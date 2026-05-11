@@ -47,7 +47,7 @@ todo desde una única ventana. Es multiplataforma: Linux, macOS y Windows.
 
 - `fue` — motor de estimación FUE (debe estar en el `PATH`)
 - `fuf` — motor de predicción FUF (debe estar en el `PATH`)
-- Un visor de PDF (usado por Ver Salida y Forecast)
+- Un visor de PDF (usado por View Output y Forecast)
 
 En Debian/Ubuntu:
 
@@ -143,7 +143,9 @@ gtk_fue.09/
 ├── bin/                          Ejecutable compilado
 ├── Makefile
 ├── build_windows_static_fue.sh   Script de compilación cruzada con MXE
-└── create_installer.sh           Constructor del instalador para Windows
+├── create_installer.sh           Constructor del instalador para Windows
+├── README.md
+└── README.es.md
 ```
 
 ## Contacto

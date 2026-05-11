@@ -139,7 +139,9 @@ gtk_fue.09/
 ├── bin/                          Compiled executable
 ├── Makefile
 ├── build_windows_static_fue.sh   MXE cross-compilation helper
-└── create_installer.sh           Windows installer builder
+├── create_installer.sh           Windows installer builder
+├── README.md
+└── README.es.md
 ```
 
 ## Bug reports

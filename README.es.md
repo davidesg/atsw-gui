@@ -140,7 +140,8 @@ gtk_fue.09/
 ├── include/                      Ficheros de cabecera
 ├── engine/                       Binarios precompilados de FUE y FUF (Windows)
 ├── data/                         Ficheros de entrada y series de datos de ejemplo
-├── bin/                          Ejecutable compilado
+├── obj/                          Objetos compilados (generado por make)
+├── bin/                          Ejecutable compilado (generado por make)
 ├── Makefile
 ├── build_windows_static_fue.sh   Script de compilación cruzada con MXE
 ├── create_installer.sh           Constructor del instalador para Windows

@@ -136,7 +136,8 @@ gtk_fue.09/
 ├── include/                      Header files
 ├── engine/                       Pre-compiled FUE and FUF binaries (Windows)
 ├── data/                         Sample input files and data series
-├── bin/                          Compiled executable
+├── obj/                          Compiled object files (created by make)
+├── bin/                          Compiled executable (created by make)
 ├── Makefile
 ├── build_windows_static_fue.sh   MXE cross-compilation helper
 ├── create_installer.sh           Windows installer builder

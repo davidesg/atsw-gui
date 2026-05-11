@@ -1,0 +1,18 @@
+# Build artifacts
+obj/
+bin/
+
+# Old/archived versions
+old/
+
+# Generated data and output files
+data/*.pdf
+data/*.log
+data/*.aux
+data/*.out
+
+# Editor and OS files
+*~
+.DS_Store
+*.swp
+*.kate-swp

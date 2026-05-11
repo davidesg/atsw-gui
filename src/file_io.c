@@ -570,11 +570,11 @@ free_model_globals();
    /* [3.2.1]: Allocate workspace for omegas and deltas:                     */
 
       Tm.Nomega = ivector( 1, Tm.NdetVar );
-      Tm.Omega  = (double **)malloc((size_t)Tm.NdetVar * sizeof(double *)) - 1;
-      Tm.Imega  = (int **)malloc((size_t)Tm.NdetVar * sizeof(int *)) - 1;
+      Tm.Omega  = (double **)calloc((size_t)(Tm.NdetVar + 1), sizeof(double *));
+      Tm.Imega  = (int **)calloc((size_t)(Tm.NdetVar + 1), sizeof(int *));
       Tm.Ndelta = ivector( 1, Tm.NdetVar );
-      Tm.Delta  = (double **)malloc((size_t)Tm.NdetVar * sizeof(double *)) - 1;
-      Tm.Ielta  = (int **)malloc((size_t)Tm.NdetVar * sizeof(int *)) - 1;
+      Tm.Delta  = (double **)calloc((size_t)(Tm.NdetVar + 1), sizeof(double *));
+      Tm.Ielta  = (int **)calloc((size_t)(Tm.NdetVar + 1), sizeof(int *));
 
    /* [3.2.2]: Read omegas for each deterministic variable (if any):         */
 
@@ -636,8 +636,8 @@ free_model_globals();
    if ( Tm.NumAr1 > 0 )
       {
       Tm.p1  = ivector( 1, Tm.NumAr1 );
-      Tm.Ar1 = (double **)malloc((size_t)Tm.NumAr1 * sizeof(double *)) - 1;
-      Tm.Ia1 = (int **)malloc((size_t)Tm.NumAr1 * sizeof(int *)) - 1;
+      Tm.Ar1 = (double **)calloc((size_t)(Tm.NumAr1 + 1), sizeof(double *));
+      Tm.Ia1 = (int **)calloc((size_t)(Tm.NumAr1 + 1), sizeof(int *));
       }
    for ( i = 1; i <= Tm.NumAr1; i++ ){
        fscanf( inputv, "%d", &Tm.p1[i] );
@@ -676,8 +676,8 @@ free_model_globals();
    if ( Tm.NumAr2 > 0 )
       {
       Tm.p2  = ivector( 1, Tm.NumAr2 );
-      Tm.Ar2 = (double **)malloc((size_t)Tm.NumAr2 * sizeof(double *)) - 1;
-      Tm.Ia2 = (int **)malloc((size_t)Tm.NumAr2 * sizeof(int *)) - 1;
+      Tm.Ar2 = (double **)calloc((size_t)(Tm.NumAr2 + 1), sizeof(double *));
+      Tm.Ia2 = (int **)calloc((size_t)(Tm.NumAr2 + 1), sizeof(int *));
       }
    for ( i = 1; i <= Tm.NumAr2; i++ ){
         fscanf( inputv, "%d", &Tm.p2[i] );
@@ -716,8 +716,8 @@ free_model_globals();
    if ( Tm.NumMa1 > 0 )
       {
       Tm.q1  = ivector( 1, Tm.NumMa1 );
-      Tm.Ma1 = (double **)malloc((size_t)Tm.NumMa1 * sizeof(double *)) - 1;
-      Tm.Im1 = (int **)malloc((size_t)Tm.NumMa1 * sizeof(int *)) - 1;
+      Tm.Ma1 = (double **)calloc((size_t)(Tm.NumMa1 + 1), sizeof(double *));
+      Tm.Im1 = (int **)calloc((size_t)(Tm.NumMa1 + 1), sizeof(int *));
       }
    for ( i = 1; i <= Tm.NumMa1; i++ ){
         fscanf( inputv, "%d", &Tm.q1[i] );
@@ -756,8 +756,8 @@ free_model_globals();
    if ( Tm.NumMa2 > 0 )
       {
       Tm.q2  = ivector( 1, Tm.NumMa2 );
-      Tm.Ma2 = (double **)malloc((size_t)Tm.NumMa2 * sizeof(double *)) - 1;
-      Tm.Im2 = (int **)malloc((size_t)Tm.NumMa2 * sizeof(int *)) - 1;
+      Tm.Ma2 = (double **)calloc((size_t)(Tm.NumMa2 + 1), sizeof(double *));
+      Tm.Im2 = (int **)calloc((size_t)(Tm.NumMa2 + 1), sizeof(int *));
       }
    for ( i = 1; i <= Tm.NumMa2; i++ ){
        fscanf( inputv, "%d", &Tm.q2[i] );
@@ -796,7 +796,7 @@ free_model_globals();
    if ( Tm.NumAr1f > 0 )
       {
       Tm.pfre1 = vector( 1, Tm.NumAr1f );
-      Tm.Ar1f  = (double **)malloc((size_t)Tm.NumAr1f * sizeof(double *)) - 1;
+      Tm.Ar1f  = (double **)calloc((size_t)(Tm.NumAr1f + 1), sizeof(double *));
       Tm.Ia1f  = ivector( 1, Tm.NumAr1f );
       }
    for ( i = 1; i <= Tm.NumAr1f; i++ ){
@@ -832,7 +832,7 @@ free_model_globals();
    if ( Tm.NumMa1f > 0 )
       {
       Tm.qfre1 = vector( 1, Tm.NumMa1f );
-      Tm.Ma1f  = (double **)malloc((size_t)Tm.NumMa1f * sizeof(double *)) - 1;
+      Tm.Ma1f  = (double **)calloc((size_t)(Tm.NumMa1f + 1), sizeof(double *));
       Tm.Im1f  = ivector( 1, Tm.NumMa1f );
       }
    for ( i = 1; i <= Tm.NumMa1f; i++ ){

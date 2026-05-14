@@ -3,7 +3,7 @@
  *   fue.h                                                                 *
  *   Exact maximum likelihood estimation of time series models:            *
  *   Copyright (C) 2009 by A.B Treadway & D.E Guerrero & J.A. Mauricio     *
- *   abtreadway@telefonica.net &  warriord@rocketmail.com                  *
+ *   davidesg@ucm.es                                                       *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *

@@ -7,7 +7,7 @@
  *       LU and Cholesky decomposition, scalar and string utilities,       *
  *       Easter date calculation.                                          *
  *     Copyright (C) 2009  Arthur B. Treadway & David E. Guerrero          *
- *       abtreadway@telefonica.net & warriord@rocketmail.com               *
+ *       davidesg@ucm.es                                                   *
  *       Eigenvalue solver (gsl_eigenqr) via GNU Scientific Library.       *
  *       Dynamic memory allocation routines and error handler.             *
  *                                                                         *

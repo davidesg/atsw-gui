@@ -1,6 +1,6 @@
 /***************************************************************************
  *   Copyright (C) 2009 by Arthur B. Treadway and David E. Guerrero        *
- *   abtreadway@telefonica.net, warriord@rocketmail.com                    *
+ *   davidesg@ucm.es                                                       *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -30,7 +30,7 @@
 
 struct Forecast                   /* forecast data  structure:                          */
     {
-     int L;                       /* Lead time for forecasting (N§ of forecasts):       */
+     int L;                       /* Lead time for forecasting (NÂ§ of forecasts):       */
      int b;                       /* Dead time for first point forecast                 */
      int Aper;                     /* Last obseverved year                              */
      int Asub;                     /* Last observed season  (Origen: Asub/aper)         */

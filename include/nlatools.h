@@ -5,7 +5,7 @@
  *   Contributors:                                                         *
  *     Copyright (C) 1995  Jose Alberto Mauricio                           *
  *     Copyright (C) 2009  Arthur B. Treadway & David E. Guerrero          *
- *       abtreadway@telefonica.net & warriord@rocketmail.com               *
+ *       davidesg@ucm.es                                                   *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *

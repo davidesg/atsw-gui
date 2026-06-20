@@ -81,30 +81,32 @@ static double* simulate_arma(double *phi, int p, double *theta, int q, int n, gs
                                int d, int D, int n, gsl_rng *rng) {
     int i, j;  // <-- declaración añadida
 
-    // Construir polinomios AR regular y estacional (incluyendo constante 1)
+    // Construir polinomios AR regular y estacional (incluyendo constante 1).
+    // CLAVE: los coeficientes estacionales van en los lags s, 2s, ..., P*s
+    // (no en 1..P), para que la estructura aparezca en el lag estacional.
     int deg_ar_reg = p;
-    int deg_ar_sea = P;
+    int deg_ar_sea = P * s;
     double *ar_reg = (double*)calloc(deg_ar_reg + 1, sizeof(double));
     double *ar_sea = (double*)calloc(deg_ar_sea + 1, sizeof(double));
     ar_reg[0] = 1.0;
     ar_sea[0] = 1.0;
     for (i = 0; i < p; i++) ar_reg[i+1] = -phi[i];
-    for (i = 0; i < P; i++) ar_sea[i+1] = -Phi[i];
+    for (i = 0; i < P; i++) ar_sea[(i+1)*s] = -Phi[i];
 
     // Convolucionar para obtener polinomio AR total
     int deg_ar_total;
     double *ar_total = (double*)calloc(deg_ar_reg + deg_ar_sea + 1, sizeof(double));
     convolve_polynomials(ar_reg, deg_ar_reg, ar_sea, deg_ar_sea, ar_total, &deg_ar_total);
 
-    // Construir polinomios MA regular y estacional
+    // Construir polinomios MA regular y estacional (estacional en lags s,2s,...,Q*s)
     int deg_ma_reg = q;
-    int deg_ma_sea = Q;
+    int deg_ma_sea = Q * s;
     double *ma_reg = (double*)calloc(deg_ma_reg + 1, sizeof(double));
     double *ma_sea = (double*)calloc(deg_ma_sea + 1, sizeof(double));
     ma_reg[0] = 1.0;
     ma_sea[0] = 1.0;
     for (i = 0; i < q; i++) ma_reg[i+1] = -theta[i];
-    for (i = 0; i < Q; i++) ma_sea[i+1] = -Theta[i];
+    for (i = 0; i < Q; i++) ma_sea[(i+1)*s] = -Theta[i];
 
     // Convolucionar para obtener polinomio MA total
     int deg_ma_total;

@@ -21,7 +21,7 @@
 #define MIN_SEASONAL_MA_COEF 0.1
 #define MAX_SEASONAL_MA_COEF 0.8
 
-#define MAHALANOBIS_FEATURE_DIM 30
+#define MAHALANOBIS_FEATURE_DIM 42
 
 // Número máximo de candidatos (modelos tentativos estilo Box-Jenkins) en el shortlist
 #define MAX_ORDER_CANDIDATES 12
@@ -166,7 +166,7 @@ void plot_comparison_acf_pacf(double *acf_theoretical, double *pacf_theoretical,
 // Integración con detección estacional
 int detectar_y_ajustar_estacionalidad(const char *filename, DataParameters *params,
                                      int *P_max, int *Q_max, char **mensaje_advertencia);
-void extract_feature_vector(PatternFeatures *features, double *vector, int dim);
+void extract_feature_vector(PatternFeatures *features, double *vector, int dim, int s, int lags);
 void reorder_with_mahalanobis(gsl_vector **vectors, int n,
                               gsl_vector *emp_vector,
                               ModelRecord *records, int n_records,

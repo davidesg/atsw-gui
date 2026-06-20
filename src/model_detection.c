@@ -861,7 +861,7 @@ void adaptive_grid_search(double *empirical_data, int n_data, int s,
     // MLP-BASED ORDER IDENTIFICATION (replaces heuristic effective_orders)
     // =========================================================================
     double feature_vector[MAHALANOBIS_FEATURE_DIM];
-    extract_feature_vector(&empirical_features, feature_vector, MAHALANOBIS_FEATURE_DIM);
+    extract_feature_vector(&empirical_features, feature_vector, MAHALANOBIS_FEATURE_DIM, s, lags);
 
     MLPPrediction mlp_pred;
     int mlp_ok = mlp_predict(feature_vector, &mlp_pred);
@@ -2294,6 +2294,62 @@ static double compute_arma_aicc(double *y, int n, int p, double *phi, int q, dou
     return aicc;
 }
 
+/* AICc de un SARIMA multiplicativo (p,q)(P,Q)_s por expansión de polinomios y
+ * filtrado de residuos. Convención BJ: AR(B)·SAR(B^s) Z = MA(B)·SMA(B^s) a, con
+ * coef. positivos (Z=(1-theta B)(1-Theta B^s)a). Menor = mejor. Maneja el caso
+ * regular (P=Q=0) como caso particular. */
+static double compute_sarima_aicc(double *y, int n, int p, double *phi, int q, double *theta,
+                                  int P, double *Phi, int Q, double *Theta, int s) {
+    int k = p + q + P + Q;
+    if (k == 0) return 1e30;
+    int dar = p + P * s, dma = q + Q * s;
+    if (dar >= n / 2 || dma >= n / 2) return 1e30;
+
+    // Polinomios AR/MA regulares y estacionales (coef. de B^i, con 1 en B^0)
+    double arr[16] = {0}, ars[64] = {0}, mar[16] = {0}, mas[64] = {0};
+    if (p + 1 > 16 || P * s + 1 > 64 || q + 1 > 16 || Q * s + 1 > 64) return 1e30;
+    arr[0] = 1.0; for (int i = 0; i < p; i++) arr[i + 1]      = -phi[i];
+    ars[0] = 1.0; for (int i = 0; i < P; i++) ars[(i + 1) * s] = -Phi[i];
+    mar[0] = 1.0; for (int i = 0; i < q; i++) mar[i + 1]      = -theta[i];
+    mas[0] = 1.0; for (int i = 0; i < Q; i++) mas[(i + 1) * s] = -Theta[i];
+
+    // Expansión por convolución: arexp = arr*ars (grado dar), maexp = mar*mas (grado dma)
+    double arexp[80] = {0}, maexp[80] = {0};
+    if (dar + 1 > 80 || dma + 1 > 80) return 1e30;
+    for (int i = 0; i <= p; i++)
+        for (int j = 0; j <= P * s; j++) arexp[i + j] += arr[i] * ars[j];
+    for (int i = 0; i <= q; i++)
+        for (int j = 0; j <= Q * s; j++) maexp[i + j] += mar[i] * mas[j];
+
+    double mean = 0.0; for (int i = 0; i < n; i++) mean += y[i]; mean /= n;
+    int start = MAX(dar, dma);
+    if (start >= n - 2) return 1e30;
+    double *e = (double*)calloc(n, sizeof(double));
+    if (!e) return 1e30;
+    double rss = 0.0; int used = 0;
+    for (int t = start; t < n; t++) {
+        // e_t = sum_{i=0..dar} arexp[i] zc_{t-i}  -  sum_{j=1..dma} maexp[j] e_{t-j}
+        double v = 0.0;
+        for (int i = 0; i <= dar; i++) v += arexp[i] * (y[t - i] - mean);
+        for (int j = 1; j <= dma; j++) v -= maexp[j] * e[t - j];
+        e[t] = v;
+        rss += v * v; used++;
+    }
+    free(e);
+    if (used <= k + 2 || rss <= 0.0) return 1e30;
+    return used * log(rss / used) + 2.0 * k + 2.0 * k * (k + 1.0) / (double)(used - k - 1);
+}
+
+/* Estima el coeficiente MA(1) estacional invirtiendo rho_s = -Theta/(1+Theta^2)
+ * (raíz invertible |Theta|<1). Para la puntuación de candidatos SMA. */
+static double estimate_seasonal_ma1(double rho_s) {
+    if (fabs(rho_s) < 1e-6) return 0.0;
+    if (fabs(rho_s) >= 0.5) rho_s = (rho_s > 0 ? 0.49 : -0.49);  // fuera de rango invertible
+    double disc = 1.0 - 4.0 * rho_s * rho_s;
+    if (disc < 0) disc = 0;
+    return (-1.0 + sqrt(disc)) / (2.0 * rho_s);
+}
+
 /* Identificación de órdenes MIXTOS (estilo EACF/Box-Jenkins): recorre una pequeña
  * rejilla ARMA(p<=3, q<=2), estima cada celda por H-R/YW y la puntúa por AICc.
  * Inserta en el shortlist los mejores modelos de bajo orden con buen ajuste, que
@@ -2369,13 +2425,17 @@ static void rank_shortlist_by_fit(ModelCandidate *cand, double *data, int n,
             }
             estimate_ar_yule_walker(acf_seasonal, P, Phi);
         }
-        for (int i = 0; i < Q; i++) Theta[i] = MIN_SEASONAL_MA_COEF;
+        if (Q > 0) {
+            // MA(1) estacional por inversión de rho_s; resto, default suave
+            Theta[0] = (s <= lags) ? estimate_seasonal_ma1(acf_emp[s]) : MIN_SEASONAL_MA_COEF;
+            for (int i = 1; i < Q; i++) Theta[i] = MIN_SEASONAL_MA_COEF;
+        }
 
-        // Puntuación por similitud BJ (ACF/PACF teórica vs empírica) con parsimonia
-        // SUAVE de desempate. La similitud es robusta a estimaciones crudas (a
-        // diferencia del AICc sobre H-R, que penaliza injustamente los MA). El MCP
-        // decide el modelo final entre el top-k con estimación MLE propia.
-        double score = 0.0;
+        // Puntuación por -AICc (seasonal-aware): penaliza los modelos que sobreajustan
+        // el ruido de los lags regulares y trata con justicia los lags estacionales.
+        // Ahora que la H-R está corregida (signo+iteración), el AICc ordena bien
+        // tanto regular como estacional. El MCP decide el final con su MLE.
+        double score = -1e30;
         if (!(p == 0 && q == 0 && P == 0 && Q == 0)) {
             int stable = 1;
             if (p > 0 && !check_ar_roots(phi, p)) stable = 0;
@@ -2383,17 +2443,16 @@ static void rank_shortlist_by_fit(ModelCandidate *cand, double *data, int n,
             if (q > 0 && !check_ma_roots(theta, q)) stable = 0;
             if (Q > 0 && !check_ma_roots(Theta, Q)) stable = 0;
             if (stable) {
-                double act[MAX_LAGS + 1] = {0}, pact[MAX_LAGS + 1] = {0};
-                calcular_ACF_PACF_SARIMA(p, phi, q, theta, P, Phi, Q, Theta, s, act, pact, lags);
-                PatternFeatures tf;
-                extract_pattern_features(act, pact, lags, s, &tf);
-                tf.acf_values = act; tf.pacf_values = pact;
-                score = pattern_similarity(&tf, emp_features, s, lags)
-                      - 0.03 * (p + q + P + Q);
+                double aicc = compute_sarima_aicc(data, n, p, phi, q, theta, P, Phi, Q, Theta, s);
+                score = -aicc;
+                if ((P > 0 || Q > 0) && getenv("ART_DEBUG_SEAS"))
+                    fprintf(stderr, "SEAS (%d,%d)(%d,%d) Phi=%.3f Theta=%.3f acf[s]=%.3f aicc=%.2f\n",
+                            p, q, P, Q, P>0?Phi[0]:0.0, Q>0?Theta[0]:0.0,
+                            s<=lags?acf_emp[s]:0.0, aicc);
             }
         }
         cand->candidates[c].prob = score;
-        (void)compute_arma_aicc;  // disponible como score alternativo
+        (void)compute_arma_aicc; (void)emp_features; (void)pacf_emp;
     }
     // Orden descendente por puntuación
     for (int i = 0; i < cand->n_candidates; i++)
@@ -2403,9 +2462,18 @@ static void rank_shortlist_by_fit(ModelCandidate *cand, double *data, int n,
                 cand->candidates[i] = cand->candidates[j];
                 cand->candidates[j] = t;
             }
+    if (getenv("ART_DEBUG_RANK")) {
+        fprintf(stderr, "RANK:");
+        for (int i = 0; i < cand->n_candidates; i++)
+            fprintf(stderr, " (%d,%d)(%d,%d)=%.3f", cand->candidates[i].p, cand->candidates[i].q,
+                    cand->candidates[i].P, cand->candidates[i].Q, cand->candidates[i].prob);
+        fprintf(stderr, "\n");
+    }
 }
 
-void extract_feature_vector(PatternFeatures *features, double *vector, int dim) {
+/* Construye el vector de features para el MLP. DEBE coincidir lag a lag con
+ * train.py extract_pattern_features (42 dims): 30 regulares + 12 estacionales. */
+void extract_feature_vector(PatternFeatures *features, double *vector, int dim, int s, int lags) {
     int idx = 0;
     // ACF lags 1..12
     for (int i = 1; i <= 12 && idx < dim; i++) vector[idx++] = features->acf_values[i];
@@ -2420,6 +2488,26 @@ void extract_feature_vector(PatternFeatures *features, double *vector, int dim) 
     // Seasonal strengths
     vector[idx++] = features->seasonal_acf_strength;
     vector[idx++] = features->seasonal_pacf_strength;
+
+    // Bloque estacional s-relativo (lags s,2s,3s + satelites). 0 si no estacional.
+    #define SG_ACF(lag)  (((lag) >= 1 && (lag) <= lags) ? features->acf_values[lag]  : 0.0)
+    #define SG_PACF(lag) (((lag) >= 1 && (lag) <= lags) ? features->pacf_values[lag] : 0.0)
+    int seas = (s > 1);
+    if (idx < dim) vector[idx++] = seas ? SG_ACF(s)       : 0.0;  // ACF[s]
+    if (idx < dim) vector[idx++] = seas ? SG_ACF(2*s)     : 0.0;  // ACF[2s]
+    if (idx < dim) vector[idx++] = seas ? SG_ACF(3*s)     : 0.0;  // ACF[3s]
+    if (idx < dim) vector[idx++] = seas ? SG_PACF(s)      : 0.0;  // PACF[s]
+    if (idx < dim) vector[idx++] = seas ? SG_PACF(2*s)    : 0.0;  // PACF[2s]
+    if (idx < dim) vector[idx++] = seas ? SG_PACF(3*s)    : 0.0;  // PACF[3s]
+    if (idx < dim) vector[idx++] = seas ? SG_ACF(s-1)     : 0.0;  // ACF[s-1]
+    if (idx < dim) vector[idx++] = seas ? SG_ACF(s+1)     : 0.0;  // ACF[s+1]
+    if (idx < dim) vector[idx++] = seas ? SG_ACF(2*s-1)   : 0.0;  // ACF[2s-1]
+    if (idx < dim) vector[idx++] = seas ? SG_ACF(2*s+1)   : 0.0;  // ACF[2s+1]
+    if (idx < dim) vector[idx++] = seas ? SG_PACF(s-1)    : 0.0;  // PACF[s-1]
+    if (idx < dim) vector[idx++] = seas ? SG_PACF(s+1)    : 0.0;  // PACF[s+1]
+    #undef SG_ACF
+    #undef SG_PACF
+
     // Fill remainder
     while (idx < dim) vector[idx++] = 0.0;
 }

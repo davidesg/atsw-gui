@@ -31,13 +31,14 @@ def simulate_sarima_fast(phi, theta, Phi, Theta, s, d, D, n, rng):
     total_n = n + d + D * s + 200
     ar_reg = np.zeros(p + 1); ar_reg[0] = 1.0
     for i in range(p): ar_reg[i + 1] = -phi[i]
-    ar_sea = np.zeros(P + 1); ar_sea[0] = 1.0
-    for i in range(P): ar_sea[i + 1] = -Phi[i]
+    # CLAVE: coeficientes estacionales en lags s, 2s, ..., P*s (no 1..P)
+    ar_sea = np.zeros(P * s + 1); ar_sea[0] = 1.0
+    for i in range(P): ar_sea[(i + 1) * s] = -Phi[i]
     ar_total = np.convolve(ar_reg, ar_sea)
     ma_reg = np.zeros(q + 1); ma_reg[0] = 1.0
     for i in range(q): ma_reg[i + 1] = -theta[i]
-    ma_sea = np.zeros(Q + 1); ma_sea[0] = 1.0
-    for i in range(Q): ma_sea[i + 1] = -Theta[i]
+    ma_sea = np.zeros(Q * s + 1); ma_sea[0] = 1.0
+    for i in range(Q): ma_sea[(i + 1) * s] = -Theta[i]
     ma_total = np.convolve(ma_reg, ma_sea)
     pt = len(ar_total) - 1; qt = len(ma_total) - 1
     pt_arr = -ar_total[1:] if pt > 0 else np.array([], dtype=np.float64)
@@ -119,7 +120,7 @@ def extract_pattern_features(acf, pacf, lags, s):
             if ml+1 <= lags: sas += abs(acf[ml+1])*0.3; sps += abs(pacf[ml+1])*0.3
         if sc > 0: sas /= sc; sps /= sc
 
-    v = np.zeros(30, dtype=np.float32); idx = 0
+    v = np.zeros(42, dtype=np.float32); idx = 0
     for i in range(1,13): v[idx] = float(acf[i]) if i <= lags else 0.0; idx += 1
     for i in range(1,13): v[idx] = float(pacf[i]) if i <= lags else 0.0; idx += 1
     v[idx] = float(acl); idx += 1
@@ -128,6 +129,22 @@ def extract_pattern_features(acf, pacf, lags, s):
     v[idx] = float(pdr); idx += 1
     v[idx] = float(sas); idx += 1
     v[idx] = float(sps); idx += 1
+    # Bloque estacional s-relativo (lags s,2s,3s + satelites). 0 si no estacional.
+    def sg(arr, lag):
+        return float(arr[lag]) if (1 <= lag <= lags) else 0.0
+    seas = s > 1
+    v[idx] = sg(acf,  s)     if seas else 0.0; idx += 1  # ACF[s]
+    v[idx] = sg(acf,  2*s)   if seas else 0.0; idx += 1  # ACF[2s]
+    v[idx] = sg(acf,  3*s)   if seas else 0.0; idx += 1  # ACF[3s]
+    v[idx] = sg(pacf, s)     if seas else 0.0; idx += 1  # PACF[s]
+    v[idx] = sg(pacf, 2*s)   if seas else 0.0; idx += 1  # PACF[2s]
+    v[idx] = sg(pacf, 3*s)   if seas else 0.0; idx += 1  # PACF[3s]
+    v[idx] = sg(acf,  s-1)   if seas else 0.0; idx += 1  # ACF[s-1]  satelite
+    v[idx] = sg(acf,  s+1)   if seas else 0.0; idx += 1  # ACF[s+1]  satelite
+    v[idx] = sg(acf,  2*s-1) if seas else 0.0; idx += 1  # ACF[2s-1] satelite
+    v[idx] = sg(acf,  2*s+1) if seas else 0.0; idx += 1  # ACF[2s+1] satelite
+    v[idx] = sg(pacf, s-1)   if seas else 0.0; idx += 1  # PACF[s-1] satelite
+    v[idx] = sg(pacf, s+1)   if seas else 0.0; idx += 1  # PACF[s+1] satelite
     return v
 
 # =============================================================================
@@ -143,9 +160,16 @@ def generate_dataset(n, rng):
         (3,1,0,0),(1,3,0,0),(3,2,0,0),(3,3,0,0),
         # AR(2) complex roots (pseudo-cyclical) — extra weight
         (2,0,0,0),(2,0,0,0),
-        (0,0,1,0),(0,0,2,0),(0,0,0,1),(0,0,0,2),
-        (0,0,1,1),(1,0,1,0),(2,0,1,0),
-        (0,1,1,0),(1,1,1,0),(1,1,0,1),
+        # --- Estacionales (s in {4,12}). SAR(1) y SAR(2) frecuentes en datos
+        #     economicos (up-weight); SMA solo orden 1 (SMA(2) es muy raro). ---
+        (0,0,1,0),(0,0,1,0),(0,0,2,0),(0,0,2,0),  # SAR(1) y SAR(2)
+        (0,0,0,1),(0,0,0,1),                        # SMA(1)
+        (0,0,1,1),                                  # SAR(1)+SMA(1)
+        (1,0,1,0),(1,0,1,0),(2,0,1,0),(1,0,2,0),    # AR x SAR(1), AR x SAR(2)
+        (0,1,0,1),(0,1,0,1),                        # MA x SMA(1)
+        (1,0,0,1),(0,1,1,0),                        # AR x SMA(1), MA x SAR(1)
+        (1,1,1,0),(1,1,0,1),(1,1,1,1),              # ARMA x estacional
+        (2,1,1,0),
     ]
     npo = (n // len(pool)) + 1
     t = 0
@@ -168,7 +192,8 @@ def generate_dataset(n, rng):
                 if np.sum(np.abs(Phi))>=0.95: Phi *= 0.8/np.sum(np.abs(Phi))
             Theta = rng.uniform(0.2,0.7,Q).astype(np.float64) if Q>0 else np.array([],dtype=np.float64)
             s = rng.choice([4,12]) if (P>0 or Q>0) else 1
-            nobs = rng.randint(150,400)
+            # s=12 necesita n grande para estimar bien la ACF hasta el lag 3s=36
+            nobs = rng.randint(240,520) if s == 12 else rng.randint(150,400)
             if s==1:
                 ser = simulate_arma_fast(phi,theta,nobs,rng)
             else:
@@ -192,7 +217,7 @@ def _softmax(x):
     return e / np.maximum(np.sum(e, axis=1, keepdims=True), 1e-12)
 
 class AdamMLP:
-    def __init__(self, input_dim=30, h1=128, h2=128, h3=64, rng=None):
+    def __init__(self, input_dim=42, h1=128, h2=128, h3=64, rng=None):
         if rng is None: rng = np.random.RandomState(42)
         self.id = input_dim; self.h1 = h1; self.h2 = h2; self.h3 = h3
         self.fmean = np.zeros(input_dim, np.float32)
@@ -320,7 +345,7 @@ def main():
     a = p.parse_args()
 
     print("="*60)
-    print("ART_18 — MLP Adam 30→128→128→64, 100K muestras")
+    print("ART_18 — MLP Adam 42→128→128→64, 100K muestras")
     print("="*60)
 
     print(f"\n[1/3] Generando {a.samples} series...")
@@ -337,9 +362,9 @@ def main():
     ytr = (yp[idx[:-nt]],yq[idx[:-nt]],yP[idx[:-nt]],yQ[idx[:-nt]])
     yte = (yp[idx[-nt:]],yq[idx[-nt:]],yP[idx[-nt:]],yQ[idx[-nt:]])
 
-    print(f"\n[2/3] Adam 30→128→128→64, {a.epochs} épocas...")
+    print(f"\n[2/3] Adam 42→128→128→64, {a.epochs} épocas...")
     t0 = time.time()
-    mlp = AdamMLP(30,128,128,64,rng)
+    mlp = AdamMLP(42,128,128,64,rng)
     mlp.train(Xtr,*ytr,epochs=a.epochs,lr=a.lr)
     print(f"  {time.time()-t0:.1f}s")
 

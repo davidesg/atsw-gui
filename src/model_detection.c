@@ -162,6 +162,9 @@ static void rank_shortlist_by_fit(ModelCandidate *cand, double *data, int n,
 static void add_arma_grid_candidates(ModelCandidate *cand, double *data, int n,
                                      double *acf_emp, int lags, int s,
                                      int p_max, int q_max);
+static void add_seasonal_grid_candidates(ModelCandidate *cand, double *data, int n,
+                                         double *acf_emp, int lags, int s,
+                                         int P_max, int Q_max);
 
 // Función para validar patrones AR basados en PACF empírica
 static int validate_ar_pattern(int p, double *pacf_empirical, int lags, double threshold) {
@@ -895,6 +898,10 @@ void adaptive_grid_search(double *empirical_data, int n_data, int s,
         // modelos como ARMA(2,1) que el MLP/cortes leen como AR.
         add_arma_grid_candidates(best_candidate, empirical_data, n_data,
                                  acf_empirical, lags, s, p_max, q_max);
+        // Identificación estacional: cruza bases regulares con hipótesis (P,Q) y deja
+        // que el AICc resuelva la ambigüedad SAR<->SMA del MLP.
+        add_seasonal_grid_candidates(best_candidate, empirical_data, n_data,
+                                     acf_empirical, lags, s, P_max, Q_max);
         // Cierre del lazo: estimación ligera + puntuación por similitud, reordena el
         // shortlist para que el top-k sea el conjunto que el atsw-MCP elegiría.
         rank_shortlist_by_fit(best_candidate, empirical_data, n_data,
@@ -2390,6 +2397,82 @@ static void add_arma_grid_candidates(ModelCandidate *cand, double *data, int n,
         cand->candidates[cand->n_candidates].q = qq;
         cand->candidates[cand->n_candidates].P = 0;
         cand->candidates[cand->n_candidates].Q = 0;
+        cand->candidates[cand->n_candidates].prob = 0.0;
+        cand->n_candidates++;
+        added++;
+    }
+}
+
+/* AICc de un candidato SARIMA: estima coeficientes (YW/H-R regular, YW estacional,
+ * Theta_1 por inversión) y devuelve compute_sarima_aicc. 1e30 si inestable/falla. */
+static double sarima_candidate_aicc(double *data, int n, double *acf_emp, int lags,
+                                    int s, int p, int q, int P, int Q) {
+    double phi[10] = {0}, theta[10] = {0}, Phi[5] = {0}, Theta[5] = {0};
+    if (q == 0) { if (p > 0 && !estimate_ar_yule_walker(acf_emp, p, phi)) return 1e30; }
+    else        { if (!estimate_arma_hannan_rissanen(data, n, p, q, phi, theta)) return 1e30; }
+    if (P > 0) {
+        double acs[16]; acs[0] = 1.0;
+        for (int i = 1; i <= P && i < 16; i++) { int lg = i * s; acs[i] = (lg <= lags) ? acf_emp[lg] : 0.0; }
+        estimate_ar_yule_walker(acs, P, Phi);
+    }
+    if (Q > 0) {
+        Theta[0] = (s <= lags) ? estimate_seasonal_ma1(acf_emp[s]) : MIN_SEASONAL_MA_COEF;
+        for (int i = 1; i < Q; i++) Theta[i] = MIN_SEASONAL_MA_COEF;
+    }
+    if (p > 0 && !check_ar_roots(phi, p)) return 1e30;
+    if (P > 0 && !check_ar_roots(Phi, P)) return 1e30;
+    if (q > 0 && !check_ma_roots(theta, q)) return 1e30;
+    if (Q > 0 && !check_ma_roots(Theta, Q)) return 1e30;
+    return compute_sarima_aicc(data, n, p, phi, q, theta, P, Phi, Q, Theta, s);
+}
+
+/* Identificación de candidatos SARIMA: cruza las bases REGULARES presentes en el
+ * shortlist (p,q con p+q<=3) con TODAS las hipótesis estacionales (P,Q) de una
+ * pequeña rejilla, puntúa por AICc e inserta las mejores. Esencial porque el MLP
+ * confunde SAR<->SMA: aquí se exploran ambas y el AICc decide (p.ej. recupera el
+ * (1,0,0,1) cuando el MLP predijo P=1 en vez de Q=1). */
+static void add_seasonal_grid_candidates(ModelCandidate *cand, double *data, int n,
+                                         double *acf_emp, int lags, int s,
+                                         int P_max, int Q_max) {
+    if (s <= 1) return;
+    int Pg = MIN(2, P_max), Qg = MIN(1, Q_max);
+    if (Pg == 0 && Qg == 0) return;
+
+    // Bases regulares distintas presentes (parsimoniosas, pocas para no diluir)
+    int bp[8], bq[8], nb = 0;
+    for (int c = 0; c < cand->n_candidates && nb < 3; c++) {
+        int p = cand->candidates[c].p, q = cand->candidates[c].q;
+        if (p + q > 2) continue;
+        int dup = 0; for (int k = 0; k < nb; k++) if (bp[k] == p && bq[k] == q) dup = 1;
+        if (!dup) { bp[nb] = p; bq[nb] = q; nb++; }
+    }
+
+    typedef struct { int p, q, P, Q; double aicc; } GC;
+    GC g[96]; int ng = 0;
+    for (int b = 0; b < nb; b++)
+        for (int P = 0; P <= Pg; P++)
+            for (int Q = 0; Q <= Qg; Q++) {
+                if (P == 0 && Q == 0) continue;   // solo añadimos estructura estacional
+                double a = sarima_candidate_aicc(data, n, acf_emp, lags, s, bp[b], bq[b], P, Q);
+                if (a >= 1e29) continue;
+                g[ng].p = bp[b]; g[ng].q = bq[b]; g[ng].P = P; g[ng].Q = Q; g[ng].aicc = a; ng++;
+            }
+    for (int i = 0; i < ng; i++)
+        for (int j = i + 1; j < ng; j++)
+            if (g[j].aicc < g[i].aicc) { GC t = g[i]; g[i] = g[j]; g[j] = t; }
+
+    int added = 0;
+    for (int idx = 0; idx < ng && added < 2; idx++) {
+        if (cand->n_candidates >= MAX_ORDER_CANDIDATES) break;
+        int p = g[idx].p, q = g[idx].q, P = g[idx].P, Q = g[idx].Q, dup = 0;
+        for (int c = 0; c < cand->n_candidates; c++)
+            if (cand->candidates[c].p == p && cand->candidates[c].q == q &&
+                cand->candidates[c].P == P && cand->candidates[c].Q == Q) dup = 1;
+        if (dup) continue;
+        cand->candidates[cand->n_candidates].p = p;
+        cand->candidates[cand->n_candidates].q = q;
+        cand->candidates[cand->n_candidates].P = P;
+        cand->candidates[cand->n_candidates].Q = Q;
         cand->candidates[cand->n_candidates].prob = 0.0;
         cand->n_candidates++;
         added++;

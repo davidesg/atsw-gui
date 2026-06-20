@@ -28,7 +28,7 @@ else
     PKG_CONFIG = pkg-config
 endif
 
-CFLAGS   = -O2 -g -Wall -Iinclude
+CFLAGS   = -O2 -g -Wall -Iinclude -MMD -MP
 LDFLAGS  +=
 LIBS     = -lm
 
@@ -145,5 +145,8 @@ help:
 	@echo "  make CROSS=i686-w64-mingw32.static-      # 32 bits"
 	@echo "  make CROSS=x86_64-w64-mingw32.static-    # 64 bits"
 	@echo "  (Asegurar que MXE está en PATH y PKG_CONFIG_PATH apunta a sus librerías)"
+
+# ---------- Dependencias automáticas de headers (-MMD) ----------
+-include $(OBJS:.o=.d) $(GUI_OBJS:.o=.d) $(CLI_OBJ:.o=.d)
 
 .PHONY: all cli clean distclean install uninstall help

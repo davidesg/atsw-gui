@@ -2314,7 +2314,8 @@ static double compute_arma_aicc(double *y, int n, int p, double *phi, int q, dou
  * coef. positivos (Z=(1-theta B)(1-Theta B^s)a). Menor = mejor. Maneja el caso
  * regular (P=Q=0) como caso particular. */
 static double compute_sarima_aicc(double *y, int n, int p, double *phi, int q, double *theta,
-                                  int P, double *Phi, int Q, double *Theta, int s) {
+                                  int P, double *Phi, int Q, double *Theta, int s,
+                                  int min_start) {
     int k = p + q + P + Q;
     if (k == 0) return 1e30;
     int dar = p + P * s, dma = q + Q * s;
@@ -2337,7 +2338,9 @@ static double compute_sarima_aicc(double *y, int n, int p, double *phi, int q, d
         for (int j = 0; j <= Q * s; j++) maexp[i + j] += mar[i] * mas[j];
 
     double mean = 0.0; for (int i = 0; i < n; i++) mean += y[i]; mean /= n;
-    int start = MAX(dar, dma);
+    // Muestra COMÚN: arranque = max(orden propio, min_start) para que todos los
+    // candidatos usen el mismo número de observaciones y el AICc sea comparable.
+    int start = MAX(MAX(dar, dma), min_start);
     if (start >= n - 2) return 1e30;
     double *e = (double*)calloc(n, sizeof(double));
     if (!e) return 1e30;
@@ -2414,7 +2417,7 @@ static void add_arma_grid_candidates(ModelCandidate *cand, double *data, int n,
 /* AICc de un candidato SARIMA: estima coeficientes (YW/H-R regular, YW estacional,
  * Theta_1 por inversión) y devuelve compute_sarima_aicc. 1e30 si inestable/falla. */
 static double sarima_candidate_aicc(double *data, int n, double *acf_emp, int lags,
-                                    int s, int p, int q, int P, int Q) {
+                                    int s, int p, int q, int P, int Q, int min_start) {
     double phi[10] = {0}, theta[10] = {0}, Phi[5] = {0}, Theta[5] = {0};
     if (q == 0) { if (p > 0 && !estimate_ar_yule_walker(acf_emp, p, phi)) return 1e30; }
     else        { if (!estimate_arma_hannan_rissanen(data, n, p, q, phi, theta)) return 1e30; }
@@ -2431,7 +2434,7 @@ static double sarima_candidate_aicc(double *data, int n, double *acf_emp, int la
     if (P > 0 && !check_ar_roots(Phi, P)) return 1e30;
     if (q > 0 && !check_ma_roots(theta, q)) return 1e30;
     if (Q > 0 && !check_ma_roots(Theta, Q)) return 1e30;
-    return compute_sarima_aicc(data, n, p, phi, q, theta, P, Phi, Q, Theta, s);
+    return compute_sarima_aicc(data, n, p, phi, q, theta, P, Phi, Q, Theta, s, min_start);
 }
 
 /* Identificación de candidatos SARIMA: cruza las bases REGULARES presentes en el
@@ -2461,7 +2464,7 @@ static void add_seasonal_grid_candidates(ModelCandidate *cand, double *data, int
         for (int P = 0; P <= Pg; P++)
             for (int Q = 0; Q <= Qg; Q++) {
                 if (P == 0 && Q == 0) continue;   // solo añadimos estructura estacional
-                double a = sarima_candidate_aicc(data, n, acf_emp, lags, s, bp[b], bq[b], P, Q);
+                double a = sarima_candidate_aicc(data, n, acf_emp, lags, s, bp[b], bq[b], P, Q, 0);
                 if (a >= 1e29) continue;
                 g[ng].p = bp[b]; g[ng].q = bq[b]; g[ng].P = P; g[ng].Q = Q; g[ng].aicc = a; ng++;
             }
@@ -2495,6 +2498,16 @@ static void rank_shortlist_by_fit(ModelCandidate *cand, double *data, int n,
                                   double *acf_emp, double *pacf_emp,
                                   PatternFeatures *emp_features, int lags, int s) {
     if (!cand || cand->n_candidates <= 0) return;
+    // Arranque COMÚN para que TODOS los candidatos puntúen con el mismo número de
+    // observaciones (AICc comparable). Sin esto, los modelos estacionales pierden
+    // ~P*s observaciones y son penalizados injustamente frente a los regulares.
+    int common_start = 0;
+    for (int c = 0; c < cand->n_candidates; c++) {
+        int dar = cand->candidates[c].p + cand->candidates[c].P * s;
+        int dma = cand->candidates[c].q + cand->candidates[c].Q * s;
+        int st = dar > dma ? dar : dma;
+        if (st > common_start) common_start = st;
+    }
     for (int c = 0; c < cand->n_candidates; c++) {
         int p = cand->candidates[c].p, q = cand->candidates[c].q;
         int P = cand->candidates[c].P, Q = cand->candidates[c].Q;
@@ -2534,7 +2547,7 @@ static void rank_shortlist_by_fit(ModelCandidate *cand, double *data, int n,
             if (q > 0 && !check_ma_roots(theta, q)) stable = 0;
             if (Q > 0 && !check_ma_roots(Theta, Q)) stable = 0;
             if (stable) {
-                double aicc = compute_sarima_aicc(data, n, p, phi, q, theta, P, Phi, Q, Theta, s);
+                double aicc = compute_sarima_aicc(data, n, p, phi, q, theta, P, Phi, Q, Theta, s, common_start);
                 score = -aicc;
                 if ((P > 0 || Q > 0) && getenv("ART_DEBUG_SEAS"))
                     fprintf(stderr, "SEAS (%d,%d)(%d,%d) Phi=%.3f Theta=%.3f acf[s]=%.3f aicc=%.2f\n",

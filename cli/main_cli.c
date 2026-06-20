@@ -264,6 +264,7 @@ int main(int argc, char *argv[]) {
         {"mlp-direct",   no_argument,       0, 1009},
         {"pmax",         required_argument, 0, 1010},
         {"qmax",         required_argument, 0, 1011},
+        {"log",          no_argument,       0, 1012},
         {"reps",         required_argument, 0, 1006},
         {"seed",         required_argument, 0, 1007},
         {"output",       required_argument, 0, 1008},
@@ -282,6 +283,7 @@ int main(int argc, char *argv[]) {
     int use_deseasonalize = 0;
     int use_mlp_direct = 0;
     int pmax_override = -1, qmax_override = -1;
+    int use_log = 0;
     int reps = 1;
     unsigned long seed = time(NULL);
     char *output_file = NULL;
@@ -307,6 +309,7 @@ int main(int argc, char *argv[]) {
             case 1009: use_mlp_direct = 1; break;
             case 1010: pmax_override = atoi(optarg); break;
             case 1011: qmax_override = atoi(optarg); break;
+            case 1012: use_log = 1; break;
             case 1006: reps = atoi(optarg); break;
             case 1007: seed = atol(optarg); break;
             case 1008: output_file = optarg; break;
@@ -392,7 +395,7 @@ int main(int argc, char *argv[]) {
         // Configurar parámetros de transformación
         DataParameters params;
         memset(&params, 0, sizeof(DataParameters));
-        params.apply_log = 0;   // Los datos ya están en escala natural
+        params.apply_log = use_log;   // --log aplica logaritmo natural (como el checkbox de la GUI)
         params.d = d;
         params.D = D;
         params.s = s;

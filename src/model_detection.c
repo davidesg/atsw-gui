@@ -2073,8 +2073,9 @@ int detectar_y_ajustar_estacionalidad(const char *filename, DataParameters *para
             printf("✅ Estacionalidad detectada y estructura estacional especificada (P_max=%d, Q_max=%d)\n",
                    *P_max, *Q_max);
         }
-    } else {
-        // No se detectó estacionalidad - restringir a modelos no estacionales
+    } else if (!params->mlp_direct) {
+        // MODO CLÁSICO: no se detectó estacionalidad -> restringir el grid a P=Q=0
+        // (la puerta es un filtro de EFICIENCIA para la búsqueda en grid).
         printf("🔒 Restringiendo búsqueda a modelos NO estacionales (P=0, Q=0)\n");
         *P_max = 0;
         *Q_max = 0;
@@ -2082,6 +2083,13 @@ int detectar_y_ajustar_estacionalidad(const char *filename, DataParameters *para
             "INFORMACIÓN: No se detectó estacionalidad significativa. "
             "Se restringió la búsqueda a modelos no estacionales."
         );
+    } else {
+        // MODO BJ (mlp-direct): NO se restringe. El MLP + features estacionales y el
+        // AICc del shortlist deciden la estacionalidad (coherente con ART). El coste
+        // de incluir candidatos estacionales es trivial (no hay grid que restringir),
+        // y así no se pierden SARIMA estocásticos que el test F podría no captar.
+        printf("ℹ️  Modo BJ: la estacionalidad la decide el MLP/AICc (sin restringir P,Q).\n");
+        *mensaje_advertencia = NULL;
     }
 
     // Liberar memoria del resultado estacional

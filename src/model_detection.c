@@ -2257,6 +2257,13 @@ static int estimate_arma_hannan_rissanen(double *y, int n, int p, int q,
         sa = 0.0; for (int i = 0; i < q; i++) sa += fabs(theta[i]);
         if (sa > 0.95) { double sc = 0.90 / sa; for (int i = 0; i < q; i++) theta[i] *= sc; }
     }
+    if (ok && getenv("ART_DEBUG_HR")) {
+        fprintf(stderr, "HR(%d,%d): phi=", p, q);
+        for (int i = 0; i < p; i++) fprintf(stderr, "%+.3f ", phi[i]);
+        fprintf(stderr, " theta(BJ, Z=(1-theta*B)a)=");
+        for (int i = 0; i < q; i++) fprintf(stderr, "%+.3f ", theta[i]);
+        fprintf(stderr, "\n");
+    }
     free(yc); free(phi_long); free(e); free(X); free(Y); free(XtX); free(XtY); free(beta);
     return ok;
 }

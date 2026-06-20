@@ -166,6 +166,7 @@ typedef struct {
     double similarity;
     int correct;
     int in_shortlist;       // 1 si el modelo verdadero está en el shortlist BJ del MLP
+    int true_rank;          // rango (1-based) del verdadero en el shortlist ordenado; 0 si ausente
     double elapsed_ms;
 } RunResult;
 
@@ -353,6 +354,7 @@ int main(int argc, char *argv[]) {
     double total_time = 0.0;
     int correct_count = 0;
     int shortlist_count = 0;
+    int rank_hist[MAX_ORDER_CANDIDATES + 2] = {0};  // rank_hist[r] = #series con verdadero en rango r
 
     for (int rep = 0; rep < reps; rep++) {
         double *series = NULL;
@@ -422,15 +424,18 @@ int main(int argc, char *argv[]) {
                                 candidate.P == true_P && candidate.Q == true_Q);
         if (results[rep].correct) correct_count++;
 
-        // ¿Está el modelo verdadero en el shortlist BJ propuesto por el MLP?
-        results[rep].in_shortlist = 0;
+        // Rango (1-based) del modelo verdadero en el shortlist ORDENADO por similitud;
+        // 0 si no está. Permite estudiar la potencia (recall@k) al recortar el shortlist.
+        int true_rank = 0;
         for (int c = 0; c < candidate.n_candidates; c++) {
             if (candidate.candidates[c].p == true_p && candidate.candidates[c].q == true_q &&
                 candidate.candidates[c].P == true_P && candidate.candidates[c].Q == true_Q) {
-                results[rep].in_shortlist = 1; break;
+                true_rank = c + 1; break;
             }
         }
-        if (results[rep].in_shortlist) shortlist_count++;
+        results[rep].true_rank = true_rank;
+        results[rep].in_shortlist = (true_rank > 0);
+        if (true_rank > 0) { shortlist_count++; rank_hist[true_rank]++; }
 
         if (out != stdout) {
             fprintf(out, "%d,%d,%d,%d,%d,%d,%d,%d,%d,%.6f,%d,%d,%.3f\n",
@@ -468,6 +473,13 @@ int main(int argc, char *argv[]) {
     printf("Precisión (orden exacto): %.2f%% (%d/%d)\n", accuracy, correct_count, reps);
     printf("Modelo verdadero en shortlist: %.2f%% (%d/%d)\n",
            (double)shortlist_count / reps * 100.0, shortlist_count, reps);
+    // Potencia recall@k: P(verdadero entre los k de mayor similitud) al recortar el shortlist.
+    printf("Potencia recall@k (shortlist ordenado por similitud):\n");
+    int cum = 0;
+    for (int k = 1; k <= MAX_ORDER_CANDIDATES; k++) {
+        cum += rank_hist[k];
+        printf("  recall@%d = %5.1f%%\n", k, (double)cum / reps * 100.0);
+    }
     printf("Similitud media: %.4f\n", avg_sim);
     printf("Tiempo medio por ejecución: %.2f ms\n", avg_time);
 

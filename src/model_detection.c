@@ -151,9 +151,14 @@ static void send_plot_data(double *acf_theoretical, double *pacf_theoretical,
 
 // Forward declaration
 static int estimate_ar_yule_walker(double *acf, int p, double *phi);
+static int estimate_arma_hannan_rissanen(double *y, int n, int p, int q,
+                                         double *phi, double *theta);
 static void build_mlp_shortlist(const MLPPrediction *pred, int ep, int eq,
                                 int p_max, int q_max,
                                 int P_max, int Q_max, ModelCandidate *best);
+static void rank_shortlist_by_fit(ModelCandidate *cand, double *data, int n,
+                                  double *acf_emp, double *pacf_emp,
+                                  PatternFeatures *emp_features, int lags, int s);
 
 // Función para validar patrones AR basados en PACF empírica
 static int validate_ar_pattern(int p, double *pacf_empirical, int lags, double threshold) {
@@ -883,6 +888,10 @@ void adaptive_grid_search(double *empirical_data, int n_data, int s,
         determine_effective_orders(acf_empirical, pacf_empirical, lags, n_data, s,
                                    &ep_c, &eq_c, &eP_c, &eQ_c);
         build_mlp_shortlist(&mlp_pred, ep_c, eq_c, p_max, q_max, P_max, Q_max, best_candidate);
+        // Cierre del lazo: estimación ligera + puntuación por similitud, reordena el
+        // shortlist para que el top-k sea el conjunto que el atsw-MCP elegiría.
+        rank_shortlist_by_fit(best_candidate, empirical_data, n_data,
+                              acf_empirical, pacf_empirical, &empirical_features, lags, s);
         printf("MLP shortlist (%d):", best_candidate->n_candidates);
         for (int i = 0; i < best_candidate->n_candidates; i++)
             printf(" (%d,%d)(%d,%d) p=%.3f",
@@ -2129,6 +2138,186 @@ static int estimate_ar_yule_walker(double *acf, int p, double *phi) {
         for (int i = 0; i < p; i++) phi[i] *= scale;
     }
     return 1;
+}
+
+/* Hannan-Rissanen: estima ARMA(p,q) vía AR largo + OLS. Estimación ligera para
+ * puntuar los candidatos del shortlist (cierre del lazo identificación->estimación).
+ * y: serie (ya diferenciada/desestacionalizada). Devuelve 1 si tuvo éxito. */
+static int estimate_arma_hannan_rissanen(double *y, int n, int p, int q,
+                                         double *phi, double *theta) {
+    if (p == 0 && q == 0) return 1;
+    int m = MAX(p, q) + (int)sqrt(n);
+    if (m < MAX(p, q) + 2) m = MAX(p, q) + 2;
+    if (m >= n - 10) m = n - 10;
+    if (m < 1) m = 1;
+
+    double acf_long[MAX_LAGS + 1];
+    calcular_ACF_muestral(y, n, acf_long, MIN(m + 5, MAX_LAGS));
+    double *phi_long = (double*)calloc(m, sizeof(double));
+    if (!phi_long) return 0;
+    if (!estimate_ar_yule_walker(acf_long, m, phi_long)) { free(phi_long); return 0; }
+
+    int n_resid = n - m;
+    if (n_resid < p + q + 5) { free(phi_long); return 0; }
+    double *resid = (double*)malloc(n_resid * sizeof(double));
+    for (int t = 0; t < n_resid; t++) {
+        double pred = 0.0;
+        for (int j = 0; j < m; j++) pred += phi_long[j] * y[m + t - j - 1];
+        resid[t] = y[m + t] - pred;
+    }
+
+    int k = p + q;
+    if (k == 0) { free(phi_long); free(resid); return 1; }
+    int nobs = n_resid;
+    double *X = (double*)calloc(nobs * k, sizeof(double));
+    double *Y = (double*)malloc(nobs * sizeof(double));
+    for (int i = 0; i < nobs; i++) {
+        Y[i] = y[m + i];
+        for (int j = 0; j < p; j++) {
+            int lag_idx = m + i - j - 1;
+            X[i * k + j] = (lag_idx >= 0) ? y[lag_idx] : 0.0;
+        }
+        for (int j = 0; j < q; j++) {
+            int lag_idx = i - j - 1;
+            X[i * k + p + j] = (lag_idx >= 0) ? resid[lag_idx] : 0.0;
+        }
+    }
+
+    double *XtX = (double*)calloc(k * k, sizeof(double));
+    double *XtY = (double*)calloc(k, sizeof(double));
+    for (int i = 0; i < nobs; i++) {
+        for (int r = 0; r < k; r++) {
+            XtY[r] += X[i * k + r] * Y[i];
+            for (int c = 0; c < k; c++) XtX[r * k + c] += X[i * k + r] * X[i * k + c];
+        }
+    }
+    for (int i = 0; i < k; i++) XtX[i * k + i] += 1e-6;  // ridge
+
+    int ok = 1;
+    for (int col = 0; col < k && ok; col++) {
+        int max_row = col; double max_val = fabs(XtX[col * k + col]);
+        for (int r = col + 1; r < k; r++)
+            if (fabs(XtX[r * k + col]) > max_val) { max_val = fabs(XtX[r * k + col]); max_row = r; }
+        if (max_val < 1e-12) { ok = 0; break; }
+        if (max_row != col) {
+            for (int c = col; c < k; c++) {
+                double tmp = XtX[col * k + c]; XtX[col * k + c] = XtX[max_row * k + c]; XtX[max_row * k + c] = tmp;
+            }
+            double tmp = XtY[col]; XtY[col] = XtY[max_row]; XtY[max_row] = tmp;
+        }
+        for (int r = col + 1; r < k; r++) {
+            double f = XtX[r * k + col] / XtX[col * k + col];
+            for (int c = col; c < k; c++) XtX[r * k + c] -= f * XtX[col * k + c];
+            XtY[r] -= f * XtY[col];
+        }
+    }
+    double *beta = (double*)calloc(k, sizeof(double));
+    if (ok) {
+        for (int i = k - 1; i >= 0; i--) {
+            double sum = XtY[i];
+            for (int j = i + 1; j < k; j++) sum -= XtX[i * k + j] * beta[j];
+            beta[i] = sum / XtX[i * k + i];
+        }
+        for (int i = 0; i < p; i++) phi[i] = beta[i];
+        for (int i = 0; i < q; i++) theta[i] = beta[p + i];
+        double sa = 0.0; for (int i = 0; i < p; i++) sa += fabs(phi[i]);
+        if (sa > 0.95) { double sc = 0.90 / sa; for (int i = 0; i < p; i++) phi[i] *= sc; }
+        sa = 0.0; for (int i = 0; i < q; i++) sa += fabs(theta[i]);
+        if (sa > 0.95) { double sc = 0.90 / sa; for (int i = 0; i < q; i++) theta[i] *= sc; }
+    }
+    free(X); free(Y); free(XtX); free(XtY); free(phi_long); free(resid); free(beta);
+    return ok;
+}
+
+/* AICc de un ARMA(p,q) regular por filtrado de residuos (convención Box-Jenkins:
+ * y_t = sum phi_i y_{t-i} + e_t - sum theta_j e_{t-j}). Menor = mejor. La serie se
+ * centra previamente. Para s>1 con componentes estacionales se aproxima con la
+ * parte regular (los tests actuales son no estacionales). */
+static double compute_arma_aicc(double *y, int n, int p, double *phi, int q, double *theta) {
+    int k = p + q;
+    double mean = 0.0; for (int i = 0; i < n; i++) mean += y[i]; mean /= n;
+    int start = MAX(p, q);
+    if (start >= n - 2) return 1e30;
+    double *e = (double*)calloc(n, sizeof(double));
+    if (!e) return 1e30;
+    double rss = 0.0; int used = 0;
+    for (int t = start; t < n; t++) {
+        double pred = 0.0;
+        for (int i = 0; i < p; i++) pred += phi[i] * (y[t - i - 1] - mean);
+        for (int j = 0; j < q; j++) pred -= theta[j] * e[t - j - 1];
+        e[t] = (y[t] - mean) - pred;
+        rss += e[t] * e[t]; used++;
+    }
+    free(e);
+    if (used <= k + 2 || rss <= 0.0) return 1e30;
+    double aicc = used * log(rss / used) + 2.0 * k
+                + 2.0 * k * (k + 1.0) / (double)(used - k - 1);
+    return aicc;
+}
+
+/* Cierre del lazo: estima cada candidato del shortlist (YW para AR puro, H-R para
+ * ARMA; estacional por YW/defaults) y lo PUNTÚA por AICc (ajuste vs parsimonia).
+ * Reordena candidates[] de mejor a peor (prob = -AICc), de modo que el top-k sea
+ * el conjunto que el atsw-MCP estimaría/elegiría. */
+static void rank_shortlist_by_fit(ModelCandidate *cand, double *data, int n,
+                                  double *acf_emp, double *pacf_emp,
+                                  PatternFeatures *emp_features, int lags, int s) {
+    if (!cand || cand->n_candidates <= 0) return;
+    for (int c = 0; c < cand->n_candidates; c++) {
+        int p = cand->candidates[c].p, q = cand->candidates[c].q;
+        int P = cand->candidates[c].P, Q = cand->candidates[c].Q;
+        double phi[10] = {0}, theta[10] = {0}, Phi[5] = {0}, Theta[5] = {0};
+
+        if (q == 0) {
+            if (p > 0) estimate_ar_yule_walker(acf_emp, p, phi);
+        } else {
+            if (!estimate_arma_hannan_rissanen(data, n, p, q, phi, theta)) {
+                // Si H-R falla, defaults suaves para no descartar el candidato
+                for (int i = 0; i < p; i++) phi[i] = 0.3 / (i + 1);
+                for (int i = 0; i < q; i++) theta[i] = 0.3 / (i + 1);
+            }
+        }
+        if (P > 0) {
+            double acf_seasonal[16]; acf_seasonal[0] = 1.0;
+            for (int i = 1; i <= P && i < 16; i++) {
+                int lag = i * s; acf_seasonal[i] = (lag <= lags) ? acf_emp[lag] : 0.0;
+            }
+            estimate_ar_yule_walker(acf_seasonal, P, Phi);
+        }
+        for (int i = 0; i < Q; i++) Theta[i] = MIN_SEASONAL_MA_COEF;
+
+        // Puntuación por similitud BJ (ACF/PACF teórica vs empírica) con parsimonia
+        // SUAVE de desempate. La similitud es robusta a estimaciones crudas (a
+        // diferencia del AICc sobre H-R, que penaliza injustamente los MA). El MCP
+        // decide el modelo final entre el top-k con estimación MLE propia.
+        double score = 0.0;
+        if (!(p == 0 && q == 0 && P == 0 && Q == 0)) {
+            int stable = 1;
+            if (p > 0 && !check_ar_roots(phi, p)) stable = 0;
+            if (P > 0 && !check_ar_roots(Phi, P)) stable = 0;
+            if (q > 0 && !check_ma_roots(theta, q)) stable = 0;
+            if (Q > 0 && !check_ma_roots(Theta, Q)) stable = 0;
+            if (stable) {
+                double act[MAX_LAGS + 1] = {0}, pact[MAX_LAGS + 1] = {0};
+                calcular_ACF_PACF_SARIMA(p, phi, q, theta, P, Phi, Q, Theta, s, act, pact, lags);
+                PatternFeatures tf;
+                extract_pattern_features(act, pact, lags, s, &tf);
+                tf.acf_values = act; tf.pacf_values = pact;
+                score = pattern_similarity(&tf, emp_features, s, lags)
+                      - 0.03 * (p + q + P + Q);
+            }
+        }
+        cand->candidates[c].prob = score;
+        (void)compute_arma_aicc;  // disponible como score alternativo
+    }
+    // Orden descendente por puntuación
+    for (int i = 0; i < cand->n_candidates; i++)
+        for (int j = i + 1; j < cand->n_candidates; j++)
+            if (cand->candidates[j].prob > cand->candidates[i].prob) {
+                OrderCandidate t = cand->candidates[i];
+                cand->candidates[i] = cand->candidates[j];
+                cand->candidates[j] = t;
+            }
 }
 
 void extract_feature_vector(PatternFeatures *features, double *vector, int dim) {

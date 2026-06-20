@@ -1,0 +1,41 @@
+Estudio de potencia recall@k del shortlist de ART
+==================================================
+200 reps, n=300, seed=123, pmax=qmax=5, --mlp-direct
+Shortlist ordenado por similitud BJ (ACF/PACF teórica vs empírica) con
+parsimonia suave de desempate. recall@k = P(verdadero entre los k de mayor
+puntuación). El atsw-MCP estima/elige el modelo final entre el top-k.
+
+Modelo      @1     @2     @3     @4     @5     @9(=∈shortlist)
+-----------------------------------------------------------------
+AR(1)       78.5   88.5   88.5   88.5   88.5   88.5
+AR(2)       80.0   85.0   85.0   85.0   85.0   85.0
+AR(3)       65.0   76.5   78.0   78.0   78.0   78.0
+MA(1)        0.0    9.0   65.0   92.5   93.0   93.5
+MA(2)       36.5   70.5   90.5   96.0   96.0   96.0
+ARMA(1,1)    0.0   11.0   78.5   87.0   89.0   90.0
+ARMA(2,1)    0.0   11.0   19.0   28.0   31.5   33.5
+
+Lectura
+-------
+- AR: la potencia satura en k=2 (recall@2 ≈ recall@9). Recortar a 2 es
+  prácticamente gratis para modelos AR puros.
+- MA/ARMA: el verdadero modelo cae al rango ~3, detrás de aproximaciones AR
+  más simples con similitud parecida. La potencia satura en k=4
+  (recall@4: MA(1) 92.5, MA(2) 96, ARMA(1,1) 87). Recortar a 2 pierde el
+  verdadero (recall@2 = 9-70%).
+- ARMA(2,1): incluso @9 solo 33.5% -> es la IDENTIFICACIÓN la que falla
+  (no entra en el shortlist), no el ranking. Objetivo del siguiente paso.
+
+Causa de no poder recortar a 2 en C
+-----------------------------------
+La estimación ligera (Yule-Walker / Hannan-Rissanen) es demasiado cruda para
+estimar bien la parte MA, así que el verdadero MA/ARMA pierde similitud frente
+a aproximaciones AR. Separar esos look-alikes requiere estimación MLE propia,
+que es justamente lo que hace el atsw-MCP.
+
+Recomendación para "el MCP elige entre 2"
+-----------------------------------------
+Entregar al MCP el top-4 del shortlist (no 2): captura casi toda la potencia
+disponible (87-96%) salvo ARMA(2,1). El MCP, con su MLE + diagnósticos,
+reduce de 4 a 2 (o a 1). Recortar a 2 por similitud en C solo es seguro si la
+serie es AR pura.

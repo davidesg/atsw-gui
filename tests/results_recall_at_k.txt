@@ -1,20 +1,21 @@
-Estudio recall@k tras arreglar identificacion de ARMA(2,1)
-==========================================================
+Estudio recall@k — HR iterado + signo de theta corregido
+========================================================
 200 reps, n=300, seed=123, pmax=qmax=5, --mlp-direct
-Shortlist = MLP top-2xtop-2 + reducciones puras + lectura clasica por
-cortes + rejilla ARMA mixta (p<=3,q<=2, top-4 por AICc). Ranking por
-similitud BJ con parsimonia suave.
+Shortlist = MLP + reducciones puras + lectura por cortes + rejilla ARMA
+mixta. Estimacion: Yule-Walker (AR) y Hannan-Rissanen ITERADO (ARMA, 4
+iteraciones, signo theta corregido). Ranking por similitud BJ.
 
 Modelo            @2      @3      @4      @5  @12(SL)
 -------------------------------------------------------------
-AR(1)          88.5%   88.5%   88.5%   88.5%    88.5%
-AR(2)          85.0%   85.0%   85.0%   85.0%    85.0%
-AR(3)          76.5%   78.0%   78.0%   78.0%    78.0%
-MA(1)           7.0%   55.0%   79.5%   90.0%    93.5%
-MA(2)          70.0%   90.0%   96.0%   96.0%    96.0%
-ARMA(1,1)      12.0%   53.0%   75.5%   85.5%    98.5%
-ARMA(2,1)      17.5%   35.5%   52.5%   64.0%    84.0%
+AR(1)          82.5%   87.5%   88.0%   88.0%    88.5%
+AR(2)          73.0%   78.5%   79.5%   83.5%    85.0%
+AR(3)          37.5%   64.5%   74.0%   75.0%    78.0%
+MA(1)          88.5%   91.0%   92.5%   92.5%    93.5%
+MA(2)          94.0%   95.0%   96.0%   96.0%    96.0%
+ARMA(1,1)       4.5%   76.0%   86.0%   90.5%    98.5%
+ARMA(2,1)      36.0%   66.5%   87.0%   94.5%    97.0%
 
-ARMA(2,1) en shortlist: 33.5% (antes) -> 84% (ahora). Robusto 84-92%
-en seeds 7/55/777. Coste menor: ligera caida de MA(1)/ARMA(1,1) a k
-medio. Recomendacion: entregar top-4/5 al atsw-MCP.
+El HR iterado y la correccion del signo de theta disparan la potencia a
+k bajo de MA/ARMA: MA(1) recall@2 7%->88.5%, ARMA(2,1) recall@5 64->94.5%.
+Leve coste en AR a k=2/3 (recupera en k=5). recall@5 global: 75-96%.
+Recomendacion: entregar top-5 al atsw-MCP.

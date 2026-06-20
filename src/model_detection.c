@@ -2147,92 +2147,117 @@ static int estimate_ar_yule_walker(double *acf, int p, double *phi) {
     return 1;
 }
 
-/* Hannan-Rissanen: estima ARMA(p,q) vía AR largo + OLS. Estimación ligera para
- * puntuar los candidatos del shortlist (cierre del lazo identificación->estimación).
- * y: serie (ya diferenciada/desestacionalizada). Devuelve 1 si tuvo éxito. */
+/* Hannan-Rissanen ITERADO: estima ARMA(p,q) vía AR largo + OLS, refinando los
+ * residuos con el propio modelo ARMA en cada iteración (mejora notable de la
+ * parte MA frente al HR de 2 etapas). Convención Box-Jenkins:
+ *   yc_t = sum phi_i yc_{t-i} + e_t - sum theta_j e_{t-j}   (yc = serie centrada)
+ * La regresión de yc sobre [yc_lags, e_lags] da coef. gamma_j = -theta_j en la
+ * parte MA, de ahí theta_j = -beta[p+j] (corrige el signo del HR anterior).
+ * Estimación ligera para puntuar el shortlist. Devuelve 1 si tuvo éxito. */
 static int estimate_arma_hannan_rissanen(double *y, int n, int p, int q,
                                          double *phi, double *theta) {
     if (p == 0 && q == 0) return 1;
+    int k = p + q;
+
+    // Centrar la serie (la regresión no lleva intercepto)
+    double mean = 0.0; for (int i = 0; i < n; i++) mean += y[i]; mean /= n;
+    double *yc = (double*)malloc(n * sizeof(double));
+    if (!yc) return 0;
+    for (int i = 0; i < n; i++) yc[i] = y[i] - mean;
+
+    // Etapa 1: AR largo (Yule-Walker) -> residuos iniciales e[t]
     int m = MAX(p, q) + (int)sqrt(n);
     if (m < MAX(p, q) + 2) m = MAX(p, q) + 2;
     if (m >= n - 10) m = n - 10;
     if (m < 1) m = 1;
 
     double acf_long[MAX_LAGS + 1];
-    calcular_ACF_muestral(y, n, acf_long, MIN(m + 5, MAX_LAGS));
+    calcular_ACF_muestral(yc, n, acf_long, MIN(m + 5, MAX_LAGS));
     double *phi_long = (double*)calloc(m, sizeof(double));
-    if (!phi_long) return 0;
-    if (!estimate_ar_yule_walker(acf_long, m, phi_long)) { free(phi_long); return 0; }
-
-    int n_resid = n - m;
-    if (n_resid < p + q + 5) { free(phi_long); return 0; }
-    double *resid = (double*)malloc(n_resid * sizeof(double));
-    for (int t = 0; t < n_resid; t++) {
+    double *e = (double*)calloc(n, sizeof(double));
+    if (!phi_long || !e) { free(yc); free(phi_long); free(e); return 0; }
+    if (!estimate_ar_yule_walker(acf_long, m, phi_long)) { free(yc); free(phi_long); free(e); return 0; }
+    for (int t = m; t < n; t++) {
         double pred = 0.0;
-        for (int j = 0; j < m; j++) pred += phi_long[j] * y[m + t - j - 1];
-        resid[t] = y[m + t] - pred;
+        for (int j = 0; j < m; j++) pred += phi_long[j] * yc[t - j - 1];
+        e[t] = yc[t] - pred;
     }
 
-    int k = p + q;
-    if (k == 0) { free(phi_long); free(resid); return 1; }
-    int nobs = n_resid;
-    double *X = (double*)calloc(nobs * k, sizeof(double));
-    double *Y = (double*)malloc(nobs * sizeof(double));
-    for (int i = 0; i < nobs; i++) {
-        Y[i] = y[m + i];
-        for (int j = 0; j < p; j++) {
-            int lag_idx = m + i - j - 1;
-            X[i * k + j] = (lag_idx >= 0) ? y[lag_idx] : 0.0;
-        }
-        for (int j = 0; j < q; j++) {
-            int lag_idx = i - j - 1;
-            X[i * k + p + j] = (lag_idx >= 0) ? resid[lag_idx] : 0.0;
-        }
-    }
+    // Empezar donde los residuos e[t-1..t-q] ya son reales (t-q >= m)
+    int start = MAX(m + q, MAX(p, q));
+    int nobs = n - start;
+    if (nobs < k + 5) { free(yc); free(phi_long); free(e); return 0; }
 
-    double *XtX = (double*)calloc(k * k, sizeof(double));
-    double *XtY = (double*)calloc(k, sizeof(double));
-    for (int i = 0; i < nobs; i++) {
-        for (int r = 0; r < k; r++) {
-            XtY[r] += X[i * k + r] * Y[i];
-            for (int c = 0; c < k; c++) XtX[r * k + c] += X[i * k + r] * X[i * k + c];
-        }
-    }
-    for (int i = 0; i < k; i++) XtX[i * k + i] += 1e-6;  // ridge
-
-    int ok = 1;
-    for (int col = 0; col < k && ok; col++) {
-        int max_row = col; double max_val = fabs(XtX[col * k + col]);
-        for (int r = col + 1; r < k; r++)
-            if (fabs(XtX[r * k + col]) > max_val) { max_val = fabs(XtX[r * k + col]); max_row = r; }
-        if (max_val < 1e-12) { ok = 0; break; }
-        if (max_row != col) {
-            for (int c = col; c < k; c++) {
-                double tmp = XtX[col * k + c]; XtX[col * k + c] = XtX[max_row * k + c]; XtX[max_row * k + c] = tmp;
-            }
-            double tmp = XtY[col]; XtY[col] = XtY[max_row]; XtY[max_row] = tmp;
-        }
-        for (int r = col + 1; r < k; r++) {
-            double f = XtX[r * k + col] / XtX[col * k + col];
-            for (int c = col; c < k; c++) XtX[r * k + c] -= f * XtX[col * k + c];
-            XtY[r] -= f * XtY[col];
-        }
-    }
+    double *X   = (double*)malloc(nobs * k * sizeof(double));
+    double *Y   = (double*)malloc(nobs * sizeof(double));
+    double *XtX = (double*)malloc(k * k * sizeof(double));
+    double *XtY = (double*)malloc(k * sizeof(double));
     double *beta = (double*)calloc(k, sizeof(double));
-    if (ok) {
+    if (!X || !Y || !XtX || !XtY || !beta) {
+        free(yc); free(phi_long); free(e); free(X); free(Y); free(XtX); free(XtY); free(beta);
+        return 0;
+    }
+
+    const int NITER = 4;
+    int ok = 1;
+    for (int iter = 0; iter < NITER && ok; iter++) {
+        // Regresores: Y[i]=yc[t], X=[yc_{t-1..t-p}, e_{t-1..t-q}]
+        for (int i = 0; i < nobs; i++) {
+            int t = start + i;
+            Y[i] = yc[t];
+            for (int j = 0; j < p; j++) X[i * k + j]     = yc[t - j - 1];
+            for (int j = 0; j < q; j++) X[i * k + p + j] = e[t - j - 1];
+        }
+        // (X'X + ridge) beta = X'Y
+        for (int a = 0; a < k; a++) { XtY[a] = 0.0; for (int b = 0; b < k; b++) XtX[a * k + b] = 0.0; }
+        for (int i = 0; i < nobs; i++)
+            for (int r = 0; r < k; r++) {
+                XtY[r] += X[i * k + r] * Y[i];
+                for (int c = 0; c < k; c++) XtX[r * k + c] += X[i * k + r] * X[i * k + c];
+            }
+        for (int i = 0; i < k; i++) XtX[i * k + i] += 1e-6;  // ridge
+
+        for (int col = 0; col < k && ok; col++) {
+            int mr = col; double mv = fabs(XtX[col * k + col]);
+            for (int r = col + 1; r < k; r++)
+                if (fabs(XtX[r * k + col]) > mv) { mv = fabs(XtX[r * k + col]); mr = r; }
+            if (mv < 1e-12) { ok = 0; break; }
+            if (mr != col) {
+                for (int c = col; c < k; c++) { double t = XtX[col * k + c]; XtX[col * k + c] = XtX[mr * k + c]; XtX[mr * k + c] = t; }
+                double t = XtY[col]; XtY[col] = XtY[mr]; XtY[mr] = t;
+            }
+            for (int r = col + 1; r < k; r++) {
+                double f = XtX[r * k + col] / XtX[col * k + col];
+                for (int c = col; c < k; c++) XtX[r * k + c] -= f * XtX[col * k + c];
+                XtY[r] -= f * XtY[col];
+            }
+        }
+        if (!ok) break;
         for (int i = k - 1; i >= 0; i--) {
             double sum = XtY[i];
             for (int j = i + 1; j < k; j++) sum -= XtX[i * k + j] * beta[j];
             beta[i] = sum / XtX[i * k + i];
         }
-        for (int i = 0; i < p; i++) phi[i] = beta[i];
-        for (int i = 0; i < q; i++) theta[i] = beta[p + i];
+
+        // Recalcular residuos con el modelo actual (gamma_j = beta[p+j] = -theta_j):
+        //   e_t = yc_t - sum phi_i yc_{t-i} - sum gamma_j e_{t-j}
+        for (int t = start; t < n; t++) {
+            double pred = 0.0;
+            for (int j = 0; j < p; j++) pred += beta[j] * yc[t - j - 1];
+            for (int j = 0; j < q; j++) pred += beta[p + j] * e[t - j - 1];
+            e[t] = yc[t] - pred;
+        }
+    }
+
+    if (ok) {
+        for (int i = 0; i < p; i++) phi[i]   =  beta[i];
+        for (int i = 0; i < q; i++) theta[i] = -beta[p + i];   // signo corregido
         double sa = 0.0; for (int i = 0; i < p; i++) sa += fabs(phi[i]);
         if (sa > 0.95) { double sc = 0.90 / sa; for (int i = 0; i < p; i++) phi[i] *= sc; }
         sa = 0.0; for (int i = 0; i < q; i++) sa += fabs(theta[i]);
         if (sa > 0.95) { double sc = 0.90 / sa; for (int i = 0; i < q; i++) theta[i] *= sc; }
     }
-    free(X); free(Y); free(XtX); free(XtY); free(phi_long); free(resid); free(beta);
+    free(yc); free(phi_long); free(e); free(X); free(Y); free(XtX); free(XtY); free(beta);
     return ok;
 }
 

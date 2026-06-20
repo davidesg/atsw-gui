@@ -153,6 +153,7 @@ static void send_plot_data(double *acf_theoretical, double *pacf_theoretical,
 static int estimate_ar_yule_walker(double *acf, int p, double *phi);
 static int estimate_arma_hannan_rissanen(double *y, int n, int p, int q,
                                          double *phi, double *theta);
+static double estimate_seasonal_ma1(double rho_s);
 static void build_mlp_shortlist(const MLPPrediction *pred, int ep, int eq,
                                 int p_max, int q_max,
                                 int P_max, int Q_max, ModelCandidate *best);
@@ -923,13 +924,26 @@ void adaptive_grid_search(double *empirical_data, int n_data, int s,
         best_candidate->P = top.P; best_candidate->Q = top.Q;
         best_candidate->similarity = top.prob;
 
+        // Coeficientes ESTIMADOS del modelo top (misma estimación que el ranking):
+        // YW para AR puro, Hannan-Rissanen para la parte ARMA, YW estacional para
+        // Phi y MA(1) estacional por inversión de rho_s para Theta. Así el modelo
+        // mostrado y su ACF/PACF teórica coinciden con la serie (no defaults).
+        double phi_e[10] = {0}, theta_e[10] = {0};
+        if (top.q == 0) {
+            if (top.p > 0) estimate_ar_yule_walker(acf_empirical, top.p, phi_e);
+        } else {
+            if (!estimate_arma_hannan_rissanen(empirical_data, n_data, top.p, top.q, phi_e, theta_e)) {
+                for (int i = 0; i < top.p; i++) phi_e[i] = 0.3 / (i + 1);
+                for (int i = 0; i < top.q; i++) theta_e[i] = 0.3 / (i + 1);
+            }
+        }
         if (top.p > 0) {
             best_candidate->best_phi = (double*)calloc(top.p, sizeof(double));
-            estimate_ar_yule_walker(acf_empirical, top.p, best_candidate->best_phi);
+            memcpy(best_candidate->best_phi, phi_e, top.p * sizeof(double));
         }
         if (top.q > 0) {
             best_candidate->best_theta = (double*)calloc(top.q, sizeof(double));
-            for (int i = 0; i < top.q; i++) best_candidate->best_theta[i] = 0.3 / (i + 1);
+            memcpy(best_candidate->best_theta, theta_e, top.q * sizeof(double));
         }
         if (top.P > 0) {
             double acf_seasonal[16]; acf_seasonal[0] = 1.0;
@@ -942,7 +956,9 @@ void adaptive_grid_search(double *empirical_data, int n_data, int s,
         }
         if (top.Q > 0) {
             best_candidate->best_Theta = (double*)calloc(top.Q, sizeof(double));
-            for (int i = 0; i < top.Q; i++) best_candidate->best_Theta[i] = MIN_SEASONAL_MA_COEF;
+            best_candidate->best_Theta[0] = (s <= lags) ? estimate_seasonal_ma1(acf_empirical[s])
+                                                        : MIN_SEASONAL_MA_COEF;
+            for (int i = 1; i < top.Q; i++) best_candidate->best_Theta[i] = MIN_SEASONAL_MA_COEF;
         }
 
         best_candidate->lags_used = lags;

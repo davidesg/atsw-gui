@@ -151,7 +151,8 @@ static void send_plot_data(double *acf_theoretical, double *pacf_theoretical,
 
 // Forward declaration
 static int estimate_ar_yule_walker(double *acf, int p, double *phi);
-static void build_mlp_shortlist(const MLPPrediction *pred, int p_max, int q_max,
+static void build_mlp_shortlist(const MLPPrediction *pred, int ep, int eq,
+                                int p_max, int q_max,
                                 int P_max, int Q_max, ModelCandidate *best);
 
 // Función para validar patrones AR basados en PACF empírica
@@ -756,7 +757,8 @@ double evaluate_model_similarity(int p, double *phi, int q, double *theta,
  * ordenado por probabilidad conjunta aproximada. El verdadero modelo suele caer
  * en el top-2 de cada cabeza aunque no sea el argmax, igual que un analista BJ
  * propone varios modelos tentativos. */
-static void build_mlp_shortlist(const MLPPrediction *pred, int p_max, int q_max,
+static void build_mlp_shortlist(const MLPPrediction *pred, int ep, int eq,
+                                int p_max, int q_max,
                                 int P_max, int Q_max, ModelCandidate *best) {
     // Dos mejores p
     int p1 = pred->orders[0], p2 = -1; double bp2 = -1.0;
@@ -770,19 +772,27 @@ static void build_mlp_shortlist(const MLPPrediction *pred, int p_max, int q_max,
     int P0 = pred->orders[2]; if (P0 > P_max) P0 = P_max; if (P0 < 0) P0 = 0;
     int Q0 = pred->orders[3]; if (Q0 > Q_max) Q0 = Q_max; if (Q0 < 0) Q0 = 0;
 
-    int ps[2] = {p1, p2}, qs[2] = {q1, q2};
-    OrderCandidate tmp[8]; int nt = 0;
-    // Top-2 p × top-2 q + las reducciones puras (p1,0) y (0,q1), como propondría
-    // un analista Box-Jenkins (AR puro / MA puro siempre entre los tentativos).
-    int cp_pairs[6][2] = { {p1,q1},{p1,q2},{p2,q1},{p2,q2}, {p1,0},{0,q1} };
-    for (int idx = 0; idx < 6; idx++) {
+    OrderCandidate tmp[12]; int nt = 0;
+    // Candidatos tentativos (filosofía Box-Jenkins), en orden de prioridad:
+    //  - Top-2 p × top-2 q del MLP (mezclas ARMA)
+    //  - Reducciones puras del MLP: (p1,0) AR puro, (0,q1) MA puro
+    //  - Lectura CLÁSICA del correlograma empírico: corte de PACF → AR(ep) puro,
+    //    corte de ACF → MA(eq) puro, y la mezcla (ep,eq). Esto refuerza la
+    //    identificación AR, donde el MLP es débil.
+    int cp_pairs[9][2] = {
+        {p1,q1},{p1,q2},{p2,q1},{p2,q2},
+        {p1,0},{0,q1},
+        {ep,0},{0,eq},{ep,eq}
+    };
+    for (int idx = 0; idx < 9; idx++) {
         int pp = cp_pairs[idx][0], qq = cp_pairs[idx][1];
         if (pp < 0 || pp > p_max || qq < 0 || qq > q_max) continue;
         int dup = 0;
         for (int k = 0; k < nt; k++) if (tmp[k].p == pp && tmp[k].q == qq) dup = 1;
         if (dup) continue;
         tmp[nt].p = pp; tmp[nt].q = qq; tmp[nt].P = P0; tmp[nt].Q = Q0;
-        tmp[nt].prob = pred->prob_p[pp] * pred->prob_q[qq]
+        tmp[nt].prob = pred->prob_p[pp < MLP_NUM_p ? pp : MLP_NUM_p-1]
+                     * pred->prob_q[qq < MLP_NUM_q ? qq : MLP_NUM_q-1]
                      * pred->prob_P[P0] * pred->prob_Q[Q0];
         nt++;
     }
@@ -867,7 +877,12 @@ void adaptive_grid_search(double *empirical_data, int n_data, int s,
     // atsw-MCP estima y elige el modelo final entre los candidatos.
     // =========================================================================
     if (mlp_ok == 0) {
-        build_mlp_shortlist(&mlp_pred, p_max, q_max, P_max, Q_max, best_candidate);
+        // Lectura clásica del correlograma empírico (corte de PACF/ACF) para reforzar
+        // la identificación AR/MA pura, donde el MLP es débil.
+        int ep_c, eq_c, eP_c, eQ_c;
+        determine_effective_orders(acf_empirical, pacf_empirical, lags, n_data, s,
+                                   &ep_c, &eq_c, &eP_c, &eQ_c);
+        build_mlp_shortlist(&mlp_pred, ep_c, eq_c, p_max, q_max, P_max, Q_max, best_candidate);
         printf("MLP shortlist (%d):", best_candidate->n_candidates);
         for (int i = 0; i < best_candidate->n_candidates; i++)
             printf(" (%d,%d)(%d,%d) p=%.3f",

@@ -26,3 +26,6 @@ ml/venv/
 
 # Root virtualenv
 .venv/
+
+# Dependency files
+*.d

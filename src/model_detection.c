@@ -159,6 +159,9 @@ static void build_mlp_shortlist(const MLPPrediction *pred, int ep, int eq,
 static void rank_shortlist_by_fit(ModelCandidate *cand, double *data, int n,
                                   double *acf_emp, double *pacf_emp,
                                   PatternFeatures *emp_features, int lags, int s);
+static void add_arma_grid_candidates(ModelCandidate *cand, double *data, int n,
+                                     double *acf_emp, int lags, int s,
+                                     int p_max, int q_max);
 
 // Función para validar patrones AR basados en PACF empírica
 static int validate_ar_pattern(int p, double *pacf_empirical, int lags, double threshold) {
@@ -888,6 +891,10 @@ void adaptive_grid_search(double *empirical_data, int n_data, int s,
         determine_effective_orders(acf_empirical, pacf_empirical, lags, n_data, s,
                                    &ep_c, &eq_c, &eP_c, &eQ_c);
         build_mlp_shortlist(&mlp_pred, ep_c, eq_c, p_max, q_max, P_max, Q_max, best_candidate);
+        // Identificación de órdenes mixtos (rejilla ARMA + AICc) para no perder
+        // modelos como ARMA(2,1) que el MLP/cortes leen como AR.
+        add_arma_grid_candidates(best_candidate, empirical_data, n_data,
+                                 acf_empirical, lags, s, p_max, q_max);
         // Cierre del lazo: estimación ligera + puntuación por similitud, reordena el
         // shortlist para que el top-k sea el conjunto que el atsw-MCP elegiría.
         rank_shortlist_by_fit(best_candidate, empirical_data, n_data,
@@ -2255,10 +2262,56 @@ static double compute_arma_aicc(double *y, int n, int p, double *phi, int q, dou
     return aicc;
 }
 
+/* Identificación de órdenes MIXTOS (estilo EACF/Box-Jenkins): recorre una pequeña
+ * rejilla ARMA(p<=3, q<=2), estima cada celda por H-R/YW y la puntúa por AICc.
+ * Inserta en el shortlist los mejores modelos de bajo orden con buen ajuste, que
+ * es donde el MLP y la lectura por cortes fallan (p.ej. ARMA(2,1) leído como AR).
+ * Los candidatos de la rejilla son regulares (P=Q=0). */
+static void add_arma_grid_candidates(ModelCandidate *cand, double *data, int n,
+                                     double *acf_emp, int lags, int s,
+                                     int p_max, int q_max) {
+    (void)lags; (void)s; (void)acf_emp;
+    int Pg = MIN(3, p_max), Qg = MIN(2, q_max);
+    typedef struct { int p, q; double aicc; } GC;
+    GC g[16]; int ng = 0;
+    // Solo celdas MIXTAS (p>=1, q>=1): el AR/MA puro ya lo cubren las reducciones
+    // y la lectura por cortes. Aquí añadimos lo que falta sin meter más AR que
+    // compita en el ranking y entierre al ARMA verdadero.
+    for (int p = 1; p <= Pg; p++) {
+        for (int q = 1; q <= Qg; q++) {
+            double phi[10] = {0}, theta[10] = {0};
+            if (!estimate_arma_hannan_rissanen(data, n, p, q, phi, theta)) continue;
+            double a = compute_arma_aicc(data, n, p, phi, q, theta);
+            if (a >= 1e29) continue;
+            g[ng].p = p; g[ng].q = q; g[ng].aicc = a; ng++;
+        }
+    }
+    for (int i = 0; i < ng; i++)
+        for (int j = i + 1; j < ng; j++)
+            if (g[j].aicc < g[i].aicc) { GC t = g[i]; g[i] = g[j]; g[j] = t; }
+
+    int added = 0;
+    for (int idx = 0; idx < ng && added < 4; idx++) {
+        if (cand->n_candidates >= MAX_ORDER_CANDIDATES) break;
+        int pp = g[idx].p, qq = g[idx].q, dup = 0;
+        for (int c = 0; c < cand->n_candidates; c++)
+            if (cand->candidates[c].p == pp && cand->candidates[c].q == qq &&
+                cand->candidates[c].P == 0 && cand->candidates[c].Q == 0) dup = 1;
+        if (dup) continue;
+        cand->candidates[cand->n_candidates].p = pp;
+        cand->candidates[cand->n_candidates].q = qq;
+        cand->candidates[cand->n_candidates].P = 0;
+        cand->candidates[cand->n_candidates].Q = 0;
+        cand->candidates[cand->n_candidates].prob = 0.0;
+        cand->n_candidates++;
+        added++;
+    }
+}
+
 /* Cierre del lazo: estima cada candidato del shortlist (YW para AR puro, H-R para
- * ARMA; estacional por YW/defaults) y lo PUNTÚA por AICc (ajuste vs parsimonia).
- * Reordena candidates[] de mejor a peor (prob = -AICc), de modo que el top-k sea
- * el conjunto que el atsw-MCP estimaría/elegiría. */
+ * ARMA; estacional por YW/defaults) y lo PUNTÚA por similitud cruda ACF/PACF (sin
+ * penalización de parsimonia). Reordena candidates[] de mejor a peor (prob = score),
+ * de modo que el top-k sea el conjunto que el atsw-MCP estimaría/elegiría. */
 static void rank_shortlist_by_fit(ModelCandidate *cand, double *data, int n,
                                   double *acf_emp, double *pacf_emp,
                                   PatternFeatures *emp_features, int lags, int s) {

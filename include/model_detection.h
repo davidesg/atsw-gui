@@ -24,7 +24,7 @@
 #define MAHALANOBIS_FEATURE_DIM 30
 
 // Número máximo de candidatos (modelos tentativos estilo Box-Jenkins) en el shortlist
-#define MAX_ORDER_CANDIDATES 9
+#define MAX_ORDER_CANDIDATES 12
 
 typedef struct {
     double *data;

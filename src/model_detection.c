@@ -2558,7 +2558,7 @@ static void rank_shortlist_by_fit(ModelCandidate *cand, double *data, int n,
         cand->candidates[c].prob = score;
         (void)compute_arma_aicc; (void)emp_features; (void)pacf_emp;
     }
-    // Orden descendente por puntuación
+    // Orden descendente por puntuación (prob = -AICc)
     for (int i = 0; i < cand->n_candidates; i++)
         for (int j = i + 1; j < cand->n_candidates; j++)
             if (cand->candidates[j].prob > cand->candidates[i].prob) {
@@ -2566,6 +2566,24 @@ static void rank_shortlist_by_fit(ModelCandidate *cand, double *data, int n,
                 cand->candidates[i] = cand->candidates[j];
                 cand->candidates[j] = t;
             }
+
+    // Convertir -AICc en PESOS DE AKAIKE: w_i = exp(-0.5*(AICc_i - AICc_min)) / sum.
+    // Quedan en [0,1] y suman 1 -> probabilidad de cada modelo dentro del shortlist
+    // (confianza interpretable; refleja empates como ~0.5/0.5). Sustituye al -AICc
+    // crudo que no tenía sentido como "similitud".
+    {
+        double best = cand->candidates[0].prob;   // mayor -AICc = mejor (menor AICc)
+        double sumw = 0.0;
+        for (int c = 0; c < cand->n_candidates; c++) {
+            double d = cand->candidates[c].prob - best;   // <= 0
+            double w = (isfinite(d) && d > -700.0) ? exp(0.5 * d) : 0.0;
+            cand->candidates[c].prob = w;   // peso sin normalizar (temporal)
+            sumw += w;
+        }
+        if (sumw > 0.0)
+            for (int c = 0; c < cand->n_candidates; c++) cand->candidates[c].prob /= sumw;
+    }
+
     if (getenv("ART_DEBUG_RANK")) {
         fprintf(stderr, "RANK:");
         for (int i = 0; i < cand->n_candidates; i++)

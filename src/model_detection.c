@@ -159,7 +159,8 @@ static void build_mlp_shortlist(const MLPPrediction *pred, int ep, int eq,
                                 int P_max, int Q_max, ModelCandidate *best);
 static void rank_shortlist_by_fit(ModelCandidate *cand, double *data, int n,
                                   double *acf_emp, double *pacf_emp,
-                                  PatternFeatures *emp_features, int lags, int s);
+                                  PatternFeatures *emp_features, int lags, int s,
+                                  const MLPPrediction *mlp);
 static void add_arma_grid_candidates(ModelCandidate *cand, double *data, int n,
                                      double *acf_emp, int lags, int s,
                                      int p_max, int q_max);
@@ -906,7 +907,8 @@ void adaptive_grid_search(double *empirical_data, int n_data, int s,
         // Cierre del lazo: estimación ligera + puntuación por similitud, reordena el
         // shortlist para que el top-k sea el conjunto que el atsw-MCP elegiría.
         rank_shortlist_by_fit(best_candidate, empirical_data, n_data,
-                              acf_empirical, pacf_empirical, &empirical_features, lags, s);
+                              acf_empirical, pacf_empirical, &empirical_features, lags, s,
+                              mlp_ok == 0 ? &mlp_pred : NULL);
         printf("MLP shortlist (%d):", best_candidate->n_candidates);
         for (int i = 0; i < best_candidate->n_candidates; i++)
             printf(" (%d,%d)(%d,%d) p=%.3f",
@@ -2510,9 +2512,25 @@ static void add_seasonal_grid_candidates(ModelCandidate *cand, double *data, int
  * ARMA; estacional por YW/defaults) y lo PUNTÚA por similitud cruda ACF/PACF (sin
  * penalización de parsimonia). Reordena candidates[] de mejor a peor (prob = score),
  * de modo que el top-k sea el conjunto que el atsw-MCP estimaría/elegiría. */
+/* Prior de identificación del MLP para un orden (p,q,P,Q): producto de las
+ * marginales de cada cabeza. Bien definido para CUALQUIER candidato (también los
+ * añadidos por la rejilla), con un suelo para no anular un candidato que el AICc
+ * respalde con fuerza. NULL -> prior uniforme (1). */
+static double mlp_order_prior(const MLPPrediction *mlp, int p, int q, int P, int Q) {
+    if (!mlp) return 1.0;
+    double pr = 1.0;
+    pr *= (p >= 0 && p < MLP_NUM_p)  ? mlp->prob_p[p] : 0.0;
+    pr *= (q >= 0 && q < MLP_NUM_q)  ? mlp->prob_q[q] : 0.0;
+    pr *= (P >= 0 && P < MLP_NUM_SP) ? mlp->prob_P[P] : 0.0;
+    pr *= (Q >= 0 && Q < MLP_NUM_SQ) ? mlp->prob_Q[Q] : 0.0;
+    const double FLOOR = 1e-3;   // ni el MLP más confiado anula un AICc dominante
+    return pr < FLOOR ? FLOOR : pr;
+}
+
 static void rank_shortlist_by_fit(ModelCandidate *cand, double *data, int n,
                                   double *acf_emp, double *pacf_emp,
-                                  PatternFeatures *emp_features, int lags, int s) {
+                                  PatternFeatures *emp_features, int lags, int s,
+                                  const MLPPrediction *mlp) {
     if (!cand || cand->n_candidates <= 0) return;
     // Arranque COMÚN para que TODOS los candidatos puntúen con el mismo número de
     // observaciones (AICc comparable). Sin esto, los modelos estacionales pierden
@@ -2583,17 +2601,53 @@ static void rank_shortlist_by_fit(ModelCandidate *cand, double *data, int n,
                 cand->candidates[j] = t;
             }
 
-    // Convertir -AICc en PESOS DE AKAIKE: w_i = exp(-0.5*(AICc_i - AICc_min)) / sum.
-    // Quedan en [0,1] y suman 1 -> probabilidad de cada modelo dentro del shortlist
-    // (confianza interpretable; refleja empates como ~0.5/0.5). Sustituye al -AICc
-    // crudo que no tenía sentido como "similitud".
+    // DESEMPATE por identificación dentro de modelos AICc-indistinguibles.
+    // El AICc manda (es la evidencia de ajuste); pero cuando varios candidatos caen
+    // dentro de ΔAICc < TAU del mejor, son estadísticamente equivalentes (regla
+    // habitual ΔAICc<2) y el AICc no debe decidir por ruido. En esa franja elegimos
+    // el de mayor PRIOR del MLP (evidencia de identificación que antes se tiraba).
+    // Esto arregla AR(2) raíces reales vs ARMA(1,1) (empate a k=2) SIN romper AR(1),
+    // donde (1,0) gana el AICc por margen amplio y no entra en la franja de empate.
+    // Los candidatos están ordenados desc por score=-AICc; candidates[0] = mejor AICc.
     {
-        double best = cand->candidates[0].prob;   // mayor -AICc = mejor (menor AICc)
+        // ΔAICc de indistinguibilidad. TAU=1.0 es el mejor balance medido: gran mejora
+        // en AR(1)/MA(1) puros sin castigar de más a los mixtos (override por entorno).
+        double TAU = 1.0;
+        { const char *e = getenv("ART_TIE_TAU"); if (e) TAU = atof(e); }
+        double best_score = cand->candidates[0].prob; // = -AICc_min (el mayor)
+        // Criterio de desempate (regla de parsimonia de Box-Jenkins): dentro de la
+        // franja, MENOS parámetros gana; si empatan en k, el MAYOR prior del MLP
+        // (evidencia de identificación) desempata el subempate a igual k (p.ej.
+        // AR(2) vs ARMA(1,1), ambos k=2). El MLP NO se usa como prior global porque
+        // es anti-parsimonioso y hunde los AR/MA puros; aquí solo arbitra k iguales.
+        int win = 0, win_k = 1 << 30; double win_prior = -1.0;
+        for (int c = 0; c < cand->n_candidates; c++) {
+            if (best_score - cand->candidates[c].prob >= TAU) break;  // fuera de la franja
+            int k = cand->candidates[c].p + cand->candidates[c].q +
+                    cand->candidates[c].P + cand->candidates[c].Q;
+            double pr = mlp_order_prior(mlp, cand->candidates[c].p, cand->candidates[c].q,
+                                        cand->candidates[c].P, cand->candidates[c].Q);
+            if (k < win_k || (k == win_k && pr > win_prior)) {
+                win_k = k; win_prior = pr; win = c;
+            }
+        }
+        if (win != 0) {   // promover el ganador del desempate al puesto 1
+            OrderCandidate t = cand->candidates[win];
+            for (int c = win; c > 0; c--) cand->candidates[c] = cand->candidates[c - 1];
+            cand->candidates[0] = t;
+        }
+    }
+
+    // Convertir -AICc en PESOS DE AKAIKE (confianza interpretable en [0,1] que suma 1).
+    {
+        double best = -1e30;
+        for (int c = 0; c < cand->n_candidates; c++)
+            if (cand->candidates[c].prob > best) best = cand->candidates[c].prob;
         double sumw = 0.0;
         for (int c = 0; c < cand->n_candidates; c++) {
             double d = cand->candidates[c].prob - best;   // <= 0
             double w = (isfinite(d) && d > -700.0) ? exp(0.5 * d) : 0.0;
-            cand->candidates[c].prob = w;   // peso sin normalizar (temporal)
+            cand->candidates[c].prob = w;
             sumw += w;
         }
         if (sumw > 0.0)

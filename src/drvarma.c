@@ -37,7 +37,10 @@ char **series_names = NULL; /* nser series names (1-based) */
 
 /* Global Box-Cox / differencing spec (applied to every series) */
 real trans_lambda = 1.0;   /* Box-Cox lambda (0 = log, 1 = none) */
-real trans_scale  = 1.0;   /* rescale factor applied after Box-Cox (-scale) */
+real trans_scale  = 100.0; /* rescale factor applied after Box-Cox (-scale).
+                              Default 100: rescaling improves the conditioning of
+                              the convergence criteria (per J.A. Mauricio); the
+                              optimum is unchanged and forecasts are inverted. */
 int  trans_d      = 0;     /* number of regular differences */
 int  trans_D      = 0;     /* number of seasonal differences (lag = data_freq) */
 
@@ -173,7 +176,7 @@ int main(int argc, char *argv[])
         printf("  -volmov [window]: compute moving-window volatility (window default 20)\n");
         printf("  -deseason [auto|force]: harmonic seasonal adjustment of RAW series\n");
         printf("       auto = only series with significant seasonality (default); force = all\n");
-        printf("  -scale factor: rescale the series (multiply after Box-Cox); forecasts inverted\n");
+        printf("  -scale factor: rescale the series (multiply after Box-Cox); forecasts inverted (default 100)\n");
         printf("  -estwin N: estimate params on first N raw obs, then write <base>.recursive\n");
         printf("       with fixed-parameter forecasts from every origin (needs -forecast H)\n");
             exit(1);

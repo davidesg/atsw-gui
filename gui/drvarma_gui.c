@@ -51,6 +51,7 @@ typedef struct {
     int n_var;              /* number of variables (series) */
     char *input_filename;   /* full path of the loaded text file */
     char *base_name;        /* basename (without extension) for .inp/.out */
+    char **series_names;    /* generic series names y1..yN (GUI-managed) */
 } Data;
 
 typedef struct {
@@ -186,6 +187,13 @@ static gboolean load_data_file(const char *filename) {
     FILE *f = fopen(filename, "r");
     if (!f) return FALSE;
 
+    /* Free generic series names from a previous load (reload). */
+    if (data.series_names) {
+        for (int j = 0; j < data.n_var; j++) g_free(data.series_names[j]);
+        g_free(data.series_names);
+        data.series_names = NULL;
+    }
+
     /* Forzar locale numérico a C (punto decimal) para consistencia entre plataformas */
     setlocale(LC_NUMERIC, "C");
     
@@ -267,7 +275,13 @@ static gboolean load_data_file(const char *filename) {
     data.n_var = n_cols;
     data.input_filename = g_strdup(filename);
     set_basename_from_path(filename);
-    
+
+    /* The input file is a plain numeric matrix with no names: the GUI assigns
+       generic names y1..yN and manages them consistently (UI, log, .inp). */
+    data.series_names = g_new(char *, data.n_var);
+    for (int j = 0; j < data.n_var; j++)
+        data.series_names[j] = g_strdup_printf("y%d", j + 1);
+
     return TRUE;
 }
 
@@ -494,7 +508,7 @@ static double** preprocess_series(double **input, int n_obs, int n_var,
             double *diff_series = apply_differences_to_series(series, nobs_trans, d, &n_diff);
 
             if (!diff_series || n_diff < 2 * s) {
-                if (log_output) g_string_append_printf(log_output, "  Series %d: insufficient data after differencing, skipping.\n", j+1);
+                if (log_output) g_string_append_printf(log_output, "  %s: insufficient data after differencing, skipping.\n", data.series_names[j]);
                 free(series);
                 free(diff_series);
                 continue;
@@ -534,8 +548,8 @@ static double** preprocess_series(double **input, int n_obs, int n_var,
             }
 
             if (log_output) {
-                g_string_append_printf(log_output, "  Series %d: F=%.3f, p=%.4f, R²=%.3f -> %s",
-                                       j+1, f_stat, p_value, r_sq,
+                g_string_append_printf(log_output, "  %s: F=%.3f, p=%.4f, R²=%.3f -> %s",
+                                       data.series_names[j], f_stat, p_value, r_sq,
                                        is_seasonal ? "SEASONAL" : "NOT SEASONAL");
                 if (do_deseason) {
                     g_string_append(log_output, " (adjusted)\n");
@@ -560,7 +574,7 @@ static double** preprocess_series(double **input, int n_obs, int n_var,
                         }
                         free(level_dummies);
                     } else {
-                        if (log_output) g_string_append_printf(log_output, "    Warning: adjustment failed for series %d\n", j+1);
+                        if (log_output) g_string_append_printf(log_output, "    Warning: adjustment failed for series %s\n", data.series_names[j]);
                     }
                 }
             }
@@ -634,7 +648,7 @@ static double** preprocess_series_levels(double **input, int n_obs, int n_var,
             double *diff_series = apply_differences_to_series(series, nobs_trans, d, &n_diff);
 
             if (!diff_series || n_diff < 2 * s) {
-                if (log_output) g_string_append_printf(log_output, "  Series %d: insufficient data, skipping.\n", j+1);
+                if (log_output) g_string_append_printf(log_output, "  %s: insufficient data, skipping.\n", data.series_names[j]);
                 free(series);
                 free(diff_series);
                 continue;
@@ -662,8 +676,8 @@ static double** preprocess_series_levels(double **input, int n_obs, int n_var,
             int do_deseason = opts.deseasonalize_auto ? is_seasonal : 1;
 
             if (log_output) {
-                g_string_append_printf(log_output, "  Series %d: F=%.3f, p=%.4f -> %s",
-                                       j+1, f_stat, p_value,
+                g_string_append_printf(log_output, "  %s: F=%.3f, p=%.4f -> %s",
+                                       data.series_names[j], f_stat, p_value,
                                        is_seasonal ? "SEASONAL" : "NOT SEASONAL");
                 if (do_deseason) {
                     g_string_append(log_output, " (adjusted)\n");
@@ -686,7 +700,7 @@ static double** preprocess_series_levels(double **input, int n_obs, int n_var,
                         }
                         free(level_dummies);
                     } else {
-                        if (log_output) g_string_append_printf(log_output, "    Warning: adjustment failed for series %d\n", j+1);
+                        if (log_output) g_string_append_printf(log_output, "    Warning: adjustment failed for series %s\n", data.series_names[j]);
                     }
                 }
             }
@@ -761,7 +775,8 @@ static gboolean generate_inp_file(const char *inp_path) {
     fprintf(f, "** Series, observations, start (subperiod year):\n %d %d %d %d\n",
             data.n_var, nobs_levels, opts.start_sub, opts.start_year);
     fprintf(f, "** Series names:\n");
-    for (int j = 1; j <= data.n_var; j++) fprintf(f, " y%d", j);
+    for (int j = 0; j < data.n_var; j++)
+        fprintf(f, " %s", data.series_names ? data.series_names[j] : "y?");
     fprintf(f, "\n");
     fprintf(f, "** Box-Cox lambda, regular differences, annual differences:\n");
     fprintf(f, " %g %d %d\n", lambda, d, D);
@@ -1874,7 +1889,7 @@ static void on_test_seasonality(GtkWidget *widget, gpointer user_data) {
         free(series);
 
         if (!diff_series || n_diff < 2 * s) {
-            g_string_append_printf(log, "Series %d: insufficient data after differencing.\n", j+1);
+            g_string_append_printf(log, "%s: insufficient data after differencing.\n", data.series_names[j]);
             free(diff_series);
             continue;
         }
@@ -1895,11 +1910,11 @@ static void on_test_seasonality(GtkWidget *widget, gpointer user_data) {
         if (reg_ok) {
             double f_crit = f_distribution_critical_value(num_harm, n_diff - num_harm - 1, 0.05);
             int is_seasonal = (f_stat > f_crit);
-            g_string_append_printf(log, "Series %d: F=%.3f (crit=%.3f), p=%.4f, R²=%.3f -> %s\n",
-                                   j+1, f_stat, f_crit, p_value, r_sq,
+            g_string_append_printf(log, "%s: F=%.3f (crit=%.3f), p=%.4f, R²=%.3f -> %s\n",
+                                   data.series_names[j], f_stat, f_crit, p_value, r_sq,
                                    is_seasonal ? "SEASONAL" : "NOT SEASONAL");
         } else {
-            g_string_append_printf(log, "Series %d: regression failed.\n", j+1);
+            g_string_append_printf(log, "%s: regression failed.\n", data.series_names[j]);
         }
 
         free(coeffs); free(std_err);

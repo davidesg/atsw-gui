@@ -98,6 +98,15 @@ países** (diferencias mínimas; peor a h=1, marginal a h=24). Razón: para prev
 que prever el crudo (≈paseo aleatorio sin deriva) → su previsión se aplana en ~3 meses y añade
 ruido, no señal; el coeficiente retardado es pequeño.
 
+> **Caveat de inferencia.** El desbalance de varianzas WTI (σ≈8%) vs IPC (σ≈0.25%), ~1000× en
+> varianza, mal-condiciona la estimación de la matriz var/cov → los **SE/Wald de los términos
+> cruzados no son fiables** (el t de φ₁₂ pasa de −1.1 a −100 entre escalas con el mismo
+> coeficiente; `steptol` paraba en un punto más robusto a esas pre-estimaciones). Es un
+> problema **conocido del pass-through** (commodity volátil + IPC suave), no del default de
+> escala. Los **puntos estimados (φ₂₁), elasticidades y previsiones son robustos e
+> invariantes**; la **exogeneidad/direccionalidad del WTI** se apoya en el punto estimado +
+> economía + la evidencia de previsión (que no usan SE), no en el Wald cruzado.
+
 ### El canal contemporáneo y opciones (no implementadas)
 
 La **media condicional** del IPC no usa Σ₂₁ (no se conoce la innovación del crudo de t) — sí

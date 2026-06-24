@@ -1,5 +1,5 @@
 Forecasts from VARMA(3,0) model
-lambda=0, scale=1, d=1, D=0, freq=12, horizon=24, deseason=auto
+lambda=0, scale=100, d=1, D=0, freq=12, horizon=24, deseason=auto
 Level/Low95/High95 in original units (re-seasonalized). mon%/ann% = monthly/annual variation rate and std (100*delta/scale; % for lambda=0).
 
 Series 1 (IPC_ES):

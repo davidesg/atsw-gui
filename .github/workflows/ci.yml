@@ -1,0 +1,36 @@
+name: build
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config libgsl-dev libglib2.0-dev libgtk-3-dev
+
+      - name: Build (engine + GUI)
+        run: make
+
+      - name: Smoke test (estimate a reference model)
+        run: |
+          cp data/models_group1/IPC3.inp /tmp/ci.inp
+          ./bin/drvarma /tmp/ci 3 0 -mean -deseason auto -forecast 12
+          grep -q "OPTIMIZER CONVERGED" /tmp/ci.out
+          test -s /tmp/ci.forecast
+
+      - name: License scan (must be free of Numerical Recipes)
+        run: |
+          # Match the Numerical Recipes copyright markers, not mere mentions.
+          if grep -rIn "Numerical Recipes Software\|Copr\." src include gui; then
+            echo "::error::Numerical Recipes copyright marker found"; exit 1
+          fi
+          echo "OK: no Numerical Recipes copyright markers"

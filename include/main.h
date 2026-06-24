@@ -91,7 +91,6 @@ void choldcp( real **mat, int n, real *d1, real *d2, int *ifault );
 void cholfor( real **matl, int n, real *rhsol );
 void cholbak( real **matl, int n, real *rhsol );
 void cholsol( real **matl, int n, real *rhsol );
-void eigenql( real **z, int n, real *d );
 void eigenqr( real **a, int n, real *wr, real *wi );
 void svdcp( real **a, int m, int n, real *w, real **v );
 void svsol( real **u, real *w, real **v, int n, real *x );

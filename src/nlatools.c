@@ -2,10 +2,27 @@
 /*****************************************************************************/
 /*  NLATOOLS.C                                                               */
 /*  Numerical linear algebra and dynamic memory allocation routines.         */
-/*  Copyright (C) Jos‚ Alberto Mauricio, 1995 (except where indicated).      */
+/*                                                                           */
+/*  Copyright (C) Jose Alberto Mauricio, 1995 (LU/Cholesky, string utils).   */
+/*  Eigenvalues (eigenqr) and SVD (svdcp/svsol) via the GNU Scientific       */
+/*  Library (GSL).  Dynamic memory routines (C) Arthur B. Treadway &         */
+/*  David E. Guerrero, 2009.                                                 */
+/*                                                                           */
+/*  Free of Numerical Recipes code.  Free software under the GNU General     */
+/*  Public License (see COPYING), v2 or, at your option, any later version.  */
 /*****************************************************************************/
 
 #include "main.h"            /* Header file (prototype declarations)        */
+#include <stdlib.h>
+#include <stdio.h>
+#include <math.h>
+#include <gsl/gsl_eigen.h>
+#include <gsl/gsl_matrix.h>
+#include <gsl/gsl_vector.h>
+#include <gsl/gsl_vector_complex.h>
+#include <gsl/gsl_complex.h>
+#include <gsl/gsl_complex_math.h>
+#include <gsl/gsl_linalg.h>
 extern real macheps;          /* Machine epsilon (global: declared in DRV.C) */
 extern FILE *outputv;         /* Output file (global: declared in DRV.C)     */
 
@@ -231,856 +248,184 @@ void cholsol( real **matl, int n, real *rhsol )
 /****************************************************************************/
 /****************************************************************************/
 
-void eigenql( real **z, int n, real *d )
-
-/* (C) Copr. 1986-92 Numerical Recipes Software *!-.                        */
-
-{
-   real s, r, p, g, f, dd, c, b, *e, pythag( real a, real b );
-   int  m, l, iter, i, k;
-   void tred2( real **a, int n, real *d, real *e );
-
-   e = vector( 1, n );
-   tred2( z, n, d, e );
-
-   for ( i = 2; i <= n; i++ ) e[i-1] = e[i];
-   e[n] = 0.0;
-   for ( l = 1; l <= n; l++ )
-       {
-       iter = 0;
-       do {
-          for ( m = l; m <= n-1; m++ )
-              {
-              dd = fabs( d[m] ) + fabs( d[m+1] );
-              if ( (real)(fabs( e[m] ) + dd) == dd ) break;
-              }
-          if ( m != l )
-             {
-             if ( iter++ == 30 )
-                nrerror( "TOO MANY ITERATIONS IN eigenql()" );
-             g = (d[l+1] - d[l]) / (2.0 * e[l]);
-             r = pythag( g, 1.0 );
-             g = d[m] - d[l] + e[l] / (g + SIGN(r,g));
-             s = c = 1.0;
-             p = 0.0;
-             for ( i = m-1; i >= l; i-- )
-                 {
-                 f = s * e[i];
-                 b = c * e[i];
-                 e[i+1] = (r = pythag( f, g ));
-                 if ( r == 0.0 )
-                    {
-                    d[i+1] -= p;
-                    e[m] = 0.0;
-                    break;
-                    }
-                 s = f / r;
-                 c = g / r;
-                 g = d[i+1] - p;
-                 r = (d[i] - g) * s + 2.0 * c * b;
-                 d[i+1] = g + (p = s * r);
-                 g = c * r - b;
-                 for ( k = 1; k <= n; k++ )
-                     {
-                     f = z[k][i+1];
-                     z[k][i+1] = s * z[k][i] + c * f;
-                     z[k][i] = c * z[k][i] - s * f;
-                     }
-                 }
-             if ( r == 0.0 && i >= l ) continue;
-             d[l] -= p;
-             e[l] = g;
-             e[m] = 0.0;
-             }
-       } while ( m != l );
-       }
-   free_vector( e, 1, n );
-}
+real pythag( real a, real b );      /* forward decl (defined below) */
 
 /****************************************************************************/
-
-void tred2( real **a, int n, real *d, real *e )
-
-/* (C) Copr. 1986-92 Numerical Recipes Software *!-.                        */
-
-{
-   int l, k, j, i;
-   real scale, hh, h, g, f;
-
-   for ( i = n; i >= 2; i-- )
-       {
-       l = i - 1;
-       h = scale = 0.0;
-       if ( l > 1 )
-          {
-          for ( k = 1; k <= l; k++ ) scale += fabs( a[i][k] );
-          if ( scale == 0.0 )
-             e[i] = a[i][l];
-          else
-             {
-             for (k = 1; k <= l; k++ )
-                 {
-                 a[i][k] /= scale;
-                 h += a[i][k] * a[i][k];
-                 }
-             f = a[i][l];
-             g = (f >= 0.0 ? -sqrt( h ) : sqrt( h ));
-             e[i] = scale * g;
-             h -= f * g;
-             a[i][l] = f - g;
-             f = 0.0;
-             for ( j = 1; j <= l; j++ )
-                 {
-                 a[j][i] = a[i][j] / h;
-                 g = 0.0;
-                 for ( k = 1; k <= j; k++ ) g += a[j][k] * a[i][k];
-                 for ( k = j+1; k <= l; k++ ) g += a[k][j]*a[i][k];
-                 e[j] = g / h;
-                 f += e[j] * a[i][j];
-                 }
-             hh = f / (h + h);
-             for ( j = 1; j <= l; j++ )
-                 {
-                 f = a[i][j];
-                 e[j] = g = e[j] - hh * f;
-                 for ( k = 1; k <= j; k++ )
-                     a[j][k] -= (f * e[k] + g * a[i][k]);
-                 }
-             }
-          }
-       else
-          e[i] = a[i][l];
-       d[i] = h;
-       }
-
-   d[1] = 0.0;
-   e[1] = 0.0;
-
-   for ( i = 1; i <= n; i++ )
-       {
-       l = i - 1;
-       if ( d[i] )
-          for ( j = 1; j <= l; j++ )
-              {
-              g = 0.0;
-              for ( k = 1; k <= l; k++ ) g += a[i][k] * a[k][j];
-              for ( k = 1; k <= l; k++ ) a[k][j] -= g * a[k][i];
-              }
-       d[i] = a[i][i];
-       a[i][i] = 1.0;
-       for (j = 1; j <= l; j++ ) a[j][i] = a[i][j] = 0.0;
-       }
-}
-
-/****************************************************************************/
+/*  Eigenvalues of a real general matrix via GSL (replaces NR hqr/balanc/  */
+/*  elmhes/tred2).  On exit wr/wi hold the real/imag parts (1-based) and    */
+/*  a[i][i] the modulus of the i-th eigenvalue (as the former NR routine).  */
 /****************************************************************************/
 
 void eigenqr( real **a, int n, real *wr, real *wi )
-
-/* (C) Copr. 1986-92 Numerical Recipes Software *!-.                        */
-
 {
-   int  nn, m, l, k, j, its, i, mmin;
-   real z, y, x, w, v, u, t, s, r, q, p, anorm, pythag( real a, real b );
-   void balanc( real **a, int n ), elmhes( real **a, int n );
+   int i, j;
+   gsl_matrix *A = gsl_matrix_alloc( (size_t)n, (size_t)n );
+   gsl_vector_complex *eval = gsl_vector_complex_alloc( (size_t)n );
+   gsl_eigen_nonsymm_workspace *w = gsl_eigen_nonsymm_alloc( (size_t)n );
+   gsl_complex ev;
 
-   balanc( a, n );
-   elmhes( a, n );
+   for ( i = 0; i < n; i++ )
+      for ( j = 0; j < n; j++ )
+         gsl_matrix_set( A, i, j, a[i+1][j+1] );
 
-   anorm = fabs( a[1][1] );
-   for ( i = 2; i <= n; i++ )
-       for ( j = (i-1); j <= n; j++ ) anorm += fabs( a[i][j] );
+   gsl_eigen_nonsymm_params( 0, 1, w );          /* balance before solving */
+   gsl_eigen_nonsymm( A, eval, w );
 
-   nn = n;
-   t  = 0.0;
+   for ( i = 0; i < n; i++ )
+      {
+      ev = gsl_vector_complex_get( eval, i );
+      wr[i+1] = GSL_REAL( ev );
+      wi[i+1] = GSL_IMAG( ev );
+      }
+   for ( i = 1; i <= n; i++ ) a[i][i] = pythag( wr[i], wi[i] );
 
-   while ( nn >= 1 )
-     {
-     its = 0;
-     do {
-        for ( l = nn; l >= 2; l-- )
-            {
-            s = fabs( a[l-1][l-1] ) + fabs( a[l][l] );
-            if ( s == 0.0 ) s = anorm;
-            if ( (real)(fabs( a[l][l-1]) + s ) == s ) break;
-            }
-        x = a[nn][nn];
-        if ( l == nn )
-           {
-           wr[nn]   = x + t;
-           wi[nn--] = 0.0;
-           }
-        else
-           {
-           y = a[nn-1][nn-1];
-           w = a[nn][nn-1] * a[nn-1][nn];
-           if ( l == (nn-1) )
-              {
-              p = 0.5 * (y - x);
-              q = p * p + w;
-              z = sqrt( fabs( q ) );
-              x += t;
-              if ( q >= 0.0 )
-                 {
-                 z = p + SIGN(z,p);
-                 wr[nn-1] = wr[nn] = x + z;
-                 if ( z ) wr[nn] = x - w / z;
-                 wi[nn-1] = wi[nn] = 0.0;
-                 }
-              else
-                 {
-                 wr[nn-1] = wr[nn] = x + p;
-                 wi[nn-1]= -(wi[nn] = z);
-                 }
-              nn -= 2;
-              }
-           else
-              {
-              if ( its == 80 )
-                 nrerror( "TOO MANY ITERATIONS IN eigenqr()" );
-              if ( its == 10 || its == 20 )
-                 {
-                 t += x;
-                 for ( i = 1; i <= nn;i++ ) a[i][i] -= x;
-                 s = fabs( a[nn][nn-1] ) + fabs( a[nn-1][nn-2] );
-                 y = x = 0.75 * s;
-                 w = -0.4375 * s * s;
-                 }
-              ++its;
-              for ( m = (nn-2); m >= l; m--)
-                  {
-                  z = a[m][m];
-                  r = x - z;
-                  s = y - z;
-                  p = (r * s - w) / a[m+1][m] + a[m][m+1];
-                  q = a[m+1][m+1] - z - r - s;
-                  r = a[m+2][m+1];
-                  s = fabs( p ) + fabs( q ) + fabs( r );
-                  p /= s;
-                  q /= s;
-                  r /= s;
-                  if ( m == l ) break;
-                  u = fabs( a[m][m-1] ) * (fabs( q ) + fabs( r ));
-                  v = fabs( p ) * (fabs( a[m-1][m-1] ) + fabs( z ) +
-                      fabs( a[m+1][m+1] ));
-                  if ( (real)(u+v) == v ) break;
-                  }
-              for ( i = m+2; i <= nn; i++ )
-                  {
-                  a[i][i-2] = 0.0;
-                  if ( i != (m+2) ) a[i][i-3] = 0.0;
-                  }
-              for ( k = m; k <= nn-1; k++ )
-                  {
-                  if ( k != m )
-                     {
-                     p = a[k][k-1];
-                     q = a[k+1][k-1];
-                     r = 0.0;
-                     if ( k != (nn-1) ) r = a[k+2][k-1];
-                     if ( (x = fabs( p ) + fabs( q ) + fabs( r )) != 0.0 )
-                        {
-                        p /= x;
-                        q /= x;
-                        r /= x;
-                        }
-                     }
-                  if ( (s = SIGN(sqrt(p*p+q*q+r*r),p)) != 0.0 )
-                     {
-                     if (k == m)
-                        {
-                        if ( l != m )
-                           a[k][k-1] = -a[k][k-1];
-                        }
-                     else
-                        a[k][k-1] = -s*x;
-                     p += s;
-                     x = p / s;
-                     y = q / s;
-                     z = r / s;
-                     q /= p;
-                     r /= p;
-                     for ( j = k; j <= nn; j++ )
-                         {
-                         p = a[k][j] + q * a[k+1][j];
-                         if ( k != (nn-1) )
-                            {
-                            p += r * a[k+2][j];
-                            a[k+2][j] -= p * z;
-                            }
-                         a[k+1][j] -= p * y;
-                         a[k][j] -= p * x;
-                         }
-                     mmin = nn < k+3 ? nn : k+3;
-                     for ( i = l; i <= mmin; i++)
-                         {
-                         p = x * a[i][k] + y * a[i][k+1];
-                         if (k != (nn-1))
-                            {
-                            p += z * a[i][k+2];
-                            a[i][k+2] -= p * r;
-                            }
-                         a[i][k+1] -= p*q;
-                         a[i][k] -= p;
-                         }
-                     }
-                  }
-              }
-           }
-     } while ( l < nn-1 );
-     }
-     for ( i = 1; i <= n; i++ ) a[i][i] = pythag( wr[i], wi[i] );
+   gsl_eigen_nonsymm_free( w );
+   gsl_vector_complex_free( eval );
+   gsl_matrix_free( A );
 }
 
 /****************************************************************************/
-
-void balanc( real **a, int n )
-
-/* (C) Copr. 1986-92 Numerical Recipes Software *!-.                        */
-
-{
-   int  last, j, i;
-   real s, r, g, f, c, sqrdx;
-
-   sqrdx = RADIX * RADIX;
-   last  = 0;
-   while ( last == 0 )
-     {
-     last = 1;
-     for ( i = 1; i <= n; i++ )
-         {
-         r = c = 0.0;
-         for ( j = 1; j <= n; j++ )
-             if ( j != i )
-                {
-                c += fabs(a[j][i]);
-                r += fabs(a[i][j]);
-                }
-         if ( c && r )
-            {
-            g = r / RADIX;
-            f = 1.0;
-            s = c + r;
-            while ( c < g )
-              {
-              f *= RADIX;
-              c *= sqrdx;
-              }
-            g = r * RADIX;
-            while ( c > g )
-              {
-              f /= RADIX;
-              c /= sqrdx;
-              }
-            if ( (c + r) / f < 0.95 * s )
-               {
-               last = 0;
-               g = 1.0 / f;
-               for ( j = 1; j <= n; j++ ) a[i][j] *= g;
-               for ( j = 1; j <= n; j++ ) a[j][i] *= f;
-               }
-            }
-         }
-     }
-}
-
-/****************************************************************************/
-
-void elmhes( real **a, int n )
-
-/* (C) Copr. 1986-92 Numerical Recipes Software *!-.                        */
-
-{
-   int  m, j, i;
-   real y, x;
-
-   for ( m = 2; m < n; m++ )
-       {
-       x = 0.0;
-       i = m;
-       for ( j = m; j <= n; j++ )
-           {
-           if ( fabs( a[j][m-1] ) > fabs( x ) )
-              {
-              x = a[j][m-1];
-              i = j;
-              }
-           }
-       if ( i != m )
-          {
-          for ( j = m-1; j <= n; j++ ) SWAP(a[i][j],a[m][j])
-          for ( j = 1; j <= n; j++ ) SWAP(a[j][i],a[j][m])
-          }
-       if ( x )
-          {
-          for ( i = m+1; i <= n; i++ )
-              {
-              if ( (y = a[i][m-1] ) != 0.0 )
-                 {
-                 y /= x;
-                 a[i][m-1] = y;
-                 for ( j = m; j <= n; j++ ) a[i][j] -= y * a[m][j];
-                 for ( j = 1; j <= n; j++ ) a[j][m] += y * a[j][i];
-                 }
-              }
-          }
-       }
-}
-
-/****************************************************************************/
+/*  Singular value decomposition via GSL: a = u w v^T (1-based).            */
+/*  On exit a holds u (m x n), w the singular values (n), v the n x n V.    */
 /****************************************************************************/
 
 void svdcp( real **a, int m, int n, real *w, real **v )
-
-/* (C) Copr. 1986-92 Numerical Recipes Software *!-.                        */
-
 {
-   real anorm, c, f, g, h, s, scale, x, y, z, *rv1;
-   int  flag, i, its, j, jj, k, l, nm;
-   real pythag( real a, real b );
+   int i, j;
+   gsl_matrix *A = gsl_matrix_alloc( (size_t)m, (size_t)n );
+   gsl_matrix *V = gsl_matrix_alloc( (size_t)n, (size_t)n );
+   gsl_vector *S = gsl_vector_alloc( (size_t)n );
+   gsl_vector *work = gsl_vector_alloc( (size_t)n );
 
-   rv1 = vector( 1, n );
-   g   = scale = anorm = 0.0;
+   for ( i = 0; i < m; i++ )
+      for ( j = 0; j < n; j++ )
+         gsl_matrix_set( A, i, j, a[i+1][j+1] );
 
-   for ( i = 1; i <= n; i++ )
-       {
-       l = i + 1;
-       rv1[i] = scale * g;
-       g = s = scale = 0.0;
-       if ( i <= m )
-          {
-          for ( k = i; k <= m; k++ ) scale += fabs( a[k][i] );
-          if ( scale )
-             {
-             for ( k = i; k <= m; k++ )
-                 {
-                 a[k][i] /= scale;
-                 s += a[k][i] * a[k][i];
-                 }
-             f = a[i][i];
-             g = -SIGN(sqrt(s),f);
-             h = f * g - s;
-             a[i][i] = f - g;
-             for ( j = l; j <= n; j++)
-                 {
-                 for ( s = 0.0, k = i; k <= m; k++ ) s += a[k][i] * a[k][j];
-                 f = s / h;
-                 for ( k = i; k <= m; k++ ) a[k][j] += f * a[k][i];
-                 }
-             for ( k = i; k <= m; k++ ) a[k][i] *= scale;
-             }
-          }
-       w[i] = scale * g;
-       g = s = scale = 0.0;
-       if ( i <= m && i != n )
-          {
-          for ( k = l; k <= n; k++ ) scale += fabs( a[i][k] );
-          if ( scale )
-             {
-             for ( k = l; k <= n; k++)
-                 {
-                 a[i][k] /= scale;
-                 s += a[i][k] * a[i][k];
-                 }
-             f = a[i][l];
-             g = -SIGN(sqrt(s),f);
-             h = f * g - s;
-             a[i][l] = f - g;
-             for ( k = l; k <= n; k++ ) rv1[k] = a[i][k] / h;
-             for ( j = l; j <=m ; j++)
-                 {
-                 for ( s = 0.0, k = l; k <= n; k++ ) s += a[j][k] * a[i][k];
-                 for ( k = l; k <= n; k++ ) a[j][k] += s * rv1[k];
-                 }
-             for ( k = l; k <= n; k++) a[i][k] *= scale;
-             }
-          }
-       anorm = rmax(anorm,(fabs(w[i])+fabs(rv1[i])));
-       }
+   gsl_linalg_SV_decomp( A, V, S, work );
 
-   for ( i = n; i >= 1; i-- )
-       {
-       if ( i < n )
-          {
-          if ( g )
-             {
-             for ( j = l; j <= n; j++ )
-                 v[j][i] = (a[i][j] / a[i][l]) / g;
-             for ( j = l; j <= n; j++ )
-                 {
-                 for ( s = 0.0, k = l; k <= n; k++ ) s += a[i][k] * v[k][j];
-                 for ( k = l; k <= n; k++ ) v[k][j] += s * v[k][i];
-                 }
-             }
-          for ( j = l; j <= n; j++ ) v[i][j] = v[j][i] = 0.0;
-          }
-       v[i][i] = 1.0;
-       g = rv1[i];
-       l = i;
-       }
+   for ( i = 0; i < m; i++ )
+      for ( j = 0; j < n; j++ )
+         a[i+1][j+1] = gsl_matrix_get( A, i, j );
+   for ( j = 0; j < n; j++ ) w[j+1] = gsl_vector_get( S, j );
+   for ( i = 0; i < n; i++ )
+      for ( j = 0; j < n; j++ )
+         v[i+1][j+1] = gsl_matrix_get( V, i, j );
 
-   for ( i = IMIN(m,n); i >= 1; i-- )
-       {
-       l = i + 1;
-       g = w[i];
-       for ( j = l; j <= n; j++ ) a[i][j] = 0.0;
-       if ( g )
-          {
-          g = 1.0 / g;
-          for ( j = l; j <= n; j++ )
-              {
-              for ( s = 0.0, k = l; k <= m; k++ ) s += a[k][i] * a[k][j];
-              f = (s / a[i][i]) * g;
-              for ( k = i; k <= m; k++ ) a[k][j] += f * a[k][i];
-              }
-          for ( j = i; j <= m; j++ ) a[j][i] *= g;
-          }
-       else
-          for ( j = i; j <= m; j++ ) a[j][i] = 0.0;
-       ++a[i][i];
-       }
-
-   for ( k = n; k >= 1; k-- )
-       {
-       for ( its = 1; its <= 30; its++ )
-           {
-           flag = 1;
-           for ( l = k; l >= 1;l-- )
-               {
-               nm = l - 1;
-               if ( (real)(fabs( rv1[l]) + anorm ) == anorm )
-                  {
-                  flag = 0;
-                  break;
-                  }
-               if ( (real)(fabs(w[nm]) + anorm) == anorm ) break;
-               }
-           if ( flag )
-              {
-              c = 0.0;
-              s = 1.0;
-              for ( i = l; i <= k; i++)
-                  {
-                  f = s * rv1[i];
-                  rv1[i] = c * rv1[i];
-                  if ((real)(fabs( f ) + anorm) == anorm ) break;
-                  g = w[i];
-                  h = pythag( f, g );
-                  w[i] = h;
-                  h = 1.0 / h;
-                  c = g * h;
-                  s = -f * h;
-                  for ( j = 1; j <= m; j++ )
-                      {
-                      y = a[j][nm];
-                      z = a[j][i];
-                      a[j][nm] = y * c + z * s;
-                      a[j][i] = z * c - y * s;
-                      }
-                  }
-              }
-           z = w[k];
-           if ( l == k )
-              {
-              if ( z < 0.0 )
-                 {
-                 w[k] = -z;
-                 for ( j = 1; j <= n; j++ ) v[j][k] = -v[j][k];
-                 }
-              break;
-              }
-           if ( its == 30 )
-              nrerror( "NO CONVERGENCE IN 30 svdcmp() ITERATIONS" );
-           x = w[l];
-           nm = k - 1;
-           y = w[nm];
-           g = rv1[nm];
-           h = rv1[k];
-           f = ((y - z) * (y + z) + (g - h) * (g + h)) / (2.0 * h * y);
-           g = pythag( f, 1.0 );
-           f = ((x - z) * (x + z) + h * ((y / (f + SIGN(g,f))) - h)) / x;
-           c = s = 1.0;
-           for ( j = l; j <= nm; j++ )
-               {
-               i = j + 1;
-               g = rv1[i];
-               y = w[i];
-               h = s * g;
-               g = c * g;
-               z = pythag( f, h );
-               rv1[j] = z;
-               c = f / z;
-               s = h / z;
-               f = x * c + g * s;
-               g = g * c - x * s;
-               h = y * s;
-               y *= c;
-               for ( jj = 1; jj <= n; jj++ )
-                   {
-                   x = v[jj][j];
-                   z = v[jj][i];
-                   v[jj][j] = x * c + z * s;
-                   v[jj][i] = z * c - x * s;
-                   }
-               z = pythag( f, h );
-               w[j] = z;
-               if ( z )
-                  {
-                  z = 1.0 / z;
-                  c = f * z;
-                  s = h * z;
-                  }
-               f = c * g + s * y;
-               x = c * y - s * g;
-               for ( jj = 1; jj <= m; jj++ )
-                   {
-                   y = a[jj][j];
-                   z = a[jj][i];
-                   a[jj][j] = y * c + z * s;
-                   a[jj][i] = z * c - y * s;
-                   }
-               }
-           rv1[l] = 0.0;
-           rv1[k] = f;
-           w[k]   = x;
-           }
-       }
-   free_vector( rv1, 1, n );
+   gsl_vector_free( work ); gsl_vector_free( S );
+   gsl_matrix_free( V ); gsl_matrix_free( A );
 }
 
+/****************************************************************************/
+/*  Solve (u w v^T) y = x using the SVD factors; x is overwritten with y.  */
 /****************************************************************************/
 
 void svsol( real **u, real *w, real **v, int n, real *x )
-
-/* (C) Copr. 1986-92 Numerical Recipes Software *!-.                        */
-
 {
-   int  jj, j, i;
-   real s, *tmp, wmax, wmin;
+   int i, j;
+   gsl_matrix *U = gsl_matrix_alloc( (size_t)n, (size_t)n );
+   gsl_matrix *V = gsl_matrix_alloc( (size_t)n, (size_t)n );
+   gsl_vector *S = gsl_vector_alloc( (size_t)n );
+   gsl_vector *b = gsl_vector_alloc( (size_t)n );
+   gsl_vector *sol = gsl_vector_alloc( (size_t)n );
 
-   tmp  = vector( 1, n );
-   wmax = 0.0;
-   for ( j = 1; j <= n; j++ ) if ( w[j] > wmax ) wmax = w[j];
-   wmin = wmax * sqrt( macheps );
-   for ( j = 1; j <= n; j++ ) if ( w[j] < wmin ) w[j] = 0.0;
+   for ( i = 0; i < n; i++ )
+      {
+      for ( j = 0; j < n; j++ )
+         {
+         gsl_matrix_set( U, i, j, u[i+1][j+1] );
+         gsl_matrix_set( V, i, j, v[i+1][j+1] );
+         }
+      gsl_vector_set( S, i, w[i+1] );
+      gsl_vector_set( b, i, x[i+1] );
+      }
 
-   for ( j = 1; j <= n; j++ )
-       {
-       s = 0.0;
-       if ( w[j] )
-          {
-          for ( i = 1; i <= n; i++ ) s += u[i][j] * x[i];
-          s /= w[j];
-          }
-       tmp[j] = s;
-       }
-   for ( j = 1; j <= n; j++ )
-       {
-       s = 0.0;
-       for ( jj = 1; jj <= n; jj++ ) s += v[j][jj] * tmp[jj];
-       x[j] = s;
-       }
-   free_vector( tmp, 1, n );
+   gsl_linalg_SV_solve( U, V, S, b, sol );
+
+   for ( i = 0; i < n; i++ ) x[i+1] = gsl_vector_get( sol, i );
+
+   gsl_vector_free( sol ); gsl_vector_free( b ); gsl_vector_free( S );
+   gsl_matrix_free( V ); gsl_matrix_free( U );
 }
 
 /****************************************************************************/
+/*  Arthur B. Treadway & David E. Guerrero (2009) -- dynamic memory.        */
+/*  1-based (nl-based) indexing; allocations sized [0..nh] (calloc) so any   */
+/*  nl >= 0 is valid without undefined pointer arithmetic.                   */
 /****************************************************************************/
 
 void nrerror( char error_text[] )
-
-/* (C) Copr. 1986-92 Numerical Recipes Software *!-.                        */
-
 {
-   printf( "Unrecoverable run-time error:\n" );
-   printf( "%s\n", error_text );
-   printf( "... Exiting to system ...\n" );
+   fprintf( stderr, "Unrecoverable run-time error:\n%s\n... Exiting to system ...\n",
+            error_text );
    exit( 1 );
 }
 
-/****************************************************************************/
-
 real *vector( long nl, long nh )
-
-/* (C) Copr. 1986-92 Numerical Recipes Software *!-.                        */
-
 {
-   real *v;
-
-   v = (real *)malloc((size_t)((nh-nl+1) * sizeof(real)));
-   if ( !v ) nrerror( "ALLOCATION FAILURE IN vector()" );
-   return( v-nl );
+   real *v = (real *)calloc( (size_t)(nh + 1), sizeof(real) );
+   if ( !v ) nrerror( "ALLOCATION FAILURE in vector()" );
+   return( v );
 }
-
-/****************************************************************************/
 
 int *ivector( long nl, long nh )
-
-/* (C) Copr. 1986-92 Numerical Recipes Software *!-.                        */
-
 {
-   int *v;
-
-   v = (int *)malloc((size_t)((nh-nl+1) * sizeof(int)));
-   if ( !v ) nrerror( "ALLOCATION FAILURE IN ivector()" );
-   return( v-nl );
+   int *v = (int *)calloc( (size_t)(nh + 1), sizeof(int) );
+   if ( !v ) nrerror( "ALLOCATION FAILURE in ivector()" );
+   return( v );
 }
-
-/****************************************************************************/
 
 real **matrix( long nrl, long nrh, long ncl, long nch )
-
-/* (C) Copr. 1986-92 Numerical Recipes Software *!-.                        */
-
 {
-   long i, nrow=nrh-nrl+1, ncol=nch-ncl+1;
-   real **m;
-
-/* Allocate pointers to rows:                                               */
-
-   m = (real **)malloc((size_t)(nrow * sizeof(real*)));
-   if ( !m ) nrerror( "ALLOCATION FAILURE 1 IN matrix()" );
-   m -= nrl;
-
-/* Allocate rows and set pointers to them:                                  */
-
-   m[nrl] = (real *)malloc((size_t)(nrow * ncol * sizeof(real)));
-   if ( !m[nrl] ) nrerror( "ALLOCATION FAILURE 2 IN matrix()" );
-   m[nrl] -= ncl;
-
-   for( i = nrl + 1; i <= nrh; i++ ) m[i] = m[i-1] + ncol;
-
-/* Return pointer to array of pointers to rows:                             */
-
+   long i, nrow = nrh - nrl + 1;
+   real **m = (real **)calloc( (size_t)(nrh + 1), sizeof(real *) );
+   real *data;
+   if ( !m ) nrerror( "ALLOCATION FAILURE 1 in matrix()" );
+   data = (real *)calloc( (size_t)(nrow * (nch + 1)), sizeof(real) );
+   if ( !data ) nrerror( "ALLOCATION FAILURE 2 in matrix()" );
+   for ( i = nrl; i <= nrh; i++ ) m[i] = data + (i - nrl) * (nch + 1);
    return( m );
 }
-
-/****************************************************************************/
 
 int **imatrix( long nrl, long nrh, long ncl, long nch )
-
-/* (C) Copr. 1986-92 Numerical Recipes Software *!-.                        */
-
 {
-   long i, nrow=nrh-nrl+1,ncol=nch-ncl+1;
-   int  **m;
-
-/* Allocate pointers to rows:                                               */
-
-   m = (int **)malloc((size_t)(nrow * sizeof(int*)));
-   if ( !m ) nrerror( "ALLOCATION FAILURE 1 IN imatrix()" );
-   m -= nrl;
-
-/* Allocate rows and set pointers to them:                                  */
-
-   m[nrl] = (int *)malloc((size_t)(nrow * ncol * sizeof(int)));
-   if ( !m[nrl] ) nrerror( "ALLOCATION FAILURE 2 IN imatrix()" );
-   m[nrl] -= ncl;
-
-   for( i = nrl + 1; i <= nrh; i++ ) m[i] = m[i-1] + ncol;
-
-/* Return pointer to array of pointers to rows:                             */
-
+   long i, nrow = nrh - nrl + 1;
+   int **m = (int **)calloc( (size_t)(nrh + 1), sizeof(int *) );
+   int *data;
+   if ( !m ) nrerror( "ALLOCATION FAILURE 1 in imatrix()" );
+   data = (int *)calloc( (size_t)(nrow * (nch + 1)), sizeof(int) );
+   if ( !data ) nrerror( "ALLOCATION FAILURE 2 in imatrix()" );
+   for ( i = nrl; i <= nrh; i++ ) m[i] = data + (i - nrl) * (nch + 1);
    return( m );
 }
 
-/****************************************************************************/
-
 real ***tensor( long nrl, long nrh, long ncl, long nch, long ndl, long ndh )
-
-/* (C) Copr. 1986-92 Numerical Recipes Software *!-.                        */
-
 {
-   long i, j, nrow=nrh-nrl+1, ncol=nch-ncl+1, ndep=ndh-ndl+1;
-   real ***t;
-
-/* Allocate pointers to pointers to rows:                                    */
-
-   t = (real ***)malloc((size_t)(nrow * sizeof(real**)));
-   if ( !t ) nrerror( "ALLOCATION FAILURE 1 IN tensor()" );
-   t -= nrl;
-
-/* Allocate pointers to rows and set pointers to them:                       */
-
-   t[nrl] = (real **)malloc((size_t)(nrow * ncol * sizeof(real*)));
-   if ( !t[nrl] ) nrerror( "ALLOCATION FAILURE 2 IN tensor()" );
-   t[nrl] -= ncl;
-
-/* Allocate rows and set pointers to them:                                   */
-
-   t[nrl][ncl] = (real *)malloc((size_t)(nrow * ncol * ndep * sizeof(real)));
-   if ( !t[nrl][ncl] ) nrerror( "ALLOCATION FAILURE 3 IN tensor()" );
-   t[nrl][ncl] -= ndl;
-
-   for (j = ncl + 1; j <= nch; j++ ) t[nrl][j] = t[nrl][j-1] + ndep;
-   for (i = nrl + 1; i <= nrh; i++)
-       {
-       t[i] = t[i-1] + ncol;
-       t[i][ncl] = t[i-1][ncl] + ncol * ndep;
-       for( j = ncl + 1; j <= nch; j++ ) t[i][j] = t[i][j-1] + ndep;
-       }
-
-/* Return pointer to array of pointers to rows:                              */
-
+   long i, j, nrow = nrh - nrl + 1, ncol = nch - ncl + 1;
+   real ***t = (real ***)calloc( (size_t)(nrh + 1), sizeof(real **) );
+   real **planes; real *data;
+   if ( !t ) nrerror( "ALLOCATION FAILURE 1 in tensor()" );
+   planes = (real **)calloc( (size_t)(nrow * (nch + 1)), sizeof(real *) );
+   if ( !planes ) nrerror( "ALLOCATION FAILURE 2 in tensor()" );
+   data = (real *)calloc( (size_t)(nrow * ncol * (ndh + 1)), sizeof(real) );
+   if ( !data ) nrerror( "ALLOCATION FAILURE 3 in tensor()" );
+   for ( i = nrl; i <= nrh; i++ )
+      {
+      t[i] = planes + (i - nrl) * (nch + 1);
+      for ( j = ncl; j <= nch; j++ )
+         t[i][j] = data + ( (i - nrl) * ncol + (j - ncl) ) * (ndh + 1);
+      }
    return( t );
 }
 
-/****************************************************************************/
-
-void free_vector( real *v, long nl, long nh )
-
-/* (C) Copr. 1986-92 Numerical Recipes Software *!-.                        */
-
-{
-   free((FREE_ARG) (v + nl));
-}
-
-/****************************************************************************/
-
-void free_ivector( int *v, long nl, long nh )
-
-/* (C) Copr. 1986-92 Numerical Recipes Software *!-.                        */
-
-{
-   free((FREE_ARG) (v + nl));
-}
-
-/****************************************************************************/
-
+void free_vector( real *v, long nl, long nh ) { free( v ); }
+void free_ivector( int *v, long nl, long nh ) { free( v ); }
 void free_matrix( real **m, long nrl, long nrh, long ncl, long nch )
-
-/* (C) Copr. 1986-92 Numerical Recipes Software *!-.                        */
-
-{
-   free((FREE_ARG) (m[nrl] + ncl));
-   free((FREE_ARG) (m + nrl));
-}
-
-/****************************************************************************/
-
+   { if ( m ) { free( m[nrl] ); free( m ); } }
 void free_imatrix( int **m, long nrl, long nrh, long ncl, long nch )
-
-/* (C) Copr. 1986-92 Numerical Recipes Software *!-.                        */
-
-{
-   free((FREE_ARG) (m[nrl] + ncl));
-   free((FREE_ARG) (m + nrl));
-}
-
-/****************************************************************************/
-
+   { if ( m ) { free( m[nrl] ); free( m ); } }
 void free_tensor( real ***t, long nrl, long nrh, long ncl, long nch,
                   long ndl, long ndh )
-
-/* (C) Copr. 1986-92 Numerical Recipes Software *!-.                        */
-
-{
-   free((FREE_ARG) (t[nrl][ncl] + ndl));
-   free((FREE_ARG) (t[nrl] + ncl));
-   free((FREE_ARG) (t + nrl));
-}
-
-/****************************************************************************/
-/****************************************************************************/
+   { if ( t ) { free( t[nrl][ncl] ); free( t[nrl] ); free( t ); } }
 
 real rmax( real a, real b )
 
@@ -1369,16 +714,16 @@ void calcnu( double omega, int s, double delta, int r, double *nu, int lags )
 /*****************************************************************************/
 
 /*****************************************************************************/
-/* DISTRIBUCIÓN CHI-CUADRADO - FUNCIÓN DE DISTRIBUCIÓN ACUMULADA (CDF)      */
+/* DISTRIBUCIï¿½N CHI-CUADRADO - FUNCIï¿½N DE DISTRIBUCIï¿½N ACUMULADA (CDF)      */
 /*****************************************************************************/
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
 
-/* Función gamma (necesaria para chi-cuadrado) */
+/* Funciï¿½n gamma (necesaria para chi-cuadrado) */
 static real gamma_func(real x) {
-    /* Aproximación de Stirling para gamma(x) */
+    /* Aproximaciï¿½n de Stirling para gamma(x) */
     real coef[6] = {
         76.18009172947146,
         -86.50532032941677,
@@ -1399,7 +744,7 @@ static real gamma_func(real x) {
     return exp(-tmp + log(2.5066282746310005 * ser / x));
 }
 
-/* Función gamma incompleta regularizada P(a,x) */
+/* Funciï¿½n gamma incompleta regularizada P(a,x) */
 static real gammap(real a, real x) {
     /* Serie para gamma incompleta regularizada */
     if (x < a + 1.0) {
@@ -1417,7 +762,7 @@ static real gammap(real a, real x) {
 
         return sum * exp(-x + a * log(x) - log(gamma_func(a)));
     } else {
-        /* Usar fracción continua */
+        /* Usar fracciï¿½n continua */
         real b = x + 1.0 - a;
         real c = 1.0 / 1e-30;
         real d = 1.0 / b;
@@ -1440,20 +785,20 @@ static real gammap(real a, real x) {
     }
 }
 
-/* Distribución chi-cuadrado acumulada - P(?² < x | df) */
+/* Distribuciï¿½n chi-cuadrado acumulada - P(?ï¿½ < x | df) */
 real chisq(real x, int df) {
     if (df <= 0) return 0.0;
     if (x <= 0.0) return 0.0;
-    if (x > 1000.0) return 1.0;  /* Límite superior */
+    if (x > 1000.0) return 1.0;  /* Lï¿½mite superior */
 
-    /* Para df pequeños, cálculo exacto */
+    /* Para df pequeï¿½os, cï¿½lculo exacto */
     if (df < 30) {
         return gammap(df / 2.0, x / 2.0);
     } else {
-        /* Para df grandes, usar aproximación normal (Wilson-Hilferty) */
+        /* Para df grandes, usar aproximaciï¿½n normal (Wilson-Hilferty) */
         real z = (pow(x / df, 1.0/3.0) - (1.0 - 2.0/(9.0 * df))) / sqrt(2.0/(9.0 * df));
 
-        /* Distribución normal acumulada */
+        /* Distribuciï¿½n normal acumulada */
         real t = 1.0 / (1.0 + 0.2316419 * fabs(z));
         real d = 0.3989423 * exp(-z * z / 2.0);
         real prob = d * t * (0.3193815 + t * (-0.3565638 + t * (1.7814779 + t * (-1.821256 + t * 1.330274))));
@@ -1467,20 +812,20 @@ real chisq(real x, int df) {
     }
 }
 
-/* Versión alternativa más simple (menos precisa pero más rápida) */
+/* Versiï¿½n alternativa mï¿½s simple (menos precisa pero mï¿½s rï¿½pida) */
 real chisq_simple(real x, int df) {
     if (df <= 0 || x <= 0.0) return 0.0;
     if (x > 1000.0) return 1.0;
 
-    /* Aproximación de Wilson-Hilferty (buena para df > 30) */
+    /* Aproximaciï¿½n de Wilson-Hilferty (buena para df > 30) */
     if (df > 30) {
         real z = (pow(x / df, 1.0/3.0) - (1.0 - 2.0/(9.0 * df))) / sqrt(2.0/(9.0 * df));
 
-        /* Distribución normal estándar acumulada usando erf */
+        /* Distribuciï¿½n normal estï¿½ndar acumulada usando erf */
         return 0.5 * (1.0 + erf(z / sqrt(2.0)));
     }
 
-    /* Para df pequeños, usar serie más simple */
+    /* Para df pequeï¿½os, usar serie mï¿½s simple */
     real sum = 0.0;
     real term = exp(-x/2.0);
 
@@ -1494,12 +839,12 @@ real chisq_simple(real x, int df) {
         }
         sum = 1.0 - running_sum;
     } else {
-        /* df impar - usar fórmula más compleja */
+        /* df impar - usar fï¿½rmula mï¿½s compleja */
         real sqrt_x = sqrt(x);
         real t = sqrt_x / sqrt(df);
         sum = 2.0 * (1.0 - 0.5 * (1.0 + erf(t/sqrt(2.0))));
 
-        /* Corrección */
+        /* Correcciï¿½n */
         if (df > 1) {
             term = exp(-x/2.0) * sqrt(x/2.0) / sqrt(M_PI);
             sum += term;
@@ -1514,11 +859,11 @@ real chisq_simple(real x, int df) {
 }
 
 /*****************************************************************************/
-/* DISTRIBUCIÓN t-STUDENT - FUNCIÓN DE DISTRIBUCIÓN ACUMULADA (CDF)         */
+/* DISTRIBUCIï¿½N t-STUDENT - FUNCIï¿½N DE DISTRIBUCIï¿½N ACUMULADA (CDF)         */
 /*****************************************************************************/
 
 real tdist(real t, int df) {
-    if (df <= 0) return 0.5;  /* Distribución indefinida */
+    if (df <= 0) return 0.5;  /* Distribuciï¿½n indefinida */
 
     real x = df / (df + t * t);
 
@@ -1550,7 +895,7 @@ real tdist(real t, int df) {
     }
 }
 
-/* Versión alternativa usando beta incompleta */
+/* Versiï¿½n alternativa usando beta incompleta */
 real tdist_beta(real t, int df) {
     real x = df / (df + t * t);
 
@@ -1562,7 +907,7 @@ real tdist_beta(real t, int df) {
     real a = df / 2.0;
     real b = 0.5;
 
-    /* Aproximación de la beta incompleta */
+    /* Aproximaciï¿½n de la beta incompleta */
     real bt = exp(lgamma(a + b) - lgamma(a) - lgamma(b) + a * log(x) + b * log(1.0 - x));
 
     if (x < (a + 1.0) / (a + b + 2.0)) {
@@ -1594,7 +939,7 @@ real tdist_beta(real t, int df) {
             return 0.5 * result;
         }
     } else {
-        /* Usar fracción continua */
+        /* Usar fracciï¿½n continua */
         real c = 1.0;
         real d = 1.0 - (a + b) * x / (a + 1.0);
         if (fabs(d) < 1e-30) d = 1e-30;
@@ -1633,9 +978,9 @@ real tdist_beta(real t, int df) {
     }
 }
 
-/* Función de distribución normal estándar acumulada (para referencia) */
+/* Funciï¿½n de distribuciï¿½n normal estï¿½ndar acumulada (para referencia) */
 real normal_cdf(real z) {
-    /* Aproximación de Abramowitz y Stegun (precisión 7.5e-8) */
+    /* Aproximaciï¿½n de Abramowitz y Stegun (precisiï¿½n 7.5e-8) */
     real t = 1.0 / (1.0 + 0.2316419 * fabs(z));
     real d = 0.3989423 * exp(-z * z / 2.0);
     real prob = d * t * (0.3193815 + t * (-0.3565638 + t * (1.7814779 + t * (-1.821256 + t * 1.330274))));

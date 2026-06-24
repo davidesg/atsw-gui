@@ -20,6 +20,15 @@ The code is **free of Numerical Recipes**: all linear algebra that previously
 relied on NR routines (eigenvalues, SVD) now uses the GNU Scientific Library
 (GSL), and the dynamic-memory helpers are clean reimplementations.
 
+## Documentation
+
+- [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) — input format, options, reading the
+  output, recursive forecasting, examples.
+- [`docs/DEVELOPER_GUIDE.md`](docs/DEVELOPER_GUIDE.md) — architecture, source
+  layout, estimation pipeline, conventions.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — how to build, contribute and keep the
+  code license-clean.
+
 ## Dependencies
 
 | Component | Needs |

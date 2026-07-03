@@ -450,8 +450,14 @@ double ***tensor( long nrl, long nrh, long ncl, long nch, long ndl, long ndh )
    double **planes;
    double *data;
 
-   t = (double ***)calloc( (size_t)(nrh + 1), sizeof(double **) );
+   t = (double ***)calloc( (size_t)nrow, sizeof(double **) );
    if ( !t ) nrerror( "ALLOCATION FAILURE 1 in tensor()" );
+   t -= nrl;   /* Offset the base so t[nrl..nrh] is addressable, matching the
+                  (i-nrl) offsets used for planes/data below. Without this a
+                  tensor with a negative lower row index (gamwa's -q+1, q>0)
+                  writes t[nrl<0] out of bounds -> heap corruption / double
+                  free. Undone in free_tensor via free(t + nrl). Same de-NR
+                  regression fixed in fue-1.13.1. */
 
    planes = (double **)calloc( (size_t)(nrow * (nch + 1)), sizeof(double *) );
    if ( !planes ) nrerror( "ALLOCATION FAILURE 2 in tensor()" );
@@ -502,7 +508,7 @@ void free_imatrix( int **m, long nrl, long nrh, long ncl, long nch )
 void free_tensor( double ***t, long nrl, long nrh, long ncl, long nch,
                   long ndl, long ndh )
 {
-   if ( t ) { free( t[nrl][ncl] ); free( t[nrl] ); free( t ); }
+   if ( t ) { free( t[nrl][ncl] ); free( t[nrl] ); free( t + nrl ); }
 }
 
 /*****************************************************************************/

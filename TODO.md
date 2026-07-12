@@ -137,13 +137,17 @@ Referencia fue: φ_N = 0.402839 · μ_Y = 0.154472 · σ²_Y = 0.062666 · logL 
       | SE(μ) | **0.028502** | 0.073304 | **0.028502** |
       | SE(det f=1) | 0.068328 | 0.056673 | 0.068328 |
 
-      **(c) La SE(μ) de fue parece equivocada.** Tres cálculos independientes dan
-      0.0285 —la fórmula `σ/((1−φ)√n)`, una simulación de 20 000 réplicas (0.0284) y
-      el GLS exacto con el modelo completo (0.028502)—; el 0.073304 de fue es 2.6×
-      demasiado grande. fue y drtran **sí** coinciden en el resto de casos
-      (`ES_CORE_S3`, `ES_CORE_S135b`): la discrepancia solo aparece en el modelo con
-      deterministas, donde fue también difiere en los armónicos de f=1.
-      **Anotado para revisar en fue**, no en el puente.
+      **(c) fue arrastra el MISMO bug del hessiano BFGS.** *(Corregido 2026-07-12: la
+      primera lectura fue errónea. Se dijo que "la SE de μ de fue está mal", mirando
+      una sola salida. No es que fue calcule mal la SE: es que la calcula de forma
+      **inestable**.)* Hay dos salidas de fue del mismo `ES_CPI_m10`, con
+      estimaciones puntuales **idénticas** y SE **radicalmente distintas**: SE(μ) =
+      0.073304 en una y 0.028316 en otra; y en los deterministas la primera se
+      equivoca por un factor **4-5×**. Es la firma exacta del hessiano acumulado por
+      BFGS: depende del camino del optimizador. fue usa el **mismo `drvmlest.c`**,
+      con las mismas dos líneas de `fdhess` comentadas. Documentado con evidencia y
+      arreglo en **`atws/fue/fue-1.13.1/ERRORES_ESTANDAR.md`**. Afecta a la
+      inferencia del estudio de inflación (qué armónicos entran en el modelo).
 
       **(d)** Es plausible que el caveat de drvarma sobre los SE/Wald cruzados poco
       fiables (`MODELS_RESULTS.md` §4) tenga **esta misma raíz** (hessiano BFGS +

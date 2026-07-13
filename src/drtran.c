@@ -1367,8 +1367,11 @@ int main(int argc, char *argv[])
     printf("Output (Y)             : %s\n", argv[optind]);
     printf("Input  (X)             : %s\n", argv[optind + 1]);
     printf("Results file           : %s\n", outfile_path);
-    printf("Method                 : exact maximum likelihood ");
-    printf("(bivariate VARMA cast)\n");
+    if (prewhiten_only)
+        printf("Method                 : prewhitening only (no estimation)\n");
+    else
+        printf("Method                 : exact maximum likelihood "
+               "(bivariate VARMA cast)\n");
 
     /* --- Leer los dos modelos univariantes --- */
     /* Convención: primer argumento = endógena (Y), segundo = exógena (X) */
@@ -1409,7 +1412,11 @@ int main(int argc, char *argv[])
     fprintf(outputv, "Model            : %s\n", model_name);
     fprintf(outputv, "Output (Y)       : %s\n", argv[optind]);
     fprintf(outputv, "Input  (X)       : %s\n", argv[optind + 1]);
-    fprintf(outputv, "Transfer model   : s=%d, r=%d, b=%d\n", s_ord, r_ord, b_delay);
+    if (prewhiten_only)
+        fprintf(outputv, "Transfer model   : (to be identified)\n");
+    else
+        fprintf(outputv, "Transfer model   : b=%d, r=%d, s=%d\n",
+                b_delay, r_ord, s_ord);
     fprintf(outputv, "Diagonal AR/MA   : yes\n");
     fprintf(outputv, "Diagonal cov     : yes\n");
     fprintf(outputv, "Frequency        : %d\n", TsY.freq);
@@ -1445,7 +1452,6 @@ int main(int argc, char *argv[])
 
     /* --- Preblanqueo e identificación (si no se dieron órdenes) --- */
     if (auto_id || prewhiten_only) {
-        fprintf(outputv, "Ejecutando preblanqueo para identificar órdenes...\n");
         prewhiten_and_identify(w_X, w_Y, n_stat,
                                phi_X, p_X, theta_X, q_X,
                                &r_ord, &s_ord, &b_delay, outputv);

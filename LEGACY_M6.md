@@ -12,12 +12,56 @@ funcionar y se compara con lo que drtran tiene hoy.
 
 ## 1. Qué son
 
-El sistema del **mercado laboral español** (datos de la EPA). Las 7 series:
-**P** (población), **EA**, **EP**, **EI**, **EU**, **EC** (componentes) y **A**
-(un agregado contemporáneo). El informe de previsión (`m3.out`) los publica como
-*POBLACION*, *ACTIVOS*, *PARADOS*, con **nivel**, **variación trimestral** y
-**variación anual**, cada una con su desviación típica. Datos **trimestrales**,
-desde 1976, ~80 observaciones.
+El sistema del **mercado laboral español** (datos de la EPA), trimestral, desde
+1976, ~80 observaciones.
+
+| # | serie | |
+|---|---|---|
+| 1 | **P** | POBLACIÓN (16 y más años) |
+| 2 | **EA** | OCUPADOS: agricultura |
+| 3 | **EP** | OCUPADOS: servicios privados |
+| 4 | **EI** | OCUPADOS: industria |
+| 5 | **EU** | OCUPADOS: servicios públicos |
+| 6 | **EC** | OCUPADOS: construcción |
+| 7 | **A** | **ACTIVOS** (población activa) — solo en m6-3 |
+
+## 1b. ¿Es m6 un modelo de transferencia? SÍ
+
+**Es una RED de funciones de transferencia**, no otra cosa:
+
+```
+   P  (autónoma)
+   EA (autónoma)
+   EC (autónoma) ── b=2 ──► EU ── b=1 ──► EI ── b=1 ──► EP
+    └──────────────────── b=1 ─────────────────────────►┘
+
+   ACTIVOS ◄── b=0 ── P, EA, EP, EI, EU        (ecuación de participación)
+```
+
+**La fila Φ(0) de ACTIVOS NO es una identidad contable.** Sus coeficientes están
+etiquetados en el propio `forsil.c` como `omega P`, `omega EA`, `omega EP`,
+`omega EI`, `omega EU` —omegas, numeradores de transferencia— y valen 0.44, 0.43,
+0.45, 0.52, 0.30: son **estimados**, no unos. Es una relación **behavioral** (la
+participación laboral), expresada como una transferencia **contemporánea (b=0)**
+con cinco entradas.
+
+**Las identidades contables están FUERA del modelo.** `forsil` las calcula después
+de prever, como combinaciones lineales de las previsiones con varianza `c'Vc`:
+
+- *OCUPADOS: AGREGACIÓN DE COMPONENTES* = Σ(series 2..6)
+- *PARADOS* = ACTIVOS − OCUPADOS = serie 7 − Σ(2..6)
+
+**Consecuencia para drtran: Φ(0) ≠ I NO hace falta.** Restar una transferencia
+contemporánea es algebraicamente lo mismo:
+
+```
+Φ(0)·w :   A_t − Σ ω_j X_j,t = N_t        (lo que hace m6)
+drtran :   w[1] = w_A − Σ nu_j(B) w_Xj    con nu_j(0) = omega_0 != 0
+```
+
+Es el mismo modelo con otra contabilidad. drtran ya lo hace (IPC ← WTI tiene b=0).
+m6 usó Φ(0) porque el marco de `drv.c` obligaba a escribirlo todo como matrices
+VARMA, no porque hiciera falta.
 
 | | m | p | q | npar | datos | precisión |
 |---|---|---|---|---|---|---|
@@ -112,17 +156,21 @@ Ahí está el techo.
 
 ### A. Bloqueantes para los m6
 
-1. **m > 2.** Hoy `m=2` está cableado. Es el cambio estructural mayor: el vector de
-   parámetros, el cast y el reporte dejan de ser "salida vs entrada" y pasan a ser
-   un sistema.
-2. **Covarianza no diagonal.** Hay que parametrizar `Q` estructurada manteniendo
-   definida positiva y **sin reintroducir la redundancia de escala** que costó M0.8
-   (factorización de Cholesky con la diagonal normalizada).
-3. **Red de transferencias + parámetros compartidos.** Es *el* mecanismo: que `x6`
-   aparezca en `Θ₄₄` (dinámica de EI) y en `Θ₃₄` (EI→EP) **es** lo que hace que la
-   transferencia sea racional. Sin compartir parámetros no hay ω/δ.
-4. **Ecuación contemporánea Φ(0) ≠ I** y su normalización. El código ya existe en
-   drvarma; hay que traerlo al cast de drtran.
+1. ~~**m > 2**~~ ✅ **HECHO**: cast de hasta 8 series, con una transferencia por
+   entrada.
+2. ~~**Parámetros compartidos**~~ ✅ **HECHO**: tabla de slots (libre / fijo /
+   compartido), declarada en un fichero con `-c`.
+3. ~~**Ecuación contemporánea Φ(0) ≠ I**~~ ❌ **NO HACE FALTA**: es una
+   transferencia con b=0, que drtran ya sabe restar (ver §1b).
+4. **LA RED: varias SALIDAS.** ⬅ *el hueco real*. En m6, **EU es a la vez salida**
+   (de EC) **y entrada** (de EI); lo mismo EI. drtran tiene **una** salida y k
+   entradas. Hace falta que **cualquier** serie pueda tener transferencias restadas
+   y ser a la vez entrada de otra: un DAG de transferencias.
+5. **Covarianza no diagonal.** Es la forma *reducida* de la dependencia
+   contemporánea que NO se modela como transferencia — y m6-1 la usa **sin tener
+   ninguna estructura contemporánea**, lo que prueba que no son sustitutos.
+   Parametrizar `Q` por Cholesky con la diagonal normalizada, **sin reintroducir la
+   redundancia de escala** que costó M0.8.
 
 ### B. Baratas y valiosas ya
 

@@ -416,6 +416,67 @@ grep -q "THE 2 INPUT(S)" "$OUT" \
 
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
+echo "── 2e. PARÁMETROS COMPARTIDOS Y FIJOS (-c) ──"
+echo "   Un parámetro puede aparecer en VARIOS sitios de la estructura con un"
+echo "   solo grado de libertad. Es lo que hace racional a una transferencia"
+echo "   dentro de un sistema: en los m6, el mismo x6 está en la dinámica propia"
+echo "   de EI y en la transferencia EI->EP."
+echo ""
+
+# --- referencia: todo libre ---
+OUT="$TMPDIR/cns_free.txt"
+$DRTRAN "$SYN/SYNR_Y.pre" "$SYN/SYNR_X.pre" -b 1 -r 1 -s 0 -o "$OUT" > /dev/null 2>&1
+LL_FREE=$(grep "Log-likelihood =" "$OUT" | awk '{print $3}')
+NF_FREE=$(grep "Structural parameters" "$OUT" | sed 's/.*free: \([0-9]*\).*/\1/')
+
+# --- COMPARTIR: delta de la transferencia = AR propio de la entrada ---
+CNS="$TMPDIR/share.cns"
+printf 'delta1[1] = phi_2[B^1]\n' > "$CNS"
+OUT="$TMPDIR/cns_share.txt"
+$DRTRAN "$SYN/SYNR_Y.pre" "$SYN/SYNR_X.pre" -b 1 -r 1 -s 0 -c "$CNS" -o "$OUT" > /dev/null 2>&1
+
+NF_SH=$(grep "Structural parameters" "$OUT" | sed 's/.*free: \([0-9]*\).*/\1/')
+check "compartir quita UN grado de libertad" "$((NF_FREE - 1))" "$NF_SH" 0.5
+
+D1=$(val "$OUT" 'delta1\[1\]')
+P2=$(val "$OUT" 'phi_2\[B\^1\]')
+check "delta1[1] y phi_2[B^1] valen LO MISMO" "$P2" "$D1" 0.000001
+grep -q "delta1\[1\].*(= phi_2\[B\^1\])" "$OUT" \
+    && pass "el informe dice con quién comparte" \
+    || fail "el informe no indica el parámetro compartido"
+
+# la restricción no puede MEJORAR la verosimilitud
+LL_SH=$(grep "Log-likelihood =" "$OUT" | awk '{print $3}')
+python3 -c "import sys; sys.exit(0 if $LL_SH <= $LL_FREE + 1e-6 else 1)" \
+    && pass "la restricción no aumenta la verosimilitud (como debe)" \
+    || fail "compartir AUMENTA la verosimilitud: imposible"
+
+# --- FIJAR un coeficiente a un valor ---
+CNS="$TMPDIR/fix.cns"
+printf '# fijar el denominador en su valor verdadero\ndelta1[1] = 0.6\n' > "$CNS"
+OUT="$TMPDIR/cns_fix.txt"
+$DRTRAN "$SYN/SYNR_Y.pre" "$SYN/SYNR_X.pre" -b 1 -r 1 -s 0 -c "$CNS" -o "$OUT" > /dev/null 2>&1
+
+check "delta1[1] queda FIJO en 0.6" 0.600000 "$(val "$OUT" 'delta1\[1\]')" 0.000001
+NF_FX=$(grep "Structural parameters" "$OUT" | sed 's/.*free: \([0-9]*\).*/\1/')
+check "fijar quita UN grado de libertad" "$((NF_FREE - 1))" "$NF_FX" 0.5
+grep -q "delta1\[1\].*(fixed)" "$OUT" && pass "el informe lo marca como fijo" \
+                                      || fail "el informe no lo marca como fijo"
+
+# --- un nombre inexistente debe fallar con un mensaje claro ---
+CNS="$TMPDIR/bad.cns"
+printf 'delta9[3] = 0.5\n' > "$CNS"
+if $DRTRAN "$SYN/SYNR_Y.pre" "$SYN/SYNR_X.pre" -b 1 -r 1 -s 0 -c "$CNS" \
+        -o "$TMPDIR/bad.txt" > "$TMPDIR/bad_console.txt" 2>&1; then
+    fail "acepta una restricción sobre un parámetro inexistente"
+else
+    grep -qi "unknown parameter" "$TMPDIR/bad_console.txt" \
+        && pass "rechaza un parámetro inexistente con un mensaje claro" \
+        || fail "falla, pero sin explicar por qué"
+fi
+
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
 echo "── 3. PASS-THROUGH: con Y = X la verdad es omega_0 = 1 ──"
 echo ""
 

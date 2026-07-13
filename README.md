@@ -98,8 +98,32 @@ El **primer** fichero es la endógena (Y); los demás, las entradas exógenas.
 | `-D` `-E` | fijar TODOS los deterministas de Y / de X |
 | `-M` | fijar ambas medias en el valor del `.pre` |
 | `-f L` | prever L periodos con bandas al 95% |
+| `-c F` | **restricciones**: parámetros compartidos y fijos (ver abajo) |
 | `-o F` | escribir los resultados en F en lugar de `NAME.out` |
 | `-v` | traza del optimizador |
+
+## Parámetros compartidos y fijos
+
+Un parámetro puede aparecer en **varios sitios** de la estructura con **un solo
+grado de libertad**. Eso es lo que hace **racional** a una transferencia dentro de
+un sistema: en los modelos m6 de Mauricio, el mismo `x6` está en la dinámica propia
+de EI **y** en la transferencia EI→EP.
+
+Se declara en un fichero (`-c`), con los **mismos nombres que el programa imprime**:
+
+```
+delta1[1] = phi_2[B^1]   # el denominador de la transferencia ES el AR de la entrada
+omega1[0] = omega2[0]    # compartir entre dos entradas
+omega2[1] = 0.0          # fijar en un valor
+```
+
+El optimizador solo ve los parámetros libres; el cast expande ese vector corto a la
+estructura completa. El informe marca cada parámetro como libre, `(fixed)` o
+`(= otro)`.
+
+> El mecanismo está rescatado del **TASTE** de Treadway (1991), cuyos registros
+> `USMODEL` y `TFINPUT` llevaban un `point: Apuntador a parms` — un entero por
+> parámetro que decía qué posición de la estructura ocupaba.
 
 ## Validación
 

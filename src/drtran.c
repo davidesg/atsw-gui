@@ -26,6 +26,7 @@
 #include "fue_pre_reader.h"
 #include "forecast.h"
 #include <unistd.h>   /* getopt */
+#include <stdarg.h>
 
 /* -------------------------------------------------------------------------- */
 /* Definición de variables globales del modelo                                */
@@ -1069,6 +1070,7 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
         fprintf(out, "\nCould not build the model for forecasting.\n");
         return;
     }
+    x = expand_params(x);        /* los omegas se leen de la estructura completa */
     p = vf.p; q = vf.q;
 
     sigma = matrix(1, m, 1, m);
@@ -1268,6 +1270,17 @@ static void usage(const char *prog)
 "           (default: <output>_<input>, from the two .pre file names)\n"
 "  -o FILE  write the results to FILE instead of NAME.out\n"
 "\n"
+"SHARED AND FIXED PARAMETERS\n"
+"  -c FILE  constraints file. A parameter may appear in SEVERAL places of the\n"
+"           structure with a SINGLE degree of freedom -- which is what makes a\n"
+"           transfer function rational inside a system. Use the SAME names the\n"
+"           program prints:\n"
+"\n"
+"             delta1[1] = phi_2[B^1]   # share: the transfer denominator IS the\n"
+"                                      # input's own AR (a rational transfer)\n"
+"             omega1[0] = omega2[0]    # share between two inputs\n"
+"             omega2[1] = 0.0          # fix at a value\n"
+"\n"
 "IDENTIFICATION\n"
 "  -p       PREWHITEN ONLY: filter the input with its own ARMA, apply the same\n"
 "           filter to the output, plot the CCF and suggest (b, r, s).\n"
@@ -1320,6 +1333,209 @@ static void usage(const char *prog)
 /* -------------------------------------------------------------------------- */
 /* main                                                                       */
 /* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+/* TABLA DE SLOTS: parámetros libres, FIJOS y COMPARTIDOS                      */
+/*                                                                            */
+/* Rescatado del TASTE de Treadway (1991): su TFINPUT/USMODEL llevan un        */
+/* "point: Apuntador a parms", un entero por parámetro que dice qué posición   */
+/* del vector ocupa. Aquí se generaliza: cada parámetro estructural es un      */
+/* SLOT que puede ser                                                          */
+/*                                                                            */
+/*     LIBRE      -> lo estima el optimizador                                  */
+/*     FIJO       -> vale una constante                                        */
+/*     COMPARTIDO -> es el MISMO parámetro que otro slot                       */
+/*                                                                            */
+/* El optimizador solo ve los libres; shootx expande ese vector corto a la     */
+/* estructura completa. Compartir parámetros es lo que hace que la             */
+/* transferencia de un sistema sea racional: en los modelos m6, el mismo x6    */
+/* aparece en la dinámica propia de EI y en la transferencia EI->EP.           */
+/*                                                                            */
+/* Los nombres de los slots son los MISMOS que el programa imprime, así que    */
+/* las restricciones se escriben leyendo la salida:                            */
+/*                                                                            */
+/*     delta1[1] = phi_2[B^1]      # el denominador de la TF = el AR de la     */
+/*                                 # entrada: la firma de una TF racional      */
+/*     omega1[0] = omega2[0]       # compartir entre entradas                  */
+/*     omega2[1] = 0.0             # fijar                                     */
+/* -------------------------------------------------------------------------- */
+#define MAX_SLOT   400
+#define SLOT_FREE  0
+#define SLOT_FIXED 1
+#define SLOT_ALIAS 2
+
+static char slot_name[MAX_SLOT + 1][40];
+static int  slot_kind[MAX_SLOT + 1];
+static int  slot_alias[MAX_SLOT + 1];
+static real slot_value[MAX_SLOT + 1];
+static int  free_of_slot[MAX_SLOT + 1];   /* slot -> índice libre (0 si no)  */
+static int  slot_of_free[MAX_SLOT + 1];   /* índice libre -> slot            */
+static int  n_slot = 0, n_free = 0;
+static real xfull[MAX_SLOT + 1];          /* la estructura completa          */
+
+static void add_slot(const char *fmt, ...)
+{
+    va_list ap;
+    if (n_slot >= MAX_SLOT) return;
+    n_slot++;
+    va_start(ap, fmt);
+    vsnprintf(slot_name[n_slot], sizeof slot_name[0], fmt, ap);
+    va_end(ap);
+    slot_kind[n_slot]  = SLOT_FREE;
+    slot_alias[n_slot] = 0;
+    slot_value[n_slot] = 0.0;
+}
+
+/* Nombres de los factores ARMA, en el MISMO orden que pack_ar/ma_factors */
+static void add_arma_slots(struct Tusmodel *Tmi, int i, int is_ar)
+{
+    const char *sym = is_ar ? "phi" : "theta";
+    int Num1 = is_ar ? Tmi->NumAr1  : Tmi->NumMa1;
+    int Num2 = is_ar ? Tmi->NumAr2  : Tmi->NumMa2;
+    int Numf = is_ar ? Tmi->NumAr1f : Tmi->NumMa1f;
+    int *o1 = is_ar ? Tmi->p1 : Tmi->q1;
+    int *o2 = is_ar ? Tmi->p2 : Tmi->q2;
+    int **f1 = is_ar ? Tmi->Ia1  : Tmi->Im1;
+    int **f2 = is_ar ? Tmi->Ia2  : Tmi->Im2;
+    int  *ff = is_ar ? Tmi->Ia1f : Tmi->Im1f;
+    int  *fr = is_ar ? Tmi->pfre1 : Tmi->qfre1;
+    int k, j;
+
+    for (k = 1; k <= Num1; k++)
+        for (j = 1; j <= o1[k]; j++)
+            if (f1[k][j] == 1) add_slot("%s_%d[B^%d]", sym, i, j);
+    for (k = 1; k <= Num2; k++)
+        for (j = 1; j <= o2[k]; j++)
+            if (f2[k][j] == 1) add_slot("%s_%d[B^%d]", sym, i, j * Tmi->sper);
+    for (k = 1; k <= Numf; k++)
+        if (ff[k] == 1) add_slot("%s_%d[f=%d]", sym, i, fr[k]);
+}
+
+/* Construye la tabla de slots EN EL MISMO ORDEN que el vector de parámetros */
+static void build_slots(void)
+{
+    int i, j, k;
+
+    n_slot = 0;
+
+    for (j = 1; j <= n_inp; j++) {
+        for (k = 0; k <= s_ord[j]; k++) add_slot("omega%d[%d]", j, k);
+        for (k = 1; k <= r_ord[j]; k++) add_slot("delta%d[%d]", j, k);
+    }
+    for (i = 1; i <= n_ser; i++) {
+        if (fix_arma[i]) continue;
+        add_arma_slots(&Tm[i], i, 1);
+        add_arma_slots(&Tm[i], i, 0);
+    }
+    for (i = 1; i <= n_ser; i++) {
+        int iv, kk;
+        if (fix_det[i]) continue;
+        for (iv = 1; iv <= Tm[i].NdetVar; iv++) {
+            for (kk = 0; kk <= Tm[i].Nomega[iv]; kk++)
+                if (Tm[i].Imega[iv][kk] == 1)
+                    add_slot("omega_d%d[%d,%d]", i, iv, kk);
+            for (kk = 1; kk <= Tm[i].Ndelta[iv]; kk++)
+                if (Tm[i].Ielta[iv][kk] == 1)
+                    add_slot("delta_d%d[%d,%d]", i, iv, kk);
+        }
+    }
+    for (i = 1; i <= n_ser; i++)
+        if (!fix_mu[i]) add_slot("mu[%d]", i);
+    for (i = 2; i <= n_ser; i++)
+        add_slot("log(var%d/var1)", i);
+}
+
+static int find_slot(const char *name)
+{
+    int i;
+    for (i = 1; i <= n_slot; i++)
+        if (strcmp(slot_name[i], name) == 0) return i;
+    return 0;
+}
+
+/* Lee el fichero de restricciones: "NOMBRE = NOMBRE" (compartir) o
+   "NOMBRE = valor" (fijar). Comentarios con '#'.                            */
+static int read_constraints(const char *path)
+{
+    FILE *f = fopen(path, "r");
+    char line[256];
+    int nc = 0;
+
+    if (f == NULL) {
+        fprintf(stderr, "Error opening constraints file: %s\n", path);
+        return -1;
+    }
+
+    while (fgets(line, sizeof line, f)) {
+        char lhs[64], rhs[64];
+        char *hash = strchr(line, '#');
+        int a, b;
+        double v;
+
+        if (hash) *hash = '\0';
+        if (sscanf(line, " %63[^= \t] = %63s", lhs, rhs) != 2) continue;
+
+        a = find_slot(lhs);
+        if (a == 0) {
+            fprintf(stderr, "Error: unknown parameter '%s' in %s\n", lhs, path);
+            fclose(f);
+            return -1;
+        }
+
+        b = find_slot(rhs);
+        if (b != 0) {                       /* COMPARTIDO */
+            /* seguir la cadena hasta el representante final */
+            while (slot_kind[b] == SLOT_ALIAS) b = slot_alias[b];
+            if (b == a) {
+                fprintf(stderr, "Error: '%s' cannot be shared with itself\n", lhs);
+                fclose(f);
+                return -1;
+            }
+            slot_kind[a]  = SLOT_ALIAS;
+            slot_alias[a] = b;
+        } else if (sscanf(rhs, "%lf", &v) == 1) {   /* FIJO */
+            slot_kind[a]  = SLOT_FIXED;
+            slot_value[a] = v;
+        } else {
+            fprintf(stderr, "Error: cannot parse '%s = %s' in %s\n", lhs, rhs, path);
+            fclose(f);
+            return -1;
+        }
+        nc++;
+    }
+    fclose(f);
+    return nc;
+}
+
+/* Mapas libre <-> slot. n_free es lo que ve el optimizador. */
+static void resolve_slots(void)
+{
+    int i;
+    n_free = 0;
+    for (i = 1; i <= n_slot; i++) {
+        free_of_slot[i] = 0;
+        if (slot_kind[i] == SLOT_FREE) {
+            n_free++;
+            free_of_slot[i]   = n_free;
+            slot_of_free[n_free] = i;
+        }
+    }
+}
+
+/* Expande el vector corto (libres) a la estructura completa. Es lo que hace
+   que un parámetro compartido aparezca en DOS sitios con un solo grado de
+   libertad.                                                                 */
+real *expand_params(real *xfree)
+{
+    int i;
+    for (i = 1; i <= n_slot; i++) {
+        if (slot_kind[i] == SLOT_FREE)       xfull[i] = xfree[free_of_slot[i]];
+        else if (slot_kind[i] == SLOT_FIXED) xfull[i] = slot_value[i];
+    }
+    for (i = 1; i <= n_slot; i++)
+        if (slot_kind[i] == SLOT_ALIAS) xfull[i] = xfull[slot_alias[i]];
+    return xfull;
+}
+
 /* -------------------------------------------------------------------------- */
 /* estimate_and_report: estima por ML exacta e informa                         */
 /* -------------------------------------------------------------------------- */
@@ -1377,79 +1593,75 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
     fprintf(outputv, "                        Parameter     Estimate    Std.Error   t-stat  p-val\n");
     fprintf(outputv, "--------------------------------------------------------------------\n");
 
-    pi = 1;
+    /* Un recorrido por SLOTS: cada parámetro estructural es libre, fijo o
+       compartido con otro. Los compartidos muestran el mismo valor y el mismo
+       error estándar que su representante, y dicen con quién comparten.     */
+    {
+        real *xf = expand_params(x);
 
-#define SHOW(label)                                                          \
-    do {                                                                     \
-        dev[pi] = (cov[pi][pi] > 0) ? sqrt(cov[pi][pi]) : 0.0;               \
-        tstat = (dev[pi] > 1e-15) ? x[pi] / dev[pi] : 0.0;                   \
-        pval  = 2.0 * (1.0 - normal_cdf(fabs(tstat)));                       \
-        fprintf(outputv, "%-20s %12.6f %12.6f %8.3f %6.4f %s\n",             \
-                label, x[pi], dev[pi], tstat, pval,                          \
-                (pval < 0.001) ? "***" : (pval < 0.01) ? "**" :              \
-                (pval < 0.05) ? "*" : (pval < 0.1) ? "." : "");              \
-        pi++;                                                                \
-    } while (0)
-
-    for (j = 1; j <= n_inp; j++) {
-        char lab[40];
-        int k;
-        for (k = 0; k <= s_ord[j]; k++) {
-            snprintf(lab, sizeof lab, "omega%d[%d]", j, k);
-            SHOW(lab);
-        }
-        for (k = 1; k <= r_ord[j]; k++) {
-            snprintf(lab, sizeof lab, "delta%d[%d]", j, k);
-            SHOW(lab);
+        for (i = 1; i <= n_slot; i++) {
+            if (slot_kind[i] == SLOT_FIXED) {
+                fprintf(outputv, "%-20s %12.6f       (fixed)\n",
+                        slot_name[i], xf[i]);
+            } else if (slot_kind[i] == SLOT_ALIAS) {
+                fprintf(outputv, "%-20s %12.6f       (= %s)\n",
+                        slot_name[i], xf[i], slot_name[slot_alias[i]]);
+            } else {
+                pi = free_of_slot[i];
+                dev[pi] = (cov[pi][pi] > 0) ? sqrt(cov[pi][pi]) : 0.0;
+                tstat = (dev[pi] > 1e-15) ? x[pi] / dev[pi] : 0.0;
+                pval  = 2.0 * (1.0 - normal_cdf(fabs(tstat)));
+                fprintf(outputv, "%-20s %12.6f %12.6f %8.3f %6.4f %s\n",
+                        slot_name[i], x[pi], dev[pi], tstat, pval,
+                        (pval < 0.001) ? "***" : (pval < 0.01) ? "**" :
+                        (pval < 0.05) ? "*" : (pval < 0.1) ? "." : "");
+            }
         }
     }
 
+    /* Los coeficientes que el .pre deja FIJOS no son slots (no tienen grado de
+       libertad), pero forman parte del modelo y hay que verlos.             */
     for (i = 1; i <= n_ser; i++) {
-        char tag[8];
-        int k;
-        snprintf(tag, sizeof tag, "%d", i);
+        int k, iv;
+        char lab[40];
+
+        for (k = 1; k <= p_ord[i]; k++)
+            if (fix_arma[i])
+                { char lb[40]; snprintf(lb, sizeof lb, "phi_%d[B^%d]", i, k);
+                  fprintf(outputv, "%-20s (fixed by .pre %12.6f)\n", lb, phi[i][k]); }
+        for (k = 1; k <= q_ord[i]; k++)
+            if (fix_arma[i])
+                { char lb[40]; snprintf(lb, sizeof lb, "theta_%d[B^%d]", i, k);
+                  fprintf(outputv, "%-20s (fixed by .pre %12.6f)\n", lb, theta[i][k]); }
+
         if (!fix_arma[i]) {
-            print_arma_factors(&Tm[i], tag, 1, x, cov, dev, &pi, outputv);
-            print_arma_factors(&Tm[i], tag, 0, x, cov, dev, &pi, outputv);
-        } else {
-            for (k = 1; k <= p_ord[i]; k++)
-                fprintf(outputv, "phi_%s[B^%-2d]     (fixed %12.6f)\n", tag, k, phi[i][k]);
-            for (k = 1; k <= q_ord[i]; k++)
-                fprintf(outputv, "theta_%s[B^%-2d]   (fixed %12.6f)\n", tag, k, theta[i][k]);
+            int f, j2;
+            for (f = 1; f <= Tm[i].NumAr1; f++)
+                for (j2 = 1; j2 <= Tm[i].p1[f]; j2++)
+                    if (Tm[i].Ia1[f][j2] != 1)
+                        { char lb[40]; snprintf(lb, sizeof lb, "phi_%d[B^%d]", i, j2);
+                          fprintf(outputv, "%-20s (fixed by .pre %12.6f)\n", lb, Tm[i].Ar1[f][j2]); }
+            for (f = 1; f <= Tm[i].NumMa1; f++)
+                for (j2 = 1; j2 <= Tm[i].q1[f]; j2++)
+                    if (Tm[i].Im1[f][j2] != 1)
+                        { char lb[40]; snprintf(lb, sizeof lb, "theta_%d[B^%d]", i, j2);
+                          fprintf(outputv, "%-20s (fixed by .pre %12.6f)\n", lb, Tm[i].Ma1[f][j2]); }
+        }
+
+        if (!fix_det[i])
+            for (iv = 1; iv <= Tm[i].NdetVar; iv++)
+                for (k = 0; k <= Tm[i].Nomega[iv]; k++)
+                    if (Tm[i].Imega[iv][k] != 1) {
+                        snprintf(lab, sizeof lab, "omega_d%d[%d,%d]", i, iv, k);
+                        fprintf(outputv, "%-20s (fixed by .pre %12.6f)\n",
+                                lab, Tm[i].Omega[iv][k]);
+                    }
+
+        if (fix_mu[i]) {
+            snprintf(lab, sizeof lab, "mu[%d]", i);
+            fprintf(outputv, "%-20s (fixed by .pre %12.6f)\n", lab, mu[i]);
         }
     }
-
-    for (i = 1; i <= n_ser; i++) {
-        int i2, j2;
-        if (fix_det[i]) continue;
-        for (i2 = 1; i2 <= Tm[i].NdetVar; i2++) {
-            char lab[40];
-            for (j2 = 0; j2 <= Tm[i].Nomega[i2]; j2++) {
-                if (Tm[i].Imega[i2][j2] != 1) continue;
-                snprintf(lab, sizeof lab, "omega_d%d[%d,%d]", i, i2, j2);
-                SHOW(lab);
-            }
-            for (j2 = 1; j2 <= Tm[i].Ndelta[i2]; j2++) {
-                if (Tm[i].Ielta[i2][j2] != 1) continue;
-                snprintf(lab, sizeof lab, "delta_d%d[%d,%d]", i, i2, j2);
-                SHOW(lab);
-            }
-        }
-    }
-
-    for (i = 1; i <= n_ser; i++) {
-        char lab[40];
-        snprintf(lab, sizeof lab, "mu[%d]", i);
-        if (fix_mu[i]) fprintf(outputv, "%-20s (fixed %12.6f)\n", lab, mu[i]);
-        else           SHOW(lab);
-    }
-
-    for (i = 2; i <= n_ser; i++) {
-        char lab[40];
-        snprintf(lab, sizeof lab, "log(var%d/var1)", i);
-        SHOW(lab);
-    }
-#undef SHOW
 
     fprintf(outputv, "--------------------------------------------------------------------\n");
     fprintf(outputv, "Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1\n\n");
@@ -1559,6 +1771,7 @@ int main(int argc, char *argv[])
     int no_transfer = 0;
     char *model_name = NULL;
     char *opt_b = NULL, *opt_r = NULL, *opt_s = NULL;
+    char *cons_file = NULL;
     char outname[512];
     int fix_out_arma = 0, fix_inp_arma = 0;
     int fix_out_det  = 0, fix_inp_det  = 0;
@@ -1566,7 +1779,7 @@ int main(int argc, char *argv[])
     macheps = cmacheps();
     outputv = stdout;
 
-    while ((opt = getopt(argc, argv, "r:s:b:f:m:p0XNDEMvho:")) != -1) {
+    while ((opt = getopt(argc, argv, "r:s:b:f:m:c:p0XNDEMvho:")) != -1) {
         switch (opt) {
         case 'r': opt_r = optarg; auto_id = 0; break;
         case 's': opt_s = optarg; auto_id = 0; break;
@@ -1579,6 +1792,7 @@ int main(int argc, char *argv[])
         case 'f': fc_horizon = atoi(optarg); break;
         case 'm': model_name = optarg;       break;
         case 'p': prewhiten_only = 1;        break;
+        case 'c': cons_file = optarg;        break;
         case '0': no_transfer = 1; auto_id = 0; break;
         case 'v': quiet_mode = 0;            break;
         case 'o': outfile = optarg;          break;
@@ -1741,57 +1955,63 @@ int main(int argc, char *argv[])
         }
     }
 
-    /* --- Numero de parametros y vector inicial --- */
+    /* --- Tabla de slots, restricciones y vector inicial --- */
+    build_slots();
+
+    if (cons_file != NULL) {
+        int nc = read_constraints(cons_file);
+        if (nc < 0) return 9;
+        fprintf(outputv, "\nConstraints from %s: %d\n", cons_file, nc);
+    }
+    resolve_slots();
+
+    fprintf(outputv, "\nStructural parameters: %d   (free: %d", n_slot, n_free);
+    if (n_slot > n_free)
+        fprintf(outputv, ", fixed/shared: %d", n_slot - n_free);
+    fprintf(outputv, ")\n\n");
+
     {
-        int npar = 0;
+        real *xs = vector(1, n_slot);      /* valores iniciales, por SLOT */
+        real *x  = vector(1, n_free);      /* lo que ve el optimizador    */
+        int idx = 1;
 
-        for (j = 1; j <= n_inp; j++) npar += (s_ord[j] + 1) + r_ord[j];
-        for (i = 1; i <= n_ser; i++) {
-            if (!fix_arma[i])
-                npar += n_ar_free_params(&Tm[i]) + n_ma_free_params(&Tm[i]);
-            if (!fix_det[i]) npar += n_det_free_params(&Tm[i]);
-            if (!fix_mu[i])  npar += 1;
+        for (j = 1; j <= n_inp; j++) {
+            for (l = 0; l <= s_ord[j]; l++) xs[idx++] = 0.0;
+            for (l = 1; l <= r_ord[j]; l++) xs[idx++] = 0.0;
         }
-        npar += n_ser - 1;   /* log(var_i/var_1), i = 2..m */
-
-        fprintf(outputv, "\nParameters to estimate: %d\n\n", npar);
+        for (i = 1; i <= n_ser; i++) {
+            if (fix_arma[i]) continue;
+            idx += pack_ar_factors(&Tm[i], xs, idx);
+            idx += pack_ma_factors(&Tm[i], xs, idx);
+        }
+        for (i = 1; i <= n_ser; i++)
+            if (!fix_det[i]) idx += pack_det_params(&Tm[i], xs, idx);
 
         {
-            real *x = vector(1, npar);
-            int idx = 1;
-
-            for (j = 1; j <= n_inp; j++) {
-                for (l = 0; l <= s_ord[j]; l++) x[idx++] = 0.0;
-                for (l = 1; l <= r_ord[j]; l++) x[idx++] = 0.0;
-            }
+            double mm[MAX_SER + 1], vv[MAX_SER + 1];
+            int t;
             for (i = 1; i <= n_ser; i++) {
-                if (fix_arma[i]) continue;
-                idx += pack_ar_factors(&Tm[i], x, idx);
-                idx += pack_ma_factors(&Tm[i], x, idx);
+                mm[i] = vv[i] = 0.0;
+                for (t = 1; t <= n_stat; t++) mm[i] += w[i][t];
+                mm[i] /= n_stat;
+                for (t = 1; t <= n_stat; t++)
+                    vv[i] += (w[i][t] - mm[i]) * (w[i][t] - mm[i]);
+                vv[i] /= n_stat;
             }
             for (i = 1; i <= n_ser; i++)
-                if (!fix_det[i]) idx += pack_det_params(&Tm[i], x, idx);
-
-            {
-                double mm[MAX_SER + 1], vv[MAX_SER + 1];
-                int t;
-                for (i = 1; i <= n_ser; i++) {
-                    mm[i] = vv[i] = 0.0;
-                    for (t = 1; t <= n_stat; t++) mm[i] += w[i][t];
-                    mm[i] /= n_stat;
-                    for (t = 1; t <= n_stat; t++)
-                        vv[i] += (w[i][t] - mm[i]) * (w[i][t] - mm[i]);
-                    vv[i] /= n_stat;
-                }
-                for (i = 1; i <= n_ser; i++)
-                    if (!fix_mu[i]) x[idx++] = mm[i];
-                for (i = 2; i <= n_ser; i++)
-                    x[idx++] = log(vv[i] / vv[1]);
-            }
-
-            estimate_and_report(x, npar, fc_horizon, argv[optind]);
-            free_vector(x, 1, npar);
+                if (!fix_mu[i]) xs[idx++] = mm[i];
+            for (i = 2; i <= n_ser; i++)
+                xs[idx++] = log(vv[i] / vv[1]);
         }
+
+        /* del vector por slots al vector LIBRE */
+        for (i = 1; i <= n_slot; i++)
+            if (slot_kind[i] == SLOT_FREE) x[free_of_slot[i]] = xs[i];
+
+        estimate_and_report(x, n_free, fc_horizon, argv[optind]);
+
+        free_vector(x, 1, n_free);
+        free_vector(xs, 1, n_slot);
     }
 
     fclose(outputv);

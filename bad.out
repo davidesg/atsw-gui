@@ -1,0 +1,18 @@
+DRTRAN 1.0: Box-Jenkins transfer function models by exact ML
+Copyright (C) 1995-2026 A.B. Treadway, J.A. Mauricio & D.E. Guerrero
+Free software under the GNU GPL v2 or later; NO WARRANTY.
+
+Model            : bad
+Series           : 2 (1 output + 1 input(s))
+Output (Y)       : tests/data/SYNR_Y.pre
+Input  (X1)      : tests/data/SYNR_X.pre
+Frequency        : 12
+Start            : 1 2000
+Observations     : 399 (raw 400)
+
+  series 1: Box-Cox 0.00, d=1 D=0, 0 deterministic(s)
+  series 2: Box-Cox 0.00, d=1 D=0, 0 deterministic(s)
+
+
+Transfer function orders:
+  input 1: b = 1, r = 1, s = 0

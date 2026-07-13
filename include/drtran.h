@@ -92,6 +92,10 @@ extern int diag_cov;
    estimables en el .pre (Imega/Ielta) */
 void unpack_det_params(struct Tusmodel *Tm, real *x, int *idx);
 
+/* Expande el vector de parámetros LIBRES a la estructura completa, aplicando
+   los coeficientes fijos y los COMPARTIDOS. */
+real *expand_params(real *xfree);
+
 /* Rechaza factores de frecuencia fija invalidos (c2 >= 0) */
 int invalid_fixfreq(struct Tusmodel *Tm);
 

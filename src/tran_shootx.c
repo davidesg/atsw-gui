@@ -81,8 +81,13 @@ static int unstable_delta(struct Tusmodel *Tmi)
 /*                                                                            */
 /* Todo el acoplamiento vive en las transferencias restadas a la serie 1.      */
 /* -------------------------------------------------------------------------- */
-void shootx(real *x, struct Tvarma *armax, int *ifaultx, int firstx, int lastx)
+void shootx(real *xfree, struct Tvarma *armax, int *ifaultx, int firstx, int lastx)
 {
+    /* El optimizador solo ve los parámetros LIBRES. Aquí se expanden a la
+       estructura completa, aplicando los fijos y los COMPARTIDOS: un mismo
+       grado de libertad puede aparecer en varios sitios de la estructura.  */
+    real *x = expand_params(xfree);
+
     int m = n_ser;
     int idx = 1;
     int i, j, k, t;

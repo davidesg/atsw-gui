@@ -1,4 +1,18 @@
 /*****************************************************************************/
+/*  drtran.c -- part of drtran (Box-Jenkins transfer function models).
+ *
+ *  Original to drtran.
+ *
+ *  Copyright (C) 1995-2026 A.B. Treadway, J.A. Mauricio & D.E. Guerrero.
+ *
+ *  This program is free software: you can redistribute it and/or modify it
+ *  under the terms of the GNU General Public License as published by the
+ *  Free Software Foundation; either version 2 of the License, or (at your
+ *  option) any later version.  Distributed WITHOUT ANY WARRANTY; see the
+ *  GNU General Public License (file COPYING) for details.
+ *****************************************************************************/
+
+/*****************************************************************************/
 /*  DRTRAN.C                                                                  */
 /*  Programa principal de estimación de funciones de transferencia            */
 /*  Box–Jenkins (DRTRAN).                                                     */
@@ -1281,7 +1295,10 @@ static void usage(const char *prog)
 "  %s CPI.pre WTI.pre                 full cycle: identify, estimate, validate\n"
 "  %s CPI.pre WTI.pre -b 0 -s 1       impose (b, r, s)\n"
 "  %s CPI.pre WTI.pre -0              homologation with fue (no transfer)\n"
-"  %s CPI.pre WTI.pre -m oil -f 12    name the model and forecast 12 periods\n",
+"  %s CPI.pre WTI.pre -m oil -f 12    name the model and forecast 12 periods\n"
+"\n"
+"drtran is free software under the GNU General Public License v2 or later.\n"
+"It embeds the exact VARMA likelihood engine of drvarma/ART. See COPYING.\n",
         DRTRAN_VERSION, prog, prog, prog, prog, prog, prog);
 }
 
@@ -1361,7 +1378,9 @@ int main(int argc, char *argv[])
     printf("\n");
     printf("DRTRAN %s: Box-Jenkins transfer function models by exact ML\n",
            DRTRAN_VERSION);
-    printf("Copyright (C) 2026 A.B. Treadway, J.A. Mauricio & D.E. Guerrero\n");
+    printf("Copyright (C) 1995-2026 A.B. Treadway, J.A. Mauricio & D.E. Guerrero\n");
+    printf("Free software under the GNU GPL v2 or later; comes with NO WARRANTY.\n");
+    printf("See the file COPYING for details.\n");
     printf("Non-final version. May contain errors. Please report.\n\n");
     printf("Model                  : %s\n", model_name);
     printf("Output (Y)             : %s\n", argv[optind]);
@@ -1407,8 +1426,10 @@ int main(int argc, char *argv[])
     }
 
     /* --- Cabecera del .out --- */
-    fprintf(outputv, "DRTRAN %s: Box-Jenkins transfer function models by exact ML\n\n",
+    fprintf(outputv, "DRTRAN %s: Box-Jenkins transfer function models by exact ML\n",
             DRTRAN_VERSION);
+    fprintf(outputv, "Copyright (C) 1995-2026 A.B. Treadway, J.A. Mauricio & D.E. Guerrero\n");
+    fprintf(outputv, "Free software under the GNU GPL v2 or later; NO WARRANTY.\n\n");
     fprintf(outputv, "Model            : %s\n", model_name);
     fprintf(outputv, "Output (Y)       : %s\n", argv[optind]);
     fprintf(outputv, "Input  (X)       : %s\n", argv[optind + 1]);

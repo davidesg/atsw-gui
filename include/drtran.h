@@ -1,4 +1,18 @@
 /*****************************************************************************/
+/*  drtran.h -- part of drtran (Box-Jenkins transfer function models).
+ *
+ *  Original to drtran.
+ *
+ *  Copyright (C) 1995-2026 A.B. Treadway, J.A. Mauricio & D.E. Guerrero.
+ *
+ *  This program is free software: you can redistribute it and/or modify it
+ *  under the terms of the GNU General Public License as published by the
+ *  Free Software Foundation; either version 2 of the License, or (at your
+ *  option) any later version.  Distributed WITHOUT ANY WARRANTY; see the
+ *  GNU General Public License (file COPYING) for details.
+ *****************************************************************************/
+
+/*****************************************************************************/
 /*  DRTRAN.H                                                                 */
 /*  Cabecera específica del programa de estimación de funciones de           */
 /*  transferencia Box‑Jenkins (DRTRAN).                                      */

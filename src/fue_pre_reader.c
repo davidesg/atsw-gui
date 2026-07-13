@@ -1,4 +1,18 @@
 /*****************************************************************************/
+/*  fue_pre_reader.c -- part of drtran (Box-Jenkins transfer function models).
+ *
+ *  Original to drtran.
+ *
+ *  Copyright (C) 1995-2026 A.B. Treadway, J.A. Mauricio & D.E. Guerrero.
+ *
+ *  This program is free software: you can redistribute it and/or modify it
+ *  under the terms of the GNU General Public License as published by the
+ *  Free Software Foundation; either version 2 of the License, or (at your
+ *  option) any later version.  Distributed WITHOUT ANY WARRANTY; see the
+ *  GNU General Public License (file COPYING) for details.
+ *****************************************************************************/
+
+/*****************************************************************************/
 /*  fue_pre_reader.c — Lector de archivos .pre (DRVUS/FUE)                   */
 /*  Parsea el modelo completo: deterministas (Omega/Delta), factores ARMA,   */
 /*  media (valor + flag de estimación), Box-Cox, diferencias y la serie.     */

@@ -163,6 +163,20 @@ tests/   cases/          .pre reales (SF_MEG), con su referencia de fue
          gen_synthetic.py
 ```
 
+## Licencia
+
+**GNU General Public License, versión 2 o posterior** (fichero `COPYING`).
+
+drtran incorpora, literalmente, el motor de verosimilitud exacta VARMA de
+**drvarma/ART** — `elfvarma.c`, `drvmlest.c`, `qnewtopt.c`, `nlatools.c`,
+`diagnose.c`, `forecast.c` —, que es GPL. drtran es por tanto obra derivada y se
+distribuye bajo la misma licencia.
+
+El copyright del conjunto es de **A.B. Treadway, J.A. Mauricio y D.E. Guerrero**:
+el núcleo numérico es de Mauricio (`elfvarma.c` *es* Mauricio, J.A. (1995), *JASA*
+90, 282-291), y el diseño del *cast* parámetros → estructura VARMA procede de los
+modelos escritos a mano de la línea ART.
+
 ## Documentación
 
 - **[TODO.md]** — estado, hitos cerrados y hoja de ruta.

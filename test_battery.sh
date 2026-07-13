@@ -944,6 +944,80 @@ python3 -c "import sys; sys.exit(0 if $LVL1 < 82.84 else 1)" \
     && pass "IPC: enero cae bajo el último dato (los armónicos futuros se aplican)" \
     || fail "IPC: el componente determinista futuro no se está aplicando"
 
+
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
+echo "── 4c. AGREGADOS: identidades contables con varianza c'Vc (-a) ──"
+echo "   La identidad (OCUPADOS = suma de sectores; PARADOS = ACTIVOS - OCUPADOS)"
+echo "   NO entra en el modelo: se calcula DESPUÉS de prever, como hacía el legacy."
+echo "   Lo que no es trivial es su BANDA: los errores de previsión de las series"
+echo "   están CORRELACIONADOS -- comparten innovaciones a través de la red -- así"
+echo "   que la varianza del agregado NO es la suma de las varianzas. Es c'Vc."
+echo ""
+echo "   Sobre la cadena X -> M -> Y, con la transferencia M->Y de retardo b=2."
+echo ""
+
+AG="$TMPDIR/ag.txt"
+printf 'TOTAL = + SYNC_Y + SYNC_M\nGAP   = + SYNC_Y - SYNC_M\n' > "$AG"
+OUT="$TMPDIR/aggr.txt"
+$DRTRAN "$SYN/SYNC_Y.pre" "$SYN/SYNC_M.pre" "$SYN/SYNC_X.pre" -n "$SYN/SYNC.net" \
+        -a "$AG" -f 6 -o "$OUT" >/dev/null 2>&1
+
+python3 - "$OUT" <<'PYCHK'
+import re, sys
+t = open(sys.argv[1]).read()
+
+def series_sd(tag):
+    m = re.search(r'Output: %s.*?\n(?:.*\n)*?  ---+\n((?:  +\d+.*\n)+)' % tag, t)
+    return {int(r.split()[0]): (float(r.split()[6]) - float(r.split()[5])) / (2 * 1.96)
+            for r in m.group(1).strip().split('\n')}
+
+def aggr_sd(tag):
+    m = re.search(r'Aggregate: %s.*?\n(?:.*\n)*?  ---+\n((?:  +\d+.*\n)+)' % tag, t)
+    return {int(r.split()[0]): float(r.split()[2])
+            for r in m.group(1).strip().split('\n')}
+
+Y, M = series_sd('SYNC_Y'), series_sd('SYNC_M')
+T, G = aggr_sd('TOTAL'),   aggr_sd('GAP')
+
+ok, msg = True, []
+for l in sorted(T):
+    indep = (Y[l]**2 + M[l]**2) ** 0.5
+    if l <= 2:
+        # la transferencia M->Y tiene b=2: la innovacion de M AUN NO ha llegado
+        # a Y, luego los errores son INDEPENDIENTES y c'Vc == la suma ingenua.
+        if abs(T[l] - indep) > 1e-3 or abs(G[l] - indep) > 1e-3:
+            ok = False; msg.append("l=%d: con b=2 los errores aun son independientes, "
+                                   "c'Vc deberia coincidir (%.4f vs %.4f)" % (l, T[l], indep))
+    else:
+        # ya llegada la innovacion, la correlacion es POSITIVA: sumar amplifica,
+        # restar cancela.
+        if not (G[l] < indep < T[l]):
+            ok = False; msg.append("l=%d: no se cumple GAP < indep < TOTAL "
+                                   "(%.4f, %.4f, %.4f)" % (l, G[l], indep, T[l]))
+sys.exit(0 if ok else (print('\n'.join(msg)) or 1))
+PYCHK
+
+if [ $? -eq 0 ]; then
+    pass "c'Vc coincide con la suma ingenua mientras b=2 impide la correlación (l<=2)"
+    pass "y en cuanto la innovación llega (l>=3): GAP < independientes < TOTAL"
+else
+    fail "la varianza del agregado no respeta la correlación entre errores"
+    fail "(ver arriba)"
+fi
+
+grep -q "Aggregate: TOTAL" "$OUT" && pass "el informe da el agregado" || fail "no da el agregado"
+grep -q "Aggregate: GAP"   "$OUT" && pass "y admite varios" || fail "no admite varios agregados"
+
+# serie inexistente en el fichero de agregados
+BADA="$TMPDIR/bad_ag.txt"
+printf 'X = + NO_EXISTE\n' > "$BADA"
+$DRTRAN "$SYN/SYNC_Y.pre" "$SYN/SYNC_M.pre" "$SYN/SYNC_X.pre" -n "$SYN/SYNC.net" \
+        -a "$BADA" -f 3 -o "$TMPDIR/bad_ag.out" > "$TMPDIR/bad_ag.log" 2>&1
+grep -q "unknown series" "$TMPDIR/bad_ag.log" \
+    && pass "una serie inexistente en el agregado se rechaza" \
+    || fail "acepta una serie inexistente en el agregado"
+
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
 echo "── 5. Sanidad ──"

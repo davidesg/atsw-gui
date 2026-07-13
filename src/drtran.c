@@ -54,6 +54,20 @@ int  fix_det[MAX_SER + 1];
 /* Transferencia de la entrada j (j = 1..n_inp) */
 int b_del[MAX_SER + 1], r_ord[MAX_SER + 1], s_ord[MAX_SER + 1];
 
+/* --------------------------------------------------------------------------
+   AGREGADOS: combinaciones lineales de las series, con su banda.
+
+   Las identidades contables (OCUPADOS = suma de sectores; PARADOS = ACTIVOS -
+   OCUPADOS) NO entran en el modelo: se calculan DESPUES de prever, como hacia
+   el legacy. Lo que no es trivial es la banda: los errores de prevision de las
+   series estan CORRELACIONADOS -- comparten innovaciones a traves de la red --
+   asi que la varianza del agregado no es la suma de las varianzas. Es c'Vc.
+   -------------------------------------------------------------------------- */
+#define MAX_AGGR 8
+static char aggr_name[MAX_AGGR + 1][40];
+static real aggr_c[MAX_AGGR + 1][MAX_SER + 1];
+static int  n_aggr = 0;
+
 /* LA RED: cada enlace es una transferencia de lnk[k].inp a lnk[k].out.      */
 struct Tlink lnk[MAX_LINK + 1];
 int n_link = 0;
@@ -1175,18 +1189,30 @@ static void reformulation_advice(real **a, int n, FILE *out)
     fprintf(out, "=============================================================\n");
 }
 
+
+/* V(l)_{i1,i2} = SUM_{t<l} [ LP(t) Sigma LP(t)' ]_{i1,i2}, con Sigma GENERAL. */
+static real vcov_at(real ***LP, real **sigma, int m, int i1, int i2, int l)
+{
+    int t, j, k;
+    real v = 0.0;
+    for (t = 0; t <= l - 1; t++)
+        for (j = 1; j <= m; j++)
+            for (k = 1; k <= m; k++)
+                v += sigma[j][k] * LP[i1][j][t] * LP[i2][k][t];
+    return v;
+}
+
 static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
 {
     struct Tvarma vf;
     int    ifault = 0;
-    int    m = n_ser, i, j, k, l, t, u, p, q, ord;
+    int    m = n_ser, i, j, k, l, t, u, p, q;
     int    K  = n_stat + L + 1;
     int    NK = (n_link > 0) ? n_link : 1;
 
     real **sigma, **f1, ***v1, ***v2, ***v3, ***psi;
     real **nu, **we, ***pt;
-    real  *uu, *detY, *bc;
-    real   S[MAX_SER + 1];
+    int    nobsmax = 0;
 
     shootx(x, &vf, &ifault, 1, 0);
     if (ifault != 0) {
@@ -1199,7 +1225,8 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
     sigma = matrix(1, m, 1, m);
     for (i = 1; i <= m; i++)
         for (j = 1; j <= m; j++) sigma[i][j] = sigma2 * vf.qq[i][j];
-    for (i = 1; i <= m; i++) S[i] = sigma[i][i];
+    for (i = 1; i <= m; i++)
+        if (Ts[i].nobs > nobsmax) nobsmax = Ts[i].nobs;
 
     /* El VARMA preve sus m series, que son los RUIDOS: cada w_i menos lo que
        recibe por la red.  Reconstruir las series OBSERVADAS exige recorrer la
@@ -1285,6 +1312,73 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
     fprintf(out, "  the series' own innovation and EVERY innovation upstream of it\n");
     fprintf(out, "  in the network, each propagated through the nu(B) it crosses.\n");
 
+    /* --- Niveles y pesos psi del NIVEL, para TODAS las series --------------
+       Se necesitan de todas, no solo de las salidas, porque un AGREGADO es una
+       combinacion lineal de cualquier subconjunto de ellas.                   */
+    {
+    real ***LP  = tensor(1, m, 1, m, 0, L);   /* LP[i][j][t]: psi del nivel de i */
+    real  **BC  = matrix(1, m, 1, nobsmax + L);
+    real  **DET = matrix(1, m, 1, nobsmax + L);
+    real  **LVL = matrix(1, m, 1, L);         /* nivel previsto */
+    real  **JAC = matrix(1, m, 1, L);         /* dz/db en el punto previsto */
+    real   *uu_i = vector(0, L);
+
+    for (i = 1; i <= m; i++) {
+        int ordi = Tm[i].ornsop;
+        int nb   = Ts[i].nobs;
+
+        build_det_component(&Tm[i], &Ts[i], nb + L, DET[i]);
+
+        for (t = 1; t <= nb; t++) {
+            real y  = Ts[i].data[t];
+            real b0 = (fabs(Tm[i].boxlam) < 1e-8)
+                    ? log(y) * Ts[i].refactor
+                    : ((pow(y, Tm[i].boxlam) - 1.0) / Tm[i].boxlam) * Ts[i].refactor;
+            BC[i][t] = b0 - DET[i][t];
+        }
+        for (l = 1; l <= L; l++) {
+            real acc = we[i][n_stat + l];
+            int  tt  = nb + l;
+            for (k = 1; k <= ordi; k++) acc -= (-Tm[i].rnsop[k]) * BC[i][tt - k];
+            BC[i][tt] = acc;
+        }
+
+        /* 1/rnsop(B): el operador que integra al nivel */
+        uu_i[0] = 1.0;
+        for (t = 1; t <= L; t++) {
+            real sum = 0.0;
+            for (k = 1; k <= ordi && k <= t; k++)
+                sum += (-Tm[i].rnsop[k]) * uu_i[t - k];
+            uu_i[t] = -sum;
+        }
+        for (j = 1; j <= m; j++)
+            for (t = 0; t <= L; t++) {
+                real acc = 0.0;
+                for (k = 0; k <= t; k++) acc += uu_i[k] * pt[i][j][t - k];
+                LP[i][j][t] = acc;
+            }
+
+        /* nivel y jacobiano dz/db (para la delta de los agregados) */
+        for (l = 1; l <= L; l++) {
+            real center = BC[i][Ts[i].nobs + l] + DET[i][Ts[i].nobs + l];
+            real lam    = Tm[i].boxlam;
+            if (fabs(lam) < 1e-8) {
+                LVL[i][l] = exp(center / Ts[i].refactor);
+                JAC[i][l] = LVL[i][l] / Ts[i].refactor;
+            } else {
+                real base = lam * (center / Ts[i].refactor) + 1.0;
+                LVL[i][l] = pow(base, 1.0 / lam);
+                JAC[i][l] = pow(base, 1.0 / lam - 1.0) / Ts[i].refactor;
+            }
+        }
+    }
+
+    /* --- Covarianza del error de prevision, en el espacio TRANSFORMADO -----
+           V(l)_{i1,i2} = SUM_{t<l} [ LP(t) Sigma LP(t)' ]_{i1,i2}
+       Sigma GENERAL: desde que se pueden liberar covarianzas, suponerla
+       diagonal aqui seria un error -- y lo era.                              */
+    #define VCOV(I1, I2, LL)  vcov_at(LP, sigma, m, (I1), (I2), (LL))
+
     /* --- Una tabla por serie que RECIBE alguna transferencia --------------- */
     for (u = 1; u <= m; u++) {
         int is_out = 0;
@@ -1292,75 +1386,94 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
         for (k = 1; k <= n_link; k++) if (lnk[k].out == i) is_out = 1;
         if (!is_out) continue;
 
-        ord  = Tm[i].ornsop;
-        detY = vector(1, Ts[i].nobs + L);
-        bc   = vector(1, Ts[i].nobs + L);
-        build_det_component(&Tm[i], &Ts[i], Ts[i].nobs + L, detY);
-
-        for (t = 1; t <= Ts[i].nobs; t++) {
-            real y  = Ts[i].data[t];
-            real b0 = (fabs(Tm[i].boxlam) < 1e-8)
-                    ? log(y) * Ts[i].refactor
-                    : ((pow(y, Tm[i].boxlam) - 1.0) / Tm[i].boxlam) * Ts[i].refactor;
-            bc[t] = b0 - detY[t];
-        }
-        for (l = 1; l <= L; l++) {
-            real acc = we[i][n_stat + l];
-            int  tt  = Ts[i].nobs + l;
-            for (j = 1; j <= ord; j++) acc -= (-Tm[i].rnsop[j]) * bc[tt - j];
-            bc[tt] = acc;
-        }
-
-        /* Pesos psi del NIVEL: convolucion de los del sistema con 1/rnsop(B) */
-        uu = vector(0, L);
-        uu[0] = 1.0;
-        for (t = 1; t <= L; t++) {
-            real sum = 0.0;
-            for (j = 1; j <= ord && j <= t; j++)
-                sum += (-Tm[i].rnsop[j]) * uu[t - j];
-            uu[t] = -sum;
-        }
-
         fprintf(out, "\n  Output: %s\n", Ts[i].name ? Ts[i].name : "");
         fprintf(out, "  Stationary series (w) and LEVEL, with 95%% bands:\n\n");
         fprintf(out, "   l     w_Y fcst    sd(w)   |     LEVEL         lower         upper\n");
         fprintf(out, "  ---------------------------------------------------------------------\n");
 
         for (l = 1; l <= L; l++) {
-            real vw = 0.0, vl = 0.0, lo, hi, center, sd, lvl;
+            real vw = 0.0, vl, sd, lo, hi, center, lvl, lam;
+            int  j2;
 
-            for (j = 1; j <= m; j++)
-                for (t = 0; t <= l - 1; t++) {
-                    real Ul = 0.0;
-                    int  v;
-                    for (v = 0; v <= t; v++) Ul += uu[v] * pt[i][j][t - v];
-                    vw += S[j] * pt[i][j][t] * pt[i][j][t];
-                    vl += S[j] * Ul * Ul;
-                }
+            for (t = 0; t <= l - 1; t++)
+                for (j = 1; j <= m; j++)
+                    for (j2 = 1; j2 <= m; j2++)
+                        vw += sigma[j][j2] * pt[i][j][t] * pt[i][j2][t];
+
+            vl = VCOV(i, i, l);
             sd = sqrt(vl);
 
-            center = bc[Ts[i].nobs + l] + detY[Ts[i].nobs + l];
+            center = BC[i][Ts[i].nobs + l] + DET[i][Ts[i].nobs + l];
             lo = center - 1.96 * sd;
             hi = center + 1.96 * sd;
+            lam = Tm[i].boxlam;
+            lvl = LVL[i][l];
 
-            if (fabs(Tm[i].boxlam) < 1e-8) {
-                lvl = exp(center / Ts[i].refactor);
-                lo  = exp(lo     / Ts[i].refactor);
-                hi  = exp(hi     / Ts[i].refactor);
+            if (fabs(lam) < 1e-8) {
+                lo = exp(lo / Ts[i].refactor);
+                hi = exp(hi / Ts[i].refactor);
             } else {
-                real lam = Tm[i].boxlam;
-                lvl = pow(lam * (center / Ts[i].refactor) + 1.0, 1.0 / lam);
-                lo  = pow(lam * (lo     / Ts[i].refactor) + 1.0, 1.0 / lam);
-                hi  = pow(lam * (hi     / Ts[i].refactor) + 1.0, 1.0 / lam);
+                lo = pow(lam * (lo / Ts[i].refactor) + 1.0, 1.0 / lam);
+                hi = pow(lam * (hi / Ts[i].refactor) + 1.0, 1.0 / lam);
             }
             fprintf(out, "  %3d  %10.4f  %8.4f  |  %10.4f  %10.4f  %10.4f\n",
                     l, we[i][n_stat + l], sqrt(vw), lvl, lo, hi);
         }
-
-        free_vector(uu, 0, L);
-        free_vector(bc, 1, Ts[i].nobs + L);
-        free_vector(detY, 1, Ts[i].nobs + L);
     }
+
+    /* --- AGREGADOS: combinaciones lineales, con varianza c'Vc --------------
+       La identidad contable (OCUPADOS = suma de sectores; PARADOS = ACTIVOS -
+       OCUPADOS) NO se mete en el modelo: se calcula DESPUES de prever, como
+       hacia el legacy. Lo que no es trivial es su BANDA: los errores de
+       prevision de las series estan correlacionados -- comparten innovaciones a
+       traves de la red -- asi que la varianza del agregado NO es la suma de las
+       varianzas. Es c'Vc, con V la matriz completa del error de prevision.
+
+       Ojo: las series se modelan transformadas (log, Box-Cox), y la identidad
+       vive en NIVELES. Por eso el agregado se forma con los niveles y la
+       varianza se propaga por el metodo delta, con J_i = dz_i/db_i.           */
+    for (k = 1; k <= n_aggr; k++) {
+        fprintf(out, "\n  Aggregate: %s  =", aggr_name[k]);
+        for (i = 1; i <= m; i++) {
+            if (aggr_c[k][i] == 0.0) continue;
+            fprintf(out, " %c %s", (aggr_c[k][i] > 0) ? '+' : '-',
+                    Ts[i].name ? Ts[i].name : "?");
+        }
+        fprintf(out, "\n");
+        fprintf(out, "  Computed AFTER forecasting; its band is c'Vc, so it accounts for\n");
+        fprintf(out, "  the correlation between the series' forecast errors.\n\n");
+        fprintf(out, "   l        LEVEL       sd         lower         upper\n");
+        fprintf(out, "  ----------------------------------------------------------\n");
+
+        for (l = 1; l <= L; l++) {
+            real pnt = 0.0, var = 0.0, sd;
+            int  i2;
+
+            for (i = 1; i <= m; i++) pnt += aggr_c[k][i] * LVL[i][l];
+
+            for (i = 1; i <= m; i++) {
+                if (aggr_c[k][i] == 0.0) continue;
+                for (i2 = 1; i2 <= m; i2++) {
+                    if (aggr_c[k][i2] == 0.0) continue;
+                    var += aggr_c[k][i] * aggr_c[k][i2]
+                         * JAC[i][l] * JAC[i2][l] * VCOV(i, i2, l);
+                }
+            }
+            sd = (var > 0.0) ? sqrt(var) : 0.0;
+            fprintf(out, "  %3d  %11.4f  %8.4f  %11.4f  %11.4f\n",
+                    l, pnt, sd, pnt - 1.96 * sd, pnt + 1.96 * sd);
+        }
+    }
+    #undef VCOV
+
+    free_vector(uu_i, 0, L);
+    free_matrix(JAC, 1, m, 1, L);
+    free_matrix(LVL, 1, m, 1, L);
+    free_matrix(DET, 1, m, 1, nobsmax + L);
+    free_matrix(BC, 1, m, 1, nobsmax + L);
+    free_tensor(LP, 1, m, 1, m, 0, L);
+    }
+
     fprintf(out, "=============================================================\n\n");
 
     free_tensor(pt, 1, m, 1, m, 0, L);
@@ -1470,6 +1583,69 @@ static int read_network(const char *path)
     }
     fclose(f);
     return nl;
+}
+
+/* Fichero de agregados:  NOMBRE = + SERIE - SERIE ...
+   Las series por su nombre (el del .pre) o por su posicion.                  */
+static int read_aggregates(const char *path)
+{
+    FILE *f = fopen(path, "r");
+    char line[512];
+
+    if (f == NULL) {
+        fprintf(stderr, "Error: cannot open the aggregates file %s\n", path);
+        return -1;
+    }
+
+    n_aggr = 0;
+    while (fgets(line, sizeof line, f)) {
+        char *h = strchr(line, '#');
+        char *eq, *tok;
+        real sign = 1.0;
+        int  i;
+
+        if (h) *h = '\0';
+        eq = strchr(line, '=');
+        if (eq == NULL) {
+            int only_ws = 1; char *c;
+            for (c = line; *c; c++) if (!isspace((unsigned char)*c)) only_ws = 0;
+            if (only_ws) continue;
+            fprintf(stderr, "Error: bad line in %s (expected NAME = +A -B): %s",
+                    path, line);
+            fclose(f); return -1;
+        }
+        *eq = '\0';
+
+        if (n_aggr >= MAX_AGGR) {
+            fprintf(stderr, "Error: too many aggregates (max %d)\n", MAX_AGGR);
+            fclose(f); return -1;
+        }
+        n_aggr++;
+        for (i = 1; i <= n_ser; i++) aggr_c[n_aggr][i] = 0.0;
+
+        if (sscanf(line, " %39s", aggr_name[n_aggr]) != 1) {
+            fprintf(stderr, "Error: aggregate with no name in %s\n", path);
+            fclose(f); return -1;
+        }
+
+        for (tok = strtok(eq + 1, " \t\n\r"); tok; tok = strtok(NULL, " \t\n\r")) {
+            if (strcmp(tok, "+") == 0) { sign =  1.0; continue; }
+            if (strcmp(tok, "-") == 0) { sign = -1.0; continue; }
+            if (tok[0] == '+') { sign =  1.0; tok++; }
+            else if (tok[0] == '-') { sign = -1.0; tok++; }
+            if (*tok == '\0') continue;
+
+            i = series_index(tok);
+            if (i == 0) {
+                fprintf(stderr, "Error: unknown series '%s' in %s\n", tok, path);
+                fclose(f); return -1;
+            }
+            aggr_c[n_aggr][i] += sign;
+            sign = 1.0;
+        }
+    }
+    fclose(f);
+    return n_aggr;
 }
 
 /* Orden topologico: una serie solo se puede construir (y prever) despues de
@@ -1582,6 +1758,19 @@ static void usage(const char *prog)
 "           would be simultaneous and cannot be cast as a triangular VARMA.\n"
 "           Without -n, every input feeds the first file (the star), and -b/-r/-s\n"
 "           give the orders.\n"
+"\n"
+"AGGREGATES  (accounting identities)\n"
+"  -a FILE  linear combinations of the series, reported with the forecast:\n"
+"\n"
+"             OCUPADOS = + EA + EP + EI + EU + EC\n"
+"             PARADOS  = + ACTIVOS - EA - EP - EI - EU - EC\n"
+"\n"
+"           An identity does NOT belong in the model: it is computed AFTER\n"
+"           forecasting. What is not trivial is its band. The forecast errors of\n"
+"           the series are CORRELATED -- through the network they share\n"
+"           innovations -- so the variance of an aggregate is not the sum of the\n"
+"           variances. It is c'Vc, with V the full forecast error covariance.\n"
+"           Requires -f.\n"
 "\n"
 "IDENTIFICATION\n"
 "  -p       PREWHITEN ONLY: filter the input with its own ARMA, apply the same\n"
@@ -2319,6 +2508,7 @@ int main(int argc, char *argv[])
     char *opt_b = NULL, *opt_r = NULL, *opt_s = NULL;
     char *cons_file = NULL;
     char *net_file  = NULL;
+    char *aggr_file = NULL;
     char outname[512];
     int fix_out_arma = 0, fix_inp_arma = 0;
     int fix_out_det  = 0, fix_inp_det  = 0;
@@ -2326,7 +2516,7 @@ int main(int argc, char *argv[])
     macheps = cmacheps();
     outputv = stdout;
 
-    while ((opt = getopt(argc, argv, "r:s:b:f:m:c:n:p0XNDEMvho:")) != -1) {
+    while ((opt = getopt(argc, argv, "r:s:b:f:m:c:n:a:p0XNDEMvho:")) != -1) {
         switch (opt) {
         case 'r': opt_r = optarg; auto_id = 0; break;
         case 's': opt_s = optarg; auto_id = 0; break;
@@ -2341,6 +2531,7 @@ int main(int argc, char *argv[])
         case 'p': prewhiten_only = 1;        break;
         case 'c': cons_file = optarg;        break;
         case 'n': net_file  = optarg;        break;
+        case 'a': aggr_file = optarg;        break;
         case '0': no_transfer = 1; auto_id = 0; break;
         case 'v': quiet_mode = 0;            break;
         case 'o': outfile = optarg;          break;
@@ -2439,6 +2630,15 @@ int main(int argc, char *argv[])
         auto_id = 0;             /* la red trae sus propios ordenes */
     }
     if (!topo_sort()) return 7;
+
+    if (aggr_file != NULL) {
+        int na = read_aggregates(aggr_file);
+        if (na < 0) return 10;
+        fprintf(outputv, "\nAggregates from %s: %d\n", aggr_file, na);
+        if (fc_horizon <= 0)
+            fprintf(stderr, "Note: aggregates are reported with the forecast; "
+                            "use -f to set a horizon.\n");
+    }
 
     build_stationary_series();
     if (n_stat <= 0) {

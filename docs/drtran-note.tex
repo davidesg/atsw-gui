@@ -570,12 +570,30 @@ reproduces the previously documented values $(0.0154,\,0.0104)$.
   are: see \S\ref{sec:gain}. This was the most valuable of the three, because
   without them the relation is estimated but not described.
 
-\item \textbf{Identity-linked triads.} The dissertation handles them
-  (\S2.4) by restricting the deterministic parameters of the three series to
-  satisfy the identity, \emph{``economizing the number of parameters to be
-  estimated''}. The slot table can already express this; it has not been
-  exercised, and the linear combinations of forecasts with their $c'Vc$ variance
-  (the aggregates) are not implemented.
+\item \textbf{Aggregates and identity-linked triads.} An accounting identity
+  (\textsc{employed} $=$ sum of sectors; \textsc{unemployed} $=$
+  \textsc{active} $-$ \textsc{employed}) does \emph{not} belong in the model: it
+  is computed after forecasting, as the legacy programs did. What is not trivial
+  is its \emph{band}. The forecast errors of the series are correlated---through
+  the network they share innovations---so the variance of an aggregate is
+  \textbf{not} the sum of the variances; it is $c'Vc$, with $V$ the full forecast
+  error covariance, propagated to levels by the delta method. This is now
+  reported, and computing it required fixing a real defect: the forecast variance
+  assumed $\Sigma$ diagonal, which stopped being true the moment covariances
+  could be freed (\S\ref{sec:qq}).
+
+  The check is pretty. On the chain $X\rightarrow M \rightarrow Y$ with $b=2$ on
+  the link $M\rightarrow Y$, the aggregate's band \emph{coincides} with the naive
+  independent sum at horizons 1 and 2---$M$'s innovation has not yet reached
+  $Y$---and separates from horizon 3 onwards, with $\mathrm{sd}(Y-M) <
+  \sqrt{\mathrm{var}(Y)+\mathrm{var}(M)} < \mathrm{sd}(Y+M)$, exactly as positive
+  correlation requires. The pure delay itself appears as the horizon at which the
+  correlation is born.
+
+  What has \emph{not} been exercised is the other half of the dissertation's
+  treatment (\S2.4): restricting the deterministic parameters of the three series
+  to satisfy the identity, which \emph{``economizes the number of parameters to be
+  estimated''}. The slot table can already express it.
 \end{enumerate}
 
 \section*{Reproducibility}

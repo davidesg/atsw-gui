@@ -201,10 +201,11 @@ Ahí está el techo.
    ```
 
    que son exactamente las tres que m6-1 libera de sus quince. La escala sigue
-   anclada con `Q[1,1] = 1` (ver BRIDGE_DESIGN §10: la verosimilitud concentrada es
-   invariante ante `Q → cQ`, así que sin normalizar el hessiano es **exactamente**
-   singular — y por eso los errores estándar de las sigmas que publica m6-1, que
-   salen del hessiano de BFGS, no significan nada).
+   anclada con `Q[1,1] = 1`. Ver BRIDGE_DESIGN §10: la verosimilitud concentrada es
+   **exactamente** invariante ante `Q → cQ`. Medido: eso deja logL y Σ̂ intactos (como
+   dice Mauricio) y no toca los errores estándar de φ/μ/ω, pero **destruye la
+   inferencia sobre la propia Q** — que es justo la que hace falta para decidir si una
+   covarianza es cero. Los `sd` de las sigmas que publica m6-1 son de esa especie.
 
 ### B. Baratas y valiosas ya
 

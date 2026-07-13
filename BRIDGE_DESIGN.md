@@ -296,44 +296,73 @@ mapa parámetros → estructura VARMA.
 ## §10 — La covarianza de las innovaciones: por qué Q[1,1] = 1
 
 Leído: Mauricio (1995), *Exact maximum likelihood estimation of stationary vector
-ARMA models* (`literature/9316.pdf`), secciones 2 y 3. Y el precedente del código:
+ARMA models*, JASA 90 (`literature/9316.pdf`) — que es **el algoritmo que implementa
+`elfvarma`** — y Mauricio (2002), *An algorithm for the exact likelihood of a
+stationary VARMA model*, JTSA 23(4) (`literature/518-2013-11-11-JAM102.pdf`), que
+describe un algoritmo **distinto** (forma de innovaciones, adaptación multivariante
+de Ansley 1979) y **no** es el que está cableado. Más el precedente del código:
 `drv-source/m6-1/drv.c` y `drvarma_v.04.1/src/drvarma.c`.
 
-**La teoría.** El modelo supone `a_t ~ N(0, sigma2·Q)`. Mauricio dice literalmente
-en la ec. (2.1) que esta descomposición **«although not unique»** sirve para obtener
-una verosimilitud concentrada. La concentrada (su ec. 3.1) es
+### La no-unicidad es real, y Mauricio la declara
 
-```
-l_c = −(mn/2)[log(2π/mn) + 1] − (n/2)·log(Π₁Π₂)
-Π₁ = (η'η − λ'λ)^m        Π₂ = |Q|·|D|^(1/n)
-```
+El modelo supone `a_t ~ N(0, sigma2·Q)`. En el JTSA (p. 474) lo dice sin rodeos:
 
-Sustituir `Q → cQ` divide la forma cuadrática por `c` (multiplica Π₁ por `c^−m`) y
-multiplica `|Q|` por `c^m`. **Π es exactamente invariante.** No es un problema
-numérico: es una dirección plana exacta en el espacio de parámetros.
+> «the fact that the decomposition σ²Q is not unique **raises no problem in the
+> estimation of E[A_t A′_t]**, since, on convergence of the estimation algorithm,
+> interest lies in the product σ²Q, but not in σ² nor in Q by itself»
 
-**El precedente.** Ni el legacy ni drvarma normalizan: `m6-1` estima las nueve
-entradas de su Q, incluida `sigma11` (`x[1] = 12.71`), con `npar = 60`. Y publica
-errores estándar finitos para ellas (`sd[1] = 2.29`). ¿Cómo, si el hessiano es
-singular? Porque **`fdhess`/`choldcp` están comentados** (`m6-1/drvmlest.c:97-98`) y
-los `sd` salen del hessiano **acumulado por BFGS**, que se construye con los pasos
-que el optimizador da y por tanto nunca ve la dirección en la que no se mueve. Da
-números finitos y sin significado. Es el mismo bug que costó M0.8 en drtran, y que
-allí se manifestó sin disimulo: SE(Q[2,2]) = 408.901.
+Y es **cierto**. El criterio (JTSA ec. 12) es `F(β|w) = (w̃′R_W⁻¹w̃)·|R_W|^(1/mn)`.
+Bajo `Q → cQ`, `R_W` escala por `c`: el primer factor va como `1/c`, el segundo como
+`c`. **F es exactamente invariante.** Y como `sigma2` se concentra, a lo largo de ese
+rayo `σ̂²(cQ)·cQ = σ̂²(Q)·Q`: **el producto Σ̂ no se mueve**.
 
-**La decisión.** drtran **se desvía a propósito** de drvarma y del legacy:
+### Medido, no supuesto
 
-1. `Q[1,1] ≡ 1`; la escala se la queda `sigma2`. Quita exactamente el grado de
-   libertad redundante. Quedan `m(m+1)/2` parámetros para Σ, que es lo correcto.
+Estimando ES_CPI + WTI con la escala de Q libre (como el legacy) y normalizada:
+
+| | escala libre | Q[1,1] = 1 |
+|---|---|---|
+| logL | −767.424341 | −767.424341 |
+| Σ̂ | 0.062666 / 68.838114 | 0.062666 / 68.838114 |
+| SE(phi_1) | 0.062204 | 0.062204 |
+| SE(mu) | 0.028502 | 0.028502 |
+| SE(log var2/var1) | 0.193083 | **0.136399** |
+
+Conclusiones, en orden de importancia:
+
+1. **logL y Σ̂ son idénticos a seis decimales.** La dirección plana existe y es exacta,
+   y Mauricio tiene razón: para estimar Σ no estorba.
+2. **No contamina** los errores estándar de φ, θ, μ, ω, δ. (Yo había afirmado que sí;
+   es falso.)
+3. **Destruye la inferencia sobre la propia Q.** El parámetro de escala, que es
+   *literalmente no identificable*, recibe un error estándar finito y un contraste de
+   aspecto respetable (`t = −0.19, p = 0.85`); y la razón de varianzas, que sí está
+   identificada, sale con un error estándar **inflado un 42 %** (0.193 vs 0.136).
+
+Los `sd` de las nueve sigmas que publica m6-1 (`sd[1] = 2.29`…) son de esta especie.
+Salen, además, del hessiano **acumulado por BFGS** — `fdhess`/`choldcp` están
+**comentados** en `m6-1/drvmlest.c:97-98` —, que se construye con los pasos que el
+optimizador da y por tanto nunca ve la dirección en la que no se mueve.
+
+### Por qué drtran sí normaliza
+
+Porque necesita justo esa inferencia. Decidir si una covarianza es distinta de cero
+(`q[4,2] = free`) **es un contraste**, y tiene que ser un contraste de verdad. Así que:
+
+1. `Q[1,1] ≡ 1`; la escala se la queda `sigma2`. Quita exactamente el grado de libertad
+   redundante y deja `m(m+1)/2` parámetros para Σ, que es lo correcto.
 2. Diagonal: se estima `log(var_i/var_1)` — positiva por construcción.
-3. Covarianzas `q[i,j]` (i>j): **fijas en cero por defecto**, liberables una a una
-   con `q[i,j] = free` en el fichero de restricciones. No es un flag global porque
-   el problema no lo es: **m6-1 libera tres de sus quince** (`sigma42`, `sigma62`,
-   `sigma54`) y el resto son cero.
-4. Si la Q resultante no es definida positiva, `elf` lo detecta y `objcfunc`
-   devuelve 1.0: el punto se rechaza. Es literalmente la estrategia de la ec. (3.5)
-   del artículo (`F = Π/Π₀` acotada en (0,1), puesta a 1 en los puntos inadmisibles).
+3. Covarianzas `q[i,j]` (i>j): **fijas en cero por defecto**, liberables una a una con
+   `q[i,j] = free`. No es un interruptor global porque el problema no lo es: **m6-1
+   libera tres de sus quince** (`sigma42`, `sigma62`, `sigma54`).
+4. Si la Q resultante no es definida positiva, `elf` lo detecta y `objcfunc` devuelve
+   1.0: el punto se rechaza. Es la estrategia del propio artículo de 1995 (ec. 3.5).
 
-**Comprobado** (§2g de la batería, caso sintético con `rho = 0.600`): recupera
-`rho = 0.617`, LR = 190.9 contra χ²(1), y **SE(q[2,1]) = 0.076** — finito y con
-sentido, porque el hessiano exacto ya no es singular.
+**Comprobado** (§2g de la batería, sintético con `rho = 0.600`): recupera `rho = 0.617`,
+LR = 190.9 contra χ²(1), y `SE(q[2,1]) = 0.076`.
+
+### Nota para drvarma (fuera del alcance de drtran)
+
+drvarma informa `cov[i,j]` con error estándar, t y p-valor (`docs/USER_GUIDE.md:85`) y
+**no** normaliza Q. Esos tres números son, por lo anterior, los que no se sostienen —
+el `cov[i,j]` en sí (y Σ) están bien. Apuntado, no tocado.

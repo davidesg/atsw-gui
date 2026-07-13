@@ -48,6 +48,11 @@ check() {
 # valor de un parámetro en la tabla de resultados
 val() { grep -E "^$2" "$1" | head -1 | awk '{print $2}'; }
 
+# sig <fichero> <i> <j>: elemento (i,j) de la matriz Sigma = sigma2*Q del .out
+sig() {
+    grep -A"$2" "Sigma = sigma2 \* Q" "$1" | tail -1 | awk -v c="$3" '{print $c}'
+}
+
 # El optimizador no debe FALLAR (límite de iteraciones / pasos máximos).
 # "PARADA en un punto sin mejora" es legítimo: es lo que ocurre al arrancar ya
 # en el óptimo, y no impide que el punto sea el correcto.
@@ -84,8 +89,8 @@ check "phi_X (WTI)"     0.299193 "$(val "$OUT" 'phi_2\[B\^1\]')"  0.0001
 check "mu_Y   (ES_CPI)" 0.154472 "$(val "$OUT" 'mu\[1\]')"     0.0001
 
 # Sigma = sigma2 * Q  (Q por sí sola NO es la covarianza)
-S11=$(grep "Sigma\[1,1\]" "$OUT" | awk '{print $NF}')
-S22=$(grep "Sigma\[2,2\]" "$OUT" | awk '{print $NF}')
+S11=$(sig "$OUT" 1 1)
+S22=$(sig "$OUT" 2 2)
 check "Sigma[1,1] (ES_CPI)"  0.062666 "$S11" 0.0005
 check "Sigma[2,2] (WTI)"    68.838100 "$S22" 0.01
 
@@ -115,7 +120,7 @@ $DRTRAN "$CASES/ES_CPI_airAR_mu.pre" "$CASES/WTI_ar1.pre" -0 -o "$OUT" > /dev/nu
 check "phi   (B^1)"   0.363119 "$(val "$OUT" 'phi_1\[B\^1\]')"    0.0001
 check "Theta (B^12)"  0.857450 "$(val "$OUT" 'theta_1\[B\^12\]')" 0.0001
 check "mu"           -0.014475 "$(val "$OUT" 'mu\[1\]')"        0.0001
-check "Sigma[1,1]"    0.069328 "$(grep 'Sigma\[1,1\]' "$OUT" | awk '{print $NF}')" 0.0005
+check "Sigma[1,1]"    0.069328 "$(sig "$OUT" 1 1)" 0.0005
 
 # --- Airline puro: MA regular + MA anual (sin media) --------------------------
 echo "   [airline MA] ES_CPI_airline: ∇∇₁₂ ln y = (1+0.4212B)(1-0.8147B¹²)a"
@@ -124,7 +129,7 @@ $DRTRAN "$CASES/ES_CPI_airline.pre" "$CASES/WTI_ar1.pre" -0 -o "$OUT" > /dev/nul
 
 check "theta (B^1)"  -0.421156 "$(val "$OUT" 'theta_1\[B\^1\]')"  0.0005
 check "Theta (B^12)"  0.814706 "$(val "$OUT" 'theta_1\[B\^12\]')"  0.0005
-check "Sigma[1,1]"    0.071022 "$(grep 'Sigma\[1,1\]' "$OUT" | awk '{print $NF}')" 0.0005
+check "Sigma[1,1]"    0.071022 "$(sig "$OUT" 1 1)" 0.0005
 
 # --- MEG / estacionalidad estocástica -----------------------------------------
 # Ejercita: factor irreducible de la diferencia anual (ifadf[3]=1), AR anual y
@@ -140,7 +145,7 @@ check "phi_3  (B^3)"   0.205844 "$(val "$OUT" 'phi_1\[B\^3\]')"   0.0002
 check "Phi    (B^12)"  0.295467 "$(val "$OUT" 'phi_1\[B\^12\]')"   0.0002
 check "MA f=3 (c2)"   -0.950159 "$(val "$OUT" 'theta_1\[f=3\]')" 0.0005
 check "mu"             0.266056 "$(val "$OUT" 'mu\[1\]')"        0.0002
-check "Sigma[1,1]"     0.016968 "$(grep 'Sigma\[1,1\]' "$OUT" | awk '{print $NF}')" 0.0005
+check "Sigma[1,1]"     0.016968 "$(sig "$OUT" 1 1)" 0.0005
 
 # --- MEG con TRES frecuencias: c1 != 0 y de ambos signos ----------------------
 # El término en B de un factor de frecuencia fija se DERIVA de c2:
@@ -157,7 +162,7 @@ check "MA f=3 (c1=0)" -0.908012 "$(val "$OUT" 'theta_1\[f=3\]')"  0.0005
 check "MA f=1 (c1>0)" -0.924052 "$(val "$OUT" 'theta_1\[f=1\]')"  0.0005
 check "MA f=5 (c1<0)" -0.924685 "$(val "$OUT" 'theta_1\[f=5\]')"  0.0005
 check "mu"             0.257980 "$(val "$OUT" 'mu\[1\]')"         0.0002
-check "Sigma[1,1]"     0.016176 "$(grep 'Sigma\[1,1\]' "$OUT" | awk '{print $NF}')" 0.0005
+check "Sigma[1,1]"     0.016176 "$(sig "$OUT" 1 1)" 0.0005
 
 # --- Coeficiente ARMA FIJADO en el .pre ---------------------------------------
 # FR_CPI_f5 trae "0.0000  0": el AR(1) está FIJO, no es un valor inicial.
@@ -168,7 +173,7 @@ $DRTRAN "$CASES/FR_CPI_f5.pre" "$CASES/WTI_ar1.pre" -0 -o "$OUT" > /dev/null 2>&
 grep -q "phi_1\[B\^1\].*fixed" "$OUT" && pass "el AR(1) respeta el flag del .pre (fijo)" \
                                       || fail "el AR(1) NO respeta el flag del .pre"
 check "MA f=5 (c2)"   -0.954212 "$(val "$OUT" 'theta_1\[f=5\]')"  0.0005
-check "Sigma[1,1]"     0.046484 "$(grep 'Sigma\[1,1\]' "$OUT" | awk '{print $NF}')" 0.0005
+check "Sigma[1,1]"     0.046484 "$(sig "$OUT" 1 1)" 0.0005
 
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
@@ -264,8 +269,8 @@ check "omega_1"  0.400 "$(val "$OUT" 'omega1\[1\]')"  0.06
 check "phi_N"    0.300 "$(val "$OUT" 'phi_1\[B\^1\]')"  0.12
 check "phi_X"    0.500 "$(val "$OUT" 'phi_2\[B\^1\]')"  0.12
 
-S11=$(grep "Sigma\[1,1\]" "$OUT" | awk '{print $NF}')
-S22=$(grep "Sigma\[2,2\]" "$OUT" | awk '{print $NF}')
+S11=$(sig "$OUT" 1 1)
+S22=$(sig "$OUT" 2 2)
 check "Sigma ruido"    0.25 "$S11" 0.06
 check "Sigma entrada"  1.00 "$S22" 0.20
 
@@ -547,6 +552,58 @@ grep -q "unknown series" "$TMPDIR/bad.log" \
     && pass "una serie inexistente en la red se rechaza" \
     || fail "acepta una serie inexistente"
 
+
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
+echo "── 2g. COVARIANZA NO DIAGONAL (q[i,j] = free) ──"
+echo "   Sigma = sigma2*Q es una descomposición NO ÚNICA (Mauricio 1995, ec. 2.1):"
+echo "   la verosimilitud concentrada es invariante ante Q -> cQ. Por eso Q se"
+echo "   normaliza con Q[1,1]=1 y sigma2 se queda la escala; si no, el hessiano es"
+echo "   exactamente singular. El legacy NO normaliza: sus errores estándar de las"
+echo "   sigmas son finitos solo porque salen del hessiano de BFGS."
+echo ""
+echo "   Caso sintético SYNQ: rho(a_N, a_X) = 0.600, sin transferencia."
+echo ""
+
+OUT="$TMPDIR/q_diag.txt"
+$DRTRAN "$SYN/SYNQ_Y.pre" "$SYN/SYNQ_X.pre" -0 -o "$OUT" > /dev/null 2>&1
+LL_D=$(grep "Log-likelihood =" "$OUT" | awk '{print $3}')
+NF_D=$(grep "Structural parameters" "$OUT" | sed 's/.*free: \([0-9]*\).*/\1/')
+R12_D=$(grep -A1 "Innovation correlations" "$OUT" | tail -1 | awk '{print $2}')
+check "por defecto la covarianza es DIAGONAL (corr = 0)" 0.0 "$R12_D" 1e-9
+
+OUT="$TMPDIR/q_full.txt"
+$DRTRAN "$SYN/SYNQ_Y.pre" "$SYN/SYNQ_X.pre" -0 -c "$SYN/SYNQ.cns" -o "$OUT" > /dev/null 2>&1
+LL_F=$(grep "Log-likelihood =" "$OUT" | awk '{print $3}')
+NF_F=$(grep "Structural parameters" "$OUT" | sed 's/.*free: \([0-9]*\).*/\1/')
+R12=$(grep -A1 "Innovation correlations" "$OUT" | tail -1 | awk '{print $2}')
+
+check "liberar q[2,1] añade UN grado de libertad" "$((NF_D + 1))" "$NF_F" 0.5
+check "recupera la correlación (verdad 0.600)" 0.600 "$R12" 0.05
+
+python3 -c "import sys; sys.exit(0 if 2*($LL_F - ($LL_D)) > 3.84 else 1)" \
+    && pass "LR de la covarianza = $(python3 -c "print('%.1f' % (2*($LL_F-($LL_D))))") > chi2(1) = 3.84" \
+    || fail "la covarianza no mejora la verosimilitud"
+
+# EL error estándar: la prueba de que el hessiano NO es singular. Con la escala
+# de Q sin normalizar esto daba 408901 (M0.8).
+SD_Q=$(grep -E "^q\[2,1\]" "$OUT" | awk '{print $3}')
+python3 -c "import sys; sys.exit(0 if 0.0 < $SD_Q < 1.0 else 1)" \
+    && pass "el error estándar de q[2,1] es finito y razonable ($SD_Q)" \
+    || fail "error estándar de q[2,1] degenerado ($SD_Q): ¿hessiano singular?"
+
+# Sigma debe ser simétrica
+S12=$(sig "$OUT" 1 2); S21=$(sig "$OUT" 2 1)
+check "Sigma es simétrica" "$S12" "$S21" 1e-9
+
+# Fijar una covarianza a un valor también debe poder hacerse
+CNS="$TMPDIR/qfix.cns"
+printf 'q[2,1] = 0.0\n' > "$CNS"
+OUT="$TMPDIR/q_fix0.txt"
+$DRTRAN "$SYN/SYNQ_Y.pre" "$SYN/SYNQ_X.pre" -0 -c "$CNS" -o "$OUT" > /dev/null 2>&1
+LL_0=$(grep "Log-likelihood =" "$OUT" | awk '{print $3}')
+check "fijar q[2,1]=0 reproduce el caso diagonal" "$LL_D" "$LL_0" 0.0001
+
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
 echo "── 3. PASS-THROUGH: con Y = X la verdad es omega_0 = 1 ──"
@@ -621,7 +678,7 @@ echo ""
 OUT="$TMPDIR/fc.txt"
 $DRTRAN "$SYN/SYN_Y.pre" "$SYN/SYN_X.pre" -b 2 -r 0 -s 1 -f 6 -o "$OUT" > /dev/null 2>&1
 
-SN=$(grep "Sigma\[1,1\]" "$OUT" | awk '{print $NF}')
+SN=$(sig "$OUT" 1 1)
 PHIN=$(val "$OUT" 'phi_1\[B\^1\]')
 
 # sd(w) del paso l: columna 3 de la tabla de previsión

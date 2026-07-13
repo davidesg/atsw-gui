@@ -1449,6 +1449,14 @@ static void usage(const char *prog)
 "                                      # input's own AR (a rational transfer)\n"
 "             omega1[0] = omega2[0]    # share between two inputs\n"
 "             omega2[1] = 0.0          # fix at a value\n"
+"             q[2,1]    = free         # free an innovation covariance\n"
+"\n"
+"           The innovation covariances q[i,j] are the one thing that starts out\n"
+"           FIXED (at zero): a diagonal covariance is the default, and freeing one\n"
+"           is a modelling decision, not a switch. Mauricio's m6-1 frees three of\n"
+"           its fifteen. Sigma = sigma2*Q is normalized with Q[1,1] = 1 -- that\n"
+"           decomposition is not unique (Mauricio 1995, eq. 2.1), and without the\n"
+"           normalization the Hessian is exactly singular.\n"
 "\n"
 "THE TRANSFER NETWORK\n"
 "  -n FILE  declare a NETWORK of transfers (a DAG) instead of the default star.\n"
@@ -1630,6 +1638,19 @@ static void build_slots(void)
         if (!fix_mu[i]) add_slot("mu[%d]", i);
     for (i = 2; i <= n_ser; i++)
         add_slot("log(var%d/var1)", i);
+
+    /* Covarianzas de las innovaciones. Van SIEMPRE al mapa, pero FIJAS EN CERO:
+       la covarianza diagonal es el caso por defecto, y liberar una covarianza es
+       una decision del analista, no algo que se active en bloque. m6-1 no libera
+       las 15 de su sistema: libera TRES (sigma42, sigma62, sigma54). El fichero
+       de restricciones lo dice en el mismo sitio y con el mismo lenguaje que
+       todo lo demas:   q[4,2] = free                                          */
+    for (i = 2; i <= n_ser; i++)
+        for (j = 1; j < i; j++) {
+            add_slot("q[%d,%d]", i, j);
+            slot_kind[n_slot]  = SLOT_FIXED;
+            slot_value[n_slot] = 0.0;
+        }
 }
 
 static int find_slot(const char *name)
@@ -1640,8 +1661,11 @@ static int find_slot(const char *name)
     return 0;
 }
 
-/* Lee el fichero de restricciones: "NOMBRE = NOMBRE" (compartir) o
-   "NOMBRE = valor" (fijar). Comentarios con '#'.                            */
+/* Lee el fichero de restricciones:
+     NOMBRE = NOMBRE   compartir (un solo grado de libertad en varios sitios)
+     NOMBRE = valor    fijar
+     NOMBRE = free     liberar (las covarianzas q[i,j] nacen fijas en cero)
+   Comentarios con '#'.                                                       */
 static int read_constraints(const char *path)
 {
     FILE *f = fopen(path, "r");
@@ -1667,6 +1691,13 @@ static int read_constraints(const char *path)
             fprintf(stderr, "Error: unknown parameter '%s' in %s\n", lhs, path);
             fclose(f);
             return -1;
+        }
+
+        if (strcmp(rhs, "free") == 0) {     /* LIBERAR (una covarianza) */
+            slot_kind[a]  = SLOT_FREE;
+            slot_alias[a] = 0;
+            nc++;
+            continue;
         }
 
         b = find_slot(rhs);
@@ -1854,14 +1885,38 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
     fprintf(outputv, "--------------------------------------------------------------------\n");
     fprintf(outputv, "Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1\n\n");
 
-    /* Q es la covarianza NORMALIZADA (Q[1,1] = 1); la real es Sigma = sigma2*Q */
-    fprintf(outputv, "sigma2 (concentrated) = %.6f\n\n", varma1.sigma2);
-    fprintf(outputv, "Sigma = sigma2 * Q  (innovation covariance):\n");
-    fprintf(outputv, "  Sigma[1,1] (noise)     = %12.6f\n", varma1.sigma2 * 1.0);
-    for (i = 2; i <= n_ser; i++)
-        fprintf(outputv, "  Sigma[%d,%d] (input %d)   = %12.6f\n", i, i, i - 1,
-                varma1.sigma2 * exp(x[npar - n_ser + i]));
-    fprintf(outputv, "\n");
+    /* Q es la covarianza NORMALIZADA (Q[1,1] = 1); la real es Sigma = sigma2*Q.
+       La normalizacion NO es cosmetica: la verosimilitud concentrada es invariante
+       ante Q -> cQ (Mauricio 1995, ec. 3.1-3.3), asi que sin fijar Q[1,1] habria
+       una direccion exactamente plana y el hessiano seria singular.            */
+    {
+        struct Tvarma vq;
+        int ifq = 0, jj;
+
+        fprintf(outputv, "sigma2 (concentrated) = %.6f\n", varma1.sigma2);
+        fprintf(outputv, "  (Q is normalized with Q[1,1] = 1; sigma2 carries the scale)\n\n");
+
+        shootx(x, &vq, &ifq, 1, 0);
+        if (ifq == 0) {
+            fprintf(outputv, "Sigma = sigma2 * Q  (innovation covariance):\n");
+            for (i = 1; i <= n_ser; i++) {
+                fprintf(outputv, "  ");
+                for (jj = 1; jj <= n_ser; jj++)
+                    fprintf(outputv, "%12.6f", varma1.sigma2 * vq.qq[i][jj]);
+                fprintf(outputv, "\n");
+            }
+            fprintf(outputv, "\nInnovation correlations:\n");
+            for (i = 1; i <= n_ser; i++) {
+                fprintf(outputv, "  ");
+                for (jj = 1; jj <= n_ser; jj++)
+                    fprintf(outputv, "%12.4f", vq.qq[i][jj] /
+                            sqrt(vq.qq[i][i] * vq.qq[jj][jj]));
+                fprintf(outputv, "\n");
+            }
+            fprintf(outputv, "\n");
+        }
+        shootx(x, &vq, &ifq, 0, 1);
+    }
 
     {
         struct Tvarma vdiag;
@@ -2205,6 +2260,8 @@ int main(int argc, char *argv[])
                 if (!fix_mu[i]) xs[idx++] = mm[i];
             for (i = 2; i <= n_ser; i++)
                 xs[idx++] = log(vv[i] / vv[1]);
+            for (i = 2; i <= n_ser; i++)
+                for (l = 1; l < i; l++) xs[idx++] = 0.0;   /* covarianzas */
         }
 
         /* del vector por slots al vector LIBRE */

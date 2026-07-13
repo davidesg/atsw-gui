@@ -189,11 +189,22 @@ Ahí está el techo.
    bate a la estrella por 213 puntos de logL (−1038.6 vs −1251.8). En la estrella, el
    enlace directo X→Y sale insignificante (t = 1.45): el efecto de X sobre Y es
    indirecto, y solo la red puede decirlo.
-5. **Covarianza no diagonal.** Es la forma *reducida* de la dependencia
-   contemporánea que NO se modela como transferencia — y m6-1 la usa **sin tener
-   ninguna estructura contemporánea**, lo que prueba que no son sustitutos.
-   Parametrizar `Q` por Cholesky con la diagonal normalizada, **sin reintroducir la
-   redundancia de escala** que costó M0.8.
+5. ~~**Covarianza no diagonal**~~ ✅ **HECHO**. Es la forma *reducida* de la
+   dependencia contemporánea que NO se modela como transferencia — y m6-1 la usa
+   **sin tener ninguna estructura contemporánea**, lo que prueba que no son
+   sustitutos. Cada `q[i,j]` es un slot **fijo en cero** que se libera uno a uno:
+
+   ```
+   q[4,2] = free
+   q[6,2] = free
+   q[5,4] = free
+   ```
+
+   que son exactamente las tres que m6-1 libera de sus quince. La escala sigue
+   anclada con `Q[1,1] = 1` (ver BRIDGE_DESIGN §10: la verosimilitud concentrada es
+   invariante ante `Q → cQ`, así que sin normalizar el hessiano es **exactamente**
+   singular — y por eso los errores estándar de las sigmas que publica m6-1, que
+   salen del hessiano de BFGS, no significan nada).
 
 ### B. Baratas y valiosas ya
 

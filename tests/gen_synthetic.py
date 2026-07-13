@@ -276,9 +276,60 @@ def build_chain(outdir, seed):
           % (om_my, om_xm))
 
 
+def build_corr(outdir, seed):
+    """Innovaciones CORRELACIONADAS contemporaneamente (rho = 0.600), sin
+    transferencia.
+
+    Es la forma REDUCIDA de una dependencia contemporanea que no se modela como
+    transferencia. m6-1 la usa: tiene covarianzas fuera de la diagonal SIN tener
+    ninguna estructura contemporanea, lo que prueba que no son sustitutos.
+
+        w_X[t] = 0.5 w_X[t-1] + e[t]
+        N[t]   = 0.3 N[t-1]   + a[t]      corr(a_t, e_t) = 0.600
+        w_Y[t] = N[t]
+    """
+    rnd = random.Random(seed)
+    burn = 200
+    n = N_OBS + burn
+    rho = 0.600
+    sd_e, sd_a = 1.0, 0.5
+
+    wx = [0.0] * n
+    nz = [0.0] * n
+    for t in range(1, n):
+        z1 = rnd.gauss(0.0, 1.0)
+        z2 = rnd.gauss(0.0, 1.0)
+        e = sd_e * z1
+        a = sd_a * (rho * z1 + math.sqrt(1.0 - rho * rho) * z2)
+        wx[t] = 0.500 * wx[t - 1] + e
+        nz[t] = 0.300 * nz[t - 1] + a
+
+    wx, wy = wx[burn:], nz[burn:]
+
+    def to_levels(v, base):
+        z, acc = [], 0.0
+        for u in v:
+            acc += u / 100.0
+            z.append(base * math.exp(acc))
+        return z
+
+    write_pre(os.path.join(outdir, "SYNQ_Y.pre"), "SYNQ_Y",
+              to_levels(wy, 100.0), 0.300, mu_free=False)
+    write_pre(os.path.join(outdir, "SYNQ_X.pre"), "SYNQ_X",
+              to_levels(wx, 50.0), 0.500, mu_free=False)
+
+    with open(os.path.join(outdir, "SYNQ.cns"), "w") as f:
+        f.write("# liberar la covarianza de las innovaciones (nace fija en cero)\n")
+        f.write("q[2,1] = free\n")
+
+    print("SYNQ -> VERDAD: rho(a_N, a_X) = %.3f, sin transferencia" % rho)
+
+
 def main():
     outdir = sys.argv[1] if len(sys.argv) > 1 else "."
     os.makedirs(outdir, exist_ok=True)
+
+    build_corr(outdir, SEED + 4)
 
     build_chain(outdir, SEED + 3)
 

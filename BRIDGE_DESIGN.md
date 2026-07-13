@@ -289,3 +289,51 @@ y racionales, parámetros compartidos y fijos, covarianza estructurada (no
 diagonal), diferenciación por serie y regresores deterministas. drtran automatiza
 hoy el caso de una entrada; el objetivo a largo plazo es un pequeño DSL para el
 mapa parámetros → estructura VARMA.
+
+
+---
+
+## §10 — La covarianza de las innovaciones: por qué Q[1,1] = 1
+
+Leído: Mauricio (1995), *Exact maximum likelihood estimation of stationary vector
+ARMA models* (`literature/9316.pdf`), secciones 2 y 3. Y el precedente del código:
+`drv-source/m6-1/drv.c` y `drvarma_v.04.1/src/drvarma.c`.
+
+**La teoría.** El modelo supone `a_t ~ N(0, sigma2·Q)`. Mauricio dice literalmente
+en la ec. (2.1) que esta descomposición **«although not unique»** sirve para obtener
+una verosimilitud concentrada. La concentrada (su ec. 3.1) es
+
+```
+l_c = −(mn/2)[log(2π/mn) + 1] − (n/2)·log(Π₁Π₂)
+Π₁ = (η'η − λ'λ)^m        Π₂ = |Q|·|D|^(1/n)
+```
+
+Sustituir `Q → cQ` divide la forma cuadrática por `c` (multiplica Π₁ por `c^−m`) y
+multiplica `|Q|` por `c^m`. **Π es exactamente invariante.** No es un problema
+numérico: es una dirección plana exacta en el espacio de parámetros.
+
+**El precedente.** Ni el legacy ni drvarma normalizan: `m6-1` estima las nueve
+entradas de su Q, incluida `sigma11` (`x[1] = 12.71`), con `npar = 60`. Y publica
+errores estándar finitos para ellas (`sd[1] = 2.29`). ¿Cómo, si el hessiano es
+singular? Porque **`fdhess`/`choldcp` están comentados** (`m6-1/drvmlest.c:97-98`) y
+los `sd` salen del hessiano **acumulado por BFGS**, que se construye con los pasos
+que el optimizador da y por tanto nunca ve la dirección en la que no se mueve. Da
+números finitos y sin significado. Es el mismo bug que costó M0.8 en drtran, y que
+allí se manifestó sin disimulo: SE(Q[2,2]) = 408.901.
+
+**La decisión.** drtran **se desvía a propósito** de drvarma y del legacy:
+
+1. `Q[1,1] ≡ 1`; la escala se la queda `sigma2`. Quita exactamente el grado de
+   libertad redundante. Quedan `m(m+1)/2` parámetros para Σ, que es lo correcto.
+2. Diagonal: se estima `log(var_i/var_1)` — positiva por construcción.
+3. Covarianzas `q[i,j]` (i>j): **fijas en cero por defecto**, liberables una a una
+   con `q[i,j] = free` en el fichero de restricciones. No es un flag global porque
+   el problema no lo es: **m6-1 libera tres de sus quince** (`sigma42`, `sigma62`,
+   `sigma54`) y el resto son cero.
+4. Si la Q resultante no es definida positiva, `elf` lo detecta y `objcfunc`
+   devuelve 1.0: el punto se rechaza. Es literalmente la estrategia de la ec. (3.5)
+   del artículo (`F = Π/Π₀` acotada en (0,1), puesta a 1 en los puntos inadmisibles).
+
+**Comprobado** (§2g de la batería, caso sintético con `rho = 0.600`): recupera
+`rho = 0.617`, LR = 190.9 contra χ²(1), y **SE(q[2,1]) = 0.076** — finito y con
+sentido, porque el hessiano exacto ya no es singular.

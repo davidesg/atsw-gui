@@ -98,6 +98,7 @@ void shootx(real *xfree, struct Tvarma *armax, int *ifaultx, int firstx, int las
     real **nu = NULL;          /* nu[k][.] : pesos del enlace k              */
     real **tr = NULL;          /* tr[i][.] : transferencia que RECIBE la serie i */
     real   var[MAX_SER + 1];
+    real   cov[MAX_SER + 1][MAX_SER + 1];
 
     *ifaultx = 0;
 
@@ -131,14 +132,26 @@ void shootx(real *xfree, struct Tvarma *armax, int *ifaultx, int firstx, int las
     for (i = 1; i <= n_ser; i++)
         if (!fix_mu[i]) mu[i] = x[idx++];
 
-    /* --- 5. Covarianza Q, diagonal.
-             est() CONCENTRA un factor de escala sigma2 (Sigma = sigma2*Q), así
-             que la escala global de Q NO está identificada: meter todas las
-             varianzas libres deja una dirección exactamente plana y un hessiano
-             SINGULAR. Solo las RAZONES son estimables: se normaliza Q[1][1] = 1
-             y se estima log(var_i/var_1) para i = 2..m.                       */
+    /* --- 5. Covarianza Q.
+             est() CONCENTRA un factor de escala sigma2 (Sigma = sigma2*Q). Esa
+             descomposicion NO es unica, y Mauricio (1995, ec. 2.1) lo dice: la
+             verosimilitud concentrada (su ec. 3.1) depende de Q solo a traves de
+             Pi1*Pi2 = (eta'eta - lambda'lambda)^m * |Q| * |D|^(1/n), que es
+             EXACTAMENTE invariante ante Q -> cQ. Dejar las m varianzas libres
+             (como hacen drvarma y el legacy) deja una direccion plana y un
+             hessiano SINGULAR: los errores estandar de Q que da el legacy son
+             finitos solo porque salen del hessiano acumulado por BFGS, que nunca
+             ve esa direccion. Aqui se normaliza Q[1][1] = 1 y se estima
+             log(var_i/var_1); la escala se la queda sigma2.
+
+             Las COVARIANZAS q[i][j] (i>j) son libres solo si el fichero de
+             restricciones las libera. Si la Q resultante no es definida positiva,
+             elf lo detecta y objcfunc devuelve 1.0: el punto se rechaza. Es la
+             estrategia del propio articulo (seccion 3).                       */
     var[1] = 1.0;
     for (i = 2; i <= n_ser; i++) var[i] = exp(x[idx++]);
+    for (i = 2; i <= n_ser; i++)
+        for (j = 1; j < i; j++) cov[i][j] = x[idx++];
 
     /* --- 6. Expandir los factores ARMA a polinomios --- */
     for (i = 1; i <= n_ser; i++) {
@@ -244,10 +257,13 @@ void shootx(real *xfree, struct Tvarma *armax, int *ifaultx, int firstx, int las
         }
     }
 
-    /* --- 13. Q diagonal y medias --- */
+    /* --- 13. Q (simetrica) y medias --- */
     for (i = 1; i <= m; i++)
         for (j = 1; j <= m; j++)
             armax->qq[i][j] = (i == j) ? var[i] : 0.0;
+    for (i = 2; i <= m; i++)
+        for (j = 1; j < i; j++)
+            armax->qq[i][j] = armax->qq[j][i] = cov[i][j];
     armax->sigma2 = 1.0;        /* la escala la concentra est() */
 
     for (i = 1; i <= m; i++) armax->mu[i] = mu[i];

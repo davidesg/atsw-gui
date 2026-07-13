@@ -644,14 +644,43 @@ $h$ & univariate & transfer $b{=}0$ & transfer $b{=}1$ \\
 \end{tabular}
 \end{center}
 
-A caveat, because the data corrected an earlier and more sweeping claim of ours:
-$b=1$ is \emph{not} ``$b=0$ minus the contemporaneous term''. It is a different
-model---dropping $\omega_0$ makes the noise absorb the contemporaneous covariation,
-so $\sigma_N$ grows. There is a trade-off, and it only clearly pays in Spain; in
-France and Germany the two are within $1\%$ of each other. The contemporaneous term
-is a real feature of the data (its $t$ is $6$--$10$ everywhere); it is simply
-\emph{unusable for forecasting} unless one is willing to condition on a scenario
-for the oil price.
+Two caveats, both of which corrected earlier and more sweeping claims of ours.
+
+First, $b=1$ is \emph{not} ``$b=0$ minus the contemporaneous term''. It is a
+different model---dropping $\omega_0$ makes the noise absorb the contemporaneous
+covariation, so $\sigma_N$ grows. There is a trade-off, and it only clearly pays in
+Spain; in France and Germany the two are within $1\%$ of each other.
+
+Second---and this is the point that matters---it is \textbf{not} true that the
+contemporaneous term is ``unusable for forecasting''. Of course one uses the
+\emph{forecast} of the oil price, and that is exactly what the program does: the
+future of the input enters the transfer like any other value. The real difficulty
+is that the oil price is very nearly \emph{unforecastable}. Its stationary model is
+an AR(1) with $\phi=0.30$ on monthly log differences whose innovation standard
+deviation is $8.3\%$, so the one-step forecast carries a signal-to-noise ratio of
+about $0.18$, and two steps out, $0.05$:
+
+\begin{center}
+\begin{tabular}{crrr}
+\toprule
+$l$ & forecast (from a $+5\%$ month) & s.e. & signal/noise \\
+\midrule
+1 & $+1.50\%$ & $8.30\%$ & $0.18$ \\
+2 & $+0.45\%$ & $8.66\%$ & $0.05$ \\
+3 & $+0.13\%$ & $8.69\%$ & $0.02$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+So $\omega_0$ does not contribute \emph{unusable} information; it contributes
+almost \emph{no} information and all of the variance. Its variance cost to the
+inflation forecast is $\omega_0^2\sigma_X^2 = (0.0164\times 8.30)^2 = 0.019$,
+against a total inflation forecast variance of $0.25^2=0.063$---nearly a third of
+it, bought with a signal that is mostly noise. The contemporaneous channel is a
+real feature of the data (its $t$ statistic is between $6$ and $10$ in all three
+countries); it is simply not worth its variance, \emph{unless} one conditions on a
+scenario for the oil price rather than forecasting it, which is a different
+exercise.
 
 \paragraph{What this is not.} These are \emph{theoretical} forecast error
 variances, computed from the fitted models. They say what the models imply, not
@@ -660,8 +689,9 @@ what happens out of sample, where parameter uncertainty and structural change---
 out-of-sample comparison needs recursive forecasting with the parameters held
 fixed, which is item~5 of \S\ref{sec:open}. What the decomposition settles is the
 \emph{mechanism}: it is not that oil does not matter for inflation---it plainly
-does, with an elasticity of $2.7\%$ in Spain---but that its usable information is
-confined to what has already been observed.
+does, with an elasticity of $2.7\%$ in Spain---but that the oil price's own
+unpredictability is so large that, beyond one step, what the transfer imports is
+mostly the variance of the oil forecast rather than its signal.
 
 \section{What the dissertation taught, and what remains}
 \label{sec:todo}

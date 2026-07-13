@@ -1128,6 +1128,44 @@ grep -q "unknown series" "$TMPDIR/bad_ag.log" \
     && pass "una serie inexistente en el agregado se rechaza" \
     || fail "acepta una serie inexistente en el agregado"
 
+
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
+echo "── 4d. PREVISIÓN DE MODELOS CON MA: los residuos pasados ──"
+echo "   forecast_model necesita los residuos pasados para la parte MA: la"
+echo "   previsión de un MA(q) ES una combinación de las últimas q innovaciones."
+echo "   shootx solo ALOJA a[] (a ceros); quien lo calcula es elf. Sin esa llamada,"
+echo "   TODO modelo con q>0 se preveía con residuos NULOS -- y la serie estacionaria"
+echo "   salía exactamente 0.0000 a todo horizonte. No se notaba porque ningún"
+echo "   modelo con MA se preveía en las pruebas. Contra fue 1.13.1 (Python):"
+echo ""
+echo "     h        fue     drtran(bug)    drtran"
+echo "     1    81.8884   81.7807(-0.13%)  81.8947"
+echo "     6    83.3690   83.1716(-0.24%)  83.3808"
+echo ""
+
+OUT="$TMPDIR/ma_fc.txt"
+$DRTRAN "$WORK/ES_CPI_airline.pre" "$WORK/WTI_ar1.pre" -0 -f 6 -o "$OUT" >/dev/null 2>&1
+
+# nivel previsto del airline, contra el de fue
+lvl() { grep -A"$((4 + $2))" "Output: ES_CPI" "$1" | tail -1 | awk '{print $5}'; }
+check "airline h=1: coincide con fue (81.8884)" 81.8884 "$(lvl "$OUT" 1)" 0.02
+check "airline h=2: coincide con fue (81.9091)" 81.9091 "$(lvl "$OUT" 2)" 0.02
+check "airline h=6: coincide con fue (83.3690)" 83.3690 "$(lvl "$OUT" 6)" 0.02
+
+# LA REGRESIÓN: la serie estacionaria NO puede ser idénticamente cero
+python3 - "$OUT" <<'PYMA'
+import re, sys
+t = open(sys.argv[1]).read()
+m = re.search(r'Output: ES_CPI.*?\n(?:.*\n)*?  ---+\n((?:  +\d+.*\n)+)', t)
+w = [float(r.split()[1]) for r in m.group(1).strip().split('\n')]
+# con residuos a cero, un MA puro en diferencias preve w = 0 a todo horizonte
+sys.exit(0 if any(abs(v) > 1e-6 for v in w) else 1)
+PYMA
+[ $? -eq 0 ] \
+    && pass "la previsión estacionaria de un MA NO es idénticamente cero (los residuos se usan)" \
+    || fail "la previsión de un MA sale 0.0000: los residuos NO se están calculando"
+
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
 echo "── 5. Sanidad ──"

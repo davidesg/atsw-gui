@@ -1226,6 +1226,26 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
     x = expand_params(x);        /* los omegas se leen de la estructura completa */
     p = vf.p; q = vf.q;
 
+    /* Los RESIDUOS pasados. forecast_model los necesita para la parte MA: la
+       prevision de un MA(q) es una combinacion de las ultimas q innovaciones. Y
+       shootx solo ALOJA a[] -- a ceros --, no lo calcula: quien lo calcula es elf.
+       Sin esta llamada, todo modelo con q > 0 se preveia con residuos NULOS. No
+       se notaba porque un AR puro no entra en ese bucle... y ningun modelo con MA
+       se preveia en las pruebas. */
+    {
+        real pi1, pi2, pi3;
+        int  ifa = 0;
+        vf.xitol = -1e-3;                       /* verosimilitud EXACTA */
+        elf(vf.m, vf.n, vf.p, vf.q, vf.mu, vf.phi, vf.theta, vf.qq, vf.w,
+            1.0, vf.xitol, FALSE, vf.a, &pi1, &pi2, &pi3, &ifa);
+        if (ifa != 0) {
+            fprintf(out, "\nCould not compute the residuals for forecasting "
+                         "(elf ifault = %d).\n", ifa);
+            shootx(x, &vf, &ifault, 0, 1);
+            return;
+        }
+    }
+
     sigma = matrix(1, m, 1, m);
     for (i = 1; i <= m; i++)
         for (j = 1; j <= m; j++) sigma[i][j] = sigma2 * vf.qq[i][j];

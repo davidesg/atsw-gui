@@ -1,5 +1,8 @@
 # drtran
 
+> **[NOTA_TECNICA.md](NOTA_TECNICA.md)** — qué se aparta este programa de las
+> soluciones originales de Box–Jenkins, y por qué. Con las cifras.
+
 **Modelos de transferencia de Box–Jenkins por máxima verosimilitud exacta.**
 
 drtran es el **puente** entre dos programas que ya funcionan:

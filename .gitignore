@@ -5,3 +5,6 @@ build/
 
 # Salidas de trabajo (se regeneran; no son fuente)
 *.log
+
+# salidas de ejecuciones sueltas
+*.out

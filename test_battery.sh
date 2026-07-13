@@ -613,6 +613,120 @@ OUT="$TMPDIR/passthru.txt"
 $DRTRAN "$WORK/WTI_ar1.pre" "$WORK/WTI_ar1.pre" -r 0 -s 0 -b 0 -o "$OUT" > /dev/null 2>&1
 check "omega_0 (Y=X)"  1.0 "$(val "$OUT" 'omega1\[0\]')"  0.01
 
+
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
+echo "── 3b. CASO REAL: IPC_ES <- WTI. ¿La transferencia es RACIONAL? ──"
+echo "   Los datos deciden, no la costumbre. Tres ajustes, mismo output y mismo"
+echo "   input, y dos de ellos con EXACTAMENTE los mismos parámetros libres."
+echo ""
+
+CASES="tests/cases"
+R1="$TMPDIR/ipc_rat.txt"     # omega_0 / (1 - delta_1 B)   -- racional
+R2="$TMPDIR/ipc_s1.txt"      # omega_0 + omega_1 B         -- dos omegas
+R3="$TMPDIR/ipc_rat11.txt"   # omega_0 + omega_1 B, / (1 - delta_1 B)  -- anida a R2
+
+$DRTRAN "$CASES/ES_CPI_m10.pre" "$CASES/WTI_ar1.pre" -b 0 -r 1 -s 0 -o "$R1" >/dev/null 2>&1
+$DRTRAN "$CASES/ES_CPI_m10.pre" "$CASES/WTI_ar1.pre" -b 0 -r 0 -s 1 -o "$R2" >/dev/null 2>&1
+$DRTRAN "$CASES/ES_CPI_m10.pre" "$CASES/WTI_ar1.pre" -b 0 -r 1 -s 1 -o "$R3" >/dev/null 2>&1
+
+LL1=$(grep "Log-likelihood =" "$R1" | awk '{print $3}')
+LL2=$(grep "Log-likelihood =" "$R2" | awk '{print $3}')
+LL3=$(grep "Log-likelihood =" "$R3" | awk '{print $3}')
+NF1=$(grep "Structural parameters" "$R1" | sed 's/.*free: \([0-9]*\).*/\1/')
+NF2=$(grep "Structural parameters" "$R2" | sed 's/.*free: \([0-9]*\).*/\1/')
+
+check "racional y dos-omegas tienen los MISMOS parámetros libres" "$NF2" "$NF1" 0.5
+python3 -c "import sys; sys.exit(0 if $LL2 > $LL1 else 1)" \
+    && pass "con los mismos parámetros, DOS OMEGAS gana al racional ($LL2 vs $LL1)" \
+    || fail "el racional gana al de dos omegas"
+
+grep -q "NOT adequate" "$R1" \
+    && pass "la adecuación DELATA al racional (deja rastro del input en el ruido)" \
+    || fail "la adecuación no detecta la mala especificación del racional"
+grep -q "is ADEQUATE" "$R2" \
+    && pass "el de dos omegas es adecuado" \
+    || fail "el de dos omegas sale inadecuado"
+
+# R3 anida a R2: el contraste honesto del denominador
+D1=$(val "$R3" 'delta1\[1\]')
+T3=$(grep -E "^delta1\[1\]" "$R3" | awk '{print $4}')
+python3 -c "import sys; sys.exit(0 if abs($T3) < 2.0 else 1)" \
+    && pass "en el modelo que los ANIDA, delta_1 es insignificante (t = $T3): no hay denominador" \
+    || fail "delta_1 sale significativo en el modelo anidante (t = $T3)"
+python3 -c "import sys; sys.exit(0 if 2*($LL3 - ($LL2)) < 3.84 else 1)" \
+    && pass "LR del denominador = $(python3 -c "print('%.3f' % (2*($LL3-($LL2))))") < chi2(1) = 3.84" \
+    || fail "el denominador mejora significativamente"
+
+# El t = 6.4 del delta en el modelo R1 es un ESPEJISMO: con el denominador
+# forzado, delta es el unico camino para dar peso al retardo 1.
+TD1=$(grep -E "^delta1\[1\]" "$R1" | awk '{print $4}')
+python3 -c "import sys; sys.exit(0 if $TD1 > 4.0 else 1)" \
+    && pass "aviso: en el racional forzado delta_1 parece contundente (t = $TD1) y es un espejismo" \
+    || fail "el racional forzado no reproduce el t alto de delta_1"
+
+echo ""
+echo "   Los pesos: el racional impone cola geométrica; los datos quieren dos y parar."
+echo ""
+
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
+echo "── 3c. SEPARABILIDAD: por qué Box-Jenkins puede dejar FIJO el modelo del input ──"
+echo "   La tesis de Muñoz Polo (2001, sec. 2.6): «El modelo U del input permanece"
+echo "   inalterado desde el inicio hasta el fin del proceso». drtran, en cambio, lo"
+echo "   estima CONJUNTAMENTE. ¿Cambia algo? Con Sigma diagonal y sin realimentación"
+echo "   la verosimilitud se FACTORIZA, así que no: no es una aproximación, es"
+echo "   exactamente óptimo. Y por eso drtran homologa con fue."
+echo ""
+
+FX="$TMPDIR/ipc_fixX.txt"
+$DRTRAN "$CASES/ES_CPI_m10.pre" "$CASES/WTI_ar1.pre" -b 0 -r 0 -s 1 -X -o "$FX" >/dev/null 2>&1
+LLX=$(grep "Log-likelihood =" "$FX" | awk '{print $3}')
+check "fijar el ARMA del input NO cambia la verosimilitud" "$LL2" "$LLX" 1e-6
+check "ni el omega_0" "$(val "$R2" 'omega1\[0\]')" "$(val "$FX" 'omega1\[0\]')" 1e-6
+check "ni el omega_1" "$(val "$R2" 'omega1\[1\]')" "$(val "$FX" 'omega1\[1\]')" 1e-6
+
+echo ""
+echo "── 3d. omega_0 vs sigma_12: dos formas de explicar LO MISMO en k=0 ──"
+echo "   Una transferencia CONTEMPORÁNEA (b=0) y la covarianza de las innovaciones"
+echo "   producen la misma covarianza cruzada en el retardo 0. Solo se separan por"
+echo "   cómo decae en k>0: phi_X^k la transferencia, phi_N^k la covarianza. Si los"
+echo "   dos AR se parecen, la identificación es débil. Es la razón de que m6-1 tenga"
+echo "   covarianzas y NINGUNA estructura contemporánea."
+echo ""
+
+CQ="$TMPDIR/q21.cns"
+printf 'q[2,1] = free\n' > "$CQ"
+
+# (a) IPC<-WTI: b=0 y phi_X=0.30 ~ phi_N=0.40. Cresta.
+PAT="$TMPDIR/ipc_ridge.txt"
+$DRTRAN "$CASES/ES_CPI_m10.pre" "$CASES/WTI_ar1.pre" -b 0 -r 0 -s 1 -c "$CQ" -o "$PAT" >/dev/null 2>&1
+LLP=$(grep "Log-likelihood =" "$PAT" | awk '{print $3}')
+RHO=$(grep -A1 "Innovation correlations" "$PAT" | tail -1 | awk '{print $2}')
+TQ=$(grep -E "^q\[2,1\]" "$PAT" | awk '{print $4}')
+
+grep -q "near-collinearity" "$PAT" \
+    && pass "drtran AVISA de la casi-colinealidad (b=0 + covarianza libre)" \
+    || fail "no avisa de la casi-colinealidad"
+python3 -c "import sys; sys.exit(0 if 2*($LLP - ($LL2)) < 3.84 else 1)" \
+    && pass "y tiene razón: la verosimilitud NO mejora (LR = $(python3 -c "print('%.3f' % (2*($LLP-($LL2))))"))" \
+    || fail "la covarianza sí mejora significativamente"
+python3 -c "import sys; sys.exit(0 if abs($RHO) > 0.9 and abs($TQ) > 100 else 1)" \
+    && pass "pero los parámetros huyen a una esquina: corr = $RHO, t = $TQ" \
+    || fail "no se reproduce la patología (corr = $RHO, t = $TQ)"
+
+# (b) SYN: b=2 (no contemporánea) y phi_X=0.50 != phi_N=0.30. Sin patología.
+CLEAN="$TMPDIR/syn_q.txt"
+$DRTRAN "$SYN/SYN_Y.pre" "$SYN/SYN_X.pre" -b 2 -r 0 -s 1 -c "$CQ" -o "$CLEAN" >/dev/null 2>&1
+TQ2=$(grep -E "^q\[2,1\]" "$CLEAN" | awk '{print $4}')
+grep -q "near-collinearity" "$CLEAN" \
+    && fail "avisa de colinealidad donde NO la hay (b=2)" \
+    || pass "con b=2 NO avisa: la transferencia no toca el retardo 0"
+python3 -c "import sys; sys.exit(0 if abs($TQ2) < 2.0 else 1)" \
+    && pass "y la covarianza sale correctamente NO significativa (t = $TQ2, verdad = 0)" \
+    || fail "la covarianza sale significativa siendo cero (t = $TQ2)"
+check "los omegas se recuperan igual (verdad 0.800)" 0.800 "$(val "$CLEAN" 'omega1\[0\]')" 0.05
+
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
 echo "── 4. DETERMINISTAS: tipos de fue e intervenciones racionales ──"

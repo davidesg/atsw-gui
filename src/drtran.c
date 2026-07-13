@@ -1653,6 +1653,53 @@ static void build_slots(void)
         }
 }
 
+static int find_slot(const char *name);
+
+/* --------------------------------------------------------------------------
+   Aviso de casi-colinealidad: una transferencia CONTEMPORANEA (b=0) y la
+   covarianza de las innovaciones de esas dos series explican LO MISMO en el
+   retardo k=0. Solo se separan por como decae la covarianza cruzada en k>0:
+   phi_X^k si es transferencia, phi_N^k si es covarianza. Si los dos AR se
+   parecen, la identificacion es debil y el optimizador se va por una cresta:
+   medido en IPC<-WTI (phi_X=0.30, phi_N=0.40) la verosimilitud no mejora
+   (LR=0.03) pero la correlacion se va a -0.98, omega_0 se multiplica por 9 y
+   los t-ratios llegan a 2424.
+
+   Por eso la doctrina de la escuela es usar UNA de las dos, no las dos: m6-1
+   tiene covarianzas fuera de la diagonal y NINGUNA estructura contemporanea, y
+   la tesis de Munoz Polo (2001, sec. 2.4) dice que la especificacion de una
+   relacion bivariante "puede comenzar con la modificacion de la matriz Sigma".
+   -------------------------------------------------------------------------- */
+static void warn_contemp_collinear(FILE *out)
+{
+    int k, s1, s2;
+    char nm[40];
+
+    for (k = 1; k <= n_link; k++) {
+        if (lnk[k].b != 0 || lnk[k].s < 0) continue;
+
+        snprintf(nm, sizeof nm, "q[%d,%d]", lnk[k].out, lnk[k].inp);
+        s1 = find_slot(nm);
+        snprintf(nm, sizeof nm, "q[%d,%d]", lnk[k].inp, lnk[k].out);
+        s2 = find_slot(nm);
+
+        if ((s1 && slot_kind[s1] == SLOT_FREE) ||
+            (s2 && slot_kind[s2] == SLOT_FREE)) {
+            fprintf(out,
+"\n*** WARNING: near-collinearity.\n"
+"    Link %d (%s <- %s) is CONTEMPORANEOUS (b=0) and its innovation\n"
+"    covariance is FREE at the same time. At lag k=0 the two explain the very\n"
+"    same thing; they part company only through the decay of the cross-\n"
+"    covariance at k>0 (phi_X^k for the transfer, phi_N^k for the covariance).\n"
+"    When the two AR structures are close, the likelihood has a near-flat ridge:\n"
+"    the fit barely improves while omega and the correlation run off to a corner\n"
+"    with enormous t-ratios. Use ONE of the two, not both.\n", k,
+                Ts[lnk[k].out].name ? Ts[lnk[k].out].name : "?",
+                Ts[lnk[k].inp].name ? Ts[lnk[k].inp].name : "?");
+        }
+    }
+}
+
 static int find_slot(const char *name)
 {
     int i;
@@ -2222,6 +2269,8 @@ int main(int argc, char *argv[])
         fprintf(outputv, "\nConstraints from %s: %d\n", cons_file, nc);
     }
     resolve_slots();
+    warn_contemp_collinear(outputv);
+    warn_contemp_collinear(stdout);
 
     fprintf(outputv, "\nStructural parameters: %d   (free: %d", n_slot, n_free);
     if (n_slot > n_free)

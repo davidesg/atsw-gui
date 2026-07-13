@@ -1166,6 +1166,103 @@ PYMA
     && pass "la previsión estacionaria de un MA NO es idénticamente cero (los residuos se usan)" \
     || fail "la previsión de un MA sale 0.0000: los residuos NO se están calculando"
 
+
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
+echo "── 4e. PREVISIÓN RECURSIVA FUERA DE MUESTRA (-R) ──"
+echo "   Las varianzas que un modelo declara son TEÓRICAS: se calculan SUPONIENDO"
+echo "   QUE ESE MODELO ES CIERTO. Cada modelo se pone su propia nota, así que"
+echo "   comparar dos varianzas teóricas NO es comparar dos modelos. La única forma"
+echo "   honesta: estimar UNA vez, congelar los parámetros, y hacer rodar el origen."
+echo ""
+
+# --- el ejercicio del pass-through, ahora de verdad ---
+for P in ES:ES_CPI_m10 DE:DE_CPI_mar3sar; do
+    K=${P%%:*}; M=${P##*:}
+    $DRTRAN "$WORK/$M.pre" "$WORK/WTI_ar1.pre" -0             -R 168 -f 12 \
+            -o "$TMPDIR/R_${K}_uni.txt" >/dev/null 2>&1
+    $DRTRAN "$WORK/$M.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1 -R 168 -f 12 \
+            -o "$TMPDIR/R_${K}_tf.txt"  >/dev/null 2>&1
+done
+
+grep -q "RECURSIVE FORECAST EVALUATION" "$TMPDIR/R_ES_uni.txt" \
+    && pass "el informe da la evaluación recursiva" \
+    || fail "no hay evaluación recursiva"
+NO=$(grep -E "^  Origins" "$TMPDIR/R_ES_uni.txt" | awk '{print $3}')
+check "37 orígenes (obs 168..204, H=12, n=216)" 37 "$NO" 0.5
+
+# --- ES: el crudo MEJORA a todo horizonte. Contradice a la varianza teorica.
+python3 - "$TMPDIR" <<'PYR'
+import re, sys
+T = sys.argv[1]
+def rmse(f):
+    t = open(f).read()
+    m = re.search(r'h      n        MAE.*?\n  ---+\n((?:  +\d+.*\n)+)', t)
+    return {int(r.split()[0]): float(r.split()[3]) for r in m.group(1).strip().split('\n')}
+u, t = rmse('%s/R_ES_uni.txt' % T), rmse('%s/R_ES_tf.txt' % T)
+bad = [h for h in (1, 2, 3, 6, 12) if t[h] >= u[h]]
+sys.exit(0 if not bad else (print("ES: el crudo no mejora en h=%s" % bad) or 1))
+PYR
+[ $? -eq 0 ] \
+    && pass "ES: fuera de muestra el crudo MEJORA el RMSE a TODO horizonte" \
+    || fail "ES: el crudo no mejora fuera de muestra"
+
+# --- DE: EMPEORA. Es donde el coeficiente retardado no era significativo.
+python3 - "$TMPDIR" <<'PYD'
+import re, sys
+T = sys.argv[1]
+def rmse(f):
+    t = open(f).read()
+    m = re.search(r'h      n        MAE.*?\n  ---+\n((?:  +\d+.*\n)+)', t)
+    return {int(r.split()[0]): float(r.split()[3]) for r in m.group(1).strip().split('\n')}
+u, t = rmse('%s/R_DE_uni.txt' % T), rmse('%s/R_DE_tf.txt' % T)
+sys.exit(0 if all(t[h] > u[h] for h in (1, 3, 6, 12)) else 1)
+PYD
+[ $? -eq 0 ] \
+    && pass "DE: fuera de muestra el crudo EMPEORA (allí el retardo no era significativo)" \
+    || fail "DE: el resultado fuera de muestra no es el esperado"
+
+# --- LA LECCIÓN: la varianza teórica decía lo CONTRARIO para ES a h>=2.
+python3 - "$TMPDIR" <<'PYL'
+import re, sys
+T = sys.argv[1]
+def lvl_sd(f):
+    t = open(f).read()
+    m = re.search(r'Output: ES_CPI.*?\n(?:.*\n)*?  ---+\n((?:  +\d+.*\n)+)', t)
+    return {int(r.split()[0]): (float(r.split()[6]) - float(r.split()[5])) / (2 * 1.96)
+            for r in m.group(1).strip().split('\n')}
+def rmse(f):
+    t = open(f).read()
+    m = re.search(r'h      n        MAE.*?\n  ---+\n((?:  +\d+.*\n)+)', t)
+    return {int(r.split()[0]): float(r.split()[3]) for r in m.group(1).strip().split('\n')}
+lu, lt = lvl_sd('%s/R_ES_uni.txt' % T), lvl_sd('%s/R_ES_tf.txt' % T)
+ru, rt = rmse('%s/R_ES_uni.txt' % T),   rmse('%s/R_ES_tf.txt' % T)
+# a h=3 la TEORIA dice que la transferencia es PEOR (sd mayor)...
+theory_worse = lt[3] > lu[3]
+# ...y la REALIDAD dice que es mejor.
+reality_better = rt[3] < ru[3]
+# y la razon: el univariante es MAS sobreconfiado que la transferencia
+uni_worse_calibrated = (ru[3] / lu[3]) > (rt[3] / lt[3])
+sys.exit(0 if (theory_worse and reality_better and uni_worse_calibrated) else 1)
+PYL
+[ $? -eq 0 ] \
+    && pass "a h=3 la TEORÍA dice que empeora y la REALIDAD que mejora: cada modelo se pone su nota" \
+    || fail "no se reproduce la divergencia teoría/realidad"
+
+# --- el CSV por origen ---
+$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1 -R 200 -f 6 \
+        -C "$TMPDIR/rec.csv" -o "$TMPDIR/rc.txt" >/dev/null 2>&1
+[ -s "$TMPDIR/rec.csv" ] && head -1 "$TMPDIR/rec.csv" | grep -q "origin,horizon,actual,forecast,error" \
+    && pass "escribe los errores por origen en CSV (-C)" \
+    || fail "no escribe el CSV de errores"
+
+# --- -R sin horizonte debe rechazarse ---
+$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -0 -R 168 -o "$TMPDIR/rr.txt" \
+        > "$TMPDIR/rr.log" 2>&1
+grep -q "needs a horizon" "$TMPDIR/rr.log" \
+    && pass "-R sin -f se rechaza con un mensaje claro" \
+    || fail "acepta -R sin horizonte"
+
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
 echo "── 5. Sanidad ──"

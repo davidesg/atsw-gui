@@ -687,11 +687,104 @@ variances, computed from the fitted models. They say what the models imply, not
 what happens out of sample, where parameter uncertainty and structural change---the
 2021--22 inflation surge, in this very sample---have their say. A genuine
 out-of-sample comparison needs recursive forecasting with the parameters held
-fixed, which is item~5 of \S\ref{sec:open}. What the decomposition settles is the
-\emph{mechanism}: it is not that oil does not matter for inflation---it plainly
-does, with an elasticity of $2.7\%$ in Spain---but that the oil price's own
-unpredictability is so large that, beyond one step, what the transfer imports is
-mostly the variance of the oil forecast rather than its signal.
+fixed. \textbf{That comparison is in \S\ref{sec:recursive}, and it overturns the
+conclusion this paragraph was about to draw.} We leave the mechanism here because
+it is right---the oil price's own unpredictability is large, and beyond one step
+the transfer does import a great deal of the variance of the oil forecast---but it
+does not follow, as we assumed it would, that the transfer forecasts worse.
+
+
+\subsection{The out-of-sample verdict, and why the theory misled us}
+\label{sec:recursive}
+
+Everything above rests on \emph{theoretical} forecast error variances. That is not
+good enough, and the reason is worth stating plainly, because we walked into it:
+
+\begin{quote}
+A model's forecast variance is computed \emph{under the assumption that the model
+is true.} Each model grades itself. Comparing two models' theoretical variances is
+therefore \textbf{not} comparing the two models.
+\end{quote}
+
+The program now does the honest test (\texttt{-R}): estimate \emph{once} on the
+first $E$ observations, hold the parameters \textbf{fixed}, and roll the forecast
+origin forward one datum at a time, comparing each forecast with what actually
+happened. It is what the earlier VAR study did, and what settles the question.
+
+Spanish CPI, training window $1..168$, 37 origins, $H=12$. Ratio of the transfer
+model's out-of-sample RMSE of the \emph{level} to the univariate's, next to what
+the two models' own theoretical variances predicted:
+
+\begin{center}
+\begin{tabular}{crr}
+\toprule
+$h$ & theory (self-graded) & \textbf{out of sample} \\
+\midrule
+ 1 & $0.964$ & $\mathbf{0.948}$ \\
+ 2 & $1.026$ & $\mathbf{0.916}$ \\
+ 3 & $1.035$ & $\mathbf{0.900}$ \\
+ 6 & $1.030$ & $\mathbf{0.898}$ \\
+12 & $1.026$ & $\mathbf{0.913}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{The theory said the transfer would hurt beyond one step. It does not: it
+helps at every horizon, by $9$--$10\%$ of RMSE.} And this is not an artifact of the
+window---across five training windows ($25$ to $73$ origins) the improvement ranges
+from $5\%$ to $13\%$ and never reverses.
+
+Why did the theory mislead? Look at what each model \emph{claims} for itself
+against what it \emph{delivers}:
+
+\begin{center}
+\begin{tabular}{crrrrrr}
+\toprule
+ & \multicolumn{3}{c}{univariate} & \multicolumn{3}{c}{transfer}\\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
+$h$ & claimed & delivered & ratio & claimed & delivered & ratio\\
+\midrule
+ 1 & $0.205$ & $0.258$ & $1.26$ & $0.198$ & $0.245$ & $1.24$\\
+ 3 & $0.480$ & $0.511$ & $1.06$ & $0.497$ & $0.459$ & $\mathbf{0.92}$\\
+12 & $1.164$ & $0.835$ & $0.72$ & $1.194$ & $0.762$ & $\mathbf{0.64}$\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+At $h=3$ the univariate model \emph{claims} a standard deviation of $0.480$ and
+\emph{delivers} $0.511$. The transfer model claims $0.497$---\emph{worse}---and
+delivers $0.459$---\emph{better}. It is more pessimistic about itself and more
+accurate in fact. The self-graded comparison inverts the ranking.
+
+\paragraph{The three countries, out of sample.} The pattern is not uniform, and the
+differences line up with the estimated structure:
+
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+ & Spain & France & Germany \\
+\midrule
+$h=1$  & $0.948$ & $0.969$ & $1.101$ \\
+$h=3$  & $0.900$ & $0.971$ & $1.102$ \\
+$h=12$ & $0.913$ & $1.056$ & $1.089$ \\
+\midrule
+verdict & \textbf{helps everywhere} & helps short-horizon & \textbf{hurts} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Spain, the most oil-sensitive of the three (gain $2.7\%$), gains materially at every
+horizon. France gains at short horizons only. Germany---the country whose
+\emph{lagged} coefficient was insignificant, so that its channel is essentially
+contemporaneous and therefore has to be forecast rather than read off---is made
+\emph{worse} by the oil price at every horizon.
+
+\paragraph{What this changes.} The earlier verdict was that incorporating the oil
+price does not improve the unconditional inflation forecast \emph{in any of the
+three countries}. With the proper univariate structures and a transfer model rather
+than a VAR, that is \textbf{not} what the data say: for Spain it improves the
+forecast by about $10\%$ of RMSE at every horizon, robustly. For Germany the old
+verdict stands, and now one can see why.
 
 \section{What the dissertation taught, and what remains}
 \label{sec:todo}
@@ -769,10 +862,10 @@ These are stated as limitations, not as plans.
   routine already returns the covariance matrices of those differences
   ($v_2$, $v_3$); the program computes them and \emph{throws them away}.
 
-\item \textbf{New observations without re-estimating.} The monitoring workflow:
-  add data, update the residuals recursively with the parameters held fixed, and
-  see whether the model still holds. It fits naturally with the specification
-  file, which already carries the estimated parameters.
+\item \textbf{New observations without re-estimating}, as a \emph{monitoring}
+  workflow. The recursive machinery of \S\ref{sec:recursive} does the evaluation
+  half of this (\texttt{-R}); what is missing is the operational half---append data
+  to a fitted model and ask whether it still holds.
 \end{enumerate}
 
 \section*{Reproducibility}

@@ -73,6 +73,11 @@ struct Tlink lnk[MAX_LINK + 1];
 int n_link = 0;
 int topo[MAX_SER + 1];
 
+/* Prevision recursiva: ventana de estimacion y fichero de errores por origen. */
+static int  rec_start = 0;
+static int  nobs_full[MAX_SER + 1];
+static char rec_csv[600] = "";
+
 /* ¿La red es la ESTRELLA por defecto (todo entra a la serie 1)? Solo entonces
    tiene sentido hablar de "la entrada j" y "la salida Y".                    */
 static int net_is_star(void)
@@ -1206,6 +1211,214 @@ static real vcov_at(real ***LP, real **sigma, int m, int i1, int i2, int l)
     return v;
 }
 
+
+/* --------------------------------------------------------------------------
+   PREVISION RECURSIVA (fuera de muestra, parametros FIJOS).
+
+   Las varianzas de prevision que da el modelo son TEORICAS: dicen lo que el
+   modelo implica, no lo que pasa fuera de muestra, donde entran la
+   incertidumbre de los parametros y los cambios de estructura. La unica forma
+   de decidir empiricamente si un modelo prevé mejor que otro es esta: estimar
+   UNA vez sobre una ventana, congelar los parametros, y hacer rodar el origen
+   un dato cada vez, previendo H pasos y comparando con lo que de verdad paso.
+
+   Es lo que hace drvarma (-estwin) y lo que el ejercicio de pass-through pedia.
+   -------------------------------------------------------------------------- */
+
+/* Previsiones de NIVEL, sin bandas, de todas las series. Devuelve 0 si va bien. */
+static int forecast_levels(real *x, int L, real **LVL)
+{
+    struct Tvarma vf;
+    int  ifault = 0, m = n_ser, i, j, k, l, t, u;
+    int  K = n_stat + L + 1;
+    real **sigma, **f1, ***v1, ***v2, ***v3, **nu, **we, *det, *bc;
+    int  rc = 0;
+
+    shootx(x, &vf, &ifault, 1, 0);
+    if (ifault != 0) return 1;
+    x = expand_params(x);
+
+    {   /* los residuos: sin ellos, la parte MA no preve nada */
+        real pi1, pi2, pi3;
+        int  ifa = 0;
+        vf.xitol = -1e-3;
+        elf(vf.m, vf.n, vf.p, vf.q, vf.mu, vf.phi, vf.theta, vf.qq, vf.w,
+            1.0, vf.xitol, FALSE, vf.a, &pi1, &pi2, &pi3, &ifa);
+        if (ifa != 0) { shootx(x, &vf, &ifault, 0, 1); return 2; }
+    }
+
+    sigma = matrix(1, m, 1, m);
+    for (i = 1; i <= m; i++)
+        for (j = 1; j <= m; j++) sigma[i][j] = vf.qq[i][j];
+
+    f1 = matrix(1, m, 1, L);
+    v1 = tensor(1, L, 1, m, 1, m);
+    v2 = tensor(1, L, 1, m, 1, m);
+    v3 = tensor(1, L, 1, m, 1, m);
+    forecast_model(m, n_stat, vf.p, vf.q, vf.mu, vf.phi, vf.theta, sigma,
+                   vf.w, vf.a, f1, v1, v2, v3, 0, L, Ts[1].freq, NULL);
+
+    nu = matrix(1, (n_link > 0) ? n_link : 1, 1, K);
+    for (k = 1; k <= ((n_link > 0) ? n_link : 1); k++)
+        for (t = 1; t <= K; t++) nu[k][t] = 0.0;
+    {
+        real omega[MAX_S + 1], delta[MAX_R + 1];
+        int idx = 1;
+        for (k = 1; k <= n_link; k++) {
+            for (j = 0; j <= lnk[k].s; j++) omega[j] = x[idx++];
+            for (j = 1; j <= lnk[k].r; j++) delta[j] = x[idx++];
+            compute_irf(omega, lnk[k].s, delta, lnk[k].r, lnk[k].b, nu[k], K);
+        }
+    }
+
+    /* las series extendidas, en orden topologico */
+    we = matrix(1, m, 1, n_stat + L);
+    for (u = 1; u <= m; u++) {
+        i = topo[u];
+        for (t = 1; t <= n_stat; t++) we[i][t] = w[i][t];
+        for (l = 1; l <= L; l++) {
+            real acc = f1[i][l];
+            int  tt  = n_stat + l;
+            for (k = 1; k <= n_link; k++) {
+                if (lnk[k].out != i) continue;
+                for (j = 1; j <= tt && j <= K; j++)
+                    acc += nu[k][j] * we[lnk[k].inp][tt - j + 1];
+            }
+            we[i][tt] = acc;
+        }
+    }
+
+    /* integrar al nivel */
+    for (i = 1; i <= m; i++) {
+        int nb = Ts[i].nobs, ord = Tm[i].ornsop;
+        det = vector(1, nb + L);
+        bc  = vector(1, nb + L);
+        build_det_component(&Tm[i], &Ts[i], nb + L, det);
+
+        for (t = 1; t <= nb; t++) {
+            real y  = Ts[i].data[t];
+            real b0 = (fabs(Tm[i].boxlam) < 1e-8)
+                    ? log(y) * Ts[i].refactor
+                    : ((pow(y, Tm[i].boxlam) - 1.0) / Tm[i].boxlam) * Ts[i].refactor;
+            bc[t] = b0 - det[t];
+        }
+        for (l = 1; l <= L; l++) {
+            real acc = we[i][n_stat + l];
+            int  tt  = nb + l;
+            for (k = 1; k <= ord; k++) acc -= (-Tm[i].rnsop[k]) * bc[tt - k];
+            bc[tt] = acc;
+
+            {
+                real c = bc[tt] + det[tt], lam = Tm[i].boxlam;
+                LVL[i][l] = (fabs(lam) < 1e-8)
+                          ? exp(c / Ts[i].refactor)
+                          : pow(lam * (c / Ts[i].refactor) + 1.0, 1.0 / lam);
+            }
+        }
+        free_vector(bc, 1, nb + L);
+        free_vector(det, 1, nb + L);
+    }
+
+    free_matrix(we, 1, m, 1, n_stat + L);
+    free_matrix(nu, 1, (n_link > 0) ? n_link : 1, 1, K);
+    free_tensor(v3, 1, L, 1, m, 1, m);
+    free_tensor(v2, 1, L, 1, m, 1, m);
+    free_tensor(v1, 1, L, 1, m, 1, m);
+    free_matrix(f1, 1, m, 1, L);
+    free_matrix(sigma, 1, m, 1, m);
+    shootx(x, &vf, &ifault, 0, 1);
+    return rc;
+}
+
+static void recursive_eval(real *x, int L, FILE *out)
+{
+    int   i, l, e, no;
+    int   nfull = nobs_full[1];
+    int   e0    = rec_start;
+    int   elast = nfull - L;
+    real **LVL  = matrix(1, n_ser, 1, L);
+    real  *sae  = vector(1, L);      /* suma de |error|        */
+    real  *sse  = vector(1, L);      /* suma de error^2        */
+    real  *sape = vector(1, L);      /* suma de |error|/actual */
+    int   *cnt  = ivector(1, L);
+    FILE  *csv  = NULL;
+
+    if (elast < e0) {
+        fprintf(out, "\nRecursive evaluation: not enough data "
+                     "(origin %d, horizon %d, %d observations).\n", e0, L, nfull);
+        goto done;
+    }
+
+    for (l = 1; l <= L; l++) { sae[l] = sse[l] = sape[l] = 0.0; cnt[l] = 0; }
+
+    if (rec_csv[0] != '\0') {
+        csv = fopen(rec_csv, "w");
+        if (csv) fprintf(csv, "origin,horizon,actual,forecast,error\n");
+    }
+
+    no = 0;
+    for (e = e0; e <= elast; e++) {
+        for (i = 1; i <= n_ser; i++) Ts[i].nobs = e;
+        build_stationary_series();
+        if (n_stat <= 0) continue;
+
+        if (forecast_levels(x, L, LVL) != 0) continue;
+        no++;
+
+        for (l = 1; l <= L; l++) {
+            real act = Ts[1].data[e + l];      /* el dato NO truncado */
+            real err = LVL[1][l] - act;
+            sae[l]  += fabs(err);
+            sse[l]  += err * err;
+            sape[l] += (fabs(act) > 1e-12) ? fabs(err / act) : 0.0;
+            cnt[l]++;
+            if (csv)
+                fprintf(csv, "%d,%d,%.6f,%.6f,%.6f\n", e, l, act, LVL[1][l], err);
+        }
+    }
+
+    if (csv) fclose(csv);
+
+    /* Devolver la muestra a la VENTANA DE ESTIMACION, no al tamano completo: las
+       estructuras que el llamante todavia tiene vivas (la Tvarma de diagnosis)
+       estan dimensionadas para esa ventana, y escribir con un n_stat mayor las
+       desborda. Costo una segfault. */
+    for (i = 1; i <= n_ser; i++) Ts[i].nobs = rec_start;
+    build_stationary_series();
+
+    fprintf(out, "\n");
+    fprintf(out, "=============================================================\n");
+    fprintf(out, "  RECURSIVE FORECAST EVALUATION (out of sample)\n");
+    fprintf(out, "=============================================================\n");
+    fprintf(out, "  The variances the model reports are THEORETICAL: they say what\n");
+    fprintf(out, "  the model implies, not what happens out of sample, where\n");
+    fprintf(out, "  parameter uncertainty and structural change have their say.\n");
+    fprintf(out, "  Here the parameters are estimated ONCE on the first %d\n", e0);
+    fprintf(out, "  observations, then held FIXED while the origin rolls forward\n");
+    fprintf(out, "  one datum at a time.\n\n");
+    fprintf(out, "  Output   : %s\n", Ts[1].name ? Ts[1].name : "");
+    fprintf(out, "  Origins  : %d  (from obs %d to %d)\n", no, e0, elast);
+    fprintf(out, "  Horizon  : %d\n\n", L);
+    fprintf(out, "    h      n        MAE         RMSE        MAPE(%%)\n");
+    fprintf(out, "  ---------------------------------------------------\n");
+    for (l = 1; l <= L; l++) {
+        if (cnt[l] == 0) continue;
+        fprintf(out, "  %3d  %5d  %11.6f  %11.6f  %10.4f\n",
+                l, cnt[l], sae[l] / cnt[l], sqrt(sse[l] / cnt[l]),
+                100.0 * sape[l] / cnt[l]);
+    }
+    fprintf(out, "=============================================================\n");
+    if (rec_csv[0] != '\0')
+        fprintf(out, "  Per-origin errors written to %s\n", rec_csv);
+
+done:
+    free_ivector(cnt, 1, L);
+    free_vector(sape, 1, L);
+    free_vector(sse, 1, L);
+    free_vector(sae, 1, L);
+    free_matrix(LVL, 1, n_ser, 1, L);
+}
+
 static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
 {
     struct Tvarma vf;
@@ -1782,6 +1995,19 @@ static void usage(const char *prog)
 "           would be simultaneous and cannot be cast as a triangular VARMA.\n"
 "           Without -n, every input feeds the first file (the star), and -b/-r/-s\n"
 "           give the orders.\n"
+"\n"
+"RECURSIVE FORECAST EVALUATION  (out of sample)\n"
+"  -R E     estimate ONCE on observations 1..E, then hold the parameters FIXED\n"
+"           and roll the forecast origin forward one datum at a time, comparing\n"
+"           each forecast with what actually happened. Reports MAE, RMSE and MAPE\n"
+"           by horizon. Needs -f H.\n"
+"\n"
+"           The variances the model reports are THEORETICAL: they say what the\n"
+"           model implies, not what happens out of sample, where parameter\n"
+"           uncertainty and structural change have their say. This is the only\n"
+"           way to decide EMPIRICALLY whether one model forecasts better than\n"
+"           another. Run it on two specifications and compare.\n"
+"  -C FILE  write the per-origin errors to FILE (CSV).\n"
 "\n"
 "AGGREGATES  (accounting identities)\n"
 "  -a FILE  linear combinations of the series, reported with the forecast:\n"
@@ -2450,6 +2676,9 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
             if (fc_horizon > 0)
                 transfer_forecast(x, npar, fc_horizon, varma1.sigma2, outputv);
 
+            if (rec_start > 0)
+                recursive_eval(x, fc_horizon, outputv);
+
             shootx(x, &vdiag, &ifault_diag, 0, 1);
         }
     }
@@ -2540,7 +2769,7 @@ int main(int argc, char *argv[])
     macheps = cmacheps();
     outputv = stdout;
 
-    while ((opt = getopt(argc, argv, "r:s:b:f:m:c:n:a:p0XNDEMvho:")) != -1) {
+    while ((opt = getopt(argc, argv, "r:s:b:f:m:c:n:a:R:C:p0XNDEMvho:")) != -1) {
         switch (opt) {
         case 'r': opt_r = optarg; auto_id = 0; break;
         case 's': opt_s = optarg; auto_id = 0; break;
@@ -2556,6 +2785,8 @@ int main(int argc, char *argv[])
         case 'c': cons_file = optarg;        break;
         case 'n': net_file  = optarg;        break;
         case 'a': aggr_file = optarg;        break;
+        case 'R': rec_start = atoi(optarg);  break;
+        case 'C': snprintf(rec_csv, sizeof rec_csv, "%s", optarg); break;
         case '0': no_transfer = 1; auto_id = 0; break;
         case 'v': quiet_mode = 0;            break;
         case 'o': outfile = optarg;          break;
@@ -2636,6 +2867,25 @@ int main(int argc, char *argv[])
                             "observations (%d vs %d)\n", Ts[i].nobs, Ts[1].nobs);
             return 4;
         }
+    }
+
+    /* --- Prevision recursiva: se ESTIMA solo con la ventana de entrenamiento.
+           El resto de los datos siguen en Ts[i].data; lo unico que se recorta es
+           nobs. Asi la evaluacion es honestamente fuera de muestra.            */
+    for (i = 1; i <= n_ser; i++) nobs_full[i] = Ts[i].nobs;
+    if (rec_start > 0) {
+        if (rec_start >= Ts[1].nobs) {
+            fprintf(stderr, "Error: -R %d leaves no data out of sample "
+                            "(%d observations)\n", rec_start, Ts[1].nobs);
+            return 11;
+        }
+        if (fc_horizon <= 0) {
+            fprintf(stderr, "Error: -R needs a horizon; give -f H\n");
+            return 11;
+        }
+        for (i = 1; i <= n_ser; i++) Ts[i].nobs = rec_start;
+        printf("Estimation window      : 1..%d  (recursive evaluation to %d)\n",
+               rec_start, nobs_full[1]);
     }
 
     /* --- La RED: estrella por defecto, DAG si se declara con -n --- */

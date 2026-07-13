@@ -37,7 +37,7 @@ TARGET = $(BINDIR)/drtran
 PREFIX  ?= /usr/local
 DESTDIR ?=
 
-.PHONY: all clean test install uninstall help
+.PHONY: all clean test install uninstall help doc
 
 all: $(TARGET)
 
@@ -52,6 +52,12 @@ install: $(TARGET)
 uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/drtran
 
+# La nota tecnica (docs/drtran-note.pdf). Requiere pdflatex.
+doc:
+	cd docs && pdflatex -interaction=nonstopmode drtran-note.tex >/dev/null \
+	        && pdflatex -interaction=nonstopmode drtran-note.tex >/dev/null
+	@echo "docs/drtran-note.pdf"
+
 help:
 	@echo "drtran — modelos de transferencia Box–Jenkins (ML exacta)"
 	@echo ""
@@ -59,6 +65,7 @@ help:
 	@echo "  make test       ejecuta la batería de comprobaciones"
 	@echo "  make install    instala en \$$PREFIX/bin  (por defecto /usr/local)"
 	@echo "  make uninstall  desinstala"
+	@echo "  make doc        compila la nota tecnica -> docs/drtran-note.pdf"
 	@echo "  make clean      borra objetos y binario"
 	@echo ""
 	@echo "  Sin sudo:  make install PREFIX=\$$HOME/.local"
@@ -74,6 +81,7 @@ $(SRCDIR)/%.o: $(SRCDIR)/%.c
 
 clean:
 	rm -f $(SRCDIR)/*.o $(TARGET)
+	rm -f docs/*.aux docs/*.log docs/*.out docs/*.toc
 
 # Los objetos dependen de TODAS las cabeceras: sin esto, cambiar un struct en
 # include/ deja objetos con layouts distintos y el binario falla de formas

@@ -8,3 +8,6 @@ build/
 
 # salidas de ejecuciones sueltas
 *.out
+docs/*.aux
+docs/*.log
+docs/*.pdf

@@ -1,7 +1,9 @@
 # drtran
 
-> **[NOTA_TECNICA.md](NOTA_TECNICA.md)** — qué se aparta este programa de las
-> soluciones originales de Box–Jenkins, y por qué. Con las cifras.
+> **Nota técnica:** [`docs/drtran-note.tex`](docs/drtran-note.tex) — *Re-implementing
+> Box–Jenkins transfer function models on an exact VARMA likelihood: engineering
+> notes, and one identification hazard.* Qué se aparta este programa de las
+> soluciones originales, y por qué, con las cifras. `make doc` la compila.
 
 **Modelos de transferencia de Box–Jenkins por máxima verosimilitud exacta.**
 

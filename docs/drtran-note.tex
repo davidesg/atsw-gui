@@ -1,0 +1,571 @@
+%% drtran -- Box-Jenkins transfer function models.
+%% Copyright (C) 1995-2026 A.B. Treadway, J.A. Mauricio & D.E. Guerrero.
+%%
+%% This document is free: you may redistribute it and/or modify it under the
+%% terms of the GNU General Public License as published by the Free Software
+%% Foundation; either version 2 of the License, or (at your option) any later
+%% version.  Distributed WITHOUT ANY WARRANTY; see COPYING for details.
+%%
+%% Build:  pdflatex drtran-note
+
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{geometry}
+\usepackage{verbatim}
+\usepackage[hidelinks]{hyperref}
+
+\geometry{margin=2.7cm}
+
+\title{\bfseries Re-implementing Box--Jenkins transfer function models\\
+       on an exact VARMA likelihood:\\[2pt]
+       \large engineering notes, and one identification hazard}
+
+\author{D. E. Guerrero\thanks{Universidad Complutense de Madrid,
+        \texttt{davidesg@ucm.es}. This note documents the \texttt{drtran}
+        program, which is free software under the GNU GPL. The exact
+        likelihood engine is J. A. Mauricio's and is used unmodified; the
+        methodology is A. B. Treadway's school. Errors are mine.}}
+
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent
+\textbf{Nothing in this note is new.} The models are Box and Jenkins's, the
+identification procedure is theirs, the exact multivariate likelihood is
+Mauricio's, and the methodology is Treadway's. What the note reports is what
+happens when that classical apparatus is \emph{re-assembled} on top of an exact
+vector ARMA likelihood, in one program, with everything estimated at once:
+a handful of engineering decisions turn out to depart from the original
+solutions in ways that are measurable, and one of them exposes an
+identification hazard that is easy to walk into and easy to miss. We show that
+the contemporaneous transfer coefficient $\omega_0$ and the innovation
+covariance $\sigma_{12}$ are \emph{exactly} observationally equivalent when the
+noise and the input share the same autoregressive operator, and are separated
+otherwise only by a signal proportional to the difference between those
+operators. In a real case (Spanish CPI and the price of crude oil) that
+separating signal is $10\%$ of the main one, and the likelihood develops a flat
+ridge along which the fit does not improve while the estimates run to a corner.
+Every number below is reproducible from the program's test battery.
+\end{abstract}
+
+\section{What is not new}
+\label{sec:notnew}
+
+It is worth being blunt about this first, because the rest of the note is only
+interesting once it is settled.
+
+\begin{itemize}
+\item \textbf{The models} are the transfer function models of
+  Box \& Jenkins (1970), chapters 10--11 of the current
+  edition~\cite{bjr1994}.
+
+\item \textbf{The cast} used here---write $N_t = Y_t - \sum_j \nu_j(B) X_{j,t}$,
+  stack $N$ and the inputs into a vector, and note that the resulting system is
+  a VARMA with \emph{diagonal} $\Phi$, $\Theta$ and $Q$---is the standard
+  multivariate representation of a transfer function model. It is in Tiao and
+  Box~\cite{tiaobox1981}, in Hillmer and Tiao, and in Reinsel. It is also
+  written out by hand, for a three-variable system, in
+  Muñoz Polo (2001)~\cite{munoz2001}, \S2.4.
+
+\item \textbf{The network} of \S\ref{sec:network}---several outputs, a series
+  that is at once the output of one relation and the input of another---is a
+  \emph{recursive} dynamic simultaneous system: a Wold causal chain. It is what
+  Mauricio's \texttt{m6} labour-market models already were in 1996; they were
+  simply hand-coded, one \texttt{shootx} at a time.
+
+\item \textbf{The scale normalization} $Q_{11}=1$ of \S\ref{sec:qq} is textbook
+  identification under a concentrated scale factor. Mauricio himself states that
+  the decomposition $\Sigma = \sigma^2 Q$ is not unique~\cite{mauricio1995,
+  mauricio2002}.
+
+\item \textbf{The exact Hessian} of \S\ref{sec:hessian} is ordinary numerical
+  practice~\cite{dennis1983}. The code for it was already present in the
+  ancestor programs---\emph{commented out}.
+
+\item \textbf{The identification hazard} of \S\ref{sec:identification} is, at
+  bottom, the Cowles Commission problem: one cannot free a contemporaneous
+  structural coefficient and the innovation covariance at the same time. That is
+  eighty years old and is the identification problem of any structural VAR. What
+  \S\ref{sec:identification} adds is only a quantitative refinement in the
+  transfer-function case, and a diagnostic that follows from it.
+\end{itemize}
+
+\noindent
+What \emph{is} contributed here is engineering, not science: an automatic
+reduction from a univariate model specification to a VARMA structure; a
+declarative way of stating parameter restrictions that were previously written
+into code by hand; three concrete software-correctness findings about a family
+of programs that has been in use for thirty years; and a test battery that pins
+the result to the univariate program's output to six decimal places. This note
+is therefore a \emph{software and reproducibility} note. It is offered in that
+spirit.
+
+\section{The lineage, and the one structural idea}
+
+\subsection{Lineage}
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Box \& Jenkins (1970) & the models \\
+\quad Jenkins's program & \\
+\quad\quad \textsc{taste} (Treadway) & identification and estimation; backforecasting \\
+\quad\quad\quad \texttt{fue} & univariate (ARIMA/GSM with intervention) \\
+Mauricio (1995, 1997) & \emph{exact} likelihood of a VARMA --- \texttt{elf} \\
+\quad \texttt{drvarma} & estimates arbitrary VARMA models \\
+\quad\quad \texttt{drtran} & the bridge: \texttt{fue} $\rightarrow$ VARMA $\rightarrow$ \texttt{elf} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Muñoz Polo's dissertation~\cite{munoz2001}, supervised by Treadway, is the
+document that fixes the methodology of the school, and it already estimates with
+Mauricio's engine (``the software implementing the exact ML algorithm programmed
+and designed by Mauricio (1995, 1996, 1997)'', ch.~3). The two halves of the
+lineage were therefore already joined in 2001---\emph{by hand}. What
+\texttt{drtran} does is automate the joining.
+
+\subsection{The cast}
+
+A transfer function model
+\begin{equation}
+Y_t \;=\; \sum_{j=1}^{k} \frac{\omega_j(B)}{\delta_j(B)}\,B^{b_j}\,X_{j,t}
+        \;+\; N_t
+\label{eq:tf}
+\end{equation}
+is recast as a VARMA of $m = 1+k$ series in which
+\begin{align}
+w_{t,1} &= w^{Y}_t - \textstyle\sum_j \nu_j(B)\, w^{X_j}_t \qquad (\text{the noise } N),\\
+w_{t,j+1} &= w^{X_j}_t,
+\end{align}
+with $\Phi$ and $\Theta$ \emph{diagonal} (each series carries its own ARMA) and
+$Q$ diagonal. All of the coupling lives in the \emph{subtracted} transfer, so the
+VARMA that the likelihood engine sees has no off-diagonal element anywhere.
+
+Two consequences follow, and they are the whole design:
+
+\begin{enumerate}
+\item Mauricio's engine can be used \textbf{unmodified}. In this project any
+  discrepancy with the univariate program was treated, without exception, as a
+  bug in the bridge. It always was one.
+\item The joint fit \textbf{reproduces} the univariate program run separately on
+  each series, to six decimals, on six real models
+  (deterministic seasonality; airline; generalized seasonality with
+  fixed-frequency factors; a fixed AR coefficient). This is the entry gate of the
+  test battery, and \S\ref{sec:separability} explains why it must hold.
+\end{enumerate}
+
+\section{Six engineering departures, measured}
+
+\subsection{The input model: fixed, or estimated jointly}
+\label{sec:separability}
+
+The doctrine is explicit~\cite[\S2.6]{munoz2001}: \emph{``the univariate model of
+the input remains unaltered from the beginning to the end of the process.''}
+\texttt{drtran} does the opposite: it estimates everything---the output's ARMA,
+the input's ARMA, the transfer, the deterministic terms and the means---in a
+single maximization.
+
+\textbf{Does it matter? No---and that is the result.} On Spanish CPI
+$\leftarrow$ WTI crude:
+
+\begin{center}
+\begin{tabular}{lrr}
+\toprule
+ & input ARMA \emph{fixed} & input ARMA \emph{free} \\
+\midrule
+$\log L$   & $-718.183933$ & $-718.183933$ \\
+$\omega_0$ & $0.016402$    & $0.016402$ \\
+$\omega_1$ & $0.010792$    & $0.010792$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Identical. This is not a coincidence. With $Q$ \emph{diagonal} and no feedback,
+the joint likelihood \emph{factorizes} as $L(N)\cdot L(X)$, and $L(X)$ does not
+involve the transfer. Box and Jenkins's decision to leave the input model alone
+is therefore \textbf{not an approximation: it is exactly optimal} in that case.
+It is also, precisely, why the joint fit homologates with the univariate program.
+
+The factorization \textbf{breaks the moment $\sigma_{12}$ is freed}---and that is
+exactly the case the dissertation~\cite[\S2.4]{munoz2001} points to as the
+starting point for specifying a bivariate relation. There, joint estimation stops
+being a luxury.
+
+\subsection{$\sigma^2 Q$: the normalization that was missing}
+\label{sec:qq}
+
+The engine assumes $a_t \sim N(0,\sigma^2 Q)$ and concentrates $\sigma^2$ out.
+Mauricio states in both references that this decomposition is \emph{not unique},
+and that this \emph{``raises no problem in the estimation of $E[a_t a_t']$, since
+interest lies in the product $\sigma^2 Q$, but not in $\sigma^2$ nor in $Q$ by
+itself''}~\cite[p.~474]{mauricio2002}.
+
+\textbf{He is right, and we verified it.} The concentrated criterion
+is~\cite[eq.~12]{mauricio2002}
+\begin{equation}
+F(\beta\mid w) \;=\; \bigl(\tilde{w}' R_W^{-1}\tilde{w}\bigr)\,
+                     |R_W|^{1/(mn)},
+\label{eq:crit}
+\end{equation}
+and under $Q\to cQ$ the matrix $R_W$ scales by $c$: the first factor goes as
+$1/c$, the second as $c$. \emph{$F$ is exactly invariant.} Since $\sigma^2$ is
+concentrated, $\hat\sigma^2(cQ)\cdot cQ = \hat\sigma^2(Q)\cdot Q$: the product
+does not move. Estimating the same model with the scale of $Q$ free (as the
+ancestor programs do) and with it normalized:
+
+\begin{center}
+\begin{tabular}{lrr}
+\toprule
+ & scale free & $Q_{11}=1$ \\
+\midrule
+$\log L$                         & $-767.424341$ & $-767.424341$ \\
+$\hat\Sigma$                     & $0.062666 \,/\, 68.838114$ & $0.062666 \,/\, 68.838114$ \\
+$\mathrm{SE}(\phi_1)$            & $0.062204$ & $0.062204$ \\
+$\mathrm{SE}(\mu)$               & $0.028502$ & $0.028502$ \\
+$\mathrm{SE}(\log \mathrm{var}_2/\mathrm{var}_1)$ & $\mathbf{0.193083}$ & $\mathbf{0.136399}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The flat direction is \emph{exact}, and it is harmless for $\log L$, for
+$\hat\Sigma$, and for the standard errors of $\phi,\theta,\mu,\omega,\delta$. The
+damage is confined to \textbf{inference on $Q$ itself}: the scale parameter,
+which is \emph{literally} unidentified, receives a respectable-looking
+$t=-0.19$ with $p=0.85$; and the variance ratio, which \emph{is} identified,
+comes out with a standard error inflated by $42\%$.
+
+\texttt{drtran} normalizes $Q_{11}=1$ for one concrete reason: \textbf{deciding
+whether a covariance is zero is a test}, and a test has to be a real one. Nothing
+else needed it.
+
+\subsection{Standard errors: exact Hessian, not the accumulated one}
+\label{sec:hessian}
+
+The ancestor programs compute standard errors from the \emph{BFGS-accumulated}
+Hessian. In all of them the exact alternative (a finite-difference Hessian plus a
+Cholesky factorization) is written and \emph{commented out}. It was a 1996 cost
+decision that nobody revisited.
+
+A BFGS Hessian is built from the steps the optimizer \emph{takes}; it therefore
+never sees the directions in which the optimizer does not move, and produces
+finite numbers where there should be none. Two measured consequences: the
+univariate program's standard errors are \emph{unstable}---two runs of the same
+model, with identical point estimates, report $\mathrm{SE}(\mu)=0.073304$ and
+$0.028316$; and the standard errors reported for the nine elements of $Q$ in
+\texttt{m6-1} lie along the flat direction of \S\ref{sec:qq}.
+
+Using the exact Hessian, $\mathrm{SE}(\mu)=0.028502$, which is the exact GLS
+value.
+
+\subsection{``A single output'' versus the network}
+\label{sec:network}
+
+The title of \S2.5 of the dissertation is, literally, \emph{``Representation of
+the Single-Output Transfer Model''}. That is the boundary of the classical
+apparatus: one output, $k$ exogenous inputs.
+
+The school's real systems are not that. In \texttt{m6} (the Spanish labour
+market), \texttt{EU} is an \emph{output} of \texttt{EC} \emph{and} an \emph{input}
+to \texttt{EI}:
+\begin{center}
+\texttt{EC} $\xrightarrow{\;b=2\;}$ \texttt{EU} $\xrightarrow{\;b=1\;}$
+\texttt{EI} $\xrightarrow{\;b=1\;}$ \texttt{EP}
+\end{center}
+\texttt{drtran} generalizes the cast to a \emph{directed acyclic graph} of
+transfers, declared in a file: each link subtracts its transfer from \emph{its}
+output, so a series may be both a target and a source; the VARMA stays diagonal;
+and forecasting walks the graph in topological order, propagating the system's
+$\psi$ weights,
+\begin{equation}
+\Psi_{ij}(B) \;=\; \delta_{ij}\,\psi_i(B)
+   \;+\; \sum_{k:\,\mathrm{out}(k)=i} \nu_k(B)\,\Psi_{\mathrm{in}(k),\,j}(B),
+\end{equation}
+so that the forecast error of a series inherits the innovations of everything
+upstream of it, each filtered by the $\nu(B)$ it crosses. A \emph{cycle} is
+rejected: the system would be simultaneous and cannot be triangularized by
+subtraction.
+
+Measured on a synthetic chain $X \rightarrow M \rightarrow Y$: the network
+recovers both transfers and, \textbf{with the same seven free parameters}, beats
+the star by $213$ points of log-likelihood ($-1038.6$ vs $-1251.8$). In the star,
+the direct link $X\rightarrow Y$ that it is forced to postulate is insignificant
+($t=1.45$)---because the effect of $X$ on $Y$ is \emph{indirect}, and only the
+network can say so.
+
+\subsection{Restrictions: transform the data, or declare them}
+
+The dissertation imposes long-run neutrality ($g = \nu(1) = 1$, unit long-run
+gain) by \emph{transforming the data}, rewriting the model as
+\[
+Y_t - \ln M1_{t-b} \;=\; \frac{\omega^{*}(B)}{\delta(B)}\,B^{b}\,
+\nabla \ln M1_t \;+\; N_t,
+\qquad \omega^{*}(B)=\omega(B)-\delta(B),
+\]
+an elegant solution of its time: the restriction is nonlinear in the parameters,
+so it is taken \emph{out} of the optimizer by hand. It has the further virtue of
+giving the resulting output an economic reading (real balances).
+
+\texttt{drtran} instead declares restrictions in a \emph{slot table}: every
+structural parameter is FREE, FIXED or ALIAS (shared), stated in a file using the
+names the program prints. This covers the \emph{linear} restrictions---sharing
+and fixing, which are what the dissertation uses for identity-linked
+triads---but it does \textbf{not} cover the gain, which is nonlinear. See
+\S\ref{sec:todo}.
+
+\subsection{The start of the sample: \textsc{taste} did it better}
+
+The transfer $\sum_k \nu_k X_{t-k}$ needs the input's past, and at $t=1$ there is
+none. \textsc{taste} \emph{backforecasts} it, which is Box and Jenkins's
+solution. \texttt{drtran} \emph{truncates}: it assumes a zero pre-sample input.
+
+Measured: with $r=1$ and $\delta=0.6$ the error at $t=1$ is $63\%$ of
+$\mathrm{sd}(w_X)$ and decays as $\delta^t$, contaminating the first nine or so
+observations. With 215--400 data points this is irrelevant. With the 69
+observations of \texttt{m6} it would be $15\%$ of the sample. \textbf{Here the
+1979 solution is better than ours}, and it is on the list.
+
+\section{An identification hazard}
+\label{sec:identification}
+
+This is the one result in the note, and it came out of an experiment that was
+about something else.
+
+Estimating Spanish CPI $\leftarrow$ WTI with a \emph{contemporaneous} transfer
+($b=0$) \emph{and} freeing the innovation covariance at the same time sends the
+fit to an absurd corner:
+
+\begin{center}
+\begin{tabular}{lrr}
+\toprule
+ & $b=0$, $\Sigma$ diagonal & $b=0$, $\sigma_{12}$ free \\
+\midrule
+$\log L$                  & $-718.184$ & $-718.170$ \\
+$\omega_0$                & $0.0164$   & $\mathbf{0.1520}$ \\
+$\mathrm{corr}(a_N,a_X)$  & $0$        & $\mathbf{-0.985}$ \\
+$t$ of $\sigma_{12}$      & ---        & $\mathbf{-2424}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The likelihood \emph{does not improve} ($\mathrm{LR}=0.029$, against
+$\chi^2_1 = 3.84$), yet the estimates fly. This is not an optimizer failure. It is
+a nearly flat ridge, and it has an exact explanation.
+
+\paragraph{The prewhitened cross-correlation.} Filter both series by the input's
+model: $\alpha_t = \phi_X(B) X_t = a_{X,t}$ and $\beta_t = \phi_X(B) Y_t$.
+
+\begin{description}
+\item[(A) Contemporaneous transfer] $Y_t = \omega_0 X_t + N_t$, with $N \perp X$:
+\[
+\beta_t = \omega_0 a_{X,t} + \phi_X(B) N_t,
+\qquad
+\mathrm{Cov}(\beta_t,\alpha_{t-k}) =
+\begin{cases}
+\omega_0\,\sigma_X^2, & k=0,\\[2pt]
+0, & k>0 .
+\end{cases}
+\]
+A clean spike at $k=0$.
+
+\item[(B) Innovation covariance] $Y_t = N_t$, with
+$\mathrm{cov}(a_{N,t}, a_{X,t}) = \sigma_{12}$:
+\[
+\beta_t = \phi_X(B)\,\psi_N(B)\,a_{N,t},
+\qquad
+\mathrm{Cov}(\beta_t,\alpha_{t-k})
+ = \sigma_{12}\,\bigl[\,B^k\ \text{coefficient of}\ \phi_X(B)\psi_N(B)\,\bigr].
+\]
+With AR(1) noise and input this is $\sigma_{12}$ at $k=0$ and
+\begin{equation}
+\boxed{\;
+\mathrm{Cov}(\beta_t,\alpha_{t-k}) \;=\;
+\sigma_{12}\;\phi_N^{\,k-1}\,\bigl(\phi_N - \phi_X\bigr),
+\qquad k \ge 1 .\;}
+\label{eq:tail}
+\end{equation}
+The \emph{same} spike at $k=0$, plus a tail proportional to
+$(\phi_N - \phi_X)$.
+\end{description}
+
+\paragraph{Consequence.} If $\phi_N = \phi_X$ the tail in \eqref{eq:tail}
+vanishes and the two models are \textbf{exactly observationally equivalent}. This
+is not numerical collinearity: it is non-identification. And the closer the two
+autoregressive structures, the weaker the identification. The tail relative to
+the spike:
+
+\begin{center}
+\begin{tabular}{lrrrrr}
+\toprule
+case & $\phi_N$ & $\phi_X$ & $k=1$ & $k=2$ & $k=3$ \\
+\midrule
+CPI $\leftarrow$ WTI (real) & $0.403$ & $0.299$ & $\mathbf{+0.104}$ & $+0.042$ & $+0.017$ \\
+Synthetic                   & $0.300$ & $0.500$ & $-0.200$ & $-0.060$ & $-0.018$ \\
+$\phi_N = \phi_X$           & ---     & ---     & $\mathbf{0.000}$ & $0.000$ & $0.000$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+In the real case, \emph{all} of the information separating the two mechanisms is
+a signal worth $10.4\%$ of the main one. With 215 observations it cannot be
+resolved. Hence the ridge.
+
+\paragraph{Three practical consequences,} all verified:
+\begin{enumerate}
+\item With $b \ge 1$ the problem disappears: the transfer contributes nothing at
+  $k=0$, so $\sigma_{12}$ is cleanly identified. On synthetic data with $b=2$ and
+  a true $\sigma_{12}=0$: $t=1.33$, $p=0.18$, correctly insignificant, with the
+  $\omega$'s untouched.
+\item \texttt{drtran} now \emph{warns} when a link with $b=0$ has its covariance
+  freed.
+\item It explains the school's practice. \texttt{m6-1} carries off-diagonal
+  covariances and \emph{no} contemporaneous structure whatever; and the
+  dissertation~\cite[\S2.4]{munoz2001} says that the specification of a bivariate
+  relation \emph{``may begin with the modification of the matrix $\Sigma$''}. One
+  uses \emph{one} of the two devices, never both. We rediscovered this by walking
+  into it.
+\end{enumerate}
+
+\section{An application: the pass-through of crude oil to Spanish CPI is not rational}
+
+Three fits, same output and same input, the first two with \emph{exactly} the same
+number of free parameters:
+
+\begin{center}
+\begin{tabular}{lrrl}
+\toprule
+model & free & $\log L$ & adequacy \\
+\midrule
+$\omega_0/(1-\delta_1 B)$ \quad (rational)      & 17 & $-721.72$ & \textbf{INADEQUATE} ($p=0.033$) \\
+$\omega_0 + \omega_1 B$ \quad (two $\omega$'s)  & 17 & $\mathbf{-718.18}$ & adequate ($p=0.196$) \\
+$(\omega_0+\omega_1 B)/(1-\delta_1 B)$ \quad (nests the above) & 18 & $-718.18$ & adequate \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The rational form \emph{loses with the same number of parameters}. The third fit,
+which nests the second, settles it: $\delta_1 = -0.010$ with $t=-0.055$;
+$\mathrm{LR}=0.003$ against $\chi^2_1=3.84$. There is no denominator.
+
+The reason is visible in the impulse weights:
+\begin{center}
+\begin{tabular}{lrrrrr}
+\toprule
+ & $\nu_0$ & $\nu_1$ & $\nu_2$ & $\nu_3$ & $\nu_4$\\
+\midrule
+rational        & $0.01680$ & $0.00769$ & $0.00352$ & $0.00161$ & $0.00074$\\
+two $\omega$'s  & $0.01640$ & $0.01079$ & $0$ & $0$ & $0$\\
+\bottomrule
+\end{tabular}
+\end{center}
+The data want $\nu_1/\nu_0 \approx 0.66$ \emph{and} $\nu_2 = 0$. A geometric decay
+cannot do both. The adequacy test catches it exactly there: the noise still
+carries a trace of the input at $k=2$, with $r=-0.14$---negative, because the
+rational form puts \emph{too much} weight at that lag.
+
+\paragraph{A methodological warning.} In the \emph{forced} rational fit,
+$\delta_1 = 0.458$ with $t=6.40$: apparently overwhelming. It is a mirage. With
+the denominator imposed, $\delta$ is the \emph{only} route to any weight at lag
+one; its significance says ``there is a response at lag one'', not ``the response
+is geometric''. The honest test is the one in the nesting model, and there it
+dies.
+
+Economically: the pass-through of crude to the Spanish CPI is immediate and
+exhausted within two months---not a distributed lag that propagates. The estimate
+$\omega = (0.0164,\,0.0108)$ reproduces the previously documented values
+$(0.0154,\,0.0104)$.
+
+\section{What the dissertation teaches and the program still does not do}
+\label{sec:todo}
+
+\begin{enumerate}
+\item \textbf{The order of reformulation.} The dissertation~\cite[\S2.6]{munoz2001}
+  states an asymmetry that is not obvious: a misspecified \emph{relation} can make
+  the residual ACF/PACF look like a misspecified \emph{noise}, but \emph{``a
+  misspecified noise cannot give, in the CCF, the impression of a misspecified
+  relation. For these reasons, $\nu(B)$ is reformulated until it appears adequate
+  \emph{before} reformulating $\theta(B)$.''} The program prints both diagnostics
+  and says nothing about which to act on first. It should: \emph{the relation
+  first, the noise afterwards}.
+
+\item \textbf{The long-run gain $g=\nu(1)$} is not reported. It is the quantity
+  with economic meaning---the total permanent effect of the input on the
+  output---and the one the dissertation wants to test. It is
+  $\sum\omega / (1-\sum\delta)$, and its standard error follows from the delta
+  method with the covariance matrix already computed. With it, a long-run
+  neutrality hypothesis can be tested \emph{directly}, without transforming the
+  data and without estimating two models.
+
+\item \textbf{Identity-linked triads.} The dissertation handles them
+  (\S2.4) by restricting the deterministic parameters of the three series to
+  satisfy the identity, \emph{``economizing the number of parameters to be
+  estimated''}. The slot table can already express this; it has not been
+  exercised, and the linear combinations of forecasts with their $c'Vc$ variance
+  (the aggregates) are not implemented.
+\end{enumerate}
+
+\section*{Reproducibility}
+
+Every figure in this note is produced by the program's test battery
+(\texttt{test\_battery.sh}, 134 checks): homologation against the univariate
+program (\S1--1d), synthetic ground truth (\S2--2c), multiple inputs (\S2d),
+shared and fixed parameters (\S2e), the network (\S2f), the covariance (\S2g),
+the real case and its rational form (\S3b), separability (\S3c), and the
+identification hazard (\S3d). The source is at
+\url{https://github.com/davidesg/drtran}, under the GNU GPL.
+
+\begin{thebibliography}{9}
+
+\bibitem{bjr1994}
+G.~E.~P.~Box, G.~M.~Jenkins and G.~C.~Reinsel (1994).
+\emph{Time Series Analysis: Forecasting and Control}, 3rd ed. Prentice Hall.
+Chapters 10--11.
+
+\bibitem{dennis1983}
+J.~E.~Dennis and R.~B.~Schnabel (1983).
+\emph{Numerical Methods for Unconstrained Optimization and Nonlinear Equations}.
+Prentice Hall.
+
+\bibitem{mauricio1995}
+J.~A.~Mauricio (1995).
+Exact maximum likelihood estimation of stationary vector ARMA models.
+\emph{Journal of the American Statistical Association} \textbf{90}, 282--291.
+\emph{(The algorithm implemented in the likelihood engine used here.)}
+
+\bibitem{mauricio2002}
+J.~A.~Mauricio (2002).
+An algorithm for the exact likelihood of a stationary vector
+autoregressive-moving average model.
+\emph{Journal of Time Series Analysis} \textbf{23}(4), 473--486.
+\emph{(An innovations-form algorithm; a different one, not the one wired in.)}
+
+\bibitem{melard1984}
+G.~M\'elard (1984).
+Algorithm AS 197: A fast algorithm for the exact likelihood of
+autoregressive-moving average models.
+\emph{Applied Statistics} \textbf{33}, 104--114.
+\emph{(The univariate engine behind \texttt{fue}.)}
+
+\bibitem{munoz2001}
+M.~S.~Mu\~noz Polo (2001).
+\emph{Estudios econom\'etricos de las series temporales de la industria
+espa\~nola}. Doctoral dissertation, Universidad Complutense de Madrid.
+Supervisor: A.~B.~Treadway.
+
+\bibitem{tiaobox1981}
+G.~C.~Tiao and G.~E.~P.~Box (1981).
+Modeling multiple time series with applications.
+\emph{Journal of the American Statistical Association} \textbf{76}, 802--816.
+
+\end{thebibliography}
+
+\end{document}

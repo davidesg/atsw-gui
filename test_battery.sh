@@ -604,6 +604,77 @@ $DRTRAN "$SYN/SYNQ_Y.pre" "$SYN/SYNQ_X.pre" -0 -c "$CNS" -o "$OUT" > /dev/null 2
 LL_0=$(grep "Log-likelihood =" "$OUT" | awk '{print $3}')
 check "fijar q[2,1]=0 reproduce el caso diagonal" "$LL_D" "$LL_0" 0.0001
 
+
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
+echo "── 2h. CARACTERIZACIÓN DE LA FLT: ganancia y retardo medio ──"
+echo "   Una transferencia estimada no está DESCRITA hasta que se dice cuánto"
+echo "   responde en total (la GANANCIA) y cuánto tarda (el RETARDO MEDIO). Los"
+echo "   omegas y deltas sueltos son la parametrización, no la respuesta."
+echo ""
+echo "     g = nu(1) = omega(1)/delta(1)"
+echo "     m = nu'(1)/nu(1) = b + [SUM k*omega_k]/omega(1) + [SUM j*delta_j]/delta(1)"
+echo ""
+
+gain()  { grep -E "^  gain " "$1"     | awk '{print $2}'; }
+gainse(){ grep -E "^  gain " "$1"     | awk '{print $3}'; }
+mlag()  { grep -E "^  mean lag " "$1" | awk '{print $3}'; }
+mlagse(){ grep -E "^  mean lag " "$1" | awk '{print $4}'; }
+
+# --- AUTOCOMPROBACIÓN EXACTA: con s=0 y r=0, la ganancia ES omega_0 y el
+#     retardo medio ES b. Si el método delta está bien, coinciden AL BIT.
+OUT="$TMPDIR/ch_trivial.txt"
+$DRTRAN "$SYN/SYN2_Y.pre" "$SYN/SYN2_X1.pre" -b 1 -r 0 -s 0 -o "$OUT" >/dev/null 2>&1
+W0=$(val "$OUT" 'omega1\[0\]')
+S0=$(grep -E "^omega1\[0\]" "$OUT" | awk '{print $3}')
+check "s=0,r=0: la ganancia ES omega_0"          "$W0" "$(gain "$OUT")"   1e-9
+check "s=0,r=0: y su error estándar TAMBIÉN"     "$S0" "$(gainse "$OUT")" 1e-9
+check "s=0,r=0: el retardo medio ES b"           1.0   "$(mlag "$OUT")"   1e-9
+check "s=0,r=0: sin incertidumbre (b es entero)" 0.0   "$(mlagse "$OUT")" 1e-9
+
+# --- VERDAD SINTÉTICA: b=2, omega=(0.8,0.4)
+#     g = 1.2 ;  m = 2 + 0.4/1.2 = 2.3333
+OUT="$TMPDIR/ch_syn.txt"
+$DRTRAN "$SYN/SYN_Y.pre" "$SYN/SYN_X.pre" -b 2 -r 0 -s 1 -o "$OUT" >/dev/null 2>&1
+check "SYN: ganancia (verdad 1.200)"       1.200 "$(gain "$OUT")" 0.06
+check "SYN: retardo medio (verdad 2.333)"  2.333 "$(mlag "$OUT")" 0.06
+
+# --- VERDAD SINTÉTICA RACIONAL: b=1, omega=0.6, delta=0.6
+#     g = 0.6/0.4 = 1.5 ;  m = 1 + 0.6/0.4 = 2.5   <- el denominador ALARGA la respuesta
+OUT="$TMPDIR/ch_synr.txt"
+$DRTRAN "$SYN/SYNR_Y.pre" "$SYN/SYNR_X.pre" -b 1 -r 1 -s 0 -o "$OUT" >/dev/null 2>&1
+check "SYNR: ganancia (verdad 1.500)"      1.500 "$(gain "$OUT")" 0.08
+check "SYNR: retardo medio (verdad 2.500)" 2.500 "$(mlag "$OUT")" 0.10
+
+# --- PARÁMETRO COMPARTIDO: el gradiente debe pasar POR EL ALIAS.
+#     Tratar delta y phi_2 como independientes daría una SE distinta.
+CNS="$TMPDIR/sh.cns"
+printf 'delta1[1] = phi_2[B^1]\n' > "$CNS"
+OUT="$TMPDIR/ch_share.txt"
+$DRTRAN "$SYN/SYNR_Y.pre" "$SYN/SYNR_X.pre" -b 1 -r 1 -s 0 -c "$CNS" -o "$OUT" >/dev/null 2>&1
+SEG=$(gainse "$OUT")
+python3 -c "import sys; sys.exit(0 if 0.0 < $SEG < 0.5 else 1)" \
+    && pass "con delta COMPARTIDO, la ganancia tiene SE por el alias ($SEG)" \
+    || fail "la SE de la ganancia con parámetro compartido es degenerada ($SEG)"
+
+# --- CASO REAL: el crudo se traslada al IPC de forma casi inmediata
+OUT="$TMPDIR/ch_ipc.txt"
+$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1 -o "$OUT" >/dev/null 2>&1
+GI=$(gain "$OUT"); MI=$(mlag "$OUT")
+check "IPC<-WTI: ganancia = omega_0 + omega_1" 0.027194 "$GI" 0.0005
+python3 -c "import sys; sys.exit(0 if 0.0 <= $MI < 1.0 else 1)" \
+    && pass "IPC<-WTI: el retardo medio es de MEDIO MES ($MI): traslado inmediato" \
+    || fail "el retardo medio del IPC no es inmediato ($MI)"
+
+# --- el retardo medio NUNCA puede caer por debajo del retardo puro b
+for f in "$TMPDIR/ch_syn.txt" "$TMPDIR/ch_synr.txt" "$TMPDIR/ch_trivial.txt"; do
+    B=$(grep -E "^  pure delay b" "$f" | awk '{print $4}')
+    M=$(mlag "$f")
+    python3 -c "import sys; sys.exit(0 if $M >= $B - 1e-9 else 1)" || {
+        fail "retardo medio ($M) por debajo del retardo puro ($B): imposible"; break; }
+done
+pass "el retardo medio nunca cae por debajo del retardo puro b"
+
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
 echo "── 3. PASS-THROUGH: con Y = X la verdad es omega_0 = 1 ──"

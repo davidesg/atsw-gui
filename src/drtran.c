@@ -87,6 +87,8 @@ int quiet_mode = 1;    /* suprimir traza del optimizador (0 = verbose) */
 static real sum_p_transfer = -1.0;   /* p-valor de adecuación de la transferencia */
 static real sum_p_exog     = -1.0;   /* p-valor de exogeneidad de la entrada      */
 static real sum_logl       = 0.0;
+static real sum_gain[MAX_LINK + 1];
+static real sum_mlag[MAX_LINK + 1];
 static int  sum_npar       = 0;
 static char outfile_path[600];
 static const char *sum_conv = "";
@@ -1069,6 +1071,7 @@ cleanup:
 /* componente determinista futuro (que se CONOCE: son funciones del tiempo) y */
 /* se deshace el reescalado y la Box-Cox.                                     */
 /* -------------------------------------------------------------------------- */
+
 static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
 {
     struct Tvarma vf;
@@ -1787,6 +1790,142 @@ static void resolve_slots(void)
     }
 }
 
+/* --------------------------------------------------------------------------
+   CARACTERIZACION DE LA FLT: ganancia y retardo medio.
+
+   Una transferencia estimada no esta DESCRITA hasta que se dicen dos cosas:
+   cuanto responde el output en total, y cuanto TARDA en hacerlo. Los omegas y
+   deltas sueltos no lo dicen; son la parametrizacion, no la respuesta.
+
+     ganancia (efecto total y permanente de un cambio unitario y permanente):
+         g = nu(1) = omega(1) / delta(1),
+         omega(1) = SUM_k omega_k,   delta(1) = 1 - SUM_j delta_j
+
+     retardo medio (el centro de gravedad de la respuesta; su VELOCIDAD):
+         m = nu'(1)/nu(1) = b + [SUM_k k*omega_k]/omega(1)
+                              + [SUM_j j*delta_j]/delta(1)
+
+   Los errores estandar salen por el metodo DELTA con la matriz de covarianzas
+   de los parametros libres: var(f) = grad' C grad. El gradiente se arma en el
+   espacio LIBRE, que es donde vive C: un slot fijo no aporta nada, y uno
+   compartido aporta a su representante (por eso la ganancia de una
+   transferencia con delta compartido con el AR del input tiene la SE correcta
+   y no la que saldria de tratar los dos como independientes).
+   -------------------------------------------------------------------------- */
+static void add_grad(real *g, int slot, real v)
+{
+    int r = slot;
+    if (r <= 0) return;
+    while (slot_kind[r] == SLOT_ALIAS) r = slot_alias[r];
+    if (slot_kind[r] != SLOT_FREE) return;              /* fijo: no aporta */
+    g[free_of_slot[r]] += v;
+}
+
+static real delta_se(real *g, real **cov, int npar)
+{
+    int i, j;
+    real v = 0.0;
+    for (i = 1; i <= npar; i++)
+        for (j = 1; j <= npar; j++) v += g[i] * cov[i][j] * g[j];
+    return (v > 0.0) ? sqrt(v) : 0.0;
+}
+
+static void transfer_characteristics(real *x, real **cov, int npar, FILE *out)
+{
+    real *xf = expand_params(x);
+    real *gg = vector(1, npar);
+    int   j, k, slot0, slot;
+    int   any = 0;
+
+    for (j = 1; j <= n_link; j++) if (lnk[j].s >= 0) any = 1;
+    if (!any) return;
+
+    fprintf(out, "\n");
+    fprintf(out, "The transfer functions, characterized\n");
+    fprintf(out, "    g = nu(1) = omega(1)/delta(1)\n");
+    fprintf(out, "        the total, permanent response of the output to a unit,\n");
+    fprintf(out, "        permanent change in the input.  HOW MUCH.\n");
+    fprintf(out, "    m = nu'(1)/nu(1) = b + SUM k*omega_k / omega(1)\n");
+    fprintf(out, "                         + SUM j*delta_j / delta(1)\n");
+    fprintf(out, "        the centre of gravity of the response in time.  HOW SOON.\n");
+    fprintf(out, "    Standard errors by the delta method.\n\n");
+    fprintf(out, "%-22s %12s %12s %8s\n", "", "estimate", "std.error", "t");
+    fprintf(out, "--------------------------------------------------------------\n");
+
+    slot0 = 0;
+    for (j = 1; j <= n_link; j++) {
+        real w1 = 0.0, wk = 0.0, d1 = 1.0, dj = 0.0;
+        real g, m, seg, sem;
+        char lab[64];
+
+        if (lnk[j].s < 0) continue;
+
+        /* primer slot de este enlace */
+        slot = slot0 + 1;
+        for (k = 0; k <= lnk[j].s; k++) {
+            w1 += xf[slot + k];
+            wk += k * xf[slot + k];
+        }
+        for (k = 1; k <= lnk[j].r; k++) {
+            real dv = xf[slot + lnk[j].s + k];
+            d1 -= dv;
+            dj += k * dv;
+        }
+        slot0 += (lnk[j].s + 1) + lnk[j].r;
+
+        if (net_is_star())
+            snprintf(lab, sizeof lab, "input %d", j);
+        else
+            snprintf(lab, sizeof lab, "%s <- %s",
+                     Ts[lnk[j].out].name, Ts[lnk[j].inp].name);
+        fprintf(out, "%s:\n", lab);
+
+        if (fabs(d1) < 1e-8 || fabs(w1) < 1e-12) {
+            fprintf(out, "  (delta(1) or omega(1) too close to zero: "
+                         "gain and mean lag are not defined)\n");
+            continue;
+        }
+
+        g = w1 / d1;
+        m = lnk[j].b + wk / w1 + dj / d1;
+
+        /* --- gradiente de la GANANCIA ---------------------------------- */
+        for (k = 1; k <= npar; k++) gg[k] = 0.0;
+        for (k = 0; k <= lnk[j].s; k++)
+            add_grad(gg, slot + k, 1.0 / d1);                 /* d g / d omega_k */
+        for (k = 1; k <= lnk[j].r; k++)
+            add_grad(gg, slot + lnk[j].s + k, g / d1);        /* d g / d delta_k */
+        seg = delta_se(gg, cov, npar);
+
+        fprintf(out, "  %-20s %12.6f %12.6f %8.2f\n", "gain", g, seg,
+                (seg > 1e-15) ? g / seg : 0.0);
+        sum_gain[j] = g;
+        sum_mlag[j] = m;
+
+        /* --- gradiente del RETARDO MEDIO -------------------------------- */
+        for (k = 1; k <= npar; k++) gg[k] = 0.0;
+        {
+            real A = wk / w1;            /* aporte del numerador */
+            real C = dj / d1;            /* aporte del denominador */
+            for (k = 0; k <= lnk[j].s; k++)
+                add_grad(gg, slot + k, (k - A) / w1);
+            for (k = 1; k <= lnk[j].r; k++)
+                add_grad(gg, slot + lnk[j].s + k, (k + C) / d1);
+        }
+        sem = delta_se(gg, cov, npar);
+
+        fprintf(out, "  %-20s %12.6f %12.6f %8.2f\n", "mean lag", m, sem,
+                (sem > 1e-15) ? m / sem : 0.0);
+        fprintf(out, "  %-20s %12d\n", "pure delay b", lnk[j].b);
+    }
+    fprintf(out, "--------------------------------------------------------------\n");
+    fprintf(out, "  The mean lag is in periods, measured from t. It cannot be below\n");
+    fprintf(out, "  the pure delay b: the response cannot arrive before it starts.\n");
+
+    free_vector(gg, 1, npar);
+}
+
+
 /* Expande el vector corto (libres) a la estructura completa. Es lo que hace
    que un parámetro compartido aparezca en DOS sitios con un solo grado de
    libertad.                                                                 */
@@ -1932,6 +2071,8 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
     fprintf(outputv, "--------------------------------------------------------------------\n");
     fprintf(outputv, "Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1\n\n");
 
+    transfer_characteristics(x, cov, npar, outputv);
+
     /* Q es la covarianza NORMALIZADA (Q[1,1] = 1); la real es Sigma = sigma2*Q.
        La normalizacion NO es cosmetica: la verosimilitud concentrada es invariante
        ante Q -> cQ (Mauricio 1995, ec. 3.1-3.3), asi que sin fijar Q[1,1] habria
@@ -2018,6 +2159,9 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
             for (k = 1; k <= lnk[j].r; k++, idx++)
                 printf("                delta_%d = %10.6f  (t = %6.2f)\n", k,
                        x[idx], dev[idx] > 1e-15 ? x[idx] / dev[idx] : 0.0);
+            if (sum_gain[j] != 0.0 || sum_mlag[j] != 0.0)
+                printf("                gain    = %10.6f   mean lag = %.2f\n",
+                       sum_gain[j], sum_mlag[j]);
         }
         for (i = 1; i <= n_ser; i++)
             printf("  Series %d  : AR order %d, MA order %d, %d deterministic(s)%s\n",

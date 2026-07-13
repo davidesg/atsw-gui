@@ -435,6 +435,67 @@ resolved. Hence the ridge.
   into it.
 \end{enumerate}
 
+
+\section{Characterizing the transfer function: gain and mean lag}
+\label{sec:gain}
+
+An estimated transfer function is not \emph{described} until two things are
+said: how much the output responds in total, and how long it takes. The
+$\omega$'s and $\delta$'s are the parametrization, not the response.
+
+\begin{align}
+\text{gain}\qquad
+ g &= \nu(1) \;=\; \frac{\omega(1)}{\delta(1)},
+ && \omega(1)=\sum_k \omega_k,\quad \delta(1)=1-\sum_j \delta_j
+ \label{eq:gain}\\[4pt]
+\text{mean lag}\qquad
+ \bar{m} &= \frac{\nu'(1)}{\nu(1)}
+   \;=\; b \;+\; \frac{\sum_k k\,\omega_k}{\omega(1)}
+             \;+\; \frac{\sum_j j\,\delta_j}{\delta(1)}
+ \label{eq:mlag}
+\end{align}
+
+The gain is the total, permanent response to a unit, permanent change in the
+input: \emph{how much}. The mean lag is the centre of gravity of the response in
+time: \emph{how soon}. It is the natural measure of the \emph{speed} of the
+relation, and it is what the pure delay $b$ alone cannot tell you---$b$ says when
+the response \emph{begins}, not where its mass is. Note in \eqref{eq:mlag} that a
+denominator does not change the gain's character but \emph{stretches} the
+response: it adds $\sum j\delta_j/\delta(1)$ to the mean lag.
+
+Standard errors follow from the delta method with the covariance matrix of the
+free parameters, $\mathrm{var}(f) = \nabla f' \, C \, \nabla f$. The gradient is
+assembled in the \emph{free} space, which is where $C$ lives: a fixed slot
+contributes nothing, and a shared one contributes to its representative---so the
+gain of a transfer whose denominator is shared with the input's own AR gets the
+right standard error, and not the one that would follow from treating the two as
+independent.
+
+Two checks. First, an exact self-test: with $s=0$ and $r=0$ the gain \emph{is}
+$\omega_0$ and the mean lag \emph{is} $b$, so the delta method must reproduce
+$\omega_0$'s standard error to the last digit---it does ($0.042634$ in both), with
+a mean lag of exactly $1.000000 \pm 0$. Second, against synthetic ground truth:
+
+\begin{center}
+\begin{tabular}{lrrrr}
+\toprule
+ & \multicolumn{2}{c}{gain} & \multicolumn{2}{c}{mean lag} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+ & truth & estimate & truth & estimate \\
+\midrule
+$b=2$, $\omega=(0.8,\,0.4)$              & $1.200$ & $1.192$ & $2.333$ & $2.341$ \\
+$b=1$, $\omega=0.6$, $\delta=0.6$        & $1.500$ & $1.467$ & $2.500$ & $2.429$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{This is also how long-run hypotheses should be tested.} The
+dissertation imposes unit long-run gain by transforming the data and then tests
+it by estimating a second, unrestricted model and comparing likelihoods. With
+\eqref{eq:gain} and its standard error, the hypothesis $g=1$ is tested
+\emph{directly}, on the model already fitted, with no data transformation and no
+second estimation.
+
 \section{An application: the pass-through of crude oil to Spanish CPI is not rational}
 
 Three fits, same output and same input, the first two with \emph{exactly} the same
@@ -479,10 +540,15 @@ one; its significance says ``there is a response at lag one'', not ``the respons
 is geometric''. The honest test is the one in the nesting model, and there it
 dies.
 
-Economically: the pass-through of crude to the Spanish CPI is immediate and
-exhausted within two months---not a distributed lag that propagates. The estimate
-$\omega = (0.0164,\,0.0108)$ reproduces the previously documented values
-$(0.0154,\,0.0104)$.
+Characterized by \eqref{eq:gain}--\eqref{eq:mlag}, the relation is
+\[
+g = 0.027195 \;(0.002453),\qquad
+\bar{m} = 0.397 \;(0.044)\ \text{months},\qquad b=0 .
+\]
+The pass-through of crude to the Spanish CPI is \emph{immediate}---its centre of
+gravity is less than half a month---and exhausted within two; it is not a
+distributed lag that propagates. The estimate $\omega = (0.0164,\,0.0108)$
+reproduces the previously documented values $(0.0154,\,0.0104)$.
 
 \section{What the dissertation teaches and the program still does not do}
 \label{sec:todo}
@@ -497,13 +563,9 @@ $(0.0154,\,0.0104)$.
   and says nothing about which to act on first. It should: \emph{the relation
   first, the noise afterwards}.
 
-\item \textbf{The long-run gain $g=\nu(1)$} is not reported. It is the quantity
-  with economic meaning---the total permanent effect of the input on the
-  output---and the one the dissertation wants to test. It is
-  $\sum\omega / (1-\sum\delta)$, and its standard error follows from the delta
-  method with the covariance matrix already computed. With it, a long-run
-  neutrality hypothesis can be tested \emph{directly}, without transforming the
-  data and without estimating two models.
+\item \textbf{The long-run gain and the mean lag} were not reported. They now
+  are: see \S\ref{sec:gain}. This was the most valuable of the three, because
+  without them the relation is estimated but not described.
 
 \item \textbf{Identity-linked triads.} The dissertation handles them
   (\S2.4) by restricting the deterministic parameters of the three series to

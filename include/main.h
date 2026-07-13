@@ -295,11 +295,7 @@ void apply_univariate_model( struct Tusmodel *Tm, struct Tseries *Ts,
                              real **DataMat, real **w_out, int *nstat_out );
 
 /* Preblanqueo y sugerencia de ordenes de la funcion de transferencia */
-void prewhiten_and_identify( real *w_X, real *w_Y, int n,
-                             real *phi_X, int p_X,
-                             real *theta_X, int q_X,
-                             int *r, int *s, int *b,
-                             FILE *outputv );
+void prewhiten_and_identify( int j, FILE *outputv );
 
 /* Funcion shootx para el modelo de transferencia (cumple con la firma de cast) */
 void shootx_tran( real *x, struct Tvarma *armax, int *ifaultx, int firstx, int lastx );

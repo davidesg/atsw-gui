@@ -9,11 +9,11 @@ drtran es el **puente** entre dos programas que ya funcionan:
 - **[drvarma]** — evalúa la **verosimilitud exacta VARMA** de Mauricio (`elf`) y la
   maximiza con BFGS factorizado.
 
-drtran lee dos modelos ya especificados en fue y los estima **conjuntamente**,
-todos los parámetros a la vez:
+drtran lee los modelos ya especificados en fue —una salida y **una o varias
+entradas**— y los estima **conjuntamente**, todos los parámetros a la vez:
 
 ```
-Y_t  =  ω(B)/δ(B) · B^b · X_t  +  N_t
+Y_t  =  Σⱼ  ωⱼ(B)/δⱼ(B) · B^bⱼ · Xⱼ,t  +  N_t
 ```
 
 ## Qué hace, en una orden
@@ -49,10 +49,12 @@ El modelo de transferencia se reescribe como un **VARMA bivariante diagonal**, q
 es lo que el `elf` de drvarma sabe puntuar:
 
 ```
-serie 1 = w_Y − transferencia   (el ruido N)   AR/MA = el ARMA de Y
-serie 2 = w_X                   (la entrada)   AR/MA = el ARMA de X
+serie 1     = w_Y − Σⱼ transferenciaⱼ   (el ruido N)   AR/MA = el ARMA de Y
+serie j+1   = w_Xⱼ                     (la entrada j)  AR/MA = el ARMA de Xⱼ
 covarianza diagonal
 ```
+
+Hasta **7 entradas** (un cast de hasta 8 series).
 
 Todo el acoplamiento vive en `transferencia_t = Σ_j ν_j · w_X(t−j)`. Con ω = 0 el
 modelo se parte en dos univariantes independientes — y **ahí está la prueba de que
@@ -81,16 +83,16 @@ estima bien. Especifícalas como transferencia.
 ## Uso
 
 ```
-drtran salida.pre entrada.pre [opciones]
+drtran salida.pre entrada1.pre [entrada2.pre ...] [opciones]
 ```
 
-El **primer** fichero es la endógena (Y); el **segundo**, la entrada exógena (X).
+El **primer** fichero es la endógena (Y); los demás, las entradas exógenas.
 
 | | |
 |---|---|
 | `-m NAME` | nombre del modelo; los resultados van a `NAME.out` (por defecto: `<salida>_<entrada>`) |
 | `-p` | **solo preblanqueo**: filtra, grafica la CCF y sugiere (b, r, s). No estima |
-| `-b N` `-r N` `-s N` | imponer el retardo puro, el denominador y el numerador (por defecto: identificados) |
+| `-b N` `-r N` `-s N` | imponer el retardo puro, el denominador y el numerador (por defecto: identificados). Con varias entradas, lista separada por comas: `-b 1,0 -s 0,1` |
 | `-0` | **sin transferencia**: los dos univariantes estimados conjuntamente. Es el modo de homologación con fue |
 | `-N` `-X` | fijar el ARMA del ruido / de la entrada |
 | `-D` `-E` | fijar TODOS los deterministas de Y / de X |

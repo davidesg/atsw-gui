@@ -79,13 +79,13 @@ $DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -0 -o "$OUT" > /dev/null 2>&1
 
 opt_ok "$OUT" "el optimizador no falla"
 
-check "phi_N (ES_CPI)"  0.402839 "$(val "$OUT" 'phi_N\[B\^1\]')"  0.0001
-check "phi_X (WTI)"     0.299193 "$(val "$OUT" 'phi_X\[B\^1\]')"  0.0001
+check "phi_N (ES_CPI)"  0.402839 "$(val "$OUT" 'phi_1\[B\^1\]')"  0.0001
+check "phi_X (WTI)"     0.299193 "$(val "$OUT" 'phi_2\[B\^1\]')"  0.0001
 check "mu_Y   (ES_CPI)" 0.154472 "$(val "$OUT" 'mu\[1\]')"     0.0001
 
 # Sigma = sigma2 * Q  (Q por sí sola NO es la covarianza)
-S11=$(grep "Sigma\[1,1\]" "$OUT" | awk '{print $4}')
-S22=$(grep "Sigma\[2,2\]" "$OUT" | awk '{print $4}')
+S11=$(grep "Sigma\[1,1\]" "$OUT" | awk '{print $NF}')
+S22=$(grep "Sigma\[2,2\]" "$OUT" | awk '{print $NF}')
 check "Sigma[1,1] (ES_CPI)"  0.062666 "$S11" 0.0005
 check "Sigma[2,2] (WTI)"    68.838100 "$S22" 0.01
 
@@ -112,19 +112,19 @@ echo "   [airline AR] ES_CPI_airAR_mu: (1-0.3631B)(∇∇₁₂ ln y + 0.0145) =
 OUT="$TMPDIR/air.txt"
 $DRTRAN "$CASES/ES_CPI_airAR_mu.pre" "$CASES/WTI_ar1.pre" -0 -o "$OUT" > /dev/null 2>&1
 
-check "phi   (B^1)"   0.363119 "$(val "$OUT" 'phi_N\[B\^1\]')"    0.0001
-check "Theta (B^12)"  0.857450 "$(val "$OUT" 'theta_N\[B\^12\]')" 0.0001
+check "phi   (B^1)"   0.363119 "$(val "$OUT" 'phi_1\[B\^1\]')"    0.0001
+check "Theta (B^12)"  0.857450 "$(val "$OUT" 'theta_1\[B\^12\]')" 0.0001
 check "mu"           -0.014475 "$(val "$OUT" 'mu\[1\]')"        0.0001
-check "Sigma[1,1]"    0.069328 "$(grep 'Sigma\[1,1\]' "$OUT" | awk '{print $4}')" 0.0005
+check "Sigma[1,1]"    0.069328 "$(grep 'Sigma\[1,1\]' "$OUT" | awk '{print $NF}')" 0.0005
 
 # --- Airline puro: MA regular + MA anual (sin media) --------------------------
 echo "   [airline MA] ES_CPI_airline: ∇∇₁₂ ln y = (1+0.4212B)(1-0.8147B¹²)a"
 OUT="$TMPDIR/air2.txt"
 $DRTRAN "$CASES/ES_CPI_airline.pre" "$CASES/WTI_ar1.pre" -0 -o "$OUT" > /dev/null 2>&1
 
-check "theta (B^1)"  -0.421156 "$(val "$OUT" 'theta_N\[B\^1\]')"  0.0005
-check "Theta (B^12)"  0.814706 "$(val "$OUT" 'theta_N\[B\^12\]')"  0.0005
-check "Sigma[1,1]"    0.071022 "$(grep 'Sigma\[1,1\]' "$OUT" | awk '{print $4}')" 0.0005
+check "theta (B^1)"  -0.421156 "$(val "$OUT" 'theta_1\[B\^1\]')"  0.0005
+check "Theta (B^12)"  0.814706 "$(val "$OUT" 'theta_1\[B\^12\]')"  0.0005
+check "Sigma[1,1]"    0.071022 "$(grep 'Sigma\[1,1\]' "$OUT" | awk '{print $NF}')" 0.0005
 
 # --- MEG / estacionalidad estocástica -----------------------------------------
 # Ejercita: factor irreducible de la diferencia anual (ifadf[3]=1), AR anual y
@@ -134,13 +134,13 @@ echo "   [MEG] ES_CORE_S3: AR(3) + AR₁₂ + MA de frecuencia fija en f=3, ifad
 OUT="$TMPDIR/meg.txt"
 $DRTRAN "$CASES/ES_CORE_S3.pre" "$CASES/WTI_ar1.pre" -0 -o "$OUT" > /dev/null 2>&1
 
-check "phi_1  (B^1)"   0.186067 "$(val "$OUT" 'phi_N\[B\^1\]')"   0.0002
-check "phi_2  (B^2)"   0.138391 "$(val "$OUT" 'phi_N\[B\^2\]')"   0.0002
-check "phi_3  (B^3)"   0.205844 "$(val "$OUT" 'phi_N\[B\^3\]')"   0.0002
-check "Phi    (B^12)"  0.295467 "$(val "$OUT" 'phi_N\[B\^12\]')"   0.0002
-check "MA f=3 (c2)"   -0.950159 "$(val "$OUT" 'theta_N\[f=3\]')" 0.0005
+check "phi_1  (B^1)"   0.186067 "$(val "$OUT" 'phi_1\[B\^1\]')"   0.0002
+check "phi_2  (B^2)"   0.138391 "$(val "$OUT" 'phi_1\[B\^2\]')"   0.0002
+check "phi_3  (B^3)"   0.205844 "$(val "$OUT" 'phi_1\[B\^3\]')"   0.0002
+check "Phi    (B^12)"  0.295467 "$(val "$OUT" 'phi_1\[B\^12\]')"   0.0002
+check "MA f=3 (c2)"   -0.950159 "$(val "$OUT" 'theta_1\[f=3\]')" 0.0005
 check "mu"             0.266056 "$(val "$OUT" 'mu\[1\]')"        0.0002
-check "Sigma[1,1]"     0.016968 "$(grep 'Sigma\[1,1\]' "$OUT" | awk '{print $4}')" 0.0005
+check "Sigma[1,1]"     0.016968 "$(grep 'Sigma\[1,1\]' "$OUT" | awk '{print $NF}')" 0.0005
 
 # --- MEG con TRES frecuencias: c1 != 0 y de ambos signos ----------------------
 # El término en B de un factor de frecuencia fija se DERIVA de c2:
@@ -151,13 +151,13 @@ echo "   [MEG x3] ES_CORE_S135b: MA de frecuencia fija en f=3, f=1 y f=5"
 OUT="$TMPDIR/meg3.txt"
 $DRTRAN "$CASES/ES_CORE_S135b.pre" "$CASES/WTI_ar1.pre" -0 -o "$OUT" > /dev/null 2>&1
 
-check "phi_1 (B^1)"    0.257507 "$(val "$OUT" 'phi_N\[B\^1\]')"   0.0002
-check "phi_3 (B^3)"    0.312740 "$(val "$OUT" 'phi_N\[B\^3\]')"   0.0002
-check "MA f=3 (c1=0)" -0.908012 "$(val "$OUT" 'theta_N\[f=3\]')"  0.0005
-check "MA f=1 (c1>0)" -0.924052 "$(val "$OUT" 'theta_N\[f=1\]')"  0.0005
-check "MA f=5 (c1<0)" -0.924685 "$(val "$OUT" 'theta_N\[f=5\]')"  0.0005
+check "phi_1 (B^1)"    0.257507 "$(val "$OUT" 'phi_1\[B\^1\]')"   0.0002
+check "phi_3 (B^3)"    0.312740 "$(val "$OUT" 'phi_1\[B\^3\]')"   0.0002
+check "MA f=3 (c1=0)" -0.908012 "$(val "$OUT" 'theta_1\[f=3\]')"  0.0005
+check "MA f=1 (c1>0)" -0.924052 "$(val "$OUT" 'theta_1\[f=1\]')"  0.0005
+check "MA f=5 (c1<0)" -0.924685 "$(val "$OUT" 'theta_1\[f=5\]')"  0.0005
 check "mu"             0.257980 "$(val "$OUT" 'mu\[1\]')"         0.0002
-check "Sigma[1,1]"     0.016176 "$(grep 'Sigma\[1,1\]' "$OUT" | awk '{print $4}')" 0.0005
+check "Sigma[1,1]"     0.016176 "$(grep 'Sigma\[1,1\]' "$OUT" | awk '{print $NF}')" 0.0005
 
 # --- Coeficiente ARMA FIJADO en el .pre ---------------------------------------
 # FR_CPI_f5 trae "0.0000  0": el AR(1) está FIJO, no es un valor inicial.
@@ -165,10 +165,10 @@ echo "   [f=5 + AR fijo] FR_CPI_f5: AR(1) fijado en 0 por el .pre"
 OUT="$TMPDIR/fr5.txt"
 $DRTRAN "$CASES/FR_CPI_f5.pre" "$CASES/WTI_ar1.pre" -0 -o "$OUT" > /dev/null 2>&1
 
-grep -q "phi_N\[B\^1\].*fixed" "$OUT" && pass "el AR(1) respeta el flag del .pre (fijo)" \
+grep -q "phi_1\[B\^1\].*fixed" "$OUT" && pass "el AR(1) respeta el flag del .pre (fijo)" \
                                       || fail "el AR(1) NO respeta el flag del .pre"
-check "MA f=5 (c2)"   -0.954212 "$(val "$OUT" 'theta_N\[f=5\]')"  0.0005
-check "Sigma[1,1]"     0.046484 "$(grep 'Sigma\[1,1\]' "$OUT" | awk '{print $4}')" 0.0005
+check "MA f=5 (c2)"   -0.954212 "$(val "$OUT" 'theta_1\[f=5\]')"  0.0005
+check "Sigma[1,1]"     0.046484 "$(grep 'Sigma\[1,1\]' "$OUT" | awk '{print $NF}')" 0.0005
 
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
@@ -202,10 +202,10 @@ $DRTRAN "$PERT" "$CASES/WTI_ar1.pre" -0 -o "$OUT" > /dev/null 2>&1
 opt_ok "$OUT" "el optimizador no falla desde un arranque lejano"
 
 # ...y al MISMO óptimo que con las preestimaciones de fue
-check "phi_1  (perturbado)"  0.186067 "$(val "$OUT" 'phi_N\[B\^1\]')"   0.0002
-check "phi_3  (perturbado)"  0.205844 "$(val "$OUT" 'phi_N\[B\^3\]')"   0.0002
-check "Phi    (perturbado)"  0.295467 "$(val "$OUT" 'phi_N\[B\^12\]')"  0.0002
-check "MA f=3 (perturbado)" -0.950159 "$(val "$OUT" 'theta_N\[f=3\]')"  0.0005
+check "phi_1  (perturbado)"  0.186067 "$(val "$OUT" 'phi_1\[B\^1\]')"   0.0002
+check "phi_3  (perturbado)"  0.205844 "$(val "$OUT" 'phi_1\[B\^3\]')"   0.0002
+check "Phi    (perturbado)"  0.295467 "$(val "$OUT" 'phi_1\[B\^12\]')"  0.0002
+check "MA f=3 (perturbado)" -0.950159 "$(val "$OUT" 'theta_1\[f=3\]')"  0.0005
 check "mu     (perturbado)"  0.266056 "$(val "$OUT" 'mu\[1\]')"         0.0002
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -226,15 +226,15 @@ se() { grep -E "^$2" "$1" | head -1 | awk '{print $3}'; }
 
 OUT="$TMPDIR/homolog.txt"   # el caso canónico, ya estimado arriba
 
-check "SE(phi_N)  [teoría 0.06242]"  0.062421 "$(se "$OUT" 'phi_N\[B\^1\]')" 0.001
-check "SE(phi_X)  [teoría 0.06508]"  0.065075 "$(se "$OUT" 'phi_X\[B\^1\]')" 0.001
+check "SE(phi_N)  [teoría 0.06242]"  0.062421 "$(se "$OUT" 'phi_1\[B\^1\]')" 0.001
+check "SE(phi_X)  [teoría 0.06508]"  0.065075 "$(se "$OUT" 'phi_2\[B\^1\]')" 0.001
 check "SE(mu)     [GLS 0.028502]"    0.028502 "$(se "$OUT" 'mu\[1\]')"       0.001
 
 # los deterministas: GLS exacto sobre el diseño diferenciado
-check "SE(det f=1 cos) [GLS 0.06833]" 0.068328 "$(se "$OUT" 'omega_Y\[1,0\]')"  0.002
-check "SE(det f=1 sin) [GLS 0.06829]" 0.068294 "$(se "$OUT" 'omega_Y\[2,0\]')"  0.002
-check "SE(det f=2 cos) [GLS 0.02769]" 0.027692 "$(se "$OUT" 'omega_Y\[3,0\]')"  0.001
-check "SE(alternador)  [GLS 0.00609]" 0.006094 "$(se "$OUT" 'omega_Y\[11,0\]')" 0.001
+check "SE(det f=1 cos) [GLS 0.06833]" 0.068328 "$(se "$OUT" 'omega_d1\[1,0\]')"  0.002
+check "SE(det f=1 sin) [GLS 0.06829]" 0.068294 "$(se "$OUT" 'omega_d1\[2,0\]')"  0.002
+check "SE(det f=2 cos) [GLS 0.02769]" 0.027692 "$(se "$OUT" 'omega_d1\[3,0\]')"  0.001
+check "SE(alternador)  [GLS 0.00609]" 0.006094 "$(se "$OUT" 'omega_d1\[11,0\]')" 0.001
 
 # ninguna SE puede ser absurda (la firma del hessiano singular)
 if grep -qE "^(phi|theta|mu|omega|delta|log)" "$OUT" | true; then :; fi
@@ -259,13 +259,13 @@ $DRTRAN "$SYN/SYN_Y.pre" "$SYN/SYN_X.pre" -r 0 -s 1 -b 2 -o "$OUT" > /dev/null 2
 opt_ok "$OUT" "el optimizador no falla"
 
 # tolerancias ~2 errores estándar: es una muestra finita, no aritmética exacta
-check "omega_0"  0.800 "$(val "$OUT" 'omega\[0\]')"  0.06
-check "omega_1"  0.400 "$(val "$OUT" 'omega\[1\]')"  0.06
-check "phi_N"    0.300 "$(val "$OUT" 'phi_N\[B\^1\]')"  0.12
-check "phi_X"    0.500 "$(val "$OUT" 'phi_X\[B\^1\]')"  0.12
+check "omega_0"  0.800 "$(val "$OUT" 'omega1\[0\]')"  0.06
+check "omega_1"  0.400 "$(val "$OUT" 'omega1\[1\]')"  0.06
+check "phi_N"    0.300 "$(val "$OUT" 'phi_1\[B\^1\]')"  0.12
+check "phi_X"    0.500 "$(val "$OUT" 'phi_2\[B\^1\]')"  0.12
 
-S11=$(grep "Sigma\[1,1\]" "$OUT" | awk '{print $4}')
-S22=$(grep "Sigma\[2,2\]" "$OUT" | awk '{print $4}')
+S11=$(grep "Sigma\[1,1\]" "$OUT" | awk '{print $NF}')
+S22=$(grep "Sigma\[2,2\]" "$OUT" | awk '{print $NF}')
 check "Sigma ruido"    0.25 "$S11" 0.06
 check "Sigma entrada"  1.00 "$S22" 0.20
 
@@ -369,12 +369,59 @@ grep -q "X behaves as exogenous" "$OUT" \
 
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
+echo "── 2d. MÚLTIPLES ENTRADAS (m > 2) ──"
+echo "   Y = nu1(B)·X1 + nu2(B)·X2 + N, con DOS transferencias distintas."
+echo "   VERDAD:  X1: b=1, r=0, s=0, omega=0.70"
+echo "            X2: b=0, r=0, s=1, omega=(0.50, 0.30)"
+echo ""
+
+OUT="$TMPDIR/m3.txt"
+$DRTRAN "$SYN/SYN2_Y.pre" "$SYN/SYN2_X1.pre" "$SYN/SYN2_X2.pre" \
+        -b 1,0 -r 0,0 -s 0,1 -o "$OUT" > /dev/null 2>&1
+
+opt_ok "$OUT" "el optimizador no falla con 3 series"
+
+grep -q "Series           : 3 (1 output + 2 input(s))" "$OUT" \
+    && pass "el cast es de 3 series (m = 1 + 2)" \
+    || fail "el cast NO es de 3 series"
+
+# se recuperan LAS DOS transferencias a la vez (tolerancia ~2-3 SE)
+check "omega1[0]  (X1)"  0.700 "$(val "$OUT" 'omega1\[0\]')"  0.06
+check "omega2[0]  (X2)"  0.500 "$(val "$OUT" 'omega2\[0\]')"  0.06
+check "omega2[1]  (X2)"  0.300 "$(val "$OUT" 'omega2\[1\]')"  0.06
+
+# y el ARMA propio de cada serie
+check "phi serie 1 (ruido)" 0.300 "$(val "$OUT" 'phi_1\[B\^1\]')" 0.12
+check "phi serie 2 (X1)"    0.500 "$(val "$OUT" 'phi_2\[B\^1\]')" 0.12
+check "phi serie 3 (X2)"    0.200 "$(val "$OUT" 'phi_3\[B\^1\]')" 0.12
+
+# la identificación debe proponer los órdenes de CADA entrada por separado
+OUT="$TMPDIR/m3id.txt"
+$DRTRAN "$SYN/SYN2_Y.pre" "$SYN/SYN2_X1.pre" "$SYN/SYN2_X2.pre" \
+        -p -o "$OUT" > /dev/null 2>&1
+[ "$(grep -c 'RECOMMENDED' "$OUT")" = "2" ] \
+    && pass "el preblanqueo identifica CADA entrada por separado" \
+    || fail "no identifica las dos entradas"
+grep -q "RECOMMENDED: b=1, r=0, s=0" "$OUT" \
+    && pass "identifica el retardo b=1 de X1" \
+    || fail "no identifica el retardo de X1"
+
+# previsión con dos entradas: prever Y exige prever LAS DOS
+OUT="$TMPDIR/m3fc.txt"
+$DRTRAN "$SYN/SYN2_Y.pre" "$SYN/SYN2_X1.pre" "$SYN/SYN2_X2.pre" \
+        -b 1,0 -r 0,0 -s 0,1 -f 6 -o "$OUT" > /dev/null 2>&1
+grep -q "THE 2 INPUT(S)" "$OUT" \
+    && pass "prevé con las dos entradas" \
+    || fail "la previsión no contempla las dos entradas"
+
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
 echo "── 3. PASS-THROUGH: con Y = X la verdad es omega_0 = 1 ──"
 echo ""
 
 OUT="$TMPDIR/passthru.txt"
 $DRTRAN "$WORK/WTI_ar1.pre" "$WORK/WTI_ar1.pre" -r 0 -s 0 -b 0 -o "$OUT" > /dev/null 2>&1
-check "omega_0 (Y=X)"  1.0 "$(val "$OUT" 'omega\[0\]')"  0.01
+check "omega_0 (Y=X)"  1.0 "$(val "$OUT" 'omega1\[0\]')"  0.01
 
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
@@ -408,11 +455,11 @@ if [ $RC -eq 124 ]; then
     fail "se cuelga con deterministas racionales (¿falta la guarda de delta?)"
 else
     opt_ok "$OUT" "no falla con step racional + impulse"
-    grep -q "omega_Y\[1,1\]" "$OUT" && pass "estima omega_1 del step (Nomega>0)" \
+    grep -q "omega_d1\[1,1\]" "$OUT" && pass "estima omega_1 del step (Nomega>0)" \
                                     || fail "no estima omega_1 del step"
-    grep -q "delta_Y\[1,1\]" "$OUT" && pass "estima delta_1 del step (Ndelta>0)" \
+    grep -q "delta_d1\[1,1\]" "$OUT" && pass "estima delta_1 del step (Ndelta>0)" \
                                     || fail "no estima delta_1 del step"
-    grep -q "omega_Y\[2,0\]" "$OUT" && pass "estima el impulse" \
+    grep -q "omega_d1\[2,0\]" "$OUT" && pass "estima el impulse" \
                                     || fail "no estima el impulse"
 fi
 
@@ -441,8 +488,8 @@ echo ""
 OUT="$TMPDIR/fc.txt"
 $DRTRAN "$SYN/SYN_Y.pre" "$SYN/SYN_X.pre" -b 2 -r 0 -s 1 -f 6 -o "$OUT" > /dev/null 2>&1
 
-SN=$(grep "Sigma\[1,1\]" "$OUT" | awk '{print $4}')
-PHIN=$(val "$OUT" 'phi_N\[B\^1\]')
+SN=$(grep "Sigma\[1,1\]" "$OUT" | awk '{print $NF}')
+PHIN=$(val "$OUT" 'phi_1\[B\^1\]')
 
 # sd(w) del paso l: columna 3 de la tabla de previsión
 sdw() { awk -v l="$2" '/w_Y fcst/{f=1;next} f&&$1==l{print $3;exit}' "$1"; }

@@ -14,57 +14,43 @@
 
 #include "main.h"
 #include "drtran.h"
-#include "fue_pre_reader.h"   /* para apply_univariate_model */
+#include "fue_pre_reader.h"
 
 /* -------------------------------------------------------------------------- */
-/* Función auxiliar: calcula la secuencia de pesos nu para un filtro racional */
-/* omega(B)/delta(B) con retardo b.                                           */
-/* nu[t] = omega[t-1-b] + sum_{j=1..r} delta[j] * nu[t-j]                     */
-/* donde t es índice 1-based en la serie estacionaria.                         */
-/* omega[0] = ω₀ (contemporáneo), omega[1] = ω₁, ..., omega[s] = ω_s.          */
+/* compute_irf: pesos nu de un filtro racional omega(B)/delta(B) con retardo b */
+/* nu[t] = omega[t-1-b] + sum_{j=1..r} delta[j]*nu[t-j]                        */
+/* nu[j] pesa a la entrada en el retardo j-1.                                  */
 /* -------------------------------------------------------------------------- */
-static void compute_irf(real *omega, int s, real *delta, int r, int b,
-                         real *nu, int length)
+void compute_irf(real *omega, int s, real *delta, int r, int b,
+                 real *nu, int length)
 {
     int t, j;
+
     for (t = 1; t <= length; t++) nu[t] = 0.0;
 
     for (t = 1; t <= length; t++) {
         real sum = 0.0;
-        /* contribución del numerador: lag 0-based = t-1-b */
-        int lag = t - 1 - b;
+        int  lag = t - 1 - b;
         if (lag >= 0 && lag <= s) sum = omega[lag];
-        /* contribución del denominador */
-        for (j = 1; j <= r; j++) {
+        for (j = 1; j <= r; j++)
             if (t > j) sum += delta[j] * nu[t - j];
-        }
         nu[t] = sum;
     }
 }
 
 /* -------------------------------------------------------------------------- */
-/* Recalcula las series estacionarias w_X e w_Y aplicando el modelo           */
-/* univariante. Se llama en cada evaluación de shootx.                       */
-/* -------------------------------------------------------------------------- */
-static void recompute_stationary_series(void)
-{
-    build_stationary_pair();   /* reconstruye w_X, w_Y y las alinea; fija n_stat */
-}
-
-/* -------------------------------------------------------------------------- */
 /* Estabilidad del denominador δ(B) de cada variable determinista.            */
-/* El filtro 1/δ(B) es recursivo: si δ(B) tiene raíces dentro del círculo     */
-/* unidad, la contribución determinista explota y la serie estacionaria se va */
-/* a infinito. Se comprueba con chekma, que usa la misma convención de        */
-/* polinomio (1 - δ₁B - δ₂B² - …). Devuelve 1 si alguna δ es inestable.       */
+/* El filtro 1/δ(B) es recursivo: con raíces dentro del círculo unidad la      */
+/* contribución determinista explota. Se comprueba con chekma, que usa la      */
+/* misma convención de polinomio (1 - δ₁B - δ₂B² - …).                        */
 /* -------------------------------------------------------------------------- */
-static int unstable_delta(struct Tusmodel *Tm)
+static int unstable_delta(struct Tusmodel *Tmi)
 {
     int i, k;
     real wr[10], wi[10], wmod[10];
 
-    for (i = 1; i <= Tm->NdetVar; i++) {
-        int nd = Tm->Ndelta[i];
+    for (i = 1; i <= Tmi->NdetVar; i++) {
+        int nd = Tmi->Ndelta[i];
         int ifault_chk = 0;
         real ***t1;
 
@@ -72,7 +58,7 @@ static int unstable_delta(struct Tusmodel *Tm)
 
         t1 = tensor(0, nd, 1, 1, 1, 1);
         t1[0][1][1] = 1.0;
-        for (k = 1; k <= nd; k++) t1[k][1][1] = Tm->Delta[i][k];
+        for (k = 1; k <= nd; k++) t1[k][1][1] = Tmi->Delta[i][k];
 
         chekma(1, nd, t1, wr, wi, wmod, &ifault_chk);
         free_tensor(t1, 0, nd, 1, 1, 1, 1);
@@ -83,123 +69,117 @@ static int unstable_delta(struct Tusmodel *Tm)
 }
 
 /* -------------------------------------------------------------------------- */
-/* shootx: transforma el vector de parámetros en la estructura Tvarma        */
+/* shootx — el CAST: vector de parámetros -> estructura VARMA                  */
+/*                                                                            */
+/* Modelo:   Y_t = SUM_j nu_j(B) X_j,t + N_t                                   */
+/*                                                                            */
+/* VARMA diagonal de m = 1 + n_inp series:                                     */
+/*     w[.][1]   = w_1 - SUM_j transferencia_j     (el ruido N)                */
+/*     w[.][i]   = w_i                             (la entrada i-1)            */
+/*     phi/theta diagonales: cada serie con su propio ARMA                     */
+/*     Q diagonal, con Q[1][1] = 1 (la escala la concentra sigma2)             */
+/*                                                                            */
+/* Todo el acoplamiento vive en las transferencias restadas a la serie 1.      */
 /* -------------------------------------------------------------------------- */
 void shootx(real *x, struct Tvarma *armax, int *ifaultx, int firstx, int lastx)
 {
-    int m = 2;   /* bivariante: salida Y, entrada X */
+    int m = n_ser;
     int idx = 1;
-    int i, j, k;
+    int i, j, k, t;
     int p, q;
-    real omega[MAX_S+1], delta[MAX_R+1];
-    real *transfer_weights;              /* pesos ν, indexados 1..n_stat */
-    real *transfer;                      /* componente de transferencia en cada t */
+
+    real omega[MAX_INP + 1][MAX_S + 1];
+    real delta[MAX_INP + 1][MAX_R + 1];
+    real **nu = NULL;          /* nu[j][.] : pesos de la entrada j */
+    real  *transfer = NULL;    /* transferencia total en cada t     */
+    real   var[MAX_SER + 1];
 
     *ifaultx = 0;
 
-    /* Los vectores de trabajo se reservan MÁS ABAJO, una vez que
-       recompute_stationary_series() ha fijado el n_stat definitivo.          */
-
-    /* 1. Extraer parámetros de la transferencia */
-    for (j = 0; j <= s_ord; j++) omega[j] = x[idx++];
-    for (j = 1; j <= r_ord; j++) delta[j] = x[idx++];
-
-    /* 2. Extraer parámetros ARMA del ruido de Y (si no fijos) — FACTORES */
-    if (!fix_noise) {
-        unpack_ar_factors(&TmY, x, &idx);
-        unpack_ma_factors(&TmY, x, &idx);
-        /* Re-expandir después de actualizar Tm */
-        if (p_N > 0) expand_ar_factors(&TmY, phi_N, p_N);
-        if (q_N > 0) expand_ma_factors(&TmY, theta_N, q_N);
-    }
-    /* 3. Extraer parámetros ARMA de X (si no fijos) — FACTORES */
-    if (!fix_X) {
-        unpack_ar_factors(&TmX, x, &idx);
-        unpack_ma_factors(&TmX, x, &idx);
-        if (p_X > 0) expand_ar_factors(&TmX, phi_X, p_X);
-        if (q_X > 0) expand_ma_factors(&TmX, theta_X, q_X);
+    /* --- 1. Parámetros de las transferencias (una por entrada) --- */
+    for (j = 1; j <= n_inp; j++) {
+        for (k = 0; k <= s_ord[j]; k++) omega[j][k] = x[idx++];
+        for (k = 1; k <= r_ord[j]; k++) delta[j][k] = x[idx++];
     }
 
-    /* 3b/3c. Coeficientes deterministas ω(B)/δ(B) de cada serie: solo los que
-              el .pre marca como estimables (Imega/Ielta).                    */
-    if (!fix_det_Y) unpack_det_params(&TmY, x, &idx);
-    if (!fix_det_X) unpack_det_params(&TmX, x, &idx);
-
-    /* Rechazar denominadores δ(B) inestables: el filtro 1/δ(B) explotaría */
-    if (unstable_delta(&TmY) || unstable_delta(&TmX)) {
-        *ifaultx = 1;
-        return;
+    /* --- 2. ARMA de cada serie (factores del .pre, no expandidos) --- */
+    for (i = 1; i <= n_ser; i++) {
+        if (fix_arma[i]) continue;
+        unpack_ar_factors(&Tm[i], x, &idx);
+        unpack_ma_factors(&Tm[i], x, &idx);
     }
 
-    /* Rechazar factores de frecuencia fija con c₂ >= 0 (r = sqrt(−c₂)) */
-    if (invalid_fixfreq(&TmY) || invalid_fixfreq(&TmX)) {
-        *ifaultx = 1;
-        return;
-    }
+    /* --- 3. Deterministas: solo los coeficientes libres según el .pre --- */
+    for (i = 1; i <= n_ser; i++)
+        if (!fix_det[i]) unpack_det_params(&Tm[i], x, &idx);
 
-    /* 3d. Extraer medias (cada serie por separado; si está fija conserva el
-           valor leído del .pre de FUE) */
-    if (!fix_mu_Y) mu_Y = x[idx++];
-    if (!fix_mu_X) mu_X = x[idx++];
-
-    /* 4. Covarianza Q (diagonal).
-          OJO: est() CONCENTRA un factor de escala sigma2 (Σ = sigma2·Q), así que
-          la escala global de Q NO está identificada: meter var_Y y var_X como dos
-          parámetros libres deja una dirección exactamente plana en la
-          verosimilitud y un hessiano SINGULAR (se veía en SE de Q de 4·10^5).
-          Solo la RAZÓN de varianzas es estimable. Se normaliza Q[1,1] = 1 y se
-          estima log(var_X/var_Y): un único parámetro, bien escalado y con
-          positividad garantizada. La escala la recupera sigma2.               */
-    real log_ratio = x[idx++];
-    real var_Y = 1.0;
-    real var_X = exp(log_ratio);
-
-    /* Re-expandir factores ARMA desde Tm (por si fueron modificados) */
-    /* Si los ARMA están fijos, recalcular desde Tm; si libres, ya se leyeron de x[] */
-    if (fix_noise) {
-        if (p_N > 0) expand_ar_factors(&TmY, phi_N, p_N);
-        if (q_N > 0) expand_ma_factors(&TmY, theta_N, q_N);
-    }
-    if (fix_X) {
-        if (p_X > 0) expand_ar_factors(&TmX, phi_X, p_X);
-        if (q_X > 0) expand_ma_factors(&TmX, theta_X, q_X);
-    }
-
-    /* Recalcular series estacionarias con los parámetros actuales */
-    recompute_stationary_series();
-    if (n_stat <= 0) {
-        *ifaultx = 1;
-        return;
-    }
-
-    /* Ahora que n_stat es definitivo, reservar los vectores de trabajo.
-       (Antes eran un array de pila de 5000 sin comprobar contra n_stat.)     */
-    transfer_weights = vector(1, n_stat);
-    transfer         = vector(1, n_stat);
-
-    /* Calcular los pesos nu de la transferencia */
-    compute_irf(omega, s_ord, delta, r_ord, b_delay, transfer_weights, n_stat);
-
-    /* Construir la serie de transferencia: transfer[t] = sum_{j} nu[j] * w_X[t-j] */
-    for (int t = 1; t <= n_stat; t++) {
-        real tr = 0.0;
-        for (j = 1; j <= t; j++) {
-            tr += transfer_weights[j] * w_X[t - j + 1];
+    /* Rechazar deterministas con denominador inestable o factores de
+       frecuencia fija inválidos (c2 >= 0) */
+    for (i = 1; i <= n_ser; i++) {
+        if (unstable_delta(&Tm[i]) || invalid_fixfreq(&Tm[i])) {
+            *ifaultx = 1;
+            return;
         }
-        transfer[t] = tr;
     }
 
-    /* Dimensiones del VARMA */
-    p = (p_N > p_X) ? p_N : p_X;
-    q = (q_N > q_X) ? q_N : q_X;
-    /* elf requiere al menos p >= 1 (phi[1] debe existir aunque sea cero) */
-    if (p < 1) p = 1;
+    /* --- 4. Medias (cada serie según su flag) --- */
+    for (i = 1; i <= n_ser; i++)
+        if (!fix_mu[i]) mu[i] = x[idx++];
+
+    /* --- 5. Covarianza Q, diagonal.
+             est() CONCENTRA un factor de escala sigma2 (Sigma = sigma2*Q), así
+             que la escala global de Q NO está identificada: meter todas las
+             varianzas libres deja una dirección exactamente plana y un hessiano
+             SINGULAR. Solo las RAZONES son estimables: se normaliza Q[1][1] = 1
+             y se estima log(var_i/var_1) para i = 2..m.                       */
+    var[1] = 1.0;
+    for (i = 2; i <= n_ser; i++) var[i] = exp(x[idx++]);
+
+    /* --- 6. Expandir los factores ARMA a polinomios --- */
+    for (i = 1; i <= n_ser; i++) {
+        if (p_ord[i] > 0) expand_ar_factors(&Tm[i], phi[i],   p_ord[i]);
+        if (q_ord[i] > 0) expand_ma_factors(&Tm[i], theta[i], q_ord[i]);
+    }
+
+    /* --- 7. Series estacionarias con los parámetros actuales --- */
+    build_stationary_series();
+    if (n_stat <= 0) { *ifaultx = 1; return; }
+
+    /* --- 8. Transferencia total: suma de las de cada entrada --- */
+    transfer = vector(1, n_stat);
+    for (t = 1; t <= n_stat; t++) transfer[t] = 0.0;
+
+    if (n_inp > 0) {
+        nu = matrix(1, n_inp, 1, n_stat);
+
+        for (j = 1; j <= n_inp; j++) {
+            compute_irf(omega[j], s_ord[j], delta[j], r_ord[j], b_del[j],
+                        nu[j], n_stat);
+
+            /* transferencia_j[t] = sum_k nu_j[k] * w_{j+1}[t-k+1] */
+            for (t = 1; t <= n_stat; t++) {
+                real tr = 0.0;
+                for (k = 1; k <= t; k++)
+                    tr += nu[j][k] * w[j + 1][t - k + 1];
+                transfer[t] += tr;
+            }
+        }
+    }
+
+    /* --- 9. Dimensiones del VARMA --- */
+    p = 1;                       /* elf exige p >= 1 */
+    q = 0;
+    for (i = 1; i <= n_ser; i++) {
+        if (p_ord[i] > p) p = p_ord[i];
+        if (q_ord[i] > q) q = q_ord[i];
+    }
+
     armax->m = m;
     armax->n = n_stat;
     armax->p = p;
     armax->q = q;
 
-    /* Alojar memoria en firstx */
+    /* --- 10. Alojar / reinicializar --- */
     if (firstx) {
         armax->mu    = vector(1, m);
         armax->phi   = tensor(0, p, 1, m, 1, m);
@@ -211,94 +191,68 @@ void shootx(real *x, struct Tvarma *armax, int *ifaultx, int firstx, int lastx)
         for (i = 1; i <= m; i++) {
             armax->mu[i] = 0.0;
             for (j = 1; j <= m; j++) {
-                for (k = 0; k <= p; k++) armax->phi[k][i][j] = 0.0;
+                for (k = 0; k <= p; k++) armax->phi[k][i][j]   = 0.0;
                 for (k = 0; k <= q; k++) armax->theta[k][i][j] = 0.0;
                 armax->qq[i][j] = 0.0;
             }
-            for (j = 1; j <= n_stat; j++) {
-                armax->w[j][i] = 0.0;
-                armax->a[j][i] = 0.0;
+            for (t = 1; t <= n_stat; t++) {
+                armax->w[t][i] = 0.0;
+                armax->a[t][i] = 0.0;
             }
         }
-        /* phi[0] y theta[0] = identidad */
-        for (i = 1; i <= m; i++) {
-            armax->phi[0][i][i] = 1.0;
+        for (i = 1; i <= m; i++) {          /* phi[0] = theta[0] = I */
+            armax->phi[0][i][i]   = 1.0;
             armax->theta[0][i][i] = 1.0;
         }
     } else {
-        /* Reinicializar a cero antes de rellenar */
         for (k = 1; k <= p; k++)
             for (i = 1; i <= m; i++)
-                for (j = 1; j <= m; j++)
-                    armax->phi[k][i][j] = 0.0;
+                for (j = 1; j <= m; j++) armax->phi[k][i][j] = 0.0;
         for (k = 1; k <= q; k++)
             for (i = 1; i <= m; i++)
-                for (j = 1; j <= m; j++)
-                    armax->theta[k][i][j] = 0.0;
+                for (j = 1; j <= m; j++) armax->theta[k][i][j] = 0.0;
     }
 
-    /* Llenar matrices phi y theta (diagonales) */
-    for (k = 1; k <= p; k++) {
-        if (k <= p_N) armax->phi[k][1][1] = phi_N[k];
-        if (k <= p_X) armax->phi[k][2][2] = phi_X[k];
-    }
-    for (k = 1; k <= q; k++) {
-        if (k <= q_N) armax->theta[k][1][1] = theta_N[k];
-        if (k <= q_X) armax->theta[k][2][2] = theta_X[k];
+    /* --- 11. phi y theta DIAGONALES: cada serie con su propio ARMA --- */
+    for (i = 1; i <= m; i++) {
+        for (k = 1; k <= p_ord[i]; k++) armax->phi[k][i][i]   = phi[i][k];
+        for (k = 1; k <= q_ord[i]; k++) armax->theta[k][i][i] = theta[i][k];
     }
 
-    /* ─── Restricciones: estacionariedad, invertibilidad, varianzas > 0 ─── */
+    /* --- 12. Restricciones --- */
     {
-        real wr[10], wi[10], wmod[10];
+        real wr[4 * MAX_SER], wi[4 * MAX_SER], wmod[4 * MAX_SER];
         int ifault_chk = 0;
 
-        /* Varianzas positivas */
-        if (var_Y <= 0.0 || var_X <= 0.0) {
-            *ifaultx = 1;
-            free_vector(transfer, 1, n_stat);
-            free_vector(transfer_weights, 1, n_stat);
-            return;
-        }
+        for (i = 1; i <= m; i++)
+            if (p_ord[i] >= 1 && fabs(phi[i][1]) >= 0.999) {
+                *ifaultx = 1;
+                goto cleanup;
+            }
 
-        /* Chequeo simple AR(1): |φ₁| < 1 para cada serie */
-        if ((p_N >= 1 && fabs(phi_N[1]) >= 0.999) ||
-            (p_X >= 1 && fabs(phi_X[1]) >= 0.999)) {
-            *ifaultx = 1;
-            free_vector(transfer, 1, n_stat);
-            free_vector(transfer_weights, 1, n_stat);
-            return;
-        }
-
-        /* Chequeo multivariante de invertibilidad MA */
         if (q > 0) {
             chekma(m, q, armax->theta, wr, wi, wmod, &ifault_chk);
-            if (ifault_chk != 0) {
-                *ifaultx = 1;
-                free_vector(transfer, 1, n_stat);
-                free_vector(transfer_weights, 1, n_stat);
-                return;
-            }
+            if (ifault_chk != 0) { *ifaultx = 1; goto cleanup; }
         }
     }
 
-    /* Matriz de covarianza qq (diagonal, contiene varianzas) */
-    armax->qq[1][1] = var_Y;
-    armax->qq[2][2] = var_X;
-    armax->qq[1][2] = armax->qq[2][1] = 0.0;
-    armax->sigma2 = 1.0;   /* ya que qq incorpora las varianzas */
+    /* --- 13. Q diagonal y medias --- */
+    for (i = 1; i <= m; i++)
+        for (j = 1; j <= m; j++)
+            armax->qq[i][j] = (i == j) ? var[i] : 0.0;
+    armax->sigma2 = 1.0;        /* la escala la concentra est() */
 
-    /* Media */
-    armax->mu[1] = mu_Y;
-    armax->mu[2] = mu_X;
+    for (i = 1; i <= m; i++) armax->mu[i] = mu[i];
 
-    /* Construir las series w: w[.,1] = w_Y - transferencia, w[.,2] = w_X */
-    for (int t = 1; t <= n_stat; t++) {
-        armax->w[t][1] = w_Y[t] - transfer[t];
-        armax->w[t][2] = w_X[t];
+    /* --- 14. Las series: la 1 es el ruido; las demás, las entradas --- */
+    for (t = 1; t <= n_stat; t++) {
+        armax->w[t][1] = w[1][t] - transfer[t];
+        for (i = 2; i <= m; i++) armax->w[t][i] = w[i][t];
     }
 
+cleanup:
+    if (nu) free_matrix(nu, 1, n_inp, 1, n_stat);
     free_vector(transfer, 1, n_stat);
-    free_vector(transfer_weights, 1, n_stat);
 
     if (lastx) {
         free_matrix(armax->a, 1, armax->n, 1, armax->m);

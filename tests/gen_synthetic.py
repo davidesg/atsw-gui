@@ -144,9 +144,66 @@ def build_case(outdir, tag, b, r, s, omega, delta, seed):
           % (tag, b, r, s, omega, delta))
 
 
+def build_two_inputs(outdir, seed):
+    """Caso de DOS entradas: Y = nu1(B) X1 + nu2(B) X2 + N, con verdad conocida.
+
+    Es la prueba del cast multivariante: si drtran recupera las DOS
+    transferencias a la vez, m > 2 funciona.
+    """
+    rnd = random.Random(seed)
+    burn = 200
+    n = N_OBS + burn
+
+    # verdad
+    b1, r1, s1, om1 = 1, 0, 0, [0.700]          # X1: retardo 1, un solo omega
+    b2, r2, s2, om2 = 0, 0, 1, [0.500, 0.300]   # X2: contemporaneo, dos omegas
+
+    x1 = [0.0] * n
+    x2 = [0.0] * n
+    nz = [0.0] * n
+    for t in range(1, n):
+        x1[t] = 0.500 * x1[t - 1] + rnd.gauss(0.0, 1.0)
+        x2[t] = 0.200 * x2[t - 1] + rnd.gauss(0.0, 1.5)   # entrada distinta
+        nz[t] = PHI_N * nz[t - 1] + rnd.gauss(0.0, SD_A)
+
+    nu1 = impulse_response(om1, s1, [], r1, b1, 60)
+    nu2 = impulse_response(om2, s2, [], r2, b2, 60)
+
+    wy = [0.0] * n
+    for t in range(n):
+        acc = 0.0
+        for j in range(1, 61):
+            idx = t - (j - 1)
+            if idx < 0:
+                break
+            acc += nu1[j] * x1[idx] + nu2[j] * x2[idx]
+        wy[t] = acc + nz[t]
+
+    x1, x2, wy = x1[burn:], x2[burn:], wy[burn:]
+
+    def to_levels(v, base):
+        z, acc = [], 0.0
+        for u in v:
+            acc += u / 100.0
+            z.append(base * math.exp(acc))
+        return z
+
+    write_pre(os.path.join(outdir, "SYN2_X1.pre"), "SYN2_X1",
+              to_levels(x1, 50.0), 0.500, mu_free=False)
+    write_pre(os.path.join(outdir, "SYN2_X2.pre"), "SYN2_X2",
+              to_levels(x2, 30.0), 0.200, mu_free=False)
+    write_pre(os.path.join(outdir, "SYN2_Y.pre"), "SYN2_Y",
+              to_levels(wy, 100.0), PHI_N, mu_free=False)
+
+    print("SYN2 -> VERDAD: X1 b=1 r=0 s=0 omega=%s | X2 b=0 r=0 s=1 omega=%s"
+          % (om1, om2))
+
+
 def main():
     outdir = sys.argv[1] if len(sys.argv) > 1 else "."
     os.makedirs(outdir, exist_ok=True)
+
+    build_two_inputs(outdir, SEED + 2)
 
     # Caso 2: transferencia RACIONAL. nu decae geométricamente con razón delta,
     # que es lo que debe hacer aflorar la propuesta [B] (denominador r=1) en la

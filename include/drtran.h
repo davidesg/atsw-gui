@@ -33,51 +33,57 @@
 #define MAX_LAG_WEIGHTS 5000   /* longitud máxima para los pesos nu[t] */
 
 /* -------------------------------------------------------------------------- */
+/* Número máximo de series: 1 salida + hasta MAX_INP entradas                 */
+/* -------------------------------------------------------------------------- */
+#define MAX_SER 8
+#define MAX_INP (MAX_SER - 1)
+
+/* -------------------------------------------------------------------------- */
 /* Variables globales compartidas                                             */
+/*                                                                            */
+/* El modelo es multivariante de transferencia:                               */
+/*                                                                            */
+/*     Y_t = SUM_j  omega_j(B)/delta_j(B) * B^b_j * X_j,t  +  N_t             */
+/*                                                                            */
+/* y se castea a un VARMA de m = 1 + n_inp series, DIAGONAL:                  */
+/*                                                                            */
+/*     serie 1      = w_1 - SUM_j transferencia_j   (el ruido N)              */
+/*     serie j+1    = w_{j+1}                       (la entrada j)            */
+/*                                                                            */
+/* Índice 1 = SALIDA (Y); índices 2..n_ser = ENTRADAS. La entrada j (j=1..    */
+/* n_inp) es la serie j+1.                                                    */
 /* -------------------------------------------------------------------------- */
 
-/* Modelos univariantes leídos de los archivos .pre (FUE) */
-extern struct Tusmodel TmX, TmY;
+extern int n_ser;    /* número de series = 1 + n_inp */
+extern int n_inp;    /* número de entradas exógenas  */
 
-/* Series temporales originales (metadatos y datos) */
-extern struct Tseries TsX, TsY;
+/* Modelos univariantes leídos de los .pre de fue, y sus series */
+extern struct Tusmodel Tm[MAX_SER + 1];
+extern struct Tseries  Ts[MAX_SER + 1];
+extern real **DataMat[MAX_SER + 1];
 
-/* Matrices de datos: fila 0 = serie transformada (Box‑Cox),
-   filas 1..NdetVar = variables deterministas */
-extern real **DataMatX, **DataMatY;
+/* Series estacionarias (tras Box-Cox, deterministas y diferenciación),
+   recortadas todas a la ventana común */
+extern real *w[MAX_SER + 1];
+extern int   n_stat;
 
-/* Longitud de las series después de eliminar deterministas y diferenciar */
-extern int n_stat;
+/* ARMA de cada serie: órdenes EXPANDIDOS y polinomios */
+extern int   p_ord[MAX_SER + 1], q_ord[MAX_SER + 1];
+extern real *phi[MAX_SER + 1], *theta[MAX_SER + 1];
 
-/* Series estacionarias w_X (entrada) y w_Y (salida) */
-extern real *w_X, *w_Y;
+/* Media de cada serie, y si es libre o fija (según el flag del .pre) */
+extern real mu[MAX_SER + 1];
+extern int  fix_mu[MAX_SER + 1];
 
-/* Órdenes de la función de transferencia:
-   r_ord : orden del denominador δ(B)
-   s_ord : orden del numerador ω(B)
-   b_delay : retardo puro B^b                              */
-extern int r_ord, s_ord, b_delay;
+/* Banderas: 1 = mantener fijo (por serie) */
+extern int fix_arma[MAX_SER + 1];   /* parámetros ARMA */
+extern int fix_det[MAX_SER + 1];    /* coeficientes deterministas */
 
-/* Banderas de estimación:
-   fix_X    : 1 = mantener fijos los parámetros ARMA de X
-   fix_noise: 1 = mantener fijos los parámetros ARMA del ruido N_t
-   fix_det_X: 1 = mantener fijos los coefs deterministas de X
-   fix_det_Y: 1 = mantener fijos los coefs deterministas de Y   */
-extern int fix_X, fix_noise;
-extern int fix_det_X, fix_det_Y;
-
-/* Medias: se fijan o liberan POR SERIE, según el flag de estimación que trae
-   el .pre de FUE (Tm->Imu). Si la media está fija, conserva el valor del .pre
-   (típicamente 0); si es libre, entra en x[] como un parámetro más.        */
-extern int fix_mu_Y, fix_mu_X;
-extern real mu_Y, mu_X;
-
-/* Órdenes ARMA del ruido (N_t, asociado a Y) y de la entrada (X) */
-extern int p_N, q_N, p_X, q_X;
-
-/* Coeficientes ARMA (se leen de FUE y pueden ser fijos o estimables) */
-extern real *phi_N, *theta_N;   /* ruido N_t */
-extern real *phi_X, *theta_X;   /* entrada X_t */
+/* Función de transferencia de la entrada j (j = 1..n_inp):
+     b_del[j] : retardo puro B^b
+     r_ord[j] : orden del denominador delta(B)
+     s_ord[j] : orden del numerador omega(B)   (-1 = sin transferencia) */
+extern int b_del[MAX_SER + 1], r_ord[MAX_SER + 1], s_ord[MAX_SER + 1];
 
 /* Indicador de matriz de covarianza diagonal (1 = sí, 0 = completa) */
 extern int diag_cov;
@@ -89,9 +95,10 @@ void unpack_det_params(struct Tusmodel *Tm, real *x, int *idx);
 /* Rechaza factores de frecuencia fija invalidos (c2 >= 0) */
 int invalid_fixfreq(struct Tusmodel *Tm);
 
-/* Construye w_X y w_Y y las recorta a la ventana común (los dos modelos pueden
-   diferenciar distinto: ∇∇₁₂ pierde 13 observaciones y ∇ solo 1). Fija n_stat. */
-void build_stationary_pair(void);
+/* Construye las series estacionarias de TODAS las series y las recorta a la
+   ventana común (cada modelo puede diferenciar distinto: ∇∇₁₂ pierde 13
+   observaciones y ∇ solo 1). Fija n_stat. */
+void build_stationary_series(void);
 
 /* Unscramble: expandir factores AR/MA de FUE a polinomios VARMA */
 void expand_ar_factors(struct Tusmodel *Tm, real *phi_out, int p);

@@ -30,18 +30,27 @@
 /* -------------------------------------------------------------------------- */
 /* Definición de variables globales del modelo                                */
 /* -------------------------------------------------------------------------- */
-struct Tusmodel TmX, TmY;
-struct Tseries TsX, TsY;
-real **DataMatX = NULL, **DataMatY = NULL;
-int n_stat = 0;
-real *w_X = NULL, *w_Y = NULL;
-int r_ord = 0, s_ord = 0, b_delay = 0;
-int fix_X = 0, fix_noise = 0;
-int fix_det_X = 0, fix_det_Y = 0;   /* 0 = seguir los flags del .pre */
-int fix_mu_Y = 0, fix_mu_X = 0; /* se fijan desde el .pre (Tm->Imu) tras leerlo */
-real mu_Y = 0.0, mu_X = 0.0;    /* valor de la media de cada serie */
-int p_N = 0, q_N = 0, p_X = 0, q_X = 0;
-real *phi_N = NULL, *theta_N = NULL, *phi_X = NULL, *theta_X = NULL;
+/* Indice 1 = SALIDA (Y); 2..n_ser = ENTRADAS. La entrada j es la serie j+1. */
+int n_ser = 2;
+int n_inp = 1;
+
+struct Tusmodel Tm[MAX_SER + 1];
+struct Tseries  Ts[MAX_SER + 1];
+real **DataMat[MAX_SER + 1];
+real  *w[MAX_SER + 1];
+int    n_stat = 0;
+
+int   p_ord[MAX_SER + 1], q_ord[MAX_SER + 1];
+real *phi[MAX_SER + 1], *theta[MAX_SER + 1];
+
+real mu[MAX_SER + 1];
+int  fix_mu[MAX_SER + 1];
+int  fix_arma[MAX_SER + 1];
+int  fix_det[MAX_SER + 1];
+
+/* Transferencia de la entrada j (j = 1..n_inp) */
+int b_del[MAX_SER + 1], r_ord[MAX_SER + 1], s_ord[MAX_SER + 1];
+
 int diag_cov = 1;
 
 /* Variables globales requeridas por el motor drvarma */
@@ -260,40 +269,36 @@ static void print_arma_factors(struct Tusmodel *Tm, const char *tag, int is_ar,
    longitud: hay que recortarlas a la VENTANA COMÚN, quedándose con las últimas
    n = min(n_X, n_Y) observaciones de cada una (ambas series arrancan en la
    misma fecha, así que alinear por el final las alinea en el calendario).   */
-static void trim_to_common(real *w, int nstat, int ncommon)
+static void trim_to_common(real *v, int nstat, int ncommon)
 {
     int t, off = nstat - ncommon;
     if (off <= 0) return;
-    for (t = 1; t <= ncommon; t++) w[t] = w[t + off];
+    for (t = 1; t <= ncommon; t++) v[t] = v[t + off];
 }
 
-void build_stationary_pair(void)
+/* Construye la serie estacionaria de TODAS las series y las recorta a la
+   VENTANA COMUN: cada modelo pierde tantas observaciones iniciales como el
+   orden de su propio operador no estacionario. Todas arrancan en la misma
+   fecha, asi que alinear por el final las alinea en el calendario.          */
+void build_stationary_series(void)
 {
-    int nstat_X = 0, nstat_Y = 0;
+    int nst[MAX_SER + 1];
+    int i, nmin = 0;
 
-    if (w_X) free_vector(w_X, 1, n_stat);
-    if (w_Y) free_vector(w_Y, 1, n_stat);
-    w_X = NULL; w_Y = NULL;
-
-    apply_univariate_model(&TmX, &TsX, DataMatX, &w_X, &nstat_X);
-    apply_univariate_model(&TmY, &TsY, DataMatY, &w_Y, &nstat_Y);
-
-    if (w_X == NULL || w_Y == NULL || nstat_X <= 0 || nstat_Y <= 0) {
-        n_stat = 0;
-        return;
+    for (i = 1; i <= n_ser; i++) {
+        if (w[i]) free_vector(w[i], 1, n_stat);
+        w[i] = NULL;
     }
-
-    n_stat = (nstat_X < nstat_Y) ? nstat_X : nstat_Y;
-    trim_to_common(w_X, nstat_X, n_stat);
-    trim_to_common(w_Y, nstat_Y, n_stat);
+    for (i = 1; i <= n_ser; i++) {
+        nst[i] = 0;
+        apply_univariate_model(&Tm[i], &Ts[i], DataMat[i], &w[i], &nst[i]);
+        if (w[i] == NULL || nst[i] <= 0) { n_stat = 0; return; }
+        if (nmin == 0 || nst[i] < nmin) nmin = nst[i];
+    }
+    n_stat = nmin;
+    for (i = 1; i <= n_ser; i++) trim_to_common(w[i], nst[i], n_stat);
 }
 
-/* ── Deterministas: ω(B)/δ(B) por variable ─────────────────────────────
-   fue marca con un flag (Imega/Ielta) qué coeficientes estima. drtran respeta
-   esa especificación: solo los marcados entran en x[]; el resto queda fijo en
-   el valor del .pre.                                                        */
-
-/* Número de coeficientes deterministas LIBRES (ω y δ) de un modelo */
 static int n_det_free_params(struct Tusmodel *Tm)
 {
     int n = 0, i, j;
@@ -646,12 +651,20 @@ void apply_univariate_model(struct Tusmodel *Tm, struct Tseries *Ts,
 /*    exógena y el modelo de transferencia de una entrada no es válido.       */
 /* 6. Propone varios (b, r, s) razonados y recomienda uno.                    */
 /* -------------------------------------------------------------------------- */
-void prewhiten_and_identify(real *w_X, real *w_Y, int n,
-                            real *phi_X_in, int p_X_in,
-                            real *theta_X_in, int q_X_in,
-                            int *r, int *s, int *b,
-                            FILE *outputv)
+void prewhiten_and_identify(int j, FILE *outputv)
 {
+    int    si  = j + 1;                 /* la entrada j es la serie j+1 */
+    real  *w_X = w[si];
+    real  *w_Y = w[1];
+    real  *phi_X_in   = phi[si];
+    real  *theta_X_in = theta[si];
+    int    p_X_in = p_ord[si];
+    int    q_X_in = q_ord[si];
+    int    n = n_stat;
+    int   *r = &r_ord[j];
+    int   *s = &s_ord[j];
+    int   *b = &b_del[j];
+
     real *a_X, *beta_Y, *ccf, *nu;
     int nlags, t, k, lag;
     real threshold, s_a, s_b, mean_a, mean_b;
@@ -724,6 +737,7 @@ void prewhiten_and_identify(real *w_X, real *w_Y, int n,
     fprintf(outputv, "\n");
     fprintf(outputv, "=============================================================\n");
     fprintf(outputv, "  IDENTIFICATION - prewhitening and CCF (Box-Jenkins)         \n");
+    fprintf(outputv, "  Input %d: %s\n", j, Ts[si].name ? Ts[si].name : "");
     fprintf(outputv, "=============================================================\n");
     fprintf(outputv, "  The input is prewhitened with its own ARMA and the SAME filter\n");
     fprintf(outputv, "  is applied to the output.  r(k) = corr(beta_t, a_{t-k}):\n");
@@ -738,7 +752,7 @@ void prewhiten_and_identify(real *w_X, real *w_Y, int n,
             plot[lag + nlags + 1] = ccf[lag];
 
         ser.nobs = n;
-        ser.freq = TsX.freq;
+        ser.freq = Ts[si].freq;
         PlotCCF(plot, nlags, &ser);
 
         free_vector(plot, 1, 2 * nlags + 1);
@@ -875,9 +889,13 @@ void prewhiten_and_identify(real *w_X, real *w_Y, int n,
 /*   - CCF significativa en k <  0  ->  RETROALIMENTACION: X no es exogena y   */
 /*                                      el modelo de una entrada no es valido  */
 /* -------------------------------------------------------------------------- */
-static void transfer_adequacy(real **a, int n, int b, int r, int s, FILE *out,
+static void transfer_adequacy(real **a, int n, int j, FILE *out,
                               real *p_transfer, real *p_exog)
 {
+    int si = j + 1;                     /* la entrada j es la serie j+1 */
+    int b  = b_del[j];
+    int r  = r_ord[j];
+    int s  = s_ord[j];
     int    nlags = (n / 4 < 24) ? n / 4 : 24;
     real  *aN, *aX, *cpos, *cneg, *plot;
     real   mN, mX, sN, sX, threshold, Q;
@@ -894,7 +912,7 @@ static void transfer_adequacy(real **a, int n, int b, int r, int s, FILE *out,
     cneg = vector(1, nlags + 1);
     plot = vector(1, 2 * nlags + 1);
 
-    for (t = 1; t <= n; t++) { aN[t] = a[t][1]; aX[t] = a[t][2]; }
+    for (t = 1; t <= n; t++) { aN[t] = a[t][1]; aX[t] = a[t][si]; }
 
     mN = Mean(aN, n);  sN = Stdev(aN, n);
     mX = Mean(aX, n);  sX = Stdev(aX, n);
@@ -914,7 +932,8 @@ static void transfer_adequacy(real **a, int n, int b, int r, int s, FILE *out,
 
     fprintf(out, "\n");
     fprintf(out, "=============================================================\n");
-    fprintf(out, "  TRANSFER FUNCTION ADEQUACY                                  \n");
+    fprintf(out, "  TRANSFER FUNCTION ADEQUACY - input %d (%s)\n",
+            j, Ts[si].name ? Ts[si].name : "");
     fprintf(out, "  CCF between the estimated noise and the prewhitened input    \n");
     fprintf(out, "=============================================================\n");
     fprintf(out, "  If (b, r, s) is correct, this CCF must be white noise.\n");
@@ -924,7 +943,7 @@ static void transfer_adequacy(real **a, int n, int b, int r, int s, FILE *out,
     {
         struct Tseries ser;
         ser.nobs = n;
-        ser.freq = TsX.freq;
+        ser.freq = Ts[si].freq;
         PlotCCF(plot, nlags, &ser);
     }
 
@@ -1034,194 +1053,185 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
 {
     struct Tvarma vf;
     int    ifault = 0;
-    int    m = 2, i, j, k, l, t, p, q;
-    int    nobs   = TsY.nobs;
-    int    ornsop = TmY.ornsop;
-    int    K      = n_stat + L + 1;      /* pesos nu suficientes */
+    int    m = n_ser, i, j, k, l, t, p, q;
+    int    nobs   = Ts[1].nobs;
+    int    ornsop = Tm[1].ornsop;
+    int    K      = n_stat + L + 1;
+    int    NJ     = (n_inp > 0) ? n_inp : 1;
 
     real **sigma, **f1, ***v1, ***v2, ***v3, ***psi;
-    real  *nu, *omega, *delta, *psiN, *psiX, *g, *u, *UN, *Ug;
-    real  *detY, *bc, *lvl, *sd;
-    real   SN, SX;
+    real **nu, **g, **Ug;
+    real  *psiN, *u, *UN, *detY, *bc, *wYf;
+    real   SN, SX[MAX_SER + 1];
 
-    /* --- 1. Reconstruir el VARMA estimado y su covarianza --- */
     shootx(x, &vf, &ifault, 1, 0);
-    if (ifault != 0) { fprintf(out, "\nCould not build the model for forecasting.\n"); return; }
-
+    if (ifault != 0) {
+        fprintf(out, "\nCould not build the model for forecasting.\n");
+        return;
+    }
     p = vf.p; q = vf.q;
 
     sigma = matrix(1, m, 1, m);
     for (i = 1; i <= m; i++)
-        for (j = 1; j <= m; j++)
-            sigma[i][j] = sigma2 * vf.qq[i][j];
-    SN = sigma[1][1];   /* varianza de la innovacion del RUIDO   */
-    SX = sigma[2][2];   /* varianza de la innovacion de la ENTRADA */
+        for (j = 1; j <= m; j++) sigma[i][j] = sigma2 * vf.qq[i][j];
+    SN = sigma[1][1];
+    for (i = 2; i <= m; i++) SX[i] = sigma[i][i];
 
-    /* --- 2. Prevision del VARMA (motor de drvarma) --- */
+    /* El VARMA preve sus m series: la 1 es el RUIDO, las demas las ENTRADAS */
     f1 = matrix(1, m, 1, L);
     v1 = tensor(1, L, 1, m, 1, m);
     v2 = tensor(1, L, 1, m, 1, m);
     v3 = tensor(1, L, 1, m, 1, m);
-
     forecast_model(m, n_stat, p, q, vf.mu, vf.phi, vf.theta, sigma,
-                   vf.w, vf.a, f1, v1, v2, v3, 0, L, TsY.freq, NULL);
+                   vf.w, vf.a, f1, v1, v2, v3, 0, L, Ts[1].freq, NULL);
 
-    /* --- 3. Pesos nu(B) de la transferencia --- */
-    omega = vector(0, MAX_S);
-    delta = vector(0, MAX_R);
-    nu    = vector(1, K);
+    /* Pesos nu de cada transferencia */
+    nu = matrix(1, NJ, 1, K);
     {
+        real omega[MAX_S + 1], delta[MAX_R + 1];
         int idx = 1;
-        for (j = 0; j <= s_ord; j++) omega[j] = x[idx++];
-        for (j = 1; j <= r_ord; j++) delta[j] = x[idx++];
-    }
-    /* misma recursion que en shootx: nu[j] pesa a w_X en el retardo j-1 */
-    for (t = 1; t <= K; t++) {
-        real sum = 0.0;
-        int lag = t - 1 - b_delay;
-        if (lag >= 0 && lag <= s_ord) sum = omega[lag];
-        for (j = 1; j <= r_ord; j++)
-            if (t > j) sum += delta[j] * nu[t - j];
-        nu[t] = sum;
+        for (j = 1; j <= n_inp; j++) {
+            for (k = 0; k <= s_ord[j]; k++) omega[k] = x[idx++];
+            for (k = 1; k <= r_ord[j]; k++) delta[k] = x[idx++];
+            compute_irf(omega, s_ord[j], delta, r_ord[j], b_del[j], nu[j], K);
+        }
     }
 
-    /* --- 4. Prevision de w_Y = N + transferencia --- */
+    /* w_Y = N + SUM_j transferencia_j, con cada entrada observada en el pasado
+       y PREVISTA en el futuro: prever Y exige prever las X.                  */
+    wYf = vector(1, L);
+    for (l = 1; l <= L; l++) wYf[l] = f1[1][l];      /* f1[1] ya lleva mu_1 */
     {
-        real *wYf = vector(1, L);
-        real *wXe = vector(1, n_stat + L);      /* entrada: observada + prevista */
-
-        for (t = 1; t <= n_stat; t++)      wXe[t] = w_X[t];
-        for (l = 1; l <= L; l++)           wXe[n_stat + l] = f1[2][l];
-
-        for (l = 1; l <= L; l++) {
-            real tr = 0.0;
-            int  tt = n_stat + l;
-            for (j = 1; j <= tt && j <= K; j++)
-                tr += nu[j] * wXe[tt - j + 1];
-            wYf[l] = f1[1][l] + tr;             /* f1[1] ya incluye mu_Y */
+        real *wXe = vector(1, n_stat + L);
+        for (j = 1; j <= n_inp; j++) {
+            for (t = 1; t <= n_stat; t++) wXe[t] = w[j + 1][t];
+            for (l = 1; l <= L; l++)      wXe[n_stat + l] = f1[j + 1][l];
+            for (l = 1; l <= L; l++) {
+                real tr = 0.0;
+                int  tt = n_stat + l;
+                for (k = 1; k <= tt && k <= K; k++)
+                    tr += nu[j][k] * wXe[tt - k + 1];
+                wYf[l] += tr;
+            }
         }
+        free_vector(wXe, 1, n_stat + L);
+    }
 
-        /* --- 5. Pesos psi y varianza del error de prevision --- */
-        psi  = tensor(0, L, 1, m, 1, m);
-        compute_psi_weights(m, p, q, vf.phi, vf.theta, L, psi);
+    /* Varianza del error: la salida se alimenta de m fuentes de innovacion
+       INDEPENDIENTES (Q diagonal):
+           w_Y = SUM_j nu_j(B) psi_j(B) a_j  +  psi_N(B) a_N
+       luego, con g_j = nu_j * psi_{j+1} (convolucion):
+           Var(l) = SN*SUM_{i<l} psi_N(i)^2 + SUM_j SX_j*SUM_{i<l} g_j(i)^2    */
+    psi = tensor(0, L, 1, m, 1, m);
+    compute_psi_weights(m, p, q, vf.phi, vf.theta, L, psi);
 
-        psiN = vector(0, L);
-        psiX = vector(0, L);
-        g    = vector(0, L);
-        for (i = 0; i <= L; i++) {
-            psiN[i] = psi[i][1][1];             /* VARMA diagonal */
-            psiX[i] = psi[i][2][2];
-        }
-        /* g = nu * psi_X   (v_k = nu[k+1]) */
+    psiN = vector(0, L);
+    for (i = 0; i <= L; i++) psiN[i] = psi[i][1][1];   /* VARMA diagonal */
+
+    g = matrix(1, NJ, 1, L + 1);
+    for (j = 1; j <= n_inp; j++)
         for (i = 0; i <= L; i++) {
             real sum = 0.0;
             for (k = 0; k <= i; k++)
-                if (k + 1 <= K) sum += nu[k + 1] * psiX[i - k];
-            g[i] = sum;
+                if (k + 1 <= K) sum += nu[j][k + 1] * psi[i - k][j + 1][j + 1];
+            g[j][i + 1] = sum;
         }
 
-        /* --- 6. Integracion al nivel --- */
-        detY = vector(1, nobs + L);
-        bc   = vector(1, nobs + L);
-        lvl  = vector(1, L);
-        sd   = vector(1, L);
+    /* Integracion al nivel: operador no estacionario + determinista futuro */
+    detY = vector(1, nobs + L);
+    bc   = vector(1, nobs + L);
+    build_det_component(&Tm[1], &Ts[1], nobs + L, detY);
 
-        build_det_component(&TmY, &TsY, nobs + L, detY);
-
-        /* historia observada en la escala Box-Cox * reescalado, sin deterministas */
-        for (t = 1; t <= nobs; t++) {
-            real y = TsY.data[t];
-            real b0 = (fabs(TmY.boxlam) < 1e-8)
-                    ? log(y) * TsY.refactor
-                    : ((pow(y, TmY.boxlam) - 1.0) / TmY.boxlam) * TsY.refactor;
-            bc[t] = b0 - detY[t];               /* = "detrended" */
-        }
-
-        /* deshacer la diferenciacion: w[t] = SUM_j (-rnsop[j]) d[t+ornsop-j] */
-        for (l = 1; l <= L; l++) {
-            real acc = wYf[l];
-            int  tt  = nobs + l;
-            for (j = 1; j <= ornsop; j++)
-                acc -= (-TmY.rnsop[j]) * bc[tt - j];
-            bc[tt] = acc;
-        }
-
-        /* --- 7. Pesos psi del NIVEL: convolucion con 1/rnsop(B) --- */
-        u  = vector(0, L);
-        UN = vector(0, L);
-        Ug = vector(0, L);
-        u[0] = 1.0;
-        for (i = 1; i <= L; i++) {
-            real sum = 0.0;
-            for (j = 1; j <= ornsop && j <= i; j++)
-                sum += (-TmY.rnsop[j]) * u[i - j];
-            u[i] = -sum;
-        }
-        for (i = 0; i <= L; i++) {
-            real sN = 0.0, sG = 0.0;
-            for (k = 0; k <= i; k++) {
-                sN += u[k] * psiN[i - k];
-                sG += u[k] * g[i - k];
-            }
-            UN[i] = sN;
-            Ug[i] = sG;
-        }
-
-        /* --- 8. Informe --- */
-        fprintf(out, "\n");
-        fprintf(out, "=============================================================\n");
-        fprintf(out, "  FORECAST OF Y GIVEN THE MODEL OF X                          \n");
-        fprintf(out, "=============================================================\n");
-        fprintf(out, "  Forecasting Y requires forecasting X: the transfer needs the\n");
-        fprintf(out, "  future of the input. The forecast error of Y therefore has TWO\n");
-        fprintf(out, "  sources: the noise innovation and the input innovation, the\n");
-        fprintf(out, "  latter propagated through nu(B).\n\n");
-        fprintf(out, "  Stationary series (w) and LEVEL, with 95%% bands:\n\n");
-        fprintf(out, "   l     w_Y fcst    sd(w)   |     LEVEL         lower         upper\n");
-        fprintf(out, "  ---------------------------------------------------------------------\n");
-
-        for (l = 1; l <= L; l++) {
-            real vw = 0.0, vl = 0.0, lo, hi, center;
-
-            for (i = 0; i <= l - 1; i++) {
-                vw += SN * psiN[i] * psiN[i] + SX * g[i]  * g[i];
-                vl += SN * UN[i]   * UN[i]   + SX * Ug[i] * Ug[i];
-            }
-            sd[l] = sqrt(vl);
-
-            /* volver al nivel original: sumar deterministas, deshacer escala y Box-Cox */
-            center = bc[nobs + l] + detY[nobs + l];
-            lo     = center - 1.96 * sd[l];
-            hi     = center + 1.96 * sd[l];
-
-            if (fabs(TmY.boxlam) < 1e-8) {
-                lvl[l] = exp(center / TsY.refactor);
-                lo     = exp(lo / TsY.refactor);
-                hi     = exp(hi / TsY.refactor);
-            } else {
-                real lam = TmY.boxlam;
-                lvl[l] = pow(lam * (center / TsY.refactor) + 1.0, 1.0 / lam);
-                lo     = pow(lam * (lo     / TsY.refactor) + 1.0, 1.0 / lam);
-                hi     = pow(lam * (hi     / TsY.refactor) + 1.0, 1.0 / lam);
-            }
-
-            fprintf(out, "  %3d  %10.4f  %8.4f  |  %10.4f  %10.4f  %10.4f\n",
-                    l, wYf[l], sqrt(vw), lvl[l], lo, hi);
-        }
-        fprintf(out, "=============================================================\n\n");
-
-        free_vector(Ug, 0, L); free_vector(UN, 0, L); free_vector(u, 0, L);
-        free_vector(sd, 1, L); free_vector(lvl, 1, L);
-        free_vector(bc, 1, nobs + L); free_vector(detY, 1, nobs + L);
-        free_vector(g, 0, L); free_vector(psiX, 0, L); free_vector(psiN, 0, L);
-        free_tensor(psi, 0, L, 1, m, 1, m);
-        free_vector(wXe, 1, n_stat + L);
-        free_vector(wYf, 1, L);
+    for (t = 1; t <= nobs; t++) {
+        real y = Ts[1].data[t];
+        real b0 = (fabs(Tm[1].boxlam) < 1e-8)
+                ? log(y) * Ts[1].refactor
+                : ((pow(y, Tm[1].boxlam) - 1.0) / Tm[1].boxlam) * Ts[1].refactor;
+        bc[t] = b0 - detY[t];
+    }
+    for (l = 1; l <= L; l++) {
+        real acc = wYf[l];
+        int  tt  = nobs + l;
+        for (j = 1; j <= ornsop; j++) acc -= (-Tm[1].rnsop[j]) * bc[tt - j];
+        bc[tt] = acc;
     }
 
-    free_vector(nu, 1, K);
-    free_vector(delta, 0, MAX_R);
-    free_vector(omega, 0, MAX_S);
+    /* Pesos psi del NIVEL: convolucion con 1/rnsop(B) */
+    u  = vector(0, L);
+    UN = vector(0, L);
+    Ug = matrix(1, NJ, 1, L + 1);
+    u[0] = 1.0;
+    for (i = 1; i <= L; i++) {
+        real sum = 0.0;
+        for (j = 1; j <= ornsop && j <= i; j++)
+            sum += (-Tm[1].rnsop[j]) * u[i - j];
+        u[i] = -sum;
+    }
+    for (i = 0; i <= L; i++) {
+        real sN = 0.0;
+        for (k = 0; k <= i; k++) sN += u[k] * psiN[i - k];
+        UN[i] = sN;
+        for (j = 1; j <= n_inp; j++) {
+            real sG = 0.0;
+            for (k = 0; k <= i; k++) sG += u[k] * g[j][i - k + 1];
+            Ug[j][i + 1] = sG;
+        }
+    }
+
+    fprintf(out, "\n");
+    fprintf(out, "=============================================================\n");
+    fprintf(out, "  FORECAST OF Y GIVEN THE MODELS OF THE %d INPUT(S)\n", n_inp);
+    fprintf(out, "=============================================================\n");
+    fprintf(out, "  Forecasting Y requires forecasting the inputs: the transfer\n");
+    fprintf(out, "  needs their future. The forecast error of Y therefore adds\n");
+    fprintf(out, "  the noise innovation and EACH input innovation, the latter\n");
+    fprintf(out, "  propagated through its own nu(B).\n\n");
+    fprintf(out, "  Stationary series (w) and LEVEL, with 95%% bands:\n\n");
+    fprintf(out, "   l     w_Y fcst    sd(w)   |     LEVEL         lower         upper\n");
+    fprintf(out, "  ---------------------------------------------------------------------\n");
+
+    for (l = 1; l <= L; l++) {
+        real vw = 0.0, vl = 0.0, lo, hi, center, sd, lvl;
+
+        for (i = 0; i <= l - 1; i++) {
+            vw += SN * psiN[i] * psiN[i];
+            vl += SN * UN[i]   * UN[i];
+            for (j = 1; j <= n_inp; j++) {
+                vw += SX[j + 1] * g[j][i + 1]  * g[j][i + 1];
+                vl += SX[j + 1] * Ug[j][i + 1] * Ug[j][i + 1];
+            }
+        }
+        sd = sqrt(vl);
+
+        center = bc[nobs + l] + detY[nobs + l];
+        lo = center - 1.96 * sd;
+        hi = center + 1.96 * sd;
+
+        if (fabs(Tm[1].boxlam) < 1e-8) {
+            lvl = exp(center / Ts[1].refactor);
+            lo  = exp(lo / Ts[1].refactor);
+            hi  = exp(hi / Ts[1].refactor);
+        } else {
+            real lam = Tm[1].boxlam;
+            lvl = pow(lam * (center / Ts[1].refactor) + 1.0, 1.0 / lam);
+            lo  = pow(lam * (lo     / Ts[1].refactor) + 1.0, 1.0 / lam);
+            hi  = pow(lam * (hi     / Ts[1].refactor) + 1.0, 1.0 / lam);
+        }
+        fprintf(out, "  %3d  %10.4f  %8.4f  |  %10.4f  %10.4f  %10.4f\n",
+                l, wYf[l], sqrt(vw), lvl, lo, hi);
+    }
+    fprintf(out, "=============================================================\n\n");
+
+    free_matrix(Ug, 1, NJ, 1, L + 1);
+    free_vector(UN, 0, L);
+    free_vector(u, 0, L);
+    free_vector(bc, 1, nobs + L);
+    free_vector(detY, 1, nobs + L);
+    free_matrix(g, 1, NJ, 1, L + 1);
+    free_vector(psiN, 0, L);
+    free_tensor(psi, 0, L, 1, m, 1, m);
+    free_vector(wYf, 1, L);
+    free_matrix(nu, 1, NJ, 1, K);
     free_tensor(v3, 1, L, 1, m, 1, m);
     free_tensor(v2, 1, L, 1, m, 1, m);
     free_tensor(v1, 1, L, 1, m, 1, m);
@@ -1242,10 +1252,11 @@ static void usage(const char *prog)
 "A bridge between fue (univariate models) and drvarma (exact VARMA likelihood).\n"
 "Reads two models already specified in fue (.pre) and estimates them JOINTLY:\n"
 "\n"
-"    Y_t = [omega(B)/delta(B)] B^b X_t + N_t\n"
+"    Y_t = SUM_j [omega_j(B)/delta_j(B)] B^b_j X_j,t + N_t\n"
 "\n"
-"Usage: %s output.pre input.pre [options]\n"
-"       The FIRST file is the output (Y); the SECOND is the exogenous input (X).\n"
+"Usage: %s output.pre input1.pre [input2.pre ...] [options]\n"
+"       The FIRST file is the output (Y); the rest are the exogenous inputs.\n"
+"       Up to 7 inputs (a VARMA cast of up to 8 series).\n"
 "\n"
 "With no options, drtran runs the full Box-Jenkins cycle:\n"
 "  1. prewhiten the input, read the CCF   -> propose (b, r, s)\n"
@@ -1262,10 +1273,12 @@ static void usage(const char *prog)
 "           filter to the output, plot the CCF and suggest (b, r, s).\n"
 "           Does NOT estimate and does NOT iterate.\n"
 "\n"
-"TRANSFER FUNCTION\n"
+"TRANSFER FUNCTION  (one per input)\n"
 "  -b N     pure delay B^b                    (default: identified)\n"
 "  -r N     order of the denominator delta(B) (default: identified)\n"
 "  -s N     order of the numerator omega(B)   (default: identified)\n"
+"           With several inputs, give a comma-separated list, one value per\n"
+"           input:  -b 1,0  -s 0,1.  A single value applies to ALL inputs.\n"
 "  -0       NO transfer: fit the two univariate models jointly and diagonally.\n"
 "           This is the homologation mode against fue (it must reproduce fue\n"
 "           run separately on each series).\n"
@@ -1296,76 +1309,314 @@ static void usage(const char *prog)
 "  %s CPI.pre WTI.pre -b 0 -s 1       impose (b, r, s)\n"
 "  %s CPI.pre WTI.pre -0              homologation with fue (no transfer)\n"
 "  %s CPI.pre WTI.pre -m oil -f 12    name the model and forecast 12 periods\n"
+"  %s CPI.pre WTI.pre EUR.pre         TWO inputs (a 3-variate VARMA cast)\n"
+"  %s CPI.pre WTI.pre EUR.pre -b 1,0 -s 0,1    one (b,r,s) per input\n"
 "\n"
 "drtran is free software under the GNU General Public License v2 or later.\n"
 "It embeds the exact VARMA likelihood engine of drvarma/ART. See COPYING.\n",
-        DRTRAN_VERSION, prog, prog, prog, prog, prog, prog);
+        DRTRAN_VERSION, prog, prog, prog, prog, prog, prog, prog, prog);
 }
 
 /* -------------------------------------------------------------------------- */
 /* main                                                                       */
 /* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+/* estimate_and_report: estima por ML exacta e informa                         */
+/* -------------------------------------------------------------------------- */
+static void estimate_and_report(real *x, int npar, int fc_horizon,
+                                const char *yname)
+{
+    struct Tvarma varma1;
+    real  *dev   = vector(1, npar);
+    real **cov   = matrix(1, npar, 1, npar);
+    real **a_est = matrix(1, n_stat, 1, n_ser);
+    int    maxits = 500, nrits = 10, ifault = 0;
+    real   gradtol = 1e-7, steptol = 1e-7;
+    int    i, j, pi;
+    real   tstat, pval;
+
+    varma1.xitol = -1e-3;              /* verosimilitud exacta */
+
+    fprintf(outputv, "Estimating transfer function model...\n");
+
+    est(shootx, npar, x, dev, cov, maxits, nrits,
+        gradtol, steptol, varma1.xitol, a_est,
+        &varma1.sigma2, &varma1.logelf, &ifault);
+
+    {
+        const char *why, *verdict;
+        switch (opt_termcode) {
+        case 1:  verdict = "CONVERGENCE OBTAINED";
+                 why = "gradient stopping criterium satisfied";        break;
+        case 2:  verdict = "CONVERGENCE OBTAINED";
+                 why = "parameter stopping criterium satisfied";       break;
+        case 3:  verdict = "STOPPED AT A POINT WITH NO IMPROVEMENT";
+                 why = "last global step failed to locate a lower point "
+                       "(usual when starting AT the optimum)";         break;
+        case 4:  verdict = "*** NO CONVERGENCE ***";
+                 why = "ITERATION LIMIT REACHED";                      break;
+        case 5:  verdict = "*** NO CONVERGENCE ***";
+                 why = "five consecutive steps of max length";         break;
+        default: verdict = "*** NO CONVERGENCE ***";
+                 why = "unknown";                                      break;
+        }
+        sum_logl = varma1.logelf;  sum_npar = npar;
+        sum_conv = verdict;        sum_why = why;   sum_fault = ifault;
+
+        fprintf(outputv, "\n**** %s AFTER %d ITERATIONS (of %d)\n",
+                verdict, opt_iters, maxits);
+        fprintf(outputv, "**** %s\n", why);
+        if (ifault != 0)
+            fprintf(outputv, "**** ifault = %d (estimates not reliable)\n", ifault);
+        fprintf(outputv, "\nLog-likelihood = %.6f\n\n", varma1.logelf);
+    }
+
+    fprintf(outputv, "=============================================================\n");
+    fprintf(outputv, "  Estimated Parameters and Standard Deviations               \n");
+    fprintf(outputv, "=============================================================\n\n");
+    fprintf(outputv, "                        Parameter     Estimate    Std.Error   t-stat  p-val\n");
+    fprintf(outputv, "--------------------------------------------------------------------\n");
+
+    pi = 1;
+
+#define SHOW(label)                                                          \
+    do {                                                                     \
+        dev[pi] = (cov[pi][pi] > 0) ? sqrt(cov[pi][pi]) : 0.0;               \
+        tstat = (dev[pi] > 1e-15) ? x[pi] / dev[pi] : 0.0;                   \
+        pval  = 2.0 * (1.0 - normal_cdf(fabs(tstat)));                       \
+        fprintf(outputv, "%-20s %12.6f %12.6f %8.3f %6.4f %s\n",             \
+                label, x[pi], dev[pi], tstat, pval,                          \
+                (pval < 0.001) ? "***" : (pval < 0.01) ? "**" :              \
+                (pval < 0.05) ? "*" : (pval < 0.1) ? "." : "");              \
+        pi++;                                                                \
+    } while (0)
+
+    for (j = 1; j <= n_inp; j++) {
+        char lab[40];
+        int k;
+        for (k = 0; k <= s_ord[j]; k++) {
+            snprintf(lab, sizeof lab, "omega%d[%d]", j, k);
+            SHOW(lab);
+        }
+        for (k = 1; k <= r_ord[j]; k++) {
+            snprintf(lab, sizeof lab, "delta%d[%d]", j, k);
+            SHOW(lab);
+        }
+    }
+
+    for (i = 1; i <= n_ser; i++) {
+        char tag[8];
+        int k;
+        snprintf(tag, sizeof tag, "%d", i);
+        if (!fix_arma[i]) {
+            print_arma_factors(&Tm[i], tag, 1, x, cov, dev, &pi, outputv);
+            print_arma_factors(&Tm[i], tag, 0, x, cov, dev, &pi, outputv);
+        } else {
+            for (k = 1; k <= p_ord[i]; k++)
+                fprintf(outputv, "phi_%s[B^%-2d]     (fixed %12.6f)\n", tag, k, phi[i][k]);
+            for (k = 1; k <= q_ord[i]; k++)
+                fprintf(outputv, "theta_%s[B^%-2d]   (fixed %12.6f)\n", tag, k, theta[i][k]);
+        }
+    }
+
+    for (i = 1; i <= n_ser; i++) {
+        int i2, j2;
+        if (fix_det[i]) continue;
+        for (i2 = 1; i2 <= Tm[i].NdetVar; i2++) {
+            char lab[40];
+            for (j2 = 0; j2 <= Tm[i].Nomega[i2]; j2++) {
+                if (Tm[i].Imega[i2][j2] != 1) continue;
+                snprintf(lab, sizeof lab, "omega_d%d[%d,%d]", i, i2, j2);
+                SHOW(lab);
+            }
+            for (j2 = 1; j2 <= Tm[i].Ndelta[i2]; j2++) {
+                if (Tm[i].Ielta[i2][j2] != 1) continue;
+                snprintf(lab, sizeof lab, "delta_d%d[%d,%d]", i, i2, j2);
+                SHOW(lab);
+            }
+        }
+    }
+
+    for (i = 1; i <= n_ser; i++) {
+        char lab[40];
+        snprintf(lab, sizeof lab, "mu[%d]", i);
+        if (fix_mu[i]) fprintf(outputv, "%-20s (fixed %12.6f)\n", lab, mu[i]);
+        else           SHOW(lab);
+    }
+
+    for (i = 2; i <= n_ser; i++) {
+        char lab[40];
+        snprintf(lab, sizeof lab, "log(var%d/var1)", i);
+        SHOW(lab);
+    }
+#undef SHOW
+
+    fprintf(outputv, "--------------------------------------------------------------------\n");
+    fprintf(outputv, "Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1\n\n");
+
+    /* Q es la covarianza NORMALIZADA (Q[1,1] = 1); la real es Sigma = sigma2*Q */
+    fprintf(outputv, "sigma2 (concentrated) = %.6f\n\n", varma1.sigma2);
+    fprintf(outputv, "Sigma = sigma2 * Q  (innovation covariance):\n");
+    fprintf(outputv, "  Sigma[1,1] (noise)     = %12.6f\n", varma1.sigma2 * 1.0);
+    for (i = 2; i <= n_ser; i++)
+        fprintf(outputv, "  Sigma[%d,%d] (input %d)   = %12.6f\n", i, i, i - 1,
+                varma1.sigma2 * exp(x[npar - n_ser + i]));
+    fprintf(outputv, "\n");
+
+    {
+        struct Tvarma vdiag;
+        int ifault_diag = 0, t;
+
+        shootx(x, &vdiag, &ifault_diag, 1, 0);
+        if (ifault_diag == 0) {
+            for (t = 1; t <= n_stat; t++)
+                for (i = 1; i <= n_ser; i++) vdiag.a[t][i] = a_est[t][i];
+
+            fprintf(outputv, "\n");
+            diagnose(&vdiag);
+            fprintf(outputv, "\n--- Multivariate diagnostics (Hosking + JB) ---\n");
+            multivariate_diagnostics(a_est, n_stat, n_ser, outputv);
+
+            for (j = 1; j <= n_inp; j++)
+                if (s_ord[j] >= 0) {
+                    real pt = -1.0, pe = -1.0;
+                    transfer_adequacy(a_est, n_stat, j, outputv, &pt, &pe);
+                    if (j == 1) { sum_p_transfer = pt; sum_p_exog = pe; }
+                }
+
+            if (fc_horizon > 0)
+                transfer_forecast(x, npar, fc_horizon, varma1.sigma2, outputv);
+
+            shootx(x, &vdiag, &ifault_diag, 0, 1);
+        }
+    }
+
+    {
+        int k, idx = 1;
+        printf("Observations           : %d\n", n_stat);
+        printf("Parameters             : %d\n", sum_npar);
+        printf("\n**** %s AFTER %d ITERATIONS\n", sum_conv, opt_iters);
+        printf("**** %s\n", sum_why);
+        if (sum_fault)
+            printf("**** ifault = %d (estimates not reliable)\n", sum_fault);
+        printf("\nLog-likelihood         : %.6f\n\n", sum_logl);
+
+        printf("Estimated model  (output: %s)\n", yname);
+        for (j = 1; j <= n_inp; j++) {
+            if (s_ord[j] < 0) { printf("  Input %d   : no transfer\n", j); continue; }
+            printf("  Input %d   : nu(B) = omega(B)/delta(B) * B^%d\n", j, b_del[j]);
+            for (k = 0; k <= s_ord[j]; k++, idx++)
+                printf("                omega_%d = %10.6f  (t = %6.2f)\n", k,
+                       x[idx], dev[idx] > 1e-15 ? x[idx] / dev[idx] : 0.0);
+            for (k = 1; k <= r_ord[j]; k++, idx++)
+                printf("                delta_%d = %10.6f  (t = %6.2f)\n", k,
+                       x[idx], dev[idx] > 1e-15 ? x[idx] / dev[idx] : 0.0);
+        }
+        for (i = 1; i <= n_ser; i++)
+            printf("  Series %d  : AR order %d, MA order %d, %d deterministic(s)%s\n",
+                   i, p_ord[i], q_ord[i], Tm[i].NdetVar,
+                   fix_mu[i] ? ", mean fixed" : ", mean free");
+
+        if (sum_p_transfer >= 0.0) {
+            printf("\nDiagnostics (input 1)\n");
+            printf("  Transfer adequacy   : %-9s (p = %.4f)\n",
+                   sum_p_transfer < 0.05 ? "INADEQUATE" : "adequate", sum_p_transfer);
+            printf("  Input exogeneity    : %-9s (p = %.4f)\n",
+                   sum_p_exog < 0.05 ? "FEEDBACK!" : "ok", sum_p_exog);
+        }
+        printf("\nFull results written to %s\n\n", outfile_path);
+    }
+
+    free_matrix(a_est, 1, n_stat, 1, n_ser);
+    free_matrix(cov, 1, npar, 1, npar);
+    free_vector(dev, 1, npar);
+}
+
+/* Parsea "1,0,2" en arr[1..n]. Un solo valor se replica a todas las entradas. */
+static void parse_orders(const char *str, int *arr, int n)
+{
+    const char *q = str;
+    int j = 1, v;
+
+    if (str == NULL) return;
+    while (j <= n && sscanf(q, "%d", &v) == 1) {
+        arr[j++] = v;
+        q = strchr(q, ',');
+        if (q == NULL) break;
+        q++;
+    }
+    if (j == 2) for (; j <= n; j++) arr[j] = arr[1];
+}
+
 int main(int argc, char *argv[])
 {
-    int opt;
+    int opt, i, j, l;
     char *outfile = NULL;
-    int auto_id = 1;   /* 1 = no se dieron órdenes, ejecutar preblanqueo */
-    int force_fix_mu = 0;   /* -M: fijar ambas medias, ignorando el .pre */
-    int fc_horizon = 0;     /* -f L: horizonte de prevision (0 = no prever) */
-    int prewhiten_only = 0; /* -p: solo preblanquear (filtrar + CCF), sin estimar */
+    int auto_id = 1;
+    int force_fix_mu = 0;
+    int fc_horizon = 0;
+    int prewhiten_only = 0;
+    int no_transfer = 0;
     char *model_name = NULL;
+    char *opt_b = NULL, *opt_r = NULL, *opt_s = NULL;
     char outname[512];
+    int fix_out_arma = 0, fix_inp_arma = 0;
+    int fix_out_det  = 0, fix_inp_det  = 0;
 
-    /* Inicializar variables globales del motor */
     macheps = cmacheps();
     outputv = stdout;
 
-    /* --- Procesar argumentos --- */
     while ((opt = getopt(argc, argv, "r:s:b:f:m:p0XNDEMvho:")) != -1) {
         switch (opt) {
-        case 'r': r_ord    = atoi(optarg); auto_id = 0; break;
-        case 's': s_ord    = atoi(optarg); auto_id = 0; break;
-        case 'b': b_delay  = atoi(optarg); auto_id = 0; break;
-        case 'X': fix_X    = 1;           break;  /* fijar ARMA */
-        case 'N': fix_noise = 1;          break;  /* fijar ARMA */
-        case 'D': fix_det_Y = 1;          break;  /* fijar TODOS los det de Y */
-        case 'E': fix_det_X = 1;          break;  /* fijar TODOS los det de X */
-        case 'M': force_fix_mu = 1;       break;  /* fijar ambas medias */
-        case 'f': fc_horizon = atoi(optarg); break;  /* horizonte de prevision */
-        case 'm': model_name = optarg;    break;  /* nombre del modelo */
-        case 'p': prewhiten_only = 1;     break;  /* solo preblanqueo */
-        case '0': s_ord = -1; r_ord = 0; b_delay = 0; auto_id = 0;
-                  break;  /* sin transferencia: dos univariantes conjuntos */
-        case 'v': quiet_mode = 0;         break;
-        case 'o': outfile  = optarg;      break;
+        case 'r': opt_r = optarg; auto_id = 0; break;
+        case 's': opt_s = optarg; auto_id = 0; break;
+        case 'b': opt_b = optarg; auto_id = 0; break;
+        case 'X': fix_inp_arma = 1;          break;
+        case 'N': fix_out_arma = 1;          break;
+        case 'D': fix_out_det  = 1;          break;
+        case 'E': fix_inp_det  = 1;          break;
+        case 'M': force_fix_mu = 1;          break;
+        case 'f': fc_horizon = atoi(optarg); break;
+        case 'm': model_name = optarg;       break;
+        case 'p': prewhiten_only = 1;        break;
+        case '0': no_transfer = 1; auto_id = 0; break;
+        case 'v': quiet_mode = 0;            break;
+        case 'o': outfile = optarg;          break;
         case 'h': usage(argv[0]); return 0;
         default:  usage(argv[0]); return 1;
         }
     }
 
-    if (optind + 1 >= argc) {
-        fprintf(stderr, "Error: se requieren dos archivos .pre "
-                "(entrada y salida)\n");
+    /* --- Series: 1 salida + N entradas --- */
+    n_ser = argc - optind;
+    if (n_ser < 2) {
+        fprintf(stderr, "Error: at least two .pre files are needed "
+                        "(one output and one input)\n\n");
         usage(argv[0]);
         return 1;
     }
+    if (n_ser > MAX_SER) {
+        fprintf(stderr, "Error: too many series (%d); the limit is %d\n",
+                n_ser, MAX_SER);
+        return 1;
+    }
+    n_inp = n_ser - 1;
 
-    /* Nombre del modelo: -m, o por defecto <salida>_<entrada> a partir de los
-       dos .pre (sin ruta ni extension). Los resultados van a <modelo>.out; la
-       consola solo recibe un resumen.                                        */
+    /* --- Nombre del modelo y fichero de resultados --- */
     if (model_name == NULL) {
-        char yb[128], xb[128];
-        base_name(argv[optind],     yb, sizeof yb);
-        base_name(argv[optind + 1], xb, sizeof xb);
-        snprintf(outname, sizeof outname, "%s_%s", yb, xb);
+        char nb[128];
+        outname[0] = '\0';
+        for (i = 0; i < n_ser; i++) {
+            base_name(argv[optind + i], nb, sizeof nb);
+            if (i) strncat(outname, "_", sizeof outname - strlen(outname) - 1);
+            strncat(outname, nb, sizeof outname - strlen(outname) - 1);
+        }
         model_name = outname;
     }
-
     {
         char path[600];
         if (outfile != NULL) snprintf(path, sizeof path, "%s", outfile);
         else                 snprintf(path, sizeof path, "%s.out", model_name);
-
         outputv = fopen(path, "w");
         if (outputv == NULL) {
             fprintf(stderr, "Error opening output file: %s\n", path);
@@ -1374,7 +1625,6 @@ int main(int argc, char *argv[])
         snprintf(outfile_path, sizeof outfile_path, "%s", path);
     }
 
-    /* --- Banner y cabecera de consola (convencion de fue/drvarma) --- */
     printf("\n");
     printf("DRTRAN %s: Box-Jenkins transfer function models by exact ML\n",
            DRTRAN_VERSION);
@@ -1384,42 +1634,44 @@ int main(int argc, char *argv[])
     printf("Non-final version. May contain errors. Please report.\n\n");
     printf("Model                  : %s\n", model_name);
     printf("Output (Y)             : %s\n", argv[optind]);
-    printf("Input  (X)             : %s\n", argv[optind + 1]);
+    for (j = 1; j <= n_inp; j++)
+        printf("Input  (X%d)            : %s\n", j, argv[optind + j]);
     printf("Results file           : %s\n", outfile_path);
     if (prewhiten_only)
         printf("Method                 : prewhitening only (no estimation)\n");
     else
         printf("Method                 : exact maximum likelihood "
-               "(bivariate VARMA cast)\n");
+               "(%d-variate VARMA cast)\n", n_ser);
 
-    /* --- Leer los dos modelos univariantes --- */
-    /* Convención: primer argumento = endógena (Y), segundo = exógena (X) */
-    if (read_fue_pre(argv[optind], &TmY, &TsY, &DataMatY) != 0) {
-        fprintf(stderr, "Error reading %s\n", argv[optind]);
-        return 2;
-    }
-    if (read_fue_pre(argv[optind + 1], &TmX, &TsX, &DataMatX) != 0) {
-        fprintf(stderr, "Error leyendo %s\n", argv[optind + 1]);
-        return 3;
-    }
+    /* --- Leer los .pre --- */
+    for (i = 1; i <= n_ser; i++) {
+        if (read_fue_pre(argv[optind + i - 1], &Tm[i], &Ts[i], &DataMat[i]) != 0) {
+            fprintf(stderr, "Error reading %s\n", argv[optind + i - 1]);
+            return 2;
+        }
+        mu[i]     = Tm[i].mu;
+        fix_mu[i] = force_fix_mu ? 1 : !Tm[i].Imu;
+        fix_arma[i] = (i == 1) ? fix_out_arma : fix_inp_arma;
+        fix_det[i]  = (i == 1) ? fix_out_det  : fix_inp_det;
 
-    /* --- Medias: cada serie hereda del .pre su valor y su condición de
-           libre/fija. FUE marca con un flag las medias que estima (p.ej.
-           ES_CPI: "0.154472 1"); las que no forman parte del modelo vienen
-           como un simple "0" (p.ej. WTI). -M fuerza a fijar ambas.        */
-    mu_Y = TmY.mu;   fix_mu_Y = force_fix_mu ? 1 : !TmY.Imu;
-    mu_X = TmX.mu;   fix_mu_X = force_fix_mu ? 1 : !TmX.Imu;
-
-    /* Verificar que las longitudes coincidan */
-    if (TsX.nobs != TsY.nobs) {
-        fprintf(stderr,
-                "Error: las series tienen distinto número de observaciones "
-                "(X: %d, Y: %d)\n", TsX.nobs, TsY.nobs);
-        return 4;
+        if (Ts[i].nobs != Ts[1].nobs) {
+            fprintf(stderr, "Error: series have different numbers of "
+                            "observations (%d vs %d)\n", Ts[i].nobs, Ts[1].nobs);
+            return 4;
+        }
     }
 
-    /* --- Series estacionarias w_X, w_Y, recortadas a la ventana común --- */
-    build_stationary_pair();
+    /* --- Ordenes de las transferencias --- */
+    for (j = 1; j <= n_inp; j++) { b_del[j] = 0; r_ord[j] = 0; s_ord[j] = 0; }
+    if (no_transfer)
+        for (j = 1; j <= n_inp; j++) s_ord[j] = -1;
+    else {
+        parse_orders(opt_b, b_del, n_inp);
+        parse_orders(opt_r, r_ord, n_inp);
+        parse_orders(opt_s, s_ord, n_inp);
+    }
+
+    build_stationary_series();
     if (n_stat <= 0) {
         fprintf(stderr, "Error: could not build the stationary series\n");
         return 5;
@@ -1431,465 +1683,117 @@ int main(int argc, char *argv[])
     fprintf(outputv, "Copyright (C) 1995-2026 A.B. Treadway, J.A. Mauricio & D.E. Guerrero\n");
     fprintf(outputv, "Free software under the GNU GPL v2 or later; NO WARRANTY.\n\n");
     fprintf(outputv, "Model            : %s\n", model_name);
+    fprintf(outputv, "Series           : %d (1 output + %d input(s))\n", n_ser, n_inp);
     fprintf(outputv, "Output (Y)       : %s\n", argv[optind]);
-    fprintf(outputv, "Input  (X)       : %s\n", argv[optind + 1]);
-    if (prewhiten_only)
-        fprintf(outputv, "Transfer model   : (to be identified)\n");
-    else
-        fprintf(outputv, "Transfer model   : b=%d, r=%d, s=%d\n",
-                b_delay, r_ord, s_ord);
-    fprintf(outputv, "Diagonal AR/MA   : yes\n");
-    fprintf(outputv, "Diagonal cov     : yes\n");
-    fprintf(outputv, "Frequency        : %d\n", TsY.freq);
-    fprintf(outputv, "Start            : %d %d\n", TsY.begtime, TsY.begyear);
-    fprintf(outputv, "Box-Cox lambda   : %.2f (Y), %.2f (X)\n", TmY.boxlam, TmX.boxlam);
-    fprintf(outputv, "Rescale factor   : %.0f (Y), %.0f (X)\n", TsY.refactor, TsX.refactor);
-    fprintf(outputv, "Differences      : d=%d, D=%d (Y)   d=%d, D=%d (X)\n",
-            TmY.nrdiff, TmY.nadiff, TmX.nrdiff, TmX.nadiff);
-    fprintf(outputv, "Deterministics   : %d (Y), %d (X)\n", TmY.NdetVar, TmX.NdetVar);
-    fprintf(outputv, "Observations     : %d (raw %d)\n\n", n_stat, TsY.nobs);
-    fflush(outputv);
+    for (j = 1; j <= n_inp; j++)
+        fprintf(outputv, "Input  (X%d)      : %s\n", j, argv[optind + j]);
+    fprintf(outputv, "Frequency        : %d\n", Ts[1].freq);
+    fprintf(outputv, "Start            : %d %d\n", Ts[1].begtime, Ts[1].begyear);
+    fprintf(outputv, "Observations     : %d (raw %d)\n\n", n_stat, Ts[1].nobs);
+    for (i = 1; i <= n_ser; i++)
+        fprintf(outputv, "  series %d: Box-Cox %.2f, d=%d D=%d, %d deterministic(s)\n",
+                i, Tm[i].boxlam, Tm[i].nrdiff, Tm[i].nadiff, Tm[i].NdetVar);
+    fprintf(outputv, "\n");
 
-    /* --- Extraer parámetros ARMA fijos --- */
-    p_X = total_ar_order(&TmX);  q_X = total_ma_order(&TmX);
-    p_N = total_ar_order(&TmY);  q_N = total_ma_order(&TmY);
-
-    if (p_X > 0) {
-        phi_X = vector(1, p_X);
-        expand_ar_factors(&TmX, phi_X, p_X);
-    }
-    if (q_X > 0) {
-        theta_X = vector(1, q_X);
-        expand_ma_factors(&TmX, theta_X, q_X);
-    }
-    if (p_N > 0) {
-        phi_N = vector(1, p_N);
-        expand_ar_factors(&TmY, phi_N, p_N);
-    }
-    if (q_N > 0) {
-        theta_N = vector(1, q_N);
-        expand_ma_factors(&TmY, theta_N, q_N);
+    /* --- ARMA de cada serie --- */
+    for (i = 1; i <= n_ser; i++) {
+        p_ord[i] = total_ar_order(&Tm[i]);
+        q_ord[i] = total_ma_order(&Tm[i]);
+        if (p_ord[i] > 0) {
+            phi[i] = vector(1, p_ord[i]);
+            expand_ar_factors(&Tm[i], phi[i], p_ord[i]);
+        }
+        if (q_ord[i] > 0) {
+            theta[i] = vector(1, q_ord[i]);
+            expand_ma_factors(&Tm[i], theta[i], q_ord[i]);
+        }
     }
 
-    /* --- Preblanqueo e identificación (si no se dieron órdenes) --- */
-    if (auto_id || prewhiten_only) {
-        prewhiten_and_identify(w_X, w_Y, n_stat,
-                               phi_X, p_X, theta_X, q_X,
-                               &r_ord, &s_ord, &b_delay, outputv);
-    }
+    /* --- Identificacion: una por entrada --- */
+    if (auto_id || prewhiten_only)
+        for (j = 1; j <= n_inp; j++)
+            prewhiten_and_identify(j, outputv);
 
-    /* ── -p: SOLO PREBLANQUEO ──────────────────────────────────────────
-       Filtra y dibuja la CCF. No estima, no itera: es el paso de
-       identificacion aislado, para mirar la relacion antes de comprometerse
-       con una especificacion.                                              */
     if (prewhiten_only) {
         printf("Observations           : %d\n", n_stat);
         printf("\n**** PREWHITENING ONLY: no estimation performed\n\n");
         printf("Suggested transfer function orders:\n");
-        printf("  b (delay)             : %d\n", b_delay);
-        printf("  r (denominator)       : %d\n", r_ord);
-        printf("  s (numerator)         : %d\n", s_ord);
-        printf("\nCCF plot and impulse response weights written to %s\n\n",
+        for (j = 1; j <= n_inp; j++)
+            printf("  input %d: b = %d, r = %d, s = %d\n",
+                   j, b_del[j], r_ord[j], s_ord[j]);
+        printf("\nCCF plots and impulse response weights written to %s\n\n",
                outfile_path);
         fclose(outputv);
         return 0;
     }
 
     fprintf(outputv, "\nTransfer function orders:\n");
-    fprintf(outputv, "  b (delay)       = %d\n", b_delay);
-    fprintf(outputv, "  r (denominator) = %d\n", r_ord);
-    fprintf(outputv, "  s (numerator)   = %d\n", s_ord);
-
-    if (r_ord > MAX_R) {
-        fprintf(stderr, "Error: r=%d exceeds MAX_R=%d\n", r_ord, MAX_R);
-        return 8;
+    for (j = 1; j <= n_inp; j++) {
+        fprintf(outputv, "  input %d: b = %d, r = %d, s = %d\n",
+                j, b_del[j], r_ord[j], s_ord[j]);
+        if (r_ord[j] > MAX_R) {
+            fprintf(stderr, "Error: r=%d exceeds MAX_R=%d\n", r_ord[j], MAX_R);
+            return 8;
+        }
+        if (s_ord[j] > MAX_S) {
+            fprintf(stderr, "Error: s=%d exceeds MAX_S=%d\n", s_ord[j], MAX_S);
+            return 8;
+        }
     }
-    if (s_ord > MAX_S) {
-        fprintf(stderr, "Error: s=%d exceeds MAX_S=%d\n", s_ord, MAX_S);
-        return 8;
-    }
 
-    /* --- Calcular número de parámetros --- */
+    /* --- Numero de parametros y vector inicial --- */
     {
-        int npar = (s_ord + 1) + r_ord;   /* ω₀…ω_s, δ₁…δ_r */
-        int ndet_Y = (!fix_det_Y) ? n_det_free_params(&TmY) : 0;
-        int ndet_X = (!fix_det_X) ? n_det_free_params(&TmX) : 0;
+        int npar = 0;
 
-        if (!fix_noise)  npar += n_ar_free_params(&TmY) + n_ma_free_params(&TmY);
-        if (!fix_X)      npar += n_ar_free_params(&TmX) + n_ma_free_params(&TmX);
-        npar += ndet_Y + ndet_X;   /* coefs deterministas */
-        if (!fix_mu_Y)   npar += 1;
-        if (!fix_mu_X)   npar += 1;
-        npar += 1;   /* log(var_X/var_Y): la escala la concentra sigma2 */
+        for (j = 1; j <= n_inp; j++) npar += (s_ord[j] + 1) + r_ord[j];
+        for (i = 1; i <= n_ser; i++) {
+            if (!fix_arma[i])
+                npar += n_ar_free_params(&Tm[i]) + n_ma_free_params(&Tm[i]);
+            if (!fix_det[i]) npar += n_det_free_params(&Tm[i]);
+            if (!fix_mu[i])  npar += 1;
+        }
+        npar += n_ser - 1;   /* log(var_i/var_1), i = 2..m */
 
-        fprintf(outputv, "Parameters to estimate: %d\n", npar);
-        fprintf(outputv, "  fix_noise=%d, fix_X=%d, fix_det_Y=%d, fix_det_X=%d,"
-                         " fix_mu_Y=%d, fix_mu_X=%d\n\n",
-                fix_noise, fix_X, fix_det_Y, fix_det_X, fix_mu_Y, fix_mu_X);
+        fprintf(outputv, "\nParameters to estimate: %d\n\n", npar);
 
-        /* --- Construir vector de parámetros iniciales --- */
         {
             real *x = vector(1, npar);
             int idx = 1;
-            int j;
 
-            /* ω₀…ω_s: inicializar en cero */
-            for (j = 0; j <= s_ord; j++) x[idx++] = 0.0;
-            /* δ₁…δ_r: inicializar en cero */
-            for (j = 1; j <= r_ord; j++) x[idx++] = 0.0;
-
-            /* φ_N (ruido): factores ARMA (no expandidos) */
-            if (!fix_noise) {
-                pack_ar_factors(&TmY, x, idx);
-                idx += n_ar_free_params(&TmY);
-                pack_ma_factors(&TmY, x, idx);
-                idx += n_ma_free_params(&TmY);
+            for (j = 1; j <= n_inp; j++) {
+                for (l = 0; l <= s_ord[j]; l++) x[idx++] = 0.0;
+                for (l = 1; l <= r_ord[j]; l++) x[idx++] = 0.0;
             }
-
-            /* φ_X: factores ARMA (no expandidos) */
-            if (!fix_X) {
-                pack_ar_factors(&TmX, x, idx);
-                idx += n_ar_free_params(&TmX);
-                pack_ma_factors(&TmX, x, idx);
-                idx += n_ma_free_params(&TmX);
+            for (i = 1; i <= n_ser; i++) {
+                if (fix_arma[i]) continue;
+                idx += pack_ar_factors(&Tm[i], x, idx);
+                idx += pack_ma_factors(&Tm[i], x, idx);
             }
+            for (i = 1; i <= n_ser; i++)
+                if (!fix_det[i]) idx += pack_det_params(&Tm[i], x, idx);
 
-            /* Coeficientes deterministas ω/δ: inicializar con los de FUE */
-            if (!fix_det_Y) idx += pack_det_params(&TmY, x, idx);
-            if (!fix_det_X) idx += pack_det_params(&TmX, x, idx);
-
-            /* Medias y varianzas: inicializar con los momentos muestrales de w.
-               Las varianzas DEBEN arrancar en su orden de magnitud real: el paso
-               de diferencias finitas de cdgrad es eta^(1/3)*max(|x|,1) ≈ 6e-6
-               absoluto, así que un arranque muy por debajo de la escala de la
-               serie deja el parámetro fuera del alcance del optimizador.       */
             {
-                double mY = 0.0, mX = 0.0, vY = 0.0, vX = 0.0;
+                double mm[MAX_SER + 1], vv[MAX_SER + 1];
                 int t;
-                for (t = 1; t <= n_stat; t++) { mY += w_Y[t]; mX += w_X[t]; }
-                mY /= n_stat; mX /= n_stat;
-                for (t = 1; t <= n_stat; t++) {
-                    vY += (w_Y[t] - mY) * (w_Y[t] - mY);
-                    vX += (w_X[t] - mX) * (w_X[t] - mX);
+                for (i = 1; i <= n_ser; i++) {
+                    mm[i] = vv[i] = 0.0;
+                    for (t = 1; t <= n_stat; t++) mm[i] += w[i][t];
+                    mm[i] /= n_stat;
+                    for (t = 1; t <= n_stat; t++)
+                        vv[i] += (w[i][t] - mm[i]) * (w[i][t] - mm[i]);
+                    vv[i] /= n_stat;
                 }
-
-                if (!fix_mu_Y) x[idx++] = mY;   /* mu_Y inicial */
-                if (!fix_mu_X) x[idx++] = mX;   /* mu_X inicial */
-
-                /* log(var_X/var_Y) inicial, a partir de las varianzas muestrales */
-                x[idx++] = log((vX / n_stat) / (vY / n_stat));
+                for (i = 1; i <= n_ser; i++)
+                    if (!fix_mu[i]) x[idx++] = mm[i];
+                for (i = 2; i <= n_ser; i++)
+                    x[idx++] = log(vv[i] / vv[1]);
             }
 
-            /* --- Configurar optimizador --- */
-            {
-                struct Tvarma varma1;
-                real *dev = vector(1, npar);
-                real **cov = matrix(1, npar, 1, npar);
-                real **a_est = matrix(1, n_stat, 1, 2);  /* m=2 */
-                int maxits = 500, nrits = 10, ifault = 0;
-                real gradtol = 1e-7, steptol = 1e-7;
-
-                varma1.xitol = -1e-3;   /* verosimilitud exacta */
-
-                fprintf(outputv, "Estimating transfer function model...\n");
-
-                est(shootx, npar, x, dev, cov, maxits, nrits,
-                    gradtol, steptol, varma1.xitol, a_est,
-                    &varma1.sigma2, &varma1.logelf, &ifault);
-
-                /* Informe honesto de la terminación: qnewtopt deja el número
-                   real de iteraciones y el código de parada en opt_iters /
-                   opt_termcode. Solo 1 y 2 son convergencia.                */
-                {
-                    const char *why, *verdict;
-
-                    /* termcode (Dennis–Schnabel, umstop):
-                         1,2 = convergencia (gradiente / paso)
-                         3   = la búsqueda lineal no encontró un punto mejor. NO es
-                               un fallo: es lo típico cuando se ARRANCA en el óptimo
-                               (p.ej. con las preestimaciones de fue). Perturbando el
-                               arranque, el mismo modelo converge por gradiente al
-                               MISMO óptimo.
-                         4,5 = fallo real (límite de iteraciones / pasos máximos) */
-                    switch (opt_termcode) {
-                    case 1:  verdict = "CONVERGENCE OBTAINED";
-                             why = "gradient stopping criterium satisfied";       break;
-                    case 2:  verdict = "CONVERGENCE OBTAINED";
-                             why = "parameter stopping criterium satisfied";      break;
-                    case 3:  verdict = "STOPPED AT A POINT WITH NO IMPROVEMENT";
-                             why = "last global step failed to locate a lower point "
-                                   "(usual when starting AT the optimum)";        break;
-                    case 4:  verdict = "*** NO CONVERGENCE ***";
-                             why = "ITERATION LIMIT REACHED";                     break;
-                    case 5:  verdict = "*** NO CONVERGENCE ***";
-                             why = "five consecutive steps of max length";        break;
-                    default: verdict = "*** NO CONVERGENCE ***";
-                             why = "unknown";                                     break;
-                    }
-
-                    sum_logl  = varma1.logelf;
-                    sum_npar  = npar;
-                    sum_conv  = verdict;
-                    sum_why   = why;
-                    sum_fault = ifault;
-
-                    fprintf(outputv, "\n**** %s AFTER %d ITERATIONS (of %d)\n",
-                            verdict, opt_iters, maxits);
-                    fprintf(outputv, "**** %s\n", why);
-                    if (ifault != 0)
-                        fprintf(outputv, "**** ifault = %d (estimates not reliable)\n", ifault);
-                    fprintf(outputv, "\nLog-likelihood = %.6f\n\n", varma1.logelf);
-                }
-
-                /* --- Tabla de parámetros estilo drvarma --- */
-                {
-                    real tstat, pval;
-                    int pi;  /* parameter index */
-
-                    fprintf(outputv, "=============================================================\n");
-                    fprintf(outputv, "  Estimated Parameters and Standard Deviations               \n");
-                    fprintf(outputv, "=============================================================\n\n");
-                    fprintf(outputv, "                        Parameter     Estimate    Std.Error   t-stat  p-val\n");
-                    fprintf(outputv, "--------------------------------------------------------------------\n");
-
-                    pi = 1;
-
-                    /* Transfer numerator ω₀...ω_s */
-                    for (j = 0; j <= s_ord; j++) {
-                        dev[pi] = (cov[pi][pi] > 0) ? sqrt(cov[pi][pi]) : 0.0;
-                        tstat = (dev[pi] > 1e-15) ? x[pi] / dev[pi] : 0.0;
-                        pval  = 2.0 * (1.0 - normal_cdf(fabs(tstat)));
-                        fprintf(outputv, "omega[%d]             %12.6f %12.6f %8.3f %6.4f %s\n",
-                                j, x[pi], dev[pi], tstat, pval,
-                                (pval < 0.001) ? "***" : (pval < 0.01) ? "**" :
-                                (pval < 0.05) ? "*" : (pval < 0.1) ? "." : "");
-                        pi++;
-                    }
-
-                    /* Transfer denominator δ₁...δ_r */
-                    for (j = 1; j <= r_ord; j++) {
-                        dev[pi] = (cov[pi][pi] > 0) ? sqrt(cov[pi][pi]) : 0.0;
-                        tstat = (dev[pi] > 1e-15) ? x[pi] / dev[pi] : 0.0;
-                        pval  = 2.0 * (1.0 - normal_cdf(fabs(tstat)));
-                        fprintf(outputv, "delta[%d]             %12.6f %12.6f %8.3f %6.4f %s\n",
-                                j, x[pi], dev[pi], tstat, pval,
-                                (pval < 0.001) ? "***" : (pval < 0.01) ? "**" :
-                                (pval < 0.05) ? "*" : (pval < 0.1) ? "." : "");
-                        pi++;
-                    }
-
-                    /* ARMA del ruido (modelo de Y) */
-                    if (!fix_noise) {
-                        print_arma_factors(&TmY, "N", 1, x, cov, dev, &pi, outputv);
-                        print_arma_factors(&TmY, "N", 0, x, cov, dev, &pi, outputv);
-                    } else {
-                        for (j = 1; j <= p_N; j++)
-                            fprintf(outputv, "phi_N[B^%-2d]     (fixed %12.6f)\n", j, phi_N[j]);
-                        for (j = 1; j <= q_N; j++)
-                            fprintf(outputv, "theta_N[B^%-2d]   (fixed %12.6f)\n", j, theta_N[j]);
-                    }
-
-                    /* ARMA de la entrada (modelo de X) */
-                    if (!fix_X) {
-                        print_arma_factors(&TmX, "X", 1, x, cov, dev, &pi, outputv);
-                        print_arma_factors(&TmX, "X", 0, x, cov, dev, &pi, outputv);
-                    } else {
-                        for (j = 1; j <= p_X; j++)
-                            fprintf(outputv, "phi_X[B^%-2d]     (fixed %12.6f)\n", j, phi_X[j]);
-                        for (j = 1; j <= q_X; j++)
-                            fprintf(outputv, "theta_X[B^%-2d]   (fixed %12.6f)\n", j, theta_X[j]);
-                    }
-
-                    /* Deterministic coefficients */
-                    /* Deterministas: ω_i(j) y δ_i(j) de cada variable, solo los
-                       que el .pre marca como estimables.                     */
-                    {
-                        int s;
-                        struct Tusmodel *Tms[2]; const char *tag[2]; int skip[2];
-                        Tms[0] = &TmY; tag[0] = "Y"; skip[0] = fix_det_Y;
-                        Tms[1] = &TmX; tag[1] = "X"; skip[1] = fix_det_X;
-
-                        for (s = 0; s < 2; s++) {
-                            int i2, j2;
-                            if (skip[s]) continue;
-                            for (i2 = 1; i2 <= Tms[s]->NdetVar; i2++) {
-                                for (j2 = 0; j2 <= Tms[s]->Nomega[i2]; j2++) {
-                                    if (Tms[s]->Imega[i2][j2] != 1) continue;
-                                    dev[pi] = (cov[pi][pi] > 0) ? sqrt(cov[pi][pi]) : 0.0;
-                                    tstat = (dev[pi] > 1e-15) ? x[pi] / dev[pi] : 0.0;
-                                    pval  = 2.0 * (1.0 - normal_cdf(fabs(tstat)));
-                                    fprintf(outputv, "omega_%s[%d,%d]       %12.6f %12.6f %8.3f %6.4f %s\n",
-                                            tag[s], i2, j2, x[pi], dev[pi], tstat, pval,
-                                            (pval < 0.001) ? "***" : (pval < 0.01) ? "**" :
-                                            (pval < 0.05) ? "*" : (pval < 0.1) ? "." : "");
-                                    pi++;
-                                }
-                                for (j2 = 1; j2 <= Tms[s]->Ndelta[i2]; j2++) {
-                                    if (Tms[s]->Ielta[i2][j2] != 1) continue;
-                                    dev[pi] = (cov[pi][pi] > 0) ? sqrt(cov[pi][pi]) : 0.0;
-                                    tstat = (dev[pi] > 1e-15) ? x[pi] / dev[pi] : 0.0;
-                                    pval  = 2.0 * (1.0 - normal_cdf(fabs(tstat)));
-                                    fprintf(outputv, "delta_%s[%d,%d]       %12.6f %12.6f %8.3f %6.4f %s\n",
-                                            tag[s], i2, j2, x[pi], dev[pi], tstat, pval,
-                                            (pval < 0.001) ? "***" : (pval < 0.01) ? "**" :
-                                            (pval < 0.05) ? "*" : (pval < 0.1) ? "." : "");
-                                    pi++;
-                                }
-                            }
-                        }
-                    }
-
-                    /* Means (cada serie por separado) */
-                    {
-                        int k;
-                        int fixed_mu[2]; real mu_val[2];
-                        fixed_mu[0] = fix_mu_Y;  mu_val[0] = mu_Y;
-                        fixed_mu[1] = fix_mu_X;  mu_val[1] = mu_X;
-
-                        for (k = 0; k < 2; k++) {
-                            if (fixed_mu[k]) {
-                                fprintf(outputv, "mu[%d]           (fixed %12.6f)\n",
-                                        k+1, mu_val[k]);
-                                continue;
-                            }
-                            dev[pi] = (cov[pi][pi] > 0) ? sqrt(cov[pi][pi]) : 0.0;
-                            tstat = (dev[pi] > 1e-15) ? x[pi] / dev[pi] : 0.0;
-                            pval  = 2.0 * (1.0 - normal_cdf(fabs(tstat)));
-                            fprintf(outputv, "mu[%d]                %12.6f %12.6f %8.3f %6.4f %s\n",
-                                    k+1, x[pi], dev[pi], tstat, pval,
-                                    (pval < 0.001) ? "***" : (pval < 0.01) ? "**" :
-                                    (pval < 0.05) ? "*" : (pval < 0.1) ? "." : "");
-                            pi++;
-                        }
-                    }
-
-                    /* Razón de varianzas: el único parámetro de escala estimable
-                       (la escala global la concentra sigma2). */
-                    {
-                        dev[pi] = (cov[pi][pi] > 0) ? sqrt(cov[pi][pi]) : 0.0;
-                        tstat = (dev[pi] > 1e-15) ? x[pi] / dev[pi] : 0.0;
-                        pval  = 2.0 * (1.0 - normal_cdf(fabs(tstat)));
-                        fprintf(outputv, "log(varX/varY)       %12.6f %12.6f %8.3f %6.4f %s\n",
-                                x[pi], dev[pi], tstat, pval,
-                                (pval < 0.001) ? "***" : (pval < 0.01) ? "**" :
-                                (pval < 0.05) ? "*" : (pval < 0.1) ? "." : "");
-                    }
-
-                    fprintf(outputv, "--------------------------------------------------------------------\n");
-                    fprintf(outputv, "Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1\n\n");
-
-                    /* Q es la covarianza NORMALIZADA (Q[1,1] = 1); la covarianza
-                       real es Sigma = sigma2 * Q, con sigma2 el factor de escala
-                       que est() concentra. drvarma imprime ambas: igual aquí.   */
-                    fprintf(outputv, "sigma2 (concentrada) = %.6f\n\n", varma1.sigma2);
-                    fprintf(outputv, "Sigma = sigma2 * Q  (covarianza de las innovaciones):\n");
-                    fprintf(outputv, "  Sigma[1,1] (noise) = %12.6f\n",
-                            varma1.sigma2 * 1.0);
-                    fprintf(outputv, "  Sigma[2,2] (input) = %12.6f\n\n",
-                            varma1.sigma2 * exp(x[npar]));
-                }
-
-                /* ─────────── Diagnóstico con funciones de drvarma ─────────── */
-                {
-                    struct Tvarma vdiag;
-                    int ifault_diag = 0;
-                    int t;
-
-                    /* Reconstruir el VARMA con los parámetros finales */
-                    shootx(x, &vdiag, &ifault_diag, 1, 0);
-
-                    if (ifault_diag == 0)
-                    {
-                        /* Copiar residuos estimados al VARMA de diagnóstico */
-                        for (t = 1; t <= n_stat; t++) {
-                            vdiag.a[t][1] = a_est[t][1];
-                            vdiag.a[t][2] = a_est[t][2];
-                        }
-
-                        fprintf(outputv, "\n");
-                        diagnose(&vdiag);
-
-                        fprintf(outputv, "\n");
-                        fprintf(outputv, "--- Multivariate diagnostics (Hosking + JB) ---\n");
-                        multivariate_diagnostics(a_est, n_stat, 2, outputv);
-
-                        /* Adecuación de la transferencia: el ruido no debe
-                           conservar huella de la entrada preblanqueada. Solo
-                           tiene sentido si hay transferencia (s >= 0).       */
-                        if (s_ord >= 0)
-                            transfer_adequacy(a_est, n_stat, b_delay, r_ord,
-                                              s_ord, outputv,
-                                              &sum_p_transfer, &sum_p_exog);
-
-                        if (fc_horizon > 0)
-                            transfer_forecast(x, npar, fc_horizon,
-                                              varma1.sigma2, outputv);
-
-                        /* Liberar el VARMA de diagnóstico */
-                        shootx(x, &vdiag, &ifault_diag, 0, 1);
-                    }
-                }
-
-                /* ── Resumen de consola ────────────────────────────────────
-                   Escueto y en inglés, como fue/drvarma. El detalle esta en el .out. */
-                {
-                    int j2;
-                    printf("Observations           : %d\n", n_stat);
-                    printf("Parameters             : %d\n", sum_npar);
-                    printf("Transfer (b, r, s)     : (%d, %d, %d)%s\n",
-                           b_delay, r_ord, s_ord,
-                           auto_id ? "  [identified by prewhitening]" : "  [imposed]");
-                    printf("\n**** %s AFTER %d ITERATIONS\n", sum_conv, opt_iters);
-                    printf("**** %s\n", sum_why);
-                    if (sum_fault)
-                        printf("**** ifault = %d (estimates not reliable)\n", sum_fault);
-                    printf("\nLog-likelihood         : %.6f\n\n", sum_logl);
-
-                    printf("Estimated model\n");
-                    if (s_ord >= 0) {
-                        printf("  Transfer  : nu(B) = omega(B)/delta(B) * B^%d\n", b_delay);
-                        for (j2 = 0; j2 <= s_ord; j2++)
-                                printf("                omega_%d = %10.6f  (t = %6.2f)\n", j2,
-                                       x[j2 + 1], dev[j2+1] > 1e-15 ? x[j2+1]/dev[j2+1] : 0.0);
-                        for (j2 = 1; j2 <= r_ord; j2++)
-                                printf("                delta_%d = %10.6f  (t = %6.2f)\n", j2,
-                                       x[s_ord + 1 + j2],
-                                       dev[s_ord+1+j2] > 1e-15 ? x[s_ord+1+j2]/dev[s_ord+1+j2] : 0.0);
-                    } else {
-                        printf("  Transfer  : none (two univariate models, joint diagonal fit)\n");
-                    }
-                    printf("  Noise (Y) : AR order %d, MA order %d, %d deterministic(s)%s\n",
-                           p_N, q_N, TmY.NdetVar, fix_mu_Y ? ", mean fixed" : ", mean free");
-                    printf("  Input (X) : AR order %d, MA order %d, %d deterministic(s)%s\n",
-                           p_X, q_X, TmX.NdetVar, fix_mu_X ? ", mean fixed" : ", mean free");
-
-                    if (sum_p_transfer >= 0.0) {
-                        printf("\nDiagnostics\n");
-                        printf("  Transfer adequacy   : %-9s (p = %.4f)\n",
-                                   sum_p_transfer < 0.05 ? "INADEQUATE" : "adequate",
-                                   sum_p_transfer);
-                        printf("  Input exogeneity    : %-9s (p = %.4f)\n",
-                                   sum_p_exog < 0.05 ? "FEEDBACK!" : "ok",
-                                   sum_p_exog);
-                    }
-                    printf("\nFull results written to %s\n\n", outfile_path);
-                }
-
-                /* Liberar memoria del optimizador */
-                free_matrix(a_est, 1, n_stat, 1, 2);
-                free_matrix(cov, 1, npar, 1, npar);
-                free_vector(dev, 1, npar);
-            }
-
+            estimate_and_report(x, npar, fc_horizon, argv[optind]);
             free_vector(x, 1, npar);
         }
     }
 
-    /* --- Liberar memoria --- */
-    /* (simplificado: en producción haría falta liberar todas las estructuras) */
-
-    if (outfile != NULL && outputv != stdout)
-        fclose(outputv);
-
+    fclose(outputv);
     return 0;
 }

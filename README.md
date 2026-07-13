@@ -31,6 +31,18 @@ drtran IPC.pre WTI.pre
 
 Y con `-f 12`, prevé 12 periodos con bandas al 95%.
 
+**Mirar antes de comprometerse.** `-p` hace **solo el preblanqueo**: filtra, dibuja
+la CCF y sugiere (b, r, s). No estima ni itera.
+
+```sh
+drtran IPC.pre WTI.pre -p
+```
+
+**Salida.** La consola solo da lo esencial —convergencia y qué modelo se ha
+estimado—; el detalle completo (tablas, gráficos de la CCF, diagnósticos,
+previsiones) va al fichero `<modelo>.out`. El nombre del modelo se da con `-m`; si
+no, se deriva de los dos `.pre`.
+
 ## Cómo funciona: el *cast*
 
 El modelo de transferencia se reescribe como un **VARMA bivariante diagonal**, que
@@ -76,13 +88,15 @@ El **primer** fichero es la endógena (Y); el **segundo**, la entrada exógena (
 
 | | |
 |---|---|
+| `-m NAME` | nombre del modelo; los resultados van a `NAME.out` (por defecto: `<salida>_<entrada>`) |
+| `-p` | **solo preblanqueo**: filtra, grafica la CCF y sugiere (b, r, s). No estima |
 | `-b N` `-r N` `-s N` | imponer el retardo puro, el denominador y el numerador (por defecto: identificados) |
 | `-0` | **sin transferencia**: los dos univariantes estimados conjuntamente. Es el modo de homologación con fue |
 | `-N` `-X` | fijar el ARMA del ruido / de la entrada |
 | `-D` `-E` | fijar TODOS los deterministas de Y / de X |
 | `-M` | fijar ambas medias en el valor del `.pre` |
 | `-f L` | prever L periodos con bandas al 95% |
-| `-o F` | escribir los resultados en F |
+| `-o F` | escribir los resultados en F en lugar de `NAME.out` |
 | `-v` | traza del optimizador |
 
 ## Validación

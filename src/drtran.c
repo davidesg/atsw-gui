@@ -38,6 +38,30 @@ int quiet_mode = 1;    /* suprimir traza del optimizador (0 = verbose) */
 #define DRTRAN_PI 3.14159265358979323846
 #define DRTRAN_VERSION "1.0"
 
+/* ── Resumen para la consola ────────────────────────────────────────────
+   El .out lleva el detalle completo (tablas, gráficos, diagnósticos). Por
+   pantalla solo va lo que el usuario necesita ver de un vistazo: si convergió
+   y qué modelo se ha estimado. Estas variables lo recogen por el camino.   */
+static real sum_p_transfer = -1.0;   /* p-valor de adecuación de la transferencia */
+static real sum_p_exog     = -1.0;   /* p-valor de exogeneidad de la entrada      */
+static real sum_logl       = 0.0;
+static int  sum_npar       = 0;
+static char outfile_path[600];
+static const char *sum_conv = "";
+static const char *sum_why  = "";
+static int  sum_fault = 0;
+
+/* Nombre base de una ruta, sin directorio ni extension: "a/b/ES_CPI.pre" -> "ES_CPI" */
+static void base_name(const char *path, char *out, size_t n)
+{
+    const char *b = strrchr(path, '/');
+    char *dot;
+    b = (b == NULL) ? path : b + 1;
+    snprintf(out, n, "%s", b);
+    dot = strrchr(out, '.');
+    if (dot != NULL) *dot = '\0';
+}
+
 /* Resultado real del optimizador (definidos en qnewtopt.c) */
 extern int opt_iters, opt_termcode;
 
@@ -653,7 +677,7 @@ void prewhiten_and_identify(real *w_X, real *w_Y, int n,
     mean_b = Mean(beta_Y, n);   s_b = Stdev(beta_Y, n);
 
     if (s_a < 1e-12 || s_b < 1e-12) {
-        fprintf(outputv, "\nPreblanqueo: serie sin variabilidad; no se identifica.\n");
+        fprintf(outputv, "\nPrewhitening: series has no variability; cannot identify.\n");
         *b = 0; *r = 0; *s = 0;
         free_vector(nu, -nlags, nlags); free_vector(ccf, -nlags, nlags);
         free_vector(beta_Y, 1, n); free_vector(a_X, 1, n);
@@ -685,12 +709,12 @@ void prewhiten_and_identify(real *w_X, real *w_Y, int n,
     /* --- Informe: grafico de la CCF en caracteres (diagnose.c: PlotCCF) --- */
     fprintf(outputv, "\n");
     fprintf(outputv, "=============================================================\n");
-    fprintf(outputv, "  IDENTIFICACION - preblanqueo y CCF (Box-Jenkins)           \n");
+    fprintf(outputv, "  IDENTIFICATION - prewhitening and CCF (Box-Jenkins)         \n");
     fprintf(outputv, "=============================================================\n");
-    fprintf(outputv, "  La entrada se preblanquea con su propio ARMA y el MISMO\n");
-    fprintf(outputv, "  filtro se aplica a la salida.  r(k) = corr(beta_t, a_{t-k}):\n");
-    fprintf(outputv, "    k > 0  ->  Y responde a X con k periodos de retardo (transferencia)\n");
-    fprintf(outputv, "    k < 0  ->  Y antecede a X (retroalimentacion: NO deberia haberla)\n\n");
+    fprintf(outputv, "  The input is prewhitened with its own ARMA and the SAME filter\n");
+    fprintf(outputv, "  is applied to the output.  r(k) = corr(beta_t, a_{t-k}):\n");
+    fprintf(outputv, "    k > 0  ->  Y responds to X with a k-period lag (the transfer)\n");
+    fprintf(outputv, "    k < 0  ->  Y leads X (feedback: there should be NONE)\n\n");
 
     {
         struct Tseries ser;
@@ -707,19 +731,19 @@ void prewhiten_and_identify(real *w_X, real *w_Y, int n,
     }
 
     /* Pesos de la respuesta impulso en los retardos significativos */
-    fprintf(outputv, "\n  Pesos de la respuesta impulso  nu(k) = r(k) * s_beta / s_a\n");
-    fprintf(outputv, "  (solo los retardos con CCF significativa)\n\n");
+    fprintf(outputv, "\n  Impulse response weights  nu(k) = r(k) * s_beta / s_a\n");
+    fprintf(outputv, "  (only lags with a significant CCF)\n\n");
     fprintf(outputv, "     k      r(k)      nu(k)\n");
     fprintf(outputv, "    ------------------------------\n");
     for (lag = -nlags; lag <= nlags; lag++) {
         if (fabs(ccf[lag]) <= threshold) continue;
         fprintf(outputv, "   %4d  %8.4f  %9.4f  %s\n", lag, ccf[lag], nu[lag],
-                (lag < 0) ? "<-- retroalimentacion?" : "");
+                (lag < 0) ? "<-- feedback?" : "");
         if (lag < 0) nsig_neg++;
         if (lag >= 0 && b_hat < 0) b_hat = lag;   /* primer k significativo */
     }
     if (b_hat < 0 && nsig_neg == 0)
-        fprintf(outputv, "   (ninguno)\n");
+        fprintf(outputv, "   (none)\n");
     fprintf(outputv, "\n");
 
     /* La estructura de la transferencia es el bloque CONTIGUO de pesos que
@@ -746,25 +770,25 @@ void prewhiten_and_identify(real *w_X, real *w_Y, int n,
         Qn    = ChiTestC(cn + 1, nlags, n);   /* se salta el retardo 0 */
         pvaln = 1.0 - chisq(Qn, nlags);
 
-        fprintf(outputv, "  Exogeneidad — portmanteau de la CCF en k < 0:\n");
-        fprintf(outputv, "    Q(%d) = %.4f   p-valor = %.4f   [%d significativa(s) de %d]\n",
+        fprintf(outputv, "  Exogeneity - portmanteau of the CCF at k < 0:\n");
+        fprintf(outputv, "    Q(%d) = %.4f   p-value = %.4f   [%d significant out of %d]\n",
                 nlags, Qn, pvaln, nsig_neg, nlags);
 
         if (pvaln < 0.05) {
-            fprintf(outputv, "\n  AVISO: la salida antecede a la entrada. Puede haber\n");
-            fprintf(outputv, "  RETROALIMENTACION (Y -> X). El modelo de transferencia de una\n");
-            fprintf(outputv, "  entrada supone que X es EXOGENA; si hay feedback, sus\n");
-            fprintf(outputv, "  estimaciones no son fiables.\n\n");
+            fprintf(outputv, "\n  WARNING: the output leads the input. There may be\n");
+            fprintf(outputv, "  FEEDBACK (Y -> X). The single-input transfer model assumes X is\n");
+            fprintf(outputv, "  EXOGENOUS; with feedback, its estimates are not reliable.\n\n");
+            fprintf(outputv, "");
         } else {
-            fprintf(outputv, "    X se comporta como exogena. OK\n\n");
+            fprintf(outputv, "    X behaves as exogenous. OK\n\n");
         }
         free_vector(cn, 1, nlags + 1);
     }
 
     /* --- 6: propuestas --- */
     if (b_hat < 0) {
-        fprintf(outputv, "  No hay CCF significativa en k >= 0: no se detecta relacion.\n");
-        fprintf(outputv, "  Propuesta: b=0, r=0, s=0 (sin transferencia).\n");
+        fprintf(outputv, "  No significant CCF at k >= 0: no relationship detected.\n");
+        fprintf(outputv, "  Proposal: b=0, r=0, s=0 (no transfer).\n");
         *b = 0; *r = 0; *s = 0;
     } else {
         int nblock = last_sig - b_hat + 1;   /* amplitud del bloque significativo */
@@ -776,8 +800,8 @@ void prewhiten_and_identify(real *w_X, real *w_Y, int n,
         r1 = 0;
         s1 = last_sig - b_hat;
         if (s1 > MAX_S) {
-            fprintf(outputv, "  AVISO: el bloque significativo (s=%d) excede MAX_S=%d;\n"
-                             "  se recorta. Revisa la CCF a mano.\n", s1, MAX_S);
+            fprintf(outputv, "  WARNING: the significant block (s=%d) exceeds MAX_S=%d;\n"
+                             "  it is truncated. Inspect the CCF by hand.\n", s1, MAX_S);
             s1 = MAX_S;
         }
 
@@ -795,24 +819,24 @@ void prewhiten_and_identify(real *w_X, real *w_Y, int n,
             }
         }
 
-        fprintf(outputv, "  Pesos significativos: k = %d..%d  (b = primer k significativo)\n\n",
+        fprintf(outputv, "  Significant weights: k = %d..%d  (b = first significant k)\n\n",
                 b_hat, last_sig);
-        fprintf(outputv, "  PROPUESTAS:\n");
-        fprintf(outputv, "    [A]  b=%d  r=%d  s=%d   -- cada peso significativo como omega libre\n",
+        fprintf(outputv, "  PROPOSALS:\n");
+        fprintf(outputv, "    [A]  b=%d  r=%d  s=%d   -- every significant weight as a free omega\n",
                 b_hat, r1, s1);
         if (decays)
-            fprintf(outputv, "    [B]  b=%d  r=%d  s=%d   -- la cola decae (razon ~ %.2f): un\n"
-                             "                             denominador delta la resume con 1 parametro\n",
+            fprintf(outputv, "    [B]  b=%d  r=%d  s=%d   -- the tail decays (ratio ~ %.2f): a\n"
+                             "                             delta denominator sums it up with 1 parameter\n",
                     b2, r2, s2, ratio);
         else
-            fprintf(outputv, "    [B]  (no procede: la cola no decae geometricamente)\n");
+            fprintf(outputv, "    [B]  (not applicable: the tail does not decay geometrically)\n");
 
         /* Recomendacion: la parsimoniosa si hay decaimiento claro, si no la directa */
         if (decays) { *b = b2; *r = r2; *s = s2; }
         else        { *b = b_hat; *r = r1; *s = s1; }
 
-        fprintf(outputv, "\n  RECOMENDADO: b=%d, r=%d, s=%d\n", *b, *r, *s);
-        fprintf(outputv, "  (usa -b/-r/-s para imponer otra especificacion)\n");
+        fprintf(outputv, "\n  RECOMMENDED: b=%d, r=%d, s=%d\n", *b, *r, *s);
+        fprintf(outputv, "  (use -b/-r/-s to impose a different specification)\n");
     }
     fprintf(outputv, "=============================================================\n\n");
 
@@ -837,7 +861,8 @@ void prewhiten_and_identify(real *w_X, real *w_Y, int n,
 /*   - CCF significativa en k <  0  ->  RETROALIMENTACION: X no es exogena y   */
 /*                                      el modelo de una entrada no es valido  */
 /* -------------------------------------------------------------------------- */
-static void transfer_adequacy(real **a, int n, int b, int r, int s, FILE *out)
+static void transfer_adequacy(real **a, int n, int b, int r, int s, FILE *out,
+                              real *p_transfer, real *p_exog)
 {
     int    nlags = (n / 4 < 24) ? n / 4 : 24;
     real  *aN, *aX, *cpos, *cneg, *plot;
@@ -845,6 +870,9 @@ static void transfer_adequacy(real **a, int n, int b, int r, int s, FILE *out)
     int    t, k, lag, npar_tr, df, nsig_pos = 0, nsig_neg = 0;
 
     if (nlags < 10) nlags = 10;
+
+    if (p_transfer) *p_transfer = -1.0;
+    if (p_exog)     *p_exog     = -1.0;
 
     aN   = vector(1, n);
     aX   = vector(1, n);
@@ -872,12 +900,12 @@ static void transfer_adequacy(real **a, int n, int b, int r, int s, FILE *out)
 
     fprintf(out, "\n");
     fprintf(out, "=============================================================\n");
-    fprintf(out, "  ADECUACION DE LA TRANSFERENCIA                             \n");
-    fprintf(out, "  CCF entre el ruido estimado y la entrada preblanqueada      \n");
+    fprintf(out, "  TRANSFER FUNCTION ADEQUACY                                  \n");
+    fprintf(out, "  CCF between the estimated noise and the prewhitened input    \n");
     fprintf(out, "=============================================================\n");
-    fprintf(out, "  Si (b, r, s) es correcta, esta CCF debe ser ruido blanco.\n");
-    fprintf(out, "    k >= 0 significativo -> falta estructura en la TRANSFERENCIA\n");
-    fprintf(out, "    k <  0 significativo -> RETROALIMENTACION (X no es exogena)\n\n");
+    fprintf(out, "  If (b, r, s) is correct, this CCF must be white noise.\n");
+    fprintf(out, "    significant at k >= 0 -> structure missing in the TRANSFER\n");
+    fprintf(out, "    significant at k <  0 -> FEEDBACK (X is not exogenous)\n\n");
 
     {
         struct Tseries ser;
@@ -896,10 +924,10 @@ static void transfer_adequacy(real **a, int n, int b, int r, int s, FILE *out)
     df = (nlags + 1) - npar_tr;
     if (df < 1) df = 1;
 
-    fprintf(out, "\n  Portmanteau de la CCF (k >= 0), que es el test de la transferencia:\n");
-    fprintf(out, "    Q(%d) = %.4f   [%d retardos - %d parametros de nu(B)]\n",
+    fprintf(out, "\n  Portmanteau of the CCF (k >= 0): this is the test of the transfer:\n");
+    fprintf(out, "    Q(%d) = %.4f   [%d lags - %d parameters of nu(B)]\n",
             df, Q, nlags + 1, npar_tr);
-    fprintf(out, "    p-valor = %.4f\n", 1.0 - chisq(Q, df));
+    fprintf(out, "    p-value = %.4f\n", 1.0 - chisq(Q, df));
 
     /* El veredicto lo dicta el test CONJUNTO (portmanteau), no la presencia de
        algun pico suelto: con bandas al 5% se espera que ~1 de cada 20 retardos
@@ -909,23 +937,25 @@ static void transfer_adequacy(real **a, int n, int b, int r, int s, FILE *out)
         real pval     = 1.0 - chisq(Q, df);
         real expected = 0.05 * (nlags + 1);
 
-        fprintf(out, "\n  VEREDICTO:\n");
+        if (p_transfer) *p_transfer = pval;
+
+        fprintf(out, "\n  VERDICT:\n");
 
         if (pval < 0.05) {
-            fprintf(out, "    *** La transferencia NO es adecuada (p = %.4f).\n", pval);
-            fprintf(out, "    El ruido aun conserva huella de la entrada en:\n");
+            fprintf(out, "    *** The transfer is NOT adequate (p = %.4f).\n", pval);
+            fprintf(out, "    The noise still carries a trace of the input at:\n");
             for (k = 0; k <= nlags; k++)
                 if (fabs(cpos[k + 1]) > threshold)
                     fprintf(out, "      k = %2d   r = %7.4f\n", k, cpos[k + 1]);
-            fprintf(out, "    Amplia nu(B) para cubrir esos retardos: sube s hasta el ultimo\n");
-            fprintf(out, "    de ellos, o prueba r=1 si los pesos decaen. Y vuelve a estimar.\n");
+            fprintf(out, "    Widen nu(B) to cover those lags: raise s up to the last one, or\n");
+            fprintf(out, "    try r=1 if the weights decay. Then re-estimate.\n");
         } else {
-            fprintf(out, "    La transferencia es ADECUADA (p = %.4f): la CCF es\n", pval);
-            fprintf(out, "    compatible con ruido blanco en k >= 0.\n");
+            fprintf(out, "    The transfer is ADEQUATE (p = %.4f): the CCF is consistent\n", pval);
+            fprintf(out, "    with white noise at k >= 0.\n");
             if (nsig_pos > 0) {
-                fprintf(out, "    (%d retardo(s) cruzan las bandas individuales; por azar se\n",
+                fprintf(out, "    (%d lag(s) cross the individual bands; ~%.1f would be expected\n",
                         nsig_pos);
-                fprintf(out, "     esperarian ~%.1f, asi que no contradicen el test conjunto:\n",
+                fprintf(out, "     by chance, so they do not contradict the joint test:\n",
                         expected);
                 for (k = 0; k <= nlags; k++)
                     if (fabs(cpos[k + 1]) > threshold)
@@ -940,15 +970,17 @@ static void transfer_adequacy(real **a, int n, int b, int r, int s, FILE *out)
         real Qn    = ChiTestC(cneg + 1, nlags, n);
         real pvaln = 1.0 - chisq(Qn, nlags);
 
-        fprintf(out, "\n  Portmanteau de la CCF (k < 0), que es el test de EXOGENEIDAD:\n");
-        fprintf(out, "    Q(%d) = %.4f   p-valor = %.4f   [%d significativa(s)]\n",
+        if (p_exog) *p_exog = pvaln;
+
+        fprintf(out, "\n  Portmanteau of the CCF (k < 0): this is the EXOGENEITY test:\n");
+        fprintf(out, "    Q(%d) = %.4f   p-value = %.4f   [%d significant]\n",
                 nlags, Qn, pvaln, nsig_neg);
         if (pvaln < 0.05) {
-            fprintf(out, "\n    *** AVISO: la salida antecede a la entrada. Hay indicios de\n");
-            fprintf(out, "    RETROALIMENTACION (Y -> X), y el modelo de transferencia de una\n");
-            fprintf(out, "    entrada supone que X es EXOGENA: sus estimaciones no serian fiables.\n");
+            fprintf(out, "\n    *** WARNING: the output leads the input. There are signs of\n");
+            fprintf(out, "    FEEDBACK (Y -> X), and the single-input transfer model assumes\n");
+            fprintf(out, "    X is EXOGENOUS: its estimates would not be reliable.\n");
         } else {
-            fprintf(out, "    X se comporta como exogena. OK\n");
+            fprintf(out, "    X behaves as exogenous. OK\n");
         }
     }
     fprintf(out, "=============================================================\n\n");
@@ -1000,7 +1032,7 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
 
     /* --- 1. Reconstruir el VARMA estimado y su covarianza --- */
     shootx(x, &vf, &ifault, 1, 0);
-    if (ifault != 0) { fprintf(out, "\nNo se pudo construir el modelo para prever.\n"); return; }
+    if (ifault != 0) { fprintf(out, "\nCould not build the model for forecasting.\n"); return; }
 
     p = vf.p; q = vf.q;
 
@@ -1124,14 +1156,14 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
         /* --- 8. Informe --- */
         fprintf(out, "\n");
         fprintf(out, "=============================================================\n");
-        fprintf(out, "  PREVISION DE Y DADO EL MODELO DE X                         \n");
+        fprintf(out, "  FORECAST OF Y GIVEN THE MODEL OF X                          \n");
         fprintf(out, "=============================================================\n");
-        fprintf(out, "  Prever Y exige prever X: la transferencia necesita el futuro\n");
-        fprintf(out, "  de la entrada. El error de prevision de Y tiene por tanto DOS\n");
-        fprintf(out, "  fuentes: la innovacion del ruido y la de la entrada, esta\n");
-        fprintf(out, "  ultima propagada por nu(B).\n\n");
-        fprintf(out, "  Serie estacionaria (w) y NIVEL, con bandas al 95%%:\n\n");
-        fprintf(out, "   l     w_Y prev    sd(w)   |     NIVEL      inferior      superior\n");
+        fprintf(out, "  Forecasting Y requires forecasting X: the transfer needs the\n");
+        fprintf(out, "  future of the input. The forecast error of Y therefore has TWO\n");
+        fprintf(out, "  sources: the noise innovation and the input innovation, the\n");
+        fprintf(out, "  latter propagated through nu(B).\n\n");
+        fprintf(out, "  Stationary series (w) and LEVEL, with 95%% bands:\n\n");
+        fprintf(out, "   l     w_Y fcst    sd(w)   |     LEVEL         lower         upper\n");
         fprintf(out, "  ---------------------------------------------------------------------\n");
 
         for (l = 1; l <= L; l++) {
@@ -1191,55 +1223,66 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
 static void usage(const char *prog)
 {
     fprintf(stderr,
-"drtran %s - modelos de transferencia Box-Jenkins por maxima verosimilitud exacta\n"
+"DRTRAN %s: Box-Jenkins transfer function models by exact maximum likelihood\n"
 "\n"
-"Puente entre fue (modelos univariantes) y drvarma (verosimilitud exacta VARMA).\n"
-"Lee dos modelos ya especificados en fue (.pre) y los estima CONJUNTAMENTE:\n"
+"A bridge between fue (univariate models) and drvarma (exact VARMA likelihood).\n"
+"Reads two models already specified in fue (.pre) and estimates them JOINTLY:\n"
 "\n"
-"    Y_t = [w(B)/d(B)] B^b X_t + N_t\n"
+"    Y_t = [omega(B)/delta(B)] B^b X_t + N_t\n"
 "\n"
-"Uso: %s salida.pre entrada.pre [opciones]\n"
-"     El PRIMER fichero es la endogena (Y); el SEGUNDO, la entrada exogena (X).\n"
+"Usage: %s output.pre input.pre [options]\n"
+"       The FIRST file is the output (Y); the SECOND is the exogenous input (X).\n"
 "\n"
-"Sin opciones, drtran hace el ciclo completo de Box-Jenkins:\n"
-"  1. preblanquea la entrada y lee la CCF  -> propone (b, r, s)\n"
-"  2. estima todo a la vez por ML exacta   -> transferencia + ARMA + deterministas\n"
-"  3. valida (CCF ruido vs entrada)        -> adecuacion y exogeneidad\n"
+"With no options, drtran runs the full Box-Jenkins cycle:\n"
+"  1. prewhiten the input, read the CCF   -> propose (b, r, s)\n"
+"  2. estimate everything jointly by exact ML\n"
+"  3. validate (CCF noise vs input)       -> adequacy and exogeneity\n"
 "\n"
-"ESPECIFICACION DE LA TRANSFERENCIA\n"
-"  -b N   retardo puro B^b                        (por defecto: identificado)\n"
-"  -r N   orden del denominador d(B)              (por defecto: identificado)\n"
-"  -s N   orden del numerador w(B)                (por defecto: identificado)\n"
-"  -0     SIN transferencia: estima los dos modelos univariantes de forma\n"
-"         conjunta y diagonal. Es el modo de homologacion con fue (debe\n"
-"         reproducir fue ejecutado sobre cada serie por separado).\n"
+"MODEL AND OUTPUT\n"
+"  -m NAME  model name; results go to NAME.out\n"
+"           (default: <output>_<input>, from the two .pre file names)\n"
+"  -o FILE  write the results to FILE instead of NAME.out\n"
 "\n"
-"QUE SE ESTIMA\n"
-"  Por defecto MANDA EL .pre: cada coeficiente ARMA, cada omega/delta de las\n"
-"  deterministas y cada media son libres o fijos segun su flag en el fichero\n"
-"  (\"0.0000  0\" es un coeficiente FIJO, no un valor inicial). Para forzar:\n"
-"  -N     fijar los parametros ARMA del ruido (los de Y)\n"
-"  -X     fijar los parametros ARMA de la entrada\n"
-"  -D     fijar TODOS los coeficientes deterministas de Y\n"
-"  -E     fijar TODOS los coeficientes deterministas de X\n"
-"  -M     fijar ambas medias en el valor del .pre\n"
+"IDENTIFICATION\n"
+"  -p       PREWHITEN ONLY: filter the input with its own ARMA, apply the same\n"
+"           filter to the output, plot the CCF and suggest (b, r, s).\n"
+"           Does NOT estimate and does NOT iterate.\n"
 "\n"
-"PREVISION\n"
-"  -f L   prever L periodos, con bandas al 95%%. Prever Y exige prever X: el\n"
-"         error de Y suma la innovacion del ruido y la de la entrada,\n"
-"         propagada por nu(B).\n"
+"TRANSFER FUNCTION\n"
+"  -b N     pure delay B^b                    (default: identified)\n"
+"  -r N     order of the denominator delta(B) (default: identified)\n"
+"  -s N     order of the numerator omega(B)   (default: identified)\n"
+"  -0       NO transfer: fit the two univariate models jointly and diagonally.\n"
+"           This is the homologation mode against fue (it must reproduce fue\n"
+"           run separately on each series).\n"
 "\n"
-"OTRAS\n"
-"  -o F   escribir los resultados en el fichero F\n"
-"  -v     traza del optimizador\n"
-"  -h     esta ayuda\n"
+"WHAT IS ESTIMATED\n"
+"  By default THE .pre RULES: every ARMA coefficient, every omega/delta of the\n"
+"  deterministic variables and every mean is free or fixed according to its flag\n"
+"  in the file (\"0.0000  0\" is a FIXED coefficient, not a starting value).\n"
+"  To override:\n"
+"  -N       fix the noise ARMA parameters (those of Y)\n"
+"  -X       fix the input ARMA parameters\n"
+"  -D       fix ALL deterministic coefficients of Y\n"
+"  -E       fix ALL deterministic coefficients of X\n"
+"  -M       fix both means at their .pre values\n"
 "\n"
-"EJEMPLOS\n"
-"  %s IPC.pre WTI.pre              ciclo completo: identifica, estima y valida\n"
-"  %s IPC.pre WTI.pre -b 0 -s 1    imponer (b, r, s)\n"
-"  %s IPC.pre WTI.pre -0           homologacion con fue (sin transferencia)\n"
-"  %s IPC.pre WTI.pre -f 12        y ademas prever 12 periodos\n",
-        DRTRAN_VERSION, prog, prog, prog, prog, prog);
+"FORECASTING\n"
+"  -f L     forecast L periods ahead, with 95%% bands. Forecasting Y requires\n"
+"           forecasting X: the error of Y adds the noise innovation and the\n"
+"           input innovation, the latter propagated through nu(B).\n"
+"\n"
+"OTHER\n"
+"  -v       optimizer trace\n"
+"  -h       this help\n"
+"\n"
+"EXAMPLES\n"
+"  %s CPI.pre WTI.pre -p              prewhiten only: look before committing\n"
+"  %s CPI.pre WTI.pre                 full cycle: identify, estimate, validate\n"
+"  %s CPI.pre WTI.pre -b 0 -s 1       impose (b, r, s)\n"
+"  %s CPI.pre WTI.pre -0              homologation with fue (no transfer)\n"
+"  %s CPI.pre WTI.pre -m oil -f 12    name the model and forecast 12 periods\n",
+        DRTRAN_VERSION, prog, prog, prog, prog, prog, prog);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1252,13 +1295,16 @@ int main(int argc, char *argv[])
     int auto_id = 1;   /* 1 = no se dieron órdenes, ejecutar preblanqueo */
     int force_fix_mu = 0;   /* -M: fijar ambas medias, ignorando el .pre */
     int fc_horizon = 0;     /* -f L: horizonte de prevision (0 = no prever) */
+    int prewhiten_only = 0; /* -p: solo preblanquear (filtrar + CCF), sin estimar */
+    char *model_name = NULL;
+    char outname[512];
 
     /* Inicializar variables globales del motor */
     macheps = cmacheps();
     outputv = stdout;
 
     /* --- Procesar argumentos --- */
-    while ((opt = getopt(argc, argv, "r:s:b:f:0XNDEMvho:")) != -1) {
+    while ((opt = getopt(argc, argv, "r:s:b:f:m:p0XNDEMvho:")) != -1) {
         switch (opt) {
         case 'r': r_ord    = atoi(optarg); auto_id = 0; break;
         case 's': s_ord    = atoi(optarg); auto_id = 0; break;
@@ -1269,6 +1315,8 @@ int main(int argc, char *argv[])
         case 'E': fix_det_X = 1;          break;  /* fijar TODOS los det de X */
         case 'M': force_fix_mu = 1;       break;  /* fijar ambas medias */
         case 'f': fc_horizon = atoi(optarg); break;  /* horizonte de prevision */
+        case 'm': model_name = optarg;    break;  /* nombre del modelo */
+        case 'p': prewhiten_only = 1;     break;  /* solo preblanqueo */
         case '0': s_ord = -1; r_ord = 0; b_delay = 0; auto_id = 0;
                   break;  /* sin transferencia: dos univariantes conjuntos */
         case 'v': quiet_mode = 0;         break;
@@ -1285,18 +1333,47 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    if (outfile != NULL) {
-        outputv = fopen(outfile, "w");
+    /* Nombre del modelo: -m, o por defecto <salida>_<entrada> a partir de los
+       dos .pre (sin ruta ni extension). Los resultados van a <modelo>.out; la
+       consola solo recibe un resumen.                                        */
+    if (model_name == NULL) {
+        char yb[128], xb[128];
+        base_name(argv[optind],     yb, sizeof yb);
+        base_name(argv[optind + 1], xb, sizeof xb);
+        snprintf(outname, sizeof outname, "%s_%s", yb, xb);
+        model_name = outname;
+    }
+
+    {
+        char path[600];
+        if (outfile != NULL) snprintf(path, sizeof path, "%s", outfile);
+        else                 snprintf(path, sizeof path, "%s.out", model_name);
+
+        outputv = fopen(path, "w");
         if (outputv == NULL) {
-            fprintf(stderr, "Error: no se pudo abrir %s\n", outfile);
+            fprintf(stderr, "Error opening output file: %s\n", path);
             return 1;
         }
+        snprintf(outfile_path, sizeof outfile_path, "%s", path);
     }
+
+    /* --- Banner y cabecera de consola (convencion de fue/drvarma) --- */
+    printf("\n");
+    printf("DRTRAN %s: Box-Jenkins transfer function models by exact ML\n",
+           DRTRAN_VERSION);
+    printf("Copyright (C) 2026 A.B. Treadway, J.A. Mauricio & D.E. Guerrero\n");
+    printf("Non-final version. May contain errors. Please report.\n\n");
+    printf("Model                  : %s\n", model_name);
+    printf("Output (Y)             : %s\n", argv[optind]);
+    printf("Input  (X)             : %s\n", argv[optind + 1]);
+    printf("Results file           : %s\n", outfile_path);
+    printf("Method                 : exact maximum likelihood ");
+    printf("(bivariate VARMA cast)\n");
 
     /* --- Leer los dos modelos univariantes --- */
     /* Convención: primer argumento = endógena (Y), segundo = exógena (X) */
     if (read_fue_pre(argv[optind], &TmY, &TsY, &DataMatY) != 0) {
-        fprintf(stderr, "Error leyendo %s\n", argv[optind]);
+        fprintf(stderr, "Error reading %s\n", argv[optind]);
         return 2;
     }
     if (read_fue_pre(argv[optind + 1], &TmX, &TsX, &DataMatX) != 0) {
@@ -1322,16 +1399,16 @@ int main(int argc, char *argv[])
     /* --- Series estacionarias w_X, w_Y, recortadas a la ventana común --- */
     build_stationary_pair();
     if (n_stat <= 0) {
-        fprintf(stderr, "Error: no se pudieron construir las series "
-                        "estacionarias\n");
+        fprintf(stderr, "Error: could not build the stationary series\n");
         return 5;
     }
 
-    fprintf(outputv, "  Longitud estacionaria: n_stat = %d\n\n", n_stat);
-
-    /* --- Cabecera estilo drvarma --- */
-    fprintf(outputv, "Input Y (endog)  : %s\n", argv[optind]);
-    fprintf(outputv, "Input X (exog)   : %s\n", argv[optind + 1]);
+    /* --- Cabecera del .out --- */
+    fprintf(outputv, "DRTRAN %s: Box-Jenkins transfer function models by exact ML\n\n",
+            DRTRAN_VERSION);
+    fprintf(outputv, "Model            : %s\n", model_name);
+    fprintf(outputv, "Output (Y)       : %s\n", argv[optind]);
+    fprintf(outputv, "Input  (X)       : %s\n", argv[optind + 1]);
     fprintf(outputv, "Transfer model   : s=%d, r=%d, b=%d\n", s_ord, r_ord, b_delay);
     fprintf(outputv, "Diagonal AR/MA   : yes\n");
     fprintf(outputv, "Diagonal cov     : yes\n");
@@ -1367,24 +1444,41 @@ int main(int argc, char *argv[])
     }
 
     /* --- Preblanqueo e identificación (si no se dieron órdenes) --- */
-    if (auto_id) {
+    if (auto_id || prewhiten_only) {
         fprintf(outputv, "Ejecutando preblanqueo para identificar órdenes...\n");
         prewhiten_and_identify(w_X, w_Y, n_stat,
                                phi_X, p_X, theta_X, q_X,
                                &r_ord, &s_ord, &b_delay, outputv);
     }
 
-    fprintf(outputv, "\nÓrdenes de la función de transferencia:\n");
-    fprintf(outputv, "  b (retardo) = %d\n", b_delay);
-    fprintf(outputv, "  r (denom δ)  = %d\n", r_ord);
-    fprintf(outputv, "  s (num ω)   = %d\n", s_ord);
+    /* ── -p: SOLO PREBLANQUEO ──────────────────────────────────────────
+       Filtra y dibuja la CCF. No estima, no itera: es el paso de
+       identificacion aislado, para mirar la relacion antes de comprometerse
+       con una especificacion.                                              */
+    if (prewhiten_only) {
+        printf("Observations           : %d\n", n_stat);
+        printf("\n**** PREWHITENING ONLY: no estimation performed\n\n");
+        printf("Suggested transfer function orders:\n");
+        printf("  b (delay)             : %d\n", b_delay);
+        printf("  r (denominator)       : %d\n", r_ord);
+        printf("  s (numerator)         : %d\n", s_ord);
+        printf("\nCCF plot and impulse response weights written to %s\n\n",
+               outfile_path);
+        fclose(outputv);
+        return 0;
+    }
+
+    fprintf(outputv, "\nTransfer function orders:\n");
+    fprintf(outputv, "  b (delay)       = %d\n", b_delay);
+    fprintf(outputv, "  r (denominator) = %d\n", r_ord);
+    fprintf(outputv, "  s (numerator)   = %d\n", s_ord);
 
     if (r_ord > MAX_R) {
-        fprintf(stderr, "Error: r_ord=%d excede MAX_R=%d\n", r_ord, MAX_R);
+        fprintf(stderr, "Error: r=%d exceeds MAX_R=%d\n", r_ord, MAX_R);
         return 8;
     }
     if (s_ord > MAX_S) {
-        fprintf(stderr, "Error: s_ord=%d excede MAX_S=%d\n", s_ord, MAX_S);
+        fprintf(stderr, "Error: s=%d exceeds MAX_S=%d\n", s_ord, MAX_S);
         return 8;
     }
 
@@ -1401,7 +1495,7 @@ int main(int argc, char *argv[])
         if (!fix_mu_X)   npar += 1;
         npar += 1;   /* log(var_X/var_Y): la escala la concentra sigma2 */
 
-        fprintf(outputv, "Número de parámetros a estimar: %d\n", npar);
+        fprintf(outputv, "Parameters to estimate: %d\n", npar);
         fprintf(outputv, "  fix_noise=%d, fix_X=%d, fix_det_Y=%d, fix_det_X=%d,"
                          " fix_mu_Y=%d, fix_mu_X=%d\n\n",
                 fix_noise, fix_X, fix_det_Y, fix_det_X, fix_mu_Y, fix_mu_X);
@@ -1470,7 +1564,7 @@ int main(int argc, char *argv[])
 
                 varma1.xitol = -1e-3;   /* verosimilitud exacta */
 
-                fprintf(outputv, "Estimando modelo de transferencia...\n");
+                fprintf(outputv, "Estimating transfer function model...\n");
 
                 est(shootx, npar, x, dev, cov, maxits, nrits,
                     gradtol, steptol, varma1.xitol, a_est,
@@ -1491,29 +1585,33 @@ int main(int argc, char *argv[])
                                MISMO óptimo.
                          4,5 = fallo real (límite de iteraciones / pasos máximos) */
                     switch (opt_termcode) {
-                    case 1:  verdict = "CONVERGIÓ";
-                             why = "gradiente escalado <= gradtol";              break;
-                    case 2:  verdict = "CONVERGIÓ";
-                             why = "paso escalado <= steptol";                   break;
-                    case 3:  verdict = "PARADA en un punto sin mejora";
-                             why = "la búsqueda lineal no encontró un punto mejor "
-                                   "(normal si se arranca en el óptimo)";        break;
-                    case 4:  verdict = "*** NO CONVERGIÓ ***";
-                             why = "LÍMITE DE ITERACIONES alcanzado";            break;
-                    case 5:  verdict = "*** NO CONVERGIÓ ***";
-                             why = "cinco pasos consecutivos de longitud máxima"; break;
-                    default: verdict = "*** NO CONVERGIÓ ***";
-                             why = "desconocido";                                break;
+                    case 1:  verdict = "CONVERGENCE OBTAINED";
+                             why = "gradient stopping criterium satisfied";       break;
+                    case 2:  verdict = "CONVERGENCE OBTAINED";
+                             why = "parameter stopping criterium satisfied";      break;
+                    case 3:  verdict = "STOPPED AT A POINT WITH NO IMPROVEMENT";
+                             why = "last global step failed to locate a lower point "
+                                   "(usual when starting AT the optimum)";        break;
+                    case 4:  verdict = "*** NO CONVERGENCE ***";
+                             why = "ITERATION LIMIT REACHED";                     break;
+                    case 5:  verdict = "*** NO CONVERGENCE ***";
+                             why = "five consecutive steps of max length";        break;
+                    default: verdict = "*** NO CONVERGENCE ***";
+                             why = "unknown";                                     break;
                     }
 
-                    fprintf(outputv, "\n=============================================================\n");
-                    fprintf(outputv, "  OPTIMIZADOR: %s tras %d iteraciones (de %d)\n",
+                    sum_logl  = varma1.logelf;
+                    sum_npar  = npar;
+                    sum_conv  = verdict;
+                    sum_why   = why;
+                    sum_fault = ifault;
+
+                    fprintf(outputv, "\n**** %s AFTER %d ITERATIONS (of %d)\n",
                             verdict, opt_iters, maxits);
-                    fprintf(outputv, "  Criterio de parada: %s\n", why);
+                    fprintf(outputv, "**** %s\n", why);
                     if (ifault != 0)
-                        fprintf(outputv, "  *** ifault = %d (estimación no fiable)\n", ifault);
-                    fprintf(outputv, "  Objective function = %.12f\n", varma1.logelf);
-                    fprintf(outputv, "=============================================================\n\n");
+                        fprintf(outputv, "**** ifault = %d (estimates not reliable)\n", ifault);
+                    fprintf(outputv, "\nLog-likelihood = %.6f\n\n", varma1.logelf);
                 }
 
                 /* --- Tabla de parámetros estilo drvarma --- */
@@ -1685,7 +1783,7 @@ int main(int argc, char *argv[])
                         diagnose(&vdiag);
 
                         fprintf(outputv, "\n");
-                        fprintf(outputv, "--- Diagnóstico multivariante (Hosking + JB) ---\n");
+                        fprintf(outputv, "--- Multivariate diagnostics (Hosking + JB) ---\n");
                         multivariate_diagnostics(a_est, n_stat, 2, outputv);
 
                         /* Adecuación de la transferencia: el ruido no debe
@@ -1693,7 +1791,8 @@ int main(int argc, char *argv[])
                            tiene sentido si hay transferencia (s >= 0).       */
                         if (s_ord >= 0)
                             transfer_adequacy(a_est, n_stat, b_delay, r_ord,
-                                              s_ord, outputv);
+                                              s_ord, outputv,
+                                              &sum_p_transfer, &sum_p_exog);
 
                         if (fc_horizon > 0)
                             transfer_forecast(x, npar, fc_horizon,
@@ -1702,6 +1801,51 @@ int main(int argc, char *argv[])
                         /* Liberar el VARMA de diagnóstico */
                         shootx(x, &vdiag, &ifault_diag, 0, 1);
                     }
+                }
+
+                /* ── Resumen de consola ────────────────────────────────────
+                   Escueto y en inglés, como fue/drvarma. El detalle esta en el .out. */
+                {
+                    int j2;
+                    printf("Observations           : %d\n", n_stat);
+                    printf("Parameters             : %d\n", sum_npar);
+                    printf("Transfer (b, r, s)     : (%d, %d, %d)%s\n",
+                           b_delay, r_ord, s_ord,
+                           auto_id ? "  [identified by prewhitening]" : "  [imposed]");
+                    printf("\n**** %s AFTER %d ITERATIONS\n", sum_conv, opt_iters);
+                    printf("**** %s\n", sum_why);
+                    if (sum_fault)
+                        printf("**** ifault = %d (estimates not reliable)\n", sum_fault);
+                    printf("\nLog-likelihood         : %.6f\n\n", sum_logl);
+
+                    printf("Estimated model\n");
+                    if (s_ord >= 0) {
+                        printf("  Transfer  : nu(B) = omega(B)/delta(B) * B^%d\n", b_delay);
+                        for (j2 = 0; j2 <= s_ord; j2++)
+                                printf("                omega_%d = %10.6f  (t = %6.2f)\n", j2,
+                                       x[j2 + 1], dev[j2+1] > 1e-15 ? x[j2+1]/dev[j2+1] : 0.0);
+                        for (j2 = 1; j2 <= r_ord; j2++)
+                                printf("                delta_%d = %10.6f  (t = %6.2f)\n", j2,
+                                       x[s_ord + 1 + j2],
+                                       dev[s_ord+1+j2] > 1e-15 ? x[s_ord+1+j2]/dev[s_ord+1+j2] : 0.0);
+                    } else {
+                        printf("  Transfer  : none (two univariate models, joint diagonal fit)\n");
+                    }
+                    printf("  Noise (Y) : AR order %d, MA order %d, %d deterministic(s)%s\n",
+                           p_N, q_N, TmY.NdetVar, fix_mu_Y ? ", mean fixed" : ", mean free");
+                    printf("  Input (X) : AR order %d, MA order %d, %d deterministic(s)%s\n",
+                           p_X, q_X, TmX.NdetVar, fix_mu_X ? ", mean fixed" : ", mean free");
+
+                    if (sum_p_transfer >= 0.0) {
+                        printf("\nDiagnostics\n");
+                        printf("  Transfer adequacy   : %-9s (p = %.4f)\n",
+                                   sum_p_transfer < 0.05 ? "INADEQUATE" : "adequate",
+                                   sum_p_transfer);
+                        printf("  Input exogeneity    : %-9s (p = %.4f)\n",
+                                   sum_p_exog < 0.05 ? "FEEDBACK!" : "ok",
+                                   sum_p_exog);
+                    }
+                    printf("\nFull results written to %s\n\n", outfile_path);
                 }
 
                 /* Liberar memoria del optimizador */

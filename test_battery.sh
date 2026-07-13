@@ -45,7 +45,7 @@ val() { grep -E "^$2" "$1" | head -1 | awk '{print $2}'; }
 # "PARADA en un punto sin mejora" es legítimo: es lo que ocurre al arrancar ya
 # en el óptimo, y no impide que el punto sea el correcto.
 opt_ok() {
-    if grep -q "NO CONVERGIÓ" "$1"; then fail "$2 (el optimizador FALLÓ)"
+    if grep -q "NO CONVERGENCE" "$1"; then fail "$2 (el optimizador FALLÓ)"
     else pass "$2"; fi
 }
 
@@ -68,7 +68,7 @@ echo "        suma logL = -767.4243"
 echo ""
 
 OUT="$TMPDIR/homolog.txt"
-$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -0 > "$OUT" 2>&1
+$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -0 -o "$OUT" > /dev/null 2>&1
 
 opt_ok "$OUT" "el optimizador no falla"
 
@@ -82,7 +82,7 @@ S22=$(grep "Sigma\[2,2\]" "$OUT" | awk '{print $4}')
 check "Sigma[1,1] (ES_CPI)"  0.062666 "$S11" 0.0005
 check "Sigma[2,2] (WTI)"    68.838100 "$S22" 0.01
 
-LOGL=$(grep "Objective function" "$OUT" | awk '{print $4}')
+LOGL=$(grep "Log-likelihood =" "$OUT" | awk '{print $3}')
 check "logL conjunta = suma de las univariantes" -767.4243 "$LOGL" 0.01
 
 # El WTI trae mu fija en el .pre: drtran debe respetarlo
@@ -103,7 +103,7 @@ CASES="tests/cases"
 # Además Y pierde 13 observaciones y X (WTI) solo 1 -> ventana común.
 echo "   [airline AR] ES_CPI_airAR_mu: (1-0.3631B)(∇∇₁₂ ln y + 0.0145) = (1-0.8575B¹²)a"
 OUT="$TMPDIR/air.txt"
-$DRTRAN "$CASES/ES_CPI_airAR_mu.pre" "$CASES/WTI_ar1.pre" -0 > "$OUT" 2>&1
+$DRTRAN "$CASES/ES_CPI_airAR_mu.pre" "$CASES/WTI_ar1.pre" -0 -o "$OUT" > /dev/null 2>&1
 
 check "phi   (B^1)"   0.363119 "$(val "$OUT" 'phi_N\[B\^1\]')"    0.0001
 check "Theta (B^12)"  0.857450 "$(val "$OUT" 'theta_N\[B\^12\]')" 0.0001
@@ -113,7 +113,7 @@ check "Sigma[1,1]"    0.069328 "$(grep 'Sigma\[1,1\]' "$OUT" | awk '{print $4}')
 # --- Airline puro: MA regular + MA anual (sin media) --------------------------
 echo "   [airline MA] ES_CPI_airline: ∇∇₁₂ ln y = (1+0.4212B)(1-0.8147B¹²)a"
 OUT="$TMPDIR/air2.txt"
-$DRTRAN "$CASES/ES_CPI_airline.pre" "$CASES/WTI_ar1.pre" -0 > "$OUT" 2>&1
+$DRTRAN "$CASES/ES_CPI_airline.pre" "$CASES/WTI_ar1.pre" -0 -o "$OUT" > /dev/null 2>&1
 
 check "theta (B^1)"  -0.421156 "$(val "$OUT" 'theta_N\[B\^1\]')"  0.0005
 check "Theta (B^12)"  0.814706 "$(val "$OUT" 'theta_N\[B\^12\]')"  0.0005
@@ -125,7 +125,7 @@ check "Sigma[1,1]"    0.071022 "$(grep 'Sigma\[1,1\]' "$OUT" | awk '{print $4}')
 #     c1 = 2·cos(2πf/s)·sqrt(-c2)
 echo "   [MEG] ES_CORE_S3: AR(3) + AR₁₂ + MA de frecuencia fija en f=3, ifadf[3]=1"
 OUT="$TMPDIR/meg.txt"
-$DRTRAN "$CASES/ES_CORE_S3.pre" "$CASES/WTI_ar1.pre" -0 > "$OUT" 2>&1
+$DRTRAN "$CASES/ES_CORE_S3.pre" "$CASES/WTI_ar1.pre" -0 -o "$OUT" > /dev/null 2>&1
 
 check "phi_1  (B^1)"   0.186067 "$(val "$OUT" 'phi_N\[B\^1\]')"   0.0002
 check "phi_2  (B^2)"   0.138391 "$(val "$OUT" 'phi_N\[B\^2\]')"   0.0002
@@ -142,7 +142,7 @@ check "Sigma[1,1]"     0.016968 "$(grep 'Sigma\[1,1\]' "$OUT" | awk '{print $4}'
 # correcta de una que ignore c1. En f=1 vale +1.66 y en f=5 vale -1.67: estos SÍ.
 echo "   [MEG x3] ES_CORE_S135b: MA de frecuencia fija en f=3, f=1 y f=5"
 OUT="$TMPDIR/meg3.txt"
-$DRTRAN "$CASES/ES_CORE_S135b.pre" "$CASES/WTI_ar1.pre" -0 > "$OUT" 2>&1
+$DRTRAN "$CASES/ES_CORE_S135b.pre" "$CASES/WTI_ar1.pre" -0 -o "$OUT" > /dev/null 2>&1
 
 check "phi_1 (B^1)"    0.257507 "$(val "$OUT" 'phi_N\[B\^1\]')"   0.0002
 check "phi_3 (B^3)"    0.312740 "$(val "$OUT" 'phi_N\[B\^3\]')"   0.0002
@@ -156,7 +156,7 @@ check "Sigma[1,1]"     0.016176 "$(grep 'Sigma\[1,1\]' "$OUT" | awk '{print $4}'
 # FR_CPI_f5 trae "0.0000  0": el AR(1) está FIJO, no es un valor inicial.
 echo "   [f=5 + AR fijo] FR_CPI_f5: AR(1) fijado en 0 por el .pre"
 OUT="$TMPDIR/fr5.txt"
-$DRTRAN "$CASES/FR_CPI_f5.pre" "$CASES/WTI_ar1.pre" -0 > "$OUT" 2>&1
+$DRTRAN "$CASES/FR_CPI_f5.pre" "$CASES/WTI_ar1.pre" -0 -o "$OUT" > /dev/null 2>&1
 
 grep -q "phi_N\[B\^1\].*fixed" "$OUT" && pass "el AR(1) respeta el flag del .pre (fijo)" \
                                       || fail "el AR(1) NO respeta el flag del .pre"
@@ -190,7 +190,7 @@ open(dst, 'w').write('\n'.join(out) + '\n')
 EOF
 
 OUT="$TMPDIR/pert.txt"
-$DRTRAN "$PERT" "$CASES/WTI_ar1.pre" -0 > "$OUT" 2>&1
+$DRTRAN "$PERT" "$CASES/WTI_ar1.pre" -0 -o "$OUT" > /dev/null 2>&1
 
 opt_ok "$OUT" "el optimizador no falla desde un arranque lejano"
 
@@ -247,7 +247,7 @@ if [ ! -f "$SYN/SYN_Y.pre" ]; then
 fi
 
 OUT="$TMPDIR/synth.txt"
-$DRTRAN "$SYN/SYN_Y.pre" "$SYN/SYN_X.pre" -r 0 -s 1 -b 2 > "$OUT" 2>&1
+$DRTRAN "$SYN/SYN_Y.pre" "$SYN/SYN_X.pre" -r 0 -s 1 -b 2 -o "$OUT" > /dev/null 2>&1
 
 opt_ok "$OUT" "el optimizador no falla"
 
@@ -271,8 +271,8 @@ echo ""
 
 # --- caso simple: b=2, r=0, s=1 ---
 OUT="$TMPDIR/id1.txt"
-$DRTRAN "$SYN/SYN_Y.pre" "$SYN/SYN_X.pre" > "$OUT" 2>&1
-REC=$(grep "RECOMENDADO" "$OUT" | head -1)
+$DRTRAN "$SYN/SYN_Y.pre" "$SYN/SYN_X.pre" -o "$OUT" > /dev/null 2>&1
+REC=$(grep "RECOMMENDED" "$OUT" | head -1)
 echo "   [b=2, r=0, s=1] $REC"
 echo "$REC" | grep -q "b=2, r=0, s=1" && pass "identifica b=2, r=0, s=1" \
                                       || fail "NO identifica b=2, r=0, s=1 -> $REC"
@@ -292,13 +292,13 @@ check "nu(2) preestima omega_0" 0.80 "$NU2" 0.08
 check "nu(3) preestima omega_1" 0.40 "$NU3" 0.08
 
 # la CCF no debe tener picos en k<0 (X es exógena por construcción)
-grep -q "X se comporta como exogena" "$OUT" && pass "no detecta retroalimentación (X exógena)" \
+grep -q "X behaves as exogenous" "$OUT" && pass "no detecta retroalimentación (X exógena)" \
                                   || fail "detecta retroalimentación donde no la hay"
 
 # --- caso racional: b=1, r=1, s=0 (la cola decae con razón delta=0.6) ---
 OUT="$TMPDIR/id2.txt"
-$DRTRAN "$SYN/SYNR_Y.pre" "$SYN/SYNR_X.pre" > "$OUT" 2>&1
-REC=$(grep "RECOMENDADO" "$OUT" | head -1)
+$DRTRAN "$SYN/SYNR_Y.pre" "$SYN/SYNR_X.pre" -o "$OUT" > /dev/null 2>&1
+REC=$(grep "RECOMMENDED" "$OUT" | head -1)
 echo "   [b=1, r=1, s=0] $REC"
 echo "$REC" | grep -q "b=1, r=1, s=0" && pass "identifica el DENOMINADOR (r=1)" \
                                       || fail "NO identifica r=1 -> $REC"
@@ -309,12 +309,12 @@ grep -q "\[A\]" "$OUT" && grep -q "\[B\]" "$OUT" \
 
 # --- caso real: no debe proponer órdenes absurdos por un pico espurio lejano ---
 OUT="$TMPDIR/id3.txt"
-$DRTRAN "$CASES/ES_CPI_m10.pre" "$CASES/WTI_ar1.pre" > "$OUT" 2>&1
-REC=$(grep "RECOMENDADO" "$OUT" | head -1)
+$DRTRAN "$CASES/ES_CPI_m10.pre" "$CASES/WTI_ar1.pre" -o "$OUT" > /dev/null 2>&1
+REC=$(grep "RECOMMENDED" "$OUT" | head -1)
 echo "   [ES_CPI <- WTI] $REC"
 echo "$REC" | grep -q "b=0, r=0, s=1" && pass "IPC<-WTI: propone b=0, r=0, s=1" \
                                       || fail "IPC<-WTI: propuesta inesperada -> $REC"
-grep -q "excede MAX_S" "$OUT" && fail "un pico espurio lejano dispara s absurdo" \
+grep -q "exceeds MAX_S" "$OUT" && fail "un pico espurio lejano dispara s absurdo" \
                               || pass "los picos espurios lejanos no inflan s"
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -327,36 +327,36 @@ echo ""
 
 # --- órdenes CORRECTOS -> adecuada ---
 OUT="$TMPDIR/adq_ok.txt"
-$DRTRAN "$SYN/SYN_Y.pre" "$SYN/SYN_X.pre" -b 2 -r 0 -s 1 > "$OUT" 2>&1
-grep -q "La transferencia es ADECUADA" "$OUT" \
+$DRTRAN "$SYN/SYN_Y.pre" "$SYN/SYN_X.pre" -b 2 -r 0 -s 1 -o "$OUT" > /dev/null 2>&1
+grep -q "transfer is ADEQUATE" "$OUT" \
     && pass "con (b=2,r=0,s=1) [la verdad] declara la transferencia ADECUADA" \
     || fail "con los órdenes correctos NO la declara adecuada"
 
 # no debe inventarse retroalimentación: X es exógena por construcción
-grep -q "X se comporta como exogena" "$OUT" \
+grep -q "X behaves as exogenous" "$OUT" \
     && pass "no inventa retroalimentación (X exógena por construcción)" \
     || fail "detecta retroalimentación donde no la hay"
 
 # --- órdenes MAL -> inadecuada, y debe señalar DÓNDE ---
 OUT="$TMPDIR/adq_bad.txt"
-$DRTRAN "$SYN/SYN_Y.pre" "$SYN/SYN_X.pre" -b 0 -r 0 -s 0 > "$OUT" 2>&1
-grep -q "NO es adecuada" "$OUT" \
+$DRTRAN "$SYN/SYN_Y.pre" "$SYN/SYN_X.pre" -b 0 -r 0 -s 0 -o "$OUT" > /dev/null 2>&1
+grep -q "is NOT adequate" "$OUT" \
     && pass "con (b=0,r=0,s=0) [mal] declara la transferencia INADECUADA" \
     || fail "no detecta una transferencia mal especificada"
 
 # y los retardos que señala deben ser los de la transferencia verdadera (2 y 3)
-awk '/conserva huella de la entrada en:/{f=1;next} f&&/^ *k =/{print $3}' "$OUT" \
+awk '/carries a trace of the input at:/{f=1;next} f&&/^ *k =/{print $3}' "$OUT" \
     | head -2 | tr '\n' ' ' | grep -q "2 3" \
     && pass "señala los retardos correctos (k=2 y k=3, donde vive nu(B))" \
     || fail "no señala los retardos de la transferencia verdadera"
 
 # --- caso real: con los órdenes identificados, debe ser adecuada ---
 OUT="$TMPDIR/adq_real.txt"
-$DRTRAN "$CASES/ES_CPI_m10.pre" "$CASES/WTI_ar1.pre" > "$OUT" 2>&1
-grep -q "La transferencia es ADECUADA" "$OUT" \
+$DRTRAN "$CASES/ES_CPI_m10.pre" "$CASES/WTI_ar1.pre" -o "$OUT" > /dev/null 2>&1
+grep -q "transfer is ADEQUATE" "$OUT" \
     && pass "IPC<-WTI: el modelo identificado resulta adecuado" \
     || fail "IPC<-WTI: el modelo identificado NO resulta adecuado"
-grep -q "X se comporta como exogena" "$OUT" \
+grep -q "X behaves as exogenous" "$OUT" \
     && pass "IPC<-WTI: el WTI se comporta como exógeno" \
     || fail "IPC<-WTI: detecta retroalimentación IPC -> WTI"
 
@@ -366,7 +366,7 @@ echo "── 3. PASS-THROUGH: con Y = X la verdad es omega_0 = 1 ──"
 echo ""
 
 OUT="$TMPDIR/passthru.txt"
-$DRTRAN "$WORK/WTI_ar1.pre" "$WORK/WTI_ar1.pre" -r 0 -s 0 -b 0 > "$OUT" 2>&1
+$DRTRAN "$WORK/WTI_ar1.pre" "$WORK/WTI_ar1.pre" -r 0 -s 0 -b 0 -o "$OUT" > /dev/null 2>&1
 check "omega_0 (Y=X)"  1.0 "$(val "$OUT" 'omega\[0\]')"  0.01
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -394,7 +394,7 @@ open(dst, 'w').write('\n'.join(L[:i] + det + L[j:]) + '\n')
 EOF
 
 OUT="$TMPDIR/det.txt"
-timeout 120 $DRTRAN "$SYNDET" "$WORK/WTI_ar1.pre" -0 > "$OUT" 2>&1
+timeout 120 $DRTRAN "$SYNDET" "$WORK/WTI_ar1.pre" -0 -o "$OUT" > /dev/null 2>&1
 RC=$?
 
 if [ $RC -eq 124 ]; then
@@ -432,13 +432,13 @@ echo "     sd(3) >> sd(2)                     [ya entra el error de X]"
 echo ""
 
 OUT="$TMPDIR/fc.txt"
-$DRTRAN "$SYN/SYN_Y.pre" "$SYN/SYN_X.pre" -b 2 -r 0 -s 1 -f 6 > "$OUT" 2>&1
+$DRTRAN "$SYN/SYN_Y.pre" "$SYN/SYN_X.pre" -b 2 -r 0 -s 1 -f 6 -o "$OUT" > /dev/null 2>&1
 
 SN=$(grep "Sigma\[1,1\]" "$OUT" | awk '{print $4}')
 PHIN=$(val "$OUT" 'phi_N\[B\^1\]')
 
 # sd(w) del paso l: columna 3 de la tabla de previsión
-sdw() { awk -v l="$2" '/w_Y prev/{f=1;next} f&&$1==l{print $3;exit}' "$1"; }
+sdw() { awk -v l="$2" '/w_Y fcst/{f=1;next} f&&$1==l{print $3;exit}' "$1"; }
 
 SD1=$(sdw "$OUT" 1); SD2=$(sdw "$OUT" 2); SD3=$(sdw "$OUT" 3)
 
@@ -457,7 +457,7 @@ python3 -c "import sys; sys.exit(0 if $SD3 > 1.5*$SD2 else 1)" \
 python3 - "$OUT" <<'EOF'
 import sys, re
 lines = open(sys.argv[1]).read().splitlines()
-i = next(k for k,l in enumerate(lines) if 'w_Y prev' in l)
+i = next(k for k,l in enumerate(lines) if 'w_Y fcst' in l)
 w = []
 for l in lines[i+2:]:
     p = l.split()
@@ -470,8 +470,8 @@ EOF
 
 # --- caso real: el determinista futuro se aplica (la caída de enero) ---
 OUT="$TMPDIR/fc_real.txt"
-$DRTRAN "$CASES/ES_CPI_m10.pre" "$CASES/WTI_ar1.pre" -f 12 > "$OUT" 2>&1
-LVL1=$(awk '/w_Y prev/{f=1;next} f&&$1==1{print $5;exit}' "$OUT")
+$DRTRAN "$CASES/ES_CPI_m10.pre" "$CASES/WTI_ar1.pre" -f 12 -o "$OUT" > /dev/null 2>&1
+LVL1=$(awk '/w_Y fcst/{f=1;next} f&&$1==1{print $5;exit}' "$OUT")
 # el último dato observado es de diciembre; enero trae la caída de rebajas,
 # así que la previsión de enero debe quedar POR DEBAJO del último nivel (82.84)
 python3 -c "import sys; sys.exit(0 if $LVL1 < 82.84 else 1)" \
@@ -485,8 +485,8 @@ echo ""
 $DRTRAN -h > /dev/null 2>&1 && pass "drtran -h funciona" || fail "-h falla"
 
 OUT="$TMPDIR/autoid.txt"
-$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" > "$OUT" 2>&1
-grep -q "RECOMENDADO" "$OUT" && pass "la identificación automática corre" \
+$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -o "$OUT" > /dev/null 2>&1
+grep -q "RECOMMENDED" "$OUT" && pass "la identificación automática corre" \
                              || fail "la identificación automática falla"
 
 # ─────────────────────────────────────────────────────────────────────────

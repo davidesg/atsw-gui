@@ -323,6 +323,7 @@ triads---but it does \textbf{not} cover the gain, which is nonlinear. See
 \S\ref{sec:todo}.
 
 \subsection{The start of the sample: \textsc{taste} did it better}
+\label{sec:truncation}
 
 The transfer $\sum_k \nu_k X_{t-k}$ needs the input's past, and at $t=1$ there is
 none. \textsc{taste} \emph{backforecasts} it, which is Box and Jenkins's
@@ -550,50 +551,198 @@ gravity is less than half a month---and exhausted within two; it is not a
 distributed lag that propagates. The estimate $\omega = (0.0164,\,0.0108)$
 reproduces the previously documented values $(0.0154,\,0.0104)$.
 
-\section{What the dissertation teaches and the program still does not do}
+
+\section{The pass-through exercise: does the multivariate model forecast better?}
+\label{sec:passthrough}
+
+This is the question the earlier work posed---\emph{does adding the oil price
+improve the inflation forecast?}---and answered with a bivariate VAR for three
+countries (Spain, France, Germany). The answer there was \emph{no}. But the VAR
+was \emph{inadequate}, and for a reason that is worth naming, because it is
+structural and not a matter of effort.
+
+\paragraph{Why the VAR could not do it.} A VAR imposes the \emph{same} lag
+structure on every equation, with full coefficient matrices. The CPI series do not
+want that. Their univariate models---arrived at independently---are:
+Spain AR(1) plus harmonics; France a seasonal AR$(1)_{12}$; Germany AR(3) plus a
+seasonal AR$(1)_{12}$ plus harmonics. A regular VAR$(p)$ with harmonic
+deseasonalization cannot carry those, and it showed: the residual portmanteau
+\emph{failed} for France ($p=0.006$) and Germany ($p=0.018$). Raising $p$ to
+absorb the seasonality would have introduced off-diagonal terms at high lags and,
+with them, spurious feedback from inflation to the oil price. The VAR was caught
+between an inadequate noise and a fictitious causality.
+
+The cast of \S2.2 does not have this problem. \textbf{Each series keeps its own
+univariate model}---seasonal factors, generalized seasonality, fixed-frequency
+factors and all---because the VARMA it produces is diagonal, and the transfer is
+unidirectional \emph{by construction}, so there is no order to raise and no
+feedback to invent.
+
+\paragraph{The structure is reproduced.} Estimating each CPI against WTI with
+$b=0$, $r=0$, $s=1$:
+
+\begin{center}
+\begin{tabular}{lrrrl}
+\toprule
+ & gain $g=\nu(1)$ & (s.e.) & mean lag & noise diagnostic \\
+\midrule
+Spain   & $0.0272$ & $(0.0025)$ & $0.40$ & passes ($p=0.46$) \\
+France  & $0.0155$ & $(0.0015)$ & $0.43$ & \textbf{passes} ($p=0.20$); the VAR failed ($0.006$) \\
+Germany & $0.0127$ & $(0.0021)$ & $0.14$ & marginal ($p=0.03$); the VAR failed ($0.018$) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The long-run elasticities reproduce the published ordering and magnitudes (Spain
+$2.7\%$, France $1.35\%$, Germany $1.1\%$), and in Germany the \emph{lagged}
+coefficient is insignificant ($t=0.97$), also as reported---the German channel is
+essentially contemporaneous. \textbf{France's noise now passes.} Germany's
+improves but remains marginal; its univariate model is the most demanding of the
+three and the relation is the weakest.
+
+\paragraph{The forecast comparison, and why the answer was ``no''.} With the exact
+variance decomposition of \S\ref{sec:network} we do not need a rolling experiment
+to see the mechanism. Forecast error standard deviation of the stationary
+inflation series, univariate versus transfer:
+
+\begin{center}
+\begin{tabular}{crrrrrr}
+\toprule
+ & \multicolumn{2}{c}{Spain} & \multicolumn{2}{c}{France} & \multicolumn{2}{c}{Germany}\\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+$h$ & univariate & transfer & univariate & transfer & univariate & transfer\\
+\midrule
+ 1 & $0.2503$ & $\mathbf{0.2412}$ & $0.1880$ & $\mathbf{0.1701}$ & $0.2295$ & $\mathbf{0.2270}$\\
+ 2 & $0.2699$ & $0.2804$ & $0.1880$ & $0.1868$ & $0.2297$ & $0.2309$\\
+12 & $0.2735$ & $0.2839$ & $0.1880$ & $0.1884$ & $0.2329$ & $0.2330$\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+At $h=1$ the transfer \emph{helps} in all three: at the forecast origin the oil
+price of the previous month \emph{has already been observed}, so $\omega_1 X_{t-1}$
+is free information. Beyond $h=1$ it \emph{hurts}: to forecast inflation from oil
+one must forecast \emph{oil}, whose innovation variance is some three orders of
+magnitude larger than inflation's. That injected uncertainty, propagated through
+$\nu(B)$, swamps the reduction in the noise. This is exactly the published verdict,
+now with its mechanism made explicit rather than inferred from a rolling MAPE.
+
+\paragraph{And a consequence that follows from it.} If the contemporaneous term is
+what forces us to forecast oil, drop it. A model with $b=1$---using only the
+\emph{already observed} lag---beats the univariate at \emph{every} horizon for
+Spain:
+
+\begin{center}
+\begin{tabular}{crrr}
+\toprule
+$h$ & univariate & transfer $b{=}0$ & transfer $b{=}1$ \\
+\midrule
+ 1 & $0.2503$ & $0.2412$ & $\mathbf{0.2384}$ \\
+ 2 & $0.2699$ & $0.2804$ & $\mathbf{0.2617}$ \\
+12 & $0.2735$ & $0.2839$ & $\mathbf{0.2637}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+A caveat, because the data corrected an earlier and more sweeping claim of ours:
+$b=1$ is \emph{not} ``$b=0$ minus the contemporaneous term''. It is a different
+model---dropping $\omega_0$ makes the noise absorb the contemporaneous covariation,
+so $\sigma_N$ grows. There is a trade-off, and it only clearly pays in Spain; in
+France and Germany the two are within $1\%$ of each other. The contemporaneous term
+is a real feature of the data (its $t$ is $6$--$10$ everywhere); it is simply
+\emph{unusable for forecasting} unless one is willing to condition on a scenario
+for the oil price.
+
+\paragraph{What this is not.} These are \emph{theoretical} forecast error
+variances, computed from the fitted models. They say what the models imply, not
+what happens out of sample, where parameter uncertainty and structural change---the
+2021--22 inflation surge, in this very sample---have their say. A genuine
+out-of-sample comparison needs recursive forecasting with the parameters held
+fixed, which is item~5 of \S\ref{sec:open}. What the decomposition settles is the
+\emph{mechanism}: it is not that oil does not matter for inflation---it plainly
+does, with an elasticity of $2.7\%$ in Spain---but that its usable information is
+confined to what has already been observed.
+
+\section{What the dissertation taught, and what remains}
 \label{sec:todo}
 
+\subsection{Three things that reading it put into the program}
+
 \begin{enumerate}
-\item \textbf{The order of reformulation} is now stated. The
-  dissertation~\cite[\S2.6]{munoz2001} points out an asymmetry that is not
-  obvious: a misspecified \emph{relation} can make the residual ACF/PACF look like
-  a misspecified \emph{noise}, but \emph{``a misspecified noise cannot give, in the
-  CCF, the impression of a misspecified relation. For these reasons, $\nu(B)$ is
-  reformulated until it appears adequate \emph{before} reformulating
-  $\theta(B)$.''} The contamination runs one way: what is left over from the input
-  ends up \emph{inside} the noise. The program used to print both diagnostics and
-  say nothing about which to act on. It now combines them and says it---and it
-  warns, when both look bad, that the noise may merely be showing the relation's
-  leftovers, so it should not be touched yet.
+\item \textbf{The order of reformulation.} The dissertation~\cite[\S2.6]{munoz2001}
+  points out an asymmetry that is not obvious: a misspecified \emph{relation} can
+  make the residual ACF/PACF look like a misspecified \emph{noise}, but \emph{``a
+  misspecified noise cannot give, in the CCF, the impression of a misspecified
+  relation. For these reasons, $\nu(B)$ is reformulated until it appears adequate
+  \emph{before} reformulating $\theta(B)$.''} The contamination runs one way: what
+  is left over from the input ends up \emph{inside} the noise. The program used to
+  print both diagnostics and say nothing about which to act on; it now combines
+  them and says it, and warns---when both look bad---that the noise may merely be
+  showing the relation's leftovers, so it should not be touched yet.
 
-\item \textbf{The long-run gain and the mean lag} were not reported. They now
-  are: see \S\ref{sec:gain}. This was the most valuable of the three, because
-  without them the relation is estimated but not described.
+\item \textbf{The long-run gain and the mean lag} (\S\ref{sec:gain}). Without them
+  the relation is estimated but not described. This was the most valuable of the
+  three.
 
-\item \textbf{Aggregates and identity-linked triads.} An accounting identity
-  (\textsc{employed} $=$ sum of sectors; \textsc{unemployed} $=$
-  \textsc{active} $-$ \textsc{employed}) does \emph{not} belong in the model: it
-  is computed after forecasting, as the legacy programs did. What is not trivial
-  is its \emph{band}. The forecast errors of the series are correlated---through
-  the network they share innovations---so the variance of an aggregate is
-  \textbf{not} the sum of the variances; it is $c'Vc$, with $V$ the full forecast
-  error covariance, propagated to levels by the delta method. This is now
-  reported, and computing it required fixing a real defect: the forecast variance
-  assumed $\Sigma$ diagonal, which stopped being true the moment covariances
-  could be freed (\S\ref{sec:qq}).
+\item \textbf{Aggregates.} An accounting identity (\textsc{employed} $=$ sum of
+  sectors; \textsc{unemployed} $=$ \textsc{active} $-$ \textsc{employed}) does
+  \emph{not} belong in the model: it is computed after forecasting, as the legacy
+  programs did. What is not trivial is its \emph{band}. The forecast errors of the
+  series are correlated---through the network they share innovations---so the
+  variance of an aggregate is \textbf{not} the sum of the variances; it is
+  $c'Vc$, with $V$ the full forecast error covariance, propagated to levels by the
+  delta method.
 
-  The check is pretty. On the chain $X\rightarrow M \rightarrow Y$ with $b=2$ on
-  the link $M\rightarrow Y$, the aggregate's band \emph{coincides} with the naive
-  independent sum at horizons 1 and 2---$M$'s innovation has not yet reached
-  $Y$---and separates from horizon 3 onwards, with $\mathrm{sd}(Y-M) <
-  \sqrt{\mathrm{var}(Y)+\mathrm{var}(M)} < \mathrm{sd}(Y+M)$, exactly as positive
-  correlation requires. The pure delay itself appears as the horizon at which the
-  correlation is born.
+  Computing it required fixing a real defect: the forecast variance assumed
+  $\Sigma$ diagonal, which stopped being true the moment covariances could be
+  freed (\S\ref{sec:qq}). The check is pretty. On the chain $X\rightarrow M
+  \rightarrow Y$ with $b=2$ on the link $M\rightarrow Y$, the aggregate's band
+  \emph{coincides} with the naive independent sum at horizons 1 and 2---$M$'s
+  innovation has not yet reached $Y$---and separates from horizon 3 onwards, with
+  $\mathrm{sd}(Y-M) < \sqrt{\mathrm{var}(Y)+\mathrm{var}(M)} < \mathrm{sd}(Y+M)$,
+  exactly as positive correlation requires. The pure delay itself appears as the
+  horizon at which the correlation is born.
+\end{enumerate}
 
-  What has \emph{not} been exercised is the other half of the dissertation's
-  treatment (\S2.4): restricting the deterministic parameters of the three series
-  to satisfy the identity, which \emph{``economizes the number of parameters to be
-  estimated''}. The slot table can already express it.
+\subsection{Five things that remain open}
+\label{sec:open}
+
+These are stated as limitations, not as plans.
+
+\begin{enumerate}
+\item \textbf{Truncation at the start of the sample.} \textsc{taste}
+  \emph{backforecasts} the pre-sample input; the present program \emph{truncates}
+  it (\S\ref{sec:truncation}). With 215--400 observations this is immaterial; with
+  the 69 observations of \texttt{m6} the contaminated stretch would be $15\%$ of
+  the sample. \textbf{Here the 1979 solution is better than ours.}
+
+\item \textbf{Nonlinear restrictions cannot be \emph{imposed}.} The slot table
+  expresses FREE, FIXED and SHARED---that is, linear equality between parameters.
+  A unit long-run gain, $g=\nu(1)=1$, is nonlinear in the $\omega$'s and
+  $\delta$'s, so the dissertation imposes it by transforming the data. With
+  \S\ref{sec:gain} that hypothesis can now be \emph{tested} directly, which is
+  what one usually wants; but it still cannot be \emph{imposed}, and there are
+  cases (estimating subject to a theoretical restriction one is not willing to
+  question) where imposing is the point.
+
+\item \textbf{The estimative half of identity-linked triads.} The dissertation
+  (\S2.4) does more than compute the identity after the fact: it \emph{restricts
+  the deterministic parameters of the three series to satisfy the identity},
+  which \emph{``economizes the number of parameters to be estimated''} and makes
+  the estimates use the data more efficiently. The slot table can already express
+  this---it is exactly what sharing a parameter across series means---but it has
+  not been exercised on a real triad.
+
+\item \textbf{Growth rates with their standard deviations.} What an economist
+  reads is not only the level, but how much it rises this quarter and how much
+  against a year ago, each with a band. The likelihood engine's forecasting
+  routine already returns the covariance matrices of those differences
+  ($v_2$, $v_3$); the program computes them and \emph{throws them away}.
+
+\item \textbf{New observations without re-estimating.} The monitoring workflow:
+  add data, update the residuals recursively with the parameters held fixed, and
+  see whether the model still holds. It fits naturally with the specification
+  file, which already carries the estimated parameters.
 \end{enumerate}
 
 \section*{Reproducibility}

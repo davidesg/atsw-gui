@@ -835,6 +835,116 @@ grep -q "A badly specified noise CANNOT dirty the CCF" "$OUT" \
     && pass "el informe explica POR QUÉ ese orden y no el contrario" \
     || fail "no explica la asimetría"
 
+
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
+echo "── 3f. PASS-THROUGH del crudo a la inflación: ES, FR y DE ──"
+echo "   El ejercicio de SF_MEG/drvarma: ¿mejora el modelo multivariante la"
+echo "   previsión del univariante? Allí se usó un VAR, y NO era adecuado por una"
+echo "   razón concreta: el VAR no podía llevar la estructura univariante que las"
+echo "   series necesitan (FR un SAR(1)_12; DE un AR(3)+SAR), así que dejaba"
+echo "   autocorrelación residual (Q falla: FR p=0.006, DE p=0.018), y subir el"
+echo "   orden p introducía realimentación espuria IPC->WTI."
+echo ""
+echo "   drtran no tiene ese problema: CADA SERIE CONSERVA SU MODELO DE FUE, y la"
+echo "   transferencia es unidireccional por construcción."
+echo ""
+
+# --- las tres elasticidades. drvarma documenta ES 2.7% > FR 1.35% > DE 1.1%
+for P in ES:ES_CPI_m10 FR:FR_CPI_msar DE:DE_CPI_mar3sar; do
+    K=${P%%:*}; M=${P##*:}
+    $DRTRAN "$WORK/$M.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1 -f 24 \
+            -o "$TMPDIR/pt_$K.txt" >/dev/null 2>&1
+    $DRTRAN "$WORK/$M.pre" "$WORK/WTI_ar1.pre" -0 -f 24 \
+            -o "$TMPDIR/pu_$K.txt" >/dev/null 2>&1
+    $DRTRAN "$WORK/$M.pre" "$WORK/WTI_ar1.pre" -b 1 -r 0 -s 0 -f 24 \
+            -o "$TMPDIR/pb1_$K.txt" >/dev/null 2>&1
+done
+
+GES=$(gain "$TMPDIR/pt_ES.txt"); GFR=$(gain "$TMPDIR/pt_FR.txt"); GDE=$(gain "$TMPDIR/pt_DE.txt")
+check "elasticidad de largo plazo ES (drvarma: 2.7%)" 0.027 "$GES" 0.004
+check "elasticidad de largo plazo FR (drvarma: 1.35%)" 0.0135 "$GFR" 0.004
+check "elasticidad de largo plazo DE (drvarma: 1.1%)" 0.011 "$GDE" 0.004
+python3 -c "import sys; sys.exit(0 if $GES > $GFR > $GDE else 1)" \
+    && pass "el ORDEN se mantiene: España > Francia > Alemania" \
+    || fail "el orden de las elasticidades no coincide con drvarma"
+
+# --- DE: el retardo NO es significativo, como en drvarma ---
+TD=$(grep -E "^omega1\[1\]" "$TMPDIR/pt_DE.txt" | awk '{print $4}')
+python3 -c "import sys; sys.exit(0 if abs($TD) < 2.0 else 1)" \
+    && pass "DE: el coeficiente retardado NO es significativo (t = $TD), como en drvarma" \
+    || fail "DE: el retardado sale significativo (t = $TD)"
+
+# --- LO QUE EL VAR NO PODÍA: el ruido de FR ya no queda autocorrelacionado ---
+grep -A3 "relation (CCF" "$TMPDIR/pt_FR.txt" | grep -q "Nothing to reformulate" \
+    && pass "FR: relación Y ruido pasan (el VAR fallaba el ruido con p=0.006)" \
+    || fail "FR: sigue quedando estructura sin modelar"
+grep -A3 "relation (CCF" "$TMPDIR/pt_ES.txt" | grep -q "Nothing to reformulate" \
+    && pass "ES: relación y ruido pasan" \
+    || fail "ES: queda estructura sin modelar"
+
+# --- LA COMPARACIÓN DE PREVISIÓN ---
+python3 - "$TMPDIR" <<'PYFC'
+import re, sys
+T = sys.argv[1]
+def sd(f, tag):
+    t = open(f).read()
+    m = re.search(r'Output: %s.*?\n(?:.*\n)*?  ---+\n((?:  +\d+.*\n)+)' % tag, t)
+    return {int(r.split()[0]): float(r.split()[2]) for r in m.group(1).strip().split('\n')}
+names = {'ES': 'ES_CPI', 'FR': 'IPC_FR', 'DE': 'IPC_DE'}
+bad = []
+for k, tag in names.items():
+    u  = sd('%s/pu_%s.txt'  % (T, k), tag)
+    t0 = sd('%s/pt_%s.txt'  % (T, k), tag)
+    b1 = sd('%s/pb1_%s.txt' % (T, k), tag)
+    # (a) a h=1 la transferencia AYUDA: el retardo del crudo ya se observo
+    if not t0[1] < u[1]:
+        bad.append("%s: a h=1 la transferencia no mejora (%.4f vs %.4f)" % (k, t0[1], u[1]))
+    # (b) con b=0, a horizontes largos EMPEORA: hay que prever el crudo
+    if k == 'ES' and not t0[12] > u[12]:
+        bad.append("ES: con b=0 no empeora a h=12, y deberia (prever el crudo inyecta ruido)")
+    # (c) OJO: b=1 no es "b=0 sin el contemporaneo". Es OTRO modelo: al quitar
+    #     omega_0 el ruido absorbe la covariacion contemporanea y sigma_N crece.
+    #     Hay un INTERCAMBIO -- se pierde ajuste, pero se evita tener que prever
+    #     el crudo para ese termino. Solo compensa CLARAMENTE en ES; en FR y DE
+    #     es un empate (diferencias por debajo del 1%). No se afirma dominancia.
+    if k == 'ES':
+        for h in (1, 2, 3, 12):
+            if b1[h] >= t0[h]:
+                bad.append("ES: b=1 no mejora a b=0 en h=%d (%.4f vs %.4f)"
+                           % (h, b1[h], t0[h]))
+    else:
+        for h in (1, 2, 3, 12):
+            if abs(b1[h] - t0[h]) / t0[h] > 0.01:
+                bad.append("%s: b=1 y b=0 deberian empatar (<1%%) y difieren en h=%d "
+                           "(%.4f vs %.4f)" % (k, h, b1[h], t0[h]))
+sys.exit(0 if not bad else (print('\n'.join(bad)) or 1))
+PYFC
+
+if [ $? -eq 0 ]; then
+    pass "a h=1 la transferencia MEJORA: el crudo del origen ya está observado"
+    pass "con b=0 y horizonte largo EMPEORA: hay que prever el crudo, y su varianza es ~1000x"
+    pass "en ES, tirar el término contemporáneo (b=1) mejora a b=0 a todo horizonte"
+    pass "en FR y DE es un empate (<1%): quitar omega_0 sube el ruido tanto como ahorra"
+else
+    fail "la comparación de previsión no da lo esperado (ver arriba)"
+fi
+
+# ES con b=1 bate al univariante a TODO horizonte: el resultado accionable
+python3 - "$TMPDIR" <<'PYES'
+import re, sys
+T = sys.argv[1]
+def sd(f):
+    t = open(f).read()
+    m = re.search(r'Output: ES_CPI.*?\n(?:.*\n)*?  ---+\n((?:  +\d+.*\n)+)', t)
+    return {int(r.split()[0]): float(r.split()[2]) for r in m.group(1).strip().split('\n')}
+u, b = sd('%s/pu_ES.txt' % T), sd('%s/pb1_ES.txt' % T)
+sys.exit(0 if all(b[h] < u[h] for h in (1, 2, 3, 6, 12, 24)) else 1)
+PYES
+[ $? -eq 0 ] \
+    && pass "ES con b=1 bate al univariante a TODO horizonte (h=1..24)" \
+    || fail "ES con b=1 no bate al univariante en todos los horizontes"
+
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
 echo "── 4. DETERMINISTAS: tipos de fue e intervenciones racionales ──"

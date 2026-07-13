@@ -1153,7 +1153,11 @@ static void reformulation_advice(real **a, int n, FILE *out)
             Q += corr[j] * corr[j] / (n - j);
         Q *= n * (n + 2.0);
 
-        df = nlags - (p_ord[i] + q_ord[i]);
+        /* Los grados de libertad se pierden por cada PARAMETRO estimado, no por
+           cada grado del polinomio. Un SAR(1)_12 tiene grado 12 y UN parametro:
+           restar 12 infla el estadistico y produce una falsa alarma justo en los
+           modelos estacionales, que son los que mas importan aqui.            */
+        df = nlags - (n_ar_free_params(&Tm[i]) + n_ma_free_params(&Tm[i]));
         if (df < 1) df = 1;
         p_noise = 1.0 - chisq(Q, df);
 

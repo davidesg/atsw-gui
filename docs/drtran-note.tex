@@ -554,14 +554,17 @@ reproduces the previously documented values $(0.0154,\,0.0104)$.
 \label{sec:todo}
 
 \begin{enumerate}
-\item \textbf{The order of reformulation.} The dissertation~\cite[\S2.6]{munoz2001}
-  states an asymmetry that is not obvious: a misspecified \emph{relation} can make
-  the residual ACF/PACF look like a misspecified \emph{noise}, but \emph{``a
-  misspecified noise cannot give, in the CCF, the impression of a misspecified
-  relation. For these reasons, $\nu(B)$ is reformulated until it appears adequate
-  \emph{before} reformulating $\theta(B)$.''} The program prints both diagnostics
-  and says nothing about which to act on first. It should: \emph{the relation
-  first, the noise afterwards}.
+\item \textbf{The order of reformulation} is now stated. The
+  dissertation~\cite[\S2.6]{munoz2001} points out an asymmetry that is not
+  obvious: a misspecified \emph{relation} can make the residual ACF/PACF look like
+  a misspecified \emph{noise}, but \emph{``a misspecified noise cannot give, in the
+  CCF, the impression of a misspecified relation. For these reasons, $\nu(B)$ is
+  reformulated until it appears adequate \emph{before} reformulating
+  $\theta(B)$.''} The contamination runs one way: what is left over from the input
+  ends up \emph{inside} the noise. The program used to print both diagnostics and
+  say nothing about which to act on. It now combines them and says it---and it
+  warns, when both look bad, that the noise may merely be showing the relation's
+  leftovers, so it should not be touched yet.
 
 \item \textbf{The long-run gain and the mean lag} were not reported. They now
   are: see \S\ref{sec:gain}. This was the most valuable of the three, because

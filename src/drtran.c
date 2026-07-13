@@ -88,6 +88,7 @@ static real sum_p_transfer = -1.0;   /* p-valor de adecuación de la transferenc
 static real sum_p_exog     = -1.0;   /* p-valor de exogeneidad de la entrada      */
 static real sum_logl       = 0.0;
 static real sum_gain[MAX_LINK + 1];
+static real link_p_transfer[MAX_LINK + 1];
 static real sum_mlag[MAX_LINK + 1];
 static int  sum_npar       = 0;
 static char outfile_path[600];
@@ -1071,6 +1072,108 @@ cleanup:
 /* componente determinista futuro (que se CONOCE: son funciones del tiempo) y */
 /* se deshace el reescalado y la Box-Cox.                                     */
 /* -------------------------------------------------------------------------- */
+
+
+/* --------------------------------------------------------------------------
+   EL ORDEN DE REFORMULACION.
+
+   Munoz Polo (2001, sec. 2.6) establece una asimetria que no es obvia y que
+   decide por donde empezar a arreglar un modelo:
+
+     "La especificacion inadecuada de la relacion v(B) puede generar la
+      apariencia (en acf/pacf residuales) de especificacion inadecuada del
+      ruido [...]. Sin embargo, la especificacion inadecuada del ruido NO PUEDE
+      dar la impresion en ccf de especificacion inadecuada de la relacion. Por
+      estas razones, se reformula v(B) hasta que parezca adecuada ANTES de
+      reformular theta(B)."
+
+   Es decir: la contaminacion va en un solo sentido. Un ruido mal especificado
+   no ensucia la CCF, pero una relacion mal especificada SI ensucia la ACF del
+   ruido -- porque lo que sobra del input se queda dentro del ruido. Luego un
+   ACF residual feo NO es evidencia contra el ruido mientras la CCF siga
+   hablando. Arreglar el ruido primero es perseguir un sintoma.
+
+   El programa imprimia los dos diagnosticos y callaba sobre cual mirar. Aqui
+   los combina y lo dice.
+   -------------------------------------------------------------------------- */
+static void reformulation_advice(real **a, int n, FILE *out)
+{
+    int i, j, u, nlags, df;
+    real *res, *corr, mean, var, Q, p_noise, p_rel;
+
+    nlags = (n / 4 < 24) ? n / 4 : 24;
+    if (nlags < 4) return;
+
+    fprintf(out, "\n");
+    fprintf(out, "=============================================================\n");
+    fprintf(out, "  WHAT TO REFORMULATE, AND IN WHAT ORDER\n");
+    fprintf(out, "=============================================================\n");
+    fprintf(out, "  The contamination runs ONE WAY. A badly specified relation\n");
+    fprintf(out, "  leaves part of the input inside the noise, so it DOES dirty the\n");
+    fprintf(out, "  residual ACF. A badly specified noise CANNOT dirty the CCF.\n");
+    fprintf(out, "  Therefore: fix the RELATION first; only then the noise. A poor\n");
+    fprintf(out, "  residual ACF is not evidence against the noise while the CCF is\n");
+    fprintf(out, "  still speaking.  (Munoz Polo 2001, sec. 2.6.)\n\n");
+
+    res  = vector(1, n);
+    corr = vector(1, nlags);
+
+    for (u = 1; u <= n_ser; u++) {
+        int is_out = 0;
+        i = topo[u];
+        for (j = 1; j <= n_link; j++)
+            if (lnk[j].out == i && lnk[j].s >= 0) is_out = 1;
+        if (!is_out) continue;
+
+        /* --- el ruido de esta serie: portmanteau de sus residuos --- */
+        mean = 0.0;
+        for (j = 1; j <= n; j++) { res[j] = a[j][i]; mean += res[j]; }
+        mean /= n;
+        var = 0.0;
+        for (j = 1; j <= n; j++) var += (res[j] - mean) * (res[j] - mean);
+        var /= n;
+
+        Acf(res, n, nlags, corr, mean, var);
+        Q = 0.0;
+        for (j = 1; j <= nlags; j++)
+            Q += corr[j] * corr[j] / (n - j);
+        Q *= n * (n + 2.0);
+
+        df = nlags - (p_ord[i] + q_ord[i]);
+        if (df < 1) df = 1;
+        p_noise = 1.0 - chisq(Q, df);
+
+        /* --- la relacion: el peor p-valor de adecuacion de sus enlaces --- */
+        p_rel = 1.0;
+        for (j = 1; j <= n_link; j++)
+            if (lnk[j].out == i && lnk[j].s >= 0 && link_p_transfer[j] >= 0.0
+                && link_p_transfer[j] < p_rel)
+                p_rel = link_p_transfer[j];
+
+        fprintf(out, "  %s:\n", Ts[i].name ? Ts[i].name : "");
+        fprintf(out, "    relation (CCF, noise vs input)   p = %.4f\n", p_rel);
+        fprintf(out, "    noise    (ACF of the residuals)  p = %.4f   [Q(%d) = %.2f]\n",
+                p_noise, df, Q);
+
+        if (p_rel < 0.05) {
+            fprintf(out, "    -> REFORMULATE THE RELATION.\n");
+            if (p_noise < 0.05)
+                fprintf(out, "       The noise looks bad too, but do NOT touch it yet:\n"
+                             "       that may be the relation's leftovers showing up in\n"
+                             "       the ACF. Re-estimate and look again.\n");
+        } else if (p_noise < 0.05) {
+            fprintf(out, "    -> The relation is adequate. NOW reformulate the NOISE\n"
+                         "       (its ARMA structure), not the transfer.\n");
+        } else {
+            fprintf(out, "    -> Nothing to reformulate: relation and noise both pass.\n");
+        }
+        fprintf(out, "\n");
+    }
+
+    free_vector(corr, 1, nlags);
+    free_vector(res, 1, n);
+    fprintf(out, "=============================================================\n");
+}
 
 static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
 {
@@ -2120,12 +2223,16 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
             fprintf(outputv, "\n--- Multivariate diagnostics (Hosking + JB) ---\n");
             multivariate_diagnostics(a_est, n_stat, n_ser, outputv);
 
+            for (j = 1; j <= n_link; j++) link_p_transfer[j] = -1.0;
             for (j = 1; j <= n_link; j++)
                 if (lnk[j].s >= 0) {
                     real pt = -1.0, pe = -1.0;
                     transfer_adequacy(a_est, n_stat, j, outputv, &pt, &pe);
+                    link_p_transfer[j] = pt;
                     if (j == 1) { sum_p_transfer = pt; sum_p_exog = pe; }
                 }
+
+            reformulation_advice(a_est, n_stat, outputv);
 
             if (fc_horizon > 0)
                 transfer_forecast(x, npar, fc_horizon, varma1.sigma2, outputv);

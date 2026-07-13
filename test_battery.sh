@@ -798,6 +798,43 @@ python3 -c "import sys; sys.exit(0 if abs($TQ2) < 2.0 else 1)" \
     || fail "la covarianza sale significativa siendo cero (t = $TQ2)"
 check "los omegas se recuperan igual (verdad 0.800)" 0.800 "$(val "$CLEAN" 'omega1\[0\]')" 0.05
 
+
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
+echo "── 3e. EL ORDEN DE REFORMULACIÓN: la relación antes que el ruido ──"
+echo "   Muñoz Polo (2001, sec. 2.6): la contaminación va en UN SOLO SENTIDO."
+echo "   Una relación mal especificada deja parte del input DENTRO del ruido, así"
+echo "   que SÍ ensucia la ACF residual. Un ruido mal especificado NO PUEDE"
+echo "   ensuciar la CCF. Luego: arreglar la RELACIÓN primero. Una ACF residual"
+echo "   fea no es evidencia contra el ruido mientras la CCF siga hablando."
+echo ""
+
+# (a) orden EQUIVOCADO (b=0,s=0; la verdad es b=2,s=1) -> arreglar la RELACIÓN
+OUT="$TMPDIR/adv_bad.txt"
+$DRTRAN "$SYN/SYN_Y.pre" "$SYN/SYN_X.pre" -b 0 -r 0 -s 0 -o "$OUT" >/dev/null 2>&1
+grep -q "REFORMULATE THE RELATION" "$OUT" \
+    && pass "con (b,r,s) equivocados manda arreglar la RELACIÓN" \
+    || fail "no manda arreglar la relación cuando está mal especificada"
+
+# (b) orden CORRECTO -> ya no manda arreglar la relación
+OUT="$TMPDIR/adv_ok.txt"
+$DRTRAN "$SYN/SYN_Y.pre" "$SYN/SYN_X.pre" -b 2 -r 0 -s 1 -o "$OUT" >/dev/null 2>&1
+grep -q "REFORMULATE THE RELATION" "$OUT" \
+    && fail "sigue mandando arreglar la relación con los órdenes correctos" \
+    || pass "con los órdenes correctos ya no manda arreglar la relación"
+
+# (c) caso real bien especificado -> no hay nada que reformular
+OUT="$TMPDIR/adv_ipc.txt"
+$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1 -o "$OUT" >/dev/null 2>&1
+grep -q "Nothing to reformulate" "$OUT" \
+    && pass "IPC<-WTI bien especificado: nada que reformular" \
+    || fail "declara algo que reformular en un modelo adecuado"
+
+# (d) el consejo cita la asimetría, que es la razón de todo
+grep -q "A badly specified noise CANNOT dirty the CCF" "$OUT" \
+    && pass "el informe explica POR QUÉ ese orden y no el contrario" \
+    || fail "no explica la asimetría"
+
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
 echo "── 4. DETERMINISTAS: tipos de fue e intervenciones racionales ──"

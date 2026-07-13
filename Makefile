@@ -24,12 +24,36 @@ OBJS = $(SRCS:.c=.o)
 
 TARGET = $(BINDIR)/drtran
 
-.PHONY: all clean test
+# Destino de la instalación (misma convención que fue y drvarma).
+# Sin sudo:  make install PREFIX=$$HOME/.local
+PREFIX  ?= /usr/local
+DESTDIR ?=
+
+.PHONY: all clean test install uninstall help
 
 all: $(TARGET)
 
 test: $(TARGET)
 	./test_battery.sh
+
+install: $(TARGET)
+	install -d $(DESTDIR)$(PREFIX)/bin
+	install -m 755 $(TARGET) $(DESTDIR)$(PREFIX)/bin/drtran
+	@echo "instalado en $(DESTDIR)$(PREFIX)/bin/drtran"
+
+uninstall:
+	rm -f $(DESTDIR)$(PREFIX)/bin/drtran
+
+help:
+	@echo "drtran — modelos de transferencia Box–Jenkins (ML exacta)"
+	@echo ""
+	@echo "  make            compila -> bin/drtran"
+	@echo "  make test       ejecuta la batería de comprobaciones"
+	@echo "  make install    instala en \$$PREFIX/bin  (por defecto /usr/local)"
+	@echo "  make uninstall  desinstala"
+	@echo "  make clean      borra objetos y binario"
+	@echo ""
+	@echo "  Sin sudo:  make install PREFIX=\$$HOME/.local"
 
 $(TARGET): $(OBJS) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)

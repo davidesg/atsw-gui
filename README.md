@@ -116,12 +116,21 @@ Además: **robustez al arranque** — se perturban las preestimaciones del `.pre
 modelo debe converger al **mismo** óptimo. El óptimo tiene que ser un *atractor*,
 no un eco de los valores iniciales.
 
-## Compilar
+## Compilar e instalar
 
 ```sh
-make            # -> bin/drtran
-make test       # la batería
+make                    # -> bin/drtran
+make test               # la batería de comprobaciones
+sudo make install       # -> /usr/local/bin/drtran   (como fue y drvarma)
 ```
+
+Sin `sudo`, en tu propio `$HOME`:
+
+```sh
+make install PREFIX=$HOME/.local
+```
+
+`make uninstall` lo quita; `make help` resume los objetivos.
 
 Sin dependencias externas: el motor de drvarma va incluido en `src/`.
 

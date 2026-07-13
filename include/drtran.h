@@ -79,11 +79,39 @@ extern int  fix_mu[MAX_SER + 1];
 extern int fix_arma[MAX_SER + 1];   /* parámetros ARMA */
 extern int fix_det[MAX_SER + 1];    /* coeficientes deterministas */
 
-/* Función de transferencia de la entrada j (j = 1..n_inp):
+/* Función de transferencia de la entrada j (j = 1..n_inp), en el caso simple
+   de UNA salida (los flags -b/-r/-s de la línea de órdenes):
      b_del[j] : retardo puro B^b
      r_ord[j] : orden del denominador delta(B)
      s_ord[j] : orden del numerador omega(B)   (-1 = sin transferencia) */
 extern int b_del[MAX_SER + 1], r_ord[MAX_SER + 1], s_ord[MAX_SER + 1];
+
+/* -------------------------------------------------------------------------- */
+/* LA RED de transferencias                                                    */
+/*                                                                            */
+/* El modelo general no es una salida y k entradas, sino un DAG: cualquier     */
+/* serie puede recibir transferencias Y ser a la vez entrada de otra. En el    */
+/* sistema laboral de Mauricio (m6), EU es SALIDA de EC y ENTRADA de EI:       */
+/*                                                                            */
+/*     EC ── b=2 ──► EU ── b=1 ──► EI ── b=1 ──► EP                            */
+/*                                                                            */
+/* Cada ENLACE es una transferencia nu(B) = omega(B)/delta(B)·B^b de una serie */
+/* de entrada a una de salida. El caso de una sola salida es el particular en  */
+/* que todos los enlaces apuntan a la serie 1.                                 */
+/* -------------------------------------------------------------------------- */
+#define MAX_LINK 32
+
+struct Tlink {
+    int out;    /* serie que RECIBE la transferencia */
+    int inp;    /* serie que la EMITE                */
+    int b, r, s;
+};
+
+extern struct Tlink lnk[MAX_LINK + 1];
+extern int n_link;
+
+/* Orden topológico de las series (las entradas antes que sus salidas). */
+extern int topo[MAX_SER + 1];
 
 /* Indicador de matriz de covarianza diagonal (1 = sí, 0 = completa) */
 extern int diag_cov;
@@ -95,6 +123,8 @@ void unpack_det_params(struct Tusmodel *Tm, real *x, int *idx);
 /* Expande el vector de parámetros LIBRES a la estructura completa, aplicando
    los coeficientes fijos y los COMPARTIDOS. */
 real *expand_params(real *xfree);
+void compute_irf(real *omega, int s, real *delta, int r, int b,
+                 real *nu, int length);
 
 /* Rechaza factores de frecuencia fija invalidos (c2 >= 0) */
 int invalid_fixfreq(struct Tusmodel *Tm);

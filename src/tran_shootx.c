@@ -93,18 +93,18 @@ void shootx(real *xfree, struct Tvarma *armax, int *ifaultx, int firstx, int las
     int i, j, k, t;
     int p, q;
 
-    real omega[MAX_INP + 1][MAX_S + 1];
-    real delta[MAX_INP + 1][MAX_R + 1];
-    real **nu = NULL;          /* nu[j][.] : pesos de la entrada j */
-    real  *transfer = NULL;    /* transferencia total en cada t     */
+    real omega[MAX_LINK + 1][MAX_S + 1];
+    real delta[MAX_LINK + 1][MAX_R + 1];
+    real **nu = NULL;          /* nu[k][.] : pesos del enlace k              */
+    real **tr = NULL;          /* tr[i][.] : transferencia que RECIBE la serie i */
     real   var[MAX_SER + 1];
 
     *ifaultx = 0;
 
-    /* --- 1. Parámetros de las transferencias (una por entrada) --- */
-    for (j = 1; j <= n_inp; j++) {
-        for (k = 0; k <= s_ord[j]; k++) omega[j][k] = x[idx++];
-        for (k = 1; k <= r_ord[j]; k++) delta[j][k] = x[idx++];
+    /* --- 1. Parámetros de las transferencias: una por ENLACE --- */
+    for (j = 1; j <= n_link; j++) {
+        for (k = 0; k <= lnk[j].s; k++) omega[j][k] = x[idx++];
+        for (k = 1; k <= lnk[j].r; k++) delta[j][k] = x[idx++];
     }
 
     /* --- 2. ARMA de cada serie (factores del .pre, no expandidos) --- */
@@ -150,23 +150,26 @@ void shootx(real *xfree, struct Tvarma *armax, int *ifaultx, int firstx, int las
     build_stationary_series();
     if (n_stat <= 0) { *ifaultx = 1; return; }
 
-    /* --- 8. Transferencia total: suma de las de cada entrada --- */
-    transfer = vector(1, n_stat);
-    for (t = 1; t <= n_stat; t++) transfer[t] = 0.0;
+    /* --- 8. Transferencias de la RED: cada enlace resta a SU salida --- */
+    tr = matrix(1, n_ser, 1, n_stat);
+    for (i = 1; i <= n_ser; i++)
+        for (t = 1; t <= n_stat; t++) tr[i][t] = 0.0;
 
-    if (n_inp > 0) {
-        nu = matrix(1, n_inp, 1, n_stat);
+    if (n_link > 0) {
+        nu = matrix(1, n_link, 1, n_stat);
 
-        for (j = 1; j <= n_inp; j++) {
-            compute_irf(omega[j], s_ord[j], delta[j], r_ord[j], b_del[j],
+        for (j = 1; j <= n_link; j++) {
+            int o = lnk[j].out, in = lnk[j].inp;
+
+            compute_irf(omega[j], lnk[j].s, delta[j], lnk[j].r, lnk[j].b,
                         nu[j], n_stat);
 
-            /* transferencia_j[t] = sum_k nu_j[k] * w_{j+1}[t-k+1] */
+            /* la salida o recibe: sum_k nu_j[k] * w_in[t-k+1] */
             for (t = 1; t <= n_stat; t++) {
-                real tr = 0.0;
+                real acc = 0.0;
                 for (k = 1; k <= t; k++)
-                    tr += nu[j][k] * w[j + 1][t - k + 1];
-                transfer[t] += tr;
+                    acc += nu[j][k] * w[in][t - k + 1];
+                tr[o][t] += acc;
             }
         }
     }
@@ -249,15 +252,14 @@ void shootx(real *xfree, struct Tvarma *armax, int *ifaultx, int firstx, int las
 
     for (i = 1; i <= m; i++) armax->mu[i] = mu[i];
 
-    /* --- 14. Las series: la 1 es el ruido; las demás, las entradas --- */
-    for (t = 1; t <= n_stat; t++) {
-        armax->w[t][1] = w[1][t] - transfer[t];
-        for (i = 2; i <= m; i++) armax->w[t][i] = w[i][t];
-    }
+    /* --- 14. Cada serie, menos lo que recibe por la red: es su RUIDO --- */
+    for (t = 1; t <= n_stat; t++)
+        for (i = 1; i <= m; i++)
+            armax->w[t][i] = w[i][t] - tr[i][t];
 
 cleanup:
-    if (nu) free_matrix(nu, 1, n_inp, 1, n_stat);
-    free_vector(transfer, 1, n_stat);
+    if (nu) free_matrix(nu, 1, n_link, 1, n_stat);
+    free_matrix(tr, 1, n_ser, 1, n_stat);
 
     if (lastx) {
         free_matrix(armax->a, 1, armax->n, 1, armax->m);

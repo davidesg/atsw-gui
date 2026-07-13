@@ -369,8 +369,14 @@ drvarma puntúa *cualquier* estructura VARMA; la potencia estaba en el `shootx`
 escrito a mano. El destino de drtran es **generar ese mapa automáticamente** —
 un pequeño DSL parámetros → estructura VARMA— no solo ω/δ de una entrada.
 
-- [ ] Múltiples entradas (m = 1 + #entradas).
-- [ ] Covarianza estructurada, parámetros compartidos/fijos.
+- [x] Múltiples entradas (m = 1 + #entradas).
+- [x] Parámetros compartidos/fijos (tabla de slots, `-c`).
+- [x] **La RED**: un DAG de transferencias (`-n`). Una serie puede recibir
+      transferencias y ser a la vez entrada de otra — que es lo que son de verdad
+      los sistemas de Mauricio. El cast resta a cada serie lo que recibe; la
+      previsión recorre la red en orden topológico; un ciclo se rechaza.
+- [ ] Covarianza **no diagonal** (Cholesky con diagonal normalizada, sin
+      reintroducir la redundancia de escala que costó M0.8).
 - [ ] Puerto a Python reutilizando los paquetes `fue` y `drvarma` (drvarma 0.1.0
       está en PyPI y su motor de ML exacta es Python puro).
 

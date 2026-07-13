@@ -26,6 +26,8 @@
 #include "fue_pre_reader.h"
 #include "forecast.h"
 #include <unistd.h>   /* getopt */
+#include <strings.h>  /* strcasecmp */
+#include <ctype.h>
 #include <stdarg.h>
 
 /* -------------------------------------------------------------------------- */
@@ -51,6 +53,22 @@ int  fix_det[MAX_SER + 1];
 
 /* Transferencia de la entrada j (j = 1..n_inp) */
 int b_del[MAX_SER + 1], r_ord[MAX_SER + 1], s_ord[MAX_SER + 1];
+
+/* LA RED: cada enlace es una transferencia de lnk[k].inp a lnk[k].out.      */
+struct Tlink lnk[MAX_LINK + 1];
+int n_link = 0;
+int topo[MAX_SER + 1];
+
+/* ¿La red es la ESTRELLA por defecto (todo entra a la serie 1)? Solo entonces
+   tiene sentido hablar de "la entrada j" y "la salida Y".                    */
+static int net_is_star(void)
+{
+    int k;
+    if (n_link != n_inp) return 0;
+    for (k = 1; k <= n_link; k++)
+        if (lnk[k].out != 1 || lnk[k].inp != k + 1) return 0;
+    return 1;
+}
 
 int diag_cov = 1;
 
@@ -654,17 +672,18 @@ void apply_univariate_model(struct Tusmodel *Tm, struct Tseries *Ts,
 /* -------------------------------------------------------------------------- */
 void prewhiten_and_identify(int j, FILE *outputv)
 {
-    int    si  = j + 1;                 /* la entrada j es la serie j+1 */
+    int    si  = lnk[j].inp;            /* serie que EMITE  el enlace j */
+    int    so  = lnk[j].out;            /* serie que RECIBE el enlace j */
     real  *w_X = w[si];
-    real  *w_Y = w[1];
+    real  *w_Y = w[so];
     real  *phi_X_in   = phi[si];
     real  *theta_X_in = theta[si];
     int    p_X_in = p_ord[si];
     int    q_X_in = q_ord[si];
     int    n = n_stat;
-    int   *r = &r_ord[j];
-    int   *s = &s_ord[j];
-    int   *b = &b_del[j];
+    int   *r = &lnk[j].r;
+    int   *s = &lnk[j].s;
+    int   *b = &lnk[j].b;
 
     real *a_X, *beta_Y, *ccf, *nu;
     int nlags, t, k, lag;
@@ -738,7 +757,8 @@ void prewhiten_and_identify(int j, FILE *outputv)
     fprintf(outputv, "\n");
     fprintf(outputv, "=============================================================\n");
     fprintf(outputv, "  IDENTIFICATION - prewhitening and CCF (Box-Jenkins)         \n");
-    fprintf(outputv, "  Input %d: %s\n", j, Ts[si].name ? Ts[si].name : "");
+    fprintf(outputv, "  Link %d:  %s  ->  %s\n", j,
+            Ts[si].name ? Ts[si].name : "", Ts[so].name ? Ts[so].name : "");
     fprintf(outputv, "=============================================================\n");
     fprintf(outputv, "  The input is prewhitened with its own ARMA and the SAME filter\n");
     fprintf(outputv, "  is applied to the output.  r(k) = corr(beta_t, a_{t-k}):\n");
@@ -893,10 +913,10 @@ void prewhiten_and_identify(int j, FILE *outputv)
 static void transfer_adequacy(real **a, int n, int j, FILE *out,
                               real *p_transfer, real *p_exog)
 {
-    int si = j + 1;                     /* la entrada j es la serie j+1 */
-    int b  = b_del[j];
-    int r  = r_ord[j];
-    int s  = s_ord[j];
+    int si = lnk[j].inp;                /* serie que EMITE  el enlace j */
+    int so = lnk[j].out;                /* serie que RECIBE el enlace j */
+    int r  = lnk[j].r;
+    int s  = lnk[j].s;
     int    nlags = (n / 4 < 24) ? n / 4 : 24;
     real  *aN, *aX, *cpos, *cneg, *plot;
     real   mN, mX, sN, sX, threshold, Q;
@@ -913,7 +933,7 @@ static void transfer_adequacy(real **a, int n, int j, FILE *out,
     cneg = vector(1, nlags + 1);
     plot = vector(1, 2 * nlags + 1);
 
-    for (t = 1; t <= n; t++) { aN[t] = a[t][1]; aX[t] = a[t][si]; }
+    for (t = 1; t <= n; t++) { aN[t] = a[t][so]; aX[t] = a[t][si]; }
 
     mN = Mean(aN, n);  sN = Stdev(aN, n);
     mX = Mean(aX, n);  sX = Stdev(aX, n);
@@ -988,9 +1008,8 @@ static void transfer_adequacy(real **a, int n, int j, FILE *out,
             fprintf(out, "    with white noise at k >= 0.\n");
             if (nsig_pos > 0) {
                 fprintf(out, "    (%d lag(s) cross the individual bands; ~%.1f would be expected\n",
-                        nsig_pos);
-                fprintf(out, "     by chance, so they do not contradict the joint test:\n",
-                        expected);
+                        nsig_pos, expected);
+                fprintf(out, "     by chance, so they do not contradict the joint test:\n");
                 for (k = 0; k <= nlags; k++)
                     if (fabs(cpos[k + 1]) > threshold)
                         fprintf(out, "       k = %2d   r = %7.4f\n", k, cpos[k + 1]);
@@ -1054,16 +1073,14 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
 {
     struct Tvarma vf;
     int    ifault = 0;
-    int    m = n_ser, i, j, k, l, t, p, q;
-    int    nobs   = Ts[1].nobs;
-    int    ornsop = Tm[1].ornsop;
-    int    K      = n_stat + L + 1;
-    int    NJ     = (n_inp > 0) ? n_inp : 1;
+    int    m = n_ser, i, j, k, l, t, u, p, q, ord;
+    int    K  = n_stat + L + 1;
+    int    NK = (n_link > 0) ? n_link : 1;
 
     real **sigma, **f1, ***v1, ***v2, ***v3, ***psi;
-    real **nu, **g, **Ug;
-    real  *psiN, *u, *UN, *detY, *bc, *wYf;
-    real   SN, SX[MAX_SER + 1];
+    real **nu, **we, ***pt;
+    real  *uu, *detY, *bc;
+    real   S[MAX_SER + 1];
 
     shootx(x, &vf, &ifault, 1, 0);
     if (ifault != 0) {
@@ -1076,10 +1093,11 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
     sigma = matrix(1, m, 1, m);
     for (i = 1; i <= m; i++)
         for (j = 1; j <= m; j++) sigma[i][j] = sigma2 * vf.qq[i][j];
-    SN = sigma[1][1];
-    for (i = 2; i <= m; i++) SX[i] = sigma[i][i];
+    for (i = 1; i <= m; i++) S[i] = sigma[i][i];
 
-    /* El VARMA preve sus m series: la 1 es el RUIDO, las demas las ENTRADAS */
+    /* El VARMA preve sus m series, que son los RUIDOS: cada w_i menos lo que
+       recibe por la red.  Reconstruir las series OBSERVADAS exige recorrer la
+       red en orden topologico, sumando las transferencias.                    */
     f1 = matrix(1, m, 1, L);
     v1 = tensor(1, L, 1, m, 1, m);
     v2 = tensor(1, L, 1, m, 1, m);
@@ -1087,153 +1105,162 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
     forecast_model(m, n_stat, p, q, vf.mu, vf.phi, vf.theta, sigma,
                    vf.w, vf.a, f1, v1, v2, v3, 0, L, Ts[1].freq, NULL);
 
-    /* Pesos nu de cada transferencia */
-    nu = matrix(1, NJ, 1, K);
+    /* Pesos nu de cada ENLACE */
+    nu = matrix(1, NK, 1, K);
+    for (k = 1; k <= NK; k++)
+        for (t = 1; t <= K; t++) nu[k][t] = 0.0;
     {
         real omega[MAX_S + 1], delta[MAX_R + 1];
         int idx = 1;
-        for (j = 1; j <= n_inp; j++) {
-            for (k = 0; k <= s_ord[j]; k++) omega[k] = x[idx++];
-            for (k = 1; k <= r_ord[j]; k++) delta[k] = x[idx++];
-            compute_irf(omega, s_ord[j], delta, r_ord[j], b_del[j], nu[j], K);
+        for (k = 1; k <= n_link; k++) {
+            for (j = 0; j <= lnk[k].s; j++) omega[j] = x[idx++];
+            for (j = 1; j <= lnk[k].r; j++) delta[j] = x[idx++];
+            compute_irf(omega, lnk[k].s, delta, lnk[k].r, lnk[k].b, nu[k], K);
         }
     }
 
-    /* w_Y = N + SUM_j transferencia_j, con cada entrada observada en el pasado
-       y PREVISTA en el futuro: prever Y exige prever las X.                  */
-    wYf = vector(1, L);
-    for (l = 1; l <= L; l++) wYf[l] = f1[1][l];      /* f1[1] ya lleva mu_1 */
-    {
-        real *wXe = vector(1, n_stat + L);
-        for (j = 1; j <= n_inp; j++) {
-            for (t = 1; t <= n_stat; t++) wXe[t] = w[j + 1][t];
-            for (l = 1; l <= L; l++)      wXe[n_stat + l] = f1[j + 1][l];
-            for (l = 1; l <= L; l++) {
-                real tr = 0.0;
-                int  tt = n_stat + l;
-                for (k = 1; k <= tt && k <= K; k++)
-                    tr += nu[j][k] * wXe[tt - k + 1];
-                wYf[l] += tr;
+    /* --- Series estacionarias EXTENDIDAS, en orden topologico --------------
+       Pasado: lo observado.  Futuro: el ruido previsto MAS la transferencia,
+       que a su vez necesita el futuro de las entradas -> por eso el orden.   */
+    we = matrix(1, m, 1, n_stat + L);
+    for (u = 1; u <= m; u++) {
+        i = topo[u];
+        for (t = 1; t <= n_stat; t++) we[i][t] = w[i][t];
+        for (l = 1; l <= L; l++) {
+            real acc = f1[i][l];              /* f1 ya lleva mu_i */
+            int  tt  = n_stat + l;
+            for (k = 1; k <= n_link; k++) {
+                if (lnk[k].out != i) continue;
+                for (j = 1; j <= tt && j <= K; j++)
+                    acc += nu[k][j] * we[lnk[k].inp][tt - j + 1];
             }
+            we[i][tt] = acc;
         }
-        free_vector(wXe, 1, n_stat + L);
     }
 
-    /* Varianza del error: la salida se alimenta de m fuentes de innovacion
-       INDEPENDIENTES (Q diagonal):
-           w_Y = SUM_j nu_j(B) psi_j(B) a_j  +  psi_N(B) a_N
-       luego, con g_j = nu_j * psi_{j+1} (convolucion):
-           Var(l) = SN*SUM_{i<l} psi_N(i)^2 + SUM_j SX_j*SUM_{i<l} g_j(i)^2    */
+    /* --- Pesos psi TOTALES del sistema -------------------------------------
+       La serie i responde a la innovacion j por dos caminos: su propio ruido
+       (si i == j) y todo lo que le llega por la red:
+
+           Psi_ij(B) = d_ij * psi_i(B) + SUM_{k: out=i} nu_k(B) * Psi_{inp(k),j}(B)
+
+       Es la misma recursion topologica.  El error de prevision de una serie
+       hereda, propagadas por su nu(B), las innovaciones de TODO lo que tiene
+       aguas arriba: eso es lo que hace que prever Y exija prever las X.      */
     psi = tensor(0, L, 1, m, 1, m);
     compute_psi_weights(m, p, q, vf.phi, vf.theta, L, psi);
 
-    psiN = vector(0, L);
-    for (i = 0; i <= L; i++) psiN[i] = psi[i][1][1];   /* VARMA diagonal */
-
-    g = matrix(1, NJ, 1, L + 1);
-    for (j = 1; j <= n_inp; j++)
-        for (i = 0; i <= L; i++) {
-            real sum = 0.0;
-            for (k = 0; k <= i; k++)
-                if (k + 1 <= K) sum += nu[j][k + 1] * psi[i - k][j + 1][j + 1];
-            g[j][i + 1] = sum;
-        }
-
-    /* Integracion al nivel: operador no estacionario + determinista futuro */
-    detY = vector(1, nobs + L);
-    bc   = vector(1, nobs + L);
-    build_det_component(&Tm[1], &Ts[1], nobs + L, detY);
-
-    for (t = 1; t <= nobs; t++) {
-        real y = Ts[1].data[t];
-        real b0 = (fabs(Tm[1].boxlam) < 1e-8)
-                ? log(y) * Ts[1].refactor
-                : ((pow(y, Tm[1].boxlam) - 1.0) / Tm[1].boxlam) * Ts[1].refactor;
-        bc[t] = b0 - detY[t];
-    }
-    for (l = 1; l <= L; l++) {
-        real acc = wYf[l];
-        int  tt  = nobs + l;
-        for (j = 1; j <= ornsop; j++) acc -= (-Tm[1].rnsop[j]) * bc[tt - j];
-        bc[tt] = acc;
-    }
-
-    /* Pesos psi del NIVEL: convolucion con 1/rnsop(B) */
-    u  = vector(0, L);
-    UN = vector(0, L);
-    Ug = matrix(1, NJ, 1, L + 1);
-    u[0] = 1.0;
-    for (i = 1; i <= L; i++) {
-        real sum = 0.0;
-        for (j = 1; j <= ornsop && j <= i; j++)
-            sum += (-Tm[1].rnsop[j]) * u[i - j];
-        u[i] = -sum;
-    }
-    for (i = 0; i <= L; i++) {
-        real sN = 0.0;
-        for (k = 0; k <= i; k++) sN += u[k] * psiN[i - k];
-        UN[i] = sN;
-        for (j = 1; j <= n_inp; j++) {
-            real sG = 0.0;
-            for (k = 0; k <= i; k++) sG += u[k] * g[j][i - k + 1];
-            Ug[j][i + 1] = sG;
-        }
+    pt = tensor(1, m, 1, m, 0, L);
+    for (u = 1; u <= m; u++) {
+        i = topo[u];
+        for (j = 1; j <= m; j++)
+            for (t = 0; t <= L; t++) {
+                real acc = (i == j) ? psi[t][i][i] : 0.0;   /* VARMA diagonal */
+                for (k = 1; k <= n_link; k++) {
+                    int v;
+                    if (lnk[k].out != i) continue;
+                    for (v = 0; v <= t; v++)
+                        if (v + 1 <= K)
+                            acc += nu[k][v + 1] * pt[lnk[k].inp][j][t - v];
+                }
+                pt[i][j][t] = acc;
+            }
     }
 
     fprintf(out, "\n");
     fprintf(out, "=============================================================\n");
-    fprintf(out, "  FORECAST OF Y GIVEN THE MODELS OF THE %d INPUT(S)\n", n_inp);
+    if (net_is_star())
+        fprintf(out, "  FORECAST OF Y GIVEN THE MODELS OF THE %d INPUT(S)\n", n_inp);
+    else
+        fprintf(out, "  FORECAST OF THE TRANSFER NETWORK (%d LINKS)\n", n_link);
     fprintf(out, "=============================================================\n");
-    fprintf(out, "  Forecasting Y requires forecasting the inputs: the transfer\n");
-    fprintf(out, "  needs their future. The forecast error of Y therefore adds\n");
-    fprintf(out, "  the noise innovation and EACH input innovation, the latter\n");
-    fprintf(out, "  propagated through its own nu(B).\n\n");
-    fprintf(out, "  Stationary series (w) and LEVEL, with 95%% bands:\n\n");
-    fprintf(out, "   l     w_Y fcst    sd(w)   |     LEVEL         lower         upper\n");
-    fprintf(out, "  ---------------------------------------------------------------------\n");
+    fprintf(out, "  Forecasting an output requires forecasting its inputs: the\n");
+    fprintf(out, "  transfer needs their future. The forecast error therefore adds\n");
+    fprintf(out, "  the series' own innovation and EVERY innovation upstream of it\n");
+    fprintf(out, "  in the network, each propagated through the nu(B) it crosses.\n");
 
-    for (l = 1; l <= L; l++) {
-        real vw = 0.0, vl = 0.0, lo, hi, center, sd, lvl;
+    /* --- Una tabla por serie que RECIBE alguna transferencia --------------- */
+    for (u = 1; u <= m; u++) {
+        int is_out = 0;
+        i = topo[u];
+        for (k = 1; k <= n_link; k++) if (lnk[k].out == i) is_out = 1;
+        if (!is_out) continue;
 
-        for (i = 0; i <= l - 1; i++) {
-            vw += SN * psiN[i] * psiN[i];
-            vl += SN * UN[i]   * UN[i];
-            for (j = 1; j <= n_inp; j++) {
-                vw += SX[j + 1] * g[j][i + 1]  * g[j][i + 1];
-                vl += SX[j + 1] * Ug[j][i + 1] * Ug[j][i + 1];
+        ord  = Tm[i].ornsop;
+        detY = vector(1, Ts[i].nobs + L);
+        bc   = vector(1, Ts[i].nobs + L);
+        build_det_component(&Tm[i], &Ts[i], Ts[i].nobs + L, detY);
+
+        for (t = 1; t <= Ts[i].nobs; t++) {
+            real y  = Ts[i].data[t];
+            real b0 = (fabs(Tm[i].boxlam) < 1e-8)
+                    ? log(y) * Ts[i].refactor
+                    : ((pow(y, Tm[i].boxlam) - 1.0) / Tm[i].boxlam) * Ts[i].refactor;
+            bc[t] = b0 - detY[t];
+        }
+        for (l = 1; l <= L; l++) {
+            real acc = we[i][n_stat + l];
+            int  tt  = Ts[i].nobs + l;
+            for (j = 1; j <= ord; j++) acc -= (-Tm[i].rnsop[j]) * bc[tt - j];
+            bc[tt] = acc;
+        }
+
+        /* Pesos psi del NIVEL: convolucion de los del sistema con 1/rnsop(B) */
+        uu = vector(0, L);
+        uu[0] = 1.0;
+        for (t = 1; t <= L; t++) {
+            real sum = 0.0;
+            for (j = 1; j <= ord && j <= t; j++)
+                sum += (-Tm[i].rnsop[j]) * uu[t - j];
+            uu[t] = -sum;
+        }
+
+        fprintf(out, "\n  Output: %s\n", Ts[i].name ? Ts[i].name : "");
+        fprintf(out, "  Stationary series (w) and LEVEL, with 95%% bands:\n\n");
+        fprintf(out, "   l     w_Y fcst    sd(w)   |     LEVEL         lower         upper\n");
+        fprintf(out, "  ---------------------------------------------------------------------\n");
+
+        for (l = 1; l <= L; l++) {
+            real vw = 0.0, vl = 0.0, lo, hi, center, sd, lvl;
+
+            for (j = 1; j <= m; j++)
+                for (t = 0; t <= l - 1; t++) {
+                    real Ul = 0.0;
+                    int  v;
+                    for (v = 0; v <= t; v++) Ul += uu[v] * pt[i][j][t - v];
+                    vw += S[j] * pt[i][j][t] * pt[i][j][t];
+                    vl += S[j] * Ul * Ul;
+                }
+            sd = sqrt(vl);
+
+            center = bc[Ts[i].nobs + l] + detY[Ts[i].nobs + l];
+            lo = center - 1.96 * sd;
+            hi = center + 1.96 * sd;
+
+            if (fabs(Tm[i].boxlam) < 1e-8) {
+                lvl = exp(center / Ts[i].refactor);
+                lo  = exp(lo     / Ts[i].refactor);
+                hi  = exp(hi     / Ts[i].refactor);
+            } else {
+                real lam = Tm[i].boxlam;
+                lvl = pow(lam * (center / Ts[i].refactor) + 1.0, 1.0 / lam);
+                lo  = pow(lam * (lo     / Ts[i].refactor) + 1.0, 1.0 / lam);
+                hi  = pow(lam * (hi     / Ts[i].refactor) + 1.0, 1.0 / lam);
             }
+            fprintf(out, "  %3d  %10.4f  %8.4f  |  %10.4f  %10.4f  %10.4f\n",
+                    l, we[i][n_stat + l], sqrt(vw), lvl, lo, hi);
         }
-        sd = sqrt(vl);
 
-        center = bc[nobs + l] + detY[nobs + l];
-        lo = center - 1.96 * sd;
-        hi = center + 1.96 * sd;
-
-        if (fabs(Tm[1].boxlam) < 1e-8) {
-            lvl = exp(center / Ts[1].refactor);
-            lo  = exp(lo / Ts[1].refactor);
-            hi  = exp(hi / Ts[1].refactor);
-        } else {
-            real lam = Tm[1].boxlam;
-            lvl = pow(lam * (center / Ts[1].refactor) + 1.0, 1.0 / lam);
-            lo  = pow(lam * (lo     / Ts[1].refactor) + 1.0, 1.0 / lam);
-            hi  = pow(lam * (hi     / Ts[1].refactor) + 1.0, 1.0 / lam);
-        }
-        fprintf(out, "  %3d  %10.4f  %8.4f  |  %10.4f  %10.4f  %10.4f\n",
-                l, wYf[l], sqrt(vw), lvl, lo, hi);
+        free_vector(uu, 0, L);
+        free_vector(bc, 1, Ts[i].nobs + L);
+        free_vector(detY, 1, Ts[i].nobs + L);
     }
     fprintf(out, "=============================================================\n\n");
 
-    free_matrix(Ug, 1, NJ, 1, L + 1);
-    free_vector(UN, 0, L);
-    free_vector(u, 0, L);
-    free_vector(bc, 1, nobs + L);
-    free_vector(detY, 1, nobs + L);
-    free_matrix(g, 1, NJ, 1, L + 1);
-    free_vector(psiN, 0, L);
+    free_tensor(pt, 1, m, 1, m, 0, L);
     free_tensor(psi, 0, L, 1, m, 1, m);
-    free_vector(wYf, 1, L);
-    free_matrix(nu, 1, NJ, 1, K);
+    free_matrix(we, 1, m, 1, n_stat + L);
+    free_matrix(nu, 1, NK, 1, K);
     free_tensor(v3, 1, L, 1, m, 1, m);
     free_tensor(v2, 1, L, 1, m, 1, m);
     free_tensor(v1, 1, L, 1, m, 1, m);
@@ -1241,6 +1268,145 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
     free_matrix(sigma, 1, m, 1, m);
     shootx(x, &vf, &ifault, 0, 1);
     (void)npar;
+}
+
+/* -------------------------------------------------------------------------- */
+/* LA RED de transferencias                                                    */
+/*                                                                            */
+/* Por defecto la red es una ESTRELLA: todas las entradas apuntan a la serie 1.*/
+/* Con -n <fichero> se declara un DAG cualquiera, que es lo que de verdad son  */
+/* los sistemas de Mauricio: en m6, EU es SALIDA de EC y a la vez ENTRADA de   */
+/* EI.  Cada linea del fichero es un ENLACE:                                   */
+/*                                                                            */
+/*     SALIDA <- ENTRADA   b r s                                              */
+/*                                                                            */
+/* donde SALIDA y ENTRADA son el nombre de la serie (el del .pre) o su posicion*/
+/* en la linea de ordenes (1 = el primer fichero).                            */
+/* -------------------------------------------------------------------------- */
+static void build_default_links(void)
+{
+    int j;
+    n_link = 0;
+    for (j = 1; j <= n_inp; j++) {
+        n_link++;
+        lnk[n_link].out = 1;
+        lnk[n_link].inp = j + 1;
+        lnk[n_link].b   = b_del[j];
+        lnk[n_link].r   = r_ord[j];
+        lnk[n_link].s   = s_ord[j];
+    }
+}
+
+static int series_index(const char *tok)
+{
+    int i;
+    char *end;
+    long v = strtol(tok, &end, 10);
+
+    if (*end == '\0' && v >= 1 && v <= n_ser) return (int)v;
+
+    for (i = 1; i <= n_ser; i++)
+        if (Ts[i].name && strcasecmp(Ts[i].name, tok) == 0) return i;
+    return 0;
+}
+
+static int read_network(const char *path)
+{
+    FILE *f = fopen(path, "r");
+    char line[256];
+    int  nl = 0;
+
+    if (f == NULL) {
+        fprintf(stderr, "Error: cannot open the network file %s\n", path);
+        return -1;
+    }
+
+    n_link = 0;
+    while (fgets(line, sizeof line, f)) {
+        char lhs[64], arrow[8], rhs[64];
+        int  b, r, sO, io, ii;
+        char *h = strchr(line, '#');
+        if (h) *h = '\0';
+        if (sscanf(line, "%63s %7s %63s %d %d %d",
+                   lhs, arrow, rhs, &b, &r, &sO) != 6) {
+            int only_ws = 1; char *c;
+            for (c = line; *c; c++) if (!isspace((unsigned char)*c)) only_ws = 0;
+            if (only_ws) continue;
+            fprintf(stderr, "Error: bad line in %s: %s", path, line);
+            fclose(f); return -1;
+        }
+        if (strcmp(arrow, "<-") != 0) {
+            fprintf(stderr, "Error: expected '<-' in %s, found '%s'\n", path, arrow);
+            fclose(f); return -1;
+        }
+        io = series_index(lhs);
+        ii = series_index(rhs);
+        if (io == 0 || ii == 0) {
+            fprintf(stderr, "Error: unknown series in %s: '%s <- %s'\n",
+                    path, lhs, rhs);
+            fclose(f); return -1;
+        }
+        if (io == ii) {
+            fprintf(stderr, "Error: a series cannot feed itself (%s)\n", lhs);
+            fclose(f); return -1;
+        }
+        if (n_link >= MAX_LINK) {
+            fprintf(stderr, "Error: too many links (max %d)\n", MAX_LINK);
+            fclose(f); return -1;
+        }
+        n_link++;
+        lnk[n_link].out = io;
+        lnk[n_link].inp = ii;
+        lnk[n_link].b   = b;
+        lnk[n_link].r   = r;
+        lnk[n_link].s   = sO;
+        nl++;
+    }
+    fclose(f);
+    return nl;
+}
+
+/* Orden topologico: una serie solo se puede construir (y prever) despues de
+   TODAS las que la alimentan. Si hay un ciclo el sistema es simultaneo y no se
+   puede resolver restando transferencias: hay que decirlo, no estimar basura. */
+static int topo_sort(void)
+{
+    int indeg[MAX_SER + 1], i, k, nt = 0, changed;
+    char done[MAX_SER + 1];
+
+    for (i = 1; i <= n_ser; i++) { indeg[i] = 0; done[i] = 0; }
+    for (k = 1; k <= n_link; k++) indeg[lnk[k].out]++;
+
+    do {
+        changed = 0;
+        for (i = 1; i <= n_ser; i++) {
+            if (done[i] || indeg[i] > 0) continue;
+            topo[++nt] = i;
+            done[i] = 1;
+            changed = 1;
+            for (k = 1; k <= n_link; k++)
+                if (lnk[k].inp == i) indeg[lnk[k].out]--;
+        }
+    } while (changed);
+
+    if (nt < n_ser) {
+        fprintf(stderr, "Error: the transfer network has a CYCLE: the system is\n"
+                        "       simultaneous and cannot be cast as a triangular\n"
+                        "       VARMA by subtracting transfers.\n");
+        return 0;
+    }
+    return 1;
+}
+
+static void print_network(FILE *out)
+{
+    int k;
+    fprintf(out, "\nTransfer network (%d link(s)):\n", n_link);
+    for (k = 1; k <= n_link; k++)
+        fprintf(out, "  %-14s <- %-14s  b=%d, r=%d, s=%d\n",
+                Ts[lnk[k].out].name ? Ts[lnk[k].out].name : "?",
+                Ts[lnk[k].inp].name ? Ts[lnk[k].inp].name : "?",
+                lnk[k].b, lnk[k].r, lnk[k].s);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1255,6 +1421,9 @@ static void usage(const char *prog)
 "Reads two models already specified in fue (.pre) and estimates them JOINTLY:\n"
 "\n"
 "    Y_t = SUM_j [omega_j(B)/delta_j(B)] B^b_j X_j,t + N_t\n"
+"\n"
+"and, with -n, a NETWORK of such equations, in which a series may be at once an\n"
+"output and an input (see THE TRANSFER NETWORK below).\n"
 "\n"
 "Usage: %s output.pre input1.pre [input2.pre ...] [options]\n"
 "       The FIRST file is the output (Y); the rest are the exogenous inputs.\n"
@@ -1280,6 +1449,25 @@ static void usage(const char *prog)
 "                                      # input's own AR (a rational transfer)\n"
 "             omega1[0] = omega2[0]    # share between two inputs\n"
 "             omega2[1] = 0.0          # fix at a value\n"
+"\n"
+"THE TRANSFER NETWORK\n"
+"  -n FILE  declare a NETWORK of transfers (a DAG) instead of the default star.\n"
+"           A series may RECEIVE transfers and be an INPUT to another one: that\n"
+"           is what a real system is (in Mauricio's m6: EC -> EU -> EI -> EP).\n"
+"           One link per line, output first:\n"
+"\n"
+"             OUTPUT <- INPUT   b r s\n"
+"\n"
+"           naming the series by the name in its .pre or by its position on the\n"
+"           command line.  For instance, the chain X -> M -> Y:\n"
+"\n"
+"             Y <- M   2 0 0     # M feeds Y with a delay of 2\n"
+"             M <- X   1 0 0     # and X feeds M\n"
+"\n"
+"           Here X affects Y only INDIRECTLY.  A cycle is rejected: the system\n"
+"           would be simultaneous and cannot be cast as a triangular VARMA.\n"
+"           Without -n, every input feeds the first file (the star), and -b/-r/-s\n"
+"           give the orders.\n"
 "\n"
 "IDENTIFICATION\n"
 "  -p       PREWHITEN ONLY: filter the input with its own ARMA, apply the same\n"
@@ -1417,9 +1605,9 @@ static void build_slots(void)
 
     n_slot = 0;
 
-    for (j = 1; j <= n_inp; j++) {
-        for (k = 0; k <= s_ord[j]; k++) add_slot("omega%d[%d]", j, k);
-        for (k = 1; k <= r_ord[j]; k++) add_slot("delta%d[%d]", j, k);
+    for (j = 1; j <= n_link; j++) {
+        for (k = 0; k <= lnk[j].s; k++) add_slot("omega%d[%d]", j, k);
+        for (k = 1; k <= lnk[j].r; k++) add_slot("delta%d[%d]", j, k);
     }
     for (i = 1; i <= n_ser; i++) {
         if (fix_arma[i]) continue;
@@ -1689,8 +1877,8 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
             fprintf(outputv, "\n--- Multivariate diagnostics (Hosking + JB) ---\n");
             multivariate_diagnostics(a_est, n_stat, n_ser, outputv);
 
-            for (j = 1; j <= n_inp; j++)
-                if (s_ord[j] >= 0) {
+            for (j = 1; j <= n_link; j++)
+                if (lnk[j].s >= 0) {
                     real pt = -1.0, pe = -1.0;
                     transfer_adequacy(a_est, n_stat, j, outputv, &pt, &pe);
                     if (j == 1) { sum_p_transfer = pt; sum_p_exog = pe; }
@@ -1714,13 +1902,18 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
         printf("\nLog-likelihood         : %.6f\n\n", sum_logl);
 
         printf("Estimated model  (output: %s)\n", yname);
-        for (j = 1; j <= n_inp; j++) {
-            if (s_ord[j] < 0) { printf("  Input %d   : no transfer\n", j); continue; }
-            printf("  Input %d   : nu(B) = omega(B)/delta(B) * B^%d\n", j, b_del[j]);
-            for (k = 0; k <= s_ord[j]; k++, idx++)
+        for (j = 1; j <= n_link; j++) {
+            if (lnk[j].s < 0) { printf("  Input %d   : no transfer\n", j); continue; }
+            if (net_is_star())
+                printf("  Input %d   : nu(B) = omega(B)/delta(B) * B^%d\n",
+                       j, lnk[j].b);
+            else
+                printf("  %s <- %s : nu(B) = omega(B)/delta(B) * B^%d\n",
+                       Ts[lnk[j].out].name, Ts[lnk[j].inp].name, lnk[j].b);
+            for (k = 0; k <= lnk[j].s; k++, idx++)
                 printf("                omega_%d = %10.6f  (t = %6.2f)\n", k,
                        x[idx], dev[idx] > 1e-15 ? x[idx] / dev[idx] : 0.0);
-            for (k = 1; k <= r_ord[j]; k++, idx++)
+            for (k = 1; k <= lnk[j].r; k++, idx++)
                 printf("                delta_%d = %10.6f  (t = %6.2f)\n", k,
                        x[idx], dev[idx] > 1e-15 ? x[idx] / dev[idx] : 0.0);
         }
@@ -1772,6 +1965,7 @@ int main(int argc, char *argv[])
     char *model_name = NULL;
     char *opt_b = NULL, *opt_r = NULL, *opt_s = NULL;
     char *cons_file = NULL;
+    char *net_file  = NULL;
     char outname[512];
     int fix_out_arma = 0, fix_inp_arma = 0;
     int fix_out_det  = 0, fix_inp_det  = 0;
@@ -1779,7 +1973,7 @@ int main(int argc, char *argv[])
     macheps = cmacheps();
     outputv = stdout;
 
-    while ((opt = getopt(argc, argv, "r:s:b:f:m:c:p0XNDEMvho:")) != -1) {
+    while ((opt = getopt(argc, argv, "r:s:b:f:m:c:n:p0XNDEMvho:")) != -1) {
         switch (opt) {
         case 'r': opt_r = optarg; auto_id = 0; break;
         case 's': opt_s = optarg; auto_id = 0; break;
@@ -1793,6 +1987,7 @@ int main(int argc, char *argv[])
         case 'm': model_name = optarg;       break;
         case 'p': prewhiten_only = 1;        break;
         case 'c': cons_file = optarg;        break;
+        case 'n': net_file  = optarg;        break;
         case '0': no_transfer = 1; auto_id = 0; break;
         case 'v': quiet_mode = 0;            break;
         case 'o': outfile = optarg;          break;
@@ -1875,7 +2070,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    /* --- Ordenes de las transferencias --- */
+    /* --- La RED: estrella por defecto, DAG si se declara con -n --- */
     for (j = 1; j <= n_inp; j++) { b_del[j] = 0; r_ord[j] = 0; s_ord[j] = 0; }
     if (no_transfer)
         for (j = 1; j <= n_inp; j++) s_ord[j] = -1;
@@ -1884,6 +2079,13 @@ int main(int argc, char *argv[])
         parse_orders(opt_r, r_ord, n_inp);
         parse_orders(opt_s, s_ord, n_inp);
     }
+    build_default_links();
+
+    if (net_file != NULL) {
+        if (read_network(net_file) < 0) return 6;
+        auto_id = 0;             /* la red trae sus propios ordenes */
+    }
+    if (!topo_sort()) return 7;
 
     build_stationary_series();
     if (n_stat <= 0) {
@@ -1925,16 +2127,16 @@ int main(int argc, char *argv[])
 
     /* --- Identificacion: una por entrada --- */
     if (auto_id || prewhiten_only)
-        for (j = 1; j <= n_inp; j++)
+        for (j = 1; j <= n_link; j++)
             prewhiten_and_identify(j, outputv);
 
     if (prewhiten_only) {
         printf("Observations           : %d\n", n_stat);
         printf("\n**** PREWHITENING ONLY: no estimation performed\n\n");
         printf("Suggested transfer function orders:\n");
-        for (j = 1; j <= n_inp; j++)
+        for (j = 1; j <= n_link; j++)
             printf("  input %d: b = %d, r = %d, s = %d\n",
-                   j, b_del[j], r_ord[j], s_ord[j]);
+                   j, lnk[j].b, lnk[j].r, lnk[j].s);
         printf("\nCCF plots and impulse response weights written to %s\n\n",
                outfile_path);
         fclose(outputv);
@@ -1942,18 +2144,19 @@ int main(int argc, char *argv[])
     }
 
     fprintf(outputv, "\nTransfer function orders:\n");
-    for (j = 1; j <= n_inp; j++) {
+    for (j = 1; j <= n_link; j++) {
         fprintf(outputv, "  input %d: b = %d, r = %d, s = %d\n",
-                j, b_del[j], r_ord[j], s_ord[j]);
-        if (r_ord[j] > MAX_R) {
-            fprintf(stderr, "Error: r=%d exceeds MAX_R=%d\n", r_ord[j], MAX_R);
+                j, lnk[j].b, lnk[j].r, lnk[j].s);
+        if (lnk[j].r > MAX_R) {
+            fprintf(stderr, "Error: r=%d exceeds MAX_R=%d\n", lnk[j].r, MAX_R);
             return 8;
         }
-        if (s_ord[j] > MAX_S) {
-            fprintf(stderr, "Error: s=%d exceeds MAX_S=%d\n", s_ord[j], MAX_S);
+        if (lnk[j].s > MAX_S) {
+            fprintf(stderr, "Error: s=%d exceeds MAX_S=%d\n", lnk[j].s, MAX_S);
             return 8;
         }
     }
+    if (net_file != NULL) print_network(outputv);
 
     /* --- Tabla de slots, restricciones y vector inicial --- */
     build_slots();
@@ -1975,9 +2178,9 @@ int main(int argc, char *argv[])
         real *x  = vector(1, n_free);      /* lo que ve el optimizador    */
         int idx = 1;
 
-        for (j = 1; j <= n_inp; j++) {
-            for (l = 0; l <= s_ord[j]; l++) xs[idx++] = 0.0;
-            for (l = 1; l <= r_ord[j]; l++) xs[idx++] = 0.0;
+        for (j = 1; j <= n_link; j++) {
+            for (l = 0; l <= lnk[j].s; l++) xs[idx++] = 0.0;
+            for (l = 1; l <= lnk[j].r; l++) xs[idx++] = 0.0;
         }
         for (i = 1; i <= n_ser; i++) {
             if (fix_arma[i]) continue;

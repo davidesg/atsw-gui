@@ -199,9 +199,88 @@ def build_two_inputs(outdir, seed):
           % (om1, om2))
 
 
+def build_chain(outdir, seed):
+    """LA RED: una CADENA  X -> M -> Y.
+
+    M es a la vez SALIDA (de X) y ENTRADA (de Y). Es la topologia de m6 en
+    miniatura (EC -> EU -> EI) y es justo lo que el modelo en estrella NO puede
+    representar: en la estrella toda transferencia acaba en la serie 1.
+
+        w_M[t] = nu_XM(B) w_X[t] + N_M[t]      b=1, s=0, omega = 0.700
+        w_Y[t] = nu_MY(B) w_M[t] + N_Y[t]      b=2, s=0, omega = 0.500
+
+    Ojo: X influye en Y INDIRECTAMENTE, a traves de M. La verdad NO tiene un
+    enlace X -> Y, y drtran debe poder decirlo.
+    """
+    rnd = random.Random(seed)
+    burn = 200
+    n = N_OBS + burn
+
+    om_xm, b_xm = [0.700], 1
+    om_my, b_my = [0.500], 2
+
+    wx = [0.0] * n
+    nm = [0.0] * n
+    ny = [0.0] * n
+    for t in range(1, n):
+        wx[t] = 0.500 * wx[t - 1] + rnd.gauss(0.0, 1.0)
+        nm[t] = 0.300 * nm[t - 1] + rnd.gauss(0.0, 0.5)
+        ny[t] = 0.400 * ny[t - 1] + rnd.gauss(0.0, 0.4)
+
+    nu_xm = impulse_response(om_xm, 0, [], 0, b_xm, 60)
+    nu_my = impulse_response(om_my, 0, [], 0, b_my, 60)
+
+    wm = [0.0] * n
+    for t in range(n):
+        acc = 0.0
+        for j in range(1, 61):
+            idx = t - (j - 1)
+            if idx < 0:
+                break
+            acc += nu_xm[j] * wx[idx]
+        wm[t] = acc + nm[t]
+
+    wy = [0.0] * n
+    for t in range(n):
+        acc = 0.0
+        for j in range(1, 61):
+            idx = t - (j - 1)
+            if idx < 0:
+                break
+            acc += nu_my[j] * wm[idx]
+        wy[t] = acc + ny[t]
+
+    wx, wm, wy = wx[burn:], wm[burn:], wy[burn:]
+
+    def to_levels(v, base):
+        z, acc = [], 0.0
+        for u in v:
+            acc += u / 100.0
+            z.append(base * math.exp(acc))
+        return z
+
+    write_pre(os.path.join(outdir, "SYNC_Y.pre"), "SYNC_Y",
+              to_levels(wy, 100.0), 0.400, mu_free=False)
+    write_pre(os.path.join(outdir, "SYNC_M.pre"), "SYNC_M",
+              to_levels(wm, 70.0), 0.300, mu_free=False)
+    write_pre(os.path.join(outdir, "SYNC_X.pre"), "SYNC_X",
+              to_levels(wx, 50.0), 0.500, mu_free=False)
+
+    with open(os.path.join(outdir, "SYNC.net"), "w") as f:
+        f.write("# LA RED:  X -> M -> Y   (M es salida Y entrada)\n")
+        f.write("# SALIDA <- ENTRADA   b r s\n")
+        f.write("SYNC_Y <- SYNC_M   2 0 0\n")
+        f.write("SYNC_M <- SYNC_X   1 0 0\n")
+
+    print("SYNC -> VERDAD (cadena): Y<-M b=2 omega=%s | M<-X b=1 omega=%s"
+          % (om_my, om_xm))
+
+
 def main():
     outdir = sys.argv[1] if len(sys.argv) > 1 else "."
     os.makedirs(outdir, exist_ok=True)
+
+    build_chain(outdir, SEED + 3)
 
     build_two_inputs(outdir, SEED + 2)
 

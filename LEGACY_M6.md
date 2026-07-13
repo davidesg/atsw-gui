@@ -162,10 +162,33 @@ Ahí está el techo.
    compartido), declarada en un fichero con `-c`.
 3. ~~**Ecuación contemporánea Φ(0) ≠ I**~~ ❌ **NO HACE FALTA**: es una
    transferencia con b=0, que drtran ya sabe restar (ver §1b).
-4. **LA RED: varias SALIDAS.** ⬅ *el hueco real*. En m6, **EU es a la vez salida**
-   (de EC) **y entrada** (de EI); lo mismo EI. drtran tiene **una** salida y k
-   entradas. Hace falta que **cualquier** serie pueda tener transferencias restadas
-   y ser a la vez entrada de otra: un DAG de transferencias.
+4. ~~**LA RED: varias SALIDAS**~~ ✅ **HECHO**. En m6, **EU es a la vez salida**
+   (de EC) **y entrada** (de EI); lo mismo EI. Ahora **cualquier** serie puede
+   recibir transferencias y ser a la vez entrada de otra. Se declara con `-n`:
+
+   ```
+   OUTPUT <- INPUT   b r s
+   ```
+
+   El cast resta a **cada** serie lo que recibe (`w[i] − Σ transferencias hacia i`),
+   no solo a la serie 1; el resto es su ruido, y el VARMA sigue siendo diagonal. La
+   previsión recorre la red en **orden topológico** y propaga los pesos ψ del
+   sistema:
+
+   ```
+   Psi_ij(B) = d_ij·psi_i(B) + SUM_{k: out=i} nu_k(B)·Psi_{inp(k),j}(B)
+   ```
+
+   de modo que el error de previsión de una serie hereda las innovaciones de **todo
+   lo que tiene aguas arriba**, cada una filtrada por los ν(B) que atraviesa. Un
+   **ciclo** se rechaza: sería un sistema simultáneo, y entonces no se puede
+   triangularizar restando transferencias.
+
+   Comprobado sobre una cadena sintética `X → M → Y` (§2f de la batería): recupera
+   las dos transferencias y los tres ARMA, y **con los mismos 7 parámetros libres**
+   bate a la estrella por 213 puntos de logL (−1038.6 vs −1251.8). En la estrella, el
+   enlace directo X→Y sale insignificante (t = 1.45): el efecto de X sobre Y es
+   indirecto, y solo la red puede decirlo.
 5. **Covarianza no diagonal.** Es la forma *reducida* de la dependencia
    contemporánea que NO se modela como transferencia — y m6-1 la usa **sin tener
    ninguna estructura contemporánea**, lo que prueba que no son sustitutos.

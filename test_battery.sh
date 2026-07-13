@@ -475,6 +475,78 @@ else
         || fail "falla, pero sin explicar por qué"
 fi
 
+
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
+echo "── 2f. LA RED: un DAG de transferencias (-n) ──"
+echo "   El modelo general no es UNA salida y k entradas, sino una RED: una serie"
+echo "   puede RECIBIR transferencias y ser a la vez ENTRADA de otra. Es lo que"
+echo "   son de verdad los sistemas de Mauricio (en m6: EC -> EU -> EI -> EP)."
+echo ""
+echo "   Cadena sintética  X -> M -> Y   (verdad: Y<-M b=2 w=0.500; M<-X b=1 w=0.700)"
+echo "   X influye en Y solo INDIRECTAMENTE, a través de M."
+echo ""
+
+NET="$SYN/SYNC.net"
+OUT="$TMPDIR/net_chain.txt"
+$DRTRAN "$SYN/SYNC_Y.pre" "$SYN/SYNC_M.pre" "$SYN/SYNC_X.pre" -n "$NET" \
+        -o "$OUT" -f 6 > /dev/null 2>&1
+
+check "omega Y<-M  (verdad 0.500)" 0.500 "$(val "$OUT" 'omega1\[0\]')" 0.05
+check "omega M<-X  (verdad 0.700)" 0.700 "$(val "$OUT" 'omega2\[0\]')" 0.05
+check "phi del ruido de Y (verdad 0.400)" 0.400 "$(val "$OUT" 'phi_1\[B\^1\]')" 0.06
+check "phi del ruido de M (verdad 0.300)" 0.300 "$(val "$OUT" 'phi_2\[B\^1\]')" 0.06
+check "phi de X           (verdad 0.500)" 0.500 "$(val "$OUT" 'phi_3\[B\^1\]')" 0.06
+
+LL_NET=$(grep "Log-likelihood =" "$OUT" | awk '{print $3}')
+NP_NET=$(grep "Structural parameters" "$OUT" | sed 's/.*free: \([0-9]*\).*/\1/')
+
+# La ESTRELLA: lo único que drtran sabía hacer antes. MISMO número de parámetros,
+# pero no puede decir que M depende de X: trata a M como autónoma.
+OUT2="$TMPDIR/net_star.txt"
+$DRTRAN "$SYN/SYNC_Y.pre" "$SYN/SYNC_M.pre" "$SYN/SYNC_X.pre" \
+        -b 2,3 -r 0,0 -s 0,0 -o "$OUT2" > /dev/null 2>&1
+LL_STAR=$(grep "Log-likelihood =" "$OUT2" | awk '{print $3}')
+NP_STAR=$(grep "Structural parameters" "$OUT2" | sed 's/.*free: \([0-9]*\).*/\1/')
+
+check "la estrella tiene los MISMOS parámetros libres" "$NP_NET" "$NP_STAR" 0.5
+python3 -c "import sys; sys.exit(0 if $LL_NET > $LL_STAR + 50 else 1)" \
+    && pass "la RED gana a la estrella por >50 en logL con los mismos parámetros ($LL_NET vs $LL_STAR)" \
+    || fail "la red no mejora sobre la estrella ($LL_NET vs $LL_STAR)"
+
+# En la estrella el enlace X->Y sale insignificante: el efecto es indirecto.
+T_XY=$(grep -E "^omega2\[0\]" "$OUT2" | awk '{print $4}')
+python3 -c "import sys; sys.exit(0 if abs($T_XY) < 2.0 else 1)" \
+    && pass "en la estrella el enlace directo X->Y es insignificante (t = $T_XY)" \
+    || fail "la estrella declara significativo un enlace X->Y que NO existe (t = $T_XY)"
+
+grep -q "Transfer network (2 link(s))" "$OUT" \
+    && pass "el informe declara la red" \
+    || fail "el informe no declara la red"
+grep -q "Output: SYNC_M" "$OUT" \
+    && pass "prevé TODAS las series que reciben transferencia, no solo la 1" \
+    || fail "no prevé la serie intermedia M"
+
+# --- un CICLO debe rechazarse: el sistema sería simultáneo ---
+CYC="$TMPDIR/cycle.net"
+printf 'SYNC_Y <- SYNC_M  1 0 0\nSYNC_M <- SYNC_Y  1 0 0\n' > "$CYC"
+# Ojo: drtran sale con codigo != 0 al rechazar, y con 'set -o pipefail' eso
+# tumbaria el pipeline aunque el grep acierte. Se captura y luego se busca.
+$DRTRAN "$SYN/SYNC_Y.pre" "$SYN/SYNC_M.pre" "$SYN/SYNC_X.pre" -n "$CYC" \
+        -o "$TMPDIR/cyc.txt" > "$TMPDIR/cyc.log" 2>&1
+grep -q "CYCLE" "$TMPDIR/cyc.log" \
+    && pass "un ciclo en la red se RECHAZA (sistema simultáneo)" \
+    || fail "acepta una red con ciclo"
+
+# --- serie desconocida en el fichero de red ---
+BAD="$TMPDIR/bad.net"
+printf 'NO_EXISTE <- SYNC_X  1 0 0\n' > "$BAD"
+$DRTRAN "$SYN/SYNC_Y.pre" "$SYN/SYNC_M.pre" "$SYN/SYNC_X.pre" -n "$BAD" \
+        -o "$TMPDIR/bad.txt" > "$TMPDIR/bad.log" 2>&1
+grep -q "unknown series" "$TMPDIR/bad.log" \
+    && pass "una serie inexistente en la red se rechaza" \
+    || fail "acepta una serie inexistente"
+
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
 echo "── 3. PASS-THROUGH: con Y = X la verdad es omega_0 = 1 ──"

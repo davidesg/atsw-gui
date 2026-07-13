@@ -1,0 +1,4 @@
+# LA RED:  X -> M -> Y   (M es salida Y entrada)
+# SALIDA <- ENTRADA   b r s
+SYNC_Y <- SYNC_M   2 0 0
+SYNC_M <- SYNC_X   1 0 0

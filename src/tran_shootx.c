@@ -133,7 +133,8 @@ static void poly_mul(real *a, int da, real *b, int db, real *c, int *dc)
 /* -------------------------------------------------------------------------- */
 static void build_embedded_varma(struct Tvarma *armax, int m,
                                  real omega[][MAX_S + 1], real delta[][MAX_R + 1],
-                                 real *var, int firstx, int *ifaultx)
+                                 real *var, real cov[][MAX_SER + 1],
+                                 int firstx, int *ifaultx)
 {
     real  P[MAX_SER + 1][MAX_SER + 1][MAX_POLY + 1];   /* fila AR, forma llana */
     int   dP[MAX_SER + 1][MAX_SER + 1];
@@ -251,9 +252,15 @@ static void build_embedded_varma(struct Tvarma *armax, int m,
             armax->theta[k][i][i] = -M[i][k];
     }
 
-    /* Q estructural: diagonal (mas las covarianzas liberadas, ya en var/cov) */
+    /* Q ESTRUCTURAL: diagonal, mas las covarianzas que el fichero de restricciones
+       haya LIBERADO. Se me olvido cablearlas: un q[i,j] libre no llegaba aqui, o sea
+       era un parametro SIN EFECTO -- direccion exactamente plana, y un error estandar
+       de tres millones. */
     for (i = 1; i <= m; i++)
         for (j = 1; j <= m; j++) armax->qq[i][j] = (i == j) ? var[i] : 0.0;
+    for (i = 2; i <= m; i++)
+        for (j = 1; j < i; j++)
+            armax->qq[i][j] = armax->qq[j][i] = cov[i][j];
     armax->sigma2 = 1.0;
 
     /* Las MEDIAS. Aqui w_i es la serie OBSERVADA, no el ruido:
@@ -486,7 +493,7 @@ void shootx(real *xfree, struct Tvarma *armax, int *ifaultx, int firstx, int las
        Sin restar nada. elf recibe las series tal cual y su verosimilitud EXACTA
        se ocupa de la inicializacion pre-muestral: no hay truncamiento.        */
     if (embed_varma) {
-        build_embedded_varma(armax, m, omega, delta, var, firstx, ifaultx);
+        build_embedded_varma(armax, m, omega, delta, var, cov, firstx, ifaultx);
 
         if (*ifaultx == 0) {                       /* invertibilidad del MA */
             real wr[4 * MAX_SER], wi[4 * MAX_SER], wmod[4 * MAX_SER];

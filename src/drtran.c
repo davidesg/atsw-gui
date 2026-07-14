@@ -1404,7 +1404,8 @@ static int forecast_levels(real *x, int L, real **LVL)
         }
     }
 
-    /* las series extendidas, en orden topologico */
+    /* las series extendidas, en orden topologico. Con el cast EMPOTRADO la
+       transferencia ya esta dentro del VARMA: no se vuelve a sumar.            */
     we = matrix(1, m, 1, n_stat + L);
     for (u = 1; u <= m; u++) {
         i = topo[u];
@@ -1412,11 +1413,12 @@ static int forecast_levels(real *x, int L, real **LVL)
         for (l = 1; l <= L; l++) {
             real acc = f1[i][l];
             int  tt  = n_stat + l;
-            for (k = 1; k <= n_link; k++) {
-                if (lnk[k].out != i) continue;
-                for (j = 1; j <= tt && j <= K; j++)
-                    acc += nu[k][j] * we[lnk[k].inp][tt - j + 1];
-            }
+            if (!embed_varma)
+                for (k = 1; k <= n_link; k++) {
+                    if (lnk[k].out != i) continue;
+                    for (j = 1; j <= tt && j <= K; j++)
+                        acc += nu[k][j] * we[lnk[k].inp][tt - j + 1];
+                }
             we[i][tt] = acc;
         }
     }
@@ -1625,6 +1627,9 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
     /* --- Series estacionarias EXTENDIDAS, en orden topologico --------------
        Pasado: lo observado.  Futuro: el ruido previsto MAS la transferencia,
        que a su vez necesita el futuro de las entradas -> por eso el orden.   */
+    /* Con el cast EMPOTRADO la transferencia YA ESTA DENTRO del VARMA: f1[i][l] es
+       directamente la prevision de la serie OBSERVADA w_i. Volver a sumarle la
+       transferencia la contaria DOS VECES -- y lo hacia: inflaba la sd un 40%.    */
     we = matrix(1, m, 1, n_stat + L);
     for (u = 1; u <= m; u++) {
         i = topo[u];
@@ -1632,11 +1637,12 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
         for (l = 1; l <= L; l++) {
             real acc = f1[i][l];              /* f1 ya lleva mu_i */
             int  tt  = n_stat + l;
-            for (k = 1; k <= n_link; k++) {
-                if (lnk[k].out != i) continue;
-                for (j = 1; j <= tt && j <= K; j++)
-                    acc += nu[k][j] * we[lnk[k].inp][tt - j + 1];
-            }
+            if (!embed_varma)
+                for (k = 1; k <= n_link; k++) {
+                    if (lnk[k].out != i) continue;
+                    for (j = 1; j <= tt && j <= K; j++)
+                        acc += nu[k][j] * we[lnk[k].inp][tt - j + 1];
+                }
             we[i][tt] = acc;
         }
     }
@@ -1654,6 +1660,12 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
     compute_psi_weights(m, p, q, vf.phi, vf.theta, L, psi);
 
     pt = tensor(1, m, 1, m, 0, L);
+    if (embed_varma) {
+        /* El VARMA ya ES el sistema: sus psi son los del sistema. Nada que propagar. */
+        for (i = 1; i <= m; i++)
+            for (j = 1; j <= m; j++)
+                for (t = 0; t <= L; t++) pt[i][j][t] = psi[t][i][j];
+    } else
     for (u = 1; u <= m; u++) {
         i = topo[u];
         for (j = 1; j <= m; j++)

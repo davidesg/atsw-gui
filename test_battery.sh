@@ -955,11 +955,10 @@ python3 -c "import sys; sys.exit(0 if 2*($LV3 - ($LV1)) < 3.84 else 1)" \
     && pass "con -V: el LR del denominador = $(python3 -c "print('%.4f' % (2*($LV3-($LV1))))") < chi2(1): no hay denominador" \
     || fail "el denominador sale significativo con -V"
 
-# --- EL RETARDO MEDIO EXPLICA LA PREVISIÓN ---
+# --- EL RETARDO MEDIO ---
 # El racional pone la masa de la respuesta MAS ATRAS en el tiempo (retardo medio
-# 0.84 frente a 0.40), o sea en retardos YA OBSERVADOS en el origen. Por eso preve
-# mejor a UN paso, aunque su cola sea falsa. Y por eso pierde en cuanto el horizonte
-# crece: la mala especificación se cobra la factura.
+# 0.84 frente a 0.40): su cola geométrica, que es FALSA (la adecuación la caza en
+# k=2), arrastra la respuesta hacia retardos que en el origen ya están observados.
 M1=$(mlag "$V1"); M2=$(mlag "$V2")
 python3 -c "import sys; sys.exit(0 if $M2 > $M1 + 0.2 else 1)" \
     && pass "el racional tiene el retardo medio MÁS LARGO ($M2 vs $M1): su cola falsa empuja la masa hacia atrás" \
@@ -975,15 +974,27 @@ def rmse(f):
     m=re.search(r'h      n        MAE.*?\n  ---+\n((?:  +\d+.*\n)+)', t)
     return {int(r.split()[0]): float(r.split()[3]) for r in m.group(1).strip().split('\n')}
 W, R = rmse(sys.argv[1]), rmse(sys.argv[2])
-# a h=1 el racional gana (masa mas atras = mas input YA OBSERVADO)
-# a h>=3 pierde (la cola es falsa y la mala especificacion se paga)
-ok = R[1] < W[1] and all(R[h] > W[h] for h in (3, 6, 12))
+ok = all(R[h] >= W[h] - 1e-6 for h in (1, 3, 6, 12))
 sys.exit(0 if ok else (print("h=1 %.4f/%.4f  h=3 %.4f/%.4f  h=12 %.4f/%.4f"
         % (R[1],W[1],R[3],W[3],R[12],W[12])) or 1))
 PYRAT
 [ $? -eq 0 ] \
-    && pass "fuera de muestra: el racional gana a h=1 (por el motivo equivocado) y PIERDE de h=3 en adelante" \
+    && pass "fuera de muestra el racional PIERDE a todo horizonte (también a h=1)" \
     || fail "no se reproduce el patrón de previsión racional/dos-omegas"
+
+
+# --- REGRESIÓN: los dos cast deben dar la MISMA previsión ---
+# Con -V la transferencia YA ESTÁ dentro del VARMA: f1[1] es directamente la
+# previsión de w_Y. Volver a sumarle la transferencia la contaba DOS VECES, e
+# inflaba la desviación típica un 40% (0.3372 en vez de 0.2412).
+FS="$TMPDIR/fc_sub.txt"; FV="$TMPDIR/fc_emb.txt"
+$DRTRAN "$CASES/ES_CPI_m10.pre" "$CASES/WTI_ar1.pre" -b 0 -r 0 -s 1    -f 6 -o "$FS" >/dev/null 2>&1
+$DRTRAN "$CASES/ES_CPI_m10.pre" "$CASES/WTI_ar1.pre" -b 0 -r 0 -s 1 -V -f 6 -o "$FV" >/dev/null 2>&1
+fsd() { grep -A"$((4 + $2))" "Output: ES_CPI" "$1" | tail -1 | awk '{print $3}'; }
+flv() { grep -A"$((4 + $2))" "Output: ES_CPI" "$1" | tail -1 | awk '{print $5}'; }
+check "los dos cast dan la MISMA sd de previsión a h=1" "$(fsd "$FS" 1)" "$(fsd "$FV" 1)" 0.001
+check "y el MISMO nivel previsto a h=1"                 "$(flv "$FS" 1)" "$(flv "$FV" 1)" 0.01
+check "y a h=6"                                          "$(flv "$FS" 6)" "$(flv "$FV" 6)" 0.01
 
 echo ""
 echo "   Los pesos: el racional impone cola geométrica; los datos quieren dos y parar."

@@ -398,3 +398,50 @@ un pequeño DSL parámetros → estructura VARMA— no solo ω/δ de una entrada
   optimizador. De ahí que la escala de las series (M0.2) sea crítica.
 - La covarianza diagonal y el AR/MA diagonal son lo que permite que la
   verosimilitud exacta se factorice y homologue con fue. Mantener esa estructura.
+
+---
+
+## Posible, NO objetivo: un estudio de comparación de estimadores
+
+**El objetivo del proyecto es un drtran funcional a partir del legacy y un puerto a
+Python, como drvarma. No es un artículo.** Un programa que se presenta como
+*contribución a la literatura* es un pasivo: hay que defenderlo, y se vuelve
+experimental. Un programa que se presenta como *implementación cuidadosa de métodos
+publicados* es un activo: se puede usar. La nota técnica está encuadrada así
+(«Nothing in this note is new») y ahí debe quedarse.
+
+Dicho eso, del estudio de §mcstudy salieron cosas que **podrían** sostener una nota de
+estadística computacional. Se apuntan con su alcance honesto, no como plan.
+
+### Lo que le falta al estudio para sostenerse
+
+Tal como está, compara la **ML exacta contra un truncamiento propio**. Es una
+conclusión anunciada, y un evaluador lo diría: la literatura YA tiene un método exacto
+para estos modelos — espacio de los estados con el estado inicial del filtro estimado
+(Gómez 2019, §3.2.1, campo `ser.inc`). Faltan **dos** comparaciones:
+
+1. **Contra la ML exacta por Kalman** (SSMMATLAB). La eficacia debería ser
+   *idéntica* — los dos son exactos. La comparación se vuelve entonces puramente
+   **computacional**, que es donde sí tenemos algo:
+   - **O(n²) frente a O(n)**: el cast por resta convoluciona la transferencia en cada
+     evaluación de la objetivo; el empotrado no convoluciona nada. Se cruzan, y a
+     n=400 el empotrado es 2× más rápido. Es complejidad, no estadística.
+   - La **realización no mínima** (el factor común D(B) en |P| y en |M|) y su coste en
+     convergencia cerca de la raíz unitaria: 85% con δ=0.95.
+2. **Contra el método condicional / de retropredicción de Box–Jenkins**, que es lo que
+   TASTE hace y lo que la gente usa. Ésa es la comparación con contenido práctico.
+
+### Sobre las asintóticas: se espera un resultado NULO, y se sabe por qué
+
+El truncamiento afecta a un número de observaciones que **no crece con n**: su
+contribución a la log-verosimilitud es O(1) frente a O(n). Luego el estimador
+condicional y el exacto son **asintóticamente equivalentes** — es el resultado estándar
+de ARMA (condicional vs exacta) y se traslada. **Un estudio asintótico confirmaría que
+no hay nada que ver.**
+
+Lo que sí tendría contenido es la asintótica **local a la unidad**, δ = 1 − c/n: ahí el
+tramo contaminado es una *fracción fija* de la muestra y la diferencia **no se
+desvanece**. Y es exactamente lo que se observa: la celda δ=0.95, n=400 es la **única**
+en la que la ventaja sobrevive a una muestra grande (−60% en el RMSE de la ganancia).
+Ese es el indicio. Sería un proyecto de teoría econométrica en serio, no un apéndice.
+

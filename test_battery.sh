@@ -297,6 +297,41 @@ for C in ES_CORE_S135b ES_CPI_airline FR_CPI_msar DE_CPI_mar3sar; do
 done
 
 
+
+# --- ¿SON ORTOGONALES LOS RESIDUOS? ---
+# Los ESTRUCTURALES sí: Q es diagonal, y ése es el supuesto del modelo.
+# Los de la FORMA REDUCIDA no, cuando b=0: la representación VARMA pone omega_0 en
+# el retardo cero, Phi(0) != I, y Sigma_12 = omega_0 * Sigma_22 aparece SOLA.
+OB0="$TMPDIR/orth_b0.txt"; OB1="$TMPDIR/orth_b1.txt"; OSU="$TMPDIR/orth_sub.txt"
+$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1 -V -o "$OB0" >/dev/null 2>&1
+$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -b 1 -r 0 -s 0 -V -o "$OB1" >/dev/null 2>&1
+$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1    -o "$OSU" >/dev/null 2>&1
+
+rho() { grep -A1 "Innovation correlations" "$1" | tail -1 | awk '{print $2}'; }
+check "b=0 empotrado: los residuos REDUCIDOS NO son ortogonales" 0.5639 "$(rho "$OB0")" 0.01
+check "b=1 empotrado: Phi(0)=I, ya son ortogonales"              0.0    "$(rho "$OB1")" 1e-9
+check "cast por resta: la serie 1 ES el ruido, ortogonales"      0.0    "$(rho "$OSU")" 1e-9
+
+# LA CLAVE: des-normalizar con Phi(0) ES un Cholesky con el INPUT ordenado PRIMERO.
+# Si es cierto, el factor de Cholesky de Sigma debe devolver omega_0 exactamente.
+python3 - "$OB0" <<'PYCH'
+import math, re, sys
+t = open(sys.argv[1]).read()
+S = [[float(x) for x in r.split()] for r in
+     re.search(r'Sigma = sigma2 \* Q.*\n((?: +[-\d.]+ +[-\d.]+\n){2})', t).group(1).strip().split('\n')]
+w0 = float(re.search(r'^omega1\[0\]\s+(\S+)', t, re.M).group(1))
+sYY, sYX, sXX = S[0][0], S[0][1], S[1][1]
+L11 = math.sqrt(sXX); L21 = sYX / L11          # Cholesky con X (el input) PRIMERO
+sys.exit(0 if abs(L21 / L11 - w0) < 1e-5 else (print("%.6f vs %.6f" % (L21/L11, w0)) or 1))
+PYCH
+[ $? -eq 0 ] \
+    && pass "el Cholesky de Sigma con el INPUT primero devuelve exactamente omega_0" \
+    || fail "el Cholesky no reproduce omega_0"
+
+grep -q "ARBITRARINESS" "$OB0" \
+    && pass "y el informe lo dice: no se escapa de ortogonalizar, sino de ELEGIR el orden" \
+    || fail "el informe no advierte de que la Sigma es la REDUCIDA"
+
 # --- LA COVARIANZA NO SE ESTIMA: SALE DE LA ESTRUCTURA ---
 echo ""
 echo "   ¿Hay que estimar la matriz de covarianzas con la FLT dentro del VARMA?"

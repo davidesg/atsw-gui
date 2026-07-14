@@ -2861,6 +2861,24 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
                     fprintf(outputv, "%12.6f", varma1.sigma2 * vq.qq[i][jj]);
                 fprintf(outputv, "\n");
             }
+            if (embed_varma && !phi0_is_identity) {
+                fprintf(outputv,
+"\n  NOTE: this is the REDUCED-FORM covariance. With a contemporaneous transfer\n"
+"  (b=0) the VARMA representation puts omega_0 at lag zero, so Phi(0) != I and the\n"
+"  innovations of the OBSERVED series are correlated -- by construction, not by\n"
+"  misspecification: Sigma_12 = omega_0 * Sigma_22. The STRUCTURAL innovations are\n"
+"  orthogonal (Q diagonal): that is the model's assumption, and it is what the\n"
+"  diagnostics below are run on, after undoing the normalisation with\n"
+"  a_structural = Phi(0) a_reduced.\n"
+"\n"
+"  Note also what that undoing IS: a Cholesky factorisation of Sigma with the\n"
+"  INPUT ordered FIRST. So this does not escape orthogonalisation -- it escapes\n"
+"  the ARBITRARINESS of it. The ordering is not chosen by the analyst; it is the\n"
+"  exogeneity of the input, which is an assumption, and one that is TESTED (the\n"
+"  cross-correlation at negative lags). With b >= 1 the question does not even\n"
+"  arise: Phi(0) = I and the innovations are already orthogonal. The whole\n"
+"  identification problem lives at lag zero.\n");
+            }
             fprintf(outputv, "\nInnovation correlations:\n");
             for (i = 1; i <= n_ser; i++) {
                 fprintf(outputv, "  ");

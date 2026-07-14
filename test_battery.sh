@@ -296,6 +296,39 @@ for C in ES_CORE_S135b ES_CPI_airline FR_CPI_msar DE_CPI_mar3sar; do
         || fail "-V falla en $C"
 done
 
+
+# --- LA COVARIANZA NO SE ESTIMA: SALE DE LA ESTRUCTURA ---
+echo ""
+echo "   ¿Hay que estimar la matriz de covarianzas con la FLT dentro del VARMA?"
+echo "   NO. La Q ESTRUCTURAL sigue siendo diagonal. La Q REDUCIDA es"
+echo "       Q_red = Phi(0)^-1 . Q . Phi(0)^-T,     Phi(0) = [[1, -omega_0],[0,1]]"
+echo "   o sea Sigma_12 = omega_0 * Sigma_22: una FUNCIÓN de omega_0, no un"
+echo "   parámetro nuevo. Es la identidad del SVAR: un coeficiente estructural"
+echo "   contemporáneo GENERA la covarianza de la forma reducida. Por eso no se"
+echo "   pueden estimar los dos (sección 2g/3d)."
+echo ""
+
+V0="$TMPDIR/v_b0.txt"; V1="$TMPDIR/v_b1.txt"
+$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1 -V -o "$V0" >/dev/null 2>&1
+$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -b 1 -r 0 -s 0 -V -o "$V1" >/dev/null 2>&1
+
+# con b=1 (sin contemporánea) Phi(0)=I y la covarianza reducida es CERO
+check "b=1: sin término contemporáneo, Sigma es DIAGONAL" 0.0 "$(sig "$V1" 1 2)" 1e-9
+
+# con b=0 la covarianza aparece SOLA, y vale exactamente omega_0 * Sigma_22
+W0=$(val "$V0" 'omega1\[0\]')
+S22=$(sig "$V0" 2 2)
+S12=$(sig "$V0" 1 2)
+python3 -c "import sys; sys.exit(0 if abs($S12 - $W0*$S22) < 1e-3 else 1)" \
+    && pass "b=0: Sigma_12 = omega_0 * Sigma_22 ($S12 = $W0 x $S22): NO se estima, se DEDUCE" \
+    || fail "Sigma_12 no coincide con omega_0 * Sigma_22"
+
+# y no cuesta un grado de libertad: la covarianza no es un parámetro
+NF0=$(grep "Structural parameters" "$V0" | sed 's/.*free: \([0-9]*\).*/\1/')
+NF1=$(grep "Structural parameters" "$V1" | sed 's/.*free: \([0-9]*\).*/\1/')
+check "la covarianza NO cuesta un parámetro (b=0 tiene uno más SOLO por omega_1)" \
+      "$((NF1 + 1))" "$NF0" 0.5
+
 # --- y la RED ---
 $DRTRAN "$SYN/SYNC_Y.pre" "$SYN/SYNC_M.pre" "$SYN/SYNC_X.pre" -n "$SYN/SYNC.net" -V \
         -o "$TMPDIR/v_net.txt" >/dev/null 2>&1

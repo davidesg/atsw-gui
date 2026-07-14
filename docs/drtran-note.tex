@@ -851,6 +851,51 @@ forecast by about $10\%$ of RMSE at every horizon, robustly. For Germany the old
 verdict stands, and now one can see why.
 
 
+
+\subsection{Does the embedded cast require estimating a covariance matrix?}
+\label{sec:embedcov}
+
+No---and the reason is the best confirmation of \S\ref{sec:identification} that we
+have found.
+
+The \emph{structural} covariance stays diagonal: one innovation per series,
+uncorrelated, exactly as before. But when the transfer is contemporaneous ($b=0$),
+$\omega_0$ lands at lag zero, so $\Phi_0 \ne I$ and the system must be normalized by
+$\Phi_0^{-1}$. With $m=2$,
+\[
+\Phi_0=\begin{pmatrix}1 & -\omega_0\\ 0 & 1\end{pmatrix},
+\qquad
+Q_{\text{red}}=\Phi_0^{-1}Q\,\Phi_0^{-\top}
+=\begin{pmatrix}\sigma_N^2+\omega_0^2\sigma_X^2 & \omega_0\sigma_X^2\\[2pt]
+                \omega_0\sigma_X^2 & \sigma_X^2\end{pmatrix}.
+\]
+The reduced-form covariance is $\sigma_{12}=\omega_0\sigma_X^2$: a \emph{function}
+of $\omega_0$, not a new parameter. Verified on Spanish CPI against WTI:
+$\omega_0\,\Sigma_{22}=0.016400\times 68.787225=1.128110$, against the
+$\Sigma_{12}=1.128097$ the program reports. With $b=1$ the covariance is exactly
+zero, and the model has one free parameter fewer---the one belonging to $\omega_1$,
+not to any covariance.
+
+This is the identity of a structural VAR: \textbf{a contemporaneous structural
+coefficient \emph{generates} the reduced-form covariance.} It is why the two cannot
+both be estimated (\S\ref{sec:identification}).
+
+\paragraph{And the same non-identification result falls out of the algebra.} After
+normalizing, the off-diagonal autoregressive coefficient at lag one is
+\[
+\bigl[\Phi_0^{-1}\Phi_1\bigr]_{12}
+ \;=\; -\omega_0\phi_N + \omega_0\phi_X
+ \;=\; \boxed{\;\omega_0\,(\phi_X-\phi_N)\;}
+\]
+which is \emph{the only trace left}, once the system is written in reduced form,
+that the relation is a \emph{transfer} rather than a mere innovation covariance.
+It vanishes exactly when $\phi_N=\phi_X$. That is the condition of
+\S\ref{sec:identification}, derived by a completely different route---and on the
+real data it evaluates to $0.0164\times 0.0040 = 0.000065$, which is zero for all
+practical purposes. The Spanish contemporaneous transfer model \emph{is}, to a very
+good approximation, a diagonal model with a correlated innovation. The two are the
+same model, and the algebra says so without being asked.
+
 \section{Impulse response and variance decomposition: is this better than a VAR?}
 \label{sec:irf}
 

@@ -264,6 +264,28 @@ echo "   y elf, que ve el sistema entero, hace la inicialización pre-muestral E
 echo "   El truncamiento no se arregla: DESAPARECE. Es lo que hacen los m6 de Mauricio."
 echo ""
 
+
+# --- EL COROLARIO FALSABLE DE LA PROPOSICIÓN DE EXACTITUD ---
+# Los dos cast coinciden IDÉNTICAMENTE si y solo si toda transferencia es puramente
+# contemporánea (b=s=r=0): entonces no se usa NINGÚN valor pre-muestral del input y
+# no hay nada que truncar. En cuanto b>=1 o s>=1, deben DIFERIR.
+EX1="$TMPDIR/ex_s.txt"; EX2="$TMPDIR/ex_v.txt"
+$DRTRAN "$SYN/SYNI_Y.pre" "$SYN/SYNI_X.pre" -b 0 -r 0 -s 0 -S -o "$EX1" >/dev/null 2>&1
+$DRTRAN "$SYN/SYNI_Y.pre" "$SYN/SYNI_X.pre" -b 0 -r 0 -s 0 -V -o "$EX2" >/dev/null 2>&1
+L1=$(grep "Log-likelihood =" "$EX1" | awk '{print $3}')
+L2=$(grep "Log-likelihood =" "$EX2" | awk '{print $3}')
+python3 -c "import sys; sys.exit(0 if abs($L1-($L2)) < 1e-9 else 1)" \
+    && pass "b=r=s=0: los dos cast dan la MISMA verosimilitud ($L1). No hay pre-muestral que truncar" \
+    || fail "con b=r=s=0 los cast difieren ($L1 vs $L2), y no deberían"
+
+$DRTRAN "$SYN/SYNI_Y.pre" "$SYN/SYNI_X.pre" -b 1 -r 0 -s 0 -S -o "$EX1" >/dev/null 2>&1
+$DRTRAN "$SYN/SYNI_Y.pre" "$SYN/SYNI_X.pre" -b 1 -r 0 -s 0 -V -o "$EX2" >/dev/null 2>&1
+L1=$(grep "Log-likelihood =" "$EX1" | awk '{print $3}')
+L2=$(grep "Log-likelihood =" "$EX2" | awk '{print $3}')
+python3 -c "import sys; sys.exit(0 if abs($L1-($L2)) > 1e-9 else 1)" \
+    && pass "y con b=1 DIFIEREN: la transferencia mira al pasado, y el cast por resta se inventa ceros" \
+    || fail "con b=1 los cast coinciden, y no deberían"
+
 # --- LA PUERTA: sin transferencia, -V debe seguir homologando con fue ---
 OUT="$TMPDIR/v_hom.txt"
 $DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -0 -V -o "$OUT" >/dev/null 2>&1

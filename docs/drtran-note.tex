@@ -1257,6 +1257,94 @@ Proposition~\ref{prop:norm}, Corollaries~\ref{cor:sigma} and~\ref{cor:chol},
 Proposition~\ref{prop:ident}. Every one of them is simple. Every one of them bit us,
 and four of them were live bugs in the program until we wrote them out.
 
+
+\section{How much does exactness buy? A Monte Carlo study}
+\label{sec:mcstudy}
+
+Proposition~\ref{prop:exact} says the subtracting cast conditions on pre-sample
+inputs equal to zero, and that the two casts coincide only for a purely
+contemporaneous transfer. It does not say how much that matters. It should matter
+most where the impulse response is \emph{long}, because the omitted terms are its
+tail: for $\nu(B)=\omega B^{b}/(1-\delta B)$ the truncation error at time $t$ decays
+like $\delta^{t}$, so the contaminated stretch grows with $\delta$ and dilutes with
+$n$. With $\delta=0.85$ and $n=69$---the length of the \texttt{m6} systems---some
+twenty of the sixty-nine observations carry a truncation error above $10\%$ of the
+noise's standard deviation; with $\delta=0.30$, three.
+
+Forty paired replications per cell; truth $b=1$, $r=1$, $s=0$, $\omega=0.600$;
+AR(1) noise and AR(1) input. $\Delta$ is the change in RMSE on moving from the
+subtracting cast to the embedded one, so \emph{negative is better}.
+
+\begin{center}
+\begin{tabular}{rr rrr rrr rrr rr}
+\toprule
+ & & \multicolumn{3}{c}{$\omega_0$} & \multicolumn{3}{c}{$\delta_1$}
+ & \multicolumn{3}{c}{gain $\nu(1)$} & \multicolumn{2}{c}{efficiency}\\
+\cmidrule(lr){3-5}\cmidrule(lr){6-8}\cmidrule(lr){9-11}\cmidrule(lr){12-13}
+$n$ & $\delta$ & sub & emb & $\Delta$ & sub & emb & $\Delta$ & sub & emb & $\Delta$
+    & $t_{\text{emb}}/t_{\text{sub}}$ & iter \\
+\midrule
+ 69 & 0.30 & .0657 & .0667 & $+1\%$ & .0926 & .0916 & $-1\%$   & .1081 & .1068 & $-1\%$  & $1.14$ & 14\\
+ 69 & 0.60 & .0605 & .0601 & $-1\%$ & .0630 & .0569 & $-10\%$  & .1644 & .1535 & $-7\%$  & $1.16$ & 18\\
+ 69 & 0.85 & .0423 & .0334 & $\mathbf{-21\%}$ & .0395 & .0156 & $\mathbf{-60\%}$ & .5381 & .3812 & $\mathbf{-29\%}$ & $1.15$ & 27\\
+ 69 & 0.95 & .0377 & .0272 & $\mathbf{-28\%}$ & .0100 & .0043 & $\mathbf{-57\%}$ & 2.034 & 1.168 & $\mathbf{-43\%}$ & $1.27$ & 39\\
+\midrule
+150 & 0.85 & .0249 & .0241 & $-3\%$ & .0093 & .0090 & $-3\%$ & .1893 & .1801 & $-5\%$ & $0.96$ & 27\\
+400 & 0.85 & .0150 & .0137 & $-8\%$ & .0037 & .0037 & $0\%$  & .0874 & .0887 & $+1\%$ & $\mathbf{0.58}$ & 27\\
+400 & 0.95 & .0140 & .0086 & $\mathbf{-39\%}$ & .0012 & .0008 & $\mathbf{-34\%}$ & .3248 & .1294 & $\mathbf{-60\%}$ & $\mathbf{0.51}$ & 42\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Efficacy.} The advantage behaves exactly as the truncation error does. It
+is nil at $\delta=0.30$, appears at $0.60$, and becomes large at $0.85$ and beyond;
+and it dilutes with the sample---at $n=400$ and $\delta=0.85$ it has essentially
+vanished. But at $\delta=0.95$ it survives even $n=400$, because a memory that long
+contaminates a long stretch of any sample: the RMSE of the gain falls by $60\%$.
+
+Note \emph{where} the damage sits. It is not in $\omega$, which is a local weight,
+but in $\delta$, which governs the \emph{tail}---and the tail is precisely what
+truncation destroys. That is why the gain $\nu(1)=\omega/(1-\delta)$, which depends
+on $\delta$ through a small denominator, suffers most of all. Put plainly:
+\textbf{the subtracting cast cannot estimate a long memory well, because it has
+erased the memory}.
+
+\paragraph{Efficiency, and a surprise.} For short samples the embedded cast costs
+$15$--$27\%$ more time, and needs more iterations as $\delta$ grows ($14\to39$).
+That is Remark~\ref{rem:common} made visible: the cast carries the common factor
+$D(B)$ in both $|P|$ and $|M|$, and an almost-cancelling factor is a delicate object
+for an optimiser. It is the price of exactness, and it is a real price.
+
+But look at $n=400$: the embedded cast is \emph{twice as fast}. This is not a
+statistical effect; it is complexity. The subtracting cast forms the transfer by
+convolution,
+\[
+\text{transfer}(t)=\sum_{k=1}^{t}\nu_k\,w_{X,t-k+1},\qquad t=1,\dots,n,
+\]
+which is $O(n^2)$ \emph{per objective evaluation, per link}. The embedded cast
+convolves nothing: it multiplies a few short polynomials---$O(1)$ in $n$---and hands
+the raw series to the likelihood. So the subtracting cast is quadratic in the sample
+and the embedded one is linear, and they cross. At $n=69$ the higher VARMA orders
+dominate and the embedded cast is slower; by $n=400$ the $O(n^2)$ convolution
+dominates and it is $2\times$ faster.
+
+\paragraph{Convergence.} Both casts converge in every replication except at
+$\delta=0.95$, where the embedded cast converges in $85$--$88\%$ of them. At a memory
+that close to a unit root, the common factor of Remark~\ref{rem:common} is a
+near-exact cancellation, and the surface is hard. This is a genuine limitation and it
+is worth saying.
+
+\paragraph{And one bug, which the study found.} At $\delta\approx0.95$ the optimiser
+wandered into a region where the objective returned \texttt{NaN}. The line search
+backtracks by \emph{interpolating on the function value}: a \texttt{NaN} objective
+gives a \texttt{NaN} step length, and then \texttt{lambda < minlam} is \emph{false}
+--- every comparison with \texttt{NaN} is --- so the step is neither accepted nor
+abandoned. The search span forever. No iteration limit protects against this: the
+infinite loop is \emph{inside} an iteration, not in the loop over them. The fix is
+the one the estimation paper already prescribes for inadmissible points: return the
+scaled objective set to one. A point that yields a non-finite likelihood is
+inadmissible, and is now rejected as such.
+
 \section{Impulse response and variance decomposition: is this better than a VAR?}
 \label{sec:irf}
 

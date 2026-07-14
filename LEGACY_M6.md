@@ -260,3 +260,92 @@ m6-2 y m6-3, está terminado.
 4. **DSL de estructura** + parámetros compartidos y fijos.
 5. **Reproducir m6-1**, que es el más limpio, y compararlo con su `.out`.
 6. **Seguimiento** (`nobspls`) y agregados.
+
+
+---
+
+## 8. LA FUENTE (encontrada, julio 2026): Relloso (1997)
+
+Estuve a punto de reconstruir los m6 a ciegas desde el `shootx` del legacy. El usuario
+lo paró. La teoría está publicada:
+
+> **Relloso Pereda, S. (1997).** *Un modelo multivariante para el empleo por sectores,
+> activos y parados en España.* Documento de trabajo ICAE **9720**, Universidad
+> Complutense. Tesis dirigida por A. B. Treadway.
+> (En `drvarma_source/literature/9720.pdf`.)
+
+Y aclara **dos cosas que yo tenía mal o a medias**:
+
+### 8.1 La escuela usaba `elf`, y lo sabía
+
+> «Todos los modelos presentados están estimados por **Máxima Verosimilitud Exacta
+> (MVE)** […] el desarrollo de este trabajo **no habría sido factible de no disponer de
+> los algoritmos de evaluación y optimización de la función de verosimilitud de los
+> modelos ARMA multivariantes desarrollados por Mauricio (1995, 1996 y 1997)**.»
+
+Y la tesis de Muñoz Polo (2001) dice lo mismo, con la palabra clave:
+
+> «Todos los modelos empíricos presentados se estiman por el criterio de Máxima
+> Verosimilitud Exacta (MVE) **No Condicionada**, mediante el algoritmo de Mauricio
+> (1995, 1996, 1997).»
+
+**«No Condicionada».** Es exactamente la distinción que nos ha ocupado toda la semana.
+La escuela **no** usaba la aproximación condicional de Box–Jenkins/TASTE, y lo marcaba
+en el texto. La duda de si eran conscientes queda resuelta: lo eran, y lo escribieron.
+
+### 8.2 El PRIMER modelo multivariante es el de covarianzas, no el dinámico
+
+> «Se detectan **fuertes correlaciones contemporáneas** entre algunos de los sectores,
+> lo que conduce a la especificación de un **modelo pentavariante con dinámica
+> diagonal**, para mejorar (1) las estimaciones de los parámetros de los modelos UTI
+> con procedimientos más eficientes de estimación y (2) las propiedades de las
+> inferencias basadas en los residuos. **En la diagonal principal de la matriz MA se
+> recogen los modelos UTI de las variables.**»
+
+Es decir: **dinámica diagonal + covarianzas liberadas**. Que es, exactamente, `-0` con
+`q[i,j] = free` en drtran. Y coincide con la doctrina que Muñoz Polo (2001, §2.4)
+formula en general: «la especificación de las relaciones bivariantes **puede comenzar
+con la modificación de la matriz Σ**».
+
+`m6-1` (el VMA(4) con MA fuera de la diagonal) viene **después**, cuando se añaden las
+relaciones dinámicas. Yo lo había tomado por el punto de partida.
+
+---
+
+## 9. LA CARENCIA QUE ESTO DESTAPA: la tabla de slots necesita PRODUCTOS
+
+Los coeficientes fuera de la diagonal del `shootx` de m6-1 son **productos de
+parámetros**: `x5*x6`, `x12*x14 - x13`, `x2*x3*x4`. Al factorizarlos se ve lo que son:
+
+```
+Theta_34(B) = x5 · B · (1 - x6 B)                    numerador FACTORIZADO
+Theta_36(B) = B · (1 - x14 B) · (x12 + x13 B)        idem
+Theta_22(B) = (1 - x2 B)(1 + x4 B)(1 + x3 B^2)       MA(1) x MA(1) x FF(f=1)
+```
+
+Los **diagonales** (como `Theta_22`) drtran los expresa: son la estructura factorizada
+del `.pre` de fue (regular × anual × frecuencia fija), y `expand_ma_factors` los
+despliega.
+
+Los **de fuera de la diagonal** no. Una transferencia con **numerador factorizado**
+necesita que la tabla de slots exprese **productos**, y hoy solo expresa
+LIBRE / FIJO / **ALIAS** (igualdad). Ésa es la carencia real, y es la que impide
+reproducir m6-1 tal cual.
+
+**Ruta:** empezar por el modelo de dinámica diagonal + covarianzas (que drtran YA
+hace y que es el que el documento pone primero), y dejar el dinámico para cuando la
+tabla de slots admita productos.
+
+## 10. Estado de la reconstrucción
+
+`tests/build_m6.py` genera los seis `.pre` desde `m1.inp` con:
+- las diferencias del legacy (∇² en todas salvo EA, que lleva ∇∇₄),
+- sin Box-Cox (niveles),
+- y las **23 deterministas** de `GenDet` (17 escalones, 2 impulsos, 1 impulso
+  compuesto, cos/sin de frecuencia 1, y el alternante), repartidas por serie.
+
+Las seis se leen y el sistema de 6 variables **corre**: 64 observaciones, 47
+parámetros, 37 coeficientes deterministas. **No converge todavía**, y no debe
+extrañar: los ARMA univariantes que he puesto son un MA(1) genérico de relleno, no
+los del documento. El siguiente paso es leer los modelos UTI de la Tabla 4 de
+Relloso (1997) y ponerlos.

@@ -78,8 +78,13 @@ static int  rec_start = 0;
 static int  nobs_full[MAX_SER + 1];
 static char rec_csv[600] = "";
 
-/* El cast: 0 = restar la transferencia; 1 = EMPOTRARLA en el VARMA (-V). */
-int embed_varma = 0;
+/* EL CAST. Por defecto la transferencia va DENTRO del VARMA (empotrada), que es
+   lo correcto: elf recibe las series tal cual y hace la inicializacion
+   pre-muestral EXACTA, asi que la verosimilitud que se informa es la de LOS
+   DATOS -- y por tanto AIC, BIC y los contrastes LR significan lo que dicen.
+   Con el cast por resta, elf calculaba una verosimilitud exacta... de la serie
+   equivocada.  -S vuelve al cast por resta.                                     */
+int embed_varma = 1;
 
 /* ¿La red es la ESTRELLA por defecto (todo entra a la serie 1)? Solo entonces
    tiene sentido hablar de "la entrada j" y "la salida Y".                    */
@@ -1594,9 +1599,16 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
         }
     }
 
+    /* La covarianza de las innovaciones. Con el cast EMPOTRADO se usa la
+       ESTRUCTURAL, no la reducida: las varianzas de prevision salen IGUALES
+       (Psi_red Sigma_red Psi_red' = Psi_str Q Psi_str'), pero solo con la
+       estructural las innovaciones son ORTOGONALES -- y solo entonces la
+       descomposicion de la varianza es UNICA.                                  */
     sigma = matrix(1, m, 1, m);
     for (i = 1; i <= m; i++)
-        for (j = 1; j <= m; j++) sigma[i][j] = sigma2 * vf.qq[i][j];
+        for (j = 1; j <= m; j++)
+            sigma[i][j] = sigma2 * ((embed_varma && !phi0_is_identity)
+                                    ? qq_struct[i][j] : vf.qq[i][j]);
     for (i = 1; i <= m; i++)
         if (Ts[i].nobs > nobsmax) nobsmax = Ts[i].nobs;
 
@@ -1661,10 +1673,21 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
 
     pt = tensor(1, m, 1, m, 0, L);
     if (embed_varma) {
-        /* El VARMA ya ES el sistema: sus psi son los del sistema. Nada que propagar. */
+        /* El VARMA ya ES el sistema: sus psi son los del sistema. Pero son los de la
+           forma REDUCIDA: w = Psi_red(B) u, con u = Phi(0)^-1 a. Luego los psi
+           ESTRUCTURALES son Psi_str = Psi_red . Phi(0)^-1, y con ellos la
+           descomposicion de la varianza vuelve a ser unica.                     */
         for (i = 1; i <= m; i++)
             for (j = 1; j <= m; j++)
-                for (t = 0; t <= L; t++) pt[i][j][t] = psi[t][i][j];
+                for (t = 0; t <= L; t++) {
+                    if (phi0_is_identity) { pt[i][j][t] = psi[t][i][j]; continue; }
+                    {
+                        real acc = 0.0;
+                        for (k = 1; k <= m; k++)
+                            acc += psi[t][i][k] * phi0_inv[k][j];
+                        pt[i][j][t] = acc;
+                    }
+                }
     } else
     for (u = 1; u <= m; u++) {
         i = topo[u];
@@ -2233,15 +2256,17 @@ static void usage(const char *prog)
 "           Requires -f.\n"
 "\n"
 "THE CAST\n"
-"  -V       EMBED the transfer in the VARMA instead of subtracting it.\n"
+"  -V       EMBED the transfer in the VARMA.  THIS IS THE DEFAULT.\n"
+"  -S       SUBTRACT the transfer instead (the old cast).\n"
 "\n"
-"           By default drtran builds the noise outside the likelihood engine,\n"
+"           The subtracting cast builds the noise OUTSIDE the likelihood engine,\n"
 "           N_t = w_Y,t - SUM_k nu_k w_X,{t-k}, which at t=1 needs input values\n"
 "           that DO NOT EXIST. It sets them to zero. The engine cannot fix this,\n"
 "           because it never sees those inputs: it is handed the noise already\n"
-"           contaminated.\n"
+"           contaminated. The likelihood it then computes is exact -- for the\n"
+"           WRONG series.\n"
 "\n"
-"           With -V nothing is subtracted. The transfer becomes OFF-DIAGONAL\n"
+"           Embedded, nothing is subtracted. The transfer becomes OFF-DIAGONAL\n"
 "           coefficients of the VARMA,\n"
 "\n"
 "             [phi_i.D_i] w_i - SUM_k [phi_i.omega_k.B^bk.(D_i/delta_k)] w_in\n"
@@ -2258,6 +2283,12 @@ static void usage(const char *prog)
 "           rational transfer the bias of omega falls from +0.0017 to -0.0002,\n"
 "           though RMSE improves by well under 1%: the truncation matters less\n"
 "           than one would fear.\n"
+"\n"
+"           With a CONTEMPORANEOUS transfer (b=0) the embedded cast puts omega_0\n"
+"           at lag zero, so Phi(0) != I and the innovations of the OBSERVED series\n"
+"           come out correlated -- by construction, not by misspecification. The\n"
+"           report gives BOTH covariances: the reduced-form one and the structural\n"
+"           one, which is the one the model assumes orthogonal.\n"
 "\n"
 "IDENTIFICATION\n"
 "  -p       PREWHITEN ONLY: filter the input with its own ARMA, apply the same\n"
@@ -2900,6 +2931,30 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
                 fprintf(outputv, "\n");
             }
             fprintf(outputv, "\n");
+
+            /* Y la ESTRUCTURAL, que es la que el modelo SUPONE ortogonal y la unica
+               comparable con la del cast por resta. Sin esto, con -V solo se veia la
+               reducida -- y su correlacion es 0.56 POR CONSTRUCCION, no por nada que
+               se haya estimado. */
+            if (embed_varma && !phi0_is_identity) {
+                fprintf(outputv, "Sigma STRUCTURAL = sigma2 * Q  "
+                                 "(what the model assumes orthogonal):\n");
+                for (i = 1; i <= n_ser; i++) {
+                    fprintf(outputv, "  ");
+                    for (jj = 1; jj <= n_ser; jj++)
+                        fprintf(outputv, "%12.6f", varma1.sigma2 * qq_struct[i][jj]);
+                    fprintf(outputv, "\n");
+                }
+                fprintf(outputv, "\nStructural innovation correlations:\n");
+                for (i = 1; i <= n_ser; i++) {
+                    fprintf(outputv, "  ");
+                    for (jj = 1; jj <= n_ser; jj++)
+                        fprintf(outputv, "%12.4f", qq_struct[i][jj] /
+                                sqrt(qq_struct[i][i] * qq_struct[jj][jj]));
+                    fprintf(outputv, "\n");
+                }
+                fprintf(outputv, "\n");
+            }
         }
         shootx(x, &vq, &ifq, 0, 1);
     }
@@ -3048,7 +3103,7 @@ int main(int argc, char *argv[])
     macheps = cmacheps();
     outputv = stdout;
 
-    while ((opt = getopt(argc, argv, "r:s:b:f:m:c:n:a:R:C:p0XNDEMVvho:")) != -1) {
+    while ((opt = getopt(argc, argv, "r:s:b:f:m:c:n:a:R:C:p0XNDEMVSvho:")) != -1) {
         switch (opt) {
         case 'r': opt_r = optarg; auto_id = 0; break;
         case 's': opt_s = optarg; auto_id = 0; break;
@@ -3068,6 +3123,7 @@ int main(int argc, char *argv[])
         case 'C': snprintf(rec_csv, sizeof rec_csv, "%s", optarg); break;
         case '0': no_transfer = 1; auto_id = 0; break;
         case 'V': embed_varma = 1;           break;
+        case 'S': embed_varma = 0;           break;
         case 'v': quiet_mode = 0;            break;
         case 'o': outfile = optarg;          break;
         case 'h': usage(argv[0]); return 0;

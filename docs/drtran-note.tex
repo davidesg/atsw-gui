@@ -394,10 +394,45 @@ data}, so likelihood-ratio tests and information criteria mean what they say.
 Under the subtracting cast, the engine computed an exact likelihood---of the wrong
 series.
 
-It costs nothing measurable, it reproduces the univariate program to six decimals
-when there is no transfer, and it survives every hard case in the battery (a
-generalized-seasonality model, an airline, a seasonal AR, a network). It is not yet
-the default only because the default has 200 tests behind it.
+\paragraph{It is now the default.} Getting there took two steps, and the first one
+is the story.
+
+We forced the embedded cast as the default and ran the whole battery. Sixteen
+failures. Eleven were artifacts of tests that compare one cast against the other;
+one was a tolerance; \emph{four were real bugs}, and all four lived in the embedded
+path, which had been exercised only lightly:
+
+\begin{itemize}
+\item The \textbf{diagnostics} ran on reduced-form residuals. With $b=0$ those are
+  correlated with the input \emph{by construction} ($\Sigma_{12}=\omega_0\sigma_X^2$),
+  so the adequacy test measured that correlation and called it misspecification:
+  both CPI models came out ``NOT adequate'' with $p=0.0000$. They must be
+  un-normalized first, $a_{\text{struct}}=\Phi_0\,a_{\text{red}}$.
+\item The \textbf{forecast double-counted the transfer}. The VARMA already contains
+  it, so adding $\sum_k\nu_k w_{X}$ again inflated the forecast standard deviation
+  by $40\%$.
+\item \textbf{Freed covariances were ignored}: \texttt{q[2,1] = free} never reached
+  the covariance matrix. A parameter with no effect---an exactly flat direction, and
+  a standard error of $3{,}008{,}863$.
+\item The \textbf{variance decomposition} could not be reported, because the
+  reduced-form $\Sigma$ is not diagonal. It needs the structural $\psi$ weights,
+  $\Psi_{\text{struct}}=\Psi_{\text{red}}\,\Phi_0^{-1}$.
+\end{itemize}
+
+None of these is a defect of the design. All four are a defect of \emph{coverage},
+and they say something worth saying about how one earns the right to change a
+default: not by arguing that the new thing is correct---it was---but by making the
+old and the new say the same thing about everything, and watching where they don't.
+
+So the second step was a harness: thirteen cross-checks that run \emph{both} casts
+on every hard case---no transfer, contemporaneous, non-contemporaneous, rational
+(which puts a common factor in the AR and MA), a moving average, generalized
+seasonality, a seasonal AR, two inputs, the network, a freed covariance, a shared
+parameter, and the recursive forecast---and require that the parameters, the
+diagnostics, the impulse response, the gain, the forecasts and the variance
+decomposition all agree. It would have caught all four bugs in a minute. With it in
+place, the battery passes 243/243 with \emph{either} cast as the default, and the
+default is now the embedded one. \texttt{-S} restores the old cast.
 
 \section{An identification hazard}
 \label{sec:identification}

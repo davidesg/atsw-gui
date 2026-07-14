@@ -91,6 +91,8 @@ extern int embed_varma;
 
 /* Phi(0) del cast empotrado, para des-normalizar los residuos en la diagnosis. */
 extern real phi0_last[MAX_SER + 1][MAX_SER + 1];
+extern real phi0_inv[MAX_SER + 1][MAX_SER + 1];
+extern real qq_struct[MAX_SER + 1][MAX_SER + 1];
 extern int  phi0_is_identity;
 
 /* -------------------------------------------------------------------------- */

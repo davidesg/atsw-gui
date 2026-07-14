@@ -263,6 +263,13 @@ static void build_embedded_varma(struct Tvarma *armax, int m,
             armax->qq[i][j] = armax->qq[j][i] = cov[i][j];
     armax->sigma2 = 1.0;
 
+    /* Se guarda la Q ESTRUCTURAL: normalize_phi0 va a pisar armax->qq con la
+       REDUCIDA, y la descomposicion de la varianza necesita la estructural --
+       que es la unica en la que las innovaciones son ortogonales y por tanto la
+       unica en la que la descomposicion es UNICA.                              */
+    for (i = 1; i <= m; i++)
+        for (j = 1; j <= m; j++) qq_struct[i][j] = armax->qq[i][j];
+
     /* Las MEDIAS. Aqui w_i es la serie OBSERVADA, no el ruido:
            E[w_i] = mu_i + SUM_{k: out=i} g_k * E[w_inp(k)],   g_k = nu_k(1)
        Se calcula en orden topologico: una salida necesita la media de su entrada. */
@@ -302,6 +309,8 @@ static void build_embedded_varma(struct Tvarma *armax, int m,
    que la PROPIA transferencia genera (Sigma_12 = omega_0 sigma_X^2) y la llama
    mala especificacion. */
 real phi0_last[MAX_SER + 1][MAX_SER + 1];
+real phi0_inv[MAX_SER + 1][MAX_SER + 1];
+real qq_struct[MAX_SER + 1][MAX_SER + 1];   /* la Q ESTRUCTURAL (diagonal)     */
 int  phi0_is_identity = 1;
 
 static int normalize_phi0(struct Tvarma *armax)
@@ -337,6 +346,8 @@ static int normalize_phi0(struct Tvarma *armax)
         lusol(F, v, m, idx);
         for (i = 1; i <= m; i++) Fi[i][j] = v[i];
     }
+    for (i = 1; i <= m; i++)
+        for (j = 1; j <= m; j++) phi0_inv[i][j] = Fi[i][j];
 
     for (k = 1; k <= p; k++) {
         for (i = 1; i <= m; i++)

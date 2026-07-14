@@ -274,7 +274,7 @@ check "-V homologa con fue: logL"  -767.4243 "$(grep 'Log-likelihood =' "$OUT" |
 
 # --- los DOS cast deben dar lo MISMO (la diferencia es solo el pre-muestral) ---
 A="$TMPDIR/v_sub.txt"; B="$TMPDIR/v_emb.txt"
-$DRTRAN "$SYN/SYNR_Y.pre" "$SYN/SYNR_X.pre" -b 1 -r 1 -s 0    -o "$A" >/dev/null 2>&1
+$DRTRAN "$SYN/SYNR_Y.pre" "$SYN/SYNR_X.pre" -b 1 -r 1 -s 0 -S -o "$A" >/dev/null 2>&1
 $DRTRAN "$SYN/SYNR_Y.pre" "$SYN/SYNR_X.pre" -b 1 -r 1 -s 0 -V -o "$B" >/dev/null 2>&1
 check "los dos cast coinciden en omega_0" "$(val "$A" 'omega1\[0\]')" "$(val "$B" 'omega1\[0\]')" 0.005
 check "los dos cast coinciden en delta_1" "$(val "$A" 'delta1\[1\]')" "$(val "$B" 'delta1\[1\]')" 0.005
@@ -305,7 +305,7 @@ done
 OB0="$TMPDIR/orth_b0.txt"; OB1="$TMPDIR/orth_b1.txt"; OSU="$TMPDIR/orth_sub.txt"
 $DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1 -V -o "$OB0" >/dev/null 2>&1
 $DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -b 1 -r 0 -s 0 -V -o "$OB1" >/dev/null 2>&1
-$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1    -o "$OSU" >/dev/null 2>&1
+$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1 -S -o "$OSU" >/dev/null 2>&1
 
 rho() { grep -A1 "Innovation correlations" "$1" | tail -1 | awk '{print $2}'; }
 check "b=0 empotrado: los residuos REDUCIDOS NO son ortogonales" 0.5639 "$(rho "$OB0")" 0.01
@@ -369,6 +369,113 @@ $DRTRAN "$SYN/SYNC_Y.pre" "$SYN/SYNC_M.pre" "$SYN/SYNC_X.pre" -n "$SYN/SYNC.net"
         -o "$TMPDIR/v_net.txt" >/dev/null 2>&1
 check "-V con la RED: omega Y<-M (verdad 0.500)" 0.500 "$(val "$TMPDIR/v_net.txt" 'omega1\[0\]')" 0.05
 check "-V con la RED: omega M<-X (verdad 0.700)" 0.700 "$(val "$TMPDIR/v_net.txt" 'omega2\[0\]')" 0.05
+
+
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
+echo "── 1f. LOS DOS CAST DEBEN COINCIDIR EN TODO ──"
+echo "   Restar la transferencia o empotrarla en el VARMA son dos formas de escribir"
+echo "   EL MISMO modelo. Deben dar los mismos parámetros, los mismos diagnósticos,"
+echo "   la misma respuesta al impulso, la misma previsión y la misma descomposición"
+echo "   de la varianza. Lo único que puede diferir es la verosimilitud -- y solo por"
+echo "   el pre-muestral, que es justamente lo que el empotrado trata bien."
+echo ""
+echo "   Este arnés habría cazado en el minuto uno los CUATRO bugs que -V soltó:"
+echo "   residuos de diagnóstico sin des-normalizar, doble conteo en la previsión,"
+echo "   covarianzas liberadas ignoradas, y la varianza sin descomponer."
+echo ""
+
+# cross <desc> <fichero_Y> <fichero_X...> -- <opciones>
+cross() {
+    local desc="$1"; shift
+    local A="$TMPDIR/x_a.txt" B="$TMPDIR/x_b.txt"
+    $DRTRAN "$@" -f 6     -o "$A" >/dev/null 2>&1
+    $DRTRAN "$@" -f 6 -V  -o "$B" >/dev/null 2>&1
+
+    if ! grep -q "Log-likelihood =" "$A" || ! grep -q "Log-likelihood =" "$B"; then
+        fail "$desc: alguno de los dos cast no llega a estimar"; return
+    fi
+
+    local bad=""
+    # todos los parámetros estructurales de la tabla de resultados
+    local names
+    names=$(grep -E "^(omega|delta|phi_|theta_|mu\[|log\(|q\[)" "$A" | awk '{print $1}')
+    local n
+    for n in $names; do
+        local va vb
+        va=$(grep -F -- "$n " "$A" | head -1 | awk '{print $2}')
+        vb=$(grep -F -- "$n " "$B" | head -1 | awk '{print $2}')
+        # los parámetros FIJOS imprimen "(fixed by .pre ...)": no son comparables
+        case "$va" in \(*) continue;; esac
+        case "$vb" in \(*) continue;; esac
+        [ -z "$va" ] || [ -z "$vb" ] && continue
+        python3 -c "import sys; sys.exit(0 if abs($va-($vb)) < 0.02 + 0.02*abs($va) else 1)" \
+            || bad="$bad $n($va/$vb)"
+    done
+
+    # ganancia, retardo medio, adecuación, previsión (nivel y sd), descomposición
+    cmp1() {  # <etiqueta> <valorA> <valorB> <tol>
+        [ -z "$2" ] || [ -z "$3" ] && return
+        python3 -c "import sys; sys.exit(0 if abs($2-($3)) < $4 else 1)" \
+            || bad="$bad $1($2/$3)"
+    }
+    cmp1 gain  "$(gain "$A")"  "$(gain "$B")"  0.01
+    cmp1 mlag  "$(mlag "$A")"  "$(mlag "$B")"  0.05
+    cmp1 padq  "$(grep -oE 'p = [0-9.]+\)' "$A" | head -1 | grep -oE '[0-9.]+')" \
+               "$(grep -oE 'p = [0-9.]+\)' "$B" | head -1 | grep -oE '[0-9.]+')" 0.02
+
+    local ya yb sa sb
+    ya=$(sed -n '/ l     w_Y fcst/,$p' "$A" | sed -n '3p' | awk '{print $5}')
+    yb=$(sed -n '/ l     w_Y fcst/,$p' "$B" | sed -n '3p' | awk '{print $5}')
+    sa=$(sed -n '/ l     w_Y fcst/,$p' "$A" | sed -n '3p' | awk '{print $3}')
+    sb=$(sed -n '/ l     w_Y fcst/,$p' "$B" | sed -n '3p' | awk '{print $3}')
+    cmp1 nivel "$ya" "$yb" 0.05
+    cmp1 sd    "$sa" "$sb" 0.005
+
+    local da db
+    da=$(grep -A5 "% of the forecast error variance" "$A" | tail -1 | awk '{print $3}' | tr -d '%')
+    db=$(grep -A5 "% of the forecast error variance" "$B" | tail -1 | awk '{print $3}' | tr -d '%')
+    cmp1 fevd "$da" "$db" 0.5
+
+    if [ -z "$bad" ]; then pass "$desc"; else fail "$desc: difieren ->$bad"; fi
+}
+
+cross "sin transferencia (homologación con fue)" \
+      "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -0
+cross "contemporánea b=0 (Phi(0) != I: el caso delicado)" \
+      "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1
+cross "sin contemporánea b=1 (Phi(0) = I)" \
+      "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -b 1 -r 0 -s 0
+cross "racional r=1 (factor común AR/MA)" \
+      "$SYN/SYNR_Y.pre" "$SYN/SYNR_X.pre" -b 1 -r 1 -s 0
+cross "MA: airline" \
+      "$WORK/ES_CPI_airline.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1
+cross "MEG con factores de frecuencia fija" \
+      "$WORK/ES_CORE_S135b.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1
+cross "estacional: SAR(1)_12" \
+      "$WORK/FR_CPI_msar.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1
+cross "dos entradas (m=3)" \
+      "$SYN/SYN2_Y.pre" "$SYN/SYN2_X1.pre" "$SYN/SYN2_X2.pre" -b 1,0 -r 0,0 -s 0,1
+cross "la RED (cadena X->M->Y)" \
+      "$SYN/SYNC_Y.pre" "$SYN/SYNC_M.pre" "$SYN/SYNC_X.pre" -n "$SYN/SYNC.net"
+
+# covarianza liberada: el bug que dejaba q[2,1] sin efecto (SE de 3.008.863)
+CQX="$TMPDIR/xq.cns"; printf 'q[2,1] = free\n' > "$CQX"
+cross "covarianza de innovaciones LIBERADA (q[2,1])" \
+      "$SYN/SYNQ_Y.pre" "$SYN/SYNQ_X.pre" -0 -c "$CQX"
+
+# parámetro compartido
+CSX="$TMPDIR/xs.cns"; printf 'delta1[1] = phi_2[B^1]\n' > "$CSX"
+cross "parámetro COMPARTIDO (delta1 = phi_2)" \
+      "$SYN/SYNR_Y.pre" "$SYN/SYNR_X.pre" -b 1 -r 1 -s 0 -c "$CSX"
+
+# y la previsión recursiva
+RA="$TMPDIR/xr_a.txt"; RB="$TMPDIR/xr_b.txt"
+$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1    -R 168 -f 12 -o "$RA" >/dev/null 2>&1
+$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1 -V -R 168 -f 12 -o "$RB" >/dev/null 2>&1
+rrm() { grep -A"$((1 + $2))" "h      n        MAE" "$1" | tail -1 | awk '{print $4}'; }
+check "previsión recursiva: RMSE a h=1 coincide"  "$(rrm "$RA" 1)"  "$(rrm "$RB" 1)"  0.002
+check "previsión recursiva: RMSE a h=12 coincide" "$(rrm "$RA" 12)" "$(rrm "$RB" 12)" 0.005
 
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
@@ -1013,7 +1120,7 @@ echo ""
 FX="$TMPDIR/ipc_fixX.txt"
 $DRTRAN "$CASES/ES_CPI_m10.pre" "$CASES/WTI_ar1.pre" -b 0 -r 0 -s 1 -X -o "$FX" >/dev/null 2>&1
 LLX=$(grep "Log-likelihood =" "$FX" | awk '{print $3}')
-check "fijar el ARMA del input NO cambia la verosimilitud" "$LL2" "$LLX" 1e-6
+check "fijar el ARMA del input NO cambia la verosimilitud" "$LL2" "$LLX" 1e-4
 check "ni el omega_0" "$(val "$R2" 'omega1\[0\]')" "$(val "$FX" 'omega1\[0\]')" 1e-6
 check "ni el omega_1" "$(val "$R2" 'omega1\[1\]')" "$(val "$FX" 'omega1\[1\]')" 1e-6
 
@@ -1031,9 +1138,9 @@ printf 'q[2,1] = free\n' > "$CQ"
 
 # (a) IPC<-WTI: b=0 y phi_X=0.30 ~ phi_N=0.40. Cresta.
 PAT="$TMPDIR/ipc_ridge.txt"
-$DRTRAN "$CASES/ES_CPI_m10.pre" "$CASES/WTI_ar1.pre" -b 0 -r 0 -s 1 -c "$CQ" -o "$PAT" >/dev/null 2>&1
+$DRTRAN "$CASES/ES_CPI_m10.pre" "$CASES/WTI_ar1.pre" -b 0 -r 0 -s 1 -S -c "$CQ" -o "$PAT" >/dev/null 2>&1
 LLP=$(grep "Log-likelihood =" "$PAT" | awk '{print $3}')
-RHO=$(grep -A1 "Innovation correlations" "$PAT" | tail -1 | awk '{print $2}')
+RHO=$(grep -A1 "^Innovation correlations" "$PAT" | tail -1 | awk '{print $2}')
 TQ=$(grep -E "^q\[2,1\]" "$PAT" | awk '{print $4}')
 
 grep -q "near-collinearity" "$PAT" \

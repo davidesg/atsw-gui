@@ -288,6 +288,15 @@ static void build_embedded_varma(struct Tvarma *armax, int m,
      qq       <- Phi0^-1 qq Phi0^-T
    Es la misma que hace drvarma. Hace falta en cuanto hay una transferencia
    CONTEMPORANEA (b=0), que mete omega_0 en el retardo cero.                   */
+/* Phi(0) del ultimo cast empotrado. Se guarda porque los DIAGNOSTICOS necesitan
+   los residuos ESTRUCTURALES, no los de la forma reducida: al normalizar,
+   a_reducido = Phi(0)^-1 a_estructural, luego a_estructural = Phi(0) a_reducido.
+   Sin deshacer esto, la prueba de adecuacion mide la correlacion contemporanea
+   que la PROPIA transferencia genera (Sigma_12 = omega_0 sigma_X^2) y la llama
+   mala especificacion. */
+real phi0_last[MAX_SER + 1][MAX_SER + 1];
+int  phi0_is_identity = 1;
+
 static int normalize_phi0(struct Tvarma *armax)
 {
     int m = armax->m, p = armax->p, q = armax->q;
@@ -297,8 +306,11 @@ static int normalize_phi0(struct Tvarma *armax)
     real *v;
 
     for (i = 1; i <= m; i++)
-        for (j = 1; j <= m; j++)
+        for (j = 1; j <= m; j++) {
+            phi0_last[i][j] = armax->phi[0][i][j];
             if (fabs(armax->phi[0][i][j] - ((i == j) ? 1.0 : 0.0)) > 1e-14) need = 1;
+        }
+    phi0_is_identity = !need;
     if (!need) return 0;
 
     F  = matrix(1, m, 1, m);

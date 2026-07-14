@@ -89,6 +89,10 @@ extern int b_del[MAX_SER + 1], r_ord[MAX_SER + 1], s_ord[MAX_SER + 1];
 /* El cast: 0 = restar la transferencia; 1 = EMPOTRARLA en el VARMA (-V). */
 extern int embed_varma;
 
+/* Phi(0) del cast empotrado, para des-normalizar los residuos en la diagnosis. */
+extern real phi0_last[MAX_SER + 1][MAX_SER + 1];
+extern int  phi0_is_identity;
+
 /* -------------------------------------------------------------------------- */
 /* LA RED de transferencias                                                    */
 /*                                                                            */

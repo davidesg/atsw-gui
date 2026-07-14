@@ -744,6 +744,23 @@ python3 -c "import sys; sys.exit(0 if 0.0 < $SEG < 0.5 else 1)" \
     && pass "con delta COMPARTIDO, la ganancia tiene SE por el alias ($SEG)" \
     || fail "la SE de la ganancia con parámetro compartido es degenerada ($SEG)"
 
+
+# --- LOS DIAGNOSTICOS CON EL CAST EMPOTRADO: residuos ESTRUCTURALES ---
+# Con -V la serie 1 es w_Y, no el ruido, y tras normalizar los residuos son los de
+# la FORMA REDUCIDA -- correlacionados con los del input POR CONSTRUCCION
+# (Sigma_12 = omega_0 * sigma_X^2). Si no se deshace la normalizacion, la prueba de
+# adecuacion mide esa correlacion y la llama mala especificacion: los dos modelos
+# del IPC salian "NO adecuados" con p = 0.0000. Hay que aplicar a = Phi(0) * a_red.
+DS="$TMPDIR/diag_sub.txt"; DV="$TMPDIR/diag_emb.txt"
+$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1    -o "$DS" >/dev/null 2>&1
+$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1 -V -o "$DV" >/dev/null 2>&1
+PS=$(grep -oE "is ADEQUATE \(p = [0-9.]+" "$DS" | grep -oE "[0-9.]+$")
+PV=$(grep -oE "is ADEQUATE \(p = [0-9.]+" "$DV" | grep -oE "[0-9.]+$")
+[ -n "$PV" ] \
+    && pass "con -V la transferencia sale ADECUADA (p = $PV): los residuos se des-normalizan" \
+    || fail "con -V la adecuación falla: ¿se están usando los residuos de la forma reducida?"
+check "y el p-valor coincide con el del cast por resta" "$PS" "$PV" 0.01
+
 # --- CASO REAL: el crudo se traslada al IPC de forma casi inmediata
 OUT="$TMPDIR/ch_ipc.txt"
 $DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1 -o "$OUT" >/dev/null 2>&1
@@ -881,6 +898,57 @@ TD1=$(grep -E "^delta1\[1\]" "$R1" | awk '{print $4}')
 python3 -c "import sys; sys.exit(0 if $TD1 > 4.0 else 1)" \
     && pass "aviso: en el racional forzado delta_1 parece contundente (t = $TD1) y es un espejismo" \
     || fail "el racional forzado no reproduce el t alto de delta_1"
+
+
+# --- LOS DOS MODELOS CON EL CAST EMPOTRADO: AIC y BIC ya SIGNIFICAN algo ---
+# Con -V la verosimilitud es la EXACTA de los datos, asi que los criterios de
+# informacion y los LR son validos (con el cast por resta, elf calculaba una
+# verosimilitud exacta... de la serie equivocada).
+V1="$TMPDIR/ipc_v_w.txt"; V2="$TMPDIR/ipc_v_r.txt"; V3="$TMPDIR/ipc_v_n.txt"
+$DRTRAN "$CASES/ES_CPI_m10.pre" "$CASES/WTI_ar1.pre" -b 0 -r 0 -s 1 -V -o "$V1" >/dev/null 2>&1
+$DRTRAN "$CASES/ES_CPI_m10.pre" "$CASES/WTI_ar1.pre" -b 0 -r 1 -s 0 -V -o "$V2" >/dev/null 2>&1
+$DRTRAN "$CASES/ES_CPI_m10.pre" "$CASES/WTI_ar1.pre" -b 0 -r 1 -s 1 -V -o "$V3" >/dev/null 2>&1
+LV1=$(grep "Log-likelihood =" "$V1" | awk '{print $3}')
+LV2=$(grep "Log-likelihood =" "$V2" | awk '{print $3}')
+LV3=$(grep "Log-likelihood =" "$V3" | awk '{print $3}')
+python3 -c "import sys; sys.exit(0 if $LV1 > $LV2 + 3.0 else 1)" \
+    && pass "con -V: dos omegas bate al racional por $(python3 -c "print('%.2f' % ($LV1-($LV2)))") de logL (mismos 17 parámetros)" \
+    || fail "con -V el racional no queda por debajo"
+grep -q "is ADEQUATE" "$V1" && pass "con -V: el de dos omegas es ADECUADO" || fail "el de dos omegas falla la adecuación con -V"
+grep -q "NOT adequate" "$V2" && pass "con -V: el racional es INADECUADO (rastro del input en k=2)" || fail "el racional no se delata con -V"
+python3 -c "import sys; sys.exit(0 if 2*($LV3 - ($LV1)) < 3.84 else 1)" \
+    && pass "con -V: el LR del denominador = $(python3 -c "print('%.4f' % (2*($LV3-($LV1))))") < chi2(1): no hay denominador" \
+    || fail "el denominador sale significativo con -V"
+
+# --- EL RETARDO MEDIO EXPLICA LA PREVISIÓN ---
+# El racional pone la masa de la respuesta MAS ATRAS en el tiempo (retardo medio
+# 0.84 frente a 0.40), o sea en retardos YA OBSERVADOS en el origen. Por eso preve
+# mejor a UN paso, aunque su cola sea falsa. Y por eso pierde en cuanto el horizonte
+# crece: la mala especificación se cobra la factura.
+M1=$(mlag "$V1"); M2=$(mlag "$V2")
+python3 -c "import sys; sys.exit(0 if $M2 > $M1 + 0.2 else 1)" \
+    && pass "el racional tiene el retardo medio MÁS LARGO ($M2 vs $M1): su cola falsa empuja la masa hacia atrás" \
+    || fail "el retardo medio del racional no es más largo"
+
+O1="$TMPDIR/ipc_o_w.txt"; O2="$TMPDIR/ipc_o_r.txt"
+$DRTRAN "$CASES/ES_CPI_m10.pre" "$CASES/WTI_ar1.pre" -b 0 -r 0 -s 1 -V -R 168 -f 12 -o "$O1" >/dev/null 2>&1
+$DRTRAN "$CASES/ES_CPI_m10.pre" "$CASES/WTI_ar1.pre" -b 0 -r 1 -s 0 -V -R 168 -f 12 -o "$O2" >/dev/null 2>&1
+python3 - "$O1" "$O2" <<'PYRAT'
+import re, sys
+def rmse(f):
+    t=open(f).read()
+    m=re.search(r'h      n        MAE.*?\n  ---+\n((?:  +\d+.*\n)+)', t)
+    return {int(r.split()[0]): float(r.split()[3]) for r in m.group(1).strip().split('\n')}
+W, R = rmse(sys.argv[1]), rmse(sys.argv[2])
+# a h=1 el racional gana (masa mas atras = mas input YA OBSERVADO)
+# a h>=3 pierde (la cola es falsa y la mala especificacion se paga)
+ok = R[1] < W[1] and all(R[h] > W[h] for h in (3, 6, 12))
+sys.exit(0 if ok else (print("h=1 %.4f/%.4f  h=3 %.4f/%.4f  h=12 %.4f/%.4f"
+        % (R[1],W[1],R[3],W[3],R[12],W[12])) or 1))
+PYRAT
+[ $? -eq 0 ] \
+    && pass "fuera de muestra: el racional gana a h=1 (por el motivo equivocado) y PIERDE de h=3 en adelante" \
+    || fail "no se reproduce el patrón de previsión racional/dos-omegas"
 
 echo ""
 echo "   Los pesos: el racional impone cola geométrica; los datos quieren dos y parar."

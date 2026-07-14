@@ -2879,6 +2879,29 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
         int ifault_diag = 0, t;
 
         shootx(x, &vdiag, &ifault_diag, 1, 0);
+
+        /* Con el cast EMPOTRADO, los residuos que devuelve elf son los de la FORMA
+           REDUCIDA. Los diagnosticos (adecuacion, exogeneidad, ACF del ruido) hablan
+           del RUIDO ESTRUCTURAL, asi que hay que deshacer la normalizacion:
+                a_estructural = Phi(0) * a_reducido
+           Sin esto, la prueba de adecuacion mide la correlacion contemporanea que la
+           PROPIA transferencia genera (Sigma_12 = omega_0 * sigma_X^2) y la declara
+           mala especificacion: los dos modelos del IPC salian "NO adecuados" con
+           p = 0.0000 solo por eso. */
+        if (embed_varma && !phi0_is_identity && ifault_diag == 0) {
+            real *tmp = vector(1, n_ser);
+            int   ii, jj, tt;
+            for (tt = 1; tt <= n_stat; tt++) {
+                for (ii = 1; ii <= n_ser; ii++) {
+                    tmp[ii] = 0.0;
+                    for (jj = 1; jj <= n_ser; jj++)
+                        tmp[ii] += phi0_last[ii][jj] * a_est[tt][jj];
+                }
+                for (ii = 1; ii <= n_ser; ii++) a_est[tt][ii] = tmp[ii];
+            }
+            free_vector(tmp, 1, n_ser);
+        }
+
         if (ifault_diag == 0) {
             for (t = 1; t <= n_stat; t++)
                 for (i = 1; i <= n_ser; i++) vdiag.a[t][i] = a_est[t][i];

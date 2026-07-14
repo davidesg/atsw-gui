@@ -1,0 +1,103 @@
+************************************************
+*        Input file for program DRVUS          *
+*   Caso sintetico generado por gen_synthetic  *
+************************************************
+
+** Frequency of time series: either 1(A), 4(Q) or 12(M):
+ 12
+** Number of observations and starting date of time series:
+ 69  1 2000 T_Y
+** Number of deterministic variables (including seasonal components):
+0
+**Number and orders of regular AR operators:
+1 1
+**
+0.3000 1
+** Number and orders of annual AR operators:
+0
+** Number and orders of regular MA operators:
+0
+** Number and orders of anual MA operators:
+0
+** Number and frequencies of regular AR(2) operators with fixed frequency:
+0
+** Number and frequencies of regular MA(2) operators with fixed frequency:
+0
+** Mean parameter (mu):
+0
+** Box-Cox lambda, regular differences and complete annual differences:
+0.00 1 0
+** Individual factors of the annual difference (from freq 0.0): 
+ 0 0 0 0 0 0 0
+** ACF/PACF bands (0 Automatic) and reescaling factor: 
+ 0.00 100.00
+** Time series (stochastic and non-standard deterministic variables): 
+100.1362242884 
+99.8859495068 
+99.8084449542 
+99.7999855643 
+100.7990863176 
+100.5877498635 
+101.0531726429 
+100.8619888094 
+100.6722199552 
+99.5211302282 
+98.2486913565 
+97.8263528063 
+98.4363755880 
+99.5722487855 
+100.3644545003 
+101.9750315421 
+104.1239457729 
+105.1583422119 
+107.2758948195 
+108.6773510499 
+111.1985329238 
+114.1110629619 
+116.7232106976 
+118.0908091099 
+119.3675999356 
+119.9428940922 
+119.3443909356 
+118.7967784332 
+118.5212732060 
+117.9307754130 
+117.2943048091 
+115.6646776301 
+114.1257843253 
+112.9041107371 
+112.5077495223 
+113.3823141479 
+112.6751935460 
+112.8900377090 
+114.9170245870 
+115.8197515472 
+116.6854231937 
+117.4691987908 
+118.5559778776 
+118.2594940284 
+118.5847437320 
+118.1718099256 
+116.6914246766 
+115.3559045306 
+112.7602554446 
+110.6007827708 
+108.3927415062 
+105.9737870850 
+102.1755703186 
+98.4191313952 
+96.6305466770 
+95.0221564167 
+94.4256336830 
+93.7003540249 
+92.8051328750 
+92.4667464002 
+91.0273470941 
+88.6743471842 
+86.7866689131 
+85.1857207741 
+84.2176498754 
+83.3465789010 
+83.3863070768 
+83.5102189990 
+82.7250734924 

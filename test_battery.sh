@@ -1700,6 +1700,39 @@ grep -q "needs a horizon" "$TMPDIR/rr.log" \
     || fail "acepta -R sin horizonte"
 
 # ─────────────────────────────────────────────────────────────────────────
+
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
+echo "── 5b. EL PROGRAMA NO PUEDE COLGARSE ──"
+echo "   lnsrch retrocede INTERPOLANDO con el valor de la función objetivo. Si ese"
+echo "   valor es NaN, el lambda interpolado sale NaN; y entonces 'lambda < minlam'"
+echo "   es FALSO -- toda comparación con NaN lo es --, así que el paso ni se acepta"
+echo "   ni se abandona: la búsqueda lineal GIRA PARA SIEMPRE."
+echo ""
+echo "   Encontrado con una transferencia racional de memoria larga (delta~0.95) sobre"
+echo "   69 datos: drtran llevaba HORA Y MEDIA dando vueltas. Un punto que produce un"
+echo "   objetivo no finito es INADMISIBLE, y se rechaza como tal (se devuelve 1.0),"
+echo "   igual que cuando elf declara ifault."
+echo ""
+
+# el caso exacto que colgaba
+timeout 60 $DRTRAN "$SYN/HANG_Y.pre" "$SYN/HANG_X.pre" -b 1 -r 1 -s 0 -S \
+        -o "$TMPDIR/hang_s.txt" >/dev/null 2>&1
+[ $? -ne 124 ] \
+    && pass "el caso que colgaba TERMINA (cast por resta)" \
+    || fail "SE CUELGA: la búsqueda lineal está girando con un objetivo no finito"
+
+timeout 60 $DRTRAN "$SYN/HANG_Y.pre" "$SYN/HANG_X.pre" -b 1 -r 1 -s 0 -V \
+        -o "$TMPDIR/hang_v.txt" >/dev/null 2>&1
+[ $? -ne 124 ] \
+    && pass "y también con el cast empotrado" \
+    || fail "SE CUELGA con el cast empotrado"
+
+# y además estima algo razonable (memoria larga: delta cerca de 0.87)
+check "estima la memoria larga (delta ~ 0.87)" 0.87 "$(val "$TMPDIR/hang_s.txt" 'delta1\[1\]')" 0.06
+opt_ok "$TMPDIR/hang_s.txt" "y converge de verdad, no por agotar iteraciones"
+
+
 echo ""
 echo "── 5. Sanidad ──"
 echo ""

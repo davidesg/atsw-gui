@@ -19,7 +19,8 @@
 /*  Copyright (C) Jos� Alberto Mauricio, 1995.                               */
 /*****************************************************************************/
 
-#include "main.h"              /* Header file (prototype declarations)        */
+#include "main.h"
+#include <math.h>              /* Header file (prototype declarations)        */
 extern real macheps;          /* Machine epsilon (global: declared in DRV.C) */
 extern FILE *outputv;         /* Output file */
 
@@ -176,8 +177,25 @@ real objcfunc( real *x )
 
    if ( ifault > 0 )                            /* ifault = 1-2-3-4-5.       */
       return( 1.0 );
-   else
-      return( pow( (pi1 / pi10x), varmax.m ) * (pi2 / pi20x) );
+
+/* [3]: Un objetivo NO FINITO cuelga el programa. No es una exageracion:        */
+/*                                                                             */
+/*      lnsrch retrocede interpolando con el valor de la funcion. Si ese valor  */
+/*      es NaN, el lambda interpolado sale NaN; y entonces "lambda < minlam" es */
+/*      FALSO -- toda comparacion con NaN lo es --, asi que el paso ni se acepta */
+/*      ni se abandona, y la busqueda lineal GIRA PARA SIEMPRE. Encontrado con  */
+/*      una transferencia racional de memoria larga (delta ~ 0.95) sobre 69     */
+/*      datos: drtran llevaba HORA Y MEDIA dando vueltas.                       */
+/*                                                                             */
+/*      Un punto que produce un objetivo no finito es un punto inadmisible, y   */
+/*      se trata como tal: se devuelve 1.0, exactamente igual que cuando elf    */
+/*      declara ifault. Es la estrategia del propio articulo (sec. 3).          */
+
+   {
+      real f = pow( (pi1 / pi10x), varmax.m ) * (pi2 / pi20x);
+      if ( !isfinite( f ) ) return( 1.0 );
+      return( f );
+   }
 }
 
 /*****************************************************************************/

@@ -325,9 +325,59 @@ def build_corr(outdir, seed):
     print("SYNQ -> VERDAD: rho(a_N, a_X) = %.3f, sin transferencia" % rho)
 
 
+def build_ident(outdir, seed):
+    """LA NO IDENTIFICACION, con verdad construida.
+
+    Una transferencia CONTEMPORANEA (b=0) y una covarianza de innovaciones
+    explican LO MISMO en el retardo 0. Solo las separa la cola de la ccf
+    preblanqueada, proporcional a (phi_N - phi_X). Luego:
+
+        si phi_N == phi_X, los dos modelos son EXACTAMENTE indistinguibles.
+
+    Se generan DOS pares. En los dos la verdad es una transferencia
+    contemporanea Y = 0.5*X + N, con innovaciones INDEPENDIENTES:
+
+      SYNI  : phi_N = phi_X = 0.500   -> no identificado. Los dos modelos deben
+                                         dar la MISMA verosimilitud.
+      SYNJ  : phi_N = 0.200, phi_X = 0.700 -> bien separados. Deben diferir.
+    """
+    for tag, pn, px in (("SYNI", 0.500, 0.500), ("SYNJ", 0.200, 0.700)):
+        rnd = random.Random(seed + hash(tag) % 1000)
+        burn = 300
+        n = N_OBS + burn
+        w0 = 0.500
+
+        wx = [0.0] * n
+        nz = [0.0] * n
+        for t in range(1, n):
+            wx[t] = px * wx[t - 1] + rnd.gauss(0.0, 1.0)
+            nz[t] = pn * nz[t - 1] + rnd.gauss(0.0, 0.5)
+
+        wy = [w0 * wx[t] + nz[t] for t in range(n)]
+        wx, wy = wx[burn:], wy[burn:]
+
+        def to_levels(v, base):
+            z, acc = [], 0.0
+            for u in v:
+                acc += u / 100.0
+                z.append(base * math.exp(acc))
+            return z
+
+        write_pre(os.path.join(outdir, "%s_X.pre" % tag), "%s_X" % tag,
+                  to_levels(wx, 50.0), px, mu_free=False)
+        write_pre(os.path.join(outdir, "%s_Y.pre" % tag), "%s_Y" % tag,
+                  to_levels(wy, 100.0), pn, mu_free=False)
+
+        print("%s -> VERDAD: Y = %.3f*X + N,  phi_N=%.3f  phi_X=%.3f  %s"
+              % (tag, w0, pn, px,
+                 "(NO IDENTIFICADO)" if abs(pn - px) < 1e-9 else "(separables)"))
+
+
 def main():
     outdir = sys.argv[1] if len(sys.argv) > 1 else "."
     os.makedirs(outdir, exist_ok=True)
+
+    build_ident(outdir, SEED + 5)
 
     build_corr(outdir, SEED + 4)
 

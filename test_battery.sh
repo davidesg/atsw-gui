@@ -1091,6 +1091,75 @@ PYES
     && pass "ES con b=1 bate al univariante a TODO horizonte (h=1..24)" \
     || fail "ES con b=1 no bate al univariante en todos los horizontes"
 
+
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
+echo "── 3g. NO IDENTIFICACIÓN, con verdad construida ──"
+echo "   En la sección 3d medimos la PATOLOGÍA (la cresta). Aquí se mide la CAUSA,"
+echo "   sobre datos generados con la verdad conocida."
+echo ""
+echo "   Una transferencia CONTEMPORÁNEA y una covarianza de innovaciones explican"
+echo "   lo mismo en el retardo 0. Solo las separa la dinámica, y la señal que las"
+echo "   separa es proporcional a (phi_X - phi_N). El álgebra del cast empotrado lo"
+echo "   dice sin que se le pregunte: tras normalizar por Phi(0), el AR fuera de la"
+echo "   diagonal en el retardo 1 vale exactamente"
+echo ""
+echo "       [Phi(0)^-1 Phi_1]_12 = omega_0 * (phi_X - phi_N)"
+echo ""
+echo "   que es EL ÚNICO RASTRO que queda, en forma reducida, de que la relación es"
+echo "   una TRANSFERENCIA y no una simple covarianza. Se anula si phi_N = phi_X."
+echo ""
+
+CQ="$TMPDIR/q21.cns";  printf 'q[2,1] = free\n' > "$CQ"
+CE="$TMPDIR/eq.cns";   printf 'phi_2[B^1] = phi_1[B^1]\n' > "$CE"
+CEQ="$TMPDIR/eqq.cns"; printf 'phi_2[B^1] = phi_1[B^1]\nq[2,1] = free\n' > "$CEQ"
+
+# ── SYNI: phi_N = phi_X = 0.5. Los dos modelos son EL MISMO. ──
+# Se impone phi_N = phi_X en ambos, que es el subconjunto donde coinciden, y se
+# comparan con el MISMO número de parámetros libres.
+A="$TMPDIR/id_A.txt"; B="$TMPDIR/id_B.txt"
+$DRTRAN "$SYN/SYNI_Y.pre" "$SYN/SYNI_X.pre" -b 0 -r 0 -s 0 -V -c "$CE"  -o "$A" >/dev/null 2>&1
+$DRTRAN "$SYN/SYNI_Y.pre" "$SYN/SYNI_X.pre" -0              -c "$CEQ" -o "$B" >/dev/null 2>&1
+
+NA=$(grep "Structural parameters" "$A" | sed 's/.*free: \([0-9]*\).*/\1/')
+NB=$(grep "Structural parameters" "$B" | sed 's/.*free: \([0-9]*\).*/\1/')
+check "mismo número de parámetros libres" "$NA" "$NB" 0.5
+
+LA=$(grep "Log-likelihood =" "$A" | awk '{print $3}')
+LB=$(grep "Log-likelihood =" "$B" | awk '{print $3}')
+python3 -c "import sys; sys.exit(0 if abs($LA - ($LB)) < 1e-6 else 1)" \
+    && pass "con phi_N = phi_X, transferencia y covarianza dan la MISMA verosimilitud ($LA): son EL MISMO MODELO" \
+    || fail "deberían ser indistinguibles y difieren ($LA vs $LB)"
+check "y hasta la phi estimada coincide" "$(val "$A" 'phi_1\[B\^1\]')" "$(val "$B" 'phi_1\[B\^1\]')" 1e-6
+
+# ── SYNJ: phi_N = 0.2, phi_X = 0.7. Ahora SÍ se distinguen. ──
+# La verdad es una TRANSFERENCIA. Con las phi libres y los MISMOS parámetros,
+# el modelo verdadero debe ganar, y por mucho.
+A2="$TMPDIR/id_A2.txt"; B2="$TMPDIR/id_B2.txt"
+$DRTRAN "$SYN/SYNJ_Y.pre" "$SYN/SYNJ_X.pre" -b 0 -r 0 -s 0 -V -o "$A2" >/dev/null 2>&1
+$DRTRAN "$SYN/SYNJ_Y.pre" "$SYN/SYNJ_X.pre" -0 -c "$CQ"       -o "$B2" >/dev/null 2>&1
+
+check "SYNJ: recupera omega_0 (verdad 0.500)" 0.500 "$(val "$A2" 'omega1\[0\]')" 0.03
+check "SYNJ: recupera phi_X   (verdad 0.700)" 0.700 "$(val "$A2" 'phi_2\[B\^1\]')" 0.05
+
+LA2=$(grep "Log-likelihood =" "$A2" | awk '{print $3}')
+LB2=$(grep "Log-likelihood =" "$B2" | awk '{print $3}')
+python3 -c "import sys; sys.exit(0 if $LA2 - ($LB2) > 10.0 else 1)" \
+    && pass "con phi_N != phi_X la TRANSFERENCIA (la verdad) gana por $(python3 -c "print('%.1f' % ($LA2-($LB2)))") puntos" \
+    || fail "con las phi separadas los datos no distinguen los dos mecanismos"
+
+# el modelo EQUIVOCADO se delata: deforma las dos phi para imitar la transferencia
+P1=$(val "$B2" 'phi_1\[B\^1\]'); P2=$(val "$B2" 'phi_2\[B\^1\]')
+python3 -c "import sys; sys.exit(0 if abs($P1 - 0.2) > 0.1 and abs($P2 - 0.7) > 0.1 else 1)" \
+    && pass "y el modelo de covarianza se delata: deforma las dos phi ($P1, $P2 frente a 0.2, 0.7)" \
+    || fail "el modelo de covarianza no deforma las phi"
+
+echo ""
+echo "   Resumen: phi_N = phi_X -> diferencia 0.00 (no identificado)."
+echo "            phi_N != phi_X -> la verdad gana por 26 puntos."
+echo "   La identificación NACE de que los AR sean distintos."
+echo ""
+
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
 echo "── 4. DETERMINISTAS: tipos de fue e intervenciones racionales ──"

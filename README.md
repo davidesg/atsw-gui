@@ -1,5 +1,9 @@
 # drtran
 
+> **[M6_EJERCICIO.md](M6_EJERCICIO.md)** — el modelo del empleo por sectores (Relloso
+> 1997): la fuente, la metodología, lo reconstruido y lo que falta. Es el ejercicio para
+> el que drtran se construyó.
+
 > **Nota técnica:** [`docs/drtran-note.tex`](docs/drtran-note.tex) — *Re-implementing
 > Box–Jenkins transfer function models on an exact VARMA likelihood: engineering
 > notes, and one identification hazard.* Qué se aparta este programa de las

@@ -86,6 +86,9 @@ extern int fix_det[MAX_SER + 1];    /* coeficientes deterministas */
      s_ord[j] : orden del numerador omega(B)   (-1 = sin transferencia) */
 extern int b_del[MAX_SER + 1], r_ord[MAX_SER + 1], s_ord[MAX_SER + 1];
 
+/* El cast: 0 = restar la transferencia; 1 = EMPOTRARLA en el VARMA (-V). */
+extern int embed_varma;
+
 /* -------------------------------------------------------------------------- */
 /* LA RED de transferencias                                                    */
 /*                                                                            */

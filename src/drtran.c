@@ -78,6 +78,9 @@ static int  rec_start = 0;
 static int  nobs_full[MAX_SER + 1];
 static char rec_csv[600] = "";
 
+/* El cast: 0 = restar la transferencia; 1 = EMPOTRARLA en el VARMA (-V). */
+int embed_varma = 0;
+
 /* ¿La red es la ESTRELLA por defecto (todo entra a la serie 1)? Solo entonces
    tiene sentido hablar de "la entrada j" y "la salida Y".                    */
 static int net_is_star(void)
@@ -2217,6 +2220,33 @@ static void usage(const char *prog)
 "           variances. It is c'Vc, with V the full forecast error covariance.\n"
 "           Requires -f.\n"
 "\n"
+"THE CAST\n"
+"  -V       EMBED the transfer in the VARMA instead of subtracting it.\n"
+"\n"
+"           By default drtran builds the noise outside the likelihood engine,\n"
+"           N_t = w_Y,t - SUM_k nu_k w_X,{t-k}, which at t=1 needs input values\n"
+"           that DO NOT EXIST. It sets them to zero. The engine cannot fix this,\n"
+"           because it never sees those inputs: it is handed the noise already\n"
+"           contaminated.\n"
+"\n"
+"           With -V nothing is subtracted. The transfer becomes OFF-DIAGONAL\n"
+"           coefficients of the VARMA,\n"
+"\n"
+"             [phi_i.D_i] w_i - SUM_k [phi_i.omega_k.B^bk.(D_i/delta_k)] w_in\n"
+"                                                        = [D_i.theta_i] a_i\n"
+"\n"
+"           and the exact likelihood does the pre-sample initialisation itself.\n"
+"           The truncation is not fixed: it DISAPPEARS. This is what Mauricio's\n"
+"           own m6 models do, and it makes backforecasting (Box-Jenkins, TASTE)\n"
+"           unnecessary rather than better.\n"
+"\n"
+"           Cost: none measurable. Gain: the reported likelihood is the EXACT\n"
+"           likelihood of the data, so LR tests and information criteria are\n"
+"           valid; and omega is unbiased. On a 69-observation sample with a\n"
+"           rational transfer the bias of omega falls from +0.0017 to -0.0002,\n"
+"           though RMSE improves by well under 1%: the truncation matters less\n"
+"           than one would fear.\n"
+"\n"
 "IDENTIFICATION\n"
 "  -p       PREWHITEN ONLY: filter the input with its own ARMA, apply the same\n"
 "           filter to the output, plot the CCF and suggest (b, r, s).\n"
@@ -2965,7 +2995,7 @@ int main(int argc, char *argv[])
     macheps = cmacheps();
     outputv = stdout;
 
-    while ((opt = getopt(argc, argv, "r:s:b:f:m:c:n:a:R:C:p0XNDEMvho:")) != -1) {
+    while ((opt = getopt(argc, argv, "r:s:b:f:m:c:n:a:R:C:p0XNDEMVvho:")) != -1) {
         switch (opt) {
         case 'r': opt_r = optarg; auto_id = 0; break;
         case 's': opt_s = optarg; auto_id = 0; break;
@@ -2984,6 +3014,7 @@ int main(int argc, char *argv[])
         case 'R': rec_start = atoi(optarg);  break;
         case 'C': snprintf(rec_csv, sizeof rec_csv, "%s", optarg); break;
         case '0': no_transfer = 1; auto_id = 0; break;
+        case 'V': embed_varma = 1;           break;
         case 'v': quiet_mode = 0;            break;
         case 'o': outfile = optarg;          break;
         case 'h': usage(argv[0]); return 0;

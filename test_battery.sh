@@ -248,6 +248,60 @@ BIG=$(grep -E "^(phi_|theta_|mu\[1|omega_|delta_|log\()" "$OUT" \
 [ -z "$BIG" ] && pass "ninguna SE absurda (hessiano no singular)" \
               || fail "SE absurda en $BIG (¿hessiano singular?)"
 
+
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
+echo "── 1e. EL CAST EMPOTRADO (-V): la transferencia DENTRO del VARMA ──"
+echo "   El cast por RESTA construye el ruido fuera de elf:"
+echo "       N_t = w_Y,t - SUM_k nu_k w_X,{t-k}"
+echo "   y en t=1 necesita w_X en instantes que NO EXISTEN. Los pone a cero. elf no"
+echo "   puede arreglarlo porque nunca ve esas X: recibe el ruido ya contaminado."
+echo ""
+echo "   El cast EMPOTRADO no resta nada. Escribe la transferencia como coeficientes"
+echo "   FUERA DE LA DIAGONAL del VARMA:"
+echo "       [phi_i*D_i] w_i - SUM_k [phi_i*omega_k*B^bk*(D_i/delta_k)] w_inp = [D_i*theta_i] a_i"
+echo "   y elf, que ve el sistema entero, hace la inicialización pre-muestral EXACTA."
+echo "   El truncamiento no se arregla: DESAPARECE. Es lo que hacen los m6 de Mauricio."
+echo ""
+
+# --- LA PUERTA: sin transferencia, -V debe seguir homologando con fue ---
+OUT="$TMPDIR/v_hom.txt"
+$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -0 -V -o "$OUT" >/dev/null 2>&1
+check "-V homologa con fue: phi_N"  0.402839 "$(val "$OUT" 'phi_1\[B\^1\]')" 0.0001
+check "-V homologa con fue: phi_X"  0.299193 "$(val "$OUT" 'phi_2\[B\^1\]')" 0.0001
+check "-V homologa con fue: mu"     0.154472 "$(val "$OUT" 'mu\[1\]')"       0.0001
+check "-V homologa con fue: logL"  -767.4243 "$(grep 'Log-likelihood =' "$OUT" | awk '{print $3}')" 0.01
+
+# --- los DOS cast deben dar lo MISMO (la diferencia es solo el pre-muestral) ---
+A="$TMPDIR/v_sub.txt"; B="$TMPDIR/v_emb.txt"
+$DRTRAN "$SYN/SYNR_Y.pre" "$SYN/SYNR_X.pre" -b 1 -r 1 -s 0    -o "$A" >/dev/null 2>&1
+$DRTRAN "$SYN/SYNR_Y.pre" "$SYN/SYNR_X.pre" -b 1 -r 1 -s 0 -V -o "$B" >/dev/null 2>&1
+check "los dos cast coinciden en omega_0" "$(val "$A" 'omega1\[0\]')" "$(val "$B" 'omega1\[0\]')" 0.005
+check "los dos cast coinciden en delta_1" "$(val "$A" 'delta1\[1\]')" "$(val "$B" 'delta1\[1\]')" 0.005
+check "y recuperan la verdad (omega=0.600)" 0.600 "$(val "$B" 'omega1\[0\]')" 0.03
+check "y recuperan la verdad (delta=0.600)" 0.600 "$(val "$B" 'delta1\[1\]')" 0.03
+
+# --- la verosimilitud EMPOTRADA es la EXACTA: no es la del cast por resta ---
+LA=$(grep "Log-likelihood =" "$A" | awk '{print $3}')
+LB=$(grep "Log-likelihood =" "$B" | awk '{print $3}')
+python3 -c "import sys; sys.exit(0 if abs($LB - ($LA)) > 1e-6 else 1)" \
+    && pass "las dos verosimilitudes DIFIEREN ($LB vs $LA): la del cast por resta no es exacta" \
+    || fail "las verosimilitudes coinciden: el pre-muestral no se está tratando distinto"
+
+# --- aguanta los casos DIFÍCILES (órdenes altos) ---
+for C in ES_CORE_S135b ES_CPI_airline FR_CPI_msar DE_CPI_mar3sar; do
+    $DRTRAN "$WORK/$C.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1 -V -o "$TMPDIR/v_$C.txt" >/dev/null 2>&1
+    grep -q "Log-likelihood =" "$TMPDIR/v_$C.txt" \
+        && pass "-V aguanta $C" \
+        || fail "-V falla en $C"
+done
+
+# --- y la RED ---
+$DRTRAN "$SYN/SYNC_Y.pre" "$SYN/SYNC_M.pre" "$SYN/SYNC_X.pre" -n "$SYN/SYNC.net" -V \
+        -o "$TMPDIR/v_net.txt" >/dev/null 2>&1
+check "-V con la RED: omega Y<-M (verdad 0.500)" 0.500 "$(val "$TMPDIR/v_net.txt" 'omega1\[0\]')" 0.05
+check "-V con la RED: omega M<-X (verdad 0.700)" 0.700 "$(val "$TMPDIR/v_net.txt" 'omega2\[0\]')" 0.05
+
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
 echo "── 2. VERDAD SINTÉTICA: se recupera la transferencia conocida ──"

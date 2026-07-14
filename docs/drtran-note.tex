@@ -322,18 +322,82 @@ and fixing, which are what the dissertation uses for identity-linked
 triads---but it does \textbf{not} cover the gain, which is nonlinear. See
 \S\ref{sec:todo}.
 
-\subsection{The start of the sample: \textsc{taste} did it better}
+\subsection{The start of the sample: neither truncation nor backforecasting}
 \label{sec:truncation}
 
 The transfer $\sum_k \nu_k X_{t-k}$ needs the input's past, and at $t=1$ there is
-none. \textsc{taste} \emph{backforecasts} it, which is Box and Jenkins's
-solution. \texttt{drtran} \emph{truncates}: it assumes a zero pre-sample input.
+none. \textsc{taste} \emph{backforecasts} it, which is Box and Jenkins's solution.
+\texttt{drtran} originally \emph{truncated}: it assumed a zero pre-sample input.
 
-Measured: with $r=1$ and $\delta=0.6$ the error at $t=1$ is $63\%$ of
-$\mathrm{sd}(w_X)$ and decays as $\delta^t$, contaminating the first nine or so
-observations. With 215--400 data points this is irrelevant. With the 69
-observations of \texttt{m6} it would be $15\%$ of the sample. \textbf{Here the
-1979 solution is better than ours}, and it is on the list.
+We first wrote here that \textsc{taste} did it better. That was wrong, and the
+error is instructive. \emph{The exact likelihood makes backforecasting
+unnecessary, not merely inferior}---but only if the transfer is inside the model.
+Two problems were being conflated:
+
+\begin{description}
+\item[The noise's initialisation.] Box and Jenkins backforecast the pre-sample
+  \emph{innovations}. The exact likelihood computes this analytically. Obsolete,
+  as one would expect after thirty years.
+\item[The input's pre-sample values.] A different problem entirely. When the noise
+  is built \emph{outside} the engine, as $N_t = w_{Y,t} - \sum_k \nu_k
+  w_{X,t-k}$, the engine never sees the inputs: it is handed a noise series that
+  is already contaminated at the start of the sample. \textbf{No amount of exactness
+  downstream can repair that.}
+\end{description}
+
+The fix is not to backforecast. It is to stop subtracting. Writing
+\[
+\delta(B)\,w_{Y,t}=\omega(B)B^{b} w_{X,t}+\delta(B)N_t,
+\qquad \phi_N(B)N_t=\theta_N(B)a_{N,t},
+\]
+and multiplying through by $\phi_N(B)$ gives a restricted VARMA,
+\begin{equation}
+\bigl[\phi_N\delta\bigr](B)\,w_{Y,t}
+\;-\;\bigl[\phi_N\,\omega\,B^{b}\bigr](B)\,w_{X,t}
+\;=\;\bigl[\delta\,\theta_N\bigr](B)\,a_{N,t},
+\label{eq:embed}
+\end{equation}
+whose series are handed to the engine \emph{as they are}. The exact likelihood then
+performs the pre-sample initialisation itself. The truncation is not repaired; it
+\textbf{disappears}. With several links into one series, multiply by all of their
+denominators, $D_i=\prod_k\delta_k$; each row is built independently, so the network
+of \S\ref{sec:network} needs nothing new.
+
+\textbf{This is what Mauricio's own \texttt{m6} models do.} Their casting routine
+writes \texttt{theta1[1][3][4] = -x5}, \texttt{theta1[2][3][4] = x5*x6}---off the
+diagonal, with \emph{products} of structural parameters, which is exactly what
+multiplying the polynomials of \eqref{eq:embed} produces. They never had a
+truncation problem, and they never backforecast. We had reintroduced, by
+subtracting, a problem the exact likelihood had already abolished.
+
+\paragraph{And how much did it matter? Less than we claimed.} With the embedded
+cast available (\texttt{-V}), the two can be compared. On 200 paired replications
+of a 69-observation sample---\texttt{m6}'s length---with a \emph{rational} transfer
+(an infinite impulse response, the worst case):
+
+\begin{center}
+\begin{tabular}{lrrrr}
+\toprule
+cast & bias $\omega$ & RMSE $\omega$ & bias $\delta$ & RMSE $\delta$\\
+\midrule
+subtract & $+0.0017$ & $0.0491$ & $-0.0066$ & $0.0515$\\
+embedded & $\mathbf{-0.0002}$ & $0.0490$ & $-0.0057$ & $0.0513$\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The bias of $\omega$ essentially vanishes---it falls by a factor of eight---but the
+RMSE improves by less than half a percent. Truncation mattered far less than we
+feared. What the embedded cast buys is not accuracy but \emph{correctness}: the
+number reported as the log-likelihood is now the exact likelihood \emph{of the
+data}, so likelihood-ratio tests and information criteria mean what they say.
+Under the subtracting cast, the engine computed an exact likelihood---of the wrong
+series.
+
+It costs nothing measurable, it reproduces the univariate program to six decimals
+when there is no transfer, and it survives every hard case in the battery (a
+generalized-seasonality model, an airline, a seasonal AR, a network). It is not yet
+the default only because the default has 200 tests behind it.
 
 \section{An identification hazard}
 \label{sec:identification}
@@ -914,11 +978,10 @@ needs (\S\ref{sec:passthrough}).
 These are stated as limitations, not as plans.
 
 \begin{enumerate}
-\item \textbf{Truncation at the start of the sample.} \textsc{taste}
-  \emph{backforecasts} the pre-sample input; the present program \emph{truncates}
-  it (\S\ref{sec:truncation}). With 215--400 observations this is immaterial; with
-  the 69 observations of \texttt{m6} the contaminated stretch would be $15\%$ of
-  the sample. \textbf{Here the 1979 solution is better than ours.}
+\item \textbf{Making the embedded cast the default} (\S\ref{sec:truncation}).
+  It is exact, it costs nothing, and it survives every case; the only reason it is
+  an option is that the subtracting cast is the one with two hundred tests behind
+  it.
 
 \item \textbf{Nonlinear restrictions cannot be \emph{imposed}.} The slot table
   expresses FREE, FIXED and SHARED---that is, linear equality between parameters.

@@ -1226,6 +1226,136 @@ static real vcov_at(real ***LP, real **sigma, int m, int i1, int i2, int l)
    -------------------------------------------------------------------------- */
 
 /* Previsiones de NIVEL, sin bandas, de todas las series. Devuelve 0 si va bien. */
+
+static void add_grad(real *g, int slot, real v);
+static real delta_se(real *g, real **cov, int npar);
+
+/* --------------------------------------------------------------------------
+   LA FUNCION DE RESPUESTA AL IMPULSO, cuantificada.
+
+   Los pesos nu_k YA son la respuesta al impulso: es lo que hace comodo a un
+   modelo de transferencia. Pero sueltos no son comparables con nada. Lo que se
+   necesita es (a) su error estandar y (b) la respuesta ACUMULADA, que es la que
+   converge a la ganancia y la que un economista lee.
+
+   nu_t = omega_{t-1-b} + SUM_j delta_j nu_{t-j}
+
+   El gradiente sale de la MISMA recursion:
+     d nu_t / d omega_i = [t-1-b == i] + SUM_j delta_j * d nu_{t-j} / d omega_i
+     d nu_t / d delta_i = nu_{t-i}     + SUM_j delta_j * d nu_{t-j} / d delta_i
+   y de ahi el error estandar por el metodo delta. La acumulada es la suma de
+   los gradientes.
+
+   NOTA sobre los VAR. En un VAR la respuesta al impulso NO esta identificada sin
+   una ordenacion (Cholesky), porque Sigma no es diagonal: hay que decidir quien
+   choca primero, y la respuesta CAMBIA con esa decision. Aqui la identificacion
+   ES el modelo: nu(B) se estima directamente y Q es diagonal. Pero eso no es
+   magia -- es que las restricciones (input exogeno, Sigma diagonal) estan
+   DECLARADAS, se CONTRASTAN (exogeneidad, adecuacion) y se pueden RELAJAR. Un
+   VAR con orden de Cholesky impone restricciones del mismo tipo, solo que
+   escondidas en el orden. Ver el aviso de casi-colinealidad: si se libera la
+   covarianza junto a una transferencia contemporanea, drtran vuelve a caer en el
+   MISMO problema, y lo dice.
+   -------------------------------------------------------------------------- */
+static void impulse_response_report(real *x, real **cov, int npar, FILE *out)
+{
+    real *xf = expand_params(x);
+    int   j, k, i, slot0 = 0, slot;
+    int   K;
+    real *nu, *cum, **gnu, *gcum, *gg;
+
+    for (j = 1; j <= n_link; j++) if (lnk[j].s >= 0) break;
+    if (j > n_link) return;
+
+    fprintf(out, "\n");
+    fprintf(out, "=============================================================\n");
+    fprintf(out, "  IMPULSE RESPONSE  nu(B) = omega(B)/delta(B) * B^b\n");
+    fprintf(out, "=============================================================\n");
+    fprintf(out, "  nu_k is the response of the output, k periods later, to a ONE-OFF\n");
+    fprintf(out, "  unit shock in the input. The CUMULATIVE column is the response to a\n");
+    fprintf(out, "  PERMANENT unit change; it converges to the gain.\n\n");
+    fprintf(out, "  In a VAR the impulse response is not identified without an ordering\n");
+    fprintf(out, "  (Cholesky), because Sigma is not diagonal. Here the identification IS\n");
+    fprintf(out, "  the model. That is not magic: the restrictions (exogenous input,\n");
+    fprintf(out, "  diagonal Sigma) are DECLARED, they are TESTED, and they can be\n");
+    fprintf(out, "  relaxed -- and if you relax them next to a contemporaneous transfer,\n");
+    fprintf(out, "  you land back in the VAR's problem, and the program says so.\n");
+
+    slot0 = 0;
+    for (j = 1; j <= n_link; j++) {
+        int b = lnk[j].b, r = lnk[j].r, sn = lnk[j].s;
+
+        if (sn < 0) continue;
+        slot = slot0 + 1;
+        slot0 += (sn + 1) + r;
+
+        K = b + sn + 12;                       /* suficiente para ver la cola */
+        if (K > 36) K = 36;
+
+        nu   = vector(0, K);
+        cum  = vector(0, K);
+        gnu  = matrix(0, K, 1, npar);
+        gcum = vector(1, npar);
+        gg   = vector(1, npar);
+
+        for (k = 0; k <= K; k++) {
+            real acc = 0.0;
+            int  lag = k - b;
+            if (lag >= 0 && lag <= sn) acc = xf[slot + lag];
+            for (i = 1; i <= r; i++)
+                if (k >= i) acc += xf[slot + sn + i] * nu[k - i];
+            nu[k] = acc;
+            cum[k] = (k == 0) ? nu[0] : cum[k - 1] + nu[k];
+        }
+
+        /* gradientes, por la misma recursion */
+        for (k = 0; k <= K; k++)
+            for (i = 1; i <= npar; i++) gnu[k][i] = 0.0;
+        for (i = 1; i <= npar; i++) gcum[i] = 0.0;
+
+        fprintf(out, "\n  ");
+        if (net_is_star()) fprintf(out, "Input %d", j);
+        else fprintf(out, "%s <- %s", Ts[lnk[j].out].name, Ts[lnk[j].inp].name);
+        fprintf(out, "   (b=%d, r=%d, s=%d)\n\n", b, r, sn);
+        fprintf(out, "    k      nu_k     std.err       t   |   cumulative   std.err\n");
+        fprintf(out, "  ---------------------------------------------------------------\n");
+
+        for (k = 0; k <= K; k++) {
+            real se, sec;
+            int  lag = k - b;
+
+            for (i = 1; i <= npar; i++) gg[i] = 0.0;
+
+            /* d nu_k / d omega_lag */
+            if (lag >= 0 && lag <= sn) add_grad(gg, slot + lag, 1.0);
+            /* d nu_k / d delta_i  y la parte recursiva */
+            for (i = 1; i <= r; i++) {
+                int p2;
+                if (k >= i) add_grad(gg, slot + sn + i, nu[k - i]);
+                for (p2 = 1; p2 <= npar; p2++)
+                    if (k >= i) gg[p2] += xf[slot + sn + i] * gnu[k - i][p2];
+            }
+            for (i = 1; i <= npar; i++) {
+                gnu[k][i] = gg[i];
+                gcum[i]  += gg[i];
+            }
+
+            se  = delta_se(gg, cov, npar);
+            sec = delta_se(gcum, cov, npar);
+
+            fprintf(out, "  %3d  %9.6f  %9.6f  %6.2f  |  %9.6f  %9.6f\n",
+                    k, nu[k], se, (se > 1e-15) ? nu[k] / se : 0.0, cum[k], sec);
+        }
+
+        free_vector(gg, 1, npar);
+        free_vector(gcum, 1, npar);
+        free_matrix(gnu, 0, K, 1, npar);
+        free_vector(cum, 0, K);
+        free_vector(nu, 0, K);
+    }
+    fprintf(out, "=============================================================\n");
+}
+
 static int forecast_levels(real *x, int L, real **LVL)
 {
     struct Tvarma vf;
@@ -1656,6 +1786,71 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
             fprintf(out, "  %3d  %10.4f  %8.4f  |  %10.4f  %10.4f  %10.4f\n",
                     l, we[i][n_stat + l], sqrt(vw), lvl, lo, hi);
         }
+    }
+
+    /* --- DESCOMPOSICION DE LA VARIANZA DEL ERROR DE PREVISION --------------
+       Cuanto del error de prever la salida i a l pasos viene de CADA fuente de
+       innovacion. Con Sigma DIAGONAL la respuesta es limpia y unica:
+
+           share_ij(l) = sigma_jj * SUM_{t<l} LP[i][j][t]^2  /  Var_i(l)
+
+       porque las innovaciones son ortogonales y no hay nada que ordenar.
+
+       Si Sigma NO es diagonal, la descomposicion NO ES UNICA: hay que decidir a
+       quien se le atribuye la parte comun, y eso exige una ORDENACION (Cholesky).
+       Es EXACTAMENTE el problema del VAR. drtran no lo resuelve por arte de
+       magia: lo evita mientras Sigma sea diagonal, y cuando no lo es, lo dice en
+       vez de fabricar una descomposicion que depende de un orden arbitrario.     */
+    {
+        int i2, diagQ = 1;
+        for (i = 1; i <= m && diagQ; i++)
+            for (j = 1; j <= m; j++)
+                if (i != j && fabs(sigma[i][j]) > 1e-14) { diagQ = 0; break; }
+
+        fprintf(out, "\n");
+        fprintf(out, "  FORECAST ERROR VARIANCE DECOMPOSITION\n");
+        fprintf(out, "  How much of the error of forecasting the output comes from EACH\n");
+        fprintf(out, "  source of innovation.\n");
+
+        if (!diagQ) {
+            fprintf(out, "\n  NOT REPORTED: Sigma is not diagonal. With correlated\n");
+            fprintf(out, "  innovations the decomposition is NOT UNIQUE -- someone has to be\n");
+            fprintf(out, "  given the common part, and that requires an ORDERING (Cholesky).\n");
+            fprintf(out, "  That is exactly the VAR's problem. It is not solved here; it is\n");
+            fprintf(out, "  avoided while Sigma stays diagonal, and declared when it does not.\n\n");
+        } else {
+            for (u = 1; u <= m; u++) {
+                int is_out = 0;
+                i = topo[u];
+                for (k = 1; k <= n_link; k++) if (lnk[k].out == i) is_out = 1;
+                if (!is_out) continue;
+
+                fprintf(out, "\n  %s  (%% of the forecast error variance of the LEVEL)\n\n",
+                        Ts[i].name ? Ts[i].name : "");
+                fprintf(out, "    l  ");
+                for (j = 1; j <= m; j++)
+                    fprintf(out, "%12.12s", (j == i) ? "own noise"
+                                          : (Ts[j].name ? Ts[j].name : "?"));
+                fprintf(out, "\n  ------");
+                for (j = 1; j <= m; j++) fprintf(out, "------------");
+                fprintf(out, "\n");
+
+                for (l = 1; l <= L; l++) {
+                    real tot = VCOV(i, i, l);
+                    if (tot <= 0.0) continue;
+                    fprintf(out, "  %3d  ", l);
+                    for (j = 1; j <= m; j++) {
+                        real c = 0.0;
+                        for (t = 0; t <= l - 1; t++)
+                            c += sigma[j][j] * LP[i][j][t] * LP[i][j][t];
+                        fprintf(out, "%11.1f%%", 100.0 * c / tot);
+                    }
+                    fprintf(out, "\n");
+                }
+            }
+            fprintf(out, "\n");
+        }
+        (void)i2;
     }
 
     /* --- AGREGADOS: combinaciones lineales, con varianza c'Vc --------------
@@ -2614,6 +2809,7 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
     fprintf(outputv, "Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1\n\n");
 
     transfer_characteristics(x, cov, npar, outputv);
+    impulse_response_report(x, cov, npar, outputv);
 
     /* Q es la covarianza NORMALIZADA (Q[1,1] = 1); la real es Sigma = sigma2*Q.
        La normalizacion NO es cosmetica: la verosimilitud concentrada es invariante

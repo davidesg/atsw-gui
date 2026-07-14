@@ -675,6 +675,65 @@ for f in "$TMPDIR/ch_syn.txt" "$TMPDIR/ch_synr.txt" "$TMPDIR/ch_trivial.txt"; do
 done
 pass "el retardo medio nunca cae por debajo del retardo puro b"
 
+
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
+echo "── 2i. RESPUESTA AL IMPULSO Y DESCOMPOSICIÓN DE LA VARIANZA ──"
+echo "   Los pesos nu_k YA son la respuesta al impulso -- ésa es la comodidad de un"
+echo "   modelo de transferencia. Pero sueltos no son comparables con nada: hacen"
+echo "   falta su error estándar y la respuesta ACUMULADA, que converge a la"
+echo "   ganancia. Y la descomposición de la varianza, que es lo que se compara"
+echo "   con un VAR."
+echo ""
+
+OUT="$TMPDIR/irf.txt"
+$DRTRAN "$SYN/SYNR_Y.pre" "$SYN/SYNR_X.pre" -b 1 -r 1 -s 0 -f 12 -o "$OUT" >/dev/null 2>&1
+
+irf()  { grep -E "^  +$2  " "$1" | head -1 | awk '{print $2}'; }
+icum() { grep -E "^  +$2  " "$1" | head -1 | awk '{print $6}'; }
+
+# VERDAD (b=1, omega=0.6, delta=0.6): nu_0=0, nu_1=0.6, nu_2=0.36, nu_3=0.216
+check "SYNR nu_0 = 0 (retardo puro b=1)"    0.0   "$(irf "$OUT" 0)" 1e-9
+check "SYNR nu_1 (verdad 0.600)"            0.600 "$(irf "$OUT" 1)" 0.03
+check "SYNR nu_2 (verdad 0.360)"            0.360 "$(irf "$OUT" 2)" 0.03
+check "SYNR nu_3 (verdad 0.216)"            0.216 "$(irf "$OUT" 3)" 0.03
+
+# la ACUMULADA converge a la GANANCIA: es la misma cantidad por otro camino
+G=$(gain "$OUT")
+C=$(awk '/k      nu_k/{f=1;next} f&&/^=+$/{exit} f&&/^ +[0-9]+ /{v=$6} END{print v}' "$OUT")
+python3 -c "import sys; sys.exit(0 if abs($C - $G) < 0.02 else 1)" \
+    && pass "la respuesta ACUMULADA converge a la ganancia ($C vs $G)" \
+    || fail "la acumulada no converge a la ganancia ($C vs $G)"
+
+# el error estandar de nu_0 con s=0,r=0 DEBE ser el de omega_0
+OUT2="$TMPDIR/irf0.txt"
+$DRTRAN "$SYN/SYN2_Y.pre" "$SYN/SYN2_X1.pre" -b 1 -r 0 -s 0 -o "$OUT2" >/dev/null 2>&1
+SW=$(grep -E "^omega1\[0\]" "$OUT2" | awk '{print $3}')
+SN=$(grep -E "^    1  " "$OUT2" | head -1 | awk '{print $3}')
+check "SE(nu_1) = SE(omega_0) cuando la transferencia es un solo peso" "$SW" "$SN" 1e-9
+
+# --- DESCOMPOSICIÓN DE LA VARIANZA ---
+OUT="$TMPDIR/fevd.txt"
+$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1 -f 12 -o "$OUT" >/dev/null 2>&1
+fevd() { grep -A"$((3 + $2))" "ES_CPI  (%" "$1" | tail -1 | awk '{print $3}' | tr -d '%'; }
+S1=$(fevd "$OUT" 1); S3=$(fevd "$OUT" 3)
+check "ES: a h=1 el crudo explica ~32% de la varianza del error" 31.8 "$S1" 1.0
+check "ES: a h=3 ya explica la MITAD"                            50.1 "$S3" 1.5
+python3 -c "import sys; sys.exit(0 if $S3 > $S1 else 1)" \
+    && pass "la aportación del crudo CRECE con el horizonte (hay que preverlo)" \
+    || fail "la aportación del crudo no crece con el horizonte"
+
+# --- LA HONESTIDAD: con Sigma NO diagonal, la descomposición NO es única ---
+CNS="$TMPDIR/qq.cns"; printf 'q[2,1] = free\n' > "$CNS"
+OUT="$TMPDIR/fevd_nd.txt"
+$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -b 1 -r 0 -s 0 -c "$CNS" -f 6 -o "$OUT" >/dev/null 2>&1
+grep -q "NOT UNIQUE" "$OUT" \
+    && pass "con Sigma no diagonal NO la calcula: haría falta una ORDENACIÓN (el problema del VAR)" \
+    || fail "fabrica una descomposición dependiente de un orden arbitrario"
+grep -q "exactly the VAR's problem" "$OUT" \
+    && pass "y lo dice: drtran no lo resuelve por magia, lo EVITA mientras puede" \
+    || fail "no explica por qué no la da"
+
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
 echo "── 3. PASS-THROUGH: con Y = X la verdad es omega_0 = 1 ──"

@@ -786,6 +786,87 @@ than a VAR, that is \textbf{not} what the data say: for Spain it improves the
 forecast by about $10\%$ of RMSE at every horizon, robustly. For Germany the old
 verdict stands, and now one can see why.
 
+
+\section{Impulse response and variance decomposition: is this better than a VAR?}
+\label{sec:irf}
+
+The weights $\nu_k$ \emph{are} the impulse response---that is the convenience of a
+transfer function. But on their own they are not comparable with anything. Two
+things make them so, and both are now reported.
+
+\paragraph{The quantified impulse response.} Each $\nu_k$ with its standard error,
+and the \emph{cumulative} response, which is the reply to a \emph{permanent} unit
+change and converges to the gain. Both standard errors come from the delta method,
+with the gradients obtained from the same recursion that generates the weights:
+\[
+\nu_t=\omega_{t-b}+\sum_j \delta_j\nu_{t-j}
+\;\Longrightarrow\;
+\frac{\partial \nu_t}{\partial \omega_i}=\mathbb{1}[t-b=i]+\sum_j\delta_j\frac{\partial \nu_{t-j}}{\partial\omega_i},
+\quad
+\frac{\partial \nu_t}{\partial \delta_i}=\nu_{t-i}+\sum_j\delta_j\frac{\partial \nu_{t-j}}{\partial\delta_i}.
+\]
+A self-test: when the transfer is a single weight, $\mathrm{SE}(\nu_b)$ must equal
+$\mathrm{SE}(\omega_0)$ to the last digit. It does.
+
+\paragraph{The forecast error variance decomposition.} With $\Sigma$ diagonal,
+\[
+\text{share}_{ij}(l) \;=\; \frac{\sigma_{jj}\sum_{t<l}\Psi^{\text{level}}_{ij}(t)^2}{V_i(l)},
+\]
+clean and unique, because the innovations are orthogonal and there is nothing to
+order. For Spanish CPI against WTI:
+
+\begin{center}
+\begin{tabular}{crr}
+\toprule
+$l$ & own noise & \textbf{WTI} \\
+\midrule
+ 1 & $68.2\%$ & $\mathbf{31.8\%}$ \\
+ 3 & $49.9\%$ & $\mathbf{50.1\%}$ \\
+12 & $44.7\%$ & $\mathbf{55.3\%}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+A third of the one-month error, and \emph{half} by three months, is the oil
+innovation. Note that this is the same fact as \S\ref{sec:passthrough} seen from
+the other side: the oil price contributes a great deal of \emph{variance}. What
+\S\ref{sec:recursive} added is that it nevertheless contributes enough
+\emph{signal} to be worth it---in Spain.
+
+\paragraph{Is this better than a VAR? Yes, but not for the obvious reason.}
+In a VAR the impulse response is \emph{not identified} without an ordering, because
+$\Sigma$ is not diagonal: someone has to be shocked first, and the answer changes
+with that decision. Here the identification \emph{is} the model---$\nu(B)$ is
+estimated directly and $Q$ is diagonal.
+
+It would be comfortable to conclude that the transfer model escapes the
+identification problem. \textbf{It does not.} What it does is put the restrictions
+where they can be seen:
+
+\begin{itemize}
+\item The restrictions---exogenous input, diagonal $\Sigma$---are \emph{declared},
+  not buried in an ordering.
+\item They are \emph{tested}: the cross-correlation at negative lags is an
+  exogeneity test, and the adequacy test asks whether $\nu(B)$ is wide enough.
+\item They can be \emph{relaxed}, one covariance at a time.
+\item And when they are relaxed next to a contemporaneous transfer, the program
+  lands back in \emph{exactly} the VAR's problem---$\omega_0$ and $\sigma_{12}$
+  explain the same thing at lag zero (\S\ref{sec:identification})---and it says so
+  instead of producing a number.
+\end{itemize}
+
+Consistently with that, the variance decomposition is \textbf{not reported} when
+$\Sigma$ is non-diagonal. With correlated innovations the decomposition is not
+unique: someone must be given the common part, and that requires a Cholesky
+ordering. That is the VAR's problem. It is not solved here. It is \emph{avoided}
+while $\Sigma$ stays diagonal, and \emph{declared} when it does not.
+
+So the superiority is real but modest, and it is of a particular kind: not fewer
+assumptions, but assumptions that are explicit, testable and refusable. To which
+must be added the one advantage that is not methodological at all but decided the
+pass-through exercise---each series may keep the univariate model it actually
+needs (\S\ref{sec:passthrough}).
+
 \section{What the dissertation taught, and what remains}
 \label{sec:todo}
 

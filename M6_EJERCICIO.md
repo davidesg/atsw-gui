@@ -169,6 +169,17 @@ PRODUCTO       x = y * z      (y, en general, polinomios factorizados en omega(B
 **Ésa es la carencia real, y es concreta y acotada.** No es un problema de diseño del
 cast ni del motor: es una limitación del lenguaje de restricciones.
 
+> **Actualización (jul-2026) — la carencia, MEDIDA.** Se montó la red completa del legacy
+> (EC→EU→EI→EP + EC→EP) en drtran con **numeradores libres** (sin los productos) y se
+> comparó con los valores del legacy como regla de medida. Resultado: el enlace **limpio**
+> EP←EI (sin productos) **clava** el legacy (ω=(0.750,−0.300) vs (0.78,−0.382)); los enlaces
+> con **numerador factorizado + parámetro compartido** (EP←EC, EI←EU, EU←EC) aciertan los
+> términos dominantes pero no clavan. Eso es *exactamente* lo que se pierde sin los
+> productos. La verosimilitud mejora (ℓ: −1709.5 diagonal → −1697.6 red), y las 3
+> covarianzas del legacy (EA·EI, EA·EC, EI·EU) se recuperan. Detalle y tablas en
+> **`docs/M6_TABLA4_BASELINE.md` §9**. El ejercicio ya no solo destapa la carencia: la
+> cuantifica.
+
 ## 7. Lo que este ejercicio ya ha dado (aunque no haya corrido todavía)
 
 Cuatro cosas, ninguna esperada:

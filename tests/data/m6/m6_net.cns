@@ -1,0 +1,8 @@
+# Paso 4: red de transferencias del m6-1 (Relloso 1997), con las 3 covarianzas
+# contemporaneas que libera el legacy (drv.c: qq[4][2], qq[6][2], qq[5][4]).
+# ORDEN de series en la linea de comandos (para las posiciones q[i,j]):
+#   1=EP  2=EI  3=EU  4=EC  5=EA  6=P
+#   EA*EI = q[5,2]   EA*EC = q[5,4]   EI*EU = q[3,2]
+q[5,2] = free
+q[5,4] = free
+q[3,2] = free

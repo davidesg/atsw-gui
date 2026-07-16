@@ -291,9 +291,67 @@ transferencia (moderados; ningún Q-cruce supera con holgura el crítico):
 Coherente con la red del legacy (EC→EU→EI→EP): EU–EI fuerte contemporáneo, EI→EP a lag 1.
 Los `sector→P` (EU→P k=4) se descartan por la exogeneidad de P.
 
-**Lo que queda:** pasos 3-4 (especificar la red de transferencias a partir de estos
-enlaces) — necesita los **productos** en la tabla de slots (`M6_EJERCICIO.md` §6). Opción:
-reducir `m6.cns` a las 3 covarianzas del legacy y añadir la dinámica fuera de la diagonal.
+**Lo que queda:** pasos 3-4 (§9).
+
+## 9. Pasos 3-4 — la red de transferencias, validada contra el legacy
+
+**La red del legacy m6-1** (decodificada de `drv-source/m6-1/drv.c`, función `shootx`,
+tensor `theta1[lag][salida][entrada]` — NO de `multshea.c`, que no está cableado). Es un
+**VMA(4)** (p=0). Diagonal: P=(1−.82B), EA=∇∇₄ factorizado, **EP = identidad (sin MA
+propia)**, EI=(1−.49B), EU=(1−.90B), EC=(1−.43B). DAG **EC→EU→EI→EP** + **EC→EP**, todas
+finitas (r=0):
+
+| transfer | b,s | numerador factorizado (legacy) | comparte |
+|---|---|---|---|
+| EP←EI | 1,1 | −x5(1−x6B) | **x6 = MA de EI** |
+| EP←EC | 1,2 | (1−x14B)(x12+x13B) | — |
+| EI←EU | 1,3 | −(1−B)(x8+x9B+x10B²) | — |
+| EU←EC | 2,1 | −x15(1−x16B) | **x16 = MA de EU** |
+
+Covarianzas: el legacy libera **solo 3** (`qq[4][2]`=EA·EI, `qq[6][2]`=EA·EC,
+`qq[5][4]`=EI·EU).
+
+**Estimación en drtran** (numeradores LIBRES; drtran no expresa los productos ni los
+compartidos), con la red y las covarianzas versionadas en `tests/data/m6/m6_net.dag` y
+`m6_net.cns` (orden EP EI EU EC EA P):
+`drtran M6_EP M6_EI M6_EU M6_EC M6_EA M6_P -n m6_net.dag -c m6_net.cns`. Convergió
+(55 par, **ℓ=−1697.6** vs −1709.5 del diagonal → los transfers ganan ~12). Convención
+**ω_drtran = −θ_legacy** (el signo − del cast empotrado).
+
+| transfer | drtran (red) | legacy (−θ) | veredicto |
+|---|---|---|---|
+| **EP←EI** | **(0.750, −0.300)** | **(0.78, −0.382)** | **✓ clavado** |
+| EP←EC | (0.36, 0.53, −0.16) | (0.56, 0.74, −1.28) | dominantes ✓, ω₂ amortiguado |
+| EI←EU | (0.15, 0.45, 0.29, −0.01) | (0.18, 0.24, −0.14, −0.28) | líder ✓, resto flojo |
+| EU←EC | (0.17, −0.03) | (0.34, −0.31) | el más débil (mitad) |
+
+Covarianzas recuperadas: EU·EI **+0.40**, EA·EC **−0.36**, EA·EI **−0.22** (legacy
+~+.40/−.41/−.31). Transfer adecuado (p=0.95), exogeneidad ok.
+
+**La carencia, ahora MEDIDA.** EP←EI (limpio, sin productos) **clava** el legacy —y su ω₁ se
+corrige al añadir contexto: bivariante +0.10 → +EC −0.20 → red completa −0.30 ≈ −0.38. Los
+enlaces con **numerador factorizado + parámetro compartido** (EP←EC, EI←EU, EU←EC) aciertan
+los términos dominantes pero **no clavan**: eso es exactamente lo que se pierde por estimar
+con numeradores libres en vez de los **productos** del legacy (`M6_EJERCICIO.md` §6). El
+ejercicio no solo confirma la carencia — la **cuantifica**.
+
+## 10. Sobre las iteraciones — la regla de medida del legacy
+
+El diagonal converge en ~334 iteraciones y el usuario preguntó por qué, si los `.pre`
+arrancan en el óptimo univariante. Investigado:
+- **drvarma** inicializa Q desde la **covarianza muestral de residuos** (`init_varma`,
+  Hannan-Rissanen); drtran arranca las covarianzas en **0**. Porté ese init: acercó el
+  arranque (F en el óptimo 0.24→0.29) pero **apenas cambió las iteraciones** (334→323) y
+  alteró el aterrizaje en crestas planas (rompió un test) → **revertido**.
+- **La prueba definitiva (regla de medida):** el **legacy m6-1 convergió en 258 iteraciones
+  arrancando *en* la solución** (valores hardcodeados), con la función objetivo **plana**
+  (F: 1.000000 → 0.999659, 0.03%). Arrancar en el óptimo **no** le ahorró iteraciones.
+
+**Conclusión:** las ~250-330 iteraciones son **propiedad del optimizador** (`qnewtopt`, el
+mismo en legacy y drtran) —parada por cambio de parámetros con direcciones casi planas—, **no
+de la distancia de arranque**. drtran (334 desde mal arranque) ≈ legacy (258 desde el óptimo).
+Reducirla de verdad exige tocar el motor (parada por valor de función, o Hessiano exacto vs
+BFGS acumulado; ver `drtran-note.tex` §sec:hessian) — algo que el legacy tampoco hacía.
 
 ---
 

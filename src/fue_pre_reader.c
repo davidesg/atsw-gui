@@ -129,7 +129,12 @@ static void CalcNonsOp( int sp, int d, int ds, int *ifds, int ord, real *op )
     }
     if ( ((sp == 12) && (ifds[6] == 1)) || ((sp == 4) && (ifds[2] == 1)) )
     {
-        pol4[0] = -1.0; pol4[1] = 1.0;
+        /* Nyquist (f=s/2): factor (1 + B), root at B=-1  =>  pol4 = -(1+B).
+           Al portar de fue.c se copio aqui el (1 - B) de la frecuencia CERO
+           (pol4[1] = +1.0), que sobre-diferencia en f=0 y NO diferencia en
+           Nyquist: rompia toda serie con raiz estacional en pi (EA/EP/EC de m6,
+           sigma ~8x, el MA se iba a la raiz unitaria). El legacy trae -1.0.     */
+        pol4[0] = -1.0; pol4[1] = -1.0;
         for ( i = 1; i <= pp2; i++ ) pol2[i] = 0.0; pol2[0] = -1.0; pol3[0] = -1.0;
         for ( i = 0; i <= pp; i++ ) for ( j = 0; j <= 1; j++ ) pol2[j+i] -= pol4[j] * pol3[i];
         pp += 1; for ( i = 1; i <= pp; i++ ) pol3[i] = pol2[i];

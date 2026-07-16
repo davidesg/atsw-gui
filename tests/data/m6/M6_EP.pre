@@ -1,6 +1,6 @@
 ************************************************
 *        Input file for program DRVUS          *
-*   m6 (Relloso 1997) reconstruido del legacy  *
+*   m6 (Relloso 1997, Tabla 4) -- baseline     *
 ************************************************
 
 ** Frequency of time series: either 1(A), 4(Q) or 12(M):
@@ -8,39 +8,24 @@
 ** Number of observations and starting date of time series:
  69  3 1976 EP
 ** Number of deterministic variables (including seasonal components):
-9
+4
 **
-step 2 1980
-step 3 1980
 step 2 1987
-step 3 1987
-step 3 1988
-step 4 1988
 cos 1
 sin 1
 alter
 **
-0 0 0 0 0 0 0 0 0 
+0 0 0 0 
 **
-0.000000  1
+179.200000  1
 **
-0.000000  1
+1.200000  1
 **
-0.000000  1
+36.200000  1
 **
-0.000000  1
+-3.400000  1
 **
-0.000000  1
-**
-0.000000  1
-**
-0.000000  1
-**
-0.000000  1
-**
-0.000000  1
-**
-0 0 0 0 0 0 0 0 0 
+0 0 0 0 
 **Number and orders of regular AR operators:
 0
 ** Number and orders of annual AR operators:
@@ -48,7 +33,7 @@ alter
 ** Number and orders of regular MA operators:
 1 1
 **
-0.3000 1
+0.6400 1
 ** Number and orders of anual MA operators:
 0
 ** Number and frequencies of regular AR(2) operators with fixed frequency:
@@ -60,7 +45,7 @@ alter
 ** Box-Cox lambda, regular differences and complete annual differences:
 1.00 2 0
 ** Individual factors of the annual difference (from freq 0.0): 
- 0 0 0 0 0 0 0
+ 0 0 0
 ** ACF/PACF bands (0 Automatic) and reescaling factor: 
  0.00 1.00
 ** Time series (stochastic and non-standard deterministic variables): 

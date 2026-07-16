@@ -196,6 +196,18 @@ importable, y que es la herramienta de identificación de la casa.
 **La Tabla 4 del documento sirve de CONTROL, no de fuente.** Lo que ART identifique debe
 parecerse a lo que allí está; si no se parece, hay que entender por qué antes de seguir.
 
+> **Actualización (jul-2026) — el plan se concretó: grabar la Tabla 4.** En vez de
+> re-identificar cada serie, se **graba la especificación publicada** (Tabla 4, la
+> representación más estocástica) como valores de arranque de los seis `.pre`, vía
+> `build_m6.py`, con **las intervenciones de la Tabla 4**. El detalle completo —la Tabla 4
+> transcrita, la codificación `.pre` del MEG ∇∇₄, y por serie— está en
+> **`docs/M6_TABLA4_BASELINE.md`**, que es la línea de contexto de este trabajo.
+>
+> **EA ya está verificado** (reproduce Tabla 4: θ=.43, λ₁=−.68, λ₂=−.72, σ=27.0, APROBADO).
+> Hallazgo clave: `∇∇₄` se codifica como **d=2 + ifadf[π/2,π]** (no d=1); ver el doc §3.
+> Pendientes: P, EP, EC, EI, EU + extender `build_m6.py` (MEG, ifadf de 3 valores para s=4,
+> intervenciones compuestas).
+
 Luego, el **paso 2** de la metodología, que es lo que drtran ya sabe hacer:
 
 ```sh

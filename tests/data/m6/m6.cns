@@ -1,0 +1,18 @@
+# m6 paso 2: modelo MS de dinámica DIAGONAL con covarianzas contemporáneas
+# SIN RESTRINGIR (Relloso 1997 §4). Orden: 1=P 2=EA 3=EP 4=EI 5=EU 6=EC.
+# Se liberan las 15 covarianzas q[i,j] (i>j); la diagonal y sigma2 quedan por defecto.
+q[2,1] = free
+q[3,1] = free
+q[3,2] = free
+q[4,1] = free
+q[4,2] = free
+q[4,3] = free
+q[5,1] = free
+q[5,2] = free
+q[5,3] = free
+q[5,4] = free
+q[6,1] = free
+q[6,2] = free
+q[6,3] = free
+q[6,4] = free
+q[6,5] = free

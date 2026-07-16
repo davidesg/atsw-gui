@@ -103,6 +103,29 @@ grep -q "mu\[2\].*fixed" "$OUT" && pass "mu_X respeta el flag del .pre (fija)" \
 
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
+echo "── 1a-bis. HOMOLOGACIÓN MEG ∇∇₄ — la raíz de Nyquist ──"
+echo "   EA (empleo agrario, m6): ∇∇₄ con testigos MEG en π/2 y en π (Nyquist)."
+echo "   CalcNonsOp portó mal la rama Nyquist (pol4[1]=+1 => el (1-B) de f=0 en"
+echo "   vez del (1+B) de π): sobre-diferenciaba en f=0, NO en Nyquist, y la MA se"
+echo "   iba a la raíz unitaria (σ_EA ~89 vs 27). Debe reproducir a fue/Tabla 4:"
+echo "   θ=.43, λ₂=-.72, λ₁=-.68, σ_EA=27.3."
+echo ""
+
+OUT="$TMPDIR/homolog_meg.txt"
+$DRTRAN "$SYN/m6/M6_EA.pre" "$SYN/m6/M6_P.pre" -0 -o "$OUT" > /dev/null 2>&1
+
+opt_ok "$OUT" "el optimizador no falla (∇∇₄ con ifadf en Nyquist)"
+check "EA θ regular (f=0)"          0.430628 "$(val "$OUT" 'theta_1\[B\^1\]')" 0.001
+check "EA λ₁ testigo π/2"          -0.683905 "$(val "$OUT" 'theta_1\[f=1\]')" 0.001
+check "P  θ regular"                0.820277 "$(val "$OUT" 'theta_2\[B\^1\]')" 0.001
+# σ²_EA: el síntoma directo del bug de Nyquist (se disparaba al no diferenciar en π)
+check "σ²_EA no inflada (Nyquist OK)" 747.1332 \
+      "$(grep 'sigma2 (concentrated)' "$OUT" | awk '{print $NF}')" 1.0
+check "logL conjunta ∇∇₄"          -578.7640 \
+      "$(grep 'Log-likelihood =' "$OUT" | awk '{print $3}')" 0.01
+
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
 echo "── 1b. HOMOLOGACIÓN, casos reales de SF_MEG ──"
 echo "   Los tres tipos de modelo del estudio de inflación, cada uno ejercitando"
 echo "   una parte distinta del motor. Referencias: los .out de fue."

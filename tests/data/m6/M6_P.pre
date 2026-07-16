@@ -1,6 +1,6 @@
 ************************************************
 *        Input file for program DRVUS          *
-*   m6 (Relloso 1997) reconstruido del legacy  *
+*   m6 (Relloso 1997, Tabla 4) -- baseline     *
 ************************************************
 
 ** Frequency of time series: either 1(A), 4(Q) or 12(M):
@@ -16,7 +16,7 @@
 ** Number and orders of regular MA operators:
 1 1
 **
-0.3000 1
+0.8200 1
 ** Number and orders of anual MA operators:
 0
 ** Number and frequencies of regular AR(2) operators with fixed frequency:
@@ -28,7 +28,7 @@
 ** Box-Cox lambda, regular differences and complete annual differences:
 1.00 2 0
 ** Individual factors of the annual difference (from freq 0.0): 
- 0 0 0 0 0 0 0
+ 0 0 0
 ** ACF/PACF bands (0 Automatic) and reescaling factor: 
  0.00 1.00
 ** Time series (stochastic and non-standard deterministic variables): 

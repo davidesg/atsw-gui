@@ -382,6 +382,66 @@ un pequeño DSL parámetros → estructura VARMA— no solo ω/δ de una entrada
 
 ---
 
+## M6 — El caso m6 corrido (pasos 1-4), y la escalera como PRODUCTO
+
+El "techo" de M5 —los sistemas escritos a mano de `drv-source` (m6-1)— ya no es techo:
+se corrió **m6 de punta a punta** con drtran, con la **Tabla 4 de Relloso (1997)** y el
+**legacy m6-1 como regla de medida**. Detalle: `docs/M6_TABLA4_BASELINE.md`.
+
+- [x] **Pasos 1-2 — univariantes y diagonal.** Los seis `.pre` grabados de la Tabla 4
+      (representaciones de la **diagonal del legacy**: solo EA estocástica; EP/EI/EC ∇²
+      determinista; P/EU ∇²), verificados uno a uno con fue. **6.º bug destapado: el
+      signo de Nyquist en `CalcNonsOp`** (`pol4[1]` +1→−1, un carácter mal portado de
+      `fue.c:4449`) rompía toda serie con raíz estacional en π (σ ~8×). Regresión añadida.
+- [x] **Paso 2 leído.** Las 3 correlaciones contemporáneas fuertes = las 3 covarianzas
+      que el legacy libera (EA·EI, EA·EC, EI·EU).
+- [x] **Pasos 3-4 — la red.** DAG **EC→EU→EI→EP + EC→EP** decodificado de `drv.c`
+      (`shootx`, NO `multshea.c`), montado con `-n`, validado contra el legacy: **EP←EI
+      CLAVA** (0.750,−0.300 vs 0.78,−0.382). La verosimilitud gana ~12 (ℓ: −1709.6→−1697.6).
+- [x] **La carencia de los PRODUCTOS, MEDIDA.** Los enlaces limpios (EP←EI) clavan; los
+      de numerador factorizado + parámetro compartido (EP←EC, EI←EU, EU←EC) aciertan lo
+      dominante pero no clavan. Es exactamente lo que se pierde sin los productos.
+- [x] **Iteraciones — regla de medida.** El legacy convergió en **258 iter arrancando
+      EN la solución** (F plano 1.000000→0.999659): las ~250-330 iter son propiedad del
+      optimizador `qnewtopt`, no de la distancia de arranque. (Se probó portar el init de
+      Q desde la cov. muestral de residuos como en drvarma `init_varma`: apenas cambió
+      las iter y alteró crestas planas → revertido.)
+
+### El producto: la escalera de la escuela, automatizada
+
+m6 no es m6: es la **escalera metodológica de Treadway** (univariantes → MS diagonal con
+covarianzas libres → leer CCF → añadir dinámica → validar). Convertirla en producto =
+automatizar lo que hoy es manual. Candidatos, por palanca:
+
+- [ ] **(1) Identificación de red MULTIVARIANTE — recomendado empezar aquí.** El paso 3,
+      automatizado: extender el preblanqueo **bivariante** (M2, `-p`) a escanear **todas**
+      las CCF residuales del diagonal y **proponer el DAG** (enlaces + `b/r/s`). Es "el
+      `-p` del sistema entero". El hueco más claro y el que más trabajo manual llevó;
+      drtran ya tiene la pieza bivariante que extender.
+- [ ] **(2) PRODUCTOS en la tabla de slots.** Cerrar la carencia MEDIDA: que `-c` exprese
+      `x = y*z` (y polinomios factorizados en ω(B)), para reproducir los numeradores
+      factorizados y compartidos del legacy. Complemento natural de (1). *(Ver M5 y la
+      carencia en `M6_EJERCICIO.md` §6.)*
+- [ ] **(3) La escalera como driver guiado.** Un modo que orqueste pasos 2-4: corre el
+      diagonal, emite el informe de CCF + red sugerida, deja confirmar/estimar. Como el
+      guiado de ART, pero para el sistema.
+- [ ] **(4) Empaquetar m6.** El caso como ejemplo tutorial + **test de regresión del
+      sistema completo** que se distribuye con drtran. Valida y enseña la escalera.
+
+### ⚠ Concern abierto — signo/normalización del cast empotrado
+
+drtran debe estar en la tradición de **Box–Jenkins, donde TODOS los operadores están
+normalizados** (líder = 1, convención de signo consistente). En la validación de m6 hubo
+un flag: al comparar el transfer con el legacy hizo falta cuidado de signo —drtran reporta
+ω ≈ +x5 (el **parámetro** del legacy, bien), pero el VMA off-diagonal interno lleva −x5
+(el signo del empotrado)—. Conviene zanjarlo:
+
+- [ ] **Auditar la convención de signo/normalización de punta a punta.** Que TODO operador
+      de cara al usuario (ω, δ, θ, φ, Σ) esté en la forma **normalizada de Box–Jenkins**, y
+      que el signo − del empotrado **nunca** se filtre a una cantidad reportada. Fijar y
+      **documentar explícitamente** la convención del numerador de transferencia (BJR usa
+      `ω(B) = ω₀ − ω₁B − … − ω_sB^s`) y comprobar que la que imprime drtran coincide.
+
 ## Decisiones abiertas
 
 - [ ] **Lenguaje**: terminar el C (está a un paso de homologar) vs. puerto a Python

@@ -86,6 +86,10 @@ static char rec_csv[600] = "";
    equivocada.  -S vuelve al cast por resta.                                     */
 int embed_varma = 1;
 
+/* -i : identificacion de RED. Tras estimar el modelo diagonal, lee las ccf
+   residuales y propone la red de transferencias + covarianzas (identify_network). */
+int net_ident = 0;
+
 /* ¿La red es la ESTRELLA por defecto (todo entra a la serie 1)? Solo entonces
    tiene sentido hablar de "la entrada j" y "la salida Y".                    */
 static int net_is_star(void)
@@ -2294,6 +2298,11 @@ static void usage(const char *prog)
 "  -p       PREWHITEN ONLY: filter the input with its own ARMA, apply the same\n"
 "           filter to the output, plot the CCF and suggest (b, r, s).\n"
 "           Does NOT estimate and does NOT iterate.\n"
+"  -i       IDENTIFY THE NETWORK from the diagonal model. After estimating the\n"
+"           diagonal (-0), read the residual CCFs and propose the transfer DAG\n"
+"           (directed links + b/r/s) and the contemporaneous covariances. It is\n"
+"           a GUIDE: prune by exogeneity, acyclicity and lag plausibility. This\n"
+"           is the multivariate counterpart of -p (Munoz Polo 2001, paso 3).\n"
 "\n"
 "TRANSFER FUNCTION  (one per input)\n"
 "  -b N     pure delay B^b                    (default: identified)\n"
@@ -2752,6 +2761,169 @@ real *expand_params(real *xfree)
 }
 
 /* -------------------------------------------------------------------------- */
+/* identify_network — el "-p del sistema entero".  Lee las CCF de los residuos  */
+/* del modelo DIAGONAL (cada serie preblanqueada por su PROPIO modelo) y         */
+/* PROPONE la red de transferencias + las covarianzas contemporaneas, tal como   */
+/* manda la escuela (Munoz Polo 2001 §2.6: leer las ccf residuales del modelo    */
+/* diagonal para descubrir las relaciones dinamicas del sistema).                */
+/*                                                                              */
+/* Convencion:  ccf_ij(k) = corr(a_i(t), a_j(t+k)),  con i<j.                    */
+/*   |r| > 2/sqrt(n) es significativo.                                          */
+/*     k>0  -> a_i antecede a a_j -> enlace  i -> j  (a_j RECIBE de a_i)         */
+/*     k<0  -> a_j antecede a a_i -> enlace  j -> i                             */
+/*     k=0  -> contemporaneo      -> liberar la covarianza  q[i,j]              */
+/*     ambos lados significativos -> FEEDBACK: no cabe en un DAG de una via;    */
+/*                                    se avisa y se toma la direccion dominante. */
+/* Cada enlace dinamico propone (b, s): b = primer retardo significativo, s =    */
+/* extension del bloque contiguo (omegas libres, r=0), igual que la M2 bivariante.*/
+/* -------------------------------------------------------------------------- */
+static int net_bs_from_side(real *c, int nlags, real thr, int *b, int *s,
+                            real *peak)
+{
+    /* c[k+1] = ccf en el retardo k = 1..nlags de un lado.  Devuelve 1 si hay
+       un bloque significativo, y fija b (primer k signif.) y s (fin - b).      */
+    int k, b_hat = -1, last = -1;
+    real pk = 0.0;
+    for (k = 1; k <= nlags; k++) {
+        if (fabs(c[k + 1]) > thr) {
+            if (b_hat < 0) b_hat = k;
+            last = k;
+        } else if (b_hat >= 0 && k > last + 1) {
+            break;   /* el bloque es el CONTIGUO desde b; un pico aislado lejano es ruido */
+        }
+        if (fabs(c[k + 1]) > fabs(pk)) pk = c[k + 1];
+    }
+    if (b_hat < 0) return 0;
+    /* recortar last al bloque contiguo desde b_hat */
+    last = b_hat;
+    while (last + 1 <= nlags && fabs(c[last + 2]) > thr) last++;
+    *b = b_hat; *s = last - b_hat; *peak = pk;
+    return 1;
+}
+
+static void identify_network(real **a, int n, int m, FILE *out)
+{
+    int   i, j, t, k, nlags;
+    real  thr = 2.0 / sqrt((real) n);
+    int   lo[MAX_SER * MAX_SER + 1], li[MAX_SER * MAX_SER + 1];   /* out, in */
+    int   lb[MAX_SER * MAX_SER + 1], lsv[MAX_SER * MAX_SER + 1];  /* b, s    */
+    real  lpk[MAX_SER * MAX_SER + 1];
+    int   nl = 0;
+    int   qi[MAX_SER * MAX_SER + 1], qj[MAX_SER * MAX_SER + 1];   /* covarianzas */
+    real  qr[MAX_SER * MAX_SER + 1];
+    int   nq = 0, nfb = 0;
+    real *ai, *aj, *cpos, *cneg;
+
+    /* Ventana de busqueda: transferencias con retardo > ~2 ciclos estacionales
+       son inverosimiles; ademas, cuantos mas retardos, mas falsos positivos por
+       contraste multiple.  Se acota a 2*s (o 8 si no hay estacionalidad).       */
+    nlags = n / 4;  if (nlags > 12) nlags = 12;  if (nlags < 6) nlags = 6;
+    { int fq = Ts[1].freq; int cap = (fq > 1) ? 2 * fq : 8;
+      if (nlags > cap) nlags = cap; }
+
+    fprintf(out, "\n=============================================================\n");
+    fprintf(out, "  NETWORK IDENTIFICATION  (residual CCF of the diagonal model)\n");
+    fprintf(out, "=============================================================\n");
+    fprintf(out, "  Munoz Polo (2001) §2.6: las relaciones dinamicas del sistema se\n");
+    fprintf(out, "  leen en las ccf de los residuos del modelo DIAGONAL.  Esto es una\n");
+    fprintf(out, "  GUIA de candidatos, no la red final: podar por exogeneidad (nada\n");
+    fprintf(out, "  entra en una serie exogena), aciclicidad (el DAG no admite ciclos)\n");
+    fprintf(out, "  y verosimilitud del retardo.  Busqueda hasta k=%d.\n\n", nlags);
+    fprintf(out, "  residuals a_i.  ccf(k)=corr(a_i(t),a_j(t+k)); |r|>%.3f is\n", thr);
+    fprintf(out, "  significant.  k=0 -> contemporaneous (free q[i,j]);\n");
+    fprintf(out, "  k>0 -> i->j;  k<0 -> j->i;  both sides -> feedback.\n\n");
+
+    ai = vector(1, n);  aj = vector(1, n);
+    cpos = vector(1, nlags + 1);  cneg = vector(1, nlags + 1);
+
+    for (i = 1; i < m; i++) {
+        for (j = i + 1; j <= m; j++) {
+            real mi, mj, si, sj, r0, pkp = 0.0, pkn = 0.0;
+            int  bp, sp, bn, sn, haspos, hasneg;
+            for (t = 1; t <= n; t++) { ai[t] = a[t][i]; aj[t] = a[t][j]; }
+            mi = Mean(ai, n);  si = Stdev(ai, n);
+            mj = Mean(aj, n);  sj = Stdev(aj, n);
+            if (si < 1e-12 || sj < 1e-12) continue;
+
+            /* cpos[k+1]=corr(a_i(t),a_j(t+k))  (k>=0, lado i->j)               */
+            /* cneg[k+1]=corr(a_j(t),a_i(t+k)) = ccf_ij(-k)  (lado j->i)         */
+            Ccf(ai, aj, n, nlags, cpos, mi, mj, si, sj);
+            Ccf(aj, ai, n, nlags, cneg, mj, mi, sj, si);
+            r0 = cpos[1];                         /* k = 0 */
+
+            if (fabs(r0) > thr) { qi[++nq] = i; qj[nq] = j; qr[nq] = r0; }
+
+            haspos = net_bs_from_side(cpos, nlags, thr, &bp, &sp, &pkp);
+            hasneg = net_bs_from_side(cneg, nlags, thr, &bn, &sn, &pkn);
+
+            if (haspos && hasneg) {           /* FEEDBACK: se toma el mas fuerte */
+                nfb++;
+                fprintf(out, "  [feedback]  %s <-> %s : i->j k=%d(%.2f), j->i k=%d(%.2f)"
+                             "  -> se toma el dominante\n",
+                        Ts[i].name ? Ts[i].name : "?", Ts[j].name ? Ts[j].name : "?",
+                        bp, pkp, bn, pkn);
+                if (fabs(pkp) >= fabs(pkn)) { hasneg = 0; } else { haspos = 0; }
+            }
+            if (haspos) { lo[++nl] = j; li[nl] = i; lb[nl] = bp; lsv[nl] = sp; lpk[nl] = pkp; }
+            if (hasneg) { lo[++nl] = i; li[nl] = j; lb[nl] = bn; lsv[nl] = sn; lpk[nl] = pkn; }
+        }
+    }
+
+    /* --- Covarianzas contemporaneas --- */
+    fprintf(out, "  CONTEMPORANEOUS  (k=0; free the innovation covariance):\n");
+    if (nq == 0) fprintf(out, "    (none above the band)\n");
+    for (k = 1; k <= nq; k++)
+        fprintf(out, "    %-4s - %-4s   r(0) = %+.3f\n",
+                Ts[qi[k]].name ? Ts[qi[k]].name : "?",
+                Ts[qj[k]].name ? Ts[qj[k]].name : "?", qr[k]);
+
+    /* Ordenar los enlaces por |peak| descendente (los reales suelen ser los mas
+       fuertes; los picos lejanos espurios caen al fondo). Insercion sobre los
+       arrays paralelos.                                                         */
+    for (i = 2; i <= nl; i++) {
+        int oo = lo[i], ii = li[i], bb = lb[i], ss = lsv[i]; real pp = lpk[i];
+        int q = i - 1;
+        while (q >= 1 && fabs(lpk[q]) < fabs(pp)) {
+            lo[q+1]=lo[q]; li[q+1]=li[q]; lb[q+1]=lb[q]; lsv[q+1]=lsv[q]; lpk[q+1]=lpk[q];
+            q--;
+        }
+        lo[q+1]=oo; li[q+1]=ii; lb[q+1]=bb; lsv[q+1]=ss; lpk[q+1]=pp;
+    }
+
+    /* --- Enlaces dinamicos --- */
+    fprintf(out, "\n  DIRECTED LINKS  (candidate transfers, strongest first):\n");
+    if (nl == 0) fprintf(out, "    (none above the band)\n");
+    for (k = 1; k <= nl; k++)
+        fprintf(out, "    %-4s -> %-4s   peak %+.3f   proposal  b=%d r=0 s=%d\n",
+                Ts[li[k]].name ? Ts[li[k]].name : "?",
+                Ts[lo[k]].name ? Ts[lo[k]].name : "?", lpk[k], lb[k], lsv[k]);
+
+    /* --- Bloques listos para copiar --- */
+    if (nl > 0) {
+        fprintf(out, "\n  SUGGESTED NETWORK  (paste into a -n file):\n");
+        for (k = 1; k <= nl; k++)
+            fprintf(out, "    %s <- %s   %d 0 %d\n",
+                    Ts[lo[k]].name ? Ts[lo[k]].name : "?",
+                    Ts[li[k]].name ? Ts[li[k]].name : "?", lb[k], lsv[k]);
+    }
+    if (nq > 0) {
+        fprintf(out, "\n  SUGGESTED COVARIANCES  (paste into a -c file; positions by\n");
+        fprintf(out, "  command-line order):\n");
+        for (k = 1; k <= nq; k++)
+            fprintf(out, "    q[%s,%s] = free\n",
+                    Ts[qi[k]].name ? Ts[qi[k]].name : "?",
+                    Ts[qj[k]].name ? Ts[qj[k]].name : "?");
+    }
+    if (nfb > 0)
+        fprintf(out, "\n  NOTE: %d pair(s) show feedback (both directions). A one-way\n"
+                     "  transfer DAG took the dominant side; inspect them by hand.\n", nfb);
+    fprintf(out, "=============================================================\n");
+
+    free_vector(cneg, 1, nlags + 1);  free_vector(cpos, 1, nlags + 1);
+    free_vector(aj, 1, n);            free_vector(ai, 1, n);
+}
+
+/* -------------------------------------------------------------------------- */
 /* estimate_and_report: estima por ML exacta e informa                         */
 /* -------------------------------------------------------------------------- */
 static void estimate_and_report(real *x, int npar, int fc_horizon,
@@ -2996,6 +3168,11 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
             fprintf(outputv, "\n--- Multivariate diagnostics (Hosking + JB) ---\n");
             multivariate_diagnostics(a_est, n_stat, n_ser, outputv);
 
+            /* -i : identificar la RED a partir de las ccf residuales del diagonal.
+               Tiene sentido sobre el modelo DIAGONAL (sin transferencias todavia). */
+            if (net_ident && n_ser >= 2)
+                identify_network(a_est, n_stat, n_ser, outputv);
+
             for (j = 1; j <= n_link; j++) link_p_transfer[j] = -1.0;
             for (j = 1; j <= n_link; j++)
                 if (lnk[j].s >= 0) {
@@ -3103,7 +3280,7 @@ int main(int argc, char *argv[])
     macheps = cmacheps();
     outputv = stdout;
 
-    while ((opt = getopt(argc, argv, "r:s:b:f:m:c:n:a:R:C:p0XNDEMVSvho:")) != -1) {
+    while ((opt = getopt(argc, argv, "r:s:b:f:m:c:n:a:R:C:p0iXNDEMVSvho:")) != -1) {
         switch (opt) {
         case 'r': opt_r = optarg; auto_id = 0; break;
         case 's': opt_s = optarg; auto_id = 0; break;
@@ -3116,6 +3293,7 @@ int main(int argc, char *argv[])
         case 'f': fc_horizon = atoi(optarg); break;
         case 'm': model_name = optarg;       break;
         case 'p': prewhiten_only = 1;        break;
+        case 'i': net_ident = 1;             break;
         case 'c': cons_file = optarg;        break;
         case 'n': net_file  = optarg;        break;
         case 'a': aggr_file = optarg;        break;

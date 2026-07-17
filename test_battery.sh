@@ -1790,6 +1790,33 @@ grep -q "RECOMMENDED" "$OUT" && pass "la identificación automática corre" \
 
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
+echo "── 6. IDENTIFICACIÓN DE RED (-i) ──"
+echo "   El '-p del sistema entero': tras el diagonal, lee las ccf residuales y"
+echo "   propone la red + covarianzas. En m6 debe recuperar las 3 covarianzas"
+echo "   contemporáneas del legacy (EA·EI, EA·EC, EI·EU) y el enlace limpio EI→EP."
+echo ""
+
+NID="$TMPDIR/netid.txt"
+$DRTRAN "$SYN/m6/M6_P.pre" "$SYN/m6/M6_EA.pre" "$SYN/m6/M6_EP.pre" \
+        "$SYN/m6/M6_EI.pre" "$SYN/m6/M6_EU.pre" "$SYN/m6/M6_EC.pre" \
+        -0 -c "$SYN/m6/m6.cns" -i -o "$NID" > /dev/null 2>&1
+
+grep -q "NETWORK IDENTIFICATION" "$NID" \
+    && pass "la identificación de red corre (-i)" || fail "-i no produce salida"
+# Las 3 covarianzas contemporáneas del legacy (en la sección CONTEMPORANEOUS)
+awk '/CONTEMPORANEOUS/{f=1} /DIRECTED LINKS/{f=0} f' "$NID" | grep -q "EA.*-.*EI" \
+    && pass "identifica la covarianza EA·EI" || fail "no ve EA·EI"
+awk '/CONTEMPORANEOUS/{f=1} /DIRECTED LINKS/{f=0} f' "$NID" | grep -q "EA.*-.*EC" \
+    && pass "identifica la covarianza EA·EC" || fail "no ve EA·EC"
+awk '/CONTEMPORANEOUS/{f=1} /DIRECTED LINKS/{f=0} f' "$NID" | grep -q "EI.*-.*EU" \
+    && pass "identifica la covarianza EI·EU" || fail "no ve EI·EU"
+# El enlace limpio EI -> EP con retardo 1 (el que clava contra el legacy)
+grep -qE "EI +-> +EP .*b=1 " "$NID" \
+    && pass "propone el enlace EI→EP con b=1 (el limpio del legacy)" \
+    || fail "no propone EI→EP b=1"
+
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
 echo "============================================"
 echo -e "  RESULTADO: ${GREEN}$PASS PASS${NC}, ${RED}$FAIL FAIL${NC}"
 echo "============================================"

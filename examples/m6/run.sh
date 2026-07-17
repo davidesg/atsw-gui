@@ -51,6 +51,11 @@ echo "Tras el diagonal, drtran lee las CCF de los residuos y PROPONE la red:"
 $DT $M6 -0 -c $DAT/m6.cns -i -o "$OUT/netid.out" >/dev/null 2>&1
 awk '/NETWORK IDENTIFICATION/{f=1} /WHAT TO REFORMULATE/{f=0} f' "$OUT/netid.out" \
     | grep -vE "^ *$" | sed 's/^/  /'
+echo
+echo "El DRIVER guiado (-g NAME) hace lo mismo pero ESCRIBE NAME.dag y NAME.cns"
+echo "(listos para -n/-c) y emite el plan con el siguiente comando:"
+$DT $M6 -g "$OUT/m6cand" -c $DAT/m6.cns -o "$OUT/guide.out" >/dev/null 2>&1
+awk '/GUIDED MODE/{f=1} /^====/&&f&&n++{exit} f' "$OUT/guide.out" | sed 's/^/  /'
 
 # --- Paso 4: la red de transferencias ----------------------------------------
 hd "Paso 4  RED de transferencias (drtran -n)  EC->EU->EI->EP + EC->EP"

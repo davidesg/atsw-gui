@@ -49,6 +49,17 @@ residuos** y propone la red — covarianzas contemporáneas (k=0), enlaces dirig
 **EI→EP con b=1**. Es una **guía** de candidatos: hay que podar por exogeneidad,
 aciclicidad y verosimilitud del retardo (Muñoz Polo 2001, §2.6).
 
+El **driver guiado** `-g NAME` hace lo mismo pero además **escribe** `NAME.dag` y
+`NAME.cns` (listos para `-n`/`-c`, con las covarianzas ya en índices numéricos
+`q[i,j]`) y emite el **plan** con el comando exacto para estimar. Tú revisas y
+podas el borrador, y estimas:
+
+```bash
+drtran M6_EP.pre … M6_P.pre -g m6cand -c m6.cns   # escribe m6cand.dag / .cns + el plan
+#  ... revisa y poda m6cand.dag ...
+drtran M6_EP.pre … M6_P.pre -n m6cand.dag -c m6cand.cns
+```
+
 ### Paso 4 — la RED de transferencias (`drtran -n`)
 
 La red del legacy m6-1: **EC→EU→EI→EP** con el atajo **EC→EP** (en

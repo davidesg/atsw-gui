@@ -447,9 +447,14 @@ automatizar lo que hoy es manual. Candidatos, por palanca:
       ℓ=−1731.4, 24 par libres, Δℓ=2.5 sobre 3 g.l. ⇒ **LR no rechazada** (χ²(3)₀.₉₅=7.81,
       p≈0.17). EP←EC queda libre por diseño (x12,x13,x14 locales, sin g.l. que ganar).
       Batería 276 PASS. Detalle: `M6_TABLA4_BASELINE.md` §11.
-- [ ] **(3) La escalera como driver guiado.** Un modo que orqueste pasos 2-4: corre el
-      diagonal, emite el informe de CCF + red sugerida, deja confirmar/estimar. Como el
-      guiado de ART, pero para el sistema.
+- [x] **(3) La escalera como driver guiado — HECHO (`-g NAME`, jul-2026).** Como `-i`, pero
+      además **escribe** `NAME.dag` y `NAME.cns` listos para `-n`/`-c` (las covarianzas con
+      índices numéricos del triángulo inferior `q[i,j]`, i>j — no los nombres que `-c` no lee)
+      y emite el **plan** de la escalera con el comando exacto para estimar. Deja al usuario
+      confirmar/podar y estimar (la red identificada es una guía, no la final — la doctrina de
+      la escuela). En m6 identifica las 3 covarianzas del legacy (q[3,2], q[5,2], q[5,4]) y el
+      **round-trip** (red podada + el `.cns` escrito) reproduce la ℓ canónica −1697.6. Batería
+      sección 9 (4 checks). Documentado en la ayuda y `examples/m6/`.
 - [x] **(4) Empaquetar m6 — HECHO (jul-2026).** `examples/m6/` con `run.sh` (recorre la
       escalera de punta a punta: univariantes → diagonal → `-i` → red libre/productos/completa,
       imprimiendo la progresión de ℓ) y `README.md` (tutorial). **Regresión del sistema

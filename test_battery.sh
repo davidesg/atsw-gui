@@ -1963,6 +1963,31 @@ python3 -c "import sys; sys.exit(0 if ($LN8) > ($LD8) else 1)" \
 
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
+echo "── 9. DRIVER GUIADO (-g): escribe la red y emite el plan ──"
+echo "   Como -i, pero ESCRIBE NAME.dag / NAME.cns listos para -n/-c (covarianzas"
+echo "   con indices numericos del triangulo inferior) y emite el plan. Deja al"
+echo "   usuario confirmar/podar y estimar (la red identificada es una guia)."
+echo ""
+GN9="$TMPDIR/m6guide"; GO9="$TMPDIR/guide.out"
+$DRTRAN $M6_7 -g "$GN9" -c "$SYN/m6/m6.cns" -o "$GO9" >/dev/null 2>&1
+{ [ -f "$GN9.dag" ] && [ -f "$GN9.cns" ]; } \
+    && pass "-g escribe los dos artefactos (NAME.dag y NAME.cns)" \
+    || fail "-g no escribe los ficheros"
+grep -q "GUIDED MODE" "$GO9" \
+    && pass "-g emite el plan de la escalera (siguiente comando)" \
+    || fail "-g no emite el plan"
+# el cns usa INDICES NUMERICOS del triangulo inferior (i>j): usable directo con -c
+grep -qE "^q\[3,2\] = free" "$GN9.cns" \
+    && pass "-g identifica la covarianza EI-EU con el indice correcto q[3,2] (no q[2,3])" \
+    || fail "-g escribe un indice de covarianza que -c no puede leer"
+# ROUND-TRIP: la red podada del legacy + el cns ESCRITO por -g reproduce la l canonica
+printf 'EP <- EI 1 0 1\nEP <- EC 1 0 2\nEI <- EU 1 0 3\nEU <- EC 2 0 1\n' > "$TMPDIR/pruned9.dag"
+$DRTRAN $M6_7 -n "$TMPDIR/pruned9.dag" -c "$GN9.cns" -o "$TMPDIR/rt9.out" >/dev/null 2>&1
+LRT9=$(grep -E "Log-likelihood" "$TMPDIR/rt9.out" | grep -oE "\-[0-9]+\.[0-9]+")
+check "round-trip: red podada + el cns de -g reproduce la l canonica" -1697.61 "$LRT9" 0.5
+
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
 echo "============================================"
 echo -e "  RESULTADO: ${GREEN}$PASS PASS${NC}, ${RED}$FAIL FAIL${NC}"
 echo "============================================"

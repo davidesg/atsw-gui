@@ -90,6 +90,12 @@ int embed_varma = 1;
    residuales y propone la red de transferencias + covarianzas (identify_network). */
 int net_ident = 0;
 
+/* -g NAME : modo GUIADO (driver de la escalera). Como -i, pero ademas ESCRIBE
+   los artefactos NAME.dag / NAME.cns listos para -n/-c y emite el plan con el
+   siguiente comando. Deja al usuario confirmar/podar y estimar (la doctrina de
+   la escuela: la red identificada es una guia, no la final). */
+char *guide_name = NULL;
+
 /* ¿La red es la ESTRELLA por defecto (todo entra a la serie 1)? Solo entonces
    tiene sentido hablar de "la entrada j" y "la salida Y".                    */
 static int net_is_star(void)
@@ -2315,6 +2321,10 @@ static void usage(const char *prog)
 "           (directed links + b/r/s) and the contemporaneous covariances. It is\n"
 "           a GUIDE: prune by exogeneity, acyclicity and lag plausibility. This\n"
 "           is the multivariate counterpart of -p (Munoz Polo 2001, paso 3).\n"
+"  -g NAME  GUIDED driver of the ladder. Like -i, but also WRITES NAME.dag and\n"
+"           NAME.cns (ready for -n/-c, covariances with numeric q[i,j]) and\n"
+"           prints the plan with the next command. Review/prune the draft, then\n"
+"           estimate:  drtran <.pre ...> -n NAME.dag -c NAME.cns\n"
 "\n"
 "TRANSFER FUNCTION  (one per input)\n"
 "           nu(B) = omega(B)/delta(B) * B^b, in the Box-Jenkins convention:\n"
@@ -3068,6 +3078,58 @@ static void identify_network(real **a, int n, int m, FILE *out)
                      "  transfer DAG took the dominant side; inspect them by hand.\n", nfb);
     fprintf(out, "=============================================================\n");
 
+    /* --- MODO GUIADO (-g): escribir los artefactos y emitir el plan --- */
+    if (guide_name != NULL) {
+        char fdag[600], fcns[600];
+        FILE *fd, *fc;
+        snprintf(fdag, sizeof fdag, "%s.dag", guide_name);
+        snprintf(fcns, sizeof fcns, "%s.cns", guide_name);
+
+        fd = fopen(fdag, "w");
+        if (fd) {
+            fprintf(fd, "# Red PROPUESTA por drtran -g (guia, no la red final).\n");
+            fprintf(fd, "# Revisa y PODA: exogeneidad, aciclicidad, retardo verosimil.\n");
+            fprintf(fd, "# Formato:  SALIDA <- ENTRADA  b r s      (# pico de la ccf)\n");
+            for (k = 1; k <= nl; k++)
+                fprintf(fd, "%-4s <- %-4s   %d 0 %d      # pico %+.3f\n",
+                        Ts[lo[k]].name ? Ts[lo[k]].name : "?",
+                        Ts[li[k]].name ? Ts[li[k]].name : "?",
+                        lb[k], lsv[k], lpk[k]);
+            fclose(fd);
+        }
+        fc = fopen(fcns, "w");
+        if (fc) {
+            fprintf(fc, "# Covarianzas contemporaneas PROPUESTAS por drtran -g.\n");
+            fprintf(fc, "# Indices q[i,j] por orden en la linea de comandos:\n#  ");
+            for (i = 1; i <= m; i++)
+                fprintf(fc, " %d=%s", i, Ts[i].name ? Ts[i].name : "?");
+            fprintf(fc, "\n");
+            /* los slots q[i,j] son el triangulo INFERIOR (i>j): mayor indice
+               primero.  El bucle guarda qi<qj, asi que se escribe q[qj,qi].    */
+            for (k = 1; k <= nq; k++)
+                fprintf(fc, "q[%d,%d] = free      # %s - %s : r(0) = %+.3f\n",
+                        qj[k], qi[k],
+                        Ts[qi[k]].name ? Ts[qi[k]].name : "?",
+                        Ts[qj[k]].name ? Ts[qj[k]].name : "?", qr[k]);
+            fclose(fc);
+        }
+
+        fprintf(out, "\n=============================================================\n");
+        fprintf(out, "  GUIDED MODE (-g): la escalera, paso a paso\n");
+        fprintf(out, "=============================================================\n");
+        fprintf(out, "  [hecho] paso 2  modelo DIAGONAL estimado.\n");
+        fprintf(out, "  [hecho] paso 3  red IDENTIFICADA de las ccf residuales:\n");
+        fprintf(out, "            -> %-16s (%d enlace(s) candidato(s))\n", fdag, nl);
+        fprintf(out, "            -> %-16s (%d covarianza(s))\n", fcns, nq);
+        fprintf(out, "\n  paso 4  CONFIRMA y ESTIMA.  La red escrita es una GUIA:\n");
+        fprintf(out, "          revisa %s y PODA (exogeneidad, aciclicidad,\n", fdag);
+        fprintf(out, "          retardo verosimil) antes de estimar.  Luego:\n\n");
+        fprintf(out, "            drtran <tus .pre, mismo orden> -n %s -c %s\n", fdag, fcns);
+        fprintf(out, "\n  Los numeradores factorizados/compartidos del sistema se\n");
+        fprintf(out, "  expresan en el -c (PRODUCTO x=y*z, COMBINACION x=y+z; ver -h).\n");
+        fprintf(out, "=============================================================\n");
+    }
+
     free_vector(cneg, 1, nlags + 1);  free_vector(cpos, 1, nlags + 1);
     free_vector(aj, 1, n);            free_vector(ai, 1, n);
 }
@@ -3448,7 +3510,7 @@ int main(int argc, char *argv[])
     macheps = cmacheps();
     outputv = stdout;
 
-    while ((opt = getopt(argc, argv, "r:s:b:f:m:c:n:a:R:C:p0iXNDEMVSvho:")) != -1) {
+    while ((opt = getopt(argc, argv, "r:s:b:f:m:c:n:a:R:C:g:p0iXNDEMVSvho:")) != -1) {
         switch (opt) {
         case 'r': opt_r = optarg; auto_id = 0; break;
         case 's': opt_s = optarg; auto_id = 0; break;
@@ -3462,6 +3524,7 @@ int main(int argc, char *argv[])
         case 'm': model_name = optarg;       break;
         case 'p': prewhiten_only = 1;        break;
         case 'i': net_ident = 1;             break;
+        case 'g': guide_name = optarg; net_ident = 1; no_transfer = 1; auto_id = 0; break;
         case 'c': cons_file = optarg;        break;
         case 'n': net_file  = optarg;        break;
         case 'a': aggr_file = optarg;        break;

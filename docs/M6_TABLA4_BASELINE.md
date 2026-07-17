@@ -171,10 +171,10 @@ intervenciones de Tabla 4. **Las seis series verificadas.** Los `.pre` se genera
 para verificar; se vuelcan a `tests/data/m6/` cuando se cierre la tanda.
 
 > **Caveat — intervenciones compuestas débilmente identificadas.** Las compuestas de fin de
-> muestra (EU II/87 y IV/92, EI IV/92) se **graban** en Tabla 4 correctamente (la ganancia
-> permanente en convención fue, `ω₀+ω₁_fue`, iguala la `g` de Relloso), pero la
-> re-estimación en solitario las lleva a otro modo (p.ej. EU II/87 −60.8/−118.7 → −113.3/
-> −28.3). Con solo 2-3 obs tras la fecha, el numerador de dos parámetros es casi no
+> muestra (EU II/87 y IV/92, EI IV/92) se **graban** con los ω₀,ω₁ de Tabla 4 DIRECTOS, y la
+> ganancia permanente `g = ω₀−ω₁` (convención BJR, la de Relloso) cuadra, pero la
+> re-estimación en solitario las lleva a otro modo (p.ej. EU II/87 −60.8/+118.7 → −113.3/
+> +28.3). Con solo 2-3 obs tras la fecha, el numerador de dos parámetros es casi no
 > identificable univariantemente. No es un error de encoding: es el arranque correcto, y el
 > multivariante (donde Relloso las estimó con información cruzada) es donde se anclan.
 
@@ -197,9 +197,10 @@ Artefactos en `examples/m6_EA/work/` (scratchpad de trabajo, no versionado como 
 ## 6. Puntos abiertos — resueltos
 
 1. **Intervenciones compuestas** (EU II/87 y IV/92; EI IV/92) — **RESUELTO.** Numerador de
-   dos parámetros. `g = ω₀ − ω₁` (Relloso escribe `(ω₀ − ω₁B)`); fue aplica `Σ ωⱼBʲ` con
-   signo **+** (`fue_pre_reader.c:358`), luego se graba **ω₁_fue = −ω₁(Tabla 4)** y la
-   ganancia `ω₀ + ω₁_fue = g` cuadra. `det_block` escribe Nomega=1 (dos ω por variable).
+   dos parámetros. `g = ω₀ − ω₁` (Relloso escribe `(ω₀ − ω₁B)`); fue aplica **esa misma
+   convención BJR** (`calcnu`, fue.c:4505: `ν[j] = Σδ·ν[j−i] − ω[j]`), así que se graban
+   **los ω₀,ω₁ de Relloso DIRECTOS** (sin negar) y la ganancia `ω₀ − ω₁ = g` cuadra.
+   `det_block` escribe Nomega=1 (dos ω por variable).
    *Caveat*: débilmente identificadas en solitario (§5). Correcto como arranque.
 2. **EI y EC — ∇² determinista** (como el legacy) — **RESUELTO.** Sus testigos ∇∇₄ pinchan
    en −1.0 (EI ya en Tabla 4; EC en el diagonal conjunto): estacionalidad *de facto*
@@ -315,21 +316,23 @@ Covarianzas: el legacy libera **solo 3** (`qq[4][2]`=EA·EI, `qq[6][2]`=EA·EC,
 compartidos), con la red y las covarianzas versionadas en `tests/data/m6/m6_net.dag` y
 `m6_net.cns` (orden EP EI EU EC EA P):
 `drtran M6_EP M6_EI M6_EU M6_EC M6_EA M6_P -n m6_net.dag -c m6_net.cns`. Convergió
-(55 par, **ℓ=−1697.6** vs −1709.5 del diagonal → los transfers ganan ~12). Convención
-**ω_drtran = −θ_legacy** (el signo − del cast empotrado).
+(55 par, **ℓ=−1697.6** vs −1709.5 del diagonal → los transfers ganan ~12). Ambas columnas
+están en **convención Box-Jenkins** ω(B)=ω₀−ω₁B−…, la misma de fue (tras el audit de signo;
+ver TODO §"signo del cast"). El − del cast empotrado es interno y ya **no** se filtra al ω
+reportado; los ω₀ son idénticos y los ω_k (k≥1) llevan el signo BJR.
 
-| transfer | drtran (red) | legacy (−θ) | veredicto |
+| transfer | drtran (red) | legacy (BJR) | veredicto |
 |---|---|---|---|
-| **EP←EI** | **(0.750, −0.300)** | **(0.78, −0.382)** | **✓ clavado** |
-| EP←EC | (0.36, 0.53, −0.16) | (0.56, 0.74, −1.28) | dominantes ✓, ω₂ amortiguado |
-| EI←EU | (0.15, 0.45, 0.29, −0.01) | (0.18, 0.24, −0.14, −0.28) | líder ✓, resto flojo |
-| EU←EC | (0.17, −0.03) | (0.34, −0.31) | el más débil (mitad) |
+| **EP←EI** | **(0.750, 0.300)** | **(0.78, 0.382)** | **✓ clavado** |
+| EP←EC | (0.361, −0.529, 0.159) | (0.56, −0.74, 1.28) | dominantes ✓, ω₂ amortiguado |
+| EI←EU | (0.154, −0.453, −0.292, 0.006) | (0.18, −0.24, 0.14, 0.28) | líder ✓, resto flojo |
+| EU←EC | (0.170, 0.029) | (0.34, 0.31) | el más débil (mitad) |
 
 Covarianzas recuperadas: EU·EI **+0.40**, EA·EC **−0.36**, EA·EI **−0.22** (legacy
 ~+.40/−.41/−.31). Transfer adecuado (p=0.95), exogeneidad ok.
 
 **La carencia, ahora MEDIDA.** EP←EI (limpio, sin productos) **clava** el legacy —y su ω₁ se
-corrige al añadir contexto: bivariante +0.10 → +EC −0.20 → red completa −0.30 ≈ −0.38. Los
+corrige al añadir contexto: bivariante −0.10 → +EC +0.20 → red completa +0.30 ≈ +0.38 (BJR). Los
 enlaces con **numerador factorizado + parámetro compartido** (EP←EC, EI←EU, EU←EC) aciertan
 los términos dominantes pero **no clavan**: eso es exactamente lo que se pierde por estimar
 con numeradores libres en vez de los **productos** del legacy (`M6_EJERCICIO.md` §6). El

@@ -468,8 +468,9 @@ intervenciones compuestas (donde se negaba ω₁ a mano para compensar).
       `2h-bis` en la batería (3 checks, incl. guarda `ω₁>0`). Sub-bug encontrado y corregido:
       `build_intervention` grababa un banner de 3 líneas y el lector salta EXACTO 5 → leía
       `nobs=0`; banner alineado a 4+blanco como `write_pre`. Batería **268 PASS, 0 FAIL**.
-- [ ] Menor: actualizar la tabla de comparación con el legacy en `M6_TABLA4_BASELINE.md` §9
-      a los ω BJR (los ω₁ cambian de signo; el modelo y las conclusiones no).
+- [x] **Tabla §9 de `M6_TABLA4_BASELINE.md` actualizada** a los ω BJR (re-corrida la red:
+      ℓ=−1697.6; ω₀ idénticos, ω_k k≥1 con signo BJR en ambas columnas; verdictos intactos).
+      También §5/§6: la ganancia determinista `g=ω₀−ω₁` (Relloso directo, no `ω₀+ω₁_fue`).
 
 **Auditoría CERRADA:** todos los operadores (φ, θ, δ, ω) en convención Box-Jenkins
 normalizada; el `−` del empotrado es interno y no se filtra. drtran coincide con fue. El

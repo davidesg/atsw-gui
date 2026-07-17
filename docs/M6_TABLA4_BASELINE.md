@@ -356,6 +356,56 @@ de la distancia de arranque**. drtran (334 desde mal arranque) ≈ legacy (258 d
 Reducirla de verdad exige tocar el motor (parada por valor de función, o Hessiano exacto vs
 BFGS acumulado; ver `drtran-note.tex` §sec:hessian) — algo que el legacy tampoco hacía.
 
+## 11. Paso 4 (v2) — los PRODUCTOS del legacy, impuestos y medidos
+
+Objetivo (1) del plan-producto (`TODO.md` M6): re-correr la red expresando los numeradores
+**factorizados con parámetros COMPARTIDOS** del legacy, ahora que `-c` soporta `x = [-]y * z`.
+
+**Dos enlaces son producto puro** (MA compartida). En BJR ω(B)=ω₀−ω₁B, el factor
+`−x_L(1−x_M B)` da coef B¹ = −ω₁ = x_L·x_M y coef B⁰ = ω₀ = −x_L, de donde **ω₁ = ω₀·x_M**:
+- EP←EI: `omega1[1] = omega1[0] * theta_2` (x6 = MA de EI).
+- EU←EC: `omega4[1] = omega4[0] * theta_3` (x16 = MA de EU).
+
+Versionado en `tests/data/m6/m6_net_prod.cns`.
+
+**Hallazgo — las compuestas confunden la ℓ.** Correr la red libre-todo con productos cae a
+ℓ=−1729 (peor que la diagonal) y se atasca. NO es el producto: son las **intervenciones
+compuestas débilmente identificadas** (§5), que saltan de un modo a otro (EU II/87 va de
+(−137,−7) libre a ≈Relloso (−61,+118)) y dominan la ℓ. Para aislar la transferencia hay que
+**fijar los deterministas en sus valores .pre (Relloso)** con `-D -E` (fija `fix_det` de
+todas las series: −D la 1, −E las 2..n). Es lo correcto: Relloso los estimó con información
+cruzada que esta red reducida no tiene.
+
+**Con los deterministas fijos** (`-D -E`) la comparación es limpia y apples-to-apples:
+
+| | transfer libre | + productos | Δ |
+|---|---|---|---|
+| ℓ | −1728.9 (converge) | −1729.3 | **−0.4** (2 restricciones, 27→25 par libres) |
+
+El coste de imponer la MA compartida del legacy es **ínfimo (0.4)** ⇒ la estructura es
+consistente con los datos. Y mueve el ω₁ (el coef atado a la MA) hacia el legacy:
+
+| coef | libre | producto | legacy (BJR) |
+|---|---|---|---|
+| EP←EI ω₀ | 0.678 | 0.670 | 0.78 |
+| EP←EI ω₁ | 0.255 | **0.330** | 0.382 |
+| EU←EC ω₀ | 0.199 | 0.112 | 0.34 |
+| EU←EC ω₁ | 0.016 | **0.104** | 0.31 |
+
+El ω₁ se corrige hacia el legacy en ambos (EU←EC pasa de ~0 a 0.104); el ω₀ (líder, aún
+libre) queda por debajo porque falta el resto de la estructura (los otros dos numeradores
+factorizados y la covarianza completa del legacy).
+
+**Los otros dos enlaces NO son producto puro** — necesitan la extensión pendiente
+(sumas/diferencias, `x = y*z ± w`):
+- EP←EC = `(1−x14B)(x12+x13B)`: producto de DOS factores libres → coeficientes que son
+  productos **y** sumas de x12,x13,x14.
+- EI←EU = `−(1−B)(x8+x9B+x10B²)`: el factor FIJO `(1−B)` impone una combinación lineal
+  (`ν_num(1)=0`, i.e. Σ coef = 0), no un producto.
+
+⇒ Objetivo (1) **parcialmente cerrado**: los 2 enlaces de MA compartida impuestos y medidos
+(coste ínfimo; ω₁ hacia el legacy). Los 2 factorizados esperan la mini-expresión.
+
 ---
 
 ## Referencias

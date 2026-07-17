@@ -1,0 +1,18 @@
+# Paso 4 (v2) -- red de transferencias del m6-1 (Relloso 1997) CON los PRODUCTOS
+# del legacy: numeradores factorizados con parametros COMPARTIDOS.
+#
+# ORDEN de series en la linea de comandos (para q[i,j] y theta_i):
+#   1=EP  2=EI  3=EU  4=EC  5=EA  6=P
+#
+# --- Las 3 covarianzas contemporaneas que libera el legacy (drv.c qq[][]) ---
+#   EA*EI = q[5,2]   EA*EC = q[5,4]   EI*EU = q[3,2]
+q[5,2] = free
+q[5,4] = free
+q[3,2] = free
+#
+# --- PRODUCTOS: numeradores factorizados con MA COMPARTIDA (BJR omega(B)=w0-w1B) ---
+# EP<-EI : legacy -x5*(1-x6 B), con x6 = MA de EI (theta_2).  En BJR el coef B^1 es
+#          w1 = w0 * x6  =>  omega1[1] = omega1[0] * theta_2.
+omega1[1] = omega1[0] * theta_2[B^1]
+# EU<-EC : legacy -x15*(1-x16 B), con x16 = MA de EU (theta_3).  Igual estructura.
+omega4[1] = omega4[0] * theta_3[B^1]

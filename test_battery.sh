@@ -1871,6 +1871,39 @@ grep -qE "EI +-> +EP .*b=1 " "$NID" \
 
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
+echo "── 7. PRODUCTOS EN LA RED (numeradores factorizados del legacy) ──"
+echo "   Los enlaces de MA COMPARTIDA del m6 (EP<-EI usa x6=MA de EI; EU<-EC usa"
+echo "   x16=MA de EU) impuestos como PRODUCTOS: omega1[1]=omega1[0]*theta_2, idem"
+echo "   omega4. Deterministas FIJOS (-D -E): las compuestas debilmente identificadas"
+echo "   (mode-hopping) confundirian la l; asi la comparacion aisla la transferencia."
+echo ""
+DAG7="$SYN/m6/m6_net.dag"
+M6_7="$SYN/m6/M6_EP.pre $SYN/m6/M6_EI.pre $SYN/m6/M6_EU.pre $SYN/m6/M6_EC.pre $SYN/m6/M6_EA.pre $SYN/m6/M6_P.pre"
+NA7="$TMPDIR/m6net_free.txt"; NB7="$TMPDIR/m6net_prod.txt"
+$DRTRAN $M6_7 -n "$DAG7" -c "$SYN/m6/m6_net.cns"      -D -E -o "$NA7" >/dev/null 2>&1
+$DRTRAN $M6_7 -n "$DAG7" -c "$SYN/m6/m6_net_prod.cns" -D -E -o "$NB7" >/dev/null 2>&1
+
+grep -q "(= omega1\[0\] \* theta_2" "$NB7" \
+    && pass "el producto EP<-EI se imprime en la red (omega1[1] = omega1[0]*theta_2)" \
+    || fail "el producto EP<-EI no aparece en la red"
+# el producto se cumple EXACTO: omega1[1] = omega1[0] * theta_2 (MA de EI, compartida)
+W10=$(val "$NB7" 'omega1\[0\]'); W11=$(val "$NB7" 'omega1\[1\]'); TH2=$(val "$NB7" 'theta_2\[B')
+python3 -c "import sys; sys.exit(0 if abs($W11 - ($W10)*($TH2)) < 1e-4 else 1)" \
+    && pass "el producto se cumple EXACTO en la red: $W11 = $W10 * $TH2" \
+    || fail "el producto no se cumple: $W11 != $W10 * $TH2"
+# signo BJR: el omega_1 del enlace compartido es POSITIVO (con el bug + saldria negativo)
+python3 -c "import sys; sys.exit(0 if $W11 > 0 else 1)" \
+    && pass "el omega_1 del enlace compartido es POSITIVO (signo BJR): $W11" \
+    || fail "el omega_1 del enlace compartido salio negativo: $W11"
+# imponer la estructura de MA compartida del legacy cuesta CASI NADA en l => consistente
+LA7=$(grep -E "Log-likelihood" "$NA7" | grep -oE "\-[0-9.]+")
+LB7=$(grep -E "Log-likelihood" "$NB7" | grep -oE "\-[0-9.]+")
+python3 -c "import sys; sys.exit(0 if 0 <= ($LA7)-($LB7) < 2.0 else 1)" \
+    && pass "los 2 productos cuestan <2 en l ($LA7 libre -> $LB7 producto): estructura consistente" \
+    || fail "los productos cuestan demasiado en l ($LA7 -> $LB7): revisar"
+
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
 echo "============================================"
 echo -e "  RESULTADO: ${GREEN}$PASS PASS${NC}, ${RED}$FAIL FAIL${NC}"
 echo "============================================"

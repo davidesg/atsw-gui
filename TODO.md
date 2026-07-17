@@ -430,6 +430,16 @@ automatizar lo que hoy es manual. Candidatos, por palanca:
       *Pendiente:* sumas/diferencias de productos (`x = y*z - w`, para coeficientes como
       `x12·x14 - x13`) — una mini-expresión, o el numerador factorizado como producto de
       factores-polinomio.
+- [x] **(1-bis) La red m6 RE-CORRIDA con los productos — HECHO/MEDIDO (jul-2026).** Los 2
+      enlaces de **MA compartida** impuestos: EP←EI `omega1[1]=omega1[0]*theta_2` (x6=MA de
+      EI) y EU←EC `omega4[1]=omega4[0]*theta_3` (x16=MA de EU); en `tests/data/m6/m6_net_prod.cns`.
+      **Hallazgo:** correr libre-todo cae a ℓ=−1729 y se atasca — NO es el producto, son las
+      **compuestas débilmente identificadas** (mode-hopping, §5) que dominan la ℓ. Fijando los
+      deterministas (`-D -E`, Relloso) la comparación aísla la transferencia: **los 2 productos
+      cuestan solo Δℓ=0.4** (estructura consistente) y mueven el ω₁ hacia el legacy (EP←EI
+      0.255→0.330 vs 0.382; EU←EC 0.016→0.104 vs 0.31). Los otros 2 enlaces (EP←EC dos-factores,
+      EI←EU factor fijo (1−B)) **necesitan la mini-expresión pendiente**. Batería +4 = **272 PASS**
+      (sección 7). Detalle: `M6_TABLA4_BASELINE.md` §11.
 - [ ] **(3) La escalera como driver guiado.** Un modo que orqueste pasos 2-4: corre el
       diagonal, emite el informe de CCF + red sugerida, deja confirmar/estimar. Como el
       guiado de ART, pero para el sistema.

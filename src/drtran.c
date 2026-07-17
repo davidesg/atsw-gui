@@ -619,12 +619,18 @@ void apply_univariate_model(struct Tusmodel *Tm, struct Tseries *Ts,
                 filt_out[t] = 0.0;
             }
 
-            /* --- Aplicar numerador Ω(B) --- */
+            /* --- Aplicar numerador Ω(B) = ω₀ - ω₁B - ω₂B² - ... (convencion
+               Box-Jenkins, como fue: calcnu en fue.c:4505 hace nu[j] = ... - ω[j]).
+               El termino lider (j=0) suma; los demas RESTAN.  Antes se sumaban
+               todos (+), lo que invertia el signo de los ω no lideres: latente
+               porque la homologacion solo tiene Nomega=0; lo destapo m6 con las
+               intervenciones compuestas. --- */
             for (t = 1; t <= nobs; t++) {
                 real sum = 0.0;
                 for (j = 0; j <= nw; j++) {
                     if (t - j >= 1)
-                        sum += Tm->Omega[i][j] * DataMat[i][t - j];
+                        sum += (j == 0 ? Tm->Omega[i][j] : -Tm->Omega[i][j])
+                               * DataMat[i][t - j];
                 }
                 filt_num[t] = sum;
             }

@@ -76,9 +76,10 @@ LEGACY = "/home/david/Dropbox/SRC/drv-source/m6-1/m1.inp"
 READY = {"P", "EA", "EP", "EI", "EU", "EC"}
 
 # INTERVENCIONES COMPUESTAS (dos parametros ω₀,ω₁, con ganancia g=ω₀-ω₁ en Tabla 4):
-# Relloso escribe el numerador (ω₀ - ω₁B); fue lo aplica como Σ ωⱼBʲ con signo + (ver
-# fue_pre_reader.c:358). => se graba ω₁_fue = -ω₁_Tabla4, para que la ganancia
-# permanente ω₀ + ω₁_fue = ω₀ - ω₁_Tabla4 = g coincida. Se anota "(-ω₁ de T4)" al lado.
+# Se graban los valores de Relloso DIRECTOS (ω₀, ω₁): drtran aplica el numerador en
+# la convencion Box-Jenkins ω(B)=ω₀-ω₁B (como fue calcnu), asi que la ganancia
+# permanente ω₀-ω₁ = g coincide sola.  (Antes se negaba ω₁ para compensar un bug de
+# signo en drtran, ya corregido; ver la auditoria del signo en TODO.md.)
 
 # Cada serie:  (name, kind, theta, lam1, lam2, dets)
 #   kind : "reg2" = ∇²  (d=2, ifadf 0 0 0, MA regular de 1 factor)
@@ -120,16 +121,16 @@ SERIES = [
         ("compimp", 2, 1982, [18.2]),
         ("step", 2, 1987, [63.2]),
         ("step", 1, 1988, [-53.2]),
-        ("step", 4, 1992, [-60.9, -81.3]),     # compuesta: ω₁_fue = -81.3 (-ω₁ de T4 81.3)
+        ("step", 4, 1992, [-60.9, 81.3]),      # compuesta (Relloso ω₀,ω₁ directos; g=-142.2)
         ("cos", 1, 0, [4.8]),
         ("sin", 1, 0, [2.3]),
         ("alter", 0, 0, [3.1]),
     ]),
     ("EU", "reg2", 0.88, None,  None,  [        # ∇², sin estacional
-        ("step", 2, 1987, [-60.8, -118.7]),    # compuesta: ω₁_fue = -118.7 (-ω₁ de T4 118.7)
+        ("step", 2, 1987, [-60.8, 118.7]),     # compuesta (Relloso ω₀,ω₁ directos; g=-179.5)
         ("impulse", 3, 1988, [-60.3]),
         ("step", 1, 1992, [-44.6]),
-        ("step", 4, 1992, [-44.5, -39.2]),     # compuesta: ω₁_fue = -39.2 (-ω₁ de T4 39.2)
+        ("step", 4, 1992, [-44.5, 39.2]),      # compuesta (Relloso ω₀,ω₁ directos; g=-83.7)
     ]),
     # EC: el legacy m6-1 (drv.c) la modela ∇² con estacionalidad DETERMINISTA
     # (cos/sin/alter) + MA(1), NO ∇∇₄. Coincide con la fila ∇² de la Tabla 4

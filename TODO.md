@@ -436,19 +436,25 @@ automatizar lo que hoy es manual. Candidatos, por palanca:
 - [ ] **(4) Empaquetar m6.** El caso como ejemplo tutorial + **test de regresión del
       sistema completo** que se distribuye con drtran. Valida y enseña la escalera.
 
-### ⚠ Concern abierto — signo/normalización del cast empotrado
+### Auditoría del signo/normalización — EN CURSO
 
-drtran debe estar en la tradición de **Box–Jenkins, donde TODOS los operadores están
-normalizados** (líder = 1, convención de signo consistente). En la validación de m6 hubo
-un flag: al comparar el transfer con el legacy hizo falta cuidado de signo —drtran reporta
-ω ≈ +x5 (el **parámetro** del legacy, bien), pero el VMA off-diagonal interno lleva −x5
-(el signo del empotrado)—. Conviene zanjarlo:
+**Veredicto de la auditoría.** El signo `−` del empotrado (`tran_shootx.c:203`) es INTERNO
+(la off-diagonal de la Φ del VARMA) y **NO se filtra a lo reportado**: drtran reporta la ω
+de la transferencia, limpia. φ/θ/δ están en convención B-J (`1 − coef·B`). **La única
+discrepancia:** el **numerador ω** se aplicaba con `+` (`ω₀ + ω₁B`), pero **fue lo aplica en
+BJR `ω₀ − ω₁B`** (`calcnu`, fue.c:4505: `nu[j] = Σδ·nu[j-i] − ω[j]`; y el display de fue,
+:1624-1637, lo confirma). Era un **bug de porting latente** — la homologación solo tiene
+`Nomega=0`, así que el signo de los ω no-líderes nunca se probó; **m6 lo destapó** con las
+intervenciones compuestas (donde se negaba ω₁ a mano para compensar).
 
-- [ ] **Auditar la convención de signo/normalización de punta a punta.** Que TODO operador
-      de cara al usuario (ω, δ, θ, φ, Σ) esté en la forma **normalizada de Box–Jenkins**, y
-      que el signo − del empotrado **nunca** se filtre a una cantidad reportada. Fijar y
-      **documentar explícitamente** la convención del numerador de transferencia (BJR usa
-      `ω(B) = ω₀ − ω₁B − … − ω_sB^s`) y comprobar que la que imprime drtran coincide.
+- [x] **Verificado:** el motor de fue (`calcnu`) es BJR (`ω₀ − ω₁B`).
+- [x] **ω DETERMINISTA corregido** a BJR (`drtran.c:623`, `fue_pre_reader.c:363`): el líder
+      suma, los demás restan. `build_m6.py` graba ahora los ω₁ de Relloso DIRECTOS (sin la
+      negación-parche). Test-safe (batería 263 PASS; m6 da el mismo ℓ, consistente).
+- [ ] **ω de TRANSFERENCIA** (`compute_irf:34`, `build_embedded_varma:194`): falta pasarlo a
+      BJR por consistencia («las intervenciones SON FLT»). Flipa el signo de ω₁⁺ reportado →
+      actualizar `gen_synthetic.py` y los tests sintéticos de transferencia. El δ ya es B-J.
+- [ ] Documentar la convención (ω BJR) en la ayuda y en `M6_TABLA4_BASELINE.md`.
 
 ## Decisiones abiertas
 

@@ -357,11 +357,13 @@ void build_det_component(struct Tusmodel *Tm, struct Tseries *Ts,
 
         gen_detvar(Tm->detspec[i], &Text, v);
 
-        /* numerador Omega(B) */
+        /* numerador Omega(B) = ω₀ - ω₁B - ... (Box-Jenkins, como fue calcnu):
+           el lider suma, los demas RESTAN. */
         for (t = 1; t <= nobs_ext; t++) {
             real sum = 0.0;
             for (j = 0; j <= nw; j++)
-                if (t - j >= 1) sum += Tm->Omega[i][j] * v[t - j];
+                if (t - j >= 1)
+                    sum += (j == 0 ? Tm->Omega[i][j] : -Tm->Omega[i][j]) * v[t - j];
             filt_num[t] = sum;
         }
 

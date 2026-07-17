@@ -451,10 +451,18 @@ intervenciones compuestas (donde se negaba ω₁ a mano para compensar).
 - [x] **ω DETERMINISTA corregido** a BJR (`drtran.c:623`, `fue_pre_reader.c:363`): el líder
       suma, los demás restan. `build_m6.py` graba ahora los ω₁ de Relloso DIRECTOS (sin la
       negación-parche). Test-safe (batería 263 PASS; m6 da el mismo ℓ, consistente).
-- [ ] **ω de TRANSFERENCIA** (`compute_irf:34`, `build_embedded_varma:194`): falta pasarlo a
-      BJR por consistencia («las intervenciones SON FLT»). Flipa el signo de ω₁⁺ reportado →
-      actualizar `gen_synthetic.py` y los tests sintéticos de transferencia. El δ ya es B-J.
-- [ ] Documentar la convención (ω BJR) en la ayuda y en `M6_TABLA4_BASELINE.md`.
+- [x] **ω de TRANSFERENCIA a BJR** (`compute_irf`, `build_embedded_varma`, y la
+      caracterización `transfer_characteristics`: ganancia `g=ω(1)` y retardo medio). El
+      líder suma, los demás restan. La **respuesta ν no cambia** (física), solo la
+      parametrización: la data sintética es byte-idéntica; `gen_synthetic.py` etiqueta la
+      verdad en BJR; los tests de ω₁⁺ pasan a negativo. m6 da el MISMO ℓ=−1697.6 (pura
+      reparametrización). Batería 263 PASS.
+- [x] **Documentada** la convención (ω BJR) en la ayuda (`-b/-r/-s`).
+- [ ] Menor: actualizar la tabla de comparación con el legacy en `M6_TABLA4_BASELINE.md` §9
+      a los ω BJR (los ω₁ cambian de signo; el modelo y las conclusiones no).
+
+**Auditoría CERRADA:** todos los operadores (φ, θ, δ, ω) en convención Box-Jenkins
+normalizada; el `−` del empotrado es interno y no se filtra. drtran coincide con fue.
 
 ## Decisiones abiertas
 

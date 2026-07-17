@@ -2314,6 +2314,11 @@ static void usage(const char *prog)
 "           is the multivariate counterpart of -p (Munoz Polo 2001, paso 3).\n"
 "\n"
 "TRANSFER FUNCTION  (one per input)\n"
+"           nu(B) = omega(B)/delta(B) * B^b, in the Box-Jenkins convention:\n"
+"             omega(B) = omega_0 - omega_1 B - ... - omega_s B^s\n"
+"             delta(B) = 1     - delta_1 B - ... - delta_r B^r\n"
+"           (the leading omega adds, the rest SUBTRACT, as in fue's calcnu; the\n"
+"           impulse response nu is the same physical object either way).\n"
 "  -b N     pure delay B^b                    (default: identified)\n"
 "  -r N     order of the denominator delta(B) (default: identified)\n"
 "  -s N     order of the numerator omega(B)   (default: identified)\n"
@@ -2730,8 +2735,10 @@ static void transfer_characteristics(real *x, real **cov, int npar, FILE *out)
         /* primer slot de este enlace */
         slot = slot0 + 1;
         for (k = 0; k <= lnk[j].s; k++) {
-            w1 += xf[slot + k];
-            wk += k * xf[slot + k];
+            /* omega(B) = w0 - w1 B - ... (BJR): el lider suma, los demas restan */
+            real sk = (k == 0) ? 1.0 : -1.0;
+            w1 += sk * xf[slot + k];
+            wk += k * sk * xf[slot + k];
         }
         for (k = 1; k <= lnk[j].r; k++) {
             real dv = xf[slot + lnk[j].s + k];
@@ -2759,7 +2766,7 @@ static void transfer_characteristics(real *x, real **cov, int npar, FILE *out)
         /* --- gradiente de la GANANCIA ---------------------------------- */
         for (k = 1; k <= npar; k++) gg[k] = 0.0;
         for (k = 0; k <= lnk[j].s; k++)
-            add_grad(gg, slot + k, 1.0 / d1);                 /* d g / d omega_k */
+            add_grad(gg, slot + k, ((k == 0) ? 1.0 : -1.0) / d1);  /* d g / d omega_k (BJR) */
         for (k = 1; k <= lnk[j].r; k++)
             add_grad(gg, slot + lnk[j].s + k, g / d1);        /* d g / d delta_k */
         seg = delta_se(gg, cov, npar);
@@ -2775,7 +2782,7 @@ static void transfer_characteristics(real *x, real **cov, int npar, FILE *out)
             real A = wk / w1;            /* aporte del numerador */
             real C = dj / d1;            /* aporte del denominador */
             for (k = 0; k <= lnk[j].s; k++)
-                add_grad(gg, slot + k, (k - A) / w1);
+                add_grad(gg, slot + k, ((k == 0) ? 1.0 : -1.0) * (k - A) / w1);
             for (k = 1; k <= lnk[j].r; k++)
                 add_grad(gg, slot + lnk[j].s + k, (k + C) / d1);
         }

@@ -539,7 +539,8 @@ opt_ok "$OUT" "el optimizador no falla"
 
 # tolerancias ~2 errores estándar: es una muestra finita, no aritmética exacta
 check "omega_0"  0.800 "$(val "$OUT" 'omega1\[0\]')"  0.06
-check "omega_1"  0.400 "$(val "$OUT" 'omega1\[1\]')"  0.06
+# omega(B) = w0 - w1 B (BJR): con nu=(0.8, 0.4) => w1 = -0.4
+check "omega_1" -0.400 "$(val "$OUT" 'omega1\[1\]')"  0.06
 check "phi_N"    0.300 "$(val "$OUT" 'phi_1\[B\^1\]')"  0.12
 check "phi_X"    0.500 "$(val "$OUT" 'phi_2\[B\^1\]')"  0.12
 
@@ -574,8 +575,9 @@ nuval() {
 }
 NU2=$(nuval "$OUT" 2)
 NU3=$(nuval "$OUT" 3)
-check "nu(2) preestima omega_0" 0.80 "$NU2" 0.08
-check "nu(3) preestima omega_1" 0.40 "$NU3" 0.08
+# nu es la RESPUESTA (fisica, invariante al convenio): nu(2)=omega_0, nu(3)=-omega_1 en BJR
+check "nu(2) = respuesta lag 2 (= omega_0)"      0.80 "$NU2" 0.08
+check "nu(3) = respuesta lag 3 (= -omega_1 BJR)" 0.40 "$NU3" 0.08
 
 # la CCF no debe tener picos en k<0 (X es exógena por construcción)
 grep -q "X behaves as exogenous" "$OUT" && pass "no detecta retroalimentación (X exógena)" \
@@ -667,7 +669,7 @@ grep -q "Series           : 3 (1 output + 2 input(s))" "$OUT" \
 # se recuperan LAS DOS transferencias a la vez (tolerancia ~2-3 SE)
 check "omega1[0]  (X1)"  0.700 "$(val "$OUT" 'omega1\[0\]')"  0.06
 check "omega2[0]  (X2)"  0.500 "$(val "$OUT" 'omega2\[0\]')"  0.06
-check "omega2[1]  (X2)"  0.300 "$(val "$OUT" 'omega2\[1\]')"  0.06
+check "omega2[1]  (X2)" -0.300 "$(val "$OUT" 'omega2\[1\]')"  0.06  # BJR: w0 - w1 B
 
 # y el ARMA propio de cada serie
 check "phi serie 1 (ruido)" 0.300 "$(val "$OUT" 'phi_1\[B\^1\]')" 0.12
@@ -973,7 +975,7 @@ check "y el p-valor coincide con el del cast por resta" "$PS" "$PV" 0.01
 OUT="$TMPDIR/ch_ipc.txt"
 $DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1 -o "$OUT" >/dev/null 2>&1
 GI=$(gain "$OUT"); MI=$(mlag "$OUT")
-check "IPC<-WTI: ganancia = omega_0 + omega_1" 0.027194 "$GI" 0.0005
+check "IPC<-WTI: ganancia nu(1) = omega_0 - omega_1 (BJR)" 0.027194 "$GI" 0.0005
 python3 -c "import sys; sys.exit(0 if 0.0 <= $MI < 1.0 else 1)" \
     && pass "IPC<-WTI: el retardo medio es de MEDIO MES ($MI): traslado inmediato" \
     || fail "el retardo medio del IPC no es inmediato ($MI)"

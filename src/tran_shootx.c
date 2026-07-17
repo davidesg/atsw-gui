@@ -31,7 +31,9 @@ void compute_irf(real *omega, int s, real *delta, int r, int b,
     for (t = 1; t <= length; t++) {
         real sum = 0.0;
         int  lag = t - 1 - b;
-        if (lag >= 0 && lag <= s) sum = omega[lag];
+        /* numerador omega(B) = omega_0 - omega_1 B - ... (Box-Jenkins, como fue
+           calcnu): el termino lider suma, los demas RESTAN. */
+        if (lag >= 0 && lag <= s) sum = (lag == 0) ? omega[0] : -omega[lag];
         for (j = 1; j <= r; j++)
             if (t > j) sum += delta[j] * nu[t - j];
         nu[t] = sum;
@@ -189,9 +191,11 @@ static void build_embedded_varma(struct Tvarma *armax, int m,
             }
             (void)r;
 
-            /* omega_k(B) * B^b, en forma llana */
+            /* omega_k(B) * B^b, en forma llana.  omega(B) = omega_0 - omega_1 B - ...
+               (Box-Jenkins, como fue calcnu): el lider suma, los demas RESTAN. */
             for (l = 0; l <= b + sn; l++) tmp[l] = 0.0;
-            for (l = 0; l <= sn; l++) tmp[b + l] = omega[k][l];
+            for (l = 0; l <= sn; l++)
+                tmp[b + l] = (l == 0) ? omega[k][0] : -omega[k][l];
             dtmp = b + sn;
 
             if (dacc + dtmp > MAX_POLY) { *ifaultx = 1; return; }

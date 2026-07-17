@@ -40,18 +40,27 @@ SD_A    = 0.500      # innovación del ruido
 B_DELAY = 2          # retardo puro
 R_ORD   = 0          # sin denominador
 S_ORD   = 1          # numerador de orden 1
-OMEGA   = [0.800, 0.400]   # omega_0, omega_1
+OMEGA   = [0.800, -0.400]  # omega_0, omega_1  (BJR: nu = 0.8 - (-0.4)B = 0.8 + 0.4·resp)
 DELTA   = []               # (vacío: r=0)
 
 SEED    = 20260712
 
 
 def impulse_response(omega, s, delta, r, b, length):
-    """nu[t], t=1..length (misma recursión que compute_irf en tran_shootx.c)."""
+    """nu[t], t=1..length (misma recursión que compute_irf en tran_shootx.c).
+
+    Numerador en convención Box-Jenkins: omega(B) = omega_0 - omega_1 B - ...
+    (el líder suma, los demás restan), como el calcnu de fue.
+    """
     nu = [0.0] * (length + 1)
     for t in range(1, length + 1):
         lag = t - 1 - b
-        acc = omega[lag] if 0 <= lag <= s else 0.0
+        if lag == 0:
+            acc = omega[0]
+        elif 0 < lag <= s:
+            acc = -omega[lag]
+        else:
+            acc = 0.0
         for j in range(1, r + 1):
             if t > j:
                 acc += delta[j - 1] * nu[t - j]
@@ -156,7 +165,7 @@ def build_two_inputs(outdir, seed):
 
     # verdad
     b1, r1, s1, om1 = 1, 0, 0, [0.700]          # X1: retardo 1, un solo omega
-    b2, r2, s2, om2 = 0, 0, 1, [0.500, 0.300]   # X2: contemporaneo, dos omegas
+    b2, r2, s2, om2 = 0, 0, 1, [0.500, -0.300]  # X2: contemporaneo, dos omegas (BJR)
 
     x1 = [0.0] * n
     x2 = [0.0] * n

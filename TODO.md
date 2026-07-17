@@ -458,11 +458,23 @@ intervenciones compuestas (donde se negaba ω₁ a mano para compensar).
       verdad en BJR; los tests de ω₁⁺ pasan a negativo. m6 da el MISMO ℓ=−1697.6 (pura
       reparametrización). Batería 263 PASS.
 - [x] **Documentada** la convención (ω BJR) en la ayuda (`-b/-r/-s`).
+- [x] **Chequeos de signo en la batería** (`test_battery.sh`): guardas de que la ganancia
+      `g=ω(1)` NO es la del convenio + (0.4 en SYN), ni el retardo medio (1.0); y de que la
+      respuesta `ν(3)=−ω₁` sale con el signo físico.
+- [x] **CIERRE SINTÉTICO — caso determinista (`SYND.pre`).** Intervención COMPUESTA (escalón
+      con dos ω deterministas) sobre input AR(1); verdad ω₀=10, ω₁=6 en BJR. Es el camino que
+      la homologación de m6 (todo `Nomega=0`) NUNCA ejercía: el **numerador determinista**.
+      drtran recupera ω₀=9.91, **ω₁=+5.86 (POSITIVO)** — con el bug `+` saldría −5.86. Bloque
+      `2h-bis` en la batería (3 checks, incl. guarda `ω₁>0`). Sub-bug encontrado y corregido:
+      `build_intervention` grababa un banner de 3 líneas y el lector salta EXACTO 5 → leía
+      `nobs=0`; banner alineado a 4+blanco como `write_pre`. Batería **268 PASS, 0 FAIL**.
 - [ ] Menor: actualizar la tabla de comparación con el legacy en `M6_TABLA4_BASELINE.md` §9
       a los ω BJR (los ω₁ cambian de signo; el modelo y las conclusiones no).
 
 **Auditoría CERRADA:** todos los operadores (φ, θ, δ, ω) en convención Box-Jenkins
-normalizada; el `−` del empotrado es interno y no se filtra. drtran coincide con fue.
+normalizada; el `−` del empotrado es interno y no se filtra. drtran coincide con fue. El
+signo del **numerador determinista** queda blindado con un caso sintético de verdad conocida
+(`SYND`), además de las guardas de la ganancia/retardo en la transferencia.
 
 ## Decisiones abiertas
 

@@ -1005,6 +1005,24 @@ pass "el retardo medio nunca cae por debajo del retardo puro b"
 
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
+echo "── 2h-bis. SIGNO DEL NUMERADOR DETERMINISTA (intervención compuesta) ──"
+# SYND lleva una intervención COMPUESTA (escalón con dos omegas deterministas) sobre
+# un input AR(1). Verdad: omega_0 = 10, omega_1 = 6 en convenio Box-Jenkins ω(B)=ω₀-ω₁B.
+# Este es el camino de signo que la homologación de m6 (todo Nomega=0) NUNCA ejercía:
+# el numerador DETERMINISTA. Con el convenio + (el bug latente) drtran recuperaría
+# omega_1 NEGATIVO (-6); en BJR sale POSITIVO (+6). Es el cierre sintético del audit.
+OUT="$TMPDIR/synd.txt"
+$DRTRAN "$SYN/SYND.pre" "$SYN/SYNR_X.pre" -0 -o "$OUT" >/dev/null 2>&1
+check "SYND: omega_0 determinista (verdad 10)"                    10.0 "$(val "$OUT" 'omega_d1\[1,0\]')" 0.6
+check "SYND: omega_1 determinista POSITIVO (verdad +6, BJR)"       6.0 "$(val "$OUT" 'omega_d1\[1,1\]')" 0.6
+W1D=$(val "$OUT" 'omega_d1\[1,1\]')
+python3 -c "import sys; sys.exit(0 if $W1D > 0 else 1)" \
+    && pass "el omega_1 determinista es POSITIVO: guarda el signo BJR en compute_det ($W1D)" \
+    || fail "el omega_1 determinista salió NEGATIVO: convenio + en el numerador determinista ($W1D)"
+
+
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
 echo "── 2i. RESPUESTA AL IMPULSO Y DESCOMPOSICIÓN DE LA VARIANZA ──"
 echo "   Los pesos nu_k YA son la respuesta al impulso -- ésa es la comodidad de un"
 echo "   modelo de transferencia. Pero sueltos no son comparables con nada: hacen"

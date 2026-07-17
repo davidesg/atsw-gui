@@ -382,9 +382,71 @@ def build_ident(outdir, seed):
                  "(NO IDENTIFICADO)" if abs(pn - px) < 1e-9 else "(separables)"))
 
 
+def build_intervention(outdir, seed):
+    """Serie con una INTERVENCIÓN COMPUESTA (numerador de dos omegas), verdad conocida.
+
+    Guarda el signo del omega DETERMINISTA -- el bug latente que m6 destapó y que la
+    homologación (todo Nomega=0) nunca probaba. fue/drtran aplican el numerador en
+    Box-Jenkins:  comp(t) = w0*step(t) - w1*step(t-1).  Se genera la serie con esa
+    verdad y drtran debe RECUPERAR w1 con signo POSITIVO (con el bug +, saldría negativo).
+
+        U(t) = comp(t) + random_walk(t)          (U = 100*log(z), sin diferenciar)
+        z(t) = exp(U(t)/100)
+        .pre: log, d=1, sin ARMA, step con Nomega=1 (omega libre)
+    """
+    rnd = random.Random(seed)
+    n = 400
+    t0 = 100                 # índice 0-based; obs 101 (1-based) = mayo 2008 (freq 12, ini 1/2000)
+    W0, W1 = 10.0, 6.0       # impacto W0=10; efecto permanente W0-W1 = 4
+    PHI = 0.500              # AR(1) del ruido (estacionario, d=0; ademas evita el
+                             # caso "sin operadores", que el lector no maneja)
+    comp = [W0 * (1.0 if t >= t0 else 0.0) - W1 * (1.0 if t >= t0 + 1 else 0.0)
+            for t in range(n)]
+    nz = [0.0] * n
+    for t in range(1, n):
+        nz[t] = PHI * nz[t - 1] + rnd.gauss(0.0, 0.3)
+    U = [comp[t] + nz[t] for t in range(n)]   # U = 100*log(z), SIN diferenciar (d=0)
+    z = [math.exp(u / 100.0) for u in U]       # base 1: 100*log(z) = U exacto
+
+    per, yr = 5, 2008        # obs 101: 100 meses tras 1/2000 -> mes 1+100%12=5, año 2000+100//12=2008
+    L = [        # OJO: el lector salta EXACTO 5 lineas de cabecera (banner de 4 + blanco)
+        "************************************************",
+        "*        Input file for program DRVUS          *",
+        "*   Caso sintetico: intervencion compuesta     *",
+        "************************************************", "",
+        "** Frequency of time series: either 1(A), 4(Q) or 12(M):", " 12",
+        "** Number of observations and starting date of time series:",
+        " %d  1 2000 SYND" % n,
+        "** Number of deterministic variables (including seasonal components):", "1",
+        "**", "step %d %d" % (per, yr),
+        "**", "1",                       # Nomega = 1 (dos coeficientes: w0, w1)
+        "**", "1.000000 1", "1.000000 1",  # omega LIBRE (arranque neutro 1,1)
+        "**", "0",                       # Ndelta = 0
+        "**Number and orders of regular AR operators:", "1 1",
+        "**", "%.4f 1" % PHI,
+        "** Number and orders of annual AR operators:", "0",
+        "** Number and orders of regular MA operators:", "0",
+        "** Number and orders of anual MA operators:", "0",
+        "** Number and frequencies of regular AR(2) operators with fixed frequency:", "0",
+        "** Number and frequencies of regular MA(2) operators with fixed frequency:", "0",
+        "** Mean parameter (mu):", "0",
+        "** Box-Cox lambda, regular differences and complete annual differences:",
+        "0.00 0 0",
+        "** Individual factors of the annual difference (from freq 0.0): ", " 0 0 0 0 0 0 0",
+        "** ACF/PACF bands (0 Automatic) and reescaling factor: ", " 0.00 100.00",
+        "** Time series (stochastic and non-standard deterministic variables): ",
+    ]
+    L += ["%.10f " % v for v in z]
+    open(os.path.join(outdir, "SYND.pre"), "w").write("\n".join(L) + "\n")
+    print("SYND -> VERDAD: intervencion compuesta w0=%.1f w1=%.1f (BJR: w0 - w1 B), "
+          "step obs %d, ruido AR(1) phi=%.1f" % (W0, W1, t0 + 1, PHI))
+
+
 def main():
     outdir = sys.argv[1] if len(sys.argv) > 1 else "."
     os.makedirs(outdir, exist_ok=True)
+
+    build_intervention(outdir, SEED + 6)
 
     build_ident(outdir, SEED + 5)
 

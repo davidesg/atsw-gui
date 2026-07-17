@@ -742,6 +742,27 @@ check "fijar quita UN grado de libertad" "$((NF_FREE - 1))" "$NF_FX" 0.5
 grep -q "delta1\[1\].*(fixed)" "$OUT" && pass "el informe lo marca como fijo" \
                                       || fail "el informe no lo marca como fijo"
 
+# --- PRODUCTO: un coeficiente ES el producto de otros dos (numerador factorizado
+#     del legacy).  omega1[1] = -omega1[0]*theta_2 reproduce -x5(1-x6B) con x6
+#     compartido con la MA del input.  Es la carencia que el ejercicio m6 midio. ---
+CNS="$TMPDIR/prod.cns"
+printf 'omega1[1] = -omega1[0] * theta_2[B^1]\n' > "$CNS"
+OUT="$TMPDIR/cns_prod.txt"
+$DRTRAN "$SYN/m6/M6_EP.pre" "$SYN/m6/M6_EI.pre" -b 1 -r 0 -s 1 -c "$CNS" -o "$OUT" > /dev/null 2>&1
+
+W0=$(val "$OUT" 'omega1\[0\]')
+W1=$(val "$OUT" 'omega1\[1\]')
+T2=$(val "$OUT" 'theta_2\[B\^1\]')
+check "el producto se impone EXACTO: omega1[1] = -omega1[0]*theta_2[B^1]" \
+      "$(python3 -c "print(-1.0*($W0)*($T2))")" "$W1" 1e-5
+grep -q "(= -omega1\[0\] \* theta_2" "$OUT" \
+    && pass "el informe muestra el producto (con signo)" \
+    || fail "el informe no muestra el producto"
+NF_PR=$(grep "Structural parameters" "$OUT" | sed 's/.*free: \([0-9]*\).*/\1/')
+NF_PRFREE=$($DRTRAN "$SYN/m6/M6_EP.pre" "$SYN/m6/M6_EI.pre" -b 1 -r 0 -s 1 -o "$TMPDIR/pf.txt" >/dev/null 2>&1; \
+           grep "Structural parameters" "$TMPDIR/pf.txt" | sed 's/.*free: \([0-9]*\).*/\1/')
+check "el producto quita UN grado de libertad" "$((NF_PRFREE - 1))" "$NF_PR" 0.5
+
 # --- un nombre inexistente debe fallar con un mensaje claro ---
 CNS="$TMPDIR/bad.cns"
 printf 'delta9[3] = 0.5\n' > "$CNS"

@@ -413,15 +413,23 @@ m6 no es m6: es la **escalera metodológica de Treadway** (univariantes → MS d
 covarianzas libres → leer CCF → añadir dinámica → validar). Convertirla en producto =
 automatizar lo que hoy es manual. Candidatos, por palanca:
 
-- [ ] **(1) Identificación de red MULTIVARIANTE — recomendado empezar aquí.** El paso 3,
-      automatizado: extender el preblanqueo **bivariante** (M2, `-p`) a escanear **todas**
-      las CCF residuales del diagonal y **proponer el DAG** (enlaces + `b/r/s`). Es "el
-      `-p` del sistema entero". El hueco más claro y el que más trabajo manual llevó;
-      drtran ya tiene la pieza bivariante que extender.
-- [ ] **(2) PRODUCTOS en la tabla de slots.** Cerrar la carencia MEDIDA: que `-c` exprese
-      `x = y*z` (y polinomios factorizados en ω(B)), para reproducir los numeradores
-      factorizados y compartidos del legacy. Complemento natural de (1). *(Ver M5 y la
-      carencia en `M6_EJERCICIO.md` §6.)*
+- [x] **(1) Identificación de red MULTIVARIANTE — HECHO (v1).** Flag `-i`:
+      `identify_network` lee las ccf de los residuos del diagonal (doble preblanqueo) y
+      propone el DAG (enlaces dirigidos + `b/s`) y las covarianzas contemporáneas.
+      Validado en m6 (recupera las 3 covarianzas del legacy y el enlace limpio EI→EP b=1).
+      Es una GUÍA de candidatos (poda por exogeneidad/aciclicidad/retardo). *Pendiente
+      de refinar:* `r=1` (denominador racional), detección de ciclos, mejor filtrado del
+      ruido de retardos lejanos.
+- [x] **(2) PRODUCTOS en la tabla de slots — HECHO (v1).** El `-c` acepta ahora
+      `x = [-]y * z`: un coeficiente ES el producto (con signo) de otros dos slots
+      (`SLOT_PRODUCT`, resuelto en `expand_params`; el gradiente lo maneja `cdgrad` por
+      diferencias finitas, sin regla de cadena). Reproduce los numeradores factorizados +
+      compartidos del legacy: p.ej. `omega1[1] = -omega1[0] * theta_2[B^1]` = `-x5(1-x6B)`
+      con `x6` compartido con la MA del input. Validado (bloque m6 EP←EI: el producto se
+      impone exacto y quita 1 g.l.). **Cierra la carencia MEDIDA** (`M6_EJERCICIO.md` §6).
+      *Pendiente:* sumas/diferencias de productos (`x = y*z - w`, para coeficientes como
+      `x12·x14 - x13`) — una mini-expresión, o el numerador factorizado como producto de
+      factores-polinomio.
 - [ ] **(3) La escalera como driver guiado.** Un modo que orqueste pasos 2-4: corre el
       diagonal, emite el informe de CCF + red sugerida, deja confirmar/estimar. Como el
       guiado de ART, pero para el sistema.

@@ -2204,6 +2204,9 @@ static void usage(const char *prog)
 "             delta1[1] = phi_2[B^1]   # share: the transfer denominator IS the\n"
 "                                      # input's own AR (a rational transfer)\n"
 "             omega1[0] = omega2[0]    # share between two inputs\n"
+"             omega1[1] = omega1[0] * theta_2[B^1]   # PRODUCT: a factorized\n"
+"                                      # numerator w0*(1 - x*B) with x shared with\n"
+"                                      # the input's own MA (Mauricio's m6 form)\n"
 "             omega2[1] = 0.0          # fix at a value\n"
 "             q[2,1]    = free         # free an innovation covariance\n"
 "\n"
@@ -2376,15 +2379,17 @@ static void usage(const char *prog)
 /*     omega1[0] = omega2[0]       # compartir entre entradas                  */
 /*     omega2[1] = 0.0             # fijar                                     */
 /* -------------------------------------------------------------------------- */
-#define MAX_SLOT   400
-#define SLOT_FREE  0
-#define SLOT_FIXED 1
-#define SLOT_ALIAS 2
+#define MAX_SLOT    400
+#define SLOT_FREE    0
+#define SLOT_FIXED   1
+#define SLOT_ALIAS   2
+#define SLOT_PRODUCT 3   /* x = y * z : el coeficiente ES un producto de otros dos */
 
 static char slot_name[MAX_SLOT + 1][40];
 static int  slot_kind[MAX_SLOT + 1];
 static int  slot_alias[MAX_SLOT + 1];
 static real slot_value[MAX_SLOT + 1];
+static int  slot_pa[MAX_SLOT + 1], slot_pb[MAX_SLOT + 1];  /* operandos del PRODUCTO */
 static int  free_of_slot[MAX_SLOT + 1];   /* slot -> índice libre (0 si no)  */
 static int  slot_of_free[MAX_SLOT + 1];   /* índice libre -> slot            */
 static int  n_slot = 0, n_free = 0;
@@ -2401,6 +2406,8 @@ static void add_slot(const char *fmt, ...)
     slot_kind[n_slot]  = SLOT_FREE;
     slot_alias[n_slot] = 0;
     slot_value[n_slot] = 0.0;
+    slot_pa[n_slot]    = 0;
+    slot_pb[n_slot]    = 0;
 }
 
 /* Nombres de los factores ARMA, en el MISMO orden que pack_ar/ma_factors */
@@ -2547,13 +2554,14 @@ static int read_constraints(const char *path)
     }
 
     while (fgets(line, sizeof line, f)) {
-        char lhs[64], rhs[64];
+        char lhs[64], rhs[64], rhsfull[128];
         char *hash = strchr(line, '#');
+        char *star;
         int a, b;
         double v;
 
         if (hash) *hash = '\0';
-        if (sscanf(line, " %63[^= \t] = %63s", lhs, rhs) != 2) continue;
+        if (sscanf(line, " %63[^= \t] = %127[^\n]", lhs, rhsfull) != 2) continue;
 
         a = find_slot(lhs);
         if (a == 0) {
@@ -2561,6 +2569,40 @@ static int read_constraints(const char *path)
             fclose(f);
             return -1;
         }
+
+        /* PRODUCTO:  x = [-] y * z.  El coeficiente ES el producto de otros dos
+           slots, con un signo opcional (numerador factorizado del legacy: p.ej.
+           omega1[1] = -omega1[0] * theta_4 reproduce -x5*(1-x6B) con x6 compartido
+           con la MA del input).  El gradiente lo maneja cdgrad por diferencias
+           finitas: no hace falta regla de la cadena analitica.                    */
+        star = strchr(rhsfull, '*');
+        if (star) {
+            char pa[64], pb[64];
+            char *p = rhsfull;
+            real sign = 1.0;
+            *star = '\0';
+            while (*p == ' ' || *p == '\t') p++;
+            if (*p == '-') { sign = -1.0; p++; while (*p == ' ' || *p == '\t') p++; }
+            if (sscanf(p, "%63s", pa) == 1 && sscanf(star + 1, " %63s", pb) == 1) {
+                int sa = find_slot(pa), sb = find_slot(pb);
+                if (sa == 0 || sb == 0) {
+                    fprintf(stderr, "Error: unknown operand in product '%s = %s * %s' in %s\n",
+                            lhs, pa, pb, path);
+                    fclose(f); return -1;
+                }
+                if (sa == a || sb == a) {
+                    fprintf(stderr, "Error: '%s' cannot be a factor of itself\n", lhs);
+                    fclose(f); return -1;
+                }
+                slot_kind[a]  = SLOT_PRODUCT;
+                slot_pa[a] = sa;  slot_pb[a] = sb;
+                slot_value[a] = sign;         /* +1 o -1: el signo del producto */
+                nc++;
+                continue;
+            }
+        }
+
+        if (sscanf(rhsfull, " %63s", rhs) != 1) continue;
 
         if (strcmp(rhs, "free") == 0) {     /* LIBERAR (una covarianza) */
             slot_kind[a]  = SLOT_FREE;
@@ -2754,9 +2796,24 @@ real *expand_params(real *xfree)
     for (i = 1; i <= n_slot; i++) {
         if (slot_kind[i] == SLOT_FREE)       xfull[i] = xfree[free_of_slot[i]];
         else if (slot_kind[i] == SLOT_FIXED) xfull[i] = slot_value[i];
+        else                                 xfull[i] = 0.0;   /* alias/producto: abajo */
     }
     for (i = 1; i <= n_slot; i++)
         if (slot_kind[i] == SLOT_ALIAS) xfull[i] = xfull[slot_alias[i]];
+    /* PRODUCTOS:  x = xfull[pa] * xfull[pb].  Se itera para resolver cadenas
+       (producto de producto); n_slot pasadas bastan.  El gradiente lo capta
+       cdgrad por diferencias finitas sobre los libres — sin regla de cadena. */
+    {
+        int pass, changed = 1;
+        for (pass = 0; changed && pass < n_slot; pass++) {
+            changed = 0;
+            for (i = 1; i <= n_slot; i++)
+                if (slot_kind[i] == SLOT_PRODUCT) {
+                    real nv = slot_value[i] * xfull[slot_pa[i]] * xfull[slot_pb[i]];
+                    if (nv != xfull[i]) { xfull[i] = nv; changed = 1; }
+                }
+        }
+    }
     return xfull;
 }
 
@@ -2993,6 +3050,10 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
             } else if (slot_kind[i] == SLOT_ALIAS) {
                 fprintf(outputv, "%-20s %12.6f       (= %s)\n",
                         slot_name[i], xf[i], slot_name[slot_alias[i]]);
+            } else if (slot_kind[i] == SLOT_PRODUCT) {
+                fprintf(outputv, "%-20s %12.6f       (= %s%s * %s)\n",
+                        slot_name[i], xf[i], (slot_value[i] < 0 ? "-" : ""),
+                        slot_name[slot_pa[i]], slot_name[slot_pb[i]]);
             } else {
                 pi = free_of_slot[i];
                 dev[pi] = (cov[pi][pi] > 0) ? sqrt(cov[pi][pi]) : 0.0;

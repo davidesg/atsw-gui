@@ -935,6 +935,19 @@ OUT="$TMPDIR/ch_syn.txt"
 $DRTRAN "$SYN/SYN_Y.pre" "$SYN/SYN_X.pre" -b 2 -r 0 -s 1 -o "$OUT" >/dev/null 2>&1
 check "SYN: ganancia (verdad 1.200)"       1.200 "$(gain "$OUT")" 0.06
 check "SYN: retardo medio (verdad 2.333)"  2.333 "$(mlag "$OUT")" 0.06
+# GUARDA DEL SIGNO (auditoria BJR).  La ganancia g = nu(1) es fisica.  Con el
+# convenio + (el bug) seria Sum(omega) = omega_0 + omega_1 = 0.8 + (-0.4) = 0.4,
+# NO 1.2.  transfer_characteristics DEBE usar omega(1) = omega_0 - omega_1 (BJR):
+G_SYN=$(gain "$OUT")
+python3 -c "import sys; sys.exit(0 if abs($G_SYN - 0.4) > 0.3 else 1)" \
+    && pass "la ganancia NO es la del convenio + (0.4): guarda el signo BJR de omega en g" \
+    || fail "la ganancia parece del convenio + (bug de signo en la caracterizacion)"
+# idem para la VELOCIDAD: con el convenio + el retardo medio seria
+# 2 + (1*(-0.4))/0.4 = 1.0, imposiblemente por debajo del retardo puro b=2.
+M_SYN=$(mlag "$OUT")
+python3 -c "import sys; sys.exit(0 if abs($M_SYN - 1.0) > 0.5 else 1)" \
+    && pass "el retardo medio NO es el del convenio + (1.0): guarda el signo BJR en m" \
+    || fail "el retardo medio parece del convenio + (bug de signo)"
 
 # --- VERDAD SINTÉTICA RACIONAL: b=1, omega=0.6, delta=0.6
 #     g = 0.6/0.4 = 1.5 ;  m = 1 + 0.6/0.4 = 2.5   <- el denominador ALARGA la respuesta

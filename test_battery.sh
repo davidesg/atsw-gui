@@ -1942,6 +1942,27 @@ python3 -c "import sys; sys.exit(0 if abs($MO21-(($MO20)*($MTH4)-($MO22)))<1e-4 
 
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
+echo "── 8. REGRESION DEL SISTEMA COMPLETO (m6, la escalera de punta a punta) ──"
+echo "   El diagonal y la red libre deben dar los log-likelihood canonicos: una"
+echo "   guarda de que TODO el pipeline (lectura .pre, MEG, cast, optimizador) no"
+echo "   deriva. Es el ejemplo empaquetado en examples/m6/."
+echo ""
+DIAG8="$TMPDIR/m6_diag.txt"; NET8="$TMPDIR/m6_netfree8.txt"
+$DRTRAN $M6_7 -0                  -c "$SYN/m6/m6.cns"     -o "$DIAG8" >/dev/null 2>&1
+$DRTRAN $M6_7 -n "$DAG7" -c "$SYN/m6/m6_net.cns"          -o "$NET8"  >/dev/null 2>&1
+LD8=$(grep -E "Log-likelihood" "$DIAG8" | grep -oE "\-[0-9]+\.[0-9]+")
+LN8=$(grep -E "Log-likelihood" "$NET8"  | grep -oE "\-[0-9]+\.[0-9]+")
+check "diagonal m6: log-likelihood canonico (~-1709.5)"  -1709.51 "$LD8" 0.5
+check "red libre m6: log-likelihood canonico (~-1697.6)" -1697.61 "$LN8" 0.5
+python3 -c "import sys; sys.exit(0 if ($LN8) > ($LD8) else 1)" \
+    && pass "la red de transferencias mejora la l sobre el diagonal (~12)" \
+    || fail "la red NO mejora sobre el diagonal ($LN8 vs $LD8)"
+{ [ -x examples/m6/run.sh ] && [ -f examples/m6/README.md ]; } \
+    && pass "el caso esta EMPAQUETADO (examples/m6/run.sh + README.md)" \
+    || fail "falta el ejemplo empaquetado examples/m6/"
+
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
 echo "============================================"
 echo -e "  RESULTADO: ${GREEN}$PASS PASS${NC}, ${RED}$FAIL FAIL${NC}"
 echo "============================================"

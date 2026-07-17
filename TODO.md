@@ -450,8 +450,11 @@ automatizar lo que hoy es manual. Candidatos, por palanca:
 - [ ] **(3) La escalera como driver guiado.** Un modo que orqueste pasos 2-4: corre el
       diagonal, emite el informe de CCF + red sugerida, deja confirmar/estimar. Como el
       guiado de ART, pero para el sistema.
-- [ ] **(4) Empaquetar m6.** El caso como ejemplo tutorial + **test de regresión del
-      sistema completo** que se distribuye con drtran. Valida y enseña la escalera.
+- [x] **(4) Empaquetar m6 — HECHO (jul-2026).** `examples/m6/` con `run.sh` (recorre la
+      escalera de punta a punta: univariantes → diagonal → `-i` → red libre/productos/completa,
+      imprimiendo la progresión de ℓ) y `README.md` (tutorial). **Regresión del sistema
+      completo** en la batería §8: los ℓ canónicos (diagonal −1709.5, red libre −1697.6, la red
+      mejora ~12) guardan que todo el pipeline no deriva. Batería **280 PASS**.
 
 ### Auditoría del signo/normalización — EN CURSO
 

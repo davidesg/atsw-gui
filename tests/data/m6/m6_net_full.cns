@@ -1,0 +1,25 @@
+# Paso 4 (v3) -- la ESTRUCTURA COMPLETA del legacy m6-1 expresable con la tabla de
+# slots: los 2 numeradores de MA compartida (PRODUCTO) y el factor fijo (1-B) de
+# EI<-EU (COMBINACION LINEAL).  BJR omega(B)=w0-w1B.
+#
+# ORDEN de series: 1=EP  2=EI  3=EU  4=EC  5=EA  6=P
+#
+# --- Las 3 covarianzas contemporaneas del legacy (drv.c qq[][]) ---
+q[5,2] = free
+q[5,4] = free
+q[3,2] = free
+#
+# --- PRODUCTOS: numeradores factorizados con MA COMPARTIDA ---
+# EP<-EI : -x5*(1-x6 B), x6 = MA de EI (theta_2)  =>  omega1[1] = omega1[0]*x6.
+omega1[1] = omega1[0] * theta_2[B^1]
+# EU<-EC : -x15*(1-x16 B), x16 = MA de EU (theta_3) =>  omega4[1] = omega4[0]*x16.
+omega4[1] = omega4[0] * theta_3[B^1]
+#
+# --- COMBINACION LINEAL: factor FIJO (1-B) de EI<-EU ---
+# EI<-EU : -(1-B)(x8+x9 B+x10 B^2).  El (1-B) impone nu_num(1)=0, i.e. en BJR
+#   w0 - w1 - w2 - w3 = 0  =>  omega3[0] = omega3[1] + omega3[2] + omega3[3].
+omega3[0] = omega3[1] + omega3[2] + omega3[3]
+#
+# NOTA: EP<-EC = (1-x14B)(x12+x13B) NO se impone: x12,x13,x14 son locales (sin
+# compartir), luego el numerador libre omega2[0..2] ya cubre el mismo espacio; la
+# forma factorizada solo restringiria a raices reales, sin ganar grados de libertad.

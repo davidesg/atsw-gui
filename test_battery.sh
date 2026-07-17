@@ -1904,6 +1904,44 @@ python3 -c "import sys; sys.exit(0 if 0 <= ($LA7)-($LB7) < 2.0 else 1)" \
 
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
+echo "── 7b. COMBINACION LINEAL: el factor FIJO (1-B) de una FLT ──"
+echo "   EI<-EU del legacy = -(1-B)(x8+x9B+x10B^2). El (1-B) impone nu_num(1)=0,"
+echo "   i.e. en BJR omega3[0] = omega3[1]+omega3[2]+omega3[3]. La tabla de slots lo"
+echo "   expresa como COMBINACION LINEAL (SLOT_LINCOMB), quitando 1 g.l."
+echo ""
+NC7="$TMPDIR/m6net_full.txt"
+$DRTRAN $M6_7 -n "$DAG7" -c "$SYN/m6/m6_net_full.cns" -D -E -o "$NC7" >/dev/null 2>&1
+
+grep -q "(= omega3\[1\] + omega3\[2\] + omega3\[3\])" "$NC7" \
+    && pass "la combinacion lineal (1-B) se imprime (omega3[0] = omega3[1]+omega3[2]+omega3[3])" \
+    || fail "la combinacion lineal no aparece en la red"
+# se cumple EXACTA: la suma de los tres coeficientes libres ES omega3[0]
+O30=$(val "$NC7" 'omega3\[0\]'); O31=$(val "$NC7" 'omega3\[1\]')
+O32=$(val "$NC7" 'omega3\[2\]'); O33=$(val "$NC7" 'omega3\[3\]')
+python3 -c "import sys; sys.exit(0 if abs($O30-($O31+$O32+$O33))<1e-4 else 1)" \
+    && pass "la combinacion se cumple EXACTA: $O30 = $O31 + $O32 + $O33" \
+    || fail "la combinacion no se cumple: $O30 != $O31+$O32+$O33"
+# la ESTRUCTURA COMPLETA del legacy (2 productos + el (1-B)) NO es rechazada:
+# LR = 2*dl sobre 3 g.l., chi2(3)_.95 = 7.81  =>  dl < 3.9 (holgado)
+LC7=$(grep -E "Log-likelihood" "$NC7" | grep -oE "\-[0-9.]+")
+python3 -c "import sys; sys.exit(0 if 0 <= ($LA7)-($LC7) < 3.9 else 1)" \
+    && pass "la estructura completa del legacy no es rechazada (LR: $LA7 -> $LC7, 3 g.l.)" \
+    || fail "la estructura completa cuesta demasiado ($LA7 -> $LC7): revisar"
+
+# --- el camino MIXTO producto-en-suma (x = y*z - w): identidad exacta ---
+# No es un modelo con sentido (theta_4 no es x14); solo ejercita el parser/resolvedor
+# del termino-producto dentro de una combinacion lineal.
+MIX="$TMPDIR/lc_mix.cns"; MO="$TMPDIR/lc_mix.txt"
+printf 'q[5,2] = free\nq[3,2] = free\nomega2[1] = omega2[0] * theta_4[B^1] - omega2[2]\n' > "$MIX"
+$DRTRAN $M6_7 -n "$DAG7" -c "$MIX" -D -E -o "$MO" >/dev/null 2>&1
+MO20=$(val "$MO" 'omega2\[0\]'); MO21=$(val "$MO" 'omega2\[1\]')
+MO22=$(val "$MO" 'omega2\[2\]'); MTH4=$(val "$MO" 'theta_4\[B')
+python3 -c "import sys; sys.exit(0 if abs($MO21-(($MO20)*($MTH4)-($MO22)))<1e-4 else 1)" \
+    && pass "el termino-producto en la suma se cumple: $MO21 = $MO20*$MTH4 - $MO22" \
+    || fail "el camino producto-en-suma (y*z - w) no se cumple"
+
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
 echo "============================================"
 echo -e "  RESULTADO: ${GREEN}$PASS PASS${NC}, ${RED}$FAIL FAIL${NC}"
 echo "============================================"

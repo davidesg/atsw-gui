@@ -427,9 +427,13 @@ automatizar lo que hoy es manual. Candidatos, por palanca:
       compartidos del legacy: p.ej. `omega1[1] = -omega1[0] * theta_2[B^1]` = `-x5(1-x6B)`
       con `x6` compartido con la MA del input. Validado (bloque m6 EP←EI: el producto se
       impone exacto y quita 1 g.l.). **Cierra la carencia MEDIDA** (`M6_EJERCICIO.md` §6).
-      *Pendiente:* sumas/diferencias de productos (`x = y*z - w`, para coeficientes como
-      `x12·x14 - x13`) — una mini-expresión, o el numerador factorizado como producto de
-      factores-polinomio.
+- [x] **(2-bis) La mini-expresión — HECHA (`SLOT_LINCOMB`, jul-2026).** El `-c` acepta ahora
+      **combinaciones lineales** `x = [±]t1 [±]t2 …`, con cada término un slot **o** un producto
+      `slot*slot`. Generaliza el producto a sumas/diferencias: cubre el factor **fijo `(1−B)`**
+      de una FLT (`ν_num(1)=0` ⇒ `omega[0]=omega[1]+omega[2]+…`) y los coeficientes `y*z − w` de
+      un numerador factorizado (`x12·x14 − x13`). Resuelto en `expand_params` (iterativo,
+      gradiente por `cdgrad`); se imprime con su fórmula. Batería sección 7b (4 checks: (1−B)
+      exacto, estructura completa no rechazada, camino producto-en-suma).
 - [x] **(1-bis) La red m6 RE-CORRIDA con los productos — HECHO/MEDIDO (jul-2026).** Los 2
       enlaces de **MA compartida** impuestos: EP←EI `omega1[1]=omega1[0]*theta_2` (x6=MA de
       EI) y EU←EC `omega4[1]=omega4[0]*theta_3` (x16=MA de EU); en `tests/data/m6/m6_net_prod.cns`.
@@ -437,9 +441,12 @@ automatizar lo que hoy es manual. Candidatos, por palanca:
       **compuestas débilmente identificadas** (mode-hopping, §5) que dominan la ℓ. Fijando los
       deterministas (`-D -E`, Relloso) la comparación aísla la transferencia: **los 2 productos
       cuestan solo Δℓ=0.4** (estructura consistente) y mueven el ω₁ hacia el legacy (EP←EI
-      0.255→0.330 vs 0.382; EU←EC 0.016→0.104 vs 0.31). Los otros 2 enlaces (EP←EC dos-factores,
-      EI←EU factor fijo (1−B)) **necesitan la mini-expresión pendiente**. Batería +4 = **272 PASS**
-      (sección 7). Detalle: `M6_TABLA4_BASELINE.md` §11.
+      0.255→0.330 vs 0.382; EU←EC 0.016→0.104 vs 0.31). Batería +4 (sección 7).
+      **Estructura COMPLETA** (con la mini-expresión (2-bis)): 2 productos + el `(1−B)` de
+      EI←EU (`omega3[0]=omega3[1]+omega3[2]+omega3[3]`), en `tests/data/m6/m6_net_full.cns`:
+      ℓ=−1731.4, 24 par libres, Δℓ=2.5 sobre 3 g.l. ⇒ **LR no rechazada** (χ²(3)₀.₉₅=7.81,
+      p≈0.17). EP←EC queda libre por diseño (x12,x13,x14 locales, sin g.l. que ganar).
+      Batería 276 PASS. Detalle: `M6_TABLA4_BASELINE.md` §11.
 - [ ] **(3) La escalera como driver guiado.** Un modo que orqueste pasos 2-4: corre el
       diagonal, emite el informe de CCF + red sugerida, deja confirmar/estimar. Como el
       guiado de ART, pero para el sistema.

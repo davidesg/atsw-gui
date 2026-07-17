@@ -396,15 +396,38 @@ El ω₁ se corrige hacia el legacy en ambos (EU←EC pasa de ~0 a 0.104); el ω
 libre) queda por debajo porque falta el resto de la estructura (los otros dos numeradores
 factorizados y la covarianza completa del legacy).
 
-**Los otros dos enlaces NO son producto puro** — necesitan la extensión pendiente
-(sumas/diferencias, `x = y*z ± w`):
-- EP←EC = `(1−x14B)(x12+x13B)`: producto de DOS factores libres → coeficientes que son
-  productos **y** sumas de x12,x13,x14.
-- EI←EU = `−(1−B)(x8+x9B+x10B²)`: el factor FIJO `(1−B)` impone una combinación lineal
-  (`ν_num(1)=0`, i.e. Σ coef = 0), no un producto.
+**Los otros dos enlaces NO son producto puro:**
+- EP←EC = `(1−x14B)(x12+x13B)`: producto de DOS factores libres. Pero **x12,x13,x14 son
+  locales** (no compartidos; los únicos shares del legacy son `x7=x6` y `x16=x11`,
+  `LEGACY_M6.md` §9): el numerador libre `omega2[0..2]` ya cubre el mismo espacio, la forma
+  factorizada solo restringiría a **raíces reales**, sin ganar g.l. ⇒ **no se impone**.
+- EI←EU = `−(1−B)(x8+x9B+x10B²)`: el factor **FIJO `(1−B)`** sí reduce 1 g.l. (3 params
+  libres, 4 coeficientes). En BJR impone `ν_num(1)=0`, i.e.
+  **`omega3[0] = omega3[1] + omega3[2] + omega3[3]`** — una **combinación lineal**.
 
-⇒ Objetivo (1) **parcialmente cerrado**: los 2 enlaces de MA compartida impuestos y medidos
-(coste ínfimo; ω₁ hacia el legacy). Los 2 factorizados esperan la mini-expresión.
+### La mini-expresión, implementada (`SLOT_LINCOMB`)
+
+Se añadió a la tabla de slots la **combinación lineal** `x = [±]t1 [±]t2 …`, con cada término
+un slot **o** un producto `slot*slot` — generaliza el producto a sumas/diferencias y cubre
+tanto el `(1−B)` (suma pura) como los coeficientes `y*z − w` de un numerador factorizado.
+El gradiente lo capta `cdgrad` por diferencias finitas, igual que el producto.
+
+**La estructura COMPLETA del legacy** (2 productos de MA compartida + el `(1−B)`), en
+`tests/data/m6/m6_net_full.cns`, converge y **no es rechazada**:
+
+| | transfer libre | + 2 productos | + (1−B) [completa] |
+|---|---|---|---|
+| ℓ | −1728.9 | −1729.3 | −1731.4 |
+| par. libres | 27 | 25 | 24 |
+| Δℓ vs libre | — | 0.4 | **2.5** |
+
+LR = 2·2.5 = 5.0 sobre 3 g.l.; χ²(3)₀.₉₅ = 7.81 ⇒ **no rechazada** (p≈0.17). Toda la
+estructura del legacy expresable con la tabla de slots es **consistente con los datos**. El
+`(1−B)` solo cuesta ~2 (borderline aislado), pero las 3 restricciones juntas caben holgadas.
+
+⇒ Objetivo (1) **cerrado en lo alcanzable**: las 3 restricciones estructurales del legacy
+(2 productos + 1 combinación lineal) impuestas, medidas y no rechazadas. EP←EC queda libre
+por diseño (no aporta g.l.).
 
 ---
 

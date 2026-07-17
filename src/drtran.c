@@ -2213,6 +2213,9 @@ static void usage(const char *prog)
 "             omega1[1] = omega1[0] * theta_2[B^1]   # PRODUCT: a factorized\n"
 "                                      # numerator w0*(1 - x*B) with x shared with\n"
 "                                      # the input's own MA (Mauricio's m6 form)\n"
+"             omega3[0] = omega3[1] + omega3[2] + omega3[3]  # LINEAR COMB: a\n"
+"                                      # fixed (1-B) factor forces nu_num(1)=0;\n"
+"                                      # terms may be slots or products (y*z - w)\n"
 "             omega2[1] = 0.0          # fix at a value\n"
 "             q[2,1]    = free         # free an innovation covariance\n"
 "\n"
@@ -2395,12 +2398,18 @@ static void usage(const char *prog)
 #define SLOT_FIXED   1
 #define SLOT_ALIAS   2
 #define SLOT_PRODUCT 3   /* x = y * z : el coeficiente ES un producto de otros dos */
+#define SLOT_LINCOMB 4   /* x = [±]t1 [±]t2 ... : suma de terminos (ti = slot o slot*slot) */
+#define MAX_LC_TERMS 6   /* terminos por combinacion lineal (basta para m6)              */
 
 static char slot_name[MAX_SLOT + 1][40];
 static int  slot_kind[MAX_SLOT + 1];
 static int  slot_alias[MAX_SLOT + 1];
 static real slot_value[MAX_SLOT + 1];
 static int  slot_pa[MAX_SLOT + 1], slot_pb[MAX_SLOT + 1];  /* operandos del PRODUCTO */
+static int  slot_nlc[MAX_SLOT + 1];                        /* nº de terminos (LINCOMB) */
+static real slot_lc_sign[MAX_SLOT + 1][MAX_LC_TERMS];      /* +1/-1 por termino        */
+static int  slot_lc_a[MAX_SLOT + 1][MAX_LC_TERMS];         /* factor 1 de cada termino */
+static int  slot_lc_b[MAX_SLOT + 1][MAX_LC_TERMS];         /* factor 2 (0 = sin producto) */
 static int  free_of_slot[MAX_SLOT + 1];   /* slot -> índice libre (0 si no)  */
 static int  slot_of_free[MAX_SLOT + 1];   /* índice libre -> slot            */
 static int  n_slot = 0, n_free = 0;
@@ -2419,6 +2428,7 @@ static void add_slot(const char *fmt, ...)
     slot_value[n_slot] = 0.0;
     slot_pa[n_slot]    = 0;
     slot_pb[n_slot]    = 0;
+    slot_nlc[n_slot]   = 0;
 }
 
 /* Nombres de los factores ARMA, en el MISMO orden que pack_ar/ma_factors */
@@ -2579,6 +2589,66 @@ static int read_constraints(const char *path)
             fprintf(stderr, "Error: unknown parameter '%s' in %s\n", lhs, path);
             fclose(f);
             return -1;
+        }
+
+        /* COMBINACION LINEAL:  x = [±]t1 [±]t2 ...  con ti = slot o slot*slot.
+           Generaliza el PRODUCTO a sumas/diferencias de terminos.  Cubre el factor
+           FIJO (1−B) de una FLT — que impone nu_num(1)=0, i.e. omega[0]=omega[1]+
+           omega[2]+... — y los coeficientes producto±termino de un numerador
+           factorizado (p.ej. x12*x14 − x13 del legacy).  Se detecta por un
+           separador +/- interno (los nombres de slot no llevan +/-).  El gradiente
+           lo capta cdgrad por diferencias finitas, como el producto.              */
+        {
+            char *q = rhsfull;
+            int   is_lc = 0;
+            while (*q == ' ' || *q == '\t') q++;
+            if (*q == '+' || *q == '-') q++;          /* signo inicial: no separa */
+            for (; *q; q++) if (*q == '+' || *q == '-') { is_lc = 1; break; }
+            if (is_lc) {
+                char *p = rhsfull;
+                real  sg = 1.0;
+                int   nt = 0, ok = 1;
+                while (*p) {
+                    char tok[80], f1[64], f2[64], *st, *ast;
+                    while (*p == ' ' || *p == '\t') p++;
+                    if (*p == '+') { sg =  1.0; p++; continue; }
+                    if (*p == '-') { sg = -1.0; p++; continue; }
+                    if (!*p) break;
+                    st = tok;                          /* leer termino hasta +/- o fin */
+                    while (*p && *p != '+' && *p != '-' &&
+                           (size_t)(st - tok) < sizeof tok - 1) *st++ = *p++;
+                    *st = '\0';
+                    if (nt >= MAX_LC_TERMS) { ok = 0; break; }
+                    ast = strchr(tok, '*');
+                    if (ast) {
+                        int s1, s2;
+                        *ast = '\0';
+                        if (sscanf(tok, " %63s", f1) != 1 ||
+                            sscanf(ast + 1, " %63s", f2) != 1) { ok = 0; break; }
+                        s1 = find_slot(f1); s2 = find_slot(f2);
+                        if (!s1 || !s2 || s1 == a || s2 == a) { ok = 0; break; }
+                        slot_lc_sign[a][nt] = sg;
+                        slot_lc_a[a][nt] = s1; slot_lc_b[a][nt] = s2; nt++;
+                    } else {
+                        int s1;
+                        if (sscanf(tok, " %63s", f1) != 1) { ok = 0; break; }
+                        s1 = find_slot(f1);
+                        if (!s1 || s1 == a) { ok = 0; break; }
+                        slot_lc_sign[a][nt] = sg;
+                        slot_lc_a[a][nt] = s1; slot_lc_b[a][nt] = 0; nt++;
+                    }
+                }
+                if (!ok || nt < 1) {
+                    fprintf(stderr,
+                        "Error: cannot parse linear combination '%s = %s' in %s\n",
+                        lhs, rhsfull, path);
+                    fclose(f); return -1;
+                }
+                slot_kind[a] = SLOT_LINCOMB;
+                slot_nlc[a]  = nt;
+                nc++;
+                continue;
+            }
         }
 
         /* PRODUCTO:  x = [-] y * z.  El coeficiente ES el producto de otros dos
@@ -2820,11 +2890,20 @@ real *expand_params(real *xfree)
         int pass, changed = 1;
         for (pass = 0; changed && pass < n_slot; pass++) {
             changed = 0;
-            for (i = 1; i <= n_slot; i++)
+            for (i = 1; i <= n_slot; i++) {
                 if (slot_kind[i] == SLOT_PRODUCT) {
                     real nv = slot_value[i] * xfull[slot_pa[i]] * xfull[slot_pb[i]];
                     if (nv != xfull[i]) { xfull[i] = nv; changed = 1; }
+                } else if (slot_kind[i] == SLOT_LINCOMB) {
+                    real nv = 0.0; int t;
+                    for (t = 0; t < slot_nlc[i]; t++) {
+                        real term = slot_lc_sign[i][t] * xfull[slot_lc_a[i][t]];
+                        if (slot_lc_b[i][t]) term *= xfull[slot_lc_b[i][t]];
+                        nv += term;
+                    }
+                    if (nv != xfull[i]) { xfull[i] = nv; changed = 1; }
                 }
+            }
         }
     }
     return xfull;
@@ -3067,6 +3146,21 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
                 fprintf(outputv, "%-20s %12.6f       (= %s%s * %s)\n",
                         slot_name[i], xf[i], (slot_value[i] < 0 ? "-" : ""),
                         slot_name[slot_pa[i]], slot_name[slot_pb[i]]);
+            } else if (slot_kind[i] == SLOT_LINCOMB) {
+                char expr[256]; int t; size_t off = 0;
+                for (t = 0; t < slot_nlc[i]; t++) {
+                    const char *op = (slot_lc_sign[i][t] < 0) ? "- "
+                                   : (t == 0 ? "" : "+ ");
+                    off += snprintf(expr + off, sizeof expr - off, "%s%s", op,
+                                    slot_name[slot_lc_a[i][t]]);
+                    if (slot_lc_b[i][t])
+                        off += snprintf(expr + off, sizeof expr - off, " * %s",
+                                        slot_name[slot_lc_b[i][t]]);
+                    if (t + 1 < slot_nlc[i])
+                        off += snprintf(expr + off, sizeof expr - off, " ");
+                }
+                fprintf(outputv, "%-20s %12.6f       (= %s)\n",
+                        slot_name[i], xf[i], expr);
             } else {
                 pi = free_of_slot[i];
                 dev[pi] = (cov[pi][pi] > 0) ? sqrt(cov[pi][pi]) : 0.0;

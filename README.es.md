@@ -1,4 +1,4 @@
-# FUF 1.08.1
+# FUF 1.08.2
 
 **Free Univariate Forecasting** — predicción probabilística para modelos SARIMA univariantes.
 
@@ -60,7 +60,7 @@ brew install gsl gnuplot
 ## Estructura de ficheros
 
 ```
-fuf-1.08.1/
+fuf-1.08.2/
 ├── src/           ficheros fuente (.c)
 ├── include/       ficheros de cabecera (.h)
 ├── obj/           objetos compilados (generado por make)

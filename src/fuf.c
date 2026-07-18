@@ -1105,10 +1105,19 @@ int main( int argc, char *argv[] )
 
 /* [8.3]: Compute point forecasts for the level series, plus variances for   */
 /*        the level, d-level and d4-level series:                            */
-// Around line 750 in fuf.c, change the forecast call:
-forecast( varma1.m, Ts.nobs, Tm.ornsop, (Tm.ornsop+varma1.p ), varma1.q, varma1.mu, Fs.phi0,
-          varma1.theta, Fs.sigma2, varma1.nt, varma1.a, Fs.f1, Fs.v1, Fs.v2, Fs.v3,
-          Fs.b, Fs.L, Ts.freq, varma1.xi, (Tm.NdetVar > 0) );  // Add condition
+/* Intercepto de la deriva por serie: c_k = mu_k * phi_k(1) = mu_k*(1-Sum phi).*/
+/* Se anade DENTRO de la recursion phi0 (usfo.c [1]); corrige el bug de l*mu.  */
+{ int ii, kk; double *drift = vector( 1, varma1.m );
+  for ( kk = 1; kk <= varma1.m; kk++ ) {
+      double phisum = 0.0;
+      for ( ii = 1; ii <= varma1.p; ii++ ) phisum += varma1.phi[ii][kk][kk];
+      drift[kk] = varma1.mu[kk] * ( 1.0 - phisum );
+  }
+  forecast( varma1.m, Ts.nobs, Tm.ornsop, (Tm.ornsop+varma1.p ), varma1.q, varma1.mu, Fs.phi0,
+            varma1.theta, Fs.sigma2, varma1.nt, varma1.a, Fs.f1, Fs.v1, Fs.v2, Fs.v3,
+            Fs.b, Fs.L, Ts.freq, varma1.xi, (Tm.NdetVar > 0), drift );
+  free_vector( drift, 1, varma1.m );
+}
 
 /* [8.4]: Compute point forecasts for the d-level and df-level series:       */
 

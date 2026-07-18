@@ -46,7 +46,7 @@ int i, j;
 void forecast( int m, int n, int ornsop, int p, int q, double *mu, double ***phi,
                double ***theta, double sigma2, double **w, double **a,
                double **f1, double ***v1, double ***v2, double ***v3, int b, int L, int f,
-               double **xius, int has_deterministic )
+               double **xius, int has_deterministic, double *drift )
 {
    int  i, i1, j, j1, k, l;
    double ***psi1, ***psi2, ***psi3, **mtmp1, **mtmp2, *vtmp1, *vtmp2, s1, s2;
@@ -97,39 +97,24 @@ void forecast( int m, int n, int ornsop, int p, int q, double *mu, double ***phi
                   }
 
        for ( i1 = 1; i1 <= m; i1++ )
-           f1[i1][l] = vtmp1[i1] - vtmp2[i1];
+           f1[i1][l] = vtmp1[i1] - vtmp2[i1] + drift[i1];   /* + intercepto mu*phi(1) */
        }
 
 
 /*****************************************************************************/
 /* [2]: Adjust level forecasts by deterministic (intervention) effects (f1): */
 /*****************************************************************************/
-
+/* CORRECCION DEL BUG DE LA MEDIA: la deriva NO se anade aqui como l*mu sobre */
+/* un transitorio homogeneo (eso duplicaba la deriva -> exceso mu*phi/(1-phi));*/
+/* el intercepto correcto mu*phi(1) ya va DENTRO de la recursion en [1].       */
+/* Aqui solo se anade el efecto determinista (intervenciones/armonicos).       */
 
    if (has_deterministic) {
-       // Original complex logic for when deterministic variables are present
-       s2 = 0.0;
-       for ( l = 1; l <= L; l++ ) {
-           for ( k = 1; k <= m; k++ ) {
-                   f1[k][l] += xius[k][l+n];
-                if (mu[k] != 0){
-                   s2 += mu[k];
-                   f1[k][l] += s2;
-               }
-
-       }
-       }
-   } else {
-       // Simplified logic for when no deterministic variables are present
-       for ( l = 1; l <= L; l++ ) {
-           for ( k = 1; k <= m; k++ ) {
-               // Simple additive model: forecast = ARMA component + mean
-             //  f1[k][l] += mu[k];
-                    s2 +=  mu[k];
-                   f1[k][l] += s2;
-           }
-       }
+       for ( l = 1; l <= L; l++ )
+           for ( k = 1; k <= m; k++ )
+               f1[k][l] += xius[k][l+n];
    }
+   (void) s2; (void) mu;
 
 /*
 s2 = 0.0;

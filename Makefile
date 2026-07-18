@@ -1,4 +1,4 @@
-# Makefile for FUF 1.08.1 (console engine)
+# Makefile for FUF 1.08.2 (console engine)
 # Works on Linux, macOS, and Windows (MSYS2/MinGW-w64)
 # Also supports cross-compilation to Windows from Linux using MXE
 #   Example: make CROSS=x86_64-w64-mingw32.static-    # 64-bit static

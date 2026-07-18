@@ -48,7 +48,7 @@ void varphi(int ornsop, int p, double ***phi0, double ***phi, double *rnsop);
 void forecast( int m, int n, int ornsop, int p, int q, double *mu, double ***phi,
                double ***theta, double sigma2, double **w, double **a,
                double **f1, double ***v1, double ***v2, double ***v3, int b, int L, int f,
-               double **xius, int has_deterministic );
+               double **xius, int has_deterministic, double *drift );
 
 void point_forecast ( int m, int freq, int L, int nobs, double *data,
 			 double **f1, double **f2, double **f3);

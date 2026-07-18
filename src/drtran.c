@@ -1235,6 +1235,35 @@ static real vcov_at(real ***LP, real **sigma, int m, int i1, int i2, int l)
     return v;
 }
 
+/* Varianza del error de prevision de (1-B^lag) aplicado al NIVEL de la serie i, a
+   l pasos.  lag=0 -> el nivel; lag=1 -> variacion de periodo (1-B); lag=s ->
+   variacion anual (1-B^s).  Pesos LP(t)-LP(t-lag), como el msfo.c del legacy
+   (secciones [5]-[8]): las previsiones de nivel a l y a l-lag comparten las
+   innovaciones, y su diferencia hereda los pesos restados.                       */
+static real vcov_diff_at(real ***LP, real **sigma, int m, int i, int l, int lag)
+{
+    int t, j, k;
+    real v = 0.0;
+    for (t = 0; t <= l - 1; t++)
+        for (j = 1; j <= m; j++)
+            for (k = 1; k <= m; k++) {
+                real wj = LP[i][j][t] - (lag > 0 && t - lag >= 0 ? LP[i][j][t-lag] : 0.0);
+                real wk = LP[i][k][t] - (lag > 0 && t - lag >= 0 ? LP[i][k][t-lag] : 0.0);
+                v += sigma[j][k] * wj * wk;
+            }
+    return v;
+}
+
+/* Fecha (periodo/anno) de la observacion n, dada la fecha de arranque.  Como el
+   ObsToDate de fuf/forsil.  Para series anuales (freq<=1) *per queda a 0.         */
+static void obs_to_date(int begyear, int begtime, int freq, int n, int *per, int *yr)
+{
+    if (freq <= 1) { *per = 0; *yr = begyear + (n - 1); return; }
+    { int idx = (begtime - 1) + (n - 1);
+      *per = idx % freq + 1;
+      *yr  = begyear + idx / freq; }
+}
+
 
 /* --------------------------------------------------------------------------
    PREVISION RECURSIVA (fuera de muestra, parametros FIJOS).
@@ -1799,6 +1828,77 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
        Sigma GENERAL: desde que se pueden liberar covarianzas, suponerla
        diagonal aqui seria un error -- y lo era.                              */
     #define VCOV(I1, I2, LL)  vcov_at(LP, sigma, m, (I1), (I2), (LL))
+
+    /* --- REPORTE DE PREVISION "a la fuf/forsil" ---------------------------
+       Una tabla por serie con NIVEL (valor, DT), VARIACION de periodo (1-B) y
+       ANUAL (1-B^s) con sus DT, y el residuo (ERR).  Homologable con el
+       forecast_table_acii de fuf (univariante) y con forsil (multivariante):
+       misma tabla.  Las filas observadas llevan la variacion real y el residuo;
+       las de prevision, el valor previsto y su desviacion tipica.
+       Metrica: en modelos LOG la variacion va en % (x100/refactor, como fuf); en
+       niveles, como diferencia directa (/refactor, como forsil).                */
+    for (u = 1; u <= m; u++) {
+        int    nb, ord, freq, per, yr, obs;
+        real   refc, lam, vscale;
+        real  *ystar;                 /* nivel TRANSFORMADO y* = BC + DET */
+        i = topo[u];
+        nb   = Ts[i].nobs;
+        ord  = Tm[i].ornsop;
+        freq = Ts[i].freq;
+        refc = Ts[i].refactor;
+        lam  = Tm[i].boxlam;
+        vscale = (fabs(lam) < 1e-8) ? 100.0 / refc : 1.0 / refc;
+
+        ystar = vector(1, nb + L);
+        for (t = 1; t <= nb + L; t++) ystar[t] = BC[i][t] + DET[i][t];
+
+        obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, nb, &per, &yr);
+        fprintf(out, "\n  FORECAST REPORT\n");
+        fprintf(out, "    VARIABLE NAME  : %s\n", Ts[i].name ? Ts[i].name : "");
+        if (freq > 1) fprintf(out, "    FORECAST ORIGIN: %2d/%-4d", per, yr);
+        else          fprintf(out, "    FORECAST ORIGIN: %-4d", yr);
+        fprintf(out, "    LEAD TIME: %d\n\n", L);
+        fprintf(out, "   +--------------------------------------------------------------------+\n");
+        fprintf(out, "   |         |      LEVEL       |           VARIATION            |       |\n");
+        fprintf(out, "   |  DATE   +-----------------+-------------------------------+  ERR  |\n");
+        fprintf(out, "   |         |   VALUE  |  STD |  PERIOD |  STD  | ANNUAL |  STD |       |\n");
+        fprintf(out, "   +--------------------------------------------------------------------+\n");
+
+        /* Filas OBSERVADAS: las ultimas L+1 (origen incluido). */
+        for (obs = nb - L; obs <= nb; obs++) {
+            if (obs < 1) continue;
+            obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, obs, &per, &yr);
+            if (freq > 1) fprintf(out, "   %2d/%-4d ", per, yr);
+            else          fprintf(out, "   %-6d ", yr);
+            fprintf(out, "%9.2f    -   ", Ts[i].data[obs]);
+            if (obs - 1 >= 1) fprintf(out, "%8.2f    -   ", vscale * (ystar[obs] - ystar[obs-1]));
+            else              fprintf(out, "    -        -   ");
+            if (obs - freq >= 1) fprintf(out, "%7.2f    -  ", vscale * (ystar[obs] - ystar[obs-freq]));
+            else                 fprintf(out, "   -        -  ");
+            if (obs - ord >= 1 && obs - ord <= n_stat)
+                fprintf(out, "%7.2f\n", vscale * vf.a[i][obs - ord]);
+            else
+                fprintf(out, "    -  \n");
+        }
+        /* Filas de PREVISION. */
+        for (l = 1; l <= L; l++) {
+            real sd1 = sqrt(vcov_diff_at(LP, sigma, m, i, l, 0));
+            real sd2 = sqrt(vcov_diff_at(LP, sigma, m, i, l, 1));
+            real sd3 = (freq > 1) ? sqrt(vcov_diff_at(LP, sigma, m, i, l, freq)) : 0.0;
+            real f2  = ystar[nb + l] - ystar[nb + l - 1];
+            real f3  = (nb + l - freq >= 1) ? ystar[nb + l] - ystar[nb + l - freq] : 0.0;
+            obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, nb + l, &per, &yr);
+            if (freq > 1) fprintf(out, "   %2d/%-4d ", per, yr);
+            else          fprintf(out, "   %-6d ", yr);
+            fprintf(out, "%9.2f %6.2f ", LVL[i][l], vscale * sd1);
+            fprintf(out, "%8.2f %6.2f ", vscale * f2, vscale * sd2);
+            if (freq > 1) fprintf(out, "%7.2f %6.2f", vscale * f3, vscale * sd3);
+            else          fprintf(out, "    -       - ");
+            fprintf(out, "    -  \n");
+        }
+        fprintf(out, "   +--------------------------------------------------------------------+\n");
+        free_vector(ystar, 1, nb + L);
+    }
 
     /* --- Una tabla por serie que RECIBE alguna transferencia --------------- */
     for (u = 1; u <= m; u++) {

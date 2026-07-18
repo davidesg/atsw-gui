@@ -1081,6 +1081,36 @@ grep -q "exactly the VAR's problem" "$OUT" \
 
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
+echo "── 2j. REPORTE DE PREVISIÓN (a la fuf/forsil) ──"
+echo "   La tabla NIVEL/VARIACIÓN(período,anual)/ERR con desviaciones típicas,"
+echo "   homologable con el forecast_table_acii de fuf y con forsil. drtran ya"
+echo "   calcula los pesos psi del nivel; el reporte los presenta a la fuf."
+echo ""
+FR="$TMPDIR/frep.txt"
+$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -0 -f 6 -o "$FR" >/dev/null 2>&1
+# el reporte se emite con la cabecera y las columnas de fuf
+grep -q "FORECAST REPORT" "$FR" \
+    && pass "emite el FORECAST REPORT" || fail "no emite el reporte de previsión"
+{ grep -q "LEVEL" "$FR" && grep -q "VARIATION" "$FR" && grep -q "PERIOD" "$FR" \
+  && grep -q "ANNUAL" "$FR" && grep -q "ERR" "$FR"; } \
+    && pass "la tabla lleva las columnas NIVEL/VARIACIÓN(período,anual)/ERR" \
+    || fail "faltan columnas del reporte a la fuf"
+# FIRMA de forsil: en la 1a fila de PREVISIÓN, la DT de nivel = período = anual
+#   (a 1 paso los tres errores SON la misma innovación).  m3.out del legacy: 17.8/17.8/17.8.
+FLINE=$(awk '/FORECAST REPORT/{n++} n==1 && /^ +[0-9]+\/[0-9]+/ && $3!="-" && $4!="-"{print; exit}' "$FR")
+S1=$(echo "$FLINE" | awk '{print $3}'); S2=$(echo "$FLINE" | awk '{print $5}'); S3=$(echo "$FLINE" | awk '{print $7}')
+python3 -c "import sys; sys.exit(0 if abs($S1-$S2)<1e-6 and abs($S1-$S3)<1e-6 else 1)" 2>/dev/null \
+    && pass "a 1 paso DT(nivel)=DT(período)=DT(anual) ($S1): la firma de forsil" \
+    || fail "las DT a 1 paso no coinciden ($S1/$S2/$S3): la innovación es una sola"
+# HOMOLOGACIÓN con el valor documentado: WTI (AR(1) sobre dif. de log) tiene DT de
+# la variación de ~8.3% a 1 paso, 8.66% a 2, 8.69% a 3 (drtran-note, tabla WTI).
+WS1=$(awk '/VARIABLE NAME  : WTI/{f=1} f && /^ +[0-9]+\/[0-9]+/ && $5!="-"{print $5; exit}' "$FR")
+python3 -c "import sys; sys.exit(0 if abs($WS1-8.30)<0.05 else 1)" 2>/dev/null \
+    && pass "WTI: DT de la variación a 1 paso = $WS1 (documentado 8.30)" \
+    || fail "la DT de la variación de WTI no homologa con el valor documentado ($WS1)"
+
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
 echo "── 3. PASS-THROUGH: con Y = X la verdad es omega_0 = 1 ──"
 echo ""
 

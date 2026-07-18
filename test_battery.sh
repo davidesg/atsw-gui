@@ -1109,6 +1109,28 @@ python3 -c "import sys; sys.exit(0 if abs($WS1-8.30)<0.05 else 1)" 2>/dev/null \
     && pass "WTI: DT de la variación a 1 paso = $WS1 (documentado 8.30)" \
     || fail "la DT de la variación de WTI no homologa con el valor documentado ($WS1)"
 
+# --- INFORME LaTeX/PDF (-L): tabla + grafico pgfplots por serie, a la fuf ---
+# Se corre DENTRO de $TMPDIR (pdflatex escribe en su cwd) con rutas absolutas.
+RD_2j=$(pwd)
+( cd "$TMPDIR" && "$RD_2j/$DRTRAN" "$RD_2j/$WORK/ES_CPI_m10.pre" "$RD_2j/$WORK/WTI_ar1.pre" \
+      -0 -f 6 -m fcx -L -o fcx.out >/dev/null 2>&1 )
+{ [ -f "$TMPDIR/fcx_forecast.tex" ] \
+  && grep -q "tabular" "$TMPDIR/fcx_forecast.tex" \
+  && grep -q "tikzpicture" "$TMPDIR/fcx_forecast.tex" \
+  && grep -q "fill between" "$TMPDIR/fcx_forecast.tex"; } \
+    && pass "-L escribe el .tex con tabla + gráfico pgfplots (banda del 95%)" \
+    || fail "-L no genera el informe LaTeX esperado"
+# el _ de ES_CPI debe ir escapado (si no, pdflatex peta)
+grep -q 'ES\\_CPI' "$TMPDIR/fcx_forecast.tex" \
+    && pass "el nombre de serie va con el _ escapado para LaTeX" \
+    || fail "el nombre de serie no escapa el _ (rompería pdflatex)"
+# si hay pdflatex, el PDF debe compilar
+if command -v pdflatex >/dev/null 2>&1; then
+    [ -f "$TMPDIR/fcx_forecast.pdf" ] \
+        && pass "y compila a PDF con pdflatex" \
+        || fail "-L no compiló el PDF pese a haber pdflatex"
+fi
+
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
 echo "── 3. PASS-THROUGH: con Y = X la verdad es omega_0 = 1 ──"

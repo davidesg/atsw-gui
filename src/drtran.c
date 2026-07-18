@@ -96,6 +96,12 @@ int net_ident = 0;
    la escuela: la red identificada es una guia, no la final). */
 char *guide_name = NULL;
 
+/* -L : ademas del reporte ASCII, escribe un informe de prevision LaTeX/PDF "a la
+   fuf" (<base>_forecast.tex: tabla NIVEL/VARIACION + grafico pgfplots por serie) y
+   lo compila con pdflatex si esta disponible.  forecast_base es el nombre base. */
+int   latex_forecast = 0;
+char *forecast_base   = NULL;
+
 /* ¿La red es la ESTRELLA por defecto (todo entra a la serie 1)? Solo entonces
    tiene sentido hablar de "la entrada j" y "la salida Y".                    */
 static int net_is_star(void)
@@ -1604,6 +1610,179 @@ done:
     free_matrix(LVL, 1, n_ser, 1, L);
 }
 
+/* Escapa los caracteres especiales de LaTeX de un nombre (los _ de las series
+   romperian el .tex).  Devuelve dst.                                             */
+static const char *latex_escape(char *dst, size_t n, const char *src)
+{
+    size_t j = 0;
+    if (src == NULL) { dst[0] = '\0'; return dst; }
+    for (; *src && j + 2 < n; src++) {
+        if (*src == '_' || *src == '%' || *src == '&' || *src == '#' || *src == '$')
+            dst[j++] = '\\';
+        dst[j++] = *src;
+    }
+    dst[j] = '\0';
+    return dst;
+}
+
+/* Inversa de la transformacion Box-Cox: del espacio transformado (c/refactor) al
+   NIVEL.  lam=0 -> log; lam!=0 -> Box-Cox.                                        */
+static real bc_inverse(real c, real lam, real refc)
+{
+    real z = c / refc;
+    if (fabs(lam) < 1e-8) return exp(z);
+    return pow(lam * z + 1.0, 1.0 / lam);
+}
+
+/* Informe de prevision LaTeX/PDF "a la fuf": una pagina por serie con la tabla
+   NIVEL/VARIACION/ERR y un grafico (historia + prevision + banda del 95%) en
+   pgfplots (autocontenido, sin gnuplot).  Compila con pdflatex si esta.
+   Recibe los tensores ya calculados por transfer_forecast.                       */
+static void forecast_latex_doc(int m, int L, real ***LP, real **sigma,
+                               real **BC, real **DET, real **LVL,
+                               real **aresid, int *topo)
+{
+    char fname[600];
+    FILE *tex;
+    int  u, i, l, t, per, yr;
+
+    if (forecast_base == NULL) return;
+    snprintf(fname, sizeof fname, "%s_forecast.tex", forecast_base);
+    tex = fopen(fname, "w");
+    if (tex == NULL) return;
+
+    fprintf(tex,
+        "\\documentclass[11pt,a4paper]{article}\n"
+        "\\usepackage[T1]{fontenc}\n\\usepackage[utf8]{inputenc}\n"
+        "\\usepackage{booktabs}\n\\usepackage{geometry}\n\\usepackage{pgfplots}\n"
+        "\\pgfplotsset{compat=1.16}\n\\usepgfplotslibrary{fillbetween}\n"
+        "\\geometry{margin=2cm}\n\\pagestyle{empty}\n\\begin{document}\n");
+
+    for (u = 1; u <= m; u++) {
+        int  nb, ord, freq, H;
+        real refc, lam, vscale;
+        real *ystar;
+        i    = topo[u];
+        nb   = Ts[i].nobs;
+        ord  = Tm[i].ornsop;
+        freq = Ts[i].freq;
+        refc = Ts[i].refactor;
+        lam  = Tm[i].boxlam;
+        vscale = (fabs(lam) < 1e-8) ? 100.0 / refc : 1.0 / refc;
+
+        ystar = vector(1, nb + L);
+        for (t = 1; t <= nb + L; t++) ystar[t] = BC[i][t] + DET[i][t];
+
+        obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, nb, &per, &yr);
+        { char enm[128];
+          fprintf(tex, "\\section*{Forecast report: %s}\n",
+                  latex_escape(enm, sizeof enm, Ts[i].name)); }
+        if (freq > 1) fprintf(tex, "Forecast origin: %d/%d.\\quad Lead time: %d.\n\n",
+                              per, yr, L);
+        else          fprintf(tex, "Forecast origin: %d.\\quad Lead time: %d.\n\n",
+                              yr, L);
+
+        /* --- Tabla --- */
+        fprintf(tex, "\\begin{center}\\small\n\\begin{tabular}{r rr rr rr r}\n\\toprule\n");
+        fprintf(tex, " & \\multicolumn{2}{c}{LEVEL} & \\multicolumn{4}{c}{VARIATION} & \\\\\n");
+        fprintf(tex, "\\cmidrule(lr){2-3}\\cmidrule(lr){4-7}\n");
+        fprintf(tex, "DATE & VALUE & STD & PERIOD & STD & ANNUAL & STD & ERR \\\\\n\\midrule\n");
+        for (t = nb - L; t <= nb; t++) {
+            if (t < 1) continue;
+            obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, t, &per, &yr);
+            if (freq > 1) fprintf(tex, "%d/%d & ", per, yr);
+            else          fprintf(tex, "%d & ", yr);
+            fprintf(tex, "%.2f & -- & ", Ts[i].data[t]);
+            if (t - 1 >= 1)    fprintf(tex, "%.2f & -- & ", vscale * (ystar[t] - ystar[t-1]));
+            else               fprintf(tex, "-- & -- & ");
+            if (t - freq >= 1) fprintf(tex, "%.2f & -- & ", vscale * (ystar[t] - ystar[t-freq]));
+            else               fprintf(tex, "-- & -- & ");
+            if (t - ord >= 1 && t - ord <= n_stat)
+                 fprintf(tex, "%.2f \\\\\n", vscale * aresid[i][t - ord]);
+            else fprintf(tex, "-- \\\\\n");
+        }
+        fprintf(tex, "\\midrule\n");
+        for (l = 1; l <= L; l++) {
+            real sd1 = sqrt(vcov_diff_at(LP, sigma, m, i, l, 0));
+            real sd2 = sqrt(vcov_diff_at(LP, sigma, m, i, l, 1));
+            real sd3 = (freq > 1) ? sqrt(vcov_diff_at(LP, sigma, m, i, l, freq)) : 0.0;
+            real f2  = ystar[nb + l] - ystar[nb + l - 1];
+            real f3  = (nb + l - freq >= 1) ? ystar[nb + l] - ystar[nb + l - freq] : 0.0;
+            obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, nb + l, &per, &yr);
+            if (freq > 1) fprintf(tex, "%d/%d & ", per, yr);
+            else          fprintf(tex, "%d & ", yr);
+            fprintf(tex, "%.2f & %.2f & %.2f & %.2f & ",
+                    LVL[i][l], vscale * sd1, vscale * f2, vscale * sd2);
+            if (freq > 1) fprintf(tex, "%.2f & %.2f & -- \\\\\n", vscale * f3, vscale * sd3);
+            else          fprintf(tex, "-- & -- & -- \\\\\n");
+        }
+        fprintf(tex, "\\bottomrule\n\\end{tabular}\\end{center}\n\n");
+
+        /* --- Grafico: historia + prevision + banda 95% --- */
+        H = (nb < 4 * (freq > 1 ? freq : 6)) ? nb : 4 * (freq > 1 ? freq : 6);
+        fprintf(tex, "\\begin{center}\n\\begin{tikzpicture}\n"
+                "\\begin{axis}[width=.9\\textwidth,height=6cm,xlabel={time},"
+                "ylabel={level},legend pos=north west,no markers]\n");
+        /* banda: caminos superior e inferior (arranca en el ultimo dato, ancho 0) */
+        fprintf(tex, "\\addplot[name path=U,draw=none,forget plot] coordinates {");
+        { obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, nb, &per, &yr);
+          fprintf(tex, "(%.3f,%.4f)", yr + (freq>1 ? (per-1.0)/freq : 0.0), Ts[i].data[nb]); }
+        for (l = 1; l <= L; l++) {
+            real center = BC[i][nb+l] + DET[i][nb+l];
+            real sd = sqrt(vcov_diff_at(LP, sigma, m, i, l, 0));
+            real hi = bc_inverse(center + 1.96 * sd, lam, refc);
+            obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, nb + l, &per, &yr);
+            fprintf(tex, "(%.3f,%.4f)", yr + (freq>1 ? (per-1.0)/freq : 0.0), hi);
+        }
+        fprintf(tex, "};\n\\addplot[name path=Lo,draw=none,forget plot] coordinates {");
+        { obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, nb, &per, &yr);
+          fprintf(tex, "(%.3f,%.4f)", yr + (freq>1 ? (per-1.0)/freq : 0.0), Ts[i].data[nb]); }
+        for (l = 1; l <= L; l++) {
+            real center = BC[i][nb+l] + DET[i][nb+l];
+            real sd = sqrt(vcov_diff_at(LP, sigma, m, i, l, 0));
+            real lo = bc_inverse(center - 1.96 * sd, lam, refc);
+            obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, nb + l, &per, &yr);
+            fprintf(tex, "(%.3f,%.4f)", yr + (freq>1 ? (per-1.0)/freq : 0.0), lo);
+        }
+        fprintf(tex, "};\n\\addplot[blue!12] fill between[of=U and Lo];\n");
+        /* historia */
+        fprintf(tex, "\\addplot[black,thick] coordinates {");
+        for (t = nb - H + 1; t <= nb; t++) {
+            obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, t, &per, &yr);
+            fprintf(tex, "(%.3f,%.4f)", yr + (freq>1 ? (per-1.0)/freq : 0.0), Ts[i].data[t]);
+        }
+        fprintf(tex, "};\n\\addplot[blue,thick,dashed] coordinates {");
+        obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, nb, &per, &yr);
+        fprintf(tex, "(%.3f,%.4f)", yr + (freq>1 ? (per-1.0)/freq : 0.0), Ts[i].data[nb]);
+        for (l = 1; l <= L; l++) {
+            obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, nb + l, &per, &yr);
+            fprintf(tex, "(%.3f,%.4f)", yr + (freq>1 ? (per-1.0)/freq : 0.0), LVL[i][l]);
+        }
+        fprintf(tex, "};\n\\legend{95\\%% band,history,forecast}\n"
+                "\\end{axis}\n\\end{tikzpicture}\n\\end{center}\n\\clearpage\n\n");
+
+        free_vector(ystar, 1, nb + L);
+    }
+    fprintf(tex, "\\end{document}\n");
+    fclose(tex);
+
+    /* compilar con pdflatex si esta disponible (dos pasadas por fill between) */
+    if (system("command -v pdflatex >/dev/null 2>&1") == 0) {
+        char cmd[1400];
+        snprintf(cmd, sizeof cmd,
+                 "pdflatex -interaction=batchmode -halt-on-error %s >/dev/null 2>&1 && "
+                 "pdflatex -interaction=batchmode -halt-on-error %s >/dev/null 2>&1",
+                 fname, fname);
+        if (system(cmd) == 0) {
+            /* limpiar auxiliares */
+            char aux[1400];
+            snprintf(aux, sizeof aux, "rm -f %s_forecast.aux %s_forecast.log",
+                     forecast_base, forecast_base);
+            if (system(aux) != 0) { /* ignore */ }
+        }
+    }
+}
+
 static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
 {
     struct Tvarma vf;
@@ -2052,6 +2231,10 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
     }
     #undef VCOV
 
+    /* --- Informe LaTeX/PDF (-L), con los mismos tensores ------------------- */
+    if (latex_forecast)
+        forecast_latex_doc(m, L, LP, sigma, BC, DET, LVL, vf.a, topo);
+
     free_vector(uu_i, 0, L);
     free_matrix(JAC, 1, m, 1, L);
     free_matrix(LVL, 1, m, 1, L);
@@ -2455,7 +2638,12 @@ static void usage(const char *prog)
 "FORECASTING\n"
 "  -f L     forecast L periods ahead, with 95%% bands. Forecasting Y requires\n"
 "           forecasting X: the error of Y adds the noise innovation and the\n"
-"           input innovation, the latter propagated through nu(B).\n"
+"           input innovation, the latter propagated through nu(B).  Emits, per\n"
+"           series, a report with the LEVEL and its period/annual VARIATION,\n"
+"           each with a standard deviation (as fuf/forsil present them).\n"
+"  -L       also write a LaTeX/PDF forecast report (<name>_forecast.tex, one\n"
+"           page per series: the table plus a pgfplots chart with the 95%% band)\n"
+"           and compile it with pdflatex if available.\n"
 "\n"
 "OTHER\n"
 "  -v       optimizer trace\n"
@@ -3610,7 +3798,7 @@ int main(int argc, char *argv[])
     macheps = cmacheps();
     outputv = stdout;
 
-    while ((opt = getopt(argc, argv, "r:s:b:f:m:c:n:a:R:C:g:p0iXNDEMVSvho:")) != -1) {
+    while ((opt = getopt(argc, argv, "r:s:b:f:m:c:n:a:R:C:g:Lp0iXNDEMVSvho:")) != -1) {
         switch (opt) {
         case 'r': opt_r = optarg; auto_id = 0; break;
         case 's': opt_s = optarg; auto_id = 0; break;
@@ -3625,6 +3813,7 @@ int main(int argc, char *argv[])
         case 'p': prewhiten_only = 1;        break;
         case 'i': net_ident = 1;             break;
         case 'g': guide_name = optarg; net_ident = 1; no_transfer = 1; auto_id = 0; break;
+        case 'L': latex_forecast = 1;        break;
         case 'c': cons_file = optarg;        break;
         case 'n': net_file  = optarg;        break;
         case 'a': aggr_file = optarg;        break;
@@ -3666,6 +3855,7 @@ int main(int argc, char *argv[])
         }
         model_name = outname;
     }
+    forecast_base = model_name;
     {
         char path[600];
         if (outfile != NULL) snprintf(path, sizeof path, "%s", outfile);

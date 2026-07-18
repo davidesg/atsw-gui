@@ -30,15 +30,14 @@
 
 \geometry{margin=2.7cm}
 
-\title{\bfseries Re-implementing Box--Jenkins transfer function models\\
+\title{\bfseries Box--Jenkins transfer function models\\
        on an exact VARMA likelihood:\\[2pt]
-       \large engineering notes, and one identification hazard}
+       \large theory, implementation, and worked examples}
 
 \author{D. E. Guerrero\thanks{Universidad Complutense de Madrid,
-        \texttt{davidesg@ucm.es}. This note documents the \texttt{drtran}
-        program, which is free software under the GNU GPL. The exact
-        likelihood engine is J. A. Mauricio's and is used unmodified; the
-        methodology is A. B. Treadway's school. Errors are mine.}}
+        \texttt{davidesg@ucm.es}. This document describes \texttt{drtran}, free
+        software under the GNU GPL. The exact multivariate likelihood is that of
+        Mauricio~\cite{mauricio1997} and is used unmodified.}}
 
 \date{July 2026}
 
@@ -47,100 +46,96 @@
 
 \begin{abstract}
 \noindent
-\textbf{Nothing in this note is new.} The models are Box and Jenkins's, the
-identification procedure is theirs, the exact multivariate likelihood is
-Mauricio's, and the methodology is Treadway's. What the note reports is what
-happens when that classical apparatus is \emph{re-assembled} on top of an exact
-vector ARMA likelihood, in one program, with everything estimated at once:
-a handful of engineering decisions turn out to depart from the original
-solutions in ways that are measurable, and one of them exposes an
-identification hazard that is easy to walk into and easy to miss. We show that
-the contemporaneous transfer coefficient $\omega_0$ and the innovation
-covariance $\sigma_{12}$ are \emph{exactly} observationally equivalent when the
-noise and the input share the same autoregressive operator, and are separated
-otherwise only by a signal proportional to the difference between those
-operators. In a real case (Spanish CPI and the price of crude oil) that
-separating signal is $10\%$ of the main one, and the likelihood develops a flat
-ridge along which the fit does not improve while the estimates run to a corner.
-Every number below is reproducible from the program's test battery.
+This document describes \texttt{drtran}, a program that estimates Box--Jenkins
+transfer function models by exact maximum likelihood. A transfer function model
+is recast as a vector ARMA (VARMA) with diagonal autoregressive, moving-average
+and covariance matrices, so that a direct exact VARMA likelihood applies without
+modification. We state the transformation formally, document its implementation
+in the command-line program, and illustrate it on two applications: the
+pass-through of crude oil to consumer prices, and a recursive multivariate model
+of employment by sector. The document also records an identification result that
+is easy to overlook in practice: a contemporaneous transfer coefficient
+$\omega_0$ and the corresponding innovation covariance $\sigma_{12}$ are exactly
+observationally equivalent when the noise and the input share the same
+autoregressive operator, and are separated otherwise only by a signal
+proportional to the difference between those operators. Every numerical result
+is reproducible from the program's test battery.
 \end{abstract}
 
-\section{What is not new}
-\label{sec:notnew}
+\section{Overview}
+\label{sec:overview}
 
-It is worth being blunt about this first, because the rest of the note is only
-interesting once it is settled.
+\texttt{drtran} estimates the transfer function models of
+Box, Jenkins and Reinsel~\cite[chs.~10--11]{bjr1994} by exact maximum
+likelihood. Its distinguishing choice is representational: rather than build the
+noise series by subtraction and hand it to a univariate routine, the program
+casts the whole transfer function model as a VARMA and evaluates the exact
+likelihood of that VARMA directly. Three properties follow from the cast and
+organize the rest of the document.
 
 \begin{itemize}
-\item \textbf{The models} are the transfer function models of
-  Box \& Jenkins (1970), chapters 10--11 of the current
-  edition~\cite{bjr1994}.
+\item \textbf{The model class.} A single-output transfer function model with $k$
+  exogenous inputs is a VARMA of $m=k+1$ series with \emph{diagonal}
+  autoregressive, moving-average and innovation-covariance matrices; all the
+  coupling lives in the first equation. The representation is standard
+  \cite{tiaobox1981,reinsel1997,lutkepohl2005}; \S\ref{sec:theory} states it as a
+  premultiplication and records the properties that its implementation depends
+  on.
 
-\item \textbf{The cast} used here---write $N_t = Y_t - \sum_j \nu_j(B) X_{j,t}$,
-  stack $N$ and the inputs into a vector, and note that the resulting system is
-  a VARMA with \emph{diagonal} $\Phi$, $\Theta$ and $Q$---is the standard
-  multivariate representation of a transfer function model. It is in Tiao and
-  Box~\cite{tiaobox1981}, in Hillmer and Tiao, and in Reinsel. It is also
-  written out by hand, for a three-variable system, in
-  Muñoz Polo (2001)~\cite{munoz2001}, \S2.4.
+\item \textbf{The extension to a network.} A series may be simultaneously the
+  output of one relation and the input of another. \texttt{drtran} generalizes
+  the cast to a directed acyclic graph of transfers (\S\ref{sec:network}): a
+  recursive dynamic system, or Wold causal chain, that the single-output theory
+  does not cover but the diagonal VARMA accommodates without change.
 
-\item \textbf{The network} of \S\ref{sec:network}---several outputs, a series
-  that is at once the output of one relation and the input of another---is a
-  \emph{recursive} dynamic simultaneous system: a Wold causal chain. It is what
-  Mauricio's \texttt{m6} labour-market models already were in 1996; they were
-  simply hand-coded, one \texttt{shootx} at a time.
-
-\item \textbf{The scale normalization} $Q_{11}=1$ of \S\ref{sec:qq} is textbook
-  identification under a concentrated scale factor. Mauricio himself states that
-  the decomposition $\Sigma = \sigma^2 Q$ is not unique~\cite{mauricio1995,
-  mauricio2002}.
-
-\item \textbf{The exact Hessian} of \S\ref{sec:hessian} is ordinary numerical
-  practice~\cite{dennis1983}. The code for it was already present in the
-  ancestor programs---\emph{commented out}.
-
-\item \textbf{The identification hazard} of \S\ref{sec:identification} is, at
-  bottom, the Cowles Commission problem: one cannot free a contemporaneous
-  structural coefficient and the innovation covariance at the same time. That is
-  eighty years old and is the identification problem of any structural VAR. What
-  \S\ref{sec:identification} adds is only a quantitative refinement in the
-  transfer-function case, and a diagnostic that follows from it.
+\item \textbf{Exactness of the pre-sample.} Because each input is modelled as a
+  series \emph{of the system}, with its own ARMA, its pre-sample is integrated
+  out by the exact likelihood at no cost in parameters (\S\ref{sec:truncation}).
+  The number reported as the log-likelihood is then the exact likelihood of the
+  observed data, so likelihood-ratio tests and information criteria are valid.
 \end{itemize}
 
 \noindent
-What \emph{is} contributed here is engineering, not science: an automatic
-reduction from a univariate model specification to a VARMA structure; a
-declarative way of stating parameter restrictions that were previously written
-into code by hand; three concrete software-correctness findings about a family
-of programs that has been in use for thirty years; and a test battery that pins
-the result to the univariate program's output to six decimal places. This note
-is therefore a \emph{software and reproducibility} note. It is offered in that
-spirit.
-
-\section{The lineage, and the one structural idea}
+The theoretical content is elementary and standard \cite{lutkepohl2005,
+reinsel1997, gomez2019}; the reduction of a structured model to a plain VARMA so
+that a direct exact likelihood applies unchanged is the device of
+Mauricio~\cite{mauricio2006}. What this document contributes is the concrete
+combination and its implementation: an automatic reduction from a univariate
+model specification to a VARMA structure, a declarative language for parameter
+restrictions (\S\ref{sec:restrictions}), the network extension, and the
+identification analysis of \S\ref{sec:identification}. Every figure below is
+produced by the program's test battery.
 
 \subsection{Lineage}
+
+The program sits at the confluence of two lines of software, both of which
+predate it. On one side, univariate ARIMA and generalized-seasonal models with
+intervention analysis, in the Box--Jenkins tradition (the program \texttt{fue},
+built on M\'elard's exact univariate likelihood~\cite{melard1984}). On the
+other, the exact likelihood of an arbitrary stationary
+VARMA~\cite{mauricio1995,mauricio1997} and its implementation \texttt{drvarma}.
 
 \begin{center}
 \begin{tabular}{ll}
 \toprule
-Box \& Jenkins (1970) & the models \\
-\quad Jenkins's program & \\
-\quad\quad \textsc{taste} (Treadway) & identification and estimation; backforecasting \\
-\quad\quad\quad \texttt{fue} & univariate (ARIMA/GSM with intervention) \\
-Mauricio (1995, 1997) & \emph{exact} likelihood of a VARMA --- \texttt{elf} \\
+Box, Jenkins \& Reinsel~\cite{bjr1994} & the models \\
+\quad \texttt{fue} & univariate ARIMA/generalized-seasonal with intervention \\
+Mauricio~\cite{mauricio1995,mauricio1997} & exact likelihood of a VARMA \\
 \quad \texttt{drvarma} & estimates arbitrary VARMA models \\
-\quad\quad \texttt{drtran} & the bridge: \texttt{fue} $\rightarrow$ VARMA $\rightarrow$ \texttt{elf} \\
+\quad\quad \texttt{drtran} & the bridge: univariate $\rightarrow$ VARMA $\rightarrow$ exact likelihood \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-Muñoz Polo's dissertation~\cite{munoz2001}, supervised by Treadway, is the
-document that fixes the methodology of the school, and it already estimates with
-Mauricio's engine (``the software implementing the exact ML algorithm programmed
-and designed by Mauricio (1995, 1996, 1997)'', ch.~3). The two halves of the
-lineage were therefore already joined in 2001---\emph{by hand}. What
-\texttt{drtran} does is automate the joining.
+\noindent
+\texttt{drtran} automates the joining of the two: it reads a univariate model
+specification for each series, casts the transfer function system into the VARMA
+form the likelihood engine expects, and estimates every parameter---each series'
+ARMA, the transfers, the deterministic terms and the means---in a single
+maximization. A design invariant makes the bridge testable: when no transfer is
+present, the joint fit must reproduce the univariate program run separately on
+each series, to full machine precision. This homologation is the entry gate of
+the test battery, and \S\ref{sec:separability} explains why it must hold exactly.
 
 \subsection{The cast}
 
@@ -159,32 +154,31 @@ with $\Phi$ and $\Theta$ \emph{diagonal} (each series carries its own ARMA) and
 $Q$ diagonal. All of the coupling lives in the \emph{subtracted} transfer, so the
 VARMA that the likelihood engine sees has no off-diagonal element anywhere.
 
-Two consequences follow, and they are the whole design:
+Two consequences follow, and they organize the implementation:
 
 \begin{enumerate}
-\item Mauricio's engine can be used \textbf{unmodified}. In this project any
-  discrepancy with the univariate program was treated, without exception, as a
-  bug in the bridge. It always was one.
+\item The exact likelihood engine is used \textbf{unmodified}. Any discrepancy
+  between the joint fit and the univariate program is, by construction, a defect
+  of the bridge rather than of the estimator.
 \item The joint fit \textbf{reproduces} the univariate program run separately on
-  each series, to six decimals, on six real models
-  (deterministic seasonality; airline; generalized seasonality with
-  fixed-frequency factors; a fixed AR coefficient). This is the entry gate of the
-  test battery, and \S\ref{sec:separability} explains why it must hold.
+  each series, to machine precision, across a range of specifications
+  (deterministic seasonality; the airline model; generalized seasonality with
+  fixed-frequency factors; a fixed autoregressive coefficient). This homologation
+  is the entry gate of the test battery, and \S\ref{sec:separability} explains why
+  it must hold exactly.
 \end{enumerate}
 
-\section{Six engineering departures, measured}
+\section{Estimation choices, and their consequences}
 
 \subsection{The input model: fixed, or estimated jointly}
 \label{sec:separability}
 
-The doctrine is explicit~\cite[\S2.6]{munoz2001}: \emph{``the univariate model of
-the input remains unaltered from the beginning to the end of the process.''}
-\texttt{drtran} does the opposite: it estimates everything---the output's ARMA,
-the input's ARMA, the transfer, the deterministic terms and the means---in a
-single maximization.
-
-\textbf{Does it matter? No---and that is the result.} On Spanish CPI
-$\leftarrow$ WTI crude:
+In the classical procedure the univariate model of an input is identified once and
+held fixed thereafter~\cite[chs.~10--11]{bjr1994}. \texttt{drtran} instead
+estimates every parameter---the output's ARMA, each input's ARMA, the transfers,
+the deterministic terms and the means---in a single maximization. The two agree
+exactly whenever the innovation covariance is diagonal, as the following case
+illustrates. On Spanish CPI $\leftarrow$ WTI crude:
 
 \begin{center}
 \begin{tabular}{lrr}
@@ -198,28 +192,23 @@ $\omega_1$ & $0.010792$    & $0.010792$ \\
 \end{tabular}
 \end{center}
 
-Identical. This is not a coincidence. With $Q$ \emph{diagonal} and no feedback,
-the joint likelihood \emph{factorizes} as $L(N)\cdot L(X)$, and $L(X)$ does not
-involve the transfer. Box and Jenkins's decision to leave the input model alone
-is therefore \textbf{not an approximation: it is exactly optimal} in that case.
-It is also, precisely, why the joint fit homologates with the univariate program.
+The estimates are identical, and this is not a coincidence. With $Q$ diagonal and
+no feedback, the joint likelihood factorizes as $L(N)\cdot L(X)$, and $L(X)$ does
+not involve the transfer. Holding the input model fixed is therefore not an
+approximation but exactly optimal in that case; it is also why the joint fit
+homologates with the univariate program. The factorization breaks the moment
+$\sigma_{12}$ is freed---the case in which a bivariate relation is specified
+through the innovation covariance rather than a transfer (\S\ref{sec:identification}).
+There, joint estimation is no longer optional.
 
-The factorization \textbf{breaks the moment $\sigma_{12}$ is freed}---and that is
-exactly the case the dissertation~\cite[\S2.4]{munoz2001} points to as the
-starting point for specifying a bivariate relation. There, joint estimation stops
-being a luxury.
-
-\subsection{$\sigma^2 Q$: the normalization that was missing}
+\subsection{The scale normalization $\sigma^2 Q$}
 \label{sec:qq}
 
-The engine assumes $a_t \sim N(0,\sigma^2 Q)$ and concentrates $\sigma^2$ out.
-Mauricio states in both references that this decomposition is \emph{not unique},
-and that this \emph{``raises no problem in the estimation of $E[a_t a_t']$, since
-interest lies in the product $\sigma^2 Q$, but not in $\sigma^2$ nor in $Q$ by
-itself''}~\cite[p.~474]{mauricio2002}.
-
-\textbf{He is right, and we verified it.} The concentrated criterion
-is~\cite[eq.~12]{mauricio2002}
+The engine assumes $a_t \sim N(0,\sigma^2 Q)$ and concentrates $\sigma^2$ out. The
+decomposition $\Sigma=\sigma^2 Q$ is not unique; this raises no problem for the
+estimation of $\Sigma=E[a_t a_t']$, since interest lies in the product, but it does
+affect inference on $Q$ alone~\cite[p.~474]{mauricio2002}. The concentrated
+criterion is~\cite[eq.~12]{mauricio2002}
 \begin{equation}
 F(\beta\mid w) \;=\; \bigl(\tilde{w}' R_W^{-1}\tilde{w}\bigr)\,
                      |R_W|^{1/(mn)},
@@ -228,8 +217,8 @@ F(\beta\mid w) \;=\; \bigl(\tilde{w}' R_W^{-1}\tilde{w}\bigr)\,
 and under $Q\to cQ$ the matrix $R_W$ scales by $c$: the first factor goes as
 $1/c$, the second as $c$. \emph{$F$ is exactly invariant.} Since $\sigma^2$ is
 concentrated, $\hat\sigma^2(cQ)\cdot cQ = \hat\sigma^2(Q)\cdot Q$: the product
-does not move. Estimating the same model with the scale of $Q$ free (as the
-ancestor programs do) and with it normalized:
+does not move. Estimating the same model with the scale of $Q$ free and with it
+normalized to $Q_{11}=1$:
 
 \begin{center}
 \begin{tabular}{lrr}
@@ -245,55 +234,47 @@ $\mathrm{SE}(\log \mathrm{var}_2/\mathrm{var}_1)$ & $\mathbf{0.193083}$ & $\math
 \end{tabular}
 \end{center}
 
-The flat direction is \emph{exact}, and it is harmless for $\log L$, for
-$\hat\Sigma$, and for the standard errors of $\phi,\theta,\mu,\omega,\delta$. The
-damage is confined to \textbf{inference on $Q$ itself}: the scale parameter,
-which is \emph{literally} unidentified, receives a respectable-looking
-$t=-0.19$ with $p=0.85$; and the variance ratio, which \emph{is} identified,
-comes out with a standard error inflated by $42\%$.
+The flat direction is exact, and it is harmless for $\log L$, for $\hat\Sigma$,
+and for the standard errors of $\phi,\theta,\mu,\omega,\delta$. The consequence is
+confined to inference on $Q$ itself: the scale parameter, which is unidentified,
+receives a plausible-looking $t=-0.19$ with $p=0.85$; and the variance ratio,
+which is identified, comes out with a standard error inflated by $42\%$.
 
-\texttt{drtran} normalizes $Q_{11}=1$ for one concrete reason: \textbf{deciding
-whether a covariance is zero is a test}, and a test has to be a real one. Nothing
-else needed it.
+\texttt{drtran} normalizes $Q_{11}=1$ because deciding whether a covariance is
+zero is a hypothesis test, and the standard error that test rests on must be the
+identified one.
 
 \subsection{Standard errors: exact Hessian, not the accumulated one}
 \label{sec:hessian}
 
-The ancestor programs compute standard errors from the \emph{BFGS-accumulated}
-Hessian. In all of them the exact alternative (a finite-difference Hessian plus a
-Cholesky factorization) is written and \emph{commented out}. It was a 1996 cost
-decision that nobody revisited.
+Standard errors may be computed either from the BFGS-accumulated Hessian or from a
+finite-difference Hessian of the concentrated criterion. \texttt{drtran} uses the
+latter. A BFGS Hessian is built from the steps the optimizer takes; it never sees
+the directions in which the optimizer does not move, and so produces finite numbers
+where there should be none. The effect is visible in two ways: standard errors
+computed from the accumulated Hessian are unstable---two runs of the same model,
+with identical point estimates, can report $\mathrm{SE}(\mu)=0.073304$ and
+$0.028316$; and the standard errors so obtained for the elements of $Q$ lie along
+the flat direction of \S\ref{sec:qq}. With the finite-difference Hessian,
+$\mathrm{SE}(\mu)=0.028502$, the exact GLS value.
 
-A BFGS Hessian is built from the steps the optimizer \emph{takes}; it therefore
-never sees the directions in which the optimizer does not move, and produces
-finite numbers where there should be none. Two measured consequences: the
-univariate program's standard errors are \emph{unstable}---two runs of the same
-model, with identical point estimates, report $\mathrm{SE}(\mu)=0.073304$ and
-$0.028316$; and the standard errors reported for the nine elements of $Q$ in
-\texttt{m6-1} lie along the flat direction of \S\ref{sec:qq}.
-
-Using the exact Hessian, $\mathrm{SE}(\mu)=0.028502$, which is the exact GLS
-value.
-
-\subsection{``A single output'' versus the network}
+\subsection{From a single output to a network}
 \label{sec:network}
 
-The title of \S2.5 of the dissertation is, literally, \emph{``Representation of
-the Single-Output Transfer Model''}. That is the boundary of the classical
-apparatus: one output, $k$ exogenous inputs.
-
-The school's real systems are not that. In \texttt{m6} (the Spanish labour
-market), \texttt{EU} is an \emph{output} of \texttt{EC} \emph{and} an \emph{input}
-to \texttt{EI}:
+The classical apparatus covers a single output driven by $k$ exogenous
+inputs~\cite[chs.~10--11]{bjr1994}. Many systems of interest exceed that boundary:
+a series may be at once the output of one relation and the input of another. In the
+employment model of \S\ref{sec:m6}, for instance, construction employment is an
+output of services employment and an input to industrial employment,
 \begin{center}
 \texttt{EC} $\xrightarrow{\;b=2\;}$ \texttt{EU} $\xrightarrow{\;b=1\;}$
-\texttt{EI} $\xrightarrow{\;b=1\;}$ \texttt{EP}
+\texttt{EI} $\xrightarrow{\;b=1\;}$ \texttt{EP}\,,
 \end{center}
-\texttt{drtran} generalizes the cast to a \emph{directed acyclic graph} of
-transfers, declared in a file: each link subtracts its transfer from \emph{its}
-output, so a series may be both a target and a source; the VARMA stays diagonal;
-and forecasting walks the graph in topological order, propagating the system's
-$\psi$ weights,
+a recursive dynamic system. \texttt{drtran} generalizes the cast to a
+\emph{directed acyclic graph} of transfers, declared in a file: each link subtracts
+its transfer from \emph{its} output, so a series may be both a target and a source;
+the VARMA stays diagonal; and forecasting walks the graph in topological order,
+propagating the system's $\psi$ weights,
 \begin{equation}
 \Psi_{ij}(B) \;=\; \delta_{ij}\,\psi_i(B)
    \;+\; \sum_{k:\,\mathrm{out}(k)=i} \nu_k(B)\,\Psi_{\mathrm{in}(k),\,j}(B),
@@ -310,37 +291,49 @@ the direct link $X\rightarrow Y$ that it is forced to postulate is insignificant
 ($t=1.45$)---because the effect of $X$ on $Y$ is \emph{indirect}, and only the
 network can say so.
 
-\subsection{Restrictions: transform the data, or declare them}
+\subsection{Restrictions: declared, not coded}
+\label{sec:restrictions}
 
-The dissertation imposes long-run neutrality ($g = \nu(1) = 1$, unit long-run
-gain) by \emph{transforming the data}, rewriting the model as
-\[
-Y_t - \ln M1_{t-b} \;=\; \frac{\omega^{*}(B)}{\delta(B)}\,B^{b}\,
-\nabla \ln M1_t \;+\; N_t,
-\qquad \omega^{*}(B)=\omega(B)-\delta(B),
-\]
-an elegant solution of its time: the restriction is nonlinear in the parameters,
-so it is taken \emph{out} of the optimizer by hand. It has the further virtue of
-giving the resulting output an economic reading (real balances).
+Parameter restrictions across the equations of a system---a transfer denominator
+that equals the input's own autoregressive operator, a factorized numerator whose
+coefficients share a parameter, an accounting identity linking deterministic
+terms---were traditionally imposed by writing the constrained coefficients into the
+estimation code by hand. \texttt{drtran} declares them instead in a \emph{slot
+table}: every structural parameter, referred to by the name the program prints, is
+one of
 
-\texttt{drtran} instead declares restrictions in a \emph{slot table}: every
-structural parameter is FREE, FIXED or ALIAS (shared), stated in a file using the
-names the program prints. This covers the \emph{linear} restrictions---sharing
-and fixing, which are what the dissertation uses for identity-linked
-triads---but it does \textbf{not} cover the gain, which is nonlinear. See
-\S\ref{sec:todo}.
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textsc{free} & estimated \\
+\textsc{fixed} & held at a stated value \\
+\textsc{alias} & set equal to another parameter (shared) \\
+\textsc{product} & the product of two parameters, \texttt{x = y * z} \\
+\textsc{lincomb} & a signed sum of terms, each a parameter or a product,
+   \texttt{x = y*z - w} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent
+Aliasing expresses a shared coefficient; the product and linear-combination forms
+express factorized numerators, which arise whenever a transfer inherits part of the
+dynamics of its input (\S\ref{sec:m6}). The gradient of a derived slot is obtained
+by finite differences over the free parameters, so no chain rule is coded. These
+are the \emph{linear} and \emph{multiplicative} restrictions that a factorized
+system needs; a genuinely nonlinear constraint such as a unit long-run gain
+$g=\nu(1)=1$ is not \emph{imposed} by the slot table, but it can be \emph{tested}
+directly once the model is fitted (\S\ref{sec:gain}).
 
 \subsection{The start of the sample: neither truncation nor backforecasting}
 \label{sec:truncation}
 
 The transfer $\sum_k \nu_k X_{t-k}$ needs the input's past, and at $t=1$ there is
-none. \textsc{taste} \emph{backforecasts} it, which is Box and Jenkins's solution.
-\texttt{drtran} originally \emph{truncated}: it assumed a zero pre-sample input.
-
-We first wrote here that \textsc{taste} did it better. That was wrong, and the
-error is instructive. \emph{The exact likelihood makes backforecasting
-unnecessary, not merely inferior}---but only if the transfer is inside the model.
-Two problems were being conflated:
+none. The classical solution is to \emph{backforecast} it~\cite[chs.~6,~11]{bjr1994}.
+A na\"ive alternative is to \emph{truncate}: to assume a zero pre-sample input. The
+exact likelihood makes backforecasting unnecessary rather than merely inferior, but
+only when the transfer is kept inside the model. Two distinct problems must be
+separated:
 
 \begin{description}
 \item[The noise's initialisation.] Box and Jenkins backforecast the pre-sample
@@ -371,17 +364,17 @@ performs the pre-sample initialisation itself. The truncation is not repaired; i
 denominators, $D_i=\prod_k\delta_k$; each row is built independently, so the network
 of \S\ref{sec:network} needs nothing new.
 
-\textbf{This is what Mauricio's own \texttt{m6} models do.} Their casting routine
-writes \texttt{theta1[1][3][4] = -x5}, \texttt{theta1[2][3][4] = x5*x6}---off the
-diagonal, with \emph{products} of structural parameters, which is exactly what
-multiplying the polynomials of \eqref{eq:embed} produces. They never had a
-truncation problem, and they never backforecast. We had reintroduced, by
-subtracting, a problem the exact likelihood had already abolished.
+Multiplying the polynomials of \eqref{eq:embed} produces off-diagonal
+autoregressive entries that are \emph{products} of structural parameters---for the
+factorized numerator $\omega(B)=-x_5(1-x_6B)$ the two entries are $-x_5$ and
+$x_5x_6$. Hand-coded implementations of such systems wrote these products directly,
+and therefore never had a pre-sample truncation problem to begin with; the slot
+table of \S\ref{sec:restrictions} expresses the same products declaratively.
 
-\paragraph{And how much did it matter? Less than we claimed.} With the embedded
-cast available (\texttt{-V}), the two can be compared. On 200 paired replications
-of a 69-observation sample---\texttt{m6}'s length---with a \emph{rational} transfer
-(an infinite impulse response, the worst case):
+\paragraph{How much does the pre-sample matter?} With both casts available (the
+embedded one under the \texttt{-V} option), they can be compared directly. On 200
+paired replications of a 69-observation sample with a \emph{rational} transfer (an
+infinite impulse response, the least favourable case):
 
 \begin{center}
 \begin{tabular}{lrrrr}
@@ -394,63 +387,42 @@ embedded & $\mathbf{-0.0002}$ & $0.0490$ & $-0.0057$ & $0.0513$\\
 \end{tabular}
 \end{center}
 
-The bias of $\omega$ essentially vanishes---it falls by a factor of eight---but the
-RMSE improves by less than half a percent. Truncation mattered far less than we
-feared. What the embedded cast buys is not accuracy but \emph{correctness}: the
-number reported as the log-likelihood is now the exact likelihood \emph{of the
-data}, so likelihood-ratio tests and information criteria mean what they say.
-Under the subtracting cast, the engine computed an exact likelihood---of the wrong
-series.
+The bias of $\omega$ falls by a factor of eight, while the RMSE improves by less
+than half a percent. The pre-sample matters little for the point estimates. What
+the embedded cast secures is not accuracy but \emph{correctness}: the reported
+log-likelihood is the exact likelihood of the observed data, so likelihood-ratio
+tests and information criteria are valid. Under the subtracting cast the engine
+computes an exact likelihood, but of a different series---one whose pre-sample
+inputs have been set to zero.
 
-\paragraph{It is now the default.} Getting there took two steps, and the first one
-is the story.
+\paragraph{Consistency of the two casts.} The embedded cast is the default; the
+subtracting cast is retained under \texttt{-S} for comparison. The test battery
+runs \emph{both} casts on every case that distinguishes them---no transfer,
+contemporaneous and non-contemporaneous transfers, a rational transfer (which
+places a common factor in the autoregressive and moving-average parts), a moving
+average, generalized seasonality, a seasonal autoregression, two inputs, the
+network, a freed covariance, a shared parameter, and the recursive forecast---and
+requires that the parameters, diagnostics, impulse response, gain, forecasts and
+variance decomposition agree under either. Making the embedded cast the default
+required repairing four points at which the two paths had diverged: the adequacy
+diagnostics had to be applied to un-normalized (structural) residuals
+$a_{\text{struct}}=\Phi_0\,a_{\text{red}}$ rather than reduced-form ones; the
+forecast must not re-add a transfer the VARMA already contains; a freed covariance
+must reach the covariance matrix; and the variance decomposition requires the
+structural $\psi$ weights $\Psi_{\text{struct}}=\Psi_{\text{red}}\,\Phi_0^{-1}$,
+because the reduced-form $\Sigma$ is not diagonal when a transfer is
+contemporaneous.
 
-We forced the embedded cast as the default and ran the whole battery. Sixteen
-failures. Eleven were artifacts of tests that compare one cast against the other;
-one was a tolerance; \emph{four were real bugs}, and all four lived in the embedded
-path, which had been exercised only lightly:
-
-\begin{itemize}
-\item The \textbf{diagnostics} ran on reduced-form residuals. With $b=0$ those are
-  correlated with the input \emph{by construction} ($\Sigma_{12}=\omega_0\sigma_X^2$),
-  so the adequacy test measured that correlation and called it misspecification:
-  both CPI models came out ``NOT adequate'' with $p=0.0000$. They must be
-  un-normalized first, $a_{\text{struct}}=\Phi_0\,a_{\text{red}}$.
-\item The \textbf{forecast double-counted the transfer}. The VARMA already contains
-  it, so adding $\sum_k\nu_k w_{X}$ again inflated the forecast standard deviation
-  by $40\%$.
-\item \textbf{Freed covariances were ignored}: \texttt{q[2,1] = free} never reached
-  the covariance matrix. A parameter with no effect---an exactly flat direction, and
-  a standard error of $3{,}008{,}863$.
-\item The \textbf{variance decomposition} could not be reported, because the
-  reduced-form $\Sigma$ is not diagonal. It needs the structural $\psi$ weights,
-  $\Psi_{\text{struct}}=\Psi_{\text{red}}\,\Phi_0^{-1}$.
-\end{itemize}
-
-None of these is a defect of the design. All four are a defect of \emph{coverage},
-and they say something worth saying about how one earns the right to change a
-default: not by arguing that the new thing is correct---it was---but by making the
-old and the new say the same thing about everything, and watching where they don't.
-
-So the second step was a harness: thirteen cross-checks that run \emph{both} casts
-on every hard case---no transfer, contemporaneous, non-contemporaneous, rational
-(which puts a common factor in the AR and MA), a moving average, generalized
-seasonality, a seasonal AR, two inputs, the network, a freed covariance, a shared
-parameter, and the recursive forecast---and require that the parameters, the
-diagnostics, the impulse response, the gain, the forecasts and the variance
-decomposition all agree. It would have caught all four bugs in a minute. With it in
-place, the battery passes 243/243 with \emph{either} cast as the default, and the
-default is now the embedded one. \texttt{-S} restores the old cast.
-
-\section{An identification hazard}
+\section{Identification at lag zero}
 \label{sec:identification}
 
-This is the one result in the note, and it came out of an experiment that was
-about something else.
+A contemporaneous transfer and a freed innovation covariance can describe the same
+data, and the two are hard to tell apart in a way that is easy to overlook. This
+section states the result; \S\ref{sec:ident-theory} derives it from the reduced
+form.
 
 Estimating Spanish CPI $\leftarrow$ WTI with a \emph{contemporaneous} transfer
-($b=0$) \emph{and} freeing the innovation covariance at the same time sends the
-fit to an absurd corner:
+($b=0$) while also freeing the innovation covariance drives the fit to a corner:
 
 \begin{center}
 \begin{tabular}{lrr}
@@ -465,9 +437,9 @@ $t$ of $\sigma_{12}$      & ---        & $\mathbf{-2424}$ \\
 \end{tabular}
 \end{center}
 
-The likelihood \emph{does not improve} ($\mathrm{LR}=0.029$, against
-$\chi^2_1 = 3.84$), yet the estimates fly. This is not an optimizer failure. It is
-a nearly flat ridge, and it has an exact explanation.
+The likelihood does not improve ($\mathrm{LR}=0.029$, against $\chi^2_1 = 3.84$),
+yet the point estimates move to extreme values. This is not an optimizer failure
+but a nearly flat ridge in the likelihood, and it has an exact explanation.
 
 \paragraph{The prewhitened cross-correlation.} Filter both series by the input's
 model: $\alpha_t = \phi_X(B) X_t = a_{X,t}$ and $\beta_t = \phi_X(B) Y_t$.
@@ -506,10 +478,10 @@ $(\phi_N - \phi_X)$.
 \end{description}
 
 \paragraph{Consequence.} If $\phi_N = \phi_X$ the tail in \eqref{eq:tail}
-vanishes and the two models are \textbf{exactly observationally equivalent}. This
-is not numerical collinearity: it is non-identification. And the closer the two
-autoregressive structures, the weaker the identification. The tail relative to
-the spike:
+vanishes and the two models are exactly observationally equivalent. This is not
+numerical collinearity but non-identification, and the closer the two
+autoregressive structures, the weaker the identification. The tail relative to the
+spike:
 
 \begin{center}
 \begin{tabular}{lrrrrr}
@@ -523,33 +495,32 @@ $\phi_N = \phi_X$           & ---     & ---     & $\mathbf{0.000}$ & $0.000$ & $
 \end{tabular}
 \end{center}
 
-In the real case, \emph{all} of the information separating the two mechanisms is
-a signal worth $10.4\%$ of the main one. With 215 observations it cannot be
-resolved. Hence the ridge.
+In the real case, all of the information separating the two mechanisms is a signal
+worth $10.4\%$ of the main one. With 215 observations it cannot be resolved, and the
+likelihood ridge follows.
 
-\paragraph{Three practical consequences,} all verified:
+\paragraph{Three practical consequences.} Each is verified in the test battery.
 \begin{enumerate}
 \item With $b \ge 1$ the problem disappears: the transfer contributes nothing at
   $k=0$, so $\sigma_{12}$ is cleanly identified. On synthetic data with $b=2$ and
   a true $\sigma_{12}=0$: $t=1.33$, $p=0.18$, correctly insignificant, with the
   $\omega$'s untouched.
-\item \texttt{drtran} now \emph{warns} when a link with $b=0$ has its covariance
-  freed.
-\item It explains the school's practice. \texttt{m6-1} carries off-diagonal
-  covariances and \emph{no} contemporaneous structure whatever; and the
-  dissertation~\cite[\S2.4]{munoz2001} says that the specification of a bivariate
-  relation \emph{``may begin with the modification of the matrix $\Sigma$''}. One
-  uses \emph{one} of the two devices, never both. We rediscovered this by walking
-  into it.
+\item \texttt{drtran} warns when a link with $b=0$ has its innovation covariance
+  freed at the same time.
+\item The two devices are alternatives, not complements: a contemporaneous relation
+  is specified \emph{either} through a transfer coefficient \emph{or} through the
+  innovation covariance, not both. This is why a well-specified recursive system
+  carries off-diagonal innovation covariances and no contemporaneous transfer
+  structure, or the reverse, but does not mix them at lag zero.
 \end{enumerate}
 
 
 \section{Characterizing the transfer function: gain and mean lag}
 \label{sec:gain}
 
-An estimated transfer function is not \emph{described} until two things are
-said: how much the output responds in total, and how long it takes. The
-$\omega$'s and $\delta$'s are the parametrization, not the response.
+An estimated transfer function is not described until two quantities are stated:
+how much the output responds in total, and how long the response takes. The
+$\omega$'s and $\delta$'s are the parametrization, not the response itself.
 
 \begin{align}
 \text{gain}\qquad
@@ -597,17 +568,25 @@ $b=1$, $\omega=0.6$, $\delta=0.6$        & $1.500$ & $1.467$ & $2.500$ & $2.429$
 \end{tabular}
 \end{center}
 
-\paragraph{This is also how long-run hypotheses should be tested.} The
-dissertation imposes unit long-run gain by transforming the data and then tests
-it by estimating a second, unrestricted model and comparing likelihoods. With
-\eqref{eq:gain} and its standard error, the hypothesis $g=1$ is tested
-\emph{directly}, on the model already fitted, with no data transformation and no
-second estimation.
+\paragraph{Testing long-run hypotheses.} A unit long-run gain can be imposed by
+transforming the data---rewriting the model in terms of $\omega^*(B)=\omega(B)-
+\delta(B)$ so that the restriction is absorbed---and tested by estimating a second,
+unrestricted model and comparing likelihoods. With the gain \eqref{eq:gain} and its
+standard error, the hypothesis $g=1$ is instead tested directly, on the model
+already fitted, with no data transformation and no second estimation.
 
-\section{An application: the pass-through of crude oil to Spanish CPI is not rational}
+\section{Example: the pass-through of crude oil to consumer prices}
+\label{sec:oil}
 
-Three fits, same output and same input, the first two with \emph{exactly} the same
-number of free parameters:
+The first worked example is bivariate: the effect of the price of crude oil on
+consumer price inflation. The exercise illustrates model selection between a
+rational and a finite transfer, the gain and mean-lag characterization, and a
+forecasting comparison.
+
+\subsection{The transfer is not rational}
+
+Three fits, same output (Spanish CPI) and same input (WTI crude), the first two
+with exactly the same number of free parameters:
 
 \begin{center}
 \begin{tabular}{lrrl}
@@ -641,12 +620,12 @@ cannot do both. The adequacy test catches it exactly there: the noise still
 carries a trace of the input at $k=2$, with $r=-0.14$---negative, because the
 rational form puts \emph{too much} weight at that lag.
 
-\paragraph{A methodological warning.} In the \emph{forced} rational fit,
-$\delta_1 = 0.458$ with $t=6.40$: apparently overwhelming. It is a mirage. With
-the denominator imposed, $\delta$ is the \emph{only} route to any weight at lag
-one; its significance says ``there is a response at lag one'', not ``the response
-is geometric''. The honest test is the one in the nesting model, and there it
-dies.
+\paragraph{A methodological warning.} In the forced rational fit, $\delta_1 =
+0.458$ with $t=6.40$ appears decisive, but the significance is misleading. With the
+denominator imposed, $\delta$ is the only route to any weight at lag one, so its
+significance says ``there is a response at lag one'', not ``the response is
+geometric''. The valid test is the one in the nesting model, where $\delta_1$ is
+insignificant.
 
 Characterized by \eqref{eq:gain}--\eqref{eq:mlag}, the relation is
 \[
@@ -659,34 +638,26 @@ distributed lag that propagates. The estimate $\omega = (0.0164,\,0.0108)$
 reproduces the previously documented values $(0.0154,\,0.0104)$.
 
 
-\section{The pass-through exercise: does the multivariate model forecast better?}
+\subsection{Does the multivariate model forecast better?}
 \label{sec:passthrough}
 
-This is the question the earlier work posed---\emph{does adding the oil price
-improve the inflation forecast?}---and answered with a bivariate VAR for three
-countries (Spain, France, Germany). The answer there was \emph{no}. But the VAR
-was \emph{inadequate}, and for a reason that is worth naming, because it is
-structural and not a matter of effort.
+A natural question is whether adding the oil price improves the inflation forecast.
+A common way to ask it is a bivariate VAR of inflation and the oil price, estimated
+for several countries (here Spain, France and Germany). The VAR, however, is
+inadequate for a structural reason. It imposes the same lag structure on every
+equation, with full coefficient matrices, and the consumer-price series do not
+admit that: their univariate models, identified independently, are Spain AR(1)
+plus harmonics; France a seasonal AR$(1)_{12}$; Germany AR(3) plus a seasonal
+AR$(1)_{12}$ plus harmonics. A regular VAR$(p)$ with harmonic deseasonalization
+cannot carry these, and the residual portmanteau fails for France ($p=0.006$) and
+Germany ($p=0.018$). Raising $p$ to absorb the seasonality would introduce
+off-diagonal terms at high lags, and with them a spurious feedback from inflation
+to the oil price.
 
-\paragraph{Why the VAR could not do it.} A VAR imposes the \emph{same} lag
-structure on every equation, with full coefficient matrices. The CPI series do not
-want that. Their univariate models---arrived at independently---are:
-Spain AR(1) plus harmonics; France a seasonal AR$(1)_{12}$; Germany AR(3) plus a
-seasonal AR$(1)_{12}$ plus harmonics. A regular VAR$(p)$ with harmonic
-deseasonalization cannot carry those, and it showed: the residual portmanteau
-\emph{failed} for France ($p=0.006$) and Germany ($p=0.018$). Raising $p$ to
-absorb the seasonality would have introduced off-diagonal terms at high lags and,
-with them, spurious feedback from inflation to the oil price. The VAR was caught
-between an inadequate noise and a fictitious causality.
-
-The cast of \S2.2 does not have this problem. \textbf{Each series keeps its own
-univariate model}---seasonal factors, generalized seasonality, fixed-frequency
-factors and all---because the VARMA it produces is diagonal, and the transfer is
-unidirectional \emph{by construction}, so there is no order to raise and no
-feedback to invent.
-
-\paragraph{The structure is reproduced.} Estimating each CPI against WTI with
-$b=0$, $r=0$, $s=1$:
+The transfer function cast avoids this. Each series keeps its own univariate model
+because the VARMA is diagonal, and the transfer is unidirectional by construction,
+so there is no lag order to raise and no feedback to invent. Estimating each CPI
+against WTI with $b=0$, $r=0$, $s=1$:
 
 \begin{center}
 \begin{tabular}{lrrrl}
@@ -700,17 +671,17 @@ Germany & $0.0127$ & $(0.0021)$ & $0.14$ & marginal ($p=0.03$); the VAR failed (
 \end{tabular}
 \end{center}
 
-The long-run elasticities reproduce the published ordering and magnitudes (Spain
-$2.7\%$, France $1.35\%$, Germany $1.1\%$), and in Germany the \emph{lagged}
-coefficient is insignificant ($t=0.97$), also as reported---the German channel is
-essentially contemporaneous. \textbf{France's noise now passes.} Germany's
-improves but remains marginal; its univariate model is the most demanding of the
-three and the relation is the weakest.
+The long-run elasticities order as one would expect (Spain $2.7\%$, France
+$1.35\%$, Germany $1.1\%$), and in Germany the lagged coefficient is insignificant
+($t=0.97$): the German channel is essentially contemporaneous. France's noise now
+passes the adequacy test where the VAR failed; Germany's improves but remains
+marginal, its univariate model being the most demanding of the three and its
+relation the weakest.
 
-\paragraph{The forecast comparison, and why the answer was ``no''.} With the exact
-variance decomposition of \S\ref{sec:network} we do not need a rolling experiment
-to see the mechanism. Forecast error standard deviation of the stationary
-inflation series, univariate versus transfer:
+\paragraph{The forecast comparison.} The exact variance decomposition of
+\S\ref{sec:network} exhibits the mechanism without a rolling experiment. Forecast
+error standard deviation of the stationary inflation series, univariate versus
+transfer:
 
 \begin{center}
 \begin{tabular}{crrrrrr}
@@ -731,13 +702,12 @@ price of the previous month \emph{has already been observed}, so $\omega_1 X_{t-
 is free information. Beyond $h=1$ it \emph{hurts}: to forecast inflation from oil
 one must forecast \emph{oil}, whose innovation variance is some three orders of
 magnitude larger than inflation's. That injected uncertainty, propagated through
-$\nu(B)$, swamps the reduction in the noise. This is exactly the published verdict,
-now with its mechanism made explicit rather than inferred from a rolling MAPE.
+$\nu(B)$, swamps the reduction in the noise. The mechanism is here made explicit,
+rather than inferred from a rolling forecast-error comparison.
 
-\paragraph{And a consequence that follows from it.} If the contemporaneous term is
-what forces us to forecast oil, drop it. A model with $b=1$---using only the
-\emph{already observed} lag---beats the univariate at \emph{every} horizon for
-Spain:
+\paragraph{A consequence.} If the contemporaneous term is what forces a forecast of
+the oil price, one may drop it. A model with $b=1$, using only the already observed
+lag, beats the univariate at every horizon for Spain:
 
 \begin{center}
 \begin{tabular}{crrr}
@@ -751,18 +721,14 @@ $h$ & univariate & transfer $b{=}0$ & transfer $b{=}1$ \\
 \end{tabular}
 \end{center}
 
-Two caveats, both of which corrected earlier and more sweeping claims of ours.
-
-First, $b=1$ is \emph{not} ``$b=0$ minus the contemporaneous term''. It is a
-different model---dropping $\omega_0$ makes the noise absorb the contemporaneous
-covariation, so $\sigma_N$ grows. There is a trade-off, and it only clearly pays in
-Spain; in France and Germany the two are within $1\%$ of each other.
-
-Second---and this is the point that matters---it is \textbf{not} true that the
-contemporaneous term is ``unusable for forecasting''. Of course one uses the
-\emph{forecast} of the oil price, and that is exactly what the program does: the
-future of the input enters the transfer like any other value. The real difficulty
-is that the oil price is very nearly \emph{unforecastable}. Its stationary model is
+Two qualifications are needed. First, $b=1$ is not ``$b=0$ minus the
+contemporaneous term'': it is a different model, because dropping $\omega_0$ makes
+the noise absorb the contemporaneous covariation, so $\sigma_N$ grows. The trade-off
+pays clearly only in Spain; in France and Germany the two are within $1\%$ of each
+other. Second, the contemporaneous term is not ``unusable for forecasting''. The
+program uses the \emph{forecast} of the oil price---the future of the input enters
+the transfer like any other value. The difficulty is that the oil price is very
+nearly unforecastable. Its stationary model is
 an AR(1) with $\phi=0.30$ on monthly log differences whose innovation standard
 deviation is $8.3\%$, so the one-step forecast carries a signal-to-noise ratio of
 about $0.18$, and two steps out, $0.05$:
@@ -789,34 +755,33 @@ countries); it is simply not worth its variance, \emph{unless} one conditions on
 scenario for the oil price rather than forecasting it, which is a different
 exercise.
 
-\paragraph{What this is not.} These are \emph{theoretical} forecast error
-variances, computed from the fitted models. They say what the models imply, not
-what happens out of sample, where parameter uncertainty and structural change---the
-2021--22 inflation surge, in this very sample---have their say. A genuine
-out-of-sample comparison needs recursive forecasting with the parameters held
-fixed. \textbf{That comparison is in \S\ref{sec:recursive}, and it overturns the
-conclusion this paragraph was about to draw.} We leave the mechanism here because
-it is right---the oil price's own unpredictability is large, and beyond one step
-the transfer does import a great deal of the variance of the oil forecast---but it
-does not follow, as we assumed it would, that the transfer forecasts worse.
+\paragraph{A caveat on theoretical variances.} These are theoretical forecast
+error variances, computed from the fitted models. They report what the models
+imply, not what happens out of sample, where parameter uncertainty and structural
+change---the 2021--22 inflation surge falls in this sample---also act. A genuine
+out-of-sample comparison requires recursive forecasting with the parameters held
+fixed; it is the subject of \S\ref{sec:recursive}, and its conclusion differs from
+what the theoretical variances suggest. The mechanism above remains valid---the oil
+price's own unpredictability is large, and beyond one step the transfer imports a
+substantial share of the variance of the oil forecast---but it does not follow that
+the transfer forecasts worse.
 
 
-\subsection{The out-of-sample verdict, and why the theory misled us}
+\subsection{The out-of-sample comparison}
 \label{sec:recursive}
 
-Everything above rests on \emph{theoretical} forecast error variances. That is not
-good enough, and the reason is worth stating plainly, because we walked into it:
+The preceding discussion rests on theoretical forecast error variances, and these
+are not a sufficient basis for comparison:
 
 \begin{quote}
-A model's forecast variance is computed \emph{under the assumption that the model
-is true.} Each model grades itself. Comparing two models' theoretical variances is
-therefore \textbf{not} comparing the two models.
+A model's forecast variance is computed under the assumption that the model is
+true. Each model grades itself, so comparing two models' theoretical variances is
+not a comparison of the two models.
 \end{quote}
 
-The program now does the honest test (\texttt{-R}): estimate \emph{once} on the
-first $E$ observations, hold the parameters \textbf{fixed}, and roll the forecast
-origin forward one datum at a time, comparing each forecast with what actually
-happened. It is what the earlier VAR study did, and what settles the question.
+The genuine test (\texttt{-R}) estimates once on the first $E$ observations, holds
+the parameters fixed, and rolls the forecast origin forward one datum at a time,
+comparing each forecast with the realized value.
 
 Spanish CPI, training window $1..168$, 37 origins, $H=12$. Ratio of the transfer
 model's out-of-sample RMSE of the \emph{level} to the univariate's, next to what
@@ -841,8 +806,8 @@ helps at every horizon, by $9$--$10\%$ of RMSE.} And this is not an artifact of 
 window---across five training windows ($25$ to $73$ origins) the improvement ranges
 from $5\%$ to $13\%$ and never reverses.
 
-Why did the theory mislead? Look at what each model \emph{claims} for itself
-against what it \emph{delivers}:
+The reason the theoretical variances mislead is visible in what each model claims
+for itself against what it delivers:
 
 \begin{center}
 \begin{tabular}{crrrrrr}
@@ -886,23 +851,22 @@ horizon. France gains at short horizons only. Germany---the country whose
 contemporaneous and therefore has to be forecast rather than read off---is made
 \emph{worse} by the oil price at every horizon.
 
-\paragraph{What this changes.} The earlier verdict was that incorporating the oil
-price does not improve the unconditional inflation forecast \emph{in any of the
-three countries}. With the proper univariate structures and a transfer model rather
-than a VAR, that is \textbf{not} what the data say: for Spain it improves the
-forecast by about $10\%$ of RMSE at every horizon, robustly. For Germany the old
-verdict stands, and now one can see why.
+\paragraph{Summary.} A VAR of inflation and the oil price suggests that the oil
+price does not improve the inflation forecast in any of the three countries. With
+each series' own univariate structure and a transfer function rather than a VAR,
+the out-of-sample evidence is different: for Spain the forecast improves by about
+$10\%$ of RMSE at every horizon, robustly across training windows; for France it
+helps at short horizons; for Germany---whose channel is essentially contemporaneous,
+so that the oil price must be forecast rather than read off---it does not help.
 
 
-
-\subsection{Does the embedded cast require estimating a covariance matrix?}
+\subsection{The reduced-form covariance is not a free parameter}
 \label{sec:embedcov}
 
-No---and the reason is the best confirmation of \S\ref{sec:identification} that we
-have found.
-
-The \emph{structural} covariance stays diagonal: one innovation per series,
-uncorrelated, exactly as before. But when the transfer is contemporaneous ($b=0$),
+The embedded cast does not require estimating an innovation covariance matrix, and
+the reason is a direct confirmation of \S\ref{sec:identification}. The structural
+covariance stays diagonal: one innovation per series, uncorrelated. When the
+transfer is contemporaneous ($b=0$),
 $\omega_0$ lands at lag zero, so $\Phi_0 \ne I$ and the system must be normalized by
 $\Phi_0^{-1}$. With $m=2$,
 \[
@@ -923,35 +887,32 @@ This is the identity of a structural VAR: \textbf{a contemporaneous structural
 coefficient \emph{generates} the reduced-form covariance.} It is why the two cannot
 both be estimated (\S\ref{sec:identification}).
 
-\paragraph{And the same non-identification result falls out of the algebra.} After
-normalizing, the off-diagonal autoregressive coefficient at lag one is
+\paragraph{The same result from the reduced form.} After normalizing, the
+off-diagonal autoregressive coefficient at lag one is
 \[
 \bigl[\Phi_0^{-1}\Phi_1\bigr]_{12}
  \;=\; -\omega_0\phi_N + \omega_0\phi_X
- \;=\; \boxed{\;\omega_0\,(\phi_X-\phi_N)\;}
+ \;=\; \boxed{\;\omega_0\,(\phi_X-\phi_N)\;}\,,
 \]
-which is \emph{the only trace left}, once the system is written in reduced form,
-that the relation is a \emph{transfer} rather than a mere innovation covariance.
-It vanishes exactly when $\phi_N=\phi_X$. That is the condition of
-\S\ref{sec:identification}, derived by a completely different route---and on the
-real data it evaluates to $0.0164\times 0.0040 = 0.000065$, which is zero for all
-practical purposes. The Spanish contemporaneous transfer model \emph{is}, to a very
-good approximation, a diagonal model with a correlated innovation. The two are the
-same model, and the algebra says so without being asked.
+the only trace left, once the system is written in reduced form, that the relation
+is a transfer rather than an innovation covariance. It vanishes when
+$\phi_N=\phi_X$---the condition of \S\ref{sec:identification}, reached here by a
+different route. On the real data it evaluates to $0.0164\times 0.0040 = 0.000065$,
+negligible for practical purposes: the Spanish contemporaneous transfer model is, to
+a good approximation, a diagonal model with a correlated innovation.
 
 
 \section{The transfer function as a restricted VARMA}
 \label{sec:theory}
 
-This section states the transformation formally. It is elementary---the algebra is a
-one-line manipulation---but the six remarks that follow it are not, and each of them
-cost us a bug. Since the embedded cast is now the default, it should be written down.
-
-The move is Mauricio's own. In~\cite{mauricio2006} he estimates partially
-nonstationary vector ARMA models by applying \emph{a transformation to the
-error-correction representation that returns a standard, stationary VARMA}, to which
-the ordinary exact-likelihood machinery then applies unchanged. What follows is the
-same device applied to a transfer function.
+This section states the transformation formally. The algebra is a one-line
+manipulation, but the remarks that follow it govern the implementation and are
+recorded in full. The device---reducing a structured model to a plain VARMA to which
+a direct exact likelihood then applies unchanged---is that of
+Mauricio~\cite{mauricio2006}, where it is used to estimate partially nonstationary
+vector ARMA models by transforming the error-correction representation into a
+standard, stationary VARMA. What follows applies the same device to a transfer
+function.
 
 \subsection{Setup}
 
@@ -1114,7 +1075,7 @@ $b_j\ge1$ for all $j$ the question does not arise at all: $\Lambda=0$, the
 innovations are already orthogonal, and there is nothing to order. \textbf{The entire
 identification problem lives at lag zero.}
 
-\subsection{What this buys: the pre-sample}
+\subsection{Exactness of the pre-sample}
 
 \begin{proposition}[Exactness]
 \label{prop:exact}
@@ -1164,7 +1125,8 @@ cost in parameters. In a Box--Jenkins analysis this is free: the input's univari
 model is already there, because one needs it to prewhiten and to forecast.
 \end{remark}
 
-\subsection{Identification at lag zero}
+\subsection{Observational equivalence in the reduced form}
+\label{sec:ident-theory}
 
 \begin{proposition}[Observational equivalence]
 \label{prop:ident}
@@ -1213,19 +1175,20 @@ separable      & $0.2$ & $0.7$ & $-847.854128$ & $-874.298278$ \\
 \end{tabular}
 \end{center}
 
-To the last digit when $\phi_N=\phi_X$; by 26 points of log-likelihood when they are
-apart. \textbf{Identification is born of the two autoregressions being different.}
+Identical to the last digit when $\phi_N=\phi_X$; separated by 26 points of
+log-likelihood when the two autoregressions differ. Identification arises precisely
+from that difference.
 
-\paragraph{The consequence one has to live with.} For the Spanish pass-through, the
-data cannot say whether the oil price acts through a contemporaneous transfer or
-through an innovation covariance. What decides is not the sample: it is the
-exogeneity of the oil price---which \emph{is} tested, and passes---together with the
-economics. The transfer is then the natural causal reading. But it is a reading the
-model \textbf{assumes}. Saying so plainly is stronger, not weaker: it marks exactly
-where the empirical content is (exogeneity, the gain of $2.7\%$, the out-of-sample
-improvement) and where the assumption is.
+\paragraph{The practical consequence.} For the Spanish pass-through the sample
+cannot determine whether the oil price acts through a contemporaneous transfer or
+through an innovation covariance. What decides is not the data but the exogeneity of
+the oil price---which is tested, and passes---together with the economic reading.
+The transfer is then the natural causal interpretation, but it is an interpretation
+the model assumes. Stating this explicitly locates the empirical content
+(exogeneity, the gain of $2.7\%$, the out-of-sample improvement) and separates it
+from the identifying assumption.
 
-\subsection{What is, and is not, new here}
+\subsection{Relation to existing results}
 \label{sec:novelty}
 
 Nothing above is a new statistical result, and it is worth being precise about why.
@@ -1245,17 +1208,15 @@ Nothing above is a new statistical result, and it is worth being precise about w
   alternative.
 \end{itemize}
 
-What we have not found written down is the particular combination: the reduction of
-\eqref{eq:tfm} to \eqref{eq:varma} by premultiplication, estimated with a
-\emph{direct} exact VARMA likelihood, with the input \emph{modelled inside the
-system} so that its pre-sample is integrated out rather than estimated
-(Remark~\ref{rem:endog}). We claim no novelty for it: the algebra is a one-line
-manipulation, and we would not be surprised to be shown it somewhere.
-
-What is worth writing down is the rest---Remark~\ref{rem:common},
-Proposition~\ref{prop:norm}, Corollaries~\ref{cor:sigma} and~\ref{cor:chol},
-Proposition~\ref{prop:ident}. Every one of them is simple. Every one of them bit us,
-and four of them were live bugs in the program until we wrote them out.
+The particular combination used here---reducing \eqref{eq:tfm} to \eqref{eq:varma}
+by premultiplication, estimating it with a \emph{direct} exact VARMA likelihood, and
+modelling the input \emph{inside the system} so that its pre-sample is integrated out
+rather than estimated (Remark~\ref{rem:endog})---is a straightforward assembly of
+these ingredients; the algebra is a one-line manipulation. What is worth recording is
+the set of properties on which a correct implementation depends:
+Remark~\ref{rem:common}, Proposition~\ref{prop:norm},
+Corollaries~\ref{cor:sigma} and~\ref{cor:chol}, and Proposition~\ref{prop:ident}.
+Each is elementary, and each has a direct implementation consequence.
 
 
 \section{How much does exactness buy? A Monte Carlo study}
@@ -1309,14 +1270,14 @@ on $\delta$ through a small denominator, suffers most of all. Put plainly:
 \textbf{the subtracting cast cannot estimate a long memory well, because it has
 erased the memory}.
 
-\paragraph{Efficiency, and a surprise.} For short samples the embedded cast costs
-$15$--$27\%$ more time, and needs more iterations as $\delta$ grows ($14\to39$).
-That is Remark~\ref{rem:common} made visible: the cast carries the common factor
-$D(B)$ in both $|P|$ and $|M|$, and an almost-cancelling factor is a delicate object
-for an optimiser. It is the price of exactness, and it is a real price.
+\paragraph{Efficiency.} For short samples the embedded cast costs $15$--$27\%$ more
+time, and needs more iterations as $\delta$ grows ($14\to39$). This is
+Remark~\ref{rem:common} made visible: the cast carries the common factor $D(B)$ in
+both $|P|$ and $|M|$, and an almost-cancelling factor is a delicate object for an
+optimizer. It is the price of the exactness.
 
-But look at $n=400$: the embedded cast is \emph{twice as fast}. This is not a
-statistical effect; it is complexity. The subtracting cast forms the transfer by
+At $n=400$, however, the embedded cast is \emph{twice as fast}. This is a matter of
+complexity, not of statistics. The subtracting cast forms the transfer by
 convolution,
 \[
 \text{transfer}(t)=\sum_{k=1}^{t}\nu_k\,w_{X,t-k+1},\qquad t=1,\dots,n,
@@ -1330,27 +1291,26 @@ dominates and it is $2\times$ faster.
 
 \paragraph{Convergence.} Both casts converge in every replication except at
 $\delta=0.95$, where the embedded cast converges in $85$--$88\%$ of them. At a memory
-that close to a unit root, the common factor of Remark~\ref{rem:common} is a
-near-exact cancellation, and the surface is hard. This is a genuine limitation and it
-is worth saying.
+that close to a unit root the common factor of Remark~\ref{rem:common} is a
+near-exact cancellation and the likelihood surface is ill-conditioned. This is a
+genuine limitation of the exact cast, recorded in \S\ref{sec:open}.
 
-\paragraph{And one bug, which the study found.} At $\delta\approx0.95$ the optimiser
-wandered into a region where the objective returned \texttt{NaN}. The line search
-backtracks by \emph{interpolating on the function value}: a \texttt{NaN} objective
-gives a \texttt{NaN} step length, and then \texttt{lambda < minlam} is \emph{false}
---- every comparison with \texttt{NaN} is --- so the step is neither accepted nor
-abandoned. The search span forever. No iteration limit protects against this: the
-infinite loop is \emph{inside} an iteration, not in the loop over them. The fix is
-the one the estimation paper already prescribes for inadmissible points: return the
-scaled objective set to one. A point that yields a non-finite likelihood is
-inadmissible, and is now rejected as such.
+\paragraph{A robustness fix uncovered by the study.} At $\delta\approx0.95$ the
+optimizer can reach a region where the objective returns \texttt{NaN}. The line
+search backtracks by interpolating on the function value: a \texttt{NaN} objective
+yields a \texttt{NaN} step length, and then \texttt{lambda < minlam} is false---every
+comparison with \texttt{NaN} is---so the step is neither accepted nor abandoned, and
+the search does not terminate. No iteration limit guards against this, since the loop
+is inside a single iteration. The remedy is the one prescribed for inadmissible
+points~\cite{mauricio1997}: set the scaled objective to one. A point that yields a
+non-finite likelihood is inadmissible and is now rejected as such.
 
-\section{Impulse response and variance decomposition: is this better than a VAR?}
+\section{Impulse response and variance decomposition}
 \label{sec:irf}
 
-The weights $\nu_k$ \emph{are} the impulse response---that is the convenience of a
-transfer function. But on their own they are not comparable with anything. Two
-things make them so, and both are now reported.
+The weights $\nu_k$ are the impulse response, which is one convenience of the
+transfer function form. Two further quantities make them comparable across models,
+and both are reported.
 
 \paragraph{The quantified impulse response.} Each $\nu_k$ with its standard error,
 and the \emph{cumulative} response, which is the reply to a \emph{permanent} unit
@@ -1391,60 +1351,239 @@ the other side: the oil price contributes a great deal of \emph{variance}. What
 \S\ref{sec:recursive} added is that it nevertheless contributes enough
 \emph{signal} to be worth it---in Spain.
 
-\paragraph{Is this better than a VAR? Yes, but not for the obvious reason.}
-In a VAR the impulse response is \emph{not identified} without an ordering, because
-$\Sigma$ is not diagonal: someone has to be shocked first, and the answer changes
-with that decision. Here the identification \emph{is} the model---$\nu(B)$ is
-estimated directly and $Q$ is diagonal.
-
-It would be comfortable to conclude that the transfer model escapes the
-identification problem. \textbf{It does not.} What it does is put the restrictions
-where they can be seen:
+\paragraph{Comparison with a VAR.} In a VAR the impulse response is not identified
+without an ordering, because $\Sigma$ is not diagonal: one variable must be shocked
+first, and the response changes with that choice. In the transfer function the
+identification is part of the model specification---$\nu(B)$ is estimated directly
+and $Q$ is diagonal. This does not escape the identification problem; it relocates
+the restrictions so that they are visible:
 
 \begin{itemize}
-\item The restrictions---exogenous input, diagonal $\Sigma$---are \emph{declared},
-  not buried in an ordering.
-\item They are \emph{tested}: the cross-correlation at negative lags is an
-  exogeneity test, and the adequacy test asks whether $\nu(B)$ is wide enough.
-\item They can be \emph{relaxed}, one covariance at a time.
-\item And when they are relaxed next to a contemporaneous transfer, the program
-  lands back in \emph{exactly} the VAR's problem---$\omega_0$ and $\sigma_{12}$
-  explain the same thing at lag zero (\S\ref{sec:identification})---and it says so
-  instead of producing a number.
+\item the restrictions---an exogenous input, a diagonal $\Sigma$---are declared, not
+  encoded in an ordering;
+\item they are testable: the cross-correlation at negative lags is an exogeneity
+  test, and the adequacy test asks whether $\nu(B)$ is wide enough;
+\item they can be relaxed, one covariance at a time; and
+\item when a covariance is relaxed next to a contemporaneous transfer, the program
+  returns to exactly the VAR's identification problem---$\omega_0$ and $\sigma_{12}$
+  explain the same thing at lag zero (\S\ref{sec:identification})---and reports the
+  non-identification rather than a spurious estimate.
 \end{itemize}
 
-Consistently with that, the variance decomposition is \textbf{not reported} when
-$\Sigma$ is non-diagonal. With correlated innovations the decomposition is not
-unique: someone must be given the common part, and that requires a Cholesky
-ordering. That is the VAR's problem. It is not solved here. It is \emph{avoided}
-while $\Sigma$ stays diagonal, and \emph{declared} when it does not.
+Accordingly, the variance decomposition is not reported when $\Sigma$ is
+non-diagonal: with correlated innovations the decomposition is not unique, and
+assigning the common part requires a Cholesky ordering---the VAR's problem, avoided
+while $\Sigma$ stays diagonal and declared when it does not. The advantage over a VAR
+is therefore modest and of a specific kind: not fewer assumptions, but assumptions
+that are explicit, testable and refusable, together with the practical advantage that
+each series may keep the univariate model it requires (\S\ref{sec:passthrough}).
 
-So the superiority is real but modest, and it is of a particular kind: not fewer
-assumptions, but assumptions that are explicit, testable and refusable. To which
-must be added the one advantage that is not methodological at all but decided the
-pass-through exercise---each series may keep the univariate model it actually
-needs (\S\ref{sec:passthrough}).
+\section{Example: a recursive model of employment by sector}
+\label{sec:m6}
 
-\section{What the dissertation taught, and what remains}
+The second worked example exercises the parts of the program that the bivariate
+pass-through does not: a network of transfers, generalized seasonality, factorized
+numerators with shared parameters, and the guided identification of the system. The
+data and model are those of a multivariate study of Spanish employment by
+sector~\cite{relloso1997}: six quarterly series over 1976:III--1993:II (69
+observations)---the active population (\texttt{P}), unemployment (\texttt{EP}), and
+employment in agriculture (\texttt{EA}), industry (\texttt{EI}), construction
+(\texttt{EU}) and services (\texttt{EC}).
+
+\subsection{The system}
+
+The six series form a recursive dynamic system: a directed acyclic graph of
+transfers with a chain through the productive sectors into unemployment, plus a
+direct link,
+\begin{center}
+\texttt{EC} $\xrightarrow{\,b=2\,}$ \texttt{EU} $\xrightarrow{\,b=1\,}$
+\texttt{EI} $\xrightarrow{\,b=1\,}$ \texttt{EP}\,,
+\qquad
+\texttt{EC} $\xrightarrow{\,b=1\,}$ \texttt{EP}\,.
+\end{center}
+Each series carries its own univariate model. Five are twice-differenced ($\nabla^2$)
+with deterministic seasonality and intervention terms; agricultural employment
+\texttt{EA} carries \emph{generalized} (stochastic) seasonality---a
+$\nabla\nabla_4$ difference with a moving-average factor at each seasonal frequency,
+$\theta=0.43$ at frequency zero and $\lambda_1=-0.68$, $\lambda_2=-0.72$ at the
+harmonic and Nyquist frequencies. Because the VARMA cast keeps $\Phi$, $\Theta$ and
+$Q$ diagonal, each of these univariate specifications survives unchanged inside the
+system, exactly as in the pass-through example.
+
+\subsection{Identification of the network}
+
+The system is built in the order of the classical ladder. First the six univariate
+models are estimated jointly as a diagonal system (\texttt{-0}); this reproduces the
+univariate fits and yields the log-likelihood of the diagonal baseline,
+$-1709.51$. Its residual cross-correlations are then read to propose the transfer
+links and the contemporaneous covariances (\texttt{-i}, or \texttt{-g} to write the
+proposal directly to files). On these data the procedure recovers three
+contemporaneous covariances---$\mathrm{cov}(\texttt{EA},\texttt{EI})$,
+$\mathrm{cov}(\texttt{EA},\texttt{EC})$, $\mathrm{cov}(\texttt{EI},\texttt{EU})$---and
+the clean directed link $\texttt{EI}\rightarrow\texttt{EP}$ at lag~1. The proposed
+network is a guide to be pruned by exogeneity, acyclicity and lag plausibility, not a
+final model.
+
+Estimating the pruned network with free transfer numerators raises the
+log-likelihood to $-1697.61$, a gain of about twelve points over the diagonal for
+the added transfer parameters.
+
+\subsection{Factorized numerators}
+
+The distinctive feature of this system is that its transfer numerators are
+\emph{factorized}, and two of them share a parameter with the moving-average
+operator of their own input---the signature of a transfer that inherits part of the
+dynamics of its input. In the Box--Jenkins convention $\omega(B)=\omega_0-\omega_1B$,
+a numerator $-\omega_0(1-mB)$ has coefficient $\omega_1=\omega_0\,m$, so a shared
+factor $m$ is expressed as a product:
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+link & factorized numerator & slot-table restriction \\
+\midrule
+$\texttt{EP}\leftarrow\texttt{EI}$ & $-\omega_0(1-m_{\texttt{EI}}B)$
+   & \texttt{omega1[1] = omega1[0] * theta\_2} \\
+$\texttt{EU}\leftarrow\texttt{EC}$ & $-\omega_0(1-m_{\texttt{EU}}B)$
+   & \texttt{omega4[1] = omega4[0] * theta\_3} \\
+$\texttt{EI}\leftarrow\texttt{EU}$ & $-(1-B)(x_0+x_1B+x_2B^2)$
+   & \texttt{omega3[0] = omega3[1] + omega3[2] + omega3[3]} \\
+\bottomrule
+\end{tabular}
+\end{center}
+The first two are products; \texttt{theta\_2} and \texttt{theta\_3} are the
+moving-average parameters of \texttt{EI} and \texttt{EU}, shared into their
+respective transfers. The third numerator carries a \emph{fixed} factor $(1-B)$,
+which forces the impulse-response numerator to vanish at $B=1$; in the Box--Jenkins
+convention this is the linear constraint
+$\omega_0=\omega_1+\omega_2+\omega_3$, a linear combination of slots. These are
+exactly the product and linear-combination forms of the slot table
+(\S\ref{sec:restrictions}). A fourth link, $\texttt{EP}\leftarrow\texttt{EC}$, has a
+numerator $(1-x_2B)(x_0+x_1B)$ whose three parameters are not shared with any other
+operator; a free quadratic numerator spans the same space, so no restriction is
+imposed.
+
+\subsection{The restrictions are consistent with the data}
+
+Because the compound end-of-sample interventions of this system are weakly
+identified, and can drift between modes in the reduced network, the effect of the
+transfer restrictions is isolated by holding the deterministic terms fixed at their
+univariate values (\texttt{-D -E}). Against that reference:
+
+\begin{center}
+\begin{tabular}{lrrr}
+\toprule
+transfer numerators & free params & $\log L$ & restriction \\
+\midrule
+free                                   & 27 & $-1728.91$ & --- \\
+two shared-MA products                 & 25 & $-1729.31$ & $\Delta=0.4$, 2 d.f. \\
+$+$ the fixed $(1-B)$ factor           & 24 & $-1731.40$ & $\Delta=2.5$, 3 d.f. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Imposing the full factorized structure of the system costs $2.5$ points of
+log-likelihood over three degrees of freedom; the likelihood-ratio statistic is
+$5.0$, against $\chi^2_{3,0.95}=7.81$. The restrictions are not rejected: the
+parameter sharing that the factorized form encodes is consistent with the data, and
+it moves the estimated coefficients toward their factorized values at negligible cost
+in fit. The example thus exercises the network cast, generalized seasonality, and
+both the product and linear-combination restrictions in a single system, and shows
+that the system's classical structure survives an exact-likelihood re-estimation.
+
+\section{Scope, generalization, and the model's place}
+\label{sec:scope}
+
+\subsection{Generic cases the program is intended for}
+
+The program estimates, by exact maximum likelihood, any model that can be written as
+a system of the form \eqref{eq:tfm}--\eqref{eq:arma}: a collection of time series in
+which
+
+\begin{itemize}
+\item each series has its own univariate ARIMA or generalized-seasonal model, with
+  deterministic components (calendar effects, interventions, a mean);
+\item some series are related by \emph{one-directional} rational transfer functions
+  $\nu(B)=\omega(B)/\delta(B)\,B^b$, possibly forming a directed acyclic graph in
+  which a series is at once a target and a source; and
+\item the innovations across series are orthogonal, except for contemporaneous
+  covariances that are explicitly freed.
+\end{itemize}
+
+\noindent
+This covers single-equation regression with ARMA errors and lagged inputs (a single
+transfer, no covariances); the classical single-output transfer function model with
+several exogenous inputs; intervention analysis (a transfer whose input is a
+deterministic indicator); and recursive multivariate systems such as the employment
+example of \S\ref{sec:m6}. It does \emph{not} cover feedback systems, in which two
+series each Granger-cause the other: a cycle cannot be triangularized by subtraction,
+and the program rejects it. Genuine simultaneity requires the full VARMA, of which
+this model is a restriction.
+
+\subsection{Of what the model is a particular case}
+
+The transfer function system is a \emph{restricted VARMA}. Proposition~\ref{prop:cast}
+exhibits the restriction: a VARMA $P(B)w_t=M(B)a_t$ whose autoregressive matrix
+$P(B)$ is lower-Hessenberg with the coupling confined to the output equation, whose
+moving-average matrix $M(B)$ is diagonal up to a common factor, and whose innovation
+covariance is diagonal. An unrestricted VARMA relaxes all three: full $P(B)$ and
+$M(B)$, and an unrestricted $\Sigma$. The transfer function model is therefore the
+special case in which the multivariate dynamics are \emph{recursive} and the
+contemporaneous structure is \emph{declared} rather than estimated. This is what
+makes exact estimation with a diagonal-innovation engine possible, and what the
+program trades away relative to a full VARMA: it cannot represent feedback, and it
+assumes an innovation covariance that is diagonal unless a covariance is deliberately
+freed.
+
+\subsection{What the model generalizes, and what it extends}
+
+In the other direction, the model \emph{generalizes} the univariate ARIMA model with
+intervention: a system of one series, with no inputs, is exactly a univariate model,
+and the program reproduces the univariate estimates to machine precision
+(\S\ref{sec:separability}). It generalizes single-equation dynamic regression by
+allowing the regressors to be modelled series with their own dynamics, so that their
+pre-sample and their forecasts are handled within the system rather than conditioned
+upon.
+
+Relative to the classical transfer function apparatus, the program extends it in two
+respects. First, from a single output to a \emph{network}: the single-output theory
+\cite{bjr1994,liu1982} is generalized to a directed acyclic graph of transfers
+(\S\ref{sec:network}), a recursive dynamic system that the diagonal VARMA
+accommodates without modification. Second, from an approximate to an \emph{exact}
+likelihood: because each input is a series of the system, its pre-sample is
+integrated out by the exact VARMA likelihood rather than backforecast or truncated
+(\S\ref{sec:truncation}), so the reported log-likelihood is that of the observed
+data and the usual likelihood-based inference is valid.
+
+\subsection{Limitations}
+
+The scope above also delimits what the program does not do. It cannot estimate
+feedback systems; it assumes exogenous inputs, an assumption that is testable but not
+relaxable within a link; the innovation covariance is diagonal by default, and a
+contemporaneous transfer and a freed covariance cannot be identified simultaneously
+(\S\ref{sec:identification}); genuinely nonlinear parameter restrictions cannot be
+imposed, only tested (\S\ref{sec:gain}); and near a unit-root transfer denominator the
+exact cast becomes numerically delicate (\S\ref{sec:mcstudy}). Within these bounds,
+the estimation is exact and the classical identification, characterization and
+diagnostic apparatus applies unchanged.
+
+\section{Design principles and open limitations}
 \label{sec:todo}
 
-\subsection{Three things that reading it put into the program}
+\subsection{Principles carried over from the classical methodology}
 
 \begin{enumerate}
-\item \textbf{The order of reformulation.} The dissertation~\cite[\S2.6]{munoz2001}
-  points out an asymmetry that is not obvious: a misspecified \emph{relation} can
-  make the residual ACF/PACF look like a misspecified \emph{noise}, but \emph{``a
-  misspecified noise cannot give, in the CCF, the impression of a misspecified
-  relation. For these reasons, $\nu(B)$ is reformulated until it appears adequate
-  \emph{before} reformulating $\theta(B)$.''} The contamination runs one way: what
-  is left over from the input ends up \emph{inside} the noise. The program used to
-  print both diagnostics and say nothing about which to act on; it now combines
-  them and says it, and warns---when both look bad---that the noise may merely be
-  showing the relation's leftovers, so it should not be touched yet.
+\item \textbf{The order of reformulation.} A misspecified \emph{relation} can make
+  the residual ACF and PACF resemble a misspecified \emph{noise}, but a misspecified
+  noise cannot make the cross-correlation function resemble a misspecified relation:
+  the contamination runs one way, because what is left over from the input ends up
+  inside the noise~\cite[chs.~11--12]{bjr1994}. The transfer $\nu(B)$ is therefore
+  reformulated to adequacy \emph{before} the noise $\theta(B)$. The program combines
+  the two diagnostics accordingly and warns, when both look inadequate, that the
+  noise may merely be displaying the relation's residue and should not yet be
+  altered.
 
 \item \textbf{The long-run gain and the mean lag} (\S\ref{sec:gain}). Without them
-  the relation is estimated but not described. This was the most valuable of the
-  three.
+  the relation is estimated but not described.
 
 \item \textbf{Aggregates.} An accounting identity (\textsc{employed} $=$ sum of
   sectors; \textsc{unemployed} $=$ \textsc{active} $-$ \textsc{employed}) does
@@ -1455,65 +1594,53 @@ needs (\S\ref{sec:passthrough}).
   $c'Vc$, with $V$ the full forecast error covariance, propagated to levels by the
   delta method.
 
-  Computing it required fixing a real defect: the forecast variance assumed
-  $\Sigma$ diagonal, which stopped being true the moment covariances could be
-  freed (\S\ref{sec:qq}). The check is pretty. On the chain $X\rightarrow M
-  \rightarrow Y$ with $b=2$ on the link $M\rightarrow Y$, the aggregate's band
-  \emph{coincides} with the naive independent sum at horizons 1 and 2---$M$'s
-  innovation has not yet reached $Y$---and separates from horizon 3 onwards, with
-  $\mathrm{sd}(Y-M) < \sqrt{\mathrm{var}(Y)+\mathrm{var}(M)} < \mathrm{sd}(Y+M)$,
-  exactly as positive correlation requires. The pure delay itself appears as the
-  horizon at which the correlation is born.
+  Computing it required correcting a defect: the forecast variance assumed $\Sigma$
+  diagonal, which ceases to hold once covariances are freed (\S\ref{sec:qq}). On the
+  chain $X\rightarrow M \rightarrow Y$ with $b=2$ on the link $M\rightarrow Y$, the
+  aggregate's band coincides with the na\"ive independent sum at horizons 1 and
+  2---$M$'s innovation has not yet reached $Y$---and separates from horizon 3
+  onwards, with
+  $\mathrm{sd}(Y-M) < \sqrt{\mathrm{var}(Y)+\mathrm{var}(M)} < \mathrm{sd}(Y+M)$, as
+  positive correlation requires. The pure delay appears as the horizon at which the
+  correlation is born.
 \end{enumerate}
 
-\subsection{Five things that remain open}
+\subsection{Open limitations}
 \label{sec:open}
 
-These are stated as limitations, not as plans.
-
 \begin{enumerate}
-\item \textbf{Making the embedded cast the default} (\S\ref{sec:truncation}).
-  It is exact, it costs nothing, and it survives every case; the only reason it is
-  an option is that the subtracting cast is the one with two hundred tests behind
-  it.
+\item \textbf{Nonlinear restrictions cannot be imposed.} The slot table expresses
+  free, fixed, shared, product and linear-combination relations
+  (\S\ref{sec:restrictions})---linear and multiplicative constraints among
+  parameters. A unit long-run gain, $g=\nu(1)=1$, is a genuinely nonlinear
+  constraint on the $\omega$'s and $\delta$'s and cannot be imposed by the slot
+  table; it can, however, be tested directly (\S\ref{sec:gain}). Imposing it
+  requires transforming the data, as in the classical treatment.
 
-\item \textbf{Nonlinear restrictions cannot be \emph{imposed}.} The slot table
-  expresses FREE, FIXED and SHARED---that is, linear equality between parameters.
-  A unit long-run gain, $g=\nu(1)=1$, is nonlinear in the $\omega$'s and
-  $\delta$'s, so the dissertation imposes it by transforming the data. With
-  \S\ref{sec:gain} that hypothesis can now be \emph{tested} directly, which is
-  what one usually wants; but it still cannot be \emph{imposed}, and there are
-  cases (estimating subject to a theoretical restriction one is not willing to
-  question) where imposing is the point.
+\item \textbf{Growth rates with their standard deviations.} An applied reading
+  requires not only the level forecast but the quarter-on-quarter and
+  year-on-year growth, each with a band. The likelihood engine's forecasting
+  routine returns the covariance matrices of those differences, but the program does
+  not yet report them.
 
-\item \textbf{The estimative half of identity-linked triads.} The dissertation
-  (\S2.4) does more than compute the identity after the fact: it \emph{restricts
-  the deterministic parameters of the three series to satisfy the identity},
-  which \emph{``economizes the number of parameters to be estimated''} and makes
-  the estimates use the data more efficiently. The slot table can already express
-  this---it is exactly what sharing a parameter across series means---but it has
-  not been exercised on a real triad.
+\item \textbf{Monitoring without re-estimation.} The recursive machinery of
+  \S\ref{sec:recursive} performs the evaluation half of a monitoring workflow
+  (\texttt{-R}); the operational half---appending new data to a fitted model and
+  testing whether it still holds---is not yet implemented.
 
-\item \textbf{Growth rates with their standard deviations.} What an economist
-  reads is not only the level, but how much it rises this quarter and how much
-  against a year ago, each with a band. The likelihood engine's forecasting
-  routine already returns the covariance matrices of those differences
-  ($v_2$, $v_3$); the program computes them and \emph{throws them away}.
-
-\item \textbf{New observations without re-estimating}, as a \emph{monitoring}
-  workflow. The recursive machinery of \S\ref{sec:recursive} does the evaluation
-  half of this (\texttt{-R}); what is missing is the operational half---append data
-  to a fitted model and ask whether it still holds.
+\item \textbf{Convergence at near-unit memory.} As shown in \S\ref{sec:mcstudy},
+  the embedded cast fails to converge in a minority of replications when a transfer
+  denominator approaches a unit root ($\delta\approx0.95$), because the common factor
+  of Remark~\ref{rem:common} is then a near-exact cancellation.
 \end{enumerate}
 
 \section*{Reproducibility}
 
-Every figure in this note is produced by the program's test battery
-(\texttt{test\_battery.sh}, 134 checks): homologation against the univariate
-program (\S1--1d), synthetic ground truth (\S2--2c), multiple inputs (\S2d),
-shared and fixed parameters (\S2e), the network (\S2f), the covariance (\S2g),
-the real case and its rational form (\S3b), separability (\S3c), and the
-identification hazard (\S3d). The source is at
+Every numerical result in this document is produced by the program's test battery
+(\texttt{test\_battery.sh}): homologation against the univariate program, synthetic
+ground truth, multiple inputs, shared, fixed, product and linear-combination
+parameters, the network, freed covariances, the two worked examples, and the
+identification analysis. The source is at
 \url{https://github.com/davidesg/drtran}, under the GNU GPL.
 
 \begin{thebibliography}{9}
@@ -1590,16 +1717,22 @@ Algorithm AS 242: The exact likelihood of a vector autoregressive-moving average
 model.
 \emph{Applied Statistics} \textbf{38}(1), 161--184.
 
-\bibitem{munoz2001}
-M.~S.~Mu\~noz Polo (2001).
-\emph{Estudios econom\'etricos de las series temporales de la industria
-espa\~nola}. Doctoral dissertation, Universidad Complutense de Madrid.
-Supervisor: A.~B.~Treadway.
-
 \bibitem{tiaobox1981}
 G.~C.~Tiao and G.~E.~P.~Box (1981).
 Modeling multiple time series with applications.
 \emph{Journal of the American Statistical Association} \textbf{76}, 802--816.
+
+\bibitem{liu1982}
+L.-M.~Liu and D.~M.~Hanssens (1982).
+Identification of multiple-input transfer function models.
+\emph{Communications in Statistics -- Theory and Methods} \textbf{11}(3), 297--314.
+
+\bibitem{relloso1997}
+S.~Relloso Pereda (1997).
+\emph{Un modelo multivariante para el empleo por sectores, activos y parados en
+Espa\~na}. Working paper 9720, Instituto Complutense de An\'alisis Econ\'omico
+(ICAE), Universidad Complutense de Madrid.
+\emph{(Source of the sectoral-employment example of \S\ref{sec:m6}.)}
 
 \end{thebibliography}
 

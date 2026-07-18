@@ -26,7 +26,9 @@ SRCS = $(SRCDIR)/drtran.c       \
        $(SRCDIR)/qnewtopt.c     \
        $(SRCDIR)/nlatools.c     \
        $(SRCDIR)/diagnose.c   \
-       $(SRCDIR)/forecast.c
+       $(SRCDIR)/forecast.c   \
+       $(SRCDIR)/gnuplot_i.c  \
+       $(SRCDIR)/fuf_graphic.c
 
 OBJS = $(SRCS:.c=.o)
 

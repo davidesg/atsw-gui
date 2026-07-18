@@ -1625,14 +1625,15 @@ static const char *latex_escape(char *dst, size_t n, const char *src)
     return dst;
 }
 
-/* Inversa de la transformacion Box-Cox: del espacio transformado (c/refactor) al
-   NIVEL.  lam=0 -> log; lam!=0 -> Box-Cox.                                        */
-static real bc_inverse(real c, real lam, real refc)
-{
-    real z = c / refc;
-    if (fabs(lam) < 1e-8) return exp(z);
-    return pow(lam * z + 1.0, 1.0 / lam);
-}
+/* Modulo grafico IMPORTADO de fuf (src/fuf_graphic.c): dibuja la variacion anual
+   (historia + prevision +/- 1 DT) y los residuos (ERR) con los formatos de fuf. */
+void forecast_graphic(double *data, double **res, double **f3, double ***v3,
+                      int ornsop, double sigma2, int begyear, int begtime,
+                      int nobs, int L, int freq, char *x11out, double refactor);
+void forecast_graphic_BC(double *data, double **res, double **f1, double ***v1,
+                         int ornsop, double sigma, int begyear, int begtime,
+                         int nobs, int L, int freq, double boxlam, char *x11out,
+                         double refactor);
 
 /* Informe de prevision LaTeX/PDF "a la fuf": una pagina por serie con la tabla
    NIVEL/VARIACION/ERR y un grafico (historia + prevision + banda del 95%) en
@@ -1654,8 +1655,7 @@ static void forecast_latex_doc(int m, int L, real ***LP, real **sigma,
     fprintf(tex,
         "\\documentclass[11pt,a4paper]{article}\n"
         "\\usepackage[T1]{fontenc}\n\\usepackage[utf8]{inputenc}\n"
-        "\\usepackage{booktabs}\n\\usepackage{geometry}\n\\usepackage{pgfplots}\n"
-        "\\pgfplotsset{compat=1.16}\n\\usepgfplotslibrary{fillbetween}\n"
+        "\\usepackage{booktabs}\n\\usepackage{geometry}\n\\usepackage{graphicx}\n"
         "\\geometry{margin=2cm}\n\\pagestyle{empty}\n\\begin{document}\n");
 
     for (u = 1; u <= m; u++) {
@@ -1718,49 +1718,50 @@ static void forecast_latex_doc(int m, int L, real ***LP, real **sigma,
         }
         fprintf(tex, "\\bottomrule\n\\end{tabular}\\end{center}\n\n");
 
-        /* --- Grafico: historia + prevision + banda 95% --- */
-        H = (nb < 4 * (freq > 1 ? freq : 6)) ? nb : 4 * (freq > 1 ? freq : 6);
-        fprintf(tex, "\\begin{center}\n\\begin{tikzpicture}\n"
-                "\\begin{axis}[width=.9\\textwidth,height=6cm,xlabel={time},"
-                "ylabel={level},legend pos=north west,no markers]\n");
-        /* banda: caminos superior e inferior (arranca en el ultimo dato, ancho 0) */
-        fprintf(tex, "\\addplot[name path=U,draw=none,forget plot] coordinates {");
-        { obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, nb, &per, &yr);
-          fprintf(tex, "(%.3f,%.4f)", yr + (freq>1 ? (per-1.0)/freq : 0.0), Ts[i].data[nb]); }
-        for (l = 1; l <= L; l++) {
-            real center = BC[i][nb+l] + DET[i][nb+l];
-            real sd = sqrt(vcov_diff_at(LP, sigma, m, i, l, 0));
-            real hi = bc_inverse(center + 1.96 * sd, lam, refc);
-            obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, nb + l, &per, &yr);
-            fprintf(tex, "(%.3f,%.4f)", yr + (freq>1 ? (per-1.0)/freq : 0.0), hi);
-        }
-        fprintf(tex, "};\n\\addplot[name path=Lo,draw=none,forget plot] coordinates {");
-        { obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, nb, &per, &yr);
-          fprintf(tex, "(%.3f,%.4f)", yr + (freq>1 ? (per-1.0)/freq : 0.0), Ts[i].data[nb]); }
-        for (l = 1; l <= L; l++) {
-            real center = BC[i][nb+l] + DET[i][nb+l];
-            real sd = sqrt(vcov_diff_at(LP, sigma, m, i, l, 0));
-            real lo = bc_inverse(center - 1.96 * sd, lam, refc);
-            obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, nb + l, &per, &yr);
-            fprintf(tex, "(%.3f,%.4f)", yr + (freq>1 ? (per-1.0)/freq : 0.0), lo);
-        }
-        fprintf(tex, "};\n\\addplot[blue!12] fill between[of=U and Lo];\n");
-        /* historia */
-        fprintf(tex, "\\addplot[black,thick] coordinates {");
-        for (t = nb - H + 1; t <= nb; t++) {
-            obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, t, &per, &yr);
-            fprintf(tex, "(%.3f,%.4f)", yr + (freq>1 ? (per-1.0)/freq : 0.0), Ts[i].data[t]);
-        }
-        fprintf(tex, "};\n\\addplot[blue,thick,dashed] coordinates {");
-        obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, nb, &per, &yr);
-        fprintf(tex, "(%.3f,%.4f)", yr + (freq>1 ? (per-1.0)/freq : 0.0), Ts[i].data[nb]);
-        for (l = 1; l <= L; l++) {
-            obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, nb + l, &per, &yr);
-            fprintf(tex, "(%.3f,%.4f)", yr + (freq>1 ? (per-1.0)/freq : 0.0), LVL[i][l]);
-        }
-        fprintf(tex, "};\n\\legend{95\\%% band,history,forecast}\n"
-                "\\end{axis}\n\\end{tikzpicture}\n\\end{center}\n\\clearpage\n\n");
+        /* --- Grafico: el MODULO DE fuf (forecast_graphic), con sus formatos ---
+           Dibuja la variacion anual (historia + prevision +/- 1 DT) y los
+           residuos (ERR) via la interfaz gnuplot_i, tal cual fuf.  Solo con
+           estacionalidad (freq>1) y si hay gnuplot, como fuf.                    */
+        H = 0; (void)H;
+        if (freq > 1 && system("command -v gnuplot >/dev/null 2>&1") == 0) {
+            double *res1[2];               /* res[1][...] = residuos de la serie i */
+            double **f3w = matrix(1, 1, 1, L);
+            double ***v3w = tensor(1, L, 1, 1, 1, 1);
+            char x11[560], eps[720], pdf[720], cmd[1600];
+            int  aper, asub, ll;
 
+            real s2 = 0.0; int cc = 0;
+            res1[1] = aresid[i];
+            for (ll = 1; ll <= L; ll++) {
+                f3w[1][ll]    = (nb + ll - freq >= 1) ? ystar[nb+ll] - ystar[nb+ll-freq] : 0.0;
+                v3w[ll][1][1] = vcov_diff_at(LP, sigma, m, i, ll, freq);
+            }
+            /* El panel ERR fija sus tics en 2*sqrt(sigma2), con los residuos pintados
+               como vscale*a.  sigma2 = varianza MUESTRAL de esos residuos pintados
+               (robusto a como normalice el motor las innovaciones).               */
+            for (t = 1; t <= n_stat; t++) { real z = vscale * aresid[i][t]; s2 += z * z; cc++; }
+            if (cc > 0) s2 /= cc;
+            snprintf(x11, sizeof x11, "%s_s%d", forecast_base, i);
+
+            /* la llamada de fuf.c [8.6], con los datos de drtran para la serie i */
+            forecast_graphic(ystar, res1, f3w, v3w, ord, s2,
+                             Ts[i].begyear, Ts[i].begtime, nb, L, freq, x11, refc);
+
+            free_tensor(v3w, 1, L, 1, 1, 1, 1);
+            free_matrix(f3w, 1, 1, 1, L);
+
+            /* fuf escribe prev<x11>.<sub><per>.eps ; a PDF para pdflatex */
+            ObsToDate(Ts[i].begyear, Ts[i].begtime, nb + 1, freq, &aper, &asub);
+            snprintf(eps, sizeof eps, "prev%s.%d%d.eps", x11, asub, aper);
+            snprintf(pdf, sizeof pdf, "prev%s.%d%d.pdf", x11, asub, aper);
+            snprintf(cmd, sizeof cmd, "epstopdf '%s' >/dev/null 2>&1", eps);
+            if (system(cmd) == 0)   /* fuf inserta con scale (.90 si L>20, si no .70) */
+                fprintf(tex, "\\begin{center}\\includegraphics[scale=%s]{%s}\\end{center}\n",
+                        (L > 20) ? "0.90" : "0.70", pdf);
+            snprintf(cmd, sizeof cmd, "rm -f '%s'", eps);
+            if (system(cmd) != 0) { /* ignore */ }
+        }
+        fprintf(tex, "\\clearpage\n\n");
         free_vector(ystar, 1, nb + L);
     }
     fprintf(tex, "\\end{document}\n");
@@ -1774,10 +1775,11 @@ static void forecast_latex_doc(int m, int L, real ***LP, real **sigma,
                  "pdflatex -interaction=batchmode -halt-on-error %s >/dev/null 2>&1",
                  fname, fname);
         if (system(cmd) == 0) {
-            /* limpiar auxiliares */
+            /* limpiar auxiliares y los PDF de los graficos (ya embebidos) */
             char aux[1400];
-            snprintf(aux, sizeof aux, "rm -f %s_forecast.aux %s_forecast.log",
-                     forecast_base, forecast_base);
+            snprintf(aux, sizeof aux,
+                     "rm -f %s_forecast.aux %s_forecast.log prev%s_s*.pdf",
+                     forecast_base, forecast_base, forecast_base);
             if (system(aux) != 0) { /* ignore */ }
         }
     }
@@ -2642,8 +2644,9 @@ static void usage(const char *prog)
 "           series, a report with the LEVEL and its period/annual VARIATION,\n"
 "           each with a standard deviation (as fuf/forsil present them).\n"
 "  -L       also write a LaTeX/PDF forecast report (<name>_forecast.tex, one\n"
-"           page per series: the table plus a pgfplots chart with the 95%% band)\n"
-"           and compile it with pdflatex if available.\n"
+"           page per series: the table plus fuf's forecast chart (annual rate of\n"
+"           change with +/-1 SD band, and the residuals). Needs gnuplot+epstopdf\n"
+"           for the chart and pdflatex for the PDF; degrades gracefully without.\n"
 "\n"
 "OTHER\n"
 "  -v       optimizer trace\n"

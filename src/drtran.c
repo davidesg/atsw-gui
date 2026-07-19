@@ -97,8 +97,10 @@ int net_ident = 0;
 char *guide_name = NULL;
 
 /* -L : ademas del reporte ASCII, escribe un informe de prevision LaTeX/PDF "a la
-   fuf" (<base>_forecast.tex: tabla NIVEL/VARIACION + grafico pgfplots por serie) y
-   lo compila con pdflatex si esta disponible.  forecast_base es el nombre base. */
+   fuf" (<base>_forecast.tex): por serie, la tabla NIVEL/VARIACION (convencion de
+   filas de fuf: L/2 de historia + L/2 meses + solo fines de año) con su grafico
+   gnuplot (forecast_graphic de fuf) AL LADO, dos informes por cara.  Lo compila
+   con pdflatex si esta disponible.  forecast_base es el nombre base. */
 int   latex_forecast = 0;
 char *forecast_base   = NULL;
 
@@ -1655,13 +1657,19 @@ static void forecast_latex_doc(int m, int L, real ***LP, real **sigma,
     fprintf(tex,
         "\\documentclass[11pt,a4paper]{article}\n"
         "\\usepackage[T1]{fontenc}\n\\usepackage[utf8]{inputenc}\n"
-        "\\usepackage{booktabs}\n\\usepackage{geometry}\n\\usepackage{graphicx}\n"
-        "\\geometry{margin=2cm}\n\\pagestyle{empty}\n\\begin{document}\n");
+        "\\usepackage{geometry}\n\\usepackage{graphicx}\n"
+        "\\usepackage[table]{xcolor}\n"
+        "\\geometry{margin=1.0cm}\n\\pagestyle{empty}\n"
+        "\\setlength{\\parindent}{0pt}\n"
+        "\\renewcommand{\\arraystretch}{0.75}\\setlength{\\tabcolsep}{3.5pt}\n"
+        "\\begin{document}\n");
 
     for (u = 1; u <= m; u++) {
-        int  nb, ord, freq, H;
+        int  nb, ord, freq;
         real refc, lam, vscale;
         real *ystar;
+        int  hasfig = 0;
+        char pdf[720] = {0};
         i    = topo[u];
         nb   = Ts[i].nobs;
         ord  = Tm[i].ornsop;
@@ -1673,63 +1681,16 @@ static void forecast_latex_doc(int m, int L, real ***LP, real **sigma,
         ystar = vector(1, nb + L);
         for (t = 1; t <= nb + L; t++) ystar[t] = BC[i][t] + DET[i][t];
 
-        obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, nb, &per, &yr);
-        { char enm[128];
-          fprintf(tex, "\\section*{Forecast report: %s}\n",
-                  latex_escape(enm, sizeof enm, Ts[i].name)); }
-        if (freq > 1) fprintf(tex, "Forecast origin: %d/%d.\\quad Lead time: %d.\n\n",
-                              per, yr, L);
-        else          fprintf(tex, "Forecast origin: %d.\\quad Lead time: %d.\n\n",
-                              yr, L);
-
-        /* --- Tabla --- */
-        fprintf(tex, "\\begin{center}\\small\n\\begin{tabular}{r rr rr rr r}\n\\toprule\n");
-        fprintf(tex, " & \\multicolumn{2}{c}{LEVEL} & \\multicolumn{4}{c}{VARIATION} & \\\\\n");
-        fprintf(tex, "\\cmidrule(lr){2-3}\\cmidrule(lr){4-7}\n");
-        fprintf(tex, "DATE & VALUE & STD & PERIOD & STD & ANNUAL & STD & ERR \\\\\n\\midrule\n");
-        for (t = nb - L; t <= nb; t++) {
-            if (t < 1) continue;
-            obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, t, &per, &yr);
-            if (freq > 1) fprintf(tex, "%d/%d & ", per, yr);
-            else          fprintf(tex, "%d & ", yr);
-            fprintf(tex, "%.2f & -- & ", Ts[i].data[t]);
-            if (t - 1 >= 1)    fprintf(tex, "%.2f & -- & ", vscale * (ystar[t] - ystar[t-1]));
-            else               fprintf(tex, "-- & -- & ");
-            if (t - freq >= 1) fprintf(tex, "%.2f & -- & ", vscale * (ystar[t] - ystar[t-freq]));
-            else               fprintf(tex, "-- & -- & ");
-            if (t - ord >= 1 && t - ord <= n_stat)
-                 fprintf(tex, "%.2f \\\\\n", vscale * aresid[i][t - ord]);
-            else fprintf(tex, "-- \\\\\n");
-        }
-        fprintf(tex, "\\midrule\n");
-        for (l = 1; l <= L; l++) {
-            real sd1 = sqrt(vcov_diff_at(LP, sigma, m, i, l, 0));
-            real sd2 = sqrt(vcov_diff_at(LP, sigma, m, i, l, 1));
-            real sd3 = (freq > 1) ? sqrt(vcov_diff_at(LP, sigma, m, i, l, freq)) : 0.0;
-            real f2  = ystar[nb + l] - ystar[nb + l - 1];
-            real f3  = (nb + l - freq >= 1) ? ystar[nb + l] - ystar[nb + l - freq] : 0.0;
-            obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, nb + l, &per, &yr);
-            if (freq > 1) fprintf(tex, "%d/%d & ", per, yr);
-            else          fprintf(tex, "%d & ", yr);
-            fprintf(tex, "%.2f & %.2f & %.2f & %.2f & ",
-                    LVL[i][l], vscale * sd1, vscale * f2, vscale * sd2);
-            if (freq > 1) fprintf(tex, "%.2f & %.2f & -- \\\\\n", vscale * f3, vscale * sd3);
-            else          fprintf(tex, "-- & -- & -- \\\\\n");
-        }
-        fprintf(tex, "\\bottomrule\n\\end{tabular}\\end{center}\n\n");
-
-        /* --- Grafico: el MODULO DE fuf (forecast_graphic), con sus formatos ---
-           Dibuja la variacion anual (historia + prevision +/- 1 DT) y los
-           residuos (ERR) via la interfaz gnuplot_i, tal cual fuf.  Solo con
-           estacionalidad (freq>1) y si hay gnuplot, como fuf.                    */
-        H = 0; (void)H;
+        /* --- Grafico PRIMERO (modulo de fuf, forecast_graphic): asi sabemos si
+           hay figura y maquetamos tabla|grafico lado a lado. Dibuja la variacion
+           anual (historia + prevision +/- 1 DT) y los residuos (ERR) via gnuplot_i,
+           tal cual fuf; solo con estacionalidad (freq>1) y si hay gnuplot.        */
         if (freq > 1 && system("command -v gnuplot >/dev/null 2>&1") == 0) {
             double *res1[2];               /* res[1][...] = residuos de la serie i */
             double **f3w = matrix(1, 1, 1, L);
             double ***v3w = tensor(1, L, 1, 1, 1, 1);
-            char x11[560], eps[720], pdf[720], cmd[1600];
+            char x11[560], eps[720], cmd[1600];
             int  aper, asub, ll;
-
             real s2 = 0.0; int cc = 0;
             res1[1] = aresid[i];
             for (ll = 1; ll <= L; ll++) {
@@ -1737,31 +1698,118 @@ static void forecast_latex_doc(int m, int L, real ***LP, real **sigma,
                 v3w[ll][1][1] = vcov_diff_at(LP, sigma, m, i, ll, freq);
             }
             /* El panel ERR fija sus tics en 2*sqrt(sigma2), con los residuos pintados
-               como vscale*a.  sigma2 = varianza MUESTRAL de esos residuos pintados
-               (robusto a como normalice el motor las innovaciones).               */
+               como vscale*a.  sigma2 = varianza MUESTRAL de esos residuos pintados. */
             for (t = 1; t <= n_stat; t++) { real z = vscale * aresid[i][t]; s2 += z * z; cc++; }
             if (cc > 0) s2 /= cc;
             snprintf(x11, sizeof x11, "%s_s%d", forecast_base, i);
-
-            /* la llamada de fuf.c [8.6], con los datos de drtran para la serie i */
             forecast_graphic(ystar, res1, f3w, v3w, ord, s2,
                              Ts[i].begyear, Ts[i].begtime, nb, L, freq, x11, refc);
-
             free_tensor(v3w, 1, L, 1, 1, 1, 1);
             free_matrix(f3w, 1, 1, 1, L);
-
-            /* fuf escribe prev<x11>.<sub><per>.eps ; a PDF para pdflatex */
             ObsToDate(Ts[i].begyear, Ts[i].begtime, nb + 1, freq, &aper, &asub);
             snprintf(eps, sizeof eps, "prev%s.%d%d.eps", x11, asub, aper);
             snprintf(pdf, sizeof pdf, "prev%s.%d%d.pdf", x11, asub, aper);
             snprintf(cmd, sizeof cmd, "epstopdf '%s' >/dev/null 2>&1", eps);
-            if (system(cmd) == 0)   /* fuf inserta con scale (.90 si L>20, si no .70) */
-                fprintf(tex, "\\begin{center}\\includegraphics[scale=%s]{%s}\\end{center}\n",
-                        (L > 20) ? "0.90" : "0.70", pdf);
+            if (system(cmd) == 0) {
+                /* recorta el margen en blanco del canvas de gnuplot: contenido
+                   pegado arriba, alinea con la cabecera de la tabla. */
+                char crop[740];
+                snprintf(crop, sizeof crop, "prev%s.%d%d-crop.pdf", x11, asub, aper);
+                snprintf(cmd, sizeof cmd,
+                         "command -v pdfcrop >/dev/null 2>&1 && "
+                         "pdfcrop --margins 2 '%s' '%s' >/dev/null 2>&1", pdf, crop);
+                if (system(cmd) == 0) snprintf(pdf, sizeof pdf, "%s", crop);
+                hasfig = 1;
+            }
             snprintf(cmd, sizeof cmd, "rm -f '%s'", eps);
             if (system(cmd) != 0) { /* ignore */ }
         }
-        fprintf(tex, "\\clearpage\n\n");
+
+        /* --- Titulo del informe: formato EXACTO de fuf (usfo.c:863-873):
+           nombre, "Series brief description", Base/Unit / Data Source / Forecast
+           Origin, centrado.  Igual que fuf para que convivan en la publicacion. */
+        obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, nb, &per, &yr);
+        { char enm[128];
+          fprintf(tex, "\\begin{center}\n\\textbf{%s} \\\\ \n"
+                       "\\textbf{Series brief description} \\\\ \n"
+                       "Base/Unit: \\space \\space \\space Data Source: \\space \\space \\space ",
+                  latex_escape(enm, sizeof enm, Ts[i].name)); }
+        if (freq > 1) fprintf(tex, "Forecast Origin: %d/%d \\\\ \n\\end{center}\n\n", per, yr);
+        else          fprintf(tex, "Forecast Origin: %d \\\\ \n\\end{center}\n\n", yr);
+
+        /* --- Maqueta a la fuf: tabla (izq.) | grafico (der.), lado a lado ------- */
+        /* Maqueta tabla | grafico (proporciones de fuf: ~equilibrados).
+           \vspace*{0pt} en ambas minipages -> alineadas por el borde SUPERIOR.   */
+        if (hasfig)
+            fprintf(tex, "\\noindent\\begin{minipage}[t]{0.54\\textwidth}\\vspace*{0pt}\\small\n");
+        else
+            fprintf(tex, "\\begin{center}\\small\n");
+
+        /* ---- Tabla: maqueta EXACTA de fuf (usfo.c forecast_table_latex): ------
+           cabecera en cajones (|c| + \hline + \cline), celdas $\mathsf{}$, filas
+           de prevision sombreadas, y la fila en blanco de fuf entre los L/2 meses
+           y los fines de año.                                                     */
+        { const char *pcol = (freq == 12) ? "MONT" : (freq == 4) ? "QUART" : "PER";
+        fprintf(tex, "\\begin{tabular}{rccrcrcr}\n\\hline\n");
+        fprintf(tex, "\\multicolumn{1}{|c|}{} & \\multicolumn{2}{c|}{} & \\multicolumn{4}{c}{} & \\multicolumn{1}{|c|}{}\\vspace{-.10in}\\\\\n");
+        fprintf(tex, "\\multicolumn{1}{|c|}{} & \\multicolumn{2}{c|}{LEVEL} & \\multicolumn{4}{c}{LOG RATE OF CHANGE} & \\multicolumn{1}{|c|}{}\\\\\n");
+        fprintf(tex, "\\multicolumn{1}{|c|}{} & \\multicolumn{2}{c|}{} & \\multicolumn{4}{c}{} & \\multicolumn{1}{|c|}{}\\vspace{-.10in}\\\\ \\cline{2-7}\n");
+        fprintf(tex, "\\multicolumn{1}{|c|}{} & \\multicolumn{1}{c|}{} & \\multicolumn{1}{c|}{} & \\multicolumn{1}{c|}{} & \\multicolumn{1}{c|}{} & \\multicolumn{1}{c|}{} & \\multicolumn{1}{c|}{} & \\multicolumn{1}{c|}{}\\vspace{-.05in}\\\\\n");
+        fprintf(tex, "\\multicolumn{1}{|c|}{DATE} & \\multicolumn{1}{c|}{VALUE} & \\multicolumn{1}{c|}{Std} & \\multicolumn{1}{c|}{%s} & \\multicolumn{1}{c|}{Std} & \\multicolumn{1}{c|}{ANUAL} & \\multicolumn{1}{c|}{Std} & \\multicolumn{1}{c|}{ERR}\\\\\n", pcol);
+        fprintf(tex, "\\multicolumn{1}{|c|}{} & \\multicolumn{1}{c|}{} & \\multicolumn{1}{c|}{($\\%%$)} & \\multicolumn{1}{c|}{($\\%%$)} & \\multicolumn{1}{c|}{($\\%%$)} & \\multicolumn{1}{c|}{($\\%%$)} & \\multicolumn{1}{c|}{($\\%%$)} & \\multicolumn{1}{c|}{($\\%%$)}\\\\\n");
+        fprintf(tex, "\\hline \\\\\n");
+        }
+        /* Historia: L/2 antes del origen + el origen (convencion fuf). */
+        for (t = nb - L/2; t <= nb; t++) {
+            if (t < 1) continue;
+            obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, t, &per, &yr);
+            fprintf(tex, "$\\mathsf{%d/%d}$ & $\\mathsf{%.2f}$ & - & ", per, yr, Ts[i].data[t]);
+            if (t - 1 >= 1)    fprintf(tex, "$\\mathsf{%.2f}$ & - & ", vscale * (ystar[t] - ystar[t-1]));
+            else               fprintf(tex, "- & - & ");
+            if (t - freq >= 1) fprintf(tex, "$\\mathsf{%.2f}$ & - & ", vscale * (ystar[t] - ystar[t-freq]));
+            else               fprintf(tex, "- & - & ");
+            if (t - ord >= 1 && t - ord <= n_stat)
+                 fprintf(tex, "$\\mathsf{%.2f}$ \\\\\n", vscale * aresid[i][t - ord]);
+            else fprintf(tex, "- \\\\\n");
+        }
+        /* Prevision (convencion fuf): los primeros L/2 meses todos, la fila en
+           blanco de fuf, y del resto SOLO los fines de año (per==freq).           */
+        for (l = 1; l <= L; l++) {
+            real sd1, sd2, sd3, f2, f3;
+            obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, nb + l, &per, &yr);
+            if (l == L/2 + 1) fprintf(tex, " \\\\\n");          /* separador de fuf */
+            if (l > L/2 && per != freq) continue;
+            sd1 = sqrt(vcov_diff_at(LP, sigma, m, i, l, 0));
+            sd2 = sqrt(vcov_diff_at(LP, sigma, m, i, l, 1));
+            sd3 = (freq > 1) ? sqrt(vcov_diff_at(LP, sigma, m, i, l, freq)) : 0.0;
+            f2  = ystar[nb + l] - ystar[nb + l - 1];
+            f3  = (nb + l - freq >= 1) ? ystar[nb + l] - ystar[nb + l - freq] : 0.0;
+            fprintf(tex, "\\rowcolor{black!7}");
+            fprintf(tex, "$\\mathsf{%d/%d}$ & $\\mathsf{%.2f}$ & $\\mathsf{%.2f}$ & $\\mathsf{%.2f}$ & $\\mathsf{%.2f}$ & ",
+                    per, yr, LVL[i][l], vscale * sd1, vscale * f2, vscale * sd2);
+            if (freq > 1) fprintf(tex, "$\\mathsf{%.2f}$ & $\\mathsf{%.2f}$ & - \\\\\n", vscale * f3, vscale * sd3);
+            else          fprintf(tex, "- & - & - \\\\\n");
+        }
+        fprintf(tex, "\\end{tabular}\n");
+
+        if (hasfig) {
+            /* grafico pegado a la tabla, altura ~igual a la tabla (equilibrado
+               como fuf); keepaspectratio mantiene la forma del grafico. */
+            fprintf(tex, "\\end{minipage}\\hfill\n"
+                         "\\begin{minipage}[t]{0.44\\textwidth}\\vspace*{0pt}\\centering\n");
+            fprintf(tex, "\\includegraphics[width=\\linewidth,height=10cm,"
+                         "keepaspectratio]{%s}\n", pdf);
+            fprintf(tex, "\\end{minipage}\n\n");
+        } else {
+            fprintf(tex, "\\end{center}\n\n");
+        }
+
+        /* Dos informes por cara: separador tras el impar, salto de pagina tras el par. */
+        if (u % 2 == 0 && u < m)
+            fprintf(tex, "\\clearpage\n\n");
+        else if (u < m)
+            fprintf(tex, "\\vspace{0.5em}\\hrule\\vspace{0.5em}\n\n");
+
         free_vector(ystar, 1, nb + L);
     }
     fprintf(tex, "\\end{document}\n");

@@ -1,0 +1,101 @@
+************************************************
+* Input file for program FUE                   *
+* DOCTYPE ATSW-interface SYSTEM                *
+************************************************
+
+** Frequency of time series: either 1(A), 4(Q) or 12(M):
+ 4
+** Number of observations and starting date of time series:
+ 69  3 1976 EA
+** Number of deterministic variables (including seasonal components):
+0
+** Number and orders of regular AR operators:
+0
+** Number and orders of annual AR operators:
+0
+** Number and orders of regular MA operators:
+0
+** Number and orders of anual MA operators:
+0
+** Number and frequencies of regular AR(2) operators with fixed frequency:
+0
+** Number and frequencies of regular MA(2) operators with fixed frequency:
+0
+** Mean parameter (mu):
+0
+** Box-Cox lambda, m. Regular differences and complete annual differences:
+ 1.00  0  0
+** Individual factors of the annual difference (starting at freq 0.0):
+0 0 0
+** ACF/PACF bands (0 Automatic) and reescaling factor:
+ 0 100.00
+** Time series (stochastic and non-standard deterministic variables):
+2786.780000 
+2701.240000 
+2679.060000 
+2554.930000 
+2570.270000 
+2562.820000 
+2572.800000 
+2493.070000 
+2486.020000 
+2436.670000 
+2452.450000 
+2346.940000 
+2343.340000 
+2325.810000 
+2279.450000 
+2193.990000 
+2190.650000 
+2196.840000 
+2152.450000 
+2072.760000 
+2080.850000 
+2075.290000 
+2050.980000 
+2006.160000 
+2054.700000 
+2083.510000 
+2096.460000 
+2017.060000 
+2060.670000 
+2048.390000 
+2015.810000 
+1954.220000 
+1983.390000 
+1995.990000 
+2052.000000 
+1941.500000 
+1916.220000 
+1888.390000 
+1831.720000 
+1752.950000 
+1722.420000 
+1722.990000 
+1728.890000 
+1723.010000 
+1712.440000 
+1724.960000 
+1758.110000 
+1671.260000 
+1674.940000 
+1673.090000 
+1624.950000 
+1604.780000 
+1615.660000 
+1546.190000 
+1574.590000 
+1498.460000 
+1448.280000 
+1420.470000 
+1420.640000 
+1375.690000 
+1309.370000 
+1274.580000 
+1303.540000 
+1256.890000 
+1220.190000 
+1230.250000 
+1220.240000 
+1211.600000 
+1177.900000 

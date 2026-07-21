@@ -431,6 +431,47 @@ por diseño (no aporta g.l.).
 
 ---
 
+## 12. Diagnóstico del hueco de los ω₀ líderes — CERRADO (jul-2026)
+
+Quedaba un hilo abierto: los ω₀ **líderes** de la red parecían por debajo del legacy
+(EP←EI 0.687 vs 0.78; EU←EC 0.145 vs 0.34, §11). El diagnóstico —matriz de experimentos
+aislando una variable a la vez— muestra que **son dos cosas distintas y ninguna es un sesgo
+del motor**.
+
+| id | deterministas | numeradores | cov | ℓ | EP←EI ω₀ | EU←EC ω₀ |
+|----|---|---|---|---|---|---|
+| A | **libres** | libres | 3 | −1697.6 | **0.750** | 0.170 |
+| B | fijos `-D -E` | libres | 3 | −1728.9 | 0.678 | 0.199 |
+| C | fijos `-D -E` | productos | 3 | −1731.4 | 0.687 | 0.145 |
+| **D** | **libres** | **productos** | 3 | −1701.3 | **0.765** | 0.156 |
+| E | fijos `-D -E` | libres | 15 | −1724.9 | 0.617 | 0.247 |
+| F | libres | libres | 15 | −1692.1 | 0.637 | 0.227 |
+| **legacy** | libres | productos | 3 | | **0.78** | **0.34** |
+
+**(a) EP←EI — no hay hueco; era artefacto del `-D -E`.** El 0.687 salía de la *comparación
+limpia* (§11, config C), que **fija** los deterministas para aislar la transferencia. El
+legacy los estima **libres**. Con su estructura real (config **D** = deterministas libres +
+productos): **EP←EI ω₀ = 0.765 ± 0.271 (t=2.82)** → legacy 0.78 a **0.05 SE**. **Clavado.**
+Fijar los deterministas en Relloso sesga el líder ~0.08 hacia abajo; soltarlos lo cura.
+
+**(b) EU←EC — no es sesgo, es identificación DÉBIL.** ω₀ = 0.145–0.156 ± 0.12–0.16,
+**t = 0.9–1.3: NO significativo**. El legacy 0.34 cae a **~1.2–1.5 SE** ⇒ estadísticamente
+**indistinguible** de nuestra estimación (y de cero). Es el enlace **más profundo** (b=2, el
+más retardado); su líder está intrínsecamente mal identificado. Liberar las 15 covarianzas lo
+mueve a 0.23–0.25 (deambula dentro de su SE ancho) — firma de un parámetro débil, no de un
+sesgo que la covarianza «arregle».
+
+**(c) La covarianza 3-vs-15 es un red herring.** El legacy libera solo 3 covarianzas
+(`LEGACY_M6.md` §3). Liberar 15 sube EU←EC pero **baja EP←EI** (0.75→0.64): es un **modelo
+distinto** del legacy, no más cercano.
+
+**Veredicto.** No hay ω₀ que «clavar» ni sesgo que corregir. Con la estructura real del legacy
+(config D): EP←EI iguala al legacy (0.765 vs 0.78) y EU←EC coincide **dentro del error de
+muestreo** (0.156 vs 0.34, ~1.3 SE) sobre un parámetro que ni el legacy ni drtran identifican
+bien. **La red reproduce el legacy hasta donde los datos identifican.** Hilo cerrado.
+
+---
+
 ## Referencias
 - Relloso, S. (1997). ICAE 9720 — Tabla 4, pp. 23-24. `drvarma_source/literature/9720.pdf`.
 - `M6_EJERCICIO.md` (§4 metodología, §5 lo reconstruido, §8 lo que falta).

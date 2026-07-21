@@ -521,11 +521,19 @@ signo del **numerador determinista** queda blindado con un caso sintético de ve
 
 ## Decisiones abiertas
 
-- [ ] **Lenguaje**: terminar el C (está a un paso de homologar) vs. puerto a Python
-      reutilizando `fue` + `drvarma`. El C es hoy el camino corto.
-- [ ] **Interfaz**: ficheros `.pre` vs. objetos `fue.Model` vs. ambos.
+- [x] **Lenguaje — RESUELTO (22-jul-2026): PUERTO A PYTHON.** El C queda como
+      **implementación de referencia**, funcionalmente terminado y **homologado** (292 PASS/0
+      FAIL, cero TODO/FIXME reales, CLI completo, `make install`, nota técnica) — no era "camino
+      corto pendiente de homologar", ya homologa. El puerto se hace por PRODUCTO (paquete-hermano
+      de la suite ATSW en PyPI), reutilizando `fue` (spec univariante + lector `.pre`) y
+      `drvarma` (motor de ML exacta en **Python puro**, PyPI 0.1.0). **Arranca la sesión del
+      2026-07-23.** El C es el oráculo de regresión: cada paso del puerto reproduce el C al
+      decimal sobre la batería. Ver `M6 — puerto a Python` (arriba) y `examples/m6`, `m6_EA`.
+- [ ] **Interfaz**: ficheros `.pre` vs. objetos `fue.Model` vs. ambos. *(A fijar al arrancar
+      el puerto.)*
 - [ ] **ARMA conjunto o fijo**: por defecto libre (estimación conjunta, que es el
-      objetivo) con opción de fijar en los valores de fue.
+      objetivo) con opción de fijar en los valores de fue. *(Traslada la decisión del C, donde
+      el default es libre con `-N`/`-X` para fijar.)*
 
 ## Notas
 

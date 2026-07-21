@@ -229,7 +229,7 @@ real ChiTestC( real *corr, int lags, int nobs );
 void hosking_test(real **res, int nobs, int m, int s, real *Q, real *pval);
 void jarque_bera_multivariate(real **res, int nobs, int m, real *JB, real *pval);
 void multivariate_diagnostics(real **res, int nobs, int m, FILE *outputv);
-void diagnose(struct Tvarma *varma);
+void diagnose(struct Tvarma *varma, int freq);
 
 void test_last_lag_significance(real *x, real **cov, int npar,
                                 int m, int p, int q,

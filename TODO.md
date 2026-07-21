@@ -152,8 +152,11 @@ Referencia fue: φ_N = 0.402839 · μ_Y = 0.154472 · σ²_Y = 0.062666 · logL 
       **(d)** Es plausible que el caveat de drvarma sobre los SE/Wald cruzados poco
       fiables (`MODELS_RESULTS.md` §4) tenga **esta misma raíz** (hessiano BFGS +
       escala redundante). Merece comprobarse allí.
-- [ ] **M0.9 — Flag propio de "sin transferencia"** (hoy solo vía el truco `-s -1`),
-      que es el modo en que se ejecuta esta validación.
+- [x] **M0.9 — Flag propio de "sin transferencia" — HECHO** (revisado jul-2026). Es
+      **`-0`** (`drtran.c:3873`: `no_transfer=1` ⇒ `s_ord[j]=-1`), documentado en la ayuda
+      ("NO transfer: fit the two univariate models jointly and diagonally") y con ejemplo
+      ("homologation with fue"). El truco `-s -1` sigue funcionando como equivalente de bajo
+      nivel, pero `-0` es el flag limpio. La nota "(hoy solo vía `-s -1`)" era anterior a `-0`.
 
 ## M1 — Honestidad del programa ✅ CERRADA (2026-07-12)
 

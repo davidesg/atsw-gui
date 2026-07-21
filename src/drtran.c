@@ -3733,7 +3733,7 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
                 for (i = 1; i <= n_ser; i++) vdiag.a[t][i] = a_est[t][i];
 
             fprintf(outputv, "\n");
-            diagnose(&vdiag);
+            diagnose(&vdiag, Ts[1].freq);
             fprintf(outputv, "\n--- Multivariate diagnostics (Hosking + JB) ---\n");
             multivariate_diagnostics(a_est, n_stat, n_ser, outputv);
 

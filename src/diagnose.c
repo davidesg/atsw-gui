@@ -353,7 +353,7 @@ void AnalyzeOneSeries(real *res, int nobs, int idx, int freq) {
  /*---------------------------------------------------------------------------*/
 /*  Main diagnostic function                                                 */
 /*---------------------------------------------------------------------------*/
-void diagnose(struct Tvarma *varma) {
+void diagnose(struct Tvarma *varma, int freq) {
     int m = varma->m;
     int n = varma->n;
     int i, j, lags;
@@ -373,7 +373,7 @@ void diagnose(struct Tvarma *varma) {
         /* Fill Tseries structure */
         s1.data = res1;
         s1.nobs = n;
-        s1.freq = 12;                /* assuming non-seasonal residuals */
+        s1.freq = freq;              /* la frecuencia real de la serie (4=Q, 12=M) */
         s1.begtime = 1;
         s1.begyear = 1;
         s1.name = "residuals";

@@ -375,10 +375,24 @@ un pequeño DSL parámetros → estructura VARMA— no solo ω/δ de una entrada
       transferencias y ser a la vez entrada de otra — que es lo que son de verdad
       los sistemas de Mauricio. El cast resta a cada serie lo que recibe; la
       previsión recorre la red en orden topológico; un ciclo se rechaza.
-- [ ] Covarianza **no diagonal** (Cholesky con diagonal normalizada, sin
-      reintroducir la redundancia de escala que costó M0.8).
+- [x] Covarianza **no diagonal** — HECHO (revisado jul-2026). El motor ya estima
+      Σ general: diagonal `log(var_i/var_1)` con `var_1=1` (respeta M0.8),
+      off-diagonal **crudas**, y **rechazo si Σ no es PSD** (elf → 1.0), la
+      estrategia del propio Mauricio (§3). **m6 lo prueba**: el diagonal libera las
+      **15** covarianzas y converge con Σ plenamente no diagonal (correlaciones EA·EC
+      −0.41, EI·EU +0.35, EA·EI −0.31…); la red usa las 3 del legacy. Nunca ha fallado
+      en los casos reales (el más correlacionado, −0.41, converge).
+      > **Nota — el Cholesky no es necesario.** La línea original pedía reparametrizar
+      > con Cholesky de diagonal normalizada para eliminar la región rechazada por PSD.
+      > Es robustez, no capacidad: esa región **nunca ha mordido**, y el estudio del
+      > init de Q (§10 de `M6_TABLA4_BASELINE.md`) ya mostró que la eficiencia del
+      > optimizador **no** está en la parametrización de la covarianza (portar
+      > `init_varma` apenas cambió las iter 334→323 y rompió un test → revertido; las
+      > ~250-330 iter son propiedad de `qnewtopt`, no del arranque). Queda como refactor
+      > OPCIONAL, solo si algún día aparece un caso que se atasque en el borde PSD.
 - [ ] Puerto a Python reutilizando los paquetes `fue` y `drvarma` (drvarma 0.1.0
-      está en PyPI y su motor de ML exacta es Python puro).
+      está en PyPI y su motor de ML exacta es Python puro). **← el hito que mueve la
+      aguja**, condicionado a la decisión de lenguaje (ver "Decisiones abiertas").
 
 ---
 

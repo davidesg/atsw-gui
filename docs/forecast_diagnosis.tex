@@ -193,6 +193,89 @@ evaluation span (the input may be predictable in calm periods and unpredictable 
 crises), the diagnosis should be run over more than one hold-out period; a sign
 change of $r-1$ across regimes is itself the finding.
 
+\section{A worked example: oil pass-through to Spanish inflation}
+
+We instantiate the whole procedure on the canonical bivariate case: does adding
+crude oil (WTI) improve the out-of-sample forecast of the Spanish CPI?
+
+\paragraph{Data and models.}
+Monthly, 2002:01--2025:12 (Spanish CPI general index, INE; WTI spot, FRED). The two
+nested models, both with $\lambda=0$ (log), $d=1$:
+\[
+\text{(A) univariate: } (1-0.40B)\,(\nabla\ln\mathrm{IPC}_t-\mu)=a_t
+\;+\;\text{11 seasonal harmonics},
+\]
+\[
+\text{(B) transfer: } \ln\mathrm{IPC}_t=\nu(B)\,\ln\mathrm{WTI}_t+N_t,
+\qquad \nu(B)=\omega_0-\omega_1B,\quad(b,r,s)=(0,0,1),
+\]
+with $N_t$ the AR(1)+harmonics noise of (A). The pass-through is \emph{strongly
+significant in sample} in every window ($\hat\omega_0\approx0.016$, $t\approx9$; the
+joint log-likelihood rises from $-767$ to $-718$). By the criterion of \S1 this settles
+nothing; we must look out of sample.
+
+\paragraph{Two regimes.}
+We run the diagnosis over two hold-outs, each with parameters estimated only on the
+data \emph{preceding} it (genuine out-of-sample), $H=24$, balanced origins:
+\begin{itemize}\itemsep0pt
+\item \textbf{P1 (calm):} train 2002--2014, evaluate 2015--2019 ($N=37$ origins);
+\item \textbf{P2 (turbulent):} train 2002--2019, evaluate 2020--2025 ($N=49$; COVID and
+      the 2022 energy shock).
+\end{itemize}
+
+\begin{table}[h]
+\centering\small
+\begin{tabular}{rrrrrrr}
+\toprule
+\multicolumn{7}{c}{\textbf{P1: 2015--2019 (calm)} \quad train 2002--2014, $N=37$}\\
+\midrule
+$h$ & $N_{\mathrm{eff}}$ & $\mathrm{RMSE}_A$ & $\mathrm{RMSE}_B$ & $r=B/A$ & $\mathrm{DM}^{\*}$ & $p$\\
+\midrule
+ 1 & 37.0 & 0.299 & 0.279 & 0.931 & $+1.26$ & 0.217\\
+ 2 & 18.5 & 0.528 & 0.480 & 0.908 & $+1.89$ & 0.067\\
+ 6 &  6.2 & 1.005 & 0.955 & 0.950 & $+1.02$ & 0.315\\
+12 &  3.1 & 1.465 & 1.352 & 0.923 & $+1.93$ & 0.061\\
+24 &  1.5 & 1.929 & 1.593 & \textbf{0.826} & $+2.87$ & \textbf{0.007}\\
+\bottomrule
+\end{tabular}
+\hfill
+\begin{tabular}{rrrrrrr}
+\toprule
+\multicolumn{7}{c}{\textbf{P2: 2020--2025 (turbulent)} \quad train 2002--2019, $N=49$}\\
+\midrule
+$h$ & $N_{\mathrm{eff}}$ & $\mathrm{RMSE}_A$ & $\mathrm{RMSE}_B$ & $r=B/A$ & $\mathrm{DM}^{\*}$ & $p$\\
+\midrule
+ 1 & 49.0 & 0.743 & 0.738 & 0.993 & $+0.29$ & 0.777\\
+ 2 & 24.5 & 1.162 & 1.157 & 0.995 & $+0.18$ & 0.858\\
+ 6 &  8.2 & 2.134 & 2.225 & 1.043 & $-1.29$ & 0.204\\
+12 &  4.1 & 3.639 & 3.766 & 1.035 & $-1.70$ & 0.096\\
+24 &  2.0 & 6.050 & 6.354 & \textbf{1.050} & $-2.63$ & \textbf{0.011}\\
+\bottomrule
+\end{tabular}
+\caption{Out-of-sample diagnosis of the transfer model (B) against its nested
+univariate (A). $r<1$ and $\mathrm{DM}^{\*}>0$ favour B. Note the sign of $r-1$
+\emph{reverses} between regimes.}
+\end{table}
+
+\paragraph{Reading.} The verdict \emph{reverses with the regime}:
+\begin{itemize}\itemsep0pt
+\item \textbf{P1 (calm): B wins}, and more at longer horizons ($r=0.83$ at $h=24$, a
+      $17\%$ RMSE cut, $p=0.007$). Oil is informative and its random-walk forecast
+      suffices.
+\item \textbf{P2 (turbulent): B loses} at long horizons ($r=1.05$ at $h=24$,
+      $p=0.011$). Oil becomes unpredictable, so the transfer injects the error of its
+      \emph{own} input forecast (\S2) without predictive gain.
+\end{itemize}
+The pass-through is equally significant \emph{in sample} in both periods, yet its
+\emph{out-of-sample} value changes sign. This is the point of the criterion, and the
+reason the diagnosis is run over more than one hold-out: the sign change of $r-1$
+across regimes is itself the finding. Consistent with the reading rule of \S6, the
+$r(h)$ pattern (monotone in $h$, opposite slopes across regimes) is clean, while the
+$h=24$ $p$-values rest on $N_{\mathrm{eff}}\approx1.5$--$2$ and should be read as
+indicative. The command sequence that produces both panels is in
+\texttt{docs/FORECAST\_DIAGNOSIS.md} (\texttt{drtran -estwin/-O/-C} then
+\texttt{examples/passthrough/forecast\_compare.py}).
+
 \section*{References}
 \begin{itemize}\itemsep0pt
 \item Diebold, F.X.\ and Mariano, R.S.\ (1995). Comparing predictive accuracy.

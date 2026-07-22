@@ -27,6 +27,7 @@
 #include "forecast.h"
 #include <unistd.h>   /* getopt */
 #include <strings.h>  /* strcasecmp */
+#include <string.h>   /* strcmp */
 #include <ctype.h>
 #include <stdarg.h>
 
@@ -2584,17 +2585,23 @@ static void usage(const char *prog)
 "           Without -n, every input feeds the first file (the star), and -b/-r/-s\n"
 "           give the orders.\n"
 "\n"
-"RECURSIVE FORECAST EVALUATION  (out of sample)\n"
-"  -R E     estimate ONCE on observations 1..E, then hold the parameters FIXED\n"
-"           and roll the forecast origin forward one datum at a time, comparing\n"
-"           each forecast with what actually happened. Reports MAE, RMSE and MAPE\n"
-"           by horizon. Needs -f H.\n"
+"FIXED-WINDOW ESTIMATION  (-estwin: real-time SPS + out-of-sample evaluation)\n"
+"  -estwin E   estimate ONCE on observations 1..E and hold the parameters FIXED.\n"
+"           (-R E is a hidden alias, kept for compatibility.)  Needs -f H.\n"
 "\n"
-"           The variances the model reports are THEORETICAL: they say what the\n"
-"           model implies, not what happens out of sample, where parameter\n"
-"           uncertainty and structural change have their say. This is the only\n"
-"           way to decide EMPIRICALLY whether one model forecasts better than\n"
-"           another. Run it on two specifications and compare.\n"
+"           SPS (real-time report).  With -f H the forecast REPORT is produced from\n"
+"           the CURRENT end of the data -- which grows as new data is appended to\n"
+"           the input .pre -- using the fixed window parameters. Re-estimating the\n"
+"           SAME fixed window each time is deterministic and cheap, so a new datum\n"
+"           yields a fresh report WITHOUT drifting parameters. (fuf split estimate\n"
+"           and forecast into two programs because compute was costly; not needed\n"
+"           here.)  Add -L for the LaTeX/PDF report.\n"
+"\n"
+"           OUT-OF-SAMPLE EVALUATION.  The origin also rolls forward one datum at a\n"
+"           time, comparing each forecast with what actually happened: MAE, RMSE\n"
+"           and MAPE by horizon. The variances the model reports are THEORETICAL.\n"
+"           This is the only way to decide EMPIRICALLY whether one model forecasts\n"
+"           better than another -- run it on two specifications and compare.\n"
 "  -C FILE  write the per-origin errors to FILE (CSV).\n"
 "\n"
 "AGGREGATES  (accounting identities)\n"
@@ -3753,8 +3760,20 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
 
             reformulation_advice(a_est, n_stat, outputv);
 
-            if (fc_horizon > 0)
+            if (fc_horizon > 0) {
+                /* SPS de VENTANA FIJA: si la estimacion se ancla en una ventana
+                   (-estwin/-R E), el informe de prevision sale del FINAL ACTUAL de
+                   los datos --que crecen al anadir cada dato nuevo al .pre de
+                   input-- con los parametros de la ventana E FIJOS. Restauramos
+                   nobs completo y reconstruimos para que transfer_forecast preva
+                   desde ahi (el origen se desacopla de la ventana de estimacion,
+                   igual que el -estwin de drvarma). */
+                if (rec_start > 0) {
+                    for (i = 1; i <= n_ser; i++) Ts[i].nobs = nobs_full[i];
+                    build_stationary_series();
+                }
                 transfer_forecast(x, npar, fc_horizon, varma1.sigma2, outputv);
+            }
 
             if (rec_start > 0)
                 recursive_eval(x, fc_horizon, outputv);
@@ -3848,6 +3867,15 @@ int main(int argc, char *argv[])
 
     macheps = cmacheps();
     outputv = stdout;
+
+    /* -estwin es el nombre UNIFICADO con drvarma del modo de ventana fija; -R
+       queda como alias oculto (compatibilidad). getopt no entiende opciones largas
+       de un solo guion, asi que traducimos el token -estwin -> -R antes del bucle. */
+    {
+        int ai;
+        for (ai = 1; ai < argc; ai++)
+            if (strcmp(argv[ai], "-estwin") == 0) argv[ai] = (char *)"-R";
+    }
 
     while ((opt = getopt(argc, argv, "r:s:b:f:m:c:n:a:R:C:g:Lp0iXNDEMVSvho:")) != -1) {
         switch (opt) {

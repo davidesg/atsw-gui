@@ -78,6 +78,11 @@ int topo[MAX_SER + 1];
 static int  rec_start = 0;
 static int  nobs_full[MAX_SER + 1];
 static char rec_csv[600] = "";
+/* Origen de prevision del informe -f/-L, INDEPENDIENTE de la ventana de estimacion
+   (-estwin). >0: obs explicita; <0: el final ACTUAL de los datos (SPS en tiempo
+   real); 0 (por defecto): el final de la ventana de estimacion, o el final de los
+   datos si no hay ventana. */
+static int  fc_origin = 0;
 
 /* EL CAST. Por defecto la transferencia va DENTRO del VARMA (empotrada), que es
    lo correcto: elf recibe las series tal cual y hace la inicializacion
@@ -2588,20 +2593,27 @@ static void usage(const char *prog)
 "FIXED-WINDOW ESTIMATION  (-estwin: real-time SPS + out-of-sample evaluation)\n"
 "  -estwin E   estimate ONCE on observations 1..E and hold the parameters FIXED.\n"
 "           (-R E is a hidden alias, kept for compatibility.)  Needs -f H.\n"
+"           The ESTIMATION WINDOW (E) and the FORECAST ORIGIN (-O, below) are two\n"
+"           independent choices: params come from 1..E; the forecast starts wherever\n"
+"           -O says. Re-estimating the SAME fixed window is deterministic and cheap.\n"
+"  -O g     FORECAST ORIGIN for the -f/-L report (default: the window end E, or the\n"
+"           data end when there is no -estwin). Decoupled from the window:\n"
+"             -O g   forecast from observation g -- e.g. -estwin 216 -O 216 forecasts\n"
+"                    the out-of-sample hold-out from the end of the training window\n"
+"                    (compare two models at a chosen origin by running each with the\n"
+"                    same -O);\n"
+"             -O -1  the CURRENT end of the data -- the real-time SPS: append a new\n"
+"                    datum to the input .pre and it becomes the new origin, a fresh\n"
+"                    report with NO drifting parameters (fuf split estimate/forecast\n"
+"                    into two programs because compute was costly; not needed here).\n"
+"           Add -L for the LaTeX/PDF report.\n"
 "\n"
-"           SPS (real-time report).  With -f H the forecast REPORT is produced from\n"
-"           the CURRENT end of the data -- which grows as new data is appended to\n"
-"           the input .pre -- using the fixed window parameters. Re-estimating the\n"
-"           SAME fixed window each time is deterministic and cheap, so a new datum\n"
-"           yields a fresh report WITHOUT drifting parameters. (fuf split estimate\n"
-"           and forecast into two programs because compute was costly; not needed\n"
-"           here.)  Add -L for the LaTeX/PDF report.\n"
-"\n"
-"           OUT-OF-SAMPLE EVALUATION.  The origin also rolls forward one datum at a\n"
-"           time, comparing each forecast with what actually happened: MAE, RMSE\n"
-"           and MAPE by horizon. The variances the model reports are THEORETICAL.\n"
-"           This is the only way to decide EMPIRICALLY whether one model forecasts\n"
-"           better than another -- run it on two specifications and compare.\n"
+"           OUT-OF-SAMPLE EVALUATION.  With -C the origin ALSO rolls forward one\n"
+"           datum at a time over E..n-H (balanced horizons), comparing each forecast\n"
+"           with what actually happened: MAE, RMSE and MAPE by horizon. The\n"
+"           variances the model reports are THEORETICAL. This is the only way to\n"
+"           decide EMPIRICALLY whether one model forecasts better than another --\n"
+"           run it on two specifications and compare.\n"
 "  -C FILE  write the per-origin errors to FILE (CSV).\n"
 "\n"
 "AGGREGATES  (accounting identities)\n"
@@ -3761,17 +3773,26 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
             reformulation_advice(a_est, n_stat, outputv);
 
             if (fc_horizon > 0) {
-                /* SPS de VENTANA FIJA: si la estimacion se ancla en una ventana
-                   (-estwin/-R E), el informe de prevision sale del FINAL ACTUAL de
-                   los datos --que crecen al anadir cada dato nuevo al .pre de
-                   input-- con los parametros de la ventana E FIJOS. Restauramos
-                   nobs completo y reconstruimos para que transfer_forecast preva
-                   desde ahi (el origen se desacopla de la ventana de estimacion,
-                   igual que el -estwin de drvarma). */
-                if (rec_start > 0) {
-                    for (i = 1; i <= n_ser; i++) Ts[i].nobs = nobs_full[i];
-                    build_stationary_series();
-                }
+                /* ORIGEN de prevision, INDEPENDIENTE de la ventana de estimacion.
+                   La estimacion se ancla en la ventana (-estwin E, params FIJOS);
+                   el informe -f/-L sale del origen que elija el investigador:
+                     -O g   origen explicito en la obs g  (evaluar modelos a un
+                            origen concreto: p.ej. -estwin 216 -O 216 preve el
+                            hold-out desde el final de la ventana);
+                     -O -1  el final ACTUAL de los datos (SPS en tiempo real: un
+                            dato nuevo => nuevo origen);
+                     (omitido)  el final de la VENTANA de estimacion si -estwin
+                            esta activo, o el final de los datos si no.
+                   Se fija nobs al origen y se reconstruye la serie estacionaria
+                   para que transfer_forecast preva desde ahi. */
+                int forigin;
+                if      (fc_origin > 0) forigin = fc_origin;
+                else if (fc_origin < 0) forigin = nobs_full[1];
+                else if (rec_start > 0) forigin = rec_start;
+                else                    forigin = nobs_full[1];
+                if (forigin > nobs_full[1]) forigin = nobs_full[1];
+                for (i = 1; i <= n_ser; i++) Ts[i].nobs = forigin;
+                build_stationary_series();
                 transfer_forecast(x, npar, fc_horizon, varma1.sigma2, outputv);
             }
 
@@ -3877,7 +3898,7 @@ int main(int argc, char *argv[])
             if (strcmp(argv[ai], "-estwin") == 0) argv[ai] = (char *)"-R";
     }
 
-    while ((opt = getopt(argc, argv, "r:s:b:f:m:c:n:a:R:C:g:Lp0iXNDEMVSvho:")) != -1) {
+    while ((opt = getopt(argc, argv, "r:s:b:f:m:c:n:a:R:C:g:O:Lp0iXNDEMVSvho:")) != -1) {
         switch (opt) {
         case 'r': opt_r = optarg; auto_id = 0; break;
         case 's': opt_s = optarg; auto_id = 0; break;
@@ -3888,6 +3909,7 @@ int main(int argc, char *argv[])
         case 'E': fix_inp_det  = 1;          break;
         case 'M': force_fix_mu = 1;          break;
         case 'f': fc_horizon = atoi(optarg); break;
+        case 'O': fc_origin  = atoi(optarg); break;
         case 'm': model_name = optarg;       break;
         case 'p': prewhiten_only = 1;        break;
         case 'i': net_ident = 1;             break;

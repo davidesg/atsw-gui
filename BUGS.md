@@ -1,0 +1,103 @@
+# Known bugs — drvarma (C)
+
+## BUG (CRITICAL) — seasonal adjustment uses the wrong phase when the series does not start at subperiod 1
+
+**Found:** 2026-07-28, while building the multiart MCP over the Python port and
+running the WTI → CPI pass-through exercise.
+**Files:** `src/deseason.c` (`deseasonalize_raw`, lines ~62-90),
+`include/seasonal_detection.h` (`harmonic_regression_differenced_basis`).
+**Caller affected:** `src/drvarma.c:356` — i.e. the main executable, not only the GUI.
+**Same defect in the Python port:** `drvarma/src/drvarma/deseason.py`
+(fixed there; see `drvarma/TODO.md` and `drvarma/tests/test_regression_bugs.py`).
+
+### Symptom
+
+With `-deseason` enabled, the seasonal pattern is subtracted **shifted by
+`start_sub - 1` months**. The adjustment then *adds* seasonal variance instead of
+removing it. It is completely silent — no warning, no diagnostic.
+
+On real monthly CPI data (2002-2019), lag-12 autocorrelation of `dlog(CPI)`:
+
+| series | no adjustment | adjusted, start_sub=2 | adjusted, start_sub=1 | monthly-dummy OLS |
+|---|---|---|---|---|
+| CPI_USA | +0.328 | +0.245 | **-0.140** | -0.137 |
+| IPC_ES  | +0.798 | **+0.866** | **+0.098** | +0.056 |
+| IPC_FR  | +0.728 | **+0.862** | **+0.250** | +0.201 |
+| IPC_DE  | +0.608 | **+0.808** | **+0.177** | +0.163 |
+
+### Root cause
+
+The amplitudes are ESTIMATED by `harmonic_regression_differenced_basis()`, whose
+signature takes no `start_sub`: its design matrix is built from `t = i + d + 1`, so
+the harmonics are in a phase **relative to the first observation of the series**.
+The resulting level dummies are therefore indexed by *offset from the start*.
+
+But they are APPLIED in absolute-subperiod phase (`src/deseason.c:87-88`):
+
+```c
+double *level = transform_harmonics_to_dummies_general(coeffs, NULL, s);
+for (int p = 0; p < s; p++) dummies[j][p] = level[p];
+for (int i = 0; i < nobs; i++) {
+    int period = (i + start_sub - 1) % s;   /* <-- absolute phase */
+    raw[i + 1][j] -= level[period];         /* <-- relative-phase vector */
+}
+```
+
+Estimation phase and application phase agree only when `start_sub == 1`. For any
+other starting subperiod the two are off by `start_sub - 1` positions.
+
+### Minimal reproduction
+
+Take a series starting in January, and the same series with the first observation
+dropped (so it starts in February), declaring `start_sub` correctly in each case.
+The estimated dummy vector should be essentially identical. It comes out
+**circularly shifted by one position** instead. Real IPC_ES levels, 2002-2019:
+
+```
+from JANUARY  : [-0.663, -0.750, -0.415,  0.365, 0.461, 0.466, -0.232, ...,  0.441,  0.349]
+from FEBRUARY : [-0.751, -0.416,  0.365,  0.461, 0.466, -0.232, -0.195, ...,  0.350, -0.662]
+```
+
+Discrepancy as a share of the pattern amplitude: ES 83 %, DE 66 %, FR 57 %, US 36 %.
+After the fix the same comparison changes the pattern by less than 1 % (only the
+effect of one extra observation).
+
+### Fix
+
+Rotate the estimated dummies from start-relative into absolute-subperiod indexing
+before storing and applying them. With `start_sub == 1` this is the identity, so
+existing results and any C-vs-port parity goldens are unaffected.
+
+```c
+if (ok && do_des) {
+    double *level_rel = transform_harmonics_to_dummies_general(coeffs, NULL, s);
+    double *level = (double *) malloc((size_t) s * sizeof(double));
+    /* level_rel is indexed by offset-from-start; dummies must be by subperiod. */
+    for (int p = 0; p < s; p++)
+        level[(p + start_sub - 1) % s] = level_rel[p];
+    for (int p = 0; p < s; p++) dummies[j][p] = level[p];
+    for (int i = 0; i < nobs; i++) {
+        int period = (i + start_sub - 1) % s;
+        raw[i + 1][j] -= level[period];
+    }
+    free(level);
+    free(level_rel);
+}
+```
+
+### Impact on past work
+
+Any run that enabled deseasonalisation on a series **not starting at subperiod 1**
+is affected. Runs starting in January (the common case, and the default
+`start_sub = 1`) are correct — which is why this survived undetected. The published
+WTI → CPI pass-through note is NOT affected: its data start in January 2002, and
+its parameter and FEVD tables reproduce to within rounding once the correct phase
+is used.
+
+### Suggested regression test
+
+Deseasonalise a synthetic series with a known seasonal pattern, starting at each of
+the 12 subperiods in turn, and assert that the recovered dummies match the true
+pattern every time. The existing tests only ever exercise `start_sub = 1`, which is
+exactly the case that works. See
+`drvarma/tests/test_regression_bugs.py::test_deseason_recovers_known_pattern_at_any_start_sub`.

@@ -80,6 +80,18 @@ void deseasonalize_raw(real **raw, int nobs, int m, int s, int start_sub,
                     do_des ? " (adjusted)" : " (kept as is)");
 
         if (ok && do_des) {
+            /* ------------------------------------------------------------------
+             * BUG (CRITICAL, NOT fixed here) — wrong phase when start_sub != 1.
+             * `harmonic_regression_differenced_basis` above takes no start_sub:
+             * its design matrix is built from t = i + d + 1, so `level` below is
+             * indexed by OFFSET FROM THE START of the series. It is then applied
+             * in ABSOLUTE subperiod phase, `(i + start_sub - 1) % s`. The two
+             * agree only when start_sub == 1; otherwise the pattern is subtracted
+             * shifted by start_sub-1 months and the adjustment ADDS seasonal
+             * variance instead of removing it. Entirely silent.
+             * See BUGS.md for root cause, reproduction and the one-loop rotation
+             * that fixes it. Already fixed in the Python port (deseason.py).
+             * ------------------------------------------------------------------ */
             /* Level seasonal dummies via the A0 transform (sum-to-zero). */
             double *level = transform_harmonics_to_dummies_general(coeffs, NULL, s);
             for (int p = 0; p < s; p++) dummies[j][p] = level[p];

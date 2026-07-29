@@ -46,17 +46,58 @@ Revisado 2026-07-12. Ver `BRIDGE_DESIGN.md` para el diseño y la evidencia.
       El propio `.cns` de m6 dice cuál es la buena: «nu_num(1)=0, i.e. en BJR
       w0 - w1 - w2 - w3 = 0 => omega3[0] = omega3[1] + omega3[2] + omega3[3]».
 
-- [ ] **SOSPECHA (mismo origen, SIGUE ABIERTA) — la MEDIA del cast empotrado suma
-      los omega sin alternar el signo.** Nota: la sección de gain/mean lag
-      (`drtran.c:~3188`) SÍ usa la convención correcta (`sk = (k==0)?1.0:-1.0`),
-      así que este es el único sitio que queda por revisar. `build_embedded_varma` (tran_shootx.c:288) calcula la
-      ganancia que multiplica la media de la entrada con
-      `for (kk = 0; kk <= lnk[k].s; kk++) w1 += omega[k][kk];`, es decir
-      w0 + w1 + w2 + ..., cuando en BJR omega(1) = w0 - w1 - w2 - ...
-      Con s = 0 coinciden, así que no se ve en el caso canónico. Habría que
-      comprobarlo con s > 0: la diferencia entre `-V` y `-S` con s=1 es 0.103
-      (-718.287406 vs -718.183933) y no está separado cuánto de eso es el
-      truncamiento (esperado) y cuánto este signo.
+- [x] **CORREGIDO (2026-07-29) — el bloque de las MEDIAS del cast empotrado.**
+      La sospecha era un signo; el defecto era la PARAMETRIZACIÓN entera, y por eso
+      la corrección no es alternar el signo sino **borrar el término**.
+
+      Se sospechaba que `build_embedded_varma` (tran_shootx.c:288) sumaba los omega
+      sin alternar el signo al calcular la ganancia que multiplica la media de la
+      entrada: `for (kk = 0; kk <= lnk[k].s; kk++) w1 += omega[k][kk];`, es decir
+      w0 + w1 + w2 + …, cuando en BJR omega(1) = w0 − w1 − w2 − …
+
+      **Lo que pasa es que esa ganancia no debe estar ahí.** μ es LA MEDIA de la
+      serie, no un intercepto: es lo que fue estima y escribe en el `.pre`, y la
+      coherencia con fue exige mantener esa lectura. Box–Jenkins escribe el modelo
+      en DESVIACIONES de la media,
+
+          (w_Y − μ_Y) = ν(B)·(w_X − μ_X) + N_t   ⇒   E[w_Y] = μ_Y,
+
+      así que la media de la salida **no hereda nada** de la entrada. Multiplicando
+      por δ(B),
+
+          φ_Y·δ·(w_Y − μ_Y) − φ_Y·ω·B^b·(w_X − μ_X) = δ·θ_Y·a_Y
+
+      que es EXACTAMENTE la fila 1 de Φ(B)(w − μ) = Θ(B)a con μ = (μ_Y, μ_X). No
+      hay término que añadir. El bucle en orden topológico se sustituye por
+      `mu[i] = mu[i]`.
+
+      El ajuste anterior corresponde a la parametrización con INTERCEPTO
+      (w_Y = c + ν(B)·w_X + N). Las dos son la misma familia reparametrizada
+      **mientras μ_Y sea libre** — comprobado, mismo óptimo a 1e-12. Divergen
+      cuando μ_Y está FIJADA, y ahí imponen cosas distintas: en desviaciones
+      μ_Y = 0 significa E[w_Y] = 0; con intercepto, E[w_Y] = ν(1)·μ_X ≠ 0. Si fue
+      fijó la media en cero es porque la serie no tiene deriva.
+
+      No se veía en el caso canónico porque su entrada (WTI) tiene μ = 0, y
+      entonces el término vale cero con cualquier convención. El caso que
+      discrimina necesita **la entrada con media libre**.
+
+      Verificado contra las tres implementaciones, con dos series de media libre
+      (`ES_CPI_m10` ← `DE_CPI_mar3sar`):
+
+      | | logL |
+      |---|---|
+      | fue **C**, ES_CPI_m10 | −7.3917271 |
+      | fue **C**, DE_CPI_mar3sar | 11.2056885 |
+      | **fue C, suma** | **3.8139613** |
+      | fue Python, suma | 3.8139613 |
+      | drtran C, conjunta diagonal | 3.813961 |
+      | drtran Python, conjunta diagonal | 3.8139611 |
+
+      Y con transferencia, drtran C ≡ drtran Python en las tres estructuras:
+      (0,0,0) **24.408974**, (0,0,1) **35.487981**, (0,1,1) **35.555382**.
+      Batería: **296 PASS, 0 FAIL**. Documentado en `docs/drtran-note.tex`
+      (observación «The means are means, not intercepts»).
 
 ## El objetivo, en una frase
 

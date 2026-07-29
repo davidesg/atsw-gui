@@ -274,23 +274,31 @@ static void build_embedded_varma(struct Tvarma *armax, int m,
     for (i = 1; i <= m; i++)
         for (j = 1; j <= m; j++) qq_struct[i][j] = armax->qq[i][j];
 
-    /* Las MEDIAS. Aqui w_i es la serie OBSERVADA, no el ruido:
-           E[w_i] = mu_i + SUM_{k: out=i} g_k * E[w_inp(k)],   g_k = nu_k(1)
-       Se calcula en orden topologico: una salida necesita la media de su entrada. */
-    for (i = 1; i <= m; i++) armax->mu[i] = 0.0;
-    for (l = 1; l <= m; l++) {
-        i = topo[l];
-        armax->mu[i] = mu[i];
-        for (k = 1; k <= n_link; k++) {
-            real w1 = 0.0, d1 = 1.0;
-            int  kk;
-            if (lnk[k].out != i || lnk[k].s < 0) continue;
-            for (kk = 0; kk <= lnk[k].s; kk++) w1 += omega[k][kk];
-            for (kk = 1; kk <= lnk[k].r; kk++) d1 -= delta[k][kk];
-            if (fabs(d1) < 1e-10) { *ifaultx = 1; return; }
-            armax->mu[i] += (w1 / d1) * armax->mu[lnk[k].inp];
-        }
-    }
+    /* Las MEDIAS.  mu_i es LA MEDIA de la serie i, no un intercepto: es lo que
+       fue estima y escribe en el .pre, y la coherencia con fue exige mantener esa
+       lectura.  Box-Jenkins escribe el modelo en DESVIACIONES de la media,
+
+           (w_Y - mu_Y) = nu(B) (w_X - mu_X) + N_t   =>   E[w_Y] = mu_Y,
+
+       asi que la media de la salida NO hereda nada de la entrada -- es lo que
+       hace que las transferencias salgan limpias.  Multiplicando por delta(B),
+
+           phi_Y delta (w_Y - mu_Y) - phi_Y omega B^b (w_X - mu_X) = delta theta_Y a_Y
+
+       que es EXACTAMENTE la fila 1 de Phi(B)(w - mu) = Theta(B) a con
+       mu = (mu_Y, mu_X).  No hay termino que anadir.
+
+       Antes se hacia mu_i += (SUM_k omega_k / delta(1)) * mu_inp, en orden
+       topologico, que corresponde a la parametrizacion con INTERCEPTO
+       (w_Y = c + nu(B) w_X + N).  Las dos son la misma familia reparametrizada
+       MIENTRAS mu_Y sea libre -- comprobado: con la media de la salida libre dan
+       el mismo optimo a 1e-12.  Divergen cuando mu_Y esta FIJADA: en desviaciones
+       mu_Y = 0 significa E[w_Y] = 0; con intercepto significa E[w_Y] = nu(1) mu_X.
+       Si fue fijo la media en cero es porque la serie no tiene deriva.
+
+       No se veia en el caso canonico porque su entrada (WTI) tiene mu = 0, y
+       entonces el termino vale cero con cualquier convencion.                  */
+    for (i = 1; i <= m; i++) armax->mu[i] = mu[i];
 
     /* Las series, SIN RESTAR NADA: es lo que cambia todo. */
     {

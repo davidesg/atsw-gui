@@ -1160,6 +1160,37 @@ delicate object. It is the reason the optimiser needs more iterations as
 $\delta \to 1$ (\S\ref{sec:mcstudy}), and it is what one pays for the exactness.
 \end{remark}
 
+\begin{remark}[The means are means, not intercepts]
+\label{rem:means}
+Proposition~\ref{prop:cast} is stated for series in \emph{deviations from their
+means}, which is how Box and Jenkins write \eqref{eq:tfm}:
+\begin{equation}
+w_{1t}-\mu_1 = \sum_{j=1}^{k}\nu_j(B)\,(w_{j+1,t}-\mu_{j+1}) + N_t
+\qquad\Longrightarrow\qquad \mathbb{E}[w_{1t}]=\mu_1 .
+\label{eq:deviations}
+\end{equation}
+The output's mean inherits \emph{nothing} from the inputs. Applying $T(B)$ to
+\eqref{eq:deviations} gives $P(B)(w_t-\mu)=M(B)a_t$ with
+$\mu=(\mu_1,\dots,\mu_m)'$ carried through unchanged, which is precisely the form
+the likelihood algorithm expects; no extra term appears.
+
+The alternative parametrisation writes an \emph{intercept},
+$w_{1t}=c+\sum_j\nu_j(B)w_{j+1,t}+N_t$, whence
+$\mathbb{E}[w_{1t}]=c+\sum_j\nu_j(1)\mu_{j+1}$. The two are reparametrisations of
+the same family \emph{as long as $\mu_1$ is free}, and they then reach the same
+optimum to machine precision. They differ when $\mu_1$ is \emph{fixed}, because
+they fix different things: under \eqref{eq:deviations} $\mu_1=0$ means
+$\mathbb{E}[w_{1t}]=0$, while under the intercept form it means
+$\mathbb{E}[w_{1t}]=\sum_j\nu_j(1)\mu_{j+1}\neq0$.
+
+Deviations is the reading the pipeline requires. The $\mu$ in a \texttt{.pre} file
+is the mean \emph{fue} estimated for that series, together with a flag saying
+whether it was estimated at all; a zero there means the series has no drift, not
+that some intercept vanishes. The distinction is invisible whenever the inputs have
+zero mean---which is why it survived in the canonical example, whose input is a
+differenced log price---and it takes an input with a \emph{free} mean to expose it.
+\end{remark}
+
 \subsection{Normalisation: why \texorpdfstring{$\Phi(0)=I$}{Phi(0)=I} is not optional}
 
 The likelihood algorithm requires the model in the form

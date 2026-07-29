@@ -8,6 +8,41 @@ de Box–Jenkins.
 
 Revisado 2026-07-12. Ver `BRIDGE_DESIGN.md` para el diseño y la evidencia.
 
+## BUGS ABIERTOS
+
+- [ ] **BUG (informe, ALTO) — la RESPUESTA AL IMPULSO invierte el signo de los
+      términos no líderes del numerador, y con ella la GANANCIA.**
+      Encontrado 2026-07-29 validando el puerto a Python contra este binario.
+      El cast usa la convención de Box-Jenkins, `omega(B) = w0 - w1 B - ...`:
+      `compute_irf` (tran_shootx.c:37) hace
+      `sum = (lag == 0) ? omega[0] : -omega[lag]`, y el cast empotrado lo mismo
+      (tran_shootx.c:196-198). Pero el bloque de IMPULSE RESPONSE de
+      drtran.c:1371 hace `if (lag >= 0 && lag <= sn) acc = xf[slot + lag];`
+      **sin negar**. Reproducción, `-b 0 -r 0 -s 1 -S` sobre el caso canónico:
+
+          omega1[0] = 0.016402      omega1[1] = -0.010792
+          nu que reporta el informe : 0.016402, -0.010792   <- suma
+          nu que usa el cast (BJR)  : 0.016402, +0.010792   <- resta
+
+      Que el cast es el correcto está comprobado: el puerto a Python usa la
+      convención BJR y reproduce el log-likelihood de este binario a 1e-9
+      (-718.183933) en las cuatro combinaciones de b/r/s probadas.
+      **Impacto:** la columna CUMULATIVE del informe ES la ganancia. Publica
+      0.005610 (= w0 + w1) donde la ganancia real es w0 - w1 = **0.027194**, un
+      factor de casi 5. Afecta a todo s > 0; con s = 0 no se nota.
+      El propio `.cns` de m6 dice cuál es la buena: «nu_num(1)=0, i.e. en BJR
+      w0 - w1 - w2 - w3 = 0 => omega3[0] = omega3[1] + omega3[2] + omega3[3]».
+
+- [ ] **SOSPECHA (mismo origen) — la MEDIA del cast empotrado suma los omega sin
+      alternar el signo.** `build_embedded_varma` (tran_shootx.c:288) calcula la
+      ganancia que multiplica la media de la entrada con
+      `for (kk = 0; kk <= lnk[k].s; kk++) w1 += omega[k][kk];`, es decir
+      w0 + w1 + w2 + ..., cuando en BJR omega(1) = w0 - w1 - w2 - ...
+      Con s = 0 coinciden, así que no se ve en el caso canónico. Habría que
+      comprobarlo con s > 0: la diferencia entre `-V` y `-S` con s=1 es 0.103
+      (-718.287406 vs -718.183933) y no está separado cuánto de eso es el
+      truncamiento (esperado) y cuánto este signo.
+
 ## El objetivo, en una frase
 
 Pasar de modelos **univariantes** en fue a modelos **multivariantes de
@@ -396,6 +431,31 @@ un pequeño DSL parámetros → estructura VARMA— no solo ω/δ de una entrada
 - [ ] Puerto a Python reutilizando los paquetes `fue` y `drvarma` (drvarma 0.1.0
       está en PyPI y su motor de ML exacta es Python puro). **← el hito que mueve la
       aguja**, condicionado a la decisión de lenguaje (ver "Decisiones abiertas").
+
+- [ ] **BUG DE ROBUSTEZ — el optimizador CUELGA con datos sin reescalar (refactor=1).**
+      Descubierto revisando `DVR_rstar` (CPI_EA ← Brent, 2026-07-23). `drtran -0`
+      (diagonal libre, ruido AR(2)×AR(2) = orden 26 expandido, 11 armónicos) sobre un
+      `.pre` con **refactor=1** (Δlog ~0.002) **cuelga >2 min sin converger**; el
+      **MISMO modelo y datos** con **refactor=100** (Δlog ~0.2) **converge en 23 iters,
+      1 segundo**. Aislado limpio: μ y deterministas ×100, los AR son scale-invariant →
+      la única variable es la escala. Es **condicionamiento numérico**: los gradientes
+      de diferencias finitas del VARMA cast (paso ~6e-6) tienen relación señal/paso
+      pésima a escala raw. Confirma la **guía de Mauricio: reescalar SIEMPRE a 100
+      porque el optimizador trabaja mejor** (es la razón de M0.2). Evidencia
+      reproducible: `ART/Data/cases/DVR_2026/drtran_work/{CPI,BRENT}_{r1,r100}.pre`.
+      **A revisar (dos frentes):**
+      1. **Por qué cuelga sin reescalar en vez de avisar/condicionar.** drtran no
+         debería colgarse ante datos mal condicionados que lleguen con refactor=1: o
+         **condiciona internamente** (escala data-driven, p.ej. `refactor≈1/std(∇BoxCox)`)
+         o **rechaza/avisa** con un límite de iteraciones. Colgarse en silencio es el
+         peor modo de fallo. Nota de diseño: el fix P1 de fue/ART (refactor=100 fuente
+         única) hace que el `.pre` regenerado ya condicione ×100 → el hang desaparece al
+         regenerar; pero el C subyacente sigue siendo frágil.
+      2. **Armónicos + precisión insuficiente = mala situación de estimación.** Con la
+         parte determinista estacional (armónicos cos/sin + Nyquist) presente, si la
+         precisión de los datos/gradientes no alcanza, la superficie de verosimilitud
+         queda mal condicionada (colinealidad determinista + AR largo) → estimación
+         inestable. Revisar la interacción armónicos ↔ escala ↔ precisión del gradiente.
 
 ---
 

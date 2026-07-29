@@ -1368,7 +1368,15 @@ static void impulse_response_report(real *x, real **cov, int npar, FILE *out)
         for (k = 0; k <= K; k++) {
             real acc = 0.0;
             int  lag = k - b;
-            if (lag >= 0 && lag <= sn) acc = xf[slot + lag];
+            /* Convencion de Box-Jenkins, la MISMA que compute_irf y el cast
+               empotrado: omega(B) = w0 - w1 B - w2 B^2 - ...  El termino lider
+               SUMA y los demas RESTAN.  Antes se sumaban todos, lo que invertia
+               el signo de nu_k para lag > 0 y, con el, la GANANCIA de la columna
+               acumulada (que es nu(1) = omega(1)/delta(1)).  Con s = 0 no se
+               notaba; con s > 0 el error es grande: en el caso canonico publicaba
+               0.005610 = w0 + w1 donde la ganancia es w0 - w1 = 0.027194.        */
+            if (lag >= 0 && lag <= sn)
+                acc = (lag == 0) ? xf[slot] : -xf[slot + lag];
             for (i = 1; i <= r; i++)
                 if (k >= i) acc += xf[slot + sn + i] * nu[k - i];
             nu[k] = acc;
@@ -1393,8 +1401,12 @@ static void impulse_response_report(real *x, real **cov, int npar, FILE *out)
 
             for (i = 1; i <= npar; i++) gg[i] = 0.0;
 
-            /* d nu_k / d omega_lag */
-            if (lag >= 0 && lag <= sn) add_grad(gg, slot + lag, 1.0);
+            /* d nu_k / d omega_lag.  Con la convencion BJR el lider suma y los
+               demas restan, asi que la derivada respecto de omega_lag es -1 para
+               lag > 0.  Tiene que ser COHERENTE con la recursion de nu de arriba
+               o los errores estandar de nu_k y de la ganancia salen mal.        */
+            if (lag >= 0 && lag <= sn)
+                add_grad(gg, slot + lag, (lag == 0) ? 1.0 : -1.0);
             /* d nu_k / d delta_i  y la parte recursiva */
             for (i = 1; i <= r; i++) {
                 int p2;

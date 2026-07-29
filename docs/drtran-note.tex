@@ -413,6 +413,150 @@ structural $\psi$ weights $\Psi_{\text{struct}}=\Psi_{\text{red}}\,\Phi_0^{-1}$,
 because the reduced-form $\Sigma$ is not diagonal when a transfer is
 contemporaneous.
 
+\section{Prewhitening, and what the literature says about it}
+\label{sec:prewhitening}
+
+The orders $(b,r,s)$ are read from the cross-correlation function of the
+\emph{prewhitened} series. The procedure is Box--Jenkins (1976, ch.~11): filter
+the input with its own ARMA until it is white,
+\begin{equation}
+ a_t = \theta_x(B)^{-1}\phi_x(B)\,x_t ,
+ \label{eq:prewhiten}
+\end{equation}
+apply \emph{the same} filter to the output to obtain $\beta_t$, and read
+\begin{equation}
+ \hat\nu(k) = r_{a\beta}(k)\,\frac{s_\beta}{s_a}.
+ \label{eq:nuhat}
+\end{equation}
+The second step is the one that is easy to get wrong. Filtering only the input
+leaves the CCF contaminated by the output's own autocorrelation, and then, as
+Haugh and Box (1977) put it, the lagged cross-correlations ``can have high
+variance and the estimates at different lags can'' be badly misleading. Both
+series must go through the same filter.
+
+\subsection{The significance band is not constant}
+\label{sec:band}
+
+Haugh and Box (1977, \S1.4) give, for two independent white-noise series,
+\begin{equation}
+ \operatorname{var}\{r_{xy}(k)\} \;\simeq\; (N-k)^{-1},
+ \label{eq:hbvar}
+\end{equation}
+and say the estimates ``may be judged individually against an approximate
+standard error of $N^{-1/2}$ \emph{(or $(N-k)^{-1/2}$)}''. The band should
+\emph{widen} with the lag, because fewer overlapping products go into estimating
+it. drtran uses the constant $2/\sqrt{N}$.
+
+This is not a rounding matter. In the canonical example ($N=215$) the threshold
+at $k=24$ is $0.1364$ under the constant band and $0.1447$ under
+\eqref{eq:hbvar}, and the sample value there is $-0.1423$: significant under the
+first, not under the second. And that spike is precisely the false positive that
+forced the program to adopt the \emph{contiguous-block} rule---take the run of
+significant weights starting at $b$, not the last significant lag anywhere, which
+would have driven $s$ to 24.
+
+In other words, the heuristic is compensating for a miscalibrated band. Both
+are defensible; what is not defensible is to have neither. The Python port
+implements \eqref{eq:hbvar} as an option and keeps the constant band as the
+default, so that the two agree with this program.
+
+\subsection{Tsay's objections, and when they bite}
+\label{sec:tsay}
+
+Tsay (1985) proposes an identification procedure that needs no prewhitening and
+raises two objections to the ones that do.
+
+\emph{First: the unidirectional assumption.} ``The unidirectional effect from
+$X_t$ to $Y_t$ is seldom certain, and feedback between $Y_t$ and $X_t$ may in
+fact exist.'' This one the program answers directly. The CCF is computed on both
+sides, and the $k<0$ side---output leading input---is tested with a portmanteau
+statistic, not by counting how many lags cross the band. With 5\,\% bands about
+one lag in twenty crosses by chance, so counting raises the alarm almost always;
+the portmanteau compares the observed total against its null distribution. In the
+canonical example, $Q(24)=18.30$ with $p=0.79$: the input behaves as exogenous.
+
+\emph{Second: differencing.} ``For nonstationary series (as are most economic
+series), the transformation used to achieve stationarity may weaken the strength
+of relationships between variables. This could sometimes result in controversial
+conclusions,'' citing Feige and Pearce (1974), where analysing the levels and the
+transformed series led to conflicting answers. This objection the program does
+\emph{not} answer: identification runs on the already-differenced series that the
+\texttt{.pre} fixes.
+
+It is worth reading that objection with its date attached. Tsay (1985) predates
+Engle and Granger (1987), and the phenomenon he describes---a relation present in
+levels and weakened by differencing---is precisely the one cointegration was
+introduced to explain. That suggests a natural conjecture: \emph{the objection
+bites when the series are cointegrated, and is empty when they are not.}
+
+The mechanism is sharper than ``weakened''. If $x$ and $y$ are $I(1)$ and
+cointegrated, Granger's representation theorem puts the system in
+error-correction form, and a model written in differences \emph{without} the
+error-correction term is not merely attenuated---it is \textbf{misspecified by an
+omitted variable}. That does not only shrink the $\omega$'s, it biases them and
+leaves persistent autocorrelation in the residuals. Conversely, if the series are
+$I(1)$ and not cointegrated there is no long-run relation to lose: the whole
+association lives in the differences, which is exactly where the identification
+is being performed, and nothing is weakened.
+
+The example Tsay chooses supports the reading. Feige and Pearce (1974) is on
+money and income---the textbook cointegrating relation---so their conflicting
+answers between levels and differences look less like a defect of the method than
+like a cointegrated system analysed before the concept existed. It is also
+consistent that the alternative Tsay proposes, a VAR in levels, is consistent
+with or without unit roots (Sims, Stock and Watson 1990): his procedure gains
+robustness precisely where prewhitening-plus-differencing loses it.
+
+We state this as a conjecture, not a result, and it should not be oversold. Two
+caveats bound it. \emph{First}, cointegration is not the only channel:
+differencing amplifies measurement error relative to signal, so an attenuation
+bias operates with or without a common trend, and that channel survives the
+dichotomy. \emph{Second}, ``not cointegrated'' is a failure to reject, not a
+licence: the tests have little power in short samples, so the boundary the
+conjecture relies on is empirically blurred. The practical reading
+is narrower and safer: \textbf{when the input and the output may be cointegrated,
+the identification of $(b,r,s)$ on differenced data should be treated as
+provisional}, and the transfer specification cross-checked against a formulation
+that keeps the levels. Testing for cointegration is outside this program's scope
+(it belongs with a VECM), which makes the caveat worth stating rather than
+silently assuming away.
+
+\subsection{Two prewhitenings, and where each is used}
+
+Haugh and Box's own proposal is the \emph{double} prewhitening: filter each
+series with \emph{its own} univariate model and cross-correlate the two residual
+series, whose distribution under independence is known. That is not the same as
+the Box--Jenkins single prewhitening of \eqref{eq:prewhiten}--\eqref{eq:nuhat},
+where the output is deliberately passed through the \emph{input's} filter so that
+$r_{a\beta}(k)$ estimates the $\nu$ weights directly rather than merely testing
+independence.
+
+drtran uses both, for the two different questions. The single prewhitening
+identifies $(b,r,s)$ of a link, because it is the one that yields the weights.
+The network identification (\texttt{-i}, \texttt{-g}) reads the residual CCFs of
+the estimated \emph{diagonal} model---which is a double prewhitening, each series
+filtered by its own fitted model---because there the question is which links
+exist at all, not how large they are.
+
+\subsection{A note on the impulse-response report}
+\label{sec:irfsign}
+
+The convention \eqref{eq:bjr} is used consistently by the cast (both the
+subtracting and the embedded one) and by the gain and mean-lag computation of
+\S\ref{sec:gain}. It was \emph{not} used by the impulse-response table, which
+summed the $\omega_k$ instead of alternating their signs. The reported
+$\nu_k$ for $k>b$ therefore had the wrong sign, and with them the cumulative
+column---which \emph{is} the gain. In the canonical example with $s=1$ the table
+published $0.005610=\omega_0+\omega_1$ where the gain is
+$\omega_0-\omega_1=0.027195$, a factor of nearly five.
+
+The defect was invisible for $s=0$, which is the case the test battery covered,
+and it was mirrored by the write-up: equation \eqref{eq:gain} as previously
+stated also summed the $\omega_k$. Code and documentation confirmed each other.
+It surfaced when a second implementation, built to the same convention, disagreed
+with the table while agreeing with the likelihood to nine digits. Both are now
+fixed, and the battery checks the sign of $\nu_1$ and the gain for $s>0$.
+
 \section{Identification at lag zero}
 \label{sec:identification}
 
@@ -522,17 +666,35 @@ An estimated transfer function is not described until two quantities are stated:
 how much the output responds in total, and how long the response takes. The
 $\omega$'s and $\delta$'s are the parametrization, not the response itself.
 
+Throughout we use the Box--Jenkins sign convention for the numerator,
+\begin{equation}
+ \omega(B) = \omega_0 - \omega_1 B - \cdots - \omega_s B^{s},
+ \qquad
+ \delta(B) = 1 - \delta_1 B - \cdots - \delta_r B^{r},
+ \label{eq:bjr}
+\end{equation}
+in which \emph{the leading term adds and the rest subtract}. It is worth stating
+explicitly, because it propagates into every expression below and a lost sign is
+invisible when $s=0$---where $\omega(1)=\omega_0$ either way. That is exactly how
+a sign error survived in the impulse-response report for years
+(\S\ref{sec:irfsign}).
+
 \begin{align}
 \text{gain}\qquad
  g &= \nu(1) \;=\; \frac{\omega(1)}{\delta(1)},
- && \omega(1)=\sum_k \omega_k,\quad \delta(1)=1-\sum_j \delta_j
+ && \omega(1)=\omega_0-\!\!\sum_{k\ge 1}\!\omega_k,\quad \delta(1)=1-\sum_j \delta_j
  \label{eq:gain}\\[4pt]
 \text{mean lag}\qquad
  \bar{m} &= \frac{\nu'(1)}{\nu(1)}
-   \;=\; b \;+\; \frac{\sum_k k\,\omega_k}{\omega(1)}
+   \;=\; b \;-\; \frac{\sum_{k\ge 1} k\,\omega_k}{\omega(1)}
              \;+\; \frac{\sum_j j\,\delta_j}{\delta(1)}
  \label{eq:mlag}
 \end{align}
+
+The minus in front of the numerator term of \eqref{eq:mlag} is not a typo: under
+\eqref{eq:bjr} one has $\omega'(1) = -\sum_{k\ge1} k\,\omega_k$, while
+$\delta'(1) = -\sum_j j\,\delta_j$ enters with the opposite overall sign because
+$\delta$ sits in the denominator.
 
 The gain is the total, permanent response to a unit, permanent change in the
 input: \emph{how much}. The mean lag is the centre of gravity of the response in
@@ -1644,6 +1806,42 @@ identification analysis. The source is at
 G.~E.~P.~Box, G.~M.~Jenkins and G.~C.~Reinsel (1994).
 \emph{Time Series Analysis: Forecasting and Control}, 3rd ed. Prentice Hall.
 Chapters 10--11.
+
+\bibitem{haughbox1977}
+L.~D.~Haugh and G.~E.~P.~Box (1977).
+Identification of dynamic regression (distributed lag) models connecting two
+time series.
+\emph{Journal of the American Statistical Association} \textbf{72}(357),
+121--130.
+\emph{(The original prewhitening reference; \S1.4 gives
+$\operatorname{var}\{r_{xy}(k)\}\simeq(N-k)^{-1}$, the lag-dependent band of
+\S\ref{sec:band}, and \S1.6 the double-prewhitening procedure.)}
+
+\bibitem{tsay1985}
+R.~S.~Tsay (1985).
+Model identification in dynamic regression (distributed lag) models.
+\emph{Journal of Business \& Economic Statistics} \textbf{3}(3), 228--237.
+\emph{(The critique: no prewhitening, no differencing; see \S\ref{sec:tsay}.)}
+
+\bibitem{feigepearce1974}
+E.~L.~Feige and D.~K.~Pearce (1974).
+The causality relationship between money and income: a time series approach.
+Paper, Annual Meeting of the Midwest Economic Association, Chicago.
+\emph{(Tsay's example of conflicting conclusions between levels and differences
+---and, read later, a cointegrated system analysed before the concept existed.)}
+
+\bibitem{englegranger1987}
+R.~F.~Engle and C.~W.~J.~Granger (1987).
+Co-integration and error correction: representation, estimation, and testing.
+\emph{Econometrica} \textbf{55}(2), 251--276.
+\emph{(Two years after Tsay; the representation theorem behind
+\S\ref{sec:tsay}.)}
+
+\bibitem{simsstockwatson1990}
+C.~A.~Sims, J.~H.~Stock and M.~W.~Watson (1990).
+Inference in linear time series models with some unit roots.
+\emph{Econometrica} \textbf{58}(1), 113--144.
+\emph{(Why a VAR in levels stays consistent with unit roots present.)}
 
 \bibitem{dennis1983}
 J.~E.~Dennis and R.~B.~Schnabel (1983).

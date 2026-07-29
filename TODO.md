@@ -10,8 +10,21 @@ Revisado 2026-07-12. Ver `BRIDGE_DESIGN.md` para el diseño y la evidencia.
 
 ## BUGS ABIERTOS
 
-- [ ] **BUG (informe, ALTO) — la RESPUESTA AL IMPULSO invierte el signo de los
-      términos no líderes del numerador, y con ella la GANANCIA.**
+- [x] **CORREGIDO (informe, era ALTO) — la RESPUESTA AL IMPULSO invertía el signo
+      de los términos no líderes del numerador, y con ella la GANANCIA.**
+      Arreglado el 2026-07-29 en `drtran.c:1371` (la recursión de `nu`) y en
+      `drtran.c:1405` (el gradiente, que tenía el mismo signo y hay que mantener
+      COHERENTE o los errores estándar salen mal). Verificado: con `-s 1` el
+      informe pasa de publicar ν₁ = −0.010792 y ganancia 0.005610 a ν₁ = +0.010792
+      y ganancia **0.027195**, que es ω₀−ω₁ y coincide con lo que calcula el
+      puerto de Python. Batería: **296 PASS**, con una sección 10 nueva que fija
+      el signo de ν₁ y la ganancia para s>0 — el caso que la batería no cubría y
+      por el que el defecto sobrevivió.
+      **La documentación tenía el mismo error**: la ecuación de la ganancia en
+      `docs/drtran-note.tex` también sumaba los ω. Código y documento se
+      confirmaban mutuamente. Corregidos los dos, y añadida la convención BJR
+      como ecuación explícita.
+      Descripción original:
       Encontrado 2026-07-29 validando el puerto a Python contra este binario.
       El cast usa la convención de Box-Jenkins, `omega(B) = w0 - w1 B - ...`:
       `compute_irf` (tran_shootx.c:37) hace
@@ -33,8 +46,10 @@ Revisado 2026-07-12. Ver `BRIDGE_DESIGN.md` para el diseño y la evidencia.
       El propio `.cns` de m6 dice cuál es la buena: «nu_num(1)=0, i.e. en BJR
       w0 - w1 - w2 - w3 = 0 => omega3[0] = omega3[1] + omega3[2] + omega3[3]».
 
-- [ ] **SOSPECHA (mismo origen) — la MEDIA del cast empotrado suma los omega sin
-      alternar el signo.** `build_embedded_varma` (tran_shootx.c:288) calcula la
+- [ ] **SOSPECHA (mismo origen, SIGUE ABIERTA) — la MEDIA del cast empotrado suma
+      los omega sin alternar el signo.** Nota: la sección de gain/mean lag
+      (`drtran.c:~3188`) SÍ usa la convención correcta (`sk = (k==0)?1.0:-1.0`),
+      así que este es el único sitio que queda por revisar. `build_embedded_varma` (tran_shootx.c:288) calcula la
       ganancia que multiplica la media de la entrada con
       `for (kk = 0; kk <= lnk[k].s; kk++) w1 += omega[k][kk];`, es decir
       w0 + w1 + w2 + ..., cuando en BJR omega(1) = w0 - w1 - w2 - ...

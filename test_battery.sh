@@ -2041,6 +2041,41 @@ $DRTRAN $M6_7 -n "$TMPDIR/pruned9.dag" -c "$GN9.cns" -o "$TMPDIR/rt9.out" >/dev/
 LRT9=$(grep -E "Log-likelihood" "$TMPDIR/rt9.out" | grep -oE "\-[0-9]+\.[0-9]+")
 check "round-trip: red podada + el cns de -g reproduce la l canonica" -1697.61 "$LRT9" 0.5
 
+
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
+echo "── 10. RESPUESTA AL IMPULSO: el SIGNO del numerador y la GANANCIA ──"
+echo "   Convencion Box-Jenkins: omega(B) = w0 - w1 B - ...  El lider SUMA y los"
+echo "   demas RESTAN, igual que en compute_irf y en el cast empotrado. El informe"
+echo "   los sumaba todos, lo que invertia nu_k para lag>0 y con el la GANANCIA."
+echo "   Con s=0 no se notaba -- por eso el resto de la bateria no lo detectaba."
+echo ""
+
+IRF="$TMPDIR/irf_s1.txt"
+$DRTRAN "$CASES/ES_CPI_m10.pre" "$CASES/WTI_ar1.pre" -b 0 -r 0 -s 1 -S -o "$IRF" >/dev/null 2>&1
+
+W0=$(val "$IRF" 'omega1\[0\]')
+W1=$(val "$IRF" 'omega1\[1\]')
+# nu_k del bloque IMPULSE RESPONSE (columna 2 de las filas "  k  nu_k ...")
+NU0=$(grep -A3 "cumulative" "$IRF" | awk '$1=="0"{print $2}' | head -1)
+NU1=$(grep -A4 "cumulative" "$IRF" | awk '$1=="1"{print $2}' | head -1)
+GAN=$(grep -A4 "cumulative" "$IRF" | awk '$1=="1"{print $6}' | head -1)
+
+check "nu_0 = omega1[0]" "$W0" "$NU0" 1e-6
+# nu_1 debe ser MENOS omega1[1] (BJR), no omega1[1]
+check "nu_1 = -omega1[1]  (el lider suma, los demas RESTAN)" \
+      "$(python3 -c "print(-($W1))")" "$NU1" 1e-6
+# la ganancia acumulada es nu(1) = w0 - w1, no w0 + w1
+check "ganancia = omega(1) = w0 - w1" \
+      "$(python3 -c "print($W0 - ($W1))")" "$GAN" 1e-5
+
+# y con s=0 ambas convenciones coinciden: guarda de no-regresion
+IRF0="$TMPDIR/irf_s0.txt"
+$DRTRAN "$CASES/ES_CPI_m10.pre" "$CASES/WTI_ar1.pre" -b 0 -r 0 -s 0 -S -o "$IRF0" >/dev/null 2>&1
+W00=$(val "$IRF0" 'omega1\[0\]')
+GAN0=$(grep -A3 "cumulative" "$IRF0" | awk '$1=="0"{print $6}' | head -1)
+check "con s=0 la ganancia sigue siendo omega_0" "$W00" "$GAN0" 1e-6
+
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
 echo "============================================"

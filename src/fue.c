@@ -3045,12 +3045,29 @@ fprintf( texputv, ")");
              }
 
 
-         /* Generate a deterministic linear trend:                                 */
+         /* Generate a variable representing the Easter holiday:                */
+         /* Sin esta rama el .pre salia con la linea del tipo VACIA, y el       */
+         /* fichero dejaba de reproducir su propio modelo: al releerlo, la      */
+         /* palabra desaparecida se tomaba por variable NO ESTANDAR.  El .pre   */
+         /* es el contrato de continuidad del programa (sus semillas son las    */
+         /* estimaciones de la ultima iteracion), asi que perderlo no es un     */
+         /* detalle de formato.                                                 */
 
-          else if ( strcmp( dumstrg, "time" ) == 0 )
+          else if ( strcmp( dumstrg, "easter" ) == 0 )
              {
-             fprintf( texputv, "time\n");
-             fscanf( inputv, "\n" );
+             fprintf( preputv, "easter\n");
+             }
+
+         /* Generate a deterministic linear trend:                                 */
+         /* Ojo: esta rama comparaba con "time", palabra que el GENERADOR de    */
+         /* regresores no acepta (fue.c:396 espera "trend"), y ademas escribia  */
+         /* en texputv --el fichero LaTeX-- en vez de en preputv.  Nada podia   */
+         /* producir un "time" que el generador hubiese entendido, asi que la   */
+         /* rama estaba muerta y el trend se perdia igual que el easter.        */
+
+          else if ( strcmp( dumstrg, "trend" ) == 0 )
+             {
+             fprintf( preputv, "trend\n");
              }
 
          /* Generate a cosine seasonal component:                                  */
@@ -3074,6 +3091,22 @@ fprintf( texputv, ")");
           else if ( strcmp( dumstrg, "alter" ) == 0 )
              {
                fprintf( preputv, "alter\n");
+             }
+
+         /* Variable determinista NO ESTANDAR: sus datos viajan en columnas      */
+         /* extra del bloque de la serie -- que el .pre SI escribe.  Sin esta    */
+         /* rama se perdia la linea del nombre y el fichero no solo dejaba de    */
+         /* reproducir su modelo: releerlo hace SEGFAULTAR al programa.          */
+         /* Se escribe la palabra TAL CUAL se leyo, no un "non-standard"         */
+         /* generico: el generador toma por no estandar cualquier palabra que no */
+         /* conoce, asi que conservarla es fiel y ademas no borra la etiqueta    */
+         /* que puso el usuario.  El fgets consume el resto de la linea, igual   */
+         /* que hace el generador (fue.c:430).                                   */
+
+          else
+             {
+             fprintf( preputv, "%s\n", dumstrg );
+             fgets( dumstrg, MAXSTR, inputv );
              }
 
        }

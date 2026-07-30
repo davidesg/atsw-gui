@@ -831,6 +831,21 @@ void File_PlotSer( struct Tseries *ser )
       goto p1;
       }
 
+/* Serie DEGENERADA (varianza cero): no hay nada que dibujar, y ademas AbsMax   */
+/* sale NaN -- 0/0 -- que NO atrapa ninguna de las dos guardas de arriba,       */
+/* porque toda comparacion con NaN es falsa.  De ahi HorInc = 25/NaN,           */
+/* BandPos = NaN, iround(NaN) = basura, y Tmpstr[27 +- basura] mata el proceso. */
+/* Pasa de verdad: un ajuste degenerado deja los residuos a cero y el programa  */
+/* muere al ir a dibujarlos (BUG-0008).  Se compara con !(x > 0) y x == x en    */
+/* vez de con <= y isnan para que el NaN quede atrapado sin depender de flags   */
+/* del compilador.                                                             */
+
+   if ( !(rtmp4 > 0.0) || !(AbsMax == AbsMax) )
+      {
+      fprintf( outputv, "Warning: series with zero variance; plot skipped\n" );
+      goto p1;
+      }
+
 /* The value of each character + positions of � and 2� bands:                */
 
    HorInc   = 25.0 / AbsMax;
@@ -887,14 +902,17 @@ void File_PlotSer( struct Tseries *ser )
          if ( idx >= 0 && idx <= 54 ) Tmpstr[idx] = '*'; }
        if ( Tmpstr[27] == ' ' )
           Tmpstr[27] = '|';
-       if ( Tmpstr[27 + iround( BandPos1 )] == ' ' )
-          Tmpstr[27 + iround( BandPos1 )] = ':';
-       if ( Tmpstr[27 - iround( BandPos1 )] == ' ' )
-          Tmpstr[27 - iround( BandPos1 )] = ':';
-       if ( Tmpstr[27 + iround( BandPos2 )] == ' ' )
-          Tmpstr[27 + iround( BandPos2 )] = ':';
-       if ( Tmpstr[27 - iround( BandPos2 )] == ' ' )
-          Tmpstr[27 - iround( BandPos2 )] = ':';
+       /* Las bandas, con la MISMA guarda de rango que el marcador '*' de       */
+       /* arriba: escribir en Tmpstr[27 +- iround(BandPos)] sin comprobar el    */
+       /* indice es lo que reventaba (BUG-0008).  La guarda de la serie         */
+       /* degenerada ya evita el NaN; esto es el cinturon.                      */
+       { int k;
+         for ( k = 0; k < 4; k++ )
+             {
+             real bp  = (k < 2) ? BandPos1 : BandPos2;
+             int  idx = (k % 2 == 0) ? 27 + iround( bp ) : 27 - iround( bp );
+             if ( idx >= 0 && idx <= 54 && Tmpstr[idx] == ' ' ) Tmpstr[idx] = ':';
+             } }
        fprintf( outputv, "%s", Tmpstr );
        fprintf( outputv, "%13.10f\n", ser->data[i] );
        }
@@ -1328,7 +1346,14 @@ void PlotCor( real *corr, int lags, int isacf, struct Tseries *ser, int npar )
           TmpStr[51] = '|';
           }
        pos  = corr[i] * HorInc;
+       /* Una correlacion NO FINITA -- la de una serie de varianza cero, 0/0 --
+          da posi basura, y el bucle de abajo escribe una tirada de esa longitud
+          fuera de TmpStr: el compilador la convierte en memset y el proceso
+          muere (BUG-0008).  Una correlacion vive en [-1,1], asi que 25 es el
+          maximo legitimo; se acota y se sigue dibujando.                      */
+       if ( !(pos == pos) ) pos = 0.0;
        posi = abs( iround( pos ) );
+       if ( posi > 25 ) posi = 25;
        if ( pos <= 0.0 )
           for ( j = 25 - posi; j <= 25; j++ ) TmpStr[j] = symbol;
        else
@@ -1336,10 +1361,11 @@ void PlotCor( real *corr, int lags, int isacf, struct Tseries *ser, int npar )
        TmpStr[25] = '|';
        pos  = 2.0 / sqrt( nobs ) * HorInc;
        posi = iround( pos );
-       if ( TmpStr[25 + posi] == ' ' )
-          TmpStr[25 + posi] = ':';
-       if ( TmpStr[25 - posi] == ' ' )
-          TmpStr[25 - posi] = ':';
+       if ( posi >= 0 && posi <= 25 )
+          {
+          if ( TmpStr[25 + posi] == ' ' ) TmpStr[25 + posi] = ':';
+          if ( TmpStr[25 - posi] == ' ' ) TmpStr[25 - posi] = ':';
+          }
        fprintf( outputv, "%s", TmpStr );
 
        if ( (freq != 1) && (i % freq == 0) && (isacf) && (i - npar >= 1) )

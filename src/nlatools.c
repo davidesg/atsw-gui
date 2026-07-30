@@ -33,6 +33,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <ctype.h>
+#include <gsl/gsl_errno.h>
 #include <gsl/gsl_eigen.h>
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_vector_complex.h>
@@ -343,7 +344,36 @@ void gsl_eigenqr( double **a, int n, double *wr, double *wi )
 
    /* balance=1: apply balancing similarity transform before eigendecomposition */
    gsl_eigen_nonsymm_params( 0, 1, w );
-   gsl_eigen_nonsymm( A, eval, w );
+
+   /* El manejador de errores POR DEFECTO de GSL llama a abort(): si la         */
+   /* iteracion QR no converge ("maximum iterations reached without finding     */
+   /* all eigenvalues", francis.c:209), GSL MATA EL PROCESO.  Y no converger    */
+   /* no es una catastrofe: es un punto del espacio de parametros donde no se   */
+   /* puede certificar la estacionariedad.  Se apaga el manejador, se mira el   */
+   /* codigo, y se devuelven raices FUERA del circulo unidad -- que es como se  */
+   /* dice "no vale" en esta interfaz: el llamante (elfvarma.c:532) pone        */
+   /* ifault y el estimador se aleja de ahi.  Un punto rechazado es una         */
+   /* respuesta; un abort() no lo es.  (BUG-0008)                              */
+   {
+   gsl_error_handler_t *old = gsl_set_error_handler_off();
+   int status = gsl_eigen_nonsymm( A, eval, w );
+   gsl_set_error_handler( old );
+
+   if ( status != GSL_SUCCESS )
+      {
+      for ( i = 0; i < n; i++ )
+          {
+          wr[i+1] = 2.0;
+          wi[i+1] = 0.0;
+          for ( j = 0; j < n; j++ ) a[i+1][j+1] = 0.0;
+          a[i+1][i+1] = 2.0;          /* modulo > 1 => no estacionario */
+          }
+      gsl_eigen_nonsymm_free( w );
+      gsl_vector_complex_free( eval );
+      gsl_matrix_free( A );
+      return;
+      }
+   }
 
    for ( i = 0; i < n; i++ )
       {

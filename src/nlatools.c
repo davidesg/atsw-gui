@@ -415,18 +415,18 @@ void nrerror( char error_text[] )
 
 double *vector( long nl, long nh )
 {
-   double *v = (double *)calloc( (size_t)(nh + 1), sizeof(double) );
+   double *v = (double *)calloc( (size_t)(nh - nl + 1), sizeof(double) );
    if ( !v ) nrerror( "ALLOCATION FAILURE in vector()" );
-   return( v );
+   return( v - nl );
 }
 
 /****************************************************************************/
 
 int *ivector( long nl, long nh )
 {
-   int *v = (int *)calloc( (size_t)(nh + 1), sizeof(int) );
+   int *v = (int *)calloc( (size_t)(nh - nl + 1), sizeof(int) );
    if ( !v ) nrerror( "ALLOCATION FAILURE in ivector()" );
-   return( v );
+   return( v - nl );
 }
 
 /****************************************************************************/
@@ -509,14 +509,14 @@ double ***tensor( long nrl, long nrh, long ncl, long nch, long ndl, long ndh )
 
 void free_vector( double *v, long nl, long nh )
 {
-   free( v );
+   if ( v ) free( v + nl );
 }
 
 /****************************************************************************/
 
 void free_ivector( int *v, long nl, long nh )
 {
-   free( v );
+   if ( v ) free( v + nl );
 }
 
 /****************************************************************************/

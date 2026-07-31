@@ -11,7 +11,7 @@
 
 CC       = gcc
 CFLAGS   = -Wall -Wextra -O2 -fPIC
-LDFLAGS  = -lm
+LDFLAGS  = -lgsl -lgslcblas -lm
 
 SRCDIR   = src
 INCDIR   = include

@@ -653,19 +653,52 @@ método **condicional / de retropredicción** de Box–Jenkins; drtran por
 verosimilitud EXACTA. Si coincidieran por construcción no probarían nada. Lo que
 hay que diseñar es en qué coincidir.
 
-### Qué comparar, y qué NO
+### Lo que TASTE es, leído en su fuente (2026-08-01)
 
-Comparar lo que es propiedad del **modelo**, no del método:
+Turbo Pascal, 1987–2000. `TASTECTV.PAS` define el modelo:
 
-- los órdenes identificados (b, r, s) del preblanqueo + CCF;
-- la **respuesta al impulso ν(k) y la ganancia ν(1)** — el objeto físico, el
-  mismo bajo cualquier estimador;
-- el signo y el orden de magnitud de la transferencia;
-- las previsiones a horizontes cortos, en nivel.
+```
+TFMODEL = T inputs; cada TFINPUT = (b, s, r) + su USMODEL; NOISE: USMODEL aparte
+USMODEL = d, ds, lambda, mu, p, q, ps, qs, sp
+```
 
-NO comparar: la log-verosimilitud (objetivos distintos), los errores estándar
-(hessianos distintos), ni los residuos observación a observación (la
-inicialización pre-muestral es justo lo que difiere).
+Dos consecuencias que fijan el diseño de la comparación:
+
+1. **TASTE es el cast por RESTA, no el empotrado.** Modela el ruido
+   N_t = Y_t − Σ ν_j(B)X_j,t aparte, con su propio ARIMA. Eso es exactamente
+   `-S`. **La comparación se hace contra `-S`**; comparar contra `-V` mediría el
+   truncamiento, no la implementación.
+2. **Estima por mínimos cuadrados no lineales con RETROPREDICCIÓN.** `MRQ_MTF`
+   (`MRQEST.PAS`) es Levenberg–Marquardt sobre los residuos, con `BackCasts`
+   retroprevisiones calculadas en `BACKTF.PAS` (`BackForeCast`, `CalcPsiB`,
+   `CalcPiB`, `CalcRes1st`). drtran: ML exacta con BFGS.
+
+Y de ahí sale la comparación de tres vías que este TODO ya pedía en «Posible, NO
+objetivo»: **`-S` trunca, TASTE retropredice, `-V` hace desaparecer el
+truncamiento**. TASTE es el remedio de Box–Jenkins que el empotrado vuelve
+innecesario, y es la única forma de medir cuánto valía ese remedio.
+
+### Alcance: la transferencia, no lo univariante
+
+Los modelos univariantes **no hay que revalidarlos**: fue está probado y
+homologado (fue C ≡ fue Python ≡ diagonal de drtran a 1e-7). Lo que sólo TASTE
+puede contrastar es la maquinaria de la **transferencia**. Se valida:
+
+1. el **preblanqueo** y la CCF → los (b, r, s) identificados;
+2. la **transferencia estimada** → ν(k) y la ganancia ν(1);
+3. las **previsiones**.
+
+**Diseño experimental:** fijar los modelos univariantes de TASTE a los de fue
+(TASTE deja especificar el USMODEL del ruido y el de cada input). Así cualquier
+discrepancia es atribuible a la transferencia y no a que cada programa haya
+estimado un ARIMA distinto. Sin eso, la comparación no aísla nada.
+
+### Qué NO comparar
+
+La suma de cuadrados ni la log-verosimilitud (objetivos distintos: LM sobre
+residuos frente a ML exacta), los errores estándar (hessianos distintos), ni los
+residuos observación a observación — la inicialización pre-muestral es
+justamente lo que difiere.
 
 ### La predicción, escrita ANTES de correr nada
 
@@ -680,16 +713,27 @@ Esto se apunta ahora para que una discrepancia no se racionalice después:
   repo: la celda δ=0.95, n=400 es la única donde la ventaja del exacto sobrevive
   a una muestra grande (−60% en el RMSE de la ganancia). Si TASTE difiere ahí, es
   el resultado esperado.
+- **TASTE debería quedar ENTRE `-S` y `-V`** en los casos con memoria: la
+  retropredicción corrige parte de lo que la resta trunca, pero no todo.
+
+### El arnés ya existe
+
+`Taste/validate/` conduce TASTE por pulsaciones (`.keys`) bajo DOSBox y compara
+`TASTE.OUT`; `run_case.sh` lo corre en las dos plataformas (EXE original y puerto
+a Free Pascal) y diffea. **No hay que construir un arnés nuevo**: hay que añadir
+casos y un comparador de `TASTE.OUT` contra el `.out` de drtran.
+
+Falta un **convertidor `.pre`/`.inp` → `.BJD`** (formato de líneas: título,
+frecuencia, periodo/año de inicio, nº de observaciones, tipo, datos).
 
 ### Estado
 
-Bloqueado en el **ejecutable de TASTE para máquinas modernas**, en el que David
-está trabajando. Hasta que corra no hay nada que comparar.
+Bloqueado en el ejecutable de TASTE para máquinas modernas, en el que David está
+trabajando (`Taste/port/`, Free Pascal, ya arranca en 64 bits).
 
-Cuando corra: elegir dos o tres casos con respuesta conocida (el canónico
-ES_CPI ← WTI, uno sintético con ν(k) impuesto, y uno cerca de la raíz unitaria),
-y montar la comparación como una sección de la batería, no como un experimento
-suelto.
+Cuando corra: el canónico ES_CPI ← WTI, uno sintético con ν(k) impuesto y uno
+cerca de la raíz unitaria; y montarlo como sección de la batería, no como
+experimento suelto.
 
 ## Decisiones abiertas
 

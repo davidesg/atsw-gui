@@ -171,3 +171,54 @@ de μ de fue está mal". **Esa conclusión era incorrecta**: fue no calcula mal 
 de forma sistemática, sino de forma **inestable**. Unas veces acierta y otras no,
 según el camino que haya seguido el optimizador. El problema no es un error de
 fórmula, es la fuente del hessiano — y por eso la solución es una sola línea.
+
+---
+
+## Estado: el arreglo se conoce, y NO se aplica todavía (2026-08-01)
+
+Trabajando en drtran quedó establecido **cuál es el arreglo** y **por qué no es
+una línea**.
+
+**Cuál es.** `drvmlest.c:112` tiene la llamada comentada desde el original de
+1995:
+
+```c
+/* fdhess( objcfunc, npar, par, pi1, macheps, mtmp );  */
+/* choldcp( mtmp, npar, &pi2, &pi3, ifault );          */
+```
+
+Descomentarla sustituye la matriz que el BFGS acumula por el camino —que es el
+origen de este defecto: depende del arranque, y ni siquiera se construye cuando
+la búsqueda empieza en el óptimo— por el hessiano recalculado **en** el óptimo.
+`fdhess` está definida y completa en `qnewtopt.c`; no hay nada que escribir.
+
+**Que funciona, está comprobado.** drtran C es el único de la familia que la
+tiene activa, y su puerto a Python la reproduce: los 17 errores estándar del
+caso canónico coinciden con el binario con discrepancia relativa máxima de
+2.8e-04. Y se verificó lo que aquí falla: perturbando el arranque, los s.e. no
+se mueven.
+
+**Por qué no se aplica aquí.** fue es de **uso general**. Le van a dar modelos
+mal especificados que no convergen, y en un punto que no es el óptimo el
+hessiano por diferencias finitas no tiene por qué ser definido positivo —
+medido en el sistema m6 de drtran: en las semillas, 2 de 55 autovalores son
+≤ 0; en el óptimo real, los 55 son positivos. `choldcp` es la Cholesky
+**modificada**: parchearía esos pivotes y publicaría una columna de errores
+estándar de aspecto impecable. La matriz del BFGS no puede fallar así, porque es
+definida positiva por construcción; lo que pierde es que no es la curvatura en
+el óptimo.
+
+Ese intercambio —siempre responde aunque a veces mal, frente a responde bien o
+no responde— es probablemente la razón por la que Mauricio la dejó comentada.
+Se midieron y **se descartaron** las dos explicaciones alternativas: el coste
+(18 % de lo que ya gasta la búsqueda, y bajando con el tamaño del problema) y el
+truncamiento de `xitol`. El análisis completo está en
+`drtran-python/docs/PORTE.md` §9.
+
+**Lo que hace falta antes de tocarlo:** una sesión propia con barrido empírico
+sobre la batería —cuántos de los casos reales caen en un punto donde el hessiano
+no es definido positivo— y la decisión de qué hacer entonces: rechazar con aviso
+(lo que hace el puerto de drtran, `ifault=2`), caer de vuelta a la matriz del
+BFGS, o dejarlo a elección del usuario. Cambiar el defecto de todos los usuarios
+de fue no es un descomentar prestado de un programa con precondiciones mucho más
+fuertes.

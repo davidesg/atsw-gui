@@ -2123,7 +2123,12 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
             if (obs - freq >= 1) fprintf(out, "%7.2f    -  ", vscale * (ystar[obs] - ystar[obs-freq]));
             else                 fprintf(out, "   -        -  ");
             if (obs - ord >= 1 && obs - ord <= n_stat)
-                fprintf(out, "%7.2f\n", vscale * vf.a[i][obs - ord]);
+                /* a esta indexada [tiempo][serie], como en todo el resto del
+                   fichero.  Aqui estaba al reves -- a[i][obs-ord] --, asi que
+                   la columna ERR leia de OTRA posicion del bloque contiguo de
+                   residuos: valores que parecen residuos porque LO SON, pero de
+                   la observacion equivocada.  Por eso nunca canto.             */
+                fprintf(out, "%7.2f\n", vscale * vf.a[obs - ord][i]);
             else
                 fprintf(out, "    -  \n");
         }

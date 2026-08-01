@@ -635,6 +635,62 @@ normalizada; el `−` del empotrado es interno y no se filtra. drtran coincide c
 signo del **numerador determinista** queda blindado con un caso sintético de verdad conocida
 (`SYND`), además de las guardas de la ganancia/retardo en la transferencia.
 
+## M7 — Validación contra TASTE (la única referencia INDEPENDIENTE) — ABIERTA
+
+**Por qué es la validación que falta.** Todo lo que se ha homologado hasta ahora
+—fue, drvarma, drtran y sus portes a Python— desciende del **mismo código**:
+`elfvarma`, `qnewtopt`, `nlatools` son literalmente los mismos ficheros. La
+cadena es internamente consistente, pero tiene **un solo antepasado**. Un defecto
+en ese antepasado es invisible para todas las pruebas que existen hoy: las nueve
+baterías dirían que todo está bien.
+
+**TASTE es la excepción.** Codificado por **Mauricio y Treadway**, y diseñado con
+la ayuda de **Jenkins**. Es la única implementación al alcance que NO comparte
+código con la familia, y por tanto la única capaz de contradecirla.
+
+**Que el método sea distinto es la virtud, no el obstáculo.** TASTE estima por el
+método **condicional / de retropredicción** de Box–Jenkins; drtran por
+verosimilitud EXACTA. Si coincidieran por construcción no probarían nada. Lo que
+hay que diseñar es en qué coincidir.
+
+### Qué comparar, y qué NO
+
+Comparar lo que es propiedad del **modelo**, no del método:
+
+- los órdenes identificados (b, r, s) del preblanqueo + CCF;
+- la **respuesta al impulso ν(k) y la ganancia ν(1)** — el objeto físico, el
+  mismo bajo cualquier estimador;
+- el signo y el orden de magnitud de la transferencia;
+- las previsiones a horizontes cortos, en nivel.
+
+NO comparar: la log-verosimilitud (objetivos distintos), los errores estándar
+(hessianos distintos), ni los residuos observación a observación (la
+inicialización pre-muestral es justo lo que difiere).
+
+### La predicción, escrita ANTES de correr nada
+
+Esto se apunta ahora para que una discrepancia no se racionalice después:
+
+- **Lejos de la raíz unitaria se espera coincidencia estrecha.** El truncamiento
+  afecta a un número de observaciones que no crece con n, así que condicional y
+  exacta son asintóticamente equivalentes. Una diferencia grande ahí SÍ sería un
+  defecto de alguno de los dos.
+- **Cerca de la raíz unitaria se espera divergencia, y no es un fallo.** El tramo
+  contaminado pasa a ser una fracción fija de la muestra. Ya está medido en este
+  repo: la celda δ=0.95, n=400 es la única donde la ventaja del exacto sobrevive
+  a una muestra grande (−60% en el RMSE de la ganancia). Si TASTE difiere ahí, es
+  el resultado esperado.
+
+### Estado
+
+Bloqueado en el **ejecutable de TASTE para máquinas modernas**, en el que David
+está trabajando. Hasta que corra no hay nada que comparar.
+
+Cuando corra: elegir dos o tres casos con respuesta conocida (el canónico
+ES_CPI ← WTI, uno sintético con ν(k) impuesto, y uno cerca de la raíz unitaria),
+y montar la comparación como una sección de la batería, no como un experimento
+suelto.
+
 ## Decisiones abiertas
 
 - [x] **Lenguaje — RESUELTO (22-jul-2026): PUERTO A PYTHON.** El C queda como

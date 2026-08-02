@@ -635,148 +635,78 @@ normalizada; el `−` del empotrado es interno y no se filtra. drtran coincide c
 signo del **numerador determinista** queda blindado con un caso sintético de verdad conocida
 (`SYND`), además de las guardas de la ganancia/retardo en la transferencia.
 
-## M7 — Validación contra TASTE (la única referencia INDEPENDIENTE) — ABIERTA
+## M7 — Validación contra TASTE ✅ HECHA (2026-08-02)
 
-**Por qué es la validación que falta.** Todo lo que se ha homologado hasta ahora
-—fue, drvarma, drtran y sus portes a Python— desciende del **mismo código**:
-`elfvarma`, `qnewtopt`, `nlatools` son literalmente los mismos ficheros. La
-cadena es internamente consistente, pero tiene **un solo antepasado**. Un defecto
-en ese antepasado es invisible para todas las pruebas que existen hoy: las nueve
-baterías dirían que todo está bien.
+**Por qué importaba.** Todo lo homologado hasta entonces —fue, drvarma, drtran y
+sus portes— desciende del **mismo código**: `elfvarma`, `qnewtopt` y `nlatools`
+son literalmente los mismos ficheros. La cadena era internamente consistente
+pero tenía **un solo antepasado**, y un defecto ahí era invisible para las nueve
+baterías. Y fue, por ser univariante, **no puede validar la transferencia**, que
+es justo lo que drtran añade.
 
-**TASTE es la excepción.** Codificado por **Mauricio y Treadway**, y diseñado con
-la ayuda de **Jenkins**. Es la única implementación al alcance que NO comparte
-código con la familia, y por tanto la única capaz de contradecirla.
+**TASTE cubre ese hueco.** Escrito por José Alberto Mauricio, dirigido por
+Arthur B. Treadway y Gregorio R. Serrano (UCM, 1987-2001). Estima funciones de
+transferencia multi-input, y lo hace por **suma no condicionada de cuadrados con
+retropredicción** (Box-Jenkins clásico, Levenberg-Marquardt) frente a la ML
+exacta de drtran. Estimadores distintos: el acuerdo esperable es de 3-4 cifras,
+no de 13.
 
-**Que el método sea distinto es la virtud, no el obstáculo.** TASTE estima por el
-método **condicional / de retropredicción** de Box–Jenkins; drtran por
-verosimilitud EXACTA. Si coincidieran por construcción no probarían nada. Lo que
-hay que diseñar es en qué coincidir.
+### La cadena de custodia
 
-### Lo que TASTE es, leído en su fuente (2026-08-01)
+El oráculo se validó **antes** de usarlo como oráculo. El port a 64 bits (Free
+Pascal) contra el `TASTE.EXE` de 1993 bajo DOSBox-X, caso `howrey_estim`:
+**303 de 305 líneas idénticas**. Las 2 que difieren son la suma de cuadrados en
+la cifra 13-14 (el 8087 acumula en 80 bits, SSE2 en 64) y **no se propaga** a
+ningún parámetro ni error típico. Ni una línea del núcleo econométrico
+(`estimate`, `mrqest`, `stepopt`, `backtf`, `matrix`, `eispack`, `root`) se tocó
+en el port.
 
-Turbo Pascal, 1987–2000. `TASTECTV.PAS` define el modelo:
+### Qué quedó verificado contra drtran
 
-```
-TFMODEL = T inputs; cada TFINPUT = (b, s, r) + su USMODEL; NOISE: USMODEL aparte
-USMODEL = d, ds, lambda, mu, p, q, ps, qs, sp
-```
+| | acuerdo |
+|---|---|
+| Estimación de la función de transferencia | ω₀ **exacto**; el resto 8·10⁻⁵ … 4·10⁻³ |
+| Identificación (preblanqueo + CCF) | **mismo (b, r, s)**, y ambos recuperan la verdad sintética |
+| Previsión con transferencia | 6·10⁻⁶ … 2·10⁻⁵, **y los errores típicos** |
+| Caso canónico completo: 12 inputs, 15 parámetros | todos; errores típicos a 3-4 cifras |
 
-Dos consecuencias que fijan el diseño de la comparación:
+En el caso canónico `ES_CPI_m10` + WTI —12 inputs, justo el límite `MNI` de
+TASTE— `omega[0]` sale **exactamente igual** (0.016400). La peor discrepancia
+relativa cae en `omega_Y[9,0]`, que vale −0.0015 con t = −0.19: en absoluto son
+2.2·10⁻⁵ y es un parámetro que ningún analista mantendría. Entre los
+significativos, de 8.5·10⁻⁵ a 4.0·10⁻³.
 
-1. **TASTE es el cast por RESTA, no el empotrado.** Modela el ruido
-   N_t = Y_t − Σ ν_j(B)X_j,t aparte, con su propio ARIMA. Eso es exactamente
-   `-S`. **La comparación se hace contra `-S`**; comparar contra `-V` mediría el
-   truncamiento, no la implementación.
-2. **Estima por mínimos cuadrados no lineales con RETROPREDICCIÓN.** `MRQ_MTF`
-   (`MRQEST.PAS`) es Levenberg–Marquardt sobre los residuos, con `BackCasts`
-   retroprevisiones calculadas en `BACKTF.PAS` (`BackForeCast`, `CalcPsiB`,
-   `CalcPiB`, `CalcRes1st`). drtran: ML exacta con BFGS.
+Y los **errores típicos coinciden a 3-4 cifras** saliendo de invertir el
+hessiano de **dos funciones objetivo distintas**, que es lo más llamativo del
+ejercicio.
 
-Y de ahí sale la comparación de tres vías que este TODO ya pedía en «Posible, NO
-objetivo»: **`-S` trunca, TASTE retropredice, `-V` hace desaparecer el
-truncamiento**. TASTE es el remedio de Box–Jenkins que el empotrado vuelve
-innecesario, y es la única forma de medir cuánto valía ese remedio.
+### Corroboración independiente de la escala de las desviaciones típicas
 
-### Alcance: la transferencia, no lo univariante
+TASTE confirma, con el factor 100 exacto entre sus errores típicos y los de
+drtran, que **la desviación típica vive en la escala transformada y es un
+porcentaje**. Es el mismo resultado al que se llegó por otro camino leyendo la
+banda que publica el propio drtran (82.0149 → [81.6280, 82.4035], semiamplitud
+0.389 y no 0.473). Dos rutas independientes, misma conclusión.
 
-Los modelos univariantes **no hay que revalidarlos**: fue está probado y
-homologado (fue C ≡ fue Python ≡ diagonal de drtran a 1e-7). Lo que sólo TASTE
-puede contrastar es la maquinaria de la **transferencia**. Se valida:
+### Dónde vive
 
-1. el **preblanqueo** y la CCF → los (b, r, s) identificados;
-2. la **transferencia estimada** → ν(k) y la ganancia ν(1);
-3. las **previsiones**.
+`Taste/oracle/` — banco ejecutable, `./battery.py --datos /ruta/a/drtran/tests`,
+sale 0 si todo pasa. Las herramientas (`pre2bjd`, `mkdet`, `mktsm`, `tbatch`,
+`tbatch2drtran`) están en `Taste/port/tools/` y **ninguna reimplementa nada**:
+usan `fue.load()`, `fue.cast_us._build_indicator` y el Pascal de 1991.
 
-**Diseño experimental:** fijar los modelos univariantes de TASTE a los de fue
-(TASTE deja especificar el USMODEL del ruido y el de cada input). Así cualquier
-discrepancia es atribuible a la transferencia y no a que cada programa haya
-estimado un ARIMA distinto. Sin eso, la comparación no aísla nada.
+### PENDIENTE: sólo 3 de las 7 verificaciones son casos de regresión
 
-### Qué NO comparar
+`Taste/oracle/cases/` tiene **tres** JSON —`syn_identify`, `syn_estimate`,
+`cpi_deterministics`— y la batería dice «3 de 3 casos pasan». Las otras cuatro
+verificaciones de la tabla (previsión univariante, **previsión con
+transferencia**, **caso canónico completo de 12 inputs**, y la estimación
+univariante contra fue) están hechas y documentadas, pero **no cableadas como
+casos ejecutables**.
 
-La suma de cuadrados ni la log-verosimilitud (objetivos distintos: LM sobre
-residuos frente a ML exacta), los errores estándar (hessianos distintos), ni los
-residuos observación a observación — la inicialización pre-muestral es
-justamente lo que difiere.
-
-### La predicción, escrita ANTES de correr nada
-
-Esto se apunta ahora para que una discrepancia no se racionalice después:
-
-- **Lejos de la raíz unitaria se espera coincidencia estrecha.** El truncamiento
-  afecta a un número de observaciones que no crece con n, así que condicional y
-  exacta son asintóticamente equivalentes. Una diferencia grande ahí SÍ sería un
-  defecto de alguno de los dos.
-- **Cerca de la raíz unitaria se espera divergencia, y no es un fallo.** El tramo
-  contaminado pasa a ser una fracción fija de la muestra. Ya está medido en este
-  repo: la celda δ=0.95, n=400 es la única donde la ventaja del exacto sobrevive
-  a una muestra grande (−60% en el RMSE de la ganancia). Si TASTE difiere ahí, es
-  el resultado esperado.
-- **TASTE debería quedar ENTRE `-S` y `-V`** en los casos con memoria: la
-  retropredicción corrige parte de lo que la resta trunca, pero no todo.
-
-### LOS CONVENIOS DE SIGNO COINCIDEN — verificado en la fuente (2026-08-02)
-
-Era el riesgo principal de la comparación y **no existe**. Leído en
-`BACKTF.PAS`:
-
-* **Transferencia** (`UtilNuB`): `NU[0+b] := OMEGA[0]` y
-  `NU[j+b] := sum1 - sum2` con `sum1 = Σ DELTA[i]·NU[j+b-i]` y
-  `sum2 = OMEGA[j]`. Es decir ν₀ = ω₀, νⱼ = Σδᵢν_{j−i} − ωⱼ: **el líder suma y
-  los demás restan**, idéntico al `compute_irf` de drtran y al `calcnu` de fue.
-* **ARMA** (`CalcRes1st`): `at[t] := wt[t] - theta0 - sum1 + sum2`, que
-  desarrollado es a_t = w_t − Σφᵢw_{t−i} + Σθⱼa_{t−j}, o sea
-  φ(B) = 1 − φ₁B − … y θ(B) = 1 − θ₁B − …, la convención estándar de
-  Box–Jenkins y la de fue.
-
-**No hace falta traducir ningún signo.** Los números de `TASTE.OUT` se pueden
-comparar directamente con los de drtran.
-
-### EL ORÁCULO YA EXISTE: el caso Howrey
-
-`Taste/validate/ref/tf_estim.dos.TASTE.OUT` es una estimación de transferencia
-completa y convergida, con sus datos al lado:
-
-```
-Output CONSUMO <- input RENTA (Howrey), 92 obs trimestrales, 1/1900-4/1922
-Transferencia (b=0, s=1, r=0):  OMEGA[0]= 0.43932   OMEGA[1]= -0.18857
-Ruido   (0,2,1)(2,1,1)_4:  THETA[1]=0.94926  SPHI[1]=-0.29419
-                           SPHI[2]=-0.39447  STHETA[1]=0.81005
-Input   (0,2,1)(2,1,1)_4:  THETA[1]=0.88900  SPHI[1]=-0.21348
-                           SPHI[2]=-0.33290  STHETA[1]=0.92484
-lambda = 0 en los dos; sin término constante
-```
-
-Predicción directa para drtran, con los mismos convenios:
-**ν₀ = 0.43932, ν₁ = +0.18857, ganancia ν(1) = ω₀ − ω₁ = 0.62789.**
-
-**drtran NO está validado contra esto todavía.** No hay ningún caso Howrey en
-`tests/`, ni en la batería, ni en el puerto. Lo que falta es mecánico:
-
-1. un convertidor `.BJD` → `.pre` (cabecera de 30 líneas: títulos, frecuencia,
-   periodo/año de inicio, nº de observaciones, tipo; luego los datos);
-2. dos `.pre` con los modelos FIJADOS a los que reporta TASTE;
-3. `drtran CONSUMO.pre RENTA.pre -b 0 -r 0 -s 1 -S`.
-
-### El arnés ya existe
-
-`Taste/validate/` conduce TASTE por pulsaciones (`.keys`) bajo DOSBox y compara
-`TASTE.OUT`; `run_case.sh` lo corre en las dos plataformas (EXE original y puerto
-a Free Pascal) y diffea. **No hay que construir un arnés nuevo**: hay que añadir
-casos y un comparador de `TASTE.OUT` contra el `.out` de drtran.
-
-Falta un **convertidor `.pre`/`.inp` → `.BJD`** (formato de líneas: título,
-frecuencia, periodo/año de inicio, nº de observaciones, tipo, datos).
-
-### Estado
-
-Bloqueado en el ejecutable de TASTE para máquinas modernas, en el que David está
-trabajando (`Taste/port/`, Free Pascal, ya arranca en 64 bits).
-
-Cuando corra: el canónico ES_CPI ← WTI, uno sintético con ν(k) impuesto y uno
-cerca de la raíz unitaria; y montarlo como sección de la batería, no como
-experimento suelto.
+Consecuencia: un cambio futuro podría romper en silencio el acuerdo en la
+previsión con transferencia y nada lo detectaría. Convertirlas en JSON de
+`cases/` es trabajo mecánico y es lo que falta para cerrar M7 del todo.
 
 ## Decisiones abiertas
 

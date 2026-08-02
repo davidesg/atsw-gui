@@ -718,11 +718,14 @@ previsión con transferencia y nada lo detectaría. Convertirlas en JSON de
       `drvarma` (motor de ML exacta en **Python puro**, PyPI 0.1.0). **Arranca la sesión del
       2026-07-23.** El C es el oráculo de regresión: cada paso del puerto reproduce el C al
       decimal sobre la batería. Ver `M6 — puerto a Python` (arriba) y `examples/m6`, `m6_EA`.
-- [ ] **Interfaz**: ficheros `.pre` vs. objetos `fue.Model` vs. ambos. *(A fijar al arrancar
-      el puerto.)*
-- [ ] **ARMA conjunto o fijo**: por defecto libre (estimación conjunta, que es el
-      objetivo) con opción de fijar en los valores de fue. *(Traslada la decisión del C, donde
-      el default es libre con `-N`/`-X` para fijar.)*
+- [x] **Interfaz — RESUELTO por el puerto: AMBOS.** `drtran.load_pre()` devuelve un
+      `PreSpec` que envuelve los objetos `fue.TimeSeries` y `fue.Model` **tal cual**, sin
+      copiarlos: se entra por fichero y se trabaja con los objetos de fue. Reempaquetarlos
+      habría creado una segunda representación que mantener sincronizada.
+- [x] **ARMA conjunto o fijo — RESUELTO: libre por defecto, con las mismas letras que el C.**
+      El puerto trae `-N`/`-X`/`-D`/`-E`/`-M`, y los fija **por índice y no por nombre**,
+      porque los nombres se repiten (dos factores AR dan dos `phi_1[B^1]`) y `set_fixed` sólo
+      alcanza al primero.
 
 ## Notas
 

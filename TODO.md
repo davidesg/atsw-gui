@@ -8,6 +8,19 @@ de Box–Jenkins.
 
 Revisado 2026-07-12. Ver `BRIDGE_DESIGN.md` para el diseño y la evidencia.
 
+## Estado (2026-08-02)
+
+El C está **funcionalmente terminado y homologado**: 296 PASS / 0 FAIL, todas
+las opciones implementadas, `make install`, nota técnica. Y ahora también
+**validado contra un oráculo externo**, TASTE, que no comparte código con la
+familia (ver §M7 y el README).
+
+El **puerto a Python** (`~/Dropbox/SRC/drtran-python`) está en su **primera beta,
+0.1.0b1**: todas las opciones del C más `-W`, 170 tests, y 7 de 7 en el oráculo.
+
+Queda un solo defecto abierto, el de robustez con `refactor=1`, que afecta a los
+dos lados.
+
 ## BUGS ABIERTOS
 
 - [x] **CORREGIDO (informe, era ALTO) — la RESPUESTA AL IMPULSO invertía el signo

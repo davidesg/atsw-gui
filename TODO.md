@@ -716,6 +716,49 @@ Esto se apunta ahora para que una discrepancia no se racionalice después:
 - **TASTE debería quedar ENTRE `-S` y `-V`** en los casos con memoria: la
   retropredicción corrige parte de lo que la resta trunca, pero no todo.
 
+### LOS CONVENIOS DE SIGNO COINCIDEN — verificado en la fuente (2026-08-02)
+
+Era el riesgo principal de la comparación y **no existe**. Leído en
+`BACKTF.PAS`:
+
+* **Transferencia** (`UtilNuB`): `NU[0+b] := OMEGA[0]` y
+  `NU[j+b] := sum1 - sum2` con `sum1 = Σ DELTA[i]·NU[j+b-i]` y
+  `sum2 = OMEGA[j]`. Es decir ν₀ = ω₀, νⱼ = Σδᵢν_{j−i} − ωⱼ: **el líder suma y
+  los demás restan**, idéntico al `compute_irf` de drtran y al `calcnu` de fue.
+* **ARMA** (`CalcRes1st`): `at[t] := wt[t] - theta0 - sum1 + sum2`, que
+  desarrollado es a_t = w_t − Σφᵢw_{t−i} + Σθⱼa_{t−j}, o sea
+  φ(B) = 1 − φ₁B − … y θ(B) = 1 − θ₁B − …, la convención estándar de
+  Box–Jenkins y la de fue.
+
+**No hace falta traducir ningún signo.** Los números de `TASTE.OUT` se pueden
+comparar directamente con los de drtran.
+
+### EL ORÁCULO YA EXISTE: el caso Howrey
+
+`Taste/validate/ref/tf_estim.dos.TASTE.OUT` es una estimación de transferencia
+completa y convergida, con sus datos al lado:
+
+```
+Output CONSUMO <- input RENTA (Howrey), 92 obs trimestrales, 1/1900-4/1922
+Transferencia (b=0, s=1, r=0):  OMEGA[0]= 0.43932   OMEGA[1]= -0.18857
+Ruido   (0,2,1)(2,1,1)_4:  THETA[1]=0.94926  SPHI[1]=-0.29419
+                           SPHI[2]=-0.39447  STHETA[1]=0.81005
+Input   (0,2,1)(2,1,1)_4:  THETA[1]=0.88900  SPHI[1]=-0.21348
+                           SPHI[2]=-0.33290  STHETA[1]=0.92484
+lambda = 0 en los dos; sin término constante
+```
+
+Predicción directa para drtran, con los mismos convenios:
+**ν₀ = 0.43932, ν₁ = +0.18857, ganancia ν(1) = ω₀ − ω₁ = 0.62789.**
+
+**drtran NO está validado contra esto todavía.** No hay ningún caso Howrey en
+`tests/`, ni en la batería, ni en el puerto. Lo que falta es mecánico:
+
+1. un convertidor `.BJD` → `.pre` (cabecera de 30 líneas: títulos, frecuencia,
+   periodo/año de inicio, nº de observaciones, tipo; luego los datos);
+2. dos `.pre` con los modelos FIJADOS a los que reporta TASTE;
+3. `drtran CONSUMO.pre RENTA.pre -b 0 -r 0 -s 1 -S`.
+
 ### El arnés ya existe
 
 `Taste/validate/` conduce TASTE por pulsaciones (`.keys`) bajo DOSBox y compara

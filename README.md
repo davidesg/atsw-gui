@@ -139,6 +139,44 @@ estructura completa. El informe marca cada parámetro como libre, `(fixed)` o
 
 ## Validación
 
+### El oráculo externo: TASTE
+
+drtran y su porte a Python tienen una **segunda opinión independiente**.
+Conviene decirlo antes que nada, porque el resto de esta sección compara a
+drtran con programas que comparten su antepasado: fue, drvarma y drtran usan
+literalmente los mismos `elfvarma`, `qnewtopt` y `nlatools`. Un defecto en ese
+código común sería invisible para todas las baterías de este repositorio.
+
+**TASTE no comparte ese código.** Escrito por José Alberto Mauricio, dirigido
+por Arthur B. Treadway y Gregorio R. Serrano (UCM, 1987-2001), estima funciones
+de transferencia multi-input por **suma no condicionada de cuadrados con
+retropredicción** (Box–Jenkins clásico, Levenberg–Marquardt) frente a la ML
+exacta de drtran. Y cubre lo que fue no puede cubrir por ser univariante: **la
+función de transferencia**.
+
+    ~/Dropbox/SRC/atws/Taste          repo privado: github.com/davidesg/taste-port
+    Taste/oracle/battery.py           el banco:  ./battery.py --datos <drtran>/tests
+    Taste/port/tools/                 pre2bjd, mkdet, mktsm, tbatch, tbatch2drtran
+
+**7 de 7 casos pasan.** Verificado contra drtran: la estimación de la
+transferencia (ω₀ **exacto**; el resto 8.5·10⁻⁵ … 4.0·10⁻³), la identificación
+por preblanqueo + CCF (**mismo (b, r, s)**), la previsión con transferencia
+(coincide a cinco decimales con los parámetros fijados) y el **caso canónico
+completo** de 12 inputs y 15 parámetros — en éste, también los **errores
+típicos** a 3-4 cifras, saliendo de invertir el hessiano de **dos funciones
+objetivo distintas**.
+
+La cadena de custodia está cerrada: el port de TASTE a 64 bits se validó antes
+contra el `TASTE.EXE` de 1993 bajo DOSBox-X, **303 de 305 líneas idénticas** (las
+dos que difieren son la suma de cuadrados en la cifra 13-14).
+
+El acuerdo esperable es de 3-4 cifras, no de 13: son estimadores distintos. Un
+fallo del banco no prueba que drtran esté mal — prueba que algo cambió respecto
+a la última vez que ambos coincidían, que es lo que interesa detectar.
+
+### Las baterías internas
+
+
 `./test_battery.sh` — **80 comprobaciones**, sobre tres fuentes de verdad:
 
 **1. Homologación con fue.** Estimar conjuntamente dos modelos con estructura

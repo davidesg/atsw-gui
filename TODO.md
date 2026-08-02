@@ -451,7 +451,11 @@ En el caso real (IPC ← WTI, 12 meses) la previsión de enero cae **por debajo*
 último dato observado (82.02 vs 82.84): la caída de las rebajas que capturan los
 armónicos deterministas, aplicados correctamente en fechas futuras.
 
-- [ ] Informes homologables con fue/drvarma; empaquetado y documentación.
+- [x] **Informes homologables — HECHO en el puerto** (2026-08-01). El `-L` de
+      drtran-python no inventa un informe: adapta el de **fuf** (cuyo porte vive dentro de
+      fue, `fue.report_forecast`) pasándole un `ForecastResult` construido desde el ajuste
+      conjunto. Un informe univariante de fuf y uno de transferencia de drtran son **la misma
+      página**. El `-L` del C sigue escribiendo LaTeX; los portes de Python escriben HTML.
 
 ## M5 — Horizonte: más allá de una entrada
 
@@ -484,9 +488,10 @@ un pequeño DSL parámetros → estructura VARMA— no solo ω/δ de una entrada
       > `init_varma` apenas cambió las iter 334→323 y rompió un test → revertido; las
       > ~250-330 iter son propiedad de `qnewtopt`, no del arranque). Queda como refactor
       > OPCIONAL, solo si algún día aparece un caso que se atasque en el borde PSD.
-- [ ] Puerto a Python reutilizando los paquetes `fue` y `drvarma` (drvarma 0.1.0
-      está en PyPI y su motor de ML exacta es Python puro). **← el hito que mueve la
-      aguja**, condicionado a la decisión de lenguaje (ver "Decisiones abiertas").
+- [x] **Puerto a Python — HECHO** (`~/Dropbox/SRC/drtran-python`, 2026-08-02). Reutiliza
+      `fue` (lector `.pre` y cast univariante) y `drvarma` (`elf`, `raxopt`, `fdhess`).
+      **Todas las opciones del C implementadas** y homologadas, más `-W`. 168 tests, y
+      validado además contra el oráculo externo TASTE (7 de 7).
 
 - [ ] **BUG DE ROBUSTEZ — el optimizador CUELGA con datos sin reescalar (refactor=1).**
       Descubierto revisando `DVR_rstar` (CPI_EA ← Brent, 2026-07-23). `drtran -0`

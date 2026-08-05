@@ -1296,6 +1296,8 @@ $DRTRAN "$CASES/ES_CPI_m10.pre" "$CASES/WTI_ar1.pre" -b 0 -r 0 -s 1 -S -c "$CQ" 
 LLP=$(grep "Log-likelihood =" "$PAT" | awk '{print $3}')
 RHO=$(grep -A1 "^Innovation correlations" "$PAT" | tail -1 | awk '{print $2}')
 TQ=$(grep -E "^q\[2,1\]" "$PAT" | awk '{print $4}')
+SEQ=$(grep -E "^q\[2,1\]" "$PAT" | awk '{print $3}')
+ITP=$(grep -m1 -oE "[0-9]+ ITERATIONS" "$PAT" | awk '{print $1}')
 
 grep -q "near-collinearity" "$PAT" \
     && pass "drtran AVISA de la casi-colinealidad (b=0 + covarianza libre)" \
@@ -1303,9 +1305,19 @@ grep -q "near-collinearity" "$PAT" \
 python3 -c "import sys; sys.exit(0 if 2*($LLP - ($LL2)) < 3.84 else 1)" \
     && pass "y tiene razón: la verosimilitud NO mejora (LR = $(python3 -c "print('%.3f' % (2*($LLP-($LL2))))"))" \
     || fail "la covarianza sí mejora significativamente"
-python3 -c "import sys; sys.exit(0 if abs($RHO) > 0.9 and abs($TQ) > 100 else 1)" \
-    && pass "pero los parámetros huyen a una esquina: corr = $RHO, t = $TQ" \
-    || fail "no se reproduce la patología (corr = $RHO, t = $TQ)"
+
+# Hasta el fix de typx (2026-08-05) esta comprobación exigía que los parámetros
+# HUYERAN a una esquina: corr > 0.9 y |t| > 100. Eso no era la patología del
+# modelo sino la del OPTIMIZADOR: con el typx fijado a 1, el test de gradiente
+# no se satisfacía nunca en la dirección plana y el optimizador agotaba las 500
+# iteraciones, aterrizando en q[2,1] = -7.15 con |t| = 2424 -- un disparate para
+# un parámetro no identificado. Con typx relativo converge por gradiente en ~23
+# iteraciones y da la respuesta CORRECTA para una dirección plana: el parámetro
+# se queda donde está, con un error estándar enorme y t ~ 0. La cresta sigue ahí
+# (el aviso salta y la verosimilitud no mejora); lo que ya no hay es la huida.
+python3 -c "import sys; sys.exit(0 if abs($TQ) < 1.0 and $SEQ > 1.0 and $ITP < 100 else 1)" \
+    && pass "y el parámetro queda NO IDENTIFICADO, sin huir: t = $TQ, s.e. = $SEQ, $ITP iters" \
+    || fail "la dirección plana no se diagnostica bien (t = $TQ, s.e. = $SEQ, $ITP iters)"
 
 # (b) SYN: b=2 (no contemporánea) y phi_X=0.50 != phi_N=0.30. Sin patología.
 CLEAN="$TMPDIR/syn_q.txt"
@@ -1505,7 +1517,12 @@ LB=$(grep "Log-likelihood =" "$B" | awk '{print $3}')
 python3 -c "import sys; sys.exit(0 if abs($LA - ($LB)) < 1e-6 else 1)" \
     && pass "con phi_N = phi_X, transferencia y covarianza dan la MISMA verosimilitud ($LA): son EL MISMO MODELO" \
     || fail "deberían ser indistinguibles y difieren ($LA vs $LB)"
-check "y hasta la phi estimada coincide" "$(val "$A" 'phi_1\[B\^1\]')" "$(val "$B" 'phi_1\[B\^1\]')" 1e-6
+# Tolerancia 5e-6 (era 1e-6) desde el fix de typx: el test de gradiente pasó a
+# ser RELATIVO al tamaño del parámetro, así que declara la convergencia una
+# pizca antes y las dos parametrizaciones aterrizan a ~2.4e-6 relativo la una de
+# la otra (0.422106 vs 0.422107). La afirmación de fondo -- que son el mismo
+# modelo -- la sostiene la verosimilitud, que sigue coincidiendo a 1e-6.
+check "y hasta la phi estimada coincide" "$(val "$A" 'phi_1\[B\^1\]')" "$(val "$B" 'phi_1\[B\^1\]')" 5e-6
 
 # ── SYNJ: phi_N = 0.2, phi_X = 0.7. Ahora SÍ se distinguen. ──
 # La verdad es una TRANSFERENCIA. Con las phi libres y los MISMOS parámetros,

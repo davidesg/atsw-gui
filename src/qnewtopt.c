@@ -25,6 +25,38 @@
 extern real macheps;          /* Machine epsilon (global: declared in DRV.C) */
 extern FILE *outputv;         /* Output file (global: declared in DRV.C)     */
 extern int quiet_mode;   /* added */
+extern real qn_typx;   /* added: typical parameter size (see qn_typsize below) */
+
+/*****************************************************************************/
+/*  qn_typsize: Dennis & Schnabel's typx, which this file used to hardcode    */
+/*  to 1 (the book's simplified A9.4.1; the full algorithm takes it as an     */
+/*  input).  That is fine while the parameters are of order 1 and wrong when  */
+/*  they are not: with typx = 1 the relative-gradient test below degenerates  */
+/*  into an ABSOLUTE tolerance, and the step test into an absolute one too,   */
+/*  so at small parameter scale the first becomes unsatisfiable and the       */
+/*  second trivially satisfiable.  The optimizer still reaches the same       */
+/*  optimum; what it loses is the ability to CERTIFY it -- which on a large   */
+/*  model means iterating to maxits, i.e. drtran's refactor=1 hang.           */
+/*                                                                           */
+/*  qn_typx <= 0 reproduces the historical behaviour exactly.  A positive     */
+/*  value is a FLOOR: the typical size becomes rmax(|x|, qn_typx), relative   */
+/*  to the parameter itself but never collapsing to zero when one passes      */
+/*  through the origin.                                                      */
+/*                                                                           */
+/*  NOTE: cdgrad's finite-difference step deliberately does NOT use this.     */
+/*  The objective is a ratio of order 1, for which the absolute step          */
+/*  macheps^(1/3)*rmax(|x|,1) ~ 6.06e-6 is near-optimal; a step relative to a */
+/*  ~1e-4 parameter would be ~6e-9, whose cancellation error macheps*|f|/h    */
+/*  ~ 3e-7 EXCEEDS gradtol itself.  Measured: scaling the step changes        */
+/*  neither the optimum nor the termination code.  Same for fdhess.           */
+/*****************************************************************************/
+
+real qn_typsize( real xi )
+
+{
+   if ( qn_typx <= 0.0 ) return( fabs( xi ) + 1.0 );   /* historical */
+   return( rmax( fabs( xi ), qn_typx ) );
+}
 
 /*****************************************************************************/
 /*****************************************************************************/
@@ -182,10 +214,10 @@ int umstop0( int n, real *x, real f, real *g, real gradtol,
 
    *consecmax = 0;
 
-   max1 = fabs( g[1] ) * (fabs( x[1] ) + 1.0) / (fabs( f ) + 1.0);
+   max1 = fabs( g[1] ) * qn_typsize( x[1] ) / (fabs( f ) + 1.0);
    for (i = 2; i <= n; i++ )
        {
-       tmp = fabs( g[i] ) * (fabs( x[i] ) + 1.0) / (fabs( f ) + 1.0);
+       tmp = fabs( g[i] ) * qn_typsize( x[i] ) / (fabs( f ) + 1.0);
        if ( tmp > max1 ) max1 = tmp;
        }
 
@@ -205,17 +237,17 @@ int umstop( int n, real *xk, real *xkp1, real fkp1, real *gkp1,
    real max1, max2, tmp;
    int i;
 
-   max1 = fabs( gkp1[1] ) * (fabs( xkp1[1] ) + 1.0) / (fabs( fkp1 ) + 1.0);
+   max1 = fabs( gkp1[1] ) * qn_typsize( xkp1[1] ) / (fabs( fkp1 ) + 1.0);
    for ( i = 2; i <= n; i++ )
        {
-       tmp = fabs( gkp1[i] ) * (fabs( xkp1[i] ) + 1.0) / (fabs( fkp1 ) + 1.0);
+       tmp = fabs( gkp1[i] ) * qn_typsize( xkp1[i] ) / (fabs( fkp1 ) + 1.0);
        if ( tmp > max1 ) max1 = tmp;
        }
 
-   max2 = fabs( xkp1[1] - xk[1] ) / (fabs( xkp1[1] ) + 1.0);
+   max2 = fabs( xkp1[1] - xk[1] ) / qn_typsize( xkp1[1] );
    for ( i = 2; i <= n; i++ )
        {
-       tmp = fabs( xkp1[i] - xk[i] ) / (fabs( xkp1[i] ) + 1.0);
+       tmp = fabs( xkp1[i] - xk[i] ) / qn_typsize( xkp1[i] );
        if ( tmp > max2 ) max2 = tmp;
        }
 

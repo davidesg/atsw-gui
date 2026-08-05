@@ -18,14 +18,15 @@ familia (ver §M7 y el README).
 El **puerto a Python** (`~/Dropbox/SRC/drtran-python`) está en su **primera beta,
 0.1.0b1**: todas las opciones del C más `-W`, 193 tests, y 7 de 7 en el oráculo.
 
-El que era el último defecto abierto, el de robustez con `refactor=1`, afectaba a
-los dos lados y **quedó corregido el 2026-08-05 en el porte y en el C**: no es el
-gradiente, es que `qnewtopt` fijaba el tamaño típico de parámetro a 1 y a esa
-escala los deterministas valen ~1e-4, así que los tests de parada dejaban de
-medir lo que creían medir. El optimizador llegaba al mismo óptimo y no podía
-certificarlo — y en una dirección plana iteraba hasta `maxits`, que es el
-cuelgue. Verificado contra el oráculo TASTE: sobre datos bien escalados el fix
-no mueve ni un dígito. Ver la ficha al final.
+Queda un defecto abierto, el de `refactor=1`, que afecta a los dos lados y que
+**se estudió a fondo el 2026-08-04/05 y se decidió NO corregir**. El optimizador
+llega al mismo óptimo con los mismos parámetros y las mismas iteraciones; lo que
+falla es el termcode que reporta. Los tres arreglos que se probaron cuestan
+profundidad de convergencia y rompen la invariancia de escala de los estimadores
+sobre datos mal condicionados. `raxopt` y `elf` son trabajo publicado de
+Mauricio y no se tocan sin una alternativa probada.
+**Todo el estudio está en `docs/OPTIMIZER_STOPPING_STUDY.md`** — léelo antes de
+volver sobre el tema, está escrito para que no haya que repetirlo.
 
 ## BUGS ABIERTOS
 
@@ -512,140 +513,39 @@ un pequeño DSL parámetros → estructura VARMA— no solo ω/δ de una entrada
       **Todas las opciones del C implementadas** y homologadas, más `-W`. 168 tests, y
       validado además contra el oráculo externo TASTE (7 de 7).
 
-- [x] **BUG DE ROBUSTEZ con `refactor=1` — DIAGNOSTICADO Y CORREGIDO (2026-08-04/05),
-      en el porte Y en el C.**
-      Descubierto revisando `DVR_rstar` (CPI_EA ← Brent, 2026-07-23): `drtran -0` sobre
-      un `.pre` con **refactor=1** (Δlog ~0.002) **cuelga >2 min**; el mismo modelo con
-      **refactor=100** (Δlog ~0.2) **converge en 23 iters, 1 segundo**.
+- [ ] **`refactor=1`: el optimizador llega al óptimo pero certifica mal. ESTUDIADO A
+      FONDO Y DELIBERADAMENTE NO CORREGIDO (2026-08-04/05).**
+      **Estudio completo: `docs/OPTIMIZER_STOPPING_STUDY.md`. Léelo antes de tocar
+      nada de esto.** Resumen de lo que hay que saber para no repetirlo:
 
-      **La causa NO es la que estaba aquí apuntada.** La nota anterior decía «gradientes
-      de diferencias finitas (paso ~6e-6) con relación señal/paso pésima a escala raw».
-      Medido, eso es falso: parchear el paso **no cambia absolutamente nada** (mismo
-      óptimo, mismo termcode, mismas 25 iteraciones). El paso no es el problema.
+      - **El mecanismo.** `qnewtopt` fija el tamaño típico de parámetro (el `typx` de
+        Dennis & Schnabel) a 1 — es la forma simplificada del A9.4.1; el algoritmo
+        completo lo recibe como entrada. A `refactor=1` los deterministas valen ~1e-4,
+        así que el test de gradiente degenera en tolerancia ABSOLUTA inalcanzable y el
+        de paso en una que se cumple al instante. Mismo óptimo, mismos parámetros a
+        seis decimales, mismas 25 iteraciones; sólo cambia el termcode (1 → 2).
+      - **La hipótesis que había apuntada aquí era FALSA.** No son los gradientes de
+        diferencias finitas: escalar el paso no cambia nada, y además sería dañino
+        (el error de cancelación superaría al propio `gradtol`).
+      - **Se probaron tres arreglos y los tres se rechazaron con medidas.** El que
+        arregla el termcode cuesta profundidad de convergencia, y eso rompe la
+        invariancia de escala de los estimadores puntuales sobre datos mal
+        condicionados: en el pass-through WTI/IPC, `max|φ(100)-φ(25)|` pasa de ~1e-5
+        a 3.7e-3. El oráculo TASTE, en cambio, no lo nota (0.0e+00 de diferencia):
+        el efecto es propiedad del CONDICIONAMIENTO, no del programa.
+      - **Por qué no se toca.** `raxopt` y `elf` son trabajo publicado y arbitrado de
+        Mauricio. No se cambian criterios ni anuncios sin una alternativa probada.
+      - **Qué haría falta de verdad** (§8 del estudio): literatura, un `typx` POR
+        CLASE de parámetro —la variante que NO se probó y la más prometedora—,
+        decidir antes qué debe significar "convergido" en una verosimilitud plana, y
+        un plan de homologación escrito por adelantado.
+      - **Mientras tanto: reescalar a 100** (M0.2), que es la guía de siempre y lo que
+        fue ya emite por defecto. El aviso queda fijado en
+        `drtran-python/tests/test_refactor_scale.py`.
 
-      **La causa real: `qnewtopt` tiene el tamaño típico de parámetro (`typx`) fijado a
-      1**, y a `refactor=1` los deterministas valen ~1e-4. Cuatro sitios, un solo
-      defecto — C `src/qnewtopt.c`, port `drvarma/_qnewt.py`:
-
-      | sitio | expresión | efecto a escala pequeña |
-      |---|---|---|
-      | `qnewtopt.c:185,208` (`max1`) | `\|g\|·(\|x\|+1)/(\|f\|+1)` | tolerancia de gradiente **absoluta** → demasiado ESTRICTA |
-      | `qnewtopt.c:215` (`max2`) | `\|Δx\|/(\|x\|+1)` | tolerancia de paso **absoluta** → demasiado LAXA |
-      | `qnewtopt.c:401` (`cdgrad`) | `η^⅓·max(\|x\|,1)` | paso fijo 6.06e-6 (el «~6e-6» de la nota vieja) |
-
-      Es Dennis & Schnabel A9.4.1 en su forma simplificada; el algoritmo completo del
-      libro recibe `typx` como entrada y aquí se hardcodeó a 1. **No es un error de
-      Mauricio ni del porte** — el porte es fiel.
-
-      **Medido** (caso canónico ES_CPI ← WTI, `-V`, enlace b=0,r=0,s=1):
-
-      ```
-      refactor=100  logL= -718.2874 (equiv -718.287406)  termcode=1 (gradiente)  25 iters
-      refactor=  1  logL=1261.9358 (equiv -718.287406)  termcode=2 (paso)       25 iters
-      omegas idénticas a 6 decimales en ambos: 0.016400, -0.010747
-      ```
-      En el óptimo, el estadístico de parada: `relgrad = 1.088e-8` a escala 100 (≤ 1e-7,
-      **dispara**) frente a `5.034e-6` a escala 1 (**no dispara**). El peor slot a escala
-      1 es `omega_d1[10,0]`, x=+9.8e-5 — un **determinista**, justo la clase de parámetro
-      que encoge ×100 al reescalar (los AR/MA y las omegas de transferencia son
-      scale-invariant). Con `typx=|x|` el mismo estadístico cae a `2.471e-8` → dispararía.
-
-      **Conclusión: el optimizador NO falla, falla el CERTIFICADO.** Encuentra el mismo
-      óptimo en las mismas iteraciones; lo que pierde es la capacidad de *reconocer* que
-      ha llegado. En un problema fácil eso sólo degrada el termcode (1 → 2); en el
-      AR(2)×AR(2) orden 26 con 11 armónicos de `DVR_2026`, no certificar por gradiente
-      significa **iterar hasta `maxits`** — y a ~1 s/iteración, eso es el hang.
-
-      **FIX APLICADO en el porte** (`drvarma/_qnewt.py`, `drtran/estimate.py`):
-      `raxopt(..., typx=None)` y `drtran.fit(..., typx=1e-3)`, con
-      `typx_i = max(|x_i|, piso)` en `max1` y `max2`. `typx=None` reproduce el C **bit a
-      bit** (el camino por defecto de drvarma no se toca, y eso es demostrable, no sólo
-      testeado). Resultado a `refactor=1`: **termcode 1 y el óptimo idéntico**.
-
-      **NO se aplicó a `cdgrad`, y es deliberado.** La propuesta inicial incluía el paso
-      de diferencias finitas; medido, escalarlo no cambia nada (mismo óptimo, mismo
-      termcode, mismas 25 iteraciones), y además sería **activamente dañino**: el
-      objetivo es un ratio de orden 1, para el que el paso absoluto `η^⅓·max(|x|,1)`
-      ≈ 6.06e-6 es casi óptimo; relativizarlo a un parámetro de ~1e-4 da h ≈ 6e-9, cuyo
-      error de cancelación `ε·|f|/h ≈ 3e-7` **supera al propio `gradtol` de 1e-7**. Queda
-      un comentario en `cdgrad` explicando por qué NO lleva `typx`.
-      Igual con **`fdhess`** (`:134`), que lleva el mismo `max(|x|,1)`: relativizar su
-      paso lo haría aún más pequeño y los errores estándar están homologados 17/17 contra
-      el C a `refactor=100`. Se deja intacto — ver el punto abierto de abajo.
-
-      Tests: `drvarma/tests/test_qnewt_typx.py` (7, incluido «typx=None == el C bit a
-      bit» a escalas 1, 1e-2 y 1e-4) y `drtran-python/tests/test_refactor_scale.py` (4).
-      Repro manual: `drtran-python/scripts/repro_refactor1_{typx,relgrad}.py`.
-      Baterías: drvarma 209 + 7, drtran 189 + 4.
-
-      **Ojo, esto es OTRO problema** que el `var_disparity` de
-      `drvarma/docs/DEVELOPER_GUIDE.md` §4.3 (varianzas ~100× distintas **entre** series
-      → cond_cov ~1e8): allí el mal condicionamiento es real y afecta a los errores
-      estándar. Aquí el reescalado es **uniforme** y el modelo es literalmente el mismo
-      (la diferencia de logL es exactamente el jacobiano, 215·2·log 100).
-
-      **FIX APLICADO TAMBIÉN AL C** (2026-08-05). `src/qnewtopt.c` gana `qn_typsize()`,
-      usada en `max1` y `max2` de `umstop0`/`umstop`; el global `qn_typx` se define en
-      `drtran.c` (idioma del fichero, como `macheps`/`quiet_mode`) con valor 1e-3, y la
-      variable de entorno **`DRTRAN_TYPX=0` recupera el optimizador histórico** sin
-      recompilar, que es lo que permite comparar. `cdgrad` y `fdhess` sin tocar, por el
-      argumento de la cancelación.
-
-      **El C reproduce el defecto y el fix lo cura**, con los mismos números que el porte
-      (caso canónico, `-b 0 -r 0 -s 1`; el `refactor=1` se generó escalando mu y las 11
-      omegas deterministas por 1/100 y poniendo el factor a 1.00):
-
-      | | criterio de parada | logL |
-      |---|---|---|
-      | r100 typx=off | gradient | -718.287406 |
-      | r100 typx=on | gradient | -718.287406 |
-      | **r1 typx=off** | **parameter** (el defecto) | 1261.935774 |
-      | **r1 typx=on** | **gradient** (curado) | 1261.935774 |
-
-      y 1261.935774 - 2*215*ln(100) = -718.287406 exacto, o sea el mismo modelo.
-
-      **Y aparece un segundo síntoma, más grave, que no estaba diagnosticado: el
-      RUNAWAY en direcciones planas.** El caso 3d de la batería (`-b 0 -r 0 -s 1 -S`
-      con `q[2,1] = free`, una cresta casi colineal) con el optimizador histórico
-      **agota las 500 iteraciones** y aterriza en `q[2,1] = -7.15` con |t| = 2424 —un
-      disparate para un parámetro no identificado—; con `typx` converge por gradiente
-      en 23 iteraciones y deja `q[2,1] ~ 0` con s.e. = 9.44 y t = 0, que es la respuesta
-      correcta. Es el mismo mecanismo que el hang: no poder certificar la convergencia
-      en una dirección plana e iterar hasta `maxits`. **Esto es lo que de verdad
-      arreglaba el fix**, más que el termcode.
-
-      **Dos tests de la batería fijaban el comportamiento anterior y se actualizaron**
-      (transparencia: se tocó `test_battery.sh`, no sólo el código):
-      1. el 3d exigía que los parámetros HUYERAN (`corr > 0.9`, `|t| > 100`). Eso no era
-         la patología del modelo sino la del optimizador; ahora exige el diagnóstico
-         correcto (t ~ 0, s.e. grande, < 100 iters). El aviso de casi-colinealidad y el
-         LR siguen pasando igual, así que la afirmación de fondo no cambia.
-      2. la identidad `phi` entre dos parametrizaciones del mismo modelo (SYNI) pasó de
-         tolerancia 1e-6 a 5e-6: el test relativo declara la convergencia una pizca
-         antes y las dos aterrizan a 2.4e-6 relativo (0.422106 vs 0.422107). La
-         verosimilitud, que es la afirmación de fondo, sigue coincidiendo a 1e-6.
-
-      **VERIFICADO CON EL ORÁCULO TASTE.** 7 de 7 casos siguen pasando, y sobre los dos
-      casos que estima drtran el fix **no mueve ni un dígito**:
-
-      | caso | parámetros | typx=off vs typx=on |
-      |---|---|---|
-      | `cpi_wti_canonical` | los 6 del oráculo | diferencia **0.0e+00** |
-      | `syn_estimate` | omega0, omega1, phi_N | idénticos (0.783515, -0.407915, 0.276244) |
-
-      O sea: el fix es **inerte** donde los datos están bien escalados —que es donde
-      vive toda la homologación— y sólo actúa donde los parámetros son diminutos o la
-      dirección es plana. Batería del C: **296 PASS, 0 FAIL**.
-
-      Nota: `tests/data/HANG_{X,Y}.pre` ya **no** reproduce el cuelgue (10 iteraciones,
-      gradiente, con y sin fix), igual que
-      `ART/Data/cases/DVR_2026/drtran_work/{CPI,BRENT}_r1.pre` (25 iters). Son ficheros
-      regenerados; el repro vivo del mecanismo es el caso 3d y el canónico a r1.
-      **Y `fdhess` a escala pequeña:** los errores estándar a `refactor=1` no están
-      verificados contra nada; el paso absoluto de 6.06e-6 sobre un parámetro de 1e-4 es
-      una perturbación del 6 %, que como curvatura local es una secante, no una derivada.
-      Sigue en pie la **guía de Mauricio: reescalar SIEMPRE a 100** (razón de M0.2), y el
-      fix P1 de fue/ART hace que el `.pre` regenerado ya condicione ×100.
+      Evidencia y repro: `drtran-python/scripts/repro_refactor1_relgrad.py`;
+      `ART/Data/cases/DVR_2026/drtran_work/{CPI,BRENT}_{r1,r100}.pre` (ojo: estos
+      ficheros ya NO reproducen el cuelgue original, están regenerados).
 
 ---
 

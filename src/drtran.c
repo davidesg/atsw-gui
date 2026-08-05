@@ -128,17 +128,6 @@ real macheps;          /* épsilon de máquina (inicializado con cmacheps())  */
 FILE *outputv;         /* archivo de salida global (usado por diagnose.c)  */
 int quiet_mode = 1;    /* suprimir traza del optimizador (0 = verbose) */
 
-/* Tamaño típico de parámetro para los tests de parada de qnewtopt (el typx de
-   Dennis & Schnabel). qnewtopt lo tenía fijado a 1, lo que a refactor=1 -donde
-   los deterministas valen ~1e-4- convierte el test de gradiente en una
-   tolerancia ABSOLUTA inalcanzable y el de paso en una que se cumple de
-   inmediato: el optimizador llega al óptimo y no puede certificarlo, y en un
-   modelo grande itera hasta maxits (el cuelgue conocido con datos sin
-   reescalar). Ver qn_typsize() en qnewtopt.c: <= 0 reproduce el comportamiento
-   histórico, y se puede forzar con la variable de entorno DRTRAN_TYPX, que es
-   lo que permite rehomologar contra el binario antiguo. */
-real qn_typx = 1.0e-3;
-
 #define DRTRAN_PI 3.14159265358979323846
 #define DRTRAN_VERSION "1.0"
 
@@ -3916,14 +3905,6 @@ int main(int argc, char *argv[])
 
     macheps = cmacheps();
     outputv = stdout;
-
-    /* DRTRAN_TYPX permite recuperar el optimizador historico (typx = 1) sin
-       recompilar: DRTRAN_TYPX=0 lo desactiva. Existe para poder rehomologar
-       contra el binario antiguo, no para uso normal. */
-    {
-        const char *e = getenv( "DRTRAN_TYPX" );
-        if ( e && *e ) qn_typx = atof( e );
-    }
 
     /* -estwin es el nombre UNIFICADO con drvarma del modo de ventana fija; -R
        queda como alias oculto (compatibilidad). getopt no entiende opciones largas

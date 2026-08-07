@@ -1,5 +1,22 @@
 # Bug en el motor de previsión de fuf (C) y fue (Python): la deriva de la media
 
+> **REVISADO 2026-08-07 — CERRADO. Este informe está OBSOLETO y además
+> archivado en el repositorio equivocado.**
+>
+> * Es el mismo defecto que **`fue` BUG-0001** (`bugs/BUG-0001-forecast-mean-drift.md`),
+>   cuyo estado allí es `fixed`, `fixed_in: 0.1.5`.
+> * `fue/forecast.py` **ya lleva el parche** (líneas 457-462: `drift = mu *
+>   (1 - sum(phi_coefs))`, añadido dentro de la recursión, sin `l·mu` después).
+>   Verificado numéricamente en fue 0.1.9 contra la fórmula cerrada (†) de la
+>   sección 1: 102.00 / 103.50 / 104.75, donde el bug daría 102.50 / 104.25.
+> * El motor C embebido en fue (`_fue_engine.abi3.so`) **no tiene ruta de
+>   previsión**: la previsión es Python, así que no hay una segunda copia viva.
+> * La única copia sin parchear que queda en esta máquina es
+>   `SRC_MAC/fuf-1.06.01/src/usfo.c` (líneas 107-115), una versión anterior a
+>   la 1.08.1 que este informe describe. `fuf-1.08.1-fix` no está aquí.
+> * Y como dice la propia cabecera, **no afecta a drtran**. Vive en `drtran/docs`
+>   por accidente; su sitio es el tracker de `fue`, donde ya está.
+
 **Estado:** confirmado y parcheado (fuf C).
 **Afecta:** `fuf-1.08.1` (`src/usfo.c`, función `forecast`) y `fue` Python
 (`fue-0.1/src/fue/forecast.py`, que *"mirrors usfo.c/fuf.c exactly"*).

@@ -622,19 +622,48 @@ void shootx(real *xfree, struct Tvarma *armax, int *ifaultx, int firstx, int las
 
     /* --- 12. Restricciones --- */
     {
-        real wr[4 * MAX_SER], wi[4 * MAX_SER], wmod[4 * MAX_SER];
-        int ifault_chk = 0;
+        /* AR: la estacionariedad se lee de las RAICES, no de phi[1].
+           El test anterior era |phi[i][1]| >= 0.999 para TODO orden, y phi[1]
+           solo es el reciproco de una raiz cuando p_ord[i] == 1.  En un AR(2)
+           la region estacionaria es el triangulo |phi2|<1, phi2+phi1<1,
+           phi2-phi1<1, en el que phi1 llega a 2: todo AR(2) de raices
+           complejas con phi1 > 1 es estacionario y se rechazaba sin llegar a
+           evaluar la verosimilitud.  Y no es un rincon exotico -- es donde
+           viven los ciclos persistentes.  Peor que el ifault: partiendo por
+           debajo de la barrera el optimizador no falla, sube hasta 0.998998 y
+           se clava, con error tipico 1e-06 y t = 1.04e+06.
+           chekma hace exactamente esta comprobacion (matriz companera y modulo
+           de los autovalores) y es generica en el operador, que es por lo que
+           ya se usa aqui abajo para el MA y para la estabilidad de delta(B).
 
-        for (i = 1; i <= m; i++)
-            if (p_ord[i] >= 1 && fabs(phi[i][1]) >= 0.999) {
-                *ifaultx = 1;
-                goto cleanup;
-            }
+           Los vectores de trabajo pasan a ser dinamicos: chekma indexa 1..m*p
+           (o 1..m*q), y wr[4*MAX_SER] = wr[32] se queda corto en cuanto
+           m*max(p,q) > 32 -- alcanzable con un modelo estacional (p o q ~ 13)
+           y pocas series.  El limite ya existia para la llamada del MA. */
+        int   nchk = m * (p > q ? p : q);
+        real *wr, *wi, *wmod;
+        int   ifault_chk = 0, rechaza = 0;
 
-        if (q > 0) {
-            chekma(m, q, armax->theta, wr, wi, wmod, &ifault_chk);
-            if (ifault_chk != 0) { *ifaultx = 1; goto cleanup; }
+        if (nchk < 1) nchk = 1;
+        wr   = vector(1, nchk);
+        wi   = vector(1, nchk);
+        wmod = vector(1, nchk);
+
+        if (p > 0) {
+            chekma(m, p, armax->phi, wr, wi, wmod, &ifault_chk);
+            if (ifault_chk != 0) rechaza = 1;
         }
+
+        if (!rechaza && q > 0) {
+            chekma(m, q, armax->theta, wr, wi, wmod, &ifault_chk);
+            if (ifault_chk != 0) rechaza = 1;
+        }
+
+        free_vector(wr,   1, nchk);
+        free_vector(wi,   1, nchk);
+        free_vector(wmod, 1, nchk);
+
+        if (rechaza) { *ifaultx = 1; goto cleanup; }
     }
 
     /* --- 13. Q (simetrica) y medias --- */

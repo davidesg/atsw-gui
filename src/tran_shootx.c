@@ -565,12 +565,28 @@ void shootx(real *xfree, struct Tvarma *armax, int *ifaultx, int firstx, int las
                NULL cuando coinciden -- todo el legacy pasa por la rama de la
                derecha y no se mueve ni un bit.                                */
             real *xin = w_alt[j] ? w_alt[j] : w[in];
+            real *pre;
+            int   P;
+
+            /* LA MUESTRA PREVIA. La convolucion quiere la entrada antes de
+               t=1 y no existe; ponerla a cero es lo que hacia que este cast
+               calculase "la verosimilitud exacta de la serie EQUIVOCADA".
+               pre[1] es el valor inmediatamente anterior a xin[1].          */
+            P = build_pre_sample(j, nu[j], n_stat, &pre);
+
             for (t = 1; t <= n_stat; t++) {
                 real acc = 0.0;
                 for (k = 1; k <= t; k++)
                     acc += nu[j][k] * xin[t - k + 1];
+                /* Lo que cae antes de t=1. nu[j] esta alojado 1..n_stat, asi
+                   que el indice hay que ACOTARLO: sin la cota se lee fuera del
+                   vector para t grande. No se pierde nada, porque nu[k] ya es
+                   cero para k-1 > K.                                        */
+                for (k = t + 1; k <= t + P && k <= n_stat; k++)
+                    acc += nu[j][k] * pre[k - t];
                 tr[o][t] += acc;
             }
+            if (P > 0) free_vector(pre, 1, P);
         }
     }
 

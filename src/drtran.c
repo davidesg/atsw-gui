@@ -53,6 +53,26 @@ real  *w[MAX_SER + 1];
    por el operador de la SALIDA, no por el suyo. NULL cuando los dos operadores
    coinciden, que es todo el legacy, m6 entero y la red.                      */
 real  *w_alt[MAX_LINK + 1];
+
+/* La CABECERA de cada serie: las observaciones que el recorte a la ventana
+   comun deja fuera por delante. Son datos REALES, no estimaciones, y son
+   justo lo que la convolucion de la transferencia necesita antes de t=1. Se
+   guardan porque trim_to_common las machaca.                                */
+real  *w_head[MAX_SER + 1];
+int    n_head[MAX_SER + 1];
+
+/* Delta(B) = op_salida / op_entrada de cada enlace desajustado y ANIDADO.
+   Sirve para retropronosticar la muestra previa de la entrada re-diferenciada:
+   esa serie no tiene modelo propio con el que hacerlo --su MA seria
+   theta(B)Delta(B), y Delta tiene raices EN el circulo unidad, asi que la
+   recursion no es invertible--, de modo que se retropronostica la serie de la
+   entrada, que si tiene un modelo sano, y se pasa por Delta.                 */
+real  *alt_delta[MAX_LINK + 1];
+int    n_alt_delta[MAX_LINK + 1];
+/* Cuantas observaciones le sobran POR DELANTE a la entrada re-diferenciada
+   tras el recorte. Es el desplazamiento de w_alt, NO el de la serie propia de
+   la entrada: confundirlos desplaza la muestra previa entera.               */
+int    n_alt_head[MAX_LINK + 1];
 int    n_stat = 0;
 
 int   p_ord[MAX_SER + 1], q_ord[MAX_SER + 1];
@@ -390,6 +410,149 @@ int links_need_subtracting(void)
     return 0;
 }
 
+/* poly_div: q = a / b sobre polinomios en B dados de menor a mayor grado.
+   Devuelve el grado del cociente, o -1 si la division no es exacta.          */
+static int poly_div(const real *a, int da, const real *b, int db, real *q)
+{
+    real *r;
+    int i, k, dq = da - db;
+    if (dq < 0) return -1;
+    r = vector(0, da);
+    for (i = 0; i <= da; i++) r[i] = a[i];
+    for (k = dq; k >= 0; k--) {
+        real c = r[k + db] / b[db];
+        q[k] = c;
+        for (i = 0; i <= db; i++) r[k + i] -= c * b[i];
+    }
+    for (i = 0; i <= da; i++)
+        if (fabs(r[i]) > 1e-9) { free_vector(r, 0, da); return -1; }
+    free_vector(r, 0, da);
+    return dq;
+}
+
+/* backcast_arma: los L valores de una serie ARMA estacionaria ANTERIORES a su
+   primera observacion. out[1] es el inmediatamente anterior, out[2] el de antes.
+
+   Retroprevision de Box-Jenkins, y descansa en un hecho: la funcion generatriz
+   de autocovarianzas de un ARMA estacionario,
+
+       gamma(z) = sigma^2 Theta(z)Theta(1/z) / (Phi(z)Phi(1/z))
+
+   es simetrica bajo z -> 1/z, asi que EL PROCESO INVERTIDO EN EL TIEMPO TIENE
+   EL MISMO MODELO. Retropronosticar es por tanto prever la serie invertida con
+   los mismos phi y theta, que es lo que hace BackForeCast en TASTE.
+
+   Convenio de signos como en elf: a[t] = w[t] - SUM phi_i w[t-i] + SUM th_j a[t-j].
+   phi[1..p] y theta[1..q] son 1-indexados; w[1..n] tambien.                  */
+static void backcast_arma(const real *w, int n, const real *ph, int p,
+                          const real *th, int q, real mu, int L, real *out)
+{
+    real *u, *e;
+    int t, i, j, k;
+    if (L <= 0 || n <= 0) return;
+    u = vector(1, n);
+    e = vector(1, n);
+    for (t = 1; t <= n; t++) u[t] = w[n - t + 1] - mu;   /* invertida y centrada */
+    for (t = 1; t <= n; t++) {
+        real acc = u[t];
+        for (i = 1; i <= p && i < t; i++) acc -= ph[i] * u[t - i];
+        for (j = 1; j <= q && j < t; j++) acc += th[j] * e[t - j];
+        e[t] = acc;
+    }
+    for (k = 1; k <= L; k++) {                            /* prevision hacia delante */
+        real acc = 0.0;
+        for (i = 1; i <= p; i++) {
+            int idx = k - i;
+            acc += ph[i] * (idx >= 1 ? out[idx] - mu : u[n + idx]);
+        }
+        for (j = 1; j <= q; j++) {
+            int idx = n + k - j;
+            if (idx <= n) acc -= th[j] * e[idx];
+        }
+        out[k] = acc + mu;
+    }
+    free_vector(u, 1, n);
+    free_vector(e, 1, n);
+}
+
+/* build_pre_sample: los valores de la ENTRADA de un enlace anteriores a la
+   ventana de estimacion. (*pre)[m] es el de m periodos antes del primero.
+   Devuelve cuantos, y aloja (*pre) si son mas de cero.
+
+   Dos fuentes, en este orden:
+     1. Observaciones REALES que el recorte a la ventana comun dejo fuera
+        (w_head). Cuando la entrada va menos diferenciada que la salida le
+        sobran valores por delante: son datos, no estimaciones, y salen gratis.
+     2. RETROPRONOSTICOS para lo que siga faltando, como hace TASTE.
+
+   Solo tantos como nu pueda alcanzar. Con r=0 el filtro tiene b+s+1 pesos y
+   todo lo demas es exactamente cero, asi que una transferencia contemporanea
+   NO necesita muestra previa y una (0,0,1) necesita un solo valor. Son las
+   transferencias RACIONALES, de cola infinita, las que el truncamiento
+   estaba estropeando.                                                       */
+int build_pre_sample(int j, const real *nu, int nlen, real **pre)
+{
+    int in = lnk[j].inp;
+    int K = 0, k, m, c, need, nh, nfull;
+    real *ext, *bc;
+
+    for (k = 1; k <= nlen; k++) if (fabs(nu[k]) > 1e-12) K = k - 1;
+    if (K <= 0) { *pre = NULL; return 0; }
+
+    nh = n_head[in];
+    if (w_alt[j] == NULL) {
+        /* La serie propia de la entrada: cabecera + retropronostico. */
+        need = K - nh; if (need < 0) need = 0;
+        nfull = nh + n_stat;
+        ext = vector(1, need + nfull);
+        bc  = need > 0 ? vector(1, need) : NULL;
+        for (k = 1; k <= nh; k++)      ext[need + k] = w_head[in][k];
+        for (k = 1; k <= n_stat; k++)  ext[need + nh + k] = w[in][k];
+        if (need > 0) {
+            backcast_arma(ext + need, nfull, phi[in], p_ord[in],
+                          theta[in], q_ord[in], mu[in], need, bc);
+            for (k = 1; k <= need; k++) ext[need - k + 1] = bc[k];
+            free_vector(bc, 1, need);
+        }
+        *pre = vector(1, K);
+        for (m = 1; m <= K; m++) (*pre)[m] = ext[need + nh - m + 1];
+        free_vector(ext, 1, need + nfull);
+        return K;
+    }
+
+    /* Entrada re-diferenciada: se retropronostica la serie PROPIA --que tiene
+       un modelo sano-- y se pasa por Delta, usando la identidad
+       alt[t] = SUM_c delta[c] w_x[t+g-c].  Sin Delta no hay como hacerlo.   */
+    if (alt_delta[j] == NULL) { *pre = NULL; return 0; }
+    {
+        int g = n_alt_delta[j];
+        int off = n_alt_head[j];      /* el de w_alt, no el de la serie propia */
+        need = K - off; if (need < 0) need = 0;
+        nfull = nh + n_stat;
+        ext = vector(1, need + nfull);
+        bc  = need > 0 ? vector(1, need) : NULL;
+        for (k = 1; k <= nh; k++)      ext[need + k] = w_head[in][k];
+        for (k = 1; k <= n_stat; k++)  ext[need + nh + k] = w[in][k];
+        if (need > 0) {
+            backcast_arma(ext + need, nfull, phi[in], p_ord[in],
+                          theta[in], q_ord[in], mu[in], need, bc);
+            for (k = 1; k <= need; k++) ext[need - k + 1] = bc[k];
+            free_vector(bc, 1, need);
+        }
+        *pre = vector(1, K);
+        for (m = 1; m <= K; m++) {
+            real acc = 0.0;
+            for (c = 0; c <= g; c++) {
+                int idx = need + off - m + g - c + 1;
+                if (idx >= 1 && idx <= need + nfull) acc += alt_delta[j][c] * ext[idx];
+            }
+            (*pre)[m] = acc;
+        }
+        free_vector(ext, 1, need + nfull);
+        return K;
+    }
+}
+
 /* Construye la serie estacionaria de TODAS las series y las recorta a la
    VENTANA COMUN: cada modelo pierde tantas observaciones iniciales como el
    orden de su propio operador no estacionario. Todas arrancan en la misma
@@ -403,10 +566,16 @@ void build_stationary_series(void)
         if (w[i]) free_vector(w[i], 1, n_stat);
         w[i] = NULL;
     }
+    for (i = 1; i <= n_ser; i++) {
+        if (w_head[i]) free_vector(w_head[i], 1, n_head[i]);
+        w_head[i] = NULL;  n_head[i] = 0;
+    }
     for (j = 1; j <= n_link; j++) {
         if (w_alt[j]) free_vector(w_alt[j], 1, n_stat);
         w_alt[j] = NULL;
         nal[j] = 0;
+        if (alt_delta[j]) free_vector(alt_delta[j], 0, n_alt_delta[j]);
+        alt_delta[j] = NULL;  n_alt_delta[j] = 0;  n_alt_head[j] = 0;
     }
     for (i = 1; i <= n_ser; i++) {
         nst[i] = 0;
@@ -433,10 +602,43 @@ void build_stationary_series(void)
         if (nal[j] < nmin) nmin = nal[j];
     }
 
+    /* Delta(B) = op_salida / op_entrada, para la muestra previa de la entrada
+       re-diferenciada. Solo cuando la division es EXACTA (operadores
+       anidados); si no, no hay Delta y la muestra previa se queda a cero.   */
+    for (j = 1; j <= n_link; j++) {
+        int o = lnk[j].out, in = lnk[j].inp, dq;
+        real *cy, *cx, *qq;
+        int dy, dx, t;
+        if (!w_alt[j]) continue;
+        dy = Tm[o].ornsop;  dx = Tm[in].ornsop;
+        if (dy < dx) continue;
+        cy = vector(0, dy);  cx = vector(0, dx);  qq = vector(0, dy - dx);
+        for (t = 0; t <= dy; t++) cy[t] = -Tm[o].rnsop[t];   /* rnsop[0] = -1 */
+        for (t = 0; t <= dx; t++) cx[t] = -Tm[in].rnsop[t];
+        dq = poly_div(cy, dy, cx, dx, qq);
+        if (dq >= 0) { alt_delta[j] = qq; n_alt_delta[j] = dq; }
+        else free_vector(qq, 0, dy - dx);
+        free_vector(cy, 0, dy);  free_vector(cx, 0, dx);
+    }
+
     n_stat = nmin;
+
+    /* La CABECERA: lo que el recorte deja fuera. Datos reales, y son lo
+       primero que alimenta la muestra previa de la transferencia.           */
+    for (i = 1; i <= n_ser; i++) {
+        int t, nh = nst[i] - n_stat;
+        if (nh <= 0) continue;
+        w_head[i] = vector(1, nh);
+        for (t = 1; t <= nh; t++) w_head[i][t] = w[i][t];
+        n_head[i] = nh;
+    }
+
     for (i = 1; i <= n_ser; i++) trim_to_common(w[i], nst[i], n_stat);
     for (j = 1; j <= n_link; j++)
-        if (w_alt[j]) trim_to_common(w_alt[j], nal[j], n_stat);
+        if (w_alt[j]) {
+            n_alt_head[j] = nal[j] - n_stat;
+            trim_to_common(w_alt[j], nal[j], n_stat);
+        }
 }
 
 static int n_det_free_params(struct Tusmodel *Tm)

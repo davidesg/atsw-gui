@@ -124,6 +124,11 @@ extern int n_link;
 extern real *w_alt[MAX_LINK + 1];
 int operators_differ(int out, int inp);
 int links_need_subtracting(void);
+extern real *w_head[MAX_SER + 1];
+extern int   n_head[MAX_SER + 1];
+extern real *alt_delta[MAX_LINK + 1];
+extern int   n_alt_delta[MAX_LINK + 1];
+int build_pre_sample(int j, const real *nu, int nlen, real **pre);
 
 /* Orden topológico de las series (las entradas antes que sus salidas). */
 extern int topo[MAX_SER + 1];

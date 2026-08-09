@@ -2104,10 +2104,16 @@ if [ -f "$PT8/PT8_FR.pre" ]; then
     # da 0.009070 / -0.006200. Antes del despacho drtran daba 0.004282: un 53%
     # de discrepancia. La tolerancia de 2e-4 es la banda en la que caen los
     # casos EMPAREJADOS, que nunca estuvieron en duda.
-    check "FR omega[0] con el despacho"  0.009162 "$(val "$B8" 'omega1\[0\]')" 2e-5
-    check "FR omega[1] con el despacho" -0.005973 "$(val "$B8" 'omega1\[1\]')" 2e-5
-    check "FR aterriza en el oraculo TASTE (0.009070)" \
-          0.009070 "$(val "$B8" 'omega1\[0\]')" 2e-4
+    check "FR omega[0] con el despacho"  0.009081 "$(val "$B8" 'omega1\[0\]')" 2e-5
+    check "FR omega[1] con el despacho" -0.006206 "$(val "$B8" 'omega1\[1\]')" 2e-5
+
+    # Contra el oraculo, y con la tolerancia que el retropronostico permite.
+    # Sin muestra previa esto era 0.009162 / -0.005973: omega[1] se desviaba
+    # 2.3e-4 y ahora se desvia 6e-6, casi dos ordenes de magnitud.
+    check "FR omega[0] aterriza en el oraculo (0.009070)" \
+          0.009070 "$(val "$B8" 'omega1\[0\]')" 2e-5
+    check "FR omega[1] aterriza en el oraculo (-0.006200)" \
+          -0.006200 "$(val "$B8" 'omega1\[1\]')" 2e-5
 
     # Y el control que hace que lo anterior signifique algo: un caso EMPAREJADO
     # no se despacha y no se mueve ni un bit.

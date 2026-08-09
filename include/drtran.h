@@ -67,6 +67,7 @@ extern real **DataMat[MAX_SER + 1];
 extern real *w[MAX_SER + 1];
 extern int   n_stat;
 
+
 /* ARMA de cada serie: órdenes EXPANDIDOS y polinomios */
 extern int   p_ord[MAX_SER + 1], q_ord[MAX_SER + 1];
 extern real *phi[MAX_SER + 1], *theta[MAX_SER + 1];
@@ -118,6 +119,11 @@ struct Tlink {
 
 extern struct Tlink lnk[MAX_LINK + 1];
 extern int n_link;
+/* BUG-8: la entrada de cada enlace diferenciada por el operador de SU SALIDA.
+   NULL cuando los dos operadores coinciden. Ver build_stationary_series. */
+extern real *w_alt[MAX_LINK + 1];
+int operators_differ(int out, int inp);
+int links_need_subtracting(void);
 
 /* Orden topológico de las series (las entradas antes que sus salidas). */
 extern int topo[MAX_SER + 1];

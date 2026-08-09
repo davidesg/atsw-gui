@@ -42,6 +42,17 @@ struct Tusmodel Tm[MAX_SER + 1];
 struct Tseries  Ts[MAX_SER + 1];
 real **DataMat[MAX_SER + 1];
 real  *w[MAX_SER + 1];
+
+/* BUG-8. La entrada de cada enlace, DIFERENCIADA POR EL OPERADOR DE SU SALIDA.
+   El modelo dice que la transferencia relaciona los NIVELES y que la
+   diferenciacion la lleva el ruido; como nabla conmuta con nu(B),
+
+       op_y N  =  op_y y  -  nu(B) (op_y x)
+
+   asi que el vector que alimenta la transferencia es la entrada diferenciada
+   por el operador de la SALIDA, no por el suyo. NULL cuando los dos operadores
+   coinciden, que es todo el legacy, m6 entero y la red.                      */
+real  *w_alt[MAX_LINK + 1];
 int    n_stat = 0;
 
 int   p_ord[MAX_SER + 1], q_ord[MAX_SER + 1];
@@ -349,18 +360,53 @@ static void trim_to_common(real *v, int nstat, int ncommon)
     for (t = 1; t <= ncommon; t++) v[t] = v[t + off];
 }
 
+/* operators_differ: comparan los DOS operadores no estacionarios completos.
+
+   Compara el POLINOMIO, no el par (nrdiff, nadiff), y la diferencia importa:
+   nabla nabla_4 escrito a la manera de la escuela --nrdiff=2, nadiff=0,
+   ifadf=[0,1,1], como lo lleva EA de m6-- es EL MISMO OPERADOR que nrdiff=1,
+   nadiff=1, y comparando los enteros esas dos codificaciones se leerian como
+   desajuste. rnsop ya trae el polinomio armado, ifadf incluido.             */
+int operators_differ(int out, int inp)
+{
+    int j;
+    if (Tm[out].ornsop != Tm[inp].ornsop) return 1;
+    for (j = 0; j <= Tm[out].ornsop; j++)
+        if (fabs(Tm[out].rnsop[j] - Tm[inp].rnsop[j]) > 1e-9) return 1;
+    return 0;
+}
+
+/* links_need_subtracting: 1 si algun enlace cruza operadores distintos.
+
+   Es EL DESPACHO. El cast empotrado convierte la transferencia en coeficientes
+   off-diagonal que actuan sobre las columnas de w, asi que la entrada es lo que
+   w tenga para ella: una columna, una diferenciacion. El cast por resta calcula
+   el termino aparte, y ahi es donde cabe el segundo vector.                  */
+int links_need_subtracting(void)
+{
+    int j;
+    for (j = 1; j <= n_link; j++)
+        if (operators_differ(lnk[j].out, lnk[j].inp)) return 1;
+    return 0;
+}
+
 /* Construye la serie estacionaria de TODAS las series y las recorta a la
    VENTANA COMUN: cada modelo pierde tantas observaciones iniciales como el
    orden de su propio operador no estacionario. Todas arrancan en la misma
    fecha, asi que alinear por el final las alinea en el calendario.          */
 void build_stationary_series(void)
 {
-    int nst[MAX_SER + 1];
-    int i, nmin = 0;
+    int nst[MAX_SER + 1], nal[MAX_LINK + 1];
+    int i, j, nmin = 0;
 
     for (i = 1; i <= n_ser; i++) {
         if (w[i]) free_vector(w[i], 1, n_stat);
         w[i] = NULL;
+    }
+    for (j = 1; j <= n_link; j++) {
+        if (w_alt[j]) free_vector(w_alt[j], 1, n_stat);
+        w_alt[j] = NULL;
+        nal[j] = 0;
     }
     for (i = 1; i <= n_ser; i++) {
         nst[i] = 0;
@@ -368,8 +414,29 @@ void build_stationary_series(void)
         if (w[i] == NULL || nst[i] <= 0) { n_stat = 0; return; }
         if (nmin == 0 || nst[i] < nmin) nmin = nst[i];
     }
+
+    /* La entrada re-diferenciada por el operador de su salida (BUG-8). Se
+       obtiene intercambiando SOLO ornsop/rnsop --que es lo unico que mira el
+       diferenciador-- y llamando al MISMO apply_univariate_model: mismo
+       Box-Cox, mismas deterministas, misma serie; solo cambia el operador.
+       Sin segunda fuente de verdad.                                          */
+    for (j = 1; j <= n_link; j++) {
+        int o = lnk[j].out, in = lnk[j].inp;
+        int  sav_o;
+        real *sav_r;
+        if (!operators_differ(o, in)) continue;
+        sav_o = Tm[in].ornsop;  sav_r = Tm[in].rnsop;
+        Tm[in].ornsop = Tm[o].ornsop;  Tm[in].rnsop = Tm[o].rnsop;
+        apply_univariate_model(&Tm[in], &Ts[in], DataMat[in], &w_alt[j], &nal[j]);
+        Tm[in].ornsop = sav_o;  Tm[in].rnsop = sav_r;
+        if (w_alt[j] == NULL || nal[j] <= 0) { n_stat = 0; return; }
+        if (nal[j] < nmin) nmin = nal[j];
+    }
+
     n_stat = nmin;
     for (i = 1; i <= n_ser; i++) trim_to_common(w[i], nst[i], n_stat);
+    for (j = 1; j <= n_link; j++)
+        if (w_alt[j]) trim_to_common(w_alt[j], nal[j], n_stat);
 }
 
 static int n_det_free_params(struct Tusmodel *Tm)
@@ -4057,6 +4124,40 @@ int main(int argc, char *argv[])
         auto_id = 0;             /* la red trae sus propios ordenes */
     }
     if (!topo_sort()) return 7;
+
+    /* EL DESPACHO (BUG-8). Si algun enlace cruza operadores de diferenciacion
+       distintos, la transferencia necesita la entrada re-diferenciada por el
+       operador de la SALIDA -- un segundo vector para la misma serie, y el cast
+       empotrado no tiene donde ponerlo. Se cambia al cast por resta, que
+       construye el termino aparte.
+
+       Se ANUNCIA, no se hace callando: los dos casts calculan verosimilitudes
+       de forma distinta, y elegir entre entradas candidatas para una misma
+       salida podria acabar comparando un numero de cada uno.
+
+       Todo el legacy, m6 entero, la red y los canonicos tienen los operadores
+       iguales, asi que no pasan por aqui.                                     */
+    if (links_need_subtracting() && embed_varma) {
+        int j;
+        embed_varma = 0;
+        fprintf(stderr,
+            "Note: switching to the SUBTRACTING cast (-S).\n");
+        for (j = 1; j <= n_link; j++) {
+            int o = lnk[j].out, in = lnk[j].inp;
+            if (!operators_differ(o, in)) continue;
+            fprintf(stderr,
+                "      %s <- %s: differenced by DIFFERENT operators (orders %d "
+                "and %d).\n", Ts[o].name, Ts[in].name,
+                Tm[o].ornsop, Tm[in].ornsop);
+        }
+        fprintf(stderr,
+            "      The transfer relates the LEVELS and the noise carries the\n"
+            "      differencing, so the input must enter differenced by the\n"
+            "      OUTPUT's operator. The embedded cast has one column per\n"
+            "      series and cannot hold a second vector; the subtracting one\n"
+            "      can. Without this the fitted transfer would be nu(B)*Delta(B)\n"
+            "      and the reported GAIN wrong by Delta(1). See BUG-8.\n");
+    }
 
     if (aggr_file != NULL) {
         int na = read_aggregates(aggr_file);

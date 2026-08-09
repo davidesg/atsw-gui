@@ -557,11 +557,18 @@ void shootx(real *xfree, struct Tvarma *armax, int *ifaultx, int firstx, int las
             compute_irf(omega[j], lnk[j].s, delta[j], lnk[j].r, lnk[j].b,
                         nu[j], n_stat);
 
-            /* la salida o recibe: sum_k nu_j[k] * w_in[t-k+1] */
+            /* La salida o recibe: sum_k nu_j[k] * x[t-k+1].
+
+               x NO es la columna propia de la entrada cuando los dos operadores
+               difieren: es la entrada diferenciada por el operador de la SALIDA
+               (BUG-8). w_alt[j] la trae ya calculada y recortada a n_stat, y es
+               NULL cuando coinciden -- todo el legacy pasa por la rama de la
+               derecha y no se mueve ni un bit.                                */
+            real *xin = w_alt[j] ? w_alt[j] : w[in];
             for (t = 1; t <= n_stat; t++) {
                 real acc = 0.0;
                 for (k = 1; k <= t; k++)
-                    acc += nu[j][k] * w[in][t - k + 1];
+                    acc += nu[j][k] * xin[t - k + 1];
                 tr[o][t] += acc;
             }
         }

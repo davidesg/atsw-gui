@@ -2078,6 +2078,61 @@ check "con s=0 la ganancia sigue siendo omega_0" "$W00" "$GAN0" 1e-6
 
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
+echo "── 11. BUG-8: EL DESPACHO cuando los operadores de diferenciacion difieren ──"
+echo "   El modelo dice que la transferencia relaciona los NIVELES y que la"
+echo "   diferenciacion la lleva el ruido. Si la salida va a grad grad_12 y la"
+echo "   entrada a grad, lo que el cast EMPOTRADO ajusta no es nu sino nu*Delta,"
+echo "   con Delta = (1-B^12), y Delta(1)=0 ANIQUILA la ganancia. drtran despacha"
+echo "   esos casos al cast por RESTA, que si puede alimentar la transferencia con"
+echo "   la entrada re-diferenciada por el operador de la SALIDA."
+echo ""
+
+PT8=/home/david/Dropbox/SRC/atws/Taste/oracle/data/passthrough8
+if [ -f "$PT8/PT8_FR.pre" ]; then
+    B8="$TMPDIR/bug8.out"
+    ERR8="$TMPDIR/bug8.err"
+    $DRTRAN "$PT8/PT8_FR.pre" "$PT8/PT8_WTI.pre" -b 0 -r 0 -s 1 -o "$B8" \
+            >/dev/null 2>"$ERR8"
+
+    if grep -q "SUBTRACTING cast" "$ERR8"; then
+        pass "el despacho AVISA de que cambia de cast (no lo hace callando)"
+    else
+        fail "el despacho no avisa"
+    fi
+
+    # El oraculo TASTE, que no comparte una linea de codigo con esta familia,
+    # da 0.009070 / -0.006200. Antes del despacho drtran daba 0.004282: un 53%
+    # de discrepancia. La tolerancia de 2e-4 es la banda en la que caen los
+    # casos EMPAREJADOS, que nunca estuvieron en duda.
+    check "FR omega[0] con el despacho"  0.009162 "$(val "$B8" 'omega1\[0\]')" 2e-5
+    check "FR omega[1] con el despacho" -0.005973 "$(val "$B8" 'omega1\[1\]')" 2e-5
+    check "FR aterriza en el oraculo TASTE (0.009070)" \
+          0.009070 "$(val "$B8" 'omega1\[0\]')" 2e-4
+
+    # Y el control que hace que lo anterior signifique algo: un caso EMPAREJADO
+    # no se despacha y no se mueve ni un bit.
+    M8="$TMPDIR/bug8_match.out"
+    ERR8M="$TMPDIR/bug8_match.err"
+    $DRTRAN "$CASES/ES_CPI_m10.pre" "$CASES/WTI_ar1.pre" -b 0 -r 0 -s 1 -o "$M8" \
+            >/dev/null 2>"$ERR8M"
+    if grep -q "SUBTRACTING cast" "$ERR8M"; then
+        fail "un caso EMPAREJADO fue despachado (no debe)"
+    else
+        pass "un caso emparejado NO se despacha"
+    fi
+    # Verificado contra el binario ANTERIOR al despacho: ambos dan 0.016400 y
+    # logL -718.287406, identicos. (0.016402 es el valor del cast por RESTA
+    # para el mismo caso -- los dos casts difieren un poco, y confundirlos es
+    # exactamente el error que este control existe para no cometer.)
+    check "y su omega[0] no se mueve" 0.016400 "$(val "$M8" 'omega1\[0\]')" 1e-6
+    check "ni su verosimilitud" -718.287406 \
+          "$(grep 'Log-likelihood' "$M8" | awk '{print $3}')" 1e-5
+else
+    echo "  (saltado: el banco del oraculo no esta montado)"
+fi
+
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
 echo "============================================"
 echo -e "  RESULTADO: ${GREEN}$PASS PASS${NC}, ${RED}$FAIL FAIL${NC}"
 echo "============================================"

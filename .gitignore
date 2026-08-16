@@ -1,0 +1,6 @@
+# drvec — build artifacts
+build/
+bin/
+*.o
+*.out
+*.txt

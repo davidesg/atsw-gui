@@ -2,7 +2,8 @@
 
 *Objetivos, criterios de salida medibles y contingencias. Escrito el 2026-08-17,
 sobre lo establecido en `ANALISIS_PRELIMINAR.md` (diagnóstico y siete
-correcciones) y `ESTUDIO_BVECM_vs_DRVEC.md` (el legado y su artículo).*
+correcciones), `ESTUDIO_BVECM_vs_DRVEC.md` (el legado y su artículo) y el estudio
+de la literatura de `literature/` recogido en §3.*
 
 ---
 
@@ -52,6 +53,8 @@ de proceso más grande: todo lo verificado en esta sesión se comprobó a mano.
 - **La columna EML de Mauricio no es reproducible** y no se puede cerrar con el
   material disponible.
 - No hay capa interpretable, ni siembra desde la suite, ni batería de pruebas.
+- **La normalización no está verificada**: `drvec` obliga a elegir qué series van
+  en el bloque Y₁ y no diagnostica si la elección es apropiada (§3, Mélard).
 
 ---
 
@@ -92,7 +95,109 @@ pero es el peldaño desde el que se construye todo.
 
 ---
 
-## 3. Fases
+## 3. La literatura que condiciona el plan
+
+*Estudiada el 2026-08-17. Cuatro piezas de `literature/`, y dos de ellas cambian
+fases de este plan.*
+
+### Mélard, Roy y Saidi (2004) — la construcción alternativa
+`literature/TR0444.pdf`. Es el «Mélard et al. (2004)» que Mauricio cita como
+única referencia previa para EML de VARMA parcialmente no estacionarios, y frente
+al que se posiciona («simpler … does not suffer from nonuniqueness issues and is
+not tied to the state-space framework»). Ruta espacio-de-estados: algoritmo de
+Shea (1987, 1989), filtro de Kalman, recursiones tipo Chandrasekhar.
+
+**Correspondencia, para el diccionario.** Usan la misma parametrización de rango
+reducido: `C = C₁C₂` con `C₂ = [I_{k−d}, C₀]` normalizada. Como `C = −Φ(1) = −Π`
+y Mauricio tiene `Π = ΛB′` con `B = [I_r; B₂]`:
+
+> **C₁ = −Λ** y **C₀ = B₂′**.
+
+**Un aviso que toca directamente a nuestro banco.** Escriben, sobre el criterio
+de Ahn–Reinsel y Yap–Reinsel: *«Contrarily to what they say, the assumption on
+Φ(1) does not imply that Σ Φⱼ = I + C has d unit eigenvalues. There are examples
+where that procedure does not work, as Pham, Roy and Cédras (2003) have pointed
+out.»* Y como `Π = Φ(1)`, «Π̂ tiene un autovalor nulo» es exactamente «ΣΦⱼ tiene
+un autovalor unitario»: **el criterio que dicen que no está implicado**. O sea que
+los autovalores de Π̂ que el banco cita de las Tablas 2 y A3 de Mauricio (0.0413 /
+1.0602 y 0, 0.7212) son un indicio, **no un criterio de rango fiable**. Refuerza
+que el instrumento correcto es el test LR — es decir, F4.
+
+**Y destapa un hueco real de `drvec` para beta.** Ellos evitan la normalización:
+usan la descomposición de Pham–Roy–Cédras basada en el **espacio nulo de Φ(1)**
+—una tercera transformación, distinta de la C̄ de Mauricio y de la triangular de
+Phillips— cuya ventaja es que **no hay que elegir qué variables van en el bloque
+Y₁**. `drvec` sí obliga a elegirlas, por el orden de columnas del `.inp`, y **no
+ofrece ningún diagnóstico** de si esa normalización es apropiada. Mauricio lo
+advierte él mismo (p. 3648) y remite a Luukkonen et al. (1999) y Kurozumi (2005).
+Para un programa que va a usar otra persona, una normalización mal elegida es una
+trampa silenciosa. → **entra en el plan** (F3, y en los criterios de beta).
+
+Aportan además errores estándar y un **estudio Monte Carlo de propiedades en
+muestra pequeña**: precedente directo de F4.
+
+### Johansen y Swensen (2024) — la aplicación, y reordena F3
+`literature/Journal Time Series Analysis - 2023 - Johansen - …pdf`
+(JTSA 45:248–268). Restricciones lineales sobre los coeficientes de ajuste α,
+combinadas con expectativas racionales exactas. Definen tres modelos:
+
+| | restricción | nº de parámetros de αβ′ |
+|---|---|---|
+| **H(r)** | α, β libres | `pr + r(p−r)` |
+| **H₁(r)** | **α = Aψ**, A conocida p×s de rango s | `sr + r(p−r)` |
+| **H₂(r)** | α = (a, a⊥φ), a conocida p×m | `mp + (r−m)(2p−r)` |
+
+Dos lecturas que cambian el plan:
+
+1. **H(r) es exactamente la parametrización de `drvec`.** Con p = M: `Mr + r(M−r)`
+   = Λ (M·r) + B₂ (s·r). Confirmación independiente de que `drvec` parametriza el
+   modelo canónico, y de paso da los grados de libertad de cualquier test:
+   H₁(r) frente a H(r) son **(M−s)·r**.
+2. **La exogeneidad débil es un caso particular de H₁(r)** (A selecciona las filas
+   no nulas). Así que F3 **no** debe implementar «tests de exogeneidad débil» ad
+   hoc, sino **α = Aψ con A suministrada por el usuario**, que subsume la
+   exogeneidad débil, los vectores de ajuste conocidos (H₂) y las restricciones de
+   expectativas racionales exactas.
+
+**Y aquí `drvec` está inusualmente bien colocado**, mejor de lo que argumenté
+antes: **Λ está *en* su vector de parámetros**, así que imponer α = Aψ es
+sustituir M·r entradas libres por s·r y calcular Λ = Aψ dentro de `vec_shootx` —
+el mismo tipo de cambio que `-fixb2`, local y barato. En coordenadas BVECM α es
+*derivada*, así que la misma restricción exigiría optimización con restricciones a
+través de la aplicación inversa. **Es el argumento más fuerte a favor de la
+parametrización de `drvec` que ha aparecido en todo el estudio.**
+
+**Posicionamiento que sale de aquí.** Johansen estima H(r), H₁(r) y H₂(r) por
+regresión de rango reducido (Anderson, 1951) sobre un **VAR condicional**. Lo que
+`drvec` aportaría es **las mismas clases de restricción bajo ML exacta y con
+componentes MA**. Eso es una frase defendible sobre para qué sirve el programa.
+
+Su Ejemplo 1 es consumo / renta del trabajo / renta del capital (Campbell 1987,
+hipótesis de la renta permanente): la familia valor-presente, que es donde encaja
+la aplicación de convergencia y ley de un precio único.
+
+### Trenkler (2004) — arregla la parte más débil de F4
+`literature/trenkler.pdf`. Aproxima las distribuciones asintóticas de tests de
+cointegración de sistemas por una **Gamma** cuyos parámetros salen de
+**superficies de respuesta**, con lo que *«can be easily used to derive arbitrary
+p-values or percentiles»*.
+
+Eso sustituye mi tabla de tres columnas indexada por M−r —que no tiene entrada
+para el caso 3 y no da p-valores— por **p-valores arbitrarios calculables**.
+
+**Con una salvedad que hay que respetar:** sus estadísticos son la familia
+Saikkonen–Lütkepohl **con ajuste previo por los términos deterministas**, no
+literalmente la traza ni el λ-max de Johansen. Lo que transfiere es la *técnica*;
+para estadísticos tipo Johansen la fuente correcta es **MacKinnon, Haug y
+Michelis (1999)**, que es justamente la que cita Mauricio.
+
+### T28297-2 — material de aplicación
+Capítulo de tesis sobre otras relaciones de cointegración (variables I(1) e I(2),
+ratios de nominales). No es metodológico; se retiene como fuente de casos.
+
+---
+
+## 4. Fases
 
 Cada fase declara objetivo, criterio de salida **medible**, y contingencia.
 
@@ -192,31 +297,53 @@ configuraciones del banco, y la puerta diagonal (§2) sigue cuadrando a 1e-9.
 
 ---
 
-### F3 — Capa interpretable: formas BEC y Π
+### F3 — Capa interpretable: restricciones sobre α, formas BEC y Π
 
 **Objetivo.** Que `drvec` responda preguntas económicas. Hoy da Λ̂ y B̂₂ y para.
 
-Hace falta la triangularización P con Σ = PDP′ y D diagonal (BVECM §4), que
-descorrelaciona las innovaciones y da las ecuaciones desacopladas, más:
+Tras Johansen y Swensen (§3), el diseño correcto **no** es «tests de
+exogeneidad débil», sino la clase general:
 
-- forma BEC: `∇Y_t = Λ(B′Y_{t−1} − E[W]) + C(B)∇Y_{t−1} + u_t`;
-- forma Π;
-- **contrastes de exogeneidad débil** (filas de Λ nulas), por Wald.
+> **α = Aψ**, con A suministrada por el usuario (H₁(r)), de la que la exogeneidad
+> débil es un caso particular. Y `drvec` está bien colocado: **Λ está en su vector
+> de parámetros**, así que imponerlo es sustituir M·r entradas libres por s·r y
+> calcular Λ = Aψ en `vec_shootx` — el mismo tipo de cambio que `-fixb2`. Los
+> grados de libertad del LR contra H(r) son **(M−s)·r**, explícitos en el artículo.
+
+Y además, para interpretar:
+
+- la triangularización P con Σ = PDP′ (BVECM §4), que descorrelaciona las
+  innovaciones y da las ecuaciones desacopladas;
+- las formas BEC (`∇Y_t = Λ(B′Y_{t−1} − E[W]) + C(B)∇Y_{t−1} + u_t`) y Π.
 
 `drv_project` lo tiene resuelto para el caso bivariante (`analisis_BEC`,
-`calcular_chi2_weakex`, `calcular_chi2_joint`, con método delta y pseudoinversa
-SVD), y `LEGACY_NOTES.md` §2 y §5 ya recogen las fórmulas.
+`calcular_chi2_weakex`, `calcular_chi2_joint`), y `LEGACY_NOTES.md` §2 y §5
+recogen las fórmulas.
 
-**Salida.** Sobre un caso bivariante, reproducir los α, γ y los p-valores de
-exogeneidad débil de `drv_project` con tolerancia declarada. `drvec` tiene
-ventaja aquí: **Λ ya está en sus coordenadas**, así que sus errores estándar
-salen del Hessiano y no del método delta.
+**Y un hueco que la literatura destapó y hay que cerrar aquí:** `drvec` obliga a
+elegir qué r series van en el bloque Y₁ (por el orden de columnas del `.inp`) y
+**no dice nada** sobre si esa normalización es apropiada. Mélard et al. lo evitan
+por construcción; Mauricio lo advierte y remite a Luukkonen et al. (1999) y
+Kurozumi (2005). Beta necesita, como mínimo, un **diagnóstico** que avise cuando
+la normalización elegida sea dudosa — por ejemplo que alguna fila de B̂ implicada
+sea numéricamente despreciable, o que el ajuste sea muy sensible a permutar el
+bloque.
 
-**Contingencia.** Si el método delta para C(B) y Π resulta frágil, se publican
-las estimaciones puntuales de la forma BEC **sin** errores estándar, marcando el
-hueco. Es mejor que unos errores estándar que no se sostienen. La exogeneidad
-débil, que es el contraste que de verdad interesa, sólo necesita Λ y su
-covarianza — que ya son directas.
+**Salida.**
+1. `-alpha <fichero>` (o equivalente) impone α = Aψ y reporta el LR contra H(r)
+   con (M−s)·r grados de libertad.
+2. Sobre un caso bivariante, reproducir los α, γ y los p-valores de exogeneidad
+   débil de `drv_project` con tolerancia declarada.
+3. Un aviso de normalización dudosa que se dispare en un caso construido a
+   propósito para ello.
+
+**Contingencia.** Si el método delta para C(B) y Π resulta frágil, se publican las
+estimaciones puntuales de la forma BEC **sin** errores estándar, marcando el
+hueco: mejor que unos errores estándar que no se sostienen. Lo que **no** se
+sacrifica es α = Aψ, porque ahí Λ y su covarianza ya son directas. Y si el
+diagnóstico de normalización no se deja construir a tiempo, beta se documenta
+diciendo **explícitamente** que la elección del bloque Y₁ es responsabilidad del
+usuario y no está verificada — declararlo es aceptable; no mencionarlo, no.
 
 ---
 
@@ -231,9 +358,24 @@ estimados, reestimar H₀ y H₁ en cada una, y tomar percentiles empíricos. Ra
 hay componentes MA bajo las dos hipótesis y (en su extensión) el operador de
 convergencia añade deterministas que desplazan la distribución.
 
+**Y dos mejoras que salen de la literatura (§3):**
+
+- **p-valores en vez de una tabla de tres columnas.** Trenkler (2004) aproxima la
+  distribución asintótica por una **Gamma** con parámetros de **superficies de
+  respuesta**, lo que permite p-valores o percentiles arbitrarios. Eso cierra el
+  hueco del **caso 3**, que hoy sale con `-` porque no lo tabulé. Salvedad: sus
+  estadísticos son los de Saikkonen–Lütkepohl con ajuste previo por deterministas;
+  la técnica transfiere, pero para estadísticos tipo Johansen la fuente correcta es
+  **MacKinnon, Haug y Michelis (1999)**, la que cita Mauricio.
+- **No usar los autovalores de Π̂ como criterio de rango.** Mélard et al. muestran
+  que el supuesto sobre Φ(1) **no implica** que ΣΦⱼ tenga d autovalores unitarios
+  (Pham, Roy y Cédras, 2003). Es indicio, no criterio; el test LR es el
+  instrumento. Conviene anotarlo donde el banco cita esos autovalores.
+
 **Salida.** Reproducir el rango de `ca.jo` en ≥ 4 casos del banco, con los
-valores asintóticos actuales **y** con el bootstrap, y que coincidan en esos
-casos. Los asintóticos se conservan como opción rápida por defecto.
+valores asintóticos **y** con el bootstrap, y que coincidan en esos casos. Los
+asintóticos se conservan como opción rápida por defecto, y el caso 3 deja de
+salir sin valores críticos.
 
 **Contingencia.** El coste es N × M estimaciones completas y puede ser
 prohibitivo. En ese caso: (a) reducir N y **reportar el error de Monte Carlo**
@@ -267,11 +409,13 @@ r = 1, que es el que decide si hay cointegración y el único imprescindible.
 | 4 | Formas BEC/Π y exogeneidad débil, con o sin s.e. declarado | ✘ (F3) |
 | 5 | Rango correcto en ≥ 4 casos del banco | parcial: 2 de 2 probados |
 | 6 | Todo termcode 3 residual **explicado**, no necesariamente eliminado | ✘ |
+| 6b | α = Aψ soportado, con LR y grados de libertad correctos | ✘ (F3) |
+| 6c | La elección del bloque Y₁ **diagnosticada o declarada** como no verificada | ✘ (F3) |
 | 7 | Registro de homologación y documento de entrada | ✘ (F5) |
 
 ---
 
-## 4. Restricciones transversales
+## 5. Restricciones transversales
 
 Valen para todas las fases y no se negocian:
 
@@ -288,7 +432,7 @@ Valen para todas las fases y no se negocian:
 
 ---
 
-## 5. Registro de riesgos
+## 6. Registro de riesgos
 
 | # | riesgo | probabilidad | contingencia |
 |---|---|---|---|
@@ -298,11 +442,12 @@ Valen para todas las fases y no se negocian:
 | R4 | **Los datos del Census Housing no aparecen** | alta | Beta se homologa con un solo caso de Mauricio más los reproducidos con `ca.jo`. Ya está declarado en el banco |
 | R5 | **Trampas de convención** entre `drvec`, BVECM y `drv_project`: B₂ = −β, orden de Ȳ invertido en el código del legado, `p` como orden sobre Ȳ y no sobre ∇Y | media, y ya ha mordido dos veces | Están en `ESTUDIO_BVECM_vs_DRVEC.md` §2 y en §2 de este plan. Convertirlas en **un test** en F0, no sólo en documentación |
 | R6 | **F3 se desborda** (la triangularización P general para M y r arbitrarios es más trabajo del que parece) | media | Beta con la capa interpretable **sólo para el caso bivariante** (M=2, r=1), que es el del banco y el del legado, y el caso general como post-beta |
+| R8 | **Normalización mal elegida.** El usuario decide el bloque Y₁ por el orden de columnas; una elección mala da un modelo equivocado sin avisar | media | Diagnóstico en F3; y si no llega, **declararlo** en la documentación de beta. Luukkonen et al. (1999) y Kurozumi (2005) son las referencias |
 | R7 | **Deriva de documentación**: cinco documentos y las correcciones se pisan | media, ya ocurrió en esta sesión | F5 consolida. Mientras tanto, cada corrección se fecha y se dice qué afirmación anterior invalida |
 
 ---
 
-## 6. Lo que **no** entra en beta
+## 7. Lo que **no** entra en beta
 
 Declararlo evita que el alcance se estire:
 
@@ -320,7 +465,7 @@ Declararlo evita que el alcance se estire:
 
 ---
 
-## 7. Orden recomendado y por qué
+## 8. Orden recomendado y por qué
 
 **F0 → F1 → F2 → (F3 ∥ F4) → F5.**
 

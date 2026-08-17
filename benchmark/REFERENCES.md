@@ -65,6 +65,44 @@ and one benchmark case in `benchmark/`.
     Society, Series B*, 39, 114–118. (The exact-ML vector-MA method Chan &
     Wallis used; cited via them, not held locally.)
 
+14. Mélard, G., Roy, R. and Saidi, A. (2004). "Exact maximum likelihood
+    estimation of structured or unit root multivariate time series models."
+    IAP Statistics Network Technical Report 0444. (The state-space route —
+    Shea's algorithm, Kalman filter, Chandrasekhar recursions — that Mauricio
+    (2006) cites as the only prior reference. PDF in `literature/TR0444.pdf`.
+    Note its warning that rank[Φ(1)] = k−d does **not** imply that ΣΦⱼ has d
+    unit eigenvalues, after Pham, Roy and Cédras (2003): the eigenvalues of Π̂
+    quoted in `benchmark/README.md` are an indication, not a rank criterion.)
+
+15. Johansen, S. and Swensen, A.R. (2024). "Adjustment coefficients and exact
+    rational expectations in cointegrated vector autoregressive models."
+    *Journal of Time Series Analysis*, 45, 248–268.
+    DOI: `10.1111/jtsa.12705`. (Defines H(r), H₁(r): α = Aψ, and H₂(r) with
+    their parameter counts. Weak exogeneity is a special case of H₁(r). PDF in
+    `literature/`.)
+
+16. Trenkler, C. (2004). "Determining p-values for systems cointegration tests
+    with a prior adjustment for deterministic terms." CASE Working Paper
+    2004/37, Humboldt-Universität zu Berlin. (Gamma approximation with
+    response-surface parameters, giving arbitrary p-values. PDF in
+    `literature/trenkler.pdf`.)
+
+17. MacKinnon, J.G., Haug, A.A. and Michelis, L. (1999). "Numerical
+    distribution functions of likelihood ratio tests for cointegration."
+    *Journal of Applied Econometrics*, 14, 563–577. (The response surfaces for
+    Johansen-type statistics; the source Mauricio (2006) cites for his
+    asymptotic p-values. Not held locally.)
+
+18. Pham, D.T., Roy, R. and Cédras, L. (2003). (Cited via Mélard et al. 2004
+    for the counterexample to the unit-eigenvalue criterion and for the
+    null-space decomposition used instead. Not held locally.)
+
+19. Luukkonen, R., Ripatti, A. and Saikkonen, P. (1999); Kurozumi, E. (2005).
+    (Procedures for checking whether the applied normalization of B and the
+    corresponding arrangement of Yₜ are appropriate; cited by Mauricio (2006),
+    p. 3648. Not held locally — relevant to the open normalization gap, see
+    `docs/PLAN_BETA.md` §3 and F3.)
+
 ## Software (reference implementation)
 
 - R 4.3.3 (2024-02-29)
@@ -75,6 +113,38 @@ and one benchmark case in `benchmark/`.
 ## BibTeX
 
 ```bibtex
+@techreport{melard2004,
+  author      = {M{\'e}lard, Guy and Roy, Roch and Saidi, Abdessamad},
+  title       = {Exact maximum likelihood estimation of structured or unit root
+                 multivariate time series models},
+  institution = {IAP Statistics Network}, number = {0444}, year = {2004}
+}
+
+@article{johansenswensen2024,
+  author  = {Johansen, S{\o}ren and Swensen, Anders Rygh},
+  title   = {Adjustment coefficients and exact rational expectations in
+             cointegrated vector autoregressive models},
+  journal = {Journal of Time Series Analysis},
+  volume  = {45}, pages = {248--268}, year = {2024},
+  doi     = {10.1111/jtsa.12705}
+}
+
+@techreport{trenkler2004,
+  author      = {Trenkler, Carsten},
+  title       = {Determining p-values for systems cointegration tests with a
+                 prior adjustment for deterministic terms},
+  institution = {Humboldt-Universit{\"a}t zu Berlin, CASE},
+  number      = {2004/37}, year = {2004}
+}
+
+@article{mackinnon1999,
+  author  = {MacKinnon, James G. and Haug, Alfred A. and Michelis, Leo},
+  title   = {Numerical distribution functions of likelihood ratio tests for
+             cointegration},
+  journal = {Journal of Applied Econometrics},
+  volume  = {14}, pages = {563--577}, year = {1999}
+}
+
 @article{johansen1990,
   author  = {Johansen, S{\o}ren and Juselius, Katarina},
   title   = {Maximum likelihood estimation and inference on cointegration ---

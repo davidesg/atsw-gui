@@ -115,6 +115,17 @@ the literature.
 - ✘ **Not usable as targets:** the published log-likelihoods (15.6116 / 15.1257)
   and the Λ̂, B̂, Σ̂ values that go with them. **Do not tune `drvec` against them.**
 
+### Caveat on the Π̂ eigenvalues quoted above
+
+Mauricio reports the eigenvalues of Π̂ as evidence of the number of unit roots
+(0.0413/1.0602 in Table 2; 0/0.7212 in Table A3). **Read them as an indication,
+not as a rank criterion.** Mélard, Roy and Saidi (2004, §3) point out that the
+assumption rank[Φ(1)] = k−d does *not* imply that ΣΦⱼ = I + C has d unit
+eigenvalues, and that there are counterexamples where the procedure fails (Pham,
+Roy and Cédras, 2003). Since Π = Φ(1), "Π̂ has a single zero eigenvalue" is
+exactly the criterion they warn about. The likelihood-ratio test (`-lrtest`) is
+the instrument; the eigenvalues are a sanity check.
+
 ### Provenance caveats
 
 - Chan & Wallis state that Jones (1914) covers **1848–1909**; Mauricio states

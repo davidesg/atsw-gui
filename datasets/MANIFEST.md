@@ -34,6 +34,20 @@ are byte-copies from `/usr/share/gretl/data/misc/`.
 - **Sample**: annual, 1850–1911, 62 observations.
 - **SHA-256**: `d7fe4eb3d2c107cd5cb52045998d9bc4cf09540c1569db291e9e8bfcbbdc5285`
 
+### `mauricio/mink_muskrat.inp`
+- **Derived from**: `mauricio/mink_muskrat.csv` (same provenance), taking
+  natural logs of both series. No other transformation.
+- **Layout**: drvec's default (levels). Column order is [Y₂ ; Y₁]: col 1 =
+  `log muskrat` (Y₂, nonstationary — drvec forms ∇Y₂ internally), col 2 =
+  `log mink` (Y₁, the cointegrating block, kept in levels). M = 2, r = 1.
+- **Regenerated 2026-08-17.** It previously held ∇`log muskrat` pre-differenced
+  (61 rows) and its series-name line was in the reverse order to its columns.
+  Without the true levels of Y₂ drvec has to cumulate them from an arbitrary
+  origin, which breaks `-case 1` and makes `Ê[W]` incomparable with the
+  published value; see `docs/ANALISIS_PRELIMINAR.md` §4.3.
+- **Sample**: annual, 1850–1911, 62 observations (61 after differencing).
+- **SHA-256**: `15438b4dc29a1ff73c1a0b191bd36231efd31f4542e6d511371f11ae176bde17`
+
 ### `mauricio/census_housing` (data NOT yet located)
 - **Source**: Mauricio (2006), AddOn A2; the data are the US Census Housing
   data (housing starts, houses sold) used by Reinsel (1997) Ex. 6.4/6.6 and

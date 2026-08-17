@@ -49,6 +49,22 @@ and one benchmark case in `benchmark/`.
 10. Jones, J.W. (1914). "Fur-farming in Canada." Commission of Conservation,
     Canada, pp. 209–214. (Source of the Mink–Muskrat data.)
 
+11. Chan, W.-Y.T. and Wallis, K.F. (1978). "Multiple time series modelling:
+    another look at the mink–muskrat interaction." *Journal of the Royal
+    Statistical Society, Series C (Applied Statistics)*, 27(2), 168–175.
+    JSTOR: `2346944`. (Independent exact-ML calibration of the Mink–Muskrat
+    residual covariance; see `benchmark/README.md`. PDF in `literature/`.)
+
+12. Jenkins, G.M. (1975). "The interaction between the muskrat and mink cycles
+    in North Canada." *Proceedings of the 8th International Biometric
+    Conference*, 55–71. Editura Academiei Republicii Socialiste Romania.
+    (Cited via Chan & Wallis 1978; not held locally.)
+
+13. Osborn, D.R. (1977). "Exact and approximate maximum likelihood estimators
+    for vector moving average processes." *Journal of the Royal Statistical
+    Society, Series B*, 39, 114–118. (The exact-ML vector-MA method Chan &
+    Wallis used; cited via them, not held locally.)
+
 ## Software (reference implementation)
 
 - R 4.3.3 (2024-02-29)
@@ -133,5 +149,14 @@ and one benchmark case in `benchmark/`.
   author  = {Jones, J. W.},
   title   = {Fur-farming in Canada},
   booktitle = {Commission of Conservation}, pages = {209--214}, year = {1914}
+}
+
+@article{chanwallis1978,
+  author  = {Chan, W.-Y. T. and Wallis, Kenneth F.},
+  title   = {Multiple Time Series Modelling: Another Look at the
+             Mink--Muskrat Interaction},
+  journal = {Journal of the Royal Statistical Society, Series C
+             (Applied Statistics)},
+  volume  = {27}, number = {2}, pages = {168--175}, year = {1978}
 }
 ```

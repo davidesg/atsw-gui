@@ -46,12 +46,17 @@ principal era de **identificación**: el vector de parámetros llevaba un grado 
 libertad que la verosimilitud no puede ver, una cresta exactamente plana por la
 que el optimizador se deslizaba hasta que el line search fallaba. **Corregido**
 (§3.5 y §3.6): `npar` baja en uno, la log-verosimilitud sube en casi todas las
-configuraciones, |Σ̂| se acerca mucho a la banda de aceptación, y el `-lrtest`
+configuraciones, |Σ̂| se acerca mucho al objetivo de aceptación, y el `-lrtest`
 pasa a dar log-verosimilitudes monótonas en r en vez de estadísticos negativos
 imposibles. Lo que **queda**: el optimizador sigue parando en termcode 3, y el
-punto exacto donde para varía según por dónde se entre — por eso |Σ̂| oscila
-entre 0.00237 y 0.00257 en configuraciones equivalentes, y el criterio de §5.11
-todavía no se cumple de forma fiable.
+punto exacto donde para varía según por dónde se entre — por eso |Σ̂| oscilaba
+entre 0.00234 y 0.00257 en configuraciones equivalentes, y el criterio de §5.11
+todavía no se cumple.
+
+*(Actualización del 2026-08-17, tras F1 de `PLAN_BETA.md`: la oscilación se cerró
+—las cuatro configuraciones caen ahora en 0.00246–0.00251— pero el nivel sigue en
+~0.00248 frente a un objetivo de ~0.00230. El criterio se cumple en la
+concordancia y no en el nivel.)*
 
 Queda **un asunto abierto y relevante**: `drvec` no reproduce la verosimilitud
 publicada por Mauricio (6.5 frente a 15.13). He descartado que la causa esté en
@@ -323,9 +328,18 @@ Lo que consigue, medido:
 | **\|Σ̂\|, layout antiguo caso 2** | 0.002496 | **0.002373** ← el mejor de los cuatro |
 | Λ̂₁, niveles caso 2 (Tabla 4: 0.8392) | 0.5610 | **0.8371** |
 
-La log-verosimilitud sube en 5 de 6 configuraciones y **|Σ̂| se acerca mucho a la
-banda de §5.11** (0.0022–0.0024), aunque sólo una de las cuatro configuraciones
-probadas cae dentro. Los errores estándar salen ya de un Hessiano no singular.
+La log-verosimilitud sube en 5 de 6 configuraciones y **|Σ̂| se acerca mucho al
+objetivo de §5.11**, aunque sólo una de las cuatro configuraciones probadas cae
+dentro de la banda que entonces era el criterio (0.0022–0.0024, corregida
+después: ver §5.11). Los errores estándar salen ya de un Hessiano no singular.
+
+> **Procedencia de las filas «legado» / «layout antiguo», anotada el 2026-08-17.**
+> Todas se midieron sobre `datasets/mauricio/mink_muskrat_legacy_p8.inp`, que
+> escribe los datos con **8 decimales**. La batería genera su propio fixture con
+> `%.10f`, y sobre ése los mismos ajustes dan 0.002344 y 0.002459 en vez de
+> 0.002373 y 0.002483. Las dos medidas son correctas sobre su propia entrada; es
+> la trampa de precisión de F0, y por eso el fichero de 8 decimales está ahora en
+> el repositorio: sin él estos números no son reproducibles.
 
 **Lo que NO consigue:** el optimizador sigue parando en termcode 3 («last global
 step failed to locate a lower point») en la mayoría de casos. Es decir, la
@@ -845,11 +859,17 @@ compara entre sus Tablas 2 y 4, y los usa en el test LR de la Tabla 3; conviene
 tenerlo presente.) **|Σ̂| en cambio es invariante**: es la misma covarianza de
 innovaciones en las dos representaciones.
 
-> **Criterio de aceptación para `mink_muskrat`:** un VARMA(2,1) sobre estos
-> datos debe dar **|Σ̂| ≈ 0.0023**, y en ningún caso por debajo de ~0.0022.
-> Respaldado por tres fuentes independientes: Chan & Wallis (0.00246, con AR de
-> orden 4), la columna CML del propio artículo (0.002312) y la búsqueda global
-> (0.002311 con puerta, 0.002294 sin ella).
+> **Criterio de aceptación para `mink_muskrat`** *(corregido el 2026-08-17)*:
+> el objetivo nítido es la **búsqueda global sobre el mismo modelo y los mismos
+> datos** — un VARMA(2,1) por ML exacta llega a **|Σ̂| ≈ 0.00230** (0.002311 con
+> la puerta de invertibilidad, 0.002294 sin ella), y la columna CML del propio
+> artículo (0.002312) coincide. Ése es el objetivo.
+>
+> Chan & Wallis (0.00246) **calibra la magnitud pero no es el objetivo**: es otro
+> modelo (AR de orden 4) sobre otra ventana muestral. En la primera versión de
+> este criterio fijé una banda 0.0022–0.0024 y cité a Chan & Wallis como apoyo,
+> **aunque su valor cae fuera de esa banda** — un descuido que conviene no
+> arrastrar.
 >
 > Lo que **no** sirve como objetivo son los 15.61 / 15.13 publicados, ni el
 > |Σ̂| = 0.001788 que los acompaña.
@@ -859,6 +879,10 @@ exacta del modelo (22) sobre Y_t topa en **7.17** (n=61) / **8.14** (n=62).
 
 **Dónde está `drvec`** (p=2, q=1, r=1):
 
+*Estado tras §3.6, antes de F1. Las filas «layout antiguo» sobre el fixture de 8
+decimales (ver la nota de procedencia en §3.6); la columna de la derecha es la
+banda que entonces se usaba como criterio, hoy corregida.*
+
 | | \|Σ̂\| | ¿dentro de 0.0022–0.0024? |
 |---|---|---|
 | tras §3.5, layout antiguo, caso 2 | 0.002496 | no, un 8 % alto |
@@ -866,6 +890,10 @@ exacta del modelo (22) sobre Y_t topa en **7.17** (n=61) / **8.14** (n=62).
 | tras §3.6, layout antiguo, caso 3 | 0.002483 | por poco, no |
 | tras §3.6, **niveles (el defecto)**, caso 2 | 0.002461 | por poco, no |
 | tras §3.6, niveles, caso 3 | 0.002569 | no |
+
+**Tras F1** las cuatro concuerdan en ~0.00248 con dispersión 0.000048 (frente a
+0.000225), medidas todas sobre el fixture de `%.10f`; el nivel objetivo sigue sin
+alcanzarse y pasa a F2. Tabla completa en `PLAN_BETA.md` F1.
 
 Quitar el parámetro que no estaba identificado acercó todo al objetivo, pero
 **el criterio no se cumple de forma fiable**: sólo lo cumple una de las cuatro
@@ -932,9 +960,10 @@ arrastren:
 - [x] **§3.6** — quitado el parámetro redundante de Σ.
 - [x] **§4.5** — búferes de nombre de fichero.
 - [x] **Medido contra el criterio de §5.11**: |Σ̂| baja de 0.002496 a un rango
-      de 0.00237–0.00257 según la configuración. **El criterio aún no se cumple
+      de 0.00234–0.00257 según la configuración. **El criterio aún no se cumple
       de forma fiable**, y la dispersión entre configuraciones equivalentes
-      señala al termcode 3 residual como la causa.
+      señala al termcode 3 residual como la causa. *(F1 cerró la dispersión a
+      0.00246–0.00251; el nivel objetivo pasa a F2.)*
 - [x] **Invertido el defecto del layout**: niveles por defecto, `-differenced`
       para el formato antiguo. `mink_muskrat.inp` regenerado en niveles,
       `data/AL.inp` anotado, layout impreso en consola y en el `.out`.

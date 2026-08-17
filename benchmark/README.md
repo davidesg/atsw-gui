@@ -87,24 +87,31 @@ the literature.
   includes the r = 0 null): LR(0→1) = 25.5981 against critical values
   13.75 / 15.67 / 20.20 (M−r = 2, case 2) → reject H₀ at 1%, so **r = 1**.
   AIC and BIC agree. See `docs/ANALISIS_PRELIMINAR.md` §4.4.
-- ✔ **Usable acceptance target — on |Σ̂|, not on the log-likelihood.** On this
-  data a VARMA(2,1) should reach **|Σ̂| ≈ 0.0023**, and never below ~0.0022.
-  Backed by three independent sources (Chan & Wallis 0.00246 at AR order 4, the
-  paper's own CML column 0.002312, the global search 0.002311).
-  **`drvec` is close but not yet reliably inside.** Removing the redundant
-  covariance-scale parameter (`docs/ANALISIS_PRELIMINAR.md` §3.6) moved it from
-  0.002496 to between 0.00237 and 0.00257 depending on the run:
+- ✔ **Usable acceptance target — on |Σ̂|, not on the log-likelihood.** *(Restated
+  2026-08-17; see `docs/ANALISIS_PRELIMINAR.md` §5.11 for the correction.)* The
+  target is the **global search over this same model and data**: exact-ML
+  VARMA(2,1) reaches **|Σ̂| ≈ 0.00230** (0.002311 with the invertibility gate,
+  0.002294 without), and the paper's own CML column agrees at 0.002312. Chan &
+  Wallis (0.00246) **calibrates the magnitude but is not the target** — different
+  model (AR order 4), different sample window. An earlier version of this note
+  set a 0.0022–0.0024 band and cited Chan & Wallis in support, whose value falls
+  *outside* it.
 
-  | configuration | \|Σ̂\| | |
+  **`drvec` agrees with itself but sits ~8% high.** After F1 (variance-ratio
+  seeding, `docs/PLAN_BETA.md` F1), on the `%.10f` fixture:
+
+  | configuration | \|Σ̂\| before F1 | after F1 |
   |---|---|---|
-  | levels (default), case 2 | 0.002461 | just outside |
-  | levels (default), case 3 | 0.002569 | outside |
-  | legacy layout, case 2 | 0.002373 | inside |
-  | legacy layout, case 3 | 0.002483 | just outside |
+  | levels (default), case 2 | 0.002461 | 0.002461 |
+  | levels (default), case 3 | 0.002569 | 0.002460 |
+  | legacy layout, case 2 | 0.002344 | 0.002482 |
+  | legacy layout, case 3 | 0.002459 | 0.002508 |
+  | **spread** | **0.000225** | **0.000048** |
 
-  The spread across mathematically equivalent set-ups is itself the diagnosis:
-  the optimizer still stops on termcode 3 at slightly different points. Closing
-  that is the open item (§8).
+  The spread across mathematically equivalent set-ups was itself the diagnosis,
+  and F1 closed it by a factor of ~5 — but closed it *upwards*: no current value
+  is as close to the target as the pre-F1 legacy case 2. Reaching the level is
+  the open item, deferred to F2 (seeding from the suite).
 
   *Why |Σ̂| and not logL:* `drvec` evaluates the likelihood of **Ȳ_t**
   (61 obs, 1851–1911) while model (22) and the global search evaluate it on

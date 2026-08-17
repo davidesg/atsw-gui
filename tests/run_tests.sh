@@ -26,19 +26,23 @@
 #         DRVEC=path/to/mutant tests/run_tests.sh    (to check the suite bites)
 # Exit:   0 all passed, 1 otherwise.
 #
-# WHAT IT ACTUALLY PROTECTS, measured by mutation on 2026-08-17.  Four bugs were
-# reintroduced deliberately and the suite re-run:
+# WHAT IT ACTUALLY PROTECTS, measured by mutation on 2026-08-17 against mutants
+# built from the CURRENT source (mutating an older source is not a valid
+# measurement: it fails the baselines for the wrong reason):
 #
 #   mutation                                            failures raised
 #   ---------------------------------------------------------------------
-#   sign of Lambda in PhiBar_1 (transformation core)          13
+#   sign of Lambda in PhiBar_1 (transformation core)          14
 #   the output ignores -diagma (the §4.1 bug)                  4
 #   B2 read transposed in vec_shootx (the ESTIMATOR)           1
+#   the Sigma positive-definiteness check removed              0   <-- not caught
 #   B2 fill transposed in the printer                          0   <-- not caught
 #
-# The last one is a real gap and is explained at test 2a: since the §4.2 fix both
-# printers share one copy, so a printer-only transposition is invisible from the
-# output.  Do not read a green suite as covering that.
+# The two zeros are real gaps, stated so a green suite is not over-read:
+#   - the PD check is INSURANCE: no case here drives Sigma non-PD, so nothing
+#     exercises it.  It guards a region the optimiser does not currently reach.
+#   - a printer-only transposition is invisible because, since the §4.2 fix, both
+#     printers read one shared copy (see test 2a).
 
 set -u
 cd "$(dirname "$0")/.." || exit 1
@@ -48,6 +52,7 @@ TMP=tests/tmp
 VERBOSE=${1:-}
 PASS=0; FAIL=0
 TOL=1e-6          # absolute tolerance on logelf
+RUN_TIMEOUT=${RUN_TIMEOUT:-30}   # seconds per estimation; a hang must FAIL, not hang
 
 [ -x "$DRVEC" ] || { echo "ERROR: $DRVEC not built. Run make first."; exit 1; }
 mkdir -p "$TMP"
@@ -60,10 +65,17 @@ bad()  { FAIL=$((FAIL+1)); printf '  FAIL %s\n' "$1"; [ $# -gt 1 ] && printf '  
 logelf_of() { grep -a 'logelf' "$1.out" 2>/dev/null | awk '{print $3}'; }
 
 # run <label> <src.inp> <args...>   ; leaves $TMP/case.out, echoes nothing
+# Sets STDERR and TIMEDOUT.  A configuration that does not finish is a failure:
+# an ill-conditioned surface can send the optimiser into a region where each
+# likelihood evaluation is very slow, and that has happened for real (see the
+# note on -differenced -case 3 in docs/PLAN_BETA.md F1).
 run() {
     local src=$1; shift
     cp "$src" "$TMP/case.inp"
-    STDERR=$("$DRVEC" "$TMP/case" "$@" 2>&1 >/dev/null)
+    rm -f "$TMP/case.out"
+    TIMEDOUT=""
+    STDERR=$(timeout "$RUN_TIMEOUT" "$DRVEC" "$TMP/case" "$@" 2>&1 >/dev/null)
+    [ $? -eq 124 ] && TIMEDOUT="yes"
 }
 
 near() { awk -v a="$1" -v b="$2" -v t="$TOL" 'BEGIN{d=a-b; if(d<0)d=-d; exit !(d<=t)}'; }
@@ -85,9 +97,18 @@ awk -F, 'NR>1 && NF>=6 && $2+0!=0 {n++; p[n]=$4; o[n]=$5; e[n]=$6; m[n]=$2; y[n]
        for(i=1;i<=n;i++) printf "%.10f %.10f %.10f %.10f %.10f\n", p[i],o[i],e[i],m[i],y[i] }' \
   datasets/urca_denmark.csv > "$TMP/dk.inp"
 
+# The same mink-muskrat data in the LEGACY pre-differenced layout, so that
+# -differenced is exercised on more than one model.  Col 1 = nabla log muskrat,
+# col 2 = log mink in levels.
+awk -F, 'NR>1 && NF>=3 {n++; a[n]=log($2); b[n]=log($3)}
+  END{ printf "* fixture: mink-muskrat, LEGACY pre-differenced layout\n1\n2 %d 1 1851\ndmuskrat mink\n1.0 0 0\n", n-1;
+       for(i=2;i<=n;i++) printf "%.10f %.10f\n", b[i]-b[i-1], a[i] }' \
+  datasets/mauricio/mink_muskrat.csv > "$TMP/mmold.inp"
+
 MM=datasets/mauricio/mink_muskrat.inp
 UK=$TMP/uk.inp
 DK=$TMP/dk.inp
+MMOLD=$TMP/mmold.inp
 
 echo "drvec test suite"
 echo
@@ -97,7 +118,9 @@ echo "[1] structural: the parameter walk consumes exactly npar"
 struct_case() {
     local label=$1 src=$2; shift 2
     run "$src" "$@"
-    if printf '%s' "$STDERR" | grep -qiE 'ERROR (output|init_guess)'; then
+    if [ -n "$TIMEDOUT" ]; then
+        bad "$label" "did not finish in ${RUN_TIMEOUT}s"
+    elif printf '%s' "$STDERR" | grep -qiE 'ERROR (output|init_guess)'; then
         bad "$label" "$(printf '%s' "$STDERR" | grep -iE 'ERROR (output|init_guess)' | head -1)"
     else ok "$label"; fi
 }
@@ -116,6 +139,9 @@ struct_case "M=3 lrtest + fixb2"               "$UK" 2 0 0 -case 2 -lrtest -fixb
 struct_case "M=5 r=2 (s=3, r=2: B2 is 3x2)"    "$DK" 2 0 2 -case 2
 struct_case "M=5 lrtest"                       "$DK" 2 0 0 -case 2 -lrtest
 struct_case "legacy layout (-differenced)"     data/AL.inp 2 0 1 -case 2 -differenced
+for o in "-case 1" "-case 2" "-case 3"; do
+    struct_case "legacy layout q=1 $o" "$MMOLD" 2 1 1 $o -differenced
+done
 echo
 
 # =============================================================== 2 INVARIANTS ==
@@ -166,6 +192,25 @@ if [ -n "$free" ] && [ -n "$restr" ] && \
 else
     bad "restricted vs free" "free=$free restricted=$restr"
 fi
+# 2d. |Sigma| must agree between the two LAYOUTS of the same model.  The levels
+#     and the pre-differenced layouts differ only by an offset in Y2 that a free
+#     E[W] absorbs, so they are the same model reparameterised: |Sigma| is
+#     invariant (Cbar has |det| = 1).  They stop at slightly different points on
+#     a flat-ish surface, hence a 5% tolerance rather than equality.  This is the
+#     invariant F1 was really about: the dispersion across equivalent set-ups.
+sigdet2() {   # prints |Sigma| for an M=2 run, from the Sigma = sigma2*Q block
+    sed -n '/^Sigma = sigma2 \* Q/,/^B2/p' "$1" | grep -aE '^ +-?[0-9]' \
+      | awk 'NR==1{a=$1} NR==2{b=$1; c=$2} END{if(a=="")print ""; else printf "%.9f", a*c-b*b}'
+}
+run "$MM"    2 1 1 -case 2;               d_lev=$(sigdet2 "$TMP/case.out")
+run "$MMOLD" 2 1 1 -case 2 -differenced;  d_old=$(sigdet2 "$TMP/case.out")
+if [ -z "$d_lev" ] || [ -z "$d_old" ]; then
+    bad "|Sigma| across layouts" "could not read Sigma (lev=[$d_lev] old=[$d_old])"
+elif awk -v a="$d_lev" -v b="$d_old" 'BEGIN{r=(a>b)?a/b:b/a; exit !(r<=1.05)}'; then
+    ok "|Sigma| agrees across layouts within 5% ($d_lev vs $d_old)"
+else
+    bad "|Sigma| across layouts" "$d_lev vs $d_old differ by more than 5%"
+fi
 echo
 
 # ================================================================== 3 THE GATE ==
@@ -201,17 +246,17 @@ golden() {
     elif near "$got" "$want"; then ok "$* = $got"
     else bad "$*" "expected $want, got $got"; fi
 }
-golden  -8.0795410874 "$MM" 2 1 1 -case 1
-golden   6.4679281924 "$MM" 2 1 1 -case 2
-golden   5.6105401561 "$MM" 2 1 1 -case 3
-golden   0.8239382998 "$MM" 2 1 1 -case 2 -diagar
-golden   0.8927053355 "$MM" 2 1 1 -case 2 -diagma
-golden   0.5817489849 "$MM" 2 1 1 -case 2 -diagcov
-golden   5.2136846166 "$MM" 2 1 1 -case 2 -fixb2
-golden  -7.4652170472 "$MM" 2 1 1 -case 2 -fixb2 0
-golden 570.2297062757 "$UK" 2 0 2 -case 2   # measured on the fixture below, not on an ad-hoc .inp
-golden 749.5833234383 "$DK" 2 0 2 -case 2   # s=3, r=2: guards the B2 read order
-golden -318.8131395273 data/AL.inp 2 0 1 -case 2 -differenced
+golden   3.6856397544 "$MM" 2 1 1 -case 1
+golden   6.4786201604 "$MM" 2 1 1 -case 2
+golden   6.5140062493 "$MM" 2 1 1 -case 3
+golden  -2.5419963582 "$MM" 2 1 1 -case 2 -diagar
+golden   0.8816637342 "$MM" 2 1 1 -case 2 -diagma
+golden   0.5696296891 "$MM" 2 1 1 -case 2 -diagcov
+golden   5.4717136367 "$MM" 2 1 1 -case 2 -fixb2
+golden  -8.4835302747 "$MM" 2 1 1 -case 2 -fixb2 0
+golden 570.2297062756 "$UK" 2 0 2 -case 2
+golden 828.8447477597 "$DK" 2 0 2 -case 2   # s=3, r=2: guards the B2 read order
+golden -318.8131393592 data/AL.inp 2 0 1 -case 2 -differenced
 echo
 
 # ===================================================================== summary =

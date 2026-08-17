@@ -25,8 +25,10 @@ De ahí salen cuatro requisitos, y el orden no es negociable:
 4. **Reproducibilidad** — hay una batería de pruebas que falla cuando alguien
    rompe algo.
 
-Hoy tenemos parte de (1) y (3), nada de (2) y **nada de (4)**, que es el riesgo
-de proceso más grande: todo lo verificado en esta sesión se comprobó a mano.
+Cuando escribí esto teníamos parte de (1) y (3), nada de (2) y **nada de (4)**,
+que era el riesgo de proceso más grande: todo estaba comprobado a mano. **F0 cerró
+(4)** — hay batería (`make test`, 41 comprobaciones) y muerde. Sigue faltando (2)
+por completo, y (1) es lo que F1 y F2 empujan.
 
 ---
 
@@ -48,11 +50,15 @@ de proceso más grande: todo lo verificado en esta sesión se comprobó a mano.
 
 - **Termcode 3 residual.** La dirección exactamente plana ya no está, pero el
   optimizador sigue parando ahí en la mayoría de configuraciones.
-- **El criterio de aceptación de |Σ̂| no se cumple de forma fiable**: sólo 1 de 4
-  configuraciones equivalentes cae dentro de la banda 0.0022–0.0024.
+- **El criterio de |Σ̂| no se cumple en el nivel.** *(Actualizado tras F1.)* Las
+  cuatro configuraciones equivalentes ya concuerdan entre sí — dispersión 0.000048
+  frente a 0.000225 —, pero concuerdan en ~0.00248 y el objetivo es ~0.00230. La
+  banda 0.0022–0.0024 con la que se enunció esto queda corregida en
+  `ANALISIS_PRELIMINAR.md` §5.11; el nivel pasa a F2.
 - **La columna EML de Mauricio no es reproducible** y no se puede cerrar con el
   material disponible.
-- No hay capa interpretable, ni siembra desde la suite, ni batería de pruebas.
+- No hay capa interpretable ni siembra desde la suite. *(La batería sí existe
+  desde F0.)*
 - **La normalización no está verificada**: `drvec` obliga a elegir qué series van
   en el bloque Y₁ y no diagnostica si la elección es apropiada (§3, Mélard).
 
@@ -252,33 +258,96 @@ el test exista — el trato correcto en esta fase.
 
 ---
 
-### F1 — Σ endurecida, copiando a `drtran`
+### F1 — Σ endurecida — **HECHA el 2026-08-17, con una contingencia ejercida**
 
-**Objetivo.** Cerrar el criterio de |Σ̂|. Tres cambios, todos práctica ya
-establecida en `drtran` (`cast.py:build_sigma`):
+**Objetivo.** Cerrar el criterio de |Σ̂|, copiando tres cosas de `drtran`
+(`cast.py:build_sigma`): `var_i = exp(x_i)`, chequeo de definida positiva, y
+sembrar las razones de varianza del dato en vez de en 1.
 
-1. `var_i = exp(x_i)` para i ≥ 2, con Q₁₁ = 1 (ya está). El parámetro pasa a ser
-   `log(var_i/var_1)`, lo que **garantiza positividad** — hoy `drvec` lleva
-   varianzas crudas que pueden irse a negativo y sólo las salva el Cholesky
-   interno de `elf`.
-2. Chequeo explícito de definida positiva sobre las covarianzas, devolviendo
-   `ifault` en vez de dejar que falle abajo.
-3. **Sembrar las razones de varianza del dato**, no en 1. Hoy `drvec` siembra Σ
-   en la matriz de correlación, es decir todas las razones en 1 — que es el error
-   que `drtran` midió como catastrófico (logL −1371 en vez de −767 con escalas
-   que diferían 1098×). *Calibración honesta:* en nuestros casos el rango es
-   modesto (razón 1.06 en `mink_muskrat`, hasta 15× entre componentes en UK
-   consumption), así que **no es el problema dominante hoy**; es una bomba de
-   relojería para sistemas que mezclen unidades, que es lo normal.
+**Lo aplicado: dos de las tres.** La siembra por razones y el chequeo PD. La
+tercera, `exp()`, **se probó y se revirtió con evidencia**, y eso contradice el
+supuesto con el que escribí esta fase («si no mejora la convergencia se conserva
+igualmente: la positividad garantizada es estrictamente mejor»). **La premisa era
+falsa: `exp()` no es gratis.**
 
-**Salida.** |Σ̂| dentro de 0.0022–0.0024 en **las cuatro** configuraciones del
-criterio, no en una. Ninguna configuración del barrido rechazada por Σ no PD.
+```
+-differenced -case 3   antes de F1  0.04 s, 45 iter
+                       con exp()    NO TERMINA en 90 s
+M=5 r=2                con exp() y siembra en correlación:  NO TERMINA
+```
 
-**Contingencia.** Si la convergencia no mejora, **se conserva igualmente**: la
-positividad garantizada es estrictamente mejor que la actual, y el cambio es
-barato y aislado. Si además el criterio sigue sin cumplirse en las cuatro, se
-reformula la banda con la dispersión medida y se declara explícitamente que el
-objetivo pasa a F2 (siembra), que es la otra causa candidata.
+Bisecando, ninguno de los dos cambios cuelga por separado: es la combinación. La
+reparametrización logarítmica manda al optimizador a regiones donde cada
+evaluación de la verosimilitud es lentísima. Y además **pierde verosimilitud**:
+frente a la variante sin `exp()`, quedaba peor en tres de cuatro configuraciones.
+
+Sin `exp()` la diagonal puede irse a negativo, así que **el chequeo PD deja de
+ser un extra redundante y pasa a ser la guarda que sostiene la parametrización**.
+Cuesta una Cholesky y no toca la geometría.
+
+**Efecto medido** (mink–muskrat p=2 q=1 r=1, y los dos sistemas grandes):
+
+| configuración | antes de F1 | después | |
+|---|---|---|---|
+| `-case 1` | −8.0795 | **3.6856** | +11.77 |
+| `-case 2` | 6.4679 | 6.4786 | +0.01, y **converge** |
+| `-case 3` | 5.6105 | 6.5140 | +0.90 |
+| `-case 2 -diagar` | 0.8239 | −2.5420 | **−3.37** |
+| `-case 2 -diagma` | 0.8927 | 0.8817 | −0.01 |
+| `-case 2 -diagcov` | 0.5817 | 0.5696 | −0.01 |
+| `-case 2 -fixb2` | 5.2137 | 5.4717 | +0.26 |
+| `-case 2 -fixb2 0` | −7.4652 | −8.4835 | −1.02 |
+| **Denmark M=5 r=2** | 749.5833 | **828.8447** | **+79.26** |
+| UK M=3 r=2 | 570.22971 | 570.22971 | = |
+
+Gana mucho donde predecía la teoría —Denmark mezcla logaritmos con tipos de
+interés, así que las razones de varianza importan— y en el caso 1, que era el
+peor. Pierde en `-diagar`, y eso hay que decirlo.
+
+**Criterio de salida: NO cumplido en el nivel, cumplido en la dispersión.**
+
+```
+                      antes de F1     después
+niveles caso 2         0.002461       0.002461
+niveles caso 3         0.002569       0.002460
+antiguo  caso 2        0.002344       0.002482
+antiguo  caso 3        0.002459       0.002508
+                       ---------      ---------
+dispersión             0.000225       0.000048   <- 4.7x más apretada
+media                  0.002458       0.002478
+objetivo                      ~0.00230
+```
+
+*(Las dos columnas medidas sobre el mismo fixture, el de `%.10f` que genera la
+batería, con el binario de HEAD para la columna «antes». La primera versión de
+esta tabla daba 0.002373 y 0.002483 en las filas «antiguo» porque venían de una
+copia a `%.8f` del `.inp` — la misma trampa de precisión que ya está anotada como
+nota de método en F0, y que aquí volvió a morder.)*
+
+Las cuatro configuraciones son el mismo modelo salvo reparametrización, y ahora
+**concuerdan entre sí casi cinco veces mejor**; pero concuerdan en ~0.00248, un
+8 % por encima del objetivo. **Y hay que decir lo que la tabla también muestra:**
+antes de F1 el layout antiguo en caso 2 estaba en 0.002344, *más cerca* del
+objetivo que cualquier valor de ahora. La dispersión se cerró hacia arriba, no
+hacia el objetivo. Eso es exactamente la contingencia prevista: **se reformula y
+el objetivo de nivel pasa a F2 (siembra)**, que era la otra causa candidata.
+
+*Y de paso hubo que corregir el criterio mismo*: la banda 0.0022–0.0024 que
+había fijado citaba a Chan & Wallis como apoyo **aunque su 0.00246 cae fuera de
+ella**. El objetivo nítido es la búsqueda global sobre el mismo modelo y los
+mismos datos (~0.00230); Chan & Wallis calibra magnitud, no es objetivo. Ver
+`ANALISIS_PRELIMINAR.md` §5.11.
+
+**Añadido a la batería** (37 → **41 comprobaciones**): un invariante que sigue
+justo lo que esta fase pretendía — que |Σ̂| coincida entre los dos layouts del
+mismo modelo, dentro del 5 % — y el layout antiguo con q=1 en los tres casos
+deterministas, que es donde apareció el cuelgue. Y el arnés tiene ya **timeout
+por corrida**, porque el cuelgue de `exp()` lo habría colgado en vez de
+reportarlo; ese era un hueco de F0.
+
+**Nota honesta de cobertura:** por mutación, quitar el chequeo PD **no levanta
+ningún fallo**. Ningún caso del banco lleva a Σ no definida positiva, así que el
+chequeo es un seguro sin ruta de prueba. Está anotado en el script.
 
 ---
 
@@ -432,8 +501,8 @@ r = 1, que es el que decide si hay cointegración y el único imprescindible.
 
 | # | criterio | estado hoy |
 |---|---|---|
-| 1 | `make test` verde, con la puerta diagonal dentro | ✘ (F0) |
-| 2 | \|Σ̂\| dentro de la banda en las cuatro configuraciones | ✘ (F1) |
+| 1 | `make test` verde, con la puerta diagonal dentro | **✔ (F0)** 41 comprobaciones, medida por mutación |
+| 2 | \|Σ̂\| concordante entre las cuatro configuraciones **y** en el nivel objetivo | **parcial (F1)**: concuerdan (dispersión 0.000048, con test), pero en ~0.00248 y no en ~0.00230 → nivel a F2 |
 | 3 | Siembra desde `.pre`, con logL ≥ arranque en frío | ✘ (F2) |
 | 4 | Formas BEC/Π y exogeneidad débil, con o sin s.e. declarado | ✘ (F3) |
 | 5 | Rango correcto en ≥ 4 casos del banco | parcial: 2 de 2 probados |

@@ -367,26 +367,30 @@ static void init_guess(real *x, int npar)
         if (global_diag_ma) { for (i = 1; i <= M; i++) x[idx++] = 0.0; }
         else { for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) x[idx++] = 0.0; }
     }
-    /* Covariance block: seed at the residual CORRELATION matrix (unit
-       diagonal), as drvarma's init_varma does.  The concentrated objective is
-       scale-invariant in qq (f1 -> f1/c, f2 -> c^m f2), so this starting scale
-       is what pins the sigma2/Sigma split; the estimated innovation covariance
-       is sigma2 * this block, not this block.                                 */
+    /* Covariance block.  The concentrated objective is scale-invariant in qq
+       (f1 -> f1/c, f2 -> c^m f2), so only the RATIOS are identified and the
+       scale is reported through sigma2.  Divide the residual covariance by its
+       (1,1) entry: that pins the scale at var_1 = 1 and, crucially, KEEPS the
+       ratios var_i/var_1 that the data provides.
+       Seeding them at 1 instead -- which is what normalising to the correlation
+       matrix does -- throws that information away.  drtran measured the cost on
+       its canonical case: logL -1371 instead of -767, with scales differing by
+       1098x.  Here the spread is milder (1.06 on mink-muskrat, up to 15x between
+       components on UK consumption) but the failure mode is the same.          */
     {
-        real *sd = vector(1, M);
-        for (i = 1; i <= M; i++)
-            sd[i] = sqrt(Sig[i][i] > 1.0e-24 ? Sig[i][i] : 1.0e-24);
+        real s11 = (Sig[1][1] > 1.0e-24) ? Sig[1][1] : 1.0e-24;
         for (i = 1; i <= M; i++)
             for (j = 1; j <= M; j++)
-                Sig[i][j] /= sd[i] * sd[j];
-        for (i = 1; i <= M; i++) Sig[i][i] = 1.0;
-        free_vector(sd, 1, M);
+                Sig[i][j] /= s11;
+        Sig[1][1] = 1.0;
     }
-    /* Sig[1][1] is now exactly 1 and is NOT a free parameter (normalisation). */
-    for (i = 1; i <= M; i++) {
-        if (global_diag_cov) { if (i > 1) x[idx++] = 1.0; }
-        else { for (j = 1; j <= i; j++) { if (i == 1 && j == 1) continue;
-                                          x[idx++] = Sig[i][j]; } }
+    /* Sig[1][1] = 1 is the normalisation, not a parameter. */
+    if (global_diag_cov) {
+        for (i = 2; i <= M; i++) x[idx++] = Sig[i][i];
+    } else {
+        for (i = 2; i <= M; i++) x[idx++] = Sig[i][i];
+        for (i = 2; i <= M; i++)
+            for (j = 1; j < i; j++) x[idx++] = Sig[i][j];
     }
     if (global_fixb2) {
         /* Hand B2 to vec_shootx through B2_fixed; it is not in x[]. */
@@ -520,19 +524,46 @@ static void vec_shootx(real *x, struct Tvarma *armax,
         }
     }
 
-    /*   5. Sigma (M x M, lower triangle) — innovation covariance of A_t */
+    /*   5. Sigma (M x M) — innovation covariance of A_t, up to the scale.
+           Sigma[1][1] = 1 (see calc_nparametrs); the rest goes in RAW, in units
+           where var_1 = 1: the ratios var_i/var_1 on the diagonal and the
+           covariances off it.
+           drtran carries the diagonal as log(var_i/var_1) and applies exp() here,
+           which makes positivity structural.  That was tried and REVERTED: it is
+           not free.  Measured, exp() drove the optimiser into regions where each
+           likelihood evaluation is very slow — the legacy-layout case 3 stopped
+           finishing at all, and with correlation seeding the M=5 case did — and it
+           lost log-likelihood on three of four configurations against the raw
+           diagonal.  Positivity is enforced by the check below instead, which
+           costs one Cholesky and does not touch the geometry.                  */
     real **Sigma = matrix(1, M, 1, M);
     for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) Sigma[i][j] = 0.0;
-    Sigma[1][1] = 1.0;                    /* normalisation: see calc_nparametrs */
+    Sigma[1][1] = 1.0;
     if (global_diag_cov) {
         for (i = 2; i <= M; i++) Sigma[i][i] = x[idx++];
     } else {
-        for (i = 1; i <= M; i++)
-            for (j = 1; j <= i; j++) {
-                if (i == 1 && j == 1) continue;
+        for (i = 2; i <= M; i++) Sigma[i][i] = x[idx++];
+        for (i = 2; i <= M; i++)
+            for (j = 1; j < i; j++) {
                 Sigma[i][j] = x[idx++];
                 Sigma[j][i] = Sigma[i][j];
             }
+    }
+
+    /* Reject a non-PD Sigma at translation time.  With the raw diagonal the
+       optimiser CAN step a variance negative, so this is the guard that keeps
+       the parameterisation honest — it is not a redundant extra.  elf() would
+       also catch it on qq = Cbar*Sigma*Cbar' (Cbar is nonsingular, so the two
+       are equivalent), but here we can say WHICH matrix is the problem.
+       objcfunc answers 1.0 on ifault > 0 and the search moves away.           */
+    {
+        real **Schk = matrix(1, M, 1, M);
+        real d1, d2;
+        int ifchol = 0;
+        for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) Schk[i][j] = Sigma[i][j];
+        choldcp(Schk, M, &d1, &d2, &ifchol);
+        free_matrix(Schk, 1, M, 1, M);
+        if (ifchol > 0) *ifaultx = 1;      /* Sigma not positive definite */
     }
 
     /*   6. Cointegration matrix B₂ (s x r) */
@@ -1093,19 +1124,18 @@ int main(int argc, char *argv[])
         for (int i = 1; i <= nser; i++)
             for (int j = 1; j <= nser; j++) Qm[i][j] = 0.0;
 
-        fprintf(outputv, "Q (M x M, lower triangle; Q[1][1] = 1 by normalisation) =\n");
+        /* Same layout as vec_shootx: Q[1][1] = 1, then the variance ratios on
+           the diagonal (i >= 2), then the off-diagonals by rows.              */
         Qm[1][1] = 1.0;
+        for (int i = 2; i <= nser; i++) Qm[i][i] = x[ii++];
+        if (!global_diag_cov)
+            for (int i = 2; i <= nser; i++)
+                for (int j = 1; j < i; j++) Qm[i][j] = Qm[j][i] = x[ii++];
+
+        fprintf(outputv, "Q (M x M, lower triangle; Q[1][1] = 1 by normalisation) =\n");
         for (int i = 1; i <= nser; i++) {
             fprintf(outputv, "  ");
-            if (global_diag_cov) {
-                if (i > 1) Qm[i][i] = x[ii++];
-                fprintf(outputv, "%12.6f", Qm[i][i]);
-            } else {
-                for (int j = 1; j <= i; j++) {
-                    if (!(i == 1 && j == 1)) Qm[i][j] = Qm[j][i] = x[ii++];
-                    fprintf(outputv, "%12.6f", Qm[i][j]);
-                }
-            }
+            for (int j = 1; j <= i; j++) fprintf(outputv, "%12.6f", Qm[i][j]);
             fprintf(outputv, "\n");
         }
         fprintf(outputv, "Sigma = sigma2 * Q  (innovation covariance of A_t) =\n");

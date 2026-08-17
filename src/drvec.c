@@ -11,7 +11,8 @@
 /*  The VEC parameters are recovered after estimation.                        */
 /*                                                                             */
 /*  Usage:  drvec file p q r [-mean] [-case 1|2|3] [-diagar] [-diagma]       */
-/*                          [-diagcov] [-m 1|2] [-lrtest]                     */
+/*                          [-diagcov] [-m 1|2] [-differenced] [-fixb2]      */
+/*                          [-lrtest]                                        */
 /*                                                                             */
 /*    file   : data file name (without .inp extension)                        */
 /*    p      : AR order of the stationary VARMA on Ȳ_t                        */
@@ -28,9 +29,47 @@ real macheps;
 FILE *outputv;
 int quiet_mode = 0;
 
-real **datamat;     /* stationary data for estimation: ∇Y_{2t} (cols 1..s)
-                       and Y_{1t} in levels (cols s+1..M) */
+real **datamat;     /* data as the estimation needs it: ∇Y_{2t} (cols 1..s)
+                       and Y_{1t} in levels (cols s+1..M).  Derived from
+                       rawmat by build_y2_levels().                     */
 int  nser, nobs;
+
+/* Levels of Y_{2t}, aligned row-for-row with datamat.  W_t = Y_{1t} + B2'Y_{2t}
+   needs them, and they do NOT depend on any parameter, so they are built once
+   here instead of being rebuilt on every likelihood evaluation.
+   By default they are the true levels read from the .inp; with -differenced
+   they are reconstructed by cumulating from an arbitrary zero origin, which is
+   the legacy behaviour and is wrong for case 1 (see build_y2_levels).         */
+real **Y2_levels = NULL;
+int  global_levels = 1;   /* default: .inp carries every series in LEVELS.
+                             -differenced selects the legacy layout, where
+                             cols 1..s arrive already differenced.            */
+
+/* Data exactly as read from the .inp.  datamat and Y2_levels are derived from
+   it, and the derivation depends on r (the column split is s = M - r), so with
+   -lrtest they are rebuilt for every candidate rank.                          */
+real **rawmat = NULL;
+int  nobs_raw = 0;
+
+/* Asymptotic critical values for the sequential (lambda-max type) rank test,
+   indexed by the number of common trends M-r = 1..11, at 10%, 5% and 1%.
+   Non-standard Johansen distribution; MA terms do not affect it (Yap and
+   Reinsel, 1995, Theorem 3), as noted in Mauricio (2006), Remark 5.
+   Extracted from R's `urca` 1.3.4 (ca.jo, type="eigen"), the same reference
+   implementation used throughout benchmark/; Osterwald-Lenum (1992) tables.  */
+#define LR_MAXTRENDS 11
+static const real lr_cval_none[LR_MAXTRENDS][3] = {   /* case 1: no constant  */
+    {  6.50,   8.18,  11.65}, { 12.91,  14.90,  19.19}, { 18.90,  21.07,  25.75},
+    { 24.78,  27.14,  32.14}, { 30.84,  33.32,  38.78}, { 36.25,  39.43,  44.59},
+    { 42.06,  44.91,  51.30}, { 48.43,  51.07,  57.07}, { 54.01,  57.00,  63.37},
+    { 59.00,  62.42,  68.61}, { 65.07,  68.27,  74.36}
+};
+static const real lr_cval_const[LR_MAXTRENDS][3] = {  /* case 2: restricted c */
+    {  7.52,   9.24,  12.97}, { 13.75,  15.67,  20.20}, { 19.77,  22.00,  26.81},
+    { 25.56,  28.14,  33.24}, { 31.66,  34.40,  39.79}, { 37.45,  40.30,  46.82},
+    { 43.25,  46.45,  51.91}, { 48.91,  52.00,  57.95}, { 54.35,  57.42,  63.71},
+    { 60.25,  63.57,  69.94}, { 66.02,  69.74,  76.63}
+};
 
 /* --- .inp metadata -------------------------------------------------------- */
 int   data_freq      = 1;
@@ -53,6 +92,16 @@ int met = 1;          /* 1 = exact, 2 = approximate */
 int global_case = 1;  /* deterministic case (Mauricio Remark 6) */
 int global_lrtest = 0; /* if 1, perform sequential LR test for rank */
 
+/* -fixb2: hold B2 at the static-OLS value computed by init_guess instead of
+   estimating it.  This is the restricted model the literature tests against
+   the free one (Mauricio 2006, Table 5: B = [1,0]'; BVECM Table 1: beta = 1),
+   and it is also the natural first leg of a fix-then-relax warm start.       */
+int  global_fixb2 = 0;
+int  global_fixb2_given = 0;        /* 1 = a value was supplied on the line */
+real global_fixb2_value = 0.0;      /* that value, applied to every entry   */
+static real **B2_fixed = NULL;      /* (s x r), owned here */
+static int   b2f_s = 0, b2f_r = 0;  /* dims of the current allocation */
+
 /* --- Mauricio transformation matrices (Mauricio 2006, eq. 11-13) --------- */
 /*   Cbar = [ 0_{s x r}    I_s      ]                                      */
 /*         [    I_r       B2'       ]                                      */
@@ -65,6 +114,59 @@ static void vec_shootx(real *x, struct Tvarma *armax,
                        int *ifaultx, int firstx, int lastx);
 static int  calc_nparametrs(void);
 static void init_guess(real *x, int npar);
+static void build_y2_levels(void);
+
+/*****************************************************************************/
+/*  build_y2_levels — fill Y2_levels, once, before any estimation            */
+/*                                                                           */
+/*  default       : rawmat cols 1..s hold Y_{2t} in LEVELS.  The first row is  */
+/*                  consumed to form the differences, so datamat has one row   */
+/*                  fewer: col i = nabla Y_{2t}, col s+j = Y_{1t}, and         */
+/*                  Y2_levels holds the matching true levels.                  */
+/*  -differenced  : legacy layout, rawmat cols 1..s already hold nabla Y_{2t}. */
+/*                  The levels are then unknown and get cumulated from zero, so */
+/*                  W_t is off by B2'c for an unknown c.  E[W] absorbs that in  */
+/*                  cases 2 and 3 (verified: identical log-likelihood), but NOT */
+/*                  in case 1, where E[W] = 0 leaves nothing to absorb it.      */
+/*****************************************************************************/
+static void build_y2_levels(void)
+{
+    static int alloc_nobs = 0, alloc_s = 0;   /* dims of the previous build */
+    int M = nser, r = global_r, s = M - r;
+    int t, i, j;
+
+    if (datamat)   free_matrix(datamat,   1, alloc_nobs, 1, M);
+    if (Y2_levels) free_matrix(Y2_levels, 1, alloc_nobs, 1, alloc_s);
+
+    nobs      = global_levels ? nobs_raw - 1 : nobs_raw;
+    datamat   = matrix(1, nobs, 1, M);
+    Y2_levels = matrix(1, nobs, 1, s);
+    alloc_nobs = nobs;
+    alloc_s    = s;
+
+    if (global_levels) {
+        if (nobs < 3) {
+            fprintf(stderr, "ERROR: the levels layout needs at least 4 observations\n");
+            exit(1);
+        }
+        for (t = 1; t <= nobs; t++) {
+            for (i = 1; i <= s; i++) {
+                datamat[t][i]   = rawmat[t+1][i] - rawmat[t][i];
+                Y2_levels[t][i] = rawmat[t+1][i];
+            }
+            for (j = 1; j <= r; j++)
+                datamat[t][s + j] = rawmat[t+1][s + j];
+        }
+    } else {
+        for (t = 1; t <= nobs; t++)
+            for (i = 1; i <= M; i++)
+                datamat[t][i] = rawmat[t][i];
+        for (i = 1; i <= s; i++) Y2_levels[1][i] = 0.0;
+        for (t = 2; t <= nobs; t++)
+            for (i = 1; i <= s; i++)
+                Y2_levels[t][i] = Y2_levels[t-1][i] + datamat[t][i];
+    }
+}
 
 /*****************************************************************************/
 /*  calc_nparametrs — number of free parameters in the VEC model             */
@@ -100,11 +202,17 @@ static int calc_nparametrs(void)
     /* 4. Theta_j (M x M, j=1..q) */
     npar += q * (global_diag_ma ? M : M * M);
 
-    /* 5. Sigma (lower triangle) */
-    npar += global_diag_cov ? M : M * (M + 1) / 2;
+    /* 5. Sigma (lower triangle), minus the redundant scale.
+       The engine calls elf with sigma2 = 1 and concentrates the scale out, so
+       the objective is exactly invariant to rescaling this block (f1 -> f1/c,
+       f2 -> c^m f2).  Carrying the full triangle would leave one direction the
+       likelihood cannot see: a flat ridge that makes the line search fail and
+       the Hessian singular.  Sigma[1][1] is therefore fixed at 1 and the scale
+       is reported through sigma2 (so Sigma[1][1] = sigma2 exactly).          */
+    npar += (global_diag_cov ? M : M * (M + 1) / 2) - 1;
 
-    /* 6. B_2 (s x r) */
-    npar += s * r;
+    /* 6. B_2 (s x r), unless held fixed by -fixb2 */
+    if (!global_fixb2) npar += s * r;
 
     return npar;
 }
@@ -124,15 +232,11 @@ static void init_guess(real *x, int npar)
     int i, j, k, t, idx = 1;
     int nf = (p > 1) ? p - 1 : 0;
 
-    /* --- 0. Reconstruct Y_{2t} levels by cumulating ∇Y_{2t} ------------ */
-    real **Y2lev = matrix(1, nobs, 1, s);
-    for (i = 1; i <= s; i++) Y2lev[1][i] = 0.0;
-    for (t = 2; t <= nobs; t++)
-        for (i = 1; i <= s; i++)
-            Y2lev[t][i] = Y2lev[t-1][i] + datamat[t][i];
+    /* --- 0. Levels of Y_{2t}: built once by build_y2_levels() ---------- */
+    real **Y2lev = Y2_levels;
 
     /* --- 1. Initial B₂ via static OLS with intercept ------------------- */
-    real **B2 = matrix(1, s, 1, r);
+    real **B2 = matrix(1, s, 1, (r > 0 ? r : 1));
     for (j = 1; j <= r; j++) {
         int nc = s + 1;
         real *yy = vector(1, nobs);
@@ -166,7 +270,7 @@ static void init_guess(real *x, int npar)
     }
 
     /* --- 2. Build W_t = Y_{1t} + B₂'Y_{2t} and ∇Y_t = [∇Y_{1t};∇Y_{2t}] - */
-    real **W  = matrix(1, nobs, 1, r);
+    real **W  = matrix(1, nobs, 1, (r > 0 ? r : 1));
     real **dY = matrix(1, nobs, 1, M);   /* rows: [∇Y₁ (r); ∇Y₂ (s)] */
     for (t = 1; t <= nobs; t++) {
         for (j = 1; j <= r; j++) {
@@ -181,7 +285,7 @@ static void init_guess(real *x, int npar)
     }
 
     /* --- 3. Mean E[Ȳ_t] (Remark 6) --------------------------------------- */
-    real *EW   = vector(1, r);   /* sample mean of W */
+    real *EW   = vector(1, (r > 0 ? r : 1));   /* sample mean of W */
     real *EdY2 = vector(1, s);   /* sample mean of ∇Y₂ */
     for (j = 1; j <= r; j++) { real sm=0.0; for (t=1;t<=nobs;t++) sm+=W[t][j]; EW[j]=sm/nobs; }
     for (i = 1; i <= s; i++) { real sm=0.0; for (t=1;t<=nobs;t++) sm+=dY[t][r+i]; EdY2[i]=sm/nobs; }
@@ -190,7 +294,7 @@ static void init_guess(real *x, int npar)
     int nreg = r + nf * M;
     int T = nobs - p;              /* rows t = p+1 .. nobs */
     if (T < 1) T = 1;
-    real **X = matrix(1, T, 1, nreg);
+    real **X = matrix(1, T, 1, (nreg > 0 ? nreg : 1));
     real **Ydep = matrix(1, T, 1, M);
     for (t = p + 1; t <= nobs; t++) {
         int row = t - p, col = 1;
@@ -200,20 +304,27 @@ static void init_guess(real *x, int npar)
                 X[row][col++] = dY[t-k][i];
         for (i = 1; i <= M; i++) Ydep[row][i] = dY[t][i];
     }
-    real **XtX = matrix(1, nreg, 1, nreg);
-    real  *Xty = vector(1, nreg);
-    for (i = 1; i <= nreg; i++)
-        for (j = 1; j <= nreg; j++) {
-            real ss = 0.0;
-            for (t = 1; t <= T; t++) ss += X[t][i]*X[t][j];
-            XtX[i][j] = ss;
-        }
-    int *indx = ivector(1, nreg);
-    ludcp(XtX, nreg, indx);
+    /* With r = 0 and p <= 1 there is nothing to regress on (no error-correction
+       term, no F_i), so the whole conditional regression is skipped and the
+       residuals are the differences themselves.                              */
+    int nalloc = (nreg > 0) ? nreg : 1;
+    real **XtX = matrix(1, nalloc, 1, nalloc);
+    real  *Xty = vector(1, nalloc);
+    int *indx = ivector(1, nalloc);
+    if (nreg > 0) {
+        for (i = 1; i <= nreg; i++)
+            for (j = 1; j <= nreg; j++) {
+                real ss = 0.0;
+                for (t = 1; t <= T; t++) ss += X[t][i]*X[t][j];
+                XtX[i][j] = ss;
+            }
+        ludcp(XtX, nreg, indx);
+    }
 
-    real **Lambda = matrix(1, M, 1, r);
+    real **Lambda = matrix(1, M, 1, (r > 0 ? r : 1));
     real ***F = tensor(1, (nf > 0 ? nf : 1), 1, M, 1, M);
     for (int eq = 1; eq <= M; eq++) {
+        if (nreg == 0) break;
         for (i = 1; i <= nreg; i++) {
             Xty[i] = 0.0;
             for (t = 1; t <= T; t++) Xty[i] += X[t][i]*Ydep[t][eq];
@@ -256,29 +367,55 @@ static void init_guess(real *x, int npar)
         if (global_diag_ma) { for (i = 1; i <= M; i++) x[idx++] = 0.0; }
         else { for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) x[idx++] = 0.0; }
     }
-    for (i = 1; i <= M; i++) {
-        if (global_diag_cov) { x[idx++] = Sig[i][i]; }
-        else { for (j = 1; j <= i; j++) x[idx++] = Sig[i][j]; }
+    /* Covariance block: seed at the residual CORRELATION matrix (unit
+       diagonal), as drvarma's init_varma does.  The concentrated objective is
+       scale-invariant in qq (f1 -> f1/c, f2 -> c^m f2), so this starting scale
+       is what pins the sigma2/Sigma split; the estimated innovation covariance
+       is sigma2 * this block, not this block.                                 */
+    {
+        real *sd = vector(1, M);
+        for (i = 1; i <= M; i++)
+            sd[i] = sqrt(Sig[i][i] > 1.0e-24 ? Sig[i][i] : 1.0e-24);
+        for (i = 1; i <= M; i++)
+            for (j = 1; j <= M; j++)
+                Sig[i][j] /= sd[i] * sd[j];
+        for (i = 1; i <= M; i++) Sig[i][i] = 1.0;
+        free_vector(sd, 1, M);
     }
-    for (j = 1; j <= r; j++) for (i = 1; i <= s; i++) x[idx++] = B2[i][j];
+    /* Sig[1][1] is now exactly 1 and is NOT a free parameter (normalisation). */
+    for (i = 1; i <= M; i++) {
+        if (global_diag_cov) { if (i > 1) x[idx++] = 1.0; }
+        else { for (j = 1; j <= i; j++) { if (i == 1 && j == 1) continue;
+                                          x[idx++] = Sig[i][j]; } }
+    }
+    if (global_fixb2) {
+        /* Hand B2 to vec_shootx through B2_fixed; it is not in x[]. */
+        if (B2_fixed) free_matrix(B2_fixed, 1, b2f_s, 1, (b2f_r > 0 ? b2f_r : 1));
+        B2_fixed = matrix(1, s, 1, (r > 0 ? r : 1));
+        b2f_s = s; b2f_r = r;
+        for (j = 1; j <= r; j++) for (i = 1; i <= s; i++)
+            B2_fixed[i][j] = global_fixb2_given ? global_fixb2_value : B2[i][j];
+    } else {
+        for (j = 1; j <= r; j++) for (i = 1; i <= s; i++) x[idx++] = B2[i][j];
+    }
 
     if (idx != npar + 1)
         fprintf(stderr, "ERROR init_guess: idx=%d, npar=%d\n", idx-1, npar);
 
     free_matrix(Sig, 1, M, 1, M);
     free_tensor(F, 1, (nf > 0 ? nf : 1), 1, M, 1, M);
-    free_matrix(Lambda, 1, M, 1, r);
-    free_ivector(indx, 1, nreg);
-    free_matrix(XtX, 1, nreg, 1, nreg);
-    free_vector(Xty, 1, nreg);
-    free_matrix(X, 1, T, 1, nreg);
+    free_matrix(Lambda, 1, M, 1, (r > 0 ? r : 1));
+    free_ivector(indx, 1, nalloc);
+    free_matrix(XtX, 1, nalloc, 1, nalloc);
+    free_vector(Xty, 1, nalloc);
+    free_matrix(X, 1, T, 1, (nreg > 0 ? nreg : 1));
     free_matrix(Ydep, 1, T, 1, M);
     free_vector(EdY2, 1, s);
-    free_vector(EW, 1, r);
+    free_vector(EW, 1, (r > 0 ? r : 1));
     free_matrix(dY, 1, nobs, 1, M);
-    free_matrix(W, 1, nobs, 1, r);
-    free_matrix(B2, 1, s, 1, r);
-    free_matrix(Y2lev, 1, nobs, 1, s);
+    free_matrix(W, 1, nobs, 1, (r > 0 ? r : 1));
+    free_matrix(B2, 1, s, 1, (r > 0 ? r : 1));
+    /* Y2lev aliases the global Y2_levels; it is not owned here. */
 }
 
 /*****************************************************************************/
@@ -345,8 +482,11 @@ static void vec_shootx(real *x, struct Tvarma *armax,
         for (j = 1; j <= r; j++) mu[s + j] = x[idx++];
     }
 
-    /*   2. Adjustment matrix Lambda (M x r) */
-    real **Lambda = matrix(1, M, 1, r);
+    /*   2. Adjustment matrix Lambda (M x r).  With r = 0 there is no
+           error-correction term at all: Lambda and B2 are empty, Cbar and
+           Cinv collapse to the identity, Hbar to zero, and Ybar_t = nabla Y_t.
+           That is the no-cointegration null of the rank test.               */
+    real **Lambda = matrix(1, M, 1, (r > 0 ? r : 1));
     for (i = 1; i <= M; i++)
         for (j = 1; j <= r; j++)
             Lambda[i][j] = x[idx++];
@@ -383,21 +523,23 @@ static void vec_shootx(real *x, struct Tvarma *armax,
     /*   5. Sigma (M x M, lower triangle) — innovation covariance of A_t */
     real **Sigma = matrix(1, M, 1, M);
     for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) Sigma[i][j] = 0.0;
+    Sigma[1][1] = 1.0;                    /* normalisation: see calc_nparametrs */
     if (global_diag_cov) {
-        for (i = 1; i <= M; i++) Sigma[i][i] = x[idx++];
+        for (i = 2; i <= M; i++) Sigma[i][i] = x[idx++];
     } else {
         for (i = 1; i <= M; i++)
             for (j = 1; j <= i; j++) {
+                if (i == 1 && j == 1) continue;
                 Sigma[i][j] = x[idx++];
                 Sigma[j][i] = Sigma[i][j];
             }
     }
 
     /*   6. Cointegration matrix B₂ (s x r) */
-    real **B2 = matrix(1, s, 1, r);
+    real **B2 = matrix(1, s, 1, (r > 0 ? r : 1));
     for (j = 1; j <= r; j++)
         for (i = 1; i <= s; i++)
-            B2[i][j] = x[idx++];
+            B2[i][j] = global_fixb2 ? B2_fixed[i][j] : x[idx++];
 
     /* [4] Mauricio transformation matrices (eq. 10-14) ---------------------- */
     real **Cbar   = matrix(1, M, 1, M);
@@ -509,20 +651,15 @@ static void vec_shootx(real *x, struct Tvarma *armax,
     free_matrix(Sigma, 1, M, 1, M);
     free_tensor(Theta, 1, (q > 0 ? q : 1), 1, M, 1, M);
     free_tensor(F, 1, (nf > 0 ? nf : 1), 1, M, 1, M);
-    free_matrix(Lambda, 1, M, 1, r);
+    free_matrix(Lambda, 1, M, 1, (r > 0 ? r : 1));
     free_vector(mu, 1, M);
 
     /* [5] Build Ybar_t = (nabla Y_{2t}', W_t')'                            */
-    /* datamat cols 1..s = nabla Y_{2t} (differenced), cols s+1..M = levels */
-    /* W_t = Y_{1t} + B2' Y_{2t} with Y_{2t} from cumulated nabla Y_{2t}   */
-    /* Reconstruct Y_{2t} by cumulating nabla Y_{2t} */
+    /* datamat cols 1..s = nabla Y_{2t}, cols s+1..M = Y_{1t} in levels.    */
+    /* W_t = Y_{1t} + B2' Y_{2t}; the Y_{2t} levels are parameter-free and  */
+    /* were built once by build_y2_levels(), so nothing is recomputed here. */
     int tt;
-    real **Y2_level = matrix(1, nobs, 1, s);
-    for (i = 1; i <= s; i++)
-        Y2_level[1][i] = 0.0;  /* initial level unknown; offset absorbed in mean */
-    for (tt = 2; tt <= nobs; tt++)
-        for (i = 1; i <= s; i++)
-            Y2_level[tt][i] = Y2_level[tt-1][i] + datamat[tt][i];
+    real **Y2_level = Y2_levels;
 
     for (tt = 1; tt <= nobs; tt++) {
         /* nabla Y_{2t} */
@@ -537,8 +674,8 @@ static void vec_shootx(real *x, struct Tvarma *armax,
         }
     }
 
-    free_matrix(Y2_level, 1, nobs, 1, s);
-    free_matrix(B2, 1, s, 1, r);
+    /* Y2_level aliases the global Y2_levels; it is not owned here. */
+    free_matrix(B2, 1, s, 1, (r > 0 ? r : 1));
 
     /* [7] Deallocate on last call ------------------------------------------ */
     if (lastx == 1) {
@@ -561,21 +698,50 @@ int main(int argc, char *argv[])
 
     if (argc < 5) {
         printf("\nUsage: drvec file p q r [-mean] [-case 1|2|3] [-diagar] "
-               "[-diagma] [-diagcov] [-m 1|2] [-lrtest]\n\n");
+               "[-diagma] [-diagcov] [-m 1|2]\n"
+               "                 [-differenced] [-fixb2] [-lrtest]\n\n");
         printf("  file  : data file name (without .inp extension)\n");
         printf("  p     : AR order of stationary VARMA on Ȳ_t\n");
         printf("  q     : MA order\n");
-        printf("  r     : cointegration rank (0 < r < M)\n\n");
+        printf("  r     : cointegration rank (0 < r < M; ignored with -lrtest)\n\n");
         printf("Deterministic cases (Mauricio 2006, Remark 6):\n");
         printf("  -case 1 : E[∇Y₂]=0, E[W]=0     (default)\n");
         printf("  -case 2 : E[∇Y₂]=0, E[W]≠0     (-mean needed)\n");
-        printf("  -case 3 : E[∇Y₂]≠0, E[W]≠0     (-mean needed)\n");
+        printf("  -case 3 : E[∇Y₂]≠0, E[W]≠0     (-mean needed)\n\n");
+        printf("Data layout (cols 1..s are the Y₂ block, cols s+1..M the Y₁ block):\n");
+        printf("  default        every series in LEVELS; ∇Y₂ is formed internally\n");
+        printf("                 (one observation is consumed)\n");
+        printf("  -differenced   legacy: cols 1..s already hold ∇Y₂.  The Y₂ levels\n");
+        printf("                 are then unknown and get cumulated from zero, which\n");
+        printf("                 breaks -case 1 and makes E[W] incomparable\n\n");
+        printf("  -fixb2 [v]     hold B2 fixed instead of estimating it; npar\n");
+        printf("                 drops by s*r.  With a value, every entry of B2 is\n");
+        printf("                 pinned at v -- an a-priori restriction, so 2*[L(free)\n");
+        printf("                 - L(fixed)] IS a valid LR test, chi2 with s*r df\n");
+        printf("                 (Mauricio 2006 Table 5 tests B = [1,0]', i.e. -fixb2 0).\n");
+        printf("                 Without a value B2 is held at its static-OLS estimate:\n");
+        printf("                 useful as a warm start or a conditioning check, but\n");
+        printf("                 the restriction is then data-chosen, so the LR\n");
+        printf("                 statistic is NOT a valid test.\n\n");
+        printf("  -lrtest        sequential LR test for the cointegration rank:\n");
+        printf("                 estimates r = 0..M-1 and reports 2*[L(r+1) - L(r)];\n");
+        printf("                 incompatible with -differenced\n");
         exit(1);
     }
 
-    inputf   = NEW_STR(80);
-    outputf  = NEW_STR(80);
-    base_name = NEW_STR(80);
+    /* Size these from the actual argument, not a fixed 80: a longer path used
+       to overflow them through the strcpy/strcat below and abort the run.
+       +8 covers the ".inp"/".out" suffix and the terminator.                 */
+    {
+        int need = (int) strlen(argv[1]) + 8;
+        inputf    = NEW_STR(need);
+        outputf   = NEW_STR(need);
+        base_name = NEW_STR(need);
+        if (!inputf || !outputf || !base_name) {
+            fprintf(stderr, "ERROR: out of memory for file names\n");
+            exit(1);
+        }
+    }
 
     strcpy(base_name, argv[1]);
     strcpy(inputf, argv[1]);
@@ -595,11 +761,39 @@ int main(int argc, char *argv[])
         else if (strcmp(argv[i], "-m") == 0 && i+1 < argc)
             met = atoi(argv[++i]);
         else if (strcmp(argv[i], "-lrtest") == 0)  global_lrtest = 1;
+        else if (strcmp(argv[i], "-levels") == 0)  global_levels = 1;  /* default */
+        else if (strcmp(argv[i], "-differenced") == 0) global_levels = 0;
+        else if (strcmp(argv[i], "-fixb2") == 0) {
+            global_fixb2 = 1;
+            /* An optional numeric argument pins B2 at a value chosen a priori,
+               which is what makes the LR test against the free model valid.  */
+            if (i + 1 < argc) {
+                char *end;
+                double v = strtod(argv[i+1], &end);
+                if (end != argv[i+1] && *end == '\0') {
+                    global_fixb2_value = v;
+                    global_fixb2_given = 1;
+                    i++;
+                }
+            }
+        }
     }
     /* -mean implies case 2 (E[W]≠0) unless a case was given explicitly */
     if (global_include_mean && global_case == 1) global_case = 2;
 
-    if (global_r < 1) {
+    if (global_lrtest) {
+        /* The column split of the .inp is s = M - r, so varying r only makes
+           sense when every series is supplied in levels.                     */
+        if (!global_levels) {
+            fprintf(stderr,
+                "ERROR: -lrtest is incompatible with -differenced.  The column\n"
+                "       split depends on r (cols 1..M-r are Y_2), so a file that\n"
+                "       is already differenced cannot be re-read at another rank.\n"
+                "       Supply every series in levels (the default layout).\n");
+            exit(1);
+        }
+        if (global_r < 1) global_r = 1;   /* r on the command line is ignored */
+    } else if (global_r < 1) {
         fprintf(stderr, "ERROR: cointegration rank r must be >= 1 "
                 "(use -lrtest to test)\n");
         exit(1);
@@ -632,7 +826,8 @@ int main(int argc, char *argv[])
         /* next non-comment line: nser nobs start_sub start_year */
         do { if (!fgets(line, sizeof line, inputv)) { fprintf(stderr,"ERROR: unexpected EOF\n"); exit(1); } }
         while (line[0] == '*');
-        sscanf(line, "%d %d %d %d", &nser, &nobs, &data_start_sub, &data_start_year);
+        sscanf(line, "%d %d %d %d", &nser, &nobs_raw, &data_start_sub, &data_start_year);
+        nobs = nobs_raw;
 
         if (global_r >= nser) {
             fprintf(stderr, "ERROR: r=%d must be < M=%d\n", global_r, nser);
@@ -655,27 +850,37 @@ int main(int argc, char *argv[])
         while (line[0] == '*');
         sscanf(line, "%lf %d %d", &trans_lambda, &trans_d, &trans_D);
 
-        /* Read data: nobs rows, nser cols */
-        datamat = matrix(1, nobs, 1, nser);
-        for (int t = 1; t <= nobs; t++) {
+        /* Read data: nobs_raw rows, nser cols, kept untouched in rawmat */
+        rawmat = matrix(1, nobs_raw, 1, nser);
+        for (int t = 1; t <= nobs_raw; t++) {
             do { if (!fgets(line, sizeof line, inputv)) { fprintf(stderr,"ERROR: data too short at obs %d\n", t); exit(1); } }
             while (line[0] == '*');
             char *tok = strtok(line, " \t\n");
             for (int j = 1; j <= nser; j++) {
                 if (!tok) { fprintf(stderr,"ERROR: missing value obs %d col %d\n", t, j); exit(1); }
-                datamat[t][j] = atof(tok);
+                rawmat[t][j] = atof(tok);
                 tok = strtok(NULL, " \t\n");
             }
         }
         fclose(inputv);
     }
 
-    /* The .inp data must contain:
-       - cols 1..s (s = M - r): ∇Y_{2t}  (pre-differenced)
-       - cols s+1..M (r):       Y_{1t}    (levels)
+    /* The .inp data must contain, in column order [Y_2 block ; Y_1 block]:
+       - cols 1..s (s = M - r): Y_{2t} in levels  (or ∇Y_{2t} with -differenced)
+       - cols s+1..M (r):       Y_{1t} in levels
     */
+    build_y2_levels();          /* once: never inside the likelihood loop */
 
-    printf("Series: %d, Obs: %d, Rank: r=%d\n", nser, nobs, global_r);
+    if (!global_levels && global_case == 1)
+        fprintf(stderr,
+            "WARNING: -case 1 with -differenced.  Y_2 levels are reconstructed by\n"
+            "         cumulating from an arbitrary zero origin, which shifts W_t\n"
+            "         by B2'c.  With E[W] = 0 (case 1) nothing absorbs that shift\n"
+            "         and it contaminates B2.  Supply every series in levels (the\n"
+            "         default layout), or use -case 2 / -case 3.\n");
+
+    printf("Series: %d, Obs: %d, Rank: r=%d  (%s)\n", nser, nobs, global_r,
+           global_levels ? "levels" : "legacy pre-differenced layout");
 
     /* [2] Open output ------------------------------------------------------ */
     outputv = fopen(outputf, "w");
@@ -686,6 +891,121 @@ int main(int argc, char *argv[])
     fprintf(outputv, "Input  : %s\n", inputf);
     fprintf(outputv, "M = %d, r = %d, s = M-r = %d\n", nser, global_r, nser - global_r);
     fprintf(outputv, "Stationary VARMA(%d,%d) on Ȳ_t\n", global_p, global_q);
+    fprintf(outputv, "Case   : %d\n", global_case);
+    fprintf(outputv, "Layout : %s (%d of %d observations used)\n",
+            global_levels ? "all series in levels"
+                          : "legacy, cols 1..s pre-differenced (-differenced)",
+            nobs, nobs_raw);
+
+    /* [3a] Sequential LR test for the cointegration rank (Mauricio 2006,
+            Remark 5 and Table 3): estimate r = 1..M-1 and report
+            2*[L(r+1) - L(r)] against the non-standard asymptotic values.    */
+    if (global_lrtest) {
+        int M = nser, ok;
+        macheps = cmacheps();           /* the engine needs it; [3] is skipped */
+        /* Ranks 0..M-1.  r = 0 is the no-cointegration null: Pi = 0, so the
+           model is a plain VARMA on nabla Y.  It is the first and most
+           important comparison of the sequence.                              */
+        real *ll  = vector(0, M - 1);
+        int  *npr = ivector(0, M - 1);
+        int  *good = ivector(0, M - 1);
+
+        fprintf(outputv, "\n=== Sequential LR test for the cointegration rank ===\n");
+        printf("\nSequential LR test for the cointegration rank:\n");
+
+        for (int rr = 0; rr <= M - 1; rr++) {
+            global_r = rr;
+            build_y2_levels();
+            int np = calc_nparametrs();
+            real *xr   = vector(1, np);
+            real *devr = vector(1, np);
+            real **covr = matrix(1, np, 1, np);
+            struct Tvarma vr;
+            vr.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
+            init_guess(xr, np);
+            int ifr;
+            vec_shootx(xr, &vr, &ifr, 1, 0);
+            est(&vec_shootx, np, xr, devr, covr, 500, 200, 1e-5, 1e-7,
+                vr.xitol, vr.a, &vr.sigma2, &vr.logelf, &ifr);
+            ok = (ifr == 0);
+            good[rr] = ok;
+            npr[rr]  = np;
+            ll[rr]   = ok ? vr.logelf : 0.0;
+            printf("  r = %d : %s (ifault=%d)\n", rr,
+                   ok ? "ok" : "estimation failed", ifr);
+            vec_shootx(xr, &vr, &ifr, 0, 1);   /* deallocate */
+            free_matrix(covr, 1, np, 1, np);
+            free_vector(devr, 1, np);
+            free_vector(xr, 1, np);
+        }
+
+        fprintf(outputv, "\n  r    npar        logL         AIC         BIC\n");
+        fprintf(outputv, "  ---------------------------------------------------\n");
+        for (int rr = 0; rr <= M - 1; rr++) {
+            if (!good[rr]) { fprintf(outputv, "  %-4d  --   estimation failed\n", rr); continue; }
+            real aic = (-2.0 * ll[rr] + 2.0 * npr[rr]) / nobs;
+            real bic = (-2.0 * ll[rr] + npr[rr] * log((real) nobs)) / nobs;
+            fprintf(outputv, "  %-4d %4d %12.4f %11.4f %11.4f\n",
+                    rr, npr[rr], ll[rr], aic, bic);
+        }
+
+        fprintf(outputv,
+            "\n  H0: P = r   vs   H1: P = r+1        LR = 2*[L(r+1) - L(r)]\n");
+        fprintf(outputv,
+            "  (asymptotic critical values: %s)\n",
+            (global_case == 1) ? "case 1, no constant" :
+            (global_case == 2) ? "case 2, restricted constant" :
+                                 "case 3 — NOT TABULATED HERE");
+        fprintf(outputv, "\n  r    M-r        LR      10%%      5%%      1%%\n");
+        fprintf(outputv, "  ---------------------------------------------------\n");
+        for (int rr = 0; rr <= M - 2; rr++) {
+            if (!good[rr] || !good[rr+1]) {
+                fprintf(outputv, "  %-4d  --   (a model in the pair failed)\n", rr);
+                continue;
+            }
+            real lr = 2.0 * (ll[rr+1] - ll[rr]);
+            int  g  = M - rr;                    /* common trends under H0 */
+            /* Rank r is nested in rank r+1, so L(r+1) >= L(r) at the true
+               maxima.  A negative LR proves at least one of the two fits did
+               not reach its optimum, and the statistic means nothing.        */
+            if (lr < 0.0) {
+                fprintf(outputv,
+                        "  %-4d %4d %10.4f   NOT INTERPRETABLE: LR < 0, so at "
+                        "least one of the\n                              two fits "
+                        "did not converge (rank r is nested in r+1)\n", rr, g, lr);
+                continue;
+            }
+            fprintf(outputv, "  %-4d %4d %10.4f", rr, g, lr);
+            if (global_case != 3 && g >= 1 && g <= LR_MAXTRENDS) {
+                const real *cv = (global_case == 1) ? lr_cval_none[g-1]
+                                                    : lr_cval_const[g-1];
+                fprintf(outputv, " %8.2f %8.2f %8.2f", cv[0], cv[1], cv[2]);
+                if      (lr > cv[2]) fprintf(outputv, "   reject H0 at 1%%");
+                else if (lr > cv[1]) fprintf(outputv, "   reject H0 at 5%%");
+                else if (lr > cv[0]) fprintf(outputv, "   reject H0 at 10%%");
+                else                 fprintf(outputv, "   H0 not rejected");
+            } else {
+                fprintf(outputv, "        -        -        -   (no values)");
+            }
+            fprintf(outputv, "\n");
+        }
+        fprintf(outputv,
+            "\n  Distribution is the non-standard Johansen one; MA terms do not\n"
+            "  affect it (Yap and Reinsel 1995, Thm. 3; Mauricio 2006, Remark 5).\n"
+            "  Values from R urca 1.3.4 ca.jo(type=\"eigen\"); Osterwald-Lenum (1992).\n"
+            "  r = 0 is the no-cointegration null (Pi = 0, a plain VARMA on\n"
+            "  nabla Y); r = M would be a stationary process in levels and is not\n"
+            "  expressible here, so the sequence ends at r = M-1.  Read it with\n"
+            "  AIC/BIC, and check the optimizer banner of every rank before\n"
+            "  trusting a statistic.\n");
+
+        free_ivector(good, 0, M - 1);
+        free_ivector(npr, 0, M - 1);
+        free_vector(ll, 0, M - 1);
+        printf("Done. Output written to %s\n", base_name);
+        fclose(outputv);
+        return 0;
+    }
 
     /* [3] Estimation ------------------------------------------------------- */
     int npar = calc_nparametrs();
@@ -741,13 +1061,17 @@ int main(int argc, char *argv[])
                 fprintf(outputv, "%12.6f", x[ii]), ii++;
             fprintf(outputv, "\n");
         }
+        /* Under -diagar / -diagma only the M diagonal entries are carried in
+           x[] (see calc_nparametrs and vec_shootx), so the walk must consume
+           M, not M*M, while still displaying the full matrix.                */
         int nf = (global_p > 1) ? global_p - 1 : 0;
         for (int k = 1; k <= nf; k++) {
             fprintf(outputv, "F[%d] (M x M) =\n", k);
             for (int i = 1; i <= nser; i++) {
                 fprintf(outputv, "  ");
                 for (int j = 1; j <= nser; j++)
-                    fprintf(outputv, "%12.6f", x[ii]), ii++;
+                    fprintf(outputv, "%12.6f",
+                            global_diag_ar ? ((i == j) ? x[ii++] : 0.0) : x[ii++]);
                 fprintf(outputv, "\n");
             }
         }
@@ -756,38 +1080,80 @@ int main(int argc, char *argv[])
             for (int i = 1; i <= nser; i++) {
                 fprintf(outputv, "  ");
                 for (int j = 1; j <= nser; j++)
-                    fprintf(outputv, "%12.6f", x[ii]), ii++;
+                    fprintf(outputv, "%12.6f",
+                            global_diag_ma ? ((i == j) ? x[ii++] : 0.0) : x[ii++]);
                 fprintf(outputv, "\n");
             }
         }
-        fprintf(outputv, "Sigma (M x M, lower triangle) =\n");
+        /* The engine concentrates the covariance scale: it calls elf with
+           sigma2 = 1, so the block carried in x[] is identified only up to a
+           positive constant.  Report it as Q (what is estimated) and the
+           innovation covariance separately as sigma2 * Q, as drvarma does.   */
+        real **Qm = matrix(1, nser, 1, nser);
+        for (int i = 1; i <= nser; i++)
+            for (int j = 1; j <= nser; j++) Qm[i][j] = 0.0;
+
+        fprintf(outputv, "Q (M x M, lower triangle; Q[1][1] = 1 by normalisation) =\n");
+        Qm[1][1] = 1.0;
         for (int i = 1; i <= nser; i++) {
             fprintf(outputv, "  ");
-            for (int j = 1; j <= i; j++)
-                fprintf(outputv, "%12.6f", x[ii]), ii++;
-            fprintf(outputv, "\n");
-        }
-        fprintf(outputv, "B2 (s x r) =\n");
-        for (int i = 1; i <= s; i++) {
-            fprintf(outputv, "  ");
-            for (int j = 1; j <= r; j++)
-                fprintf(outputv, "%12.6f", x[ii]), ii++;
-            fprintf(outputv, "\n");
-        }
-
-        fprintf(outputv, "\nCointegration matrix B = [I_r; B2'] :\n");
-        for (int row = 1; row <= nser; row++) {
-            fprintf(outputv, "  row %d: ", row);
-            if (row <= r) {
-                for (int c = 1; c <= r; c++) fprintf(outputv, "%12.6f", (c==row)?1.0:0.0);
+            if (global_diag_cov) {
+                if (i > 1) Qm[i][i] = x[ii++];
+                fprintf(outputv, "%12.6f", Qm[i][i]);
             } else {
-                for (int c = 1; c <= r; c++) {
-                    int b2idx = npar - s*r + (c-1)*s + (row - r - 1) + 1;
-                    fprintf(outputv, "%12.6f", x[b2idx]);
+                for (int j = 1; j <= i; j++) {
+                    if (!(i == 1 && j == 1)) Qm[i][j] = Qm[j][i] = x[ii++];
+                    fprintf(outputv, "%12.6f", Qm[i][j]);
                 }
             }
             fprintf(outputv, "\n");
         }
+        fprintf(outputv, "Sigma = sigma2 * Q  (innovation covariance of A_t) =\n");
+        for (int i = 1; i <= nser; i++) {
+            fprintf(outputv, "  ");
+            for (int j = 1; j <= i; j++)
+                fprintf(outputv, "%12.6f", varma1.sigma2 * Qm[i][j]);
+            fprintf(outputv, "\n");
+        }
+        free_matrix(Qm, 1, nser, 1, nser);
+
+        /* B2 is stored COLUMN-major in x[] (vec_shootx and init_guess both
+           write `for j in 1..r { for i in 1..s }`), so it must be read back in
+           that order before being displayed row by row.  Both printers below
+           use this one copy, so they cannot disagree.                        */
+        real **B2m = matrix(1, s, 1, (r > 0 ? r : 1));
+        for (int j = 1; j <= r; j++)
+            for (int i = 1; i <= s; i++)
+                B2m[i][j] = global_fixb2 ? B2_fixed[i][j] : x[ii++];
+
+        if (global_fixb2)
+            fprintf(outputv, "B2 (s x r) = [FIXED at %s]\n",
+                    global_fixb2_given ? "the value given on the command line"
+                                       : "its static-OLS estimate (data-chosen: "
+                                         "an LR test against the free model is "
+                                         "NOT valid)");
+        else
+            fprintf(outputv, "B2 (s x r) =\n");
+        for (int i = 1; i <= s; i++) {
+            fprintf(outputv, "  ");
+            for (int j = 1; j <= r; j++)
+                fprintf(outputv, "%12.6f", B2m[i][j]);
+            fprintf(outputv, "\n");
+        }
+
+        if (ii != npar + 1)
+            fprintf(stderr, "ERROR output: consumed %d of %d parameters\n",
+                    ii - 1, npar);
+
+        fprintf(outputv, "\nCointegration matrix B = [I_r; B2] (M x r) :\n");
+        for (int row = 1; row <= nser; row++) {
+            fprintf(outputv, "  row %d: ", row);
+            for (int c = 1; c <= r; c++)
+                fprintf(outputv, "%12.6f",
+                        (row <= r) ? ((c == row) ? 1.0 : 0.0) : B2m[row - r][c]);
+            fprintf(outputv, "\n");
+        }
+        free_matrix(B2m, 1, s, 1, (r > 0 ? r : 1));
 
     } else {
         fprintf(outputv, "\nESTIMATION FAILED: ifault = %d\n", ifault);
@@ -806,6 +1172,7 @@ int main(int argc, char *argv[])
     free_matrix(cov, 1, npar, 1, npar);
     free_vector(dev, 1, npar);
     free_vector(x, 1, npar);
+    free_matrix(Y2_levels, 1, nobs, 1, nser - global_r);
     free_matrix(datamat, 1, nobs, 1, nser);
     for (int j = 1; j <= nser; j++) free(series_names[j]);
     free(series_names);

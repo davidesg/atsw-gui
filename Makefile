@@ -59,13 +59,7 @@ test-verbose: $(EXEC)
 clean:
 	rm -rf $(BUILD_DIR)/*.o $(EXEC) *.eps *.out *.txt
 
-disttest: $(EXEC)
-	@tests/run_tests.sh
-
-test-verbose: $(EXEC)
-	@tests/run_tests.sh -v
-
-clean: clean
+distclean: clean
 	rm -rf $(BUILD_DIR) $(BIN_DIR)
 
 rebuild: distclean all

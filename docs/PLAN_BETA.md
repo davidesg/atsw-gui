@@ -201,9 +201,38 @@ ratios de nominales). No es metodológico; se retiene como fuente de casos.
 
 Cada fase declara objetivo, criterio de salida **medible**, y contingencia.
 
-### F0 — Red de seguridad *(prerrequisito de todo)*
+### F0 — Red de seguridad *(prerrequisito de todo)* — **HECHA el 2026-08-17**
 
 **Objetivo.** Convertir en script lo que hoy se comprueba a mano.
+
+**Lo entregado:** `tests/run_tests.sh` (y `make test`), 37 comprobaciones en
+cuatro bloques — estructurales (el recorrido consume exactamente `npar` en 19
+configuraciones), invariantes sin referencia externa (monotonía de logL en r por
+anidamiento; el ajuste restringido no puede batir al libre), la **puerta
+diagonal** de §2, y valores de oro etiquetados explícitamente como *líneas base
+de regresión, no respuestas correctas*.
+
+**Y se comprobó que la batería muerde**, reintroduciendo a propósito cuatro
+fallos ya corregidos:
+
+| mutación | fallos que levanta |
+|---|---|
+| signo de Λ en Φ̄₁ (núcleo de la transformación) | **13** |
+| la salida ignora `-diagma` (el fallo de §4.1) | 4 |
+| B₂ traspuesta en `vec_shootx` (el **estimador**) | 1 |
+| B₂ traspuesta en la **impresora** | **0** ← no lo caza |
+
+El último es un hueco real y está anotado en el propio script: desde el arreglo
+de §4.2 las dos impresoras comparten una copia, así que una transposición sólo
+en la impresora es invisible desde la salida. Lo que sí guarda el orden que
+importa —el del estimador— es el valor de oro de M=5, r=2, donde s=3 y r=2 y por
+tanto una lectura traspuesta cambia la verosimilitud. Hizo falta añadir ese caso:
+con s=1 (todos los que tenía) transponer es un no-op.
+
+*Nota de método:* los valores de oro sólo valen para la entrada exacta con que se
+midieron. El fixture de UK se escribe con `%.10f` y una copia con `%.8f` da un
+logL distinto en la sexta decimal — me pasó, y por eso el fixture se genera
+dentro del test.
 
 - `tests/run_tests.sh`: el barrido de configuraciones (tres casos deterministas,
   banderas diagonales sueltas y combinadas, M=2 y M=5, r=0..3, `-levels` y

@@ -3,6 +3,7 @@
 #
 # Usage:
 #   make          — build drvec
+#   make test     — run the regression and invariant suite
 #   make clean    — remove objects and binary
 #   make rebuild  — distclean + all
 
@@ -49,10 +50,22 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
 $(EXEC): $(OBJS) | $(BIN_DIR)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
+test: $(EXEC)
+	@tests/run_tests.sh
+
+test-verbose: $(EXEC)
+	@tests/run_tests.sh -v
+
 clean:
 	rm -rf $(BUILD_DIR)/*.o $(EXEC) *.eps *.out *.txt
 
-distclean: clean
+disttest: $(EXEC)
+	@tests/run_tests.sh
+
+test-verbose: $(EXEC)
+	@tests/run_tests.sh -v
+
+clean: clean
 	rm -rf $(BUILD_DIR) $(BIN_DIR)
 
 rebuild: distclean all
@@ -63,4 +76,4 @@ $(BUILD_DIR)/elfvarma.o:  $(INCLUDE_DIR)/main.h
 $(BUILD_DIR)/drvmlest.o:  $(INCLUDE_DIR)/main.h
 $(BUILD_DIR)/nlatools.o:  $(INCLUDE_DIR)/main.h
 
-.PHONY: all clean distclean rebuild
+.PHONY: all clean distclean rebuild test test-verbose

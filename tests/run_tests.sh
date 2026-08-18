@@ -544,6 +544,29 @@ else
 fi
 echo
 
+# 6c-bis. MULTI-START can never do worse than a single start.  An invariant, not
+#     a golden value: start 1 is the unperturbed seed, so the best of n starts is
+#     by construction at least as good as the one start.  If this ever fails, the
+#     book-keeping that carries the best point back is wrong.
+#     It also has to be MONOTONE in n -- the first n starts of a long run are the
+#     starts of a short one -- which is why the jitter ladder depends only on the
+#     start index.  Getting that wrong was measured: with the amplitude scaled by
+#     n, asking for 40 starts gave a WORSE answer than asking for 24.
+run "$MM" 2 1 1 -case 2
+one=$(logelf_of "$TMP/case")
+run "$MM" 2 1 1 -case 2 -multistart 5
+five=$(logelf_of "$TMP/case")
+run "$MM" 2 1 1 -case 2 -multistart 10
+ten=$(logelf_of "$TMP/case")
+if [ -z "$one" ] || [ -z "$five" ] || [ -z "$ten" ]; then
+    bad "multi-start" "missing logelf (1=$one 5=$five 10=$ten)"
+elif awk -v a="$one" -v b="$five" -v c="$ten" \
+        'BEGIN{exit !(b >= a - 1e-9 && c >= b - 1e-9)}'; then
+    ok "multi-start is monotone: 1 -> $one, 5 -> $five, 10 -> $ten"
+else
+    bad "multi-start" "not monotone: 1 -> $one, 5 -> $five, 10 -> $ten"
+fi
+
 # 6d. THE CONVERGENCE NOTE must be present and must AGREE with the banner.
 #     Not a golden value: it is a consistency check between two things the same
 #     run says.  "OPTIMIZER STOPPED" and a note claiming a clean convergence

@@ -515,6 +515,7 @@ static int   global_writeinp = 0;    /* -writeinp <prefijo>  (componentes de Ȳ)
 static int   global_writeres = 0;    /* -writeres <prefijo>  (residuos)         */
 static char *inp_prefix      = NULL;
 static int   global_eval     = 0;    /* -eval: evaluar y salir, sin optimizar */
+static int   global_multistart = 0;  /* -multistart n: n arranques, quedarse el mejor */
 
 static int   global_seed     = 0;    /* -seed <prefijo> */
 static char *pre_prefix      = NULL;
@@ -1762,6 +1763,8 @@ int main(int argc, char *argv[])
             global_writeres = 1; inp_prefix = argv[++i];
         }
         else if (strcmp(argv[i], "-eval") == 0) global_eval = 1;
+        else if (strcmp(argv[i], "-multistart") == 0 && i+1 < argc)
+            global_multistart = atoi(argv[++i]);
         else if (strcmp(argv[i], "-alpha") == 0 && i+1 < argc) {
             global_alpha = 1; alpha_file = argv[++i];
         }
@@ -2175,6 +2178,94 @@ int main(int argc, char *argv[])
 
     int maxits = 500, nrits = 200;
     real gradtol = 1e-5, sptol = 1e-7;
+
+    /* -multistart n: estimar desde n puntos de partida y quedarse con el mejor.
+     *
+     * NO es tocar el optimizador -- que no se toca --, es ejecutarlo varias
+     * veces.  Y esta justificado por dos medidas propias, no por costumbre:
+     *
+     *   - F2 midio que el punto donde para depende fuertemente del punto donde
+     *     arranca: en el caso 1, mover Theta por centesimas mueve la respuesta
+     *     14.45 unidades.  Esa es exactamente la condicion en la que el
+     *     multiarranque paga.
+     *   - La busqueda global que sirve de referencia para |Sigma| (0.002311)
+     *     SE HIZO ASI, por multiarranque, y acaba pegada a la barrera de
+     *     invertibilidad de chekma con max|lambda(Theta1)| = 1.00005.  El ajuste
+     *     de drvec acaba en la MISMA barrera -- 1.000050 medido -- pero en otro
+     *     punto de ella, con |Sigma| 0.002461.  O sea: mismo borde, peor sitio.
+     *
+     * Las perturbaciones son deterministas (generador propio con semilla fija)
+     * para que un resultado se pueda reproducir: un multiarranque que no se
+     * puede repetir no sirve como evidencia.
+     */
+    if (global_multistart > 1) {
+        real *xbest = vector(1, npar), *xtry = vector(1, npar);
+        real *devb  = vector(1, npar);
+        real **covb = matrix(1, npar, 1, npar);
+        real best = 0.0, worst = 0.0;
+        int  k, i2, nok = 0, ifb, bestk = 0;
+        unsigned long rng = 20260818UL;      /* semilla fija, a proposito */
+
+        for (i2 = 1; i2 <= npar; i2++) xbest[i2] = x[i2];
+        for (k = 0; k < global_multistart; k++) {
+            struct Tvarma vk;
+            vk.xitol = varma1.xitol;
+            init_guess(xtry, npar);
+            if (k > 0) {
+                /* Jitter multiplicativo sobre la semilla, en una escalera de
+                   amplitud que depende SOLO de k y no de n.  Eso hace el
+                   procedimiento MONOTONO en n: los primeros n arranques de una
+                   corrida larga son exactamente los de una corta, asi que pedir
+                   mas arranques solo puede mejorar.  Con la amplitud escalada
+                   por n -- como estaba -- aumentar n cambiaba el conjunto en vez
+                   de ampliarlo, y se midio el sinsentido: n=24 daba |Sigma|
+                   0.002349 y n=40 daba 0.002453.                             */
+                real amp = 0.05 * (real) (1 + (k - 1) % 20);
+                for (i2 = 1; i2 <= npar; i2++) {
+                    real u;
+                    rng = rng * 6364136223846793005UL + 1442695040888963407UL;
+                    u = ((real) ((rng >> 33) & 0x7FFFFFFF)) / 2147483647.0;
+                    u = 2.0 * u - 1.0;                       /* U(-1, 1) */
+                    xtry[i2] += amp * u * (fabs(xtry[i2]) > 1.0e-8
+                                           ? fabs(xtry[i2]) : 0.1);
+                }
+            }
+            vec_shootx(xtry, &vk, &ifb, 1, 0);
+            est(&vec_shootx, npar, xtry, devb, covb, maxits, nrits, gradtol,
+                sptol, vk.xitol, vk.a, &vk.sigma2, &vk.logelf, &ifb);
+            if (ifb == 0) {
+                if (nok == 0 || vk.logelf > best) {
+                    best = vk.logelf; bestk = k;
+                    for (i2 = 1; i2 <= npar; i2++) xbest[i2] = xtry[i2];
+                }
+                if (nok == 0 || vk.logelf < worst) worst = vk.logelf;
+                nok++;
+            }
+            vec_shootx(xtry, &vk, &ifb, 0, 1);
+            if (!quiet_mode)
+                printf("  arranque %2d/%d: %s\n", k + 1, global_multistart,
+                       (ifb == 0) ? "ok" : "fallo");
+        }
+        if (nok > 0) {
+            for (i2 = 1; i2 <= npar; i2++) x[i2] = xbest[i2];
+            fprintf(outputv, "\nMulti-start: %d of %d starting points converged; "
+                             "logL from %.6f to %.6f (best is start %d).\n",
+                    nok, global_multistart, worst, best, bestk + 1);
+            fprintf(outputv, "  The SPREAD is the diagnostic: on a well-behaved\n"
+                             "  surface every start lands in the same place.\n");
+            if (!quiet_mode)
+                printf("  Multi-start: %d/%d ok, logL from %.6f to %.6f\n",
+                       nok, global_multistart, worst, best);
+        } else {
+            fprintf(outputv, "\nMulti-start: no starting point converged.\n");
+        }
+        free_matrix(covb, 1, npar, 1, npar);
+        free_vector(devb, 1, npar);
+        free_vector(xtry, 1, npar);
+        free_vector(xbest, 1, npar);
+        vec_shootx(x, &varma1, &ifault, 1, 0);   /* realojar para el ajuste final */
+    }
+
     est(&vec_shootx, npar, x, dev, cov, maxits, nrits, gradtol, sptol,
         varma1.xitol, varma1.a, &varma1.sigma2, &varma1.logelf, &ifault);
 

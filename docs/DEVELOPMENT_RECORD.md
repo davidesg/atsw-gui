@@ -282,12 +282,51 @@ and 1 on M = 3**. A test written on the smallest case would have been decoration
 
 ---
 
-## 6. Open, and honestly so
+## 6. The `|Σ̂|` level, closed with multi-start
+
+The last criterion open from F1, and the answer came from putting together two
+measurements that were already in hand rather than from new theory:
+
+* the outcome is strongly **path-dependent** (F2: hundredths in `Θ` move the
+  answer by units);
+* the global search that provides the `|Σ̂|` reference **was itself a
+  multi-start**, and it stops pressed against `chekma`'s invertibility barrier
+  at `max|λ(Θ₁)| = 1.00005`.
+
+The check that settled it: `drvec`'s own fit sits at **exactly the same
+barrier**, `max|λ(Θ₁)| = 1.000050`, but at a different point of it. Same edge,
+worse place — so the problem was never the admissible region.
+
+**Rejected before building anything.** A grid over `B₂` with full fits is
+useless here: scanning `-fixb2` from −0.60 to 0.10, the log-likelihood jumps from
+−7.4 to +6.5 between −0.30 and −0.24, which is not a profile likelihood but
+optimiser failures contaminating the scan — and even at the best `B₂` the `|Σ̂|`
+stays at 0.002466. `B₂` was not the cause. That is the plan's own contingency,
+tried and discarded on evidence.
+
+**`-multistart n`** — not touching the optimiser, running it more than once, with
+deterministic perturbations so a result can be reproduced.
+
+| | one start | `-multistart 60` |
+|---|---|---|
+| four equivalent configurations | 0.00246 – 0.00251 | **0.002344 – 0.002358** |
+| spread | 0.000048 | **0.000014** |
+| above the reference (0.002311) | +7 % | **+1.6 %** |
+
+**And a design defect the measurement caught.** The first version scaled the
+jitter amplitude by `n`, so asking for more starts *changed* the set instead of
+extending it: 24 starts gave 0.002349 and 40 gave 0.002453. The ladder now
+depends only on the start index, which makes the procedure monotone — the first
+`n` starts of a long run are the starts of a short one — and that is an invariant
+in the test suite. Without measuring across several `n` this would have shipped
+looking fine.
+
+## 7. Open, and honestly so
 
 | | |
 |---|---|
 | the published EML log-likelihoods of Table 5 | not reproduced; localised, not closed |
-| `\|Σ̂\|` in level | ~0.00248 against a target of ~0.00230 |
+| `\|Σ̂\|` in level | 0.002346 with `-multistart 60` against 0.002311, i.e. 1.6 % — substantially closed, not exactly met |
 | termcode 3 | explained and measured, not eliminated — see [CONVERGENCE.md](CONVERGENCE.md) |
 | the choice of the `Y₁` block | not diagnosed; the user's responsibility, and currently unchecked |
 | finite-sample critical values for the rank test | asymptotic only, and now **measured**: over 20 replications of a true r = 1 process at n = 120, the sequential test picks r = 1 in 16, over-rejects in 3 and under-rejects in 1 — about three times its nominal size. The case-3 column is not tabulated either |

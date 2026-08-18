@@ -27,7 +27,7 @@ De ahí salen cuatro requisitos, y el orden no es negociable:
 
 Cuando escribí esto teníamos parte de (1) y (3), nada de (2) y **nada de (4)**,
 que era el riesgo de proceso más grande: todo estaba comprobado a mano. **F0 cerró
-(4)** — hay batería (`make test`, 62 comprobaciones) y muerde. Sigue faltando (2)
+(4)** — hay batería (`make test`, 63 comprobaciones) y muerde. Sigue faltando (2)
 por completo, y (1) es lo que F1 y F2 empujan.
 
 ---
@@ -906,8 +906,8 @@ r = 1, que es el que decide si hay cointegración y el único imprescindible.
 
 | # | criterio | estado hoy |
 |---|---|---|
-| 1 | `make test` verde, con la puerta diagonal dentro | **✔ (F0)** 62 comprobaciones, medidas por mutación |
-| 2 | \|Σ̂\| concordante entre las cuatro configuraciones **y** en el nivel objetivo | **parcial (F1)**: concuerdan (dispersión 0.000048, con test), pero en ~0.00248 y no en ~0.00230 → nivel a F2 |
+| 1 | `make test` verde, con la puerta diagonal dentro | **✔ (F0)** 63 comprobaciones, medidas por mutación |
+| 2 | \|Σ̂\| concordante entre las cuatro configuraciones **y** en el nivel objetivo | **✔ en la concordancia, casi en el nivel**: con `-multistart 60` la dispersión cae a **0.000014** y las cuatro caen en 0.002344–0.002358, un **1.6 %** por encima de la referencia global (0.002311) frente al 7 % de antes. Ver F5.1 |
 | 3 | Siembra desde `.pre`, con logL ≥ arranque en frío | **✔ en el peldaño diagonal, ✘ por encima (F2.8)**: con r = 0 el `.pre` transporta el óptimo univariante y los dos contratos de la escalera se cumplen (cruce 1.8e-5, certificado +2.4e-7 ≥ 0, los dos con test). Con r ≥ 1 la información univariante no vale: la semilla arranca 17 unidades peor, por sobredeterminación del AR y por el acoplamiento de C̄ y Λ |
 | 4 | Formas BEC/Π y exogeneidad débil, con o sin s.e. declarado | **✔ (F3.1)**: Π = ΛB′ con autovalores y la advertencia de circularidad, exogeneidad débil por LR, y la triangularización Σ = PDP′ con test de reconstrucción |
 | 5 | Rango correcto en ≥ 4 casos del banco | **✔**: `mink_muskrat` (r=1), UK (r=2, igual que `ca.jo`), y dos sintéticos con rango **conocido por construcción**, r=0 y r=2, los dos recuperados y en la batería. Y medido lo que faltaba: en 20 réplicas con r=1 verdadero el test acierta 16, sobre-rechaza 3 y sub-rechaza 1 |
@@ -915,6 +915,59 @@ r = 1, que es el que decide si hay cointegración y el único imprescindible.
 | 6b | α = Aψ soportado, con LR y grados de libertad correctos | **✔ (F3.1)** con `-alpha`/`-weakex`, g.l. (M−sa)·r, y guarda de rango sobre A |
 | 6c | La elección del bloque Y₁ **diagnosticada o declarada** como no verificada | **✔ (F3.1)**: diagnóstico libre de unidades, con caso construido que lo dispara y test en las dos direcciones |
 | 7 | Registro de homologación y documento de entrada | **✔**: `docs/HOMOLOGATION.md` (qué reproduce, con qué tolerancia y qué no) y el conjunto de documentación en inglés con `docs/README.md` de entrada |
+
+---
+
+### F5.1 — El nivel de |Σ̂|, cerrado con multiarranque *(2026-08-18)*
+
+El criterio 2 llevaba abierto desde F1, y F2 dejó claro que la siembra no era la
+palanca. La respuesta estaba en dos medidas que ya teníamos y que no habíamos
+juntado:
+
+1. **F2 midió que el resultado depende fuertemente del punto de partida** — en el
+   caso 1, mover Θ por centésimas mueve la respuesta 14.45 unidades. Ésa es
+   exactamente la condición en la que el multiarranque paga.
+2. **La búsqueda global que sirve de referencia (|Σ̂| = 0.002311) se hizo así**,
+   por multiarranque. Y acaba pegada a la barrera de invertibilidad de `chekma`,
+   con `max|λ(Θ₁)| = 1.00005`.
+
+Y una comprobación que cierra el argumento: **el ajuste de `drvec` acaba en la
+misma barrera** — medido, `max|λ(Θ₁)| = 1.000050` — pero en **otro punto de
+ella**. Mismo borde, peor sitio. No es un problema de región admisible sino de
+cuál de sus puntos se alcanza.
+
+**Descartado antes de construir nada:** una rejilla sobre B₂ con ajustes
+completos no sirve. Barriendo `-fixb2` de −0.60 a 0.10, el logL salta de −7.4 a
++6.5 entre −0.30 y −0.24, que no es la forma de un perfil de verosimilitud sino
+**fallos del optimizador contaminando el barrido**. Y aun en el mejor B₂ el
+|Σ̂| se queda en 0.002466: **B₂ no era la causa.**
+
+**Lo aplicado: `-multistart n`.** No es tocar el optimizador —que no se toca—,
+es ejecutarlo desde n puntos y quedarse con el mejor, con perturbaciones
+**deterministas** (generador propio, semilla fija) para que el resultado se pueda
+reproducir; un multiarranque irreproducible no sirve como evidencia.
+
+**El resultado, sobre las cuatro configuraciones equivalentes:**
+
+| | tras F1 | con `-multistart 60` |
+|---|---|---|
+| niveles caso 2 | 0.002461 | **0.002346** |
+| niveles caso 3 | 0.002460 | **0.002347** |
+| antiguo caso 2 | 0.002482 | **0.002344** |
+| antiguo caso 3 | 0.002508 | **0.002358** |
+| **dispersión** | 0.000048 | **0.000014** |
+| **distancia al objetivo** (0.002311) | +7 % | **+1.6 %** |
+
+**Y un fallo de diseño que la medida destapó.** La primera versión escalaba la
+amplitud del jitter con `n`, así que pedir más arranques **cambiaba** el conjunto
+en vez de ampliarlo: n=24 daba 0.002349 y n=40 daba 0.002453. La escalera de
+amplitud depende ahora sólo del índice del arranque, de modo que los primeros n
+de una corrida larga son exactamente los de una corta y **pedir más arranques
+sólo puede mejorar**. Está en la batería como invariante.
+
+*Lo que queda:* 0.002346 frente a 0.002311 es un 1.6 %, y la referencia sin
+puerta de invertibilidad es 0.002294. El criterio se declara cumplido en la
+concordancia y **prácticamente** en el nivel, con la distancia medida y escrita.
 
 ---
 

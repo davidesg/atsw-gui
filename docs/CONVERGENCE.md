@@ -73,6 +73,19 @@ the scaling on evidence.
 
 In descending order of usefulness:
 
+0. **Run it from several starting points** — `-multistart n`. This is the one
+   that moves the answer, and it is not a matter of taste: the surface's
+   path-dependence is measured (§2), and the global search that provides this
+   program's `|Σ̂|` reference was itself a multi-start. On the canonical case,
+   going from one start to 60 takes `|Σ̂|` from 0.002461 to 0.002346 — from 7 %
+   above the reference to 1.6 % — and collapses the spread across four
+   equivalent configurations from 0.000048 to 0.000014.
+
+   The perturbations are deterministic, so a result can be reproduced; and the
+   procedure is monotone in `n`, so asking for more starts can only help. The
+   **spread** it reports is a diagnostic in its own right: on a well-behaved
+   surface every start lands in the same place, and here they do not.
+
 1. **Fix `B₂` and see if it converges** — `-fixb2`. Holding the cointegrating
    vector converges in cases where the free model stops on termcode 3, and the
    difference in log-likelihood tells you how much of the difficulty is in that
@@ -103,8 +116,14 @@ In descending order of usefulness:
   finishing at all, and it lost log-likelihood on three of four configurations.
   Positivity is enforced by an explicit check instead, which costs one Cholesky
   and does not touch the geometry.
+* **A grid over `B₂` with full fits.** Tried and rejected on measurement:
+  scanning `-fixb2` from −0.60 to 0.10, the log-likelihood jumps from −7.4 to
+  +6.5 between −0.30 and −0.24, which is not the shape of a profile likelihood
+  but optimiser failures contaminating the scan. And even at the best `B₂` the
+  `|Σ̂|` stays at 0.002466 — `B₂` was not the cause.
 * **Touching the optimiser.** It is published, refereed work, and the study that
-  covers the whole suite is the place where that question belongs.
+  covers the whole suite is the place where that question belongs. `-multistart`
+  does not touch it; it runs it more than once.
 
 ## 5. The honest summary
 

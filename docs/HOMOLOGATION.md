@@ -143,11 +143,19 @@ representations, and that criterion is:
 | global search over the same model and data | ~0.00230 | the target |
 | the paper's own CML column | 0.002312 | agrees with the target |
 | Chan & Wallis (1978), AR(4)+MA(1) | 0.00246 | calibrates magnitude; **not** the target — different model, different sample |
-| **`drvec`, four equivalent configurations** | **0.00246 – 0.00251** | ✘ **agree with each other, ~8 % above the target** |
+| `drvec`, four equivalent configurations, one start | 0.00246 – 0.00251 | agree with each other, ~8 % above |
+| **`drvec`, the same four with `-multistart 60`** | **0.002344 – 0.002358** | **spread 0.000014, and 1.6 % above** |
 
-The four configurations agreeing to 0.00005 is itself a result — they used to
-span 0.000225 — but they agree *above* the target, and one pre-2026-08-17
-configuration was closer to it than anything now. Open.
+The single-start row is what the program gives by default and is the honest
+figure for a casual run. The multi-start row is what it gives when asked to look
+properly, and it is the one to quote: the spread across four mathematically
+equivalent set-ups collapses to 0.000014 and the level lands within 1.6 % of the
+global-search reference.
+
+Not closed, and the residue is stated: 0.002346 against 0.002311 with the
+invertibility gate, or 0.002294 without it. Both `drvec` and the reference stop
+*at* that gate — measured, `max|λ(Θ₁)| = 1.000050` in both — so what separates
+them is which point of the boundary is reached, not the boundary itself.
 
 ## 4. Cases run without an external reference
 

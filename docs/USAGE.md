@@ -103,6 +103,19 @@ test is the instrument.
 | `-seedybar pfx` | seed the whole univariate block from `-writeinp` output |
 | `-eval` | evaluate the likelihood at the starting point and stop, without optimising |
 
+### Multi-start
+
+| | |
+|---|---|
+| `-multistart n` | estimate from `n` starting points and keep the best |
+
+Start 1 is the ordinary seed and the rest are deterministic perturbations of it,
+so a result is reproducible and the procedure is **monotone in `n`**: the first
+`n` starts of a long run are the starts of a short one. On this class of surface
+it is the single most effective thing available — see
+[CONVERGENCE.md](CONVERGENCE.md) §3 for the measurement — and the **spread** it
+reports across starts is a diagnostic by itself.
+
 The intended cycle:
 
 ```sh

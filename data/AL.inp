@@ -1,5 +1,7 @@
 * Arnhem-London wheat prices (annual, 100*log scale)
 * M=2, r=1. Col 1: nabla London (dL), Col 2: Arnhem level (A)
+* LEGACY LAYOUT: col 1 is already differenced, so this file needs
+* the -differenced flag (drvec now reads every series in levels).
 * Data from Garcia-Hiernaux & Guerrero (2021)
 1
 2 67 1 1809

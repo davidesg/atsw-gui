@@ -10,28 +10,136 @@ Full provenance (variables, sample, SHA-256 hashes) is in
 vectors (β) and loading matrices (α) are in `benchmark/<case>.results.txt`.
 Bibliographic references with verified DOIs are in `benchmark/REFERENCES.md`.
 
-Two tiers:
+Three tiers:
 
 - **Verified** — the result is quoted directly from the paper/book, and the data
-  is present in `datasets/`.
+  is present in `datasets/`. *(No case currently qualifies: the two Mauricio
+  cases were downgraded on 2026-08-16, see the next section.)*
 - **Reproduced** — the result is recomputed here with the R package `urca`
   (`ca.jo`, the standard Johansen reference implementation), matching the cited
   paper's specification. The data is present in `datasets/`.
+- **Downgraded / pending** — the published result is on record but cannot be
+  used as a numerical target, either because the data is missing or because the
+  reported value could not be reproduced. **Never tune `drvec` against these.**
 
 A case is useful for `drvec` validation only when the reported result is
 explicitly documented; therefore cases whose published rank is not yet
 confirmed are listed under "pending verification" rather than asserted.
 
-## Verified cases (result quoted from the paper)
+## Mauricio (2006) — the paper this project replicates
 
-### Mauricio (2006) — the paper this project replicates
+**⚠ Neither case is usable as a numerical homologation target today.**
 
-| Case | Data | Published result |
-|------|------|------------------|
-| `mauricio/mink_muskrat` | Hudson's Bay mink & muskrat fur sales, annual 1850–1911 (62 obs) | **r = 1**. VARMA(2,1) on logs. Eigenvalues of Π̂ = I − Φ̂₁ − Φ̂₂ = **0.0413, 1.0602** (single unit root). Log-likelihood **15.6116**. ĉ = [10.7976, 13.0080]. |
-| `mauricio/census_housing` | US housing starts & houses sold, monthly 1965–1975 (seasonally differenced, 125 obs) | **r = 1**. VEC(1) with Θ₁ seasonal. Eigenvalues of Π̂ = **0, 0.7212**. B̂ = [1, −1.8625], Λ̂ = [0.5191, −0.1085]. Log-likelihood **−664.2429**. *Data not yet located.* |
+| Case | Data | Published result | Status |
+|------|------|------------------|--------|
+| `mauricio/mink_muskrat` | Hudson's Bay mink & muskrat fur sales, annual 1850–1911 (62 obs) | **r = 1**. VARMA(2,1) on logs. Eigenvalues of Π̂ = I − Φ̂₁ − Φ̂₂ = **0.0413, 1.0602** (single unit root). Log-likelihood **15.6116**. ĉ = [10.7976, 13.0080]. | **Log-likelihood not reproducible** — see below |
+| `mauricio/census_housing` | US single-family housing starts & houses sold, monthly Jan 1965 – May 1975 (125 raw obs; **N = 112 effective** after (1−L¹²) and ∇) | **r = 1**. VEC(1) with Θ₁ seasonal, model (A.14). Eigenvalues of Π̂ = **0, 0.7212**. B̂ = [1, −1.8625], Λ̂ = [0.5191, −0.1085], Θ̂₁ = diag(0.9600, 1.1318), Σ̂ = [29.4526; 5.7112, 9.9830]. Log-likelihood **−664.2429**, AIC/BIC 12.0043/12.1985. | **Data not located** |
 
 Quoted from Mauricio (2006), Tables 2 and A3 (in `literature/`).
+
+### Why `mink_muskrat` was downgraded (2026-08-16)
+
+The published log-likelihoods of Tables 2 (15.6116) and 4 (15.1257) **could not
+be reproduced on the canonical data**, and the discrepancy was traced *away
+from* `drvec`. Full evidence in `docs/ANALISIS_PRELIMINAR.md` §5; in short:
+
+- The **data is confirmed correct.** Byte-identical to the Hipel & McLeod
+  `mhsets` collection (StatLib) for both series; `fma::mink` agrees too.
+- The **likelihood code is confirmed correct.** Mauricio's AS 311 `elf` matches
+  a brute-force multivariate-normal density to 2·10⁻⁸ (white noise and VAR(1)),
+  and `drvmlest.c`'s concentrated formula checks out algebraically.
+- **The published points are non-invertible as printed.** Θ̂₁ has eigenvalues
+  0.8461/**−1.0063** (Table 2) and 0.9904/**−1.0078** (Table 4); the engine
+  rejects both with `ifault = 4`.
+- **The gap is entirely in Σ̂.** At the paper's own (μ̂, Φ̂, Θ̂) the exact AS 311
+  residual covariance has |Σ| = 0.002414 against the |Σ̂| = 0.001788 published
+  beside them (ratio 1.35, i.e. −½·n·log 1.35 = −9.16 of an 11.7 gap). The
+  paper's **CML** column (|Σ̂| = 0.002312) *is* consistent with this data; the
+  **EML** column is not. For scale, |Σ̂| = 0.001788 is what an unrestricted
+  **VAR(7)** achieves on these series by OLS.
+- A 40-start global search of the exact likelihood tops out at **8.1440**
+  (n = 62) / **7.1701** (n = 61), not 15.61 — and its |Σ| = 0.002311 lands
+  essentially **on the paper's own CML value** (0.002312).
+
+**Independent calibration — Chan & Wallis (1978)**, the classic study of this
+data (`literature/Chan-MultipleTimeSeries-1978.pdf`), estimates their eq. (13)
+on **(Δ log muskrat, log mink)** — the very vector our `.inp` carries — with an
+order-4 AR and *exact* ML for the vector MA (Osborn 1977), and report the
+generalized variance |Σ̂| explicitly:
+
+| source | model | \|Σ̂\| |
+|---|---|---|
+| Jenkins (1975), diagonal form (12) | AR(4)+MA(1) diag. | 0.00299 |
+| Chan & Wallis (1978) eq. (13) | AR(4)+MA(1), exact ML | **0.00246** |
+| Mauricio (2006) Table 2, **CML** column | VARMA(2,1) | 0.002312 |
+| **global exact-ML optimum measured here** (n=61) | VARMA(2,1) | **0.002311** |
+| Mauricio (2006) Table 2, **EML** column | VARMA(2,1) | **0.001788** |
+
+A *richer* published model (AR order 4) reaches only 0.00246; our VARMA(2,1)
+reaches 0.002311, slightly better and entirely plausible. The paper's EML column
+sits **27 % below** the order-4 published fit. Our side is the one in line with
+the literature.
+
+### What this case can and cannot be used for
+
+- ✔ **The rank result (r = 1) is a valid quoted reference — and `drvec` now
+  reproduces it.** With `p=2 q=1 -case 2 -lrtest` (which since 2026-08-17
+  includes the r = 0 null): LR(0→1) = 25.5981 against critical values
+  13.75 / 15.67 / 20.20 (M−r = 2, case 2) → reject H₀ at 1%, so **r = 1**.
+  AIC and BIC agree. See `docs/ANALISIS_PRELIMINAR.md` §4.4.
+- ✔ **Usable acceptance target — on |Σ̂|, not on the log-likelihood.** *(Restated
+  2026-08-17; see `docs/ANALISIS_PRELIMINAR.md` §5.11 for the correction.)* The
+  target is the **global search over this same model and data**: exact-ML
+  VARMA(2,1) reaches **|Σ̂| ≈ 0.00230** (0.002311 with the invertibility gate,
+  0.002294 without), and the paper's own CML column agrees at 0.002312. Chan &
+  Wallis (0.00246) **calibrates the magnitude but is not the target** — different
+  model (AR order 4), different sample window. An earlier version of this note
+  set a 0.0022–0.0024 band and cited Chan & Wallis in support, whose value falls
+  *outside* it.
+
+  **`drvec` agrees with itself but sits ~8% high.** After F1 (variance-ratio
+  seeding, `docs/PLAN_BETA.md` F1), on the `%.10f` fixture:
+
+  | configuration | \|Σ̂\| before F1 | after F1 |
+  |---|---|---|
+  | levels (default), case 2 | 0.002461 | 0.002461 |
+  | levels (default), case 3 | 0.002569 | 0.002460 |
+  | legacy layout, case 2 | 0.002344 | 0.002482 |
+  | legacy layout, case 3 | 0.002459 | 0.002508 |
+  | **spread** | **0.000225** | **0.000048** |
+
+  The spread across mathematically equivalent set-ups was itself the diagnosis,
+  and F1 closed it by a factor of ~5 — but closed it *upwards*: no current value
+  is as close to the target as the pre-F1 legacy case 2. Reaching the level is
+  the open item, deferred to F2 (seeding from the suite).
+
+  *Why |Σ̂| and not logL:* `drvec` evaluates the likelihood of **Ȳ_t**
+  (61 obs, 1851–1911) while model (22) and the global search evaluate it on
+  **Y_t**. The map Y → Ȳ has unit Jacobian but **conditions on Y₁₈₅₀**, so the
+  two levels are not directly comparable. |Σ̂| is the same innovation covariance
+  in both representations. As a within-representation reference only: exact ML
+  of model (22) on Y_t tops out at 7.1701 (n = 61) / 8.1440 (n = 62).
+- ✘ **Not usable as targets:** the published log-likelihoods (15.6116 / 15.1257)
+  and the Λ̂, B̂, Σ̂ values that go with them. **Do not tune `drvec` against them.**
+
+### Caveat on the Π̂ eigenvalues quoted above
+
+Mauricio reports the eigenvalues of Π̂ as evidence of the number of unit roots
+(0.0413/1.0602 in Table 2; 0/0.7212 in Table A3). **Read them as an indication,
+not as a rank criterion.** Mélard, Roy and Saidi (2004, §3) point out that the
+assumption rank[Φ(1)] = k−d does *not* imply that ΣΦⱼ = I + C has d unit
+eigenvalues, and that there are counterexamples where the procedure fails (Pham,
+Roy and Cédras, 2003). Since Π = Φ(1), "Π̂ has a single zero eigenvalue" is
+exactly the criterion they warn about. The likelihood-ratio test (`-lrtest`) is
+the instrument; the eigenvalues are a sanity check.
+
+### Provenance caveats
+
+- Chan & Wallis state that Jones (1914) covers **1848–1909**; Mauricio states
+  1850–1911, and the data here is 1850–1911 (while `fma::mink` is 1848–1911).
+  The declared window is not consistent across the literature.
+- Chan & Wallis use **y₁ = muskrat, y₂ = mink** — the reverse of Mauricio's
+  labelling. Easy trap when comparing matrices.
 
 ## Reproduced cases (ca.jo, matching the cited specification)
 
@@ -59,6 +167,24 @@ Quoted from Mauricio (2006), Tables 2 and A3 (in `literature/`).
 | Case | Series | n obs | Result |
 |------|--------|-------|--------|
 | `urca_UKconsumption` | cons, inc, price | 76 | r = 2 at 5% (trace). |
+
+**✔ Reproduced by `drvec` (2026-08-17).** With the three series in logs and
+levels, `drvec p=2 q=0 -case 2 -lrtest` estimates r = 0, 1 and 2 — **all three
+converge properly** — and returns
+
+```
+  r  M-r      LR     10%     5%      1%
+  0    3   70.1280  19.77  22.00  26.81   reject H0 at 1%
+  1    2   25.5141  13.75  15.67  20.20   reject H0 at 1%   ->  r = 2
+```
+
+matching the `ca.jo` rank, with AIC and BIC agreeing. See
+`docs/ANALISIS_PRELIMINAR.md` §4.4.
+
+*(The same test on `urca_denmark` — M = 5, n = 54, 49–67 parameters — does not
+converge for the lower ranks and its rank should not be trusted. The model is
+too rich for that sample; `drvec` prints the optimizer status per rank so this
+is visible.)*
 
 ### Lütkepohl (2005) — "New Introduction to Multiple Time Series Analysis", Springer
 
@@ -119,6 +245,9 @@ are retained for unit-root testing only.
 - `urca_ecb` (26 obs, 4 vars) — ECB data without a single canonical published
   rank; retained in `datasets/` but not asserted as a benchmark case.
 - Census Housing raw data — not yet located (source sites offline).
+- `mauricio/mink_muskrat` — data confirmed correct, but the published EML
+  log-likelihood and Σ̂ are not reproducible; see the Mauricio section above and
+  `docs/ANALISIS_PRELIMINAR.md` §5.
 
 ## How the reproduced values were computed
 

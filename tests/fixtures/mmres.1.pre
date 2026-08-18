@@ -1,0 +1,93 @@
+************************************************
+*        Input file for program DRVUS          *
+* Copyright (C) 1996 Jos? Alberto Mauricio     *
+************************************************
+
+** Frequency of time series: either 1(A), 4(Q) or 12(M):
+ 1
+** Number of observations and starting date of time series:
+ 59 1911 1853 emuskrat
+** Number of deterministic variables (including seasonal components):
+ 0
+**Number and orders of regular AR operators:
+0
+** Number and orders of annual AR operators:
+0
+** Number and orders of regular MA operators:
+1 1
+**
+0.0108 1
+** Number and orders of anual MA operators:
+0
+** Number and frequencies of regular AR(2) operators with fixed frequency:
+0
+** Number and frequencies of regular MA(2) operators with fixed frequency:
+0
+** Mean parameter (mu):
+0.073615 1
+** Box-Cox lambda, regular differences and complete annual differences:
+1.00 0 0
+** Individual factors of the annual difference (from freq 0.0): 
+ 0
+** ACF/PACF bands (0 Automatic) and reescaling factor: 
+ 0.00 10.00
+** Time series (stochastic and non-standard deterministic variables): 
+-0.2857672519 
+0.1840041343 
+0.0746809407 
+0.2920141061 
+0.1724429446 
+0.2955942466 
+-0.0228729452 
+-0.1494951886 
+-0.2201281788 
+0.3696125167 
+-0.2249157011 
+0.3245857362 
+-0.0422467557 
+-0.0313010866 
+0.2448450002 
+0.2463917736 
+0.0407974007 
+-0.7402037029 
+0.1974215088 
+-0.0769559415 
+-0.0793711380 
+0.2122011748 
+0.2332263513 
+0.2604697576 
+0.1301232337 
+0.3011459357 
+-0.1279023672 
+-0.4678006273 
+-0.0195850138 
+-0.0190570129 
+-0.0957426786 
+0.0242007967 
+0.7123149865 
+-0.1279073216 
+0.2142525899 
+0.3709333035 
+-0.5025575150 
+0.0026490593 
+-0.3249038595 
+0.0761859929 
+0.1362687829 
+-0.1738913129 
+0.0910828439 
+0.3036406850 
+0.1141674060 
+0.1398054948 
+-0.3970584685 
+0.0253470385 
+-0.0370501113 
+0.0970400160 
+-0.0080130858 
+-0.1531347707 
+0.1353484935 
+0.0402076138 
+-0.2998033310 
+-0.5164251577 
+-0.1790205106 
+-0.2153756154 
+-0.0944719229 

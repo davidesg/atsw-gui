@@ -75,7 +75,56 @@ struct Tseries
     int  max;                    /* ?ndice del m?ximo */
     int  min;                    /* ?ndice del m?nimo */
     real *data;                  /* Vector de datos */
+    int  numbering;              /* 1 = numeracion simple, 0 = fechas       */
+    real refactor;               /* factor de reescalado (se anade para FUE) */
     };
+
+/* Estructura de modelo univariante de FUE.  Copiada byte a byte de
+   drtran/include/main.h (2026-08-17); la necesita fue_pre_reader.c, que
+   tambien viene de drtran.  Ver PLAN_BETA.md F2 (procedencia).          */
+
+/* -------------------------------------------------------------------------- */
+/* Estructura para modelo univariante completo de FUE (nueva)                */
+/* -------------------------------------------------------------------------- */
+struct Tusmodel
+{
+    int NdetVar;                 /* numero de variables deterministas */
+    char **detspec;              /* especificacion de cada detvar tal como viene
+                                    en el .pre ("cos 2", "step 6 2008", ...).
+                                    Se guarda para poder REGENERARLAS en fechas
+                                    futuras al prever: son funciones del tiempo. */
+    int *Nomega, *Ndelta;        /* ordenes de omega y delta para cada detvar */
+    real **Omega, **Delta;       /* coeficientes omega y delta */
+    int **Imega, **Ielta;        /* indicadores: 1=estimado, 0=fijo */
+
+    int NumAr1, NumAr2;          /* numero de factores AR regulares y anuales */
+    int *p1, *p2;                /* ordenes de cada factor AR */
+    real **Ar1, **Ar2;           /* coeficientes AR */
+    int **Ia1, **Ia2;            /* flags estimacion */
+
+    int NumMa1, NumMa2;          /* numero de factores MA regulares y anuales */
+    int *q1, *q2;                /* ordenes de cada factor MA */
+    real **Ma1, **Ma2;           /* coeficientes MA */
+    int **Im1, **Im2;            /* flags estimacion */
+
+    int NumAr1f, NumMa1f;        /* numero de factores AR/MA de frecuencia fija */
+    int *pfre1, *qfre1;          /* frecuencias de los factores fijos */
+    real **Ar1f, **Ma1f;         /* coeficientes AR/MA de frecuencia fija */
+    int *Ia1f, *Im1f;            /* flags estimacion */
+
+    int Imu;                     /* flag para la media */
+    real mu;                     /* valor de la media */
+
+    real boxlam;                 /* parametro lambda de Box-Cox */
+    int nrdiff;                  /* diferencias regulares */
+    int nadiff;                  /* diferencias anuales completas */
+    int *ifadf;                  /* factores irreducibles de la dif. anual */
+    int sper;                    /* periodo estacional (freq) */
+    int ornsop;                  /* orden del operador no estacionario */
+    real *rnsop;                 /* coeficientes del operador no estacionario */
+    char *residuals;             /* nombre de la serie de residuos */
+    real cbands;                 /* bandas de confianza para ACF */
+};
 
 /*****************************************************************************/
 /*  Funciones de estimaci?n (de elfvarma.c y drvmlest.c)                     */
@@ -148,6 +197,9 @@ void ObsToDate( int beg_per, int beg_sub, int obs_no, int freq,
                 int *per, int *sub );
 void DateToObs( int beg_per, int beg_sub, int per, int sub, int freq,
                 int *obs_no );
+/* Easter esta en nlatools.c:679 desde siempre, pero no estaba declarada aqui;
+   la usa fue_pre_reader.c para la deterministica "easter" (solo mensual).     */
+void Easter( int *day, int *month, int year );
 real Mean( real *data, int nobs );
 real Stdev( real *data, int nobs );
 int  MaxVal( real *data, int nobs );

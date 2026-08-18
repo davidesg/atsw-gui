@@ -1,0 +1,97 @@
+************************************************
+*        Input file for program DRVUS          *
+* Copyright (C) 1996 Jos? Alberto Mauricio     *
+************************************************
+
+** Frequency of time series: either 1(A), 4(Q) or 12(M):
+ 1
+** Number of observations and starting date of time series:
+ 61 1911 1851 dmuskrat
+** Number of deterministic variables (including seasonal components):
+ 0
+**Number and orders of regular AR operators:
+1 1
+**
+-0.4623 1
+** Number and orders of annual AR operators:
+0
+** Number and orders of regular MA operators:
+1 1
+**
+-0.8732 1
+** Number and orders of anual MA operators:
+0
+** Number and frequencies of regular AR(2) operators with fixed frequency:
+0
+** Number and frequencies of regular MA(2) operators with fixed frequency:
+0
+** Mean parameter (mu):
+0
+** Box-Cox lambda, regular differences and complete annual differences:
+1.00 0 0
+** Individual factors of the annual difference (from freq 0.0): 
+ 0
+** ACF/PACF bands (0 Automatic) and reescaling factor: 
+ 0.00 10.00
+** Time series (stochastic and non-standard deterministic variables): 
+0.1038879800 
+0.4071997600 
+0.5238711300 
+0.0364544700 
+-0.3935355600 
+-0.2892785100 
+0.1552319800 
+0.0364950100 
+-0.2095034400 
+-0.3605098500 
+0.1501808000 
+0.4873058700 
+0.0626247100 
+0.3560538500 
+-0.1975914700 
+-0.2654735200 
+0.2505286400 
+0.4051981900 
+-0.4247765200 
+-0.5540243200 
+0.6480036300 
+0.4620761600 
+0.0857558400 
+-0.1334227600 
+-0.2491178000 
+0.1076204600 
+-0.2885241700 
+0.1060603100 
+0.0277916000 
+-0.0442880500 
+0.5504872700 
+0.2163691800 
+0.0380197300 
+0.0129020300 
+-0.2819093400 
+-0.8561739100 
+0.0910497000 
+-0.0973278300 
+-0.4332693800 
+0.3651269700 
+0.5788729200 
+0.3382902800 
+0.1479563300 
+-0.3652175300 
+0.0394823300 
+0.1864940100 
+-0.3878932400 
+0.0307310100 
+0.2094379400 
+0.0902500700 
+0.1897937100 
+0.5754141000 
+-0.1032791800 
+-0.4761940000 
+0.1332959500 
+-0.4184704600 
+-0.5340403400 
+-0.8600504600 
+0.5611507400 
+0.9078560500 
+0.2517446100 

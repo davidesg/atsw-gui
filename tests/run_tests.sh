@@ -544,6 +544,36 @@ else
 fi
 echo
 
+# 6d. THE CONVERGENCE NOTE must be present and must AGREE with the banner.
+#     Not a golden value: it is a consistency check between two things the same
+#     run says.  "OPTIMIZER STOPPED" and a note claiming a clean convergence
+#     would be worse than saying nothing.
+run "$MM" 2 1 1 -case 2
+if ! grep -aq "^Convergence note:" "$TMP/case.out"; then
+    bad "convergence note" "not present in the output"
+else
+    banner_stopped=$(grep -ac "OPTIMIZER STOPPED" "$TMP/case.out")
+    note_notconv=$(grep -ac "^Convergence note: NOT a convergence" "$TMP/case.out")
+    if [ "$banner_stopped" -gt 0 ] && [ "$note_notconv" -eq 0 ]; then
+        bad "convergence note" "banner says STOPPED but the note does not"
+    elif [ "$banner_stopped" -eq 0 ] && [ "$note_notconv" -gt 0 ]; then
+        bad "convergence note" "note says NOT a convergence but the banner does not"
+    else
+        ok "the convergence note agrees with the optimiser's banner"
+    fi
+fi
+# And on a run that really does stop on termcode 3, the note must say so.
+run "$MM" 2 1 1 -case 3
+if grep -aq "OPTIMIZER STOPPED" "$TMP/case.out" && \
+   grep -aq "^Convergence note: NOT a convergence" "$TMP/case.out"; then
+    ok "a termcode-3 run is reported as NOT a convergence"
+elif grep -aq "OPTIMIZER STOPPED" "$TMP/case.out"; then
+    bad "convergence note" "termcode 3 not reported as a non-convergence"
+else
+    ok "case 3 converged this time; nothing to check"
+fi
+echo
+
 # ================================= 7 THE RANK TEST AGAINST KNOWN TRUTH ==
 echo "[7] the rank test on data whose rank is known by construction"
 # Every other check of -lrtest compares against another program's answer.  These

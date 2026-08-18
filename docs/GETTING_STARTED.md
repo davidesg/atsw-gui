@@ -40,8 +40,10 @@ plausible fit of a different model, and this line is where that is visible.
 ```
 
 The three possible endings and what to make of them are in
-[CONVERGENCE.md](CONVERGENCE.md). This one is benign; *"last global step failed
-to locate a lower point"* is the common one and needs more care.
+[CONVERGENCE.md](CONVERGENCE.md). Further down, the `.out` carries a
+**convergence note** that says what the ending means — and for this very fit it
+says the step collapsed rather than the gradient vanishing, so the standard
+errors deserve caution. Read that note before the parameters.
 
 ```
 sigma2 :    0.0480498305

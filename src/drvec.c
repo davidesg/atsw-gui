@@ -314,6 +314,105 @@ static void build_ybar(real **B2, real **Ybar)
     }
 }
 
+/*  Nota de convergencia — POR QUE paro, no solo SI paro.
+ *
+ *  En VARMA multivariante la razon de la parada es un diagnostico de primer
+ *  orden: verosimilitudes mal condicionadas, casi no identificacion y factores
+ *  comunes se manifiestan como terminacion en steptol y no en el gradiente.
+ *  La suite ya lo tenia establecido -- drvarma lo arreglo en su
+ *  report._convergence_block y drtran lo expone como Fit.convergence_note --,
+ *  y drvec imprimia el criterio sin decir lo que significa.
+ *
+ *  DOS COSAS QUE ESTA NOTA ARREGLA, las dos heredadas:
+ *
+ *   - termcode 2 (steptol) se anunciaba como "OPTIMIZER CONVERGED" a secas.  Lo
+ *     es en el sentido del programa, pero es el sintoma tipico de una
+ *     verosimilitud mal condicionada y los errores estandar no son de fiar.
+ *   - "ESTIMATION SUCCESSFUL (ifault=0)" se lee como convergencia y NO LO ES:
+ *     ifault es adecuacion del MODELO, no del optimizador (drvarma lo documenta
+ *     explicitamente).  Un ajuste que paro lejos de un optimo puede tener
+ *     ifault = 0 perfectamente.
+ *
+ *  COMO SE OBTIENE EL TERMCODE.  est() no lo devuelve, y report() vive en
+ *  qnewtopt.c, que es MOTOR y no se toca -- ni por una linea, ni para exponer un
+ *  observable.  Asi que se lee del texto que report() ya escribio en el propio
+ *  .out.  Es fragil respecto a esa cadena y sobre nada mas, y la alternativa era
+ *  tocar codigo publicado y refereado.
+ *
+ *  Devuelve el termcode 1..5, o 0 si no se pudo determinar.                  */
+static int termcode_from_out(const char *path)
+{
+    FILE *f;
+    char line[512];
+    int code = 0;
+
+    fflush(outputv);
+    f = fopen(path, "r");
+    if (!f) return 0;
+    while (fgets(line, sizeof line, f)) {
+        if (!strstr(line, "Convergence criterion:")) continue;
+        if      (strstr(line, "gradtol"))        code = 1;
+        else if (strstr(line, "steptol"))        code = 2;
+        else if (strstr(line, "lower point"))    code = 3;
+        else if (strstr(line, "iteration limit"))code = 4;
+        else if (strstr(line, "maximum length")) code = 5;
+    }
+    fclose(f);
+    return code;
+}
+
+/*  convergence_note — la interpretacion, en la salida y en la consola.        */
+static void convergence_note(int code)
+{
+    const char *note = NULL, *head = NULL;
+
+    switch (code) {
+    case 1:
+        head = "clean convergence";
+        note = "the scaled gradient is at the tolerance.  This is the one to\n"
+               "  trust.";
+        break;
+    case 2:
+        head = "stopped on steptol, NOT on the gradient";
+        note = "the step collapsed while the gradient may still be\n"
+               "  appreciable.  Typical of an ill-conditioned likelihood (near\n"
+               "  non-identification, common factors).  Treat the standard errors\n"
+               "  with caution and re-estimate from other starting values or with\n"
+               "  a smaller order.";
+        break;
+    case 3:
+        head = "NOT a convergence: the line search failed to improve";
+        note = "in drvec this is the COMMON outcome, and it is worth knowing why\n"
+               "  it is not the same situation as in drtran.  There, termcode 3\n"
+               "  usually means the fit started AT the optimum, having been seeded\n"
+               "  from a .pre.  Here it means the surface is hard: measured, moving\n"
+               "  Theta by hundredths can move the answer by units (docs/\n"
+               "  CONVERGENCE.md).  The estimates are a stationary-ish point of an\n"
+               "  exact likelihood, not a demonstrated maximum.  Cross-check with\n"
+               "  -fixb2, compare |Sigma| across equivalent configurations, and\n"
+               "  treat one run as evidence rather than as an answer.";
+        break;
+    case 4: case 5:
+        head = "NOT a convergence: the optimiser gave up";
+        note = "the estimates are not a maximum, and every criterion derived from\n"
+               "  this fit -- standard errors, AIC/BIC, any LR statistic -- is\n"
+               "  unreliable.";
+        break;
+    default:
+        head = "the termination criterion could not be read";
+        note = "no interpretation available.";
+        break;
+    }
+
+    fprintf(outputv, "\nConvergence note: %s.\n  %s\n", head, note);
+    fprintf(outputv,
+        "  (Note that ifault above is MODEL adequacy, not convergence: a fit\n"
+        "   that stopped short of an optimum can still report ifault = 0.)\n");
+    if (!quiet_mode && code != 1)
+        printf("  Convergence note: %s.  See the .out and docs/CONVERGENCE.md\n",
+               head);
+}
+
 /*  load_alpha_A — lee la matriz A de la restriccion alpha = A*psi.
  *
  *  Formato, deliberadamente simple y ASCII: una primera linea con  M sa  y
@@ -2085,6 +2184,7 @@ int main(int argc, char *argv[])
         fprintf(outputv, "\nESTIMATION SUCCESSFUL (ifault=0)\n");
         fprintf(outputv, "sigma2 : %15.10f\n", varma1.sigma2);
         fprintf(outputv, "logelf : %15.10f\n", varma1.logelf);
+        convergence_note(termcode_from_out(outputf));
 
         /* El LR de H1(r) contra H(r).  Johansen y Swensen (2024): los grados de
            libertad son (M - sa)*r, que es cuantas entradas libres de alpha

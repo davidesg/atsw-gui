@@ -15,6 +15,34 @@ unmodified. It stops for one of three reasons:
 | **step** ≤ tolerance ("scaled distance between the last two steps") | the search stopped moving. Usually fine, but it is a statement about the *steps*, not about the gradient |
 | **"last global step failed to locate a lower point"** (termcode 3) | the line search could not improve from where it is. **This is the common outcome in `drvec`**, and it is the one to be careful with |
 
+## 1b. The note the fit prints, and the two things it corrects
+
+Every fit now ends with a **convergence note** in the `.out`: not the code, but
+what it means. It exists because two things were being read the wrong way, and
+neither was `drvec`'s invention — the suite had already settled both.
+
+* **`ifault` is model adequacy, not convergence.** `ESTIMATION SUCCESSFUL
+  (ifault = 0)` reads like a convergence and is not one: a fit that stopped far
+  from an optimum can report `ifault = 0` perfectly well. `drvarma` documents
+  this explicitly, and had the same defect before it was fixed there.
+* **Termination on `steptol` was being announced as a plain "CONVERGED".** It is
+  one in the program's sense, but it is the typical symptom of an
+  ill-conditioned likelihood, and then the standard errors are not to be
+  trusted. This is not hypothetical here: the canonical mink–muskrat fit —
+  the baseline used throughout this repository — stops on `steptol`.
+
+The wording follows `drvarma`'s and `drtran`'s, so the same situation reads the
+same way across the suite. Where `drvec` differs it says so: in `drtran`,
+termcode 3 usually means the fit began *at* the optimum, having been seeded from
+a `.pre`. Here it means the surface is hard.
+
+*How the note gets the termination code:* `est()` does not return it and
+`report()` lives in `qnewtopt.c`, which is engine and is not touched — not even
+by one line to expose an observable. So the note reads the criterion back from
+the text the optimiser already wrote into the `.out`. Fragile with respect to
+that one string and nothing else; the alternative was editing published,
+refereed code.
+
 ## 2. Termcode 3 is the normal case here, and what is known about it
 
 Most configurations of `drvec` stop on termcode 3. Two things are established

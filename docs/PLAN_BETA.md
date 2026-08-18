@@ -27,7 +27,7 @@ De ahí salen cuatro requisitos, y el orden no es negociable:
 
 Cuando escribí esto teníamos parte de (1) y (3), nada de (2) y **nada de (4)**,
 que era el riesgo de proceso más grande: todo estaba comprobado a mano. **F0 cerró
-(4)** — hay batería (`make test`, 60 comprobaciones) y muerde. Sigue faltando (2)
+(4)** — hay batería (`make test`, 62 comprobaciones) y muerde. Sigue faltando (2)
 por completo, y (1) es lo que F1 y F2 empujan.
 
 ---
@@ -906,12 +906,12 @@ r = 1, que es el que decide si hay cointegración y el único imprescindible.
 
 | # | criterio | estado hoy |
 |---|---|---|
-| 1 | `make test` verde, con la puerta diagonal dentro | **✔ (F0)** 60 comprobaciones, medidas por mutación |
+| 1 | `make test` verde, con la puerta diagonal dentro | **✔ (F0)** 62 comprobaciones, medidas por mutación |
 | 2 | \|Σ̂\| concordante entre las cuatro configuraciones **y** en el nivel objetivo | **parcial (F1)**: concuerdan (dispersión 0.000048, con test), pero en ~0.00248 y no en ~0.00230 → nivel a F2 |
 | 3 | Siembra desde `.pre`, con logL ≥ arranque en frío | **✔ en el peldaño diagonal, ✘ por encima (F2.8)**: con r = 0 el `.pre` transporta el óptimo univariante y los dos contratos de la escalera se cumplen (cruce 1.8e-5, certificado +2.4e-7 ≥ 0, los dos con test). Con r ≥ 1 la información univariante no vale: la semilla arranca 17 unidades peor, por sobredeterminación del AR y por el acoplamiento de C̄ y Λ |
 | 4 | Formas BEC/Π y exogeneidad débil, con o sin s.e. declarado | **✔ (F3.1)**: Π = ΛB′ con autovalores y la advertencia de circularidad, exogeneidad débil por LR, y la triangularización Σ = PDP′ con test de reconstrucción |
 | 5 | Rango correcto en ≥ 4 casos del banco | **✔**: `mink_muskrat` (r=1), UK (r=2, igual que `ca.jo`), y dos sintéticos con rango **conocido por construcción**, r=0 y r=2, los dos recuperados y en la batería. Y medido lo que faltaba: en 20 réplicas con r=1 verdadero el test acierta 16, sobre-rechaza 3 y sub-rechaza 1 |
-| 6 | Todo termcode 3 residual **explicado**, no necesariamente eliminado | ✘ |
+| 6 | Todo termcode 3 residual **explicado**, no necesariamente eliminado | **✔**: cada ajuste emite una **nota de convergencia** que interpreta la parada (la contingencia de R1, como `Fit.convergence_note` de `drtran`), y de paso corrige dos lecturas heredadas — que `ifault` no es convergencia y que parar en `steptol` merece aviso. El porqué está medido en `CONVERGENCE.md` |
 | 6b | α = Aψ soportado, con LR y grados de libertad correctos | **✔ (F3.1)** con `-alpha`/`-weakex`, g.l. (M−sa)·r, y guarda de rango sobre A |
 | 6c | La elección del bloque Y₁ **diagnosticada o declarada** como no verificada | **✔ (F3.1)**: diagnóstico libre de unidades, con caso construido que lo dispara y test en las dos direcciones |
 | 7 | Registro de homologación y documento de entrada | **✔**: `docs/HOMOLOGATION.md` (qué reproduce, con qué tolerancia y qué no) y el conjunto de documentación en inglés con `docs/README.md` de entrada |

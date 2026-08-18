@@ -86,6 +86,20 @@ In descending order of usefulness:
    **spread** it reports is a diagnostic in its own right: on a well-behaved
    surface every start lands in the same place, and here they do not.
 
+   **How many is enough is a question the data answers, not a default.** On one
+   applied series 10 starts stopped at a local optimum of 15.28 where the answer
+   is 21.14, and 40 found it. What exposed it was not the convergence note —
+   which said «clean convergence», truthfully: it reports *how* the optimiser
+   stopped, not whether the point is the global maximum — but two checks that
+   cannot be fooled:
+
+   * **a negative likelihood-ratio** between nested models, which is impossible
+     at the true maxima and therefore proves one fit did not get there;
+   * **re-estimating with the roles of the two series swapped**: for a single
+     cointegrating relation the two normalised vectors must multiply to 1.
+
+   Both cost one extra fit and both are worth doing before believing a number.
+
 1. **Fix `B₂` and see if it converges** — `-fixb2`. Holding the cointegrating
    vector converges in cases where the free model stops on termcode 3, and the
    difference in log-likelihood tells you how much of the difficulty is in that

@@ -88,6 +88,12 @@ tabulated here). A **negative** statistic is flagged: rank `r` is nested in
 
 Incompatible with `-differenced`, because the column split depends on `r`.
 
+**Combined with `-alpha` / `-weakex`**, the sequence is still computed — testing
+the rank *within* the restricted model is a legitimate question — but the
+**critical values are suppressed**, because under `α = Aψ` the statistic has a
+different distribution and the tables are for `α` free. Printing them would be
+wrong numbers wearing the right clothes.
+
 *A caveat worth knowing:* the eigenvalues of `Π̂` are sometimes quoted as a rank
 criterion. Mélard, Roy and Saidi (2004) show that the assumption on `Φ(1)` does
 **not** imply what that criterion assumes. Treat them as an indication; the LR

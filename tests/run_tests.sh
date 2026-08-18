@@ -471,6 +471,25 @@ else
     bad "rank guard on A" "no complaint about a singular A'A"
 fi
 
+# 6a-bis. -lrtest UNDER a restriction on alpha must NOT print the tabulated
+#     critical values.  Under alpha = A*psi the statistic has a different
+#     distribution -- the tables are for alpha free -- so printing them would be
+#     wrong numbers wearing the right clothes, which is worse than none.
+run "$MM" 2 1 0 -case 2 -lrtest -weakex 1
+if grep -aq "critical values do not apply" "$TMP/case.out" && \
+   ! grep -aqE '^  [0-9]+ +[0-9]+ +-?[0-9.]+ +[0-9]+\.[0-9]{2} ' "$TMP/case.out"; then
+    ok "-lrtest with a restriction suppresses the critical values and says why"
+else
+    bad "-lrtest under a restriction" "still prints tabulated critical values"
+fi
+# ...and without the restriction it still prints them.
+run "$MM" 2 1 0 -case 2 -lrtest
+if grep -aqE '^  [0-9]+ +[0-9]+ +-?[0-9.]+ +[0-9]+\.[0-9]{2} ' "$TMP/case.out"; then
+    ok "-lrtest unrestricted still reports the critical values"
+else
+    bad "-lrtest unrestricted" "critical values disappeared"
+fi
+
 # And the parameter walk must still consume exactly npar with the restriction on.
 struct_case "M=2 with -weakex 1"  "$MM" 2 1 1 -case 2 -weakex 1
 struct_case "M=3 with -weakex 2"  "$UK" 2 0 2 -case 2 -weakex 2

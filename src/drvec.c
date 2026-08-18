@@ -2050,11 +2050,18 @@ int main(int argc, char *argv[])
 
         fprintf(outputv,
             "\n  H0: P = r   vs   H1: P = r+1        LR = 2*[L(r+1) - L(r)]\n");
-        fprintf(outputv,
-            "  (asymptotic critical values: %s)\n",
-            (global_case == 1) ? "case 1, no constant" :
-            (global_case == 2) ? "case 2, restricted constant" :
-                                 "case 3 — NOT TABULATED HERE");
+        if (global_alpha)
+            fprintf(outputv,
+                "  (every rank estimated UNDER the restriction alpha = A*psi,\n"
+                "   so this is the rank sequence within H1(r) and NOT the usual\n"
+                "   one.  The tabulated critical values do not apply and are not\n"
+                "   printed: they are for alpha free.)\n");
+        else
+            fprintf(outputv,
+                "  (asymptotic critical values: %s)\n",
+                (global_case == 1) ? "case 1, no constant" :
+                (global_case == 2) ? "case 2, restricted constant" :
+                                     "case 3 — NOT TABULATED HERE");
         fprintf(outputv, "\n  r    M-r        LR      10%%      5%%      1%%\n");
         fprintf(outputv, "  ---------------------------------------------------\n");
         for (int rr = 0; rr <= M - 2; rr++) {
@@ -2075,7 +2082,14 @@ int main(int argc, char *argv[])
                 continue;
             }
             fprintf(outputv, "  %-4d %4d %10.4f", rr, g, lr);
-            if (global_case != 3 && g >= 1 && g <= LR_MAXTRENDS) {
+            if (global_alpha) {
+                /* Bajo alpha = A*psi el estadistico tiene OTRA distribucion: las
+                   tablas son para alpha libre.  Imprimirlas aqui seria dar
+                   valores criticos equivocados con aspecto de correctos, que es
+                   peor que no darlos.                                        */
+                fprintf(outputv, "        -        -        -   (restricted:"
+                                 " tabulated values do not apply)");
+            } else if (global_case != 3 && g >= 1 && g <= LR_MAXTRENDS) {
                 const real *cv = (global_case == 1) ? lr_cval_none[g-1]
                                                     : lr_cval_const[g-1];
                 fprintf(outputv, " %8.2f %8.2f %8.2f", cv[0], cv[1], cv[2]);
@@ -2097,6 +2111,13 @@ int main(int argc, char *argv[])
             "  expressible here, so the sequence ends at r = M-1.  Read it with\n"
             "  AIC/BIC, and check the optimizer banner of every rank before\n"
             "  trusting a statistic.\n");
+        if (global_alpha)
+            fprintf(outputv,
+                "  NOTE: with alpha = A*psi imposed, what is being tested at each\n"
+                "  step is the rank WITHIN the restricted model.  That is a\n"
+                "  legitimate question and a different one; its distribution is\n"
+                "  not the tabulated Johansen one.  For the usual rank test, drop\n"
+                "  the restriction.\n");
 
         free_ivector(good, 0, M - 1);
         free_ivector(npr, 0, M - 1);

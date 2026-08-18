@@ -463,6 +463,37 @@ fi
 # And the parameter walk must still consume exactly npar with the restriction on.
 struct_case "M=2 with -weakex 1"  "$MM" 2 1 1 -case 2 -weakex 1
 struct_case "M=3 with -weakex 2"  "$UK" 2 0 2 -case 2 -weakex 2
+
+# 6b. Pi = Lambda B' must be reported, and it is what to compare fits on: unlike
+#     Lambda and B it does not move under a reparameterisation of the
+#     cointegrating space.  Its rank is r BY CONSTRUCTION, so the M-r zero
+#     eigenvalues prove nothing about the rank -- which is why the output says so.
+run "$MM" 2 1 1 -case 2
+if grep -aq "^Pi = Lambda B'" "$TMP/case.out" && \
+   grep -aq "eigenvalues of Pi:" "$TMP/case.out"; then
+    ok "Pi and its eigenvalues are reported"
+else
+    bad "Pi block" "missing from the output"
+fi
+
+# 6c. THE NORMALISATION ALARM, on a case built to fire it.  B = [I_r; B2]
+#     normalises on the Y1 block, and if that block does not appear in the
+#     cointegrating relation the fit describes something else with an inflated
+#     B2 -- silently.  datasets/synthetic/badnorm.inp is exactly that case.
+#     An alarm with no case to fire on is not an alarm, so both directions are
+#     checked: it must fire there and stay quiet on real data.
+run datasets/synthetic/badnorm.inp 2 0 1 -case 2
+if printf '%s' "$STDERR" | grep -q 'barely involves the Y1 block'; then
+    ok "the normalisation alarm fires on the case built for it"
+else
+    bad "normalisation alarm" "did not fire on datasets/synthetic/badnorm.inp"
+fi
+run "$MM" 2 1 1 -case 2
+if printf '%s' "$STDERR" | grep -q 'barely involves the Y1 block'; then
+    bad "normalisation alarm" "fired on mink-muskrat, where Y1 carries 75% of the weight"
+else
+    ok "the normalisation alarm stays quiet on a well-normalised fit"
+fi
 echo
 
 # ===================================================================== summary =

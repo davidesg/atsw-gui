@@ -161,8 +161,9 @@ normalises on `Y₁`. **Which series go in `Y₁` is therefore a modelling decis
 made by the column order of the input file**, and `drvec` does not currently
 diagnose whether that choice is appropriate. Mauricio warns about this (p. 3648);
 Mélard, Roy and Saidi (2004) avoid it by construction, using the null space of
-`Φ(1)` instead of a normalisation. Treat a fit whose `B̂₂` is very large, or very
-sensitive to permuting the block, as a sign that the choice was wrong.
+`Φ(1)` instead of a normalisation. `drvec` reports a **normalisation check** for exactly this: per relation, the
+share of the weight carried by the `Y₁` block, measured unit-free as
+`|coefficient| · sd(series)`. Below 5 % it warns. See [USAGE.md](USAGE.md) §4.
 
 ### 5.5 A log-likelihood is not scale-invariant
 

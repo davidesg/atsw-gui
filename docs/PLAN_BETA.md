@@ -27,7 +27,7 @@ De ahí salen cuatro requisitos, y el orden no es negociable:
 
 Cuando escribí esto teníamos parte de (1) y (3), nada de (2) y **nada de (4)**,
 que era el riesgo de proceso más grande: todo estaba comprobado a mano. **F0 cerró
-(4)** — hay batería (`make test`, 49 comprobaciones tras F2) y muerde. Sigue faltando (2)
+(4)** — hay batería (`make test`, 57 comprobaciones tras F3.1) y muerde. Sigue faltando (2)
 por completo, y (1) es lo que F1 y F2 empujan.
 
 ---
@@ -767,6 +767,58 @@ la normalización elegida sea dudosa — por ejemplo que alguna fila de B̂ impl
 sea numéricamente despreciable, o que el ajuste sea muy sensible a permutar el
 bloque.
 
+#### F3.1 — Lo entregado *(2026-08-18)*
+
+**1. `α = Aψ`, la clase general.** `-alpha <fichero>` con A del usuario, y
+`-weakex <i>` como atajo para la A que declara exógena débil la ecuación `i` —
+la exogeneidad débil **no** se implementa como test propio, porque es el caso
+particular de H₁(r) en que A selecciona filas. El LR contra H(r) se reporta con
+sus `(M − sa)·r` grados de libertad y su p-valor.
+
+La ventaja estructural que predecía §3 se confirma en el código: Λ está en el
+vector de parámetros, así que la restricción es una sustitución dentro de
+`vec_shootx` —el mismo patrón que `-fixb2`— y los errores estándar salen del
+hessiano. El legado necesitaba método delta con pseudoinversa SVD.
+
+Sobre `mink_muskrat` (p=2, q=1, r=1, caso 2):
+
+| hipótesis | LR | g.l. | p |
+|---|---|---|---|
+| la ecuación del muskrat no ajusta | 26.573 | 1 | ≈ 0 |
+| la ecuación del mink no ajusta | 3.590 | 1 | 0.058 |
+
+Se comprueba el rango de A por su Gram **antes** de estimar: con `A'A` singular
+ψ no está identificada.
+
+**2. Π = ΛB′, la matriz de largo plazo**, con sus autovalores. Y con una
+advertencia que resultó ser **más fuerte** que la que traía la literatura: aquí
+Π tiene rango r *por construcción*, así que sus M−r autovalores nulos están
+garantizados y leerlos como evidencia del rango es **circular**. El aviso de
+Mélard, Roy y Saidi (que el supuesto sobre Φ(1) no implica lo que esa lectura
+supone) sigue valiendo para el caso no restringido. Π es además **invariante a la
+normalización**, al contrario que Λ y B, así que es sobre Π sobre lo que hay que
+comparar ajustes.
+
+**3. El diagnóstico de normalización** — el hueco que destapó Mélard y que era el
+criterio 6c de beta. La medida es libre de unidades: en `W = Y₁ + B₂′Y₂` cada
+serie pesa `|coeficiente| · sd(serie)`, y se informa la cuota del bloque Y₁ en
+ese peso. Una cuota diminuta dice que la relación no es sobre Y₁ y que la
+normalización está forzada.
+
+| caso | cuota de Y₁ | |
+|---|---|---|
+| `mink_muskrat` | 75.5 % | sin aviso |
+| `datasets/synthetic/badnorm.inp` | **0.6 %** | **avisa** |
+
+El segundo es un caso construido a propósito —y versionado— donde dos series
+cointegran y la tercera, que es la que va al bloque Y₁, es un paseo aleatorio
+independiente. **Una alarma sin un caso donde dispare no es una alarma**, así que
+la batería comprueba las dos direcciones: que salta ahí y que calla en un ajuste
+bien normalizado. Por mutación, desactivarla levanta 1 fallo.
+
+**Pendiente de F3:** la triangularización `Σ = PDP′` y las ecuaciones
+desacopladas.
+
 **Salida.**
 1. `-alpha <fichero>` (o equivalente) impone α = Aψ y reporta el LR contra H(r)
    con (M−s)·r grados de libertad.
@@ -841,14 +893,14 @@ r = 1, que es el que decide si hay cointegración y el único imprescindible.
 
 | # | criterio | estado hoy |
 |---|---|---|
-| 1 | `make test` verde, con la puerta diagonal dentro | **✔ (F0)** 49 comprobaciones tras F2, medida por mutación |
+| 1 | `make test` verde, con la puerta diagonal dentro | **✔ (F0)** 57 comprobaciones tras F3.1, medida por mutación |
 | 2 | \|Σ̂\| concordante entre las cuatro configuraciones **y** en el nivel objetivo | **parcial (F1)**: concuerdan (dispersión 0.000048, con test), pero en ~0.00248 y no en ~0.00230 → nivel a F2 |
 | 3 | Siembra desde `.pre`, con logL ≥ arranque en frío | **✔ en el peldaño diagonal, ✘ por encima (F2.8)**: con r = 0 el `.pre` transporta el óptimo univariante y los dos contratos de la escalera se cumplen (cruce 1.8e-5, certificado +2.4e-7 ≥ 0, los dos con test). Con r ≥ 1 la información univariante no vale: la semilla arranca 17 unidades peor, por sobredeterminación del AR y por el acoplamiento de C̄ y Λ |
-| 4 | Formas BEC/Π y exogeneidad débil, con o sin s.e. declarado | ✘ (F3) |
+| 4 | Formas BEC/Π y exogeneidad débil, con o sin s.e. declarado | **parcial (F3.1)**: Π = ΛB′ con autovalores y la advertencia de circularidad, y exogeneidad débil por LR. Falta la triangularización Σ = PDP′ |
 | 5 | Rango correcto en ≥ 4 casos del banco | parcial: 2 de 2 probados |
 | 6 | Todo termcode 3 residual **explicado**, no necesariamente eliminado | ✘ |
-| 6b | α = Aψ soportado, con LR y grados de libertad correctos | ✘ (F3) |
-| 6c | La elección del bloque Y₁ **diagnosticada o declarada** como no verificada | ✘ (F3) |
+| 6b | α = Aψ soportado, con LR y grados de libertad correctos | **✔ (F3.1)** con `-alpha`/`-weakex`, g.l. (M−sa)·r, y guarda de rango sobre A |
+| 6c | La elección del bloque Y₁ **diagnosticada o declarada** como no verificada | **✔ (F3.1)**: diagnóstico libre de unidades, con caso construido que lo dispara y test en las dos direcciones |
 | 7 | Registro de homologación y documento de entrada | ✘ (F5) |
 
 ---

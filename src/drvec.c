@@ -2108,6 +2108,7 @@ int main(int argc, char *argv[])
         /* --- Structured VEC output --------------------------------------- */
         int s = nser - global_r, r = global_r;
         int ii = 1;
+        real **Lam_m = matrix(1, nser, 1, (r > 0 ? r : 1));
         fprintf(outputv, "\nVEC model (Mauricio 2006):\n");
         fprintf(outputv, "  (I - F1 L - ... - F_{p-1} L^{p-1}) nabla Y_t =\n");
         fprintf(outputv, "      -Lambda (B' Y_{t-1} - E[W_t]) + (I - Theta1 L - ...) A_t\n\n");
@@ -2150,6 +2151,7 @@ int main(int argc, char *argv[])
                     real acc = 0.0;
                     for (int kk = 1; kk <= alpha_sa; kk++)
                         acc += alpha_A[i][kk] * psi[kk][j];
+                    Lam_m[i][j] = acc;
                     fprintf(outputv, "%12.6f", acc);
                 }
                 fprintf(outputv, "\n");
@@ -2159,8 +2161,10 @@ int main(int argc, char *argv[])
             fprintf(outputv, "Lambda (M x r) =\n");
             for (int i = 1; i <= nser; i++) {
                 fprintf(outputv, "  ");
-                for (int j = 1; j <= r; j++)
+                for (int j = 1; j <= r; j++) {
+                    Lam_m[i][j] = x[ii];
                     fprintf(outputv, "%12.6f", x[ii]), ii++;
+                }
                 fprintf(outputv, "\n");
             }
         }
@@ -2255,6 +2259,114 @@ int main(int argc, char *argv[])
                         (row <= r) ? ((c == row) ? 1.0 : 0.0) : B2m[row - r][c]);
             fprintf(outputv, "\n");
         }
+
+        /* ---- Pi = Lambda * B', y sus autovalores ------------------------- */
+        /* Pi es la matriz de largo plazo y, a diferencia de Lambda y de B, es
+           INVARIANTE a la normalizacion: cualquier reparametrizacion
+           Lambda -> Lambda*G, B -> B*G^-T deja Pi igual.  Por eso es lo que hay
+           que mirar para comparar ajustes, y por eso se imprime aqui.        */
+        if (r > 0) {
+            real **Pi = matrix(1, nser, 1, nser);
+            real *wr = vector(1, nser), *wi = vector(1, nser);
+            int a, b, j;
+            for (a = 1; a <= nser; a++)
+                for (b = 1; b <= nser; b++) {
+                    real acc = 0.0;
+                    for (j = 1; j <= r; j++) {
+                        real Bbj = (b <= r) ? ((b == j) ? 1.0 : 0.0) : B2m[b - r][j];
+                        acc += Lam_m[a][j] * Bbj;
+                    }
+                    Pi[a][b] = acc;
+                }
+            fprintf(outputv, "\nPi = Lambda B' (M x M), the long-run matrix =\n");
+            for (a = 1; a <= nser; a++) {
+                fprintf(outputv, "  ");
+                for (b = 1; b <= nser; b++) fprintf(outputv, "%12.6f", Pi[a][b]);
+                fprintf(outputv, "\n");
+            }
+            fprintf(outputv, "  (Pi is INVARIANT to the normalisation, while "
+                             "Lambda and B are not:\n"
+                             "   Lambda->Lambda G, B->B G^-T leaves it "
+                             "unchanged.  Compare fits on Pi.)\n");
+            {   /* autovalores, sobre una copia: eigenqr destruye su argumento */
+                real **Pc = matrix(1, nser, 1, nser);
+                for (a = 1; a <= nser; a++) for (b = 1; b <= nser; b++)
+                    Pc[a][b] = Pi[a][b];
+                eigenqr(Pc, nser, wr, wi);
+                fprintf(outputv, "  eigenvalues of Pi:");
+                for (a = 1; a <= nser; a++) {
+                    if (fabs(wi[a]) < 1.0e-12) fprintf(outputv, "  %.6f", wr[a]);
+                    else fprintf(outputv, "  %.6f%+.6fi", wr[a], wi[a]);
+                }
+                fprintf(outputv, "\n");
+                free_matrix(Pc, 1, nser, 1, nser);
+            }
+            fprintf(outputv,
+                "  CAUTION, and it is stronger than the usual one: here Pi = Lambda B'\n"
+                "  has rank r BY CONSTRUCTION, so its M-r zero eigenvalues are\n"
+                "  guaranteed and say nothing about whether r is right -- reading them\n"
+                "  as evidence for the rank is circular.  Even in the unrestricted\n"
+                "  case they are only an indication: Melard, Roy and Saidi (2004) show\n"
+                "  the assumption on Phi(1) does not imply what that reading assumes\n"
+                "  (Pham, Roy and Cedras 2003).  The instrument is -lrtest.\n");
+            free_vector(wi, 1, nser);
+            free_vector(wr, 1, nser);
+            free_matrix(Pi, 1, nser, 1, nser);
+        }
+
+        /* ---- Diagnostico de la normalizacion ----------------------------- */
+        /* B = [I_r ; B2] asume que el bloque Y1 aparece de verdad en cada
+           relacion de cointegracion.  Si no, B2 se dispara y el modelo se
+           vuelve una trampa silenciosa: el ajuste "funciona" y describe otra
+           cosa.  Mauricio lo advierte (p. 3648) y remite a Luukkonen et al.
+           (1999) y Kurozumi (2005); Melard, Roy y Saidi lo evitan usando el
+           espacio nulo de Phi(1) en vez de una normalizacion.
+           La medida que se usa aqui es libre de unidades: en W = Y1 + B2'Y2
+           cada serie pesa |coeficiente| * sd(serie), asi que se informa la
+           cuota del bloque Y1 en ese peso total.  Una cuota diminuta dice que
+           la relacion no es realmente sobre Y1 y que la normalizacion esta
+           forzada.                                                            */
+        if (r > 0 && s > 0) {
+            real *sdY2 = vector(1, s);
+            int a, t, j;
+            for (a = 1; a <= s; a++) {
+                real m1 = 0.0, v = 0.0;
+                for (t = 1; t <= nobs; t++) m1 += Y2_levels[t][a];
+                m1 /= nobs;
+                for (t = 1; t <= nobs; t++) v += (Y2_levels[t][a] - m1)
+                                               * (Y2_levels[t][a] - m1);
+                sdY2[a] = sqrt(v / (nobs > 1 ? nobs - 1 : 1));
+            }
+            fprintf(outputv, "\nNormalisation check (which series carry each "
+                             "cointegrating relation):\n");
+            for (j = 1; j <= r; j++) {
+                real m1 = 0.0, v = 0.0, w1, w2 = 0.0, share;
+                for (t = 1; t <= nobs; t++) m1 += datamat[t][s + j];
+                m1 /= nobs;
+                for (t = 1; t <= nobs; t++) v += (datamat[t][s + j] - m1)
+                                               * (datamat[t][s + j] - m1);
+                w1 = sqrt(v / (nobs > 1 ? nobs - 1 : 1));      /* coef = 1 */
+                for (a = 1; a <= s; a++) w2 += fabs(B2m[a][j]) * sdY2[a];
+                share = (w1 + w2 > 0.0) ? w1 / (w1 + w2) : 1.0;
+                fprintf(outputv, "  relation %d: the Y1 block carries %5.1f%% "
+                                 "of the weight", j, 100.0 * share);
+                if (share < 0.05) {
+                    fprintf(outputv, "   <-- DUBIOUS\n");
+                    fprintf(stderr,
+                        "WARNING: cointegrating relation %d barely involves the "
+                        "Y1 block (%.1f%%).\n"
+                        "         B = [I_r; B2] normalises on Y1, so this fit "
+                        "may be describing\n"
+                        "         a relation among the other series with an "
+                        "inflated B2.  Consider\n"
+                        "         reordering the columns of the .inp.  See "
+                        "docs/MODEL.md 5.4.\n", j, 100.0 * share);
+                } else fprintf(outputv, "\n");
+            }
+            free_vector(sdY2, 1, s);
+        }
+
+        free_matrix(Lam_m, 1, nser, 1, (r > 0 ? r : 1));
         free_matrix(B2m, 1, s, 1, (r > 0 ? r : 1));
 
     } else {

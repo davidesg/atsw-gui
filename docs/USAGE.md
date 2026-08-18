@@ -26,9 +26,9 @@ lmuskrat lmink                  <- M series names, in column order
 `1…s` are the `Y₂` block and `s+1…M` the `Y₁` block, where `Y₁` is the
 `r`-dimensional block the cointegrating matrix is normalised on:
 `B = [I_r ; B₂]`. Putting a different series in `Y₁` is a different
-normalisation, and `drvec` does not currently diagnose whether the choice is a
-good one. Prefer as `Y₁` a series that genuinely appears in every cointegrating
-relation.
+normalisation. Prefer as `Y₁` a series that genuinely appears in every
+cointegrating relation — and check the normalisation report the fit prints (§4),
+which measures exactly that.
 
 Supply **levels** for every column; that is the default. `-differenced` selects
 the legacy layout where columns `1…s` already hold `∇Y₂`, and then the levels of
@@ -154,7 +154,44 @@ statement the program exists to support.
 
 ---
 
-## 4. Exit behaviour
+## 4. What the fit reports about the long run
+
+Two blocks are printed after the parameters, and both exist to stop a specific
+mistake.
+
+**`Pi = Lambda B'`**, the long-run matrix, with its eigenvalues. `Π` is
+**invariant to the normalisation** — reparameterising `Λ → ΛG`, `B → BG⁻ᵀ`
+leaves it unchanged — while `Λ` and `B` are not. So `Π` is what to compare two
+fits on.
+
+The eigenvalues come with a caution that is stronger than the usual one: **here
+`Π = ΛB′` has rank `r` by construction**, so its `M − r` zero eigenvalues are
+guaranteed and prove nothing about whether `r` is right. Reading them as evidence
+for the rank is circular. (Even in an unrestricted fit they are only an
+indication — Mélard, Roy and Saidi (2004) show the assumption on `Φ(1)` does not
+imply what that reading assumes.) The instrument for the rank is `-lrtest`.
+
+**The normalisation check.** `B = [I_r ; B₂]` assumes the `Y₁` block genuinely
+appears in every cointegrating relation. When it does not, `B₂` inflates and the
+fit describes a relation among the *other* series — silently, because nothing
+about the output looks wrong. The check reports, per relation, the share of the
+weight carried by `Y₁`, measured unit-free as `|coefficient| · sd(series)`:
+
+```
+Normalisation check (which series carry each cointegrating relation):
+  relation 1: the Y1 block carries  75.5% of the weight
+```
+
+Below 5 % it is marked `<-- DUBIOUS` and a warning goes to stderr. The fix is to
+reorder the columns of the `.inp` so that a series that does appear in the
+relations sits in the `Y₁` block.
+
+`datasets/synthetic/badnorm.inp` is a case built to fire it: two series that
+cointegrate plus an independent random walk placed in `Y₁`. It reports 0.6 %.
+
+---
+
+## 5. Exit behaviour
 
 `drvec` writes `file.out` whatever happens. `ERROR` messages on stderr mean the
 run did not produce an estimate; `WARNING` messages mean it did, but something

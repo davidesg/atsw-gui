@@ -230,9 +230,43 @@ structural block: the output printer still walked the parameter vector as though
 `Λ` had `M·r` entries, and consumed 24 of 22. That is the fourth walk of the same
 vector, and the reason that block exists.
 
-**Still open in F3:** the BEC and `Π` forms, the triangularisation `Σ = PDP′`, and
-a diagnostic for the choice of the `Y₁` block — which is a real trap, because the
-column order of the input file silently chooses the normalisation.
+### `Π`, and a caveat that turned out to be stronger than the literature's
+
+`Π = ΛB′` is now reported with its eigenvalues. It is the quantity to compare
+fits on, because unlike `Λ` and `B` it does not move under a reparameterisation
+of the cointegrating space.
+
+The eigenvalues carry a warning, and writing it forced a sharper statement than
+the one that was planned. The plan quoted Mélard, Roy and Saidi (2004): the
+assumption on `Φ(1)` does not imply that reading the eigenvalues of `Π̂` as a rank
+criterion is valid. True — but **in this parameterisation the objection is much
+worse than that**: `Π = ΛB′` is *built* with rank `r`, so its `M − r` zero
+eigenvalues are guaranteed by construction and reading them as evidence for `r`
+is circular. The output says so.
+
+### The normalisation alarm, and the case built to fire it
+
+`B = [I_r ; B₂]` normalises on the `Y₁` block. If that block does not appear in
+the cointegrating relation, `B₂` inflates and the fit describes a relation among
+the *other* series — with nothing in the output looking wrong. This was the trap
+Mélard et al. exposed and beta criterion 6c.
+
+The measure is unit-free: in `W = Y₁ + B₂′Y₂` each series weighs
+`|coefficient| · sd(series)`, and what is reported is the share carried by `Y₁`.
+
+| | share of `Y₁` | |
+|---|---|---|
+| `mink_muskrat` | 75.5 % | quiet |
+| `datasets/synthetic/badnorm.inp` | **0.6 %** | **warns** |
+
+The second file is committed, and it is the point: **an alarm with no case to
+fire on is not an alarm.** It is built so that two series cointegrate and the
+third — the one the column order puts in `Y₁` — is an independent random walk.
+The suite checks both directions, that it fires there and stays quiet on real
+data, and disabling the alarm raises a failure.
+
+**Still open in F3:** the triangularisation `Σ = PDP′` and the decoupled
+equations.
 
 ---
 

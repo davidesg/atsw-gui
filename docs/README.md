@@ -36,7 +36,9 @@ optimisation hard.
 ## Status
 
 **Pre-beta.** The estimator works and is tested; the interpretable layer is
-partially built. What is verified, what is not, and what is known to be wrong is
+partially built — restrictions on the adjustment coefficients, the long-run
+matrix `Π` and the normalisation diagnostic are in; the triangularisation
+`Σ = PDP′` is not. What is verified, what is not, and what is known to be wrong is
 in [DEVELOPMENT_RECORD.md](DEVELOPMENT_RECORD.md) — including the results that
 were *rejected* after measurement, which are the ones that say most about where
 the program stands.

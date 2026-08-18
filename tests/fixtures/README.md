@@ -16,3 +16,21 @@ Se versionan para que la batería no dependa de tener `fue` instalado. Si hay qu
 regenerarlos, hay que repetir los dos pasos de arriba — y entonces el valor de
 oro de `run_tests.sh` (bloque 5) hay que volver a medirlo, porque un valor de oro
 sólo vale para la entrada exacta con la que se midió.
+
+---
+
+## `mmdiag.<i>.inp` / `.pre` — el peldaño diagonal
+
+Los mismos datos, pero para `2 1 0 -case 1 -diagar -diagma -diagcov`: los dos
+componentes de Ȳ, que con r = 0 son ∇log muskrat y ∇log mink. Misma procedencia:
+los escribió `drvec -writeinp` y los estimó `python -m fue`.
+
+Sostienen los **dos contratos de la escalera** en el bloque 5 de la batería
+(`LADDER_AS_OPTIMISATION.md` §2.1 y §3): la identidad de cruce —la conjunta
+evaluada en estos valores debe ser la suma de las univariantes— y el certificado
+de optimalidad —ajustar no puede dar menos que evaluar, y la brecha es cero si y
+sólo si estos ficheros son óptimos univariantes—.
+
+La tolerancia de esas comprobaciones es 1e-4 y no menor por una razón del
+formato: **un `.pre` guarda sus coeficientes con `%.6f`**, y ese redondeo es lo
+que acota lo afilado que puede ser el certificado.

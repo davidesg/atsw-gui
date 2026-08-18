@@ -1,0 +1,96 @@
+************************************************
+* Input file for program FUE                   *
+* written by drvec: Ybar component 2           *
+************************************************
+** Frequency of time series: either 1(A), 4(Q) or 12(M):
+ 1
+** Number of observations and starting date of time series:
+ 61 1 1851 dmink
+** Number of deterministic variables (including seasonal components):
+0
+** Number and orders of regular AR operators:
+1 1
+**
+0.056523  1
+** Number and orders of annual AR operators:
+0
+** Number and orders of regular MA operators:
+1 1
+**
+0.100000  1
+** Number and orders of anual MA operators:
+0
+** Number and frequencies of regular AR(2) operators with fixed frequency:
+0
+** Number and frequencies of regular MA(2) operators with fixed frequency:
+0
+** Mean parameter (mu):
+0
+** Box-Cox lambda, regular differences and complete annual differences:
+1.00 0 0
+** Individual factors of the annual difference (from freq 0.0): 
+ 0
+** ACF/PACF bands (0 Automatic) and reescaling factor: 
+ 0.00 10.00
+** Time series (stochastic and non-standard deterministic variables): 
+-0.3367288700
+0.1615326800
+0.0117175600
+0.5216211400
+0.1821052200
+0.1916896000
+0.0059903700
+0.2074244500
+-0.1864517500
+-0.3466720300
+-0.3636295500
+0.4639876300
+-0.1176996200
+0.3394185600
+-0.0228256500
+-0.1601798000
+0.1284728100
+0.2301164900
+0.0103842300
+-0.9869683400
+0.1435458600
+0.2050919600
+0.1305089600
+0.3006011600
+0.1789814900
+0.0917024400
+-0.0019459900
+0.0635102900
+-0.2971118300
+-0.5792024300
+0.0305504400
+0.2319541900
+0.0409904000
+0.0959070300
+0.7511382100
+-0.3706134100
+-0.1737236600
+0.2555113900
+-0.7117109200
+-0.1408079400
+-0.1829206800
+0.3602575200
+0.3194512900
+-0.1351953600
+0.0092067200
+0.3143630200
+0.0837631500
+-0.0812317900
+-0.5204637700
+0.0943341000
+0.0391345500
+0.1865721600
+0.1440687900
+-0.1965685300
+0.0239102700
+0.0699472400
+-0.4273418800
+-0.5982525400
+-0.1872374900
+0.1989637700
+0.4153906000

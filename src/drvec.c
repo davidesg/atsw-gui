@@ -309,6 +309,7 @@ static void build_ybar(real **B2, real **Ybar)
 static int   global_writeinp = 0;    /* -writeinp <prefijo>  (componentes de Ȳ) */
 static int   global_writeres = 0;    /* -writeres <prefijo>  (residuos)         */
 static char *inp_prefix      = NULL;
+static int   global_eval     = 0;    /* -eval: evaluar y salir, sin optimizar */
 static int   global_seed     = 0;    /* -seed <prefijo> */
 static char *pre_prefix      = NULL;
 
@@ -327,7 +328,12 @@ static int    cond_resid_T = 0, cond_resid_M = 0;
  *  pero el modelo sólo tiene F_1..F_{p-1} y Φ̄_p = −F_{p-1}C̄⁻¹H̄ queda
  *  determinada, así que con r ≥ 1 el sistema está sobredeterminado y no hay
  *  forma consistente de repartirlo.  Θ es justo lo que hoy arranca en cero.  */
-static real **seed_tbar  = NULL;     /* [1..q][1..M] */
+static real **seed_tbar  = NULL;     /* [1..q][1..M]   diagonal de ThetaBar */
+static real **seed_phi   = NULL;     /* [1..p-1][1..M] diagonal de Phi*      */
+static real  *seed_var   = NULL;     /* [1..M]  sigma^2 de cada univariante  */
+static real  *seed_logl  = NULL;     /* [1..M]  logL de cada univariante     */
+static int    seed_have_uv = 0;      /* 1 si sigma2/logL se pudieron evaluar */
+static real   seed_logl_sum = 0.0;   /* suma de las logL univariantes        */
 static int    seed_loaded = 0;
 
 /*  De qué ruta viene la semilla, que decide en qué coordenadas está:
@@ -600,11 +606,17 @@ static int write_resid_inps(const char *prefix)
         ascii_name(series_names[i], "e", name, sizeof name);
         snprintf(path, sizeof path, "%s.%d.inp", prefix, i);
         snprintf(what, sizeof what, "residual %d, MA(%d)", i, q);
-        /* Aqui la media SI va libre en todos los casos: no es un parametro del
-           modelo conjunto sino una molestia del residuo preliminar (la
-           regresion condicional no lleva constante), y lo unico que se quiere
-           de este ajuste es la estructura MA.                                */
-        nbad += write_inp_series(path, name, col, T, year, sub, 0, q, 1, what);
+        /* La media del residuo es una molestia del ajuste preliminar --- la
+           regresion condicional no lleva constante --- y no un parametro del
+           modelo conjunto, asi que en general va libre: lo unico que se quiere
+           de aqui es la estructura MA.
+           EXCEPTO en el caso 1, donde el modelo conjunto NO ADMITE MEDIA
+           ninguna (E[nabla Y2] = 0 y E[W] = 0).  Dejarla libre alli devuelve una
+           theta condicionada a algo que el modelo no puede representar, y esta
+           medido: con mu libre la semilla arranca 3.40 por debajo del arranque
+           en frio, y fijandola en 0 recupera 0.53 de esos 3.40.  Ver F2.7.    */
+        nbad += write_inp_series(path, name, col, T, year, sub, 0, q,
+                                 (global_case != 1), what);
     }
     free_vector(col, 1, T);
     return nbad ? 1 : 0;
@@ -619,19 +631,109 @@ static int write_resid_inps(const char *prefix)
  *  "1 2" (uno de segundo).  Expandir con la rutina de la suite, en vez de
  *  reimplementar la convolución, es lo que garantiza que drvec lea el mismo
  *  modelo que fue estimó.                                                    */
+/*  pre_univariate — evalúa el modelo de UN `.pre` sobre su propia serie y
+ *  devuelve su log-verosimilitud exacta y su σ².
+ *
+ *  El `.pre` no lleva σ² — eso es cierto y está comprobado sobre el formato —
+ *  pero **sí lleva el modelo y los datos**, así que σ² es *derivable*: basta
+ *  evaluar la verosimilitud univariante con el mismo `elf` que usa toda la
+ *  suite.  Decir «no se puede sembrar Σ desde el .pre» era quedarse en la
+ *  primera mitad del argumento.
+ *
+ *  Y de paso da lo que hace falta para los dos contratos de la escalera
+ *  (`drtran-python/docs/LADDER_AS_OPTIMISATION.md` §2.1 y §3): la suma de las
+ *  logL univariantes, que con r = 0 y estructura diagonal debe coincidir con la
+ *  conjunta, y el certificado de optimalidad, que es la brecha entre evaluar y
+ *  ajustar.
+ *
+ *  σ² sale en las unidades REESCALADAS (w = refactor·z), así que se devuelve
+ *  dividido por refactor² para que las razones entre componentes con distinto
+ *  refactor sean comparables.  Se rechaza lo que no sabemos manejar: Box-Cox
+ *  distinto de la identidad, diferencias, o deterministas.                    */
+static int pre_univariate(struct Tusmodel *Tm, struct Tseries *Ts,
+                          real *logl_out, real *sigma2_out)
+{
+    const real LOG2PI = 1.837877066;
+    int n = Ts->nobs, p = 0, q = 0, k, t, ifault = 0;
+    real pi1, pi2, pi3, refac = (Ts->refactor != 0.0) ? Ts->refactor : 1.0;
+    struct Tvarma uv;
+
+    if (Tm->NdetVar != 0 || Tm->nrdiff != 0 || Tm->nadiff != 0
+        || Tm->boxlam != 1.0) {
+        fprintf(stderr, "WARNING: el .pre lleva deterministas, diferencias o "
+                        "Box-Cox; no se evalua su sigma2\n");
+        return 1;
+    }
+    for (k = 1; k <= Tm->NumAr1; k++) p += Tm->p1[k];
+    for (k = 1; k <= Tm->NumMa1; k++) q += Tm->q1[k];
+
+    uv.m = 1; uv.n = n; uv.p = p; uv.q = q;
+    uv.xitol = 1.0e-3;
+    uv.mu    = vector(1, 1);
+    uv.phi   = tensor(0, (p > 0 ? p : 1), 1, 1, 1, 1);
+    uv.theta = tensor(0, (q > 0 ? q : 1), 1, 1, 1, 1);
+    uv.qq    = matrix(1, 1, 1, 1);
+    uv.w     = matrix(1, n, 1, 1);
+    uv.a     = matrix(1, n, 1, 1);
+
+    uv.mu[1]      = (Tm->Imu ? Tm->mu : 0.0);
+    uv.qq[1][1]   = 1.0;
+    uv.phi[0][1][1]   = 1.0;
+    uv.theta[0][1][1] = 1.0;
+    if (p > 0) { real *ph = vector(1, p);
+                 for (k = 1; k <= p; k++) ph[k] = 0.0;
+                 expand_ar_factors(Tm, ph, p);
+                 for (k = 1; k <= p; k++) uv.phi[k][1][1] = ph[k];
+                 free_vector(ph, 1, p); }
+    if (q > 0) { real *th = vector(1, q);
+                 for (k = 1; k <= q; k++) th[k] = 0.0;
+                 expand_ma_factors(Tm, th, q);
+                 for (k = 1; k <= q; k++) uv.theta[k][1][1] = th[k];
+                 free_vector(th, 1, q); }
+    for (t = 1; t <= n; t++) uv.w[t][1] = Ts->data[t] * refac;
+
+    elf(uv.m, uv.n, uv.p, uv.q, uv.mu, uv.phi, uv.theta, uv.qq, uv.w,
+        1.0, uv.xitol, TRUE, uv.a, &pi1, &pi2, &pi3, &ifault);
+
+    if (ifault == 0) {
+        *logl_out = -0.5 * uv.m * uv.n * (LOG2PI - log((real) uv.m)
+                    - log((real) uv.n) + 1.0)
+                    - 0.5 * uv.n * (uv.m * log(pi1) + log(pi2));
+        /* De vuelta a las unidades ORIGINALES.  fue estima sobre w = refactor*z,
+           y una logL no es invariante de escala: hay que quitarle el jacobiano
+           n*log(refactor).  Sin esto la suma de univariantes no es comparable
+           con la conjunta y la identidad de cruce parece fallar por cientos de
+           unidades (en mink-muskrat, por 2*61*log(10) = 280.92).
+           El signo: si w = c*z entonces p_z(z) = c^n * p_w(w), luego
+           logL_z = logL_w + n*log(c).                                        */
+        *logl_out += uv.n * log(refac);
+        *sigma2_out = (pi1 / (uv.n * uv.m)) / (refac * refac);
+    }
+
+    free_matrix(uv.a, 1, n, 1, 1);
+    free_matrix(uv.w, 1, n, 1, 1);
+    free_matrix(uv.qq, 1, 1, 1, 1);
+    free_tensor(uv.theta, 0, (q > 0 ? q : 1), 1, 1, 1, 1);
+    free_tensor(uv.phi,   0, (p > 0 ? p : 1), 1, 1, 1, 1);
+    free_vector(uv.mu, 1, 1);
+    return (ifault == 0) ? 0 : 1;
+}
+
 static int load_seed_pre(const char *prefix)
 {
     int M = nser, q = global_q;
     int i, k;
 
-    if (q < 1) {
-        fprintf(stderr, "WARNING: -seed no hace nada con q = 0 "
-                        "(sólo siembra el bloque MA)\n");
-        return 1;
-    }
+    int nf = (global_p > 1) ? global_p - 1 : 0;
 
-    seed_tbar = matrix(1, q, 1, M);
-    for (k = 1; k <= q; k++) for (i = 1; i <= M; i++) seed_tbar[k][i] = 0.0;
+    seed_tbar = matrix(1, (q  > 0 ? q  : 1), 1, M);
+    seed_phi  = matrix(1, (nf > 0 ? nf : 1), 1, M);
+    seed_var  = vector(1, M);
+    seed_logl = vector(1, M);
+    for (k = 1; k <= q;  k++) for (i = 1; i <= M; i++) seed_tbar[k][i] = 0.0;
+    for (k = 1; k <= nf; k++) for (i = 1; i <= M; i++) seed_phi[k][i]  = 0.0;
+    for (i = 1; i <= M; i++) { seed_var[i] = 1.0; seed_logl[i] = 0.0; }
+    seed_have_uv = 1;
 
     for (i = 1; i <= M; i++) {
         char path[1024];
@@ -677,6 +779,46 @@ static int load_seed_pre(const char *prefix)
             fprintf(stderr, "WARNING: %s trae MA de orden %d y el modelo pide %d;"
                             " los retardos que falten se siembran en 0\n",
                     path, qpre, q);
+
+        /* AR: la diagonal de Phi*.  Con r = 0 se tiene Phi*_k = F_k, asi que
+           esto siembra F directamente; con r >= 1 hay que deshacer Cbar, que es
+           lo que hace init_guess.                                            */
+        {
+            int ppre = 0;
+            for (k = 1; k <= Tm.NumAr1; k++) ppre += Tm.p1[k];
+            if (ppre > 0) {
+                real *ph = vector(1, ppre);
+                for (k = 1; k <= ppre; k++) ph[k] = 0.0;
+                expand_ar_factors(&Tm, ph, ppre);
+                for (k = 1; k <= nf && k <= ppre; k++) seed_phi[k][i] = ph[k];
+                free_vector(ph, 1, ppre);
+            }
+            if (ppre != nf)
+                fprintf(stderr, "WARNING: %s trae AR de orden %d y el modelo "
+                                "pide %d\n", path, ppre, nf);
+        }
+
+        /* sigma^2 y logL: NO estan en el fichero, pero el fichero trae el
+           modelo Y los datos, asi que se derivan evaluando con elf.          */
+        {
+            real ll = 0.0, s2 = 1.0;
+            if (pre_univariate(&Tm, &Ts, &ll, &s2) == 0) {
+                seed_logl[i] = ll; seed_var[i] = s2;
+            } else {
+                seed_have_uv = 0;
+            }
+        }
+    }
+
+    if (seed_have_uv) {
+        real tot = 0.0;
+        for (i = 1; i <= M; i++) tot += seed_logl[i];
+        seed_logl_sum = tot;
+        if (!quiet_mode) {
+            printf("  univariantes del .pre:");
+            for (i = 1; i <= M; i++) printf(" %.6f", seed_logl[i]);
+            printf("   suma = %.6f\n", tot);
+        }
     }
     seed_loaded = 1;
     return 0;
@@ -792,6 +934,84 @@ static void init_guess(real *x, int npar)
     for (t = 1; t <= T; t++) for (i = 1; i <= M; i++) cond_resid[t][i] = E[t][i];
     free_matrix(E, 1, T, 1, M);
 
+    /* --- 4b. La semilla del .pre, llevada a las coordenadas de drvec -------
+       Solo para la ruta Ybar: los .pre describen los COMPONENTES DE Ybar, y el
+       modelo esta parametrizado en Lambda / F / Theta / Sigma sobre nabla Y.
+       Las tres vueltas, con Phi*_k = Cbar*PhiBar_k y Theta*_k = Cbar*Theta_k*Cinv:
+
+         Theta_k = Cinv * diag(theta_k) * Cbar
+         F_1     = (Cinv*diag(phi_1) - Cinv*Hbar + LamBar) * Cbar
+         F_i     = (Cinv*diag(phi_i) + F_{i-1}*Cinv*Hbar) * Cbar     i = 2..p-1
+         Sigma   = Cinv * diag(sigma^2) * Cinv'
+
+       Con r = 0 todo esto colapsa a la identidad (Cbar = I, Hbar = 0), que es
+       el peldano diagonal donde viven los contratos de la escalera.
+       Phi*_p queda determinada por F_{p-1} y no se puede imponer, asi que con
+       r >= 1 el AR esta sobredeterminado y esto es una proyeccion, no una
+       vuelta exacta.  Ver docs/PLAN_BETA.md F2.8.                            */
+    real ***Fseed = NULL, ***Tseed = NULL, **Sigseed = NULL;
+    if (seed_loaded && seed_route == SEED_YBAR) {
+        real **Cb = matrix(1, M, 1, M), **Ci = matrix(1, M, 1, M);
+        real **Hb = matrix(1, M, 1, M), **Lb = matrix(1, M, 1, M);
+        real **T1 = matrix(1, M, 1, M), **T2 = matrix(1, M, 1, M);
+        int a, b;
+        for (a = 1; a <= M; a++) for (b = 1; b <= M; b++) {
+            Cb[a][b] = 0.0; Ci[a][b] = 0.0; Hb[a][b] = 0.0; Lb[a][b] = 0.0; }
+        for (a = 1; a <= s; a++) Cb[a][r + a] = 1.0;
+        for (b = 1; b <= r; b++) Cb[s + b][b] = 1.0;
+        for (b = 1; b <= r; b++) for (a = 1; a <= s; a++) Cb[s + b][r + a] = B2[a][b];
+        for (a = 1; a <= r; a++) for (b = 1; b <= s; b++) Ci[a][b] = -B2[b][a];
+        for (a = 1; a <= r; a++) Ci[a][s + a] = 1.0;
+        for (a = 1; a <= s; a++) Ci[r + a][a] = 1.0;
+        for (a = 1; a <= r; a++) Hb[s + a][s + a] = 1.0;
+        for (a = 1; a <= M; a++) for (b = 1; b <= r; b++) Lb[a][s + b] = Lambda[a][b];
+
+        if (q > 0) {
+            Tseed = tensor(1, q, 1, M, 1, M);
+            for (k = 1; k <= q; k++) {
+                for (a = 1; a <= M; a++) for (b = 1; b <= M; b++)
+                    T1[a][b] = (a == b) ? seed_tbar[k][a] : 0.0;
+                matrix_multiply(Ci, T1, T2, M, M, M);
+                matrix_multiply(T2, Cb, Tseed[k], M, M, M);
+            }
+        }
+        if (nf > 0) {
+            real **CiH = matrix(1, M, 1, M), **W1 = matrix(1, M, 1, M);
+            matrix_multiply(Ci, Hb, CiH, M, M, M);
+            Fseed = tensor(1, nf, 1, M, 1, M);
+            for (k = 1; k <= nf; k++) {
+                for (a = 1; a <= M; a++) for (b = 1; b <= M; b++)
+                    T1[a][b] = (a == b) ? seed_phi[k][a] : 0.0;
+                matrix_multiply(Ci, T1, W1, M, M, M);        /* Cinv*diag(phi) */
+                if (k == 1) {
+                    for (a = 1; a <= M; a++) for (b = 1; b <= M; b++)
+                        W1[a][b] += -CiH[a][b] + Lb[a][b];
+                } else {
+                    matrix_multiply(Fseed[k-1], CiH, T2, M, M, M);
+                    for (a = 1; a <= M; a++) for (b = 1; b <= M; b++)
+                        W1[a][b] += T2[a][b];
+                }
+                matrix_multiply(W1, Cb, Fseed[k], M, M, M);
+            }
+            free_matrix(W1, 1, M, 1, M);
+            free_matrix(CiH, 1, M, 1, M);
+        }
+        if (seed_have_uv) {
+            Sigseed = matrix(1, M, 1, M);
+            for (a = 1; a <= M; a++) for (b = 1; b <= M; b++)
+                T1[a][b] = (a == b) ? seed_var[a] : 0.0;
+            matrix_multiply(Ci, T1, T2, M, M, M);
+            for (a = 1; a <= M; a++) for (b = 1; b <= M; b++) {
+                real acc = 0.0;
+                for (k = 1; k <= M; k++) acc += T2[a][k] * Ci[b][k];  /* *Cinv' */
+                Sigseed[a][b] = acc;
+            }
+        }
+        free_matrix(T2, 1, M, 1, M); free_matrix(T1, 1, M, 1, M);
+        free_matrix(Lb, 1, M, 1, M); free_matrix(Hb, 1, M, 1, M);
+        free_matrix(Ci, 1, M, 1, M); free_matrix(Cb, 1, M, 1, M);
+    }
+
     /* --- 5. Write x[] in the canonical VEC order ------------------------- */
     if (global_case == 2) { for (j = 1; j <= r; j++) x[idx++] = EW[j]; }
     else if (global_case == 3) {
@@ -800,8 +1020,9 @@ static void init_guess(real *x, int npar)
     }
     for (i = 1; i <= M; i++) for (j = 1; j <= r; j++) x[idx++] = Lambda[i][j];
     for (k = 1; k <= nf; k++) {
-        if (global_diag_ar) { for (i = 1; i <= M; i++) x[idx++] = F[k][i][i]; }
-        else { for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) x[idx++] = F[k][i][j]; }
+        real **Fk = (Fseed ? Fseed[k] : F[k]);
+        if (global_diag_ar) { for (i = 1; i <= M; i++) x[idx++] = Fk[i][i]; }
+        else { for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) x[idx++] = Fk[i][j]; }
     }
     /* Bloque MA.  Sin -seed arranca en CERO EXACTO, que es el único hueco real
        del arranque en frío (todo lo demás sale de datos: B₂ por OLS, Λ y F por
@@ -823,43 +1044,19 @@ static void init_guess(real *x, int npar)
                         x[idx++] = (i == j) ? seed_tbar[k][i] : 0.0;
             }
         }
-    } else if (seed_loaded && q > 0 && seed_route == SEED_YBAR) {
-        real **Cbar = matrix(1, M, 1, M);
-        real **Cinv = matrix(1, M, 1, M);
-        real **T1   = matrix(1, M, 1, M);
-        real **Th   = matrix(1, M, 1, M);
-        for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) { Cbar[i][j] = 0.0;
-                                                            Cinv[i][j] = 0.0; }
-        for (i = 1; i <= s; i++) Cbar[i][r + i] = 1.0;
-        for (j = 1; j <= r; j++) Cbar[s + j][j] = 1.0;
-        for (j = 1; j <= r; j++) for (i = 1; i <= s; i++) Cbar[s + j][r + i] = B2[i][j];
-        for (i = 1; i <= r; i++) for (j = 1; j <= s; j++) Cinv[i][j] = -B2[j][i];
-        for (i = 1; i <= r; i++) Cinv[i][s + i] = 1.0;
-        for (i = 1; i <= s; i++) Cinv[r + i][i] = 1.0;
-
+    } else if (seed_loaded && q > 0 && seed_route == SEED_YBAR && Tseed) {
+        /* Ruta Ybar: Theta_k = Cinv * diag(theta_k) * Cbar, ya montada arriba. */
         for (k = 1; k <= q; k++) {
-            for (i = 1; i <= M; i++) for (j = 1; j <= M; j++)
-                T1[i][j] = (i == j) ? seed_tbar[k][i] : 0.0;
-            /* Th = Cinv * diag(theta_bar_k) * Cbar */
-            {
-                real **T2 = matrix(1, M, 1, M);
-                matrix_multiply(Cinv, T1, T2, M, M, M);
-                matrix_multiply(T2, Cbar, Th, M, M, M);
-                free_matrix(T2, 1, M, 1, M);
-            }
             if (global_diag_ma) {
-                /* Con -diagma sólo la diagonal de Θ_k es parámetro, y
-                   C̄⁻¹diag(·)C̄ no es diagonal en general: se toma su diagonal,
-                   que es una aproximación y no la vuelta exacta.              */
-                for (i = 1; i <= M; i++) x[idx++] = Th[i][i];
+                /* Con -diagma solo la diagonal de Theta_k es parametro, y
+                   Cinv*diag(.)*Cbar no es diagonal en general: se toma su
+                   diagonal, que es una aproximacion y no la vuelta exacta.    */
+                for (i = 1; i <= M; i++) x[idx++] = Tseed[k][i][i];
             } else {
-                for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) x[idx++] = Th[i][j];
+                for (i = 1; i <= M; i++)
+                    for (j = 1; j <= M; j++) x[idx++] = Tseed[k][i][j];
             }
         }
-        free_matrix(Th,   1, M, 1, M);
-        free_matrix(T1,   1, M, 1, M);
-        free_matrix(Cinv, 1, M, 1, M);
-        free_matrix(Cbar, 1, M, 1, M);
     } else {
         for (k = 1; k <= q; k++) {
             if (global_diag_ma) { for (i = 1; i <= M; i++) x[idx++] = 0.0; }
@@ -876,6 +1073,13 @@ static void init_guess(real *x, int npar)
        its canonical case: logL -1371 instead of -767, with scales differing by
        1098x.  Here the spread is milder (1.06 on mink-muskrat, up to 15x between
        components on UK consumption) but the failure mode is the same.          */
+    /* Con la semilla del .pre, Sigma sale de las varianzas univariantes
+       (derivadas evaluando cada .pre con elf) en vez de los residuos de la
+       regresion condicional.  Es lo que cierra el bloque univariante entero:
+       sembrar solo Theta deja un punto que no es el optimo de nadie.         */
+    if (Sigseed) {
+        for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) Sig[i][j] = Sigseed[i][j];
+    }
     {
         real s11 = (Sig[1][1] > 1.0e-24) ? Sig[1][1] : 1.0e-24;
         for (i = 1; i <= M; i++)
@@ -905,6 +1109,9 @@ static void init_guess(real *x, int npar)
     if (idx != npar + 1)
         fprintf(stderr, "ERROR init_guess: idx=%d, npar=%d\n", idx-1, npar);
 
+    if (Sigseed) free_matrix(Sigseed, 1, M, 1, M);
+    if (Tseed)   free_tensor(Tseed, 1, q, 1, M, 1, M);
+    if (Fseed)   free_tensor(Fseed, 1, nf, 1, M, 1, M);
     free_matrix(Sig, 1, M, 1, M);
     free_tensor(F, 1, (nf > 0 ? nf : 1), 1, M, 1, M);
     free_matrix(Lambda, 1, M, 1, (r > 0 ? r : 1));
@@ -1299,6 +1506,7 @@ int main(int argc, char *argv[])
         else if (strcmp(argv[i], "-writeres") == 0 && i+1 < argc) {
             global_writeres = 1; inp_prefix = argv[++i];
         }
+        else if (strcmp(argv[i], "-eval") == 0) global_eval = 1;
         else if (strcmp(argv[i], "-seed") == 0 && i+1 < argc) {
             global_seed = 1; seed_route = SEED_RESID; pre_prefix = argv[++i];
         }
@@ -1335,10 +1543,19 @@ int main(int argc, char *argv[])
             exit(1);
         }
         if (global_r < 1) global_r = 1;   /* r on the command line is ignored */
-    } else if (global_r < 1) {
-        fprintf(stderr, "ERROR: cointegration rank r must be >= 1 "
-                "(use -lrtest to test)\n");
+    } else if (global_r < 0) {
+        fprintf(stderr, "ERROR: cointegration rank r must be >= 0\n");
         exit(1);
+    } else if (global_r == 0 && !quiet_mode) {
+        /* r = 0 ya no es un error.  Es el PELDANO DIAGONAL de la escalera:
+           con r = 0 se tiene Cbar = I y Hbar = 0, la verosimilitud exacta
+           factoriza con las banderas diagonales, y ahi es donde viven los dos
+           contratos de la suite (LADDER_AS_OPTIMISATION.md 2.1 y 3): la
+           identidad de cruce y el certificado de optimalidad.  Antes solo se
+           llegaba a el por dentro de -lrtest, que es justamente donde no se
+           puede inspeccionar.  Ver docs/PLAN_BETA.md F2.8.                   */
+        printf("r = 0: sin cointegracion, VARMA(%d,%d) sobre nabla Y "
+               "(el peldano diagonal)\n", global_p, global_q);
     }
 
     strcpy(outputf, base_name);
@@ -1597,6 +1814,44 @@ int main(int argc, char *argv[])
 
     int ifault;
     vec_shootx(x, &varma1, &ifault, 1, 0);  /* allocate */
+
+    /* -eval: la verosimilitud EN EL PUNTO DE PARTIDA, sin optimizar.
+       Es el diagnóstico que separa dos cosas que se confunden con facilidad:
+       una semilla mala (arranca peor) de un optimizador que desde una semilla
+       mejor acaba peor (la superficie).  Sin esto, comparar sólo los logL
+       finales no distingue un fallo de signo de un problema de camino.
+       La fórmula es la misma de drvmlest.c:133, con sigma2 = 1 y atf = TRUE.  */
+    if (global_eval) {
+        const real LOG2PI = 1.837877066;
+        real pi1, pi2, pi3, ll;
+        int ifev = 0;
+        elf(varma1.m, varma1.n, varma1.p, varma1.q, varma1.mu, varma1.phi,
+            varma1.theta, varma1.qq, varma1.w, 1.0, varma1.xitol,
+            TRUE, varma1.a, &pi1, &pi2, &pi3, &ifev);
+        if (ifev > 0) {
+            printf("eval: elf devuelve ifault = %d en el punto de partida\n", ifev);
+            fprintf(outputv, "eval: ifault = %d\n", ifev);
+        } else {
+            ll = -0.5 * varma1.m * varma1.n * (LOG2PI - log((real) varma1.m)
+                 - log((real) varma1.n) + 1.0)
+                 - 0.5 * varma1.n * (varma1.m * log(pi1) + log(pi2));
+            printf("eval: logelf en el punto de partida = %15.10f  "
+                   "(sigma2 = %.10f)\n", ll, pi1 / (varma1.n * varma1.m));
+            fprintf(outputv, "eval logelf : %15.10f\n", ll);
+            if (seed_have_uv) {
+                /* La identidad de cruce de la escalera: con r = 0 y estructura
+                   diagonal la verosimilitud exacta factoriza, asi que esto debe
+                   coincidir con la suma de las univariantes de los .pre.  Lo
+                   que sobre es la brecha de la transformacion, no del ajuste. */
+                fprintf(outputv, "sum univariate : %15.10f\n", seed_logl_sum);
+                printf("      suma univariante = %15.10f   diferencia = %.3e\n",
+                       seed_logl_sum, ll - seed_logl_sum);
+            }
+        }
+        vec_shootx(x, &varma1, &ifault, 0, 1);   /* liberar */
+        fclose(outputv);
+        return 0;
+    }
 
     int maxits = 500, nrits = 200;
     real gradtol = 1e-5, sptol = 1e-7;

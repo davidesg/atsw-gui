@@ -370,6 +370,38 @@ for i in 1 2; do
     fi
 done
 
+# 5c-ter. THE LADDER'S TWO CONTRACTS, at the diagonal rung.
+#     From drtran-python/docs/LADDER_AS_OPTIMISATION.md sections 2.1 and 3:
+#
+#       SUM_i logL(series i)  =  logL(joint DIAGONAL fit)  <=  logL(joint model)
+#       logL(diagonal fit)   >=  logL(AT the stored values), equality iff the
+#                                stored values are the univariate optima
+#
+#     The first proves the CROSSING -- transformation, scaling, seeds and orders
+#     all arrived intact, or the identity fails.  The second is a free
+#     optimality CERTIFICATE: one likelihood evaluation, no optimisation, and
+#     its sign says whether the .pre it was handed are optima.
+#     Both are checked here on r=0 with diagonal structure, which is the rung
+#     where the factorisation holds.  The tolerance is 1e-4 because a .pre
+#     stores its coefficients with %.6f, and that rounding is what bounds how
+#     sharp the certificate can be.
+LAD="2 1 0 -case 1 -diagar -diagma -diagcov"
+run "$MM" $LAD -seedybar tests/fixtures/mmdiag -eval
+ev=$(grep -a 'eval logelf'    "$TMP/case.out" | awk '{print $4}')
+su=$(grep -a 'sum univariate' "$TMP/case.out" | awk '{print $4}')
+run "$MM" $LAD -seedybar tests/fixtures/mmdiag
+fit=$(logelf_of "$TMP/case")
+if [ -z "$ev" ] || [ -z "$su" ] || [ -z "$fit" ]; then
+    bad "ladder contracts" "missing values (eval=$ev sum=$su fit=$fit)"
+else
+    awk -v e="$ev" -v s="$su" 'BEGIN{d=e-s; if(d<0)d=-d; exit !(d<=1e-4)}' \
+      && ok "crossing identity: joint at the .pre = sum of univariates ($ev vs $su)" \
+      || bad "crossing identity" "joint=$ev  sum of univariates=$su"
+    awk -v f="$fit" -v e="$ev" 'BEGIN{ exit !(f-e >= -1e-9 && f-e <= 1e-4) }' \
+      && ok "optimality certificate: gap = fit - eval is >= 0 and ~0 ($fit vs $ev)" \
+      || bad "optimality certificate" "fit=$fit  eval=$ev  gap must be >=0 and ~0"
+fi
+
 # 5d. Regression baseline for the seeded fit, on the committed .pre fixtures.
 #     Those were written by fue 1.13 (python) from drvec's own -writeres output
 #     for mink-muskrat p=2 q=1 r=1 -case 2, so the optimality claim is fue's.

@@ -27,7 +27,7 @@ De ahí salen cuatro requisitos, y el orden no es negociable:
 
 Cuando escribí esto teníamos parte de (1) y (3), nada de (2) y **nada de (4)**,
 que era el riesgo de proceso más grande: todo estaba comprobado a mano. **F0 cerró
-(4)** — hay batería (`make test`, 47 comprobaciones tras F2) y muerde. Sigue faltando (2)
+(4)** — hay batería (`make test`, 49 comprobaciones tras F2) y muerde. Sigue faltando (2)
 por completo, y (1) es lo que F1 y F2 empujan.
 
 ---
@@ -625,6 +625,102 @@ compara **contra lo que el fichero dice**, sacado con `awk` del propio `.pre`. N
 hay número de oro que mantener, así que la comprobación no envejece. Con el fallo
 restaurado levanta **2 fallos**.
 
+#### F2.8 — Los contratos de la escalera, y qué medía F2.7 en realidad
+
+*(2026-08-18. Esta sección corrige el encuadre de F2.7, no sus números.)*
+
+F2.7 midió «¿mejora el logL final si siembro Θ?» y respondió que no. **La
+pregunta estaba mal planteada**, y la razón es que la suite ya tiene definido qué
+significa sembrar y cómo se certifica — `drtran-python/docs/LADDER_AS_OPTIMISATION.md`
+§2.1 y §3 — y yo estaba reinventándolo:
+
+```
+   Σ_i logL(serie i)  =  logL(ajuste conjunto DIAGONAL)  ≤  logL(modelo conjunto)
+        \___________________________/                        \____________/
+             la factorización: prueba el CRUCE                el término extra
+
+   logL(ajuste diagonal)  ≥  logL(EN los valores almacenados)
+        con igualdad ⟺ los valores almacenados son los óptimos univariantes
+        -> el CERTIFICADO, que cuesta UNA evaluación y ninguna optimización
+```
+
+F2.7 sembraba **sólo Θ** y dejaba Λ, F y Σ de la regresión condicional. Ese punto
+**no es el óptimo de nadie**, así que no hay certificado que reclamar: medía el
+comportamiento del optimizador desde un punto híbrido, no el transporte de un
+óptimo. Lo que hacía falta era sembrar **el bloque univariante entero**.
+
+**Y para eso hubo que corregir dos cosas que F2 daba por imposibles:**
+
+- **σ² sí se puede sembrar.** Es cierto que el `.pre` no lo lleva, pero lleva **el
+  modelo y los datos**, así que σ² es *derivable*: se evalúa la verosimilitud
+  univariante con el mismo `elf` de la suite (`pre_univariate` en `drvec.c`).
+  Quedarse en «no está en el fichero» era quedarse en la primera mitad del
+  argumento.
+- **`r = 0` es ahora una configuración de primera clase.** Antes sólo se llegaba
+  a ella por dentro de `-lrtest`, que es justo donde no se puede inspeccionar. Y
+  es el **peldaño diagonal**: donde C̄ = I, H̄ = 0, la verosimilitud factoriza y
+  viven los dos contratos.
+
+**El contrato se cumple** (mink–muskrat, `2 1 0 -case 1 -diagar -diagma -diagcov`,
+sembrando desde los `.pre` que `fue` escribió sobre los componentes de Ȳ):
+
+| | |
+|---|---|
+| logL conjunta **evaluada** en los valores del `.pre`, sin optimizar | −34.6278402874 |
+| suma de las logL univariantes, calculada por `drvec` desde los `.pre` | −34.6278225170 |
+| **identidad de cruce** (diferencia) | **1.8·10⁻⁵** |
+| logL del **ajuste** diagonal desde esa semilla | −34.6278400462 |
+| **certificado** (ajustar − evaluar) | **+2.4·10⁻⁷ ≥ 0** ✔ |
+
+Las dos diferencias son del orden del redondeo del propio formato: **un `.pre`
+guarda sus coeficientes con `%.6f`**, y eso es lo que acota lo afilado que puede
+ser el certificado. Los dos contratos están ya en la batería.
+
+*Un detalle que costó un signo:* `fue` estima sobre `w = refactor·z`, y una
+log-verosimilitud **no es invariante de escala**. Para comparar con la conjunta
+hay que devolverle el jacobiano, `logL_z = logL_w + n·log(refactor)`. Sin eso la
+identidad de cruce falla por 280.92 en este caso —que es exactamente
+2·61·log(10)— y parece un fallo del transporte. Hecha la corrección, las
+univariantes del `.pre` salen **−20.057976** y **−14.569847**, que son las
+constantes de la puerta diagonal (§2) reproducidas por una tercera vía.
+
+**Y la escalera transporta exactamente un peldaño.** Con el bloque entero
+sembrado y r ≥ 1, la semilla **empeora el punto de partida**, mucho:
+
+| configuración | partida en frío | partida sembrada |
+|---|---|---|
+| `-case 1` (r=1) | −283.33 | −256.56 (+26.8) |
+| `-case 2` (r=1) | −8.74 | **−25.95 (−17.2)** |
+| `-case 3` (r=1) | −8.66 | **−25.79 (−17.1)** |
+
+No es un fallo: es el álgebra. Con r ≥ 1 el marginal univariante de un componente
+de Ȳ no es el bloque diagonal del conjunto, C̄ y Λ acoplan, y Φ̄_p queda
+determinada por F_{p−1}, así que el AR está sobredeterminado y la vuelta es una
+proyección. **La información univariante llega hasta el peldaño diagonal y no más
+arriba** — que es exactamente donde `drtran` pone su puerta de entrada.
+
+**Conclusión de la fase, ya con el marco correcto.** El valor del puente no es
+sembrar el modelo cointegrado: es que `drvec` **entra en la escalera** con los
+mismos contratos que el resto de la suite, y puede certificar el cruce y la
+optimalidad de los ficheros que recibe. Para sembrar el modelo con r ≥ 1 la
+información tiene que venir de algo que conozca el acoplamiento —la regresión
+condicional, que ya está, o la rejilla concentrada sobre B₂ de la contingencia—,
+no de univariantes.
+
+**Sobre la convención de signos del MA**, verificada en la fuente porque es un
+sitio donde la suite ya se ha quemado antes:
+
+| eslabón | convención | dónde |
+|---|---|---|
+| `elf` | `a_t = (w−μ) − Σφ_j(w−μ)_{t−j} + Σθ_j a_{t−j}` ⟹ Θ(B) = I − Σθ_jB^j | `elfvarma.c:300` |
+| cast de `fue` | `_unscramble` devuelve los coeficientes de `1 − c₁B − c₂B² …` y se pasan tal cual a `elf` | `forecast.py:143-147`, `cast_us.py:305` |
+| `expand_ma_factors` de `drtran` | la misma, negando `work[k]` para obtenerla | `drtran.c:770-772` |
+| cast de `drvec` | `armax->theta[k] = C̄·Θ_k·C̄⁻¹` con Θ_k de `x[]` | `drvec.c`, bloque [6] |
+
+Los cuatro coinciden. Y empíricamente: sembrar con **θ negada** empeora el
+arranque (−9.0987 frente a −8.5267 con la semilla y −8.7426 en frío), que es lo
+contrario de lo que pasaría con el signo invertido.
+
 **Contingencias:**
 
 - Si la ganancia de sembrar Θ no llega para mover el nivel de |Σ̂| heredado de F1,
@@ -745,9 +841,9 @@ r = 1, que es el que decide si hay cointegración y el único imprescindible.
 
 | # | criterio | estado hoy |
 |---|---|---|
-| 1 | `make test` verde, con la puerta diagonal dentro | **✔ (F0)** 47 comprobaciones tras F2, medida por mutación |
+| 1 | `make test` verde, con la puerta diagonal dentro | **✔ (F0)** 49 comprobaciones tras F2, medida por mutación |
 | 2 | \|Σ̂\| concordante entre las cuatro configuraciones **y** en el nivel objetivo | **parcial (F1)**: concuerdan (dispersión 0.000048, con test), pero en ~0.00248 y no en ~0.00230 → nivel a F2 |
-| 3 | Siembra desde `.pre`, con logL ≥ arranque en frío | **✘ medido y rechazado (F2.7)**: el puente está hecho y probado, pero sembrar Θ empeora en 4 de 6 configuraciones. Lo único que el `.pre` puede sembrar es Θ (no σ², no el AR) |
+| 3 | Siembra desde `.pre`, con logL ≥ arranque en frío | **✔ en el peldaño diagonal, ✘ por encima (F2.8)**: con r = 0 el `.pre` transporta el óptimo univariante y los dos contratos de la escalera se cumplen (cruce 1.8e-5, certificado +2.4e-7 ≥ 0, los dos con test). Con r ≥ 1 la información univariante no vale: la semilla arranca 17 unidades peor, por sobredeterminación del AR y por el acoplamiento de C̄ y Λ |
 | 4 | Formas BEC/Π y exogeneidad débil, con o sin s.e. declarado | ✘ (F3) |
 | 5 | Rango correcto en ≥ 4 casos del banco | parcial: 2 de 2 probados |
 | 6 | Todo termcode 3 residual **explicado**, no necesariamente eliminado | ✘ |

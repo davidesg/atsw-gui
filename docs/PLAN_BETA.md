@@ -402,6 +402,13 @@ original. La alternativa —enlazar contra `drtran`— acoplaría dos programas 
 son independientes por diseño. El original queda citado arriba; si el `.pre`
 cambia de formato, los dos ficheros hay que revisarlos a mano.
 
+**Y la copia ya ha divergido, por un arreglo.** El lector de `drtran` lee mal
+**todo `.pre` anual**: se salta la sección de factores de la diferencia anual,
+que los dos escritores de `fue` emiten siempre. Arreglado aquí y **declarado
+como BUG-11 en `drtran-python/docs/BUGS.md`**, con la medida y la reproducción.
+El lector de `fue` (`fue.c:819-832`) sí tiene la rama que a `drtran` se le
+perdió al extraerlo, así que el fallo no viene del código de Mauricio.
+
 #### F2.2 — El contrato de ficheros, y las seis cosas que atan a `drvec`
 
 Todo esto sale de `FILE_CONTRACT.md` y **no es negociable**, porque el formato no

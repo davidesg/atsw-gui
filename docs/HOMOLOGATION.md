@@ -82,6 +82,23 @@ methods. Raising Johansen's lag order to approximate the MA does not close it:
 the rank test loses the cointegration by `k = 3–4` on these sample sizes before
 the approximation converges.
 
+**Optimal against optimal, with the residuals checked on both sides.** Comparing
+each method's *reportable* model — Johansen's order by information criterion,
+`drvec`'s specification inherited from the univariate models — both pass their
+residual diagnosis, but the VARMA's residuals are consistently whiter
+(portmanteau p between 0.64 and 0.97, against 0.05 and 0.55), and the estimates
+differ by up to 0.40. Since the method contributes 0.019, that difference is the
+**model**.
+
+Two things this does **not** show, stated because they would be easy to claim:
+
+* it is not a parsimony result — `drvec` uses 14 parameters against Johansen's
+  8–12 on these pairs;
+* AIC and BIC cannot be compared *across* the two programs: Johansen's likelihood
+  is conditional and `drvec`'s is exact and unconditional, so their information
+  criteria measure different things. The residual diagnosis is what is
+  comparable, and it is what is compared.
+
 *Source of the data and the full tables:*
 `~/Dropbox/Cycles/Analysis/EJERCICIO_DRVEC.md`, and
 `comparar_johansen.py` beside it re-runs the comparison.

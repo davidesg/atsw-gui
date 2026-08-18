@@ -38,6 +38,9 @@
 #   7. KNOWN TRUTH  the rank test on data generated to have a known rank.  Every
 #                   other check of -lrtest compares against another program's
 #                   answer; these compare against the truth.
+#   8. MEMORY       valgrind over the main paths.  OPT-IN (VALGRIND=1) so the
+#                   suite is deterministic anywhere.  It has already caught one
+#                   real leak in the multi-start block.
 #
 # Usage:  tests/run_tests.sh [-v]        (or: make test)
 #         DRVEC=path/to/mutant tests/run_tests.sh    (to check the suite bites)
@@ -633,6 +636,45 @@ got=$(selected_rank "$TMP/case.out")
 [ "$got" = "2" ] && ok "r = 2 recovered on three series with one common trend" \
                  || bad "rank on rank2.inp" "selected r = $got, truth is 2"
 echo
+
+# ================================================== 8 MEMORY (opt-in) ==
+# Off by default so `make test` is deterministic on any machine; run it with
+#     VALGRIND=1 make test
+# Not decoration: the multi-start block leaked 1080 bytes when it was written --
+# it re-allocated the VARMA structure while the first allocation was still live
+# -- and nothing else would have noticed.
+#
+# The reader had no deallocator anywhere in the suite -- drtran does not free
+# what read_fue_pre allocates either, which is its BUG-12 -- so one was written
+# (free_fue_pre, in src/fue_bridge.c, as NEW code beside the vendored reader
+# rather than a patch to it).  These checks are how a hand-written deallocator
+# for someone else's allocator gets verified: valgrind catches over-freeing as
+# well as leaking.
+if [ "${VALGRIND:-0}" = "1" ]; then
+    echo "[8] memory (valgrind)"
+    if ! command -v valgrind >/dev/null 2>&1; then
+        bad "valgrind" "VALGRIND=1 was requested but valgrind is not installed"
+    else
+        vg_clean() {   # <label> <src> <args...>
+            local label=$1 src=$2; shift 2
+            cp "$src" "$TMP/case.inp"
+            valgrind --leak-check=full --show-leak-kinds=definite \
+                     --errors-for-leak-kinds=definite --error-exitcode=9 \
+                     "$DRVEC" "$TMP/case" "$@" >/dev/null 2>"$TMP/vg.txt"
+            if [ $? -eq 9 ]; then
+                bad "$label" "$(grep -E 'definitely lost|Invalid' "$TMP/vg.txt" | head -2)"
+            else ok "$label"; fi
+        }
+        vg_clean "no leaks: plain fit"        "$MM" 2 1 1 -case 2
+        vg_clean "no leaks: multi-start"      "$MM" 2 1 1 -case 2 -multistart 3
+        vg_clean "no leaks: alpha = A*psi"    "$MM" 2 1 1 -case 2 -weakex 1
+        vg_clean "no leaks: r=0 diagonal"     "$MM" 2 1 0 -case 1 -diagar -diagma -diagcov
+        vg_clean "no leaks: lrtest"           "$MM" 2 1 0 -case 2 -lrtest
+        vg_clean "no leaks: seeding from .pre" "$MM" 2 1 0 -case 1 \
+                 -diagar -diagma -diagcov -seedybar tests/fixtures/mmdiag
+    fi
+    echo
+fi
 
 # ===================================================================== summary =
 echo "-----------------------------------------------"

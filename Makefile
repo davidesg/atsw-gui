@@ -64,6 +64,15 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
 # tocarlos ampliaria la diferencia con el original y haria mas dificil auditar
 # la deriva.  Se silencian solo para este objeto, para que el resto del build
 # siga siendo legible.
+# free_fue_pre libera arrays de punteros que el lector reservo con el idioma
+# `malloc(n*size) - 1`, asi que el bloque real empieza en p+1.  gcc no ve la
+# resta -- esta en otra unidad de compilacion -- y avisa de free-nonheap-object
+# sobre un free que es correcto por construccion.  Comprobado con valgrind: 0
+# bytes perdidos y 0 errores en las rutas de siembra.  Se silencia SOLO este
+# aviso y SOLO en este objeto.
+$(BUILD_DIR)/fue_bridge.o: $(SRC_DIR)/fue_bridge.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -Wno-free-nonheap-object -c $< -o $@
+
 $(BUILD_DIR)/fue_pre_reader.o: $(SRC_DIR)/fue_pre_reader.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -Wno-unused-result -Wno-misleading-indentation -c $< -o $@
 

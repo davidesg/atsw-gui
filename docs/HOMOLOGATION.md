@@ -31,7 +31,7 @@ The third is the weakest, and it is where the open item lives.
 | `-weakex i` equals the equivalent `-alpha` file | **exactly** | ✔ |
 
 ```sh
-make test          # all of the above, plus 53 more checks
+make test          # all of the above, plus 56 more checks
 ```
 
 ## 2. External results

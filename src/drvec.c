@@ -314,6 +314,25 @@ static void build_ybar(real **B2, real **Ybar)
     }
 }
 
+/*  cleanup_names — lo que hay que soltar al terminar, en UN sitio.
+ *
+ *  main tiene cuatro salidas -- la normal, -lrtest, -writeinp/-writeres y
+ *  -eval -- y solo la normal liberaba.  valgrind lo caza en cuanto se le
+ *  pregunta: 350 bytes por corrida de -lrtest.  Es una fuga de fin de programa
+ *  y no le hace dano a nadie, pero tener cuatro salidas y una sola limpieza es
+ *  la forma en la que estas cosas se convierten en algo peor.                */
+static void cleanup_names(char *outf, char *inf, char *basef)
+{
+    if (series_names) {
+        for (int j = 1; j <= nser; j++) free(series_names[j]);
+        free(series_names);
+        series_names = NULL;
+    }
+    if (outf)  FREE_STR(outf);
+    if (inf)   FREE_STR(inf);
+    if (basef) FREE_STR(basef);
+}
+
 /*  Nota de convergencia — POR QUE paro, no solo SI paro.
  *
  *  En VARMA multivariante la razon de la parada es un diagnostico de primer
@@ -926,6 +945,10 @@ static int pre_univariate(struct Tusmodel *Tm, struct Tseries *Ts,
     return (ifault == 0) ? 0 : 1;
 }
 
+/*  Cada .pre leido se libera con free_fue_pre (src/fue_bridge.c).  El lector no
+ *  trae desasignador -- ni aqui ni en drtran, que es su BUG-12 --, asi que se
+ *  escribio uno; no liberar es un fallo aunque el programa termine enseguida, y
+ *  el mismo lector se usa desde procesos que no terminan.                    */
 static int load_seed_pre(const char *prefix)
 {
     int M = nser, q = global_q;
@@ -1015,6 +1038,7 @@ static int load_seed_pre(const char *prefix)
                 seed_have_uv = 0;
             }
         }
+        free_fue_pre(&Tm, &Ts, DataMat);
     }
 
     if (seed_have_uv) {
@@ -2079,6 +2103,7 @@ int main(int argc, char *argv[])
         free_vector(ll, 0, M - 1);
         printf("Done. Output written to %s\n", base_name);
         fclose(outputv);
+        cleanup_names(outputf, inputf, base_name);
         return 0;
     }
 
@@ -2132,6 +2157,7 @@ int main(int argc, char *argv[])
         printf("Ahora: 'python -m fue %s.<i> eml' y después drvec ... -seed %s\n",
                inp_prefix, inp_prefix);
         fclose(outputv);
+        cleanup_names(outputf, inputf, base_name);
         return 0;
     }
 
@@ -2173,6 +2199,7 @@ int main(int argc, char *argv[])
         }
         vec_shootx(x, &varma1, &ifault, 0, 1);   /* liberar */
         fclose(outputv);
+        cleanup_names(outputf, inputf, base_name);
         return 0;
     }
 
@@ -2263,7 +2290,10 @@ int main(int argc, char *argv[])
         free_vector(devb, 1, npar);
         free_vector(xtry, 1, npar);
         free_vector(xbest, 1, npar);
-        vec_shootx(x, &varma1, &ifault, 1, 0);   /* realojar para el ajuste final */
+        /* NO se realoja varma1: sus bufers siguen vivos desde la llamada de
+           arriba, y el bucle uso su propia estructura vk.  Volver a llamar con
+           firstx = 1 dejaba huerfana la primera asignacion -- 1080 bytes que
+           valgrind marcaba como definitely lost.                             */
     }
 
     est(&vec_shootx, npar, x, dev, cov, maxits, nrits, gradtol, sptol,
@@ -2642,12 +2672,8 @@ int main(int argc, char *argv[])
     free_vector(x, 1, npar);
     free_matrix(Y2_levels, 1, nobs, 1, nser - global_r);
     free_matrix(datamat, 1, nobs, 1, nser);
-    for (int j = 1; j <= nser; j++) free(series_names[j]);
-    free(series_names);
-    FREE_STR(outputf);
-    FREE_STR(inputf);
-    FREE_STR(base_name);
     fclose(outputv);
+    cleanup_names(outputf, inputf, base_name);
 
     printf("Done. Output written to %s\n", argv[1]);
     return 0;

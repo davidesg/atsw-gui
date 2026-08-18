@@ -1,12 +1,13 @@
 # The test suite: what it protects, measured
 
-*`tests/run_tests.sh`, run by `make test`. 54 checks. The claim that a suite
+*`tests/run_tests.sh`, run by `make test`. 63 checks, and 69 with the opt-in
+memory block. The claim that a suite
 "protects" something is worth nothing unless it is measured, so it is measured
 by mutation: real defects are put back and the failures counted.*
 
 ---
 
-## 1. Six kinds of check, in increasing order of value
+## 1. Eight kinds of check, in increasing order of value
 
 | | what it establishes |
 |---|---|
@@ -15,7 +16,9 @@ by mutation: real defects are put back and the failures counted.*
 | **3. the gate** | with `r = 0` and diagonal structure the exact likelihood factorises, so the joint logL must equal the sum of the univariate ones. This is the cast's oracle: when it breaks the fault is in `vec_shootx` or the seeding, **never** in `elf` |
 | **4. golden** | current log-likelihoods, to catch unintended drift. **Regression baselines, not correct answers** — most stop on termcode 3 |
 | **5. the bridge** | what `drvec` writes must be readable by `fue`, and what it reads must land in the right place: pure ASCII, every section present, the reader round-tripped against the file itself, and the two ladder contracts |
-| **6. restrictions** | `α = Aψ`: `-weakex` and the equivalent `-alpha` file must agree exactly; the restricted fit cannot beat the free one; a rank-deficient `A` is refused before estimating |
+| **6. interpretation** | `α = Aψ`: `-weakex` and the equivalent `-alpha` file must agree exactly; the restricted fit cannot beat the free one; a rank-deficient `A` is refused before estimating; `Σ = P D P′` must reconstruct `Σ`; multi-start must be monotone; the convergence note must agree with the optimiser's banner; and the normalisation alarm is checked in **both** directions |
+| **7. known truth** | the rank test on data generated to have a known rank — every other check of `-lrtest` compares against another program's answer, these compare against the truth |
+| **8. memory** | valgrind over the main paths; opt-in, see §3b |
 
 ## 2. What it actually catches
 
@@ -29,8 +32,15 @@ not a valid measurement, because then the baselines fail for the wrong reason:
 | the `.inp` writer drops the annual-difference section | 2 |
 | the `.pre` reader's annual bug restored (drtran BUG-11) | 2 |
 | `B₂` read transposed in `vec_shootx` (the **estimator**) | 1 |
+| the LDL′ cross term negated, on M = 3 | 1 (**0** on M = 2) |
+| the normalisation alarm disabled | 1 |
 | the Σ positive-definiteness check removed | **0** ← not caught |
 | `B₂` fill transposed in the **printer** | **0** ← not caught |
+
+The LDL′ row carries its own lesson: the reconstruction check runs on M = 3 and
+not on M = 2 because with M = 2 the inner loop never executes — there is no third
+variable for the cross term to accumulate over — so the same mutation is
+invisible. A test written on the smallest case would have been decoration.
 
 ### The two zeros, stated so a green suite is not over-read
 
@@ -69,6 +79,28 @@ a copy written with `%.8f` gives a different log-likelihood in the sixth decimal
 That is why the fixtures are generated inside the test rather than committed —
 except the `.pre` files, which must come from `fue` and so are committed with
 their provenance recorded in `tests/fixtures/README.md`.
+
+## 3b. Memory, opt-in
+
+```sh
+VALGRIND=1 make test
+```
+
+Off by default so the suite is deterministic on any machine, but not decoration:
+the first time it was run it found **two real defects**.
+
+* The multi-start block re-allocated the VARMA structure while the first
+  allocation was still live — 1080 bytes orphaned per run, and nothing else
+  would have noticed.
+* `main` had four exits — the normal one, `-lrtest`, `-writeinp/-writeres` and
+  `-eval` — and only the normal one freed the file-name buffers. Four exits and
+  one cleanup is how a harmless leak becomes a real one.
+
+It also verifies something that cannot be verified any other way:
+`free_fue_pre`, the deallocator written for the vendored `.pre` reader. That
+reader has none anywhere in the suite (`drtran`'s BUG-12), so the deallocator is
+new code written against someone else's allocator — and valgrind catches
+over-freeing as well as leaking, which is the only real check on it.
 
 ## 4. Running it
 

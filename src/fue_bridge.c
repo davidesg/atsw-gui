@@ -213,3 +213,143 @@ void expand_ma_factors(struct Tusmodel *Tm, real *theta_out, int q)
 
     free_vector(work, 0, q);
 }
+
+/*---------------------------------------------------------------------------*/
+/*  free_fue_pre: suelta TODO lo que read_fue_pre reserva.                    */
+/*---------------------------------------------------------------------------*/
+/*  ESTO NO VIENE DE drtran: alli no existe.  read_fue_pre reserva y nadie
+ *  libera -- ni en drtran ni en ningun otro consumidor --, que es una fuga por
+ *  fichero leido.  Declarado como BUG-12 en drtran-python/docs/BUGS.md.
+ *
+ *  Va aqui y no dentro de fue_pre_reader.c a proposito, para que la copia del
+ *  lector siga teniendo su delta contado respecto al original: lo que se anade
+ *  es codigo nuevo, no una modificacion de codigo prestado.
+ *
+ *  DOS COSAS QUE HAY QUE RESPETAR, y equivocarse en ellas es peor que la fuga:
+ *
+ *   - los vectores 1-based del estilo Numerical Recipes se liberan con
+ *     free_vector/free_ivector y SUS MISMOS LIMITES, no con free();
+ *   - los arrays de punteros usan el idioma `malloc(n*sizeof(p)) - 1`, asi que
+ *     el puntero que hay que devolver a free() es `p + 1`.
+ *
+ *  Verificado con valgrind: las rutas de siembra pasan a 0 bytes definitely
+ *  lost y 0 errores, que es la unica forma de comprobar un desasignador escrito
+ *  a mano contra un asignador ajeno.                                          */
+/*  El lector guarda los arrays de punteros como `malloc(n*size) - 1`, asi que
+ *  el bloque que hay que devolver a free() empieza una posicion mas alla.  Se
+ *  pasa por esta funcion, y no se escribe `free(p + 1)` a la vista, porque gcc
+ *  no ve la resta que hizo el lector y avisa de free-nonheap-object.  Aqui la
+ *  aritmetica esta aislada y explicada en un solo sitio.                     */
+static void free_base1( void *base1 )
+{
+    void **p = (void **) base1;
+    if ( p != NULL ) free( (void *) &p[1] );
+}
+
+void free_fue_pre( struct Tusmodel *Tm, struct Tseries *Ts, real **DataMat )
+{
+    int i;
+
+    if ( Ts != NULL )
+        {
+        if ( Ts->name ) free( Ts->name );
+        if ( Ts->data ) free_vector( Ts->data, 1, Ts->nobs );
+        Ts->name = NULL; Ts->data = NULL;
+        }
+    if ( Tm == NULL ) return;
+
+    if ( DataMat && Ts ) free_matrix( DataMat, 0, Tm->NdetVar, 1, Ts->nobs );
+
+    /* ── deterministas ── */
+    if ( Tm->NdetVar > 0 )
+        {
+        for ( i = 1; i <= Tm->NdetVar; i++ )
+            {
+            if ( Tm->detspec && Tm->detspec[i] ) free( Tm->detspec[i] );
+            if ( Tm->Omega && Tm->Omega[i] )
+                free_vector( Tm->Omega[i], 0, Tm->Nomega[i] );
+            if ( Tm->Imega && Tm->Imega[i] )
+                free_ivector( Tm->Imega[i], 0, Tm->Nomega[i] );
+            if ( Tm->Ndelta && Tm->Ndelta[i] > 0 )
+                {
+                if ( Tm->Delta && Tm->Delta[i] )
+                    free_vector( Tm->Delta[i], 1, Tm->Ndelta[i] );
+                if ( Tm->Ielta && Tm->Ielta[i] )
+                    free_ivector( Tm->Ielta[i], 1, Tm->Ndelta[i] );
+                }
+            }
+        if ( Tm->detspec ) free_base1( Tm->detspec );
+        if ( Tm->Nomega )  free_ivector( Tm->Nomega, 1, Tm->NdetVar );
+        if ( Tm->Ndelta )  free_ivector( Tm->Ndelta, 1, Tm->NdetVar );
+        }
+    else
+        {
+        /* la reserva ficticia del caso sin deterministas */
+        if ( Tm->Nomega ) free_ivector( Tm->Nomega, 1, 1 );
+        if ( Tm->Ndelta ) free_ivector( Tm->Ndelta, 1, 1 );
+        }
+    if ( Tm->Omega ) free_base1( Tm->Omega );
+    if ( Tm->Imega ) free_base1( Tm->Imega );
+    if ( Tm->Delta ) free_base1( Tm->Delta );
+    if ( Tm->Ielta ) free_base1( Tm->Ielta );
+    Tm->detspec = NULL; Tm->Nomega = NULL; Tm->Ndelta = NULL;
+    Tm->Omega = NULL; Tm->Imega = NULL; Tm->Delta = NULL; Tm->Ielta = NULL;
+
+    /* ── factores ARMA: los cuatro bloques tienen la misma forma ── */
+    {
+    int   nums[4];
+    int  *ords[4];
+    real **cfs[4];
+    int  **fls[4];
+    int b;
+
+    nums[0] = Tm->NumAr1; ords[0] = Tm->p1; cfs[0] = Tm->Ar1; fls[0] = Tm->Ia1;
+    nums[1] = Tm->NumAr2; ords[1] = Tm->p2; cfs[1] = Tm->Ar2; fls[1] = Tm->Ia2;
+    nums[2] = Tm->NumMa1; ords[2] = Tm->q1; cfs[2] = Tm->Ma1; fls[2] = Tm->Im1;
+    nums[3] = Tm->NumMa2; ords[3] = Tm->q2; cfs[3] = Tm->Ma2; fls[3] = Tm->Im2;
+
+    for ( b = 0; b < 4; b++ )
+        {
+        if ( nums[b] <= 0 ) continue;
+        for ( i = 1; i <= nums[b]; i++ )
+            {
+            if ( cfs[b] && cfs[b][i] ) free_vector( cfs[b][i], 0, ords[b][i] );
+            if ( fls[b] && fls[b][i] ) free_ivector( fls[b][i], 0, ords[b][i] );
+            }
+        if ( ords[b] ) free_ivector( ords[b], 1, nums[b] );
+        if ( cfs[b] )  free_base1( cfs[b] );
+        if ( fls[b] )  free_base1( fls[b] );
+        }
+    }
+    Tm->p1 = Tm->p2 = Tm->q1 = Tm->q2 = NULL;
+    Tm->Ar1 = Tm->Ar2 = Tm->Ma1 = Tm->Ma2 = NULL;
+    Tm->Ia1 = Tm->Ia2 = Tm->Im1 = Tm->Im2 = NULL;
+    Tm->NumAr1 = Tm->NumAr2 = Tm->NumMa1 = Tm->NumMa2 = 0;
+
+    /* ── factores de frecuencia fija: coef es (0..2) por factor ── */
+    if ( Tm->NumAr1f > 0 )
+        {
+        for ( i = 1; i <= Tm->NumAr1f; i++ )
+            if ( Tm->Ar1f && Tm->Ar1f[i] ) free_vector( Tm->Ar1f[i], 0, 2 );
+        if ( Tm->pfre1 ) free_ivector( Tm->pfre1, 1, Tm->NumAr1f );
+        if ( Tm->Ia1f )  free_ivector( Tm->Ia1f,  1, Tm->NumAr1f );
+        if ( Tm->Ar1f )  free_base1( Tm->Ar1f );
+        }
+    if ( Tm->NumMa1f > 0 )
+        {
+        for ( i = 1; i <= Tm->NumMa1f; i++ )
+            if ( Tm->Ma1f && Tm->Ma1f[i] ) free_vector( Tm->Ma1f[i], 0, 2 );
+        if ( Tm->qfre1 ) free_ivector( Tm->qfre1, 1, Tm->NumMa1f );
+        if ( Tm->Im1f )  free_ivector( Tm->Im1f,  1, Tm->NumMa1f );
+        if ( Tm->Ma1f )  free_base1( Tm->Ma1f );
+        }
+    Tm->Ar1f = Tm->Ma1f = NULL; Tm->pfre1 = Tm->qfre1 = NULL;
+    Tm->Ia1f = Tm->Im1f = NULL;
+    Tm->NumAr1f = Tm->NumMa1f = 0;
+
+    /* ── resto ── */
+    if ( Tm->ifadf && Tm->sper > 1 ) free_ivector( Tm->ifadf, 0, Tm->sper / 2 );
+    if ( Tm->rnsop ) free_vector( Tm->rnsop, 0, Tm->ornsop );
+    if ( Tm->residuals ) free( Tm->residuals );
+    Tm->ifadf = NULL; Tm->rnsop = NULL; Tm->residuals = NULL;
+}

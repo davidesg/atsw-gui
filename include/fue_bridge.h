@@ -22,4 +22,9 @@
 void expand_ar_factors( struct Tusmodel *Tm, real *phi_out,   int p );
 void expand_ma_factors( struct Tusmodel *Tm, real *theta_out, int q );
 
+/* Suelta todo lo que read_fue_pre reserva.  No existe en drtran -- alli nadie
+   libera, que es su BUG-12 --, asi que es codigo nuevo y por eso vive aqui y no
+   dentro de la copia del lector.                                            */
+void free_fue_pre( struct Tusmodel *Tm, struct Tseries *Ts, real **DataMat );
+
 #endif

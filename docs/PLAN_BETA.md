@@ -27,7 +27,7 @@ De ahí salen cuatro requisitos, y el orden no es negociable:
 
 Cuando escribí esto teníamos parte de (1) y (3), nada de (2) y **nada de (4)**,
 que era el riesgo de proceso más grande: todo estaba comprobado a mano. **F0 cerró
-(4)** — hay batería (`make test`, 41 comprobaciones) y muerde. Sigue faltando (2)
+(4)** — hay batería (`make test`, 47 comprobaciones tras F2) y muerde. Sigue faltando (2)
 por completo, y (1) es lo que F1 y F2 empujan.
 
 ---
@@ -745,7 +745,7 @@ r = 1, que es el que decide si hay cointegración y el único imprescindible.
 
 | # | criterio | estado hoy |
 |---|---|---|
-| 1 | `make test` verde, con la puerta diagonal dentro | **✔ (F0)** 41 comprobaciones, medida por mutación |
+| 1 | `make test` verde, con la puerta diagonal dentro | **✔ (F0)** 47 comprobaciones tras F2, medida por mutación |
 | 2 | \|Σ̂\| concordante entre las cuatro configuraciones **y** en el nivel objetivo | **parcial (F1)**: concuerdan (dispersión 0.000048, con test), pero en ~0.00248 y no en ~0.00230 → nivel a F2 |
 | 3 | Siembra desde `.pre`, con logL ≥ arranque en frío | **✘ medido y rechazado (F2.7)**: el puente está hecho y probado, pero sembrar Θ empeora en 4 de 6 configuraciones. Lo único que el `.pre` puede sembrar es Θ (no σ², no el AR) |
 | 4 | Formas BEC/Π y exogeneidad débil, con o sin s.e. declarado | ✘ (F3) |

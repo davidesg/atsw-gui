@@ -28,7 +28,10 @@
 #                   present.  Plus the identity that a Theta = 0 seed must
 #                   reproduce the cold start exactly, which is what says the
 #                   seeding plumbing is right regardless of whether seeding
-#                   helps -- it does not; see docs/PLAN_BETA.md F2.7.
+#                   helps -- it does not; see docs/PLAN_BETA.md F2.7.  And a
+#                   round-trip of the reader against the file itself, through
+#                   tests/pre_probe.c, which is the only check that reads the
+#                   series and the refactor at all.
 #
 # Usage:  tests/run_tests.sh [-v]        (or: make test)
 #         DRVEC=path/to/mutant tests/run_tests.sh    (to check the suite bites)
@@ -43,20 +46,22 @@
 #   sign of Lambda in PhiBar_1 (transformation core)          14
 #   the output ignores -diagma (the §4.1 bug)                  4
 #   the .inp writer drops the annual-difference section        2
+#   the .pre reader's annual bug (F2.1 / drtran BUG-11)        2
 #   B2 read transposed in vec_shootx (the ESTIMATOR)           1
 #   the Sigma positive-definiteness check removed              0   <-- not caught
 #   B2 fill transposed in the printer                          0   <-- not caught
-#   the .pre reader's annual bug restored (F2.1)               0   <-- not caught
 #
-# The three zeros are real gaps, stated so a green suite is not over-read:
+# The reader's annual bug raises nothing through the ESTIMATION path -- the
+# seeding only reads the MA block, which sits earlier in the file -- so it is
+# caught by the round-trip check at 5c-bis, which is the only thing that looks
+# at the series and the refactor.  Without that check it scored zero.
+#
+# The two zeros are real gaps, stated so a green suite is not over-read:
 #   - the PD check is INSURANCE: no case here drives Sigma non-PD, so nothing
 #     exercises it.  It guards a region the optimiser does not currently reach.
 #   - a printer-only transposition is invisible because, since the §4.2 fix, both
 #     printers read one shared copy (see test 2a).
-#   - the reader's annual bug corrupts the SERIES and the refactor, and the
-#     seeding reads neither: it only needs the MA block, which sits earlier in
-#     the file.  The fix is still right -- silently misreading a file is not
-#     acceptable -- but drvec's own use does not exercise it.
+
 
 set -u
 cd "$(dirname "$0")/.." || exit 1
@@ -333,6 +338,37 @@ if [ -n "$cold" ] && [ "$cold" = "$zseed" ]; then
 else
     bad "zero-seed identity" "cold=$cold  seeded=$zseed  (must be identical)"
 fi
+
+# 5c-bis. THE READER, past the MA block.  The seeding only ever reads the ARMA
+#     factors and mu, which sit BEFORE the annual-difference section, so no
+#     estimation run touches the series or the refactor -- and the reader bug
+#     that F2 found (BUG-11 of drtran, fixed in our copy) corrupts exactly
+#     those.  Measured by mutation: restoring it raises zero failures anywhere
+#     else.  This closes that gap.
+#     Nothing here is a golden number: the expected values are read out of the
+#     .pre with awk, so the check cannot go stale.
+PROBE=${PROBE:-bin/pre_probe}
+for i in 1 2; do
+    f="tests/fixtures/mmres.$i.pre"
+    if [ ! -x "$PROBE" ]; then
+        bad "reader round-trip $i" "$PROBE not built -- run make first"
+        continue
+    fi
+    got=$("$PROBE" "$f" 2>&1)
+    want=$(awk '
+        /^\*\* ACF\/PACF bands/ {getline; refac=$2; next}
+        /^\*\* Time series/     {ind=1; next}
+        ind && NF                {n++; d[n]=$1}
+        /^\*\* Frequency of time series/ {getline; freq=$1; next}
+        END{ printf "%d %d %.10g %.10f %.10f %.10f %.10f",
+                    n, freq, refac, d[1], d[2], d[n-1], d[n] }' "$f")
+    if [ "$got" = "$want" ]; then
+        ok "the .pre reader round-trips fixture $i (n, freq, refactor, series)"
+    else
+        bad "reader round-trip $i" "reader: $got
+        file:   $want"
+    fi
+done
 
 # 5d. Regression baseline for the seeded fit, on the committed .pre fixtures.
 #     Those were written by fue 1.13 (python) from drvec's own -writeres output

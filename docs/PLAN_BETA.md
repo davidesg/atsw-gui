@@ -616,12 +616,14 @@ y con la siembra **medida y rechazada como palanca de convergencia**. El objetiv
 de nivel de |Σ̂| que F1 aplazó aquí **sigue sin resolverse**, y ya no hay motivo
 para esperar que la siembra lo resuelva.
 
-**Nota honesta de cobertura.** El fallo del lector con ficheros anuales (F2.1)
-**no lo caza la batería**: comprobado por mutación, restaurarlo no levanta ningún
-fallo. La razón es que la siembra sólo lee el bloque MA, que va *antes* de la
-sección corrompida; la serie y el `refactor`, que es lo que el fallo estropea,
-`drvec` no los usa. Es un seguro sin ruta de prueba, como el chequeo PD de F1, y
-queda anotado en el script.
+**Cobertura del arreglo del lector.** Por la ruta de estimación ese fallo es
+invisible —la siembra sólo lee el bloque MA, que va *antes* de la sección
+corrompida—, así que por mutación levantaba **cero** fallos. Se ha cerrado con un
+arnés propio, `tests/pre_probe.c`: enseña lo que `read_fue_pre` ve (nobs, freq,
+`refactor`, primera, segunda, penúltima y última observación) y la batería lo
+compara **contra lo que el fichero dice**, sacado con `awk` del propio `.pre`. No
+hay número de oro que mantener, así que la comprobación no envejece. Con el fallo
+restaurado levanta **2 fallos**.
 
 **Contingencias:**
 

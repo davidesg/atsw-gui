@@ -40,6 +40,13 @@ OBJS    = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(ALL_SRC))
 
 EXEC = $(BIN_DIR)/drvec
 
+# Arnes de pruebas: ensena lo que el lector de .pre ve en un fichero.  Es lo
+# unico que ejercita la SERIE y el REFACTOR del .pre -- la estimacion solo usa
+# el bloque MA --, ver tests/pre_probe.c.
+PROBE      = $(BIN_DIR)/pre_probe
+PROBE_OBJS = $(BUILD_DIR)/fue_pre_reader.o $(BUILD_DIR)/fue_bridge.o \
+             $(BUILD_DIR)/nlatools.o
+
 all: $(EXEC)
 
 $(BUILD_DIR):
@@ -63,14 +70,17 @@ $(BUILD_DIR)/fue_pre_reader.o: $(SRC_DIR)/fue_pre_reader.c | $(BUILD_DIR)
 $(EXEC): $(OBJS) | $(BIN_DIR)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
-test: $(EXEC)
+$(PROBE): tests/pre_probe.c $(PROBE_OBJS) | $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ tests/pre_probe.c $(PROBE_OBJS) $(LIBS)
+
+test: $(EXEC) $(PROBE)
 	@tests/run_tests.sh
 
-test-verbose: $(EXEC)
+test-verbose: $(EXEC) $(PROBE)
 	@tests/run_tests.sh -v
 
 clean:
-	rm -rf $(BUILD_DIR)/*.o $(EXEC) *.eps *.out *.txt
+	rm -rf $(BUILD_DIR)/*.o $(EXEC) $(PROBE) *.eps *.out *.txt
 
 distclean: clean
 	rm -rf $(BUILD_DIR) $(BIN_DIR)

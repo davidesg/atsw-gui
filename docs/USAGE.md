@@ -227,7 +227,45 @@ cointegrate plus an independent random walk placed in `Y₁`. It reports 0.6 %.
 
 ---
 
-## 5. Exit behaviour
+## 5. Residual diagnostics
+
+Every successful fit ends with a diagnosis of its residuals, in two parts.
+
+**The suite's standard block**, `multivariate_diagnostics` copied unchanged from
+`drtran`: Hosking's multivariate portmanteau and a multivariate Jarque–Bera.
+Copied rather than written here on purpose — the same residual has to read the
+same way in `drvarma`, in `drtran` and here, and a private statistic, however
+correct, forces comparisons of unlike things.
+
+**And what `drvec` adds**, because a portmanteau cannot answer the question this
+model class raises: the **cross-correlation matrices** `R(k)` for `k = 0…K`, with
+anything past the ±2/√n band marked.
+
+```
+R(k)[i][j] = corr( a_i(t), a_j(t−k) )
+```
+
+* the **diagonal** is each equation's own residual ACF — own dynamics not
+  captured;
+* the **off-diagonal** is a cross effect the model has missed, and **its `k` is
+  its order**;
+* `R(k)[i][j]` and `R(k)[j][i]` are different statements — that is the
+  *direction* of the effect.
+
+**Lag 0 is reported apart and is not counted as a defect.** The contemporaneous
+off-diagonal is `Σ`'s, and `Σ` is estimated; counting it would fire the alarm on
+every model with correlated innovations, which is the normal case. Under
+`-diagcov` it *is* a defect, because then the restriction is imposed, and the
+output says so.
+
+This matters when the univariate ARMA is already settled — identified from clean
+ACF/PACF work upstream, as the suite's ladder intends. What is left to decide is
+whether there are **cross effects and of what order**, and that is a question
+about the off-diagonal of `R(k)`, not about the likelihood.
+
+---
+
+## 6. Exit behaviour
 
 `drvec` writes `file.out` whatever happens. `ERROR` messages on stderr mean the
 run did not produce an estimate; `WARNING` messages mean it did, but something

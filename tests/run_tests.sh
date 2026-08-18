@@ -605,6 +605,30 @@ else
     bad "multi-start standard errors" "all identical -- cov is the initialisation, not the Hessian"
 fi
 
+# 6e. RESIDUAL DIAGNOSTICS must be present, must be REAL, and must not count
+#     the contemporaneous correlation as a defect.
+#     "Real" is the point: with -multistart there is no final est() call, and
+#     the residuals were arriving from that call by accident -- so the diagnosis
+#     printed Q = nan next to "residuals appear white noise", which is the worst
+#     possible way to be wrong.  They are now computed explicitly.
+run "$MM" 2 1 1 -case 2 -multistart 5
+q=$(grep -a 'Q(' "$TMP/case.out" | head -1)
+if [ -z "$q" ]; then
+    bad "residual diagnostics" "the Hosking block is missing"
+elif printf '%s' "$q" | grep -qi 'nan'; then
+    bad "residual diagnostics" "Q is nan: the residuals were never computed ($q)"
+else
+    ok "residual diagnostics report a real Hosking statistic ($q)"
+fi
+# The k=0 off-diagonal is Sigma's, not a missing cross effect: it must be
+# reported apart and NOT drive the verdict.
+if grep -aq 'Contemporaneous innovation correlation' "$TMP/case.out" && \
+   grep -aq 'Cross DYNAMICS left in the residuals (k >= 1)' "$TMP/case.out"; then
+    ok "the contemporaneous correlation is reported apart from the cross dynamics"
+else
+    bad "residual diagnostics" "lag 0 is not separated from the cross dynamics"
+fi
+
 # 6d. THE CONVERGENCE NOTE must be present and must AGREE with the banner.
 #     Not a golden value: it is a consistency check between two things the same
 #     run says.  "OPTIMIZER STOPPED" and a note claiming a clean convergence

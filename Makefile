@@ -33,7 +33,8 @@ ENGINE_SRC = $(SRC_DIR)/elfvarma.c \
 
 # Puente con la suite (fue/.pre).  Copiado de drtran; ver docs/PLAN_BETA.md F2.1
 SUITE_SRC  = $(SRC_DIR)/fue_pre_reader.c \
-             $(SRC_DIR)/fue_bridge.c
+             $(SRC_DIR)/fue_bridge.c \
+             $(SRC_DIR)/diagnose_mv.c
 
 ALL_SRC = $(DRVEC_SRC) $(ENGINE_SRC) $(SUITE_SRC)
 OBJS    = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(ALL_SRC))

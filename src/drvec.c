@@ -333,6 +333,221 @@ static void cleanup_names(char *outf, char *inf, char *basef)
     if (basef) FREE_STR(basef);
 }
 
+/*  subtract_interventions — quita de los datos el componente determinista que
+ *  cada serie declara en su .pre.
+ *
+ *  POR QUE HACE FALTA.  El cast de fue admite intervenciones -- omega(B)/delta(B)
+ *  sobre un impulso, escalon, rampa... -- y los modelos univariantes de la
+ *  escalera las usan.  Estimar despues un VEC que las ignora es estimar otro
+ *  modelo: en el ejercicio que motivo esto, una serie con un impulso de
+ *  respuesta de cinco anios sobre una muestra de 76 daba un vector de
+ *  cointegracion sin sentido economico (positivo), y la causa era esa omision.
+ *
+ *  COMO.  build_det_component viene con el lector vendorizado y calcula
+ *  nu(B) = omega(B)/delta(B) aplicado al regresor, con la convencion de signos
+ *  de Box-Jenkins (omega_0 suma, los demas restan) y el caso racional incluido.
+ *  Se le pasa el modelo del .pre pero LAS FECHAS DE ESTA MUESTRA, porque una
+ *  determinista es funcion del tiempo: si se alinean por indice en vez de por
+ *  fecha, la intervencion cae en el anio equivocado.
+ *
+ *  LIMITE, declarado: los omega quedan FIJADOS en lo que estimo fue por
+ *  separado; no se reestiman conjuntamente.  drtran si los lleva en su vector de
+ *  parametros (BRIDGE_DESIGN.md), y ese es el paso siguiente natural.  Mientras
+ *  tanto esto es "las intervenciones del modelo univariante, aplicadas", que es
+ *  bastante mejor que "sin intervenciones" y peor que estimarlas.             */
+static void subtract_interventions(const char *prefix)
+{
+    int M = nser, i, t, nsub = 0;
+
+    for (i = 1; i <= M; i++) {
+        char path[1024];
+        struct Tusmodel Tm;
+        struct Tseries  Ts, Tsx;
+        real **DataMat = NULL;
+        real  *det;
+
+        snprintf(path, sizeof path, "%s.%d.pre", prefix, i);
+        if (read_fue_pre(path, &Tm, &Ts, &DataMat) != 0) {
+            char alt[1024];
+            snprintf(alt, sizeof alt, "%s.%d.inp", prefix, i);
+            if (read_fue_pre(alt, &Tm, &Ts, &DataMat) != 0) {
+                fprintf(stderr, "WARNING: no se pudo leer %s ni %s; la serie %d "
+                                "va sin deterministas\n", path, alt, i);
+                continue;
+            }
+        }
+        if (Tm.NdetVar > 0) {
+            /* fechas de ESTA muestra, modelo del .pre */
+            Tsx = Ts;
+            Tsx.freq    = data_freq;
+            Tsx.begyear = data_start_year;
+            Tsx.begtime = data_start_sub;
+            Tsx.nobs    = nobs_raw;
+            det = vector(1, nobs_raw);
+            build_det_component(&Tm, &Tsx, nobs_raw, det);
+            for (t = 1; t <= nobs_raw; t++) rawmat[t][i] -= det[t];
+            if (!quiet_mode) {
+                printf("  serie %d: %d determinista(s) del .pre restadas (", i,
+                       Tm.NdetVar);
+                for (int k = 1; k <= Tm.NdetVar; k++)
+                    printf("%s%s", (k > 1 ? "; " : ""),
+                           Tm.detspec[k] ? Tm.detspec[k] : "?");
+                printf(")\n");
+            }
+            fprintf(outputv, "Series %d: %d deterministic term(s) from %s "
+                             "subtracted before estimation.\n",
+                    i, Tm.NdetVar, path);
+            free_vector(det, 1, nobs_raw);
+            nsub++;
+        }
+        free_fue_pre(&Tm, &Ts, DataMat);
+    }
+    if (nsub == 0 && !quiet_mode)
+        printf("  (ningun .pre declaraba deterministas)\n");
+}
+
+/*  residual_diagnostics — la diagnosis multivariante de los residuos.
+ *
+ *  POR QUE ESTA AQUI.  drvec no hacia NINGUNA diagnosis: main.h declara
+ *  hosking_test y multivariate_diagnostics por herencia del header de drvarma,
+ *  pero esas rutinas no existen en este proyecto y el .out no decia nada de los
+ *  residuos.  Un estimador que no ensena sus residuos no se puede usar para
+ *  identificar, y en la aplicacion que motivo esto la pregunta es precisamente
+ *  de identificacion: heredado el ARMA univariante de un trabajo de ACF/PACF
+ *  limpio, lo unico que queda por decidir es si hay EFECTOS CRUZADOS y de que
+ *  orden.  Eso no se contesta mirando la verosimilitud; se contesta mirando las
+ *  correlaciones CRUZADAS de los residuos, retardo por retardo.
+ *
+ *  QUE IMPRIME, EN DOS PARTES
+ *
+ *   1. LA DIAGNOSIS DE LA SUITE, tal cual: multivariate_diagnostics de
+ *      drtran -- portmanteau de Hosking y Jarque-Bera multivariante --, copiada
+ *      sin cambios en src/diagnose_mv.c.  Es deliberado: el mismo residuo tiene
+ *      que leerse igual en drvarma, en drtran y aqui.  La primera version de
+ *      esto fue un portmanteau escrito a mano en este fichero, y estaba mal
+ *      planteado aunque fuera correcto: obligaba a comparar peras con manzanas.
+ *
+ *   2. LO QUE DRVEC ANADE, adaptado a su realidad: la matriz de correlaciones
+ *      cruzadas R(k) para k = 0..K, con lo que pasa la banda +-2/sqrt(n)
+ *      marcado.  La DIAGONAL de R(k) es la ACF de cada ecuacion (dinamica
+ *      propia mal recogida); las FUERA DE DIAGONAL son el efecto cruzado que el
+ *      modelo no ha capturado, y su k es SU ORDEN.  Eso es lo que un
+ *      portmanteau agregado no puede decir, y es justo la pregunta que queda
+ *      cuando el ARMA univariante viene ya identificado de un trabajo de
+ *      ACF/PACF limpio: si hay efectos cruzados y de que orden.
+ *
+ *  R(k)[i][j] correlaciona a_i(t) con a_j(t-k), asi que un elemento (i,j)
+ *  significativo con k >= 1 dice que la ecuacion i responde a la innovacion
+ *  PASADA de j: es un efecto cruzado retardado de orden k.  El triangulo
+ *  superior y el inferior NO son lo mismo, y ahi esta la direccion.           */
+static void residual_diagnostics(struct Tvarma *v)
+{
+    int M = v->m, n = v->n, K, i, j, k, t;
+    real band, ***C;
+    real *mean = vector(1, M);
+
+    if (n < 20 || M < 1) return;
+    K = (n / 4 < 12) ? n / 4 : 12;
+    if (K < 1) return;
+    band = 2.0 / sqrt((real) n);
+
+    /* medias (deberian ser ~0) y matrices de autocovarianza C(k) */
+    for (i = 1; i <= M; i++) {
+        real sm = 0.0;
+        for (t = 1; t <= n; t++) sm += v->a[t][i];
+        mean[i] = sm / n;
+    }
+    C = tensor(0, K, 1, M, 1, M);
+    for (k = 0; k <= K; k++)
+        for (i = 1; i <= M; i++)
+            for (j = 1; j <= M; j++) {
+                real sm = 0.0;
+                for (t = k + 1; t <= n; t++)
+                    sm += (v->a[t][i] - mean[i]) * (v->a[t-k][j] - mean[j]);
+                C[k][i][j] = sm / n;
+            }
+
+    fprintf(outputv, "\n=== Residual diagnostics ===\n");
+    fprintf(outputv, "  residual sd:");
+    for (i = 1; i <= M; i++) fprintf(outputv, " %10.6f", sqrt(C[0][i][i]));
+    fprintf(outputv, "\n  band = 2/sqrt(n) = %.4f;  * marks |r| > band\n", band);
+    fprintf(outputv, "\n  Cross-correlation matrices R(k): R(k)[i][j] = "
+                     "corr(a_i(t), a_j(t-k))\n"
+                     "  The DIAGONAL is each equation's own ACF; the "
+                     "OFF-DIAGONAL is the cross\n"
+                     "  effect the model has not captured, and its k is its "
+                     "order.\n");
+    for (k = 0; k <= K; k++) {
+        fprintf(outputv, "  k=%-2d ", k);
+        for (i = 1; i <= M; i++) {
+            if (i > 1) fprintf(outputv, "\n       ");
+            for (j = 1; j <= M; j++) {
+                real r = C[k][i][j] / sqrt(C[0][i][i] * C[0][j][j]);
+                fprintf(outputv, "%8.3f%s", r, (fabs(r) > band) ? "*" : " ");
+            }
+        }
+        fprintf(outputv, "\n");
+    }
+
+    /* La diagnosis ESTANDAR de la suite, sin tocar (src/diagnose_mv.c). */
+    multivariate_diagnostics(v->a, n, M, outputv);
+
+    /* el veredicto sobre efectos cruzados, que es la pregunta que importa */
+    {
+        int worst_k = -1, wi = 0, wj = 0, any = 0;
+        real worst = 0.0;
+        /* SOLO k >= 1.  La correlacion cruzada CONTEMPORANEA (k = 0) no es un
+           fallo del modelo: es la fuera-de-diagonal de Sigma, que el modelo
+           ESTIMA -- salvo con -diagcov, donde si seria una restriccion mal
+           puesta.  Contarla aqui haria saltar la alarma en cualquier modelo con
+           innovaciones correlacionadas, que es la situacion normal.          */
+        for (k = 1; k <= K; k++)
+            for (i = 1; i <= M; i++)
+                for (j = 1; j <= M; j++) {
+                    real r;
+                    if (i == j) continue;                    /* solo cruzados */
+                    r = C[k][i][j] / sqrt(C[0][i][i] * C[0][j][j]);
+                    if (fabs(r) > band) any = 1;
+                    if (fabs(r) > fabs(worst)) { worst = r; worst_k = k; wi = i; wj = j; }
+                }
+        {   /* la contemporanea se informa aparte, no como fallo */
+            real r0 = 0.0;
+            for (i = 1; i <= M; i++)
+                for (j = 1; j < i; j++) {
+                    real r = C[0][i][j] / sqrt(C[0][i][i] * C[0][j][j]);
+                    if (fabs(r) > fabs(r0)) r0 = r;
+                }
+            fprintf(outputv, "\n  Contemporaneous innovation correlation "
+                             "(largest |r| at k=0): %+.3f\n", r0);
+            if (global_diag_cov && fabs(r0) > band)
+                fprintf(outputv, "    NOTE: -diagcov forces Sigma diagonal, so "
+                                 "this one IS an imposed\n    restriction the "
+                                 "data does not support.\n");
+            else
+                fprintf(outputv, "    Not a defect: Sigma carries it "
+                                 "(it is estimated).\n");
+        }
+        fprintf(outputv, "  Cross DYNAMICS left in the residuals (k >= 1): ");
+        if (!any)
+            fprintf(outputv, "none beyond the band.\n"
+                    "    The cross structure in the model is enough for this "
+                    "sample.\n");
+        else
+            fprintf(outputv, "YES.\n"
+                    "    Largest: equation %d against the innovation of %d at "
+                    "lag %d, r = %+.3f.\n"
+                    "    A cross effect at lag k needs the model to reach lag k: "
+                    "raise p (or q)\n"
+                    "    if k >= the current order, and check the DIRECTION -- "
+                    "R(k)[i][j] and\n"
+                    "    R(k)[j][i] are different statements.\n",
+                    wi, wj, worst_k, worst);
+    }
+
+    free_tensor(C, 0, K, 1, M, 1, M);
+    free_vector(mean, 1, M);
+}
+
 /*  Nota de convergencia — POR QUE paro, no solo SI paro.
  *
  *  En VARMA multivariante la razon de la parada es un diagnostico de primer
@@ -534,6 +749,8 @@ static int   global_writeinp = 0;    /* -writeinp <prefijo>  (componentes de Ȳ)
 static int   global_writeres = 0;    /* -writeres <prefijo>  (residuos)         */
 static char *inp_prefix      = NULL;
 static int   global_eval     = 0;    /* -eval: evaluar y salir, sin optimizar */
+static int   global_interv   = 0;    /* -interv <prefijo>: deterministas del .pre */
+static char *interv_prefix   = NULL;
 static int   global_multistart = 0;  /* -multistart n: n arranques, quedarse el mejor */
 
 static int   global_seed     = 0;    /* -seed <prefijo> */
@@ -1787,6 +2004,9 @@ int main(int argc, char *argv[])
             global_writeres = 1; inp_prefix = argv[++i];
         }
         else if (strcmp(argv[i], "-eval") == 0) global_eval = 1;
+        else if (strcmp(argv[i], "-interv") == 0 && i+1 < argc) {
+            global_interv = 1; interv_prefix = argv[++i];
+        }
         else if (strcmp(argv[i], "-multistart") == 0 && i+1 < argc)
             global_multistart = atoi(argv[++i]);
         else if (strcmp(argv[i], "-alpha") == 0 && i+1 < argc) {
@@ -1991,6 +2211,18 @@ int main(int argc, char *argv[])
     fprintf(outputv, "M = %d, r = %d, s = M-r = %d\n", nser, global_r, nser - global_r);
     fprintf(outputv, "Stationary VARMA(%d,%d) on Ȳ_t\n", global_p, global_q);
     fprintf(outputv, "Case   : %d\n", global_case);
+    /* Las deterministas se quitan de los NIVELES, antes de formar nabla Y2 y W
+       -- que es donde el cast de fue las quita tambien, su bloque [6] va antes
+       del [7] --, y por eso hay que reconstruir los niveles despues.
+       Va aqui, y no antes, porque deja constancia en el .out y ese fichero no
+       esta abierto todavia mas arriba: escribir alli reventaba con outputv en
+       NULL.                                                                   */
+    if (global_interv) {
+        printf("Restando las deterministas declaradas en los .pre:\n");
+        subtract_interventions(interv_prefix);
+        build_y2_levels();
+    }
+
     fprintf(outputv, "Layout : %s (%d of %d observations used)\n",
             global_levels ? "all series in levels"
                           : "legacy, cols 1..s pre-differenced (-differenced)",
@@ -2350,10 +2582,26 @@ int main(int argc, char *argv[])
     if (ifault == 0) {
         vec_shootx(x, &varma1, &ifault, 0, 0);  /* retrieve final */
 
+        /* Rellenar los RESIDUOS del ajuste final.  Los escribe elf con
+           atf = TRUE, y hasta ahora llegaban de rebote porque est hacia esa
+           llamada al terminar.  Con -multistart no hay est final -- el mejor
+           punto ya esta elegido -- y los residuos se quedaban SIN CALCULAR: la
+           diagnosis salia con Q = nan y "los residuos parecen ruido blanco",
+           que es la peor forma posible de equivocarse.  Se calculan aqui, que
+           es donde se sabe cual es el ajuste final.                          */
+        {
+            real pi1, pi2, pi3;
+            int ifr = 0;
+            elf(varma1.m, varma1.n, varma1.p, varma1.q, varma1.mu, varma1.phi,
+                varma1.theta, varma1.qq, varma1.w, 1.0, varma1.xitol,
+                TRUE, varma1.a, &pi1, &pi2, &pi3, &ifr);
+        }
+
         fprintf(outputv, "\nESTIMATION SUCCESSFUL (ifault=0)\n");
         fprintf(outputv, "sigma2 : %15.10f\n", varma1.sigma2);
         fprintf(outputv, "logelf : %15.10f\n", varma1.logelf);
         convergence_note(termcode_from_out(outputf));
+        residual_diagnostics(&varma1);
 
         /* El LR de H1(r) contra H(r).  Johansen y Swensen (2024): los grados de
            libertad son (M - sa)*r, que es cuantas entradas libres de alpha

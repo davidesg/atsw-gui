@@ -171,6 +171,16 @@ for the rank is circular. (Even in an unrestricted fit they are only an
 indication — Mélard, Roy and Saidi (2004) show the assumption on `Φ(1)` does not
 imply what that reading assumes.) The instrument for the rank is `-lrtest`.
 
+**`Sigma = P D P'`**, the triangularisation. `P` is unit lower triangular and
+`D` diagonal, so with `Aₜ = P A*ₜ` the innovations `A*ₜ` are uncorrelated and the
+system premultiplied by `P⁻¹` can be read one equation at a time. The report also
+gives `D_i / Σ_ii`, the share of each equation's innovation variance that is its
+own once the earlier ones are projected out.
+
+**The ordering is the column order of the `.inp`**, and a different order gives a
+different `P`. That is the same class of silent modelling decision as the choice
+of the `Y₁` block, so the output says it.
+
 **The normalisation check.** `B = [I_r ; B₂]` assumes the `Y₁` block genuinely
 appears in every cointegrating relation. When it does not, `B₂` inflates and the
 fit describes a relation among the *other* series — silently, because nothing

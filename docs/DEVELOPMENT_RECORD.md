@@ -265,8 +265,20 @@ third — the one the column order puts in `Y₁` — is an independent random w
 The suite checks both directions, that it fires there and stays quiet on real
 data, and disabling the alarm raises a failure.
 
-**Still open in F3:** the triangularisation `Σ = PDP′` and the decoupled
-equations.
+### `Σ = P D P′`, and a coverage lesson
+
+The LDL′ triangularisation: `P` unit lower triangular, `D` diagonal, so that
+`Aₜ = P A*ₜ` with `A*ₜ` uncorrelated and the system readable one equation at a
+time. The legacy program had this for the bivariate case only; here it is
+general.
+
+The check that `P D P′` reconstructs `Σ` runs on **M = 3, not on M = 2**, and the
+reason is only visible by measuring: with `M = 2` the LDL′ inner loop never
+executes — there is no third variable for the cross term to accumulate over — so
+a mutation of that term is invisible. Negating it raises **0 failures on M = 2
+and 1 on M = 3**. A test written on the smallest case would have been decoration.
+
+**F3 is closed** apart from what the plan assigned to F4.
 
 ---
 

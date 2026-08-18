@@ -2221,6 +2221,69 @@ int main(int argc, char *argv[])
                 fprintf(outputv, "%12.6f", varma1.sigma2 * Qm[i][j]);
             fprintf(outputv, "\n");
         }
+
+        /* ---- Triangularizacion Sigma = P D P' ----------------------------- */
+        /* Descomposicion LDL' de la covarianza de innovaciones: P unitriangular
+           inferior, D diagonal.  Con A_t = P A*_t, las innovaciones A*_t estan
+           INCORRELACIONADAS (cov = D), asi que el sistema premultiplicado por
+           P^-1 se lee ecuacion a ecuacion: es lo que permite hablar de una
+           ecuacion sin arrastrar la correlacion contemporanea de las demas.
+           BVECM seccion 4; el legado lo hacia solo para el caso bivariante.
+
+           IMPORTANTE, y por eso se dice en la salida: el orden es el de las
+           COLUMNAS DEL .inp.  Otro orden da otra P.  Es la misma clase de
+           decision silenciosa que la eleccion del bloque Y1.                  */
+        {
+            real **Sg = matrix(1, nser, 1, nser);
+            real **P  = matrix(1, nser, 1, nser);
+            real  *D  = vector(1, nser);
+            int a, b, k, ok_ldl = 1;
+            for (a = 1; a <= nser; a++)
+                for (b = 1; b <= nser; b++)
+                    Sg[a][b] = varma1.sigma2 * ((b <= a) ? Qm[a][b] : Qm[b][a]);
+            for (a = 1; a <= nser; a++)
+                for (b = 1; b <= nser; b++) P[a][b] = (a == b) ? 1.0 : 0.0;
+            for (b = 1; b <= nser; b++) {
+                real acc = Sg[b][b];
+                for (k = 1; k < b; k++) acc -= P[b][k] * P[b][k] * D[k];
+                D[b] = acc;
+                if (D[b] <= 0.0) { ok_ldl = 0; break; }
+                for (a = b + 1; a <= nser; a++) {
+                    real s2 = Sg[a][b];
+                    for (k = 1; k < b; k++) s2 -= P[a][k] * P[b][k] * D[k];
+                    P[a][b] = s2 / D[b];
+                }
+            }
+            if (ok_ldl) {
+                fprintf(outputv, "\nSigma = P D P'  (P unit lower triangular; "
+                                 "A_t = P A*_t with cov(A*_t) = D)\n");
+                fprintf(outputv, "P =\n");
+                for (a = 1; a <= nser; a++) {
+                    fprintf(outputv, "  ");
+                    for (b = 1; b <= a; b++) fprintf(outputv, "%12.6f", P[a][b]);
+                    fprintf(outputv, "\n");
+                }
+                fprintf(outputv, "D (diagonal) =\n  ");
+                for (a = 1; a <= nser; a++) fprintf(outputv, "%12.6f", D[a]);
+                fprintf(outputv, "\n");
+                fprintf(outputv, "  own share of each innovation variance "
+                                 "(D_i / Sigma_ii):\n  ");
+                for (a = 1; a <= nser; a++)
+                    fprintf(outputv, "%11.1f%%", 100.0 * D[a] / Sg[a][a]);
+                fprintf(outputv, "\n");
+                fprintf(outputv,
+                    "  A*_t is uncorrelated, so premultiplying the system by P^-1\n"
+                    "  gives equations that can be read one at a time.  NOTE the\n"
+                    "  ordering is the COLUMN ORDER of the .inp: a different order\n"
+                    "  gives a different P, and the choice is the user's.\n");
+            } else {
+                fprintf(outputv, "\nSigma = P D P': not computed (Sigma is not "
+                                 "positive definite at the optimum)\n");
+            }
+            free_vector(D, 1, nser);
+            free_matrix(P, 1, nser, 1, nser);
+            free_matrix(Sg, 1, nser, 1, nser);
+        }
         free_matrix(Qm, 1, nser, 1, nser);
 
         /* B2 is stored COLUMN-major in x[] (vec_shootx and init_guess both

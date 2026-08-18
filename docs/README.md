@@ -37,8 +37,8 @@ optimisation hard.
 
 **Pre-beta.** The estimator works and is tested; the interpretable layer is
 partially built — restrictions on the adjustment coefficients, the long-run
-matrix `Π` and the normalisation diagnostic are in; the triangularisation
-`Σ = PDP′` is not. What is verified, what is not, and what is known to be wrong is
+matrix `Π`, the triangularisation `Σ = PDP′` and the normalisation diagnostic are
+in; the rank test is asymptotic only. What is verified, what is not, and what is known to be wrong is
 in [DEVELOPMENT_RECORD.md](DEVELOPMENT_RECORD.md) — including the results that
 were *rejected* after measurement, which are the ones that say most about where
 the program stands.
@@ -109,6 +109,7 @@ advertisement:
 | [USAGE.md](USAGE.md) | every option, the input format, and worked examples |
 | [SUITE_INTEGRATION.md](SUITE_INTEGRATION.md) | the ladder, its two contracts, and the provenance of the borrowed code |
 | [CONVERGENCE.md](CONVERGENCE.md) | what the optimiser reports, and how much to believe it |
+| [HOMOLOGATION.md](HOMOLOGATION.md) | which cases it reproduces, to what tolerance, and which it does not |
 | [TESTING.md](TESTING.md) | the test suite: what it protects, measured by mutation |
 | [DEVELOPMENT_RECORD.md](DEVELOPMENT_RECORD.md) | the process: what was tried, what was measured, what was rejected |
 

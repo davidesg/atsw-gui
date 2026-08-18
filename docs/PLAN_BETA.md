@@ -27,7 +27,7 @@ De ahí salen cuatro requisitos, y el orden no es negociable:
 
 Cuando escribí esto teníamos parte de (1) y (3), nada de (2) y **nada de (4)**,
 que era el riesgo de proceso más grande: todo estaba comprobado a mano. **F0 cerró
-(4)** — hay batería (`make test`, 57 comprobaciones tras F3.1) y muerde. Sigue faltando (2)
+(4)** — hay batería (`make test`, 58 comprobaciones tras F3) y muerde. Sigue faltando (2)
 por completo, y (1) es lo que F1 y F2 empujan.
 
 ---
@@ -816,8 +816,21 @@ independiente. **Una alarma sin un caso donde dispare no es una alarma**, así q
 la batería comprueba las dos direcciones: que salta ahí y que calla en un ajuste
 bien normalizado. Por mutación, desactivarla levanta 1 fallo.
 
-**Pendiente de F3:** la triangularización `Σ = PDP′` y las ecuaciones
-desacopladas.
+**4. La triangularización `Σ = PDP′`** (LDL′): `P` unitriangular inferior y `D`
+diagonal, de modo que con `A_t = P A*_t` las innovaciones `A*_t` están
+incorrelacionadas y el sistema premultiplicado por `P⁻¹` se lee ecuación a
+ecuación. Se informa además `D_i/Σ_ii`, la cuota propia de cada varianza de
+innovación. **El orden es el de las columnas del `.inp`**, y otro orden da otra
+`P`: es la misma clase de decisión silenciosa que la del bloque Y₁, así que la
+salida lo dice. El legado sólo lo tenía para el caso bivariante; aquí es general.
+
+*Nota de cobertura:* la comprobación de que `P D P′` reconstruye `Σ` se hace sobre
+**M = 3 y no sobre M = 2**, y por una razón que sólo se ve midiendo: con M = 2 el
+bucle interno de la LDL′ no llega a ejecutarse, así que una mutación del término
+cruzado es invisible. Medido: negarlo levanta 0 fallos en M = 2 y 1 en M = 3.
+
+**F3 queda cerrada** salvo lo que el plan mandó a F4 (valores críticos en muestra
+finita).
 
 **Salida.**
 1. `-alpha <fichero>` (o equivalente) impone α = Aψ y reporta el LR contra H(r)
@@ -893,15 +906,15 @@ r = 1, que es el que decide si hay cointegración y el único imprescindible.
 
 | # | criterio | estado hoy |
 |---|---|---|
-| 1 | `make test` verde, con la puerta diagonal dentro | **✔ (F0)** 57 comprobaciones tras F3.1, medida por mutación |
+| 1 | `make test` verde, con la puerta diagonal dentro | **✔ (F0)** 58 comprobaciones tras F3, medida por mutación |
 | 2 | \|Σ̂\| concordante entre las cuatro configuraciones **y** en el nivel objetivo | **parcial (F1)**: concuerdan (dispersión 0.000048, con test), pero en ~0.00248 y no en ~0.00230 → nivel a F2 |
 | 3 | Siembra desde `.pre`, con logL ≥ arranque en frío | **✔ en el peldaño diagonal, ✘ por encima (F2.8)**: con r = 0 el `.pre` transporta el óptimo univariante y los dos contratos de la escalera se cumplen (cruce 1.8e-5, certificado +2.4e-7 ≥ 0, los dos con test). Con r ≥ 1 la información univariante no vale: la semilla arranca 17 unidades peor, por sobredeterminación del AR y por el acoplamiento de C̄ y Λ |
-| 4 | Formas BEC/Π y exogeneidad débil, con o sin s.e. declarado | **parcial (F3.1)**: Π = ΛB′ con autovalores y la advertencia de circularidad, y exogeneidad débil por LR. Falta la triangularización Σ = PDP′ |
+| 4 | Formas BEC/Π y exogeneidad débil, con o sin s.e. declarado | **✔ (F3.1)**: Π = ΛB′ con autovalores y la advertencia de circularidad, exogeneidad débil por LR, y la triangularización Σ = PDP′ con test de reconstrucción |
 | 5 | Rango correcto en ≥ 4 casos del banco | parcial: 2 de 2 probados |
 | 6 | Todo termcode 3 residual **explicado**, no necesariamente eliminado | ✘ |
 | 6b | α = Aψ soportado, con LR y grados de libertad correctos | **✔ (F3.1)** con `-alpha`/`-weakex`, g.l. (M−sa)·r, y guarda de rango sobre A |
 | 6c | La elección del bloque Y₁ **diagnosticada o declarada** como no verificada | **✔ (F3.1)**: diagnóstico libre de unidades, con caso construido que lo dispara y test en las dos direcciones |
-| 7 | Registro de homologación y documento de entrada | ✘ (F5) |
+| 7 | Registro de homologación y documento de entrada | **✔**: `docs/HOMOLOGATION.md` (qué reproduce, con qué tolerancia y qué no) y el conjunto de documentación en inglés con `docs/README.md` de entrada |
 
 ---
 

@@ -21,6 +21,9 @@
 #                   A baseline is only valid for the exact input it was measured
 #                   on: the UK fixture is written with %.10f here, and a value
 #                   measured on a %.8f copy differs in the 6th decimal of logL.
+#   6. INTERPRETATION  alpha = A*psi and its LR; Pi; Sigma = P D P'; and the
+#                   normalisation alarm, checked in BOTH directions -- an alarm
+#                   with no case to fire on is not an alarm.
 #   5. THE BRIDGE   the .inp drvec writes for fue must be readable BY fue, and
 #                   the .pre it reads back must land in the right place.  The
 #                   format has no validation, so what is checked is what bit
@@ -48,6 +51,8 @@
 #   the .inp writer drops the annual-difference section        2
 #   the .pre reader's annual bug (F2.1 / drtran BUG-11)        2
 #   B2 read transposed in vec_shootx (the ESTIMATOR)           1
+#   the LDL' cross term negated, on M=3                        1   (0 on M=2)
+#   the normalisation alarm disabled                           1
 #   the Sigma positive-definiteness check removed              0   <-- not caught
 #   B2 fill transposed in the printer                          0   <-- not caught
 #
@@ -474,6 +479,46 @@ if grep -aq "^Pi = Lambda B'" "$TMP/case.out" && \
     ok "Pi and its eigenvalues are reported"
 else
     bad "Pi block" "missing from the output"
+fi
+
+# 6b-bis. Sigma = P D P' must RECONSTRUCT Sigma.  An identity, so no golden
+#     value: the check reads P, D and Sigma out of the same .out and multiplies
+#     them back.
+#     It runs on M = 3 and not on M = 2 ON PURPOSE.  With M = 2 the LDL' inner
+#     loop never executes -- there is no third variable for the cross term to
+#     accumulate over -- so a mutation of that term is invisible.  Measured:
+#     flipping its sign raises 0 failures on M = 2 and 1 on M = 3.
+ldl_reconstruction_error() {   # <out file> -> worst absolute error
+    awk '
+        /^Sigma = sigma2 \* Q/  {mode="S"; n=0; next}
+        /^Sigma = P D P/        {mode="";  next}
+        /^P =/                  {mode="P"; n=0; next}
+        /^D \(diagonal\)/       {mode="D"; next}
+        mode=="S" && /^ +[-0-9]/ {n++; for(j=1;j<=NF;j++) S[n","j]=$j; M=n; next}
+        mode=="S"               {mode=""}
+        mode=="P" && /^ +[-0-9]/ {n++; for(j=1;j<=NF;j++) P[n","j]=$j; next}
+        mode=="P"               {mode=""}
+        mode=="D" && /^ +[-0-9]/ {for(j=1;j<=NF;j++) D[j]=$j; mode=""; got=1; next}
+        END{
+            if (!got || M<2) {print "missing"; exit}
+            worst=0
+            for (a=1;a<=M;a++) for (b=1;b<=a;b++) {
+                acc=0
+                for (k=1;k<=b;k++) acc += P[a","k]*D[k]*P[b","k]
+                e = S[a","b]-acc; if (e<0) e=-e
+                if (e>worst) worst=e
+            }
+            printf "%.9f", worst
+        }' "$1"
+}
+run "$UK" 2 0 2 -case 2
+recon=$(ldl_reconstruction_error "$TMP/case.out")
+if [ "$recon" = "missing" ] || [ -z "$recon" ]; then
+    bad "Sigma = P D P'" "could not read P, D or Sigma from the output"
+elif awk -v w="$recon" 'BEGIN{exit !(w <= 1e-5)}'; then
+    ok "Sigma = P D P' reconstructs Sigma on M=3 (worst entry off by $recon)"
+else
+    bad "Sigma = P D P'" "reconstruction is off by $recon"
 fi
 
 # 6c. THE NORMALISATION ALARM, on a case built to fire it.  B = [I_r; B2]

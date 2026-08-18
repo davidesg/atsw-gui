@@ -2246,11 +2246,13 @@ int main(int argc, char *argv[])
      * para que un resultado se pueda reproducir: un multiarranque que no se
      * puede repetir no sirve como evidencia.
      */
+    int ms_done = 0;         /* 1 = el multiarranque ya dejo el ajuste final */
     if (global_multistart > 1) {
         real *xbest = vector(1, npar), *xtry = vector(1, npar);
-        real *devb  = vector(1, npar);
+        real *devb  = vector(1, npar), *devbest = vector(1, npar);
         real **covb = matrix(1, npar, 1, npar);
-        real best = 0.0, worst = 0.0;
+        real **covbest = matrix(1, npar, 1, npar);
+        real best = 0.0, worst = 0.0, best_s2 = 0.0;
         int  k, i2, nok = 0, ifb, bestk = 0;
         unsigned long rng = 20260818UL;      /* semilla fija, a proposito */
 
@@ -2283,8 +2285,22 @@ int main(int argc, char *argv[])
                 sptol, vk.xitol, vk.a, &vk.sigma2, &vk.logelf, &ifb);
             if (ifb == 0) {
                 if (nok == 0 || vk.logelf > best) {
-                    best = vk.logelf; bestk = k;
-                    for (i2 = 1; i2 <= npar; i2++) xbest[i2] = xtry[i2];
+                    best = vk.logelf; bestk = k; best_s2 = vk.sigma2;
+                    for (i2 = 1; i2 <= npar; i2++) {
+                        xbest[i2] = xtry[i2];
+                        /* La covarianza hay que guardarla DEL ARRANQUE QUE LA
+                           PRODUJO.  cov sale del factor que raxopt acumula
+                           mientras itera, asi que volver a llamar a est desde
+                           el optimo -- donde no itera -- deja mtmp en su
+                           inicializacion y devuelve errores estandar TODOS
+                           IGUALES.  Medido: 0.134231 para los tres parametros
+                           de un caso donde los verdaderos son 0.062, 0.123 y
+                           0.106.  Habrian sido errores estandar inventados con
+                           aspecto de calculados.                             */
+                        devbest[i2] = devb[i2];
+                        for (int j2 = 1; j2 <= npar; j2++)
+                            covbest[i2][j2] = covb[i2][j2];
+                    }
                 }
                 if (nok == 0 || vk.logelf < worst) worst = vk.logelf;
                 nok++;
@@ -2295,7 +2311,15 @@ int main(int argc, char *argv[])
                        (ifb == 0) ? "ok" : "fallo");
         }
         if (nok > 0) {
-            for (i2 = 1; i2 <= npar; i2++) x[i2] = xbest[i2];
+            for (i2 = 1; i2 <= npar; i2++) {
+                x[i2]   = xbest[i2];
+                dev[i2] = devbest[i2];
+                for (int j2 = 1; j2 <= npar; j2++) cov[i2][j2] = covbest[i2][j2];
+            }
+            varma1.logelf = best;
+            varma1.sigma2 = best_s2;
+            ifault  = 0;
+            ms_done = 1;    /* no se vuelve a estimar: ya esta el mejor ajuste */
             fprintf(outputv, "\nMulti-start: %d of %d starting points converged; "
                              "logL from %.6f to %.6f (best is start %d).\n",
                     nok, global_multistart, worst, best, bestk + 1);
@@ -2307,7 +2331,9 @@ int main(int argc, char *argv[])
         } else {
             fprintf(outputv, "\nMulti-start: no starting point converged.\n");
         }
+        free_matrix(covbest, 1, npar, 1, npar);
         free_matrix(covb, 1, npar, 1, npar);
+        free_vector(devbest, 1, npar);
         free_vector(devb, 1, npar);
         free_vector(xtry, 1, npar);
         free_vector(xbest, 1, npar);
@@ -2317,8 +2343,9 @@ int main(int argc, char *argv[])
            valgrind marcaba como definitely lost.                             */
     }
 
-    est(&vec_shootx, npar, x, dev, cov, maxits, nrits, gradtol, sptol,
-        varma1.xitol, varma1.a, &varma1.sigma2, &varma1.logelf, &ifault);
+    if (!ms_done)
+        est(&vec_shootx, npar, x, dev, cov, maxits, nrits, gradtol, sptol,
+            varma1.xitol, varma1.a, &varma1.sigma2, &varma1.logelf, &ifault);
 
     if (ifault == 0) {
         vec_shootx(x, &varma1, &ifault, 0, 0);  /* retrieve final */
@@ -2405,7 +2432,8 @@ int main(int argc, char *argv[])
                 fprintf(outputv, "  ");
                 for (int j = 1; j <= r; j++) {
                     Lam_m[i][j] = x[ii];
-                    fprintf(outputv, "%12.6f", x[ii]), ii++;
+                    fprintf(outputv, "%12.6f (sd %9.6f)", x[ii], dev[ii]);
+                    ii++;
                 }
                 fprintf(outputv, "\n");
             }
@@ -2545,11 +2573,21 @@ int main(int argc, char *argv[])
                                          "NOT valid)");
         else
             fprintf(outputv, "B2 (s x r) =\n");
-        for (int i = 1; i <= s; i++) {
-            fprintf(outputv, "  ");
-            for (int j = 1; j <= r; j++)
-                fprintf(outputv, "%12.6f", B2m[i][j]);
-            fprintf(outputv, "\n");
+        /* B2 va con su error estandar cuando es parametro.  Con -fixb2 no lo
+           lleva, y eso es correcto: un valor fijado no tiene error estandar, y
+           ponerle uno seria inventarlo.  El orden de lectura de dev es el mismo
+           column-major con el que se leyo B2m.                               */
+        {
+            int jj = ii - (global_fixb2 ? 0 : s * r);
+            for (int i = 1; i <= s; i++) {
+                fprintf(outputv, "  ");
+                for (int j = 1; j <= r; j++) {
+                    if (global_fixb2) fprintf(outputv, "%12.6f", B2m[i][j]);
+                    else fprintf(outputv, "%12.6f (sd %9.6f)", B2m[i][j],
+                                 dev[jj + (j - 1) * s + (i - 1)]);
+                }
+                fprintf(outputv, "\n");
+            }
         }
 
         if (ii != npar + 1)

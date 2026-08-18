@@ -115,6 +115,13 @@ test is the instrument.
 |---|---|
 | `-multistart n` | estimate from `n` starting points and keep the best |
 
+The standard errors reported come from **the best start**, not from a re-run at
+its optimum: `cov` is built from the factor the optimiser accumulates *while*
+iterating, so a run that begins already at the optimum leaves it at its
+initialisation and returns the same standard error for every parameter. That was
+the behaviour when multi-start was first written, and it is now a check in the
+test suite.
+
 Start 1 is the ordinary seed and the rest are deterministic perturbations of it,
 so a result is reproducible and the procedure is **monotone in `n`**: the first
 `n` starts of a long run are the starts of a short one. On this class of surface

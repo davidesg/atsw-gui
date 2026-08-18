@@ -186,7 +186,9 @@ echo "[2] invariants (no external reference needed)"
 #     transposed read changes the likelihood.  Making the printer provably right
 #     would need it to read the same array vec_shootx built; noted as follow-up.
 run "$UK" 2 0 2 -case 2
-b2_block=$(sed -n '/^B2 (s x r)/,/^$/p' "$TMP/case.out" | grep -aE '^ +-?[0-9]' | tr -s ' ' | sed 's/^ //')
+# El bloque lleva ahora "(sd ...)" detras de cada valor; se quita para comparar.
+b2_block=$(sed -n '/^B2 (s x r)/,/^$/p' "$TMP/case.out" | grep -aE '^ +-?[0-9]' \
+           | sed 's/(sd[^)]*)//g' | tr -s ' ' | sed 's/^ //; s/ $//')
 b_rows=$(sed -n '/^Cointegration matrix B/,/^$/p' "$TMP/case.out" | grep -a '^  row' \
          | awk 'NR>2{$1="";$2="";print}' | tr -s ' ' | sed 's/^ //')
 if [ -n "$b2_block" ] && [ "$b2_block" = "$b_rows" ]; then
@@ -587,6 +589,20 @@ elif awk -v a="$one" -v b="$five" -v c="$ten" \
     ok "multi-start is monotone: 1 -> $one, 5 -> $five, 10 -> $ten"
 else
     bad "multi-start" "not monotone: 1 -> $one, 5 -> $five, 10 -> $ten"
+fi
+
+# 6c-ter. MULTI-START must report REAL standard errors.  cov comes from the
+#     factor raxopt accumulates WHILE iterating, so re-running est from the
+#     already-optimal point leaves it at its initialisation and every standard
+#     error comes out identical.  That is what this checks, and it is not
+#     hypothetical: it was the behaviour when multi-start was first written --
+#     0.134231 for three parameters whose real values are 0.062, 0.125 and 0.106.
+run "$MM" 2 1 1 -case 2 -multistart 5
+nsd=$(grep -aoE '\(sd +[0-9.]+\)' "$TMP/case.out" | sort -u | wc -l)
+if [ "$nsd" -ge 2 ]; then
+    ok "multi-start reports standard errors that differ across parameters ($nsd distinct)"
+else
+    bad "multi-start standard errors" "all identical -- cov is the initialisation, not the Hessian"
 fi
 
 # 6d. THE CONVERGENCE NOTE must be present and must AGREE with the banner.

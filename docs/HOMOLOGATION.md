@@ -53,6 +53,39 @@ distribution (Yap and Reinsel 1995, Thm. 3, cited in Mauricio's Remark 5). **Cas
 3 is not tabulated here**, so a case-3 rank test reports the statistic without
 critical values.
 
+### 2.1b The cointegrating vector against Johansen, on eight pairs
+
+The rank rows above compare a decision. This compares **the estimate itself**,
+which is a sharper test: `drvec` with `q = 0` and Johansen's reduced-rank
+regression fit the *same model*, by two routes with nothing in common — a
+closed-form eigenvalue problem against a numerical optimisation of the exact
+likelihood.
+
+Measured on eight annual wheat-price pairs (European markets against London,
+1700–1813, n = 90–113), same files on both sides, cointegrating vector
+renormalised on the same variable:
+
+| | agreement |
+|---|---|
+| mean \|difference\| in the cointegrating coefficient | **0.019** |
+| worst pair | **0.052** |
+| best pair | 0.0003 |
+
+Two implementations with no shared ancestry agreeing to 0.02 on eight real
+samples is the strongest external check this program has, and it is on the
+quantity the program exists to produce.
+
+It also calibrates what comes next: **the same comparison with `q = 1` — the MA
+that Johansen has no way to represent — differs by 0.223 on average and 0.402 at
+worst**, i.e. an order of magnitude more than the difference between estimation
+methods. Raising Johansen's lag order to approximate the MA does not close it:
+the rank test loses the cointegration by `k = 3–4` on these sample sizes before
+the approximation converges.
+
+*Source of the data and the full tables:*
+`~/Dropbox/Cycles/Analysis/EJERCICIO_DRVEC.md`, and
+`comparar_johansen.py` beside it re-runs the comparison.
+
 ### 2.2 Cointegration rank against known truth
 
 The rows above compare against another program. These compare against **the

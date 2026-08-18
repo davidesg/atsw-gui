@@ -2600,6 +2600,17 @@ int main(int argc, char *argv[])
         fprintf(outputv, "\nESTIMATION SUCCESSFUL (ifault=0)\n");
         fprintf(outputv, "sigma2 : %15.10f\n", varma1.sigma2);
         fprintf(outputv, "logelf : %15.10f\n", varma1.logelf);
+        /* npar, AIC y BIC tambien en el ajuste simple.  Estaban solo dentro de
+           la tabla de -lrtest, y sin ellos no se puede fijar un criterio de
+           especificacion mecanico: comparar modelos anidados por LR vale para
+           una pareja, pero elegir dentro de un conjunto declarado pide un
+           criterio de informacion.  Misma normalizacion por nobs que la tabla
+           de -lrtest, para que los numeros sean el mismo numero.             */
+        fprintf(outputv, "npar   : %d\n", npar);
+        fprintf(outputv, "AIC    : %15.10f   (-2logL + 2k, /n)\n",
+                (-2.0 * varma1.logelf + 2.0 * npar) / nobs);
+        fprintf(outputv, "BIC    : %15.10f   (-2logL + k log n, /n)\n",
+                (-2.0 * varma1.logelf + npar * log((real) nobs)) / nobs);
         convergence_note(termcode_from_out(outputf));
         residual_diagnostics(&varma1);
 

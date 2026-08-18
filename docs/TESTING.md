@@ -34,10 +34,16 @@ not a valid measurement, because then the baselines fail for the wrong reason:
 | `B₂` read transposed in `vec_shootx` (the **estimator**) | 1 |
 | the LDL′ cross term negated, on M = 3 | 1 (**0** on M = 2) |
 | the normalisation alarm disabled | 1 |
+| the residuals not computed for the diagnosis | 1 |
+| the portmanteau p-value back to `1 − chisq` (drtran BUG-13) | 1 (**0** on two other cases) |
 | the Σ positive-definiteness check removed | **0** ← not caught |
 | `B₂` fill transposed in the **printer** | **0** ← not caught |
 
-The LDL′ row carries its own lesson: the reconstruction check runs on M = 3 and
+Two rows carry the same lesson about **where** a test has to run. The
+portmanteau p-value defect needs `df ≥ 30` *and* a statistic below its mean —
+i.e. a model that fits — so on the bivariate case (28 df) and on UK (72 df but
+Q = 148) the mutation raises nothing; it only bites on a synthetic three-series
+case with `Q(126) = 110`. And the LDL′ row: the reconstruction check runs on M = 3 and
 not on M = 2 because with M = 2 the inner loop never executes — there is no third
 variable for the cross term to accumulate over — so the same mutation is
 invisible. A test written on the smallest case would have been decoration.

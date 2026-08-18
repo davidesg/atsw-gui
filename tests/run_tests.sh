@@ -629,6 +629,34 @@ else
     bad "residual diagnostics" "lag 0 is not separated from the cross dynamics"
 fi
 
+# 6e-bis. THE PORTMANTEAU P-VALUE MUST BE ON THE RIGHT TAIL.  No golden value
+#     needed: for a chi-square, a statistic BELOW its df (below the mean) must
+#     have an upper-tail p above 0.5.  That is arithmetic, and it is what the
+#     suite's chisq() got wrong for df >= 30 -- it inverted the tail exactly in
+#     the case where the residuals are FINE, so the diagnosis printed
+#     "REJECT H0: residuals are not white noise" for a p of 0.98.
+#     The CASE matters, and finding one took measuring.  The suite's chisq() is
+#     correct for df < 30 (it uses gammap there) and inverts the tail only for
+#     df >= 30 AND a statistic BELOW its mean.  So the defect cannot show on
+#     mink-muskrat (28 df) nor on UK (72 df but Q = 148, above the mean): it
+#     needs a model that FITS.  datasets/synthetic/rank0.inp with r=1 gives
+#     Q(126) = 110, below the mean, which is exactly the region.
+#     Measured: restoring the original expression raises 0 failures on the other
+#     two cases and 1 here.
+run datasets/synthetic/rank0.inp 2 0 1 -case 2
+line=$(grep -a 'Q(' "$TMP/case.out" | head -1)
+qv=$(printf '%s' "$line" | sed -n 's/.*= *\([0-9.]*\), p-value.*/\1/p')
+dfv=$(printf '%s' "$line" | sed -n 's/.*Q(\([0-9]*\)).*/\1/p')
+pv=$(printf '%s' "$line" | sed -n 's/.*p-value = *\([0-9.-]*\).*/\1/p')
+if [ -z "$qv" ] || [ -z "$pv" ]; then
+    bad "portmanteau p-value" "could not parse: $line"
+elif awk -v q="$qv" -v d="$dfv" -v p="$pv" \
+        'BEGIN{ exit !( (q < d && p > 0.5) || (q > d && p < 0.5) || (q == d) ) }'; then
+    ok "the portmanteau p-value is on the upper tail (Q=$qv, df=$dfv, p=$pv)"
+else
+    bad "portmanteau p-value" "Q=$qv df=$dfv p=$pv -- the tail is inverted"
+fi
+
 # 6d. THE CONVERGENCE NOTE must be present and must AGREE with the banner.
 #     Not a golden value: it is a consistency check between two things the same
 #     run says.  "OPTIMIZER STOPPED" and a note claiming a clean convergence

@@ -37,6 +37,28 @@
 
 #include "main.h"
 #include <math.h>
+#include <gsl/gsl_cdf.h>
+
+/*  SEGUNDO DELTA respecto al original de drtran, y es un ARREGLO.
+ *
+ *  El original calcula el p-valor como `1.0 - chisq(Q, df)`, con la chisq de
+ *  nlatools.c.  Esa funcion se documenta como CDF y NO lo es de forma
+ *  consistente: con df < 30 devuelve gammap(df/2, x/2), que es la CDF; con
+ *  df >= 30 usa Wilson-Hilferty y aplica DOS correcciones de cola --
+ *      if (z > 0) prob = 1.0 - prob;
+ *      if (z < 0) prob = 1.0 - prob;
+ *  -- de modo que para z < 0 invierte un valor que ya era correcto y devuelve
+ *  la cola SUPERIOR.  Como z < 0 es justo el caso de un estadistico POR DEBAJO
+ *  de su media -- es decir, el caso en que los residuos estan bien --, el
+ *  p-valor salia complementado y el veredicto INVERTIDO.
+ *
+ *  Medido: Hosking Q = 23.4777 con 40 g.l. tiene p = 0.9825, y el original
+ *  imprimia 0.0175 con "*** REJECT H0: residuals are not white noise".
+ *
+ *  Se sustituye por gsl_cdf_chisq_Q, que es la cola superior directamente, sin
+ *  el 1 - ... .  No se toca chisq() en nlatools.c: ese fichero es motor.
+ *  Declarado como BUG-13 en drtran-python/docs/BUGS.md.                       */
+#define SUITE_CHISQ_UPPER(x, df) gsl_cdf_chisq_Q((x), (df))
 
 /*---------------------------------------------------------------------------*/
 void hosking_test(real **res, int nobs, int m, int s,
@@ -114,7 +136,7 @@ void hosking_test(real **res, int nobs, int m, int s,
 
     /* Grados de libertad = m^2 * s */
     int df = m * m * s;
-    *pval = 1.0 - chisq(*Q, df);
+    *pval = SUITE_CHISQ_UPPER(*Q, df);
 
     /* Liberar memoria */
     free_matrix(tmp3, 1, m, 1, m);
@@ -170,7 +192,7 @@ void jarque_bera_multivariate(real **res, int nobs, int m,
 
     /* Grados de libertad = 2*m */
     int df = 2 * m;
-    *pval = 1.0 - chisq(*JB, df);
+    *pval = SUITE_CHISQ_UPPER(*JB, df);
 
     free_vector(sd, 1, m);
     free_vector(mean, 1, m);

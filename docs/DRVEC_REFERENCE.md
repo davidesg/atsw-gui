@@ -1,6 +1,10 @@
 # drvec — VEC EML Estimation (Mauricio 2006)
 
-> **Status**: Core engine validated. Mauricio parametrization implemented, debugging Q normalization.
+> **Status**: superseded in part. Written 2026-07-21, while the `Q` normalisation
+> was still being debugged; that question was settled on 2026-08-17 (`Q[1][1] = 1`,
+> see [MODEL.md](MODEL.md) §3). This document is kept for its derivation of the
+> transformation and its notes on the paper and the AddOn, which remain accurate.
+> For the current state start at [README.md](README.md).
 > **Date**: 2026-07-21
 
 ---

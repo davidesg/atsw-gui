@@ -26,6 +26,7 @@
 #include "main.h"
 #include "fue_pre_reader.h"   /* lector de .pre, copiado de drtran (ver F2.1) */
 #include "fue_bridge.h"       /* expansion de los factores del .pre           */
+#include <gsl/gsl_cdf.h>      /* p-valor chi2 del LR de H1(r) contra H(r)     */
 
 real macheps;
 FILE *outputv;
@@ -103,6 +104,28 @@ int  global_fixb2_given = 0;        /* 1 = a value was supplied on the line */
 real global_fixb2_value = 0.0;      /* that value, applied to every entry   */
 static real **B2_fixed = NULL;      /* (s x r), owned here */
 static int   b2f_s = 0, b2f_r = 0;  /* dims of the current allocation */
+
+/*  F3 — restricciones lineales sobre los coeficientes de ajuste.
+ *
+ *  Johansen y Swensen (2024, JTSA 45:248-268) definen H1(r): alpha = A*psi con A
+ *  conocida M x sa de rango sa, frente a H(r) con alpha libre.  La exogeneidad
+ *  debil es el caso particular en que A selecciona filas, asi que no hace falta
+ *  un test ad hoc: se implementa la clase general y aquella sale de ella.
+ *
+ *  Y aqui drvec esta bien colocado, mejor que el legado: **Lambda esta EN su
+ *  vector de parametros**, asi que imponer alpha = A*psi es sustituir M*r
+ *  entradas libres por sa*r y calcular Lambda = A*psi dentro del cast -- el
+ *  mismo tipo de cambio que -fixb2 -- y su covarianza sale directa del hessiano.
+ *  En coordenadas BVECM alpha es DERIVADA, y por eso drv_project necesitaba el
+ *  metodo delta con pseudoinversa SVD (LEGACY_NOTES.md 5) para lo mismo.
+ *
+ *  Grados de libertad del LR contra H(r): (M - sa) * r, explicitos en el
+ *  articulo.                                                                  */
+static int    global_alpha = 0;      /* -alpha <fichero> o -weakex <i>         */
+static real **alpha_A      = NULL;   /* (M x sa), la A de Johansen y Swensen   */
+static int    alpha_sa     = 0;
+static char  *alpha_file   = NULL;
+static int    alpha_weakex = 0;      /* i > 0: ecuacion declarada exogena debil */
 
 /* --- Mauricio transformation matrices (Mauricio 2006, eq. 11-13) --------- */
 /*   Cbar = [ 0_{s x r}    I_s      ]                                      */
@@ -194,8 +217,8 @@ static int calc_nparametrs(void)
     if      (global_case == 2) npar += r;
     else if (global_case == 3) npar += M;
 
-    /* 2. Adjustment matrix Lambda (M x r) */
-    npar += M * r;
+    /* 2. Adjustment matrix Lambda (M x r), o psi (sa x r) si alpha = A*psi */
+    npar += (global_alpha ? alpha_sa : M) * r;
 
     /* 3. F_i (M x M, i=1..p-1) */
     int nf = (p > 1) ? p - 1 : 0;
@@ -291,6 +314,89 @@ static void build_ybar(real **B2, real **Ybar)
     }
 }
 
+/*  load_alpha_A — lee la matriz A de la restriccion alpha = A*psi.
+ *
+ *  Formato, deliberadamente simple y ASCII: una primera linea con  M sa  y
+ *  despues M filas de sa numeros.  Las lineas que empiezan por '*' o '#' son
+ *  comentarios.  No se copia aqui el formato posicional de fue porque esto no
+ *  es un fichero de la escalera: es una hipotesis del usuario.
+ *
+ *  Se comprueba el rango de A por su Gram: si A'A es singular la restriccion no
+ *  identifica psi, y eso hay que decirlo antes de estimar y no despues.       */
+static int load_alpha_A(const char *path)
+{
+    FILE *f = fopen(path, "r");
+    char line[1024];
+    int mm = 0, sa = 0, i, j, got = 0;
+
+    if (!f) { fprintf(stderr, "ERROR: no se pudo abrir %s\n", path); return 1; }
+    while (fgets(line, sizeof line, f)) {
+        if (line[0] == '*' || line[0] == '#' || line[0] == '\n') continue;
+        if (sscanf(line, "%d %d", &mm, &sa) == 2) { got = 1; break; }
+    }
+    if (!got || mm != nser || sa < 1 || sa > nser) {
+        fprintf(stderr, "ERROR: %s debe empezar con 'M sa' con M = %d y "
+                        "1 <= sa <= %d (leido %d %d)\n", path, nser, nser, mm, sa);
+        fclose(f); return 1;
+    }
+    alpha_A  = matrix(1, nser, 1, sa);
+    alpha_sa = sa;
+    for (i = 1; i <= nser; i++) {
+        char *tok;
+        do { if (!fgets(line, sizeof line, f)) {
+                 fprintf(stderr, "ERROR: %s se acaba en la fila %d\n", path, i);
+                 fclose(f); return 1; }
+        } while (line[0] == '*' || line[0] == '#' || line[0] == '\n');
+        tok = strtok(line, " \t\n");
+        for (j = 1; j <= sa; j++) {
+            if (!tok) { fprintf(stderr, "ERROR: %s, fila %d: faltan columnas\n",
+                                path, i); fclose(f); return 1; }
+            alpha_A[i][j] = atof(tok);
+            tok = strtok(NULL, " \t\n");
+        }
+    }
+    fclose(f);
+
+    {   /* rango de A via A'A */
+        real **G = matrix(1, sa, 1, sa);
+        real d1, d2; int ifc = 0;
+        for (i = 1; i <= sa; i++) for (j = 1; j <= sa; j++) {
+            real acc = 0.0; int k;
+            for (k = 1; k <= nser; k++) acc += alpha_A[k][i] * alpha_A[k][j];
+            G[i][j] = acc;
+        }
+        choldcp(G, sa, &d1, &d2, &ifc);
+        free_matrix(G, 1, sa, 1, sa);
+        if (ifc > 0) {
+            fprintf(stderr, "ERROR: A no tiene rango %d (A'A es singular), asi "
+                            "que psi no queda identificada\n", sa);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/*  build_weakex_A — la A que declara la ecuacion `eq` debilmente exogena.
+ *  Es la identidad M x M sin su columna eq: alpha_eq = 0 para todo j.  La
+ *  exogeneidad debil no necesita test propio, es H1(r) con esta A.            */
+static int build_weakex_A(int eq)
+{
+    int i, j, c;
+    if (eq < 1 || eq > nser) {
+        fprintf(stderr, "ERROR: -weakex %d fuera de 1..%d\n", eq, nser);
+        return 1;
+    }
+    alpha_sa = nser - 1;
+    alpha_A  = matrix(1, nser, 1, (alpha_sa > 0 ? alpha_sa : 1));
+    for (i = 1; i <= nser; i++)
+        for (j = 1; j <= alpha_sa; j++) alpha_A[i][j] = 0.0;
+    for (i = 1, c = 0; i <= nser; i++) {
+        if (i == eq) continue;
+        alpha_A[i][++c] = 1.0;
+    }
+    return 0;
+}
+
 /*****************************************************************************/
 /*  F2 — el puente con la suite: drvec escribe .inp y lee .pre               */
 /*                                                                           */
@@ -310,6 +416,7 @@ static int   global_writeinp = 0;    /* -writeinp <prefijo>  (componentes de Ȳ)
 static int   global_writeres = 0;    /* -writeres <prefijo>  (residuos)         */
 static char *inp_prefix      = NULL;
 static int   global_eval     = 0;    /* -eval: evaluar y salir, sin optimizar */
+
 static int   global_seed     = 0;    /* -seed <prefijo> */
 static char *pre_prefix      = NULL;
 
@@ -1018,7 +1125,40 @@ static void init_guess(real *x, int npar)
         for (i = 1; i <= s; i++) x[idx++] = EdY2[i];
         for (j = 1; j <= r; j++) x[idx++] = EW[j];
     }
-    for (i = 1; i <= M; i++) for (j = 1; j <= r; j++) x[idx++] = Lambda[i][j];
+    if (global_alpha) {
+        /* psi = (A'A)^-1 A' Lambda_ols: la proyeccion de la semilla libre sobre
+           el subespacio que la restriccion permite.  Es la mejor semilla
+           disponible y no cuesta nada.                                        */
+        real **AtA = matrix(1, alpha_sa, 1, alpha_sa);
+        real **psi_seed = matrix(1, alpha_sa, 1, (r > 0 ? r : 1));
+        real  *AtL = vector(1, alpha_sa);
+        int   *ind = ivector(1, alpha_sa);
+        int    a, b;
+        for (a = 1; a <= alpha_sa; a++)
+            for (b = 1; b <= alpha_sa; b++) {
+                real acc = 0.0;
+                for (i = 1; i <= M; i++) acc += alpha_A[i][a] * alpha_A[i][b];
+                AtA[a][b] = acc;
+            }
+        ludcp(AtA, alpha_sa, ind);
+        for (j = 1; j <= r; j++) {
+            for (a = 1; a <= alpha_sa; a++) {
+                real acc = 0.0;
+                for (i = 1; i <= M; i++) acc += alpha_A[i][a] * Lambda[i][j];
+                AtL[a] = acc;
+            }
+            lusol(AtA, AtL, alpha_sa, ind);
+            for (a = 1; a <= alpha_sa; a++) psi_seed[a][j] = AtL[a];
+        }
+        for (a = 1; a <= alpha_sa; a++)
+            for (j = 1; j <= r; j++) x[idx++] = psi_seed[a][j];
+        free_ivector(ind, 1, alpha_sa);
+        free_vector(AtL, 1, alpha_sa);
+        free_matrix(psi_seed, 1, alpha_sa, 1, (r > 0 ? r : 1));
+        free_matrix(AtA, 1, alpha_sa, 1, alpha_sa);
+    } else {
+        for (i = 1; i <= M; i++) for (j = 1; j <= r; j++) x[idx++] = Lambda[i][j];
+    }
     for (k = 1; k <= nf; k++) {
         real **Fk = (Fseed ? Fseed[k] : F[k]);
         if (global_diag_ar) { for (i = 1; i <= M; i++) x[idx++] = Fk[i][i]; }
@@ -1197,9 +1337,25 @@ static void vec_shootx(real *x, struct Tvarma *armax,
            Cinv collapse to the identity, Hbar to zero, and Ybar_t = nabla Y_t.
            That is the no-cointegration null of the rank test.               */
     real **Lambda = matrix(1, M, 1, (r > 0 ? r : 1));
-    for (i = 1; i <= M; i++)
-        for (j = 1; j <= r; j++)
-            Lambda[i][j] = x[idx++];
+    if (global_alpha) {
+        /* Lambda = A * psi.  psi (sa x r) es lo que ve el optimizador; A es
+           dato del usuario.  Mismo patron que -fixb2: la restriccion vive en el
+           cast, no en el optimizador.                                        */
+        real **psi = matrix(1, alpha_sa, 1, (r > 0 ? r : 1));
+        for (i = 1; i <= alpha_sa; i++)
+            for (j = 1; j <= r; j++) psi[i][j] = x[idx++];
+        for (i = 1; i <= M; i++)
+            for (j = 1; j <= r; j++) {
+                real acc = 0.0;
+                for (int kk = 1; kk <= alpha_sa; kk++) acc += alpha_A[i][kk] * psi[kk][j];
+                Lambda[i][j] = acc;
+            }
+        free_matrix(psi, 1, alpha_sa, 1, (r > 0 ? r : 1));
+    } else {
+        for (i = 1; i <= M; i++)
+            for (j = 1; j <= r; j++)
+                Lambda[i][j] = x[idx++];
+    }
 
     /*   3. F_i (M x M, i=1..p-1) */
     int nf = (p > 1) ? p - 1 : 0;
@@ -1507,6 +1663,12 @@ int main(int argc, char *argv[])
             global_writeres = 1; inp_prefix = argv[++i];
         }
         else if (strcmp(argv[i], "-eval") == 0) global_eval = 1;
+        else if (strcmp(argv[i], "-alpha") == 0 && i+1 < argc) {
+            global_alpha = 1; alpha_file = argv[++i];
+        }
+        else if (strcmp(argv[i], "-weakex") == 0 && i+1 < argc) {
+            global_alpha = 1; alpha_weakex = atoi(argv[++i]);
+        }
         else if (strcmp(argv[i], "-seed") == 0 && i+1 < argc) {
             global_seed = 1; seed_route = SEED_RESID; pre_prefix = argv[++i];
         }
@@ -1641,6 +1803,22 @@ int main(int argc, char *argv[])
     printf("Series: %d, Obs: %d, Rank: r=%d  (%s)\n", nser, nobs, global_r,
            global_levels ? "levels" : "legacy pre-differenced layout");
 
+    /* -alpha / -weakex: cargar la A de la restriccion alpha = A*psi.  Se hace
+       aqui porque necesita nser, y antes de calcular npar.                   */
+    if (global_alpha) {
+        int bad = alpha_weakex ? build_weakex_A(alpha_weakex)
+                               : load_alpha_A(alpha_file);
+        if (bad) exit(1);
+        if (global_r < 1) {
+            fprintf(stderr, "ERROR: alpha = A*psi no significa nada con r = 0 "
+                            "(no hay termino de correccion de error)\n");
+            exit(1);
+        }
+        printf("Restriccion H1(r): alpha = A*psi, con A de %d x %d%s\n",
+               nser, alpha_sa,
+               alpha_weakex ? " (exogeneidad debil)" : "");
+    }
+
     /* -writeinp: emitir un .inp por componente de Ȳ y parar.  Es un modo, no un
        añadido a la estimación: el siguiente paso de la escalera lo da fue.     */
     if (global_writeinp) {
@@ -1656,6 +1834,19 @@ int main(int argc, char *argv[])
     /* -seed: leer los .pre y sembrar el bloque MA (lo unico que el .pre puede
        sembrar; ver load_seed_pre).                                            */
     if (global_seed) {
+        /* La informacion univariante llega al PELDANO DIAGONAL y no mas arriba.
+           Con r >= 1 el marginal de un componente de Ybar no es el bloque
+           diagonal del conjunto, Cbar y Lambda acoplan, y PhiBar_p queda
+           determinada por F_{p-1}, asi que el AR esta sobredeterminado.  Esta
+           medido: en -case 2 la semilla arranca 17 unidades por debajo del
+           arranque en frio.  Se avisa en vez de prohibir, porque la medida hay
+           que poder reproducirla.  Ver docs/PLAN_BETA.md F2.8.               */
+        if (global_r > 0 && seed_route == SEED_YBAR)
+            fprintf(stderr,
+                "WARNING: -seedybar con r = %d.  La informacion univariante solo\n"
+                "         transporta un optimo en el peldano diagonal (r = 0);\n"
+                "         con r >= 1 empeora el punto de partida.  Medido en\n"
+                "         docs/PLAN_BETA.md F2.8.\n", global_r);
         if (load_seed_pre(pre_prefix) != 0)
             fprintf(stderr, "WARNING: sin semilla; se arranca en frio\n");
         else
@@ -1799,6 +1990,36 @@ int main(int argc, char *argv[])
     macheps = cmacheps();
     varma1.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
 
+    /* Con alpha = A*psi hace falta el modelo LIBRE para el LR, asi que se
+       estima primero H(r) y luego H1(r).  Los grados de libertad son
+       (M - sa)*r, explicitos en Johansen y Swensen (2024).                    */
+    real lr_free = 0.0; int lr_free_ok = 0;
+    if (global_alpha) {
+        int save = global_alpha;
+        global_alpha = 0;
+        {
+            int npf = calc_nparametrs();
+            real *xf = vector(1, npf), *devf = vector(1, npf);
+            real **covf = matrix(1, npf, 1, npf);
+            struct Tvarma vf;
+            int iff;
+            vf.xitol = varma1.xitol;
+            init_guess(xf, npf);
+            vec_shootx(xf, &vf, &iff, 1, 0);
+            est(&vec_shootx, npf, xf, devf, covf, 500, 200, 1e-5, 1e-7,
+                vf.xitol, vf.a, &vf.sigma2, &vf.logelf, &iff);
+            lr_free_ok = (iff == 0);
+            lr_free    = vf.logelf;
+            printf("  H(r)  libre        : logL = %15.10f%s\n", lr_free,
+                   lr_free_ok ? "" : "  (la estimacion fallo)");
+            vec_shootx(xf, &vf, &iff, 0, 1);
+            free_matrix(covf, 1, npf, 1, npf);
+            free_vector(devf, 1, npf);
+            free_vector(xf, 1, npf);
+        }
+        global_alpha = save;
+    }
+
     init_guess(x, npar);
 
     /* -writeres: los residuos de la regresión condicional, que es lo que
@@ -1865,6 +2086,25 @@ int main(int argc, char *argv[])
         fprintf(outputv, "sigma2 : %15.10f\n", varma1.sigma2);
         fprintf(outputv, "logelf : %15.10f\n", varma1.logelf);
 
+        /* El LR de H1(r) contra H(r).  Johansen y Swensen (2024): los grados de
+           libertad son (M - sa)*r, que es cuantas entradas libres de alpha
+           elimina la restriccion.                                            */
+        if (global_alpha && lr_free_ok) {
+            int df = (nser - alpha_sa) * global_r;
+            real lr = 2.0 * (lr_free - varma1.logelf);
+            real pv = (df > 0 && lr > 0.0) ? gsl_cdf_chisq_Q(lr, df) : 1.0;
+            fprintf(outputv, "\n--- H1(r): alpha = A*psi, contra H(r) ---\n");
+            fprintf(outputv, "logL H(r)  libre       : %15.10f\n", lr_free);
+            fprintf(outputv, "logL H1(r) restringido : %15.10f\n", varma1.logelf);
+            fprintf(outputv, "LR = 2(libre - restr.) : %15.10f\n", lr);
+            fprintf(outputv, "grados de libertad     : %d   (M - sa)*r\n", df);
+            fprintf(outputv, "p-valor (chi2)         : %15.10f\n", pv);
+            printf("  H1(r) restringido  : logL = %15.10f\n", varma1.logelf);
+            printf("  LR = %.6f, %d g.l., p = %.6f%s\n", lr, df, pv,
+                   (lr < -1.0e-6) ? "   <- NEGATIVO: el restringido bate al libre,"
+                                    " luego uno de los dos no convergio" : "");
+        }
+
         /* --- Structured VEC output --------------------------------------- */
         int s = nser - global_r, r = global_r;
         int ii = 1;
@@ -1885,12 +2125,44 @@ int main(int argc, char *argv[])
                 fprintf(outputv, "  %12.6f  (sd = %10.6f)\n", x[ii], dev[ii]), ii++;
         }
 
-        fprintf(outputv, "Lambda (M x r) =\n");
-        for (int i = 1; i <= nser; i++) {
-            fprintf(outputv, "  ");
-            for (int j = 1; j <= r; j++)
-                fprintf(outputv, "%12.6f", x[ii]), ii++;
-            fprintf(outputv, "\n");
+        if (global_alpha) {
+            /* Con alpha = A*psi lo que x[] lleva es psi (sa x r), no Lambda, y
+               el recorrido tiene que consumir sa*r y no M*r -- la impresora es
+               el otro sitio donde el layout del vector se puede desincronizar,
+               y el bloque estructural de la bateria existe por eso.
+               Se imprimen las dos: psi es lo estimado, Lambda = A*psi es lo
+               interpretable, y los errores estandar solo existen para psi.   */
+            real **psi = matrix(1, alpha_sa, 1, (r > 0 ? r : 1));
+            fprintf(outputv, "psi (sa x r), the free part of alpha = A*psi =\n");
+            for (int i = 1; i <= alpha_sa; i++) {
+                fprintf(outputv, "  ");
+                for (int j = 1; j <= r; j++) {
+                    psi[i][j] = x[ii];
+                    fprintf(outputv, "%12.6f (sd %9.6f)", x[ii], dev[ii]);
+                    ii++;
+                }
+                fprintf(outputv, "\n");
+            }
+            fprintf(outputv, "Lambda = A*psi (M x r) =\n");
+            for (int i = 1; i <= nser; i++) {
+                fprintf(outputv, "  ");
+                for (int j = 1; j <= r; j++) {
+                    real acc = 0.0;
+                    for (int kk = 1; kk <= alpha_sa; kk++)
+                        acc += alpha_A[i][kk] * psi[kk][j];
+                    fprintf(outputv, "%12.6f", acc);
+                }
+                fprintf(outputv, "\n");
+            }
+            free_matrix(psi, 1, alpha_sa, 1, (r > 0 ? r : 1));
+        } else {
+            fprintf(outputv, "Lambda (M x r) =\n");
+            for (int i = 1; i <= nser; i++) {
+                fprintf(outputv, "  ");
+                for (int j = 1; j <= r; j++)
+                    fprintf(outputv, "%12.6f", x[ii]), ii++;
+                fprintf(outputv, "\n");
+            }
         }
         /* Under -diagar / -diagma only the M diagonal entries are carried in
            x[] (see calc_nparametrs and vec_shootx), so the walk must consume

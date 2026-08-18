@@ -62,6 +62,7 @@ The resulting VARMA on Ybar_t is **stationary** and estimable by standard EML.
 drvec file p q r [-mean] [-case 1|2|3] [-diagar] [-diagma] [-diagcov] [-m 1|2]
                  [-differenced] [-fixb2 [v]] [-lrtest]
                  [-writeres pfx] [-writeinp pfx] [-seed pfx] [-seedybar pfx]
+                 [-alpha file] [-weakex i] [-eval]
 ```
 
 | Argument | Description |
@@ -69,7 +70,7 @@ drvec file p q r [-mean] [-case 1|2|3] [-diagar] [-diagma] [-diagcov] [-m 1|2]
 | `file`   | Data file name (without `.inp`) |
 | `p`      | AR order of stationary VARMA on Ȳ_t |
 | `q`      | MA order |
-| `r`      | Cointegration rank (0 < r < M); ignored with `-lrtest` |
+| `r`      | Cointegration rank, `0 <= r < M`; ignored with `-lrtest`. `r = 0` is the no-cointegration model and is a first-class configuration: it is the ladder's diagonal rung |
 
 | Option | Description |
 |--------|-------------|
@@ -83,9 +84,12 @@ drvec file p q r [-mean] [-case 1|2|3] [-diagar] [-diagma] [-diagcov] [-m 1|2]
 | `-writeres pfx` | Write one `pfx.<i>.inp` per equation holding the conditional-regression residuals, for `ART`/`fue` to identify and estimate. Then stop |
 | `-writeinp pfx` | The same, but one file per **component of Ȳ**. For identification; **not** a seeding source (see below) |
 | `-seed pfx` | Read `pfx.<i>.pre` (or `.inp`) written by `fue` from `-writeres` output, and seed the MA block Θ |
-| `-seedybar pfx` | Seed from `-writeinp` output instead, undoing Θ̄ = C̄ΘC̄⁻¹. **Measured worse**; kept so the measurement stays reproducible |
+| `-seedybar pfx` | Seed the **whole univariate block** (Φ*, Θ̄, Σ) from `-writeinp` output, undoing the transformation. Valid at `r = 0`; above that it is measured to make the start worse, and `drvec` warns |
+| `-alpha file` | Impose `α = Aψ` with `A` read from `file` (Johansen–Swensen H₁(r)), and report the LR against the free model |
+| `-weakex i` | Shorthand for the `A` that declares equation `i` weakly exogenous |
+| `-eval` | Evaluate the likelihood **at the starting point** and stop, without optimising |
 
-### The bridge to the suite, and what it is honestly worth
+### The bridge to the suite
 
 `drvec` writes `.inp` files — a *specification* — and never a `.pre`, which is a
 claim that the values are an optimum and may only be made by the program that
@@ -93,17 +97,17 @@ optimised. `fue` estimates each file and leaves the `.pre`; `drvec` reads the
 numbers back. It never calls `fue`'s cast at run time, which is deliberate: that
 cast keeps its state in module globals and is not reentrant.
 
-**What a `.pre` can seed is Θ, and only Θ.** It carries no σ² — the innovation
-variance is not in the format — and the AR side is over-determined, because the
-univariate fits give Φ*ᵢ for i = 1..p while the model has only F₁…F_{p−1}.
-Θ happens to be exactly what used to start at zero.
+At `r = 0` with diagonal structure — the ladder's diagonal rung — the two
+contracts of the suite hold and `drvec` checks them itself: the joint likelihood
+evaluated at the stored `.pre` values equals the sum of the univariate ones
+(agreement 1.8e-5, the format's own rounding), and the fitted value cannot be
+below the evaluated one (certificate +2.4e-7 ≥ 0). **Above that rung the
+univariate information does not transport**: the marginal of a component of Ȳ is
+not the joint's diagonal block, and the AR is over-determined. Measured, at
+r = 1 the seed starts 17 units below the cold start.
 
-**And seeding it does not help.** Measured over six configurations of the
-mink–muskrat case, the seeded fit is worse than the cold start in four of them.
-The cause is not the bridge: with θ = 0 the seeded run reproduces the cold start
-bit for bit (a check in the test suite). It is the likelihood surface — in case 1,
-moving Θ by a few hundredths costs 14 units of log-likelihood. Full numbers in
-`docs/PLAN_BETA.md` F2.7.
+Details, numbers and provenance in
+[docs/SUITE_INTEGRATION.md](docs/SUITE_INTEGRATION.md).
 
 ## Input format (.inp)
 
@@ -162,7 +166,8 @@ is already differenced cannot be re-read at another rank.
 `r = 0` is the no-cointegration null (Π = 0, a plain VARMA on ∇Y), so the first
 comparison is the one that matters most: is there cointegration at all? `r = M`
 would be a stationary process in levels and is not expressible, so the sequence
-ends at `r = M−1`. A single-rank run still requires `r ≥ 1`.
+ends at `r = M−1`. `r = 0` can also be run on its own, which is what makes the
+diagonal rung inspectable.
 
 A **negative** statistic is flagged as not interpretable — rank `r` is nested in
 `r+1`, so it proves one of the two fits did not converge.

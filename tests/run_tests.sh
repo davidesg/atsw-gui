@@ -414,6 +414,57 @@ elif near "$got" 6.4460747665; then ok "seeded from .pre fixtures = $got"
 else bad "seeded fit from fixtures" "expected 6.4460747665, got $got"; fi
 echo
 
+# ==================================== 6 RESTRICTIONS ON ALPHA (H1(r)) ==
+echo "[6] alpha = A*psi: the restriction, its LR, and its guards"
+# Johansen and Swensen (2024): H1(r) is alpha = A*psi with A known.  Weak
+# exogeneity is the special case where A selects rows, so -weakex is a shorthand
+# for -alpha and must give exactly the same numbers -- that is an invariant, so
+# it needs no golden value and cannot go stale.
+
+# A declaring equation 2 not to adjust: the same thing -weakex 2 builds.
+printf '* A: alpha_2 = 0\n2 1\n1\n0\n' > "$TMP/A_eq2.txt"
+lr_of() { grep -a 'LR = 2(libre' "$1.out" 2>/dev/null | awk '{print $5}'; }
+
+run "$MM" 2 1 1 -case 2 -weakex 2
+lr_short=$(lr_of "$TMP/case"); free_ll=$(grep -a 'logL H(r)' "$TMP/case.out" | awk '{print $5}')
+restr_ll=$(logelf_of "$TMP/case")
+run "$MM" 2 1 1 -case 2 -alpha "$TMP/A_eq2.txt"
+lr_gen=$(lr_of "$TMP/case")
+
+if [ -z "$lr_short" ] || [ -z "$lr_gen" ]; then
+    bad "-weakex == -alpha" "no LR (short=$lr_short general=$lr_gen)"
+elif [ "$lr_short" = "$lr_gen" ]; then
+    ok "-weakex 2 and the equivalent -alpha file agree exactly (LR = $lr_gen)"
+else
+    bad "-weakex == -alpha" "short=$lr_short  general=$lr_gen"
+fi
+
+# The restricted fit cannot beat the free one: H1(r) is nested in H(r), so the
+# LR is non-negative.  A negative value does not mean the theory is wrong, it
+# means one of the two fits did not converge -- which is worth knowing.
+if [ -n "$free_ll" ] && [ -n "$restr_ll" ] && \
+   awk -v f="$free_ll" -v r="$restr_ll" 'BEGIN{exit !(f - r >= -1e-6)}'; then
+    ok "H1(r) does not beat H(r) (free $free_ll >= restricted $restr_ll)"
+else
+    bad "nesting of H1(r) in H(r)" "free=$free_ll restricted=$restr_ll"
+fi
+
+# A rank-deficient A must be refused BEFORE estimating: with A'A singular psi is
+# not identified, and estimating anyway would return numbers for a model that
+# does not have them.
+printf '2 2\n1 2\n2 4\n' > "$TMP/A_bad.txt"
+run "$MM" 2 1 1 -case 2 -alpha "$TMP/A_bad.txt"
+if printf '%s' "$STDERR" | grep -q 'A no tiene rango'; then
+    ok "a rank-deficient A is refused before estimating"
+else
+    bad "rank guard on A" "no complaint about a singular A'A"
+fi
+
+# And the parameter walk must still consume exactly npar with the restriction on.
+struct_case "M=2 with -weakex 1"  "$MM" 2 1 1 -case 2 -weakex 1
+struct_case "M=3 with -weakex 2"  "$UK" 2 0 2 -case 2 -weakex 2
+echo
+
 # ===================================================================== summary =
 echo "-----------------------------------------------"
 printf 'passed %d, failed %d\n' "$PASS" "$FAIL"

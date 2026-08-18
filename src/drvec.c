@@ -24,6 +24,8 @@
 /*****************************************************************************/
 
 #include "main.h"
+#include "fue_pre_reader.h"   /* lector de .pre, copiado de drtran (ver F2.1) */
+#include "fue_bridge.h"       /* expansion de los factores del .pre           */
 
 real macheps;
 FILE *outputv;
@@ -225,18 +227,17 @@ static int calc_nparametrs(void)
 /*  Λ and F_i directly (this is the conditional estimator the paper mentions  */
 /*  as the natural starting point, Remark 1.1).                              */
 /*****************************************************************************/
-static void init_guess(real *x, int npar)
+/*  prelim_b2 — B₂ inicial por OLS estático con constante.
+ *
+ *  Extraído de init_guess sin cambiarle nada, porque lo necesitan DOS sitios:
+ *  la siembra y el escritor de .inp de F2, que tiene que construir el mismo Ȳ
+ *  que se va a estimar.  B2 se espera dimensionada (1..s, 1..max(r,1)).       */
+static void prelim_b2(real **B2)
 {
     int M = nser, r = global_r, s = M - r;
-    int p = global_p, q = global_q;
-    int i, j, k, t, idx = 1;
-    int nf = (p > 1) ? p - 1 : 0;
-
-    /* --- 0. Levels of Y_{2t}: built once by build_y2_levels() ---------- */
+    int i, j, t;
     real **Y2lev = Y2_levels;
 
-    /* --- 1. Initial B₂ via static OLS with intercept ------------------- */
-    real **B2 = matrix(1, s, 1, (r > 0 ? r : 1));
     for (j = 1; j <= r; j++) {
         int nc = s + 1;
         real *yy = vector(1, nobs);
@@ -268,6 +269,432 @@ static void init_guess(real *x, int npar)
         free_matrix(XX, 1, nc, 1, nc);
         free_vector(Xy, 1, nc);
     }
+    (void) M;
+}
+
+/*  build_ybar — Ȳ_t = (∇Y_{2t}', W_t')' para un B₂ dado.
+ *
+ *  MISMA construcción que el bloque [5] de vec_shootx; si las dos dejan de
+ *  coincidir, lo que drvec escribe en los .inp no es lo que estima.  Ybar se
+ *  espera dimensionada (1..nobs, 1..M).                                      */
+static void build_ybar(real **B2, real **Ybar)
+{
+    int M = nser, r = global_r, s = M - r;
+    int i, j, t;
+    for (t = 1; t <= nobs; t++) {
+        for (i = 1; i <= s; i++) Ybar[t][i] = datamat[t][i];
+        for (j = 1; j <= r; j++) {
+            real w = datamat[t][s + j];
+            for (i = 1; i <= s; i++) w += B2[i][j] * Y2_levels[t][i];
+            Ybar[t][s + j] = w;
+        }
+    }
+}
+
+/*****************************************************************************/
+/*  F2 — el puente con la suite: drvec escribe .inp y lee .pre               */
+/*                                                                           */
+/*  Ver docs/PLAN_BETA.md F2 para el estudio completo.  Lo que gobierna este  */
+/*  bloque, en tres frases:                                                  */
+/*                                                                           */
+/*   - drvec ESCRIBE .inp (una especificación) y nunca .pre (una afirmación   */
+/*     de optimalidad, que sólo puede hacer quien estimó).                   */
+/*   - El parser de fue es POSICIONAL y no valida nada, así que las secciones */
+/*     van todas y en orden, incluida la de factores de la diferencia anual,  */
+/*     que con datos anuales lleva un " 0" literal pero TIENE que estar.      */
+/*   - Todo lo que se escribe es ASCII puro: el parser de Python de fue no    */
+/*     lee Latin-1 (BUG-0010, abierto) y los fuentes de este motor lo son.    */
+/*****************************************************************************/
+
+static int   global_writeinp = 0;    /* -writeinp <prefijo>  (componentes de Ȳ) */
+static int   global_writeres = 0;    /* -writeres <prefijo>  (residuos)         */
+static char *inp_prefix      = NULL;
+static int   global_seed     = 0;    /* -seed <prefijo> */
+static char *pre_prefix      = NULL;
+
+/*  Residuos de la regresión condicional, publicados por init_guess para que
+ *  -writeres pueda escribirlos.  e_t = Θ(L)A_t.                              */
+static real **cond_resid   = NULL;
+static int    cond_resid_T = 0, cond_resid_M = 0;
+
+/*  La semilla que se lee de los .pre: la DIAGONAL de Θ̄_k, k=1..q.
+ *
+ *  SÓLO Θ, y no por comodidad: el .pre **no lleva σ²** — comprobado sobre la
+ *  gramática (FILE_CONTRACT.md: la varianza de innovaciones sólo aparece en
+ *  ficheros fuf) y sobre un .pre real escrito por fue.  Así que las razones de
+ *  Σ siguen saliendo de los residuos de la regresión condicional, donde F1 las
+ *  puso.  Y el AR tampoco se siembra: los univariantes dan Φ*_k para k=1..p,
+ *  pero el modelo sólo tiene F_1..F_{p-1} y Φ̄_p = −F_{p-1}C̄⁻¹H̄ queda
+ *  determinada, así que con r ≥ 1 el sistema está sobredeterminado y no hay
+ *  forma consistente de repartirlo.  Θ es justo lo que hoy arranca en cero.  */
+static real **seed_tbar  = NULL;     /* [1..q][1..M] */
+static int    seed_loaded = 0;
+
+/*  De qué ruta viene la semilla, que decide en qué coordenadas está:
+ *
+ *    SEED_RESID (-seed)      los .pre son de los RESIDUOS de la regresión
+ *                            condicional.  e_t = Θ(L)A_t, así que la θ
+ *                            univariante estima Θ DIRECTAMENTE, en coordenadas
+ *                            de ∇Y.  No se transforma.
+ *    SEED_YBAR  (-seedybar)  los .pre son de los COMPONENTES DE Ȳ.  Lo que un
+ *                            univariante de Ȳ ve es Θ̄ = C̄ΘC̄⁻¹, así que hay
+ *                            que deshacerlo: Θ_k = C̄⁻¹Θ̄_kC̄.
+ *
+ *  Confundir las dos es un error silencioso: la misma θ metida en la coordenada
+ *  equivocada da otro modelo sin que nada proteste.  La ruta Ȳ está medida y es
+ *  PEOR (ver PLAN_BETA.md F2.7); se conserva para poder reproducir la medida.  */
+#define SEED_NONE  0
+#define SEED_RESID 1
+#define SEED_YBAR  2
+static int seed_route = SEED_NONE;
+
+/*  ybar_start_date — fecha de la primera observación de Ȳ.
+ *  En el layout de niveles datamat[t] corresponde a rawmat[t+1], porque la
+ *  primera observación se consume al diferenciar; con -differenced no hay
+ *  desfase.  ObsToDate viene del puente (src/fue_bridge.c).                  */
+static void ybar_start_date(int *year, int *sub)
+{
+    int first = global_levels ? 2 : 1;
+    ObsToDate(data_start_year, data_start_sub, first, data_freq, year, sub);
+}
+
+/*  ar_ols_seed — semilla del AR de un componente: OLS sobre sus propios
+ *  retardos.  No es una identificación (eso es ART); es un punto de partida
+ *  mejor que una constante, y fue lo reestimará de todas formas.             */
+static void ar_ols_seed(real *y, int n, int k, real *phi)
+{
+    int i, j, t;
+    real mean = 0.0;
+    for (t = 1; t <= n; t++) mean += y[t];
+    mean /= n;
+    for (i = 1; i <= k; i++) phi[i] = 0.0;
+    if (k < 1 || n <= k + 1) return;
+
+    real **XX = matrix(1, k, 1, k);
+    real  *Xy = vector(1, k);
+    int   *ind = ivector(1, k);
+    for (i = 1; i <= k; i++) {
+        for (j = 1; j <= k; j++) {
+            real ss = 0.0;
+            for (t = k + 1; t <= n; t++) ss += (y[t-i] - mean) * (y[t-j] - mean);
+            XX[i][j] = ss;
+        }
+        Xy[i] = 0.0;
+        for (t = k + 1; t <= n; t++) Xy[i] += (y[t-i] - mean) * (y[t] - mean);
+    }
+    /* Un componente degenerado (varianza nula) haría singular a XX; en ese caso
+       se deja el AR en cero, que es una semilla legítima.                     */
+    for (i = 1; i <= k; i++) if (XX[i][i] <= 1.0e-30) goto done;
+    ludcp(XX, k, ind);
+    lusol(XX, Xy, k, ind);
+    for (i = 1; i <= k; i++) phi[i] = Xy[i];
+done:
+    free_ivector(ind, 1, k);
+    free_vector(Xy, 1, k);
+    free_matrix(XX, 1, k, 1, k);
+}
+
+/*  ascii_name — nombre de serie apto para un .inp: ASCII, sin espacios.      */
+static void ascii_name(const char *src, const char *prefix, char *dst, int cap)
+{
+    int n = 0;
+    while (*prefix && n < cap - 1) dst[n++] = *prefix++;
+    while (src && *src && n < cap - 1) {
+        unsigned char c = (unsigned char) *src++;
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+            (c >= '0' && c <= '9') || c == '_') dst[n++] = (char) c;
+    }
+    if (n == 0) dst[n++] = 'y';
+    dst[n] = '\0';
+}
+
+/*  write_inp_series — escribe UN .inp para una serie ya estacionaria.
+ *
+ *  par = orden del factor AR (0 = sin AR), qma = orden del factor MA.  Se piden
+ *  como UN factor de orden k ("1 k") y no como k factores de primer orden
+ *  ("k 1 1 ..."), para que los coeficientes del .pre mapeen directamente sobre
+ *  phi_1..phi_k / theta_1..theta_k al expandirlos (FILE_CONTRACT.md 2.3).     */
+static int write_inp_series(const char *path, const char *name,
+                            real *col, int n, int year, int sub,
+                            int par, int qma, int mu_free, const char *what)
+{
+    int t, k;
+    real mean = 0.0, refactor;
+    real *phi = vector(1, (par > 0 ? par : 1));
+    FILE *f;
+
+    for (t = 1; t <= n; t++) mean += col[t];
+    mean /= n;
+
+    /* refactor: la regla medida en la suite (drtran-python pre.py:check_scale y
+       BRIDGE_DESIGN.md).  cdgrad usa un paso de diferencias finitas de ~6e-6
+       ABSOLUTO, asi que una serie diminuta da un gradiente que es ruido; la
+       banda comoda es |w| tipico entre 0.01 y 100 y el objetivo ~1.  Se mide
+       sobre la propia serie y se redondea a potencia de diez.  Que cada
+       componente lleve el suyo es inocuo porque lo unico que se siembra de
+       vuelta es Theta, que es invariante de escala.                           */
+    {
+        real med = 0.0;
+        int cnt = 0;
+        for (t = 1; t <= n; t++) { real a = fabs(col[t]);
+                                  if (a > 0.0) { med += a; cnt++; } }
+        med = (cnt > 0) ? med / cnt : 1.0;
+        refactor = (med > 0.0) ? pow(10.0, floor(log10(1.0 / med) + 0.5)) : 1.0;
+        if (refactor < 1.0e-6) refactor = 1.0e-6;
+        if (refactor > 1.0e+6) refactor = 1.0e+6;
+    }
+
+    f = fopen(path, "w");
+    if (!f) { fprintf(stderr, "ERROR: cannot write %s\n", path);
+              free_vector(phi, 1, (par > 0 ? par : 1)); return 1; }
+
+    ar_ols_seed(col, n, par, phi);
+
+    /* Cabecera libre: el parser salta lineas hasta el separador que dice
+       "frequency".  Libre, pero ASCII (BUG-0010 de fue).                      */
+    fprintf(f, "************************************************\n");
+    fprintf(f, "* Input file for program FUE                   *\n");
+    fprintf(f, "* written by drvec: %-26s *\n", what);
+    fprintf(f, "************************************************\n");
+    fprintf(f, "** Frequency of time series: either 1(A), 4(Q) or 12(M):\n");
+    fprintf(f, " %d\n", data_freq);
+    fprintf(f, "** Number of observations and starting date of time series:\n");
+    fprintf(f, " %d %d %d %s\n", n, sub, year, name);
+    fprintf(f, "** Number of deterministic variables"
+               " (including seasonal components):\n0\n");
+    fprintf(f, "** Number and orders of regular AR operators:\n");
+    if (par > 0) {
+        fprintf(f, "1 %d\n**\n", par);
+        for (k = 1; k <= par; k++) fprintf(f, "%.6f  1\n", phi[k] * 1.0);
+    } else fprintf(f, "0\n");
+    fprintf(f, "** Number and orders of annual AR operators:\n0\n");
+    fprintf(f, "** Number and orders of regular MA operators:\n");
+    if (qma > 0) {
+        fprintf(f, "1 %d\n**\n", qma);
+        for (k = 1; k <= qma; k++) fprintf(f, "%.6f  1\n", 0.1);
+    } else fprintf(f, "0\n");
+    fprintf(f, "** Number and orders of anual MA operators:\n0\n");
+    fprintf(f, "** Number and frequencies of regular AR(2) operators"
+               " with fixed frequency:\n0\n");
+    fprintf(f, "** Number and frequencies of regular MA(2) operators"
+               " with fixed frequency:\n0\n");
+    /* mu: la media de la variable YA diferenciada, que es lo que estas series
+       son.  Sembrarla mal cuesta caro -- BUG-0012 de fue: un mu_0 de 2.5 contra
+       una serie de media 17.06 deja a fue 6.86 de logL por debajo del optimo.
+       Va escalada por refactor, como el resto de la serie.
+       Y mu_free TIENE que seguir el caso determinista del modelo conjunto: si
+       aqui se estima una media que el modelo conjunto no puede representar, la
+       theta que devuelve fue esta condicionada a algo que no existe.  El
+       formato distingue las dos cosas por el FLAG, no por el valor: "valor 1"
+       es estimar y un unico "0" es que la media no forma parte del modelo.    */
+    fprintf(f, "** Mean parameter (mu):\n");
+    if (mu_free) fprintf(f, "%.6f  1\n", mean * refactor);
+    else         fprintf(f, "0\n");
+    /* Series ya estacionarias, y ya en logs si el .inp original lo estaba:
+       identidad y cero diferencias.                                          */
+    fprintf(f, "** Box-Cox lambda, regular differences and complete"
+               " annual differences:\n1.00 0 0\n");
+    /* Esta seccion la escriben SIEMPRE los dos escritores de fue (fue.c:3485 y
+       report.py:1203) y el parser de Python la lee SIEMPRE: con datos anuales,
+       un " 0" literal.  Omitirla desplaza todo lo que viene detras sin dar
+       error -- que es el mismo fallo que tenia el lector en C (ver F2.1).     */
+    fprintf(f, "** Individual factors of the annual difference"
+               " (from freq 0.0): \n");
+    if (data_freq > 1) {
+        for (k = 0; k <= data_freq / 2; k++) fprintf(f, " 0");
+        fprintf(f, "\n");
+    } else fprintf(f, " 0\n");
+    fprintf(f, "** ACF/PACF bands (0 Automatic) and reescaling factor: \n");
+    fprintf(f, " 0.00 %.2f\n", refactor);
+    fprintf(f, "** Time series (stochastic and non-standard deterministic"
+               " variables): \n");
+    /* Los datos van CRUDOS: refactor es una directiva y fue lo aplica el mismo
+       (w = refactor * BoxCox(z), BRIDGE_DESIGN.md).  Pre-multiplicarlos aqui lo
+       aplicaria dos veces.  mu si va escalada, porque es la media de w.       */
+    for (t = 1; t <= n; t++) fprintf(f, "%.10f\n", col[t]);
+    fclose(f);
+
+    if (!quiet_mode)
+        printf("  escrito %s  (%s, n=%d, ARMA(%d,%d), refactor=%.2f)\n",
+               path, name, n, par, qma, refactor);
+    free_vector(phi, 1, (par > 0 ? par : 1));
+    return 0;
+}
+
+/*  write_component_inps — un .inp por COMPONENTE DE Ybar.
+ *
+ *  El modelo que se pide es ARMA(p-1, q) con media: p es el orden AR sobre Ybar,
+ *  luego sobre nabla Y el orden efectivo es p-1 (seccion 2 del plan).
+ *
+ *  AVISO MEDIDO: sembrar Theta desde estos ficheros EMPEORA el ajuste (ver
+ *  PLAN_BETA.md F2.7).  El marginal univariante de un componente de un VARMA no
+ *  es Theta_ii: marginalizar mezcla AR y MA e infla los ordenes.  Este modo se
+ *  conserva porque es la unidad natural para que ART identifique el modelo
+ *  -- que es informacion sobre p y q --, no como fuente de semilla.  Para eso
+ *  esta -writeres.                                                            */
+static int write_component_inps(const char *prefix)
+{
+    int M = nser, r = global_r, s = M - r;
+    int p = global_p, q = global_q;
+    int par = (p > 1) ? p - 1 : 0;
+    int i, t, year, sub, nbad = 0;
+
+    real **B2   = matrix(1, s, 1, (r > 0 ? r : 1));
+    real **Ybar = matrix(1, nobs, 1, M);
+    real  *col  = vector(1, nobs);
+    prelim_b2(B2);
+    build_ybar(B2, Ybar);
+    ybar_start_date(&year, &sub);
+
+    for (i = 1; i <= M; i++) {
+        char name[64], path[1024], what[64];
+        for (t = 1; t <= nobs; t++) col[t] = Ybar[t][i];
+        if (i <= s) ascii_name(series_names[i], "d", name, sizeof name);
+        else        ascii_name(series_names[i], "W", name, sizeof name);
+        snprintf(path, sizeof path, "%s.%d.inp", prefix, i);
+        snprintf(what, sizeof what, "Ybar component %d", i);
+        /* Caso 1: E[nabla Y2] = 0 y E[W] = 0, luego ninguna media.
+           Caso 2: E[W] != 0 pero E[nabla Y2] = 0.
+           Caso 3: las dos libres.  (Mauricio 2006, Remark 6.)                */
+        {
+            int mu_free = (global_case == 3) ||
+                          (global_case == 2 && i > s);
+            nbad += write_inp_series(path, name, col, nobs, year, sub,
+                                     par, q, mu_free, what);
+        }
+    }
+
+    free_vector(col, 1, nobs);
+    free_matrix(Ybar, 1, nobs, 1, M);
+    free_matrix(B2, 1, s, 1, (r > 0 ? r : 1));
+    return nbad ? 1 : 0;
+}
+
+/*  write_resid_inps — un .inp por componente de los RESIDUOS de la regresion
+ *  condicional.  Esta es la ruta buena para sembrar Theta, y la razon es de
+ *  fondo: los residuos son e_t = Theta(L)A_t, cuyo marginal por componente es
+ *  MA(q) EXACTAMENTE, sin la inflacion de orden del marginal de Ybar.  Asi que
+ *  se pide ARMA(0, q) -- MA puro, sin AR, que ya se ha descontado.
+ *
+ *  Requiere que init_guess se haya ejecutado (es quien publica cond_resid).    */
+static int write_resid_inps(const char *prefix)
+{
+    int M = nser, q = global_q, p = global_p;
+    int i, t, year, sub, nbad = 0;
+    int T = cond_resid_T;
+    real *col;
+
+    if (!cond_resid || T < 4) {
+        fprintf(stderr, "ERROR: no hay residuos que escribir\n");
+        return 1;
+    }
+    /* Los residuos empiezan en t = p+1 sobre el indice de Ybar. */
+    {
+        int first = (global_levels ? 2 : 1) + p;
+        ObsToDate(data_start_year, data_start_sub, first, data_freq, &year, &sub);
+    }
+    col = vector(1, T);
+    for (i = 1; i <= M; i++) {
+        char name[64], path[1024], what[64];
+        for (t = 1; t <= T; t++) col[t] = cond_resid[t][i];
+        ascii_name(series_names[i], "e", name, sizeof name);
+        snprintf(path, sizeof path, "%s.%d.inp", prefix, i);
+        snprintf(what, sizeof what, "residual %d, MA(%d)", i, q);
+        /* Aqui la media SI va libre en todos los casos: no es un parametro del
+           modelo conjunto sino una molestia del residuo preliminar (la
+           regresion condicional no lleva constante), y lo unico que se quiere
+           de este ajuste es la estructura MA.                                */
+        nbad += write_inp_series(path, name, col, T, year, sub, 0, q, 1, what);
+    }
+    free_vector(col, 1, T);
+    return nbad ? 1 : 0;
+}
+
+/*  load_seed_pre — lee un .pre por componente y deja en seed_tbar la diagonal
+ *  de Θ̄_k.  Devuelve 0 si pudo leer los M ficheros.
+ *
+ *  Los factores del .pre se expanden con expand_ma_factors, que viene de
+ *  drtran y es el espejo en C del _unscramble del cast de fue: el .pre guarda
+ *  operadores FACTORIZADOS, y "2 1 1" (dos factores de primer orden) no es
+ *  "1 2" (uno de segundo).  Expandir con la rutina de la suite, en vez de
+ *  reimplementar la convolución, es lo que garantiza que drvec lea el mismo
+ *  modelo que fue estimó.                                                    */
+static int load_seed_pre(const char *prefix)
+{
+    int M = nser, q = global_q;
+    int i, k;
+
+    if (q < 1) {
+        fprintf(stderr, "WARNING: -seed no hace nada con q = 0 "
+                        "(sólo siembra el bloque MA)\n");
+        return 1;
+    }
+
+    seed_tbar = matrix(1, q, 1, M);
+    for (k = 1; k <= q; k++) for (i = 1; i <= M; i++) seed_tbar[k][i] = 0.0;
+
+    for (i = 1; i <= M; i++) {
+        char path[1024];
+        struct Tusmodel Tm;
+        struct Tseries  Ts;
+        real **DataMat = NULL;
+        int qpre;
+
+        /* Se prueba .pre y si no está, .inp.  Los dos son el MISMO formato y
+           distinta afirmación: el .pre dice «esto es un óptimo» y el .inp «esto
+           es una especificación» (FILE_CONTRACT.md §4).  Aceptar los dos es lo
+           que hacen el lector de fue y el load_pre de drtran, y es lo que
+           permite probar la siembra con un fichero retocado a mano sin tener
+           que fabricar un .pre, que sería afirmar un óptimo que no existe.    */
+        snprintf(path, sizeof path, "%s.%d.pre", prefix, i);
+        if (read_fue_pre(path, &Tm, &Ts, &DataMat) != 0) {
+            char alt[1024];
+            snprintf(alt, sizeof alt, "%s.%d.inp", prefix, i);
+            if (read_fue_pre(alt, &Tm, &Ts, &DataMat) != 0) {
+                fprintf(stderr, "ERROR: no se pudo leer %s ni %s\n", path, alt);
+                free_matrix(seed_tbar, 1, q, 1, M); seed_tbar = NULL;
+                return 1;
+            }
+            if (!quiet_mode)
+                printf("  (%s no está; se usa %s, que es una especificación"
+                       " y no un óptimo)\n", path, alt);
+        }
+        if (Ts.nobs != nobs)
+            fprintf(stderr, "WARNING: %s trae %d observaciones y Ȳ tiene %d\n",
+                    path, Ts.nobs, nobs);
+
+        /* Orden MA que trae el fichero, sumando los factores regulares. */
+        qpre = 0;
+        for (k = 1; k <= Tm.NumMa1; k++) qpre += Tm.q1[k];
+        if (qpre > 0) {
+            real *th = vector(1, qpre);
+            for (k = 1; k <= qpre; k++) th[k] = 0.0;
+            expand_ma_factors(&Tm, th, qpre);
+            for (k = 1; k <= q && k <= qpre; k++) seed_tbar[k][i] = th[k];
+            free_vector(th, 1, qpre);
+        }
+        if (qpre != q)
+            fprintf(stderr, "WARNING: %s trae MA de orden %d y el modelo pide %d;"
+                            " los retardos que falten se siembran en 0\n",
+                    path, qpre, q);
+    }
+    seed_loaded = 1;
+    return 0;
+}
+
+static void init_guess(real *x, int npar)
+{
+    int M = nser, r = global_r, s = M - r;
+    int p = global_p, q = global_q;
+    int i, j, k, t, idx = 1;
+    int nf = (p > 1) ? p - 1 : 0;
+
+    /* --- 0. Levels of Y_{2t}: built once by build_y2_levels() ---------- */
+    real **Y2lev = Y2_levels;
+
+    /* --- 1. Initial B₂ via static OLS with intercept ------------------- */
+    real **B2 = matrix(1, s, 1, (r > 0 ? r : 1));
+    prelim_b2(B2);
 
     /* --- 2. Build W_t = Y_{1t} + B₂'Y_{2t} and ∇Y_t = [∇Y_{1t};∇Y_{2t}] - */
     real **W  = matrix(1, nobs, 1, (r > 0 ? r : 1));
@@ -335,22 +762,35 @@ static void init_guess(real *x, int npar)
             for (i = 1; i <= M; i++)
                 F[k][eq][i] = Xty[r + (k-1)*M + i];                /* F_k */
     }
-    /* Residual covariance Σ from the conditional regression */
-    real **Sig = matrix(1, M, 1, M);
-    for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) {
-        real ss = 0.0; int cnt = 0;
-        for (t = 1; t <= T; t++) {
-            real ei = Ydep[t][i], ej = Ydep[t][j];
+    /* Residuos de la regresión condicional, y de ahí Σ.
+       Antes se recalculaba e_t dentro del doble bucle de (i,j), lo que repetía
+       el mismo cálculo M² veces; ahora se calcula UNA vez, en el mismo orden de
+       restas, así que el resultado es idéntico bit a bit.  Se guardan además en
+       cond_resid porque son lo que necesita -writeres: e_t = Θ(L)A_t, luego el
+       marginal de cada componente es MA(q) EXACTAMENTE — sin la inflación de
+       orden que sufre el marginal de un componente de Ȳ.                      */
+    real **E = matrix(1, T, 1, M);
+    for (t = 1; t <= T; t++)
+        for (i = 1; i <= M; i++) {
+            real ei = Ydep[t][i];
             for (int c = 1; c <= nreg; c++) {
                 real bi = (c <= r) ? -Lambda[i][c] : F[(c-r-1)/M+1][i][(c-r-1)%M+1];
-                real bj = (c <= r) ? -Lambda[j][c] : F[(c-r-1)/M+1][j][(c-r-1)%M+1];
                 ei -= bi * X[t][c];
-                ej -= bj * X[t][c];
             }
-            ss += ei*ej; cnt++;
+            E[t][i] = ei;
         }
-        Sig[i][j] = (cnt > 0) ? ss/cnt : 1.0;
+    real **Sig = matrix(1, M, 1, M);
+    for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) {
+        real ss = 0.0;
+        for (t = 1; t <= T; t++) ss += E[t][i] * E[t][j];
+        Sig[i][j] = (T > 0) ? ss / T : 1.0;
     }
+    /* Publicar los residuos para -writeres.  Los posee este módulo. */
+    if (cond_resid) free_matrix(cond_resid, 1, cond_resid_T, 1, cond_resid_M);
+    cond_resid = matrix(1, T, 1, M);
+    cond_resid_T = T; cond_resid_M = M;
+    for (t = 1; t <= T; t++) for (i = 1; i <= M; i++) cond_resid[t][i] = E[t][i];
+    free_matrix(E, 1, T, 1, M);
 
     /* --- 5. Write x[] in the canonical VEC order ------------------------- */
     if (global_case == 2) { for (j = 1; j <= r; j++) x[idx++] = EW[j]; }
@@ -363,9 +803,68 @@ static void init_guess(real *x, int npar)
         if (global_diag_ar) { for (i = 1; i <= M; i++) x[idx++] = F[k][i][i]; }
         else { for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) x[idx++] = F[k][i][j]; }
     }
-    for (k = 1; k <= q; k++) {
-        if (global_diag_ma) { for (i = 1; i <= M; i++) x[idx++] = 0.0; }
-        else { for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) x[idx++] = 0.0; }
+    /* Bloque MA.  Sin -seed arranca en CERO EXACTO, que es el único hueco real
+       del arranque en frío (todo lo demás sale de datos: B₂ por OLS, Λ y F por
+       la regresión condicional, Σ de sus residuos).
+       Con -seed se usa lo estimado por fue sobre cada componente de Ȳ, y hay
+       que devolverlo a las coordenadas de drvec: lo que un univariante de Ȳ ve
+       es Θ̄ = C̄ΘC̄⁻¹ —así lo monta vec_shootx en armax->theta—, luego
+                              Θ_k = C̄⁻¹ Θ̄_k C̄
+       con Θ̄_k diagonal.  Sembrar los θ del .pre directamente en Θ funciona
+       sólo si C̄ = I (r = 0) y es un error silencioso en cuanto r ≥ 1.        */
+    if (seed_loaded && q > 0 && seed_route == SEED_RESID) {
+        /* Ruta de residuos: la θ leída ES la diagonal de Θ, sin transformar. */
+        for (k = 1; k <= q; k++) {
+            if (global_diag_ma) {
+                for (i = 1; i <= M; i++) x[idx++] = seed_tbar[k][i];
+            } else {
+                for (i = 1; i <= M; i++)
+                    for (j = 1; j <= M; j++)
+                        x[idx++] = (i == j) ? seed_tbar[k][i] : 0.0;
+            }
+        }
+    } else if (seed_loaded && q > 0 && seed_route == SEED_YBAR) {
+        real **Cbar = matrix(1, M, 1, M);
+        real **Cinv = matrix(1, M, 1, M);
+        real **T1   = matrix(1, M, 1, M);
+        real **Th   = matrix(1, M, 1, M);
+        for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) { Cbar[i][j] = 0.0;
+                                                            Cinv[i][j] = 0.0; }
+        for (i = 1; i <= s; i++) Cbar[i][r + i] = 1.0;
+        for (j = 1; j <= r; j++) Cbar[s + j][j] = 1.0;
+        for (j = 1; j <= r; j++) for (i = 1; i <= s; i++) Cbar[s + j][r + i] = B2[i][j];
+        for (i = 1; i <= r; i++) for (j = 1; j <= s; j++) Cinv[i][j] = -B2[j][i];
+        for (i = 1; i <= r; i++) Cinv[i][s + i] = 1.0;
+        for (i = 1; i <= s; i++) Cinv[r + i][i] = 1.0;
+
+        for (k = 1; k <= q; k++) {
+            for (i = 1; i <= M; i++) for (j = 1; j <= M; j++)
+                T1[i][j] = (i == j) ? seed_tbar[k][i] : 0.0;
+            /* Th = Cinv * diag(theta_bar_k) * Cbar */
+            {
+                real **T2 = matrix(1, M, 1, M);
+                matrix_multiply(Cinv, T1, T2, M, M, M);
+                matrix_multiply(T2, Cbar, Th, M, M, M);
+                free_matrix(T2, 1, M, 1, M);
+            }
+            if (global_diag_ma) {
+                /* Con -diagma sólo la diagonal de Θ_k es parámetro, y
+                   C̄⁻¹diag(·)C̄ no es diagonal en general: se toma su diagonal,
+                   que es una aproximación y no la vuelta exacta.              */
+                for (i = 1; i <= M; i++) x[idx++] = Th[i][i];
+            } else {
+                for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) x[idx++] = Th[i][j];
+            }
+        }
+        free_matrix(Th,   1, M, 1, M);
+        free_matrix(T1,   1, M, 1, M);
+        free_matrix(Cinv, 1, M, 1, M);
+        free_matrix(Cbar, 1, M, 1, M);
+    } else {
+        for (k = 1; k <= q; k++) {
+            if (global_diag_ma) { for (i = 1; i <= M; i++) x[idx++] = 0.0; }
+            else { for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) x[idx++] = 0.0; }
+        }
     }
     /* Covariance block.  The concentrated objective is scale-invariant in qq
        (f1 -> f1/c, f2 -> c^m f2), so only the RATIOS are identified and the
@@ -794,6 +1293,18 @@ int main(int argc, char *argv[])
         else if (strcmp(argv[i], "-lrtest") == 0)  global_lrtest = 1;
         else if (strcmp(argv[i], "-levels") == 0)  global_levels = 1;  /* default */
         else if (strcmp(argv[i], "-differenced") == 0) global_levels = 0;
+        else if (strcmp(argv[i], "-writeinp") == 0 && i+1 < argc) {
+            global_writeinp = 1; inp_prefix = argv[++i];
+        }
+        else if (strcmp(argv[i], "-writeres") == 0 && i+1 < argc) {
+            global_writeres = 1; inp_prefix = argv[++i];
+        }
+        else if (strcmp(argv[i], "-seed") == 0 && i+1 < argc) {
+            global_seed = 1; seed_route = SEED_RESID; pre_prefix = argv[++i];
+        }
+        else if (strcmp(argv[i], "-seedybar") == 0 && i+1 < argc) {
+            global_seed = 1; seed_route = SEED_YBAR;  pre_prefix = argv[++i];
+        }
         else if (strcmp(argv[i], "-fixb2") == 0) {
             global_fixb2 = 1;
             /* An optional numeric argument pins B2 at a value chosen a priori,
@@ -912,6 +1423,29 @@ int main(int argc, char *argv[])
 
     printf("Series: %d, Obs: %d, Rank: r=%d  (%s)\n", nser, nobs, global_r,
            global_levels ? "levels" : "legacy pre-differenced layout");
+
+    /* -writeinp: emitir un .inp por componente de Ȳ y parar.  Es un modo, no un
+       añadido a la estimación: el siguiente paso de la escalera lo da fue.     */
+    if (global_writeinp) {
+        int bad;
+        printf("Escribiendo un .inp por componente de Ȳ (para ART/fue):\n");
+        bad = write_component_inps(inp_prefix);
+        if (bad) { fprintf(stderr, "ERROR: no se pudieron escribir todos\n"); exit(1); }
+        printf("Ahora: para cada fichero, 'python -m fue %s.<i> eml' (o ART),\n"
+               "y despues drvec ... -seed %s\n", inp_prefix, inp_prefix);
+        exit(0);
+    }
+
+    /* -seed: leer los .pre y sembrar el bloque MA (lo unico que el .pre puede
+       sembrar; ver load_seed_pre).                                            */
+    if (global_seed) {
+        if (load_seed_pre(pre_prefix) != 0)
+            fprintf(stderr, "WARNING: sin semilla; se arranca en frio\n");
+        else
+            printf("Semilla MA leida de %s.<1..%d>.pre (ruta %s)\n",
+                   pre_prefix, nser,
+                   seed_route == SEED_RESID ? "residuos" : "componentes de Ybar");
+    }
 
     /* [2] Open output ------------------------------------------------------ */
     outputv = fopen(outputf, "w");
@@ -1049,6 +1583,17 @@ int main(int argc, char *argv[])
     varma1.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
 
     init_guess(x, npar);
+
+    /* -writeres: los residuos de la regresión condicional, que es lo que
+       init_guess acaba de publicar.  Es un modo y termina aquí.                */
+    if (global_writeres) {
+        printf("Escribiendo un .inp por residuo de la regresión condicional:\n");
+        if (write_resid_inps(inp_prefix) != 0) exit(1);
+        printf("Ahora: 'python -m fue %s.<i> eml' y después drvec ... -seed %s\n",
+               inp_prefix, inp_prefix);
+        fclose(outputv);
+        return 0;
+    }
 
     int ifault;
     vec_shootx(x, &varma1, &ifault, 1, 0);  /* allocate */

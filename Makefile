@@ -31,7 +31,11 @@ ENGINE_SRC = $(SRC_DIR)/elfvarma.c \
              $(SRC_DIR)/qnewtopt.c \
              $(SRC_DIR)/nlatools.c
 
-ALL_SRC = $(DRVEC_SRC) $(ENGINE_SRC)
+# Puente con la suite (fue/.pre).  Copiado de drtran; ver docs/PLAN_BETA.md F2.1
+SUITE_SRC  = $(SRC_DIR)/fue_pre_reader.c \
+             $(SRC_DIR)/fue_bridge.c
+
+ALL_SRC = $(DRVEC_SRC) $(ENGINE_SRC) $(SUITE_SRC)
 OBJS    = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(ALL_SRC))
 
 EXEC = $(BIN_DIR)/drvec
@@ -46,6 +50,15 @@ $(BIN_DIR):
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
+
+# El lector de .pre es una COPIA de drtran y se mantiene con el minimo delta
+# posible (ver docs/PLAN_BETA.md F2.1), asi que sus avisos -- fgets/fscanf sin
+# comprobar retorno, indentacion -- son suyos de origen y NO se corrigen aqui:
+# tocarlos ampliaria la diferencia con el original y haria mas dificil auditar
+# la deriva.  Se silencian solo para este objeto, para que el resto del build
+# siga siendo legible.
+$(BUILD_DIR)/fue_pre_reader.o: $(SRC_DIR)/fue_pre_reader.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -Wno-unused-result -Wno-misleading-indentation -c $< -o $@
 
 $(EXEC): $(OBJS) | $(BIN_DIR)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
@@ -69,5 +82,11 @@ $(BUILD_DIR)/drvec.o:     $(INCLUDE_DIR)/main.h
 $(BUILD_DIR)/elfvarma.o:  $(INCLUDE_DIR)/main.h
 $(BUILD_DIR)/drvmlest.o:  $(INCLUDE_DIR)/main.h
 $(BUILD_DIR)/nlatools.o:  $(INCLUDE_DIR)/main.h
+$(BUILD_DIR)/drvec.o:         $(INCLUDE_DIR)/fue_pre_reader.h \
+                              $(INCLUDE_DIR)/fue_bridge.h
+$(BUILD_DIR)/fue_pre_reader.o: $(INCLUDE_DIR)/main.h \
+                               $(INCLUDE_DIR)/fue_pre_reader.h
+$(BUILD_DIR)/fue_bridge.o:    $(INCLUDE_DIR)/main.h \
+                              $(INCLUDE_DIR)/fue_bridge.h
 
 .PHONY: all clean distclean rebuild test test-verbose

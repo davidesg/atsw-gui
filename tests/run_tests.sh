@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/run_tests.sh — regression and invariant suite for drvec.
 #
-# Four kinds of check, in increasing order of value:
+# Five kinds of check, in increasing order of value:
 #
 #   1. STRUCTURAL   the parameter walk consumes exactly npar; no out-of-bounds
 #                   read in any configuration.  Catches §4.1-type bugs.
@@ -21,6 +21,14 @@
 #                   A baseline is only valid for the exact input it was measured
 #                   on: the UK fixture is written with %.10f here, and a value
 #                   measured on a %.8f copy differs in the 6th decimal of logL.
+#   5. THE BRIDGE   the .inp drvec writes for fue must be readable BY fue, and
+#                   the .pre it reads back must land in the right place.  The
+#                   format has no validation, so what is checked is what bit
+#                   during F2: pure ASCII, and the annual-difference section
+#                   present.  Plus the identity that a Theta = 0 seed must
+#                   reproduce the cold start exactly, which is what says the
+#                   seeding plumbing is right regardless of whether seeding
+#                   helps -- it does not; see docs/PLAN_BETA.md F2.7.
 #
 # Usage:  tests/run_tests.sh [-v]        (or: make test)
 #         DRVEC=path/to/mutant tests/run_tests.sh    (to check the suite bites)
@@ -34,15 +42,21 @@
 #   ---------------------------------------------------------------------
 #   sign of Lambda in PhiBar_1 (transformation core)          14
 #   the output ignores -diagma (the §4.1 bug)                  4
+#   the .inp writer drops the annual-difference section        2
 #   B2 read transposed in vec_shootx (the ESTIMATOR)           1
 #   the Sigma positive-definiteness check removed              0   <-- not caught
 #   B2 fill transposed in the printer                          0   <-- not caught
+#   the .pre reader's annual bug restored (F2.1)               0   <-- not caught
 #
-# The two zeros are real gaps, stated so a green suite is not over-read:
+# The three zeros are real gaps, stated so a green suite is not over-read:
 #   - the PD check is INSURANCE: no case here drives Sigma non-PD, so nothing
 #     exercises it.  It guards a region the optimiser does not currently reach.
 #   - a printer-only transposition is invisible because, since the §4.2 fix, both
 #     printers read one shared copy (see test 2a).
+#   - the reader's annual bug corrupts the SERIES and the refactor, and the
+#     seeding reads neither: it only needs the MA block, which sits earlier in
+#     the file.  The fix is still right -- silently misreading a file is not
+#     acceptable -- but drvec's own use does not exercise it.
 
 set -u
 cd "$(dirname "$0")/.." || exit 1
@@ -215,10 +229,19 @@ echo
 
 # ================================================================== 3 THE GATE ==
 echo "[3] the diagonal gate: r=0 + diagonal => logL factorises"
-# References: exact-ML ARMA(1,1) fits, no mean, on the two differenced log
+# References: exact-ML ARMA(1,1) fits, NO MEAN, on the two differenced log
 # series, measured 2026-08-17 with drvarma's Python port (estimate_w_py, the
 # faithful mirror of the C engine).  With r=0 drvec's effective AR order on
 # nabla Y is p-1, so p=2 here corresponds to ARMA(1,1) univariately.
+#
+# SECOND, INDEPENDENT SOURCE (2026-08-18): fue 1.13 (python) reproduces both,
+# fitting the same two series with mu FIXED AT ZERO -- -20.057954 and -14.569865,
+# i.e. within 6e-5 of the constants below.  Two programs from different lineages
+# now agree on them, which is what F0's contingency asked for.
+#   The "no mean" is not a detail: with mu free fue reaches -19.908084 on the
+# muskrat series, 0.15 BETTER, and reading that as a discrepancy is a mistake
+# that was actually made during F2.  These constants are the no-mean fits
+# because the drvec run they are compared against is -case 1, which HAS no mean.
 GATE_U1=-20.0580        # nabla log muskrat
 GATE_U2=-14.5698        # nabla log mink
 GATE_SUM=$(awk -v a=$GATE_U1 -v b=$GATE_U2 'BEGIN{printf "%.4f", a+b}')
@@ -257,6 +280,70 @@ golden  -8.4835302747 "$MM" 2 1 1 -case 2 -fixb2 0
 golden 570.2297062756 "$UK" 2 0 2 -case 2
 golden 828.8447477597 "$DK" 2 0 2 -case 2   # s=3, r=2: guards the B2 read order
 golden -318.8131393592 data/AL.inp 2 0 1 -case 2 -differenced
+echo
+
+# ============================================== 5 THE SUITE BRIDGE (F2) ==
+echo "[5] the suite bridge: the .inp drvec writes, and the .pre it reads"
+# What these guard are the two traps that actually bit during F2, both of them
+# silent: a file that is not pure ASCII (fue's Python parser cannot read Latin-1,
+# BUG-0010, and this engine's sources ARE Latin-1), and a missing annual-
+# difference section (both fue writers always emit it, and leaving it out shifts
+# every section after it with no error).  See docs/PLAN_BETA.md F2.
+
+wrote_ok() {   # <label> <mode-flag> <prefix> <src> <args...>
+    local label=$1 flag=$2 pre=$3 src=$4; shift 4
+    rm -f "$pre".*.inp
+    run "$src" "$@" "$flag" "$pre"
+    local n bad=""
+    n=$(ls "$pre".*.inp 2>/dev/null | wc -l)
+    [ "$n" -eq 2 ] || bad="wrote $n files, expected 2"
+    for f in "$pre".*.inp; do
+        [ -f "$f" ] || continue
+        if [ "$(LC_ALL=C grep -c '[^ -~]' "$f")" -ne 0 ]; then
+            bad="$f is not pure ASCII"; break
+        fi
+        grep -q 'Individual factors of the annual difference' "$f" \
+            || { bad="$f lacks the annual-difference section"; break; }
+        local nsec
+        nsec=$(grep -c '^\*\*' "$f")
+        [ "$nsec" -ge 12 ] || { bad="$f has only $nsec ** sections"; break; }
+    done
+    if [ -n "$bad" ]; then bad "$label" "$bad"; else ok "$label"; fi
+}
+wrote_ok "-writeres writes 2 usable .inp" -writeres "$TMP/wr" "$MM" 2 1 1 -case 2
+wrote_ok "-writeinp writes 2 usable .inp" -writeinp "$TMP/wy" "$MM" 2 1 1 -case 2
+
+# 5c. THE IDENTITY: a seed with Theta = 0 must reproduce the cold start EXACTLY.
+#     This is what says the seeding plumbing is right -- reader, factor
+#     expansion, coordinate route and parameter layout -- independently of
+#     whether seeding helps.  The zeroed file is named .inp on purpose: it is a
+#     specification, not an optimum, so calling it .pre would be a false claim.
+run "$MM" 2 1 1 -case 2
+cold=$(logelf_of "$TMP/case")
+for i in 1 2; do
+    awk -v OFS='' '
+        /^\*\* Number and orders of regular MA/{print; mark=NR+3; next}
+        mark && NR==mark{print "0.000000  1"; next}
+        {print}' "tests/fixtures/mmres.$i.pre" > "$TMP/zero.$i.inp"
+done
+run "$MM" 2 1 1 -case 2 -seed "$TMP/zero"
+zseed=$(logelf_of "$TMP/case")
+if [ -n "$cold" ] && [ "$cold" = "$zseed" ]; then
+    ok "a Theta = 0 seed reproduces the cold start exactly ($cold)"
+else
+    bad "zero-seed identity" "cold=$cold  seeded=$zseed  (must be identical)"
+fi
+
+# 5d. Regression baseline for the seeded fit, on the committed .pre fixtures.
+#     Those were written by fue 1.13 (python) from drvec's own -writeres output
+#     for mink-muskrat p=2 q=1 r=1 -case 2, so the optimality claim is fue's.
+#     NOTE this value is WORSE than the cold start: that is the measured F2
+#     result, not a defect.  See docs/PLAN_BETA.md F2.7.
+run "$MM" 2 1 1 -case 2 -seed tests/fixtures/mmres
+got=$(logelf_of "$TMP/case")
+if [ -z "$got" ]; then bad "seeded fit from fixtures" "no logelf"
+elif near "$got" 6.4460747665; then ok "seeded from .pre fixtures = $got"
+else bad "seeded fit from fixtures" "expected 6.4460747665, got $got"; fi
 echo
 
 # ===================================================================== summary =

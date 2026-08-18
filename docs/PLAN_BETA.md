@@ -212,8 +212,9 @@ Cada fase declara objetivo, criterio de salida **medible**, y contingencia.
 **Objetivo.** Convertir en script lo que hoy se comprueba a mano.
 
 **Lo entregado:** `tests/run_tests.sh` (y `make test`), 37 comprobaciones en
-cuatro bloques — estructurales (el recorrido consume exactamente `npar` en 19
-configuraciones), invariantes sin referencia externa (monotonía de logL en r por
+cuatro bloques — estructurales (el recorrido consume exactamente `npar` en **21**
+configuraciones; esta cifra decía 19, y contadas al ejecutar el script de F0 son
+21), invariantes sin referencia externa (monotonía de logL en r por
 anidamiento; el ajuste restringido no puede batir al libre), la **puerta
 diagonal** de §2, y valores de oro etiquetados explícitamente como *líneas base
 de regresión, no respuestas correctas*.
@@ -359,38 +360,272 @@ razón de que `drvec` esté hoy fuera de la arquitectura de la suite.
 El diseño de la suite es un óptimo binivel con los ficheros como interfaz
 (`drtran-python/docs/LADDER_AS_OPTIMISATION.md`): **ART** identifica y emite
 `.inp`; **fue** estima y emite `.pre`, que es *«un óptimo en forma
-re-ejecutable»*; el consumidor lee los `.pre` y **sólo ensambla**. `drtran` lo
-hace con `read_fue_pre` y `x0_from_pre`.
+re-ejecutable»*; el consumidor lee los `.pre` y **sólo ensambla**.
 
-**Cadena para `drvec`:**
+#### F2.0 — Lo estudiado, y dónde está *(estudiado el 2026-08-17)*
+
+Esta fase se abrió derivando cosas que ya estaban escritas en la suite. Queda
+aquí para no repetirlo. Hay **dos implementaciones de cada pieza**, `fue` y
+`drtran` en C y en Python; **para `drvec`, que es C puro, la referencia es la de
+C.**
+
+| fuente | qué aporta |
+|---|---|
+| `atws/fue/fue/docs/FILE_CONTRACT.md` | la **gramática autoritativa** de `.inp`/`.out`/`.pre`, campo a campo. Declara que ante una discrepancia manda el parser (`fue/src/fue/inp.py`, que reproduce el orden de lectura de `fue-1.13.1/src/fue.c` §3.0–3.7) |
+| `atws/fue/fue/docs/CAST.md` | qué es el cast, su contrato de empaquetado, sus modos de fallo y el problema de estado global (§9) |
+| `drtran/BRIDGE_DESIGN.md` | **el precedente directo en C**: `fue` → `drvarma` por lectura de `.pre`, con su criterio de validación y la nota de escala numérica |
+| `drtran/src/fue_pre_reader.c` | el lector de `.pre` en C, ya factorizado (601 líneas). En `fue` el lector vive **dentro** de `src/fue.c` y no es enlazable |
+| `drtran-python/src/drtran/pre.py` | qué campos hace falta validar, y la regla de escala medida (`check_scale`) |
+
+#### F2.1 — Procedencia del código traído *(verificado, no supuesto)*
+
+Se **reutiliza** el lector de `drtran`, no se escribe uno nuevo:
+
+- `src/fue_pre_reader.c` y `include/fue_pre_reader.h`, copiados de
+  `drtran/src/` y `drtran/include/`. **Un único delta**: comentar
+  `#include "drtran.h"`, que no se necesita — comprobado que el lector sólo usa
+  `Tusmodel`, `Tseries` y los allocators de `nlatools`, cuyos nombres coinciden
+  en los dos proyectos. `diff` contra el original cabe en tres líneas.
+- `struct Tusmodel` copiada **byte a byte** de `drtran/include/main.h` a
+  `include/main.h`.
+- `struct Tseries` gana `numbering` y `refactor`, los dos campos que `drtran`
+  añadió para FUE. **Cambio inerte**: `Tseries` no se referencia en ningún `.c`
+  de `drvec` (0 apariciones en los cinco), así que el motor no se entera.
+- `Easter()` **ya estaba** en `src/nlatools.c:679`; sólo faltaba el prototipo en
+  `main.h`. No se ha traído código de más.
+- Comprobado que compila sin errores ni declaraciones implícitas, y que sus
+  únicos símbolos externos son `DateToObs`, `ObsToDate`, `Easter`, `vector`,
+  `ivector`, `matrix` y `stderr` — todos del motor de `drvec`.
+
+**Riesgo asumido, dicho en voz alta:** es una copia, así que puede derivar del
+original. La alternativa —enlazar contra `drtran`— acoplaría dos programas que
+son independientes por diseño. El original queda citado arriba; si el `.pre`
+cambia de formato, los dos ficheros hay que revisarlos a mano.
+
+#### F2.2 — El contrato de ficheros, y las seis cosas que atan a `drvec`
+
+Todo esto sale de `FILE_CONTRACT.md` y **no es negociable**, porque el formato no
+avisa cuando se incumple:
+
+1. **El parser es posicional y no valida nada.** La regla es de Treadway (manual
+   de DRVUS, 2001): el programa *«no interpreta los comentarios […] solamente lee
+   los números que espera encontrar en la posición correcta»*. Las líneas que
+   empiezan por `**` son separadores: su texto es indiferente, **su presencia no**.
+   Reordenar, quitar un separador o meter una línea en blanco no da error: da otro
+   modelo, o un cuelgue. Corolario: **un `.inp` que parsea no es un `.inp`
+   correcto**, y por eso ninguno se escribe a mano — lo escribe un programa (§5).
+2. **`drvec` escribe `.inp`, nunca `.pre`.** El `.pre` es una *afirmación de
+   optimalidad* y sólo la puede hacer quien estimó; el fichero no lleva marca de
+   autor, así que uno fabricado es indistinguible aguas abajo de uno legítimo.
+   `drtran.write_inp` existe justamente por esto. El invariante del `.pre` es
+   comprobable: se re-ejecuta `fue` sobre él y los números no se mueven.
+3. **ASCII puro al escribir.** BUG-0010 de `fue`, abierto: los ficheros escritos
+   por el C en un sistema Latin-1 rompen el parser de Python con
+   `UnicodeDecodeError`. Los fuentes del motor de `drvec` **son Latin-1**, así que
+   esto es una trampa preparada: el escritor de `.inp` no debe emitir un solo byte
+   fuera de ASCII, ni en los comentarios ni en los nombres de serie.
+4. **Cabecera anual.** Con `freq = 1` el parser lee `nobs, <ignorado>, begyear,
+   nombre` y fuerza `begtime = 1`; el año es el último token numérico antes del
+   nombre. Nuestro banco es anual (`mink_muskrat` empieza en 1851), así que es
+   exactamente el caso frágil — y el que tuvo el BUG-0018.
+5. **Las seis secciones ARMA van siempre**, aunque el recuento sea `0`; no se
+   pueden omitir. Y la notación es **factorizada**: `2 1 1` son *dos* factores de
+   primer orden `(1−φ₁B)(1−φ₂B)`, mientras `1 2` es *un* AR(2). Para que los
+   coeficientes del `.pre` mapeen directamente sobre φ₁…φ_k hay que pedir
+   `1 k` — un solo factor de orden k. Cada coeficiente es un par `valor flag`,
+   con `flag = 1` estimar y `0` fijar.
+6. **μ es la media de la variable ya diferenciada**, y la semilla importa: en
+   BUG-0012 un μ₀ = 2.5 contra una serie de media 17.06 deja a `fue` parado en la
+   frontera del AR, **6.86 de log-verosimilitud** por debajo del óptimo publicado,
+   mientras que desde cualquier valor entre 6 y 20 llega en siete iteraciones. La
+   lección es general y aplica a la nuestra: sembrar μ de la media de la
+   diferenciada.
+
+#### F2.3 — El cast: qué aplica a `drvec` y qué no
+
+De `CAST.md`:
+
+- **El cast es un puntero a función que se pasa a `est()`**, que no sabe qué es un
+  modelo: *«the cast is replaceable by construction»*. Esto reencuadra la frase
+  con la que abrí esta fase: `vec_shootx` **ya es** un cast de esa familia, con la
+  misma firma. `drvec` no está fuera de la arquitectura de la suite; está dentro y
+  lo que le falta es el otro extremo, la siembra.
+- **El orden de empaquetado de `x[]` es un contrato público que no está escrito en
+  ningún sitio ejecutable**: si cambiara, nada protestaría y cada consumidor
+  calcularía otro modelo en silencio. La pregunta abierta nº 5 de `CAST.md` es si
+  ese orden debería ser comprobable por máquina — y **`drvec` ya lo comprueba**
+  desde F0 (el bloque estructural: el recorrido consume exactamente `npar` en 24
+  configuraciones). Eso es algo que `drvec` puede devolverle a la suite.
+- **Estado global, §9:** el cast lee modelo, serie y datos de globales de módulo,
+  así que no es reentrante y **no pueden estar dos vivos a la vez**. Confirma R3 y
+  fija el diseño: **no se llama al cast de `fue` en ejecución**; se leen sólo los
+  números del `.pre`. Es lo que hace el C de `drtran`.
+- **`elf` concentra la escala**: quien lea `qq` como si fuera Σ obtiene la forma
+  bien y la magnitud mal. Es exactamente lo que `drvec` estableció por su cuenta
+  en §3.6 y F1, y `BRIDGE_DESIGN.md` §10 llegó al mismo `Q[1,1] = 1`.
+  **Convergencia independiente de tres programas sobre la misma decisión.**
+- El cast de `fue` aplica el **giro de invertibilidad** de un MA(1) con |θ| > 1
+  (θ → 1/θ), lo que deja al optimizador sin restringir a cambio de un pliegue en
+  la superficie (mecanismo del BUG-0005, óptimo espurio). `drvec` no hace nada
+  parecido, y por tanto un θ del `.pre` viene ya del lado invertible.
+
+#### F2.4 — La escala: el riesgo numérico concreto
+
+`BRIDGE_DESIGN.md` lo mide y `pre.py:check_scale` lo convierte en regla:
+
+- `qnewtopt/cdgrad` usa un paso de diferencias finitas
+  `eta^(1/3)·max(|x|, 1.0)` ≈ **6·10⁻⁶ absoluto**. Con varianzas de orden 10⁻⁵ el
+  paso es mayor que el propio parámetro, lo empuja a negativo, el cast devuelve
+  `ifault = 1` y el gradiente que sale es basura.
+- Medido en la suite: la misma serie con Δlog ~0.002 **no converge en 2 minutos**
+  y con Δlog ~0.2 converge en 23 iteraciones y un segundo. Banda cómoda: |w|
+  típico entre 0.01 y 100, objetivo ~1. El `refactor` de `fue` (consejo de
+  Treadway, mayo de 2001, sobre la norma del gradiente) es la palanca, y **hay que
+  multiplicar, no dividir** — con la salvedad que `check_scale` añade: subir la
+  escala de una serie ya grande la empeora.
+- **Por qué `drvec` está protegido en su propio Σ:** la escala está concentrada en
+  `sigma2` y el bloque de covarianza lleva razones O(1) con var₁ = 1. Eso es lo
+  que dejó F1, y explica de paso por qué `exp()` sobraba.
+- **Pero los `.inp` que `drvec` escriba sí necesitan `refactor`**, porque ahí es
+  `fue` quien estima varianzas directamente. Para `mink_muskrat` el ∇log tiene
+  |w| mediano ~0.2, que da `refactor = 10` por la regla de `check_scale`.
+
+#### F2.5 — La cadena, y el álgebra que hay que respetar
 
 ```
 B₂ preliminar (OLS estático, ya está en init_guess)
    -> construir Ȳ = (∇Y₂ ; W)          <- observable una vez B₂ está fijado
-      -> ART identifica cada componente; fue estima  ->  un .pre por componente
-         -> drvec lee los .pre y arma la semilla:
-              Θ, F propias y razones de Σ   <- de los .pre
-              Λ                             <- de la regresión condicional
-              B₂                            <- OLS, o congelado con -fixb2
+      -> drvec escribe un .inp por componente   (ASCII, refactor, ARMA(p−1,q))
+         -> ART identifica / fue estima          ->  un .pre por componente
+            -> drvec lee los .pre y arma la semilla:
+                 Θ                             <- de los .pre
+                 razones de Σ, Λ, F            <- de la regresión condicional
+                 B₂                            <- OLS, o congelado con -fixb2
 ```
+
+*(Este diagrama decía «Θ, F propias y razones de Σ ← de los .pre». **Las dos
+últimas no son posibles**, y saberlo salió de leer el formato y el álgebra, no de
+probar: el `.pre` **no lleva σ²** —la varianza de innovaciones sólo aparece en
+ficheros `fuf`— y el AR está **sobredeterminado**, porque los univariantes dan
+Φ*_k para k = 1..p mientras el modelo sólo tiene F_1..F_{p−1} y Φ̄_p = −F_{p−1}C̄⁻¹H̄
+queda determinada. Así que lo único que un `.pre` puede sembrar es Θ — que es,
+justamente, lo único que arrancaba en cero.)*
+
+Tres cosas que hay que hacer bien y que ya están resueltas sobre el papel:
+
+- **Coordenadas.** El MA que ve un univariante de Ȳ es Θ̄(L) = C̄Θ(L)C̄⁻¹, no Θ.
+  Con Θ̄ⱼ diagonal salida de los univariantes, **Θⱼ = C̄⁻¹Θ̄ⱼC̄** es exacto y
+  calculable con lo que `vec_shootx` ya construye. Sembrar los θ del `.pre`
+  directamente en Θ sería un error silencioso en cuanto r ≥ 1.
+- **Órdenes.** `p` es el orden AR **sobre Ȳ**, así que con r = 0 el AR efectivo
+  sobre ∇Y es **p−1** (§2). El `.inp` de cada componente pide ARMA(p−1, q), y
+  pedir ARMA(p, q) mete un desajuste de 5.5 unidades que parece un fallo y no lo
+  es. Ya mordió una vez.
+- **El `.pre` no da Λ.** Los univariantes no llevan acoplamiento entre ecuaciones
+  y Λ *es* el acoplamiento: una semilla puramente univariante daría Λ ≈ 0, el peor
+  sitio posible. Por eso la cadena mantiene la regresión condicional para Λ. Es la
+  misma decisión que `x0_from_pre` de `drtran`, que **arranca las transferencias
+  en cero a propósito**.
+
+#### F2.6 — Qué es exactamente el hueco de hoy
+
+Conviene tenerlo medido antes de tocar nada: el arranque en frío de `drvec` no es
+tan frío como decía esta fase. `init_guess` ya siembra B₂ por OLS estático, Λ y
+F_i por regresión condicional y Σ de los residuos de esa regresión. **Lo único
+que arranca en cero exacto es Θ** (`src/drvec.c:366–369`). Ése es el hueco que
+F2 llena, y el resto del beneficio esperado es refinamiento.
 
 **Salida.** El logL sembrado ≥ el de arranque en frío en **todas** las
 configuraciones del banco, y la puerta diagonal (§2) sigue cuadrando a 1e-9.
 
-**Contingencias, y una es un bloqueo real:**
+#### F2.7 — Resultado: **el puente está construido; la siembra NO cumple**
 
-- **`CAST.md` §9: el cast de `fue` no es reentrante y no pueden estar dos vivos a
-  la vez.** Así que **no** se llama al cast de `fue` en tiempo de ejecución. Se
-  leen sólo los **números** del `.pre`, que es lo que hace el C de `drtran`. Eso
-  esquiva el problema por completo y además es el diseño preferible.
-- Si reutilizar `read_fue_pre` arrastra demasiado de `drtran`, se escribe un
-  lector mínimo de los campos que `drvec` necesita (φ, θ, μ, σ², λ, d, D). Menos
-  elegante, pero desacoplado.
-- **`.pre` no da Λ.** Los univariantes no llevan información de acoplamiento
-  entre ecuaciones, y Λ *es* el acoplamiento: una semilla puramente univariante
-  daría Λ ≈ 0, el peor sitio posible. Por eso la cadena mantiene la regresión
-  condicional. Si aun así Λ sale mal, la alternativa es la rejilla concentrada
-  para B₂ (el patrón de `preestimar_parametros` del legado: concentrar Λ en forma
+*(Medido el 2026-08-17/18.)*
+
+**Lo entregado y funcionando:**
+
+- El lector de `.pre` de `drtran`, reutilizado, **con un fallo suyo arreglado**
+  (F2.1) — y el puente `src/fue_bridge.c` con las cuatro funciones que el motor
+  de `drvec` no aportaba.
+- `-writeinp` (un `.inp` por componente de Ȳ) y `-writeres` (uno por residuo de
+  la regresión condicional): ASCII puro, cabecera anual correcta, las seis
+  secciones ARMA, la sección de diferencia anual, `refactor` por la regla de la
+  suite y **μ siguiendo el caso determinista** (caso 1 ninguna, caso 2 sólo las
+  de W, caso 3 todas). Esto último no estaba y era un error: dejar que `fue`
+  estimara una media que el modelo conjunto no puede representar devuelve una θ
+  condicionada a algo que no existe.
+- `-seed` (ruta de residuos) y `-seedybar` (ruta de componentes de Ȳ).
+- Batería 41 → **45 comprobaciones**, con los dos fallos que mordieron durante la
+  fase convertidos en test: que lo escrito sea ASCII puro y que lleve la sección
+  de diferencia anual.
+
+**Las dos rutas, y por qué una está mal fundada.** La cadena que esta fase
+preveía —univariantes de los componentes de Ȳ— **no sirve para sembrar Θ**: el
+marginal univariante de un componente de un VARMA **no es Θ̄_ii**, porque
+marginalizar mezcla AR y MA e infla los órdenes. Vale para `drtran`, donde cada
+serie *es* su bloque y el único acoplamiento es la transferencia; no vale para el
+VEC, donde C̄ y Λ acoplan densamente. La ruta bien fundada son los **residuos de
+la regresión condicional**: e_t = Θ(L)A_t, cuyo marginal por componente es MA(q)
+**exactamente**. Y las dos están en coordenadas distintas — Θ̄ = C̄ΘC̄⁻¹ en la
+primera, Θ directamente en la segunda—, lo que es un error silencioso esperando:
+la misma θ en la coordenada equivocada da otro modelo sin que nada proteste.
+
+**La medida** (mink–muskrat p=2 q=1 r=1; `fue` estimando cada componente):
+
+| configuración | frío | sembrado, residuos | sembrado, Ȳ |
+|---|---|---|---|
+| `-case 1` | 3.6856 (t3) | −10.7679 (t3) **−14.45** | −9.4504 (t3) −13.14 |
+| `-case 2` | 6.4786 (**converge**) | 6.4461 (t3) −0.03 | 4.4108 (cv) −2.07 |
+| `-case 3` | 6.5140 (t3) | 5.4576 (cv) −1.06 | 6.8901 (t3) **+0.38** |
+| `-case 2 -diagma` | 0.8817 (t3) | 0.6450 (t3) −0.24 | 0.8927 (cv) +0.01 |
+| `-case 2 -diagcov` | 0.5696 (cv) | 0.5900 (cv) **+0.02** | −0.9650 (cv) −1.53 |
+| `-case 2 -fixb2` | 5.4717 (cv) | 6.5484 (t3) **+1.08** | 6.5389 (cv) +1.07 |
+
+*(cv = el optimizador converge; t3 = para en termcode 3. Nótese que la siembra
+cambia también **eso**: el caso 2 pasa de converger a pararse, y el caso 3 al
+revés.)*
+
+**Criterio de salida: NO cumplido**, y no por poco: la ruta fundada empeora en 4
+de 6 configuraciones. El resto del banco no dice nada porque UK y Denmark van con
+q = 0, así que no hay bloque MA que sembrar.
+
+**Y el hallazgo que sí vale la fase.** En el caso 1, mover Θ de cero exacto a
+diag(0.0108, 0.0611) —una perturbación de centésimas en dos parámetros— cuesta
+**14.45 unidades** de log-verosimilitud en el punto donde para el optimizador. Que
+eso no es un fallo de la siembra lo prueba una identidad que ahora está en la
+batería: **con θ = 0 en los `.pre`, `-seed` reproduce el arranque en frío bit a
+bit** (3.6856397544 en el caso 1, 6.4786201604 en el caso 2). Es decir, la
+fontanería —lector, expansión de factores, coordenadas, orden del vector— está
+bien, y lo que se está midiendo es la superficie. Es la evidencia más fuerte
+recogida hasta ahora a favor de R1: **el problema de `drvec` no es de dónde
+arranca, sino por dónde puede caminar.**
+
+**Lo que esto le hace al plan.** La premisa con la que escribí F2 —que `drvec`
+está «fuera de la arquitectura de la suite» y que arranca «en frío»— era falsa en
+las dos mitades: `vec_shootx` ya es un cast de la familia de `est()`, y el
+arranque ya sale de los datos salvo Θ. La fase se cierra con el puente hecho y
+utilizable —que es lo que permite que ART y `fue` entren en el flujo de `drvec`—
+y con la siembra **medida y rechazada como palanca de convergencia**. El objetivo
+de nivel de |Σ̂| que F1 aplazó aquí **sigue sin resolverse**, y ya no hay motivo
+para esperar que la siembra lo resuelva.
+
+**Nota honesta de cobertura.** El fallo del lector con ficheros anuales (F2.1)
+**no lo caza la batería**: comprobado por mutación, restaurarlo no levanta ningún
+fallo. La razón es que la siembra sólo lee el bloque MA, que va *antes* de la
+sección corrompida; la serie y el `refactor`, que es lo que el fallo estropea,
+`drvec` no los usa. Es un seguro sin ruta de prueba, como el chequeo PD de F1, y
+queda anotado en el script.
+
+**Contingencias:**
+
+- Si la ganancia de sembrar Θ no llega para mover el nivel de |Σ̂| heredado de F1,
+  se declara medido y se cierra la fase con el criterio que sí cumpla — el mismo
+  trato que en F1, no un objetivo movido a posteriori.
+- Si `fue` no está disponible donde se ejecute la batería, los `.pre` del banco se
+  **versionan** como fixtures (los escribió `fue`, así que la afirmación de
+  optimalidad es legítima) y el test se salta la generación.
+- Si aun con Θ sembrada Λ sale mal, la alternativa es la rejilla concentrada para
+  B₂ (el patrón de `preestimar_parametros` del legado: concentrar Λ en forma
   cerrada para cada B₂ candidato y buscar en rejilla sólo B₂).
 
 ---
@@ -503,7 +738,7 @@ r = 1, que es el que decide si hay cointegración y el único imprescindible.
 |---|---|---|
 | 1 | `make test` verde, con la puerta diagonal dentro | **✔ (F0)** 41 comprobaciones, medida por mutación |
 | 2 | \|Σ̂\| concordante entre las cuatro configuraciones **y** en el nivel objetivo | **parcial (F1)**: concuerdan (dispersión 0.000048, con test), pero en ~0.00248 y no en ~0.00230 → nivel a F2 |
-| 3 | Siembra desde `.pre`, con logL ≥ arranque en frío | ✘ (F2) |
+| 3 | Siembra desde `.pre`, con logL ≥ arranque en frío | **✘ medido y rechazado (F2.7)**: el puente está hecho y probado, pero sembrar Θ empeora en 4 de 6 configuraciones. Lo único que el `.pre` puede sembrar es Θ (no σ², no el AR) |
 | 4 | Formas BEC/Π y exogeneidad débil, con o sin s.e. declarado | ✘ (F3) |
 | 5 | Rango correcto en ≥ 4 casos del banco | parcial: 2 de 2 probados |
 | 6 | Todo termcode 3 residual **explicado**, no necesariamente eliminado | ✘ |

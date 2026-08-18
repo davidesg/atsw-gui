@@ -61,6 +61,7 @@ The resulting VARMA on Ybar_t is **stationary** and estimable by standard EML.
 ```
 drvec file p q r [-mean] [-case 1|2|3] [-diagar] [-diagma] [-diagcov] [-m 1|2]
                  [-differenced] [-fixb2 [v]] [-lrtest]
+                 [-writeres pfx] [-writeinp pfx] [-seed pfx] [-seedybar pfx]
 ```
 
 | Argument | Description |
@@ -79,6 +80,30 @@ drvec file p q r [-mean] [-case 1|2|3] [-diagar] [-diagma] [-diagcov] [-m 1|2]
 | `-differenced` | Legacy layout: cols 1..s already hold ∇Y₂ (see below) |
 | `-fixb2 [v]` | Hold B₂ fixed instead of estimating it (see below) |
 | `-lrtest` | Sequential LR test for the cointegration rank (not with `-differenced`) |
+| `-writeres pfx` | Write one `pfx.<i>.inp` per equation holding the conditional-regression residuals, for `ART`/`fue` to identify and estimate. Then stop |
+| `-writeinp pfx` | The same, but one file per **component of Ȳ**. For identification; **not** a seeding source (see below) |
+| `-seed pfx` | Read `pfx.<i>.pre` (or `.inp`) written by `fue` from `-writeres` output, and seed the MA block Θ |
+| `-seedybar pfx` | Seed from `-writeinp` output instead, undoing Θ̄ = C̄ΘC̄⁻¹. **Measured worse**; kept so the measurement stays reproducible |
+
+### The bridge to the suite, and what it is honestly worth
+
+`drvec` writes `.inp` files — a *specification* — and never a `.pre`, which is a
+claim that the values are an optimum and may only be made by the program that
+optimised. `fue` estimates each file and leaves the `.pre`; `drvec` reads the
+numbers back. It never calls `fue`'s cast at run time, which is deliberate: that
+cast keeps its state in module globals and is not reentrant.
+
+**What a `.pre` can seed is Θ, and only Θ.** It carries no σ² — the innovation
+variance is not in the format — and the AR side is over-determined, because the
+univariate fits give Φ*ᵢ for i = 1..p while the model has only F₁…F_{p−1}.
+Θ happens to be exactly what used to start at zero.
+
+**And seeding it does not help.** Measured over six configurations of the
+mink–muskrat case, the seeded fit is worse than the cold start in four of them.
+The cause is not the bridge: with θ = 0 the seeded run reproduces the cold start
+bit for bit (a check in the test suite). It is the likelihood surface — in case 1,
+moving Θ by a few hundredths costs 14 units of log-likelihood. Full numbers in
+`docs/PLAN_BETA.md` F2.7.
 
 ## Input format (.inp)
 

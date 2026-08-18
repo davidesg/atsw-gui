@@ -31,7 +31,7 @@ The third is the weakest, and it is where the open item lives.
 | `-weakex i` equals the equivalent `-alpha` file | **exactly** | ✔ |
 
 ```sh
-make test          # all of the above, plus 51 more checks
+make test          # all of the above, plus 53 more checks
 ```
 
 ## 2. External results
@@ -53,7 +53,49 @@ distribution (Yap and Reinsel 1995, Thm. 3, cited in Mauricio's Remark 5). **Cas
 3 is not tabulated here**, so a case-3 rank test reports the statistic without
 critical values.
 
-### 2.2 The univariate constants, three independent ways
+### 2.2 Cointegration rank against known truth
+
+The rows above compare against another program. These compare against **the
+truth**, because the data was generated to have it — which is a stronger claim
+and the only way to ask whether the test invents relations that are not there.
+
+| data | truth | `drvec` | |
+|---|---|---|---|
+| `datasets/synthetic/rank0.inp` — three independent random walks | r = 0 | LR(0→1) = **4.06** vs 19.77 at 10 % → not rejected | ✔ |
+| `datasets/synthetic/rank2.inp` — three series, one common trend | r = 2 | LR = **88.95** and **73.06**, both at 1 % | ✔ |
+| `datasets/synthetic/badnorm.inp` — one relation plus an independent walk | r = 1 | LR(1→2) = **20.27** vs 20.20 at 1 % → **r = 2** | ✘ over-rejects, *just* |
+
+Both ends of the range are recovered. The third is the interesting one, and it
+is not a defect of the program — it is the finite-sample size of the test, which
+the next row measures.
+
+```sh
+bin/drvec datasets/synthetic/rank0.inp 2 0 0 -case 2 -lrtest
+```
+
+### 2.3 The size of the rank test in finite samples — measured
+
+Over **20 replications** of a process with a true rank of 1, at n = 120, with the
+sequential test at the 5 % asymptotic level:
+
+| rank selected | replications |
+|---|---|
+| r = 0 | 1 (5 %) |
+| **r = 1 — correct** | **16 (80 %)** |
+| r = 2 | 3 (15 %) |
+
+So the test recovers the truth four times in five, and **over-rejects about
+three times as often as its nominal level**. `badnorm.inp` is one of those three,
+which is why it appears above as a failure: it is a draw, not a defect. Checked
+against lag order too — the over-rejection there is the same at `p = 1, 2, 3`
+(statistics 18.61, 20.27, 22.39), so it is not a lag-choice artefact.
+
+**This is the measurement that justifies F4.** Asymptotic critical values are not
+good enough at these sample sizes, and the paper's own recommendation for this
+model class is a parametric bootstrap. Until that exists, read a rank decision
+that sits near a critical value as undecided.
+
+### 2.4 The univariate constants, three independent ways
 
 The factorisation gate compares the joint `r = 0` diagonal fit against two
 univariate exact-ML ARMA(1,1) fits with no mean. Those two constants are now
@@ -115,7 +157,7 @@ These establish that the program handles the shape, not that the answer is right
 |---|---|---|
 | `urca_denmark`, M = 5, r = 2 | logL 828.8447, converges | the only case where `s > 1` **and** `r > 1`, so it is the only one where a transposed read of `B₂` is detectable at all. Mixes logarithms with interest rates, which is what makes it the test of the variance-ratio seeding (+79.26) |
 | `data/AL.inp`, legacy layout | logL −318.8131 | regression baseline only; the file is annotated as needing `-differenced` |
-| `datasets/synthetic/badnorm.inp` | normalisation share **0.6 %** | built so the normalisation alarm has something to fire on |
+| `datasets/synthetic/badnorm.inp` | normalisation share **0.6 %** | built so the normalisation alarm has something to fire on. Its rank is 1 by construction, and it is also the draw where the rank test over-rejects (§2.2) |
 
 ## 5. What is not in the register, and why
 

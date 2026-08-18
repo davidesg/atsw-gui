@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/run_tests.sh — regression and invariant suite for drvec.
 #
-# Five kinds of check, in increasing order of value:
+# Seven kinds of check, in increasing order of value:
 #
 #   1. STRUCTURAL   the parameter walk consumes exactly npar; no out-of-bounds
 #                   read in any configuration.  Catches §4.1-type bugs.
@@ -21,9 +21,6 @@
 #                   A baseline is only valid for the exact input it was measured
 #                   on: the UK fixture is written with %.10f here, and a value
 #                   measured on a %.8f copy differs in the 6th decimal of logL.
-#   6. INTERPRETATION  alpha = A*psi and its LR; Pi; Sigma = P D P'; and the
-#                   normalisation alarm, checked in BOTH directions -- an alarm
-#                   with no case to fire on is not an alarm.
 #   5. THE BRIDGE   the .inp drvec writes for fue must be readable BY fue, and
 #                   the .pre it reads back must land in the right place.  The
 #                   format has no validation, so what is checked is what bit
@@ -35,6 +32,12 @@
 #                   round-trip of the reader against the file itself, through
 #                   tests/pre_probe.c, which is the only check that reads the
 #                   series and the refactor at all.
+#   6. INTERPRETATION  alpha = A*psi and its LR; Pi; Sigma = P D P'; and the
+#                   normalisation alarm, checked in BOTH directions -- an alarm
+#                   with no case to fire on is not an alarm.
+#   7. KNOWN TRUTH  the rank test on data generated to have a known rank.  Every
+#                   other check of -lrtest compares against another program's
+#                   answer; these compare against the truth.
 #
 # Usage:  tests/run_tests.sh [-v]        (or: make test)
 #         DRVEC=path/to/mutant tests/run_tests.sh    (to check the suite bites)
@@ -539,6 +542,43 @@ if printf '%s' "$STDERR" | grep -q 'barely involves the Y1 block'; then
 else
     ok "the normalisation alarm stays quiet on a well-normalised fit"
 fi
+echo
+
+# ================================= 7 THE RANK TEST AGAINST KNOWN TRUTH ==
+echo "[7] the rank test on data whose rank is known by construction"
+# Every other check of -lrtest compares against another program's answer.  These
+# two compare against the TRUTH, because the data was generated to have it:
+# rank0.inp is three independent random walks and rank2.inp is three series
+# sharing one common trend.  They bracket the test from both ends -- one asks
+# whether it invents relations, the other whether it finds them.
+#
+# What they do NOT establish is the test's size in finite samples.  Measured
+# separately over 20 replications of a true r = 1 process at n = 120, the
+# sequential test at the 5% asymptotic level picked r = 1 in 16, r = 2 in 3 and
+# r = 0 in 1.  Over-rejection of ~15% against a nominal 5% is the finite-sample
+# distortion the parametric bootstrap of F4 exists to fix.  See
+# docs/HOMOLOGATION.md 2.3.
+
+selected_rank() {   # <out file> -> the rank the sequential test selects
+    awk '/^  r    M-r/{t=1; next}
+         t && /^ +[0-9]/ {
+             if (index($0,"not rejected")) {print sel+0; done=1; exit}
+             if (index($0,"reject"))       sel=$1+1
+             next
+         }
+         t && /NOT INTERPRETABLE/ {print sel+0; done=1; exit}
+         END{if (!done) print sel+0}' "$1"
+}
+
+run datasets/synthetic/rank0.inp 2 0 0 -case 2 -lrtest
+got=$(selected_rank "$TMP/case.out")
+[ "$got" = "0" ] && ok "r = 0 recovered on three independent random walks" \
+                 || bad "rank on rank0.inp" "selected r = $got, truth is 0"
+
+run datasets/synthetic/rank2.inp 2 0 0 -case 2 -lrtest
+got=$(selected_rank "$TMP/case.out")
+[ "$got" = "2" ] && ok "r = 2 recovered on three series with one common trend" \
+                 || bad "rank on rank2.inp" "selected r = $got, truth is 2"
 echo
 
 # ===================================================================== summary =

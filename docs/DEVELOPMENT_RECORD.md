@@ -290,5 +290,5 @@ and 1 on M = 3**. A test written on the smallest case would have been decoration
 | `\|Σ̂\|` in level | ~0.00248 against a target of ~0.00230 |
 | termcode 3 | explained and measured, not eliminated — see [CONVERGENCE.md](CONVERGENCE.md) |
 | the choice of the `Y₁` block | not diagnosed; the user's responsibility, and currently unchecked |
-| finite-sample critical values for the rank test | asymptotic only; the case-3 column is not tabulated |
+| finite-sample critical values for the rank test | asymptotic only, and now **measured**: over 20 replications of a true r = 1 process at n = 120, the sequential test picks r = 1 in 16, over-rejects in 3 and under-rejects in 1 — about three times its nominal size. The case-3 column is not tabulated either |
 | `drtran`'s BUG-11 | fixed in `drvec`'s copy, live in `drtran` |

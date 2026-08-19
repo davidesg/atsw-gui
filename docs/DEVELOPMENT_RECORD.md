@@ -371,12 +371,34 @@ procedure's own optimum included — had been bounded at `q ≤ 1` by a defect
 rather than by a decision. That is now stated where those results are recorded
 ([HOMOLOGATION.md](HOMOLOGATION.md) §3b) rather than left to be inferred.
 
+**And the defect turned out to be already known.** Asked whether it had
+precedents, the suite answered plainly: the fault belongs to the
+Numerical-Recipes cleanup that reimplemented these allocators, it was diagnosed
+and fixed on 2026-06-15, the univariate program's defect register describes the
+symptom and the cause in the same terms reached here, and the correction is
+already present in the transfer-function and VARMA programs and in the C sources
+both Python ports compile. The register even explains why the standalone C
+programs had not met it: in the univariate program the operator sections that
+would raise `q` past the regular moving-average order are commented out, so its
+`q` never reaches two. `drvec` reaches it by the ordinary route of a user asking
+for `q = 2`. What `drvec` had was the stale copy, and the fix first written here
+was accordingly discarded in favour of the suite's, adopted verbatim, so the
+function is now byte-identical to the shared one
+([SUITE_INTEGRATION.md](SUITE_INTEGRATION.md) §5).
+
 The correction changes no computed value, and this is checked rather than
 argued: the entire suite, golden baselines included, is unchanged, and the
 configuration that used to corrupt the heap now runs clean under `valgrind`.
-Both are permanent checks. The methodological point is the one worth keeping:
-the first finding was an artefact of the instrument, and what turned it into a
-result was measuring the instrument before believing the measurement.
+Both are permanent checks.
+
+Two methodological points are worth keeping, and they are different. The first
+finding was an artefact of the instrument, and what turned it into a result was
+measuring the instrument before believing the measurement. The second was
+already solved next door: a vendored copy is a fork with no notification
+channel, so the question to ask before repairing one is not how to fix it but
+whether the suite has fixed it already — and if it has, the suite's version is
+the one to take, because two correct implementations of the same routine are
+still a divergence.
 
 ## 8. Open, and honestly so
 
@@ -390,3 +412,4 @@ result was measuring the instrument before believing the measurement.
 | `drtran`'s BUG-11 | fixed in `drvec`'s copy, live in `drtran` |
 | the invertibility boundary | explained and now reported, not resolved: on these data every specification with `q ≥ 1` rests on it, so the reported optima are constrained ones and the unconstrained standard errors do not apply along the binding direction — see §7 |
 | specification searches at `q ≥ 2` | possible only since the allocation defect was corrected on 2026-08-19; the searches already recorded were bounded at `q ≤ 1` and have **not** been redone ([HOMOLOGATION.md](HOMOLOGATION.md) §3b) |
+| `vector` and `ivector` | still the pre-cleanup form, where the suite's shared copy carries the corrected one. Latent, not live: no call site in `drvec` uses a negative lower bound. Aligning them is a deliberate decision, not a tidy-up, and is set out in [SUITE_INTEGRATION.md](SUITE_INTEGRATION.md) §5 |

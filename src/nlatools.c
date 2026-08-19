@@ -409,30 +409,35 @@ int **imatrix( long nrl, long nrh, long ncl, long nch )
    return( m );
 }
 
-/* DELTA drvec: the row dimension was allocated as (nrh + 1) pointers, indexed
-   from zero, and then written at t[nrl..nrh].  That is sound while nrl >= 0 --
-   it simply over-allocates -- but elf() allocates gamwa as
-   tensor( -q+1, 0, 1, m, 1, m ), whose lower bound is NEGATIVE as soon as the
-   model has q >= 2, and the write then landed BEFORE the block: heap
-   corruption, so no VARMA with two or more MA lags could be estimated at all.
+/* DELTA drvec, 2026-08-19: adopted from the suite's own correction, not devised
+   here.  The Numerical-Recipes cleanup that reimplemented these allocators
+   dropped the base offset and allocated (nrh + 1) row pointers indexed from
+   zero.  That is sound while nrl >= 0 -- it merely over-allocates -- but elf()
+   allocates gamwa as tensor( -q+1, 0, 1, m, 1, m ), whose lower bound is
+   NEGATIVE as soon as q >= 2; the initialisation loop then wrote at t[-1] and
+   corrupted the heap, so no model with two or more MA lags could be estimated.
 
-   The fix keeps this file's convention -- allocate from index zero and free the
-   base -- and departs from it only where that convention cannot reach.  With
-   off = min(nrl, 0), the block covers indices off..nrh and the base is advanced
-   by -off, which is zero or positive, so the adjusted pointer always lies
-   INSIDE the block; free_tensor removes the same amount.  Note what this means
-   for nrl >= 0, which is every call site in drvec itself: off is zero, the
-   allocation is (nrh + 1) as before and the pointer is not moved at all, so the
-   behaviour is unchanged and no computed value can differ.  ncl and ndl are
-   still assumed >= 0, which holds everywhere.                                */
+   The defect was diagnosed and fixed elsewhere in the suite on 2026-06-15 and
+   is recorded in the univariate program's defect register; drvec had continued
+   to carry the pre-fix copy, and reached the fault by the ordinary route of a
+   user specifying q >= 2.  The code below is the suite's fix verbatim, so this
+   function is now identical to the copy shared by the transfer-function and
+   VARMA programs.  See docs/SUITE_INTEGRATION.md §5.
+
+   It changes no computed value: for nrl >= 0 -- every call site in drvec
+   itself -- the slots addressed are the same as before.                      */
 real ***tensor( long nrl, long nrh, long ncl, long nch, long ndl, long ndh )
 {
    long i, j, nrow = nrh - nrl + 1, ncol = nch - ncl + 1;
-   long off = ( nrl < 0 ) ? nrl : 0;
-   real ***t = (real ***)calloc( (size_t)(nrh - off + 1), sizeof(real **) );
+   real ***t = (real ***)calloc( (size_t)nrow, sizeof(real **) );
    real **planes; real *data;
    if ( !t ) nrerror( "ALLOCATION FAILURE 1 in tensor()" );
-   t -= off;
+   t -= nrl;   /* Offset the base so t[nrl..nrh] is addressable, matching the
+                  (i-nrl) offsets used for planes/data below. Without this a
+                  tensor with a negative lower row index (e.g. gamwa's -q+1,
+                  q>0) writes t[nrl<0] out of bounds -> heap corruption and a
+                  double free in free_tensor. Undone there via free(t + nrl).
+                  (Restores the behaviour of the original NR t -= nrl.)       */
    planes = (real **)calloc( (size_t)(nrow * (nch + 1)), sizeof(real *) );
    if ( !planes ) nrerror( "ALLOCATION FAILURE 2 in tensor()" );
    data = (real *)calloc( (size_t)(nrow * ncol * (ndh + 1)), sizeof(real) );
@@ -454,8 +459,7 @@ void free_imatrix( int **m, long nrl, long nrh, long ncl, long nch )
    { if ( m ) { free( m[nrl] ); free( m ); } }
 void free_tensor( real ***t, long nrl, long nrh, long ncl, long nch,
                   long ndl, long ndh )
-   { if ( t ) { long off = ( nrl < 0 ) ? nrl : 0;      /* see tensor() */
-                free( t[nrl][ncl] ); free( t[nrl] ); free( t + off ); } }
+   { if ( t ) { free( t[nrl][ncl] ); free( t[nrl] ); free( t + nrl ); } }
 
 real rmax( real a, real b )
 

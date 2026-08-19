@@ -32,8 +32,15 @@ exactamente eso (`tensor(-q+1, 0, …)`) en cuanto `q ≥ 2`, así que ningún m
 con dos retardos MA era estimable: corrompía el montón y abortaba. La corrección
 no mueve ningún número — con límite inferior no negativo las posiciones
 direccionadas son las mismas — y eso está comprobado, no supuesto: la batería
-entera, con los valores logL de referencia, sigue igual. Ver
-`SUITE_INTEGRATION.md` §5.
+entera, con los valores logL de referencia, sigue igual.
+
+El defecto **ya era conocido**: viene de la limpieza de Numerical Recipes que
+reescribió estos asignadores, se corrigió en la suite el 15-06-2026 y está en el
+registro de defectos del programa univariante. drvec arrastraba la copia previa.
+El código adoptado es el de la suite, literal, de modo que `tensor()` y
+`free_tensor()` son ahora idénticos a la copia compartida. Ver
+`SUITE_INTEGRATION.md` §5, que registra además qué asignadores siguen siendo los
+de antes y por qué.
 
 Dos de ellas mueven resultados a propósito: **§3.6**, que quita un parámetro que
 no estaba identificado, y **§4.3**, cuyo layout en niveles pasó a ser el defecto

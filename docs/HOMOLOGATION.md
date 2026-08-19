@@ -247,8 +247,10 @@ from it ([CONVERGENCE.md](CONVERGENCE.md) §2b).
 Until 2026-08-19 no model with `q ≥ 2` could be estimated: an allocation defect
 in the engine's supporting library corrupted the heap and aborted the run
 whenever the likelihood routine requested its cross-covariance array with a
-negative lower bound, which it does for two or more moving-average lags
-([SUITE_INTEGRATION.md](SUITE_INTEGRATION.md) §5).
+negative lower bound, which it does for two or more moving-average lags. The
+defect was not particular to `drvec` and was not new — it had been diagnosed and
+fixed elsewhere in the suite on 2026-06-15, and `drvec` was carrying the pre-fix
+copy ([SUITE_INTEGRATION.md](SUITE_INTEGRATION.md) §5).
 
 The consequence for the register is limited but must be stated. Every
 specification search reported above — including the comparison against Johansen

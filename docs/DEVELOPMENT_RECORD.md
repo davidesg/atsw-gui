@@ -329,5 +329,5 @@ looking fine.
 | `\|Σ̂\|` in level | 0.002346 with `-multistart 60` against 0.002311, i.e. 1.6 % — substantially closed, not exactly met |
 | termcode 3 | explained and measured, not eliminated — see [CONVERGENCE.md](CONVERGENCE.md) |
 | the choice of the `Y₁` block | not diagnosed; the user's responsibility, and currently unchecked |
-| finite-sample critical values for the rank test | asymptotic only, and now **measured**: over 20 replications of a true r = 1 process at n = 120, the sequential test picks r = 1 in 16, over-rejects in 3 and under-rejects in 1 — about three times its nominal size. The case-3 column is not tabulated either |
+| finite-sample critical values for the rank test | asymptotic only, and now **measured**: over 60 replications of a true r = 1 process at n = 120 the asymptotic test picks the right rank 68 % of the time and over-rejects 30 % — six times its nominal 5 %. `-bootstrap` improves that to 78 %/20 % (paired, all 6 discordant pairs its way, McNemar p = 0.031) but does not fix it |
 | `drtran`'s BUG-11 | fixed in `drvec`'s copy, live in `drtran` |

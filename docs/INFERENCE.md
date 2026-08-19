@@ -236,7 +236,8 @@ commented out (`drvmlest.c:104-107`), without modifying the engine.
 
 * **It is asymptotic theory.** Every result above is a limit result, and this
   program is used on 60–120 observations. The rank test's own finite-sample size
-  is measured at about three times its nominal level at `n = 120`
+  is measured at about six times its nominal level at `n = 120`, and the
+  parametric bootstrap cuts that to four without closing it
   ([HOMOLOGATION.md](HOMOLOGATION.md) §2.3), and Mélard et al. report the same
   for the MA case. Optimality in the limit is not accuracy in the sample.
 * **Optimality is conditional on the specification being right.** `drvec` is the

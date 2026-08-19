@@ -2709,7 +2709,8 @@ int main(int argc, char *argv[])
                 "\n  === Parametric bootstrap under H0 (%d replications) ===\n"
                 "  The asymptotic values above are known to be optimistic at these\n"
                 "  sample sizes: measured, the sequential test over-rejects about\n"
-                "  three times its nominal level at n = 120.  These are empirical\n"
+                "  SIX times its nominal level at n = 120, and these percentiles cut\n"
+                "  that to four without closing it.  They are empirical\n"
                 "  percentiles of the statistic simulated FROM THE FITTED MODEL at\n"
                 "  rank r, so they carry the sample size, the deterministic case and\n"
                 "  the MA component that the tables cannot.\n", global_boot);

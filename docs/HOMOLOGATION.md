@@ -124,20 +124,31 @@ bin/drvec datasets/synthetic/rank0.inp 2 0 0 -case 2 -lrtest
 
 ### 2.3 The size of the rank test in finite samples — measured
 
-Over **20 replications** of a process with a true rank of 1, at n = 120, with the
-sequential test at the 5 % asymptotic level:
+Over **60 replications** of a process with a true rank of 1, at n = 120, with the
+sequential test at the 5 % level, comparing the asymptotic tables against
+`-bootstrap 100`:
 
-| rank selected | replications |
-|---|---|
-| r = 0 | 1 (5 %) |
-| **r = 1 — correct** | **16 (80 %)** |
-| r = 2 | 3 (15 %) |
+| rank selected | asymptotic | bootstrap |
+|---|---|---|
+| r = 0 | 1 (1.7 %) | 1 (1.7 %) |
+| **r = 1 — correct** | 41 (**68.3 %**) | 47 (**78.3 %**) |
+| r = 2 — over-rejection | 18 (**30.0 %**) | 12 (**20.0 %**) |
 
-So the test recovers the truth four times in five, and **over-rejects about
-three times as often as its nominal level**. `badnorm.inp` is one of those three,
-which is why it appears above as a failure: it is a draw, not a defect. Checked
-against lag order too — the over-rejection there is the same at `p = 1, 2, 3`
-(statistics 18.61, 20.27, 22.39), so it is not a lag-choice artefact.
+So the asymptotic test over-rejects at **six times** its nominal 5 %, and the
+bootstrap cuts that to four times. The improvement is real rather than noise:
+the comparison is paired, and of the 6 replications where the two disagree, **all
+6 go the bootstrap's way** (McNemar exact, p = 0.031).
+
+**But 20 % against a nominal 5 % is still badly sized**, and that is the honest
+headline: the bootstrap helps and does not fix it. On samples of this length a
+rank decision near a critical value stays undecided whichever route produced it.
+
+*A correction to an earlier figure in this register.* The first version of this
+row reported over-rejection of ~15 %, from 20 replications. Extending to 60 puts
+it at 30 % — the first 20 gave 3 and the next 40 gave 15. With n = 20 the
+standard error of such a proportion is about 8 points, so the first estimate was
+a lucky draw, not a different measurement. The 60-replication figure is the one
+to quote, and it carries about 4.6 points of standard error itself.
 
 **This is the measurement that justified the parametric bootstrap**, which now
 exists as `-bootstrap N`. It replaces the tables with percentiles simulated from

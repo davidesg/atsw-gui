@@ -96,8 +96,8 @@ Incompatible with `-differenced`, because the column split depends on `r`.
 | `-bootstrap N` | with `-lrtest`: N parametric-bootstrap replications under H₀ for each rank comparison |
 
 The asymptotic tables are known to be optimistic at these sample sizes — measured
-here, the sequential test over-rejects about three times its nominal level at
-n = 120 ([HOMOLOGATION.md](HOMOLOGATION.md) §2.3), and Mélard, Roy and Saidi
+here, the sequential test over-rejects at about **six times** its nominal level
+at n = 120 — and the bootstrap cuts that to four, without fixing it ([HOMOLOGATION.md](HOMOLOGATION.md) §2.3), and Mélard, Roy and Saidi
 report the same for models with MA terms. `-bootstrap` replaces the tables with
 percentiles simulated **from the fitted model at rank r**, so they carry the
 sample size, the deterministic case and the MA component, which a table cannot.

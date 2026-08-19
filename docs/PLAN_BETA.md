@@ -926,6 +926,34 @@ las dos vías, y coinciden:
 | `synthetic/rank0` | r = 0 | r = 0 | r = 0 |
 | `synthetic/rank2` | r = 2 | r = 2 | r = 2 |
 
+**¿Corrige el sobre-rechazo?** Que funcione y que calibre son preguntas
+distintas, y ésta necesita su propio Monte Carlo. Sobre **60 réplicas** de un
+proceso con r = 1 verdadero, n = 120, al 5 %:
+
+| rango elegido | asintótico | bootstrap |
+|---|---|---|
+| r = 0 | 1 (1.7 %) | 1 (1.7 %) |
+| **r = 1 — correcto** | 41 (**68.3 %**) | 47 (**78.3 %**) |
+| r = 2 — sobre-rechazo | 18 (**30.0 %**) | 12 (**20.0 %**) |
+
+**Mejora, y la mejora es real:** la comparación es pareada, y de las 6 réplicas en
+que las dos vías discrepan, **las 6 van a favor del bootstrap** (McNemar exacto,
+p = 0.031). No es ruido.
+
+**Pero un 20 % contra un 5 % nominal sigue estando mal calibrado**, y ése es el
+titular honesto: el bootstrap ayuda y no lo arregla. En muestras de esta longitud
+una decisión de rango cerca de un valor crítico sigue siendo indecidible, venga
+de donde venga.
+
+*Y una corrección a una cifra que había repetido en varios documentos.* Con las
+primeras 20 réplicas el sobre-rechazo asintótico salió 15 % —«unas tres veces el
+nominal»—, y con 60 sale **30 %**: las primeras 20 dieron 3 y las siguientes 40
+dieron 15. Con n = 20 el error estándar de esa proporción es ~8 puntos, así que la
+primera cifra era un sorteo afortunado, no otra medida. La de 60 réplicas es la
+que hay que citar, y ella misma lleva ~4.6 puntos de error estándar. Corregido en
+`HOMOLOGATION.md`, `USAGE.md`, `INFERENCE.md`, `DEVELOPMENT_RECORD.md` y en la
+propia salida del programa.
+
 **Dos cosas que la implementación obligó a decir en la salida:**
 
 - **El p-valor tiene un suelo de 1/(B+1).** Con B = 100 no puede bajar de 0.0099,
@@ -976,7 +1004,7 @@ r = 1, que es el que decide si hay cointegración y el único imprescindible.
 | 2 | \|Σ̂\| concordante entre las cuatro configuraciones **y** en el nivel objetivo | **✔ en la concordancia, casi en el nivel**: con `-multistart 60` la dispersión cae a **0.000014** y las cuatro caen en 0.002344–0.002358, un **1.6 %** por encima de la referencia global (0.002311) frente al 7 % de antes. Ver F5.1 |
 | 3 | Siembra desde `.pre`, con logL ≥ arranque en frío | **✔ en el peldaño diagonal, ✘ por encima (F2.8)**: con r = 0 el `.pre` transporta el óptimo univariante y los dos contratos de la escalera se cumplen (cruce 1.8e-5, certificado +2.4e-7 ≥ 0, los dos con test). Con r ≥ 1 la información univariante no vale: la semilla arranca 17 unidades peor, por sobredeterminación del AR y por el acoplamiento de C̄ y Λ |
 | 4 | Formas BEC/Π y exogeneidad débil, con o sin s.e. declarado | **✔ (F3.1)**: Π = ΛB′ con autovalores y la advertencia de circularidad, exogeneidad débil por LR, y la triangularización Σ = PDP′ con test de reconstrucción |
-| 5 | Rango correcto en ≥ 4 casos del banco | **✔**: `mink_muskrat` (r=1), UK (r=2, igual que `ca.jo`), y dos sintéticos con rango **conocido por construcción**, r=0 y r=2, los dos recuperados y en la batería. Y medido lo que faltaba: en 20 réplicas con r=1 verdadero el test acierta 16, sobre-rechaza 3 y sub-rechaza 1 |
+| 5 | Rango correcto en ≥ 4 casos del banco | **✔**: `mink_muskrat` (r=1), UK (r=2, igual que `ca.jo`), y dos sintéticos con rango **conocido por construcción**, r=0 y r=2 — los cuatro recuperados por la vía asintótica **y** por el bootstrap (F4.1). Y medido lo que faltaba: en 60 réplicas con r=1 verdadero el test asintótico acierta el 68 % y sobre-rechaza el 30 %; el bootstrap, 78 % y 20 % |
 | 6 | Todo termcode 3 residual **explicado**, no necesariamente eliminado | **✔**: cada ajuste emite una **nota de convergencia** que interpreta la parada (la contingencia de R1, como `Fit.convergence_note` de `drtran`), y de paso corrige dos lecturas heredadas — que `ifault` no es convergencia y que parar en `steptol` merece aviso. El porqué está medido en `CONVERGENCE.md` |
 | 6b | α = Aψ soportado, con LR y grados de libertad correctos | **✔ (F3.1)** con `-alpha`/`-weakex`, g.l. (M−sa)·r, y guarda de rango sobre A |
 | 6c | La elección del bloque Y₁ **diagnosticada o declarada** como no verificada | **✔ (F3.1)**: diagnóstico libre de unidades, con caso construido que lo dispara y test en las dos direcciones |

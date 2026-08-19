@@ -318,15 +318,42 @@ not defined along the binding direction. This was not visible when the columns
 were measured, because the program did not report roots. At `q = 2` it holds for
 all eight.
 
-It is a symptom of over-specification rather than a property of the data. At the
-criterion-selected specifications above, six of the eight carry no such root —
-five because no moving-average term is selected at all, and Milan because its
-selected `q = 1` fit puts the root at 1.905. And it is not autoregressive–
-moving-average cancellation: at `p = 2, q = 1` the autoregressive roots stay
-between 1.30 and 2.63 while the moving-average root sits at one. The reading is
-the one [CONVERGENCE.md](CONVERGENCE.md) §2b sets out — `s = M − r` series are
-differenced by construction, and a unit moving-average root is how the
-likelihood undoes differencing the data did not require.
+**It is over-specification of the moving-average operator, not a property of the
+series, and the entry gate localises it.** At the diagonal rung — `r = 0` with
+diagonal `Φ`, `Θ` and `Σ`, where the likelihood factorises into the univariate
+models — not one of the sixteen roots is anywhere near the unit circle:
+
+| smallest MA root modulus | Milan | Stras. | Utrecht | Vienna | Aix | Arévalo | Angers | Penn |
+|---|---|---|---|---|---|---|---|---|
+| **entry gate**: `r=0`, `Θ` diagonal | 1.200 | 1.147 | 1.135 | 1.095 | 1.101 | 1.199 | 1.040 | 1.192 |
+| `r=0`, `Θ` free | 1.354 | **1.000** | 1.136 | 1.597 | 1.060 | 1.356 | **1.000** | **1.000** |
+| `r=1`, `Θ` diagonal | **1.001** | **1.000** | **1.000** | **1.000** | **1.000** | 1.455 | **1.001** | **1.000** |
+| `r=1`, `Θ` free (the tabulated fit) | **1.000** | 1.195 | **1.000** | **1.000** | **1.000** | **1.000** | **1.000** | **1.000** |
+
+The gate was estimated as the suite's ladder prescribes and not from a cold
+start: `-writeinp` emitted the two component files, `fue` estimated them and
+wrote the `.pre`, and the gate was then seeded from those. It was also re-run
+with the deterministic components of the **article's own univariate `.pre`
+files** subtracted, which moves the London root from 1.199 to 1.215. All three
+routes agree, and none produces a root on the boundary.
+
+Two further checks make the reading firm. The gate's first root is London's, and
+London is common to all eight pairs, so it must depend only on the London
+subsample — and it does: the four pairs sharing the `n = 113` sample all return
+1.19863, while Aix and Angers, both `n = 90`, return 1.10095 and 1.10093. And
+where the article's own univariate models carry a moving-average term the gate
+reproduces them closely: Vienna 1.095 against the article's 1.148, Aix 1.260
+against 1.302, Angers 1.040 against 1.068.
+
+The table then localises the condition to the two things that add moving-average
+parameters the series do not support. Five of the nine article models carry **no
+moving-average term at all**, so a free `2 × 2` `Θ₁` is heavily over-specified on
+these data; freeing the off-diagonal entries at `r = 0` already puts three pairs
+on the boundary, and raising the rank puts almost all of them there. It is not
+autoregressive–moving-average cancellation either: at `p = 2, q = 1` the
+autoregressive roots stay between 1.30 and 2.63 while the moving-average root
+sits at one. Consistently with all of this, the criterion of the previous section
+selects `q = 0` for five of the eight pairs.
 
 ### And a limit on the rank test that this exposed
 

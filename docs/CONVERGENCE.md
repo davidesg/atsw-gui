@@ -100,6 +100,13 @@ In descending order of usefulness:
 
    Both cost one extra fit and both are worth doing before believing a number.
 
+   The swap check earns its keep beyond convergence: on two real pairs it was the
+   **only** signal that the model class did not apply at all — the series had no
+   unit root, so the true rank was `r = M`, which this program cannot express.
+   Convergence was clean, the portmanteau passed, and the rank test rejected
+   `r = 0`; the swapped fits multiplying to 2.10 instead of 1 was what said
+   something was wrong, before the reason was known.
+
 1. **Fix `B₂` and see if it converges** — `-fixb2`. Holding the cointegrating
    vector converges in cases where the free model stops on termcode 3, and the
    difference in log-likelihood tells you how much of the difficulty is in that

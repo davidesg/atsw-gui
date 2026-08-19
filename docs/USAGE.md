@@ -94,6 +94,17 @@ the rank *within* the restricted model is a legitimate question — but the
 different distribution and the tables are for `α` free. Printing them would be
 wrong numbers wearing the right clothes.
 
+**When there is no unit root at all, this program cannot say so.** The sequence
+stops at `r = M−1` because `r = M` is a stationary process in levels, which the
+parameterisation cannot express — that case belongs to `drvarma`. So a system
+whose series are all stationary gets a rejection of `r = 0` (correctly: there are
+fewer than M unit roots) and no way to reach the truth, which is that there are
+none. Measured on real data: two wheat-price pairs where ADF rejects the unit
+root in every series, `drvec` rejected `r = 0` at 1 % and returned a
+cointegrating coefficient with the **wrong sign**, while Johansen picked `r = M`
+— its way of saying the same thing. **Check the order of integration of the
+series before reading a rank from here.**
+
 *A caveat worth knowing:* the eigenvalues of `Π̂` are sometimes quoted as a rank
 criterion. Mélard, Roy and Saidi (2004) show that the assumption on `Φ(1)` does
 **not** imply what that criterion assumes. Treat them as an indication; the LR

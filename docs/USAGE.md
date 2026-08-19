@@ -74,6 +74,20 @@ rather than returning numbers for a model that does not have them.
 The degrees of freedom of the reported LR are `(M − sa)·r`, from Johansen and
 Swensen (2024).
 
+### Testing the inherited moving average
+
+| | |
+|---|---|
+| `-matest N` | `H₀`: the inherited `Θ` structure; `H₁`: free `Θ`. `N` parametric bootstrap replications under `H₀` |
+
+The `χ²` reference is printed and is **not** a test: the unrestricted optimum
+sits where the rank condition degenerates, so the statistic does not have its
+asymptotic distribution. Measured ([HOMOLOGATION.md](HOMOLOGATION.md) §4i), the
+bootstrap 5 % critical value is 1.5 to 2.3 times the `χ²` one — and with the
+right distribution the restriction is still rejected at 5 % in eight of eleven
+cases. Rejecting it does not endorse the free fit, whose own optimum is
+inadmissible as a rank-`r` I(1) model.
+
 ### The rank condition
 
 | | |

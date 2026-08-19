@@ -908,6 +908,54 @@ the LR have their usual distributions. Settling it needs boundary-aware
 inference — a parametric bootstrap under the restricted model, which
 `-bootstrap` could already supply.
 
+## 4i. The inherited moving average, tested with the distribution it actually has
+
+*`-matest N`. The comparison §4g left open, done with a parametric bootstrap
+under the restricted model instead of the `χ²` that does not apply. 100
+replications, two fits each.*
+
+| case | LR | `χ²(3)` p | **bootstrap p** | boot 10% | boot 5% | boot 1% |
+|---|---|---|---|---|---|---|
+| Milan | 23.95 | 0.0000 | **0.0099** | 10.31 | 11.86 | 15.54 |
+| Strasbourg | 20.17 | 0.0002 | **0.0198** | 13.13 | 15.17 | 16.64 |
+| Utrecht | 22.82 | 0.0000 | **0.0099** | 11.85 | 13.46 | 17.21 |
+| Vienna | 24.76 | 0.0000 | **0.0099** | 12.86 | 14.21 | 18.10 |
+| Aix | 13.63 | 0.0035 | **0.0808** | 12.85 | 17.73 | 25.45 |
+| Arévalo | 20.01 | 0.0002 | **0.0198** | 12.07 | 14.33 | 19.25 |
+| Angers | 25.61 | 0.0000 | **0.0200** | 15.70 | 18.11 | 37.40 |
+| Penn | 17.80 | 0.0005 | **0.0396** | 13.11 | 15.44 | 19.69 |
+| `mink_muskrat` c1 | 27.37 | 0.0000 | **0.0118** | 8.73 | 13.94 | 24.94 |
+| `mink_muskrat` c2 | 12.93 | 0.0048 | **0.1000** | 12.37 | 16.16 | 23.20 |
+| `mink_muskrat` c3 | 12.97 | 0.0047 | **0.1011** | 12.93 | 16.13 | 24.77 |
+
+`χ²(3)` has 6.25 / 7.81 / 11.34 at 10 / 5 / 1 %.
+
+**The asymptotic test over-rejects, by a factor of 1.5 to 2.3 in the critical
+value.** The bootstrap 5 % value runs from 11.9 to 18.1 against `χ²`'s 7.81 —
+the same finding §2.3 records for the rank test, on a different statistic.
+
+**And with the right distribution the restriction is still rejected in most
+cases**: at 5 %, in eight of the eleven. It is not rejected on Aix (0.081) or on
+`mink_muskrat` in cases 2 and 3 (0.100, 0.101). Four of the eight pairs sit at
+the floor `1/(B+1) = 0.0099`, so their evidence is "stronger than 100
+replications can resolve" and no more; resolving 1 % needs `B ≥ 999`.
+
+### What that settles, and what it does not
+
+It settles the question §4g left open: **these data do want a moving average
+richer than the WARMA class**, in most of the bank, and the earlier `χ²` reading
+of that was overstated by a factor of two in the critical value rather than
+simply invalid.
+
+It does **not** endorse the free fit. Rejecting `H₀` says the restricted model
+is too narrow; it says nothing in favour of an alternative whose own optimum
+sits where the rank condition degenerates (§4h). Both can be true at once, and
+here both are: the inherited structure is too strong for these data, and the
+free `Θ` is inadmissible as a rank-`r` I(1) model. What the two measurements
+together point at is the middle — a free `Θ` under a rank floor, which is what
+`-rankadm` estimates and where `B̂₂` agrees with the canonical estimator across a
+twenty-fold range of the floor.
+
 ## 5. What is not in the register, and why
 
 * **The Census Housing example** of the AddOn (Hillmer & Tiao 1979): the data

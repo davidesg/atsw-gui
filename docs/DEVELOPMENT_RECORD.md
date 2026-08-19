@@ -641,6 +641,39 @@ paper's statement of it suggests. Two instruments came out of it that will
 outlast the argument — the rank condition as a reported diagnostic, and
 `tools/sim`, which is how any of this was decidable at all.
 
+## 8f. The comparison that could not be made, made
+
+Two sections were left with the same open end: the inherited moving average
+fits worse than the free one by an LR of 13 to 26 on 3 degrees of freedom, and
+that comparison could not be read because the unrestricted optimum sits where
+the rank condition degenerates. The way to close it was already in the program —
+the rank test's parametric bootstrap simulates under `H₀` — so `-matest N` does
+the same thing for this hypothesis: fit the restricted model, simulate from it,
+and fit both models on each replication.
+
+**The asymptotic reading was overstated but not empty.** The bootstrap 5 %
+critical value runs from 11.9 to 18.1 where `χ²(3)` says 7.81 — a factor of 1.5
+to 2.3, the same direction and roughly the same size as the over-rejection §2.3
+measures for the rank test. And with the correct distribution the restriction is
+**still rejected at 5 % in eight of the eleven cases**. So these data do want a
+moving average richer than the WARMA class allows; what was wrong was the
+strength claimed for that conclusion, not the conclusion.
+
+The part worth keeping is what the two results say together, because they pull
+in opposite directions and both are measured. The inherited structure is **too
+narrow** for this bank. The free `Θ` is **inadmissible** — its optimum denies
+the rank it is estimated at. Rejecting `H₀` licenses neither: it says the truth
+is not the restricted model, not that it is the free one. What both point at is
+the middle, a free `Θ` under a rank floor, and that is exactly where `B̂₂` stops
+depending on which route produced it.
+
+Which is the whole episode in one line: **three conjectures arrived, none of
+them survived as stated, and all three were worth measuring.** The `B₂` seed
+does not drive the moving average to the boundary; the embedding is not wrong;
+the moving average does not simply inherit. What came out instead is a
+condition the model class needs and nobody was enforcing, an option that
+enforces it, and a test with the distribution it actually has.
+
 ## 9. Open, and honestly so
 
 | | |

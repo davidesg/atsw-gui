@@ -758,6 +758,47 @@ if awk -v g="$g_wa" 'BEGIN{exit !(g > 0.5)}'; then
 else bad "mawarma: rank condition degenerate" "G=$g_wa"; fi
 echo
 
+# 5k. -matest N: the inherited moving average against the free one, with the
+#     distribution SIMULATED rather than assumed.  Small B on purpose -- this
+#     checks the machinery, not the calibration.  What must hold whatever the
+#     numbers are: the statistic is 2*[L(free) - L(restricted)] computed from
+#     the two fits the suite can reproduce on its own, the critical values are
+#     ordered, and the bootstrap ones are ABOVE the chi2 ones, which is the
+#     measured reason the option exists (HOMOLOGATION.md 4i).
+run "$MM" 2 1 1 -case 2 -mean -matest 30
+if ! grep -aq "inherited moving average against the free one" "$TMP/case.out"; then
+    bad "matest" "no test block emitted"
+else
+    lr=$(awk '/LR = 2\*/{print $(NF-3)}' "$TMP/case.out")
+    l0=$(awk '/^  restricted   logL/{print $4}' "$TMP/case.out")
+    l1=$(awk '/^  free         logL/{print $4}' "$TMP/case.out")
+    if awk -v a="$lr" -v b="$l0" -v c="$l1" \
+         'BEGIN{d=2*(c-b)-a; if(d<0)d=-d; exit !(d<=1e-4)}'; then
+        ok "matest: LR = 2*[L(free) - L(restricted)] ($lr)"
+    else bad "matest: LR does not match its own two fits" "LR=$lr L0=$l0 L1=$l1"; fi
+
+    c10=$(awk '/critical values/{print $4}' "$TMP/case.out")
+    c05=$(awk '/critical values/{print $6}' "$TMP/case.out")
+    c01=$(awk '/critical values/{print $8}' "$TMP/case.out")
+    pv=$(awk '/bootstrap p-value/{print $NF}' "$TMP/case.out")
+    if [ -z "$c01" ]; then bad "matest: no critical values" "with B=30"
+    elif awk -v a="$c10" -v b="$c05" -v c="$c01" \
+           'BEGIN{exit !(a>0 && a<=b && b<=c)}'; then
+        ok "matest: bootstrap critical values ordered ($c10 <= $c05 <= $c01)"
+    else bad "matest: critical values not ordered" "$c10 $c05 $c01"; fi
+
+    # chi2(3) at 5% is 7.815; the bootstrap value must exceed it, which is the
+    # finding: the asymptotic test over-rejects on this class of model.
+    if awk -v b="$c05" 'BEGIN{exit !(b > 7.815)}'; then
+        ok "matest: the bootstrap 5% value is above chi2(3)'s 7.815 ($c05)"
+    else bad "matest: bootstrap below chi2" "5% value $c05 vs 7.815"; fi
+
+    if awk -v p="$pv" 'BEGIN{exit !(p > 0 && p <= 1)}'; then
+        ok "matest: p-value in (0,1] ($pv)"
+    else bad "matest: p-value out of range" "$pv"; fi
+fi
+echo
+
 echo "[6] alpha = A*psi: the restriction, its LR, and its guards"
 # Johansen and Swensen (2024): H1(r) is alpha = A*psi with A known.  Weak
 # exogeneity is the special case where A selects rows, so -weakex is a shorthand

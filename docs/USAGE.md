@@ -108,6 +108,8 @@ moving-average root off the unit circle, at a cost in log-likelihood.
 | | |
 |---|---|
 | `-mawarma` | `Θ = [T₁₁  T₁₁B₂′ ; 0  0]`, the structure a WARMA process implies for its VEC representation. `q·r²` parameters instead of `q·M²` |
+| `-marow` | `Θ = [T₁₁  T₁₂ ; 0  0]` — the differenced block carries no moving average of its own, the cross block is free. **The recommended compromise** ([HOMOLOGATION.md](HOMOLOGATION.md) §4j) |
+| `-matri` | `Θ = [T₁₁  T₁₂ ; 0  T₂₂]`, block-triangular. Measured **not** to remove the pathology: the parameter that carries it is `T₂₂` |
 
 By default `Θ` is a free `M×M` matrix, which is Mauricio's model class. If the
 process admits a WARMA representation — the moving average living in the

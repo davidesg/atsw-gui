@@ -167,7 +167,8 @@ for o in "-case 1" "-case 2" "-case 3" \
          "-case 2 -diagar -diagma" "-case 3 -diagar -diagma -diagcov" \
          "-case 2 -fixb2" "-case 2 -fixb2 0" "-case 2 -fixb2 -0.5" "-case 2 -fixb2 -diagma" \
          "-case 2 -mawarma" "-case 1 -mawarma" "-case 2 -mawarma -diagar" \
-         "-case 2 -mawarma -fixb2"; do
+         "-case 2 -mawarma -fixb2" "-case 2 -marow" "-case 2 -matri" \
+         "-case 2 -marow -fixb2" "-case 3 -matri"; do
     struct_case "M=2 p=2 q=1 r=1 $o" "$MM" 2 1 1 $o
 done
 struct_case "M=2 lrtest case 2"                "$MM" 2 1 0 -case 2 -lrtest
@@ -184,6 +185,8 @@ struct_case "M=5 r=2 (s=3, r=2: B2 is 3x2)"    "$DK" 2 0 2 -case 2
 # estimated (DEVELOPMENT_RECORD.md 8d).
 struct_case "M=5 r=2 q=1 -mawarma (T11 2x2, T12 2x3)" "$DK" 2 1 2 -case 2 -mawarma
 struct_case "M=3 r=1 q=1 -mawarma"             "$UK" 2 1 1 -case 2 -mawarma
+struct_case "M=5 r=2 q=1 -marow"               "$DK" 2 1 2 -case 2 -marow
+struct_case "M=5 r=2 q=1 -matri"               "$DK" 2 1 2 -case 2 -matri
 struct_case "M=5 lrtest"                       "$DK" 2 0 0 -case 2 -lrtest
 struct_case "legacy layout (-differenced)"     data/AL.inp 2 0 1 -case 2 -differenced
 for o in "-case 1" "-case 2" "-case 3"; do
@@ -797,6 +800,31 @@ else
         ok "matest: p-value in (0,1] ($pv)"
     else bad "matest: p-value out of range" "$pv"; fi
 fi
+echo
+
+# 5l. THE MOVING-AVERAGE LADDER.  Four nested specifications of Theta, and what
+#     is checked is the nesting itself, which cannot go stale: each wider one
+#     must fit at least as well, and the two structural zeros must be exactly
+#     zero.  The measured point they were built for is in HOMOLOGATION.md 4j:
+#     what makes the fit inadmissible is T22, not T21.
+for spec in "-mawarma:1" "-marow:2" "-matri:3" ":4"; do
+    o=${spec%%:*}; np=${spec##*:}
+    run data/pairs/milan.inp 2 1 1 -case 2 -mean $o
+    eval "ll_$np=$(logelf_of "$TMP/case")"
+done
+if awk -v a="$ll_1" -v b="$ll_2" -v c="$ll_3" -v d="$ll_4" \
+     'BEGIN{exit !(a<=b+1e-6 && b<=c+1e-6 && c<=d+1e-6)}'; then
+    ok "MA ladder: logL is monotone in the nesting ($ll_1 <= $ll_2 <= $ll_3 <= $ll_4)"
+else bad "MA ladder: not monotone" "$ll_1 $ll_2 $ll_3 $ll_4"; fi
+
+run data/pairs/milan.inp 2 1 1 -case 2 -mean -marow
+z=$(awk '/\[T11 T12 ; 0 0\]/{getline; getline; print $1+0, $2+0}' "$TMP/case.out")
+[ "$z" = "0 0" ] && ok "marow: the differenced block carries no moving average" \
+                 || bad "marow: last row not zero" "$z"
+run data/pairs/milan.inp 2 1 1 -case 2 -mean -matri
+z=$(awk '/block-triangular/{getline; getline; print $1+0}' "$TMP/case.out")
+[ "$z" = "0" ] && ok "matri: the lower-left block is zero" \
+               || bad "matri: T21 not zero" "$z"
 echo
 
 echo "[6] alpha = A*psi: the restriction, its LR, and its guards"

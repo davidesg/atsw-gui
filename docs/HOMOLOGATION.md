@@ -956,6 +956,91 @@ together point at is the middle — a free `Θ` under a rank floor, which is wha
 `-rankadm` estimates and where `B̂₂` agrees with the canonical estimator across a
 twenty-fold range of the floor.
 
+## 4j. Which half of the structure the data reject, and the specification that follows
+
+*Corollary 2 imposes two things at once — the lower-left block of `Θ` zero
+**and** the differenced block carrying no moving average of its own, with the
+cross block determined by `B₂`. §4i rejected the pair of them together in eight
+of eleven cases without saying which half did the rejecting. These are the
+rungs that separate them.*
+
+| flag | `Θ` | params (`M=2, r=1, q=1`) |
+|---|---|---|
+| `-mawarma` | `[T₁₁  T₁₁B₂′ ; 0  0]` | 1 |
+| `-marow` | `[T₁₁  T₁₂ ; 0  0]` | 2 |
+| `-matri` | `[T₁₁  T₁₂ ; 0  T₂₂]` | 3 |
+| — (default) | free | 4 |
+
+### The zero that matters is not the one that looks structural
+
+`-matri` zeroes the lower-left block and leaves `T₂₂` free. **It does not remove
+the pathology**: `G` stays at 0.02–0.12 and the smallest moving-average root
+stays at 1.000 in eight of eleven cases, exactly as in the free fit.
+
+`-marow` zeroes `T₂₂` as well and frees the cross block. That does remove it:
+
+| pair | free logL / `G` / MAmin / `B̂₂` | `-marow` | `-mawarma` |
+|---|---|---|---|
+| Milan | 93.288 / 0.086 / 1.000 / −0.448 | 82.656 / **0.522** / **10.86** / −0.609 | 81.313 / 0.995 / 2.41 / −0.566 |
+| Strasbourg | 34.535 / 0.045 / 1.000 / −0.476 | 25.757 / **0.382** / **1.82** / −0.738 | 24.451 / 0.996 / 4.93 / −0.640 |
+| Utrecht | 82.296 / 0.133 / 1.000 / −0.627 | 70.918 / **0.942** / **4.97** / −0.791 | 70.888 / 0.979 / 7.53 / −0.789 |
+| Vienna | 33.953 / 0.016 / 1.000 / −0.590 | 23.011 / **0.271** / **1.75** / −0.942 | 21.572 / 0.945 / 1.63 / −0.866 |
+| Aix | 68.941 / 0.079 / 1.000 / −0.762 | 63.769 / **0.215** / **1.40** / −1.437 | 62.128 / 0.993 / 1.38 / −1.029 |
+| Arévalo | −3.563 / 0.057 / 1.000 / −0.627 | −13.455 / **0.793** / **7.81** / −1.004 | −13.570 / 0.962 / 12.55 / −0.995 |
+| Angers | 29.094 / 0.019 / 1.000 / −0.618 | 20.289 / **1.323** / 1.000 / −1.045 | 16.291 / 0.901 / 6.01 / −1.030 |
+| Penn | 41.373 / 0.018 / 1.000 / −1.088 | 33.618 / **1.200** / **1.39** / −1.098 | 32.475 / 0.925 / 1.72 / −1.088 |
+| `mink` c2 | 6.479 / 0.184 / 1.000 / −0.241 | 2.304 / **0.388** / **1.28** / −0.151 | 0.013 / 0.264 / 1.00 / −0.095 |
+| `mink` c3 | 6.514 / 0.175 / 1.000 / −0.279 | 2.307 / **0.388** / **1.28** / −0.151 | 0.027 / 0.259 / 1.00 / −0.096 |
+
+`-marow` converges **on the gradient in nine of the ten** (Angers is the
+exception), against none of the free fits.
+
+So the parameter that carries the inadmissibility is `T₂₂`: the moving average
+of the **already differenced** block. Left free, the optimiser takes it to one,
+which is `(1 − B)` sitting on `∇Y₂` — the model undoing its own differencing.
+`Θ(1)` then loses the identity in its lower block and the rank condition goes
+with it. That is the mechanism behind the conjecture that opened §4g, located.
+
+### And that is where nearly all the "evidence" against the structure came from
+
+| pair | LR(`marow` vs `mawarma`), 1 df | LR(free vs `marow`), 2 df |
+|---|---|---|
+| Milan | 2.69 | 21.26 |
+| Strasbourg | 2.61 | 17.56 |
+| Utrecht | 0.06 | 22.76 |
+| Vienna | 2.88 | 21.88 |
+| Aix | 3.28 | 10.34 |
+| Arévalo | 0.23 | 19.78 |
+| Angers | 8.00 | 17.61 |
+| Penn | 2.29 | 15.51 |
+| `mink` c2 / c3 | 4.58 / 4.56 | 8.35 / 8.41 |
+
+The admissible half — freeing the cross block, which `B₂` determines under the
+corollary — is worth **0.06 to 8.0** on 1 degree of freedom, and is **not
+rejected at 5 % in seven of the ten**. The other half — freeing `T₂₁` and `T₂₂`
+— is worth 8 to 23, and it is bought entirely in the direction that makes the
+model inadmissible.
+
+Two of the free fits (Aix 68.94, Penn 41.37) come out **below** the nested
+`-matri` fits (71.82, 41.55). A restricted model cannot beat the model that
+contains it, so those two free fits did not reach their own optimum — more
+evidence about that surface, from the arithmetic rather than from an opinion.
+
+### The compromise this supports
+
+`-marow` is what the measurements point at, and it is a specification rather
+than a tolerance: `Θ = [T₁₁  T₁₂ ; 0  0]`.
+
+* **Admissible by construction.** `Θ(1)` keeps the identity in its lower block,
+  so the rank condition cannot degenerate and no floor has to be chosen.
+* **It frees exactly what the data rejected** — the cross block, whose
+  determination by `B₂` is the half that is mostly not rejected but is also the
+  half that costs nothing to release.
+* **It behaves**: gradient convergence in nine of ten, moving-average roots at
+  1.4–10.9, `B̂₂` in the same region as the canonical estimator.
+* **What it gives up** relative to the free fit is bought in the inadmissible
+  direction, so it is not a loss that can be defended by a likelihood ratio.
+
 ## 5. What is not in the register, and why
 
 * **The Census Housing example** of the AddOn (Hillmer & Tiao 1979): the data

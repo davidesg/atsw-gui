@@ -674,6 +674,35 @@ the moving average does not simply inherit. What came out instead is a
 condition the model class needs and nobody was enforcing, an option that
 enforces it, and a test with the distribution it actually has.
 
+## 8g. Which zero mattered, and the specification that came out of it
+
+The obvious compromise was the wrong one, and finding that out took one
+measurement. Corollary 2 imposes two zeros — the lower-left block of `Θ`, and
+the differenced block's own moving average — and the natural intermediate
+looked like keeping the first and releasing the second, since the lower-left
+block is where the free estimates blow up (entries of −1.32, 1.51, **5.09**).
+`-matri` does exactly that. **It changes nothing**: `G` stays at 0.02–0.12 and
+the moving-average root stays at 1.000 in eight of eleven cases.
+
+What carries the inadmissibility is `T₂₂`, the moving average of the **already
+differenced** block. Left free it goes to one, which is `(1 − B)` sitting on
+`∇Y₂` — the model undoing its own differencing — and `Θ(1)` loses the identity
+in its lower block, taking the rank condition with it. That is the conjecture
+this whole episode started from, finally located in a single parameter.
+
+`-marow` zeroes it and frees the cross block instead: gradient convergence in
+nine of ten, moving-average roots at 1.4–10.9, `B̂₂` in the canonical region, and
+`G` between 0.22 and 1.32. The decomposition of the likelihood says why it is
+the right cut ([HOMOLOGATION.md](HOMOLOGATION.md) §4j): freeing the cross block
+is worth 0.06 to 8.0 on 1 degree of freedom and is not rejected at 5 % in seven
+of ten, while freeing `T₂₁` and `T₂₂` is worth 8 to 23 — all of it bought in the
+direction that makes the model inadmissible.
+
+And a detail worth keeping because it is arithmetic rather than judgement: on
+Aix and Penn the **free** fits come out below the nested `-matri` ones. A
+restricted model cannot beat the model containing it, so those two free fits
+never reached their own optimum.
+
 ## 9. Open, and honestly so
 
 | | |

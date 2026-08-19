@@ -159,6 +159,40 @@ static int canon_used = 0;      /* 1 = la solucion canonica entro de verdad   */
  *  Ver docs/HOMOLOGATION.md 4g.                                              */
 int global_mawarma = 0;
 
+/*  -matri — LA SOLUCION DE COMPROMISO, y es la restriccion MINIMA de las tres.
+ *
+ *  El corolario 2 impone dos cosas a la vez: que el bloque inferior izquierdo de
+ *  Theta sea CERO -- las innovaciones del bloque cointegrado no entran con
+ *  retardo en las ecuaciones diferenciadas -- y que el superior derecho sea
+ *  Theta11 B2', o sea que el bloque diferenciado NO TIENE MA propio.  El
+ *  bootstrap de 4i dice que los datos rechazan lo segundo en ocho de once
+ *  casos.  Lo primero no se ha contrastado nunca por separado, y es donde el
+ *  ajuste libre se descontrola: las entradas (2,1) estimadas libremente valen
+ *  -0.75, -1.32, 1.51 y hasta 5.09 en los ocho pares, y la (2,2) queda entre
+ *  1.0 y 2.0, que es lo que pone la raiz en el circulo.
+ *
+ *  -matri deja Theta TRIANGULAR POR BLOQUES: [T11  T12 ; 0  T22], con T22
+ *  libre.  Cuesta q*s*r parametros contra el libre -- uno solo con M = 2 y
+ *  r = 1 -- y conserva del corolario justo la parte que la estructura implica
+ *  y los datos no contradicen.                                              */
+int global_matri = 0;
+
+/*  -marow — EL PELDANO DE EN MEDIO, y el que la medida senala.
+ *
+ *  Theta = [T11  T12 ; 0  0]: el bloque DIFERENCIADO no lleva medias moviles
+ *  propias, pero el cruzado T12 queda libre en vez de determinado por B2.
+ *
+ *  Por que ahi y no en otro sitio: -matri, que anula solo el bloque inferior
+ *  IZQUIERDO y deja T22 libre, NO quita la patologia -- G se queda entre 0.02 y
+ *  0.12 y la raiz MA en 1.000 en ocho de once casos.  Lo que la quita es que
+ *  Theta(1) tenga la identidad en su bloque inferior, y eso lo da anular T22:
+ *  con T22 libre el optimizador lo lleva a la unidad, que es (1-B) sentado
+ *  sobre el bloque ya diferenciado.  O sea que de las dos restricciones que el
+ *  corolario 2 impone a la vez -- T21 = 0 con T22 = 0, y T12 determinado --,
+ *  la que sostiene la admisibilidad es la primera y la que los datos rechazan
+ *  es la segunda.  Este peldano separa las dos.                              */
+int global_marow = 0;
+
 /*  -rankadm — LA CONDICION QUE HACE QUE EL RANGO SEA EL QUE SE DICE.
  *
  *  Para que un VEC con errores de medias moviles represente un proceso I(1) con
@@ -417,7 +451,10 @@ static void par_blocks(int *nmean, int *nlam, int *nmid, int *ntail)
           queda fijo en 1 y la escala se reporta por sigma2 (de modo que
           Sigma[1][1] = sigma2 exactamente).                                  */
     *nmid  = nf * (global_diag_ar ? M : M * M)
-           + q  * (global_mawarma ? r * r : (global_diag_ma ? M : M * M))
+           + q  * (global_mawarma ? r * r
+                  : (global_marow ? r * M
+                  : (global_matri  ? M * M - s * r
+                                   : (global_diag_ma ? M : M * M))))
            + (global_diag_cov ? M : M * (M + 1) / 2) - 1;
 
     /* 6. B_2 (s x r), salvo que -fixb2 lo sujete */
@@ -2731,7 +2768,18 @@ static void init_guess(real *x, int npar)
                               Θ_k = C̄⁻¹ Θ̄_k C̄
        con Θ̄_k diagonal.  Sembrar los θ del .pre directamente en Θ funciona
        sólo si C̄ = I (r = 0) y es un error silencioso en cuanto r ≥ 1.        */
-    if (global_mawarma && q > 0) {
+    if (global_marow && q > 0) {
+        for (k = 1; k <= q; k++)
+            for (i = 1; i <= r; i++)
+                for (j = 1; j <= M; j++) x[idx++] = 0.0;
+    } else if (global_matri && q > 0) {
+        for (k = 1; k <= q; k++) {
+            for (i = 1; i <= r; i++)
+                for (j = 1; j <= M; j++) x[idx++] = 0.0;
+            for (i = r + 1; i <= M; i++)
+                for (j = r + 1; j <= M; j++) x[idx++] = 0.0;
+        }
+    } else if (global_mawarma && q > 0) {
         /*  -mawarma: el bloque libre es solo Theta11 (r x r), y el resto lo
          *  construye el cast.  La semilla es la diagonal de lo que hubiera:
          *  con la ruta de residuos, la theta univariante del bloque
@@ -2959,6 +3007,22 @@ static void vec_shootx(real *x, struct Tvarma *armax,
                 for (j = 1; j <= M; j++) Theta[k][i][j] = 0.0;
             for (i = 1; i <= r; i++)
                 for (j = 1; j <= r; j++) Theta[k][i][j] = x[idx++];
+        } else if (global_marow) {
+            /*  Theta = [T11  T12 ; 0  0]: las s filas de abajo, cero.  Ver
+             *  -marow.                                                       */
+            for (i = 1; i <= M; i++)
+                for (j = 1; j <= M; j++) Theta[k][i][j] = 0.0;
+            for (i = 1; i <= r; i++)
+                for (j = 1; j <= M; j++) Theta[k][i][j] = x[idx++];
+        } else if (global_matri) {
+            /*  Theta = [T11  T12 ; 0  T22]: solo el bloque de abajo a la
+             *  izquierda se anula.  Ver -matri.                              */
+            for (i = 1; i <= M; i++)
+                for (j = 1; j <= M; j++) Theta[k][i][j] = 0.0;
+            for (i = 1; i <= r; i++)
+                for (j = 1; j <= M; j++) Theta[k][i][j] = x[idx++];
+            for (i = r + 1; i <= M; i++)
+                for (j = r + 1; j <= M; j++) Theta[k][i][j] = x[idx++];
         } else if (global_diag_ma) {
             for (i = 1; i <= M; i++) Theta[k][i][i] = x[idx++];
         } else {
@@ -3540,6 +3604,15 @@ int main(int argc, char *argv[])
         printf("                 denies its own rank: sigma_min of\n");
         printf("                 Lambda_perp' Theta(1) B_perp below tol (default\n");
         printf("                 1e-3).  That statistic is REPORTED always\n\n");
+        printf("  -marow         Theta = [T11 T12 ; 0 0]: the differenced block\n");
+        printf("                 carries no moving average of its own, but the\n");
+        printf("                 cross block stays free.  q*s*M parameters fewer\n");
+        printf("                 than free\n\n");
+        printf("  -matri         the moving average is BLOCK-TRIANGULAR:\n");
+        printf("                 Theta = [T11 T12 ; 0 T22].  Only the lower-left\n");
+        printf("                 block is zeroed -- the differenced block keeps\n");
+        printf("                 its own moving average.  q*s*r parameters fewer\n");
+        printf("                 than free\n\n");
         printf("  -mawarma       the moving average INHERITS its structure instead\n");
         printf("                 of being free: Theta = [T11  T11*B2' ; 0  0], the\n");
         printf("                 form a WARMA process implies for its VEC\n");
@@ -3602,6 +3675,8 @@ int main(int argc, char *argv[])
         else if (strcmp(argv[i], "-seedgate") == 0) global_seedgate = 1;
         else if (strcmp(argv[i], "-seedjoh") == 0)  global_seedjoh = 1;
         else if (strcmp(argv[i], "-mawarma") == 0)  global_mawarma = 1;
+        else if (strcmp(argv[i], "-matri") == 0)    global_matri = 1;
+        else if (strcmp(argv[i], "-marow") == 0)    global_marow = 1;
         else if (strcmp(argv[i], "-matest") == 0 && i+1 < argc)
             global_matest = atoi(argv[++i]);
         else if (strcmp(argv[i], "-rankadm") == 0) {
@@ -4753,6 +4828,14 @@ int main(int argc, char *argv[])
             if (global_mawarma) {
                 for (int i = 1; i <= r; i++)
                     for (int j = 1; j <= r; j++) Th_m[k][i][j] = x[ii++];
+            } else if (global_marow) {
+                for (int i = 1; i <= r; i++)
+                    for (int j = 1; j <= nser; j++) Th_m[k][i][j] = x[ii++];
+            } else if (global_matri) {
+                for (int i = 1; i <= r; i++)
+                    for (int j = 1; j <= nser; j++) Th_m[k][i][j] = x[ii++];
+                for (int i = r + 1; i <= nser; i++)
+                    for (int j = r + 1; j <= nser; j++) Th_m[k][i][j] = x[ii++];
             } else if (global_diag_ma) {
                 for (int i = 1; i <= nser; i++) Th_m[k][i][i] = x[ii++];
             } else {
@@ -4762,7 +4845,9 @@ int main(int argc, char *argv[])
         }
         if (!global_mawarma)
             for (int k = 1; k <= global_q; k++) {
-                fprintf(outputv, "Theta[%d] (M x M) =\n", k);
+                fprintf(outputv, "Theta[%d] (M x M)%s =\n", k,
+                        global_matri ? ", block-triangular [T11 T12 ; 0 T22]"
+                      : (global_marow ? ", [T11 T12 ; 0 0]" : ""));
                 for (int i = 1; i <= nser; i++) {
                     fprintf(outputv, "  ");
                     for (int j = 1; j <= nser; j++)

@@ -548,6 +548,119 @@ static void residual_diagnostics(struct Tvarma *v)
     free_vector(mean, 1, M);
 }
 
+/*  exact_hessian_se — errores estandar por el hessiano EN EL OPTIMO.
+ *
+ *  EL PROBLEMA.  est() calcula la covarianza invirtiendo el hessiano que ACUMULA
+ *  BFGS a lo largo de la trayectoria (raxopt lo deja en mtmp).  Eso sirve para
+ *  dirigir la busqueda pero NO es la curvatura en el optimo: depende del camino
+ *  recorrido y se degrada justo en las direcciones mas planas, que son las de
+ *  mayor error estandar.  No es una sospecha -- drtran lo diagnostico y lo
+ *  arreglo (BRIDGE_DESIGN.md 8c), y aqui se vio el sintoma extremo: con
+ *  -multistart, al no iterar el est final, TODOS los errores estandar salian
+ *  identicos.
+ *
+ *  LA ALTERNATIVA ESTABA APUNTADA EN EL PROPIO MOTOR, comentada en
+ *  drvmlest.c:104-107:  fdhess(objcfunc, ...) + choldcp.  Se usa eso.
+ *
+ *  Y SE HACE SIN TOCAR EL MOTOR.  fdhess (qnewtopt.c) y objcfunc (drvmlest.c)
+ *  son simbolos publicos; se llaman desde aqui despues de est(), cuando sus
+ *  globales -- castx y varmax -- siguen apuntando a este ajuste.  La formula de
+ *  la covarianza es la MISMA que usa est (drvmlest.c:111-119),
+ *      cov = 2 * f * H^-1 / n,
+ *  con H el hessiano del objetivo concentrado; lo unico que cambia es de donde
+ *  sale H.
+ *
+ *  Devuelve 0 si pudo; deja dev y cov sobrescritos.                          */
+extern void fdhess(real (*func)(real *), int n, real *x, real f, real eta,
+                   real **H);
+
+/*  El objetivo, replicado aqui con SU PROPIA estructura.
+ *
+ *  No se puede reutilizar el objcfunc del motor: est() termina llamando al cast
+ *  con lastx = 1, que DESASIGNA la estructura, asi que llamarlo despues escribe
+ *  en memoria liberada -- comprobado, segfault.  Y no hay punto de entrada para
+ *  que la reasigne.
+ *
+ *  La formula es la de drvmlest.c:159-190, y la CONSTANTE DE NORMALIZACION DA
+ *  IGUAL: si g = c*f, entonces H_g = c*H_f y 2*g*H_g^-1 = 2*f*H_f^-1, o sea que
+ *  la covarianza no depende de c.  Se normaliza por el valor en el optimo, que
+ *  deja el objetivo en 1 y es lo mas comodo numericamente.                    */
+static struct Tvarma  fdh_varma;
+static real           fdh_norm1 = 1.0, fdh_norm2 = 1.0;
+
+static real fdh_obj(real *x)
+{
+    real pi1, pi2, pi3;
+    int ifault = 0;
+
+    vec_shootx(x, &fdh_varma, &ifault, 0, 0);
+    if (ifault > 0) return 1.0e10;          /* fuera de la region admisible */
+    elf(fdh_varma.m, fdh_varma.n, fdh_varma.p, fdh_varma.q, fdh_varma.mu,
+        fdh_varma.phi, fdh_varma.theta, fdh_varma.qq, fdh_varma.w, 1.0,
+        fdh_varma.xitol, FALSE, fdh_varma.a, &pi1, &pi2, &pi3, &ifault);
+    if (ifault > 0) return 1.0e10;
+    return pow(pi1 / fdh_norm1, (real) fdh_varma.m) * (pi2 / fdh_norm2);
+}
+
+/*  exact_hessian_se — errores estandar por el hessiano EN EL OPTIMO.
+ *
+ *  EL PROBLEMA.  est() calcula la covarianza invirtiendo el hessiano que ACUMULA
+ *  BFGS a lo largo de la trayectoria (raxopt lo deja en mtmp).  Eso sirve para
+ *  dirigir la busqueda pero NO es la curvatura en el optimo: depende del camino
+ *  recorrido y se degrada justo en las direcciones mas planas, que son las de
+ *  mayor error estandar.  No es una sospecha -- drtran lo diagnostico y lo
+ *  arreglo (BRIDGE_DESIGN.md 8c) -- y aqui se vio el sintoma extremo: con
+ *  -multistart, al no iterar el est final, TODOS los errores estandar salian
+ *  identicos.
+ *
+ *  LA ALTERNATIVA ESTABA APUNTADA EN EL PROPIO MOTOR, comentada en
+ *  drvmlest.c:104-107:  fdhess + choldcp.  Se usa eso, sin tocar el motor:
+ *  fdhess es un simbolo publico de qnewtopt.c y el objetivo es propio.
+ *
+ *  cov = 2 * f * H^-1 / n, la misma formula que est (drvmlest.c:111-119); lo
+ *  unico que cambia es de donde sale H.  Devuelve 0 si pudo.                 */
+static int exact_hessian_se(int npar, real *x, real *dev, real **cov, int neff)
+{
+    real **H = matrix(1, npar, 1, npar);
+    real  *e = vector(1, npar);
+    real d1, d2, pi1, pi2, pi3, f;
+    int i, j, ifc = 0, ifault = 0;
+
+    /* Asignar la estructura propia y fijar la normalizacion en el optimo. */
+    fdh_varma.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
+    fdh_norm1 = fdh_norm2 = 1.0;
+    vec_shootx(x, &fdh_varma, &ifault, 1, 0);
+    if (ifault > 0) goto fail;
+    elf(fdh_varma.m, fdh_varma.n, fdh_varma.p, fdh_varma.q, fdh_varma.mu,
+        fdh_varma.phi, fdh_varma.theta, fdh_varma.qq, fdh_varma.w, 1.0,
+        fdh_varma.xitol, FALSE, fdh_varma.a, &pi1, &pi2, &pi3, &ifault);
+    if (ifault > 0) goto fail;
+    fdh_norm1 = pi1; fdh_norm2 = pi2;
+
+    f = fdh_obj(x);                      /* = 1 por construccion */
+    fdhess(fdh_obj, npar, x, f, macheps, H);
+    choldcp(H, npar, &d1, &d2, &ifc);
+    if (ifc > 0) {
+        fprintf(stderr, "WARNING: -fdhess: el hessiano no es definido positivo en "
+                        "el optimo; se conservan los errores estandar de BFGS\n");
+        goto fail;
+    }
+    for (i = 1; i <= npar; i++) {
+        for (j = 1; j <= npar; j++) e[j] = 0.0;
+        e[i] = 1.0;
+        cholsol(H, npar, e);             /* e <- H^-1 e_i */
+        for (j = 1; j <= npar; j++) cov[j][i] = (2.0 * f * e[j]) / neff;
+        dev[i] = sqrt(cov[i][i] > 0.0 ? cov[i][i] : 0.0);
+    }
+    vec_shootx(x, &fdh_varma, &ifault, 0, 1);
+    free_vector(e, 1, npar); free_matrix(H, 1, npar, 1, npar);
+    return 0;
+fail:
+    vec_shootx(x, &fdh_varma, &ifault, 0, 1);
+    free_vector(e, 1, npar); free_matrix(H, 1, npar, 1, npar);
+    return 1;
+}
+
 /*  Nota de convergencia — POR QUE paro, no solo SI paro.
  *
  *  En VARMA multivariante la razon de la parada es un diagnostico de primer
@@ -749,6 +862,8 @@ static int   global_writeinp = 0;    /* -writeinp <prefijo>  (componentes de Ȳ)
 static int   global_writeres = 0;    /* -writeres <prefijo>  (residuos)         */
 static char *inp_prefix      = NULL;
 static int   global_eval     = 0;    /* -eval: evaluar y salir, sin optimizar */
+static int   global_fdhess   = 0;    /* -fdhess: errores estandar por hessiano
+                                        de diferencias finitas en el optimo   */
 static int   global_interv   = 0;    /* -interv <prefijo>: deterministas del .pre */
 static char *interv_prefix   = NULL;
 static int   global_multistart = 0;  /* -multistart n: n arranques, quedarse el mejor */
@@ -2004,6 +2119,7 @@ int main(int argc, char *argv[])
             global_writeres = 1; inp_prefix = argv[++i];
         }
         else if (strcmp(argv[i], "-eval") == 0) global_eval = 1;
+        else if (strcmp(argv[i], "-fdhess") == 0) global_fdhess = 1;
         else if (strcmp(argv[i], "-interv") == 0 && i+1 < argc) {
             global_interv = 1; interv_prefix = argv[++i];
         }
@@ -2580,6 +2696,15 @@ int main(int argc, char *argv[])
             varma1.xitol, varma1.a, &varma1.sigma2, &varma1.logelf, &ifault);
 
     if (ifault == 0) {
+        /* Errores estandar por el hessiano en el optimo, si se piden.  Va antes
+           de recuperar la estructura final porque objcfunc rellena varmax con
+           el punto que se le pase.                                           */
+        if (global_fdhess) {
+            if (exact_hessian_se(npar, x, dev, cov, nobs) == 0)
+                fprintf(outputv, "\nStandard errors from the finite-difference "
+                                 "Hessian AT the optimum (-fdhess),\n"
+                                 "not from the BFGS-accumulated factor.\n");
+        }
         vec_shootx(x, &varma1, &ifault, 0, 0);  /* retrieve final */
 
         /* Rellenar los RESIDUOS del ajuste final.  Los escribe elf con

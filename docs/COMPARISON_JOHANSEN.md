@@ -98,6 +98,42 @@ the data, and it is the case for a VARMA rather than an argument about software.
 
 ---
 
+## 2b. And the theory says which inference is the valid one
+
+The measurements above have a theoretical counterpart, and it is worth stating
+because it changes what the comparison means.
+
+**A standard error can be computed for anything; valid inference is a different
+claim.** For the cointegrating coefficient the two are not the same question,
+because `β̂` is superconsistent and its limit distribution is mixed normal rather
+than normal.
+
+* **`drvec`'s route is licensed explicitly.** The transformed system it estimates
+  is Phillips' (1991) triangular representation — Mauricio's equation (19) — and
+  the paper concludes that *«asymptotic optimal inference applies to full-system
+  EML estimation»* and that tests on `Λ` and `B` *«can be conducted using standard
+  (e.g., Wald or likelihood ratio) asymptotic χ² tests»*. See
+  [MODEL.md §2b](MODEL.md).
+* **Johansen's is licensed only when the VECM is correctly specified.** Cappuccio
+  (1996) shows there is **no reparameterisation** of an ARMA cointegrated system
+  that yields a VECM with independent errors, so with MA dynamics present
+  Johansen's ML is misspecified and *«estimation and inference on the
+  cointegrating vectors and on the short-run parameters will be somehow affected»*.
+  He names the obvious escape — approximate the MA with more autoregressive
+  terms — and §1 above is that escape, measured: on these samples the lags cost
+  the rank test first.
+
+So the divergence in §2 is not two implementations disagreeing. It is one of them
+estimating the model the data appear to have, with inference the theory backs, and
+the other estimating a model that cannot represent that data's error structure.
+
+**Confirmed for this code, not just asserted.** Wald and LR are asymptotically
+equivalent under the theory, so their agreement is a check on the implementation:
+on simulated data with a known coefficient they agree to four decimals from
+n = 200 (table in [MODEL.md §2b](MODEL.md)). That is also why the comparison of
+standard errors in §2 should not be read as one program being "tighter" than the
+other — they are answering under different specifications.
+
 ## 3. What this does *not* establish
 
 * **Not a claim that Johansen is wrong.** On the same specification the two
@@ -116,6 +152,9 @@ the data, and it is the case for a VARMA rather than an argument about software.
   these samples is fragile.
 * **Not a parsimony claim in general** — only at the orders each method needs to
   produce an adequate model on these data.
+* **Not a claim that Johansen's standard errors are wrong arithmetic.** They are
+  computed correctly for the model Johansen fits; the issue is whether that model
+  can represent the data's error structure (§2b).
 
 ---
 

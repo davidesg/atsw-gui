@@ -22,6 +22,10 @@ estimating a VARMA and transforming afterwards:
    substitution inside the translation step, and its standard errors come
    straight from the Hessian. In VECM coordinates `α` is derived, and the same
    restriction needs constrained optimisation through the inverse map.
+   And the standard errors mean what they appear to mean: the transformed system
+   is Phillips' (1991) triangular representation, from which the paper concludes
+   that asymptotically **optimal** inference applies and that Wald and LR χ² tests
+   on `Λ` and `B` are valid — verified here to four decimals ([MODEL.md §2b](MODEL.md)).
 3. **`r = 0` is expressible**, which makes the sequential likelihood-ratio test
    for the cointegration rank a sequence of fits of one program.
 
@@ -111,6 +115,7 @@ advertisement:
 | [CONVERGENCE.md](CONVERGENCE.md) | what the optimiser reports, and how much to believe it |
 | [HOMOLOGATION.md](HOMOLOGATION.md) | which cases it reproduces, to what tolerance, and which it does not |
 | [COMPARISON_JOHANSEN.md](COMPARISON_JOHANSEN.md) | against the reference implementation: same specification, then each at its optimum |
+| [coint_vector.html](coint_vector.html) | the same comparison as a chart: eight pairs, both estimators, with intervals |
 | [TESTING.md](TESTING.md) | the test suite: what it protects, measured by mutation |
 | [DEVELOPMENT_RECORD.md](DEVELOPMENT_RECORD.md) | the process: what was tried, what was measured, what was rejected |
 

@@ -72,6 +72,90 @@ Two consequences that are easy to get wrong and have both cost time here:
   `Θ̄ = C̄ΘC̄⁻¹`. Seeding a `θ` straight into `Θ` is correct only when `C̄ = I`,
   i.e. `r = 0`, and is a silent error otherwise.
 
+## 2b. Why inference on `B₂` is valid here — and optimal
+
+This is the part of the theory that decides what the program is *for*, and it is
+not a claim about the implementation: it is in the paper `drvec` implements.
+
+**The transformed system is Phillips' triangular representation.** Mauricio's
+equation (19) writes the model as
+
+```
+  ∇Y_2t          =  U_1t
+  Y_1t + B₂Y_2t   =  U_2t
+```
+
+— the differenced common-trend block and the stationary cointegrating
+combination — and the paper says of it: *«Noting that (19) is a triangular
+representation of the type introduced by Phillips (1991), it follows that
+**asymptotic optimal inference applies to full-system EML estimation** … general
+hypothesis tests on parameters of the VEC model … **can be conducted using
+standard (e.g., Wald or likelihood ratio) asymptotic χ² tests**»* (Mauricio 2006,
+Remark 5).
+
+That is exactly what `vec_shootx` builds — `Ȳ_t = (∇Y_{2t}′, W_t′)′` — so the
+standard errors this program reports for `Λ` and `B₂`, and the LR tests it
+computes, are the ones the theory licenses. It is also why the legacy program's
+`shootx` had the same shape: `(w_t, ∇z_{2t})`.
+
+**And the paper states the contrast.** Approaches that compute the exact
+likelihood directly from the unrestricted representation, without imposing the
+unit-root restrictions, leave *«inference on parameters in the VEC model,
+especially on the elements of Λ and B … quite complicated, if not impossible at
+all, in practice, and … when possible, might not be optimal in the sense given by
+Phillips (1991)»*.
+
+### What this implies about Johansen — precisely
+
+Both the VECM and the triangular representation yield LAMN limit distributions
+and both allow optimal inference **when correctly specified** (Cappuccio 1996,
+`literature/`). The difference appears when the data have MA dynamics, and it is
+a non-existence result rather than an approximation issue:
+
+> *«there exist no reparameterization of the ARMA model … that allows us to write
+> a VECM model … with independent errors. Therefore, if we assume that the true
+> DGP … is of the form (6) with d(L)=1 and proceed to estimate the cointegrating
+> vectors according to Johansen's ML procedure, **some model misspecification is
+> induced**. Even though the MA dynamics of the error term in the VECM model could
+> be approximated by including more autoregressive terms, it is likely that
+> **estimation and inference on the cointegrating vectors and on the short-run
+> parameters will be somehow affected** by this model misspecification.»*
+
+So: a standard error can be computed either way — a statistic can be computed for
+anything — but with an MA component present it is `drvec`'s that the theory
+backs. And the escape route Cappuccio mentions, approximating the MA with more
+autoregressive terms, is measured in
+[COMPARISON_JOHANSEN.md](COMPARISON_JOHANSEN.md): on samples of 90–113 the lags
+needed cost the rank test before the approximation converges.
+
+### Confirmed in this implementation
+
+Theory says Wald and LR are both valid and asymptotically equivalent here, which
+is a checkable claim about the code. On simulated data with a known `B₂ = −0.6`,
+testing that value:
+
+| n | B̂₂ | sd | Wald | LR | \|difference\| |
+|---|---|---|---|---|---|
+| 100 | −0.5526 | 0.0380 | 1.556 | 1.477 | 0.079 |
+| 200 | −0.5963 | 0.0211 | 0.030 | 0.030 | **0.0001** |
+| 400 | −0.6058 | 0.0115 | 0.253 | 0.253 | 0.0006 |
+| 800 | −0.6022 | 0.0032 | 0.492 | 0.491 | 0.0008 |
+| 1600 | −0.5977 | 0.0014 | 2.722 | 2.704 | 0.018 |
+
+The two statistics agree to four decimals from n = 200, which is what valid
+Hessian-based inference requires — and the standard error falls faster than
+`1/√T`, the superconsistency the theory predicts.
+
+Two practical notes that follow:
+
+* the standard errors are worth asking for properly: `-fdhess` recomputes them
+  from the Hessian **at the optimum** instead of the factor BFGS accumulated
+  along the path (see [CONVERGENCE.md](CONVERGENCE.md));
+* an LR against a value fixed a priori (`-fixb2 <v>`) and the Wald from the
+  reported standard error answer the same question, so disagreement between them
+  is a symptom — of a fit that did not converge, or of a Hessian read off a path
+  rather than a curvature.
+
 ## 3. The parameter vector
 
 `x[]` is walked in this order by `calc_nparametrs`, `init_guess`, `vec_shootx`

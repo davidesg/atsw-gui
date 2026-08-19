@@ -4,3 +4,7 @@ bin/
 *.o
 *.out
 *.txt
+
+# Python bytecode
+__pycache__/
+*.pyc

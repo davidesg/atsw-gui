@@ -242,7 +242,7 @@ data is therefore a **constrained** one, which is the reason the unconstrained
 Hessian cannot be formed there and `-fdhess` declines to report standard errors
 from it ([CONVERGENCE.md](CONVERGENCE.md) §2b).
 
-## 3b. A limitation that bounded the specification searches
+## 3b. The specification searches, redone with `q ≥ 2`
 
 Until 2026-08-19 no model with `q ≥ 2` could be estimated: an allocation defect
 in the engine's supporting library corrupted the heap and aborted the run
@@ -250,29 +250,97 @@ whenever the likelihood routine requested its cross-covariance array with a
 negative lower bound, which it does for two or more moving-average lags. The
 defect was not particular to `drvec` and was not new — it had been diagnosed and
 fixed elsewhere in the suite on 2026-06-15, and `drvec` was carrying the pre-fix
-copy ([SUITE_INTEGRATION.md](SUITE_INTEGRATION.md) §5).
+copy ([SUITE_INTEGRATION.md](SUITE_INTEGRATION.md) §5). Every specification
+search recorded here was therefore bounded at `q ≤ 1` by a defect rather than by
+a modelling decision. They have since been redone.
 
-The consequence for the register is limited but must be stated. Every
-specification search reported above — including the comparison against Johansen
-at each procedure's own optimum — ranged over `q ≤ 1`, and did so because of a
-defect rather than a modelling decision. The comparisons remain valid as
-comparisons, since the criterion was applied identically on both sides and
-Johansen's procedure admits no moving-average term at all; what cannot be
-claimed from them is that `q ≤ 1` was selected against the `q = 2` alternative.
+**The rebuilt exercise reproduces the recorded one exactly.** Before extending
+anything, the eight pair files were rebuilt from the same sources and the
+recorded fits re-run: all sixteen cointegrating coefficients and all sixteen
+portmanteau p-values at `q = 0` and `q = 1` reproduce to four decimals, as does
+the rank statistic quoted for Milan. What follows is therefore an extension of
+the same measurement, not a different one.
 
-On mink–muskrat the alternative is now measurable, and it does not settle the
-question either way:
+### The extension itself
 
-| `p = 2, r = 1`, case 2 | log-likelihood | `npar` | AIC | BIC |
-|---|---|---|---|---|
-| `q = 1` | 6.4786 | 14 | 0.2466 | **0.7311** |
-| `q = 2` | 11.8573 | 18 | **0.2014** | 0.8243 |
+At the specification the record uses, `p = 2`, adding the second moving-average
+lag raises the log-likelihood on all eight pairs and leaves the residuals white:
 
-The Akaike criterion prefers the larger model and the Schwarz criterion the
-smaller, so the two disagree and the question stays open. The
-moving-average operator remains on the invertibility boundary — two of its four
-roots at 0.99995 — so the enlargement does not relieve the condition that §3
-identifies.
+| pair | `q=1`: B̂₂, portm., npar | `q=2`: B̂₂, portm., npar | Δ logL |
+|---|---|---|---|
+| Milan | −0.4465, 0.66, 14 | −0.4912, 0.80, 18 | +5.45 |
+| Strasbourg | −0.6955, 0.93, 14 | −0.5137, 0.88, 18 | +4.38 |
+| Utrecht | −0.6248, 0.95, 14 | −0.6265, 0.98, 18 | +3.78 |
+| Vienna | −0.5698, 0.97, 14 | −0.5530, 0.98, 18 | +2.96 |
+| Aix | −0.7594, 0.78, 14 | −0.7315, 0.84, 18 | +5.20 |
+| Arévalo | −0.6174, 0.88, 14 | −0.6012, 1.00, 18 | +5.06 |
+| Angers | −0.6355, 0.64, 14 | −0.5480, 0.95, 18 | +3.71 |
+| Penn | −1.1013, 0.76, 14 | −1.1228, 0.66, 18 | +9.37 |
+
+The improvement is not free: 18 parameters against 14, and the Schwarz criterion
+prefers `q = 1` on seven of the eight.
+
+### What a stated criterion selects
+
+A criterion applied identically to all eight, over the grid `p ∈ {1,2,3}`,
+`q ∈ {0,1,2}` with 40 restarts: **the most parsimonious specification whose
+residuals pass the portmanteau test at 5 %, ties broken by the Schwarz
+criterion.** It is adequacy first and parsimony second, which is the rule the
+recorded exercise applied informally when it declined to select on an information
+criterion alone.
+
+| pair | selected | `npar` | portm. | B̂₂ | smallest MA root |
+|---|---|---|---|---|---|
+| Milan | `p=1, q=1` | 10 | 0.058 | −0.5459 | 1.905 |
+| Strasbourg | `p=1, q=2` | 14 | 0.756 | −0.4065 | **1.000** |
+| Utrecht | `p=1, q=0` | 6 | 0.080 | −0.8377 | — |
+| Vienna | `p=1, q=0` | 6 | 0.428 | −0.8833 | — |
+| Aix | `p=1, q=0` | 6 | 0.268 | −0.8758 | — |
+| Arévalo | `p=1, q=0` | 6 | 0.267 | −1.0300 | — |
+| Angers | `p=1, q=0` | 6 | 0.299 | −1.1058 | — |
+| Penn | `p=1, q=1` | 10 | 0.108 | −1.0982 | **1.000** |
+
+**Opening `q ≥ 2` changes the selected specification for exactly one pair of the
+eight**, Strasbourg, which is also the one pair the record identifies as needing
+an MA term that `q = 1` fails to supply. So the bound the defect imposed was
+real but narrow, and the recorded conclusions do not turn on it.
+
+### What the extension does change: the roots
+
+The searches also had to be redone because `drvec` now reports the roots of the
+estimated operators, and what they show bears on how the recorded columns should
+be read.
+
+**At the recorded specification `p = 2, q = 1`, seven of the eight pairs have a
+moving-average root on the invertibility boundary** (moduli 0.99996 to 1.00000).
+Those fits are constrained optima: the standard errors reported beside them are
+not defined along the binding direction. This was not visible when the columns
+were measured, because the program did not report roots. At `q = 2` it holds for
+all eight.
+
+It is a symptom of over-specification rather than a property of the data. At the
+criterion-selected specifications above, six of the eight carry no such root —
+five because no moving-average term is selected at all, and Milan because its
+selected `q = 1` fit puts the root at 1.905. And it is not autoregressive–
+moving-average cancellation: at `p = 2, q = 1` the autoregressive roots stay
+between 1.30 and 2.63 while the moving-average root sits at one. The reading is
+the one [CONVERGENCE.md](CONVERGENCE.md) §2b sets out — `s = M − r` series are
+differenced by construction, and a unit moving-average root is how the
+likelihood undoes differencing the data did not require.
+
+### And a limit on the rank test that this exposed
+
+Running the sequential rank test across `q` put a further limitation on record.
+With 20 restarts the test selects `r = 1` for six of the eight pairs at `q = 1`;
+Aix and Penn do not reject `r = 0`. Aix, examined directly, is **optimiser-limited
+rather than data-limited**: the two log-likelihoods give `LR = 10.53` at 20 and
+60 restarts and `LR = 16.65` — rejection at 5 % — at 150, because the `r = 1` fit
+does not reach its optimum until then. Penn does not reject even at 150.
+
+This does not contradict the record, which states that `drvec` fitted at `r = 1`
+leaves clean residuals on all eight, and that reproduces exactly. It does show
+that the sequential test's verdict on these samples can depend on how hard the
+optimiser is asked to look, which is a caution the earlier tables did not carry.
 
 ## 4. Cases run without an external reference
 

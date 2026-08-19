@@ -20,7 +20,12 @@ distincion es el punto:
      daria en un k por casualidad y no en todos.
 
   B. CADA UNO EN SU OPTIMO.  Johansen con su orden por criterio de informacion;
-     drvec con la especificacion que quiera, MA incluido.  Aqui NO tienen por que
+     drvec con la especificacion que quiera, MA incluido.  Se recorre q = 0, 1 y
+     2: hasta el 19-08-2026 q >= 2 abortaba por un defecto del asignador del
+     motor, asi que el barrido estaba acotado por un fallo y no por una
+     decision (HOMOLOGATION.md 3b).  Se marca ademas si la raiz MA queda sobre
+     la frontera de invertibilidad, porque entonces el optimo es RESTRINGIDO y
+     los errores estandar no estan definidos en esa direccion.  Aqui NO tienen por que
      coincidir, y lo que se mide es cuanto cambia la respuesta al poder
      representar un MA.  Con la diagnosis de residuos de los dos lados, que es lo
      unico comparable entre ellos: AIC y BIC no lo son, porque la verosimilitud
@@ -90,6 +95,16 @@ def drvec(stem, p, q, extra=()):
             out["npar"] = int(line.split()[2])
         elif "Q(" in line and "p-value" in line:
             out.setdefault("pw", float(line.split("p-value =")[1].strip()))
+        elif "MA (Theta)" in line:
+            mods = []
+            for tok in line.split("MA (Theta)")[1].split():
+                tok = tok.rstrip("*")
+                try:
+                    mods.append(float(tok))
+                except ValueError:          # "inf": una raiz infinita, no es defecto
+                    pass
+            if mods:
+                out["mamin"] = min(mods)
     return out
 
 
@@ -136,13 +151,17 @@ def main():
                   % (crit, kv, sel, b2j, a[0], a[1], pw, pn))
     except Exception as exc:                                   # noqa: BLE001
         print("   seleccion de orden fallida: %s" % exc)
-    for (p, q) in ((2, 0), (2, 1)):
+    for (p, q) in ((2, 0), (2, 1), (2, 2)):
         d = drvec(stem, p, q)
         if "b2" in d:
+            mm = d.get("mamin")
+            flag = ""
+            if mm is not None and mm < 1.0001:
+                flag = "  <-- raiz MA en la frontera: optimo RESTRINGIDO"
             print("   drvec  (p=%d,q=%d)   : B2=%+.6f (sd %.6f)  logL=%.4f  "
-                  "npar=%d  portm.p=%s"
+                  "npar=%d  portm.p=%s%s"
                   % (p, q, d["b2"], d.get("sd", float("nan")), d.get("ll", 0),
-                     d.get("npar", 0), d.get("pw", "?")))
+                     d.get("npar", 0), d.get("pw", "?"), flag))
     print()
     print("   AIC/BIC no se comparan entre los dos: la verosimilitud de Johansen")
     print("   es condicional y la de drvec exacta y no condicional.  Lo comparable")

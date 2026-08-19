@@ -54,22 +54,48 @@ Residual diagnosis on both sides — which is the **only** comparable statistic,
 because AIC and BIC are not: Johansen's likelihood is conditional and `drvec`'s is
 exact and unconditional, so their information criteria measure different things.
 
-| pair | Johansen AIC: k, rank, B̂₂, portm. | `drvec` q=0: B̂₂, portm. | `drvec` q=1: B̂₂, portm. |
-|---|---|---|---|
-| Milan | k=3, **r=0**, −0.535, 0.89 | −0.527, **0.021** | −0.447, 0.66 |
-| Strasbourg | k=3, **r=0**, −0.648, 0.54 | −0.637, **0.036** | −0.695, 0.93 |
-| Utrecht | k=3, **r=0**, −0.776, 0.67 | −0.802, 0.54 | −0.625, 0.95 |
-| Vienna | k=1, **r=2**, −0.893, 0.35 | −0.869, 0.51 | −0.570, 0.97 |
-| Aix | k=1, **r=2**, −1.083, 0.31 | −1.031, 0.60 | −0.759, 0.78 |
-| Arévalo | k=3, r=1, −0.855, 0.63 | −0.995, 0.60 | −0.617, 0.88 |
-| Angers | k=1, **r=2**, −1.038, 0.27 | −1.014, 0.59 | −0.635, 0.64 |
-| Penn | k=2, r=1, −1.086, 0.23 | −1.079, 0.24 | −1.101, 0.76 |
+| pair | Johansen AIC: k, rank, B̂₂, portm. | `drvec` q=0: B̂₂, portm. | `drvec` q=1: B̂₂, portm. | `drvec` q=2: B̂₂, portm. |
+|---|---|---|---|---|
+| Milan | k=3, **r=0**, −0.535, 0.89 | −0.527, **0.021** | −0.447, 0.66 | −0.491, 0.80 |
+| Strasbourg | k=3, **r=0**, −0.648, 0.54 | −0.637, **0.036** | −0.695, 0.93 | −0.514, 0.88 |
+| Utrecht | k=3, **r=0**, −0.776, 0.67 | −0.802, 0.54 | −0.625, 0.95 | −0.627, 0.98 |
+| Vienna | k=1, **r=2**, −0.893, 0.35 | −0.869, 0.51 | −0.570, 0.97 | −0.553, 0.98 |
+| Aix | k=1, **r=2**, −1.083, 0.31 | −1.031, 0.60 | −0.759, 0.78 | −0.732, 0.84 |
+| Arévalo | k=3, r=1, −0.855, 0.63 | −0.995, 0.60 | −0.617, 0.88 | −0.601, 1.00 |
+| Angers | k=1, **r=2**, −1.038, 0.27 | −1.014, 0.59 | −0.635, 0.64 | −0.548, 0.95 |
+| Penn | k=2, r=1, −1.086, 0.23 | −1.079, 0.24 | −1.101, 0.76 | −1.123, 0.66 |
+
+The `q = 2` column was added on 2026-08-19. It could not be computed before: a
+defect in the engine's allocator aborted every model with two or more
+moving-average lags ([HOMOLOGATION.md](HOMOLOGATION.md) §3b). It costs 18
+parameters against 14 and the Schwarz criterion prefers `q = 1` on seven of the
+eight, so it does not displace the `q = 1` column; under a criterion applied
+identically to all eight — the most parsimonious specification whose residuals
+pass the portmanteau test, ties by Schwarz, over `p ∈ {1,2,3}` and
+`q ∈ {0,1,2}` — `q = 2` is selected for Strasbourg alone.
 
 **At its own optimum Johansen reaches a usable rank (`r = 1`) in 2 of 8 pairs.**
 In three it finds no cointegration at all, and in three it finds full rank
 (`r = M`, which in a bivariate system says the series are stationary and there is
 nothing to cointegrate). `drvec` with `q = 1` gives `r = 1` with clean residuals
 in all eight.
+
+### A caveat these columns must now carry
+
+`drvec` reports the roots of the estimated operators as of 2026-08-19, and at the
+`p = 2, q = 1` fits tabulated above **seven of the eight pairs have a
+moving-average root on the invertibility boundary**, with moduli between 0.99996
+and 1.00000. Those are constrained optima, so the standard errors accompanying
+the coefficients are not defined along the binding direction. The cointegrating
+coefficients themselves are unaffected in the sense that matters here — they
+reproduce exactly, and the comparison with Johansen is between point estimates —
+but any reading of their precision at this specification is not supported.
+
+The condition is one of over-specification rather than of the data: at the
+specification a stated criterion selects, six of the eight carry no such root
+([HOMOLOGATION.md](HOMOLOGATION.md) §3b). Nor is it autoregressive–moving-average
+cancellation — the autoregressive roots stay between 1.30 and 2.63 while the
+moving-average root sits at one.
 
 ### The bind, and why it is not a coding difference
 

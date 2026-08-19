@@ -82,22 +82,21 @@ methods. Raising Johansen's lag order to approximate the MA does not close it:
 the rank test loses the cointegration by `k = 3–4` on these sample sizes before
 the approximation converges.
 
-**Optimal against optimal, with the residuals checked on both sides.** Comparing
-each method's *reportable* model — Johansen's order by information criterion,
-`drvec`'s specification inherited from the univariate models — both pass their
-residual diagnosis, but the VARMA's residuals are consistently whiter
-(portmanteau p between 0.64 and 0.97, against 0.05 and 0.55), and the estimates
-differ by up to 0.40. Since the method contributes 0.019, that difference is the
-**model**.
+The agreement is established **across orders**, not at one point: sweeping
+`k = 1, 2, 3` against `p = k+1` gives 24 comparisons, all between 0.0003 and
+0.052. That also confirms the `p = k+1` correspondence empirically — a wrong
+mapping would agree at one order and nowhere else.
 
-Two things this does **not** show, stated because they would be easy to claim:
+**At each one's own optimum they diverge**, and the reason is structural rather
+than numerical: the lags Johansen needs to whiten the residuals cost `m²` each,
+and by `k = 3` the rank test has collapsed. At its own AIC order Johansen reaches
+a usable rank in 2 of 8 pairs; `drvec` with `q = 1` gives `r = 1` with clean
+residuals in all eight, on 14 parameters against Johansen's 16 at `k = 3`.
 
-* it is not a parsimony result — `drvec` uses 14 parameters against Johansen's
-  8–12 on these pairs;
-* AIC and BIC cannot be compared *across* the two programs: Johansen's likelihood
-  is conditional and `drvec`'s is exact and unconditional, so their information
-  criteria measure different things. The residual diagnosis is what is
-  comparable, and it is what is compared.
+Full tables, the caveats, and what it does **not** establish — including that
+AIC/BIC are not comparable across the two programs, since one likelihood is
+conditional and the other exact — are in
+[COMPARISON_JOHANSEN.md](COMPARISON_JOHANSEN.md).
 
 *Source of the data and the full tables:*
 `~/Dropbox/Cycles/Analysis/EJERCICIO_DRVEC.md`, and

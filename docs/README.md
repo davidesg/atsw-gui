@@ -110,6 +110,7 @@ advertisement:
 | [SUITE_INTEGRATION.md](SUITE_INTEGRATION.md) | the ladder, its two contracts, and the provenance of the borrowed code |
 | [CONVERGENCE.md](CONVERGENCE.md) | what the optimiser reports, and how much to believe it |
 | [HOMOLOGATION.md](HOMOLOGATION.md) | which cases it reproduces, to what tolerance, and which it does not |
+| [COMPARISON_JOHANSEN.md](COMPARISON_JOHANSEN.md) | against the reference implementation: same specification, then each at its optimum |
 | [TESTING.md](TESTING.md) | the test suite: what it protects, measured by mutation |
 | [DEVELOPMENT_RECORD.md](DEVELOPMENT_RECORD.md) | the process: what was tried, what was measured, what was rejected |
 

@@ -111,6 +111,16 @@ int global_rungs  = 0; /* if 1, report the ladder's rungs 0-2 and their LRs   */
  *  leen de hold_*, no de x.  Es el mismo patron que -fixb2 y que -alpha: la
  *  restriccion vive en el cast y el optimizador no se entera.                */
 int global_seedgate = 0;
+
+/*  -seedb2 v — arrancar B2 en v y estimarlo LIBRE.  No es -fixb2, que lo sujeta:
+ *  aqui se mueve.  Existe como INSTRUMENTO DE MEDIDA, para poder preguntar de
+ *  que depende el ajuste -- si de donde arranca B2 o del sitio donde para el
+ *  optimizador -- sin tener que recompilar para cada valor.  Que una pregunta
+ *  sobre el arranque solo se pueda contestar recompilando es, por si mismo, una
+ *  razon para que la opcion exista.                                          */
+int  global_seedb2 = 0;
+real global_seedb2_value = 0.0;
+
 static int    prof_hold = 0;
 static real ***hold_F = NULL, ***hold_Th = NULL;
 static real  **hold_S = NULL;
@@ -2998,6 +3008,10 @@ int main(int argc, char *argv[])
         printf("  -lrtest        sequential LR test for the cointegration rank:\n");
         printf("                 estimates r = 0..M-1 and reports 2*[L(r+1) - L(r)];\n");
         printf("                 incompatible with -differenced\n\n");
+        printf("  -seedb2 v      start B2 at v and estimate it FREE (not -fixb2,\n");
+        printf("                 which holds it).  A measuring instrument: it is\n");
+        printf("                 how you ask whether the answer depends on where\n");
+        printf("                 B2 starts\n\n");
         printf("  -seedgate      seed the r >= 1 fit by profiling: estimate the\n");
         printf("                 r = 0 rung, hold F, Theta and Sigma there, and fit\n");
         printf("                 Lambda and B2 on it before releasing everything.\n");
@@ -3046,6 +3060,9 @@ int main(int argc, char *argv[])
         else if (strcmp(argv[i], "-lrtest") == 0)  global_lrtest = 1;
         else if (strcmp(argv[i], "-rungs") == 0)   global_rungs = 1;
         else if (strcmp(argv[i], "-seedgate") == 0) global_seedgate = 1;
+        else if (strcmp(argv[i], "-seedb2") == 0 && i+1 < argc) {
+            global_seedb2 = 1; global_seedb2_value = atof(argv[++i]);
+        }
         else if (strcmp(argv[i], "-levels") == 0)  global_levels = 1;  /* default */
         else if (strcmp(argv[i], "-differenced") == 0) global_levels = 0;
         else if (strcmp(argv[i], "-writeinp") == 0 && i+1 < argc) {
@@ -3671,6 +3688,14 @@ int main(int argc, char *argv[])
      *  regresion condicional es el que hay.  Y si el perfilado no sale, lo que
      *  queda es exactamente la ruta (C), sin ninguna ruta intermedia inventada:
      *  o cruza entero o no cruza.                                            */
+    if (global_seedb2) {
+        int nmean_, nlam_, nmid_, ntail_, i2;
+        par_blocks(&nmean_, &nlam_, &nmid_, &ntail_);
+        for (i2 = 1; i2 <= ntail_; i2++)
+            x[nmean_ + nlam_ + nmid_ + i2] = global_seedb2_value;
+        if (ntail_ == 0)
+            fprintf(stderr, "AVISO: -seedb2 no hace nada con -fixb2 o r = 0\n");
+    }
     if (global_seedgate) gate_profile_seed(x, npar);
 
     /* -writeres: los residuos de la regresión condicional, que es lo que

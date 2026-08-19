@@ -609,6 +609,29 @@ elif [ -n "$(logelf_of "$TMP/case")" ]; then
 else bad "seedgate" "reported but produced no fit"; fi
 echo
 
+# 5g. -seedb2 v starts B2 at v and estimates it FREE, where -fixb2 v pins it
+#     there.  Different models, but THE SAME STARTING POINT -- so the starting
+#     log-likelihood must agree to the digit.  That is what says -seedb2 writes
+#     B2 into the right slots in the right order, which is the only thing that
+#     can silently be wrong about it, and it is checked on M = 3 with r = 2 as
+#     well as on M = 2: with s = 1 the fill order of B2 is a no-op, so a
+#     transposition would be invisible there (the same lesson as the M=5 golden).
+for spec in "2 1 1 -case 2 -mean:$MM:-0.5" \
+            "2 0 2 -case 2 -mean:datasets/synthetic/rank2.inp:0.3"; do
+    sp=${spec%%:*}; rest=${spec#*:}; src=${rest%%:*}; val=${rest#*:}
+    cp "$src" "$TMP/case.inp"
+    a=$("$DRVEC" "$TMP/case" $sp -seedb2 "$val" -eval 2>/dev/null \
+        | grep -a 'punto de partida' | sed 's/.*partida = *//; s/ .*//')
+    b=$("$DRVEC" "$TMP/case" $sp -fixb2  "$val" -eval 2>/dev/null \
+        | grep -a 'punto de partida' | sed 's/.*partida = *//; s/ .*//')
+    if [ -z "$a" ] || [ -z "$b" ]; then
+        bad "seedb2: start identity ($sp)" "missing eval (seedb2=$a fixb2=$b)"
+    elif [ "$a" = "$b" ]; then
+        ok "seedb2: starts where -fixb2 pins ($sp): $a"
+    else bad "seedb2: start identity ($sp)" "seedb2=$a but fixb2=$b"; fi
+done
+echo
+
 echo "[6] alpha = A*psi: the restriction, its LR, and its guards"
 # Johansen and Swensen (2024): H1(r) is alpha = A*psi with A known.  Weak
 # exogeneity is the special case where A selects rows, so -weakex is a shorthand

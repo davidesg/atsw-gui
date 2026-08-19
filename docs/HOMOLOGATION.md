@@ -532,6 +532,63 @@ surfaces stop on `steptol` or on a failed line search, so a bad start is not
 recoverable. Carrying an optimum up a rung, which works everywhere else in this
 construction, is exactly what does not work across this one.
 
+## 4d. Does a bad `B₂` seed drive the moving average to the boundary? Measured: no
+
+*A conjecture worth testing, since route (B)'s `B₂` pre-estimates are far from
+the optimum — on Arévalo even positive — and almost every fit on this data ends
+with a moving-average root on the invertibility boundary. The instrument is
+`-seedb2 v`, which starts `B₂` at `v` and estimates it **free** (`-fixb2` pins
+it). 38 fits, four datasets.*
+
+**Where the seed moves the answer, it does not move the boundary.** Ten `B₂`
+seeds from `+0.5` to `−2.8`, everything else cold:
+
+| seed | Milan logL / `B̂₂` / MAmin | Angers | Arévalo |
+|---|---|---|---|
+| +0.5 | 93.274 / −0.445 / 0.99995 | 28.304 / −0.619 / 0.99995 | −3.721 / −0.644 / 0.99995 |
+| −0.25 | 93.290 / −0.447 / 0.99995 | 28.319 / −0.691 / 0.99995 | −3.597 / −0.623 / 0.99996 |
+| −0.6 | 93.290 / −0.447 / 1.00000 | 28.083 / −0.611 / 0.99995 | −3.544 / −0.617 / 1.00000 |
+| −1.5 | 93.290 / −0.447 / 1.00000 | 28.959 / −0.661 / 0.99996 | −3.587 / −0.622 / 0.99995 |
+| −2.8 | 91.979 / −0.438 / 0.99995 | **18.192 / −2.635** / 0.99995 | −3.983 / −0.644 / 0.99995 |
+
+On the pairs the fit is nearly indifferent to where `B₂` starts — Milan lands
+within 0.02 log-likelihood units and at `B̂₂ = −0.445 ± 0.01` from a seed of the
+wrong sign as readily as from a good one — and **the smallest moving-average
+root is 0.99995 to 1.00000 in every single run, good seeds and bad alike.** The
+boundary is not something a bad seed causes; it is where the maximum is.
+
+**And the relation runs the other way.** Pinning `B₂` and profiling shows when
+the moving average *does* come off the boundary:
+
+| `B₂` pinned | Milan logL / MAmin | Arévalo logL / MAmin |
+|---|---|---|
+| −0.25 | 90.456 / 0.99995 | −5.542 / 0.99996 |
+| **−0.45** | **93.230 / 0.99995** | −4.954 / 0.99996 |
+| **−0.60** | 90.165 / 1.17577 | **−3.742 / 0.99996** |
+| −1.00 | 86.012 / 1.32024 | −7.421 / **1.18036** |
+| −1.50 | 82.695 / 1.30733 | −10.915 / 1.18410 |
+
+The moving average leaves the boundary exactly where `B₂` is pushed **past** its
+optimum, at a cost of 3 to 7 log-likelihood units. Comfortable invertibility is
+the signature of a `B₂` that is wrong, not of one that is right. The same shows
+up in the seed runs on `mink_muskrat`, where the only two fits with a
+comfortably invertible root (MAmin 12.7 and 3.5) are also the two worst fits by
+far (logL −22.7 and −26.4).
+
+**What a bad `B₂` seed does instead is kill the run outright.** On the synthetic
+`rank2` at `r = 1`, seeding `B₂ = +0.5` makes the *starting point* non-stationary
+— `elf` answers `ifault = 3`, `est` refuses to begin, and there is no fit at all.
+That is the same wall route (B) hit from the other side (§4c): the damage a bad
+seed does is on the **stationarity** side, and it is fatal rather than gradual.
+
+Two corollaries. Route (B)'s failure cannot be blamed on its `B₂`
+pre-estimates: seeded with `B₂ = −0.25`, close to (B)'s Angers value of −0.265,
+the cold fit still reaches 28.3 where (B) reaches −8.4. What is toxic in (B)'s
+starting point is the **held `F`, `Θ`, `Σ`** and the boundary entry, not `B₂`.
+And `mink_muskrat` remains the case where the surface, not the seed, is the
+problem: there the ten seeds spread the answer from −26.4 to +5.5, which is the
+sensitivity already recorded in [CONVERGENCE.md](CONVERGENCE.md).
+
 ## 5. What is not in the register, and why
 
 * **The Census Housing example** of the AddOn (Hillmer & Tiao 1979): the data

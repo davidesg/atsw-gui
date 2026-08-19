@@ -78,7 +78,17 @@ Swensen (2024).
 
 | | |
 |---|---|
+| `-seedb2 v` | start `B₂` at `v` and estimate it **free** (`-fixb2` pins it there instead) |
 | `-seedgate` | estimate the `r = 0` rung, hold `F`, `Θ`, `Σ` there, fit `Λ` and `B₂` on it, then release everything |
+
+`-seedb2` is a measuring instrument: it is how you ask whether an answer depends
+on where `B₂` starts, without recompiling for each value. Measured with it
+([HOMOLOGATION.md](HOMOLOGATION.md) §4d): on the wheat pairs the answer barely
+depends on the seed at all, on `mink_muskrat` it depends on it enormously, and
+in no case does a bad `B₂` seed drive the moving-average root to the
+invertibility boundary — the boundary is where the maximum is, and a seed bad
+enough to matter kills the run instead, by making the starting point
+non-stationary.
 
 **Not the default, and measured to be worse on most of the bank** — it is here
 because the measurement is worth keeping, not because it should be used. See

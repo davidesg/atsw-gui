@@ -589,6 +589,123 @@ And `mink_muskrat` remains the case where the surface, not the seed, is the
 problem: there the ten seeds spread the answer from −26.4 to +5.5, which is the
 sensitivity already recorded in [CONVERGENCE.md](CONVERGENCE.md).
 
+## 4e. The canonical seed, measured without the moving average and with it
+
+*Route (D) of [VEC_EMBEDDING_PLAN.md](VEC_EMBEDDING_PLAN.md) §8b: seed `B₂` with
+the canonical reduced-rank solution — Johansen's eigenvalue problem, closed form
+— instead of the static OLS regression. `-seedjoh`. Everything else, `Λ`, `F`,
+`Σ`, `E[W]`, then follows from the conditional regression **with that `W`**,
+which is Johansen's own `α` formula, so `α` is not computed twice.*
+
+The implementation is `drvec`'s own (GSL's symmetric-definite generalized
+eigenproblem), not a call to anything external. Checked against `statsmodels`'
+`coint_johansen` on the eight pairs, `p = 2` ↔ `k = 1`: **agreement 0.001 to
+0.021** in `B₂`, the residue being the deterministic treatment (an unrestricted
+constant in the auxiliary regressions here, restricted to the relation there).
+
+### Without the moving average (`q = 0`): the seed is essentially the answer
+
+| pair | cold start | canonical start | the optimum both reach |
+|---|---|---|---|
+| Milan | 76.495 | **76.628** | 76.650 |
+| Strasbourg | 23.029 | **24.123** | 24.156 |
+| Utrecht | 68.573 | **70.605** | 70.641 |
+| Vienna | 19.981 | **20.920** | 20.979 |
+| Aix | 55.584 | **60.817** | 60.841 |
+| Arévalo | −16.307 | **−13.596** | −13.590 |
+| Angers | 15.548 | **16.161** | 16.171 |
+| Penn | 28.595 | **31.532** | 31.542 |
+| `mink_muskrat` | **−8.743** | −9.839 | −8.681 |
+
+Mean distance from the optimum: cold **1.93**, canonical **0.025** — seventy-five
+times closer, and on Arévalo the canonical seed starts 0.006 away. Both routes
+converge on the gradient to the same optimum to seven decimals, which is the
+check that the seed is changing the *start* and not the model. `mink_muskrat` is
+the exception in both halves: there the canonical seed starts 1.16 *below* the
+cold one.
+
+### With the moving average (`q = 1`): it splits
+
+| pair | cold | canonical | Δ |
+|---|---|---|---|
+| Milan | 93.288 | 93.252 | −0.04 |
+| **Strasbourg** | 34.535 | **36.088** | **+1.55** |
+| Utrecht | 82.296 | 82.379 | +0.08 |
+| Vienna | 33.953 | 33.478 | −0.47 |
+| Aix | 68.941 | 68.958 | +0.02 |
+| Arévalo | −3.563 | −3.560 | +0.002 |
+| Angers | 29.094 | 28.589 | −0.51 |
+| Penn | 41.373 | 41.353 | −0.02 |
+| `mink_muskrat` c1/c2/c3 | 3.686 / 6.479 / 6.514 | −25.564 / −1.501 / −0.838 | **−29 / −8 / −7** |
+
+Four wins and four losses on the pairs, and a rout on `mink_muskrat` — where the
+canonical `B₂` is **positive** (+0.38) against `drvec`'s optimum at −0.24, so the
+two estimators genuinely disagree on that data rather than the seed being bad.
+
+**Strasbourg is the case that matters.** The canonical seed reaches 36.088 from a
+single start — exactly the value the cold route only finds with twenty restarts —
+converging **on the gradient**, the only `q = 1` fit in the bank that does, and
+with a smallest moving-average root of **1.195**, comfortably invertible. The
+boundary fit at 34.535 that the cold start converges to is a **local** optimum.
+
+### The diagonal moving average
+
+| pair | logL | MAmin | termination |
+|---|---|---|---|
+| Milan | 91.314 | 1.00097 | gradient |
+| Strasbourg | 34.281 | 1.00014 | gradient |
+| Utrecht | 81.150 | 0.99995 | lower |
+| Vienna | 31.623 | 0.99996 | steptol |
+| Aix | 69.169 | 0.99995 | lower |
+| **Arévalo** | −11.467 | **1.45543** | gradient |
+| Angers | 23.124 | 1.00020 | gradient |
+| **Penn** | 35.906 | **1.27678** | gradient |
+
+Restricting `Θ` to be diagonal makes the optimiser behave — five of eight
+converge on the gradient against nearly none with a full `Θ` — and three sit
+comfortably off the invertibility boundary. It also fits much worse: Arévalo
+−11.47 against −3.56, an LR of 15.8 on 2 degrees of freedom.
+
+## 4f. Does the moving average "inherit" the univariate structure? Partly, and only below `r = 1`
+
+*A conjecture with real content: `Θ` is the same object as the univariate
+moving averages of the components, so with a diagonal `Θ` it should reproduce
+them rather than run to the unit circle.*
+
+The eight pairs each carry the two `fue` univariate models they were built from,
+so the univariate structure is on file rather than inferred. For every pair the
+London component's univariate model is `MA(1)` with **θ = 0.7482**; the market
+component's has **no moving average at all** in five of the eight.
+
+| pair | `Θ` diag at `r = 0` | `Θ` diag at `r = 1` | univariate (`fue`) |
+|---|---|---|---|
+| Milan | 0.8332, −0.5515 | −0.4711, **0.9990** | 0.7482, none |
+| Strasbourg | 0.8343, 0.8722 | −0.4356, **0.9999** | 0.7482, none |
+| Utrecht | 0.8343, −0.2682 | 0.3833, **1.0000** | 0.7482, none |
+| Vienna | 0.8343, 0.9132 | 0.6293, **1.0000** | 0.7482, 0.8714 |
+| Aix | 0.9083, 0.7936 | 0.7267, **1.0000** | 0.7482, 0.7682 |
+| Arévalo | 0.8343, −0.6294 | 0.2019, −0.6871 | 0.7482, none |
+| Angers | 0.9083, 0.9618 | −0.1962, **0.9998** | 0.7482, 0.9364 |
+| Penn | 0.8152, −0.9120 | −0.7494, 0.7832 | 0.7482, none |
+
+**Below the rung it inherits.** At `r = 0` the differenced London component is
+estimated at 0.815 to 0.908 against `fue`'s 0.7482 — the same structure, which
+is what the gate's factorisation contract already proves in another form.
+
+**At `r = 1` it stops.** The equation order flips — with `r = 1` the first
+equation is the market and the second the differenced London — and that second
+coefficient goes to **0.999–1.000 in six of the eight pairs**. A diagonal `Θ`
+entry of one is the factor `(1 − B)` sitting on `∇`London, which is the model
+saying that series should not have been differenced.
+
+**And it is not the seed.** Seeded with `fue`'s own univariate values through
+`-seedybar` — 0.7482 for London, zero for the market — the fit walks the same
+coefficient back to 1.0000 in **six of the eight** pairs (Penn stops at 0.783
+and Angers at 0.898). With twenty restarts and a free `Θ`, **seven of the eight**
+best fits are still on the boundary. So the boundary is where the likelihood
+sends it, from a good seed as readily as from a bad one — with Strasbourg, above,
+the measured exception where the boundary fit is only a local optimum.
+
 ## 5. What is not in the register, and why
 
 * **The Census Housing example** of the AddOn (Hillmer & Tiao 1979): the data

@@ -78,8 +78,19 @@ Swensen (2024).
 
 | | |
 |---|---|
+| `-seedjoh` | seed `B₂` with the canonical reduced-rank solution (Johansen's eigenvalue problem, closed form) instead of the static OLS regression |
 | `-seedb2 v` | start `B₂` at `v` and estimate it **free** (`-fixb2` pins it there instead) |
 | `-seedgate` | estimate the `r = 0` rung, hold `F`, `Θ`, `Σ` there, fit `Λ` and `B₂` on it, then release everything |
+
+`-seedjoh` is measured in [HOMOLOGATION.md](HOMOLOGATION.md) §4e. **Without a
+moving average it is essentially the answer**: on the eight pairs it starts an
+average of 0.025 log-likelihood units from the optimum where the cold start is
+1.93 away, and both converge to the same point. **With one it splits**: four
+wins and four losses on the pairs, a rout on `mink_muskrat` — where Johansen and
+`drvec` genuinely disagree, the canonical `B₂` being positive and the optimum
+negative — and one case, Strasbourg, where it finds from a single start the
+optimum the cold route needs twenty restarts to reach, on the gradient and with
+an invertible moving average. Not the default.
 
 `-seedb2` is a measuring instrument: it is how you ask whether an answer depends
 on where `B₂` starts, without recompiling for each value. Measured with it

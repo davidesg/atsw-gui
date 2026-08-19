@@ -632,6 +632,43 @@ for spec in "2 1 1 -case 2 -mean:$MM:-0.5" \
 done
 echo
 
+# 5h. -seedjoh seeds B2 with the canonical reduced-rank solution (Johansen's
+#     eigenvalue problem, closed form) instead of the static OLS one.  Two
+#     checks, and the first is an invariant: WITH q = 0 the two routes must
+#     reach the same optimum, because there the surface is well behaved and
+#     both converge on the gradient -- a seeding option that changed the ANSWER
+#     there would be changing the model, not the start.  The second is the
+#     claim the route is built on, so it is measured rather than asserted: the
+#     canonical seed starts closer.  It names its case on purpose -- on
+#     mink_muskrat it is the cold seed that starts closer, which is why the
+#     route is not the default (HOMOLOGATION.md 4e).
+run data/pairs/milan.inp 2 0 1 -case 2 -mean
+c0=$(logelf_of "$TMP/case")
+run data/pairs/milan.inp 2 0 1 -case 2 -mean -seedjoh
+j0=$(logelf_of "$TMP/case")
+if [ -z "$c0" ] || [ -z "$j0" ]; then
+    bad "seedjoh: q=0" "missing logelf (cold=$c0 canonical=$j0)"
+elif awk -v a="$c0" -v b="$j0" 'BEGIN{d=a-b; if(d<0)d=-d; exit !(d<=1e-6)}'; then
+    ok "seedjoh: with q=0 both seeds reach the same optimum ($c0)"
+else bad "seedjoh: q=0 seeds disagree on the optimum" "cold=$c0 canonical=$j0"; fi
+
+if ! grep -aq "seedjoh: B2 seeded from the canonical" "$TMP/case.out"; then
+    bad "seedjoh" "the canonical solution was not formed on Milan"
+else
+    ok "seedjoh: the canonical solution is formed and reported"
+    "$DRVEC" "$TMP/case" 2 0 1 -case 2 -mean -eval >/dev/null 2>&1
+    sc=$(awk '/^eval logelf/{print $4}' "$TMP/case.out")
+    "$DRVEC" "$TMP/case" 2 0 1 -case 2 -mean -seedjoh -eval >/dev/null 2>&1
+    sj=$(awk '/^eval logelf/{print $4}' "$TMP/case.out")
+    if [ -z "$sc" ] || [ -z "$sj" ]; then
+        bad "seedjoh: starting values" "missing eval (cold=$sc canonical=$sj)"
+    elif awk -v a="$sc" -v b="$sj" -v o="$c0" \
+            'BEGIN{da=o-a; db=o-b; if(da<0)da=-da; if(db<0)db=-db; exit !(db<da)}'
+    then ok "seedjoh: the canonical seed starts closer on Milan ($sj vs $sc, optimum $c0)"
+    else bad "seedjoh: the canonical seed did not start closer" "cold=$sc canonical=$sj optimum=$c0"; fi
+fi
+echo
+
 echo "[6] alpha = A*psi: the restriction, its LR, and its guards"
 # Johansen and Swensen (2024): H1(r) is alpha = A*psi with A known.  Weak
 # exogeneity is the special case where A selects rows, so -weakex is a shorthand
@@ -1025,6 +1062,8 @@ if [ "${VALGRIND:-0}" = "1" ]; then
                  -diagar -diagma -diagcov -seedybar tests/fixtures/mmdiag
         vg_clean "no leaks: -seedgate"        "$MM" 2 1 1 -case 2 -mean -seedgate
         vg_clean "no leaks: -rungs"           "$MM" 2 1 0 -case 1 -rungs
+        vg_clean "no leaks: -seedjoh"         data/pairs/milan.inp 2 1 1 \
+                 -case 2 -mean -seedjoh
     fi
     echo
 fi

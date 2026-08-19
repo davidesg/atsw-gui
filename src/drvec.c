@@ -27,6 +27,7 @@
 #include "fue_pre_reader.h"   /* lector de .pre, copiado de drtran (ver F2.1) */
 #include "fue_bridge.h"       /* expansion de los factores del .pre           */
 #include <gsl/gsl_cdf.h>      /* p-valor chi2 del LR de H1(r) contra H(r)     */
+#include <gsl/gsl_eigen.h>    /* problema de autovalores generalizado simetrico */
 
 real macheps;
 FILE *outputv;
@@ -120,6 +121,11 @@ int global_seedgate = 0;
  *  razon para que la opcion exista.                                          */
 int  global_seedb2 = 0;
 real global_seedb2_value = 0.0;
+
+/*  -seedjoh — sembrar B2 con la solucion canonica de rango reducido en vez de
+ *  con el OLS estatico.  Ver canonical_b2.                                   */
+int  global_seedjoh = 0;
+static int canon_used = 0;      /* 1 = la solucion canonica entro de verdad   */
 
 static int    prof_hold = 0;
 static real ***hold_F = NULL, ***hold_Th = NULL;
@@ -289,6 +295,218 @@ static int calc_nparametrs(void)
     int nmean, nlam, nmid, ntail;
     par_blocks(&nmean, &nlam, &nmid, &ntail);
     return nmean + nlam + (prof_hold ? 0 : nmid) + ntail;
+}
+
+/*****************************************************************************/
+/*  canonical_b2 — B2 POR LA SOLUCION CANONICA DE RANGO REDUCIDO (Johansen). */
+/*                                                                           */
+/*  QUE ES.  El estimador de Johansen resuelve el vector de cointegracion en  */
+/*  FORMA CERRADA, por un problema de autovalores, sin optimizar nada:        */
+/*                                                                           */
+/*    R0  residuos de regresar nabla Y_t en los nabla Y retardados            */
+/*    R1  residuos de regresar Y_{t-1}   en los mismos                        */
+/*    S_ij = R_i' R_j / T                                                     */
+/*    |lambda S11 - S10 S00^-1 S01| = 0,  beta = los r autovectores mayores   */
+/*                                                                           */
+/*  POR QUE COMO SEMILLA.  Porque ya esta medido lo cerca que cae del optimo  */
+/*  de este programa, y se midio para otra cosa: HOMOLOGATION.md 2.1b compara */
+/*  las dos rutas en la MISMA especificacion (q = 0) sobre los ocho pares y   */
+/*  las encuentra a entre 0.0003 y 0.052 la una de la otra, en 24             */
+/*  comparaciones.  Ninguna otra semilla de las que este programa ha probado  */
+/*  esta a esa distancia: la de (C) arranca 11 a 17 unidades de logL por      */
+/*  debajo del optimo y la de (B) llega a equivocar el signo de B2 (4b, 4c).  */
+/*                                                                           */
+/*  CONVENIOS, que es donde esto se rompe si se rompe.  La normalizacion de   */
+/*  drvec es B = [I_r ; B2] sobre Y = [Y1 ; Y2], o sea W = Y1 + B2'Y2, asi    */
+/*  que el beta canonico -- que sale normalizado como quiera el autovector -- */
+/*  hay que RENORMALIZARLO dividiendo por su bloque superior r x r.  Y alpha  */
+/*  no se calcula aqui: la regresion condicional que init_guess ya hace, con  */
+/*  el W canonico, ES la formula de alpha de Johansen, alpha = S01 beta       */
+/*  (beta' S11 beta)^-1, de modo que pedirla dos veces seria escribir dos     */
+/*  implementaciones del mismo estimador.  El signo tambien lo pone esa       */
+/*  regresion: drvec lleva -Lambda(W - E[W]), luego Lambda = -alpha.          */
+/*                                                                           */
+/*  Devuelve 1 si dejo un B2 nuevo, 0 si no pudo (y entonces vale el de OLS   */
+/*  estatico, que es la ruta de siempre).                                     */
+/*****************************************************************************/
+static int canonical_b2(real **B2)
+{
+    int M = nser, r = global_r, s = M - r, p = global_p;
+    int nf = (p > 1) ? p - 1 : 0;
+    int T  = nobs - p;
+    int nd = nf * M;                 /* los nabla Y retardados, sin constante  */
+    int i, j, k, t, ok = 0;
+    real **Y2lev = Y2_levels;
+    real **R0, **R1, **S00, **S01, **S11, **A, **bet;
+    gsl_matrix *Ag, *Bg, *evec;
+    gsl_vector *eval;
+    gsl_eigen_gensymmv_workspace *ws;
+
+    if (r <= 0 || T <= nd + M + 1) return 0;
+
+    R0 = matrix(1, T, 1, M);
+    R1 = matrix(1, T, 1, M);
+    for (t = p + 1; t <= nobs; t++) {
+        int row = t - p;
+        for (j = 1; j <= r; j++) {
+            R0[row][j]     = datamat[t][s+j] - datamat[t-1][s+j];   /* nabla Y1 */
+            R1[row][j]     = datamat[t-1][s+j];                     /* Y1_{t-1} */
+        }
+        for (i = 1; i <= s; i++) {
+            R0[row][r+i]   = datamat[t][i];         /* nabla Y2, ya diferenciado */
+            R1[row][r+i]   = Y2lev[t-1][i];         /* Y2_{t-1} en niveles       */
+        }
+    }
+
+    /*  Las dos regresiones auxiliares, con constante: la constante restringida
+     *  a la relacion es el caso 2 de drvec y el det_order = 0 con el que se
+     *  hizo la comparacion externa, asi que centrar es lo que corresponde.    */
+    {
+        int nc = nd + 1;                        /* +1 por la constante         */
+        real **D = matrix(1, T, 1, nc);
+        real **XtX = matrix(1, nc, 1, nc);
+        real  *Xty = vector(1, nc);
+        int   *ind = ivector(1, nc);
+        int    c, c2, e;
+
+        for (t = p + 1; t <= nobs; t++) {
+            int row = t - p; c = 1;
+            D[row][c++] = 1.0;
+            for (k = 1; k <= nf; k++) {
+                for (j = 1; j <= r; j++)
+                    D[row][c++] = datamat[t-k][s+j] - datamat[t-k-1][s+j];
+                for (i = 1; i <= s; i++)
+                    D[row][c++] = datamat[t-k][i];
+            }
+        }
+        for (c = 1; c <= nc; c++)
+            for (c2 = 1; c2 <= nc; c2++) {
+                real ss = 0.0;
+                for (t = 1; t <= T; t++) ss += D[t][c] * D[t][c2];
+                XtX[c][c2] = ss;
+            }
+        ludcp(XtX, nc, ind);
+        for (e = 1; e <= M; e++) {
+            real **RR;
+            int w;
+            for (w = 0; w < 2; w++) {
+                RR = w ? R1 : R0;
+                for (c = 1; c <= nc; c++) {
+                    Xty[c] = 0.0;
+                    for (t = 1; t <= T; t++) Xty[c] += D[t][c] * RR[t][e];
+                }
+                lusol(XtX, Xty, nc, ind);
+                for (t = 1; t <= T; t++) {
+                    real fit = 0.0;
+                    for (c = 1; c <= nc; c++) fit += Xty[c] * D[t][c];
+                    RR[t][e] -= fit;
+                }
+            }
+        }
+        free_ivector(ind, 1, nc);
+        free_vector(Xty, 1, nc);
+        free_matrix(XtX, 1, nc, 1, nc);
+        free_matrix(D, 1, T, 1, nc);
+    }
+
+    S00 = matrix(1, M, 1, M);
+    S01 = matrix(1, M, 1, M);
+    S11 = matrix(1, M, 1, M);
+    for (i = 1; i <= M; i++)
+        for (j = 1; j <= M; j++) {
+            real a0 = 0.0, a1 = 0.0, a2 = 0.0;
+            for (t = 1; t <= T; t++) {
+                a0 += R0[t][i] * R0[t][j];
+                a1 += R0[t][i] * R1[t][j];
+                a2 += R1[t][i] * R1[t][j];
+            }
+            S00[i][j] = a0 / T; S01[i][j] = a1 / T; S11[i][j] = a2 / T;
+        }
+
+    /*  A = S10 S00^-1 S01, simetrica semidefinida positiva.                  */
+    A = matrix(1, M, 1, M);
+    {
+        real **S00i = matrix(1, M, 1, M);
+        real  *col  = vector(1, M);
+        int   *ind  = ivector(1, M);
+        real **cp   = matrix(1, M, 1, M);
+        for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) cp[i][j] = S00[i][j];
+        ludcp(cp, M, ind);
+        for (j = 1; j <= M; j++) {
+            for (i = 1; i <= M; i++) col[i] = (i == j) ? 1.0 : 0.0;
+            lusol(cp, col, M, ind);
+            for (i = 1; i <= M; i++) S00i[i][j] = col[i];
+        }
+        for (i = 1; i <= M; i++)
+            for (j = 1; j <= M; j++) {
+                real ss = 0.0;
+                for (k = 1; k <= M; k++)
+                    for (t = 1; t <= M; t++)
+                        ss += S01[k][i] * S00i[k][t] * S01[t][j];
+                A[i][j] = ss;
+            }
+        free_matrix(cp, 1, M, 1, M);
+        free_ivector(ind, 1, M);
+        free_vector(col, 1, M);
+        free_matrix(S00i, 1, M, 1, M);
+    }
+
+    Ag = gsl_matrix_alloc(M, M); Bg = gsl_matrix_alloc(M, M);
+    evec = gsl_matrix_alloc(M, M); eval = gsl_vector_alloc(M);
+    ws = gsl_eigen_gensymmv_alloc(M);
+    for (i = 1; i <= M; i++)
+        for (j = 1; j <= M; j++) {
+            gsl_matrix_set(Ag, i-1, j-1, 0.5 * (A[i][j] + A[j][i]));
+            gsl_matrix_set(Bg, i-1, j-1, 0.5 * (S11[i][j] + S11[j][i]));
+        }
+    if (gsl_eigen_gensymmv(Ag, Bg, eval, evec, ws) == 0) {
+        gsl_eigen_gensymmv_sort(eval, evec, GSL_EIGEN_SORT_VAL_DESC);
+        bet = matrix(1, M, 1, r);
+        for (i = 1; i <= M; i++)
+            for (j = 1; j <= r; j++) bet[i][j] = gsl_matrix_get(evec, i-1, j-1);
+
+        /*  Renormalizar sobre el bloque superior r x r: beta -> beta inv(Btop),
+         *  que es lo que hace que las r primeras filas sean I_r y las s de
+         *  abajo sean B2.  Si ese bloque es singular la normalizacion de drvec
+         *  no existe para estos datos, y entonces NO se siembra: preferible a
+         *  sembrar un numero enorme.                                          */
+        {
+            real **Bt = matrix(1, r, 1, r);
+            real  *z  = vector(1, r);
+            int   *ind = ivector(1, r);
+            int    sing = 0;
+            for (i = 1; i <= r; i++)
+                for (j = 1; j <= r; j++) Bt[i][j] = bet[j][i];   /* Btop' */
+            ludcp(Bt, r, ind);
+            for (i = 1; i <= r; i++) if (fabs(Bt[i][i]) < 1.0e-12) sing = 1;
+            if (!sing) {
+                real **bn = matrix(1, M, 1, r);
+                for (i = 1; i <= M; i++) {
+                    for (j = 1; j <= r; j++) z[j] = bet[i][j];
+                    lusol(Bt, z, r, ind);
+                    for (j = 1; j <= r; j++) bn[i][j] = z[j];
+                }
+                for (i = 1; i <= s; i++)
+                    for (j = 1; j <= r; j++) B2[i][j] = bn[r+i][j];
+                ok = 1;
+                free_matrix(bn, 1, M, 1, r);
+            }
+            free_ivector(ind, 1, r);
+            free_vector(z, 1, r);
+            free_matrix(Bt, 1, r, 1, r);
+        }
+        free_matrix(bet, 1, M, 1, r);
+    }
+    gsl_eigen_gensymmv_free(ws);
+    gsl_vector_free(eval); gsl_matrix_free(evec);
+    gsl_matrix_free(Bg); gsl_matrix_free(Ag);
+    free_matrix(A, 1, M, 1, M);
+    free_matrix(S11, 1, M, 1, M);
+    free_matrix(S01, 1, M, 1, M);
+    free_matrix(S00, 1, M, 1, M);
+    free_matrix(R1, 1, T, 1, M);
+    free_matrix(R0, 1, T, 1, M);
+    return ok;
 }
 
 /*****************************************************************************/
@@ -2020,6 +2238,37 @@ static void init_guess(real *x, int npar)
     real **B2 = matrix(1, s, 1, (r > 0 ? r : 1));
     prelim_b2(B2);
 
+    /*  -seedjoh: la solucion canonica en su lugar.  Se pide DESPUES del OLS
+     *  estatico y no en vez de el, para que si el problema de autovalores no
+     *  se puede resolver quede exactamente la ruta de siempre y no una tercera
+     *  cosa a medio camino.  Todo lo que sigue -- Lambda, F, Sigma y E[W] --
+     *  sale entonces de la regresion condicional CON ESTE W, que es la propia
+     *  formula de alpha de Johansen.                                          */
+    canon_used = 0;
+    if (global_seedjoh && r > 0) {
+        canon_used = canonical_b2(B2);
+        if (canon_used) {
+            fprintf(outputv, "\n-seedjoh: B2 seeded from the canonical "
+                             "reduced-rank solution:\n");
+            for (i = 1; i <= s; i++) {
+                fprintf(outputv, "   ");
+                for (j = 1; j <= r; j++) fprintf(outputv, " %12.6f", B2[i][j]);
+                fprintf(outputv, "\n");
+            }
+            if (!quiet_mode) {
+                printf("  -seedjoh: B2 canonico =");
+                for (i = 1; i <= s; i++)
+                    for (j = 1; j <= r; j++) printf(" %.6f", B2[i][j]);
+                printf("\n");
+            }
+        } else {
+            fprintf(outputv, "\n-seedjoh: the canonical solution could not be "
+                             "formed; the static OLS seed stands.\n");
+            if (!quiet_mode)
+                printf("  -seedjoh: no se pudo formar la solucion canonica\n");
+        }
+    }
+
     /* --- 2. Build W_t = Y_{1t} + B₂'Y_{2t} and ∇Y_t = [∇Y_{1t};∇Y_{2t}] - */
     real **W  = matrix(1, nobs, 1, (r > 0 ? r : 1));
     real **dY = matrix(1, nobs, 1, M);   /* rows: [∇Y₁ (r); ∇Y₂ (s)] */
@@ -3008,6 +3257,9 @@ int main(int argc, char *argv[])
         printf("  -lrtest        sequential LR test for the cointegration rank:\n");
         printf("                 estimates r = 0..M-1 and reports 2*[L(r+1) - L(r)];\n");
         printf("                 incompatible with -differenced\n\n");
+        printf("  -seedjoh       seed B2 with the canonical reduced-rank solution\n");
+        printf("                 (Johansen's eigenvalue problem, closed form)\n");
+        printf("                 instead of the static OLS regression\n\n");
         printf("  -seedb2 v      start B2 at v and estimate it FREE (not -fixb2,\n");
         printf("                 which holds it).  A measuring instrument: it is\n");
         printf("                 how you ask whether the answer depends on where\n");
@@ -3060,6 +3312,7 @@ int main(int argc, char *argv[])
         else if (strcmp(argv[i], "-lrtest") == 0)  global_lrtest = 1;
         else if (strcmp(argv[i], "-rungs") == 0)   global_rungs = 1;
         else if (strcmp(argv[i], "-seedgate") == 0) global_seedgate = 1;
+        else if (strcmp(argv[i], "-seedjoh") == 0)  global_seedjoh = 1;
         else if (strcmp(argv[i], "-seedb2") == 0 && i+1 < argc) {
             global_seedb2 = 1; global_seedb2_value = atof(argv[++i]);
         }

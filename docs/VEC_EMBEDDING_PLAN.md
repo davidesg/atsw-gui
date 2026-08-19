@@ -297,5 +297,22 @@ The measurement to take is the same one: same bank, same five quantities, and
 `-eval` at the seed to see how far the start is before the optimiser touches
 it.
 
+**Measured** ([HOMOLOGATION.md](HOMOLOGATION.md) §4e), `-seedjoh`. Without a
+moving average the canonical seed is essentially the answer — 0.025
+log-likelihood units from the optimum on average against the cold start's 1.93,
+and both converge to the same point. With one it splits four to four on the
+pairs and loses badly on `mink_muskrat`, where the canonical `B₂` is positive
+and `drvec`'s optimum negative, so the two estimators disagree about the data
+rather than about the start. It stays behind its flag.
+
+The one case that changes what to look at next is **Strasbourg**: from a single
+canonical start the fit reaches 36.088 — the value the cold route needs twenty
+restarts to find — converging on the gradient, with the moving-average root at
+1.195 rather than on the unit circle. The boundary fit the cold start converges
+to is a *local* optimum there. So on at least one case of the bank, a
+non-invertible moving average is the signature of a fit that stopped short, not
+of the maximum. §4f measures how far that reading generalises: not far, but not
+nowhere.
+
 Steps 2 and 4 are the reason for writing this first: without a baseline taken
 before the change, the change cannot be evaluated, and the work is repeated.

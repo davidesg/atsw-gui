@@ -371,18 +371,29 @@ void nrerror( char error_text[] )
    exit( 1 );
 }
 
+/* DELTA drvec, 2026-08-19: adopted from the suite's shared copy.  Same defect
+   and same history as tensor() -- the Numerical-Recipes cleanup dropped the base
+   offset -- so v[nl..nh] was addressable only for nl >= 0.  No call site in
+   drvec uses a negative lower bound today, which is why this one was latent
+   rather than live, but the suite corrected it after the transfer-function
+   program was bitten by exactly that (its identification allocates
+   vector(-nlags, nlags)).  Aligning removes the divergence.  Note the contract
+   this establishes: the release MUST be given the same nl as the allocation,
+   where the previous form ignored it.  Verified mechanically over the whole
+   test suite; see docs/SUITE_INTEGRATION.md §5.                              */
+
 real *vector( long nl, long nh )
 {
-   real *v = (real *)calloc( (size_t)(nh + 1), sizeof(real) );
+   real *v = (real *)calloc( (size_t)(nh - nl + 1), sizeof(real) );
    if ( !v ) nrerror( "ALLOCATION FAILURE in vector()" );
-   return( v );
+   return( v - nl );
 }
 
-int *ivector( long nl, long nh )
+int *ivector( long nl, long nh )                    /* see vector() above */
 {
-   int *v = (int *)calloc( (size_t)(nh + 1), sizeof(int) );
+   int *v = (int *)calloc( (size_t)(nh - nl + 1), sizeof(int) );
    if ( !v ) nrerror( "ALLOCATION FAILURE in ivector()" );
-   return( v );
+   return( v - nl );
 }
 
 real **matrix( long nrl, long nrh, long ncl, long nch )
@@ -451,8 +462,8 @@ real ***tensor( long nrl, long nrh, long ncl, long nch, long ndl, long ndh )
    return( t );
 }
 
-void free_vector( real *v, long nl, long nh ) { free( v ); }
-void free_ivector( int *v, long nl, long nh ) { free( v ); }
+void free_vector( real *v, long nl, long nh ) { if ( v ) free( v + nl ); }
+void free_ivector( int *v, long nl, long nh ) { if ( v ) free( v + nl ); }
 void free_matrix( real **m, long nrl, long nrh, long ncl, long nch )
    { if ( m ) { free( m[nrl] ); free( m ); } }
 void free_imatrix( int **m, long nrl, long nrh, long ncl, long nch )

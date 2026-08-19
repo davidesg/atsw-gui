@@ -1246,6 +1246,30 @@ static real  *seed_var   = NULL;     /* [1..M]  sigma^2 de cada univariante  */
 static real  *seed_logl  = NULL;     /* [1..M]  logL de cada univariante     */
 static int    seed_have_uv = 0;      /* 1 si sigma2/logL se pudieron evaluar */
 static real   seed_logl_sum = 0.0;   /* suma de las logL univariantes        */
+
+/*  free_seed_pre — libera los cuatro bufers de siembra.
+ *
+ *  No existia: se asignaban en load_seed_pre y nunca se liberaban.  La fuga era
+ *  invisible mientras vector() devolvia la base del bloque, porque valgrind veia
+ *  un puntero al principio y lo daba por "todavia alcanzable"; al alinear
+ *  vector() con la suite el puntero guardado apunta dentro del bloque y la fuga
+ *  aparece como definitely lost.  O sea que el asignador con desplazamiento
+ *  DETECTA mejor, y esto es lo primero que saco a la luz.
+ *
+ *  Los limites tienen que ser los de la asignacion, no los logicos: con q = 0 o
+ *  p = 1 se reservo una fila igualmente.                                      */
+static void free_seed_pre(void)
+{
+    int M = nser, q = global_q;
+    int nf = (global_p > 1) ? global_p - 1 : 0;
+
+    if (seed_tbar) { free_matrix(seed_tbar, 1, (q  > 0 ? q  : 1), 1, M);
+                     seed_tbar = NULL; }
+    if (seed_phi)  { free_matrix(seed_phi,  1, (nf > 0 ? nf : 1), 1, M);
+                     seed_phi  = NULL; }
+    if (seed_var)  { free_vector(seed_var,  1, M); seed_var  = NULL; }
+    if (seed_logl) { free_vector(seed_logl, 1, M); seed_logl = NULL; }
+}
 static int    seed_loaded = 0;
 
 /*  De qué ruta viene la semilla, que decide en qué coordenadas está:
@@ -3549,6 +3573,7 @@ int main(int argc, char *argv[])
 
     /* [4] Cleanup ---------------------------------------------------------- */
     vec_shootx(x, &varma1, &ifault, 0, 1);  /* deallocate */
+    free_seed_pre();
     free_matrix(cov, 1, npar, 1, npar);
     free_vector(dev, 1, npar);
     free_vector(x, 1, npar);

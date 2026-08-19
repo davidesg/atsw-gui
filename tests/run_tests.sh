@@ -43,8 +43,12 @@
 #   8. ROOTS        the AR/MA roots at the optimum, the invertibility boundary
 #                   they can sit on, and the q>=2 heap-corruption regression.
 #   9. MEMORY       valgrind over the main paths.  OPT-IN (VALGRIND=1) so the
-#                   suite is deterministic anywhere.  It has already caught one
-#                   real leak in the multi-start block.
+#                   suite is deterministic anywhere.  It has already caught two
+#                   real leaks: the multi-start block, and the seeding buffers,
+#                   which had no deallocator and which only became visible once
+#                   vector() was aligned with the suite -- the previous form
+#                   returned the base of the block, and a pointer to the base
+#                   looks reachable to valgrind.
 #
 # Usage:  tests/run_tests.sh [-v]        (or: make test)
 #         DRVEC=path/to/mutant tests/run_tests.sh    (to check the suite bites)

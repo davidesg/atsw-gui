@@ -400,6 +400,17 @@ whether the suite has fixed it already — and if it has, the suite's version is
 the one to take, because two correct implementations of the same routine are
 still a divergence.
 
+`vector` and `ivector` were aligned with the suite for the same reason
+immediately afterwards. Their defect was latent here rather than live, so the
+case for changing them rested on removing the divergence, not on fixing a fault;
+what made it safe was checking the new contract mechanically — the release now
+depends on the bounds it is given, where before it ignored them — over every
+path the program has ([SUITE_INTEGRATION.md](SUITE_INTEGRATION.md) §5). It
+repaid the change at once: an offset pointer, unlike one at the base of its
+block, cannot be mistaken for a live reference, so the first run reported 32
+bytes that had been leaking unseen in the seeding path, whose four buffers had
+never had a deallocator.
+
 ## 8. Open, and honestly so
 
 | | |
@@ -412,4 +423,3 @@ still a divergence.
 | `drtran`'s BUG-11 | fixed in `drvec`'s copy, live in `drtran` |
 | the invertibility boundary | explained and now reported, not resolved: on these data every specification with `q ≥ 1` rests on it, so the reported optima are constrained ones and the unconstrained standard errors do not apply along the binding direction — see §7 |
 | specification searches at `q ≥ 2` | possible only since the allocation defect was corrected on 2026-08-19; the searches already recorded were bounded at `q ≤ 1` and have **not** been redone ([HOMOLOGATION.md](HOMOLOGATION.md) §3b) |
-| `vector` and `ivector` | still the pre-cleanup form, where the suite's shared copy carries the corrected one. Latent, not live: no call site in `drvec` uses a negative lower bound. Aligning them is a deliberate decision, not a tidy-up, and is set out in [SUITE_INTEGRATION.md](SUITE_INTEGRATION.md) §5 |

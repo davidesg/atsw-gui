@@ -208,23 +208,39 @@ log-likelihood baselines included, is unchanged, and the previously fatal
 configuration now runs clean under `valgrind`. Both are permanent checks
 ([TESTING.md](TESTING.md)).
 
-### The allocators that are still the pre-cleanup ones
+### The allocators, and which of them are now the suite's
 
 `tensor()` was the only member of the family `drvec` could reach with a negative
-lower bound, and it is the only one changed. The others remain as they were, and
-the position is stated rather than left implicit:
+lower bound, so it was the only one whose defect was live. `vector` and
+`ivector` carried the same defect latently, and have since been aligned as well;
+`matrix` and `imatrix` have not, and deliberately so.
 
-| routine | state in `drvec` | exposure |
+| routine | state in `drvec` | why |
 |---|---|---|
-| `tensor`, `free_tensor` | **corrected**, identical to the shared copy | was live: `gamwa` with `q ≥ 2` |
-| `vector`, `ivector` | pre-fix: no base offset | **latent** — no call site in `drvec` uses a negative lower bound. The suite corrected these for robustness after one of them bit the transfer-function program, whose identification step allocates `vector(−nlags, nlags)` |
-| `matrix`, `imatrix` | pre-fix, and **deliberately** so across the suite | none; the offset variant uses an incompatible row layout, so the two are not interchangeable, and the univariate program left them alone for exactly that reason |
+| `tensor`, `free_tensor` | **the suite's, identical** | was live: `gamwa` with `q ≥ 2` |
+| `vector`, `ivector` | **the suite's, identical** | was latent — no call site here uses a negative lower bound — but the suite corrected these after the transfer-function program was bitten by one, its identification step allocating `vector(−nlags, nlags)` |
+| `matrix`, `imatrix` | pre-cleanup, and **deliberately** so across the suite | the offset variant uses an incompatible row layout, so the two are not interchangeable; the univariate program left them alone for exactly that reason |
 
-Adopting the offset form for `vector` and `ivector` would align `drvec` with the
-transfer-function and VARMA copies, but it is not a free change: it makes every
-allocation and release depend on agreeing bounds, where the present form ignores
-them. It is recorded here as a decision to be taken deliberately, with the memory
-checks covering it, rather than made in passing.
+Aligning `vector` and `ivector` is not a cosmetic change, because it moves the
+release from ignoring the bounds it is given to depending on them: every
+`free_vector` must now be handed the same lower bound its allocation used. That
+was checked mechanically rather than by reading. The allocator was instrumented
+to record the lower bound against each pointer returned and to verify it at
+release, and the whole program was then exercised — nineteen configurations
+spanning every case, the diagonal restrictions, multi-start, the rank test, the
+bootstrap, `α = Aψ`, seeding from a `.pre`, both writers, the legacy layout and
+the `.pre` reader's own harness, plus the entire regression suite. No allocation
+was released under a lower bound other than its own, and no release reached a
+pointer the allocators had not produced. The instrumentation was then removed.
+
+**And the alignment paid for itself immediately.** The offset form does not only
+remove a latent fault; it makes leaks visible that the previous form concealed.
+A pointer returned at the base of its block looks reachable to `valgrind` even
+when nothing will ever free it, whereas an offset pointer does not — so the
+first run after the change reported 32 bytes definitely lost that had been
+sitting silently in the seeding path. The four buffers `load_seed_pre` allocates
+had no deallocator at all. One was written, and the memory block of the test
+suite now covers it.
 
 The consequence for results already reported is stated in
 [HOMOLOGATION.md](HOMOLOGATION.md) §3b: specification searches conducted before

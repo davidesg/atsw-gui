@@ -95,7 +95,7 @@ VALGRIND=1 make test
 
 Disabled by default so that the suite is deterministic on any machine. It is
 not merely precautionary:
-the first time it was run it found **two real defects**.
+the first time it was run it found **two real defects**, and a third surfaced later.
 
 * The multi-start block re-allocated the VARMA structure while the first
   allocation was still live — 1080 bytes orphaned per run, and nothing else
@@ -103,6 +103,15 @@ the first time it was run it found **two real defects**.
 * `main` had four exits — the normal one, `-lrtest`, `-writeinp/-writeres` and
   `-eval` — and only the normal one freed the file-name buffers. Four exits and
   one cleanup is how a harmless leak becomes a real one.
+
+A third was found later, and only because the allocators were aligned with the
+suite's shared copy ([SUITE_INTEGRATION.md](SUITE_INTEGRATION.md) §5): the four
+buffers `load_seed_pre` allocates had no deallocator. The leak had been there all
+along and `valgrind` had not reported it, because the previous allocator returned
+the base of the block and a pointer to the base looks like a live reference. The
+offset form does not, so 32 bytes surfaced on the first run after the change.
+That is worth stating as a property of the tooling rather than an anecdote: a
+memory check is only as sharp as the allocator underneath it.
 
 It also verifies something that cannot be verified any other way:
 `free_fue_pre`, the deallocator written for the vendored `.pre` reader. That

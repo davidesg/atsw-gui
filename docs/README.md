@@ -110,6 +110,7 @@ advertisement:
 |---|---|
 | [GETTING_STARTED.md](GETTING_STARTED.md) | build, first model, reading the `.out` |
 | [MODEL.md](MODEL.md) | the model class, the parameter vector, and the conventions that bite |
+| [INFERENCE.md](INFERENCE.md) | why inference on the cointegrating coefficients is valid **and optimal** here — the literature, followed in order |
 | [USAGE.md](USAGE.md) | every option, the input format, and worked examples |
 | [SUITE_INTEGRATION.md](SUITE_INTEGRATION.md) | the ladder, its two contracts, and the provenance of the borrowed code |
 | [CONVERGENCE.md](CONVERGENCE.md) | what the optimiser reports, and how much to believe it |

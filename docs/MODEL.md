@@ -75,7 +75,9 @@ Two consequences that are easy to get wrong and have both cost time here:
 ## 2b. Why inference on `B₂` is valid here — and optimal
 
 This is the part of the theory that decides what the program is *for*, and it is
-not a claim about the implementation: it is in the paper `drvec` implements.
+not a claim about the implementation: it is in the paper `drvec` implements. The
+summary is here; the sources followed in order, and what the result does **not**
+cover, are in [INFERENCE.md](INFERENCE.md).
 
 **The transformed system is Phillips' triangular representation.** Mauricio's
 equation (19) writes the model as
@@ -107,10 +109,12 @@ Phillips (1991)»*.
 
 ### What this implies about Johansen — precisely
 
-Both the VECM and the triangular representation yield LAMN limit distributions
-and both allow optimal inference **when correctly specified** (Cappuccio 1996,
-`literature/`). The difference appears when the data have MA dynamics, and it is
-a non-existence result rather than an approximation issue:
+**Not that inference on `β` is unavailable there.** Johansen (1991) establishes
+mixed-Gaussian limits and χ² tests on the cointegrating relations, and Phillips
+himself confirms it. Both representations yield LAMN limits and both allow optimal
+inference **when correctly specified** (Cappuccio 1996, `literature/`). The
+difference appears when the data have MA dynamics, and it is a non-existence
+result rather than an approximation issue:
 
 > *«there exist no reparameterization of the ARMA model … that allows us to write
 > a VECM model … with independent errors. Therefore, if we assume that the true

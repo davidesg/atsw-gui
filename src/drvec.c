@@ -1246,6 +1246,10 @@ static real  *seed_var   = NULL;     /* [1..M]  sigma^2 de cada univariante  */
 static real  *seed_logl  = NULL;     /* [1..M]  logL de cada univariante     */
 static int    seed_have_uv = 0;      /* 1 si sigma2/logL se pudieron evaluar */
 static real   seed_logl_sum = 0.0;   /* suma de las logL univariantes        */
+static real   gate_ll_start  = 0.0;  /* logL EN los valores traidos (pre-ajuste) */
+static int    gate_have_start = 0;   /* 1 si se pudo evaluar antes de optimizar  */
+static real   gate_move      = 0.0;  /* mayor desplazamiento de un coeficiente   */
+static int    gate_have_move = 0;
 
 /*  free_seed_pre — libera los cuatro bufers de siembra.
  *
@@ -1270,6 +1274,158 @@ static void free_seed_pre(void)
     if (seed_var)  { free_vector(seed_var,  1, M); seed_var  = NULL; }
     if (seed_logl) { free_vector(seed_logl, 1, M); seed_logl = NULL; }
 }
+
+/*****************************************************************************/
+/*  gate_contract — the entry gate verifies ITSELF, by the ladder's contract. */
+/*                                                                           */
+/*  WHY.  At the diagonal rung -- r = 0 with diagonal Phi, Theta and Sigma -- */
+/*  the exact likelihood FACTORISES: the joint model is M independent         */
+/*  univariate models, so                                                    */
+/*                                                                           */
+/*      logL(joint diagonal fit)  =  SUM_i logL(univariate i).               */
+/*                                                                           */
+/*  That is an identity, not an approximation, and it is the sharpest check   */
+/*  the program has on everything upstream of the likelihood: the            */
+/*  transformation, the differencing implied by the rank, the layout of the   */
+/*  parameter vector, the deterministic terms subtracted, and the scaling.    */
+/*  If any of them is wrong the two sides part company; if all are right they */
+/*  agree to rounding.  It is the same contract the suite states for its own  */
+/*  entry gate, and it is checked here rather than only in the test suite,    */
+/*  so that any run at the diagonal rung certifies itself.                    */
+/*                                                                           */
+/*  HOW.  The univariate side is computed from the FITTED diagonal blocks --  */
+/*  no external file is involved -- by evaluating the same elf() with m = 1   */
+/*  on each component in turn.  The scale is concentrated in both cases, so   */
+/*  the two sides are on the same footing.                                    */
+/*****************************************************************************/
+static void gate_contract(struct Tvarma *v)
+{
+    const real LOG2PI = 1.837877066;
+    int M = v->m, n = v->n, p = v->p, q = v->q, i, k, t;
+    real sum = 0.0;
+    int failed = 0;
+
+    if (global_r != 0 || !global_diag_ar || !global_diag_ma || !global_diag_cov)
+        return;                       /* la factorizacion solo vale aqui */
+
+    /*  Senal legible al lado del hueco: cuanto se movio el coeficiente que mas
+     *  se movio.  Se compara la semilla con el ajuste en la MISMA convencion,
+     *  la del motor, para que un cambio de signo no se lea como movimiento.  */
+    if (seed_have_uv && seed_tbar) {
+        gate_move = 0.0;
+        for (k = 1; k <= q; k++)
+            for (i = 1; i <= M; i++) {
+                real d = fabs(seed_tbar[k][i] - v->theta[k][i][i]);
+                if (d > gate_move) gate_move = d;
+            }
+        gate_have_move = 1;
+    }
+
+    fprintf(outputv,
+        "\n=== Entry gate: the factorisation contract ===\n\n"
+        "At r = 0 with diagonal Phi, Theta and Sigma the likelihood factorises,\n"
+        "so the joint fit must equal the sum of the univariate fits exactly.\n\n");
+
+    for (i = 1; i <= M; i++) {
+        struct Tvarma u;
+        real pi1, pi2, pi3, ll = 0.0;
+        int ifault = 0;
+
+        u.m = 1; u.n = n; u.p = p; u.q = q; u.xitol = v->xitol;
+        u.mu    = vector(1, 1);
+        u.phi   = tensor(0, (p > 0 ? p : 1), 1, 1, 1, 1);
+        u.theta = tensor(0, (q > 0 ? q : 1), 1, 1, 1, 1);
+        u.qq    = matrix(1, 1, 1, 1);
+        u.w     = matrix(1, n, 1, 1);
+        u.a     = matrix(1, n, 1, 1);
+
+        u.mu[1] = v->mu[i];
+        u.qq[1][1] = 1.0;                 /* la escala se concentra, como arriba */
+        u.phi[0][1][1] = 1.0; u.theta[0][1][1] = 1.0;
+        for (k = 1; k <= p; k++) u.phi[k][1][1]   = v->phi[k][i][i];
+        for (k = 1; k <= q; k++) u.theta[k][1][1] = v->theta[k][i][i];
+        for (t = 1; t <= n; t++) u.w[t][1] = v->w[t][i];
+
+        elf(u.m, u.n, u.p, u.q, u.mu, u.phi, u.theta, u.qq, u.w, 1.0,
+            u.xitol, FALSE, u.a, &pi1, &pi2, &pi3, &ifault);
+
+        if (ifault == 0) {
+            ll = -0.5 * u.n * (LOG2PI - log((real) u.n) + 1.0)
+                 - 0.5 * u.n * (log(pi1) + log(pi2));
+            sum += ll;
+            fprintf(outputv, "  univariate %d (p=%d, q=%d)   logL = %18.10f\n",
+                    i, p, q, ll);
+        } else {
+            failed = 1;
+            fprintf(outputv, "  univariate %d              elf ifault = %d\n",
+                    i, ifault);
+        }
+
+        free_matrix(u.a, 1, n, 1, 1);
+        free_matrix(u.w, 1, n, 1, 1);
+        free_matrix(u.qq, 1, 1, 1, 1);
+        free_tensor(u.theta, 0, (q > 0 ? q : 1), 1, 1, 1, 1);
+        free_tensor(u.phi,   0, (p > 0 ? p : 1), 1, 1, 1, 1);
+        free_vector(u.mu, 1, 1);
+    }
+
+    if (failed) {
+        fprintf(outputv, "\n  Contract NOT verified: a univariate evaluation "
+                         "failed.\n");
+        return;
+    }
+
+    fprintf(outputv, "  %-28s   sum  = %18.10f\n", "", sum);
+    fprintf(outputv, "  %-28s   joint= %18.10f\n", "", v->logelf);
+    fprintf(outputv, "\n  crossing identity (joint - sum) = %.3e   %s\n",
+            v->logelf - sum,
+            (fabs(v->logelf - sum) < 1.0e-4) ? "VERIFIED" : "*** NOT VERIFIED ***");
+    if (fabs(v->logelf - sum) >= 1.0e-4)
+        fprintf(outputv,
+            "\n  The two sides must agree at this rung.  A gap means the fault is\n"
+            "  upstream of the likelihood -- the transformation, the rank's\n"
+            "  differencing, the parameter walk, the deterministic terms or the\n"
+            "  scaling -- and never in elf() itself.\n");
+
+    /*  THE OPTIMALITY CERTIFICATE.  Second of the two contracts, and it costs
+     *  one likelihood evaluation that has already been made.  The gap between
+     *  the fit and the values that were brought in is non-negative by
+     *  construction and is zero if and only if those values were the
+     *  univariate optima.  So it answers a question the files themselves
+     *  cannot: was this a `.pre` -- an optimum in re-runnable form -- or a
+     *  specification that still needed estimating?  Neither is a defect; both
+     *  are legitimate inputs.  What was missing was being told which.
+     *
+     *  The threshold is the suite's, and it is MEASURED rather than chosen: a
+     *  genuine `.pre` does not return exactly to its own values, because the
+     *  format stores six decimals and the optimiser stops inside its own
+     *  tolerance, which leaves a residue of order 1e-5; a specification moves
+     *  by orders of magnitude more.  1e-3 sits in between with room to spare.  */
+    if (gate_have_start) {
+        real gap = v->logelf - gate_ll_start;
+
+        fprintf(outputv, "\n  --- optimality certificate ---\n");
+        fprintf(outputv, "  logL AT the values brought in   = %18.10f\n",
+                gate_ll_start);
+        fprintf(outputv, "  logL of the diagonal fit        = %18.10f\n",
+                v->logelf);
+        fprintf(outputv, "  optimality gap (fit - brought)  = %+.3e\n", gap);
+        if (gate_have_move)
+            fprintf(outputv, "  largest coefficient movement    = %.3e\n",
+                    gate_move);
+        fprintf(outputv,
+            "\n  The gap is >= 0 always, and zero exactly when what came in were\n"
+            "  the univariate optima.  Here they %s: this input is %s.\n",
+            (gap <= 1.0e-3) ? "were" : "were not",
+            (gap <= 1.0e-3) ? "AN OPTIMUM" : "A SPECIFICATION");
+        if (gap < -1.0e-6)
+            fprintf(outputv,
+                "\n  A NEGATIVE gap cannot happen at a converged fit: the fitted\n"
+                "  point is worse than the one it started from, so the optimiser\n"
+                "  did not converge here and the fit should not be read.\n");
+    }
+}
+
 static int    seed_loaded = 0;
 
 /*  De qué ruta viene la semilla, que decide en qué coordenadas está:
@@ -3056,6 +3212,37 @@ int main(int argc, char *argv[])
      * para que un resultado se pueda reproducir: un multiarranque que no se
      * puede repetir no sirve como evidencia.
      */
+    /*  EL CERTIFICADO DE OPTIMALIDAD, y hay UNA sola ventana para tomarlo.
+     *
+     *  La escalera de la suite dice que un `.pre` es un OPTIMO en forma
+     *  reejecutable, y ese convenio es COMPROBABLE: reestimar un optimo no
+     *  mueve los numeros, mientras que una especificacion si.  La diferencia
+     *  entre las dos verosimilitudes -- la del ajuste y la de los valores que
+     *  se trajeron -- es >= 0 por construccion y vale cero si y solo si lo
+     *  que entro eran los optimos univariantes.
+     *
+     *  Hay que evaluar AQUI porque est() sobrescribe la estructura: una vez ha
+     *  corrido, la pregunta ya no se puede contestar.  Es el mismo protocolo
+     *  que la puerta de drtran (LADDER_AS_OPTIMISATION.md 2.1 y 7.1), y se
+     *  hereda entero en vez de reinventarlo.                                 */
+    {
+        const real LOG2PI = 1.837877066;
+        real pi1, pi2, pi3;
+        int ifs = 0;
+        vec_shootx(x, &varma1, &ifs, 0, 0);
+        if (ifs == 0) {
+            elf(varma1.m, varma1.n, varma1.p, varma1.q, varma1.mu, varma1.phi,
+                varma1.theta, varma1.qq, varma1.w, 1.0, varma1.xitol,
+                FALSE, varma1.a, &pi1, &pi2, &pi3, &ifs);
+            if (ifs == 0) {
+                gate_ll_start = -0.5 * varma1.m * varma1.n
+                    * (LOG2PI - log((real) varma1.m) - log((real) varma1.n) + 1.0)
+                    - 0.5 * varma1.n * (varma1.m * log(pi1) + log(pi2));
+                gate_have_start = 1;
+            }
+        }
+    }
+
     int ms_done = 0;         /* 1 = el multiarranque ya dejo el ajuste final */
     if (global_multistart > 1) {
         real *xbest = vector(1, npar), *xtry = vector(1, npar);
@@ -3200,6 +3387,7 @@ int main(int argc, char *argv[])
                 (-2.0 * varma1.logelf + npar * log((real) nobs)) / nobs);
         convergence_note(termcode_from_out(outputf));
         operator_roots(&varma1);
+        gate_contract(&varma1);
         residual_diagnostics(&varma1);
 
         /* El LR de H1(r) contra H(r).  Johansen y Swensen (2024): los grados de

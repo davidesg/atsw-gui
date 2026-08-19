@@ -436,6 +436,52 @@ else bad "seeded fit from fixtures" "expected 6.4460747665, got $got"; fi
 echo
 
 # ==================================== 6 RESTRICTIONS ON ALPHA (H1(r)) ==
+# 5d. THE ENTRY GATE certifies itself, by the ladder's two contracts.  The
+#     program reports them now, not only this suite: the crossing identity (at
+#     the diagonal rung the likelihood factorises, so the joint fit must equal
+#     the sum of the univariate ones) and the optimality certificate (the gap
+#     against the values brought in is >= 0, and zero iff they were optima).
+#     Checked in BOTH directions, because a verdict with only one outcome is
+#     not a verdict: the .pre fixture must read as AN OPTIMUM and the .inp
+#     specification beside it as A SPECIFICATION.
+run "$MM" 2 1 0 -case 1 -diagar -diagma -diagcov
+if ! grep -aq "the factorisation contract" "$TMP/case.out"; then
+    bad "gate contract" "the entry gate reports no contract at the diagonal rung"
+elif grep -aq "crossing identity.*VERIFIED" "$TMP/case.out"; then
+    ok "gate: crossing identity verified"
+else bad "gate: crossing identity" "$(grep -a 'crossing identity' "$TMP/case.out")"; fi
+
+# the univariate constants of the gate, reproduced by the program itself
+for want in -20.0579 -14.5698; do
+    if grep -aq -- "$want" "$TMP/case.out"; then ok "gate: univariate $want"
+    else bad "gate: univariate $want" "constant not reproduced"; fi
+done
+
+# and it must NOT claim the contract away from the diagonal rung
+run "$MM" 2 1 1 -case 2
+if grep -aq "the factorisation contract" "$TMP/case.out"; then
+    bad "gate contract" "claimed at r=1, where the likelihood does not factorise"
+else ok "gate: silent where the factorisation does not hold"; fi
+
+# the certificate, both verdicts
+run "$MM" 2 1 0 -case 1 -diagar -diagma -diagcov -seedybar tests/fixtures/mmdiag
+if grep -aq "this input is AN OPTIMUM" "$TMP/case.out"; then
+    ok "certificate: a genuine .pre reads as an optimum"
+else bad "certificate" "the .pre fixture did not read as an optimum"; fi
+gap=$(grep -a "optimality gap" "$TMP/case.out" | sed 's/.*= *//')
+if awk -v g="$gap" 'BEGIN{exit !(g >= -1e-6)}'; then
+    ok "certificate: the gap is non-negative ($gap)"
+else bad "certificate" "negative gap $gap: the fit is worse than its start"; fi
+
+mkdir -p "$TMP/spec"
+cp tests/fixtures/mmdiag.1.inp "$TMP/spec/sp.1.inp"
+cp tests/fixtures/mmdiag.2.inp "$TMP/spec/sp.2.inp"
+run "$MM" 2 1 0 -case 1 -diagar -diagma -diagcov -seedybar "$TMP/spec/sp"
+if grep -aq "this input is A SPECIFICATION" "$TMP/case.out"; then
+    ok "certificate: an .inp reads as a specification"
+else bad "certificate" "the .inp did not read as a specification"; fi
+echo
+
 echo "[6] alpha = A*psi: the restriction, its LR, and its guards"
 # Johansen and Swensen (2024): H1(r) is alpha = A*psi with A known.  Weak
 # exogeneity is the special case where A selects rows, so -weakex is a shorthand

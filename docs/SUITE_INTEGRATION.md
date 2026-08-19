@@ -94,7 +94,36 @@ wrote from `drvec`'s own `-writeinp` output:
 
 Both differences are of the order of the format's own rounding: **a `.pre`
 stores its coefficients with `%.6f`**, and that is what bounds how sharp the
-certificate can be. Both contracts are checks in the test suite.
+certificate can be.
+
+**And the program now claims both contracts itself**, not only the test suite.
+Any run at the diagonal rung prints the crossing identity — computing the
+univariate side from the fitted diagonal blocks, so no external file is needed —
+and, whenever the run was seeded, the optimality certificate beside it. The
+protocol is the transfer-function program's, adopted rather than reinvented: the
+likelihood at the values brought in is taken **before** the fit overwrites them,
+since once the optimiser has run the question can no longer be asked. Reported,
+never refused: both kinds of input are legitimate, and what was missing was
+being told which one arrived.
+
+```
+  --- optimality certificate ---
+  logL AT the values brought in   =     -34.6278402874
+  logL of the diagonal fit        =     -34.6278400462
+  optimality gap (fit - brought)  = +2.413e-07
+  largest coefficient movement    = 5.162e-05
+
+  The gap is >= 0 always, and zero exactly when what came in were
+  the univariate optima.  Here they were: this input is AN OPTIMUM.
+```
+
+The verdict's threshold is the suite's, and it is **measured rather than
+chosen**: a genuine `.pre` does not return exactly to its own values, because
+the format stores six decimals and the optimiser stops inside its own tolerance;
+fed the specification beside it, the same gate reports a gap of 6.15 and a
+movement of 0.97. Four orders of magnitude separate the two, and 1e-3 sits
+comfortably between them. Both contracts and both verdicts are checks in the
+test suite, the verdict in both directions.
 
 The same computation reproduces the two univariate constants of the
 factorisation gate — **−20.057976** and **−14.569847** — by a third independent

@@ -265,6 +265,29 @@ cointegrate plus an independent random walk placed in `Y₁`. It reports 0.6 %.
 
 ---
 
+## 4a. The entry gate, and what it certifies
+
+At the diagonal rung — `r = 0` with `-diagar -diagma -diagcov` — the exact
+likelihood **factorises** into the univariate models, and every run there
+verifies two things before anything else is read.
+
+**The crossing identity.** The joint fit must equal the sum of the univariate
+fits exactly. That single number tests everything upstream of the likelihood at
+once: the transformation, the differencing the rank implies, the parameter
+walk, the deterministic terms subtracted and the scaling. If it holds, the
+univariate rung crossed intact and a model built on top of it is worth reading;
+if it does not, the base is wrong and nothing above it means anything — and the
+fault is never in the likelihood routine itself.
+
+**The optimality certificate**, whenever the run was seeded. The gap between the
+fit and the values brought in is non-negative by construction and is zero if and
+only if those values were the univariate optima, so it says whether what arrived
+was a `.pre` — an optimum in re-runnable form — or a specification that still
+needed estimating. Both are legitimate inputs; the point is to know which.
+
+This is the same gate the suite's transfer-function program uses, and it is the
+place to start: certify the base, then add structure to it.
+
 ## 4b. The roots of the estimated operators
 
 Every fit reports the moduli of the roots of the autoregressive and

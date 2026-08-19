@@ -501,6 +501,53 @@ program, measure the instrument.** The difference this time is that the
 instrument was one we had written on purpose to be trustworthy, and it still
 needed measuring.
 
+## 8c. Route (B), built and measured, and it loses
+
+`-seedgate` is the plan's preferred route, built behind a flag exactly as the
+plan said: estimate the `r = 0` rung, hold `F`, `Θ` and `Σ` there, fit `Λ` and
+`B₂` on that base, release everything. The measurement is
+[HOMOLOGATION.md](HOMOLOGATION.md) §4c, and it falls against it — three wins in
+eleven, seven losses, one of them by 37.6 log-likelihood units.
+
+Recording that is the point of having planned it this way, so it is recorded.
+What is worth more than the verdict is the two things the attempt measured.
+
+**The step off the boundary is one-sided, and nobody had said so out loud.** The
+plan's §3 measured that at `Λ = 0` the transformed system has an AR root of
+modulus exactly one, and that the two directions leaving that point behave
+differently. What the implementation ran into is the operational form of the
+same fact: with the rung below held and `Λ` at its conditional-regression value,
+`elf` answers `ifault = 3`, the optimiser refuses to start, and the run dies
+before it begins. The conditional regression's `Λ` has no reason to point the
+admissible way. So the option scans multiples of it — ±1 down to ±0.01 — and
+enters at the best admissible one. That is not the arbitrary constant the plan
+forbade: the *direction* is estimated and the *step* is chosen by the
+likelihood among admissible candidates.
+
+**And the entry is expensive.** Milan's `r = 0` optimum is 77.78; the best
+admissible entry is −24.09; profiling `Λ` and `B₂` on the held base recovers to
+−1.34. Sixty to a hundred units to cross, and only part of it back. On Angers
+the released fit then moves by 0.005 and stops, at −8.42 against the cold
+start's 29.09: the entry point is a trap rather than a start, and these surfaces
+— which stop on `steptol` or on a failed line search, never on the gradient —
+do not let go of a bad one.
+
+So the premise was wrong, and it is worth naming precisely because it is the
+premise everything else in this program rests on. **Carrying an optimum up a
+rung works everywhere in this construction except across this rung.** `F`, `Θ`
+and `Σ` are the same objects at `r = 0` and `r = 1`, but their optima are not
+near each other, and the error-correction term is not a perturbation of the
+model without it.
+
+The route that answers the objection is not a better bridge from below but a
+better estimate of what is being added. Johansen's canonical reduced-rank
+solution gives `β` in closed form with `α` following from it, and the register
+already says — from §2.1b, measured for another purpose entirely — that his `β`
+lands within 0.0003 to 0.052 of `drvec`'s own optimum on the eight pairs. That
+is one to two orders of magnitude closer than anything (B) or (C) starts from.
+It is the next thing to measure, on the same bank and with the same five
+quantities.
+
 ## 9. Open, and honestly so
 
 | | |

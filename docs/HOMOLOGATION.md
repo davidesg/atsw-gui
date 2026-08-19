@@ -474,6 +474,64 @@ asked for — a gate that fails its own contract. Milan failed it, the failure w
 reported at rung 0 as intended, and the diagnosis is §1b: the check was wrong,
 not the gate.
 
+## 4c. Route (B) against route (C): the measurement, and it falls against (B)
+
+*Steps 3 and 4 of [VEC_EMBEDDING_PLAN.md](VEC_EMBEDDING_PLAN.md) §8. Same bank,
+same five quantities, same instrument as §4b — `tools/measure_seeding_bank.sh`
+with `-seedgate` — so the two columns are the same measurement twice.*
+
+Route (B) estimates the `r = 0` rung, holds `F`, `Θ` and `Σ` there, fits `Λ` and
+`B₂` on that base, and then releases everything. Route (C) is the cold
+conditional regression.
+
+| case | (C) logL | (B) logL | Δ | (C) best of 20 | (B) best of 20 | Δ |
+|---|---|---|---|---|---|---|
+| Milan | 93.288 | 81.856 | **−11.43** | 93.290 | 84.429 | **−8.86** |
+| Strasbourg | 34.535 | 35.459 | +0.92 | 36.088 | 35.481 | −0.61 |
+| Utrecht | 82.296 | 76.837 | −5.46 | 82.383 | 82.689 | +0.31 |
+| Vienna | 33.953 | 30.601 | −3.35 | 34.118 | 30.941 | −3.18 |
+| Aix | 68.941 | 72.231 | **+3.29** | 69.179 | 72.242 | **+3.06** |
+| Arévalo | −3.563 | −7.323 | −3.76 | −3.544 | −7.323 | −3.78 |
+| Angers | 29.094 | −8.417 | **−37.51** | 29.214 | −8.417 | **−37.63** |
+| Penn | 41.373 | 30.363 | −11.01 | 42.206 | 34.891 | −7.31 |
+| `mink_muskrat` c1 | 3.686 | 2.895 | −0.79 | 3.686 | 2.942 | −0.74 |
+| `mink_muskrat` c2 | 6.479 | 5.269 | −1.21 | 6.637 | 6.500 | −0.14 |
+| `mink_muskrat` c3 | 6.514 | 6.883 | +0.37 | 6.799 | 6.883 | +0.08 |
+| the four `q = 0` cases | — | — | **0.000** | — | — | ~0 |
+
+**(B) wins three of eleven and loses seven.** The `q = 0` cases are unaffected to
+ten decimals, which is the check that the option is not doing something else
+entirely: with no moving-average block both routes reach the same optimum.
+
+Two things (B) measured on the way, and they outlast it.
+
+**The entry is one-sided, and it is expensive.** With `F`, `Θ`, `Σ` at the
+`r = 0` optimum and `Λ` at the conditional-regression value, the transformed
+system comes out **non-stationary** — `elf` answers `ifault = 3` and the
+optimiser does not start at all. That is the other face of §3 of the plan: at
+`Λ = 0` the root is exactly 1, and of the two directions leaving that point only
+one is admissible, which the conditional regression's sign has no reason to be.
+The option therefore scans multiples of that `Λ`, ±1 down to ±0.01, and enters
+at the best admissible one. What the entry costs is the finding:
+
+| case | `r = 0` optimum | admissible entry | after profiling `Λ`, `B₂` | released fit |
+|---|---|---|---|---|
+| Milan | 77.781 | −24.093 | −1.338 | 81.856 |
+| `mink_muskrat` c2 | −6.331 | −81.640 | −60.369 | 5.269 |
+| Angers | 18.080 | −68.716 | −8.422 | **−8.417** |
+
+Stepping off the boundary costs 60 to 100 units of log-likelihood, and profiling
+`Λ` and `B₂` on the held base recovers only part of it. On Angers the released
+fit then moves by 0.005 and stops: the entry point is a trap, not a start.
+
+**The `r = 0` dynamics do not transfer.** That is the substantive result. `F`,
+`Θ` and `Σ` are the same objects at both ranks, but their `r = 0` optima are not
+near their `r = 1` optima, and holding them while the error-correction term is
+introduced puts the fit somewhere the released optimiser cannot leave — these
+surfaces stop on `steptol` or on a failed line search, so a bad start is not
+recoverable. Carrying an optimum up a rung, which works everywhere else in this
+construction, is exactly what does not work across this one.
+
 ## 5. What is not in the register, and why
 
 * **The Census Housing example** of the AddOn (Hillmer & Tiao 1979): the data

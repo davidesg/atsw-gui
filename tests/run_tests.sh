@@ -582,6 +582,33 @@ else
 fi
 echo
 
+# 5f. -seedgate (route B).  It is not the default and it is measured to be worse
+#     on most of the bank, so what is checked is not that it helps: it is that it
+#     does what it says.  Two things.  With q = 0 both routes must reach the SAME
+#     optimum -- there is no moving-average block for the seeding to disagree
+#     about -- and that is an invariant, so it cannot go stale.  And with q = 1
+#     it must emit its report and still produce a fit, because a seeding option
+#     that silently drops the estimation would look like a success here.
+run datasets/synthetic/rank2.inp 2 0 1 -case 2 -mean
+c0=$(logelf_of "$TMP/case")
+run datasets/synthetic/rank2.inp 2 0 1 -case 2 -mean -seedgate
+b0=$(logelf_of "$TMP/case")
+if [ -z "$c0" ] || [ -z "$b0" ]; then
+    bad "seedgate: q=0" "missing logelf (C=$c0 B=$b0)"
+elif awk -v a="$c0" -v b="$b0" 'BEGIN{d=a-b; if(d<0)d=-d; exit !(d<=1e-6)}'; then
+    ok "seedgate: with q=0 both routes reach the same optimum ($c0)"
+else bad "seedgate: q=0 routes disagree" "cold=$c0 seedgate=$b0"; fi
+
+run "$MM" 2 1 1 -case 2 -mean -seedgate
+if ! grep -aq "the VEC block profiled on the rung below" "$TMP/case.out"; then
+    bad "seedgate" "no report emitted"
+elif ! grep -aq "the pre-estimates the conditional step produced" "$TMP/case.out"; then
+    bad "seedgate" "the pre-estimates of Lambda and B2 are not reported"
+elif [ -n "$(logelf_of "$TMP/case")" ]; then
+    ok "seedgate: reports its two stages, its pre-estimates, and still fits"
+else bad "seedgate" "reported but produced no fit"; fi
+echo
+
 echo "[6] alpha = A*psi: the restriction, its LR, and its guards"
 # Johansen and Swensen (2024): H1(r) is alpha = A*psi with A known.  Weak
 # exogeneity is the special case where A selects rows, so -weakex is a shorthand
@@ -973,6 +1000,8 @@ if [ "${VALGRIND:-0}" = "1" ]; then
         vg_clean "no leaks: q=2 (negative tensor bound)" "$MM" 2 2 1 -case 2
         vg_clean "no leaks: seeding from .pre" "$MM" 2 1 0 -case 1 \
                  -diagar -diagma -diagcov -seedybar tests/fixtures/mmdiag
+        vg_clean "no leaks: -seedgate"        "$MM" 2 1 1 -case 2 -mean -seedgate
+        vg_clean "no leaks: -rungs"           "$MM" 2 1 0 -case 1 -rungs
     fi
     echo
 fi

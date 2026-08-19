@@ -258,12 +258,44 @@ smallest moving-average root at the optimum.
    thing outside it was: the bank turned up the case §7 asked to be
    constructed — a gate failing its own contract, on Milan — and the failure
    was the check's, not the gate's (§1b).
-3. **Build (B)** behind an option, so the default and the recorded results do not
-   move.
-4. **Measure (B) against (C)** on the same bank, by the same five quantities.
-5. **Decide and document**, whichever way the measurement falls, including if it
-   falls against (B). A negative result recorded is the route not walked twice.
-6. Only then, if (B) wins, make it the default and re-measure the register.
+3. ~~**Build (B)** behind an option~~ **Done**: `-seedgate`. The default and the
+   recorded results do not move.
+4. ~~**Measure (B) against (C)**~~ **Done**: [HOMOLOGATION.md](HOMOLOGATION.md)
+   §4c, same bank and same instrument.
+5. **Decided, and it falls against (B).** It wins three of eleven cases and
+   loses seven, by up to 37.6 log-likelihood units (Angers). The route stays in
+   the program behind its flag because the measurement is worth keeping, not
+   because it should be used. Two findings outlast it: the entry off the
+   boundary is **one-sided** — the conditional regression's `Λ` has no reason to
+   point the admissible way, and `elf` refuses the other — and it is
+   **expensive**, 60 to 100 units; and the `r = 0` dynamics **do not transfer**
+   to `r = 1`, which is what the whole route assumed.
+6. ~~If (B) wins, make it the default~~ — it does not, so nothing moves.
+
+### 8b. What the negative result points at next
+
+(B) failed on its premise, not on its arithmetic: it assumed the rung below is a
+good place to start the rung above. What it did *not* try is starting from an
+estimate of `Λ` and `B₂` that is already close to the answer — and one exists,
+in closed form.
+
+**(D) The canonical reduced-rank solution.** Johansen's estimator solves an
+eigenvalue problem for `β`, and `α` follows from it; both are closed-form and
+cost no optimisation. The register already measures how good they are as a
+starting point without having asked the question: §2.1b puts Johansen's `β`
+within **0.0003 to 0.052** of `drvec`'s own optimum across 24 comparisons on the
+eight pairs. That is a pre-estimate one to two orders of magnitude closer than
+anything (B) or (C) produces.
+
+Two things have to be handled and both are known. `Λ = −α` in this
+parameterisation, since the model carries `−Λ(B′Y−E[W])` — the sign that
+(B) had to discover by scanning. And the canonical `β` is normalised on a
+different variable, so it needs renormalising onto `B = [I_r ; B₂]` before it can
+be written into the parameter vector. Neither is a choice; both are conversions.
+
+The measurement to take is the same one: same bank, same five quantities, and
+`-eval` at the seed to see how far the start is before the optimiser touches
+it.
 
 Steps 2 and 4 are the reason for writing this first: without a baseline taken
 before the change, the change cannot be evaluated, and the work is repeated.

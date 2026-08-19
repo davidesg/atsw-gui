@@ -96,6 +96,30 @@ int global_case = 1;  /* deterministic case (Mauricio Remark 6) */
 int global_lrtest = 0; /* if 1, perform sequential LR test for rank */
 int global_rungs  = 0; /* if 1, report the ladder's rungs 0-2 and their LRs   */
 
+/*  -seedgate — LA RUTA (B) DEL PLAN, detras de una opcion y NO por defecto.
+ *
+ *  El puente que la escalera usa en todas partes -- coger el optimo de abajo y
+ *  arrancar ahi -- no alcanza el peldano de r = 1: con Lambda = 0 el sistema
+ *  transformado tiene una raiz AR de modulo exactamente 1 y la verosimilitud no
+ *  esta definida ahi (docs/VEC_EMBEDDING_PLAN.md 3).  (B) cruza sin elegir
+ *  ninguna constante: se sujetan F, Theta y Sigma en el optimo de r = 0 y se
+ *  estiman SOLO Lambda y B2; el paso fuera de la frontera lo escoge la
+ *  verosimilitud.  Despues se suelta todo.
+ *
+ *  prof_hold es el modo condicional: mientras esta puesto, el vector de
+ *  parametros lleva la media, Lambda y B2, y los bloques F, Theta y Sigma se
+ *  leen de hold_*, no de x.  Es el mismo patron que -fixb2 y que -alpha: la
+ *  restriccion vive en el cast y el optimizador no se entera.                */
+int global_seedgate = 0;
+static int    prof_hold = 0;
+static real ***hold_F = NULL, ***hold_Th = NULL;
+static real  **hold_S = NULL;
+static int     hold_nf = 0, hold_q = 0, hold_M = 0;
+static real    gate_seed_ll0 = 0.0, gate_seed_ll1 = 0.0;  /* r=0 y condicional */
+static real    gate_seed_lam = 0.0;       /* el multiplo de Lambda admisible   */
+static real    gate_seed_ll_start = 0.0;  /* logL en ese arranque              */
+static int     gate_seed_ok  = 0;
+
 /* -fixb2: hold B2 at the static-OLS value computed by init_guess instead of
    estimating it.  This is the restricted model the literature tests against
    the free one (Mauricio 2006, Table 5: B = [1,0]'; BVECM Table 1: beta = 1),
@@ -208,39 +232,53 @@ static void build_y2_levels(void)
 /*    5. Σ lower triangle                            (M(M+1)/2 params)       */
 /*    6. B₂ (s×r) cointegration matrix                 (s·r params)          */
 /*****************************************************************************/
-static int calc_nparametrs(void)
+/*  par_blocks — el vector de parametros, partido en los tres tramos que el
+ *  perfilado necesita separar, y en UN solo sitio.
+ *
+ *    cabeza  la media y Lambda      lo que el paso condicional estima
+ *    medio   F, Theta y Sigma       lo que el paso condicional sujeta
+ *    cola    B2                     lo que el paso condicional estima
+ *
+ *  Cabeza y cola son contiguas por los dos extremos del vector, que es lo que
+ *  hace barato el modo condicional: quitar el tramo de en medio no reordena
+ *  nada.  Se calcula aqui y no en cada sitio porque este programa ya tiene
+ *  CUATRO recorridos del mismo vector -- calc_nparametrs, init_guess,
+ *  vec_shootx y el impresor -- y anadir un quinto criterio de conteo suelto es
+ *  exactamente como se abrio el fallo de 4.1.                                */
+static void par_blocks(int *nmean, int *nlam, int *nmid, int *ntail)
 {
     int M = nser, r = global_r, s = M - r;
     int p = global_p, q = global_q;
-    int npar = 0;
+    int nf = (p > 1) ? p - 1 : 0;
 
     /* 1. Mean E[Ȳ_t] */
-    if      (global_case == 2) npar += r;
-    else if (global_case == 3) npar += M;
+    *nmean = (global_case == 2 ? r : (global_case == 3 ? M : 0));
 
-    /* 2. Adjustment matrix Lambda (M x r), o psi (sa x r) si alpha = A*psi */
-    npar += (global_alpha ? alpha_sa : M) * r;
+    /* 2. Lambda (M x r), o psi (sa x r) con alpha = A*psi */
+    *nlam  = (global_alpha ? alpha_sa : M) * r;
 
-    /* 3. F_i (M x M, i=1..p-1) */
-    int nf = (p > 1) ? p - 1 : 0;
-    npar += nf * (global_diag_ar ? M : M * M);
+    /* 3. F_i (M x M, i=1..p-1)   4. Theta_j (M x M, j=1..q)
+       5. Sigma (triangulo inferior), menos la escala redundante.
+          El motor llama a elf con sigma2 = 1 y concentra la escala, asi que el
+          objetivo es exactamente invariante a reescalar este bloque
+          (f1 -> f1/c, f2 -> c^m f2).  Llevar el triangulo entero dejaria una
+          direccion que la verosimilitud no ve: una cresta plana que hace
+          fallar la busqueda lineal y hace singular el hessiano.  Sigma[1][1]
+          queda fijo en 1 y la escala se reporta por sigma2 (de modo que
+          Sigma[1][1] = sigma2 exactamente).                                  */
+    *nmid  = nf * (global_diag_ar ? M : M * M)
+           + q  * (global_diag_ma ? M : M * M)
+           + (global_diag_cov ? M : M * (M + 1) / 2) - 1;
 
-    /* 4. Theta_j (M x M, j=1..q) */
-    npar += q * (global_diag_ma ? M : M * M);
+    /* 6. B_2 (s x r), salvo que -fixb2 lo sujete */
+    *ntail = global_fixb2 ? 0 : s * r;
+}
 
-    /* 5. Sigma (lower triangle), minus the redundant scale.
-       The engine calls elf with sigma2 = 1 and concentrates the scale out, so
-       the objective is exactly invariant to rescaling this block (f1 -> f1/c,
-       f2 -> c^m f2).  Carrying the full triangle would leave one direction the
-       likelihood cannot see: a flat ridge that makes the line search fail and
-       the Hessian singular.  Sigma[1][1] is therefore fixed at 1 and the scale
-       is reported through sigma2 (so Sigma[1][1] = sigma2 exactly).          */
-    npar += (global_diag_cov ? M : M * (M + 1) / 2) - 1;
-
-    /* 6. B_2 (s x r), unless held fixed by -fixb2 */
-    if (!global_fixb2) npar += s * r;
-
-    return npar;
+static int calc_nparametrs(void)
+{
+    int nmean, nlam, nmid, ntail;
+    par_blocks(&nmean, &nlam, &nmid, &ntail);
+    return nmean + nlam + (prof_hold ? 0 : nmid) + ntail;
 }
 
 /*****************************************************************************/
@@ -2390,7 +2428,10 @@ static void vec_shootx(real *x, struct Tvarma *armax,
     for (k = 1; k <= (nf > 0 ? nf : 1); k++)
         for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) F[k][i][j] = 0.0;
     for (k = 1; k <= nf; k++) {
-        if (global_diag_ar) {
+        if (prof_hold) {          /* sujeto en el optimo de r = 0; ver -seedgate */
+            for (i = 1; i <= M; i++)
+                for (j = 1; j <= M; j++) F[k][i][j] = hold_F[k][i][j];
+        } else if (global_diag_ar) {
             for (i = 1; i <= M; i++) F[k][i][i] = x[idx++];
         } else {
             for (i = 1; i <= M; i++)
@@ -2404,7 +2445,10 @@ static void vec_shootx(real *x, struct Tvarma *armax,
     for (k = 1; k <= (q > 0 ? q : 1); k++)
         for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) Theta[k][i][j] = 0.0;
     for (k = 1; k <= q; k++) {
-        if (global_diag_ma) {
+        if (prof_hold) {
+            for (i = 1; i <= M; i++)
+                for (j = 1; j <= M; j++) Theta[k][i][j] = hold_Th[k][i][j];
+        } else if (global_diag_ma) {
             for (i = 1; i <= M; i++) Theta[k][i][i] = x[idx++];
         } else {
             for (i = 1; i <= M; i++)
@@ -2428,7 +2472,10 @@ static void vec_shootx(real *x, struct Tvarma *armax,
     real **Sigma = matrix(1, M, 1, M);
     for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) Sigma[i][j] = 0.0;
     Sigma[1][1] = 1.0;
-    if (global_diag_cov) {
+    if (prof_hold) {
+        for (i = 1; i <= M; i++)
+            for (j = 1; j <= M; j++) Sigma[i][j] = hold_S[i][j];
+    } else if (global_diag_cov) {
         for (i = 2; i <= M; i++) Sigma[i][i] = x[idx++];
     } else {
         for (i = 2; i <= M; i++) Sigma[i][i] = x[idx++];
@@ -2609,6 +2656,311 @@ static void vec_shootx(real *x, struct Tvarma *armax,
 }
 
 /*****************************************************************************/
+/*  gate_profile_seed — LA RUTA (B) DEL PLAN: el optimo de r = 0, y sobre el,  */
+/*  Lambda y B2 por verosimilitud.                                            */
+/*                                                                           */
+/*  POR QUE EXISTE.  Toda la construccion de la suite va de OPTIMOS HACIA     */
+/*  OPTIMOS: se estima un peldano, se certifica, y el de arriba arranca ahi.  */
+/*  Ese puente NO alcanza el peldano de r = 1, y la razon esta medida en      */
+/*  docs/VEC_EMBEDDING_PLAN.md 3: con Lambda = 0 el sistema transformado tiene */
+/*  una raiz AR de modulo exactamente 1.000000, o sea que la base esta EN la   */
+/*  frontera del espacio de arriba y no en su interior, la verosimilitud no    */
+/*  esta definida ahi, y ademas B2 no esta identificado, porque Pi = Lambda B' */
+/*  = 0 sea cual sea B2.  Sembrar el peldano de abajo tal cual es INADMISIBLE, */
+/*  no solo inexacto.                                                         */
+/*                                                                           */
+/*  COMO CRUZA.  Sujetando F, Theta y Sigma en el optimo de r = 0 y estimando  */
+/*  SOLO Lambda y B2 (y la media, que en r = 1 tiene un E[W] que abajo no      */
+/*  existe).  El problema condicional es pequeno y mucho mejor condicionado    */
+/*  que el conjunto, y su solucion es admisible POR CONSTRUCCION: el paso      */
+/*  fuera de la frontera lo elige la verosimilitud y no quien programa.  Esa   */
+/*  es la razon de preferir (B) a (A) -- entrar por la direccion que ajusta    */
+/*  con un paso calibrado --: (A) necesita una constante, y una constante fija */
+/*  es una distancia distinta en cada conjunto de datos.                       */
+/*                                                                           */
+/*  QUE SUJETA, EXACTAMENTE.  El peldano de abajo se estima con la MISMA       */
+/*  estructura que se pidio arriba: sin banderas diagonales es el peldano 2 de */
+/*  la escalera (F, Theta y Sigma libres), y con ellas es la puerta diagonal   */
+/*  certificada.  El plan dice "los valores de la puerta"; se toma el optimo   */
+/*  de r = 0 de la estructura pedida porque es el peldano inmediatamente       */
+/*  inferior y es el que la escalera manda usar, y con las banderas puestas    */
+/*  los dos coinciden.                                                        */
+/*                                                                           */
+/*  Devuelve 1 si dejo un punto de partida nuevo en x, y 0 si no lo consiguio, */
+/*  en cuyo caso x sigue siendo el de init_guess -- la ruta (C) -- y se dice.  */
+/*****************************************************************************/
+static int gate_profile_seed(real *x, int npar)
+{
+    int M = nser, r0 = global_r, p = global_p, q = global_q;
+    int nf = (p > 1) ? p - 1 : 0;
+    int nmean, nlam, nhead, nmid, ntail, np0, np2, i, j, k, idx, ifr = 0, ifc;
+    real *x0, *dev0, **cov0, *x2, *dev2, **cov2;
+    struct Tvarma v0, v2;
+
+    if (r0 <= 0) return 0;                  /* sin matriz VEC no hay que cruzar */
+    par_blocks(&nmean, &nlam, &nmid, &ntail);
+    nhead = nmean + nlam;
+    if (nhead + nmid + ntail != npar) return 0;      /* el vector no es el que  */
+                                                     /* este recorrido espera   */
+
+    /* ---- 1. el peldano de abajo, estimado hasta su optimo ---------------- */
+    global_r = 0;
+    build_y2_levels();
+    np0  = calc_nparametrs();
+    x0   = vector(1, np0);
+    dev0 = vector(1, np0);
+    cov0 = matrix(1, np0, 1, np0);
+    v0.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
+    init_guess(x0, np0);
+    vec_shootx(x0, &v0, &ifr, 1, 0);
+    est(&vec_shootx, np0, x0, dev0, cov0, 500, 200, 1e-5, 1e-7,
+        v0.xitol, v0.a, &v0.sigma2, &v0.logelf, &ifr);
+
+    if (ifr != 0) {
+        fprintf(outputv, "\n-seedgate: the r = 0 rung did not converge "
+                         "(ifault = %d); falling back to the cold start.\n", ifr);
+        if (!quiet_mode)
+            printf("  -seedgate: el peldano r = 0 no convergio; se sigue en frio\n");
+        vec_shootx(x0, &v0, &ifr, 0, 1);
+        free_matrix(cov0, 1, np0, 1, np0);
+        free_vector(dev0, 1, np0);
+        free_vector(x0, 1, np0);
+        global_r = r0; build_y2_levels();
+        return 0;
+    }
+    gate_seed_ll0 = v0.logelf;
+
+    /*  Recuperar el ajuste en las estructuras: est() deja la ultima evaluacion,
+     *  que no tiene por que ser el punto final.                              */
+    vec_shootx(x0, &v0, &ifr, 0, 0);
+
+    /*  CON r = 0 LAS COORDENADAS SON LAS MISMAS, y por eso esto se puede leer
+     *  directamente del ajuste en vez de volver a desmontar x0: Cbar y Cinv
+     *  colapsan a la identidad y Hbar a cero (vec_shootx [4]), de modo que
+     *  Phi*_k = F_k, Theta*_k = Theta_k y Sigma* = Sigma, termino a termino.
+     *  Es la misma propiedad de la que vive la puerta.                       */
+    hold_M = M; hold_nf = nf; hold_q = q;
+    hold_F  = tensor(1, (nf > 0 ? nf : 1), 1, M, 1, M);
+    hold_Th = tensor(1, (q  > 0 ? q  : 1), 1, M, 1, M);
+    hold_S  = matrix(1, M, 1, M);
+    for (k = 1; k <= (nf > 0 ? nf : 1); k++)
+        for (i = 1; i <= M; i++) for (j = 1; j <= M; j++)
+            hold_F[k][i][j] = (k <= nf) ? v0.phi[k][i][j] : 0.0;
+    for (k = 1; k <= (q > 0 ? q : 1); k++)
+        for (i = 1; i <= M; i++) for (j = 1; j <= M; j++)
+            hold_Th[k][i][j] = (k <= q) ? v0.theta[k][i][j] : 0.0;
+    for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) hold_S[i][j] = v0.qq[i][j];
+
+    vec_shootx(x0, &v0, &ifr, 0, 1);
+    free_matrix(cov0, 1, np0, 1, np0);
+    free_vector(dev0, 1, np0);
+    free_vector(x0, 1, np0);
+
+    /* ---- 2. el paso condicional: solo la media, Lambda y B2 -------------- */
+    global_r = r0;
+    build_y2_levels();
+    prof_hold = 1;
+    np2  = calc_nparametrs();               /* = nhead + ntail, por par_blocks */
+    x2   = vector(1, np2);
+    dev2 = vector(1, np2);
+    cov2 = matrix(1, np2, 1, np2);
+    for (i = 1; i <= nhead; i++) x2[i] = x[i];
+    for (i = 1; i <= ntail; i++) x2[nhead + i] = x[nhead + nmid + i];
+    v2.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
+    vec_shootx(x2, &v2, &ifr, 1, 0);
+
+    /*  UN PUNTO DE PARTIDA ADMISIBLE, Y LO ELIGE LA VEROSIMILITUD.
+     *
+     *  Esto lo obligo la medida y no estaba en el plan: con F, Theta y Sigma
+     *  sujetos en el optimo de r = 0 y Lambda en el valor de la regresion
+     *  condicional, el sistema transformado sale NO ESTACIONARIO -- elf
+     *  devuelve ifault = 3 -- y el optimizador no arranca siquiera, porque est
+     *  se planta si el punto inicial no es admisible (drvmlest.c, "bad initial
+     *  estimates").  Es la otra cara de lo que el plan midio en 3: en Lambda =
+     *  0 la raiz esta EXACTAMENTE en 1, y de las dos direcciones que salen de
+     *  ahi solo una es admisible.  El signo que trae la regresion condicional
+     *  no tiene por que ser ese.
+     *
+     *  Asi que se recorre una escalera de multiplos de la Lambda que trajo la
+     *  regresion -- la DIRECCION la eligen los datos, no el programa -- y se
+     *  arranca en el mejor punto ADMISIBLE de los que se evaluan.  Que no es
+     *  una constante fija, que es lo que el plan prohibe: es un multiplo de
+     *  algo estimado, y ademas el paso condicional lo mueve despues.  Si
+     *  ninguno es admisible, no se cruza y se dice.                          */
+    {
+        const real LOG2PI = 1.837877066;
+        static const real mult[18] = { 1.0, -1.0, 0.5, -0.5, 0.25, -0.25,
+                                       0.1, -0.1, 0.05, -0.05, 0.02, -0.02,
+                                       0.01, -0.01, 2.0, -2.0, 4.0, -4.0 };
+        real *lam0 = vector(1, (nlam > 0 ? nlam : 1));
+        real best = 0.0, bestc = 0.0;
+        int  have = 0, mi;
+
+        for (i = 1; i <= nlam; i++) lam0[i] = x2[nmean + i];
+        for (mi = 0; mi < 18; mi++) {
+            real pi1, pi2, pi3, ll;
+            int ifev = 0, ifc2 = 0;
+            for (i = 1; i <= nlam; i++) x2[nmean + i] = mult[mi] * lam0[i];
+            vec_shootx(x2, &v2, &ifc2, 0, 0);
+            if (ifc2 != 0) continue;                  /* Sigma no definida pos. */
+            elf(v2.m, v2.n, v2.p, v2.q, v2.mu, v2.phi, v2.theta, v2.qq, v2.w,
+                1.0, v2.xitol, TRUE, v2.a, &pi1, &pi2, &pi3, &ifev);
+            if (ifev != 0) continue;                  /* no admisible: 1..5     */
+            ll = -0.5 * v2.m * v2.n * (LOG2PI - log((real) v2.m)
+                 - log((real) v2.n) + 1.0)
+                 - 0.5 * v2.n * (v2.m * log(pi1) + log(pi2));
+            if (!have || ll > best) { have = 1; best = ll; bestc = mult[mi]; }
+        }
+        for (i = 1; i <= nlam; i++) x2[nmean + i] = bestc * lam0[i];
+        free_vector(lam0, 1, (nlam > 0 ? nlam : 1));
+        gate_seed_lam = bestc;
+        gate_seed_ll_start = have ? best : 0.0;
+        if (!have) {
+            fprintf(outputv, "\n-seedgate: no admissible starting point for the "
+                             "conditional step -- every multiple of the "
+                             "conditional-regression Lambda leaves the transformed "
+                             "system non-stationary or non-invertible.  Falling "
+                             "back to the cold start.\n");
+            if (!quiet_mode)
+                printf("  -seedgate: ningun arranque admisible; se sigue en frio\n");
+            vec_shootx(x2, &v2, &ifr, 0, 1);
+            prof_hold = 0;
+            free_matrix(cov2, 1, np2, 1, np2);
+            free_vector(dev2, 1, np2);
+            free_vector(x2, 1, np2);
+            free_matrix(hold_S, 1, M, 1, M);
+            free_tensor(hold_Th, 1, (q  > 0 ? q  : 1), 1, M, 1, M);
+            free_tensor(hold_F,  1, (nf > 0 ? nf : 1), 1, M, 1, M);
+            hold_F = NULL; hold_Th = NULL; hold_S = NULL;
+            return 0;
+        }
+    }
+
+    est(&vec_shootx, np2, x2, dev2, cov2, 500, 200, 1e-5, 1e-7,
+        v2.xitol, v2.a, &v2.sigma2, &v2.logelf, &ifr);
+    ifc = ifr;                     /* est deja aqui su codigo, y la liberacion */
+    gate_seed_ll1 = v2.logelf;     /* de abajo lo pisaria                      */
+    vec_shootx(x2, &v2, &ifr, 0, 1);
+    prof_hold = 0;
+
+    if (ifc != 0) {
+        fprintf(outputv, "\n-seedgate: the conditional step for Lambda and B2 "
+                         "did not converge (ifault = %d); falling back to the "
+                         "cold start.\n", ifc);
+        if (!quiet_mode)
+            printf("  -seedgate: el paso condicional no convergio; se sigue en frio\n");
+        free_matrix(cov2, 1, np2, 1, np2);
+        free_vector(dev2, 1, np2);
+        free_vector(x2, 1, np2);
+        free_matrix(hold_S, 1, M, 1, M);
+        free_tensor(hold_Th, 1, (q  > 0 ? q  : 1), 1, M, 1, M);
+        free_tensor(hold_F,  1, (nf > 0 ? nf : 1), 1, M, 1, M);
+        hold_F = NULL; hold_Th = NULL; hold_S = NULL;
+        return 0;
+    }
+
+    /* ---- 3. el vector completo: cabeza y cola del paso condicional, tramo
+              de en medio del optimo de r = 0.  El orden de escritura es el del
+              recorrido de vec_shootx, y tiene que serlo: es el quinto sitio que
+              recorre este vector.                                            */
+    for (i = 1; i <= nhead; i++) x[i] = x2[i];
+    for (i = 1; i <= ntail; i++) x[nhead + nmid + i] = x2[nhead + i];
+    idx = nhead + 1;
+    for (k = 1; k <= nf; k++) {
+        if (global_diag_ar) { for (i = 1; i <= M; i++) x[idx++] = hold_F[k][i][i]; }
+        else for (i = 1; i <= M; i++)
+                 for (j = 1; j <= M; j++) x[idx++] = hold_F[k][i][j];
+    }
+    for (k = 1; k <= q; k++) {
+        if (global_diag_ma) { for (i = 1; i <= M; i++) x[idx++] = hold_Th[k][i][i]; }
+        else for (i = 1; i <= M; i++)
+                 for (j = 1; j <= M; j++) x[idx++] = hold_Th[k][i][j];
+    }
+    if (global_diag_cov) {
+        for (i = 2; i <= M; i++) x[idx++] = hold_S[i][i];
+    } else {
+        for (i = 2; i <= M; i++) x[idx++] = hold_S[i][i];
+        for (i = 2; i <= M; i++)
+            for (j = 1; j < i; j++) x[idx++] = hold_S[i][j];
+    }
+    if (idx - 1 != nhead + nmid) {          /* el recorrido no cuadra: no se usa */
+        fprintf(outputv, "\n-seedgate: internal walk mismatch (%d vs %d); "
+                         "falling back to the cold start.\n",
+                idx - 1, nhead + nmid);
+        free_matrix(cov2, 1, np2, 1, np2);
+        free_vector(dev2, 1, np2);
+        free_vector(x2, 1, np2);
+        free_matrix(hold_S, 1, M, 1, M);
+        free_tensor(hold_Th, 1, (q  > 0 ? q  : 1), 1, M, 1, M);
+        free_tensor(hold_F,  1, (nf > 0 ? nf : 1), 1, M, 1, M);
+        hold_F = NULL; hold_Th = NULL; hold_S = NULL;
+        return 0;
+    }
+
+    free_matrix(cov2, 1, np2, 1, np2);
+    free_vector(dev2, 1, np2);
+    free_vector(x2, 1, np2);
+    free_matrix(hold_S, 1, M, 1, M);
+    free_tensor(hold_Th, 1, (q  > 0 ? q  : 1), 1, M, 1, M);
+    free_tensor(hold_F,  1, (nf > 0 ? nf : 1), 1, M, 1, M);
+    hold_F = NULL; hold_Th = NULL; hold_S = NULL;
+
+    gate_seed_ok = 1;
+    fprintf(outputv,
+        "\n=== -seedgate: the VEC block profiled on the rung below ===\n\n"
+        "  r = 0 optimum (F, Theta, Sigma)        logL = %18.10f\n"
+        "  admissible entry, Lambda x %-6.2f        logL = %18.10f\n"
+        "  + Lambda and B2 profiled on it         logL = %18.10f\n\n"
+        "  The starting point for the free fit below is that second value, not\n"
+        "  a conditional regression.  Holding the rung below and estimating only\n"
+        "  Lambda and B2 lands in the INTERIOR by construction: at Lambda = 0 the\n"
+        "  transformed system has an AR root of modulus exactly one, so the rung\n"
+        "  below cannot be carried up unchanged, and the step off that boundary\n"
+        "  is chosen here by the likelihood rather than by a constant.\n",
+        gate_seed_ll0, gate_seed_lam, gate_seed_ll_start, gate_seed_ll1);
+    /*  LAS PREESTIMACIONES, ESCRITAS.  Son el producto del paso condicional y
+     *  hay que poder verlas: si (B) acaba peor que (C), la pregunta siguiente
+     *  es siempre si el punto de partida es razonable o disparatado, y esa no
+     *  se contesta con el logL.  El orden es el del recorrido de vec_shootx:
+     *  Lambda por filas (i exterior, j interior) y B2 por columnas.          */
+    {
+        int nl = (global_alpha ? alpha_sa : M), s0 = M - r0, c;
+        fprintf(outputv, "\n  the pre-estimates the conditional step produced\n");
+        fprintf(outputv, "    %s (%d x %d):\n",
+                global_alpha ? "psi, with Lambda = A*psi" : "Lambda", nl, r0);
+        c = nhead - nlam;                       /* donde empieza Lambda en x   */
+        for (i = 1; i <= nl; i++) {
+            fprintf(outputv, "     ");
+            for (j = 1; j <= r0; j++)
+                fprintf(outputv, " %12.6f", x[c + (i - 1) * r0 + j]);
+            fprintf(outputv, "\n");
+        }
+        if (global_fixb2)
+            fprintf(outputv, "    B2 (%d x %d): held fixed by -fixb2\n", s0, r0);
+        else {
+            fprintf(outputv, "    B2 (%d x %d):\n", s0, r0);
+            c = nhead + nmid;                   /* donde empieza B2 en x       */
+            for (i = 1; i <= s0; i++) {
+                fprintf(outputv, "     ");
+                for (j = 1; j <= r0; j++)
+                    fprintf(outputv, " %12.6f", x[c + (j - 1) * s0 + i]);
+                fprintf(outputv, "\n");
+            }
+        }
+        if (nmean > 0) {
+            fprintf(outputv, "    mean block (%d):  ", nmean);
+            for (i = 1; i <= nmean; i++) fprintf(outputv, " %12.6f", x[i]);
+            fprintf(outputv, "\n");
+        }
+    }
+
+    if (!quiet_mode)
+        printf("  -seedgate: r=0 logL = %.6f  ->  perfilando Lambda y B2: %.6f\n",
+               gate_seed_ll0, gate_seed_ll1);
+    return 1;
+}
+
+/*****************************************************************************/
 /*  main                                                                      */
 /*****************************************************************************/
 int main(int argc, char *argv[])
@@ -2646,6 +2998,12 @@ int main(int argc, char *argv[])
         printf("  -lrtest        sequential LR test for the cointegration rank:\n");
         printf("                 estimates r = 0..M-1 and reports 2*[L(r+1) - L(r)];\n");
         printf("                 incompatible with -differenced\n\n");
+        printf("  -seedgate      seed the r >= 1 fit by profiling: estimate the\n");
+        printf("                 r = 0 rung, hold F, Theta and Sigma there, and fit\n");
+        printf("                 Lambda and B2 on it before releasing everything.\n");
+        printf("                 Not the default: the recorded results rest on the\n");
+        printf("                 cold start, and this moves only when measured to\n");
+        printf("                 be at least as good\n\n");
         printf("  -rungs         the ladder below the rank: rungs 0 (F, Theta and\n");
         printf("                 Sigma diagonal), 1 (Sigma free) and 2 (F and Theta\n");
         printf("                 free), all at r = 0, with their chi2 LRs.  These are\n");
@@ -2687,6 +3045,7 @@ int main(int argc, char *argv[])
             met = atoi(argv[++i]);
         else if (strcmp(argv[i], "-lrtest") == 0)  global_lrtest = 1;
         else if (strcmp(argv[i], "-rungs") == 0)   global_rungs = 1;
+        else if (strcmp(argv[i], "-seedgate") == 0) global_seedgate = 1;
         else if (strcmp(argv[i], "-levels") == 0)  global_levels = 1;  /* default */
         else if (strcmp(argv[i], "-differenced") == 0) global_levels = 0;
         else if (strcmp(argv[i], "-writeinp") == 0 && i+1 < argc) {
@@ -3306,6 +3665,14 @@ int main(int argc, char *argv[])
 
     init_guess(x, npar);
 
+    /*  -seedgate: la ruta (B).  Va DESPUES de init_guess y no en su lugar, por
+     *  dos razones.  La cabeza y la cola del vector -- la media, Lambda y B2 --
+     *  necesitan un punto de partida para el paso condicional, y el de la
+     *  regresion condicional es el que hay.  Y si el perfilado no sale, lo que
+     *  queda es exactamente la ruta (C), sin ninguna ruta intermedia inventada:
+     *  o cruza entero o no cruza.                                            */
+    if (global_seedgate) gate_profile_seed(x, npar);
+
     /* -writeres: los residuos de la regresión condicional, que es lo que
        init_guess acaba de publicar.  Es un modo y termina aquí.                */
     if (global_writeres) {
@@ -3427,7 +3794,12 @@ int main(int argc, char *argv[])
         for (k = 0; k < global_multistart; k++) {
             struct Tvarma vk;
             vk.xitol = varma1.xitol;
-            init_guess(xtry, npar);
+            /*  El multiarranque sacude LA SEMILLA QUE SE ESTA MIDIENDO, no otra:
+             *  con -seedgate esa es el punto perfilado, que ya esta en x, y
+             *  volver a llamar a init_guess aqui mediria la ruta (C) con una
+             *  etiqueta equivocada.                                           */
+            if (gate_seed_ok) { for (i2 = 1; i2 <= npar; i2++) xtry[i2] = x[i2]; }
+            else init_guess(xtry, npar);
             if (k > 0) {
                 /* Jitter multiplicativo sobre la semilla, en una escalera de
                    amplitud que depende SOLO de k y no de n.  Eso hace el

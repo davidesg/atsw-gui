@@ -74,6 +74,29 @@ rather than returning numbers for a model that does not have them.
 The degrees of freedom of the reported LR are `(M − sa)·r`, from Johansen and
 Swensen (2024).
 
+### Seeding the VEC block
+
+| | |
+|---|---|
+| `-seedgate` | estimate the `r = 0` rung, hold `F`, `Θ`, `Σ` there, fit `Λ` and `B₂` on it, then release everything |
+
+**Not the default, and measured to be worse on most of the bank** — it is here
+because the measurement is worth keeping, not because it should be used. See
+[HOMOLOGATION.md](HOMOLOGATION.md) §4c for the numbers and
+[VEC_EMBEDDING_PLAN.md](VEC_EMBEDDING_PLAN.md) for what it was trying to do.
+
+The idea is the ladder's own: estimate the rung below, then start the rung above
+from it. It does not carry over unchanged, because at `Λ = 0` the transformed
+system has an AR root of modulus exactly one — the null sits *on* the boundary
+of the alternative — so the option instead enters along the direction the
+conditional regression's `Λ` points, at the largest admissible step it can find,
+and lets the likelihood profile `Λ` and `B₂` from there.
+
+What the measurement says: the entry costs far more than the rung below is
+worth. On Angers the released fit never leaves the entry point and ends 37.6
+log-likelihood units below the cold start; on Milan 8.9 below. It wins on three
+of fifteen cases. The `r = 0` dynamics, in short, do not transfer to `r = 1`.
+
 ### The ladder
 
 | | |

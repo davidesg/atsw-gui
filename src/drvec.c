@@ -661,6 +661,225 @@ fail:
     return 1;
 }
 
+/*****************************************************************************/
+/*  F4 — bootstrap parametrico para el test de rango                          */
+/*****************************************************************************/
+/*  POR QUE.  Bajo H0 el estadistico de rango NO sigue una chi2, y los valores
+ *  criticos asintoticos que -lrtest imprime estan medidos como insuficientes a
+ *  estos tamanos: sobre 20 replicas de un proceso con r = 1 verdadero y n = 120,
+ *  el test sobre-rechaza unas TRES VECES su nivel nominal (HOMOLOGATION.md 2.3).
+ *  Melard, Roy y Saidi lo dicen para esta misma clase de modelos: los terminos MA
+ *  no alteran la distribucion asintotica del LR, pero "finite sample performance
+ *  of the test is affected by the MA terms".
+ *
+ *  COMO.  Bootstrap parametrico: se simulan N muestras BAJO H0 con los parametros
+ *  estimados al rango r, se recalcula el estadistico LR(r -> r+1) en cada una, y
+ *  los percentiles empiricos son los valores criticos.  Es lo que prescribe
+ *  BVECM 6.3-6.5.
+ *
+ *  LA SIMULACION APROVECHA LA TRANSFORMACION, en vez de reimplementar un VEC:
+ *  el modelo ajustado ES un VARMA estacionario sobre Ybar, asi que se simula ahi
+ *  -- con la convencion de elf, (w-mu) = SUM phi (w-mu) + a - SUM theta a -- y se
+ *  INVIERTE la transformacion para volver a niveles:
+ *
+ *      nabla Y2 = Ybar[1..s]         -> Y2 por acumulacion desde el nivel real
+ *      Y1       = W - B2' Y2          con W = Ybar[s+1..M]
+ *
+ *  Eso deja una muestra en el mismo formato que el .inp, de modo que las
+ *  reestimaciones son EXACTAMENTE las del camino normal, sin codigo paralelo que
+ *  pueda divergir del que se quiere calibrar.
+ *
+ *  El generador es determinista con semilla fija: un valor critico que no se
+ *  puede reproducir no sirve para decidir nada.                              */
+
+static unsigned long boot_rng = 987654321UL;
+
+static real boot_normal(void)
+{
+    /* Box-Muller sobre un LCG propio; determinista y sin depender de la libc. */
+    static int have = 0;
+    static real spare = 0.0;
+    real u1, u2, r, th;
+    if (have) { have = 0; return spare; }
+    do {
+        boot_rng = boot_rng * 6364136223846793005UL + 1442695040888963407UL;
+        u1 = ((real)((boot_rng >> 33) & 0x7FFFFFFF)) / 2147483648.0;
+    } while (u1 <= 1.0e-12);
+    boot_rng = boot_rng * 6364136223846793005UL + 1442695040888963407UL;
+    u2 = ((real)((boot_rng >> 33) & 0x7FFFFFFF)) / 2147483648.0;
+    r  = sqrt(-2.0 * log(u1));
+    th = 2.0 * M_PI * u2;
+    spare = r * sin(th); have = 1;
+    return r * cos(th);
+}
+
+/*  simulate_h0 — una muestra de NIVELES bajo el modelo de v, con B2 dado.
+ *  out se espera dimensionada (1..nobs_raw, 1..M).  Devuelve 0 si pudo.       */
+static int simulate_h0(struct Tvarma *v, real **B2, int r, real **out)
+{
+    int M = nser, s = M - r, n = v->n, p = v->p, q = v->q;
+    int burn = 50 + 10 * p, T = n + burn;
+    real **wb = matrix(1, T, 1, M);
+    real **ab = matrix(1, T, 1, M);
+    real **L  = matrix(1, M, 1, M);
+    real d1, d2;
+    int t, i, j, k, ifc = 0;
+
+    /* Cholesky de Sigma* = sigma2 * qq para dar a los choques su covarianza. */
+    for (i = 1; i <= M; i++)
+        for (j = 1; j <= M; j++) L[i][j] = v->sigma2 * v->qq[i][j];
+    choldcp(L, M, &d1, &d2, &ifc);
+    if (ifc > 0) { free_matrix(L,1,M,1,M); free_matrix(ab,1,T,1,M);
+                   free_matrix(wb,1,T,1,M); return 1; }
+    for (i = 1; i <= M; i++) for (j = i+1; j <= M; j++) L[i][j] = 0.0;
+
+    for (t = 1; t <= T; t++) {
+        real *z = vector(1, M);
+        for (i = 1; i <= M; i++) z[i] = boot_normal();
+        for (i = 1; i <= M; i++) {
+            real acc = 0.0;
+            for (k = 1; k <= i; k++) acc += L[i][k] * z[k];
+            ab[t][i] = acc;
+        }
+        free_vector(z, 1, M);
+        /* (w - mu) = SUM phi_j (w - mu)_{t-j} + a_t - SUM theta_j a_{t-j} */
+        for (i = 1; i <= M; i++) {
+            real acc = ab[t][i];
+            for (j = 1; j <= p; j++) if (t-j >= 1)
+                for (k = 1; k <= M; k++) acc += v->phi[j][i][k] * (wb[t-j][k] - v->mu[k]);
+            for (j = 1; j <= q; j++) if (t-j >= 1)
+                for (k = 1; k <= M; k++) acc -= v->theta[j][i][k] * ab[t-j][k];
+            wb[t][i] = v->mu[i] + acc;
+        }
+    }
+
+    /* Invertir la transformacion.  El origen de Y2 es el real: en el caso 1 la
+       constante no es libre, asi que un origen arbitrario contaminaria W.     */
+    for (i = 1; i <= M; i++) out[1][i] = rawmat[1][i];
+    for (t = 1; t <= n; t++) {
+        int tb = t + burn;
+        for (i = 1; i <= s; i++) out[t+1][i] = out[t][i] + wb[tb][i];
+        for (j = 1; j <= r; j++) {
+            real w = wb[tb][s+j];
+            for (i = 1; i <= s; i++) w -= B2[i][j] * out[t+1][i];
+            out[t+1][s+j] = w;
+        }
+    }
+    free_matrix(L, 1, M, 1, M);
+    free_matrix(ab, 1, T, 1, M);
+    free_matrix(wb, 1, T, 1, M);
+    return 0;
+}
+
+/*  fit_ll — reestima al rango rr y devuelve la logL, o 0 con ok = 0.          */
+static real fit_ll(int rr, int *ok)
+{
+    int np, ifr = 0;
+    real *xr, *devr, **covr, ll = 0.0;
+    struct Tvarma vr;
+    int save_r = global_r;
+
+    global_r = rr;
+    build_y2_levels();
+    np = calc_nparametrs();
+    xr = vector(1, np); devr = vector(1, np); covr = matrix(1, np, 1, np);
+    vr.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
+    init_guess(xr, np);
+    vec_shootx(xr, &vr, &ifr, 1, 0);
+    est(&vec_shootx, np, xr, devr, covr, 500, 200, 1e-5, 1e-7,
+        vr.xitol, vr.a, &vr.sigma2, &vr.logelf, &ifr);
+    *ok = (ifr == 0);
+    if (*ok) ll = vr.logelf;
+    vec_shootx(xr, &vr, &ifr, 0, 1);
+    free_matrix(covr, 1, np, 1, np); free_vector(devr, 1, np); free_vector(xr, 1, np);
+    global_r = save_r;
+    return ll;
+}
+
+static int cmp_real(const void *a, const void *b)
+{
+    real x = *(const real *)a, y = *(const real *)b;
+    return (x < y) ? -1 : ((x > y) ? 1 : 0);
+}
+
+/*  bootstrap_rank — valores criticos de LR(rr -> rr+1) bajo H0: rango = rr.
+ *  x es el ajuste al rango rr.  Devuelve el numero de replicas utiles.        */
+static int bootstrap_rank(int rr, real *x, int npar, int N, real *cv, real *pval,
+                          real lr_obs)
+{
+    int M = nser, s = M - rr, i, j, b, nok = 0, ifr = 0;
+    real **B2 = matrix(1, (s > 0 ? s : 1), 1, (rr > 0 ? rr : 1));
+    real **sim = matrix(1, nobs_raw, 1, M);
+    real **saved = matrix(1, nobs_raw, 1, M);
+    real *stat = vector(1, N);
+    struct Tvarma vh;
+    FILE *save_out = outputv;
+    int save_quiet = quiet_mode, save_r = global_r, ge = 0;
+
+    /* B2 del ajuste: ultimas s*rr entradas de x[], column-major (o fijada). */
+    if (rr > 0) {
+        int idx = npar - s * rr + 1;
+        for (j = 1; j <= rr; j++) for (i = 1; i <= s; i++)
+            B2[i][j] = global_fixb2 ? B2_fixed[i][j] : x[idx++];
+    }
+    /* El modelo bajo H0, recuperado del ajuste. */
+    global_r = rr; build_y2_levels();
+    vh.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
+    vec_shootx(x, &vh, &ifr, 1, 0);
+    {   /* rellenar sigma2/logelf evaluando: vec_shootx no los pone */
+        real pi1, pi2, pi3; int ife = 0;
+        const real LOG2PI = 1.837877066;
+        elf(vh.m, vh.n, vh.p, vh.q, vh.mu, vh.phi, vh.theta, vh.qq, vh.w, 1.0,
+            vh.xitol, TRUE, vh.a, &pi1, &pi2, &pi3, &ife);
+        vh.sigma2 = pi1 / (vh.n * vh.m);
+        vh.logelf = -0.5*vh.m*vh.n*(LOG2PI - log((real)vh.m) - log((real)vh.n) + 1.0)
+                    - 0.5*vh.n*(vh.m*log(pi1) + log(pi2));
+    }
+
+    for (i = 1; i <= nobs_raw; i++)
+        for (j = 1; j <= M; j++) saved[i][j] = rawmat[i][j];
+
+    outputv = fopen("/dev/null", "w"); quiet_mode = 1;
+    for (b = 1; b <= N; b++) {
+        int ok0 = 0, ok1 = 0;
+        real l0, l1;
+        if (simulate_h0(&vh, B2, rr, sim) != 0) continue;
+        for (i = 1; i <= nobs_raw; i++)
+            for (j = 1; j <= M; j++) rawmat[i][j] = sim[i][j];
+        l0 = fit_ll(rr,   &ok0);
+        l1 = fit_ll(rr+1, &ok1);
+        if (ok0 && ok1 && l1 >= l0) stat[++nok] = 2.0 * (l1 - l0);
+    }
+    for (i = 1; i <= nobs_raw; i++)
+        for (j = 1; j <= M; j++) rawmat[i][j] = saved[i][j];
+    if (outputv) fclose(outputv);
+    outputv = save_out; quiet_mode = save_quiet;
+    global_r = rr; build_y2_levels();
+    vec_shootx(x, &vh, &ifr, 0, 1);
+
+    if (nok >= 10) {
+        /* Cuantil (1-alpha): indice ceil((1-alpha)*nok), acotado.  Con el
+           redondeo al mas cercano que habia antes, el percentil 99 de 97 valores
+           caia en el puesto 96 y dejaba DOS por encima, o sea un 2% donde se
+           pedia un 1%.                                                       */
+        int i90 = (int) ceil(0.90 * nok), i95 = (int) ceil(0.95 * nok),
+            i99 = (int) ceil(0.99 * nok);
+        qsort(&stat[1], (size_t) nok, sizeof(real), cmp_real);
+        if (i90 < 1) i90 = 1; if (i90 > nok) i90 = nok;
+        if (i95 < 1) i95 = 1; if (i95 > nok) i95 = nok;
+        if (i99 < 1) i99 = 1; if (i99 > nok) i99 = nok;
+        cv[0] = stat[i90]; cv[1] = stat[i95]; cv[2] = stat[i99];
+        for (i = 1; i <= nok; i++) if (stat[i] >= lr_obs) ge++;
+        *pval = (real) (ge + 1) / (real) (nok + 1);   /* p-valor bootstrap */
+    }
+    free_vector(stat, 1, N);
+    free_matrix(saved, 1, nobs_raw, 1, M);
+    free_matrix(sim, 1, nobs_raw, 1, M);
+    free_matrix(B2, 1, (s > 0 ? s : 1), 1, (rr > 0 ? rr : 1));
+    global_r = save_r;
+    return nok;
+}
+
 /*  Nota de convergencia — POR QUE paro, no solo SI paro.
  *
  *  En VARMA multivariante la razon de la parada es un diagnostico de primer
@@ -864,6 +1083,8 @@ static char *inp_prefix      = NULL;
 static int   global_eval     = 0;    /* -eval: evaluar y salir, sin optimizar */
 static int   global_fdhess   = 0;    /* -fdhess: errores estandar por hessiano
                                         de diferencias finitas en el optimo   */
+static int   global_boot     = 0;    /* -bootstrap N: valores criticos por
+                                        bootstrap parametrico bajo H0         */
 static int   global_interv   = 0;    /* -interv <prefijo>: deterministas del .pre */
 static char *interv_prefix   = NULL;
 static int   global_multistart = 0;  /* -multistart n: n arranques, quedarse el mejor */
@@ -2120,6 +2341,8 @@ int main(int argc, char *argv[])
         }
         else if (strcmp(argv[i], "-eval") == 0) global_eval = 1;
         else if (strcmp(argv[i], "-fdhess") == 0) global_fdhess = 1;
+        else if (strcmp(argv[i], "-bootstrap") == 0 && i+1 < argc)
+            global_boot = atoi(argv[++i]);
         else if (strcmp(argv[i], "-interv") == 0 && i+1 < argc) {
             global_interv = 1; interv_prefix = argv[++i];
         }
@@ -2360,6 +2583,15 @@ int main(int argc, char *argv[])
         fprintf(outputv, "\n=== Sequential LR test for the cointegration rank ===\n");
         printf("\nSequential LR test for the cointegration rank:\n");
 
+        /* Con -bootstrap hay que poder SIMULAR desde el ajuste de cada rango,
+           asi que se guarda su vector de parametros en vez de liberarlo.      */
+        real **xkeep = NULL; int *npkeep = NULL;
+        if (global_boot > 0) {
+            xkeep  = (real **) malloc((size_t)(M + 1) * sizeof(real *));
+            npkeep = ivector(0, M - 1);
+            for (int rr = 0; rr <= M - 1; rr++) { xkeep[rr] = NULL; npkeep[rr] = 0; }
+        }
+
         for (int rr = 0; rr <= M - 1; rr++) {
             global_r = rr;
             build_y2_levels();
@@ -2381,6 +2613,10 @@ int main(int argc, char *argv[])
             printf("  r = %d : %s (ifault=%d)\n", rr,
                    ok ? "ok" : "estimation failed", ifr);
             vec_shootx(xr, &vr, &ifr, 0, 1);   /* deallocate */
+            if (global_boot > 0 && ok) {
+                xkeep[rr] = vector(1, np); npkeep[rr] = np;
+                for (int i2 = 1; i2 <= np; i2++) xkeep[rr][i2] = xr[i2];
+            }
             free_matrix(covr, 1, np, 1, np);
             free_vector(devr, 1, np);
             free_vector(xr, 1, np);
@@ -2466,6 +2702,74 @@ int main(int argc, char *argv[])
                 "  legitimate question and a different one; its distribution is\n"
                 "  not the tabulated Johansen one.  For the usual rank test, drop\n"
                 "  the restriction.\n");
+
+        /* ---- valores criticos por bootstrap parametrico, si se piden ------- */
+        if (global_boot > 0) {
+            fprintf(outputv,
+                "\n  === Parametric bootstrap under H0 (%d replications) ===\n"
+                "  The asymptotic values above are known to be optimistic at these\n"
+                "  sample sizes: measured, the sequential test over-rejects about\n"
+                "  three times its nominal level at n = 120.  These are empirical\n"
+                "  percentiles of the statistic simulated FROM THE FITTED MODEL at\n"
+                "  rank r, so they carry the sample size, the deterministic case and\n"
+                "  the MA component that the tables cannot.\n", global_boot);
+            fprintf(outputv, "\n  r    M-r        LR      10%%      5%%      1%%"
+                             "   p-value  reps\n");
+            fprintf(outputv, "  ------------------------------------------------"
+                             "-----------------\n");
+            printf("\nBootstrap under H0 (%d replications per comparison):\n",
+                   global_boot);
+            for (int rr = 0; rr <= M - 2; rr++) {
+                real cv[3] = {0.0, 0.0, 0.0}, pv = -1.0, lr;
+                int reps;
+                if (!good[rr] || !good[rr+1] || xkeep == NULL || xkeep[rr] == NULL) {
+                    fprintf(outputv, "  %-4d  --   (a model in the pair failed)\n", rr);
+                    continue;
+                }
+                lr = 2.0 * (ll[rr+1] - ll[rr]);
+                printf("  r = %d -> %d ...", rr, rr+1); fflush(stdout);
+                reps = bootstrap_rank(rr, xkeep[rr], npkeep[rr], global_boot,
+                                      cv, &pv, lr);
+                if (reps < 10) {
+                    fprintf(outputv, "  %-4d %4d %10.4f   only %d usable "
+                                     "replications: not reported\n",
+                            rr, M - rr, lr, reps);
+                    printf(" solo %d replicas utiles\n", reps);
+                    continue;
+                }
+                fprintf(outputv, "  %-4d %4d %10.4f %8.2f %8.2f %8.2f  %7.4f  %4d",
+                        rr, M - rr, lr, cv[0], cv[1], cv[2], pv, reps);
+                /* El veredicto se lee de los VALORES CRITICOS, no del p-valor,
+                   porque el p-valor tiene un suelo de 1/(reps+1): con 100
+                   replicas no puede bajar de 0.0099, asi que "rechaza al 1%"
+                   seria inalcanzable por construccion aunque el estadistico
+                   supere el percentil 99.                                    */
+                if      (lr > cv[2]) fprintf(outputv, "   reject H0 at 1%%\n");
+                else if (lr > cv[1]) fprintf(outputv, "   reject H0 at 5%%\n");
+                else if (lr > cv[0]) fprintf(outputv, "   reject H0 at 10%%\n");
+                else                 fprintf(outputv, "   H0 not rejected\n");
+                printf(" p = %.4f (%d replicas)\n", pv, reps);
+            }
+            /* El error de Monte Carlo, dicho en vez de escondido: la contingencia
+               del plan pedia reportarlo si N tenia que ser pequeno.            */
+            fprintf(outputv,
+                "\n  Monte Carlo error, said rather than hidden:\n"
+                "   - a bootstrap p-value from B replications has standard error\n"
+                "     sqrt(p(1-p)/B); at p = 0.05 and B = %d that is %.4f, so read a\n"
+                "     p-value near a threshold as undecided, not as a decision;\n"
+                "   - and it has a FLOOR of 1/(B+1) = %.4f -- with this B the p-value\n"
+                "     cannot go below that however extreme the statistic is, which is\n"
+                "     why the verdict above is read from the critical values.  For a\n"
+                "     p-value that can resolve 1%%, B >= 999.\n"
+                "   - replications where either fit failed to converge, or gave\n"
+                "     LR < 0, are discarded and counted in the reps column.\n",
+                global_boot, sqrt(0.05 * 0.95 / (real) global_boot),
+                1.0 / (real) (global_boot + 1));
+            for (int rr = 0; rr <= M - 1; rr++)
+                if (xkeep && xkeep[rr]) free_vector(xkeep[rr], 1, npkeep[rr]);
+            if (xkeep) free(xkeep);
+            if (npkeep) free_ivector(npkeep, 0, M - 1);
+        }
 
         free_ivector(good, 0, M - 1);
         free_ivector(npr, 0, M - 1);

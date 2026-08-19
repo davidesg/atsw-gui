@@ -139,10 +139,24 @@ which is why it appears above as a failure: it is a draw, not a defect. Checked
 against lag order too — the over-rejection there is the same at `p = 1, 2, 3`
 (statistics 18.61, 20.27, 22.39), so it is not a lag-choice artefact.
 
-**This is the measurement that justifies F4.** Asymptotic critical values are not
-good enough at these sample sizes, and the paper's own recommendation for this
-model class is a parametric bootstrap. Until that exists, read a rank decision
-that sits near a critical value as undecided.
+**This is the measurement that justified the parametric bootstrap**, which now
+exists as `-bootstrap N`. It replaces the tables with percentiles simulated from
+the fitted model, and they are visibly different — on mink–muskrat, 14.90 / 17.41
+/ 21.16 against the tabulated 13.75 / 15.67 / 20.20. It also supplies critical
+values for **case 3**, which has none tabulated here.
+
+The four cases with known or external rank are recovered by **both** routes:
+
+| case | truth | asymptotic | bootstrap |
+|---|---|---|---|
+| `mink_muskrat` | r = 1 | r = 1 | r = 1 |
+| UK consumption (M=3) | r = 2 (`ca.jo`) | r = 2 | r = 2 |
+| `synthetic/rank0` | r = 0 | r = 0 | r = 0 |
+| `synthetic/rank2` | r = 2 | r = 2 | r = 2 |
+
+Whether the bootstrap actually *corrects* the over-rejection is a separate
+question from whether it runs, and it needs its own Monte Carlo — see
+[PLAN_BETA.md](PLAN_BETA.md) F4.1.
 
 ### 2.4 The univariate constants, three independent ways
 

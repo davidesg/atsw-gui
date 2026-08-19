@@ -875,6 +875,72 @@ convergencia añade deterministas que desplazan la distribución.
   (Pham, Roy y Cédras, 2003). Es indicio, no criterio; el test LR es el
   instrumento. Conviene anotarlo donde el banco cita esos autovalores.
 
+#### F4.1 — Lo entregado *(2026-08-19)*
+
+**`-bootstrap N`**, combinado con `-lrtest`. Para cada comparación r → r+1 simula
+N muestras **bajo H₀ con los parámetros estimados al rango r**, recalcula el
+estadístico en cada una y reporta los percentiles empíricos y el p-valor.
+
+**La simulación aprovecha la transformación en vez de reimplementar un VEC.** El
+modelo ajustado *es* un VARMA estacionario sobre Ȳ, así que se simula ahí —con la
+convención de `elf`— y se **invierte** la transformación para volver a niveles:
+
+```
+   ∇Y₂ = Ȳ[1..s]   -> Y₂ por acumulación desde el nivel real
+   Y₁  = W − B₂′Y₂  con W = Ȳ[s+1..M]
+```
+
+Eso deja una muestra en el mismo formato que el `.inp`, de modo que las
+reestimaciones son **exactamente** las del camino normal: no hay un estimador
+paralelo que pueda divergir del que se quiere calibrar. El generador es
+determinista con semilla fija — un valor crítico irreproducible no decide nada.
+
+**Los valores críticos del bootstrap no son los de las tablas** (mink–muskrat,
+p=2 q=1 caso 2, 939 réplicas útiles de 999):
+
+| | 10 % | 5 % | 1 % |
+|---|---|---|---|
+| asintóticos (tablas) | 13.75 | 15.67 | 20.20 |
+| **bootstrap** | **14.90** | **17.41** | **21.16** |
+
+Uniformemente mayores aquí: +8 %, +11 %, +5 %. Es el sobre-rechazo, medido desde
+dentro del programa. Pero **no es una corrección uniforme** — en UK (M=3, r=0→1)
+los del bootstrap son *menores* al 10 % y 5 % y mayores al 1 %. El bootstrap se
+adapta a la muestra; una tabla no puede.
+
+**Y cierra el hueco del caso 3**, que salía con `-` en las tres columnas:
+
+```
+  caso 3, mink-muskrat:  LR = 25.2114
+     asintótico:   -        -        -    (no values)
+     bootstrap:  13.68    16.94    23.82   p = 0.0088  -> rechaza al 1 %
+```
+
+**Criterio de salida: cumplido.** Cuatro casos con rango conocido o externo, por
+las dos vías, y coinciden:
+
+| caso | verdad | asintótico | bootstrap |
+|---|---|---|---|
+| `mink_muskrat` | r = 1 | r = 1 | r = 1 |
+| UK consumption (M=3) | r = 2 (`ca.jo`) | r = 2 | r = 2 |
+| `synthetic/rank0` | r = 0 | r = 0 | r = 0 |
+| `synthetic/rank2` | r = 2 | r = 2 | r = 2 |
+
+**Dos cosas que la implementación obligó a decir en la salida:**
+
+- **El p-valor tiene un suelo de 1/(B+1).** Con B = 100 no puede bajar de 0.0099,
+  así que «rechaza al 1 %» sería inalcanzable por construcción aunque el
+  estadístico supere el percentil 99. Por eso el veredicto se lee de los valores
+  críticos y no del p-valor, y la salida dice que para resolver el 1 % hace falta
+  B ≥ 999. *(La primera versión no lo hacía y daba una fila incoherente: LR por
+  encima del crítico del 1 % y veredicto «al 5 %».)*
+- **El error de Monte Carlo se reporta**, que era la contingencia del plan:
+  `sqrt(p(1−p)/B)`, 0.0218 con B = 100 al 5 %.
+
+**Coste:** N × 2 estimaciones completas por comparación. 4 s para un caso
+bivariante con B = 100; 40 s para M = 3 con B = 200. La contingencia (b) del plan
+—limitar el bootstrap a r = 0 vs r = 1— no ha hecho falta.
+
 **Salida.** Reproducir el rango de `ca.jo` en ≥ 4 casos del banco, con los
 valores asintóticos **y** con el bootstrap, y que coincidan en esos casos. Los
 asintóticos se conservan como opción rápida por defecto, y el caso 3 deja de

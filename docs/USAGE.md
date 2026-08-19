@@ -79,6 +79,7 @@ Swensen (2024).
 | | |
 |---|---|
 | `-lrtest` | estimate `r = 0 … M−1` and report the sequential test |
+| `-bootstrap N` | with `-lrtest`: bootstrap critical values under H₀ (see below) |
 
 Reports, per rank, the parameter count, the log-likelihood, AIC and BIC, and for
 each consecutive pair the statistic `2·[L(r+1) − L(r)]` against the non-standard
@@ -87,6 +88,32 @@ tabulated here). A **negative** statistic is flagged: rank `r` is nested in
 `r+1`, so a negative value proves one of the two fits did not converge.
 
 Incompatible with `-differenced`, because the column split depends on `r`.
+
+### Bootstrap critical values
+
+| | |
+|---|---|
+| `-bootstrap N` | with `-lrtest`: N parametric-bootstrap replications under H₀ for each rank comparison |
+
+The asymptotic tables are known to be optimistic at these sample sizes — measured
+here, the sequential test over-rejects about three times its nominal level at
+n = 120 ([HOMOLOGATION.md](HOMOLOGATION.md) §2.3), and Mélard, Roy and Saidi
+report the same for models with MA terms. `-bootstrap` replaces the tables with
+percentiles simulated **from the fitted model at rank r**, so they carry the
+sample size, the deterministic case and the MA component, which a table cannot.
+
+It also fills the gap in **case 3**, which has no tabulated values here and
+otherwise reports the statistic with `-` in every critical-value column.
+
+Read with two caveats the output states for you: the Monte Carlo error of a
+bootstrap p-value (`sqrt(p(1−p)/B)`), and its **floor of 1/(B+1)** — with
+`B = 100` the p-value cannot go below 0.0099 however extreme the statistic is,
+which is why the verdict is read from the critical values and why `B ≥ 999` is
+needed for a p-value that resolves 1 %.
+
+Cost is `N × 2` full estimations per comparison: about 4 s for a bivariate case
+at `B = 100`, and 40 s for `M = 3` at `B = 200`. Replications where either fit
+fails to converge are discarded and counted in the `reps` column.
 
 **Combined with `-alpha` / `-weakex`**, the sequence is still computed — testing
 the rank *within* the restricted model is a legitimate question — but the

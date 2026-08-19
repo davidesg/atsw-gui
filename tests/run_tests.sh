@@ -38,6 +38,8 @@
 #   7. KNOWN TRUTH  the rank test on data generated to have a known rank.  Every
 #                   other check of -lrtest compares against another program's
 #                   answer; these compare against the truth.
+#   7b. BOOTSTRAP   -bootstrap must give ordered, usable critical values and must
+#                   fill the case-3 gap where the asymptotic tables have none.
 #   8. MEMORY       valgrind over the main paths.  OPT-IN (VALGRIND=1) so the
 #                   suite is deterministic anywhere.  It has already caught one
 #                   real leak in the multi-start block.
@@ -762,6 +764,36 @@ if [ "${VALGRIND:-0}" = "1" ]; then
     fi
     echo
 fi
+
+# 7b. THE BOOTSTRAP must produce usable critical values, ordered, and must fill
+#     the case-3 gap where the asymptotic tables have nothing.  Small B on
+#     purpose: this checks the machinery, not the calibration -- the calibration
+#     is a Monte Carlo study, not a unit test.
+run "$MM" 2 1 0 -case 2 -lrtest -bootstrap 40
+if ! grep -aq 'Parametric bootstrap under H0' "$TMP/case.out"; then
+    bad "bootstrap" "the bootstrap block is missing"
+else
+    ok10=$(grep -aA3 'p-value  reps' "$TMP/case.out" | sed -n '3p' | awk '{print $4}')
+    ok05=$(grep -aA3 'p-value  reps' "$TMP/case.out" | sed -n '3p' | awk '{print $5}')
+    ok01=$(grep -aA3 'p-value  reps' "$TMP/case.out" | sed -n '3p' | awk '{print $6}')
+    if [ -z "$ok01" ]; then
+        bad "bootstrap" "no critical values in the bootstrap row"
+    elif awk -v a="$ok10" -v b="$ok05" -v c="$ok01" \
+            'BEGIN{exit !(a>0 && a<=b && b<=c)}'; then
+        ok "bootstrap critical values are positive and ordered ($ok10 <= $ok05 <= $ok01)"
+    else
+        bad "bootstrap" "critical values not ordered: $ok10 $ok05 $ok01"
+    fi
+fi
+# case 3 has no tabulated values; the bootstrap must supply them
+run "$MM" 2 1 0 -case 3 -lrtest -bootstrap 40
+if grep -aq 'NOT TABULATED HERE' "$TMP/case.out" && \
+   grep -aA3 'p-value  reps' "$TMP/case.out" | sed -n '3p' | grep -qE '[0-9]+\.[0-9]+'; then
+    ok "the bootstrap fills the case-3 gap, where the tables have nothing"
+else
+    bad "bootstrap on case 3" "no critical values where the asymptotic table has none"
+fi
+echo
 
 # ===================================================================== summary =
 echo "-----------------------------------------------"

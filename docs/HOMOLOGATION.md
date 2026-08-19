@@ -24,7 +24,8 @@ The third is the weakest, and it is where the open item lives.
 |---|---|---|
 | the transformation against the closed form of Mauricio (2005) for M=2, r=1 | difference **0.000e+00**, term by term | ✔ |
 | `elf` against a multivariate normal computed by hand | **2·10⁻⁸** | ✔ |
-| factorisation: joint `r=0` all-diagonal = sum of the univariate fits | **1e−9** | ✔ |
+| factorisation: joint `r=0` all-diagonal = sum of the univariate fits, `q = 0` | worst over the bank **3e−11** | ✔ |
+| the same identity with `q ≥ 1` | worst **1.4e−4**, and it is the `ξ` truncation: see §1b | ✔ |
 | `Σ = P D P′` reconstructs `Σ` (M=3) | worst entry **< 1e−5** | ✔ |
 | a `Θ = 0` seed reproduces the cold start | **bit for bit** | ✔ |
 | the two layouts of the same model agree on \|Σ̂\| | within **0.00005** | ✔ |
@@ -33,6 +34,36 @@ The third is the weakest, and it is where the open item lives.
 ```sh
 make test          # all of the above, plus 56 more checks
 ```
+
+## 1b. The one identity that is not exact, and why
+
+The factorisation identity holds in algebra, and with `q = 0` it holds in the
+machine too — worst disagreement over the twelve bank series **3·10⁻¹¹**. With
+`q ≥ 1` it does not, and the reason is not a defect: `elf` truncates the `ξ`
+sequence when the sum of the absolute values of its term falls below `xitol`
+(`elfvarma.c`, `cxi` [1]), and **the joint system and the univariate ones do not
+truncate at the same term** — the joint sums `m` entries where each univariate
+sums one. So the two sides agree only as far as the approximation reaches.
+
+Measured by lowering `xitol` and rebuilding, on the largest gap in the bank
+(Milan, `p = 2, q = 1`, the diagonal rung):
+
+| `xitol` | `joint − sum` |
+|---|---|
+| `1e−3` (the default) | 1.385e−04 |
+| `1e−8` | 3.100e−09 |
+
+Five orders of tolerance, five orders of gap: the disagreement **is** the
+truncation, at a factor of about 0.15, and not a fault upstream of it.
+
+This corrected the check rather than the estimator. The gate's threshold was a
+fixed `1e−4`, which declared Milan **NOT VERIFIED** while passing Angers, whose
+*relative* disagreement (6.3e−6) is three times larger than Milan's (2.1e−6) —
+it was ranking cases by the size of their log-likelihood instead of by their
+agreement. The tolerance is now the truncation itself: `xitol` when `q > 0`,
+and `1e−6` when `q = 0`, where the identity must hold exactly. Both halves are
+in the suite, and the strict half is what keeps the loose half honest. No
+estimate moves: the change is to a verdict, not to a fit.
 
 ## 2. External results
 
@@ -378,6 +409,70 @@ These establish that the program handles the shape, not that the answer is right
 | `urca_denmark`, M = 5, r = 2 | logL 828.8447, converges | the only case where `s > 1` **and** `r > 1`, so it is the only one where a transposed read of `B₂` is detectable at all. Mixes logarithms with interest rates, which is what makes it the test of the variance-ratio seeding (+79.26) |
 | `data/AL.inp`, legacy layout | logL −318.8131 | regression baseline only; the file is annotated as needing `-differenced` |
 | `datasets/synthetic/badnorm.inp` | normalisation share **0.6 %** | built so the normalisation alarm has something to fire on. Its rank is 1 by construction, and it is also the draw where the rank test over-rejects (§2.2) |
+
+## 4b. The seeding baseline: route (C) as it stands
+
+*Step 2 of [VEC_EMBEDDING_PLAN.md](VEC_EMBEDDING_PLAN.md) §8. Taken **before**
+any change to the seeding, because a change with no baseline behind it cannot be
+evaluated and the work gets repeated. Re-run in full with
+`tools/measure_seeding_bank.sh`, which is the same instrument route (B) will be
+measured with — the same bank, the same five quantities, one extra flag.*
+
+Route (C) is what the program does today: `init_guess` runs a conditional
+regression for every block from scratch, ignoring the certified gate. Measured
+2026-08-19, `-multistart 20`:
+
+| case | spec | logL₀ | logL | term | best/20 | logL spread | MAmin |
+|---|---|---|---|---|---|---|---|
+| Milan | `2 1 1 -case 2 -mean` | 76.4950 | 93.2880 | step | 6 | 92.854 .. 93.290 | 1.0003 |
+| Strasbourg | `2 1 1 -case 2 -mean` | 23.0287 | 34.5355 | lower | 3 | 33.975 .. 36.088 | 1.0000 |
+| Utrecht | `2 1 1 -case 2 -mean` | 68.5727 | 82.2956 | lower | 9 | 81.844 .. 82.383 | 1.0000 |
+| Vienna | `2 1 1 -case 2 -mean` | 19.9811 | 33.9528 | lower | 8 | 29.430 .. 34.118 | 1.0000 |
+| Aix | `2 1 1 -case 2 -mean` | 55.5842 | 68.9414 | lower | 18 | 68.250 .. 69.179 | 1.0000 |
+| Arévalo | `2 1 1 -case 2 -mean` | −16.3068 | −3.5626 | lower | 5 | −6.305 .. −3.544 | 1.0000 |
+| Angers | `2 1 1 -case 2 -mean` | 15.5477 | 29.0937 | lower | 4 (19 ok) | 20.489 .. 29.214 | 1.0000 |
+| Penn | `2 1 1 -case 2 -mean` | 28.5950 | 41.3726 | lower | 4 | 23.517 .. 42.206 | 1.0000 |
+| `mink_muskrat` case 1 | `2 1 1 -case 1` | −283.3315 | 3.6856 | lower | **1** | −11.574 .. 3.686 | 1.0000 |
+| `mink_muskrat` case 2 | `2 1 1 -case 2 -mean` | −8.7426 | 6.4786 | step | 6 | −8.692 .. 6.637 | 1.0000 |
+| `mink_muskrat` case 3 | `2 1 1 -case 3 -mean` | −8.6607 | 6.5140 | lower | 6 | −9.975 .. 6.799 | 1.0000 |
+| `rank2`, r = 2 (the truth) | `2 0 2 -case 2 -mean` | −477.9053 | −477.6141 | grad | **1** (4 ok) | −477.620 .. −477.614 | n/a |
+| `rank2`, r = 1 | `2 0 1 -case 2 -mean` | −517.2713 | −514.1466 | grad | 2 (7 ok) | −831.094 .. −514.147 | n/a |
+| `rank0`, r = 1 (no rank to find) | `2 0 1 -case 2 -mean` | −842.9403 | −841.6278 | grad | **1** | −841.628 .. −841.628 | n/a |
+| `badnorm`, r = 1 | `2 0 1 -case 2 -mean` | −376.2501 | −359.5140 | grad | 4 (14 ok) | −360.792 .. −359.514 | n/a |
+
+`logL₀` is the likelihood **at the starting point** (`-eval`), which is what
+separates a bad seed — it starts lower — from an optimiser that from a better
+seed ends worse, which is the surface. `best/20` is the restart the best point
+was found at, so `best = 1` means the cold start already reached it. `MAmin` is
+the smallest moving-average root modulus at the optimum; `1.0000` is the
+invertibility boundary, where the optimum is a constrained one.
+
+**Five readings, and they are the baseline (B) has to beat.**
+
+1. **The start is far.** The cold start gives away **11.5 to 16.8** units of
+   log-likelihood on the eight pairs, and **287** on `mink_muskrat` case 1. With
+   `q = 0` it is 0.3 to 3.1 — the whole distance is the moving-average block.
+2. **One cold start is usually not enough.** The best of 20 beats the single
+   cold start in **10 of the 15 cases**, by up to 1.55 (Strasbourg) and 0.83
+   (Penn). The cold start reaches the best point first in only **3 of 15**, and
+   on Aix it takes 18 restarts.
+3. **The spread is the diagnostic, and it is wide.** Penn 18.7 units between the
+   worst and the best converged start, `mink_muskrat` about 15 in all three
+   cases, `rank2` at the wrong rank 317. On a well-behaved surface every start
+   lands in the same place; these do not.
+4. **The termination is honest and it is poor.** Only the four `q = 0` cases
+   stop on the gradient. Every `q = 1` case stops on `steptol` (2) or on a line
+   search that could not improve (9) — the termcode 3 already documented in
+   [CONVERGENCE.md](CONVERGENCE.md), here counted rather than described.
+5. **Ten of the eleven `q = 1` fits sit on the invertibility boundary.**
+   Consistent with §3b: at `p = 2, q = 1` on these data the optimum is
+   constrained, and the standard errors do not apply along the binding
+   direction.
+
+The bank also supplied, without being constructed for it, the case the plan
+asked for — a gate that fails its own contract. Milan failed it, the failure was
+reported at rung 0 as intended, and the diagnosis is §1b: the check was wrong,
+not the gate.
 
 ## 5. What is not in the register, and why
 

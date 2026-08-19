@@ -1376,17 +1376,53 @@ static void gate_contract(struct Tvarma *v)
         return;
     }
 
-    fprintf(outputv, "  %-28s   sum  = %18.10f\n", "", sum);
-    fprintf(outputv, "  %-28s   joint= %18.10f\n", "", v->logelf);
-    fprintf(outputv, "\n  crossing identity (joint - sum) = %.3e   %s\n",
-            v->logelf - sum,
-            (fabs(v->logelf - sum) < 1.0e-4) ? "VERIFIED" : "*** NOT VERIFIED ***");
-    if (fabs(v->logelf - sum) >= 1.0e-4)
-        fprintf(outputv,
-            "\n  The two sides must agree at this rung.  A gap means the fault is\n"
-            "  upstream of the likelihood -- the transformation, the rank's\n"
-            "  differencing, the parameter walk, the deterministic terms or the\n"
-            "  scaling -- and never in elf() itself.\n");
+    /*  LA TOLERANCIA ES LA TRUNCACION, y esta medida, no elegida.
+     *
+     *  La identidad es exacta en algebra.  Lo que la separa en la maquina es
+     *  que elf trunca la sucesion xi cuando la suma de valores absolutos de su
+     *  termino baja de xitol (elfvarma.c, cxi [1]), y el sistema conjunto y las
+     *  univariantes NO truncan en el mismo termino: el conjunto suma m entradas
+     *  y cada univariante una sola.  Medido, bajando xitol y volviendo a
+     *  construir, sobre el hueco mayor del banco (Milan, p = 2, q = 1):
+     *
+     *      xitol     joint - sum
+     *      1e-3       1.385e-04
+     *      1e-8       3.100e-09
+     *
+     *  El hueco ES xitol, con un factor de ~0.15, y con q = 0 -- donde no hay
+     *  sucesion que truncar -- es CERO EXACTO en las doce series del banco.
+     *
+     *  El umbral fijo de 1e-4 que habia aqui declaraba entonces NO VERIFICADA
+     *  la puerta de Milan, cuyo desacuerdo RELATIVO (2.1e-6) es menor que el de
+     *  Angers (6.3e-6), que pasaba: ordenaba los casos por el tamano de su logL
+     *  y no por su acuerdo, que es lo contrario de lo que dice comprobar.  Una
+     *  alarma que suena por el tamano del dato no es una alarma.
+     *
+     *  Ligado a xitol, en cambio, el contrato afirma lo unico que se puede
+     *  afirmar: que las dos rutas coinciden HASTA DONDE LA APROXIMACION LLEGA.
+     *  Los fallos que esta puerta tiene que atrapar -- el signo de Lambda en la
+     *  transformacion, B2 leido traspuesto -- abren huecos de UNIDADES, tres
+     *  ordenes por encima de este umbral, asi que no se afloja nada real.     */
+    {
+        real gap = v->logelf - sum;
+        real tol = (q > 0) ? fabs(v->xitol) : 1.0e-6;
+
+        fprintf(outputv, "  %-28s   sum  = %18.10f\n", "", sum);
+        fprintf(outputv, "  %-28s   joint= %18.10f\n", "", v->logelf);
+        fprintf(outputv, "\n  crossing identity (joint - sum) = %.3e   "
+                         "(tolerance %.1e)   %s\n", gap, tol,
+                (fabs(gap) < tol) ? "VERIFIED" : "*** NOT VERIFIED ***");
+        if (fabs(gap) >= tol)
+            fprintf(outputv,
+                "\n  The two sides must agree at this rung to within the xi\n"
+                "  truncation, which is what the tolerance is: with q > 0 it is\n"
+                "  xitol itself, and with q = 0, where there is no series to\n"
+                "  truncate, the identity holds exactly.  A gap LARGER than that\n"
+                "  is not truncation, and the fault is then upstream of the\n"
+                "  likelihood -- the transformation, the rank's differencing, the\n"
+                "  parameter walk, the deterministic terms or the scaling -- and\n"
+                "  never in elf() itself.\n");
+    }
 
     /*  THE OPTIMALITY CERTIFICATE.  Second of the two contracts, and it costs
      *  one likelihood evaluation that has already been made.  The gap between

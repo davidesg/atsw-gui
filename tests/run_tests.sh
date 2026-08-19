@@ -457,6 +457,31 @@ for want in -20.0579 -14.5698; do
     else bad "gate: univariate $want" "constant not reproduced"; fi
 done
 
+# THE TOLERANCE IS THE TRUNCATION, and both halves of that are checked.  elf
+# truncates the xi sequence when its term falls below xitol, and the joint
+# system and the univariate ones do not truncate at the same term, so with
+# q > 0 the identity can only be claimed to xitol.  With q = 0 there is no
+# sequence to truncate and it must hold EXACTLY -- that is the strict half, and
+# it is what stops the tolerance from becoming a rubber stamp.  Milan is the
+# case that made this visible: it failed a fixed 1e-4 threshold with a relative
+# disagreement smaller than cases that passed it.
+run data/pairs/milan.inp 2 1 0 -case 1 -diagar -diagma -diagcov
+line=$(grep -a "crossing identity" "$TMP/case.out")
+case "$line" in
+  *"tolerance 1.0e-03"*VERIFIED*) ok "gate: q=1 verifies against the xi truncation";;
+  *) bad "gate: q=1 tolerance" "$line";;
+esac
+run data/pairs/milan.inp 2 0 0 -case 1 -diagar -diagma -diagcov
+line=$(grep -a "crossing identity" "$TMP/case.out")
+gap=$(printf '%s' "$line" | sed 's/.*= *\([-0-9.e+]*\) .*/\1/')
+case "$line" in
+  *"tolerance 1.0e-06"*VERIFIED*) ok "gate: q=0 holds exactly (gap $gap)";;
+  *) bad "gate: q=0 must hold exactly" "$line";;
+esac
+awk -v g="$gap" 'BEGIN{if(g<0)g=-g; exit !(g < 1e-9)}' \
+  && ok "gate: q=0 gap is below 1e-9, so the tolerance is not a rubber stamp" \
+  || bad "gate: q=0 gap" "$gap is not exact; there is no truncation to blame"
+
 # and it must NOT claim the contract away from the diagonal rung
 run "$MM" 2 1 1 -case 2
 if grep -aq "the factorisation contract" "$TMP/case.out"; then

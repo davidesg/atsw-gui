@@ -248,8 +248,16 @@ smallest moving-average root at the optimum.
    Rung 2 reproduces the plain `r = 0` fit to the digit (−6.3311226118), which
    is what says the ladder re-estimates the same models and not a family
    configured differently. See [DEVELOPMENT_RECORD.md](DEVELOPMENT_RECORD.md) §8.
-2. **Measure (C) as it stands** on the whole bank, to have the baseline the
-   change is judged against. Nothing is altered at this step.
+2. ~~**Measure (C) as it stands**~~ **Done**: the baseline is
+   [HOMOLOGATION.md](HOMOLOGATION.md) §4b, taken with
+   `tools/measure_seeding_bank.sh` — the same instrument (B) will be measured
+   with. The headline is that the cold start gives away **11.5–16.8** units of
+   log-likelihood on the eight pairs and **287** on `mink_muskrat` case 1, that
+   the best of 20 restarts beats it in 10 of the 15 cases, and that it reaches
+   the best point first in only 3. Nothing in the seeding was altered. One
+   thing outside it was: the bank turned up the case §7 asked to be
+   constructed — a gate failing its own contract, on Milan — and the failure
+   was the check's, not the gate's (§1b).
 3. **Build (B)** behind an option, so the default and the recorded results do not
    move.
 4. **Measure (B) against (C)** on the same bank, by the same five quantities.

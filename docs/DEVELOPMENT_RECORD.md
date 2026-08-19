@@ -463,6 +463,44 @@ not only in what it computes but in what it *assumes about its input*, which is
 the part no golden value will ever catch. `drtran`'s copy has the same count;
 that one is live.
 
+## 8b. The baseline, and an alarm that was ringing at the wrong thing
+
+With the ladder emitting, the next step of the plan was to **measure what is
+done now** — route (C), where `init_guess` starts every block from a conditional
+regression and ignores the gate — over a bank fixed in advance: the eight
+wheat-price pairs, `mink_muskrat` in all three deterministic cases, the
+synthetic series of known rank, and the pathological one. Five quantities each.
+The whole bank takes eleven seconds, and the numbers are in
+[HOMOLOGATION.md](HOMOLOGATION.md) §4b. Two of them matter for what comes next:
+the cold start gives away **11.5 to 16.8** units of log-likelihood on the pairs
+and **287** on `mink_muskrat` case 1, and the best of twenty restarts beats one
+cold start in **ten of the fifteen** cases. That is the number route (B) has to
+improve on, and it is on record before the change rather than after it.
+
+The bank also handed over, without being built for it, the case §7 of the plan
+said would have to be constructed: **a gate that fails its own contract**. Milan
+failed it. The failure was reported at rung 0, which is exactly what that bank
+item was there to confirm — but the diagnosis was wrong. The identity separates
+the two sides only as far as `elf`'s `ξ` truncation reaches, and the joint system
+and the univariate ones do not truncate at the same term. Lowering `xitol` from
+`1e−3` to `1e−8` and rebuilding moved the Milan gap from `1.385e−04` to
+`3.100e−09`: five orders of tolerance, five orders of gap. The disagreement *is*
+the truncation.
+
+So the fixed `1e−4` threshold was ranking cases by the size of their
+log-likelihood rather than by their agreement — it failed Milan, whose relative
+disagreement is 2.1e−6, while passing Angers at 6.3e−6. The tolerance is now the
+truncation itself, `xitol` where there is a truncation and `1e−6` where there is
+none, and both halves are in the suite: the `q = 0` half must hold to 1e−9, and
+that strict half is what keeps the loose half honest. No estimate moved; what
+changed was a verdict.
+
+It is the same lesson as §7 from a different direction, and worth stating in the
+form it keeps taking here: **before believing what an instrument says about the
+program, measure the instrument.** The difference this time is that the
+instrument was one we had written on purpose to be trustworthy, and it still
+needed measuring.
+
 ## 9. Open, and honestly so
 
 | | |

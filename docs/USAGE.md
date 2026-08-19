@@ -74,6 +74,43 @@ rather than returning numbers for a model that does not have them.
 The degrees of freedom of the reported LR are `(M − sa)·r`, from Johansen and
 Swensen (2024).
 
+### The ladder
+
+| | |
+|---|---|
+| `-rungs` | estimate rungs 0-2 and report their LRs, then stop |
+
+The construction goes from optima to optima: the diagonal gate is certified
+first, and each wider model starts from the one below it. `-rungs` emits that
+sequence from a single run, so it is something the program produces rather than
+something the user assembles by hand out of three separate runs — which is where
+the degrees of freedom get miscounted, and where nothing is left on record.
+
+| rung | model | added |
+|---|---|---|
+| **0** | `r = 0`, `F`, `Θ` and `Σ` diagonal | the certified base; the likelihood factorises |
+| **1** | `r = 0`, `Σ` free | contemporaneous correlation |
+| **2** | `r = 0`, `F` and `Θ` free | cross dynamics |
+
+All three sit at `r = 0`: what is being added is correlation structure, not
+cointegration. Each is nested in the next as an **interior** point, so the
+log-likelihood cannot fall and the statistic is `χ²` on the printed degrees of
+freedom — `M(M−1)/2` for the covariance and `(p−1)M(M−1) + qM(M−1)` for the
+dynamics. Rung 0 reports its own factorisation contract, since it is the base
+everything above is built on, and a negative LR is flagged: it proves that the
+wider fit did not converge.
+
+The next rung — `r = 1`, the VEC matrix itself — is **not** an ordinary
+comparison in either respect: the null sits on the boundary of the alternative,
+where the transformed system has an AR root of modulus exactly 1, and `B₂` is
+unidentified under it. That is why it lives in `-lrtest`, with a parametric
+bootstrap for its distribution, and not here. See
+[VEC_EMBEDDING_PLAN.md](VEC_EMBEDDING_PLAN.md).
+
+```
+bin/drvec datasets/mauricio/mink_muskrat 2 1 0 -case 1 -rungs
+```
+
 ### Rank
 
 | | |

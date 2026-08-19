@@ -420,13 +420,38 @@ int read_fue_pre(const char *filename,
         return 1;
     }
 
-    /* Skip 5 header lines */
-    for (i = 0; i < 5; i++) fgets(line, MAXSTR, f);
+    /*  LA CABECERA ES LIBRE, y por eso aqui NO se cuentan lineas.  El parser
+     *  autoritativo (fue/src/fue/inp.py [3.0], FILE_CONTRACT.md 2.0) descarta
+     *  lo que venga hasta el separador cuyo texto dice "frequency", y ese es
+     *  el unico sitio de todo el formato donde mira lo que un comentario DICE.
+     *
+     *  Contar cinco lineas, que es lo que hacia esta copia, no lee el FORMATO:
+     *  lee un fichero concreto.  El .pre lo escribe FUE (report.py write_pre;
+     *  DRVUS no escribe .pre -- el banner que dice DRVUS es texto heredado que
+     *  fue copia), y lo escribe con una linea en blanco tras el banner: cinco
+     *  renglones.  El .inp que escribe drvec no la trae, y el .inp de DRVUS
+     *  trae ademas una linea de especificacion menos.  O sea que la familia de
+     *  ficheros que este lector tiene delante NO es de cabecera uniforme, y el
+     *  mismo lector acertaba con uno y se desplazaba un renglon con otro.  Y un
+     *  renglon de desplazamiento no da error: da un nobs leido de la linea
+     *  equivocada, con el que se pide un vector de ese tamano.  Medido: el
+     *  .inp de la bateria daba nobs = 1787128427 y el proceso moria por
+     *  memoria.  Ver docs/PLAN_BETA.md F2.1.                                 */
+    {
+        int seen = 0;
+        while (fgets(line, MAXSTR, f))
+            if (strstr(line, "requency")) { seen = 1; break; }
+        if (!seen) {
+            fprintf(stderr, "ERROR: %s no trae el separador de frecuencia;"
+                            " no es un fichero del formato fue\n", filename);
+            fclose(f);
+            return 1;
+        }
+    }
 
     Tm->residuals = (char *)malloc(MAXSTR);
 
     /* ── Frequency ── */
-    fgets(line, MAXSTR, f);  /* comment */
     fgets(line, MAXSTR, f);
     if (strstr(line, "number") || strstr(line, "Number"))
         { Ts->freq = 1; Ts->numbering = 1; }
@@ -438,6 +463,7 @@ int read_fue_pre(const char *filename,
     fgets(line, MAXSTR, f);
     {
         char namef[80]; int outyear;
+        Ts->nobs = 0;             /* si la linea no trae numero, se ve abajo */
         if (Ts->freq > 1)
             sscanf(line, "%d %d %d %s %s",
                    &Ts->nobs, &Ts->begtime, &Ts->begyear,
@@ -449,6 +475,18 @@ int read_fue_pre(const char *filename,
             Ts->begtime = 1;
         }
         Ts->name = strdup(namef);
+    }
+
+    /*  Y si aun asi el numero no tiene sentido, se para AQUI.  Un nobs
+     *  disparatado es la firma de una lectura desalineada, y pedir el vector
+     *  antes de mirarlo convierte un fichero mal formado en una muerte por
+     *  memoria, que no dice nada de lo que pasa.                             */
+    if (Ts->nobs <= 0) {
+        fprintf(stderr, "ERROR: %s declara %d observaciones\n",
+                filename, Ts->nobs);
+        free(Tm->residuals);
+        fclose(f);
+        return 1;
     }
 
     Ts->data = vector(1, Ts->nobs);

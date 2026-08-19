@@ -480,6 +480,81 @@ run "$MM" 2 1 0 -case 1 -diagar -diagma -diagcov -seedybar "$TMP/spec/sp"
 if grep -aq "this input is A SPECIFICATION" "$TMP/case.out"; then
     ok "certificate: an .inp reads as a specification"
 else bad "certificate" "the .inp did not read as a specification"; fi
+
+# and a file that is NOT of the format must be refused, with a sentence.  The
+# reader used to skip five header lines by count, so any header of a different
+# length -- fue writes a .pre with five, drvec writes an .inp with four -- slid
+# it one line down and it took nobs from the wrong place.  That is not a loud
+# failure: nobs was uninitialised, so the run was fine or died for memory
+# depending on what the stack held, which is how the check above passed once and
+# killed the process the next time.  See DEVELOPMENT_RECORD.md 8.
+printf 'not a fue file\nat all\n' > "$TMP/spec/bad.1.inp"
+cp "$TMP/spec/bad.1.inp" "$TMP/spec/bad.2.inp"
+run "$MM" 2 1 0 -case 1 -diagar -diagma -diagcov -seedybar "$TMP/spec/bad"
+if [ -n "$TIMEDOUT" ]; then bad "reader: a malformed seed file" "it hung"
+elif printf '%s' "$STDERR" | grep -q "separador de frecuencia"; then
+    ok "reader: a file without the frequency separator is refused, not read"
+else bad "reader: a malformed seed file was not refused" "$STDERR"; fi
+echo
+
+# 5e. THE LADDER (-rungs).  Rungs 0-2 all sit at r = 0, so each is nested in
+#     the next as an INTERIOR point: the log-likelihood cannot fall and npar
+#     must rise.  Three things are checked that a user assembling this by hand
+#     gets wrong: the degrees of freedom against the closed form -- M(M-1)/2
+#     for the covariance, (p-1)M(M-1) + qM(M-1) for the dynamics --, the sign
+#     of every LR, and above all that the TOP rung reproduces the fit the
+#     program gives without -rungs.  That last one is what says the ladder is
+#     re-estimating THE SAME models and not a differently configured family.
+#     Columns are taken from the right (NF), because the rung names have
+#     spaces in them and counting from the left ties the check to the wording.
+run "$MM" 2 1 0 -case 1 -rungs
+if ! grep -aq "The ladder: rungs" "$TMP/case.out"; then
+    bad "ladder" "-rungs emitted no ladder"
+else
+    ok "ladder: emitted"
+    rung() { awk -v k="$1" -v c="$2" \
+             '$1==k && $2!="->" && NF>4 {print $(NF-c)}' "$TMP/case.out"; }
+    l0=$(rung 0 2); l1=$(rung 1 2); l2=$(rung 2 2)
+    n0=$(rung 0 3); n1=$(rung 1 3); n2=$(rung 2 3)
+    if [ -z "$l0" ] || [ -z "$l1" ] || [ -z "$l2" ]; then
+        bad "ladder: table unreadable" "logL: '$l0' '$l1' '$l2'"
+    elif awk -v a="$l0" -v b="$l1" -v c="$l2" \
+             'BEGIN{exit !(a<=b+1e-6 && b<=c+1e-6)}'; then
+        ok "ladder: logL monotone across rungs ($l0 <= $l1 <= $l2)"
+    else bad "ladder: logL not monotone" "$l0 $l1 $l2"; fi
+    if [ "$n0" -lt "$n1" ] 2>/dev/null && [ "$n1" -lt "$n2" ] 2>/dev/null; then
+        ok "ladder: npar increases ($n0 < $n1 < $n2)"
+    else bad "ladder: npar" "$n0 $n1 $n2"; fi
+
+    # the degrees of freedom must equal the closed form, M = 2, p = 2, q = 1
+    df1=$(awk '/^  0 -> 1/{print $5}' "$TMP/case.out")
+    df2=$(awk '/^  1 -> 2/{print $5}' "$TMP/case.out")
+    [ "$df1" = "1" ] && ok "ladder: df(0->1) = M(M-1)/2 = 1" \
+                     || bad "ladder: df(0->1)" "expected 1, got $df1"
+    [ "$df2" = "4" ] && ok "ladder: df(1->2) = (p-1)M(M-1)+qM(M-1) = 4" \
+                     || bad "ladder: df(1->2)" "expected 4, got $df2"
+
+    # every LR in the ladder must be non-negative: a nested fit cannot be worse
+    neg=$(awk '/^  [01] -> [12]/{if ($4+0 < -1e-6) c++} END{print c+0}' \
+          "$TMP/case.out")
+    [ "$neg" = "0" ] && ok "ladder: no negative LR" \
+                     || bad "ladder: $neg negative LR" "a wider fit came out worse"
+
+    # rung 0 must carry its contract, since it is the base being built on
+    if grep -aq "the factorisation contract" "$TMP/case.out"; then
+        ok "ladder: rung 0 certifies itself"
+    else bad "ladder" "rung 0 reported no contract"; fi
+
+    # and rung 0's joint fit must be the sum of the univariate ones, which is
+    # the same oracle as [3] but taken from inside the ladder
+    top=$l2
+    run "$MM" 2 1 0 -case 1
+    plain=$(logelf_of "$TMP/case")
+    if [ -z "$plain" ]; then bad "ladder: top rung" "no plain r=0 fit to compare"
+    elif awk -v a="$top" -v b="$plain" 'BEGIN{d=a-b; if(d<0)d=-d; exit !(d<=1e-4)}'
+    then ok "ladder: top rung reproduces the plain r=0 fit ($top vs $plain)"
+    else bad "ladder: top rung" "rung 2 = $top but the plain r=0 fit = $plain"; fi
+fi
 echo
 
 echo "[6] alpha = A*psi: the restriction, its LR, and its guards"

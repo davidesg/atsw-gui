@@ -411,7 +411,59 @@ block, cannot be mistaken for a live reference, so the first run reported 32
 bytes that had been leaking unseen in the seeding path, whose four buffers had
 never had a deallocator.
 
-## 8. Open, and honestly so
+## 8. The ladder, and the header that was being counted
+
+The plan for embedding the VEC matrix ([VEC_EMBEDDING_PLAN.md](VEC_EMBEDDING_PLAN.md))
+puts one thing before any change to the seeding: **report the ladder**. The
+construction this program makes is optima-from-optima — the diagonal gate is
+certified, and each wider model starts from the one below — but only the two
+ends of it were ever emitted. The rungs in between had to be assembled by hand
+out of three runs and a subtraction, which is where the degrees of freedom get
+miscounted and where nothing at all is left on record. `-rungs` now emits rungs
+0 (`F`, `Θ`, `Σ` diagonal), 1 (`Σ` free) and 2 (`F`, `Θ` free), all at `r = 0`,
+with their `χ²` statistics, and rung 0 certifies itself in place. On
+`mink_muskrat`, `p = 2, q = 1`, case 1:
+
+| rung | npar | logL | LR | df | p |
+|---|---|---|---|---|---|
+| 0 `F`, `Θ`, `Σ` diagonal | 5 | −34.6278 | | | |
+| 1 `Σ` free | 6 | −30.5844 | 8.087 | 1 | 0.0045 |
+| 2 `F`, `Θ` free | 10 | −6.3311 | 48.507 | 4 | 0.0000 |
+
+The check that gives this its value is not any of those numbers: it is that rung
+2 reproduces, to the digit, the fit the program gives without `-rungs` at all
+(−6.3311226118). That says the ladder is re-estimating **the same** models and
+not a family configured slightly differently, which is the failure such a
+convenience feature would otherwise hide.
+
+Underneath it sat a real defect, and the way it surfaced is the point. The
+suite's check that a hand-written `.inp` reads as *a specification* and not as
+*an optimum* had been passing; run again it killed the process for want of
+memory. Both outcomes came from the same code. The vendored `.pre` reader skips
+**five header lines by count**, but the format's authoritative parser
+(`fue/src/fue/inp.py` [3.0]) skips whatever is there *until a separator whose
+text says* `frequency` — the one place in the whole grammar where it reads what
+a comment says. The `.pre` is written by **fue** (`report.py:write_pre`; DRVUS
+writes no `.pre` at all — the banner naming it is legacy text fue copies), and
+fue writes a blank line after that banner: five lines. The `.inp` that `drvec`
+writes has four, and DRVUS's own `.inp` carries one specification line fewer
+again. The family this reader faces does not have a header of fixed length, so
+the same reader landed correctly on one file and one line short on the next. A one-line slip raises no error: it reads
+`nobs` off the wrong line, and `nobs` was never initialised, so the number was
+whatever the stack held — small and harmless on one run, 1 787 128 427 and a
+request for that many reals on the next.
+
+Counting lines reads a *file*; scanning for the separator reads the *format*.
+The reader now scans, refuses a file with no frequency separator, and refuses a
+non-positive `nobs` before allocating anything, so a malformed input produces a
+sentence instead of a death. Two lessons, and only the second is about parsers.
+A test that passes intermittently is not a passing test — it is an
+uninitialised read waiting for its turn — and the drift of a vendored copy is
+not only in what it computes but in what it *assumes about its input*, which is
+the part no golden value will ever catch. `drtran`'s copy has the same count;
+that one is live.
+
+## 9. Open, and honestly so
 
 | | |
 |---|---|

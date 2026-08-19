@@ -12,7 +12,7 @@
 /*                                                                             */
 /*  Usage:  drvec file p q r [-mean] [-case 1|2|3] [-diagar] [-diagma]       */
 /*                          [-diagcov] [-m 1|2] [-differenced] [-fixb2]      */
-/*                          [-lrtest]                                        */
+/*                          [-lrtest] [-rungs]                               */
 /*                                                                             */
 /*    file   : data file name (without .inp extension)                        */
 /*    p      : AR order of the stationary VARMA on Ȳ_t                        */
@@ -94,6 +94,7 @@ int global_diag_cov = 0;
 int met = 1;          /* 1 = exact, 2 = approximate */
 int global_case = 1;  /* deterministic case (Mauricio Remark 6) */
 int global_lrtest = 0; /* if 1, perform sequential LR test for rank */
+int global_rungs  = 0; /* if 1, report the ladder's rungs 0-2 and their LRs   */
 
 /* -fixb2: hold B2 at the static-OLS value computed by init_guess instead of
    estimating it.  This is the restricted model the literature tests against
@@ -2582,7 +2583,7 @@ int main(int argc, char *argv[])
     if (argc < 5) {
         printf("\nUsage: drvec file p q r [-mean] [-case 1|2|3] [-diagar] "
                "[-diagma] [-diagcov] [-m 1|2]\n"
-               "                 [-differenced] [-fixb2] [-lrtest]\n\n");
+               "                 [-differenced] [-fixb2] [-lrtest] [-rungs]\n\n");
         printf("  file  : data file name (without .inp extension)\n");
         printf("  p     : AR order of stationary VARMA on Ȳ_t\n");
         printf("  q     : MA order\n");
@@ -2608,7 +2609,12 @@ int main(int argc, char *argv[])
         printf("                 statistic is NOT a valid test.\n\n");
         printf("  -lrtest        sequential LR test for the cointegration rank:\n");
         printf("                 estimates r = 0..M-1 and reports 2*[L(r+1) - L(r)];\n");
-        printf("                 incompatible with -differenced\n");
+        printf("                 incompatible with -differenced\n\n");
+        printf("  -rungs         the ladder below the rank: rungs 0 (F, Theta and\n");
+        printf("                 Sigma diagonal), 1 (Sigma free) and 2 (F and Theta\n");
+        printf("                 free), all at r = 0, with their chi2 LRs.  These are\n");
+        printf("                 ordinary nested comparisons; adding the VEC matrix\n");
+        printf("                 is not, and lives in -lrtest\n");
         exit(1);
     }
 
@@ -2644,6 +2650,7 @@ int main(int argc, char *argv[])
         else if (strcmp(argv[i], "-m") == 0 && i+1 < argc)
             met = atoi(argv[++i]);
         else if (strcmp(argv[i], "-lrtest") == 0)  global_lrtest = 1;
+        else if (strcmp(argv[i], "-rungs") == 0)   global_rungs = 1;
         else if (strcmp(argv[i], "-levels") == 0)  global_levels = 1;  /* default */
         else if (strcmp(argv[i], "-differenced") == 0) global_levels = 0;
         else if (strcmp(argv[i], "-writeinp") == 0 && i+1 < argc) {
@@ -2883,6 +2890,133 @@ int main(int argc, char *argv[])
     /* [3a] Sequential LR test for the cointegration rank (Mauricio 2006,
             Remark 5 and Table 3): estimate r = 1..M-1 and report
             2*[L(r+1) - L(r)] against the non-standard asymptotic values.    */
+    /*  -rungs — LA ESCALERA, emitida por el programa y no armada por el usuario.
+     *
+     *  POR QUE.  La construccion de la suite es de OPTIMOS HACIA OPTIMOS: cada
+     *  peldano se estima, se certifica y se entrega al de arriba.  Hasta ahora
+     *  drvec sabia certificar SU BASE (la puerta diagonal) y sabia contrastar el
+     *  rango (-lrtest), pero los peldanos intermedios -- los que van de la base
+     *  a la dinamica cruzada libre -- habia que armarlos a mano, corriendo el
+     *  programa tres veces y restando.  Un usuario que hace eso a mano se
+     *  equivoca de grados de libertad, y sobre todo no deja constancia.
+     *
+     *  QUE ES CADA PELDANO.  Todos con r = 0, o sea sin matriz VEC todavia: lo
+     *  que se anade es estructura de correlacion, no cointegracion.
+     *
+     *    0   F, Theta y Sigma diagonales    la base certificada; la
+     *                                       verosimilitud factoriza
+     *    1   Sigma libre                    correlacion contemporanea
+     *    2   F y Theta libres               dinamica cruzada
+     *
+     *  Los tres son comparaciones anidadas ORDINARIAS -- el modelo restringido
+     *  es un punto interior del amplio --, asi que la logL no puede bajar y el
+     *  estadistico es chi2 con los grados de libertad que se imprimen.  El
+     *  peldano siguiente, r = 1, NO es ordinario ni en la siembra ni en la
+     *  distribucion, y por eso vive en -lrtest y no aqui: ver
+     *  docs/VEC_EMBEDDING_PLAN.md.                                           */
+    if (global_rungs) {
+        const int NR = 3;
+        const int DAR[3] = {1, 1, 0}, DMA[3] = {1, 1, 0}, DCOV[3] = {1, 0, 0};
+        const char *NAME[3] = { "0  F, Theta, Sigma diagonal",
+                                "1  Sigma free",
+                                "2  F and Theta free" };
+        real *ll  = vector(0, NR - 1);
+        int  *npr = ivector(0, NR - 1);
+        int  *good = ivector(0, NR - 1);
+        int k;
+
+        macheps = cmacheps();
+        global_r = 0;
+
+        fprintf(outputv, "\n=== The ladder: rungs at r = 0 ===\n");
+        printf("\nThe ladder, rungs at r = 0:\n");
+
+        for (k = 0; k < NR; k++) {
+            struct Tvarma vr;
+            real *xr, *devr, **covr;
+            int np, ifr = 0;
+
+            global_diag_ar = DAR[k]; global_diag_ma = DMA[k];
+            global_diag_cov = DCOV[k];
+            build_y2_levels();
+            np = calc_nparametrs();
+            xr = vector(1, np); devr = vector(1, np);
+            covr = matrix(1, np, 1, np);
+            vr.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
+            init_guess(xr, np);
+            vec_shootx(xr, &vr, &ifr, 1, 0);
+            est(&vec_shootx, np, xr, devr, covr, 500, 200, 1e-5, 1e-7,
+                vr.xitol, vr.a, &vr.sigma2, &vr.logelf, &ifr);
+            good[k] = (ifr == 0);
+            npr[k]  = np;
+            ll[k]   = good[k] ? vr.logelf : 0.0;
+            printf("  rung %s : %s (ifault=%d)\n", NAME[k],
+                   good[k] ? "ok" : "estimation failed", ifr);
+            /*  El peldano 0 es la base: se le exige su contrato aqui mismo, que
+             *  es donde se esta construyendo sobre el.                        */
+            if (k == 0 && good[k]) {
+                vec_shootx(xr, &vr, &ifr, 0, 0);       /* recuperar el ajuste */
+                gate_contract(&vr);
+            }
+            vec_shootx(xr, &vr, &ifr, 0, 1);           /* liberar */
+            free_matrix(covr, 1, np, 1, np);
+            free_vector(devr, 1, np);
+            free_vector(xr, 1, np);
+        }
+
+        fprintf(outputv, "\n  rung                          npar         logL"
+                         "         AIC         BIC\n");
+        fprintf(outputv, "  --------------------------------------------------"
+                         "-------------------\n");
+        for (k = 0; k < NR; k++) {
+            if (!good[k]) {
+                fprintf(outputv, "  %-28s  --   estimation failed\n", NAME[k]);
+                continue;
+            }
+            fprintf(outputv, "  %-28s %4d %12.4f %11.4f %11.4f\n", NAME[k],
+                    npr[k], ll[k],
+                    (-2.0 * ll[k] + 2.0 * npr[k]) / nobs,
+                    (-2.0 * ll[k] + npr[k] * log((real) nobs)) / nobs);
+        }
+
+        fprintf(outputv, "\n  step        LR = 2*[L(k+1) - L(k)]    df    "
+                         "p-value\n");
+        fprintf(outputv, "  ------------------------------------------------"
+                         "-----\n");
+        for (k = 0; k + 1 < NR; k++) {
+            real lr;
+            int df;
+            if (!good[k] || !good[k + 1]) {
+                fprintf(outputv, "  %d -> %d      not available\n", k, k + 1);
+                continue;
+            }
+            lr = 2.0 * (ll[k + 1] - ll[k]);
+            df = npr[k + 1] - npr[k];
+            fprintf(outputv, "  %d -> %d   %14.4f       %3d   %9.4f%s\n",
+                    k, k + 1, lr, df,
+                    (df > 0 && lr > 0.0) ? gsl_cdf_chisq_Q(lr, df) : 1.0,
+                    (lr < -1.0e-6) ? "   *** NEGATIVE: the wider fit is worse,"
+                                     " so it did not converge" : "");
+        }
+
+        fprintf(outputv,
+            "\n  These are ordinary nested comparisons: the restricted model is\n"
+            "  an INTERIOR point of the wider one, so the log-likelihood cannot\n"
+            "  fall and the statistic is chi2 on the stated degrees of freedom.\n"
+            "  The next rung -- adding the VEC matrix, r = 1 -- is not ordinary\n"
+            "  in either respect: the null sits ON the boundary of the alternative\n"
+            "  and B2 is unidentified under it.  It is reported by -lrtest, with\n"
+            "  a parametric bootstrap available for its distribution.\n");
+
+        free_ivector(good, 0, NR - 1);
+        free_ivector(npr, 0, NR - 1);
+        free_vector(ll, 0, NR - 1);
+        fclose(outputv);
+        printf("Done. Output written to %s\n", outputf);
+        cleanup_names(outputf, inputf, base_name);
+        return 0;
+    }
+
     if (global_lrtest) {
         int M = nser, ok;
         macheps = cmacheps();           /* the engine needs it; [3] is skipped */

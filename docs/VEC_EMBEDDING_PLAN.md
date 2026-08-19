@@ -233,9 +233,21 @@ smallest moving-average root at the optimum.
 
 ## 8. The order of work
 
-1. **Report the rung ladder.** Emit rungs 0–2 and their LRs from a single run, so
-   the sequence is a thing the program produces rather than a thing a user
-   assembles. Rung 3 already exists as `-lrtest`.
+1. ~~**Report the rung ladder.**~~ **Done**: `-rungs` emits rungs 0–2 and their
+   LRs from a single run, so the sequence is a thing the program produces rather
+   than a thing a user assembles; rung 0 certifies itself in place. Rung 3
+   already exists as `-lrtest`. Measured on `mink_muskrat`, `p = 2, q = 1`,
+   case 1 — and the check that matters is the last line, not the statistics:
+
+   | rung | npar | logL | LR | df | p |
+   |---|---|---|---|---|---|
+   | 0 `F`, `Θ`, `Σ` diagonal | 5 | −34.6278 | | | |
+   | 1 `Σ` free | 6 | −30.5844 | 8.087 | 1 | 0.0045 |
+   | 2 `F`, `Θ` free | 10 | −6.3311 | 48.507 | 4 | 0.0000 |
+
+   Rung 2 reproduces the plain `r = 0` fit to the digit (−6.3311226118), which
+   is what says the ladder re-estimates the same models and not a family
+   configured differently. See [DEVELOPMENT_RECORD.md](DEVELOPMENT_RECORD.md) §8.
 2. **Measure (C) as it stands** on the whole bank, to have the baseline the
    change is judged against. Nothing is altered at this step.
 3. **Build (B)** behind an option, so the default and the recorded results do not

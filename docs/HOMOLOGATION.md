@@ -706,6 +706,101 @@ best fits are still on the boundary. So the boundary is where the likelihood
 sends it, from a good seed as readily as from a bad one — with Strasbourg, above,
 the measured exception where the boundary fit is only a local optimum.
 
+## 4g. The moving average is not free: it inherits. And that is where the specification was wrong
+
+*Corollary 2 of the BVECM paper (`Article_Multivariate Convergence/
+cointegration_convergence/Legacy`, WARMA–VEC equivalence with MA). `-mawarma`.*
+
+The question that opened this: in a VEC model the error-correction term is a
+**stationary regressor**, and adding a stationary regressor cannot move a moving
+average from 0.83 to 1.00. Either the data are extraordinary or the embedding is
+wrong. Four measurements, in the order they were taken.
+
+### The embedding is right — verified, not assumed
+
+Mauricio's transformation as coded (`vec_shootx` [4]–[6]) was checked against
+Eqs. (10)–(18) term by term and then **numerically**: simulating a VEC process
+with a general, non-scalar `Θ` and testing the identity
+
+`Ȳ_t − ΣΦ*_kȲ_{t−k} = A*_t − ΣΘ*_kA*_{t−k}`,
+
+with `Φ*_k = C̄Φ̄_k`, `Θ*_k = C̄Θ_kC̄⁻¹`, `A*_t = C̄A_t`, gives a maximum error of
+**4.2e−15**. The three plausible alternatives fail by 0.56 to 2.5, so the test
+discriminates. The cast is not the fault.
+
+### The estimator is right too, when the surface is
+
+Simulated from a VEC with `Θ = 0`: fitted with `q = 1` it returns
+`Θ̂ ≈ [[−0.05, −0.09],[0.08, 0.05]]`, moving-average roots at 14.2, clean
+convergence. Simulated from the **WARMA** process of Corollary 2 with `θ = 0.5`,
+`β = 0.5`, `n = 8000`, and fitted with a free `Θ`:
+
+| | truth | free fit |
+|---|---|---|
+| `B₂` | −0.5 | **−0.49993** |
+| `Λ` | (0.30, −0.20) | (0.384, −0.200) |
+| `Θ` | `[[0.5, −0.25],[0, 0]]` | `[[0.397, −0.216],[−0.009, 0.0005]]` |
+
+The free estimator **finds the inherited structure on its own** — the bottom row
+comes out at 1e−3 — which is the strongest evidence that neither the cast nor
+the optimiser is at fault.
+
+### What the theory says the structure is
+
+Corollary 2: if `{z_t}` admits a WARMA representation — `Φ(B)w_t = Θ(B)a_t` for
+the cointegrating block, `Δz₂ₜ = γw_{t−1} + … + η_t` for the differenced one —
+then the VEC error is `ε_t = [β'η_t + Θ(B)a_t ; η_t]`. Regrouping on
+`A_t = [a_t + β'η_t ; η_t]`, which is an invertible transformation of the noise,
+gives `ε_t = A_t − Θ̃₁A_{t−1}` with
+
+`Θ̃₁ = [[Θ₁, −Θ₁β'],[0, 0]] = [[Θ₁, Θ₁B₂'],[0, 0]]`  (`B₂ = −β`).
+
+Verified numerically on the simulated WARMA: **4.4e−16** for that form, **2.0**
+for the sign-flipped one. With `M = 2, r = 1` it leaves **one** free
+moving-average parameter where `drvec` was estimating **four**.
+
+### On the real data, the free version is the one misbehaving
+
+| pair | free `Θ̂` | free MAmin | inherited `Θ̂₁₁` | MAmin | free `B̂₂` | inherited `B̂₂` | Johansen `β₂` |
+|---|---|---|---|---|---|---|---|
+| Milan | bottom row −0.75, 1.11 | 1.0003 | −0.415 | **2.410** | −0.448 | **−0.566** | −0.554 |
+| Strasbourg | −0.75, 1.15 | 1.0000 | | **4.931** | −0.476 | **−0.640** | −0.652 |
+| Utrecht | −0.42, 1.04 | 1.0000 | | **7.534** | −0.627 | **−0.789** | −0.810 |
+| Vienna | −1.32, 1.54 | 1.0000 | | **1.630** | −0.590 | **−0.866** | −0.889 |
+| Aix | 1.11, 0.80 | 1.0000 | | **1.381** | −0.762 | **−1.029** | −1.081 |
+| Arévalo | 1.51, 1.14 | 1.0000 | | **12.549** | −0.627 | **−0.995** | −0.994 |
+| Angers | **5.09**, −0.07 | 1.0000 | | **6.005** | −0.618 | **−1.030** | −1.036 |
+| Penn | −1.43, 2.05 | 1.0000 | | **1.717** | −1.088 | **−1.088** | −1.079 |
+
+Three things at once, and they point the same way.
+
+1. **The boundary pathology disappears.** All eight pairs go from a smallest
+   moving-average root of 1.0000 to between 1.38 and 12.55.
+2. **All eight converge on the gradient**, where the free version stops on
+   `steptol` or a failed line search in every one.
+3. **`B̂₂` lands on the canonical estimate.** Under the restriction it agrees
+   with Johansen's `β` to **0.001–0.052** — the same agreement §2.1b measures at
+   `q = 0`, where the two fit the same model. Under the free `Θ` it was 0.1 to
+   0.4 away.
+
+Meanwhile the free `Θ̂` on these data carries entries of 1.5 and **5.09** with a
+`(2,2)` entry of 1.0–2.0 — which is what puts the root on the unit circle —
+where on simulated WARMA data it returns a bottom row of 1e−3.
+
+### The likelihood prefers the free version, and that comparison is not a test
+
+The LR is 13 to 26 on 3 degrees of freedom, so read naively the restriction is
+rejected everywhere. **It cannot be read naively**: the unrestricted optimum
+sits ON the invertibility boundary in all eight cases, and an LR statistic whose
+unrestricted estimate is on a constraint does not have its `χ²` distribution —
+the same caveat §3b already attaches to the standard errors there. What can be
+said without a distribution is what the table says: the restricted fits are
+interior, converge on the gradient, and agree with an independent estimator,
+while the unrestricted ones do none of the three.
+
+`-mawarma` is therefore offered and not imposed, and the register records the
+comparison rather than a verdict.
+
 ## 5. What is not in the register, and why
 
 * **The Census Housing example** of the AddOn (Hillmer & Tiao 1979): the data

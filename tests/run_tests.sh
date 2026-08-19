@@ -165,7 +165,9 @@ struct_case() {
 for o in "-case 1" "-case 2" "-case 3" \
          "-case 2 -diagar" "-case 2 -diagma" "-case 2 -diagcov" \
          "-case 2 -diagar -diagma" "-case 3 -diagar -diagma -diagcov" \
-         "-case 2 -fixb2" "-case 2 -fixb2 0" "-case 2 -fixb2 -0.5" "-case 2 -fixb2 -diagma"; do
+         "-case 2 -fixb2" "-case 2 -fixb2 0" "-case 2 -fixb2 -0.5" "-case 2 -fixb2 -diagma" \
+         "-case 2 -mawarma" "-case 1 -mawarma" "-case 2 -mawarma -diagar" \
+         "-case 2 -mawarma -fixb2"; do
     struct_case "M=2 p=2 q=1 r=1 $o" "$MM" 2 1 1 $o
 done
 struct_case "M=2 lrtest case 2"                "$MM" 2 1 0 -case 2 -lrtest
@@ -175,6 +177,13 @@ struct_case "M=3 r=2"                          "$UK" 2 0 2 -case 2
 struct_case "M=3 lrtest"                       "$UK" 2 0 0 -case 2 -lrtest
 struct_case "M=3 lrtest + fixb2"               "$UK" 2 0 0 -case 2 -lrtest -fixb2
 struct_case "M=5 r=2 (s=3, r=2: B2 is 3x2)"    "$DK" 2 0 2 -case 2
+# -mawarma with r > 1 and s > 1: the inherited block is r x r and the block it
+# determines is r x s, so this is the only shape where getting either dimension
+# wrong is visible.  The walk check is what catches it -- and it did: the
+# printer was reading the free q*M*M stride and publishing a Theta nobody had
+# estimated (DEVELOPMENT_RECORD.md 8d).
+struct_case "M=5 r=2 q=1 -mawarma (T11 2x2, T12 2x3)" "$DK" 2 1 2 -case 2 -mawarma
+struct_case "M=3 r=1 q=1 -mawarma"             "$UK" 2 1 1 -case 2 -mawarma
 struct_case "M=5 lrtest"                       "$DK" 2 0 0 -case 2 -lrtest
 struct_case "legacy layout (-differenced)"     data/AL.inp 2 0 1 -case 2 -differenced
 for o in "-case 1" "-case 2" "-case 3"; do
@@ -667,6 +676,46 @@ else
     then ok "seedjoh: the canonical seed starts closer on Milan ($sj vs $sc, optimum $c0)"
     else bad "seedjoh: the canonical seed did not start closer" "cold=$sc canonical=$sj optimum=$c0"; fi
 fi
+echo
+
+# 5i. -mawarma: the moving average INHERITS its structure instead of being free,
+#     which is what the WARMA-VEC equivalence implies (BVECM corollary 2):
+#     Theta = [T11  T11*B2' ; 0  0].  Two checks, and the first is the structure
+#     itself -- the last s rows must be exactly zero and the top-right block must
+#     be the product, because those are not estimates, they are consequences.
+#     Milan on purpose and not mink_muskrat: there the restricted fit drives T11
+#     to zero, and a product check with a zero factor does not bite.
+run data/pairs/milan.inp 2 1 1 -case 2 -mean -mawarma
+if ! grep -aq "inherited structure" "$TMP/case.out"; then
+    bad "mawarma" "no inherited-structure Theta reported"
+else
+    z=$(awk '/inherited structure/{getline; getline; getline; print $1+0, $2+0}' \
+        "$TMP/case.out")
+    [ "$z" = "0 0" ] && ok "mawarma: the last row of Theta is exactly zero" \
+                     || bad "mawarma: the last row of Theta is not zero" "$z"
+    # T12 = T11 * B2' -- checked against the B2 the same fit reports
+    t11=$(awk '/inherited structure/{getline; print $1}' "$TMP/case.out")
+    t12=$(awk '/inherited structure/{getline; print $2}' "$TMP/case.out")
+    b2=$(grep -a -A1 "^B2 (s x r) =" "$TMP/case.out" | tail -1 | awk '{print $1}')
+    if ! awk -v a="$t11" 'BEGIN{if(a<0)a=-a; exit !(a>1e-3)}'; then
+        bad "mawarma: T11 is zero here" "the product check would not bite"
+    elif awk -v a="$t11" -v b="$t12" -v c="$b2" \
+         'BEGIN{d=a*c-b; if(d<0)d=-d; exit !(d<=1e-5)}'; then
+        ok "mawarma: T12 = T11*B2' ($t11 * $b2 = $t12)"
+    else bad "mawarma: T12 is not T11*B2'" "T11=$t11 B2=$b2 T12=$t12"; fi
+fi
+
+# and the restriction must BITE: it cannot beat the free model, and on this data
+# it must move the fit off the invertibility boundary, which is the measured
+# reason it exists at all (HOMOLOGATION.md 4g).
+free_ll=$(run "$MM" 2 1 1 -case 2 -mean; logelf_of "$TMP/case")
+run "$MM" 2 1 1 -case 2 -mean -mawarma
+warm_ll=$(logelf_of "$TMP/case")
+if [ -z "$free_ll" ] || [ -z "$warm_ll" ]; then
+    bad "mawarma: nested comparison" "missing logelf (free=$free_ll warma=$warm_ll)"
+elif awk -v a="$free_ll" -v b="$warm_ll" 'BEGIN{exit !(b <= a + 1e-6)}'; then
+    ok "mawarma: the restricted fit cannot beat the free one ($warm_ll <= $free_ll)"
+else bad "mawarma: restricted beat free" "free=$free_ll warma=$warm_ll"; fi
 echo
 
 echo "[6] alpha = A*psi: the restriction, its LR, and its guards"

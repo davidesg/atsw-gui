@@ -548,6 +548,59 @@ is one to two orders of magnitude closer than anything (B) or (C) starts from.
 It is the next thing to measure, on the same bank and with the same five
 quantities.
 
+## 8d. The question that found the specification error
+
+The objection came in one sentence, and it was the right one: *in a VEC model
+the error-correction term is a stationary regressor, and a stationary regressor
+cannot move a moving average that much.* On the eight wheat pairs the same
+component's moving-average coefficient goes from 0.833 at `r = 0` — where it
+reproduces `fue`'s univariate 0.7482 — to 0.999 at `r = 1`. Either those data
+are extraordinary or the embedding is wrong, and the simplest answer is usually
+the embedding.
+
+**It was not the embedding.** The transformation was checked against Mauricio's
+Eqs. (10)–(18) term by term, and then numerically, on a simulated VEC process
+with a general non-scalar `Θ`: the identity holds to 4.2e−15, and the three
+plausible alternative forms of `Θ*` fail by 0.56 to 2.5, so the test
+discriminates rather than merely agreeing. Nor was it the estimator: on data
+simulated from the WARMA process of the BVECM paper's Corollary 2, `drvec` with
+a **free** `Θ` recovers the true structure by itself — bottom row 1e−3 against a
+truth of exactly zero, `B̂₂ = −0.49993` against −0.5.
+
+**It was the specification.** Corollary 2 says what the moving average of a VEC
+representation looks like when the process admits a WARMA form: the error is
+`ε_t = [β′η_t + Θ(B)a_t ; η_t]`, and regrouping on the innovations gives
+`Θ̃₁ = [[Θ₁, Θ₁B₂′],[0, 0]]` — verified numerically at 4.4e−16, against 2.0 for
+the sign-flipped alternative. **The last `s` rows are zero and the top-right
+block is not a parameter at all**: it is `Θ₁₁B₂′`. With `M = 2` and `r = 1`,
+`drvec` was estimating four moving-average parameters where the structure allows
+one. That is not a coding error, which is why reading the transformation over and
+over would never have found it. It is a model that is freer than the theory that
+justifies it.
+
+What imposing it does, on the eight pairs, is the measurement worth keeping
+([HOMOLOGATION.md](HOMOLOGATION.md) §4g): the smallest moving-average root moves
+off 1.0000 to between 1.38 and 12.55; all eight converge **on the gradient**,
+where the free version converges on none; and `B̂₂` lands within **0.001 to
+0.052** of Johansen's canonical `β`, where the free version was 0.1 to 0.4 away.
+Three independent symptoms clearing together is not what a coincidence looks
+like.
+
+The likelihood still prefers the free version — LR 13 to 26 on 3 degrees of
+freedom — and that comparison is precisely the one that cannot be made, because
+the unrestricted optimum sits on the invertibility boundary in all eight cases.
+So `-mawarma` is offered, the register carries the comparison, and no default
+moves.
+
+Two smaller things came out of the same work. The `-mawarma` printer had to be
+rewritten because it was reading the free `q·M²` stride and publishing a `Θ` and
+a `B₂` **nobody had estimated** — the fifth walk of the parameter vector, and the
+same class of defect as §4.1. The suite's structural check catches it now,
+including on `M = 5, r = 2`, where `T₁₁` is 2×2 and the block it determines is
+2×3: with `r = 1` and `s = 1` a wrong dimension there is invisible. And
+`-seedb2` exists at all because a question about a starting value should not
+require a recompilation to answer.
+
 ## 9. Open, and honestly so
 
 | | |

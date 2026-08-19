@@ -127,6 +127,37 @@ real global_seedb2_value = 0.0;
 int  global_seedjoh = 0;
 static int canon_used = 0;      /* 1 = la solucion canonica entro de verdad   */
 
+/*  -mawarma — EL MA NO ES LIBRE: LO HEREDA.
+ *
+ *  El corolario 2 del articulo BVECM (Equivalencia WARMA-VEC con MA) dice que
+ *  si el proceso admite representacion WARMA
+ *
+ *      Phi(B) w_t = Theta(B) a_t,     Delta z2_t = gamma w_{t-1} + ... + eta_t
+ *
+ *  -- o sea el MA vive en el bloque cointegrado y el bloque diferenciado es
+ *  ruido blanco --, entonces el error de la representacion VEC es
+ *
+ *      eps_t = [ beta' eta_t + Theta(B) a_t ;  eta_t ].
+ *
+ *  Reagrupando sobre A_t = [a_t + beta' eta_t ; eta_t], que es una
+ *  transformacion invertible del ruido, eso es eps_t = A_t - Theta1 A_{t-1} con
+ *
+ *      Theta = [ Theta11   Theta11 B2' ]        (B2 = -beta; ESTUDIO_BVECM 2.1)
+ *              [    0           0      ]
+ *
+ *  o sea: LAS ULTIMAS s FILAS SON CERO y el bloque superior derecho NO es libre,
+ *  esta determinado por el izquierdo y por B2.  Con M = 2 y r = 1 eso deja UN
+ *  parametro de medias moviles donde el modelo libre lleva CUATRO.
+ *
+ *  Y esto no es una preferencia de modelizacion, esta medido.  Simulando el
+ *  propio DGP WARMA del articulo (theta = 0.5, beta = 0.5, n = 1000) y ajustando
+ *  con Theta libre, drvec devuelve entradas de 3.26, 7.50 o -2.44 donde la
+ *  verdad es [[0.5, -0.25],[0,0]], y aparca en la frontera de invertibilidad.
+ *  B2 sale bien en todas las replicas -- es superconsistente -- pero el bloque
+ *  (Lambda, Theta) esta practicamente no identificado cuando Theta es libre.
+ *  Ver docs/HOMOLOGATION.md 4g.                                              */
+int global_mawarma = 0;
+
 static int    prof_hold = 0;
 static real ***hold_F = NULL, ***hold_Th = NULL;
 static real  **hold_S = NULL;
@@ -283,7 +314,7 @@ static void par_blocks(int *nmean, int *nlam, int *nmid, int *ntail)
           queda fijo en 1 y la escala se reporta por sigma2 (de modo que
           Sigma[1][1] = sigma2 exactamente).                                  */
     *nmid  = nf * (global_diag_ar ? M : M * M)
-           + q  * (global_diag_ma ? M : M * M)
+           + q  * (global_mawarma ? r * r : (global_diag_ma ? M : M * M))
            + (global_diag_cov ? M : M * (M + 1) / 2) - 1;
 
     /* 6. B_2 (s x r), salvo que -fixb2 lo sujete */
@@ -2497,7 +2528,17 @@ static void init_guess(real *x, int npar)
                               Θ_k = C̄⁻¹ Θ̄_k C̄
        con Θ̄_k diagonal.  Sembrar los θ del .pre directamente en Θ funciona
        sólo si C̄ = I (r = 0) y es un error silencioso en cuanto r ≥ 1.        */
-    if (seed_loaded && q > 0 && seed_route == SEED_RESID) {
+    if (global_mawarma && q > 0) {
+        /*  -mawarma: el bloque libre es solo Theta11 (r x r), y el resto lo
+         *  construye el cast.  La semilla es la diagonal de lo que hubiera:
+         *  con la ruta de residuos, la theta univariante del bloque
+         *  cointegrado; si no, cero, que es el arranque de siempre.          */
+        for (k = 1; k <= q; k++)
+            for (i = 1; i <= r; i++)
+                for (j = 1; j <= r; j++)
+                    x[idx++] = (i == j && seed_loaded && seed_route == SEED_RESID
+                                && seed_tbar) ? seed_tbar[k][i] : 0.0;
+    } else if (seed_loaded && q > 0 && seed_route == SEED_RESID) {
         /* Ruta de residuos: la θ leída ES la diagonal de Θ, sin transformar. */
         for (k = 1; k <= q; k++) {
             if (global_diag_ma) {
@@ -2707,6 +2748,14 @@ static void vec_shootx(real *x, struct Tvarma *armax,
         if (prof_hold) {
             for (i = 1; i <= M; i++)
                 for (j = 1; j <= M; j++) Theta[k][i][j] = hold_Th[k][i][j];
+        } else if (global_mawarma) {
+            /*  Theta = [Theta11  Theta11 B2' ; 0  0].  Ojo al orden: B2 se lee
+             *  mas abajo, asi que aqui se guarda solo el bloque libre y el
+             *  resto se completa DESPUES de tener B2.  Ver -mawarma.         */
+            for (i = 1; i <= M; i++)
+                for (j = 1; j <= M; j++) Theta[k][i][j] = 0.0;
+            for (i = 1; i <= r; i++)
+                for (j = 1; j <= r; j++) Theta[k][i][j] = x[idx++];
         } else if (global_diag_ma) {
             for (i = 1; i <= M; i++) Theta[k][i][i] = x[idx++];
         } else {
@@ -2766,6 +2815,20 @@ static void vec_shootx(real *x, struct Tvarma *armax,
     for (j = 1; j <= r; j++)
         for (i = 1; i <= s; i++)
             B2[i][j] = global_fixb2 ? B2_fixed[i][j] : x[idx++];
+
+    /*  -mawarma: el bloque superior derecho de Theta, que NO es libre.  Se
+     *  completa aqui y no arriba porque necesita B2, que se acaba de leer:
+     *  Theta[k][i][r+jj] = sum_ii Theta11[k][i][ii] * B2'[ii][jj].           */
+    if (global_mawarma && !prof_hold) {
+        for (k = 1; k <= q; k++)
+            for (i = 1; i <= r; i++)
+                for (int jj = 1; jj <= s; jj++) {
+                    real acc = 0.0;
+                    for (int ii = 1; ii <= r; ii++)
+                        acc += Theta[k][i][ii] * B2[jj][ii];
+                    Theta[k][i][r + jj] = acc;
+                }
+    }
 
     /* [4] Mauricio transformation matrices (eq. 10-14) ---------------------- */
     real **Cbar   = matrix(1, M, 1, M);
@@ -3257,6 +3320,11 @@ int main(int argc, char *argv[])
         printf("  -lrtest        sequential LR test for the cointegration rank:\n");
         printf("                 estimates r = 0..M-1 and reports 2*[L(r+1) - L(r)];\n");
         printf("                 incompatible with -differenced\n\n");
+        printf("  -mawarma       the moving average INHERITS its structure instead\n");
+        printf("                 of being free: Theta = [T11  T11*B2' ; 0  0], the\n");
+        printf("                 form a WARMA process implies for its VEC\n");
+        printf("                 representation (BVECM corollary 2).  q*r*r\n");
+        printf("                 parameters instead of q*M*M\n\n");
         printf("  -seedjoh       seed B2 with the canonical reduced-rank solution\n");
         printf("                 (Johansen's eigenvalue problem, closed form)\n");
         printf("                 instead of the static OLS regression\n\n");
@@ -3313,6 +3381,7 @@ int main(int argc, char *argv[])
         else if (strcmp(argv[i], "-rungs") == 0)   global_rungs = 1;
         else if (strcmp(argv[i], "-seedgate") == 0) global_seedgate = 1;
         else if (strcmp(argv[i], "-seedjoh") == 0)  global_seedjoh = 1;
+        else if (strcmp(argv[i], "-mawarma") == 0)  global_mawarma = 1;
         else if (strcmp(argv[i], "-seedb2") == 0 && i+1 < argc) {
             global_seedb2 = 1; global_seedb2_value = atof(argv[++i]);
         }
@@ -4307,16 +4376,38 @@ int main(int argc, char *argv[])
                 fprintf(outputv, "\n");
             }
         }
+        /*  Con -mawarma el bloque libre son solo las r*r entradas de arriba a
+         *  la izquierda; el bloque superior derecho lo determina B2 (que este
+         *  recorrido aun no ha leido) y las s filas de abajo son cero.  Se
+         *  guardan aqui y se imprimen despues de B2.  Este es el CUARTO
+         *  recorrido del mismo vector, y es exactamente donde la version
+         *  anterior de este bloque se desalineaba y publicaba una Theta que
+         *  nadie habia estimado.                                             */
+        real ***Th_m = tensor(1, (global_q > 0 ? global_q : 1), 1, nser, 1, nser);
+        for (int k = 1; k <= (global_q > 0 ? global_q : 1); k++)
+            for (int i = 1; i <= nser; i++)
+                for (int j = 1; j <= nser; j++) Th_m[k][i][j] = 0.0;
         for (int k = 1; k <= global_q; k++) {
-            fprintf(outputv, "Theta[%d] (M x M) =\n", k);
-            for (int i = 1; i <= nser; i++) {
-                fprintf(outputv, "  ");
-                for (int j = 1; j <= nser; j++)
-                    fprintf(outputv, "%12.6f",
-                            global_diag_ma ? ((i == j) ? x[ii++] : 0.0) : x[ii++]);
-                fprintf(outputv, "\n");
+            if (global_mawarma) {
+                for (int i = 1; i <= r; i++)
+                    for (int j = 1; j <= r; j++) Th_m[k][i][j] = x[ii++];
+            } else if (global_diag_ma) {
+                for (int i = 1; i <= nser; i++) Th_m[k][i][i] = x[ii++];
+            } else {
+                for (int i = 1; i <= nser; i++)
+                    for (int j = 1; j <= nser; j++) Th_m[k][i][j] = x[ii++];
             }
         }
+        if (!global_mawarma)
+            for (int k = 1; k <= global_q; k++) {
+                fprintf(outputv, "Theta[%d] (M x M) =\n", k);
+                for (int i = 1; i <= nser; i++) {
+                    fprintf(outputv, "  ");
+                    for (int j = 1; j <= nser; j++)
+                        fprintf(outputv, "%12.6f", Th_m[k][i][j]);
+                    fprintf(outputv, "\n");
+                }
+            }
         /* The engine concentrates the covariance scale: it calls elf with
            sigma2 = 1, so the block carried in x[] is identified only up to a
            positive constant.  Report it as Q (what is estimated) and the
@@ -4444,6 +4535,28 @@ int main(int argc, char *argv[])
                 fprintf(outputv, "\n");
             }
         }
+
+        /*  -mawarma: ahora que B2 esta leido, se completa e imprime Theta con
+         *  la estructura que hereda: [T11  T11*B2' ; 0  0].                  */
+        if (global_mawarma)
+            for (int k = 1; k <= global_q; k++) {
+                for (int i = 1; i <= r; i++)
+                    for (int jj2 = 1; jj2 <= s; jj2++) {
+                        real acc = 0.0;
+                        for (int i2 = 1; i2 <= r; i2++)
+                            acc += Th_m[k][i][i2] * B2m[jj2][i2];
+                        Th_m[k][i][r + jj2] = acc;
+                    }
+                fprintf(outputv, "\nTheta[%d] (M x M), inherited structure "
+                                 "[T11  T11*B2' ; 0  0] =\n", k);
+                for (int i = 1; i <= nser; i++) {
+                    fprintf(outputv, "  ");
+                    for (int j = 1; j <= nser; j++)
+                        fprintf(outputv, "%12.6f", Th_m[k][i][j]);
+                    fprintf(outputv, "\n");
+                }
+            }
+        free_tensor(Th_m, 1, (global_q > 0 ? global_q : 1), 1, nser, 1, nser);
 
         if (ii != npar + 1)
             fprintf(stderr, "ERROR output: consumed %d of %d parameters\n",

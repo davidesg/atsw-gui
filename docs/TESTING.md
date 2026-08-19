@@ -1,6 +1,6 @@
 # The test suite: what it protects, measured
 
-*`tests/run_tests.sh`, run by `make test`. 103 checks, and 113 with the opt-in
+*`tests/run_tests.sh`, run by `make test`. 112 checks, and 122 with the opt-in
 memory block. The claim that a suite
 "protects" something is worth nothing unless it is measured, so it is measured
 by mutation: real defects are put back and the failures counted.*

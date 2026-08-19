@@ -74,6 +74,28 @@ rather than returning numbers for a model that does not have them.
 The degrees of freedom of the reported LR are `(M − sa)·r`, from Johansen and
 Swensen (2024).
 
+### The moving average: free or inherited
+
+| | |
+|---|---|
+| `-mawarma` | `Θ = [T₁₁  T₁₁B₂′ ; 0  0]`, the structure a WARMA process implies for its VEC representation. `q·r²` parameters instead of `q·M²` |
+
+By default `Θ` is a free `M×M` matrix, which is Mauricio's model class. If the
+process admits a WARMA representation — the moving average living in the
+cointegrating block, the differenced block being white noise — then its VEC
+error is `ε_t = [β′η_t + Θ(B)a_t ; η_t]`, and regrouping on the innovations
+gives a `Θ` whose **last `s` rows are zero** and whose top-right block is
+**determined** by the top-left one and `B₂`. With `M = 2, r = 1` that is one
+free moving-average parameter instead of four.
+
+It matters on real data ([HOMOLOGATION.md](HOMOLOGATION.md) §4g): on the eight
+wheat pairs the free version puts the smallest moving-average root at 1.0000 —
+the invertibility boundary — in every case and never converges on the gradient,
+while the inherited version moves it to 1.38–12.55, converges on the gradient in
+all eight, and brings `B̂₂` to within 0.001–0.052 of Johansen's canonical `β`
+where the free version is 0.1 to 0.4 away. The likelihood still prefers the free
+version, but that comparison is not a test: its optimum is on the boundary.
+
 ### Seeding the VEC block
 
 | | |

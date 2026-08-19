@@ -7,7 +7,7 @@ short and awkward — the conditions this program is meant for.*
 
 Johansen's reduced-rank regression is the reference implementation of
 cointegration, and `statsmodels`' version shares no ancestry with this code. So
-it answers two different questions, and keeping them apart is the whole point:
+it answers two distinct questions, and the two must be kept apart:
 
 1. **On the same specification, do they agree?** That is a check on `drvec`.
 2. **At each one's own optimum, do they say the same thing?** That is a
@@ -100,16 +100,16 @@ the data, and it is the case for a VARMA rather than an argument about software.
 
 ## 2b. And the theory says which inference is the valid one
 
-The measurements above have a theoretical counterpart, and it is worth stating
-because it changes what the comparison means.
+The measurements above have a theoretical counterpart, which determines how the
+comparison should be read.
 
-**A standard error can be computed for anything; valid inference is a different
-claim.** For the cointegrating coefficient the two are not the same question,
+**A standard error may be computed for any estimate; the validity of the
+associated inference is a separate question.** For the cointegrating coefficient the two are not the same question,
 because `β̂` is superconsistent and its limit distribution is mixed normal rather
 than normal.
 
 * **`drvec`'s route is licensed explicitly.** The transformed system it estimates
-  is Phillips' (1991) triangular representation — Mauricio's equation (19) — and
+  is Phillips' (1991) triangular representation — equation (19) of Mauricio (2006) — and
   the paper concludes that *«asymptotic optimal inference applies to full-system
   EML estimation»* and that tests on `Λ` and `B` *«can be conducted using standard
   (e.g., Wald or likelihood ratio) asymptotic χ² tests»*. See

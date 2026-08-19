@@ -22,7 +22,7 @@ The third is the weakest, and it is where the open item lives.
 
 | what | measured | status |
 |---|---|---|
-| the transformation against the AddOn's closed form for M=2, r=1 | difference **0.000e+00**, term by term | ✔ |
+| the transformation against the closed form of Mauricio (2005) for M=2, r=1 | difference **0.000e+00**, term by term | ✔ |
 | `elf` against a multivariate normal computed by hand | **2·10⁻⁸** | ✔ |
 | factorisation: joint `r=0` all-diagonal = sum of the univariate fits | **1e−9** | ✔ |
 | `Σ = P D P′` reconstructs `Σ` (M=3) | worst entry **< 1e−5** | ✔ |
@@ -48,8 +48,8 @@ bin/drvec datasets/mauricio/mink_muskrat 2 1 0 -case 2 -lrtest
 ```
 
 The critical values are the non-standard Johansen ones (λ-max form), from
-`urca` 1.3.4 / Osterwald-Lenum (1992). MA terms do not affect the asymptotic
-distribution (Yap and Reinsel 1995, Thm. 3, cited in Mauricio's Remark 5). **Case
+Osterwald-Lenum (1992), as implemented in the `urca` package (Pfaff, 2008). MA terms do not affect the asymptotic
+distribution (Yap and Reinsel, 1995, Theorem 3; see Mauricio, 2006, Remark 5). **Case
 3 is not tabulated here**, so a case-3 rank test reports the statistic without
 critical values.
 
@@ -139,15 +139,16 @@ bootstrap cuts that to four times. The improvement is real rather than noise:
 the comparison is paired, and of the 6 replications where the two disagree, **all
 6 go the bootstrap's way** (McNemar exact, p = 0.031).
 
-**But 20 % against a nominal 5 % is still badly sized**, and that is the honest
-headline: the bootstrap helps and does not fix it. On samples of this length a
+**A size of 20 % against a nominal 5 % remains substantially distorted.** The
+bootstrap improves the calibration without correcting it. On samples of this length a
 rank decision near a critical value stays undecided whichever route produced it.
 
 *A correction to an earlier figure in this register.* The first version of this
 row reported over-rejection of ~15 %, from 20 replications. Extending to 60 puts
 it at 30 % — the first 20 gave 3 and the next 40 gave 15. With n = 20 the
 standard error of such a proportion is about 8 points, so the first estimate was
-a lucky draw, not a different measurement. The 60-replication figure is the one
+a favourable draw rather than a
+different measurement. The 60-replication figure is the one
 to quote, and it carries about 4.6 points of standard error itself.
 
 **This is the measurement that justified the parametric bootstrap**, which now
@@ -220,8 +221,8 @@ representations, and that criterion is:
 | `drvec`, four equivalent configurations, one start | 0.00246 – 0.00251 | agree with each other, ~8 % above |
 | **`drvec`, the same four with `-multistart 60`** | **0.002344 – 0.002358** | **spread 0.000014, and 1.6 % above** |
 
-The single-start row is what the program gives by default and is the honest
-figure for a casual run. The multi-start row is what it gives when asked to look
+The single-start row is what the program reports by default, and is the
+appropriate figure for a single unattended run. The multi-start row is what it gives when asked to look
 properly, and it is the one to quote: the spread across four mathematically
 equivalent set-ups collapses to 0.000014 and the level lands within 1.6 % of the
 global-search reference.
@@ -255,4 +256,4 @@ These establish that the program handles the shape, not that the answer is right
 
 *Re-measuring this register is `make test` plus the four commands quoted above.
 If a row moves, either the program changed or the input did — and the second is
-the one that has caught people out here, so check the input first.*
+the more frequent cause, so the input should be checked first.*

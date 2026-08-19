@@ -1,6 +1,6 @@
 # What the optimiser reports, and how much to believe it
 
-*Read this before trusting a fit. It is the honest part of the documentation.*
+*The reported termination of the optimiser, and how far it should be trusted.*
 
 ---
 
@@ -66,7 +66,7 @@ So: **where the optimiser stops depends on where it starts**, and in the worst
 configuration it depends on it strongly. The literature agrees that this is in
 the nature of the problem — Mauricio's own paper notes that «multicollinearity
 appears to be natural to CI» — and the suite's separate study of the optimiser
-(`drtran/docs/OPTIMIZER_STOPPING_STUDY.md`) tried and rejected three variants of
+(the optimiser study carried out for the transfer-function program of the same suite) tried and rejected three variants of
 the scaling on evidence.
 
 ## 3. What to do about it
@@ -77,9 +77,9 @@ In descending order of usefulness:
    that moves the answer, and it is not a matter of taste: the surface's
    path-dependence is measured (§2), and the global search that provides this
    program's `|Σ̂|` reference was itself a multi-start. On the canonical case,
-   going from one start to 60 takes `|Σ̂|` from 0.002461 to 0.002346 — from 7 %
-   above the reference to 1.6 % — and collapses the spread across four
-   equivalent configurations from 0.000048 to 0.000014.
+   going from one start to sixty moves `|Σ̂|` from 7 % above the reference value to
+   1.6 %, and reduces the spread across four equivalent configurations by a
+   factor of three. The figures are in [HOMOLOGATION.md](HOMOLOGATION.md).
 
    The perturbations are deterministic, so a result can be reproduced; and the
    procedure is monotone in `n`, so asking for more starts can only help. The
@@ -98,7 +98,8 @@ In descending order of usefulness:
    * **re-estimating with the roles of the two series swapped**: for a single
      cointegrating relation the two normalised vectors must multiply to 1.
 
-   Both cost one extra fit and both are worth doing before believing a number.
+   Each costs one additional fit, and both are advisable before a reported value is
+relied upon.
 
    The swap check earns its keep beyond convergence: on two real pairs it was the
    **only** signal that the model class did not apply at all — the series had no
@@ -146,7 +147,7 @@ In descending order of usefulness:
   covers the whole suite is the place where that question belongs. `-multistart`
   does not touch it; it runs it more than once.
 
-## 5. The honest summary
+## 5. Summary
 
 `drvec` will usually give you a fit that stopped on termcode 3. That fit is a
 stationary-ish point of an exact likelihood, not a global optimum, and on this

@@ -1,4 +1,4 @@
-# The model, the parameter vector, and the conventions that bite
+# The model, the parameter vector, and the conventions it depends on
 
 *Reference: Mauricio, J.A. (2006), «Exact maximum likelihood estimation of
 partially nonstationary vector ARMA models», Computational Statistics & Data
@@ -112,7 +112,7 @@ Phillips (1991)»*.
 **Not that inference on `β` is unavailable there.** Johansen (1991) establishes
 mixed-Gaussian limits and χ² tests on the cointegrating relations, and Phillips
 himself confirms it. Both representations yield LAMN limits and both allow optimal
-inference **when correctly specified** (Cappuccio 1996, `literature/`). The
+inference **when correctly specified** (Cappuccio 1996, the bibliography). The
 difference appears when the data have MA dynamics, and it is a non-existence
 result rather than an approximation issue:
 
@@ -186,10 +186,10 @@ line search fails and the Hessian is singular. `Σ[1][1]` is therefore fixed at 
 and the scale is reported through `sigma2`, so that `Σ̂ = sigma2 · Q`.
 
 This is not a local trick: `drtran` reached the same normalisation independently
-(`BRIDGE_DESIGN.md` §10), and the same concentration is why the covariance block
+(the corresponding bridge documentation of the same suite), and the same concentration is why the covariance block
 should be **seeded at the variance ratios of the data**, not at the correlation
-matrix. Measured on Danish money demand (M = 5, r = 2), which mixes logarithms
-with interest rates, that seeding is worth **+79.26** in log-likelihood.
+matrix. On a five-variable system mixing logarithms with interest rates the difference is
+substantial; the measurement is recorded in [HOMOLOGATION.md](HOMOLOGATION.md).
 
 ## 4. The deterministic cases
 
@@ -207,11 +207,11 @@ optimisation is dominated by that misfit. On mink–muskrat the case-1 fit start
 at a log-likelihood of **−283** and climbs to **3.69**, travelling a distance no
 other configuration travels. Its results are correspondingly path-dependent.
 
-## 5. The conventions that bite
+## 5. Conventions that must be respected
 
-Every one of these has caused a real error in this codebase or in a sibling
-program. They are collected here because a convention that lives only in
-someone's head is a defect waiting for a maintainer.
+Each of the following has produced an error in this program or in a related one.
+They are recorded here because a convention that is not written down is a defect
+awaiting a maintainer.
 
 ### 5.1 The sign of the MA operator
 
@@ -219,12 +219,12 @@ someone's head is a defect waiting for a maintainer.
 level across the whole suite, because this is where these programs have burned
 themselves before:
 
-| link | convention | where |
-|---|---|---|
-| `elf` | `aₜ = (w−μ) − Σφⱼ(w−μ)_{t−j} + Σθⱼa_{t−j}` ⟹ `Θ(B) = I − Σθⱼ B^j` | `elfvarma.c:300` |
-| `fue`'s cast | `_unscramble` returns the coefficients of `1 − c₁B − c₂B²…`, passed to `elf` unchanged | `forecast.py:143-147`, `cast_us.py:305` |
-| `drtran`'s `expand_ma_factors` | the same, obtained by negating its work array | `drtran.c:770-772` |
-| `drvec`'s cast | `armax->theta[k] = C̄·Θ_k·C̄⁻¹` with `Θ_k` from `x[]` | `drvec.c`, block [6] |
+| | convention |
+|---|---|
+| the likelihood routine (Mauricio, 1997) | `aₜ = (w−μ) − Σφⱼ(w−μ)_{t−j} + Σθⱼa_{t−j}`, hence `Θ(B) = I − Σθⱼ B^j` |
+| the univariate program of the suite | expands its factored operators into `1 − c₁B − c₂B²…` and passes them on unchanged |
+| the transfer-function program of the suite | the same convention |
+| this program | `C̄ Θ_k C̄⁻¹`, with `Θ_k` taken from the parameter vector |
 
 All four agree. The empirical check, which is the one that would have caught a
 mismatch: seeding with **negated** `θ` makes the starting log-likelihood *worse*

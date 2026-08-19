@@ -12,22 +12,28 @@ via the transformation described in:
 ```
 drvec/
 ├── src/
-│   ├── drvec.c          ← VEC frontend (vec_shootx, init_guess, main)
-│   ├── elfvarma.c       ← Mauricio's AS 311 exact log-likelihood (untouched)
+│   ├── drvec.c          ← VEC front end (vec_shootx, init_guess, main)
+│   ├── elfvarma.c       ← exact log-likelihood, Algorithm AS 311 (untouched)
 │   ├── drvmlest.c       ← estimation driver (untouched)
-│   ├── qnewtopt.c       ← factored BFGS quasi-Newton (untouched)
-│   └── nlatools.c       ← linear algebra / GSL wrappers (untouched)
+│   ├── qnewtopt.c       ← factored quasi-Newton optimiser (untouched)
+│   ├── nlatools.c       ← linear algebra and memory management (untouched)
+│   ├── fue_pre_reader.c ← reader for the suite's parameter files
+│   ├── fue_bridge.c     ← operator expansion and deallocation
+│   └── diagnose_mv.c    ← multivariate residual diagnostics
 ├── include/
-│   └── main.h           ← Tvarma struct, function prototypes
-├── literature/
-│   ├── Mauricio.pdf     ← Mauricio (2006) paper
-│   └── *-AddOn.pdf      ← Additional material (AddOn)
-├── data/                ← .inp data files
-├── docs/
-│   └── LEGACY_NOTES.md  ← solutions rescued from legacy drv_project
+├── docs/                ← documentation; start at docs/README.md
+├── literature/          ← the works cited, listed in docs/REFERENCES.md
+├── datasets/            ← data, including synthetic cases of known rank
+├── tests/               ← run_tests.sh, fixtures, and the .pre reader harness
+├── tools/               ← comparison against the reference implementation
 ├── Makefile
 └── README.md
 ```
+
+**Documentation.** This file covers installation and the command line. The
+model, the inferential basis, the measured results and the development history
+are documented in [`docs/`](docs/README.md).
+
 
 ## The Mauricio transformation
 

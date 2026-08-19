@@ -9,7 +9,7 @@ from them, and what the suite's own conventions require of it. Established
 ## 1. The architecture, and where `drvec` sits in it
 
 The suite is a **bilevel optimisation with files as the interface**
-(`drtran-python/docs/LADDER_AS_OPTIMISATION.md`):
+(the suite's own account of the estimation ladder):
 
 ```
    art  identifies  ->  .inp   (a SPECIFICATION: these values are a starting point)
@@ -29,7 +29,7 @@ void est( void (*cast)( real *, struct Tvarma *, int *, int, int ), … );
 `est` does not know what a model is; it knows something will turn a parameter
 vector into a `Tvarma`. `drvec`'s `vec_shootx` has exactly that signature. The
 suite's own study of the cast puts it plainly: *«the cast is replaceable by
-construction»* (`atws/fue/fue/docs/CAST.md` §2).
+construction»* (the suite's documentation of the parameter translation step §2).
 
 ## 2. What `drvec` may and may not do with the files
 
@@ -51,7 +51,7 @@ because breaking it fails silently.
    everything after it with no error.
 4. **`drvec` never calls `fue`'s cast at run time.** That cast keeps its model,
    series and data in module-level globals, so it is not reentrant and two
-   cannot be alive at once (`CAST.md` §9). Only the numbers are read.
+   cannot be alive at once (the suite's documentation of the translation step, §9). Only the numbers are read.
 5. **`μ` follows the deterministic case of the joint model.** Letting `fue`
    estimate a mean the joint model cannot represent returns a `θ` conditioned on
    something that does not exist. Case 1 gets no mean at all.
@@ -143,10 +143,10 @@ exactly what `drvec` does.
 
 | what | from | changes |
 |---|---|---|
-| `src/fue_pre_reader.c`, `include/fue_pre_reader.h` | `drtran/src`, `drtran/include` | two: the `drtran.h` include is commented out (not needed), and **one bug fixed** — see below |
-| `ObsToDate`, `DateToObs` in `src/fue_bridge.c` | `drtran/src/diagnose.c:128`, `drtran/src/drtran.c:838` | none |
-| `expand_ar_factors`, `expand_ma_factors` in `src/fue_bridge.c` | `drtran/src/drtran.c:712`, `:779` | `DRTRAN_PI` → `M_PI` |
-| `struct Tusmodel` in `include/main.h` | `drtran/include/main.h` | copied byte for byte |
+| the `.pre` reader | the transfer-function program of the suite | two: one unnecessary header include removed, and **one defect fixed** — see below |
+| the date-conversion helpers | the transfer-function program of the suite | none |
+| the operator-expansion routines | the transfer-function program of the suite | one constant renamed |
+| the univariate model structure | the transfer-function program of the suite | copied unchanged |
 
 `struct Tseries` gained `numbering` and `refactor`, the two fields `drtran` added
 for FUE. That change is inert: `Tseries` is not referenced in any `.c` of
@@ -164,20 +164,20 @@ headers as well as here.
 of `fue`'s writers emit it always. On an annual `.pre` everything after it shifts:
 `refactor` comes back from uninitialised memory and the series is read two
 positions late, losing the last two observations — with `read_fue_pre` returning
-**success**. `fue`'s own C reader has the `else` branch that `drtran`'s lost on
-extraction (`fue.c:819-832`), so the defect entered with the extraction and is
-not Mauricio's.
+**success**. The univariate program's own reader retains the branch that the extracted copy
+lost, so the defect entered with the extraction and does not originate in the
+published code.
 
-Fixed in `drvec`'s copy and verified against `fue`'s parser; filed as **BUG-11**
-in `drtran-python/docs/BUGS.md`. It is not fixed in `drtran`, where it is live:
+Fixed in `drvec`'s copy and verified against `fue`'s parser; filed in the defect register of the program it came from. It is not fixed in `drtran`, where it is live:
 that program does read the series from the `.pre`.
 
 ## 6. What `drvec` gives back
 
 Two things the suite asked for and did not have:
 
-* **the parameter-vector layout is machine-checked.** `CAST.md`'s open question
-  №5 asks whether the packing order should be verifiable rather than documented;
+* **the parameter-vector layout is machine-checked.** The suite's documentation
+  of the translation step leaves open whether the packing order should be
+  verifiable rather than merely documented;
   `drvec`'s test suite asserts that the walk consumes exactly `npar` in 24
   configurations, and that check has already caught two real defects.
 * **a third independent confirmation** of the factorisation gate's constants.

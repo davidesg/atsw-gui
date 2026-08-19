@@ -2,9 +2,9 @@
 
 *Why the standard errors and χ² tests this program reports for `Λ` and `B₂` are the
 ones the theory licenses — and what, precisely, it is that `drvec` makes possible
-that a VAR-based route does not. A study of `literature/`, 2026-08-19.*
+that a VAR-based route does not. A study of the bibliography, 2026-08-19.*
 
-Everything asserted here is sourced to a paper in `literature/` and, where it is a
+Everything asserted here is sourced to a paper in the bibliography and, where it is a
 claim about the code, checked against a measurement. The chain is short and it
 holds together, but it has one condition that does all the work, so it is worth
 following in order rather than summarising.
@@ -13,7 +13,7 @@ following in order rather than summarising.
 
 ## 1. Phillips (1991): the result, and the condition that carries it
 
-`Phillips-OptimalInferenceCointegrated-1991.pdf`, *Econometrica* 59(2), 283–306.
+Phillips (1991a).
 
 > *«It is shown that full system maximum likelihood brings the problem of
 > inference within the family that is covered by the locally asymptotically mixed
@@ -24,7 +24,7 @@ following in order rather than summarising.
 > and that hypothesis tests may be conducted using standard asymptotic
 > chi-squared tests.»*
 
-And the condition is not decoration. From the conclusions:
+The condition is not incidental. From the conclusions:
 
 > *«**This condition is crucial.** If maximum likelihood does involve the
 > estimation of unit roots, then the likelihood no longer belongs to the LAMN
@@ -60,16 +60,16 @@ exactly the thing `drvec` is:
 > regression procedures … The latter approach turns out to be **most
 > convenient**.»*
 
-Read that twice. Phillips identifies the requirement — **joint ML of the ARMA
+Phillips thereby identifies the requirement — **joint ML of the ARMA
 parameters and `B`, which needs the exact likelihood of a general ARMA system** —
-judges it inconvenient, and goes the spectral route instead (Phillips 1988c,
+judges it inconvenient, and develops a spectral alternative instead (Phillips 1988c,
 leading to the fully-modified estimators).
 
-**The requirement he set aside is what `drvec` computes.**
+**That requirement is what this program computes.**
 
 ## 3. Mauricio (2006): the same triangular system, with the ARMA likelihood built
 
-`Mauricio.pdf`. The transformation produces, as equation (19),
+The transformation produces, as equation (19),
 
 ```
   ∇Y_2t          =  U_1t
@@ -143,7 +143,7 @@ It is tempting to say inference on the cointegrating vector is not available in
 Johansen's framework. **That is not what the sources say, and the correct version
 is sharper.**
 
-Johansen (1991), `Johansen-EstimationHypothesisTesting-1991.pdf`, own abstract:
+Johansen (1991), Johansen (1991), from its abstract:
 
 > *«We show that the asymptotic distribution of the maximum likelihood estimator
 > is **mixed Gaussian**. Once a certain eigenvalue problem is solved … one can
@@ -161,8 +161,8 @@ of his own dividing line — it *does* impose unit roots by construction:
 > coefficients.»*
 
 **So the difference is not the inference theory. It is the model class**, and there
-the result is a non-existence theorem. Cappuccio (1996),
-`Oxf Bull Econ Stat … Triangular Representation and Error Correction Mechanism.pdf`:
+the result is a non-existence theorem. Cappuccio and Lubian (1996),
+Cappuccio and Lubian (1996):
 
 > *«**there exist no reparameterization** of the ARMA model … that allows us to
 > write a VECM model … **with independent errors**. Therefore, if we assume that
@@ -173,7 +173,7 @@ the result is a non-existence theorem. Cappuccio (1996),
 > **estimation and inference on the cointegrating vectors** and on the short-run
 > parameters **will be somehow affected** by this model misspecification.»*
 
-Cappuccio also notes that both representations yield LAMN limits and permit
+Cappuccio and Lubian also note that both representations yield LAMN limits and permit
 optimal inference *when correctly specified*, and that weak exogeneity is what
 licenses the conditional route — which is the same condition Johansen and Swensen
 (2024) build on: weak exogeneity *«implies that the distribution factorizes in a
@@ -193,7 +193,7 @@ So, stated exactly:
 The escape is the interesting part, because it is measurable rather than
 arguable, and it is measured in [COMPARISON_JOHANSEN.md](COMPARISON_JOHANSEN.md):
 on samples of 90–113 observations the lags needed to whiten the residuals cost the
-rank test before the approximation converges. Mélard, Roy and Saidi (`TR0444.pdf`)
+rank test before the approximation converges. Mélard, Roy and Saidi (2004)
 report the same phenomenon from the other end — *«although the addition of the MA
 terms does not alter the asymptotic distribution of the likelihood ratio test
 statistic, **finite sample performance of the test is affected by the MA
@@ -201,7 +201,8 @@ terms**»*.
 
 ## 6. Confirmed in this implementation
 
-Theory that cannot be checked against the code is decoration. Two checks:
+A theoretical result that cannot be checked against the implementation is of
+little use here. Two checks were carried out:
 
 **Wald and LR must agree.** They are asymptotically equivalent under §1, so
 disagreement would indict the implementation. On simulated data with a known
@@ -228,9 +229,9 @@ the flattest directions — the ones with the largest standard errors. Mélard e
 al. state the right practice for the same class of model — *«their estimated
 standard errors are computed by inverting the observed Hessian matrix **at the
 final estimate** of the parameters»* — and `drtran` had already diagnosed and
-fixed it (`BRIDGE_DESIGN.md` §8c). `drvec` now offers **`-fdhess`**, which
-recomputes the Hessian at the optimum using the routine the engine itself left
-commented out (`drvmlest.c:104-107`), without modifying the engine.
+fixed it (established previously for the transfer-function program of the same suite). `drvec` now offers **`-fdhess`**, which
+recomputes the Hessian at the optimum by finite differences, using a routine the
+estimation driver itself provides for the purpose, and without modifying it.
 
 ## 7. What this does *not* establish
 
@@ -242,8 +243,8 @@ commented out (`drvmlest.c:104-107`), without modifying the engine.
   for the MA case. Optimality in the limit is not accuracy in the sample.
 * **Optimality is conditional on the specification being right.** `drvec` is the
   licensed case *when the data have an ARMA error structure of the order fitted*.
-  A misspecified VARMA has no better claim than a misspecified VECM — which is
-  why the residual diagnosis is printed with every fit
+  A misspecified VARMA has no stronger claim than a misspecified VECM, which is
+  why a residual diagnosis is reported with every fit
   ([USAGE.md](USAGE.md) §5).
 * **`r = M` is outside the model class.** If the series have no unit roots, the
   transformation has nothing to remove and the parameterisation cannot express the
@@ -254,7 +255,7 @@ commented out (`drvmlest.c:104-107`), without modifying the engine.
 
 ## 8. The genealogy, one line each
 
-The papers in `literature/`, and what each contributes to the chain:
+The papers in the bibliography, and what each contributes to the chain:
 
 | | contribution |
 |---|---|
@@ -264,7 +265,7 @@ The papers in `literature/`, and what each contributes to the chain:
 | **Mauricio AddOn (JAM106)** | the closed form of the transformation for M=2, r=1 — used here to verify the cast to 0.000e+00 |
 | **Johansen (1991)** | ML in the VECM: mixed-Gaussian limits, χ² tests on the cointegrating relations, non-standard rank test |
 | **Johansen & Swensen (2024)** | `α = Aψ` restrictions; weak exogeneity as the factorisation that licenses conditional inference |
-| **Cappuccio (1996)** | the non-existence result: no VECM with independent errors for an ARMA DGP, so Johansen's route is misspecified there |
+| **Cappuccio and Lubian (1996)** | the non-existence result: no VECM with independent errors for an ARMA DGP, so Johansen's route is misspecified there |
 | **Ahn & Reinsel (1990)** | reduced-rank estimation imposing the unit-root structure — the AR-only precedent, no MA |
 | **Mélard, Roy & Saidi (2004)** (`TR0444`) | the state-space route to the same exact likelihood; Hessian-at-the-optimum standard errors; finite-sample cost of MA terms |
 | **Hillmer & Tiao (1979)** | the exact likelihood of a stationary VARMA — the machinery the transformation delivers its system to |

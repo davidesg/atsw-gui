@@ -87,14 +87,14 @@ Checks of four different kinds, each independent of the others:
 | | what it establishes |
 |---|---|
 | **the engine against a hand-computed normal** | `elf` (AS 311) agrees to **2·10⁻⁸** on a multivariate normal computed by hand |
-| **the transformation against the paper's own closed form** | Mauricio's AddOn gives Φ̄ᵢ in closed form for M = 2, r = 1; term by term the difference is **0.000e+00** |
+| **the transformation against the paper's own closed form** | Mauricio (2005) gives Φ̄ᵢ in closed form for M = 2, r = 1; term by term the difference is **0.000e+00** |
 | **the factorisation identity** | with `r = 0` and diagonal structure the exact likelihood factorises, and the joint fit equals the sum of the univariate fits to **1e−9**. Three independent programs now agree on the two univariate constants |
 | **published rank results** | the sequential LR test recovers `r = 1` on mink–muskrat and `r = 2` on UK consumption, the latter matching `urca::ca.jo` |
 
 And the limits, stated because a document that lists only what works is an
 advertisement:
 
-* the published EML log-likelihoods of Mauricio (2006) Table 5 **are not
+* the published EML log-likelihoods of Table 5 of Mauricio (2006) **are not
   reproduced**, and the discrepancy is localised but not closed
   ([DEVELOPMENT_RECORD.md](DEVELOPMENT_RECORD.md) §2);
 * the acceptance criterion on |Σ̂| **is met in agreement but not in level**;
@@ -106,25 +106,32 @@ advertisement:
 
 ## The documentation
 
+Read in this order for a first acquaintance; consult by column thereafter.
+
 | | |
 |---|---|
-| [GETTING_STARTED.md](GETTING_STARTED.md) | build, first model, reading the `.out` |
-| [MODEL.md](MODEL.md) | the model class, the parameter vector, and the conventions that bite |
-| [INFERENCE.md](INFERENCE.md) | why inference on the cointegrating coefficients is valid **and optimal** here — the literature, followed in order |
+| [GETTING_STARTED.md](GETTING_STARTED.md) | build, first model, reading the output file |
+| [MODEL.md](MODEL.md) | the model class, the parameter vector, and the conventions it depends on |
+| [INFERENCE.md](INFERENCE.md) | why inference on the cointegrating coefficients is valid, and optimal, in this parameterisation |
 | [USAGE.md](USAGE.md) | every option, the input format, and worked examples |
-| [SUITE_INTEGRATION.md](SUITE_INTEGRATION.md) | the ladder, its two contracts, and the provenance of the borrowed code |
-| [CONVERGENCE.md](CONVERGENCE.md) | what the optimiser reports, and how much to believe it |
-| [HOMOLOGATION.md](HOMOLOGATION.md) | which cases it reproduces, to what tolerance, and which it does not |
-| [COMPARISON_JOHANSEN.md](COMPARISON_JOHANSEN.md) | against the reference implementation: same specification, then each at its optimum |
-| [coint_vector.html](coint_vector.html) | the same comparison as a chart: eight pairs, both estimators, with intervals |
-| [TESTING.md](TESTING.md) | the test suite: what it protects, measured by mutation |
-| [DEVELOPMENT_RECORD.md](DEVELOPMENT_RECORD.md) | the process: what was tried, what was measured, what was rejected |
+| [CONVERGENCE.md](CONVERGENCE.md) | what the optimiser reports, and how far it should be trusted |
+| [HOMOLOGATION.md](HOMOLOGATION.md) | **the register of measured results**: what the program reproduces, to what tolerance, and what it does not |
+| [COMPARISON_JOHANSEN.md](COMPARISON_JOHANSEN.md) | against the reference implementation, at the same specification and at each one's optimum |
+| [coint_vector.html](coint_vector.html) | that comparison as a figure: eight pairs, both estimators, with intervals |
+| [SUITE_INTEGRATION.md](SUITE_INTEGRATION.md) | the file conventions of the estimation suite, and the provenance of borrowed code |
+| [TESTING.md](TESTING.md) | the test suite, and what it is measured to protect |
+| [DEVELOPMENT_RECORD.md](DEVELOPMENT_RECORD.md) | the development history: what was attempted, measured, and rejected |
+| [REFERENCES.md](REFERENCES.md) | the bibliography |
 
-The Spanish documents in this directory — `ANALISIS_PRELIMINAR.md`,
-`PLAN_BETA.md`, `ESTUDIO_BVECM_vs_DRVEC.md`, `LEGACY_NOTES.md`,
-`ENCUADRE_ESTUDIO.md` — are the **working record**: the diagnosis as it was made,
-the plan with its exit criteria, and the study of the legacy program. They are
-the primary source for everything asserted here.
+**One convention governs the set.** Every quantitative result has a single home,
+[HOMOLOGATION.md](HOMOLOGATION.md); where another document needs a figure it
+states the qualitative point and refers there. This was adopted after a corrected
+measurement had to be traced through five documents.
+
+A working record in Spanish accompanies these — the preliminary diagnosis, the
+development plan with its exit criteria, the study of the predecessor program,
+and notes on the legacy code. It is the primary source for what is asserted here,
+and is not intended for a reader approaching the program for the first time.
 
 ---
 

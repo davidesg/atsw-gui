@@ -30,12 +30,12 @@ not a valid measurement, because then the baselines fail for the wrong reason:
 | sign of `Λ` in `Φ̄₁` (the core of the transformation) | **14** |
 | the output ignores `-diagma` | 4 |
 | the `.inp` writer drops the annual-difference section | 2 |
-| the `.pre` reader's annual bug restored (drtran BUG-11) | 2 |
+| the reader defect on annual files, reinstated | 2 |
 | `B₂` read transposed in `vec_shootx` (the **estimator**) | 1 |
 | the LDL′ cross term negated, on M = 3 | 1 (**0** on M = 2) |
 | the normalisation alarm disabled | 1 |
 | the residuals not computed for the diagnosis | 1 |
-| the portmanteau p-value back to `1 − chisq` (drtran BUG-13) | 1 (**0** on two other cases) |
+| the portmanteau p-value returned to the inherited expression | 1 (**0** on two other cases) |
 | the Σ positive-definiteness check removed | **0** ← not caught |
 | `B₂` fill transposed in the **printer** | **0** ← not caught |
 
@@ -60,7 +60,7 @@ invisible. A test written on the smallest case would have been decoration.
   changes the likelihood. That case had to be added — with `s = 1`, which is what
   every earlier fixture had, transposing is a no-op.
 
-The `.pre` reader's annual bug is worth a note: through the **estimation** path
+The reader defect on annual files deserves comment: through the **estimation** path
 it scored zero, because seeding reads only the MA block, which sits earlier in
 the file than the section the bug corrupts. It is caught by a dedicated harness,
 `tests/pre_probe.c`, which is the only thing that reads the series and the
@@ -92,7 +92,8 @@ their provenance recorded in `tests/fixtures/README.md`.
 VALGRIND=1 make test
 ```
 
-Off by default so the suite is deterministic on any machine, but not decoration:
+Disabled by default so that the suite is deterministic on any machine. It is
+not merely precautionary:
 the first time it was run it found **two real defects**.
 
 * The multi-start block re-allocated the VARMA structure while the first
@@ -104,7 +105,7 @@ the first time it was run it found **two real defects**.
 
 It also verifies something that cannot be verified any other way:
 `free_fue_pre`, the deallocator written for the vendored `.pre` reader. That
-reader has none anywhere in the suite (`drtran`'s BUG-12), so the deallocator is
+reader has none anywhere in the suite, so the deallocator is
 new code written against someone else's allocator — and valgrind catches
 over-freeing as well as leaking, which is the only real check on it.
 
@@ -117,7 +118,7 @@ DRVEC=path/to/mutant tests/run_tests.sh    # check the suite bites
 RUN_TIMEOUT=60 tests/run_tests.sh          # per-run timeout, default 30 s
 ```
 
-The timeout is not decoration. An ill-conditioned surface can send the optimiser
+The per-run timeout is functional. An ill-conditioned surface can send the optimiser
 into a region where each likelihood evaluation is very slow, and that has
 happened for real: a reparameterisation tried during development turned a
 0.04-second fit into one that had not finished in 90 seconds. Without a timeout

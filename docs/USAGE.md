@@ -132,7 +132,7 @@ cointegrating coefficient with the **wrong sign**, while Johansen picked `r = M`
 — its way of saying the same thing. **Check the order of integration of the
 series before reading a rank from here.**
 
-*A caveat worth knowing:* the eigenvalues of `Π̂` are sometimes quoted as a rank
+*A caveat:* the eigenvalues of `Π̂` are sometimes quoted as a rank
 criterion. Mélard, Roy and Saidi (2004) show that the assumption on `Φ(1)` does
 **not** imply what that criterion assumes. Treat them as an indication; the LR
 test is the instrument.

@@ -101,7 +101,7 @@ The cointegrating vector, normalised on the `Y₁` block. Here it says that
 `log(mink) − 0.2405·log(muskrat)` is stationary. **Note the sign convention:**
 `Wₜ = Y_{1t} + B₂′Y_{2t}`, so this `B₂` is Johansen's `β` with the opposite sign.
 
-## Three things worth doing next
+## Three further steps
 
 **Test the rank instead of assuming it:**
 
@@ -124,7 +124,7 @@ bin/drvec datasets/mauricio/mink_muskrat 2 1 1 -case 2 -weakex 2
 Mink does not adjust, at the 5 % level: it is weakly exogenous, and the muskrat
 equation carries the correction.
 
-**Get a second opinion on a fit that stopped badly:**
+**Obtain a second estimate for a fit that terminated poorly:**
 
 ```sh
 bin/drvec datasets/mauricio/mink_muskrat 2 1 1 -case 2 -fixb2
@@ -137,5 +137,5 @@ difficulty lives in that one direction.
 ## Where to go from here
 
 * [USAGE.md](USAGE.md) — every option and the input format
-* [MODEL.md](MODEL.md) — what is being estimated, and the conventions that bite
+* [MODEL.md](MODEL.md) — what is being estimated, and the conventions it depends on
 * [CONVERGENCE.md](CONVERGENCE.md) — **read before trusting a fit**

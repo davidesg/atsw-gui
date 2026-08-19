@@ -996,6 +996,42 @@ r = 1, que es el que decide si hay cointegración y el único imprescindible.
 - Revisar los `.inp` de `data/` uno a uno (§8.3 de `ANALISIS_PRELIMINAR`): sólo
   `AL.inp` está identificado como layout antiguo.
 
+#### F5.1 — Consolidación de la documentación *(2026-08-19)*
+
+**El conjunto publicable son doce documentos en inglés**, con `docs/README.md`
+como entrada y un orden de lectura declarado. El registro de trabajo en castellano
+—éste, `ANALISIS_PRELIMINAR`, `ESTUDIO_BVECM_vs_DRVEC`, `LEGACY_NOTES`,
+`ENCUADRE_ESTUDIO`— queda identificado como tal: es la fuente primaria, no
+material de lectura para quien llega al programa.
+
+**Citas en forma académica.** Se ha añadido `REFERENCES.md` con la bibliografía
+completa, verificada contra las fuentes o contra la lista de referencias de
+Mauricio (2006), y con lo inédito identificado como tal —Mauricio (2005),
+Treadway (2001), Guerrero y García-Hiernaux (2026), y la propia suite como
+software inédito—. En los documentos publicables se han sustituido:
+
+- las rutas a PDF de `literature/` por Autor (año);
+- las referencias a documentación interna de los otros programas de la suite por
+  descripciones de su contenido;
+- las citas a fichero y línea de código ajeno por descripciones del origen, que
+  es lo que un lector externo puede comprobar.
+
+Comprobado que **todos los enlaces entre documentos resuelven** y que **toda cita
+Autor (año) tiene entrada en la bibliografía**.
+
+**Registro revisado.** Se han eliminado los giros coloquiales que funcionaban
+entre nosotros pero no en un documento publicable —«conventions that bite», «the
+honest part», «is not decoration», «a lucky draw», «caught people out»— y los
+títulos que dependían de ellos.
+
+**Una convención de coherencia, adoptada por la vía dura.** Toda cifra medida
+tiene **un único domicilio**, `HOMOLOGATION.md`; los demás documentos enuncian el
+punto cualitativo y remiten allí. Se adoptó después de que una corrección —la del
+sobre-rechazo, de «tres veces» a «seis veces» el nivel nominal— hubiera que
+propagarla a cinco documentos. Quedaban tres cifras repetidas en dos documentos
+cada una; dos se han remitido al registro y la tercera es el titular del propio
+registro.
+
 **Criterios de salida de beta:**
 
 | # | criterio | estado hoy |
@@ -1008,7 +1044,7 @@ r = 1, que es el que decide si hay cointegración y el único imprescindible.
 | 6 | Todo termcode 3 residual **explicado**, no necesariamente eliminado | **✔**: cada ajuste emite una **nota de convergencia** que interpreta la parada (la contingencia de R1, como `Fit.convergence_note` de `drtran`), y de paso corrige dos lecturas heredadas — que `ifault` no es convergencia y que parar en `steptol` merece aviso. El porqué está medido en `CONVERGENCE.md` |
 | 6b | α = Aψ soportado, con LR y grados de libertad correctos | **✔ (F3.1)** con `-alpha`/`-weakex`, g.l. (M−sa)·r, y guarda de rango sobre A |
 | 6c | La elección del bloque Y₁ **diagnosticada o declarada** como no verificada | **✔ (F3.1)**: diagnóstico libre de unidades, con caso construido que lo dispara y test en las dos direcciones |
-| 7 | Registro de homologación y documento de entrada | **✔**: `docs/HOMOLOGATION.md` (qué reproduce, con qué tolerancia y qué no) y el conjunto de documentación en inglés con `docs/README.md` de entrada |
+| 7 | Registro de homologación y documento de entrada | **✔ (F5.1)**: `HOMOLOGATION.md` como registro y fuente única de las cifras medidas, y doce documentos en inglés con `docs/README.md` de entrada, bibliografía académica en `REFERENCES.md` y enlaces y citas comprobados |
 
 ---
 

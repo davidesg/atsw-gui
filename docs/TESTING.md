@@ -7,7 +7,7 @@ by mutation: real defects are put back and the failures counted.*
 
 ---
 
-## 1. Eight kinds of check, in increasing order of value
+## 1. Nine kinds of check, in increasing order of value
 
 | | what it establishes |
 |---|---|
@@ -18,7 +18,8 @@ by mutation: real defects are put back and the failures counted.*
 | **5. the bridge** | what `drvec` writes must be readable by `fue`, and what it reads must land in the right place: pure ASCII, every section present, the reader round-tripped against the file itself, and the two ladder contracts |
 | **6. interpretation** | `α = Aψ`: `-weakex` and the equivalent `-alpha` file must agree exactly; the restricted fit cannot beat the free one; a rank-deficient `A` is refused before estimating; `Σ = P D P′` must reconstruct `Σ`; multi-start must be monotone; the convergence note must agree with the optimiser's banner; and the normalisation alarm is checked in **both** directions |
 | **7. known truth** | the rank test on data generated to have a known rank — every other check of `-lrtest` compares against another program's answer, these compare against the truth |
-| **8. memory** | valgrind over the main paths; opt-in, see §3b |
+| **8. roots and the boundary** | the moduli of the estimated AR and MA roots, and the invertibility boundary the likelihood enforces. Two things: that a model with `q ≥ 2` estimates at all, which is the regression for the allocation defect that made it abort ([SUITE_INTEGRATION.md](SUITE_INTEGRATION.md) §5); and that the unit-root alarm and the `-fdhess` boundary diagnosis fire where the optimum binds and stay silent where it does not — an alarm with no negative case is not an alarm |
+| **9. memory** | valgrind over the main paths; opt-in, see §3b |
 
 ## 2. What it actually catches
 

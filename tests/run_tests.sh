@@ -40,7 +40,9 @@
 #                   answer; these compare against the truth.
 #   7b. BOOTSTRAP   -bootstrap must give ordered, usable critical values and must
 #                   fill the case-3 gap where the asymptotic tables have none.
-#   8. MEMORY       valgrind over the main paths.  OPT-IN (VALGRIND=1) so the
+#   8. ROOTS        the AR/MA roots at the optimum, the invertibility boundary
+#                   they can sit on, and the q>=2 heap-corruption regression.
+#   9. MEMORY       valgrind over the main paths.  OPT-IN (VALGRIND=1) so the
 #                   suite is deterministic anywhere.  It has already caught one
 #                   real leak in the multi-start block.
 #
@@ -726,7 +728,66 @@ got=$(selected_rank "$TMP/case.out")
                  || bad "rank on rank2.inp" "selected r = $got, truth is 2"
 echo
 
-# ================================================== 8 MEMORY (opt-in) ==
+# ================================ 8 OPERATOR ROOTS AND THE BOUNDARY ==
+echo "[8] operator roots, and the invertibility boundary the likelihood enforces"
+# WHY THIS BLOCK EXISTS.  Two separate things, both found on 2026-08-19.
+#
+#  (a) tensor() in nlatools.c allocated (nrh+1) row pointers and then wrote at
+#      t[nrl..nrh].  elf() allocates gamwa as tensor(-q+1, 0, ...), so with
+#      q >= 2 the lower bound is NEGATIVE and the write landed BEFORE the
+#      block: heap corruption and an abort, on every model with two or more MA
+#      lags.  The first check below is that regression, and it is worth stating
+#      plainly that until it was fixed NO q >= 2 model could be estimated at
+#      all -- which silently capped every specification search at q <= 1.
+#
+#  (b) The roots report itself.  On these data the MA operator is driven onto
+#      the invertibility boundary that elf() enforces (chekma rejects a
+#      companion eigenvalue of 1.00005 or more), so the reported fit is a
+#      CONSTRAINED optimum.  That is what makes the unconstrained Hessian
+#      undefined there, and -fdhess must SAY so rather than blame the
+#      optimiser.  Checked in both directions: a case that binds and a case
+#      that does not.
+
+run "$MM" 2 2 1 -case 2
+got=$(logelf_of "$TMP/case")
+if [ -n "$TIMEDOUT" ]; then bad "q=2 estimates" "timed out"
+elif [ -z "$got" ]; then bad "q=2 estimates (tensor() heap corruption)" "no logelf: $STDERR"
+else ok "q=2 estimates, logelf = $got"; fi
+
+# The roots block must be there, and must carry m*p and m*q moduli.
+run "$MM" 2 1 1 -case 2
+nar=$(grep -a 'AR (Phi)'   "$TMP/case.out" | sed 's/.*AR (Phi)//'   | wc -w)
+nma=$(grep -a 'MA (Theta)' "$TMP/case.out" | sed 's/.*MA (Theta)//' | wc -w)
+[ "$nar" -eq 4 ] && ok "AR roots: 4 moduli for m=2, p=2" \
+                 || bad "AR roots" "expected 4 moduli, got $nar"
+[ "$nma" -eq 2 ] && ok "MA roots: 2 moduli for m=2, q=1" \
+                 || bad "MA roots" "expected 2 moduli, got $nma"
+
+# The alarm must FIRE where the optimum binds ...
+if grep -aq 'A root sits on the unit circle' "$TMP/case.out"; then
+    ok "the unit-root alarm fires on the binding fit"
+else bad "unit-root alarm" "no alarm on a fit whose MA modulus is 0.99995"; fi
+
+run "$MM" 2 1 1 -case 2 -fdhess
+if printf '%s' "$STDERR" | grep -q 'lies ON the boundary'; then
+    ok "-fdhess names the boundary as the cause"
+else bad "-fdhess diagnosis" "expected the boundary message, got: $STDERR"; fi
+
+# ... and must be SILENT where it does not.  An alarm with no negative case is
+# not an alarm; this is the same discipline as the normalisation check in 6.
+if [ -f datasets/synthetic/rank2.inp ]; then
+    run datasets/synthetic/rank2.inp 2 0 2 -case 2 -fdhess
+    if grep -aq 'A root sits on the unit circle' "$TMP/case.out"; then
+        bad "unit-root alarm" "fired on a fit with no root near the circle"
+    elif printf '%s' "$STDERR" | grep -q 'lies ON the boundary'; then
+        bad "-fdhess" "reported a boundary that is not there"
+    elif grep -aq 'finite-difference Hessian AT the optimum' "$TMP/case.out"; then
+        ok "-fdhess succeeds, and is silent, where nothing binds"
+    else bad "-fdhess" "neither succeeded nor explained itself"; fi
+fi
+echo
+
+# ================================================== 9 MEMORY (opt-in) ==
 # Off by default so `make test` is deterministic on any machine; run it with
 #     VALGRIND=1 make test
 # Not decoration: the multi-start block leaked 1080 bytes when it was written --
@@ -740,7 +801,7 @@ echo
 # for someone else's allocator gets verified: valgrind catches over-freeing as
 # well as leaking.
 if [ "${VALGRIND:-0}" = "1" ]; then
-    echo "[8] memory (valgrind)"
+    echo "[9] memory (valgrind)"
     if ! command -v valgrind >/dev/null 2>&1; then
         bad "valgrind" "VALGRIND=1 was requested but valgrind is not installed"
     else
@@ -759,6 +820,7 @@ if [ "${VALGRIND:-0}" = "1" ]; then
         vg_clean "no leaks: alpha = A*psi"    "$MM" 2 1 1 -case 2 -weakex 1
         vg_clean "no leaks: r=0 diagonal"     "$MM" 2 1 0 -case 1 -diagar -diagma -diagcov
         vg_clean "no leaks: lrtest"           "$MM" 2 1 0 -case 2 -lrtest
+        vg_clean "no leaks: q=2 (negative tensor bound)" "$MM" 2 2 1 -case 2
         vg_clean "no leaks: seeding from .pre" "$MM" 2 1 0 -case 1 \
                  -diagar -diagma -diagcov -seedybar tests/fixtures/mmdiag
     fi

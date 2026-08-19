@@ -409,12 +409,30 @@ int **imatrix( long nrl, long nrh, long ncl, long nch )
    return( m );
 }
 
+/* DELTA drvec: the row dimension was allocated as (nrh + 1) pointers, indexed
+   from zero, and then written at t[nrl..nrh].  That is sound while nrl >= 0 --
+   it simply over-allocates -- but elf() allocates gamwa as
+   tensor( -q+1, 0, 1, m, 1, m ), whose lower bound is NEGATIVE as soon as the
+   model has q >= 2, and the write then landed BEFORE the block: heap
+   corruption, so no VARMA with two or more MA lags could be estimated at all.
+
+   The fix keeps this file's convention -- allocate from index zero and free the
+   base -- and departs from it only where that convention cannot reach.  With
+   off = min(nrl, 0), the block covers indices off..nrh and the base is advanced
+   by -off, which is zero or positive, so the adjusted pointer always lies
+   INSIDE the block; free_tensor removes the same amount.  Note what this means
+   for nrl >= 0, which is every call site in drvec itself: off is zero, the
+   allocation is (nrh + 1) as before and the pointer is not moved at all, so the
+   behaviour is unchanged and no computed value can differ.  ncl and ndl are
+   still assumed >= 0, which holds everywhere.                                */
 real ***tensor( long nrl, long nrh, long ncl, long nch, long ndl, long ndh )
 {
    long i, j, nrow = nrh - nrl + 1, ncol = nch - ncl + 1;
-   real ***t = (real ***)calloc( (size_t)(nrh + 1), sizeof(real **) );
+   long off = ( nrl < 0 ) ? nrl : 0;
+   real ***t = (real ***)calloc( (size_t)(nrh - off + 1), sizeof(real **) );
    real **planes; real *data;
    if ( !t ) nrerror( "ALLOCATION FAILURE 1 in tensor()" );
+   t -= off;
    planes = (real **)calloc( (size_t)(nrow * (nch + 1)), sizeof(real *) );
    if ( !planes ) nrerror( "ALLOCATION FAILURE 2 in tensor()" );
    data = (real *)calloc( (size_t)(nrow * ncol * (ndh + 1)), sizeof(real) );
@@ -436,7 +454,8 @@ void free_imatrix( int **m, long nrl, long nrh, long ncl, long nch )
    { if ( m ) { free( m[nrl] ); free( m ); } }
 void free_tensor( real ***t, long nrl, long nrh, long ncl, long nch,
                   long ndl, long ndh )
-   { if ( t ) { free( t[nrl][ncl] ); free( t[nrl] ); free( t ); } }
+   { if ( t ) { long off = ( nrl < 0 ) ? nrl : 0;      /* see tensor() */
+                free( t[nrl][ncl] ); free( t[nrl] ); free( t + off ); } }
 
 real rmax( real a, real b )
 

@@ -171,6 +171,40 @@ published code.
 Fixed in `drvec`'s copy and verified against `fue`'s parser; filed in the defect register of the program it came from. It is not fixed in `drtran`, where it is live:
 that program does read the series from the `.pre`.
 
+### The engine, and the one correction it required
+
+The four engine files are carried unchanged in their numerical content: the
+exact likelihood, the estimation driver and the quasi-Newton optimiser are
+byte-for-byte as published, and `elf()` in particular is never touched. One
+correction was necessary in the supporting allocator library, and it is recorded
+here because the claim "the engine is unmodified" would otherwise be imprecise.
+
+`tensor()` allocated `nrh + 1` row pointers and then wrote at `t[nrl…nrh]`. For
+a non-negative lower bound this merely over-allocates, which is why it had never
+shown. The likelihood routine, however, allocates the cross-covariance array
+with a lower bound of `−q + 1`, which is **negative** as soon as the model has
+two or more moving-average lags; the write then landed before the start of the
+block. The result was heap corruption and an abort, so no model with `q ≥ 2`
+could be estimated at all. The fix keeps this library's convention — allocate
+from index zero and free the base — and departs from it only where that
+convention cannot reach: the block is extended to cover the negative indices and
+the base advanced by the same amount, which the deallocator removes.
+
+Two properties of the correction matter for homologation. It changes no computed
+value, and for the stronger of the two possible reasons: where the lower bound
+is non-negative — every call site outside the likelihood routine — the
+allocation and the pointer are *identical* to what they were, not merely
+equivalent. And it is
+verified rather than asserted — the whole regression suite, the golden
+log-likelihood baselines included, is unchanged, and the previously fatal
+configuration now runs clean under `valgrind`. Both are permanent checks
+([TESTING.md](TESTING.md)).
+
+The consequence for results already reported is stated in
+[HOMOLOGATION.md](HOMOLOGATION.md) §3b: specification searches conducted before
+the correction could not reach `q ≥ 2`, and were bounded by a defect rather than
+by a modelling decision.
+
 ## 6. What `drvec` gives back
 
 Two things the suite asked for and did not have:

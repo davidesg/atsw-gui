@@ -69,6 +69,50 @@ appears to be natural to CI» — and the suite's separate study of the optimise
 (the optimiser study carried out for the transfer-function program of the same suite) tried and rejected three variants of
 the scaling on evidence.
 
+## 2b. A third fact: the reported optimum can lie on a boundary
+
+The exact likelihood is defined only where the moving-average operator is
+invertible, and the engine enforces it: the parameter point is rejected once a
+companion eigenvalue of `Θ(B)` reaches 1.00005 in modulus. On the mink–muskrat
+data the optimiser is driven against that constraint and stops there. The
+behaviour is not particular to one set-up — cases 1, 2 and 3, with and without
+`-diagma`, and with sixty restarts, all stop with the smallest root modulus of
+`Θ(B)` equal to 0.99995, which is the boundary itself.
+
+The consequence is not cosmetic. A point on the boundary is a **constrained**
+optimum, and three familiar statements cease to apply to it:
+
+* the gradient of the unconstrained problem need not vanish, so termination on
+  termcode 3 is what one should expect there rather than a symptom to be cured;
+* the unconstrained Hessian is undefined in the binding direction, which is why
+  `-fdhess` cannot form it and reports the boundary as the reason
+  ([INFERENCE.md](INFERENCE.md) §6);
+* the standard errors describe curvature along a direction the estimate is not
+  free to move in.
+
+Every fit therefore reports the moduli of the roots of both operators and marks
+any root lying on the unit circle:
+
+```
+Roots of the AR and MA operators (moduli; the model is stationary and
+invertible when every modulus exceeds one):
+
+  AR (Phi)          inf    1.17582    1.17582    1.74400
+  MA (Theta)    1.06441    0.99995*
+```
+
+An infinite modulus is not a defect: it arises whenever the last coefficient
+matrix of the operator is singular.
+
+A moving-average root on the unit circle has a specific reading in this model.
+`drvec` places `∇Y₂ₜ` in `Ȳₜ`, so `s = M − r` series are differenced by
+construction; when the data do not require that differencing, the moving-average
+operator absorbs it with a root on the unit circle. This is the classical
+signature of overdifferencing (Plosser and Schwert, 1977), and here it is also a
+statement about the declared rank, since it is the rank that fixes how many
+series are differenced. Declaring a rank below the true one produces it, so the
+rank is what to re-examine first.
+
 ## 3. What to do about it
 
 In descending order of usefulness:

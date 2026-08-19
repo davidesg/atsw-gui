@@ -119,7 +119,7 @@ SRC/drvec/
 │   ├── elfvarma.c       ← Mauricio's AS 311 exact log-likelihood (untouched)
 │   ├── drvmlest.c       ← estimation driver (untouched)
 │   ├── qnewtopt.c       ← factored BFGS quasi-Newton (untouched)
-│   └── nlatools.c       ← linear algebra / GSL wrappers (untouched)
+│   └── nlatools.c       ← linear algebra / allocators (one allocation fix)
 ├── include/
 │   └── main.h           ← Tvarma struct, function prototypes
 ├── literature/
@@ -284,7 +284,8 @@ The legacy enforces $\theta_{11}=\theta_{12}=\theta_{21}=0$, only $\theta_{22}$ 
 
 | Item | Status |
 |---|---|
-| Motor EML (elfvarma, drvmlest, qnewtopt, nlatools) | Copied from drvarma v.04.1, untouched |
+| Motor EML (elfvarma, drvmlest, qnewtopt) | Copied from drvarma v.04.1, untouched |
+| nlatools | Copied from drvarma v.04.1; one allocation defect corrected in `tensor()`, which changes no computed value (SUITE_INTEGRATION.md §5) |
 | `vec_shootx()` — free VARMA version | Working, validated on synth |
 | `vec_shootx()` — Mauricio parametrization | Implemented, has Q bug |
 | `calc_nparametrs()` — Mauricio version | Done |

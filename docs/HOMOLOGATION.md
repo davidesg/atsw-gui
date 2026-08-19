@@ -232,6 +232,46 @@ invertibility gate, or 0.002294 without it. Both `drvec` and the reference stop
 *at* that gate — measured, `max|λ(Θ₁)| = 1.000050` in both — so what separates
 them is which point of the boundary is reached, not the boundary itself.
 
+That the estimate rests on the gate is no longer a fact recorded only here: every
+fit now reports the moduli of the roots of both operators and marks any root on
+the unit circle. It has also been established to be general rather than
+particular to one set-up. Cases 1, 2 and 3, with and without `-diagma`, and with
+sixty restarts, all stop with the smallest modulus of `Θ(B)` equal to 0.99995;
+only `p = 1`, which fits far worse, escapes it. The reported optimum for these
+data is therefore a **constrained** one, which is the reason the unconstrained
+Hessian cannot be formed there and `-fdhess` declines to report standard errors
+from it ([CONVERGENCE.md](CONVERGENCE.md) §2b).
+
+## 3b. A limitation that bounded the specification searches
+
+Until 2026-08-19 no model with `q ≥ 2` could be estimated: an allocation defect
+in the engine's supporting library corrupted the heap and aborted the run
+whenever the likelihood routine requested its cross-covariance array with a
+negative lower bound, which it does for two or more moving-average lags
+([SUITE_INTEGRATION.md](SUITE_INTEGRATION.md) §5).
+
+The consequence for the register is limited but must be stated. Every
+specification search reported above — including the comparison against Johansen
+at each procedure's own optimum — ranged over `q ≤ 1`, and did so because of a
+defect rather than a modelling decision. The comparisons remain valid as
+comparisons, since the criterion was applied identically on both sides and
+Johansen's procedure admits no moving-average term at all; what cannot be
+claimed from them is that `q ≤ 1` was selected against the `q = 2` alternative.
+
+On mink–muskrat the alternative is now measurable, and it does not settle the
+question either way:
+
+| `p = 2, r = 1`, case 2 | log-likelihood | `npar` | AIC | BIC |
+|---|---|---|---|---|
+| `q = 1` | 6.4786 | 14 | 0.2466 | **0.7311** |
+| `q = 2` | 11.8573 | 18 | **0.2014** | 0.8243 |
+
+The Akaike criterion prefers the larger model and the Schwarz criterion the
+smaller, so the two disagree and the question stays open. The
+moving-average operator remains on the invertibility boundary — two of its four
+roots at 0.99995 — so the enlargement does not relieve the condition that §3
+identifies.
+
 ## 4. Cases run without an external reference
 
 These establish that the program handles the shape, not that the answer is right.

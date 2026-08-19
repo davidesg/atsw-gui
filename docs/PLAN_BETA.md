@@ -27,7 +27,7 @@ De ahí salen cuatro requisitos, y el orden no es negociable:
 
 Cuando escribí esto teníamos parte de (1) y (3), nada de (2) y **nada de (4)**,
 que era el riesgo de proceso más grande: todo estaba comprobado a mano. **F0 cerró
-(4)** — hay batería (`make test`, 65 comprobaciones, 71 con el bloque de memoria) y muerde. Sigue faltando (2)
+(4)** — hay batería (`make test`, 77 comprobaciones, 84 con el bloque de memoria) y muerde. Sigue faltando (2)
 por completo, y (1) es lo que F1 y F2 empujan.
 
 ---
@@ -1036,7 +1036,7 @@ registro.
 
 | # | criterio | estado hoy |
 |---|---|---|
-| 1 | `make test` verde, con la puerta diagonal dentro | **✔ (F0)** 65 comprobaciones (71 con memoria), medidas por mutación |
+| 1 | `make test` verde, con la puerta diagonal dentro | **✔ (F0)** 77 comprobaciones (84 con memoria), medidas por mutación |
 | 2 | \|Σ̂\| concordante entre las cuatro configuraciones **y** en el nivel objetivo | **✔ en la concordancia, casi en el nivel**: con `-multistart 60` la dispersión cae a **0.000014** y las cuatro caen en 0.002344–0.002358, un **1.6 %** por encima de la referencia global (0.002311) frente al 7 % de antes. Ver F5.1 |
 | 3 | Siembra desde `.pre`, con logL ≥ arranque en frío | **✔ en el peldaño diagonal, ✘ por encima (F2.8)**: con r = 0 el `.pre` transporta el óptimo univariante y los dos contratos de la escalera se cumplen (cruce 1.8e-5, certificado +2.4e-7 ≥ 0, los dos con test). Con r ≥ 1 la información univariante no vale: la semilla arranca 17 unidades peor, por sobredeterminación del AR y por el acoplamiento de C̄ y Λ |
 | 4 | Formas BEC/Π y exogeneidad débil, con o sin s.e. declarado | **✔ (F3.1)**: Π = ΛB′ con autovalores y la advertencia de circularidad, exogeneidad débil por LR, y la triangularización Σ = PDP′ con test de reconstrucción |

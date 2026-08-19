@@ -586,6 +586,9 @@ extern void fdhess(real (*func)(real *), int n, real *x, real f, real eta,
  *  la covarianza no depende de c.  Se normaliza por el valor en el optimo, que
  *  deja el objetivo en 1 y es lo mas comodo numericamente.                    */
 static struct Tvarma  fdh_varma;
+static int            hess_nneg = 0;
+static long           fdh_rej = 0;
+static real           hess_ratio = 0.0;
 static real           fdh_norm1 = 1.0, fdh_norm2 = 1.0;
 
 static real fdh_obj(real *x)
@@ -594,11 +597,11 @@ static real fdh_obj(real *x)
     int ifault = 0;
 
     vec_shootx(x, &fdh_varma, &ifault, 0, 0);
-    if (ifault > 0) return 1.0e10;          /* fuera de la region admisible */
+    if (ifault > 0) { fdh_rej++; return 1.0e10; }   /* Sigma no definida positiva */
     elf(fdh_varma.m, fdh_varma.n, fdh_varma.p, fdh_varma.q, fdh_varma.mu,
         fdh_varma.phi, fdh_varma.theta, fdh_varma.qq, fdh_varma.w, 1.0,
         fdh_varma.xitol, FALSE, fdh_varma.a, &pi1, &pi2, &pi3, &ifault);
-    if (ifault > 0) return 1.0e10;
+    if (ifault > 0) { fdh_rej++; return 1.0e10; }   /* no estacionario / no invertible */
     return pow(pi1 / fdh_norm1, (real) fdh_varma.m) * (pi2 / fdh_norm2);
 }
 
@@ -638,11 +641,58 @@ static int exact_hessian_se(int npar, real *x, real *dev, real **cov, int neff)
     fdh_norm1 = pi1; fdh_norm2 = pi2;
 
     f = fdh_obj(x);                      /* = 1 por construccion */
+    fdh_rej = 0;
     fdhess(fdh_obj, npar, x, f, macheps, H);
+    {   /* Espectro ANTES de la Cholesky, que destruye la matriz.  Si falla hay
+           que poder decir CUANTO falla: un autovalor negativo minusculo es ruido
+           numerico en una direccion plana, y varios grandes son un punto de
+           silla -- o sea que el optimizador no paro en un maximo.            */
+        real **Hc = matrix(1, npar, 1, npar);
+        real *wr = vector(1, npar), *wi = vector(1, npar);
+        real mx = 0.0, mn = 0.0;
+        int nneg = 0, k;
+        for (i = 1; i <= npar; i++) for (j = 1; j <= npar; j++) Hc[i][j] = H[i][j];
+        eigenqr(Hc, npar, wr, wi);
+        for (k = 1; k <= npar; k++) {
+            if (wr[k] > mx) mx = wr[k];
+            if (wr[k] < mn) mn = wr[k];
+            if (wr[k] <= 0.0) nneg++;
+        }
+        hess_nneg = nneg; hess_ratio = (mx > 0.0) ? -mn / mx : 0.0;
+        free_vector(wi, 1, npar); free_vector(wr, 1, npar);
+        free_matrix(Hc, 1, npar, 1, npar);
+    }
     choldcp(H, npar, &d1, &d2, &ifc);
     if (ifc > 0) {
-        fprintf(stderr, "WARNING: -fdhess: el hessiano no es definido positivo en "
-                        "el optimo; se conservan los errores estandar de BFGS\n");
+        /*  DOS causas distintas, y confundirlas lleva a decir algo falso.
+         *
+         *  (a) fdh_rej > 0: alguna perturbacion de diferencias finitas salio de
+         *      la region admisible y se le respondio con la penalizacion.  Esas
+         *      filas y columnas del hessiano NO son curvatura -- son el salto a
+         *      la penalizacion --, asi que su espectro no significa nada y no se
+         *      informa.  Lo que dice es que el optimo esta EN la frontera: un
+         *      optimo restringido, donde la curvatura libre no esta definida.
+         *      Las raices que se informan mas arriba senalan cual es.
+         *
+         *  (b) fdh_rej == 0: el hessiano se formo entero con evaluaciones
+         *      validas y aun asi es indefinido.  Ahi si es informativo, y el
+         *      espectro dice cuanto.                                          */
+        if (fdh_rej > 0)
+            fprintf(stderr,
+                "WARNING: -fdhess: the optimum lies ON the boundary of the admissible\n"
+                "         region -- %ld of the finite-difference evaluations fell\n"
+                "         outside it -- so the unconstrained Hessian is not defined\n"
+                "         there and the BFGS standard errors are kept.  See the roots\n"
+                "         of the AR and MA operators reported above: a modulus at one\n"
+                "         identifies the binding direction.\n", fdh_rej);
+        else
+            fprintf(stderr,
+                "WARNING: -fdhess: the Hessian at the reported optimum is not positive\n"
+                "         definite: %d of %d eigenvalues are non-positive, the most\n"
+                "         negative being %.3g times the largest positive one.  Every\n"
+                "         evaluation was admissible, so the optimiser did not stop at\n"
+                "         a maximum.  The BFGS standard errors are kept.\n",
+                hess_nneg, npar, hess_ratio);
         goto fail;
     }
     for (i = 1; i <= npar; i++) {
@@ -659,6 +709,86 @@ fail:
     vec_shootx(x, &fdh_varma, &ifault, 0, 1);
     free_vector(e, 1, npar); free_matrix(H, 1, npar, 1, npar);
     return 1;
+}
+
+/*****************************************************************************/
+/*  report_operator_roots — moduli of the AR and MA roots at the optimum.     */
+/*                                                                           */
+/*  WHY THIS IS REPORTED.  drvec places nabla Y_2 in Ybar, so the second      */
+/*  block is differenced by construction.  When the data do not need that     */
+/*  differencing -- when the declared rank is too low -- the MA operator      */
+/*  absorbs it with a root on the unit circle, which is the classical         */
+/*  signature of overdifferencing.  The likelihood cannot go there: the       */
+/*  engine's invertibility check (chekma, elfvarma.c) rejects any point whose */
+/*  companion eigenvalue reaches 1.00005, so the optimiser stops ON the       */
+/*  boundary.  The fit that results is a CONSTRAINED optimum, and standard    */
+/*  errors from an unconstrained Hessian are not defined along that           */
+/*  direction.  Reporting the roots is what lets the user see it.            */
+/*                                                                           */
+/*  The companion matrix is built exactly as chekma builds it, so the two     */
+/*  agree by construction: for A(B) = I - A_1 B - ... - A_k B^k its           */
+/*  eigenvalues are lambda = 1/z with z the roots of det A(z) = 0, whence the */
+/*  modulus reported below is 1/|lambda|.                                     */
+/*****************************************************************************/
+static void report_operator_roots(const char *label, real ***A, int m, int k,
+                                  real *minmod)
+{
+    int mk = m * k, i, j, l;
+    real **C, *wr, *wi;
+
+    if (k <= 0) return;
+    C  = matrix(1, mk, 1, mk);
+    wr = vector(1, mk);
+    wi = vector(1, mk);
+    for (i = 1; i <= mk; i++)
+        for (j = 1; j <= mk; j++) C[i][j] = 0.0;
+    for (l = 1; l <= k; l++)
+        for (i = 1; i <= m; i++)
+            for (j = 1; j <= m; j++) C[i][j + (l - 1) * m] = A[l][i][j];
+    for (l = 1; l <= k - 1; l++)
+        for (j = 1; j <= m; j++) C[j + l * m][j + (l - 1) * m] = 1.0;
+
+    eigenqr(C, mk, wr, wi);
+
+    fprintf(outputv, "  %-11s", label);
+    for (i = 1; i <= mk; i++) {
+        real lam = sqrt(wr[i] * wr[i] + wi[i] * wi[i]);
+        /* A null companion eigenvalue is an infinite root: it happens whenever
+           the last coefficient matrix is singular, and it is no defect.      */
+        if (lam <= 1.0e-12) {
+            fprintf(outputv, "  %8s ", "inf");
+            continue;
+        }
+        if (1.0 / lam < *minmod) *minmod = 1.0 / lam;
+        fprintf(outputv, "  %8.5f%s", 1.0 / lam,
+                (1.0 / lam < 1.0001) ? "*" : " ");
+    }
+    fprintf(outputv, "\n");
+
+    free_vector(wi, 1, mk);
+    free_vector(wr, 1, mk);
+    free_matrix(C, 1, mk, 1, mk);
+}
+
+static void operator_roots(struct Tvarma *v)
+{
+    real minmod = 1.0e12;
+
+    if (v->p <= 0 && v->q <= 0) return;
+    fprintf(outputv, "\nRoots of the AR and MA operators (moduli; the model is "
+                     "stationary and\ninvertible when every modulus exceeds "
+                     "one):\n\n");
+    report_operator_roots("AR (Phi)",   v->phi,   v->m, v->p, &minmod);
+    report_operator_roots("MA (Theta)", v->theta, v->m, v->q, &minmod);
+    if (minmod < 1.0001)
+        fprintf(outputv,
+            "\n  * A root sits on the unit circle.  The estimate lies against the\n"
+            "    boundary the likelihood enforces, so this is a CONSTRAINED optimum\n"
+            "    and the standard errors are not defined along that direction.  A\n"
+            "    unit MA root here is the signature of overdifferencing: nabla Y_2\n"
+            "    is differenced by construction, so it appears when the declared\n"
+            "    rank is lower than the true one.  Re-examine the rank before\n"
+            "    reading the estimates.\n");
 }
 
 /*****************************************************************************/
@@ -865,9 +995,12 @@ static int bootstrap_rank(int rr, real *x, int npar, int N, real *cv, real *pval
         int i90 = (int) ceil(0.90 * nok), i95 = (int) ceil(0.95 * nok),
             i99 = (int) ceil(0.99 * nok);
         qsort(&stat[1], (size_t) nok, sizeof(real), cmp_real);
-        if (i90 < 1) i90 = 1; if (i90 > nok) i90 = nok;
-        if (i95 < 1) i95 = 1; if (i95 > nok) i95 = nok;
-        if (i99 < 1) i99 = 1; if (i99 > nok) i99 = nok;
+        if (i90 < 1) i90 = 1;
+        if (i90 > nok) i90 = nok;
+        if (i95 < 1) i95 = 1;
+        if (i95 > nok) i95 = nok;
+        if (i99 < 1) i99 = 1;
+        if (i99 > nok) i99 = nok;
         cv[0] = stat[i90]; cv[1] = stat[i95]; cv[2] = stat[i99];
         for (i = 1; i <= nok; i++) if (stat[i] >= lr_obs) ge++;
         *pval = (real) (ge + 1) / (real) (nok + 1);   /* p-valor bootstrap */
@@ -3042,6 +3175,7 @@ int main(int argc, char *argv[])
         fprintf(outputv, "BIC    : %15.10f   (-2logL + k log n, /n)\n",
                 (-2.0 * varma1.logelf + npar * log((real) nobs)) / nobs);
         convergence_note(termcode_from_out(outputf));
+        operator_roots(&varma1);
         residual_diagnostics(&varma1);
 
         /* El LR de H1(r) contra H(r).  Johansen y Swensen (2024): los grados de

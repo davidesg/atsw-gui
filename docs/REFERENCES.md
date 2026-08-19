@@ -118,6 +118,12 @@ Statistics*, 13(1), 27–35.
 cointegrated ARMA time series. *Journal of Time Series Analysis*, 24(5),
 553–577.
 
+**Plosser, C. I. and Schwert, G. W.** (1977). Estimation of a non-invertible
+moving average process: the case of overdifferencing. *Journal of Econometrics*,
+6(2), 199–224.
+— The reading of a moving-average root on the unit circle as the signature of
+differencing the data more than they require.
+
 ## Critical values for the rank test
 
 **Osterwald-Lenum, M.** (1992). A note with quantiles of the asymptotic

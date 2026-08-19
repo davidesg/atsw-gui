@@ -21,10 +21,19 @@ directorio temporal, sin tocar el repo. Después se aplicaron siete correcciones
 | §4.4 | `-lrtest`: test secuencial de rango, antes inexistente | funcionalidad |
 | §4.5 | nombres de fichero dimensionados por la ruta, no a 80 bytes | robustez |
 
-**El motor no se toca**: `elfvarma.c`, `drvmlest.c`, `qnewtopt.c`, `nlatools.c` y
-`main.h` están byte a byte como estaban. En particular **`elf()` no se toca
-nunca** — es la AS 311 publicada y refereada, y está validada aquí a 2·10⁻⁸
-(§5.4).
+**El motor no se toca**: `elfvarma.c`, `drvmlest.c`, `qnewtopt.c` y `main.h`
+están byte a byte como estaban. En particular **`elf()` no se toca nunca** — es
+la AS 311 publicada y refereada, y está validada aquí a 2·10⁻⁸ (§5.4).
+
+`nlatools.c` lleva **una** corrección, del 19-08-2026, y sólo en el asignador:
+`tensor()` reservaba `nrh + 1` punteros y escribía en `t[nrl…nrh]`, de modo que
+con límite inferior negativo escribía *antes* del bloque. `elf()` pide
+exactamente eso (`tensor(-q+1, 0, …)`) en cuanto `q ≥ 2`, así que ningún modelo
+con dos retardos MA era estimable: corrompía el montón y abortaba. La corrección
+no mueve ningún número — con límite inferior no negativo las posiciones
+direccionadas son las mismas — y eso está comprobado, no supuesto: la batería
+entera, con los valores logL de referencia, sigue igual. Ver
+`SUITE_INTEGRATION.md` §5.
 
 Dos de ellas mueven resultados a propósito: **§3.6**, que quita un parámetro que
 no estaba identificado, y **§4.3**, cuyo layout en niveles pasó a ser el defecto

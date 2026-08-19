@@ -233,6 +233,26 @@ fixed it (established previously for the transfer-function program of the same s
 recomputes the Hessian at the optimum by finite differences, using a routine the
 estimation driver itself provides for the purpose, and without modifying it.
 
+**And a limit on when it can be formed at all.** The exact likelihood is defined
+only where the moving-average operator is invertible, and the estimate may come
+to rest against that constraint; on the mink–muskrat data every specification
+with `q ≥ 1` does. A finite-difference step then leaves the admissible region,
+and no unconstrained curvature exists in the binding direction to be measured.
+`-fdhess` detects this — it counts the evaluations that fall outside — and
+reports the boundary as the cause, retaining the BFGS standard errors rather
+than substituting a number computed from inadmissible points. The distinction it
+draws is between two different situations that must not be conflated: an
+optimum on the boundary, where the unconstrained Hessian is undefined, and an
+indefinite Hessian assembled entirely from admissible evaluations, which instead
+says the optimiser did not stop at a maximum. Only the second is a statement
+about the optimiser, and the program makes only the one the evidence supports.
+The moduli of the roots reported with every fit identify which direction binds
+([CONVERGENCE.md](CONVERGENCE.md) §2b).
+
+What this costs is stated plainly: where the estimate lies on the boundary, the
+standard errors reported for it are the BFGS ones, with the reservations above,
+and inference along the binding direction is not supported by them.
+
 ## 7. What this does *not* establish
 
 * **It is asymptotic theory.** Every result above is a limit result, and this

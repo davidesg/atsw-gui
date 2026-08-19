@@ -321,7 +321,64 @@ depends only on the start index, which makes the procedure monotone — the firs
 in the test suite. Without measuring across several `n` this would have shipped
 looking fine.
 
-## 7. Open, and honestly so
+## 7. After the beta: a false diagnosis of my own, and a defect beneath it
+
+The question that opened this was narrow — whether `-fdhess`, which computes the
+Hessian at the optimum instead of accumulating it along the optimiser's path,
+should be the default rather than an option. Since the program's purpose is
+inference on the cointegrating coefficients, the standard errors are the
+product, and having the better route be opt-in is the wrong way round.
+
+The measurement said it could not be: on six of seven configurations the
+finite-difference Hessian was not positive definite. The first reading of that
+was that the optimiser had not stopped at a maximum, and the program was made to
+say so. **That reading was wrong, and the fault was in the measuring
+instrument.** `fdh_obj` answers `10¹⁰` at a parameter point the likelihood
+rejects. Counting those answers showed 42 of them inside a single Hessian
+evaluation: the "negative eigenvalues" were the penalty, not curvature, and the
+gradient norm of 10¹⁵ that appeared to confirm a non-stationary point was the
+same artefact. A diagnosis was being published that the evidence did not carry.
+
+What the evidence does carry is more useful. The rejections come from the
+invertibility check, and the estimated moving-average operator has a root at
+0.99995 — the boundary the engine enforces at 1.00005. The optimum is on the
+constraint. That is not particular to one set-up: every specification with
+`q ≥ 1` behaves identically, across all three cases, with and without
+`-diagma`, and with sixty restarts. It also explains what had been recorded as
+three separate open items — termination on termcode 3, the dependence on the
+starting point, and the standard errors — as one thing: these are constrained
+optima, and the unconstrained apparatus does not apply at them.
+
+Three changes followed. Every fit reports the moduli of the roots of both
+operators and marks any on the unit circle, which makes the condition visible
+instead of inferable. `-fdhess` distinguishes the two cases that had been
+conflated — an optimum on the boundary, where no unconstrained curvature exists,
+from an indefinite Hessian built entirely from admissible evaluations, which
+would genuinely indict the optimiser — and states only the one it can support.
+And the reading is recorded: a unit moving-average root here is the signature of
+overdifferencing (Plosser and Schwert, 1977), which in this model is governed by
+the declared rank, so the rank is what to re-examine first.
+
+**And underneath, a defect that had been silently bounding the work.** Extending
+the sweep to `q = 2` aborted the program. It aborted at `HEAD` as well, so it
+was not a regression, and it was not in the front end: `tensor()` in the
+allocator library reserved `nrh + 1` row pointers and then wrote at
+`t[nrl…nrh]`, which for a negative lower bound writes before the block. The
+likelihood routine asks for exactly that whenever `q ≥ 2`. So **no model with
+two or more moving-average lags had ever been estimable**, and every
+specification search in this record — the comparison against Johansen at each
+procedure's own optimum included — had been bounded at `q ≤ 1` by a defect
+rather than by a decision. That is now stated where those results are recorded
+([HOMOLOGATION.md](HOMOLOGATION.md) §3b) rather than left to be inferred.
+
+The correction changes no computed value, and this is checked rather than
+argued: the entire suite, golden baselines included, is unchanged, and the
+configuration that used to corrupt the heap now runs clean under `valgrind`.
+Both are permanent checks. The methodological point is the one worth keeping:
+the first finding was an artefact of the instrument, and what turned it into a
+result was measuring the instrument before believing the measurement.
+
+## 8. Open, and honestly so
 
 | | |
 |---|---|
@@ -331,3 +388,5 @@ looking fine.
 | the choice of the `Y₁` block | not diagnosed; the user's responsibility, and currently unchecked |
 | finite-sample critical values for the rank test | asymptotic only, and now **measured**: over 60 replications of a true r = 1 process at n = 120 the asymptotic test picks the right rank 68 % of the time and over-rejects 30 % — six times its nominal 5 %. `-bootstrap` improves that to 78 %/20 % (paired, all 6 discordant pairs its way, McNemar p = 0.031) but does not fix it |
 | `drtran`'s BUG-11 | fixed in `drvec`'s copy, live in `drtran` |
+| the invertibility boundary | explained and now reported, not resolved: on these data every specification with `q ≥ 1` rests on it, so the reported optima are constrained ones and the unconstrained standard errors do not apply along the binding direction — see §7 |
+| specification searches at `q ≥ 2` | possible only since the allocation defect was corrected on 2026-08-19; the searches already recorded were bounded at `q ≤ 1` and have **not** been redone ([HOMOLOGATION.md](HOMOLOGATION.md) §3b) |

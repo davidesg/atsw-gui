@@ -265,6 +265,30 @@ cointegrate plus an independent random walk placed in `Y₁`. It reports 0.6 %.
 
 ---
 
+## 4b. The roots of the estimated operators
+
+Every fit reports the moduli of the roots of the autoregressive and
+moving-average operators. The model is stationary and invertible when all of
+them exceed one; a modulus at one is marked, and an infinite modulus simply
+means the last coefficient matrix of that operator is singular.
+
+```
+Roots of the AR and MA operators (moduli; the model is stationary and
+invertible when every modulus exceeds one):
+
+  AR (Phi)          inf    1.17582    1.17582    1.74400
+  MA (Theta)    1.06441    0.99995*
+```
+
+A marked root is worth acting on. The likelihood is defined only inside the
+invertible region, so an estimate that reaches its boundary is a constrained
+optimum: standard errors are not defined along the binding direction, and
+`-fdhess` will decline to compute them and say why. A moving-average root on the
+unit circle further suggests the data have been differenced more than they
+require, which in this model is governed by the declared rank — `s = M − r`
+series are differenced — so the rank is the first thing to re-examine. The
+reasoning is set out in [CONVERGENCE.md](CONVERGENCE.md) §2b.
+
 ## 5. Residual diagnostics
 
 Every successful fit ends with a diagnosis of its residuals, in two parts.

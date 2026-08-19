@@ -801,6 +801,113 @@ while the unrestricted ones do none of the three.
 `-mawarma` is therefore offered and not imposed, and the register records the
 comparison rather than a verdict.
 
+## 4h. The rank condition, and what the paper leaves unguarded
+
+*The question this answers: `-mawarma` fixes the pathology, but it does so by
+narrowing the model class. Is there something narrower still that is wrong — a
+condition the class itself needs and nobody is enforcing? There is.*
+
+### The condition
+
+For a VEC model with moving-average errors to represent an I(1) process with
+cointegrating rank **exactly** `r`, the Granger representation requires
+
+`G = σ_min(Λ⊥′ Θ(1) B⊥)`  to be bounded away from zero,
+
+because `C(1) = B⊥(Λ⊥′ΓB⊥)⁻¹Λ⊥′Θ(1)` is what carries the `M−r` stochastic
+trends. Where `G` degenerates, `C(1)` loses rank: the **fitted** model says `r`
+and its parameters leave fewer trends than `r` implies.
+
+Mauricio (2006) assumes partial nonstationarity **of the true process** (§2) and
+refers to Yap and Reinsel (1995) for identifiability, but the estimation imposes
+nothing of the kind. The engine checks that the roots of `Φ*` and `Θ*` are not
+**inside** the unit circle; this degeneracy lives exactly **on** it, in the
+permitted edge. `drvec` now reports `G` at every fit, next to the roots, and
+`-rankadm [tol]` refuses points below `tol` the way a non-positive-definite `Σ`
+is refused.
+
+### Where the free fits actually sit
+
+| pair | free `G` | `\|Θ̂(1)\|` free | `-mawarma` `G` |
+|---|---|---|---|
+| Milan | 0.0855 | 0.00037 | 0.995 |
+| Strasbourg | 0.0454 | −0.00005 | 0.996 |
+| Utrecht | 0.1333 | −0.00004 | 0.979 |
+| Vienna | 0.0158 | −0.00005 | 0.945 |
+| Aix | 0.0790 | −0.00003 | 0.993 |
+| Arévalo | 0.0566 | −0.00007 | 0.962 |
+| Angers | 0.0194 | 0.12343 | 0.901 |
+| Penn | 0.0177 | −0.00004 | 0.925 |
+| **simulated WARMA, `n = 8000`** | **1.010** | | 0.999 |
+
+Two things to read carefully, and the second is a correction of the first
+impression. `Θ̂(1)` is **singular to working precision** in seven of the eight,
+and the direction in which it is singular is aligned with `Λ⊥` at 0.946 to
+0.9996 — so the degeneracy is essentially in the direction that must stay
+integrated. But `G` itself is **not** zero: it is 0.016 to 0.133. The free
+optimum does not sit *on* the degenerate set; it sits **one to two orders of
+magnitude into its neighbourhood**, against a value of ≈ 1 both under the
+inherited structure and at a known truth in simulation.
+
+### What enforcing it does, on Milan
+
+Only `G ≥ tol` is imposed; `Θ` stays free.
+
+| `tol` | logL | `G` | MAmin | `B̂₂` |
+|---|---|---|---|---|
+| — (free) | 93.288 | 0.086 | 1.000 | **−0.448** |
+| 0.05 | 93.290 | 0.087 | 1.000 | −0.447 |
+| 0.10 | 92.674 | 0.100 | 1.007 | −0.464 |
+| 0.20 | 89.505 | 0.200 | 1.288 | **−0.597** |
+| 0.30 | 87.250 | 0.300 | 1.736 | −0.585 |
+| 0.50 | 86.119 | 0.500 | 2.791 | −0.580 |
+| 0.70 | 84.634 | 0.700 | 3.349 | −0.578 |
+| 0.90 | 82.492 | 0.900 | 3.277 | −0.552 |
+| `-mawarma` | 81.313 | 0.995 | 2.410 | −0.566 |
+| Johansen's canonical `β` | | | | **−0.554** |
+
+**`B̂₂` has two regimes.** Inside the near-degenerate region it is −0.447. The
+moment the rank condition is enforced at any non-trivial level it settles at
+**−0.55 to −0.60** and stays there across a twenty-fold range of `tol`, at the
+value Johansen's canonical estimator and the inherited structure both give. The
+same happens on the whole bank at `tol = 0.3`: `B̂₂` moves from the free values
+to within 0.02–0.31 of the inherited ones, and the smallest moving-average root
+moves from 1.000 to 1.30–2.42 everywhere.
+
+So the quantity this program exists to produce depends on whether the fit is
+allowed into the near-degenerate neighbourhood — and **outside it every route
+agrees**: the canonical estimator, the inherited moving average, and the free
+one under a rank floor.
+
+### What is missing from the paper, stated plainly
+
+1. **The admissibility condition is never written down.** The assumptions are
+   about the process; the parameter space optimised over includes points that
+   violate them, and the pathology is at the boundary the engine permits.
+2. **The identification conditions are assumed by reference and never
+   translated** into the parameters the paper proposes estimating
+   (`Λ, B₂, F_i, Θ_i, Σ`), so an implementer of Remark 1 has no way to know
+   which points are admissible.
+3. **Remark 5's sequential rank test has a boundary null** — at `Λ = 0` the
+   transformed system has an AR root of exactly one and `B₂` is unidentified,
+   since `Π = ΛB′ = 0` for any `B₂` — which the paper does not say.
+4. **No finite-sample evidence.** One bivariate illustration; §2.3 here measures
+   the asymptotic rank test over-rejecting six-fold at `n = 120`.
+
+None of this makes the transformation wrong — §1 and §4g verify it to 4e−15.
+It makes the *estimation problem* less well posed than the paper's statement of
+it suggests.
+
+### What is not settled
+
+Whether these data want a moving average richer than the WARMA class allows. The
+LR prefers the free version by 13 to 26 on 3 degrees of freedom, and that
+comparison is exactly the one that cannot be made, because the unrestricted
+optimum is in the near-degenerate region where neither the standard errors nor
+the LR have their usual distributions. Settling it needs boundary-aware
+inference — a parametric bootstrap under the restricted model, which
+`-bootstrap` could already supply.
+
 ## 5. What is not in the register, and why
 
 * **The Census Housing example** of the AddOn (Hillmer & Tiao 1979): the data

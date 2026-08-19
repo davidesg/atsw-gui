@@ -601,6 +601,46 @@ including on `M = 5, r = 2`, where `T₁₁` is 2×2 and the block it determines
 `-seedb2` exists at all because a question about a starting value should not
 require a recompilation to answer.
 
+## 8e. What the paper leaves unguarded
+
+`-mawarma` removes the pathology, but it does so by narrowing the model class,
+and that raised the better question: is there a condition **the class itself
+needs** that nobody is enforcing? There is, and it is one line of the Granger
+representation.
+
+For a VEC model with moving-average errors to be an I(1) process of rank exactly
+`r`, `G = σ_min(Λ⊥′Θ(1)B⊥)` must stay away from zero — it is what makes `C(1)`
+carry the `M−r` stochastic trends. Mauricio (2006) assumes partial
+nonstationarity **of the true process** and refers to Yap and Reinsel for
+identifiability, but the estimation imposes neither: the engine checks that
+roots are not *inside* the unit circle, and this degeneracy lives exactly *on*
+it, in the permitted edge.
+
+Measured, and the measurement corrected my own first reading of it. `Θ̂(1)` is
+singular to working precision in seven of the eight pairs, and the direction of
+the singularity is aligned with `Λ⊥` at 0.946–0.9996 — so the degeneracy is in
+the direction that must stay integrated. But `G` itself is not zero: 0.016 to
+0.133, against ≈ 1 both under the inherited structure and at a known truth in
+simulation. The free optimum does not sit *on* the inadmissible set; it sits one
+to two orders of magnitude inside its neighbourhood. Saying it the first way
+would have been a stronger claim than the evidence carries.
+
+`G` is now reported at every fit, beside the roots, and `-rankadm [tol]` refuses
+points below a floor the way a non-positive-definite `Σ` is refused. What that
+buys is in [HOMOLOGATION.md](HOMOLOGATION.md) §4h, and the shape of it is what
+matters: **`B̂₂` has two regimes.** On Milan it is −0.447 inside the
+near-degenerate region and −0.55 to −0.60 outside it — stable across a twenty-fold
+range of the floor, and equal to what Johansen's canonical estimator and the
+inherited moving average both give. The quantity this program exists to produce
+depends on whether the fit is allowed into that neighbourhood, and outside it
+every route agrees.
+
+That is the honest summary of the episode: the transformation is right, the
+estimator is right, and the estimation **problem** is less well posed than the
+paper's statement of it suggests. Two instruments came out of it that will
+outlast the argument — the rank condition as a reported diagnostic, and
+`tools/sim`, which is how any of this was decidable at all.
+
 ## 9. Open, and honestly so
 
 | | |

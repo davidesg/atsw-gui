@@ -718,6 +718,46 @@ elif awk -v a="$free_ll" -v b="$warm_ll" 'BEGIN{exit !(b <= a + 1e-6)}'; then
 else bad "mawarma: restricted beat free" "free=$free_ll warma=$warm_ll"; fi
 echo
 
+# 5j. THE RANK CONDITION.  sigma_min(Lambda_perp' Theta(1) B_perp) is what makes
+#     the long-run impact C(1) have rank M-r; where it degenerates the fitted
+#     model denies the rank it was estimated at.  It is REPORTED always and
+#     -rankadm refuses points below a tolerance.  Three checks: that it is
+#     reported, that the constraint actually binds (the optimiser wants to go
+#     below, which is the whole finding), and that constraining cannot buy
+#     likelihood -- a constrained fit that beat the free one would mean the
+#     constraint is not a constraint.
+run data/pairs/milan.inp 2 1 1 -case 2 -mean
+g_free=$(awk '/Rank condition/{print $NF}' "$TMP/case.out")
+ll_free=$(logelf_of "$TMP/case")
+if [ -z "$g_free" ]; then bad "rank condition" "not reported at r=1, q=1"
+else ok "rank condition: reported ($g_free)"; fi
+
+run data/pairs/milan.inp 2 1 1 -case 2 -mean -rankadm 0.3
+g_adm=$(awk '/Rank condition/{print $NF}' "$TMP/case.out")
+ll_adm=$(logelf_of "$TMP/case")
+if [ -z "$g_adm" ] || [ -z "$ll_adm" ]; then
+    bad "rankadm" "no fit (G=$g_adm logL=$ll_adm)"
+elif awk -v g="$g_adm" 'BEGIN{exit !(g >= 0.3 - 1e-6)}'; then
+    ok "rankadm: the constraint holds at the optimum ($g_adm >= 0.3)"
+else bad "rankadm: constraint violated" "G=$g_adm with tol 0.3"; fi
+
+if awk -v a="$g_free" 'BEGIN{exit !(a < 0.3)}'; then
+    ok "rankadm: and it BINDS -- the free fit sits below it ($g_free)"
+else bad "rankadm: does not bind here" "the free fit already has G=$g_free"; fi
+
+if awk -v a="$ll_free" -v b="$ll_adm" 'BEGIN{exit !(b <= a + 1e-6)}'; then
+    ok "rankadm: the constrained fit cannot beat the free one ($ll_adm <= $ll_free)"
+else bad "rankadm: constrained beat free" "free=$ll_free adm=$ll_adm"; fi
+
+# and the inherited structure cannot degenerate at all: Theta(1)'s lower block
+# is the identity by construction, so G stays O(1) with no constraint imposed.
+run data/pairs/milan.inp 2 1 1 -case 2 -mean -mawarma
+g_wa=$(awk '/Rank condition/{print $NF}' "$TMP/case.out")
+if awk -v g="$g_wa" 'BEGIN{exit !(g > 0.5)}'; then
+    ok "mawarma: the rank condition cannot degenerate ($g_wa)"
+else bad "mawarma: rank condition degenerate" "G=$g_wa"; fi
+echo
+
 echo "[6] alpha = A*psi: the restriction, its LR, and its guards"
 # Johansen and Swensen (2024): H1(r) is alpha = A*psi with A known.  Weak
 # exogeneity is the special case where A selects rows, so -weakex is a shorthand

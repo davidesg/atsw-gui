@@ -74,6 +74,21 @@ rather than returning numbers for a model that does not have them.
 The degrees of freedom of the reported LR are `(M − sa)·r`, from Johansen and
 Swensen (2024).
 
+### The rank condition
+
+| | |
+|---|---|
+| `-rankadm [tol]` | refuse parameter points where `σ_min(Λ⊥′Θ(1)B⊥) < tol` (default `1e-3`) |
+
+That statistic is **reported at every fit**, next to the operator roots, and it
+needs no flag. It is what makes the long-run impact `C(1)` carry `M−r`
+stochastic trends: where it degenerates, the fitted model denies the rank it was
+estimated at. On the eight wheat pairs the free fits sit at 0.016–0.133 against
+≈ 1 for a correctly specified model, and `Θ̂(1)` is singular to working precision
+in seven of the eight ([HOMOLOGATION.md](HOMOLOGATION.md) §4h). Enforcing a
+floor moves `B̂₂` to the value the canonical estimator gives and moves the
+moving-average root off the unit circle, at a cost in log-likelihood.
+
 ### The moving average: free or inherited
 
 | | |

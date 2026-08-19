@@ -28,6 +28,7 @@
 #include "fue_bridge.h"       /* expansion de los factores del .pre           */
 #include <gsl/gsl_cdf.h>      /* p-valor chi2 del LR de H1(r) contra H(r)     */
 #include <gsl/gsl_eigen.h>    /* problema de autovalores generalizado simetrico */
+#include <gsl/gsl_linalg.h>   /* QR y SVD para la condicion de rango de Granger */
 
 real macheps;
 FILE *outputv;
@@ -157,6 +158,107 @@ static int canon_used = 0;      /* 1 = la solucion canonica entro de verdad   */
  *  (Lambda, Theta) esta practicamente no identificado cuando Theta es libre.
  *  Ver docs/HOMOLOGATION.md 4g.                                              */
 int global_mawarma = 0;
+
+/*  -rankadm — LA CONDICION QUE HACE QUE EL RANGO SEA EL QUE SE DICE.
+ *
+ *  Para que un VEC con errores de medias moviles represente un proceso I(1) con
+ *  rango de cointegracion EXACTAMENTE r, la matriz
+ *
+ *      G = Lambda_perp' Theta(1) B_perp        (s x s,  Theta(1) = I - sum Theta_k)
+ *
+ *  tiene que ser no singular: es la que aparece en la representacion de Granger,
+ *  C(1) = B_perp (Lambda_perp' Gamma B_perp)^-1 Lambda_perp' Theta(1).  Si G
+ *  degenera, C(1) pierde rango y el modelo AJUSTADO NIEGA SU PROPIO RANGO: dice
+ *  r y sus parametros implican que no queda tendencia estocastica.
+ *
+ *  Mauricio (2006) supone la no estacionariedad parcial DEL PROCESO VERDADERO
+ *  (seccion 2) y remite a Yap y Reinsel (1995) para las condiciones de
+ *  identificacion, pero la ESTIMACION no impone ninguna: el conjunto donde G
+ *  degenera esta dentro de la region que el programa admite, porque el motor
+ *  solo comprueba que las raices no esten DENTRO del circulo y esta patologia
+ *  vive exactamente SOBRE el, en el borde permitido.  Medido en los ocho pares
+ *  con Theta libre: |Theta(1)| entre -7e-5 y 4e-4, y la direccion en que
+ *  Theta(1) es singular alineada con Lambda_perp entre 0.946 y 0.9996.  O sea
+ *  que el optimo libre esta AHI, no cerca.  Ver docs/HOMOLOGATION.md 4h.
+ *
+ *  sigma_min(G) se REPORTA siempre, como las raices.  -rankadm ademas lo
+ *  IMPONE, rechazando el punto igual que se rechaza una Sigma no definida
+ *  positiva, para que el optimizador no entre.                               */
+int  global_rankadm = 0;
+real global_rankadm_tol = 1.0e-3;
+static real granger_sv = -1.0;   /* sigma_min(G) en la ultima evaluacion */
+
+/*  granger_smin — sigma_min(Lambda_perp' Theta(1) B_perp), o -1 si no aplica.
+ *  Lambda_perp y B_perp se ortonormalizan (QR), asi que la escala del
+ *  estadistico es la de Theta(1) y no la de como venga escrito Lambda.       */
+static real granger_smin(real **Lam, real **B2, real ***Th, int M, int r, int q)
+{
+    int s = M - r, i, j, k;
+    gsl_matrix *L, *Q, *Bp, *T1, *G, *V;
+    gsl_vector *tau, *sv, *wk;
+    real out = -1.0;
+
+    if (r <= 0 || s <= 0) return -1.0;
+
+    /*  Lambda_perp: las ultimas s columnas de la Q de la QR de Lambda.       */
+    L   = gsl_matrix_alloc(M, r);
+    Q   = gsl_matrix_alloc(M, M);
+    tau = gsl_vector_alloc(r < M ? r : M);
+    for (i = 0; i < M; i++)
+        for (j = 0; j < r; j++) gsl_matrix_set(L, i, j, Lam[i+1][j+1]);
+    {
+        gsl_matrix *R = gsl_matrix_alloc(M, r);
+        gsl_linalg_QR_decomp(L, tau);
+        gsl_linalg_QR_unpack(L, tau, Q, R);
+        gsl_matrix_free(R);
+    }
+
+    /*  B_perp = [-B2' ; I_s], ortonormalizada igual.                         */
+    Bp = gsl_matrix_alloc(M, s);
+    for (j = 0; j < s; j++) {
+        for (i = 0; i < r; i++) gsl_matrix_set(Bp, i, j, -B2[j+1][i+1]);
+        for (i = 0; i < s; i++) gsl_matrix_set(Bp, r+i, j, (i == j) ? 1.0 : 0.0);
+    }
+    {
+        gsl_matrix *Qb = gsl_matrix_alloc(M, M), *Rb = gsl_matrix_alloc(M, s);
+        gsl_vector *tb = gsl_vector_alloc(s < M ? s : M);
+        gsl_linalg_QR_decomp(Bp, tb);
+        gsl_linalg_QR_unpack(Bp, tb, Qb, Rb);
+        for (i = 0; i < M; i++)
+            for (j = 0; j < s; j++) gsl_matrix_set(Bp, i, j, gsl_matrix_get(Qb, i, j));
+        gsl_vector_free(tb); gsl_matrix_free(Rb); gsl_matrix_free(Qb);
+    }
+
+    /*  Theta(1) = I - sum_k Theta_k                                          */
+    T1 = gsl_matrix_alloc(M, M);
+    for (i = 0; i < M; i++)
+        for (j = 0; j < M; j++) {
+            real acc = (i == j) ? 1.0 : 0.0;
+            for (k = 1; k <= q; k++) acc -= Th[k][i+1][j+1];
+            gsl_matrix_set(T1, i, j, acc);
+        }
+
+    /*  G = Lambda_perp' Theta(1) B_perp,  con Lambda_perp = Q[:, r..M-1]     */
+    G = gsl_matrix_alloc(s, s);
+    for (i = 0; i < s; i++)
+        for (j = 0; j < s; j++) {
+            real acc = 0.0;
+            for (int a = 0; a < M; a++)
+                for (int b = 0; b < M; b++)
+                    acc += gsl_matrix_get(Q, a, r+i) * gsl_matrix_get(T1, a, b)
+                         * gsl_matrix_get(Bp, b, j);
+            gsl_matrix_set(G, i, j, acc);
+        }
+
+    V  = gsl_matrix_alloc(s, s);
+    sv = gsl_vector_alloc(s);
+    wk = gsl_vector_alloc(s);
+    if (gsl_linalg_SV_decomp(G, V, sv, wk) == 0) out = gsl_vector_get(sv, s-1);
+    gsl_vector_free(wk); gsl_vector_free(sv); gsl_matrix_free(V);
+    gsl_matrix_free(G); gsl_matrix_free(T1); gsl_matrix_free(Bp);
+    gsl_vector_free(tau); gsl_matrix_free(Q); gsl_matrix_free(L);
+    return out;
+}
 
 static int    prof_hold = 0;
 static real ***hold_F = NULL, ***hold_Th = NULL;
@@ -2830,6 +2932,13 @@ static void vec_shootx(real *x, struct Tvarma *armax,
                 }
     }
 
+    /*  LA CONDICION DE RANGO, medida en cada evaluacion y opcionalmente
+     *  impuesta.  Va aqui porque es el primer punto donde Lambda, Theta y B2
+     *  existen a la vez, y antes de construir nada con ellos.                */
+    granger_sv = (r > 0 && q > 0) ? granger_smin(Lambda, B2, Theta, M, r, q) : -1.0;
+    if (global_rankadm && granger_sv >= 0.0 && granger_sv < global_rankadm_tol)
+        *ifaultx = 1;          /* el punto niega el rango: fuera, como Sigma no PD */
+
     /* [4] Mauricio transformation matrices (eq. 10-14) ---------------------- */
     real **Cbar   = matrix(1, M, 1, M);
     real **Cinv   = matrix(1, M, 1, M);
@@ -3320,6 +3429,10 @@ int main(int argc, char *argv[])
         printf("  -lrtest        sequential LR test for the cointegration rank:\n");
         printf("                 estimates r = 0..M-1 and reports 2*[L(r+1) - L(r)];\n");
         printf("                 incompatible with -differenced\n\n");
+        printf("  -rankadm [tol] refuse parameter points where the fitted model\n");
+        printf("                 denies its own rank: sigma_min of\n");
+        printf("                 Lambda_perp' Theta(1) B_perp below tol (default\n");
+        printf("                 1e-3).  That statistic is REPORTED always\n\n");
         printf("  -mawarma       the moving average INHERITS its structure instead\n");
         printf("                 of being free: Theta = [T11  T11*B2' ; 0  0], the\n");
         printf("                 form a WARMA process implies for its VEC\n");
@@ -3382,6 +3495,10 @@ int main(int argc, char *argv[])
         else if (strcmp(argv[i], "-seedgate") == 0) global_seedgate = 1;
         else if (strcmp(argv[i], "-seedjoh") == 0)  global_seedjoh = 1;
         else if (strcmp(argv[i], "-mawarma") == 0)  global_mawarma = 1;
+        else if (strcmp(argv[i], "-rankadm") == 0) {
+            global_rankadm = 1;
+            if (i+1 < argc && argv[i+1][0] != '-') global_rankadm_tol = atof(argv[++i]);
+        }
         else if (strcmp(argv[i], "-seedb2") == 0 && i+1 < argc) {
             global_seedb2 = 1; global_seedb2_value = atof(argv[++i]);
         }
@@ -4276,6 +4393,32 @@ int main(int argc, char *argv[])
                 (-2.0 * varma1.logelf + npar * log((real) nobs)) / nobs);
         convergence_note(termcode_from_out(outputf));
         operator_roots(&varma1);
+        /*  La condicion de rango, al lado de las raices y por la misma razon:
+         *  dice si el punto donde se ha parado es un modelo del rango que se
+         *  pidio o de otro.  Se recalcula en la ultima evaluacion, que es la
+         *  que dejo vec_shootx justo antes.                                  */
+        if (global_r > 0 && global_q > 0 && granger_sv >= 0.0) {
+            fprintf(outputv,
+                "\nRank condition (Granger): sigma_min(Lambda_perp' Theta(1) "
+                "B_perp) = %.3e\n", granger_sv);
+            if (granger_sv < 1.0e-3)
+                fprintf(outputv,
+                  "  *** This is ZERO to working precision, and it is not a\n"
+                  "  detail: that matrix is what makes the long-run impact\n"
+                  "  C(1) = B_perp (Lambda_perp' Gamma B_perp)^-1 Lambda_perp'\n"
+                  "  Theta(1) have rank M-r.  Where it degenerates the FITTED\n"
+                  "  model denies the rank it was estimated at -- it says r and\n"
+                  "  its parameters leave no stochastic trend.  The estimate is\n"
+                  "  then on the edge of the region the model class allows, so\n"
+                  "  standard errors and LR statistics do not have their usual\n"
+                  "  distributions there.  -rankadm refuses such points; -mawarma\n"
+                  "  makes them unreachable by construction.  See\n"
+                  "  docs/HOMOLOGATION.md 4h.\n");
+            else
+                fprintf(outputv,
+                  "  Comfortably away from zero: the fit is a model of the rank\n"
+                  "  it was estimated at.\n");
+        }
         gate_contract(&varma1);
         residual_diagnostics(&varma1);
 

@@ -619,6 +619,24 @@ it — so it is **not** an out-of-sample measurement. See
 [FORECAST.md](FORECAST.md) for the algorithms, their provenance and the
 certificates.
 
+### Out of sample: `-estwin E -f H`
+
+```
+drvec file p q r -case 2 -estwin 84 -f 4
+```
+
+Estimates **once** on observations `1..E`, holds the parameters **fixed**, and
+rolls the origin forward one datum at a time over `E … n−H`, comparing each
+forecast with what actually happened: MAE, RMSE and MAPE by horizon and series.
+The parameters never see the data they are scored against. This is the only
+measurement here that says whether one specification forecasts better than
+another; a likelihood, an AIC and a theoretical band do not.
+
+The comparison worth making is against the **diagonal rung** — `r = 0` with
+`-diagar -diagma -diagcov`, which by Theorem 9 is an ARIMA on each series — and
+`tools/forecast_vs_univariate.py` runs it over the bank. What it measures is in
+[HOMOLOGATION.md](HOMOLOGATION.md) §4t, and it is not flattering.
+
 ## 6. Exit behaviour
 
 ### The exit status

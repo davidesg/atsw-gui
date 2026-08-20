@@ -52,6 +52,18 @@ failed to locate a lower point» in most configurations**, and moving a paramete
 by hundredths can move the answer by units. See
 [CONVERGENCE.md](CONVERGENCE.md) before trusting a fit.
 
+**And what it is for.** Measured out of sample against an ARIMA on each series —
+`drvec`'s own diagonal rung, which by Theorem 9 is exactly that — this program
+**does not forecast better** on its bank. With a moving average it loses in
+seven of nine cases at every horizon, by up to a factor of 2.9; without one it is
+a wash, winning about half the comparisons by a few per cent
+([HOMOLOGATION.md](HOMOLOGATION.md) §4t). So this is an exact maximum-likelihood
+estimator for a class of models — for the cointegrating vector, the adjustment
+matrix and the hypotheses on them, where it is superconsistent and where a
+univariate model says nothing at all — and it is **not** a forecasting tool that
+earns its parameters. That is the first thing to know about it, and it took
+until 2026-08-20 to measure.
+
 ---
 
 ## Ten lines that run

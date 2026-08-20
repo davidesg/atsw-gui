@@ -1943,6 +1943,104 @@ real data is not a question this section can answer — it is exactly what the
 rolling-origin comparison against a univariate model exists to settle, and that
 is still not built.
 
+## 4t. Does it forecast better than a univariate model? Measured, and mostly not
+
+*`tools/forecast_vs_univariate.py`. The criterion the whole specification
+question exists to serve, and the one this register did not have. A likelihood
+cannot answer it: the VEC nests the alternative, so its likelihood is higher by
+construction. Only an out-of-sample comparison can.*
+
+### The set-up
+
+Both sides are scored the same way, by `-estwin E -f H`: estimated **once** on
+observations `1..E`, parameters held **fixed**, the origin rolled forward one
+datum at a time, each forecast compared with what actually happened. The
+parameters never see the data they are scored against.
+
+The counterfactual is `drvec`'s **own diagonal rung**: with `r = 0` and
+`-diagar -diagma -diagcov` the exact likelihood factorises (Theorem 9), so that
+fit **is** an ARIMA(`p−1`,1,`q`) on each series separately. Using it instead of
+an outside program means both sides share the sample, the estimator, the
+forecast recursion and the scoring, so what is left between them is the
+cointegrated structure and nothing else.
+
+`E` is 75 % of each sample; RMSE is averaged over the two series; a ratio below
+1 means the VEC forecasts better.
+
+### The three tables
+
+```sh
+python3 tools/forecast_vs_univariate.py 2 1 4 0.75
+python3 tools/forecast_vs_univariate.py 2 0 4 0.75
+python3 tools/forecast_vs_univariate.py 2 1 4 0.75 -mafree
+```
+
+| case | `n` | `q=1`, default | `q=0` | `q=1`, `-mafree` |
+|---|---|---|---|---|
+| | | h=1 … h=4 | h=1 … h=4 | h=1 … h=4 |
+| mink–muskrat | 61 | 1.453 1.124 1.076 1.038 | 1.053 1.012 **0.971** **0.985** | 1.077 1.027 **0.965** **0.947** |
+| Milan | 111 | 1.129 1.159 1.190 1.218 | **0.998** 1.002 1.041 1.111 | 1.135 1.109 1.058 1.021 |
+| Vienna | 112 | **0.916 0.864 0.781 0.749** | **0.990 0.985 0.995** 1.028 | **0.924 0.904 0.872 0.839** |
+| Penn | 92 | **0.976 0.943 0.972 0.931** | **0.990 0.955 0.979 0.953** | **0.961 0.899 0.950** 1.098 |
+| Utrecht | 112 | 1.117 1.352 1.521 1.623 | **0.943 0.947 0.970 0.999** | **0.832 0.778 0.739 0.708** |
+| Aix | 89 | 1.753 2.009 2.127 2.111 | **0.906 0.877 0.905 0.897** | 1.609 1.757 1.724 1.575 |
+| Arévalo | 112 | 1.076 1.161 1.269 1.358 | 1.012 1.023 1.011 1.008 | **0.914 0.870 0.847 0.835** |
+| Angers | 89 | 2.472 2.929 2.781 2.130 | 1.112 1.166 1.208 1.118 | 1.675 1.836 1.870 1.598 |
+| Strasbourg | 112 | 1.047 1.074 1.109 1.054 | **0.989 0.981** 1.027 1.107 | **0.976 0.910 0.898 0.902** |
+| **VEC wins** | | **2/9 2/9 2/9 2/9** | **6/9 5/9 5/9 4/9** | **5/9 5/9 6/9 5/9** |
+
+### What it says
+
+**The moving average is what destroys the forecast.** With `q = 1` under the
+default the VEC loses in seven of nine cases at every horizon, by up to a factor
+of **2.9** (Angers). Drop the moving average and the same cases collapse to
+within a few per cent of the univariate benchmark. That is §4q arriving where it
+matters: a parameter that cannot be identified at these sample sizes is not free
+to carry — it is paid for out of sample.
+
+**At `q = 0` the cointegrated structure is roughly a wash.** The VEC wins about
+half the comparisons and the margins are small — best 0.88 (Aix), worst 1.21
+(Milan at `h = 4`). This is the received empirical result about multivariate
+forecasting, reproduced here on this bank: beating a univariate model is hard,
+and the structure that is worth something for **interpretation** is worth little
+for **prediction**.
+
+**And a result that runs against §4r's decision.** At `q = 1` the **free** class
+forecasts *better* than the default in eight of the nine cases — Utrecht 1.117 →
+0.832, Angers 2.472 → 1.675, Arévalo 1.076 → 0.914. The default sets `Θ₂₂ = 0`,
+and on this bank the data want that entry: it is the same trade the oracle
+measured in §4s from the other side, where imposing it on a process that has it
+cost 10 % of a forecast standard deviation.
+
+### The tension, stated rather than resolved
+
+The three tables do not point the same way, and the honest reading is that **the
+criterion decides the specification**:
+
+* For **interpretation** — `B₂`, weak exogeneity, the long-run matrix — the
+  default of §4r is right, and the argument has not moved: on this bank the free
+  fits sit on the invertibility boundary with `G = 0.02`–`0.18`, deny the rank
+  they were estimated at, and their `B̂₂` disagrees with Johansen's by 0.1 to 0.4
+  (§4g). A better forecast from a model that denies its own rank is not a model
+  to publish a cointegrating vector from.
+* For **forecasting**, on this bank, the free class does better — while being
+  inadmissible — and `q = 0` does better than both.
+
+So the moving average in this model class is, on this kind of data, a liability
+at both ends: unidentifiable when free (§4q), and costly when restricted (here).
+The protocol in [GETTING_STARTED.md](GETTING_STARTED.md) already says to select
+the rank at `q = 0`; these measurements say something stronger, and it is a
+recommendation this register can now make on evidence: **for forecasting, `q = 0`
+is not just where the rank test means what it says — it is where to stop.**
+
+### What this does not establish
+
+Nine bivariate cases, one estimation window, one `p`, and no test of whether any
+difference is significant — the number of origins runs from 13 to 24, which is
+too few for a Diebold–Mariano to say much. It is enough to answer the question
+that had no answer at all, and not enough to rank specifications on a single
+case.
+
 ## 5. What is not in the register, and why
 
 * **The Census Housing example** of the AddOn (Hillmer & Tiao 1979): the data

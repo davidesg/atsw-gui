@@ -608,8 +608,8 @@ another»*.
 | # | criterio | estado |
 |---|---|---|
 | P5.1 | `drvec` prevé en niveles con bandas, y la previsión a un paso coincide con el residuo del ajuste | **✔ 2026-08-20**: `-f H`, y el certificado da 3.5e−04 —que es la truncación de `ξ`— y 1.8e−15 con `-m 2`. Más un segundo certificado que el criterio no pedía y que hacía falta: la banda a un paso es la covarianza de la innovación leída en niveles, comprobada contra la `Σ` del vector de parámetros en cinco configuraciones. Ver [FORECAST.md](FORECAST.md) |
-| P5.2 | evaluación de origen móvil implementada y comprobada contra un caso cuyo resultado se puede calcular a mano | pendiente |
-| P5.3 | **la tabla VEC contra univariante existe y está publicada, gane o pierda** | pendiente |
+| P5.2 | evaluación de origen móvil implementada y comprobada contra un caso cuyo resultado se puede calcular a mano | **✔ 2026-08-20**: `-estwin E -f H`, con el protocolo de la suite (estimar una vez en 1..E, parámetros fijos, origen rodando). El caso a mano es el de un solo origen, donde MAE y RMSE son el mismo número por construcción, y la batería lo comprueba junto con el conteo `n − H − E + 1` |
+| P5.3 | **la tabla VEC contra univariante existe y está publicada, gane o pierda** | **✔ 2026-08-20, y PIERDE**: [HOMOLOGATION.md](HOMOLOGATION.md) §4t. Con `q = 1` el VEC pierde en 7 de 9 casos a todos los horizontes, hasta por un factor 2.9; con `q = 0` queda en tablas (6/9, 5/9, 5/9, 4/9) con márgenes de pocos puntos. El contrafactual es el peldaño diagonal del propio programa, que por el Teorema 9 **es** un ARIMA por serie |
 | P5.4 | si pierde en todo el banco, el registro lo dice en la primera página y el programa se describe como lo que entonces es: un estimador de máxima verosimilitud exacta para una clase de modelos, no una herramienta de previsión |
 
 P5.4 no es una cláusula defensiva. Es el punto: la única forma de que este
@@ -680,7 +680,7 @@ publicar mientras siga estando escrito con esta claridad:
 
 ## 9. Orden y por qué
 
-**P1 (hecha) → P4 (hecha) → P5 → P2 → P3 → P6 → (P7 idioma) → (P8 refactor).**
+**P1 (hecha) → P4 (hecha) → P5 (hecha) → P2 → P3 → P6 → (P7 idioma) → (P8 refactor).**
 
 El orden cambió el 2026-08-20, y el motivo es el requisito 6 de §0.
 

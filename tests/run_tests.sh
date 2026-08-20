@@ -1637,12 +1637,63 @@ if awk '/^ *[0-9]+ /{if(NF>=5){if(p1!="" && ($3<p1-1e-9 || $5<p2-1e-9)) bad=1; p
     ok "the bands are non-decreasing in the horizon"
 else bad "forecast bands" "a band narrowed as the horizon grew"; fi
 
-#  Con r = 0 no hay bloque W que invertir, y el programa lo dice en vez de
-#  inventarse un nivel.
+#  Con r = 0 no hay bloque W: s = M, todas las series se acumulan, y el paso a
+#  niveles es la integracion pura.  Tiene que funcionar -- es el contrafactual
+#  univariante de P5.3 (el peldano diagonal, Teorema 9) -- y sus bandas tienen
+#  que crecer como las de cualquier I(1).
 run "$MM" 2 1 0 -case 2 -f 3
-if grep -aq '\-f needs r >= 1' "$TMP/case.out"; then
-    ok "with r = 0 the forecast declines and says why"
-else bad "forecast at r=0" "no explanation emitted"; fi
+nrow=$(awk '/^ *[0-9]+ +[\-0-9.]+ +[0-9.]+ +[\-0-9.]+ +[0-9.]+$/{c++} END{print c+0}' "$TMP/case.out")
+if [ "$nrow" -ge 3 ]; then ok "the forecast works at r = 0 (pure integration, $nrow rows)"
+else bad "forecast at r=0" "no forecast table, got $nrow rows"; fi
+echo
+
+# 8e. P5.2 — LA EVALUACION DE ORIGEN MOVIL.  Lo que se comprueba es lo unico
+#     que se puede comprobar sin un oraculo externo: identidades.
+#
+#     Con UN SOLO origen, el error medio absoluto y la raiz del error cuadratico
+#     medio son el mismo numero -- promedio de un elemento --, asi que MAE = RMSE
+#     exactamente.  Es un caso que se calcula a mano y ata el conteo, el
+#     emparejamiento de cada prevision con su dato y las dos formulas a la vez.
+#     Y el numero de origenes tiene que ser n - H - E + 1.
+echo "[8e] rolling-origin evaluation (P5.2)"
+
+nfull=$(awk '/observations used/{print $4}' /dev/null 2>/dev/null; echo "")
+#  n = 61 y H = 1, luego E = 60 deja exactamente un origen: n - H - E + 1 = 1.
+run "$MM" 2 1 1 -case 2 -f 1 -estwin 60
+nor=$(awk '/origins,/{print $1}' "$TMP/case.out")
+if [ "$nor" = "1" ]; then ok "one origin when the window leaves room for exactly one"
+else bad "rolling: origin count (single)" "got '${nor:-nothing}', expected 1"; fi
+
+#  Solo dentro del bloque de la evaluacion: el .out lleva otras tablas con la
+#  misma forma y compararlas seria comparar otra cosa.
+bad_pair=$(awk '/Rolling-origin/{inb=1}
+           inb && /^ *[0-9]+ +[A-Za-z_]+ +[0-9.eE+-]+ +[0-9.eE+-]+ +[0-9.eE+-]+$/{
+             d=$3-$4; if(d<0)d=-d; if(d>1e-9) c++} END{print c+0}' "$TMP/case.out")
+if [ "$bad_pair" = "0" ]; then
+    ok "with a single origin MAE equals RMSE exactly, as it must"
+else bad "rolling: MAE vs RMSE" "$bad_pair rows disagree with one origin"; fi
+
+#  Y el conteo con mas de uno.
+run "$MM" 2 1 1 -case 2 -f 4 -estwin 45
+nor=$(awk '/origins,/{print $1}' "$TMP/case.out")
+if [ "$nor" = "13" ]; then ok "origins = n - H - E + 1 = 13 for E=45, H=4, n=61"
+else bad "rolling: origin count (13)" "got '${nor:-nothing}', expected 13"; fi
+
+#  El contrafactual univariante es el peldano diagonal, y tiene que correr.
+run "$MM" 2 1 0 -case 2 -diagar -diagma -diagcov -f 4 -estwin 45
+if grep -aq 'Rolling-origin' "$TMP/case.out"; then
+    ok "the diagonal rung (= an ARIMA per series) is scored the same way"
+else bad "rolling at r=0" "no evaluation emitted"; fi
+
+#  Y los rechazos: sin horizonte, y con una ventana que no deja sitio.
+run "$MM" 2 1 1 -case 2 -estwin 45
+grep -aq 'estwin needs a horizon' "$TMP/case.out" \
+    && ok "-estwin without -f says what is missing" \
+    || bad "-estwin without -f" "no explanation"
+cp "$MM" "$TMP/case.inp"
+if "$DRVEC" "$TMP/case" 2 1 1 -case 2 -f 4 -estwin 5 2>&1 | grep -q 'is not inside'; then
+    ok "a window outside 10..n-1 is refused"
+else bad "-estwin range" "a 5-observation window was accepted"; fi
 echo
 
 # ================================================== 9 MEMORY (opt-in) ==

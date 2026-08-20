@@ -48,6 +48,8 @@ int  nser, nobs;
    they are reconstructed by cumulating from an arbitrary zero origin, which is
    the legacy behaviour and is wrong for case 1 (see build_y2_levels).         */
 real **Y2_levels = NULL;
+int    global_estwin = 0;   /* -estwin E: estimar en 1..E y rodar el origen (P5.2) */
+int    nobs_full     = 0;   /* observaciones disponibles, antes de truncar         */
 int  global_levels = 1;   /* default: .inp carries every series in LEVELS.
                              -differenced selects the legacy layout, where
                              cols 1..s arrive already differenced.            */
@@ -454,6 +456,7 @@ static void build_y2_levels(void)
     Y2_levels = matrix(1, nobs, 1, s);
     alloc_nobs = nobs;
     alloc_s    = s;
+    nobs_full  = nobs;
 
     if (global_levels) {
         if (nobs < 3) {
@@ -476,6 +479,21 @@ static void build_y2_levels(void)
         for (t = 2; t <= nobs; t++)
             for (i = 1; i <= s; i++)
                 Y2_levels[t][i] = Y2_levels[t-1][i] + datamat[t][i];
+    }
+
+    /*  P5.2 — LA VENTANA DE ESTIMACION.  Con -estwin E se estima en 1..E y se
+     *  evalua sobre lo que viene despues, que es la unica forma de que la
+     *  medida sea FUERA DE MUESTRA: los parametros no pueden haber visto el
+     *  dato contra el que se les compara.  Las matrices se llenan enteras y
+     *  solo se recorta `nobs`, de modo que la evaluacion tiene el resto a mano
+     *  y las liberaciones siguen usando alloc_nobs, que es el tamano real.    */
+    if (global_estwin > 0) {
+        if (global_estwin < 10 || global_estwin >= nobs_full) {
+            fprintf(stderr, "drvec: -estwin %d is not inside 10..%d\n",
+                    global_estwin, nobs_full - 1);
+            exit(1);
+        }
+        nobs = global_estwin;
     }
 }
 
@@ -4205,6 +4223,159 @@ static void level_error_map(real **Csum, real **Psi_m, real **B2,
         }
 }
 
+/*  forecast_core — la recursion y el paso a niveles, desde un ORIGEN cualquiera.
+ *
+ *  Existe como funcion aparte porque la usan dos cosas: -f, que prevé desde el
+ *  final de la muestra, y -estwin, que lo hace desde cada origen de una ventana
+ *  movil.  Escribirla dos veces seria repetir el error que este fichero ya
+ *  cometio con compute_psi_weights.
+ *
+ *  Yb recibe las H previsiones de Ybar y lev las de NIVEL, en el orden de
+ *  columnas del .inp: Y2 (1..s) y luego Y1 (s+1..M).  Con r = 0 no hay bloque
+ *  W, s = M, y el paso a niveles es la acumulacion pura de las M diferencias:
+ *  el bucle de Y1 queda vacio y no hace falta un caso aparte.                 */
+static void forecast_core(struct Tvarma *v, real **B2, int o, int H,
+                          real **Yb, real **lev)
+{
+    int M = v->m, r = global_r, s = M - r, p = v->p, q = v->q;
+    int h, i, j, k, l;
+
+    for (h = 1; h <= H; h++) {
+        for (i = 1; i <= M; i++) {
+            real acc = 0.0;
+            for (k = 1; k <= p; k++) {
+                int t = h - k;
+                for (l = 1; l <= M; l++)
+                    acc += v->phi[k][i][l]
+                         * ((t >= 1 ? Yb[t][l] : v->w[o + t][l]) - v->mu[l]);
+            }
+            for (k = 1; k <= q; k++) {
+                int t = h - k;
+                if (t >= 1) continue;               /* a futuro = 0           */
+                for (l = 1; l <= M; l++) acc -= v->theta[k][i][l] * v->a[o + t][l];
+            }
+            Yb[h][i] = v->mu[i] + acc;
+        }
+    }
+    for (h = 1; h <= H; h++) {
+        for (i = 1; i <= s; i++)
+            lev[h][i] = (h == 1 ? Y2_levels[o][i] : lev[h-1][i]) + Yb[h][i];
+        for (j = 1; j <= r; j++) {
+            real acc = Yb[h][s + j];
+            for (i = 1; i <= s; i++) acc -= B2[i][j] * lev[h][i];
+            lev[h][s + j] = acc;
+        }
+    }
+}
+
+/*  rolling_eval — P5.2: EVALUACION DE ORIGEN MOVIL, QUE ES LA UNICA MEDIDA
+ *  QUE DICE SI EL MODELO SIRVE.
+ *
+ *  El protocolo es el de la suite, no uno nuevo: estimar UNA VEZ en 1..E,
+ *  mantener los parametros FIJOS, y avanzar el origen de uno en uno sobre
+ *  E..n-H comparando cada prevision con lo que de verdad paso.  La ayuda del
+ *  porte del programa hermano lo describe como "the only way to decide
+ *  EMPIRICALLY whether one model forecasts better than another", y tiene razon:
+ *  la verosimilitud, el AIC y las bandas teoricas no lo dicen.
+ *
+ *  POR QUE LOS PARAMETROS SE FIJAN.  Si se reestimara en cada origen, la medida
+ *  seguiria siendo honesta pero costaria n-E-H optimizaciones; y sobre todo
+ *  mezclaria dos cosas -- lo que el modelo predice y lo que la reestimacion
+ *  aprende -- que conviene separar.  Lo importante es que los parametros NO
+ *  hayan visto el dato contra el que se les compara, y eso lo da la ventana.
+ *
+ *  LOS RESIDUOS.  La recursion necesita los choques hasta el origen, y en los
+ *  origenes posteriores a E no existen todavia.  Se obtienen en UNA pasada:
+ *  se reconstruye Ybar sobre la muestra entera con los parametros de 1..E y se
+ *  llama a elf con atf = TRUE.  No hay adelanto de informacion: cada origen usa
+ *  solo lo que hay hasta el, y los parametros salen de 1..E.                  */
+static int rolling_eval(real *x, int E, int H)
+{
+    int M = nser, r = global_r, s = M - r, i, h, o, nor = 0;
+    int save_nobs = nobs, ifr = 0;
+    struct Tvarma vf;
+    real p1, p2, p3;
+    real **Yb, **lev, **sae, **sse, **spe, **B2r;
+    int  **cnt;
+
+    if (E + H > nobs_full) return 1;
+
+    nobs = nobs_full;                      /* filtrar sobre TODA la muestra   */
+    vec_shootx(x, &vf, &ifr, 1, 0);
+    if (ifr == 0)
+        elf(vf.m, vf.n, vf.p, vf.q, vf.mu, vf.phi, vf.theta, vf.qq, vf.w,
+            1.0, vf.xitol, TRUE, vf.a, &p1, &p2, &p3, &ifr);
+    if (ifr > 0) {
+        vec_shootx(x, &vf, &ifr, 0, 1);
+        nobs = save_nobs;
+        return 1;
+    }
+
+    /*  B2 del ajuste: el ultimo bloque del vector, salvo que -fixb2 lo sujete. */
+    B2r = matrix(1, (s > 0 ? s : 1), 1, (r > 0 ? r : 1));
+    {
+        int nmean, nlam, nmid, ntail, idx;
+        par_blocks(&nmean, &nlam, &nmid, &ntail);
+        idx = nmean + nlam + nmid + 1;
+        for (int j = 1; j <= r; j++)
+            for (i = 1; i <= s; i++)
+                B2r[i][j] = global_fixb2 ? B2_fixed[i][j] : x[idx++];
+    }
+
+    Yb  = matrix(1, H, 1, M);   lev = matrix(1, H, 1, M);
+    sae = matrix(1, H, 1, M);   sse = matrix(1, H, 1, M);
+    spe = matrix(1, H, 1, M);   cnt = imatrix(1, H, 1, M);
+    for (h = 1; h <= H; h++)
+        for (i = 1; i <= M; i++) {
+            sae[h][i] = sse[h][i] = spe[h][i] = 0.0; cnt[h][i] = 0;
+        }
+
+    for (o = E; o + H <= nobs_full; o++) {
+        forecast_core(&vf, B2r, o, H, Yb, lev);
+        nor++;
+        for (h = 1; h <= H; h++)
+            for (i = 1; i <= M; i++) {
+                /*  El nivel realizado: el bloque Y2 esta en Y2_levels y el
+                 *  bloque Y1 en datamat, que build_y2_levels dejo en NIVELES. */
+                real act = (i <= s) ? Y2_levels[o + h][i] : datamat[o + h][i];
+                real e   = act - lev[h][i];
+                sae[h][i] += fabs(e);
+                sse[h][i] += e * e;
+                if (fabs(act) > 1.0e-12) spe[h][i] += fabs(e / act);
+                cnt[h][i]++;
+            }
+    }
+
+    fprintf(outputv,
+        "\n=== Rolling-origin evaluation (out of sample) ===\n"
+        "  Estimated ONCE on observations 1..%d; parameters held FIXED.\n"
+        "  %d origins, %d..%d, each compared with what actually happened.\n"
+        "  The parameters have not seen the data they are scored against.\n\n",
+        E, nor, E, E + nor - 1);
+    fprintf(outputv, "   h  series             MAE           RMSE          MAPE%%\n");
+    for (h = 1; h <= H; h++)
+        for (i = 1; i <= M; i++)
+            fprintf(outputv, "%4d  %-12s %13.6f  %13.6f  %13.4f\n", h,
+                    series_names ? series_names[i] : "y",
+                    sae[h][i] / cnt[h][i], sqrt(sse[h][i] / cnt[h][i]),
+                    100.0 * spe[h][i] / cnt[h][i]);
+    fprintf(outputv,
+        "\n  These are the numbers that decide whether the model earns its\n"
+        "  parameters.  A likelihood, an AIC and a theoretical band do not.\n");
+    if (!quiet_mode)
+        printf("Rolling origin: %d origins from %d, H = %d, written to the .out\n",
+               nor, E, H);
+
+    free_imatrix(cnt, 1, H, 1, M);
+    free_matrix(spe, 1, H, 1, M);  free_matrix(sse, 1, H, 1, M);
+    free_matrix(sae, 1, H, 1, M);
+    free_matrix(lev, 1, H, 1, M);  free_matrix(Yb, 1, H, 1, M);
+    free_matrix(B2r, 1, (s > 0 ? s : 1), 1, (r > 0 ? r : 1));
+    vec_shootx(x, &vf, &ifr, 0, 1);
+    nobs = save_nobs;
+    return 0;
+}
+
 /*  forecast_vec — H pasos desde el final de la muestra, en niveles.
  *  Devuelve 0 si pudo.  Las columnas son las del .inp: Y2 (1..s), Y1 (s+1..M). */
 static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
@@ -4229,26 +4400,11 @@ static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
     for (i = 1; i <= M; i++)
         for (j = 1; j <= M; j++) Sig[i][j] = v->sigma2 * v->qq[i][j];
 
-    /*  [1] La media, con la recursion de elf: (w - mu) = SUM phi (w - mu)
-     *      + a - SUM theta a.  Los a futuros son cero; los pasados, los
-     *      residuos guardados.                                               */
-    for (h = 1; h <= H; h++) {
-        for (i = 1; i <= M; i++) {
-            real acc = 0.0;
-            for (k = 1; k <= p; k++) {
-                int t = h - k;
-                for (l = 1; l <= M; l++)
-                    acc += v->phi[k][i][l]
-                         * ((t >= 1 ? Yb[t][l] : v->w[n + t][l]) - v->mu[l]);
-            }
-            for (k = 1; k <= q; k++) {
-                int t = h - k;
-                if (t >= 1) continue;               /* a futuro = 0           */
-                for (l = 1; l <= M; l++) acc -= v->theta[k][i][l] * v->a[n + t][l];
-            }
-            Yb[h][i] = v->mu[i] + acc;
-        }
-    }
+    /*  [1] La media y [2] los niveles: los calcula forecast_core(), que es la
+     *      misma funcion que usa la evaluacion de origen movil.  Una sola
+     *      copia de la recursion, que es lo que este fichero ya aprendio por
+     *      las malas con compute_psi_weights.                                */
+    forecast_core(v, B2, n, H, Yb, lev);
 
     /*  [1b] EL CERTIFICADO.  La recursion de [1] se aplica hacia atras, dentro
      *  de la muestra: la prediccion a un paso de Ybar_t con la informacion
@@ -4285,18 +4441,6 @@ static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
             "  it to machine zero.  Measured on mink-muskrat: 3.5e-04 against\n"
             "  1.8e-15.  Same mechanism as HOMOLOGATION.md 1b.\n",
             worst, n - t0 + 1, fabs(v->xitol));
-    }
-
-    /*  [2] Los niveles.  Y2 acumula desde el ultimo nivel REAL; Y1 = W - B2'Y2,
-     *      que es la misma inversion que usa simulate_h0.                     */
-    for (h = 1; h <= H; h++) {
-        for (i = 1; i <= s; i++)
-            lev[h][i] = (h == 1 ? Y2_levels[n][i] : lev[h-1][i]) + Yb[h][i];
-        for (j = 1; j <= r; j++) {
-            real acc = Yb[h][s + j];
-            for (i = 1; i <= s; i++) acc -= B2[i][j] * lev[h][i];
-            lev[h][s + j] = acc;
-        }
     }
 
     /*  [3] Las bandas, por el mapa de [4] arriba y no por otro camino.        */
@@ -4427,6 +4571,7 @@ static const struct opt_spec {
     { "-marow",       A_NONE,     NULL   },
     { "-mafree",      A_NONE,     NULL   },
     { "-f",           A_INT_POS,  "H"    },
+    { "-estwin",      A_INT_POS,  "E"    },
     { "-matri",       A_NONE,     NULL   },
     { "-rankadm",     A_TOL_OPT,  "[tol]"},
     { "-matest",      A_INT_POS,  "N"    },
@@ -4797,6 +4942,8 @@ int main(int argc, char *argv[])
         else if (strcmp(argv[i], "-mafree") == 0)   global_mafree = 1;
         else if (strcmp(argv[i], "-f") == 0 && i+1 < argc)
             global_fcast = atoi(argv[++i]);
+        else if (strcmp(argv[i], "-estwin") == 0 && i+1 < argc)
+            global_estwin = atoi(argv[++i]);
         else if (strcmp(argv[i], "-warma") == 0)    global_warma = 1;
         else if (strcmp(argv[i], "-specs") == 0)    global_specs = 1;
         else if (strcmp(argv[i], "-artest") == 0 && i+1 < argc)
@@ -6774,11 +6921,14 @@ int main(int argc, char *argv[])
 
         /*  P5 — la prevision, aqui: es el ultimo sitio donde B2m sigue vivo y
          *  donde el ajuste ya esta hecho y diagnosticado.                    */
-        if (global_fcast > 0 && r > 0)
-            forecast_vec(&varma1, B2m, global_fcast, 0.95);
-        else if (global_fcast > 0)
-            fprintf(outputv, "\n(-f needs r >= 1: with r = 0 there is no W "
-                             "block to invert back to levels)\n");
+        if (global_fcast > 0) forecast_vec(&varma1, B2m, global_fcast, 0.95);
+        if (global_estwin > 0) {
+            if (global_fcast < 1)
+                fprintf(outputv, "\n(-estwin needs a horizon: give -f H)\n");
+            else if (rolling_eval(x, global_estwin, global_fcast) != 0)
+                fprintf(outputv, "\n(-estwin %d leaves no room for %d steps)\n",
+                        global_estwin, global_fcast);
+        }
 
         free_matrix(Lam_m, 1, nser, 1, (r > 0 ? r : 1));
         free_matrix(B2m, 1, s, 1, (r > 0 ? r : 1));

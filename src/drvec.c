@@ -4108,7 +4108,14 @@ int main(int argc, char *argv[])
         printf("                 Sigma diagonal), 1 (Sigma free) and 2 (F and Theta\n");
         printf("                 free), all at r = 0, with their chi2 LRs.  These are\n");
         printf("                 ordinary nested comparisons; adding the VEC matrix\n");
-        printf("                 is not, and lives in -lrtest\n");
+        printf("                 is not, and lives in -lrtest\n\n");
+        /*  El programa tiene mas opciones de las que caben aqui, y una lista
+         *  duplicada en dos sitios diverge.  Se dice donde esta la completa.  */
+        printf("This is not the full list: docs/USAGE.md documents every option,\n"
+               "and docs/GETTING_STARTED.md the order to use them in -- select\n"
+               "the rank at q = 0, look at -specs at the selected rank, then\n"
+               "estimate.  Every fit reports the rank condition, and one that\n"
+               "denies the rank it was estimated at says so.\n");
         exit(1);
     }
 

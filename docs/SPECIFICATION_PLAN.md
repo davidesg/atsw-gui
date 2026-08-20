@@ -1,5 +1,10 @@
 # The specification, the admissible set, and how `drvec` should be built
 
+> **Status: the five steps are done.** What each one produced is marked in §7,
+> the decision it led to is §8, and what it left open is §9. The measurements
+> live in [HOMOLOGATION.md](HOMOLOGATION.md) §4g–§4p and the theory in
+> [THEORY.md](THEORY.md).
+
 *Written after the measurements of [HOMOLOGATION.md](HOMOLOGATION.md) §4g–§4l
 and before the work they imply, so the route is decided once. Same genre as
 [VEC_EMBEDDING_PLAN.md](VEC_EMBEDDING_PLAN.md): what fails, the precedent, what
@@ -221,3 +226,40 @@ is no default that is both admissible and unbiased, because building one needs
 a rank test whose alternative is admissible, and §4n records why that cannot be
 written in the restricted classes. Until then the honest default is the widest
 model with its verdict attached.
+
+## 9. What the plan produced, and what it left open
+
+**Produced.** Five options that did not exist and one that did not work:
+`-warma` with its inverse map, `-specs`, `-rankadm` with a floor set from the
+measurement rather than from taste, `-artest`, and a rank condition reported at
+every fit and shouted on the terminal when it fails. Two theorems written down
+that the literature states for neighbouring models and not for this one
+(Theorems 3 and 4 of [THEORY.md](THEORY.md)), and one converse shown to be
+asserted rather than proved (Theorem 6).
+
+**Changed about what the program says.** One applied conclusion moved: the
+cointegration evidence in the eight wheat pairs is unanimous at `q = 0` and
+mostly gone at `q = 1`, for a reason that is now a theorem rather than a
+shrug — the free moving average degenerates in the direction carrying the common
+trend. The protocol that follows is in
+[GETTING_STARTED.md](GETTING_STARTED.md).
+
+**Changed about what the program computes.** Nothing by default. No golden value
+moved, and that was verified rather than assumed.
+
+**Left open, and stated so it is not read as closure.**
+
+* There is **no default that is both admissible and unbiased**, because building
+  one needs a rank test whose alternative is admissible, and §4n records why
+  that cannot be written in the restricted classes: they are defined relative to
+  the `r/s` split and collapse at `r = 0`.
+* The restricted classes carry the wheat pairs and **fail on `mink_muskrat`**
+  (§4l). Nothing here explains why that dataset is different, beyond the record
+  already noting that Johansen and `drvec` disagree about its `B₂` and that its
+  surface has been hard since the beginning.
+* The moving-average half of the triangular class is **rejected** (§4i) and its
+  autoregressive half is **not** (§4p). The specification that fits both
+  findings — a free `T₂₂` that cannot reach one — is `-marow`, but no test of
+  `-marow` against the free model with a valid distribution has been built.
+* Four of the bootstrap p-values in §4n and §4i sit at the floor `1/(B+1)`.
+  Resolving 1 % needs `B ≥ 999`, which nothing here has run.

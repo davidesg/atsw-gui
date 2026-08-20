@@ -66,9 +66,13 @@ The resulting VARMA on Ybar_t is **stationary** and estimable by standard EML.
 
 ```
 drvec file p q r [-mean] [-case 1|2|3] [-diagar] [-diagma] [-diagcov] [-m 1|2]
-                 [-differenced] [-fixb2 [v]] [-lrtest]
+                 [-differenced] [-fixb2 [v]] [-lrtest] [-bootstrap N]
                  [-writeres pfx] [-writeinp pfx] [-seed pfx] [-seedybar pfx]
-                 [-alpha file] [-weakex i] [-eval]
+                 [-alpha file] [-weakex i] [-eval] [-multistart n] [-interv pfx]
+                 [-warma] [-mawarma] [-marow] [-matri]        the specification
+                 [-rankadm [tol]] [-specs]                    admissibility
+                 [-matest N] [-artest N]                      its two tests
+                 [-rungs] [-seedgate] [-seedjoh] [-seedb2 v]  ladders and seeds
 ```
 
 | Argument | Description |
@@ -94,6 +98,35 @@ drvec file p q r [-mean] [-case 1|2|3] [-diagar] [-diagma] [-diagcov] [-m 1|2]
 | `-alpha file` | Impose `α = Aψ` with `A` read from `file` (Johansen–Swensen H₁(r)), and report the LR against the free model |
 | `-weakex i` | Shorthand for the `A` that declares equation `i` weakly exogenous |
 | `-eval` | Evaluate the likelihood **at the starting point** and stop, without optimising |
+| `-multistart n` | Estimate from `n` jittered starting points and keep the best. The **spread** is the diagnostic |
+| `-interv pfx` | Subtract the deterministic interventions declared in `pfx.<i>.pre` before estimating |
+
+### The specification of `Θ` and the short-run dynamics
+
+Measured on this data, the default — a free `Θ` — lands where the fitted model
+**denies the rank it was estimated at**, and its `B̂₂` then disagrees with every
+admissible route. See [docs/THEORY.md](docs/THEORY.md) for the condition and
+[docs/HOMOLOGATION.md](docs/HOMOLOGATION.md) §4g–§4p for the measurements.
+
+| Option | Description |
+|--------|-------------|
+| `-warma` | Parameterise the **transformed** system directly: `Φ*_k = [0 Ψ_k ; 0 Φ_k]`, `Θ*` in the `W` block, `B₂` entering only through the data. The class Phillips' triangular form and the BVECM theorems cover |
+| `-mawarma` | `Θ = [T₁₁ T₁₁B₂′ ; 0 0]`, the structure a WARMA process implies for its VEC representation |
+| `-marow` | `Θ = [T₁₁ T₁₂ ; 0 0]` — the differenced block carries no moving average of its own |
+| `-matri` | `Θ = [T₁₁ T₁₂ ; 0 T₂₂]`, block-triangular. Measured **not** to remove the pathology |
+| `-specs` | All five, in one run, with an **admissible** column and no `χ²` where the theory gives none |
+| `-rankadm [tol]` | Refuse parameter points where `σ_min(Λ⊥′Θ(1)B⊥) < tol`. The statistic is **reported always** |
+| `-matest N` | Bootstrap the inherited moving average against the free one |
+| `-artest N` | Bootstrap `Γ_i = M_iα′` (every lag through `W`) against free `F` |
+| `-rungs` | The rank-0 ladder: `F, Θ, Σ` diagonal → `Σ` free → `F, Θ` free, with their `χ²` LRs |
+| `-seedjoh` | Seed `B₂` with the canonical reduced-rank solution instead of static OLS |
+| `-seedgate` | Seed the `r ≥ 1` fit by profiling `Λ` and `B₂` on the `r = 0` rung |
+| `-seedb2 v` | Start `B₂` at `v` and estimate it free — a measuring instrument |
+
+**The order to do things in**, which is what the measurements say rather than a
+convention: select the rank at `q = 0` (a free moving average absorbs what the
+rank test measures), look at `-specs` at the selected rank, then estimate. See
+[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
 
 ### The bridge to the suite
 

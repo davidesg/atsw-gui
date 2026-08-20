@@ -401,7 +401,35 @@ leaves clean residuals on all eight, and that reproduces exactly. It does show
 that the sequential test's verdict on these samples can depend on how hard the
 optimiser is asked to look, which is a caution the earlier tables did not carry.
 
-## 4. Cases run without an external reference
+## 4. Cases run without an external reference, and the specification work
+
+Section 4 grew into the record of one investigation, so here is its map. The
+question it answers, in one line: **the fitted model has to be a model of the
+rank it was estimated at, and by default it was not.**
+
+| | |
+|---|---|
+| **4** | cases run without an external reference |
+| **4b** | the seeding baseline: route (C) as it stands |
+| **4c** | route (B) against (C) — and it falls against (B) |
+| **4d** | does a bad `B₂` seed drive the moving average to the boundary? No |
+| **4e** | the canonical seed, without the moving average and with it |
+| **4f** | does the moving average inherit the univariate structure? Below `r = 1`, yes |
+| **4g** | **the moving average is not free: it inherits** — the specification error |
+| **4h** | **the rank condition**, and what Mauricio (2006) leaves unguarded |
+| **4i** | the inherited moving average, tested with the distribution it has |
+| **4j** | which half of the structure the data reject, and the specification that follows |
+| **4k** | what the BVECM theorems actually cover, and what the equivalence does not prove |
+| **4l** | the theorems' class estimated in its own coordinates, and back again |
+| **4m** | the specification ladder, read on four cases |
+| **4n** | **the rank test**, and what the moving average was doing to it |
+| **4o** | the default, decided and not moved |
+| **4p** | the autoregressive half of the class, tested — and it survives |
+
+The theory these rest on is [THEORY.md](THEORY.md); the work they set up and
+closed is [SPECIFICATION_PLAN.md](SPECIFICATION_PLAN.md).
+
+### Cases run without an external reference
 
 These establish that the program handles the shape, not that the answer is right.
 

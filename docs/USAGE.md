@@ -122,6 +122,19 @@ The floor for the admissible column is `-rankadm`'s, whose default (0.2) is the
 empty gap between the 0.016–0.133 the degenerate fits give across the whole bank
 and the 0.52–1.00 the admissible ones do.
 
+### Two more, and they are older than the rest
+
+| | |
+|---|---|
+| `-levels` | every series read in levels and `∇Y₂` formed internally. **The default**; the flag exists so a script can say so |
+| `-interv pfx` | subtract the deterministic interventions declared in `pfx.<i>.pre` before estimating |
+
+`-interv` matters when the univariate models carry interventions — impulses at
+1799, 1779, 1810 and so on in the price series — because estimating the VEC
+while ignoring them is estimating a different model. The subtraction happens
+where `fue`'s own reader does it, before the levels are rebuilt, and it is
+recorded in the `.out`.
+
 ### The rank condition
 
 | | |

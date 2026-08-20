@@ -4,7 +4,7 @@
 
 ```sh
 make          # needs gcc and GSL (pkg-config gsl)
-make test     # 150 checks; takes a couple of minutes
+make test     # 152 checks; takes a couple of minutes
 ```
 
 `make test` builds a second small binary, `bin/pre_probe`, which the suite uses

@@ -549,6 +549,65 @@ que `-marow` (anula `T₂₂`) sí. Con `T₂₂` libre el optimizador lo lleva 
 factor `(1−B)` sobre el bloque ya diferenciado, el modelo deshaciendo su propia
 diferenciación.
 
+### Corolario 6.3 (la puerta del motor **es** la condición de admisibilidad)  `[new here]`
+
+**Enunciado.** Sea `Θ̃(L) = I − Σ_{k=1}^{q}Θ̃_kL^k` con las `s` filas inferiores de
+**cada** `Θ̃_k` nulas — la condición (6) del Teorema 6, pero también la clase más
+débil que solo anula esas filas y deja libre el bloque cruzado. Escríbase
+`T_k = Θ̃_k[1..r, 1..r]`. Entonces, para todo `q ≥ 1` y todo `(r, s)`:
+
+1. `det Θ̃(1) = det(I_r − Σ_k T_k)`;
+2. los valores propios de la matriz compañera `Mq × Mq` de `Θ̃(L)` son los de la
+   compañera `rq × rq` del bloque `r × r`, más `sq` ceros;
+3. por tanto `Θ̃(L)` es invertible **si y solo si** lo es el bloque `r × r`, y por
+   el Corolario 3.1 la condición de rango del Teorema 3 se cumple
+   automáticamente en cuanto lo sea.
+
+**Consecuencia.** El punto de `𝒫 \ 𝒞` que el Teorema 4 muestra que la
+verosimilitud alcanza y premia, y que el Teorema 5 muestra que **ningún chequeo
+de raíces del motor puede ver, no es alcanzable en esta clase**: ahí las dos
+condiciones coinciden y el chequeo que el motor ya hace —`chekma` sobre `Θ̃`— es
+exactamente el chequeo sobre el bloque `r × r`. El Teorema 5 es un enunciado
+**sobre la clase libre**.
+
+**Prueba.** (1) Con las filas inferiores nulas, `Σ_kΘ̃_k = [ΣT_k, ΣC_k; 0, 0]`
+para bloques cruzados `C_k` cualesquiera, luego
+`Θ̃(1) = I − Σ_kΘ̃_k = [I_r − ΣT_k, −ΣC_k; 0, I_s]`, triangular superior por
+bloques, y su determinante es el producto de los de la diagonal:
+`det(I_r − ΣT_k)·det(I_s)`. El bloque cruzado no interviene.
+
+(2) La compañera de `Θ̃(L)` es `𝒞 = [Θ̃_1 … Θ̃_q ; I 0 … ; ⋱]`. Permútense
+filas y columnas agrupando, dentro de cada bloque de retardo, las `r` primeras
+coordenadas antes que las `s` últimas. En esa base `𝒞` es triangular por
+bloques: el bloque diagonal superior es la compañera `rq × rq` del bloque
+`r × r` — porque las filas inferiores de cada `Θ̃_k` son nulas, ninguna
+coordenada del bloque `s` alimenta a las del bloque `r` —, y el bloque diagonal
+inferior es la compañera de un operador **idénticamente nulo** en esas `s`
+filas, es decir nilpotente, con `sq` valores propios en cero. Los valores
+propios de una matriz triangular por bloques son los de sus bloques diagonales. ∎
+
+(3) es (2) más el Corolario 3.1.
+
+**Comprobado numéricamente**, y no solo demostrado, para `(r,s,q)` = (1,1,1),
+(2,3,1), (2,1,2), (3,2,3) y (1,4,2), con bloques superiores aleatorios: la
+diferencia en (1) es **0.00e+00** y la de (2) es a lo sumo **1.3·10⁻¹⁵**
+(`tools/sim/ma_identification.py algebra`).
+
+**Qué añade sobre el Corolario 6.2.** C6.2 da (1) para `q = 1` bajo la
+estructura completa de (6). Lo nuevo es que (1) vale para todo `q` y **sin** el
+bloque cruzado heredado —basta la fila inferior nula, que es lo que `-marow`
+impone y lo que §4j del registro había localizado midiendo—, y sobre todo (2),
+que es lo que conecta la condición con el chequeo que el motor ya ejecuta.
+
+**Relevancia para el código.** Cambia el estatus de `-mawarma` y `-marow`. No son
+restricciones sobre `𝒫` cuyo cumplimiento haya que comprobar y cuyo óptimo esté
+sesgado por una cota que liga: son **parametrizaciones en las que `𝒞` es el
+espacio entero**. El argumento de `SPECIFICATION_PLAN.md` §8 para no hacer
+admisible el defecto —que `-rankadm` da una cota sesgada a la baja— es correcto
+sobre `-rankadm` y **no se aplica** aquí, porque aquí no hay cota. Con `M = 2`,
+`r = 1` la condición de admisibilidad pasa de ser un rango de una matriz `2 × 2`
+que el motor no ve a ser `|θ_w| < 1`, un escalar que el motor ya comprueba.
+
 ### Teorema 6b (Corolario 2 del BVECM: la herencia del MA)  `[BVECM, inédito]`
 
 **Enunciado.** Sea `{zₜ}` la WARMA completa `Φ_w(B)wₜ = Θ_w(B)aₜ`,
@@ -792,6 +851,7 @@ el resto de este documento cierra:
 | T4, T5 | por qué el optimizador cae en `det Θ(1)=0` | explica el 0.99995* y el termcode 3 |
 | T6, 6b | la estructura del MA (herencia) | `-mawarma`, `-marow`, `-matri`, `-warma` |
 | C6.2 | el cero que importa es `T₂₂` | §4j del registro |
+| **C6.3** | **en la clase de T6, la puerta del motor ES la condición de admisibilidad** | `-mawarma`, `-marow`: hace `𝒞` el espacio entero |
 | T7 | frontera en Λ=0 (B₂ no identificado) | `-seedgate`, nula del test de rango |
 | T8 | asintótica del test de rango (MA no cambia el límite) | `-lrtest` + `-bootstrap` |
 | T9 | factorización del peldaño diagonal | contrato `.pre`, identidad de cruce |
@@ -803,3 +863,9 @@ La línea que une todos los resultados es el **Teorema 3**: la condición
 `rango(Λ⊥′Θ(1)) = s` es la única que la literatura no escribe en los parámetros, y
 es exactamente la que distingue el modo admisible del modo de frontera que los
 ajustes libres visitan.
+
+Y la línea que la **cierra** es el Corolario 6.3. Los Teoremas 4 y 5 dicen que en
+la clase libre esa condición es alcanzable, premiada e invisible; C6.3 dice que en
+la clase del Teorema 6 es automática y que el chequeo que el motor ya hace la
+impone. El problema no se diagnostica: se elige una parametrización en la que no
+existe.

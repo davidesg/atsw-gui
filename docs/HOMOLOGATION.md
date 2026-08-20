@@ -1414,6 +1414,14 @@ on two measurements in this register: §4i, where the inherited class is rejecte
 in eight of eleven cases, and §4n, where the constrained fit is shown to be a
 downward-biased bound rather than an answer.
 
+> **Superseded by §4r.** Both legs of that reasoning survive as statements about
+> `-rankadm` and fall as statements about the class of Theorem 6. There is no
+> bound to bind in that class — Corollary 6.3 makes `𝒞` the whole parameter
+> space, so it is a **parameterisation** and not a restriction — and §4i's
+> rejection was measured against an alternative whose optimum is on the boundary,
+> where the statistic has no distribution. The default is decided again in §4r,
+> and this time it moves.
+
 ## 4p. The autoregressive half of the class, tested — and it survives
 
 *`-artest N`. Step 5 of [SPECIFICATION_PLAN.md](SPECIFICATION_PLAN.md).
@@ -1732,6 +1740,111 @@ records as assumed by reference.
 WARMA simulation — that the free estimator finds the inherited structure by
 itself — holds, but on a DGP with `φ = 0.6` against `θ = 0.5`, both positive, and
 at `n = 8000`. It is weaker evidence about the estimator than it reads as.
+
+## 4r. The class of Theorem 6 recovers its own truth, and the pathology cannot occur in it
+
+*The question §4q left open: if the free parameterisation cannot be trusted in
+the regime the bank lives in, is there one that can? Corollary 6.3 of
+[DEMOSTRACIONES.md](DEMOSTRACIONES.md) says the answer is algebraic rather than
+numerical, and this section measures both halves of it.*
+
+### The algebra, checked and not only proved
+
+```sh
+python3 tools/sim/ma_identification.py algebra
+```
+
+With the bottom `s` rows of every `Θ̃ₖ` zero — the condition (6) of Theorem 6, and
+also the weaker class `-marow` imposes, whose cross block is free:
+
+| `r` | `s` | `q` | \|`det Θ̃(1) − det(I_r − ΣT_k)`\| | max \|eig − eig of the `r×r` block\| |
+|---|---|---|---|---|
+| 1 | 1 | 1 | 0.00e+00 | 0.00e+00 |
+| 2 | 3 | 1 | 0.00e+00 | 0.00e+00 |
+| 2 | 1 | 2 | 0.00e+00 | 8.12e−16 |
+| 3 | 2 | 3 | 0.00e+00 | 1.27e−15 |
+| 1 | 4 | 2 | 0.00e+00 | 0.00e+00 |
+
+So in this class `Θ̃(L)` is invertible **iff** its `r × r` block is, and by
+Corollary 3.1 the rank condition of Theorem 3 then holds automatically. The
+consequence is the one that matters for the program: the point of `𝒫 \ 𝒞` that
+Theorem 4 shows the likelihood reaches and rewards, and that **Theorem 5 shows no
+root check of the engine can see, is not reachable here** — `chekma` on `Θ̃` is
+exactly `chekma` on the `r × r` block. With `M = 2, r = 1` the admissibility
+condition stops being the rank of a 2×2 matrix the engine cannot see and becomes
+`|θ_w| < 1`, a scalar it already checks.
+
+### And it recovers its truth, where the free version does not
+
+```sh
+python3 tools/sim/ma_identification.py structural 15
+```
+
+The WARMA DGP, whose `w` block is `(1 − 0.6B)wₜ = (1 − θB)aₜ` with `φ = 0.6`
+fixed. `|φ − θ|` is the distance from an exact common factor: small means that
+ARMA(1,1) is **not estimable by any method**, so a failure there says nothing
+about the class. Truth in VEC coordinates: `Θ₁ = [[θ, −0.5θ],[0,0]]`.
+
+| `θ` | \|`φ−θ`\| | spec | `n` | bias | IQR | \|`B̂₂`+0.5\| | MAmin | `G` |
+|---|---|---|---|---|---|---|---|---|
+| −0.5 | 1.10 | `-mawarma` | 120 | +0.034 | 0.402 | 0.0100 | 2.15 | 0.98 |
+| −0.5 | 1.10 | `-mawarma` | 250 | **+0.006** | **0.261** | 0.0048 | 2.03 | 0.98 |
+| −0.5 | 1.10 | free | 250 | +0.087 | 0.554 | 0.0049 | 1.89 | 0.71 |
+| **+0.9** | 0.30 | `-mawarma` | 120 | +0.003 | 1.626 | 0.0016 | 1.11 | 0.93 |
+| **+0.9** | 0.30 | `-mawarma` | 250 | **+0.050** | **0.272** | 0.0009 | 1.05 | 0.96 |
+| **+0.9** | 0.30 | free | 250 | −0.006 | 0.584 | 0.0009 | **1.000** | 0.45 |
+| +0.1 | 0.50 | `-mawarma` | 250 | −0.099 | 0.976 | 0.0032 | 1.55 | 0.97 |
+| +0.1 | 0.50 | free | 250 | +0.314 | 1.125 | 0.0031 | 1.20 | 0.44 |
+| +0.5 | 0.10 | `-mawarma` | 250 | −0.220 | 0.830 | 0.0021 | 2.22 | 0.94 |
+| +0.5 | 0.10 | free | 250 | −0.478 | 2.940 | 0.0026 | 1.11 | 0.16 |
+
+**`θ = +0.9` is the case that matters.** A positive coefficient — the hard regime
+of §4q — with its zero at 1.11, hard against the unit circle. The free fit parks
+**on the gate** (smallest root 1.000, `G = 0.45`) with twice the dispersion.
+`-mawarma` recovers it with bias 0.050 and IQR 0.272, interior, `G = 0.96`.
+
+**`G` does not fall below 0.93 in any cell of the structured class**, against
+0.16–0.79 for the free one, and the smallest MA root never reaches the gate.
+That is Corollary 6.3 appearing as a measurement rather than as algebra.
+
+Where `-mawarma` is poor — `θ = +0.5` with `|φ−θ| = 0.10` — the `w` block is a
+near-cancelling ARMA(1,1) and no parameterisation can help. It is a property of
+the data-generating process, not of the class. `θ = +0.1` is weak-MA and also
+poor, and costs correspondingly little.
+
+### What this reverses
+
+[SPECIFICATION_PLAN.md](SPECIFICATION_PLAN.md) §8 and §4o of this register
+decided the default by arguing that making `-rankadm` the default would replace
+one known error with another, because the constrained fit binds on `L(1)` and
+leaves `L(0)` alone and is therefore a **downward-biased bound**. That argument
+is correct about `-rankadm` and **does not apply** to the class of Theorem 6:
+there is no bound there to bind, because `𝒞` is the whole parameter space. The
+free model and the structured one are not a model and a restriction on it that
+must be tested; they are two parameterisations, one of which contains points the
+model class does not admit.
+
+It also changes how §4i should be read. That section rejected the inherited
+structure in eight of eleven cases — measured against a **free alternative whose
+optimum sits on the boundary**, where by Theorem 10 and Corollary 5.1 the
+statistic has no distribution. §4i says so itself. What it establishes is that
+the alternative is outside the class, not that the class is wrong. Read beside
+§4p, which does not reject the autoregressive half in seven of eight, the whole
+class of Theorem 6 stands with its moving-average half admissible by construction
+and its autoregressive half not rejected — at `q·r²` moving-average parameters
+instead of `q·M²`, which for `M = 2, r = 1` is **one instead of four**.
+
+### What is still not measured, and it is the one that decides
+
+None of this shows the model **forecasts** better than a univariate one, which is
+the only criterion that makes a multivariate specification worth its parameters.
+`drvec` cannot forecast: there is no horizon option among its thirty-three, no
+out-of-sample evaluation, and no comparison against `fue`. The register has
+seventeen hundred lines about estimation and nothing about the question the
+estimates exist to answer. The precedent is in the suite — the transfer-function
+program's `forecast.c`, and its port's rolling-origin evaluation, whose own help
+calls it *"the only way to decide EMPIRICALLY whether one model forecasts better
+than another"*.
 
 ## 5. What is not in the register, and why
 

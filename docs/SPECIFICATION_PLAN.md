@@ -263,3 +263,58 @@ moved, and that was verified rather than assumed.
   `-marow` against the free model with a valid distribution has been built.
 * Four of the bootstrap p-values in §4n and §4i sit at the floor `1/(B+1)`.
   Resolving 1 % needs `B ≥ 999`, which nothing here has run.
+## 10. The default, decided again — and this time it moves
+
+*Written after the measurements of [HOMOLOGATION.md](HOMOLOGATION.md) §4q and
+§4r, and after Corollary 6.3 of `DEMOSTRACIONES.md`. §8 is superseded; the
+reasoning that produced it is left standing above, because seeing why a correct
+argument was applied to the wrong object is worth more than a clean page.*
+
+**What §8 argued.** Keep the free model as the default, because the two
+candidates for replacing it both fail: `-rankadm` gives a **downward-biased
+bound** rather than an answer (§4n), and the inherited class is **rejected** by
+the data in eight of eleven cases (§4i). So the honest default is the widest
+model with its verdict attached.
+
+**Why that was the wrong object.** Both legs are statements about imposing a
+**restriction on `𝒫`**. The class of Theorem 6 is not one. By Corollary 6.3,
+with the bottom `s` rows of every `Θ̃ₖ` zero, `det Θ̃(1) = det(I_r − ΣT_k)` and
+the non-zero eigenvalues of the companion are exactly those of the `r × r` block
+— so `𝒞` **is the whole parameter space of that class**, and the engine's own
+invertibility gate enforces the rank condition of Theorem 3. There is no bound
+to bind, hence no downward bias. And §4i's rejection was measured against a free
+alternative sitting on the invertibility boundary, where by Theorem 10 the
+statistic has no distribution — §4i says so itself. It establishes that the
+alternative is outside the model class, not that the class is wrong.
+
+**What the measurements say.** §4q: in the regime the bank lives in — moving
+averages of the `(1 − θB)` kind, which is what differenced price and population
+series give — the free `Θ` is not recoverable at `n = 120` or `n = 250`, at any
+magnitude, and `-multistart` makes it worse rather than better. §4r: on a WARMA
+truth with an identified `w` block, `-mawarma` recovers `θ = +0.9` — the hard,
+near-unit-circle case — with bias 0.050 and IQR 0.272, interior, `G = 0.96`,
+where the free fit parks on the gate with `G = 0.45` and twice the dispersion.
+And §4p: the autoregressive half of the same class is **not** rejected in seven
+of eight pairs.
+
+**The decision.** The class of Theorem 6 becomes the model `drvec` fits by
+default; the free `Θ` becomes what it actually is — the widest parameterisation,
+useful as a diagnostic and as the thing to compare against, and not a
+specification anyone should publish from on this kind of data. For `M = 2,
+r = 1` that is **one** moving-average parameter instead of four, which is also
+the only version of this model with a chance of earning its parameters against a
+univariate alternative.
+
+**What that costs, stated because a default that moves moves every number.**
+Every figure in the register measured on the free default was measured on a
+different model from the one the program will fit. They are not wrong — they are
+measurements of the free parameterisation, and §4q and §4r are what they now
+mean — but the register has to say which default each of them belongs to, and
+the golden values of the suite have to be re-measured or re-labelled. That is
+the work, and it is why this is a decision and not a patch.
+
+**What is still not decided.** Whether the resulting model forecasts better than
+a univariate one. Nothing in this plan, or in the register, measures that; it is
+the acceptance criterion the whole specification question exists to serve, and
+it is in `PLAN_PRODUCCION.md` as the phase that closes the program rather than
+as an option.

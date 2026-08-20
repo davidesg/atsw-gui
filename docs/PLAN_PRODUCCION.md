@@ -34,10 +34,15 @@ De ahí salen cinco requisitos, y el orden tampoco es negociable:
 4. **El programa se puede citar.** Versión, licencia, registro de cambios y
    registro de defectos, al nivel de `drtran-python`.
 5. **Lo científico abierto sigue abierto y dicho.** Producción no significa
-   cerrado; significa acotado. Nada de §6 se cierra aquí.
+   cerrado; significa acotado.
+6. **El modelo se gana sus parámetros.** Un VARMA-VEC existe para decir algo que
+   un univariante no dice. Si no mejora la previsión de un ARIMA univariante
+   sobre los mismos datos, no hay producto — hay un estimador correcto de un
+   modelo que no sirve. *(Añadido el 2026-08-20, y es el que reordena el plan;
+   ver §6.)*
 
-Hoy tenemos (5) completo, buena parte de (3) sin escribir, y **nada de (1)**,
-que es el bloqueo real.
+Hoy (1) está hecho, (5) completo, buena parte de (3) sin escribir, y **(6) sin
+medir siquiera una vez**.
 
 ---
 
@@ -155,7 +160,7 @@ rama `else`**, más una tabla de validación de valores.
 | P1.2 | toda opción desconocida se rechaza con `exit(1)`; comprobado con una opción inventada y con erratas de opciones reales | **✔** y con sugerencia: `-diagcv` → «did you mean `-diagcov'?» |
 | P1.3 | el conjunto de opciones que `usage()` enumera **es** el conjunto que el parser acepta, verificado comparando las dos listas | **✔** 33 = 33; la lista del `usage` se genera de la misma tabla que valida, y el test la compara contra los `strcmp` del fuente |
 | P1.4 | `ESTIMATION FAILED` sale con código 2; un ajuste con termcode 3 sale con 0 | **✔** con una fixture construida al efecto (dos series exactamente colineales, `ifault = 3`) |
-| P1.5 | `--version` imprime una versión y sale 0 | **✔** `drvec 1.0.0-rc1`; la versión definitiva la pone P4 |
+| P1.5 | `--version` imprime una versión y sale 0 | **✔** `drvec 1.0.0-rc1`; la versión definitiva la pone P6 |
 | P1.6 | ningún valor dorado se mueve: la validación no toca el cálculo | **✔** 190 pasadas, 0 fallos; 200 con `VALGRIND=1` |
 
 ### 2.5 Lo construido, y lo que mide
@@ -442,7 +447,137 @@ son justo lo que la regla 1 del método prohíbe.
 
 ---
 
-## 5. Empaquetado y cita
+## 5. La especificación por defecto — P4
+
+*Escrito el 2026-08-20, después de `HOMOLOGATION.md` §4q y §4r y del Corolario
+6.3 de `DEMOSTRACIONES.md`. Esta fase no existía cuando se escribió el plan: el
+plan suponía que la especificación estaba decidida, y `SPECIFICATION_PLAN.md` §8
+la había decidido mal.*
+
+### El problema, medido
+
+En el régimen en que vive el banco —medias móviles del tipo `(1 − θB)`, que es
+lo que dan las series de precios y poblaciones diferenciadas— **el `Θ` libre no
+es recuperable**: a `n = 120` y a `n = 250`, en toda magnitud probada, con
+dispersión intercuartílica de 0.4 a 1.5 sobre un parámetro de orden 1, y
+`-multistart` lo empeora en vez de mejorarlo (§4q). Ocho de los nueve casos del
+banco acaban con una raíz MA clavada en 0.99995, que es el umbral exacto de la
+puerta del motor.
+
+Con `Θ` libre no hay modelo VARMA-VEC que pueda competir con un univariante:
+cuatro parámetros MA que la verosimilitud no distingue no compran previsión,
+la degradan.
+
+### Lo que la teoría da, y es una solución y no un diagnóstico
+
+**Corolario 6.3.** Con las `s` filas inferiores de cada `Θ̃ₖ` nulas —la condición
+(6) del Teorema 6, y también la clase más débil de `-marow`—, para todo `q` y
+todo `(r, s)`:
+
+```
+det Θ̃(1) = det(I_r − Σ T_k)
+autovalores(compañera de Θ̃) = autovalores(compañera del bloque r×r) ∪ {0,…,0}
+```
+
+Luego `Θ̃(L)` es invertible **si y solo si** lo es su bloque `r × r`, y por el
+Corolario 3.1 la condición de rango del Teorema 3 se cumple automáticamente. El
+punto de `𝒫 \ 𝒞` que el Teorema 4 dice que la verosimilitud premia y el Teorema
+5 dice que **ningún chequeo del motor puede ver, no es alcanzable en esta
+clase**: ahí `chekma` sobre `Θ̃` es exactamente `chekma` sobre el bloque `r × r`.
+Con `M = 2, r = 1`, la admisibilidad pasa de ser el rango de una matriz `2 × 2`
+invisible al motor a ser `|θ_w| < 1`, un escalar que ya comprueba.
+
+**El problema no se diagnostica: se elige una parametrización en la que no
+existe.**
+
+### Y funciona
+
+§4r, sobre una WARMA con el bloque `w` identificado: en `θ = +0.9` —coeficiente
+positivo, raíz en 1.11, pegada al círculo, el caso duro— `-mawarma` da sesgo
+0.050 e IQR 0.272, interior, `G = 0.96`; el libre se queda **en la puerta** con
+`G = 0.45` y el doble de dispersión. `G` no baja de 0.93 en ninguna celda de la
+clase estructurada.
+
+### Qué se construye (P4)
+
+1. **La clase del Teorema 6 pasa a ser el modelo por defecto.** El `Θ` libre
+   queda como diagnóstico y como término de comparación, no como especificación
+   de la que publicar.
+2. **Re-medir el registro entero bajo el nuevo defecto**, y etiquetar cada cifra
+   existente con la parametrización a la que pertenece. Esto es lo caro y es
+   inevitable: un defecto que se mueve mueve todos los números.
+3. Los valores dorados de la batería, re-medidos o re-etiquetados.
+4. `-rankadm` se queda como está: instrumento de medida sobre la clase libre. En
+   la clase estructurada no hace falta, y decirlo es parte del cambio.
+5. El aviso de la terminal cambia de sentido: ya no avisa de que el ajuste niega
+   su rango, sino de que se está usando la clase libre, que es donde eso puede
+   pasar.
+
+**Criterio de salida de P4:**
+
+| # | criterio |
+|---|---|
+| P4.1 | el defecto es la clase del Teorema 6, y `make test` verde con los dorados re-medidos |
+| P4.2 | ninguna cifra del registro sin la parametrización a la que pertenece |
+| P4.3 | ningún ajuste por defecto puede alcanzar `det Θ(1) = 0`, comprobado por una prueba que lo intente |
+| P4.4 | el `.out` reporta el bloque `r × r` y su raíz, que es ahora la condición entera |
+
+---
+
+## 6. La previsión, y el criterio de aceptación que faltaba — P5
+
+*El requisito 6 de §0. Es la fase que cierra el programa, y no existía en este
+plan ni en ningún otro documento del proyecto.*
+
+**El hueco, dicho sin rodeos.** `drvec` **no sabe prever**. Cero apariciones de
+`forecast` en el fuente; ninguna de sus treinta y tres opciones lo hace; no hay
+evaluación fuera de muestra ni comparación contra un univariante. El registro
+tiene mil setecientas líneas sobre estimación y **ninguna medida de la única
+cosa que decide si el modelo sirve**.
+
+Eso no es un olvido menor. Es muy difícil mejorar la previsión de un univariante
+con un modelo multivariante — es el resultado empírico repetido de la literatura
+de previsión —, y toda la razón de ser de este programa es la estructura de
+corto plazo que un univariante no tiene. Si esa estructura no se puede
+parametrizar de forma que se estime con `n = 120`, no hay nada que ganar; y si
+se puede (P4), hay que demostrar que se gana.
+
+**El precedente está en la suite** y no hay que inventarlo: `drtran/src/forecast.c`
+en C, y en el porte `forecast.py` y `evaluate.py` con `-estwin` —origen móvil,
+parámetros fijos, MAE/RMSE/MAPE por horizonte—, cuya propia ayuda lo describe
+como *«the only way to decide EMPIRICALLY whether one model forecasts better than
+another»*.
+
+### Qué se construye (P5)
+
+1. **Previsión** a horizonte `H` desde el modelo VEC, con sus bandas, en niveles
+   — deshaciendo la transformación, que es donde está la dificultad técnica y
+   donde `drtran` ya tiene el precedente y **BUG-10 abierto** sobre la varianza
+   del nivel: hay que leerlo antes de escribir esto.
+2. **Evaluación de origen móvil** (`-estwin E -f H`): estimar una vez en
+   `1..E`, mantener los parámetros fijos, avanzar el origen, y acumular error
+   por horizonte.
+3. **El banco de comparación**: el mismo ejercicio con `fue` univariante serie a
+   serie, que es el contrafactual que importa. La suite ya tiene el puente para
+   escribir los `.inp` y leer los `.pre`.
+4. Una tabla en el registro: RMSE por horizonte, VEC contra univariante, sobre
+   los casos del banco, con la especificación seleccionada por el protocolo.
+
+**Criterio de salida de P5, y es el criterio de salida del programa:**
+
+| # | criterio |
+|---|---|
+| P5.1 | `drvec` prevé en niveles con bandas, y la previsión a un paso coincide con el residuo del ajuste |
+| P5.2 | evaluación de origen móvil implementada y comprobada contra un caso cuyo resultado se puede calcular a mano |
+| P5.3 | **la tabla VEC contra univariante existe y está publicada, gane o pierda** |
+| P5.4 | si pierde en todo el banco, el registro lo dice en la primera página y el programa se describe como lo que entonces es: un estimador de máxima verosimilitud exacta para una clase de modelos, no una herramienta de previsión |
+
+P5.4 no es una cláusula defensiva. Es el punto: la única forma de que este
+proyecto sepa lo que tiene es medirlo, y hasta hoy nadie lo ha medido.
+
+---
+
+## 7. Empaquetado y cita
 
 El estándar del conjunto ya existe y no es este programa:
 
@@ -458,7 +593,7 @@ continua, ni `--version`. Y `docs/README.md` dice **«Pre-beta»** mientras
 `PLAN_BETA.md` marca sus nueve criterios de salida con ✔: el estado declarado y
 el estado registrado no coinciden.
 
-### Qué se construye (P4)
+### Qué se construye (P6)
 
 1. `LICENSE` (GPL-2.0-or-later, que es lo que el README ya declara) y
    `CITATION.cff` con Mauricio (2006) como referencia del método.
@@ -475,7 +610,7 @@ el estado registrado no coinciden.
 
 ---
 
-## 6. Lo que **no** entra en producción
+## 8. Lo que **no** entra en producción
 
 Declarado para que el alcance no se estire, y porque nada de esto impide
 publicar mientras siga estando escrito con esta claridad:
@@ -485,12 +620,11 @@ publicar mientras siga estando escrito con esta claridad:
 - **El termcode 3**, explicado y medido, no eliminado.
 - **La calibración en muestra finita del test de rango**: 68 %/30 % por la vía
   asintótica, 78 %/20 % con bootstrap. Mejorado, no arreglado.
-- **La frontera de invertibilidad**: en estos datos toda especificación con
-  `q >= 1` se apoya en ella, y los errores estándar no están definidos en la
-  dirección que liga.
-- **El defecto por defecto**: no hay una especificación por omisión que sea a la
-  vez admisible e insesgada, y `SPECIFICATION_PLAN.md` §4n dice por qué no puede
-  escribirse en las clases restringidas.
+- **La frontera de invertibilidad en la clase libre**: ahí toda especificación
+  con `q >= 1` se apoya en ella sobre estos datos, y los errores estándar no
+  están definidos en la dirección que liga. *En la clase por defecto de P4 deja
+  de ser un problema abierto y pasa a ser imposible (Corolario 6.3); queda como
+  limitación de la clase libre, que se sigue ofreciendo.*
 - **`-marow` contra el modelo libre** con una distribución válida.
 - **Los cuatro p-valores en el suelo `1/(B+1)`**, que necesitan `B >= 999`.
 - **El refactor de `main()`.** 2066 líneas y 36 globales; `drvec.c` pasó de 818
@@ -500,31 +634,39 @@ publicar mientras siga estando escrito con esta claridad:
 - **La unificación del idioma de la salida.** Hay ~32 mensajes al usuario en
   castellano en un programa con documentación inglesa, y `docs/README.md` cita
   la salida ya traducida («1 df» donde el programa escribe «1 g.l.»). Se arregla
-  en P5, después de la etiqueta.
+  en P7, después de la etiqueta.
 
 ---
 
-## 7. Orden y por qué
+## 9. Orden y por qué
 
-**P1 → P2 → P3 → P4 → (P5 idioma) → (P6 refactor).**
+**P1 (hecha) → P4 → P5 → P2 → P3 → P6 → (P7 idioma) → (P8 refactor).**
 
-P1 primero porque es el único bloqueo que hace *daño al usuario* —una opción
-ignorada devuelve otro modelo sin decirlo, y cuatro entradas de la línea de
-órdenes tumban el proceso— y porque es un día de trabajo con criterio de salida
-mecánico.
+El orden cambió el 2026-08-20, y el motivo es el requisito 6 de §0.
 
-P2 antes que P3 porque el registro es lo que sostiene todo lo demás: si tres de
-cuatro filas del criterio que cerró la beta no reproducen, cualquier medida que
-P3 tome se apoya en un suelo que no se ha comprobado.
+**P4 antes que nada de lo demás**, aunque sea la fase cara. La especificación por
+defecto decide qué modelo estima el programa, y por tanto qué significan todas
+las cifras del registro. Re-medir el registro (P2) bajo un defecto que va a
+cambiar es trabajo tirado; empaquetar (P6) un programa cuya especificación por
+defecto se sabe inadecuada es peor que no empaquetarlo. Antes se ponía P4 al
+final porque se suponía la especificación decidida; `SPECIFICATION_PLAN.md` §10
+explica por qué no lo estaba.
 
-P3 antes que P4 porque no tiene sentido etiquetar `v1.0.0` con el motor
-divergiendo del canónico y con dos defectos del registro resueltos aquí y
-abiertos allí. Y porque la alineación de `nlatools` destapa dos fugas: mejor
-antes de la etiqueta que después.
+**P5 inmediatamente después**, porque es el criterio que dice si algo de esto
+valía la pena, y porque cuanto antes se sepa mejor. Si el modelo estructurado no
+mejora al univariante sobre el banco, eso cambia lo que el programa dice ser, y
+conviene saberlo antes de invertir en el registro y el empaquetado, no después.
 
-P4 cierra. P5 y P6 son mejoras que no cambian ningún número y pueden ir en
-`v1.1`.
+**P2 y P3 después de P5** por la misma razón: son consolidación, y consolidar
+sobre una especificación que aún puede moverse es hacerlo dos veces. P3 sigue
+teniendo que ir antes de la etiqueta, porque no tiene sentido publicar `v1.0.0`
+con el motor divergiendo del canónico, con dos defectos del registro resueltos
+aquí y abiertos allí, y con dos fugas que la alineación de `nlatools` destapa.
 
-**Y un orden que no seguiría:** empezar por P4. Empaquetar es lo visible y lo
-que da sensación de acabado, y produciría una `v1.0.0` que segfaultea con
-`p = 0`. La versión es una afirmación sobre lo que hay dentro.
+**P6 cierra.** P7 y P8 no cambian ningún número y pueden ir en `v1.1`.
+
+**Y dos órdenes que no seguiría.** Empezar por P6: empaquetar es lo visible y
+produciría una versión cuya especificación por defecto no se sostiene. Y dejar
+P5 para el final, que es lo que este plan hacía sin darse cuenta al no incluirlo:
+un programa que nunca mide si sirve para lo que existe puede pasar todas sus
+pruebas y no servir para nada.

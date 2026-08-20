@@ -1041,6 +1041,101 @@ than a tolerance: `Θ = [T₁₁  T₁₂ ; 0  0]`.
 * **What it gives up** relative to the free fit is bought in the inadmissible
   direction, so it is not a loss that can be defended by a likelihood ratio.
 
+## 4k. What the BVECM theorems actually cover, and what the equivalence does not prove
+
+*Read after §4g–§4j, because it says where those restrictions belong. The
+theorems are proved for Phillips' triangular model in the WARMA
+parameterisation; the equivalence with the general VARMA-VEC is **asserted**,
+and it does not carry the same restrictions.*
+
+### The class the theorems cover
+
+Definition 3 of the BVECM appendix specifies
+
+`w_t = α′z_t`,  `Φ(B)w_t = a_t`,  `Δz₂ₜ = γw_{t−1} + Σψ_i w_{t−i} + η_t`,
+
+with Corollary 2 adding `Θ(B)` to the middle equation only. Read what that says
+about the second block: `Δz₂` is driven **only by lagged `w` and its own white
+noise** — no lags of `Δz₂` anywhere, and no moving average. And the first
+equation makes `w` depend only on its own lags.
+
+Its VEC image, from the proofs themselves, therefore carries two restrictions
+the general VEC does not have:
+
+* **`Γ_i = M_l α′`** — the short-run matrices have rank ≤ `r` and their row space
+  is `α′`, because every lag enters through `w`. With `M = 2, r = 1` that is 2
+  free parameters where Mauricio's `F₁` has 4.
+* **the moving-average structure of §4g**, `Θ̃₁ = [[Θ₁, Θ₁B₂′],[0,0]]`.
+
+### The converse is asserted, not proved
+
+Theorem 1 closes with "conversely, any VEC representation with `Π = Aα′` of rank
+`r` can be written in WARMA form with appropriate normalization", and Corollary
+2 repeats it for the moving-average case, referring to Mauricio (2005) for the
+construction. That reference cannot supply what is missing: **Mauricio's
+transformation is an algebraic rearrangement** — it maps a VEC to a stationary
+VARMA on `Ȳ` and back, identically, verified here to 4e−15 (§4g). An identity
+cannot turn a free `Γ_i` of rank `M` into one of rank `r`. The forward direction
+(WARMA ⟹ VEC) is proved constructively; the backward one holds only for the VEC
+models whose `Γ_i` and `Θ` already have the image structure.
+
+So the theorems' conclusions — on the adjustment matrix, on the invariance under
+the convergence operator, on what the BEC form means — are established **for the
+triangular class**, and applying them to a fit produced by a free VARMA-VEC is a
+step the papers do not license.
+
+### The restrictions read in the coordinates where they are simple
+
+`Θ* = C̄ΘC̄⁻¹` is the moving average of the transformed system `Ȳ = [∇Y₂ ; W]`,
+which is where the triangular model is stated. The ladder of §4j becomes, with
+`b = B₂`:
+
+| in VEC coordinates | `Θ*` in `Ȳ = [∇Y₂ ; W]` |
+|---|---|
+| free `Θ` | free |
+| `-matri`  `[T₁₁ T₁₂ ; 0 T₂₂]` | `[[T₂₂, 0],[·, T₁₁]]` — **the `∇Y₂` equation keeps a moving average** |
+| `-marow`  `[T₁₁ T₁₂ ; 0 0]` | `[[0, 0],[T₁₂ − bT₁₁, T₁₁]]` — first row zero |
+| `-mawarma`  `[T₁₁ T₁₁B₂′ ; 0 0]` | `[[0, 0],[0, T₁₁]]` — **diagonal** |
+
+That is the answer to why `-matri` changed nothing (§4j): in the coordinates
+that matter it leaves the differenced equation with its own moving average,
+which is the one that runs to the unit circle. And `-mawarma` is exactly
+Phillips' triangular form **with the diagonal parameterisation the theorems
+assume** — not an approximation of it.
+
+It also says where the restriction belongs. In `Ȳ` coordinates it is a pattern
+of zeros; in VEC coordinates the same restriction couples `Θ` to `B₂`
+(`T₁₂ = T₁₁B₂′`) and has to be rebuilt at every likelihood evaluation. The
+legacy `drv_project` parameterises `Ȳ`'s VARMA directly and forms `W` by
+**subtraction** — `β` enters only through the data, like the input of a transfer
+function — which is why its surface is better conditioned
+([ESTUDIO_BVECM_vs_DRVEC.md](ESTUDIO_BVECM_vs_DRVEC.md) §3.1).
+
+### Are these data in the triangular class in the AR block? Indication: no
+
+`F̂₁ = m·α′` would make `F̂₁` rank 1 with row space `α′`. On the admissible
+(`-marow`) fits:
+
+| pair | `σ₂/σ₁` of `F̂₁` | \|cos(row space, `α′`)\| |
+|---|---|---|
+| Milan | 0.073 | 0.163 |
+| Strasbourg | 0.097 | 0.089 |
+| Utrecht | 0.862 | 0.636 |
+| Vienna | 0.005 | 0.315 |
+| Aix | 0.744 | 0.219 |
+| Arévalo | 0.111 | 0.435 |
+| Angers | 0.003 | 0.508 |
+| Penn | 0.952 | 0.964 |
+
+Five of the eight are near rank one, which the restriction predicts — but the
+row space is `α′` in only one of them. So the reduction happens in a direction
+the triangular class does not allow.
+
+**This is an indication and not a test.** `F̂₁` is estimated freely and its row
+space is a weakly determined direction; settling it needs the restriction
+imposed and compared, with a bootstrap for the same boundary reason as §4i. That
+comparison is not built.
+
 ## 5. What is not in the register, and why
 
 * **The Census Housing example** of the AddOn (Hillmer & Tiao 1979): the data

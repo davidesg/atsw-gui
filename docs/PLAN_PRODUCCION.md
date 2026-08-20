@@ -605,11 +605,11 @@ another»*.
 
 **Criterio de salida de P5, y es el criterio de salida del programa:**
 
-| # | criterio |
-|---|---|
-| P5.1 | `drvec` prevé en niveles con bandas, y la previsión a un paso coincide con el residuo del ajuste |
-| P5.2 | evaluación de origen móvil implementada y comprobada contra un caso cuyo resultado se puede calcular a mano |
-| P5.3 | **la tabla VEC contra univariante existe y está publicada, gane o pierda** |
+| # | criterio | estado |
+|---|---|---|
+| P5.1 | `drvec` prevé en niveles con bandas, y la previsión a un paso coincide con el residuo del ajuste | **✔ 2026-08-20**: `-f H`, y el certificado da 3.5e−04 —que es la truncación de `ξ`— y 1.8e−15 con `-m 2`. Más un segundo certificado que el criterio no pedía y que hacía falta: la banda a un paso es la covarianza de la innovación leída en niveles, comprobada contra la `Σ` del vector de parámetros en cinco configuraciones. Ver [FORECAST.md](FORECAST.md) |
+| P5.2 | evaluación de origen móvil implementada y comprobada contra un caso cuyo resultado se puede calcular a mano | pendiente |
+| P5.3 | **la tabla VEC contra univariante existe y está publicada, gane o pierda** | pendiente |
 | P5.4 | si pierde en todo el banco, el registro lo dice en la primera página y el programa se describe como lo que entonces es: un estimador de máxima verosimilitud exacta para una clase de modelos, no una herramienta de previsión |
 
 P5.4 no es una cláusula defensiva. Es el punto: la única forma de que este

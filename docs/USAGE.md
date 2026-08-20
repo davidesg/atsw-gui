@@ -595,6 +595,30 @@ about the off-diagonal of `R(k)`, not about the likelihood.
 
 ---
 
+## 5b. Forecasting
+
+```
+drvec file p q r -case 2 -f 12
+```
+
+`-f H` writes an `H`-step forecast **in levels**, in the `.inp`'s column order,
+with `±1.96` standard-error bands. Needs `r ≥ 1`: with `r = 0` there is no `W`
+block to invert back to levels, and the program says so instead of
+approximating.
+
+The forecast is computed on the transformed system, where the model is
+stationary, and the transformation is inverted afterwards — the same route the
+bootstrap already takes. Every forecast prints a **one-step self-check** against
+the engine's own residuals; with `q ≥ 1` its residue is the `ξ` truncation, of
+order `xitol`, and `-m 2` takes it to machine zero.
+
+The bands are **theoretical**. They come from the model's own innovation
+covariance and say nothing about whether the specification is right, and
+`-f` forecasts from the end of the sample with parameters estimated on all of
+it — so it is **not** an out-of-sample measurement. See
+[FORECAST.md](FORECAST.md) for the algorithms, their provenance and the
+certificates.
+
 ## 6. Exit behaviour
 
 ### The exit status

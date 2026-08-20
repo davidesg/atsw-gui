@@ -2060,6 +2060,7 @@ static int   global_boot     = 0;    /* -bootstrap N: valores criticos por
 static int   global_interv   = 0;    /* -interv <prefijo>: deterministas del .pre */
 static char *interv_prefix   = NULL;
 static int   global_multistart = 0;  /* -multistart n: n arranques, quedarse el mejor */
+static int   global_fcast = 0;       /* -f H: horizonte de prevision (P5)             */
 
 static int   global_seed     = 0;    /* -seed <prefijo> */
 static char *pre_prefix      = NULL;
@@ -4099,6 +4100,263 @@ static int gate_profile_seed(real *x, int npar)
 }
 
 /*****************************************************************************/
+/*  P5 — LA PREVISION, EN NIVELES, CON SUS BANDAS                             */
+/*****************************************************************************/
+/*  POR QUE EXISTE.  Hasta el 2026-08-20 drvec no sabia prever: ninguna de sus
+ *  opciones lo hacia, no habia evaluacion fuera de muestra, y el registro tenia
+ *  mil setecientas lineas sobre estimacion y ninguna medida de lo unico que
+ *  decide si un modelo multivariante vale sus parametros -- si mejora la
+ *  prevision de un univariante.  Ver docs/PLAN_PRODUCCION.md P5.
+ *
+ *  COMO.  El modelo ajustado ES un VARMA estacionario sobre Ybar = (nabla Y2 ;
+ *  W), asi que se prevé ahi con la recursion de elf y se INVIERTE la
+ *  transformacion, exactamente como hace simulate_h0 para el bootstrap.  No hay
+ *  codigo paralelo: es la misma inversion.
+ *
+ *      nabla Y2_{n+h} = Ybar_{n+h}[1..s]  ->  Y2 por acumulacion desde Y2_n
+ *      W_{n+h}        = Ybar_{n+h}[s+1..M]
+ *      Y1_{n+h}       = W_{n+h} - B2' Y2_{n+h}
+ *
+ *  LA VARIANZA, Y LA LECCION DE BUG-10.  En el programa hermano, el nivel se
+ *  integraba bien en la MEDIA y mal en la VARIANZA, porque cada una llegaba al
+ *  nivel por su lado: la media pedia el operador a su fuente autoritativa y la
+ *  varianza se reconstruia uno propio con (d, D, s).  El defecto es invisible
+ *  en la prevision puntual y sale entero en las bandas -- un factor 19 en
+ *  varianza en el caso medido --, y el sesgo corre siempre hacia el lado
+ *  peligroso: omitir factores no estacionarios solo puede ESTRECHAR la banda.
+ *
+ *  Aqui la integracion es una sola (nabla sobre el bloque Y2) y el bloque W no
+ *  se integra, pero la trampa es la misma: Y1 = W - B2'Y2 HEREDA el error
+ *  acumulado de Y2, y calcular su banda solo con la de W la deja
+ *  sistematicamente estrecha.  Asi que el mapa de innovaciones a error de nivel
+ *  se escribe UNA VEZ, en level_error_map(), y la banda sale de ahi.  Con
+ *  Psi_m los pesos MA(inf) del sistema transformado y C_m = sum_{k<=m} Psi_k:
+ *
+ *      G_m = [           filas 1..s de C_m            ]
+ *            [ filas s+1..M de Psi_m - B2' (filas 1..s de C_m) ]
+ *
+ *      Var(h) = sum_{m=0}^{h-1} G_m Sigma* G_m',    Sigma* = sigma2 * qq
+ *
+ *  En h = 1, C_0 = Psi_0 = I y G_0 = [I_s 0 ; -B2' I_r], de modo que la banda a
+ *  un paso es la covarianza de la innovacion leida en niveles.  La bateria lo
+ *  comprueba, y comprueba tambien la identidad que de verdad ata el calculo: la
+ *  prevision a un paso desde el origen n-1 reproduce el dato menos el residuo
+ *  guardado.                                                                  */
+
+/*  compute_psi_weights — LOS PESOS MA(inf), Y NO SON DE AQUI.
+ *
+ *  PROCEDENCIA, leida antes de copiar.  Es la funcion de drvarma, que vive en
+ *  drtran/src/forecast.c y cuya cabecera dice "part of drvarma": el mismo
+ *  linaje que elfvarma.c.  La primera version de esta seccion la reescribio,
+ *  que es una tercera copia de una funcion compartida y exactamente la deriva
+ *  que docs/PLAN_PRODUCCION.md P3 existe para impedir.  Se sustituyo por la de
+ *  la suite, caracter por caracter, el 2026-08-20.  Si se arregla alli, hay que
+ *  arreglarlo aqui.
+ *
+ *  Psi_0 = I;  Psi_l = sum_{i<=min(l,p)} Phi_i Psi_{l-i} - Theta_l (l <= q).
+ *  Aqui se aplica al VARMA TRANSFORMADO sobre Ybar, que es donde el modelo es
+ *  estacionario; el paso a niveles es otra cosa y no se toma prestado -- ver
+ *  level_error_map().                                                         */
+void compute_psi_weights(int m, int p, int q, real ***phi, real ***theta,
+                                int L, real ***psi)
+{
+    int l, i, j, k, i1, j1;
+    for (l = 0; l <= L; l++)
+        for (i = 1; i <= m; i++)
+            for (j = 1; j <= m; j++)
+                psi[l][i][j] = 0.0;
+    for (i = 1; i <= m; i++)
+        psi[0][i][i] = 1.0;
+
+    for (l = 1; l <= L; l++) {
+        for (i = 1; i <= l; i++) {
+            if (i <= p) {
+                for (i1 = 1; i1 <= m; i1++) {
+                    for (j1 = 1; j1 <= m; j1++) {
+                        real s = 0.0;
+                        for (k = 1; k <= m; k++)
+                            s += phi[i][i1][k] * psi[l-i][k][j1];
+                        psi[l][i1][j1] += s;
+                    }
+                }
+            }
+        }
+        if (l <= q) {
+            for (i1 = 1; i1 <= m; i1++)
+                for (j1 = 1; j1 <= m; j1++)
+                    psi[l][i1][j1] -= theta[l][i1][j1];
+        }
+    }
+}
+
+/*  level_error_map — G_m, la UNICA fuente de verdad del paso a niveles.
+ *  Csum es C_m = sum_{k<=m} Psi_k, ya acumulada por el llamante.              */
+static void level_error_map(real **Csum, real **Psi_m, real **B2,
+                            int M, int r, real **G)
+{
+    int s = M - r, i, j, k;
+    for (i = 1; i <= s; i++)
+        for (j = 1; j <= M; j++) G[i][j] = Csum[i][j];
+    for (i = 1; i <= r; i++)
+        for (j = 1; j <= M; j++) {
+            real acc = Psi_m[s + i][j];
+            for (k = 1; k <= s; k++) acc -= B2[k][i] * Csum[k][j];
+            G[s + i][j] = acc;
+        }
+}
+
+/*  forecast_vec — H pasos desde el final de la muestra, en niveles.
+ *  Devuelve 0 si pudo.  Las columnas son las del .inp: Y2 (1..s), Y1 (s+1..M). */
+static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
+{
+    int M = v->m, r = global_r, s = M - r, n = v->n, p = v->p, q = v->q;
+    int h, i, j, k, l;
+    real ***Psi, **Csum, **G, **Sig, **Var, **Yb, **lev;
+    real z;
+
+    if (H < 1 || r < 0 || s < 1) return 1;
+    if (!Y2_levels) return 1;
+
+    Psi  = tensor(0, H, 1, M, 1, M);
+    Csum = matrix(1, M, 1, M);
+    G    = matrix(1, M, 1, M);
+    Sig  = matrix(1, M, 1, M);
+    Var  = matrix(1, M, 1, M);
+    Yb   = matrix(1, H, 1, M);          /* Ybar previsto                     */
+    lev  = matrix(1, H, 1, M);          /* niveles: [Y2 ; Y1]                */
+
+    compute_psi_weights(M, p, q, v->phi, v->theta, H, Psi);
+    for (i = 1; i <= M; i++)
+        for (j = 1; j <= M; j++) Sig[i][j] = v->sigma2 * v->qq[i][j];
+
+    /*  [1] La media, con la recursion de elf: (w - mu) = SUM phi (w - mu)
+     *      + a - SUM theta a.  Los a futuros son cero; los pasados, los
+     *      residuos guardados.                                               */
+    for (h = 1; h <= H; h++) {
+        for (i = 1; i <= M; i++) {
+            real acc = 0.0;
+            for (k = 1; k <= p; k++) {
+                int t = h - k;
+                for (l = 1; l <= M; l++)
+                    acc += v->phi[k][i][l]
+                         * ((t >= 1 ? Yb[t][l] : v->w[n + t][l]) - v->mu[l]);
+            }
+            for (k = 1; k <= q; k++) {
+                int t = h - k;
+                if (t >= 1) continue;               /* a futuro = 0           */
+                for (l = 1; l <= M; l++) acc -= v->theta[k][i][l] * v->a[n + t][l];
+            }
+            Yb[h][i] = v->mu[i] + acc;
+        }
+    }
+
+    /*  [1b] EL CERTIFICADO.  La recursion de [1] se aplica hacia atras, dentro
+     *  de la muestra: la prediccion a un paso de Ybar_t con la informacion
+     *  hasta t-1 tiene que ser Ybar_t - a_t, con a_t el residuo que devolvio
+     *  elf.  No es circular -- los residuos los calcula el motor por AS 311, no
+     *  esta funcion --, y ata de una vez la recursion, la convencion de la
+     *  media y los indices.  Se mide sobre la segunda mitad de la muestra,
+     *  donde el arranque exacto ya no pesa.                                   */
+    {
+        real worst = 0.0;
+        int t0 = n / 2 + 1, t;
+        if (t0 < p + q + 1) t0 = p + q + 1;
+        for (t = t0; t <= n; t++)
+            for (i = 1; i <= M; i++) {
+                real pred = v->mu[i];
+                for (k = 1; k <= p; k++)
+                    for (l = 1; l <= M; l++)
+                        pred += v->phi[k][i][l] * (v->w[t-k][l] - v->mu[l]);
+                for (k = 1; k <= q; k++)
+                    for (l = 1; l <= M; l++)
+                        pred -= v->theta[k][i][l] * v->a[t-k][l];
+                {
+                    real d = fabs(v->w[t][i] - v->a[t][i] - pred);
+                    if (d > worst) worst = d;
+                }
+            }
+        fprintf(outputv,
+            "\n  one-step self-check: max |Ybar_t - a_t - pred(t|t-1)| = %.3e\n"
+            "  over the last %d observations.  The residuals come from elf, not\n"
+            "  from this recursion, so this ties the recursion, the mean\n"
+            "  convention and the indexing to the engine.  With q >= 1 the\n"
+            "  residue is the xi TRUNCATION and not an error: it is of order\n"
+            "  xitol = %.0e, and -m 2, which switches the truncation off, takes\n"
+            "  it to machine zero.  Measured on mink-muskrat: 3.5e-04 against\n"
+            "  1.8e-15.  Same mechanism as HOMOLOGATION.md 1b.\n",
+            worst, n - t0 + 1, fabs(v->xitol));
+    }
+
+    /*  [2] Los niveles.  Y2 acumula desde el ultimo nivel REAL; Y1 = W - B2'Y2,
+     *      que es la misma inversion que usa simulate_h0.                     */
+    for (h = 1; h <= H; h++) {
+        for (i = 1; i <= s; i++)
+            lev[h][i] = (h == 1 ? Y2_levels[n][i] : lev[h-1][i]) + Yb[h][i];
+        for (j = 1; j <= r; j++) {
+            real acc = Yb[h][s + j];
+            for (i = 1; i <= s; i++) acc -= B2[i][j] * lev[h][i];
+            lev[h][s + j] = acc;
+        }
+    }
+
+    /*  [3] Las bandas, por el mapa de [4] arriba y no por otro camino.        */
+    z = (conf >= 0.99) ? 2.575829 : (conf >= 0.95) ? 1.959964 : 1.644854;
+    fprintf(outputv,
+        "\n=== Forecast, %d step%s ahead, in LEVELS ===\n"
+        "  Columns are the .inp's: Y2 block (1..%d), then Y1 block.\n"
+        "  Bands are +/- %.4f standard errors (%.0f%%), from the model's own\n"
+        "  innovation covariance; they are THEORETICAL and say nothing about\n"
+        "  whether the specification is right.\n\n",
+        H, (H == 1) ? "" : "s", s, z, 100.0 * conf);
+    fprintf(outputv, "   h");
+    for (i = 1; i <= M; i++)
+        fprintf(outputv, "  %14s %10s", series_names ? series_names[i] : "y", "s.e.");
+    fprintf(outputv, "\n");
+
+    for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) Var[i][j] = 0.0;
+    for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) Csum[i][j] = 0.0;
+
+    for (h = 1; h <= H; h++) {
+        int m = h - 1;
+        /*  C_m = C_{m-1} + Psi_m, y Var(h) = Var(h-1) + G_m Sigma* G_m'.  Las
+         *  dos son acumulaciones de un termino por horizonte: la banda a h
+         *  contiene todos los choques de n+1..n+h, cada uno con el peso que le
+         *  toca.                                                              */
+        for (i = 1; i <= M; i++)
+            for (j = 1; j <= M; j++) Csum[i][j] += Psi[m][i][j];
+        level_error_map(Csum, Psi[m], B2, M, r, G);
+        for (i = 1; i <= M; i++)
+            for (j = 1; j <= M; j++) {
+                real acc = 0.0;
+                for (k = 1; k <= M; k++)
+                    for (l = 1; l <= M; l++) acc += G[i][k] * Sig[k][l] * G[j][l];
+                Var[i][j] += acc;
+            }
+        fprintf(outputv, "%4d", h);
+        for (i = 1; i <= M; i++)
+            fprintf(outputv, "  %14.6f %10.6f", lev[h][i],
+                    (Var[i][i] > 0.0) ? sqrt(Var[i][i]) : 0.0);
+        fprintf(outputv, "\n");
+    }
+    fprintf(outputv, "\n  The Y1 band inherits the CUMULATED Y2 error through\n"
+                     "  Y1 = W - B2'Y2, which is why both come from one map and\n"
+                     "  not from two (docs/PLAN_PRODUCCION.md P5, and BUG-10 of\n"
+                     "  the transfer-function program, which is what that costs).\n");
+
+    if (!quiet_mode)
+        printf("Forecast: %d steps written to the .out\n", H);
+
+    free_matrix(lev, 1, H, 1, M);
+    free_matrix(Yb, 1, H, 1, M);
+    free_matrix(Var, 1, M, 1, M);
+    free_matrix(Sig, 1, M, 1, M);
+    free_matrix(G, 1, M, 1, M);
+    free_matrix(Csum, 1, M, 1, M);
+    free_tensor(Psi, 0, H, 1, M, 1, M);
+    return 0;
+}
+
+/*****************************************************************************/
 /*  P1 — la linea de ordenes se valida ANTES de estimar                       */
 /*                                                                           */
 /*  POR QUE.  Hasta 2026-08-20 el bucle de opciones era una cadena de strcmp  */
@@ -4168,6 +4426,7 @@ static const struct opt_spec {
     { "-mawarma",     A_NONE,     NULL   },
     { "-marow",       A_NONE,     NULL   },
     { "-mafree",      A_NONE,     NULL   },
+    { "-f",           A_INT_POS,  "H"    },
     { "-matri",       A_NONE,     NULL   },
     { "-rankadm",     A_TOL_OPT,  "[tol]"},
     { "-matest",      A_INT_POS,  "N"    },
@@ -4536,6 +4795,8 @@ int main(int argc, char *argv[])
         else if (strcmp(argv[i], "-matri") == 0)    global_matri = 1;
         else if (strcmp(argv[i], "-marow") == 0)    global_marow = 1;
         else if (strcmp(argv[i], "-mafree") == 0)   global_mafree = 1;
+        else if (strcmp(argv[i], "-f") == 0 && i+1 < argc)
+            global_fcast = atoi(argv[++i]);
         else if (strcmp(argv[i], "-warma") == 0)    global_warma = 1;
         else if (strcmp(argv[i], "-specs") == 0)    global_specs = 1;
         else if (strcmp(argv[i], "-artest") == 0 && i+1 < argc)
@@ -6510,6 +6771,14 @@ int main(int argc, char *argv[])
             }
             free_vector(sdY2, 1, s);
         }
+
+        /*  P5 — la prevision, aqui: es el ultimo sitio donde B2m sigue vivo y
+         *  donde el ajuste ya esta hecho y diagnosticado.                    */
+        if (global_fcast > 0 && r > 0)
+            forecast_vec(&varma1, B2m, global_fcast, 0.95);
+        else if (global_fcast > 0)
+            fprintf(outputv, "\n(-f needs r >= 1: with r = 0 there is no W "
+                             "block to invert back to levels)\n");
 
         free_matrix(Lam_m, 1, nser, 1, (r > 0 ? r : 1));
         free_matrix(B2m, 1, s, 1, (r > 0 ? r : 1));

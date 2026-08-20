@@ -1579,6 +1579,72 @@ ninf=$(grep -a 'MA (Theta)' "$TMP/case.out" | grep -o 'inf' | wc -l)
     || bad "P4.3 root shape" "finite=$nfin infinite=$ninf, expected 1 and 1"
 echo
 
+# ============================================== 8d FORECAST (P5) ==
+#  Lo que se comprueba, y por que cada cosa:
+#
+#   - LA RECURSION, contra los residuos del motor.  La prediccion a un paso de
+#     Ybar_t con la informacion hasta t-1 tiene que ser Ybar_t - a_t.  Los a_t
+#     los calcula elf por AS 311, no esta rutina, asi que la comprobacion no es
+#     circular: ata la recursion, la convencion de la media y los indices.  Con
+#     q >= 1 el residuo es la truncacion de xi -- de orden 1e-3 -- y con -m 2,
+#     que la apaga, baja a cero de maquina.  Las dos direcciones se comprueban.
+#
+#   - EL PASO A NIVELES, que es donde vive BUG-10 del programa hermano: alli el
+#     nivel se integraba bien en la media y mal en la varianza porque cada una
+#     llegaba por su lado.  Aqui la banda a UN PASO tiene que ser la covarianza
+#     de la innovacion leida en niveles, y esa se puede obtener por un camino
+#     COMPLETAMENTE distinto -- del vector de parametros, que es la Sigma que
+#     imprime el .out --, salvo la permutacion entre el orden interno del VEC
+#     [Y1 ; Y2] y el del .inp [Y2 ; Y1].  Si el mapa de niveles estuviera mal,
+#     esto no cuadraria.
+#
+#   - Y que la banda no se estreche con el horizonte, que es la forma en que
+#     BUG-10 se manifiesta.
+echo "[8d] the forecast: the recursion, and the step to levels (P5)"
+
+run "$MM" 2 1 1 -case 2 -f 6
+sc=$(awk '/one-step self-check/{print $NF}' "$TMP/case.out")
+if [ -z "$sc" ]; then bad "forecast self-check" "not emitted"
+elif awk -v v="$sc" 'BEGIN{exit !(v < 1e-3)}'; then
+    ok "one-step recursion agrees with elf's residuals to $sc (xi truncation)"
+else bad "forecast self-check" "$sc, which is larger than xitol"; fi
+
+run "$MM" 2 1 1 -case 2 -m 2 -f 6
+sc2=$(awk '/one-step self-check/{print $NF}' "$TMP/case.out")
+if awk -v v="$sc2" 'BEGIN{exit !(v < 1e-10)}'; then
+    ok "and with the truncation off it is machine zero ($sc2)"
+else bad "forecast self-check, -m 2" "$sc2, expected machine zero"; fi
+
+#  La banda a un paso contra la Sigma del vector de parametros, permutada.
+for cfg in "-case 2" "-case 3" "-case 2 -mafree"; do
+    run "$MM" 2 1 1 $cfg -f 3
+    s11=$(grep -a -A2 'Sigma = sigma2 \* Q' "$TMP/case.out" | awk 'NR==2{print $1}')
+    s22=$(grep -a -A2 'Sigma = sigma2 \* Q' "$TMP/case.out" | awk 'NR==3{print $2}')
+    e1=$(grep -a -A1 '^   h ' "$TMP/case.out" | awk 'NR==2{print $3}')
+    e2=$(grep -a -A1 '^   h ' "$TMP/case.out" | awk 'NR==2{print $5}')
+    if [ -z "$s11" ] || [ -z "$e1" ]; then
+        bad "forecast h=1 variance ($cfg)" "could not read Sigma or the band"
+    elif awk -v a="$e1" -v b="$s22" -v c="$e2" -v d="$s11" \
+        'BEGIN{exit !(((a*a-b)<1e-5 && (b-a*a)<1e-5) && ((c*c-d)<1e-5 && (d-c*c)<1e-5))}'; then
+        ok "h=1 band is the innovation covariance in levels ($cfg)"
+    else bad "forecast h=1 variance ($cfg)" "band^2=($e1^2,$e2^2) vs Sigma=($s22,$s11)"; fi
+done
+
+#  Y la banda no puede estrecharse: el error de nivel ACUMULA.
+run "$MM" 2 1 1 -case 2 -f 8
+if awk '/^ *[0-9]+ /{if(NF>=5){if(p1!="" && ($3<p1-1e-9 || $5<p2-1e-9)) bad=1; p1=$3; p2=$5}}
+        END{exit bad?1:0}' "$TMP/case.out"; then
+    ok "the bands are non-decreasing in the horizon"
+else bad "forecast bands" "a band narrowed as the horizon grew"; fi
+
+#  Con r = 0 no hay bloque W que invertir, y el programa lo dice en vez de
+#  inventarse un nivel.
+run "$MM" 2 1 0 -case 2 -f 3
+if grep -aq '\-f needs r >= 1' "$TMP/case.out"; then
+    ok "with r = 0 the forecast declines and says why"
+else bad "forecast at r=0" "no explanation emitted"; fi
+echo
+
 # ================================================== 9 MEMORY (opt-in) ==
 # Off by default so `make test` is deterministic on any machine; run it with
 #     VALGRIND=1 make test

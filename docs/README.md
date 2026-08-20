@@ -116,6 +116,7 @@ Read in this order for a first acquaintance; consult by column thereafter.
 | [INFERENCE.md](INFERENCE.md) | why inference on the cointegrating coefficients is valid, and optimal, in this parameterisation |
 | [USAGE.md](USAGE.md) | every option, the input format, and worked examples |
 | [CONVERGENCE.md](CONVERGENCE.md) | what the optimiser reports, and how far it should be trusted |
+| [FORECAST.md](FORECAST.md) | `-f H`: the forecast algorithms, which parts are the suite's, and the two certificates on them — including the defect in the sibling program that the level step is written to avoid |
 | [HOMOLOGATION.md](HOMOLOGATION.md) | **the register of measured results**: what the program reproduces, to what tolerance, and what it does not |
 | [COMPARISON_JOHANSEN.md](COMPARISON_JOHANSEN.md) | against the reference implementation, at the same specification and at each one's optimum |
 | [coint_vector.html](coint_vector.html) | that comparison as a figure: eight pairs, both estimators, with intervals |

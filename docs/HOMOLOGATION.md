@@ -1857,6 +1857,92 @@ program's `forecast.c`, and its port's rolling-origin evaluation, whose own help
 calls it *"the only way to decide EMPIRICALLY whether one model forecasts better
 than another"*.
 
+## 4s. The forecast against an oracle, at every horizon
+
+*`tools/sim/forecast_oracle.py`. The other programs of the suite each have an
+oracle — an independent computation to check against — and `drvec` did not. Its
+two forecast certificates ([FORECAST.md](FORECAST.md) §3, §4) are internal
+consistency checks: the recursion against the engine's residuals, and the
+one-step band against the parameter vector. Neither says anything about
+horizons beyond one, which is where the accumulation `C_m` and the cumulated
+`Y₂` error live — exactly the part no source documents.*
+
+### What the literature does and does not say
+
+Searched: of the fifteen works in `literature/`, the ones that mention
+forecasting at all mention it as a **motivation**. Ahn and Reinsel (1990) note
+that imposing unit roots improves long-horizon forecasts and cite others for it;
+Mauricio (2006) lists "forecast such process" as one of three purposes;
+Yap and Reinsel (1995) speak of "efficient prediction". **None writes the
+recursion for this class**, and the reference the last two point to for it —
+*Journal of Time Series Analysis* 13, 353–375 — is not in the bank. What
+licenses the procedure is therefore stated and proved here rather than cited:
+Proposition 2 of `DEMOSTRACIONES.md` §6b, that the transformation loses no
+information, so forecasting on `Ȳ` and inverting **is** the conditional
+expectation of `Y`.
+
+### The oracle
+
+No formula of `drvec`'s is involved. The data-generating process is simulated,
+`drvec` is handed the sample, and then the **same process** is continued 20 000
+times from its true final state with fresh shocks. The average of the
+continuations is the conditional expectation and their spread is the forecast
+error dispersion, by construction.
+
+```sh
+python3 tools/sim/forecast_oracle.py 20000 6
+```
+
+`gap/sd` is the largest discrepancy between the point forecast and the oracle's
+mean, in units of the oracle's own standard deviation; `se ratio` is the
+program's band over the oracle's dispersion. At `n = 20 000`:
+
+| `q` | `θ` | class fitted | DGP in the class? | `gap/sd` h=1, 3, 6 | `se ratio` h=1, 3, 6 |
+|---|---|---|---|---|---|
+| 0 | — | (vacuous) | **yes** | 0.010, 0.016, 0.010 | 1.000, 1.006, 1.007 |
+| 1 | +0.5 | `-mafree` | **yes** | **0.022, 0.025, 0.016** | **1.000, 1.001, 0.995** |
+| 1 | −0.5 | `-mafree` | **yes** | **0.019, 0.020, 0.018** | **1.000, 1.005, 1.008** |
+| 1 | +0.5 | default `-marow` | no | 0.097, 0.104, 0.091 | 1.008, 1.058, 1.092 |
+| 1 | −0.5 | default `-marow` | no | 0.119, 0.115, 0.116 | 1.035, 1.003, 1.039 |
+
+**The algorithm is right.** Where the model contains the truth, the point
+forecast matches the true conditional expectation to about **2 % of a forecast
+standard deviation at every horizon**, and the bands to within **0.5 %**. That
+covers the cumulation, the accumulated weights and the level reconstruction —
+everything §3 and §4 of [FORECAST.md](FORECAST.md) could not reach.
+
+At `n = 2 000` the same figures are 0.06–0.13 and the bands 1.5–6 % wide, and
+they shrink with the sample: the residue at `n = 20 000` is estimation error,
+which is the caveat Proposition 2 leaves open, measured rather than assumed.
+
+### And it measured the cost of the P4 default, which was not the plan
+
+The last two rows are a **misspecified** fit, and they were not put there on
+purpose: the DGP of `sim_vec.py` has `Θ₁ = θI`, so its **differenced block
+carries a moving average of its own** — `Θ₂₂ = θ ≠ 0` — and the default class of
+§4r sets that entry to zero by construction. The fit absorbs it elsewhere:
+
+| | truth | default fit, `n = 20 000` |
+|---|---|---|
+| `Θ₂₂` | −0.500 | **0** (imposed) |
+| `F₁[2][2]` | 0.200 | **0.567** |
+| `Λ₂` | 0.100 | **0.037** |
+| `B₂` | −0.500 | −0.499986 |
+
+and the forecast pays **about 10 % of a standard deviation at every horizon**,
+with bands up to **9 % too wide**. `B̂₂` is untouched, as everywhere else in this
+register.
+
+**This does not overturn §4r, and it is not an argument for going back.** The
+bank's data are where the free class degenerates onto the invertibility boundary
+at `n = 61`–`120`, and the default is what makes those fits estimable at all.
+What this measures is the other side of that trade: on a process whose
+differenced block genuinely carries a moving average, the default is
+misspecified and the forecast pays for it. Which of the two costs dominates on
+real data is not a question this section can answer — it is exactly what the
+rolling-origin comparison against a univariate model exists to settle, and that
+is still not built.
+
 ## 5. What is not in the register, and why
 
 * **The Census Housing example** of the AddOn (Hillmer & Tiao 1979): the data

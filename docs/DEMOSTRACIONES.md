@@ -768,6 +768,59 @@ correcta es la del acoplamiento, no la del `.pre` univariante.
 
 ---
 
+## 6b. La previsión
+
+### Proposición 2 (la previsión puede calcularse sobre `Ȳ` e invertirse)  `[new here]`
+
+**Por qué hace falta enunciarla.** El programa prevé corriendo la recursión
+estándar de un VARMA sobre el sistema **transformado** y deshaciendo después la
+transformación. Que eso dé la esperanza condicional **del proceso original** no
+es automático: exige que la transformación no pierda información. Nada de
+`literature/` lo escribe — Ahn y Reinsel (1990), Mauricio (2006) y Yap y Reinsel
+(1995) mencionan la previsión como motivación y ninguno da la recursión, y la
+referencia a la que los dos últimos remiten para ello (*JTSA* 13, 353–375) no
+está en el banco.
+
+**Enunciado.** Bajo (a)–(c), sea `Ȳₜ = (∇Y₂ₜ′, Wₜ′)′` con `Wₜ = Y₁ₜ + B₂′Y₂ₜ`.
+Entonces para todo `h ≥ 1`:
+
+1. `σ(Y₁,…,Yₙ) = σ(Y₁, Ȳ₂,…,Ȳₙ)` — las dos filtraciones **coinciden**;
+2. `E[Y_{n+h} | Y₁,…,Yₙ]` se obtiene previendo `Ȳ` y aplicando
+   `Y₂_{n+h} = Y₂ₙ + Σ_{i≤h} ∇Y₂_{n+i}`, `Y₁_{n+h} = W_{n+h} − B₂′Y₂_{n+h}`;
+3. el error de nivel es **afín** en `(A*_{n+1},…,A*_{n+h})` con coeficientes
+   `G_m` conocidos, de modo que su covarianza es `Σ_{m<h} G_m Σ* G_m′`.
+
+**Prueba.** (1) `Ȳₜ` es función de `(Y_{t−1}, Yₜ)`, luego `σ(Ȳ) ⊆ σ(Y)`. Al
+revés: de `Y₂₁` y `∇Y₂₂,…,∇Y₂ₙ` se recupera `Y₂₂,…,Y₂ₙ` por acumulación, y de
+`Wₜ` y `Y₂ₜ` se recupera `Y₁ₜ = Wₜ − B₂′Y₂ₜ`. La correspondencia es biyectiva
+dado el ancla `Y₁`, luego las σ-álgebras son la misma y las esperanzas
+condicionales respecto de una y otra coinciden.
+
+(2) Por (1) se puede condicionar en `Ȳ`. La esperanza condicional es lineal, y
+`Y₂_{n+h}` e `Y₁_{n+h}` son funciones **afines** de `(Ȳ_{n+1},…,Ȳ_{n+h})` con
+`Y₂ₙ` conocido y `B₂` fijo, luego la esperanza pasa a través de ellas.
+
+(3) Restando (2) de su valor realizado, el error de nivel es la misma función
+afín aplicada a los errores de previsión de `Ȳ`, que por la representación
+MA(∞) son `Σ_{t≤h} Ψ_{h−t}A*_{n+t}`. Acumulando el bloque diferenciado aparece
+`C_m = Σ_{k≤m}Ψ_k`, y la fila cointegrada resta `B₂′` por la misma acumulación:
+es `G_m` de `level_error_map()`. Las `A*` son incorreladas y de covarianza `Σ*`,
+luego la covarianza es la suma. ∎
+
+**Lo que la proposición NO cubre, y es donde vive el error real.** `B₂` se
+**estima**, no se conoce, de modo que el ancla de (2) y los coeficientes de (3)
+son funciones de los datos. Las bandas tratan los parámetros como conocidos, que
+es la salvedad habitual y aquí está **medida**: el oráculo de
+[HOMOLOGATION.md](HOMOLOGATION.md) §4s da un 2 % de una desviación de previsión
+a `n = 20000`, y las bandas dentro del 0.5 %.
+
+**Relevancia para el código.** Es lo que licencia `forecast_vec()`. Y (3) es la
+razón de que el mapa de niveles se escriba una sola vez: la media y la varianza
+son **la misma función afín**, aplicada al punto una y a los choques la otra.
+Calcularlas por caminos distintos es el defecto BUG-10 del programa hermano.
+
+---
+
 ## 7. Inferencia: la condición que la sostiene, y la identificación
 
 ### Teorema 10 (Phillips 1991a: optimalidad LAMN y su condición)  `[standard, citado]`
@@ -856,6 +909,7 @@ el resto de este documento cierra:
 | T8 | asintótica del test de rango (MA no cambia el límite) | `-lrtest` + `-bootstrap` |
 | T9 | factorización del peldaño diagonal | contrato `.pre`, identidad de cruce |
 | P1 | la información univariante viaja un peldaño | `-seed`/`-seedybar`, `init_guess` |
+| **P2** | **la previsión puede calcularse sobre `Ȳ` e invertirse** | `forecast_vec`, `level_error_map` |
 | T10, T11 | inferencia χ²/mixto-normal, condicionada a 𝒞 | errores estándar, `-fdhess` |
 | Ident. | identificación del VARMA (coprimidad) | el hueco que T3 cierra |
 

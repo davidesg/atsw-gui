@@ -151,6 +151,34 @@ shape BUG-10 takes when it happens.
 
 ---
 
+## 4b. The oracle, and what the literature does not say
+
+The two certificates above are **internal**: the recursion against the engine's
+residuals, and the one-step band against the parameter vector. Neither reaches
+past `h = 1`, which is where the accumulation `C_m` and the cumulated `Y₂` error
+live. And the step that needs checking most is the one **nothing in the sources
+documents**.
+
+Searched, of the fifteen works in `literature/`: those that mention forecasting
+mention it as a motivation. Ahn and Reinsel (1990) note that imposing unit roots
+improves long-horizon forecasts; Mauricio (2006) lists forecasting as one of
+three purposes; Yap and Reinsel (1995) speak of "efficient prediction". **None
+writes the recursion for this class**, and the reference the last two point to
+for it — *JTSA* 13, 353–375 — is not in the bank. So what licenses the
+procedure is proved rather than cited: **Proposition 2** of
+`DEMOSTRACIONES.md` §6b — the transformation loses no information, so
+forecasting on `Ȳ` and inverting **is** the conditional expectation of `Y`, and
+the level error is affine in the innovations with the coefficients `G_m`.
+
+`tools/sim/forecast_oracle.py` supplies what the sibling programs each have and
+this one lacked: an independent computation. It simulates the process, hands
+`drvec` the sample, and continues the **same process** 20 000 times from its
+true final state. At `n = 20 000`, with the model containing the truth, the
+point forecast matches the true conditional expectation to about **2 % of a
+forecast standard deviation at every horizon** and the bands to **0.5 %**. The
+table, including what it revealed about the cost of the default specification,
+is [HOMOLOGATION.md](HOMOLOGATION.md) §4s.
+
 ## 5. What this does **not** do yet
 
 * **No rolling-origin evaluation.** `-f H` forecasts from the end of the sample

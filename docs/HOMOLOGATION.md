@@ -1372,6 +1372,20 @@ left at all and fails to estimate. So the null and the alternative cannot be
 expressed in the same restricted family, which is a structural obstacle and not
 an oversight.*
 
+## 4o. The default, decided and not moved
+
+Step 4 of [SPECIFICATION_PLAN.md](SPECIFICATION_PLAN.md). **No row of this
+register changed**, and that was verified rather than assumed: the default
+computation is untouched and the suite is green on every golden value.
+
+What changed is that a fit which denies its own rank now says so on the
+terminal, not only in the `.out`, with the command that shows the alternatives.
+The reasoning for keeping the free model as the default — and for refusing both
+a restricted class and `-rankadm` in that role — is §8 of the plan, and it rests
+on two measurements in this register: §4i, where the inherited class is rejected
+in eight of eleven cases, and §4n, where the constrained fit is shown to be a
+downward-biased bound rather than an answer.
+
 ## 5. What is not in the register, and why
 
 * **The Census Housing example** of the AddOn (Hillmer & Tiao 1979): the data

@@ -748,6 +748,28 @@ elif awk -v g="$g_adm" 'BEGIN{exit !(g >= 0.3 - 1e-6)}'; then
     ok "rankadm: the constraint holds at the optimum ($g_adm >= 0.3)"
 else bad "rankadm: constraint violated" "G=$g_adm with tol 0.3"; fi
 
+# THE VERDICT MUST REACH THE TERMINAL, not only the .out.  That is the whole
+# of the step-4 decision: the default COMPUTATION does not move -- no recorded
+# result moves -- but the default PRESENTATION stops handing over as an answer
+# something the theory does not license.  Checked in both directions, because a
+# warning that fires on everything is not a warning.
+run data/pairs/milan.inp 2 1 1 -case 2 -mean
+if printf '%s' "$STDERR" | grep -q "NIEGA EL RANGO" ||
+   grep -aq "NIEGA EL RANGO" "$TMP/case.out"; then
+    ok "rank verdict: an inadmissible fit says so where the user can see it"
+else
+    # the notice goes to stdout, which run() discards; re-run capturing it
+    cp data/pairs/milan.inp "$TMP/case.inp"
+    if "$DRVEC" "$TMP/case" 2 1 1 -case 2 -mean 2>/dev/null | grep -q "NIEGA EL RANGO"
+    then ok "rank verdict: an inadmissible fit says so on the terminal"
+    else bad "rank verdict" "an inadmissible fit was reported silently"; fi
+fi
+cp data/pairs/milan.inp "$TMP/case.inp"
+if "$DRVEC" "$TMP/case" 2 1 1 -case 2 -mean -marow 2>/dev/null \
+   | grep -q "NIEGA EL RANGO"; then
+    bad "rank verdict" "it fired on an admissible fit too"
+else ok "rank verdict: silent on an admissible fit"; fi
+
 if awk -v a="$g_free" 'BEGIN{exit !(a < 0.3)}'; then
     ok "rankadm: and it BINDS -- the free fit sits below it ($g_free)"
 else bad "rankadm: does not bind here" "the free fit already has G=$g_free"; fi

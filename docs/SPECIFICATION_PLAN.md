@@ -163,8 +163,15 @@ judged on both halves.
    selected rank.** `-warma` and `-marow` cannot supply an alternative for a
    rank test because they collapse at `r = 0` — a structural obstacle, recorded
    as open.
-4. **Decide the default**, publish the comparison, and re-measure the golden
-   values if it moves.
+4. ~~**Decide the default**~~ **Decided, and it does not move.** The reasoning
+   is §8 below; the short form is that the free fit is measured to be wrong on
+   this data *and* the constrained one is measured to be a downward-biased bound
+   rather than an answer, so substituting one for the other would be replacing a
+   known error with a different one. What changed instead is the
+   **presentation**: an inadmissible fit now says so on the terminal, and
+   [GETTING_STARTED.md](GETTING_STARTED.md) carries the order to do things in.
+   No recorded result moves and no golden value is re-measured, which was
+   verified rather than assumed — the suite is green on all of them.
 5. **Test the autoregressive half** of the theorems' class (`Γ_i = M_lα′`) as a
    restriction rather than as the indication §4k leaves it at — with a
    bootstrap, for the same boundary reason as §4i.
@@ -172,3 +179,39 @@ judged on both halves.
 Steps 1 and 2 are plumbing with a measured purpose. Step 3 is the one that can
 change what the program says about data. Step 4 is the only one that touches a
 recorded result, and it comes last on purpose.
+
+## 8. The default, decided
+
+**The default computation does not move. The default presentation does.**
+
+Three candidates were on the table and two are refused by their own
+measurements.
+
+* **Make a restricted class the default.** Refused by §5 of this plan, and
+  independently by the measurement: `-mawarma` is rejected at 5 % in eight of
+  eleven cases by a bootstrap that is valid (§4i), and `-warma` fits
+  `mink_muskrat` twenty units worse than the free model (§4l). A default has to
+  work where it does not apply, and neither does.
+* **Make `-rankadm` the default.** Tempting, because by Theorem 4 the admissible
+  set *is* the model class and searching outside it is the defect, not a
+  preference. Refused because of what §4n measures: the constrained fit binds on
+  `L(1)` and leaves `L(0)` alone, so it is a **downward-biased bound** and not an
+  answer. Substituting it for the free fit would replace one known error with a
+  different one, and it would move every recorded number in the register to a
+  value nobody is prepared to defend.
+* **Keep the free model and say what it is.** Taken. The free model is the widest
+  in the class and the one every recorded result rests on; what was wrong was
+  not that the program fits it but that it handed the result over without saying
+  that, on this kind of data, the fit denies the rank it was estimated at.
+
+So: every fit reports `σ_min(Λ⊥′Θ(1)B⊥)`, an inadmissible one now says so **on
+the terminal** with the one command that shows the alternatives, and
+[GETTING_STARTED.md](GETTING_STARTED.md) carries the protocol — rank at `q = 0`,
+ladder at the selected rank, then estimate. The suite checks the notice in both
+directions, because a warning that fires on everything is not a warning.
+
+*What this leaves undone, stated so the decision is not read as a closure:* there
+is no default that is both admissible and unbiased, because building one needs
+a rank test whose alternative is admissible, and §4n records why that cannot be
+written in the restricted classes. Until then the honest default is the widest
+model with its verdict attached.

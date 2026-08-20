@@ -4,7 +4,7 @@
 
 ```sh
 make          # needs gcc and GSL (pkg-config gsl)
-make test     # 54 checks; takes a couple of minutes
+make test     # 150 checks; takes a couple of minutes
 ```
 
 `make test` builds a second small binary, `bin/pre_probe`, which the suite uses
@@ -100,6 +100,44 @@ Cointegration matrix B = [I_r; B2] (M x r) :
 The cointegrating vector, normalised on the `Y₁` block. Here it says that
 `log(mink) − 0.2405·log(muskrat)` is stationary. **Note the sign convention:**
 `Wₜ = Y_{1t} + B₂′Y_{2t}`, so this `B₂` is Johansen's `β` with the opposite sign.
+
+## The order to do things in
+
+Two of the steps below are not conventions, they are what the measurements say
+([HOMOLOGATION.md](HOMOLOGATION.md) §4n, §4m).
+
+**1. Select the rank with `q = 0`.**
+
+```sh
+bin/drvec data/pairs/milan 2 0 0 -case 2 -mean -lrtest -bootstrap 200
+```
+
+Without a moving average there is no admissibility question, and the test is
+measuring what it says. With one, the free moving average degenerates in the
+direction that carries the common trend and absorbs the very thing the rank test
+measures — on the eight wheat pairs the evidence goes from unanimous at `q = 0`
+to two of eight at `q = 1`. Use the bootstrap: the asymptotic table over-rejects
+six-fold at these sample sizes.
+
+**2. At the selected rank, look at the specification ladder before choosing
+one.**
+
+```sh
+bin/drvec data/pairs/milan 2 1 1 -case 2 -mean -specs
+```
+
+Read the **admissible** column first. A rung marked `NO` is not a worse fit of
+this model — it is a fit of a different one, whose rank is not the rank it was
+estimated at, and neither its standard errors nor a likelihood ratio against it
+has its usual distribution. `-marow` and `-warma` cannot degenerate by
+construction; the free model can and, on this kind of data, does.
+
+**3. Then estimate, and read the rank condition in the output.**
+
+Every fit reports `sigma_min(Λ⊥′Θ(1)B⊥)` next to the operator roots, and an
+inadmissible one says so on the terminal. That notice is the program declining to
+hand over as an answer something the theory does not license — not a suggestion
+that the number is slightly off.
 
 ## Three further steps
 

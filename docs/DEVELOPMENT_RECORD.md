@@ -781,6 +781,40 @@ cointegrate about as clearly as data of this length can. It shows that the
 instrument stops working when a free moving average is added, and now there is a
 theorem saying why.
 
+## 8j. The default, and why it stays where it is
+
+Step 4 of the plan was the only one that could touch a recorded result, and the
+decision is that **the computation stays and the presentation changes**.
+
+Two candidates were refused by their own measurements, which is the point of
+having taken them. Making a restricted class the default fails because
+`-mawarma` is rejected at 5 % in eight of eleven cases by a bootstrap that is
+valid, and `-warma` fits `mink_muskrat` twenty units worse than the free model:
+a default has to behave where it does not apply, and neither does. Making
+`-rankadm` the default is more tempting — by Theorem 4 the admissible set *is*
+the model class, so searching outside it is a defect rather than a preference —
+but §4n measures the constrained fit binding on `L(1)` while leaving `L(0)`
+alone, which makes it a downward-biased bound and not an answer. Substituting it
+would move every number in the register to a value nobody is prepared to defend.
+
+So the free model stays, because it is the widest in the class and because every
+recorded result rests on it. What was wrong was never that the program fits it;
+it was that the program handed the result over without saying that on this kind
+of data the fit denies the rank it was estimated at. Now it says so on the
+terminal, with the one command that shows the alternatives, and
+[GETTING_STARTED.md](GETTING_STARTED.md) carries the order to do things in:
+rank at `q = 0`, ladder at the selected rank, then estimate.
+
+The notice is checked in both directions, because a warning that fires on
+everything is not a warning. And no golden value moved — verified rather than
+assumed.
+
+*Stated so the decision is not read as a closure: there is no default that is
+both admissible and unbiased, because building one needs a rank test whose
+alternative is admissible, and §4n records why that cannot be written in the
+restricted classes. Until then the honest default is the widest model with its
+verdict attached.*
+
 ## 9. Open, and honestly so
 
 | | |

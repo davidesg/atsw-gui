@@ -5389,7 +5389,26 @@ int main(int argc, char *argv[])
             fprintf(outputv,
                 "\nRank condition (Granger): sigma_min(Lambda_perp' Theta(1) "
                 "B_perp) = %.3e\n", granger_sv);
-            if (granger_sv < global_rankadm_tol)
+            if (granger_sv < global_rankadm_tol) {
+                /*  Y TAMBIEN A LA TERMINAL.  Un ajuste que niega su propio
+                 *  rango no es un ajuste peor: es el ajuste de otro modelo, y
+                 *  quien corre el programa tiene que enterarse sin abrir el
+                 *  .out.  Es la decision del paso 4 del plan: el CALCULO por
+                 *  defecto no se mueve -- ningun resultado registrado se mueve
+                 *  --, pero la PRESENTACION deja de dar por respuesta algo que
+                 *  la teoria no licencia (docs/THEORY.md, corolario 5.1).    */
+                if (!quiet_mode)
+                    printf("\n  *** ATENCION: sigma_min(Lambda_perp' Theta(1) "
+                           "B_perp) = %.3e < %.1e\n"
+                           "      Este ajuste NIEGA EL RANGO con el que se ha "
+                           "estimado: no es un\n"
+                           "      ajuste peor, es el ajuste de otro modelo.  Sus "
+                           "errores estandar y\n"
+                           "      cualquier LR contra el NO tienen su "
+                           "distribucion habitual.\n"
+                           "      Vea la escalera:  drvec <fichero> %d %d %d "
+                           "-specs\n", granger_sv, global_rankadm_tol,
+                           global_p, global_q, global_r);
                 fprintf(outputv,
                   "  *** This is ZERO to working precision, and it is not a\n"
                   "  detail: that matrix is what makes the long-run impact\n"
@@ -5402,7 +5421,7 @@ int main(int argc, char *argv[])
                   "  distributions there.  -rankadm refuses such points; -mawarma\n"
                   "  makes them unreachable by construction.  See\n"
                   "  docs/HOMOLOGATION.md 4h.\n");
-            else
+            } else
                 fprintf(outputv,
                   "  Comfortably away from zero: the fit is a model of the rank\n"
                   "  it was estimated at.\n");

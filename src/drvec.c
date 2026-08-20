@@ -193,6 +193,31 @@ int global_matri = 0;
  *  es la segunda.  Este peldano separa las dos.                              */
 int global_marow = 0;
 
+/*  -warma — LA CLASE DE LOS TEOREMAS, PARAMETRIZADA DONDE ESTA ENUNCIADA.
+ *
+ *  Hasta aqui todas las restricciones se han escrito sobre Theta en coordenadas
+ *  VEC, y ahi la misma restriccion acopla Theta con B2 y hay que reconstruirla
+ *  en cada evaluacion.  En las coordenadas del sistema transformado,
+ *  Ybar = [nabla Y2 ; W], que son las que usa la definicion 3 del BVECM y las
+ *  que usa Phillips, la clase es un PATRON DE CEROS:
+ *
+ *      Phi*_k = [ 0   Psi_k ]      Theta*_k = [ 0    0    ]
+ *               [ 0   Phi_k ]                 [ 0  Th_k   ]
+ *
+ *  o sea: nada depende de retardos de nabla Y2 -- todo entra por W --, y el
+ *  bloque diferenciado no lleva medias moviles.  Y B2 entra SOLO POR LOS DATOS,
+ *  al formar W por resta, como la entrada de una funcion de transferencia; no
+ *  toca ningun parametro.  Eso es lo que hace el shootx del legado y es la
+ *  razon medida de que su superficie este mejor condicionada
+ *  (docs/ESTUDIO_BVECM_vs_DRVEC.md 3.1).
+ *
+ *  El vector de parametros REUTILIZA las mismas casillas -- media, un bloque
+ *  M x r, luego (p-1) bloques M x r, q bloques r x r, Sigma, y B2 en la cola --
+ *  para no tocar ni el bootstrap ni el perfilado ni la cola de B2, que dependen
+ *  de esa disposicion.  Lo que cambia es que se leen como coeficientes de
+ *  W_{t-k} y no como Lambda y F.                                             */
+int global_warma = 0;
+
 /*  -rankadm — LA CONDICION QUE HACE QUE EL RANGO SEA EL QUE SE DICE.
  *
  *  Para que un VEC con errores de medias moviles represente un proceso I(1) con
@@ -440,6 +465,15 @@ static void par_blocks(int *nmean, int *nlam, int *nmid, int *ntail)
 
     /* 2. Lambda (M x r), o psi (sa x r) con alpha = A*psi */
     *nlam  = (global_alpha ? alpha_sa : M) * r;
+
+    /*  -warma: los bloques de en medio son (p-1) matrices M x r -- los
+     *  coeficientes de W_{t-k} -- y q matrices r x r de medias moviles.      */
+    if (global_warma) {
+        *nmid = nf * M * r + q * r * r
+              + (global_diag_cov ? M : M * (M + 1) / 2) - 1;
+        *ntail = global_fixb2 ? 0 : s * r;
+        return;
+    }
 
     /* 3. F_i (M x M, i=1..p-1)   4. Theta_j (M x M, j=1..q)
        5. Sigma (triangulo inferior), menos la escala redundante.
@@ -2505,6 +2539,143 @@ static void init_guess(real *x, int npar)
     /* --- 0. Levels of Y_{2t}: built once by build_y2_levels() ---------- */
     real **Y2lev = Y2_levels;
 
+    /*  -warma: la semilla es su propia regresion, porque el sistema que se
+     *  parametriza es OTRO -- las ecuaciones son las de Ybar = [nabla Y2 ; W] y
+     *  no las de nabla Y.  Se regresa cada componente de Ybar_t sobre
+     *  W_{t-1}..W_{t-p} y una constante, que es exactamente la forma de la
+     *  definicion 3, y Theta arranca en cero.                                */
+    if (global_warma) {
+        real **B2w = matrix(1, s, 1, (r > 0 ? r : 1));
+        real **Yb, **X, **Yd, **XtX;
+        real *Xty, *EWv;
+        int *ind, nreg2, T2, t2, e2, c2, c3, nf2 = (p > 1) ? p - 1 : 0;
+
+        prelim_b2(B2w);
+        if (global_seedjoh && r > 0) canonical_b2(B2w);
+
+        Yb = matrix(1, nobs, 1, M);
+        for (t2 = 1; t2 <= nobs; t2++) {
+            for (i = 1; i <= s; i++) Yb[t2][i] = datamat[t2][i];
+            for (j = 1; j <= r; j++) {
+                real wv = datamat[t2][s + j];
+                for (i = 1; i <= s; i++) wv += B2w[i][j] * Y2_levels[t2][i];
+                Yb[t2][s + j] = wv;
+            }
+        }
+        EWv = vector(1, (r > 0 ? r : 1));
+        for (j = 1; j <= r; j++) {
+            real sm = 0.0;
+            for (t2 = 1; t2 <= nobs; t2++) sm += Yb[t2][s + j];
+            EWv[j] = sm / nobs;
+        }
+        nreg2 = p * r;
+        T2 = nobs - p; if (T2 < 1) T2 = 1;
+        X   = matrix(1, T2, 1, (nreg2 > 0 ? nreg2 : 1));
+        Yd  = matrix(1, T2, 1, M);
+        for (t2 = p + 1; t2 <= nobs; t2++) {
+            int row = t2 - p; c2 = 1;
+            for (k = 1; k <= p; k++)
+                for (j = 1; j <= r; j++) X[row][c2++] = Yb[t2-k][s+j] - EWv[j];
+            for (i = 1; i <= M; i++) Yd[row][i] = Yb[t2][i];
+        }
+        XtX = matrix(1, (nreg2 > 0 ? nreg2 : 1), 1, (nreg2 > 0 ? nreg2 : 1));
+        Xty = vector(1, (nreg2 > 0 ? nreg2 : 1));
+        ind = ivector(1, (nreg2 > 0 ? nreg2 : 1));
+        {
+            real ***Cw = tensor(1, p, 1, M, 1, (r > 0 ? r : 1));
+            real **E2  = matrix(1, T2, 1, M);
+            real **Sg2 = matrix(1, M, 1, M);
+            for (c2 = 1; c2 <= nreg2; c2++)
+                for (c3 = 1; c3 <= nreg2; c3++) {
+                    real ss = 0.0;
+                    for (t2 = 1; t2 <= T2; t2++) ss += X[t2][c2] * X[t2][c3];
+                    XtX[c2][c3] = ss;
+                }
+            if (nreg2 > 0) ludcp(XtX, nreg2, ind);
+            for (e2 = 1; e2 <= M; e2++) {
+                real **XX = matrix(1, nreg2, 1, nreg2);
+                for (c2 = 1; c2 <= nreg2; c2++)
+                    for (c3 = 1; c3 <= nreg2; c3++) XX[c2][c3] = XtX[c2][c3];
+                for (c2 = 1; c2 <= nreg2; c2++) {
+                    Xty[c2] = 0.0;
+                    for (t2 = 1; t2 <= T2; t2++) Xty[c2] += X[t2][c2] * Yd[t2][e2];
+                }
+                lusol(XX, Xty, nreg2, ind);
+                for (k = 1; k <= p; k++)
+                    for (j = 1; j <= r; j++) Cw[k][e2][j] = Xty[(k-1)*r + j];
+                for (t2 = 1; t2 <= T2; t2++) {
+                    real ei = Yd[t2][e2];
+                    for (c2 = 1; c2 <= nreg2; c2++) ei -= Xty[c2] * X[t2][c2];
+                    E2[t2][e2] = ei;
+                }
+                free_matrix(XX, 1, nreg2, 1, nreg2);
+            }
+            for (i = 1; i <= M; i++)
+                for (j = 1; j <= M; j++) {
+                    real ss = 0.0;
+                    for (t2 = 1; t2 <= T2; t2++) ss += E2[t2][i] * E2[t2][j];
+                    Sg2[i][j] = ss / T2;
+                }
+            /* --- escritura, en el orden que espera el cast --- */
+            if (global_case == 2) { for (j = 1; j <= r; j++) x[idx++] = EWv[j]; }
+            else if (global_case == 3) {
+                for (i = 1; i <= s; i++) {
+                    real sm = 0.0;
+                    for (t2 = 1; t2 <= nobs; t2++) sm += Yb[t2][i];
+                    x[idx++] = sm / nobs;
+                }
+                for (j = 1; j <= r; j++) x[idx++] = EWv[j];
+            }
+            for (i = 1; i <= M; i++)
+                for (j = 1; j <= r; j++) x[idx++] = Cw[1][i][j];
+            for (k = 1; k <= nf2; k++)
+                for (i = 1; i <= M; i++)
+                    for (j = 1; j <= r; j++) x[idx++] = Cw[k+1][i][j];
+            for (k = 1; k <= q; k++)
+                for (i = 1; i <= r; i++)
+                    for (j = 1; j <= r; j++) x[idx++] = 0.0;
+            {
+                real s11 = (Sg2[1][1] > 1.0e-12) ? Sg2[1][1] : 1.0;
+                if (global_diag_cov) {
+                    for (i = 2; i <= M; i++) x[idx++] = Sg2[i][i] / s11;
+                } else {
+                    for (i = 2; i <= M; i++) x[idx++] = Sg2[i][i] / s11;
+                    for (i = 2; i <= M; i++)
+                        for (j = 1; j < i; j++) x[idx++] = Sg2[i][j] / s11;
+                }
+            }
+            if (!global_fixb2)
+                for (j = 1; j <= r; j++)
+                    for (i = 1; i <= s; i++) x[idx++] = B2w[i][j];
+            else {
+                if (!B2_fixed || b2f_s != s || b2f_r != r) {
+                    if (B2_fixed) free_matrix(B2_fixed, 1, b2f_s, 1, b2f_r);
+                    B2_fixed = matrix(1, s, 1, (r > 0 ? r : 1));
+                    b2f_s = s; b2f_r = (r > 0 ? r : 1);
+                }
+                for (j = 1; j <= r; j++)
+                    for (i = 1; i <= s; i++)
+                        B2_fixed[i][j] = global_fixb2_given ? global_fixb2_value
+                                                            : B2w[i][j];
+            }
+            free_matrix(Sg2, 1, M, 1, M);
+            free_matrix(E2, 1, T2, 1, M);
+            free_tensor(Cw, 1, p, 1, M, 1, (r > 0 ? r : 1));
+        }
+        if (idx - 1 != npar)
+            fprintf(stderr, "ERROR init_guess (-warma): idx=%d, npar=%d\n",
+                    idx-1, npar);
+        free_ivector(ind, 1, (nreg2 > 0 ? nreg2 : 1));
+        free_vector(Xty, 1, (nreg2 > 0 ? nreg2 : 1));
+        free_matrix(XtX, 1, (nreg2 > 0 ? nreg2 : 1), 1, (nreg2 > 0 ? nreg2 : 1));
+        free_matrix(Yd, 1, T2, 1, M);
+        free_matrix(X, 1, T2, 1, (nreg2 > 0 ? nreg2 : 1));
+        free_vector(EWv, 1, (r > 0 ? r : 1));
+        free_matrix(Yb, 1, nobs, 1, M);
+        free_matrix(B2w, 1, s, 1, (r > 0 ? r : 1));
+        return;
+    }
+
     /* --- 1. Initial B₂ via static OLS with intercept ------------------- */
     real **B2 = matrix(1, s, 1, (r > 0 ? r : 1));
     prelim_b2(B2);
@@ -2935,6 +3106,87 @@ static void vec_shootx(real *x, struct Tvarma *armax,
             armax->phi[0][i][i]   = 1.0;
             armax->theta[0][i][i] = 1.0;
         }
+    }
+
+    /*  -warma: la parametrizacion en coordenadas Ybar.  Se escribe Phi*, Theta*
+     *  y Sigma* DIRECTAMENTE y no se construye ninguna C̄: no hay nada que
+     *  transformar porque los parametros ya son los del sistema transformado.
+     *  Ver -warma.  El vector w se monta igual que siempre, al final, con B2,
+     *  que es por donde -- y solo por donde -- entra el vector de
+     *  cointegracion.                                                        */
+    if (global_warma) {
+        int nf_w = (p > 1) ? p - 1 : 0;
+        int idw = 1, kk, ii, jj, tt2;
+        real **B2w = matrix(1, s, 1, (r > 0 ? r : 1));
+
+        for (i = 1; i <= M; i++) armax->mu[i] = 0.0;
+        if (global_case == 2) {
+            for (j = 1; j <= r; j++) armax->mu[s + j] = x[idw++];
+        } else if (global_case == 3) {
+            for (i = 1; i <= s; i++) armax->mu[i] = x[idw++];
+            for (j = 1; j <= r; j++) armax->mu[s + j] = x[idw++];
+        }
+        for (kk = 1; kk <= p; kk++)
+            for (i = 1; i <= M; i++)
+                for (j = 1; j <= M; j++) armax->phi[kk][i][j] = 0.0;
+        for (kk = 1; kk <= q; kk++)
+            for (i = 1; i <= M; i++)
+                for (j = 1; j <= M; j++) armax->theta[kk][i][j] = 0.0;
+        /*  Los coeficientes de W_{t-k}: un bloque M x r por retardo, k = 1..p-1
+         *  mas el primero, que ocupa la casilla de Lambda.                    */
+        for (i = 1; i <= M; i++)
+            for (j = 1; j <= r; j++) armax->phi[1][i][s + j] = x[idw++];
+        for (kk = 1; kk <= nf_w; kk++)
+            for (i = 1; i <= M; i++)
+                for (j = 1; j <= r; j++) armax->phi[kk + 1][i][s + j] = x[idw++];
+        for (kk = 1; kk <= q; kk++)
+            for (i = 1; i <= r; i++)
+                for (j = 1; j <= r; j++) armax->theta[kk][s + i][s + j] = x[idw++];
+        {
+            real **Sg = matrix(1, M, 1, M);
+            real **Sc = matrix(1, M, 1, M);
+            real d1, d2; int ifc = 0;
+            for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) Sg[i][j] = 0.0;
+            Sg[1][1] = 1.0;
+            if (global_diag_cov) {
+                for (i = 2; i <= M; i++) Sg[i][i] = x[idw++];
+            } else {
+                for (i = 2; i <= M; i++) Sg[i][i] = x[idw++];
+                for (i = 2; i <= M; i++)
+                    for (j = 1; j < i; j++) { Sg[i][j] = x[idw++]; Sg[j][i] = Sg[i][j]; }
+            }
+            for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) Sc[i][j] = Sg[i][j];
+            choldcp(Sc, M, &d1, &d2, &ifc);
+            if (ifc > 0) *ifaultx = 1;
+            for (i = 1; i <= M; i++)
+                for (j = 1; j <= M; j++) armax->qq[i][j] = Sg[i][j];
+            free_matrix(Sc, 1, M, 1, M);
+            free_matrix(Sg, 1, M, 1, M);
+        }
+        for (j = 1; j <= r; j++)
+            for (i = 1; i <= s; i++)
+                B2w[i][j] = global_fixb2 ? B2_fixed[i][j] : x[idw++];
+
+        for (tt2 = 1; tt2 <= nobs; tt2++) {
+            for (i = 1; i <= s; i++) armax->w[tt2][i] = datamat[tt2][i];
+            for (j = 1; j <= r; j++) {
+                real wv = datamat[tt2][s + j];
+                for (i = 1; i <= s; i++) wv += B2w[i][j] * Y2_levels[tt2][i];
+                armax->w[tt2][s + j] = wv;
+            }
+        }
+        granger_sv = -1.0;
+        free_matrix(B2w, 1, s, 1, (r > 0 ? r : 1));
+        if (lastx == 1) {
+            free_matrix(armax->a, 1, armax->n, 1, armax->m);
+            free_matrix(armax->w, 1, armax->n, 1, armax->m);
+            free_matrix(armax->qq, 1, armax->m, 1, armax->m);
+            free_tensor(armax->theta, 0, armax->q, 1, armax->m, 1, armax->m);
+            free_tensor(armax->phi, 0, armax->p, 1, armax->m, 1, armax->m);
+            free_vector(armax->mu, 1, armax->m);
+        }
+        (void) ii; (void) jj;
+        return;
     }
 
     /* [3] Unpack VEC parameters in the canonical order ---------------------- */
@@ -3604,6 +3856,11 @@ int main(int argc, char *argv[])
         printf("                 denies its own rank: sigma_min of\n");
         printf("                 Lambda_perp' Theta(1) B_perp below tol (default\n");
         printf("                 1e-3).  That statistic is REPORTED always\n\n");
+        printf("  -warma         parameterise the TRANSFORMED system directly, in\n");
+        printf("                 the coordinates the triangular model is stated in:\n");
+        printf("                 Phi*_k = [0 Psi_k ; 0 Phi_k], Theta*_k diagonal\n");
+        printf("                 in the W block, and B2 entering ONLY through the\n");
+        printf("                 data.  This is the class the BVECM theorems cover\n\n");
         printf("  -marow         Theta = [T11 T12 ; 0 0]: the differenced block\n");
         printf("                 carries no moving average of its own, but the\n");
         printf("                 cross block stays free.  q*s*M parameters fewer\n");
@@ -3677,6 +3934,7 @@ int main(int argc, char *argv[])
         else if (strcmp(argv[i], "-mawarma") == 0)  global_mawarma = 1;
         else if (strcmp(argv[i], "-matri") == 0)    global_matri = 1;
         else if (strcmp(argv[i], "-marow") == 0)    global_marow = 1;
+        else if (strcmp(argv[i], "-warma") == 0)    global_warma = 1;
         else if (strcmp(argv[i], "-matest") == 0 && i+1 < argc)
             global_matest = atoi(argv[++i]);
         else if (strcmp(argv[i], "-rankadm") == 0) {
@@ -4737,8 +4995,72 @@ int main(int argc, char *argv[])
 
         /* --- Structured VEC output --------------------------------------- */
         int s = nser - global_r, r = global_r;
-        int ii = 1;
+        int ii = 1, warma_done = 0;
         real **Lam_m = matrix(1, nser, 1, (r > 0 ? r : 1));
+
+        /*  -warma: los parametros NO son los del VEC, asi que no se imprimen
+         *  como si lo fueran.  Se publica lo que se ha estimado, en las
+         *  coordenadas en que se ha estimado, y se dice cuales son.          */
+        if (global_warma) {
+            int nf_w = (global_p > 1) ? global_p - 1 : 0, kk;
+            fprintf(outputv,
+              "\nTriangular (WARMA) parameterisation, on Ybar_t = [nabla Y2 ; W]:\n"
+              "  Ybar_t = sum_k Phi*_k Ybar_{t-k} + (I - sum_k Theta*_k L^k) A*_t\n"
+              "  with Phi*_k = [0  Psi_k ; 0  Phi_k] and Theta*_k in the W block\n"
+              "  only.  B2 enters ONLY through W = Y1 + B2'Y2, by subtraction.\n\n");
+            if (global_case == 2) {
+                fprintf(outputv, "E[W] =\n");
+                for (int j = 1; j <= r; j++)
+                    fprintf(outputv, "  %12.6f  (sd = %10.6f)\n", x[ii], dev[ii]), ii++;
+            } else if (global_case == 3) {
+                fprintf(outputv, "E[nabla Y2] and E[W] =\n");
+                for (int i = 1; i <= nser; i++)
+                    fprintf(outputv, "  %12.6f  (sd = %10.6f)\n", x[ii], dev[ii]), ii++;
+            }
+            for (kk = 1; kk <= nf_w + 1; kk++) {
+                fprintf(outputv, "coefficients of W_{t-%d}  (M x r) =\n", kk);
+                for (int i = 1; i <= nser; i++) {
+                    fprintf(outputv, "  ");
+                    for (int j = 1; j <= r; j++)
+                        fprintf(outputv, "%12.6f (sd %9.6f)", x[ii], dev[ii]), ii++;
+                    fprintf(outputv, "\n");
+                }
+            }
+            for (kk = 1; kk <= global_q; kk++) {
+                fprintf(outputv, "Theta*[%d] in the W block (r x r) =\n", kk);
+                for (int i = 1; i <= r; i++) {
+                    fprintf(outputv, "  ");
+                    for (int j = 1; j <= r; j++)
+                        fprintf(outputv, "%12.6f (sd %9.6f)", x[ii], dev[ii]), ii++;
+                    fprintf(outputv, "\n");
+                }
+            }
+            fprintf(outputv, "Q (M x M, lower triangle; Q[1][1] = 1) =\n  1.000000\n");
+            for (int i = 2; i <= nser; i++) fprintf(outputv, "  %12.6f\n", x[ii++]);
+            if (!global_diag_cov)
+                for (int i = 2; i <= nser; i++)
+                    for (int j = 1; j < i; j++)
+                        fprintf(outputv, "  off(%d,%d) %12.6f\n", i, j, x[ii++]);
+            fprintf(outputv, "B2 (s x r) =\n");
+            for (int i = 1; i <= s; i++) {
+                fprintf(outputv, "  ");
+                for (int j = 1; j <= r; j++)
+                    fprintf(outputv, "%12.6f%s", global_fixb2 ? B2_fixed[i][j] : x[ii],
+                            global_fixb2 ? "" : "");
+                if (!global_fixb2) ii += r;
+                fprintf(outputv, "\n");
+            }
+            if (ii != npar + 1)
+                fprintf(stderr, "ERROR output (-warma): consumed %d of %d\n",
+                        ii - 1, npar);
+            /*  Se sale por la MISMA limpieza que el resto, y no por un return
+             *  propio: un camino de salida nuevo es un juego nuevo de fugas, y
+             *  valgrind lo encontro en cuanto se escribio (2112 bytes en 9
+             *  bloques).  El resto de la impresion VEC se salta con la bandera. */
+            warma_done = 1;
+        }
+        if (!warma_done) {
+
         fprintf(outputv, "\nVEC model (Mauricio 2006):\n");
         fprintf(outputv, "  (I - F1 L - ... - F_{p-1} L^{p-1}) nabla Y_t =\n");
         fprintf(outputv, "      -Lambda (B' Y_{t-1} - E[W_t]) + (I - Theta1 L - ...) A_t\n\n");
@@ -5126,6 +5448,8 @@ int main(int argc, char *argv[])
 
         free_matrix(Lam_m, 1, nser, 1, (r > 0 ? r : 1));
         free_matrix(B2m, 1, s, 1, (r > 0 ? r : 1));
+        }   /* !warma_done */
+        if (warma_done) free_matrix(Lam_m, 1, nser, 1, (r > 0 ? r : 1));
 
     } else {
         fprintf(outputv, "\nESTIMATION FAILED: ifault = %d\n", ifault);

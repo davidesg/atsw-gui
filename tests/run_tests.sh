@@ -168,7 +168,8 @@ for o in "-case 1" "-case 2" "-case 3" \
          "-case 2 -fixb2" "-case 2 -fixb2 0" "-case 2 -fixb2 -0.5" "-case 2 -fixb2 -diagma" \
          "-case 2 -mawarma" "-case 1 -mawarma" "-case 2 -mawarma -diagar" \
          "-case 2 -mawarma -fixb2" "-case 2 -marow" "-case 2 -matri" \
-         "-case 2 -marow -fixb2" "-case 3 -matri"; do
+         "-case 2 -marow -fixb2" "-case 3 -matri" "-case 2 -warma" \
+         "-case 1 -warma" "-case 3 -warma" "-case 2 -warma -fixb2"; do
     struct_case "M=2 p=2 q=1 r=1 $o" "$MM" 2 1 1 $o
 done
 struct_case "M=2 lrtest case 2"                "$MM" 2 1 0 -case 2 -lrtest
@@ -187,6 +188,8 @@ struct_case "M=5 r=2 q=1 -mawarma (T11 2x2, T12 2x3)" "$DK" 2 1 2 -case 2 -mawar
 struct_case "M=3 r=1 q=1 -mawarma"             "$UK" 2 1 1 -case 2 -mawarma
 struct_case "M=5 r=2 q=1 -marow"               "$DK" 2 1 2 -case 2 -marow
 struct_case "M=5 r=2 q=1 -matri"               "$DK" 2 1 2 -case 2 -matri
+struct_case "M=5 r=2 q=1 -warma"               "$DK" 2 1 2 -case 2 -warma
+struct_case "M=3 r=1 q=1 -warma"               "$UK" 2 1 1 -case 2 -warma
 struct_case "M=5 lrtest"                       "$DK" 2 0 0 -case 2 -lrtest
 struct_case "legacy layout (-differenced)"     data/AL.inp 2 0 1 -case 2 -differenced
 for o in "-case 1" "-case 2" "-case 3"; do
@@ -825,6 +828,31 @@ run data/pairs/milan.inp 2 1 1 -case 2 -mean -matri
 z=$(awk '/block-triangular/{getline; getline; print $1+0}' "$TMP/case.out")
 [ "$z" = "0" ] && ok "matri: the lower-left block is zero" \
                || bad "matri: T21 not zero" "$z"
+echo
+
+# 5m. THE TWO PARAMETERISATIONS OF THE SAME CLASS.  -mawarma restricts Theta in
+#     VEC coordinates and casts VEC -> VARMA at every evaluation; -warma writes
+#     the transformed VARMA directly, with B2 entering only through the data.
+#     WITH p = 1 there are no F lags, so the two describe THE SAME family and
+#     must reach the same maximum.  That is an invariant across two casts that
+#     share no code path, which makes it the strongest check either of them has.
+run data/pairs/utrecht.inp 1 1 1 -case 2 -mean -warma
+w1=$(logelf_of "$TMP/case")
+run data/pairs/utrecht.inp 1 1 1 -case 2 -mean -mawarma
+w2=$(logelf_of "$TMP/case")
+if [ -z "$w1" ] || [ -z "$w2" ]; then
+    bad "warma: p=1 identity" "missing logelf (warma=$w1 mawarma=$w2)"
+elif awk -v a="$w1" -v b="$w2" 'BEGIN{d=a-b; if(d<0)d=-d; exit !(d<=1e-6)}'; then
+    ok "warma: both parameterisations reach the same optimum at p=1 ($w1)"
+else bad "warma: the two parameterisations disagree" "warma=$w1 mawarma=$w2"; fi
+
+# and the transformed system it estimates must be reported as such, not dressed
+# up as VEC parameters it never estimated
+run data/pairs/utrecht.inp 2 1 1 -case 2 -mean -warma
+if grep -aq "Triangular (WARMA) parameterisation" "$TMP/case.out" &&
+   ! grep -aq "^Lambda (M x r)" "$TMP/case.out"; then
+    ok "warma: reports the coordinates it estimated in"
+else bad "warma: output" "it printed VEC parameters it did not estimate"; fi
 echo
 
 echo "[6] alpha = A*psi: the restriction, its LR, and its guards"

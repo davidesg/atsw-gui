@@ -703,6 +703,46 @@ Aix and Penn the **free** fits come out below the nested `-matri` ones. A
 restricted model cannot beat the model containing it, so those two free fits
 never reached their own optimum.
 
+## 8h. Estimating the theorems' class where the theorems live
+
+The review of §8g's papers ended with a structural observation rather than a
+number: the BVECM theorems are proved for Phillips' triangular model in the
+WARMA parameterisation, the equivalence with the general VARMA-VEC is asserted
+rather than proved, and the two do not carry the same restrictions — a free
+`Γ_i` has rank `M` where the WARMA image has rank `r`. Which raised the question
+of where a restriction belongs. In VEC coordinates the moving-average structure
+couples `Θ` to `B₂` and has to be rebuilt at every likelihood evaluation; in the
+transformed coordinates the same class is a pattern of zeros and `B₂` enters
+only by forming `W` — by subtraction, like the input of a transfer function.
+
+`-warma` estimates it there. No `C̄`, no `Φ̄` recursion: the parameters already
+are the transformed system's. It recovers its own truth on simulated data
+(`B̂₂ = −0.49994` against −0.5), and it produced the check this program did not
+have. **With `p = 1` it and `-mawarma` describe the same family by two casts
+that share no code**, and they reach the same maximum to nine decimals —
+−22598.3542436254 against −22598.3542436269 on the simulation,
+64.1597098018 against 64.1597098014 on Utrecht. Two independent implementations
+of the same likelihood agreeing to that is worth more than either of them
+agreeing with a table.
+
+On the bank at `p = 2` it converges **on the gradient in eight of eight**, which
+nothing else in the register does, with moving-average roots from 1.0 to 25.1
+and `B̂₂` in the canonical region. The autoregressive half of the class is not
+rejected at 5 % in five of the eight. And on Angers the **less** restricted
+`-mawarma` fit comes out 3.8 units worse than the more restricted one, both
+stopping on the gradient: a nested model cannot beat the model containing it, so
+that is the VEC-coordinate parameterisation stuck in a local optimum where the
+`Ȳ`-coordinate one is not. The conditioning claim of
+[ESTUDIO_BVECM_vs_DRVEC.md](ESTUDIO_BVECM_vs_DRVEC.md) §3.1 now has a number.
+
+One thing to note about how it was built, since it is the recurring failure of
+this whole stretch. The first version printed its results through a new exit
+path of its own, and valgrind found 2112 bytes in 9 blocks immediately. A new
+way out of a function is a new set of leaks; the fix was to route it through the
+same cleanup as everything else and gate the printing with a flag. That is the
+third time in this record that adding a branch to a walk or an exit has cost
+something — the `-diagma` printer, the `-mawarma` printer, and now this.
+
 ## 9. Open, and honestly so
 
 | | |

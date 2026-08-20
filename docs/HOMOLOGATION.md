@@ -1136,6 +1136,73 @@ space is a weakly determined direction; settling it needs the restriction
 imposed and compared, with a bootstrap for the same boundary reason as §4i. That
 comparison is not built.
 
+## 4l. The theorems' class, estimated in its own coordinates
+
+*`-warma`. §4k said the restrictions belong in the coordinates the triangular
+model is stated in. This estimates them there: `Φ*_k = [0  Ψ_k ; 0  Φ_k]`,
+`Θ*_k` in the `W` block only, and `B₂` entering **only** through
+`W = Y₁ + B₂′Y₂` — by subtraction, like the input of a transfer function, with
+no parameter depending on it. No `C̄`, no `Φ̄` recursion: the parameters already
+are the transformed system's.*
+
+### It recovers its own truth
+
+Simulated from the WARMA process of Corollary 2, `n = 8000`, `p = 1`:
+
+| | truth | `-warma` |
+|---|---|---|
+| coefficients of `W_{t−1}` | (γ, φ) = (0.20, 0.60) | (0.209, 0.518) |
+| `Θ*` | 0.50 | 0.404 |
+| `B₂` | −0.50 | **−0.49994** |
+
+### And the two casts agree to nine decimals
+
+With `p = 1` there are no `F` lags, so `-warma` and `-mawarma` describe **the
+same family** by two routes that share no code — one transforms VEC → VARMA at
+every likelihood evaluation, the other writes the VARMA directly. On the WARMA
+simulation they give −22598.3542436254 and −22598.3542436269; on Utrecht,
+64.1597098018 and 64.1597098014. That identity is in the suite, and it is the
+strongest check either cast has.
+
+### On the bank, at `p = 2`
+
+`-warma` adds to `-mawarma` the autoregressive half of the class — every lag
+entering through `W`, i.e. `Γ_i = M_lα′` in VEC terms.
+
+| pair | `-warma` logL / `B̂₂` / MAmin / term | `-mawarma` | LR of the AR half, 2 df |
+|---|---|---|---|
+| Milan | 65.918 / −0.622 / 3.98 / **grad** | 81.313 / −0.566 / 2.41 | **30.79** |
+| Strasbourg | 22.428 / −0.668 / 25.06 / **grad** | 24.451 / −0.640 / 4.93 | 4.05 |
+| Utrecht | 65.905 / −0.864 / 6.97 / **grad** | 70.888 / −0.789 / 7.53 | **9.96** |
+| Vienna | 20.275 / −0.875 / 1.93 / **grad** | 21.572 / −0.866 / 1.63 | 2.59 |
+| Aix | 61.198 / −0.957 / 1.35 / **grad** | 62.128 / −1.029 / 1.38 | 1.86 |
+| Arévalo | −14.422 / −1.007 / 14.33 / **grad** | −13.570 / −0.995 / 12.55 | 1.70 |
+| Angers | 18.196 / −0.712 / 1.00 / **grad** | 16.291 / −1.030 / 6.01 | **−3.81** |
+| Penn | 30.092 / −1.100 / 18.07 / **grad** | 32.475 / −1.088 / 1.72 | 4.77 |
+
+**Eight of eight converge on the gradient** — no other specification in this
+register does — with moving-average roots from 1.0 to 25.1 and `B̂₂` in the
+canonical region throughout.
+
+The autoregressive half of the class is **not rejected at 5 % in five of the
+eight** (`χ²(2)` is 5.99); it is rejected on Milan and Utrecht. And Angers gives
+a **negative** LR: the *less* restricted `-mawarma` fit is 3.8 units **worse**
+than the more restricted `-warma` one, though both stopped on the gradient. A
+nested model cannot beat the model containing it, so what that measures is the
+VEC-coordinate parameterisation getting stuck where the `Ȳ`-coordinate one does
+not — the conditioning difference of
+[ESTUDIO_BVECM_vs_DRVEC.md](ESTUDIO_BVECM_vs_DRVEC.md) §3.1, now with a number
+on it.
+
+### Where this leaves the specification question
+
+Three routes now put `B̂₂` in the same region — the canonical estimator, the
+inherited moving average, and the triangular parameterisation — and all three
+are admissible. The free VEC fit is the one that disagrees, and it is the one
+whose optimum denies its own rank. That is as far as the measurements go: they
+do not say the triangular class is true, they say the answer stops moving as
+soon as the fit is required to be a model of the rank it claims.
+
 ## 5. What is not in the register, and why
 
 * **The Census Housing example** of the AddOn (Hillmer & Tiao 1979): the data

@@ -103,6 +103,21 @@ in seven of the eight ([HOMOLOGATION.md](HOMOLOGATION.md) §4h). Enforcing a
 floor moves `B̂₂` to the value the canonical estimator gives and moves the
 moving-average root off the unit circle, at a cost in log-likelihood.
 
+### The triangular parameterisation
+
+| | |
+|---|---|
+| `-warma` | parameterise the transformed system directly: `Φ*_k = [0 Ψ_k ; 0 Φ_k]`, `Θ*_k` in the `W` block only, `B₂` entering **only** through the data |
+
+This is the class Phillips' triangular representation and the BVECM theorems
+cover, estimated in the coordinates they are stated in. Nothing is transformed:
+the parameters are the transformed system's, and `B₂` reaches the likelihood
+only by forming `W = Y₁ + B₂′Y₂` — by subtraction, like the input of a transfer
+function. Measured ([HOMOLOGATION.md](HOMOLOGATION.md) §4l): eight of eight
+gradient convergences on the wheat pairs, moving-average roots 1.0–25.1, `B̂₂` in
+the canonical region — and, at `p = 1` where it coincides with `-mawarma`, the
+two casts agree to nine decimals.
+
 ### The moving average: free or inherited
 
 | | |

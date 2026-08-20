@@ -174,6 +174,35 @@ and the VEC parameters shown are a projection rather than the fit. The rank
 condition is reported on the recovered parameters, where by Corollary 6.2 of
 [THEORY.md](THEORY.md) it cannot degenerate.
 
+### The default, and the class it sits in
+
+Since **2026-08-20**, with `q ≥ 1` and `r ≥ 1` and no moving-average flag given,
+`drvec` estimates `Θ = [T₁₁  T₁₂ ; 0  0]` — the class `-marow` names. It is not
+a restriction whose optimum has to be corrected for: by Corollary 6.3 of the
+proofs, with the lower `s` rows zero,
+
+```
+det Θ(1) = det(I_r − Σ T₁₁ₖ)     and     eig(companion) = eig(r×r block) ∪ {0…}
+```
+
+so the moving average is invertible **iff** its `r × r` block is, the rank
+condition of Theorem 3 then holds automatically, and the degenerate point the
+likelihood otherwise reaches — and that no root check of the engine can see — is
+**not reachable**. The admissibility condition becomes the invertibility gate
+the engine already applies, on an `r × r` object instead of an `M × M` one.
+
+The `.out` names the class in force on a `MA :` line in its header, so no output
+is ambiguous about which parameterisation it belongs to.
+
+| | |
+|---|---|
+| `-mafree` | the **free** `Θ`, which was the default until 2026-08-20. Kept because it is the widest class, the term of comparison, and the parameterisation every figure in the register measured before that date belongs to. On this kind of data its optimum sits on the invertibility boundary and it is not recoverable at these sample sizes ([HOMOLOGATION.md](HOMOLOGATION.md) §4q) |
+
+At `r = 0` the structured classes are undefined — there is no `W` block, and
+zeroing the lower `s = M` rows would zero `Θ` entirely — so the moving average
+is free there whoever asks, which is also what `-lrtest` needs in order to
+compare ranks in one class.
+
 ### The moving average: free or inherited
 
 | | |

@@ -132,10 +132,18 @@ estimated at, and neither its standard errors nor a likelihood ratio against it
 has its usual distribution. `-marow` and `-warma` cannot degenerate by
 construction; the free model can and, on this kind of data, does.
 
+> **Since 2026-08-20 the default is `-marow`**, so step 3 already starts inside
+> the class that cannot degenerate. The ladder is still worth reading — it says
+> how much the structure costs in likelihood and whether a tighter rung would
+> do — but the `NO` you are looking for now appears only on the `free` rung.
+> `-mafree` estimates that rung on its own, and is the parameterisation every
+> figure in the register measured before that date belongs to.
+
 **3. Then estimate, and read the rank condition in the output.**
 
 Every fit reports `sigma_min(Λ⊥′Θ(1)B⊥)` next to the operator roots, and an
-inadmissible one says so on the terminal. That notice is the program declining to
+inadmissible one says so on the terminal — which under the default cannot
+happen, so if you see it you are in `-mafree`, and the notice says so. That notice is the program declining to
 hand over as an answer something the theory does not license — not a suggestion
 that the number is slightly off.
 

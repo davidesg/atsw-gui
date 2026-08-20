@@ -469,14 +469,30 @@ golden() {
     elif near "$got" "$want"; then ok "$* = $got"
     else bad "$*" "expected $want, got $got"; fi
 }
-golden   3.6856397544 "$MM" 2 1 1 -case 1
-golden   6.4786201604 "$MM" 2 1 1 -case 2
-golden   6.5140062493 "$MM" 2 1 1 -case 3
-golden  -2.5419963582 "$MM" 2 1 1 -case 2 -diagar
+#  P4, 2026-08-20: EL DEFECTO SE MOVIO, y con el estas ocho lineas.  Con q >= 1
+#  y r >= 1 el defecto es ahora -marow (las s filas inferiores de Theta nulas),
+#  porque por el Corolario 6.3 esa es la clase donde la region admisible es el
+#  espacio entero.  Los valores de la clase LIBRE se conservan justo debajo,
+#  bajo -mafree, para que la parametrizacion anterior siga protegida: es la que
+#  sostiene todo el registro previo a esta fecha.
+#  -diagma no se movio: es una restriccion distinta, que el defecto no toca.
+golden -10.7273981157 "$MM" 2 1 1 -case 1
+golden   2.3039690333 "$MM" 2 1 1 -case 2
+golden   2.3074789504 "$MM" 2 1 1 -case 3
+golden  -3.5511860134 "$MM" 2 1 1 -case 2 -diagar
 golden   0.8816637342 "$MM" 2 1 1 -case 2 -diagma
-golden   0.5696296891 "$MM" 2 1 1 -case 2 -diagcov
-golden   5.4717136367 "$MM" 2 1 1 -case 2 -fixb2
-golden  -8.4835302747 "$MM" 2 1 1 -case 2 -fixb2 0
+golden  -2.6646873358 "$MM" 2 1 1 -case 2 -diagcov
+golden   2.1765180953 "$MM" 2 1 1 -case 2 -fixb2
+golden   0.7822395343 "$MM" 2 1 1 -case 2 -fixb2 0
+
+#  La clase libre, con los valores que eran el defecto hasta el 2026-08-20.
+golden   3.6856397544 "$MM" 2 1 1 -case 1        -mafree
+golden   6.4786201604 "$MM" 2 1 1 -case 2        -mafree
+golden   6.5140062493 "$MM" 2 1 1 -case 3        -mafree
+golden  -2.5419963582 "$MM" 2 1 1 -case 2 -mafree -diagar
+golden   0.5696296891 "$MM" 2 1 1 -case 2 -mafree -diagcov
+golden   5.4717136367 "$MM" 2 1 1 -case 2 -mafree -fixb2
+golden  -8.4835302747 "$MM" 2 1 1 -case 2 -mafree -fixb2 0
 golden 570.2297062756 "$UK" 2 0 2 -case 2
 golden 828.8447477597 "$DK" 2 0 2 -case 2   # s=3, r=2: guards the B2 read order
 golden -318.8131393592 data/AL.inp 2 0 1 -case 2 -differenced
@@ -602,7 +618,10 @@ fi
 #     for mink-muskrat p=2 q=1 r=1 -case 2, so the optimality claim is fue's.
 #     NOTE this value is WORSE than the cold start: that is the measured F2
 #     result, not a defect.  See docs/PLAN_BETA.md F2.7.
-run "$MM" 2 1 1 -case 2 -seed tests/fixtures/mmres
+#     P4: -mafree porque la ruta de residuos siembra la DIAGONAL de Theta, que
+#     no es un punto de la clase por defecto (filas inferiores nulas).  Lo que
+#     este bloque comprueba es la fontaneria de la siembra, no el defecto.
+run "$MM" 2 1 1 -case 2 -mafree -seed tests/fixtures/mmres
 got=$(logelf_of "$TMP/case")
 if [ -z "$got" ]; then bad "seeded fit from fixtures" "no logelf"
 elif near "$got" 6.4460747665; then ok "seeded from .pre fixtures = $got"
@@ -891,13 +910,17 @@ echo
 #     below, which is the whole finding), and that constraining cannot buy
 #     likelihood -- a constrained fit that beat the free one would mean the
 #     constraint is not a constraint.
-run data/pairs/milan.inp 2 1 1 -case 2 -mean
+#     P4: sobre -mafree.  -rankadm es un instrumento de medida SOBRE LA CLASE
+#     LIBRE; en la clase por defecto la condicion se cumple sola (Corolario
+#     6.3) y no hay nada que restringir, de modo que medir ahi si "liga" no
+#     tendria sentido.
+run data/pairs/milan.inp 2 1 1 -case 2 -mean -mafree
 g_free=$(awk '/Rank condition/{print $NF}' "$TMP/case.out")
 ll_free=$(logelf_of "$TMP/case")
 if [ -z "$g_free" ]; then bad "rank condition" "not reported at r=1, q=1"
 else ok "rank condition: reported ($g_free)"; fi
 
-run data/pairs/milan.inp 2 1 1 -case 2 -mean -rankadm 0.3
+run data/pairs/milan.inp 2 1 1 -case 2 -mean -mafree -rankadm 0.3
 g_adm=$(awk '/Rank condition/{print $NF}' "$TMP/case.out")
 ll_adm=$(logelf_of "$TMP/case")
 if [ -z "$g_adm" ] || [ -z "$ll_adm" ]; then
@@ -911,14 +934,16 @@ else bad "rankadm: constraint violated" "G=$g_adm with tol 0.3"; fi
 # result moves -- but the default PRESENTATION stops handing over as an answer
 # something the theory does not license.  Checked in both directions, because a
 # warning that fires on everything is not a warning.
-run data/pairs/milan.inp 2 1 1 -case 2 -mean
+#  P4: el caso inadmisible hay que PEDIRLO con -mafree.  Que el defecto ya no
+#  pueda producirlo es el resultado de P4 y se comprueba aparte, mas abajo.
+run data/pairs/milan.inp 2 1 1 -case 2 -mean -mafree
 if printf '%s' "$STDERR" | grep -q "NIEGA EL RANGO" ||
    grep -aq "NIEGA EL RANGO" "$TMP/case.out"; then
     ok "rank verdict: an inadmissible fit says so where the user can see it"
 else
     # the notice goes to stdout, which run() discards; re-run capturing it
     cp data/pairs/milan.inp "$TMP/case.inp"
-    if "$DRVEC" "$TMP/case" 2 1 1 -case 2 -mean 2>/dev/null | grep -q "NIEGA EL RANGO"
+    if "$DRVEC" "$TMP/case" 2 1 1 -case 2 -mean -mafree 2>/dev/null | grep -q "NIEGA EL RANGO"
     then ok "rank verdict: an inadmissible fit says so on the terminal"
     else bad "rank verdict" "an inadmissible fit was reported silently"; fi
 fi
@@ -991,7 +1016,7 @@ echo
 #     must fit at least as well, and the two structural zeros must be exactly
 #     zero.  The measured point they were built for is in HOMOLOGATION.md 4j:
 #     what makes the fit inadmissible is T22, not T21.
-for spec in "-mawarma:1" "-marow:2" "-matri:3" ":4"; do
+for spec in "-mawarma:1" "-marow:2" "-matri:3" "-mafree:4"; do
     o=${spec%%:*}; np=${spec##*:}
     run data/pairs/milan.inp 2 1 1 -case 2 -mean $o
     eval "ll_$np=$(logelf_of "$TMP/case")"
@@ -1465,7 +1490,9 @@ elif [ -z "$got" ]; then bad "q=2 estimates (tensor() heap corruption)" "no loge
 else ok "q=2 estimates, logelf = $got"; fi
 
 # The roots block must be there, and must carry m*p and m*q moduli.
-run "$MM" 2 1 1 -case 2
+# P4: -mafree, porque con el defecto s*q de las raices MA se van al infinito
+# por construccion (Corolario 6.3) y este bloque cuenta moduli finitos.
+run "$MM" 2 1 1 -case 2 -mafree
 nar=$(grep -a 'AR (Phi)'   "$TMP/case.out" | sed 's/.*AR (Phi)//'   | wc -w)
 nma=$(grep -a 'MA (Theta)' "$TMP/case.out" | sed 's/.*MA (Theta)//' | wc -w)
 [ "$nar" -eq 4 ] && ok "AR roots: 4 moduli for m=2, p=2" \
@@ -1478,7 +1505,7 @@ if grep -aq 'A root sits on the unit circle' "$TMP/case.out"; then
     ok "the unit-root alarm fires on the binding fit"
 else bad "unit-root alarm" "no alarm on a fit whose MA modulus is 0.99995"; fi
 
-run "$MM" 2 1 1 -case 2 -fdhess
+run "$MM" 2 1 1 -case 2 -mafree -fdhess
 if printf '%s' "$STDERR" | grep -q 'lies ON the boundary'; then
     ok "-fdhess names the boundary as the cause"
 else bad "-fdhess diagnosis" "expected the boundary message, got: $STDERR"; fi
@@ -1495,6 +1522,61 @@ if [ -f datasets/synthetic/rank2.inp ]; then
         ok "-fdhess succeeds, and is silent, where nothing binds"
     else bad "-fdhess" "neither succeeded nor explained itself"; fi
 fi
+echo
+
+# 8c. P4 — THE DEFAULT CANNOT REACH THE BOUNDARY, AND THE FREE CLASS STILL CAN.
+#     This is criterion P4.3 of docs/PLAN_PRODUCCION.md, and it is the check
+#     that says the specification change did what it was made for.  By
+#     Corollary 6.3, with the bottom s rows of every Theta_k zero,
+#     det Theta(1) = det(I_r - sum T11_k) and the non-zero companion
+#     eigenvalues are exactly those of the r x r block -- so admissibility is
+#     the engine's own invertibility gate, and the degenerate point of P \ C is
+#     not reachable.  Checked on the cases that DO reach it in the free class:
+#     eight of the nine in the bank sit at 0.99995 there.
+#
+#     Both directions, as always: an alarm that cannot fire is not evidence,
+#     so the free class must still produce the boundary on the same data.
+echo "[8c] the default cannot reach the invertibility boundary (P4.3)"
+bound_free=0; bound_def=0; rows_ok=0; cases=0
+for f in datasets/mauricio/mink_muskrat.inp data/pairs/milan.inp \
+         data/pairs/vienna.inp data/pairs/penn.inp data/pairs/utrecht.inp; do
+    [ -f "$f" ] || continue
+    cases=$((cases+1))
+
+    run "$f" 2 1 1 -case 2 -mean -mafree
+    grep -aq 'A root sits on the unit circle' "$TMP/case.out" && bound_free=$((bound_free+1))
+
+    run "$f" 2 1 1 -case 2 -mean
+    grep -aq 'A root sits on the unit circle' "$TMP/case.out" && bound_def=$((bound_def+1))
+    #  y las filas inferiores de Theta, cero EXACTO -- no cerca de cero
+    z=$(awk '/^Theta\[1\]/{getline; getline; print $1" "$2}' "$TMP/case.out")
+    case "$z" in
+        "0.000000 0.000000") rows_ok=$((rows_ok+1)) ;;
+    esac
+done
+if [ "$cases" -eq 0 ]; then
+    ok "P4.3 skipped: no bank case available"
+else
+    [ "$bound_def" -eq 0 ] \
+        && ok "the default reaches the boundary in 0 of $cases bank cases" \
+        || bad "P4.3" "the default sat on the boundary in $bound_def of $cases"
+    [ "$bound_free" -gt 0 ] \
+        && ok "and -mafree still does, in $bound_free of $cases -- the check bites" \
+        || bad "P4.3" "-mafree reached the boundary in none: the check proves nothing"
+    [ "$rows_ok" -eq "$cases" ] \
+        && ok "the s lower rows of Theta are exactly zero in all $cases" \
+        || bad "P4.3" "lower rows not exactly zero in $((cases-rows_ok)) of $cases"
+fi
+
+#     And the shape the corollary predicts: r*q finite MA roots and s*q at
+#     infinity.  With M=2, r=1, q=1 that is one and one.
+run "$MM" 2 1 1 -case 2
+nfin=$(grep -a 'MA (Theta)' "$TMP/case.out" | sed 's/.*MA (Theta)//' | tr ' ' '\n' \
+       | grep -c '[0-9]')
+ninf=$(grep -a 'MA (Theta)' "$TMP/case.out" | grep -o 'inf' | wc -l)
+{ [ "$nfin" -eq 1 ] && [ "$ninf" -eq 1 ]; } \
+    && ok "MA roots under the default: 1 finite (the r x r block) and 1 at infinity" \
+    || bad "P4.3 root shape" "finite=$nfin infinite=$ninf, expected 1 and 1"
 echo
 
 # ================================================== 9 MEMORY (opt-in) ==

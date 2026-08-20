@@ -70,7 +70,7 @@ drvec file p q r [-mean] [-case 1|2|3] [-diagar] [-diagma] [-diagcov] [-m 1|2]
                  [-differenced] [-fixb2 [v]] [-lrtest] [-bootstrap N]
                  [-writeres pfx] [-writeinp pfx] [-seed pfx] [-seedybar pfx]
                  [-alpha file] [-weakex i] [-eval] [-multistart n] [-interv pfx]
-                 [-warma] [-mawarma] [-marow] [-matri]        the specification
+                 [-warma] [-mawarma] [-marow] [-matri] [-mafree]  the specification
                  [-rankadm [tol]] [-specs]                    admissibility
                  [-matest N] [-artest N]                      its two tests
                  [-rungs] [-seedgate] [-seedjoh] [-seedb2 v]  ladders and seeds
@@ -125,13 +125,17 @@ there is what is accepted. `drvec --version` prints the version.
 
 ### The specification of `Θ` and the short-run dynamics
 
-Measured on this data, the default — a free `Θ` — lands where the fitted model
-**denies the rank it was estimated at**, and its `B̂₂` then disagrees with every
-admissible route. See [docs/THEORY.md](docs/THEORY.md) for the condition and
-[docs/HOMOLOGATION.md](docs/HOMOLOGATION.md) §4g–§4p for the measurements.
+A free `Θ` — the default until 2026-08-20, now `-mafree` — lands on this data
+where the fitted model **denies the rank it was estimated at**, and its `B̂₂`
+then disagrees with every admissible route. The default is now the class where
+that cannot happen. See [docs/THEORY.md](docs/THEORY.md) for the condition,
+[docs/HOMOLOGATION.md](docs/HOMOLOGATION.md) §4g–§4r for the measurements, and
+`docs/SPECIFICATION_PLAN.md` §10 for the decision and what it reverses.
 
 | Option | Description |
 |--------|-------------|
+| **default** | With `q ≥ 1` and `r ≥ 1`, `Θ = [T₁₁ T₁₂ ; 0 0]` — the `-marow` class. Not a restriction: by Corollary 6.3 the admissible region **is** the whole parameter space there, and the engine's invertibility gate enforces it. The `.out` names the class on its `MA :` line |
+| `-mafree` | The **free** `Θ`, the default before 2026-08-20. The widest class and the term of comparison; on this kind of data its optimum sits on the invertibility boundary |
 | `-warma` | Parameterise the **transformed** system directly: `Φ*_k = [0 Ψ_k ; 0 Φ_k]`, `Θ*` in the `W` block, `B₂` entering only through the data. The class Phillips' triangular form and the BVECM theorems cover |
 | `-mawarma` | `Θ = [T₁₁ T₁₁B₂′ ; 0 0]`, the structure a WARMA process implies for its VEC representation |
 | `-marow` | `Θ = [T₁₁ T₁₂ ; 0 0]` — the differenced block carries no moving average of its own |

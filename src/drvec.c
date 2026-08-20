@@ -195,6 +195,46 @@ int global_matri = 0;
  *  es la segunda.  Este peldano separa las dos.                              */
 int global_marow = 0;
 
+/*  -mafree — EL Theta LIBRE, QUE HASTA EL 2026-08-20 ERA EL DEFECTO.
+ *
+ *  POR QUE DEJO DE SERLO.  El Corolario 6.3 (docs/DEMOSTRACIONES.md) dice que
+ *  con las s filas inferiores de cada Theta_k nulas -- lo que impone -marow --
+ *  se tiene det Theta(1) = det(I_r - sum T11_k), y que los autovalores de la
+ *  companera M q x M q son los de la companera r q x r q del bloque r x r mas
+ *  s q ceros.  O sea que en esa clase Theta(L) es invertible SI Y SOLO SI lo es
+ *  su bloque r x r, y por el Corolario 3.1 la condicion de rango del Teorema 3
+ *  se cumple sola.  El punto de P \ C que el Teorema 4 dice que la
+ *  verosimilitud premia y el Teorema 5 dice que ningun chequeo de raices del
+ *  motor puede ver NO ES ALCANZABLE ahi: chekma sobre Theta ES chekma sobre el
+ *  bloque r x r.  El Teorema 5 es un enunciado sobre LA CLASE LIBRE.
+ *
+ *  Medido (HOMOLOGATION.md 4q): en el regimen del banco -- medias moviles del
+ *  tipo (1 - theta B), que es lo que dan las series diferenciadas de precios y
+ *  poblaciones -- el Theta libre NO es recuperable ni con n = 250, y
+ *  -multistart lo empeora.  Y 4r: con la clase estructurada, theta = +0.9 se
+ *  recupera con sesgo 0.050 e IQR 0.272, interior, contra un libre que se queda
+ *  en la puerta con el doble de dispersion.
+ *
+ *  Se conserva y se ofrece porque es la clase mas ancha y el termino de
+ *  comparacion de todo el registro anterior; lo que ya no es es la respuesta
+ *  que el programa da si no le preguntan otra cosa.  Ver SPECIFICATION_PLAN.md
+ *  10, que revierte el paso 4 del plan de especificacion.                     */
+int global_mafree = 0;
+int default_marow = 0;      /* 1 si -marow lo puso el defecto, no el usuario  */
+
+/*  LAS CLASES ESTRUCTURADAS COLAPSAN EN r = 0, y hay que decirlo en un solo
+ *  sitio.  Con r = 0 no hay bloque W: el modelo es un VARMA sobre nabla Y y el
+ *  "bloque r x r" es 0 x 0, de modo que anular las s = M filas inferiores
+ *  anularia Theta ENTERA.  Es lo que SPECIFICATION_PLAN.md 9 ya decia -- las
+ *  clases restringidas se definen respecto de la particion r/s y colapsan en
+ *  r = 0 --, y es tambien donde viven los dos contratos de la escalera
+ *  (Teorema 9).  Asi que en r = 0 la media movil es libre, la pida quien la
+ *  pida.  -lrtest recorre r = 0..M-1, luego esto se consulta con el r del
+ *  ajuste en curso y no con el de la linea de ordenes.                       */
+static int ma_struct_on(void)  { return global_r > 0 && (global_marow || global_mawarma); }
+static int marow_on(void)      { return global_r > 0 && global_marow; }
+static int mawarma_on(void)    { return global_r > 0 && global_mawarma; }
+
 /*  -warma — LA CLASE DE LOS TEOREMAS, PARAMETRIZADA DONDE ESTA ENUNCIADA.
  *
  *  Hasta aqui todas las restricciones se han escrito sobre Theta en coordenadas
@@ -497,8 +537,8 @@ static void par_blocks(int *nmean, int *nlam, int *nmid, int *ntail)
           queda fijo en 1 y la escala se reporta por sigma2 (de modo que
           Sigma[1][1] = sigma2 exactamente).                                  */
     *nmid  = nf * (global_diag_ar ? M : M * M)
-           + q  * (global_mawarma ? r * r
-                  : (global_marow ? r * M
+           + q  * (mawarma_on() ? r * r
+                  : (marow_on() ? r * M
                   : (global_matri  ? M * M - s * r
                                    : (global_diag_ma ? M : M * M))))
            + (global_diag_cov ? M : M * (M + 1) / 2) - 1;
@@ -1458,6 +1498,25 @@ static void operator_roots(struct Tvarma *v)
             "    is differenced by construction, so it appears when the declared\n"
             "    rank is lower than the true one.  Re-examine the rank before\n"
             "    reading the estimates.\n");
+
+    /*  P4.4 — que SON esas raices en la clase estructurada.  Con las s filas
+     *  inferiores de Theta nulas, det Theta(x) = det(I_r - sum T11_k x^k):
+     *  hay r*q raices finitas y s*q en el infinito, y las finitas son las del
+     *  bloque r x r.  Decirlo cambia lo que el lector tiene que comprobar --
+     *  un escalar con M = 2, r = 1 -- y por que basta con eso.               */
+    if (v->q > 0 && ma_struct_on())
+        fprintf(outputv,
+            "\n  The %d finite MA root%s above %s of the %d x %d block, and\n"
+            "  det Theta(1) = det(I_r - sum T11_k) exactly (Corollary 6.3): the\n"
+            "  %d x %d block being invertible is the WHOLE admissibility condition\n"
+            "  in this class, and it is what the engine's own gate enforces.  The\n"
+            "  %d root%s at infinity %s the zeroed rows, and %s no defect.\n",
+            global_r * v->q, (global_r * v->q == 1) ? "" : "s",
+            (global_r * v->q == 1) ? "is that" : "are those", global_r, global_r,
+            global_r, global_r,
+            (nser - global_r) * v->q, ((nser - global_r) * v->q == 1) ? "" : "s",
+            ((nser - global_r) * v->q == 1) ? "is" : "are",
+            ((nser - global_r) * v->q == 1) ? "is" : "are");
 }
 
 /*****************************************************************************/
@@ -3147,7 +3206,7 @@ static void init_guess(real *x, int npar)
                               Θ_k = C̄⁻¹ Θ̄_k C̄
        con Θ̄_k diagonal.  Sembrar los θ del .pre directamente en Θ funciona
        sólo si C̄ = I (r = 0) y es un error silencioso en cuanto r ≥ 1.        */
-    if (global_marow && q > 0) {
+    if (marow_on() && q > 0) {
         for (k = 1; k <= q; k++)
             for (i = 1; i <= r; i++)
                 for (j = 1; j <= M; j++) x[idx++] = 0.0;
@@ -3158,7 +3217,7 @@ static void init_guess(real *x, int npar)
             for (i = r + 1; i <= M; i++)
                 for (j = r + 1; j <= M; j++) x[idx++] = 0.0;
         }
-    } else if (global_mawarma && q > 0) {
+    } else if (mawarma_on() && q > 0) {
         /*  -mawarma: el bloque libre es solo Theta11 (r x r), y el resto lo
          *  construye el cast.  La semilla es la diagonal de lo que hubiera:
          *  con la ruta de residuos, la theta univariante del bloque
@@ -3459,7 +3518,7 @@ static void vec_shootx(real *x, struct Tvarma *armax,
         if (prof_hold) {
             for (i = 1; i <= M; i++)
                 for (j = 1; j <= M; j++) Theta[k][i][j] = hold_Th[k][i][j];
-        } else if (global_mawarma) {
+        } else if (mawarma_on()) {
             /*  Theta = [Theta11  Theta11 B2' ; 0  0].  Ojo al orden: B2 se lee
              *  mas abajo, asi que aqui se guarda solo el bloque libre y el
              *  resto se completa DESPUES de tener B2.  Ver -mawarma.         */
@@ -3467,7 +3526,7 @@ static void vec_shootx(real *x, struct Tvarma *armax,
                 for (j = 1; j <= M; j++) Theta[k][i][j] = 0.0;
             for (i = 1; i <= r; i++)
                 for (j = 1; j <= r; j++) Theta[k][i][j] = x[idx++];
-        } else if (global_marow) {
+        } else if (marow_on()) {
             /*  Theta = [T11  T12 ; 0  0]: las s filas de abajo, cero.  Ver
              *  -marow.                                                       */
             for (i = 1; i <= M; i++)
@@ -3546,7 +3605,7 @@ static void vec_shootx(real *x, struct Tvarma *armax,
     /*  -mawarma: el bloque superior derecho de Theta, que NO es libre.  Se
      *  completa aqui y no arriba porque necesita B2, que se acaba de leer:
      *  Theta[k][i][r+jj] = sum_ii Theta11[k][i][ii] * B2'[ii][jj].           */
-    if (global_mawarma && !prof_hold) {
+    if (mawarma_on() && !prof_hold) {
         for (k = 1; k <= q; k++)
             for (i = 1; i <= r; i++)
                 for (int jj = 1; jj <= s; jj++) {
@@ -3927,10 +3986,33 @@ static int gate_profile_seed(real *x, int npar)
         else for (i = 1; i <= M; i++)
                  for (j = 1; j <= M; j++) x[idx++] = hold_F[k][i][j];
     }
+    /*  El peldano de abajo se estima en r = 0, donde la media movil es LIBRE
+     *  (las clases estructuradas colapsan ahi; ver ma_struct_on()).  El
+     *  peldano de arriba puede estar en una clase con menos parametros, asi
+     *  que lo que se transporta es la PROYECCION de la Theta retenida sobre
+     *  esa clase: se conservan las entradas que la clase lleva y se descartan
+     *  las que anula.  Escribir M*M aqui, que es lo que se hacia, desalineaba
+     *  el vector en cuanto el defecto dejo de ser el libre.  El recorrido
+     *  tiene que ser el MISMO que el del cast, y por eso va en el mismo
+     *  orden.                                                                */
     for (k = 1; k <= q; k++) {
-        if (global_diag_ma) { for (i = 1; i <= M; i++) x[idx++] = hold_Th[k][i][i]; }
-        else for (i = 1; i <= M; i++)
-                 for (j = 1; j <= M; j++) x[idx++] = hold_Th[k][i][j];
+        if (mawarma_on()) {
+            for (i = 1; i <= r0; i++)
+                for (j = 1; j <= r0; j++) x[idx++] = hold_Th[k][i][j];
+        } else if (marow_on()) {
+            for (i = 1; i <= r0; i++)
+                for (j = 1; j <= M; j++) x[idx++] = hold_Th[k][i][j];
+        } else if (global_matri) {
+            for (i = 1; i <= r0; i++)
+                for (j = 1; j <= M; j++) x[idx++] = hold_Th[k][i][j];
+            for (i = r0 + 1; i <= M; i++)
+                for (j = r0 + 1; j <= M; j++) x[idx++] = hold_Th[k][i][j];
+        } else if (global_diag_ma) {
+            for (i = 1; i <= M; i++) x[idx++] = hold_Th[k][i][i];
+        } else {
+            for (i = 1; i <= M; i++)
+                for (j = 1; j <= M; j++) x[idx++] = hold_Th[k][i][j];
+        }
     }
     if (global_diag_cov) {
         for (i = 2; i <= M; i++) x[idx++] = hold_S[i][i];
@@ -4085,6 +4167,7 @@ static const struct opt_spec {
     { "-warma",       A_NONE,     NULL   },
     { "-mawarma",     A_NONE,     NULL   },
     { "-marow",       A_NONE,     NULL   },
+    { "-mafree",      A_NONE,     NULL   },
     { "-matri",       A_NONE,     NULL   },
     { "-rankadm",     A_TOL_OPT,  "[tol]"},
     { "-matest",      A_INT_POS,  "N"    },
@@ -4452,6 +4535,7 @@ int main(int argc, char *argv[])
         else if (strcmp(argv[i], "-mawarma") == 0)  global_mawarma = 1;
         else if (strcmp(argv[i], "-matri") == 0)    global_matri = 1;
         else if (strcmp(argv[i], "-marow") == 0)    global_marow = 1;
+        else if (strcmp(argv[i], "-mafree") == 0)   global_mafree = 1;
         else if (strcmp(argv[i], "-warma") == 0)    global_warma = 1;
         else if (strcmp(argv[i], "-specs") == 0)    global_specs = 1;
         else if (strcmp(argv[i], "-artest") == 0 && i+1 < argc)
@@ -4511,6 +4595,24 @@ int main(int argc, char *argv[])
     }
     /* -mean implies case 2 (E[W]≠0) unless a case was given explicitly */
     if (global_include_mean && global_case == 1) global_case = 2;
+
+    /*  P4 — EL DEFECTO DE LA MEDIA MOVIL.  Con q >= 1 y sin que el usuario
+     *  haya elegido clase, se estima -marow: las s filas inferiores de Theta
+     *  nulas.  No es una restriccion sobre la clase libre cuyo optimo haya que
+     *  corregir: por el Corolario 6.3 es la parametrizacion en la que la region
+     *  admisible ES el espacio entero, y la puerta de invertibilidad que el
+     *  motor ya aplica la impone.  -mafree devuelve el defecto anterior.
+     *
+     *  -diagma no se toca: es una restriccion distinta, mas antigua, y NO esta
+     *  en la clase protegida (deja T22 diagonal, no nulo).  Quien la pide sabe
+     *  lo que pide.  Ver SPECIFICATION_PLAN.md 10.                           */
+    if (global_q > 0 && !global_mafree && !global_marow && !global_mawarma
+        && !global_matri && !global_warma && !global_diag_ma) {
+        /*  Se enciende siempre; ma_struct_on() lo apaga en los ajustes con
+         *  r = 0, que es lo unico que hace falta distinguir.                 */
+        global_marow  = 1;
+        default_marow = 1;
+    }
 
     if (global_lrtest) {
         /* The column split of the .inp is s = M - r, so varying r only makes
@@ -4700,6 +4802,23 @@ int main(int argc, char *argv[])
             global_levels ? "all series in levels"
                           : "legacy, cols 1..s pre-differenced (-differenced)",
             nobs, nobs_raw);
+
+    /*  P4 — QUE CLASE SE ESTA ESTIMANDO, dicho en la cabecera y no deducido de
+     *  las banderas.  El defecto se movio el 2026-08-20 y un .out sin esta
+     *  linea es ambiguo respecto de todo el registro anterior.               */
+    if (global_q > 0) {
+        const char *cls =
+            global_warma   ? "triangular (WARMA), estimated in Ybar coordinates"
+          : mawarma_on()   ? "Theta = [T11  T11*B2' ; 0  0]  (-mawarma)"
+          : global_matri   ? "Theta = [T11  T12 ; 0  T22]  (-matri)"
+          : global_diag_ma ? "Theta diagonal  (-diagma)"
+          : marow_on()     ? (default_marow
+                ? "Theta = [T11  T12 ; 0  0]  (the default since 2026-08-20)"
+                : "Theta = [T11  T12 ; 0  0]  (-marow)")
+          :                  "Theta FREE  (-mafree; the default before 2026-08-20)";
+        fprintf(outputv, "MA     : %s\n", cls);
+        if (!quiet_mode) printf("MA     : %s\n", cls);
+    }
 
     /*  P1 — LA COTA SUPERIOR DE p Y q LA PONE LA MUESTRA, no un numero.  Hasta
      *  2026-08-20 `drvec fichero 60 1 1` sobre 61 observaciones se intentaba:
@@ -5793,8 +5912,19 @@ int main(int argc, char *argv[])
                            "errores estandar y\n"
                            "      cualquier LR contra el NO tienen su "
                            "distribucion habitual.\n"
+                           "%s"
                            "      Vea la escalera:  drvec <fichero> %d %d %d "
                            "-specs\n", granger_sv, global_rankadm_tol,
+                           /*  P4 — y de donde viene.  Con el defecto esto no
+                            *  puede pasar (Corolario 6.3); si esta pasando es
+                            *  que se ha pedido la clase libre, y eso es lo
+                            *  primero que hay que decir.                     */
+                           global_mafree
+                             ? "      Esto es -mafree: esa clase CONTIENE puntos"
+                               " que el modelo no\n"
+                               "      admite.  El defecto (-marow) no puede"
+                               " alcanzarlos.\n"
+                             : "",
                            global_p, global_q, global_r);
                 fprintf(outputv,
                   "  *** This is ZERO to working precision, and it is not a\n"
@@ -6082,10 +6212,10 @@ int main(int argc, char *argv[])
             for (int i = 1; i <= nser; i++)
                 for (int j = 1; j <= nser; j++) Th_m[k][i][j] = 0.0;
         for (int k = 1; k <= global_q; k++) {
-            if (global_mawarma) {
+            if (mawarma_on()) {
                 for (int i = 1; i <= r; i++)
                     for (int j = 1; j <= r; j++) Th_m[k][i][j] = x[ii++];
-            } else if (global_marow) {
+            } else if (marow_on()) {
                 for (int i = 1; i <= r; i++)
                     for (int j = 1; j <= nser; j++) Th_m[k][i][j] = x[ii++];
             } else if (global_matri) {
@@ -6100,11 +6230,11 @@ int main(int argc, char *argv[])
                     for (int j = 1; j <= nser; j++) Th_m[k][i][j] = x[ii++];
             }
         }
-        if (!global_mawarma)
+        if (!mawarma_on())
             for (int k = 1; k <= global_q; k++) {
                 fprintf(outputv, "Theta[%d] (M x M)%s =\n", k,
                         global_matri ? ", block-triangular [T11 T12 ; 0 T22]"
-                      : (global_marow ? ", [T11 T12 ; 0 0]" : ""));
+                      : (marow_on() ? ", [T11 T12 ; 0 0]" : ""));
                 for (int i = 1; i <= nser; i++) {
                     fprintf(outputv, "  ");
                     for (int j = 1; j <= nser; j++)
@@ -6242,7 +6372,7 @@ int main(int argc, char *argv[])
 
         /*  -mawarma: ahora que B2 esta leido, se completa e imprime Theta con
          *  la estructura que hereda: [T11  T11*B2' ; 0  0].                  */
-        if (global_mawarma)
+        if (mawarma_on())
             for (int k = 1; k <= global_q; k++) {
                 for (int i = 1; i <= r; i++)
                     for (int jj2 = 1; jj2 <= s; jj2++) {

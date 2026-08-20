@@ -936,6 +936,83 @@ three of its results belong here because they are about this program:
 
 ---
 
+## 9b. P4 — the default moved, and why that was the whole point
+
+*Plan: [PLAN_PRODUCCION.md](PLAN_PRODUCCION.md) §5. Decision and what it
+reverses: [SPECIFICATION_PLAN.md](SPECIFICATION_PLAN.md) §10. Measurements:
+[HOMOLOGATION.md](HOMOLOGATION.md) §4q and §4r.*
+
+**The argument that forced it.** «Rank and `B₂` are reliable, ship that» is not
+a product: Johansen's procedure already delivers both, in closed form. A
+VARMA-VEC exists to say something a univariate model cannot, and that something
+is the short-run structure. If `Λ`, `F` and `Θ` cannot be pinned down, the extra
+parameters are not an advantage, they are a cost.
+
+**And they could not be**, in the regime this program is used in. §4q: with a
+moving average of the `(1 − θB)` kind — which is what differenced price and
+population series give — the free `Θ` is not recoverable at `n = 120` or
+`n = 250`, at any magnitude tried, and `-multistart` makes it worse rather than
+better, because the likelihood rewards the invertibility boundary and searching
+harder finds it more reliably.
+
+**The theory had the answer and nobody had written it down.** Corollary 6.3: with
+the lower `s` rows of every `Θ̃ₖ` zero, `det Θ̃(1) = det(I_r − ΣT_k)` and the
+non-zero companion eigenvalues are exactly those of the `r × r` block. So the
+moving average is invertible **iff** its `r × r` block is, the rank condition
+holds automatically, and the degenerate point of `𝒫 \ 𝒞` — the one Theorem 4
+says the likelihood reaches and rewards, and Theorem 5 says no root check can
+see — **is not reachable**. Theorem 5 is a statement about the free class.
+`chekma` on `Θ̃` is `chekma` on the `r × r` block; with `M = 2, r = 1` the whole
+admissibility condition is `|θ_w| < 1`, a scalar the engine already checks.
+
+Half of it was already there: Corollary 6.2 gives the determinant for `q = 1`
+under the full inherited structure. What was missing is that it holds for every
+`q` and without the inherited cross block — the lower row alone does it, which
+§4j had located by measurement — and the eigenvalue half, which is what connects
+the condition to the check the engine already performs.
+
+**What §8 of the specification plan got wrong.** Its two legs — `-rankadm` is a
+downward-biased bound, and the inherited class is rejected in eight of eleven —
+are statements about *restricting* `𝒫`. The class of Theorem 6 is not a
+restriction on `𝒫`; it is a parameterisation in which `𝒞` is the whole space.
+There is no bound to bind. And the rejection was measured against a free
+alternative sitting on the boundary, where the statistic has no distribution —
+§4i says so itself.
+
+**Measured, on the criterion that matters.** P4.3: the default reaches the
+boundary in **0 of 5** bank cases, `-mafree` still does in **4 of 5**, and the
+lower rows of `Θ̂` are exactly zero in all five. §4r: on a WARMA truth with an
+identified `w` block, `θ = +0.9` — positive coefficient, zero at 1.11, the hard
+case — is recovered with bias 0.050 and IQR 0.272, interior, `G = 0.96`, where
+the free fit parks on the gate with `G = 0.45` and twice the dispersion.
+
+### What it cost, and the lesson underneath it
+
+Eight golden values moved; seven are preserved under `-mafree` so the previous
+parameterisation stays protected. Six tests that built an inadmissible case now
+ask for it explicitly. And three places that **transport parameters between
+fits** had to learn which class they are going to: `init_guess`, whose MA block
+was written from the flags with no guard on `r`; `gate_profile_seed`, which
+wrote `M·M` held values into a vector that now expects `r·M` and needed the
+projection onto the target class; and the `r = 0` case everywhere, where the
+structured classes are undefined and the moving average must be free — which is
+also what `-lrtest` needs, since it compares ranks and can only do that inside
+one class.
+
+That last one is the general lesson: **a default is not a value, it is a
+contract between every part of the program that hands parameters to another
+part.** Moving it found three places that had been reading the flags directly
+instead of asking what the current fit is.
+
+### What it does not settle
+
+Whether the resulting model forecasts better than a univariate one. `drvec`
+still cannot forecast, and until it can this remains a better-behaved estimator
+of a model nobody has shown to be worth its parameters. That is P5, and it is
+the phase that closes the program.
+
+---
+
 ## 10. Open, and honestly so
 
 | | |

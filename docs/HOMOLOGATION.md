@@ -18,6 +18,17 @@ The third is the weakest, and it is where the open item lives.
 
 ---
 
+> **Which parameterisation each figure belongs to.** On 2026-08-20 the default
+> moving-average class changed: with `q ≥ 1` and `r ≥ 1` `drvec` now estimates
+> `Θ = [T₁₁ T₁₂ ; 0 0]`, and the free `Θ` that was the default is `-mafree`
+> (`SPECIFICATION_PLAN.md` §10; the reason is §4r below). **Every figure in this
+> register measured with `q ≥ 1` before that date belongs to the free class**,
+> and is reproduced by adding `-mafree` to the command quoted beside it. Figures
+> at `q = 0` are unaffected — there is no `Θ` to structure — and so are §4g
+> through §4p, which are explicitly about comparing classes and name theirs.
+> Sections written after that date state the class in the command. Every `.out`
+> names it on a `MA :` line in the header.
+
 ## 1. Identities — these must hold exactly
 
 | what | measured | status |

@@ -447,7 +447,7 @@ son justo lo que la regla 1 del método prohíbe.
 
 ---
 
-## 5. La especificación por defecto — P4
+## 5. La especificación por defecto — P4 — **HECHA el 2026-08-20**
 
 *Escrito el 2026-08-20, después de `HOMOLOGATION.md` §4q y §4r y del Corolario
 6.3 de `DEMOSTRACIONES.md`. Esta fase no existía cuando se escribió el plan: el
@@ -515,12 +515,52 @@ clase estructurada.
 
 **Criterio de salida de P4:**
 
-| # | criterio |
-|---|---|
-| P4.1 | el defecto es la clase del Teorema 6, y `make test` verde con los dorados re-medidos |
-| P4.2 | ninguna cifra del registro sin la parametrización a la que pertenece |
-| P4.3 | ningún ajuste por defecto puede alcanzar `det Θ(1) = 0`, comprobado por una prueba que lo intente |
-| P4.4 | el `.out` reporta el bloque `r × r` y su raíz, que es ahora la condición entera |
+| # | criterio | estado |
+|---|---|---|
+| P4.1 | el defecto es la clase del Teorema 6, y `make test` verde con los dorados re-medidos | **✔** 201 comprobaciones, 211 con `VALGRIND=1`, 0 fallos |
+| P4.2 | ninguna cifra del registro sin la parametrización a la que pertenece | **✔** nota al principio de `HOMOLOGATION.md` y línea `MA :` en la cabecera de todo `.out` |
+| P4.3 | ningún ajuste por defecto puede alcanzar `det Θ(1) = 0`, comprobado por una prueba que lo intente | **✔** bloque [8c]: el defecto llega a la frontera en **0 de 5** casos del banco y `-mafree` en **4 de 5**, o sea que la comprobación muerde |
+| P4.4 | el `.out` reporta el bloque `r × r` y su raíz, que es ahora la condición entera | **✔** con la nota del Corolario 6.3 al lado de las raíces |
+
+### Lo construido, y lo que costó
+
+**El defecto.** Con `q ≥ 1` **y `r ≥ 1`** y sin bandera de clase, se estima
+`-marow`. La condición sobre `r` no estaba en el plan y es necesaria: en `r = 0`
+no hay bloque `W`, el «bloque `r × r`» es `0 × 0` y anular las `s = M` filas
+inferiores anularía `Θ` entera. Es lo que `SPECIFICATION_PLAN.md` §9 ya decía
+—las clases restringidas colapsan en `r = 0`— y es también donde viven los dos
+contratos de la escalera. Se resuelve en un solo sitio, `ma_struct_on()`, que
+consulta el `r` **del ajuste en curso** y no el de la línea de órdenes: `-lrtest`
+recorre `r = 0..M−1` y necesita una sola clase en todos ellos, que es la libre.
+
+**`-mafree`** devuelve el defecto anterior, y es la trigésima cuarta opción.
+
+**Tres sitios más que el plan no había previsto**, y los tres son la misma
+lección — cuando el defecto se mueve, todo lo que *transporta* parámetros entre
+ajustes tiene que saber a qué clase van:
+
+- `init_guess` escribía el bloque MA según las banderas sin guardia de `r`, y
+  con `-lrtest` desalineaba el vector (`ERROR init_guess: idx=6, npar=10`).
+- `gate_profile_seed` (`-seedgate`) escribía `M·M` valores de la `Θ` retenida en
+  el peldaño `r = 0`; ahora escribe la **proyección** sobre la clase de destino,
+  que es la lectura correcta y no un parche: se conservan las entradas que la
+  clase lleva y se descartan las que anula.
+- La escalera `-specs` y el bootstrap de `-matest` ya salvaban y restauraban las
+  banderas, y por eso no hubo que tocarlos.
+
+**La batería pasó de 190 a 201 comprobaciones** (211 con memoria). Ocho valores
+dorados se re-midieron y **siete se conservan bajo `-mafree`**, de modo que la
+parametrización anterior —la que sostiene todo el registro previo— sigue
+protegida contra deriva. Seis pruebas que construían un caso inadmisible ahora
+lo piden con `-mafree`: que el defecto ya no pueda producirlo es el resultado, y
+se comprueba aparte en [8c].
+
+**Lo que se movió, dicho como manda la regla 2 del método.** Ocho valores
+dorados. Por ejemplo `2 1 1 -case 2` pasa de **6.4786** a **2.3040** —menos
+verosimilitud con doce parámetros en vez de catorce— con `G` de **0.18** a
+**0.39** y la raíz MA de **0.99995** a **1.28**: fuera de la puerta, admisible,
+y con `B̂₂` de −0.2405 a −0.1508. Cuál de los dos está más cerca de la verdad no
+lo dice la verosimilitud, y es lo que P5 tiene que medir.
 
 ---
 
@@ -640,7 +680,7 @@ publicar mientras siga estando escrito con esta claridad:
 
 ## 9. Orden y por qué
 
-**P1 (hecha) → P4 → P5 → P2 → P3 → P6 → (P7 idioma) → (P8 refactor).**
+**P1 (hecha) → P4 (hecha) → P5 → P2 → P3 → P6 → (P7 idioma) → (P8 refactor).**
 
 El orden cambió el 2026-08-20, y el motivo es el requisito 6 de §0.
 

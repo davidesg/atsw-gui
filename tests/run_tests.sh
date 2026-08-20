@@ -1178,6 +1178,22 @@ fi
 echo
 
 # ================================= 7 THE RANK TEST AGAINST KNOWN TRUTH ==
+# 6c. THE RANK TEST AND ADMISSIBILITY.  -rankadm constrains the r = 1 fit and
+#     leaves the r = 0 one alone -- there is no rank condition at r = 0 -- so
+#     the statistic can only go DOWN.  That is an invariant of the construction
+#     and it cannot go stale; what it guards is that the constraint is being
+#     applied where it is claimed and nowhere else.  The measured consequence,
+#     which is the reason this matters, is in HOMOLOGATION.md 4n.
+run data/pairs/vienna.inp 2 1 0 -case 2 -mean -lrtest
+lr_free=$(awk '/^  0 +2 /{print $3}' "$TMP/case.out")
+run data/pairs/vienna.inp 2 1 0 -case 2 -mean -lrtest -rankadm 0.2
+lr_adm=$(awk '/^  0 +2 /{print $3}' "$TMP/case.out")
+if [ -z "$lr_free" ] || [ -z "$lr_adm" ]; then
+    bad "lrtest + rankadm" "missing LR (free=$lr_free adm=$lr_adm)"
+elif awk -v a="$lr_free" -v b="$lr_adm" 'BEGIN{exit !(b <= a + 1e-6)}'; then
+    ok "rank test: constraining the alternative cannot raise the LR ($lr_adm <= $lr_free)"
+else bad "rank test: LR rose under the constraint" "free=$lr_free adm=$lr_adm"; fi
+
 echo "[7] the rank test on data whose rank is known by construction"
 # Every other check of -lrtest compares against another program's answer.  These
 # two compare against the TRUTH, because the data was generated to have it:

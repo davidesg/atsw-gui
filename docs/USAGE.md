@@ -280,6 +280,17 @@ tabulated here). A **negative** statistic is flagged: rank `r` is nested in
 
 Incompatible with `-differenced`, because the column split depends on `r`.
 
+**Select the rank with `q = 0`.** Measured
+([HOMOLOGATION.md](HOMOLOGATION.md) §4n): on the eight wheat pairs the test at
+`q = 0` rejects `r = 0` unanimously at the bootstrap resolution floor, while at
+`q = 1` a free `Θ` leaves only two of eight below 5 %. That is not a weaker test
+of the same thing — by Theorem 3 of [THEORY.md](THEORY.md) the free moving
+average degenerates in the direction that carries the common trend, so the
+alternative it fits is not a rank-one model. Enforcing admissibility
+(`-rankadm`) makes the alternative legitimate but can only lower the statistic,
+since `r = 0` has no rank condition to constrain. **Fit the moving average at
+the rank selected without it.**
+
 ### Bootstrap critical values
 
 | | |

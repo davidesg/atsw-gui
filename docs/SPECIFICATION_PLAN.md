@@ -153,9 +153,16 @@ judged on both halves.
    admissibility verdict read off the rank condition, no `χ²` p-value for a
    comparison involving an inadmissible rung, and a negative LR flagged as the
    non-convergence it is ([HOMOLOGATION.md](HOMOLOGATION.md) §4m).
-3. **Re-measure `-lrtest`** under `-warma` and `-marow` on the bank, against the
-   free version and against the bootstrap critical values of §2.3. This is where
-   an applied conclusion can actually change.
+3. ~~**Re-measure `-lrtest`**~~ **Done, and the applied conclusion did change**
+   ([HOMOLOGATION.md](HOMOLOGATION.md) §4n). At `q = 0` all eight pairs reject
+   `r = 0` at the bootstrap resolution floor; with a free `q = 1` only two do,
+   and with admissibility enforced only one. The reason is Theorem 3: the free
+   moving average degenerates in the `Λ⊥` direction, which is the one carrying
+   the common trend, so it absorbs what the test measures. **The protocol that
+   follows is to select the rank at `q = 0` and fit the moving average at the
+   selected rank.** `-warma` and `-marow` cannot supply an alternative for a
+   rank test because they collapse at `r = 0` — a structural obstacle, recorded
+   as open.
 4. **Decide the default**, publish the comparison, and re-measure the golden
    values if it moves.
 5. **Test the autoregressive half** of the theorems' class (`Γ_i = M_lα′`) as a

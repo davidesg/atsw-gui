@@ -1310,6 +1310,68 @@ admissible, the free one is not, and the admissible `B̂₂` runs −0.10 to −
 against the free −0.24 — the same shape as the pairs, on a dataset where the
 triangular rung fits 20 units worse.
 
+## 4n. The rank test, and what the moving average was doing to it
+
+*Step 3 of [SPECIFICATION_PLAN.md](SPECIFICATION_PLAN.md), and the measurement
+with the most at stake: `-lrtest` fits a free `Θ` at every rank, and those are
+exactly the fits §4h shows landing where the model denies its own rank. All
+p-values below are **bootstrap** ones, 100 replications, because the asymptotic
+table is measured to over-reject six-fold (§2.3).*
+
+| pair | `q = 0`: LR / p / reps | `q = 1` free | `q = 1` admissible |
+|---|---|---|---|
+| Milan | 25.06 / **0.011** / 90 | 31.02 / **0.022** / 89 | 23.45 / **0.024** / 83 |
+| Strasbourg | 25.86 / **0.010** / 97 | 21.98 / 0.067 / 88 | 17.37 / 0.095 / 73 |
+| Utrecht | 30.74 / **0.010** / 97 | 17.09 / 0.238 / 100 | 12.69 / 0.250 / 79 |
+| Vienna | 21.87 / **0.010** / 95 | 26.68 / **0.011** / 90 | 9.17 / 0.318 / 62 |
+| Aix | 27.39 / **0.010** / 95 | 10.05 / 0.598 / 96 | 7.51 / 0.644 / 86 |
+| Arévalo | 44.19 / **0.010** / 95 | 29.56 / **0.044** / 89 | 19.95 / 0.185 / 64 |
+| Angers | 32.39 / **0.011** / 91 | 22.03 / 0.068 / 73 | 1.81 / 0.813 / 47 |
+| Penn | 42.17 / **0.010** / 96 | 10.06 / 0.575 / 79 | 7.09 / 0.623 / 76 |
+
+**Without a moving average the eight pairs cointegrate, unanimously and at the
+resolution floor.** Every bootstrap p-value is 0.010–0.011, which with `B = 100`
+is `1/(B+1)` — "stronger than a hundred replications can resolve". There is no
+ambiguity about these data at `q = 0`.
+
+**Adding a free moving average destroys that evidence**, and now there is a
+reason rather than a shrug. By Theorem 3 of [THEORY.md](THEORY.md) the rank is
+`r` only while `Λ⊥′Θ(1)` keeps full row rank, and §4h measures the free `r = 1`
+fits landing with `Θ̂(1)` singular in almost exactly the `Λ⊥` direction — the one
+that annihilates the common trend. **The moving average absorbs the very thing
+the rank test is measuring.** So the `q = 1` free column is not a weaker test of
+the same hypothesis; it is a comparison in which the alternative is not a
+rank-one model.
+
+**Enforcing admissibility does not restore the evidence either**, and it should
+not be expected to: the constraint binds on `L(1)` and leaves `L(0)` untouched —
+there is no rank condition at `r = 0` — so the statistic can only fall. It falls
+a long way: Vienna from 26.7 to 9.2, Angers from 22.0 to 1.8. What that column
+establishes is not a verdict but a bound: **whatever evidence the `q = 1` fit
+appeared to give, most of it was bought in the inadmissible region.**
+
+### The protocol that follows
+
+**Select the rank with `q = 0`, then fit the moving average at the selected
+rank.** At `q = 0` the instrument is clean — no `Θ`, so no admissibility
+question, and the answer here is unanimous — while at `q = 1` neither column is
+a usable test: the free one compares against an alternative outside the model
+class, and the constrained one biases the statistic down by construction.
+
+This is the same phenomenon §3b of this register recorded from the other side,
+where the lags needed to whiten the residuals destroyed the rank test. Both are
+the alternative's fit being spent on something other than cointegration.
+
+*[open] A test of the rank at `q ≥ 1` that is neither inadmissible nor
+downward-biased is not built. It would need the alternative estimated in a class
+that cannot degenerate — `-marow` or `-warma` — but those restrictions are
+defined relative to the `r/s` split and **collapse at `r = 0`**: with `r = 0`,
+`-mawarma` and `-marow` annihilate `Θ` entirely (measured: Milan `r = 0`
+`-marow` gives 64.1210, exactly the `q = 0` fit) and `-warma` has no dynamics
+left at all and fails to estimate. So the null and the alternative cannot be
+expressed in the same restricted family, which is a structural obstacle and not
+an oversight.*
+
 ## 5. What is not in the register, and why
 
 * **The Census Housing example** of the AddOn (Hillmer & Tiao 1979): the data

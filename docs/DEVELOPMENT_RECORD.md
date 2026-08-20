@@ -743,6 +743,44 @@ same cleanup as everything else and gate the printing with a flag. That is the
 third time in this record that adding a branch to a walk or an exit has cost
 something — the `-diagma` printer, the `-mawarma` printer, and now this.
 
+## 8i. The measurement that changed an answer about data
+
+The plan put this third on purpose: the rank test is where an applied conclusion
+could move, and it moved. All p-values below are bootstrap ones, because the
+asymptotic table over-rejects six-fold.
+
+**At `q = 0` the eight wheat pairs cointegrate unanimously**, every bootstrap
+p-value sitting at `1/(B+1)` — the resolution floor of a hundred replications.
+With a free moving average at `q = 1`, two of eight stay below 5 %. With
+admissibility enforced, one.
+
+The reason is Theorem 3. The rank is `r` only while `Λ⊥′Θ(1)` keeps full row
+rank, and the free `r = 1` fits land with `Θ̂(1)` singular in almost exactly the
+`Λ⊥` direction — the one carrying the common trend. **The moving average absorbs
+the very thing the rank test measures.** So the `q = 1` free column was never a
+weaker test of the same hypothesis: its alternative is not a rank-one model.
+
+Enforcing admissibility does not give the evidence back, and should not be
+expected to: the constraint binds on `L(1)` and leaves `L(0)` alone, because
+`r = 0` has no rank condition, so the statistic can only fall — Vienna from 26.7
+to 9.2, Angers from 22.0 to 1.8. That column is a bound, not a verdict: most of
+what the `q = 1` fit appeared to establish was bought in the inadmissible region.
+
+What comes out is a protocol rather than a number: **select the rank at `q = 0`,
+then fit the moving average at the selected rank.** And an obstacle worth
+recording rather than papering over: the restricted classes cannot supply an
+alternative for a rank test, because they are defined relative to the `r/s`
+split and collapse at `r = 0` — with `r = 0`, `-marow` annihilates `Θ` entirely
+and reproduces the `q = 0` fit to the digit, and `-warma` has no dynamics left
+and does not estimate. The null and the alternative cannot be written in the
+same restricted family.
+
+It is worth saying what this does **not** show. It does not show that these
+series fail to cointegrate — at `q = 0`, where the instrument is clean, they
+cointegrate about as clearly as data of this length can. It shows that the
+instrument stops working when a free moving average is added, and now there is a
+theorem saying why.
+
 ## 9. Open, and honestly so
 
 | | |

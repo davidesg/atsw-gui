@@ -815,6 +815,41 @@ alternative is admissible, and §4n records why that cannot be written in the
 restricted classes. Until then the honest default is the widest model with its
 verdict attached.*
 
+## 8k. The last rung, and a reading of my own that it reversed
+
+Step 5 tested the autoregressive half of the triangular class — `Γ_i = M_iα′`,
+every lag entering through the cointegrating combination — as a restriction
+instead of as the eyeballed indication §4k had left it at. `-artest` reuses the
+machinery of `-matest` with the other pair: `H₀` is `-warma`, `H₁` is
+`-mawarma`, the moving-average structure held in both.
+
+**It is not rejected in seven of the eight pairs.** Only Milan rejects, at the
+bootstrap resolution floor; Utrecht is marginal. So the class splits cleanly:
+its moving-average half is rejected in eight of eleven cases (§4i) and its
+autoregressive half survives. What these data reject is the assumption that the
+differenced block carries no moving average of its own — not the assumption that
+the short-run dynamics enter through `W`.
+
+**And it reverses what §4k said.** I had measured that `F̂₁`'s dominant row
+direction matches `α′` in only one of the eight pairs, and read that as an
+indication the data are not in the class in the autoregressive block. Tested
+properly, the reading is wrong: the row space of a freely estimated `F̂₁` is a
+weakly determined direction, and a distance between two weakly determined
+directions is not evidence of anything. That is the same mistake as the one this
+record opens with in §7 — believing an instrument before measuring it — and here
+the difference it makes is between "the class does not fit these data" and "the
+class fits seven of the eight".
+
+Two smaller things. The reason for bootstrapping is **not** the one `-matest`
+has, and the output says so: here the unrestricted model is admissible, and what
+is non-standard is that a reduced-rank restriction's likelihood ratio is not
+`χ²` when the true rank may already be below the one the restriction allows.
+And the first version of the shared block printed a conditional format string
+with the numbers concatenated onto one branch of the ternary — it compiled, and
+`-artest` silently lost its logL, LR and p-value lines. Splitting the call in
+two fixed it; the suite now checks that `-artest` reports the pair it claims to
+be testing, by reproducing both fits on its own.
+
 ## 9. Open, and honestly so
 
 | | |

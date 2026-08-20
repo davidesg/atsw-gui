@@ -79,6 +79,7 @@ Swensen (2024).
 | | |
 |---|---|
 | `-matest N` | `H₀`: the inherited `Θ` structure; `H₁`: free `Θ`. `N` parametric bootstrap replications under `H₀` |
+| `-artest N` | `H₀`: `Γ_i = M_iα′`, every lag entering through `W`; `H₁`: `F_i` free. Same machinery, the other half of the class |
 
 The `χ²` reference is printed and is **not** a test: the unrestricted optimum
 sits where the rank condition degenerates, so the statistic does not have its

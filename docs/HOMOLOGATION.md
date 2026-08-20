@@ -1132,10 +1132,10 @@ Five of the eight are near rank one, which the restriction predicts — but the
 row space is `α′` in only one of them. So the reduction happens in a direction
 the triangular class does not allow.
 
-**This is an indication and not a test.** `F̂₁` is estimated freely and its row
-space is a weakly determined direction; settling it needs the restriction
-imposed and compared, with a bootstrap for the same boundary reason as §4i. That
-comparison is not built.
+**This is an indication and not a test**, and §4p now shows it was a
+**misleading** one. `F̂₁` is estimated freely and its row space is a weakly
+determined direction; imposing the restriction and testing it properly reverses
+the reading in seven of the eight pairs.
 
 ## 4l. The theorems' class, estimated in its own coordinates
 
@@ -1385,6 +1385,68 @@ a restricted class and `-rankadm` in that role — is §8 of the plan, and it re
 on two measurements in this register: §4i, where the inherited class is rejected
 in eight of eleven cases, and §4n, where the constrained fit is shown to be a
 downward-biased bound rather than an answer.
+
+## 4p. The autoregressive half of the class, tested — and it survives
+
+*`-artest N`. Step 5 of [SPECIFICATION_PLAN.md](SPECIFICATION_PLAN.md).
+`H₀`: `Γ_i = M_iα′`, every lag entering through `W`, which is `-warma`.
+`H₁`: `F_i` free, which is `-mawarma`. The moving-average structure is held in
+both, so the comparison isolates the autoregressive half. 100 replications.*
+
+**Why this one is bootstrapped is not the reason §4i had.** Here the
+unrestricted model **is** admissible — the rank condition reads 0.90 to 1.00
+across the bank — so this is not a boundary of the model class. It is that
+`Γ_i = M_iα′` is a **reduced-rank** restriction on `F_i`, and the likelihood
+ratio for a rank restriction is not `χ²` when the true rank may be below the one
+the restriction allows: in five of the eight pairs `F̂₁` comes out near rank one
+already, and `M_i` is then close to unidentified.
+
+| pair | LR | `χ²(2)` p | **bootstrap p** | boot 10% | 5% | 1% |
+|---|---|---|---|---|---|---|
+| Milan | 30.79 | 0.0000 | **0.0102** | 6.53 | 10.17 | 17.40 |
+| Strasbourg | 4.05 | 0.1322 | 0.3646 | 8.71 | 10.47 | 29.23 |
+| Utrecht | 9.96 | 0.0069 | 0.0606 | 7.21 | 10.12 | 15.41 |
+| Vienna | 2.59 | 0.2732 | 0.4421 | 9.81 | 14.28 | 23.78 |
+| Aix | 1.86 | 0.3943 | 0.6289 | 6.95 | 11.00 | 15.63 |
+| Arévalo | 1.70 | 0.4265 | 0.5149 | 8.02 | 11.22 | 21.64 |
+| Angers | **−3.81** | 1.0000 | 1.0000 | 7.47 | 9.33 | 23.80 |
+| Penn | 4.77 | 0.0923 | 0.2551 | 7.34 | 8.77 | 47.64 |
+
+`χ²(2)` has 4.61 / 5.99 / 9.21.
+
+**The restriction is not rejected in seven of the eight pairs.** Only Milan
+rejects, at the resolution floor; Utrecht is marginal at 0.061. Angers returns a
+negative statistic — the *unrestricted* fit is worse — which is the `-mawarma`
+non-convergence already recorded in §4l, and the bootstrap reports it as
+`p = 1` rather than dressing it up.
+
+The bootstrap 5 % values run 8.8 to 29.2 against `χ²(2)`'s 5.99, a factor of 1.5
+to 4.9 — the same over-rejection of the asymptotic reference that §2.3 and §4i
+measure on two other statistics.
+
+### This corrects §4k
+
+§4k measured that `F̂₁`'s dominant row direction matches `α′` in only one of the
+eight pairs and called it an indication that these data are not in the class in
+the autoregressive block. **Tested, that reading is wrong.** The row space of a
+freely estimated `F̂₁` is a weakly determined direction, and a distance between
+two weakly determined directions is not evidence. Imposing the restriction and
+simulating its distribution reverses the conclusion in seven of the eight cases.
+The lesson is the one this record keeps relearning: an eyeballed distance is not
+a test, and the difference is not a detail here — it is the difference between
+"the class does not fit these data" and "the class fits seven of the eight".
+
+### And the class splits cleanly in two
+
+| half of the triangular class | verdict on the bank |
+|---|---|
+| the moving-average half (`Θ` inherited, §4i) | **rejected** at 5 % in eight of eleven |
+| the autoregressive half (`Γ_i = M_iα′`, here) | **not rejected** in seven of eight |
+
+So the theorems' class fails on its moving-average half and survives on its
+autoregressive one. What these data reject is the assumption that the
+differenced block carries no moving average of its own — not the assumption that
+the short-run dynamics enter through the cointegrating combination.
 
 ## 5. What is not in the register, and why
 

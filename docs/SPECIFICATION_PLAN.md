@@ -172,9 +172,15 @@ judged on both halves.
    [GETTING_STARTED.md](GETTING_STARTED.md) carries the order to do things in.
    No recorded result moves and no golden value is re-measured, which was
    verified rather than assumed — the suite is green on all of them.
-5. **Test the autoregressive half** of the theorems' class (`Γ_i = M_lα′`) as a
-   restriction rather than as the indication §4k leaves it at — with a
-   bootstrap, for the same boundary reason as §4i.
+5. ~~**Test the autoregressive half**~~ **Done**: `-artest`
+   ([HOMOLOGATION.md](HOMOLOGATION.md) §4p). **Not rejected in seven of the
+   eight pairs**, which reverses the indication §4k had left — the row space of
+   a freely estimated `F̂₁` is a weakly determined direction, and a distance
+   between two such is not evidence. The class therefore splits: its
+   moving-average half is rejected (§4i, eight of eleven) and its autoregressive
+   half is not. Bootstrapped for a different reason than §4i: here the
+   unrestricted model is admissible, and what is non-standard is that
+   `Γ_i = M_iα′` is a reduced-rank restriction.
 
 Steps 1 and 2 are plumbing with a measured purpose. Step 3 is the one that can
 change what the program says about data. Step 4 is the only one that touches a

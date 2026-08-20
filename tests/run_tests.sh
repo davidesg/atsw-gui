@@ -799,8 +799,8 @@ if ! grep -aq "inherited moving average against the free one" "$TMP/case.out"; t
     bad "matest" "no test block emitted"
 else
     lr=$(awk '/LR = 2\*/{print $(NF-3)}' "$TMP/case.out")
-    l0=$(awk '/^  restricted   logL/{print $4}' "$TMP/case.out")
-    l1=$(awk '/^  free         logL/{print $4}' "$TMP/case.out")
+    l0=$(awk '/^  restricted     logL/{print $4}' "$TMP/case.out")
+    l1=$(awk '/^  unrestricted   logL/{print $4}' "$TMP/case.out")
     if awk -v a="$lr" -v b="$l0" -v c="$l1" \
          'BEGIN{d=2*(c-b)-a; if(d<0)d=-d; exit !(d<=1e-4)}'; then
         ok "matest: LR = 2*[L(free) - L(restricted)] ($lr)"
@@ -938,6 +938,34 @@ else
         ok "specs: no chi2 p-value for a comparison with an inadmissible rung"
     else bad "specs" "it printed a p-value the theory does not license"; fi
 fi
+echo
+
+# 5o. -artest: the AR half of the triangular class (Gamma_i = M_i alpha') against
+#     free F, bootstrapped.  Same machinery as -matest with a different pair, so
+#     what is checked is that the pair is really the one advertised: the
+#     restricted fit must be -warma's and the unrestricted one -mawarma's, which
+#     the suite can reproduce on its own.  That is what stops the two tests from
+#     silently becoming the same test.
+#     Milan and not mink_muskrat: -warma does not estimate there, which is a
+#     measured property of that data (HOMOLOGATION.md 4l) and not a defect, but
+#     it leaves this check with nothing to compare.
+run data/pairs/milan.inp 2 1 1 -case 2 -mean -warma
+w0=$(logelf_of "$TMP/case")
+run data/pairs/milan.inp 2 1 1 -case 2 -mean -mawarma
+w1=$(logelf_of "$TMP/case")
+run data/pairs/milan.inp 2 1 1 -case 2 -mean -artest 20
+a0=$(awk '/^  restricted     logL/{print $4}' "$TMP/case.out")
+a1=$(awk '/^  unrestricted   logL/{print $4}' "$TMP/case.out")
+if [ -z "$a0" ] || [ -z "$a1" ]; then
+    bad "artest" "no restricted/unrestricted logL reported"
+elif awk -v a="$a0" -v b="$w0" -v c="$a1" -v d="$w1" \
+       'BEGIN{x=a-b; y=c-d; if(x<0)x=-x; if(y<0)y=-y; exit !(x<=1e-4 && y<=1e-4)}'
+then ok "artest: it tests -warma against -mawarma ($a0 vs $a1)"
+else bad "artest: it is not testing the pair it says" "H0=$a0 (warma $w0) H1=$a1 (mawarma $w1)"; fi
+
+if grep -aqi "reduced-rank restriction" "$TMP/case.out"; then
+    ok "artest: it states the right reason for bootstrapping"
+else bad "artest" "it repeated -matest's boundary reason, which does not apply here"; fi
 echo
 
 echo "[6] alpha = A*psi: the restriction, its LR, and its guards"

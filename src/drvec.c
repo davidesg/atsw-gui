@@ -255,6 +255,7 @@ int  global_rankadm = 0;
 real global_rankadm_tol = 0.2;
 int  global_matest = 0;      /* -matest N: bootstrap del MA heredado vs libre */
 int  global_specs  = 0;      /* -specs: la escalera de especificaciones        */
+int  global_artest = 0;      /* -artest N: bootstrap de Gamma_i = m_i alpha'   */
 static real granger_sv = -1.0;   /* sigma_min(G) en la ultima evaluacion */
 
 /*  granger_smin — sigma_min(Lambda_perp' Theta(1) B_perp), o -1 si no aplica.
@@ -1698,8 +1699,19 @@ static int bootstrap_rank(int rr, real *x, int npar, int N, real *cv, real *pval
 /*  estadistico observado en esa distribucion.  Cada replica cuesta DOS        */
 /*  ajustes, el restringido y el libre, exactamente como el observado.        */
 /*****************************************************************************/
+/*  set_spec — LA ESCALERA, EN UN SOLO SITIO.  0 warma, 1 mawarma, 2 marow,
+ *  3 matri, 4 libre.  Existe porque el bootstrap tiene que poder poner y quitar
+ *  una especificacion entera sin que se le olvide una bandera, y porque cuatro
+ *  banderas puestas a mano en cinco sitios es como se cuela una combinacion que
+ *  nadie quiso.                                                              */
+static void set_spec(int k)
+{
+    global_warma = (k == 0); global_mawarma = (k == 1);
+    global_marow = (k == 2); global_matri   = (k == 3);
+}
+
 static int bootstrap_ma(real *x0, int npar0, int N, real *cv, real *pval,
-                        real lr_obs)
+                        real lr_obs, int k0, int k1)
 {
     int M = nser, r = global_r, s = M - r, i, j, b, nok = 0, ifr = 0, ge = 0;
     real **B2  = matrix(1, (s > 0 ? s : 1), 1, (r > 0 ? r : 1));
@@ -1710,9 +1722,9 @@ static int bootstrap_ma(real *x0, int npar0, int N, real *cv, real *pval,
     FILE *save_out = outputv;
     int save_quiet = quiet_mode, save_wa = global_mawarma;
 
-    /*  El modelo bajo H0 es el RESTRINGIDO, asi que se recupera con la
-     *  bandera puesta: con ella quitada, vec_shootx leeria otro vector.      */
-    global_mawarma = 1;
+    /*  El modelo bajo H0 es el RESTRINGIDO, asi que se recupera con SU
+     *  especificacion puesta: con otra, vec_shootx leeria otro vector.       */
+    set_spec(k0);
     {
         int idx = npar0 - s * r + 1;
         for (j = 1; j <= r; j++) for (i = 1; i <= s; i++)
@@ -1738,12 +1750,12 @@ static int bootstrap_ma(real *x0, int npar0, int N, real *cv, real *pval,
     for (b = 1; b <= N; b++) {
         int ok0 = 0, ok1 = 0;
         real l0, l1;
-        global_mawarma = 1;
+        set_spec(k0);
         if (simulate_h0(&vh, B2, r, sim) != 0) continue;
         for (i = 1; i <= nobs_raw; i++)
             for (j = 1; j <= M; j++) rawmat[i][j] = sim[i][j];
-        global_mawarma = 1; l0 = fit_ll(r, &ok0);
-        global_mawarma = 0; l1 = fit_ll(r, &ok1);
+        set_spec(k0); l0 = fit_ll(r, &ok0);
+        set_spec(k1); l1 = fit_ll(r, &ok1);
         /*  Se descartan las replicas donde el libre acaba POR DEBAJO del
          *  restringido: el restringido esta anidado, asi que un LR negativo es
          *  un ajuste que no convergio, no una realizacion del estadistico.   */
@@ -1753,10 +1765,10 @@ static int bootstrap_ma(real *x0, int npar0, int N, real *cv, real *pval,
         for (j = 1; j <= M; j++) rawmat[i][j] = saved[i][j];
     if (outputv) fclose(outputv);
     outputv = save_out; quiet_mode = save_quiet;
-    global_mawarma = 1;
+    set_spec(k0);
     build_y2_levels();
     vec_shootx(x0, &vh, &ifr, 0, 1);
-    global_mawarma = save_wa;
+    set_spec(-1); global_mawarma = save_wa;
 
     if (nok >= 10) {
         int i90 = (int) ceil(0.90 * nok), i95 = (int) ceil(0.95 * nok),
@@ -4045,6 +4057,9 @@ int main(int argc, char *argv[])
         printf("                 termination, the rank condition G, the smallest\n");
         printf("                 MA root, B2 and an ADMISSIBLE column -- and no\n");
         printf("                 chi2 p-value where the theory does not give one\n\n");
+        printf("  -artest N      test the triangular short-run dynamics\n");
+        printf("                 (Gamma_i = M_i alpha': every lag enters through\n");
+        printf("                 W) against free F, with N bootstrap replications\n\n");
         printf("  -matest N      test the inherited moving average against the\n");
         printf("                 free one with N parametric bootstrap replications\n");
         printf("                 under the restricted model.  The chi2 reference\n");
@@ -4137,6 +4152,8 @@ int main(int argc, char *argv[])
         else if (strcmp(argv[i], "-marow") == 0)    global_marow = 1;
         else if (strcmp(argv[i], "-warma") == 0)    global_warma = 1;
         else if (strcmp(argv[i], "-specs") == 0)    global_specs = 1;
+        else if (strcmp(argv[i], "-artest") == 0 && i+1 < argc)
+            global_artest = atoi(argv[++i]);
         else if (strcmp(argv[i], "-matest") == 0 && i+1 < argc)
             global_matest = atoi(argv[++i]);
         else if (strcmp(argv[i], "-rankadm") == 0) {
@@ -4696,8 +4713,22 @@ int main(int argc, char *argv[])
 
     /*  -matest N — el contraste del MA heredado contra el libre, con su
      *  distribucion SIMULADA en vez de supuesta.  Es un modo y termina aqui.  */
-    if (global_matest > 0) {
-        int M = nser, np0, np1, ok0 = 0, ok1 = 0, nb, df;
+    if (global_matest > 0 || global_artest > 0) {
+        /*  Dos contrastes con la misma maquinaria y distinta pareja:
+         *    -matest   H0 = mawarma  contra  H1 = libre   (la mitad de MA)
+         *    -artest   H0 = warma    contra  H1 = mawarma (la mitad de AR)
+         *  El segundo es el que el paso 5 del plan pedia, y su razon para
+         *  simular NO es la misma: aqui el modelo no restringido SI es
+         *  admisible (G entre 0.90 y 1.00 en todo el banco), asi que no es el
+         *  problema de frontera de 4i.  Es que la restriccion Gamma_i = m_i
+         *  alpha' es de RANGO REDUCIDO sobre F_i, y el LR de una restriccion de
+         *  rango no es chi2 cuando el rango verdadero puede estar por debajo
+         *  del que la restriccion permite -- y en cinco de los ocho pares F1
+         *  sale casi de rango uno, con lo que m_i queda casi no identificado.  */
+        int use_ar = (global_artest > 0);
+        int reps = use_ar ? global_artest : global_matest;
+        int k0 = use_ar ? 0 : 1, k1 = use_ar ? 1 : 4;
+        int np0, np1, ok0 = 0, ok1 = 0, nb, df;
         real l0, l1, lr, cv[3] = {0,0,0}, pv = -1.0;
         real *x0, *dev0, **cov0;
         struct Tvarma v0;
@@ -4705,13 +4736,11 @@ int main(int argc, char *argv[])
 
         macheps = cmacheps();
         if (global_r < 1 || global_q < 1) {
-            fprintf(stderr, "ERROR: -matest needs r >= 1 and q >= 1\n");
+            fprintf(stderr, "ERROR: -matest/-artest need r >= 1 and q >= 1\n");
             exit(1);
         }
-        df = global_q * (M * M - global_r * global_r);
-
         /* [1] el restringido, que es H0 -- y se guarda, porque de el se simula */
-        global_mawarma = 1;
+        set_spec(k0);
         build_y2_levels();
         np0 = calc_nparametrs();
         x0 = vector(1, np0); dev0 = vector(1, np0); cov0 = matrix(1, np0, 1, np0);
@@ -4723,38 +4752,51 @@ int main(int argc, char *argv[])
         ok0 = (ifr == 0); l0 = v0.logelf;
         vec_shootx(x0, &v0, &ifr, 0, 1);
 
-        /* [2] el libre */
-        global_mawarma = 0;
+        /* [2] el no restringido */
+        set_spec(k1);
         l1 = fit_ll(global_r, &ok1);
         np1 = calc_nparametrs();
+        df = np1 - np0;
 
         if (!ok0 || !ok1) {
-            fprintf(outputv, "\n-matest: one of the two fits failed "
-                             "(restricted %s, free %s); no test.\n",
+            fprintf(outputv, "\n%s: one of the two fits failed "
+                             "(restricted %s, unrestricted %s); no test.\n",
+                    use_ar ? "-artest" : "-matest",
                     ok0 ? "ok" : "failed", ok1 ? "ok" : "failed");
         } else {
             lr = 2.0 * (l1 - l0);
+            /*  La cabecera y los numeros van en DOS llamadas y no en una con
+             *  la cadena de formato condicional: con el ternario, los literales
+             *  que venian detras se concatenan a una sola de las dos ramas y
+             *  los %f se quedan sin formato en la otra.  Compila, y se pierden
+             *  los numeros en silencio -- que es como se perdieron la primera
+             *  vez que se escribio esto.                                     */
+            fprintf(outputv, "%s", use_ar
+                ? "\n=== The triangular short-run dynamics against free F ===\n\n"
+                  "  H0: Gamma_i = M_i alpha' -- every lag enters through W,\n"
+                  "      which is what the triangular class implies\n"
+                  "  H1: F_i free (the moving-average structure held in both)\n\n"
+                : "\n=== The inherited moving average against the free one ===\n\n"
+                  "  H0: Theta = [T11  T11*B2' ; 0  0], the structure a WARMA\n"
+                  "      process implies for its VEC representation\n"
+                  "  H1: Theta free\n\n");
             fprintf(outputv,
-                "\n=== The inherited moving average against the free one ===\n\n"
-                "  H0: Theta = [T11  T11*B2' ; 0  0], the structure a WARMA\n"
-                "      process implies for its VEC representation\n"
-                "  H1: Theta free\n\n"
-                "  restricted   logL = %15.10f   (%d parameters)\n"
-                "  free         logL = %15.10f   (%d parameters)\n"
-                "  LR = 2*[L(free) - L(restricted)] = %.4f   on %d df\n"
-                "  chi2 p-value, FOR REFERENCE ONLY               = %.4f\n",
+                "  restricted     logL = %15.10f   (%d parameters)\n"
+                "  unrestricted   logL = %15.10f   (%d parameters)\n"
+                "  LR = 2*[L(H1) - L(H0)] = %.4f   on %d df\n"
+                "  chi2 p-value, FOR REFERENCE ONLY          = %.4f\n",
                 l0, np0, l1, np1, lr, df,
                 (lr > 0.0) ? gsl_cdf_chisq_Q(lr, df) : 1.0);
             printf("  restringido %.6f   libre %.6f   LR %.4f (%d gl)\n",
                    l0, l1, lr, df);
 
-            nb = bootstrap_ma(x0, np0, global_matest, cv, &pv, lr);
+            nb = bootstrap_ma(x0, np0, reps, cv, &pv, lr, k0, k1);
             if (nb >= 10) {
                 fprintf(outputv,
                   "\n  Parametric bootstrap under H0, %d of %d replications "
                   "usable:\n"
                   "    critical values   10%%: %8.4f   5%%: %8.4f   1%%: %8.4f\n"
-                  "    bootstrap p-value = %.4f\n", nb, global_matest,
+                  "    bootstrap p-value = %.4f\n", nb, reps,
                   cv[0], cv[1], cv[2], pv);
                 fprintf(outputv, "    verdict: %s\n",
                     (lr > cv[2]) ? "reject H0 at 1%" :
@@ -4770,14 +4812,25 @@ int main(int argc, char *argv[])
                       "    (the p-value counts the observed statistic itself, so\n"
                       "     with B = %d it can sit on the other side of the same\n"
                       "     threshold as the critical value; both are printed)\n",
-                      global_matest);
+                      reps);
                 printf("  bootstrap: p = %.4f  (%d/%d replicas)\n", pv, nb,
-                       global_matest);
+                       reps);
             } else {
                 fprintf(outputv, "\n  Parametric bootstrap: only %d usable "
                                  "replications; no critical values.\n", nb);
             }
-            fprintf(outputv,
+            fprintf(outputv, use_ar ?
+              "\n  WHY THE BOOTSTRAP AND NOT THE chi2, and the reason is NOT\n"
+              "  the one in -matest.  Here the unrestricted model IS admissible\n"
+              "  -- the rank condition reads 0.90 to 1.00 across the bank -- so\n"
+              "  this is not a boundary of the model class.  It is that\n"
+              "  Gamma_i = M_i alpha' is a REDUCED-RANK restriction on F_i, and\n"
+              "  the likelihood ratio for a rank restriction is not chi2 when\n"
+              "  the true rank may be below the one the restriction allows: in\n"
+              "  five of the eight pairs F1 comes out near rank one already, and\n"
+              "  M_i is then close to unidentified.  The bootstrap is simulated\n"
+              "  FROM THE RESTRICTED FIT, which is H0.\n"
+              :
               "\n  WHY THE BOOTSTRAP AND NOT THE chi2.  The unrestricted\n"
               "  optimum on this kind of data stops in the neighbourhood where\n"
               "  the rank condition degenerates -- sigma_min(Lambda_perp'\n"
@@ -4792,8 +4845,8 @@ int main(int argc, char *argv[])
               "  Read it with its floor of 1/(B+1) = %.4f and its Monte Carlo\n"
               "  error sqrt(p(1-p)/B) = %.4f at p = 0.05.\n"
               "  See docs/HOMOLOGATION.md 4g and 4h.\n",
-              1.0 / (real) (global_matest + 1),
-              sqrt(0.05 * 0.95 / (real) global_matest));
+              1.0 / (real) (reps + 1),
+              sqrt(0.05 * 0.95 / (real) reps));
         }
         free_matrix(cov0, 1, np0, 1, np0);
         free_vector(dev0, 1, np0);

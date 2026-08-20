@@ -1108,6 +1108,41 @@ static void subtract_interventions(const char *prefix)
             Tsx.nobs    = nobs_raw;
             det = vector(1, nobs_raw);
             build_det_component(&Tm, &Tsx, nobs_raw, det);
+            /*  EL REFACTOR, que hasta el 2026-08-20 no se aplicaba y es un
+             *  defecto.  El modelo del .pre esta definido sobre
+             *  w = refactor * BoxCox(z) (FILE_CONTRACT del formato, y
+             *  fue_pre_reader.c lo lee en Ts->refactor), asi que sus omega
+             *  estan en LAS UNIDADES DE w y no en las del dato que drvec tiene
+             *  delante.  Restarlas tal cual solo acierta cuando refactor = 1,
+             *  que es lo que valia en todos los casos probados hasta que una
+             *  aplicacion real -- tres IPC mensuales con refactor = 100 --
+             *  dejo ver lo contrario: la serie "ajustada" salia con una
+             *  varianza de innovacion cien veces la suya y el modelo era
+             *  inservible sin que nada avisara.
+             *
+             *  Es la misma familia que los defectos de escala del programa
+             *  hermano: un coeficiente tomado de una fuente y aplicado en las
+             *  unidades de otra.  Se divide, que es lo que lleva det a las
+             *  unidades del dato.                                            */
+            {
+                real rf = (Ts.refactor != 0.0) ? Ts.refactor : 1.0;
+                if (rf != 1.0) {
+                    for (t = 1; t <= nobs_raw; t++) det[t] /= rf;
+                    if (!quiet_mode)
+                        printf("  serie %d: refactor %.6g del .pre aplicado a "
+                               "las deterministas\n", i, rf);
+                    fprintf(outputv, "Series %d: the .pre's refactor %.6g was "
+                                     "applied to its deterministic terms.\n", i, rf);
+                }
+                /*  Y la transformacion de Box-Cox NO se puede comprobar desde
+                 *  aqui -- el .pre dice con que lambda se estimo, pero no si el
+                 *  .inp de drvec trae la serie ya transformada --, asi que se
+                 *  dice y se deja al usuario, que es lo unico honesto.        */
+                if (!quiet_mode && Tm.boxlam != 1.0)
+                    printf("  serie %d: el .pre se estimo con lambda = %.4g; "
+                           "el .inp de drvec debe traer la serie YA "
+                           "transformada\n", i, Tm.boxlam);
+            }
             for (t = 1; t <= nobs_raw; t++) rawmat[t][i] -= det[t];
             if (!quiet_mode) {
                 printf("  serie %d: %d determinista(s) del .pre restadas (", i,
@@ -2079,6 +2114,7 @@ static int   global_interv   = 0;    /* -interv <prefijo>: deterministas del .pr
 static char *interv_prefix   = NULL;
 static int   global_multistart = 0;  /* -multistart n: n arranques, quedarse el mejor */
 static int   global_fcast = 0;       /* -f H: horizonte de prevision (P5)             */
+static const char *fc_csv = NULL;    /* -C fichero: errores por origen, para el DM    */
 
 static int   global_seed     = 0;    /* -seed <prefijo> */
 static char *pre_prefix      = NULL;
@@ -4294,6 +4330,7 @@ static int rolling_eval(real *x, int E, int H)
     int M = nser, r = global_r, s = M - r, i, h, o, nor = 0;
     int save_nobs = nobs, ifr = 0;
     struct Tvarma vf;
+    FILE *csv = NULL;
     real p1, p2, p3;
     real **Yb, **lev, **sae, **sse, **spe, **B2r;
     int  **cnt;
@@ -4330,6 +4367,16 @@ static int rolling_eval(real *x, int E, int H)
             sae[h][i] = sse[h][i] = spe[h][i] = 0.0; cnt[h][i] = 0;
         }
 
+    /*  -C: los errores ORIGEN A ORIGEN, que es lo que un contraste de igualdad
+     *  de capacidad predictiva necesita.  Un RMSE agregado no permite un
+     *  Diebold-Mariano: hace falta la serie de perdidas.  La letra es la del
+     *  programa hermano, que lleva la misma opcion por la misma razon.       */
+    if (fc_csv) {
+        csv = fopen(fc_csv, "w");
+        if (csv) fprintf(csv, "origin,h,series,actual,forecast,error\n");
+        else fprintf(stderr, "WARNING: cannot write %s\n", fc_csv);
+    }
+
     for (o = E; o + H <= nobs_full; o++) {
         forecast_core(&vf, B2r, o, H, Yb, lev);
         nor++;
@@ -4343,6 +4390,9 @@ static int rolling_eval(real *x, int E, int H)
                 sse[h][i] += e * e;
                 if (fabs(act) > 1.0e-12) spe[h][i] += fabs(e / act);
                 cnt[h][i]++;
+                if (csv) fprintf(csv, "%d,%d,%s,%.10f,%.10f,%.10f\n", o, h,
+                                 series_names ? series_names[i] : "y",
+                                 act, lev[h][i], e);
             }
     }
 
@@ -4366,6 +4416,7 @@ static int rolling_eval(real *x, int E, int H)
         printf("Rolling origin: %d origins from %d, H = %d, written to the .out\n",
                nor, E, H);
 
+    if (csv) { fclose(csv); if (!quiet_mode) printf("Per-origin errors: %s\n", fc_csv); }
     free_imatrix(cnt, 1, H, 1, M);
     free_matrix(spe, 1, H, 1, M);  free_matrix(sse, 1, H, 1, M);
     free_matrix(sae, 1, H, 1, M);
@@ -4572,6 +4623,7 @@ static const struct opt_spec {
     { "-mafree",      A_NONE,     NULL   },
     { "-f",           A_INT_POS,  "H"    },
     { "-estwin",      A_INT_POS,  "E"    },
+    { "-C",           A_STR,      "FILE" },
     { "-matri",       A_NONE,     NULL   },
     { "-rankadm",     A_TOL_OPT,  "[tol]"},
     { "-matest",      A_INT_POS,  "N"    },
@@ -4944,6 +4996,8 @@ int main(int argc, char *argv[])
             global_fcast = atoi(argv[++i]);
         else if (strcmp(argv[i], "-estwin") == 0 && i+1 < argc)
             global_estwin = atoi(argv[++i]);
+        else if (strcmp(argv[i], "-C") == 0 && i+1 < argc)
+            fc_csv = argv[++i];
         else if (strcmp(argv[i], "-warma") == 0)    global_warma = 1;
         else if (strcmp(argv[i], "-specs") == 0)    global_specs = 1;
         else if (strcmp(argv[i], "-artest") == 0 && i+1 < argc)

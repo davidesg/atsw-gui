@@ -619,6 +619,19 @@ it — so it is **not** an out-of-sample measurement. See
 [FORECAST.md](FORECAST.md) for the algorithms, their provenance and the
 certificates.
 
+### The `.pre`'s rescaling factor, and why it matters here
+
+A `.pre` describes a model of `w = refactor · BoxCox(z)`, so its deterministic
+coefficients are in the units of `w`. The suite's `.pre` files are normally
+written with `refactor = 100`, because the optimiser converges there and hangs
+at raw scale. `-interv` divides by it before subtracting, and says so; if the
+`.pre` was estimated with a Box-Cox `λ ≠ 1` the program warns, because it cannot
+check whether the `.inp` you handed it carries the series already transformed —
+that one is yours to get right.
+
+Until 2026-08-20 the factor was not applied, which was only harmless while every
+case tested had `refactor = 1`. See [HOMOLOGATION.md](HOMOLOGATION.md) §4u.
+
 ### Out of sample: `-estwin E -f H`
 
 ```

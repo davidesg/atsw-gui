@@ -291,8 +291,8 @@ fi
 #  Es la comprobacion que no se queda obsoleta: la lista aceptada sale del
 #  FUENTE y la enumerada sale del BINARIO.  Antes de P1 habrian diferido en 11.
 if [ -f src/drvec.c ]; then
-    parser_opts=$(grep -ao 'strcmp(argv\[i\], "-[a-z0-9]*"' src/drvec.c \
-                  | grep -ao '"-[a-z0-9]*"' | tr -d '"' | sort -u)
+    parser_opts=$(grep -ao 'strcmp(argv\[i\], "-[A-Za-z0-9]*"' src/drvec.c \
+                  | grep -ao '"-[A-Za-z0-9]*"' | tr -d '"' | sort -u)
     usage_opts=$("$DRVEC" -h 2>/dev/null \
                  | sed -n '/^Every option drvec accepts/,$p' | tail -n +2 \
                  | tr -s ' ' '\n' | grep -a '^-' | sort -u)
@@ -1694,6 +1694,79 @@ cp "$MM" "$TMP/case.inp"
 if "$DRVEC" "$TMP/case" 2 1 1 -case 2 -f 4 -estwin 5 2>&1 | grep -q 'is not inside'; then
     ok "a window outside 10..n-1 is refused"
 else bad "-estwin range" "a 5-observation window was accepted"; fi
+echo
+
+# 8f. EL REFACTOR DEL .pre, que -interv no aplicaba.
+#
+#     El modelo de un .pre esta definido sobre w = refactor * BoxCox(z), asi que
+#     sus omega estan en las unidades de w y no en las del dato que drvec tiene
+#     delante.  Restarlas tal cual solo acierta con refactor = 1, y la norma de
+#     la suite es refactor = 100: el .pre que conecta fue con drtran va
+#     reescalado para que el optimizador converja (PORTE.md: en el C cuelga mas
+#     de dos minutos con refactor = 1 y converge en 23 iteraciones con 100).  La
+#     disciplina escrita del conjunto es "never hardcode the rescaling factor;
+#     read model.refactor -- the suite has three logged bugs from getting this
+#     wrong", y esta era la cuarta.  Medido sobre tres IPC mensuales: la serie
+#     "ajustada" salia con una varianza de innovacion 10^4 veces la suya.
+#
+#     LA COMPROBACION ES UNA INVARIANCIA, que no depende de ningun valor dorado:
+#     un .pre con (refactor = 10, omega = 2.5) y otro con (refactor = 1,
+#     omega = 0.25) declaran LA MISMA deterministica en las unidades del dato, y
+#     tienen que dar el MISMO ajuste.  Con el control negativo al lado, porque
+#     una invariancia que se cumple sola no prueba nada: (refactor = 1,
+#     omega = 2.5) tiene que dar otro.
+#
+#     Las fixtures se derivan de mmres.1.pre en vez de versionarse, como el
+#     resto de esta bateria.  El bloque determinista del formato lleva DOS
+#     lineas de banderas -- una antes de los omega y otra despues --, y omitir
+#     la segunda desplaza el lector un renglon sin dar error: la serie se lee
+#     corrida y el refactor sale 1.  Es la firma de BUG-11 otra vez.
+echo "[8f] the .pre's refactor, applied to its deterministic terms"
+
+mkpre() {   # mkpre <refactor> <omega> <prefix>
+    for i in 1 2; do
+        awk -v rf="$1" -v om="$2" '
+          /^\*\* ACF\/PACF bands/ { print; getline; printf " 0.00 %.2f\n", rf; next }
+          /^\*\* Number of deterministic variables/ {
+              print; getline
+              print "1"; print "**"; print "alter"; print "**"; print "0 "
+              print "**"; printf "%.6f  1\n", om; print "**"; print "0 "
+              next }
+          { print }' tests/fixtures/mmres.1.pre > "$TMP/$3.$i.pre"
+    done
+}
+mkpre 10 2.50  pre_rf10      # resta 2.50/10 = 0.250
+mkpre  1 0.25  pre_rf1eq     # resta 0.25/1  = 0.250   -> el mismo ajuste
+mkpre  1 2.50  pre_rf1ne     # resta 2.50/1  = 2.500   -> otro ajuste
+
+#  Primero: la fixture tiene que LEERSE bien.  Si el bloque determinista esta
+#  mal construido el lector se desplaza y todo lo de abajo mide otra cosa.
+if [ -x "$PROBE" ]; then
+    got=$("$PROBE" "$TMP/pre_rf10.1.pre" 2>&1)
+    ref=$("$PROBE" tests/fixtures/mmres.1.pre 2>&1)
+    gs=$(printf '%s' "$got" | cut -d' ' -f4-); rs=$(printf '%s' "$ref" | cut -d' ' -f4-)
+    gr=$(printf '%s' "$got" | cut -d' ' -f3)
+    if [ "$gs" = "$rs" ] && [ "$gr" = "10" ]; then
+        ok "the crafted .pre reads back with refactor 10 and the same series"
+    else bad "refactor fixture" "reader got '$got' against '$ref'"; fi
+fi
+
+run "$MM" 2 1 1 -case 2 -interv "$TMP/pre_rf10"
+ll_a=$(logelf_of "$TMP/case")
+run "$MM" 2 1 1 -case 2 -interv "$TMP/pre_rf1eq"
+ll_b=$(logelf_of "$TMP/case")
+run "$MM" 2 1 1 -case 2 -interv "$TMP/pre_rf1ne"
+ll_c=$(logelf_of "$TMP/case")
+
+if [ -z "$ll_a" ] || [ -z "$ll_b" ]; then
+    bad "refactor invariance" "one of the fits produced no logelf"
+elif [ "$ll_a" = "$ll_b" ]; then
+    ok "refactor 10 with omega 2.5 = refactor 1 with omega 0.25 ($ll_a)"
+else bad "refactor invariance" "$ll_a vs $ll_b -- the refactor is not being applied"; fi
+
+if [ "$ll_a" != "$ll_c" ]; then
+    ok "and refactor 1 with omega 2.5 differs, so the check bites ($ll_c)"
+else bad "refactor control" "the negative control gave the same fit"; fi
 echo
 
 # ================================================== 9 MEMORY (opt-in) ==

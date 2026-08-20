@@ -1013,6 +1013,53 @@ the phase that closes the program.
 
 ---
 
+## 9c. An application found a defect the suite had already named
+
+*The full case is [HOMOLOGATION.md](HOMOLOGATION.md) §4u.*
+
+Three euro-area CPIs, monthly, with the univariate models of a price-level study
+— logs, one regular difference, and deterministic seasonality at all eleven
+frequencies. The natural route is `-interv`, which subtracts the deterministic
+terms declared in the `.pre` files.
+
+Those `.pre` files carry `refactor = 100`, and **that is the suite's norm**: the
+file joining the univariate program to the multivariate one is rescaled so the
+optimiser converges — at raw scale the C hangs for over two minutes and at 100 it
+converges in 23 iterations. A `.pre` therefore describes a model of
+`w = refactor · BoxCox(z)`, and its `ω` are in the units of `w`.
+
+`-interv` subtracted them in the units of the **data**. Only right when
+`refactor = 1`, which every case previously tested happened to be. On these
+series the adjusted data came out with an innovation variance **ten thousand
+times** its own, and nothing said a word: the fit converged, the diagnostics ran,
+and the rank test reported `r = 2` with `LR = 253.8`. After the fix the same test
+gives `LR = 10.7` with a bootstrap `p = 0.31` — **`r = 0`**.
+
+**The rule was already written down.** The suite's shared discipline says *«never
+hardcode the rescaling factor; read `model.refactor` — the suite has three logged
+bugs from getting this wrong»*. This was the fourth, and it was `drvec` not
+following a rule the family had already paid for three times. That is the more
+useful lesson than the arithmetic: the register's provenance sections list what
+was borrowed, and this says the *conventions* have to be borrowed too, not only
+the code.
+
+**What the case then produced**, once the data were right, is in §4u: the rank
+test and Johansen agree on `r = 0` under matching specifications, with `drvec`'s
+bootstrap the more conservative of the two exactly as §2.3 predicts; the
+in-sample gain from the error-correction term is 2–3 % of residual variance and
+insignificant; and out of sample, imposing a rank the data reject costs 5 % to
+27 % of RMSE with `p < 0.05`. Four instruments, built for different purposes,
+agreeing.
+
+**And a defect in a tool of this repository**, found on the way:
+`tools/compare_johansen.py` picks the rank by counting how many rows of the trace
+sequence reject (`sum(lr1 > cvt[:,1])`). The sequential procedure stops at the
+first non-rejection. On this case the last row rejects and the first does not, so
+the count returns 1 where the sequence returns 0 — the right answer for the wrong
+reason. Not yet fixed; recorded.
+
+---
+
 ## 10. Open, and honestly so
 
 | | |

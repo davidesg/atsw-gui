@@ -1,6 +1,6 @@
 # The test suite: what it protects, measured
 
-*`tests/run_tests.sh`, run by `make test`. 214 checks, and 224 with the opt-in
+*`tests/run_tests.sh`, run by `make test`. 217 checks, and 227 with the opt-in
 memory block. The claim that a suite
 "protects" something is worth nothing unless it is measured, so it is measured
 by mutation: real defects are put back and the failures counted.*
@@ -31,7 +31,7 @@ Measured by mutation against the current source — mutating an older source is
 not a valid measurement, because then the baselines fail for the wrong reason:
 
 > **Scope note.** The table below was measured on 2026-08-17, when the suite had
-> 63 checks. It has 214 now, and the checks added since — the ladders, the
+> 63 checks. It has 217 now, and the checks added since — the ladders, the
 > admissibility column, the two bootstrapped tests, the inverse map — have **not**
 > been mutation-measured. Their protection is argued from what they compare, not
 > measured, and the difference matters: an argued check is a hypothesis about

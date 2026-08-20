@@ -2041,6 +2041,163 @@ too few for a Diebold–Mariano to say much. It is enough to answer the question
 that had no answer at all, and not enough to rank specifications on a single
 case.
 
+## 4u. An applied case: three euro-area CPIs, and what four instruments say about it
+
+*Monthly `IPC_ES`, `IPC_DE`, `IPC_FR` in logs, 1/2002–11/2023, from a price-level
+and energy study. Univariate models from that study: `λ = 0`, `d = 1`, `D = 0`
+and **deterministic seasonality at all frequencies** — eleven harmonics — so the
+VEC is fitted on the deterministic-adjusted logs with `-interv`. In `drvec`'s
+coordinates the univariate AR(1) on `∇log` is `p = 2, q = 0`. Training window
+1/2002–12/2019, evaluation on what follows.*
+
+### It began with a defect, and the defect is the first result
+
+The `.pre` files of that study carry `refactor = 100`, which is the suite's
+**norm** and not an oddity: the file that joins the univariate program to the
+multivariate one is rescaled so the optimiser converges — in the C it hangs for
+over two minutes at `refactor = 1` and converges in 23 iterations at 100. The
+model in a `.pre` is therefore defined on `w = refactor · BoxCox(z)`, and its
+`ω` are in the units of `w`.
+
+**`-interv` subtracted them in the units of the data**, which is only right when
+`refactor = 1`. Every case tested here until now had exactly that, so nothing
+had ever caught it. On these three series the "adjusted" data came out with an
+innovation variance **10⁴ times** its own — `σ² = 0.052` against `6·10⁻⁶` — and
+the program said nothing.
+
+It is not a new failure mode. The suite's own written discipline is *«never
+hardcode the rescaling factor; read `model.refactor` — the suite has three
+logged bugs from getting this wrong»*. This was the fourth, and `drvec` was the
+one not following a rule the family had already paid for. Fixed, with the
+invariance in the suite (§[8f]) and its negative control.
+
+**Everything below is measured after the fix.** The first rank test run on this
+case, before it, reported `r = 2` with `LR = 253.8`. That number was an artefact
+and is recorded here only so the correction is visible.
+
+### The rank: `r = 0`
+
+Case 3, `p = 2, q = 0`, training sample, free short-run dynamics:
+
+| `r` | npar | logL | AIC | BIC |
+|---|---|---|---|---|
+| 0 | 17 | 3127.93 | **−28.8049** | **−28.5393** |
+| 1 | 22 | 3133.29 | −28.8083 | −28.4645 |
+| 2 | 25 | 3133.47 | −28.7822 | −28.3915 |
+
+Case 3 has no tabulated critical values, so the program's parametric bootstrap
+(400 replications) supplies them:
+
+| step | LR | 10 % | 5 % | 1 % | **p** | |
+|---|---|---|---|---|---|---|
+| 0 → 1 | 10.72 | 15.08 | 17.34 | 26.86 | **0.313** | not rejected |
+| 1 → 2 | 0.36 | 9.29 | 10.99 | 15.49 | **0.956** | not rejected |
+
+AIC prefers `r = 1` in the fourth decimal; BIC prefers `r = 0` clearly.
+
+### Against Johansen, on the same adjusted series and sample
+
+`k_ar_diff = 1`, which is this `p = 2` on `Ȳ`:
+
+| specification | test | statistic | 5 % | verdict on `r = 0` |
+|---|---|---|---|---|
+| case 3 (`det_order = 1`) | trace | 33.92 | 35.01 | not rejected (rejected at 10 %: 32.06) |
+| case 3 | λ-max | 22.09 | 24.25 | not rejected |
+| case 2 (`det_order = 0`) | trace | 30.47 | 29.80 | **rejected** |
+| case 2 | λ-max | 17.72 | 21.13 | not rejected |
+
+**The same conclusion, with a different margin**, and the difference runs the way
+§2.3 of this register already measured: the asymptotic test over-rejects and the
+bootstrap is more conservative. Here the asymptotic sits on the 5–10 % edge and
+the bootstrap gives 0.31.
+
+**A note on how the sequence is read.** In the case-3 table the `r ≤ 2` row has
+trace 4.11 against 3.84, so counting *how many rows reject* returns 1, while the
+sequential procedure stops at the first non-rejection and returns 0.
+`tools/compare_johansen.py` counts the first way (`sum(lr1 > cvt[:,1])`) and on
+this case would give the right answer for the wrong reason.
+
+### Imposing `r = 1`: the two programs disagree, and that is what `r = 0` means
+
+Normalised on `IPC_ES`, as `drvec` must:
+
+```
+drvec:     W = log ES + 1.4012 log DE − 2.7734 log FR
+Johansen:  W = log ES − 7.8930 log DE + 2.7744 log FR
+```
+
+On `Π = ΛB′`, which is invariant to the normalisation, the largest entry-wise
+difference is **0.150** against norms of 0.209 and 0.166; the angle between the
+two cointegrating directions is **49.8°** and between the adjustment directions
+**45.9°**.
+
+**Neither is wrong.** With rank zero the cointegrating vector is not identified —
+there is nothing to converge to — and two estimators maximising different
+criteria land in different places. The disagreement measures the
+non-identification; it is not evidence against either program. Part of it is
+normalisation: Johansen's `β` normalised on `IPC_DE` is (1, −0.352, −0.127), a
+balanced vector, and forcing `drvec`'s normalisation on `IPC_ES` divides by
+0.127 and inflates it. That is the `Y₁`-block choice this register lists as
+open and as the user's responsibility.
+
+`drvec`'s adjustment vector at the imposed `r = 1`, and weak exogeneity:
+
+| | `Λ` (s.e.) | `t` | `-weakex` LR | `p` |
+|---|---|---|---|---|
+| IPC_ES | 0.0467 (0.0170) | 2.74 | 7.797 | **0.0052** — adjusts |
+| IPC_DE | 0.0198 (0.0165) | 1.20 | 1.592 | 0.207 — weakly exogenous |
+| IPC_FR | 0.0057 (0.0096) | 0.59 | 0.313 | 0.576 — weakly exogenous |
+
+If a relation existed, only Spain would adjust to it and the core would drive
+it, which is the expected direction for a small open economy.
+
+### In sample: the error-correction term gains almost nothing
+
+Diagonal short-run dynamics on both sides, so the only difference is the
+error-correction term:
+
+| | var(∇Ỹ) | `σ²` at `r=0` | `σ²` at `r=2` | `R²` at `r=0` | `R²` at `r=2` | gain |
+|---|---|---|---|---|---|---|
+| IPC_DE | 5.604e−6 | 5.541e−6 | 5.385e−6 | 0.0113 | 0.0392 | **+0.028** |
+| IPC_FR | 3.685e−6 | 3.642e−6 | 3.518e−6 | 0.0117 | 0.0453 | **+0.034** |
+| IPC_ES | 7.527e−6 | 6.240e−6 | 6.119e−6 | 0.1710 | 0.1871 | **+0.016** |
+
+A 2–3 % reduction in residual variance per equation. The corresponding
+`LR = 8.72` on 5 degrees of freedom is below `χ²(5)`'s 11.07 and far below the
+bootstrap's critical value. **There is a gain, and it is not distinguishable
+from noise.**
+
+### Out of sample: imposing a rank the data reject costs
+
+`-estwin 216 -f 12`, 35 origins from 12/2019, RMSE in percentage points,
+Diebold–Mariano with HAC to `h−1` and the Harvey–Leybourne–Newbold correction —
+the routine of the study this data comes from, applied to the per-origin errors
+`-C` writes:
+
+| cell | h=1 | h=3 | h=6 | h=12 |
+|---|---|---|---|---|
+| `r=2` diagonal | 1.048 (p .038) | 1.160 (p .005) | 1.239 (p .014) | 1.267 (p .003) |
+| `r=2` diagonal, `Σ` free | 1.045 | 1.108 (p .012) | 1.169 (p .020) | 1.196 (p .005) |
+| `r=2` free | 1.055 (p .047) | 1.160 (p .010) | 1.261 (p .012) | 1.286 (p .010) |
+| `r=0` free (a VARMA) | 1.012 | 0.977 | 0.983 | 0.988 (p .050) |
+
+Univariate RMSE: 0.62, 1.29, 2.12, 3.85 percentage points.
+
+### What the four instruments say together
+
+The rank test said `r = 0`; Johansen agreed under the matching specification;
+the in-sample gain is 2–3 % of residual variance and insignificant; and the
+out-of-sample evaluation, by an independent route, penalises imposing a rank by
+5 % to 27 % of RMSE with `p < 0.05`. **The rank test was right, and the forecast
+evaluation confirmed it.** That is the program working, not failing: the
+instrument that decides the rank and the one that measures prediction agree, and
+they were not built to agree.
+
+Two limits on the reading. The evaluation period is **exceptional** — COVID and
+the energy shock, with Spain decoupling — so this measures forecasting through a
+break rather than the model class in general; and `r = 0` means *not rejected*,
+not *shown to be absent*: Johansen's trace rejects at 10 % under case 3.
+
 ## 5. What is not in the register, and why
 
 * **The Census Housing example** of the AddOn (Hillmer & Tiao 1979): the data

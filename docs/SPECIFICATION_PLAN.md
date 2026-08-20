@@ -43,6 +43,32 @@ assembles. The specification of `Θ` and `Φ` needs exactly the same treatment,
 and the rungs already exist as options: `-warma`, `-mawarma`, `-marow`,
 `-matri`, free.
 
+## 2b. The theory this rests on
+
+Written out in [THEORY.md](THEORY.md), because the theorems this program had
+been leaning on were all proved for neighbouring models. What that note
+establishes, and what each item of §4 below depends on:
+
+* **Theorem 3.** `{Y_t}` from (1) has cointegrating rank exactly `r` **iff**
+  `rank(Λ⊥′Θ(1)) = M − r`. Nothing in Mauricio (2006) states this in these
+  parameters, and nothing in the estimation enforces it.
+* **Corollary 3.1.** `det Θ(1) ≠ 0` suffices. So the entire difficulty is the
+  surface `det Θ(1) = 0` — a unit moving-average root at frequency zero.
+* **Theorem 4.** That surface is inside the set the optimiser searches, the
+  likelihood is finite on it, and points of it can fail the rank condition. The
+  maximiser over the search set need not be in the model class.
+* **Theorem 5.** The failure is **invisible** to the engine's checks: the
+  transformed system stays stationary and only its moving average touches the
+  unit circle, which the engine permits. Hence the condition must be computed on
+  `(Λ, B, Θ)` directly.
+* **Corollary 5.1.** Phillips optimality, the mixed-normal limit of `B̂₂` and the
+  `χ²` limits are theorems **about the model class**. At a fit on that boundary
+  they are not licensed — which is why the comparisons of §4i had to be
+  bootstrapped.
+* **Corollary 6.2.** The restriction `Θ = [T₁₁ T₁₂ ; 0 0]` makes the degeneracy
+  impossible by construction, with no constant to choose. That is the reason a
+  specification is preferred to a floor.
+
 ## 3. What the sources actually say
 
 * **Mauricio (2006)** assumes partial nonstationarity of the *true* process and
@@ -90,8 +116,8 @@ and the rungs already exist as options: `-warma`, `-mawarma`, `-marow`,
   front of it, and the golden values are re-measured when it does.
 * **Not preferring a tolerance to a specification.** `-rankadm` works and is the
   right diagnostic, but a floor is a number someone chose; `-marow` and `-warma`
-  are classes that cannot degenerate. Use the floor to measure, the class to
-  estimate.
+  are classes that cannot degenerate — Corollary 6.2 of [THEORY.md](THEORY.md),
+  not a preference. Use the floor to measure, the class to estimate.
 * **Not reporting parameters that were never estimated.** Twice now a new branch
   through a parameter walk has published a `Θ` and a `B₂` nobody fitted
   ([DEVELOPMENT_RECORD.md](DEVELOPMENT_RECORD.md) §8d, §8h). Every new route

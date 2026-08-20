@@ -111,6 +111,7 @@ Read in this order for a first acquaintance; consult by column thereafter.
 | | |
 |---|---|
 | [GETTING_STARTED.md](GETTING_STARTED.md) | build, first model, reading the output file |
+| [THEORY.md](THEORY.md) | **the theorems for the model this program estimates**, stated and proved in its own parameters: the Granger representation for (1), the condition that makes the rank be `r`, why the engine's checks cannot see its failure, and the exact form of the triangular equivalence |
 | [MODEL.md](MODEL.md) | the model class, the parameter vector, and the conventions it depends on |
 | [INFERENCE.md](INFERENCE.md) | why inference on the cointegrating coefficients is valid, and optimal, in this parameterisation |
 | [USAGE.md](USAGE.md) | every option, the input format, and worked examples |

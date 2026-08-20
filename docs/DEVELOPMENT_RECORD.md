@@ -850,7 +850,93 @@ with the numbers concatenated onto one branch of the ternary — it compiled, an
 two fixed it; the suite now checks that `-artest` reports the pair it claims to
 be testing, by reproducing both fits on its own.
 
-## 9. Open, and honestly so
+## 9. P1 — the command line, and what a review of the suite found
+
+*The full plan is [PLAN_PRODUCCION.md](PLAN_PRODUCCION.md); this is the account
+of what was done and what it cost.*
+
+### The defect, and why it was the first thing
+
+The option loop was a chain of `strcmp` with **no `else`**. An option `drvec` did
+not know — a typo like `-diagcv`, an option belonging to another program of the
+suite — was ignored in silence, and the program estimated a **different model**
+and reported it as the one that had been asked for. On this data that is not a
+cosmetic difference: a free `Θ` and a diagonal one are the difference between a
+fit that denies its own rank and one that does not (§8j). A program that shouts
+when `σ_min(Λ⊥′Θ(1)B⊥)` falls below 0.2 and says nothing when handed an option
+that does not exist has its alarms badly distributed.
+
+And `p`, `q`, `r` were read with `atoi`, which returns 0 on text without saying
+so. Four command lines a user could type by accident ended in `SIGSEGV` inside
+`init_guess` — `p = 0`, `p = -1`, `p = 200`, and a non-numeric order — one hung,
+and `p = 60` on 61 observations was attempted, failed, and returned **0** to the
+shell.
+
+### The design, and the one rule that made it safe
+
+A **table** declares which options exist and what argument each takes; a
+**validation pass** walks it before anything is assigned; the `strcmp` chain
+stays exactly as it was, behind. The rule: **the validation does not assign.**
+That is what guarantees it cannot change by accident what the program estimates,
+and it did not — no golden value moved.
+
+The same table generates the complete option list that `-h` prints, so the set
+accepted and the set documented cannot separate again. Before this they had:
+`usage()` covered 22 of 33 options, and nothing detected it.
+
+The convention is not invented here. `drtran` in C uses `getopt` with
+`default: usage(argv[0]); return 1;`, and the Python port states it as a
+principle — *«Refusing rather than ignoring the option»* — with three exit codes.
+`drvec` now has the same three: `0` completed, `1` refused, `2` attempted and not
+completed.
+
+**The distinction that had to survive.** A termcode-3 stop is **not** a failure.
+It is the explained stop most of what this program publishes rests on
+([CONVERGENCE.md](CONVERGENCE.md)), and it still exits 0. Turning it into an
+error would have marked half the register as broken. There is a test that pins
+it.
+
+### Measured
+
+The suite went from 152 checks to 190 (200 with the memory block), and it bites —
+measured by mutation against the current source, which is rule 3 of the method:
+
+| mutant | failures raised |
+|---|---|
+| `validate_cli()` made a no-op | 16 |
+| `p`, `q`, `r` back to `atoi`, and the degrees-of-freedom bound removed | 7 |
+| `usage()` enumerating only the first 22 options | 1 |
+| the estimation-failure exit code back to 0 | 1 |
+
+Two checks do **not** bite and are written into the script as such, because a
+green suite that is not read carefully is worse than a red one.
+
+### What the review of the suite found on the way
+
+The rest of the review is in [PLAN_PRODUCCION.md](PLAN_PRODUCCION.md) §4, and
+three of its results belong here because they are about this program:
+
+* **The engine is intact, and now that is measured against the source rather
+  than against our own history.** `elfvarma.c`, `drvmlest.c` and `qnewtopt.c`
+  are **byte for byte** the VARMA program's. The one that has diverged from the
+  canonical copy is the transfer-function program, for reasons of its own.
+* **`nlatools.c` is the only copy in the family that diverges in code**, and the
+  divergence is `matrix`/`imatrix` and their releases, which are the univariate
+  program's variant rather than the shared one. The recorded reason for leaving
+  them — that the two layouts are not interchangeable — was tested: with the
+  shared variant in place **all 152 functional checks pass**, and the only
+  consequence is that valgrind then reports **two real leaks that the current
+  layout conceals** (`cond_resid` and `rawmat`, both process-lifetime). So the
+  reason is true of the univariate program and **false of `drvec`**. That is the
+  same mechanism §5 of [SUITE_INTEGRATION.md](SUITE_INTEGRATION.md) already
+  describes for `vector`, met a second time.
+* **Two defects still open in the suite's register are fixed here**, in C: the
+  reader's annual-section bug and the missing deallocator. The register does not
+  know it.
+
+---
+
+## 10. Open, and honestly so
 
 | | |
 |---|---|

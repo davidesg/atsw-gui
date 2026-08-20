@@ -65,6 +65,7 @@ The resulting VARMA on Ybar_t is **stationary** and estimable by standard EML.
 ## Usage
 
 ```
+drvec -h | --version
 drvec file p q r [-mean] [-case 1|2|3] [-diagar] [-diagma] [-diagcov] [-m 1|2]
                  [-differenced] [-fixb2 [v]] [-lrtest] [-bootstrap N]
                  [-writeres pfx] [-writeinp pfx] [-seed pfx] [-seedybar pfx]
@@ -100,6 +101,27 @@ drvec file p q r [-mean] [-case 1|2|3] [-diagar] [-diagma] [-diagcov] [-m 1|2]
 | `-eval` | Evaluate the likelihood **at the starting point** and stop, without optimising |
 | `-multistart n` | Estimate from `n` jittered starting points and keep the best. The **spread** is the diagnostic |
 | `-interv pfx` | Subtract the deterministic interventions declared in `pfx.<i>.pre` before estimating |
+
+### Exit status, and options that are refused
+
+| code | meaning |
+|---|---|
+| `0` | the fit ran to completion — **including a termcode-3 stop**, which is an explained stop and not a failure |
+| `1` | the command line or the input was refused; nothing was estimated |
+| `2` | the estimation was attempted and could not be completed (`ifault ≠ 0`) |
+
+An argument `drvec` does not recognise stops the run rather than being ignored:
+
+```
+$ drvec mink_muskrat 2 1 1 -diagcv
+drvec: unknown option `-diagcv'
+       did you mean `-diagcov'?
+```
+
+A silently ignored option would estimate a different model and present it as the
+one that was asked for. `drvec -h` lists every option and exits 0; its last
+block is generated from the table the parser itself uses, so what is documented
+there is what is accepted. `drvec --version` prints the version.
 
 ### The specification of `Θ` and the short-run dynamics
 

@@ -131,10 +131,18 @@ Read in this order for a first acquaintance; consult by column thereafter.
 states the qualitative point and refers there. This was adopted after a corrected
 measurement had to be traced through five documents.
 
-A working record in Spanish accompanies these — the preliminary diagnosis, the
-development plan with its exit criteria, the study of the predecessor program,
-and notes on the legacy code. It is the primary source for what is asserted here,
-and is not intended for a reader approaching the program for the first time.
+A working record in Spanish accompanies these. It is the primary source for what
+is asserted here, and is not intended for a reader approaching the program for
+the first time.
+
+| | |
+|---|---|
+| [DEMOSTRACIONES.md](DEMOSTRACIONES.md) | **the proofs**: T1–T11 with their corollaries and lemmas, stated in this program's own parameters. [THEORY.md](THEORY.md) states the same results for a reader who wants the conclusions; this is where they are proved, and where each one is labelled `[standard]`, `[cited]` or `[new here]` |
+| [external_review.md](external_review.md) | an **external evaluation** of the scientific state: the moving-average problem, the multimodal surface, and whether the specification has a defect of theoretical origin, with seven proposals (S1–S7). Where the register agrees with it and where it does not is [HOMOLOGATION.md](HOMOLOGATION.md) §4q |
+| [PLAN_PRODUCCION.md](PLAN_PRODUCCION.md) | **the plan from beta to a production version**, with its exit criteria — and the review of what `drvec` shares with the other programs of the suite and where it has drifted from them |
+| `ANALISIS_PRELIMINAR.md` | the preliminary diagnosis |
+| `PLAN_BETA.md` | the development plan to beta, with its exit criteria |
+| `ESTUDIO_BVECM_vs_DRVEC.md`, `LEGACY_NOTES.md`, `ENCUADRE_ESTUDIO.md` | the study of the predecessor program, and notes on the legacy code |
 
 ---
 

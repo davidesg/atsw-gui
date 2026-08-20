@@ -29,6 +29,8 @@
 #include <gsl/gsl_cdf.h>      /* p-valor chi2 del LR de H1(r) contra H(r)     */
 #include <gsl/gsl_eigen.h>    /* problema de autovalores generalizado simetrico */
 #include <gsl/gsl_linalg.h>   /* QR y SVD para la condicion de rango de Granger */
+#include <stdarg.h>           /* bad_cli: el mensaje de uso lleva formato      */
+#include <errno.h>            /* strtol/strtod: ERANGE                         */
 
 real macheps;
 FILE *outputv;
@@ -4015,6 +4017,356 @@ static int gate_profile_seed(real *x, int npar)
 }
 
 /*****************************************************************************/
+/*  P1 — la linea de ordenes se valida ANTES de estimar                       */
+/*                                                                           */
+/*  POR QUE.  Hasta 2026-08-20 el bucle de opciones era una cadena de strcmp  */
+/*  SIN rama else: una opcion desconocida -- una errata como -diagcv, o una   */
+/*  opcion de otro programa de la suite -- se ignoraba EN SILENCIO y drvec    */
+/*  estimaba otro modelo sin decirlo.  Eso es justo lo que la tesis del       */
+/*  programa no admite: la especificacion ES el resultado, y el ajuste de     */
+/*  otra especificacion no es un ajuste peor sino el ajuste de otro modelo    */
+/*  (SPECIFICATION_PLAN.md 8).  Un programa que grita cuando sigma_min cae    */
+/*  por debajo de 0.2 y calla cuando le pasan una opcion inexistente tiene    */
+/*  las alarmas mal repartidas.  Y p, q, r se leian con atoi, que devuelve 0  */
+/*  en silencio ante un texto: `drvec fichero x y z` moria por SIGSEGV dentro */
+/*  de init_guess, igual que p = 0, p = -1 y p = 200.                         */
+/*                                                                           */
+/*  LA CONVENCION NO SE INVENTA AQUI, es la de la suite.  drtran en C usa     */
+/*  getopt con `default: usage(argv[0]); return 1;`, y el porte la enuncia    */
+/*  como principio -- "Refusing rather than ignoring the option" -- con tres  */
+/*  codigos de salida: 0 exito (y -h), 1 linea de ordenes mal formada, 2 la   */
+/*  opcion se reconoce pero no se puede atender.  drvec no puede usar getopt  */
+/*  tal cual porque su vocabulario es de PALABRAS y no de letras, asi que la  */
+/*  forma de minimo delta es esta: una TABLA que declara que opciones existen */
+/*  y que argumento lleva cada una, una pasada de validacion que la recorre   */
+/*  antes de tocar nada, y la cadena de strcmp de siempre intacta detras.  La */
+/*  validacion NO asigna: asi no puede cambiar por accidente lo que se        */
+/*  estima, y ningun valor dorado se mueve.                                   */
+/*                                                                           */
+/*  La tabla es ademas la fuente del listado completo que imprime usage(), de */
+/*  modo que la lista ACEPTADA y la lista DOCUMENTADA no pueden separarse --  */
+/*  antes usage() cubria 22 de 33 opciones --, y la bateria compara las dos.  */
+/*  Ver docs/PLAN_PRODUCCION.md P1.                                           */
+/*****************************************************************************/
+
+#ifndef DRVEC_VERSION
+#define DRVEC_VERSION "1.0.0-rc1"
+#endif
+
+enum opt_arg {
+    A_NONE,      /* bandera                                                  */
+    A_STR,       /* fichero o prefijo, obligatorio                           */
+    A_INT_POS,   /* entero >= 1, obligatorio                                 */
+    A_CASE,      /* 1, 2 o 3                                                 */
+    A_METHOD,    /* 1 o 2                                                    */
+    A_REAL,      /* real, obligatorio                                        */
+    A_REAL_OPT,  /* real OPCIONAL: se consume si parsea entero (-fixb2)      */
+    A_TOL_OPT    /* real > 0 OPCIONAL, si no empieza por '-' (-rankadm)      */
+};
+
+static const struct opt_spec {
+    const char   *name;
+    enum opt_arg  arg;
+    const char   *val;     /* como se llama el valor en el listado           */
+} OPT_TABLE[] = {
+    { "-mean",        A_NONE,     NULL   },
+    { "-case",        A_CASE,     "1|2|3"},
+    { "-m",           A_METHOD,   "1|2"  },
+    { "-diagar",      A_NONE,     NULL   },
+    { "-diagma",      A_NONE,     NULL   },
+    { "-diagcov",     A_NONE,     NULL   },
+    { "-levels",      A_NONE,     NULL   },
+    { "-differenced", A_NONE,     NULL   },
+    { "-fixb2",       A_REAL_OPT, "[v]"  },
+    { "-lrtest",      A_NONE,     NULL   },
+    { "-bootstrap",   A_INT_POS,  "N"    },
+    { "-rungs",       A_NONE,     NULL   },
+    { "-specs",       A_NONE,     NULL   },
+    { "-warma",       A_NONE,     NULL   },
+    { "-mawarma",     A_NONE,     NULL   },
+    { "-marow",       A_NONE,     NULL   },
+    { "-matri",       A_NONE,     NULL   },
+    { "-rankadm",     A_TOL_OPT,  "[tol]"},
+    { "-matest",      A_INT_POS,  "N"    },
+    { "-artest",      A_INT_POS,  "N"    },
+    { "-alpha",       A_STR,      "FILE" },
+    { "-weakex",      A_INT_POS,  "i"    },
+    { "-multistart",  A_INT_POS,  "n"    },
+    { "-eval",        A_NONE,     NULL   },
+    { "-fdhess",      A_NONE,     NULL   },
+    { "-seed",        A_STR,      "pfx"  },
+    { "-seedybar",    A_STR,      "pfx"  },
+    { "-seedgate",    A_NONE,     NULL   },
+    { "-seedjoh",     A_NONE,     NULL   },
+    { "-seedb2",      A_REAL,     "v"    },
+    { "-interv",      A_STR,      "pfx"  },
+    { "-writeres",    A_STR,      "pfx"  },
+    { "-writeinp",    A_STR,      "pfx"  },
+    { NULL,           A_NONE,     NULL   }
+};
+
+/*  El listado completo, generado de la tabla.  Es lo que hace imposible que  */
+/*  usage() y el parser vuelvan a divergir.                                   */
+static void usage_option_list(FILE *o)
+{
+    int i, col = 0;
+    fprintf(o, "\nEvery option drvec accepts (docs/USAGE.md documents them all):\n ");
+    for (i = 0; OPT_TABLE[i].name; i++) {
+        char item[48];
+        if (OPT_TABLE[i].val)
+            snprintf(item, sizeof item, "%s %s", OPT_TABLE[i].name, OPT_TABLE[i].val);
+        else
+            snprintf(item, sizeof item, "%s", OPT_TABLE[i].name);
+        if (col && col + (int) strlen(item) + 2 > 72) { fprintf(o, "\n "); col = 0; }
+        fprintf(o, " %-*s", (int) strlen(item) + 1, item);
+        col += (int) strlen(item) + 2;
+    }
+    fprintf(o, "\n");
+}
+
+static void usage(FILE *o)
+{
+    fprintf(o, "\ndrvec %s — VEC model EML estimation (Mauricio 2006)\n",
+            DRVEC_VERSION);
+    fprintf(o, "\nUsage: drvec file p q r [-mean] [-case 1|2|3] [-diagar] "
+               "[-diagma] [-diagcov] [-m 1|2]\n"
+               "                 [-differenced] [-fixb2] [-lrtest] [-rungs]\n\n");
+    fprintf(o, "  file  : data file name (without .inp extension)\n");
+    fprintf(o, "  p     : AR order of stationary VARMA on Ȳ_t\n");
+    fprintf(o, "  q     : MA order\n");
+    fprintf(o, "  r     : cointegration rank (0 < r < M; ignored with -lrtest)\n\n");
+    fprintf(o, "Deterministic cases (Mauricio 2006, Remark 6):\n");
+    fprintf(o, "  -case 1 : E[∇Y₂]=0, E[W]=0     (default)\n");
+    fprintf(o, "  -case 2 : E[∇Y₂]=0, E[W]≠0     (-mean needed)\n");
+    fprintf(o, "  -case 3 : E[∇Y₂]≠0, E[W]≠0     (-mean needed)\n\n");
+    fprintf(o, "Data layout (cols 1..s are the Y₂ block, cols s+1..M the Y₁ block):\n");
+    fprintf(o, "  default        every series in LEVELS; ∇Y₂ is formed internally\n");
+    fprintf(o, "                 (one observation is consumed)\n");
+    fprintf(o, "  -differenced   legacy: cols 1..s already hold ∇Y₂.  The Y₂ levels\n");
+    fprintf(o, "                 are then unknown and get cumulated from zero, which\n");
+    fprintf(o, "                 breaks -case 1 and makes E[W] incomparable\n\n");
+    fprintf(o, "  -fixb2 [v]     hold B2 fixed instead of estimating it; npar\n");
+    fprintf(o, "                 drops by s*r.  With a value, every entry of B2 is\n");
+    fprintf(o, "                 pinned at v -- an a-priori restriction, so 2*[L(free)\n");
+    fprintf(o, "                 - L(fixed)] IS a valid LR test, chi2 with s*r df\n");
+    fprintf(o, "                 (Mauricio 2006 Table 5 tests B = [1,0]', i.e. -fixb2 0).\n");
+    fprintf(o, "                 Without a value B2 is held at its static-OLS estimate:\n");
+    fprintf(o, "                 useful as a warm start or a conditioning check, but\n");
+    fprintf(o, "                 the restriction is then data-chosen, so the LR\n");
+    fprintf(o, "                 statistic is NOT a valid test.\n\n");
+    fprintf(o, "  -lrtest        sequential LR test for the cointegration rank:\n");
+    fprintf(o, "                 estimates r = 0..M-1 and reports 2*[L(r+1) - L(r)];\n");
+    fprintf(o, "                 incompatible with -differenced\n\n");
+    fprintf(o, "  -specs         the specification ladder: warma, mawarma, marow,\n");
+    fprintf(o, "                 matri and free, in one run, with npar, logL,\n");
+    fprintf(o, "                 termination, the rank condition G, the smallest\n");
+    fprintf(o, "                 MA root, B2 and an ADMISSIBLE column -- and no\n");
+    fprintf(o, "                 chi2 p-value where the theory does not give one\n\n");
+    fprintf(o, "  -artest N      test the triangular short-run dynamics\n");
+    fprintf(o, "                 (Gamma_i = M_i alpha': every lag enters through\n");
+    fprintf(o, "                 W) against free F, with N bootstrap replications\n\n");
+    fprintf(o, "  -matest N      test the inherited moving average against the\n");
+    fprintf(o, "                 free one with N parametric bootstrap replications\n");
+    fprintf(o, "                 under the restricted model.  The chi2 reference\n");
+    fprintf(o, "                 is printed too, and it is NOT a test: the\n");
+    fprintf(o, "                 unrestricted optimum sits on the edge of the\n");
+    fprintf(o, "                 admissible region\n\n");
+    fprintf(o, "  -rankadm [tol] refuse parameter points where the fitted model\n");
+    fprintf(o, "                 denies its own rank: sigma_min of\n");
+    fprintf(o, "                 Lambda_perp' Theta(1) B_perp below tol (default\n");
+    fprintf(o, "                 0.2, which is the empty gap between the 0.016-\n");
+    fprintf(o, "                 0.133 the degenerate fits give and the 0.52-1.00\n");
+    fprintf(o, "                 the admissible ones do).  REPORTED always\n\n");
+    fprintf(o, "  -warma         parameterise the TRANSFORMED system directly, in\n");
+    fprintf(o, "                 the coordinates the triangular model is stated in:\n");
+    fprintf(o, "                 Phi*_k = [0 Psi_k ; 0 Phi_k], Theta*_k diagonal\n");
+    fprintf(o, "                 in the W block, and B2 entering ONLY through the\n");
+    fprintf(o, "                 data.  This is the class the BVECM theorems cover\n\n");
+    fprintf(o, "  -marow         Theta = [T11 T12 ; 0 0]: the differenced block\n");
+    fprintf(o, "                 carries no moving average of its own, but the\n");
+    fprintf(o, "                 cross block stays free.  q*s*M parameters fewer\n");
+    fprintf(o, "                 than free\n\n");
+    fprintf(o, "  -matri         the moving average is BLOCK-TRIANGULAR:\n");
+    fprintf(o, "                 Theta = [T11 T12 ; 0 T22].  Only the lower-left\n");
+    fprintf(o, "                 block is zeroed -- the differenced block keeps\n");
+    fprintf(o, "                 its own moving average.  q*s*r parameters fewer\n");
+    fprintf(o, "                 than free\n\n");
+    fprintf(o, "  -mawarma       the moving average INHERITS its structure instead\n");
+    fprintf(o, "                 of being free: Theta = [T11  T11*B2' ; 0  0], the\n");
+    fprintf(o, "                 form a WARMA process implies for its VEC\n");
+    fprintf(o, "                 representation (BVECM corollary 2).  q*r*r\n");
+    fprintf(o, "                 parameters instead of q*M*M\n\n");
+    fprintf(o, "  -seedjoh       seed B2 with the canonical reduced-rank solution\n");
+    fprintf(o, "                 (Johansen's eigenvalue problem, closed form)\n");
+    fprintf(o, "                 instead of the static OLS regression\n\n");
+    fprintf(o, "  -seedb2 v      start B2 at v and estimate it FREE (not -fixb2,\n");
+    fprintf(o, "                 which holds it).  A measuring instrument: it is\n");
+    fprintf(o, "                 how you ask whether the answer depends on where\n");
+    fprintf(o, "                 B2 starts\n\n");
+    fprintf(o, "  -seedgate      seed the r >= 1 fit by profiling: estimate the\n");
+    fprintf(o, "                 r = 0 rung, hold F, Theta and Sigma there, and fit\n");
+    fprintf(o, "                 Lambda and B2 on it before releasing everything.\n");
+    fprintf(o, "                 Not the default: the recorded results rest on the\n");
+    fprintf(o, "                 cold start, and this moves only when measured to\n");
+    fprintf(o, "                 be at least as good\n\n");
+    fprintf(o, "  -rungs         the ladder below the rank: rungs 0 (F, Theta and\n");
+    fprintf(o, "                 Sigma diagonal), 1 (Sigma free) and 2 (F and Theta\n");
+    fprintf(o, "                 free), all at r = 0, with their chi2 LRs.  These are\n");
+    fprintf(o, "                 ordinary nested comparisons; adding the VEC matrix\n");
+    fprintf(o, "                 is not, and lives in -lrtest\n\n");
+    /*  El programa tiene mas opciones de las que caben aqui, y una lista
+     *  duplicada en dos sitios diverge.  Se dice donde esta la completa.  */
+    fprintf(o, "The options above are the ones that need a paragraph; the full\n"
+               "list follows, and docs/USAGE.md documents every one of them.\n"
+               "docs/GETTING_STARTED.md has the order to use them in -- select\n"
+               "the rank at q = 0, look at -specs at the selected rank, then\n"
+               "estimate.  Every fit reports the rank condition, and one that\n"
+               "denies the rank it was estimated at says so.\n");
+    usage_option_list(o);
+}
+
+/*  Un error de USO sale con 1 y por stderr.  No se imprime el usage entero
+ *  en cada valor mal puesto: eso entierra el mensaje.  Se imprime cuando el
+ *  problema es que la opcion no existe, que es cuando la lista ayuda.        */
+static void bad_cli(const char *fmt, ...)
+{
+    va_list ap;
+    fprintf(stderr, "drvec: ");
+    va_start(ap, fmt);
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
+    fprintf(stderr, "\n       `drvec -h' lists every option; docs/USAGE.md documents them.\n");
+    exit(1);
+}
+
+/*  strtol/strtod con comprobacion del final del texto.  atoi("x") devuelve 0
+ *  sin decir nada, y un 0 silencioso en p es un SIGSEGV en init_guess.       */
+static int arg_int(const char *s, long *out)
+{
+    char *end;
+    long v;
+    if (!s || !*s) return 0;
+    errno = 0;
+    v = strtol(s, &end, 10);
+    if (end == s || *end != '\0' || errno == ERANGE) return 0;
+    *out = v;
+    return 1;
+}
+
+static int arg_real(const char *s, double *out)
+{
+    char *end;
+    double v;
+    if (!s || !*s) return 0;
+    errno = 0;
+    v = strtod(s, &end);
+    if (end == s || *end != '\0' || errno == ERANGE) return 0;
+    *out = v;
+    return 1;
+}
+
+static const struct opt_spec *opt_lookup(const char *name)
+{
+    int i;
+    for (i = 0; OPT_TABLE[i].name; i++)
+        if (strcmp(OPT_TABLE[i].name, name) == 0) return &OPT_TABLE[i];
+    return NULL;
+}
+
+/*  La sugerencia ante una errata: el prefijo comun mas largo.  Con -diagcv
+ *  devuelve -diagcov y con -multistar devuelve -multistart, que es el 90 %
+ *  de las erratas reales.                                                    */
+static const char *opt_nearest(const char *name)
+{
+    int i, best = 0; const char *hit = NULL;
+    for (i = 0; OPT_TABLE[i].name; i++) {
+        int k = 0;
+        while (name[k] && OPT_TABLE[i].name[k] && name[k] == OPT_TABLE[i].name[k]) k++;
+        if (k > best) { best = k; hit = OPT_TABLE[i].name; }
+    }
+    return (best >= 4) ? hit : NULL;
+}
+
+/*  validate_cli — la pasada previa sobre argv[5..].  Se para en el primer
+ *  problema y no asigna nada.                                                */
+static void validate_cli(int argc, char *argv[])
+{
+    int i;
+    for (i = 5; i < argc; i++) {
+        const struct opt_spec *o;
+        long iv; double rv;
+
+        if (argv[i][0] != '-') {
+            bad_cli("unexpected argument `%s' — options start with `-'", argv[i]);
+        }
+        o = opt_lookup(argv[i]);
+        if (!o) {
+            const char *near = opt_nearest(argv[i]);
+            fprintf(stderr, "drvec: unknown option `%s'\n", argv[i]);
+            if (near) fprintf(stderr, "       did you mean `%s'?\n", near);
+            usage(stderr);
+            exit(1);
+        }
+        switch (o->arg) {
+        case A_NONE:
+            break;
+        case A_STR:
+            if (i + 1 >= argc) bad_cli("%s needs %s", o->name, o->val);
+            i++;
+            break;
+        case A_INT_POS:
+            if (i + 1 >= argc) bad_cli("%s needs %s", o->name, o->val);
+            if (!arg_int(argv[i+1], &iv) || iv < 1)
+                bad_cli("%s needs an integer >= 1, got `%s'", o->name, argv[i+1]);
+            i++;
+            break;
+        case A_CASE:
+            if (i + 1 >= argc) bad_cli("%s needs %s", o->name, o->val);
+            if (!arg_int(argv[i+1], &iv) || iv < 1 || iv > 3)
+                bad_cli("%s must be 1, 2 or 3 (Mauricio 2006, Remark 6), got `%s'",
+                        o->name, argv[i+1]);
+            i++;
+            break;
+        case A_METHOD:
+            if (i + 1 >= argc) bad_cli("%s needs %s", o->name, o->val);
+            if (!arg_int(argv[i+1], &iv) || iv < 1 || iv > 2)
+                bad_cli("%s must be 1 (exact ML) or 2 (approximate), got `%s'",
+                        o->name, argv[i+1]);
+            i++;
+            break;
+        case A_REAL:
+            if (i + 1 >= argc) bad_cli("%s needs %s", o->name, o->val);
+            if (!arg_real(argv[i+1], &rv))
+                bad_cli("%s needs a number, got `%s'", o->name, argv[i+1]);
+            i++;
+            break;
+        case A_REAL_OPT:
+            /*  -fixb2: el valor es opcional y se reconoce por parsear entero,
+                que es exactamente el criterio que usa el asignador.          */
+            if (i + 1 < argc && arg_real(argv[i+1], &rv)) i++;
+            break;
+        case A_TOL_OPT:
+            /*  -rankadm: el valor es opcional y se reconoce por NO empezar
+                por '-', que es el criterio del asignador.  Si esta, tiene que
+                ser un numero positivo: una tolerancia <= 0 apaga el aviso sin
+                decirlo, y esa es la alarma que el programa no debe perder.   */
+            if (i + 1 < argc && argv[i+1][0] != '-') {
+                if (!arg_real(argv[i+1], &rv) || rv <= 0.0)
+                    bad_cli("%s needs a tolerance > 0, got `%s'",
+                            o->name, argv[i+1]);
+                i++;
+            } else if (i + 1 < argc && arg_real(argv[i+1], &rv)) {
+                /*  Un numero NEGATIVO detras de -rankadm: el asignador no lo
+                    tomaria como valor (mira el '-' inicial) y caeria como
+                    opcion desconocida, con un mensaje que no dice nada.     */
+                bad_cli("%s needs a tolerance > 0, got `%s'", o->name, argv[i+1]);
+            }
+            break;
+        }
+    }
+}
+
+/*****************************************************************************/
 /*  main                                                                      */
 /*****************************************************************************/
 int main(int argc, char *argv[])
@@ -4022,101 +4374,24 @@ int main(int argc, char *argv[])
     STRING inputf, outputf, base_name;
     FILE  *inputv;
 
+    /*  -h/--help y --version, antes que nada: son consultas, no ejecuciones,
+        y salen con 0 por stdout (la convencion del porte).  Sin argumentos
+        util, el usage sale por stderr y con 1, que es un error de uso.      */
+    if (argc >= 2 && (strcmp(argv[1], "-h") == 0 ||
+                      strcmp(argv[1], "--help") == 0)) {
+        usage(stdout);
+        return 0;
+    }
+    if (argc >= 2 && (strcmp(argv[1], "--version") == 0 ||
+                      strcmp(argv[1], "-version") == 0)) {
+        printf("drvec %s\n", DRVEC_VERSION);
+        printf("VEC model EML estimation (Mauricio 2006), on the drvarma engine\n");
+        printf("GPL v2 or later\n");
+        return 0;
+    }
     if (argc < 5) {
-        printf("\nUsage: drvec file p q r [-mean] [-case 1|2|3] [-diagar] "
-               "[-diagma] [-diagcov] [-m 1|2]\n"
-               "                 [-differenced] [-fixb2] [-lrtest] [-rungs]\n\n");
-        printf("  file  : data file name (without .inp extension)\n");
-        printf("  p     : AR order of stationary VARMA on Ȳ_t\n");
-        printf("  q     : MA order\n");
-        printf("  r     : cointegration rank (0 < r < M; ignored with -lrtest)\n\n");
-        printf("Deterministic cases (Mauricio 2006, Remark 6):\n");
-        printf("  -case 1 : E[∇Y₂]=0, E[W]=0     (default)\n");
-        printf("  -case 2 : E[∇Y₂]=0, E[W]≠0     (-mean needed)\n");
-        printf("  -case 3 : E[∇Y₂]≠0, E[W]≠0     (-mean needed)\n\n");
-        printf("Data layout (cols 1..s are the Y₂ block, cols s+1..M the Y₁ block):\n");
-        printf("  default        every series in LEVELS; ∇Y₂ is formed internally\n");
-        printf("                 (one observation is consumed)\n");
-        printf("  -differenced   legacy: cols 1..s already hold ∇Y₂.  The Y₂ levels\n");
-        printf("                 are then unknown and get cumulated from zero, which\n");
-        printf("                 breaks -case 1 and makes E[W] incomparable\n\n");
-        printf("  -fixb2 [v]     hold B2 fixed instead of estimating it; npar\n");
-        printf("                 drops by s*r.  With a value, every entry of B2 is\n");
-        printf("                 pinned at v -- an a-priori restriction, so 2*[L(free)\n");
-        printf("                 - L(fixed)] IS a valid LR test, chi2 with s*r df\n");
-        printf("                 (Mauricio 2006 Table 5 tests B = [1,0]', i.e. -fixb2 0).\n");
-        printf("                 Without a value B2 is held at its static-OLS estimate:\n");
-        printf("                 useful as a warm start or a conditioning check, but\n");
-        printf("                 the restriction is then data-chosen, so the LR\n");
-        printf("                 statistic is NOT a valid test.\n\n");
-        printf("  -lrtest        sequential LR test for the cointegration rank:\n");
-        printf("                 estimates r = 0..M-1 and reports 2*[L(r+1) - L(r)];\n");
-        printf("                 incompatible with -differenced\n\n");
-        printf("  -specs         the specification ladder: warma, mawarma, marow,\n");
-        printf("                 matri and free, in one run, with npar, logL,\n");
-        printf("                 termination, the rank condition G, the smallest\n");
-        printf("                 MA root, B2 and an ADMISSIBLE column -- and no\n");
-        printf("                 chi2 p-value where the theory does not give one\n\n");
-        printf("  -artest N      test the triangular short-run dynamics\n");
-        printf("                 (Gamma_i = M_i alpha': every lag enters through\n");
-        printf("                 W) against free F, with N bootstrap replications\n\n");
-        printf("  -matest N      test the inherited moving average against the\n");
-        printf("                 free one with N parametric bootstrap replications\n");
-        printf("                 under the restricted model.  The chi2 reference\n");
-        printf("                 is printed too, and it is NOT a test: the\n");
-        printf("                 unrestricted optimum sits on the edge of the\n");
-        printf("                 admissible region\n\n");
-        printf("  -rankadm [tol] refuse parameter points where the fitted model\n");
-        printf("                 denies its own rank: sigma_min of\n");
-        printf("                 Lambda_perp' Theta(1) B_perp below tol (default\n");
-        printf("                 0.2, which is the empty gap between the 0.016-\n");
-        printf("                 0.133 the degenerate fits give and the 0.52-1.00\n");
-        printf("                 the admissible ones do).  REPORTED always\n\n");
-        printf("  -warma         parameterise the TRANSFORMED system directly, in\n");
-        printf("                 the coordinates the triangular model is stated in:\n");
-        printf("                 Phi*_k = [0 Psi_k ; 0 Phi_k], Theta*_k diagonal\n");
-        printf("                 in the W block, and B2 entering ONLY through the\n");
-        printf("                 data.  This is the class the BVECM theorems cover\n\n");
-        printf("  -marow         Theta = [T11 T12 ; 0 0]: the differenced block\n");
-        printf("                 carries no moving average of its own, but the\n");
-        printf("                 cross block stays free.  q*s*M parameters fewer\n");
-        printf("                 than free\n\n");
-        printf("  -matri         the moving average is BLOCK-TRIANGULAR:\n");
-        printf("                 Theta = [T11 T12 ; 0 T22].  Only the lower-left\n");
-        printf("                 block is zeroed -- the differenced block keeps\n");
-        printf("                 its own moving average.  q*s*r parameters fewer\n");
-        printf("                 than free\n\n");
-        printf("  -mawarma       the moving average INHERITS its structure instead\n");
-        printf("                 of being free: Theta = [T11  T11*B2' ; 0  0], the\n");
-        printf("                 form a WARMA process implies for its VEC\n");
-        printf("                 representation (BVECM corollary 2).  q*r*r\n");
-        printf("                 parameters instead of q*M*M\n\n");
-        printf("  -seedjoh       seed B2 with the canonical reduced-rank solution\n");
-        printf("                 (Johansen's eigenvalue problem, closed form)\n");
-        printf("                 instead of the static OLS regression\n\n");
-        printf("  -seedb2 v      start B2 at v and estimate it FREE (not -fixb2,\n");
-        printf("                 which holds it).  A measuring instrument: it is\n");
-        printf("                 how you ask whether the answer depends on where\n");
-        printf("                 B2 starts\n\n");
-        printf("  -seedgate      seed the r >= 1 fit by profiling: estimate the\n");
-        printf("                 r = 0 rung, hold F, Theta and Sigma there, and fit\n");
-        printf("                 Lambda and B2 on it before releasing everything.\n");
-        printf("                 Not the default: the recorded results rest on the\n");
-        printf("                 cold start, and this moves only when measured to\n");
-        printf("                 be at least as good\n\n");
-        printf("  -rungs         the ladder below the rank: rungs 0 (F, Theta and\n");
-        printf("                 Sigma diagonal), 1 (Sigma free) and 2 (F and Theta\n");
-        printf("                 free), all at r = 0, with their chi2 LRs.  These are\n");
-        printf("                 ordinary nested comparisons; adding the VEC matrix\n");
-        printf("                 is not, and lives in -lrtest\n\n");
-        /*  El programa tiene mas opciones de las que caben aqui, y una lista
-         *  duplicada en dos sitios diverge.  Se dice donde esta la completa.  */
-        printf("This is not the full list: docs/USAGE.md documents every option,\n"
-               "and docs/GETTING_STARTED.md the order to use them in -- select\n"
-               "the rank at q = 0, look at -specs at the selected rank, then\n"
-               "estimate.  Every fit reports the rank condition, and one that\n"
-               "denies the rank it was estimated at says so.\n");
-        exit(1);
+        usage(stderr);
+        return 1;
     }
 
     /* Size these from the actual argument, not a fixed 80: a longer path used
@@ -4136,9 +4411,29 @@ int main(int argc, char *argv[])
     strcpy(base_name, argv[1]);
     strcpy(inputf, argv[1]);
 
-    global_p = atoi(argv[2]);
-    global_q = atoi(argv[3]);
-    global_r = atoi(argv[4]);
+    /*  p, q, r con strtol y comprobacion del final.  Con atoi, `drvec f x y z`
+        daba p = q = r = 0 y el proceso moria dentro de init_guess sin decir
+        una palabra; p = 0 hacia lo mismo por la via legitima.  El limite
+        inferior de p es 1: el orden AR del VARMA estacionario sobre Ybar, del
+        que el orden efectivo sobre nabla Y es p - 1 (MODEL.md 5.2).  El
+        limite SUPERIOR no se pone aqui sino con los grados de libertad, una
+        vez leido el fichero: es la muestra la que lo fija, no un numero.    */
+    {
+        long lp, lq, lr;
+        if (!arg_int(argv[2], &lp) || lp < 1)
+            bad_cli("p (the AR order) must be an integer >= 1, got `%s'", argv[2]);
+        if (!arg_int(argv[3], &lq) || lq < 0)
+            bad_cli("q (the MA order) must be an integer >= 0, got `%s'", argv[3]);
+        if (!arg_int(argv[4], &lr) || lr < 0)
+            bad_cli("r (the cointegration rank) must be an integer >= 0, got `%s'",
+                    argv[4]);
+        global_p = (int) lp;
+        global_q = (int) lq;
+        global_r = (int) lr;
+    }
+
+    /*  La pasada de validacion, antes de que nada se asigne.  Ver P1.       */
+    validate_cli(argc, argv);
 
     /* Parse options */
     for (int i = 5; i < argc; i++) {
@@ -4405,6 +4700,37 @@ int main(int argc, char *argv[])
             global_levels ? "all series in levels"
                           : "legacy, cols 1..s pre-differenced (-differenced)",
             nobs, nobs_raw);
+
+    /*  P1 — LA COTA SUPERIOR DE p Y q LA PONE LA MUESTRA, no un numero.  Hasta
+     *  2026-08-20 `drvec fichero 60 1 1` sobre 61 observaciones se intentaba:
+     *  fallaba con ifault = 3 tras un rato, y devolvia 0 al shell.  Y `q = 60`
+     *  se colgaba.  Un modelo con tantos parametros como datos no es un modelo
+     *  mal condicionado, es un modelo que no esta identificado, y estimarlo no
+     *  produce un resultado sino un numero.  El limite se pone donde se puede
+     *  medir -- con el fichero ya leido -- y en npar, que es la magnitud que de
+     *  verdad manda: cubre p grande, q grande y M grande por igual.
+     *
+     *  El umbral es npar < nobs * M, o sea al menos un dato por parametro.  Es
+     *  generoso a proposito: no es un criterio estadistico -- para eso estan el
+     *  AIC y el BIC que el programa ya imprime -- sino la frontera por debajo
+     *  de la cual el ajuste no significa nada.                               */
+    {
+        int npar_check = calc_nparametrs();
+        if (npar_check >= nobs * nser) {
+            fprintf(stderr,
+                "drvec: the model has %d parameters and the sample has %d data "
+                "points\n"
+                "       (%d observations x %d series).  There is nothing to "
+                "estimate:\n"
+                "       lower p or q, or use a longer sample.\n",
+                npar_check, nobs * nser, nobs, nser);
+            fprintf(outputv,
+                "\nREFUSED: %d parameters against %d data points.  Not estimated.\n",
+                npar_check, nobs * nser);
+            fclose(outputv);
+            return 1;
+        }
+    }
 
     /* [3a] Sequential LR test for the cointegration rank (Mauricio 2006,
             Remark 5 and Table 3): estimate r = 1..M-1 and report
@@ -5076,6 +5402,7 @@ int main(int argc, char *argv[])
     }
 
     /* [3] Estimation ------------------------------------------------------- */
+    int estimation_failed = 0;      /* P1: el codigo de salida lo refleja */
     int npar = calc_nparametrs();
     real *x   = vector(1, npar);
     real *dev = vector(1, npar);
@@ -6060,6 +6387,17 @@ int main(int argc, char *argv[])
         if (warma_done) free_matrix(Lam_m, 1, nser, 1, (r > 0 ? r : 1));
 
     } else {
+        /*  P1 — EL FALLO SE NOTA DESDE FUERA.  Hasta 2026-08-20 esta rama
+         *  escribia el diagnostico en el .out y devolvia 0 al shell, asi que
+         *  un guion que encadenara ajustes no podia distinguir un modelo
+         *  estimado de uno que no lo fue.  Sale con 2, que en la convencion
+         *  del porte es "reconocido pero no atendible", y se reserva 1 para
+         *  el error de USO.  Cuidado con la distincion que importa: el
+         *  termcode 3 -- "last global step failed to locate a lower point" --
+         *  NO es esto.  Es una parada explicada, con su nota de convergencia,
+         *  y sigue saliendo con 0: convertirla en fallo marcaria como error
+         *  la mayoria de los ajustes que este programa publica.             */
+        estimation_failed = 1;
         fprintf(outputv, "\nESTIMATION FAILED: ifault = %d\n", ifault);
         switch (ifault) {
             case 1: fprintf(outputv, "  Q not positive definite\n"); break;
@@ -6069,6 +6407,8 @@ int main(int argc, char *argv[])
             case 5: fprintf(outputv, "  Numerical problem\n"); break;
             case 6: fprintf(outputv, "  Error in vec_shootx()\n"); break;
         }
+        fprintf(stderr, "drvec: estimation failed (ifault = %d); "
+                        "see %s\n", ifault, outputf);
     }
 
     /* [4] Cleanup ---------------------------------------------------------- */
@@ -6082,6 +6422,7 @@ int main(int argc, char *argv[])
     fclose(outputv);
     cleanup_names(outputf, inputf, base_name);
 
+    if (estimation_failed) return 2;
     printf("Done. Output written to %s\n", argv[1]);
     return 0;
 }

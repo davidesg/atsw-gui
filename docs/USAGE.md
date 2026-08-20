@@ -568,6 +568,43 @@ about the off-diagonal of `R(k)`, not about the likelihood.
 
 ## 6. Exit behaviour
 
+### The exit status
+
+| code | meaning |
+|---|---|
+| `0` | the fit ran to completion. **This includes a termcode-3 stop** — «last global step failed to locate a lower point» — which is an explained stop with its convergence note, not a failure; see [CONVERGENCE.md](CONVERGENCE.md) |
+| `1` | the command line or the input file was refused: an unknown option, a value out of range, a file that cannot be read, or a model with at least as many parameters as data points. Nothing was estimated |
+| `2` | the estimation was attempted and could not be completed (`ifault ≠ 0`). The `.out` says which of the six conditions failed |
+
+A script can therefore tell the three apart, which it could not before
+2026-08-20: every outcome used to exit 0.
+
+### Refused, not ignored
+
+Any argument `drvec` does not recognise stops the run:
+
+```
+$ drvec mink_muskrat 2 1 1 -diagcv
+drvec: unknown option `-diagcv'
+       did you mean `-diagcov'?
+```
+
+This is deliberate and it is the suite's convention. A silently ignored option
+would estimate a **different model** and report it as the one that was asked
+for — and on this data the difference between `Θ` free and `Θ` diagonal is the
+difference between a fit that denies its own rank and one that does not
+([SPECIFICATION_PLAN.md](SPECIFICATION_PLAN.md) §8). The same applies to values:
+`-case 9`, `-m 3`, `-multistart 0` and `-rankadm -1` are all refused.
+
+### Queries
+
+`drvec -h` (or `--help`) prints the option list and exits 0; the last block of
+it is generated from the same table the parser uses, so the set of options
+documented there **is** the set accepted. `drvec --version` prints the version
+and exits 0.
+
+### Messages
+
 `drvec` writes `file.out` whatever happens. `ERROR` messages on stderr mean the
 run did not produce an estimate; `WARNING` messages mean it did, but something
 about the specification deserves attention. The suite treats

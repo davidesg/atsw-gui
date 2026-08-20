@@ -1,8 +1,14 @@
 #!/bin/bash
 # tests/run_tests.sh — regression and invariant suite for drvec.
 #
-# Seven kinds of check, in increasing order of value:
+# Eight kinds of check, in increasing order of value:
 #
+#   0. COMMAND LINE the program refuses what it does not understand instead of
+#                   ignoring it, and the exit code says what happened.  Added
+#                   with P1; see docs/PLAN_PRODUCCION.md.  The check that
+#                   cannot go stale is the last one: the set of options the
+#                   PARSER accepts, read out of the source, against the set
+#                   usage() ENUMERATES, read out of the binary.
 #   1. STRUCTURAL   the parameter walk consumes exactly npar; no out-of-bounds
 #                   read in any configuration.  Catches §4.1-type bugs.
 #   2. INVARIANTS   properties that must hold whatever the numbers are, so they
@@ -80,6 +86,24 @@
 #     exercises it.  It guards a region the optimiser does not currently reach.
 #   - a printer-only transposition is invisible because, since the §4.2 fix, both
 #     printers read one shared copy (see test 2a).
+#
+# AND THE COMMAND-LINE BLOCK [0], measured the same way on 2026-08-20 against
+# mutants built from the current source (docs/PLAN_PRODUCCION.md P1):
+#
+#   mutation                                            failures raised
+#   ---------------------------------------------------------------------
+#   validate_cli() made a no-op (options ignored again)       16
+#   p, q, r back to atoi, and the df bound removed             7
+#   usage() enumerates only the first 22 options               1
+#   the estimation-failure exit code back to 0                 1
+#
+# Two checks in [0] do NOT bite, and are kept for what they document rather
+# than for what they catch:
+#   - `-weakex 0`: the pre-P1 program also exited 1 on it, but through the
+#     wrong path and with the message of another failure ("no se pudo abrir
+#     (null)").  The check pins the exit code, not the message.
+#   - `r = -1`: refused before P1 too, by the explicit test that was already
+#     in main().  It is here so the three positionals are checked as a set.
 
 
 set -u
@@ -149,6 +173,140 @@ DK=$TMP/dk.inp
 MMOLD=$TMP/mmold.inp
 
 echo "drvec test suite"
+echo
+
+# ============================================================ 0 COMMAND LINE ==
+#  Anadido con P1 (docs/PLAN_PRODUCCION.md).  Lo que protege, y por que existe:
+#  hasta 2026-08-20 el bucle de opciones no tenia rama else, asi que una errata
+#  -- -diagcv por -diagcov -- se ignoraba EN SILENCIO y drvec estimaba otro
+#  modelo sin decirlo; y p, q, r se leian con atoi, de modo que p = 0, p = -1,
+#  p = 200 y un p no numerico tumbaban el proceso por SIGSEGV dentro de
+#  init_guess.  Cada linea de abajo es una de esas entradas.
+#
+#  La comprobacion que no puede quedarse obsoleta es la ultima: compara la lista
+#  de opciones que el parser ACEPTA con la que usage() ENUMERA.  Antes de P1 el
+#  usage cubria 22 de 33, y nada lo detectaba.
+echo "[0] the command line: it refuses rather than ignores"
+
+CLI=$TMP/cli
+cp "$MM" "$CLI.inp"
+
+# cli <label> <expected-rc> <args...>
+cli() {
+    local label=$1 want=$2; shift 2
+    local rc
+    timeout "$RUN_TIMEOUT" "$DRVEC" "$@" >/dev/null 2>&1; rc=$?
+    if [ "$rc" -ge 128 ] && [ "$rc" -ne 124 ]; then
+        bad "$label" "the process died on signal $((rc-128)) instead of returning $want"
+    elif [ "$rc" -eq 124 ]; then
+        bad "$label" "did not finish in ${RUN_TIMEOUT}s"
+    elif [ "$rc" -ne "$want" ]; then
+        bad "$label" "rc=$rc, expected $want"
+    else ok "$label"; fi
+}
+
+# --- the queries: they answer and leave, with 0 -----------------------------
+cli "-h exits 0"                    0 -h
+cli "--help exits 0"                0 --help
+cli "--version exits 0"             0 --version
+cli "no arguments is a usage error" 1
+
+# --- the positionals: strtol, not atoi --------------------------------------
+cli "p = 0 is refused"              1 "$CLI" 0 1 1 -case 2
+cli "p = -1 is refused"             1 "$CLI" -1 1 1 -case 2
+cli "p = 200 is refused"            1 "$CLI" 200 1 1 -case 2
+cli "a non-numeric p is refused"    1 "$CLI" x y z -case 2
+cli "q = -1 is refused"             1 "$CLI" 2 -1 1 -case 2
+cli "r = -1 is refused"             1 "$CLI" 2 1 -1 -case 2
+cli "r >= M is refused"             1 "$CLI" 2 1 5 -case 2
+
+# --- unknown options, which is the defect this section exists for -----------
+cli "an invented option is refused" 1 "$CLI" 2 1 1 -case 2 -bogusflag
+cli "-diagcv (a typo) is refused"   1 "$CLI" 2 1 1 -case 2 -diagcv
+cli "-multistar (a typo) is refused" 1 "$CLI" 2 1 1 -case 2 -multistar 20
+cli "a stray positional is refused" 1 "$CLI" 2 1 1 -case 2 rubbish
+
+#  Y la sugerencia, que es lo que convierte el rechazo en algo util.
+sug=$(timeout "$RUN_TIMEOUT" "$DRVEC" "$CLI" 2 1 1 -diagcv 2>&1 | grep -a 'did you mean')
+case "$sug" in
+    *-diagcov*) ok "the refusal suggests the option that was meant" ;;
+    *)          bad "typo suggestion" "got: ${sug:-nothing}" ;;
+esac
+
+# --- option values ----------------------------------------------------------
+cli "-case 0 is refused"            1 "$CLI" 2 1 1 -case 0
+cli "-case 9 is refused"            1 "$CLI" 2 1 1 -case 9
+cli "-m 3 is refused"               1 "$CLI" 2 1 1 -m 3
+cli "-multistart 0 is refused"      1 "$CLI" 2 1 1 -case 2 -multistart 0
+cli "-multistart abc is refused"    1 "$CLI" 2 1 1 -case 2 -multistart abc
+cli "-bootstrap -1 is refused"      1 "$CLI" 2 1 1 -case 2 -bootstrap -1
+cli "-matest 0 is refused"          1 "$CLI" 2 1 1 -case 2 -matest 0
+cli "-weakex 0 is refused"          1 "$CLI" 2 1 1 -case 2 -weakex 0
+cli "-rankadm -1 is refused"        1 "$CLI" 2 1 1 -case 2 -rankadm -1
+cli "-rankadm 0 is refused"         1 "$CLI" 2 1 1 -case 2 -rankadm 0
+cli "-seedb2 abc is refused"        1 "$CLI" 2 1 1 -case 2 -seedb2 abc
+cli "-alpha with no file is refused" 1 "$CLI" 2 1 1 -case 2 -alpha
+
+#  Y LO QUE NO DEBE ROMPERSE.  -fixb2 y -rankadm llevan valor OPCIONAL, y el
+#  criterio con que la validacion decide si el siguiente argumento es el valor
+#  tiene que ser EL MISMO que usa el asignador, o una linea de ordenes legitima
+#  deja de funcionar.  -fixb2 -0.5 es un valor negativo que empieza por '-';
+#  -fixb2 -diagma es una opcion detras de -fixb2.  Los dos son validos.
+cli "-fixb2 with no value still runs"   0 "$CLI" 2 1 1 -case 2 -fixb2
+cli "-fixb2 -0.5 still runs"            0 "$CLI" 2 1 1 -case 2 -fixb2 -0.5
+cli "-fixb2 followed by an option runs" 0 "$CLI" 2 1 1 -case 2 -fixb2 -diagma
+cli "-rankadm with no tolerance runs"   0 "$CLI" 2 1 1 -case 2 -rankadm
+cli "an ordinary fit still exits 0"     0 "$CLI" 2 1 1 -case 2
+
+# --- degrees of freedom: the sample sets the upper bound on p and q ---------
+cli "p = 60 on 61 observations is refused" 1 "$CLI" 60 1 1 -case 2
+cli "q = 60 on 61 observations is refused" 1 "$CLI" 2 60 1 -case 2
+
+# --- the exit code says what happened ---------------------------------------
+#  Un ajuste que NO se pudo completar sale con 2.  El caso: dos series
+#  exactamente colineales, que dejan el operador AR fuera de la region
+#  estacionaria (ifault = 3).  Se genera aqui, como el resto de fixtures.
+awk 'BEGIN{ n=40;
+    printf "* fixture: the second series is an exact multiple of the first\n";
+    printf "1\n2 %d 1 1900\na b\n1.0 0 0\n", n;
+    for (t=0; t<n; t++) { x = sin(t*0.3) + t*0.01; printf "%.10f %.10f\n", x, 2*x } }' \
+  > "$TMP/degen.inp"
+cli "an estimation that fails exits 2"  2 "$TMP/degen" 2 1 1 -case 2
+
+#  Y LA DISTINCION QUE IMPORTA: el termcode 3 -- "last global step failed to
+#  locate a lower point" -- NO es un fallo.  Es la parada explicada en la que
+#  se apoya la mayoria de lo que este programa publica (CONVERGENCE.md), y
+#  tiene que seguir saliendo con 0.  Si esto empieza a fallar, alguien ha
+#  convertido una parada en un error y ha marcado como rotos la mitad de los
+#  resultados del registro.
+timeout "$RUN_TIMEOUT" "$DRVEC" "$CLI" 2 1 1 -case 1 >/dev/null 2>&1; rc3=$?
+if grep -qa 'failed to locate a lower point' "$CLI.out" 2>/dev/null; then
+    [ "$rc3" -eq 0 ] && ok "a termcode-3 stop still exits 0" \
+                     || bad "termcode 3 exit code" "rc=$rc3, expected 0"
+else
+    ok "a termcode-3 stop still exits 0 (not reached on this fit; rc=$rc3)"
+fi
+
+# --- usage() and the parser cannot diverge ----------------------------------
+#  Es la comprobacion que no se queda obsoleta: la lista aceptada sale del
+#  FUENTE y la enumerada sale del BINARIO.  Antes de P1 habrian diferido en 11.
+if [ -f src/drvec.c ]; then
+    parser_opts=$(grep -ao 'strcmp(argv\[i\], "-[a-z0-9]*"' src/drvec.c \
+                  | grep -ao '"-[a-z0-9]*"' | tr -d '"' | sort -u)
+    usage_opts=$("$DRVEC" -h 2>/dev/null \
+                 | sed -n '/^Every option drvec accepts/,$p' | tail -n +2 \
+                 | tr -s ' ' '\n' | grep -a '^-' | sort -u)
+    if [ "$parser_opts" = "$usage_opts" ]; then
+        ok "every option the parser accepts is enumerated by -h ($(printf '%s\n' "$parser_opts" | wc -l) of them)"
+    else
+        bad "usage() and the parser have diverged" \
+            "only in the parser: $(comm -23 <(printf '%s\n' "$parser_opts") <(printf '%s\n' "$usage_opts") | tr '\n' ' ')
+        only in -h:        $(comm -13 <(printf '%s\n' "$parser_opts") <(printf '%s\n' "$usage_opts") | tr '\n' ' ')"
+    fi
+else
+    ok "usage/parser cross-check skipped (not run from the source tree)"
+fi
+
 echo
 
 # ============================================================== 1 STRUCTURAL ==

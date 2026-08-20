@@ -250,6 +250,20 @@ lower bound, so it was the only one whose defect was live. `vector` and
 | `vector`, `ivector` | **the suite's, identical** | was latent — no call site here uses a negative lower bound — but the suite corrected these after the transfer-function program was bitten by one, its identification step allocating `vector(−nlags, nlags)` |
 | `matrix`, `imatrix` | pre-cleanup, and **deliberately** so across the suite | the offset variant uses an incompatible row layout, so the two are not interchangeable; the univariate program left them alone for exactly that reason |
 
+**And that last reason has since been measured, with a result that narrows it.**
+On 2026-08-20 the four routines were replaced by the shared variant in a copy of
+the tree and the whole suite was run: **all 152 functional checks pass**, no
+golden value moves, the diagonal gate still closes and the `.pre` still reads.
+The only consequence is under `valgrind`, and it is the same mechanism described
+two paragraphs below: the shared variant **reveals two leaks that the present
+one conceals** — `cond_resid` in `init_guess` and `rawmat` in `main`, both of
+process lifetime, both real, both invisible today because a pointer returned at
+the base of its block looks reachable. So the incompatibility is the univariate
+program's and **not** `drvec`'s, and the reason for leaving these two alone here
+is weaker than the reason for leaving them alone there. Aligning them, and
+closing the two leaks that follow, is
+[PLAN_PRODUCCION.md](PLAN_PRODUCCION.md) P3.
+
 Aligning `vector` and `ivector` is not a cosmetic change, because it moves the
 release from ignoring the bounds it is given to depending on them: every
 `free_vector` must now be handed the same lower bound its allocation used. That

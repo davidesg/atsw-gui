@@ -1,16 +1,17 @@
 # The test suite: what it protects, measured
 
-*`tests/run_tests.sh`, run by `make test`. 152 checks, and 162 with the opt-in
+*`tests/run_tests.sh`, run by `make test`. 190 checks, and 200 with the opt-in
 memory block. The claim that a suite
 "protects" something is worth nothing unless it is measured, so it is measured
 by mutation: real defects are put back and the failures counted.*
 
 ---
 
-## 1. Nine kinds of check, in increasing order of value
+## 1. Ten kinds of check, in increasing order of value
 
 | | what it establishes |
 |---|---|
+| **0. the command line** | the program **refuses what it does not understand instead of ignoring it**, and its exit code says what happened. Every entry of the table in [PLAN_PRODUCCION.md](PLAN_PRODUCCION.md) §2.1 is a check here: the four command lines that used to end in `SIGSEGV`, the options that used to be swallowed in silence, the values that were never range-checked, and the model with more parameters than data. Plus the two that must **not** break — `-fixb2 -0.5` and `-fixb2 -diagma`, where the optional value has to be recognised by the same criterion the assigner uses — and the distinction that matters: a termcode-3 stop is **not** a failure and still exits 0 |
 | **1. structural** | the parameter walk consumes exactly `npar` in 24 configurations. `calc_nparametrs`, `init_guess`, `vec_shootx` and the printer are four independent walks of the same vector; when they disagree the program reads past the end of `x[]` and reports numbers for a model nobody specified |
 | **2. invariants** | properties that hold whatever the data says, so they need no external reference and cannot go stale: both printers must agree on `B₂`; logL must be monotone in `r` (rank `r` is nested in `r+1`); a restricted fit cannot beat the free one; \|Σ̂\| must agree between the two layouts of the same model |
 | **3. the gate** | with `r = 0` and diagonal structure the exact likelihood factorises, so the joint logL must equal the sum of the univariate ones. This is the cast's oracle: when it breaks the fault is in `vec_shootx` or the seeding, **never** in `elf`. The tolerance is the `ξ` truncation and not a fixed number, and both halves are checked: with `q > 0` the identity is claimed only to `xitol`, and with `q = 0`, where there is nothing to truncate, it must hold to 1e−9 — the strict half is what keeps the loose half honest ([HOMOLOGATION.md](HOMOLOGATION.md) §1b) |
@@ -30,7 +31,7 @@ Measured by mutation against the current source — mutating an older source is
 not a valid measurement, because then the baselines fail for the wrong reason:
 
 > **Scope note.** The table below was measured on 2026-08-17, when the suite had
-> 63 checks. It has 152 now, and the checks added since — the ladders, the
+> 63 checks. It has 190 now, and the checks added since — the ladders, the
 > admissibility column, the two bootstrapped tests, the inverse map — have **not**
 > been mutation-measured. Their protection is argued from what they compare, not
 > measured, and the difference matters: an argued check is a hypothesis about

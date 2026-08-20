@@ -244,8 +244,17 @@ int global_warma = 0;
  *  IMPONE, rechazando el punto igual que se rechaza una Sigma no definida
  *  positiva, para que el optimizador no entre.                               */
 int  global_rankadm = 0;
-real global_rankadm_tol = 1.0e-3;
+/*  EL SUELO, PUESTO CON LA MEDIDA DELANTE Y NO ANTES.  Sobre el banco entero,
+ *  las especificaciones admisibles dan G entre 0.52 y 1.00 y las que degeneran
+ *  entre 0.016 y 0.133 (HOMOLOGATION.md 4h y 4j): un orden de magnitud de
+ *  separacion y un hueco vacio en medio.  0.2 es el numero redondo de ese
+ *  hueco.  Es una eleccion, se dice que lo es, y -rankadm la cambia -- pero no
+ *  es una eleccion arbitraria: cualquier corte entre 0.15 y 0.5 clasifica igual
+ *  los veintitantos ajustes del registro.  El valor anterior, 1e-3, no mordia
+ *  en ningun caso medido, que es otra forma de estar mal elegido.            */
+real global_rankadm_tol = 0.2;
 int  global_matest = 0;      /* -matest N: bootstrap del MA heredado vs libre */
+int  global_specs  = 0;      /* -specs: la escalera de especificaciones        */
 static real granger_sv = -1.0;   /* sigma_min(G) en la ultima evaluacion */
 
 /*  granger_smin — sigma_min(Lambda_perp' Theta(1) B_perp), o -1 si no aplica.
@@ -1383,8 +1392,11 @@ fail:
 /*  eigenvalues are lambda = 1/z with z the roots of det A(z) = 0, whence the */
 /*  modulus reported below is 1/|lambda|.                                     */
 /*****************************************************************************/
+/*  quiet = 1: solo calcula el modulo menor y no imprime.  Lo necesita la
+ *  escalera de especificaciones, que quiere el numero de cada peldano sin la
+ *  tabla de raices de cada uno.                                             */
 static void report_operator_roots(const char *label, real ***A, int m, int k,
-                                  real *minmod)
+                                  real *minmod, int quiet)
 {
     int mk = m * k, i, j, l;
     real **C, *wr, *wi;
@@ -1403,20 +1415,21 @@ static void report_operator_roots(const char *label, real ***A, int m, int k,
 
     eigenqr(C, mk, wr, wi);
 
-    fprintf(outputv, "  %-11s", label);
+    if (!quiet) fprintf(outputv, "  %-11s", label);
     for (i = 1; i <= mk; i++) {
         real lam = sqrt(wr[i] * wr[i] + wi[i] * wi[i]);
         /* A null companion eigenvalue is an infinite root: it happens whenever
            the last coefficient matrix is singular, and it is no defect.      */
         if (lam <= 1.0e-12) {
-            fprintf(outputv, "  %8s ", "inf");
+            if (!quiet) fprintf(outputv, "  %8s ", "inf");
             continue;
         }
         if (1.0 / lam < *minmod) *minmod = 1.0 / lam;
-        fprintf(outputv, "  %8.5f%s", 1.0 / lam,
-                (1.0 / lam < 1.0001) ? "*" : " ");
+        if (!quiet)
+            fprintf(outputv, "  %8.5f%s", 1.0 / lam,
+                    (1.0 / lam < 1.0001) ? "*" : " ");
     }
-    fprintf(outputv, "\n");
+    if (!quiet) fprintf(outputv, "\n");
 
     free_vector(wi, 1, mk);
     free_vector(wr, 1, mk);
@@ -1431,8 +1444,8 @@ static void operator_roots(struct Tvarma *v)
     fprintf(outputv, "\nRoots of the AR and MA operators (moduli; the model is "
                      "stationary and\ninvertible when every modulus exceeds "
                      "one):\n\n");
-    report_operator_roots("AR (Phi)",   v->phi,   v->m, v->p, &minmod);
-    report_operator_roots("MA (Theta)", v->theta, v->m, v->q, &minmod);
+    report_operator_roots("AR (Phi)",   v->phi,   v->m, v->p, &minmod, 0);
+    report_operator_roots("MA (Theta)", v->theta, v->m, v->q, &minmod, 0);
     if (minmod < 1.0001)
         fprintf(outputv,
             "\n  * A root sits on the unit circle.  The estimate lies against the\n"
@@ -4027,6 +4040,11 @@ int main(int argc, char *argv[])
         printf("  -lrtest        sequential LR test for the cointegration rank:\n");
         printf("                 estimates r = 0..M-1 and reports 2*[L(r+1) - L(r)];\n");
         printf("                 incompatible with -differenced\n\n");
+        printf("  -specs         the specification ladder: warma, mawarma, marow,\n");
+        printf("                 matri and free, in one run, with npar, logL,\n");
+        printf("                 termination, the rank condition G, the smallest\n");
+        printf("                 MA root, B2 and an ADMISSIBLE column -- and no\n");
+        printf("                 chi2 p-value where the theory does not give one\n\n");
         printf("  -matest N      test the inherited moving average against the\n");
         printf("                 free one with N parametric bootstrap replications\n");
         printf("                 under the restricted model.  The chi2 reference\n");
@@ -4036,7 +4054,9 @@ int main(int argc, char *argv[])
         printf("  -rankadm [tol] refuse parameter points where the fitted model\n");
         printf("                 denies its own rank: sigma_min of\n");
         printf("                 Lambda_perp' Theta(1) B_perp below tol (default\n");
-        printf("                 1e-3).  That statistic is REPORTED always\n\n");
+        printf("                 0.2, which is the empty gap between the 0.016-\n");
+        printf("                 0.133 the degenerate fits give and the 0.52-1.00\n");
+        printf("                 the admissible ones do).  REPORTED always\n\n");
         printf("  -warma         parameterise the TRANSFORMED system directly, in\n");
         printf("                 the coordinates the triangular model is stated in:\n");
         printf("                 Phi*_k = [0 Psi_k ; 0 Phi_k], Theta*_k diagonal\n");
@@ -4116,6 +4136,7 @@ int main(int argc, char *argv[])
         else if (strcmp(argv[i], "-matri") == 0)    global_matri = 1;
         else if (strcmp(argv[i], "-marow") == 0)    global_marow = 1;
         else if (strcmp(argv[i], "-warma") == 0)    global_warma = 1;
+        else if (strcmp(argv[i], "-specs") == 0)    global_specs = 1;
         else if (strcmp(argv[i], "-matest") == 0 && i+1 < argc)
             global_matest = atoi(argv[++i]);
         else if (strcmp(argv[i], "-rankadm") == 0) {
@@ -4485,6 +4506,188 @@ int main(int argc, char *argv[])
         free_ivector(good, 0, NR - 1);
         free_ivector(npr, 0, NR - 1);
         free_vector(ll, 0, NR - 1);
+        fclose(outputv);
+        printf("Done. Output written to %s\n", outputf);
+        cleanup_names(outputf, inputf, base_name);
+        return 0;
+    }
+
+    /*  -specs — LA ESCALERA DE ESPECIFICACIONES, emitida por el programa.
+     *
+     *  Cinco modelos ANIDADOS de la media movil y la dinamica corta, del mas
+     *  restringido al libre, y en un solo comando:
+     *
+     *    warma    Phi*_k = [0 Psi_k ; 0 Phi_k] y Theta* diagonal -- la clase
+     *             que los teoremas cubren (docs/THEORY.md, definicion 3)
+     *    mawarma  Theta = [T11 T11B2' ; 0 0]   -- la misma estructura de MA
+     *             con F libre
+     *    marow    Theta = [T11 T12 ; 0 0]      -- el bloque cruzado libre
+     *    matri    Theta = [T11 T12 ; 0 T22]    -- y el diferenciado con MA
+     *    libre    Theta libre
+     *
+     *  Por que en un comando: porque la pregunta que un usuario tiene delante
+     *  no es "cuanto ajusta esta especificacion" sino "cual de ellas, y es
+     *  admisible", y esas dos no se contestan con una corrida.
+     *
+     *  Y POR QUE LA COLUMNA DE ADMISIBILIDAD ES LA PRIMERA QUE HAY QUE LEER.
+     *  Por el teorema 3 de docs/THEORY.md el proceso tiene rango r si y solo si
+     *  rank(Lambda_perp' Theta(1)) = M - r, y por el teorema 4 el conjunto donde
+     *  eso falla esta DENTRO del que el optimizador recorre.  Un peldano con G
+     *  pequeno no es un ajuste peor: es un ajuste de otro modelo.  Por el
+     *  corolario 5.1, ademas, ni sus errores estandar ni un LR contra el tienen
+     *  su distribucion, asi que el p-valor chi2 se imprime SOLO cuando los dos
+     *  peldanos comparados son admisibles, y donde no, se dice y se remite a
+     *  -matest.                                                              */
+    if (global_specs) {
+        const int NS = 5;
+        const char *NM[5] = { "warma  ", "mawarma", "marow  ", "matri  ", "free   " };
+        real ll[5], gg[5], mam[5], b2v[5];
+        int  npv[5], okv[5], tcv[5], adm[5];
+        int  k, M = nser;
+
+        macheps = cmacheps();
+        if (global_r < 1) {
+            fprintf(stderr, "ERROR: -specs needs r >= 1\n");
+            exit(1);
+        }
+        fprintf(outputv, "\n=== The specification ladder ===\n");
+        printf("\nEscalera de especificaciones:\n");
+
+        for (k = 0; k < NS; k++) {
+            struct Tvarma vs;
+            real *xs, *devs, **covs;
+            int np, ifs = 0, s2 = M - global_r;
+
+            global_warma = (k == 0); global_mawarma = (k == 1);
+            global_marow = (k == 2);  global_matri   = (k == 3);
+            build_y2_levels();
+            np = calc_nparametrs();
+            xs = vector(1, np); devs = vector(1, np);
+            covs = matrix(1, np, 1, np);
+            vs.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
+            init_guess(xs, np);
+            if (global_warma) {
+                /*  el mismo encogido admisible que usa la ruta normal        */
+                static const real shr[6] = { 1.0, 0.8, 0.5, 0.3, 0.1, 0.0 };
+                int nm2, nl2, nmid2, nt2, nfw = (global_p > 1) ? global_p - 1 : 0;
+                int nar, i2, mi;
+                real *ar0;
+                par_blocks(&nm2, &nl2, &nmid2, &nt2);
+                nar = nl2 + nfw * M * global_r;
+                ar0 = vector(1, (nar > 0 ? nar : 1));
+                for (i2 = 1; i2 <= nar; i2++) ar0[i2] = xs[nm2 + i2];
+                vec_shootx(xs, &vs, &ifs, 1, 0);
+                for (mi = 0; mi < 6; mi++) {
+                    real p1, p2, p3; int ife = 0, ifc = 0;
+                    for (i2 = 1; i2 <= nar; i2++) xs[nm2 + i2] = shr[mi] * ar0[i2];
+                    vec_shootx(xs, &vs, &ifc, 0, 0);
+                    if (ifc != 0) continue;
+                    elf(vs.m, vs.n, vs.p, vs.q, vs.mu, vs.phi, vs.theta, vs.qq,
+                        vs.w, 1.0, vs.xitol, TRUE, vs.a, &p1, &p2, &p3, &ife);
+                    if (ife == 0) break;
+                }
+                free_vector(ar0, 1, (nar > 0 ? nar : 1));
+                vec_shootx(xs, &vs, &ifs, 0, 1);
+            }
+            vec_shootx(xs, &vs, &ifs, 1, 0);
+            est(&vec_shootx, np, xs, devs, covs, 500, 200, 1e-5, 1e-7,
+                vs.xitol, vs.a, &vs.sigma2, &vs.logelf, &ifs);
+            okv[k] = (ifs == 0);
+            npv[k] = np;
+            ll[k]  = okv[k] ? vs.logelf : 0.0;
+            tcv[k] = termcode_from_out(outputf);
+            gg[k] = -1.0; mam[k] = -1.0; b2v[k] = 0.0;
+            if (okv[k]) {
+                real mm = 1.0e30;
+                vec_shootx(xs, &vs, &ifs, 0, 0);      /* recuperar el ajuste  */
+                report_operator_roots("MA", vs.theta, vs.m, vs.q, &mm, 1);
+                mam[k] = (mm < 1.0e29) ? mm : -1.0;
+                for (int j2 = 1; j2 <= global_r; j2++)
+                    b2v[k] = global_fixb2 ? B2_fixed[1][j2]
+                           : xs[np - s2 * global_r + (j2 - 1) * s2 + 1];
+                if (global_warma) {
+                    /*  en coordenadas Ybar hay que volver primero            */
+                    real **B2w = matrix(1, s2, 1, global_r);
+                    real **Lw = matrix(1, M, 1, global_r);
+                    real ***Fw = tensor(1, (global_p > 1 ? global_p - 1 : 1), 1, M, 1, M);
+                    real ***Tw = tensor(1, (global_q > 0 ? global_q : 1), 1, M, 1, M);
+                    real **Sw = matrix(1, M, 1, M);
+                    for (int j2 = 1; j2 <= global_r; j2++)
+                        for (int i2 = 1; i2 <= s2; i2++)
+                            B2w[i2][j2] = global_fixb2 ? B2_fixed[i2][j2]
+                                        : xs[np - s2*global_r + (j2-1)*s2 + i2];
+                    for (int k2 = 1; k2 <= (global_q > 0 ? global_q : 1); k2++)
+                        for (int i2 = 1; i2 <= M; i2++)
+                            for (int j2 = 1; j2 <= M; j2++) Tw[k2][i2][j2] = 0.0;
+                    warma_inverse(&vs, B2w, Lw, Fw, Tw, Sw);
+                    gg[k] = granger_smin(Lw, B2w, Tw, M, global_r, global_q);
+                    free_matrix(Sw, 1, M, 1, M);
+                    free_tensor(Tw, 1, (global_q > 0 ? global_q : 1), 1, M, 1, M);
+                    free_tensor(Fw, 1, (global_p > 1 ? global_p - 1 : 1), 1, M, 1, M);
+                    free_matrix(Lw, 1, M, 1, global_r);
+                    free_matrix(B2w, 1, s2, 1, global_r);
+                } else gg[k] = granger_sv;
+            }
+            adm[k] = (okv[k] && gg[k] >= global_rankadm_tol);
+            printf("  %s : %s\n", NM[k], okv[k] ? "ok" : "fallo");
+            vec_shootx(xs, &vs, &ifs, 0, 1);
+            free_matrix(covs, 1, np, 1, np);
+            free_vector(devs, 1, np);
+            free_vector(xs, 1, np);
+        }
+        global_warma = global_mawarma = global_marow = global_matri = 0;
+
+        fprintf(outputv,
+          "\n  spec      npar          logL   term        G     MAmin       B2  adm\n"
+          "  ------------------------------------------------------------------------\n");
+        for (k = 0; k < NS; k++) {
+            const char *tn = (tcv[k] == 1) ? "grad" : (tcv[k] == 2) ? "step"
+                           : (tcv[k] == 3) ? "lower" : (tcv[k] == 0) ? "--" : "gave up";
+            if (!okv[k]) {
+                fprintf(outputv, "  %s  %4d   estimation failed\n", NM[k], npv[k]);
+                continue;
+            }
+            fprintf(outputv, "  %s  %4d %13.4f  %-6s %8.3e %8.3f %8.4f  %s\n",
+                    NM[k], npv[k], ll[k], tn, gg[k],
+                    (mam[k] >= 0.0) ? mam[k] : 0.0, b2v[k],
+                    adm[k] ? "yes" : "NO");
+        }
+
+        fprintf(outputv,
+          "\n  step               LR     df   verdict\n"
+          "  ----------------------------------------------------------------------\n");
+        for (k = 0; k + 1 < NS; k++) {
+            real lr;
+            int df = npv[k+1] - npv[k];
+            if (!okv[k] || !okv[k+1]) {
+                fprintf(outputv, "  %s -> %s   not available\n", NM[k], NM[k+1]);
+                continue;
+            }
+            lr = 2.0 * (ll[k+1] - ll[k]);
+            fprintf(outputv, "  %s -> %s %8.3f %4d   ", NM[k], NM[k+1], lr, df);
+            if (lr < -1.0e-6)
+                fprintf(outputv, "NEGATIVE: the wider fit is worse, so it did "
+                                 "not converge\n");
+            else if (adm[k] && adm[k+1])
+                fprintf(outputv, "chi2 p = %.4f\n",
+                        (df > 0) ? gsl_cdf_chisq_Q(lr, df) : 1.0);
+            else
+                fprintf(outputv, "no p-value: %s is not admissible, so the "
+                                 "statistic is not chi2 (-matest)\n",
+                        adm[k] ? NM[k+1] : NM[k]);
+        }
+
+        fprintf(outputv,
+          "\n  READ THE LAST COLUMN FIRST.  By Theorem 3 of docs/THEORY.md the\n"
+          "  process has cointegrating rank r if and only if\n"
+          "  rank(Lambda_perp' Theta(1)) = M - r, and by Theorem 4 the set where\n"
+          "  that fails lies INSIDE the one the optimiser searches.  A rung with\n"
+          "  a small G is not a worse fit of this model: it is a fit of another\n"
+          "  one, whose rank is not the rank it was estimated at.  Corollary 5.1\n"
+          "  then removes the usual distributions, which is why no chi2 p-value\n"
+          "  is printed for a comparison involving it.  The floor used here is\n"
+          "  %.1e (-rankadm sets it).\n", global_rankadm_tol);
+
         fclose(outputv);
         printf("Done. Output written to %s\n", outputf);
         cleanup_names(outputf, inputf, base_name);
@@ -5186,7 +5389,7 @@ int main(int argc, char *argv[])
             fprintf(outputv,
                 "\nRank condition (Granger): sigma_min(Lambda_perp' Theta(1) "
                 "B_perp) = %.3e\n", granger_sv);
-            if (granger_sv < 1.0e-3)
+            if (granger_sv < global_rankadm_tol)
                 fprintf(outputv,
                   "  *** This is ZERO to working precision, and it is not a\n"
                   "  detail: that matrix is what makes the long-run impact\n"
@@ -5358,7 +5561,7 @@ int main(int argc, char *argv[])
                     fprintf(outputv,
                       "\nRank condition (Granger): sigma_min(Lambda_perp' "
                       "Theta(1) B_perp) = %.3e\n%s", gg,
-                      (gg < 1.0e-3)
+                      (gg < global_rankadm_tol)
                         ? "  *** ZERO to working precision: this fit denies the "
                           "rank it was estimated at.\n"
                         : "  Comfortably away from zero: the fit is a model of "

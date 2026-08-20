@@ -149,8 +149,10 @@ judged on both halves.
    beside them — `10⁻¹⁷` on every case of the bank
    ([HOMOLOGATION.md](HOMOLOGATION.md) §4l). Theorem 6's structure comes out of
    the inversion by itself, which is the check that it was done right.
-2. **The specification ladder in one command**, with the admissibility verdict
-   and no invalid p-values.
+2. ~~**The specification ladder in one command**~~ **Done**: `-specs`, with the
+   admissibility verdict read off the rank condition, no `χ²` p-value for a
+   comparison involving an inadmissible rung, and a negative LR flagged as the
+   non-convergence it is ([HOMOLOGATION.md](HOMOLOGATION.md) §4m).
 3. **Re-measure `-lrtest`** under `-warma` and `-marow` on the bank, against the
    free version and against the bootstrap critical values of §2.3. This is where
    an applied conclusion can actually change.

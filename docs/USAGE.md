@@ -88,6 +88,39 @@ right distribution the restriction is still rejected at 5 % in eight of eleven
 cases. Rejecting it does not endorse the free fit, whose own optimum is
 inadmissible as a rank-`r` I(1) model.
 
+### The specification ladder
+
+| | |
+|---|---|
+| `-specs` | fit `-warma`, `-mawarma`, `-marow`, `-matri` and the free model in one run, and report them side by side |
+
+Five **nested** specifications of `Θ` and the short-run dynamics, from the class
+the theorems cover to the free one, with `npar`, logL, termination, the rank
+condition `G`, the smallest moving-average root, `B̂₂` and an **admissible**
+column. Milan, `p = 2, q = 1, r = 1, case 2`:
+
+```
+  spec      npar          logL   term        G     MAmin       B2  adm
+  warma       9       65.9177  grad   9.969e-01    3.982  -0.6224  yes
+  mawarma    11       81.3133  grad   9.951e-01    2.410  -0.5663  yes
+  marow      12       82.6558  grad   5.215e-01   10.857  -0.6085  yes
+  matri      13       91.7596  lower  8.677e-02    1.000  -0.4552  NO
+  free       14       93.2880  step   8.554e-02    1.000  -0.4475  NO
+```
+
+**Read the last column first.** By Theorem 3 of [THEORY.md](THEORY.md) the
+process has cointegrating rank `r` if and only if `rank(Λ⊥′Θ(1)) = M − r`, and
+by Theorem 4 the set where that fails lies *inside* the one the optimiser
+searches. A rung with a small `G` is not a worse fit of this model — it is a fit
+of a different one, whose rank is not the rank it was estimated at. Corollary
+5.1 then removes the usual distributions, so **no `χ²` p-value is printed for a
+comparison involving such a rung**; `-matest` bootstraps those. A negative LR is
+flagged as what it is: a wider model that did not converge.
+
+The floor for the admissible column is `-rankadm`'s, whose default (0.2) is the
+empty gap between the 0.016–0.133 the degenerate fits give across the whole bank
+and the 0.52–1.00 the admissible ones do.
+
 ### The rank condition
 
 | | |

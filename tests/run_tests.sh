@@ -169,7 +169,8 @@ for o in "-case 1" "-case 2" "-case 3" \
          "-case 2 -mawarma" "-case 1 -mawarma" "-case 2 -mawarma -diagar" \
          "-case 2 -mawarma -fixb2" "-case 2 -marow" "-case 2 -matri" \
          "-case 2 -marow -fixb2" "-case 3 -matri" "-case 2 -warma" \
-         "-case 1 -warma" "-case 3 -warma" "-case 2 -warma -fixb2"; do
+         "-case 1 -warma" "-case 3 -warma" "-case 2 -warma -fixb2" \
+         "-case 2 -rankadm 0.2"; do
     struct_case "M=2 p=2 q=1 r=1 $o" "$MM" 2 1 1 $o
 done
 struct_case "M=2 lrtest case 2"                "$MM" 2 1 0 -case 2 -lrtest
@@ -879,6 +880,42 @@ gg=$(awk '/Rank condition/{print $NF}' "$TMP/case.out")
 if awk -v g="$gg" 'BEGIN{exit !(g > 0.5)}'; then
     ok "warma: the recovered fit satisfies the rank condition ($gg)"
 else bad "warma: rank condition on the recovered fit" "$gg"; fi
+echo
+
+# 5n. -specs: the whole specification ladder in one run.  What is checked is
+#     what cannot go stale: the five models are NESTED, so npar and logL must
+#     both increase along the ladder; the admissibility column has to be read
+#     off the rank condition and not invented; and a chi2 p-value must NOT be
+#     printed for a comparison involving an inadmissible rung, which is the
+#     whole point of the column (docs/THEORY.md, corollary 5.1).
+run data/pairs/milan.inp 2 1 1 -case 2 -mean -specs
+if ! grep -aq "The specification ladder" "$TMP/case.out"; then
+    bad "specs" "no ladder emitted"
+else
+    ok "specs: emitted"
+    lls=$(awk '$2 ~ /^[0-9]+$/ && $NF ~ /^(yes|NO)$/ {print $3}' "$TMP/case.out")
+    nps=$(awk '$2 ~ /^[0-9]+$/ && $NF ~ /^(yes|NO)$/ {print $2}' "$TMP/case.out")
+    if [ "$(printf '%s\n' $lls | wc -l)" != "5" ]; then
+        bad "specs: not five rungs" "$(printf '%s ' $lls)"
+    elif printf '%s\n' $lls | awk 'NR>1 && $1 < prev - 1e-6 {bad=1} {prev=$1} END{exit bad+0}'
+    then ok "specs: logL is monotone along the nesting ($(printf '%s ' $lls))"
+    else bad "specs: logL not monotone" "$(printf '%s ' $lls)"; fi
+    if printf '%s\n' $nps | awk 'NR>1 && $1 <= prev {bad=1} {prev=$1} END{exit bad+0}'
+    then ok "specs: npar increases along the nesting ($(printf '%s ' $nps))"
+    else bad "specs: npar" "$(printf '%s ' $nps)"; fi
+
+    # the free rung on this data is inadmissible, and that must show
+    fa=$(awk '$1=="free" && $NF ~ /^(yes|NO)$/ {print $NF}' "$TMP/case.out")
+    fw=$(awk '$1=="warma" && $NF ~ /^(yes|NO)$/ {print $NF}' "$TMP/case.out")
+    if [ "$fa" = "NO" ] && [ "$fw" = "yes" ]; then
+        ok "specs: the admissibility column separates the rungs (warma yes, free NO)"
+    else bad "specs: admissibility column" "warma=$fw free=$fa"; fi
+
+    # and no chi2 where the theory does not give one
+    if grep -aq "matri   -> free .*no p-value" "$TMP/case.out"; then
+        ok "specs: no chi2 p-value for a comparison with an inadmissible rung"
+    else bad "specs" "it printed a p-value the theory does not license"; fi
+fi
 echo
 
 echo "[6] alpha = A*psi: the restriction, its LR, and its guards"

@@ -29,6 +29,7 @@ The third is the weakest, and it is where the open item lives.
 | `Σ = P D P′` reconstructs `Σ` (M=3) | worst entry **< 1e−5** | ✔ |
 | a `Θ = 0` seed reproduces the cold start | **bit for bit** | ✔ |
 | the two layouts of the same model agree on \|Σ̂\| | within **0.00005** | ✔ |
+| the operator roots against `zroots` (Laguerre, `Root-1.01`, byte-identical in `ART_18.1`) | `1.000262` and `2.486237` against `1.00026` and `2.48624` | ✔ |
 | `-weakex i` equals the equivalent `-alpha` file | **exactly** | ✔ |
 
 ```sh
@@ -1277,6 +1278,37 @@ are admissible. The free VEC fit is the one that disagrees, and it is the one
 whose optimum denies its own rank. That is as far as the measurements go: they
 do not say the triangular class is true, they say the answer stops moving as
 soon as the fit is required to be a model of the rank it claims.
+
+## 4m. The specification ladder, read on four cases
+
+*`-specs`. Step 2 of [SPECIFICATION_PLAN.md](SPECIFICATION_PLAN.md): the five
+nested specifications in one run, with the admissibility column first.*
+
+```
+Milan                              Arévalo
+spec    npar     logL  term      G  MAmin      B2 adm   |  spec      logL      G  MAmin      B2 adm
+warma      9  65.9177  grad  0.997  3.982 -0.6224 yes   |  warma  -14.4221  0.978 14.326 -1.0070 yes
+mawarma   11  81.3133  grad  0.995  2.410 -0.5663 yes   |  mawarma-13.5699  0.962 12.549 -0.9948 yes
+marow     12  82.6558  grad  0.522 10.857 -0.6085 yes   |  marow  -13.4548  0.793  7.806 -1.0043 yes
+matri     13  91.7596  lower 0.087  1.000 -0.4552 NO    |  matri  -11.1788  0.862  1.493 -1.0076 yes
+free      14  93.2880  step  0.086  1.000 -0.4475 NO    |  free    -3.5626  0.057  1.000 -0.6272 NO
+```
+
+**The two regimes of `B̂₂`, now in one table.** On Arévalo every admissible rung
+gives −0.99 to −1.01 and the inadmissible one gives −0.63; on Milan the
+admissible ones give −0.57 to −0.62 and the inadmissible −0.45. The estimate
+does not drift across the ladder — it **jumps** when the fit leaves the class.
+
+**Penn shows the other failure the column is for.** Its `matri` rung fits 41.55
+against the free model's 41.37, so the ladder prints
+`matri -> free  −0.360  NEGATIVE: the wider fit is worse, so it did not
+converge`. A nested model beating the model that contains it is arithmetic, not
+evidence, and the ladder says so rather than ranking them.
+
+**`mink_muskrat` again splits from the pairs.** Four of its five rungs are
+admissible, the free one is not, and the admissible `B̂₂` runs −0.10 to −0.20
+against the free −0.24 — the same shape as the pairs, on a dataset where the
+triangular rung fits 20 units worse.
 
 ## 5. What is not in the register, and why
 

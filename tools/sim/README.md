@@ -12,6 +12,7 @@ experiment behind it is ([HOMOLOGATION.md](../../docs/HOMOLOGATION.md) §4g,
 | `warma_struct.py` | simulates the WARMA process of BVECM Corollary 2 and checks the structure its VEC error must have: `Θ̃₁ = [[Θ₁, Θ₁B₂′],[0,0]]` at 4.4e−16, against 2.0 for the sign-flipped form. Also pins `Λ` for that DGP |
 | `sim_vec.py` | writes a `.inp` from a VEC truth (`B₂ = −0.5`, `Λ = (0.30,0.10)`, `F₁ = 0.2I`, `Θ₁ = θI`) so the program can be asked to recover it |
 | `sim_warma.py` | the same for the WARMA truth, whose VEC representation satisfies Corollary 2 |
+| `zroots_check.c` | the operator roots against the house's own root finder: `zroots` (Laguerre) from `Root-1.01`, byte-identical to the copy in `ART_18.1`. With `M = 2` the moving-average polynomial is scalar, so the two methods can be compared directly — and they agree to six figures on the number the whole admissibility diagnosis rests on |
 
 What they established, in order: the cast is exact; the estimator recovers
 `Θ = 0` when that is the truth; it recovers the **inherited** structure by itself

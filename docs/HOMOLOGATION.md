@@ -1476,6 +1476,233 @@ autoregressive one. What these data reject is the assumption that the
 differenced block carries no moving average of its own — not the assumption that
 the short-run dynamics enter through the cointegrating combination.
 
+## 4q. When is the moving average estimable at all? The separation of the operators
+
+*`tools/sim/ma_identification.py`, four modes. The question: the program
+estimates a free `Θ` badly on the bank and well on some simulated data, and
+nothing in this register said **when**. The candidates were the sample size, the
+number of moving-average parameters, the optimiser, and the proximity of the MA
+root to the unit circle. This section varies the one thing none of those touch.*
+
+### The instrument, and why it is the right one
+
+The DGP is `sim_vec.py`'s — `B₂ = −0.5`, `Λ = (0.30, 0.10)`, `F₁ = 0.2I`,
+`Θ₁ = θI`, `Σ = I` — and its **AR roots do not depend on `θ`**. Measured once,
+with `Θ = 0` and `q = 0` so that nothing is being estimated that is not there:
+
+```sh
+python3 tools/sim/sim_vec.py 20000 0.0 5 /tmp/z.inp
+bin/drvec /tmp/z 2 0 1 -case 1          #  AR (Phi)  3.256  4.850  inf  1.583
+```
+
+So moving `θ` moves the MA root against a **fixed** set of AR roots, and the
+distance between them is the only thing that changes from row to row of the
+table below. That distance is how close the pair `(Φ, Θ)` is to sharing a common
+factor — the left coprimality that Mauricio (2006) and Yap–Reinsel (1995)
+**assume and never impose**, and which
+[DEMOSTRACIONES.md](DEMOSTRACIONES.md) §7 records as assumed by reference.
+
+### The measurement
+
+```sh
+python3 tools/sim/ma_identification.py separation 15
+```
+
+15 replications per cell, `Θ` **free** (`p = 2, q = 1, r = 1, -case 1`), median
+and interquartile range of `Θ̂₁₁` against its truth `θ`:
+
+| `θ` | MA root | distance to nearest AR root | `n` | `Θ̂₁₁` median (IQR) | \|`B̂₂`+0.5\| | on the gate |
+|---|---|---|---|---|---|---|
+| −0.3 | −3.33 | **4.92** | 120 | −0.236 (0.198) | 0.0050 | 7 % |
+| −0.3 | −3.33 | **4.92** | 250 | −0.298 (0.098) | 0.0050 | 0 % |
+| −0.5 | −2.00 | **3.58** | 120 | **−0.496 (0.081)** | 0.0049 | 0 % |
+| −0.5 | −2.00 | **3.58** | 250 | **−0.521 (0.072)** | 0.0046 | 0 % |
+| −0.8 | −1.25 | **2.83** | 120 | **−0.808 (0.115)** | 0.0050 | 27 % |
+| −0.8 | −1.25 | **2.83** | 250 | **−0.807 (0.056)** | 0.0042 | 0 % |
+| 0.4167 | 2.40 | 0.82 | 120 | 0.281 (0.779) | 0.0054 | 60 % |
+| 0.4167 | 2.40 | 0.82 | 250 | 0.249 (1.113) | 0.0045 | 13 % |
+| 0.5 | 2.00 | 0.42 | 120 | 0.274 (0.661) | 0.0055 | 33 % |
+| 0.5 | 2.00 | 0.42 | 250 | 0.233 (1.127) | 0.0045 | 7 % |
+| 0.6 | 1.67 | **0.08** | 120 | 0.217 (0.412) | 0.0052 | 33 % |
+| 0.6 | 1.67 | **0.08** | 250 | 0.286 (1.145) | 0.0041 | 0 % |
+| 0.8 | 1.25 | 0.33 | 120 | 0.453 (0.552) | 0.0082 | 20 % |
+| 0.8 | 1.25 | 0.33 | 250 | 0.615 (0.318) | 0.0047 | 7 % |
+
+**With the operators separated, a completely free 2×2 moving average is
+recovered at `n = 120`**: −0.496 against −0.500, interquartile range 0.081. With
+them close, the same code on the same sample size gives an interquartile range
+of 0.4 to 1.15 and a median displaced by half the parameter.
+
+Three readings the table rules out, and one it leaves standing:
+
+* **not the number of parameters.** Four free moving-average parameters are
+  estimated to three decimals at `n = 120` when they are identified. The
+  `q·M²`-against-`q·r²` count is not what fails.
+* **not the sample size.** `n = 120` succeeds in the separated rows and `n = 250`
+  fails in the close ones.
+* **not the proximity to the unit circle.** `θ = −0.8` puts the true root at
+  1.25, and 27 % of those fits sit on the gate at `n = 120` — with a median
+  estimate of **−0.808 against −0.800**. That is the pile-up effect, and it is
+  **benign**: a good estimate resting on a constraint.
+* **the separation.** Every row with distance ≥ 2.8 has an IQR of 0.06–0.20;
+  every row with distance ≤ 0.82 has 0.32–1.15.
+
+And in **every** row, whatever the moving average does, `|B̂₂ + 0.5| ≈ 0.005`.
+
+### It is not the optimiser
+
+```sh
+python3 tools/sim/ma_identification.py multistart 15
+```
+
+The same cells with `-multistart 20`. In the **separated** rows the medians are
+unchanged to three decimals in five of the six cells (−0.236, −0.298, −0.496,
+−0.521, −0.807; the sixth moves −0.808 → −0.811). In the **close** rows nothing
+is repaired: `θ = 0.5, n = 250` goes 0.233 → 0.236, `θ = 0.6, n = 250` goes
+0.286 → 0.228, `θ = 0.4167, n = 120` goes 0.281 → 0.357. At `n = 4000` on this
+DGP the 20 starts span **60.6 log-likelihood units** and the estimate does not
+move at all.
+
+**And the restarts land on the gate more often, not less** — 7 → 13, 33 → 47,
+13 → 27, 7 → 13 across the close rows. That is Theorem 4 of
+[DEMOSTRACIONES.md](DEMOSTRACIONES.md) showing up as a measurement: the
+likelihood is finite and continuous on `det Θ(1) = 0` and **rewards** it, so
+searching harder finds it more reliably. The optimiser is not failing; it is
+succeeding at maximising something whose maximiser is not the truth.
+
+### And the admissibility statistic does not see it
+
+```sh
+python3 tools/sim/ma_identification.py gap 25
+```
+
+`n = 4000`, free `Θ`, 25 replications, split at the median AR–MA distance:
+
+| half | mean gap | median max error in `Θ̂` | median `G` | median \|`B̂₂`+0.5\| |
+|---|---|---|---|---|
+| smaller gap | 0.0572 | **0.471** | **0.339** | 0.0008 |
+| larger gap | 0.2424 | **0.181** | **0.236** | 0.0006 |
+
+The near-cancelling half has **three times the error and a higher `G`**. The rank
+condition `σ_min(Λ⊥′Θ(1)B⊥)` catches the catastrophic degeneracies — one
+replication in the table has `G = 0.012` with an error of 18.6 — and is blind to
+the ordinary ones, which pass any floor comfortably while the estimate is
+useless. `G` and the separation are two different diagnostics and neither
+substitutes for the other.
+
+### The restricted class does not escape it either
+
+```sh
+python3 tools/sim/ma_identification.py inherited 15
+```
+
+The WARMA truth of BVECM Corollary 2 (`Θ₁ = [[0.50, −0.25],[0, 0]]`), fitted free
+and under the two restrictions. **That DGP is near-cancelling by construction** —
+`sim_warma.py` fixes `φ = 0.6` and the canonical run uses `θ = 0.5`, so the `w`
+block is an ARMA(1,1) with roots 1.67 and 2.00 — which is itself worth recording,
+because it is the instrument this register used to establish the inherited
+structure, and it explains why that needed `n = 8000`.
+
+| `n` | spec | `Θ̂₁₁` median (IQR) | `Θ̂₂₁` median | \|`B̂₂`+0.5\| | smallest MA root | `G` |
+|---|---|---|---|---|---|---|
+| 120 | free | −0.244 (1.716) | 0.282 | 0.0057 | **1.000** | 0.306 |
+| 120 | `-mawarma` | −0.418 (0.366) | 0 | 0.0051 | 1.948 | 0.954 |
+| 120 | `-marow` | −0.341 (0.749) | 0 | 0.0045 | 1.849 | 0.845 |
+| 250 | free | 0.022 (2.940) | −0.022 | 0.0026 | 1.112 | 0.163 |
+| 250 | `-mawarma` | 0.280 (0.830) | 0 | 0.0021 | 2.222 | 0.939 |
+| 250 | `-marow` | 0.388 (1.154) | 0 | 0.0023 | 1.840 | 0.826 |
+| 1000 | free | 0.303 (0.764) | 0.050 | 0.0014 | 1.525 | 0.995 |
+| 1000 | `-mawarma` | 0.220 (0.845) | 0 | 0.0014 | 2.093 | 0.958 |
+| 1000 | `-marow` | −0.047 (0.927) | 0 | 0.0013 | 2.143 | 0.928 |
+
+The truth is `Θ₁₁ = +0.50`. At `n = 120` the restricted fit is tight (IQR 0.366)
+and **centred on the wrong sign**; at `n = 1000` it is at 0.220. The free fit is
+no better and much wider.
+
+`-mawarma` buys **interiority and admissibility** — the smallest MA root never
+approaches the gate and `G` sits at 0.94–0.97, against a free fit that is on the
+gate at `n = 120` with `G = 0.31` — and it does **not** buy a recovered `θ`.
+Under weak identification the restricted class misses its own truth as widely as
+the free one.
+
+### What the bank looks like through this lens
+
+The free fits at `p = 2, q = 1, r = 1`, moduli as the program prints them:
+
+| case | AR | MA | nearest AR–MA gap |
+|---|---|---|---|
+| mink–muskrat | 1.176, 1.176, 1.744 | **1.064**, 0.99995* | 0.11 |
+| Penn | 2.046, 2.046, 3.334 | 0.99997*, **3.161** | 0.17 |
+| Arévalo | 4.031, 1.419, 7.528 | 0.99996*, **1.739** | 0.32 |
+| Aix | 4.048, 1.594, 1.594 | 0.99995*, **3.720** | 0.33 |
+| Milan | 1.996, 1.996, 1.715 | 1.00026, 2.486 | 0.49 |
+| Angers | 1.744, 1.300, 1.300 | 0.99996*, 0.99996* | both on the gate |
+| Strasbourg | 2.821, 2.821, 1.632 | 0.99996*, 8.940 | 0.63 |
+| Utrecht | 1.796, 1.796, 1.419 | 0.99995*, 4.119 | 0.42 |
+| Vienna | 1.893, 1.893, 1.487 | 0.99995*, 12.53 | 0.49 |
+
+**Both mechanisms are present, and the first dominates.** Eight of the nine have
+a root pinned at 0.99995, which is exactly the threshold `chekma` enforces
+(`elfvarma.c`: `ifault = 1` when the companion eigenvalue reaches 1.00005), so
+the gate — not the data — is what stops them there. Four also carry a second MA
+root within 0.11–0.33 of an AR root. Against the simulated table, every one of
+these cases is in the regime where the short-run estimates are not to be read.
+
+### What this settles, and what it does not
+
+**Settles.** The moving-average difficulty is a **weak-identification** problem,
+not a defect of the cast, the engine or the optimiser, and not a consequence of
+leaving `Θ` free. It has a measurable cause — the separation between the roots
+of `Φ̂` and those of `Θ̂` — and that quantity is already computed at every fit by
+`report_operator_roots`. It also splits the invertibility boundary into two
+things that this register had been treating as one: a benign pile-up, where the
+estimate is right and rests on a constraint, and a drift to the nearest edge of a
+flat valley, where it is not.
+
+**Does not settle.** This is one DGP family (`M = 2`, `r = 1`, `p = 2`, `q = 1`),
+15 to 25 replications per cell, and one measure of separation — the smallest
+distance between root moduli, which is a crude proxy for near-non-coprimality and
+ignores the directions the matrix polynomials cancel in. It is an indication with
+a command behind it, not a theorem, and the threshold at which the separation
+becomes dangerous is bracketed here between 0.82 and 2.83 rather than calibrated.
+
+**Where it stands against the external review.**
+[external_review.md](external_review.md) reaches the same conclusion about what
+is *not* at fault — the cast, the engine, the optimiser — and its diagnosis of
+the boundary, resting on Theorems 3 to 5, is the right account of what the
+**bank** shows: eight of nine cases pinned at the gate. What it attributes the
+failure to is narrower than the measurement supports. Its §1.3 makes the defect
+the free `Θ`'s `q·M²` parameters against the class's `q·r²`; the table above
+estimates those four parameters to three decimals at `n = 120` when they are
+identified, and the restricted class misses its own truth when they are not. And
+its S1 — an admissibility floor inside the cast — treats a statistic that the
+`gap` table measures to be **uncorrelated with the error in the ordinary cases
+and higher in the worse half**. The review's S5, the coprimality diagnostic it
+ranks fourth and describes as a report, is the one this section says is
+load-bearing: it is the only proposal that addresses what the measurement
+identifies as the cause, and the quantity it needs is already computed at every
+fit.
+
+**Two caveats on the proofs, found while using them.** The theorems this section
+leans on — T3, C3.2, T4 — were followed step by step and hold. Two places want
+tightening. T4's parenthesis says the gate "rejects only the points strictly
+inside": it rejects what is more than 5·10⁻⁵ inside and admits a thin
+non-invertible layer, which is the margin `chekma` enforces and which the
+external review's H4 states correctly. And T6's necessity argument for (5) is
+informal where the sufficiency argument is not: necessity follows from the direct
+construction only if the VEC representation of a given process is unique, and
+that uniqueness **is** the identification assumption §7 of the same document
+records as assumed by reference. It is repairable by stating the hypothesis; it is
+worth stating because this section is about what happens when it nearly fails.
+
+**And it corrects two readings already in the register.** `tools/sim/README.md`
+described the scatter of `(Λ, Θ)` under a free `Θ` as "the identification problem
+`-mawarma` removes": measured, `-mawarma` removes the boundary and not the
+identification problem. And §4g's inference from the WARMA simulation — that the
+free estimator finds the inherited structure by itself — holds, but on a DGP that
+is near-cancelling by construction and at `n = 8000`; it is weaker evidence about
+the estimator than it reads as.
+
 ## 5. What is not in the register, and why
 
 * **The Census Housing example** of the AddOn (Hillmer & Tiao 1979): the data
@@ -1488,6 +1715,7 @@ the short-run dynamics enter through the cointegrating combination.
 
 ---
 
-*Re-measuring this register is `make test` plus the four commands quoted above.
-If a row moves, either the program changed or the input did — and the second is
-the more frequent cause, so the input should be checked first.*
+*Re-measuring this register is `make test` plus the commands quoted above — the
+four estimation runs, and the four modes of `tools/sim/ma_identification.py` for
+§4q. If a row moves, either the program changed or the input did — and the second
+is the more frequent cause, so the input should be checked first.*

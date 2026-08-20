@@ -4679,6 +4679,52 @@ int main(int argc, char *argv[])
      *  regresion condicional es el que hay.  Y si el perfilado no sale, lo que
      *  queda es exactamente la ruta (C), sin ninguna ruta intermedia inventada:
      *  o cruza entero o no cruza.                                            */
+    /*  -warma: un arranque ADMISIBLE, encogiendo el bloque autorregresivo.
+     *
+     *  El mismo muro de -seedgate por otro lado: la regresion que siembra los
+     *  coeficientes de W_{t-k} puede dar un Phi* no estacionario, y entonces
+     *  est no arranca siquiera ("bad initial estimates") y no hay ajuste, que
+     *  es lo que pasaba en mink_muskrat.  Se recorre una escalera de factores
+     *  sobre ESE bloque -- la direccion la dan los datos, la escala la
+     *  admisibilidad -- y se arranca en el primero que el motor acepta.  Con
+     *  factor 0 el sistema es Ybar_t = A*_t, trivialmente estacionario, asi que
+     *  la escalera siempre termina.                                          */
+    if (global_warma) {
+        static const real shr[6] = { 1.0, 0.8, 0.5, 0.3, 0.1, 0.0 };
+        int nmean_, nlam_, nmid_, ntail_, nf_w = (global_p > 1) ? global_p - 1 : 0;
+        int nar, i2, mi;
+        real *ar0;
+        struct Tvarma vt;
+        int ift = 0;
+
+        par_blocks(&nmean_, &nlam_, &nmid_, &ntail_);
+        nar = nlam_ + nf_w * nser * global_r;
+        ar0 = vector(1, (nar > 0 ? nar : 1));
+        for (i2 = 1; i2 <= nar; i2++) ar0[i2] = x[nmean_ + i2];
+        vt.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
+        vec_shootx(x, &vt, &ift, 1, 0);
+        for (mi = 0; mi < 6; mi++) {
+            real pi1, pi2, pi3;
+            int ifev = 0, ifc = 0;
+            for (i2 = 1; i2 <= nar; i2++) x[nmean_ + i2] = shr[mi] * ar0[i2];
+            vec_shootx(x, &vt, &ifc, 0, 0);
+            if (ifc != 0) continue;
+            elf(vt.m, vt.n, vt.p, vt.q, vt.mu, vt.phi, vt.theta, vt.qq, vt.w,
+                1.0, vt.xitol, TRUE, vt.a, &pi1, &pi2, &pi3, &ifev);
+            if (ifev == 0) break;
+        }
+        if (mi > 0 && mi < 6 && !quiet_mode)
+            printf("  -warma: arranque encogido a x%.1f para que sea admisible\n",
+                   shr[mi]);
+        if (mi >= 6) {
+            fprintf(outputv, "\n-warma: no admissible starting point was found "
+                             "even with the autoregressive block at zero.\n");
+            for (i2 = 1; i2 <= nar; i2++) x[nmean_ + i2] = 0.0;
+        }
+        vec_shootx(x, &vt, &ift, 0, 1);
+        free_vector(ar0, 1, (nar > 0 ? nar : 1));
+    }
+
     if (global_seedb2) {
         int nmean_, nlam_, nmid_, ntail_, i2;
         par_blocks(&nmean_, &nlam_, &nmid_, &ntail_);
@@ -4814,8 +4860,14 @@ int main(int argc, char *argv[])
              *  con -seedgate esa es el punto perfilado, que ya esta en x, y
              *  volver a llamar a init_guess aqui mediria la ruta (C) con una
              *  etiqueta equivocada.                                           */
-            if (gate_seed_ok) { for (i2 = 1; i2 <= npar; i2++) xtry[i2] = x[i2]; }
-            else init_guess(xtry, npar);
+            /*  Con -warma pasa lo mismo que con -seedgate: el punto de
+             *  partida bueno es el que ya esta en x -- encogido hasta ser
+             *  admisible --, y volver a llamar a init_guess aqui devolveria el
+             *  crudo, que el motor rechaza.  Medido: en mink_muskrat solo 2 de
+             *  20 arranques convergian por eso.                              */
+            if (gate_seed_ok || global_warma) {
+                for (i2 = 1; i2 <= npar; i2++) xtry[i2] = x[i2];
+            } else init_guess(xtry, npar);
             if (k > 0) {
                 /* Jitter multiplicativo sobre la semilla, en una escalera de
                    amplitud que depende SOLO de k y no de n.  Eso hace el

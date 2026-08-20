@@ -10,6 +10,12 @@
 #
 #   tools/measure_seeding_bank.sh [opciones extra para drvec]
 #
+# Las rutas medidas con el, y donde estan sus tablas:
+#   (sin opcion)  la siembra fria, ruta (C)          HOMOLOGATION.md 4b
+#   -seedgate     perfilar sobre el peldano r = 0    HOMOLOGATION.md 4c
+#   -seedjoh      la semilla canonica de Johansen    HOMOLOGATION.md 4e
+#   -warma        la parametrizacion triangular      HOMOLOGATION.md 4l
+#
 # Cinco cantidades por corrida, que son las que el plan 7 fija:
 #
 #   logL0   la verosimilitud EN EL PUNTO DE PARTIDA (-eval).  Es lo que separa

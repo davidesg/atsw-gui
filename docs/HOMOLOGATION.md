@@ -1194,6 +1194,47 @@ not — the conditioning difference of
 [ESTUDIO_BVECM_vs_DRVEC.md](ESTUDIO_BVECM_vs_DRVEC.md) §3.1, now with a number
 on it.
 
+### The bank, with `-multistart 20`
+
+Same instrument as §4b and §4c, `tools/measure_seeding_bank.sh -warma`, five
+seconds for the lot:
+
+| case | logL₀ | logL | term | best/20 | logL spread | (C)'s spread | MAmin |
+|---|---|---|---|---|---|---|---|
+| Milan | 16.526 | 65.918 | grad | 6 (17 ok) | **0.000** | 0.435 | 3.98 |
+| Strasbourg | −32.182 | 22.428 | grad | 1 (19 ok) | 0.985 | 2.113 | 25.06 |
+| Utrecht | 30.834 | 65.905 | grad | 8 | **0.056** | 0.539 | 6.97 |
+| Vienna | −65.931 | 20.275 | grad | 2 (19 ok) | 1.323 | 4.688 | 1.93 |
+| Aix | 55.410 | 61.198 | grad | 2 | **0.000** | 0.929 | 1.35 |
+| Arévalo | −41.289 | −14.422 | grad | 17 | 4.017 | 2.761 | 14.33 |
+| Angers | −11.860 | 18.196 | grad | 7 | 1.944 | 8.725 | 1.00 |
+| Penn | −9.432 | 30.092 | grad | 8 | **0.306** | 18.688 | 18.07 |
+| `mink_muskrat` c1 | −347.847 | −179.321 | lower | 11 | 190.653 | 15.259 | 1.000 |
+| `mink_muskrat` c2 | −203.382 | −13.737 | step | 11 | 179.239 | 15.329 | 1.000 |
+| `mink_muskrat` c3 | −203.098 | −36.438 | lower | 13 | 175.140 | 16.774 | 1.000 |
+
+**On the eight pairs the surface is a different object.** Seven of the eight
+spreads are smaller than route (C)'s, and on Milan and Aix the spread is
+**exactly zero** — every one of the converged starts lands on the same point,
+which is the definition of a well-behaved surface the multi-start block prints
+for itself. Penn goes from a spread of 18.7 to 0.31. And the starting point no
+longer matters: `logL₀` is 30 to 90 units below the optimum on several of them
+(the seed is shrunk until admissible, which throws it far) and the fit converges
+on the gradient anyway. Under the free parameterisation a start that bad decides
+the answer.
+
+**And on `mink_muskrat` the class simply does not fit.** Not a seeding artefact:
+the fits converge (11 to 13 of 20 usable starts, all 20 admissible once the
+multi-start jitters the shrunk seed rather than the raw one) and land at −179,
+−14 and −36 against the free fits' 3.7, 6.5 and 6.5. The triangular class, which
+carries the wheat pairs comfortably, is wrong for the predator–prey data — where
+Johansen and `drvec` already disagreed about `B₂` (§4e), and where the register
+has recorded a hard surface since the beginning.
+
+That split is worth more than an average would be: the specification the
+theorems cover works where the theorems were aimed, and fails visibly where it
+does not apply, instead of degrading quietly everywhere.
+
 ### Where this leaves the specification question
 
 Three routes now put `B̂₂` in the same region — the canonical estimator, the

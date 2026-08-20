@@ -262,15 +262,47 @@ representations, and that criterion is:
 | the paper's own CML column | 0.002312 | agrees with the target |
 | Chan & Wallis (1978), AR(4)+MA(1) | 0.00246 | calibrates magnitude; **not** the target — different model, different sample |
 | `drvec`, four equivalent configurations, one start | 0.00246 – 0.00251 | agree with each other, ~8 % above |
-| **`drvec`, the same four with `-multistart 60`** | **0.002344 – 0.002358** | **spread 0.000014, and 1.6 % above** |
+| **`drvec`, the same four with `-multistart 60`** | **0.002344 – 0.002372** | **spread 0.000028, and 1.9 % above** |
+
+> **Re-measured on 2026-08-20, and one of the four figures was wrong.** The
+> program now prints `|Σ̂|` itself (P2 of `PLAN_PRODUCCION.md`); until then it had
+> to be computed by hand from a matrix rounded to six decimals, which is where
+> this row lost a digit. The four, with the commands that produce them — note
+> `-mafree`, because the default class changed in §4r and these figures belong to
+> the free one:
+>
+> ```sh
+> bin/drvec datasets/mauricio/mink_muskrat 2 1 1 -case 2 -mafree -multistart 60
+> bin/drvec datasets/mauricio/mink_muskrat 2 1 1 -case 3 -mafree -multistart 60
+> bin/drvec <legacy> 2 1 1 -case 2 -differenced -mafree -multistart 60
+> bin/drvec <legacy> 2 1 1 -case 3 -differenced -mafree -multistart 60
+> ```
+>
+> | configuration | recorded | re-measured |
+> |---|---|---|
+> | levels, case 2 | 0.002346 | **0.002372** ✘ |
+> | levels, case 3 | 0.002347 | 0.002347 ✔ |
+> | legacy, case 2 | 0.002344 | 0.002344 ✔ |
+> | legacy, case 3 | 0.002358 | 0.002358 ✔ |
+>
+> Three of the four reproduce **to the digit**. The `legacy` layout is derived
+> from `mink_muskrat.csv` exactly as the suite derives it, so the earlier guess
+> that those two rows needed an input that no longer exists was wrong — they
+> reproduce fine. Only `levels, case 2` does not, and it has not reproduced since
+> the beta close either: the binary rebuilt at `e6a9431` gives the same
+> 0.002372. The recorded 0.002346 is therefore a transcription error, corrected
+> above, and the criterion is slightly weaker than it was written to be —
+> spread 0.000028 rather than 0.000014, level 1.9 % rather than 1.6 %. The
+> qualitative conclusion does not move. The suite now carries these four as a
+> `SLOW=1` regression so the figure cannot drift again unnoticed.
 
 The single-start row is what the program reports by default, and is the
 appropriate figure for a single unattended run. The multi-start row is what it gives when asked to look
 properly, and it is the one to quote: the spread across four mathematically
-equivalent set-ups collapses to 0.000014 and the level lands within 1.6 % of the
+equivalent set-ups collapses to 0.000028 and the level lands within 1.9 % of the
 global-search reference.
 
-Not closed, and the residue is stated: 0.002346 against 0.002311 with the
+Not closed, and the residue is stated: 0.002355 (the mean of the four) against 0.002311 with the
 invertibility gate, or 0.002294 without it. Both `drvec` and the reference stop
 *at* that gate — measured, `max|λ(Θ₁)| = 1.000050` in both — so what separates
 them is which point of the boundary is reached, not the boundary itself.

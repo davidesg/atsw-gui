@@ -6734,6 +6734,43 @@ int main(int argc, char *argv[])
             fprintf(outputv, "\n");
         }
 
+        /*  P2 — |Sigma| ES EL CRITERIO DE HOMOLOGACION DE ESTE PROGRAMA y hasta
+         *  el 2026-08-20 no lo imprimia: habia que sacarlo a mano de la matriz
+         *  de arriba, redondeada a seis decimales, y esa aritmetica manual es
+         *  precisamente donde el registro perdio la pista de tres de las cuatro
+         *  filas de su criterio de salida de beta.  Un programa que declara un
+         *  criterio y no lo emite obliga a que otro lo calcule, y el que lo
+         *  calcula se equivoca.  Ver docs/PLAN_PRODUCCION.md P2.
+         *
+         *  Se da tambien log|Sigma|, que es lo que entra en la verosimilitud y
+         *  lo unico legible cuando |Sigma| se va a 1e-30 con M grande.        */
+        {
+            real **Sm = matrix(1, nser, 1, nser);
+            real d1 = 0.0, d2 = 0.0; int ifd = 0;
+            for (int i = 1; i <= nser; i++)
+                for (int j = 1; j <= nser; j++)
+                    Sm[i][j] = varma1.sigma2 * (j <= i ? Qm[i][j] : Qm[j][i]);
+            choldcp(Sm, nser, &d1, &d2, &ifd);
+            if (ifd == 0) {
+                /*  choldcp deja el determinante como d1 * 2^d2 -- la mantisa y
+                 *  el exponente por separado, para no desbordar --, y acumula
+                 *  YA los cuadrados de la diagonal del factor (nlatools.c:
+                 *  `*d1 *= mat[j][j] * mat[j][j]`), de modo que eso ES det(Sigma)
+                 *  y no el de su factor.  Elevarlo al cuadrado otra vez daba
+                 *  6.06e-06 donde el registro tiene 0.002461, que es su
+                 *  cuadrado exacto: la primera version de esta linea lo hizo.  */
+                real logdet = log(fabs(d1)) + d2 * log(2.0);
+                fprintf(outputv, "  |Sigma| = %.10g      log|Sigma| = %.6f\n",
+                        exp(logdet), logdet);
+                if (!quiet_mode)
+                    printf("  |Sigma| = %.10g\n", exp(logdet));
+            } else {
+                fprintf(outputv, "  |Sigma|: not computed (Sigma is not "
+                                 "positive definite here)\n");
+            }
+            free_matrix(Sm, 1, nser, 1, nser);
+        }
+
         /* ---- Triangularizacion Sigma = P D P' ----------------------------- */
         /* Descomposicion LDL' de la covarianza de innovaciones: P unitriangular
            inferior, D diagonal.  Con A_t = P A*_t, las innovaciones A*_t estan

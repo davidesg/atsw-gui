@@ -48,6 +48,9 @@
 #                   fill the case-3 gap where the asymptotic tables have none.
 #   8. ROOTS        the AR/MA roots at the optimum, the invertibility boundary
 #                   they can sit on, and the q>=2 heap-corruption regression.
+#   8g. |Sigma|     the beta exit criterion, on the four equivalent
+#                   configurations.  OPT-IN (SLOW=1): it needs -multistart 60
+#                   four times over.
 #   9. MEMORY       valgrind over the main paths.  OPT-IN (VALGRIND=1) so the
 #                   suite is deterministic anywhere.  It has already caught two
 #                   real leaks: the multi-start block, and the seeding buffers,
@@ -1768,6 +1771,60 @@ if [ "$ll_a" != "$ll_c" ]; then
     ok "and refactor 1 with omega 2.5 differs, so the check bites ($ll_c)"
 else bad "refactor control" "the negative control gave the same fit"; fi
 echo
+
+# 8g. |Sigma| SOBRE LAS CUATRO CONFIGURACIONES EQUIVALENTES.  OPT-IN (SLOW=1).
+#
+#     Es el criterio 2 de salida de beta, y hasta el 2026-08-20 no tenia
+#     regresion: los dorados cubrian solo el arranque unico, de modo que la
+#     cifra sobre la que se declaro cerrada la beta podia moverse sin que nada
+#     lo dijera -- y una de las cuatro estaba mal transcrita justamente por eso.
+#     Ahora el programa imprime |Sigma| el mismo, asi que la comprobacion no
+#     depende de que nadie multiplique a mano una matriz de seis decimales.
+#
+#     Va con -mafree: estas cifras son de la CLASE LIBRE, que era el defecto
+#     cuando se midieron.  Y con -multistart 60, que es lo que tarda: fuera del
+#     camino por defecto para que `make test` siga siendo de segundos.
+#
+#         SLOW=1 make test
+if [ "${SLOW:-0}" = "1" ]; then
+    echo "[8g] |Sigma| on the four equivalent configurations (SLOW)"
+    #  El layout antiguo se DERIVA del csv, igual que $MMOLD mas arriba: no
+    #  hace falta el .inp pre-diferenciado que se regenero en 2026-08-17.
+    sig_of() {   # sig_of <inp> <args...>
+        cp "$1" "$TMP/sig.inp"; shift
+        timeout 1800 "$DRVEC" "$TMP/sig" 2 1 1 "$@" -mafree -multistart 60 \
+            >/dev/null 2>&1
+        awk '/\|Sigma\| =/{print $3; exit}' "$TMP/sig.out"
+    }
+    sig_case() {  # sig_case <label> <expected> <inp> <args...>
+        local label=$1 want=$2 inp=$3; shift 3
+        local got; got=$(sig_of "$inp" "$@")
+        if [ -z "$got" ]; then bad "|Sigma| $label" "not reported"
+        elif awk -v a="$got" -v b="$want" 'BEGIN{d=a-b; if(d<0)d=-d; exit !(d<=5e-7)}'
+        then ok "|Sigma| $label = $got"
+        else bad "|Sigma| $label" "got $got, expected $want"; fi
+    }
+    sig_case "levels case 2" 0.002372325 "$MM"    -case 2
+    sig_case "levels case 3" 0.002347236 "$MM"    -case 3
+    sig_case "legacy case 2" 0.002344044 "$MMOLD" -case 2 -differenced
+    sig_case "legacy case 3" 0.002358310 "$MMOLD" -case 3 -differenced
+
+    #  Y lo que el criterio dice de verdad: que las cuatro CONCUERDAN.  Un
+    #  dorado por separado no lo comprueba -- podrian moverse las cuatro a la
+    #  vez --, y la concordancia es la mitad del criterio.
+    a=$(sig_of "$MM" -case 2);    b=$(sig_of "$MM" -case 3)
+    c=$(sig_of "$MMOLD" -case 2 -differenced)
+    d=$(sig_of "$MMOLD" -case 3 -differenced)
+    if awk -v w="$a" -v x="$b" -v y="$c" -v z="$d" 'BEGIN{
+          mx=w; mn=w
+          for (v in a) {}
+          if (x>mx) mx=x; if (y>mx) mx=y; if (z>mx) mx=z
+          if (x<mn) mn=x; if (y<mn) mn=y; if (z<mn) mn=z
+          exit !(mx-mn <= 3.5e-5) }'; then
+        ok "the four agree to 3.5e-5 or better"
+    else bad "|Sigma| spread" "$a $b $c $d"; fi
+    echo
+fi
 
 # ================================================== 9 MEMORY (opt-in) ==
 # Off by default so `make test` is deterministic on any machine; run it with

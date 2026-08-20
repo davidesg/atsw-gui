@@ -1,0 +1,39 @@
+name: urca_Raotbl2 
+source: Dickey, Jansen & Thornton (1994), Rao Ch.2 Table D.2 
+description: Rao (1994) 'Cointegration for the Applied Economist', Table D.2 
+n_obs: 144  n_vars: 4 
+vars: m1p, m2p, mbp, nm1m2p 
+K(lag order): 2  ecdet: const  spec: longrun 
+
+TRACE TEST (H0 r=0 ... r<=m-1, from largest to smallest eigenvalue)
+[1]   4.864523  28.155730  60.920582 110.354023
+trace critical values (10pct, 5pct, 1pct)
+         10pct  5pct  1pct
+r <= 3 |  7.52  9.24 12.97
+r <= 2 | 17.85 19.96 24.60
+r <= 1 | 32.00 34.91 41.07
+r = 0  | 49.65 53.12 60.16
+
+EIGEN (max) TEST
+[1]  4.864523 23.291207 32.764852 49.433441
+eigen critical values
+         10pct  5pct  1pct
+r <= 3 |  7.52  9.24 12.97
+r <= 2 | 13.75 15.67 20.20
+r <= 1 | 19.77 22.00 26.81
+r = 0  | 25.56 28.14 33.24
+
+cointegration vectors (beta, columns), normalized:
+             m1p.l2    m2p.l2    mbp.l2  nm1m2p.l2  constant
+m1p.l2     1.000000  1.000000  1.000000  1.0000000  1.000000
+m2p.l2    -4.528403  5.069540 -2.124573 -2.4281960  3.815356
+mbp.l2     0.599183 -3.660917 -1.234388  0.7144669 -5.075793
+nm1m2p.l2  3.184373 -2.573131  1.527116  1.3161514 -1.595384
+constant   1.832492 -6.757805  5.378797 -1.1770453  2.884290
+
+loading matrix (alpha):
+               m1p.l2     m2p.l2       mbp.l2    nm1m2p.l2      constant
+m1p.d     0.005698502 0.05112041 -0.003477467 -0.026348428  7.925761e-13
+m2p.d     0.004009072 0.02056938  0.010792914 -0.023340230 -1.494830e-14
+mbp.d     0.010114400 0.05188636  0.005610389 -0.007953997 -2.184408e-13
+nm1m2p.d -0.003210269 0.01173772  0.017468887 -0.022884976 -4.644576e-14

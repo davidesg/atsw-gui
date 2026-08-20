@@ -1,0 +1,44 @@
+DRVEC — VEC(1) EML Estimation (Mauricio 2006)
+==============================================
+
+Input  : data/AL.inp
+M = 2, r = 1, s = M-r = 1
+Stationary VARMA(2,0) on Ȳ_t
+Case   : 2
+Layout : legacy, cols 1..s pre-differenced (-differenced) (67 of 67 observations used)
+
+=============================================================
+  OPTIMIZER CONVERGED after 103 iterations
+  Objective function = 0.011875690700
+  Convergence criterion: norm of scaled gradient <= gradtol
+=============================================================
+
+
+ESTIMATION SUCCESSFUL (ifault=0)
+sigma2 :    0.4594489583
+logelf : -318.8131395273
+
+VEC model (Mauricio 2006):
+  (I - F1 L - ... - F_{p-1} L^{p-1}) nabla Y_t =
+      -Lambda (B' Y_{t-1} - E[W_t]) + (I - Theta1 L - ...) A_t
+
+E[W] =
+    -73.384913  (sd =   0.929586)
+Lambda (M x r) =
+      0.159556
+      0.987674
+F[1] (M x M) =
+      0.045705   -0.007199
+     -5.736095   -0.662760
+Q (M x M, lower triangle; Q[1][1] = 1 by normalisation) =
+      1.000000
+      5.516883  238.131741
+Sigma = sigma2 * Q  (innovation covariance of A_t) =
+      0.459449
+      2.534726  109.409380
+B2 (s x r) =
+     -0.279997
+
+Cointegration matrix B = [I_r; B2] (M x r) :
+  row 1:     1.000000
+  row 2:    -0.279997

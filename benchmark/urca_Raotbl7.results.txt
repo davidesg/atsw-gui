@@ -1,0 +1,39 @@
+name: urca_Raotbl7 
+source: Otto (1994), Rao Ch.6 Table D.6 
+description: Rao (1994) 'Cointegration for the Applied Economist', Table D.7 
+n_obs: 132  n_vars: 4 
+vars: m1, p, gdp, r 
+K(lag order): 2  ecdet: const  spec: longrun 
+
+TRACE TEST (H0 r=0 ... r<=m-1, from largest to smallest eigenvalue)
+[1]   5.738003  17.266381  66.168138 149.886564
+trace critical values (10pct, 5pct, 1pct)
+         10pct  5pct  1pct
+r <= 3 |  7.52  9.24 12.97
+r <= 2 | 17.85 19.96 24.60
+r <= 1 | 32.00 34.91 41.07
+r = 0  | 49.65 53.12 60.16
+
+EIGEN (max) TEST
+[1]  5.738003 11.528378 48.901756 83.718426
+eigen critical values
+         10pct  5pct  1pct
+r <= 3 |  7.52  9.24 12.97
+r <= 2 | 13.75 15.67 20.20
+r <= 1 | 19.77 22.00 26.81
+r = 0  | 25.56 28.14 33.24
+
+cointegration vectors (beta, columns), normalized:
+                 m1.l2          p.l2        gdp.l2          r.l2      constant
+m1.l2     1.000000e+00     1.0000000  1.000000e+00  1.000000e+00  1.000000e+00
+p.l2     -2.226592e+04 71648.8730569 -2.381991e+04 -1.642958e+04 -7.356258e+03
+gdp.l2   -3.460564e-02    -0.9918856 -1.215191e-02 -5.945782e-02 -6.741702e-02
+r.l2      1.181214e+03  7753.1645556  2.056803e+01  1.465770e+02  1.703377e+01
+constant  1.328257e+03 35765.4107684  2.871162e+03  9.671940e+03  6.632301e+03
+
+loading matrix (alpha):
+              m1.l2          p.l2        gdp.l2          r.l2      constant
+m1.d  -7.261781e-02 -2.213555e-03  3.098581e-02 -1.900347e-02 -5.236822e-16
+p.d    1.069837e-06 -1.761504e-08  7.918568e-07 -7.671619e-08  3.161377e-20
+gdp.d -4.786488e-01 -2.177288e-02 -1.388355e-01  1.901670e-01 -5.730699e-15
+r.d   -1.689058e-04  6.874292e-06  1.880328e-04  6.135451e-05  5.841066e-18

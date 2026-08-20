@@ -309,8 +309,8 @@ deterministic perturbations so a result can be reproduced.
 
 | | one start | `-multistart 60` |
 |---|---|---|
-| four equivalent configurations | 0.00246 – 0.00251 | **0.002344 – 0.002358** |
-| spread | 0.000048 | **0.000014** |
+| four equivalent configurations | 0.00246 – 0.00251 | **0.002344 – 0.002372** |
+| spread | 0.000048 | **0.000028** |
 | above the reference (0.002311) | +7 % | **+1.6 %** |
 
 **And a design defect the measurement caught.** The first version scaled the
@@ -1065,7 +1065,7 @@ reason. Not yet fixed; recorded.
 | | |
 |---|---|
 | the published EML log-likelihoods of Table 5 | not reproduced; localised, not closed |
-| `\|Σ̂\|` in level | 0.002346 with `-multistart 60` against 0.002311, i.e. 1.6 % — substantially closed, not exactly met |
+| `\|Σ̂\|` in level | 0.002355 with `-multistart 60` against 0.002311, i.e. 1.9 % — substantially closed, not exactly met. Re-measured 2026-08-20; one of the four figures was a transcription error ([HOMOLOGATION.md](HOMOLOGATION.md)) |
 | termcode 3 | explained and measured, not eliminated — see [CONVERGENCE.md](CONVERGENCE.md) |
 | the choice of the `Y₁` block | not diagnosed; the user's responsibility, and currently unchecked |
 | finite-sample critical values for the rank test | asymptotic only, and now **measured**: over 60 replications of a true r = 1 process at n = 120 the asymptotic test picks the right rank 68 % of the time and over-rejects 30 % — six times its nominal 5 %. `-bootstrap` improves that to 78 %/20 % (paired, all 6 discordant pairs its way, McNemar p = 0.031) but does not fix it |

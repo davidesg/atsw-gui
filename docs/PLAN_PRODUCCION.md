@@ -254,15 +254,35 @@ modo que **los 15 `benchmark/*.results.txt`** —la referencia externa de
 `data/*.out` **no están versionados**. El documento cita ficheros que no viajan
 con el repositorio.
 
-### Qué se construye (P2)
+### Qué se construye (P2) — **HECHO el 2026-08-20**
 
-1. `drvec` imprime `|Σ̂|` (y `log|Σ̂|`) en el `.out`, junto a `Σ`.
-2. Se rehacen las cuatro filas con el comando exacto escrito al lado de cada
-   una, sobre ficheros que estén en el repositorio; si una configuración exige
-   una entrada que ya no existe, se retira de la tabla y se dice.
-3. Bloque `SLOW=1` en la batería con el `|Σ̂|` de las configuraciones que queden,
-   como valor dorado.
-4. Excepciones en `.gitignore` para `benchmark/*.results.txt` y `data/*.out`.
+1. **✔** `drvec` imprime `|Σ̂|` y `log|Σ̂|` en el `.out` y en la terminal, junto a
+   `Σ`. Comprobado contra el cálculo a mano: 0.002461005 frente a 0.002461007,
+   que es la precisión de la matriz impresa. *(Y la primera versión de esa línea
+   elevaba el determinante al cuadrado, porque `choldcp` ya acumula los
+   cuadrados de la diagonal del factor de Cholesky; se vio porque daba
+   6.06e−06, que es exactamente el cuadrado del valor del registro.)*
+2. **✔** Rehechas las cuatro filas, con el comando al lado. **Tres reproducen a
+   la cifra**; la cuarta —«niveles caso 2»— no, y tampoco reproducía desde el
+   cierre de beta: el binario reconstruido en `e6a9431` da lo mismo que hoy. Era
+   un error de transcripción, corregido en los tres documentos donde vivía. La
+   hipótesis anterior —que las dos filas «antiguo» necesitaban un fichero
+   desaparecido— **era falsa**: el layout antiguo se deriva del `.csv` igual que
+   ya hacía la batería.
+3. **✔** Bloque `[8g]`, opt-in con `SLOW=1`: las cuatro cifras y, además, que
+   **concuerden** — cuatro valores moviéndose a la vez pasarían una comprobación
+   valor a valor.
+4. **✔** `.gitignore` con excepciones: entran los 16 `benchmark/*.results.txt`
+   —la referencia externa de `urca::ca.jo` que `benchmark/README.md` cita como
+   nivel «Reproduced»— y los 11 `data/*.out`. Comprobado que las salidas
+   transitorias siguen ignorándose.
+
+**Lo que costó, y es el resultado de fondo:** el criterio queda algo más débil
+de lo que estaba escrito — dispersión 0.000028 en vez de 0.000014, nivel 1.9 %
+en vez de 1.6 % — y la conclusión cualitativa no se mueve. La causa de que se
+perdiera la pista está identificada y cerrada: el programa declaraba un criterio
+y no lo emitía, así que alguien tenía que multiplicar a mano una matriz
+redondeada a seis decimales, y quien lo hace se equivoca.
 
 **Criterio de salida de P2:** cada cifra de `HOMOLOGATION.md` tiene al lado el
 comando que la produce, ese comando corre sobre el repositorio limpio, y da la
@@ -680,7 +700,7 @@ publicar mientras siga estando escrito con esta claridad:
 
 ## 9. Orden y por qué
 
-**P1 (hecha) → P4 (hecha) → P5 (hecha) → P2 → P3 → P6 → (P7 idioma) → (P8 refactor).**
+**P1 (hecha) → P4 (hecha) → P5 (hecha) → P2 (hecha) → P3 → P6 → (P7 idioma) → (P8 refactor).**
 
 El orden cambió el 2026-08-20, y el motivo es el requisito 6 de §0.
 

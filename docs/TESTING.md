@@ -1,7 +1,7 @@
 # The test suite: what it protects, measured
 
-*`tests/run_tests.sh`, run by `make test`. 217 checks, and 227 with the opt-in
-memory block. The claim that a suite
+*`tests/run_tests.sh`, run by `make test`. 217 checks, 227 with the opt-in
+memory block and 222 with the opt-in slow one. The claim that a suite
 "protects" something is worth nothing unless it is measured, so it is measured
 by mutation: real defects are put back and the failures counted.*
 
@@ -21,6 +21,7 @@ by mutation: real defects are put back and the failures counted.*
 | **6. interpretation** | `α = Aψ`: `-weakex` and the equivalent `-alpha` file must agree exactly; the restricted fit cannot beat the free one; a rank-deficient `A` is refused before estimating; `Σ = P D P′` must reconstruct `Σ`; multi-start must be monotone; the convergence note must agree with the optimiser's banner; and the normalisation alarm is checked in **both** directions |
 | **7. known truth** | the rank test on data generated to have a known rank — every other check of `-lrtest` compares against another program's answer, these compare against the truth |
 | **8. roots and the boundary** | the moduli of the estimated AR and MA roots, and the invertibility boundary the likelihood enforces. Two things: that a model with `q ≥ 2` estimates at all, which is the regression for the allocation defect that made it abort ([SUITE_INTEGRATION.md](SUITE_INTEGRATION.md) §5); and that the unit-root alarm and the `-fdhess` boundary diagnosis fire where the optimum binds and stay silent where it does not — an alarm with no negative case is not an alarm |
+| **8g. \|Σ̂\|** | the beta exit criterion — `\|Σ̂\|` on the four equivalent configurations, each with `-multistart 60`. Opt-in with `SLOW=1`, because it is minutes rather than seconds. It exists because that criterion had **no** regression: the golden values cover single starts only, so the figure the beta was closed on could drift unseen, and one of its four rows had in fact been mis-transcribed. Both halves are checked — the four values and the fact that they **agree**, since four values drifting together would pass a per-value check |
 | **9. memory** | valgrind over the main paths; opt-in, see §3b |
 | **10. the specification** | the five nested specifications of `Θ` are checked for what cannot go stale: the structural zeros are exactly zero, `T₁₂ = T₁₁B₂′` where the structure determines it, logL and `npar` are monotone along the nesting, the two parameterisations of the same class reach the same optimum at `p = 1` **to nine decimals through casts that share no code**, and the inverse map's residual is machine zero |
 | **11. admissibility** | `σ_min(Λ⊥′Θ(1)B⊥)` is reported at every fit; the constraint binds where the free fit sits below it; constraining the alternative cannot raise the rank statistic; and the terminal notice fires on an inadmissible fit and **stays silent on an admissible one**, because a warning that fires on everything is not a warning |

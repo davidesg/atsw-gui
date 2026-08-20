@@ -1,0 +1,30 @@
+name: urca_UKpppuip 
+source: Johansen, S. and Juselius, K. (1992), J. Econometrics 53, 211-244 
+description: UK PPP + UIP, quarterly 1971:Q1-1987:Q2 
+n_obs: 62  n_vars: 7 
+vars: p1, p2, e12, i1, i2, doilp0, doilp1 
+K(lag order): 2  ecdet: const  spec: longrun 
+
+TRACE TEST (H0 r=0 ... r<=m-1, from largest to smallest eigenvalue)
+[1] NA NA NA NA NA NA NA
+trace critical values (10pct, 5pct, 1pct)
+     [,1] [,2] [,3]
+[1,]   NA   NA   NA
+[2,]   NA   NA   NA
+[3,]   NA   NA   NA
+[4,]   NA   NA   NA
+[5,]   NA   NA   NA
+[6,]   NA   NA   NA
+[7,]   NA   NA   NA
+
+EIGEN (max) TEST
+[1] NA NA NA NA NA NA NA
+eigen critical values
+     [,1] [,2] [,3]
+[1,]   NA   NA   NA
+[2,]   NA   NA   NA
+[3,]   NA   NA   NA
+[4,]   NA   NA   NA
+[5,]   NA   NA   NA
+[6,]   NA   NA   NA
+[7,]   NA   NA   NA

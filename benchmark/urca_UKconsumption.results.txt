@@ -1,0 +1,35 @@
+name: urca_UKconsumption 
+source: Pokorny, M. (1987), An Introduction to Econometrics, p.408 
+description: UK cons, inc, price, quarterly 1957:Q1-1975:Q4 
+n_obs: 76  n_vars: 3 
+vars: cons, inc, price 
+K(lag order): 2  ecdet: const  spec: longrun 
+
+TRACE TEST (H0 r=0 ... r<=m-1, from largest to smallest eigenvalue)
+[1]   5.608888  38.730535 106.300616
+trace critical values (10pct, 5pct, 1pct)
+         10pct  5pct  1pct
+r <= 2 |  7.52  9.24 12.97
+r <= 1 | 17.85 19.96 24.60
+r = 0  | 32.00 34.91 41.07
+
+EIGEN (max) TEST
+[1]  5.608888 33.121647 67.570081
+eigen critical values
+         10pct  5pct  1pct
+r <= 2 |  7.52  9.24 12.97
+r <= 1 | 13.75 15.67 20.20
+r = 0  | 19.77 22.00 26.81
+
+cointegration vectors (beta, columns), normalized:
+               cons.l2        inc.l2    price.l2    constant
+cons.l2      1.0000000     1.0000000    1.000000    1.000000
+inc.l2      -0.5863182    -0.6696779   -1.669894   -1.967525
+price.l2   -10.0278417    13.0442347   42.276612  112.841423
+constant -1382.9283198 -2183.0691086 3084.524894 -989.301950
+
+loading matrix (alpha):
+              cons.l2       inc.l2      price.l2      constant
+cons.d  -1.9948676983 -0.276794402  0.0738493384  1.129470e-14
+inc.d   -1.1082470113  0.117069279  0.0979669391  7.087234e-15
+price.d -0.0009960006  0.001830895 -0.0005416016 -6.865326e-19

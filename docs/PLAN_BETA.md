@@ -1037,7 +1037,7 @@ registro.
 | # | criterio | estado hoy |
 |---|---|---|
 | 1 | `make test` verde, con la puerta diagonal dentro | **✔ (F0)** 77 comprobaciones (84 con memoria), medidas por mutación |
-| 2 | \|Σ̂\| concordante entre las cuatro configuraciones **y** en el nivel objetivo | **✔ en la concordancia, casi en el nivel**: con `-multistart 60` la dispersión cae a **0.000014** y las cuatro caen en 0.002344–0.002358, un **1.6 %** por encima de la referencia global (0.002311) frente al 7 % de antes. Ver F5.1 |
+| 2 | \|Σ̂\| concordante entre las cuatro configuraciones **y** en el nivel objetivo | **✔ en la concordancia, casi en el nivel**: con `-multistart 60` la dispersión cae a **0.000028** y las cuatro caen en 0.002344–0.002372, un **1.9 %** por encima de la referencia global (0.002311) frente al 7 % de antes. Ver F5.1, y la corrección de 2026-08-20 en `HOMOLOGATION.md` — la fila «niveles caso 2» estaba mal transcrita |
 | 3 | Siembra desde `.pre`, con logL ≥ arranque en frío | **✔ en el peldaño diagonal, ✘ por encima (F2.8)**: con r = 0 el `.pre` transporta el óptimo univariante y los dos contratos de la escalera se cumplen (cruce 1.8e-5, certificado +2.4e-7 ≥ 0, los dos con test). Con r ≥ 1 la información univariante no vale: la semilla arranca 17 unidades peor, por sobredeterminación del AR y por el acoplamiento de C̄ y Λ |
 | 4 | Formas BEC/Π y exogeneidad débil, con o sin s.e. declarado | **✔ (F3.1)**: Π = ΛB′ con autovalores y la advertencia de circularidad, exogeneidad débil por LR, y la triangularización Σ = PDP′ con test de reconstrucción |
 | 5 | Rango correcto en ≥ 4 casos del banco | **✔**: `mink_muskrat` (r=1), UK (r=2, igual que `ca.jo`), y dos sintéticos con rango **conocido por construcción**, r=0 y r=2 — los cuatro recuperados por la vía asintótica **y** por el bootstrap (F4.1). Y medido lo que faltaba: en 60 réplicas con r=1 verdadero el test asintótico acierta el 68 % y sobre-rechaza el 30 %; el bootstrap, 78 % y 20 % |
@@ -1081,11 +1081,11 @@ reproducir; un multiarranque irreproducible no sirve como evidencia.
 
 | | tras F1 | con `-multistart 60` |
 |---|---|---|
-| niveles caso 2 | 0.002461 | **0.002346** |
+| niveles caso 2 | 0.002461 | **0.002372** *(corregido el 2026-08-20; decía 0.002346)* |
 | niveles caso 3 | 0.002460 | **0.002347** |
 | antiguo caso 2 | 0.002482 | **0.002344** |
 | antiguo caso 3 | 0.002508 | **0.002358** |
-| **dispersión** | 0.000048 | **0.000014** |
+| **dispersión** | 0.000048 | **0.000028** |
 | **distancia al objetivo** (0.002311) | +7 % | **+1.6 %** |
 
 **Y un fallo de diseño que la medida destapó.** La primera versión escalaba la
@@ -1095,7 +1095,7 @@ amplitud depende ahora sólo del índice del arranque, de modo que los primeros 
 de una corrida larga son exactamente los de una corta y **pedir más arranques
 sólo puede mejorar**. Está en la batería como invariante.
 
-*Lo que queda:* 0.002346 frente a 0.002311 es un 1.6 %, y la referencia sin
+*Lo que queda:* 0.002355 (la media de las cuatro) frente a 0.002311 es un 1.9 %, y la referencia sin
 puerta de invertibilidad es 0.002294. El criterio se declara cumplido en la
 concordancia y **prácticamente** en el nivel, con la distancia medida y escrita.
 

@@ -143,8 +143,12 @@ judged on both halves.
 
 ## 7. The order of work
 
-1. **The inverse map**, so `-warma` reports `Λ`, `F`, `Π`, `G` and the roots.
-   Without it the best-conditioned route cannot be the recommended one.
+1. ~~**The inverse map**~~ **Done**: `-warma` reports the fit in both coordinate
+   systems, with `Λ`, `F_i`, `Θ_j`, `Π = ΛB′` and the rank condition recovered by
+   inverting the transformation once, and the residual of that inversion printed
+   beside them — `10⁻¹⁷` on every case of the bank
+   ([HOMOLOGATION.md](HOMOLOGATION.md) §4l). Theorem 6's structure comes out of
+   the inversion by itself, which is the check that it was done right.
 2. **The specification ladder in one command**, with the admissibility verdict
    and no invalid p-values.
 3. **Re-measure `-lrtest`** under `-warma` and `-marow` on the bank, against the

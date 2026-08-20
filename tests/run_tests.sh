@@ -846,13 +846,39 @@ elif awk -v a="$w1" -v b="$w2" 'BEGIN{d=a-b; if(d<0)d=-d; exit !(d<=1e-6)}'; the
     ok "warma: both parameterisations reach the same optimum at p=1 ($w1)"
 else bad "warma: the two parameterisations disagree" "warma=$w1 mawarma=$w2"; fi
 
-# and the transformed system it estimates must be reported as such, not dressed
-# up as VEC parameters it never estimated
+# and the transformed system it estimates must be reported as such, before the
+# inverse map puts the same fit back in VEC coordinates
 run data/pairs/utrecht.inp 2 1 1 -case 2 -mean -warma
-if grep -aq "Triangular (WARMA) parameterisation" "$TMP/case.out" &&
-   ! grep -aq "^Lambda (M x r)" "$TMP/case.out"; then
+if grep -aq "Triangular (WARMA) parameterisation" "$TMP/case.out"; then
     ok "warma: reports the coordinates it estimated in"
-else bad "warma: output" "it printed VEC parameters it did not estimate"; fi
+else bad "warma: output" "it did not report the parameterisation it used"; fi
+
+# THE INVERSE MAP.  Lambda, F, Theta and Pi are RECOVERED by inverting the
+# transformation once, not estimated again, so the residual of the equation the
+# inversion has to satisfy must be zero to machine precision.  A residual that
+# is not zero would mean the fitted point is outside the image of the map and
+# the VEC parameters printed are a projection -- which is exactly the kind of
+# thing this program has published by accident twice (DEVELOPMENT_RECORD 8d, 8h).
+res=$(awk '/inversion residual/{print $4}' "$TMP/case.out")
+if [ -z "$res" ]; then bad "warma: inverse map" "no residual reported"
+elif awk -v e="$res" 'BEGIN{exit !(e < 1e-6)}'; then
+    ok "warma: the inversion is exact ($res)"
+else bad "warma: the fit is not in the image of the map" "residual $res"; fi
+
+# and the structure Theorem 6 predicts must come out of the inversion BY ITSELF:
+# the differenced block of the recovered Theta carries no moving average.
+z=$(awk '/^Theta\[1\] \(M x M\) =/{getline; getline; print $1+0, $2+0}' \
+    "$TMP/case.out")
+[ "$z" = "0 0" ] && ok "warma: the recovered Theta has the inherited structure" \
+                 || bad "warma: recovered Theta" "last row is $z, expected 0 0"
+
+# the rank condition, computed on the recovered VEC parameters, must be O(1):
+# by Corollary 6.2 this class cannot degenerate, so a small value here would
+# mean the inverse map or the class is wrong (docs/THEORY.md)
+gg=$(awk '/Rank condition/{print $NF}' "$TMP/case.out")
+if awk -v g="$gg" 'BEGIN{exit !(g > 0.5)}'; then
+    ok "warma: the recovered fit satisfies the rank condition ($gg)"
+else bad "warma: rank condition on the recovered fit" "$gg"; fi
 echo
 
 echo "[6] alpha = A*psi: the restriction, its LR, and its guards"

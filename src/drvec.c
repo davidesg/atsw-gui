@@ -503,6 +503,187 @@ static int calc_nparametrs(void)
 }
 
 /*****************************************************************************/
+/*  warma_inverse — DE VUELTA A LAS COORDENADAS VEC.                          */
+/*                                                                           */
+/*  -warma estima el sistema transformado, que es donde la clase de los       */
+/*  teoremas es un patron de ceros y donde B2 no toca ningun parametro.  Pero */
+/*  lo que un usuario necesita leer es Lambda, F, Pi y la condicion de rango, */
+/*  asi que la transformacion se INVIERTE UNA VEZ AL FINAL -- que es la       */
+/*  direccion dual que describe ESTUDIO_BVECM_vs_DRVEC.md 1, y lo que el      */
+/*  analisis_BEC del legado hace.                                            */
+/*                                                                           */
+/*  LAS ECUACIONES.  De PhiBar_k = Cinv Phi*_k y de la recursion (16):        */
+/*                                                                           */
+/*      F_1     = (PhiBar_1 - E) Cbar + Pi          con E = Cinv Hbar        */
+/*      F_i     = (PhiBar_i + F_{i-1} E) Cbar       (i = 2 .. p-1)           */
+/*      0       = PhiBar_p + F_{p-1} E              (la que queda)           */
+/*                                                                           */
+/*  y Pi = LamBar Cbar = Lambda B', asi que la ultima ecuacion determina      */
+/*  Lambda.  Con p = 2 y M = 2 sale en cerrado -- comprobado con sympy --:    */
+/*  Lambda = -(PhiBar_2)_{:,s+1..M} - ((PhiBar_1 - E) Cbar)_{:,1..r}.  Aqui   */
+/*  se resuelve el caso general por minimos cuadrados sobre un sistema AFIN   */
+/*  en Lambda, que evita un analisis de casos por p y da ademas el RESIDUO:   */
+/*  si el punto no estuviera en la imagen del mapa, el residuo lo diria en    */
+/*  vez de que el programa publicara una Lambda inventada.                    */
+/*                                                                           */
+/*  Theta_j = Cinv Theta*_j Cbar y Sigma = Cinv Sigma* Cinv', que son las     */
+/*  mismas relaciones del teorema 1 leidas al reves.                          */
+/*****************************************************************************/
+static void wi_forward(real ***PhB, real **Cbar, real **E, real **Lam,
+                       int M, int r, int p, real ***F, real **R)
+{
+    int s = M - r, nf = (p > 1) ? p - 1 : 0;
+    int i, j, k;
+    real **T1 = matrix(1, M, 1, M), **T2 = matrix(1, M, 1, M);
+
+    /*  LamBar = [0, Lambda], y Pi = LamBar Cbar = Lambda B'.                */
+    for (i = 1; i <= M; i++)
+        for (j = 1; j <= M; j++) T1[i][j] = 0.0;
+    for (i = 1; i <= M; i++)
+        for (j = 1; j <= r; j++) T1[i][s + j] = Lam[i][j];
+    matrix_multiply(T1, Cbar, T2, M, M, M);          /* T2 = Pi */
+
+    if (nf >= 1) {
+        for (i = 1; i <= M; i++)
+            for (j = 1; j <= M; j++) T1[i][j] = PhB[1][i][j] - E[i][j];
+        {
+            real **T3 = matrix(1, M, 1, M);
+            matrix_multiply(T1, Cbar, T3, M, M, M);
+            for (i = 1; i <= M; i++)
+                for (j = 1; j <= M; j++) F[1][i][j] = T3[i][j] + T2[i][j];
+            free_matrix(T3, 1, M, 1, M);
+        }
+        for (k = 2; k <= nf; k++) {
+            real **T3 = matrix(1, M, 1, M), **T4 = matrix(1, M, 1, M);
+            matrix_multiply(F[k-1], E, T3, M, M, M);
+            for (i = 1; i <= M; i++)
+                for (j = 1; j <= M; j++) T3[i][j] += PhB[k][i][j];
+            matrix_multiply(T3, Cbar, T4, M, M, M);
+            for (i = 1; i <= M; i++)
+                for (j = 1; j <= M; j++) F[k][i][j] = T4[i][j];
+            free_matrix(T4, 1, M, 1, M);
+            free_matrix(T3, 1, M, 1, M);
+        }
+        /*  El residuo de la ecuacion que queda: PhiBar_p + F_{p-1} E.        */
+        matrix_multiply(F[nf], E, T1, M, M, M);
+        for (i = 1; i <= M; i++)
+            for (j = 1; j <= M; j++) R[i][j] = PhB[p][i][j] + T1[i][j];
+    } else {
+        /*  p = 1: la unica ecuacion es PhiBar_1 = E - LamBar, y su residuo. */
+        for (i = 1; i <= M; i++)
+            for (j = 1; j <= M; j++) R[i][j] = PhB[1][i][j] - E[i][j];
+        for (i = 1; i <= M; i++)
+            for (j = 1; j <= r; j++) R[i][s + j] += Lam[i][j];
+    }
+    free_matrix(T2, 1, M, 1, M);
+    free_matrix(T1, 1, M, 1, M);
+}
+
+static real warma_inverse(struct Tvarma *v, real **B2, real **Lam, real ***F,
+                          real ***Th, real **Sg)
+{
+    int M = nser, r = global_r, s = M - r, p = global_p, q = global_q;
+    int nf = (p > 1) ? p - 1 : 0, nl = M * r;
+    int i, j, k, a, b, c;
+    real **Cbar = matrix(1, M, 1, M), **Cinv = matrix(1, M, 1, M);
+    real **Hbar = matrix(1, M, 1, M), **E = matrix(1, M, 1, M);
+    real ***PhB = tensor(1, p, 1, M, 1, M);
+    real **R0 = matrix(1, M, 1, M), **R1 = matrix(1, M, 1, M);
+    real **J  = matrix(1, M * M, 1, (nl > 0 ? nl : 1));
+    real **N  = matrix(1, (nl > 0 ? nl : 1), 1, (nl > 0 ? nl : 1));
+    real  *rhs = vector(1, (nl > 0 ? nl : 1));
+    int   *ind = ivector(1, (nl > 0 ? nl : 1));
+    real  res = 0.0;
+
+    for (i = 1; i <= M; i++)
+        for (j = 1; j <= M; j++) {
+            Cbar[i][j] = 0.0; Cinv[i][j] = 0.0; Hbar[i][j] = 0.0;
+        }
+    for (i = 1; i <= s; i++) Cbar[i][r + i] = 1.0;
+    for (j = 1; j <= r; j++) Cbar[s + j][j] = 1.0;
+    for (j = 1; j <= r; j++)
+        for (i = 1; i <= s; i++) Cbar[s + j][r + i] = B2[i][j];
+    for (i = 1; i <= r; i++)
+        for (j = 1; j <= s; j++) Cinv[i][j] = -B2[j][i];
+    for (i = 1; i <= r; i++) Cinv[i][s + i] = 1.0;
+    for (i = 1; i <= s; i++) Cinv[r + i][i] = 1.0;
+    for (i = 1; i <= r; i++) Hbar[s + i][s + i] = 1.0;
+    matrix_multiply(Cinv, Hbar, E, M, M, M);
+
+    for (k = 1; k <= p; k++) matrix_multiply(Cinv, v->phi[k], PhB[k], M, M, M);
+    for (k = 1; k <= q; k++) {
+        real **T = matrix(1, M, 1, M);
+        matrix_multiply(Cinv, v->theta[k], T, M, M, M);
+        matrix_multiply(T, Cbar, Th[k], M, M, M);
+        free_matrix(T, 1, M, 1, M);
+    }
+    {
+        real **T = matrix(1, M, 1, M);
+        matrix_multiply(Cinv, v->qq, T, M, M, M);
+        for (i = 1; i <= M; i++)
+            for (j = 1; j <= M; j++) {
+                real ss = 0.0;
+                for (k = 1; k <= M; k++) ss += T[i][k] * Cinv[j][k];
+                Sg[i][j] = ss;
+            }
+        free_matrix(T, 1, M, 1, M);
+    }
+
+    /*  El sistema afin en Lambda: R(Lambda) = R0 + J vec(Lambda).           */
+    for (i = 1; i <= M; i++) for (j = 1; j <= r; j++) Lam[i][j] = 0.0;
+    wi_forward(PhB, Cbar, E, Lam, M, r, p, F, R0);
+    c = 0;
+    for (a = 1; a <= M; a++)
+        for (b = 1; b <= r; b++) {
+            c++;
+            Lam[a][b] = 1.0;
+            wi_forward(PhB, Cbar, E, Lam, M, r, p, F, R1);
+            Lam[a][b] = 0.0;
+            for (i = 1; i <= M; i++)
+                for (j = 1; j <= M; j++)
+                    J[(i-1)*M + j][c] = R1[i][j] - R0[i][j];
+        }
+    for (a = 1; a <= nl; a++) {
+        for (b = 1; b <= nl; b++) {
+            real ss = 0.0;
+            for (i = 1; i <= M * M; i++) ss += J[i][a] * J[i][b];
+            N[a][b] = ss;
+        }
+        {
+            real ss = 0.0;
+            for (i = 1; i <= M; i++)
+                for (j = 1; j <= M; j++) ss += J[(i-1)*M + j][a] * R0[i][j];
+            rhs[a] = -ss;
+        }
+    }
+    if (nl > 0) {
+        ludcp(N, nl, ind);
+        lusol(N, rhs, nl, ind);
+        c = 0;
+        for (a = 1; a <= M; a++)
+            for (b = 1; b <= r; b++) Lam[a][b] = rhs[++c];
+    }
+    wi_forward(PhB, Cbar, E, Lam, M, r, p, F, R1);
+    for (i = 1; i <= M; i++)
+        for (j = 1; j <= M; j++) res += R1[i][j] * R1[i][j];
+    res = sqrt(res);
+
+    free_ivector(ind, 1, (nl > 0 ? nl : 1));
+    free_vector(rhs, 1, (nl > 0 ? nl : 1));
+    free_matrix(N, 1, (nl > 0 ? nl : 1), 1, (nl > 0 ? nl : 1));
+    free_matrix(J, 1, M * M, 1, (nl > 0 ? nl : 1));
+    free_matrix(R1, 1, M, 1, M);
+    free_matrix(R0, 1, M, 1, M);
+    free_tensor(PhB, 1, p, 1, M, 1, M);
+    free_matrix(E, 1, M, 1, M);
+    free_matrix(Hbar, 1, M, 1, M);
+    free_matrix(Cinv, 1, M, 1, M);
+    free_matrix(Cbar, 1, M, 1, M);
+    (void) nf;
+    return res;
+}
+
+/*****************************************************************************/
 /*  canonical_b2 — B2 POR LA SOLUCION CANONICA DE RANGO REDUCIDO (Johansen). */
 /*                                                                           */
 /*  QUE ES.  El estimador de Johansen resuelve el vector de cointegracion en  */
@@ -5105,6 +5286,99 @@ int main(int argc, char *argv[])
             if (ii != npar + 1)
                 fprintf(stderr, "ERROR output (-warma): consumed %d of %d\n",
                         ii - 1, npar);
+
+            /*  Y DE VUELTA A LAS COORDENADAS VEC, una sola vez, al final.
+             *  Es lo que hace utilizable esta ruta: se estima donde la clase
+             *  es un patron de ceros y se REPORTA donde el usuario lee.      */
+            if (r > 0) {
+                real **B2w = matrix(1, s, 1, (r > 0 ? r : 1));
+                real **Lw  = matrix(1, nser, 1, r);
+                real ***Fw = tensor(1, (global_p > 1 ? global_p - 1 : 1),
+                                    1, nser, 1, nser);
+                real ***Tw = tensor(1, (global_q > 0 ? global_q : 1),
+                                    1, nser, 1, nser);
+                real **Sw  = matrix(1, nser, 1, nser);
+                real resid, gg;
+                int nfw = (global_p > 1) ? global_p - 1 : 0;
+
+                for (int j2 = 1; j2 <= r; j2++)
+                    for (int i2 = 1; i2 <= s; i2++)
+                        B2w[i2][j2] = global_fixb2 ? B2_fixed[i2][j2]
+                                    : x[npar - s * r + (j2 - 1) * s + i2];
+                for (int k2 = 1; k2 <= (global_q > 0 ? global_q : 1); k2++)
+                    for (int i2 = 1; i2 <= nser; i2++)
+                        for (int j2 = 1; j2 <= nser; j2++) Tw[k2][i2][j2] = 0.0;
+                resid = warma_inverse(&varma1, B2w, Lw, Fw, Tw, Sw);
+
+                fprintf(outputv,
+                  "\n--- the same fit in VEC coordinates ---\n"
+                  "  (I - F1 L - ...) nabla Y_t = -Lambda (B'Y_{t-1} - E[W]) "
+                  "+ (I - Theta1 L - ...) A_t\n"
+                  "  recovered by inverting the transformation once, not "
+                  "estimated again.\n");
+                fprintf(outputv, "\nLambda (M x r) =\n");
+                for (int i2 = 1; i2 <= nser; i2++) {
+                    fprintf(outputv, "  ");
+                    for (int j2 = 1; j2 <= r; j2++)
+                        fprintf(outputv, "%12.6f", Lw[i2][j2]);
+                    fprintf(outputv, "\n");
+                }
+                for (int k2 = 1; k2 <= nfw; k2++) {
+                    fprintf(outputv, "F[%d] (M x M) =\n", k2);
+                    for (int i2 = 1; i2 <= nser; i2++) {
+                        fprintf(outputv, "  ");
+                        for (int j2 = 1; j2 <= nser; j2++)
+                            fprintf(outputv, "%12.6f", Fw[k2][i2][j2]);
+                        fprintf(outputv, "\n");
+                    }
+                }
+                for (int k2 = 1; k2 <= global_q; k2++) {
+                    fprintf(outputv, "Theta[%d] (M x M) =\n", k2);
+                    for (int i2 = 1; i2 <= nser; i2++) {
+                        fprintf(outputv, "  ");
+                        for (int j2 = 1; j2 <= nser; j2++)
+                            fprintf(outputv, "%12.6f", Tw[k2][i2][j2]);
+                        fprintf(outputv, "\n");
+                    }
+                }
+                fprintf(outputv, "Pi = Lambda B' (M x M) =\n");
+                for (int i2 = 1; i2 <= nser; i2++) {
+                    fprintf(outputv, "  ");
+                    for (int j2 = 1; j2 <= nser; j2++) {
+                        real acc = 0.0;
+                        for (int k2 = 1; k2 <= r; k2++)
+                            acc += Lw[i2][k2] * ((j2 <= r) ? (j2 == k2 ? 1.0 : 0.0)
+                                                           : B2w[j2 - r][k2]);
+                        fprintf(outputv, "%12.6f", acc);
+                    }
+                    fprintf(outputv, "\n");
+                }
+                gg = granger_smin(Lw, B2w, Tw, nser, r, global_q);
+                if (gg >= 0.0)
+                    fprintf(outputv,
+                      "\nRank condition (Granger): sigma_min(Lambda_perp' "
+                      "Theta(1) B_perp) = %.3e\n%s", gg,
+                      (gg < 1.0e-3)
+                        ? "  *** ZERO to working precision: this fit denies the "
+                          "rank it was estimated at.\n"
+                        : "  Comfortably away from zero: the fit is a model of "
+                          "the rank it was estimated at.\n");
+                /*  El residuo del mapa: si el punto no estuviera en la imagen
+                 *  de la transformacion, esto lo diria en vez de dejar que se
+                 *  publicara una Lambda inventada.                           */
+                fprintf(outputv, "  inversion residual = %.3e%s\n", resid,
+                        (resid > 1.0e-6)
+                          ? "   *** the fitted point is NOT in the image of the "
+                            "transformation; the VEC parameters above are a "
+                            "least-squares projection, not the fit"
+                          : "   (exact: the two coordinate systems describe the "
+                            "same fit)");
+                free_matrix(Sw, 1, nser, 1, nser);
+                free_tensor(Tw, 1, (global_q > 0 ? global_q : 1), 1, nser, 1, nser);
+                free_tensor(Fw, 1, (global_p > 1 ? global_p - 1 : 1), 1, nser, 1, nser);
+                free_matrix(Lw, 1, nser, 1, r);
+                free_matrix(B2w, 1, s, 1, (r > 0 ? r : 1));
+            }
             /*  Se sale por la MISMA limpieza que el resto, y no por un return
              *  propio: un camino de salida nuevo es un juego nuevo de fugas, y
              *  valgrind lo encontro en cuanto se escribio (2112 bytes en 9

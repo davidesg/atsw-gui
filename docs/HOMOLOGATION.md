@@ -1235,6 +1235,40 @@ That split is worth more than an average would be: the specification the
 theorems cover works where the theorems were aimed, and fails visibly where it
 does not apply, instead of degrading quietly everywhere.
 
+### The same fit in VEC coordinates
+
+Step 1 of [SPECIFICATION_PLAN.md](SPECIFICATION_PLAN.md). The transformation is
+inverted **once**, at the end, from `Φ̄_k = C̄⁻¹Φ*_k` and the recursion of Theorem
+1: `F₁ = (Φ̄₁ − C̄⁻¹H̄)C̄ + Π`, `F_i = (Φ̄_i + F_{i−1}C̄⁻¹H̄)C̄`, and the equation
+left over, `0 = Φ̄_p + F_{p−1}C̄⁻¹H̄`, determines `Λ`. Solved as an affine
+least-squares problem in `Λ` so that no case analysis in `p` is needed and so
+that the **residual** is available.
+
+| pair | inversion residual | `Λ̂` | `G` | `B̂₂` |
+|---|---|---|---|---|
+| Milan | 4.2e−17 | (0.377, −0.195) | 0.997 | −0.622 |
+| Strasbourg | 3.9e−17 | (0.307, −0.226) | 0.999 | −0.668 |
+| Utrecht | 3.9e−17 | (0.570, −0.290) | 0.971 | −0.864 |
+| Vienna | 0.0 | (0.453, −0.204) | 0.957 | −0.875 |
+| Aix | 5.6e−17 | (0.583, −0.467) | 0.996 | −0.957 |
+| Arévalo | 1.4e−17 | (0.328, −0.214) | 0.978 | −1.007 |
+| Angers | 0.0 | (0.945, −0.072) | 0.856 | −0.712 |
+| Penn | 8.8e−17 | (0.487, −0.412) | 0.991 | −1.100 |
+
+**The residual is machine zero everywhere**, which says the two coordinate
+systems describe the same fit and not an approximation of it. It is printed
+because a residual away from zero would mean the fitted point is outside the
+image of the map and the `Λ` shown is a projection — the failure mode this
+program has published twice by accident
+([DEVELOPMENT_RECORD.md](DEVELOPMENT_RECORD.md) §8d, §8h), now checkable in one
+number.
+
+Two things come out of the inversion **by themselves**, and both are the theory
+appearing without being imposed: the recovered `Θ̂` has its differenced block
+exactly zero (Theorem 6, condition 6), and the recovered `F̂₁` has rank one with
+row space `B′` (condition 5) — on the simulated WARMA data, rows
+`(0.0325, −0.0163)` and `(0.00033, −0.00016)`, both proportional to `(1, −0.5)`.
+
 ### Where this leaves the specification question
 
 Three routes now put `B̂₂` in the same region — the canonical estimator, the

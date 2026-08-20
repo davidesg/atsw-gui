@@ -118,6 +118,15 @@ gradient convergences on the wheat pairs, moving-average roots 1.0–25.1, `B̂�
 the canonical region — and, at `p = 1` where it coincides with `-mawarma`, the
 two casts agree to nine decimals.
 
+The output carries **the same fit in both coordinate systems**: what was
+estimated, and then `Λ`, `F_i`, `Θ_j` and `Π = ΛB′` recovered by inverting the
+transformation **once**, with the residual of that inversion printed beside them
+(it is `10⁻¹⁷` on every case of the bank). The residual is not decoration: a
+value away from zero would mean the fitted point is outside the image of the map
+and the VEC parameters shown are a projection rather than the fit. The rank
+condition is reported on the recovered parameters, where by Corollary 6.2 of
+[THEORY.md](THEORY.md) it cannot degenerate.
+
 ### The moving average: free or inherited
 
 | | |

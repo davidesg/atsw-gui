@@ -435,11 +435,20 @@ son justo lo que la regla 1 del método prohíbe.
 
 ### 4.6 Qué se construye (P3)
 
-1. **Alinear `matrix`/`imatrix`/`free_matrix`/`free_imatrix`** con la copia
-   compartida, cerrar las dos fugas que eso destapa
-   (`cond_resid`, `rawmat`), y dejar `nlatools.c` con **cero** líneas de código
-   divergentes. Actualizar la tabla de `SUITE_INTEGRATION.md` §5 con el motivo
-   medido.
+1. **HECHO el 2026-08-21.** Adoptadas las cuatro rutinas de la copia canónica.
+   **Sin comentarios, `nlatools.c` difiere del canónico en cero líneas**, igual
+   que la de `drtran` y la del paquete de Python: cuatro copias, un fichero.
+
+   Destapó **cinco** fugas, no dos: a `cond_resid` y `rawmat` se sumaron
+   `alpha_A` y, en `-lrtest` y `-rungs`, `datamat` e `Y2_levels` —que se
+   reservan una vez por rango—. Cerradas en `free_case_data()`, llamada desde
+   `cleanup_names()`, que es por donde ya pasaban las siete salidas de `main`.
+
+   Y de paso apareció una sexta cosa: `main` liberaba `datamat` e `Y2_levels`
+   con `nobs` en lugar de con la dimensión de la **reserva**, que dejaron de ser
+   el mismo número cuando `-estwin` empezó a recortar la muestra de estimación.
+   Esa liberación ya no está; hay una sola, y usa las dimensiones de quien
+   reservó.
 2. **Devolver a la suite** los tres arreglos del lector y el desasignador:
    parche para `drtran/src/fue_pre_reader.c` y entradas en
    `drtran-python/docs/BUGS.md` cerrando BUG-11 y BUG-12 con la referencia al

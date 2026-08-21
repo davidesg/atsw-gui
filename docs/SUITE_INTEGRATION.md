@@ -248,21 +248,34 @@ lower bound, so it was the only one whose defect was live. `vector` and
 |---|---|---|
 | `tensor`, `free_tensor` | **the suite's, identical** | was live: `gamwa` with `q ≥ 2` |
 | `vector`, `ivector` | **the suite's, identical** | was latent — no call site here uses a negative lower bound — but the suite corrected these after the transfer-function program was bitten by one, its identification step allocating `vector(−nlags, nlags)` |
-| `matrix`, `imatrix` | pre-cleanup, and **deliberately** so across the suite | the offset variant uses an incompatible row layout, so the two are not interchangeable; the univariate program left them alone for exactly that reason |
+| `matrix`, `imatrix` | **the suite's, identical** — adopted 2026-08-21 | the reason for leaving them had been measured and did not hold *here*; see below |
 
-**And that last reason has since been measured, with a result that narrows it.**
-On 2026-08-20 the four routines were replaced by the shared variant in a copy of
-the tree and the whole suite was run: **all 152 functional checks pass**, no
-golden value moves, the diagonal gate still closes and the `.pre` still reads.
-The only consequence is under `valgrind`, and it is the same mechanism described
-two paragraphs below: the shared variant **reveals two leaks that the present
-one conceals** — `cond_resid` in `init_guess` and `rawmat` in `main`, both of
-process lifetime, both real, both invisible today because a pointer returned at
-the base of its block looks reachable. So the incompatibility is the univariate
-program's and **not** `drvec`'s, and the reason for leaving these two alone here
-is weaker than the reason for leaving them alone there. Aligning them, and
-closing the two leaks that follow, is
-[PLAN_PRODUCCION.md](PLAN_PRODUCCION.md) P3.
+**Measured first, then done.** On 2026-08-20 the four routines were replaced by
+the shared variant in a copy of the tree and the whole suite was run: every
+functional check passed, no golden value moved, the diagonal gate still closed
+and the `.pre` still read. The only consequence was under `valgrind`, and it was
+the mechanism described two paragraphs below — the shared variant **reveals
+leaks that the previous one conceals**, because a pointer returned at the base
+of its block looks reachable and an offset one does not. So the incompatibility
+is the univariate program's and **not** `drvec`'s.
+
+Adopted on 2026-08-21. **Stripped of comments, `nlatools.c` now differs from the
+canonical copy in zero lines**, and so do `drtran`'s and the Python package's:
+four copies, one file.
+
+**It revealed five leaks, not two.** The prediction was `cond_resid` and
+`rawmat`; the other three appeared once the paths were run — `alpha_A` in the
+`α = Aψ` route, and `datamat` and `Y2_levels` in `-lrtest` and `-rungs`, which
+call `build_y2_levels` once per rank. All five are of process lifetime and none
+harms a batch program. What they harm is the next one: a `valgrind` report with
+five known leaks in it is a report in which the sixth is invisible.
+
+They are closed in `free_case_data()`, called from `cleanup_names()`, which is
+where all seven exits of `main` already passed. And doing that found one more
+thing: `main` had been freeing `datamat` and `Y2_levels` with `nobs` rather than
+with the dimension they were **allocated** with, which stopped being the same
+number when `-estwin` began truncating the estimation sample. That free is gone;
+there is one now, and it uses the allocation's own dimensions.
 
 Aligning `vector` and `ivector` is not a cosmetic change, because it moves the
 release from ignoring the bounds it is given to depending on them: every

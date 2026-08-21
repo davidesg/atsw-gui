@@ -442,9 +442,13 @@ static void build_y2_levels(void);
 /*                  cases 2 and 3 (verified: identical log-likelihood), but NOT */
 /*                  in case 1, where E[W] = 0 leaves nothing to absorb it.      */
 /*****************************************************************************/
+/*  Dimensiones con las que se reservaron datamat y Y2_levels.  Estaban dentro
+ *  de build_y2_levels como estaticas locales; suben al fichero para que
+ *  free_case_data() pueda soltarlas al terminar.                             */
+static int alloc_nobs = 0, alloc_s = 0;
+
 static void build_y2_levels(void)
 {
-    static int alloc_nobs = 0, alloc_s = 0;   /* dims of the previous build */
     int M = nser, r = global_r, s = M - r;
     int t, i, j;
 
@@ -1037,6 +1041,33 @@ static void build_ybar(real **B2, real **Ybar)
     }
 }
 
+/*  free_case_data — lo que el caso reserva y sobrevive a todas las salidas.
+ *
+ *  P3, 2026-08-21.  Estas tres -- datamat, Y2_levels y la A de la restriccion
+ *  alpha = A*psi -- eran fugas de fin de programa INVISIBLES mientras matrix()
+ *  devolvia el puntero en la base de su bloque.  Al adoptar la version
+ *  compartida de drvarma aparecieron las cinco de golpe (con rawmat y
+ *  cond_resid, en cleanup_names), y -lrtest y -rungs, que llaman a
+ *  build_y2_levels una vez por rango, las tenian por partida doble.
+ *
+ *  Ninguna hace dano en un programa por lotes.  Lo que hacen es tapar las que
+ *  si lo harian: una salida de valgrind con cinco fugas conocidas es una en la
+ *  que la sexta no se ve.                                                     */
+static void free_case_data(void)
+{
+    if (datamat)   { free_matrix(datamat,   1, alloc_nobs, 1, nser); datamat = NULL; }
+    if (Y2_levels) { free_matrix(Y2_levels, 1, alloc_nobs, 1, alloc_s); Y2_levels = NULL; }
+    if (alpha_A)   { free_matrix(alpha_A, 1, nser, 1, (alpha_sa > 0 ? alpha_sa : 1));
+                     alpha_A = NULL; }
+    alloc_nobs = 0; alloc_s = 0;
+}
+
+/*  Los residuos de la regresion condicional, que init_guess publica para
+ *  -writeres.  Se declaran AQUI, y no junto a su uso, porque cleanup_names los
+ *  libera y esta por encima: es el precio de tener una sola limpieza.        */
+static real **cond_resid   = NULL;
+static int    cond_resid_T = 0, cond_resid_M = 0;
+
 /*  cleanup_names — lo que hay que soltar al terminar, en UN sitio.
  *
  *  main tiene cuatro salidas -- la normal, -lrtest, -writeinp/-writeres y
@@ -1051,6 +1082,27 @@ static void cleanup_names(char *outf, char *inf, char *basef)
         free(series_names);
         series_names = NULL;
     }
+    /*  P3 — LAS DOS QUE EL ALINEAMIENTO DE nlatools DESTAPO, el 2026-08-21.
+     *
+     *  rawmat (los datos crudos del .inp) y cond_resid (los residuos de la
+     *  regresion condicional, que init_guess publica para -writeres) son de
+     *  vida de proceso y no las liberaba nadie.  Eran INVISIBLES para valgrind
+     *  mientras matrix() devolvia el puntero en la BASE de su bloque: un
+     *  puntero a la base parece alcanzable.  Al adoptar la version compartida
+     *  de drvarma -- que devuelve el puntero desplazado -- aparecieron las dos,
+     *  1416 y 1488 bytes.  Es el mismo mecanismo que SUITE_INTEGRATION.md 5 ya
+     *  describia para vector(), encontrado por segunda vez y por la misma via.
+     *
+     *  Van aqui porque aqui es donde pasan las siete salidas de main.        */
+    if (rawmat) {
+        free_matrix(rawmat, 1, nobs_raw, 1, nser);
+        rawmat = NULL;
+    }
+    if (cond_resid) {
+        free_matrix(cond_resid, 1, cond_resid_T, 1, cond_resid_M);
+        cond_resid = NULL;
+    }
+    free_case_data();
     if (outf)  FREE_STR(outf);
     if (inf)   FREE_STR(inf);
     if (basef) FREE_STR(basef);
@@ -2121,8 +2173,6 @@ static char *pre_prefix      = NULL;
 
 /*  Residuos de la regresión condicional, publicados por init_guess para que
  *  -writeres pueda escribirlos.  e_t = Θ(L)A_t.                              */
-static real **cond_resid   = NULL;
-static int    cond_resid_T = 0, cond_resid_M = 0;
 
 /*  La semilla que se lee de los .pre: la DIAGONAL de Θ̄_k, k=1..q.
  *
@@ -7057,8 +7107,10 @@ int main(int argc, char *argv[])
     free_matrix(cov, 1, npar, 1, npar);
     free_vector(dev, 1, npar);
     free_vector(x, 1, npar);
-    free_matrix(Y2_levels, 1, nobs, 1, nser - global_r);
-    free_matrix(datamat, 1, nobs, 1, nser);
+    /*  datamat y Y2_levels las suelta free_case_data(), desde cleanup_names,
+     *  que es por donde pasan las siete salidas.  Aqui se liberaban con `nobs`
+     *  y no con la dimension de la RESERVA, que con -estwin ya no coinciden:
+     *  la ventana recorta nobs y las matrices siguen enteras.                */
     fclose(outputv);
     cleanup_names(outputf, inputf, base_name);
 

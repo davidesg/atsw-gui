@@ -398,25 +398,27 @@ int *ivector( long nl, long nh )                    /* see vector() above */
 
 real **matrix( long nrl, long nrh, long ncl, long nch )
 {
-   long i, nrow = nrh - nrl + 1;
-   real **m = (real **)calloc( (size_t)(nrh + 1), sizeof(real *) );
+   long i, nrow = nrh - nrl + 1, ncol = nch - ncl + 1;
+   real **m = (real **)calloc( (size_t)nrow, sizeof(real *) );
    real *data;
    if ( !m ) nrerror( "ALLOCATION FAILURE 1 in matrix()" );
-   data = (real *)calloc( (size_t)(nrow * (nch + 1)), sizeof(real) );
+   m -= nrl;
+   data = (real *)calloc( (size_t)(nrow * ncol), sizeof(real) );
    if ( !data ) nrerror( "ALLOCATION FAILURE 2 in matrix()" );
-   for ( i = nrl; i <= nrh; i++ ) m[i] = data + (i - nrl) * (nch + 1);
+   for ( i = nrl; i <= nrh; i++ ) m[i] = data + (i - nrl) * ncol - ncl;
    return( m );
 }
 
 int **imatrix( long nrl, long nrh, long ncl, long nch )
 {
-   long i, nrow = nrh - nrl + 1;
-   int **m = (int **)calloc( (size_t)(nrh + 1), sizeof(int *) );
+   long i, nrow = nrh - nrl + 1, ncol = nch - ncl + 1;
+   int **m = (int **)calloc( (size_t)nrow, sizeof(int *) );
    int *data;
    if ( !m ) nrerror( "ALLOCATION FAILURE 1 in imatrix()" );
-   data = (int *)calloc( (size_t)(nrow * (nch + 1)), sizeof(int) );
+   m -= nrl;
+   data = (int *)calloc( (size_t)(nrow * ncol), sizeof(int) );
    if ( !data ) nrerror( "ALLOCATION FAILURE 2 in imatrix()" );
-   for ( i = nrl; i <= nrh; i++ ) m[i] = data + (i - nrl) * (nch + 1);
+   for ( i = nrl; i <= nrh; i++ ) m[i] = data + (i - nrl) * ncol - ncl;
    return( m );
 }
 
@@ -465,9 +467,9 @@ real ***tensor( long nrl, long nrh, long ncl, long nch, long ndl, long ndh )
 void free_vector( real *v, long nl, long nh ) { if ( v ) free( v + nl ); }
 void free_ivector( int *v, long nl, long nh ) { if ( v ) free( v + nl ); }
 void free_matrix( real **m, long nrl, long nrh, long ncl, long nch )
-   { if ( m ) { free( m[nrl] ); free( m ); } }
+   { if ( m ) { free( m[nrl] + ncl ); free( m + nrl ); } }
 void free_imatrix( int **m, long nrl, long nrh, long ncl, long nch )
-   { if ( m ) { free( m[nrl] ); free( m ); } }
+   { if ( m ) { free( m[nrl] + ncl ); free( m + nrl ); } }
 void free_tensor( real ***t, long nrl, long nrh, long ncl, long nch,
                   long ndl, long ndh )
    { if ( t ) { free( t[nrl][ncl] ); free( t[nrl] ); free( t + nrl ); } }

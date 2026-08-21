@@ -160,7 +160,7 @@ rama `else`**, más una tabla de validación de valores.
 | P1.2 | toda opción desconocida se rechaza con `exit(1)`; comprobado con una opción inventada y con erratas de opciones reales | **✔** y con sugerencia: `-diagcv` → «did you mean `-diagcov'?» |
 | P1.3 | el conjunto de opciones que `usage()` enumera **es** el conjunto que el parser acepta, verificado comparando las dos listas | **✔** 33 = 33; la lista del `usage` se genera de la misma tabla que valida, y el test la compara contra los `strcmp` del fuente |
 | P1.4 | `ESTIMATION FAILED` sale con código 2; un ajuste con termcode 3 sale con 0 | **✔** con una fixture construida al efecto (dos series exactamente colineales, `ifault = 3`) |
-| P1.5 | `--version` imprime una versión y sale 0 | **✔** `drvec 1.0.0-rc1`; la versión definitiva la pone P6 |
+| P1.5 | `--version` imprime una versión y sale 0 | **✔** `drvec 0.9` desde el 2026-08-21 |
 | P1.6 | ningún valor dorado se mueve: la validación no toca el cálculo | **✔** 190 pasadas, 0 fallos; 200 con `VALGRIND=1` |
 
 ### 2.5 Lo construido, y lo que mide
@@ -707,7 +707,18 @@ el estado registrado no coinciden.
 1. `LICENSE` (GPL-2.0-or-later, que es lo que el README ya declara) y
    `CITATION.cff` con Mauricio (2006) como referencia del método.
 2. Versión en un solo sitio, embebida en el binario, impresa por `--version` y
-   en la cabecera del `.out`. Etiqueta `v1.0.0`.
+   en la cabecera del `.out` — **hecho el 2026-08-21**: `0.9`, y va también en
+   la primera línea del fichero de resultados, porque un `.out` que no dice con
+   qué se produjo no lo reproduce nadie. Etiqueta `v0.9`.
+
+   **Por qué 0.9 y no 1.0**, decidido y no heredado: un número de versión es una
+   afirmación sobre lo que hay dentro, y dentro hay dos cosas que un 1.0
+   taparía — que el programa **no mejora la previsión de un ARIMA por serie**
+   sobre su banco (§4t del registro), y que **la especificación por defecto
+   cambió el 2026-08-20**, con ella todas las cifras medidas sobre la anterior.
+   Ninguna de las dos es un defecto que arreglar: son el estado del
+   conocimiento, medidas y escritas. Lo que no procede es ponerles un 1.0
+   encima.
 3. `CHANGELOG.md` con el formato de `drtran-python`: lo publicado, y los
    informes completos en el registro.
 4. `docs/BUGS.md` propio, o entradas en el del conjunto — a decidir, pero **uno
@@ -768,7 +779,7 @@ conviene saberlo antes de invertir en el registro y el empaquetado, no después.
 
 **P2 y P3 después de P5** por la misma razón: son consolidación, y consolidar
 sobre una especificación que aún puede moverse es hacerlo dos veces. P3 sigue
-teniendo que ir antes de la etiqueta, porque no tiene sentido publicar `v1.0.0`
+teniendo que ir antes de la etiqueta, porque no tiene sentido publicar `v0.9`
 con el motor divergiendo del canónico, con dos defectos del registro resueltos
 aquí y abiertos allí, y con dos fugas que la alineación de `nlatools` destapa.
 

@@ -4634,8 +4634,27 @@ static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
 /*  Ver docs/PLAN_PRODUCCION.md P1.                                           */
 /*****************************************************************************/
 
+/*  LA VERSION, Y POR QUE ES 0.9 Y NO 1.0.
+ *
+ *  Un numero de version es una afirmacion sobre lo que hay dentro, y lo que hay
+ *  dentro incluye dos cosas que un 1.0 no deberia tapar:
+ *
+ *   - MEDIDO FUERA DE MUESTRA, este programa NO mejora la prevision de un ARIMA
+ *     por serie sobre su banco (HOMOLOGATION.md 4t).  Es un estimador de maxima
+ *     verosimilitud exacta para una clase de modelos -- y para el vector de
+ *     cointegracion y las hipotesis sobre el, donde es superconsistente y donde
+ *     un univariante no dice nada --, no una herramienta de prevision que gane
+ *     sus parametros.
+ *   - LA ESPECIFICACION POR DEFECTO CAMBIO el 2026-08-20 (SPECIFICATION_PLAN.md
+ *     10), y con ella todas las cifras del registro medidas sobre la anterior.
+ *     Un defecto recien movido no ha tenido tiempo de equivocarse en manos de
+ *     nadie.
+ *
+ *  Ninguna de las dos es un defecto que arreglar: son el estado del
+ *  conocimiento, y estan medidas y escritas.  Lo que no procede es ponerles un
+ *  1.0 encima.                                                                */
 #ifndef DRVEC_VERSION
-#define DRVEC_VERSION "1.0.0-rc1"
+#define DRVEC_VERSION "0.9"
 #endif
 
 enum opt_arg {
@@ -5157,7 +5176,8 @@ int main(int argc, char *argv[])
     strcat(outputf, ".out");
     strcat(inputf, ".inp");
 
-    printf("\nDRVEC — VEC model EML estimation (Mauricio 2006)\n");
+    printf("\nDRVEC %s — VEC model EML estimation (Mauricio 2006)\n",
+           DRVEC_VERSION);
     printf("Input  : %s\n", inputf);
     printf("Output : %s\n", outputf);
     printf("Model  : VEC(%d) with stationary VARMA(%d,%d) on Ȳ_t\n",
@@ -5292,7 +5312,11 @@ int main(int argc, char *argv[])
     outputv = fopen(outputf, "w");
     if (!outputv) { fprintf(stderr, "ERROR: cannot write %s\n", outputf); exit(1); }
 
-    fprintf(outputv, "DRVEC — VEC(%d) EML Estimation (Mauricio 2006)\n", global_r);
+    /*  La version, EN EL FICHERO DE RESULTADOS.  Un .out que no dice con que
+     *  se produjo no es reproducible por nadie, y este programa ha movido su
+     *  especificacion por defecto una vez ya.                                */
+    fprintf(outputv, "DRVEC %s — VEC(%d) EML Estimation (Mauricio 2006)\n",
+            DRVEC_VERSION, global_r);
     fprintf(outputv, "==============================================\n\n");
     fprintf(outputv, "Input  : %s\n", inputf);
     fprintf(outputv, "M = %d, r = %d, s = M-r = %d\n", nser, global_r, nser - global_r);

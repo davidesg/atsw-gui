@@ -396,13 +396,34 @@ int read_fue_pre(const char *filename,
         return 1;
     }
 
-    /* Skip 5 header lines */
-    for (i = 0; i < 5; i++) fgets(line, MAXSTR, f);
+    /*  LA CABECERA ES LIBRE, y por eso aqui NO se cuentan lineas.  El parser
+     *  autoritativo (fue/src/fue/inp.py [3.0], FILE_CONTRACT.md 2.0) descarta
+     *  lo que venga hasta el separador cuyo texto dice "frequency", y ese es
+     *  el unico sitio de todo el formato donde mira lo que un comentario DICE.
+     *
+     *  Contar cinco lineas no lee el FORMATO: lee un fichero concreto.  El
+     *  .pre lo escribe fue con una linea en blanco tras el banner -- cinco
+     *  renglones --, pero el .inp que escribe drvec no la trae y el de DRVUS
+     *  trae ademas una linea de especificacion menos.  La familia de ficheros
+     *  que este lector tiene delante NO es de cabecera uniforme, y un renglon
+     *  de desplazamiento no da error: da un nobs leido de la linea equivocada.
+     *  Medido desde drvec: un .inp de su bateria daba nobs = 1787128427 y el
+     *  proceso moria por memoria.                                            */
+    {
+        int seen = 0;
+        while (fgets(line, MAXSTR, f))
+            if (strstr(line, "requency")) { seen = 1; break; }
+        if (!seen) {
+            fprintf(stderr, "ERROR: %s no trae el separador de frecuencia;"
+                            " no es un fichero del formato fue\n", filename);
+            fclose(f);
+            return 1;
+        }
+    }
 
     Tm->residuals = (char *)malloc(MAXSTR);
 
     /* ── Frequency ── */
-    fgets(line, MAXSTR, f);  /* comment */
     fgets(line, MAXSTR, f);
     if (strstr(line, "number") || strstr(line, "Number"))
         { Ts->freq = 1; Ts->numbering = 1; }
@@ -425,6 +446,17 @@ int read_fue_pre(const char *filename,
             Ts->begtime = 1;
         }
         Ts->name = strdup(namef);
+    }
+
+    /*  Un nobs disparatado es la firma de una lectura desalineada, y pedir el
+     *  vector antes de mirarlo convierte un fichero mal formado en una muerte
+     *  por memoria, que no dice nada de lo que pasa.                          */
+    if (Ts->nobs <= 0) {
+        fprintf(stderr, "ERROR: %s declara %d observaciones\n",
+                filename, Ts->nobs);
+        free(Tm->residuals);
+        fclose(f);
+        return 1;
     }
 
     Ts->data = vector(1, Ts->nobs);
@@ -547,11 +579,26 @@ int read_fue_pre(const char *filename,
     sscanf(line, "%lf %d %d", &Tm->boxlam, &Tm->nrdiff, &Tm->nadiff);
 
     /* ── ifadf ── */
+    /*  BUG-11.  La seccion la escriben SIEMPRE los dos escritores de fue --
+     *  fue-1.13.1/src/fue.c:3485 y fue/src/fue/report.py:1203 --: con freq > 1
+     *  los freq/2+1 flags, y con datos ANUALES un " 0" literal.  Este lector
+     *  leia las dos lineas SOLO dentro del if, asi que en un fichero anual
+     *  todo lo que viene detras se desplazaba: cbands y refactor salian 0.0 y
+     *  LA SERIE NO SE LEIA, quedando a ceros, con read_fue_pre devolviendo
+     *  EXITO.  Silencioso y verosimil.
+     *
+     *  No se veia aqui porque los datos de drtran son mensuales.  Lo encontro
+     *  drvec, cuyo banco es anual (mink-muskrat, 1850-1911), al reutilizar
+     *  este lector en vez de escribir un segundo.  El defecto entro con la
+     *  EXTRACCION: el lector propio de fue conserva la rama que la copia
+     *  perdio.                                                                */
+    fgets(line, MAXSTR, f); fgets(line, MAXSTR, f);
     if (Ts->freq > 1) {
         Tm->ifadf = ivector(0, Ts->freq / 2);
-        fgets(line, MAXSTR, f); fgets(line, MAXSTR, f);
         { char *p = line; for (i = 0; i <= Ts->freq / 2; i++)
             { int off; sscanf(p, "%d%n", &Tm->ifadf[i], &off); p += off; } }
+    } else {
+        Tm->ifadf = NULL;   /* antes quedaba sin inicializar */
     }
 
     /* ── cbands + refactor ── */
@@ -599,3 +646,138 @@ int read_fue_pre(const char *filename,
 
     return 0;
 }
+
+/*****************************************************************************/
+/*  free_fue_pre -- BUG-12: read_fue_pre no traia desasignador                */
+/*****************************************************************************/
+/*  Cada lectura de un .pre reservaba una veintena de bloques -- la serie, los
+ *  deterministas con sus omega y delta, los cuatro bloques de factores ARMA,
+ *  los de frecuencia fija, ifadf, rnsop y los residuos -- y no habia forma de
+ *  soltarlos.  Medido sobre un caso mensual de examples/: 20 bloques
+ *  "definitely lost", varios de esta funcion.
+ *
+ *  En un programa que lee dos ficheros y termina no hace dano, y por eso duro.
+ *  Lo que hace es TAPAR: una salida de valgrind con veinte fugas conocidas es
+ *  una en la que la veintiuna no se ve.  Y en cuanto alguien llame al lector en
+ *  un bucle -- un barrido de especificaciones, un bootstrap -- deja de ser
+ *  inofensivo.
+ *
+ *  Escrito en drvec, que reutilizo este lector y necesitaba cerrarlo para que
+ *  su bateria de memoria pudiera ser verde; devuelto aqui el 2026-08-21.
+ *
+ *  free_base1 deshace el idioma `malloc(n*size) - 1` con el que el lector
+ *  reserva sus arrays base-1: el bloque real empieza en p+1.                 */
+static void free_base1( void *base1 )
+{
+    void **p = (void **) base1;
+    if ( p != NULL ) free( (void *) &p[1] );
+}
+
+void free_fue_pre( struct Tusmodel *Tm, struct Tseries *Ts, real **DataMat )
+{
+    int i;
+
+    if ( Ts != NULL )
+        {
+        if ( Ts->name ) free( Ts->name );
+        if ( Ts->data ) free_vector( Ts->data, 1, Ts->nobs );
+        Ts->name = NULL; Ts->data = NULL;
+        }
+    if ( Tm == NULL ) return;
+
+    if ( DataMat && Ts ) free_matrix( DataMat, 0, Tm->NdetVar, 1, Ts->nobs );
+
+    /* ── deterministas ── */
+    if ( Tm->NdetVar > 0 )
+        {
+        for ( i = 1; i <= Tm->NdetVar; i++ )
+            {
+            if ( Tm->detspec && Tm->detspec[i] ) free( Tm->detspec[i] );
+            if ( Tm->Omega && Tm->Omega[i] )
+                free_vector( Tm->Omega[i], 0, Tm->Nomega[i] );
+            if ( Tm->Imega && Tm->Imega[i] )
+                free_ivector( Tm->Imega[i], 0, Tm->Nomega[i] );
+            if ( Tm->Ndelta && Tm->Ndelta[i] > 0 )
+                {
+                if ( Tm->Delta && Tm->Delta[i] )
+                    free_vector( Tm->Delta[i], 1, Tm->Ndelta[i] );
+                if ( Tm->Ielta && Tm->Ielta[i] )
+                    free_ivector( Tm->Ielta[i], 1, Tm->Ndelta[i] );
+                }
+            }
+        if ( Tm->detspec ) free_base1( Tm->detspec );
+        if ( Tm->Nomega )  free_ivector( Tm->Nomega, 1, Tm->NdetVar );
+        if ( Tm->Ndelta )  free_ivector( Tm->Ndelta, 1, Tm->NdetVar );
+        }
+    else
+        {
+        /* la reserva ficticia del caso sin deterministas */
+        if ( Tm->Nomega ) free_ivector( Tm->Nomega, 1, 1 );
+        if ( Tm->Ndelta ) free_ivector( Tm->Ndelta, 1, 1 );
+        }
+    if ( Tm->Omega ) free_base1( Tm->Omega );
+    if ( Tm->Imega ) free_base1( Tm->Imega );
+    if ( Tm->Delta ) free_base1( Tm->Delta );
+    if ( Tm->Ielta ) free_base1( Tm->Ielta );
+    Tm->detspec = NULL; Tm->Nomega = NULL; Tm->Ndelta = NULL;
+    Tm->Omega = NULL; Tm->Imega = NULL; Tm->Delta = NULL; Tm->Ielta = NULL;
+
+    /* ── factores ARMA: los cuatro bloques tienen la misma forma ── */
+    {
+    int   nums[4];
+    int  *ords[4];
+    real **cfs[4];
+    int  **fls[4];
+    int b;
+
+    nums[0] = Tm->NumAr1; ords[0] = Tm->p1; cfs[0] = Tm->Ar1; fls[0] = Tm->Ia1;
+    nums[1] = Tm->NumAr2; ords[1] = Tm->p2; cfs[1] = Tm->Ar2; fls[1] = Tm->Ia2;
+    nums[2] = Tm->NumMa1; ords[2] = Tm->q1; cfs[2] = Tm->Ma1; fls[2] = Tm->Im1;
+    nums[3] = Tm->NumMa2; ords[3] = Tm->q2; cfs[3] = Tm->Ma2; fls[3] = Tm->Im2;
+
+    for ( b = 0; b < 4; b++ )
+        {
+        if ( nums[b] <= 0 ) continue;
+        for ( i = 1; i <= nums[b]; i++ )
+            {
+            if ( cfs[b] && cfs[b][i] ) free_vector( cfs[b][i], 0, ords[b][i] );
+            if ( fls[b] && fls[b][i] ) free_ivector( fls[b][i], 0, ords[b][i] );
+            }
+        if ( ords[b] ) free_ivector( ords[b], 1, nums[b] );
+        if ( cfs[b] )  free_base1( cfs[b] );
+        if ( fls[b] )  free_base1( fls[b] );
+        }
+    }
+    Tm->p1 = Tm->p2 = Tm->q1 = Tm->q2 = NULL;
+    Tm->Ar1 = Tm->Ar2 = Tm->Ma1 = Tm->Ma2 = NULL;
+    Tm->Ia1 = Tm->Ia2 = Tm->Im1 = Tm->Im2 = NULL;
+    Tm->NumAr1 = Tm->NumAr2 = Tm->NumMa1 = Tm->NumMa2 = 0;
+
+    /* ── factores de frecuencia fija: coef es (0..2) por factor ── */
+    if ( Tm->NumAr1f > 0 )
+        {
+        for ( i = 1; i <= Tm->NumAr1f; i++ )
+            if ( Tm->Ar1f && Tm->Ar1f[i] ) free_vector( Tm->Ar1f[i], 0, 2 );
+        if ( Tm->pfre1 ) free_ivector( Tm->pfre1, 1, Tm->NumAr1f );
+        if ( Tm->Ia1f )  free_ivector( Tm->Ia1f,  1, Tm->NumAr1f );
+        if ( Tm->Ar1f )  free_base1( Tm->Ar1f );
+        }
+    if ( Tm->NumMa1f > 0 )
+        {
+        for ( i = 1; i <= Tm->NumMa1f; i++ )
+            if ( Tm->Ma1f && Tm->Ma1f[i] ) free_vector( Tm->Ma1f[i], 0, 2 );
+        if ( Tm->qfre1 ) free_ivector( Tm->qfre1, 1, Tm->NumMa1f );
+        if ( Tm->Im1f )  free_ivector( Tm->Im1f,  1, Tm->NumMa1f );
+        if ( Tm->Ma1f )  free_base1( Tm->Ma1f );
+        }
+    Tm->Ar1f = Tm->Ma1f = NULL; Tm->pfre1 = Tm->qfre1 = NULL;
+    Tm->Ia1f = Tm->Im1f = NULL;
+    Tm->NumAr1f = Tm->NumMa1f = 0;
+
+    /* ── resto ── */
+    if ( Tm->ifadf && Tm->sper > 1 ) free_ivector( Tm->ifadf, 0, Tm->sper / 2 );
+    if ( Tm->rnsop ) free_vector( Tm->rnsop, 0, Tm->ornsop );
+    if ( Tm->residuals ) free( Tm->residuals );
+    Tm->ifadf = NULL; Tm->rnsop = NULL; Tm->residuals = NULL;
+}
+

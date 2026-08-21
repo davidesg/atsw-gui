@@ -23,6 +23,9 @@
  * La matriz DataMat se dimensiona como DataMat[0..Tm->NdetVar][1..Ts.nobs]
  * y contiene las variables deterministas (fila 0 = serie transformada).
  */
+/*  BUG-12: lo que read_fue_pre reserva, soltado.  Ver fue_pre_reader.c.   */
+void free_fue_pre( struct Tusmodel *Tm, struct Tseries *Ts, real **DataMat );
+
 int read_fue_pre(const char *filename,
                  struct Tusmodel *Tm,
                  struct Tseries *Ts,

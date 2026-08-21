@@ -4504,6 +4504,14 @@ int main(int argc, char *argv[])
         free_vector(xs, 1, n_slot);
     }
 
+    /*  BUG-12: lo que leyeron los .pre, soltado.  Hasta el 2026-08-21 no habia
+     *  desasignador y cada lectura dejaba una veintena de bloques.  No hacia
+     *  dano aqui -- se leen dos ficheros y se termina -- pero tapaba: una
+     *  salida de valgrind con veinte fugas conocidas es una en la que la
+     *  veintiuna no se ve.                                                    */
+    for (i = 1; i <= n_ser; i++)
+        free_fue_pre(&Tm[i], &Ts[i], DataMat[i]);
+
     fclose(outputv);
     return 0;
 }

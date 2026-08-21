@@ -51,6 +51,10 @@
 #   8g. |Sigma|     the beta exit criterion, on the four equivalent
 #                   configurations.  OPT-IN (SLOW=1): it needs -multistart 60
 #                   four times over.
+#   8h. BUG-13      the engine's chisq() against GSL.  Watches code drvec does
+#                   NOT run: the function belongs to the file shared with
+#                   drvarma and drtran, which do, and this is the only one of
+#                   the three with an automatic suite.
 #   9. MEMORY       valgrind over the main paths.  OPT-IN (VALGRIND=1) so the
 #                   suite is deterministic anywhere.  It has already caught two
 #                   real leaks: the multi-start block, and the seeding buffers,
@@ -1825,6 +1829,50 @@ if [ "${SLOW:-0}" = "1" ]; then
     else bad "|Sigma| spread" "$a $b $c $d"; fi
     echo
 fi
+
+# 8h. BUG-13: LA CHI2 DEL MOTOR, contra GSL.
+#
+#     chisq() de nlatools.c se documenta como la CDF y con df >= 30 aplicaba DOS
+#     correcciones de cola, de modo que para z < 0 devolvia el complemento.  Y
+#     z < 0 es el estadistico POR DEBAJO de su media: el caso en que el modelo
+#     esta BIEN.  Todo p-valor escrito `1.0 - chisq(...)` salia invertido y la
+#     diagnosis declaraba no blancos unos residuos limpios -- Q = 23.4777 con
+#     40 g.l. tiene p = 0.9825 y se imprimia 0.0175 con "REJECT H0".  Solo
+#     fallaba en los casos buenos, que es lo que lo hacia dificil de ver.
+#
+#     ESTA COMPROBACION ES ATIPICA EN ESTA BATERIA y por eso se explica: drvec
+#     NO llama a chisq -- usa gsl_cdf_chisq_Q, y lo dice en diagnose_mv.c --,
+#     asi que un fallo aqui no movería ni un valor dorado.  Pero la funcion es
+#     del fichero COMPARTIDO con drvarma y drtran, que si la usan, y este es el
+#     unico de los tres programas con bateria automatica.  De modo que aqui se
+#     vigila codigo que este programa no ejecuta, a proposito.
+#
+#     La comprobacion que muerde es la primera: 0.0175 y no 0.9825.
+echo "[8h] the engine's chi-square, against GSL (BUG-13)"
+
+CHIP=${CHIP:-bin/chisq_probe}
+if [ ! -x "$CHIP" ]; then
+    bad "chisq probe" "$CHIP not built -- run make first"
+else
+    #  1. la cola no puede estar invertida: el primer caso es z < 0, df = 40.
+    v=$("$CHIP" | awk 'NR==1{print $3}')
+    if awk -v a="$v" 'BEGIN{exit !(a > 0.010 && a < 0.025)}'; then
+        ok "chisq(23.4777, 40) = $v, the lower tail (BUG-13 would give ~0.98)"
+    else bad "BUG-13" "chisq(23.4777, 40) = $v; expected ~0.0175"; fi
+
+    #  2. y en todo el rango, dentro del error de Wilson-Hilferty.
+    worst=$("$CHIP" | awk '{if($5>m) m=$5} END{printf "%.3e", m}')
+    if awk -v w="$worst" 'BEGIN{exit !(w < 5e-4)}'; then
+        ok "chisq agrees with GSL to $worst over the nine cases"
+    else bad "chisq vs GSL" "worst difference $worst"; fi
+
+    #  3. y las dos ramas: con df < 30 es exacta (gammap), no aproximada.
+    ex=$("$CHIP" | awk '$2 < 30 {if($5>m) m=$5} END{printf "%.3e", m+0}')
+    if awk -v w="$ex" 'BEGIN{exit !(w < 1e-9)}'; then
+        ok "and with df < 30 it is exact ($ex), which is the gammap branch"
+    else bad "chisq df<30" "difference $ex, expected machine zero"; fi
+fi
+echo
 
 # ================================================== 9 MEMORY (opt-in) ==
 # Off by default so `make test` is deterministic on any machine; run it with

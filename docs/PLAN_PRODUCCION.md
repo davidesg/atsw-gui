@@ -444,10 +444,22 @@ son justo lo que la regla 1 del método prohíbe.
    parche para `drtran/src/fue_pre_reader.c` y entradas en
    `drtran-python/docs/BUGS.md` cerrando BUG-11 y BUG-12 con la referencia al
    commit de `drvec`.
-3. **BUG-13**: proponerlo al registro como defecto de `drvarma` con la
-   reproducción que `drvec` ya tiene en su batería (el caso sintético de tres
-   series con `Q(126) = 110`), y dejar en `drvec` un comentario en `chisq()` que
-   diga que está defectuosa y que el programa no la usa.
+3. **BUG-13** — **HECHO el 2026-08-21**, y más de lo que el plan pedía. En vez
+   de comentar que está rota, se ha **arreglado en las cuatro copias a la vez**
+   —`drvarma` canónico, el paquete de Python, `drtran` y ésta—, carácter por
+   carácter, porque un arreglo divergente en un fichero compartido es peor que
+   el defecto. Comprobado antes de tocar nada que **ningún llamante se había
+   adaptado**: los ocho escriben `1.0 - chisq(...)`. Verificado contra
+   `gsl_cdf_chisq_P` a través del objeto construido: 1.9e−04 con `df ≥ 30`, que
+   es el error de Wilson-Hilferty, y precisión de máquina por debajo. Y con
+   regresión: `tests/chisq_probe.c` y el bloque `[8h]`, que **vigila código que
+   `drvec` no ejecuta** porque los dos programas que sí lo ejecutan no tienen
+   batería. Medido que muerde: devolver la segunda corrección levanta dos
+   fallos.
+
+   *Lo que queda fuera:* `drvarma_source` no está bajo control de versiones, así
+   que sus dos copias quedan arregladas en disco y sin commit; y las versiones
+   archivadas `v.01`–`v.04` se dejan como están, a propósito.
 4. **Medir la identidad de cruce**: establecer si 1.8e−05 es el redondeo del
    formato —escribiendo el mismo `.pre` con más decimales y viendo si baja— o es
    pérdida de precisión de `drvec`. El resultado, sea el que sea, va al registro.

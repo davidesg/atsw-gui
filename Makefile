@@ -45,6 +45,10 @@ EXEC = $(BIN_DIR)/drvec
 # unico que ejercita la SERIE y el REFACTOR del .pre -- la estimacion solo usa
 # el bloque MA --, ver tests/pre_probe.c.
 PROBE      = $(BIN_DIR)/pre_probe
+#  Arnes de la chi2 del motor: drvec no llama a chisq() -- usa GSL --, asi que
+#  sin esto su bateria no protegeria el arreglo de BUG-13 en un fichero que
+#  drvarma y drtran SI usan.  Ver tests/chisq_probe.c.
+CHIPROBE   = $(BIN_DIR)/chisq_probe
 PROBE_OBJS = $(BUILD_DIR)/fue_pre_reader.o $(BUILD_DIR)/fue_bridge.o \
              $(BUILD_DIR)/nlatools.o
 
@@ -83,14 +87,17 @@ $(EXEC): $(OBJS) | $(BIN_DIR)
 $(PROBE): tests/pre_probe.c $(PROBE_OBJS) | $(BIN_DIR)
 	$(CC) $(CFLAGS) -o $@ tests/pre_probe.c $(PROBE_OBJS) $(LIBS)
 
-test: $(EXEC) $(PROBE)
+$(CHIPROBE): tests/chisq_probe.c $(BUILD_DIR)/nlatools.o | $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ tests/chisq_probe.c $(BUILD_DIR)/nlatools.o $(LIBS)
+
+test: $(EXEC) $(PROBE) $(CHIPROBE)
 	@tests/run_tests.sh
 
-test-verbose: $(EXEC) $(PROBE)
+test-verbose: $(EXEC) $(PROBE) $(CHIPROBE)
 	@tests/run_tests.sh -v
 
 clean:
-	rm -rf $(BUILD_DIR)/*.o $(EXEC) $(PROBE) *.eps *.out *.txt
+	rm -rf $(BUILD_DIR)/*.o $(EXEC) $(PROBE) $(CHIPROBE) *.eps *.out *.txt
 
 distclean: clean
 	rm -rf $(BUILD_DIR) $(BIN_DIR)

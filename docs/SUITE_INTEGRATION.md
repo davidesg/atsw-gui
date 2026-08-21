@@ -290,6 +290,32 @@ The consequence for results already reported is stated in
 the correction could not reach `q ≥ 2`, and were bounded by a defect rather than
 by a modelling decision.
 
+### The engine's chi-square, and a defect given back
+
+`chisq()` in `nlatools.c` is documented as the cumulative χ² and, for `df ≥ 30`,
+applied **two** tail corrections instead of one. The Abramowitz–Stegun
+polynomial at `|z|` gives the upper tail of `|z|`, which for `z < 0` already
+*is* the lower tail of `z`; the second correction flipped a value that was
+right. And `z < 0` is a statistic **below** its mean — the case where the model
+is fine — so every p-value written `1.0 - chisq(...)` came out complemented and
+the residual diagnosis declared clean residuals non-white. Measured:
+`Q = 23.4777` on 40 d.f. has `p = 0.9825` and was printed as 0.0175 with
+*"REJECT H0"*.
+
+Found from here on 2026-08-19, recorded as BUG-13 in the suite's defect
+register, and **fixed on 2026-08-21 in the four copies at once** — the canonical
+`drvarma`, the Python package's, `drtran`'s and this one — character for
+character, because a divergent fix to a shared file is worse than the defect.
+Checked first that no caller had adapted to it: all of them write
+`1.0 - chisq(...)`. Verified against `gsl_cdf_chisq_P`: agreement to 1.9e−04 for
+`df ≥ 30`, which is Wilson–Hilferty's own error, and to machine precision below.
+
+`drvec` still does not use the function — `diagnose_mv.c` routes through
+`gsl_cdf_chisq_Q`, which is the upper tail directly and needs no `1 - …` — and
+that is now a deliberate belt-and-braces rather than a workaround. The battery
+watches `chisq` anyway, in `[8h]`, on the grounds that it belongs to a file two
+other programs execute and neither of them has an automatic suite.
+
 ## 6. What `drvec` gives back
 
 Two things the suite asked for and did not have:

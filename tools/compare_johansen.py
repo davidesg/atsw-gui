@@ -55,10 +55,32 @@ def read_inp(path):
     return np.asarray(rows), names, year
 
 
+def _rank_sequential(jo):
+    """El rango de la traza, leido COMO SE LEE: parando en el primer no rechazo.
+
+    Aqui habia `int(sum(jo.lr1 > jo.cvt[:, 1]))`, que cuenta CUANTAS filas
+    rechazan.  No es lo mismo.  El procedimiento de Johansen contrasta H0: r = 0,
+    y si no la rechaza se para y devuelve 0; solo si la rechaza pasa a r <= 1.
+    Contar filas coincide con eso mientras los rechazos sean un prefijo -- que es
+    lo habitual y por eso duro --, y falla en cuanto una fila posterior rechaza
+    con una anterior que no.
+
+    Encontrado sobre tres IPC de la zona euro (HOMOLOGATION.md 4u): con
+    det_order = 1 la fila r <= 2 da traza 4.11 contra 3.84 y las dos primeras no
+    rechazan, asi que contar devuelve 1 y la secuencia devuelve 0.  Daba la
+    respuesta correcta -- coincidia con lo que dice drvec -- por la razon
+    equivocada, que es la unica forma en que estas cosas sobreviven.
+    """
+    for i in range(len(jo.lr1)):
+        if jo.lr1[i] <= jo.cvt[i, 1]:      # no se rechaza H0: r <= i
+            return i
+    return len(jo.lr1)                     # se rechazaron todas
+
+
 def joh(y, k, rank=1):
     """(rango elegido, B2 renormalizado, alpha, p portmanteau, p normalidad)."""
     jo = coint_johansen(y, det_order=0, k_ar_diff=k)
-    sel = int(sum(jo.lr1 > jo.cvt[:, 1]))
+    sel = _rank_sequential(jo)
     v = VECM(y, k_ar_diff=k, coint_rank=rank, deterministic="ci").fit()
     b = np.asarray(v.beta)[:, 0]
     b2 = b[0] / b[1] if abs(b[1]) > 1e-12 else float("nan")

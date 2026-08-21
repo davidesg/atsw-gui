@@ -92,9 +92,34 @@ wrote from `drvec`'s own `-writeinp` output:
 | logL of the diagonal **fit** from that seed | −34.6278400462 |
 | **certificate** (fit − evaluate) | **+2.4·10⁻⁷ ≥ 0** ✔ |
 
-Both differences are of the order of the format's own rounding: **a `.pre`
-stores its coefficients with `%.6f`**, and that is what bounds how sharp the
-certificate can be.
+**The two differences do not have the same cause, and until 2026-08-21 this
+paragraph said they did.** It read that both were the format's own rounding.
+Measured, on the diagonal rung with `-diagar -diagma -diagcov`:
+
+| | truncation on (`-m 1`) | off (`-m 2`) |
+|---|---|---|
+| `q = 0` | −1.123e−12 | −1.123e−12 |
+| `q = 1` | **−1.773e−05** | **−1.634e−10** |
+
+* **The crossing identity is the `ξ` truncation**, not the format. Switching the
+  truncation off moves it five orders of magnitude, and at `q = 0` — where there
+  is no series to truncate — it is machine zero whatever `-m` says. The reason
+  is in `gate_contract`: the joint system and the univariate ones do not
+  truncate at the same term, because the joint sums `m` entries and each
+  univariate one. The tolerance the program applies is `xitol` itself for
+  `q > 0` and `1e−6` for `q = 0`, which is the only thing that can honestly be
+  claimed: the two routes agree **as far as the approximation reaches**.
+* **The certificate is the format's rounding.** That one evaluates the
+  likelihood *at the stored values*, and a `.pre` keeps its coefficients with
+  `%.6f`, so `%.6f` is what bounds how sharp it can be.
+
+**And it corrects a comparison made in the production plan.** That plan recorded
+the sibling program's gate at −1.50e−07 against this one's 1.8e−05 and called
+`drvec` "two orders of magnitude worse". The two numbers were never comparable —
+different models, different `q`, and one of them carrying a truncation the other
+does not — and with the truncation off this side is 1.6e−10. The lesson is the
+plan's own rule turned on itself: a figure taken from another program's document
+is not a measurement of this one.
 
 **And the program now claims both contracts itself**, not only the test suite.
 Any run at the diagonal rung prints the crossing identity — computing the

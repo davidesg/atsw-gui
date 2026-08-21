@@ -290,7 +290,7 @@ cifra. Comprobado ejecutándolos todos.
 
 ---
 
-## 4. La suite: motor, cast y registro de defectos
+## 4. La suite: motor, cast y registro de defectos — **HECHA el 2026-08-21**
 
 `drvec` es, a nivel de suite, un subproducto de `drvarma` y de `fue`: usa el
 motor del primero y el cast del segundo, exactamente como `drtran`. Esa frase
@@ -477,22 +477,42 @@ son justo lo que la regla 1 del método prohíbe.
    *Lo que queda fuera:* `drvarma_source` no está bajo control de versiones, así
    que sus dos copias quedan arregladas en disco y sin commit; y las versiones
    archivadas `v.01`–`v.04` se dejan como están, a propósito.
-4. **Medir la identidad de cruce**: establecer si 1.8e−05 es el redondeo del
-   formato —escribiendo el mismo `.pre` con más decimales y viendo si baja— o es
-   pérdida de precisión de `drvec`. El resultado, sea el que sea, va al registro.
-5. **Una nota de arquitectura** que diga qué comparte `drvec` con quién y por
-   qué diverge donde diverge, con las cifras de §4.1 y §4.2. Es lo que hoy no
-   existe y lo que hace que la deriva se descubra midiendo en vez de leyendo.
+4. **HECHO el 2026-08-21, y la pregunta estaba mal planteada.** No es el
+   redondeo del formato ni pérdida de precisión: es **la truncación de `ξ`**.
+   Medido en la puerta diagonal — `q = 1` da −1.773e−05 con truncación y
+   −1.634e−10 sin ella (`-m 2`), y `q = 0` da −1.123e−12 con las dos, porque no
+   hay sucesión que truncar.
+
+   Y corrige dos cosas escritas. `SUITE_INTEGRATION.md` §3 atribuía **las dos**
+   diferencias al `%.6f` del formato; sólo la segunda —el certificado, que
+   evalúa en los valores guardados— lo es. Y este plan comparaba 1.8e−05 contra
+   el −1.50e−07 del hermano y llamaba a `drvec` «dos órdenes peor»: los dos
+   números nunca fueron comparables —otro modelo, otra `q`, y una truncación que
+   sólo uno lleva— y sin ella este lado da 1.6e−10. Es la regla del propio plan
+   vuelta contra él: una cifra tomada del documento de otro programa no es una
+   medida de éste.
+5. **HECHO el 2026-08-21**: [ARCHITECTURE.md](ARCHITECTURE.md), con las cifras
+   ya no como tabla de divergencias sino como **una columna de ceros**, y con el
+   comando que las vuelve a medir al final. Si una fila deja de ser cero, o
+   alguien arregló algo aquí y no allí o al revés — y ninguna de las dos cosas
+   se anuncia sola.
+
+6. **HECHO**: `tools/compare_johansen.py` elegía el rango contando cuántas filas
+   de la traza rechazan, cuando la secuencia se para en la primera que **no**.
+   Coincide mientras los rechazos sean un prefijo —lo habitual, y por eso duró—
+   y falla en cuanto una fila posterior rechaza con una anterior que no, que es
+   justo el caso de los tres IPC de `HOMOLOGATION.md` §4u: contar daba 1 y la
+   secuencia da 0. Daba la respuesta correcta por la razón equivocada.
 
 **Criterio de salida de P3:**
 
-| # | criterio |
-|---|---|
-| P3.1 | `diff` de `elfvarma.c`, `drvmlest.c`, `qnewtopt.c` y `nlatools.c` contra `drvarma_v.04.1`: **cero líneas de código**; sólo cabeceras |
-| P3.2 | un test de la batería que ejecuta ese `diff` y falla si aparece código divergente |
-| P3.3 | `VALGRIND=1 make test` verde **con el layout compartido** |
-| P3.4 | BUG-11 y BUG-12 cerrados en el registro de la suite, con parche aplicado a `drtran` |
-| P3.5 | la identidad de cruce, medida y explicada |
+| # | criterio | estado |
+|---|---|---|
+| P3.1 | `diff` de `elfvarma.c`, `drvmlest.c`, `qnewtopt.c` y `nlatools.c` contra `drvarma_v.04.1`: **cero líneas de código** | **✔** los cuatro a cero |
+| P3.2 | un test de la batería que ejecuta ese `diff` y falla si aparece código divergente | **✘ no hecho** — la batería no puede alcanzar `drvarma_source`, que está fuera del repositorio y sin control de versiones. Queda el comando en [ARCHITECTURE.md](ARCHITECTURE.md) §7, que es una comprobación manual y hay que decirlo |
+| P3.3 | `VALGRIND=1 make test` verde **con el layout compartido** | **✔** 230, y 235 con `SLOW=1` |
+| P3.4 | BUG-11 y BUG-12 cerrados en el registro de la suite, con parche aplicado a `drtran` | **✔** `drtran d5bf5be`, registro `58e293b` |
+| P3.5 | la identidad de cruce, medida y explicada | **✔** es la truncación de `ξ`, y corrige dos afirmaciones escritas |
 
 ---
 
@@ -729,7 +749,7 @@ publicar mientras siga estando escrito con esta claridad:
 
 ## 9. Orden y por qué
 
-**P1 (hecha) → P4 (hecha) → P5 (hecha) → P2 (hecha) → P3 → P6 → (P7 idioma) → (P8 refactor).**
+**P1 (hecha) → P4 (hecha) → P5 (hecha) → P2 (hecha) → P3 (hecha) → P6 → (P7 idioma) → (P8 refactor).**
 
 El orden cambió el 2026-08-20, y el motivo es el requisito 6 de §0.
 

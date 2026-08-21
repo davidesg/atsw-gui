@@ -165,7 +165,8 @@ cast keeps its state in module globals and is not reentrant.
 At `r = 0` with diagonal structure — the ladder's diagonal rung — the two
 contracts of the suite hold and `drvec` checks them itself: the joint likelihood
 evaluated at the stored `.pre` values equals the sum of the univariate ones
-(agreement 1.8e-5, the format's own rounding), and the fitted value cannot be
+(agreement 1.8e-5, which is the `ξ` truncation and falls to 1.6e-10 with `-m 2`;
+see SUITE_INTEGRATION.md §3), and the fitted value cannot be
 below the evaluated one (certificate +2.4e-7 ≥ 0). **Above that rung the
 univariate information does not transport**: the marginal of a component of Ȳ is
 not the joint's diagonal block, and the AR is over-determined. Measured, at

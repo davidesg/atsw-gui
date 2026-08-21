@@ -133,6 +133,7 @@ Read in this order for a first acquaintance; consult by column thereafter.
 | [COMPARISON_JOHANSEN.md](COMPARISON_JOHANSEN.md) | against the reference implementation, at the same specification and at each one's optimum |
 | [coint_vector.html](coint_vector.html) | that comparison as a figure: eight pairs, both estimators, with intervals |
 | [SUITE_INTEGRATION.md](SUITE_INTEGRATION.md) | the file conventions of the estimation suite, and the provenance of borrowed code |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | **what is shared with the suite and what is not**, in code lines: the engine `drvec` carries unchanged, the cast it improved and gave back, where it deliberately differs, and the command that re-measures all of it |
 | [SPECIFICATION_PLAN.md](SPECIFICATION_PLAN.md) | the admissible set and the specification ladder: what was planned, what each of the five steps produced, the default it decided, and what it left open |
 | [VEC_EMBEDDING_PLAN.md](VEC_EMBEDDING_PLAN.md) | **planned work**: how `Π = ΛB′` is embedded on the certified gate, the boundary that blocks the usual bridge, and the order of work |
 | [TESTING.md](TESTING.md) | the test suite, and what it is measured to protect |

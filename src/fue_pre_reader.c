@@ -435,6 +435,7 @@ int read_fue_pre(const char *filename,
     fgets(line, MAXSTR, f);
     {
         char namef[80]; int outyear;
+        Ts->nobs = 0;             /* si la linea no trae numero, se ve abajo */
         if (Ts->freq > 1)
             sscanf(line, "%d %d %d %s %s",
                    &Ts->nobs, &Ts->begtime, &Ts->begyear,

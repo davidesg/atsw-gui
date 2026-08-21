@@ -449,10 +449,18 @@ son justo lo que la regla 1 del método prohíbe.
    el mismo número cuando `-estwin` empezó a recortar la muestra de estimación.
    Esa liberación ya no está; hay una sola, y usa las dimensiones de quien
    reservó.
-2. **Devolver a la suite** los tres arreglos del lector y el desasignador:
-   parche para `drtran/src/fue_pre_reader.c` y entradas en
-   `drtran-python/docs/BUGS.md` cerrando BUG-11 y BUG-12 con la referencia al
-   commit de `drvec`.
+2. **HECHO el 2026-08-21** (`drtran d5bf5be`, registro `58e293b`). Devueltos los
+   tres arreglos del lector y el desasignador. BUG-11 y BUG-12 **cerrados**.
+
+   Medido sobre un caso mensual real de `examples/`: de **20 bloques
+   «definitely lost» a 2**, y de varios del lector a **cero**. Los dos que
+   quedan son de `drtran` mismo —`main` y `apply_univariate_model`— y se dejan
+   como están, registrados: ampliar el arreglo a las tripas de otro programa no
+   es lo que se venía a hacer.
+
+   Y comprobado lo que de verdad importaba: el mismo caso mensual con el lector
+   viejo y con el nuevo da una salida **idéntica, cero líneas de diferencia**.
+   El arreglo es del caso anual, que es el que estaba roto.
 3. **BUG-13** — **HECHO el 2026-08-21**, y más de lo que el plan pedía. En vez
    de comentar que está rota, se ha **arreglado en las cuatro copias a la vez**
    —`drvarma` canónico, el paquete de Python, `drtran` y ésta—, carácter por

@@ -22,6 +22,10 @@ __pycache__/
 *.txt
 !benchmark/*.results.txt
 !datasets/**/*.txt
+#  The golden baseline is not a derived file: it IS the reference a refactor is
+#  checked against, and a check whose baseline does not travel with the
+#  repository is a check nobody else can run.  See tools/golden.sh.
+!tests/golden/hashes.txt
 
 #  Los otros dos productos del programa (P6.7): la prevision fechada y los
 #  errores origen a origen.  Derivados como el .out, y por la misma razon.

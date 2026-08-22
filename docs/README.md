@@ -47,7 +47,7 @@ are the state of the knowledge, measured and written down — but neither is
 something to put a 1.0 on top of. That document also says what would have to be
 true for the number to move.
 
-The estimator works and is tested (252 checks, and 262 under `VALGRIND=1`, on
+The estimator works and is tested (253 checks, and 263 under `VALGRIND=1`, on
 master; 235 and 245 at the tag); the
 interpretable layer is in — restrictions on the adjustment coefficients, the
 long-run matrix `Π`, the triangularisation `Σ = PDP′`, the normalisation

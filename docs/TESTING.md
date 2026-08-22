@@ -1,13 +1,13 @@
 # The test suite: what it protects, measured
 
-*`tests/run_tests.sh`, run by `make test`. 220 checks, 230 with the opt-in
-memory block and 225 with the opt-in slow one. The claim that a suite
+*`tests/run_tests.sh`, run by `make test`. 253 checks, 263 with the opt-in
+memory block and more with the opt-in slow one. The claim that a suite
 "protects" something is worth nothing unless it is measured, so it is measured
 by mutation: real defects are put back and the failures counted.*
 
 ---
 
-## 1. Ten kinds of check, in increasing order of value
+## 1. The kinds of check, in increasing order of value
 
 | | what it establishes |
 |---|---|
@@ -23,6 +23,12 @@ by mutation: real defects are put back and the failures counted.*
 | **8. roots and the boundary** | the moduli of the estimated AR and MA roots, and the invertibility boundary the likelihood enforces. Two things: that a model with `q ≥ 2` estimates at all, which is the regression for the allocation defect that made it abort ([SUITE_INTEGRATION.md](SUITE_INTEGRATION.md) §5); and that the unit-root alarm and the `-fdhess` boundary diagnosis fire where the optimum binds and stay silent where it does not — an alarm with no negative case is not an alarm |
 | **8g. \|Σ̂\|** | the beta exit criterion — `\|Σ̂\|` on the four equivalent configurations, each with `-multistart 60`. Opt-in with `SLOW=1`, because it is minutes rather than seconds. It exists because that criterion had **no** regression: the golden values cover single starts only, so the figure the beta was closed on could drift unseen, and one of its four rows had in fact been mis-transcribed. Both halves are checked — the four values and the fact that they **agree**, since four values drifting together would pass a per-value check |
 | **8h. BUG-13** | the engine's `chisq()` against GSL. **The one block that watches code `drvec` does not run**: the function belongs to `nlatools.c`, shared with `drvarma` and `drtran`, which do call it and have no automatic suite of their own. `drvec` routes its own p-values through GSL, so a regression here would move nothing of its own — which is exactly why it needs watching from somewhere |
+| **8i. the hypotheses** | the Wald block every run prints is checked by an **identity**: with one parameter the Wald statistic *is* the square of the `t` ratio printed beside the coefficient, and that is verified at **both ends of the parameter vector** — `Λ` at the head and `B₂` at the tail — so a misaligned index map (the §4.1 defect) breaks it at once. Plus what the block must *say*: `Λ = 0` labelled as not a test, the `-fdhess` reminder present exactly when `-fdhess` was not given, and the restrictions declared as imposed rather than faked under `-fixb2` |
+| **8j. the output file system** | `<base>.forecast` and `<base>.recursive` are written without being named, the forecast rows are dated so that they continue the `.inp`'s calendar exactly, the three band columns are tied to each other (`Low`/`High` **are** level ± 1.96 s.e. on every row), and `-C` redirects instead of adding a second file |
+| **8k. the language** | no Spanish left in the comments or messages of `src/drvec.c` (P7), **and the checker fires** on a file that is Spanish end to end — the vendored files are excluded on purpose, their language being their owner's business |
+| **8l. version and defects** | the version number says the same thing in the `#define`, `CITATION.cff`, `CHANGELOG.md`, `VERSIONS.md` and the binary; every defect entry has a number, a status and a **measured cost**; no `BUG-N` is referenced and unregistered. Both checks are themselves checked against a deliberately broken copy |
+| **8m. the `.pre` route** | the suite's input route reproduces the `.inp` route **byte for byte** below `ESTIMATION SUCCESSFUL`, its deterministic handling agrees **exactly** with `-interv` over the same models, the files are aligned by date, and it refuses one file, mixed frequencies, `-interv` and `-differenced` |
+| **8n. the golden set** | 24 whole reports, hashed byte for byte. It is the net for a change whose claim is that **nothing moves** — a refactor — and it is worth exactly what it was worth the day it was captured, which is why it supplements the invariants above rather than replacing them |
 | **9. memory** | valgrind over the main paths; opt-in, see §3b |
 | **10. the specification** | the five nested specifications of `Θ` are checked for what cannot go stale: the structural zeros are exactly zero, `T₁₂ = T₁₁B₂′` where the structure determines it, logL and `npar` are monotone along the nesting, the two parameterisations of the same class reach the same optimum at `p = 1` **to nine decimals through casts that share no code**, and the inverse map's residual is machine zero |
 | **11. admissibility** | `σ_min(Λ⊥′Θ(1)B⊥)` is reported at every fit; the constraint binds where the free fit sits below it; constraining the alternative cannot raise the rank statistic; and the terminal notice fires on an inadmissible fit and **stays silent on an admissible one**, because a warning that fires on everything is not a warning |

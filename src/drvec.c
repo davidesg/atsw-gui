@@ -23,6 +23,75 @@
 /*  GPL v2 or later.                                                           */
 /*****************************************************************************/
 
+/*****************************************************************************/
+/*  WHERE THINGS ARE IN THIS FILE                                            */
+/*                                                                           */
+/*  Eight thousand lines is a lot to read from the top, and until 2026-08-23  */
+/*  that is what finding anything here required: main() was 2320 lines and    */
+/*  carried the argument parsing, five whole modes, the multi-start and the   */
+/*  entire report at one indentation.  P8 cut it into the phases it always    */
+/*  had; this map says where they went.  main() is now 468 lines and reads    */
+/*  as the sequence it is.                                                   */
+/*                                                                           */
+/*  THE MODEL AND ITS PARAMETER VECTOR                                       */
+/*    par_blocks, calc_nparametrs   the layout of x[], in ONE place           */
+/*    init_guess                    where the fit starts, from the data      */
+/*    vec_shootx                    x[] -> the VARMA the engine estimates    */
+/*    warma_inverse                 and back, for the -warma coordinates     */
+/*    build_y2_levels, build_ybar   the data, differenced and transformed    */
+/*                                                                           */
+/*  WHAT THE FIT IS CHECKED AGAINST                                          */
+/*    granger_smin                  the rank condition (Theorem 3)           */
+/*    operator_roots                the AR/MA roots and the boundary         */
+/*    residual_diagnostics          Hosking, Jarque-Bera, the R(k)           */
+/*    gate_contract                 the ladder's two contracts               */
+/*    exact_hessian_se              standard errors at the optimum (-fdhess) */
+/*                                                                           */
+/*  INFERENCE                                                                */
+/*    wald_sub, emit_wald,          the hypotheses a VEC answers, by default */
+/*      hypothesis_block                                                     */
+/*    bootstrap_rank, bootstrap_ma  the distributions that are simulated     */
+/*      simulate_h0, fit_ll           because they are not chi2             */
+/*    load_alpha_A, build_weakex_A  alpha = A*psi, and weak exogeneity       */
+/*                                                                           */
+/*  FORECASTING (P5)                                                         */
+/*    compute_psi_weights           the MA(inf) weights -- drvarma's, copied */
+/*    level_error_map               innovations -> level error, ONE map      */
+/*    forecast_core, forecast_vec   the recursion, and <base>.forecast       */
+/*    rolling_eval                  out of sample, and <base>.recursive      */
+/*                                                                           */
+/*  THE BRIDGE TO THE SUITE (F2, P9)                                         */
+/*    read_inp_input                the .inp route                            */
+/*    read_pre_inputs               the .pre route: one fue model per series */
+/*    load_seed_pre, pre_univariate what a .pre can and cannot seed          */
+/*    write_component_inps,         what drvec writes for fue                */
+/*      write_resid_inps, write_inp_series                                   */
+/*    subtract_interventions        the deterministic terms, on the .inp route*/
+/*                                                                           */
+/*  THE COMMAND LINE (P1)                                                    */
+/*    OPT_TABLE, validate_cli       what exists, checked before anything runs*/
+/*    parse_cli                     and what it sets                          */
+/*    usage, usage_option_list      the same table, printed                  */
+/*                                                                           */
+/*  THE MODES -- each estimates, prints and exits, so each is a function     */
+/*    run_rungs        -rungs      the ladder below the rank                 */
+/*    run_specs        -specs      the specification ladder                  */
+/*    run_lrtest       -lrtest     the sequential rank test                  */
+/*    run_ma_ar_test   -matest/-artest   the two bootstrapped comparisons    */
+/*    run_eval         -eval       the likelihood at the starting point      */
+/*    run_multistart   -multistart not a mode: it leaves a fit behind        */
+/*                                                                           */
+/*  AND THE REPORT                                                           */
+/*    report_fit                    everything the .out says about a fit     */
+/*                                                                           */
+/*  WHAT IS STILL GLOBAL, and why it is not an oversight: the option flags    */
+/*  (what the user asked for), the data (rawmat, datamat, Y2_levels, and the  */
+/*  calendar), and the three file names.  Every one of them is read by more   */
+/*  than one of the functions above and written by exactly one.  Threading    */
+/*  them through six signatures would say less than declaring them once, and  */
+/*  would be a large diff whose only effect is a larger diff.                 */
+/*****************************************************************************/
+
 #include "main.h"
 #include "fue_pre_reader.h"   /* .pre reader, copied from drtran (see F2.1) */
 #include "fue_bridge.h"       /* expansion of the .pre's factors                */
@@ -2198,6 +2267,25 @@ static const char *fc_csv = NULL;    /* -C file: per-origin errors, for the DM t
  *  ESTIMATION report.  See docs/PLAN_PRODUCCION.md 7.1.                      */
 static char out_base[512] = "";
 
+/*  P1 — the exit code reflects a fit that did not converge.  It is at file
+ *  scope because report_fit() sets it and main() reads it: the two used to be
+ *  one function, and this is the only piece of state that crossed the cut.   */
+static int estimation_failed = 0;
+
+/*  P8 — the three file names, at file scope.  They were locals of main(), and
+ *  every mode that was extracted out of main() needed all three: the .out to
+ *  write to, the input to name in it, and the base to free at the end.  Three
+ *  parameters repeated on six signatures say less than one declaration here,
+ *  and they are exactly as global as out_base already was.                   */
+static STRING inputf = NULL, outputf = NULL, base_name = NULL;
+
+/*  P8 — the optimiser's stopping rules, at file scope.  They were locals of
+ *  main() and every mode that estimates needs them; they are constants, they
+ *  are the same for every fit the program makes, and passing four of them down
+ *  six signatures said nothing that this declaration does not.               */
+static const int  maxits = 500, nrits = 200;
+static const real gradtol = 1e-5, sptol = 1e-7;
+
 /*  P9 — THE .pre ROUTE'S STATE.  pre_route says which of the two interfaces was
  *  used; i_pqr and first_opt say where p q r and the options begin, which on
  *  the .inp route are 2 and 5 and on the .pre one depend on how many files were
@@ -3530,6 +3618,20 @@ static void vec_shootx(real *x, struct Tvarma *armax,
     armax->n = nobs;
     armax->p = p;
     armax->q = q;
+
+    /*  P8 — AND THE TRUNCATION TOLERANCE, WHICH IS WHAT CLOSES BUG-14.  Every
+     *  site that uses a Tvarma set this field itself -- a dozen of them, all
+     *  with the same expression -- and rolling_eval did not, so elf ran the
+     *  out-of-sample route with whatever was in that word of the stack
+     *  (docs/BUGS.md BUG-14).  Patching that one site fixed the symptom and
+     *  left the hole: a field no filling function fills is a field the next
+     *  site will forget too.  Setting it here makes forgetting impossible.
+     *
+     *  It cannot move a number: every one of those sites sets it to exactly
+     *  this expression, and they set it AFTER this call, so they write the same
+     *  value over the same value.  The golden set (tools/golden.sh) is what
+     *  says so rather than this comment.                                     */
+    armax->xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
 
     /* [2] Allocate memory on first call ------------------------------------ */
     if (firstx) {
@@ -5097,6 +5199,78 @@ static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
 }
 
 /*****************************************************************************/
+/*  P8 — read_inp_input: the .inp route's reader, out of main().             */
+/*                                                                           */
+/*  It was 53 lines inline in a function of 2320, next to the .pre route's    */
+/*  one-line call to read_pre_inputs.  The two do the same job -- fill        */
+/*  rawmat, nser, nobs_raw, series_names and the calendar -- and one of them  */
+/*  was a function and the other was not, so the symmetry that makes the two  */
+/*  routes interchangeable was invisible in the source.  Now both are         */
+/*  functions and main() picks one.                                          */
+/*                                                                           */
+/*  Reader of the same shape as drvarma v.04.1's.  Exits on a malformed file: */
+/*  there is nothing to recover to.                                          */
+/*****************************************************************************/
+static void read_inp_input(const char *path)
+{
+    FILE *inputv;
+
+    if (NULL == (inputv = fopen(path, "r"))) {
+        fprintf(stderr, "ERROR: cannot open %s\n", path);
+        exit(1);
+    }
+    {
+        /* InpReader: same as drvarma v.04.1 */
+        /* Minimal reader: read nser, nobs_raw, start, names, lambda, d, D, data */
+        char line[512];
+        /* skip comments */
+        do { if (!fgets(line, sizeof line, inputv)) { fprintf(stderr,"ERROR: unexpected EOF\n"); exit(1); } }
+        while (line[0] == '*');
+        data_freq = atoi(line);
+        /* next non-comment line: nser nobs start_sub start_year */
+        do { if (!fgets(line, sizeof line, inputv)) { fprintf(stderr,"ERROR: unexpected EOF\n"); exit(1); } }
+        while (line[0] == '*');
+        sscanf(line, "%d %d %d %d", &nser, &nobs_raw, &data_start_sub, &data_start_year);
+        nobs = nobs_raw;
+
+        if (global_r >= nser) {
+            fprintf(stderr, "ERROR: r=%d must be < M=%d\n", global_r, nser);
+            exit(1);
+        }
+
+        series_names = (char **) malloc((nser + 1) * sizeof(char *));
+        do { if (!fgets(line, sizeof line, inputv)) { fprintf(stderr,"ERROR: missing series names\n"); exit(1); } }
+        while (line[0] == '*');
+        {
+            char *tok = strtok(line, " \t\n");
+            for (int j = 1; j <= nser; j++) {
+                if (!tok) { fprintf(stderr,"ERROR: need %d series names\n", nser); exit(1); }
+                series_names[j] = strdup(tok);
+                tok = strtok(NULL, " \t\n");
+            }
+        }
+        /* Box-Cox lambda, d, D */
+        do { if (!fgets(line, sizeof line, inputv)) { fprintf(stderr,"ERROR: missing transform line\n"); exit(1); } }
+        while (line[0] == '*');
+        sscanf(line, "%lf %d %d", &trans_lambda, &trans_d, &trans_D);
+
+        /* Read data: nobs_raw rows, nser cols, kept untouched in rawmat */
+        rawmat = matrix(1, nobs_raw, 1, nser);
+        for (int t = 1; t <= nobs_raw; t++) {
+            do { if (!fgets(line, sizeof line, inputv)) { fprintf(stderr,"ERROR: data too short at obs %d\n", t); exit(1); } }
+            while (line[0] == '*');
+            char *tok = strtok(line, " \t\n");
+            for (int j = 1; j <= nser; j++) {
+                if (!tok) { fprintf(stderr,"ERROR: missing value obs %d col %d\n", t, j); exit(1); }
+                rawmat[t][j] = atof(tok);
+                tok = strtok(NULL, " \t\n");
+            }
+        }
+        fclose(inputv);
+    }
+}
+
+/*****************************************************************************/
 /*  P9 — THE .pre INPUT ROUTE: one univariate model per series, as in drtran  */
 /*                                                                           */
 /*  WHY drvec AND NOT drvarma.  drvarma reads a single .inp with every series */
@@ -5313,6 +5487,1575 @@ static int read_pre_inputs(char **files, int nfiles)
     }
     free(start); free(det); free(DM); free(Ts); free(Tm);
     return ok ? 0 : 1;
+}
+
+/*****************************************************************************/
+/*  P8 — report_fit: everything the .out says about a finished fit.          */
+/*                                                                           */
+/*  It was 793 lines inline in main(), which is why finding anything in this  */
+/*  program meant reading main() from the top: the parameter printer, the     */
+/*  roots, the diagnostics, Pi, the hypothesis block and the forecast all     */
+/*  lived at the same indentation as the argument parsing.  Nothing here is   */
+/*  new and nothing here moved -- the golden set (tools/golden.sh) is what    */
+/*  says so, byte for byte over twenty-four configurations.                   */
+/*                                                                           */
+/*  ifault comes in by value: main() does not read it back, it reads          */
+/*  estimation_failed, which this sets.                                      */
+/*****************************************************************************/
+static void report_fit(real *x, real *dev, real **cov, int npar,
+                       struct Tvarma *vp, int ifault, const char *outname,
+                       real lr_free, int lr_free_ok)
+{
+    if (ifault == 0) {
+        /* Standard errors from the Hessian at the optimum, if asked for.  It goes
+           before recovering the final structure because objcfunc fills varmax
+           with whatever point it is handed.                                  */
+        if (global_fdhess) {
+            if (exact_hessian_se(npar, x, dev, cov, nobs) == 0)
+                fprintf(outputv, "\nStandard errors from the finite-difference "
+                                 "Hessian AT the optimum (-fdhess),\n"
+                                 "not from the BFGS-accumulated factor.\n");
+        }
+        vec_shootx(x, vp, &ifault, 0, 0);  /* retrieve final */
+
+        /* Fill in the RESIDUALS of the final fit.  elf writes them with
+           atf = TRUE, and until now they arrived by rebound because est made
+           that call on finishing.  With -multistart there is no final est --
+           the best point is already chosen -- and the residuals were left
+           UNCOMPUTED: the diagnosis came out with Q = nan and "the residuals
+           appear to be white noise", which is the worst possible way to be
+           wrong.  They are computed here, which is where the final fit is
+           known.                                                             */
+        {
+            real pi1, pi2, pi3;
+            int ifr = 0;
+            elf(vp->m, vp->n, vp->p, vp->q, vp->mu, vp->phi,
+                vp->theta, vp->qq, vp->w, 1.0, vp->xitol,
+                TRUE, vp->a, &pi1, &pi2, &pi3, &ifr);
+        }
+
+        fprintf(outputv, "\nESTIMATION SUCCESSFUL (ifault=0)\n");
+        fprintf(outputv, "sigma2 : %15.10f\n", vp->sigma2);
+        fprintf(outputv, "logelf : %15.10f\n", vp->logelf);
+        /* npar, AIC and BIC in the plain fit too.  They were only inside
+           -lrtest's table, and without them no mechanical specification
+           criterion can be set: comparing nested models by LR works for a pair,
+           but choosing within a declared set asks for an information criterion.
+           Same normalisation by nobs as -lrtest's table, so that the numbers
+           are the same number.                                               */
+        fprintf(outputv, "npar   : %d\n", npar);
+        fprintf(outputv, "AIC    : %15.10f   (-2logL + 2k, /n)\n",
+                (-2.0 * vp->logelf + 2.0 * npar) / nobs);
+        fprintf(outputv, "BIC    : %15.10f   (-2logL + k log n, /n)\n",
+                (-2.0 * vp->logelf + npar * log((real) nobs)) / nobs);
+        convergence_note(termcode_from_out(outname));
+        operator_roots(vp);
+        /*  The rank condition, beside the roots and for the same reason: it
+         *  says whether the point it stopped at is a model of the rank that was
+         *  asked for or of another.  It is recomputed at the last evaluation,
+         *  which is the one vec_shootx left just before.                     */
+        if (global_r > 0 && global_q > 0 && granger_sv >= 0.0) {
+            fprintf(outputv,
+                "\nRank condition (Granger): sigma_min(Lambda_perp' Theta(1) "
+                "B_perp) = %.3e\n", granger_sv);
+            if (granger_sv < global_rankadm_tol) {
+                /*  AND TO THE TERMINAL AS WELL.  A fit that denies its own rank
+                 *  is not a worse fit: it is the fit of another model, and
+                 *  whoever runs the program has to find out without opening the
+                 *  .out.  It is the decision of step 4 of the plan: the default
+                 *  CALCULATION does not move -- no recorded result moves -- but
+                 *  the PRESENTATION stops offering as an answer something the
+                 *  theory does not license (docs/THEORY.md, corollary 5.1).  */
+                if (!quiet_mode)
+                    printf("\n  *** WARNING: sigma_min(Lambda_perp' Theta(1) "
+                           "B_perp) = %.3e < %.1e\n"
+                           "      This fit DENIES THE RANK it was estimated "
+                           "at: it is not a\n"
+                           "      worse fit, it is the fit of another model.  Its "
+                           "standard errors\n"
+                           "      and any LR against it do NOT have their "
+                           "usual distribution.\n"
+                           "%s"
+                           "      See the ladder:  drvec <file> %d %d %d "
+                           "-specs\n", granger_sv, global_rankadm_tol,
+                           /*  P4 — and where it comes from.  Under the default this
+                            *  cannot happen (Corollary 6.3); if it is
+                            *  happening, the free class has been asked for, and
+                            *  that is the first thing to say.                */
+                           global_mafree
+                             ? "      This is -mafree: that class CONTAINS points"
+                               " the model does not\n"
+                               "      admit.  The default (-marow) cannot"
+                               " reach them.\n"
+                             : "",
+                           global_p, global_q, global_r);
+                fprintf(outputv,
+                  "  *** This is ZERO to working precision, and it is not a\n"
+                  "  detail: that matrix is what makes the long-run impact\n"
+                  "  C(1) = B_perp (Lambda_perp' Gamma B_perp)^-1 Lambda_perp'\n"
+                  "  Theta(1) have rank M-r.  Where it degenerates the FITTED\n"
+                  "  model denies the rank it was estimated at -- it says r and\n"
+                  "  its parameters leave no stochastic trend.  The estimate is\n"
+                  "  then on the edge of the region the model class allows, so\n"
+                  "  standard errors and LR statistics do not have their usual\n"
+                  "  distributions there.  -rankadm refuses such points; -mawarma\n"
+                  "  makes them unreachable by construction.  See\n"
+                  "  docs/HOMOLOGATION.md 4h.\n");
+            } else
+                fprintf(outputv,
+                  "  Comfortably away from zero: the fit is a model of the rank\n"
+                  "  it was estimated at.\n");
+        }
+        gate_contract(vp);
+        residual_diagnostics(vp);
+
+        /* The LR of H1(r) against H(r).  Johansen and Swensen (2024): the degrees
+           of freedom are (M - sa)*r, which is how many free entries of alpha the
+           restriction removes.                                               */
+        if (global_alpha && lr_free_ok) {
+            int df = (nser - alpha_sa) * global_r;
+            real lr = 2.0 * (lr_free - vp->logelf);
+            real pv = (df > 0 && lr > 0.0) ? gsl_cdf_chisq_Q(lr, df) : 1.0;
+            fprintf(outputv, "\n--- H1(r): alpha = A*psi, against H(r) ---\n");
+            fprintf(outputv, "logL H(r)  free        : %15.10f\n", lr_free);
+            fprintf(outputv, "logL H1(r) restricted  : %15.10f\n", vp->logelf);
+            fprintf(outputv, "LR = 2(free - restr.)  : %15.10f\n", lr);
+            fprintf(outputv, "degrees of freedom     : %d   (M - sa)*r\n", df);
+            fprintf(outputv, "p-value (chi2)         : %15.10f\n", pv);
+            printf("  H1(r) restricted   : logL = %15.10f\n", vp->logelf);
+            printf("  LR = %.6f, %d df, p = %.6f%s\n", lr, df, pv,
+                   (lr < -1.0e-6) ? "   <- NEGATIVE: the restricted beats the free one,"
+                                    " so one of the two did not converge" : "");
+        }
+
+        /* --- Structured VEC output --------------------------------------- */
+        int s = nser - global_r, r = global_r;
+        int ii = 1, warma_done = 0;
+        real **Lam_m = matrix(1, nser, 1, (r > 0 ? r : 1));
+
+        /*  -warma: the parameters are NOT the VEC's, so they are not printed
+         *  as if they were.  What has been estimated is published, in the
+         *  coordinates it was estimated in, and they are named.              */
+        if (global_warma) {
+            int nf_w = (global_p > 1) ? global_p - 1 : 0, kk;
+            fprintf(outputv,
+              "\nTriangular (WARMA) parameterisation, on Ybar_t = [nabla Y2 ; W]:\n"
+              "  Ybar_t = sum_k Phi*_k Ybar_{t-k} + (I - sum_k Theta*_k L^k) A*_t\n"
+              "  with Phi*_k = [0  Psi_k ; 0  Phi_k] and Theta*_k in the W block\n"
+              "  only.  B2 enters ONLY through W = Y1 + B2'Y2, by subtraction.\n\n");
+            if (global_case == 2) {
+                fprintf(outputv, "E[W] =\n");
+                for (int j = 1; j <= r; j++)
+                    fprintf(outputv, "  %12.6f  (sd = %10.6f)\n", x[ii], dev[ii]), ii++;
+            } else if (global_case == 3) {
+                fprintf(outputv, "E[nabla Y2] and E[W] =\n");
+                for (int i = 1; i <= nser; i++)
+                    fprintf(outputv, "  %12.6f  (sd = %10.6f)\n", x[ii], dev[ii]), ii++;
+            }
+            for (kk = 1; kk <= nf_w + 1; kk++) {
+                fprintf(outputv, "coefficients of W_{t-%d}  (M x r) =\n", kk);
+                for (int i = 1; i <= nser; i++) {
+                    fprintf(outputv, "  ");
+                    for (int j = 1; j <= r; j++)
+                        fprintf(outputv, "%12.6f (sd %9.6f)", x[ii], dev[ii]), ii++;
+                    fprintf(outputv, "\n");
+                }
+            }
+            for (kk = 1; kk <= global_q; kk++) {
+                fprintf(outputv, "Theta*[%d] in the W block (r x r) =\n", kk);
+                for (int i = 1; i <= r; i++) {
+                    fprintf(outputv, "  ");
+                    for (int j = 1; j <= r; j++)
+                        fprintf(outputv, "%12.6f (sd %9.6f)", x[ii], dev[ii]), ii++;
+                    fprintf(outputv, "\n");
+                }
+            }
+            fprintf(outputv, "Q (M x M, lower triangle; Q[1][1] = 1) =\n  1.000000\n");
+            for (int i = 2; i <= nser; i++) fprintf(outputv, "  %12.6f\n", x[ii++]);
+            if (!global_diag_cov)
+                for (int i = 2; i <= nser; i++)
+                    for (int j = 1; j < i; j++)
+                        fprintf(outputv, "  off(%d,%d) %12.6f\n", i, j, x[ii++]);
+            fprintf(outputv, "B2 (s x r) =\n");
+            for (int i = 1; i <= s; i++) {
+                fprintf(outputv, "  ");
+                for (int j = 1; j <= r; j++)
+                    fprintf(outputv, "%12.6f%s", global_fixb2 ? B2_fixed[i][j] : x[ii],
+                            global_fixb2 ? "" : "");
+                if (!global_fixb2) ii += r;
+                fprintf(outputv, "\n");
+            }
+            if (ii != npar + 1)
+                fprintf(stderr, "ERROR output (-warma): consumed %d of %d\n",
+                        ii - 1, npar);
+
+            /*  AND BACK TO VEC COORDINATES, once only, at the end.  It is what
+             *  makes this route usable: it is estimated where the class is a
+             *  zero pattern and REPORTED where the user reads.               */
+            if (r > 0) {
+                real **B2w = matrix(1, s, 1, (r > 0 ? r : 1));
+                real **Lw  = matrix(1, nser, 1, r);
+                real ***Fw = tensor(1, (global_p > 1 ? global_p - 1 : 1),
+                                    1, nser, 1, nser);
+                real ***Tw = tensor(1, (global_q > 0 ? global_q : 1),
+                                    1, nser, 1, nser);
+                real **Sw  = matrix(1, nser, 1, nser);
+                real resid, gg;
+                int nfw = (global_p > 1) ? global_p - 1 : 0;
+
+                for (int j2 = 1; j2 <= r; j2++)
+                    for (int i2 = 1; i2 <= s; i2++)
+                        B2w[i2][j2] = global_fixb2 ? B2_fixed[i2][j2]
+                                    : x[npar - s * r + (j2 - 1) * s + i2];
+                for (int k2 = 1; k2 <= (global_q > 0 ? global_q : 1); k2++)
+                    for (int i2 = 1; i2 <= nser; i2++)
+                        for (int j2 = 1; j2 <= nser; j2++) Tw[k2][i2][j2] = 0.0;
+                resid = warma_inverse(vp, B2w, Lw, Fw, Tw, Sw);
+
+                fprintf(outputv,
+                  "\n--- the same fit in VEC coordinates ---\n"
+                  "  (I - F1 L - ...) nabla Y_t = -Lambda (B'Y_{t-1} - E[W]) "
+                  "+ (I - Theta1 L - ...) A_t\n"
+                  "  recovered by inverting the transformation once, not "
+                  "estimated again.\n");
+                fprintf(outputv, "\nLambda (M x r) =\n");
+                for (int i2 = 1; i2 <= nser; i2++) {
+                    fprintf(outputv, "  ");
+                    for (int j2 = 1; j2 <= r; j2++)
+                        fprintf(outputv, "%12.6f", Lw[i2][j2]);
+                    fprintf(outputv, "\n");
+                }
+                for (int k2 = 1; k2 <= nfw; k2++) {
+                    fprintf(outputv, "F[%d] (M x M) =\n", k2);
+                    for (int i2 = 1; i2 <= nser; i2++) {
+                        fprintf(outputv, "  ");
+                        for (int j2 = 1; j2 <= nser; j2++)
+                            fprintf(outputv, "%12.6f", Fw[k2][i2][j2]);
+                        fprintf(outputv, "\n");
+                    }
+                }
+                for (int k2 = 1; k2 <= global_q; k2++) {
+                    fprintf(outputv, "Theta[%d] (M x M) =\n", k2);
+                    for (int i2 = 1; i2 <= nser; i2++) {
+                        fprintf(outputv, "  ");
+                        for (int j2 = 1; j2 <= nser; j2++)
+                            fprintf(outputv, "%12.6f", Tw[k2][i2][j2]);
+                        fprintf(outputv, "\n");
+                    }
+                }
+                fprintf(outputv, "Pi = Lambda B' (M x M) =\n");
+                for (int i2 = 1; i2 <= nser; i2++) {
+                    fprintf(outputv, "  ");
+                    for (int j2 = 1; j2 <= nser; j2++) {
+                        real acc = 0.0;
+                        for (int k2 = 1; k2 <= r; k2++)
+                            acc += Lw[i2][k2] * ((j2 <= r) ? (j2 == k2 ? 1.0 : 0.0)
+                                                           : B2w[j2 - r][k2]);
+                        fprintf(outputv, "%12.6f", acc);
+                    }
+                    fprintf(outputv, "\n");
+                }
+                gg = granger_smin(Lw, B2w, Tw, nser, r, global_q);
+                if (gg >= 0.0)
+                    fprintf(outputv,
+                      "\nRank condition (Granger): sigma_min(Lambda_perp' "
+                      "Theta(1) B_perp) = %.3e\n%s", gg,
+                      (gg < global_rankadm_tol)
+                        ? "  *** ZERO to working precision: this fit denies the "
+                          "rank it was estimated at.\n"
+                        : "  Comfortably away from zero: the fit is a model of "
+                          "the rank it was estimated at.\n");
+                /*  The residual of the map: if the point were not in the image of
+                 *  the transformation, this would say so instead of letting an
+                 *  invented Lambda be published.                             */
+                fprintf(outputv, "  inversion residual = %.3e%s\n", resid,
+                        (resid > 1.0e-6)
+                          ? "   *** the fitted point is NOT in the image of the "
+                            "transformation; the VEC parameters above are a "
+                            "least-squares projection, not the fit"
+                          : "   (exact: the two coordinate systems describe the "
+                            "same fit)");
+                free_matrix(Sw, 1, nser, 1, nser);
+                free_tensor(Tw, 1, (global_q > 0 ? global_q : 1), 1, nser, 1, nser);
+                free_tensor(Fw, 1, (global_p > 1 ? global_p - 1 : 1), 1, nser, 1, nser);
+                free_matrix(Lw, 1, nser, 1, r);
+                free_matrix(B2w, 1, s, 1, (r > 0 ? r : 1));
+            }
+            /*  It exits through the SAME cleanup as the rest, and not by a
+             *  return of its own: a new exit path is a new set of leaks, and
+             *  valgrind found them as soon as it was written (2112 bytes in 9
+             *  blocks).  The rest of the VEC printing is skipped with the flag.*/
+            warma_done = 1;
+        }
+        if (!warma_done) {
+
+        /*  P6.8 — THE INDICES INTO x[], NOTED IN THE WALK THAT ALREADY EXISTS.
+         *  The hypothesis block needs to know where in the vector each
+         *  parameter lives.  This file already warns, further up, that it has
+         *  FOUR walks of the same vector and that adding a fifth loose counting
+         *  rule is exactly how the §4.1 bug was opened.  So there is no fifth
+         *  walk: it is noted here, where the walking is already going on and
+         *  where the walk itself is checked against npar at the end.  0 = that
+         *  entry is NOT free -- the structure, -fixb2 or -alpha fixes it -- and
+         *  is therefore imposed, not testable.                               */
+        int nf_ix = (global_p > 1) ? global_p - 1 : 1;
+        int nq_ix = (global_q > 0) ? global_q : 1;
+        int **ix_lam = imatrix(1, nser, 1, (r > 0 ? r : 1));
+        int **ix_B2  = imatrix(1, (s > 0 ? s : 1), 1, (r > 0 ? r : 1));
+        int **ix_F   = imatrix(1, nf_ix * nser, 1, nser);
+        int **ix_Th  = imatrix(1, nq_ix * nser, 1, nser);
+        for (int a = 1; a <= nser; a++)
+            for (int b = 1; b <= (r > 0 ? r : 1); b++) ix_lam[a][b] = 0;
+        for (int a = 1; a <= (s > 0 ? s : 1); a++)
+            for (int b = 1; b <= (r > 0 ? r : 1); b++) ix_B2[a][b] = 0;
+        for (int a = 1; a <= nf_ix * nser; a++)
+            for (int b = 1; b <= nser; b++) ix_F[a][b] = 0;
+        for (int a = 1; a <= nq_ix * nser; a++)
+            for (int b = 1; b <= nser; b++) ix_Th[a][b] = 0;
+
+        fprintf(outputv, "\nVEC model (Mauricio 2006):\n");
+        fprintf(outputv, "  (I - F1 L - ... - F_{p-1} L^{p-1}) nabla Y_t =\n");
+        fprintf(outputv, "      -Lambda (B' Y_{t-1} - E[W_t]) + (I - Theta1 L - ...) A_t\n\n");
+
+        if (global_case == 2) {
+            fprintf(outputv, "E[W] =\n");
+            for (int j = 1; j <= r; j++)
+                fprintf(outputv, "  %12.6f  (sd = %10.6f)\n", x[ii], dev[ii]), ii++;
+        } else if (global_case == 3) {
+            fprintf(outputv, "E[nabla Y2] =\n");
+            for (int i = 1; i <= s; i++)
+                fprintf(outputv, "  %12.6f  (sd = %10.6f)\n", x[ii], dev[ii]), ii++;
+            fprintf(outputv, "E[W] =\n");
+            for (int j = 1; j <= r; j++)
+                fprintf(outputv, "  %12.6f  (sd = %10.6f)\n", x[ii], dev[ii]), ii++;
+        }
+
+        if (global_alpha) {
+            /* With alpha = A*psi what x[] carries is psi (sa x r), not Lambda, and
+               the walk has to consume sa*r and not M*r -- the printer is the
+               other place where the vector's layout can fall out of step, and
+               the suite's structural block exists for that.
+               Both are printed: psi is what is estimated, Lambda = A*psi is what
+               is interpretable, and the standard errors exist only for psi.   */
+            real **psi = matrix(1, alpha_sa, 1, (r > 0 ? r : 1));
+            fprintf(outputv, "psi (sa x r), the free part of alpha = A*psi =\n");
+            for (int i = 1; i <= alpha_sa; i++) {
+                fprintf(outputv, "  ");
+                for (int j = 1; j <= r; j++) {
+                    psi[i][j] = x[ii];
+                    fprintf(outputv, "%12.6f (sd %9.6f)", x[ii], dev[ii]);
+                    ii++;
+                }
+                fprintf(outputv, "\n");
+            }
+            fprintf(outputv, "Lambda = A*psi (M x r) =\n");
+            for (int i = 1; i <= nser; i++) {
+                fprintf(outputv, "  ");
+                for (int j = 1; j <= r; j++) {
+                    real acc = 0.0;
+                    for (int kk = 1; kk <= alpha_sa; kk++)
+                        acc += alpha_A[i][kk] * psi[kk][j];
+                    Lam_m[i][j] = acc;
+                    fprintf(outputv, "%12.6f", acc);
+                }
+                fprintf(outputv, "\n");
+            }
+            free_matrix(psi, 1, alpha_sa, 1, (r > 0 ? r : 1));
+        } else {
+            fprintf(outputv, "Lambda (M x r) =\n");
+            for (int i = 1; i <= nser; i++) {
+                fprintf(outputv, "  ");
+                for (int j = 1; j <= r; j++) {
+                    Lam_m[i][j] = x[ii];
+                    ix_lam[i][j] = ii;
+                    fprintf(outputv, "%12.6f (sd %9.6f)", x[ii], dev[ii]);
+                    ii++;
+                }
+                fprintf(outputv, "\n");
+            }
+        }
+        /* Under -diagar / -diagma only the M diagonal entries are carried in
+           x[] (see calc_nparametrs and vec_shootx), so the walk must consume
+           M, not M*M, while still displaying the full matrix.                */
+        int nf = (global_p > 1) ? global_p - 1 : 0;
+        for (int k = 1; k <= nf; k++) {
+            fprintf(outputv, "F[%d] (M x M) =\n", k);
+            for (int i = 1; i <= nser; i++) {
+                fprintf(outputv, "  ");
+                for (int j = 1; j <= nser; j++) {
+                    real fv;
+                    if (global_diag_ar) {
+                        if (i == j) { ix_F[(k-1)*nser + i][j] = ii; fv = x[ii++]; }
+                        else fv = 0.0;
+                    } else { ix_F[(k-1)*nser + i][j] = ii; fv = x[ii++]; }
+                    fprintf(outputv, "%12.6f", fv);
+                }
+                fprintf(outputv, "\n");
+            }
+        }
+        /*  With -mawarma the free block is only the r*r entries at the top
+         *  left; the upper-right block is determined by B2 (which this walk has
+         *  not read yet) and the lower s rows are zero.  They are stored here
+         *  and printed after B2.  This is the FOURTH walk of the same vector,
+         *  and it is exactly where the previous version of this block fell out
+         *  of step and published a Theta nobody had estimated.               */
+        real ***Th_m = tensor(1, (global_q > 0 ? global_q : 1), 1, nser, 1, nser);
+        for (int k = 1; k <= (global_q > 0 ? global_q : 1); k++)
+            for (int i = 1; i <= nser; i++)
+                for (int j = 1; j <= nser; j++) Th_m[k][i][j] = 0.0;
+        for (int k = 1; k <= global_q; k++) {
+            if (mawarma_on()) {
+                for (int i = 1; i <= r; i++)
+                    for (int j = 1; j <= r; j++) {
+                        ix_Th[(k-1)*nser + i][j] = ii; Th_m[k][i][j] = x[ii++]; }
+            } else if (marow_on()) {
+                for (int i = 1; i <= r; i++)
+                    for (int j = 1; j <= nser; j++) {
+                        ix_Th[(k-1)*nser + i][j] = ii; Th_m[k][i][j] = x[ii++]; }
+            } else if (global_matri) {
+                for (int i = 1; i <= r; i++)
+                    for (int j = 1; j <= nser; j++) {
+                        ix_Th[(k-1)*nser + i][j] = ii; Th_m[k][i][j] = x[ii++]; }
+                for (int i = r + 1; i <= nser; i++)
+                    for (int j = r + 1; j <= nser; j++) {
+                        ix_Th[(k-1)*nser + i][j] = ii; Th_m[k][i][j] = x[ii++]; }
+            } else if (global_diag_ma) {
+                for (int i = 1; i <= nser; i++) {
+                    ix_Th[(k-1)*nser + i][i] = ii; Th_m[k][i][i] = x[ii++]; }
+            } else {
+                for (int i = 1; i <= nser; i++)
+                    for (int j = 1; j <= nser; j++) {
+                        ix_Th[(k-1)*nser + i][j] = ii; Th_m[k][i][j] = x[ii++]; }
+            }
+        }
+        if (!mawarma_on())
+            for (int k = 1; k <= global_q; k++) {
+                fprintf(outputv, "Theta[%d] (M x M)%s =\n", k,
+                        global_matri ? ", block-triangular [T11 T12 ; 0 T22]"
+                      : (marow_on() ? ", [T11 T12 ; 0 0]" : ""));
+                for (int i = 1; i <= nser; i++) {
+                    fprintf(outputv, "  ");
+                    for (int j = 1; j <= nser; j++)
+                        fprintf(outputv, "%12.6f", Th_m[k][i][j]);
+                    fprintf(outputv, "\n");
+                }
+            }
+        /* The engine concentrates the covariance scale: it calls elf with
+           sigma2 = 1, so the block carried in x[] is identified only up to a
+           positive constant.  Report it as Q (what is estimated) and the
+           innovation covariance separately as sigma2 * Q, as drvarma does.   */
+        real **Qm = matrix(1, nser, 1, nser);
+        for (int i = 1; i <= nser; i++)
+            for (int j = 1; j <= nser; j++) Qm[i][j] = 0.0;
+
+        /* Same layout as vec_shootx: Q[1][1] = 1, then the variance ratios on
+           the diagonal (i >= 2), then the off-diagonals by rows.              */
+        Qm[1][1] = 1.0;
+        for (int i = 2; i <= nser; i++) Qm[i][i] = x[ii++];
+        if (!global_diag_cov)
+            for (int i = 2; i <= nser; i++)
+                for (int j = 1; j < i; j++) Qm[i][j] = Qm[j][i] = x[ii++];
+
+        fprintf(outputv, "Q (M x M, lower triangle; Q[1][1] = 1 by normalisation) =\n");
+        for (int i = 1; i <= nser; i++) {
+            fprintf(outputv, "  ");
+            for (int j = 1; j <= i; j++) fprintf(outputv, "%12.6f", Qm[i][j]);
+            fprintf(outputv, "\n");
+        }
+        fprintf(outputv, "Sigma = sigma2 * Q  (innovation covariance of A_t) =\n");
+        for (int i = 1; i <= nser; i++) {
+            fprintf(outputv, "  ");
+            for (int j = 1; j <= i; j++)
+                fprintf(outputv, "%12.6f", vp->sigma2 * Qm[i][j]);
+            fprintf(outputv, "\n");
+        }
+
+        /*  P2 — |Sigma| IS THIS PROGRAM'S HOMOLOGATION CRITERION and until
+         *  2026-08-20 it did not print it: it had to be worked out by hand from
+         *  the matrix above, rounded to six decimals, and that manual
+         *  arithmetic is precisely where the register lost track of three of
+         *  the four rows of its beta exit criterion.  A program that declares a
+         *  criterion and does not emit it forces somebody else to compute it,
+         *  and whoever computes it gets it wrong.  See
+         *  docs/PLAN_PRODUCCION.md P2.
+         *
+         *  log|Sigma| is given too, which is what enters the likelihood and the
+         *  only readable thing when |Sigma| goes to 1e-30 with a large M.     */
+        {
+            real **Sm = matrix(1, nser, 1, nser);
+            real d1 = 0.0, d2 = 0.0; int ifd = 0;
+            for (int i = 1; i <= nser; i++)
+                for (int j = 1; j <= nser; j++)
+                    Sm[i][j] = vp->sigma2 * (j <= i ? Qm[i][j] : Qm[j][i]);
+            choldcp(Sm, nser, &d1, &d2, &ifd);
+            if (ifd == 0) {
+                /*  choldcp leaves the determinant as d1 * 2^d2 -- mantissa and
+                 *  exponent apart, so as not to overflow -- and ALREADY
+                 *  accumulates the squares of the factor's diagonal (nlatools.c:
+                 *  `*d1 *= mat[j][j] * mat[j][j]`), so that IS det(Sigma) and
+                 *  not its factor's.  Squaring it again gave 6.06e-06 where the
+                 *  register has 0.002461, which is its exact square: the first
+                 *  version of this line did just that.                       */
+                real logdet = log(fabs(d1)) + d2 * log(2.0);
+                fprintf(outputv, "  |Sigma| = %.10g      log|Sigma| = %.6f\n",
+                        exp(logdet), logdet);
+                if (!quiet_mode)
+                    printf("  |Sigma| = %.10g\n", exp(logdet));
+            } else {
+                fprintf(outputv, "  |Sigma|: not computed (Sigma is not "
+                                 "positive definite here)\n");
+            }
+            free_matrix(Sm, 1, nser, 1, nser);
+        }
+
+        /* ---- Triangularizacion Sigma = P D P' ----------------------------- */
+        /* LDL' decomposition of the innovation covariance: P unit lower
+           triangular, D diagonal.  With A_t = P A*_t, the innovations A*_t are
+           UNCORRELATED (cov = D), so the system premultiplied by P^-1 can be
+           read equation by equation: that is what allows one to speak of a
+           single equation without dragging in the contemporaneous correlation
+           of the others.  BVECM section 4; the legacy did it for the bivariate
+           case only.
+
+           IMPORTANT, and that is why it is said in the output: the ordering is
+           that of the .inp's COLUMNS.  Another order gives another P.  It is
+           the same class of silent decision as the choice of the Y1 block.    */
+        {
+            real **Sg = matrix(1, nser, 1, nser);
+            real **P  = matrix(1, nser, 1, nser);
+            real  *D  = vector(1, nser);
+            int a, b, k, ok_ldl = 1;
+            for (a = 1; a <= nser; a++)
+                for (b = 1; b <= nser; b++)
+                    Sg[a][b] = vp->sigma2 * ((b <= a) ? Qm[a][b] : Qm[b][a]);
+            for (a = 1; a <= nser; a++)
+                for (b = 1; b <= nser; b++) P[a][b] = (a == b) ? 1.0 : 0.0;
+            for (b = 1; b <= nser; b++) {
+                real acc = Sg[b][b];
+                for (k = 1; k < b; k++) acc -= P[b][k] * P[b][k] * D[k];
+                D[b] = acc;
+                if (D[b] <= 0.0) { ok_ldl = 0; break; }
+                for (a = b + 1; a <= nser; a++) {
+                    real s2 = Sg[a][b];
+                    for (k = 1; k < b; k++) s2 -= P[a][k] * P[b][k] * D[k];
+                    P[a][b] = s2 / D[b];
+                }
+            }
+            if (ok_ldl) {
+                fprintf(outputv, "\nSigma = P D P'  (P unit lower triangular; "
+                                 "A_t = P A*_t with cov(A*_t) = D)\n");
+                fprintf(outputv, "P =\n");
+                for (a = 1; a <= nser; a++) {
+                    fprintf(outputv, "  ");
+                    for (b = 1; b <= a; b++) fprintf(outputv, "%12.6f", P[a][b]);
+                    fprintf(outputv, "\n");
+                }
+                fprintf(outputv, "D (diagonal) =\n  ");
+                for (a = 1; a <= nser; a++) fprintf(outputv, "%12.6f", D[a]);
+                fprintf(outputv, "\n");
+                fprintf(outputv, "  own share of each innovation variance "
+                                 "(D_i / Sigma_ii):\n  ");
+                for (a = 1; a <= nser; a++)
+                    fprintf(outputv, "%11.1f%%", 100.0 * D[a] / Sg[a][a]);
+                fprintf(outputv, "\n");
+                fprintf(outputv,
+                    "  A*_t is uncorrelated, so premultiplying the system by P^-1\n"
+                    "  gives equations that can be read one at a time.  NOTE the\n"
+                    "  ordering is the COLUMN ORDER of the .inp: a different order\n"
+                    "  gives a different P, and the choice is the user's.\n");
+            } else {
+                fprintf(outputv, "\nSigma = P D P': not computed (Sigma is not "
+                                 "positive definite at the optimum)\n");
+            }
+            free_vector(D, 1, nser);
+            free_matrix(P, 1, nser, 1, nser);
+            free_matrix(Sg, 1, nser, 1, nser);
+        }
+        free_matrix(Qm, 1, nser, 1, nser);
+
+        /* B2 is stored COLUMN-major in x[] (vec_shootx and init_guess both
+           write `for j in 1..r { for i in 1..s }`), so it must be read back in
+           that order before being displayed row by row.  Both printers below
+           use this one copy, so they cannot disagree.                        */
+        real **B2m = matrix(1, s, 1, (r > 0 ? r : 1));
+        for (int j = 1; j <= r; j++)
+            for (int i = 1; i <= s; i++) {
+                if (!global_fixb2) ix_B2[i][j] = ii;
+                B2m[i][j] = global_fixb2 ? B2_fixed[i][j] : x[ii++];
+            }
+
+        if (global_fixb2)
+            fprintf(outputv, "B2 (s x r) = [FIXED at %s]\n",
+                    global_fixb2_given ? "the value given on the command line"
+                                       : "its static-OLS estimate (data-chosen: "
+                                         "an LR test against the free model is "
+                                         "NOT valid)");
+        else
+            fprintf(outputv, "B2 (s x r) =\n");
+        /* B2 goes with its standard error when it is a parameter.  With -fixb2
+           it does not, and that is correct: a held value has no standard error,
+           and giving it one would be inventing it.  The order dev is read in is
+           the same column-major one B2m was read in.                         */
+        {
+            int jj = ii - (global_fixb2 ? 0 : s * r);
+            for (int i = 1; i <= s; i++) {
+                fprintf(outputv, "  ");
+                for (int j = 1; j <= r; j++) {
+                    if (global_fixb2) fprintf(outputv, "%12.6f", B2m[i][j]);
+                    else fprintf(outputv, "%12.6f (sd %9.6f)", B2m[i][j],
+                                 dev[jj + (j - 1) * s + (i - 1)]);
+                }
+                fprintf(outputv, "\n");
+            }
+        }
+
+        /*  -mawarma: now that B2 has been read, Theta is completed and printed
+         *  with the structure it inherits: [T11  T11*B2' ; 0  0].            */
+        if (mawarma_on())
+            for (int k = 1; k <= global_q; k++) {
+                for (int i = 1; i <= r; i++)
+                    for (int jj2 = 1; jj2 <= s; jj2++) {
+                        real acc = 0.0;
+                        for (int i2 = 1; i2 <= r; i2++)
+                            acc += Th_m[k][i][i2] * B2m[jj2][i2];
+                        Th_m[k][i][r + jj2] = acc;
+                    }
+                fprintf(outputv, "\nTheta[%d] (M x M), inherited structure "
+                                 "[T11  T11*B2' ; 0  0] =\n", k);
+                for (int i = 1; i <= nser; i++) {
+                    fprintf(outputv, "  ");
+                    for (int j = 1; j <= nser; j++)
+                        fprintf(outputv, "%12.6f", Th_m[k][i][j]);
+                    fprintf(outputv, "\n");
+                }
+            }
+        free_tensor(Th_m, 1, (global_q > 0 ? global_q : 1), 1, nser, 1, nser);
+
+        if (ii != npar + 1)
+            fprintf(stderr, "ERROR output: consumed %d of %d parameters\n",
+                    ii - 1, npar);
+
+        fprintf(outputv, "\nCointegration matrix B = [I_r; B2] (M x r) :\n");
+        for (int row = 1; row <= nser; row++) {
+            fprintf(outputv, "  row %d: ", row);
+            for (int c = 1; c <= r; c++)
+                fprintf(outputv, "%12.6f",
+                        (row <= r) ? ((c == row) ? 1.0 : 0.0) : B2m[row - r][c]);
+            fprintf(outputv, "\n");
+        }
+
+        /* ---- Pi = Lambda * B', y sus autovalores ------------------------- */
+        /* Pi is the long-run matrix and, unlike Lambda and B, is INVARIANT to the
+           normalisation: any reparameterisation Lambda -> Lambda*G,
+           B -> B*G^-T leaves Pi unchanged.  That is why it is what to look at
+           when comparing fits, and why it is printed here.                   */
+        if (r > 0) {
+            real **Pi = matrix(1, nser, 1, nser);
+            real *wr = vector(1, nser), *wi = vector(1, nser);
+            int a, b, j;
+            for (a = 1; a <= nser; a++)
+                for (b = 1; b <= nser; b++) {
+                    real acc = 0.0;
+                    for (j = 1; j <= r; j++) {
+                        real Bbj = (b <= r) ? ((b == j) ? 1.0 : 0.0) : B2m[b - r][j];
+                        acc += Lam_m[a][j] * Bbj;
+                    }
+                    Pi[a][b] = acc;
+                }
+            fprintf(outputv, "\nPi = Lambda B' (M x M), the long-run matrix =\n");
+            for (a = 1; a <= nser; a++) {
+                fprintf(outputv, "  ");
+                for (b = 1; b <= nser; b++) fprintf(outputv, "%12.6f", Pi[a][b]);
+                fprintf(outputv, "\n");
+            }
+            fprintf(outputv, "  (Pi is INVARIANT to the normalisation, while "
+                             "Lambda and B are not:\n"
+                             "   Lambda->Lambda G, B->B G^-T leaves it "
+                             "unchanged.  Compare fits on Pi.)\n");
+            {   /* eigenvalues, on a copy: eigenqr destroys its argument */
+                real **Pc = matrix(1, nser, 1, nser);
+                for (a = 1; a <= nser; a++) for (b = 1; b <= nser; b++)
+                    Pc[a][b] = Pi[a][b];
+                eigenqr(Pc, nser, wr, wi);
+                fprintf(outputv, "  eigenvalues of Pi:");
+                for (a = 1; a <= nser; a++) {
+                    if (fabs(wi[a]) < 1.0e-12) fprintf(outputv, "  %.6f", wr[a]);
+                    else fprintf(outputv, "  %.6f%+.6fi", wr[a], wi[a]);
+                }
+                fprintf(outputv, "\n");
+                free_matrix(Pc, 1, nser, 1, nser);
+            }
+            fprintf(outputv,
+                "  CAUTION, and it is stronger than the usual one: here Pi = Lambda B'\n"
+                "  has rank r BY CONSTRUCTION, so its M-r zero eigenvalues are\n"
+                "  guaranteed and say nothing about whether r is right -- reading them\n"
+                "  as evidence for the rank is circular.  Even in the unrestricted\n"
+                "  case they are only an indication: Melard, Roy and Saidi (2004) show\n"
+                "  the assumption on Phi(1) does not imply what that reading assumes\n"
+                "  (Pham, Roy and Cedras 2003).  The instrument is -lrtest.\n");
+            free_vector(wi, 1, nser);
+            free_vector(wr, 1, nser);
+            free_matrix(Pi, 1, nser, 1, nser);
+        }
+
+        /* ---- Diagnostic on the normalisation ------------------------------ */
+        /* B = [I_r ; B2] assumes the Y1 block genuinely appears in every
+           cointegrating relation.  If it does not, B2 blows up and the model
+           becomes a silent trap: the fit "works" and describes something else.
+           Mauricio warns about it (p. 3648) and refers to Luukkonen et al.
+           (1999) and Kurozumi (2005); Melard, Roy and Saidi avoid it by using
+           the null space of Phi(1) instead of a normalisation.
+           The measure used here is unit-free: in W = Y1 + B2'Y2 each series
+           weighs |coefficient| * sd(series), so the Y1 block's share of that
+           total weight is reported.  A tiny share says the relation is not
+           really about Y1 and that the normalisation is forced.              */
+        if (r > 0 && s > 0) {
+            real *sdY2 = vector(1, s);
+            int a, t, j;
+            for (a = 1; a <= s; a++) {
+                real m1 = 0.0, v = 0.0;
+                for (t = 1; t <= nobs; t++) m1 += Y2_levels[t][a];
+                m1 /= nobs;
+                for (t = 1; t <= nobs; t++) v += (Y2_levels[t][a] - m1)
+                                               * (Y2_levels[t][a] - m1);
+                sdY2[a] = sqrt(v / (nobs > 1 ? nobs - 1 : 1));
+            }
+            fprintf(outputv, "\nNormalisation check (which series carry each "
+                             "cointegrating relation):\n");
+            for (j = 1; j <= r; j++) {
+                real m1 = 0.0, v = 0.0, w1, w2 = 0.0, share;
+                for (t = 1; t <= nobs; t++) m1 += datamat[t][s + j];
+                m1 /= nobs;
+                for (t = 1; t <= nobs; t++) v += (datamat[t][s + j] - m1)
+                                               * (datamat[t][s + j] - m1);
+                w1 = sqrt(v / (nobs > 1 ? nobs - 1 : 1));      /* coef = 1 */
+                for (a = 1; a <= s; a++) w2 += fabs(B2m[a][j]) * sdY2[a];
+                share = (w1 + w2 > 0.0) ? w1 / (w1 + w2) : 1.0;
+                fprintf(outputv, "  relation %d: the Y1 block carries %5.1f%% "
+                                 "of the weight", j, 100.0 * share);
+                if (share < 0.05) {
+                    fprintf(outputv, "   <-- DUBIOUS\n");
+                    fprintf(stderr,
+                        "WARNING: cointegrating relation %d barely involves the "
+                        "Y1 block (%.1f%%).\n"
+                        "         B = [I_r; B2] normalises on Y1, so this fit "
+                        "may be describing\n"
+                        "         a relation among the other series with an "
+                        "inflated B2.  Consider\n"
+                        "         reordering the columns of the .inp.  See "
+                        "docs/MODEL.md 5.4.\n", j, 100.0 * share);
+                } else fprintf(outputv, "\n");
+            }
+            free_vector(sdY2, 1, s);
+        }
+
+        /*  P6.8 — the hypotheses about the relations, here: the walk above has
+         *  just been checked against npar, so the indices it noted are the good
+         *  ones.  It goes BEFORE the forecast because it answers whether the
+         *  model has anything to say, and that is read first.                */
+        hypothesis_block(x, cov, ix_lam, ix_B2, ix_F, ix_Th);
+        free_imatrix(ix_Th,  1, nq_ix * nser, 1, nser);
+        free_imatrix(ix_F,   1, nf_ix * nser, 1, nser);
+        free_imatrix(ix_B2,  1, (s > 0 ? s : 1), 1, (r > 0 ? r : 1));
+        free_imatrix(ix_lam, 1, nser, 1, (r > 0 ? r : 1));
+
+        /*  P5 — the forecast, here: it is the last place where B2m is still
+         *  alive and where the fit is already made and diagnosed.            */
+        if (global_fcast > 0) forecast_vec(vp, B2m, global_fcast, 0.95);
+        if (global_estwin > 0) {
+            if (global_fcast < 1)
+                fprintf(outputv, "\n(-estwin needs a horizon: give -f H)\n");
+            else if (rolling_eval(x, global_estwin, global_fcast) != 0)
+                fprintf(outputv, "\n(-estwin %d leaves no room for %d steps)\n",
+                        global_estwin, global_fcast);
+        }
+
+        free_matrix(Lam_m, 1, nser, 1, (r > 0 ? r : 1));
+        free_matrix(B2m, 1, s, 1, (r > 0 ? r : 1));
+        }   /* !warma_done */
+        if (warma_done) free_matrix(Lam_m, 1, nser, 1, (r > 0 ? r : 1));
+
+    } else {
+        /*  P1 — THE FAILURE IS VISIBLE FROM OUTSIDE.  Until 2026-08-20 this
+         *  branch wrote the diagnosis into the .out and returned 0 to the
+         *  shell, so a script chaining fits could not tell an estimated model
+         *  from one that was not.  It exits with 2, which in the port's
+         *  convention is "recognised but cannot be honoured", and 1 is reserved
+         *  for a USAGE error.  Mind the distinction that matters: termcode 3 --
+         *  "last global step failed to locate a lower point" -- is NOT this.
+         *  It is an explained stop, with its convergence note, and it still
+         *  exits with 0: turning it into a failure would mark as an error most
+         *  of the fits this program publishes.                               */
+        estimation_failed = 1;
+        fprintf(outputv, "\nESTIMATION FAILED: ifault = %d\n", ifault);
+        switch (ifault) {
+            case 1: fprintf(outputv, "  Q not positive definite\n"); break;
+            case 2: fprintf(outputv, "  AR operator has unit root\n"); break;
+            case 3: fprintf(outputv, "  AR operator non-stationary\n"); break;
+            case 4: fprintf(outputv, "  MA operator non-invertible\n"); break;
+            case 5: fprintf(outputv, "  Numerical problem\n"); break;
+            case 6: fprintf(outputv, "  Error in vec_shootx()\n"); break;
+        }
+        fprintf(stderr, "drvec: estimation failed (ifault = %d); "
+                        "see %s\n", ifault, outname);
+    }
+}
+
+/*****************************************************************************/
+/*  P8 — run_rungs: the -rungs mode, out of main().  A mode is a program in   */
+/*  its own right -- it estimates, prints and exits -- so it belongs in a     */
+/*  function of its own and not at the same indentation as the argument       */
+/*  parsing.  Returns the process exit code.                                  */
+/*****************************************************************************/
+static int run_rungs(void)
+{
+        const int NR = 3;
+        const int DAR[3] = {1, 1, 0}, DMA[3] = {1, 1, 0}, DCOV[3] = {1, 0, 0};
+        const char *NAME[3] = { "0  F, Theta, Sigma diagonal",
+                                "1  Sigma free",
+                                "2  F and Theta free" };
+        real *ll  = vector(0, NR - 1);
+        int  *npr = ivector(0, NR - 1);
+        int  *good = ivector(0, NR - 1);
+        int k;
+
+        macheps = cmacheps();
+        global_r = 0;
+
+        fprintf(outputv, "\n=== The ladder: rungs at r = 0 ===\n");
+        printf("\nThe ladder, rungs at r = 0:\n");
+
+        for (k = 0; k < NR; k++) {
+            struct Tvarma vr;
+            real *xr, *devr, **covr;
+            int np, ifr = 0;
+
+            global_diag_ar = DAR[k]; global_diag_ma = DMA[k];
+            global_diag_cov = DCOV[k];
+            build_y2_levels();
+            np = calc_nparametrs();
+            xr = vector(1, np); devr = vector(1, np);
+            covr = matrix(1, np, 1, np);
+            vr.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
+            init_guess(xr, np);
+            vec_shootx(xr, &vr, &ifr, 1, 0);
+            est(&vec_shootx, np, xr, devr, covr, 500, 200, 1e-5, 1e-7,
+                vr.xitol, vr.a, &vr.sigma2, &vr.logelf, &ifr);
+            good[k] = (ifr == 0);
+            npr[k]  = np;
+            ll[k]   = good[k] ? vr.logelf : 0.0;
+            printf("  rung %s : %s (ifault=%d)\n", NAME[k],
+                   good[k] ? "ok" : "estimation failed", ifr);
+            /*  Rung 0 is the base: its contract is demanded right here, which is
+             *  where it is being built upon.                                 */
+            if (k == 0 && good[k]) {
+                vec_shootx(xr, &vr, &ifr, 0, 0);       /* recover the fit */
+                gate_contract(&vr);
+            }
+            vec_shootx(xr, &vr, &ifr, 0, 1);           /* liberar */
+            free_matrix(covr, 1, np, 1, np);
+            free_vector(devr, 1, np);
+            free_vector(xr, 1, np);
+        }
+
+        fprintf(outputv, "\n  rung                          npar         logL"
+                         "         AIC         BIC\n");
+        fprintf(outputv, "  --------------------------------------------------"
+                         "-------------------\n");
+        for (k = 0; k < NR; k++) {
+            if (!good[k]) {
+                fprintf(outputv, "  %-28s  --   estimation failed\n", NAME[k]);
+                continue;
+            }
+            fprintf(outputv, "  %-28s %4d %12.4f %11.4f %11.4f\n", NAME[k],
+                    npr[k], ll[k],
+                    (-2.0 * ll[k] + 2.0 * npr[k]) / nobs,
+                    (-2.0 * ll[k] + npr[k] * log((real) nobs)) / nobs);
+        }
+
+        fprintf(outputv, "\n  step        LR = 2*[L(k+1) - L(k)]    df    "
+                         "p-value\n");
+        fprintf(outputv, "  ------------------------------------------------"
+                         "-----\n");
+        for (k = 0; k + 1 < NR; k++) {
+            real lr;
+            int df;
+            if (!good[k] || !good[k + 1]) {
+                fprintf(outputv, "  %d -> %d      not available\n", k, k + 1);
+                continue;
+            }
+            lr = 2.0 * (ll[k + 1] - ll[k]);
+            df = npr[k + 1] - npr[k];
+            fprintf(outputv, "  %d -> %d   %14.4f       %3d   %9.4f%s\n",
+                    k, k + 1, lr, df,
+                    (df > 0 && lr > 0.0) ? gsl_cdf_chisq_Q(lr, df) : 1.0,
+                    (lr < -1.0e-6) ? "   *** NEGATIVE: the wider fit is worse,"
+                                     " so it did not converge" : "");
+        }
+
+        fprintf(outputv,
+            "\n  These are ordinary nested comparisons: the restricted model is\n"
+            "  an INTERIOR point of the wider one, so the log-likelihood cannot\n"
+            "  fall and the statistic is chi2 on the stated degrees of freedom.\n"
+            "  The next rung -- adding the VEC matrix, r = 1 -- is not ordinary\n"
+            "  in either respect: the null sits ON the boundary of the alternative\n"
+            "  and B2 is unidentified under it.  It is reported by -lrtest, with\n"
+            "  a parametric bootstrap available for its distribution.\n");
+
+        free_ivector(good, 0, NR - 1);
+        free_ivector(npr, 0, NR - 1);
+        free_vector(ll, 0, NR - 1);
+        fclose(outputv);
+        printf("Done. Output written to %s\n", outputf);
+        cleanup_names(outputf, inputf, base_name);
+        return 0;
+}
+
+/*****************************************************************************/
+/*  P8 — run_specs: the -specs mode, out of main().  Returns the exit code.   */
+/*****************************************************************************/
+static int run_specs(void)
+{
+        const int NS = 5;
+        const char *NM[5] = { "warma  ", "mawarma", "marow  ", "matri  ", "free   " };
+        real ll[5], gg[5], mam[5], b2v[5];
+        int  npv[5], okv[5], tcv[5], adm[5];
+        int  k, M = nser;
+
+        macheps = cmacheps();
+        if (global_r < 1) {
+            fprintf(stderr, "ERROR: -specs needs r >= 1\n");
+            exit(1);
+        }
+        fprintf(outputv, "\n=== The specification ladder ===\n");
+        printf("\nSpecification ladder:\n");
+
+        for (k = 0; k < NS; k++) {
+            struct Tvarma vs;
+            real *xs, *devs, **covs;
+            int np, ifs = 0, s2 = M - global_r;
+
+            global_warma = (k == 0); global_mawarma = (k == 1);
+            global_marow = (k == 2);  global_matri   = (k == 3);
+            build_y2_levels();
+            np = calc_nparametrs();
+            xs = vector(1, np); devs = vector(1, np);
+            covs = matrix(1, np, 1, np);
+            vs.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
+            init_guess(xs, np);
+            if (global_warma) {
+                /*  the same admissible shrinkage the normal route uses         */
+                static const real shr[6] = { 1.0, 0.8, 0.5, 0.3, 0.1, 0.0 };
+                int nm2, nl2, nmid2, nt2, nfw = (global_p > 1) ? global_p - 1 : 0;
+                int nar, i2, mi;
+                real *ar0;
+                par_blocks(&nm2, &nl2, &nmid2, &nt2);
+                nar = nl2 + nfw * M * global_r;
+                ar0 = vector(1, (nar > 0 ? nar : 1));
+                for (i2 = 1; i2 <= nar; i2++) ar0[i2] = xs[nm2 + i2];
+                vec_shootx(xs, &vs, &ifs, 1, 0);
+                for (mi = 0; mi < 6; mi++) {
+                    real p1, p2, p3; int ife = 0, ifc = 0;
+                    for (i2 = 1; i2 <= nar; i2++) xs[nm2 + i2] = shr[mi] * ar0[i2];
+                    vec_shootx(xs, &vs, &ifc, 0, 0);
+                    if (ifc != 0) continue;
+                    elf(vs.m, vs.n, vs.p, vs.q, vs.mu, vs.phi, vs.theta, vs.qq,
+                        vs.w, 1.0, vs.xitol, TRUE, vs.a, &p1, &p2, &p3, &ife);
+                    if (ife == 0) break;
+                }
+                free_vector(ar0, 1, (nar > 0 ? nar : 1));
+                vec_shootx(xs, &vs, &ifs, 0, 1);
+            }
+            vec_shootx(xs, &vs, &ifs, 1, 0);
+            est(&vec_shootx, np, xs, devs, covs, 500, 200, 1e-5, 1e-7,
+                vs.xitol, vs.a, &vs.sigma2, &vs.logelf, &ifs);
+            okv[k] = (ifs == 0);
+            npv[k] = np;
+            ll[k]  = okv[k] ? vs.logelf : 0.0;
+            tcv[k] = termcode_from_out(outputf);
+            gg[k] = -1.0; mam[k] = -1.0; b2v[k] = 0.0;
+            if (okv[k]) {
+                real mm = 1.0e30;
+                vec_shootx(xs, &vs, &ifs, 0, 0);      /* recover the fit  */
+                report_operator_roots("MA", vs.theta, vs.m, vs.q, &mm, 1);
+                mam[k] = (mm < 1.0e29) ? mm : -1.0;
+                for (int j2 = 1; j2 <= global_r; j2++)
+                    b2v[k] = global_fixb2 ? B2_fixed[1][j2]
+                           : xs[np - s2 * global_r + (j2 - 1) * s2 + 1];
+                if (global_warma) {
+                    /*  in Ybar coordinates one has to come back first        */
+                    real **B2w = matrix(1, s2, 1, global_r);
+                    real **Lw = matrix(1, M, 1, global_r);
+                    real ***Fw = tensor(1, (global_p > 1 ? global_p - 1 : 1), 1, M, 1, M);
+                    real ***Tw = tensor(1, (global_q > 0 ? global_q : 1), 1, M, 1, M);
+                    real **Sw = matrix(1, M, 1, M);
+                    for (int j2 = 1; j2 <= global_r; j2++)
+                        for (int i2 = 1; i2 <= s2; i2++)
+                            B2w[i2][j2] = global_fixb2 ? B2_fixed[i2][j2]
+                                        : xs[np - s2*global_r + (j2-1)*s2 + i2];
+                    for (int k2 = 1; k2 <= (global_q > 0 ? global_q : 1); k2++)
+                        for (int i2 = 1; i2 <= M; i2++)
+                            for (int j2 = 1; j2 <= M; j2++) Tw[k2][i2][j2] = 0.0;
+                    warma_inverse(&vs, B2w, Lw, Fw, Tw, Sw);
+                    gg[k] = granger_smin(Lw, B2w, Tw, M, global_r, global_q);
+                    free_matrix(Sw, 1, M, 1, M);
+                    free_tensor(Tw, 1, (global_q > 0 ? global_q : 1), 1, M, 1, M);
+                    free_tensor(Fw, 1, (global_p > 1 ? global_p - 1 : 1), 1, M, 1, M);
+                    free_matrix(Lw, 1, M, 1, global_r);
+                    free_matrix(B2w, 1, s2, 1, global_r);
+                } else gg[k] = granger_sv;
+            }
+            adm[k] = (okv[k] && gg[k] >= global_rankadm_tol);
+            printf("  %s : %s\n", NM[k], okv[k] ? "ok" : "fallo");
+            vec_shootx(xs, &vs, &ifs, 0, 1);
+            free_matrix(covs, 1, np, 1, np);
+            free_vector(devs, 1, np);
+            free_vector(xs, 1, np);
+        }
+        global_warma = global_mawarma = global_marow = global_matri = 0;
+
+        fprintf(outputv,
+          "\n  spec      npar          logL   term        G     MAmin       B2  adm\n"
+          "  ------------------------------------------------------------------------\n");
+        for (k = 0; k < NS; k++) {
+            const char *tn = (tcv[k] == 1) ? "grad" : (tcv[k] == 2) ? "step"
+                           : (tcv[k] == 3) ? "lower" : (tcv[k] == 0) ? "--" : "gave up";
+            if (!okv[k]) {
+                fprintf(outputv, "  %s  %4d   estimation failed\n", NM[k], npv[k]);
+                continue;
+            }
+            fprintf(outputv, "  %s  %4d %13.4f  %-6s %8.3e %8.3f %8.4f  %s\n",
+                    NM[k], npv[k], ll[k], tn, gg[k],
+                    (mam[k] >= 0.0) ? mam[k] : 0.0, b2v[k],
+                    adm[k] ? "yes" : "NO");
+        }
+
+        fprintf(outputv,
+          "\n  step               LR     df   verdict\n"
+          "  ----------------------------------------------------------------------\n");
+        for (k = 0; k + 1 < NS; k++) {
+            real lr;
+            int df = npv[k+1] - npv[k];
+            if (!okv[k] || !okv[k+1]) {
+                fprintf(outputv, "  %s -> %s   not available\n", NM[k], NM[k+1]);
+                continue;
+            }
+            lr = 2.0 * (ll[k+1] - ll[k]);
+            fprintf(outputv, "  %s -> %s %8.3f %4d   ", NM[k], NM[k+1], lr, df);
+            if (lr < -1.0e-6)
+                fprintf(outputv, "NEGATIVE: the wider fit is worse, so it did "
+                                 "not converge\n");
+            else if (adm[k] && adm[k+1])
+                fprintf(outputv, "chi2 p = %.4f\n",
+                        (df > 0) ? gsl_cdf_chisq_Q(lr, df) : 1.0);
+            else
+                fprintf(outputv, "no p-value: %s is not admissible, so the "
+                                 "statistic is not chi2 (-matest)\n",
+                        adm[k] ? NM[k+1] : NM[k]);
+        }
+
+        fprintf(outputv,
+          "\n  READ THE LAST COLUMN FIRST.  By Theorem 3 of docs/THEORY.md the\n"
+          "  process has cointegrating rank r if and only if\n"
+          "  rank(Lambda_perp' Theta(1)) = M - r, and by Theorem 4 the set where\n"
+          "  that fails lies INSIDE the one the optimiser searches.  A rung with\n"
+          "  a small G is not a worse fit of this model: it is a fit of another\n"
+          "  one, whose rank is not the rank it was estimated at.  Corollary 5.1\n"
+          "  then removes the usual distributions, which is why no chi2 p-value\n"
+          "  is printed for a comparison involving it.  The floor used here is\n"
+          "  %.1e (-rankadm sets it).\n", global_rankadm_tol);
+
+        fclose(outputv);
+        printf("Done. Output written to %s\n", outputf);
+        cleanup_names(outputf, inputf, base_name);
+        return 0;
+}
+
+/*****************************************************************************/
+/*  P8 — run_ma_ar_test: the -matest and -artest modes, out of main().  They  */
+/*  are one function because they are one procedure with two pairs: the same  */
+/*  bootstrap under the restricted model, with a different H0 and H1.         */
+/*  Returns the exit code.                                                    */
+/*****************************************************************************/
+static int run_ma_ar_test(void)
+{
+        /*  Two tests with the same machinery and a different pair:
+         *    -matest   H0 = mawarma  against  H1 = free    (half the MA)
+         *    -artest   H0 = warma    against  H1 = mawarma (half the AR)
+         *  The second is the one step 5 of the plan asked for, and its reason
+         *  for simulating is NOT the same: here the unrestricted model IS
+         *  admissible (G between 0.90 and 1.00 over the whole bank), so it is
+         *  not 4i's boundary problem.  It is that the restriction
+         *  Gamma_i = m_i alpha' is of REDUCED RANK on F_i, and the LR of a rank
+         *  restriction is not chi2 when the true rank may be below the one the
+         *  restriction allows -- and in five of the eight pairs F1 comes out
+         *  nearly of rank one, which leaves m_i nearly unidentified.         */
+        int use_ar = (global_artest > 0);
+        int reps = use_ar ? global_artest : global_matest;
+        int k0 = use_ar ? 0 : 1, k1 = use_ar ? 1 : 4;
+        int np0, np1, ok0 = 0, ok1 = 0, nb, df;
+        real l0, l1, lr, cv[3] = {0,0,0}, pv = -1.0;
+        real *x0, *dev0, **cov0;
+        struct Tvarma v0;
+        int ifr = 0;
+
+        macheps = cmacheps();
+        if (global_r < 1 || global_q < 1) {
+            fprintf(stderr, "ERROR: -matest/-artest need r >= 1 and q >= 1\n");
+            exit(1);
+        }
+        /* [1] the restricted model, which is H0 -- and it is kept, because the simulation comes from it */
+        set_spec(k0);
+        build_y2_levels();
+        np0 = calc_nparametrs();
+        x0 = vector(1, np0); dev0 = vector(1, np0); cov0 = matrix(1, np0, 1, np0);
+        v0.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
+        init_guess(x0, np0);
+        vec_shootx(x0, &v0, &ifr, 1, 0);
+        est(&vec_shootx, np0, x0, dev0, cov0, 500, 200, 1e-5, 1e-7,
+            v0.xitol, v0.a, &v0.sigma2, &v0.logelf, &ifr);
+        ok0 = (ifr == 0); l0 = v0.logelf;
+        vec_shootx(x0, &v0, &ifr, 0, 1);
+
+        /* [2] the unrestricted one */
+        set_spec(k1);
+        l1 = fit_ll(global_r, &ok1);
+        np1 = calc_nparametrs();
+        df = np1 - np0;
+
+        if (!ok0 || !ok1) {
+            fprintf(outputv, "\n%s: one of the two fits failed "
+                             "(restricted %s, unrestricted %s); no test.\n",
+                    use_ar ? "-artest" : "-matest",
+                    ok0 ? "ok" : "failed", ok1 ? "ok" : "failed");
+        } else {
+            lr = 2.0 * (l1 - l0);
+            /*  The header and the numbers go in TWO calls and not in one with a
+             *  conditional format string: with the ternary, the literals that
+             *  followed concatenate onto only one of the two branches and the
+             *  %f are left without a format in the other.  It compiles, and the
+             *  numbers are lost in silence -- which is how they were lost the
+             *  first time this was written.                                  */
+            fprintf(outputv, "%s", use_ar
+                ? "\n=== The triangular short-run dynamics against free F ===\n\n"
+                  "  H0: Gamma_i = M_i alpha' -- every lag enters through W,\n"
+                  "      which is what the triangular class implies\n"
+                  "  H1: F_i free (the moving-average structure held in both)\n\n"
+                : "\n=== The inherited moving average against the free one ===\n\n"
+                  "  H0: Theta = [T11  T11*B2' ; 0  0], the structure a WARMA\n"
+                  "      process implies for its VEC representation\n"
+                  "  H1: Theta free\n\n");
+            fprintf(outputv,
+                "  restricted     logL = %15.10f   (%d parameters)\n"
+                "  unrestricted   logL = %15.10f   (%d parameters)\n"
+                "  LR = 2*[L(H1) - L(H0)] = %.4f   on %d df\n"
+                "  chi2 p-value, FOR REFERENCE ONLY          = %.4f\n",
+                l0, np0, l1, np1, lr, df,
+                (lr > 0.0) ? gsl_cdf_chisq_Q(lr, df) : 1.0);
+            printf("  restricted %.6f   free %.6f   LR %.4f (%d df)\n",
+                   l0, l1, lr, df);
+
+            nb = bootstrap_ma(x0, np0, reps, cv, &pv, lr, k0, k1);
+            if (nb >= 10) {
+                fprintf(outputv,
+                  "\n  Parametric bootstrap under H0, %d of %d replications "
+                  "usable:\n"
+                  "    critical values   10%%: %8.4f   5%%: %8.4f   1%%: %8.4f\n"
+                  "    bootstrap p-value = %.4f\n", nb, reps,
+                  cv[0], cv[1], cv[2], pv);
+                fprintf(outputv, "    verdict: %s\n",
+                    (lr > cv[2]) ? "reject H0 at 1%" :
+                    (lr > cv[1]) ? "reject H0 at 5%" :
+                    (lr > cv[0]) ? "reject H0 at 10%" : "H0 not rejected");
+                /*  The verdict is read off the CRITICAL VALUES and the p-value
+                 *  also counts the observed statistic, so with few
+                 *  replications the two can end up on different sides of a
+                 *  threshold.  Saying so is cheaper than picking one and
+                 *  keeping quiet.                                            */
+                if ((lr > cv[0] && pv > 0.10) || (lr > cv[1] && pv > 0.05) ||
+                    (lr > cv[2] && pv > 0.01))
+                    fprintf(outputv,
+                      "    (the p-value counts the observed statistic itself, so\n"
+                      "     with B = %d it can sit on the other side of the same\n"
+                      "     threshold as the critical value; both are printed)\n",
+                      reps);
+                printf("  bootstrap: p = %.4f  (%d/%d replicas)\n", pv, nb,
+                       reps);
+            } else {
+                fprintf(outputv, "\n  Parametric bootstrap: only %d usable "
+                                 "replications; no critical values.\n", nb);
+            }
+            fprintf(outputv, use_ar ?
+              "\n  WHY THE BOOTSTRAP AND NOT THE chi2, and the reason is NOT\n"
+              "  the one in -matest.  Here the unrestricted model IS admissible\n"
+              "  -- the rank condition reads 0.90 to 1.00 across the bank -- so\n"
+              "  this is not a boundary of the model class.  It is that\n"
+              "  Gamma_i = M_i alpha' is a REDUCED-RANK restriction on F_i, and\n"
+              "  the likelihood ratio for a rank restriction is not chi2 when\n"
+              "  the true rank may be below the one the restriction allows: in\n"
+              "  five of the eight pairs F1 comes out near rank one already, and\n"
+              "  M_i is then close to unidentified.  The bootstrap is simulated\n"
+              "  FROM THE RESTRICTED FIT, which is H0.\n"
+              :
+              "\n  WHY THE BOOTSTRAP AND NOT THE chi2.  The unrestricted\n"
+              "  optimum on this kind of data stops in the neighbourhood where\n"
+              "  the rank condition degenerates -- sigma_min(Lambda_perp'\n"
+              "  Theta(1) B_perp) of order 0.01-0.1 against ~1 for a correctly\n"
+              "  specified model, with Theta(1) singular to working precision.\n"
+              "  An LR whose unrestricted estimate sits on the edge of the\n"
+              "  admissible region does not have its asymptotic distribution,\n"
+              "  so the chi2 column above is a reference and not a test.  The\n"
+              "  bootstrap distribution is simulated FROM THE RESTRICTED FIT,\n"
+              "  which is H0, and it inherits the sample size, the\n"
+              "  deterministic case and the moving-average structure.\n"
+              "  Read it with its floor of 1/(B+1) = %.4f and its Monte Carlo\n"
+              "  error sqrt(p(1-p)/B) = %.4f at p = 0.05.\n"
+              "  See docs/HOMOLOGATION.md 4g and 4h.\n",
+              1.0 / (real) (reps + 1),
+              sqrt(0.05 * 0.95 / (real) reps));
+        }
+        free_matrix(cov0, 1, np0, 1, np0);
+        free_vector(dev0, 1, np0);
+        free_vector(x0, 1, np0);
+        fclose(outputv);
+        printf("Done. Output written to %s\n", outputf);
+        cleanup_names(outputf, inputf, base_name);
+        return 0;
+}
+
+/*****************************************************************************/
+/*  P8 — run_lrtest: the -lrtest mode, out of main().  It estimates every     */
+/*  rank from 0 to M-1, so it is the one mode that runs the whole estimation  */
+/*  M times over; it prints the sequential table and, with -bootstrap, the    */
+/*  critical values.  Returns the exit code.                                  */
+/*****************************************************************************/
+static int run_lrtest(void)
+{
+        int M = nser, ok;
+        macheps = cmacheps();           /* the engine needs it; [3] is skipped */
+        /* Ranks 0..M-1.  r = 0 is the no-cointegration null: Pi = 0, so the
+           model is a plain VARMA on nabla Y.  It is the first and most
+           important comparison of the sequence.                              */
+        real *ll  = vector(0, M - 1);
+        int  *npr = ivector(0, M - 1);
+        int  *good = ivector(0, M - 1);
+
+        fprintf(outputv, "\n=== Sequential LR test for the cointegration rank ===\n");
+        printf("\nSequential LR test for the cointegration rank:\n");
+
+        /* With -bootstrap one has to be able to SIMULATE from each rank's fit,
+           so its parameter vector is kept instead of freed.                   */
+        real **xkeep = NULL; int *npkeep = NULL;
+        if (global_boot > 0) {
+            xkeep  = (real **) malloc((size_t)(M + 1) * sizeof(real *));
+            npkeep = ivector(0, M - 1);
+            for (int rr = 0; rr <= M - 1; rr++) { xkeep[rr] = NULL; npkeep[rr] = 0; }
+        }
+
+        for (int rr = 0; rr <= M - 1; rr++) {
+            global_r = rr;
+            build_y2_levels();
+            int np = calc_nparametrs();
+            real *xr   = vector(1, np);
+            real *devr = vector(1, np);
+            real **covr = matrix(1, np, 1, np);
+            struct Tvarma vr;
+            vr.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
+            init_guess(xr, np);
+            int ifr;
+            vec_shootx(xr, &vr, &ifr, 1, 0);
+            est(&vec_shootx, np, xr, devr, covr, 500, 200, 1e-5, 1e-7,
+                vr.xitol, vr.a, &vr.sigma2, &vr.logelf, &ifr);
+            ok = (ifr == 0);
+            good[rr] = ok;
+            npr[rr]  = np;
+            ll[rr]   = ok ? vr.logelf : 0.0;
+            printf("  r = %d : %s (ifault=%d)\n", rr,
+                   ok ? "ok" : "estimation failed", ifr);
+            vec_shootx(xr, &vr, &ifr, 0, 1);   /* deallocate */
+            if (global_boot > 0 && ok) {
+                xkeep[rr] = vector(1, np); npkeep[rr] = np;
+                for (int i2 = 1; i2 <= np; i2++) xkeep[rr][i2] = xr[i2];
+            }
+            free_matrix(covr, 1, np, 1, np);
+            free_vector(devr, 1, np);
+            free_vector(xr, 1, np);
+        }
+
+        fprintf(outputv, "\n  r    npar        logL         AIC         BIC\n");
+        fprintf(outputv, "  ---------------------------------------------------\n");
+        for (int rr = 0; rr <= M - 1; rr++) {
+            if (!good[rr]) { fprintf(outputv, "  %-4d  --   estimation failed\n", rr); continue; }
+            real aic = (-2.0 * ll[rr] + 2.0 * npr[rr]) / nobs;
+            real bic = (-2.0 * ll[rr] + npr[rr] * log((real) nobs)) / nobs;
+            fprintf(outputv, "  %-4d %4d %12.4f %11.4f %11.4f\n",
+                    rr, npr[rr], ll[rr], aic, bic);
+        }
+
+        fprintf(outputv,
+            "\n  H0: P = r   vs   H1: P = r+1        LR = 2*[L(r+1) - L(r)]\n");
+        if (global_alpha)
+            fprintf(outputv,
+                "  (every rank estimated UNDER the restriction alpha = A*psi,\n"
+                "   so this is the rank sequence within H1(r) and NOT the usual\n"
+                "   one.  The tabulated critical values do not apply and are not\n"
+                "   printed: they are for alpha free.)\n");
+        else
+            fprintf(outputv,
+                "  (asymptotic critical values: %s)\n",
+                (global_case == 1) ? "case 1, no constant" :
+                (global_case == 2) ? "case 2, restricted constant" :
+                                     "case 3 — NOT TABULATED HERE");
+        fprintf(outputv, "\n  r    M-r        LR      10%%      5%%      1%%\n");
+        fprintf(outputv, "  ---------------------------------------------------\n");
+        for (int rr = 0; rr <= M - 2; rr++) {
+            if (!good[rr] || !good[rr+1]) {
+                fprintf(outputv, "  %-4d  --   (a model in the pair failed)\n", rr);
+                continue;
+            }
+            real lr = 2.0 * (ll[rr+1] - ll[rr]);
+            int  g  = M - rr;                    /* common trends under H0 */
+            /* Rank r is nested in rank r+1, so L(r+1) >= L(r) at the true
+               maxima.  A negative LR proves at least one of the two fits did
+               not reach its optimum, and the statistic means nothing.        */
+            if (lr < 0.0) {
+                fprintf(outputv,
+                        "  %-4d %4d %10.4f   NOT INTERPRETABLE: LR < 0, so at "
+                        "least one of the\n                              two fits "
+                        "did not converge (rank r is nested in r+1)\n", rr, g, lr);
+                continue;
+            }
+            fprintf(outputv, "  %-4d %4d %10.4f", rr, g, lr);
+            if (global_alpha) {
+                /* Under alpha = A*psi the statistic has ANOTHER distribution: the
+                   tables are for a free alpha.  Printing them here would be
+                   giving wrong critical values that look right, which is worse
+                   than giving none.                                          */
+                fprintf(outputv, "        -        -        -   (restricted:"
+                                 " tabulated values do not apply)");
+            } else if (global_case != 3 && g >= 1 && g <= LR_MAXTRENDS) {
+                const real *cv = (global_case == 1) ? lr_cval_none[g-1]
+                                                    : lr_cval_const[g-1];
+                fprintf(outputv, " %8.2f %8.2f %8.2f", cv[0], cv[1], cv[2]);
+                if      (lr > cv[2]) fprintf(outputv, "   reject H0 at 1%%");
+                else if (lr > cv[1]) fprintf(outputv, "   reject H0 at 5%%");
+                else if (lr > cv[0]) fprintf(outputv, "   reject H0 at 10%%");
+                else                 fprintf(outputv, "   H0 not rejected");
+            } else {
+                fprintf(outputv, "        -        -        -   (no values)");
+            }
+            fprintf(outputv, "\n");
+        }
+        fprintf(outputv,
+            "\n  Distribution is the non-standard Johansen one; MA terms do not\n"
+            "  affect it (Yap and Reinsel 1995, Thm. 3; Mauricio 2006, Remark 5).\n"
+            "  Values from R urca 1.3.4 ca.jo(type=\"eigen\"); Osterwald-Lenum (1992).\n"
+            "  r = 0 is the no-cointegration null (Pi = 0, a plain VARMA on\n"
+            "  nabla Y); r = M would be a stationary process in levels and is not\n"
+            "  expressible here, so the sequence ends at r = M-1.  Read it with\n"
+            "  AIC/BIC, and check the optimizer banner of every rank before\n"
+            "  trusting a statistic.\n");
+        if (global_alpha)
+            fprintf(outputv,
+                "  NOTE: with alpha = A*psi imposed, what is being tested at each\n"
+                "  step is the rank WITHIN the restricted model.  That is a\n"
+                "  legitimate question and a different one; its distribution is\n"
+                "  not the tabulated Johansen one.  For the usual rank test, drop\n"
+                "  the restriction.\n");
+
+        /* ---- critical values by parametric bootstrap, if asked for --------- */
+        if (global_boot > 0) {
+            fprintf(outputv,
+                "\n  === Parametric bootstrap under H0 (%d replications) ===\n"
+                "  The asymptotic values above are known to be optimistic at these\n"
+                "  sample sizes: measured, the sequential test over-rejects about\n"
+                "  SIX times its nominal level at n = 120, and these percentiles cut\n"
+                "  that to four without closing it.  They are empirical\n"
+                "  percentiles of the statistic simulated FROM THE FITTED MODEL at\n"
+                "  rank r, so they carry the sample size, the deterministic case and\n"
+                "  the MA component that the tables cannot.\n", global_boot);
+            fprintf(outputv, "\n  r    M-r        LR      10%%      5%%      1%%"
+                             "   p-value  reps\n");
+            fprintf(outputv, "  ------------------------------------------------"
+                             "-----------------\n");
+            printf("\nBootstrap under H0 (%d replications per comparison):\n",
+                   global_boot);
+            for (int rr = 0; rr <= M - 2; rr++) {
+                real cv[3] = {0.0, 0.0, 0.0}, pv = -1.0, lr;
+                int reps;
+                if (!good[rr] || !good[rr+1] || xkeep == NULL || xkeep[rr] == NULL) {
+                    fprintf(outputv, "  %-4d  --   (a model in the pair failed)\n", rr);
+                    continue;
+                }
+                lr = 2.0 * (ll[rr+1] - ll[rr]);
+                printf("  r = %d -> %d ...", rr, rr+1); fflush(stdout);
+                reps = bootstrap_rank(rr, xkeep[rr], npkeep[rr], global_boot,
+                                      cv, &pv, lr);
+                if (reps < 10) {
+                    fprintf(outputv, "  %-4d %4d %10.4f   only %d usable "
+                                     "replications: not reported\n",
+                            rr, M - rr, lr, reps);
+                    printf(" only %d usable replications\n", reps);
+                    continue;
+                }
+                fprintf(outputv, "  %-4d %4d %10.4f %8.2f %8.2f %8.2f  %7.4f  %4d",
+                        rr, M - rr, lr, cv[0], cv[1], cv[2], pv, reps);
+                /* The verdict is read off the CRITICAL VALUES, not the p-value,
+                   because the p-value has a floor of 1/(reps+1): with 100
+                   replications it cannot go below 0.0099, so "rejects at 1%"
+                   would be unreachable by construction even if the statistic
+                   exceeded the 99th percentile.                              */
+                if      (lr > cv[2]) fprintf(outputv, "   reject H0 at 1%%\n");
+                else if (lr > cv[1]) fprintf(outputv, "   reject H0 at 5%%\n");
+                else if (lr > cv[0]) fprintf(outputv, "   reject H0 at 10%%\n");
+                else                 fprintf(outputv, "   H0 not rejected\n");
+                printf(" p = %.4f (%d replicas)\n", pv, reps);
+            }
+            /* The Monte Carlo error, stated instead of hidden: the plan's
+               contingency asked for it to be reported if N had to be small.   */
+            fprintf(outputv,
+                "\n  Monte Carlo error, said rather than hidden:\n"
+                "   - a bootstrap p-value from B replications has standard error\n"
+                "     sqrt(p(1-p)/B); at p = 0.05 and B = %d that is %.4f, so read a\n"
+                "     p-value near a threshold as undecided, not as a decision;\n"
+                "   - and it has a FLOOR of 1/(B+1) = %.4f -- with this B the p-value\n"
+                "     cannot go below that however extreme the statistic is, which is\n"
+                "     why the verdict above is read from the critical values.  For a\n"
+                "     p-value that can resolve 1%%, B >= 999.\n"
+                "   - replications where either fit failed to converge, or gave\n"
+                "     LR < 0, are discarded and counted in the reps column.\n",
+                global_boot, sqrt(0.05 * 0.95 / (real) global_boot),
+                1.0 / (real) (global_boot + 1));
+            for (int rr = 0; rr <= M - 1; rr++)
+                if (xkeep && xkeep[rr]) free_vector(xkeep[rr], 1, npkeep[rr]);
+            if (xkeep) free(xkeep);
+            if (npkeep) free_ivector(npkeep, 0, M - 1);
+        }
+
+        free_ivector(good, 0, M - 1);
+        free_ivector(npr, 0, M - 1);
+        free_vector(ll, 0, M - 1);
+        printf("Done. Output written to %s\n", base_name);
+        fclose(outputv);
+        cleanup_names(outputf, inputf, base_name);
+        return 0;
+}
+
+/*****************************************************************************/
+/*  P8 — run_multistart: the -multistart block, out of main().  It is not a   */
+/*  mode -- it does not print and exit, it leaves a fit behind -- so unlike   */
+/*  the modes it returns whether it did: 1 means the best point is already in */
+/*  x and main() must not estimate again.                                     */
+/*****************************************************************************/
+static int run_multistart(real *x, real *dev, real **cov, int npar,
+                          struct Tvarma *vp, int *ifault)
+{
+    int ms_done = 0;
+        real *xbest = vector(1, npar), *xtry = vector(1, npar);
+        real *devb  = vector(1, npar), *devbest = vector(1, npar);
+        real **covb = matrix(1, npar, 1, npar);
+        real **covbest = matrix(1, npar, 1, npar);
+        real best = 0.0, worst = 0.0, best_s2 = 0.0;
+        int  k, i2, nok = 0, ifb, bestk = 0;
+        unsigned long rng = 20260818UL;      /* semilla fija, a proposito */
+
+        for (i2 = 1; i2 <= npar; i2++) xbest[i2] = x[i2];
+        for (k = 0; k < global_multistart; k++) {
+            struct Tvarma vk;
+            vk.xitol = vp->xitol;
+            /*  The multi-start shakes THE SEED BEING MEASURED, not another one:
+             *  with -seedgate that is the profiled point, which is already in
+             *  x, and calling init_guess again here would measure route (C)
+             *  under the wrong label.                                        */
+            /*  With -warma the same happens as with -seedgate: the good
+             *  starting point is the one already in x -- shrunk until
+             *  admissible -- and calling init_guess again here would return the
+             *  raw one, which the engine rejects.  Measured: on mink_muskrat
+             *  only 2 of 20 starts converged because of that.                */
+            if (gate_seed_ok || global_warma) {
+                for (i2 = 1; i2 <= npar; i2++) xtry[i2] = x[i2];
+            } else init_guess(xtry, npar);
+            if (k > 0) {
+                /* Multiplicative jitter on the seed, in a ladder of amplitude that
+                   depends ONLY on k and not on n.  That makes the procedure
+                   MONOTONE in n: the first n starts of a long run are exactly
+                   those of a short one, so asking for more starts can only
+                   improve things.  With the amplitude scaled by n -- as it was
+                   -- increasing n changed the set instead of extending it, and
+                   the nonsense was measured: n=24 gave |Sigma| 0.002349 and
+                   n=40 gave 0.002453.                                        */
+                real amp = 0.05 * (real) (1 + (k - 1) % 20);
+                for (i2 = 1; i2 <= npar; i2++) {
+                    real u;
+                    rng = rng * 6364136223846793005UL + 1442695040888963407UL;
+                    u = ((real) ((rng >> 33) & 0x7FFFFFFF)) / 2147483647.0;
+                    u = 2.0 * u - 1.0;                       /* U(-1, 1) */
+                    xtry[i2] += amp * u * (fabs(xtry[i2]) > 1.0e-8
+                                           ? fabs(xtry[i2]) : 0.1);
+                }
+            }
+            vec_shootx(xtry, &vk, &ifb, 1, 0);
+            est(&vec_shootx, npar, xtry, devb, covb, maxits, nrits, gradtol,
+                sptol, vk.xitol, vk.a, &vk.sigma2, &vk.logelf, &ifb);
+            if (ifb == 0) {
+                if (nok == 0 || vk.logelf > best) {
+                    best = vk.logelf; bestk = k; best_s2 = vk.sigma2;
+                    for (i2 = 1; i2 <= npar; i2++) {
+                        xbest[i2] = xtry[i2];
+                        /* The covariance has to be kept FROM THE START THAT PRODUCED
+                           IT.  cov comes from the factor raxopt accumulates
+                           while iterating, so calling est again from the
+                           optimum -- where it does not iterate -- leaves mtmp
+                           at its initialisation and returns standard errors
+                           that are ALL EQUAL.  Measured: 0.134231 for the three
+                           parameters of a case where the true ones are 0.062,
+                           0.123 and 0.106.  They would have been invented
+                           standard errors that looked computed.              */
+                        devbest[i2] = devb[i2];
+                        for (int j2 = 1; j2 <= npar; j2++)
+                            covbest[i2][j2] = covb[i2][j2];
+                    }
+                }
+                if (nok == 0 || vk.logelf < worst) worst = vk.logelf;
+                nok++;
+            }
+            vec_shootx(xtry, &vk, &ifb, 0, 1);
+            if (!quiet_mode)
+                printf("  arranque %2d/%d: %s\n", k + 1, global_multistart,
+                       (ifb == 0) ? "ok" : "fallo");
+        }
+        if (nok > 0) {
+            for (i2 = 1; i2 <= npar; i2++) {
+                x[i2]   = xbest[i2];
+                dev[i2] = devbest[i2];
+                for (int j2 = 1; j2 <= npar; j2++) cov[i2][j2] = covbest[i2][j2];
+            }
+            vp->logelf = best;
+            vp->sigma2 = best_s2;
+            *ifault = 0;
+            ms_done = 1;    /* no re-estimation: the best fit is already there */
+            fprintf(outputv, "\nMulti-start: %d of %d starting points converged; "
+                             "logL from %.6f to %.6f (best is start %d).\n",
+                    nok, global_multistart, worst, best, bestk + 1);
+            fprintf(outputv, "  The SPREAD is the diagnostic: on a well-behaved\n"
+                             "  surface every start lands in the same place.\n");
+            if (!quiet_mode)
+                printf("  Multi-start: %d/%d ok, logL from %.6f to %.6f\n",
+                       nok, global_multistart, worst, best);
+        } else {
+            fprintf(outputv, "\nMulti-start: no starting point converged.\n");
+        }
+        free_matrix(covbest, 1, npar, 1, npar);
+        free_matrix(covb, 1, npar, 1, npar);
+        free_vector(devbest, 1, npar);
+        free_vector(devb, 1, npar);
+        free_vector(xtry, 1, npar);
+        free_vector(xbest, 1, npar);
+        /* varma1 is NOT reallocated: its buffers are still alive from the call
+           above, and the loop used its own structure vk.  Calling again with
+           firstx = 1 orphaned the first allocation -- 1080 bytes that valgrind
+           marked as definitely lost.                                         */
+    return ms_done;
 }
 
 /*****************************************************************************/
@@ -5701,11 +7444,21 @@ static void validate_cli(int argc, char *argv[], int first)
 /*****************************************************************************/
 /*  main                                                                      */
 /*****************************************************************************/
-int main(int argc, char *argv[])
+/*****************************************************************************/
+/*  P8 — parse_cli: the command line, out of main().                         */
+/*                                                                           */
+/*  267 lines that read arguments and set flags, at the same indentation as   */
+/*  the estimation they configure.  Everything it touches is already at file  */
+/*  scope -- the option globals, the two route variables, the three file      */
+/*  names -- so the cut costs no parameters at all, which is the sign that it */
+/*  was one block pretending to be part of another.                          */
+/*                                                                           */
+/*  It returns -1 to say "carry on", or a process exit code: 0 for the        */
+/*  queries (-h, --version) and 1 for a malformed line.  The rules those      */
+/*  codes follow are P1's, and validate_cli is where they are enforced.       */
+/*****************************************************************************/
+static int parse_cli(int argc, char *argv[])
 {
-    STRING inputf, outputf, base_name;
-    FILE  *inputv;
-
     /*  -h/--help and --version, before anything else: they are queries, not
         runs, and they exit with 0 through stdout (the port's convention).
         With no useful argument, the usage goes to stderr and exits 1, which
@@ -5972,6 +7725,56 @@ int main(int argc, char *argv[])
         printf("r = 0: no cointegration, VARMA(%d,%d) on nabla Y "
                "(the diagonal rung)\n", global_p, global_q);
     }
+    return -1;
+}
+
+/*****************************************************************************/
+/*  P8 — run_eval: the -eval mode, out of main().  It evaluates the           */
+/*  likelihood AT THE STARTING POINT and stops, which is the diagnostic that  */
+/*  separates a bad seed from a bad path.  Returns the exit code.             */
+/*****************************************************************************/
+static int run_eval(real *x, int npar, struct Tvarma *vp)
+{
+    int ifault = 0;
+        const real LOG2PI = 1.837877066;
+        real pi1, pi2, pi3, ll;
+        int ifev = 0;
+        elf(vp->m, vp->n, vp->p, vp->q, vp->mu, vp->phi,
+            vp->theta, vp->qq, vp->w, 1.0, vp->xitol,
+            TRUE, vp->a, &pi1, &pi2, &pi3, &ifev);
+        if (ifev > 0) {
+            printf("eval: elf returns ifault = %d at the starting point\n", ifev);
+            fprintf(outputv, "eval: ifault = %d\n", ifev);
+        } else {
+            ll = -0.5 * vp->m * vp->n * (LOG2PI - log((real) vp->m)
+                 - log((real) vp->n) + 1.0)
+                 - 0.5 * vp->n * (vp->m * log(pi1) + log(pi2));
+            printf("eval: logelf at the starting point = %15.10f  "
+                   "(sigma2 = %.10f)\n", ll, pi1 / (vp->n * vp->m));
+            fprintf(outputv, "eval logelf : %15.10f\n", ll);
+            if (seed_have_uv) {
+                /* The ladder's crossing identity: with r = 0 and diagonal structure
+                   the exact likelihood factorises, so this must coincide with
+                   the sum of the univariate ones from the .pre files.  What is
+                   left over is the transformation's gap, not the fit's.      */
+                fprintf(outputv, "sum univariate : %15.10f\n", seed_logl_sum);
+                printf("      suma univariante = %15.10f   diferencia = %.3e\n",
+                       seed_logl_sum, ll - seed_logl_sum);
+            }
+        }
+        vec_shootx(x, vp, &ifault, 0, 1);   /* deallocate */
+        fclose(outputv);
+        cleanup_names(outputf, inputf, base_name);
+        return 0;
+}
+
+int main(int argc, char *argv[])
+{
+
+    {
+        int rc = parse_cli(argc, argv);
+        if (rc >= 0) return rc;
+    }
 
     /*  The names of the products.  outputf has to be sized from out_base and
      *  not from argv[1], which on the .pre route is one file of several.     */
@@ -6006,60 +7809,8 @@ int main(int argc, char *argv[])
             exit(1);
         }
     } else {
-    if (NULL == (inputv = fopen(inputf, "r"))) {
-        fprintf(stderr, "ERROR: cannot open %s\n", inputf);
-        exit(1);
+        read_inp_input(inputf);
     }
-    {
-        /* InpReader: same as drvarma v.04.1 */
-        /* Minimal reader: read nser, nobs_raw, start, names, lambda, d, D, data */
-        char line[512];
-        /* skip comments */
-        do { if (!fgets(line, sizeof line, inputv)) { fprintf(stderr,"ERROR: unexpected EOF\n"); exit(1); } }
-        while (line[0] == '*');
-        data_freq = atoi(line);
-        /* next non-comment line: nser nobs start_sub start_year */
-        do { if (!fgets(line, sizeof line, inputv)) { fprintf(stderr,"ERROR: unexpected EOF\n"); exit(1); } }
-        while (line[0] == '*');
-        sscanf(line, "%d %d %d %d", &nser, &nobs_raw, &data_start_sub, &data_start_year);
-        nobs = nobs_raw;
-
-        if (global_r >= nser) {
-            fprintf(stderr, "ERROR: r=%d must be < M=%d\n", global_r, nser);
-            exit(1);
-        }
-
-        series_names = (char **) malloc((nser + 1) * sizeof(char *));
-        do { if (!fgets(line, sizeof line, inputv)) { fprintf(stderr,"ERROR: missing series names\n"); exit(1); } }
-        while (line[0] == '*');
-        {
-            char *tok = strtok(line, " \t\n");
-            for (int j = 1; j <= nser; j++) {
-                if (!tok) { fprintf(stderr,"ERROR: need %d series names\n", nser); exit(1); }
-                series_names[j] = strdup(tok);
-                tok = strtok(NULL, " \t\n");
-            }
-        }
-        /* Box-Cox lambda, d, D */
-        do { if (!fgets(line, sizeof line, inputv)) { fprintf(stderr,"ERROR: missing transform line\n"); exit(1); } }
-        while (line[0] == '*');
-        sscanf(line, "%lf %d %d", &trans_lambda, &trans_d, &trans_D);
-
-        /* Read data: nobs_raw rows, nser cols, kept untouched in rawmat */
-        rawmat = matrix(1, nobs_raw, 1, nser);
-        for (int t = 1; t <= nobs_raw; t++) {
-            do { if (!fgets(line, sizeof line, inputv)) { fprintf(stderr,"ERROR: data too short at obs %d\n", t); exit(1); } }
-            while (line[0] == '*');
-            char *tok = strtok(line, " \t\n");
-            for (int j = 1; j <= nser; j++) {
-                if (!tok) { fprintf(stderr,"ERROR: missing value obs %d col %d\n", t, j); exit(1); }
-                rawmat[t][j] = atof(tok);
-                tok = strtok(NULL, " \t\n");
-            }
-        }
-        fclose(inputv);
-    }
-    }   /* !pre_route */
 
     /* The data must contain, in column order [Y_2 block ; Y_1 block]:
        - cols 1..s (s = M - r): Y_{2t} in levels  (or ∇Y_{2t} with -differenced)
@@ -6239,108 +7990,7 @@ int main(int argc, char *argv[])
      *  r = 1, is NOT ordinary either in the seeding or in the distribution, and
      *  that is why it lives in -lrtest and not here: see
      *  docs/VEC_EMBEDDING_PLAN.md.                                           */
-    if (global_rungs) {
-        const int NR = 3;
-        const int DAR[3] = {1, 1, 0}, DMA[3] = {1, 1, 0}, DCOV[3] = {1, 0, 0};
-        const char *NAME[3] = { "0  F, Theta, Sigma diagonal",
-                                "1  Sigma free",
-                                "2  F and Theta free" };
-        real *ll  = vector(0, NR - 1);
-        int  *npr = ivector(0, NR - 1);
-        int  *good = ivector(0, NR - 1);
-        int k;
-
-        macheps = cmacheps();
-        global_r = 0;
-
-        fprintf(outputv, "\n=== The ladder: rungs at r = 0 ===\n");
-        printf("\nThe ladder, rungs at r = 0:\n");
-
-        for (k = 0; k < NR; k++) {
-            struct Tvarma vr;
-            real *xr, *devr, **covr;
-            int np, ifr = 0;
-
-            global_diag_ar = DAR[k]; global_diag_ma = DMA[k];
-            global_diag_cov = DCOV[k];
-            build_y2_levels();
-            np = calc_nparametrs();
-            xr = vector(1, np); devr = vector(1, np);
-            covr = matrix(1, np, 1, np);
-            vr.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
-            init_guess(xr, np);
-            vec_shootx(xr, &vr, &ifr, 1, 0);
-            est(&vec_shootx, np, xr, devr, covr, 500, 200, 1e-5, 1e-7,
-                vr.xitol, vr.a, &vr.sigma2, &vr.logelf, &ifr);
-            good[k] = (ifr == 0);
-            npr[k]  = np;
-            ll[k]   = good[k] ? vr.logelf : 0.0;
-            printf("  rung %s : %s (ifault=%d)\n", NAME[k],
-                   good[k] ? "ok" : "estimation failed", ifr);
-            /*  Rung 0 is the base: its contract is demanded right here, which is
-             *  where it is being built upon.                                 */
-            if (k == 0 && good[k]) {
-                vec_shootx(xr, &vr, &ifr, 0, 0);       /* recover the fit */
-                gate_contract(&vr);
-            }
-            vec_shootx(xr, &vr, &ifr, 0, 1);           /* liberar */
-            free_matrix(covr, 1, np, 1, np);
-            free_vector(devr, 1, np);
-            free_vector(xr, 1, np);
-        }
-
-        fprintf(outputv, "\n  rung                          npar         logL"
-                         "         AIC         BIC\n");
-        fprintf(outputv, "  --------------------------------------------------"
-                         "-------------------\n");
-        for (k = 0; k < NR; k++) {
-            if (!good[k]) {
-                fprintf(outputv, "  %-28s  --   estimation failed\n", NAME[k]);
-                continue;
-            }
-            fprintf(outputv, "  %-28s %4d %12.4f %11.4f %11.4f\n", NAME[k],
-                    npr[k], ll[k],
-                    (-2.0 * ll[k] + 2.0 * npr[k]) / nobs,
-                    (-2.0 * ll[k] + npr[k] * log((real) nobs)) / nobs);
-        }
-
-        fprintf(outputv, "\n  step        LR = 2*[L(k+1) - L(k)]    df    "
-                         "p-value\n");
-        fprintf(outputv, "  ------------------------------------------------"
-                         "-----\n");
-        for (k = 0; k + 1 < NR; k++) {
-            real lr;
-            int df;
-            if (!good[k] || !good[k + 1]) {
-                fprintf(outputv, "  %d -> %d      not available\n", k, k + 1);
-                continue;
-            }
-            lr = 2.0 * (ll[k + 1] - ll[k]);
-            df = npr[k + 1] - npr[k];
-            fprintf(outputv, "  %d -> %d   %14.4f       %3d   %9.4f%s\n",
-                    k, k + 1, lr, df,
-                    (df > 0 && lr > 0.0) ? gsl_cdf_chisq_Q(lr, df) : 1.0,
-                    (lr < -1.0e-6) ? "   *** NEGATIVE: the wider fit is worse,"
-                                     " so it did not converge" : "");
-        }
-
-        fprintf(outputv,
-            "\n  These are ordinary nested comparisons: the restricted model is\n"
-            "  an INTERIOR point of the wider one, so the log-likelihood cannot\n"
-            "  fall and the statistic is chi2 on the stated degrees of freedom.\n"
-            "  The next rung -- adding the VEC matrix, r = 1 -- is not ordinary\n"
-            "  in either respect: the null sits ON the boundary of the alternative\n"
-            "  and B2 is unidentified under it.  It is reported by -lrtest, with\n"
-            "  a parametric bootstrap available for its distribution.\n");
-
-        free_ivector(good, 0, NR - 1);
-        free_ivector(npr, 0, NR - 1);
-        free_vector(ll, 0, NR - 1);
-        fclose(outputv);
-        printf("Done. Output written to %s\n", outputf);
-        cleanup_names(outputf, inputf, base_name);
-        return 0;
-    }
+    if (global_rungs) return run_rungs();
 
     /*  -specs — THE SPECIFICATION LADDER, emitted by the program.
      *
@@ -6369,523 +8019,16 @@ int main(int argc, char *argv[])
      *  distribution, so the chi2 p-value is printed ONLY when both rungs
      *  compared are admissible, and where they are not, that is said and the
      *  reader is sent to -matest.                                            */
-    if (global_specs) {
-        const int NS = 5;
-        const char *NM[5] = { "warma  ", "mawarma", "marow  ", "matri  ", "free   " };
-        real ll[5], gg[5], mam[5], b2v[5];
-        int  npv[5], okv[5], tcv[5], adm[5];
-        int  k, M = nser;
-
-        macheps = cmacheps();
-        if (global_r < 1) {
-            fprintf(stderr, "ERROR: -specs needs r >= 1\n");
-            exit(1);
-        }
-        fprintf(outputv, "\n=== The specification ladder ===\n");
-        printf("\nSpecification ladder:\n");
-
-        for (k = 0; k < NS; k++) {
-            struct Tvarma vs;
-            real *xs, *devs, **covs;
-            int np, ifs = 0, s2 = M - global_r;
-
-            global_warma = (k == 0); global_mawarma = (k == 1);
-            global_marow = (k == 2);  global_matri   = (k == 3);
-            build_y2_levels();
-            np = calc_nparametrs();
-            xs = vector(1, np); devs = vector(1, np);
-            covs = matrix(1, np, 1, np);
-            vs.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
-            init_guess(xs, np);
-            if (global_warma) {
-                /*  the same admissible shrinkage the normal route uses         */
-                static const real shr[6] = { 1.0, 0.8, 0.5, 0.3, 0.1, 0.0 };
-                int nm2, nl2, nmid2, nt2, nfw = (global_p > 1) ? global_p - 1 : 0;
-                int nar, i2, mi;
-                real *ar0;
-                par_blocks(&nm2, &nl2, &nmid2, &nt2);
-                nar = nl2 + nfw * M * global_r;
-                ar0 = vector(1, (nar > 0 ? nar : 1));
-                for (i2 = 1; i2 <= nar; i2++) ar0[i2] = xs[nm2 + i2];
-                vec_shootx(xs, &vs, &ifs, 1, 0);
-                for (mi = 0; mi < 6; mi++) {
-                    real p1, p2, p3; int ife = 0, ifc = 0;
-                    for (i2 = 1; i2 <= nar; i2++) xs[nm2 + i2] = shr[mi] * ar0[i2];
-                    vec_shootx(xs, &vs, &ifc, 0, 0);
-                    if (ifc != 0) continue;
-                    elf(vs.m, vs.n, vs.p, vs.q, vs.mu, vs.phi, vs.theta, vs.qq,
-                        vs.w, 1.0, vs.xitol, TRUE, vs.a, &p1, &p2, &p3, &ife);
-                    if (ife == 0) break;
-                }
-                free_vector(ar0, 1, (nar > 0 ? nar : 1));
-                vec_shootx(xs, &vs, &ifs, 0, 1);
-            }
-            vec_shootx(xs, &vs, &ifs, 1, 0);
-            est(&vec_shootx, np, xs, devs, covs, 500, 200, 1e-5, 1e-7,
-                vs.xitol, vs.a, &vs.sigma2, &vs.logelf, &ifs);
-            okv[k] = (ifs == 0);
-            npv[k] = np;
-            ll[k]  = okv[k] ? vs.logelf : 0.0;
-            tcv[k] = termcode_from_out(outputf);
-            gg[k] = -1.0; mam[k] = -1.0; b2v[k] = 0.0;
-            if (okv[k]) {
-                real mm = 1.0e30;
-                vec_shootx(xs, &vs, &ifs, 0, 0);      /* recover the fit  */
-                report_operator_roots("MA", vs.theta, vs.m, vs.q, &mm, 1);
-                mam[k] = (mm < 1.0e29) ? mm : -1.0;
-                for (int j2 = 1; j2 <= global_r; j2++)
-                    b2v[k] = global_fixb2 ? B2_fixed[1][j2]
-                           : xs[np - s2 * global_r + (j2 - 1) * s2 + 1];
-                if (global_warma) {
-                    /*  in Ybar coordinates one has to come back first        */
-                    real **B2w = matrix(1, s2, 1, global_r);
-                    real **Lw = matrix(1, M, 1, global_r);
-                    real ***Fw = tensor(1, (global_p > 1 ? global_p - 1 : 1), 1, M, 1, M);
-                    real ***Tw = tensor(1, (global_q > 0 ? global_q : 1), 1, M, 1, M);
-                    real **Sw = matrix(1, M, 1, M);
-                    for (int j2 = 1; j2 <= global_r; j2++)
-                        for (int i2 = 1; i2 <= s2; i2++)
-                            B2w[i2][j2] = global_fixb2 ? B2_fixed[i2][j2]
-                                        : xs[np - s2*global_r + (j2-1)*s2 + i2];
-                    for (int k2 = 1; k2 <= (global_q > 0 ? global_q : 1); k2++)
-                        for (int i2 = 1; i2 <= M; i2++)
-                            for (int j2 = 1; j2 <= M; j2++) Tw[k2][i2][j2] = 0.0;
-                    warma_inverse(&vs, B2w, Lw, Fw, Tw, Sw);
-                    gg[k] = granger_smin(Lw, B2w, Tw, M, global_r, global_q);
-                    free_matrix(Sw, 1, M, 1, M);
-                    free_tensor(Tw, 1, (global_q > 0 ? global_q : 1), 1, M, 1, M);
-                    free_tensor(Fw, 1, (global_p > 1 ? global_p - 1 : 1), 1, M, 1, M);
-                    free_matrix(Lw, 1, M, 1, global_r);
-                    free_matrix(B2w, 1, s2, 1, global_r);
-                } else gg[k] = granger_sv;
-            }
-            adm[k] = (okv[k] && gg[k] >= global_rankadm_tol);
-            printf("  %s : %s\n", NM[k], okv[k] ? "ok" : "fallo");
-            vec_shootx(xs, &vs, &ifs, 0, 1);
-            free_matrix(covs, 1, np, 1, np);
-            free_vector(devs, 1, np);
-            free_vector(xs, 1, np);
-        }
-        global_warma = global_mawarma = global_marow = global_matri = 0;
-
-        fprintf(outputv,
-          "\n  spec      npar          logL   term        G     MAmin       B2  adm\n"
-          "  ------------------------------------------------------------------------\n");
-        for (k = 0; k < NS; k++) {
-            const char *tn = (tcv[k] == 1) ? "grad" : (tcv[k] == 2) ? "step"
-                           : (tcv[k] == 3) ? "lower" : (tcv[k] == 0) ? "--" : "gave up";
-            if (!okv[k]) {
-                fprintf(outputv, "  %s  %4d   estimation failed\n", NM[k], npv[k]);
-                continue;
-            }
-            fprintf(outputv, "  %s  %4d %13.4f  %-6s %8.3e %8.3f %8.4f  %s\n",
-                    NM[k], npv[k], ll[k], tn, gg[k],
-                    (mam[k] >= 0.0) ? mam[k] : 0.0, b2v[k],
-                    adm[k] ? "yes" : "NO");
-        }
-
-        fprintf(outputv,
-          "\n  step               LR     df   verdict\n"
-          "  ----------------------------------------------------------------------\n");
-        for (k = 0; k + 1 < NS; k++) {
-            real lr;
-            int df = npv[k+1] - npv[k];
-            if (!okv[k] || !okv[k+1]) {
-                fprintf(outputv, "  %s -> %s   not available\n", NM[k], NM[k+1]);
-                continue;
-            }
-            lr = 2.0 * (ll[k+1] - ll[k]);
-            fprintf(outputv, "  %s -> %s %8.3f %4d   ", NM[k], NM[k+1], lr, df);
-            if (lr < -1.0e-6)
-                fprintf(outputv, "NEGATIVE: the wider fit is worse, so it did "
-                                 "not converge\n");
-            else if (adm[k] && adm[k+1])
-                fprintf(outputv, "chi2 p = %.4f\n",
-                        (df > 0) ? gsl_cdf_chisq_Q(lr, df) : 1.0);
-            else
-                fprintf(outputv, "no p-value: %s is not admissible, so the "
-                                 "statistic is not chi2 (-matest)\n",
-                        adm[k] ? NM[k+1] : NM[k]);
-        }
-
-        fprintf(outputv,
-          "\n  READ THE LAST COLUMN FIRST.  By Theorem 3 of docs/THEORY.md the\n"
-          "  process has cointegrating rank r if and only if\n"
-          "  rank(Lambda_perp' Theta(1)) = M - r, and by Theorem 4 the set where\n"
-          "  that fails lies INSIDE the one the optimiser searches.  A rung with\n"
-          "  a small G is not a worse fit of this model: it is a fit of another\n"
-          "  one, whose rank is not the rank it was estimated at.  Corollary 5.1\n"
-          "  then removes the usual distributions, which is why no chi2 p-value\n"
-          "  is printed for a comparison involving it.  The floor used here is\n"
-          "  %.1e (-rankadm sets it).\n", global_rankadm_tol);
-
-        fclose(outputv);
-        printf("Done. Output written to %s\n", outputf);
-        cleanup_names(outputf, inputf, base_name);
-        return 0;
-    }
+    if (global_specs) return run_specs();
 
     /*  -matest N — the test of the inherited MA against the free one, with its
      *  distribution SIMULATED rather than assumed.  It is a mode and ends
      *  here.                                                                 */
-    if (global_matest > 0 || global_artest > 0) {
-        /*  Two tests with the same machinery and a different pair:
-         *    -matest   H0 = mawarma  against  H1 = free    (half the MA)
-         *    -artest   H0 = warma    against  H1 = mawarma (half the AR)
-         *  The second is the one step 5 of the plan asked for, and its reason
-         *  for simulating is NOT the same: here the unrestricted model IS
-         *  admissible (G between 0.90 and 1.00 over the whole bank), so it is
-         *  not 4i's boundary problem.  It is that the restriction
-         *  Gamma_i = m_i alpha' is of REDUCED RANK on F_i, and the LR of a rank
-         *  restriction is not chi2 when the true rank may be below the one the
-         *  restriction allows -- and in five of the eight pairs F1 comes out
-         *  nearly of rank one, which leaves m_i nearly unidentified.         */
-        int use_ar = (global_artest > 0);
-        int reps = use_ar ? global_artest : global_matest;
-        int k0 = use_ar ? 0 : 1, k1 = use_ar ? 1 : 4;
-        int np0, np1, ok0 = 0, ok1 = 0, nb, df;
-        real l0, l1, lr, cv[3] = {0,0,0}, pv = -1.0;
-        real *x0, *dev0, **cov0;
-        struct Tvarma v0;
-        int ifr = 0;
+    if (global_matest > 0 || global_artest > 0) return run_ma_ar_test();
 
-        macheps = cmacheps();
-        if (global_r < 1 || global_q < 1) {
-            fprintf(stderr, "ERROR: -matest/-artest need r >= 1 and q >= 1\n");
-            exit(1);
-        }
-        /* [1] the restricted model, which is H0 -- and it is kept, because the simulation comes from it */
-        set_spec(k0);
-        build_y2_levels();
-        np0 = calc_nparametrs();
-        x0 = vector(1, np0); dev0 = vector(1, np0); cov0 = matrix(1, np0, 1, np0);
-        v0.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
-        init_guess(x0, np0);
-        vec_shootx(x0, &v0, &ifr, 1, 0);
-        est(&vec_shootx, np0, x0, dev0, cov0, 500, 200, 1e-5, 1e-7,
-            v0.xitol, v0.a, &v0.sigma2, &v0.logelf, &ifr);
-        ok0 = (ifr == 0); l0 = v0.logelf;
-        vec_shootx(x0, &v0, &ifr, 0, 1);
-
-        /* [2] the unrestricted one */
-        set_spec(k1);
-        l1 = fit_ll(global_r, &ok1);
-        np1 = calc_nparametrs();
-        df = np1 - np0;
-
-        if (!ok0 || !ok1) {
-            fprintf(outputv, "\n%s: one of the two fits failed "
-                             "(restricted %s, unrestricted %s); no test.\n",
-                    use_ar ? "-artest" : "-matest",
-                    ok0 ? "ok" : "failed", ok1 ? "ok" : "failed");
-        } else {
-            lr = 2.0 * (l1 - l0);
-            /*  The header and the numbers go in TWO calls and not in one with a
-             *  conditional format string: with the ternary, the literals that
-             *  followed concatenate onto only one of the two branches and the
-             *  %f are left without a format in the other.  It compiles, and the
-             *  numbers are lost in silence -- which is how they were lost the
-             *  first time this was written.                                  */
-            fprintf(outputv, "%s", use_ar
-                ? "\n=== The triangular short-run dynamics against free F ===\n\n"
-                  "  H0: Gamma_i = M_i alpha' -- every lag enters through W,\n"
-                  "      which is what the triangular class implies\n"
-                  "  H1: F_i free (the moving-average structure held in both)\n\n"
-                : "\n=== The inherited moving average against the free one ===\n\n"
-                  "  H0: Theta = [T11  T11*B2' ; 0  0], the structure a WARMA\n"
-                  "      process implies for its VEC representation\n"
-                  "  H1: Theta free\n\n");
-            fprintf(outputv,
-                "  restricted     logL = %15.10f   (%d parameters)\n"
-                "  unrestricted   logL = %15.10f   (%d parameters)\n"
-                "  LR = 2*[L(H1) - L(H0)] = %.4f   on %d df\n"
-                "  chi2 p-value, FOR REFERENCE ONLY          = %.4f\n",
-                l0, np0, l1, np1, lr, df,
-                (lr > 0.0) ? gsl_cdf_chisq_Q(lr, df) : 1.0);
-            printf("  restricted %.6f   free %.6f   LR %.4f (%d df)\n",
-                   l0, l1, lr, df);
-
-            nb = bootstrap_ma(x0, np0, reps, cv, &pv, lr, k0, k1);
-            if (nb >= 10) {
-                fprintf(outputv,
-                  "\n  Parametric bootstrap under H0, %d of %d replications "
-                  "usable:\n"
-                  "    critical values   10%%: %8.4f   5%%: %8.4f   1%%: %8.4f\n"
-                  "    bootstrap p-value = %.4f\n", nb, reps,
-                  cv[0], cv[1], cv[2], pv);
-                fprintf(outputv, "    verdict: %s\n",
-                    (lr > cv[2]) ? "reject H0 at 1%" :
-                    (lr > cv[1]) ? "reject H0 at 5%" :
-                    (lr > cv[0]) ? "reject H0 at 10%" : "H0 not rejected");
-                /*  The verdict is read off the CRITICAL VALUES and the p-value
-                 *  also counts the observed statistic, so with few
-                 *  replications the two can end up on different sides of a
-                 *  threshold.  Saying so is cheaper than picking one and
-                 *  keeping quiet.                                            */
-                if ((lr > cv[0] && pv > 0.10) || (lr > cv[1] && pv > 0.05) ||
-                    (lr > cv[2] && pv > 0.01))
-                    fprintf(outputv,
-                      "    (the p-value counts the observed statistic itself, so\n"
-                      "     with B = %d it can sit on the other side of the same\n"
-                      "     threshold as the critical value; both are printed)\n",
-                      reps);
-                printf("  bootstrap: p = %.4f  (%d/%d replicas)\n", pv, nb,
-                       reps);
-            } else {
-                fprintf(outputv, "\n  Parametric bootstrap: only %d usable "
-                                 "replications; no critical values.\n", nb);
-            }
-            fprintf(outputv, use_ar ?
-              "\n  WHY THE BOOTSTRAP AND NOT THE chi2, and the reason is NOT\n"
-              "  the one in -matest.  Here the unrestricted model IS admissible\n"
-              "  -- the rank condition reads 0.90 to 1.00 across the bank -- so\n"
-              "  this is not a boundary of the model class.  It is that\n"
-              "  Gamma_i = M_i alpha' is a REDUCED-RANK restriction on F_i, and\n"
-              "  the likelihood ratio for a rank restriction is not chi2 when\n"
-              "  the true rank may be below the one the restriction allows: in\n"
-              "  five of the eight pairs F1 comes out near rank one already, and\n"
-              "  M_i is then close to unidentified.  The bootstrap is simulated\n"
-              "  FROM THE RESTRICTED FIT, which is H0.\n"
-              :
-              "\n  WHY THE BOOTSTRAP AND NOT THE chi2.  The unrestricted\n"
-              "  optimum on this kind of data stops in the neighbourhood where\n"
-              "  the rank condition degenerates -- sigma_min(Lambda_perp'\n"
-              "  Theta(1) B_perp) of order 0.01-0.1 against ~1 for a correctly\n"
-              "  specified model, with Theta(1) singular to working precision.\n"
-              "  An LR whose unrestricted estimate sits on the edge of the\n"
-              "  admissible region does not have its asymptotic distribution,\n"
-              "  so the chi2 column above is a reference and not a test.  The\n"
-              "  bootstrap distribution is simulated FROM THE RESTRICTED FIT,\n"
-              "  which is H0, and it inherits the sample size, the\n"
-              "  deterministic case and the moving-average structure.\n"
-              "  Read it with its floor of 1/(B+1) = %.4f and its Monte Carlo\n"
-              "  error sqrt(p(1-p)/B) = %.4f at p = 0.05.\n"
-              "  See docs/HOMOLOGATION.md 4g and 4h.\n",
-              1.0 / (real) (reps + 1),
-              sqrt(0.05 * 0.95 / (real) reps));
-        }
-        free_matrix(cov0, 1, np0, 1, np0);
-        free_vector(dev0, 1, np0);
-        free_vector(x0, 1, np0);
-        fclose(outputv);
-        printf("Done. Output written to %s\n", outputf);
-        cleanup_names(outputf, inputf, base_name);
-        return 0;
-    }
-
-    if (global_lrtest) {
-        int M = nser, ok;
-        macheps = cmacheps();           /* the engine needs it; [3] is skipped */
-        /* Ranks 0..M-1.  r = 0 is the no-cointegration null: Pi = 0, so the
-           model is a plain VARMA on nabla Y.  It is the first and most
-           important comparison of the sequence.                              */
-        real *ll  = vector(0, M - 1);
-        int  *npr = ivector(0, M - 1);
-        int  *good = ivector(0, M - 1);
-
-        fprintf(outputv, "\n=== Sequential LR test for the cointegration rank ===\n");
-        printf("\nSequential LR test for the cointegration rank:\n");
-
-        /* With -bootstrap one has to be able to SIMULATE from each rank's fit,
-           so its parameter vector is kept instead of freed.                   */
-        real **xkeep = NULL; int *npkeep = NULL;
-        if (global_boot > 0) {
-            xkeep  = (real **) malloc((size_t)(M + 1) * sizeof(real *));
-            npkeep = ivector(0, M - 1);
-            for (int rr = 0; rr <= M - 1; rr++) { xkeep[rr] = NULL; npkeep[rr] = 0; }
-        }
-
-        for (int rr = 0; rr <= M - 1; rr++) {
-            global_r = rr;
-            build_y2_levels();
-            int np = calc_nparametrs();
-            real *xr   = vector(1, np);
-            real *devr = vector(1, np);
-            real **covr = matrix(1, np, 1, np);
-            struct Tvarma vr;
-            vr.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
-            init_guess(xr, np);
-            int ifr;
-            vec_shootx(xr, &vr, &ifr, 1, 0);
-            est(&vec_shootx, np, xr, devr, covr, 500, 200, 1e-5, 1e-7,
-                vr.xitol, vr.a, &vr.sigma2, &vr.logelf, &ifr);
-            ok = (ifr == 0);
-            good[rr] = ok;
-            npr[rr]  = np;
-            ll[rr]   = ok ? vr.logelf : 0.0;
-            printf("  r = %d : %s (ifault=%d)\n", rr,
-                   ok ? "ok" : "estimation failed", ifr);
-            vec_shootx(xr, &vr, &ifr, 0, 1);   /* deallocate */
-            if (global_boot > 0 && ok) {
-                xkeep[rr] = vector(1, np); npkeep[rr] = np;
-                for (int i2 = 1; i2 <= np; i2++) xkeep[rr][i2] = xr[i2];
-            }
-            free_matrix(covr, 1, np, 1, np);
-            free_vector(devr, 1, np);
-            free_vector(xr, 1, np);
-        }
-
-        fprintf(outputv, "\n  r    npar        logL         AIC         BIC\n");
-        fprintf(outputv, "  ---------------------------------------------------\n");
-        for (int rr = 0; rr <= M - 1; rr++) {
-            if (!good[rr]) { fprintf(outputv, "  %-4d  --   estimation failed\n", rr); continue; }
-            real aic = (-2.0 * ll[rr] + 2.0 * npr[rr]) / nobs;
-            real bic = (-2.0 * ll[rr] + npr[rr] * log((real) nobs)) / nobs;
-            fprintf(outputv, "  %-4d %4d %12.4f %11.4f %11.4f\n",
-                    rr, npr[rr], ll[rr], aic, bic);
-        }
-
-        fprintf(outputv,
-            "\n  H0: P = r   vs   H1: P = r+1        LR = 2*[L(r+1) - L(r)]\n");
-        if (global_alpha)
-            fprintf(outputv,
-                "  (every rank estimated UNDER the restriction alpha = A*psi,\n"
-                "   so this is the rank sequence within H1(r) and NOT the usual\n"
-                "   one.  The tabulated critical values do not apply and are not\n"
-                "   printed: they are for alpha free.)\n");
-        else
-            fprintf(outputv,
-                "  (asymptotic critical values: %s)\n",
-                (global_case == 1) ? "case 1, no constant" :
-                (global_case == 2) ? "case 2, restricted constant" :
-                                     "case 3 — NOT TABULATED HERE");
-        fprintf(outputv, "\n  r    M-r        LR      10%%      5%%      1%%\n");
-        fprintf(outputv, "  ---------------------------------------------------\n");
-        for (int rr = 0; rr <= M - 2; rr++) {
-            if (!good[rr] || !good[rr+1]) {
-                fprintf(outputv, "  %-4d  --   (a model in the pair failed)\n", rr);
-                continue;
-            }
-            real lr = 2.0 * (ll[rr+1] - ll[rr]);
-            int  g  = M - rr;                    /* common trends under H0 */
-            /* Rank r is nested in rank r+1, so L(r+1) >= L(r) at the true
-               maxima.  A negative LR proves at least one of the two fits did
-               not reach its optimum, and the statistic means nothing.        */
-            if (lr < 0.0) {
-                fprintf(outputv,
-                        "  %-4d %4d %10.4f   NOT INTERPRETABLE: LR < 0, so at "
-                        "least one of the\n                              two fits "
-                        "did not converge (rank r is nested in r+1)\n", rr, g, lr);
-                continue;
-            }
-            fprintf(outputv, "  %-4d %4d %10.4f", rr, g, lr);
-            if (global_alpha) {
-                /* Under alpha = A*psi the statistic has ANOTHER distribution: the
-                   tables are for a free alpha.  Printing them here would be
-                   giving wrong critical values that look right, which is worse
-                   than giving none.                                          */
-                fprintf(outputv, "        -        -        -   (restricted:"
-                                 " tabulated values do not apply)");
-            } else if (global_case != 3 && g >= 1 && g <= LR_MAXTRENDS) {
-                const real *cv = (global_case == 1) ? lr_cval_none[g-1]
-                                                    : lr_cval_const[g-1];
-                fprintf(outputv, " %8.2f %8.2f %8.2f", cv[0], cv[1], cv[2]);
-                if      (lr > cv[2]) fprintf(outputv, "   reject H0 at 1%%");
-                else if (lr > cv[1]) fprintf(outputv, "   reject H0 at 5%%");
-                else if (lr > cv[0]) fprintf(outputv, "   reject H0 at 10%%");
-                else                 fprintf(outputv, "   H0 not rejected");
-            } else {
-                fprintf(outputv, "        -        -        -   (no values)");
-            }
-            fprintf(outputv, "\n");
-        }
-        fprintf(outputv,
-            "\n  Distribution is the non-standard Johansen one; MA terms do not\n"
-            "  affect it (Yap and Reinsel 1995, Thm. 3; Mauricio 2006, Remark 5).\n"
-            "  Values from R urca 1.3.4 ca.jo(type=\"eigen\"); Osterwald-Lenum (1992).\n"
-            "  r = 0 is the no-cointegration null (Pi = 0, a plain VARMA on\n"
-            "  nabla Y); r = M would be a stationary process in levels and is not\n"
-            "  expressible here, so the sequence ends at r = M-1.  Read it with\n"
-            "  AIC/BIC, and check the optimizer banner of every rank before\n"
-            "  trusting a statistic.\n");
-        if (global_alpha)
-            fprintf(outputv,
-                "  NOTE: with alpha = A*psi imposed, what is being tested at each\n"
-                "  step is the rank WITHIN the restricted model.  That is a\n"
-                "  legitimate question and a different one; its distribution is\n"
-                "  not the tabulated Johansen one.  For the usual rank test, drop\n"
-                "  the restriction.\n");
-
-        /* ---- critical values by parametric bootstrap, if asked for --------- */
-        if (global_boot > 0) {
-            fprintf(outputv,
-                "\n  === Parametric bootstrap under H0 (%d replications) ===\n"
-                "  The asymptotic values above are known to be optimistic at these\n"
-                "  sample sizes: measured, the sequential test over-rejects about\n"
-                "  SIX times its nominal level at n = 120, and these percentiles cut\n"
-                "  that to four without closing it.  They are empirical\n"
-                "  percentiles of the statistic simulated FROM THE FITTED MODEL at\n"
-                "  rank r, so they carry the sample size, the deterministic case and\n"
-                "  the MA component that the tables cannot.\n", global_boot);
-            fprintf(outputv, "\n  r    M-r        LR      10%%      5%%      1%%"
-                             "   p-value  reps\n");
-            fprintf(outputv, "  ------------------------------------------------"
-                             "-----------------\n");
-            printf("\nBootstrap under H0 (%d replications per comparison):\n",
-                   global_boot);
-            for (int rr = 0; rr <= M - 2; rr++) {
-                real cv[3] = {0.0, 0.0, 0.0}, pv = -1.0, lr;
-                int reps;
-                if (!good[rr] || !good[rr+1] || xkeep == NULL || xkeep[rr] == NULL) {
-                    fprintf(outputv, "  %-4d  --   (a model in the pair failed)\n", rr);
-                    continue;
-                }
-                lr = 2.0 * (ll[rr+1] - ll[rr]);
-                printf("  r = %d -> %d ...", rr, rr+1); fflush(stdout);
-                reps = bootstrap_rank(rr, xkeep[rr], npkeep[rr], global_boot,
-                                      cv, &pv, lr);
-                if (reps < 10) {
-                    fprintf(outputv, "  %-4d %4d %10.4f   only %d usable "
-                                     "replications: not reported\n",
-                            rr, M - rr, lr, reps);
-                    printf(" only %d usable replications\n", reps);
-                    continue;
-                }
-                fprintf(outputv, "  %-4d %4d %10.4f %8.2f %8.2f %8.2f  %7.4f  %4d",
-                        rr, M - rr, lr, cv[0], cv[1], cv[2], pv, reps);
-                /* The verdict is read off the CRITICAL VALUES, not the p-value,
-                   because the p-value has a floor of 1/(reps+1): with 100
-                   replications it cannot go below 0.0099, so "rejects at 1%"
-                   would be unreachable by construction even if the statistic
-                   exceeded the 99th percentile.                              */
-                if      (lr > cv[2]) fprintf(outputv, "   reject H0 at 1%%\n");
-                else if (lr > cv[1]) fprintf(outputv, "   reject H0 at 5%%\n");
-                else if (lr > cv[0]) fprintf(outputv, "   reject H0 at 10%%\n");
-                else                 fprintf(outputv, "   H0 not rejected\n");
-                printf(" p = %.4f (%d replicas)\n", pv, reps);
-            }
-            /* The Monte Carlo error, stated instead of hidden: the plan's
-               contingency asked for it to be reported if N had to be small.   */
-            fprintf(outputv,
-                "\n  Monte Carlo error, said rather than hidden:\n"
-                "   - a bootstrap p-value from B replications has standard error\n"
-                "     sqrt(p(1-p)/B); at p = 0.05 and B = %d that is %.4f, so read a\n"
-                "     p-value near a threshold as undecided, not as a decision;\n"
-                "   - and it has a FLOOR of 1/(B+1) = %.4f -- with this B the p-value\n"
-                "     cannot go below that however extreme the statistic is, which is\n"
-                "     why the verdict above is read from the critical values.  For a\n"
-                "     p-value that can resolve 1%%, B >= 999.\n"
-                "   - replications where either fit failed to converge, or gave\n"
-                "     LR < 0, are discarded and counted in the reps column.\n",
-                global_boot, sqrt(0.05 * 0.95 / (real) global_boot),
-                1.0 / (real) (global_boot + 1));
-            for (int rr = 0; rr <= M - 1; rr++)
-                if (xkeep && xkeep[rr]) free_vector(xkeep[rr], 1, npkeep[rr]);
-            if (xkeep) free(xkeep);
-            if (npkeep) free_ivector(npkeep, 0, M - 1);
-        }
-
-        free_ivector(good, 0, M - 1);
-        free_ivector(npr, 0, M - 1);
-        free_vector(ll, 0, M - 1);
-        printf("Done. Output written to %s\n", base_name);
-        fclose(outputv);
-        cleanup_names(outputf, inputf, base_name);
-        return 0;
-    }
+    if (global_lrtest) return run_lrtest();
 
     /* [3] Estimation ------------------------------------------------------- */
-    int estimation_failed = 0;      /* P1: the exit code reflects it */
     int npar = calc_nparametrs();
     real *x   = vector(1, npar);
     real *dev = vector(1, npar);
@@ -7001,7 +8144,7 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    int ifault;
+    int ifault = 0;      /* est() or run_multistart() sets it */
     vec_shootx(x, &varma1, &ifault, 1, 0);  /* allocate */
 
     /* -eval: the likelihood AT THE STARTING POINT, without optimising.
@@ -7010,41 +8153,8 @@ int main(int argc, char *argv[])
        worse (the surface).  Without this, comparing only the final logLs does
        not distinguish a sign error from a path problem.
        The formula is drvmlest.c:133's, with sigma2 = 1 and atf = TRUE.       */
-    if (global_eval) {
-        const real LOG2PI = 1.837877066;
-        real pi1, pi2, pi3, ll;
-        int ifev = 0;
-        elf(varma1.m, varma1.n, varma1.p, varma1.q, varma1.mu, varma1.phi,
-            varma1.theta, varma1.qq, varma1.w, 1.0, varma1.xitol,
-            TRUE, varma1.a, &pi1, &pi2, &pi3, &ifev);
-        if (ifev > 0) {
-            printf("eval: elf returns ifault = %d at the starting point\n", ifev);
-            fprintf(outputv, "eval: ifault = %d\n", ifev);
-        } else {
-            ll = -0.5 * varma1.m * varma1.n * (LOG2PI - log((real) varma1.m)
-                 - log((real) varma1.n) + 1.0)
-                 - 0.5 * varma1.n * (varma1.m * log(pi1) + log(pi2));
-            printf("eval: logelf at the starting point = %15.10f  "
-                   "(sigma2 = %.10f)\n", ll, pi1 / (varma1.n * varma1.m));
-            fprintf(outputv, "eval logelf : %15.10f\n", ll);
-            if (seed_have_uv) {
-                /* The ladder's crossing identity: with r = 0 and diagonal structure
-                   the exact likelihood factorises, so this must coincide with
-                   the sum of the univariate ones from the .pre files.  What is
-                   left over is the transformation's gap, not the fit's.      */
-                fprintf(outputv, "sum univariate : %15.10f\n", seed_logl_sum);
-                printf("      suma univariante = %15.10f   diferencia = %.3e\n",
-                       seed_logl_sum, ll - seed_logl_sum);
-            }
-        }
-        vec_shootx(x, &varma1, &ifault, 0, 1);   /* liberar */
-        fclose(outputv);
-        cleanup_names(outputf, inputf, base_name);
-        return 0;
-    }
+    if (global_eval) return run_eval(x, npar, &varma1);
 
-    int maxits = 500, nrits = 200;
-    real gradtol = 1e-5, sptol = 1e-7;
 
     /* -multistart n: estimate from n starting points and keep the best.
      *
@@ -7097,911 +8207,16 @@ int main(int argc, char *argv[])
         }
     }
 
-    int ms_done = 0;         /* 1 = the multi-start already left the final fit */
-    if (global_multistart > 1) {
-        real *xbest = vector(1, npar), *xtry = vector(1, npar);
-        real *devb  = vector(1, npar), *devbest = vector(1, npar);
-        real **covb = matrix(1, npar, 1, npar);
-        real **covbest = matrix(1, npar, 1, npar);
-        real best = 0.0, worst = 0.0, best_s2 = 0.0;
-        int  k, i2, nok = 0, ifb, bestk = 0;
-        unsigned long rng = 20260818UL;      /* semilla fija, a proposito */
-
-        for (i2 = 1; i2 <= npar; i2++) xbest[i2] = x[i2];
-        for (k = 0; k < global_multistart; k++) {
-            struct Tvarma vk;
-            vk.xitol = varma1.xitol;
-            /*  The multi-start shakes THE SEED BEING MEASURED, not another one:
-             *  with -seedgate that is the profiled point, which is already in
-             *  x, and calling init_guess again here would measure route (C)
-             *  under the wrong label.                                        */
-            /*  With -warma the same happens as with -seedgate: the good
-             *  starting point is the one already in x -- shrunk until
-             *  admissible -- and calling init_guess again here would return the
-             *  raw one, which the engine rejects.  Measured: on mink_muskrat
-             *  only 2 of 20 starts converged because of that.                */
-            if (gate_seed_ok || global_warma) {
-                for (i2 = 1; i2 <= npar; i2++) xtry[i2] = x[i2];
-            } else init_guess(xtry, npar);
-            if (k > 0) {
-                /* Multiplicative jitter on the seed, in a ladder of amplitude that
-                   depends ONLY on k and not on n.  That makes the procedure
-                   MONOTONE in n: the first n starts of a long run are exactly
-                   those of a short one, so asking for more starts can only
-                   improve things.  With the amplitude scaled by n -- as it was
-                   -- increasing n changed the set instead of extending it, and
-                   the nonsense was measured: n=24 gave |Sigma| 0.002349 and
-                   n=40 gave 0.002453.                                        */
-                real amp = 0.05 * (real) (1 + (k - 1) % 20);
-                for (i2 = 1; i2 <= npar; i2++) {
-                    real u;
-                    rng = rng * 6364136223846793005UL + 1442695040888963407UL;
-                    u = ((real) ((rng >> 33) & 0x7FFFFFFF)) / 2147483647.0;
-                    u = 2.0 * u - 1.0;                       /* U(-1, 1) */
-                    xtry[i2] += amp * u * (fabs(xtry[i2]) > 1.0e-8
-                                           ? fabs(xtry[i2]) : 0.1);
-                }
-            }
-            vec_shootx(xtry, &vk, &ifb, 1, 0);
-            est(&vec_shootx, npar, xtry, devb, covb, maxits, nrits, gradtol,
-                sptol, vk.xitol, vk.a, &vk.sigma2, &vk.logelf, &ifb);
-            if (ifb == 0) {
-                if (nok == 0 || vk.logelf > best) {
-                    best = vk.logelf; bestk = k; best_s2 = vk.sigma2;
-                    for (i2 = 1; i2 <= npar; i2++) {
-                        xbest[i2] = xtry[i2];
-                        /* The covariance has to be kept FROM THE START THAT PRODUCED
-                           IT.  cov comes from the factor raxopt accumulates
-                           while iterating, so calling est again from the
-                           optimum -- where it does not iterate -- leaves mtmp
-                           at its initialisation and returns standard errors
-                           that are ALL EQUAL.  Measured: 0.134231 for the three
-                           parameters of a case where the true ones are 0.062,
-                           0.123 and 0.106.  They would have been invented
-                           standard errors that looked computed.              */
-                        devbest[i2] = devb[i2];
-                        for (int j2 = 1; j2 <= npar; j2++)
-                            covbest[i2][j2] = covb[i2][j2];
-                    }
-                }
-                if (nok == 0 || vk.logelf < worst) worst = vk.logelf;
-                nok++;
-            }
-            vec_shootx(xtry, &vk, &ifb, 0, 1);
-            if (!quiet_mode)
-                printf("  arranque %2d/%d: %s\n", k + 1, global_multistart,
-                       (ifb == 0) ? "ok" : "fallo");
-        }
-        if (nok > 0) {
-            for (i2 = 1; i2 <= npar; i2++) {
-                x[i2]   = xbest[i2];
-                dev[i2] = devbest[i2];
-                for (int j2 = 1; j2 <= npar; j2++) cov[i2][j2] = covbest[i2][j2];
-            }
-            varma1.logelf = best;
-            varma1.sigma2 = best_s2;
-            ifault  = 0;
-            ms_done = 1;    /* no re-estimation: the best fit is already there */
-            fprintf(outputv, "\nMulti-start: %d of %d starting points converged; "
-                             "logL from %.6f to %.6f (best is start %d).\n",
-                    nok, global_multistart, worst, best, bestk + 1);
-            fprintf(outputv, "  The SPREAD is the diagnostic: on a well-behaved\n"
-                             "  surface every start lands in the same place.\n");
-            if (!quiet_mode)
-                printf("  Multi-start: %d/%d ok, logL from %.6f to %.6f\n",
-                       nok, global_multistart, worst, best);
-        } else {
-            fprintf(outputv, "\nMulti-start: no starting point converged.\n");
-        }
-        free_matrix(covbest, 1, npar, 1, npar);
-        free_matrix(covb, 1, npar, 1, npar);
-        free_vector(devbest, 1, npar);
-        free_vector(devb, 1, npar);
-        free_vector(xtry, 1, npar);
-        free_vector(xbest, 1, npar);
-        /* varma1 is NOT reallocated: its buffers are still alive from the call
-           above, and the loop used its own structure vk.  Calling again with
-           firstx = 1 orphaned the first allocation -- 1080 bytes that valgrind
-           marked as definitely lost.                                         */
-    }
+    /*  1 = the multi-start already left the final fit in x.               */
+    int ms_done = (global_multistart > 1)
+                ? run_multistart(x, dev, cov, npar, &varma1, &ifault) : 0;
 
     if (!ms_done)
         est(&vec_shootx, npar, x, dev, cov, maxits, nrits, gradtol, sptol,
             varma1.xitol, varma1.a, &varma1.sigma2, &varma1.logelf, &ifault);
 
-    if (ifault == 0) {
-        /* Standard errors from the Hessian at the optimum, if asked for.  It goes
-           before recovering the final structure because objcfunc fills varmax
-           with whatever point it is handed.                                  */
-        if (global_fdhess) {
-            if (exact_hessian_se(npar, x, dev, cov, nobs) == 0)
-                fprintf(outputv, "\nStandard errors from the finite-difference "
-                                 "Hessian AT the optimum (-fdhess),\n"
-                                 "not from the BFGS-accumulated factor.\n");
-        }
-        vec_shootx(x, &varma1, &ifault, 0, 0);  /* retrieve final */
-
-        /* Fill in the RESIDUALS of the final fit.  elf writes them with
-           atf = TRUE, and until now they arrived by rebound because est made
-           that call on finishing.  With -multistart there is no final est --
-           the best point is already chosen -- and the residuals were left
-           UNCOMPUTED: the diagnosis came out with Q = nan and "the residuals
-           appear to be white noise", which is the worst possible way to be
-           wrong.  They are computed here, which is where the final fit is
-           known.                                                             */
-        {
-            real pi1, pi2, pi3;
-            int ifr = 0;
-            elf(varma1.m, varma1.n, varma1.p, varma1.q, varma1.mu, varma1.phi,
-                varma1.theta, varma1.qq, varma1.w, 1.0, varma1.xitol,
-                TRUE, varma1.a, &pi1, &pi2, &pi3, &ifr);
-        }
-
-        fprintf(outputv, "\nESTIMATION SUCCESSFUL (ifault=0)\n");
-        fprintf(outputv, "sigma2 : %15.10f\n", varma1.sigma2);
-        fprintf(outputv, "logelf : %15.10f\n", varma1.logelf);
-        /* npar, AIC and BIC in the plain fit too.  They were only inside
-           -lrtest's table, and without them no mechanical specification
-           criterion can be set: comparing nested models by LR works for a pair,
-           but choosing within a declared set asks for an information criterion.
-           Same normalisation by nobs as -lrtest's table, so that the numbers
-           are the same number.                                               */
-        fprintf(outputv, "npar   : %d\n", npar);
-        fprintf(outputv, "AIC    : %15.10f   (-2logL + 2k, /n)\n",
-                (-2.0 * varma1.logelf + 2.0 * npar) / nobs);
-        fprintf(outputv, "BIC    : %15.10f   (-2logL + k log n, /n)\n",
-                (-2.0 * varma1.logelf + npar * log((real) nobs)) / nobs);
-        convergence_note(termcode_from_out(outputf));
-        operator_roots(&varma1);
-        /*  The rank condition, beside the roots and for the same reason: it
-         *  says whether the point it stopped at is a model of the rank that was
-         *  asked for or of another.  It is recomputed at the last evaluation,
-         *  which is the one vec_shootx left just before.                     */
-        if (global_r > 0 && global_q > 0 && granger_sv >= 0.0) {
-            fprintf(outputv,
-                "\nRank condition (Granger): sigma_min(Lambda_perp' Theta(1) "
-                "B_perp) = %.3e\n", granger_sv);
-            if (granger_sv < global_rankadm_tol) {
-                /*  AND TO THE TERMINAL AS WELL.  A fit that denies its own rank
-                 *  is not a worse fit: it is the fit of another model, and
-                 *  whoever runs the program has to find out without opening the
-                 *  .out.  It is the decision of step 4 of the plan: the default
-                 *  CALCULATION does not move -- no recorded result moves -- but
-                 *  the PRESENTATION stops offering as an answer something the
-                 *  theory does not license (docs/THEORY.md, corollary 5.1).  */
-                if (!quiet_mode)
-                    printf("\n  *** WARNING: sigma_min(Lambda_perp' Theta(1) "
-                           "B_perp) = %.3e < %.1e\n"
-                           "      This fit DENIES THE RANK it was estimated "
-                           "at: it is not a\n"
-                           "      worse fit, it is the fit of another model.  Its "
-                           "standard errors\n"
-                           "      and any LR against it do NOT have their "
-                           "usual distribution.\n"
-                           "%s"
-                           "      See the ladder:  drvec <file> %d %d %d "
-                           "-specs\n", granger_sv, global_rankadm_tol,
-                           /*  P4 — and where it comes from.  Under the default this
-                            *  cannot happen (Corollary 6.3); if it is
-                            *  happening, the free class has been asked for, and
-                            *  that is the first thing to say.                */
-                           global_mafree
-                             ? "      This is -mafree: that class CONTAINS points"
-                               " the model does not\n"
-                               "      admit.  The default (-marow) cannot"
-                               " reach them.\n"
-                             : "",
-                           global_p, global_q, global_r);
-                fprintf(outputv,
-                  "  *** This is ZERO to working precision, and it is not a\n"
-                  "  detail: that matrix is what makes the long-run impact\n"
-                  "  C(1) = B_perp (Lambda_perp' Gamma B_perp)^-1 Lambda_perp'\n"
-                  "  Theta(1) have rank M-r.  Where it degenerates the FITTED\n"
-                  "  model denies the rank it was estimated at -- it says r and\n"
-                  "  its parameters leave no stochastic trend.  The estimate is\n"
-                  "  then on the edge of the region the model class allows, so\n"
-                  "  standard errors and LR statistics do not have their usual\n"
-                  "  distributions there.  -rankadm refuses such points; -mawarma\n"
-                  "  makes them unreachable by construction.  See\n"
-                  "  docs/HOMOLOGATION.md 4h.\n");
-            } else
-                fprintf(outputv,
-                  "  Comfortably away from zero: the fit is a model of the rank\n"
-                  "  it was estimated at.\n");
-        }
-        gate_contract(&varma1);
-        residual_diagnostics(&varma1);
-
-        /* The LR of H1(r) against H(r).  Johansen and Swensen (2024): the degrees
-           of freedom are (M - sa)*r, which is how many free entries of alpha the
-           restriction removes.                                               */
-        if (global_alpha && lr_free_ok) {
-            int df = (nser - alpha_sa) * global_r;
-            real lr = 2.0 * (lr_free - varma1.logelf);
-            real pv = (df > 0 && lr > 0.0) ? gsl_cdf_chisq_Q(lr, df) : 1.0;
-            fprintf(outputv, "\n--- H1(r): alpha = A*psi, against H(r) ---\n");
-            fprintf(outputv, "logL H(r)  free        : %15.10f\n", lr_free);
-            fprintf(outputv, "logL H1(r) restricted  : %15.10f\n", varma1.logelf);
-            fprintf(outputv, "LR = 2(free - restr.)  : %15.10f\n", lr);
-            fprintf(outputv, "degrees of freedom     : %d   (M - sa)*r\n", df);
-            fprintf(outputv, "p-value (chi2)         : %15.10f\n", pv);
-            printf("  H1(r) restricted   : logL = %15.10f\n", varma1.logelf);
-            printf("  LR = %.6f, %d df, p = %.6f%s\n", lr, df, pv,
-                   (lr < -1.0e-6) ? "   <- NEGATIVE: the restricted beats the free one,"
-                                    " so one of the two did not converge" : "");
-        }
-
-        /* --- Structured VEC output --------------------------------------- */
-        int s = nser - global_r, r = global_r;
-        int ii = 1, warma_done = 0;
-        real **Lam_m = matrix(1, nser, 1, (r > 0 ? r : 1));
-
-        /*  -warma: the parameters are NOT the VEC's, so they are not printed
-         *  as if they were.  What has been estimated is published, in the
-         *  coordinates it was estimated in, and they are named.              */
-        if (global_warma) {
-            int nf_w = (global_p > 1) ? global_p - 1 : 0, kk;
-            fprintf(outputv,
-              "\nTriangular (WARMA) parameterisation, on Ybar_t = [nabla Y2 ; W]:\n"
-              "  Ybar_t = sum_k Phi*_k Ybar_{t-k} + (I - sum_k Theta*_k L^k) A*_t\n"
-              "  with Phi*_k = [0  Psi_k ; 0  Phi_k] and Theta*_k in the W block\n"
-              "  only.  B2 enters ONLY through W = Y1 + B2'Y2, by subtraction.\n\n");
-            if (global_case == 2) {
-                fprintf(outputv, "E[W] =\n");
-                for (int j = 1; j <= r; j++)
-                    fprintf(outputv, "  %12.6f  (sd = %10.6f)\n", x[ii], dev[ii]), ii++;
-            } else if (global_case == 3) {
-                fprintf(outputv, "E[nabla Y2] and E[W] =\n");
-                for (int i = 1; i <= nser; i++)
-                    fprintf(outputv, "  %12.6f  (sd = %10.6f)\n", x[ii], dev[ii]), ii++;
-            }
-            for (kk = 1; kk <= nf_w + 1; kk++) {
-                fprintf(outputv, "coefficients of W_{t-%d}  (M x r) =\n", kk);
-                for (int i = 1; i <= nser; i++) {
-                    fprintf(outputv, "  ");
-                    for (int j = 1; j <= r; j++)
-                        fprintf(outputv, "%12.6f (sd %9.6f)", x[ii], dev[ii]), ii++;
-                    fprintf(outputv, "\n");
-                }
-            }
-            for (kk = 1; kk <= global_q; kk++) {
-                fprintf(outputv, "Theta*[%d] in the W block (r x r) =\n", kk);
-                for (int i = 1; i <= r; i++) {
-                    fprintf(outputv, "  ");
-                    for (int j = 1; j <= r; j++)
-                        fprintf(outputv, "%12.6f (sd %9.6f)", x[ii], dev[ii]), ii++;
-                    fprintf(outputv, "\n");
-                }
-            }
-            fprintf(outputv, "Q (M x M, lower triangle; Q[1][1] = 1) =\n  1.000000\n");
-            for (int i = 2; i <= nser; i++) fprintf(outputv, "  %12.6f\n", x[ii++]);
-            if (!global_diag_cov)
-                for (int i = 2; i <= nser; i++)
-                    for (int j = 1; j < i; j++)
-                        fprintf(outputv, "  off(%d,%d) %12.6f\n", i, j, x[ii++]);
-            fprintf(outputv, "B2 (s x r) =\n");
-            for (int i = 1; i <= s; i++) {
-                fprintf(outputv, "  ");
-                for (int j = 1; j <= r; j++)
-                    fprintf(outputv, "%12.6f%s", global_fixb2 ? B2_fixed[i][j] : x[ii],
-                            global_fixb2 ? "" : "");
-                if (!global_fixb2) ii += r;
-                fprintf(outputv, "\n");
-            }
-            if (ii != npar + 1)
-                fprintf(stderr, "ERROR output (-warma): consumed %d of %d\n",
-                        ii - 1, npar);
-
-            /*  AND BACK TO VEC COORDINATES, once only, at the end.  It is what
-             *  makes this route usable: it is estimated where the class is a
-             *  zero pattern and REPORTED where the user reads.               */
-            if (r > 0) {
-                real **B2w = matrix(1, s, 1, (r > 0 ? r : 1));
-                real **Lw  = matrix(1, nser, 1, r);
-                real ***Fw = tensor(1, (global_p > 1 ? global_p - 1 : 1),
-                                    1, nser, 1, nser);
-                real ***Tw = tensor(1, (global_q > 0 ? global_q : 1),
-                                    1, nser, 1, nser);
-                real **Sw  = matrix(1, nser, 1, nser);
-                real resid, gg;
-                int nfw = (global_p > 1) ? global_p - 1 : 0;
-
-                for (int j2 = 1; j2 <= r; j2++)
-                    for (int i2 = 1; i2 <= s; i2++)
-                        B2w[i2][j2] = global_fixb2 ? B2_fixed[i2][j2]
-                                    : x[npar - s * r + (j2 - 1) * s + i2];
-                for (int k2 = 1; k2 <= (global_q > 0 ? global_q : 1); k2++)
-                    for (int i2 = 1; i2 <= nser; i2++)
-                        for (int j2 = 1; j2 <= nser; j2++) Tw[k2][i2][j2] = 0.0;
-                resid = warma_inverse(&varma1, B2w, Lw, Fw, Tw, Sw);
-
-                fprintf(outputv,
-                  "\n--- the same fit in VEC coordinates ---\n"
-                  "  (I - F1 L - ...) nabla Y_t = -Lambda (B'Y_{t-1} - E[W]) "
-                  "+ (I - Theta1 L - ...) A_t\n"
-                  "  recovered by inverting the transformation once, not "
-                  "estimated again.\n");
-                fprintf(outputv, "\nLambda (M x r) =\n");
-                for (int i2 = 1; i2 <= nser; i2++) {
-                    fprintf(outputv, "  ");
-                    for (int j2 = 1; j2 <= r; j2++)
-                        fprintf(outputv, "%12.6f", Lw[i2][j2]);
-                    fprintf(outputv, "\n");
-                }
-                for (int k2 = 1; k2 <= nfw; k2++) {
-                    fprintf(outputv, "F[%d] (M x M) =\n", k2);
-                    for (int i2 = 1; i2 <= nser; i2++) {
-                        fprintf(outputv, "  ");
-                        for (int j2 = 1; j2 <= nser; j2++)
-                            fprintf(outputv, "%12.6f", Fw[k2][i2][j2]);
-                        fprintf(outputv, "\n");
-                    }
-                }
-                for (int k2 = 1; k2 <= global_q; k2++) {
-                    fprintf(outputv, "Theta[%d] (M x M) =\n", k2);
-                    for (int i2 = 1; i2 <= nser; i2++) {
-                        fprintf(outputv, "  ");
-                        for (int j2 = 1; j2 <= nser; j2++)
-                            fprintf(outputv, "%12.6f", Tw[k2][i2][j2]);
-                        fprintf(outputv, "\n");
-                    }
-                }
-                fprintf(outputv, "Pi = Lambda B' (M x M) =\n");
-                for (int i2 = 1; i2 <= nser; i2++) {
-                    fprintf(outputv, "  ");
-                    for (int j2 = 1; j2 <= nser; j2++) {
-                        real acc = 0.0;
-                        for (int k2 = 1; k2 <= r; k2++)
-                            acc += Lw[i2][k2] * ((j2 <= r) ? (j2 == k2 ? 1.0 : 0.0)
-                                                           : B2w[j2 - r][k2]);
-                        fprintf(outputv, "%12.6f", acc);
-                    }
-                    fprintf(outputv, "\n");
-                }
-                gg = granger_smin(Lw, B2w, Tw, nser, r, global_q);
-                if (gg >= 0.0)
-                    fprintf(outputv,
-                      "\nRank condition (Granger): sigma_min(Lambda_perp' "
-                      "Theta(1) B_perp) = %.3e\n%s", gg,
-                      (gg < global_rankadm_tol)
-                        ? "  *** ZERO to working precision: this fit denies the "
-                          "rank it was estimated at.\n"
-                        : "  Comfortably away from zero: the fit is a model of "
-                          "the rank it was estimated at.\n");
-                /*  The residual of the map: if the point were not in the image of
-                 *  the transformation, this would say so instead of letting an
-                 *  invented Lambda be published.                             */
-                fprintf(outputv, "  inversion residual = %.3e%s\n", resid,
-                        (resid > 1.0e-6)
-                          ? "   *** the fitted point is NOT in the image of the "
-                            "transformation; the VEC parameters above are a "
-                            "least-squares projection, not the fit"
-                          : "   (exact: the two coordinate systems describe the "
-                            "same fit)");
-                free_matrix(Sw, 1, nser, 1, nser);
-                free_tensor(Tw, 1, (global_q > 0 ? global_q : 1), 1, nser, 1, nser);
-                free_tensor(Fw, 1, (global_p > 1 ? global_p - 1 : 1), 1, nser, 1, nser);
-                free_matrix(Lw, 1, nser, 1, r);
-                free_matrix(B2w, 1, s, 1, (r > 0 ? r : 1));
-            }
-            /*  It exits through the SAME cleanup as the rest, and not by a
-             *  return of its own: a new exit path is a new set of leaks, and
-             *  valgrind found them as soon as it was written (2112 bytes in 9
-             *  blocks).  The rest of the VEC printing is skipped with the flag.*/
-            warma_done = 1;
-        }
-        if (!warma_done) {
-
-        /*  P6.8 — THE INDICES INTO x[], NOTED IN THE WALK THAT ALREADY EXISTS.
-         *  The hypothesis block needs to know where in the vector each
-         *  parameter lives.  This file already warns, further up, that it has
-         *  FOUR walks of the same vector and that adding a fifth loose counting
-         *  rule is exactly how the §4.1 bug was opened.  So there is no fifth
-         *  walk: it is noted here, where the walking is already going on and
-         *  where the walk itself is checked against npar at the end.  0 = that
-         *  entry is NOT free -- the structure, -fixb2 or -alpha fixes it -- and
-         *  is therefore imposed, not testable.                               */
-        int nf_ix = (global_p > 1) ? global_p - 1 : 1;
-        int nq_ix = (global_q > 0) ? global_q : 1;
-        int **ix_lam = imatrix(1, nser, 1, (r > 0 ? r : 1));
-        int **ix_B2  = imatrix(1, (s > 0 ? s : 1), 1, (r > 0 ? r : 1));
-        int **ix_F   = imatrix(1, nf_ix * nser, 1, nser);
-        int **ix_Th  = imatrix(1, nq_ix * nser, 1, nser);
-        for (int a = 1; a <= nser; a++)
-            for (int b = 1; b <= (r > 0 ? r : 1); b++) ix_lam[a][b] = 0;
-        for (int a = 1; a <= (s > 0 ? s : 1); a++)
-            for (int b = 1; b <= (r > 0 ? r : 1); b++) ix_B2[a][b] = 0;
-        for (int a = 1; a <= nf_ix * nser; a++)
-            for (int b = 1; b <= nser; b++) ix_F[a][b] = 0;
-        for (int a = 1; a <= nq_ix * nser; a++)
-            for (int b = 1; b <= nser; b++) ix_Th[a][b] = 0;
-
-        fprintf(outputv, "\nVEC model (Mauricio 2006):\n");
-        fprintf(outputv, "  (I - F1 L - ... - F_{p-1} L^{p-1}) nabla Y_t =\n");
-        fprintf(outputv, "      -Lambda (B' Y_{t-1} - E[W_t]) + (I - Theta1 L - ...) A_t\n\n");
-
-        if (global_case == 2) {
-            fprintf(outputv, "E[W] =\n");
-            for (int j = 1; j <= r; j++)
-                fprintf(outputv, "  %12.6f  (sd = %10.6f)\n", x[ii], dev[ii]), ii++;
-        } else if (global_case == 3) {
-            fprintf(outputv, "E[nabla Y2] =\n");
-            for (int i = 1; i <= s; i++)
-                fprintf(outputv, "  %12.6f  (sd = %10.6f)\n", x[ii], dev[ii]), ii++;
-            fprintf(outputv, "E[W] =\n");
-            for (int j = 1; j <= r; j++)
-                fprintf(outputv, "  %12.6f  (sd = %10.6f)\n", x[ii], dev[ii]), ii++;
-        }
-
-        if (global_alpha) {
-            /* With alpha = A*psi what x[] carries is psi (sa x r), not Lambda, and
-               the walk has to consume sa*r and not M*r -- the printer is the
-               other place where the vector's layout can fall out of step, and
-               the suite's structural block exists for that.
-               Both are printed: psi is what is estimated, Lambda = A*psi is what
-               is interpretable, and the standard errors exist only for psi.   */
-            real **psi = matrix(1, alpha_sa, 1, (r > 0 ? r : 1));
-            fprintf(outputv, "psi (sa x r), the free part of alpha = A*psi =\n");
-            for (int i = 1; i <= alpha_sa; i++) {
-                fprintf(outputv, "  ");
-                for (int j = 1; j <= r; j++) {
-                    psi[i][j] = x[ii];
-                    fprintf(outputv, "%12.6f (sd %9.6f)", x[ii], dev[ii]);
-                    ii++;
-                }
-                fprintf(outputv, "\n");
-            }
-            fprintf(outputv, "Lambda = A*psi (M x r) =\n");
-            for (int i = 1; i <= nser; i++) {
-                fprintf(outputv, "  ");
-                for (int j = 1; j <= r; j++) {
-                    real acc = 0.0;
-                    for (int kk = 1; kk <= alpha_sa; kk++)
-                        acc += alpha_A[i][kk] * psi[kk][j];
-                    Lam_m[i][j] = acc;
-                    fprintf(outputv, "%12.6f", acc);
-                }
-                fprintf(outputv, "\n");
-            }
-            free_matrix(psi, 1, alpha_sa, 1, (r > 0 ? r : 1));
-        } else {
-            fprintf(outputv, "Lambda (M x r) =\n");
-            for (int i = 1; i <= nser; i++) {
-                fprintf(outputv, "  ");
-                for (int j = 1; j <= r; j++) {
-                    Lam_m[i][j] = x[ii];
-                    ix_lam[i][j] = ii;
-                    fprintf(outputv, "%12.6f (sd %9.6f)", x[ii], dev[ii]);
-                    ii++;
-                }
-                fprintf(outputv, "\n");
-            }
-        }
-        /* Under -diagar / -diagma only the M diagonal entries are carried in
-           x[] (see calc_nparametrs and vec_shootx), so the walk must consume
-           M, not M*M, while still displaying the full matrix.                */
-        int nf = (global_p > 1) ? global_p - 1 : 0;
-        for (int k = 1; k <= nf; k++) {
-            fprintf(outputv, "F[%d] (M x M) =\n", k);
-            for (int i = 1; i <= nser; i++) {
-                fprintf(outputv, "  ");
-                for (int j = 1; j <= nser; j++) {
-                    real fv;
-                    if (global_diag_ar) {
-                        if (i == j) { ix_F[(k-1)*nser + i][j] = ii; fv = x[ii++]; }
-                        else fv = 0.0;
-                    } else { ix_F[(k-1)*nser + i][j] = ii; fv = x[ii++]; }
-                    fprintf(outputv, "%12.6f", fv);
-                }
-                fprintf(outputv, "\n");
-            }
-        }
-        /*  With -mawarma the free block is only the r*r entries at the top
-         *  left; the upper-right block is determined by B2 (which this walk has
-         *  not read yet) and the lower s rows are zero.  They are stored here
-         *  and printed after B2.  This is the FOURTH walk of the same vector,
-         *  and it is exactly where the previous version of this block fell out
-         *  of step and published a Theta nobody had estimated.               */
-        real ***Th_m = tensor(1, (global_q > 0 ? global_q : 1), 1, nser, 1, nser);
-        for (int k = 1; k <= (global_q > 0 ? global_q : 1); k++)
-            for (int i = 1; i <= nser; i++)
-                for (int j = 1; j <= nser; j++) Th_m[k][i][j] = 0.0;
-        for (int k = 1; k <= global_q; k++) {
-            if (mawarma_on()) {
-                for (int i = 1; i <= r; i++)
-                    for (int j = 1; j <= r; j++) {
-                        ix_Th[(k-1)*nser + i][j] = ii; Th_m[k][i][j] = x[ii++]; }
-            } else if (marow_on()) {
-                for (int i = 1; i <= r; i++)
-                    for (int j = 1; j <= nser; j++) {
-                        ix_Th[(k-1)*nser + i][j] = ii; Th_m[k][i][j] = x[ii++]; }
-            } else if (global_matri) {
-                for (int i = 1; i <= r; i++)
-                    for (int j = 1; j <= nser; j++) {
-                        ix_Th[(k-1)*nser + i][j] = ii; Th_m[k][i][j] = x[ii++]; }
-                for (int i = r + 1; i <= nser; i++)
-                    for (int j = r + 1; j <= nser; j++) {
-                        ix_Th[(k-1)*nser + i][j] = ii; Th_m[k][i][j] = x[ii++]; }
-            } else if (global_diag_ma) {
-                for (int i = 1; i <= nser; i++) {
-                    ix_Th[(k-1)*nser + i][i] = ii; Th_m[k][i][i] = x[ii++]; }
-            } else {
-                for (int i = 1; i <= nser; i++)
-                    for (int j = 1; j <= nser; j++) {
-                        ix_Th[(k-1)*nser + i][j] = ii; Th_m[k][i][j] = x[ii++]; }
-            }
-        }
-        if (!mawarma_on())
-            for (int k = 1; k <= global_q; k++) {
-                fprintf(outputv, "Theta[%d] (M x M)%s =\n", k,
-                        global_matri ? ", block-triangular [T11 T12 ; 0 T22]"
-                      : (marow_on() ? ", [T11 T12 ; 0 0]" : ""));
-                for (int i = 1; i <= nser; i++) {
-                    fprintf(outputv, "  ");
-                    for (int j = 1; j <= nser; j++)
-                        fprintf(outputv, "%12.6f", Th_m[k][i][j]);
-                    fprintf(outputv, "\n");
-                }
-            }
-        /* The engine concentrates the covariance scale: it calls elf with
-           sigma2 = 1, so the block carried in x[] is identified only up to a
-           positive constant.  Report it as Q (what is estimated) and the
-           innovation covariance separately as sigma2 * Q, as drvarma does.   */
-        real **Qm = matrix(1, nser, 1, nser);
-        for (int i = 1; i <= nser; i++)
-            for (int j = 1; j <= nser; j++) Qm[i][j] = 0.0;
-
-        /* Same layout as vec_shootx: Q[1][1] = 1, then the variance ratios on
-           the diagonal (i >= 2), then the off-diagonals by rows.              */
-        Qm[1][1] = 1.0;
-        for (int i = 2; i <= nser; i++) Qm[i][i] = x[ii++];
-        if (!global_diag_cov)
-            for (int i = 2; i <= nser; i++)
-                for (int j = 1; j < i; j++) Qm[i][j] = Qm[j][i] = x[ii++];
-
-        fprintf(outputv, "Q (M x M, lower triangle; Q[1][1] = 1 by normalisation) =\n");
-        for (int i = 1; i <= nser; i++) {
-            fprintf(outputv, "  ");
-            for (int j = 1; j <= i; j++) fprintf(outputv, "%12.6f", Qm[i][j]);
-            fprintf(outputv, "\n");
-        }
-        fprintf(outputv, "Sigma = sigma2 * Q  (innovation covariance of A_t) =\n");
-        for (int i = 1; i <= nser; i++) {
-            fprintf(outputv, "  ");
-            for (int j = 1; j <= i; j++)
-                fprintf(outputv, "%12.6f", varma1.sigma2 * Qm[i][j]);
-            fprintf(outputv, "\n");
-        }
-
-        /*  P2 — |Sigma| IS THIS PROGRAM'S HOMOLOGATION CRITERION and until
-         *  2026-08-20 it did not print it: it had to be worked out by hand from
-         *  the matrix above, rounded to six decimals, and that manual
-         *  arithmetic is precisely where the register lost track of three of
-         *  the four rows of its beta exit criterion.  A program that declares a
-         *  criterion and does not emit it forces somebody else to compute it,
-         *  and whoever computes it gets it wrong.  See
-         *  docs/PLAN_PRODUCCION.md P2.
-         *
-         *  log|Sigma| is given too, which is what enters the likelihood and the
-         *  only readable thing when |Sigma| goes to 1e-30 with a large M.     */
-        {
-            real **Sm = matrix(1, nser, 1, nser);
-            real d1 = 0.0, d2 = 0.0; int ifd = 0;
-            for (int i = 1; i <= nser; i++)
-                for (int j = 1; j <= nser; j++)
-                    Sm[i][j] = varma1.sigma2 * (j <= i ? Qm[i][j] : Qm[j][i]);
-            choldcp(Sm, nser, &d1, &d2, &ifd);
-            if (ifd == 0) {
-                /*  choldcp leaves the determinant as d1 * 2^d2 -- mantissa and
-                 *  exponent apart, so as not to overflow -- and ALREADY
-                 *  accumulates the squares of the factor's diagonal (nlatools.c:
-                 *  `*d1 *= mat[j][j] * mat[j][j]`), so that IS det(Sigma) and
-                 *  not its factor's.  Squaring it again gave 6.06e-06 where the
-                 *  register has 0.002461, which is its exact square: the first
-                 *  version of this line did just that.                       */
-                real logdet = log(fabs(d1)) + d2 * log(2.0);
-                fprintf(outputv, "  |Sigma| = %.10g      log|Sigma| = %.6f\n",
-                        exp(logdet), logdet);
-                if (!quiet_mode)
-                    printf("  |Sigma| = %.10g\n", exp(logdet));
-            } else {
-                fprintf(outputv, "  |Sigma|: not computed (Sigma is not "
-                                 "positive definite here)\n");
-            }
-            free_matrix(Sm, 1, nser, 1, nser);
-        }
-
-        /* ---- Triangularizacion Sigma = P D P' ----------------------------- */
-        /* LDL' decomposition of the innovation covariance: P unit lower
-           triangular, D diagonal.  With A_t = P A*_t, the innovations A*_t are
-           UNCORRELATED (cov = D), so the system premultiplied by P^-1 can be
-           read equation by equation: that is what allows one to speak of a
-           single equation without dragging in the contemporaneous correlation
-           of the others.  BVECM section 4; the legacy did it for the bivariate
-           case only.
-
-           IMPORTANT, and that is why it is said in the output: the ordering is
-           that of the .inp's COLUMNS.  Another order gives another P.  It is
-           the same class of silent decision as the choice of the Y1 block.    */
-        {
-            real **Sg = matrix(1, nser, 1, nser);
-            real **P  = matrix(1, nser, 1, nser);
-            real  *D  = vector(1, nser);
-            int a, b, k, ok_ldl = 1;
-            for (a = 1; a <= nser; a++)
-                for (b = 1; b <= nser; b++)
-                    Sg[a][b] = varma1.sigma2 * ((b <= a) ? Qm[a][b] : Qm[b][a]);
-            for (a = 1; a <= nser; a++)
-                for (b = 1; b <= nser; b++) P[a][b] = (a == b) ? 1.0 : 0.0;
-            for (b = 1; b <= nser; b++) {
-                real acc = Sg[b][b];
-                for (k = 1; k < b; k++) acc -= P[b][k] * P[b][k] * D[k];
-                D[b] = acc;
-                if (D[b] <= 0.0) { ok_ldl = 0; break; }
-                for (a = b + 1; a <= nser; a++) {
-                    real s2 = Sg[a][b];
-                    for (k = 1; k < b; k++) s2 -= P[a][k] * P[b][k] * D[k];
-                    P[a][b] = s2 / D[b];
-                }
-            }
-            if (ok_ldl) {
-                fprintf(outputv, "\nSigma = P D P'  (P unit lower triangular; "
-                                 "A_t = P A*_t with cov(A*_t) = D)\n");
-                fprintf(outputv, "P =\n");
-                for (a = 1; a <= nser; a++) {
-                    fprintf(outputv, "  ");
-                    for (b = 1; b <= a; b++) fprintf(outputv, "%12.6f", P[a][b]);
-                    fprintf(outputv, "\n");
-                }
-                fprintf(outputv, "D (diagonal) =\n  ");
-                for (a = 1; a <= nser; a++) fprintf(outputv, "%12.6f", D[a]);
-                fprintf(outputv, "\n");
-                fprintf(outputv, "  own share of each innovation variance "
-                                 "(D_i / Sigma_ii):\n  ");
-                for (a = 1; a <= nser; a++)
-                    fprintf(outputv, "%11.1f%%", 100.0 * D[a] / Sg[a][a]);
-                fprintf(outputv, "\n");
-                fprintf(outputv,
-                    "  A*_t is uncorrelated, so premultiplying the system by P^-1\n"
-                    "  gives equations that can be read one at a time.  NOTE the\n"
-                    "  ordering is the COLUMN ORDER of the .inp: a different order\n"
-                    "  gives a different P, and the choice is the user's.\n");
-            } else {
-                fprintf(outputv, "\nSigma = P D P': not computed (Sigma is not "
-                                 "positive definite at the optimum)\n");
-            }
-            free_vector(D, 1, nser);
-            free_matrix(P, 1, nser, 1, nser);
-            free_matrix(Sg, 1, nser, 1, nser);
-        }
-        free_matrix(Qm, 1, nser, 1, nser);
-
-        /* B2 is stored COLUMN-major in x[] (vec_shootx and init_guess both
-           write `for j in 1..r { for i in 1..s }`), so it must be read back in
-           that order before being displayed row by row.  Both printers below
-           use this one copy, so they cannot disagree.                        */
-        real **B2m = matrix(1, s, 1, (r > 0 ? r : 1));
-        for (int j = 1; j <= r; j++)
-            for (int i = 1; i <= s; i++) {
-                if (!global_fixb2) ix_B2[i][j] = ii;
-                B2m[i][j] = global_fixb2 ? B2_fixed[i][j] : x[ii++];
-            }
-
-        if (global_fixb2)
-            fprintf(outputv, "B2 (s x r) = [FIXED at %s]\n",
-                    global_fixb2_given ? "the value given on the command line"
-                                       : "its static-OLS estimate (data-chosen: "
-                                         "an LR test against the free model is "
-                                         "NOT valid)");
-        else
-            fprintf(outputv, "B2 (s x r) =\n");
-        /* B2 goes with its standard error when it is a parameter.  With -fixb2
-           it does not, and that is correct: a held value has no standard error,
-           and giving it one would be inventing it.  The order dev is read in is
-           the same column-major one B2m was read in.                         */
-        {
-            int jj = ii - (global_fixb2 ? 0 : s * r);
-            for (int i = 1; i <= s; i++) {
-                fprintf(outputv, "  ");
-                for (int j = 1; j <= r; j++) {
-                    if (global_fixb2) fprintf(outputv, "%12.6f", B2m[i][j]);
-                    else fprintf(outputv, "%12.6f (sd %9.6f)", B2m[i][j],
-                                 dev[jj + (j - 1) * s + (i - 1)]);
-                }
-                fprintf(outputv, "\n");
-            }
-        }
-
-        /*  -mawarma: now that B2 has been read, Theta is completed and printed
-         *  with the structure it inherits: [T11  T11*B2' ; 0  0].            */
-        if (mawarma_on())
-            for (int k = 1; k <= global_q; k++) {
-                for (int i = 1; i <= r; i++)
-                    for (int jj2 = 1; jj2 <= s; jj2++) {
-                        real acc = 0.0;
-                        for (int i2 = 1; i2 <= r; i2++)
-                            acc += Th_m[k][i][i2] * B2m[jj2][i2];
-                        Th_m[k][i][r + jj2] = acc;
-                    }
-                fprintf(outputv, "\nTheta[%d] (M x M), inherited structure "
-                                 "[T11  T11*B2' ; 0  0] =\n", k);
-                for (int i = 1; i <= nser; i++) {
-                    fprintf(outputv, "  ");
-                    for (int j = 1; j <= nser; j++)
-                        fprintf(outputv, "%12.6f", Th_m[k][i][j]);
-                    fprintf(outputv, "\n");
-                }
-            }
-        free_tensor(Th_m, 1, (global_q > 0 ? global_q : 1), 1, nser, 1, nser);
-
-        if (ii != npar + 1)
-            fprintf(stderr, "ERROR output: consumed %d of %d parameters\n",
-                    ii - 1, npar);
-
-        fprintf(outputv, "\nCointegration matrix B = [I_r; B2] (M x r) :\n");
-        for (int row = 1; row <= nser; row++) {
-            fprintf(outputv, "  row %d: ", row);
-            for (int c = 1; c <= r; c++)
-                fprintf(outputv, "%12.6f",
-                        (row <= r) ? ((c == row) ? 1.0 : 0.0) : B2m[row - r][c]);
-            fprintf(outputv, "\n");
-        }
-
-        /* ---- Pi = Lambda * B', y sus autovalores ------------------------- */
-        /* Pi is the long-run matrix and, unlike Lambda and B, is INVARIANT to the
-           normalisation: any reparameterisation Lambda -> Lambda*G,
-           B -> B*G^-T leaves Pi unchanged.  That is why it is what to look at
-           when comparing fits, and why it is printed here.                   */
-        if (r > 0) {
-            real **Pi = matrix(1, nser, 1, nser);
-            real *wr = vector(1, nser), *wi = vector(1, nser);
-            int a, b, j;
-            for (a = 1; a <= nser; a++)
-                for (b = 1; b <= nser; b++) {
-                    real acc = 0.0;
-                    for (j = 1; j <= r; j++) {
-                        real Bbj = (b <= r) ? ((b == j) ? 1.0 : 0.0) : B2m[b - r][j];
-                        acc += Lam_m[a][j] * Bbj;
-                    }
-                    Pi[a][b] = acc;
-                }
-            fprintf(outputv, "\nPi = Lambda B' (M x M), the long-run matrix =\n");
-            for (a = 1; a <= nser; a++) {
-                fprintf(outputv, "  ");
-                for (b = 1; b <= nser; b++) fprintf(outputv, "%12.6f", Pi[a][b]);
-                fprintf(outputv, "\n");
-            }
-            fprintf(outputv, "  (Pi is INVARIANT to the normalisation, while "
-                             "Lambda and B are not:\n"
-                             "   Lambda->Lambda G, B->B G^-T leaves it "
-                             "unchanged.  Compare fits on Pi.)\n");
-            {   /* eigenvalues, on a copy: eigenqr destroys its argument */
-                real **Pc = matrix(1, nser, 1, nser);
-                for (a = 1; a <= nser; a++) for (b = 1; b <= nser; b++)
-                    Pc[a][b] = Pi[a][b];
-                eigenqr(Pc, nser, wr, wi);
-                fprintf(outputv, "  eigenvalues of Pi:");
-                for (a = 1; a <= nser; a++) {
-                    if (fabs(wi[a]) < 1.0e-12) fprintf(outputv, "  %.6f", wr[a]);
-                    else fprintf(outputv, "  %.6f%+.6fi", wr[a], wi[a]);
-                }
-                fprintf(outputv, "\n");
-                free_matrix(Pc, 1, nser, 1, nser);
-            }
-            fprintf(outputv,
-                "  CAUTION, and it is stronger than the usual one: here Pi = Lambda B'\n"
-                "  has rank r BY CONSTRUCTION, so its M-r zero eigenvalues are\n"
-                "  guaranteed and say nothing about whether r is right -- reading them\n"
-                "  as evidence for the rank is circular.  Even in the unrestricted\n"
-                "  case they are only an indication: Melard, Roy and Saidi (2004) show\n"
-                "  the assumption on Phi(1) does not imply what that reading assumes\n"
-                "  (Pham, Roy and Cedras 2003).  The instrument is -lrtest.\n");
-            free_vector(wi, 1, nser);
-            free_vector(wr, 1, nser);
-            free_matrix(Pi, 1, nser, 1, nser);
-        }
-
-        /* ---- Diagnostic on the normalisation ------------------------------ */
-        /* B = [I_r ; B2] assumes the Y1 block genuinely appears in every
-           cointegrating relation.  If it does not, B2 blows up and the model
-           becomes a silent trap: the fit "works" and describes something else.
-           Mauricio warns about it (p. 3648) and refers to Luukkonen et al.
-           (1999) and Kurozumi (2005); Melard, Roy and Saidi avoid it by using
-           the null space of Phi(1) instead of a normalisation.
-           The measure used here is unit-free: in W = Y1 + B2'Y2 each series
-           weighs |coefficient| * sd(series), so the Y1 block's share of that
-           total weight is reported.  A tiny share says the relation is not
-           really about Y1 and that the normalisation is forced.              */
-        if (r > 0 && s > 0) {
-            real *sdY2 = vector(1, s);
-            int a, t, j;
-            for (a = 1; a <= s; a++) {
-                real m1 = 0.0, v = 0.0;
-                for (t = 1; t <= nobs; t++) m1 += Y2_levels[t][a];
-                m1 /= nobs;
-                for (t = 1; t <= nobs; t++) v += (Y2_levels[t][a] - m1)
-                                               * (Y2_levels[t][a] - m1);
-                sdY2[a] = sqrt(v / (nobs > 1 ? nobs - 1 : 1));
-            }
-            fprintf(outputv, "\nNormalisation check (which series carry each "
-                             "cointegrating relation):\n");
-            for (j = 1; j <= r; j++) {
-                real m1 = 0.0, v = 0.0, w1, w2 = 0.0, share;
-                for (t = 1; t <= nobs; t++) m1 += datamat[t][s + j];
-                m1 /= nobs;
-                for (t = 1; t <= nobs; t++) v += (datamat[t][s + j] - m1)
-                                               * (datamat[t][s + j] - m1);
-                w1 = sqrt(v / (nobs > 1 ? nobs - 1 : 1));      /* coef = 1 */
-                for (a = 1; a <= s; a++) w2 += fabs(B2m[a][j]) * sdY2[a];
-                share = (w1 + w2 > 0.0) ? w1 / (w1 + w2) : 1.0;
-                fprintf(outputv, "  relation %d: the Y1 block carries %5.1f%% "
-                                 "of the weight", j, 100.0 * share);
-                if (share < 0.05) {
-                    fprintf(outputv, "   <-- DUBIOUS\n");
-                    fprintf(stderr,
-                        "WARNING: cointegrating relation %d barely involves the "
-                        "Y1 block (%.1f%%).\n"
-                        "         B = [I_r; B2] normalises on Y1, so this fit "
-                        "may be describing\n"
-                        "         a relation among the other series with an "
-                        "inflated B2.  Consider\n"
-                        "         reordering the columns of the .inp.  See "
-                        "docs/MODEL.md 5.4.\n", j, 100.0 * share);
-                } else fprintf(outputv, "\n");
-            }
-            free_vector(sdY2, 1, s);
-        }
-
-        /*  P6.8 — the hypotheses about the relations, here: the walk above has
-         *  just been checked against npar, so the indices it noted are the good
-         *  ones.  It goes BEFORE the forecast because it answers whether the
-         *  model has anything to say, and that is read first.                */
-        hypothesis_block(x, cov, ix_lam, ix_B2, ix_F, ix_Th);
-        free_imatrix(ix_Th,  1, nq_ix * nser, 1, nser);
-        free_imatrix(ix_F,   1, nf_ix * nser, 1, nser);
-        free_imatrix(ix_B2,  1, (s > 0 ? s : 1), 1, (r > 0 ? r : 1));
-        free_imatrix(ix_lam, 1, nser, 1, (r > 0 ? r : 1));
-
-        /*  P5 — the forecast, here: it is the last place where B2m is still
-         *  alive and where the fit is already made and diagnosed.            */
-        if (global_fcast > 0) forecast_vec(&varma1, B2m, global_fcast, 0.95);
-        if (global_estwin > 0) {
-            if (global_fcast < 1)
-                fprintf(outputv, "\n(-estwin needs a horizon: give -f H)\n");
-            else if (rolling_eval(x, global_estwin, global_fcast) != 0)
-                fprintf(outputv, "\n(-estwin %d leaves no room for %d steps)\n",
-                        global_estwin, global_fcast);
-        }
-
-        free_matrix(Lam_m, 1, nser, 1, (r > 0 ? r : 1));
-        free_matrix(B2m, 1, s, 1, (r > 0 ? r : 1));
-        }   /* !warma_done */
-        if (warma_done) free_matrix(Lam_m, 1, nser, 1, (r > 0 ? r : 1));
-
-    } else {
-        /*  P1 — THE FAILURE IS VISIBLE FROM OUTSIDE.  Until 2026-08-20 this
-         *  branch wrote the diagnosis into the .out and returned 0 to the
-         *  shell, so a script chaining fits could not tell an estimated model
-         *  from one that was not.  It exits with 2, which in the port's
-         *  convention is "recognised but cannot be honoured", and 1 is reserved
-         *  for a USAGE error.  Mind the distinction that matters: termcode 3 --
-         *  "last global step failed to locate a lower point" -- is NOT this.
-         *  It is an explained stop, with its convergence note, and it still
-         *  exits with 0: turning it into a failure would mark as an error most
-         *  of the fits this program publishes.                               */
-        estimation_failed = 1;
-        fprintf(outputv, "\nESTIMATION FAILED: ifault = %d\n", ifault);
-        switch (ifault) {
-            case 1: fprintf(outputv, "  Q not positive definite\n"); break;
-            case 2: fprintf(outputv, "  AR operator has unit root\n"); break;
-            case 3: fprintf(outputv, "  AR operator non-stationary\n"); break;
-            case 4: fprintf(outputv, "  MA operator non-invertible\n"); break;
-            case 5: fprintf(outputv, "  Numerical problem\n"); break;
-            case 6: fprintf(outputv, "  Error in vec_shootx()\n"); break;
-        }
-        fprintf(stderr, "drvec: estimation failed (ifault = %d); "
-                        "see %s\n", ifault, outputf);
-    }
+    report_fit(x, dev, cov, npar, &varma1, ifault, outputf,
+               lr_free, lr_free_ok);
 
     /* [4] Cleanup ---------------------------------------------------------- */
     vec_shootx(x, &varma1, &ifault, 0, 1);  /* deallocate */

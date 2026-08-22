@@ -2166,6 +2166,25 @@ for opt in "-interv $TMP/iv" "-differenced"; do
 done
 echo
 
+# 8n. P8 — THE GOLDEN SET.  A refactor claims to move NOTHING, and that claim is
+#     stronger than the ones the rest of this suite checks, so it needs a
+#     stronger check: every byte of every report, over the configurations that
+#     reach each mode.  tools/golden.sh stores the hashes; this runs them.
+#
+#     It is not a substitute for anything above it.  An invariant says what must
+#     be true of any correct version; a golden hash says only that today's
+#     output equals yesterday's, and it is worth exactly as much as the day it
+#     was captured.  What it is for is a change whose whole point is that
+#     nothing moves -- and for that it is the only honest net.
+echo "[8n] the golden set: 24 reports, byte for byte (P8)"
+
+if ./tools/golden.sh verify > "$TMP/golden.txt" 2>&1; then
+    ok "$(cat "$TMP/golden.txt")"
+else
+    bad "golden set" "$(head -4 "$TMP/golden.txt" | tr '\n' ' ')"
+fi
+echo
+
 # ================================================== 9 MEMORY (opt-in) ==
 # Off by default so `make test` is deterministic on any machine; run it with
 #     VALGRIND=1 make test

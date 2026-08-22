@@ -128,7 +128,12 @@ the next release takes, and the entry for that release will say why.
   route by identity — the reports are byte-identical below `ESTIMATION
   SUCCESSFUL`, and the deterministic handling agrees exactly with `-interv`.
 
-Suite: 252 checks, 262 with `VALGRIND=1`.
+- **P8, the refactor.** `main()` went from 2 320 lines to 468, nine functions
+  out of it, and a map of the file at the top. It moved nothing, and that is
+  checked rather than asserted: `tools/golden.sh` compares twenty-four whole
+  reports byte for byte. `BUG-14` is closed at its root in the process.
+
+Suite: 253 checks, 263 with `VALGRIND=1`.
 
 ---
 

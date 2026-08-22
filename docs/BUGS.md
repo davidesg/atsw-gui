@@ -66,12 +66,18 @@ stack word fell in the range where the truncation does not bite. That is not the
 same as harmless — it was undefined behaviour, and a different compiler, call
 depth or day could have moved it without a word. Recorded in §4v.
 
-**The lesson.** The structure has a field no filling function fills. While that
-is true, every new site that uses it is another chance at the same bug. What
-closes it is `vec_shootx` setting `xitol` itself — deliberately not done now,
-because touching it would move every figure in the register through the back
-door. It is written down for the refactor (P8), which is where a change with no
-measurable effect belongs.
+**The lesson, and it is now acted on.** The structure had a field that no
+filling function filled. While that was true, every new site that used it was
+another chance at the same bug — patching `rolling_eval` fixed the symptom and
+left the hole. **Closed at the root on 2026-08-23**, in P8: `vec_shootx` sets
+`xitol` itself, so forgetting it is no longer possible. It cannot move a number
+— every site that sets it uses exactly the same expression and sets it *after*
+the call, writing the same value over the same value — and that is not an
+argument, it is checked: the golden set (`tools/golden.sh`) compares
+twenty-four whole reports byte for byte, and none moved.
+
+It waited for P8 on purpose. A change with no measurable effect belongs with the
+other changes that have none, where one net covers them all.
 
 ---
 

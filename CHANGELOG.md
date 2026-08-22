@@ -42,7 +42,23 @@ sólo sobre `drvec.c`: los ficheros vendorizados son de su dueño.
   número tiene que decir lo mismo en seis sitios, y cada defecto tiene que tener
   número, estado y **coste medido**.
 
-Batería: 235 → 252.
+### El refactor de `main()` (P8)
+
+`main()` llevaba **2 320 líneas**: la línea de órdenes, cinco modos completos, el
+multiarranque y el informe entero —793 líneas— a la misma indentación. Ahora
+**468**, y nueve funciones: `report_fit`, `parse_cli`, `run_lrtest`,
+`run_specs`, `run_ma_ar_test`, `run_multistart`, `run_rungs`, `read_inp_input`
+y `run_eval`. Arriba del fichero va un mapa de dónde está cada cosa.
+
+Un refactor afirma que **no mueve nada**, así que primero la red que lo
+demuestra: `tools/golden.sh` guarda el hash de cada byte de cada informe sobre
+24 configuraciones y se verifica después de cada corte. Los 24 siguen idénticos,
+y va en la batería (bloque `[8n]`).
+
+Con la red puesta, **BUG-14 queda cerrado de raíz**: `vec_shootx` fija ahora
+`xitol`, de modo que olvidarlo ya no es posible. No movió ningún informe.
+
+Batería: 235 → 253, y 263 con `VALGRIND=1`.
 
 ## 0.9 — 2026-08-22
 

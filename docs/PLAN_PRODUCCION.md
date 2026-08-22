@@ -877,20 +877,22 @@ publicar mientras siga estando escrito con esta claridad:
   limitación de la clase libre, que se sigue ofreciendo.*
 - **`-marow` contra el modelo libre** con una distribución válida.
 - **Los cuatro p-valores en el suelo `1/(B+1)`**, que necesitan `B >= 999`.
-- **El refactor de `main()`.** 2066 líneas y 36 globales; `drvec.c` pasó de 818
-  líneas el 2026-08-16 a 6086 el 2026-08-20. No bloquea el lanzamiento y
-  encarece todo lo que venga después, así que va detrás de la etiqueta, no
-  delante.
-- **La unificación del idioma de la salida.** Hay ~32 mensajes al usuario en
-  castellano en un programa con documentación inglesa, y `docs/README.md` cita
-  la salida ya traducida («1 df» donde el programa escribe «1 g.l.»). Se arregla
-  en P7, después de la etiqueta.
+- ~~**El refactor de `main()`.**~~ **Hecho el 2026-08-23** (§11): 2 320 → 468
+  líneas, nueve funciones extraídas, y la red que dice que no movió nada.
+- ~~**La unificación del idioma de la salida.**~~ **Hecha el 2026-08-22** (§10.1):
+  `src/drvec.c` entero en inglés, contra un invariante, y con una comprobación
+  en la batería para que no se deshaga.
+
+*Los dos tachados se hicieron después de la etiqueta `v0.9`, que es donde el
+plan los había puesto. Se dejan escritos porque el resto de esta lista sigue
+vigente y porque un plan que borra lo que cumplió no permite juzgar si el orden
+era el bueno.*
 
 ---
 
 ## 9. Orden y por qué
 
-**P1 (hecha) → P4 (hecha) → P5 (hecha) → P2 (hecha) → P3 (hecha) → P6 (hecha) → P7 (hecha) → P9 (hecha) → (P8 refactor).**
+**P1 → P4 → P5 → P2 → P3 → P6 → P7 → P9 → P8. Todas hechas.**
 
 El orden cambió el 2026-08-20, y el motivo es el requisito 6 de §0.
 
@@ -1028,3 +1030,72 @@ mismos modelos, que es lo que dice que las unidades son las correctas —lo que
 un solo fichero, frecuencias mezcladas, `-interv` (restaría dos veces) y
 `-differenced`.
 
+---
+
+## 11. P8, el refactor — **HECHO el 2026-08-23**
+
+Era lo último de la lista y lo que el plan describía como «no bloquea el
+lanzamiento y encarece todo lo que venga después». Lo segundo se notó durante
+P6, P7 y P9: cada vez que hubo que insertar algo en `main()` hubo antes que
+leerlo entero para encontrar dónde.
+
+### El problema, medido
+
+`main()` tenía **2 320 líneas** y llevaba, a la misma indentación: el análisis de
+la línea de órdenes, la lectura del `.inp`, cinco modos completos (`-rungs`,
+`-specs`, `-lrtest`, `-matest`/`-artest`, `-eval`), el multiarranque y **el
+informe entero**, 793 líneas de él.
+
+### La red, primero
+
+Un refactor afirma que **no mueve nada**, y esa afirmación es más fuerte que las
+que comprueba el resto de la batería, así que necesita una comprobación más
+fuerte. `tools/golden.sh` guarda el hash de **cada byte de cada informe** sobre
+24 configuraciones elegidas para tocar todos los modos, y se verifica después de
+cada corte. Los 24 siguen idénticos.
+
+Conviene decir lo que esa red **no** es: un invariante dice lo que tiene que ser
+cierto en cualquier versión correcta; un hash dorado sólo dice que la salida de
+hoy es la de ayer, y vale exactamente lo que valía el día en que se capturó.
+Para un cambio cuyo objetivo es que nada se mueva es la única red honesta; para
+cualquier otro no sirve. Va en la batería como bloque `[8n]` y tarda 1,2 s.
+
+### Lo cortado
+
+| | líneas | |
+|---|---|---|
+| `report_fit` | 793 | todo lo que el `.out` dice de un ajuste |
+| `parse_cli` | 267 | la línea de órdenes y lo que fija |
+| `run_lrtest` | 210 | el contraste secuencial de rango |
+| `run_specs` | 155 | la escalera de especificaciones |
+| `run_ma_ar_test` | 144 | los dos contrastes con distribución simulada |
+| `run_multistart` | 106 | no es un modo: deja un ajuste detrás |
+| `run_rungs` | 102 | la escalera bajo el rango |
+| `read_inp_input` | 53 | la ruta `.inp`, al lado de `read_pre_inputs` |
+| `run_eval` | 32 | la verosimilitud en el punto de partida |
+
+**`main()`: 2 320 → 468 líneas**, y lo que queda se lee como la secuencia que
+siempre fue. Arriba del fichero va ahora un **mapa** de dónde está cada cosa,
+que es lo que faltaba para poder trabajar en 8 200 líneas sin leerlas.
+
+### Y BUG-14, cerrado de raíz
+
+`vec_shootx` llenaba la estructura menos `xitol`, y por eso `rolling_eval` pudo
+olvidarlo. Parchear ese sitio arregló el síntoma y dejó el agujero: mientras el
+campo no lo llene nadie, el siguiente sitio lo olvidará también. Ahora lo pone
+`vec_shootx`. No mueve ningún número —todos los sitios lo fijan con la misma
+expresión y lo fijan **después** de la llamada—, y eso no es un argumento sino
+una medida: los 24 informes dorados no se movieron.
+
+Esperó a P8 a propósito. Un cambio sin efecto medible va con los demás cambios
+sin efecto medible, donde una sola red los cubre a todos.
+
+### Lo que NO se hizo, y por qué
+
+**Las 36 globales siguen ahí**, agrupadas y documentadas pero no encapsuladas en
+una estructura. Son tres cosas: las banderas de opción (lo que el usuario pidió),
+los datos (`rawmat`, `datamat`, `Y2_levels` y el calendario) y los tres nombres
+de fichero. Cada una la leen varias de las funciones de arriba y la escribe
+exactamente una. Pasarlas por seis firmas diría menos que declararlas una vez, y
+sería un diff grande cuyo único efecto es un diff grande. Queda dicho en el mapa
+del fichero, que es donde un lector lo necesita.

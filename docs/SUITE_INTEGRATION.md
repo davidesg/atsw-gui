@@ -61,6 +61,37 @@ because breaking it fails silently.
    step is ~6·10⁻⁶ *absolute*, so a series whose typical `|w|` is tiny produces a
    gradient that is noise. The comfortable band is `0.01 … 100`, aiming at ~1.
 
+### 2b. And since 0.9, `drvec` READS `.pre` as its input
+
+Rule 1 says `drvec` writes `.inp` and never a `.pre`. Reading is the other
+direction and has no such constraint: a `.pre` is a model somebody else
+certified, and consuming one is the whole point of sitting on this side of the
+suite.
+
+```sh
+drvec s1.pre s2.pre ... sM.pre p q r [options]
+```
+
+This is `drtran`'s interface — `drtran output.pre input1.pre ...` — and `drvec`
+belongs with `drtran` rather than with `drvarma` for a reason that is
+architectural and not cosmetic: **`drvarma` does not share the ladder, it is the
+engine the ladder is built on**, so a single `.inp` with every series is right
+for it. `drvec` does share the ladder: its design (`PLAN_BETA.md` F2) is that the
+univariate identification happens in `fue` and arrives here already done. Until
+0.9 its interface did not say so, and the consequence was three manual steps —
+export to an `.inp`, `-interv`, `-seed` — of which the second is where `BUG-15`
+appeared.
+
+What is taken from each file is what the file is *for*: the series, its
+`w = refactor·BoxCox(z)` (the format's contract, and what `drtran.c:885` does),
+its deterministic terms, and its calendar. Alignment is **by date**, not by
+position. What is *not* taken is the moving average: seeding it is measured to
+make the fit worse with `r ≥ 1`, so it stays behind `-seed`.
+
+The route is certified against the old one by identity, not by resemblance — the
+two reports are byte-identical below `ESTIMATION SUCCESSFUL`, and the
+deterministic handling agrees exactly with `-interv`. Both are in the suite.
+
 ## 3. The two contracts, and `drvec` satisfies them
 
 From `LADDER_AS_OPTIMISATION.md` §2.1 and §3:

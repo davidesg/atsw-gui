@@ -11,6 +11,53 @@ that with `r = 0` the effective AR order on `∇Y` is `p − 1`
 
 ---
 
+## 0. Two ways in
+
+`drvec` estimates the same model from either of two interfaces, and which one to
+use depends on where the series come from.
+
+```sh
+drvec file p q r [options]                       # one .inp with every series
+drvec s1.pre s2.pre ... sM.pre p q r [options]   # one univariate model per series
+```
+
+**The `.pre` route is the suite's**, and it is the one to prefer when the series
+have already been through `fue`. `drvec` sits on `drtran`'s side of the suite —
+the univariate work is done in `fue` and arrives here already done — and
+`drtran`'s interface has always said so: `drtran output.pre input1.pre ...`.
+`drvarma`'s does not, and should not: it does not share the ladder, it *is* the
+engine the ladder is built on.
+
+From each `.pre` this route takes:
+
+| | |
+|---|---|
+| the series | and its Box-Cox and rescaling: the system is built in `w = refactor·BoxCox(z)`, which is the format's contract and what `drtran` does |
+| the deterministic terms | **subtracted**, with the dates of *this* sample — a deterministic term is a function of time, so aligning by index instead of by date puts an intervention in the wrong year |
+| the calendar | the files are lined up **by date** and the common sample is used; mixed frequencies are refused |
+
+The column order is the `.inp`'s: the first `M − r` files are the `∇Y₂` block and
+the last `r` the `Y₁` block, the one `B = [I_r ; B₂]` normalises on. Which file
+went into which block is printed. Products are named `<stem1>_<stem2>…`, and
+`-name NAME` overrides that (`-m` is taken: it is the estimation method).
+
+**What the route does not do**, and deliberately: it does not seed the moving
+average from those models, even though they are right there. That is measured to
+make the fit *worse* with `r ≥ 1` ([PLAN_BETA.md](PLAN_BETA.md) F2.7 and F2.8),
+and a route that silently does something measured to be harmful is worse than one
+that makes you ask. `-seed` still asks.
+
+`-interv` and `-differenced` are refused here: the first would subtract the
+deterministic terms twice, and a `.pre` carries its series in levels and says how
+it is differenced.
+
+**It gives the same fit as the `.inp` route.** On mink–muskrat the two reports
+are byte-identical from `ESTIMATION SUCCESSFUL` onwards, and with a deterministic
+term in play the `.pre` route agrees exactly with `-interv` over the same models.
+Both identities are in the suite, block `[8m]`.
+
+---
+
 ## 1. The input file
 
 ```

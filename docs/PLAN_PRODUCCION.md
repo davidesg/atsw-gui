@@ -890,7 +890,7 @@ publicar mientras siga estando escrito con esta claridad:
 
 ## 9. Orden y por qué
 
-**P1 (hecha) → P4 (hecha) → P5 (hecha) → P2 (hecha) → P3 (hecha) → P6 (hecha) → (P7 idioma) → (P8 refactor).**
+**P1 (hecha) → P4 (hecha) → P5 (hecha) → P2 (hecha) → P3 (hecha) → P6 (hecha) → P7 (hecha) → P9 (hecha) → (P8 refactor).**
 
 El orden cambió el 2026-08-20, y el motivo es el requisito 6 de §0.
 
@@ -920,3 +920,111 @@ produciría una versión cuya especificación por defecto no se sostiene. Y deja
 P5 para el final, que es lo que este plan hacía sin darse cuenta al no incluirlo:
 un programa que nunca mide si sirve para lo que existe puede pasar todas sus
 pruebas y no servir para nada.
+
+---
+
+## 10. P7 y P9, y por qué van juntas — **HECHAS el 2026-08-22**
+
+Las dos salieron de la misma revisión y de la misma pregunta: **qué parte de
+`drvec` está donde el usuario la ve, y qué parte está donde sólo la ve quien lo
+mantiene.**
+
+### 10.1 El idioma (P7)
+
+`src/drvec.c` tenía 1 156 líneas de comentario en castellano dentro de un
+programa con documentación inglesa, y `docs/README.md` citaba salida ya
+traducida («1 df» donde el programa escribía «1 g.l.»). Las dos cosas son el
+mismo defecto: **lo que se puede auditar y lo que no**. Un comentario en un
+idioma que el lector no tiene es un comentario que no está, y un documento que
+cita una salida que el programa no emite ha dejado de ser comprobable.
+
+Traducido entero el 2026-08-22: 363 comentarios y ~40 mensajes al usuario.
+
+**Cómo, y esto importa más que el resultado.** Traducir a mano 1 200 líneas de
+prosa dentro de un fichero de 7 600 es exactamente el tipo de edición que mueve
+una línea de código sin que nadie se entere — un `ii++` desplazado dentro del
+recorrido de la impresora es §4.1 otra vez. Así que la traducción se hizo contra
+un **invariante**: `tools/strip_comments.py` quita todos los comentarios y las
+dos versiones, antes y después, tienen que ser **idénticas byte a byte**. Una
+traducción que cambie un carácter de código no pasa. Se comprobó en cada uno de
+los ocho lotes.
+
+Lo que queda fijo es `tools/check_language.py`, en la batería (bloque `[8k]`),
+**sólo sobre `src/drvec.c`**: `nlatools.c`, `fue_pre_reader.c`, `fue_bridge.c` y
+`diagnose_mv.c` son del conjunto, copiados de `drvarma` y `drtran`, y
+traducirlos aquí sería justamente la divergencia que P3 existe para impedir. Su
+idioma es asunto de su dueño. Y el propio comprobador se comprueba: la batería
+le pasa un fichero que es castellano de principio a fin y exige que lo rechace,
+porque una comprobación que no puede fallar es decoración.
+
+### 10.2 La versión y los defectos, con sistema (P6, ampliada)
+
+**El razonamiento de la versión sale del código.** Vivía en un comentario junto
+al `#define`, y es un argumento que el lector necesita **antes** de ejecutar el
+programa, no mientras lee sus fuentes. Ahora está en `docs/VERSIONS.md`, que
+además dice lo que un registro de versiones tiene que decir y no suele:
+
+- **qué afirma cada número** — aquí no es «cuánto se ha añadido» sino qué puede
+  dar por bueno quien lo usa;
+- **qué tendría que ser cierto para que se mueva** a 1.0, escrito como condición
+  y no como tarea;
+- y una regla que este proyecto ya había aplicado sin escribirla: **un defecto
+  encontrado no retrasa una versión; un defecto tapado sí.** `BUG-14` se
+  encontró el día de la etiqueta 0.9, en la ruta misma sobre la que descansa el
+  argumento de la versión. Se arregló, se volvió a medir la tabla que dependía
+  de él, y el resultado entró en el registro. Esa secuencia es lo que un número
+  de versión puede sostener; lo que no puede sostener es una medida que nadie
+  volvió a correr.
+
+**Y los dos registros que se llevan a mano se comprueban**, porque son
+exactamente lo que se pudre en silencio:
+
+| | qué comprueba |
+|---|---|
+| `tools/check_version.sh` | el número dice lo mismo en el `#define`, `CITATION.cff`, `CHANGELOG.md`, `docs/VERSIONS.md`, el binario y la etiqueta. Una publicación cuyo `CITATION.cff` lleva el número anterior no la puede citar nadie |
+| `tools/check_bugs.py` | cada entrada tiene número, estado y **coste medido**; los números no se repiten ni invaden el rango que otro registro del conjunto posee; y todo `BUG-N` citado en el árbol está registrado en alguna parte — una referencia a un número que nadie registró no identifica nada |
+
+Los dos van en la batería (bloque `[8l]`) y los dos se comprueban a sí mismos:
+se les da un `CITATION.cff` con otra versión y una entrada sin coste, y tienen
+que fallar.
+
+### 10.3 La entrada por `.pre` (P9)
+
+**El diagnóstico.** `drvec` comparte la escalera de `fue` y `drvarma` no. Se ve
+en las interfaces:
+
+| | entrada | por qué |
+|---|---|---|
+| `drvarma` | un `.inp` con todas las series | no comparte la escalera: **es** el motor sobre el que la escalera está construida |
+| `drtran` | `drtran salida.pre entrada1.pre ...` | sí la comparte: el trabajo univariante se hace en `fue` y llega hecho |
+| **`drvec` hasta la 0.9** | **un `.inp`**, y los `.pre` sólo para sembrar | comparte la escalera y su interfaz no lo decía |
+
+Y no era sólo una cuestión de forma. Para partir de modelos de `fue` había que
+dar **tres pasos a mano**: exportar las series a un `.inp`, `-interv` para
+restar las deterministas, y `-seed` para la media móvil. Tres pasos que hay que
+recordar y un formato que rellenar a mano — y el segundo de ellos es donde
+apareció `BUG-15`.
+
+**Lo construido.** `drvec s1.pre s2.pre ... sM.pre p q r [opciones]`. De cada
+`.pre` se toma la serie, su transformación `w = refactor·BoxCox(z)` —que es el
+contrato del formato y literalmente lo que hace `drtran.c:885`—, sus términos
+deterministas (restados, con **las fechas de esta muestra**, porque una
+determinista es función del tiempo) y su calendario. Los ficheros se alinean
+**por fecha** y se usa la intersección. El orden de columnas es el del `.inp`,
+y se dice cuál fue a cada bloque.
+
+**Lo que NO hace, y es deliberado.** No siembra la media móvil desde esos
+modelos, aunque los tiene delante y sería gratis: está medido que **empeora** el
+ajuste con `r ≥ 1` (F2.7 y F2.8), y una ruta que hace en silencio algo medido
+como dañino es peor que una que obliga a pedirlo. `-seed` sigue pidiéndolo.
+
+**El certificado.** La ruta nueva no es «otra forma de leer datos»: es una
+segunda implementación de la entrada, y una segunda implementación se justifica
+con una **identidad**. Sobre mink–muskrat, la ruta `.pre` reproduce la ruta
+`.inp` **byte a byte** de `ESTIMATION SUCCESSFUL` en adelante; y con una
+determinista en juego coincide **exactamente** con lo que da `-interv` sobre los
+mismos modelos, que es lo que dice que las unidades son las correctas —lo que
+`BUG-15` era. Las dos están en la batería, bloque `[8m]`, con lo que refusa:
+un solo fichero, frecuencias mezcladas, `-interv` (restaría dos veces) y
+`-differenced`.
+

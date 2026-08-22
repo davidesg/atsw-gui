@@ -1,105 +1,135 @@
-# Defectos de `drvec`
+# Defects: the register, and how it is kept
 
-**La numeración es la del conjunto.** `fue`, `drvarma`, `drtran` y `drvec`
-comparten motor y cast, y por eso comparten una sola serie de números: `BUG-1` a
-`BUG-13` están en `drtran-python/docs/BUGS.md`, y de ellos `drvec` toca los
-10 a 13. Los que empiezan aquí siguen esa serie, **no** una propia, para que un
-número no signifique nunca dos cosas. (`fue` lleva además su propia numeración
-de cuatro cifras, `BUG-0005`, `BUG-0010`, `BUG-0012`, `BUG-0018`, y no se
-confunde con ésta.)
-
-Cada entrada dice **qué es, cómo se encontró y qué costó**. Lo que costó es la
-parte que no se puede omitir: un defecto sin coste medido no se puede priorizar
-ni cerrar.
+*What each defect was, how it was found, and what it cost. The third is the part
+that cannot be omitted: a defect with no measured cost cannot be prioritised and
+cannot be closed.*
 
 ---
 
-## BUG-14 — `xitol` sin inicializar en la evaluación de origen móvil
+## How this register works
 
-**Estado: arreglado el 2026-08-22** (`src/drvec.c`, `rolling_eval`).
+**The numbering is the suite's, not this program's.** `fue`, `drvarma`, `drtran`
+and `drvec` share an engine and a cast, so they share **one** sequence of
+numbers: `BUG-1` to `BUG-13` live in `drtran-python/docs/BUGS.md`, and of those
+`drvec` touches 10 to 13. The ones that start here continue that sequence rather
+than opening a private one, so that a number never means two things. A pointer in
+the other register says where 14 onward are and that the next one numbered there
+starts at 16. (`fue` also carries its own four-digit numbering — `BUG-0005`,
+`BUG-0010`, `BUG-0012`, `BUG-0018` — which does not collide with this.)
 
-`rolling_eval` monta su propia `struct Tvarma` en la pila y la llena con
-`vec_shootx`, que rellena todos los campos **menos `xitol`**: esa tolerancia la
-pone cada sitio que usa la estructura, y hay una docena de sitios que lo hacen.
-Éste no. `elf` recibía entonces como tolerancia de truncamiento del vector `ξ`
-lo que hubiera en esa palabra de la pila.
+**States.** A defect is `OPEN`, `FIXED` or `WON'T FIX`, and the last one carries
+its reason. There is no `CLOSED`: a defect that was never reproduced is `OPEN`
+and says so.
 
-**Cómo se encontró.** Pasando `valgrind` sobre los caminos nuevos de P6:
-60 saltos condicionales sobre valor sin inicializar, todos en `cxi`
-(`elfvarma.c:773`), con el origen en la asignación de pila de `rolling_eval`.
-No lo habría encontrado ninguna comprobación de resultados: el programa no
-fallaba ni daba `nan`.
+**What an entry must contain**, and `tools/check_bugs.py` enforces it:
 
-**Qué costó.** Es la ruta de la evaluación **fuera de muestra**, o sea la de la
-medición que decide el número de versión del programa (`HOMOLOGATION.md` §4t).
-Con el arreglo se volvieron a medir las tres columnas de §4t —`q=1` por defecto,
-`q=0` y `q=1 -mafree`, nueve casos cada una— y **reproducen la tabla publicada
-dígito a dígito**. Así que el coste medido es **cero** y §4t se sostiene: el
-valor que había en la pila caía dentro del rango en que la truncación no muerde.
-Eso no lo hace inocuo — era comportamiento indefinido, y el siguiente compilador
-o la siguiente pila podían haberlo movido sin avisar.
+```markdown
+## BUG-N — one line saying what it is
 
-**La lección.** La estructura tiene un campo que ninguna función de llenado
-llena. Mientras siga así, cada nuevo sitio que la use es otra ocasión para el
-mismo fallo. Lo que lo cierra de verdad es que `vec_shootx` lo ponga; queda
-anotado para el refactor de P8, porque tocarlo ahora movería todas las cifras
-del registro por la puerta de atrás.
+**Status: FIXED on YYYY-MM-DD** (where, in the source).
 
----
+**What it was.**   The mechanism, not the symptom.
+**How it was found.**   Which check, which run, which measurement.
+**What it cost.**   Measured.  "Nothing measurable" is a valid answer and is
+                    worth more than silence, but it has to have been measured.
+**The lesson.**   Optional, and it is where the checks come from.
+```
 
-## BUG-15 — el `refactor` del `.pre` no se deshacía en `-interv`
-
-**Estado: arreglado el 2026-08-21** (`src/drvec.c`, `subtract_interventions`).
-
-Los `.pre` que conectan `fue` con el resto de la suite llevan las series
-reescaladas ×100 por norma —mejora el condicionamiento del optimizador—, y el
-factor viaja en el propio fichero. `subtract_interventions` leía los términos
-deterministas del `.pre` y los restaba de los niveles **sin dividir por el
-factor**, así que restaba cien veces lo que debía.
-
-**Cómo se encontró.** Estimando un VARMA-VEC sobre IPC_ES, IPC_DE e IPC_FR a
-partir de los `.pre` de sus modelos con estacionalidad determinista.
-
-**Qué costó.** El análisis de rango de los tres IPC daba `r = 1` donde es
-`r = 0`: una relación de cointegración inventada por un factor de escala. Con el
-arreglo, `r = 0` con p de bootstrap 0.313, y Johansen coincide bajo la misma
-especificación.
-
-**La lección, que ya estaba escrita.** `drtran-python/docs/PORTE.md` y
-`ARCHITECTURE_MCP.md` dicen «nunca codificar el factor de reescalado a mano — la
-suite lleva tres defectos registrados por eso». Éste era el cuarto caso del
-mismo modo de fallo ya nombrado.
+**A defect is not fixed until what it could have moved has been re-measured**,
+and the register says it was re-measured even when nothing moved. That is why
+`HOMOLOGATION.md` §4v exists and why `BUG-14` did not delay the 0.9 tag: found,
+fixed, re-measured, recorded. See [VERSIONS.md](VERSIONS.md) §1.
 
 ---
 
-## Encontrados y arreglados antes de la 0.9
+## BUG-14 — `xitol` uninitialised in the rolling-origin evaluation
 
-Sin número porque se arreglaron dentro del desarrollo y su informe completo está
-en el registro, no aquí. Se listan porque son los modos de fallo que este
-programa tiene, y el que los conozca los buscará antes:
+**Status: FIXED on 2026-08-22** (`src/drvec.c`, `rolling_eval`).
 
-| qué era | dónde está contado |
+**What it was.** `rolling_eval` builds its own `struct Tvarma` on the stack and
+fills it with `vec_shootx`, which sets every field **except `xitol`**: that
+tolerance is set by each site that uses the structure, and a dozen sites do it.
+This one did not. `elf` was therefore called with whatever happened to be in that
+word of the stack as the truncation tolerance of the `ξ` vector.
+
+**How it was found.** Running `valgrind` over the paths P6 added: sixty
+conditional jumps on an uninitialised value, all in `cxi` (`elfvarma.c:773`),
+with the origin in `rolling_eval`'s stack allocation. Nothing else would have
+found it — the program did not crash, did not warn and did not produce a `nan`.
+
+**What it cost.** This is the out-of-sample route, i.e. the one the measurement
+that decides this program's version number goes through
+([HOMOLOGATION.md](HOMOLOGATION.md) §4t). All three columns of §4t, nine cases
+each, were re-run with the fix in and **reproduce the published table digit for
+digit**. So the measured cost is **zero**: the value that happened to sit in that
+stack word fell in the range where the truncation does not bite. That is not the
+same as harmless — it was undefined behaviour, and a different compiler, call
+depth or day could have moved it without a word. Recorded in §4v.
+
+**The lesson.** The structure has a field no filling function fills. While that
+is true, every new site that uses it is another chance at the same bug. What
+closes it is `vec_shootx` setting `xitol` itself — deliberately not done now,
+because touching it would move every figure in the register through the back
+door. It is written down for the refactor (P8), which is where a change with no
+measurable effect belongs.
+
+---
+
+## BUG-15 — the `.pre`'s `refactor` was not undone under `-interv`
+
+**Status: FIXED on 2026-08-21** (`src/drvec.c`, `subtract_interventions`).
+
+**What it was.** The `.pre` files that connect `fue` to the rest of the suite
+carry their series rescaled by 100 as a matter of course — it improves the
+optimiser's conditioning — and the factor travels in the file itself.
+`subtract_interventions` read the deterministic terms out of the `.pre` and
+subtracted them from the levels **without dividing by the factor**, so it
+subtracted a hundred times what it should.
+
+**How it was found.** Estimating a VARMA-VEC on IPC_ES, IPC_DE and IPC_FR from
+the `.pre` files of their models with deterministic seasonality.
+
+**What it cost.** The rank analysis of the three CPIs returned `r = 1` where it
+is `r = 0`: a cointegrating relation invented by a scale factor. With the fix,
+`r = 0` with a bootstrap p of 0.313, and Johansen agrees under the matching
+specification.
+
+**The lesson, which was already written down.** `drtran-python/docs/PORTE.md`
+and `ARCHITECTURE_MCP.md` say "never hard-code the rescaling factor — the suite
+has three logged defects because of it". This was the fourth instance of an
+already-named failure mode. The check that would have caught it is in the suite
+now, block `[8f]`.
+
+---
+
+## Found and fixed before 0.9
+
+Unnumbered because they were fixed inside the development and their full report
+is in the record, not here. They are listed because they are the failure modes
+this program *has*, and whoever knows them will look for them first:
+
+| what it was | where it is told |
 |---|---|
-| el recorrido del vector de parámetros se desalineaba en la impresora y publicaba una `Θ` que nadie había estimado | `DEVELOPMENT_RECORD.md` §4.1 — de ahí viene el bloque **estructural** de la batería, y de ahí la regla de que los índices se anoten **en el recorrido que ya hay** |
-| con `-multistart` no había estimación final, y los residuos se quedaban sin calcular: la diagnosis salía con `Q = nan` y «los residuos parecen ruido blanco» | `src/drvec.c`, junto al arreglo — la peor forma posible de equivocarse, porque el mensaje era tranquilizador |
-| el bloque de multi-arranque realojaba la estructura VARMA con la primera asignación viva: 1080 bytes perdidos | de ahí el bloque `VALGRIND=1` de la batería |
-| doble liberación (`SIGABRT`) al centralizar la limpieza: `main` ya liberaba `datamat` e `Y2_levels`, y con `nobs` en vez de `alloc_nobs` | latente bajo `-estwin`, que es justo donde `nobs` se recorta |
-| el `.pre` de prueba se leía una fila desplazada: el bloque determinista lleva **dos** líneas de banderas, no una | misma firma que `BUG-11`, y del lado de `drvec` |
+| the parameter-vector walk fell out of step in the printer and published a `Θ` nobody had estimated | `DEVELOPMENT_RECORD.md` §4.1 — the suite's **structural** block comes from this, and so does the rule that indices are noted **in the walk that already exists** |
+| with `-multistart` there was no final estimation, so the residuals were left uncomputed: the diagnosis came out with `Q = nan` and "the residuals appear to be white noise" | next to the fix in `src/drvec.c` — the worst possible way to be wrong, because the message was reassuring |
+| the multi-start block reallocated the VARMA structure with the first allocation still live: 1080 bytes lost | this is why the suite has its `VALGRIND=1` block |
+| double free (`SIGABRT`) on centralising the cleanup: `main` already freed `datamat` and `Y2_levels`, and with `nobs` instead of `alloc_nobs` | latent under `-estwin`, which is precisely where `nobs` is trimmed |
+| a hand-made `.pre` fixture was read one row off: the deterministic block carries **two** flag lines, not one | same signature as `BUG-11`, and on `drvec`'s side |
 
 ---
 
-## Lo que se vigila, y no es un defecto
+## Watched, and not defects
 
-Está en `DEVELOPMENT_RECORD.md` §10, que es la lista viva. Lo que más importa
-tener a mano al leer una salida:
+The live list is `DEVELOPMENT_RECORD.md` §10. What matters most when reading an
+output:
 
-- **`termcode 3`.** El optimizador se para en «last global step failed» con
-  frecuencia. Explicado y medido, no eliminado: `docs/CONVERGENCE.md`.
-- **La frontera de invertibilidad en la clase libre** (`-mafree`): ahí los
-  errores estándar no están definidos en la dirección que liga. En la clase por
-  defecto **no puede alcanzarse** (Corolario 6.3).
-- **Los valores críticos del contraste de rango** son asintóticos: sobre un
-  proceso con `r = 1` a `n = 120` aciertan el 68 % de las veces y sobre-rechazan
-  el 30 %. `-bootstrap` sube a 78 %/20 %; no lo arregla.
-- **La elección del bloque `Y₁`** es del usuario y no se comprueba. La alarma de
-  normalización avisa cuando la relación apenas lo involucra.
+- **`termcode 3`.** The optimiser stops on "last global step failed" often.
+  Explained and measured, not eliminated: [CONVERGENCE.md](CONVERGENCE.md).
+- **The invertibility boundary in the free class** (`-mafree`): there the
+  standard errors are not defined along the binding direction. In the default
+  class it **cannot be reached** (Corollary 6.3).
+- **The rank test's critical values are asymptotic**: on a process with `r = 1`
+  at `n = 120` they pick the right rank 68 % of the time and over-reject 30 %.
+  `-bootstrap` raises that to 78 %/20 %; it does not fix it.
+- **The choice of the `Y₁` block** is the user's and is not checked. The
+  normalisation alarm fires when the relation barely involves it.

@@ -5,6 +5,45 @@ Los informes completos están en [`docs/DEVELOPMENT_RECORD.md`](docs/DEVELOPMENT
 (las mediciones). Los defectos, en [`docs/BUGS.md`](docs/BUGS.md). Etiquetas de
 publicación: `v*`.
 
+## Sin publicar — 2026-08-22
+
+### La entrada por `.pre`, que es la del conjunto (P9)
+
+```sh
+drvec s1.pre s2.pre ... sM.pre p q r [opciones]
+```
+
+Un modelo univariante por serie, como `drtran`. De cada `.pre` se toma la serie
+con su `w = refactor·BoxCox(z)`, sus términos deterministas —**restados**, con
+las fechas de esta muestra— y su calendario; los ficheros se alinean **por
+fecha** y se usa la intersección. Antes había que dar tres pasos a mano:
+exportar a un `.inp`, `-interv` y `-seed`.
+
+Certificada por dos identidades, no por parecido: reproduce la ruta `.inp`
+**byte a byte** desde `ESTIMATION SUCCESSFUL`, y con una determinista en juego
+coincide **exactamente** con `-interv` sobre los mismos modelos. `-name NAME`
+nombra los productos (`-m` está tomado: es el método de estimación).
+
+### El idioma (P7)
+
+`src/drvec.c` entero en inglés: 363 comentarios y ~40 mensajes. Hecho contra un
+invariante —quitar los comentarios de las dos versiones tiene que dar ficheros
+idénticos byte a byte— porque traducir 1 200 líneas dentro de 7 600 es como se
+mueve una línea de código sin querer. `tools/check_language.py` lo mantiene,
+sólo sobre `drvec.c`: los ficheros vendorizados son de su dueño.
+
+### Sistema de versiones y de defectos (P6, ampliada)
+
+- `docs/VERSIONS.md`: el razonamiento de la versión sale del código y pasa a
+  donde un lector lo necesita, con la política, las condiciones para llegar a
+  1.0, y la regla de que un defecto **encontrado** no retrasa una versión y uno
+  **tapado** sí.
+- `tools/check_version.sh` y `tools/check_bugs.py`, los dos en la batería: el
+  número tiene que decir lo mismo en seis sitios, y cada defecto tiene que tener
+  número, estado y **coste medido**.
+
+Batería: 235 → 252.
+
 ## 0.9 — 2026-08-22
 
 Primera versión numerada. **Por qué 0.9 y no 1.0**: el programa no mejora la

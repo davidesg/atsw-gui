@@ -821,9 +821,9 @@ for spec in "2 1 1 -case 2 -mean:$MM:-0.5" \
     sp=${spec%%:*}; rest=${spec#*:}; src=${rest%%:*}; val=${rest#*:}
     cp "$src" "$TMP/case.inp"
     a=$("$DRVEC" "$TMP/case" $sp -seedb2 "$val" -eval 2>/dev/null \
-        | grep -a 'punto de partida' | sed 's/.*partida = *//; s/ .*//')
+        | grep -a 'at the starting point' | sed 's/.*point = *//; s/ .*//')
     b=$("$DRVEC" "$TMP/case" $sp -fixb2  "$val" -eval 2>/dev/null \
-        | grep -a 'punto de partida' | sed 's/.*partida = *//; s/ .*//')
+        | grep -a 'at the starting point' | sed 's/.*point = *//; s/ .*//')
     if [ -z "$a" ] || [ -z "$b" ]; then
         bad "seedb2: start identity ($sp)" "missing eval (seedb2=$a fixb2=$b)"
     elif [ "$a" = "$b" ]; then
@@ -944,19 +944,19 @@ else bad "rankadm: constraint violated" "G=$g_adm with tol 0.3"; fi
 #  P4: el caso inadmisible hay que PEDIRLO con -mafree.  Que el defecto ya no
 #  pueda producirlo es el resultado de P4 y se comprueba aparte, mas abajo.
 run data/pairs/milan.inp 2 1 1 -case 2 -mean -mafree
-if printf '%s' "$STDERR" | grep -q "NIEGA EL RANGO" ||
-   grep -aq "NIEGA EL RANGO" "$TMP/case.out"; then
+if printf '%s' "$STDERR" | grep -q "DENIES THE RANK" ||
+   grep -aq "DENIES THE RANK" "$TMP/case.out"; then
     ok "rank verdict: an inadmissible fit says so where the user can see it"
 else
     # the notice goes to stdout, which run() discards; re-run capturing it
     cp data/pairs/milan.inp "$TMP/case.inp"
-    if "$DRVEC" "$TMP/case" 2 1 1 -case 2 -mean -mafree 2>/dev/null | grep -q "NIEGA EL RANGO"
+    if "$DRVEC" "$TMP/case" 2 1 1 -case 2 -mean -mafree 2>/dev/null | grep -q "DENIES THE RANK"
     then ok "rank verdict: an inadmissible fit says so on the terminal"
     else bad "rank verdict" "an inadmissible fit was reported silently"; fi
 fi
 cp data/pairs/milan.inp "$TMP/case.inp"
 if "$DRVEC" "$TMP/case" 2 1 1 -case 2 -mean -marow 2>/dev/null \
-   | grep -q "NIEGA EL RANGO"; then
+   | grep -q "DENIES THE RANK"; then
     bad "rank verdict" "it fired on an admissible fit too"
 else ok "rank verdict: silent on an admissible fit"; fi
 
@@ -1166,7 +1166,7 @@ echo "[6] alpha = A*psi: the restriction, its LR, and its guards"
 
 # A declaring equation 2 not to adjust: the same thing -weakex 2 builds.
 printf '* A: alpha_2 = 0\n2 1\n1\n0\n' > "$TMP/A_eq2.txt"
-lr_of() { grep -a 'LR = 2(libre' "$1.out" 2>/dev/null | awk '{print $5}'; }
+lr_of() { grep -a 'LR = 2(free' "$1.out" 2>/dev/null | awk '{print $5}'; }
 
 run "$MM" 2 1 1 -case 2 -weakex 2
 lr_short=$(lr_of "$TMP/case"); free_ll=$(grep -a 'logL H(r)' "$TMP/case.out" | awk '{print $5}')
@@ -1197,7 +1197,7 @@ fi
 # does not have them.
 printf '2 2\n1 2\n2 4\n' > "$TMP/A_bad.txt"
 run "$MM" 2 1 1 -case 2 -alpha "$TMP/A_bad.txt"
-if printf '%s' "$STDERR" | grep -q 'A no tiene rango'; then
+if printf '%s' "$STDERR" | grep -q 'A does not have rank'; then
     ok "a rank-deficient A is refused before estimating"
 else
     bad "rank guard on A" "no complaint about a singular A'A"
@@ -1993,6 +1993,177 @@ run "$MM" 2 1 1 -case 2 -f 3 -estwin 40 -C "$TMP/elsewhere.csv"
 if [ -f "$TMP/elsewhere.csv" ] && [ ! -f "$TMP/case.recursive" ]; then
     ok "-C redirects it instead of adding a second file"
 else bad "-C" "did not redirect the per-origin file"; fi
+echo
+
+# 8k. P7 — THE LANGUAGE OF THE SOURCE.  drvec.c was written in a mix of Spanish
+#     and English: the comments carried the reasoning, the documentation was in
+#     English, and docs/README.md quoted output the program did not produce.  A
+#     reader who cannot read the comments cannot audit the reasoning.  Fixed on
+#     2026-08-22 by translating the file; kept fixed here, because a file does
+#     not become mixed again in one commit -- it does so one line at a time.
+#
+#     ONLY drvec.c.  nlatools.c, fue_pre_reader.c, fue_bridge.c and
+#     diagnose_mv.c are the suite's, copied from drvarma and drtran, and
+#     translating them here would be exactly the divergence P3 exists to stop:
+#     their language is their owner's business.
+echo "[8k] the language of drvec.c (P7)"
+
+if ! command -v python3 >/dev/null 2>&1; then
+    ok "skipped: python3 not available"
+elif python3 tools/check_language.py src/drvec.c > "$TMP/lang.txt" 2>&1; then
+    ok "no Spanish left in the comments or the messages of src/drvec.c"
+else
+    bad "language" "$(head -3 "$TMP/lang.txt" | tr '\n' ' ')"
+fi
+
+#  And the check itself has to be able to fail, or it is decoration.
+cat > "$TMP/lang_probe.c" <<'PROBE'
+/*  Esto es un comentario en castellano que la comprobacion tiene que ver,
+ *  porque si no la ve entonces no sirve para nada y la bateria miente.      */
+int main(void) { return 0; }
+PROBE
+if python3 tools/check_language.py "$TMP/lang_probe.c" >/dev/null 2>&1; then
+    bad "language check" "it passed a file that is Spanish from end to end"
+else
+    ok "and the check fires on a file that is Spanish, so it is not decoration"
+fi
+echo
+
+# 8l. P6 — THE TWO REGISTERS THAT ARE KEPT BY HAND, CHECKED.
+#
+#     The version number has ONE definition (the #define) and five copies that
+#     are written by hand; the defect register has one sequence of numbers
+#     shared with three other programs.  Both are exactly the kind of thing that
+#     rots quietly: a release whose CITATION.cff still says the previous number
+#     cannot be cited correctly, and a BUG-N referenced in the code and
+#     registered nowhere identifies nothing.  See docs/VERSIONS.md 2 and
+#     docs/BUGS.md.
+echo "[8l] the version number and the defect register (P6)"
+
+if ./tools/check_version.sh > "$TMP/ver.txt" 2>&1; then
+    ok "the version agrees in the source, CITATION.cff, CHANGELOG, VERSIONS and the binary"
+else
+    bad "version consistency" "$(grep MISMATCH "$TMP/ver.txt" | head -2 | tr '\n' ' ')"
+fi
+
+if ! command -v python3 >/dev/null 2>&1; then
+    ok "defect register: skipped, no python3"
+elif python3 tools/check_bugs.py > "$TMP/bugs.txt" 2>&1; then
+    ok "$(cat "$TMP/bugs.txt")"
+else
+    bad "defect register" "$(head -2 "$TMP/bugs.txt" | tr '\n' ' ')"
+fi
+
+#  And both checks have to be able to fail.
+cp CITATION.cff "$TMP/cff.bak"
+sed -i 's/^version: .*/version: "9.9"/' CITATION.cff
+if ./tools/check_version.sh >/dev/null 2>&1; then
+    bad "version check" "it passed a CITATION.cff carrying another version"
+else
+    ok "and the version check fires when one copy disagrees"
+fi
+cp "$TMP/cff.bak" CITATION.cff
+
+if command -v python3 >/dev/null 2>&1; then
+    sed 's/^\*\*What it cost\.\*\*/**Cost.**/' docs/BUGS.md > "$TMP/bugs_probe.md"
+    if python3 tools/check_bugs.py "$TMP/bugs_probe.md" >/dev/null 2>&1; then
+        bad "defect register check" "it passed entries that do not say what they cost"
+    else
+        ok "and the register check fires on an entry with no measured cost"
+    fi
+fi
+echo
+
+# 8m. P9 — THE .pre INPUT ROUTE.  drvec is on drtran's side of the suite: the
+#     univariate work is done in fue and arrives here already done.  drtran's
+#     interface says so -- one .pre per series -- and until 2026-08-22 drvec's
+#     did not: the series had to be exported to an .inp by hand, then -interv to
+#     subtract the deterministic terms.
+#
+#     WHAT IS CHECKED IS AN IDENTITY, and it is the only thing worth checking:
+#     the new route must give EXACTLY the fit the old one gives on the same
+#     data.  A route that is merely "close" is a second implementation.
+echo "[8m] the .pre input route (P9)"
+
+MUS=tests/fixtures/mmpre.muskrat.pre
+MNK=tests/fixtures/mmpre.mink.pre
+
+#  1. The identity, with no deterministic terms in play.
+cp datasets/mauricio/mink_muskrat.inp "$TMP/pinp.inp"
+"$DRVEC" "$TMP/pinp" 2 1 1 -mean -case 2 >/dev/null 2>&1
+"$DRVEC" "$MUS" "$MNK" 2 1 1 -mean -case 2 -name "$TMP/proute" >/dev/null 2>&1
+a=$(logelf_of "$TMP/pinp"); b=$(logelf_of "$TMP/proute")
+if [ -z "$a" ] || [ -z "$b" ]; then
+    bad ".pre route" "one of the two fits did not produce a logelf ($a / $b)"
+elif [ "$a" = "$b" ]; then
+    ok ".pre route reproduces the .inp route exactly (logelf $a)"
+else bad ".pre route identity" ".inp gives $a and .pre gives $b"; fi
+
+#  And not just the likelihood: everything from the parameters on.
+if diff <(sed -n '/ESTIMATION SUCCESSFUL/,$p' "$TMP/pinp.out") \
+        <(sed -n '/ESTIMATION SUCCESSFUL/,$p' "$TMP/proute.out") >/dev/null 2>&1; then
+    ok "and the whole report after ESTIMATION SUCCESSFUL is byte-identical"
+else bad ".pre route identity" "the reports differ below ESTIMATION SUCCESSFUL"; fi
+
+#  2. The deterministic terms.  The .pre route subtracts them itself; the .inp
+#     route needs -interv.  Both go through build_det_component, so the two must
+#     agree -- and this is what says the units are right, which is what BUG-15
+#     was about.
+cp "$MUS" "$TMP/iv.1.pre"; cp tests/fixtures/mmpre.step.pre "$TMP/iv.2.pre"
+cp datasets/mauricio/mink_muskrat.inp "$TMP/iv.inp"
+"$DRVEC" "$TMP/iv" 2 1 1 -mean -case 2 -interv "$TMP/iv" >/dev/null 2>&1
+"$DRVEC" "$MUS" tests/fixtures/mmpre.step.pre 2 1 1 -mean -case 2 \
+         -name "$TMP/pstep" >/dev/null 2>&1
+a=$(logelf_of "$TMP/iv"); b=$(logelf_of "$TMP/pstep")
+if [ -n "$a" ] && [ "$a" = "$b" ]; then
+    ok "the deterministic terms land in the same place as -interv puts them ($a)"
+else bad ".pre deterministics" "-interv gives $a and the .pre route gives $b"; fi
+
+#  And they are actually being subtracted: a step of 5 cannot leave the fit
+#  where it was.
+c=$(logelf_of "$TMP/proute")
+if [ "$b" != "$c" ]; then
+    ok "and a step of 5 does move the fit ($c -> $b), so it is not a no-op"
+else bad ".pre deterministics" "the fit did not move at all"; fi
+
+#  3. The products are named after the model, and the default name is built
+#     from the files -- which is drtran's <output>_<input> for M series.
+rm -f "$TMP/proute.forecast"
+"$DRVEC" "$MUS" "$MNK" 2 1 1 -mean -case 2 -f 4 -name "$TMP/proute" >/dev/null 2>&1
+if [ -f "$TMP/proute.out" ] && [ -f "$TMP/proute.forecast" ]; then
+    ok "-name governs every product: .out and .forecast"
+else bad ".pre route naming" "the products are not named after -name"; fi
+
+nm=$("$DRVEC" "$MUS" "$MNK" 2 1 1 -mean -case 2 2>/dev/null \
+     | awk '/^Output/{print $3}')
+rm -f mmpre.muskrat_mmpre.mink.out
+if [ "$nm" = "mmpre.muskrat_mmpre.mink.out" ]; then
+    ok "and with no -name it is the file stems joined: $nm"
+else bad ".pre default name" "got '$nm'"; fi
+
+#  4. The files are lined up by DATE.  One of them starts three years later, so
+#     the common sample has to be 59 observations from 1853 and not 62 from
+#     wherever the arrays happen to begin.
+out=$("$DRVEC" "$MUS" tests/fixtures/mmpre.late.pre 2 1 1 -mean -case 2 \
+      -name "$TMP/plate" 2>/dev/null | grep 'Common sample')
+if printf '%s' "$out" | grep -q '59 observations, 1/1853'; then
+    ok "the common sample is the intersection of the calendars: $out"
+else bad ".pre date alignment" "$out"; fi
+
+#  5. What it refuses, and it exits 1 each time.
+for probe in "one file:$MUS" \
+             "mixed frequencies:$MUS tests/fixtures/mmpre.monthly.pre" ; do
+    lbl=${probe%%:*}; args=${probe#*:}
+    "$DRVEC" $args 2 1 1 >/dev/null 2>&1
+    if [ $? -eq 1 ]; then ok "refused, with exit 1: $lbl"
+    else bad ".pre guard" "$lbl was not refused with exit 1"; fi
+done
+
+for opt in "-interv $TMP/iv" "-differenced"; do
+    "$DRVEC" "$MUS" "$MNK" 2 1 1 $opt >/dev/null 2>&1
+    if [ $? -eq 1 ]; then ok "refused, with exit 1: ${opt%% *} on the .pre route"
+    else bad ".pre guard" "${opt%% *} was accepted on the .pre route"; fi
+done
 echo
 
 # ================================================== 9 MEMORY (opt-in) ==

@@ -7,6 +7,18 @@ via the transformation described in:
 > nonstationary vector ARMA models." *Computational Statistics & Data Analysis*,
 > 50, 3644–3662.
 
+## Two ways in
+
+```sh
+drvec file p q r [options]                       # one .inp with every series
+drvec s1.pre s2.pre ... sM.pre p q r [options]   # one univariate model per series
+```
+
+The second is the suite's: one `fue` model per series, with its transformation,
+its deterministic terms and its calendar, aligned by date. It gives the same fit
+as the first — checked as an identity, not as a resemblance. See
+[docs/USAGE.md](docs/USAGE.md) §0.
+
 ## Architecture
 
 ```

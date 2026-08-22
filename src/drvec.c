@@ -24,33 +24,19 @@
 /*****************************************************************************/
 
 #include "main.h"
-#include "fue_pre_reader.h"   /* lector de .pre, copiado de drtran (ver F2.1) */
-#include "fue_bridge.h"       /* expansion de los factores del .pre           */
-#include <gsl/gsl_cdf.h>      /* p-valor chi2 del LR de H1(r) contra H(r)     */
-#include <gsl/gsl_eigen.h>    /* problema de autovalores generalizado simetrico */
-#include <gsl/gsl_linalg.h>   /* QR y SVD para la condicion de rango de Granger */
-#include <stdarg.h>           /* bad_cli: el mensaje de uso lleva formato      */
+#include "fue_pre_reader.h"   /* .pre reader, copied from drtran (see F2.1) */
+#include "fue_bridge.h"       /* expansion of the .pre's factors                */
+#include <gsl/gsl_cdf.h>      /* chi2 p-value of the LR of H1(r) against H(r) */
+#include <gsl/gsl_eigen.h>    /* symmetric generalised eigenvalue problem */
+#include <gsl/gsl_linalg.h>   /* QR and SVD for the Granger rank condition       */
+#include <stdarg.h>           /* bad_cli: the usage message takes a format      */
 #include <errno.h>            /* strtol/strtod: ERANGE                         */
 
-/*  LA VERSION, Y POR QUE ES 0.9 Y NO 1.0.
- *
- *  Un numero de version es una afirmacion sobre lo que hay dentro, y lo que hay
- *  dentro incluye dos cosas que un 1.0 no deberia tapar:
- *
- *   - MEDIDO FUERA DE MUESTRA, este programa NO mejora la prevision de un ARIMA
- *     por serie sobre su banco (HOMOLOGATION.md 4t).  Es un estimador de maxima
- *     verosimilitud exacta para una clase de modelos -- y para el vector de
- *     cointegracion y las hipotesis sobre el, donde es superconsistente y donde
- *     un univariante no dice nada --, no una herramienta de prevision que gane
- *     sus parametros.
- *   - LA ESPECIFICACION POR DEFECTO CAMBIO el 2026-08-20 (SPECIFICATION_PLAN.md
- *     10), y con ella todas las cifras del registro medidas sobre la anterior.
- *     Un defecto recien movido no ha tenido tiempo de equivocarse en manos de
- *     nadie.
- *
- *  Ninguna de las dos es un defecto que arreglar: son el estado del
- *  conocimiento, y estan medidas y escritas.  Lo que no procede es ponerles un
- *  1.0 encima.                                                                */
+/*  THE VERSION.  The number lives here; the reasoning behind it lives in
+ *  docs/VERSIONS.md, which is also where the release policy and the rule for
+ *  moving this number are written.  A source file is the wrong place for an
+ *  argument that a reader needs before running the program, and the right
+ *  place for the single definition the binary is built from.                 */
 #ifndef DRVEC_VERSION
 #define DRVEC_VERSION "0.9"
 #endif
@@ -71,8 +57,8 @@ int  nser, nobs;
    they are reconstructed by cumulating from an arbitrary zero origin, which is
    the legacy behaviour and is wrong for case 1 (see build_y2_levels).         */
 real **Y2_levels = NULL;
-int    global_estwin = 0;   /* -estwin E: estimar en 1..E y rodar el origen (P5.2) */
-int    nobs_full     = 0;   /* observaciones disponibles, antes de truncar         */
+int    global_estwin = 0;   /* -estwin E: fit on 1..E and roll the origin (P5.2) */
+int    nobs_full     = 0;   /* observations available, before trimming             */
 int  global_levels = 1;   /* default: .inp carries every series in LEVELS.
                              -differenced selects the legacy layout, where
                              cols 1..s arrive already differenced.            */
@@ -125,209 +111,213 @@ int global_case = 1;  /* deterministic case (Mauricio Remark 6) */
 int global_lrtest = 0; /* if 1, perform sequential LR test for rank */
 int global_rungs  = 0; /* if 1, report the ladder's rungs 0-2 and their LRs   */
 
-/*  -seedgate — LA RUTA (B) DEL PLAN, detras de una opcion y NO por defecto.
+/*  -seedgate — ROUTE (B) OF THE PLAN, behind an option and NOT the default.
  *
- *  El puente que la escalera usa en todas partes -- coger el optimo de abajo y
- *  arrancar ahi -- no alcanza el peldano de r = 1: con Lambda = 0 el sistema
- *  transformado tiene una raiz AR de modulo exactamente 1 y la verosimilitud no
- *  esta definida ahi (docs/VEC_EMBEDDING_PLAN.md 3).  (B) cruza sin elegir
- *  ninguna constante: se sujetan F, Theta y Sigma en el optimo de r = 0 y se
- *  estiman SOLO Lambda y B2; el paso fuera de la frontera lo escoge la
- *  verosimilitud.  Despues se suelta todo.
+ *  The bridge the ladder uses everywhere else -- take the optimum of the rung
+ *  below and start there -- does not reach the r = 1 rung: with Lambda = 0 the
+ *  transformed system has an AR root of modulus exactly 1 and the likelihood is
+ *  not defined there (docs/VEC_EMBEDDING_PLAN.md 3).  (B) crosses without
+ *  choosing any constant: F, Theta and Sigma are held at the r = 0 optimum and
+ *  ONLY Lambda and B2 are estimated, so the step off the boundary is the
+ *  likelihood's to choose.  Everything is released afterwards.
  *
- *  prof_hold es el modo condicional: mientras esta puesto, el vector de
- *  parametros lleva la media, Lambda y B2, y los bloques F, Theta y Sigma se
- *  leen de hold_*, no de x.  Es el mismo patron que -fixb2 y que -alpha: la
- *  restriccion vive en el cast y el optimizador no se entera.                */
+ *  prof_hold is the conditional mode: while it is set, the parameter vector
+ *  carries the mean, Lambda and B2, and the F, Theta and Sigma blocks are read
+ *  from hold_*, not from x.  Same pattern as -fixb2 and -alpha: the restriction
+ *  lives in the cast and the optimiser never learns about it.                */
 int global_seedgate = 0;
 
-/*  -seedb2 v — arrancar B2 en v y estimarlo LIBRE.  No es -fixb2, que lo sujeta:
- *  aqui se mueve.  Existe como INSTRUMENTO DE MEDIDA, para poder preguntar de
- *  que depende el ajuste -- si de donde arranca B2 o del sitio donde para el
- *  optimizador -- sin tener que recompilar para cada valor.  Que una pregunta
- *  sobre el arranque solo se pueda contestar recompilando es, por si mismo, una
- *  razon para que la opcion exista.                                          */
+/*  -seedb2 v — start B2 at v and estimate it FREE.  This is not -fixb2, which
+ *  holds it: here it moves.  It exists as a MEASURING INSTRUMENT, so that the
+ *  question of what the fit depends on -- where B2 starts, or where the
+ *  optimiser stops -- can be asked without recompiling for each value.  That a
+ *  question about the starting point could only be answered by recompiling is,
+ *  by itself, a reason for the option to exist.                              */
 int  global_seedb2 = 0;
 real global_seedb2_value = 0.0;
 
-/*  -seedjoh — sembrar B2 con la solucion canonica de rango reducido en vez de
- *  con el OLS estatico.  Ver canonical_b2.                                   */
+/*  -seedjoh — seed B2 with the canonical reduced-rank solution instead of the
+ *  static OLS one.  See canonical_b2.                                        */
 int  global_seedjoh = 0;
-static int canon_used = 0;      /* 1 = la solucion canonica entro de verdad   */
+static int canon_used = 0;      /* 1 = the canonical solution really went in  */
 
-/*  -mawarma — EL MA NO ES LIBRE: LO HEREDA.
+/*  -mawarma — THE MA IS NOT FREE: IT IS INHERITED.
  *
- *  El corolario 2 del articulo BVECM (Equivalencia WARMA-VEC con MA) dice que
- *  si el proceso admite representacion WARMA
+ *  Corollary 2 of the BVECM paper (WARMA-VEC equivalence with an MA) says that
+ *  if the process admits a WARMA representation
  *
  *      Phi(B) w_t = Theta(B) a_t,     Delta z2_t = gamma w_{t-1} + ... + eta_t
  *
- *  -- o sea el MA vive en el bloque cointegrado y el bloque diferenciado es
- *  ruido blanco --, entonces el error de la representacion VEC es
+ *  -- that is, the MA lives in the cointegrated block and the differenced block
+ *  is white noise -- then the error of the VEC representation is
  *
  *      eps_t = [ beta' eta_t + Theta(B) a_t ;  eta_t ].
  *
- *  Reagrupando sobre A_t = [a_t + beta' eta_t ; eta_t], que es una
- *  transformacion invertible del ruido, eso es eps_t = A_t - Theta1 A_{t-1} con
+ *  Regrouping on A_t = [a_t + beta' eta_t ; eta_t], which is an invertible
+ *  transformation of the noise, that is eps_t = A_t - Theta1 A_{t-1} with
  *
  *      Theta = [ Theta11   Theta11 B2' ]        (B2 = -beta; ESTUDIO_BVECM 2.1)
  *              [    0           0      ]
  *
- *  o sea: LAS ULTIMAS s FILAS SON CERO y el bloque superior derecho NO es libre,
- *  esta determinado por el izquierdo y por B2.  Con M = 2 y r = 1 eso deja UN
- *  parametro de medias moviles donde el modelo libre lleva CUATRO.
+ *  that is: THE LAST s ROWS ARE ZERO and the upper-right block is NOT free, it
+ *  is determined by the left one and by B2.  With M = 2 and r = 1 that leaves
+ *  ONE moving-average parameter where the free model carries FOUR.
  *
- *  Y esto no es una preferencia de modelizacion, esta medido.  Simulando el
- *  propio DGP WARMA del articulo (theta = 0.5, beta = 0.5, n = 1000) y ajustando
- *  con Theta libre, drvec devuelve entradas de 3.26, 7.50 o -2.44 donde la
- *  verdad es [[0.5, -0.25],[0,0]], y aparca en la frontera de invertibilidad.
- *  B2 sale bien en todas las replicas -- es superconsistente -- pero el bloque
- *  (Lambda, Theta) esta practicamente no identificado cuando Theta es libre.
- *  Ver docs/HOMOLOGATION.md 4g.                                              */
+ *  And this is not a modelling preference, it is measured.  Simulating the
+ *  paper's own WARMA DGP (theta = 0.5, beta = 0.5, n = 1000) and fitting with a
+ *  free Theta, drvec returns entries of 3.26, 7.50 or -2.44 where the truth is
+ *  [[0.5, -0.25],[0,0]], and parks on the invertibility boundary.  B2 comes out
+ *  right in every replication -- it is superconsistent -- but the (Lambda,
+ *  Theta) block is practically unidentified when Theta is free.
+ *  See docs/HOMOLOGATION.md 4g.                                              */
 int global_mawarma = 0;
 
-/*  -matri — LA SOLUCION DE COMPROMISO, y es la restriccion MINIMA de las tres.
+/*  -matri — THE COMPROMISE, and the MINIMAL of the three restrictions.
  *
- *  El corolario 2 impone dos cosas a la vez: que el bloque inferior izquierdo de
- *  Theta sea CERO -- las innovaciones del bloque cointegrado no entran con
- *  retardo en las ecuaciones diferenciadas -- y que el superior derecho sea
- *  Theta11 B2', o sea que el bloque diferenciado NO TIENE MA propio.  El
- *  bootstrap de 4i dice que los datos rechazan lo segundo en ocho de once
- *  casos.  Lo primero no se ha contrastado nunca por separado, y es donde el
- *  ajuste libre se descontrola: las entradas (2,1) estimadas libremente valen
- *  -0.75, -1.32, 1.51 y hasta 5.09 en los ocho pares, y la (2,2) queda entre
- *  1.0 y 2.0, que es lo que pone la raiz en el circulo.
+ *  Corollary 2 imposes two things at once: that the lower-left block of Theta be
+ *  ZERO -- the innovations of the cointegrated block do not enter the
+ *  differenced equations with a lag -- and that the upper-right one be
+ *  Theta11 B2', i.e. that the differenced block have NO MA OF ITS OWN.  The
+ *  bootstrap of 4i says the data reject the second in eight of eleven cases.
+ *  The first has never been tested on its own, and it is where the free fit
+ *  goes out of control: the (2,1) entries estimated freely come to -0.75,
+ *  -1.32, 1.51 and even 5.09 over the eight pairs, and (2,2) lands between 1.0
+ *  and 2.0, which is what puts the root on the circle.
  *
- *  -matri deja Theta TRIANGULAR POR BLOQUES: [T11  T12 ; 0  T22], con T22
- *  libre.  Cuesta q*s*r parametros contra el libre -- uno solo con M = 2 y
- *  r = 1 -- y conserva del corolario justo la parte que la estructura implica
- *  y los datos no contradicen.                                              */
+ *  -matri leaves Theta BLOCK-TRIANGULAR: [T11  T12 ; 0  T22], with T22 free.
+ *  It costs q*s*r parameters against the free model -- exactly one with M = 2
+ *  and r = 1 -- and keeps of the corollary precisely the part the structure
+ *  implies and the data do not contradict.                                   */
 int global_matri = 0;
 
-/*  -marow — EL PELDANO DE EN MEDIO, y el que la medida senala.
+/*  -marow — THE MIDDLE RUNG, and the one the measurement points at.
  *
- *  Theta = [T11  T12 ; 0  0]: el bloque DIFERENCIADO no lleva medias moviles
- *  propias, pero el cruzado T12 queda libre en vez de determinado por B2.
+ *  Theta = [T11  T12 ; 0  0]: the DIFFERENCED block carries no moving average
+ *  of its own, but the cross block T12 stays free instead of being determined
+ *  by B2.
  *
- *  Por que ahi y no en otro sitio: -matri, que anula solo el bloque inferior
- *  IZQUIERDO y deja T22 libre, NO quita la patologia -- G se queda entre 0.02 y
- *  0.12 y la raiz MA en 1.000 en ocho de once casos.  Lo que la quita es que
- *  Theta(1) tenga la identidad en su bloque inferior, y eso lo da anular T22:
- *  con T22 libre el optimizador lo lleva a la unidad, que es (1-B) sentado
- *  sobre el bloque ya diferenciado.  O sea que de las dos restricciones que el
- *  corolario 2 impone a la vez -- T21 = 0 con T22 = 0, y T12 determinado --,
- *  la que sostiene la admisibilidad es la primera y la que los datos rechazan
- *  es la segunda.  Este peldano separa las dos.                              */
+ *  Why there and not somewhere else: -matri, which zeroes only the lower-LEFT
+ *  block and leaves T22 free, does NOT remove the pathology -- G stays between
+ *  0.02 and 0.12 and the MA root at 1.000 in eight of eleven cases.  What
+ *  removes it is Theta(1) having the identity in its lower block, and that is
+ *  what zeroing T22 gives: with T22 free the optimiser drives it to unity,
+ *  which is a (1-B) sitting on the already differenced block.  So of the two
+ *  restrictions corollary 2 imposes at once -- T21 = 0 with T22 = 0, and T12
+ *  determined -- the one that sustains admissibility is the first and the one
+ *  the data reject is the second.  This rung separates them.                 */
 int global_marow = 0;
 
-/*  -mafree — EL Theta LIBRE, QUE HASTA EL 2026-08-20 ERA EL DEFECTO.
+/*  -mafree — THE FREE Theta, WHICH WAS THE DEFAULT UNTIL 2026-08-20.
  *
- *  POR QUE DEJO DE SERLO.  El Corolario 6.3 (docs/DEMOSTRACIONES.md) dice que
- *  con las s filas inferiores de cada Theta_k nulas -- lo que impone -marow --
- *  se tiene det Theta(1) = det(I_r - sum T11_k), y que los autovalores de la
- *  companera M q x M q son los de la companera r q x r q del bloque r x r mas
- *  s q ceros.  O sea que en esa clase Theta(L) es invertible SI Y SOLO SI lo es
- *  su bloque r x r, y por el Corolario 3.1 la condicion de rango del Teorema 3
- *  se cumple sola.  El punto de P \ C que el Teorema 4 dice que la
- *  verosimilitud premia y el Teorema 5 dice que ningun chequeo de raices del
- *  motor puede ver NO ES ALCANZABLE ahi: chekma sobre Theta ES chekma sobre el
- *  bloque r x r.  El Teorema 5 es un enunciado sobre LA CLASE LIBRE.
+ *  WHY IT STOPPED BEING ONE.  Corollary 6.3 (docs/DEMOSTRACIONES.md) says that
+ *  with the lower s rows of every Theta_k zero -- which is what -marow imposes
+ *  -- one has det Theta(1) = det(I_r - sum T11_k), and that the eigenvalues of
+ *  the M q x M q companion are those of the r q x r q companion of the r x r
+ *  block plus s q zeros.  So in that class Theta(L) is invertible IF AND ONLY
+ *  IF its r x r block is, and by Corollary 3.1 the rank condition of Theorem 3
+ *  holds by itself.  The point of P \ C that Theorem 4 says the likelihood
+ *  rewards and Theorem 5 says no root check of the engine can see IS NOT
+ *  REACHABLE there: chekma on Theta IS chekma on the r x r block.  Theorem 5 is
+ *  a statement about THE FREE CLASS.
  *
- *  Medido (HOMOLOGATION.md 4q): en el regimen del banco -- medias moviles del
- *  tipo (1 - theta B), que es lo que dan las series diferenciadas de precios y
- *  poblaciones -- el Theta libre NO es recuperable ni con n = 250, y
- *  -multistart lo empeora.  Y 4r: con la clase estructurada, theta = +0.9 se
- *  recupera con sesgo 0.050 e IQR 0.272, interior, contra un libre que se queda
- *  en la puerta con el doble de dispersion.
+ *  Measured (HOMOLOGATION.md 4q): in the bank's regime -- moving averages of
+ *  the form (1 - theta B), which is what differenced series of prices and
+ *  populations give -- the free Theta is NOT recoverable even at n = 250, and
+ *  -multistart makes it worse.  And 4r: with the structured class, theta = +0.9
+ *  is recovered with bias 0.050 and IQR 0.272, interior, against a free one
+ *  that stays at the door with twice the dispersion.
  *
- *  Se conserva y se ofrece porque es la clase mas ancha y el termino de
- *  comparacion de todo el registro anterior; lo que ya no es es la respuesta
- *  que el programa da si no le preguntan otra cosa.  Ver SPECIFICATION_PLAN.md
- *  10, que revierte el paso 4 del plan de especificacion.                     */
+ *  It is kept and offered because it is the widest class and the term of
+ *  comparison of the whole earlier register; what it no longer is, is the
+ *  answer the program gives when nobody asks it for another one.  See
+ *  SPECIFICATION_PLAN.md 10, which reverses step 4 of the specification plan. */
 int global_mafree = 0;
-int default_marow = 0;      /* 1 si -marow lo puso el defecto, no el usuario  */
+int default_marow = 0;      /* 1 if -marow came from the default, not the user */
 
-/*  LAS CLASES ESTRUCTURADAS COLAPSAN EN r = 0, y hay que decirlo en un solo
- *  sitio.  Con r = 0 no hay bloque W: el modelo es un VARMA sobre nabla Y y el
- *  "bloque r x r" es 0 x 0, de modo que anular las s = M filas inferiores
- *  anularia Theta ENTERA.  Es lo que SPECIFICATION_PLAN.md 9 ya decia -- las
- *  clases restringidas se definen respecto de la particion r/s y colapsan en
- *  r = 0 --, y es tambien donde viven los dos contratos de la escalera
- *  (Teorema 9).  Asi que en r = 0 la media movil es libre, la pida quien la
- *  pida.  -lrtest recorre r = 0..M-1, luego esto se consulta con el r del
- *  ajuste en curso y no con el de la linea de ordenes.                       */
+/*  THE STRUCTURED CLASSES COLLAPSE AT r = 0, and that has to be said in one
+ *  place only.  With r = 0 there is no W block: the model is a VARMA on
+ *  nabla Y and the "r x r block" is 0 x 0, so zeroing the lower s = M rows
+ *  would zero Theta ENTIRELY.  That is what SPECIFICATION_PLAN.md 9 already
+ *  said -- the restricted classes are defined with respect to the r/s partition
+ *  and collapse at r = 0 -- and it is also where the two contracts of the
+ *  ladder live (Theorem 9).  So at r = 0 the moving average is free, whoever
+ *  asks for what.  -lrtest walks r = 0..M-1, so this is consulted with the r of
+ *  the fit in hand and not with the one on the command line.                 */
 static int ma_struct_on(void)  { return global_r > 0 && (global_marow || global_mawarma); }
 static int marow_on(void)      { return global_r > 0 && global_marow; }
 static int mawarma_on(void)    { return global_r > 0 && global_mawarma; }
 
-/*  -warma — LA CLASE DE LOS TEOREMAS, PARAMETRIZADA DONDE ESTA ENUNCIADA.
+/*  -warma — THE CLASS OF THE THEOREMS, PARAMETERISED WHERE IT IS STATED.
  *
- *  Hasta aqui todas las restricciones se han escrito sobre Theta en coordenadas
- *  VEC, y ahi la misma restriccion acopla Theta con B2 y hay que reconstruirla
- *  en cada evaluacion.  En las coordenadas del sistema transformado,
- *  Ybar = [nabla Y2 ; W], que son las que usa la definicion 3 del BVECM y las
- *  que usa Phillips, la clase es un PATRON DE CEROS:
+ *  So far every restriction has been written on Theta in VEC coordinates, and
+ *  there the same restriction couples Theta with B2 and has to be rebuilt at
+ *  every evaluation.  In the coordinates of the transformed system,
+ *  Ybar = [nabla Y2 ; W], which are the ones Definition 3 of the BVECM uses and
+ *  the ones Phillips uses, the class is a ZERO PATTERN:
  *
  *      Phi*_k = [ 0   Psi_k ]      Theta*_k = [ 0    0    ]
  *               [ 0   Phi_k ]                 [ 0  Th_k   ]
  *
- *  o sea: nada depende de retardos de nabla Y2 -- todo entra por W --, y el
- *  bloque diferenciado no lleva medias moviles.  Y B2 entra SOLO POR LOS DATOS,
- *  al formar W por resta, como la entrada de una funcion de transferencia; no
- *  toca ningun parametro.  Eso es lo que hace el shootx del legado y es la
- *  razon medida de que su superficie este mejor condicionada
+ *  that is: nothing depends on lags of nabla Y2 -- everything enters through W
+ *  -- and the differenced block carries no moving averages.  And B2 enters ONLY
+ *  THROUGH THE DATA, when W is formed by subtraction, like the input of a
+ *  transfer function; it touches no parameter.  That is what the legacy shootx
+ *  does and the measured reason why its surface is better conditioned
  *  (docs/ESTUDIO_BVECM_vs_DRVEC.md 3.1).
  *
- *  El vector de parametros REUTILIZA las mismas casillas -- media, un bloque
- *  M x r, luego (p-1) bloques M x r, q bloques r x r, Sigma, y B2 en la cola --
- *  para no tocar ni el bootstrap ni el perfilado ni la cola de B2, que dependen
- *  de esa disposicion.  Lo que cambia es que se leen como coeficientes de
- *  W_{t-k} y no como Lambda y F.                                             */
+ *  The parameter vector REUSES the same slots -- mean, one M x r block, then
+ *  (p-1) M x r blocks, q r x r blocks, Sigma, and B2 in the tail -- so as not
+ *  to touch the bootstrap, the profiling or B2's tail, all of which depend on
+ *  that layout.  What changes is that they are read as coefficients of W_{t-k}
+ *  and not as Lambda and F.                                                  */
 int global_warma = 0;
 
-/*  -rankadm — LA CONDICION QUE HACE QUE EL RANGO SEA EL QUE SE DICE.
+/*  -rankadm — THE CONDITION THAT MAKES THE RANK BE THE ONE CLAIMED.
  *
- *  Para que un VEC con errores de medias moviles represente un proceso I(1) con
- *  rango de cointegracion EXACTAMENTE r, la matriz
+ *  For a VEC with moving-average errors to represent an I(1) process with
+ *  cointegration rank EXACTLY r, the matrix
  *
  *      G = Lambda_perp' Theta(1) B_perp        (s x s,  Theta(1) = I - sum Theta_k)
  *
- *  tiene que ser no singular: es la que aparece en la representacion de Granger,
- *  C(1) = B_perp (Lambda_perp' Gamma B_perp)^-1 Lambda_perp' Theta(1).  Si G
- *  degenera, C(1) pierde rango y el modelo AJUSTADO NIEGA SU PROPIO RANGO: dice
- *  r y sus parametros implican que no queda tendencia estocastica.
+ *  must be non-singular: it is the one that appears in Granger's
+ *  representation, C(1) = B_perp (Lambda_perp' Gamma B_perp)^-1 Lambda_perp'
+ *  Theta(1).  If G degenerates, C(1) loses rank and the FITTED MODEL DENIES ITS
+ *  OWN RANK: it says r, and its parameters imply that no stochastic trend is
+ *  left.
  *
- *  Mauricio (2006) supone la no estacionariedad parcial DEL PROCESO VERDADERO
- *  (seccion 2) y remite a Yap y Reinsel (1995) para las condiciones de
- *  identificacion, pero la ESTIMACION no impone ninguna: el conjunto donde G
- *  degenera esta dentro de la region que el programa admite, porque el motor
- *  solo comprueba que las raices no esten DENTRO del circulo y esta patologia
- *  vive exactamente SOBRE el, en el borde permitido.  Medido en los ocho pares
- *  con Theta libre: |Theta(1)| entre -7e-5 y 4e-4, y la direccion en que
- *  Theta(1) es singular alineada con Lambda_perp entre 0.946 y 0.9996.  O sea
- *  que el optimo libre esta AHI, no cerca.  Ver docs/HOMOLOGATION.md 4h.
+ *  Mauricio (2006) assumes partial non-stationarity OF THE TRUE PROCESS
+ *  (section 2) and refers to Yap and Reinsel (1995) for the identification
+ *  conditions, but the ESTIMATION imposes none: the set where G degenerates
+ *  lies inside the region the program admits, because the engine only checks
+ *  that the roots are not INSIDE the circle and this pathology lives exactly ON
+ *  it, on the permitted edge.  Measured on the eight pairs with a free Theta:
+ *  |Theta(1)| between -7e-5 and 4e-4, and the direction in which Theta(1) is
+ *  singular aligned with Lambda_perp between 0.946 and 0.9996.  So the free
+ *  optimum is THERE, not near it.  See docs/HOMOLOGATION.md 4h.
  *
- *  sigma_min(G) se REPORTA siempre, como las raices.  -rankadm ademas lo
- *  IMPONE, rechazando el punto igual que se rechaza una Sigma no definida
- *  positiva, para que el optimizador no entre.                               */
+ *  sigma_min(G) is REPORTED always, like the roots.  -rankadm also IMPOSES it,
+ *  rejecting the point the way a non-positive-definite Sigma is rejected, so
+ *  that the optimiser cannot enter.                                          */
 int  global_rankadm = 0;
-/*  EL SUELO, PUESTO CON LA MEDIDA DELANTE Y NO ANTES.  Sobre el banco entero,
- *  las especificaciones admisibles dan G entre 0.52 y 1.00 y las que degeneran
- *  entre 0.016 y 0.133 (HOMOLOGATION.md 4h y 4j): un orden de magnitud de
- *  separacion y un hueco vacio en medio.  0.2 es el numero redondo de ese
- *  hueco.  Es una eleccion, se dice que lo es, y -rankadm la cambia -- pero no
- *  es una eleccion arbitraria: cualquier corte entre 0.15 y 0.5 clasifica igual
- *  los veintitantos ajustes del registro.  El valor anterior, 1e-3, no mordia
- *  en ningun caso medido, que es otra forma de estar mal elegido.            */
+/*  THE FLOOR, SET WITH THE MEASUREMENT IN FRONT AND NOT BEFORE IT.  Over the
+ *  whole bank, the admissible specifications give G between 0.52 and 1.00 and
+ *  the degenerate ones between 0.016 and 0.133 (HOMOLOGATION.md 4h and 4j): an
+ *  order of magnitude of separation and an empty gap in between.  0.2 is the
+ *  round number in that gap.  It is a choice, it is said to be one, and
+ *  -rankadm changes it -- but it is not an arbitrary choice: any cut between
+ *  0.15 and 0.5 classifies the twenty-odd fits of the register identically.
+ *  The previous value, 1e-3, did not bite in any measured case, which is
+ *  another way of being badly chosen.                                        */
 real global_rankadm_tol = 0.2;
-int  global_matest = 0;      /* -matest N: bootstrap del MA heredado vs libre */
-int  global_specs  = 0;      /* -specs: la escalera de especificaciones        */
-int  global_artest = 0;      /* -artest N: bootstrap de Gamma_i = m_i alpha'   */
-static real granger_sv = -1.0;   /* sigma_min(G) en la ultima evaluacion */
+int  global_matest = 0;      /* -matest N: bootstrap of the inherited vs free MA */
+int  global_specs  = 0;      /* -specs: the specification ladder               */
+int  global_artest = 0;      /* -artest N: bootstrap of Gamma_i = m_i alpha'   */
+static real granger_sv = -1.0;   /* sigma_min(G) at the last evaluation */
 
-/*  granger_smin — sigma_min(Lambda_perp' Theta(1) B_perp), o -1 si no aplica.
- *  Lambda_perp y B_perp se ortonormalizan (QR), asi que la escala del
- *  estadistico es la de Theta(1) y no la de como venga escrito Lambda.       */
+/*  granger_smin — sigma_min(Lambda_perp' Theta(1) B_perp), or -1 if it does not
+ *  apply.  Lambda_perp and B_perp are orthonormalised (QR), so the scale of the
+ *  statistic is Theta(1)'s and not that of however Lambda happens to be
+ *  written.                                                                  */
 static real granger_smin(real **Lam, real **B2, real ***Th, int M, int r, int q)
 {
     int s = M - r, i, j, k;
@@ -337,7 +327,7 @@ static real granger_smin(real **Lam, real **B2, real ***Th, int M, int r, int q)
 
     if (r <= 0 || s <= 0) return -1.0;
 
-    /*  Lambda_perp: las ultimas s columnas de la Q de la QR de Lambda.       */
+    /*  Lambda_perp: the last s columns of the Q of Lambda's QR.             */
     L   = gsl_matrix_alloc(M, r);
     Q   = gsl_matrix_alloc(M, M);
     tau = gsl_vector_alloc(r < M ? r : M);
@@ -375,7 +365,7 @@ static real granger_smin(real **Lam, real **B2, real ***Th, int M, int r, int q)
             gsl_matrix_set(T1, i, j, acc);
         }
 
-    /*  G = Lambda_perp' Theta(1) B_perp,  con Lambda_perp = Q[:, r..M-1]     */
+    /*  G = Lambda_perp' Theta(1) B_perp,  with Lambda_perp = Q[:, r..M-1]    */
     G = gsl_matrix_alloc(s, s);
     for (i = 0; i < s; i++)
         for (j = 0; j < s; j++) {
@@ -402,8 +392,8 @@ static real ***hold_F = NULL, ***hold_Th = NULL;
 static real  **hold_S = NULL;
 static int     hold_nf = 0, hold_q = 0, hold_M = 0;
 static real    gate_seed_ll0 = 0.0, gate_seed_ll1 = 0.0;  /* r=0 y condicional */
-static real    gate_seed_lam = 0.0;       /* el multiplo de Lambda admisible   */
-static real    gate_seed_ll_start = 0.0;  /* logL en ese arranque              */
+static real    gate_seed_lam = 0.0;       /* the admissible multiple of Lambda */
+static real    gate_seed_ll_start = 0.0;  /* logL at that starting point       */
 static int     gate_seed_ok  = 0;
 
 /* -fixb2: hold B2 at the static-OLS value computed by init_guess instead of
@@ -416,24 +406,25 @@ real global_fixb2_value = 0.0;      /* that value, applied to every entry   */
 static real **B2_fixed = NULL;      /* (s x r), owned here */
 static int   b2f_s = 0, b2f_r = 0;  /* dims of the current allocation */
 
-/*  F3 — restricciones lineales sobre los coeficientes de ajuste.
+/*  F3 — linear restrictions on the adjustment coefficients.
  *
- *  Johansen y Swensen (2024, JTSA 45:248-268) definen H1(r): alpha = A*psi con A
- *  conocida M x sa de rango sa, frente a H(r) con alpha libre.  La exogeneidad
- *  debil es el caso particular en que A selecciona filas, asi que no hace falta
- *  un test ad hoc: se implementa la clase general y aquella sale de ella.
+ *  Johansen and Swensen (2024, JTSA 45:248-268) define H1(r): alpha = A*psi with
+ *  A a known M x sa matrix of rank sa, against H(r) with alpha free.  Weak
+ *  exogeneity is the particular case in which A selects rows, so no ad-hoc test
+ *  is needed: the general class is implemented and that one falls out of it.
  *
- *  Y aqui drvec esta bien colocado, mejor que el legado: **Lambda esta EN su
- *  vector de parametros**, asi que imponer alpha = A*psi es sustituir M*r
- *  entradas libres por sa*r y calcular Lambda = A*psi dentro del cast -- el
- *  mismo tipo de cambio que -fixb2 -- y su covarianza sale directa del hessiano.
- *  En coordenadas BVECM alpha es DERIVADA, y por eso drv_project necesitaba el
- *  metodo delta con pseudoinversa SVD (LEGACY_NOTES.md 5) para lo mismo.
+ *  And here drvec is well placed, better than the legacy: **Lambda is IN its
+ *  parameter vector**, so imposing alpha = A*psi is replacing M*r free entries
+ *  by sa*r and computing Lambda = A*psi inside the cast -- the same kind of
+ *  change as -fixb2 -- and its covariance comes straight out of the Hessian.
+ *  In BVECM coordinates alpha is DERIVED, which is why drv_project needed the
+ *  delta method with an SVD pseudo-inverse (LEGACY_NOTES.md 5) for the same
+ *  thing.
  *
- *  Grados de libertad del LR contra H(r): (M - sa) * r, explicitos en el
- *  articulo.                                                                  */
-static int    global_alpha = 0;      /* -alpha <fichero> o -weakex <i>         */
-static real **alpha_A      = NULL;   /* (M x sa), la A de Johansen y Swensen   */
+ *  Degrees of freedom of the LR against H(r): (M - sa) * r, explicit in the
+ *  paper.                                                                    */
+static int    global_alpha = 0;      /* -alpha <file> or -weakex <i>           */
+static real **alpha_A      = NULL;   /* (M x sa), Johansen and Swensen's A     */
 static int    alpha_sa     = 0;
 static char  *alpha_file   = NULL;
 static int    alpha_weakex = 0;      /* i > 0: ecuacion declarada exogena debil */
@@ -465,9 +456,9 @@ static void build_y2_levels(void);
 /*                  cases 2 and 3 (verified: identical log-likelihood), but NOT */
 /*                  in case 1, where E[W] = 0 leaves nothing to absorb it.      */
 /*****************************************************************************/
-/*  Dimensiones con las que se reservaron datamat y Y2_levels.  Estaban dentro
- *  de build_y2_levels como estaticas locales; suben al fichero para que
- *  free_case_data() pueda soltarlas al terminar.                             */
+/*  The dimensions datamat and Y2_levels were allocated with.  They used to be
+ *  static locals inside build_y2_levels; they move up to file scope so that
+ *  free_case_data() can release them at the end.                             */
 static int alloc_nobs = 0, alloc_s = 0;
 
 static void build_y2_levels(void)
@@ -508,12 +499,12 @@ static void build_y2_levels(void)
                 Y2_levels[t][i] = Y2_levels[t-1][i] + datamat[t][i];
     }
 
-    /*  P5.2 — LA VENTANA DE ESTIMACION.  Con -estwin E se estima en 1..E y se
-     *  evalua sobre lo que viene despues, que es la unica forma de que la
-     *  medida sea FUERA DE MUESTRA: los parametros no pueden haber visto el
-     *  dato contra el que se les compara.  Las matrices se llenan enteras y
-     *  solo se recorta `nobs`, de modo que la evaluacion tiene el resto a mano
-     *  y las liberaciones siguen usando alloc_nobs, que es el tamano real.    */
+    /*  P5.2 — THE ESTIMATION WINDOW.  With -estwin E the fit is on 1..E and the
+     *  evaluation on what comes after, which is the only way for the
+     *  measurement to be OUT OF SAMPLE: the parameters cannot have seen the
+     *  datum they are scored against.  The matrices are filled whole and only
+     *  `nobs` is trimmed, so the evaluation has the rest to hand and the frees
+     *  keep using alloc_nobs, which is the real size.                        */
     if (global_estwin > 0) {
         if (global_estwin < 10 || global_estwin >= nobs_full) {
             fprintf(stderr, "drvec: -estwin %d is not inside 10..%d\n",
@@ -538,19 +529,19 @@ static void build_y2_levels(void)
 /*    5. Σ lower triangle                            (M(M+1)/2 params)       */
 /*    6. B₂ (s×r) cointegration matrix                 (s·r params)          */
 /*****************************************************************************/
-/*  par_blocks — el vector de parametros, partido en los tres tramos que el
- *  perfilado necesita separar, y en UN solo sitio.
+/*  par_blocks — the parameter vector, split into the three stretches the
+ *  profiling needs to separate, in ONE place only.
  *
- *    cabeza  la media y Lambda      lo que el paso condicional estima
- *    medio   F, Theta y Sigma       lo que el paso condicional sujeta
- *    cola    B2                     lo que el paso condicional estima
+ *    head    the mean and Lambda      what the conditional step estimates
+ *    middle  F, Theta and Sigma       what the conditional step holds
+ *    tail    B2                       what the conditional step estimates
  *
- *  Cabeza y cola son contiguas por los dos extremos del vector, que es lo que
- *  hace barato el modo condicional: quitar el tramo de en medio no reordena
- *  nada.  Se calcula aqui y no en cada sitio porque este programa ya tiene
- *  CUATRO recorridos del mismo vector -- calc_nparametrs, init_guess,
- *  vec_shootx y el impresor -- y anadir un quinto criterio de conteo suelto es
- *  exactamente como se abrio el fallo de 4.1.                                */
+ *  Head and tail are contiguous at the two ends of the vector, which is what
+ *  makes the conditional mode cheap: removing the middle stretch reorders
+ *  nothing.  It is computed here and not at each site because this program
+ *  already has FOUR walks of the same vector -- calc_nparametrs, init_guess,
+ *  vec_shootx and the printer -- and adding a fifth loose counting rule is
+ *  exactly how the §4.1 bug was opened.                                      */
 static void par_blocks(int *nmean, int *nlam, int *nmid, int *ntail)
 {
     int M = nser, r = global_r, s = M - r;
@@ -560,11 +551,11 @@ static void par_blocks(int *nmean, int *nlam, int *nmid, int *ntail)
     /* 1. Mean E[Ȳ_t] */
     *nmean = (global_case == 2 ? r : (global_case == 3 ? M : 0));
 
-    /* 2. Lambda (M x r), o psi (sa x r) con alpha = A*psi */
+    /* 2. Lambda (M x r), or psi (sa x r) with alpha = A*psi */
     *nlam  = (global_alpha ? alpha_sa : M) * r;
 
-    /*  -warma: los bloques de en medio son (p-1) matrices M x r -- los
-     *  coeficientes de W_{t-k} -- y q matrices r x r de medias moviles.      */
+    /*  -warma: the middle blocks are (p-1) M x r matrices -- the coefficients
+     *  of W_{t-k} -- and q r x r moving-average matrices.                    */
     if (global_warma) {
         *nmid = nf * M * r + q * r * r
               + (global_diag_cov ? M : M * (M + 1) / 2) - 1;
@@ -573,14 +564,14 @@ static void par_blocks(int *nmean, int *nlam, int *nmid, int *ntail)
     }
 
     /* 3. F_i (M x M, i=1..p-1)   4. Theta_j (M x M, j=1..q)
-       5. Sigma (triangulo inferior), menos la escala redundante.
-          El motor llama a elf con sigma2 = 1 y concentra la escala, asi que el
-          objetivo es exactamente invariante a reescalar este bloque
-          (f1 -> f1/c, f2 -> c^m f2).  Llevar el triangulo entero dejaria una
-          direccion que la verosimilitud no ve: una cresta plana que hace
-          fallar la busqueda lineal y hace singular el hessiano.  Sigma[1][1]
-          queda fijo en 1 y la escala se reporta por sigma2 (de modo que
-          Sigma[1][1] = sigma2 exactamente).                                  */
+       5. Sigma (lower triangle), minus the redundant scale.
+          The engine calls elf with sigma2 = 1 and concentrates the scale, so
+          the objective is exactly invariant to rescaling this block
+          (f1 -> f1/c, f2 -> c^m f2).  Carrying the whole triangle would leave
+          a direction the likelihood cannot see: a flat ridge that makes the
+          line search fail and the Hessian singular.  Sigma[1][1] is held at 1
+          and the scale is reported through sigma2 (so that Sigma[1][1] =
+          sigma2 exactly).                                                    */
     *nmid  = nf * (global_diag_ar ? M : M * M)
            + q  * (mawarma_on() ? r * r
                   : (marow_on() ? r * M
@@ -588,7 +579,7 @@ static void par_blocks(int *nmean, int *nlam, int *nmid, int *ntail)
                                    : (global_diag_ma ? M : M * M))))
            + (global_diag_cov ? M : M * (M + 1) / 2) - 1;
 
-    /* 6. B_2 (s x r), salvo que -fixb2 lo sujete */
+    /* 6. B_2 (s x r), unless -fixb2 holds it */
     *ntail = global_fixb2 ? 0 : s * r;
 }
 
@@ -600,31 +591,31 @@ static int calc_nparametrs(void)
 }
 
 /*****************************************************************************/
-/*  warma_inverse — DE VUELTA A LAS COORDENADAS VEC.                          */
+/*  warma_inverse — BACK TO VEC COORDINATES.                                 */
 /*                                                                           */
-/*  -warma estima el sistema transformado, que es donde la clase de los       */
-/*  teoremas es un patron de ceros y donde B2 no toca ningun parametro.  Pero */
-/*  lo que un usuario necesita leer es Lambda, F, Pi y la condicion de rango, */
-/*  asi que la transformacion se INVIERTE UNA VEZ AL FINAL -- que es la       */
-/*  direccion dual que describe ESTUDIO_BVECM_vs_DRVEC.md 1, y lo que el      */
-/*  analisis_BEC del legado hace.                                            */
+/*  -warma estimates the transformed system, which is where the class of  */
+/*  the theorems is a zero pattern and where B2 touches no parameter.  But*/
+/*  what a user needs to read is Lambda, F, Pi and the rank condition, so */
+/*  the transformation is INVERTED ONCE AT THE END -- which is the dual   */
+/*  direction ESTUDIO_BVECM_vs_DRVEC.md 1 describes, and what the legacy  */
+/*  analisis_BEC does.                                                    */
 /*                                                                           */
-/*  LAS ECUACIONES.  De PhiBar_k = Cinv Phi*_k y de la recursion (16):        */
+/*  THE EQUATIONS.  From PhiBar_k = Cinv Phi*_k and from recursion (16):  */
 /*                                                                           */
-/*      F_1     = (PhiBar_1 - E) Cbar + Pi          con E = Cinv Hbar        */
+/*      F_1     = (PhiBar_1 - E) Cbar + Pi          with E = Cinv Hbar       */
 /*      F_i     = (PhiBar_i + F_{i-1} E) Cbar       (i = 2 .. p-1)           */
-/*      0       = PhiBar_p + F_{p-1} E              (la que queda)           */
+/*      0       = PhiBar_p + F_{p-1} E              (the one that is left)*/
 /*                                                                           */
-/*  y Pi = LamBar Cbar = Lambda B', asi que la ultima ecuacion determina      */
-/*  Lambda.  Con p = 2 y M = 2 sale en cerrado -- comprobado con sympy --:    */
-/*  Lambda = -(PhiBar_2)_{:,s+1..M} - ((PhiBar_1 - E) Cbar)_{:,1..r}.  Aqui   */
-/*  se resuelve el caso general por minimos cuadrados sobre un sistema AFIN   */
-/*  en Lambda, que evita un analisis de casos por p y da ademas el RESIDUO:   */
-/*  si el punto no estuviera en la imagen del mapa, el residuo lo diria en    */
-/*  vez de que el programa publicara una Lambda inventada.                    */
+/*  and Pi = LamBar Cbar = Lambda B', so the last equation determines     */
+/*  Lambda.  With p = 2 and M = 2 it comes out in closed form -- checked  */
+/*  Lambda = -(PhiBar_2)_{:,s+1..M} - ((PhiBar_1 - E) Cbar)_{:,1..r}.  Here  */
+/*  with sympy --: the general case is solved by least squares on a system*/
+/*  AFFINE in Lambda, which avoids a case analysis by p and also gives the*/
+/*  RESIDUAL: if the point were not in the image of the map, the residual */
+/*  would say so instead of the program publishing an invented Lambda.    */
 /*                                                                           */
-/*  Theta_j = Cinv Theta*_j Cbar y Sigma = Cinv Sigma* Cinv', que son las     */
-/*  mismas relaciones del teorema 1 leidas al reves.                          */
+/*  Theta_j = Cinv Theta*_j Cbar and Sigma = Cinv Sigma* Cinv', which are */
+/*  the same relations of theorem 1 read backwards.                       */
 /*****************************************************************************/
 static void wi_forward(real ***PhB, real **Cbar, real **E, real **Lam,
                        int M, int r, int p, real ***F, real **R)
@@ -661,12 +652,12 @@ static void wi_forward(real ***PhB, real **Cbar, real **E, real **Lam,
             free_matrix(T4, 1, M, 1, M);
             free_matrix(T3, 1, M, 1, M);
         }
-        /*  El residuo de la ecuacion que queda: PhiBar_p + F_{p-1} E.        */
+        /*  The residual of the equation that is left: PhiBar_p + F_{p-1} E.  */
         matrix_multiply(F[nf], E, T1, M, M, M);
         for (i = 1; i <= M; i++)
             for (j = 1; j <= M; j++) R[i][j] = PhB[p][i][j] + T1[i][j];
     } else {
-        /*  p = 1: la unica ecuacion es PhiBar_1 = E - LamBar, y su residuo. */
+        /*  p = 1: the only equation is PhiBar_1 = E - LamBar, and its residual.*/
         for (i = 1; i <= M; i++)
             for (j = 1; j <= M; j++) R[i][j] = PhB[1][i][j] - E[i][j];
         for (i = 1; i <= M; i++)
@@ -726,7 +717,7 @@ static real warma_inverse(struct Tvarma *v, real **B2, real **Lam, real ***F,
         free_matrix(T, 1, M, 1, M);
     }
 
-    /*  El sistema afin en Lambda: R(Lambda) = R0 + J vec(Lambda).           */
+    /*  The affine system in Lambda: R(Lambda) = R0 + J vec(Lambda).         */
     for (i = 1; i <= M; i++) for (j = 1; j <= r; j++) Lam[i][j] = 0.0;
     wi_forward(PhB, Cbar, E, Lam, M, r, p, F, R0);
     c = 0;
@@ -781,43 +772,43 @@ static real warma_inverse(struct Tvarma *v, real **B2, real **Lam, real ***F,
 }
 
 /*****************************************************************************/
-/*  canonical_b2 — B2 POR LA SOLUCION CANONICA DE RANGO REDUCIDO (Johansen). */
+/*  canonical_b2 — B2 BY THE CANONICAL REDUCED-RANK SOLUTION (Johansen).  */
 /*                                                                           */
-/*  QUE ES.  El estimador de Johansen resuelve el vector de cointegracion en  */
-/*  FORMA CERRADA, por un problema de autovalores, sin optimizar nada:        */
+/*  WHAT IT IS.  Johansen's estimator solves the cointegrating vector in  */
+/*  CLOSED FORM, by an eigenvalue problem, optimising nothing:            */
 /*                                                                           */
-/*    R0  residuos de regresar nabla Y_t en los nabla Y retardados            */
-/*    R1  residuos de regresar Y_{t-1}   en los mismos                        */
+/*    R0  residuals of regressing nabla Y_t on the lagged nabla Y             */
+/*    R1  residuals of regressing Y_{t-1}   on the same                       */
 /*    S_ij = R_i' R_j / T                                                     */
-/*    |lambda S11 - S10 S00^-1 S01| = 0,  beta = los r autovectores mayores   */
+/*    |lambda S11 - S10 S00^-1 S01| = 0,  beta = the r largest eigenvectors   */
 /*                                                                           */
-/*  POR QUE COMO SEMILLA.  Porque ya esta medido lo cerca que cae del optimo  */
-/*  de este programa, y se midio para otra cosa: HOMOLOGATION.md 2.1b compara */
-/*  las dos rutas en la MISMA especificacion (q = 0) sobre los ocho pares y   */
-/*  las encuentra a entre 0.0003 y 0.052 la una de la otra, en 24             */
-/*  comparaciones.  Ninguna otra semilla de las que este programa ha probado  */
-/*  esta a esa distancia: la de (C) arranca 11 a 17 unidades de logL por      */
-/*  debajo del optimo y la de (B) llega a equivocar el signo de B2 (4b, 4c).  */
+/*  WHY AS A SEED.  Because how close it falls to this program's optimum  */
+/*  is already measured, and was measured for something else:             */
+/*  HOMOLOGATION.md 2.1b compares the two routes on the SAME              */
+/*  specification (q = 0) over the eight pairs and finds them between     */
+/*  0.0003 and 0.052 apart, in 24 comparisons.  No other seed this        */
+/*  program has tried is at that distance: (C)'s starts 11 to 17 units of */
+/*  logL below the optimum and (B)'s can get B2's sign wrong (4b, 4c).    */
 /*                                                                           */
-/*  CONVENIOS, que es donde esto se rompe si se rompe.  La normalizacion de   */
-/*  drvec es B = [I_r ; B2] sobre Y = [Y1 ; Y2], o sea W = Y1 + B2'Y2, asi    */
-/*  que el beta canonico -- que sale normalizado como quiera el autovector -- */
-/*  hay que RENORMALIZARLO dividiendo por su bloque superior r x r.  Y alpha  */
-/*  no se calcula aqui: la regresion condicional que init_guess ya hace, con  */
-/*  el W canonico, ES la formula de alpha de Johansen, alpha = S01 beta       */
-/*  (beta' S11 beta)^-1, de modo que pedirla dos veces seria escribir dos     */
-/*  implementaciones del mismo estimador.  El signo tambien lo pone esa       */
-/*  regresion: drvec lleva -Lambda(W - E[W]), luego Lambda = -alpha.          */
+/*  CONVENTIONS, which is where this breaks if it breaks.  drvec's        */
+/*  normalisation is B = [I_r ; B2] over Y = [Y1 ; Y2], i.e.              */
+/*  W = Y1 + B2'Y2, so the canonical beta -- which comes out normalised   */
+/*  however the eigenvector likes -- has to be RENORMALISED by dividing   */
+/*  by its upper r x r block.  And alpha is not computed here: the        */
+/*  conditional regression init_guess already does, with the canonical W, */
+/*  IS Johansen's formula for alpha, alpha = S01 beta (beta' S11 beta)^-1,*/
+/*  so asking for it twice would be writing two implementations of the    */
+/*  regression: drvec carries -Lambda(W - E[W]), so Lambda = -alpha.          */
 /*                                                                           */
-/*  Devuelve 1 si dejo un B2 nuevo, 0 si no pudo (y entonces vale el de OLS   */
-/*  estatico, que es la ruta de siempre).                                     */
+/*  Returns 1 if it left a new B2, 0 if it could not (and then the static */
+/*  OLS one stands, which is the route of always).                        */
 /*****************************************************************************/
 static int canonical_b2(real **B2)
 {
     int M = nser, r = global_r, s = M - r, p = global_p;
     int nf = (p > 1) ? p - 1 : 0;
     int T  = nobs - p;
-    int nd = nf * M;                 /* los nabla Y retardados, sin constante  */
+    int nd = nf * M;                 /* the lagged nabla Y, with no constant */
     int i, j, k, t, ok = 0;
     real **Y2lev = Y2_levels;
     real **R0, **R1, **S00, **S01, **S11, **A, **bet;
@@ -836,16 +827,16 @@ static int canonical_b2(real **B2)
             R1[row][j]     = datamat[t-1][s+j];                     /* Y1_{t-1} */
         }
         for (i = 1; i <= s; i++) {
-            R0[row][r+i]   = datamat[t][i];         /* nabla Y2, ya diferenciado */
-            R1[row][r+i]   = Y2lev[t-1][i];         /* Y2_{t-1} en niveles       */
+            R0[row][r+i]   = datamat[t][i];         /* nabla Y2, already differenced */
+            R1[row][r+i]   = Y2lev[t-1][i];         /* Y2_{t-1} in levels        */
         }
     }
 
-    /*  Las dos regresiones auxiliares, con constante: la constante restringida
-     *  a la relacion es el caso 2 de drvec y el det_order = 0 con el que se
-     *  hizo la comparacion externa, asi que centrar es lo que corresponde.    */
+    /*  The two auxiliary regressions, with a constant: a constant restricted
+     *  to the relation is drvec's case 2 and the det_order = 0 the external
+     *  comparison was made with, so centring is what corresponds.            */
     {
-        int nc = nd + 1;                        /* +1 por la constante         */
+        int nc = nd + 1;                        /* +1 for the constant          */
         real **D = matrix(1, T, 1, nc);
         real **XtX = matrix(1, nc, 1, nc);
         real  *Xty = vector(1, nc);
@@ -948,11 +939,11 @@ static int canonical_b2(real **B2)
         for (i = 1; i <= M; i++)
             for (j = 1; j <= r; j++) bet[i][j] = gsl_matrix_get(evec, i-1, j-1);
 
-        /*  Renormalizar sobre el bloque superior r x r: beta -> beta inv(Btop),
-         *  que es lo que hace que las r primeras filas sean I_r y las s de
-         *  abajo sean B2.  Si ese bloque es singular la normalizacion de drvec
-         *  no existe para estos datos, y entonces NO se siembra: preferible a
-         *  sembrar un numero enorme.                                          */
+        /*  Renormalise on the upper r x r block: beta -> beta inv(Btop), which
+         *  is what makes the first r rows I_r and the lower s ones B2.  If
+         *  that block is singular, drvec's normalisation does not exist for
+         *  these data, and then nothing is seeded: better than seeding a huge
+         *  number.                                                            */
         {
             real **Bt = matrix(1, r, 1, r);
             real  *z  = vector(1, r);
@@ -1000,11 +991,11 @@ static int canonical_b2(real **B2)
 /*  Λ and F_i directly (this is the conditional estimator the paper mentions  */
 /*  as the natural starting point, Remark 1.1).                              */
 /*****************************************************************************/
-/*  prelim_b2 — B₂ inicial por OLS estático con constante.
+/*  prelim_b2 — initial B₂ by static OLS with a constant.
  *
- *  Extraído de init_guess sin cambiarle nada, porque lo necesitan DOS sitios:
- *  la siembra y el escritor de .inp de F2, que tiene que construir el mismo Ȳ
- *  que se va a estimar.  B2 se espera dimensionada (1..s, 1..max(r,1)).       */
+ *  Lifted out of init_guess unchanged, because TWO places need it: the seeding
+ *  and F2's .inp writer, which has to build the same Ȳ that will be estimated.
+ *  B2 is expected dimensioned (1..s, 1..max(r,1)).                           */
 static void prelim_b2(real **B2)
 {
     int M = nser, r = global_r, s = M - r;
@@ -1045,11 +1036,11 @@ static void prelim_b2(real **B2)
     (void) M;
 }
 
-/*  build_ybar — Ȳ_t = (∇Y_{2t}', W_t')' para un B₂ dado.
+/*  build_ybar — Ȳ_t = (∇Y_{2t}', W_t')' for a given B₂.
  *
- *  MISMA construcción que el bloque [5] de vec_shootx; si las dos dejan de
- *  coincidir, lo que drvec escribe en los .inp no es lo que estima.  Ybar se
- *  espera dimensionada (1..nobs, 1..M).                                      */
+ *  SAME construction as block [5] of vec_shootx; if the two stop agreeing,
+ *  what drvec writes into the .inp files is not what it estimates.  Ybar is
+ *  expected dimensioned (1..nobs, 1..M).                                     */
 static void build_ybar(real **B2, real **Ybar)
 {
     int M = nser, r = global_r, s = M - r;
@@ -1064,18 +1055,18 @@ static void build_ybar(real **B2, real **Ybar)
     }
 }
 
-/*  free_case_data — lo que el caso reserva y sobrevive a todas las salidas.
+/*  free_case_data — what the case allocates and that survives every exit.
  *
- *  P3, 2026-08-21.  Estas tres -- datamat, Y2_levels y la A de la restriccion
- *  alpha = A*psi -- eran fugas de fin de programa INVISIBLES mientras matrix()
- *  devolvia el puntero en la base de su bloque.  Al adoptar la version
- *  compartida de drvarma aparecieron las cinco de golpe (con rawmat y
- *  cond_resid, en cleanup_names), y -lrtest y -rungs, que llaman a
- *  build_y2_levels una vez por rango, las tenian por partida doble.
+ *  P3, 2026-08-21.  These three -- datamat, Y2_levels and the A of the
+ *  alpha = A*psi restriction -- were end-of-program leaks that were INVISIBLE
+ *  while matrix() returned the pointer at the base of its block.  Adopting
+ *  drvarma's shared version brought all five out at once (with rawmat and
+ *  cond_resid, in cleanup_names), and -lrtest and -rungs, which call
+ *  build_y2_levels once per rank, had them twice over.
  *
- *  Ninguna hace dano en un programa por lotes.  Lo que hacen es tapar las que
- *  si lo harian: una salida de valgrind con cinco fugas conocidas es una en la
- *  que la sexta no se ve.                                                     */
+ *  None of them does harm in a batch program.  What they do is hide the ones
+ *  that would: a valgrind output with five known leaks is one in which the
+ *  sixth cannot be seen.                                                     */
 static void free_case_data(void)
 {
     if (datamat)   { free_matrix(datamat,   1, alloc_nobs, 1, nser); datamat = NULL; }
@@ -1085,19 +1076,20 @@ static void free_case_data(void)
     alloc_nobs = 0; alloc_s = 0;
 }
 
-/*  Los residuos de la regresion condicional, que init_guess publica para
- *  -writeres.  Se declaran AQUI, y no junto a su uso, porque cleanup_names los
- *  libera y esta por encima: es el precio de tener una sola limpieza.        */
+/*  The residuals of the conditional regression, which init_guess publishes
+ *  for -writeres.  They are declared HERE, and not next to their use, because
+ *  cleanup_names frees them and sits above: that is the price of having a
+ *  single cleanup.                                                           */
 static real **cond_resid   = NULL;
 static int    cond_resid_T = 0, cond_resid_M = 0;
 
-/*  cleanup_names — lo que hay que soltar al terminar, en UN sitio.
+/*  cleanup_names — what has to be released at the end, in ONE place.
  *
- *  main tiene cuatro salidas -- la normal, -lrtest, -writeinp/-writeres y
- *  -eval -- y solo la normal liberaba.  valgrind lo caza en cuanto se le
- *  pregunta: 350 bytes por corrida de -lrtest.  Es una fuga de fin de programa
- *  y no le hace dano a nadie, pero tener cuatro salidas y una sola limpieza es
- *  la forma en la que estas cosas se convierten en algo peor.                */
+ *  main has four exits -- the normal one, -lrtest, -writeinp/-writeres and
+ *  -eval -- and only the normal one freed anything.  valgrind catches it the
+ *  moment it is asked: 350 bytes per -lrtest run.  It is an end-of-program leak
+ *  and harms nobody, but having four exits and a single cleanup is how these
+ *  things turn into something worse.                                         */
 static void cleanup_names(char *outf, char *inf, char *basef)
 {
     if (series_names) {
@@ -1105,18 +1097,18 @@ static void cleanup_names(char *outf, char *inf, char *basef)
         free(series_names);
         series_names = NULL;
     }
-    /*  P3 — LAS DOS QUE EL ALINEAMIENTO DE nlatools DESTAPO, el 2026-08-21.
+    /*  P3 — THE TWO THAT ALIGNING nlatools UNCOVERED, on 2026-08-21.
      *
-     *  rawmat (los datos crudos del .inp) y cond_resid (los residuos de la
-     *  regresion condicional, que init_guess publica para -writeres) son de
-     *  vida de proceso y no las liberaba nadie.  Eran INVISIBLES para valgrind
-     *  mientras matrix() devolvia el puntero en la BASE de su bloque: un
-     *  puntero a la base parece alcanzable.  Al adoptar la version compartida
-     *  de drvarma -- que devuelve el puntero desplazado -- aparecieron las dos,
-     *  1416 y 1488 bytes.  Es el mismo mecanismo que SUITE_INTEGRATION.md 5 ya
-     *  describia para vector(), encontrado por segunda vez y por la misma via.
+     *  rawmat (the raw .inp data) and cond_resid (the residuals of the
+     *  conditional regression, which init_guess publishes for -writeres) are
+     *  process-lifetime and nobody freed them.  They were INVISIBLE to valgrind
+     *  while matrix() returned the pointer at the BASE of its block: a pointer
+     *  to the base looks reachable.  Adopting drvarma's shared version -- which
+     *  returns the offset pointer -- brought both out, 1416 and 1488 bytes.
+     *  Same mechanism SUITE_INTEGRATION.md 5 already described for vector(),
+     *  found a second time and by the same route.
      *
-     *  Van aqui porque aqui es donde pasan las siete salidas de main.        */
+     *  They go here because here is where all seven exits of main pass.      */
     if (rawmat) {
         free_matrix(rawmat, 1, nobs_raw, 1, nser);
         rawmat = NULL;
@@ -1131,28 +1123,28 @@ static void cleanup_names(char *outf, char *inf, char *basef)
     if (basef) FREE_STR(basef);
 }
 
-/*  subtract_interventions — quita de los datos el componente determinista que
- *  cada serie declara en su .pre.
+/*  subtract_interventions — removes from the data the deterministic component
+ *  each series declares in its .pre.
  *
- *  POR QUE HACE FALTA.  El cast de fue admite intervenciones -- omega(B)/delta(B)
- *  sobre un impulso, escalon, rampa... -- y los modelos univariantes de la
- *  escalera las usan.  Estimar despues un VEC que las ignora es estimar otro
- *  modelo: en el ejercicio que motivo esto, una serie con un impulso de
- *  respuesta de cinco anios sobre una muestra de 76 daba un vector de
- *  cointegracion sin sentido economico (positivo), y la causa era esa omision.
+ *  WHY IT IS NEEDED.  fue's cast admits interventions -- omega(B)/delta(B) on
+ *  an impulse, step, ramp... -- and the univariate models of the ladder use
+ *  them.  Estimating a VEC afterwards that ignores them is estimating a
+ *  different model: in the exercise that motivated this, a series with a
+ *  five-year response impulse over a sample of 76 gave a cointegrating vector
+ *  with no economic sense (positive), and that omission was the cause.
  *
- *  COMO.  build_det_component viene con el lector vendorizado y calcula
- *  nu(B) = omega(B)/delta(B) aplicado al regresor, con la convencion de signos
- *  de Box-Jenkins (omega_0 suma, los demas restan) y el caso racional incluido.
- *  Se le pasa el modelo del .pre pero LAS FECHAS DE ESTA MUESTRA, porque una
- *  determinista es funcion del tiempo: si se alinean por indice en vez de por
- *  fecha, la intervencion cae en el anio equivocado.
+ *  HOW.  build_det_component comes with the vendored reader and computes
+ *  nu(B) = omega(B)/delta(B) applied to the regressor, with the Box-Jenkins
+ *  sign convention (omega_0 adds, the rest subtract) and the rational case
+ *  included.  It is handed the .pre's model but THE DATES OF THIS SAMPLE,
+ *  because a deterministic term is a function of time: align them by index
+ *  instead of by date and the intervention lands in the wrong year.
  *
- *  LIMITE, declarado: los omega quedan FIJADOS en lo que estimo fue por
- *  separado; no se reestiman conjuntamente.  drtran si los lleva en su vector de
- *  parametros (BRIDGE_DESIGN.md), y ese es el paso siguiente natural.  Mientras
- *  tanto esto es "las intervenciones del modelo univariante, aplicadas", que es
- *  bastante mejor que "sin intervenciones" y peor que estimarlas.             */
+ *  LIMIT, declared: the omegas stay FIXED at whatever fue estimated
+ *  separately; they are not re-estimated jointly.  drtran does carry them in
+ *  its parameter vector (BRIDGE_DESIGN.md), and that is the natural next step.
+ *  Meanwhile this is "the univariate model's interventions, applied", which is
+ *  a good deal better than "no interventions" and worse than estimating them. */
 static void subtract_interventions(const char *prefix)
 {
     int M = nser, i, t, nsub = 0;
@@ -1169,13 +1161,13 @@ static void subtract_interventions(const char *prefix)
             char alt[1024];
             snprintf(alt, sizeof alt, "%s.%d.inp", prefix, i);
             if (read_fue_pre(alt, &Tm, &Ts, &DataMat) != 0) {
-                fprintf(stderr, "WARNING: no se pudo leer %s ni %s; la serie %d "
-                                "va sin deterministas\n", path, alt, i);
+                fprintf(stderr, "WARNING: could not read %s or %s; series %d goes\n"
+                                "         without deterministic terms\n", path, alt, i);
                 continue;
             }
         }
         if (Tm.NdetVar > 0) {
-            /* fechas de ESTA muestra, modelo del .pre */
+            /* dates of THIS sample, model from the .pre */
             Tsx = Ts;
             Tsx.freq    = data_freq;
             Tsx.begyear = data_start_year;
@@ -1183,44 +1175,45 @@ static void subtract_interventions(const char *prefix)
             Tsx.nobs    = nobs_raw;
             det = vector(1, nobs_raw);
             build_det_component(&Tm, &Tsx, nobs_raw, det);
-            /*  EL REFACTOR, que hasta el 2026-08-20 no se aplicaba y es un
-             *  defecto.  El modelo del .pre esta definido sobre
-             *  w = refactor * BoxCox(z) (FILE_CONTRACT del formato, y
-             *  fue_pre_reader.c lo lee en Ts->refactor), asi que sus omega
-             *  estan en LAS UNIDADES DE w y no en las del dato que drvec tiene
-             *  delante.  Restarlas tal cual solo acierta cuando refactor = 1,
-             *  que es lo que valia en todos los casos probados hasta que una
-             *  aplicacion real -- tres IPC mensuales con refactor = 100 --
-             *  dejo ver lo contrario: la serie "ajustada" salia con una
-             *  varianza de innovacion cien veces la suya y el modelo era
-             *  inservible sin que nada avisara.
+            /*  THE REFACTOR, which until 2026-08-20 was not applied, and that
+             *  is a defect.  The .pre's model is defined on
+             *  w = refactor * BoxCox(z) (the format's FILE_CONTRACT, and
+             *  fue_pre_reader.c reads it into Ts->refactor), so its omegas are
+             *  in THE UNITS OF w and not in those of the datum drvec has in
+             *  front of it.  Subtracting them as they come is right only when
+             *  refactor = 1, which is what held in every case tried until a
+             *  real application -- three monthly CPIs with refactor = 100 --
+             *  showed otherwise: the "adjusted" series came out with an
+             *  innovation variance a hundred times its own and the model was
+             *  useless without anything warning about it.
              *
-             *  Es la misma familia que los defectos de escala del programa
-             *  hermano: un coeficiente tomado de una fuente y aplicado en las
-             *  unidades de otra.  Se divide, que es lo que lleva det a las
-             *  unidades del dato.                                            */
+             *  Same family as the sibling program's scale defects: a
+             *  coefficient taken from one source and applied in the units of
+             *  another.  Divide, which is what takes det into the units of the
+             *  datum.                                                        */
             {
                 real rf = (Ts.refactor != 0.0) ? Ts.refactor : 1.0;
                 if (rf != 1.0) {
                     for (t = 1; t <= nobs_raw; t++) det[t] /= rf;
                     if (!quiet_mode)
-                        printf("  serie %d: refactor %.6g del .pre aplicado a "
-                               "las deterministas\n", i, rf);
+                        printf("  series %d: the .pre's refactor %.6g applied to the\n"
+                               "             deterministic terms\n", i, rf);
                     fprintf(outputv, "Series %d: the .pre's refactor %.6g was "
                                      "applied to its deterministic terms.\n", i, rf);
                 }
-                /*  Y la transformacion de Box-Cox NO se puede comprobar desde
-                 *  aqui -- el .pre dice con que lambda se estimo, pero no si el
-                 *  .inp de drvec trae la serie ya transformada --, asi que se
-                 *  dice y se deja al usuario, que es lo unico honesto.        */
+                /*  And the Box-Cox transformation CANNOT be checked from here --
+                 *  the .pre says which lambda it was estimated with, but not
+                 *  whether drvec's .inp carries the series already transformed
+                 *  -- so it is said and left to the user, which is the only
+                 *  honest thing to do.                                       */
                 if (!quiet_mode && Tm.boxlam != 1.0)
-                    printf("  serie %d: el .pre se estimo con lambda = %.4g; "
-                           "el .inp de drvec debe traer la serie YA "
+                    printf("  series %d: the .pre was estimated with lambda = %.4g; "
+                           "drvec's .inp must bring the series ALREADY "
                            "transformada\n", i, Tm.boxlam);
             }
             for (t = 1; t <= nobs_raw; t++) rawmat[t][i] -= det[t];
             if (!quiet_mode) {
-                printf("  serie %d: %d determinista(s) del .pre restadas (", i,
+                printf("  series %d: %d deterministic term(s) from the .pre subtracted (", i,
                        Tm.NdetVar);
                 for (int k = 1; k <= Tm.NdetVar; k++)
                     printf("%s%s", (k > 1 ? "; " : ""),
@@ -1239,40 +1232,42 @@ static void subtract_interventions(const char *prefix)
         printf("  (ningun .pre declaraba deterministas)\n");
 }
 
-/*  residual_diagnostics — la diagnosis multivariante de los residuos.
+/*  residual_diagnostics — the multivariate diagnosis of the residuals.
  *
- *  POR QUE ESTA AQUI.  drvec no hacia NINGUNA diagnosis: main.h declara
- *  hosking_test y multivariate_diagnostics por herencia del header de drvarma,
- *  pero esas rutinas no existen en este proyecto y el .out no decia nada de los
- *  residuos.  Un estimador que no ensena sus residuos no se puede usar para
- *  identificar, y en la aplicacion que motivo esto la pregunta es precisamente
- *  de identificacion: heredado el ARMA univariante de un trabajo de ACF/PACF
- *  limpio, lo unico que queda por decidir es si hay EFECTOS CRUZADOS y de que
- *  orden.  Eso no se contesta mirando la verosimilitud; se contesta mirando las
- *  correlaciones CRUZADAS de los residuos, retardo por retardo.
+ *  WHY IT IS HERE.  drvec did NO diagnosis at all: main.h declares hosking_test
+ *  and multivariate_diagnostics inherited from drvarma's header, but those
+ *  routines do not exist in this project and the .out said nothing about the
+ *  residuals.  An estimator that does not show its residuals cannot be used to
+ *  identify, and in the application that motivated this the question is
+ *  precisely one of identification: with the univariate ARMA inherited from
+ *  clean ACF/PACF work, all that is left to decide is whether there are CROSS
+ *  EFFECTS and of what order.  That is not answered by looking at the
+ *  likelihood; it is answered by looking at the CROSS correlations of the
+ *  residuals, lag by lag.
  *
- *  QUE IMPRIME, EN DOS PARTES
+ *  WHAT IT PRINTS, IN TWO PARTS
  *
- *   1. LA DIAGNOSIS DE LA SUITE, tal cual: multivariate_diagnostics de
- *      drtran -- portmanteau de Hosking y Jarque-Bera multivariante --, copiada
- *      sin cambios en src/diagnose_mv.c.  Es deliberado: el mismo residuo tiene
- *      que leerse igual en drvarma, en drtran y aqui.  La primera version de
- *      esto fue un portmanteau escrito a mano en este fichero, y estaba mal
- *      planteado aunque fuera correcto: obligaba a comparar peras con manzanas.
+ *   1. THE SUITE'S DIAGNOSIS, as it comes: multivariate_diagnostics from
+ *      drtran -- Hosking's portmanteau and multivariate Jarque-Bera -- copied
+ *      unchanged into src/diagnose_mv.c.  That is deliberate: the same residual
+ *      has to read the same in drvarma, in drtran and here.  The first version
+ *      of this was a portmanteau written by hand in this file, and it was badly
+ *      framed even though it was correct: it forced a comparison of apples with
+ *      oranges.
  *
- *   2. LO QUE DRVEC ANADE, adaptado a su realidad: la matriz de correlaciones
- *      cruzadas R(k) para k = 0..K, con lo que pasa la banda +-2/sqrt(n)
- *      marcado.  La DIAGONAL de R(k) es la ACF de cada ecuacion (dinamica
- *      propia mal recogida); las FUERA DE DIAGONAL son el efecto cruzado que el
- *      modelo no ha capturado, y su k es SU ORDEN.  Eso es lo que un
- *      portmanteau agregado no puede decir, y es justo la pregunta que queda
- *      cuando el ARMA univariante viene ya identificado de un trabajo de
- *      ACF/PACF limpio: si hay efectos cruzados y de que orden.
+ *   2. WHAT DRVEC ADDS, fitted to its own reality: the cross-correlation matrix
+ *      R(k) for k = 0..K, with whatever crosses the +-2/sqrt(n) band marked.
+ *      The DIAGONAL of R(k) is each equation's own ACF (own dynamics badly
+ *      captured); the OFF-DIAGONAL ones are the cross effect the model has not
+ *      captured, and their k is THEIR ORDER.  That is what an aggregate
+ *      portmanteau cannot say, and it is exactly the question that is left when
+ *      the univariate ARMA arrives already identified from clean ACF/PACF work:
+ *      whether there are cross effects and of what order.
  *
- *  R(k)[i][j] correlaciona a_i(t) con a_j(t-k), asi que un elemento (i,j)
- *  significativo con k >= 1 dice que la ecuacion i responde a la innovacion
- *  PASADA de j: es un efecto cruzado retardado de orden k.  El triangulo
- *  superior y el inferior NO son lo mismo, y ahi esta la direccion.           */
+ *  R(k)[i][j] correlates a_i(t) with a_j(t-k), so a significant (i,j) element
+ *  with k >= 1 says that equation i responds to the PAST innovation of j: it is
+ *  a lagged cross effect of order k.  The upper and lower triangles are NOT the
+ *  same thing, and that is where the direction is.                           */
 static void residual_diagnostics(struct Tvarma *v)
 {
     int M = v->m, n = v->n, K, i, j, k, t;
@@ -1284,7 +1279,7 @@ static void residual_diagnostics(struct Tvarma *v)
     if (K < 1) return;
     band = 2.0 / sqrt((real) n);
 
-    /* medias (deberian ser ~0) y matrices de autocovarianza C(k) */
+    /* means (should be ~0) and autocovariance matrices C(k) */
     for (i = 1; i <= M; i++) {
         real sm = 0.0;
         for (t = 1; t <= n; t++) sm += v->a[t][i];
@@ -1322,28 +1317,28 @@ static void residual_diagnostics(struct Tvarma *v)
         fprintf(outputv, "\n");
     }
 
-    /* La diagnosis ESTANDAR de la suite, sin tocar (src/diagnose_mv.c). */
+    /* The suite's STANDARD diagnosis, untouched (src/diagnose_mv.c). */
     multivariate_diagnostics(v->a, n, M, outputv);
 
-    /* el veredicto sobre efectos cruzados, que es la pregunta que importa */
+    /* the verdict on cross effects, which is the question that matters */
     {
         int worst_k = -1, wi = 0, wj = 0, any = 0;
         real worst = 0.0;
-        /* SOLO k >= 1.  La correlacion cruzada CONTEMPORANEA (k = 0) no es un
-           fallo del modelo: es la fuera-de-diagonal de Sigma, que el modelo
-           ESTIMA -- salvo con -diagcov, donde si seria una restriccion mal
-           puesta.  Contarla aqui haria saltar la alarma en cualquier modelo con
-           innovaciones correlacionadas, que es la situacion normal.          */
+        /* ONLY k >= 1.  The CONTEMPORANEOUS cross correlation (k = 0) is not a
+           failure of the model: it is the off-diagonal of Sigma, which the model
+           ESTIMATES -- except under -diagcov, where it would indeed be a badly
+           placed restriction.  Counting it here would fire the alarm on any
+           model with correlated innovations, which is the normal situation.  */
         for (k = 1; k <= K; k++)
             for (i = 1; i <= M; i++)
                 for (j = 1; j <= M; j++) {
                     real r;
-                    if (i == j) continue;                    /* solo cruzados */
+                    if (i == j) continue;                    /* cross ones only */
                     r = C[k][i][j] / sqrt(C[0][i][i] * C[0][j][j]);
                     if (fabs(r) > band) any = 1;
                     if (fabs(r) > fabs(worst)) { worst = r; worst_k = k; wi = i; wj = j; }
                 }
-        {   /* la contemporanea se informa aparte, no como fallo */
+        {   /* the contemporaneous one is reported apart, not as a failure */
             real r0 = 0.0;
             for (i = 1; i <= M; i++)
                 for (j = 1; j < i; j++) {
@@ -1381,43 +1376,44 @@ static void residual_diagnostics(struct Tvarma *v)
     free_vector(mean, 1, M);
 }
 
-/*  exact_hessian_se — errores estandar por el hessiano EN EL OPTIMO.
+/*  exact_hessian_se — standard errors from the Hessian AT THE OPTIMUM.
  *
- *  EL PROBLEMA.  est() calcula la covarianza invirtiendo el hessiano que ACUMULA
- *  BFGS a lo largo de la trayectoria (raxopt lo deja en mtmp).  Eso sirve para
- *  dirigir la busqueda pero NO es la curvatura en el optimo: depende del camino
- *  recorrido y se degrada justo en las direcciones mas planas, que son las de
- *  mayor error estandar.  No es una sospecha -- drtran lo diagnostico y lo
- *  arreglo (BRIDGE_DESIGN.md 8c), y aqui se vio el sintoma extremo: con
- *  -multistart, al no iterar el est final, TODOS los errores estandar salian
- *  identicos.
+ *  THE PROBLEM.  est() computes the covariance by inverting the Hessian that
+ *  BFGS ACCUMULATES along the trajectory (raxopt leaves it in mtmp).  That is
+ *  good for steering the search but is NOT the curvature at the optimum: it
+ *  depends on the path taken and degrades precisely in the flattest directions,
+ *  which are the ones with the largest standard errors.  This is not a
+ *  suspicion -- drtran diagnosed and fixed it (BRIDGE_DESIGN.md 8c), and here
+ *  the extreme symptom showed up: with -multistart, since the final est does
+ *  not iterate, ALL the standard errors came out identical.
  *
- *  LA ALTERNATIVA ESTABA APUNTADA EN EL PROPIO MOTOR, comentada en
- *  drvmlest.c:104-107:  fdhess(objcfunc, ...) + choldcp.  Se usa eso.
+ *  THE ALTERNATIVE WAS NOTED IN THE ENGINE ITSELF, commented out at
+ *  drvmlest.c:104-107:  fdhess(objcfunc, ...) + choldcp.  That is what is used.
  *
- *  Y SE HACE SIN TOCAR EL MOTOR.  fdhess (qnewtopt.c) y objcfunc (drvmlest.c)
- *  son simbolos publicos; se llaman desde aqui despues de est(), cuando sus
- *  globales -- castx y varmax -- siguen apuntando a este ajuste.  La formula de
- *  la covarianza es la MISMA que usa est (drvmlest.c:111-119),
+ *  AND IT IS DONE WITHOUT TOUCHING THE ENGINE.  fdhess (qnewtopt.c) and
+ *  objcfunc (drvmlest.c) are public symbols; they are called from here after
+ *  est(), while their globals -- castx and varmax -- still point at this fit.
+ *  The covariance formula is the SAME one est uses (drvmlest.c:111-119),
  *      cov = 2 * f * H^-1 / n,
- *  con H el hessiano del objetivo concentrado; lo unico que cambia es de donde
- *  sale H.
+ *  with H the Hessian of the concentrated objective; all that changes is where
+ *  H comes from.
  *
- *  Devuelve 0 si pudo; deja dev y cov sobrescritos.                          */
+ *  Returns 0 if it worked; leaves dev and cov overwritten.                   */
 extern void fdhess(real (*func)(real *), int n, real *x, real f, real eta,
                    real **H);
 
-/*  El objetivo, replicado aqui con SU PROPIA estructura.
+/*  The objective, replicated here with ITS OWN structure.
  *
- *  No se puede reutilizar el objcfunc del motor: est() termina llamando al cast
- *  con lastx = 1, que DESASIGNA la estructura, asi que llamarlo despues escribe
- *  en memoria liberada -- comprobado, segfault.  Y no hay punto de entrada para
- *  que la reasigne.
+ *  The engine's objcfunc cannot be reused: est() ends by calling the cast with
+ *  lastx = 1, which DEALLOCATES the structure, so calling it afterwards writes
+ *  into freed memory -- checked, segfault.  And there is no entry point that
+ *  would make it reallocate.
  *
- *  La formula es la de drvmlest.c:159-190, y la CONSTANTE DE NORMALIZACION DA
- *  IGUAL: si g = c*f, entonces H_g = c*H_f y 2*g*H_g^-1 = 2*f*H_f^-1, o sea que
- *  la covarianza no depende de c.  Se normaliza por el valor en el optimo, que
- *  deja el objetivo en 1 y es lo mas comodo numericamente.                    */
+ *  The formula is drvmlest.c:159-190's, and THE NORMALISING CONSTANT DOES NOT
+ *  MATTER: if g = c*f then H_g = c*H_f and 2*g*H_g^-1 = 2*f*H_f^-1, i.e. the
+ *  covariance does not depend on c.  It is normalised by the value at the
+ *  optimum, which leaves the objective at 1 and is the most convenient
+ *  numerically.                                                              */
 static struct Tvarma  fdh_varma;
 static int            hess_nneg = 0;
 static long           fdh_rej = 0;
@@ -1430,31 +1426,32 @@ static real fdh_obj(real *x)
     int ifault = 0;
 
     vec_shootx(x, &fdh_varma, &ifault, 0, 0);
-    if (ifault > 0) { fdh_rej++; return 1.0e10; }   /* Sigma no definida positiva */
+    if (ifault > 0) { fdh_rej++; return 1.0e10; }   /* Sigma not positive definite */
     elf(fdh_varma.m, fdh_varma.n, fdh_varma.p, fdh_varma.q, fdh_varma.mu,
         fdh_varma.phi, fdh_varma.theta, fdh_varma.qq, fdh_varma.w, 1.0,
         fdh_varma.xitol, FALSE, fdh_varma.a, &pi1, &pi2, &pi3, &ifault);
-    if (ifault > 0) { fdh_rej++; return 1.0e10; }   /* no estacionario / no invertible */
+    if (ifault > 0) { fdh_rej++; return 1.0e10; }   /* non-stationary / non-invertible */
     return pow(pi1 / fdh_norm1, (real) fdh_varma.m) * (pi2 / fdh_norm2);
 }
 
-/*  exact_hessian_se — errores estandar por el hessiano EN EL OPTIMO.
+/*  exact_hessian_se — standard errors from the Hessian AT THE OPTIMUM.
  *
- *  EL PROBLEMA.  est() calcula la covarianza invirtiendo el hessiano que ACUMULA
- *  BFGS a lo largo de la trayectoria (raxopt lo deja en mtmp).  Eso sirve para
- *  dirigir la busqueda pero NO es la curvatura en el optimo: depende del camino
- *  recorrido y se degrada justo en las direcciones mas planas, que son las de
- *  mayor error estandar.  No es una sospecha -- drtran lo diagnostico y lo
- *  arreglo (BRIDGE_DESIGN.md 8c) -- y aqui se vio el sintoma extremo: con
- *  -multistart, al no iterar el est final, TODOS los errores estandar salian
- *  identicos.
+ *  THE PROBLEM.  est() computes the covariance by inverting the Hessian that
+ *  BFGS ACCUMULATES along the trajectory (raxopt leaves it in mtmp).  That is
+ *  good for steering the search but is NOT the curvature at the optimum: it
+ *  depends on the path taken and degrades precisely in the flattest directions,
+ *  which are the ones with the largest standard errors.  This is not a
+ *  suspicion -- drtran diagnosed and fixed it (BRIDGE_DESIGN.md 8c) -- and here
+ *  the extreme symptom showed up: with -multistart, since the final est does
+ *  not iterate, ALL the standard errors came out identical.
  *
- *  LA ALTERNATIVA ESTABA APUNTADA EN EL PROPIO MOTOR, comentada en
- *  drvmlest.c:104-107:  fdhess + choldcp.  Se usa eso, sin tocar el motor:
- *  fdhess es un simbolo publico de qnewtopt.c y el objetivo es propio.
+ *  THE ALTERNATIVE WAS NOTED IN THE ENGINE ITSELF, commented out at
+ *  drvmlest.c:104-107:  fdhess + choldcp.  That is what is used, without
+ *  touching the engine: fdhess is a public symbol of qnewtopt.c and the
+ *  objective is our own.
  *
- *  cov = 2 * f * H^-1 / n, la misma formula que est (drvmlest.c:111-119); lo
- *  unico que cambia es de donde sale H.  Devuelve 0 si pudo.                 */
+ *  cov = 2 * f * H^-1 / n, the same formula est uses (drvmlest.c:111-119); all
+ *  that changes is where H comes from.  Returns 0 if it worked.              */
 static int exact_hessian_se(int npar, real *x, real *dev, real **cov, int neff)
 {
     real **H = matrix(1, npar, 1, npar);
@@ -1462,7 +1459,7 @@ static int exact_hessian_se(int npar, real *x, real *dev, real **cov, int neff)
     real d1, d2, pi1, pi2, pi3, f;
     int i, j, ifc = 0, ifault = 0;
 
-    /* Asignar la estructura propia y fijar la normalizacion en el optimo. */
+    /* Allocate our own structure and fix the normalisation at the optimum. */
     fdh_varma.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
     fdh_norm1 = fdh_norm2 = 1.0;
     vec_shootx(x, &fdh_varma, &ifault, 1, 0);
@@ -1473,13 +1470,13 @@ static int exact_hessian_se(int npar, real *x, real *dev, real **cov, int neff)
     if (ifault > 0) goto fail;
     fdh_norm1 = pi1; fdh_norm2 = pi2;
 
-    f = fdh_obj(x);                      /* = 1 por construccion */
+    f = fdh_obj(x);                      /* = 1 by construction */
     fdh_rej = 0;
     fdhess(fdh_obj, npar, x, f, macheps, H);
-    {   /* Espectro ANTES de la Cholesky, que destruye la matriz.  Si falla hay
-           que poder decir CUANTO falla: un autovalor negativo minusculo es ruido
-           numerico en una direccion plana, y varios grandes son un punto de
-           silla -- o sea que el optimizador no paro en un maximo.            */
+    {   /* Spectrum BEFORE the Cholesky, which destroys the matrix.  If it fails
+           one has to be able to say BY HOW MUCH: one tiny negative eigenvalue is
+           numerical noise in a flat direction, and several large ones are a
+           saddle point -- i.e. the optimiser did not stop at a maximum.      */
         real **Hc = matrix(1, npar, 1, npar);
         real *wr = vector(1, npar), *wi = vector(1, npar);
         real mx = 0.0, mn = 0.0;
@@ -1497,19 +1494,20 @@ static int exact_hessian_se(int npar, real *x, real *dev, real **cov, int neff)
     }
     choldcp(H, npar, &d1, &d2, &ifc);
     if (ifc > 0) {
-        /*  DOS causas distintas, y confundirlas lleva a decir algo falso.
+        /*  TWO distinct causes, and confusing them leads to saying something
+         *  false.
          *
-         *  (a) fdh_rej > 0: alguna perturbacion de diferencias finitas salio de
-         *      la region admisible y se le respondio con la penalizacion.  Esas
-         *      filas y columnas del hessiano NO son curvatura -- son el salto a
-         *      la penalizacion --, asi que su espectro no significa nada y no se
-         *      informa.  Lo que dice es que el optimo esta EN la frontera: un
-         *      optimo restringido, donde la curvatura libre no esta definida.
-         *      Las raices que se informan mas arriba senalan cual es.
+         *  (a) fdh_rej > 0: some finite-difference perturbation left the
+         *      admissible region and was answered with the penalty.  Those rows
+         *      and columns of the Hessian are NOT curvature -- they are the jump
+         *      to the penalty -- so their spectrum means nothing and is not
+         *      reported.  What it does say is that the optimum is ON the
+         *      boundary: a constrained optimum, where the free curvature is not
+         *      defined.  The roots reported above point at which one.
          *
-         *  (b) fdh_rej == 0: el hessiano se formo entero con evaluaciones
-         *      validas y aun asi es indefinido.  Ahi si es informativo, y el
-         *      espectro dice cuanto.                                          */
+         *  (b) fdh_rej == 0: the Hessian was formed entirely from valid
+         *      evaluations and is indefinite even so.  There it IS informative,
+         *      and the spectrum says by how much.                            */
         if (fdh_rej > 0)
             fprintf(stderr,
                 "WARNING: -fdhess: the optimum lies ON the boundary of the admissible\n"
@@ -1563,9 +1561,9 @@ fail:
 /*  eigenvalues are lambda = 1/z with z the roots of det A(z) = 0, whence the */
 /*  modulus reported below is 1/|lambda|.                                     */
 /*****************************************************************************/
-/*  quiet = 1: solo calcula el modulo menor y no imprime.  Lo necesita la
- *  escalera de especificaciones, que quiere el numero de cada peldano sin la
- *  tabla de raices de cada uno.                                             */
+/*  quiet = 1: computes only the smallest modulus and prints nothing.  The
+ *  specification ladder needs it, wanting each rung's number without each
+ *  rung's table of roots.                                                    */
 static void report_operator_roots(const char *label, real ***A, int m, int k,
                                   real *minmod, int quiet)
 {
@@ -1627,11 +1625,11 @@ static void operator_roots(struct Tvarma *v)
             "    rank is lower than the true one.  Re-examine the rank before\n"
             "    reading the estimates.\n");
 
-    /*  P4.4 — que SON esas raices en la clase estructurada.  Con las s filas
-     *  inferiores de Theta nulas, det Theta(x) = det(I_r - sum T11_k x^k):
-     *  hay r*q raices finitas y s*q en el infinito, y las finitas son las del
-     *  bloque r x r.  Decirlo cambia lo que el lector tiene que comprobar --
-     *  un escalar con M = 2, r = 1 -- y por que basta con eso.               */
+    /*  P4.4 — what those roots ARE in the structured class.  With the lower s
+     *  rows of Theta zero, det Theta(x) = det(I_r - sum T11_k x^k): there are
+     *  r*q finite roots and s*q at infinity, and the finite ones are the r x r
+     *  block's.  Saying so changes what the reader has to check -- a scalar
+     *  with M = 2, r = 1 -- and why that is enough.                          */
     if (v->q > 0 && ma_struct_on())
         fprintf(outputv,
             "\n  The %d finite MA root%s above %s of the %d x %d block, and\n"
@@ -1648,41 +1646,41 @@ static void operator_roots(struct Tvarma *v)
 }
 
 /*****************************************************************************/
-/*  F4 — bootstrap parametrico para el test de rango                          */
+/*  F4 — parametric bootstrap for the rank test                              */
 /*****************************************************************************/
-/*  POR QUE.  Bajo H0 el estadistico de rango NO sigue una chi2, y los valores
- *  criticos asintoticos que -lrtest imprime estan medidos como insuficientes a
- *  estos tamanos: sobre 20 replicas de un proceso con r = 1 verdadero y n = 120,
- *  el test sobre-rechaza unas TRES VECES su nivel nominal (HOMOLOGATION.md 2.3).
- *  Melard, Roy y Saidi lo dicen para esta misma clase de modelos: los terminos MA
- *  no alteran la distribucion asintotica del LR, pero "finite sample performance
- *  of the test is affected by the MA terms".
+/*  WHY.  Under H0 the rank statistic does NOT follow a chi2, and the
+ *  asymptotic critical values -lrtest prints are measured to be insufficient at
+ *  these sizes: over 20 replications of a process with a true r = 1 and
+ *  n = 120, the test over-rejects by about THREE TIMES its nominal level
+ *  (HOMOLOGATION.md 2.3).  Melard, Roy and Saidi say it for this very class of
+ *  models: the MA terms do not alter the asymptotic distribution of the LR, but
+ *  "finite sample performance of the test is affected by the MA terms".
  *
- *  COMO.  Bootstrap parametrico: se simulan N muestras BAJO H0 con los parametros
- *  estimados al rango r, se recalcula el estadistico LR(r -> r+1) en cada una, y
- *  los percentiles empiricos son los valores criticos.  Es lo que prescribe
- *  BVECM 6.3-6.5.
+ *  HOW.  Parametric bootstrap: N samples are simulated UNDER H0 with the
+ *  parameters estimated at rank r, the LR(r -> r+1) statistic is recomputed on
+ *  each, and the empirical percentiles are the critical values.  It is what
+ *  BVECM 6.3-6.5 prescribes.
  *
- *  LA SIMULACION APROVECHA LA TRANSFORMACION, en vez de reimplementar un VEC:
- *  el modelo ajustado ES un VARMA estacionario sobre Ybar, asi que se simula ahi
- *  -- con la convencion de elf, (w-mu) = SUM phi (w-mu) + a - SUM theta a -- y se
- *  INVIERTE la transformacion para volver a niveles:
+ *  THE SIMULATION EXPLOITS THE TRANSFORMATION, instead of reimplementing a VEC:
+ *  the fitted model IS a stationary VARMA on Ybar, so it is simulated there --
+ *  with elf's convention, (w-mu) = SUM phi (w-mu) + a - SUM theta a -- and the
+ *  transformation is INVERTED to get back to levels:
  *
- *      nabla Y2 = Ybar[1..s]         -> Y2 por acumulacion desde el nivel real
- *      Y1       = W - B2' Y2          con W = Ybar[s+1..M]
+ *      nabla Y2 = Ybar[1..s]         -> Y2 by cumulating from the real level
+ *      Y1       = W - B2' Y2          with W = Ybar[s+1..M]
  *
- *  Eso deja una muestra en el mismo formato que el .inp, de modo que las
- *  reestimaciones son EXACTAMENTE las del camino normal, sin codigo paralelo que
- *  pueda divergir del que se quiere calibrar.
+ *  That leaves a sample in the same format as the .inp, so the re-estimations
+ *  are EXACTLY those of the normal route, with no parallel code that could
+ *  drift from the one being calibrated.
  *
- *  El generador es determinista con semilla fija: un valor critico que no se
- *  puede reproducir no sirve para decidir nada.                              */
+ *  The generator is deterministic with a fixed seed: a critical value that
+ *  cannot be reproduced is no use for deciding anything.                     */
 
 static unsigned long boot_rng = 987654321UL;
 
 static real boot_normal(void)
 {
-    /* Box-Muller sobre un LCG propio; determinista y sin depender de la libc. */
+    /* Box-Muller over an LCG of our own; deterministic and independent of libc. */
     static int have = 0;
     static real spare = 0.0;
     real u1, u2, r, th;
@@ -1699,8 +1697,8 @@ static real boot_normal(void)
     return r * cos(th);
 }
 
-/*  simulate_h0 — una muestra de NIVELES bajo el modelo de v, con B2 dado.
- *  out se espera dimensionada (1..nobs_raw, 1..M).  Devuelve 0 si pudo.       */
+/*  simulate_h0 — one sample of LEVELS under v's model, with B2 given.
+ *  out is expected dimensioned (1..nobs_raw, 1..M).  Returns 0 if it worked.  */
 static int simulate_h0(struct Tvarma *v, real **B2, int r, real **out)
 {
     int M = nser, s = M - r, n = v->n, p = v->p, q = v->q;
@@ -1711,7 +1709,7 @@ static int simulate_h0(struct Tvarma *v, real **B2, int r, real **out)
     real d1, d2;
     int t, i, j, k, ifc = 0;
 
-    /* Cholesky de Sigma* = sigma2 * qq para dar a los choques su covarianza. */
+    /* Cholesky of Sigma* = sigma2 * qq to give the shocks their covariance. */
     for (i = 1; i <= M; i++)
         for (j = 1; j <= M; j++) L[i][j] = v->sigma2 * v->qq[i][j];
     choldcp(L, M, &d1, &d2, &ifc);
@@ -1739,8 +1737,8 @@ static int simulate_h0(struct Tvarma *v, real **B2, int r, real **out)
         }
     }
 
-    /* Invertir la transformacion.  El origen de Y2 es el real: en el caso 1 la
-       constante no es libre, asi que un origen arbitrario contaminaria W.     */
+    /* Invert the transformation.  Y2's origin is the real one: in case 1 the
+       constant is not free, so an arbitrary origin would contaminate W.      */
     for (i = 1; i <= M; i++) out[1][i] = rawmat[1][i];
     for (t = 1; t <= n; t++) {
         int tb = t + burn;
@@ -1757,7 +1755,7 @@ static int simulate_h0(struct Tvarma *v, real **B2, int r, real **out)
     return 0;
 }
 
-/*  fit_ll — reestima al rango rr y devuelve la logL, o 0 con ok = 0.          */
+/*  fit_ll — re-estimates at rank rr and returns the logL, or 0 with ok = 0. */
 static real fit_ll(int rr, int *ok)
 {
     int np, ifr = 0;
@@ -1788,8 +1786,8 @@ static int cmp_real(const void *a, const void *b)
     return (x < y) ? -1 : ((x > y) ? 1 : 0);
 }
 
-/*  bootstrap_rank — valores criticos de LR(rr -> rr+1) bajo H0: rango = rr.
- *  x es el ajuste al rango rr.  Devuelve el numero de replicas utiles.        */
+/*  bootstrap_rank — critical values of LR(rr -> rr+1) under H0: rank = rr.
+ *  x is the fit at rank rr.  Returns the number of usable replications.      */
 static int bootstrap_rank(int rr, real *x, int npar, int N, real *cv, real *pval,
                           real lr_obs)
 {
@@ -1802,17 +1800,17 @@ static int bootstrap_rank(int rr, real *x, int npar, int N, real *cv, real *pval
     FILE *save_out = outputv;
     int save_quiet = quiet_mode, save_r = global_r, ge = 0;
 
-    /* B2 del ajuste: ultimas s*rr entradas de x[], column-major (o fijada). */
+    /* B2 of the fit: last s*rr entries of x[], column-major (or held). */
     if (rr > 0) {
         int idx = npar - s * rr + 1;
         for (j = 1; j <= rr; j++) for (i = 1; i <= s; i++)
             B2[i][j] = global_fixb2 ? B2_fixed[i][j] : x[idx++];
     }
-    /* El modelo bajo H0, recuperado del ajuste. */
+    /* The model under H0, recovered from the fit. */
     global_r = rr; build_y2_levels();
     vh.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
     vec_shootx(x, &vh, &ifr, 1, 0);
-    {   /* rellenar sigma2/logelf evaluando: vec_shootx no los pone */
+    {   /* fill sigma2/logelf by evaluating: vec_shootx does not set them */
         real pi1, pi2, pi3; int ife = 0;
         const real LOG2PI = 1.837877066;
         elf(vh.m, vh.n, vh.p, vh.q, vh.mu, vh.phi, vh.theta, vh.qq, vh.w, 1.0,
@@ -1844,10 +1842,10 @@ static int bootstrap_rank(int rr, real *x, int npar, int N, real *cv, real *pval
     vec_shootx(x, &vh, &ifr, 0, 1);
 
     if (nok >= 10) {
-        /* Cuantil (1-alpha): indice ceil((1-alpha)*nok), acotado.  Con el
-           redondeo al mas cercano que habia antes, el percentil 99 de 97 valores
-           caia en el puesto 96 y dejaba DOS por encima, o sea un 2% donde se
-           pedia un 1%.                                                       */
+        /* Quantile (1-alpha): index ceil((1-alpha)*nok), bounded.  With the
+           round-to-nearest that was there before, the 99th percentile of 97
+           values landed in slot 96 and left TWO above it, i.e. a 2% where 1%
+           was being asked for.                                              */
         int i90 = (int) ceil(0.90 * nok), i95 = (int) ceil(0.95 * nok),
             i99 = (int) ceil(0.99 * nok);
         qsort(&stat[1], (size_t) nok, sizeof(real), cmp_real);
@@ -1870,29 +1868,29 @@ static int bootstrap_rank(int rr, real *x, int npar, int N, real *cv, real *pval
 }
 
 /*****************************************************************************/
-/*  bootstrap_ma — la distribucion del LR entre el MA HEREDADO y el LIBRE,     */
-/*  simulada bajo el restringido.                                             */
+/*  bootstrap_ma — the distribution of the LR between the INHERITED MA and   */
+/*  the free one, simulated under the restricted model.                      */
 /*                                                                           */
-/*  POR QUE NO BASTA LA chi2.  El estadistico compara q*r*r parametros de     */
-/*  medias moviles contra q*M*M, o sea df = q(M^2 - r^2), y leido asi el       */
-/*  restringido se rechaza en los ocho pares.  Pero esa lectura no vale: el    */
-/*  optimo NO RESTRINGIDO se para en la vecindad donde la condicion de rango   */
-/*  degenera -- G entre 0.016 y 0.133 contra ~1 de un modelo bien             */
-/*  especificado, con Theta(1) singular a precision de trabajo (4h) --, y un   */
-/*  LR cuyo estimador no restringido esta en el borde de la region admisible   */
-/*  no tiene su distribucion asintotica.  Es la misma advertencia que 3b lleva */
-/*  para los errores estandar, aplicada al contraste.                         */
+/*  WHY THE chi2 IS NOT ENOUGH.  The statistic compares q*r*r moving-       */
+/*  average parameters against q*M*M, i.e. df = q(M^2 - r^2), and read that  */
+/*  way the restricted model is rejected in all eight pairs.  But that      */
+/*  reading does not hold: the UNRESTRICTED optimum stops in the            */
+/*  neighbourhood where the rank condition degenerates -- G between 0.016   */
+/*  and 0.133 against ~1 for a well specified model, with Theta(1) singular */
+/*  and an LR whose unrestricted estimator sits on the edge of the          */
+/*  admissible region does not have its asymptotic distribution.  Same      */
+/*  warning 3b carries for the standard errors, applied to the test.       */
 /*                                                                           */
-/*  Lo que se puede hacer sin distribucion asintotica es simular la que hay:   */
-/*  generar bajo el modelo RESTRINGIDO -- que es H0 -- y mirar donde cae el    */
-/*  estadistico observado en esa distribucion.  Cada replica cuesta DOS        */
-/*  ajustes, el restringido y el libre, exactamente como el observado.        */
+/*  What can be done without an asymptotic distribution is to simulate the  */
+/*  one there is: generate under the RESTRICTED model -- which is H0 -- and */
+/*  see where the observed statistic falls in that distribution.  Each      */
+/*  replication costs TWO fits, restricted and free, just like the observed.*/
 /*****************************************************************************/
-/*  set_spec — LA ESCALERA, EN UN SOLO SITIO.  0 warma, 1 mawarma, 2 marow,
- *  3 matri, 4 libre.  Existe porque el bootstrap tiene que poder poner y quitar
- *  una especificacion entera sin que se le olvide una bandera, y porque cuatro
- *  banderas puestas a mano en cinco sitios es como se cuela una combinacion que
- *  nadie quiso.                                                              */
+/*  set_spec — THE LADDER, IN ONE PLACE ONLY.  0 warma, 1 mawarma, 2 marow,
+ *  3 matri, 4 free.  It exists because the bootstrap has to be able to set and
+ *  clear a whole specification without forgetting a flag, and because four
+ *  flags set by hand in five places is how a combination nobody wanted gets
+ *  in.                                                                       */
 static void set_spec(int k)
 {
     global_warma = (k == 0); global_mawarma = (k == 1);
@@ -1911,8 +1909,9 @@ static int bootstrap_ma(real *x0, int npar0, int N, real *cv, real *pval,
     FILE *save_out = outputv;
     int save_quiet = quiet_mode, save_wa = global_mawarma;
 
-    /*  El modelo bajo H0 es el RESTRINGIDO, asi que se recupera con SU
-     *  especificacion puesta: con otra, vec_shootx leeria otro vector.       */
+    /*  The model under H0 is the RESTRICTED one, so it is recovered with ITS
+     *  specification in place: with another, vec_shootx would read another
+     *  vector.                                                               */
     set_spec(k0);
     {
         int idx = npar0 - s * r + 1;
@@ -1945,9 +1944,9 @@ static int bootstrap_ma(real *x0, int npar0, int N, real *cv, real *pval,
             for (j = 1; j <= M; j++) rawmat[i][j] = sim[i][j];
         set_spec(k0); l0 = fit_ll(r, &ok0);
         set_spec(k1); l1 = fit_ll(r, &ok1);
-        /*  Se descartan las replicas donde el libre acaba POR DEBAJO del
-         *  restringido: el restringido esta anidado, asi que un LR negativo es
-         *  un ajuste que no convergio, no una realizacion del estadistico.   */
+        /*  Replications where the free fit ends up BELOW the restricted one are
+         *  discarded: the restricted model is nested, so a negative LR is a fit
+         *  that did not converge, not a realisation of the statistic.        */
         if (ok0 && ok1 && l1 >= l0) stat[++nok] = 2.0 * (l1 - l0);
     }
     for (i = 1; i <= nobs_raw; i++)
@@ -1980,32 +1979,33 @@ static int bootstrap_ma(real *x0, int npar0, int N, real *cv, real *pval,
     return nok;
 }
 
-/*  Nota de convergencia — POR QUE paro, no solo SI paro.
+/*  Convergence note — WHY it stopped, not just WHETHER it stopped.
  *
- *  En VARMA multivariante la razon de la parada es un diagnostico de primer
- *  orden: verosimilitudes mal condicionadas, casi no identificacion y factores
- *  comunes se manifiestan como terminacion en steptol y no en el gradiente.
- *  La suite ya lo tenia establecido -- drvarma lo arreglo en su
- *  report._convergence_block y drtran lo expone como Fit.convergence_note --,
- *  y drvec imprimia el criterio sin decir lo que significa.
+ *  In multivariate VARMA the reason for stopping is a first-order diagnostic:
+ *  ill-conditioned likelihoods, near non-identification and common factors all
+ *  show up as termination on steptol rather than on the gradient.  The suite
+ *  had already established this -- drvarma fixed it in its
+ *  report._convergence_block and drtran exposes it as Fit.convergence_note --
+ *  and drvec printed the criterion without saying what it means.
  *
- *  DOS COSAS QUE ESTA NOTA ARREGLA, las dos heredadas:
+ *  TWO THINGS THIS NOTE FIXES, both inherited:
  *
- *   - termcode 2 (steptol) se anunciaba como "OPTIMIZER CONVERGED" a secas.  Lo
- *     es en el sentido del programa, pero es el sintoma tipico de una
- *     verosimilitud mal condicionada y los errores estandar no son de fiar.
- *   - "ESTIMATION SUCCESSFUL (ifault=0)" se lee como convergencia y NO LO ES:
- *     ifault es adecuacion del MODELO, no del optimizador (drvarma lo documenta
- *     explicitamente).  Un ajuste que paro lejos de un optimo puede tener
- *     ifault = 0 perfectamente.
+ *   - termcode 2 (steptol) was announced as a flat "OPTIMIZER CONVERGED".  It
+ *     is, in the program's sense, but it is the typical symptom of an
+ *     ill-conditioned likelihood and the standard errors are not to be trusted.
+ *   - "ESTIMATION SUCCESSFUL (ifault=0)" reads as convergence and IS NOT:
+ *     ifault is MODEL adequacy, not the optimiser's (drvarma documents this
+ *     explicitly).  A fit that stopped far from an optimum can perfectly well
+ *     report ifault = 0.
  *
- *  COMO SE OBTIENE EL TERMCODE.  est() no lo devuelve, y report() vive en
- *  qnewtopt.c, que es MOTOR y no se toca -- ni por una linea, ni para exponer un
- *  observable.  Asi que se lee del texto que report() ya escribio en el propio
- *  .out.  Es fragil respecto a esa cadena y sobre nada mas, y la alternativa era
- *  tocar codigo publicado y refereado.
+ *  HOW THE TERMCODE IS OBTAINED.  est() does not return it, and report() lives
+ *  in qnewtopt.c, which is ENGINE and is not touched -- not by one line, not
+ *  even to expose an observable.  So it is read back from the text report()
+ *  already wrote into the .out itself.  That is fragile with respect to that
+ *  string and nothing else, and the alternative was editing published, refereed
+ *  code.
  *
- *  Devuelve el termcode 1..5, o 0 si no se pudo determinar.                  */
+ *  Returns the termcode 1..5, or 0 if it could not be determined.            */
 static int termcode_from_out(const char *path)
 {
     FILE *f;
@@ -2027,7 +2027,7 @@ static int termcode_from_out(const char *path)
     return code;
 }
 
-/*  convergence_note — la interpretacion, en la salida y en la consola.        */
+/*  convergence_note — the interpretation, in the output and on the console. */
 static void convergence_note(int code)
 {
     const char *note = NULL, *head = NULL;
@@ -2079,28 +2079,29 @@ static void convergence_note(int code)
                head);
 }
 
-/*  load_alpha_A — lee la matriz A de la restriccion alpha = A*psi.
+/*  load_alpha_A — reads the matrix A of the alpha = A*psi restriction.
  *
- *  Formato, deliberadamente simple y ASCII: una primera linea con  M sa  y
- *  despues M filas de sa numeros.  Las lineas que empiezan por '*' o '#' son
- *  comentarios.  No se copia aqui el formato posicional de fue porque esto no
- *  es un fichero de la escalera: es una hipotesis del usuario.
+ *  Format, deliberately simple and ASCII: a first line with  M sa  and then M
+ *  rows of sa numbers.  Lines beginning with '*' or '#' are comments.  fue's
+ *  positional format is not copied here because this is not a file of the
+ *  ladder: it is a hypothesis of the user's.
  *
- *  Se comprueba el rango de A por su Gram: si A'A es singular la restriccion no
- *  identifica psi, y eso hay que decirlo antes de estimar y no despues.       */
+ *  A's rank is checked through its Gram matrix: if A'A is singular the
+ *  restriction does not identify psi, and that has to be said before
+ *  estimating, not after.                                                    */
 static int load_alpha_A(const char *path)
 {
     FILE *f = fopen(path, "r");
     char line[1024];
     int mm = 0, sa = 0, i, j, got = 0;
 
-    if (!f) { fprintf(stderr, "ERROR: no se pudo abrir %s\n", path); return 1; }
+    if (!f) { fprintf(stderr, "ERROR: cannot open %s\n", path); return 1; }
     while (fgets(line, sizeof line, f)) {
         if (line[0] == '*' || line[0] == '#' || line[0] == '\n') continue;
         if (sscanf(line, "%d %d", &mm, &sa) == 2) { got = 1; break; }
     }
     if (!got || mm != nser || sa < 1 || sa > nser) {
-        fprintf(stderr, "ERROR: %s debe empezar con 'M sa' con M = %d y "
+        fprintf(stderr, "ERROR: %s must start with 'M sa', with M = %d and "
                         "1 <= sa <= %d (leido %d %d)\n", path, nser, nser, mm, sa);
         fclose(f); return 1;
     }
@@ -2109,7 +2110,7 @@ static int load_alpha_A(const char *path)
     for (i = 1; i <= nser; i++) {
         char *tok;
         do { if (!fgets(line, sizeof line, f)) {
-                 fprintf(stderr, "ERROR: %s se acaba en la fila %d\n", path, i);
+                 fprintf(stderr, "ERROR: %s ends at row %d\n", path, i);
                  fclose(f); return 1; }
         } while (line[0] == '*' || line[0] == '#' || line[0] == '\n');
         tok = strtok(line, " \t\n");
@@ -2133,22 +2134,22 @@ static int load_alpha_A(const char *path)
         choldcp(G, sa, &d1, &d2, &ifc);
         free_matrix(G, 1, sa, 1, sa);
         if (ifc > 0) {
-            fprintf(stderr, "ERROR: A no tiene rango %d (A'A es singular), asi "
-                            "que psi no queda identificada\n", sa);
+            fprintf(stderr, "ERROR: A does not have rank %d (A'A is singular), so psi\n"
+                            "       is not identified\n", sa);
             return 1;
         }
     }
     return 0;
 }
 
-/*  build_weakex_A — la A que declara la ecuacion `eq` debilmente exogena.
- *  Es la identidad M x M sin su columna eq: alpha_eq = 0 para todo j.  La
- *  exogeneidad debil no necesita test propio, es H1(r) con esta A.            */
+/*  build_weakex_A — the A that declares equation `eq` weakly exogenous.
+ *  It is the M x M identity without its column eq: alpha_eq = 0 for every j.
+ *  Weak exogeneity needs no test of its own, it is H1(r) with this A.        */
 static int build_weakex_A(int eq)
 {
     int i, j, c;
     if (eq < 1 || eq > nser) {
-        fprintf(stderr, "ERROR: -weakex %d fuera de 1..%d\n", eq, nser);
+        fprintf(stderr, "ERROR: -weakex %d is outside 1..%d\n", eq, nser);
         return 1;
     }
     alpha_sa = nser - 1;
@@ -2163,78 +2164,117 @@ static int build_weakex_A(int eq)
 }
 
 /*****************************************************************************/
-/*  F2 — el puente con la suite: drvec escribe .inp y lee .pre               */
+/*  F2 — the bridge to the suite: drvec writes .inp and reads .pre          */
 /*                                                                           */
-/*  Ver docs/PLAN_BETA.md F2 para el estudio completo.  Lo que gobierna este  */
-/*  bloque, en tres frases:                                                  */
+/*  See docs/PLAN_BETA.md F2 for the full study.  What governs this block,  */
+/*  in three sentences:                                                    */
 /*                                                                           */
-/*   - drvec ESCRIBE .inp (una especificación) y nunca .pre (una afirmación   */
-/*     de optimalidad, que sólo puede hacer quien estimó).                   */
-/*   - El parser de fue es POSICIONAL y no valida nada, así que las secciones */
-/*     van todas y en orden, incluida la de factores de la diferencia anual,  */
-/*     que con datos anuales lleva un " 0" literal pero TIENE que estar.      */
-/*   - Todo lo que se escribe es ASCII puro: el parser de Python de fue no    */
-/*     lee Latin-1 (BUG-0010, abierto) y los fuentes de este motor lo son.    */
+/*   - drvec WRITES .inp (a specification) and never .pre (a claim of       */
+/*     optimality, which only whoever estimated can make).                  */
+/*   - fue's parser is POSITIONAL and validates nothing, so the sections    */
+/*     all go, and in order, including the annual-difference factor one,    */
+/*     which with annual data carries a literal " 0" but MUST be there.     */
+/*   - Everything written is pure ASCII: fue's Python parser does not read  */
+/*     Latin-1 (BUG-0010, open) and this engine's sources are.              */
 /*****************************************************************************/
 
-static int   global_writeinp = 0;    /* -writeinp <prefijo>  (componentes de Ȳ) */
+static int   global_writeinp = 0;    /* -writeinp <prefix>  (components of Ȳ) */
 static int   global_writeres = 0;    /* -writeres <prefijo>  (residuos)         */
 static char *inp_prefix      = NULL;
-static int   global_eval     = 0;    /* -eval: evaluar y salir, sin optimizar */
-static int   global_fdhess   = 0;    /* -fdhess: errores estandar por hessiano
-                                        de diferencias finitas en el optimo   */
-static int   global_boot     = 0;    /* -bootstrap N: valores criticos por
-                                        bootstrap parametrico bajo H0         */
-static int   global_interv   = 0;    /* -interv <prefijo>: deterministas del .pre */
+static int   global_eval     = 0;    /* -eval: evaluate and exit, without optimising */
+static int   global_fdhess   = 0;    /* -fdhess: standard errors from a
+                                        finite-difference Hessian at the optimum */
+static int   global_boot     = 0;    /* -bootstrap N: critical values by a
+                                        parametric bootstrap under H0         */
+static int   global_interv   = 0;    /* -interv <prefix>: deterministics from the .pre */
 static char *interv_prefix   = NULL;
-static int   global_multistart = 0;  /* -multistart n: n arranques, quedarse el mejor */
-static int   global_fcast = 0;       /* -f H: horizonte de prevision (P5)             */
-static const char *fc_csv = NULL;    /* -C fichero: errores por origen, para el DM    */
-/*  P6.7 — EL NOMBRE BASE, GLOBAL.  El sistema de ficheros del conjunto nombra
- *  cada producto por el mismo prefijo -- <base>.out, <base>.forecast,
- *  <base>.recursive -- y hasta ahora ese prefijo vivia solo dentro de main(),
- *  asi que la prevision no tenia forma de escribir su propio fichero y acababa
- *  metida en el informe de la ESTIMACION.  Ver docs/PLAN_PRODUCCION.md 7.1.  */
+static int   global_multistart = 0;  /* -multistart n: n starts, keep the best */
+static int   global_fcast = 0;       /* -f H: forecast horizon (P5)                   */
+static const char *fc_csv = NULL;    /* -C file: per-origin errors, for the DM test    */
+/*  P6.7 — THE BASE NAME, GLOBAL.  The suite's file system names every
+ *  product after the same prefix -- <base>.out, <base>.forecast,
+ *  <base>.recursive -- and until now that prefix lived only inside main(), so
+ *  the forecast had no way to write its own file and ended up inside the
+ *  ESTIMATION report.  See docs/PLAN_PRODUCCION.md 7.1.                      */
 static char out_base[512] = "";
+
+/*  P9 — THE .pre ROUTE'S STATE.  pre_route says which of the two interfaces was
+ *  used; i_pqr and first_opt say where p q r and the options begin, which on
+ *  the .inp route are 2 and 5 and on the .pre one depend on how many files were
+ *  given.  model_name is what the products are named after: <name>.out,
+ *  <name>.forecast, <name>.recursive.  drtran calls that option -m; here -m is
+ *  already the estimation method, inherited from drvarma, so the option is
+ *  -name and the collision is declared instead of resolved by moving a letter
+ *  that appears in the register.                                             */
+static int    pre_route  = 0;
+static char **pre_files  = NULL;
+static int    n_pre      = 0;
+static int    i_pqr      = 2;
+static int    first_opt  = 5;
+static const char *model_name = NULL;
+
+/*  ends_with — the suffix test the route detection is made of.               */
+static int ends_with(const char *s, const char *suf)
+{
+    size_t ls = strlen(s), lf = strlen(suf);
+    return ls >= lf && strcmp(s + ls - lf, suf) == 0;
+}
+
+/*  path_stem — "dir/ES_CPI.pre" -> "ES_CPI".  Used to name the products after
+ *  the files they came from, which is what drtran does with <output>_<input>. */
+static void path_stem(const char *path, char *out, size_t n)
+{
+    const char *b = strrchr(path, '/');
+    const char *dot;
+    size_t k, lim;
+    b = b ? b + 1 : path;
+    /*  The LAST dot, not the first: `mmpre.muskrat.pre` is one series called
+     *  mmpre.muskrat, and cutting at the first dot named every fixture of a set
+     *  the same thing -- so two runs wrote over each other's .out.           */
+    dot = strrchr(b, '.');
+    lim = dot ? (size_t) (dot - b) : strlen(b);
+    for (k = 0; k + 1 < n && k < lim; k++) out[k] = b[k];
+    out[k] = '\0';
+}
 
 static int   global_seed     = 0;    /* -seed <prefijo> */
 static char *pre_prefix      = NULL;
 
-/*  Residuos de la regresión condicional, publicados por init_guess para que
- *  -writeres pueda escribirlos.  e_t = Θ(L)A_t.                              */
+/*  Residuals of the conditional regression, published by init_guess so that
+ *  -writeres can write them out.  e_t = Θ(L)A_t.                             */
 
-/*  La semilla que se lee de los .pre: la DIAGONAL de Θ̄_k, k=1..q.
+/*  The seed read from the .pre files: the DIAGONAL of Θ̄_k, k=1..q.
  *
- *  SÓLO Θ, y no por comodidad: el .pre **no lleva σ²** — comprobado sobre la
- *  gramática (FILE_CONTRACT.md: la varianza de innovaciones sólo aparece en
- *  ficheros fuf) y sobre un .pre real escrito por fue.  Así que las razones de
- *  Σ siguen saliendo de los residuos de la regresión condicional, donde F1 las
- *  puso.  Y el AR tampoco se siembra: los univariantes dan Φ*_k para k=1..p,
- *  pero el modelo sólo tiene F_1..F_{p-1} y Φ̄_p = −F_{p-1}C̄⁻¹H̄ queda
- *  determinada, así que con r ≥ 1 el sistema está sobredeterminado y no hay
- *  forma consistente de repartirlo.  Θ es justo lo que hoy arranca en cero.  */
-static real **seed_tbar  = NULL;     /* [1..q][1..M]   diagonal de ThetaBar */
-static real **seed_phi   = NULL;     /* [1..p-1][1..M] diagonal de Phi*      */
-static real  *seed_var   = NULL;     /* [1..M]  sigma^2 de cada univariante  */
-static real  *seed_logl  = NULL;     /* [1..M]  logL de cada univariante     */
-static int    seed_have_uv = 0;      /* 1 si sigma2/logL se pudieron evaluar */
-static real   seed_logl_sum = 0.0;   /* suma de las logL univariantes        */
-static real   gate_ll_start  = 0.0;  /* logL EN los valores traidos (pre-ajuste) */
-static int    gate_have_start = 0;   /* 1 si se pudo evaluar antes de optimizar  */
-static real   gate_move      = 0.0;  /* mayor desplazamiento de un coeficiente   */
+ *  ONLY Θ, and not out of convenience: the .pre **does not carry σ²** —
+ *  checked against the grammar (FILE_CONTRACT.md: the innovation variance
+ *  appears only in fuf files) and against a real .pre written by fue.  So Σ's
+ *  ratios still come from the residuals of the conditional regression, where F1
+ *  put them.  And the AR is not seeded either: the univariate models give Φ*_k
+ *  for k=1..p, but the model only has F_1..F_{p-1} and Φ̄_p = −F_{p-1}C̄⁻¹H̄ is
+ *  determined, so with r ≥ 1 the system is overdetermined and there is no
+ *  consistent way to split it.  Θ is exactly what starts at zero today.      */
+static real **seed_tbar  = NULL;     /* [1..q][1..M]   diagonal of ThetaBar */
+static real **seed_phi   = NULL;     /* [1..p-1][1..M] diagonal of Phi*      */
+static real  *seed_var   = NULL;     /* [1..M]  sigma^2 of each univariate    */
+static real  *seed_logl  = NULL;     /* [1..M]  logL of each univariate       */
+static int    seed_have_uv = 0;      /* 1 if sigma2/logL could be evaluated */
+static real   seed_logl_sum = 0.0;   /* sum of the univariate logLs          */
+static real   gate_ll_start  = 0.0;  /* logL AT the values brought in (pre-fit)  */
+static int    gate_have_start = 0;   /* 1 if it could be evaluated before optimising */
+static real   gate_move      = 0.0;  /* largest displacement of a coefficient    */
 static int    gate_have_move = 0;
 
-/*  free_seed_pre — libera los cuatro bufers de siembra.
+/*  free_seed_pre — releases the four seeding buffers.
  *
- *  No existia: se asignaban en load_seed_pre y nunca se liberaban.  La fuga era
- *  invisible mientras vector() devolvia la base del bloque, porque valgrind veia
- *  un puntero al principio y lo daba por "todavia alcanzable"; al alinear
- *  vector() con la suite el puntero guardado apunta dentro del bloque y la fuga
- *  aparece como definitely lost.  O sea que el asignador con desplazamiento
- *  DETECTA mejor, y esto es lo primero que saco a la luz.
+ *  It did not exist: they were allocated in load_seed_pre and never freed.  The
+ *  leak was invisible while vector() returned the base of the block, because
+ *  valgrind saw a pointer to the start and called it "still reachable"; on
+ *  aligning vector() with the suite the stored pointer points inside the block
+ *  and the leak shows up as definitely lost.  So the offset allocator DETECTS
+ *  better, and this is the first thing it brought to light.
  *
- *  Los limites tienen que ser los de la asignacion, no los logicos: con q = 0 o
- *  p = 1 se reservo una fila igualmente.                                      */
+ *  The bounds have to be the allocation's, not the logical ones: with q = 0 or
+ *  p = 1 a row was reserved all the same.                                    */
 static void free_seed_pre(void)
 {
     int M = nser, q = global_q;
@@ -2279,11 +2319,12 @@ static void gate_contract(struct Tvarma *v)
     int failed = 0;
 
     if (global_r != 0 || !global_diag_ar || !global_diag_ma || !global_diag_cov)
-        return;                       /* la factorizacion solo vale aqui */
+        return;                       /* the factorisation only holds here */
 
-    /*  Senal legible al lado del hueco: cuanto se movio el coeficiente que mas
-     *  se movio.  Se compara la semilla con el ajuste en la MISMA convencion,
-     *  la del motor, para que un cambio de signo no se lea como movimiento.  */
+    /*  A readable signal next to the gap: how far the coefficient that moved
+     *  most actually moved.  The seed is compared with the fit in the SAME
+     *  convention, the engine's, so that a sign change is not read as
+     *  movement.                                                             */
     if (seed_have_uv && seed_tbar) {
         gate_move = 0.0;
         for (k = 1; k <= q; k++)
@@ -2313,7 +2354,7 @@ static void gate_contract(struct Tvarma *v)
         u.a     = matrix(1, n, 1, 1);
 
         u.mu[1] = v->mu[i];
-        u.qq[1][1] = 1.0;                 /* la escala se concentra, como arriba */
+        u.qq[1][1] = 1.0;                 /* the scale is concentrated, as above */
         u.phi[0][1][1] = 1.0; u.theta[0][1][1] = 1.0;
         for (k = 1; k <= p; k++) u.phi[k][1][1]   = v->phi[k][i][i];
         for (k = 1; k <= q; k++) u.theta[k][1][1] = v->theta[k][i][i];
@@ -2348,33 +2389,36 @@ static void gate_contract(struct Tvarma *v)
         return;
     }
 
-    /*  LA TOLERANCIA ES LA TRUNCACION, y esta medida, no elegida.
+    /*  THE TOLERANCE IS THE TRUNCATION, and it is measured, not chosen.
      *
-     *  La identidad es exacta en algebra.  Lo que la separa en la maquina es
-     *  que elf trunca la sucesion xi cuando la suma de valores absolutos de su
-     *  termino baja de xitol (elfvarma.c, cxi [1]), y el sistema conjunto y las
-     *  univariantes NO truncan en el mismo termino: el conjunto suma m entradas
-     *  y cada univariante una sola.  Medido, bajando xitol y volviendo a
-     *  construir, sobre el hueco mayor del banco (Milan, p = 2, q = 1):
+     *  The identity is exact in algebra.  What separates the two sides on the
+     *  machine is that elf truncates the xi sequence when the sum of absolute
+     *  values of its term falls below xitol (elfvarma.c, cxi [1]), and the
+     *  joint system and the univariate ones do NOT truncate at the same term:
+     *  the joint one sums m entries and each univariate one a single entry.
+     *  Measured, by lowering xitol and rebuilding, on the bank's largest gap
+     *  (Milan, p = 2, q = 1):
      *
      *      xitol     joint - sum
      *      1e-3       1.385e-04
      *      1e-8       3.100e-09
      *
-     *  El hueco ES xitol, con un factor de ~0.15, y con q = 0 -- donde no hay
-     *  sucesion que truncar -- es CERO EXACTO en las doce series del banco.
+     *  The gap IS xitol, with a factor of ~0.15, and with q = 0 -- where there
+     *  is no sequence to truncate -- it is EXACTLY ZERO on all twelve series of
+     *  the bank.
      *
-     *  El umbral fijo de 1e-4 que habia aqui declaraba entonces NO VERIFICADA
-     *  la puerta de Milan, cuyo desacuerdo RELATIVO (2.1e-6) es menor que el de
-     *  Angers (6.3e-6), que pasaba: ordenaba los casos por el tamano de su logL
-     *  y no por su acuerdo, que es lo contrario de lo que dice comprobar.  Una
-     *  alarma que suena por el tamano del dato no es una alarma.
+     *  The fixed 1e-4 threshold that used to be here therefore declared Milan's
+     *  gate NOT VERIFIED, when its RELATIVE disagreement (2.1e-6) is smaller
+     *  than Angers' (6.3e-6), which passed: it ordered the cases by the size of
+     *  their logL and not by their agreement, which is the opposite of what it
+     *  claims to check.  An alarm that rings at the size of the datum is not an
+     *  alarm.
      *
-     *  Ligado a xitol, en cambio, el contrato afirma lo unico que se puede
-     *  afirmar: que las dos rutas coinciden HASTA DONDE LA APROXIMACION LLEGA.
-     *  Los fallos que esta puerta tiene que atrapar -- el signo de Lambda en la
-     *  transformacion, B2 leido traspuesto -- abren huecos de UNIDADES, tres
-     *  ordenes por encima de este umbral, asi que no se afloja nada real.     */
+     *  Tied to xitol instead, the contract asserts the only thing that can be
+     *  asserted: that the two routes agree AS FAR AS THE APPROXIMATION REACHES.
+     *  The failures this gate has to catch -- the sign of Lambda in the
+     *  transformation, B2 read transposed -- open gaps of UNITS, three orders
+     *  above this threshold, so nothing real is loosened.                    */
     {
         real gap = v->logelf - sum;
         real tol = (q > 0) ? fabs(v->xitol) : 1.0e-6;
@@ -2437,37 +2481,38 @@ static void gate_contract(struct Tvarma *v)
 
 static int    seed_loaded = 0;
 
-/*  De qué ruta viene la semilla, que decide en qué coordenadas está:
+/*  Which route the seed comes from, which decides what coordinates it is in:
  *
- *    SEED_RESID (-seed)      los .pre son de los RESIDUOS de la regresión
- *                            condicional.  e_t = Θ(L)A_t, así que la θ
- *                            univariante estima Θ DIRECTAMENTE, en coordenadas
- *                            de ∇Y.  No se transforma.
- *    SEED_YBAR  (-seedybar)  los .pre son de los COMPONENTES DE Ȳ.  Lo que un
- *                            univariante de Ȳ ve es Θ̄ = C̄ΘC̄⁻¹, así que hay
- *                            que deshacerlo: Θ_k = C̄⁻¹Θ̄_kC̄.
+ *    SEED_RESID (-seed)      the .pre files are of the RESIDUALS of the
+ *                            conditional regression.  e_t = Θ(L)A_t, so the
+ *                            univariate θ estimates Θ DIRECTLY, in ∇Y
+ *                            coordinates.  It is not transformed.
+ *    SEED_YBAR  (-seedybar)  the .pre files are of the COMPONENTS OF Ȳ.  What a
+ *                            univariate model of Ȳ sees is Θ̄ = C̄ΘC̄⁻¹, so that
+ *                            has to be undone: Θ_k = C̄⁻¹Θ̄_kC̄.
  *
- *  Confundir las dos es un error silencioso: la misma θ metida en la coordenada
- *  equivocada da otro modelo sin que nada proteste.  La ruta Ȳ está medida y es
- *  PEOR (ver PLAN_BETA.md F2.7); se conserva para poder reproducir la medida.  */
+ *  Confusing the two is a silent error: the same θ put into the wrong
+ *  coordinate gives a different model with nothing complaining.  The Ȳ route is
+ *  measured and it is WORSE (see PLAN_BETA.md F2.7); it is kept so that the
+ *  measurement can be reproduced.                                            */
 #define SEED_NONE  0
 #define SEED_RESID 1
 #define SEED_YBAR  2
 static int seed_route = SEED_NONE;
 
-/*  ybar_start_date — fecha de la primera observación de Ȳ.
- *  En el layout de niveles datamat[t] corresponde a rawmat[t+1], porque la
- *  primera observación se consume al diferenciar; con -differenced no hay
- *  desfase.  ObsToDate viene del puente (src/fue_bridge.c).                  */
+/*  ybar_start_date — date of the first observation of Ȳ.
+ *  In the levels layout datamat[t] corresponds to rawmat[t+1], because the
+ *  first observation is consumed by differencing; with -differenced there is no
+ *  offset.  ObsToDate comes from the bridge (src/fue_bridge.c).              */
 static void ybar_start_date(int *year, int *sub)
 {
     int first = global_levels ? 2 : 1;
     ObsToDate(data_start_year, data_start_sub, first, data_freq, year, sub);
 }
 
-/*  ar_ols_seed — semilla del AR de un componente: OLS sobre sus propios
- *  retardos.  No es una identificación (eso es ART); es un punto de partida
- *  mejor que una constante, y fue lo reestimará de todas formas.             */
+/*  ar_ols_seed — seed for a component's AR: OLS on its own lags.  It is not
+ *  an identification (that is ART); it is a starting point better than a
+ *  constant, and fue will re-estimate it anyway.                             */
 static void ar_ols_seed(real *y, int n, int k, real *phi)
 {
     int i, j, t;
@@ -2489,8 +2534,8 @@ static void ar_ols_seed(real *y, int n, int k, real *phi)
         Xy[i] = 0.0;
         for (t = k + 1; t <= n; t++) Xy[i] += (y[t-i] - mean) * (y[t] - mean);
     }
-    /* Un componente degenerado (varianza nula) haría singular a XX; en ese caso
-       se deja el AR en cero, que es una semilla legítima.                     */
+    /* A degenerate component (zero variance) would make XX singular; in that
+       case the AR is left at zero, which is a legitimate seed.               */
     for (i = 1; i <= k; i++) if (XX[i][i] <= 1.0e-30) goto done;
     ludcp(XX, k, ind);
     lusol(XX, Xy, k, ind);
@@ -2501,7 +2546,7 @@ done:
     free_matrix(XX, 1, k, 1, k);
 }
 
-/*  ascii_name — nombre de serie apto para un .inp: ASCII, sin espacios.      */
+/*  ascii_name — a series name fit for an .inp: ASCII, no blanks.           */
 static void ascii_name(const char *src, const char *prefix, char *dst, int cap)
 {
     int n = 0;
@@ -2515,12 +2560,12 @@ static void ascii_name(const char *src, const char *prefix, char *dst, int cap)
     dst[n] = '\0';
 }
 
-/*  write_inp_series — escribe UN .inp para una serie ya estacionaria.
+/*  write_inp_series — writes ONE .inp for an already stationary series.
  *
- *  par = orden del factor AR (0 = sin AR), qma = orden del factor MA.  Se piden
- *  como UN factor de orden k ("1 k") y no como k factores de primer orden
- *  ("k 1 1 ..."), para que los coeficientes del .pre mapeen directamente sobre
- *  phi_1..phi_k / theta_1..theta_k al expandirlos (FILE_CONTRACT.md 2.3).     */
+ *  par = order of the AR factor (0 = no AR), qma = order of the MA factor.
+ *  They are asked for as ONE factor of order k ("1 k") and not as k first-order
+ *  factors ("k 1 1 ..."), so that the .pre's coefficients map directly onto
+ *  phi_1..phi_k / theta_1..theta_k when expanded (FILE_CONTRACT.md 2.3).     */
 static int write_inp_series(const char *path, const char *name,
                             real *col, int n, int year, int sub,
                             int par, int qma, int mu_free, const char *what)
@@ -2533,13 +2578,13 @@ static int write_inp_series(const char *path, const char *name,
     for (t = 1; t <= n; t++) mean += col[t];
     mean /= n;
 
-    /* refactor: la regla medida en la suite (drtran-python pre.py:check_scale y
-       BRIDGE_DESIGN.md).  cdgrad usa un paso de diferencias finitas de ~6e-6
-       ABSOLUTO, asi que una serie diminuta da un gradiente que es ruido; la
-       banda comoda es |w| tipico entre 0.01 y 100 y el objetivo ~1.  Se mide
-       sobre la propia serie y se redondea a potencia de diez.  Que cada
-       componente lleve el suyo es inocuo porque lo unico que se siembra de
-       vuelta es Theta, que es invariante de escala.                           */
+    /* refactor: the rule measured in the suite (drtran-python pre.py:check_scale
+       and BRIDGE_DESIGN.md).  cdgrad uses an ABSOLUTE finite-difference step of
+       ~6e-6, so a tiny series gives a gradient that is noise; the comfortable
+       band is a typical |w| between 0.01 and 100 with the objective around 1.
+       It is measured on the series itself and rounded to a power of ten.  That
+       each component carries its own is harmless because the only thing seeded
+       back is Theta, which is scale-invariant.                                */
     {
         real med = 0.0;
         int cnt = 0;
@@ -2557,8 +2602,8 @@ static int write_inp_series(const char *path, const char *name,
 
     ar_ols_seed(col, n, par, phi);
 
-    /* Cabecera libre: el parser salta lineas hasta el separador que dice
-       "frequency".  Libre, pero ASCII (BUG-0010 de fue).                      */
+    /* Free header: the parser skips lines up to the separator that says
+       "frequency".  Free, but ASCII (fue's BUG-0010).                        */
     fprintf(f, "************************************************\n");
     fprintf(f, "* Input file for program FUE                   *\n");
     fprintf(f, "* written by drvec: %-26s *\n", what);
@@ -2585,26 +2630,26 @@ static int write_inp_series(const char *path, const char *name,
                " with fixed frequency:\n0\n");
     fprintf(f, "** Number and frequencies of regular MA(2) operators"
                " with fixed frequency:\n0\n");
-    /* mu: la media de la variable YA diferenciada, que es lo que estas series
-       son.  Sembrarla mal cuesta caro -- BUG-0012 de fue: un mu_0 de 2.5 contra
-       una serie de media 17.06 deja a fue 6.86 de logL por debajo del optimo.
-       Va escalada por refactor, como el resto de la serie.
-       Y mu_free TIENE que seguir el caso determinista del modelo conjunto: si
-       aqui se estima una media que el modelo conjunto no puede representar, la
-       theta que devuelve fue esta condicionada a algo que no existe.  El
-       formato distingue las dos cosas por el FLAG, no por el valor: "valor 1"
-       es estimar y un unico "0" es que la media no forma parte del modelo.    */
+    /* mu: the mean of the ALREADY differenced variable, which is what these
+       series are.  Seeding it wrongly is expensive -- fue's BUG-0012: a mu_0 of
+       2.5 against a series of mean 17.06 leaves fue 6.86 of logL below the
+       optimum.  It goes scaled by refactor, like the rest of the series.
+       And mu_free MUST follow the deterministic case of the joint model: if a
+       mean the joint model cannot represent is estimated here, the theta fue
+       returns is conditioned on something that does not exist.  The format
+       distinguishes the two by the FLAG, not by the value: "value 1" means
+       estimate, and a single "0" means the mean is not part of the model.    */
     fprintf(f, "** Mean parameter (mu):\n");
     if (mu_free) fprintf(f, "%.6f  1\n", mean * refactor);
     else         fprintf(f, "0\n");
-    /* Series ya estacionarias, y ya en logs si el .inp original lo estaba:
-       identidad y cero diferencias.                                          */
+    /* Series already stationary, and already in logs if the original .inp was:
+       identity and zero differences.                                        */
     fprintf(f, "** Box-Cox lambda, regular differences and complete"
                " annual differences:\n1.00 0 0\n");
-    /* Esta seccion la escriben SIEMPRE los dos escritores de fue (fue.c:3485 y
-       report.py:1203) y el parser de Python la lee SIEMPRE: con datos anuales,
-       un " 0" literal.  Omitirla desplaza todo lo que viene detras sin dar
-       error -- que es el mismo fallo que tenia el lector en C (ver F2.1).     */
+    /* This section is ALWAYS written by both of fue's writers (fue.c:3485 and
+       report.py:1203) and the Python parser ALWAYS reads it: with annual data,
+       a literal " 0".  Omitting it shifts everything that comes after with no
+       error -- the same bug the C reader had (see F2.1).                     */
     fprintf(f, "** Individual factors of the annual difference"
                " (from freq 0.0): \n");
     if (data_freq > 1) {
@@ -2615,9 +2660,9 @@ static int write_inp_series(const char *path, const char *name,
     fprintf(f, " 0.00 %.2f\n", refactor);
     fprintf(f, "** Time series (stochastic and non-standard deterministic"
                " variables): \n");
-    /* Los datos van CRUDOS: refactor es una directiva y fue lo aplica el mismo
-       (w = refactor * BoxCox(z), BRIDGE_DESIGN.md).  Pre-multiplicarlos aqui lo
-       aplicaria dos veces.  mu si va escalada, porque es la media de w.       */
+    /* The data go RAW: refactor is a directive and fue applies it itself
+       (w = refactor * BoxCox(z), BRIDGE_DESIGN.md).  Pre-multiplying here would
+       apply it twice.  mu does go scaled, because it is the mean of w.       */
     for (t = 1; t <= n; t++) fprintf(f, "%.10f\n", col[t]);
     fclose(f);
 
@@ -2628,17 +2673,17 @@ static int write_inp_series(const char *path, const char *name,
     return 0;
 }
 
-/*  write_component_inps — un .inp por COMPONENTE DE Ybar.
+/*  write_component_inps — one .inp per COMPONENT OF Ybar.
  *
- *  El modelo que se pide es ARMA(p-1, q) con media: p es el orden AR sobre Ybar,
- *  luego sobre nabla Y el orden efectivo es p-1 (seccion 2 del plan).
+ *  The model asked for is ARMA(p-1, q) with a mean: p is the AR order on Ybar,
+ *  so on nabla Y the effective order is p-1 (section 2 of the plan).
  *
- *  AVISO MEDIDO: sembrar Theta desde estos ficheros EMPEORA el ajuste (ver
- *  PLAN_BETA.md F2.7).  El marginal univariante de un componente de un VARMA no
- *  es Theta_ii: marginalizar mezcla AR y MA e infla los ordenes.  Este modo se
- *  conserva porque es la unidad natural para que ART identifique el modelo
- *  -- que es informacion sobre p y q --, no como fuente de semilla.  Para eso
- *  esta -writeres.                                                            */
+ *  MEASURED WARNING: seeding Theta from these files MAKES THE FIT WORSE (see
+ *  PLAN_BETA.md F2.7).  The univariate marginal of a component of a VARMA is
+ *  not Theta_ii: marginalising mixes AR and MA and inflates the orders.  This
+ *  mode is kept because it is the natural unit for ART to identify the model
+ *  -- which is information about p and q -- not as a source of seeds.  For that
+ *  there is -writeres.                                                       */
 static int write_component_inps(const char *prefix)
 {
     int M = nser, r = global_r, s = M - r;
@@ -2660,9 +2705,9 @@ static int write_component_inps(const char *prefix)
         else        ascii_name(series_names[i], "W", name, sizeof name);
         snprintf(path, sizeof path, "%s.%d.inp", prefix, i);
         snprintf(what, sizeof what, "Ybar component %d", i);
-        /* Caso 1: E[nabla Y2] = 0 y E[W] = 0, luego ninguna media.
-           Caso 2: E[W] != 0 pero E[nabla Y2] = 0.
-           Caso 3: las dos libres.  (Mauricio 2006, Remark 6.)                */
+        /* Case 1: E[nabla Y2] = 0 and E[W] = 0, so no mean at all.
+           Case 2: E[W] != 0 but E[nabla Y2] = 0.
+           Case 3: both free.  (Mauricio 2006, Remark 6.)                     */
         {
             int mu_free = (global_case == 3) ||
                           (global_case == 2 && i > s);
@@ -2677,13 +2722,14 @@ static int write_component_inps(const char *prefix)
     return nbad ? 1 : 0;
 }
 
-/*  write_resid_inps — un .inp por componente de los RESIDUOS de la regresion
- *  condicional.  Esta es la ruta buena para sembrar Theta, y la razon es de
- *  fondo: los residuos son e_t = Theta(L)A_t, cuyo marginal por componente es
- *  MA(q) EXACTAMENTE, sin la inflacion de orden del marginal de Ybar.  Asi que
- *  se pide ARMA(0, q) -- MA puro, sin AR, que ya se ha descontado.
+/*  write_resid_inps — one .inp per component of the RESIDUALS of the
+ *  conditional regression.  This is the good route for seeding Theta, and the
+ *  reason is fundamental: the residuals are e_t = Theta(L)A_t, whose marginal
+ *  per component is EXACTLY MA(q), without the order inflation of Ybar's
+ *  marginal.  So ARMA(0, q) is asked for -- pure MA, with no AR, which has
+ *  already been netted out.
  *
- *  Requiere que init_guess se haya ejecutado (es quien publica cond_resid).    */
+ *  Requires init_guess to have run (it is what publishes cond_resid).        */
 static int write_resid_inps(const char *prefix)
 {
     int M = nser, q = global_q, p = global_p;
@@ -2692,10 +2738,10 @@ static int write_resid_inps(const char *prefix)
     real *col;
 
     if (!cond_resid || T < 4) {
-        fprintf(stderr, "ERROR: no hay residuos que escribir\n");
+        fprintf(stderr, "ERROR: there are no residuals to write\n");
         return 1;
     }
-    /* Los residuos empiezan en t = p+1 sobre el indice de Ybar. */
+    /* The residuals start at t = p+1 on Ybar's index. */
     {
         int first = (global_levels ? 2 : 1) + p;
         ObsToDate(data_start_year, data_start_sub, first, data_freq, &year, &sub);
@@ -2707,15 +2753,15 @@ static int write_resid_inps(const char *prefix)
         ascii_name(series_names[i], "e", name, sizeof name);
         snprintf(path, sizeof path, "%s.%d.inp", prefix, i);
         snprintf(what, sizeof what, "residual %d, MA(%d)", i, q);
-        /* La media del residuo es una molestia del ajuste preliminar --- la
-           regresion condicional no lleva constante --- y no un parametro del
-           modelo conjunto, asi que en general va libre: lo unico que se quiere
-           de aqui es la estructura MA.
-           EXCEPTO en el caso 1, donde el modelo conjunto NO ADMITE MEDIA
-           ninguna (E[nabla Y2] = 0 y E[W] = 0).  Dejarla libre alli devuelve una
-           theta condicionada a algo que el modelo no puede representar, y esta
-           medido: con mu libre la semilla arranca 3.40 por debajo del arranque
-           en frio, y fijandola en 0 recupera 0.53 de esos 3.40.  Ver F2.7.    */
+        /* The residual's mean is a nuisance of the preliminary fit --- the
+           conditional regression carries no constant --- and not a parameter of
+           the joint model, so in general it goes free: all that is wanted from
+           here is the MA structure.
+           EXCEPT in case 1, where the joint model ADMITS NO MEAN at all
+           (E[nabla Y2] = 0 and E[W] = 0).  Leaving it free there returns a theta
+           conditioned on something the model cannot represent, and it is
+           measured: with mu free the seed starts 3.40 below the cold start, and
+           fixing it at 0 recovers 0.53 of those 3.40.  See F2.7.             */
         nbad += write_inp_series(path, name, col, T, year, sub, 0, q,
                                  (global_case != 1), what);
     }
@@ -2723,34 +2769,34 @@ static int write_resid_inps(const char *prefix)
     return nbad ? 1 : 0;
 }
 
-/*  load_seed_pre — lee un .pre por componente y deja en seed_tbar la diagonal
- *  de Θ̄_k.  Devuelve 0 si pudo leer los M ficheros.
+/*  load_seed_pre — reads one .pre per component and leaves the diagonal of
+ *  Θ̄_k in seed_tbar.  Returns 0 if it could read all M files.
  *
- *  Los factores del .pre se expanden con expand_ma_factors, que viene de
- *  drtran y es el espejo en C del _unscramble del cast de fue: el .pre guarda
- *  operadores FACTORIZADOS, y "2 1 1" (dos factores de primer orden) no es
- *  "1 2" (uno de segundo).  Expandir con la rutina de la suite, en vez de
- *  reimplementar la convolución, es lo que garantiza que drvec lea el mismo
- *  modelo que fue estimó.                                                    */
-/*  pre_univariate — evalúa el modelo de UN `.pre` sobre su propia serie y
- *  devuelve su log-verosimilitud exacta y su σ².
+ *  The .pre's factors are expanded with expand_ma_factors, which comes from
+ *  drtran and is the C mirror of fue's cast _unscramble: the .pre stores
+ *  FACTORISED operators, and "2 1 1" (two first-order factors) is not "1 2"
+ *  (one of second order).  Expanding with the suite's routine, instead of
+ *  reimplementing the convolution, is what guarantees that drvec reads the same
+ *  model fue estimated.                                                      */
+/*  pre_univariate — evaluates ONE `.pre`'s model on its own series and returns
+ *  its exact log-likelihood and its σ².
  *
- *  El `.pre` no lleva σ² — eso es cierto y está comprobado sobre el formato —
- *  pero **sí lleva el modelo y los datos**, así que σ² es *derivable*: basta
- *  evaluar la verosimilitud univariante con el mismo `elf` que usa toda la
- *  suite.  Decir «no se puede sembrar Σ desde el .pre» era quedarse en la
- *  primera mitad del argumento.
+ *  The `.pre` does not carry σ² — that is true and checked against the format —
+ *  but **it does carry the model and the data**, so σ² is *derivable*: it is
+ *  enough to evaluate the univariate likelihood with the same `elf` the whole
+ *  suite uses.  Saying "Σ cannot be seeded from the .pre" was stopping at the
+ *  first half of the argument.
  *
- *  Y de paso da lo que hace falta para los dos contratos de la escalera
- *  (`drtran-python/docs/LADDER_AS_OPTIMISATION.md` §2.1 y §3): la suma de las
- *  logL univariantes, que con r = 0 y estructura diagonal debe coincidir con la
- *  conjunta, y el certificado de optimalidad, que es la brecha entre evaluar y
- *  ajustar.
+ *  And it gives, in passing, what the ladder's two contracts need
+ *  (`drtran-python/docs/LADDER_AS_OPTIMISATION.md` §2.1 and §3): the sum of the
+ *  univariate logLs, which with r = 0 and diagonal structure must coincide with
+ *  the joint one, and the optimality certificate, which is the gap between
+ *  evaluating and fitting.
  *
- *  σ² sale en las unidades REESCALADAS (w = refactor·z), así que se devuelve
- *  dividido por refactor² para que las razones entre componentes con distinto
- *  refactor sean comparables.  Se rechaza lo que no sabemos manejar: Box-Cox
- *  distinto de la identidad, diferencias, o deterministas.                    */
+ *  σ² comes out in the RESCALED units (w = refactor·z), so it is returned
+ *  divided by refactor² for the ratios between components with different
+ *  refactors to be comparable.  What we do not know how to handle is refused:
+ *  a Box-Cox other than the identity, differencing, or deterministic terms.  */
 static int pre_univariate(struct Tusmodel *Tm, struct Tseries *Ts,
                           real *logl_out, real *sigma2_out)
 {
@@ -2761,8 +2807,8 @@ static int pre_univariate(struct Tusmodel *Tm, struct Tseries *Ts,
 
     if (Tm->NdetVar != 0 || Tm->nrdiff != 0 || Tm->nadiff != 0
         || Tm->boxlam != 1.0) {
-        fprintf(stderr, "WARNING: el .pre lleva deterministas, diferencias o "
-                        "Box-Cox; no se evalua su sigma2\n");
+        fprintf(stderr, "WARNING: the .pre carries deterministic terms, differencing or a\n"
+                        "         Box-Cox; its sigma2 is not evaluated\n");
         return 1;
     }
     for (k = 1; k <= Tm->NumAr1; k++) p += Tm->p1[k];
@@ -2800,12 +2846,12 @@ static int pre_univariate(struct Tusmodel *Tm, struct Tseries *Ts,
         *logl_out = -0.5 * uv.m * uv.n * (LOG2PI - log((real) uv.m)
                     - log((real) uv.n) + 1.0)
                     - 0.5 * uv.n * (uv.m * log(pi1) + log(pi2));
-        /* De vuelta a las unidades ORIGINALES.  fue estima sobre w = refactor*z,
-           y una logL no es invariante de escala: hay que quitarle el jacobiano
-           n*log(refactor).  Sin esto la suma de univariantes no es comparable
-           con la conjunta y la identidad de cruce parece fallar por cientos de
-           unidades (en mink-muskrat, por 2*61*log(10) = 280.92).
-           El signo: si w = c*z entonces p_z(z) = c^n * p_w(w), luego
+        /* Back to the ORIGINAL units.  fue estimates on w = refactor*z, and a
+           logL is not scale-invariant: the jacobian n*log(refactor) has to come
+           off.  Without this the sum of univariate logLs is not comparable with
+           the joint one and the crossing identity looks as though it fails by
+           hundreds of units (on mink-muskrat, by 2*61*log(10) = 280.92).
+           The sign: if w = c*z then p_z(z) = c^n * p_w(w), so
            logL_z = logL_w + n*log(c).                                        */
         *logl_out += uv.n * log(refac);
         *sigma2_out = (pi1 / (uv.n * uv.m)) / (refac * refac);
@@ -2820,10 +2866,11 @@ static int pre_univariate(struct Tusmodel *Tm, struct Tseries *Ts,
     return (ifault == 0) ? 0 : 1;
 }
 
-/*  Cada .pre leido se libera con free_fue_pre (src/fue_bridge.c).  El lector no
- *  trae desasignador -- ni aqui ni en drtran, que es su BUG-12 --, asi que se
- *  escribio uno; no liberar es un fallo aunque el programa termine enseguida, y
- *  el mismo lector se usa desde procesos que no terminan.                    */
+/*  Each .pre read is released with free_fue_pre (src/fue_bridge.c).  The
+ *  reader brings no deallocator -- neither here nor in drtran, which is its
+ *  BUG-12 -- so one was written; not freeing is a fault even if the program
+ *  ends straight away, and the same reader is used from processes that do not
+ *  end.                                                                      */
 static int load_seed_pre(const char *prefix)
 {
     int M = nser, q = global_q;
@@ -2847,30 +2894,31 @@ static int load_seed_pre(const char *prefix)
         real **DataMat = NULL;
         int qpre;
 
-        /* Se prueba .pre y si no está, .inp.  Los dos son el MISMO formato y
-           distinta afirmación: el .pre dice «esto es un óptimo» y el .inp «esto
-           es una especificación» (FILE_CONTRACT.md §4).  Aceptar los dos es lo
-           que hacen el lector de fue y el load_pre de drtran, y es lo que
-           permite probar la siembra con un fichero retocado a mano sin tener
-           que fabricar un .pre, que sería afirmar un óptimo que no existe.    */
+        /* .pre is tried and, failing that, .inp.  The two are the SAME format
+           and a different claim: the .pre says "this is an optimum" and the .inp
+           "this is a specification" (FILE_CONTRACT.md §4).  Accepting both is
+           what fue's reader and drtran's load_pre do, and it is what allows the
+           seeding to be tested with a hand-edited file without having to
+           manufacture a .pre, which would be claiming an optimum that does not
+           exist.                                                             */
         snprintf(path, sizeof path, "%s.%d.pre", prefix, i);
         if (read_fue_pre(path, &Tm, &Ts, &DataMat) != 0) {
             char alt[1024];
             snprintf(alt, sizeof alt, "%s.%d.inp", prefix, i);
             if (read_fue_pre(alt, &Tm, &Ts, &DataMat) != 0) {
-                fprintf(stderr, "ERROR: no se pudo leer %s ni %s\n", path, alt);
+                fprintf(stderr, "ERROR: could not read %s or %s\n", path, alt);
                 free_matrix(seed_tbar, 1, q, 1, M); seed_tbar = NULL;
                 return 1;
             }
             if (!quiet_mode)
-                printf("  (%s no está; se usa %s, que es una especificación"
-                       " y no un óptimo)\n", path, alt);
+                printf("  (%s is not there; %s is used, which is a specification"
+                       " and not an optimum)\n", path, alt);
         }
         if (Ts.nobs != nobs)
-            fprintf(stderr, "WARNING: %s trae %d observaciones y Ȳ tiene %d\n",
+            fprintf(stderr, "WARNING: %s brings %d observations and Ȳ has %d\n",
                     path, Ts.nobs, nobs);
 
-        /* Orden MA que trae el fichero, sumando los factores regulares. */
+        /* MA order the file brings, summing the regular factors. */
         qpre = 0;
         for (k = 1; k <= Tm.NumMa1; k++) qpre += Tm.q1[k];
         if (qpre > 0) {
@@ -2881,13 +2929,13 @@ static int load_seed_pre(const char *prefix)
             free_vector(th, 1, qpre);
         }
         if (qpre != q)
-            fprintf(stderr, "WARNING: %s trae MA de orden %d y el modelo pide %d;"
-                            " los retardos que falten se siembran en 0\n",
+            fprintf(stderr, "WARNING: %s brings an MA of order %d and the model asks for %d;\n"
+                            "         the missing lags are seeded at 0\n",
                     path, qpre, q);
 
-        /* AR: la diagonal de Phi*.  Con r = 0 se tiene Phi*_k = F_k, asi que
-           esto siembra F directamente; con r >= 1 hay que deshacer Cbar, que es
-           lo que hace init_guess.                                            */
+        /* AR: the diagonal of Phi*.  With r = 0 one has Phi*_k = F_k, so this
+           seeds F directly; with r >= 1 Cbar has to be undone, which is what
+           init_guess does.                                                   */
         {
             int ppre = 0;
             for (k = 1; k <= Tm.NumAr1; k++) ppre += Tm.p1[k];
@@ -2899,12 +2947,12 @@ static int load_seed_pre(const char *prefix)
                 free_vector(ph, 1, ppre);
             }
             if (ppre != nf)
-                fprintf(stderr, "WARNING: %s trae AR de orden %d y el modelo "
-                                "pide %d\n", path, ppre, nf);
+                fprintf(stderr, "WARNING: %s brings an AR of order %d and the model "
+                                "asks for %d\n", path, ppre, nf);
         }
 
-        /* sigma^2 y logL: NO estan en el fichero, pero el fichero trae el
-           modelo Y los datos, asi que se derivan evaluando con elf.          */
+        /* sigma^2 and logL: NOT in the file, but the file brings the model AND
+           the data, so they are derived by evaluating with elf.              */
         {
             real ll = 0.0, s2 = 1.0;
             if (pre_univariate(&Tm, &Ts, &ll, &s2) == 0) {
@@ -2921,9 +2969,9 @@ static int load_seed_pre(const char *prefix)
         for (i = 1; i <= M; i++) tot += seed_logl[i];
         seed_logl_sum = tot;
         if (!quiet_mode) {
-            printf("  univariantes del .pre:");
+            printf("  univariate logL from the .pre files:");
             for (i = 1; i <= M; i++) printf(" %.6f", seed_logl[i]);
-            printf("   suma = %.6f\n", tot);
+            printf("   sum = %.6f\n", tot);
         }
     }
     seed_loaded = 1;
@@ -2940,11 +2988,11 @@ static void init_guess(real *x, int npar)
     /* --- 0. Levels of Y_{2t}: built once by build_y2_levels() ---------- */
     real **Y2lev = Y2_levels;
 
-    /*  -warma: la semilla es su propia regresion, porque el sistema que se
-     *  parametriza es OTRO -- las ecuaciones son las de Ybar = [nabla Y2 ; W] y
-     *  no las de nabla Y.  Se regresa cada componente de Ybar_t sobre
-     *  W_{t-1}..W_{t-p} y una constante, que es exactamente la forma de la
-     *  definicion 3, y Theta arranca en cero.                                */
+    /*  -warma: the seed is its own regression, because the system being
+     *  parameterised is ANOTHER one -- the equations are Ybar = [nabla Y2 ; W]'s
+     *  and not nabla Y's.  Each component of Ybar_t is regressed on
+     *  W_{t-1}..W_{t-p} and a constant, which is exactly the form of
+     *  definition 3, and Theta starts at zero.                               */
     if (global_warma) {
         real **B2w = matrix(1, s, 1, (r > 0 ? r : 1));
         real **Yb, **X, **Yd, **XtX;
@@ -3017,7 +3065,7 @@ static void init_guess(real *x, int npar)
                     for (t2 = 1; t2 <= T2; t2++) ss += E2[t2][i] * E2[t2][j];
                     Sg2[i][j] = ss / T2;
                 }
-            /* --- escritura, en el orden que espera el cast --- */
+            /* --- writing, in the order the cast expects --- */
             if (global_case == 2) { for (j = 1; j <= r; j++) x[idx++] = EWv[j]; }
             else if (global_case == 3) {
                 for (i = 1; i <= s; i++) {
@@ -3081,12 +3129,12 @@ static void init_guess(real *x, int npar)
     real **B2 = matrix(1, s, 1, (r > 0 ? r : 1));
     prelim_b2(B2);
 
-    /*  -seedjoh: la solucion canonica en su lugar.  Se pide DESPUES del OLS
-     *  estatico y no en vez de el, para que si el problema de autovalores no
-     *  se puede resolver quede exactamente la ruta de siempre y no una tercera
-     *  cosa a medio camino.  Todo lo que sigue -- Lambda, F, Sigma y E[W] --
-     *  sale entonces de la regresion condicional CON ESTE W, que es la propia
-     *  formula de alpha de Johansen.                                          */
+    /*  -seedjoh: the canonical solution in its place.  It is asked for AFTER
+     *  the static OLS and not instead of it, so that if the eigenvalue problem
+     *  cannot be solved what is left is exactly the route of always and not a
+     *  third thing halfway between.  Everything that follows -- Lambda, F,
+     *  Sigma and E[W] -- then comes out of the conditional regression WITH THIS
+     *  W, which is Johansen's own formula for alpha.                         */
     canon_used = 0;
     if (global_seedjoh && r > 0) {
         canon_used = canonical_b2(B2);
@@ -3108,7 +3156,7 @@ static void init_guess(real *x, int npar)
             fprintf(outputv, "\n-seedjoh: the canonical solution could not be "
                              "formed; the static OLS seed stands.\n");
             if (!quiet_mode)
-                printf("  -seedjoh: no se pudo formar la solucion canonica\n");
+                printf("  -seedjoh: the canonical solution could not be formed\n");
         }
     }
 
@@ -3178,13 +3226,13 @@ static void init_guess(real *x, int npar)
             for (i = 1; i <= M; i++)
                 F[k][eq][i] = Xty[r + (k-1)*M + i];                /* F_k */
     }
-    /* Residuos de la regresión condicional, y de ahí Σ.
-       Antes se recalculaba e_t dentro del doble bucle de (i,j), lo que repetía
-       el mismo cálculo M² veces; ahora se calcula UNA vez, en el mismo orden de
-       restas, así que el resultado es idéntico bit a bit.  Se guardan además en
-       cond_resid porque son lo que necesita -writeres: e_t = Θ(L)A_t, luego el
-       marginal de cada componente es MA(q) EXACTAMENTE — sin la inflación de
-       orden que sufre el marginal de un componente de Ȳ.                      */
+    /* Residuals of the conditional regression, and from them Σ.
+       e_t used to be recomputed inside the double (i,j) loop, which repeated the
+       same calculation M² times; now it is computed ONCE, in the same order of
+       subtractions, so the result is identical bit for bit.  They are also kept
+       in cond_resid because they are what -writeres needs: e_t = Θ(L)A_t, so
+       each component's marginal is EXACTLY MA(q) — without the order inflation
+       a component of Ȳ's marginal suffers.                                    */
     real **E = matrix(1, T, 1, M);
     for (t = 1; t <= T; t++)
         for (i = 1; i <= M; i++) {
@@ -3201,28 +3249,29 @@ static void init_guess(real *x, int npar)
         for (t = 1; t <= T; t++) ss += E[t][i] * E[t][j];
         Sig[i][j] = (T > 0) ? ss / T : 1.0;
     }
-    /* Publicar los residuos para -writeres.  Los posee este módulo. */
+    /* Publish the residuals for -writeres.  This module owns them. */
     if (cond_resid) free_matrix(cond_resid, 1, cond_resid_T, 1, cond_resid_M);
     cond_resid = matrix(1, T, 1, M);
     cond_resid_T = T; cond_resid_M = M;
     for (t = 1; t <= T; t++) for (i = 1; i <= M; i++) cond_resid[t][i] = E[t][i];
     free_matrix(E, 1, T, 1, M);
 
-    /* --- 4b. La semilla del .pre, llevada a las coordenadas de drvec -------
-       Solo para la ruta Ybar: los .pre describen los COMPONENTES DE Ybar, y el
-       modelo esta parametrizado en Lambda / F / Theta / Sigma sobre nabla Y.
-       Las tres vueltas, con Phi*_k = Cbar*PhiBar_k y Theta*_k = Cbar*Theta_k*Cinv:
+    /* --- 4b. The .pre's seed, carried into drvec's coordinates -------------
+       Only for the Ybar route: the .pre files describe the COMPONENTS OF Ybar,
+       and the model is parameterised in Lambda / F / Theta / Sigma on nabla Y.
+       The three returns, with Phi*_k = Cbar*PhiBar_k and
+       Theta*_k = Cbar*Theta_k*Cinv:
 
          Theta_k = Cinv * diag(theta_k) * Cbar
          F_1     = (Cinv*diag(phi_1) - Cinv*Hbar + LamBar) * Cbar
          F_i     = (Cinv*diag(phi_i) + F_{i-1}*Cinv*Hbar) * Cbar     i = 2..p-1
          Sigma   = Cinv * diag(sigma^2) * Cinv'
 
-       Con r = 0 todo esto colapsa a la identidad (Cbar = I, Hbar = 0), que es
-       el peldano diagonal donde viven los contratos de la escalera.
-       Phi*_p queda determinada por F_{p-1} y no se puede imponer, asi que con
-       r >= 1 el AR esta sobredeterminado y esto es una proyeccion, no una
-       vuelta exacta.  Ver docs/PLAN_BETA.md F2.8.                            */
+       With r = 0 all of this collapses to the identity (Cbar = I, Hbar = 0),
+       which is the diagonal rung where the ladder's contracts live.
+       Phi*_p is determined by F_{p-1} and cannot be imposed, so with r >= 1 the
+       AR is overdetermined and this is a projection, not an exact return.
+       See docs/PLAN_BETA.md F2.8.                                            */
     real ***Fseed = NULL, ***Tseed = NULL, **Sigseed = NULL;
     if (seed_loaded && seed_route == SEED_YBAR) {
         real **Cb = matrix(1, M, 1, M), **Ci = matrix(1, M, 1, M);
@@ -3293,9 +3342,9 @@ static void init_guess(real *x, int npar)
         for (j = 1; j <= r; j++) x[idx++] = EW[j];
     }
     if (global_alpha) {
-        /* psi = (A'A)^-1 A' Lambda_ols: la proyeccion de la semilla libre sobre
-           el subespacio que la restriccion permite.  Es la mejor semilla
-           disponible y no cuesta nada.                                        */
+        /* psi = (A'A)^-1 A' Lambda_ols: the projection of the free seed onto the
+           subspace the restriction allows.  It is the best seed available and
+           costs nothing.                                                     */
         real **AtA = matrix(1, alpha_sa, 1, alpha_sa);
         real **psi_seed = matrix(1, alpha_sa, 1, (r > 0 ? r : 1));
         real  *AtL = vector(1, alpha_sa);
@@ -3331,15 +3380,15 @@ static void init_guess(real *x, int npar)
         if (global_diag_ar) { for (i = 1; i <= M; i++) x[idx++] = Fk[i][i]; }
         else { for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) x[idx++] = Fk[i][j]; }
     }
-    /* Bloque MA.  Sin -seed arranca en CERO EXACTO, que es el único hueco real
-       del arranque en frío (todo lo demás sale de datos: B₂ por OLS, Λ y F por
-       la regresión condicional, Σ de sus residuos).
-       Con -seed se usa lo estimado por fue sobre cada componente de Ȳ, y hay
-       que devolverlo a las coordenadas de drvec: lo que un univariante de Ȳ ve
-       es Θ̄ = C̄ΘC̄⁻¹ —así lo monta vec_shootx en armax->theta—, luego
+    /* MA block.  Without -seed it starts at EXACT ZERO, which is the only real
+       gap of the cold start (everything else comes from data: B₂ by OLS, Λ and
+       F by the conditional regression, Σ from its residuals).
+       With -seed what fue estimated on each component of Ȳ is used, and it has
+       to be brought back into drvec's coordinates: what a univariate model of Ȳ
+       sees is Θ̄ = C̄ΘC̄⁻¹ —that is how vec_shootx builds armax->theta—, so
                               Θ_k = C̄⁻¹ Θ̄_k C̄
-       con Θ̄_k diagonal.  Sembrar los θ del .pre directamente en Θ funciona
-       sólo si C̄ = I (r = 0) y es un error silencioso en cuanto r ≥ 1.        */
+       with Θ̄_k diagonal.  Seeding the .pre's θ directly into Θ works only if
+       C̄ = I (r = 0) and is a silent error as soon as r ≥ 1.                  */
     if (marow_on() && q > 0) {
         for (k = 1; k <= q; k++)
             for (i = 1; i <= r; i++)
@@ -3352,17 +3401,17 @@ static void init_guess(real *x, int npar)
                 for (j = r + 1; j <= M; j++) x[idx++] = 0.0;
         }
     } else if (mawarma_on() && q > 0) {
-        /*  -mawarma: el bloque libre es solo Theta11 (r x r), y el resto lo
-         *  construye el cast.  La semilla es la diagonal de lo que hubiera:
-         *  con la ruta de residuos, la theta univariante del bloque
-         *  cointegrado; si no, cero, que es el arranque de siempre.          */
+        /*  -mawarma: the free block is only Theta11 (r x r), and the cast builds
+         *  the rest.  The seed is the diagonal of whatever there is: with the
+         *  residual route, the univariate theta of the cointegrated block;
+         *  otherwise zero, which is the start of always.                     */
         for (k = 1; k <= q; k++)
             for (i = 1; i <= r; i++)
                 for (j = 1; j <= r; j++)
                     x[idx++] = (i == j && seed_loaded && seed_route == SEED_RESID
                                 && seed_tbar) ? seed_tbar[k][i] : 0.0;
     } else if (seed_loaded && q > 0 && seed_route == SEED_RESID) {
-        /* Ruta de residuos: la θ leída ES la diagonal de Θ, sin transformar. */
+        /* Residual route: the θ read IS the diagonal of Θ, untransformed. */
         for (k = 1; k <= q; k++) {
             if (global_diag_ma) {
                 for (i = 1; i <= M; i++) x[idx++] = seed_tbar[k][i];
@@ -3373,12 +3422,12 @@ static void init_guess(real *x, int npar)
             }
         }
     } else if (seed_loaded && q > 0 && seed_route == SEED_YBAR && Tseed) {
-        /* Ruta Ybar: Theta_k = Cinv * diag(theta_k) * Cbar, ya montada arriba. */
+        /* Ybar route: Theta_k = Cinv * diag(theta_k) * Cbar, already built above. */
         for (k = 1; k <= q; k++) {
             if (global_diag_ma) {
-                /* Con -diagma solo la diagonal de Theta_k es parametro, y
-                   Cinv*diag(.)*Cbar no es diagonal en general: se toma su
-                   diagonal, que es una aproximacion y no la vuelta exacta.    */
+                /* With -diagma only the diagonal of Theta_k is a parameter, and
+                   Cinv*diag(.)*Cbar is not diagonal in general: its diagonal is
+                   taken, which is an approximation and not the exact return. */
                 for (i = 1; i <= M; i++) x[idx++] = Tseed[k][i][i];
             } else {
                 for (i = 1; i <= M; i++)
@@ -3401,10 +3450,10 @@ static void init_guess(real *x, int npar)
        its canonical case: logL -1371 instead of -767, with scales differing by
        1098x.  Here the spread is milder (1.06 on mink-muskrat, up to 15x between
        components on UK consumption) but the failure mode is the same.          */
-    /* Con la semilla del .pre, Sigma sale de las varianzas univariantes
-       (derivadas evaluando cada .pre con elf) en vez de los residuos de la
-       regresion condicional.  Es lo que cierra el bloque univariante entero:
-       sembrar solo Theta deja un punto que no es el optimo de nadie.         */
+    /* With the .pre's seed, Sigma comes from the univariate variances
+       (derived by evaluating each .pre with elf) instead of from the residuals
+       of the conditional regression.  It is what closes the whole univariate
+       block: seeding Theta alone leaves a point that is nobody's optimum.    */
     if (Sigseed) {
         for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) Sig[i][j] = Sigseed[i][j];
     }
@@ -3509,12 +3558,11 @@ static void vec_shootx(real *x, struct Tvarma *armax,
         }
     }
 
-    /*  -warma: la parametrizacion en coordenadas Ybar.  Se escribe Phi*, Theta*
-     *  y Sigma* DIRECTAMENTE y no se construye ninguna C̄: no hay nada que
-     *  transformar porque los parametros ya son los del sistema transformado.
-     *  Ver -warma.  El vector w se monta igual que siempre, al final, con B2,
-     *  que es por donde -- y solo por donde -- entra el vector de
-     *  cointegracion.                                                        */
+    /*  -warma: the parameterisation in Ybar coordinates.  Phi*, Theta* and
+     *  Sigma* are written DIRECTLY and no C̄ is built: there is nothing to
+     *  transform because the parameters already are the transformed system's.
+     *  See -warma.  The vector w is assembled as always, at the end, with B2,
+     *  which is where -- and only where -- the cointegrating vector enters.  */
     if (global_warma) {
         int nf_w = (p > 1) ? p - 1 : 0;
         int idw = 1, kk, ii, jj, tt2;
@@ -3533,8 +3581,8 @@ static void vec_shootx(real *x, struct Tvarma *armax,
         for (kk = 1; kk <= q; kk++)
             for (i = 1; i <= M; i++)
                 for (j = 1; j <= M; j++) armax->theta[kk][i][j] = 0.0;
-        /*  Los coeficientes de W_{t-k}: un bloque M x r por retardo, k = 1..p-1
-         *  mas el primero, que ocupa la casilla de Lambda.                    */
+        /*  The coefficients of W_{t-k}: one M x r block per lag, k = 1..p-1 plus
+         *  the first, which occupies Lambda's slot.                          */
         for (i = 1; i <= M; i++)
             for (j = 1; j <= r; j++) armax->phi[1][i][s + j] = x[idw++];
         for (kk = 1; kk <= nf_w; kk++)
@@ -3607,9 +3655,9 @@ static void vec_shootx(real *x, struct Tvarma *armax,
            That is the no-cointegration null of the rank test.               */
     real **Lambda = matrix(1, M, 1, (r > 0 ? r : 1));
     if (global_alpha) {
-        /* Lambda = A * psi.  psi (sa x r) es lo que ve el optimizador; A es
-           dato del usuario.  Mismo patron que -fixb2: la restriccion vive en el
-           cast, no en el optimizador.                                        */
+        /* Lambda = A * psi.  psi (sa x r) is what the optimiser sees; A is the
+           user's datum.  Same pattern as -fixb2: the restriction lives in the
+           cast, not in the optimiser.                                        */
         real **psi = matrix(1, alpha_sa, 1, (r > 0 ? r : 1));
         for (i = 1; i <= alpha_sa; i++)
             for (j = 1; j <= r; j++) psi[i][j] = x[idx++];
@@ -3632,7 +3680,7 @@ static void vec_shootx(real *x, struct Tvarma *armax,
     for (k = 1; k <= (nf > 0 ? nf : 1); k++)
         for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) F[k][i][j] = 0.0;
     for (k = 1; k <= nf; k++) {
-        if (prof_hold) {          /* sujeto en el optimo de r = 0; ver -seedgate */
+        if (prof_hold) {          /* held at the r = 0 optimum; see -seedgate */
             for (i = 1; i <= M; i++)
                 for (j = 1; j <= M; j++) F[k][i][j] = hold_F[k][i][j];
         } else if (global_diag_ar) {
@@ -3653,23 +3701,23 @@ static void vec_shootx(real *x, struct Tvarma *armax,
             for (i = 1; i <= M; i++)
                 for (j = 1; j <= M; j++) Theta[k][i][j] = hold_Th[k][i][j];
         } else if (mawarma_on()) {
-            /*  Theta = [Theta11  Theta11 B2' ; 0  0].  Ojo al orden: B2 se lee
-             *  mas abajo, asi que aqui se guarda solo el bloque libre y el
-             *  resto se completa DESPUES de tener B2.  Ver -mawarma.         */
+            /*  Theta = [Theta11  Theta11 B2' ; 0  0].  Mind the order: B2 is read
+             *  further down, so only the free block is stored here and the rest
+             *  is completed AFTER B2 is in hand.  See -mawarma.              */
             for (i = 1; i <= M; i++)
                 for (j = 1; j <= M; j++) Theta[k][i][j] = 0.0;
             for (i = 1; i <= r; i++)
                 for (j = 1; j <= r; j++) Theta[k][i][j] = x[idx++];
         } else if (marow_on()) {
-            /*  Theta = [T11  T12 ; 0  0]: las s filas de abajo, cero.  Ver
+            /*  Theta = [T11  T12 ; 0  0]: the lower s rows, zero.  See
              *  -marow.                                                       */
             for (i = 1; i <= M; i++)
                 for (j = 1; j <= M; j++) Theta[k][i][j] = 0.0;
             for (i = 1; i <= r; i++)
                 for (j = 1; j <= M; j++) Theta[k][i][j] = x[idx++];
         } else if (global_matri) {
-            /*  Theta = [T11  T12 ; 0  T22]: solo el bloque de abajo a la
-             *  izquierda se anula.  Ver -matri.                              */
+            /*  Theta = [T11  T12 ; 0  T22]: only the lower-left block is zeroed.
+             *  See -matri.                                                   */
             for (i = 1; i <= M; i++)
                 for (j = 1; j <= M; j++) Theta[k][i][j] = 0.0;
             for (i = 1; i <= r; i++)
@@ -3736,9 +3784,9 @@ static void vec_shootx(real *x, struct Tvarma *armax,
         for (i = 1; i <= s; i++)
             B2[i][j] = global_fixb2 ? B2_fixed[i][j] : x[idx++];
 
-    /*  -mawarma: el bloque superior derecho de Theta, que NO es libre.  Se
-     *  completa aqui y no arriba porque necesita B2, que se acaba de leer:
-     *  Theta[k][i][r+jj] = sum_ii Theta11[k][i][ii] * B2'[ii][jj].           */
+    /*  -mawarma: the upper-right block of Theta, which is NOT free.  It is
+     *  completed here and not above because it needs B2, which has just been
+     *  read: Theta[k][i][r+jj] = sum_ii Theta11[k][i][ii] * B2'[ii][jj].     */
     if (mawarma_on() && !prof_hold) {
         for (k = 1; k <= q; k++)
             for (i = 1; i <= r; i++)
@@ -3750,12 +3798,12 @@ static void vec_shootx(real *x, struct Tvarma *armax,
                 }
     }
 
-    /*  LA CONDICION DE RANGO, medida en cada evaluacion y opcionalmente
-     *  impuesta.  Va aqui porque es el primer punto donde Lambda, Theta y B2
-     *  existen a la vez, y antes de construir nada con ellos.                */
+    /*  THE RANK CONDITION, measured at every evaluation and optionally
+     *  imposed.  It goes here because it is the first point at which Lambda,
+     *  Theta and B2 all exist, and before anything is built with them.       */
     granger_sv = (r > 0 && q > 0) ? granger_smin(Lambda, B2, Theta, M, r, q) : -1.0;
     if (global_rankadm && granger_sv >= 0.0 && granger_sv < global_rankadm_tol)
-        *ifaultx = 1;          /* el punto niega el rango: fuera, como Sigma no PD */
+        *ifaultx = 1;          /* the point denies the rank: out, like a non-PD Sigma */
 
     /* [4] Mauricio transformation matrices (eq. 10-14) ---------------------- */
     real **Cbar   = matrix(1, M, 1, M);
@@ -3905,38 +3953,38 @@ static void vec_shootx(real *x, struct Tvarma *armax,
 }
 
 /*****************************************************************************/
-/*  gate_profile_seed — LA RUTA (B) DEL PLAN: el optimo de r = 0, y sobre el,  */
-/*  Lambda y B2 por verosimilitud.                                            */
+/*  gate_profile_seed — ROUTE (B) OF THE PLAN: the r = 0 optimum, and on top */
+/*  of it, Lambda and B2 by likelihood.                                       */
 /*                                                                           */
-/*  POR QUE EXISTE.  Toda la construccion de la suite va de OPTIMOS HACIA     */
-/*  OPTIMOS: se estima un peldano, se certifica, y el de arriba arranca ahi.  */
-/*  Ese puente NO alcanza el peldano de r = 1, y la razon esta medida en      */
-/*  docs/VEC_EMBEDDING_PLAN.md 3: con Lambda = 0 el sistema transformado tiene */
-/*  una raiz AR de modulo exactamente 1.000000, o sea que la base esta EN la   */
-/*  frontera del espacio de arriba y no en su interior, la verosimilitud no    */
-/*  esta definida ahi, y ademas B2 no esta identificado, porque Pi = Lambda B' */
-/*  = 0 sea cual sea B2.  Sembrar el peldano de abajo tal cual es INADMISIBLE, */
-/*  no solo inexacto.                                                         */
+/*  WHY IT EXISTS.  The whole construction of the suite goes from OPTIMA    */
+/*  TO OPTIMA: a rung is estimated, certified, and the one above starts     */
+/*  there.  That bridge does NOT reach the r = 1 rung, and the reason is    */
+/*  measured in docs/VEC_EMBEDDING_PLAN.md 3: with Lambda = 0 the           */
+/*  transformed system has an AR root of modulus exactly 1.000000, i.e. the */
+/*  base is ON the boundary of the space above and not in its interior, the */
+/*  likelihood is not defined there, and B2 is not identified either,       */
+/*  because Pi = Lambda B' = 0 whatever B2 is.  Seeding with the rung below */
+/*  not merely inexact.                                                       */
 /*                                                                           */
-/*  COMO CRUZA.  Sujetando F, Theta y Sigma en el optimo de r = 0 y estimando  */
-/*  SOLO Lambda y B2 (y la media, que en r = 1 tiene un E[W] que abajo no      */
-/*  existe).  El problema condicional es pequeno y mucho mejor condicionado    */
-/*  que el conjunto, y su solucion es admisible POR CONSTRUCCION: el paso      */
-/*  fuera de la frontera lo elige la verosimilitud y no quien programa.  Esa   */
-/*  es la razon de preferir (B) a (A) -- entrar por la direccion que ajusta    */
-/*  con un paso calibrado --: (A) necesita una constante, y una constante fija */
-/*  es una distancia distinta en cada conjunto de datos.                       */
+/*  HOW IT CROSSES.  By holding F, Theta and Sigma at the r = 0 optimum and */
+/*  estimating ONLY Lambda and B2 (and the mean, which at r = 1 has an      */
+/*  E[W] that does not exist below).  The conditional problem is small and  */
+/*  far better conditioned than the joint one, and its solution is          */
+/*  admissible BY CONSTRUCTION: the step off the boundary is chosen by the  */
+/*  likelihood and not by whoever writes the program.  That is the reason   */
+/*  for preferring (B) to (A) -- entering along the direction that fits,    */
+/*  with a calibrated step --: (A) needs a constant, and a fixed constant   */
 /*                                                                           */
-/*  QUE SUJETA, EXACTAMENTE.  El peldano de abajo se estima con la MISMA       */
-/*  estructura que se pidio arriba: sin banderas diagonales es el peldano 2 de */
-/*  la escalera (F, Theta y Sigma libres), y con ellas es la puerta diagonal   */
-/*  certificada.  El plan dice "los valores de la puerta"; se toma el optimo   */
-/*  de r = 0 de la estructura pedida porque es el peldano inmediatamente       */
-/*  inferior y es el que la escalera manda usar, y con las banderas puestas    */
-/*  los dos coinciden.                                                        */
+/*  WHAT IT HOLDS, EXACTLY.  The rung below is estimated with the SAME      */
+/*  structure that was asked for above: with no diagonal flags it is rung 2*/
+/*  of the ladder (F, Theta and Sigma free), and with them it is the        */
+/*  certified diagonal gate.  The plan says "the gate's values"; the r = 0  */
+/*  optimum of the requested structure is taken because it is the rung      */
+/*  immediately below and the one the ladder mandates, and with the flags     */
+/*  set, the two coincide.                                                    */
 /*                                                                           */
-/*  Devuelve 1 si dejo un punto de partida nuevo en x, y 0 si no lo consiguio, */
-/*  en cuyo caso x sigue siendo el de init_guess -- la ruta (C) -- y se dice.  */
+/*  Returns 1 if it left a new starting point in x, and 0 if it did not, in    */
+/*  which case x is still init_guess's -- route (C) -- and that is said.       */
 /*****************************************************************************/
 static int gate_profile_seed(real *x, int npar)
 {
@@ -3946,13 +3994,13 @@ static int gate_profile_seed(real *x, int npar)
     real *x0, *dev0, **cov0, *x2, *dev2, **cov2;
     struct Tvarma v0, v2;
 
-    if (r0 <= 0) return 0;                  /* sin matriz VEC no hay que cruzar */
+    if (r0 <= 0) return 0;                  /* with no VEC matrix there is nothing to cross */
     par_blocks(&nmean, &nlam, &nmid, &ntail);
     nhead = nmean + nlam;
-    if (nhead + nmid + ntail != npar) return 0;      /* el vector no es el que  */
-                                                     /* este recorrido espera   */
+    if (nhead + nmid + ntail != npar) return 0;      /* the vector is not the one */
+                                                     /* this walk expects  */
 
-    /* ---- 1. el peldano de abajo, estimado hasta su optimo ---------------- */
+    /* ---- 1. the rung below, estimated to its optimum ---------------------- */
     global_r = 0;
     build_y2_levels();
     np0  = calc_nparametrs();
@@ -3969,7 +4017,7 @@ static int gate_profile_seed(real *x, int npar)
         fprintf(outputv, "\n-seedgate: the r = 0 rung did not converge "
                          "(ifault = %d); falling back to the cold start.\n", ifr);
         if (!quiet_mode)
-            printf("  -seedgate: el peldano r = 0 no convergio; se sigue en frio\n");
+            printf("  -seedgate: the r = 0 rung did not converge; carrying on cold\n");
         vec_shootx(x0, &v0, &ifr, 0, 1);
         free_matrix(cov0, 1, np0, 1, np0);
         free_vector(dev0, 1, np0);
@@ -3979,15 +4027,15 @@ static int gate_profile_seed(real *x, int npar)
     }
     gate_seed_ll0 = v0.logelf;
 
-    /*  Recuperar el ajuste en las estructuras: est() deja la ultima evaluacion,
-     *  que no tiene por que ser el punto final.                              */
+    /*  Recover the fit into the structures: est() leaves the last evaluation,
+     *  which need not be the final point.                                    */
     vec_shootx(x0, &v0, &ifr, 0, 0);
 
-    /*  CON r = 0 LAS COORDENADAS SON LAS MISMAS, y por eso esto se puede leer
-     *  directamente del ajuste en vez de volver a desmontar x0: Cbar y Cinv
-     *  colapsan a la identidad y Hbar a cero (vec_shootx [4]), de modo que
-     *  Phi*_k = F_k, Theta*_k = Theta_k y Sigma* = Sigma, termino a termino.
-     *  Es la misma propiedad de la que vive la puerta.                       */
+    /*  WITH r = 0 THE COORDINATES ARE THE SAME, which is why this can be read
+     *  straight off the fit instead of taking x0 apart again: Cbar and Cinv
+     *  collapse to the identity and Hbar to zero (vec_shootx [4]), so that
+     *  Phi*_k = F_k, Theta*_k = Theta_k and Sigma* = Sigma, term by term.
+     *  It is the same property the gate lives off.                           */
     hold_M = M; hold_nf = nf; hold_q = q;
     hold_F  = tensor(1, (nf > 0 ? nf : 1), 1, M, 1, M);
     hold_Th = tensor(1, (q  > 0 ? q  : 1), 1, M, 1, M);
@@ -4005,11 +4053,11 @@ static int gate_profile_seed(real *x, int npar)
     free_vector(dev0, 1, np0);
     free_vector(x0, 1, np0);
 
-    /* ---- 2. el paso condicional: solo la media, Lambda y B2 -------------- */
+    /* ---- 2. the conditional step: only the mean, Lambda and B2 ------------ */
     global_r = r0;
     build_y2_levels();
     prof_hold = 1;
-    np2  = calc_nparametrs();               /* = nhead + ntail, por par_blocks */
+    np2  = calc_nparametrs();               /* = nhead + ntail, from par_blocks */
     x2   = vector(1, np2);
     dev2 = vector(1, np2);
     cov2 = matrix(1, np2, 1, np2);
@@ -4018,24 +4066,24 @@ static int gate_profile_seed(real *x, int npar)
     v2.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
     vec_shootx(x2, &v2, &ifr, 1, 0);
 
-    /*  UN PUNTO DE PARTIDA ADMISIBLE, Y LO ELIGE LA VEROSIMILITUD.
+    /*  A STARTING POINT THAT IS ADMISSIBLE, AND THE LIKELIHOOD CHOOSES IT.
      *
-     *  Esto lo obligo la medida y no estaba en el plan: con F, Theta y Sigma
-     *  sujetos en el optimo de r = 0 y Lambda en el valor de la regresion
-     *  condicional, el sistema transformado sale NO ESTACIONARIO -- elf
-     *  devuelve ifault = 3 -- y el optimizador no arranca siquiera, porque est
-     *  se planta si el punto inicial no es admisible (drvmlest.c, "bad initial
-     *  estimates").  Es la otra cara de lo que el plan midio en 3: en Lambda =
-     *  0 la raiz esta EXACTAMENTE en 1, y de las dos direcciones que salen de
-     *  ahi solo una es admisible.  El signo que trae la regresion condicional
-     *  no tiene por que ser ese.
+     *  This was forced by the measurement and was not in the plan: with F,
+     *  Theta and Sigma held at the r = 0 optimum and Lambda at the value of the
+     *  conditional regression, the transformed system comes out NON-STATIONARY
+     *  -- elf returns ifault = 3 -- and the optimiser does not even start,
+     *  because est refuses if the initial point is not admissible
+     *  (drvmlest.c, "bad initial estimates").  It is the other face of what the
+     *  plan measured in 3: at Lambda = 0 the root is EXACTLY at 1, and of the
+     *  two directions leaving that point only one is admissible.  The sign the
+     *  conditional regression brings need not be that one.
      *
-     *  Asi que se recorre una escalera de multiplos de la Lambda que trajo la
-     *  regresion -- la DIRECCION la eligen los datos, no el programa -- y se
-     *  arranca en el mejor punto ADMISIBLE de los que se evaluan.  Que no es
-     *  una constante fija, que es lo que el plan prohibe: es un multiplo de
-     *  algo estimado, y ademas el paso condicional lo mueve despues.  Si
-     *  ninguno es admisible, no se cruza y se dice.                          */
+     *  So a ladder of multiples of the Lambda the regression brought is walked
+     *  -- the DIRECTION is chosen by the data, not by the program -- and the
+     *  start is the best ADMISSIBLE point among those evaluated.  Which is not
+     *  a fixed constant, which is what the plan forbids: it is a multiple of
+     *  something estimated, and the conditional step moves it afterwards
+     *  anyway.  If none is admissible, nothing is crossed and that is said.  */
     {
         const real LOG2PI = 1.837877066;
         static const real mult[18] = { 1.0, -1.0, 0.5, -0.5, 0.25, -0.25,
@@ -4051,10 +4099,10 @@ static int gate_profile_seed(real *x, int npar)
             int ifev = 0, ifc2 = 0;
             for (i = 1; i <= nlam; i++) x2[nmean + i] = mult[mi] * lam0[i];
             vec_shootx(x2, &v2, &ifc2, 0, 0);
-            if (ifc2 != 0) continue;                  /* Sigma no definida pos. */
+            if (ifc2 != 0) continue;                  /* Sigma not positive def. */
             elf(v2.m, v2.n, v2.p, v2.q, v2.mu, v2.phi, v2.theta, v2.qq, v2.w,
                 1.0, v2.xitol, TRUE, v2.a, &pi1, &pi2, &pi3, &ifev);
-            if (ifev != 0) continue;                  /* no admisible: 1..5     */
+            if (ifev != 0) continue;                  /* not admissible: 1..5    */
             ll = -0.5 * v2.m * v2.n * (LOG2PI - log((real) v2.m)
                  - log((real) v2.n) + 1.0)
                  - 0.5 * v2.n * (v2.m * log(pi1) + log(pi2));
@@ -4071,7 +4119,7 @@ static int gate_profile_seed(real *x, int npar)
                              "system non-stationary or non-invertible.  Falling "
                              "back to the cold start.\n");
             if (!quiet_mode)
-                printf("  -seedgate: ningun arranque admisible; se sigue en frio\n");
+                printf("  -seedgate: no admissible start; carrying on cold\n");
             vec_shootx(x2, &v2, &ifr, 0, 1);
             prof_hold = 0;
             free_matrix(cov2, 1, np2, 1, np2);
@@ -4087,8 +4135,8 @@ static int gate_profile_seed(real *x, int npar)
 
     est(&vec_shootx, np2, x2, dev2, cov2, 500, 200, 1e-5, 1e-7,
         v2.xitol, v2.a, &v2.sigma2, &v2.logelf, &ifr);
-    ifc = ifr;                     /* est deja aqui su codigo, y la liberacion */
-    gate_seed_ll1 = v2.logelf;     /* de abajo lo pisaria                      */
+    ifc = ifr;                     /* est leaves its code here, and the release */
+    gate_seed_ll1 = v2.logelf;     /* below would overwrite it                  */
     vec_shootx(x2, &v2, &ifr, 0, 1);
     prof_hold = 0;
 
@@ -4097,7 +4145,7 @@ static int gate_profile_seed(real *x, int npar)
                          "did not converge (ifault = %d); falling back to the "
                          "cold start.\n", ifc);
         if (!quiet_mode)
-            printf("  -seedgate: el paso condicional no convergio; se sigue en frio\n");
+            printf("  -seedgate: the conditional step did not converge; carrying on cold\n");
         free_matrix(cov2, 1, np2, 1, np2);
         free_vector(dev2, 1, np2);
         free_vector(x2, 1, np2);
@@ -4108,10 +4156,10 @@ static int gate_profile_seed(real *x, int npar)
         return 0;
     }
 
-    /* ---- 3. el vector completo: cabeza y cola del paso condicional, tramo
-              de en medio del optimo de r = 0.  El orden de escritura es el del
-              recorrido de vec_shootx, y tiene que serlo: es el quinto sitio que
-              recorre este vector.                                            */
+    /* ---- 3. the full vector: head and tail from the conditional step, middle
+              stretch from the r = 0 optimum.  The order of writing is
+              vec_shootx's walk, and it has to be: this is the fifth site that
+              walks this vector.                                              */
     for (i = 1; i <= nhead; i++) x[i] = x2[i];
     for (i = 1; i <= ntail; i++) x[nhead + nmid + i] = x2[nhead + i];
     idx = nhead + 1;
@@ -4120,15 +4168,14 @@ static int gate_profile_seed(real *x, int npar)
         else for (i = 1; i <= M; i++)
                  for (j = 1; j <= M; j++) x[idx++] = hold_F[k][i][j];
     }
-    /*  El peldano de abajo se estima en r = 0, donde la media movil es LIBRE
-     *  (las clases estructuradas colapsan ahi; ver ma_struct_on()).  El
-     *  peldano de arriba puede estar en una clase con menos parametros, asi
-     *  que lo que se transporta es la PROYECCION de la Theta retenida sobre
-     *  esa clase: se conservan las entradas que la clase lleva y se descartan
-     *  las que anula.  Escribir M*M aqui, que es lo que se hacia, desalineaba
-     *  el vector en cuanto el defecto dejo de ser el libre.  El recorrido
-     *  tiene que ser el MISMO que el del cast, y por eso va en el mismo
-     *  orden.                                                                */
+    /*  The rung below is estimated at r = 0, where the moving average is FREE
+     *  (the structured classes collapse there; see ma_struct_on()).  The rung
+     *  above may be in a class with fewer parameters, so what is carried over
+     *  is the PROJECTION of the retained Theta onto that class: the entries the
+     *  class carries are kept and the ones it zeroes are dropped.  Writing M*M
+     *  here, which is what used to be done, misaligned the vector as soon as
+     *  the default stopped being the free class.  The walk has to be the SAME
+     *  as the cast's, and that is why it goes in the same order.             */
     for (k = 1; k <= q; k++) {
         if (mawarma_on()) {
             for (i = 1; i <= r0; i++)
@@ -4155,7 +4202,7 @@ static int gate_profile_seed(real *x, int npar)
         for (i = 2; i <= M; i++)
             for (j = 1; j < i; j++) x[idx++] = hold_S[i][j];
     }
-    if (idx - 1 != nhead + nmid) {          /* el recorrido no cuadra: no se usa */
+    if (idx - 1 != nhead + nmid) {          /* the walk does not add up: not used */
         fprintf(outputv, "\n-seedgate: internal walk mismatch (%d vs %d); "
                          "falling back to the cold start.\n",
                 idx - 1, nhead + nmid);
@@ -4190,17 +4237,17 @@ static int gate_profile_seed(real *x, int npar)
         "  below cannot be carried up unchanged, and the step off that boundary\n"
         "  is chosen here by the likelihood rather than by a constant.\n",
         gate_seed_ll0, gate_seed_lam, gate_seed_ll_start, gate_seed_ll1);
-    /*  LAS PREESTIMACIONES, ESCRITAS.  Son el producto del paso condicional y
-     *  hay que poder verlas: si (B) acaba peor que (C), la pregunta siguiente
-     *  es siempre si el punto de partida es razonable o disparatado, y esa no
-     *  se contesta con el logL.  El orden es el del recorrido de vec_shootx:
-     *  Lambda por filas (i exterior, j interior) y B2 por columnas.          */
+    /*  THE PRE-ESTIMATES, WRITTEN OUT.  They are the product of the conditional
+     *  step and one has to be able to see them: if (B) ends up worse than (C),
+     *  the next question is always whether the starting point is reasonable or
+     *  absurd, and that one is not answered by the logL.  The order is
+     *  vec_shootx's walk: Lambda by rows (i outer, j inner) and B2 by columns.*/
     {
         int nl = (global_alpha ? alpha_sa : M), s0 = M - r0, c;
         fprintf(outputv, "\n  the pre-estimates the conditional step produced\n");
         fprintf(outputv, "    %s (%d x %d):\n",
                 global_alpha ? "psi, with Lambda = A*psi" : "Lambda", nl, r0);
-        c = nhead - nlam;                       /* donde empieza Lambda en x   */
+        c = nhead - nlam;                       /* where Lambda starts in x */
         for (i = 1; i <= nl; i++) {
             fprintf(outputv, "     ");
             for (j = 1; j <= r0; j++)
@@ -4211,7 +4258,7 @@ static int gate_profile_seed(real *x, int npar)
             fprintf(outputv, "    B2 (%d x %d): held fixed by -fixb2\n", s0, r0);
         else {
             fprintf(outputv, "    B2 (%d x %d):\n", s0, r0);
-            c = nhead + nmid;                   /* donde empieza B2 en x       */
+            c = nhead + nmid;                   /* where B2 starts in x     */
             for (i = 1; i <= s0; i++) {
                 fprintf(outputv, "     ");
                 for (j = 1; j <= r0; j++)
@@ -4233,63 +4280,64 @@ static int gate_profile_seed(real *x, int npar)
 }
 
 /*****************************************************************************/
-/*  P5 — LA PREVISION, EN NIVELES, CON SUS BANDAS                             */
+/*  P5 — THE FORECAST, IN LEVELS, WITH ITS BANDS                              */
 /*****************************************************************************/
-/*  POR QUE EXISTE.  Hasta el 2026-08-20 drvec no sabia prever: ninguna de sus
- *  opciones lo hacia, no habia evaluacion fuera de muestra, y el registro tenia
- *  mil setecientas lineas sobre estimacion y ninguna medida de lo unico que
- *  decide si un modelo multivariante vale sus parametros -- si mejora la
- *  prevision de un univariante.  Ver docs/PLAN_PRODUCCION.md P5.
+/*  WHY IT EXISTS.  Until 2026-08-20 drvec could not forecast: none of its
+ *  options did it, there was no out-of-sample evaluation, and the register had
+ *  seventeen hundred lines about estimation and no measurement of the one thing
+ *  that decides whether a multivariate model is worth its parameters -- whether
+ *  it improves on a univariate forecast.  See docs/PLAN_PRODUCCION.md P5.
  *
- *  COMO.  El modelo ajustado ES un VARMA estacionario sobre Ybar = (nabla Y2 ;
- *  W), asi que se prevé ahi con la recursion de elf y se INVIERTE la
- *  transformacion, exactamente como hace simulate_h0 para el bootstrap.  No hay
- *  codigo paralelo: es la misma inversion.
+ *  HOW.  The fitted model IS a stationary VARMA on Ybar = (nabla Y2 ; W), so
+ *  the forecast is made there with elf's recursion and the transformation is
+ *  INVERTED, exactly as simulate_h0 does for the bootstrap.  There is no
+ *  parallel code: it is the same inversion.
  *
- *      nabla Y2_{n+h} = Ybar_{n+h}[1..s]  ->  Y2 por acumulacion desde Y2_n
+ *      nabla Y2_{n+h} = Ybar_{n+h}[1..s]  ->  Y2 by cumulating from Y2_n
  *      W_{n+h}        = Ybar_{n+h}[s+1..M]
  *      Y1_{n+h}       = W_{n+h} - B2' Y2_{n+h}
  *
- *  LA VARIANZA, Y LA LECCION DE BUG-10.  En el programa hermano, el nivel se
- *  integraba bien en la MEDIA y mal en la VARIANZA, porque cada una llegaba al
- *  nivel por su lado: la media pedia el operador a su fuente autoritativa y la
- *  varianza se reconstruia uno propio con (d, D, s).  El defecto es invisible
- *  en la prevision puntual y sale entero en las bandas -- un factor 19 en
- *  varianza en el caso medido --, y el sesgo corre siempre hacia el lado
- *  peligroso: omitir factores no estacionarios solo puede ESTRECHAR la banda.
+ *  THE VARIANCE, AND THE LESSON OF BUG-10.  In the sibling program the level
+ *  was integrated correctly in the MEAN and incorrectly in the VARIANCE,
+ *  because each reached the level by its own route: the mean asked its
+ *  authoritative source for the operator and the variance rebuilt one of its
+ *  own from (d, D, s).  The defect is invisible in the point forecast and comes
+ *  out whole in the bands -- a factor of 19 in variance in the measured case --
+ *  and the bias always runs the dangerous way: omitting non-stationary factors
+ *  can only NARROW the band.
  *
- *  Aqui la integracion es una sola (nabla sobre el bloque Y2) y el bloque W no
- *  se integra, pero la trampa es la misma: Y1 = W - B2'Y2 HEREDA el error
- *  acumulado de Y2, y calcular su banda solo con la de W la deja
- *  sistematicamente estrecha.  Asi que el mapa de innovaciones a error de nivel
- *  se escribe UNA VEZ, en level_error_map(), y la banda sale de ahi.  Con
- *  Psi_m los pesos MA(inf) del sistema transformado y C_m = sum_{k<=m} Psi_k:
+ *  Here the integration is a single one (nabla on the Y2 block) and the W block
+ *  is not integrated, but the trap is the same: Y1 = W - B2'Y2 INHERITS the
+ *  cumulated error of Y2, and computing its band from W's alone leaves it
+ *  systematically narrow.  So the map from innovations to level error is
+ *  written ONCE, in level_error_map(), and the band comes from there.  With
+ *  Psi_m the MA(inf) weights of the transformed system and C_m = sum_{k<=m}
+ *  Psi_k:
  *
- *      G_m = [           filas 1..s de C_m            ]
- *            [ filas s+1..M de Psi_m - B2' (filas 1..s de C_m) ]
+ *      G_m = [           rows 1..s of C_m             ]
+ *            [ rows s+1..M of Psi_m - B2' (rows 1..s of C_m) ]
  *
  *      Var(h) = sum_{m=0}^{h-1} G_m Sigma* G_m',    Sigma* = sigma2 * qq
  *
- *  En h = 1, C_0 = Psi_0 = I y G_0 = [I_s 0 ; -B2' I_r], de modo que la banda a
- *  un paso es la covarianza de la innovacion leida en niveles.  La bateria lo
- *  comprueba, y comprueba tambien la identidad que de verdad ata el calculo: la
- *  prevision a un paso desde el origen n-1 reproduce el dato menos el residuo
- *  guardado.                                                                  */
+ *  At h = 1, C_0 = Psi_0 = I and G_0 = [I_s 0 ; -B2' I_r], so the one-step band
+ *  is the innovation covariance read in levels.  The suite checks that, and
+ *  also checks the identity that really ties the calculation down: the one-step
+ *  forecast from origin n-1 reproduces the datum minus the stored residual.   */
 
-/*  compute_psi_weights — LOS PESOS MA(inf), Y NO SON DE AQUI.
+/*  compute_psi_weights — THE MA(inf) WEIGHTS, AND THEY ARE NOT OURS.
  *
- *  PROCEDENCIA, leida antes de copiar.  Es la funcion de drvarma, que vive en
- *  drtran/src/forecast.c y cuya cabecera dice "part of drvarma": el mismo
- *  linaje que elfvarma.c.  La primera version de esta seccion la reescribio,
- *  que es una tercera copia de una funcion compartida y exactamente la deriva
- *  que docs/PLAN_PRODUCCION.md P3 existe para impedir.  Se sustituyo por la de
- *  la suite, caracter por caracter, el 2026-08-20.  Si se arregla alli, hay que
- *  arreglarlo aqui.
+ *  PROVENANCE, read before copying.  It is drvarma's function, which lives in
+ *  drtran/src/forecast.c and whose header says "part of drvarma": the same
+ *  lineage as elfvarma.c.  The first version of this section rewrote it, which
+ *  is a third copy of a shared function and exactly the drift
+ *  docs/PLAN_PRODUCCION.md P3 exists to prevent.  It was replaced by the
+ *  suite's, character for character, on 2026-08-20.  If it is fixed there, it
+ *  has to be fixed here.
  *
  *  Psi_0 = I;  Psi_l = sum_{i<=min(l,p)} Phi_i Psi_{l-i} - Theta_l (l <= q).
- *  Aqui se aplica al VARMA TRANSFORMADO sobre Ybar, que es donde el modelo es
- *  estacionario; el paso a niveles es otra cosa y no se toma prestado -- ver
- *  level_error_map().                                                         */
+ *  Here it is applied to the TRANSFORMED VARMA on Ybar, which is where the
+ *  model is stationary; the step to levels is another matter and is not
+ *  borrowed -- see level_error_map().                                         */
 void compute_psi_weights(int m, int p, int q, real ***phi, real ***theta,
                                 int L, real ***psi)
 {
@@ -4322,8 +4370,8 @@ void compute_psi_weights(int m, int p, int q, real ***phi, real ***theta,
     }
 }
 
-/*  level_error_map — G_m, la UNICA fuente de verdad del paso a niveles.
- *  Csum es C_m = sum_{k<=m} Psi_k, ya acumulada por el llamante.              */
+/*  level_error_map — G_m, the ONLY source of truth for the step to levels.
+ *  Csum is C_m = sum_{k<=m} Psi_k, already accumulated by the caller.         */
 static void level_error_map(real **Csum, real **Psi_m, real **B2,
                             int M, int r, real **G)
 {
@@ -4338,17 +4386,17 @@ static void level_error_map(real **Csum, real **Psi_m, real **B2,
         }
 }
 
-/*  forecast_core — la recursion y el paso a niveles, desde un ORIGEN cualquiera.
+/*  forecast_core — the recursion and the step to levels, from ANY origin.
  *
- *  Existe como funcion aparte porque la usan dos cosas: -f, que prevé desde el
- *  final de la muestra, y -estwin, que lo hace desde cada origen de una ventana
- *  movil.  Escribirla dos veces seria repetir el error que este fichero ya
- *  cometio con compute_psi_weights.
+ *  It exists as a separate function because two things use it: -f, which
+ *  forecasts from the end of the sample, and -estwin, which does it from every
+ *  origin of a rolling window.  Writing it twice would repeat the mistake this
+ *  file already made with compute_psi_weights.
  *
- *  Yb recibe las H previsiones de Ybar y lev las de NIVEL, en el orden de
- *  columnas del .inp: Y2 (1..s) y luego Y1 (s+1..M).  Con r = 0 no hay bloque
- *  W, s = M, y el paso a niveles es la acumulacion pura de las M diferencias:
- *  el bucle de Y1 queda vacio y no hace falta un caso aparte.                 */
+ *  Yb receives the H forecasts of Ybar and lev those of the LEVEL, in the
+ *  .inp's column order: Y2 (1..s) and then Y1 (s+1..M).  With r = 0 there is no
+ *  W block, s = M, and the step to levels is the pure cumulation of the M
+ *  differences: the Y1 loop is empty and no separate case is needed.          */
 static void forecast_core(struct Tvarma *v, real **B2, int o, int H,
                           real **Yb, real **lev)
 {
@@ -4383,27 +4431,27 @@ static void forecast_core(struct Tvarma *v, real **B2, int o, int H,
     }
 }
 
-/*  rolling_eval — P5.2: EVALUACION DE ORIGEN MOVIL, QUE ES LA UNICA MEDIDA
- *  QUE DICE SI EL MODELO SIRVE.
+/*  rolling_eval — P5.2: ROLLING-ORIGIN EVALUATION, WHICH IS THE ONLY
+ *  MEASUREMENT THAT SAYS WHETHER THE MODEL IS ANY USE.
  *
- *  El protocolo es el de la suite, no uno nuevo: estimar UNA VEZ en 1..E,
- *  mantener los parametros FIJOS, y avanzar el origen de uno en uno sobre
- *  E..n-H comparando cada prevision con lo que de verdad paso.  La ayuda del
- *  porte del programa hermano lo describe como "the only way to decide
- *  EMPIRICALLY whether one model forecasts better than another", y tiene razon:
- *  la verosimilitud, el AIC y las bandas teoricas no lo dicen.
+ *  The protocol is the suite's, not a new one: estimate ONCE on 1..E, hold the
+ *  parameters FIXED, and advance the origin one datum at a time over E..n-H,
+ *  comparing each forecast with what actually happened.  The sibling program's
+ *  port describes it as "the only way to decide EMPIRICALLY whether one model
+ *  forecasts better than another", and it is right: the likelihood, the AIC and
+ *  the theoretical bands do not say so.
  *
- *  POR QUE LOS PARAMETROS SE FIJAN.  Si se reestimara en cada origen, la medida
- *  seguiria siendo honesta pero costaria n-E-H optimizaciones; y sobre todo
- *  mezclaria dos cosas -- lo que el modelo predice y lo que la reestimacion
- *  aprende -- que conviene separar.  Lo importante es que los parametros NO
- *  hayan visto el dato contra el que se les compara, y eso lo da la ventana.
+ *  WHY THE PARAMETERS ARE HELD.  Re-estimating at every origin would still be
+ *  an honest measurement but would cost n-E-H optimisations; and above all it
+ *  would mix two things -- what the model predicts and what the re-estimation
+ *  learns -- that are better kept apart.  What matters is that the parameters
+ *  have NOT seen the datum they are scored against, and the window gives that.
  *
- *  LOS RESIDUOS.  La recursion necesita los choques hasta el origen, y en los
- *  origenes posteriores a E no existen todavia.  Se obtienen en UNA pasada:
- *  se reconstruye Ybar sobre la muestra entera con los parametros de 1..E y se
- *  llama a elf con atf = TRUE.  No hay adelanto de informacion: cada origen usa
- *  solo lo que hay hasta el, y los parametros salen de 1..E.                  */
+ *  THE RESIDUALS.  The recursion needs the shocks up to the origin, and at
+ *  origins later than E they do not exist yet.  They are obtained in ONE pass:
+ *  Ybar is rebuilt over the whole sample with the parameters from 1..E and elf
+ *  is called with atf = TRUE.  No information is brought forward: each origin
+ *  uses only what there is up to it, and the parameters come from 1..E.       */
 static int rolling_eval(real *x, int E, int H)
 {
     int M = nser, r = global_r, s = M - r, i, h, o, nor = 0;
@@ -4416,17 +4464,17 @@ static int rolling_eval(real *x, int E, int H)
 
     if (E + H > nobs_full) return 1;
 
-    nobs = nobs_full;                      /* filtrar sobre TODA la muestra   */
+    nobs = nobs_full;                      /* filter over the WHOLE sample    */
     vec_shootx(x, &vf, &ifr, 1, 0);
-    /*  LA TOLERANCIA DE TRUNCAMIENTO, QUE FALTABA.  vec_shootx llena la
-     *  estructura menos este campo -- lo pone cada sitio que la usa (hay una
-     *  docena) -- y aqui no se ponia: vf esta en la pila, asi que elf recibia
-     *  como xitol lo que hubiera en esa palabra, y valgrind lo cazo en cxi
-     *  (elfvarma.c:773) con 60 saltos sobre valor sin inicializar.  Es la
-     *  evaluacion fuera de muestra, o sea la medida que decide el numero de
-     *  version de este programa (HOMOLOGATION.md 4t), corriendo con un
-     *  truncamiento indefinido.  Encontrado el 2026-08-22 al pasar valgrind
-     *  sobre los caminos nuevos de P6.                                       */
+    /*  THE TRUNCATION TOLERANCE, WHICH WAS MISSING.  vec_shootx fills the
+     *  structure except for this field -- every site that uses it sets it, and
+     *  there are a dozen -- and here it was not being set: vf is on the stack,
+     *  so elf received as xitol whatever was in that word, and valgrind caught
+     *  it in cxi (elfvarma.c:773) with 60 jumps on an uninitialised value.
+     *  This is the out-of-sample evaluation, i.e. the measurement that decides
+     *  this program's version number (HOMOLOGATION.md 4t), running with an
+     *  undefined truncation.  Found on 2026-08-22 by running valgrind over P6's
+     *  new paths.  BUG-14.                                                   */
     vf.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
     if (ifr == 0)
         elf(vf.m, vf.n, vf.p, vf.q, vf.mu, vf.phi, vf.theta, vf.qq, vf.w,
@@ -4437,7 +4485,7 @@ static int rolling_eval(real *x, int E, int H)
         return 1;
     }
 
-    /*  B2 del ajuste: el ultimo bloque del vector, salvo que -fixb2 lo sujete. */
+    /*  B2 of the fit: the last block of the vector, unless -fixb2 holds it. */
     B2r = matrix(1, (s > 0 ? s : 1), 1, (r > 0 ? r : 1));
     {
         int nmean, nlam, nmid, ntail, idx;
@@ -4456,16 +4504,16 @@ static int rolling_eval(real *x, int E, int H)
             sae[h][i] = sse[h][i] = spe[h][i] = 0.0; cnt[h][i] = 0;
         }
 
-    /*  -C: los errores ORIGEN A ORIGEN, que es lo que un contraste de igualdad
-     *  de capacidad predictiva necesita.  Un RMSE agregado no permite un
-     *  Diebold-Mariano: hace falta la serie de perdidas.  La letra es la del
-     *  programa hermano, que lleva la misma opcion por la misma razon.       */
-    /*  P6.7 — y se escribe SIEMPRE, en <base>.recursive, sin que haya que
-     *  nombrarlo.  Antes existia solo si el usuario se acordaba de -C, y la
-     *  medida que sostiene el numero de version de este programa (§4t del
-     *  registro) se hizo asi, contra un fichero temporal.  Una medida que
-     *  decide la version no puede depender de que alguien recuerde una
-     *  opcion.  -C sigue valiendo, ahora como REDIRECCION.                   */
+    /*  -C: the ORIGIN-BY-ORIGIN errors, which is what a test of equal
+     *  predictive ability needs.  An aggregate RMSE does not allow a
+     *  Diebold-Mariano: the series of losses is required.  The letter is the
+     *  sibling program's, which carries the same option for the same reason. */
+    /*  P6.7 — and it is written ALWAYS, in <base>.recursive, without having to
+     *  be named.  It used to exist only if the user remembered -C, and the
+     *  measurement that sustains this program's version number (§4t of the
+     *  register) was made that way, against a temporary file.  A measurement
+     *  that decides the version cannot depend on somebody remembering an
+     *  option.  -C still works, now as a REDIRECTION.                        */
     {
         static char rec_path[600];
         if (!fc_csv) {
@@ -4487,8 +4535,8 @@ static int rolling_eval(real *x, int E, int H)
         nor++;
         for (h = 1; h <= H; h++)
             for (i = 1; i <= M; i++) {
-                /*  El nivel realizado: el bloque Y2 esta en Y2_levels y el
-                 *  bloque Y1 en datamat, que build_y2_levels dejo en NIVELES. */
+                /*  The realised level: the Y2 block is in Y2_levels and the Y1 block
+                 *  in datamat, which build_y2_levels left in LEVELS.         */
                 real act = (i <= s) ? Y2_levels[o + h][i] : datamat[o + h][i];
                 real e   = act - lev[h][i];
                 sae[h][i] += fabs(e);
@@ -4534,29 +4582,30 @@ static int rolling_eval(real *x, int E, int H)
 
 
 /*****************************************************************************/
-/*  P6.8 — LAS HIPOTESIS QUE UN VEC CONTESTA, Y QUE NO CUESTAN UNA ESTIMACION */
+/*  P6.8 — THE HYPOTHESES A VEC ANSWERS, AND THAT COST NO ESTIMATION       */
 /*                                                                           */
-/*  Hasta ahora este programa imprimia por defecto la diagnosis (Hosking,     */
-/*  Jarque-Bera, las R(k)) y la condicion de rango -- todo sobre los          */
-/*  RESIDUOS -- y ninguna hipotesis sobre las RELACIONES, que es de lo que    */
-/*  trata el modelo.  Las que tenia estaban todas detras de una opcion y      */
+/*  Until now this program printed by default the diagnosis (Hosking,      */
+/*  Jarque-Bera, the R(k)) and the rank condition -- all about the         */
+/*  RESIDUALS -- and no hypothesis about the RELATIONS, which is what the  */
+/*  model is about.  The ones it had were all behind an option and         */
 /*  todas exigian reestimar: -lrtest, -weakex, -matest, -artest, -fixb2.      */
 /*                                                                           */
-/*  El escalon barato faltaba, y no faltaba por falta de material: est()      */
-/*  devuelve la covarianza de los parametros en cov, y de su diagonal salen   */
-/*  los sd que el .out ya imprime al lado de Lambda y de B2.  Con esa matriz  */
-/*  un Wald sobre un subvector es aritmetica.  El programa hermano lo hace    */
-/*  siempre (drvarma report.py:_wald_blocks); aqui ademas hay Lambda y B2,    */
-/*  que son la parte en la que un VEC es informativo y un VARMA no.           */
+/*  The cheap rung was missing, and not for want of material: est()        */
+/*  returns the covariance of the parameters in cov, and its diagonal is   */
+/*  where the sd values the .out already prints beside Lambda and B2 come  */
+/*  from.  With that matrix a Wald on a subvector is arithmetic.  The      */
+/*  sibling program does it always (drvarma report.py:_wald_blocks); here  */
+/*  there are also Lambda and B2, the part where a VEC is informative and  */
 /*                                                                           */
-/*  Ver docs/PLAN_PRODUCCION.md 7.2.                                          */
+/*  See docs/PLAN_PRODUCCION.md 7.2.                                         */
 /*****************************************************************************/
 
-/*  wald_sub — chi2 = th' S^+ th sobre el subvector idx[1..k], con S^+ la
- *  PSEUDOINVERSA por SVD y df = rango(S).  Es el port de wald_test del
- *  hermano, y la pseudoinversa no es un adorno: con -diagcov, -marow o
- *  -fixb2 hay direcciones que la verosimilitud no ve, y una inversa normal
- *  las convertiria en un chi2 gigante en vez de descontarlas del df.        */
+/*  wald_sub — chi2 = th' S^+ th on the subvector idx[1..k], with S^+ the
+ *  SVD PSEUDO-INVERSE and df = rank(S).  It is the port of the sibling's
+ *  wald_test, and the pseudo-inverse is not an ornament: with -diagcov,
+ *  -marow or -fixb2 there are directions the likelihood cannot see, and an
+ *  ordinary inverse would turn them into a huge chi2 instead of discounting
+ *  them from the df.                                                        */
 static int wald_sub(real *x, real **cov, int *idx, int k, real *chi2, int *df)
 {
     real **S, **V, *w, *th, *y;
@@ -4594,13 +4643,13 @@ static int wald_sub(real *x, real **cov, int *idx, int k, real *chi2, int *df)
     free_vector(y, 1, k); free_vector(th, 1, k); free_vector(w, 1, k);
     free_matrix(V, 1, k, 1, k); free_matrix(S, 1, k, 1, k);
 
-    if (!(acc >= 0.0)) return 1;             /* nan o negativo: no se emite  */
+    if (!(acc >= 0.0)) return 1;             /* nan or negative: not emitted  */
     *chi2 = acc;
     *df   = rk;
     return (rk > 0) ? 0 : 1;
 }
 
-/*  emit_wald — una hipotesis, con su lectura.  Devuelve 0 si la emitio.     */
+/*  emit_wald — one hypothesis, with its reading.  Returns 0 if emitted.    */
 static int emit_wald(real *x, real **cov, int *idx, int k,
                      const char *title, const char *h0,
                      const char *reject, const char *accept)
@@ -4622,10 +4671,10 @@ static int emit_wald(real *x, real **cov, int *idx, int k,
     return 0;
 }
 
-/*  hypothesis_block — el bloque entero.  ix_* son los indices de x[] que el
- *  recorrido de la impresora fue anotando; 0 quiere decir que esa entrada no
- *  es libre (la fija la estructura, -fixb2 o -alpha) y por tanto no se puede
- *  contrastar: esta impuesta, no estimada.                                  */
+/*  hypothesis_block — the whole block.  ix_* are the indices into x[] that
+ *  the printer's walk noted down; 0 means that entry is not free (the
+ *  structure, -fixb2 or -alpha fixes it) and therefore cannot be tested: it is
+ *  imposed, not estimated.                                                   */
 static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
                              int **ix_F, int **ix_Th)
 {
@@ -4651,7 +4700,7 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
         "  replaced by anything below.\n");
 
     if (r > 0) {
-        /* ---- 1. Lambda = 0, y por que NO es un contraste ----------------- */
+        /* ---- 1. Lambda = 0, and why it is NOT a test --------------------- */
         k = 0;
         for (i = 1; i <= M; i++)
             for (j = 1; j <= r; j++)
@@ -4703,7 +4752,7 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
             emit_wald(x, cov, idx, k, title, h0, rej_s, acc_s);
         }
 
-        /* ---- 3. Exclusion de la relacion de largo plazo ------------------ */
+        /* ---- 3. Exclusion from the long-run relation --------------------- */
         k = 0;
         for (i = 1; i <= s; i++)
             for (j = 1; j <= r; j++)
@@ -4756,7 +4805,7 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
             "  exist in this fit.  What follows is the short-run block alone.\n");
     }
 
-    /* ---- 4. La dinamica corta ------------------------------------------- */
+    /* ---- 4. The short-run dynamics -------------------------------------- */
     if (nf > 0 || q > 0) {
         fprintf(outputv,
             "\n--- Short-run dynamics ---\n"
@@ -4766,7 +4815,7 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
             "  equilibrium error, which is not the same statement as Granger\n"
             "  causality among the levels.\n");
 
-        if (nf > 0) {                              /* ultimo retardo de F     */
+        if (nf > 0) {                              /* last lag of F     */
             k = 0;
             for (i = 1; i <= M; i++)
                 for (j = 1; j <= M; j++)
@@ -4778,7 +4827,7 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
                       "REJECT H0 -> the last AR lag is significant.",
                       "Cannot reject H0 -> the last AR lag is not significant.");
         }
-        if (q > 0) {                               /* ultimo retardo de Theta */
+        if (q > 0) {                               /* last lag of Theta */
             k = 0;
             for (i = 1; i <= M; i++)
                 for (j = 1; j <= M; j++)
@@ -4791,7 +4840,7 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
                       "Cannot reject H0 -> the last MA lag is not significant.");
         }
 
-        k = 0;                                     /* todos los cruzados      */
+        k = 0;                                     /* all the cross ones        */
         for (kk = 1; kk <= nf; kk++)
             for (i = 1; i <= M; i++)
                 for (j = 1; j <= M; j++)
@@ -4812,7 +4861,7 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
             fprintf(outputv, "\nNo free cross effects to test (the short run "
                              "is already diagonal or structured).\n");
 
-        for (i = 1; i <= M; i++) {                 /* las dos direcciones     */
+        for (i = 1; i <= M; i++) {                 /* the two directions  */
             nm = series_names ? series_names[i] : "y";
             k = 0;
             for (kk = 1; kk <= nf; kk++)
@@ -4867,8 +4916,9 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
     free_ivector(idx, 1, (M * M * (nf + q) + M * r + s * r) + 1);
 }
 
-/*  forecast_vec — H pasos desde el final de la muestra, en niveles.
- *  Devuelve 0 si pudo.  Las columnas son las del .inp: Y2 (1..s), Y1 (s+1..M). */
+/*  forecast_vec — H steps from the end of the sample, in levels.
+ *  Returns 0 if it worked.  The columns are the .inp's: Y2 (1..s), Y1
+ *  (s+1..M).                                                                 */
 static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
 {
     int M = v->m, r = global_r, s = M - r, n = v->n, p = v->p, q = v->q;
@@ -4886,25 +4936,26 @@ static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
     Var  = matrix(1, M, 1, M);
     Yb   = matrix(1, H, 1, M);          /* Ybar previsto                     */
     lev  = matrix(1, H, 1, M);          /* niveles: [Y2 ; Y1]                */
-    SE   = matrix(1, H, 1, M);          /* el error estandar de cada nivel   */
+    SE   = matrix(1, H, 1, M);          /* the standard error of each level   */
 
     compute_psi_weights(M, p, q, v->phi, v->theta, H, Psi);
     for (i = 1; i <= M; i++)
         for (j = 1; j <= M; j++) Sig[i][j] = v->sigma2 * v->qq[i][j];
 
-    /*  [1] La media y [2] los niveles: los calcula forecast_core(), que es la
-     *      misma funcion que usa la evaluacion de origen movil.  Una sola
-     *      copia de la recursion, que es lo que este fichero ya aprendio por
-     *      las malas con compute_psi_weights.                                */
+    /*  [1] The mean and [2] the levels: computed by forecast_core(), which is
+     *      the same function the rolling-origin evaluation uses.  One single
+     *      copy of the recursion, which is what this file already learned the
+     *      hard way with compute_psi_weights.                                */
     forecast_core(v, B2, n, H, Yb, lev);
 
-    /*  [1b] EL CERTIFICADO.  La recursion de [1] se aplica hacia atras, dentro
-     *  de la muestra: la prediccion a un paso de Ybar_t con la informacion
-     *  hasta t-1 tiene que ser Ybar_t - a_t, con a_t el residuo que devolvio
-     *  elf.  No es circular -- los residuos los calcula el motor por AS 311, no
-     *  esta funcion --, y ata de una vez la recursion, la convencion de la
-     *  media y los indices.  Se mide sobre la segunda mitad de la muestra,
-     *  donde el arranque exacto ya no pesa.                                   */
+    /*  [1b] THE CERTIFICATE.  The recursion of [1] is applied backwards,
+     *  inside the sample: the one-step prediction of Ybar_t with the
+     *  information up to t-1 has to be Ybar_t - a_t, with a_t the residual elf
+     *  returned.  It is not circular -- the residuals are computed by the
+     *  engine through AS 311, not by this function -- and it ties down at once
+     *  the recursion, the mean convention and the indexing.  It is measured
+     *  over the second half of the sample, where the exact start no longer
+     *  weighs.                                                                */
     {
         real worst = 0.0;
         int t0 = n / 2 + 1, t;
@@ -4935,7 +4986,7 @@ static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
             worst, n - t0 + 1, fabs(v->xitol));
     }
 
-    /*  [3] Las bandas, por el mapa de [4] arriba y no por otro camino.        */
+    /*  [3] The bands, through the map of [4] above and by no other route.    */
     z = (conf >= 0.99) ? 2.575829 : (conf >= 0.95) ? 1.959964 : 1.644854;
     fprintf(outputv,
         "\n=== Forecast, %d step%s ahead, in LEVELS ===\n"
@@ -4954,10 +5005,9 @@ static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
 
     for (h = 1; h <= H; h++) {
         int m = h - 1;
-        /*  C_m = C_{m-1} + Psi_m, y Var(h) = Var(h-1) + G_m Sigma* G_m'.  Las
-         *  dos son acumulaciones de un termino por horizonte: la banda a h
-         *  contiene todos los choques de n+1..n+h, cada uno con el peso que le
-         *  toca.                                                              */
+        /*  C_m = C_{m-1} + Psi_m, and Var(h) = Var(h-1) + G_m Sigma* G_m'.
+         *  Both are accumulations of one term per horizon: the band at h
+         *  contains every shock from n+1..n+h, each with its due weight.     */
         for (i = 1; i <= M; i++)
             for (j = 1; j <= M; j++) Csum[i][j] += Psi[m][i][j];
         level_error_map(Csum, Psi[m], B2, M, r, G);
@@ -4976,12 +5026,12 @@ static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
         fprintf(outputv, "\n");
     }
 
-    /*  P6.7 — <base>.forecast, EL FICHERO DEL CONJUNTO.  Lo que hay arriba es
-     *  el informe de la estimacion; esto es el producto, y lleva lo que el
-     *  .out nunca llevo: la FECHA de cada fila y la banda ya construida.  Sin
-     *  fecha, quien lee la prevision tiene que reconstruir el calendario por
-     *  su cuenta desde la cabecera del .inp, y eso es un error esperando.
-     *  El formato es el del hermano (drvarma v.04.1, drvarma.c:627).         */
+    /*  P6.7 — <base>.forecast, THE SUITE'S FILE.  What is above is the
+     *  estimation report; this is the product, and it carries what the .out
+     *  never did: the DATE of each row and the band already built.  With no
+     *  date, whoever reads the forecast has to rebuild the calendar from the
+     *  .inp's header, and that is an error waiting to happen.  The format is
+     *  the sibling's (drvarma v.04.1, drvarma.c:627).                        */
     {
         char fname[600];
         FILE *ff;
@@ -4989,9 +5039,9 @@ static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
         ff = fopen(fname, "w");
         if (!ff) fprintf(stderr, "WARNING: cannot write %s\n", fname);
         else {
-            /*  El indice CRUDO del origen: con las series en niveles la fila t
-             *  de datamat es la fila t+1 del .inp (una observacion se consume
-             *  al diferenciar), y con -differenced es la misma fila.          */
+            /*  The RAW index of the origin: with the series in levels, row t of
+             *  datamat is row t+1 of the .inp (one observation is consumed by
+             *  differencing), and with -differenced it is the same row.      */
             int raw_origin = global_levels ? n + 1 : n;
             int per, sub;
             fprintf(ff, "DRVEC %s -- forecasts from a VEC(%d) model\n",
@@ -5047,54 +5097,273 @@ static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
 }
 
 /*****************************************************************************/
-/*  P1 — la linea de ordenes se valida ANTES de estimar                       */
+/*  P9 — THE .pre INPUT ROUTE: one univariate model per series, as in drtran  */
 /*                                                                           */
-/*  POR QUE.  Hasta 2026-08-20 el bucle de opciones era una cadena de strcmp  */
-/*  SIN rama else: una opcion desconocida -- una errata como -diagcv, o una   */
-/*  opcion de otro programa de la suite -- se ignoraba EN SILENCIO y drvec    */
-/*  estimaba otro modelo sin decirlo.  Eso es justo lo que la tesis del       */
-/*  programa no admite: la especificacion ES el resultado, y el ajuste de     */
-/*  otra especificacion no es un ajuste peor sino el ajuste de otro modelo    */
-/*  (SPECIFICATION_PLAN.md 8).  Un programa que grita cuando sigma_min cae    */
-/*  por debajo de 0.2 y calla cuando le pasan una opcion inexistente tiene    */
-/*  las alarmas mal repartidas.  Y p, q, r se leian con atoi, que devuelve 0  */
-/*  en silencio ante un texto: `drvec fichero x y z` moria por SIGSEGV dentro */
-/*  de init_guess, igual que p = 0, p = -1 y p = 200.                         */
+/*  WHY drvec AND NOT drvarma.  drvarma reads a single .inp with every series */
+/*  in it, and that is right for drvarma: it does not share fue's ladder --   */
+/*  it is the engine the ladder is built on.  drtran does share it, and its   */
+/*  interface says so: `drtran output.pre input1.pre ...`, one already        */
+/*  identified univariate model per series.  drvec is on drtran's side of     */
+/*  that line: its whole design (docs/PLAN_BETA.md F2) is that the univariate */
+/*  work is done in fue and arrives here already done.  Until now it arrived  */
+/*  by hand -- export the series to an .inp, then -interv to subtract the     */
+/*  deterministic terms, then -seed for the moving average -- which is three  */
+/*  steps a user has to remember and one file format to fill in by hand.      */
 /*                                                                           */
-/*  LA CONVENCION NO SE INVENTA AQUI, es la de la suite.  drtran en C usa     */
-/*  getopt con `default: usage(argv[0]); return 1;`, y el porte la enuncia    */
+/*  WHAT IS TAKEN FROM EACH .pre                                              */
+/*                                                                           */
+/*    the series          Ts.data, the raw z                                  */
+/*    the transformation  w = refactor * BoxCox(z), which is the format's own */
+/*                        contract (BRIDGE_DESIGN.md) and exactly what        */
+/*                        drtran.c:885 does.  drvec works in w for the same   */
+/*                        reason drtran does: the deterministic coefficients  */
+/*                        the file carries are in the units of w              */
+/*    the deterministics  subtracted, through build_det_component, with the   */
+/*                        DATES of this sample -- a deterministic term is a   */
+/*                        function of time, so aligning by index instead of   */
+/*                        by date puts the intervention in the wrong year     */
+/*    the calendar        frequency and start; the sample used is the         */
+/*                        intersection of the files' calendars                */
+/*                                                                           */
+/*  WHAT IS NOT.  The moving average is NOT seeded from the models, even      */
+/*  though they are right there and it would be free: it is measured to make  */
+/*  the fit WORSE with r >= 1 (docs/PLAN_BETA.md F2.7 and F2.8), and a route  */
+/*  that silently does a thing measured to be harmful is worse than one that  */
+/*  makes you ask.  -seed still asks.                                         */
+/*                                                                           */
+/*  THE COLUMN ORDER IS THE .inp's, and it has to be: the files on the        */
+/*  command line are the columns, so the first M-r are the nabla Y2 block and */
+/*  the last r are the Y1 block, the one B = [I_r ; B2] normalises on.  A     */
+/*  second order would be a silent trap of exactly the kind this program      */
+/*  already warns about.  Which file went into which block is printed.        */
+/*****************************************************************************/
+
+/*  boxcox_w — the format's transformation: w = refactor * BoxCox(z).  Same
+ *  branch and the same 1e-8 threshold as drtran.c:885, deliberately.        */
+static real boxcox_w(real z, real lam, real refac)
+{
+    if (fabs(lam) < 1.0e-8) return log(z) * refac;
+    if (fabs(lam - 1.0) < 1.0e-12) return z * refac;
+    return ((pow(z, lam) - 1.0) / lam) * refac;
+}
+
+/*  abs_period — a single index on a common calendar, so that files that start
+ *  on different dates can be lined up by DATE and not by position.  With
+ *  annual data (freq = 1) the subperiod is meaningless and only the year
+ *  counts, which is the same convention drtran's obs_to_date uses.          */
+static long abs_period(int year, int sub, int freq)
+{
+    if (freq <= 1) return (long) year;
+    return (long) year * freq + (sub - 1);
+}
+
+/*  read_pre_inputs — fill rawmat, series_names and the calendar from the M
+ *  .pre files.  Returns 0 on success.  Everything it sets is what the .inp
+ *  reader sets, so the rest of the program cannot tell the two apart.       */
+static int read_pre_inputs(char **files, int nfiles)
+{
+    struct Tusmodel *Tm;
+    struct Tseries  *Ts;
+    real ***DM;
+    real **det;
+    long *start;
+    long first = 0, last = 0;
+    int i, t, ok = 1, freq0 = 0;
+    int syear = 0, ssub = 1;
+
+    if (nfiles < 2) {
+        fprintf(stderr, "ERROR: a VEC model needs at least two series, got %d\n",
+                nfiles);
+        return 1;
+    }
+
+    Tm  = (struct Tusmodel *) calloc((size_t) nfiles + 1, sizeof *Tm);
+    Ts  = (struct Tseries  *) calloc((size_t) nfiles + 1, sizeof *Ts);
+    DM  = (real ***) calloc((size_t) nfiles + 1, sizeof *DM);
+    det = (real **)  calloc((size_t) nfiles + 1, sizeof *det);
+    start = (long *) calloc((size_t) nfiles + 1, sizeof *start);
+    if (!Tm || !Ts || !DM || !det || !start) {
+        fprintf(stderr, "ERROR: out of memory reading the .pre files\n");
+        return 1;
+    }
+
+    for (i = 1; i <= nfiles; i++) {
+        if (read_fue_pre(files[i], &Tm[i], &Ts[i], &DM[i]) != 0) {
+            fprintf(stderr, "ERROR: cannot read %s\n", files[i]);
+            ok = 0;
+            break;
+        }
+        if (Ts[i].nobs < 4) {
+            fprintf(stderr, "ERROR: %s carries %d observations\n",
+                    files[i], Ts[i].nobs);
+            ok = 0; break;
+        }
+        if (freq0 == 0) freq0 = Ts[i].freq;
+        else if (Ts[i].freq != freq0) {
+            fprintf(stderr,
+                "ERROR: %s has frequency %d and %s has %d.  A VEC model is one\n"
+                "       system on one calendar; the series cannot be mixed.\n",
+                files[i], Ts[i].freq, files[1], freq0);
+            ok = 0; break;
+        }
+        start[i] = abs_period(Ts[i].begyear, Ts[i].begtime, Ts[i].freq);
+        if (i == 1 || start[i] > first) first = start[i];
+        if (i == 1 || start[i] + Ts[i].nobs - 1 < last)
+            last = start[i] + Ts[i].nobs - 1;
+    }
+
+    if (ok && last - first + 1 < 4) {
+        fprintf(stderr,
+            "ERROR: the .pre files overlap in %ld observation(s); at least 4 are\n"
+            "       needed.  They are lined up by DATE, not by position.\n",
+            last - first + 1);
+        ok = 0;
+    }
+
+    if (ok) {
+        data_freq       = freq0;
+        nser            = nfiles;
+        nobs_raw        = (int) (last - first + 1);
+        nobs            = nobs_raw;
+        if (freq0 <= 1) { syear = (int) first;            ssub = 1; }
+        else            { syear = (int) (first / freq0);  ssub = (int) (first % freq0) + 1; }
+        data_start_year = syear;
+        data_start_sub  = ssub;
+
+        series_names = (char **) malloc(((size_t) nser + 1) * sizeof *series_names);
+        rawmat = matrix(1, nobs_raw, 1, nser);
+
+        printf("\nSeries, in the .inp's column order (the first %d are the "
+               "nabla Y2 block):\n", nser - global_r);
+        printf("  %-3s %-22s %-12s %8s %6s %3s %3s %s\n",
+               "#", "file", "name", "refactor", "lambda", "d", "D", "obs");
+        for (i = 1; i <= nser; i++) {
+            int off = (int) (first - start[i]);       /* rows to skip at the head */
+            real refac = (Ts[i].refactor != 0.0) ? Ts[i].refactor : 1.0;
+            real lam   = Tm[i].boxlam;
+
+            series_names[i] = strdup(Ts[i].name ? Ts[i].name : files[i]);
+
+            /*  The deterministic component over THIS file's own sample, which
+             *  is where its dates are; the head is skipped afterwards.  It
+             *  comes back in the units of w, which is the units this route
+             *  works in, so unlike -interv there is nothing to divide by --
+             *  the mismatch BUG-15 was about cannot arise here.             */
+            det[i] = vector(1, Ts[i].nobs);
+            for (t = 1; t <= Ts[i].nobs; t++) det[i][t] = 0.0;
+            if (Tm[i].NdetVar > 0)
+                build_det_component(&Tm[i], &Ts[i], Ts[i].nobs, det[i]);
+
+            for (t = 1; t <= nobs_raw; t++) {
+                real z = Ts[i].data[off + t];
+                if (fabs(lam - 1.0) > 1.0e-12 && z <= 0.0) {
+                    fprintf(stderr,
+                        "ERROR: %s asks for a Box-Cox with lambda = %g and "
+                        "observation %d is %g\n", files[i], lam, off + t, z);
+                    ok = 0; break;
+                }
+                rawmat[t][i] = boxcox_w(z, lam, refac) - det[i][off + t];
+            }
+            if (!ok) break;
+
+            printf("  %-3d %-22s %-12s %8.4g %6.3g %3d %3d %d%s\n",
+                   i, files[i], series_names[i], refac, lam,
+                   Tm[i].nrdiff, Tm[i].nadiff, Ts[i].nobs,
+                   (i <= nser - global_r) ? "" : "   <- Y1");
+
+            /*  A univariate model that does NOT difference is a model that says
+             *  its series is stationary; putting it in a VEC says the opposite.
+             *  It is a warning and not an error because the rank test exists
+             *  precisely to settle the question.                            */
+            if (Tm[i].nrdiff == 0 && Tm[i].nadiff == 0)
+                fprintf(stderr,
+                    "WARNING: %s carries no differencing, so its own univariate\n"
+                    "         model says the series is stationary.  A VEC model\n"
+                    "         assumes I(1) series.\n", files[i]);
+        }
+    }
+
+    if (ok) {
+        /*  The refactors, and what they do to B2.  W = Y1 + B2'Y2 is formed in
+         *  w units, so a coefficient b_i is the z-unit one times
+         *  refactor_i / refactor_{Y1}.  When every file carries the same
+         *  factor -- which is the suite's norm -- they cancel and B2 reads
+         *  directly.  When they do not, saying so is the difference between a
+         *  number and a number in unknown units.                            */
+        int same = 1;
+        real r1 = (Ts[1].refactor != 0.0) ? Ts[1].refactor : 1.0;
+        for (i = 2; i <= nser; i++) {
+            real ri = (Ts[i].refactor != 0.0) ? Ts[i].refactor : 1.0;
+            if (fabs(ri - r1) > 1.0e-9 * r1) same = 0;
+        }
+        if (!same)
+            fprintf(stderr,
+                "WARNING: the .pre files do not share one refactor.  The system is\n"
+                "         built in w = refactor*BoxCox(z) units, as in drtran, so\n"
+                "         each entry of B2 is its z-unit value times\n"
+                "         refactor_i / refactor_(Y1 block).  Compare fits on Pi,\n"
+                "         which the normalisation does not touch.\n");
+        printf("Common sample: %d observations, %d/%d onwards, frequency %d\n",
+               nobs_raw, ssub, syear, data_freq);
+    }
+
+    for (i = 1; i <= nfiles; i++) {
+        if (det[i]) free_vector(det[i], 1, Ts[i].nobs);
+        if (Ts[i].data) free_fue_pre(&Tm[i], &Ts[i], DM[i]);
+    }
+    free(start); free(det); free(DM); free(Ts); free(Tm);
+    return ok ? 0 : 1;
+}
+
+/*****************************************************************************/
+/*  P1 — the command line is validated BEFORE estimating                      */
+/*                                                                           */
+/*  WHY.  Until 2026-08-20 the option loop was a chain of strcmp with NO    */
+/*  else branch: an unknown option -- a typo like -diagcv, or an option of  */
+/*  another program of the suite -- was ignored IN SILENCE and drvec        */
+/*  estimated a different model without saying so.  That is exactly what    */
+/*  the program's own thesis does not admit: the specification IS the       */
+/*  result, and the fit of another specification is not a worse fit but the */
+/*  fit of another model (SPECIFICATION_PLAN.md 8).  A program that shouts  */
+/*  when sigma_min falls below 0.2 and keeps quiet when handed an option    */
+/*  that does not exist has its alarms badly distributed.  And p, q, r were */
+/*  read with atoi, which silently returns 0 on text: `drvec file x y z`    */
+/*  died by SIGSEGV inside init_guess, as did p = 0, p = -1 and p = 200.    */
+/*                                                                           */
+/*  THE CONVENTION IS NOT INVENTED HERE, it is the suite's.  drtran in C    */
+/*  uses getopt with `default: usage(argv[0]); return 1;`, and the port     */
 /*  como principio -- "Refusing rather than ignoring the option" -- con tres  */
-/*  codigos de salida: 0 exito (y -h), 1 linea de ordenes mal formada, 2 la   */
-/*  opcion se reconoce pero no se puede atender.  drvec no puede usar getopt  */
-/*  tal cual porque su vocabulario es de PALABRAS y no de letras, asi que la  */
-/*  forma de minimo delta es esta: una TABLA que declara que opciones existen */
-/*  y que argumento lleva cada una, una pasada de validacion que la recorre   */
-/*  antes de tocar nada, y la cadena de strcmp de siempre intacta detras.  La */
-/*  validacion NO asigna: asi no puede cambiar por accidente lo que se        */
-/*  estima, y ningun valor dorado se mueve.                                   */
+/*  exit codes: 0 success (and -h), 1 a malformed command line, 2 the       */
+/*  option is recognised but cannot be honoured.  drvec cannot use getopt   */
+/*  as it stands because its vocabulary is of WORDS and not letters, so the */
+/*  minimum-delta form is this: a TABLE that declares which options exist   */
+/*  and what argument each takes, a validation pass that walks it before    */
+/*  anything is touched, and the usual chain of strcmp intact behind it.    */
+/*  The validation ASSIGNS NOTHING: that way it cannot accidentally change  */
+/*  what is estimated, and no golden value moves.                          */
 /*                                                                           */
-/*  La tabla es ademas la fuente del listado completo que imprime usage(), de */
-/*  modo que la lista ACEPTADA y la lista DOCUMENTADA no pueden separarse --  */
-/*  antes usage() cubria 22 de 33 opciones --, y la bateria compara las dos.  */
-/*  Ver docs/PLAN_PRODUCCION.md P1.                                           */
+/*  The table is also the source of the full listing usage() prints, so     */
+/*  that the ACCEPTED list and the DOCUMENTED list cannot come apart --     */
+/*  usage() used to cover 22 of 33 options -- and the suite compares them.  */
+/*  See docs/PLAN_PRODUCCION.md P1.                                         */
 /*****************************************************************************/
 
 
 enum opt_arg {
     A_NONE,      /* bandera                                                  */
-    A_STR,       /* fichero o prefijo, obligatorio                           */
+    A_STR,       /* file or prefix, mandatory                                */
     A_INT_POS,   /* entero >= 1, obligatorio                                 */
     A_CASE,      /* 1, 2 o 3                                                 */
     A_METHOD,    /* 1 o 2                                                    */
     A_REAL,      /* real, obligatorio                                        */
-    A_REAL_OPT,  /* real OPCIONAL: se consume si parsea entero (-fixb2)      */
-    A_TOL_OPT    /* real > 0 OPCIONAL, si no empieza por '-' (-rankadm)      */
+    A_REAL_OPT,  /* OPTIONAL real: consumed if it parses whole (-fixb2)      */
+    A_TOL_OPT    /* OPTIONAL real > 0, if it does not start with '-' (-rankadm) */
 };
 
 static const struct opt_spec {
     const char   *name;
     enum opt_arg  arg;
-    const char   *val;     /* como se llama el valor en el listado           */
+    const char   *val;     /* what the value is called in the listing         */
 } OPT_TABLE[] = {
     { "-mean",        A_NONE,     NULL   },
     { "-case",        A_CASE,     "1|2|3"},
@@ -5133,11 +5402,12 @@ static const struct opt_spec {
     { "-interv",      A_STR,      "pfx"  },
     { "-writeres",    A_STR,      "pfx"  },
     { "-writeinp",    A_STR,      "pfx"  },
+    { "-name",        A_STR,      "NAME" },
     { NULL,           A_NONE,     NULL   }
 };
 
-/*  El listado completo, generado de la tabla.  Es lo que hace imposible que  */
-/*  usage() y el parser vuelvan a divergir.                                   */
+/*  The full listing, generated from the table.  It is what makes it       */
+/*  impossible for usage() and the parser to diverge again.                */
 static void usage_option_list(FILE *o)
 {
     int i, col = 0;
@@ -5159,9 +5429,18 @@ static void usage(FILE *o)
 {
     fprintf(o, "\ndrvec %s — VEC model EML estimation (Mauricio 2006)\n",
             DRVEC_VERSION);
-    fprintf(o, "\nUsage: drvec file p q r [-mean] [-case 1|2|3] [-diagar] "
-               "[-diagma] [-diagcov] [-m 1|2]\n"
-               "                 [-differenced] [-fixb2] [-lrtest] [-rungs]\n\n");
+    fprintf(o, "\nTwo ways in, and they estimate the same model:\n\n");
+    fprintf(o, "  drvec file p q r [options]\n");
+    fprintf(o, "        one .inp with every series in it (file.inp -> file.out)\n\n");
+    fprintf(o, "  drvec s1.pre s2.pre [... sM.pre] p q r [options]\n");
+    fprintf(o, "        ONE UNIVARIATE MODEL PER SERIES, as in drtran: each .pre\n");
+    fprintf(o, "        brings its series, its Box-Cox and rescaling, and its\n");
+    fprintf(o, "        deterministic terms, which are subtracted here.  The files\n");
+    fprintf(o, "        are lined up by DATE and the common sample is used.  The\n");
+    fprintf(o, "        column order is the .inp's: the first M-r files are the\n");
+    fprintf(o, "        nabla Y2 block and the last r the Y1 block.  Products are\n");
+    fprintf(o, "        named <stem1>_<stem2>...; -name NAME overrides that (-m is\n");
+    fprintf(o, "        taken here: it is the estimation method)\n\n");
     fprintf(o, "  file  : data file name (without .inp extension)\n");
     fprintf(o, "  p     : AR order of stationary VARMA on Ȳ_t\n");
     fprintf(o, "  q     : MA order\n");
@@ -5262,8 +5541,8 @@ static void usage(FILE *o)
     fprintf(o, "exogeneity (row of Lambda = 0) and of exclusion from the\n");
     fprintf(o, "cointegrating relations (row of B2 = 0), read off the covariance\n");
     fprintf(o, "the estimation already produced.  Use -fdhess before quoting one.\n\n");
-    /*  El programa tiene mas opciones de las que caben aqui, y una lista
-     *  duplicada en dos sitios diverge.  Se dice donde esta la completa.  */
+    /*  The program has more options than fit here, and a list duplicated in
+     *  two places diverges.  Where the full one is, is stated.              */
     fprintf(o, "The options above are the ones that need a paragraph; the full\n"
                "list follows, and docs/USAGE.md documents every one of them.\n"
                "docs/GETTING_STARTED.md has the order to use them in -- select\n"
@@ -5273,9 +5552,10 @@ static void usage(FILE *o)
     usage_option_list(o);
 }
 
-/*  Un error de USO sale con 1 y por stderr.  No se imprime el usage entero
- *  en cada valor mal puesto: eso entierra el mensaje.  Se imprime cuando el
- *  problema es que la opcion no existe, que es cuando la lista ayuda.        */
+/*  A USAGE error exits with 1 and through stderr.  The whole usage is not
+ *  printed on every misplaced value: that buries the message.  It is printed
+ *  when the problem is that the option does not exist, which is when the list
+ *  helps.                                                                    */
 static void bad_cli(const char *fmt, ...)
 {
     va_list ap;
@@ -5287,8 +5567,8 @@ static void bad_cli(const char *fmt, ...)
     exit(1);
 }
 
-/*  strtol/strtod con comprobacion del final del texto.  atoi("x") devuelve 0
- *  sin decir nada, y un 0 silencioso en p es un SIGSEGV en init_guess.       */
+/*  strtol/strtod with a check on the end of the text.  atoi("x") returns 0
+ *  without saying anything, and a silent 0 in p is a SIGSEGV in init_guess.  */
 static int arg_int(const char *s, long *out)
 {
     char *end;
@@ -5321,9 +5601,9 @@ static const struct opt_spec *opt_lookup(const char *name)
     return NULL;
 }
 
-/*  La sugerencia ante una errata: el prefijo comun mas largo.  Con -diagcv
- *  devuelve -diagcov y con -multistar devuelve -multistart, que es el 90 %
- *  de las erratas reales.                                                    */
+/*  The suggestion for a typo: the longest common prefix.  With -diagcv it
+ *  returns -diagcov and with -multistar it returns -multistart, which is 90 %
+ *  of the real typos.                                                        */
 static const char *opt_nearest(const char *name)
 {
     int i, best = 0; const char *hit = NULL;
@@ -5335,12 +5615,14 @@ static const char *opt_nearest(const char *name)
     return (best >= 4) ? hit : NULL;
 }
 
-/*  validate_cli — la pasada previa sobre argv[5..].  Se para en el primer
- *  problema y no asigna nada.                                                */
-static void validate_cli(int argc, char *argv[])
+/*  validate_cli — the preliminary pass over the options.  `first` is where
+ *  they start, which is 5 on the .inp route and M+4 on the .pre one.  It stops
+ *  at the
+ *  first problem and assigns nothing.                                        */
+static void validate_cli(int argc, char *argv[], int first)
 {
     int i;
-    for (i = 5; i < argc; i++) {
+    for (i = first; i < argc; i++) {
         const struct opt_spec *o;
         long iv; double rv;
 
@@ -5389,24 +5671,26 @@ static void validate_cli(int argc, char *argv[])
             i++;
             break;
         case A_REAL_OPT:
-            /*  -fixb2: el valor es opcional y se reconoce por parsear entero,
-                que es exactamente el criterio que usa el asignador.          */
+            /*  -fixb2: the value is optional and is recognised by parsing whole,
+                which is exactly the criterion the assigner uses.             */
             if (i + 1 < argc && arg_real(argv[i+1], &rv)) i++;
             break;
         case A_TOL_OPT:
-            /*  -rankadm: el valor es opcional y se reconoce por NO empezar
-                por '-', que es el criterio del asignador.  Si esta, tiene que
-                ser un numero positivo: una tolerancia <= 0 apaga el aviso sin
-                decirlo, y esa es la alarma que el programa no debe perder.   */
+            /*  -rankadm: the value is optional and is recognised by NOT starting
+                with '-', which is the assigner's criterion.  If present it has
+                to be a positive number: a tolerance <= 0 switches the warning
+                off without saying so, and that is the alarm the program must
+                not lose.                                                     */
             if (i + 1 < argc && argv[i+1][0] != '-') {
                 if (!arg_real(argv[i+1], &rv) || rv <= 0.0)
                     bad_cli("%s needs a tolerance > 0, got `%s'",
                             o->name, argv[i+1]);
                 i++;
             } else if (i + 1 < argc && arg_real(argv[i+1], &rv)) {
-                /*  Un numero NEGATIVO detras de -rankadm: el asignador no lo
-                    tomaria como valor (mira el '-' inicial) y caeria como
-                    opcion desconocida, con un mensaje que no dice nada.     */
+                /*  A NEGATIVE number after -rankadm: the assigner would not take
+                    it as a value (it looks at the leading '-') and it would
+                    fall through as an unknown option, with a message that says
+                    nothing.                                                  */
                 bad_cli("%s needs a tolerance > 0, got `%s'", o->name, argv[i+1]);
             }
             break;
@@ -5422,9 +5706,10 @@ int main(int argc, char *argv[])
     STRING inputf, outputf, base_name;
     FILE  *inputv;
 
-    /*  -h/--help y --version, antes que nada: son consultas, no ejecuciones,
-        y salen con 0 por stdout (la convencion del porte).  Sin argumentos
-        util, el usage sale por stderr y con 1, que es un error de uso.      */
+    /*  -h/--help and --version, before anything else: they are queries, not
+        runs, and they exit with 0 through stdout (the port's convention).
+        With no useful argument, the usage goes to stderr and exits 1, which
+        is a usage error.                                                    */
     if (argc >= 2 && (strcmp(argv[1], "-h") == 0 ||
                       strcmp(argv[1], "--help") == 0)) {
         usage(stdout);
@@ -5440,6 +5725,32 @@ int main(int argc, char *argv[])
     if (argc < 5) {
         usage(stderr);
         return 1;
+    }
+
+    /*  P9 — WHICH ROUTE.  Leading arguments that end in `.pre` are series, one
+     *  univariate model each, and then p q r follow: that is drtran's
+     *  interface, and drvec belongs on drtran's side of the line (see
+     *  read_pre_inputs).  Anything else is the .inp route, untouched -- every
+     *  figure in the register was measured through it.
+     *
+     *  The test is the SUFFIX and not the existence of the file, so that a
+     *  mistyped path is reported as a missing .pre and not as a nonsensical
+     *  AR order.                                                            */
+    {
+        int k = 1;
+        while (k < argc && ends_with(argv[k], ".pre")) k++;
+        n_pre = k - 1;
+        if (n_pre > 0) {
+            pre_route = 1;
+            pre_files = argv;                 /* 1..n_pre, borrowed          */
+            if (argc < n_pre + 4) {
+                fprintf(stderr, "ERROR: after the .pre files come p, q and r\n");
+                usage(stderr);
+                return 1;
+            }
+            i_pqr    = n_pre + 1;
+            first_opt = n_pre + 4;
+        }
     }
 
     /* Size these from the actual argument, not a fixed 80: a longer path used
@@ -5460,32 +5771,58 @@ int main(int argc, char *argv[])
     snprintf(out_base, sizeof out_base, "%s", base_name);
     strcpy(inputf, argv[1]);
 
-    /*  p, q, r con strtol y comprobacion del final.  Con atoi, `drvec f x y z`
-        daba p = q = r = 0 y el proceso moria dentro de init_guess sin decir
-        una palabra; p = 0 hacia lo mismo por la via legitima.  El limite
-        inferior de p es 1: el orden AR del VARMA estacionario sobre Ybar, del
-        que el orden efectivo sobre nabla Y es p - 1 (MODEL.md 5.2).  El
-        limite SUPERIOR no se pone aqui sino con los grados de libertad, una
-        vez leido el fichero: es la muestra la que lo fija, no un numero.    */
+    /*  P9 — the products' name on the .pre route.  Default: the file stems
+     *  joined, which is drtran's <output>_<input> generalised to M series and
+     *  says at a glance what was fitted.  -name overrides it, and is read here
+     *  rather than in the option loop because the name has to exist before the
+     *  files are opened.                                                     */
+    if (pre_route) {
+        int k;
+        for (k = first_opt; k + 1 < argc; k++)
+            if (strcmp(argv[k], "-name") == 0) { model_name = argv[k+1]; break; }
+        if (model_name)
+            snprintf(out_base, sizeof out_base, "%s", model_name);
+        else {
+            char stem[128];
+            size_t used = 0;
+            out_base[0] = '\0';
+            for (k = 1; k <= n_pre; k++) {
+                path_stem(argv[k], stem, sizeof stem);
+                used += (size_t) snprintf(out_base + used, sizeof out_base - used,
+                                          "%s%s", (k > 1) ? "_" : "", stem);
+                if (used >= sizeof out_base - 1) break;
+            }
+        }
+    }
+
+    /*  p, q, r with strtol and a check on the end.  With atoi, `drvec f x y z`
+        gave p = q = r = 0 and the process died inside init_guess without a
+        word; p = 0 did the same by the legitimate route.  The lower bound on p
+        is 1: the AR order of the stationary VARMA on Ybar, of which the
+        effective order on nabla Y is p - 1 (MODEL.md 5.2).  The UPPER bound is
+        not set here but with the degrees of freedom, once the file has been
+        read: it is the sample that fixes it, not a number.                  */
     {
         long lp, lq, lr;
-        if (!arg_int(argv[2], &lp) || lp < 1)
-            bad_cli("p (the AR order) must be an integer >= 1, got `%s'", argv[2]);
-        if (!arg_int(argv[3], &lq) || lq < 0)
-            bad_cli("q (the MA order) must be an integer >= 0, got `%s'", argv[3]);
-        if (!arg_int(argv[4], &lr) || lr < 0)
+        if (!arg_int(argv[i_pqr], &lp) || lp < 1)
+            bad_cli("p (the AR order) must be an integer >= 1, got `%s'",
+                    argv[i_pqr]);
+        if (!arg_int(argv[i_pqr+1], &lq) || lq < 0)
+            bad_cli("q (the MA order) must be an integer >= 0, got `%s'",
+                    argv[i_pqr+1]);
+        if (!arg_int(argv[i_pqr+2], &lr) || lr < 0)
             bad_cli("r (the cointegration rank) must be an integer >= 0, got `%s'",
-                    argv[4]);
+                    argv[i_pqr+2]);
         global_p = (int) lp;
         global_q = (int) lq;
         global_r = (int) lr;
     }
 
-    /*  La pasada de validacion, antes de que nada se asigne.  Ver P1.       */
-    validate_cli(argc, argv);
+    /*  The validation pass, before anything is assigned.  See P1.           */
+    validate_cli(argc, argv, first_opt);
 
     /* Parse options */
-    for (int i = 5; i < argc; i++) {
+    for (int i = first_opt; i < argc; i++) {
         if      (strcmp(argv[i], "-mean") == 0)    global_include_mean = 1;
         else if (strcmp(argv[i], "-case") == 0 && i+1 < argc)
             global_case = atoi(argv[++i]);
@@ -5523,6 +5860,7 @@ int main(int argc, char *argv[])
         }
         else if (strcmp(argv[i], "-levels") == 0)  global_levels = 1;  /* default */
         else if (strcmp(argv[i], "-differenced") == 0) global_levels = 0;
+        else if (strcmp(argv[i], "-name") == 0 && i+1 < argc) i++;  /* read above */
         else if (strcmp(argv[i], "-writeinp") == 0 && i+1 < argc) {
             global_writeinp = 1; inp_prefix = argv[++i];
         }
@@ -5568,22 +5906,44 @@ int main(int argc, char *argv[])
     /* -mean implies case 2 (E[W]≠0) unless a case was given explicitly */
     if (global_include_mean && global_case == 1) global_case = 2;
 
-    /*  P4 — EL DEFECTO DE LA MEDIA MOVIL.  Con q >= 1 y sin que el usuario
-     *  haya elegido clase, se estima -marow: las s filas inferiores de Theta
-     *  nulas.  No es una restriccion sobre la clase libre cuyo optimo haya que
-     *  corregir: por el Corolario 6.3 es la parametrizacion en la que la region
-     *  admisible ES el espacio entero, y la puerta de invertibilidad que el
-     *  motor ya aplica la impone.  -mafree devuelve el defecto anterior.
+    /*  P4 — THE MOVING-AVERAGE DEFAULT.  With q >= 1 and no class chosen by
+     *  the user, -marow is estimated: the lower s rows of Theta zero.  It is
+     *  not a restriction on the free class whose optimum has to be corrected:
+     *  by Corollary 6.3 it is the parameterisation in which the admissible
+     *  region IS the whole space, and the invertibility gate the engine already
+     *  applies imposes it.  -mafree returns the previous default.
      *
-     *  -diagma no se toca: es una restriccion distinta, mas antigua, y NO esta
-     *  en la clase protegida (deja T22 diagonal, no nulo).  Quien la pide sabe
-     *  lo que pide.  Ver SPECIFICATION_PLAN.md 10.                           */
+     *  -diagma is left alone: it is a different, older restriction, and it is
+     *  NOT in the protected class (it leaves T22 diagonal, not zero).  Whoever
+     *  asks for it knows what they are asking for.  See SPECIFICATION_PLAN.md
+     *  10.                                                                   */
     if (global_q > 0 && !global_mafree && !global_marow && !global_mawarma
         && !global_matri && !global_warma && !global_diag_ma) {
-        /*  Se enciende siempre; ma_struct_on() lo apaga en los ajustes con
-         *  r = 0, que es lo unico que hace falta distinguir.                 */
+        /*  Switched on always; ma_struct_on() switches it off in fits with
+         *  r = 0, which is the only case that needs distinguishing.          */
         global_marow  = 1;
         default_marow = 1;
+    }
+
+    /*  P9 — -interv is the .inp route's way of getting the deterministic terms
+     *  out of a .pre.  On the .pre route they are already out, subtracted by
+     *  read_pre_inputs from the same models, so accepting the option would mean
+     *  subtracting them twice -- silently, and with the same signature as
+     *  BUG-15.  It is refused rather than ignored: a user who typed it was
+     *  asking for something, and being told it already happened is the answer. */
+    if (pre_route && global_interv) {
+        fprintf(stderr,
+            "ERROR: -interv does nothing on the .pre route -- the deterministic\n"
+            "       terms are already subtracted, from those same models.\n"
+            "       Accepting it would subtract them twice.\n");
+        exit(1);
+    }
+    if (pre_route && !global_levels) {
+        fprintf(stderr,
+            "ERROR: -differenced does not apply to the .pre route.  A .pre\n"
+            "       carries the series in levels and says how it is differenced;\n"
+            "       drvec forms nabla Y2 itself.\n");
+        exit(1);
     }
 
     if (global_lrtest) {
@@ -5602,20 +5962,30 @@ int main(int argc, char *argv[])
         fprintf(stderr, "ERROR: cointegration rank r must be >= 0\n");
         exit(1);
     } else if (global_r == 0 && !quiet_mode) {
-        /* r = 0 ya no es un error.  Es el PELDANO DIAGONAL de la escalera:
-           con r = 0 se tiene Cbar = I y Hbar = 0, la verosimilitud exacta
-           factoriza con las banderas diagonales, y ahi es donde viven los dos
-           contratos de la suite (LADDER_AS_OPTIMISATION.md 2.1 y 3): la
-           identidad de cruce y el certificado de optimalidad.  Antes solo se
-           llegaba a el por dentro de -lrtest, que es justamente donde no se
-           puede inspeccionar.  Ver docs/PLAN_BETA.md F2.8.                   */
-        printf("r = 0: sin cointegracion, VARMA(%d,%d) sobre nabla Y "
-               "(el peldano diagonal)\n", global_p, global_q);
+        /* r = 0 is no longer an error.  It is the ladder's DIAGONAL RUNG: with
+           r = 0 one has Cbar = I and Hbar = 0, the exact likelihood factorises
+           with the diagonal flags, and that is where the suite's two contracts
+           live (LADDER_AS_OPTIMISATION.md 2.1 and 3): the crossing identity and
+           the optimality certificate.  It used to be reachable only from inside
+           -lrtest, which is precisely where it cannot be inspected.  See
+           docs/PLAN_BETA.md F2.8.                                            */
+        printf("r = 0: no cointegration, VARMA(%d,%d) on nabla Y "
+               "(the diagonal rung)\n", global_p, global_q);
     }
 
-    strcpy(outputf, base_name);
+    /*  The names of the products.  outputf has to be sized from out_base and
+     *  not from argv[1], which on the .pre route is one file of several.     */
+    {
+        int need = (int) strlen(out_base) + 8;
+        char *o = NEW_STR(need);
+        if (!o) { fprintf(stderr, "ERROR: out of memory for file names\n"); exit(1); }
+        FREE_STR(outputf);
+        outputf = o;
+    }
+    strcpy(outputf, out_base);
     strcat(outputf, ".out");
-    strcat(inputf, ".inp");
+    if (pre_route) snprintf(inputf, (size_t) strlen(argv[1]) + 8, "%s", "the .pre files");
+    else           strcat(inputf, ".inp");
 
     printf("\nDRVEC %s — VEC model EML estimation (Mauricio 2006)\n",
            DRVEC_VERSION);
@@ -5625,7 +5995,17 @@ int main(int argc, char *argv[])
            global_r, global_p, global_q);
     printf("Case   : %d\n", global_case);
 
-    /* [1] Read .inp file --------------------------------------------------- */
+    /* [1] Read the data ---------------------------------------------------- */
+    if (pre_route) {
+        /*  P9 — one univariate model per series, as in drtran.  Everything the
+         *  .inp reader below sets, this sets too, so nothing downstream can
+         *  tell the two routes apart.                                        */
+        if (read_pre_inputs(pre_files, n_pre) != 0) exit(1);
+        if (global_r >= nser) {
+            fprintf(stderr, "ERROR: r=%d must be < M=%d\n", global_r, nser);
+            exit(1);
+        }
+    } else {
     if (NULL == (inputv = fopen(inputf, "r"))) {
         fprintf(stderr, "ERROR: cannot open %s\n", inputf);
         exit(1);
@@ -5679,8 +6059,9 @@ int main(int argc, char *argv[])
         }
         fclose(inputv);
     }
+    }   /* !pre_route */
 
-    /* The .inp data must contain, in column order [Y_2 block ; Y_1 block]:
+    /* The data must contain, in column order [Y_2 block ; Y_1 block]:
        - cols 1..s (s = M - r): Y_{2t} in levels  (or ∇Y_{2t} with -differenced)
        - cols s+1..M (r):       Y_{1t} in levels
     */
@@ -5697,65 +6078,65 @@ int main(int argc, char *argv[])
     printf("Series: %d, Obs: %d, Rank: r=%d  (%s)\n", nser, nobs, global_r,
            global_levels ? "levels" : "legacy pre-differenced layout");
 
-    /* -alpha / -weakex: cargar la A de la restriccion alpha = A*psi.  Se hace
-       aqui porque necesita nser, y antes de calcular npar.                   */
+    /* -alpha / -weakex: load the A of the alpha = A*psi restriction.  Done
+       here because it needs nser, and before npar is computed.               */
     if (global_alpha) {
         int bad = alpha_weakex ? build_weakex_A(alpha_weakex)
                                : load_alpha_A(alpha_file);
         if (bad) exit(1);
         if (global_r < 1) {
-            fprintf(stderr, "ERROR: alpha = A*psi no significa nada con r = 0 "
-                            "(no hay termino de correccion de error)\n");
+            fprintf(stderr, "ERROR: alpha = A*psi means nothing with r = 0 "
+                            "(there is no error-correction term)\n");
             exit(1);
         }
-        printf("Restriccion H1(r): alpha = A*psi, con A de %d x %d%s\n",
+        printf("Restriction H1(r): alpha = A*psi, with A of %d x %d%s\n",
                nser, alpha_sa,
-               alpha_weakex ? " (exogeneidad debil)" : "");
+               alpha_weakex ? " (weak exogeneity)" : "");
     }
 
-    /* -writeinp: emitir un .inp por componente de Ȳ y parar.  Es un modo, no un
-       añadido a la estimación: el siguiente paso de la escalera lo da fue.     */
+    /* -writeinp: emit one .inp per component of Ȳ and stop.  It is a mode, not
+       an addition to the estimation: the next step of the ladder is fue's.    */
     if (global_writeinp) {
         int bad;
-        printf("Escribiendo un .inp por componente de Ȳ (para ART/fue):\n");
+        printf("Writing one .inp per component of Ȳ (for ART/fue):\n");
         bad = write_component_inps(inp_prefix);
-        if (bad) { fprintf(stderr, "ERROR: no se pudieron escribir todos\n"); exit(1); }
-        printf("Ahora: para cada fichero, 'python -m fue %s.<i> eml' (o ART),\n"
-               "y despues drvec ... -seed %s\n", inp_prefix, inp_prefix);
+        if (bad) { fprintf(stderr, "ERROR: not all of them could be written\n"); exit(1); }
+        printf("Now: for each file, 'python -m fue %s.<i> eml' (or ART),\n"
+               "and then drvec ... -seed %s\n", inp_prefix, inp_prefix);
         exit(0);
     }
 
-    /* -seed: leer los .pre y sembrar el bloque MA (lo unico que el .pre puede
-       sembrar; ver load_seed_pre).                                            */
+    /* -seed: read the .pre files and seed the MA block (the only thing the
+       .pre can seed; see load_seed_pre).                                      */
     if (global_seed) {
-        /* La informacion univariante llega al PELDANO DIAGONAL y no mas arriba.
-           Con r >= 1 el marginal de un componente de Ybar no es el bloque
-           diagonal del conjunto, Cbar y Lambda acoplan, y PhiBar_p queda
-           determinada por F_{p-1}, asi que el AR esta sobredeterminado.  Esta
-           medido: en -case 2 la semilla arranca 17 unidades por debajo del
-           arranque en frio.  Se avisa en vez de prohibir, porque la medida hay
-           que poder reproducirla.  Ver docs/PLAN_BETA.md F2.8.               */
+        /* The univariate information reaches the DIAGONAL RUNG and no higher.
+           With r >= 1 the marginal of a component of Ybar is not the diagonal
+           block of the joint model, Cbar and Lambda couple, and PhiBar_p is
+           determined by F_{p-1}, so the AR is overdetermined.  It is measured:
+           in -case 2 the seed starts 17 units below the cold start.  It warns
+           instead of forbidding, because the measurement has to be
+           reproducible.  See docs/PLAN_BETA.md F2.8.                         */
         if (global_r > 0 && seed_route == SEED_YBAR)
             fprintf(stderr,
-                "WARNING: -seedybar con r = %d.  La informacion univariante solo\n"
-                "         transporta un optimo en el peldano diagonal (r = 0);\n"
-                "         con r >= 1 empeora el punto de partida.  Medido en\n"
+                "WARNING: -seedybar with r = %d.  Univariate information carries an\n"
+                "         optimum only on the diagonal rung (r = 0); with r >= 1\n"
+                "         it makes the starting point worse.  Measured in\n"
                 "         docs/PLAN_BETA.md F2.8.\n", global_r);
         if (load_seed_pre(pre_prefix) != 0)
-            fprintf(stderr, "WARNING: sin semilla; se arranca en frio\n");
+            fprintf(stderr, "WARNING: no seed; starting cold\n");
         else
-            printf("Semilla MA leida de %s.<1..%d>.pre (ruta %s)\n",
+            printf("MA seed read from %s.<1..%d>.pre (route %s)\n",
                    pre_prefix, nser,
-                   seed_route == SEED_RESID ? "residuos" : "componentes de Ybar");
+                   seed_route == SEED_RESID ? "residuals" : "components of Ybar");
     }
 
     /* [2] Open output ------------------------------------------------------ */
     outputv = fopen(outputf, "w");
     if (!outputv) { fprintf(stderr, "ERROR: cannot write %s\n", outputf); exit(1); }
 
-    /*  La version, EN EL FICHERO DE RESULTADOS.  Un .out que no dice con que
-     *  se produjo no es reproducible por nadie, y este programa ha movido su
-     *  especificacion por defecto una vez ya.                                */
+    /*  The version, IN THE RESULTS FILE.  An .out that does not say what
+     *  produced it is reproducible by nobody, and this program has moved its
+     *  default specification once already.                                   */
     fprintf(outputv, "DRVEC %s — VEC(%d) EML Estimation (Mauricio 2006)\n",
             DRVEC_VERSION, global_r);
     fprintf(outputv, "==============================================\n\n");
@@ -5763,14 +6144,14 @@ int main(int argc, char *argv[])
     fprintf(outputv, "M = %d, r = %d, s = M-r = %d\n", nser, global_r, nser - global_r);
     fprintf(outputv, "Stationary VARMA(%d,%d) on Ȳ_t\n", global_p, global_q);
     fprintf(outputv, "Case   : %d\n", global_case);
-    /* Las deterministas se quitan de los NIVELES, antes de formar nabla Y2 y W
-       -- que es donde el cast de fue las quita tambien, su bloque [6] va antes
-       del [7] --, y por eso hay que reconstruir los niveles despues.
-       Va aqui, y no antes, porque deja constancia en el .out y ese fichero no
-       esta abierto todavia mas arriba: escribir alli reventaba con outputv en
-       NULL.                                                                   */
+    /* The deterministic terms come off the LEVELS, before nabla Y2 and W are
+       formed -- which is where fue's cast removes them too, its block [6] comes
+       before [7] -- and that is why the levels have to be rebuilt afterwards.
+       It goes here, and not earlier, because it leaves a record in the .out and
+       that file is not open yet further up: writing there blew up with outputv
+       at NULL.                                                                */
     if (global_interv) {
-        printf("Restando las deterministas declaradas en los .pre:\n");
+        printf("Subtracting the deterministic terms declared in the .pre files:\n");
         subtract_interventions(interv_prefix);
         build_y2_levels();
     }
@@ -5780,9 +6161,10 @@ int main(int argc, char *argv[])
                           : "legacy, cols 1..s pre-differenced (-differenced)",
             nobs, nobs_raw);
 
-    /*  P4 — QUE CLASE SE ESTA ESTIMANDO, dicho en la cabecera y no deducido de
-     *  las banderas.  El defecto se movio el 2026-08-20 y un .out sin esta
-     *  linea es ambiguo respecto de todo el registro anterior.               */
+    /*  P4 — WHICH CLASS IS BEING ESTIMATED, said in the header and not
+     *  deduced from the flags.  The default moved on 2026-08-20 and an .out
+     *  without this line is ambiguous with respect to the whole earlier
+     *  register.                                                             */
     if (global_q > 0) {
         const char *cls =
             global_warma   ? "triangular (WARMA), estimated in Ybar coordinates"
@@ -5797,19 +6179,20 @@ int main(int argc, char *argv[])
         if (!quiet_mode) printf("MA     : %s\n", cls);
     }
 
-    /*  P1 — LA COTA SUPERIOR DE p Y q LA PONE LA MUESTRA, no un numero.  Hasta
-     *  2026-08-20 `drvec fichero 60 1 1` sobre 61 observaciones se intentaba:
-     *  fallaba con ifault = 3 tras un rato, y devolvia 0 al shell.  Y `q = 60`
-     *  se colgaba.  Un modelo con tantos parametros como datos no es un modelo
-     *  mal condicionado, es un modelo que no esta identificado, y estimarlo no
-     *  produce un resultado sino un numero.  El limite se pone donde se puede
-     *  medir -- con el fichero ya leido -- y en npar, que es la magnitud que de
-     *  verdad manda: cubre p grande, q grande y M grande por igual.
+    /*  P1 — THE UPPER BOUND ON p AND q IS SET BY THE SAMPLE, not by a number.
+     *  Until 2026-08-20 `drvec file 60 1 1` on 61 observations was attempted:
+     *  it failed with ifault = 3 after a while, and returned 0 to the shell.
+     *  And `q = 60` hung.  A model with as many parameters as data is not an
+     *  ill-conditioned model, it is a model that is not identified, and
+     *  estimating it produces not a result but a number.  The limit is set
+     *  where it can be measured -- with the file already read -- and on npar,
+     *  which is the quantity that really governs: it covers large p, large q
+     *  and large M alike.
      *
-     *  El umbral es npar < nobs * M, o sea al menos un dato por parametro.  Es
-     *  generoso a proposito: no es un criterio estadistico -- para eso estan el
-     *  AIC y el BIC que el programa ya imprime -- sino la frontera por debajo
-     *  de la cual el ajuste no significa nada.                               */
+     *  The threshold is npar < nobs * M, i.e. at least one datum per parameter.
+     *  It is deliberately generous: it is not a statistical criterion -- the
+     *  AIC and BIC the program already prints are there for that -- but the
+     *  boundary below which the fit means nothing at all.                    */
     {
         int npar_check = calc_nparametrs();
         if (npar_check >= nobs * nser) {
@@ -5831,29 +6214,30 @@ int main(int argc, char *argv[])
     /* [3a] Sequential LR test for the cointegration rank (Mauricio 2006,
             Remark 5 and Table 3): estimate r = 1..M-1 and report
             2*[L(r+1) - L(r)] against the non-standard asymptotic values.    */
-    /*  -rungs — LA ESCALERA, emitida por el programa y no armada por el usuario.
+    /*  -rungs — THE LADDER, emitted by the program and not assembled by the
+     *  user.
      *
-     *  POR QUE.  La construccion de la suite es de OPTIMOS HACIA OPTIMOS: cada
-     *  peldano se estima, se certifica y se entrega al de arriba.  Hasta ahora
-     *  drvec sabia certificar SU BASE (la puerta diagonal) y sabia contrastar el
-     *  rango (-lrtest), pero los peldanos intermedios -- los que van de la base
-     *  a la dinamica cruzada libre -- habia que armarlos a mano, corriendo el
-     *  programa tres veces y restando.  Un usuario que hace eso a mano se
-     *  equivoca de grados de libertad, y sobre todo no deja constancia.
+     *  WHY.  The suite's construction goes from OPTIMA TO OPTIMA: each rung is
+     *  estimated, certified and handed to the one above.  Until now drvec knew
+     *  how to certify ITS BASE (the diagonal gate) and how to test the rank
+     *  (-lrtest), but the intermediate rungs -- the ones from the base to free
+     *  cross dynamics -- had to be assembled by hand, running the program three
+     *  times and subtracting.  A user doing that by hand gets the degrees of
+     *  freedom wrong, and above all leaves no record.
      *
-     *  QUE ES CADA PELDANO.  Todos con r = 0, o sea sin matriz VEC todavia: lo
-     *  que se anade es estructura de correlacion, no cointegracion.
+     *  WHAT EACH RUNG IS.  All with r = 0, i.e. with no VEC matrix yet: what is
+     *  added is correlation structure, not cointegration.
      *
-     *    0   F, Theta y Sigma diagonales    la base certificada; la
-     *                                       verosimilitud factoriza
-     *    1   Sigma libre                    correlacion contemporanea
-     *    2   F y Theta libres               dinamica cruzada
+     *    0   F, Theta and Sigma diagonal     the certified base; the
+     *                                        likelihood factorises
+     *    1   Sigma free                      contemporaneous correlation
+     *    2   F and Theta free                cross dynamics
      *
-     *  Los tres son comparaciones anidadas ORDINARIAS -- el modelo restringido
-     *  es un punto interior del amplio --, asi que la logL no puede bajar y el
-     *  estadistico es chi2 con los grados de libertad que se imprimen.  El
-     *  peldano siguiente, r = 1, NO es ordinario ni en la siembra ni en la
-     *  distribucion, y por eso vive en -lrtest y no aqui: ver
+     *  All three are ORDINARY nested comparisons -- the restricted model is an
+     *  interior point of the wide one -- so the logL cannot fall and the
+     *  statistic is chi2 with the degrees of freedom printed.  The next rung,
+     *  r = 1, is NOT ordinary either in the seeding or in the distribution, and
+     *  that is why it lives in -lrtest and not here: see
      *  docs/VEC_EMBEDDING_PLAN.md.                                           */
     if (global_rungs) {
         const int NR = 3;
@@ -5893,10 +6277,10 @@ int main(int argc, char *argv[])
             ll[k]   = good[k] ? vr.logelf : 0.0;
             printf("  rung %s : %s (ifault=%d)\n", NAME[k],
                    good[k] ? "ok" : "estimation failed", ifr);
-            /*  El peldano 0 es la base: se le exige su contrato aqui mismo, que
-             *  es donde se esta construyendo sobre el.                        */
+            /*  Rung 0 is the base: its contract is demanded right here, which is
+             *  where it is being built upon.                                 */
             if (k == 0 && good[k]) {
-                vec_shootx(xr, &vr, &ifr, 0, 0);       /* recuperar el ajuste */
+                vec_shootx(xr, &vr, &ifr, 0, 0);       /* recover the fit */
                 gate_contract(&vr);
             }
             vec_shootx(xr, &vr, &ifr, 0, 1);           /* liberar */
@@ -5958,32 +6342,33 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    /*  -specs — LA ESCALERA DE ESPECIFICACIONES, emitida por el programa.
+    /*  -specs — THE SPECIFICATION LADDER, emitted by the program.
      *
-     *  Cinco modelos ANIDADOS de la media movil y la dinamica corta, del mas
-     *  restringido al libre, y en un solo comando:
+     *  Five NESTED models of the moving average and the short-run dynamics,
+     *  from the most restricted to the free one, in a single command:
      *
-     *    warma    Phi*_k = [0 Psi_k ; 0 Phi_k] y Theta* diagonal -- la clase
-     *             que los teoremas cubren (docs/THEORY.md, definicion 3)
-     *    mawarma  Theta = [T11 T11B2' ; 0 0]   -- la misma estructura de MA
-     *             con F libre
-     *    marow    Theta = [T11 T12 ; 0 0]      -- el bloque cruzado libre
-     *    matri    Theta = [T11 T12 ; 0 T22]    -- y el diferenciado con MA
-     *    libre    Theta libre
+     *    warma    Phi*_k = [0 Psi_k ; 0 Phi_k] and Theta* diagonal -- the class
+     *             the theorems cover (docs/THEORY.md, definition 3)
+     *    mawarma  Theta = [T11 T11B2' ; 0 0]   -- the same MA structure with F
+     *             free
+     *    marow    Theta = [T11 T12 ; 0 0]      -- the cross block free
+     *    matri    Theta = [T11 T12 ; 0 T22]    -- and the differenced one with
+     *             an MA
+     *    free     Theta free
      *
-     *  Por que en un comando: porque la pregunta que un usuario tiene delante
-     *  no es "cuanto ajusta esta especificacion" sino "cual de ellas, y es
-     *  admisible", y esas dos no se contestan con una corrida.
+     *  Why in one command: because the question a user has in front of them is
+     *  not "how well does this specification fit" but "which of them, and is it
+     *  admissible", and those two are not answered by one run.
      *
-     *  Y POR QUE LA COLUMNA DE ADMISIBILIDAD ES LA PRIMERA QUE HAY QUE LEER.
-     *  Por el teorema 3 de docs/THEORY.md el proceso tiene rango r si y solo si
-     *  rank(Lambda_perp' Theta(1)) = M - r, y por el teorema 4 el conjunto donde
-     *  eso falla esta DENTRO del que el optimizador recorre.  Un peldano con G
-     *  pequeno no es un ajuste peor: es un ajuste de otro modelo.  Por el
-     *  corolario 5.1, ademas, ni sus errores estandar ni un LR contra el tienen
-     *  su distribucion, asi que el p-valor chi2 se imprime SOLO cuando los dos
-     *  peldanos comparados son admisibles, y donde no, se dice y se remite a
-     *  -matest.                                                              */
+     *  AND WHY THE ADMISSIBILITY COLUMN IS THE FIRST ONE TO READ.  By theorem 3
+     *  of docs/THEORY.md the process has rank r if and only if
+     *  rank(Lambda_perp' Theta(1)) = M - r, and by theorem 4 the set where that
+     *  fails is INSIDE the one the optimiser walks.  A rung with a small G is
+     *  not a worse fit: it is the fit of another model.  By corollary 5.1,
+     *  moreover, neither its standard errors nor an LR against it have their
+     *  distribution, so the chi2 p-value is printed ONLY when both rungs
+     *  compared are admissible, and where they are not, that is said and the
+     *  reader is sent to -matest.                                            */
     if (global_specs) {
         const int NS = 5;
         const char *NM[5] = { "warma  ", "mawarma", "marow  ", "matri  ", "free   " };
@@ -5997,7 +6382,7 @@ int main(int argc, char *argv[])
             exit(1);
         }
         fprintf(outputv, "\n=== The specification ladder ===\n");
-        printf("\nEscalera de especificaciones:\n");
+        printf("\nSpecification ladder:\n");
 
         for (k = 0; k < NS; k++) {
             struct Tvarma vs;
@@ -6013,7 +6398,7 @@ int main(int argc, char *argv[])
             vs.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
             init_guess(xs, np);
             if (global_warma) {
-                /*  el mismo encogido admisible que usa la ruta normal        */
+                /*  the same admissible shrinkage the normal route uses         */
                 static const real shr[6] = { 1.0, 0.8, 0.5, 0.3, 0.1, 0.0 };
                 int nm2, nl2, nmid2, nt2, nfw = (global_p > 1) ? global_p - 1 : 0;
                 int nar, i2, mi;
@@ -6045,14 +6430,14 @@ int main(int argc, char *argv[])
             gg[k] = -1.0; mam[k] = -1.0; b2v[k] = 0.0;
             if (okv[k]) {
                 real mm = 1.0e30;
-                vec_shootx(xs, &vs, &ifs, 0, 0);      /* recuperar el ajuste  */
+                vec_shootx(xs, &vs, &ifs, 0, 0);      /* recover the fit  */
                 report_operator_roots("MA", vs.theta, vs.m, vs.q, &mm, 1);
                 mam[k] = (mm < 1.0e29) ? mm : -1.0;
                 for (int j2 = 1; j2 <= global_r; j2++)
                     b2v[k] = global_fixb2 ? B2_fixed[1][j2]
                            : xs[np - s2 * global_r + (j2 - 1) * s2 + 1];
                 if (global_warma) {
-                    /*  en coordenadas Ybar hay que volver primero            */
+                    /*  in Ybar coordinates one has to come back first        */
                     real **B2w = matrix(1, s2, 1, global_r);
                     real **Lw = matrix(1, M, 1, global_r);
                     real ***Fw = tensor(1, (global_p > 1 ? global_p - 1 : 1), 1, M, 1, M);
@@ -6140,20 +6525,21 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    /*  -matest N — el contraste del MA heredado contra el libre, con su
-     *  distribucion SIMULADA en vez de supuesta.  Es un modo y termina aqui.  */
+    /*  -matest N — the test of the inherited MA against the free one, with its
+     *  distribution SIMULATED rather than assumed.  It is a mode and ends
+     *  here.                                                                 */
     if (global_matest > 0 || global_artest > 0) {
-        /*  Dos contrastes con la misma maquinaria y distinta pareja:
-         *    -matest   H0 = mawarma  contra  H1 = libre   (la mitad de MA)
-         *    -artest   H0 = warma    contra  H1 = mawarma (la mitad de AR)
-         *  El segundo es el que el paso 5 del plan pedia, y su razon para
-         *  simular NO es la misma: aqui el modelo no restringido SI es
-         *  admisible (G entre 0.90 y 1.00 en todo el banco), asi que no es el
-         *  problema de frontera de 4i.  Es que la restriccion Gamma_i = m_i
-         *  alpha' es de RANGO REDUCIDO sobre F_i, y el LR de una restriccion de
-         *  rango no es chi2 cuando el rango verdadero puede estar por debajo
-         *  del que la restriccion permite -- y en cinco de los ocho pares F1
-         *  sale casi de rango uno, con lo que m_i queda casi no identificado.  */
+        /*  Two tests with the same machinery and a different pair:
+         *    -matest   H0 = mawarma  against  H1 = free    (half the MA)
+         *    -artest   H0 = warma    against  H1 = mawarma (half the AR)
+         *  The second is the one step 5 of the plan asked for, and its reason
+         *  for simulating is NOT the same: here the unrestricted model IS
+         *  admissible (G between 0.90 and 1.00 over the whole bank), so it is
+         *  not 4i's boundary problem.  It is that the restriction
+         *  Gamma_i = m_i alpha' is of REDUCED RANK on F_i, and the LR of a rank
+         *  restriction is not chi2 when the true rank may be below the one the
+         *  restriction allows -- and in five of the eight pairs F1 comes out
+         *  nearly of rank one, which leaves m_i nearly unidentified.         */
         int use_ar = (global_artest > 0);
         int reps = use_ar ? global_artest : global_matest;
         int k0 = use_ar ? 0 : 1, k1 = use_ar ? 1 : 4;
@@ -6168,7 +6554,7 @@ int main(int argc, char *argv[])
             fprintf(stderr, "ERROR: -matest/-artest need r >= 1 and q >= 1\n");
             exit(1);
         }
-        /* [1] el restringido, que es H0 -- y se guarda, porque de el se simula */
+        /* [1] the restricted model, which is H0 -- and it is kept, because the simulation comes from it */
         set_spec(k0);
         build_y2_levels();
         np0 = calc_nparametrs();
@@ -6181,7 +6567,7 @@ int main(int argc, char *argv[])
         ok0 = (ifr == 0); l0 = v0.logelf;
         vec_shootx(x0, &v0, &ifr, 0, 1);
 
-        /* [2] el no restringido */
+        /* [2] the unrestricted one */
         set_spec(k1);
         l1 = fit_ll(global_r, &ok1);
         np1 = calc_nparametrs();
@@ -6194,12 +6580,12 @@ int main(int argc, char *argv[])
                     ok0 ? "ok" : "failed", ok1 ? "ok" : "failed");
         } else {
             lr = 2.0 * (l1 - l0);
-            /*  La cabecera y los numeros van en DOS llamadas y no en una con
-             *  la cadena de formato condicional: con el ternario, los literales
-             *  que venian detras se concatenan a una sola de las dos ramas y
-             *  los %f se quedan sin formato en la otra.  Compila, y se pierden
-             *  los numeros en silencio -- que es como se perdieron la primera
-             *  vez que se escribio esto.                                     */
+            /*  The header and the numbers go in TWO calls and not in one with a
+             *  conditional format string: with the ternary, the literals that
+             *  followed concatenate onto only one of the two branches and the
+             *  %f are left without a format in the other.  It compiles, and the
+             *  numbers are lost in silence -- which is how they were lost the
+             *  first time this was written.                                  */
             fprintf(outputv, "%s", use_ar
                 ? "\n=== The triangular short-run dynamics against free F ===\n\n"
                   "  H0: Gamma_i = M_i alpha' -- every lag enters through W,\n"
@@ -6216,7 +6602,7 @@ int main(int argc, char *argv[])
                 "  chi2 p-value, FOR REFERENCE ONLY          = %.4f\n",
                 l0, np0, l1, np1, lr, df,
                 (lr > 0.0) ? gsl_cdf_chisq_Q(lr, df) : 1.0);
-            printf("  restringido %.6f   libre %.6f   LR %.4f (%d gl)\n",
+            printf("  restricted %.6f   free %.6f   LR %.4f (%d df)\n",
                    l0, l1, lr, df);
 
             nb = bootstrap_ma(x0, np0, reps, cv, &pv, lr, k0, k1);
@@ -6231,10 +6617,11 @@ int main(int argc, char *argv[])
                     (lr > cv[2]) ? "reject H0 at 1%" :
                     (lr > cv[1]) ? "reject H0 at 5%" :
                     (lr > cv[0]) ? "reject H0 at 10%" : "H0 not rejected");
-                /*  El veredicto se lee de los VALORES CRITICOS y el p-valor
-                 *  cuenta ademas el estadistico observado, asi que con pocas
-                 *  replicas los dos pueden quedar a distinto lado de un
-                 *  umbral.  Decirlo es mas barato que elegir uno y callar.   */
+                /*  The verdict is read off the CRITICAL VALUES and the p-value
+                 *  also counts the observed statistic, so with few
+                 *  replications the two can end up on different sides of a
+                 *  threshold.  Saying so is cheaper than picking one and
+                 *  keeping quiet.                                            */
                 if ((lr > cv[0] && pv > 0.10) || (lr > cv[1] && pv > 0.05) ||
                     (lr > cv[2] && pv > 0.01))
                     fprintf(outputv,
@@ -6299,8 +6686,8 @@ int main(int argc, char *argv[])
         fprintf(outputv, "\n=== Sequential LR test for the cointegration rank ===\n");
         printf("\nSequential LR test for the cointegration rank:\n");
 
-        /* Con -bootstrap hay que poder SIMULAR desde el ajuste de cada rango,
-           asi que se guarda su vector de parametros en vez de liberarlo.      */
+        /* With -bootstrap one has to be able to SIMULATE from each rank's fit,
+           so its parameter vector is kept instead of freed.                   */
         real **xkeep = NULL; int *npkeep = NULL;
         if (global_boot > 0) {
             xkeep  = (real **) malloc((size_t)(M + 1) * sizeof(real *));
@@ -6383,10 +6770,10 @@ int main(int argc, char *argv[])
             }
             fprintf(outputv, "  %-4d %4d %10.4f", rr, g, lr);
             if (global_alpha) {
-                /* Bajo alpha = A*psi el estadistico tiene OTRA distribucion: las
-                   tablas son para alpha libre.  Imprimirlas aqui seria dar
-                   valores criticos equivocados con aspecto de correctos, que es
-                   peor que no darlos.                                        */
+                /* Under alpha = A*psi the statistic has ANOTHER distribution: the
+                   tables are for a free alpha.  Printing them here would be
+                   giving wrong critical values that look right, which is worse
+                   than giving none.                                          */
                 fprintf(outputv, "        -        -        -   (restricted:"
                                  " tabulated values do not apply)");
             } else if (global_case != 3 && g >= 1 && g <= LR_MAXTRENDS) {
@@ -6419,7 +6806,7 @@ int main(int argc, char *argv[])
                 "  not the tabulated Johansen one.  For the usual rank test, drop\n"
                 "  the restriction.\n");
 
-        /* ---- valores criticos por bootstrap parametrico, si se piden ------- */
+        /* ---- critical values by parametric bootstrap, if asked for --------- */
         if (global_boot > 0) {
             fprintf(outputv,
                 "\n  === Parametric bootstrap under H0 (%d replications) ===\n"
@@ -6451,24 +6838,24 @@ int main(int argc, char *argv[])
                     fprintf(outputv, "  %-4d %4d %10.4f   only %d usable "
                                      "replications: not reported\n",
                             rr, M - rr, lr, reps);
-                    printf(" solo %d replicas utiles\n", reps);
+                    printf(" only %d usable replications\n", reps);
                     continue;
                 }
                 fprintf(outputv, "  %-4d %4d %10.4f %8.2f %8.2f %8.2f  %7.4f  %4d",
                         rr, M - rr, lr, cv[0], cv[1], cv[2], pv, reps);
-                /* El veredicto se lee de los VALORES CRITICOS, no del p-valor,
-                   porque el p-valor tiene un suelo de 1/(reps+1): con 100
-                   replicas no puede bajar de 0.0099, asi que "rechaza al 1%"
-                   seria inalcanzable por construccion aunque el estadistico
-                   supere el percentil 99.                                    */
+                /* The verdict is read off the CRITICAL VALUES, not the p-value,
+                   because the p-value has a floor of 1/(reps+1): with 100
+                   replications it cannot go below 0.0099, so "rejects at 1%"
+                   would be unreachable by construction even if the statistic
+                   exceeded the 99th percentile.                              */
                 if      (lr > cv[2]) fprintf(outputv, "   reject H0 at 1%%\n");
                 else if (lr > cv[1]) fprintf(outputv, "   reject H0 at 5%%\n");
                 else if (lr > cv[0]) fprintf(outputv, "   reject H0 at 10%%\n");
                 else                 fprintf(outputv, "   H0 not rejected\n");
                 printf(" p = %.4f (%d replicas)\n", pv, reps);
             }
-            /* El error de Monte Carlo, dicho en vez de escondido: la contingencia
-               del plan pedia reportarlo si N tenia que ser pequeno.            */
+            /* The Monte Carlo error, stated instead of hidden: the plan's
+               contingency asked for it to be reported if N had to be small.   */
             fprintf(outputv,
                 "\n  Monte Carlo error, said rather than hidden:\n"
                 "   - a bootstrap p-value from B replications has standard error\n"
@@ -6498,7 +6885,7 @@ int main(int argc, char *argv[])
     }
 
     /* [3] Estimation ------------------------------------------------------- */
-    int estimation_failed = 0;      /* P1: el codigo de salida lo refleja */
+    int estimation_failed = 0;      /* P1: the exit code reflects it */
     int npar = calc_nparametrs();
     real *x   = vector(1, npar);
     real *dev = vector(1, npar);
@@ -6508,9 +6895,9 @@ int main(int argc, char *argv[])
     macheps = cmacheps();
     varma1.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
 
-    /* Con alpha = A*psi hace falta el modelo LIBRE para el LR, asi que se
-       estima primero H(r) y luego H1(r).  Los grados de libertad son
-       (M - sa)*r, explicitos en Johansen y Swensen (2024).                    */
+    /* With alpha = A*psi the FREE model is needed for the LR, so H(r) is
+       estimated first and H1(r) afterwards.  The degrees of freedom are
+       (M - sa)*r, explicit in Johansen and Swensen (2024).                    */
     real lr_free = 0.0; int lr_free_ok = 0;
     if (global_alpha) {
         int save = global_alpha;
@@ -6528,8 +6915,8 @@ int main(int argc, char *argv[])
                 vf.xitol, vf.a, &vf.sigma2, &vf.logelf, &iff);
             lr_free_ok = (iff == 0);
             lr_free    = vf.logelf;
-            printf("  H(r)  libre        : logL = %15.10f%s\n", lr_free,
-                   lr_free_ok ? "" : "  (la estimacion fallo)");
+            printf("  H(r)  free         : logL = %15.10f%s\n", lr_free,
+                   lr_free_ok ? "" : "  (the estimation failed)");
             vec_shootx(xf, &vf, &iff, 0, 1);
             free_matrix(covf, 1, npf, 1, npf);
             free_vector(devf, 1, npf);
@@ -6540,22 +6927,22 @@ int main(int argc, char *argv[])
 
     init_guess(x, npar);
 
-    /*  -seedgate: la ruta (B).  Va DESPUES de init_guess y no en su lugar, por
-     *  dos razones.  La cabeza y la cola del vector -- la media, Lambda y B2 --
-     *  necesitan un punto de partida para el paso condicional, y el de la
-     *  regresion condicional es el que hay.  Y si el perfilado no sale, lo que
-     *  queda es exactamente la ruta (C), sin ninguna ruta intermedia inventada:
-     *  o cruza entero o no cruza.                                            */
-    /*  -warma: un arranque ADMISIBLE, encogiendo el bloque autorregresivo.
+    /*  -seedgate: route (B).  It goes AFTER init_guess and not in its place,
+     *  for two reasons.  The head and tail of the vector -- the mean, Lambda
+     *  and B2 -- need a starting point for the conditional step, and the
+     *  conditional regression's is the one there is.  And if the profiling does
+     *  not work out, what is left is exactly route (C), with no invented
+     *  intermediate route: it either crosses whole or it does not cross.     */
+    /*  -warma: an ADMISSIBLE start, by shrinking the autoregressive block.
      *
-     *  El mismo muro de -seedgate por otro lado: la regresion que siembra los
-     *  coeficientes de W_{t-k} puede dar un Phi* no estacionario, y entonces
-     *  est no arranca siquiera ("bad initial estimates") y no hay ajuste, que
-     *  es lo que pasaba en mink_muskrat.  Se recorre una escalera de factores
-     *  sobre ESE bloque -- la direccion la dan los datos, la escala la
-     *  admisibilidad -- y se arranca en el primero que el motor acepta.  Con
-     *  factor 0 el sistema es Ybar_t = A*_t, trivialmente estacionario, asi que
-     *  la escalera siempre termina.                                          */
+     *  The same wall as -seedgate from another side: the regression that seeds
+     *  the coefficients of W_{t-k} can give a non-stationary Phi*, and then est
+     *  does not even start ("bad initial estimates") and there is no fit, which
+     *  is what happened on mink_muskrat.  A ladder of factors on THAT block is
+     *  walked -- the direction given by the data, the scale by admissibility --
+     *  and the start is the first one the engine accepts.  With factor 0 the
+     *  system is Ybar_t = A*_t, trivially stationary, so the ladder always
+     *  terminates.                                                           */
     if (global_warma) {
         static const real shr[6] = { 1.0, 0.8, 0.5, 0.3, 0.1, 0.0 };
         int nmean_, nlam_, nmid_, ntail_, nf_w = (global_p > 1) ? global_p - 1 : 0;
@@ -6581,7 +6968,7 @@ int main(int argc, char *argv[])
             if (ifev == 0) break;
         }
         if (mi > 0 && mi < 6 && !quiet_mode)
-            printf("  -warma: arranque encogido a x%.1f para que sea admisible\n",
+            printf("  -warma: start shrunk to x%.1f to make it admissible\n",
                    shr[mi]);
         if (mi >= 6) {
             fprintf(outputv, "\n-warma: no admissible starting point was found "
@@ -6598,16 +6985,16 @@ int main(int argc, char *argv[])
         for (i2 = 1; i2 <= ntail_; i2++)
             x[nmean_ + nlam_ + nmid_ + i2] = global_seedb2_value;
         if (ntail_ == 0)
-            fprintf(stderr, "AVISO: -seedb2 no hace nada con -fixb2 o r = 0\n");
+            fprintf(stderr, "WARNING: -seedb2 does nothing with -fixb2 or r = 0\n");
     }
     if (global_seedgate) gate_profile_seed(x, npar);
 
-    /* -writeres: los residuos de la regresión condicional, que es lo que
-       init_guess acaba de publicar.  Es un modo y termina aquí.                */
+    /* -writeres: the residuals of the conditional regression, which is what
+       init_guess has just published.  It is a mode and ends here.             */
     if (global_writeres) {
-        printf("Escribiendo un .inp por residuo de la regresión condicional:\n");
+        printf("Writing one .inp per residual of the conditional regression:\n");
         if (write_resid_inps(inp_prefix) != 0) exit(1);
-        printf("Ahora: 'python -m fue %s.<i> eml' y después drvec ... -seed %s\n",
+        printf("Now: 'python -m fue %s.<i> eml' and then drvec ... -seed %s\n",
                inp_prefix, inp_prefix);
         fclose(outputv);
         cleanup_names(outputf, inputf, base_name);
@@ -6617,12 +7004,12 @@ int main(int argc, char *argv[])
     int ifault;
     vec_shootx(x, &varma1, &ifault, 1, 0);  /* allocate */
 
-    /* -eval: la verosimilitud EN EL PUNTO DE PARTIDA, sin optimizar.
-       Es el diagnóstico que separa dos cosas que se confunden con facilidad:
-       una semilla mala (arranca peor) de un optimizador que desde una semilla
-       mejor acaba peor (la superficie).  Sin esto, comparar sólo los logL
-       finales no distingue un fallo de signo de un problema de camino.
-       La fórmula es la misma de drvmlest.c:133, con sigma2 = 1 y atf = TRUE.  */
+    /* -eval: the likelihood AT THE STARTING POINT, without optimising.
+       It is the diagnostic that separates two things easily confused: a bad
+       seed (it starts worse) from an optimiser that from a better seed ends up
+       worse (the surface).  Without this, comparing only the final logLs does
+       not distinguish a sign error from a path problem.
+       The formula is drvmlest.c:133's, with sigma2 = 1 and atf = TRUE.       */
     if (global_eval) {
         const real LOG2PI = 1.837877066;
         real pi1, pi2, pi3, ll;
@@ -6631,20 +7018,20 @@ int main(int argc, char *argv[])
             varma1.theta, varma1.qq, varma1.w, 1.0, varma1.xitol,
             TRUE, varma1.a, &pi1, &pi2, &pi3, &ifev);
         if (ifev > 0) {
-            printf("eval: elf devuelve ifault = %d en el punto de partida\n", ifev);
+            printf("eval: elf returns ifault = %d at the starting point\n", ifev);
             fprintf(outputv, "eval: ifault = %d\n", ifev);
         } else {
             ll = -0.5 * varma1.m * varma1.n * (LOG2PI - log((real) varma1.m)
                  - log((real) varma1.n) + 1.0)
                  - 0.5 * varma1.n * (varma1.m * log(pi1) + log(pi2));
-            printf("eval: logelf en el punto de partida = %15.10f  "
+            printf("eval: logelf at the starting point = %15.10f  "
                    "(sigma2 = %.10f)\n", ll, pi1 / (varma1.n * varma1.m));
             fprintf(outputv, "eval logelf : %15.10f\n", ll);
             if (seed_have_uv) {
-                /* La identidad de cruce de la escalera: con r = 0 y estructura
-                   diagonal la verosimilitud exacta factoriza, asi que esto debe
-                   coincidir con la suma de las univariantes de los .pre.  Lo
-                   que sobre es la brecha de la transformacion, no del ajuste. */
+                /* The ladder's crossing identity: with r = 0 and diagonal structure
+                   the exact likelihood factorises, so this must coincide with
+                   the sum of the univariate ones from the .pre files.  What is
+                   left over is the transformation's gap, not the fit's.      */
                 fprintf(outputv, "sum univariate : %15.10f\n", seed_logl_sum);
                 printf("      suma univariante = %15.10f   diferencia = %.3e\n",
                        seed_logl_sum, ll - seed_logl_sum);
@@ -6659,38 +7046,39 @@ int main(int argc, char *argv[])
     int maxits = 500, nrits = 200;
     real gradtol = 1e-5, sptol = 1e-7;
 
-    /* -multistart n: estimar desde n puntos de partida y quedarse con el mejor.
+    /* -multistart n: estimate from n starting points and keep the best.
      *
-     * NO es tocar el optimizador -- que no se toca --, es ejecutarlo varias
-     * veces.  Y esta justificado por dos medidas propias, no por costumbre:
+     * This is NOT touching the optimiser -- which is not touched --, it is
+     * running it several times.  And it is justified by two measurements of our
+     * own, not by custom:
      *
-     *   - F2 midio que el punto donde para depende fuertemente del punto donde
-     *     arranca: en el caso 1, mover Theta por centesimas mueve la respuesta
-     *     14.45 unidades.  Esa es exactamente la condicion en la que el
-     *     multiarranque paga.
-     *   - La busqueda global que sirve de referencia para |Sigma| (0.002311)
-     *     SE HIZO ASI, por multiarranque, y acaba pegada a la barrera de
-     *     invertibilidad de chekma con max|lambda(Theta1)| = 1.00005.  El ajuste
-     *     de drvec acaba en la MISMA barrera -- 1.000050 medido -- pero en otro
-     *     punto de ella, con |Sigma| 0.002461.  O sea: mismo borde, peor sitio.
+     *   - F2 measured that the point where it stops depends strongly on the
+     *     point where it starts: in case 1, moving Theta by hundredths moves
+     *     the answer by 14.45 units.  That is exactly the condition in which
+     *     multi-start pays.
+     *   - The global search that serves as the reference for |Sigma| (0.002311)
+     *     WAS DONE THIS WAY, by multi-start, and it ends up glued to chekma's
+     *     invertibility barrier with max|lambda(Theta1)| = 1.00005.  drvec's
+     *     fit ends at the SAME barrier -- 1.000050 measured -- but at another
+     *     point of it, with |Sigma| 0.002461.  That is: same edge, worse spot.
      *
-     * Las perturbaciones son deterministas (generador propio con semilla fija)
-     * para que un resultado se pueda reproducir: un multiarranque que no se
-     * puede repetir no sirve como evidencia.
+     * The perturbations are deterministic (own generator with a fixed seed) so
+     * that a result can be reproduced: a multi-start that cannot be repeated is
+     * no use as evidence.
      */
-    /*  EL CERTIFICADO DE OPTIMALIDAD, y hay UNA sola ventana para tomarlo.
+    /*  THE OPTIMALITY CERTIFICATE, and there is ONE window in which to take it.
      *
-     *  La escalera de la suite dice que un `.pre` es un OPTIMO en forma
-     *  reejecutable, y ese convenio es COMPROBABLE: reestimar un optimo no
-     *  mueve los numeros, mientras que una especificacion si.  La diferencia
-     *  entre las dos verosimilitudes -- la del ajuste y la de los valores que
-     *  se trajeron -- es >= 0 por construccion y vale cero si y solo si lo
-     *  que entro eran los optimos univariantes.
+     *  The suite's ladder says that a `.pre` is an OPTIMUM in re-runnable form,
+     *  and that convention is CHECKABLE: re-estimating an optimum does not move
+     *  the numbers, while a specification does.  The difference between the two
+     *  likelihoods -- the fit's and that of the values brought in -- is >= 0 by
+     *  construction and equals zero if and only if what came in were the
+     *  univariate optima.
      *
-     *  Hay que evaluar AQUI porque est() sobrescribe la estructura: una vez ha
-     *  corrido, la pregunta ya no se puede contestar.  Es el mismo protocolo
-     *  que la puerta de drtran (LADDER_AS_OPTIMISATION.md 2.1 y 7.1), y se
-     *  hereda entero en vez de reinventarlo.                                 */
+     *  It has to be evaluated HERE because est() overwrites the structure: once
+     *  it has run, the question can no longer be answered.  It is the same
+     *  protocol as drtran's gate (LADDER_AS_OPTIMISATION.md 2.1 and 7.1), and
+     *  it is inherited whole instead of reinvented.                          */
     {
         const real LOG2PI = 1.837877066;
         real pi1, pi2, pi3;
@@ -6709,7 +7097,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    int ms_done = 0;         /* 1 = el multiarranque ya dejo el ajuste final */
+    int ms_done = 0;         /* 1 = the multi-start already left the final fit */
     if (global_multistart > 1) {
         real *xbest = vector(1, npar), *xtry = vector(1, npar);
         real *devb  = vector(1, npar), *devbest = vector(1, npar);
@@ -6723,27 +7111,27 @@ int main(int argc, char *argv[])
         for (k = 0; k < global_multistart; k++) {
             struct Tvarma vk;
             vk.xitol = varma1.xitol;
-            /*  El multiarranque sacude LA SEMILLA QUE SE ESTA MIDIENDO, no otra:
-             *  con -seedgate esa es el punto perfilado, que ya esta en x, y
-             *  volver a llamar a init_guess aqui mediria la ruta (C) con una
-             *  etiqueta equivocada.                                           */
-            /*  Con -warma pasa lo mismo que con -seedgate: el punto de
-             *  partida bueno es el que ya esta en x -- encogido hasta ser
-             *  admisible --, y volver a llamar a init_guess aqui devolveria el
-             *  crudo, que el motor rechaza.  Medido: en mink_muskrat solo 2 de
-             *  20 arranques convergian por eso.                              */
+            /*  The multi-start shakes THE SEED BEING MEASURED, not another one:
+             *  with -seedgate that is the profiled point, which is already in
+             *  x, and calling init_guess again here would measure route (C)
+             *  under the wrong label.                                        */
+            /*  With -warma the same happens as with -seedgate: the good
+             *  starting point is the one already in x -- shrunk until
+             *  admissible -- and calling init_guess again here would return the
+             *  raw one, which the engine rejects.  Measured: on mink_muskrat
+             *  only 2 of 20 starts converged because of that.                */
             if (gate_seed_ok || global_warma) {
                 for (i2 = 1; i2 <= npar; i2++) xtry[i2] = x[i2];
             } else init_guess(xtry, npar);
             if (k > 0) {
-                /* Jitter multiplicativo sobre la semilla, en una escalera de
-                   amplitud que depende SOLO de k y no de n.  Eso hace el
-                   procedimiento MONOTONO en n: los primeros n arranques de una
-                   corrida larga son exactamente los de una corta, asi que pedir
-                   mas arranques solo puede mejorar.  Con la amplitud escalada
-                   por n -- como estaba -- aumentar n cambiaba el conjunto en vez
-                   de ampliarlo, y se midio el sinsentido: n=24 daba |Sigma|
-                   0.002349 y n=40 daba 0.002453.                             */
+                /* Multiplicative jitter on the seed, in a ladder of amplitude that
+                   depends ONLY on k and not on n.  That makes the procedure
+                   MONOTONE in n: the first n starts of a long run are exactly
+                   those of a short one, so asking for more starts can only
+                   improve things.  With the amplitude scaled by n -- as it was
+                   -- increasing n changed the set instead of extending it, and
+                   the nonsense was measured: n=24 gave |Sigma| 0.002349 and
+                   n=40 gave 0.002453.                                        */
                 real amp = 0.05 * (real) (1 + (k - 1) % 20);
                 for (i2 = 1; i2 <= npar; i2++) {
                     real u;
@@ -6762,15 +7150,15 @@ int main(int argc, char *argv[])
                     best = vk.logelf; bestk = k; best_s2 = vk.sigma2;
                     for (i2 = 1; i2 <= npar; i2++) {
                         xbest[i2] = xtry[i2];
-                        /* La covarianza hay que guardarla DEL ARRANQUE QUE LA
-                           PRODUJO.  cov sale del factor que raxopt acumula
-                           mientras itera, asi que volver a llamar a est desde
-                           el optimo -- donde no itera -- deja mtmp en su
-                           inicializacion y devuelve errores estandar TODOS
-                           IGUALES.  Medido: 0.134231 para los tres parametros
-                           de un caso donde los verdaderos son 0.062, 0.123 y
-                           0.106.  Habrian sido errores estandar inventados con
-                           aspecto de calculados.                             */
+                        /* The covariance has to be kept FROM THE START THAT PRODUCED
+                           IT.  cov comes from the factor raxopt accumulates
+                           while iterating, so calling est again from the
+                           optimum -- where it does not iterate -- leaves mtmp
+                           at its initialisation and returns standard errors
+                           that are ALL EQUAL.  Measured: 0.134231 for the three
+                           parameters of a case where the true ones are 0.062,
+                           0.123 and 0.106.  They would have been invented
+                           standard errors that looked computed.              */
                         devbest[i2] = devb[i2];
                         for (int j2 = 1; j2 <= npar; j2++)
                             covbest[i2][j2] = covb[i2][j2];
@@ -6793,7 +7181,7 @@ int main(int argc, char *argv[])
             varma1.logelf = best;
             varma1.sigma2 = best_s2;
             ifault  = 0;
-            ms_done = 1;    /* no se vuelve a estimar: ya esta el mejor ajuste */
+            ms_done = 1;    /* no re-estimation: the best fit is already there */
             fprintf(outputv, "\nMulti-start: %d of %d starting points converged; "
                              "logL from %.6f to %.6f (best is start %d).\n",
                     nok, global_multistart, worst, best, bestk + 1);
@@ -6811,10 +7199,10 @@ int main(int argc, char *argv[])
         free_vector(devb, 1, npar);
         free_vector(xtry, 1, npar);
         free_vector(xbest, 1, npar);
-        /* NO se realoja varma1: sus bufers siguen vivos desde la llamada de
-           arriba, y el bucle uso su propia estructura vk.  Volver a llamar con
-           firstx = 1 dejaba huerfana la primera asignacion -- 1080 bytes que
-           valgrind marcaba como definitely lost.                             */
+        /* varma1 is NOT reallocated: its buffers are still alive from the call
+           above, and the loop used its own structure vk.  Calling again with
+           firstx = 1 orphaned the first allocation -- 1080 bytes that valgrind
+           marked as definitely lost.                                         */
     }
 
     if (!ms_done)
@@ -6822,9 +7210,9 @@ int main(int argc, char *argv[])
             varma1.xitol, varma1.a, &varma1.sigma2, &varma1.logelf, &ifault);
 
     if (ifault == 0) {
-        /* Errores estandar por el hessiano en el optimo, si se piden.  Va antes
-           de recuperar la estructura final porque objcfunc rellena varmax con
-           el punto que se le pase.                                           */
+        /* Standard errors from the Hessian at the optimum, if asked for.  It goes
+           before recovering the final structure because objcfunc fills varmax
+           with whatever point it is handed.                                  */
         if (global_fdhess) {
             if (exact_hessian_se(npar, x, dev, cov, nobs) == 0)
                 fprintf(outputv, "\nStandard errors from the finite-difference "
@@ -6833,13 +7221,14 @@ int main(int argc, char *argv[])
         }
         vec_shootx(x, &varma1, &ifault, 0, 0);  /* retrieve final */
 
-        /* Rellenar los RESIDUOS del ajuste final.  Los escribe elf con
-           atf = TRUE, y hasta ahora llegaban de rebote porque est hacia esa
-           llamada al terminar.  Con -multistart no hay est final -- el mejor
-           punto ya esta elegido -- y los residuos se quedaban SIN CALCULAR: la
-           diagnosis salia con Q = nan y "los residuos parecen ruido blanco",
-           que es la peor forma posible de equivocarse.  Se calculan aqui, que
-           es donde se sabe cual es el ajuste final.                          */
+        /* Fill in the RESIDUALS of the final fit.  elf writes them with
+           atf = TRUE, and until now they arrived by rebound because est made
+           that call on finishing.  With -multistart there is no final est --
+           the best point is already chosen -- and the residuals were left
+           UNCOMPUTED: the diagnosis came out with Q = nan and "the residuals
+           appear to be white noise", which is the worst possible way to be
+           wrong.  They are computed here, which is where the final fit is
+           known.                                                             */
         {
             real pi1, pi2, pi3;
             int ifr = 0;
@@ -6851,12 +7240,12 @@ int main(int argc, char *argv[])
         fprintf(outputv, "\nESTIMATION SUCCESSFUL (ifault=0)\n");
         fprintf(outputv, "sigma2 : %15.10f\n", varma1.sigma2);
         fprintf(outputv, "logelf : %15.10f\n", varma1.logelf);
-        /* npar, AIC y BIC tambien en el ajuste simple.  Estaban solo dentro de
-           la tabla de -lrtest, y sin ellos no se puede fijar un criterio de
-           especificacion mecanico: comparar modelos anidados por LR vale para
-           una pareja, pero elegir dentro de un conjunto declarado pide un
-           criterio de informacion.  Misma normalizacion por nobs que la tabla
-           de -lrtest, para que los numeros sean el mismo numero.             */
+        /* npar, AIC and BIC in the plain fit too.  They were only inside
+           -lrtest's table, and without them no mechanical specification
+           criterion can be set: comparing nested models by LR works for a pair,
+           but choosing within a declared set asks for an information criterion.
+           Same normalisation by nobs as -lrtest's table, so that the numbers
+           are the same number.                                               */
         fprintf(outputv, "npar   : %d\n", npar);
         fprintf(outputv, "AIC    : %15.10f   (-2logL + 2k, /n)\n",
                 (-2.0 * varma1.logelf + 2.0 * npar) / nobs);
@@ -6864,43 +7253,43 @@ int main(int argc, char *argv[])
                 (-2.0 * varma1.logelf + npar * log((real) nobs)) / nobs);
         convergence_note(termcode_from_out(outputf));
         operator_roots(&varma1);
-        /*  La condicion de rango, al lado de las raices y por la misma razon:
-         *  dice si el punto donde se ha parado es un modelo del rango que se
-         *  pidio o de otro.  Se recalcula en la ultima evaluacion, que es la
-         *  que dejo vec_shootx justo antes.                                  */
+        /*  The rank condition, beside the roots and for the same reason: it
+         *  says whether the point it stopped at is a model of the rank that was
+         *  asked for or of another.  It is recomputed at the last evaluation,
+         *  which is the one vec_shootx left just before.                     */
         if (global_r > 0 && global_q > 0 && granger_sv >= 0.0) {
             fprintf(outputv,
                 "\nRank condition (Granger): sigma_min(Lambda_perp' Theta(1) "
                 "B_perp) = %.3e\n", granger_sv);
             if (granger_sv < global_rankadm_tol) {
-                /*  Y TAMBIEN A LA TERMINAL.  Un ajuste que niega su propio
-                 *  rango no es un ajuste peor: es el ajuste de otro modelo, y
-                 *  quien corre el programa tiene que enterarse sin abrir el
-                 *  .out.  Es la decision del paso 4 del plan: el CALCULO por
-                 *  defecto no se mueve -- ningun resultado registrado se mueve
-                 *  --, pero la PRESENTACION deja de dar por respuesta algo que
-                 *  la teoria no licencia (docs/THEORY.md, corolario 5.1).    */
+                /*  AND TO THE TERMINAL AS WELL.  A fit that denies its own rank
+                 *  is not a worse fit: it is the fit of another model, and
+                 *  whoever runs the program has to find out without opening the
+                 *  .out.  It is the decision of step 4 of the plan: the default
+                 *  CALCULATION does not move -- no recorded result moves -- but
+                 *  the PRESENTATION stops offering as an answer something the
+                 *  theory does not license (docs/THEORY.md, corollary 5.1).  */
                 if (!quiet_mode)
-                    printf("\n  *** ATENCION: sigma_min(Lambda_perp' Theta(1) "
+                    printf("\n  *** WARNING: sigma_min(Lambda_perp' Theta(1) "
                            "B_perp) = %.3e < %.1e\n"
-                           "      Este ajuste NIEGA EL RANGO con el que se ha "
-                           "estimado: no es un\n"
-                           "      ajuste peor, es el ajuste de otro modelo.  Sus "
-                           "errores estandar y\n"
-                           "      cualquier LR contra el NO tienen su "
-                           "distribucion habitual.\n"
+                           "      This fit DENIES THE RANK it was estimated "
+                           "at: it is not a\n"
+                           "      worse fit, it is the fit of another model.  Its "
+                           "standard errors\n"
+                           "      and any LR against it do NOT have their "
+                           "usual distribution.\n"
                            "%s"
-                           "      Vea la escalera:  drvec <fichero> %d %d %d "
+                           "      See the ladder:  drvec <file> %d %d %d "
                            "-specs\n", granger_sv, global_rankadm_tol,
-                           /*  P4 — y de donde viene.  Con el defecto esto no
-                            *  puede pasar (Corolario 6.3); si esta pasando es
-                            *  que se ha pedido la clase libre, y eso es lo
-                            *  primero que hay que decir.                     */
+                           /*  P4 — and where it comes from.  Under the default this
+                            *  cannot happen (Corollary 6.3); if it is
+                            *  happening, the free class has been asked for, and
+                            *  that is the first thing to say.                */
                            global_mafree
-                             ? "      Esto es -mafree: esa clase CONTIENE puntos"
-                               " que el modelo no\n"
-                               "      admite.  El defecto (-marow) no puede"
-                               " alcanzarlos.\n"
+                             ? "      This is -mafree: that class CONTAINS points"
+                               " the model does not\n"
+                               "      admit.  The default (-marow) cannot"
+                               " reach them.\n"
                              : "",
                            global_p, global_q, global_r);
                 fprintf(outputv,
@@ -6923,23 +7312,23 @@ int main(int argc, char *argv[])
         gate_contract(&varma1);
         residual_diagnostics(&varma1);
 
-        /* El LR de H1(r) contra H(r).  Johansen y Swensen (2024): los grados de
-           libertad son (M - sa)*r, que es cuantas entradas libres de alpha
-           elimina la restriccion.                                            */
+        /* The LR of H1(r) against H(r).  Johansen and Swensen (2024): the degrees
+           of freedom are (M - sa)*r, which is how many free entries of alpha the
+           restriction removes.                                               */
         if (global_alpha && lr_free_ok) {
             int df = (nser - alpha_sa) * global_r;
             real lr = 2.0 * (lr_free - varma1.logelf);
             real pv = (df > 0 && lr > 0.0) ? gsl_cdf_chisq_Q(lr, df) : 1.0;
-            fprintf(outputv, "\n--- H1(r): alpha = A*psi, contra H(r) ---\n");
-            fprintf(outputv, "logL H(r)  libre       : %15.10f\n", lr_free);
-            fprintf(outputv, "logL H1(r) restringido : %15.10f\n", varma1.logelf);
-            fprintf(outputv, "LR = 2(libre - restr.) : %15.10f\n", lr);
-            fprintf(outputv, "grados de libertad     : %d   (M - sa)*r\n", df);
-            fprintf(outputv, "p-valor (chi2)         : %15.10f\n", pv);
-            printf("  H1(r) restringido  : logL = %15.10f\n", varma1.logelf);
-            printf("  LR = %.6f, %d g.l., p = %.6f%s\n", lr, df, pv,
-                   (lr < -1.0e-6) ? "   <- NEGATIVO: el restringido bate al libre,"
-                                    " luego uno de los dos no convergio" : "");
+            fprintf(outputv, "\n--- H1(r): alpha = A*psi, against H(r) ---\n");
+            fprintf(outputv, "logL H(r)  free        : %15.10f\n", lr_free);
+            fprintf(outputv, "logL H1(r) restricted  : %15.10f\n", varma1.logelf);
+            fprintf(outputv, "LR = 2(free - restr.)  : %15.10f\n", lr);
+            fprintf(outputv, "degrees of freedom     : %d   (M - sa)*r\n", df);
+            fprintf(outputv, "p-value (chi2)         : %15.10f\n", pv);
+            printf("  H1(r) restricted   : logL = %15.10f\n", varma1.logelf);
+            printf("  LR = %.6f, %d df, p = %.6f%s\n", lr, df, pv,
+                   (lr < -1.0e-6) ? "   <- NEGATIVE: the restricted beats the free one,"
+                                    " so one of the two did not converge" : "");
         }
 
         /* --- Structured VEC output --------------------------------------- */
@@ -6947,9 +7336,9 @@ int main(int argc, char *argv[])
         int ii = 1, warma_done = 0;
         real **Lam_m = matrix(1, nser, 1, (r > 0 ? r : 1));
 
-        /*  -warma: los parametros NO son los del VEC, asi que no se imprimen
-         *  como si lo fueran.  Se publica lo que se ha estimado, en las
-         *  coordenadas en que se ha estimado, y se dice cuales son.          */
+        /*  -warma: the parameters are NOT the VEC's, so they are not printed
+         *  as if they were.  What has been estimated is published, in the
+         *  coordinates it was estimated in, and they are named.              */
         if (global_warma) {
             int nf_w = (global_p > 1) ? global_p - 1 : 0, kk;
             fprintf(outputv,
@@ -7003,9 +7392,9 @@ int main(int argc, char *argv[])
                 fprintf(stderr, "ERROR output (-warma): consumed %d of %d\n",
                         ii - 1, npar);
 
-            /*  Y DE VUELTA A LAS COORDENADAS VEC, una sola vez, al final.
-             *  Es lo que hace utilizable esta ruta: se estima donde la clase
-             *  es un patron de ceros y se REPORTA donde el usuario lee.      */
+            /*  AND BACK TO VEC COORDINATES, once only, at the end.  It is what
+             *  makes this route usable: it is estimated where the class is a
+             *  zero pattern and REPORTED where the user reads.               */
             if (r > 0) {
                 real **B2w = matrix(1, s, 1, (r > 0 ? r : 1));
                 real **Lw  = matrix(1, nser, 1, r);
@@ -7079,9 +7468,9 @@ int main(int argc, char *argv[])
                           "rank it was estimated at.\n"
                         : "  Comfortably away from zero: the fit is a model of "
                           "the rank it was estimated at.\n");
-                /*  El residuo del mapa: si el punto no estuviera en la imagen
-                 *  de la transformacion, esto lo diria en vez de dejar que se
-                 *  publicara una Lambda inventada.                           */
+                /*  The residual of the map: if the point were not in the image of
+                 *  the transformation, this would say so instead of letting an
+                 *  invented Lambda be published.                             */
                 fprintf(outputv, "  inversion residual = %.3e%s\n", resid,
                         (resid > 1.0e-6)
                           ? "   *** the fitted point is NOT in the image of the "
@@ -7095,23 +7484,23 @@ int main(int argc, char *argv[])
                 free_matrix(Lw, 1, nser, 1, r);
                 free_matrix(B2w, 1, s, 1, (r > 0 ? r : 1));
             }
-            /*  Se sale por la MISMA limpieza que el resto, y no por un return
-             *  propio: un camino de salida nuevo es un juego nuevo de fugas, y
-             *  valgrind lo encontro en cuanto se escribio (2112 bytes en 9
-             *  bloques).  El resto de la impresion VEC se salta con la bandera. */
+            /*  It exits through the SAME cleanup as the rest, and not by a
+             *  return of its own: a new exit path is a new set of leaks, and
+             *  valgrind found them as soon as it was written (2112 bytes in 9
+             *  blocks).  The rest of the VEC printing is skipped with the flag.*/
             warma_done = 1;
         }
         if (!warma_done) {
 
-        /*  P6.8 — LOS INDICES DE x[], ANOTADOS EN EL RECORRIDO QUE YA HAY.
-         *  El bloque de hipotesis necesita saber en que posicion del vector
-         *  vive cada parametro.  Este fichero ya avisa, mas arriba, de que
-         *  tiene CUATRO recorridos del mismo vector y de que anadir un quinto
-         *  criterio de conteo suelto es exactamente como se abrio el fallo de
-         *  4.1.  Asi que no hay quinto recorrido: se anota aqui, donde ya se
-         *  esta caminando y donde el propio recorrido se comprueba contra npar
-         *  al final.  0 = esa entrada NO es libre -- la fija la estructura,
-         *  -fixb2 o -alpha -- y por tanto esta impuesta, no contrastable.    */
+        /*  P6.8 — THE INDICES INTO x[], NOTED IN THE WALK THAT ALREADY EXISTS.
+         *  The hypothesis block needs to know where in the vector each
+         *  parameter lives.  This file already warns, further up, that it has
+         *  FOUR walks of the same vector and that adding a fifth loose counting
+         *  rule is exactly how the §4.1 bug was opened.  So there is no fifth
+         *  walk: it is noted here, where the walking is already going on and
+         *  where the walk itself is checked against npar at the end.  0 = that
+         *  entry is NOT free -- the structure, -fixb2 or -alpha fixes it -- and
+         *  is therefore imposed, not testable.                               */
         int nf_ix = (global_p > 1) ? global_p - 1 : 1;
         int nq_ix = (global_q > 0) ? global_q : 1;
         int **ix_lam = imatrix(1, nser, 1, (r > 0 ? r : 1));
@@ -7145,12 +7534,12 @@ int main(int argc, char *argv[])
         }
 
         if (global_alpha) {
-            /* Con alpha = A*psi lo que x[] lleva es psi (sa x r), no Lambda, y
-               el recorrido tiene que consumir sa*r y no M*r -- la impresora es
-               el otro sitio donde el layout del vector se puede desincronizar,
-               y el bloque estructural de la bateria existe por eso.
-               Se imprimen las dos: psi es lo estimado, Lambda = A*psi es lo
-               interpretable, y los errores estandar solo existen para psi.   */
+            /* With alpha = A*psi what x[] carries is psi (sa x r), not Lambda, and
+               the walk has to consume sa*r and not M*r -- the printer is the
+               other place where the vector's layout can fall out of step, and
+               the suite's structural block exists for that.
+               Both are printed: psi is what is estimated, Lambda = A*psi is what
+               is interpretable, and the standard errors exist only for psi.   */
             real **psi = matrix(1, alpha_sa, 1, (r > 0 ? r : 1));
             fprintf(outputv, "psi (sa x r), the free part of alpha = A*psi =\n");
             for (int i = 1; i <= alpha_sa; i++) {
@@ -7207,13 +7596,12 @@ int main(int argc, char *argv[])
                 fprintf(outputv, "\n");
             }
         }
-        /*  Con -mawarma el bloque libre son solo las r*r entradas de arriba a
-         *  la izquierda; el bloque superior derecho lo determina B2 (que este
-         *  recorrido aun no ha leido) y las s filas de abajo son cero.  Se
-         *  guardan aqui y se imprimen despues de B2.  Este es el CUARTO
-         *  recorrido del mismo vector, y es exactamente donde la version
-         *  anterior de este bloque se desalineaba y publicaba una Theta que
-         *  nadie habia estimado.                                             */
+        /*  With -mawarma the free block is only the r*r entries at the top
+         *  left; the upper-right block is determined by B2 (which this walk has
+         *  not read yet) and the lower s rows are zero.  They are stored here
+         *  and printed after B2.  This is the FOURTH walk of the same vector,
+         *  and it is exactly where the previous version of this block fell out
+         *  of step and published a Theta nobody had estimated.               */
         real ***Th_m = tensor(1, (global_q > 0 ? global_q : 1), 1, nser, 1, nser);
         for (int k = 1; k <= (global_q > 0 ? global_q : 1); k++)
             for (int i = 1; i <= nser; i++)
@@ -7285,16 +7673,17 @@ int main(int argc, char *argv[])
             fprintf(outputv, "\n");
         }
 
-        /*  P2 — |Sigma| ES EL CRITERIO DE HOMOLOGACION DE ESTE PROGRAMA y hasta
-         *  el 2026-08-20 no lo imprimia: habia que sacarlo a mano de la matriz
-         *  de arriba, redondeada a seis decimales, y esa aritmetica manual es
-         *  precisamente donde el registro perdio la pista de tres de las cuatro
-         *  filas de su criterio de salida de beta.  Un programa que declara un
-         *  criterio y no lo emite obliga a que otro lo calcule, y el que lo
-         *  calcula se equivoca.  Ver docs/PLAN_PRODUCCION.md P2.
+        /*  P2 — |Sigma| IS THIS PROGRAM'S HOMOLOGATION CRITERION and until
+         *  2026-08-20 it did not print it: it had to be worked out by hand from
+         *  the matrix above, rounded to six decimals, and that manual
+         *  arithmetic is precisely where the register lost track of three of
+         *  the four rows of its beta exit criterion.  A program that declares a
+         *  criterion and does not emit it forces somebody else to compute it,
+         *  and whoever computes it gets it wrong.  See
+         *  docs/PLAN_PRODUCCION.md P2.
          *
-         *  Se da tambien log|Sigma|, que es lo que entra en la verosimilitud y
-         *  lo unico legible cuando |Sigma| se va a 1e-30 con M grande.        */
+         *  log|Sigma| is given too, which is what enters the likelihood and the
+         *  only readable thing when |Sigma| goes to 1e-30 with a large M.     */
         {
             real **Sm = matrix(1, nser, 1, nser);
             real d1 = 0.0, d2 = 0.0; int ifd = 0;
@@ -7303,13 +7692,13 @@ int main(int argc, char *argv[])
                     Sm[i][j] = varma1.sigma2 * (j <= i ? Qm[i][j] : Qm[j][i]);
             choldcp(Sm, nser, &d1, &d2, &ifd);
             if (ifd == 0) {
-                /*  choldcp deja el determinante como d1 * 2^d2 -- la mantisa y
-                 *  el exponente por separado, para no desbordar --, y acumula
-                 *  YA los cuadrados de la diagonal del factor (nlatools.c:
-                 *  `*d1 *= mat[j][j] * mat[j][j]`), de modo que eso ES det(Sigma)
-                 *  y no el de su factor.  Elevarlo al cuadrado otra vez daba
-                 *  6.06e-06 donde el registro tiene 0.002461, que es su
-                 *  cuadrado exacto: la primera version de esta linea lo hizo.  */
+                /*  choldcp leaves the determinant as d1 * 2^d2 -- mantissa and
+                 *  exponent apart, so as not to overflow -- and ALREADY
+                 *  accumulates the squares of the factor's diagonal (nlatools.c:
+                 *  `*d1 *= mat[j][j] * mat[j][j]`), so that IS det(Sigma) and
+                 *  not its factor's.  Squaring it again gave 6.06e-06 where the
+                 *  register has 0.002461, which is its exact square: the first
+                 *  version of this line did just that.                       */
                 real logdet = log(fabs(d1)) + d2 * log(2.0);
                 fprintf(outputv, "  |Sigma| = %.10g      log|Sigma| = %.6f\n",
                         exp(logdet), logdet);
@@ -7323,16 +7712,17 @@ int main(int argc, char *argv[])
         }
 
         /* ---- Triangularizacion Sigma = P D P' ----------------------------- */
-        /* Descomposicion LDL' de la covarianza de innovaciones: P unitriangular
-           inferior, D diagonal.  Con A_t = P A*_t, las innovaciones A*_t estan
-           INCORRELACIONADAS (cov = D), asi que el sistema premultiplicado por
-           P^-1 se lee ecuacion a ecuacion: es lo que permite hablar de una
-           ecuacion sin arrastrar la correlacion contemporanea de las demas.
-           BVECM seccion 4; el legado lo hacia solo para el caso bivariante.
+        /* LDL' decomposition of the innovation covariance: P unit lower
+           triangular, D diagonal.  With A_t = P A*_t, the innovations A*_t are
+           UNCORRELATED (cov = D), so the system premultiplied by P^-1 can be
+           read equation by equation: that is what allows one to speak of a
+           single equation without dragging in the contemporaneous correlation
+           of the others.  BVECM section 4; the legacy did it for the bivariate
+           case only.
 
-           IMPORTANTE, y por eso se dice en la salida: el orden es el de las
-           COLUMNAS DEL .inp.  Otro orden da otra P.  Es la misma clase de
-           decision silenciosa que la eleccion del bloque Y1.                  */
+           IMPORTANT, and that is why it is said in the output: the ordering is
+           that of the .inp's COLUMNS.  Another order gives another P.  It is
+           the same class of silent decision as the choice of the Y1 block.    */
         {
             real **Sg = matrix(1, nser, 1, nser);
             real **P  = matrix(1, nser, 1, nser);
@@ -7405,10 +7795,10 @@ int main(int argc, char *argv[])
                                          "NOT valid)");
         else
             fprintf(outputv, "B2 (s x r) =\n");
-        /* B2 va con su error estandar cuando es parametro.  Con -fixb2 no lo
-           lleva, y eso es correcto: un valor fijado no tiene error estandar, y
-           ponerle uno seria inventarlo.  El orden de lectura de dev es el mismo
-           column-major con el que se leyo B2m.                               */
+        /* B2 goes with its standard error when it is a parameter.  With -fixb2
+           it does not, and that is correct: a held value has no standard error,
+           and giving it one would be inventing it.  The order dev is read in is
+           the same column-major one B2m was read in.                         */
         {
             int jj = ii - (global_fixb2 ? 0 : s * r);
             for (int i = 1; i <= s; i++) {
@@ -7422,8 +7812,8 @@ int main(int argc, char *argv[])
             }
         }
 
-        /*  -mawarma: ahora que B2 esta leido, se completa e imprime Theta con
-         *  la estructura que hereda: [T11  T11*B2' ; 0  0].                  */
+        /*  -mawarma: now that B2 has been read, Theta is completed and printed
+         *  with the structure it inherits: [T11  T11*B2' ; 0  0].            */
         if (mawarma_on())
             for (int k = 1; k <= global_q; k++) {
                 for (int i = 1; i <= r; i++)
@@ -7458,10 +7848,10 @@ int main(int argc, char *argv[])
         }
 
         /* ---- Pi = Lambda * B', y sus autovalores ------------------------- */
-        /* Pi es la matriz de largo plazo y, a diferencia de Lambda y de B, es
-           INVARIANTE a la normalizacion: cualquier reparametrizacion
-           Lambda -> Lambda*G, B -> B*G^-T deja Pi igual.  Por eso es lo que hay
-           que mirar para comparar ajustes, y por eso se imprime aqui.        */
+        /* Pi is the long-run matrix and, unlike Lambda and B, is INVARIANT to the
+           normalisation: any reparameterisation Lambda -> Lambda*G,
+           B -> B*G^-T leaves Pi unchanged.  That is why it is what to look at
+           when comparing fits, and why it is printed here.                   */
         if (r > 0) {
             real **Pi = matrix(1, nser, 1, nser);
             real *wr = vector(1, nser), *wi = vector(1, nser);
@@ -7485,7 +7875,7 @@ int main(int argc, char *argv[])
                              "Lambda and B are not:\n"
                              "   Lambda->Lambda G, B->B G^-T leaves it "
                              "unchanged.  Compare fits on Pi.)\n");
-            {   /* autovalores, sobre una copia: eigenqr destruye su argumento */
+            {   /* eigenvalues, on a copy: eigenqr destroys its argument */
                 real **Pc = matrix(1, nser, 1, nser);
                 for (a = 1; a <= nser; a++) for (b = 1; b <= nser; b++)
                     Pc[a][b] = Pi[a][b];
@@ -7511,18 +7901,17 @@ int main(int argc, char *argv[])
             free_matrix(Pi, 1, nser, 1, nser);
         }
 
-        /* ---- Diagnostico de la normalizacion ----------------------------- */
-        /* B = [I_r ; B2] asume que el bloque Y1 aparece de verdad en cada
-           relacion de cointegracion.  Si no, B2 se dispara y el modelo se
-           vuelve una trampa silenciosa: el ajuste "funciona" y describe otra
-           cosa.  Mauricio lo advierte (p. 3648) y remite a Luukkonen et al.
-           (1999) y Kurozumi (2005); Melard, Roy y Saidi lo evitan usando el
-           espacio nulo de Phi(1) en vez de una normalizacion.
-           La medida que se usa aqui es libre de unidades: en W = Y1 + B2'Y2
-           cada serie pesa |coeficiente| * sd(serie), asi que se informa la
-           cuota del bloque Y1 en ese peso total.  Una cuota diminuta dice que
-           la relacion no es realmente sobre Y1 y que la normalizacion esta
-           forzada.                                                            */
+        /* ---- Diagnostic on the normalisation ------------------------------ */
+        /* B = [I_r ; B2] assumes the Y1 block genuinely appears in every
+           cointegrating relation.  If it does not, B2 blows up and the model
+           becomes a silent trap: the fit "works" and describes something else.
+           Mauricio warns about it (p. 3648) and refers to Luukkonen et al.
+           (1999) and Kurozumi (2005); Melard, Roy and Saidi avoid it by using
+           the null space of Phi(1) instead of a normalisation.
+           The measure used here is unit-free: in W = Y1 + B2'Y2 each series
+           weighs |coefficient| * sd(series), so the Y1 block's share of that
+           total weight is reported.  A tiny share says the relation is not
+           really about Y1 and that the normalisation is forced.              */
         if (r > 0 && s > 0) {
             real *sdY2 = vector(1, s);
             int a, t, j;
@@ -7563,18 +7952,18 @@ int main(int argc, char *argv[])
             free_vector(sdY2, 1, s);
         }
 
-        /*  P6.8 — las hipotesis sobre las relaciones, aqui: el recorrido de
-         *  arriba acaba de comprobarse contra npar, asi que los indices que
-         *  anoto son los buenos.  Va ANTES de la prevision porque contesta a
-         *  si el modelo tiene algo que decir, y eso se lee primero.          */
+        /*  P6.8 — the hypotheses about the relations, here: the walk above has
+         *  just been checked against npar, so the indices it noted are the good
+         *  ones.  It goes BEFORE the forecast because it answers whether the
+         *  model has anything to say, and that is read first.                */
         hypothesis_block(x, cov, ix_lam, ix_B2, ix_F, ix_Th);
         free_imatrix(ix_Th,  1, nq_ix * nser, 1, nser);
         free_imatrix(ix_F,   1, nf_ix * nser, 1, nser);
         free_imatrix(ix_B2,  1, (s > 0 ? s : 1), 1, (r > 0 ? r : 1));
         free_imatrix(ix_lam, 1, nser, 1, (r > 0 ? r : 1));
 
-        /*  P5 — la prevision, aqui: es el ultimo sitio donde B2m sigue vivo y
-         *  donde el ajuste ya esta hecho y diagnosticado.                    */
+        /*  P5 — the forecast, here: it is the last place where B2m is still
+         *  alive and where the fit is already made and diagnosed.            */
         if (global_fcast > 0) forecast_vec(&varma1, B2m, global_fcast, 0.95);
         if (global_estwin > 0) {
             if (global_fcast < 1)
@@ -7590,16 +7979,16 @@ int main(int argc, char *argv[])
         if (warma_done) free_matrix(Lam_m, 1, nser, 1, (r > 0 ? r : 1));
 
     } else {
-        /*  P1 — EL FALLO SE NOTA DESDE FUERA.  Hasta 2026-08-20 esta rama
-         *  escribia el diagnostico en el .out y devolvia 0 al shell, asi que
-         *  un guion que encadenara ajustes no podia distinguir un modelo
-         *  estimado de uno que no lo fue.  Sale con 2, que en la convencion
-         *  del porte es "reconocido pero no atendible", y se reserva 1 para
-         *  el error de USO.  Cuidado con la distincion que importa: el
-         *  termcode 3 -- "last global step failed to locate a lower point" --
-         *  NO es esto.  Es una parada explicada, con su nota de convergencia,
-         *  y sigue saliendo con 0: convertirla en fallo marcaria como error
-         *  la mayoria de los ajustes que este programa publica.             */
+        /*  P1 — THE FAILURE IS VISIBLE FROM OUTSIDE.  Until 2026-08-20 this
+         *  branch wrote the diagnosis into the .out and returned 0 to the
+         *  shell, so a script chaining fits could not tell an estimated model
+         *  from one that was not.  It exits with 2, which in the port's
+         *  convention is "recognised but cannot be honoured", and 1 is reserved
+         *  for a USAGE error.  Mind the distinction that matters: termcode 3 --
+         *  "last global step failed to locate a lower point" -- is NOT this.
+         *  It is an explained stop, with its convergence note, and it still
+         *  exits with 0: turning it into a failure would mark as an error most
+         *  of the fits this program publishes.                               */
         estimation_failed = 1;
         fprintf(outputv, "\nESTIMATION FAILED: ifault = %d\n", ifault);
         switch (ifault) {
@@ -7620,10 +8009,11 @@ int main(int argc, char *argv[])
     free_matrix(cov, 1, npar, 1, npar);
     free_vector(dev, 1, npar);
     free_vector(x, 1, npar);
-    /*  datamat y Y2_levels las suelta free_case_data(), desde cleanup_names,
-     *  que es por donde pasan las siete salidas.  Aqui se liberaban con `nobs`
-     *  y no con la dimension de la RESERVA, que con -estwin ya no coinciden:
-     *  la ventana recorta nobs y las matrices siguen enteras.                */
+    /*  datamat and Y2_levels are released by free_case_data(), from
+     *  cleanup_names, which is where all seven exits pass.  Here they were
+     *  freed with `nobs` and not with the ALLOCATION's dimension, which with
+     *  -estwin no longer coincide: the window trims nobs and the matrices stay
+     *  whole.                                                                */
     fclose(outputv);
     cleanup_names(outputf, inputf, base_name);
 

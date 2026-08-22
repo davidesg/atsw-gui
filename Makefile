@@ -96,6 +96,27 @@ test: $(EXEC) $(PROBE) $(CHIPROBE)
 test-verbose: $(EXEC) $(PROBE) $(CHIPROBE)
 	@tests/run_tests.sh -v
 
+#  P6 — INSTALACION.  PREFIX se puede sobreescribir en la linea de ordenes
+#  (make install PREFIX=$HOME/.local) y DESTDIR existe para los empaquetadores,
+#  que instalan en una raiz falsa antes de hacer el paquete.  Se instala el
+#  binario, la pagina de uso no existe todavia, y la documentacion va aparte
+#  porque un usuario que solo quiere el programa no quiere 30 ficheros .md.
+PREFIX  ?= /usr/local
+DESTDIR ?=
+BINDIR   = $(DESTDIR)$(PREFIX)/bin
+DOCDIR   = $(DESTDIR)$(PREFIX)/share/doc/drvec
+
+install: $(EXEC)
+	install -d $(BINDIR)
+	install -m 755 $(EXEC) $(BINDIR)/drvec
+	install -d $(DOCDIR)
+	install -m 644 README.md CHANGELOG.md LICENSE CITATION.cff $(DOCDIR)
+	@echo "drvec installed in $(BINDIR); docs in $(DOCDIR)"
+
+uninstall:
+	rm -f $(BINDIR)/drvec
+	rm -rf $(DOCDIR)
+
 clean:
 	rm -rf $(BUILD_DIR)/*.o $(EXEC) $(PROBE) $(CHIPROBE) *.eps *.out *.txt
 
@@ -116,4 +137,4 @@ $(BUILD_DIR)/fue_pre_reader.o: $(INCLUDE_DIR)/main.h \
 $(BUILD_DIR)/fue_bridge.o:    $(INCLUDE_DIR)/main.h \
                               $(INCLUDE_DIR)/fue_bridge.h
 
-.PHONY: all clean distclean rebuild test test-verbose
+.PHONY: all clean distclean rebuild test test-verbose install uninstall

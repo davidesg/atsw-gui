@@ -508,6 +508,29 @@ relations sits in the `Y₁` block.
 `datasets/synthetic/badnorm.inp` is a case built to fire it: two series that
 cointegrate plus an independent random walk placed in `Y₁`. It reports 0.6 %.
 
+### The hypotheses, reported without being asked
+
+A VEC model exists to say something about **relations**, so every run prints a
+Wald block on them. It costs no estimation: the covariance of the parameters is
+already there — it is where the standard errors printed beside `Λ` and `B₂` come
+from — and a Wald statistic on a subvector is arithmetic on it. For a single
+coefficient it is exactly the square of the `t` ratio you can read off the
+report, which is what the suite's check [8i] verifies.
+
+| block | null | reference |
+|---|---|---|
+| **weak exogeneity**, one row of `Λ` at a time | variable `i` does not respond to the disequilibrium | χ² with `r` df, and it is **valid**: with `Λ ≠ 0` overall, `B` stays identified under the null (Johansen 1992) |
+| **exclusion**, one row of `B₂` at a time | variable `i` does not enter the long-run relation | χ² with `r` df, valid — `β` is superconsistent. Only the `∇Y₂` block can be excluded: `B = [I_r ; B₂]` normalises on `Y₁`, whose coefficients are `1` and `0` by construction |
+| **the short run** — last lag of `F` and `Θ`, all cross effects, and each component's two directions | the coefficients are zero | χ². **Read with care**: `F` and `Θ` act on `Ȳₜ = (∇Y₂ₜ′, Wₜ′)′`, so a cross effect is between a *differenced* variable and an *equilibrium error* — not a statement about Granger causality among the levels |
+| `Λ = 0` | nothing adjusts | printed, and printed **declaring that it is not a test**. Under that null `B` multiplies a zero and is not identified at all: a nuisance parameter disappears (Davies), and the χ² is the distribution of nothing. The instrument is `-lrtest`, with `-bootstrap N` |
+
+Two conditions on reading any of them. First, `-fdhess`: by default the
+covariance is the factor the BFGS accumulated on the way to the optimum, and the
+block says so at the bottom whenever it was not asked for. Second, with `-fixb2`
+or `-alpha` the corresponding matrix is *imposed*, not estimated — there is no
+covariance to test it with, and the block says that instead of producing a
+number.
+
 ---
 
 ## 4a. The entry gate, and what it certifies
@@ -649,6 +672,22 @@ The comparison worth making is against the **diagonal rung** — `r = 0` with
 `-diagar -diagma -diagcov`, which by Theorem 9 is an ARIMA on each series — and
 `tools/forecast_vs_univariate.py` runs it over the bank. What it measures is in
 [HOMOLOGATION.md](HOMOLOGATION.md) §4t, and it is not flattering.
+
+### The files a run writes
+
+The suite names every product after the same base, and `drvec` follows it:
+
+| file | when | what is in it |
+|---|---|---|
+| `<file>.out` | always | the estimation report: convergence, parameters with standard errors, roots, the rank condition, residual diagnostics, the hypothesis block, and the forecast table |
+| `<file>.forecast` | with `-f H` | the forecast as a **product**: one block per series, each row **dated** from the `.inp`'s calendar, with level, low, high and standard error |
+| `<file>.recursive` | with `-estwin E` | one row per (origin, horizon, series): the actual value, the forecast and the error. This is what a Diebold–Mariano test needs — an aggregate RMSE cannot give one — and it is written **without being asked for**. `-C FILE` redirects it |
+
+Before 0.9 the forecast lived only inside the `.out`, undated, and the
+per-origin errors existed only if you remembered `-C`. The measurement that
+decides this program's version number was made that way, against a temporary
+file; a measurement that carries the version cannot depend on remembering an
+option.
 
 ## 6. Exit behaviour
 

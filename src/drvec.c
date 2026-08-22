@@ -32,6 +32,29 @@
 #include <stdarg.h>           /* bad_cli: el mensaje de uso lleva formato      */
 #include <errno.h>            /* strtol/strtod: ERANGE                         */
 
+/*  LA VERSION, Y POR QUE ES 0.9 Y NO 1.0.
+ *
+ *  Un numero de version es una afirmacion sobre lo que hay dentro, y lo que hay
+ *  dentro incluye dos cosas que un 1.0 no deberia tapar:
+ *
+ *   - MEDIDO FUERA DE MUESTRA, este programa NO mejora la prevision de un ARIMA
+ *     por serie sobre su banco (HOMOLOGATION.md 4t).  Es un estimador de maxima
+ *     verosimilitud exacta para una clase de modelos -- y para el vector de
+ *     cointegracion y las hipotesis sobre el, donde es superconsistente y donde
+ *     un univariante no dice nada --, no una herramienta de prevision que gane
+ *     sus parametros.
+ *   - LA ESPECIFICACION POR DEFECTO CAMBIO el 2026-08-20 (SPECIFICATION_PLAN.md
+ *     10), y con ella todas las cifras del registro medidas sobre la anterior.
+ *     Un defecto recien movido no ha tenido tiempo de equivocarse en manos de
+ *     nadie.
+ *
+ *  Ninguna de las dos es un defecto que arreglar: son el estado del
+ *  conocimiento, y estan medidas y escritas.  Lo que no procede es ponerles un
+ *  1.0 encima.                                                                */
+#ifndef DRVEC_VERSION
+#define DRVEC_VERSION "0.9"
+#endif
+
 real macheps;
 FILE *outputv;
 int quiet_mode = 0;
@@ -2167,6 +2190,12 @@ static char *interv_prefix   = NULL;
 static int   global_multistart = 0;  /* -multistart n: n arranques, quedarse el mejor */
 static int   global_fcast = 0;       /* -f H: horizonte de prevision (P5)             */
 static const char *fc_csv = NULL;    /* -C fichero: errores por origen, para el DM    */
+/*  P6.7 — EL NOMBRE BASE, GLOBAL.  El sistema de ficheros del conjunto nombra
+ *  cada producto por el mismo prefijo -- <base>.out, <base>.forecast,
+ *  <base>.recursive -- y hasta ahora ese prefijo vivia solo dentro de main(),
+ *  asi que la prevision no tenia forma de escribir su propio fichero y acababa
+ *  metida en el informe de la ESTIMACION.  Ver docs/PLAN_PRODUCCION.md 7.1.  */
+static char out_base[512] = "";
 
 static int   global_seed     = 0;    /* -seed <prefijo> */
 static char *pre_prefix      = NULL;
@@ -4389,6 +4418,16 @@ static int rolling_eval(real *x, int E, int H)
 
     nobs = nobs_full;                      /* filtrar sobre TODA la muestra   */
     vec_shootx(x, &vf, &ifr, 1, 0);
+    /*  LA TOLERANCIA DE TRUNCAMIENTO, QUE FALTABA.  vec_shootx llena la
+     *  estructura menos este campo -- lo pone cada sitio que la usa (hay una
+     *  docena) -- y aqui no se ponia: vf esta en la pila, asi que elf recibia
+     *  como xitol lo que hubiera en esa palabra, y valgrind lo cazo en cxi
+     *  (elfvarma.c:773) con 60 saltos sobre valor sin inicializar.  Es la
+     *  evaluacion fuera de muestra, o sea la medida que decide el numero de
+     *  version de este programa (HOMOLOGATION.md 4t), corriendo con un
+     *  truncamiento indefinido.  Encontrado el 2026-08-22 al pasar valgrind
+     *  sobre los caminos nuevos de P6.                                       */
+    vf.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
     if (ifr == 0)
         elf(vf.m, vf.n, vf.p, vf.q, vf.mu, vf.phi, vf.theta, vf.qq, vf.w,
             1.0, vf.xitol, TRUE, vf.a, &p1, &p2, &p3, &ifr);
@@ -4421,10 +4460,26 @@ static int rolling_eval(real *x, int E, int H)
      *  de capacidad predictiva necesita.  Un RMSE agregado no permite un
      *  Diebold-Mariano: hace falta la serie de perdidas.  La letra es la del
      *  programa hermano, que lleva la misma opcion por la misma razon.       */
-    if (fc_csv) {
+    /*  P6.7 — y se escribe SIEMPRE, en <base>.recursive, sin que haya que
+     *  nombrarlo.  Antes existia solo si el usuario se acordaba de -C, y la
+     *  medida que sostiene el numero de version de este programa (§4t del
+     *  registro) se hizo asi, contra un fichero temporal.  Una medida que
+     *  decide la version no puede depender de que alguien recuerde una
+     *  opcion.  -C sigue valiendo, ahora como REDIRECCION.                   */
+    {
+        static char rec_path[600];
+        if (!fc_csv) {
+            snprintf(rec_path, sizeof rec_path, "%s.recursive", out_base);
+            fc_csv = rec_path;
+        }
         csv = fopen(fc_csv, "w");
-        if (csv) fprintf(csv, "origin,h,series,actual,forecast,error\n");
-        else fprintf(stderr, "WARNING: cannot write %s\n", fc_csv);
+        if (csv) {
+            fprintf(csv, "# DRVEC %s  rolling-origin errors, one row per "
+                         "(origin, horizon, series)\n", DRVEC_VERSION);
+            fprintf(csv, "# estwin=%d horizon=%d p=%d q=%d r=%d case=%d\n",
+                    E, H, global_p, global_q, r, global_case);
+            fprintf(csv, "origin,h,series,actual,forecast,error\n");
+        } else fprintf(stderr, "WARNING: cannot write %s\n", fc_csv);
     }
 
     for (o = E; o + H <= nobs_full; o++) {
@@ -4477,13 +4532,348 @@ static int rolling_eval(real *x, int E, int H)
     return 0;
 }
 
+
+/*****************************************************************************/
+/*  P6.8 — LAS HIPOTESIS QUE UN VEC CONTESTA, Y QUE NO CUESTAN UNA ESTIMACION */
+/*                                                                           */
+/*  Hasta ahora este programa imprimia por defecto la diagnosis (Hosking,     */
+/*  Jarque-Bera, las R(k)) y la condicion de rango -- todo sobre los          */
+/*  RESIDUOS -- y ninguna hipotesis sobre las RELACIONES, que es de lo que    */
+/*  trata el modelo.  Las que tenia estaban todas detras de una opcion y      */
+/*  todas exigian reestimar: -lrtest, -weakex, -matest, -artest, -fixb2.      */
+/*                                                                           */
+/*  El escalon barato faltaba, y no faltaba por falta de material: est()      */
+/*  devuelve la covarianza de los parametros en cov, y de su diagonal salen   */
+/*  los sd que el .out ya imprime al lado de Lambda y de B2.  Con esa matriz  */
+/*  un Wald sobre un subvector es aritmetica.  El programa hermano lo hace    */
+/*  siempre (drvarma report.py:_wald_blocks); aqui ademas hay Lambda y B2,    */
+/*  que son la parte en la que un VEC es informativo y un VARMA no.           */
+/*                                                                           */
+/*  Ver docs/PLAN_PRODUCCION.md 7.2.                                          */
+/*****************************************************************************/
+
+/*  wald_sub — chi2 = th' S^+ th sobre el subvector idx[1..k], con S^+ la
+ *  PSEUDOINVERSA por SVD y df = rango(S).  Es el port de wald_test del
+ *  hermano, y la pseudoinversa no es un adorno: con -diagcov, -marow o
+ *  -fixb2 hay direcciones que la verosimilitud no ve, y una inversa normal
+ *  las convertiria en un chi2 gigante en vez de descontarlas del df.        */
+static int wald_sub(real *x, real **cov, int *idx, int k, real *chi2, int *df)
+{
+    real **S, **V, *w, *th, *y;
+    real tol, smax = 0.0, acc = 0.0;
+    int i, j, rk = 0;
+
+    *chi2 = 0.0; *df = 0;
+    if (k < 1) return 1;
+
+    S  = matrix(1, k, 1, k);
+    V  = matrix(1, k, 1, k);
+    w  = vector(1, k);
+    th = vector(1, k);
+    y  = vector(1, k);
+
+    for (i = 1; i <= k; i++) {
+        th[i] = x[idx[i]];
+        for (j = 1; j <= k; j++) S[i][j] = cov[idx[i]][idx[j]];
+    }
+    svdcp(S, k, k, w, V);                    /* S <- U */
+    for (i = 1; i <= k; i++) if (w[i] > smax) smax = w[i];
+    tol = smax * 1.0e-8;
+
+    for (i = 1; i <= k; i++) {               /* y = diag(1/w) U' th          */
+        real u = 0.0;
+        for (j = 1; j <= k; j++) u += S[j][i] * th[j];
+        if (w[i] > tol) { y[i] = u / w[i]; rk++; } else y[i] = 0.0;
+    }
+    for (i = 1; i <= k; i++) {               /* chi2 = th' (V y)             */
+        real v = 0.0;
+        for (j = 1; j <= k; j++) v += V[i][j] * y[j];
+        acc += th[i] * v;
+    }
+
+    free_vector(y, 1, k); free_vector(th, 1, k); free_vector(w, 1, k);
+    free_matrix(V, 1, k, 1, k); free_matrix(S, 1, k, 1, k);
+
+    if (!(acc >= 0.0)) return 1;             /* nan o negativo: no se emite  */
+    *chi2 = acc;
+    *df   = rk;
+    return (rk > 0) ? 0 : 1;
+}
+
+/*  emit_wald — una hipotesis, con su lectura.  Devuelve 0 si la emitio.     */
+static int emit_wald(real *x, real **cov, int *idx, int k,
+                     const char *title, const char *h0,
+                     const char *reject, const char *accept)
+{
+    real chi2; int df;
+    if (k < 1) return 1;
+    if (wald_sub(x, cov, idx, k, &chi2, &df) != 0) {
+        fprintf(outputv, "\n%s\n  not computable (the covariance of this block "
+                         "is not usable)\n", title);
+        return 1;
+    }
+    {
+        real pv = gsl_cdf_chisq_Q(chi2, df);
+        fprintf(outputv, "\n%s\n", title);
+        if (h0) fprintf(outputv, "  %s\n", h0);
+        fprintf(outputv, "  Wald chi2(%d) = %.4f, p-value = %.4f\n", df, chi2, pv);
+        fprintf(outputv, "  %s\n", (pv < 0.05) ? reject : accept);
+    }
+    return 0;
+}
+
+/*  hypothesis_block — el bloque entero.  ix_* son los indices de x[] que el
+ *  recorrido de la impresora fue anotando; 0 quiere decir que esa entrada no
+ *  es libre (la fija la estructura, -fixb2 o -alpha) y por tanto no se puede
+ *  contrastar: esta impuesta, no estimada.                                  */
+static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
+                             int **ix_F, int **ix_Th)
+{
+    int M = nser, r = global_r, s = M - r, p = global_p, q = global_q;
+    int nf = (p > 1) ? p - 1 : 0;
+    int *idx = ivector(1, (M * M * (nf + q) + M * r + s * r) + 1);
+    int k, i, j, kk;
+    char title[256], h0[256], acc_s[256], rej_s[256];
+    const char *nm;
+
+    fprintf(outputv,
+        "\n\n=============================================================\n"
+        "     HYPOTHESES ABOUT THE RELATIONS (WALD)                   \n"
+        "=============================================================\n"
+        "  Read off the covariance matrix the estimation already produced:\n"
+        "  NOTHING here is re-estimated.  That covariance is, by default,\n"
+        "  the factor the BFGS accumulated on its way to the optimum; the\n"
+        "  option -fdhess replaces it with the finite-difference Hessian AT\n"
+        "  the optimum, and that is the one to use for a p-value that is\n"
+        "  going to be published.  The tests that DO need a re-estimation --\n"
+        "  the rank itself, and the restricted fits -- are -lrtest,\n"
+        "  -bootstrap, -weakex, -matest and -artest, and they are not\n"
+        "  replaced by anything below.\n");
+
+    if (r > 0) {
+        /* ---- 1. Lambda = 0, y por que NO es un contraste ----------------- */
+        k = 0;
+        for (i = 1; i <= M; i++)
+            for (j = 1; j <= r; j++)
+                if (ix_lam[i][j] > 0) idx[++k] = ix_lam[i][j];
+        if (k > 0) {
+            real chi2; int df;
+            if (wald_sub(x, cov, idx, k, &chi2, &df) == 0)
+                fprintf(outputv,
+                    "\n--- The error-correction term as a whole ---\n"
+                    "  H0: Lambda = 0 (nothing adjusts to the disequilibrium)\n"
+                    "  Wald chi2(%d) = %.4f, chi2 p-value = %.4f\n"
+                    "  THIS IS NOT A TEST, and the number is here only because\n"
+                    "  leaving it out would invite someone to compute it worse.\n"
+                    "  Under Lambda = 0 the matrix B is not identified at all --\n"
+                    "  it multiplies a zero -- so the null sits on a boundary\n"
+                    "  where a nuisance parameter disappears (Davies) and the\n"
+                    "  chi2 is the distribution of nothing.  The instrument for\n"
+                    "  this question is -lrtest, with -bootstrap N for a p-value\n"
+                    "  that is calibrated in this sample size.\n",
+                    df, chi2, gsl_cdf_chisq_Q(chi2, df));
+        } else {
+            fprintf(outputv,
+                "\n--- The error-correction term as a whole ---\n"
+                "  Lambda is not free in x[] (-alpha imposes alpha = A*psi),\n"
+                "  so the restriction is already in the fit and there is\n"
+                "  nothing here to test.\n");
+        }
+
+        /* ---- 2. Exogeneidad debil, fila a fila --------------------------- */
+        fprintf(outputv,
+            "\n--- Weak exogeneity, one variable at a time ---\n"
+            "  H0: row i of Lambda = 0, i.e. variable i does not respond to\n"
+            "  the disequilibrium and carries no information about B.  This one\n"
+            "  IS a standard chi2 with r = %d df (Johansen 1992): with Lambda\n"
+            "  non-zero overall, B stays identified under the null.\n", r);
+        for (i = 1; i <= M; i++) {
+            k = 0;
+            for (j = 1; j <= r; j++)
+                if (ix_lam[i][j] > 0) idx[++k] = ix_lam[i][j];
+            if (k < 1) continue;
+            nm = series_names ? series_names[i] : "y";
+            snprintf(title, sizeof title, "%s (%s block):", nm,
+                     (i <= s) ? "nabla Y2" : "Y1");
+            snprintf(h0, sizeof h0, "H0: this variable does not adjust");
+            snprintf(rej_s, sizeof rej_s,
+                     "REJECT H0 -> %s adjusts to the disequilibrium.", nm);
+            snprintf(acc_s, sizeof acc_s,
+                     "Cannot reject H0 -> %s is weakly exogenous for B.", nm);
+            emit_wald(x, cov, idx, k, title, h0, rej_s, acc_s);
+        }
+
+        /* ---- 3. Exclusion de la relacion de largo plazo ------------------ */
+        k = 0;
+        for (i = 1; i <= s; i++)
+            for (j = 1; j <= r; j++)
+                if (ix_B2[i][j] > 0) idx[++k] = ix_B2[i][j];
+        if (k > 0) {
+            fprintf(outputv,
+                "\n--- Exclusion from the cointegrating relations ---\n"
+                "  H0: row i of B2 = 0, i.e. variable i does not enter the\n"
+                "  long-run relation.  Only the %d variable%s of the nabla Y2\n"
+                "  block can be excluded: B = [I_r ; B2] normalises on the Y1\n"
+                "  block, whose coefficients are 1 and 0 by construction and\n"
+                "  are not estimated.  Standard chi2 (beta is superconsistent).\n",
+                s, (s == 1) ? "" : "s");
+            for (i = 1; i <= s; i++) {
+                k = 0;
+                for (j = 1; j <= r; j++)
+                    if (ix_B2[i][j] > 0) idx[++k] = ix_B2[i][j];
+                if (k < 1) continue;
+                nm = series_names ? series_names[i] : "y";
+                snprintf(title, sizeof title, "%s:", nm);
+                snprintf(h0, sizeof h0, "H0: row %d of B2 = 0", i);
+                snprintf(rej_s, sizeof rej_s,
+                         "REJECT H0 -> %s belongs in the long-run relation.", nm);
+                snprintf(acc_s, sizeof acc_s,
+                         "Cannot reject H0 -> %s can be dropped from it.", nm);
+                emit_wald(x, cov, idx, k, title, h0, rej_s, acc_s);
+            }
+            if (s > 1) {
+                k = 0;
+                for (i = 1; i <= s; i++)
+                    for (j = 1; j <= r; j++)
+                        if (ix_B2[i][j] > 0) idx[++k] = ix_B2[i][j];
+                emit_wald(x, cov, idx, k, "All of B2 jointly:",
+                          "H0: B2 = 0 (the relation involves only the Y1 block)",
+                          "REJECT H0 -> the nabla Y2 block belongs in it.",
+                          "Cannot reject H0 -> the relation is inside Y1 alone.");
+            }
+        } else if (global_fixb2) {
+            fprintf(outputv,
+                "\n--- Exclusion from the cointegrating relations ---\n"
+                "  B2 is held fixed (-fixb2), so it is imposed and not\n"
+                "  estimated: there is no covariance to test it with.  The LR\n"
+                "  statistic that -fixb2 with a value does give IS a valid test\n"
+                "  of that restriction -- see the usage text.\n");
+        }
+    } else {
+        fprintf(outputv,
+            "\n  r = 0: there is no error-correction term, no Lambda and no B,\n"
+            "  so the three hypotheses a VEC model is here to answer do not\n"
+            "  exist in this fit.  What follows is the short-run block alone.\n");
+    }
+
+    /* ---- 4. La dinamica corta ------------------------------------------- */
+    if (nf > 0 || q > 0) {
+        fprintf(outputv,
+            "\n--- Short-run dynamics ---\n"
+            "  CAREFUL with the reading: F and Theta act on Ybar_t =\n"
+            "  (nabla Y2_t', W_t')', not on the original series.  A cross\n"
+            "  effect below is between a DIFFERENCED variable and an\n"
+            "  equilibrium error, which is not the same statement as Granger\n"
+            "  causality among the levels.\n");
+
+        if (nf > 0) {                              /* ultimo retardo de F     */
+            k = 0;
+            for (i = 1; i <= M; i++)
+                for (j = 1; j <= M; j++)
+                    if (ix_F[(nf - 1) * M + i][j] > 0)
+                        idx[++k] = ix_F[(nf - 1) * M + i][j];
+            snprintf(title, sizeof title,
+                     "Joint significance of the last AR lag, F[%d]:", nf);
+            emit_wald(x, cov, idx, k, title, "H0: F[last] = 0",
+                      "REJECT H0 -> the last AR lag is significant.",
+                      "Cannot reject H0 -> the last AR lag is not significant.");
+        }
+        if (q > 0) {                               /* ultimo retardo de Theta */
+            k = 0;
+            for (i = 1; i <= M; i++)
+                for (j = 1; j <= M; j++)
+                    if (ix_Th[(q - 1) * M + i][j] > 0)
+                        idx[++k] = ix_Th[(q - 1) * M + i][j];
+            snprintf(title, sizeof title,
+                     "Joint significance of the last MA lag, Theta[%d]:", q);
+            emit_wald(x, cov, idx, k, title, "H0: Theta[last] = 0",
+                      "REJECT H0 -> the last MA lag is significant.",
+                      "Cannot reject H0 -> the last MA lag is not significant.");
+        }
+
+        k = 0;                                     /* todos los cruzados      */
+        for (kk = 1; kk <= nf; kk++)
+            for (i = 1; i <= M; i++)
+                for (j = 1; j <= M; j++)
+                    if (i != j && ix_F[(kk - 1) * M + i][j] > 0)
+                        idx[++k] = ix_F[(kk - 1) * M + i][j];
+        for (kk = 1; kk <= q; kk++)
+            for (i = 1; i <= M; i++)
+                for (j = 1; j <= M; j++)
+                    if (i != j && ix_Th[(kk - 1) * M + i][j] > 0)
+                        idx[++k] = ix_Th[(kk - 1) * M + i][j];
+        if (k > 0)
+            emit_wald(x, cov, idx, k, "All cross effects in Ybar jointly:",
+                      "H0: every off-diagonal coefficient of F and Theta = 0",
+                      "REJECT H0 -> the cross structure earns its parameters.",
+                      "Cannot reject H0 -> a diagonal short run would do "
+                      "(-diagar / -diagma).");
+        else
+            fprintf(outputv, "\nNo free cross effects to test (the short run "
+                             "is already diagonal or structured).\n");
+
+        for (i = 1; i <= M; i++) {                 /* las dos direcciones     */
+            nm = series_names ? series_names[i] : "y";
+            k = 0;
+            for (kk = 1; kk <= nf; kk++)
+                for (j = 1; j <= M; j++)
+                    if (j != i && ix_F[(kk - 1) * M + i][j] > 0)
+                        idx[++k] = ix_F[(kk - 1) * M + i][j];
+            for (kk = 1; kk <= q; kk++)
+                for (j = 1; j <= M; j++)
+                    if (j != i && ix_Th[(kk - 1) * M + i][j] > 0)
+                        idx[++k] = ix_Th[(kk - 1) * M + i][j];
+            if (k > 0) {
+                snprintf(title, sizeof title,
+                         "%s: what the other components do to it:", nm);
+                snprintf(h0, sizeof h0,
+                         "H0: no other component of Ybar enters equation %d", i);
+                snprintf(rej_s, sizeof rej_s,
+                         "REJECT H0 -> %s is driven by the others.", nm);
+                snprintf(acc_s, sizeof acc_s,
+                         "Cannot reject H0 -> %s is not driven by the others.", nm);
+                emit_wald(x, cov, idx, k, title, h0, rej_s, acc_s);
+            }
+            k = 0;
+            for (kk = 1; kk <= nf; kk++)
+                for (j = 1; j <= M; j++)
+                    if (j != i && ix_F[(kk - 1) * M + j][i] > 0)
+                        idx[++k] = ix_F[(kk - 1) * M + j][i];
+            for (kk = 1; kk <= q; kk++)
+                for (j = 1; j <= M; j++)
+                    if (j != i && ix_Th[(kk - 1) * M + j][i] > 0)
+                        idx[++k] = ix_Th[(kk - 1) * M + j][i];
+            if (k > 0) {
+                snprintf(title, sizeof title,
+                         "%s: what it does to the other components:", nm);
+                snprintf(h0, sizeof h0,
+                         "H0: component %d enters no other equation", i);
+                snprintf(rej_s, sizeof rej_s,
+                         "REJECT H0 -> %s drives the others.", nm);
+                snprintf(acc_s, sizeof acc_s,
+                         "Cannot reject H0 -> %s does not drive the others.", nm);
+                emit_wald(x, cov, idx, k, title, h0, rej_s, acc_s);
+            }
+        }
+    }
+
+    if (!global_fdhess)
+        fprintf(outputv,
+            "\n  Reminder: these p-values came from the BFGS-accumulated\n"
+            "  covariance.  Re-run with -fdhess before quoting any of them.\n");
+    fprintf(outputv,
+        "=============================================================\n");
+
+    free_ivector(idx, 1, (M * M * (nf + q) + M * r + s * r) + 1);
+}
+
 /*  forecast_vec — H pasos desde el final de la muestra, en niveles.
  *  Devuelve 0 si pudo.  Las columnas son las del .inp: Y2 (1..s), Y1 (s+1..M). */
 static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
 {
     int M = v->m, r = global_r, s = M - r, n = v->n, p = v->p, q = v->q;
     int h, i, j, k, l;
-    real ***Psi, **Csum, **G, **Sig, **Var, **Yb, **lev;
+    real ***Psi, **Csum, **G, **Sig, **Var, **Yb, **lev, **SE;
     real z;
 
     if (H < 1 || r < 0 || s < 1) return 1;
@@ -4496,6 +4886,7 @@ static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
     Var  = matrix(1, M, 1, M);
     Yb   = matrix(1, H, 1, M);          /* Ybar previsto                     */
     lev  = matrix(1, H, 1, M);          /* niveles: [Y2 ; Y1]                */
+    SE   = matrix(1, H, 1, M);          /* el error estandar de cada nivel   */
 
     compute_psi_weights(M, p, q, v->phi, v->theta, H, Psi);
     for (i = 1; i <= M; i++)
@@ -4578,10 +4969,63 @@ static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
                 Var[i][j] += acc;
             }
         fprintf(outputv, "%4d", h);
-        for (i = 1; i <= M; i++)
-            fprintf(outputv, "  %14.6f %10.6f", lev[h][i],
-                    (Var[i][i] > 0.0) ? sqrt(Var[i][i]) : 0.0);
+        for (i = 1; i <= M; i++) {
+            SE[h][i] = (Var[i][i] > 0.0) ? sqrt(Var[i][i]) : 0.0;
+            fprintf(outputv, "  %14.6f %10.6f", lev[h][i], SE[h][i]);
+        }
         fprintf(outputv, "\n");
+    }
+
+    /*  P6.7 — <base>.forecast, EL FICHERO DEL CONJUNTO.  Lo que hay arriba es
+     *  el informe de la estimacion; esto es el producto, y lleva lo que el
+     *  .out nunca llevo: la FECHA de cada fila y la banda ya construida.  Sin
+     *  fecha, quien lee la prevision tiene que reconstruir el calendario por
+     *  su cuenta desde la cabecera del .inp, y eso es un error esperando.
+     *  El formato es el del hermano (drvarma v.04.1, drvarma.c:627).         */
+    {
+        char fname[600];
+        FILE *ff;
+        snprintf(fname, sizeof fname, "%s.forecast", out_base);
+        ff = fopen(fname, "w");
+        if (!ff) fprintf(stderr, "WARNING: cannot write %s\n", fname);
+        else {
+            /*  El indice CRUDO del origen: con las series en niveles la fila t
+             *  de datamat es la fila t+1 del .inp (una observacion se consume
+             *  al diferenciar), y con -differenced es la misma fila.          */
+            int raw_origin = global_levels ? n + 1 : n;
+            int per, sub;
+            fprintf(ff, "DRVEC %s -- forecasts from a VEC(%d) model\n",
+                    DRVEC_VERSION, r);
+            fprintf(ff, "input=%s.inp p=%d q=%d r=%d case=%d freq=%d "
+                        "horizon=%d bands=%.0f%%\n",
+                    out_base, p, q, r, global_case, data_freq, H, 100.0 * conf);
+            fprintf(ff, "Levels in the units of the .inp.  Columns 1..%d are the "
+                        "Y2 block, %d..%d the Y1 block.\n",
+                    s, s + 1, M);
+            fprintf(ff, "Low/High are +/- %.4f standard errors and are "
+                        "THEORETICAL: they assume the specification is right.\n\n",
+                    z);
+            for (i = 1; i <= M; i++) {
+                fprintf(ff, "Series %d (%s):\n", i,
+                        series_names ? series_names[i] : "y");
+                fprintf(ff, "  %-9s %14s %14s %14s %12s\n",
+                        "date", "Level", "Low", "High", "s.e.");
+                for (h = 1; h <= H; h++) {
+                    ObsToDate(data_start_year, data_start_sub, raw_origin + h,
+                              data_freq, &per, &sub);
+                    if (data_freq > 1)
+                        fprintf(ff, "  %3d/%-5d", sub, per);
+                    else
+                        fprintf(ff, "  %-9d", per);
+                    fprintf(ff, " %14.6f %14.6f %14.6f %12.6f\n",
+                            lev[h][i], lev[h][i] - z * SE[h][i],
+                            lev[h][i] + z * SE[h][i], SE[h][i]);
+                }
+                fprintf(ff, "\n");
+            }
+            fclose(ff);
+            if (!quiet_mode) printf("Forecasts written to %s\n", fname);
+        }
     }
     fprintf(outputv, "\n  The Y1 band inherits the CUMULATED Y2 error through\n"
                      "  Y1 = W - B2'Y2, which is why both come from one map and\n"
@@ -4591,6 +5035,7 @@ static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
     if (!quiet_mode)
         printf("Forecast: %d steps written to the .out\n", H);
 
+    free_matrix(SE, 1, H, 1, M);
     free_matrix(lev, 1, H, 1, M);
     free_matrix(Yb, 1, H, 1, M);
     free_matrix(Var, 1, M, 1, M);
@@ -4634,28 +5079,6 @@ static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
 /*  Ver docs/PLAN_PRODUCCION.md P1.                                           */
 /*****************************************************************************/
 
-/*  LA VERSION, Y POR QUE ES 0.9 Y NO 1.0.
- *
- *  Un numero de version es una afirmacion sobre lo que hay dentro, y lo que hay
- *  dentro incluye dos cosas que un 1.0 no deberia tapar:
- *
- *   - MEDIDO FUERA DE MUESTRA, este programa NO mejora la prevision de un ARIMA
- *     por serie sobre su banco (HOMOLOGATION.md 4t).  Es un estimador de maxima
- *     verosimilitud exacta para una clase de modelos -- y para el vector de
- *     cointegracion y las hipotesis sobre el, donde es superconsistente y donde
- *     un univariante no dice nada --, no una herramienta de prevision que gane
- *     sus parametros.
- *   - LA ESPECIFICACION POR DEFECTO CAMBIO el 2026-08-20 (SPECIFICATION_PLAN.md
- *     10), y con ella todas las cifras del registro medidas sobre la anterior.
- *     Un defecto recien movido no ha tenido tiempo de equivocarse en manos de
- *     nadie.
- *
- *  Ninguna de las dos es un defecto que arreglar: son el estado del
- *  conocimiento, y estan medidas y escritas.  Lo que no procede es ponerles un
- *  1.0 encima.                                                                */
-#ifndef DRVEC_VERSION
-#define DRVEC_VERSION "0.9"
-#endif
 
 enum opt_arg {
     A_NONE,      /* bandera                                                  */
@@ -4822,6 +5245,23 @@ static void usage(FILE *o)
     fprintf(o, "                 free), all at r = 0, with their chi2 LRs.  These are\n");
     fprintf(o, "                 ordinary nested comparisons; adding the VEC matrix\n");
     fprintf(o, "                 is not, and lives in -lrtest\n\n");
+    fprintf(o, "Forecasting, and the files it writes (P5, P6.7):\n");
+    fprintf(o, "  -f H           forecast H steps in LEVELS, with bands.  The\n");
+    fprintf(o, "                 table goes to the .out and the dated forecast to\n");
+    fprintf(o, "                 <file>.forecast, which is the file the rest of\n");
+    fprintf(o, "                 the suite writes too\n\n");
+    fprintf(o, "  -estwin E      estimate ONCE on observations 1..E, hold the\n");
+    fprintf(o, "                 parameters fixed and roll the origin forward,\n");
+    fprintf(o, "                 scoring each forecast against what happened.\n");
+    fprintf(o, "                 Needs -f H.  The summary goes to the .out and the\n");
+    fprintf(o, "                 per-origin errors to <file>.recursive, which is\n");
+    fprintf(o, "                 what a test of equal predictive ability needs\n\n");
+    fprintf(o, "  -C FILE        write those per-origin errors to FILE instead of\n");
+    fprintf(o, "                 <file>.recursive.  A redirection, not a condition\n\n");
+    fprintf(o, "Every run also reports, without being asked, Wald tests of weak\n");
+    fprintf(o, "exogeneity (row of Lambda = 0) and of exclusion from the\n");
+    fprintf(o, "cointegrating relations (row of B2 = 0), read off the covariance\n");
+    fprintf(o, "the estimation already produced.  Use -fdhess before quoting one.\n\n");
     /*  El programa tiene mas opciones de las que caben aqui, y una lista
      *  duplicada en dos sitios diverge.  Se dice donde esta la completa.  */
     fprintf(o, "The options above are the ones that need a paragraph; the full\n"
@@ -5017,6 +5457,7 @@ int main(int argc, char *argv[])
     }
 
     strcpy(base_name, argv[1]);
+    snprintf(out_base, sizeof out_base, "%s", base_name);
     strcpy(inputf, argv[1]);
 
     /*  p, q, r con strtol y comprobacion del final.  Con atoi, `drvec f x y z`
@@ -6662,6 +7103,30 @@ int main(int argc, char *argv[])
         }
         if (!warma_done) {
 
+        /*  P6.8 — LOS INDICES DE x[], ANOTADOS EN EL RECORRIDO QUE YA HAY.
+         *  El bloque de hipotesis necesita saber en que posicion del vector
+         *  vive cada parametro.  Este fichero ya avisa, mas arriba, de que
+         *  tiene CUATRO recorridos del mismo vector y de que anadir un quinto
+         *  criterio de conteo suelto es exactamente como se abrio el fallo de
+         *  4.1.  Asi que no hay quinto recorrido: se anota aqui, donde ya se
+         *  esta caminando y donde el propio recorrido se comprueba contra npar
+         *  al final.  0 = esa entrada NO es libre -- la fija la estructura,
+         *  -fixb2 o -alpha -- y por tanto esta impuesta, no contrastable.    */
+        int nf_ix = (global_p > 1) ? global_p - 1 : 1;
+        int nq_ix = (global_q > 0) ? global_q : 1;
+        int **ix_lam = imatrix(1, nser, 1, (r > 0 ? r : 1));
+        int **ix_B2  = imatrix(1, (s > 0 ? s : 1), 1, (r > 0 ? r : 1));
+        int **ix_F   = imatrix(1, nf_ix * nser, 1, nser);
+        int **ix_Th  = imatrix(1, nq_ix * nser, 1, nser);
+        for (int a = 1; a <= nser; a++)
+            for (int b = 1; b <= (r > 0 ? r : 1); b++) ix_lam[a][b] = 0;
+        for (int a = 1; a <= (s > 0 ? s : 1); a++)
+            for (int b = 1; b <= (r > 0 ? r : 1); b++) ix_B2[a][b] = 0;
+        for (int a = 1; a <= nf_ix * nser; a++)
+            for (int b = 1; b <= nser; b++) ix_F[a][b] = 0;
+        for (int a = 1; a <= nq_ix * nser; a++)
+            for (int b = 1; b <= nser; b++) ix_Th[a][b] = 0;
+
         fprintf(outputv, "\nVEC model (Mauricio 2006):\n");
         fprintf(outputv, "  (I - F1 L - ... - F_{p-1} L^{p-1}) nabla Y_t =\n");
         fprintf(outputv, "      -Lambda (B' Y_{t-1} - E[W_t]) + (I - Theta1 L - ...) A_t\n\n");
@@ -6716,6 +7181,7 @@ int main(int argc, char *argv[])
                 fprintf(outputv, "  ");
                 for (int j = 1; j <= r; j++) {
                     Lam_m[i][j] = x[ii];
+                    ix_lam[i][j] = ii;
                     fprintf(outputv, "%12.6f (sd %9.6f)", x[ii], dev[ii]);
                     ii++;
                 }
@@ -6730,9 +7196,14 @@ int main(int argc, char *argv[])
             fprintf(outputv, "F[%d] (M x M) =\n", k);
             for (int i = 1; i <= nser; i++) {
                 fprintf(outputv, "  ");
-                for (int j = 1; j <= nser; j++)
-                    fprintf(outputv, "%12.6f",
-                            global_diag_ar ? ((i == j) ? x[ii++] : 0.0) : x[ii++]);
+                for (int j = 1; j <= nser; j++) {
+                    real fv;
+                    if (global_diag_ar) {
+                        if (i == j) { ix_F[(k-1)*nser + i][j] = ii; fv = x[ii++]; }
+                        else fv = 0.0;
+                    } else { ix_F[(k-1)*nser + i][j] = ii; fv = x[ii++]; }
+                    fprintf(outputv, "%12.6f", fv);
+                }
                 fprintf(outputv, "\n");
             }
         }
@@ -6750,20 +7221,26 @@ int main(int argc, char *argv[])
         for (int k = 1; k <= global_q; k++) {
             if (mawarma_on()) {
                 for (int i = 1; i <= r; i++)
-                    for (int j = 1; j <= r; j++) Th_m[k][i][j] = x[ii++];
+                    for (int j = 1; j <= r; j++) {
+                        ix_Th[(k-1)*nser + i][j] = ii; Th_m[k][i][j] = x[ii++]; }
             } else if (marow_on()) {
                 for (int i = 1; i <= r; i++)
-                    for (int j = 1; j <= nser; j++) Th_m[k][i][j] = x[ii++];
+                    for (int j = 1; j <= nser; j++) {
+                        ix_Th[(k-1)*nser + i][j] = ii; Th_m[k][i][j] = x[ii++]; }
             } else if (global_matri) {
                 for (int i = 1; i <= r; i++)
-                    for (int j = 1; j <= nser; j++) Th_m[k][i][j] = x[ii++];
+                    for (int j = 1; j <= nser; j++) {
+                        ix_Th[(k-1)*nser + i][j] = ii; Th_m[k][i][j] = x[ii++]; }
                 for (int i = r + 1; i <= nser; i++)
-                    for (int j = r + 1; j <= nser; j++) Th_m[k][i][j] = x[ii++];
+                    for (int j = r + 1; j <= nser; j++) {
+                        ix_Th[(k-1)*nser + i][j] = ii; Th_m[k][i][j] = x[ii++]; }
             } else if (global_diag_ma) {
-                for (int i = 1; i <= nser; i++) Th_m[k][i][i] = x[ii++];
+                for (int i = 1; i <= nser; i++) {
+                    ix_Th[(k-1)*nser + i][i] = ii; Th_m[k][i][i] = x[ii++]; }
             } else {
                 for (int i = 1; i <= nser; i++)
-                    for (int j = 1; j <= nser; j++) Th_m[k][i][j] = x[ii++];
+                    for (int j = 1; j <= nser; j++) {
+                        ix_Th[(k-1)*nser + i][j] = ii; Th_m[k][i][j] = x[ii++]; }
             }
         }
         if (!mawarma_on())
@@ -6915,8 +7392,10 @@ int main(int argc, char *argv[])
            use this one copy, so they cannot disagree.                        */
         real **B2m = matrix(1, s, 1, (r > 0 ? r : 1));
         for (int j = 1; j <= r; j++)
-            for (int i = 1; i <= s; i++)
+            for (int i = 1; i <= s; i++) {
+                if (!global_fixb2) ix_B2[i][j] = ii;
                 B2m[i][j] = global_fixb2 ? B2_fixed[i][j] : x[ii++];
+            }
 
         if (global_fixb2)
             fprintf(outputv, "B2 (s x r) = [FIXED at %s]\n",
@@ -7083,6 +7562,16 @@ int main(int argc, char *argv[])
             }
             free_vector(sdY2, 1, s);
         }
+
+        /*  P6.8 — las hipotesis sobre las relaciones, aqui: el recorrido de
+         *  arriba acaba de comprobarse contra npar, asi que los indices que
+         *  anoto son los buenos.  Va ANTES de la prevision porque contesta a
+         *  si el modelo tiene algo que decir, y eso se lee primero.          */
+        hypothesis_block(x, cov, ix_lam, ix_B2, ix_F, ix_Th);
+        free_imatrix(ix_Th,  1, nq_ix * nser, 1, nser);
+        free_imatrix(ix_F,   1, nf_ix * nser, 1, nser);
+        free_imatrix(ix_B2,  1, (s > 0 ? s : 1), 1, (r > 0 ? r : 1));
+        free_imatrix(ix_lam, 1, nser, 1, (r > 0 ? r : 1));
 
         /*  P5 — la prevision, aqui: es el ultimo sitio donde B2m sigue vivo y
          *  donde el ajuste ya esta hecho y diagnosticado.                    */

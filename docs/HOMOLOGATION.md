@@ -2230,6 +2230,67 @@ the energy shock, with Spain decoupling — so this measures forecasting through
 break rather than the model class in general; and `r = 0` means *not rejected*,
 not *shown to be absent*: Johansen's trace rejects at 10 % under case 3.
 
+## 4v. A defect under §4t, and the table re-measured against it
+
+*Found on 2026-08-22 by running `valgrind` over the paths P6 added. The
+interesting part is not the defect — it is what re-measuring said about the
+result that rested on it.*
+
+### The defect
+
+`rolling_eval` builds its own `struct Tvarma` on the stack and fills it with
+`vec_shootx`, which sets every field **except `xitol`**: that tolerance is set by
+each site that uses the structure, and there are a dozen sites that do it. This
+one did not. `elf` was therefore called with whatever happened to be in that
+word of the stack as the truncation tolerance of the `ξ` vector.
+
+```
+==12872== Conditional jump or move depends on uninitialised value(s)
+==12872==    at 0x12C0C4: cxi (elfvarma.c:773)
+==12872==    by 0x12D757: elf (elfvarma.c:264)
+==12872==    by 0x12377B: rolling_eval (drvec.c:4422)
+==12872==  Uninitialised value was created by a stack allocation
+==12872==    at 0x122BB0: rolling_eval (drvec.c:4408)
+```
+
+Sixty such jumps in one run. Nothing else would have found it: the program did
+not crash, did not warn, and did not produce a `nan`. It is `BUG-14`.
+
+### Why it mattered more than a usual leak
+
+`rolling_eval` **is** the out-of-sample route. Everything in §4t — the table that
+decides that this program's version is 0.9 and not 1.0 — went through it.
+
+### The re-measurement
+
+The three columns of §4t, nine cases each, re-run with the fix in:
+
+```sh
+python3 tools/forecast_vs_univariate.py 2 1 4 0.75
+python3 tools/forecast_vs_univariate.py 2 0 4 0.75
+python3 tools/forecast_vs_univariate.py 2 1 4 0.75 -mafree
+```
+
+**All twenty-seven rows reproduce the published table digit for digit**, to the
+three decimals it carries, and the win counts are unchanged: 2/9 at every horizon
+for the default, 6/9 5/9 5/9 4/9 at `q = 0`, 5/9 5/9 6/9 5/9 for `-mafree`.
+
+So the measured cost of the defect is **zero**: the value that happened to sit in
+that stack word fell in the range where the truncation does not bite. That is not
+the same as harmless — it was undefined behaviour, and a different compiler, a
+different call depth or a different day could have moved it without a word.
+
+The conclusion of §4t stands, and now it stands on defined behaviour.
+
+### What actually closes it
+
+The structure has a field that no filling function fills. While that is true,
+every new site that uses it is another chance at the same bug. What closes it is
+`vec_shootx` setting `xitol` itself — deliberately **not** done now, because
+touching it would move every figure in this register through the back door. It
+is written down for the refactor (P8), which is where a change with no measurable
+effect belongs.
+
 ## 5. What is not in the register, and why
 
 * **The Census Housing example** of the AddOn (Hillmer & Tiao 1979): the data

@@ -179,21 +179,36 @@ forecast standard deviation at every horizon** and the bands to **0.5 %**. The
 table, including what it revealed about the cost of the default specification,
 is [HOMOLOGATION.md](HOMOLOGATION.md) §4s.
 
-## 5. What this does **not** do yet
+## 5. Where the numbers go, and what they are worth
 
-* **No rolling-origin evaluation.** `-f H` forecasts from the end of the sample
-  with the parameters estimated on all of it. That is not an out-of-sample
-  measurement and must not be read as one.
-* **No comparison against a univariate model**, which is the only criterion that
-  says whether a multivariate specification earns its parameters.
-* `r = 0` is refused rather than approximated: with no `W` block there is
-  nothing to invert back to levels.
+`-f H` writes the table into the `.out` and the **dated** forecast into
+`<base>.forecast` — one block per series, each row carrying the date the
+`.inp`'s calendar gives it, the level, the band and the standard error. That is
+the suite's file system (`drvarma` v.04.1 writes `.forecast` and `.recursive`
+the same way), and it exists because a forecast that has to be re-dated by hand
+by whoever reads it is a forecast with an error waiting in it.
 
-Those are the rest of P5 in [PLAN_PRODUCCION.md](PLAN_PRODUCCION.md), and until
-they exist the register still has no measurement of whether this model forecasts
-better than an ARIMA on each series.
+`-estwin E -f H` writes the per-origin errors into `<base>.recursive`: one row
+per (origin, horizon, series) with the actual value, the forecast and the error.
+An aggregate RMSE cannot support a test of equal predictive ability; the series
+of losses can, which is why this file exists and why it is written **without
+being asked for**. `-C FILE` redirects it.
+
+### What it is not
 
 The bands are **theoretical**: they come from the model's own innovation
 covariance and say nothing about whether the specification is right. That is the
 distinction the transfer-function program's help puts plainly, and the reason
 rolling-origin evaluation is a separate thing and not a refinement of this one.
+
+`-f H` alone forecasts from the end of the sample with parameters estimated on
+all of it, so **it is not an out-of-sample measurement** and must not be read as
+one. The out-of-sample measurement is `-estwin`, and what it says when it is run
+against `drvec`'s own diagonal rung — an ARIMA per series, by Theorem 9 — is in
+[HOMOLOGATION.md](HOMOLOGATION.md) §4t, where the answer is mostly *no*. §4v
+records the defect that route carried until 2026-08-22 and the re-measurement
+that left the table unchanged.
+
+`r = 0` is supported: with no `W` block every series is in the `∇Y₂` block and
+the step to levels is pure integration. The suite checks it, because it is the
+univariate counterfactual the whole comparison rests on.

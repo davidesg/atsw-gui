@@ -686,7 +686,7 @@ proyecto sepa lo que tiene es medirlo, y hasta hoy nadie lo ha medido.
 
 ---
 
-## 7. Empaquetado y cita
+## 7. Empaquetado y cita — **HECHA el 2026-08-22**
 
 El estándar del conjunto ya existe y no es este programa:
 
@@ -701,6 +701,91 @@ El estándar del conjunto ya existe y no es este programa:
 continua, ni `--version`. Y `docs/README.md` dice **«Pre-beta»** mientras
 `PLAN_BETA.md` marca sus nueve criterios de salida con ✔: el estado declarado y
 el estado registrado no coinciden.
+
+### 7.1 El sistema de ficheros de salida — medido el 2026-08-22
+
+Los dos programas que hay que seguir no dicen lo mismo, y el que hay que seguir
+es el que **separa**:
+
+| programa | ficheros que escribe | criterio |
+|---|---|---|
+| `drv` (`/drv_project`, Phillips triangular) | `<base>.out` y nada más | un solo `fopen` de salida en `main.c:1043`; el `.out` de `AL.2` son 2124 líneas donde el volcado del optimizador, los residuos y los parámetros van seguidos |
+| `drvarma` C v.04.1 | `<base>.out`, `<base>.forecast`, `<base>.recursive`, `<base>.volexp`, `<base>.volmov` | un fichero por **producto**, con su propia cabecera reproducible |
+| `drvarma` Python 0.1.6 | los mismos, más `<base>_<serie>.html` | `cli.py` los nombra en un solo sitio y anuncia cada uno por `stdout` |
+| **`drvec` 0.9** | **`<base>.out`**, y lo demás sólo si el usuario nombra la ruta | `-C FICHERO` (CSV de errores) y `-writeres`/`-writeinp` (prefijo) |
+
+El defecto de `drvec` no es que escriba poco: es que **la previsión y la
+evaluación de origen móvil no tienen fichero propio**. La tabla de previsión se
+imprime dentro del `.out`, que es el informe de la ESTIMACIÓN, y los errores
+origen a origen sólo existen si el usuario se acuerda de pasar `-C`. Eso rompe
+dos cosas a la vez:
+
+- **la previsión no se puede consumir**: no lleva fechas, así que quien la lee
+  tiene que reconstruir el calendario por su cuenta a partir de la cabecera del
+  `.inp`. `drvarma` lleva `sub/año` en cada fila desde su v.04, y `ObsToDate` ya
+  está en `drvec` (`src/fue_bridge.c`, usado por `-writeres`): lo que falta es
+  llamarlo;
+- **la evaluación fuera de muestra es opcional por accidente**. §4t del registro
+  —la medida que decide que la versión es 0.9 y no 1.0— se hizo con `-C`
+  apuntando a un fichero temporal. Una medida que sostiene el número de versión
+  no puede depender de que el usuario recuerde una opción.
+
+`drv` no sirve de modelo aquí, y conviene decir por qué en vez de callarlo: su
+`.out` mezcla el volcado del optimizador con el resultado porque nunca tuvo que
+alimentar a nada. `drvec` sí: `tools/forecast_vs_univariate.py` y el
+Diebold-Mariano leen el CSV de `-C`.
+
+### 7.2 Las hipótesis por defecto — lo que un VEC dice y `drvec` se calla
+
+`drvarma` imprime **siempre** un bloque `JOINT HYPOTHESIS TESTS (WALD)`
+(`report.py:_wald_blocks`): último retardo AR, último MA, todos los efectos
+cruzados, y para cada variable las dos direcciones (qué la influye y a quién
+influye). No hace falta pedirlo.
+
+`drvec` imprime por defecto la diagnosis (Hosking, Jarque-Bera multivariante,
+las R(k)) y la condición de rango de Granger — todo sobre los RESIDUOS — y
+**ninguna hipótesis sobre las relaciones**, que es de lo que trata el modelo.
+Las que tiene existen todas detrás de una opción y **todas exigen reestimar**:
+
+| hipótesis | opción hoy | coste |
+|---|---|---|
+| rango de cointegración | `-lrtest` (+ `-bootstrap N`) | M estimaciones |
+| exogeneidad débil de la variable i | `-weakex i` | una estimación restringida |
+| estructura de la media móvil | `-matest N` | N remuestreos |
+| dinámica corta triangular | `-artest N` | N remuestreos |
+| B₂ conocida | `-fixb2 v` | una estimación restringida |
+
+Falta el escalón barato: la matriz de covarianzas de los parámetros **ya está
+calculada** (`est` la devuelve en `cov`, y de su diagonal salen los `sd` que el
+`.out` ya imprime junto a Λ y a B₂). Con ella, un Wald sobre un subvector es
+aritmética, no una estimación más. Y las hipótesis que un VEC contesta con eso
+son exactamente las que dan sentido al modelo:
+
+1. **Λ = 0** — el término de corrección de error, entero. **NO es un contraste**
+   y hay que escribirlo así: bajo Λ = 0 la matriz B queda sin identificar
+   (problema de Davies), y la χ² no es la distribución de nada. Se imprime por
+   referencia y se remite a `-lrtest -bootstrap`, igual que ya se hace con la
+   χ² de `-matest`.
+2. **Exogeneidad débil, fila a fila: Λ_{i·} = 0**, `r` g.l. Ésta **sí** es una
+   χ² estándar (Johansen 1992): con Λ ≠ 0 en conjunto, B sigue identificada.
+   Dice qué variables no se ajustan al desequilibrio, que es la pregunta que
+   trae a un usuario a un VEC.
+3. **Exclusión de la relación, fila a fila: B₂_{i·} = 0**, `r` g.l., χ²
+   estándar por la superconsistencia de β. Dice qué variables no entran en la
+   relación de largo plazo.
+4. **El bloque corto**: último retardo de F y de Θ, los efectos cruzados y las
+   dos direcciones por variable — literalmente lo que hace el hermano, sobre
+   los mismos parámetros y con la misma lectura.
+
+Las tres primeras son las que `drvarma` no puede tener porque su modelo no
+tiene ni Λ ni B: son la parte en que `drvec` es informativo y el hermano no.
+Que hoy no salgan por defecto es el hueco.
+
+**Una advertencia que va en el propio bloque**: por defecto `cov` viene del
+factor que acumula el BFGS, no del hessiano en el óptimo. `-fdhess` lo sustituye
+por el de diferencias finitas AL óptimo, y es el que hay que usar para publicar
+un contraste. Se dice ahí y no en la documentación, que es donde nadie mira
+cuando está leyendo un p-valor.
 
 ### Qué se construye (P6)
 
@@ -727,6 +812,51 @@ el estado registrado no coinciden.
 5. `make install` con `PREFIX`, y CI que corra `make test` y `VALGRIND=1 make
    test`.
 6. Alinear el estado declarado: `docs/README.md` deja de decir «Pre-beta».
+7. **El sistema de ficheros de salida del conjunto** (§7.1): `<base>.forecast`
+   con FECHAS y bandas, y `<base>.recursive` para los errores origen a origen,
+   escritos sin que haya que nombrar la ruta. `-C FICHERO` se queda como
+   redirección, no como condición para que la medida exista.
+8. **El bloque de hipótesis por defecto** (§7.2): Wald sobre la `cov` que ya se
+   calcula — Λ = 0 por referencia y dicho que no es un contraste, exogeneidad
+   débil fila a fila, exclusión de la relación fila a fila, y el bloque corto
+   del hermano. Con el aviso de `-fdhess` dentro del bloque.
+
+### Lo construido (P6), el 2026-08-22
+
+| | |
+|---|---|
+| `LICENSE` | GPL-2.0, la copia del hermano `drvarma` v.04.1, que es lo que el README ya declaraba sin fichero detrás |
+| `CITATION.cff` | con Mauricio (2006) como referencia del método. Los autores son **la línea de copyright que llevan las fuentes** (`src/drvec.c:22`), no una atribución nueva |
+| `CHANGELOG.md` | el formato de `drtran-python`: lo publicado aquí, los informes completos en el registro |
+| `docs/BUGS.md` | registro propio, **con la numeración del conjunto**: `BUG-1` a `BUG-13` viven en `drtran-python`, y de ahí siguen `BUG-14` y `BUG-15`. Un puntero cruzado en el otro registro dice que lo siguiente empieza en 16, para que un número no signifique dos cosas |
+| `make install` | con `PREFIX` y `DESTDIR`; binario en `bin/`, documentación en `share/doc/drvec`. La CI comprueba que instalar y desinstalar no mienten |
+| CI | dos trabajos: `make test`, y `VALGRIND=1 make test` aparte porque tarda varias veces más |
+| `docs/README.md` | deja de decir «Pre-beta» y dice 0.9, con las dos razones |
+
+**El sistema de ficheros (P6.7).** `<base>.forecast` con la FECHA de cada fila,
+y `<base>.recursive` con los errores origen a origen, los dos escritos sin que
+haya que nombrar la ruta. `-C` pasa a ser redirección. Ocho comprobaciones
+nuevas en la batería, bloque `[8j]`, incluida la que ata las tres columnas de la
+banda entre sí y la que comprueba que la primera fecha continúa el `.inp`.
+
+**Las hipótesis (P6.8).** Bloque Wald por defecto sobre la `cov` que ya se
+calculaba. Ocho comprobaciones nuevas, bloque `[8i]`, y la que vale es una
+**identidad**: con un solo parámetro el Wald ES el cuadrado del cociente `t` que
+el propio `.out` imprime al lado del coeficiente, y se comprueba en los dos
+extremos del vector de parámetros — Λ, que está al principio, y B₂, que está al
+final. Si el mapa de índices se desalineara —el fallo de §4.1— la igualdad se
+rompe en el acto. Por eso los índices se anotan **en el recorrido que ya hay** y
+no en uno nuevo.
+
+**Y un defecto encontrado por el camino**, que es lo que suele pasar cuando se
+pasa valgrind sobre código que no se había pasado: `BUG-14`, `xitol` sin
+inicializar en la evaluación de origen móvil, o sea en la ruta de §4t. Las tres
+columnas de §4t se volvieron a medir y **reproducen la tabla dígito a dígito**,
+así que el coste medido es cero y el resultado se sostiene — ahora sobre
+comportamiento definido. Ver `HOMOLOGATION.md` §4v.
+
+Batería: **235**, y **245** con `VALGRIND=1`.
+
 
 ---
 
@@ -760,7 +890,7 @@ publicar mientras siga estando escrito con esta claridad:
 
 ## 9. Orden y por qué
 
-**P1 (hecha) → P4 (hecha) → P5 (hecha) → P2 (hecha) → P3 (hecha) → P6 → (P7 idioma) → (P8 refactor).**
+**P1 (hecha) → P4 (hecha) → P5 (hecha) → P2 (hecha) → P3 (hecha) → P6 (hecha) → (P7 idioma) → (P8 refactor).**
 
 El orden cambió el 2026-08-20, y el motivo es el requisito 6 de §0.
 

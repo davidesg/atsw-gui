@@ -27,6 +27,9 @@ drvec/
 ├── tests/               ← run_tests.sh, fixtures, and the .pre reader harness
 ├── tools/               ← comparison against the reference implementation
 ├── Makefile
+├── CHANGELOG.md         ← what changed, by release
+├── CITATION.cff         ← how to cite it
+├── LICENSE              ← GPL-2.0-or-later
 └── README.md
 ```
 
@@ -278,5 +281,17 @@ Requires: **GSL** (`libgsl-dev`), gcc.
 
 ## License
 
-GPL v2 or later. Based on code by J.A. Mauricio (1995–2006),
-A.B. Treadway, and D.E. Guerrero.
+GPL v2 or later — the full text is in [LICENSE](LICENSE). Based on code by
+J.A. Mauricio (1995–2006), A.B. Treadway, and D.E. Guerrero.
+
+## Citing
+
+[CITATION.cff](CITATION.cff) has the machine-readable form. Cite the method
+paper — Mauricio (2006) — alongside the software; the software implements it and
+does not replace it.
+
+## Version
+
+**0.9**, and the reason it is not 1.0 is written next to the `#define` in
+`src/drvec.c`. Changes are in [CHANGELOG.md](CHANGELOG.md), defects in
+[docs/BUGS.md](docs/BUGS.md).

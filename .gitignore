@@ -22,3 +22,8 @@ __pycache__/
 *.txt
 !benchmark/*.results.txt
 !datasets/**/*.txt
+
+#  Los otros dos productos del programa (P6.7): la prevision fechada y los
+#  errores origen a origen.  Derivados como el .out, y por la misma razon.
+*.forecast
+*.recursive

@@ -39,13 +39,22 @@ optimisation hard.
 
 ## Status
 
-**Pre-beta.** The estimator works and is tested; the interpretable layer is
-partially built — restrictions on the adjustment coefficients, the long-run
-matrix `Π`, the triangularisation `Σ = PDP′` and the normalisation diagnostic are
-in; the rank test is asymptotic only. What is verified, what is not, and what is known to be wrong is
-in [DEVELOPMENT_RECORD.md](DEVELOPMENT_RECORD.md) — including the results that
-were *rejected* after measurement, which are the ones that say most about where
-the program stands.
+**0.9.** Not 1.0, and the reason is written next to the `#define` in
+`src/drvec.c` rather than left to be guessed: measured out of sample the program
+does **not** beat an ARIMA per series on its bank ([HOMOLOGATION.md](HOMOLOGATION.md)
+§4t), and its default specification changed on 2026-08-20. Neither is a defect
+to fix — they are the state of the knowledge, measured and written down — but
+neither is something to put a 1.0 on top of.
+
+The estimator works and is tested (235 checks, and 245 under `VALGRIND=1`); the
+interpretable layer is in — restrictions on the adjustment coefficients, the
+long-run matrix `Π`, the triangularisation `Σ = PDP′`, the normalisation
+diagnostic, and a default block of Wald tests of weak exogeneity and of
+exclusion from the cointegrating relations; the rank test is asymptotic, with an
+optional parametric bootstrap. What is verified, what is not, and what is known
+to be wrong is in [DEVELOPMENT_RECORD.md](DEVELOPMENT_RECORD.md) and
+[BUGS.md](BUGS.md) — including the results that were *rejected* after
+measurement, which are the ones that say most about where the program stands.
 
 The one number a user should carry: **the optimiser stops on «last global step
 failed to locate a lower point» in most configurations**, and moving a parameter
@@ -138,6 +147,7 @@ Read in this order for a first acquaintance; consult by column thereafter.
 | [VEC_EMBEDDING_PLAN.md](VEC_EMBEDDING_PLAN.md) | **planned work**: how `Π = ΛB′` is embedded on the certified gate, the boundary that blocks the usual bridge, and the order of work |
 | [TESTING.md](TESTING.md) | the test suite, and what it is measured to protect |
 | [DEVELOPMENT_RECORD.md](DEVELOPMENT_RECORD.md) | the development history: what was attempted, measured, and rejected |
+| [BUGS.md](BUGS.md) | the **defect register**: what each one was, how it was found, and what it cost. The numbering is the suite's single sequence, so a number never means two things |
 | [REFERENCES.md](REFERENCES.md) | the bibliography |
 
 **One convention governs the set.** Every quantitative result has a single home,

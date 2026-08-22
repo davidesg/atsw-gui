@@ -1874,6 +1874,127 @@ else
 fi
 echo
 
+# 8i. P6.8 — EL BLOQUE DE HIPOTESIS.  Lo que se comprueba es una IDENTIDAD y no
+#     un valor: con un solo parametro, el Wald ES el cuadrado del cociente t que
+#     el propio .out imprime al lado del coeficiente.  Si el mapa de indices que
+#     recoge la impresora se desalineara -- que es el fallo de 4.1, y por eso
+#     los indices se anotan en el recorrido que ya hay y no en uno nuevo --,
+#     esta igualdad se rompe inmediatamente.
+echo "[8i] the hypotheses about the relations (P6.8)"
+
+run "$MM" 2 1 1 -case 2 -fdhess
+if ! grep -aq 'HYPOTHESES ABOUT THE RELATIONS' "$TMP/case.out"; then
+    bad "hypothesis block" "not emitted"
+else
+    ok "the block is emitted by default, with no option asked for"
+
+    #  Lambda: dos filas, cada una un solo coeficiente -> chi2 = (coef/sd)^2.
+    lam=$(grep -a -A2 '^Lambda (M x r) =' "$TMP/case.out" | awk 'NR>=2{print $1, $3}' | tr -d ')')
+    wal=$(sed -n '/Weak exogeneity, one variable/,/Exclusion from/p' "$TMP/case.out" \
+          | awk '/Wald chi2/{gsub(",","",$4); print $4}')
+    n=0; worst=0
+    while read -r c sd; do
+        n=$((n+1))
+        w=$(echo "$wal" | sed -n "${n}p")
+        [ -z "$w" ] && continue
+        d=$(awk -v c="$c" -v s="$sd" -v w="$w" 'BEGIN{t=(c/s)^2; d=t-w; if(d<0)d=-d; print d}')
+        worst=$(awk -v a="$worst" -v b="$d" 'BEGIN{print (b>a)?b:a}')
+    done <<< "$lam"
+    if [ "$n" -ge 2 ] && awk -v w="$worst" 'BEGIN{exit !(w < 1e-3)}'; then
+        ok "weak-exogeneity Wald = (coef/sd)^2 on all $n rows of Lambda (max diff $worst)"
+    else bad "weak exogeneity vs t^2" "$n rows, worst difference $worst"; fi
+
+    #  B2: lo mismo, y ademas ata el OTRO extremo del vector de parametros.
+    b2=$(grep -a -A1 '^B2 (s x r) =' "$TMP/case.out" | awk 'NR==2{print $1, $3}' | tr -d ')')
+    wb=$(sed -n '/Exclusion from the cointegrating/,/Short-run dynamics/p' "$TMP/case.out" \
+         | awk '/Wald chi2/{gsub(",","",$4); print $4; exit}')
+    d=$(echo "$b2" | awk -v w="$wb" '{t=($1/$2)^2; d=t-w; if(d<0)d=-d; print d}')
+    if [ -n "$wb" ] && awk -v d="$d" 'BEGIN{exit !(d < 1e-3)}'; then
+        ok "exclusion Wald on B2 = (coef/sd)^2 too (diff $d), so both ends of x[] are aligned"
+    else bad "B2 exclusion vs t^2" "difference $d"; fi
+
+    #  Lambda = 0 se imprime, y se imprime DICIENDO que no es un contraste.
+    if grep -aq 'THIS IS NOT A TEST' "$TMP/case.out"; then
+        ok "Lambda = 0 is reported and labelled as not being a test (Davies)"
+    else bad "Lambda = 0" "reported without the boundary warning"; fi
+
+    #  Y el aviso de -fdhess NO sale cuando se pidio -fdhess.
+    if grep -aq 'Re-run with -fdhess' "$TMP/case.out"; then
+        bad "-fdhess reminder" "printed even though -fdhess was given"
+    else ok "the -fdhess reminder is absent when -fdhess was used"; fi
+fi
+
+#  Sin -fdhess el aviso SI tiene que salir: un p-valor que sale del factor
+#  acumulado por el BFGS no es el que se publica.
+run "$MM" 2 1 1 -case 2
+if grep -aq 'Re-run with -fdhess' "$TMP/case.out"; then
+    ok "and it is present when the covariance came from the BFGS factor"
+else bad "-fdhess reminder" "missing on the default run"; fi
+
+#  Con r = 0 no hay Lambda ni B: el bloque tiene que decirlo, no inventarlo.
+run "$MM" 2 1 0 -case 2
+if grep -aq 'r = 0: there is no error-correction term' "$TMP/case.out" \
+   && ! grep -aq 'Weak exogeneity' "$TMP/case.out"; then
+    ok "at r = 0 the block says the three VEC hypotheses do not exist"
+else bad "hypothesis block at r=0" "emitted weak exogeneity with no Lambda"; fi
+
+#  Con -fixb2 B2 esta impuesta: no hay covarianza con que contrastarla, y el
+#  bloque tiene que decir eso en vez de contrastar un parametro que no existe.
+run "$MM" 2 1 1 -case 2 -fixb2 0
+if grep -aq 'B2 is held fixed' "$TMP/case.out"; then
+    ok "with -fixb2 the exclusion test is declared unavailable, not faked"
+else bad "hypothesis block with -fixb2" "did not declare B2 as imposed"; fi
+echo
+
+# 8j. P6.7 — EL SISTEMA DE FICHEROS DE SALIDA.  El conjunto nombra cada producto
+#     por el mismo prefijo (drvarma v.04.1 drvarma.c:627 y 688), y hasta la 0.9
+#     drvec metia la prevision dentro del informe de la ESTIMACION y dejaba los
+#     errores origen a origen sin escribir salvo que el usuario nombrara la ruta.
+echo "[8j] the output file system: <base>.forecast and <base>.recursive (P6.7)"
+
+rm -f "$TMP/case.forecast" "$TMP/case.recursive"
+run "$MM" 2 1 1 -case 2 -f 5
+if [ -f "$TMP/case.forecast" ]; then
+    ok "-f writes <base>.forecast without being told where"
+    nrow=$(awk '/^  [0-9]/{c++} END{print c+0}' "$TMP/case.forecast")
+    if [ "$nrow" -eq 10 ]; then
+        ok "it carries H x M = 5 x 2 = 10 dated rows"
+    else bad ".forecast rows" "got $nrow, expected 10"; fi
+    #  La fecha: anual, y tiene que continuar donde acaba el .inp.
+    d1=$(awk '/^  [0-9]/{print $1; exit}' "$TMP/case.forecast")
+    hdr=$(awk '!/^\*/{n++; if(n==2){print $2, $4; exit}}' "$TMP/case.inp")
+    want=$(echo "$hdr" | awk '{print $2 + $1}')
+    if [ -n "$d1" ] && [ "$d1" = "$want" ]; then
+        ok "the first forecast is dated $d1, which continues the .inp exactly"
+    else bad ".forecast dating" "got $d1, expected $want"; fi
+    #  Y la banda tiene que ser el nivel +/- z s.e., que es lo unico que ata
+    #  las tres columnas entre si.
+    if awk '/^  [0-9]/{lo=$3; hi=$4; se=$5; lv=$2;
+              a=lv-1.959964*se-lo; b=hi-(lv+1.959964*se);
+              if(a<0)a=-a; if(b<0)b=-b; if(a>1e-5||b>1e-5) bad=1}
+            END{exit bad?1:0}' "$TMP/case.forecast"; then
+        ok "Low/High are the level +/- 1.96 s.e. on every row"
+    else bad ".forecast bands" "a row's band is not the level +/- 1.96 s.e."; fi
+else bad ".forecast" "not written"; fi
+
+run "$MM" 2 1 1 -case 2 -f 3 -estwin 40
+if [ -f "$TMP/case.recursive" ]; then
+    ok "-estwin writes <base>.recursive without -C"
+    hdr=$(grep -ac '^origin,h,series,actual,forecast,error$' "$TMP/case.recursive")
+    nrow=$(grep -avc '^#\|^origin' "$TMP/case.recursive")
+    if [ "$hdr" -eq 1 ] && [ "$nrow" -gt 0 ]; then
+        ok "with its provenance header and $nrow per-origin rows"
+    else bad ".recursive contents" "header $hdr, rows $nrow"; fi
+else bad ".recursive" "not written"; fi
+
+#  -C sigue siendo una redireccion, no una condicion.
+rm -f "$TMP/case.recursive" "$TMP/elsewhere.csv"
+run "$MM" 2 1 1 -case 2 -f 3 -estwin 40 -C "$TMP/elsewhere.csv"
+if [ -f "$TMP/elsewhere.csv" ] && [ ! -f "$TMP/case.recursive" ]; then
+    ok "-C redirects it instead of adding a second file"
+else bad "-C" "did not redirect the per-origin file"; fi
+echo
+
 # ================================================== 9 MEMORY (opt-in) ==
 # Off by default so `make test` is deterministic on any machine; run it with
 #     VALGRIND=1 make test

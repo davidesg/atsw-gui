@@ -2249,7 +2249,7 @@ static int estimation_failed = 0;
  *  report() writes.  A .out that separates its sections some other way is a
  *  .out a reader of the suite has to learn again.                            */
 #define EQBAR   "============================================================="
-#define DASHBAR "--------------------------------------------------------------------"
+#define DASHBAR "------------------------------------------------------------------------"
 
 /*  banner — a titled section, in the suite's shape.                          */
 static void banner(const char *title)
@@ -2268,15 +2268,31 @@ static const char *sig_code(real p)
          : (p < 0.05)  ? "*"   : (p < 0.10) ? "." : " ";
 }
 
+/*  sname / cname — the names the rows are labelled with.  A parameter that
+ *  says `Lambda[2,1]` needs a legend; one that says `Lambda[mink <- ec1]` does
+ *  not, and that is the whole difference between a table a VECM reader can use
+ *  and one they have to decode.  cname is for the components of
+ *  Ybar = (nabla Y2', W')': the differenced series, and the equilibrium
+ *  errors, which is what the W block is.                                     */
+static const char *sname(int i)
+{
+    static char buf[4][24];
+    static int  turn = 0;
+    char *b = buf[turn = (turn + 1) & 3];
+    snprintf(b, 24, "%.20s", (series_names && i >= 1 && i <= nser)
+                             ? series_names[i] : "y");
+    return b;
+}
+
 static void par_row(const char *label, real est, real se)
 {
     if (se > 0.0) {
         real t  = est / se;
         real pv = 2.0 * gsl_cdf_ugaussian_Q(fabs(t));
-        fprintf(outputv, "%-24s %13.6f %12.6f %8.3f %7.4f %s\n",
+        fprintf(outputv, "%-28s %13.6f %12.6f %8.3f %7.4f %s\n",
                 label, est, se, t, pv, sig_code(pv));
     } else {
-        fprintf(outputv, "%-24s %13.6f %12s %8s %7s\n",
+        fprintf(outputv, "%-28s %13.6f %12s %8s %7s\n",
                 label, est, "-", "-", "-");
     }
 }
@@ -4890,11 +4906,21 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
 
     /* ---- 4. The short-run dynamics -------------------------------------- */
     if (nf > 0 || q > 0) {
+        /*  WHAT F AND Theta ACT ON, said correctly.  This block used to warn
+         *  that they act on Ybar = (nabla Y2', W')'; they do NOT.  The
+         *  parameter vector printed here is the VEC form's, where
+         *  F(L) nabla Y_t = -Lambda(...) + Theta(L) A_t: F multiplies nabla Y
+         *  and Theta multiplies the innovations.  It is the -warma
+         *  parameterisation that lives in Ybar coordinates, and that route
+         *  prints its own block and never reaches here.  Corrected 2026-08-24;
+         *  the old line told the reader to distrust a Granger reading that is
+         *  in fact exactly what these tests are.                             */
         fprintf(outputv,
-            "\nShort-run dynamics\n"
-            "  ! F and Theta act on Ybar = (nabla Y2', W')', not on the levels: "
-            "a cross effect\n"
-            "    here is not Granger causality among the original series\n");
+            "\nShort-run dynamics   [F on nabla Y, Theta on the innovations]\n"
+            "  ! these are statements about nabla Y, not about the levels: "
+            "a variable can\n"
+            "    drive another's DIFFERENCES and still be tied to it only "
+            "through ec\n");
 
         if (nf > 0) {                              /* last lag of F     */
             k = 0;
@@ -4933,7 +4959,7 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
                     if (i != j && ix_Th[(kk - 1) * M + i][j] > 0)
                         idx[++k] = ix_Th[(kk - 1) * M + i][j];
         if (k > 0)
-            emit_wald(x, cov, idx, k, "All cross effects in Ybar jointly:",
+            emit_wald(x, cov, idx, k, "All cross effects jointly:",
                       "H0: every off-diagonal coefficient of F and Theta = 0",
                       "REJECT H0 -> the cross structure earns its parameters.",
                       "Cannot reject H0 -> a diagonal short run would do "
@@ -4955,13 +4981,13 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
                         idx[++k] = ix_Th[(kk - 1) * M + i][j];
             if (k > 0) {
                 snprintf(title, sizeof title,
-                         "%s: what the other components do to it:", nm);
+                         "D.%s: what the others do to it:", nm);
                 snprintf(h0, sizeof h0,
-                         "H0: no other component of Ybar enters equation %d", i);
+                         "H0: no other variable enters the equation of D.%s", nm);
                 snprintf(rej_s, sizeof rej_s,
-                         "REJECT H0 -> %s is driven by the others.", nm);
+                         "REJECT H0 -> D.%s is driven by the others.", nm);
                 snprintf(acc_s, sizeof acc_s,
-                         "Cannot reject H0 -> %s is not driven by the others.", nm);
+                         "Cannot reject H0 -> D.%s is not driven by the others.", nm);
                 emit_wald(x, cov, idx, k, title, h0, rej_s, acc_s);
             }
             k = 0;
@@ -4975,13 +5001,13 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
                         idx[++k] = ix_Th[(kk - 1) * M + j][i];
             if (k > 0) {
                 snprintf(title, sizeof title,
-                         "%s: what it does to the other components:", nm);
+                         "D.%s: what it does to the others:", nm);
                 snprintf(h0, sizeof h0,
-                         "H0: component %d enters no other equation", i);
+                         "H0: D.%s enters no other equation", nm);
                 snprintf(rej_s, sizeof rej_s,
-                         "REJECT H0 -> %s drives the others.", nm);
+                         "REJECT H0 -> D.%s drives the others.", nm);
                 snprintf(acc_s, sizeof acc_s,
-                         "Cannot reject H0 -> %s does not drive the others.", nm);
+                         "Cannot reject H0 -> D.%s does not drive the others.", nm);
                 emit_wald(x, cov, idx, k, title, h0, rej_s, acc_s);
             }
         }
@@ -5873,84 +5899,124 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
             }
 
         if (ii != npar + 1)
-            fprintf(stderr, "ERROR output: consumed %d of %d parameters\n",
-                    ii - 1, npar);
-
-        /* ================= THE PARAMETER TABLE (P10) ===================== */
-        /*  The suite's shape: one row per FREE parameter, with its standard
-         *  error, t and two-sided p.  It is built from the index maps the walk
-         *  above recorded, so a row exists exactly where a parameter does --
-         *  an entry the structure imposes has no row, which is the difference
-         *  between a zero that was estimated and a zero that was assumed.    */
         banner("Estimated Parameters and Standard Deviations");
-        fprintf(outputv, "\n%-24s %13s %12s %8s %7s\n",
+        /*  THE MAP TO THE READER'S NOTATION, once, at the head of the table.
+         *  Someone who knows VECM knows Johansen's
+         *      nabla Y_t = alpha beta' Y_{t-1} + Gamma_1 nabla Y_{t-1} + ...
+         *  and this program writes the same model in Mauricio's symbols.  Two
+         *  of them coincide (Gamma_i = F_i, beta = B) and one does NOT: the
+         *  equation carries -Lambda, so alpha = -Lambda and a POSITIVE Lambda
+         *  is error-correcting.  A reader who takes Lambda for alpha reads the
+         *  adjustment backwards, which is the one misreading this table has to
+         *  make impossible.                                                  */
+        fprintf(outputv,
+            "\n  F(L) nabla Y_t = -Lambda (B'Y_{t-1} - E[W]) + Theta(L) A_t,"
+            "   Pi = Lambda B'\n"
+            "  In Johansen's notation: Gamma_i = F_i and beta = B, but "
+            "alpha = -Lambda,\n"
+            "  so a POSITIVE Lambda is error-correcting (his alpha is "
+            "negative there).\n");
+        fprintf(outputv, "  Rows read `equation <- regressor`; D.x is nabla x,"
+                         " A.x its innovation,\n"
+                         "  and ec%s the equilibrium error%s B'Y_{t-1}.\n",
+                (r == 1) ? " is" : "1..ec%d are", (r == 1) ? "" : "s");
+        fprintf(outputv, "\n%-28s %13s %12s %8s %7s\n",
                 "Parameter", "Estimate", "Std.Error", "t-stat", "p-val");
         fprintf(outputv, "%s\n", DASHBAR);
         {
             char lb[64];
             int a2, b2i, k2;
 
-            for (a2 = 1; a2 <= nmu; a2++) {
-                if (global_case == 3 && a2 <= s)
-                    snprintf(lb, sizeof lb, "E[nablaY2]_%d", a2);
-                else
-                    snprintf(lb, sizeof lb, "E[W]_%d",
-                             (global_case == 3) ? a2 - s : a2);
-                par_row(lb, mu_m[a2], dev[ix_mu[a2]]);
+            if (nmu > 0) {
+                fprintf(outputv, "\nMean of the stationary vector Ybar\n");
+                for (a2 = 1; a2 <= nmu; a2++) {
+                    if (global_case == 3 && a2 <= s)
+                        snprintf(lb, sizeof lb, "  E[D.%s]", sname(a2));
+                    else
+                        snprintf(lb, sizeof lb, "  E[ec%d]",
+                                 (global_case == 3) ? a2 - s : a2);
+                    par_row(lb, mu_m[a2], dev[ix_mu[a2]]);
+                }
             }
-            if (psi_m) {
-                for (a2 = 1; a2 <= alpha_sa; a2++)
-                    for (b2i = 1; b2i <= r; b2i++) {
-                        snprintf(lb, sizeof lb, "psi[%d,%d]", a2, b2i);
-                        par_row(lb, psi_m[a2][b2i], dev[ix_psi[a2][b2i]]);
-                    }
-            } else {
-                for (a2 = 1; a2 <= nser; a2++)
-                    for (b2i = 1; b2i <= r; b2i++)
-                        if (ix_lam[a2][b2i]) {
-                            snprintf(lb, sizeof lb, "Lambda[%d,%d]", a2, b2i);
-                            par_row(lb, Lam_m[a2][b2i], dev[ix_lam[a2][b2i]]);
+            if (r > 0) {
+                fprintf(outputv, "\nAdjustment to the equilibrium error, "
+                                 "Lambda (alpha = -Lambda)\n");
+                if (psi_m) {
+                    fprintf(outputv, "  free part psi of alpha = A*psi; "
+                                     "Lambda = A*psi is in the model block\n");
+                    for (a2 = 1; a2 <= alpha_sa; a2++)
+                        for (b2i = 1; b2i <= r; b2i++) {
+                            snprintf(lb, sizeof lb, "  psi[%d <- ec%d]", a2, b2i);
+                            par_row(lb, psi_m[a2][b2i], dev[ix_psi[a2][b2i]]);
+                        }
+                } else {
+                    for (a2 = 1; a2 <= nser; a2++)
+                        for (b2i = 1; b2i <= r; b2i++)
+                            if (ix_lam[a2][b2i]) {
+                                snprintf(lb, sizeof lb, "  D.%s <- ec%d",
+                                         sname(a2), b2i);
+                                par_row(lb, Lam_m[a2][b2i], dev[ix_lam[a2][b2i]]);
+                            }
+                }
+            }
+            if (r > 0 && s > 0) {
+                fprintf(outputv, "\nCointegrating vectors, B = [I_r ; B2] "
+                                 "(beta), normalised on the Y1 block\n");
+                if (global_fixb2)
+                    fprintf(outputv, "  B2 held fixed: imposed, not estimated\n");
+                for (b2i = 1; b2i <= r; b2i++)
+                    for (a2 = 1; a2 <= s; a2++)
+                        if (ix_B2[a2][b2i]) {
+                            snprintf(lb, sizeof lb, "  %s in ec%d",
+                                     sname(a2), b2i);
+                            par_row(lb, B2m[a2][b2i], dev[ix_B2[a2][b2i]]);
                         }
             }
-            for (k2 = 1; k2 <= nf; k2++)
-                for (a2 = 1; a2 <= nser; a2++)
-                    for (b2i = 1; b2i <= nser; b2i++)
-                        if (ix_F[(k2-1)*nser + a2][b2i]) {
-                            snprintf(lb, sizeof lb, "F%d[%d,%d]", k2, a2, b2i);
-                            par_row(lb, F_m[k2][a2][b2i],
-                                    dev[ix_F[(k2-1)*nser + a2][b2i]]);
-                        }
-            for (k2 = 1; k2 <= global_q; k2++)
-                for (a2 = 1; a2 <= nser; a2++)
-                    for (b2i = 1; b2i <= nser; b2i++)
-                        if (ix_Th[(k2-1)*nser + a2][b2i]) {
-                            snprintf(lb, sizeof lb, "Theta%d[%d,%d]", k2, a2, b2i);
-                            par_row(lb, Th_m[k2][a2][b2i],
-                                    dev[ix_Th[(k2-1)*nser + a2][b2i]]);
-                        }
-            /*  Q: the free block is the variance ratios and the off-diagonals;
-             *  Q[1,1] = 1 is the normalisation and is not a parameter.       */
+            if (nf > 0) {
+                fprintf(outputv, "\nShort-run dynamics on nabla Y, "
+                                 "F(k) = Gamma_k\n");
+                for (k2 = 1; k2 <= nf; k2++)
+                    for (a2 = 1; a2 <= nser; a2++)
+                        for (b2i = 1; b2i <= nser; b2i++)
+                            if (ix_F[(k2-1)*nser + a2][b2i]) {
+                                snprintf(lb, sizeof lb, "  D.%s <- D.%s(-%d)",
+                                         sname(a2), sname(b2i), k2);
+                                par_row(lb, F_m[k2][a2][b2i],
+                                        dev[ix_F[(k2-1)*nser + a2][b2i]]);
+                            }
+            }
+            if (global_q > 0) {
+                fprintf(outputv, "\nMoving average on the innovations, "
+                                 "Theta(k)\n");
+                for (k2 = 1; k2 <= global_q; k2++)
+                    for (a2 = 1; a2 <= nser; a2++)
+                        for (b2i = 1; b2i <= nser; b2i++)
+                            if (ix_Th[(k2-1)*nser + a2][b2i]) {
+                                snprintf(lb, sizeof lb, "  D.%s <- A.%s(-%d)",
+                                         sname(a2), sname(b2i), k2);
+                                par_row(lb, Th_m[k2][a2][b2i],
+                                        dev[ix_Th[(k2-1)*nser + a2][b2i]]);
+                            }
+            }
+            /*  Q, not Sigma: the engine concentrates the scale, so what is
+             *  estimated is the covariance up to a positive constant, with
+             *  Q[1,1] = 1.  Sigma = sigma2 * Q is in the model block.        */
             {
                 int qi = ix_q0;
+                fprintf(outputv, "\nInnovation covariance up to scale, Q "
+                                 "(Sigma = sigma2 * Q, Q[1,1] = 1)\n");
                 for (a2 = 2; a2 <= nser; a2++) {
-                    snprintf(lb, sizeof lb, "Q[%d,%d]", a2, a2);
+                    snprintf(lb, sizeof lb, "  var %s", sname(a2));
                     par_row(lb, Qm[a2][a2], dev[qi++]);
                 }
                 if (!global_diag_cov)
                     for (a2 = 2; a2 <= nser; a2++)
                         for (b2i = 1; b2i < a2; b2i++) {
-                            snprintf(lb, sizeof lb, "Q[%d,%d]", a2, b2i);
+                            snprintf(lb, sizeof lb, "  cov %s, %s",
+                                     sname(a2), sname(b2i));
                             par_row(lb, Qm[a2][b2i], dev[qi++]);
                         }
             }
-            for (b2i = 1; b2i <= r; b2i++)
-                for (a2 = 1; a2 <= s; a2++)
-                    if (ix_B2[a2][b2i]) {
-                        snprintf(lb, sizeof lb, "B2[%d,%d]", a2, b2i);
-                        par_row(lb, B2m[a2][b2i], dev[ix_B2[a2][b2i]]);
-                    }
-            if (global_fixb2)
-                fprintf(outputv, "%-24s %13s\n", "B2", "(fixed)");
         }
         fprintf(outputv, "%s\n", DASHBAR);
         fprintf(outputv, "Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 "
@@ -7949,28 +8015,27 @@ int main(int argc, char *argv[])
      *  report.py:_header_block).  It says with what the file was produced,
      *  which is the one thing a results file cannot omit, and it says it the
      *  way the other programs of the suite say it.                           */
-    fprintf(outputv, "Program          : DRVEC %s (Mauricio 2006)\n", DRVEC_VERSION);
+    /*  WHAT THE MODEL IS AND HOW IT IS ESTIMATED, named properly.  The
+     *  program is not "Mauricio 2006": it is a compendium, and citing one
+     *  paper beside the name is not what a results file does.  What a results
+     *  file states is the MODEL and the ALGORITHM, which is what makes the
+     *  numbers reproducible: a VARMA-VEC estimated by exact unconditional
+     *  maximum likelihood, with Mauricio's algorithm for the transformation
+     *  and AS 311 for the exact likelihood of the resulting stationary
+     *  system.  The references are in docs/REFERENCES.md.                    */
+    fprintf(outputv, "Program          : DRVEC %s\n", DRVEC_VERSION);
     fprintf(outputv, "Input Data File  : %s\n", inputf);
     fprintf(outputv, "Output File      : %s\n", outputf);
-    fprintf(outputv, "Model: VEC(%d), stationary VARMA(%d,%d) on Ybar\n",
-            global_r, global_p, global_q);
-    fprintf(outputv, "Series           : M = %d, r = %d, s = M-r = %d\n",
-            nser, global_r, nser - global_r);
-    fprintf(outputv, "Deterministic    : case %d (%s)\n", global_case,
-            global_case == 1 ? "E[nablaY2]=0, E[W]=0"
-          : global_case == 2 ? "E[nablaY2]=0, E[W] free"
-                             : "E[nablaY2] free, E[W] free");
-    fprintf(outputv, "Include mean     : %s\n", global_include_mean ? "yes" : "no");
-    fprintf(outputv, "Diagonal AR      : %s\n", global_diag_ar  ? "yes" : "no");
-    fprintf(outputv, "Diagonal MA      : %s\n", global_diag_ma  ? "yes" : "no");
-    fprintf(outputv, "Diagonal Cov     : %s\n", global_diag_cov ? "yes" : "no");
-    fprintf(outputv, "Estimation method: %d\n", met);
-    fprintf(outputv, "Frequency        : %d\n", data_freq);
-    fprintf(outputv, "Start            : %d %d\n", data_start_sub, data_start_year);
-    fprintf(outputv, "Series names     :");
-    { int j; for (j = 1; j <= nser; j++)
-        fprintf(outputv, " %s", series_names ? series_names[j] : "y"); }
-    fprintf(outputv, "\n");
+    fprintf(outputv, "Model            : VARMA-VEC(%d,%d), M = %d series, "
+                     "cointegration rank r = %d\n",
+            global_p, global_q, nser, global_r);
+    fprintf(outputv, "Estimation       : %s\n", (met == 2)
+            ? "conditional (approximate) maximum likelihood"
+            : "exact unconditional maximum likelihood, Mauricio's algorithm");
+    fprintf(outputv, "Deterministic    : case %d -- %s\n", global_case,
+            global_case == 1 ? "E[nabla Y2] = 0, E[W] = 0"
+          : global_case == 2 ? "E[nabla Y2] = 0, E[W] free"
+                             : "E[nabla Y2] free, E[W] free");
     /* The deterministic terms come off the LEVELS, before nabla Y2 and W are
        formed -- which is where fue's cast removes them too, its block [6] comes
        before [7] -- and that is why the levels have to be rebuilt afterwards.
@@ -7983,10 +8048,44 @@ int main(int argc, char *argv[])
         build_y2_levels();
     }
 
-    fprintf(outputv, "Data layout      : %s\n",
-            global_levels ? "all series in levels"
-                          : "legacy, cols 1..s pre-differenced (-differenced)");
-    fprintf(outputv, "Observations     : %d (raw %d)\n", nobs, nobs_raw);
+    /*  The structure, in ONE line: three "Diagonal X : no" lines said less
+     *  than this does, and the MA class -- which is what actually moved on
+     *  2026-08-20 -- gets named rather than deduced.                         */
+    fprintf(outputv, "Structure        : F %s, Theta %s, Sigma %s\n",
+            global_diag_ar ? "diagonal" : "free",
+            global_q == 0 ? "absent (q = 0)"
+          : global_warma  ? "diagonal in the W block (-warma)"
+          : mawarma_on()  ? "= [T11  T11*B2' ; 0  0] (-mawarma)"
+          : global_matri  ? "= [T11 T12 ; 0 T22] (-matri)"
+          : global_diag_ma ? "diagonal (-diagma)"
+          : marow_on()    ? (default_marow ? "= [T11 T12 ; 0 0] (default)"
+                                           : "= [T11 T12 ; 0 0] (-marow)")
+                          : "free (-mafree)",
+            global_diag_cov ? "diagonal" : "free");
+    fprintf(outputv, "Series           :");
+    { int j; for (j = 1; j <= nser; j++)
+        fprintf(outputv, " %s", series_names ? series_names[j] : "y"); }
+    fprintf(outputv, "   (%d in the nabla Y2 block, %d in Y1)\n",
+            nser - global_r, global_r);
+    fprintf(outputv, "Sample           : %d observations from %d",
+            nobs, data_start_year);
+    if (data_freq > 1) fprintf(outputv, "/%d", data_start_sub);
+    fprintf(outputv, ", %s (raw %d)\n",
+            data_freq == 1 ? "annual" : data_freq == 4 ? "quarterly"
+          : data_freq == 12 ? "monthly" : "irregular", nobs_raw);
+    if (!global_levels)
+        fprintf(outputv, "  ! legacy layout: cols 1..s arrive already "
+                         "differenced (-differenced)\n");
+    /*  A Box-Cox or a differencing order declared in the .inp is NOT applied
+     *  on this route -- drvec forms nabla Y2 itself and takes the series as
+     *  they come.  Reading a directive and ignoring it in silence is the one
+     *  thing this program refuses to do everywhere else.                     */
+    if (!pre_route && (fabs(trans_lambda - 1.0) > 1.0e-12 || trans_d || trans_D))
+        fprintf(outputv, "  ! the .inp declares lambda = %g, d = %d, D = %d, and "
+                         "this route applies NONE of them:\n"
+                         "    supply the series already transformed, or use the "
+                         ".pre route, which does apply them\n",
+                trans_lambda, trans_d, trans_D);
 
     /*  P4 — WHICH CLASS IS BEING ESTIMATED, said in the header and not
      *  deduced from the flags.  The default moved on 2026-08-20 and an .out
@@ -8002,7 +8101,6 @@ int main(int argc, char *argv[])
                 ? "Theta = [T11  T12 ; 0  0]  (the default since 2026-08-20)"
                 : "Theta = [T11  T12 ; 0  0]  (-marow)")
           :                  "Theta FREE  (-mafree; the default before 2026-08-20)";
-        fprintf(outputv, "MA structure     : %s\n", cls);
         if (!quiet_mode) printf("MA     : %s\n", cls);
     }
 

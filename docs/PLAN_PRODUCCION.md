@@ -1209,3 +1209,66 @@ un bloque dentro de `report_fit` lo mete o lo saca del `if (!warma_done)`.
 Los dos los encontró la comparación de números, no la lectura. Y las cinco
 reservas del paso de lectura las cazó el bloque de valgrind en cuanto
 existieron.
+
+### 12.1 La cabecera y los parámetros, revisados el 2026-08-24
+
+**Fuera «(Mauricio 2006)» del nombre.** `drvec` es el compendio de muchos
+artículos, y poner uno al lado del nombre no es lo que hace un fichero de
+resultados. Lo que sí es usual, y lo que hace reproducible una cifra, es
+declarar **el modelo y el algoritmo**:
+
+```
+Program          : DRVEC 0.9
+Model            : VARMA-VEC(2,1), M = 2 series, cointegration rank r = 1
+Estimation       : exact unconditional maximum likelihood, Mauricio's algorithm
+```
+
+Y la cabecera se revisó entera con el mismo criterio — que cada línea diga algo
+que el lector necesite:
+
+- `Include mean` era redundante con el caso determinista, que ya lo implica: se
+  quita.
+- Las tres líneas `Diagonal AR/MA/Cov : no` dicen menos que una que nombre la
+  estructura: `Structure : F free, Theta = [T11 T12 ; 0 0] (default), Sigma free`.
+- `Frequency : 1` y `Start : 1 1850` se juntan en `Sample : 61 observations
+  from 1850, annual (raw 62)`.
+- Y **un aviso que faltaba**: la ruta `.inp` LEE `lambda`, `d` y `D` de la
+  cabecera del fichero y **no aplica ninguno** — `drvec` forma ∇Y₂ él mismo y
+  toma las series como vienen. Leer una directiva y desatenderla en silencio es
+  lo único que este programa se niega a hacer en todas partes menos aquí. Ahora
+  lo dice, y remite a la ruta `.pre`, que sí las aplica.
+
+### 12.2 Los parámetros: la propuesta, y por qué
+
+El lector al que va dirigido sabe la forma de Johansen:
+
+```
+  nabla Y_t = alpha beta' Y_{t-1} + Gamma_1 nabla Y_{t-1} + ... + eps_t
+```
+
+y la tabla le daba `Lambda[2,1]`, `F1[1,2]`, `B2[1,1]`, `Q[2,2]`. Tres cosas se
+lo impedían, y sólo la primera es cosmética:
+
+1. **Los símbolos son los de Mauricio, no los suyos.**
+2. **Los índices son desnudos**: `Lambda[2,1]` exige saber que la fila 2 es
+   `mink` y la columna 1 la primera relación.
+3. **La convención de signo estaba callada, y es la que muerde.** El modelo
+   lleva `−Λ`, o sea **α = −Λ**: quien lea `Λ = +0.61` como α lee el ajuste al
+   revés. `Γ_i = F_i` y `β = B` sí coinciden.
+
+La propuesta, y lo construido:
+
+- **bloques con nombre en palabras**, y el símbolo de Mauricio al lado;
+- **filas etiquetadas por lo que son**, no por dónde están: `D.mink <- ec1`,
+  `muskrat in ec1`, `D.muskrat <- D.mink(-1)`, `cov mink, muskrat`;
+- **el mapa a Johansen, una vez, en la cabecera de la tabla**, incluida la
+  frase que evita el error de signo: *a POSITIVE Lambda is error-correcting*.
+
+**Y un defecto que la revisión destapó.** El bloque Wald avisaba: «F and Theta
+act on Ybar = (nabla Y2', W')', not on the levels: a cross effect here is not
+Granger causality». Es **falso** para la parametrización que ese bloque imprime:
+el vector que recorre es el de la forma VEC, donde `F(L)∇Y_t = −Λ(·) + Θ(L)A_t`,
+así que F multiplica ∇Y y Θ los choques. Quien vive en coordenadas Ȳ es `-warma`,
+que imprime su propio bloque y nunca llega ahí. El aviso le decía al lector que
+desconfiara de una lectura de Granger que es exactamente la que esos contrastes
+permiten. Corregido, y con él las etiquetas de los contrastes direccionales.

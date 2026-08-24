@@ -420,7 +420,7 @@ fi
 #     a flat-ish surface, hence a 5% tolerance rather than equality.  This is the
 #     invariant F1 was really about: the dispersion across equivalent set-ups.
 sigdet2() {   # prints |Sigma| for an M=2 run, from the Sigma = sigma2*Q block
-    sed -n '/^Sigma = sigma2 \* Q/,/^B2/p' "$1" | grep -aE '^ +-?[0-9]' \
+    sed -n '/^Sigma = sigma2 \* Q:/,/^ *|Sigma|/p' "$1" | grep -aE '^ +-?[0-9]' \
       | awk 'NR==1{a=$1} NR==2{b=$1; c=$2} END{if(a=="")print ""; else printf "%.9f", a*c-b*b}'
 }
 run "$MM"    2 1 1 -case 2;               d_lev=$(sigdet2 "$TMP/case.out")
@@ -1246,7 +1246,7 @@ fi
 #     flipping its sign raises 0 failures on M = 2 and 1 on M = 3.
 ldl_reconstruction_error() {   # <out file> -> worst absolute error
     awk '
-        /^Sigma = sigma2 \* Q/  {mode="S"; n=0; next}
+        /^Sigma = sigma2 \* Q:/ {mode="S"; n=0; next}
         /^P matrix/             {mode="P"; n=0; next}
         /^D vector/             {mode="D"; next}
         mode=="S" && /^ +[-0-9]/ {n++; for(j=1;j<=NF;j++) S[n","j]=$j; M=n; next}
@@ -1624,8 +1624,8 @@ else bad "forecast self-check, -m 2" "$sc2, expected machine zero"; fi
 #  La banda a un paso contra la Sigma del vector de parametros, permutada.
 for cfg in "-case 2" "-case 3" "-case 2 -mafree"; do
     run "$MM" 2 1 1 $cfg -f 3
-    s11=$(grep -a -A2 'Sigma = sigma2 \* Q' "$TMP/case.out" | awk 'NR==2{print $1}')
-    s22=$(grep -a -A2 'Sigma = sigma2 \* Q' "$TMP/case.out" | awk 'NR==3{print $2}')
+    s11=$(grep -a -A2 '^Sigma = sigma2 \* Q:' "$TMP/case.out" | awk 'NR==2{print $1}')
+    s22=$(grep -a -A2 '^Sigma = sigma2 \* Q:' "$TMP/case.out" | awk 'NR==3{print $2}')
     e1=$(grep -a -A1 '^   h ' "$TMP/case.out" | awk 'NR==2{print $3}')
     e2=$(grep -a -A1 '^   h ' "$TMP/case.out" | awk 'NR==2{print $5}')
     if [ -z "$s11" ] || [ -z "$e1" ]; then
@@ -1888,7 +1888,8 @@ else
     ok "the block is emitted by default, with no option asked for"
 
     #  Lambda: dos filas, cada una un solo coeficiente -> chi2 = (coef/sd)^2.
-    lam=$(grep -a '^Lambda\[' "$TMP/case.out" | awk '{print $2, $3}')
+    lam=$(sed -n '/^Adjustment to the equilibrium error/,/^$/p' "$TMP/case.out" \
+          | grep -aE '<- ec' | awk '{print $4, $5}')
     wal=$(sed -n '/Weak exogeneity, one variable/,/Exclusion from/p' "$TMP/case.out" \
           | awk '/Wald chi2/{gsub(",","",$4); print $4}')
     n=0; worst=0
@@ -1904,7 +1905,8 @@ else
     else bad "weak exogeneity vs t^2" "$n rows, worst difference $worst"; fi
 
     #  B2: lo mismo, y ademas ata el OTRO extremo del vector de parametros.
-    b2=$(grep -a '^B2\[' "$TMP/case.out" | awk '{print $2, $3}')
+    b2=$(sed -n '/^Cointegrating vectors, B =/,/^$/p' "$TMP/case.out" \
+         | grep -aE ' in ec' | awk '{print $4, $5}')
     wb=$(sed -n '/Exclusion from the cointegrating/,/Short-run dynamics/p' "$TMP/case.out" \
          | awk '/Wald chi2/{gsub(",","",$4); print $4; exit}')
     d=$(echo "$b2" | awk -v w="$wb" '{t=($1/$2)^2; d=t-w; if(d<0)d=-d; print d}')

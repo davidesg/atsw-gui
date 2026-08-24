@@ -730,12 +730,20 @@ separated by a line of `=`:
 |---|---|
 | header | what the run was: model, rank, deterministic case, MA class, flags, calendar, series, observations |
 | `OPTIMIZER ...` | the engine's own convergence banner, then the note, `sigma2`, `logelf`, `npar`, AIC, BIC |
-| `Estimated Parameters and Standard Deviations` | one row per **free** parameter: estimate, standard error, `t`, `p`, significance codes. A structural zero has no row — that is the difference between a zero that was estimated and one that was assumed |
-| `Vector Error Correction Model` | the matrices: `E[W]`, `Lambda`, `F(k)`, `theta(k)`, `B2`, `B`, `Pi` with its eigenvalues, `Q`, `Sigma`, `|Sigma|`, `P`, `D` |
+| `Estimated Parameters and Standard Deviations` | one row per **free** parameter, grouped by block and named: `D.mink <- ec1`, `muskrat in ec1`, `D.muskrat <- D.mink(-1)`. Estimate, standard error, `t`, `p`, significance codes. A structural zero has no row — that is the difference between a zero that was estimated and one that was assumed |
+| `Vector Error Correction Model` | the matrices: `E[W]`, `alpha`, `Gamma(k)`, `theta(k)`, `beta_2`, `beta`, `Pi` with its eigenvalues, `Q`, `Sigma`, `|Sigma|`, `P`, `D` |
 | `Cointegration Diagnostics` | the rank condition with its verdict, and the normalisation share |
 | `Joint Hypothesis Tests (Wald)` | each `H0`, its χ², its p and the conclusion |
 | `Multivariate Residual Diagnostics` | Hosking, Jarque-Bera, and the `R(k)` matrices |
 | roots, then `Forecast` | inverse roots and the forecast table |
+
+**The report is in Johansen's notation, not the algorithm's.** Someone who
+knows VAR-VECM should not have to translate: `alpha`, `beta`, `Gamma(k)`,
+`Pi = alpha beta'`. Internally the model is parameterised Mauricio's way — that
+is what makes the exact likelihood computable — and the map is
+`alpha = -Lambda`, `beta = B`, `Gamma_k = F_k`, documented in
+[MODEL.md](MODEL.md). **The sign matters**: the internal equation carries
+`-Lambda`, so a *negative* `alpha` is error-correcting, as in Johansen.
 
 **The `.out` carries results and tests, not commentary.** Lines beginning `!`
 are the exception, and there are four of them: they mark the cases where a

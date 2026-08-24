@@ -1219,7 +1219,7 @@ declarar **el modelo y el algoritmo**:
 
 ```
 Program          : DRVEC 0.9
-Model            : VARMA-VEC(2,1), M = 2 series, cointegration rank r = 1
+Model            : VARMA-VECM(2,1), M = 2 series, cointegration rank r = 1
 Estimation       : exact unconditional maximum likelihood, Mauricio's algorithm
 ```
 
@@ -1272,3 +1272,35 @@ así que F multiplica ∇Y y Θ los choques. Quien vive en coordenadas Ȳ es `-w
 que imprime su propio bloque y nunca llega ahí. El aviso le decía al lector que
 desconfiara de una lectura de Granger que es exactamente la que esos contrastes
 permiten. Corregido, y con él las etiquetas de los contrastes direccionales.
+
+### 12.3 El nombre, y la notación del informe — 2026-08-24
+
+**`VARMA-VECM`, no `VARMA-VEC`.** `VECM` es el acrónimo que está en el índice de
+todos los manuales — Johansen, Lütkepohl — y es el que trae en la cabeza quien
+llega desde un VAR-VECM; `VEC` a secas es sobre todo de EViews, y además se lee
+mal («vector»). Que la `M` de «Model» quede pegada a un compuesto es un precio
+menor. La única salvedad, y se dice por precisión y no por duda: en rigor el
+modelo es la *forma de corrección de error de un VARMA*, y `VARMA-VECM` es una
+etiqueta, no una afirmación de que exista una clase con ese nombre.
+
+**Y el informe pasa entero a la notación de Johansen.** El criterio es el coste
+de entrada: quien conoce los mnemotécnicos de VAR-VECM tiene que poder leer esto
+sin traducir. El cast a VARMA es lo que hace calculable la verosimilitud exacta,
+pero es **interior**: no tiene por qué aparecer en la salida.
+
+| en el informe | interno (Mauricio) | |
+|---|---|---|
+| `alpha` | `-Lambda` | **el signo cambia**: el modelo lleva `−Λ` |
+| `beta` | `B = [I_r ; B2]` | igual |
+| `Gamma(k)` | `F_k` | igual |
+| `Theta(k)` | `Θ_k` | igual |
+| `Pi = alpha beta'` | `Λ B'` | **el signo cambia** |
+
+Lo que se movió en el `.out`, y **sólo eso**: el signo de las filas de `alpha` y
+de `Pi`, con sus `t` (el error estándar y el `p` no cambian, porque un Wald es
+el cuadrado del cociente), y el nombre de `sigma_min(alpha_perp' Θ(1)
+beta_perp)`, cuyo valor es idéntico —`α_perp` y `Λ_perp` generan el mismo
+espacio—. Comprobado por diferencia línea a línea contra el informe anterior.
+
+El autovalor de `Pi` pasa así de `+0.557` a `−0.557`, que es como se lee: una
+velocidad de ajuste. Antes, quien lo tomara por el de Johansen lo leía al revés.

@@ -4825,7 +4825,7 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
             if (wald_sub(x, cov, idx, k, &chi2, &df) == 0)
                 fprintf(outputv,
                     "\nError-correction term as a whole\n"
-                    "  H0: Lambda = 0\n"
+                    "  H0: alpha = 0\n"
                     "  Wald chi2(%d) = %.4f, p-value = %.4f\n"
                     "  ! NOT A TEST: under H0, B is unidentified (Davies).  "
                     "Use -lrtest -bootstrap\n",
@@ -4833,14 +4833,14 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
         } else {
             fprintf(outputv,
                 "\nError-correction term as a whole\n"
-                "  Lambda is not free (-alpha imposes alpha = A*psi): "
+                "  alpha is not free (-alpha imposes alpha = A*psi): "
                 "nothing to test\n");
         }
 
         /* ---- 2. Exogeneidad debil, fila a fila --------------------------- */
         fprintf(outputv,
             "\nWeak exogeneity, one variable at a time"
-            "   [H0: row i of Lambda = 0, chi2(%d)]\n", r);
+            "   [H0: row i of alpha = 0, chi2(%d)]\n", r);
         for (i = 1; i <= M; i++) {
             k = 0;
             for (j = 1; j <= r; j++)
@@ -4865,9 +4865,10 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
         if (k > 0) {
             fprintf(outputv,
                 "\nExclusion from the cointegrating relations"
-                "   [H0: row i of B2 = 0, chi2(%d)]\n"
-                "  only the %d nabla Y2 variable%s can be excluded: B = [I_r ; B2]"
-                " normalises on Y1\n", r, s, (s == 1) ? "" : "s");
+                "   [H0: row i of beta_2 = 0, chi2(%d)]\n"
+                "  only the %d nabla Y2 variable%s can be excluded: "
+                "beta = [I_r ; beta_2] normalises on Y1\n",
+                r, s, (s == 1) ? "" : "s");
             for (i = 1; i <= s; i++) {
                 k = 0;
                 for (j = 1; j <= r; j++)
@@ -4875,7 +4876,7 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
                 if (k < 1) continue;
                 nm = series_names ? series_names[i] : "y";
                 snprintf(title, sizeof title, "%s:", nm);
-                snprintf(h0, sizeof h0, "H0: row %d of B2 = 0", i);
+                snprintf(h0, sizeof h0, "H0: row %d of beta_2 = 0", i);
                 snprintf(rej_s, sizeof rej_s,
                          "REJECT H0 -> %s belongs in the long-run relation.", nm);
                 snprintf(acc_s, sizeof acc_s,
@@ -4895,7 +4896,7 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
         } else if (global_fixb2) {
             fprintf(outputv,
                 "\nExclusion from the cointegrating relations\n"
-                "  B2 is held fixed (-fixb2): imposed, not estimated, so there "
+                "  beta_2 is held fixed (-fixb2): imposed, not estimated, so there "
                 "is nothing to test\n");
         }
     } else {
@@ -5910,15 +5911,15 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
          *  adjustment backwards, which is the one misreading this table has to
          *  make impossible.                                                  */
         fprintf(outputv,
-            "\n  F(L) nabla Y_t = -Lambda (B'Y_{t-1} - E[W]) + Theta(L) A_t,"
-            "   Pi = Lambda B'\n"
-            "  In Johansen's notation: Gamma_i = F_i and beta = B, but "
-            "alpha = -Lambda,\n"
-            "  so a POSITIVE Lambda is error-correcting (his alpha is "
-            "negative there).\n");
+            "\n  nabla Y_t = alpha (beta'Y_{t-1} - E[W]) + Gamma_1 nabla Y_{t-1}"
+            " + ... + Theta(L) A_t\n"
+            "  with Pi = alpha beta' of rank r, and beta = [I_r ; beta_2] "
+            "normalised on Y1.\n"
+            "  Johansen's notation throughout: a NEGATIVE alpha is "
+            "error-correcting.\n");
         fprintf(outputv, "  Rows read `equation <- regressor`; D.x is nabla x,"
                          " A.x its innovation,\n"
-                         "  and ec%s the equilibrium error%s B'Y_{t-1}.\n",
+                         "  and ec%s the equilibrium error%s beta'Y_{t-1}.\n",
                 (r == 1) ? " is" : "1..ec%d are", (r == 1) ? "" : "s");
         fprintf(outputv, "\n%-28s %13s %12s %8s %7s\n",
                 "Parameter", "Estimate", "Std.Error", "t-stat", "p-val");
@@ -5939,8 +5940,8 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
                 }
             }
             if (r > 0) {
-                fprintf(outputv, "\nAdjustment to the equilibrium error, "
-                                 "Lambda (alpha = -Lambda)\n");
+                fprintf(outputv, "\nAdjustment coefficients, alpha (M x r)"
+                                 "   [negative = error-correcting]\n");
                 if (psi_m) {
                     fprintf(outputv, "  free part psi of alpha = A*psi; "
                                      "Lambda = A*psi is in the model block\n");
@@ -5955,15 +5956,23 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
                             if (ix_lam[a2][b2i]) {
                                 snprintf(lb, sizeof lb, "  D.%s <- ec%d",
                                          sname(a2), b2i);
-                                par_row(lb, Lam_m[a2][b2i], dev[ix_lam[a2][b2i]]);
+                                /*  REPORTED AS alpha, WHICH IS -Lambda.  The
+                                 *  parameter vector carries Mauricio's Lambda
+                                 *  and the model equation carries -Lambda; a
+                                 *  reader who knows VECM knows alpha, and the
+                                 *  cast to a VARMA is an internal matter.
+                                 *  Only the sign moves: the standard error is
+                                 *  the same and so is |t|.                   */
+                                par_row(lb, -Lam_m[a2][b2i], dev[ix_lam[a2][b2i]]);
                             }
                 }
             }
             if (r > 0 && s > 0) {
-                fprintf(outputv, "\nCointegrating vectors, B = [I_r ; B2] "
-                                 "(beta), normalised on the Y1 block\n");
+                fprintf(outputv, "\nCointegrating vectors, beta = [I_r ; "
+                                 "beta_2], normalised on the Y1 block\n");
                 if (global_fixb2)
-                    fprintf(outputv, "  B2 held fixed: imposed, not estimated\n");
+                    fprintf(outputv, "  beta_2 held fixed: imposed, not "
+                                     "estimated\n");
                 for (b2i = 1; b2i <= r; b2i++)
                     for (a2 = 1; a2 <= s; a2++)
                         if (ix_B2[a2][b2i]) {
@@ -5973,8 +5982,8 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
                         }
             }
             if (nf > 0) {
-                fprintf(outputv, "\nShort-run dynamics on nabla Y, "
-                                 "F(k) = Gamma_k\n");
+                fprintf(outputv, "\nShort-run dynamics, Gamma(k) on "
+                                 "nabla Y_{t-k}\n");
                 for (k2 = 1; k2 <= nf; k2++)
                     for (a2 = 1; a2 <= nser; a2++)
                         for (b2i = 1; b2i <= nser; b2i++)
@@ -6026,26 +6035,34 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
                              "factor; -fdhess uses the Hessian at the optimum\n");
 
 
-        /* ================= THE MODEL, IN VEC FORM ======================== */
+        /* ================= THE MODEL, IN VECM FORM ======================= */
+        /*  Reported in Johansen's notation, which is the one a reader of this
+         *  class of model already has: alpha = -Lambda, beta = B, Gamma_k =
+         *  F_k.  The internal parameterisation is Mauricio's -- it is what
+         *  makes the exact likelihood computable -- and it stays in the
+         *  parameter vector, in the source and in docs/MODEL.md.  A report
+         *  that speaks the algorithm's notation charges the reader for an
+         *  internal decision.                                                */
         banner("Vector Error Correction Model");
-        fprintf(outputv, "\n  (I - F1 L - ... - F_{p-1} L^{p-1}) nabla Y_t ="
-                         "\n      -Lambda (B' Y_{t-1} - E[W_t])"
-                         " + (I - Theta1 L - ...) A_t\n\n");
+        fprintf(outputv, "\n  nabla Y_t = alpha (beta'Y_{t-1} - E[W])"
+                         " + Gamma_1 nabla Y_{t-1} + ... + Theta(L) A_t\n"
+                         "  Theta(L) = I - Theta1 L - ... - Theta_q L^q,"
+                         "   Pi = alpha beta'\n\n");
         if (nmu > 0) {
             fprintf(outputv, "%s vector:\n",
                     global_case == 3 ? "E[nablaY2] and E[W]" : "E[W]");
             for (int a2 = 1; a2 <= nmu; a2++)
                 fprintf(outputv, "  %12.6f\n", mu_m[a2]);
         }
-        fprintf(outputv, "Lambda matrix (M x r):\n");
+        fprintf(outputv, "alpha matrix (M x r):\n");
         for (int a2 = 1; a2 <= nser; a2++) {
             fprintf(outputv, "  ");
             for (int b2i = 1; b2i <= r; b2i++)
-                fprintf(outputv, "%12.6f", Lam_m[a2][b2i]);
+                fprintf(outputv, "%12.6f", -Lam_m[a2][b2i]);
             fprintf(outputv, "\n");
         }
         for (int k2 = 1; k2 <= nf; k2++) {
-            fprintf(outputv, "F(%d) matrix:\n", k2);
+            fprintf(outputv, "Gamma(%d) matrix:\n", k2);
             for (int a2 = 1; a2 <= nser; a2++) {
                 fprintf(outputv, "  ");
                 for (int b2i = 1; b2i <= nser; b2i++)
@@ -6066,7 +6083,7 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
             }
         }
         free_tensor(Th_m, 1, (global_q > 0 ? global_q : 1), 1, nser, 1, nser);
-        fprintf(outputv, "B2 matrix (s x r)%s:\n",
+        fprintf(outputv, "beta_2 matrix (s x r)%s:\n",
                 global_fixb2 ? (global_fixb2_given
                     ? "  [FIXED at the value given]"
                     : "  [FIXED at its static-OLS estimate: data-chosen, so an"
@@ -6078,7 +6095,7 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
             fprintf(outputv, "\n");
         }
 
-        fprintf(outputv, "B matrix (M x r), B = [I_r ; B2]:\n");
+        fprintf(outputv, "beta matrix (M x r), beta = [I_r ; beta_2]:\n");
         for (int row = 1; row <= nser; row++) {
             fprintf(outputv, "  ");
             for (int c = 1; c <= r; c++)
@@ -6101,11 +6118,14 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
                     real acc = 0.0;
                     for (j = 1; j <= r; j++) {
                         real Bbj = (b <= r) ? ((b == j) ? 1.0 : 0.0) : B2m[b - r][j];
-                        acc += Lam_m[a][j] * Bbj;
+                        /*  alpha = -Lambda, so Pi = alpha beta' = -Lambda B'.
+                         *  Reported with Johansen's sign, which is the one
+                         *  whose eigenvalues read as adjustment speeds.      */
+                        acc -= Lam_m[a][j] * Bbj;
                     }
                     Pi[a][b] = acc;
                 }
-            fprintf(outputv, "Pi = Lambda B' matrix (M x M), the long run:\n");
+            fprintf(outputv, "Pi = alpha beta' matrix (M x M), the long run:\n");
             for (a = 1; a <= nser; a++) {
                 fprintf(outputv, "  ");
                 for (b = 1; b <= nser; b++) fprintf(outputv, "%12.6f", Pi[a][b]);
@@ -6257,8 +6277,8 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
          *  which is the one vec_shootx left just before.                     */
         if (global_r > 0 && global_q > 0 && granger_sv >= 0.0) {
             fprintf(outputv,
-                "\nRank condition (Granger): sigma_min(Lambda_perp' Theta(1) "
-                "B_perp) = %.3e\n", granger_sv);
+                "\nRank condition (Granger): sigma_min(alpha_perp' Theta(1) "
+                "beta_perp) = %.3e\n", granger_sv);
             if (granger_sv < global_rankadm_tol) {
                 /*  AND TO THE TERMINAL AS WELL.  A fit that denies its own rank
                  *  is not a worse fit: it is the fit of another model, and
@@ -6268,8 +6288,8 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
                  *  the PRESENTATION stops offering as an answer something the
                  *  theory does not license (docs/THEORY.md, corollary 5.1).  */
                 if (!quiet_mode)
-                    printf("\n  *** WARNING: sigma_min(Lambda_perp' Theta(1) "
-                           "B_perp) = %.3e < %.1e\n"
+                    printf("\n  *** WARNING: sigma_min(alpha_perp' Theta(1) "
+                           "beta_perp) = %.3e < %.1e\n"
                            "      This fit DENIES THE RANK it was estimated "
                            "at: it is not a\n"
                            "      worse fit, it is the fit of another model.  Its "
@@ -6347,7 +6367,7 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
                     fprintf(stderr,
                         "WARNING: cointegrating relation %d barely involves the "
                         "Y1 block (%.1f%%).\n"
-                        "         B = [I_r; B2] normalises on Y1, so this fit "
+                        "         beta = [I_r; beta_2] normalises on Y1, so this fit "
                         "may be describing\n"
                         "         a relation among the other series with an "
                         "inflated B2.  Consider\n"
@@ -8026,7 +8046,7 @@ int main(int argc, char *argv[])
     fprintf(outputv, "Program          : DRVEC %s\n", DRVEC_VERSION);
     fprintf(outputv, "Input Data File  : %s\n", inputf);
     fprintf(outputv, "Output File      : %s\n", outputf);
-    fprintf(outputv, "Model            : VARMA-VEC(%d,%d), M = %d series, "
+    fprintf(outputv, "Model            : VARMA-VECM(%d,%d), M = %d series, "
                      "cointegration rank r = %d\n",
             global_p, global_q, nser, global_r);
     fprintf(outputv, "Estimation       : %s\n", (met == 2)

@@ -376,14 +376,14 @@ echo "[2] invariants (no external reference needed)"
 #     would need it to read the same array vec_shootx built; noted as follow-up.
 run "$UK" 2 0 2 -case 2
 # El bloque lleva ahora "(sd ...)" detras de cada valor; se quita para comparar.
-b2_block=$(sed -n '/^B2 matrix (s x r)/,/^[A-Z]/p' "$TMP/case.out" | grep -aE '^ +-?[0-9]' \
+b2_block=$(sed -n '/^beta_2 matrix (s x r)/,/^[a-zA-Z]/p' "$TMP/case.out" | grep -aE '^ +-?[0-9]' \
            | sed 's/(sd[^)]*)//g' | tr -s ' ' | sed 's/^ //; s/ $//')
-b_rows=$(sed -n '/^B matrix (M x r)/,/^[A-Z]/p' "$TMP/case.out" \
+b_rows=$(sed -n '/^beta matrix (M x r)/,/^[a-zA-Z]/p' "$TMP/case.out" \
          | grep -aE '^ +-?[0-9]' | awk 'NR>2' | tr -s ' ' | sed 's/^ //; s/ $//')
 if [ -n "$b2_block" ] && [ "$b2_block" = "$b_rows" ]; then
-    ok "B2 block agrees with the B matrix rows (M=3, r=2)"
+    ok "beta_2 block agrees with the beta matrix rows (M=3, r=2)"
 else
-    bad "B2 block vs B matrix rows" "block=[$b2_block] rows=[$b_rows]"
+    bad "beta_2 block vs beta matrix rows" "block=[$b2_block] rows=[$b_rows]"
 fi
 
 # 2b. logL monotone in r: rank r is nested in r+1, so L(r+1) >= L(r).
@@ -886,7 +886,7 @@ else
     # T12 = T11 * B2' -- checked against the B2 the same fit reports
     t11=$(awk '/^theta\(1\) matrix/{getline; print $1}' "$TMP/case.out")
     t12=$(awk '/^theta\(1\) matrix/{getline; print $2}' "$TMP/case.out")
-    b2=$(grep -a -A1 "^B2 matrix (s x r)" "$TMP/case.out" | tail -1 | awk '{print $1}')
+    b2=$(grep -a -A1 "^beta_2 matrix (s x r)" "$TMP/case.out" | tail -1 | awk '{print $1}')
     if ! awk -v a="$t11" 'BEGIN{if(a<0)a=-a; exit !(a>1e-3)}'; then
         bad "mawarma: T11 is zero here" "the product check would not bite"
     elif awk -v a="$t11" -v b="$t12" -v c="$b2" \
@@ -1225,12 +1225,12 @@ fi
 struct_case "M=2 with -weakex 1"  "$MM" 2 1 1 -case 2 -weakex 1
 struct_case "M=3 with -weakex 2"  "$UK" 2 0 2 -case 2 -weakex 2
 
-# 6b. Pi = Lambda B' must be reported, and it is what to compare fits on: unlike
-#     Lambda and B it does not move under a reparameterisation of the
+# 6b. Pi = alpha beta' must be reported, and it is what to compare fits on:
+#     unlike alpha and beta it does not move under a reparameterisation of the
 #     cointegrating space.  Its rank is r BY CONSTRUCTION, so the M-r zero
 #     eigenvalues prove nothing about the rank -- which is why the output says so.
 run "$MM" 2 1 1 -case 2
-if grep -aq "^Pi = Lambda B'" "$TMP/case.out" && \
+if grep -aq "^Pi = alpha beta'" "$TMP/case.out" && \
    grep -aq "eigenvalues of Pi:" "$TMP/case.out"; then
     ok "Pi and its eigenvalues are reported"
 else
@@ -1887,8 +1887,9 @@ if ! grep -aq 'Joint Hypothesis Tests (Wald)' "$TMP/case.out"; then
 else
     ok "the block is emitted by default, with no option asked for"
 
-    #  Lambda: dos filas, cada una un solo coeficiente -> chi2 = (coef/sd)^2.
-    lam=$(sed -n '/^Adjustment to the equilibrium error/,/^$/p' "$TMP/case.out" \
+    #  alpha: dos filas, cada una un solo coeficiente -> chi2 = (coef/sd)^2.
+    #  El signo da igual: el Wald es el CUADRADO del cociente t.
+    lam=$(sed -n '/^Adjustment coefficients, alpha/,/^$/p' "$TMP/case.out" \
           | grep -aE '<- ec' | awk '{print $4, $5}')
     wal=$(sed -n '/Weak exogeneity, one variable/,/Exclusion from/p' "$TMP/case.out" \
           | awk '/Wald chi2/{gsub(",","",$4); print $4}')
@@ -1901,17 +1902,17 @@ else
         worst=$(awk -v a="$worst" -v b="$d" 'BEGIN{print (b>a)?b:a}')
     done <<< "$lam"
     if [ "$n" -ge 2 ] && awk -v w="$worst" 'BEGIN{exit !(w < 1e-3)}'; then
-        ok "weak-exogeneity Wald = (coef/sd)^2 on all $n rows of Lambda (max diff $worst)"
+        ok "weak-exogeneity Wald = (coef/sd)^2 on all $n rows of alpha (max diff $worst)"
     else bad "weak exogeneity vs t^2" "$n rows, worst difference $worst"; fi
 
     #  B2: lo mismo, y ademas ata el OTRO extremo del vector de parametros.
-    b2=$(sed -n '/^Cointegrating vectors, B =/,/^$/p' "$TMP/case.out" \
+    b2=$(sed -n '/^Cointegrating vectors, beta =/,/^$/p' "$TMP/case.out" \
          | grep -aE ' in ec' | awk '{print $4, $5}')
     wb=$(sed -n '/Exclusion from the cointegrating/,/Short-run dynamics/p' "$TMP/case.out" \
          | awk '/Wald chi2/{gsub(",","",$4); print $4; exit}')
     d=$(echo "$b2" | awk -v w="$wb" '{t=($1/$2)^2; d=t-w; if(d<0)d=-d; print d}')
     if [ -n "$wb" ] && awk -v d="$d" 'BEGIN{exit !(d < 1e-3)}'; then
-        ok "exclusion Wald on B2 = (coef/sd)^2 too (diff $d), so both ends of x[] are aligned"
+        ok "exclusion Wald on beta_2 = (coef/sd)^2 too (diff $d), so both ends of x[] are aligned"
     else bad "B2 exclusion vs t^2" "difference $d"; fi
 
     #  Lambda = 0 se imprime, y se imprime DICIENDO que no es un contraste.
@@ -1942,7 +1943,7 @@ else bad "hypothesis block at r=0" "emitted weak exogeneity with no Lambda"; fi
 #  Con -fixb2 B2 esta impuesta: no hay covarianza con que contrastarla, y el
 #  bloque tiene que decir eso en vez de contrastar un parametro que no existe.
 run "$MM" 2 1 1 -case 2 -fixb2 0
-if grep -aq 'B2 is held fixed (-fixb2)' "$TMP/case.out"; then
+if grep -aq 'beta_2 is held fixed (-fixb2)' "$TMP/case.out"; then
     ok "with -fixb2 the exclusion test is declared unavailable, not faked"
 else bad "hypothesis block with -fixb2" "did not declare B2 as imposed"; fi
 echo

@@ -65,6 +65,23 @@ Verificado sacando todos los literales numéricos de 22 informes antes y despué
 y exigiendo que el nuevo contenga al viejo. Destapó dos defectos: la ruta
 `-warma` perdía la diagnosis, las raíces y las cifras del ajuste.
 
+### El informe, en la notación de Johansen (P10)
+
+El nombre del modelo pasa a **`VARMA-VECM`**: `VECM` es el acrónimo de los
+manuales y el que trae quien llega desde un VAR-VECM. Y el informe entero pasa a
+su notación — `alpha`, `beta`, `Gamma(k)`, `Pi = alpha beta'` — porque el
+criterio es el **coste de entrada**: el cast a VARMA es lo que hace calculable la
+verosimilitud exacta, pero es interior y no tiene por qué salir en el fichero.
+
+El mapa: `alpha = -Lambda`, `beta = B`, `Gamma_k = F_k`. Sólo se movieron el
+signo de `alpha` y de `Pi` —con sus `t`; el error estándar y el `p` no cambian—
+y el nombre de `sigma_min(alpha_perp' Theta(1) beta_perp)`, de igual valor. El
+autovalor de `Pi` pasa de `+0.557` a `-0.557`, que es como se lee: una velocidad
+de ajuste.
+
+También sale `(Mauricio 2006)` de la cabecera —lo que un fichero de resultados
+declara es el modelo y el algoritmo, no una cita— y con ella se revisa entera.
+
 ### El refactor de `main()` (P8)
 
 `main()` llevaba **2 320 líneas**: la línea de órdenes, cinco modos completos, el

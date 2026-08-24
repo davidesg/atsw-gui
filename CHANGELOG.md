@@ -65,6 +65,29 @@ Verificado sacando todos los literales numéricos de 22 informes antes y despué
 y exigiendo que el nuevo contenga al viejo. Destapó dos defectos: la ruta
 `-warma` perdía la diagnosis, las raíces y las cifras del ajuste.
 
+### Ganancia de largo plazo, retardo medio, y BUG-17 (P11)
+
+`drvarma` acumula la respuesta del sistema estacionario y llama a la suma
+ganancia de largo plazo. En niveles esa suma **diverge**: `G_k` no se apaga,
+converge al efecto **permanente**. Los dos programas calculan lo mismo de todas
+formas, y conviene ver por qué: la respuesta en niveles de `drvec` es la
+acumulación de la de `drvarma`, así que sus **incrementos** son lo que `drvarma`
+llama respuesta, y la ganancia y el retardo medio son sus mismas fórmulas
+aplicadas a ellos.
+
+Con su certificado: `β'Y_t` es estacionario, luego **ningún choque puede moverlo
+permanentemente**, o sea `β'·gain = 0` exactamente. Da `1.2e-10`.
+
+**Y ese certificado destapó `BUG-17`**, que no es de presentación: `drvec` lleva
+**dos órdenes de fila** —el del `.inp` para los datos, `Γ`, `Θ` y las
+respuestas; el interno `[Y₁ ; Y₂]` para `Λ` y `B`— y el informe los mezclaba.
+Etiquetaba las filas de `Λ` con los nombres del `.inp`, así que en **todo ajuste
+con `r < M` nombraba la serie equivocada**, incluidos los contrastes de
+exogeneidad débil desde P6.8; y `-weakex i` restringía una serie distinta de la
+que se le pedía. Las cifras eran correctas —las filas se contrastaban bien—,
+sólo sus nombres estaban cambiados. Corregido, y **§4u del registro queda
+marcado** hasta que se vuelva a medir su atribución por serie.
+
 ### Respuestas al impulso y descomposición de la varianza, en niveles (P11)
 
 `diagnose.c` trae `impulse_response()` y `variance_decomposition()` ya

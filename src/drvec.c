@@ -512,6 +512,7 @@ static int  calc_nparametrs(void);
 static void init_guess(real *x, int npar);
 static void build_y2_levels(void);
 static void banner(const char *title);
+static int  inp2lam(int i);
 
 /*****************************************************************************/
 /*  build_y2_levels — fill Y2_levels, once, before any estimation            */
@@ -2193,6 +2194,14 @@ static int build_weakex_A(int eq)
         fprintf(stderr, "ERROR: -weakex %d is outside 1..%d\n", eq, nser);
         return 1;
     }
+    /*  -weakex i NAMES THE SERIES BY ITS POSITION IN THE .inp, which is what a
+     *  user has in front of them, and the restriction has to be put on the row
+     *  of Lambda that belongs to it.  Those two are not the same index when
+     *  r < M: Lambda is written in the internal order [Y1 ; Y2] (see inp2lam).
+     *  Until 2026-08-24 this zeroed the internal row directly, so on any fit
+     *  with r < M it declared the wrong series weakly exogenous.  Part of
+     *  BUG-17.                                                              */
+    eq = inp2lam(eq);
     alpha_sa = nser - 1;
     alpha_A  = matrix(1, nser, 1, (alpha_sa > 0 ? alpha_sa : 1));
     for (i = 1; i <= nser; i++)
@@ -2266,6 +2275,31 @@ static const char *sig_code(real p)
 {
     return (p < 0.001) ? "***" : (p < 0.01) ? "**"
          : (p < 0.05)  ? "*"   : (p < 0.10) ? "." : " ";
+}
+
+/*  inp2lam — the row of Lambda (and of psi, and of alpha) that belongs to the
+ *  series sitting at position i of the .inp.
+ *
+ *  THE TWO ORDERS, and this is where they meet.  The data, the series names,
+ *  Theta, Gamma, the responses and the forecast are all in the .inp's order,
+ *  [Y2 block ; Y1 block].  Lambda and B are NOT: the cast writes the system in
+ *  the INTERNAL order [Y1 ; Y2] -- Cbar maps [Y1 ; Y2] to Ybar = [nabla Y2 ; W]
+ *  and PhBar[1] = Cinv*Hbar - LamBar, whose rows are Cinv's, which are
+ *  internal.  So Lambda's row 1..r is the Y1 block and r+1..M the Y2 block.
+ *
+ *  Until 2026-08-24 the report labelled Lambda's rows with series_names[i]
+ *  straight, so on any fit with r < M it named the WRONG SERIES -- the weak
+ *  exogeneity tests included, since P6.8.  Found while building the
+ *  beta' gain = 0 certificate, which is the first thing in the program that
+ *  had to multiply beta by something in the .inp's order and therefore the
+ *  first that could not paper over the mismatch.
+ *
+ *  Everything the report shows is put in the .inp's order through here, so the
+ *  reader sees one order and only one.                                       */
+static int inp2lam(int i)
+{
+    int s = nser - global_r;
+    return (i <= s) ? global_r + i : i - s;
 }
 
 /*  sname / cname — the names the rows are labelled with.  A parameter that
@@ -4841,10 +4875,15 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
         fprintf(outputv,
             "\nWeak exogeneity, one variable at a time"
             "   [H0: row i of alpha = 0, chi2(%d)]\n", r);
+        /*  i walks the .inp's order and inp2lam takes it to the row of
+         *  Lambda that belongs to that series.  Walking Lambda directly, which
+         *  is what this loop did until 2026-08-24, tested the right row and
+         *  named the WRONG SERIES on every fit with r < M.                   */
         for (i = 1; i <= M; i++) {
+            int li = inp2lam(i);
             k = 0;
             for (j = 1; j <= r; j++)
-                if (ix_lam[i][j] > 0) idx[++k] = ix_lam[i][j];
+                if (ix_lam[li][j] > 0) idx[++k] = ix_lam[li][j];
             if (k < 1) continue;
             nm = series_names ? series_names[i] : "y";
             snprintf(title, sizeof title, "%s (%s block):", nm,
@@ -5605,6 +5644,124 @@ static void level_irf_fevd(struct Tvarma *v, real **B2, int K)
         }
     }
 
+    /*  ---- LONG-RUN GAIN AND MEAN LAG ---------------------------------- *
+     *
+     *  drvarma accumulates the response of the STATIONARY system and calls the
+     *  total the long-run gain (diagnose.c:1626).  Here the response is already
+     *  in levels, so accumulating it again would diverge: G_k does not go to
+     *  zero, it converges to the PERMANENT effect.  The two programs compute
+     *  the same object all the same, and it is worth seeing why: drvec's level
+     *  response is the accumulation of drvarma's, so drvec's INCREMENTS
+     *  delta_k = G_k - G_{k-1} are what drvarma calls the response.  The gain
+     *  and the mean lag are then drvarma's formulas applied to delta_k, and
+     *
+     *      gain     = sum_k delta_k = lim_k G_k        the permanent effect
+     *      mean lag = sum_k k delta_k / sum_k delta_k  how long it takes
+     *
+     *  THE CERTIFICATE, and it is sharp: beta'Y_t is stationary, so a permanent
+     *  shock cannot move it.  Therefore beta' C(1) = 0 EXACTLY, and the worst
+     *  element of beta' gain is reported.  It exercises the whole chain at once
+     *  -- the Psi weights, the level map, the orthogonalisation and the
+     *  accumulation -- and it cannot be satisfied by accident.
+     *
+     *  The horizon for the limit is its own, and much longer than the printed
+     *  one: a gain read off a table that stops at 20 is not a limit.          */
+    {
+        int KL = 400, conv = 0;
+        real ***PsiL = tensor(0, KL, 1, M, 1, M);
+        real **CsL = matrix(1, M, 1, M), **GL = matrix(1, M, 1, M);
+        real **Gp = matrix(1, M, 1, M);
+        real **gain = matrix(1, M, 1, M), **wsum = matrix(1, M, 1, M);
+        real worst = 0.0, tail = 0.0;
+
+        compute_psi_weights(M, v->p, v->q, v->phi, v->theta, KL, PsiL);
+        for (i = 1; i <= M; i++)
+            for (j = 1; j <= M; j++) {
+                CsL[i][j] = 0.0; Gp[i][j] = 0.0;
+                gain[i][j] = 0.0; wsum[i][j] = 0.0;
+            }
+        for (k = 0; k <= KL; k++) {
+            real mx = 0.0;
+            for (i = 1; i <= M; i++)
+                for (j = 1; j <= M; j++) CsL[i][j] += PsiL[k][i][j];
+            level_error_map(CsL, PsiL[k], B2, M, r, GL);
+            /*  In the structural coordinates, so that the numbers are the ones
+             *  the response table shows.                                     */
+            for (i = 1; i <= M; i++)
+                for (j = 1; j <= M; j++) {
+                    real acc = 0.0, d;
+                    for (l = j; l <= M; l++) acc += GL[i][l] * P[l][j];
+                    acc *= sqrt(D[j]);
+                    d = acc - Gp[i][j];
+                    gain[i][j] += d;
+                    wsum[i][j] += k * d;
+                    Gp[i][j] = acc;
+                    if (fabs(d) > mx) mx = fabs(d);
+                }
+            if (k > 20 && mx < 1.0e-10) { conv = 1; tail = mx; break; }
+            tail = mx;
+        }
+
+        banner("Long-Run Gain and Mean Lag, in Levels");
+        fprintf(outputv,
+            "\n  gain     = lim_k G_k, the PERMANENT effect of a one-s.d. shock\n"
+            "  mean lag = sum k delta_k / sum delta_k, with delta_k the "
+            "increment of\n             the response: how long the level takes "
+            "to get there\n");
+        fprintf(outputv, "  %s at k = %d (largest increment %.2e)\n",
+                conv ? "converged" : "NOT converged", k, tail);
+        fprintf(outputv, "\nStructural shock standard deviations "
+                         "(one-s.d. shock size):\n");
+        for (j = 1; j <= M; j++)
+            fprintf(outputv, "  %-12s : %.6f\n",
+                    series_names ? series_names[j] : "y", sqrt(D[j]));
+        for (j = 1; j <= M; j++) {
+            fprintf(outputv, "\nShock to %s:\n",
+                    series_names ? series_names[j] : "y");
+            for (i = 1; i <= M; i++) {
+                real gross = fabs(gain[i][j]);
+                if (gross > 1.0e-12 && fabs(gain[i][j]) > 1.0e-8)
+                    fprintf(outputv, "  %-12s : gain = %10.6f   mean lag = "
+                                     "%7.2f periods\n",
+                            series_names ? series_names[i] : "y",
+                            gain[i][j], wsum[i][j] / gain[i][j]);
+                else
+                    fprintf(outputv, "  %-12s : gain = %10.6f   mean lag = "
+                                     "undefined (the permanent effect is zero)\n",
+                            series_names ? series_names[i] : "y", gain[i][j]);
+            }
+        }
+        /*  beta' gain = 0: the equilibrium error cannot be moved permanently. */
+        for (j = 1; j <= M; j++)
+            for (k = 1; k <= r; k++) {
+                real acc = 0.0;
+                /*  beta IN THE .inp's ROW ORDER, which is [Y2 block ; Y1
+                 *  block] -- not the internal [Y1 ; Y2] that B = [I_r ; B2] is
+                 *  written in.  gain, alpha and the responses are all in the
+                 *  .inp's order, so beta has to be put in it too; pairing them
+                 *  the other way is what made this check fail the first time
+                 *  it was run, and it turned out the report had the same
+                 *  mismatch in its beta matrix.                              */
+                for (i = 1; i <= M; i++) {
+                    real bik = (i <= s) ? B2[i][k]
+                                        : ((i - s == k) ? 1.0 : 0.0);
+                    acc += bik * gain[i][j];
+                }
+                if (fabs(acc) > worst) worst = fabs(acc);
+            }
+        fprintf(outputv,
+            "\n  self-check  max |beta' gain| = %.3e\n"
+            "  beta'Y_t is stationary, so no shock can move it permanently: "
+            "this is\n  zero by construction, and it exercises the weights, the "
+            "level map and\n  the orthogonalisation at once.  The gain matrix "
+            "has rank M - r = %d.\n", worst, s);
+
+        free_matrix(wsum, 1, M, 1, M); free_matrix(gain, 1, M, 1, M);
+        free_matrix(Gp, 1, M, 1, M);   free_matrix(GL, 1, M, 1, M);
+        free_matrix(CsL, 1, M, 1, M);
+        free_tensor(PsiL, 0, KL, 1, M, 1, M);
+    }
+
     banner("Forecast Error Variance Decomposition, in Levels");
     fprintf(outputv,
         "\n  Percentage of the h-step level forecast error variance due to "
@@ -6115,7 +6272,9 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
                 } else {
                     for (a2 = 1; a2 <= nser; a2++)
                         for (b2i = 1; b2i <= r; b2i++)
-                            if (ix_lam[a2][b2i]) {
+                            /*  a2 walks the .inp's order; inp2lam takes it to
+                             *  the row of Lambda that belongs to that series. */
+                            if (ix_lam[inp2lam(a2)][b2i]) {
                                 snprintf(lb, sizeof lb, "  D.%s <- ec%d",
                                          sname(a2), b2i);
                                 /*  REPORTED AS alpha, WHICH IS -Lambda.  The
@@ -6125,7 +6284,8 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
                                  *  cast to a VARMA is an internal matter.
                                  *  Only the sign moves: the standard error is
                                  *  the same and so is |t|.                   */
-                                par_row(lb, -Lam_m[a2][b2i], dev[ix_lam[a2][b2i]]);
+                                par_row(lb, -Lam_m[inp2lam(a2)][b2i],
+                                        dev[ix_lam[inp2lam(a2)][b2i]]);
                             }
                 }
             }
@@ -6216,11 +6376,11 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
             for (int a2 = 1; a2 <= nmu; a2++)
                 fprintf(outputv, "  %12.6f\n", mu_m[a2]);
         }
-        fprintf(outputv, "alpha matrix (M x r):\n");
+        fprintf(outputv, "alpha matrix (M x r), rows in the .inp's order:\n");
         for (int a2 = 1; a2 <= nser; a2++) {
             fprintf(outputv, "  ");
             for (int b2i = 1; b2i <= r; b2i++)
-                fprintf(outputv, "%12.6f", -Lam_m[a2][b2i]);
+                fprintf(outputv, "%12.6f", -Lam_m[inp2lam(a2)][b2i]);
             fprintf(outputv, "\n");
         }
         for (int k2 = 1; k2 <= nf; k2++) {
@@ -6257,12 +6417,20 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
             fprintf(outputv, "\n");
         }
 
-        fprintf(outputv, "beta matrix (M x r), beta = [I_r ; beta_2]:\n");
+        /*  beta IN THE .inp's ROW ORDER.  B = [I_r ; B2] is written in the
+         *  INTERNAL order [Y1 ; Y2]; every other matrix in this report -- alpha,
+         *  Gamma, theta, Pi, the responses -- has its rows in the .inp's order,
+         *  [Y2 block ; Y1 block].  Printing beta in the internal one paired it
+         *  row by row with the wrong series.  Found on 2026-08-24 by the
+         *  beta' gain = 0 certificate, which is the only thing in the program
+         *  that multiplies beta by something in the .inp's order.            */
+        fprintf(outputv, "beta matrix (M x r), rows in the .inp's order:\n");
         for (int row = 1; row <= nser; row++) {
             fprintf(outputv, "  ");
             for (int c = 1; c <= r; c++)
                 fprintf(outputv, "%12.6f",
-                        (row <= r) ? ((c == row) ? 1.0 : 0.0) : B2m[row - r][c]);
+                        (row <= s) ? B2m[row][c]
+                                   : ((row - s == c) ? 1.0 : 0.0));
             fprintf(outputv, "\n");
         }
 
@@ -6279,11 +6447,15 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
                 for (b = 1; b <= nser; b++) {
                     real acc = 0.0;
                     for (j = 1; j <= r; j++) {
-                        real Bbj = (b <= r) ? ((b == j) ? 1.0 : 0.0) : B2m[b - r][j];
+                        /*  Both indices in the .inp's order, as everywhere
+                         *  else: Lambda's rows already are, and beta's have to
+                         *  be put in it (see the beta matrix above).         */
+                        real Bbj = (b <= s) ? B2m[b][j]
+                                            : ((b - s == j) ? 1.0 : 0.0);
                         /*  alpha = -Lambda, so Pi = alpha beta' = -Lambda B'.
                          *  Reported with Johansen's sign, which is the one
                          *  whose eigenvalues read as adjustment speeds.      */
-                        acc -= Lam_m[a][j] * Bbj;
+                        acc -= Lam_m[inp2lam(a)][j] * Bbj;
                     }
                     Pi[a][b] = acc;
                 }

@@ -2174,6 +2174,15 @@ open and as the user's responsibility.
 
 `drvec`'s adjustment vector at the imposed `r = 1`, and weak exogeneity:
 
+> **⚠ The row-to-series attribution of this table is under review (BUG-17,
+> 2026-08-24).** `Λ`'s rows are written in the internal order `[Y₁ ; Y₂]`, and
+> until that date the program labelled them with the `.inp`'s order — so which
+> series each row belongs to depends on how this table was transcribed, and
+> that cannot be reconstructed from what is written here. **The values, the
+> standard errors and the LR statistics are unaffected**: the rows were tested
+> correctly, only their names were in question. Re-run with the corrected build
+> before quoting the per-series attribution. See [BUGS.md](BUGS.md) BUG-17.
+
 | | `Λ` (s.e.) | `t` | `-weakex` LR | `p` |
 |---|---|---|---|---|
 | IPC_ES | 0.0467 (0.0170) | 2.74 | 7.797 | **0.0052** — adjusts |

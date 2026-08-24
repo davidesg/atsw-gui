@@ -378,8 +378,10 @@ run "$UK" 2 0 2 -case 2
 # El bloque lleva ahora "(sd ...)" detras de cada valor; se quita para comparar.
 b2_block=$(sed -n '/^beta_2 matrix (s x r)/,/^[a-zA-Z]/p' "$TMP/case.out" | grep -aE '^ +-?[0-9]' \
            | sed 's/(sd[^)]*)//g' | tr -s ' ' | sed 's/^ //; s/ $//')
+#  beta va ahora en el orden del .inp, o sea [Y2 ; Y1]: las filas de beta_2
+#  son las s PRIMERAS, no las ultimas.  Ver inp2lam en src/drvec.c.
 b_rows=$(sed -n '/^beta matrix (M x r)/,/^[a-zA-Z]/p' "$TMP/case.out" \
-         | grep -aE '^ +-?[0-9]' | awk 'NR>2' | tr -s ' ' | sed 's/^ //; s/ $//')
+         | grep -aE '^ +-?[0-9]' | head -1 | tr -s ' ' | sed 's/^ //; s/ $//')
 if [ -n "$b2_block" ] && [ "$b2_block" = "$b_rows" ]; then
     ok "beta_2 block agrees with the beta matrix rows (M=3, r=2)"
 else

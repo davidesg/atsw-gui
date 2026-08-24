@@ -143,6 +143,61 @@ whatever any one of the three does to look for them.
 
 ---
 
+## BUG-17 — the report named the wrong series for `alpha`, and `-weakex` restricted the wrong one
+
+**Status: FIXED on 2026-08-24** (`src/drvec.c`, `inp2lam` and its call sites).
+
+**What it was.** `drvec` carries two row orders and the report mixed them.
+
+The data, the series names, `Gamma`, `Theta`, the residuals, the responses and
+the forecast are all in the **`.inp`'s order**, `[Y2 block ; Y1 block]`. `Lambda`
+and `B` are **not**: the cast writes the system in the **internal order**
+`[Y1 ; Y2]` — `Cbar` maps `[Y1 ; Y2]` to `Ybar = [nabla Y2 ; W]`, and
+`PhBar[1] = Cinv*Hbar - LamBar`, whose rows are `Cinv`'s, which are internal. So
+`Lambda`'s rows `1..r` are the `Y1` block and `r+1..M` the `Y2` block.
+
+The report labelled `Lambda`'s row `i` with `series_names[i]` straight. On any
+fit with `r < M` that names the **wrong series** — in the parameter table, in
+the `alpha` matrix and, since P6.8, in the **weak exogeneity tests**. And
+`-weakex i` zeroed the internal row `i`, so it declared a different series
+weakly exogenous from the one the user asked about.
+
+**What was NOT wrong.** The fit itself: the estimation, the likelihood, `logelf`,
+`sigma2`, the standard errors and every LR statistic are unaffected — the rows
+were tested correctly, they were *named* wrongly. `granger_smin` is also correct:
+it builds `Lambda_perp` and `B_perp` both in the internal order and multiplies
+them by a `Theta` that is internal too, so it is self-consistent, and the rank
+condition figures the register carries stand.
+
+**How it was found.** Building the `beta' gain = 0` certificate for the long-run
+gain (P11). That is the first thing in the program that had to multiply `beta`
+by a quantity in the `.inp`'s order, so it is the first that could not paper over
+the mismatch: it came out at `2.0e-01` where it must be zero, and putting `beta`
+in the `.inp`'s order took it to `1.2e-10`. Nothing else in the program crossed
+the two orders, which is why it had never shown.
+
+**What it cost.** In the shipped output, a wrong series name on the adjustment
+coefficients and on the weak exogeneity verdicts whenever `r < M`, which is every
+fit that is not a plain VARMA. On mink–muskrat the loadings were swapped between
+`muskrat` and `mink`. `Pi` was also assembled by pairing `Lambda`'s internal rows
+with `B`'s internal rows and then *labelling* the result in the `.inp`'s order,
+so `Pi` as a matrix was internally consistent but its rows and columns were named
+wrongly; its non-zero eigenvalue, `-0.557476` on mink–muskrat, is unchanged.
+
+**AND IT REACHES THE REGISTER.** [HOMOLOGATION.md](HOMOLOGATION.md) §4u lists
+`Lambda`, its `t` and the `-weakex` LR **per series** for the three euro-area
+CPIs. Those numbers are right; which series each belongs to has to be checked
+against the corrected output before that table is quoted again. The table is
+flagged there.
+
+**The lesson.** Two orders is one too many, and a program that carries both will
+eventually print one while meaning the other. What caught it was not a reading of
+the code — the mismatch had been read past several times — but an **identity that
+had to cross the two**. Certificates earn their keep by being the only place
+where an assumption cannot stay implicit.
+
+---
+
 ## Found and fixed before 0.9
 
 Unnumbered because they were fixed inside the development and their full report

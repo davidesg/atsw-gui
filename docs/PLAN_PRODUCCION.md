@@ -1304,3 +1304,54 @@ espacio—. Comprobado por diferencia línea a línea contra el informe anterior
 
 El autovalor de `Pi` pasa así de `+0.557` a `−0.557`, que es como se lee: una
 velocidad de ajuste. Antes, quien lo tomara por el de Johansen lo leía al revés.
+
+### 12.4 P11 — respuestas al impulso y descomposición, en niveles
+
+**El hueco frente a `drvarma`, medido**: sobre los tres IPC, 1665 líneas contra
+280. La diagnosis por serie era la mayor parte y se cerró vendorizando
+`diagnose.c` entero (§12.5). Lo que quedaba eran **IRF y FEVD**.
+
+**Y aquí no se reutiliza, y hay que decir por qué.** `diagnose.c` trae
+`impulse_response()` y `variance_decomposition()`, ya enlazadas y gratis.
+Llamarlas daría las respuestas de `Ȳ = (∇Y₂', W')'` — el bloque diferenciado y
+los errores de equilibrio —, que **no es lo que se le pregunta a un modelo
+cointegrado**. Lo que se pregunta es qué le hace un choque a los **niveles**,
+porque ahí la respuesta se parte en una permanente y una transitoria.
+
+**Pero tampoco se deriva nada nuevo.** `level_error_map()` ya lleva una
+innovación al error de nivel, y es la fuente única sobre la que están
+construidas las bandas de previsión (`FORECAST.md` §4). La respuesta de
+`Y_{t+k}` a una innovación en `t` **es `G_k`**: el error de nivel a horizonte
+`h` es `Σ_{m<h} G_m A_{t+h−m}`, luego el choque de `t` entra en el nivel de
+`t+k` con peso `G_k`. El mismo mapa, leído hacia delante.
+
+Ortogonalizadas con `Σ = P D P'`, que ahora se factoriza en **un solo sitio**
+(`ldl_sigma`): lo usaban el informe y las respuestas, y dos copias de una
+factorización es como aparecen dos respuestas a una pregunta.
+
+**El certificado, y es el que hacía falta.** Con `R_k = G_k P D^{1/2}` se tiene
+`Var(h) = Σ_{k<h} R_k R_k'`, o sea
+
+```
+    s.e.(h) = sqrt( sum_{k<h} sum_j R_k[i][j]^2 )
+```
+
+y eso se comprueba **contra la tabla de previsión de la misma corrida**, bloque
+`[8o]`. Coincide a `0.000000000`. Si la ortogonalización, el mapa o la
+acumulación estuvieran mal, se rompe. Y cada fila de la descomposición suma
+100 %, que es lo que la hace una partición y no una lista.
+
+### 12.5 La diagnosis por serie, y BUG-16
+
+`drvec` había vendorizado sólo la rebanada multivariante de `diagnose.c`. Ahora
+va **entero**, y la copia de `drvarma` porque es la que fecha los residuos y
+etiqueta las series con globales que `drvec` ya tiene con esos nombres: encaja
+sin un cambio, que es lo que dice que era la copia correcta.
+
+Al enlazarlo apareció **`BUG-16`**, un desbordamiento de un byte en
+`File_HistSer` presente en todos los histogramas que esa rutina ha dibujado, en
+código que `drvarma` y `drtran` poseen. Arreglado en los dos dueños y traído de
+vuelta. Lo encontró el bloque `VALGRIND=1` de `drvec`, la primera batería del
+conjunto que pasa valgrind por encima del informe entero — que es, exactamente,
+el argumento de P3 leído al revés: compartir código comparte sus defectos, y
+comparte también lo que cualquiera de los tres haga por buscarlos.

@@ -65,6 +65,23 @@ Verificado sacando todos los literales numéricos de 22 informes antes y despué
 y exigiendo que el nuevo contenga al viejo. Destapó dos defectos: la ruta
 `-warma` perdía la diagnosis, las raíces y las cifras del ajuste.
 
+### Respuestas al impulso y descomposición de la varianza, en niveles (P11)
+
+`diagnose.c` trae `impulse_response()` y `variance_decomposition()` ya
+enlazadas, y **no se usan**: darían las respuestas de `Ȳ = (∇Y₂', W')'`, que no
+es lo que se le pregunta a un modelo cointegrado. Lo que se pregunta es qué hace
+un choque a los **niveles**, donde la respuesta se parte en permanente y
+transitoria.
+
+Tampoco se deriva nada nuevo: `level_error_map()` ya lleva una innovación al
+error de nivel, y la respuesta de `Y_{t+k}` a un choque en `t` **es `G_k`**. El
+mismo mapa certificado de las bandas, leído hacia delante, ortogonalizado con
+`Σ = P D P'` — que ahora se factoriza en un solo sitio.
+
+Con el certificado que lo ata a la previsión: `s.e.(h)` **es** la raíz de la
+suma de respuestas al cuadrado hasta `k = h−1`, comprobado contra la tabla de la
+misma corrida y coincidente a `1e-9`.
+
 ### La diagnosis que faltaba, y un defecto en el fichero compartido (P10)
 
 Ejecutar el caso de los tres IPC por `drvarma` y por `drvec` y poner las dos

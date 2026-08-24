@@ -5485,6 +5485,160 @@ static int read_pre_inputs(char **files, int nfiles)
 }
 
 /*****************************************************************************/
+/*  P11 — LDL' OF THE INNOVATION COVARIANCE, IN ONE PLACE.                    */
+/*                                                                           */
+/*  Sigma = P D P' with P unit lower triangular is used twice: the report     */
+/*  prints it, and the impulse responses need it to orthogonalise the shocks. */
+/*  Two copies of a factorisation is how two answers to one question appear,  */
+/*  so it is written once.  Returns 1 if Sigma is positive definite.          */
+/*                                                                           */
+/*  The ordering is the .inp's column order, which is the user's choice and   */
+/*  not a property of the fit; both callers say so.                           */
+/*****************************************************************************/
+static int ldl_sigma(struct Tvarma *v, real **P, real *D)
+{
+    int M = v->m, a, b, k;
+    real **Sg = matrix(1, M, 1, M);
+    int ok = 1;
+
+    for (a = 1; a <= M; a++)
+        for (b = 1; b <= M; b++) {
+            Sg[a][b] = v->sigma2 * v->qq[a][b];
+            P[a][b]  = (a == b) ? 1.0 : 0.0;
+        }
+    for (b = 1; b <= M; b++) {
+        real acc = Sg[b][b];
+        for (k = 1; k < b; k++) acc -= P[b][k] * P[b][k] * D[k];
+        D[b] = acc;
+        if (D[b] <= 0.0) { ok = 0; break; }
+        for (a = b + 1; a <= M; a++) {
+            real s2 = Sg[a][b];
+            for (k = 1; k < b; k++) s2 -= P[a][k] * P[b][k] * D[k];
+            P[a][b] = s2 / D[b];
+        }
+    }
+    free_matrix(Sg, 1, M, 1, M);
+    return ok;
+}
+
+/*****************************************************************************/
+/*  P11 — IMPULSE RESPONSES AND VARIANCE DECOMPOSITION, IN LEVELS            */
+/*                                                                           */
+/*  WHY NOT THE SUITE'S.  drvarma has impulse_response() and                  */
+/*  variance_decomposition() and they are right there in the vendored         */
+/*  diagnose.c.  Calling them would give the responses of Ybar =              */
+/*  (nabla Y2', W')' -- the differenced block and the equilibrium errors --    */
+/*  which is not what anyone asks a cointegrated model.  What is asked is     */
+/*  what a shock does to the LEVELS, because that is where the answer splits  */
+/*  into a permanent part and a transitory one.                              */
+/*                                                                           */
+/*  AND drvec ALREADY HAS THE MAP.  level_error_map() carries an innovation   */
+/*  into the level error, and it is the single source of truth the forecast   */
+/*  bands are built on (docs/FORECAST.md 4).  The response of Y_{t+k} to an   */
+/*  innovation at t IS G_k: the level error at horizon h is                    */
+/*  sum_{m<h} G_m A_{t+h-m}, so the shock at t enters the level at t+k with   */
+/*  weight G_k.  Nothing new is derived here; the same map is read forwards.  */
+/*                                                                           */
+/*  ORTHOGONALISED, with Sigma = P D P': shock j is one standard deviation of */
+/*  A*_j, so the response is G_k P e_j sqrt(D_j).  The ordering is the .inp's */
+/*  columns and a different order gives different shocks -- the same silent   */
+/*  decision the P matrix carries, said in the same place.                    */
+/*                                                                           */
+/*  THE DECOMPOSITION FALLS OUT OF THE SAME NUMBERS, and that is the check    */
+/*  worth having: with R_k = G_k P D^(1/2), Var(h) = sum_{m<h} R_m R_m', so   */
+/*  the forecast standard error at h is the square root of the sum of squared */
+/*  responses.  The suite verifies exactly that identity against the forecast */
+/*  table, which is what says the two blocks describe one model.             */
+/*****************************************************************************/
+static void level_irf_fevd(struct Tvarma *v, real **B2, int K)
+{
+    int M = v->m, r = global_r, s = M - r, i, j, k, l;
+    real ***Psi, ***R, **Csum, **G, **P, *D;
+
+    if (K < 1 || s < 1) return;
+
+    P = matrix(1, M, 1, M);
+    D = vector(1, M);
+    if (!ldl_sigma(v, P, D)) {
+        free_vector(D, 1, M); free_matrix(P, 1, M, 1, M);
+        fprintf(outputv, "\n(impulse responses not computed: Sigma is not "
+                         "positive definite)\n");
+        return;
+    }
+
+    Psi  = tensor(0, K, 1, M, 1, M);
+    R    = tensor(0, K, 1, M, 1, M);
+    Csum = matrix(1, M, 1, M);
+    G    = matrix(1, M, 1, M);
+    compute_psi_weights(M, v->p, v->q, v->phi, v->theta, K, Psi);
+    for (i = 1; i <= M; i++)
+        for (j = 1; j <= M; j++) Csum[i][j] = 0.0;
+
+    for (k = 0; k <= K; k++) {
+        for (i = 1; i <= M; i++)
+            for (j = 1; j <= M; j++) Csum[i][j] += Psi[k][i][j];
+        level_error_map(Csum, Psi[k], B2, M, r, G);
+        for (i = 1; i <= M; i++)
+            for (j = 1; j <= M; j++) {
+                real acc = 0.0;
+                for (l = j; l <= M; l++) acc += G[i][l] * P[l][j];
+                R[k][i][j] = acc * sqrt(D[j]);
+            }
+    }
+
+    banner("Impulse Response of the Levels");
+    fprintf(outputv,
+        "\n  Response of Y_{t+k} to a one-s.d. orthogonalized shock at t.\n"
+        "  Shocks are orthogonalized by Sigma = P D P', so the ORDERING is the\n"
+        "  .inp's column order: a different order gives different shocks.\n"
+        "  ! in a cointegrated system the response does not die out: what it\n"
+        "    converges to is the permanent effect, of rank M - r = %d.\n", s);
+    for (j = 1; j <= M; j++) {
+        fprintf(outputv, "\nShock to %s:\n    k", series_names ? series_names[j] : "y");
+        for (i = 1; i <= M; i++)
+            fprintf(outputv, " %14s", series_names ? series_names[i] : "y");
+        fprintf(outputv, "\n");
+        for (k = 0; k <= K; k++) {
+            fprintf(outputv, "%5d", k);
+            for (i = 1; i <= M; i++) fprintf(outputv, " %14.6f", R[k][i][j]);
+            fprintf(outputv, "\n");
+        }
+    }
+
+    banner("Forecast Error Variance Decomposition, in Levels");
+    fprintf(outputv,
+        "\n  Percentage of the h-step level forecast error variance due to "
+        "each shock.\n  Same orthogonalization, so the same caveat on the "
+        "ordering.\n");
+    for (i = 1; i <= M; i++) {
+        real *acc = vector(1, M);
+        for (j = 1; j <= M; j++) acc[j] = 0.0;
+        fprintf(outputv, "\n%s:\n    h", series_names ? series_names[i] : "y");
+        for (j = 1; j <= M; j++)
+            fprintf(outputv, " %11s", series_names ? series_names[j] : "y");
+        fprintf(outputv, "\n");
+        for (k = 0; k <= K; k++) {
+            real tot = 0.0;
+            for (j = 1; j <= M; j++) { acc[j] += R[k][i][j] * R[k][i][j];
+                                       tot += acc[j]; }
+            fprintf(outputv, "%5d", k + 1);
+            for (j = 1; j <= M; j++)
+                fprintf(outputv, " %10.1f%%",
+                        (tot > 0.0) ? 100.0 * acc[j] / tot : 0.0);
+            fprintf(outputv, "\n");
+        }
+        free_vector(acc, 1, M);
+    }
+
+    free_matrix(G, 1, M, 1, M);
+    free_matrix(Csum, 1, M, 1, M);
+    free_tensor(R, 0, K, 1, M, 1, M);
+    free_tensor(Psi, 0, K, 1, M, 1, M);
+    free_vector(D, 1, M);
+    free_matrix(P, 1, M, 1, M);
+}
+
+/*****************************************************************************/
 /*  P8 — report_fit: everything the .out says about a finished fit.          */
 /*                                                                           */
 /*  It was 793 lines inline in main(), which is why finding anything in this  */
@@ -6404,6 +6558,13 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
 
         /*  The diagnosis of the residuals and the roots close the report on
          *  the FIT; the forecast is a product and comes after them.          */
+        /*  P11 — the impulse responses and the decomposition, in drvarma's
+         *  place in the report: after the hypotheses and before the residual
+         *  diagnosis.  The horizon is drvarma's rule too -- 10 on a short
+         *  sample, 20 otherwise -- so that the two reports are read the same
+         *  way.                                                              */
+        level_irf_fevd(vp, B2m, (nobs < 40) ? 10 : 20);
+
         residual_diagnostics(vp);
         operator_roots(vp);
         /*  AND THE PER-SERIES DIAGNOSIS, which is the suite's and which drvec

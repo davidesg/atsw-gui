@@ -2190,6 +2190,64 @@ else
 fi
 echo
 
+# 8o. P11 — THE LEVEL IMPULSE RESPONSES, AND THE IDENTITY THAT TIES THEM TO THE
+#     FORECAST.  Both blocks are built from the same map -- level_error_map(),
+#     the single source of truth of docs/FORECAST.md 4 -- so they cannot be
+#     independently wrong: with R_k = G_k P D^(1/2), the h-step forecast
+#     variance is sum_{k<h} R_k R_k', hence
+#
+#         s.e.(h) = sqrt( sum_{k<h} sum_j R_k[i][j]^2 )
+#
+#     and that is checked against the forecast table of the SAME run.  If the
+#     orthogonalisation, the map or the accumulation were wrong, this breaks.
+echo "[8o] the level impulse responses (P11)"
+
+run "$MM" 2 1 1 -case 2 -f 4
+if ! grep -aq 'Impulse Response of the Levels' "$TMP/case.out"; then
+    bad "impulse responses" "not emitted"
+else
+    ok "the level impulse responses are reported by default"
+
+    #  s.e.(h) de la tabla de prevision, contra la suma de respuestas al
+    #  cuadrado hasta k = h-1.  Se comprueba en las dos series y a h = 1..4.
+    worst=$(awk '
+        /^Shock to /   {sh++; k=-1; next}
+        sh && /^ *[0-9]+ / && NF>=3 {k=$1; R[sh","k","1]=$2; R[sh","k","2]=$3;
+                                     if (k>kmax) kmax=k; next}
+        /^   h  / {mode="F"; next}
+        mode=="F" && /^ *[0-9]+ / && NF>=5 {h=$1; SE[h","1]=$3; SE[h","2]=$5;
+                                            if (h>hmax) hmax=h}
+        END{
+            worst=0
+            for (h=1; h<=hmax; h++)
+                for (i=1; i<=2; i++) {
+                    acc=0
+                    for (k=0; k<h; k++)
+                        for (j=1; j<=2; j++) acc += R[j","k","i]*R[j","k","i]
+                    d = sqrt(acc) - SE[h","i]; if (d<0) d=-d
+                    if (d>worst) worst=d
+                }
+            printf "%.9f", worst
+        }' "$TMP/case.out")
+    if [ -n "$worst" ] && awk -v w="$worst" 'BEGIN{exit !(w < 1e-6)}'; then
+        ok "the forecast s.e. IS the root of the summed squared responses (worst $worst)"
+    else
+        bad "IRF vs forecast s.e." "they disagree by $worst"
+    fi
+
+    #  Y la descomposicion tiene que sumar 100 en cada fila: es una particion.
+    if awk '/Forecast Error Variance Decomposition/{f=1}
+            f && /^ *[0-9]+ +[0-9.]+% /{
+                t=0; for(j=2;j<=NF;j++){v=$j; sub("%","",v); t+=v}
+                if (t < 99.9 || t > 100.1) bad=1 }
+            END{exit bad?1:0}' "$TMP/case.out"; then
+        ok "every row of the decomposition adds to 100%"
+    else
+        bad "FEVD" "a row does not add to 100%"
+    fi
+fi
+echo
+
 # ================================================== 9 MEMORY (opt-in) ==
 # Off by default so `make test` is deterministic on any machine; run it with
 #     VALGRIND=1 make test

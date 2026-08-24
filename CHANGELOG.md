@@ -42,6 +42,29 @@ sólo sobre `drvec.c`: los ficheros vendorizados son de su dueño.
   número tiene que decir lo mismo en seis sitios, y cada defecto tiene que tener
   número, estado y **coste medido**.
 
+### El `.out`, con la estructura del conjunto (P10)
+
+El `.out` de `drvec` no era un fichero de resultados: era un ensayo. De 283
+líneas del caso canónico, más de la mitad eran prosa explicativa — por qué una
+χ² no es un contraste, qué costó BUG-10 en el programa hermano, qué dice Mélard
+sobre los autovalores de Π. Todo eso está además en la documentación, que es
+donde va.
+
+Ahora sigue a `drvarma`, que es el programa multivariante del conjunto y con
+quien `drvec` comparte motor: cabecera `clave : valor`, bloques separados por
+la línea de `=` de 61, y **una tabla de parámetros** con `Estimate`,
+`Std.Error`, **`t-stat`**, **`p-val`** y códigos de significación — antes los
+errores estándar iban pegados a la matriz, sin `t`, sin `p` y sin poder leerse
+en columna. Seis secciones: parámetros, modelo VEC, diagnosis de cointegración,
+Wald, diagnosis de residuos y previsión.
+
+De la prosa quedan **cuatro avisos de una línea**, marcados con `!`, que son los
+que cambian cómo se lee un número. 283 → 237 líneas.
+
+Verificado sacando todos los literales numéricos de 22 informes antes y después
+y exigiendo que el nuevo contenga al viejo. Destapó dos defectos: la ruta
+`-warma` perdía la diagnosis, las raíces y las cifras del ajuste.
+
 ### El refactor de `main()` (P8)
 
 `main()` llevaba **2 320 líneas**: la línea de órdenes, cinco modos completos, el

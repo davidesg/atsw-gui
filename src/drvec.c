@@ -511,6 +511,7 @@ static void vec_shootx(real *x, struct Tvarma *armax,
 static int  calc_nparametrs(void);
 static void init_guess(real *x, int npar);
 static void build_y2_levels(void);
+static void banner(const char *title);
 
 /*****************************************************************************/
 /*  build_y2_levels — fill Y2_levels, once, before any estimation            */
@@ -1364,16 +1365,13 @@ static void residual_diagnostics(struct Tvarma *v)
                 C[k][i][j] = sm / n;
             }
 
-    fprintf(outputv, "\n=== Residual diagnostics ===\n");
+    banner("Multivariate Residual Diagnostics");
+    fprintf(outputv, "\n");
     fprintf(outputv, "  residual sd:");
     for (i = 1; i <= M; i++) fprintf(outputv, " %10.6f", sqrt(C[0][i][i]));
     fprintf(outputv, "\n  band = 2/sqrt(n) = %.4f;  * marks |r| > band\n", band);
-    fprintf(outputv, "\n  Cross-correlation matrices R(k): R(k)[i][j] = "
-                     "corr(a_i(t), a_j(t-k))\n"
-                     "  The DIAGONAL is each equation's own ACF; the "
-                     "OFF-DIAGONAL is the cross\n"
-                     "  effect the model has not captured, and its k is its "
-                     "order.\n");
+    fprintf(outputv, "\nResidual cross-correlation matrices, "
+                     "R(k)[i][j] = corr(a_i(t), a_j(t-k)):\n");
     for (k = 0; k <= K; k++) {
         fprintf(outputv, "  k=%-2d ", k);
         for (i = 1; i <= M; i++) {
@@ -1414,30 +1412,19 @@ static void residual_diagnostics(struct Tvarma *v)
                     real r = C[0][i][j] / sqrt(C[0][i][i] * C[0][j][j]);
                     if (fabs(r) > fabs(r0)) r0 = r;
                 }
-            fprintf(outputv, "\n  Contemporaneous innovation correlation "
-                             "(largest |r| at k=0): %+.3f\n", r0);
-            if (global_diag_cov && fabs(r0) > band)
-                fprintf(outputv, "    NOTE: -diagcov forces Sigma diagonal, so "
-                                 "this one IS an imposed\n    restriction the "
-                                 "data does not support.\n");
-            else
-                fprintf(outputv, "    Not a defect: Sigma carries it "
-                                 "(it is estimated).\n");
+            fprintf(outputv, "\n  Contemporaneous correlation, largest |r| "
+                             "at k=0: %+.3f%s\n", r0,
+                     (global_diag_cov && fabs(r0) > band)
+                       ? "   ! -diagcov forces Sigma diagonal: an imposed "
+                         "restriction the data do not support"
+                       : "   (Sigma carries it)");
         }
-        fprintf(outputv, "  Cross DYNAMICS left in the residuals (k >= 1): ");
+        fprintf(outputv, "  Cross dynamics left at k >= 1: ");
         if (!any)
-            fprintf(outputv, "none beyond the band.\n"
-                    "    The cross structure in the model is enough for this "
-                    "sample.\n");
+            fprintf(outputv, "none beyond the band\n");
         else
-            fprintf(outputv, "YES.\n"
-                    "    Largest: equation %d against the innovation of %d at "
-                    "lag %d, r = %+.3f.\n"
-                    "    A cross effect at lag k needs the model to reach lag k: "
-                    "raise p (or q)\n"
-                    "    if k >= the current order, and check the DIRECTION -- "
-                    "R(k)[i][j] and\n"
-                    "    R(k)[j][i] are different statements.\n",
+            fprintf(outputv, "YES, largest is equation %d against the "
+                    "innovation of %d at lag %d, r = %+.3f\n",
                     wi, wj, worst_k, worst);
     }
 
@@ -1679,9 +1666,8 @@ static void operator_roots(struct Tvarma *v)
     real minmod = 1.0e12;
 
     if (v->p <= 0 && v->q <= 0) return;
-    fprintf(outputv, "\nRoots of the AR and MA operators (moduli; the model is "
-                     "stationary and\ninvertible when every modulus exceeds "
-                     "one):\n\n");
+    fprintf(outputv, "\nInverse roots of |phi(B)|=0 and |theta(B)|=0 "
+                     "(moduli; > 1 is stationary/invertible):\n\n");
     report_operator_roots("AR (Phi)",   v->phi,   v->m, v->p, &minmod, 0);
     report_operator_roots("MA (Theta)", v->theta, v->m, v->q, &minmod, 0);
     if (minmod < 1.0001)
@@ -1701,16 +1687,11 @@ static void operator_roots(struct Tvarma *v)
      *  with M = 2, r = 1 -- and why that is enough.                          */
     if (v->q > 0 && ma_struct_on())
         fprintf(outputv,
-            "\n  The %d finite MA root%s above %s of the %d x %d block, and\n"
-            "  det Theta(1) = det(I_r - sum T11_k) exactly (Corollary 6.3): the\n"
-            "  %d x %d block being invertible is the WHOLE admissibility condition\n"
-            "  in this class, and it is what the engine's own gate enforces.  The\n"
-            "  %d root%s at infinity %s the zeroed rows, and %s no defect.\n",
+            "  the %d finite MA root%s %s the %d x %d block's; the %d at "
+            "infinity %s the zeroed rows\n",
             global_r * v->q, (global_r * v->q == 1) ? "" : "s",
-            (global_r * v->q == 1) ? "is that" : "are those", global_r, global_r,
-            global_r, global_r,
-            (nser - global_r) * v->q, ((nser - global_r) * v->q == 1) ? "" : "s",
-            ((nser - global_r) * v->q == 1) ? "is" : "are",
+            (global_r * v->q == 1) ? "is" : "are", global_r, global_r,
+            (nser - global_r) * v->q,
             ((nser - global_r) * v->q == 1) ? "is" : "are");
 }
 
@@ -2101,48 +2082,38 @@ static void convergence_note(int code)
 {
     const char *note = NULL, *head = NULL;
 
+    /*  One line each, in the shape drvarma's convergence block uses: a verdict
+     *  and, where the verdict changes how the fit must be read, a marked
+     *  warning.  What each termination code MEANS is argued in
+     *  docs/CONVERGENCE.md, which is where an argument belongs.              */
     switch (code) {
     case 1:
-        head = "clean convergence";
-        note = "the scaled gradient is at the tolerance.  This is the one to\n"
-               "  trust.";
+        head = "clean convergence, on the scaled gradient";
+        note = NULL;
         break;
     case 2:
         head = "stopped on steptol, NOT on the gradient";
-        note = "the step collapsed while the gradient may still be\n"
-               "  appreciable.  Typical of an ill-conditioned likelihood (near\n"
-               "  non-identification, common factors).  Treat the standard errors\n"
-               "  with caution and re-estimate from other starting values or with\n"
-               "  a smaller order.";
+        note = "the step collapsed while the gradient may still be appreciable; "
+               "treat the standard errors with caution";
         break;
     case 3:
         head = "NOT a convergence: the line search failed to improve";
-        note = "in drvec this is the COMMON outcome, and it is worth knowing why\n"
-               "  it is not the same situation as in drtran.  There, termcode 3\n"
-               "  usually means the fit started AT the optimum, having been seeded\n"
-               "  from a .pre.  Here it means the surface is hard: measured, moving\n"
-               "  Theta by hundredths can move the answer by units (docs/\n"
-               "  CONVERGENCE.md).  The estimates are a stationary-ish point of an\n"
-               "  exact likelihood, not a demonstrated maximum.  Cross-check with\n"
-               "  -fixb2, compare |Sigma| across equivalent configurations, and\n"
-               "  treat one run as evidence rather than as an answer.";
+        note = "the estimates are a stationary-ish point, not a demonstrated "
+               "maximum.  See docs/CONVERGENCE.md";
         break;
     case 4: case 5:
         head = "NOT a convergence: the optimiser gave up";
-        note = "the estimates are not a maximum, and every criterion derived from\n"
-               "  this fit -- standard errors, AIC/BIC, any LR statistic -- is\n"
-               "  unreliable.";
+        note = "every criterion derived from this fit -- standard errors, "
+               "AIC/BIC, any LR -- is unreliable";
         break;
     default:
         head = "the termination criterion could not be read";
-        note = "no interpretation available.";
+        note = NULL;
         break;
     }
 
-    fprintf(outputv, "\nConvergence note: %s.\n  %s\n", head, note);
-    fprintf(outputv,
-        "  (Note that ifault above is MODEL adequacy, not convergence: a fit\n"
-        "   that stopped short of an optimum can still report ifault = 0.)\n");
+    fprintf(outputv, "Convergence      : %s\n", head);
+    if (note) fprintf(outputv, "  ! %s\n", note);
     if (!quiet_mode && code != 1)
         printf("  Convergence note: %s.  See the .out and docs/CONVERGENCE.md\n",
                head);
@@ -2271,6 +2242,43 @@ static char out_base[512] = "";
  *  scope because report_fit() sets it and main() reads it: the two used to be
  *  one function, and this is the only piece of state that crossed the cut.   */
 static int estimation_failed = 0;
+
+/*  P10 — THE SEPARATORS OF THE SUITE'S .out.  61 '=' and 68 '-', which is what
+ *  drvarma's report uses (report.py, EQ and DASH) and what the C engine's own
+ *  report() writes.  A .out that separates its sections some other way is a
+ *  .out a reader of the suite has to learn again.                            */
+#define EQBAR   "============================================================="
+#define DASHBAR "--------------------------------------------------------------------"
+
+/*  banner — a titled section, in the suite's shape.                          */
+static void banner(const char *title)
+{
+    fprintf(outputv, "\n\n%s\n  %s\n%s\n", EQBAR, title, EQBAR);
+}
+
+/*  sig_code / par_row — one row of the parameter table: name, estimate,
+ *  standard error, t and its two-sided p, with the significance codes
+ *  drvarma prints (report.py:_parameters_block).  drvec used to print
+ *  `0.608562 (sd 0.263137)` glued to the matrix -- no t, no p, and impossible
+ *  to read down a column.                                                    */
+static const char *sig_code(real p)
+{
+    return (p < 0.001) ? "***" : (p < 0.01) ? "**"
+         : (p < 0.05)  ? "*"   : (p < 0.10) ? "." : " ";
+}
+
+static void par_row(const char *label, real est, real se)
+{
+    if (se > 0.0) {
+        real t  = est / se;
+        real pv = 2.0 * gsl_cdf_ugaussian_Q(fabs(t));
+        fprintf(outputv, "%-24s %13.6f %12.6f %8.3f %7.4f %s\n",
+                label, est, se, t, pv, sig_code(pv));
+    } else {
+        fprintf(outputv, "%-24s %13.6f %12s %8s %7s\n",
+                label, est, "-", "-", "-");
+    }
+}
 
 /*  P8 — the three file names, at file scope.  They were locals of main(), and
  *  every mode that was extracted out of main() needed all three: the .out to
@@ -4787,19 +4795,7 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
     char title[256], h0[256], acc_s[256], rej_s[256];
     const char *nm;
 
-    fprintf(outputv,
-        "\n\n=============================================================\n"
-        "     HYPOTHESES ABOUT THE RELATIONS (WALD)                   \n"
-        "=============================================================\n"
-        "  Read off the covariance matrix the estimation already produced:\n"
-        "  NOTHING here is re-estimated.  That covariance is, by default,\n"
-        "  the factor the BFGS accumulated on its way to the optimum; the\n"
-        "  option -fdhess replaces it with the finite-difference Hessian AT\n"
-        "  the optimum, and that is the one to use for a p-value that is\n"
-        "  going to be published.  The tests that DO need a re-estimation --\n"
-        "  the rank itself, and the restricted fits -- are -lrtest,\n"
-        "  -bootstrap, -weakex, -matest and -artest, and they are not\n"
-        "  replaced by anything below.\n");
+    banner("Joint Hypothesis Tests (Wald)");
 
     if (r > 0) {
         /* ---- 1. Lambda = 0, and why it is NOT a test --------------------- */
@@ -4811,33 +4807,23 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
             real chi2; int df;
             if (wald_sub(x, cov, idx, k, &chi2, &df) == 0)
                 fprintf(outputv,
-                    "\n--- The error-correction term as a whole ---\n"
-                    "  H0: Lambda = 0 (nothing adjusts to the disequilibrium)\n"
-                    "  Wald chi2(%d) = %.4f, chi2 p-value = %.4f\n"
-                    "  THIS IS NOT A TEST, and the number is here only because\n"
-                    "  leaving it out would invite someone to compute it worse.\n"
-                    "  Under Lambda = 0 the matrix B is not identified at all --\n"
-                    "  it multiplies a zero -- so the null sits on a boundary\n"
-                    "  where a nuisance parameter disappears (Davies) and the\n"
-                    "  chi2 is the distribution of nothing.  The instrument for\n"
-                    "  this question is -lrtest, with -bootstrap N for a p-value\n"
-                    "  that is calibrated in this sample size.\n",
+                    "\nError-correction term as a whole\n"
+                    "  H0: Lambda = 0\n"
+                    "  Wald chi2(%d) = %.4f, p-value = %.4f\n"
+                    "  ! NOT A TEST: under H0, B is unidentified (Davies).  "
+                    "Use -lrtest -bootstrap\n",
                     df, chi2, gsl_cdf_chisq_Q(chi2, df));
         } else {
             fprintf(outputv,
-                "\n--- The error-correction term as a whole ---\n"
-                "  Lambda is not free in x[] (-alpha imposes alpha = A*psi),\n"
-                "  so the restriction is already in the fit and there is\n"
-                "  nothing here to test.\n");
+                "\nError-correction term as a whole\n"
+                "  Lambda is not free (-alpha imposes alpha = A*psi): "
+                "nothing to test\n");
         }
 
         /* ---- 2. Exogeneidad debil, fila a fila --------------------------- */
         fprintf(outputv,
-            "\n--- Weak exogeneity, one variable at a time ---\n"
-            "  H0: row i of Lambda = 0, i.e. variable i does not respond to\n"
-            "  the disequilibrium and carries no information about B.  This one\n"
-            "  IS a standard chi2 with r = %d df (Johansen 1992): with Lambda\n"
-            "  non-zero overall, B stays identified under the null.\n", r);
+            "\nWeak exogeneity, one variable at a time"
+            "   [H0: row i of Lambda = 0, chi2(%d)]\n", r);
         for (i = 1; i <= M; i++) {
             k = 0;
             for (j = 1; j <= r; j++)
@@ -4861,13 +4847,10 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
                 if (ix_B2[i][j] > 0) idx[++k] = ix_B2[i][j];
         if (k > 0) {
             fprintf(outputv,
-                "\n--- Exclusion from the cointegrating relations ---\n"
-                "  H0: row i of B2 = 0, i.e. variable i does not enter the\n"
-                "  long-run relation.  Only the %d variable%s of the nabla Y2\n"
-                "  block can be excluded: B = [I_r ; B2] normalises on the Y1\n"
-                "  block, whose coefficients are 1 and 0 by construction and\n"
-                "  are not estimated.  Standard chi2 (beta is superconsistent).\n",
-                s, (s == 1) ? "" : "s");
+                "\nExclusion from the cointegrating relations"
+                "   [H0: row i of B2 = 0, chi2(%d)]\n"
+                "  only the %d nabla Y2 variable%s can be excluded: B = [I_r ; B2]"
+                " normalises on Y1\n", r, s, (s == 1) ? "" : "s");
             for (i = 1; i <= s; i++) {
                 k = 0;
                 for (j = 1; j <= r; j++)
@@ -4894,28 +4877,23 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
             }
         } else if (global_fixb2) {
             fprintf(outputv,
-                "\n--- Exclusion from the cointegrating relations ---\n"
-                "  B2 is held fixed (-fixb2), so it is imposed and not\n"
-                "  estimated: there is no covariance to test it with.  The LR\n"
-                "  statistic that -fixb2 with a value does give IS a valid test\n"
-                "  of that restriction -- see the usage text.\n");
+                "\nExclusion from the cointegrating relations\n"
+                "  B2 is held fixed (-fixb2): imposed, not estimated, so there "
+                "is nothing to test\n");
         }
     } else {
         fprintf(outputv,
-            "\n  r = 0: there is no error-correction term, no Lambda and no B,\n"
-            "  so the three hypotheses a VEC model is here to answer do not\n"
-            "  exist in this fit.  What follows is the short-run block alone.\n");
+            "\n  r = 0: no error-correction term, no Lambda and no B; the "
+            "short-run block only\n");
     }
 
     /* ---- 4. The short-run dynamics -------------------------------------- */
     if (nf > 0 || q > 0) {
         fprintf(outputv,
-            "\n--- Short-run dynamics ---\n"
-            "  CAREFUL with the reading: F and Theta act on Ybar_t =\n"
-            "  (nabla Y2_t', W_t')', not on the original series.  A cross\n"
-            "  effect below is between a DIFFERENCED variable and an\n"
-            "  equilibrium error, which is not the same statement as Granger\n"
-            "  causality among the levels.\n");
+            "\nShort-run dynamics\n"
+            "  ! F and Theta act on Ybar = (nabla Y2', W')', not on the levels: "
+            "a cross effect\n"
+            "    here is not Granger causality among the original series\n");
 
         if (nf > 0) {                              /* last lag of F     */
             k = 0;
@@ -5009,11 +4987,8 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
     }
 
     if (!global_fdhess)
-        fprintf(outputv,
-            "\n  Reminder: these p-values came from the BFGS-accumulated\n"
-            "  covariance.  Re-run with -fdhess before quoting any of them.\n");
-    fprintf(outputv,
-        "=============================================================\n");
+        fprintf(outputv, "\n  ! p-values from the BFGS-accumulated covariance; "
+                         "use -fdhess before quoting them\n");
 
     free_ivector(idx, 1, (M * M * (nf + q) + M * r + s * r) + 1);
 }
@@ -5077,26 +5052,19 @@ static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
                 }
             }
         fprintf(outputv,
-            "\n  one-step self-check: max |Ybar_t - a_t - pred(t|t-1)| = %.3e\n"
-            "  over the last %d observations.  The residuals come from elf, not\n"
-            "  from this recursion, so this ties the recursion, the mean\n"
-            "  convention and the indexing to the engine.  With q >= 1 the\n"
-            "  residue is the xi TRUNCATION and not an error: it is of order\n"
-            "  xitol = %.0e, and -m 2, which switches the truncation off, takes\n"
-            "  it to machine zero.  Measured on mink-muskrat: 3.5e-04 against\n"
-            "  1.8e-15.  Same mechanism as HOMOLOGATION.md 1b.\n",
+            "\n  one-step self-check: max |Ybar_t - a_t - pred(t|t-1)| = %.3e "
+            "over %d obs\n"
+            "  (the residue is the xi truncation, of order xitol = %.0e)\n",
             worst, n - t0 + 1, fabs(v->xitol));
     }
 
     /*  [3] The bands, through the map of [4] above and by no other route.    */
     z = (conf >= 0.99) ? 2.575829 : (conf >= 0.95) ? 1.959964 : 1.644854;
-    fprintf(outputv,
-        "\n=== Forecast, %d step%s ahead, in LEVELS ===\n"
-        "  Columns are the .inp's: Y2 block (1..%d), then Y1 block.\n"
-        "  Bands are +/- %.4f standard errors (%.0f%%), from the model's own\n"
-        "  innovation covariance; they are THEORETICAL and say nothing about\n"
-        "  whether the specification is right.\n\n",
-        H, (H == 1) ? "" : "s", s, z, 100.0 * conf);
+    banner("Forecast");
+    fprintf(outputv, "\n%d step%s ahead, in levels.  Columns are the .inp's: "
+                     "Y2 block (1..%d), then Y1.\n"
+                     "s.e. are THEORETICAL; a %.0f%% band is +/- %.4f s.e.\n\n",
+        H, (H == 1) ? "" : "s", s, 100.0 * conf, z);
     fprintf(outputv, "   h");
     for (i = 1; i <= M; i++)
         fprintf(outputv, "  %14s %10s", series_names ? series_names[i] : "y", "s.e.");
@@ -5179,10 +5147,8 @@ static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
             if (!quiet_mode) printf("Forecasts written to %s\n", fname);
         }
     }
-    fprintf(outputv, "\n  The Y1 band inherits the CUMULATED Y2 error through\n"
-                     "  Y1 = W - B2'Y2, which is why both come from one map and\n"
-                     "  not from two (docs/PLAN_PRODUCCION.md P5, and BUG-10 of\n"
-                     "  the transfer-function program, which is what that costs).\n");
+    fprintf(outputv, "\n  ! the Y1 s.e. inherits the cumulated Y2 error "
+                     "through Y1 = W - B2'Y2\n");
 
     if (!quiet_mode)
         printf("Forecast: %d steps written to the .out\n", H);
@@ -5512,9 +5478,8 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
            with whatever point it is handed.                                  */
         if (global_fdhess) {
             if (exact_hessian_se(npar, x, dev, cov, nobs) == 0)
-                fprintf(outputv, "\nStandard errors from the finite-difference "
-                                 "Hessian AT the optimum (-fdhess),\n"
-                                 "not from the BFGS-accumulated factor.\n");
+                fprintf(outputv, "Standard errors  : finite-difference Hessian "
+                                 "at the optimum (-fdhess)\n");
         }
         vec_shootx(x, vp, &ifault, 0, 0);  /* retrieve final */
 
@@ -5534,80 +5499,20 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
                 TRUE, vp->a, &pi1, &pi2, &pi3, &ifr);
         }
 
-        fprintf(outputv, "\nESTIMATION SUCCESSFUL (ifault=0)\n");
-        fprintf(outputv, "sigma2 : %15.10f\n", vp->sigma2);
-        fprintf(outputv, "logelf : %15.10f\n", vp->logelf);
-        /* npar, AIC and BIC in the plain fit too.  They were only inside
-           -lrtest's table, and without them no mechanical specification
-           criterion can be set: comparing nested models by LR works for a pair,
-           but choosing within a declared set asks for an information criterion.
-           Same normalisation by nobs as -lrtest's table, so that the numbers
-           are the same number.                                               */
-        fprintf(outputv, "npar   : %d\n", npar);
-        fprintf(outputv, "AIC    : %15.10f   (-2logL + 2k, /n)\n",
-                (-2.0 * vp->logelf + 2.0 * npar) / nobs);
-        fprintf(outputv, "BIC    : %15.10f   (-2logL + k log n, /n)\n",
-                (-2.0 * vp->logelf + npar * log((real) nobs)) / nobs);
+        /*  The convergence note goes with the optimizer's own banner, which the
+         *  engine already wrote into this file: WHY it stopped belongs next to
+         *  WHETHER it stopped.  The fit statistics follow it, and they are
+         *  printed for EVERY parameterisation -- -warma included, which is
+         *  what the branch below skips.                                      */
         convergence_note(termcode_from_out(outname));
-        operator_roots(vp);
-        /*  The rank condition, beside the roots and for the same reason: it
-         *  says whether the point it stopped at is a model of the rank that was
-         *  asked for or of another.  It is recomputed at the last evaluation,
-         *  which is the one vec_shootx left just before.                     */
-        if (global_r > 0 && global_q > 0 && granger_sv >= 0.0) {
-            fprintf(outputv,
-                "\nRank condition (Granger): sigma_min(Lambda_perp' Theta(1) "
-                "B_perp) = %.3e\n", granger_sv);
-            if (granger_sv < global_rankadm_tol) {
-                /*  AND TO THE TERMINAL AS WELL.  A fit that denies its own rank
-                 *  is not a worse fit: it is the fit of another model, and
-                 *  whoever runs the program has to find out without opening the
-                 *  .out.  It is the decision of step 4 of the plan: the default
-                 *  CALCULATION does not move -- no recorded result moves -- but
-                 *  the PRESENTATION stops offering as an answer something the
-                 *  theory does not license (docs/THEORY.md, corollary 5.1).  */
-                if (!quiet_mode)
-                    printf("\n  *** WARNING: sigma_min(Lambda_perp' Theta(1) "
-                           "B_perp) = %.3e < %.1e\n"
-                           "      This fit DENIES THE RANK it was estimated "
-                           "at: it is not a\n"
-                           "      worse fit, it is the fit of another model.  Its "
-                           "standard errors\n"
-                           "      and any LR against it do NOT have their "
-                           "usual distribution.\n"
-                           "%s"
-                           "      See the ladder:  drvec <file> %d %d %d "
-                           "-specs\n", granger_sv, global_rankadm_tol,
-                           /*  P4 — and where it comes from.  Under the default this
-                            *  cannot happen (Corollary 6.3); if it is
-                            *  happening, the free class has been asked for, and
-                            *  that is the first thing to say.                */
-                           global_mafree
-                             ? "      This is -mafree: that class CONTAINS points"
-                               " the model does not\n"
-                               "      admit.  The default (-marow) cannot"
-                               " reach them.\n"
-                             : "",
-                           global_p, global_q, global_r);
-                fprintf(outputv,
-                  "  *** This is ZERO to working precision, and it is not a\n"
-                  "  detail: that matrix is what makes the long-run impact\n"
-                  "  C(1) = B_perp (Lambda_perp' Gamma B_perp)^-1 Lambda_perp'\n"
-                  "  Theta(1) have rank M-r.  Where it degenerates the FITTED\n"
-                  "  model denies the rank it was estimated at -- it says r and\n"
-                  "  its parameters leave no stochastic trend.  The estimate is\n"
-                  "  then on the edge of the region the model class allows, so\n"
-                  "  standard errors and LR statistics do not have their usual\n"
-                  "  distributions there.  -rankadm refuses such points; -mawarma\n"
-                  "  makes them unreachable by construction.  See\n"
-                  "  docs/HOMOLOGATION.md 4h.\n");
-            } else
-                fprintf(outputv,
-                  "  Comfortably away from zero: the fit is a model of the rank\n"
-                  "  it was estimated at.\n");
-        }
-        gate_contract(vp);
-        residual_diagnostics(vp);
+        fprintf(outputv, "sigma2           : %15.10f\n", vp->sigma2);
+        fprintf(outputv, "logelf           : %15.10f\n", vp->logelf);
+        fprintf(outputv, "npar             : %d\n", npar);
+        fprintf(outputv, "AIC              : %15.10f   (-2logL + 2k, /n)\n",
+                (-2.0 * vp->logelf + 2.0 * npar) / nobs);
+        fprintf(outputv, "BIC              : %15.10f   (-2logL + k log n, /n)\n",
+                (-2.0 * vp->logelf + npar * log((real) nobs)) / nobs);
+
 
         /* The LR of H1(r) against H(r).  Johansen and Swensen (2024): the degrees
            of freedom are (M - sa)*r, which is how many free entries of alpha the
@@ -5813,21 +5718,33 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
         for (int a = 1; a <= nq_ix * nser; a++)
             for (int b = 1; b <= nser; b++) ix_Th[a][b] = 0;
 
-        fprintf(outputv, "\nVEC model (Mauricio 2006):\n");
-        fprintf(outputv, "  (I - F1 L - ... - F_{p-1} L^{p-1}) nabla Y_t =\n");
-        fprintf(outputv, "      -Lambda (B' Y_{t-1} - E[W_t]) + (I - Theta1 L - ...) A_t\n\n");
+        /*  P10 — THE WALK ONLY READS.  It used to read and print at the same
+         *  time, which is why the matrices came out interleaved with their
+         *  standard errors and there was no table anywhere.  Now it fills these
+         *  arrays and records the indices, and the two printing passes below --
+         *  the parameter table and the model in VEC form -- work off them.    */
+        real **psi_m = NULL;      /* only under -alpha */
+        int  **ix_psi = NULL;
+        real  *mu_m  = vector(1, nser);
+        int   *ix_mu = ivector(1, nser);
+        int    nmu   = 0;
+        real ***F_m  = tensor(1, nf_ix, 1, nser, 1, nser);
+        for (int a = 1; a <= nser; a++) { mu_m[a] = 0.0; ix_mu[a] = 0; }
+        for (int k = 1; k <= nf_ix; k++)
+            for (int a = 1; a <= nser; a++)
+                for (int b = 1; b <= nser; b++) F_m[k][a][b] = 0.0;
 
         if (global_case == 2) {
-            fprintf(outputv, "E[W] =\n");
-            for (int j = 1; j <= r; j++)
-                fprintf(outputv, "  %12.6f  (sd = %10.6f)\n", x[ii], dev[ii]), ii++;
+            for (int j = 1; j <= r; j++) {
+                mu_m[++nmu] = x[ii]; ix_mu[nmu] = ii; ii++;
+            }
         } else if (global_case == 3) {
-            fprintf(outputv, "E[nabla Y2] =\n");
-            for (int i = 1; i <= s; i++)
-                fprintf(outputv, "  %12.6f  (sd = %10.6f)\n", x[ii], dev[ii]), ii++;
-            fprintf(outputv, "E[W] =\n");
-            for (int j = 1; j <= r; j++)
-                fprintf(outputv, "  %12.6f  (sd = %10.6f)\n", x[ii], dev[ii]), ii++;
+            for (int i = 1; i <= s; i++) {
+                mu_m[++nmu] = x[ii]; ix_mu[nmu] = ii; ii++;
+            }
+            for (int j = 1; j <= r; j++) {
+                mu_m[++nmu] = x[ii]; ix_mu[nmu] = ii; ii++;
+            }
         }
 
         if (global_alpha) {
@@ -5837,62 +5754,44 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
                the suite's structural block exists for that.
                Both are printed: psi is what is estimated, Lambda = A*psi is what
                is interpretable, and the standard errors exist only for psi.   */
-            real **psi = matrix(1, alpha_sa, 1, (r > 0 ? r : 1));
-            fprintf(outputv, "psi (sa x r), the free part of alpha = A*psi =\n");
-            for (int i = 1; i <= alpha_sa; i++) {
-                fprintf(outputv, "  ");
+            /*  Under alpha = A*psi what x[] carries is psi (sa x r), not
+             *  Lambda: psi is what is estimated and has standard errors,
+             *  Lambda = A*psi is what is interpretable and does not.  Both are
+             *  reported, in their own places.                                */
+            psi_m = matrix(1, alpha_sa, 1, (r > 0 ? r : 1));
+            ix_psi = imatrix(1, alpha_sa, 1, (r > 0 ? r : 1));
+            for (int i = 1; i <= alpha_sa; i++)
                 for (int j = 1; j <= r; j++) {
-                    psi[i][j] = x[ii];
-                    fprintf(outputv, "%12.6f (sd %9.6f)", x[ii], dev[ii]);
-                    ii++;
+                    psi_m[i][j] = x[ii]; ix_psi[i][j] = ii; ii++;
                 }
-                fprintf(outputv, "\n");
-            }
-            fprintf(outputv, "Lambda = A*psi (M x r) =\n");
-            for (int i = 1; i <= nser; i++) {
-                fprintf(outputv, "  ");
+            for (int i = 1; i <= nser; i++)
                 for (int j = 1; j <= r; j++) {
                     real acc = 0.0;
                     for (int kk = 1; kk <= alpha_sa; kk++)
-                        acc += alpha_A[i][kk] * psi[kk][j];
+                        acc += alpha_A[i][kk] * psi_m[kk][j];
                     Lam_m[i][j] = acc;
-                    fprintf(outputv, "%12.6f", acc);
                 }
-                fprintf(outputv, "\n");
-            }
-            free_matrix(psi, 1, alpha_sa, 1, (r > 0 ? r : 1));
         } else {
-            fprintf(outputv, "Lambda (M x r) =\n");
-            for (int i = 1; i <= nser; i++) {
-                fprintf(outputv, "  ");
+            for (int i = 1; i <= nser; i++)
                 for (int j = 1; j <= r; j++) {
                     Lam_m[i][j] = x[ii];
                     ix_lam[i][j] = ii;
-                    fprintf(outputv, "%12.6f (sd %9.6f)", x[ii], dev[ii]);
                     ii++;
                 }
-                fprintf(outputv, "\n");
-            }
         }
         /* Under -diagar / -diagma only the M diagonal entries are carried in
            x[] (see calc_nparametrs and vec_shootx), so the walk must consume
            M, not M*M, while still displaying the full matrix.                */
         int nf = (global_p > 1) ? global_p - 1 : 0;
-        for (int k = 1; k <= nf; k++) {
-            fprintf(outputv, "F[%d] (M x M) =\n", k);
-            for (int i = 1; i <= nser; i++) {
-                fprintf(outputv, "  ");
+        for (int k = 1; k <= nf; k++)
+            for (int i = 1; i <= nser; i++)
                 for (int j = 1; j <= nser; j++) {
-                    real fv;
                     if (global_diag_ar) {
-                        if (i == j) { ix_F[(k-1)*nser + i][j] = ii; fv = x[ii++]; }
-                        else fv = 0.0;
-                    } else { ix_F[(k-1)*nser + i][j] = ii; fv = x[ii++]; }
-                    fprintf(outputv, "%12.6f", fv);
+                        if (i == j) { ix_F[(k-1)*nser + i][j] = ii;
+                                      F_m[k][i][j] = x[ii++]; }
+                    } else { ix_F[(k-1)*nser + i][j] = ii;
+                             F_m[k][i][j] = x[ii++]; }
                 }
-                fprintf(outputv, "\n");
-            }
-        }
         /*  With -mawarma the free block is only the r*r entries at the top
          *  left; the upper-right block is determined by B2 (which this walk has
          *  not read yet) and the lower s rows are zero.  They are stored here
@@ -5928,18 +5827,6 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
                         ix_Th[(k-1)*nser + i][j] = ii; Th_m[k][i][j] = x[ii++]; }
             }
         }
-        if (!mawarma_on())
-            for (int k = 1; k <= global_q; k++) {
-                fprintf(outputv, "Theta[%d] (M x M)%s =\n", k,
-                        global_matri ? ", block-triangular [T11 T12 ; 0 T22]"
-                      : (marow_on() ? ", [T11 T12 ; 0 0]" : ""));
-                for (int i = 1; i <= nser; i++) {
-                    fprintf(outputv, "  ");
-                    for (int j = 1; j <= nser; j++)
-                        fprintf(outputv, "%12.6f", Th_m[k][i][j]);
-                    fprintf(outputv, "\n");
-                }
-            }
         /* The engine concentrates the covariance scale: it calls elf with
            sigma2 = 1, so the block carried in x[] is identified only up to a
            positive constant.  Report it as Q (what is estimated) and the
@@ -5951,25 +5838,251 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
         /* Same layout as vec_shootx: Q[1][1] = 1, then the variance ratios on
            the diagonal (i >= 2), then the off-diagonals by rows.              */
         Qm[1][1] = 1.0;
+        int ix_q0 = ii;                 /* where Q's free block starts in x[] */
         for (int i = 2; i <= nser; i++) Qm[i][i] = x[ii++];
         if (!global_diag_cov)
             for (int i = 2; i <= nser; i++)
                 for (int j = 1; j < i; j++) Qm[i][j] = Qm[j][i] = x[ii++];
 
-        fprintf(outputv, "Q (M x M, lower triangle; Q[1][1] = 1 by normalisation) =\n");
-        for (int i = 1; i <= nser; i++) {
+
+        /* B2 is stored COLUMN-major in x[] (vec_shootx and init_guess both
+           write `for j in 1..r { for i in 1..s }`), so it must be read back in
+           that order before being displayed row by row.  Both printers below
+           use this one copy, so they cannot disagree.                        */
+        real **B2m = matrix(1, s, 1, (r > 0 ? r : 1));
+        for (int j = 1; j <= r; j++)
+            for (int i = 1; i <= s; i++) {
+                if (!global_fixb2) ix_B2[i][j] = ii;
+                B2m[i][j] = global_fixb2 ? B2_fixed[i][j] : x[ii++];
+            }
+
+
+        /*  -mawarma: now that B2 has been read, Theta is completed with the
+         *  structure it inherits: [T11  T11*B2' ; 0  0].                     */
+        if (mawarma_on())
+            for (int k = 1; k <= global_q; k++) {
+                for (int i = 1; i <= r; i++)
+                    for (int jj2 = 1; jj2 <= s; jj2++) {
+                        real acc = 0.0;
+                        for (int i2 = 1; i2 <= r; i2++)
+                            acc += Th_m[k][i][i2] * B2m[jj2][i2];
+                        Th_m[k][i][r + jj2] = acc;
+                    }
+            }
+
+        if (ii != npar + 1)
+            fprintf(stderr, "ERROR output: consumed %d of %d parameters\n",
+                    ii - 1, npar);
+
+        /* ================= THE PARAMETER TABLE (P10) ===================== */
+        /*  The suite's shape: one row per FREE parameter, with its standard
+         *  error, t and two-sided p.  It is built from the index maps the walk
+         *  above recorded, so a row exists exactly where a parameter does --
+         *  an entry the structure imposes has no row, which is the difference
+         *  between a zero that was estimated and a zero that was assumed.    */
+        banner("Estimated Parameters and Standard Deviations");
+        fprintf(outputv, "\n%-24s %13s %12s %8s %7s\n",
+                "Parameter", "Estimate", "Std.Error", "t-stat", "p-val");
+        fprintf(outputv, "%s\n", DASHBAR);
+        {
+            char lb[64];
+            int a2, b2i, k2;
+
+            for (a2 = 1; a2 <= nmu; a2++) {
+                if (global_case == 3 && a2 <= s)
+                    snprintf(lb, sizeof lb, "E[nablaY2]_%d", a2);
+                else
+                    snprintf(lb, sizeof lb, "E[W]_%d",
+                             (global_case == 3) ? a2 - s : a2);
+                par_row(lb, mu_m[a2], dev[ix_mu[a2]]);
+            }
+            if (psi_m) {
+                for (a2 = 1; a2 <= alpha_sa; a2++)
+                    for (b2i = 1; b2i <= r; b2i++) {
+                        snprintf(lb, sizeof lb, "psi[%d,%d]", a2, b2i);
+                        par_row(lb, psi_m[a2][b2i], dev[ix_psi[a2][b2i]]);
+                    }
+            } else {
+                for (a2 = 1; a2 <= nser; a2++)
+                    for (b2i = 1; b2i <= r; b2i++)
+                        if (ix_lam[a2][b2i]) {
+                            snprintf(lb, sizeof lb, "Lambda[%d,%d]", a2, b2i);
+                            par_row(lb, Lam_m[a2][b2i], dev[ix_lam[a2][b2i]]);
+                        }
+            }
+            for (k2 = 1; k2 <= nf; k2++)
+                for (a2 = 1; a2 <= nser; a2++)
+                    for (b2i = 1; b2i <= nser; b2i++)
+                        if (ix_F[(k2-1)*nser + a2][b2i]) {
+                            snprintf(lb, sizeof lb, "F%d[%d,%d]", k2, a2, b2i);
+                            par_row(lb, F_m[k2][a2][b2i],
+                                    dev[ix_F[(k2-1)*nser + a2][b2i]]);
+                        }
+            for (k2 = 1; k2 <= global_q; k2++)
+                for (a2 = 1; a2 <= nser; a2++)
+                    for (b2i = 1; b2i <= nser; b2i++)
+                        if (ix_Th[(k2-1)*nser + a2][b2i]) {
+                            snprintf(lb, sizeof lb, "Theta%d[%d,%d]", k2, a2, b2i);
+                            par_row(lb, Th_m[k2][a2][b2i],
+                                    dev[ix_Th[(k2-1)*nser + a2][b2i]]);
+                        }
+            /*  Q: the free block is the variance ratios and the off-diagonals;
+             *  Q[1,1] = 1 is the normalisation and is not a parameter.       */
+            {
+                int qi = ix_q0;
+                for (a2 = 2; a2 <= nser; a2++) {
+                    snprintf(lb, sizeof lb, "Q[%d,%d]", a2, a2);
+                    par_row(lb, Qm[a2][a2], dev[qi++]);
+                }
+                if (!global_diag_cov)
+                    for (a2 = 2; a2 <= nser; a2++)
+                        for (b2i = 1; b2i < a2; b2i++) {
+                            snprintf(lb, sizeof lb, "Q[%d,%d]", a2, b2i);
+                            par_row(lb, Qm[a2][b2i], dev[qi++]);
+                        }
+            }
+            for (b2i = 1; b2i <= r; b2i++)
+                for (a2 = 1; a2 <= s; a2++)
+                    if (ix_B2[a2][b2i]) {
+                        snprintf(lb, sizeof lb, "B2[%d,%d]", a2, b2i);
+                        par_row(lb, B2m[a2][b2i], dev[ix_B2[a2][b2i]]);
+                    }
+            if (global_fixb2)
+                fprintf(outputv, "%-24s %13s\n", "B2", "(fixed)");
+        }
+        fprintf(outputv, "%s\n", DASHBAR);
+        fprintf(outputv, "Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 "
+                         "'.' 0.1 ' ' 1\n");
+        if (!global_fdhess)
+            fprintf(outputv, "  ! standard errors from the BFGS-accumulated "
+                             "factor; -fdhess uses the Hessian at the optimum\n");
+
+
+        /* ================= THE MODEL, IN VEC FORM ======================== */
+        banner("Vector Error Correction Model");
+        fprintf(outputv, "\n  (I - F1 L - ... - F_{p-1} L^{p-1}) nabla Y_t ="
+                         "\n      -Lambda (B' Y_{t-1} - E[W_t])"
+                         " + (I - Theta1 L - ...) A_t\n\n");
+        if (nmu > 0) {
+            fprintf(outputv, "%s vector:\n",
+                    global_case == 3 ? "E[nablaY2] and E[W]" : "E[W]");
+            for (int a2 = 1; a2 <= nmu; a2++)
+                fprintf(outputv, "  %12.6f\n", mu_m[a2]);
+        }
+        fprintf(outputv, "Lambda matrix (M x r):\n");
+        for (int a2 = 1; a2 <= nser; a2++) {
             fprintf(outputv, "  ");
-            for (int j = 1; j <= i; j++) fprintf(outputv, "%12.6f", Qm[i][j]);
+            for (int b2i = 1; b2i <= r; b2i++)
+                fprintf(outputv, "%12.6f", Lam_m[a2][b2i]);
             fprintf(outputv, "\n");
         }
-        fprintf(outputv, "Sigma = sigma2 * Q  (innovation covariance of A_t) =\n");
-        for (int i = 1; i <= nser; i++) {
+        for (int k2 = 1; k2 <= nf; k2++) {
+            fprintf(outputv, "F(%d) matrix:\n", k2);
+            for (int a2 = 1; a2 <= nser; a2++) {
+                fprintf(outputv, "  ");
+                for (int b2i = 1; b2i <= nser; b2i++)
+                    fprintf(outputv, "%12.6f", F_m[k2][a2][b2i]);
+                fprintf(outputv, "\n");
+            }
+        }
+        for (int k2 = 1; k2 <= global_q; k2++) {
+            fprintf(outputv, "theta(%d) matrix%s:\n", k2,
+                    mawarma_on()  ? "  [T11  T11*B2' ; 0  0]"
+                  : global_matri  ? "  [T11 T12 ; 0 T22]"
+                  : marow_on()    ? "  [T11 T12 ; 0 0]" : "");
+            for (int a2 = 1; a2 <= nser; a2++) {
+                fprintf(outputv, "  ");
+                for (int b2i = 1; b2i <= nser; b2i++)
+                    fprintf(outputv, "%12.6f", Th_m[k2][a2][b2i]);
+                fprintf(outputv, "\n");
+            }
+        }
+        free_tensor(Th_m, 1, (global_q > 0 ? global_q : 1), 1, nser, 1, nser);
+        fprintf(outputv, "B2 matrix (s x r)%s:\n",
+                global_fixb2 ? (global_fixb2_given
+                    ? "  [FIXED at the value given]"
+                    : "  [FIXED at its static-OLS estimate: data-chosen, so an"
+                      " LR against the free model is not valid]") : "");
+        for (int a2 = 1; a2 <= s; a2++) {
             fprintf(outputv, "  ");
-            for (int j = 1; j <= i; j++)
-                fprintf(outputv, "%12.6f", vp->sigma2 * Qm[i][j]);
+            for (int b2i = 1; b2i <= r; b2i++)
+                fprintf(outputv, "%12.6f", B2m[a2][b2i]);
             fprintf(outputv, "\n");
         }
 
+        fprintf(outputv, "B matrix (M x r), B = [I_r ; B2]:\n");
+        for (int row = 1; row <= nser; row++) {
+            fprintf(outputv, "  ");
+            for (int c = 1; c <= r; c++)
+                fprintf(outputv, "%12.6f",
+                        (row <= r) ? ((c == row) ? 1.0 : 0.0) : B2m[row - r][c]);
+            fprintf(outputv, "\n");
+        }
+
+        /* ---- Pi = Lambda * B', y sus autovalores ------------------------- */
+        /* Pi is the long-run matrix and, unlike Lambda and B, is INVARIANT to the
+           normalisation: any reparameterisation Lambda -> Lambda*G,
+           B -> B*G^-T leaves Pi unchanged.  That is why it is what to look at
+           when comparing fits, and why it is printed here.                   */
+        if (r > 0) {
+            real **Pi = matrix(1, nser, 1, nser);
+            real *wr = vector(1, nser), *wi = vector(1, nser);
+            int a, b, j;
+            for (a = 1; a <= nser; a++)
+                for (b = 1; b <= nser; b++) {
+                    real acc = 0.0;
+                    for (j = 1; j <= r; j++) {
+                        real Bbj = (b <= r) ? ((b == j) ? 1.0 : 0.0) : B2m[b - r][j];
+                        acc += Lam_m[a][j] * Bbj;
+                    }
+                    Pi[a][b] = acc;
+                }
+            fprintf(outputv, "Pi = Lambda B' matrix (M x M), the long run:\n");
+            for (a = 1; a <= nser; a++) {
+                fprintf(outputv, "  ");
+                for (b = 1; b <= nser; b++) fprintf(outputv, "%12.6f", Pi[a][b]);
+                fprintf(outputv, "\n");
+            }
+            {   /* eigenvalues, on a copy: eigenqr destroys its argument */
+                real **Pc = matrix(1, nser, 1, nser);
+                for (a = 1; a <= nser; a++) for (b = 1; b <= nser; b++)
+                    Pc[a][b] = Pi[a][b];
+                eigenqr(Pc, nser, wr, wi);
+                fprintf(outputv, "  eigenvalues of Pi:");
+                for (a = 1; a <= nser; a++) {
+                    if (fabs(wi[a]) < 1.0e-12) fprintf(outputv, "  %.6f", wr[a]);
+                    else fprintf(outputv, "  %.6f%+.6fi", wr[a], wi[a]);
+                }
+                fprintf(outputv, "\n");
+                free_matrix(Pc, 1, nser, 1, nser);
+            }
+            /*  Pi has rank r BY CONSTRUCTION here, so its M-r zero
+             *  eigenvalues prove nothing about the rank; the instrument is
+             *  -lrtest.  Said in one line because it changes how the number is
+             *  read; argued in docs/USAGE.md 4.                              */
+            fprintf(outputv, "  ! Pi has rank r by construction: the %d zero "
+                             "eigenvalue%s prove%s nothing about r (use -lrtest)\n",
+                    nser - r, (nser - r == 1) ? "" : "s",
+                    (nser - r == 1) ? "s" : "");
+            free_vector(wi, 1, nser);
+            free_vector(wr, 1, nser);
+            free_matrix(Pi, 1, nser, 1, nser);
+        }
+        fprintf(outputv, "Q matrix (lower triangle; Q[1,1] = 1 by "
+                         "normalisation):\n");
+        for (int a2 = 1; a2 <= nser; a2++) {
+            fprintf(outputv, "  ");
+            for (int b2i = 1; b2i <= a2; b2i++)
+                fprintf(outputv, "%12.6f", Qm[a2][b2i]);
+            fprintf(outputv, "\n");
+        }
+        fprintf(outputv, "Sigma = sigma2 * Q:\n");
+        for (int a2 = 1; a2 <= nser; a2++) {
+            fprintf(outputv, "  ");
+            for (int b2i = 1; b2i <= a2; b2i++)
+                fprintf(outputv, "%12.6f", vp->sigma2 * Qm[a2][b2i]);
+            fprintf(outputv, "\n");
+        }
         /*  P2 — |Sigma| IS THIS PROGRAM'S HOMOLOGATION CRITERION and until
          *  2026-08-20 it did not print it: it had to be worked out by hand from
          *  the matrix above, rounded to six decimals, and that manual
@@ -6042,30 +6155,25 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
                 }
             }
             if (ok_ldl) {
-                fprintf(outputv, "\nSigma = P D P'  (P unit lower triangular; "
-                                 "A_t = P A*_t with cov(A*_t) = D)\n");
-                fprintf(outputv, "P =\n");
+                fprintf(outputv, "P matrix (Sigma = P D P', P unit lower "
+                                 "triangular):\n");
                 for (a = 1; a <= nser; a++) {
                     fprintf(outputv, "  ");
                     for (b = 1; b <= a; b++) fprintf(outputv, "%12.6f", P[a][b]);
                     fprintf(outputv, "\n");
                 }
-                fprintf(outputv, "D (diagonal) =\n  ");
+                fprintf(outputv, "D vector:\n  ");
                 for (a = 1; a <= nser; a++) fprintf(outputv, "%12.6f", D[a]);
                 fprintf(outputv, "\n");
-                fprintf(outputv, "  own share of each innovation variance "
-                                 "(D_i / Sigma_ii):\n  ");
+                fprintf(outputv, "  own share D_i/Sigma_ii:\n  ");
                 for (a = 1; a <= nser; a++)
                     fprintf(outputv, "%11.1f%%", 100.0 * D[a] / Sg[a][a]);
                 fprintf(outputv, "\n");
-                fprintf(outputv,
-                    "  A*_t is uncorrelated, so premultiplying the system by P^-1\n"
-                    "  gives equations that can be read one at a time.  NOTE the\n"
-                    "  ordering is the COLUMN ORDER of the .inp: a different order\n"
-                    "  gives a different P, and the choice is the user's.\n");
+                fprintf(outputv, "  ! the ordering is the .inp's column order: "
+                             "another order gives another P\n");
             } else {
-                fprintf(outputv, "\nSigma = P D P': not computed (Sigma is not "
-                                 "positive definite at the optimum)\n");
+                fprintf(outputv, "P, D: not computed (Sigma is not positive "
+                                 "definite at the optimum)\n");
             }
             free_vector(D, 1, nser);
             free_matrix(P, 1, nser, 1, nser);
@@ -6073,131 +6181,64 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
         }
         free_matrix(Qm, 1, nser, 1, nser);
 
-        /* B2 is stored COLUMN-major in x[] (vec_shootx and init_guess both
-           write `for j in 1..r { for i in 1..s }`), so it must be read back in
-           that order before being displayed row by row.  Both printers below
-           use this one copy, so they cannot disagree.                        */
-        real **B2m = matrix(1, s, 1, (r > 0 ? r : 1));
-        for (int j = 1; j <= r; j++)
-            for (int i = 1; i <= s; i++) {
-                if (!global_fixb2) ix_B2[i][j] = ii;
-                B2m[i][j] = global_fixb2 ? B2_fixed[i][j] : x[ii++];
-            }
 
-        if (global_fixb2)
-            fprintf(outputv, "B2 (s x r) = [FIXED at %s]\n",
-                    global_fixb2_given ? "the value given on the command line"
-                                       : "its static-OLS estimate (data-chosen: "
-                                         "an LR test against the free model is "
-                                         "NOT valid)");
-        else
-            fprintf(outputv, "B2 (s x r) =\n");
-        /* B2 goes with its standard error when it is a parameter.  With -fixb2
-           it does not, and that is correct: a held value has no standard error,
-           and giving it one would be inventing it.  The order dev is read in is
-           the same column-major one B2m was read in.                         */
-        {
-            int jj = ii - (global_fixb2 ? 0 : s * r);
-            for (int i = 1; i <= s; i++) {
-                fprintf(outputv, "  ");
-                for (int j = 1; j <= r; j++) {
-                    if (global_fixb2) fprintf(outputv, "%12.6f", B2m[i][j]);
-                    else fprintf(outputv, "%12.6f (sd %9.6f)", B2m[i][j],
-                                 dev[jj + (j - 1) * s + (i - 1)]);
-                }
-                fprintf(outputv, "\n");
-            }
-        }
-
-        /*  -mawarma: now that B2 has been read, Theta is completed and printed
-         *  with the structure it inherits: [T11  T11*B2' ; 0  0].            */
-        if (mawarma_on())
-            for (int k = 1; k <= global_q; k++) {
-                for (int i = 1; i <= r; i++)
-                    for (int jj2 = 1; jj2 <= s; jj2++) {
-                        real acc = 0.0;
-                        for (int i2 = 1; i2 <= r; i2++)
-                            acc += Th_m[k][i][i2] * B2m[jj2][i2];
-                        Th_m[k][i][r + jj2] = acc;
-                    }
-                fprintf(outputv, "\nTheta[%d] (M x M), inherited structure "
-                                 "[T11  T11*B2' ; 0  0] =\n", k);
-                for (int i = 1; i <= nser; i++) {
-                    fprintf(outputv, "  ");
-                    for (int j = 1; j <= nser; j++)
-                        fprintf(outputv, "%12.6f", Th_m[k][i][j]);
-                    fprintf(outputv, "\n");
-                }
-            }
-        free_tensor(Th_m, 1, (global_q > 0 ? global_q : 1), 1, nser, 1, nser);
-
-        if (ii != npar + 1)
-            fprintf(stderr, "ERROR output: consumed %d of %d parameters\n",
-                    ii - 1, npar);
-
-        fprintf(outputv, "\nCointegration matrix B = [I_r; B2] (M x r) :\n");
-        for (int row = 1; row <= nser; row++) {
-            fprintf(outputv, "  row %d: ", row);
-            for (int c = 1; c <= r; c++)
-                fprintf(outputv, "%12.6f",
-                        (row <= r) ? ((c == row) ? 1.0 : 0.0) : B2m[row - r][c]);
-            fprintf(outputv, "\n");
-        }
-
-        /* ---- Pi = Lambda * B', y sus autovalores ------------------------- */
-        /* Pi is the long-run matrix and, unlike Lambda and B, is INVARIANT to the
-           normalisation: any reparameterisation Lambda -> Lambda*G,
-           B -> B*G^-T leaves Pi unchanged.  That is why it is what to look at
-           when comparing fits, and why it is printed here.                   */
-        if (r > 0) {
-            real **Pi = matrix(1, nser, 1, nser);
-            real *wr = vector(1, nser), *wi = vector(1, nser);
-            int a, b, j;
-            for (a = 1; a <= nser; a++)
-                for (b = 1; b <= nser; b++) {
-                    real acc = 0.0;
-                    for (j = 1; j <= r; j++) {
-                        real Bbj = (b <= r) ? ((b == j) ? 1.0 : 0.0) : B2m[b - r][j];
-                        acc += Lam_m[a][j] * Bbj;
-                    }
-                    Pi[a][b] = acc;
-                }
-            fprintf(outputv, "\nPi = Lambda B' (M x M), the long-run matrix =\n");
-            for (a = 1; a <= nser; a++) {
-                fprintf(outputv, "  ");
-                for (b = 1; b <= nser; b++) fprintf(outputv, "%12.6f", Pi[a][b]);
-                fprintf(outputv, "\n");
-            }
-            fprintf(outputv, "  (Pi is INVARIANT to the normalisation, while "
-                             "Lambda and B are not:\n"
-                             "   Lambda->Lambda G, B->B G^-T leaves it "
-                             "unchanged.  Compare fits on Pi.)\n");
-            {   /* eigenvalues, on a copy: eigenqr destroys its argument */
-                real **Pc = matrix(1, nser, 1, nser);
-                for (a = 1; a <= nser; a++) for (b = 1; b <= nser; b++)
-                    Pc[a][b] = Pi[a][b];
-                eigenqr(Pc, nser, wr, wi);
-                fprintf(outputv, "  eigenvalues of Pi:");
-                for (a = 1; a <= nser; a++) {
-                    if (fabs(wi[a]) < 1.0e-12) fprintf(outputv, "  %.6f", wr[a]);
-                    else fprintf(outputv, "  %.6f%+.6fi", wr[a], wi[a]);
-                }
-                fprintf(outputv, "\n");
-                free_matrix(Pc, 1, nser, 1, nser);
-            }
+        banner("Cointegration Diagnostics");
+        /*  The rank condition, beside the roots and for the same reason: it
+         *  says whether the point it stopped at is a model of the rank that was
+         *  asked for or of another.  It is recomputed at the last evaluation,
+         *  which is the one vec_shootx left just before.                     */
+        if (global_r > 0 && global_q > 0 && granger_sv >= 0.0) {
             fprintf(outputv,
-                "  CAUTION, and it is stronger than the usual one: here Pi = Lambda B'\n"
-                "  has rank r BY CONSTRUCTION, so its M-r zero eigenvalues are\n"
-                "  guaranteed and say nothing about whether r is right -- reading them\n"
-                "  as evidence for the rank is circular.  Even in the unrestricted\n"
-                "  case they are only an indication: Melard, Roy and Saidi (2004) show\n"
-                "  the assumption on Phi(1) does not imply what that reading assumes\n"
-                "  (Pham, Roy and Cedras 2003).  The instrument is -lrtest.\n");
-            free_vector(wi, 1, nser);
-            free_vector(wr, 1, nser);
-            free_matrix(Pi, 1, nser, 1, nser);
+                "\nRank condition (Granger): sigma_min(Lambda_perp' Theta(1) "
+                "B_perp) = %.3e\n", granger_sv);
+            if (granger_sv < global_rankadm_tol) {
+                /*  AND TO THE TERMINAL AS WELL.  A fit that denies its own rank
+                 *  is not a worse fit: it is the fit of another model, and
+                 *  whoever runs the program has to find out without opening the
+                 *  .out.  It is the decision of step 4 of the plan: the default
+                 *  CALCULATION does not move -- no recorded result moves -- but
+                 *  the PRESENTATION stops offering as an answer something the
+                 *  theory does not license (docs/THEORY.md, corollary 5.1).  */
+                if (!quiet_mode)
+                    printf("\n  *** WARNING: sigma_min(Lambda_perp' Theta(1) "
+                           "B_perp) = %.3e < %.1e\n"
+                           "      This fit DENIES THE RANK it was estimated "
+                           "at: it is not a\n"
+                           "      worse fit, it is the fit of another model.  Its "
+                           "standard errors\n"
+                           "      and any LR against it do NOT have their "
+                           "usual distribution.\n"
+                           "%s"
+                           "      See the ladder:  drvec <file> %d %d %d "
+                           "-specs\n", granger_sv, global_rankadm_tol,
+                           /*  P4 — and where it comes from.  Under the default this
+                            *  cannot happen (Corollary 6.3); if it is
+                            *  happening, the free class has been asked for, and
+                            *  that is the first thing to say.                */
+                           global_mafree
+                             ? "      This is -mafree: that class CONTAINS points"
+                               " the model does not\n"
+                               "      admit.  The default (-marow) cannot"
+                               " reach them.\n"
+                             : "",
+                           global_p, global_q, global_r);
+                fprintf(outputv,
+                  "  *** This is ZERO to working precision, and it is not a\n"
+                  "  detail: that matrix is what makes the long-run impact\n"
+                  "  C(1) = B_perp (Lambda_perp' Gamma B_perp)^-1 Lambda_perp'\n"
+                  "  Theta(1) have rank M-r.  Where it degenerates the FITTED\n"
+                  "  model denies the rank it was estimated at -- it says r and\n"
+                  "  its parameters leave no stochastic trend.  The estimate is\n"
+                  "  then on the edge of the region the model class allows, so\n"
+                  "  standard errors and LR statistics do not have their usual\n"
+                  "  distributions there.  -rankadm refuses such points; -mawarma\n"
+                  "  makes them unreachable by construction.  See\n"
+                  "  docs/HOMOLOGATION.md 4h.\n");
+            } else
+                fprintf(outputv,
+                  "  admissible (tolerance %.2f)\n", global_rankadm_tol);
         }
-
+        gate_contract(vp);
         /* ---- Diagnostic on the normalisation ------------------------------ */
         /* B = [I_r ; B2] assumes the Y1 block genuinely appears in every
            cointegrating relation.  If it does not, B2 blows up and the model
@@ -6220,8 +6261,8 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
                                                * (Y2_levels[t][a] - m1);
                 sdY2[a] = sqrt(v / (nobs > 1 ? nobs - 1 : 1));
             }
-            fprintf(outputv, "\nNormalisation check (which series carry each "
-                             "cointegrating relation):\n");
+            fprintf(outputv, "\nNormalisation, share of the weight carried by "
+                             "the Y1 block:\n");
             for (j = 1; j <= r; j++) {
                 real m1 = 0.0, v = 0.0, w1, w2 = 0.0, share;
                 for (t = 1; t <= nobs; t++) m1 += datamat[t][s + j];
@@ -6251,13 +6292,19 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
 
         /*  P6.8 — the hypotheses about the relations, here: the walk above has
          *  just been checked against npar, so the indices it noted are the good
-         *  ones.  It goes BEFORE the forecast because it answers whether the
-         *  model has anything to say, and that is read first.                */
+         *  ones.                                                             */
         hypothesis_block(x, cov, ix_lam, ix_B2, ix_F, ix_Th);
         free_imatrix(ix_Th,  1, nq_ix * nser, 1, nser);
         free_imatrix(ix_F,   1, nf_ix * nser, 1, nser);
         free_imatrix(ix_B2,  1, (s > 0 ? s : 1), 1, (r > 0 ? r : 1));
         free_imatrix(ix_lam, 1, nser, 1, (r > 0 ? r : 1));
+        /*  P10 — what the reading pass allocated.  It is not decoration: the
+         *  suite's valgrind block caught all five the moment they existed.   */
+        free_tensor(F_m, 1, nf_ix, 1, nser, 1, nser);
+        free_ivector(ix_mu, 1, nser);
+        free_vector(mu_m, 1, nser);
+        if (psi_m)  free_matrix(psi_m, 1, alpha_sa, 1, (r > 0 ? r : 1));
+        if (ix_psi) free_imatrix(ix_psi, 1, alpha_sa, 1, (r > 0 ? r : 1));
 
         /*  P5 — the forecast, here: it is the last place where B2m is still
          *  alive and where the fit is already made and diagnosed.            */
@@ -6273,6 +6320,13 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
         free_matrix(Lam_m, 1, nser, 1, (r > 0 ? r : 1));
         free_matrix(B2m, 1, s, 1, (r > 0 ? r : 1));
         }   /* !warma_done */
+
+        /*  The residual diagnosis and the roots belong to EVERY fit, -warma
+         *  included: they are about the residuals and the operators, which
+         *  both parameterisations have.  They sit outside the branch for that
+         *  reason -- inside it, the -warma report lost them.                 */
+        residual_diagnostics(vp);
+        operator_roots(vp);
         if (warma_done) free_matrix(Lam_m, 1, nser, 1, (r > 0 ? r : 1));
 
     } else {
@@ -7885,16 +7939,32 @@ int main(int argc, char *argv[])
     outputv = fopen(outputf, "w");
     if (!outputv) { fprintf(stderr, "ERROR: cannot write %s\n", outputf); exit(1); }
 
-    /*  The version, IN THE RESULTS FILE.  An .out that does not say what
-     *  produced it is reproducible by nobody, and this program has moved its
-     *  default specification once already.                                   */
-    fprintf(outputv, "DRVEC %s — VEC(%d) EML Estimation (Mauricio 2006)\n",
-            DRVEC_VERSION, global_r);
-    fprintf(outputv, "==============================================\n\n");
-    fprintf(outputv, "Input  : %s\n", inputf);
-    fprintf(outputv, "M = %d, r = %d, s = M-r = %d\n", nser, global_r, nser - global_r);
-    fprintf(outputv, "Stationary VARMA(%d,%d) on Ȳ_t\n", global_p, global_q);
-    fprintf(outputv, "Case   : %d\n", global_case);
+    /*  P10 — THE HEADER, in the suite's `key : value` shape (drvarma.c:415 and
+     *  report.py:_header_block).  It says with what the file was produced,
+     *  which is the one thing a results file cannot omit, and it says it the
+     *  way the other programs of the suite say it.                           */
+    fprintf(outputv, "Program          : DRVEC %s (Mauricio 2006)\n", DRVEC_VERSION);
+    fprintf(outputv, "Input Data File  : %s\n", inputf);
+    fprintf(outputv, "Output File      : %s\n", outputf);
+    fprintf(outputv, "Model: VEC(%d), stationary VARMA(%d,%d) on Ybar\n",
+            global_r, global_p, global_q);
+    fprintf(outputv, "Series           : M = %d, r = %d, s = M-r = %d\n",
+            nser, global_r, nser - global_r);
+    fprintf(outputv, "Deterministic    : case %d (%s)\n", global_case,
+            global_case == 1 ? "E[nablaY2]=0, E[W]=0"
+          : global_case == 2 ? "E[nablaY2]=0, E[W] free"
+                             : "E[nablaY2] free, E[W] free");
+    fprintf(outputv, "Include mean     : %s\n", global_include_mean ? "yes" : "no");
+    fprintf(outputv, "Diagonal AR      : %s\n", global_diag_ar  ? "yes" : "no");
+    fprintf(outputv, "Diagonal MA      : %s\n", global_diag_ma  ? "yes" : "no");
+    fprintf(outputv, "Diagonal Cov     : %s\n", global_diag_cov ? "yes" : "no");
+    fprintf(outputv, "Estimation method: %d\n", met);
+    fprintf(outputv, "Frequency        : %d\n", data_freq);
+    fprintf(outputv, "Start            : %d %d\n", data_start_sub, data_start_year);
+    fprintf(outputv, "Series names     :");
+    { int j; for (j = 1; j <= nser; j++)
+        fprintf(outputv, " %s", series_names ? series_names[j] : "y"); }
+    fprintf(outputv, "\n");
     /* The deterministic terms come off the LEVELS, before nabla Y2 and W are
        formed -- which is where fue's cast removes them too, its block [6] comes
        before [7] -- and that is why the levels have to be rebuilt afterwards.
@@ -7907,10 +7977,10 @@ int main(int argc, char *argv[])
         build_y2_levels();
     }
 
-    fprintf(outputv, "Layout : %s (%d of %d observations used)\n",
+    fprintf(outputv, "Data layout      : %s\n",
             global_levels ? "all series in levels"
-                          : "legacy, cols 1..s pre-differenced (-differenced)",
-            nobs, nobs_raw);
+                          : "legacy, cols 1..s pre-differenced (-differenced)");
+    fprintf(outputv, "Observations     : %d (raw %d)\n", nobs, nobs_raw);
 
     /*  P4 — WHICH CLASS IS BEING ESTIMATED, said in the header and not
      *  deduced from the flags.  The default moved on 2026-08-20 and an .out
@@ -7926,7 +7996,7 @@ int main(int argc, char *argv[])
                 ? "Theta = [T11  T12 ; 0  0]  (the default since 2026-08-20)"
                 : "Theta = [T11  T12 ; 0  0]  (-marow)")
           :                  "Theta FREE  (-mafree; the default before 2026-08-20)";
-        fprintf(outputv, "MA     : %s\n", cls);
+        fprintf(outputv, "MA structure     : %s\n", cls);
         if (!quiet_mode) printf("MA     : %s\n", cls);
     }
 

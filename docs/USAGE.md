@@ -720,6 +720,31 @@ The comparison worth making is against the **diagonal rung** — `r = 0` with
 `tools/forecast_vs_univariate.py` runs it over the bank. What it measures is in
 [HOMOLOGATION.md](HOMOLOGATION.md) §4t, and it is not flattering.
 
+### What the `.out` looks like
+
+It follows `drvarma`'s, because that is the multivariate program of the suite
+and the one `drvec` shares its engine with. A `key : value` header, then blocks
+separated by a line of `=`:
+
+| block | what is in it |
+|---|---|
+| header | what the run was: model, rank, deterministic case, MA class, flags, calendar, series, observations |
+| `OPTIMIZER ...` | the engine's own convergence banner, then the note, `sigma2`, `logelf`, `npar`, AIC, BIC |
+| `Estimated Parameters and Standard Deviations` | one row per **free** parameter: estimate, standard error, `t`, `p`, significance codes. A structural zero has no row — that is the difference between a zero that was estimated and one that was assumed |
+| `Vector Error Correction Model` | the matrices: `E[W]`, `Lambda`, `F(k)`, `theta(k)`, `B2`, `B`, `Pi` with its eigenvalues, `Q`, `Sigma`, `|Sigma|`, `P`, `D` |
+| `Cointegration Diagnostics` | the rank condition with its verdict, and the normalisation share |
+| `Joint Hypothesis Tests (Wald)` | each `H0`, its χ², its p and the conclusion |
+| `Multivariate Residual Diagnostics` | Hosking, Jarque-Bera, and the `R(k)` matrices |
+| roots, then `Forecast` | inverse roots and the forecast table |
+
+**The `.out` carries results and tests, not commentary.** Lines beginning `!`
+are the exception, and there are four of them: they mark the cases where a
+number cannot be read at face value — `Λ = 0` is not a test, `Π`'s zero
+eigenvalues prove nothing about `r`, the forecast s.e. are theoretical, and
+without `-fdhess` the standard errors come from the BFGS factor. Why each of
+those is so is argued here and in [INFERENCE.md](INFERENCE.md), which is where an
+argument belongs.
+
 ### The files a run writes
 
 The suite names every product after the same base, and `drvec` follows it:

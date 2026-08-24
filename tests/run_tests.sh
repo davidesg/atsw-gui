@@ -376,10 +376,10 @@ echo "[2] invariants (no external reference needed)"
 #     would need it to read the same array vec_shootx built; noted as follow-up.
 run "$UK" 2 0 2 -case 2
 # El bloque lleva ahora "(sd ...)" detras de cada valor; se quita para comparar.
-b2_block=$(sed -n '/^B2 (s x r)/,/^$/p' "$TMP/case.out" | grep -aE '^ +-?[0-9]' \
+b2_block=$(sed -n '/^B2 matrix (s x r)/,/^[A-Z]/p' "$TMP/case.out" | grep -aE '^ +-?[0-9]' \
            | sed 's/(sd[^)]*)//g' | tr -s ' ' | sed 's/^ //; s/ $//')
-b_rows=$(sed -n '/^Cointegration matrix B/,/^$/p' "$TMP/case.out" | grep -a '^  row' \
-         | awk 'NR>2{$1="";$2="";print}' | tr -s ' ' | sed 's/^ //')
+b_rows=$(sed -n '/^B matrix (M x r)/,/^[A-Z]/p' "$TMP/case.out" \
+         | grep -aE '^ +-?[0-9]' | awk 'NR>2' | tr -s ' ' | sed 's/^ //; s/ $//')
 if [ -n "$b2_block" ] && [ "$b2_block" = "$b_rows" ]; then
     ok "B2 block agrees with the B matrix rows (M=3, r=2)"
 else
@@ -877,17 +877,16 @@ echo
 #     Milan on purpose and not mink_muskrat: there the restricted fit drives T11
 #     to zero, and a product check with a zero factor does not bite.
 run data/pairs/milan.inp 2 1 1 -case 2 -mean -mawarma
-if ! grep -aq "inherited structure" "$TMP/case.out"; then
+if ! grep -aq "^theta(1) matrix" "$TMP/case.out"; then
     bad "mawarma" "no inherited-structure Theta reported"
 else
-    z=$(awk '/inherited structure/{getline; getline; getline; print $1+0, $2+0}' \
-        "$TMP/case.out")
+    z=$(awk '/^theta\(1\) matrix/{getline; getline; print $1+0, $2+0}' "$TMP/case.out")
     [ "$z" = "0 0" ] && ok "mawarma: the last row of Theta is exactly zero" \
                      || bad "mawarma: the last row of Theta is not zero" "$z"
     # T12 = T11 * B2' -- checked against the B2 the same fit reports
-    t11=$(awk '/inherited structure/{getline; print $1}' "$TMP/case.out")
-    t12=$(awk '/inherited structure/{getline; print $2}' "$TMP/case.out")
-    b2=$(grep -a -A1 "^B2 (s x r) =" "$TMP/case.out" | tail -1 | awk '{print $1}')
+    t11=$(awk '/^theta\(1\) matrix/{getline; print $1}' "$TMP/case.out")
+    t12=$(awk '/^theta\(1\) matrix/{getline; print $2}' "$TMP/case.out")
+    b2=$(grep -a -A1 "^B2 matrix (s x r)" "$TMP/case.out" | tail -1 | awk '{print $1}')
     if ! awk -v a="$t11" 'BEGIN{if(a<0)a=-a; exit !(a>1e-3)}'; then
         bad "mawarma: T11 is zero here" "the product check would not bite"
     elif awk -v a="$t11" -v b="$t12" -v c="$b2" \
@@ -1034,11 +1033,11 @@ if awk -v a="$ll_1" -v b="$ll_2" -v c="$ll_3" -v d="$ll_4" \
 else bad "MA ladder: not monotone" "$ll_1 $ll_2 $ll_3 $ll_4"; fi
 
 run data/pairs/milan.inp 2 1 1 -case 2 -mean -marow
-z=$(awk '/\[T11 T12 ; 0 0\]/{getline; getline; print $1+0, $2+0}' "$TMP/case.out")
+z=$(awk '/^theta\(1\) matrix/{getline; getline; print $1+0, $2+0}' "$TMP/case.out")
 [ "$z" = "0 0" ] && ok "marow: the differenced block carries no moving average" \
                  || bad "marow: last row not zero" "$z"
 run data/pairs/milan.inp 2 1 1 -case 2 -mean -matri
-z=$(awk '/block-triangular/{getline; getline; print $1+0}' "$TMP/case.out")
+z=$(awk '/^theta\(1\) matrix/{getline; getline; print $1+0}' "$TMP/case.out")
 [ "$z" = "0" ] && ok "matri: the lower-left block is zero" \
                || bad "matri: T21 not zero" "$z"
 echo
@@ -1248,9 +1247,8 @@ fi
 ldl_reconstruction_error() {   # <out file> -> worst absolute error
     awk '
         /^Sigma = sigma2 \* Q/  {mode="S"; n=0; next}
-        /^Sigma = P D P/        {mode="";  next}
-        /^P =/                  {mode="P"; n=0; next}
-        /^D \(diagonal\)/       {mode="D"; next}
+        /^P matrix/             {mode="P"; n=0; next}
+        /^D vector/             {mode="D"; next}
         mode=="S" && /^ +[-0-9]/ {n++; for(j=1;j<=NF;j++) S[n","j]=$j; M=n; next}
         mode=="S"               {mode=""}
         mode=="P" && /^ +[-0-9]/ {n++; for(j=1;j<=NF;j++) P[n","j]=$j; next}
@@ -1328,7 +1326,8 @@ fi
 #     hypothetical: it was the behaviour when multi-start was first written --
 #     0.134231 for three parameters whose real values are 0.062, 0.125 and 0.106.
 run "$MM" 2 1 1 -case 2 -multistart 5
-nsd=$(grep -aoE '\(sd +[0-9.]+\)' "$TMP/case.out" | sort -u | wc -l)
+nsd=$(awk '/^Parameter +Estimate/{f=1;next} f&&/^Signif/{f=0} f&&NF>=5{print $3}' \
+      "$TMP/case.out" | sort -u | wc -l)
 if [ "$nsd" -ge 2 ]; then
     ok "multi-start reports standard errors that differ across parameters ($nsd distinct)"
 else
@@ -1352,8 +1351,8 @@ else
 fi
 # The k=0 off-diagonal is Sigma's, not a missing cross effect: it must be
 # reported apart and NOT drive the verdict.
-if grep -aq 'Contemporaneous innovation correlation' "$TMP/case.out" && \
-   grep -aq 'Cross DYNAMICS left in the residuals (k >= 1)' "$TMP/case.out"; then
+if grep -aq 'Contemporaneous correlation, largest' "$TMP/case.out" && \
+   grep -aq 'Cross dynamics left at k >= 1' "$TMP/case.out"; then
     ok "the contemporaneous correlation is reported apart from the cross dynamics"
 else
     bad "residual diagnostics" "lag 0 is not separated from the cross dynamics"
@@ -1392,11 +1391,11 @@ fi
 #     run says.  "OPTIMIZER STOPPED" and a note claiming a clean convergence
 #     would be worse than saying nothing.
 run "$MM" 2 1 1 -case 2
-if ! grep -aq "^Convergence note:" "$TMP/case.out"; then
+if ! grep -aq "^Convergence      :" "$TMP/case.out"; then
     bad "convergence note" "not present in the output"
 else
     banner_stopped=$(grep -ac "OPTIMIZER STOPPED" "$TMP/case.out")
-    note_notconv=$(grep -ac "^Convergence note: NOT a convergence" "$TMP/case.out")
+    note_notconv=$(grep -ac "^Convergence      : NOT a convergence" "$TMP/case.out")
     if [ "$banner_stopped" -gt 0 ] && [ "$note_notconv" -eq 0 ]; then
         bad "convergence note" "banner says STOPPED but the note does not"
     elif [ "$banner_stopped" -eq 0 ] && [ "$note_notconv" -gt 0 ]; then
@@ -1408,7 +1407,7 @@ fi
 # And on a run that really does stop on termcode 3, the note must say so.
 run "$MM" 2 1 1 -case 3
 if grep -aq "OPTIMIZER STOPPED" "$TMP/case.out" && \
-   grep -aq "^Convergence note: NOT a convergence" "$TMP/case.out"; then
+   grep -aq "^Convergence      : NOT a convergence" "$TMP/case.out"; then
     ok "a termcode-3 run is reported as NOT a convergence"
 elif grep -aq "OPTIMIZER STOPPED" "$TMP/case.out"; then
     bad "convergence note" "termcode 3 not reported as a non-convergence"
@@ -1525,7 +1524,7 @@ if [ -f datasets/synthetic/rank2.inp ]; then
         bad "unit-root alarm" "fired on a fit with no root near the circle"
     elif printf '%s' "$STDERR" | grep -q 'lies ON the boundary'; then
         bad "-fdhess" "reported a boundary that is not there"
-    elif grep -aq 'finite-difference Hessian AT the optimum' "$TMP/case.out"; then
+    elif grep -aq 'finite-difference Hessian at the optimum' "$TMP/case.out"; then
         ok "-fdhess succeeds, and is silent, where nothing binds"
     else bad "-fdhess" "neither succeeded nor explained itself"; fi
 fi
@@ -1556,7 +1555,7 @@ for f in datasets/mauricio/mink_muskrat.inp data/pairs/milan.inp \
     run "$f" 2 1 1 -case 2 -mean
     grep -aq 'A root sits on the unit circle' "$TMP/case.out" && bound_def=$((bound_def+1))
     #  y las filas inferiores de Theta, cero EXACTO -- no cerca de cero
-    z=$(awk '/^Theta\[1\]/{getline; getline; print $1" "$2}' "$TMP/case.out")
+    z=$(awk '/^theta\(1\) matrix/{getline; getline; print $1" "$2}' "$TMP/case.out")
     case "$z" in
         "0.000000 0.000000") rows_ok=$((rows_ok+1)) ;;
     esac
@@ -1610,14 +1609,14 @@ echo
 echo "[8d] the forecast: the recursion, and the step to levels (P5)"
 
 run "$MM" 2 1 1 -case 2 -f 6
-sc=$(awk '/one-step self-check/{print $NF}' "$TMP/case.out")
+sc=$(sed -n 's/.*one-step self-check.* = \([0-9.e+-]*\) over.*/\1/p' "$TMP/case.out")
 if [ -z "$sc" ]; then bad "forecast self-check" "not emitted"
 elif awk -v v="$sc" 'BEGIN{exit !(v < 1e-3)}'; then
     ok "one-step recursion agrees with elf's residuals to $sc (xi truncation)"
 else bad "forecast self-check" "$sc, which is larger than xitol"; fi
 
 run "$MM" 2 1 1 -case 2 -m 2 -f 6
-sc2=$(awk '/one-step self-check/{print $NF}' "$TMP/case.out")
+sc2=$(sed -n 's/.*one-step self-check.* = \([0-9.e+-]*\) over.*/\1/p' "$TMP/case.out")
 if awk -v v="$sc2" 'BEGIN{exit !(v < 1e-10)}'; then
     ok "and with the truncation off it is machine zero ($sc2)"
 else bad "forecast self-check, -m 2" "$sc2, expected machine zero"; fi
@@ -1883,13 +1882,13 @@ echo
 echo "[8i] the hypotheses about the relations (P6.8)"
 
 run "$MM" 2 1 1 -case 2 -fdhess
-if ! grep -aq 'HYPOTHESES ABOUT THE RELATIONS' "$TMP/case.out"; then
+if ! grep -aq 'Joint Hypothesis Tests (Wald)' "$TMP/case.out"; then
     bad "hypothesis block" "not emitted"
 else
     ok "the block is emitted by default, with no option asked for"
 
     #  Lambda: dos filas, cada una un solo coeficiente -> chi2 = (coef/sd)^2.
-    lam=$(grep -a -A2 '^Lambda (M x r) =' "$TMP/case.out" | awk 'NR>=2{print $1, $3}' | tr -d ')')
+    lam=$(grep -a '^Lambda\[' "$TMP/case.out" | awk '{print $2, $3}')
     wal=$(sed -n '/Weak exogeneity, one variable/,/Exclusion from/p' "$TMP/case.out" \
           | awk '/Wald chi2/{gsub(",","",$4); print $4}')
     n=0; worst=0
@@ -1905,7 +1904,7 @@ else
     else bad "weak exogeneity vs t^2" "$n rows, worst difference $worst"; fi
 
     #  B2: lo mismo, y ademas ata el OTRO extremo del vector de parametros.
-    b2=$(grep -a -A1 '^B2 (s x r) =' "$TMP/case.out" | awk 'NR==2{print $1, $3}' | tr -d ')')
+    b2=$(grep -a '^B2\[' "$TMP/case.out" | awk '{print $2, $3}')
     wb=$(sed -n '/Exclusion from the cointegrating/,/Short-run dynamics/p' "$TMP/case.out" \
          | awk '/Wald chi2/{gsub(",","",$4); print $4; exit}')
     d=$(echo "$b2" | awk -v w="$wb" '{t=($1/$2)^2; d=t-w; if(d<0)d=-d; print d}')
@@ -1914,12 +1913,12 @@ else
     else bad "B2 exclusion vs t^2" "difference $d"; fi
 
     #  Lambda = 0 se imprime, y se imprime DICIENDO que no es un contraste.
-    if grep -aq 'THIS IS NOT A TEST' "$TMP/case.out"; then
+    if grep -aq 'NOT A TEST' "$TMP/case.out"; then
         ok "Lambda = 0 is reported and labelled as not being a test (Davies)"
     else bad "Lambda = 0" "reported without the boundary warning"; fi
 
     #  Y el aviso de -fdhess NO sale cuando se pidio -fdhess.
-    if grep -aq 'Re-run with -fdhess' "$TMP/case.out"; then
+    if grep -aq 'use -fdhess before quoting' "$TMP/case.out"; then
         bad "-fdhess reminder" "printed even though -fdhess was given"
     else ok "the -fdhess reminder is absent when -fdhess was used"; fi
 fi
@@ -1927,13 +1926,13 @@ fi
 #  Sin -fdhess el aviso SI tiene que salir: un p-valor que sale del factor
 #  acumulado por el BFGS no es el que se publica.
 run "$MM" 2 1 1 -case 2
-if grep -aq 'Re-run with -fdhess' "$TMP/case.out"; then
+if grep -aq 'use -fdhess before quoting' "$TMP/case.out"; then
     ok "and it is present when the covariance came from the BFGS factor"
 else bad "-fdhess reminder" "missing on the default run"; fi
 
 #  Con r = 0 no hay Lambda ni B: el bloque tiene que decirlo, no inventarlo.
 run "$MM" 2 1 0 -case 2
-if grep -aq 'r = 0: there is no error-correction term' "$TMP/case.out" \
+if grep -aq 'r = 0: no error-correction term' "$TMP/case.out" \
    && ! grep -aq 'Weak exogeneity' "$TMP/case.out"; then
     ok "at r = 0 the block says the three VEC hypotheses do not exist"
 else bad "hypothesis block at r=0" "emitted weak exogeneity with no Lambda"; fi
@@ -1941,7 +1940,7 @@ else bad "hypothesis block at r=0" "emitted weak exogeneity with no Lambda"; fi
 #  Con -fixb2 B2 esta impuesta: no hay covarianza con que contrastarla, y el
 #  bloque tiene que decir eso en vez de contrastar un parametro que no existe.
 run "$MM" 2 1 1 -case 2 -fixb2 0
-if grep -aq 'B2 is held fixed' "$TMP/case.out"; then
+if grep -aq 'B2 is held fixed (-fixb2)' "$TMP/case.out"; then
     ok "with -fixb2 the exclusion test is declared unavailable, not faked"
 else bad "hypothesis block with -fixb2" "did not declare B2 as imposed"; fi
 echo

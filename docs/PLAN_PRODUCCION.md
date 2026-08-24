@@ -1099,3 +1099,113 @@ de fichero. Cada una la leen varias de las funciones de arriba y la escribe
 exactamente una. Pasarlas por seis firmas diría menos que declararlas una vez, y
 sería un diff grande cuyo único efecto es un diff grande. Queda dicho en el mapa
 del fichero, que es donde un lector lo necesita.
+
+---
+
+## 12. P10 — el `.out`, con la estructura del conjunto
+
+### El defecto, y es de fondo
+
+El `.out` de `drvec` no era un fichero de resultados: era un ensayo. Sobre 283
+líneas del caso canónico, más de la mitad eran **prosa explicativa dentro del
+fichero de salida** — por qué una χ² no es un contraste, qué costó BUG-10 en el
+programa hermano, qué dice Mélard sobre los autovalores de Π, por qué la banda
+de Y₁ hereda el error acumulado de Y₂. Todo eso es cierto y todo eso está
+además en la documentación, que es donde va.
+
+**Lo que un `.out` lleva son resultados y contrastes, en secciones.** Los tres
+programas del conjunto lo hacen igual y `drvec` se lo inventó por su cuenta,
+que es exactamente como sale cuadrada la rueda.
+
+### Lo que hacen los otros, leído
+
+| | |
+|---|---|
+| `fue` | cabecera `clave : valor` alineada por los dos puntos; convergencia con `****`; coeficientes con `(error estándar) [índice]`; después secciones nombradas y terminadas en dos puntos: `Selection Model Criterium:`, `Estimated covariance matrix:`, `Estimated correlation matrix:`, `Correlations greater than or equal to 0.7...`, los residuos con su tabla de momentos, y los gráficos ASCII |
+| `drvarma` (C v.04.1 y el porte) | la misma cabecera `clave : valor` — `Input Data File`, `Output File`, `Model:`, las banderas, `Frequency`, `Start`, `Box-Cox lambda`, `Rescale factor`, `Differences`, `Series names`, `Observations` —, y luego bloques separados por una línea de `=` de 61: convergencia, **tabla de parámetros**, Wald, IRF, FEVD, diagnosis, `Normalized model:` con las matrices, y raíces inversas |
+| `drv` | cabecera equivalente y las secciones `CONFIGURATION:`, `Estimated standard deviations:`, `Estimated parameters and their standard deviations:`, `Estimated covariance matrix:` |
+
+Tres cosas son comunes a los tres y ninguna estaba en `drvec`:
+
+1. **La cabecera `clave : valor`**, alineada, que dice con qué se corrió.
+2. **La tabla de parámetros**: nombre, estimación, error estándar, **t**, **p** y
+   códigos de significación. `drvec` imprimía `0.608562 (sd 0.263137)` pegado a
+   la matriz — sin `t`, sin `p`, y sin poder leerse en columna.
+3. **Secciones delimitadas**, con un separador constante y un título.
+
+Y una cuarta, negativa: **la prosa está acotada**. `drvarma` sí avisa —líneas
+de una sola frase marcadas con `⚠`, cuando el aviso cambia cómo se lee un
+número, como el `termcode 2`— pero no explica en el `.out` por qué un contraste
+tiene la distribución que tiene.
+
+### Qué se construye (P10)
+
+El `.out` de `drvec`, con la convención de `drvarma` porque es el programa
+multivariante del conjunto y comparte con `drvec` el motor:
+
+```
+cabecera clave : valor          incluidos M, r, s, el caso determinista y la
+                                clase de MA, que son de drvec
+=== OPTIMIZER ...               convergencia, igual que drvarma
+=== Estimated Parameters ...    LA TABLA, con t y p y códigos
+                                y debajo sigma2, logelf, AIC, BIC, |Sigma|
+=== VECTOR ERROR CORRECTION ...  E[W], Lambda, F(k), theta(k), B, Pi, Q,
+     MODEL                       Sigma, P, D -- matrices, sin comentario
+=== COINTEGRATION DIAGNOSTICS   la condición de rango y la normalización, con
+                                su valor y su veredicto en una línea
+=== JOINT HYPOTHESIS TESTS      H0, chi2, p, conclusión.  Sin los párrafos
+     (WALD)
+=== MULTIVARIATE RESIDUAL       Hosking y Jarque-Bera con la redacción de
+     DIAGNOSTICS                 drvarma, y las R(k)
+Inverse roots of |phi(B)|=0     con el formato de drvarma
+Inverse roots of |theta(B)|=0
+=== FORECAST                    la tabla
+```
+
+**Los avisos que sobreviven** son los que cambian cómo se lee un número, y van
+como una línea marcada, no como un párrafo: que la χ² de `Λ = 0` no es un
+contraste, que un `σ_min` por debajo del umbral hace que el ajuste sea de otro
+modelo, que las bandas son teóricas, y que sin `-fdhess` los errores estándar
+vienen del factor acumulado. Cuatro líneas donde había cuatro páginas.
+
+**Lo que se va del `.out` y ya está escrito en otro sitio**: el porqué de la
+frontera de Davies (`INFERENCE.md` y `docs/BUGS.md`), la lección de BUG-10
+(`FORECAST.md` §4), la advertencia sobre los autovalores de Π (`USAGE.md` §4),
+el certificado de un paso (`FORECAST.md` §3) y el mecanismo de la truncación
+`ξ` (`HOMOLOGATION.md` §1b). Ninguno se pierde; dejan de estar donde no tocan.
+
+**La red.** El `.out` cambia entero a propósito, así que el conjunto dorado se
+vuelve a capturar — y esa recaptura es la única del proyecto que se hace con la
+salida moviéndose. Lo que NO puede moverse son las cifras. Se comprobó sacando
+**todos los literales numéricos** de los 22 informes viejos y de los nuevos y
+exigiendo que el conjunto nuevo **contenga** al viejo: los números nuevos (`t`,
+`p`) se esperan; uno que falte o cambie es un defecto.
+
+### Lo construido (P10), el 2026-08-24
+
+Resultado sobre el caso canónico: **283 → 237 líneas**, y las que quedan son
+resultados.
+
+| | antes | ahora |
+|---|---|---|
+| cabecera | tres líneas y un `====` propio | 17 líneas `clave : valor`, la del conjunto |
+| parámetros | `0.608562 (sd 0.263137)` pegado a la matriz | **tabla** con `Estimate`, `Std.Error`, `t-stat`, `p-val` y códigos de significación |
+| secciones | `=== Residual diagnostics ===`, `--- H1(r) ---`, ninguna otra | seis bloques con el separador del conjunto |
+| prosa | ~150 líneas de ensayo | cuatro avisos de una línea, marcados con `!` |
+
+**El contraste de la comprobación numérica** dejó fuera exactamente tres
+literales: `6.3` (la cita del Corolario 6.3), `3.5e-04` y `1.8e-15` (las dos
+medidas que la nota del certificado citaba de memoria). Ninguno era un resultado
+de la corrida — eran citas dentro de la prosa. Todo lo demás está.
+
+**Dos defectos que el traslado destapó**, los dos por el mismo mecanismo: mover
+un bloque dentro de `report_fit` lo mete o lo saca del `if (!warma_done)`.
+
+- La diagnosis de residuos y las raíces quedaron **dentro** de la rama, así que
+  la ruta `-warma` las perdió: 145 → 69 líneas. Son propiedades de los residuos
+  y de los operadores, que las dos parametrizaciones tienen, así que van fuera.
+- Y las cifras del ajuste (`sigma2`, `logelf`, `npar`, AIC, BIC) igual.
+
+Los dos los encontró la comparación de números, no la lectura. Y las cinco
+reservas del paso de lectura las cazó el bloque de valgrind en cuanto
+existieron.

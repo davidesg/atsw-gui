@@ -1638,8 +1638,11 @@ done
 
 #  Y la banda no puede estrecharse: el error de nivel ACUMULA.
 run "$MM" 2 1 1 -case 2 -f 8
-if awk '/^ *[0-9]+ /{if(NF>=5){if(p1!="" && ($3<p1-1e-9 || $5<p2-1e-9)) bad=1; p1=$3; p2=$5}}
-        END{exit bad?1:0}' "$TMP/case.out"; then
+#  Acotado a la SECCION de prevision: desde 2026-08-24 el .out lleva la
+#  diagnosis por serie, cuyas filas de acf/pacf tambien empiezan por un numero.
+if sed -n '/^  Forecast$/,$p' "$TMP/case.out" \
+   | awk '/^ *[0-9]+ /{if(NF>=5){if(p1!="" && ($3<p1-1e-9 || $5<p2-1e-9)) bad=1; p1=$3; p2=$5}}
+        END{exit bad?1:0}'; then
     ok "the bands are non-decreasing in the horizon"
 else bad "forecast bands" "a band narrowed as the horizon grew"; fi
 

@@ -11,7 +11,9 @@ cannot be closed.*
 **The numbering is the suite's, not this program's.** `fue`, `drvarma`, `drtran`
 and `drvec` share an engine and a cast, so they share **one** sequence of
 numbers: `BUG-1` to `BUG-13` live in `drtran-python/docs/BUGS.md`, and of those
-`drvec` touches 10 to 13. The ones that start here continue that sequence rather
+`drvec` touches 10 to 13.  `BUG-16` is a defect in code `drvarma` and `drtran`
+own, found here and fixed in both of them; it is registered here because here is
+where it was found and measured. The ones that start here continue that sequence rather
 than opening a private one, so that a number never means two things. A pointer in
 the other register says where 14 onward are and that the next one numbered there
 starts at 16. (`fue` also carries its own four-digit numbering — `BUG-0005`,
@@ -105,6 +107,39 @@ and `ARCHITECTURE_MCP.md` say "never hard-code the rescaling factor — the suit
 has three logged defects because of it". This was the fourth instance of an
 already-named failure mode. The check that would have caught it is in the suite
 now, block `[8f]`.
+
+---
+
+## BUG-16 — one-byte overflow in the residual histogram, in the suite's `diagnose.c`
+
+**Status: FIXED on 2026-08-24** in the owners — `drvarma_v.04.1/src/diagnose.c`
+and `drtran/src/diagnose.c` — and the fix brought back into `drvec/src/diagnose.c`.
+
+**What it was.** `File_HistSer` allocates its histogram rows with
+`malloc(NumCol + 1)` and then writes `NumCat` categories of `nphor` characters
+each, followed by a closing `"|"`. But `NumCat * nphor` is *exactly* `NumCol`
+— 16 × 4 when the range is ±4 sigma, 32 × 2 when it is ±8 — so the string is
+`NumCol + 1` characters long and needs `NumCol + 2` bytes with its terminator.
+`strcat` wrote the NUL one byte past the end of the block, on **every histogram
+this routine has ever drawn**.
+
+**How it was found.** drvec vendored the whole of `diagnose.c` on 2026-08-24 and
+its `VALGRIND=1` block ran over the resulting `.out`: *Invalid write of size 2,
+`strcat` in `File_HistSer` (diagnose.c:809), address 64 bytes inside a block of
+size 65*. This is the first time this file has been linked into a program whose
+suite runs valgrind over its whole output.
+
+**What it cost.** Nothing observed, which is the honest answer and not a
+reassuring one: a one-byte heap overflow corrupts whatever the allocator put
+after the block, and `malloc` in practice rounds up, so it usually lands in
+padding. It is undefined behaviour that happened to be survivable — the same
+category as `BUG-14`, and the same reason for fixing it rather than noting it.
+
+**The lesson.** The defect is in code shared by three programs and had been
+there for as long as the routine has existed. What found it was not a reading:
+it was linking the file into the one program of the family whose suite passes
+valgrind over the full report. Sharing code shares its defects; it also shares
+whatever any one of the three does to look for them.
 
 ---
 

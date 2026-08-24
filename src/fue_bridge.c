@@ -48,26 +48,13 @@
 #include "main.h"
 
 /*---------------------------------------------------------------------------*/
-/*  ObsToDate: convierte numero de observacion a (periodo, subperiodo)       */
-/*---------------------------------------------------------------------------*/
-void ObsToDate(int beg_per, int beg_sub, int obs_no, int freq,
-               int *per, int *sub)
-{
-    div_t cad;
-    if (obs_no + beg_sub - 1 <= freq) {
-        *per = beg_per;
-        *sub = beg_sub + obs_no - 1;
-    } else {
-        cad = div(obs_no - (freq - beg_sub + 1), freq);
-        if (cad.rem > 0) {
-            *per = beg_per + cad.quot + 1;
-            *sub = cad.rem;
-        } else {
-            *per = beg_per + cad.quot;
-            *sub = freq;
-        }
-    }
-}
+/*  ObsToDate lived here as a copy of drtran/src/diagnose.c:128, because that
+ *  file was not vendored and only this one function was needed.  Since
+ *  2026-08-24 the whole of diagnose.c IS vendored (src/diagnose.c, from
+ *  drvarma v.04.1), so the copy is gone and the definition is the owner's.
+ *  Two identical definitions in one binary is not a style question: the linker
+ *  refuses it, which is the one kind of duplication that cannot rot quietly.
+ */
 
 /*---------------------------------------------------------------------------*/
 /*  DateToObs: convierte (periodo, subperiodo) a numero de observacion       */

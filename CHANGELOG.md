@@ -65,6 +65,28 @@ Verificado sacando todos los literales numéricos de 22 informes antes y despué
 y exigiendo que el nuevo contenga al viejo. Destapó dos defectos: la ruta
 `-warma` perdía la diagnosis, las raíces y las cifras del ajuste.
 
+### La diagnosis que faltaba, y un defecto en el fichero compartido (P10)
+
+Ejecutar el caso de los tres IPC por `drvarma` y por `drvec` y poner las dos
+salidas al lado dejó el hueco a la vista: **1665 líneas contra 280**. `drvec`
+sólo había vendorizado la rebanada multivariante de `diagnose.c` — Hosking y
+Jarque-Bera — y le faltaba **toda la diagnosis por serie**: momentos con sus
+fechas, gráfico estandarizado, histograma, ACF y PACF con sus bandas y
+Ljung-Box.
+
+Ahora se vendoriza `diagnose.c` **entero**, y la copia de `drvarma` y no la de
+`drtran` por una razón que no es preferencia: la de `drvarma` fecha los residuos
+y etiqueta las series con `data_freq`, `data_start_year`, `data_start_sub` y
+`series_names`, globales que `drvec` ya tiene con esos nombres. Encaja sin un
+cambio, que es lo que dice que era la copia correcta. 280 → 1530 líneas.
+
+**Y al enlazarlo apareció `BUG-16`**: `File_HistSer` reservaba sus filas con un
+byte de menos y `strcat` escribía el terminador fuera del bloque, en todos los
+histogramas que esa rutina ha dibujado. Arreglado en los dos dueños —`drvarma` y
+`drtran`— y traído de vuelta. Lo encontró el bloque `VALGRIND=1` de `drvec`, que
+es la primera batería del conjunto que pasa valgrind por encima del informe
+entero.
+
 ### El informe, en la notación de Johansen (P10)
 
 El nombre del modelo pasa a **`VARMA-VECM`**: `VECM` es el acrónimo de los

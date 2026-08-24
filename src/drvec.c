@@ -1365,9 +1365,9 @@ static void residual_diagnostics(struct Tvarma *v)
                 C[k][i][j] = sm / n;
             }
 
-    /*  The suite's STANDARD diagnosis, untouched (src/diagnose_mv.c), and it
-     *  brings its own banner: this section is titled by the shared code, not
-     *  by a second title of ours.                                            */
+    /*  The suite's STANDARD diagnosis, untouched (src/diagnose.c, vendored
+     *  from drvarma), and it brings its own banner: this section is titled by
+     *  the shared code, not by a second title of ours.                       */
     multivariate_diagnostics(v->a, n, M, outputv);
     fprintf(outputv, "\n");
     fprintf(outputv, "  residual sd:");
@@ -5899,7 +5899,15 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
                     }
             }
 
+        /*  THE WALK, CHECKED AGAINST npar.  This is the structural guard the
+         *  suite's block exists for; a replacement of the printing block on
+         *  2026-08-24 left it without a body, so the banner below hung off it
+         *  and the error was never emitted.  Found by running the IPC case
+         *  side by side with drvarma.                                        */
         if (ii != npar + 1)
+            fprintf(stderr, "ERROR output: consumed %d of %d parameters\n",
+                    ii - 1, npar);
+
         banner("Estimated Parameters and Standard Deviations");
         /*  THE MAP TO THE READER'S NOTATION, once, at the head of the table.
          *  Someone who knows VECM knows Johansen's
@@ -6398,6 +6406,13 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
          *  the FIT; the forecast is a product and comes after them.          */
         residual_diagnostics(vp);
         operator_roots(vp);
+        /*  AND THE PER-SERIES DIAGNOSIS, which is the suite's and which drvec
+         *  simply did not have: the residual moments with their dates, the
+         *  standardized plot, the histogram, and the ACF and PACF with their
+         *  bands and Ljung-Box.  Vendored whole in src/diagnose.c; drvec only
+         *  calls it.  Measured against drvarma on the three-CPI case, this is
+         *  most of the 1665 lines drvec was missing.                         */
+        diagnose(vp);
 
         /*  P5 — the forecast, here: it is the last place where B2m is still
          *  alive and where the fit is already made and diagnosed.            */
@@ -6418,7 +6433,10 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
          *  residuals and the operators are the same in both parameterisations,
          *  so its report gets them here.  (Inside the branch, the -warma path
          *  lost them: 145 lines to 69.)                                      */
-        if (warma_done) { residual_diagnostics(vp); operator_roots(vp); }
+        if (warma_done) {
+            residual_diagnostics(vp); operator_roots(vp);
+            diagnose(vp);
+        }
         if (warma_done) free_matrix(Lam_m, 1, nser, 1, (r > 0 ? r : 1));
 
     } else {
@@ -8049,9 +8067,18 @@ int main(int argc, char *argv[])
     fprintf(outputv, "Model            : VARMA-VECM(%d,%d), M = %d series, "
                      "cointegration rank r = %d\n",
             global_p, global_q, nser, global_r);
+    /*  THE ALGORITHM HAS A NAME, and it is not the author's surname: the
+     *  exact likelihood of the transformed stationary system is evaluated by
+     *  ALGORITHM AS 311 (Mauricio 1997), and the transformation that turns the
+     *  VECM into that stationary system is Mauricio (2006).  Naming the
+     *  algorithm and citing it in parentheses is what a results file does; the
+     *  full references are in docs/REFERENCES.md.                            */
     fprintf(outputv, "Estimation       : %s\n", (met == 2)
-            ? "conditional (approximate) maximum likelihood"
-            : "exact unconditional maximum likelihood, Mauricio's algorithm");
+            ? "Conditional (Approximate) Maximum Likelihood"
+            : "Exact Unconditional Maximum Likelihood, Algorithm AS 311 "
+              "(Mauricio 1997)");
+    fprintf(outputv, "Transformation   : VECM to stationary VARMA "
+                     "(Mauricio 2006)\n");
     fprintf(outputv, "Deterministic    : case %d -- %s\n", global_case,
             global_case == 1 ? "E[nabla Y2] = 0, E[W] = 0"
           : global_case == 2 ? "E[nabla Y2] = 0, E[W] free"

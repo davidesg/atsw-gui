@@ -1365,7 +1365,10 @@ static void residual_diagnostics(struct Tvarma *v)
                 C[k][i][j] = sm / n;
             }
 
-    banner("Multivariate Residual Diagnostics");
+    /*  The suite's STANDARD diagnosis, untouched (src/diagnose_mv.c), and it
+     *  brings its own banner: this section is titled by the shared code, not
+     *  by a second title of ours.                                            */
+    multivariate_diagnostics(v->a, n, M, outputv);
     fprintf(outputv, "\n");
     fprintf(outputv, "  residual sd:");
     for (i = 1; i <= M; i++) fprintf(outputv, " %10.6f", sqrt(C[0][i][i]));
@@ -1384,8 +1387,6 @@ static void residual_diagnostics(struct Tvarma *v)
         fprintf(outputv, "\n");
     }
 
-    /* The suite's STANDARD diagnosis, untouched (src/diagnose_mv.c). */
-    multivariate_diagnostics(v->a, n, M, outputv);
 
     /* the verdict on cross effects, which is the question that matters */
     {
@@ -5025,6 +5026,8 @@ static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
      *      hard way with compute_psi_weights.                                */
     forecast_core(v, B2, n, H, Yb, lev);
 
+    banner("Forecast");
+
     /*  [1b] THE CERTIFICATE.  The recursion of [1] is applied backwards,
      *  inside the sample: the one-step prediction of Ybar_t with the
      *  information up to t-1 has to be Ybar_t - a_t, with a_t the residual elf
@@ -5060,7 +5063,6 @@ static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
 
     /*  [3] The bands, through the map of [4] above and by no other route.    */
     z = (conf >= 0.99) ? 2.575829 : (conf >= 0.95) ? 1.959964 : 1.644854;
-    banner("Forecast");
     fprintf(outputv, "\n%d step%s ahead, in levels.  Columns are the .inp's: "
                      "Y2 block (1..%d), then Y1.\n"
                      "s.e. are THEORETICAL; a %.0f%% band is +/- %.4f s.e.\n\n",
@@ -6306,6 +6308,11 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
         if (psi_m)  free_matrix(psi_m, 1, alpha_sa, 1, (r > 0 ? r : 1));
         if (ix_psi) free_imatrix(ix_psi, 1, alpha_sa, 1, (r > 0 ? r : 1));
 
+        /*  The diagnosis of the residuals and the roots close the report on
+         *  the FIT; the forecast is a product and comes after them.          */
+        residual_diagnostics(vp);
+        operator_roots(vp);
+
         /*  P5 — the forecast, here: it is the last place where B2m is still
          *  alive and where the fit is already made and diagnosed.            */
         if (global_fcast > 0) forecast_vec(vp, B2m, global_fcast, 0.95);
@@ -6321,12 +6328,11 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
         free_matrix(B2m, 1, s, 1, (r > 0 ? r : 1));
         }   /* !warma_done */
 
-        /*  The residual diagnosis and the roots belong to EVERY fit, -warma
-         *  included: they are about the residuals and the operators, which
-         *  both parameterisations have.  They sit outside the branch for that
-         *  reason -- inside it, the -warma report lost them.                 */
-        residual_diagnostics(vp);
-        operator_roots(vp);
+        /*  -warma prints its own block and skips the one above, but the
+         *  residuals and the operators are the same in both parameterisations,
+         *  so its report gets them here.  (Inside the branch, the -warma path
+         *  lost them: 145 lines to 69.)                                      */
+        if (warma_done) { residual_diagnostics(vp); operator_roots(vp); }
         if (warma_done) free_matrix(Lam_m, 1, nser, 1, (r > 0 ? r : 1));
 
     } else {

@@ -63,7 +63,11 @@ CASES=(
 
 hash_of() {
     #  Drop the version banner and any absolute path; everything else counts.
-    sed -e '/^DRVEC .* EML Estimation/d' -e 's#/tmp/[^ ]*##g' "$1" \
+    #  The version line is the one line allowed to move without the numbers
+    #  moving, so it is dropped before hashing -- otherwise every release
+    #  invalidates the whole baseline and the net stops meaning anything.
+    sed -e '/^DRVEC .* EML Estimation/d' -e '/^Program  *: DRVEC/d' \
+        -e 's#/tmp/[^ ]*##g' "$1" \
         | cksum | awk '{print $1"-"$2}'
 }
 

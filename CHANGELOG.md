@@ -5,7 +5,7 @@ Los informes completos están en [`docs/DEVELOPMENT_RECORD.md`](docs/DEVELOPMENT
 (las mediciones). Los defectos, en [`docs/BUGS.md`](docs/BUGS.md). Etiquetas de
 publicación: `v*`.
 
-## Sin publicar — 2026-08-22
+## 0.10 — 2026-08-24
 
 ### La entrada por `.pre`, que es la del conjunto (P9)
 

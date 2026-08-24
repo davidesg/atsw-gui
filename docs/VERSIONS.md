@@ -63,6 +63,58 @@ a release nobody can cite correctly.
 
 ## 3. The record
 
+### 0.10 — 2026-08-24
+
+**Why a release at all, and why now.** `BUG-17` shipped in `v0.9`: on every fit
+with `r < M` the report **named the wrong series** for the adjustment
+coefficients, and `-weakex i` restricted a different series from the one asked
+for. The numbers were right and their names were not — which is the kind of
+defect a user cannot detect from the output, because nothing about it looks
+wrong. Under §1's rule, a defect found does not hold a version back; what holds
+one back is a defect hidden. This one is fixed, the measurement it touched has
+been re-run (`HOMOLOGATION.md` §4u) and **its conclusion changed**, which is
+recorded there beside the table it replaces.
+
+**Why 0.10 and not 1.0.** Both conditions §3 sets for a 1.0 are still open, and
+one of them got further away rather than closer:
+
+1. the program still does not beat an ARIMA per series out of sample (§4t,
+   re-measured and unchanged after `BUG-14`);
+2. §3 asks for a default that has *survived a stretch of use* — and in this
+   release the **entire report** was rebuilt, the parameter table is new, the
+   notation moved to Johansen's, and three of the four defects on record were
+   found in the last three days. A 1.0 on top of that would be asserting
+   stability that nothing has had time to test.
+
+**Why 0.10 and not 0.9.1.** `z` is for fixes that move no recorded figure. This
+moves several: the `.out` is a different document, §4u's conclusion changed, and
+the program gained the `.pre` input route, impulse responses, variance
+decomposition, long-run gain and the per-series residual diagnosis. That is `y`.
+
+**What it contains.**
+
+| | |
+|---|---|
+| **P7** | `src/drvec.c` is English throughout, kept so by `tools/check_language.py` |
+| **P8** | `main()` 2 320 → 468 lines, nine functions out of it, a map at the top of the file; `BUG-14` closed at its root |
+| **P9** | the suite's `.pre` input route: one `fue` model per series, as in `drtran`, certified against the `.inp` route by identity |
+| **P10** | the `.out` in the suite's shape, with a parameter table carrying `t` and `p`, and the whole report in **Johansen's notation**; the per-series residual diagnosis, vendored from `drvarma`'s `diagnose.c` |
+| **P11** | impulse responses and variance decomposition **in levels**, with the long-run gain and mean lag, certified against the forecast bands |
+| | the version and defect systems: this document, `tools/check_version.sh`, `tools/check_bugs.py`, `tools/golden.sh` |
+
+**Defects fixed**: `BUG-14` (uninitialised `xitol` on the out-of-sample route),
+`BUG-15` (the `.pre`'s rescaling under `-interv`), `BUG-16` (a one-byte overflow
+in the suite's `diagnose.c`, fixed in `drvarma` and in `drtran`) and `BUG-17`.
+Two of the four are in code this program does not own.
+
+**Re-measured for this release, and the answer stated even where nothing moved**:
+§4t's three columns reproduce the published table digit for digit after
+`BUG-14`; the twenty-four golden reports were re-captured because the `.out`
+changed on purpose, and every numeric literal of the old reports was checked to
+survive into the new ones; §4u was re-run and does not survive, and says so.
+
+Test suite: 256 checks, 266 with `VALGRIND=1`.
+
 ### 0.9 — 2026-08-22
 
 The first numbered version. **Not 1.0, and the reason is not modesty**: two
@@ -111,10 +163,9 @@ out-of-sample route) and `BUG-15` (the `.pre`'s rescaling factor not undone in
 
 ---
 
-### Unreleased, after v0.9
+### What was in 0.10, in detail
 
-Work that is in `master` and **not** in the tag; it will carry whatever number
-the next release takes, and the entry for that release will say why.
+The list the release above summarises, item by item.
 
 - **P7, the language of the source.** `src/drvec.c` is English throughout — 363
   comments and about forty messages — and `tools/check_language.py` keeps it
@@ -150,12 +201,7 @@ the next release takes, and the entry for that release will say why.
 
 Suite: 256 checks, 266 with `VALGRIND=1`.
 
-**This is a release.** `BUG-17` shipped in `v0.9`: the numbers were right and
-their names were not, which is a defect a user cannot detect from the output.
-Under §1's rule — a defect found does not hold a version back, a defect hidden
-does — the fix has been made, the measurement it touched has been re-run
-(`HOMOLOGATION.md` §4u) and the result recorded, including that its conclusion
-changed. What remains is to move the number.
+
 
 ---
 

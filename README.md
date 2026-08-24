@@ -304,6 +304,7 @@ does not replace it.
 
 ## Version
 
-**0.9**, and the reason it is not 1.0 is written next to the `#define` in
-`src/drvec.c`. Changes are in [CHANGELOG.md](CHANGELOG.md), defects in
+**0.10**. Why that number and not 1.0 is argued in
+[docs/VERSIONS.md](docs/VERSIONS.md), which also carries the release policy.
+Changes are in [CHANGELOG.md](CHANGELOG.md), defects in
 [docs/BUGS.md](docs/BUGS.md).

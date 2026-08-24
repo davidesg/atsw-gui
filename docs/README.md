@@ -39,16 +39,15 @@ optimisation hard.
 
 ## Status
 
-**0.9.** Not 1.0, and the reason is in [VERSIONS.md](VERSIONS.md) rather than
+**0.10.** Not 1.0, and the reason is in [VERSIONS.md](VERSIONS.md) rather than
 left to be guessed: measured out of sample the program does **not** beat an
-ARIMA per series on its bank ([HOMOLOGATION.md](HOMOLOGATION.md) §4t), and its
-default specification changed on 2026-08-20. Neither is a defect to fix — they
-are the state of the knowledge, measured and written down — but neither is
-something to put a 1.0 on top of. That document also says what would have to be
-true for the number to move.
+ARIMA per series on its bank ([HOMOLOGATION.md](HOMOLOGATION.md) §4t), and in
+this release the whole report was rebuilt — a 1.0 asserts a stability nothing
+has yet had time to test. Neither is a defect to fix; they are the state of the
+knowledge, measured and written down. That document also says what would have to
+be true for the number to move.
 
-The estimator works and is tested (256 checks, and 266 under `VALGRIND=1`, on
-master; 235 and 245 at the tag); the
+The estimator works and is tested (256 checks, 266 under `VALGRIND=1`); the
 interpretable layer is in — restrictions on the adjustment coefficients, the
 long-run matrix `Π`, the triangularisation `Σ = PDP′`, the normalisation
 diagnostic, and a default block of Wald tests of weak exogeneity and of

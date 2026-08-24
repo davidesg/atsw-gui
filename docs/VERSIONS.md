@@ -132,8 +132,30 @@ the next release takes, and the entry for that release will say why.
   out of it, and a map of the file at the top. It moved nothing, and that is
   checked rather than asserted: `tools/golden.sh` compares twenty-four whole
   reports byte for byte. `BUG-14` is closed at its root in the process.
+- **P10, the `.out`.** Rebuilt to the suite's shape — `drvarma`'s: a
+  `key : value` header, blocks under one separator, a parameter table with `t`
+  and `p`, and the report in **Johansen's notation** (`alpha`, `beta`,
+  `Gamma`, `Pi`) rather than the algorithm's. The per-series residual
+  diagnosis, which drvec simply did not have, comes from vendoring the suite's
+  `diagnose.c` whole.
+- **P11, impulse responses and variance decomposition, in levels**, with the
+  long-run gain and mean lag, built on the same `level_error_map` the forecast
+  bands use and certified against them.
+- **Three defects found on the way**, all in [BUGS.md](BUGS.md): `BUG-15`
+  (the `.pre` rescaling under `-interv`), `BUG-16` (a one-byte overflow in the
+  suite's `diagnose.c`, fixed in `drvarma` and `drtran`) and **`BUG-17`**,
+  which is the one that matters for a release: the report **named the wrong
+  series** for the adjustment coefficients, and `-weakex` restricted the wrong
+  one, on every fit with `r < M`.
 
-Suite: 253 checks, 263 with `VALGRIND=1`.
+Suite: 256 checks, 266 with `VALGRIND=1`.
+
+**This is a release.** `BUG-17` shipped in `v0.9`: the numbers were right and
+their names were not, which is a defect a user cannot detect from the output.
+Under §1's rule — a defect found does not hold a version back, a defect hidden
+does — the fix has been made, the measurement it touched has been re-run
+(`HOMOLOGATION.md` §4u) and the result recorded, including that its conclusion
+changed. What remains is to move the number.
 
 ---
 

@@ -4861,8 +4861,8 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
                     "\nError-correction term as a whole\n"
                     "  H0: alpha = 0\n"
                     "  Wald chi2(%d) = %.4f, p-value = %.4f\n"
-                    "  ! NOT A TEST: under H0, B is unidentified (Davies).  "
-                    "Use -lrtest -bootstrap\n",
+                    "  ! NOT A TEST: under H0, beta is unidentified "
+                    "(Davies).  Use -lrtest -bootstrap\n",
                     df, chi2, gsl_cdf_chisq_Q(chi2, df));
         } else {
             fprintf(outputv,
@@ -4956,10 +4956,10 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
          *  the old line told the reader to distrust a Granger reading that is
          *  in fact exactly what these tests are.                             */
         fprintf(outputv,
-            "\nShort-run dynamics   [F on nabla Y, Theta on the innovations]\n"
-            "  ! these are statements about nabla Y, not about the levels: "
-            "a variable can\n"
-            "    drive another's DIFFERENCES and still be tied to it only "
+            "\nShort-run dynamics   [Gamma on nabla Y, Theta on the "
+            "innovations]\n"
+            "  ! statements about nabla Y, not about the levels: a variable "
+            "can drive\n    another's DIFFERENCES and still be tied to it only "
             "through ec\n");
 
         if (nf > 0) {                              /* last lag of F     */
@@ -4969,8 +4969,9 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
                     if (ix_F[(nf - 1) * M + i][j] > 0)
                         idx[++k] = ix_F[(nf - 1) * M + i][j];
             snprintf(title, sizeof title,
-                     "Joint significance of the last AR lag, F[%d]:", nf);
-            emit_wald(x, cov, idx, k, title, "H0: F[last] = 0",
+                     "Joint significance of the last short-run lag, "
+                     "Gamma(%d):", nf);
+            emit_wald(x, cov, idx, k, title, "H0: Gamma(last) = 0",
                       "REJECT H0 -> the last AR lag is significant.",
                       "Cannot reject H0 -> the last AR lag is not significant.");
         }
@@ -4981,8 +4982,8 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
                     if (ix_Th[(q - 1) * M + i][j] > 0)
                         idx[++k] = ix_Th[(q - 1) * M + i][j];
             snprintf(title, sizeof title,
-                     "Joint significance of the last MA lag, Theta[%d]:", q);
-            emit_wald(x, cov, idx, k, title, "H0: Theta[last] = 0",
+                     "Joint significance of the last MA lag, Theta(%d):", q);
+            emit_wald(x, cov, idx, k, title, "H0: Theta(last) = 0",
                       "REJECT H0 -> the last MA lag is significant.",
                       "Cannot reject H0 -> the last MA lag is not significant.");
         }
@@ -5000,7 +5001,8 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
                         idx[++k] = ix_Th[(kk - 1) * M + i][j];
         if (k > 0)
             emit_wald(x, cov, idx, k, "All cross effects jointly:",
-                      "H0: every off-diagonal coefficient of F and Theta = 0",
+                      "H0: every off-diagonal coefficient of Gamma and "
+                      "Theta = 0",
                       "REJECT H0 -> the cross structure earns its parameters.",
                       "Cannot reject H0 -> a diagonal short run would do "
                       "(-diagar / -diagma).");
@@ -5215,8 +5217,9 @@ static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
             if (!quiet_mode) printf("Forecasts written to %s\n", fname);
         }
     }
-    fprintf(outputv, "\n  ! the Y1 s.e. inherits the cumulated Y2 error "
-                     "through Y1 = W - B2'Y2\n");
+    fprintf(outputv, "\n  ! the Y1 s.e. inherits the CUMULATED error of the "
+                     "nabla Y2 block,\n    because the two are tied by the "
+                     "cointegrating relation\n");
 
     if (!quiet_mode)
         printf("Forecast: %d steps written to the .out\n", H);
@@ -6248,7 +6251,11 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
             int a2, b2i, k2;
 
             if (nmu > 0) {
-                fprintf(outputv, "\nMean of the stationary vector Ybar\n");
+                fprintf(outputv, "\n%s\n", (global_case == 3)
+                        ? "Means: of the drift in nabla Y2, and of the "
+                          "equilibrium error"
+                        : "Mean of the equilibrium error (the constant "
+                          "restricted to the relation)");
                 for (a2 = 1; a2 <= nmu; a2++) {
                     if (global_case == 3 && a2 <= s)
                         snprintf(lb, sizeof lb, "  E[D.%s]", sname(a2));
@@ -6394,9 +6401,12 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
         }
         for (int k2 = 1; k2 <= global_q; k2++) {
             fprintf(outputv, "theta(%d) matrix%s:\n", k2,
-                    mawarma_on()  ? "  [T11  T11*B2' ; 0  0]"
-                  : global_matri  ? "  [T11 T12 ; 0 T22]"
-                  : marow_on()    ? "  [T11 T12 ; 0 0]" : "");
+                    mawarma_on()  ? "   (inherited: the nabla Y2 block has no MA"
+                                    " and the cross block is beta-determined)"
+                  : global_matri  ? "   (the equilibrium errors do not enter the"
+                                    " nabla Y2 equations with a lag)"
+                  : marow_on()    ? "   (the nabla Y2 block carries no MA of "
+                                    "its own)" : "");
             for (int a2 = 1; a2 <= nser; a2++) {
                 fprintf(outputv, "  ");
                 for (int b2i = 1; b2i <= nser; b2i++)

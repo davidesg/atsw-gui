@@ -49,8 +49,13 @@ PROBE      = $(BIN_DIR)/pre_probe
 #  sin esto su bateria no protegeria el arreglo de BUG-13 en un fichero que
 #  drvarma y drtran SI usan.  Ver tests/chisq_probe.c.
 CHIPROBE   = $(BIN_DIR)/chisq_probe
+#  diagnose.o entra aqui desde el 2026-08-24: ObsToDate vivia en fue_bridge.c
+#  como copia, y al vendorizar diagnose.c entero paso a ser de su dueno.  El
+#  arnes lo necesita porque fue_pre_reader lo llama para fechar las
+#  deterministas.  Lo cazo la CI sobre un arbol limpio; en local el binario
+#  viejo seguia enlazado y la bateria pasaba por encima.
 PROBE_OBJS = $(BUILD_DIR)/fue_pre_reader.o $(BUILD_DIR)/fue_bridge.o \
-             $(BUILD_DIR)/nlatools.o
+             $(BUILD_DIR)/diagnose.o $(BUILD_DIR)/nlatools.o
 
 all: $(EXEC)
 

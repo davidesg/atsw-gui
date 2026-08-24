@@ -24,8 +24,8 @@ jobs:
         run: make
       - name: La version que dice el binario
         run: bin/drvec --version
-      - name: Bateria
-        run: make test
+      - name: Bateria (con la comprobacion de compilacion desde cero)
+        run: CLEANBUILD=1 make test
       - name: Que install y uninstall no mientan
         run: |
           make install PREFIX="$PWD/_inst"

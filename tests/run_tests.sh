@@ -2250,6 +2250,27 @@ else
 fi
 echo
 
+# 0b. THE BUILD ITSELF, FROM CLEAN.  Opt-in with CLEANBUILD=1, and it exists
+#     because of a real failure: on 2026-08-24 `ObsToDate` moved out of
+#     fue_bridge.c into the vendored diagnose.c, which left tests/pre_probe.c
+#     without the symbol.  Nothing here noticed, because bin/pre_probe was
+#     already built and `make` had no reason to relink it.  The CI, starting
+#     from an empty tree, failed on the first push.
+#
+#     A suite that runs against whatever binaries happen to be lying around is
+#     testing the last build, not this one.  Off by default because a full
+#     rebuild is slow; on in CI, which is where a clean tree is free.
+if [ "${CLEANBUILD:-0}" = "1" ]; then
+    echo "[0b] the build, from clean"
+    if make distclean >/dev/null 2>&1 && make >/dev/null 2>&1 \
+       && make bin/pre_probe bin/chisq_probe >/dev/null 2>&1; then
+        ok "everything links from an empty build directory"
+    else
+        bad "clean build" "something does not link; see make output"
+    fi
+    echo
+fi
+
 # ================================================== 9 MEMORY (opt-in) ==
 # Off by default so `make test` is deterministic on any machine; run it with
 #     VALGRIND=1 make test

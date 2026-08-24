@@ -30,6 +30,27 @@
 #include "main.h"
 #include "fue_pre_reader.h"
 
+/*  WHAT diagnose.c EXPECTS FROM ITS HOST, declared here because this harness
+ *  is the host.
+ *
+ *  ObsToDate belongs to the suite's diagnose.c (vendored whole on 2026-08-24);
+ *  fue_pre_reader calls it to date the deterministic terms, so this harness has
+ *  to link that object -- and diagnose.c, being the report writer of a full
+ *  program, expects a handful of globals from it.  Giving them here keeps ONE
+ *  definition of ObsToDate, its owner's, instead of a private copy: a copy is
+ *  what docs/PLAN_PRODUCCION.md P3 exists to stop, and it is how the two
+ *  implementations of a shared function start.
+ *
+ *  The CI found this on a clean tree; locally a stale bin/pre_probe from before
+ *  the vendoring was still linked, and the suite had been passing over it.     */
+FILE  *outputv         = NULL;
+char **series_names    = NULL;
+int    data_freq       = 1;
+int    data_start_year = 1;
+int    data_start_sub  = 1;
+int    trans_d         = 0;
+int    trans_D         = 0;
+
 real macheps;
 
 int main(int argc, char **argv)

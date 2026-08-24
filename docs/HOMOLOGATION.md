@@ -2180,8 +2180,8 @@ open and as the user's responsibility.
 > series each row belongs to depends on how this table was transcribed, and
 > that cannot be reconstructed from what is written here. **The values, the
 > standard errors and the LR statistics are unaffected**: the rows were tested
-> correctly, only their names were in question. Re-run with the corrected build
-> before quoting the per-series attribution. See [BUGS.md](BUGS.md) BUG-17.
+> correctly, only their names were in question. See [BUGS.md](BUGS.md) BUG-17,
+> and **the re-measurement below**, which supersedes this table's reading.
 
 | | `Λ` (s.e.) | `t` | `-weakex` LR | `p` |
 |---|---|---|---|---|
@@ -2191,6 +2191,55 @@ open and as the user's responsibility.
 
 If a relation existed, only Spain would adjust to it and the core would drive
 it, which is the expected direction for a small open economy.
+
+### Re-measured after BUG-17, 2026-08-24
+
+*The table above is left as it was written. This is the same analysis on the
+data that can be reproduced exactly, with the build that names the rows
+correctly.*
+
+**What is reproducible and what is not.** The study's `.pre` files —
+`IPC_DE_m10`, `IPC_FR_m10`, `IPC_ES_m10`, all three with `λ = 0`, `d = 1` and
+eleven harmonics — carry **216 observations, 1/2002–12/2019**, which is the
+training window. The sample the original table was computed on (the register
+describes the data as running to 11/2023) is not in those files, so the figures
+below are **not** expected to reproduce it digit for digit. What they settle is
+the question BUG-17 raised, which is not a value but an attribution.
+
+**And it is now run through the `.pre` route** (P9), which is what this case
+asked for in the first place: it applies the Box-Cox and subtracts the eleven
+harmonics itself, so the three manual steps the original run needed — export,
+`-interv`, seed — are gone, and with them the place `BUG-15` came from.
+
+```sh
+drvec IPC_DE_m10.pre IPC_FR_m10.pre IPC_ES_m10.pre 2 0 1 -mean -case 2 -fdhess
+```
+
+| | `α` (s.e.) | `t` | Wald `χ²(1)` | `p` |
+|---|---|---|---|---|
+| IPC_DE | −0.02655 (0.01526) | −1.74 | 3.026 | 0.082 |
+| IPC_FR | −0.01892 (0.00987) | −1.92 | 3.678 | 0.055 |
+| IPC_ES | −0.02541 (0.01521) | −1.67 | 2.792 | 0.095 |
+
+with `W = log ES + 1.8559 log DE − 3.2725 log FR` on this window.
+
+**The conclusion changes, and in the direction the rest of §4u already pointed.**
+The old table read *«only Spain adjusts, and the core drives it»*. On this sample
+and with the rows named correctly, **none of the three adjusts significantly**:
+all three sit between 0.055 and 0.095, and all three are negative, which is the
+error-correcting sign. That is what `r = 0` looks like from the inside — there is
+no relation for anything to adjust to — and it agrees with the bootstrap p of
+0.313 this section already reports.
+
+**And a discrepancy worth recording rather than smoothing.** The `-weakex` LR on
+the same fits is 20.7, 18.9 and 15.1 — every one of them "significant" at any
+level — against Wald statistics of 3.0, 3.7 and 2.8. The two do not disagree
+about a loading: they are not testing the same thing. Imposing `α_i = 0` at an
+**imposed** `r = 1` when the rank is 0 leaves `β` unidentified, so the restricted
+fit is free to move the cointegrating direction anywhere, and the likelihood it
+gives up is not the price of the restriction on `α` alone. The Wald, which holds
+the fit fixed, is the one to read here. This is the same non-identification the
+section measures elsewhere, arriving through a third door.
 
 ### In sample: the error-correction term gains almost nothing
 

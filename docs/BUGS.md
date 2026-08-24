@@ -184,11 +184,17 @@ with `B`'s internal rows and then *labelling* the result in the `.inp`'s order,
 so `Pi` as a matrix was internally consistent but its rows and columns were named
 wrongly; its non-zero eigenvalue, `-0.557476` on mink–muskrat, is unchanged.
 
-**AND IT REACHES THE REGISTER.** [HOMOLOGATION.md](HOMOLOGATION.md) §4u lists
-`Lambda`, its `t` and the `-weakex` LR **per series** for the three euro-area
-CPIs. Those numbers are right; which series each belongs to has to be checked
-against the corrected output before that table is quoted again. The table is
-flagged there.
+**AND IT REACHED THE REGISTER — re-measured on 2026-08-24.**
+[HOMOLOGATION.md](HOMOLOGATION.md) §4u lists `Lambda`, its `t` and the `-weakex`
+LR **per series** for the three euro-area CPIs. The analysis was re-run through
+the `.pre` route on the study's own files, and the table is superseded there.
+The original sample could not be reproduced — the `.pre` files carry the
+training window, 216 observations — so the figures are not the same figures;
+what the re-run settles is the attribution, and it changes the reading: the old
+table concluded that only Spain adjusted, and with the rows named correctly
+**none of the three adjusts significantly** on that window. Which is what `r = 0`
+looks like from the inside, and agrees with the bootstrap p of 0.313 the section
+already carried.
 
 **The lesson.** Two orders is one too many, and a program that carries both will
 eventually print one while meaning the other. What caught it was not a reading of

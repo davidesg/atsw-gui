@@ -17,16 +17,35 @@ on**:
 | | what it asserts |
 |---|---|
 | `0.x` | the estimator works and is tested, and at least one thing the register measures is **against** it, or has been measured too recently to have been used by anybody |
-| `1.0` | nothing in the register argues against using it for what it claims to do, and the default specification has been stable long enough for the recorded figures to have been produced under it |
+| `1.0` | nothing in the register argues against using it for what it claims to do; the default specification has been stable long enough for the recorded figures to have been produced under it; and it has been run enough times, on data it was not developed on, for those two statements to mean something |
 | `x.y.z` | `z` moves for fixes that change no recorded figure; `y` for work that adds capability or moves figures; `x` for a change in what the program claims |
 
-**Two rules follow, and they are the whole point of writing this down.**
+**Three rules follow, and they are the whole point of writing this down.**
 
 **A defect found is not a reason to hold a version back; a defect *hidden* is.**
 `BUG-14` was found the day 0.9 was tagged, in the very route the version argument
 rests on. It was fixed, the table it affected was re-measured, and the result
 went into the register. That sequence is what a version number is allowed to
 stand on. What it may not stand on is a measurement nobody re-ran.
+
+**A result about the data is not a defect of the program.** Whether a VECM
+forecasts better than an ARIMA per series is a property of the series, not of the
+estimator. The theory runs the right way — if the structure is really there and
+the gain in fit is real, the forecast should be the more efficient one — but the
+gain is small, hard to estimate at these sample sizes, and routinely eaten by the
+uncertainty in the parameters that carry it. That is the standing empirical
+result of the forecasting literature, not a verdict on this code. So
+`HOMOLOGATION.md` §4t is a measurement the program **owns and publishes**, and
+not one that argues against it; it does not hold a version back by itself. What a
+`1.0` needs on this front is not a win but **exposure**: the program run many
+times, on data it was not developed on, with what it found written down each
+time — and the defects that exposure turns up fixed as they appear. The two go
+together, and neither is finished by a release. `BUG-15` is what the first half
+looks like: it came out of applying the program to a study's own files, and it
+had been silently wrong on every `.pre` whose `refactor` was not 1 — which is to
+say, on data nobody had run it against yet. The other three on record came from
+inside — a valgrind block, a certificate, a battery — and that is the second
+half.
 
 **The number moves when the claim changes, not when the calendar does.** There
 is no release schedule.
@@ -75,12 +94,16 @@ one back is a defect hidden. This one is fixed, the measurement it touched has
 been re-run (`HOMOLOGATION.md` §4u) and **its conclusion changed**, which is
 recorded there beside the table it replaces.
 
-**Why 0.10 and not 1.0.** Both conditions §3 sets for a 1.0 are still open, and
+**Why 0.10 and not 1.0.** The conditions §1 sets for a 1.0 are still open, and
 one of them got further away rather than closer:
 
-1. the program still does not beat an ARIMA per series out of sample (§4t,
-   re-measured and unchanged after `BUG-14`);
-2. §3 asks for a default that has *survived a stretch of use* — and in this
+1. the program has not been run enough. The out-of-sample bank is nine cases —
+   one animal-population pair and eight wheat-price pairs — and §4t is what it
+   measured there, re-measured and unchanged after `BUG-14`. That table is not
+   the blocker under §1's third rule: not beating an ARIMA is a fact about those
+   series, and it is published as one. What is open is the **exposure** the rule
+   asks for, and nine cases from two sources is not it;
+2. §1 asks for a default that has *survived a stretch of use* — and in this
    release the **entire report** was rebuilt, the parameter table is new, the
    notation moved to Johansen's, and three of the four defects on record were
    found in the last three days. A 1.0 on top of that would be asserting

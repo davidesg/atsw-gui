@@ -1056,7 +1056,11 @@ agreeing.
 sequence reject (`sum(lr1 > cvt[:,1])`). The sequential procedure stops at the
 first non-rejection. On this case the last row rejects and the first does not, so
 the count returns 1 where the sequence returns 0 — the right answer for the wrong
-reason. Not yet fixed; recorded.
+reason. **Fixed on 2026-08-21** (`484b209`): `_rank_sequential()` in
+`tools/compare_johansen.py` now walks the rows and returns at the first
+non-rejection. The entry stays because the failure mode outlives its fix —
+counting agrees with the sequence for as long as the rejections form a prefix,
+which is why it survived every comparison in this register before this one.
 
 ---
 

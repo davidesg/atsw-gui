@@ -2146,8 +2146,9 @@ the bootstrap gives 0.31.
 **A note on how the sequence is read.** In the case-3 table the `r ≤ 2` row has
 trace 4.11 against 3.84, so counting *how many rows reject* returns 1, while the
 sequential procedure stops at the first non-rejection and returns 0.
-`tools/compare_johansen.py` counts the first way (`sum(lr1 > cvt[:,1])`) and on
-this case would give the right answer for the wrong reason.
+`tools/compare_johansen.py` counted the first way (`sum(lr1 > cvt[:,1])`) and on
+this case gave the right answer for the wrong reason; **fixed on 2026-08-21**
+(`484b209`), and it now reads the sequence.
 
 ### Imposing `r = 1`: the two programs disagree, and that is what `r = 0` means
 

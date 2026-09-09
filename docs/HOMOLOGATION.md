@@ -2350,6 +2350,65 @@ touching it would move every figure in this register through the back door. It
 is written down for the refactor (P8), which is where a change with no measurable
 effect belongs.
 
+## 4w. A third party's data, `M = 3`: the `-fdhess` standard errors move with the units
+
+**The case.** Bolivia's real exchange rate (TFM, M. Tapia Torrico 2026), three
+quarterly series 2004Q1–2024Q4, `n = 84`: the real effective exchange rate
+`ITCER`, the implicit gas price `PGAS` and public spending over GDP `RATIO`.
+Estimated through the **`.pre` route** from three univariate models built in
+`art`/`fue`, `p = 5`, `q = 0`, case 3 — the mapping of the thesis's Gretl
+specification. This is data the program was not developed on, with a published
+result in front of it.
+
+**The measurement.** The three `.pre` did not share a rescaling factor: `PGAS`
+and `ITCER` were written with `refactor = 1` and `RATIO` with `100`. Since the
+system is built in `w = refactor · BoxCox(z)`, `RATIO` entered at a hundred times
+the scale of the other two. Re-running with all three at `100` gives, as theory
+requires, **the same fit** — objective 0.915556383 against 0.915556386, and
+`|Sigma|` multiplied by exactly `100^4` — and **point estimates that map
+exactly**: `beta_RATIO` goes from 0.020221 to 2.022092.
+
+The standard errors do not:
+
+| | mixed scales | common scale |
+|---|---|---|
+| `beta` PGAS | 0.4997 (t = 2.573, **p = 0.010**) | 0.4997 (t = 2.239, **p = 0.025**) |
+| `beta` RATIO | (t = 2.321, **p = 0.020**) | (t = 1.947, **p = 0.052**) |
+| `alpha` D.PGAS | (t = −1.803, p = 0.071) | (t = −1.881, p = 0.060) |
+| iterations to converge | 236 | **113** |
+
+`beta_RATIO` crosses the 5 % line in one direction or the other **with the same
+data and the same model**, according to how the inputs happen to be scaled. The
+finite-difference steps of `-fdhess` are not commensurate when the variables
+differ by two orders of magnitude, and `Sigma`'s condition number was ~3.4e4.
+
+**What this is and is not.** It is not a defect in the estimator: ML is
+equivariant and the point estimates prove it to six digits. It is a property of
+the numerical Hessian that a user cannot see, on an input the suite does not
+check. The `.pre` route reads `refactor` from each file and does not compare
+them; `art` has a warning for writing a file with `refactor != 100`
+(`art/bugs/BUG-0085`) and it did not fire here, because the bare `.inp` files came
+from outside.
+
+**Suggested check.** The `.pre` route should say, at least, that the files do not
+share a rescaling factor — it already prints which file went into which block.
+
+**Also from this case:** BUG-18, BUG-19 and BUG-20, all three about what the
+report *says* rather than what it computes, and all three found by a reader who
+had the documentation open.
+
+**The architectural reading of this case is in [SUITE_INTEGRATION.md](SUITE_INTEGRATION.md) §7**:
+the published `r = 1` rests entirely on three break dummies, and adding the sample's
+largest episode moves the trace between 29.77 and 45.37 depending on the form given to
+it — which is what the univariate ladder settles with a contrast and the system level
+cannot settle at all.
+
+**And the substantive result**, for the record: the sequential rank test gives
+`LR = 3.07` for `r = 0` against `r = 1`, and AIC and BIC both select `r = 0`.
+With `r = 1` imposed, the adjustment coefficient of the series the relation is
+normalised on is `-0.0033` (t = −0.07).
+
+
 ## 5. What is not in the register, and why
 
 * **The Census Housing example** of the AddOn (Hillmer & Tiao 1979): the data

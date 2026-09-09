@@ -395,3 +395,122 @@ Two things the suite asked for and did not have:
   `drvec`'s test suite asserts that the walk consumes exactly `npar` in 24
   configurations, and that check has already caught two real defects.
 * **a third independent confirmation** of the factorisation gate's constants.
+
+## 7. Why the univariate rung comes first: a measured defence against a spurious rank
+
+The suite's order — `art`/`fue` first, then `drvec` — reads as ergonomics: the
+univariate work is done, so do not do it twice. It is not. It is a defence, and
+this section measures how much it buys, on a case where the answer was already
+published.
+
+### 7.1 The case
+
+Bolivia's real exchange rate (TFM, M. Tapia Torrico 2026). Three quarterly
+series, `n = 84`, a VECM with `r = 1` on `(ln ITCER, ln P_gas, RATIO_SA)`, and on
+that single cointegrating relation the whole applied contribution: the
+equilibrium exchange rate, the misalignment, the required depreciation.
+
+The specification carries three break dummies as exogenous regressors —
+`d2011` (step 2011Q4), `d2015` (step 2015Q1), `d_covid` (pulse 2020Q2–Q4) — and
+Johansen's trace for `r = 0` is **32.676** against a 5 % critical value of 29.80.
+It rejects by 2.9 points. The figure is reproduced here exactly.
+
+### 7.2 What the result rests on
+
+Changing one thing at a time:
+
+| specification | trace `r=0` | verdict |
+|---|---|---|
+| as published | **32.676** | r = 1 |
+| `RATIO` in logs instead of levels | 31.724 | r = 1 |
+| `RATIO` **not** seasonally adjusted | **32.676** | r = 1 |
+| **without the three break dummies** | **21.379** | **r = 0** |
+
+The transformation does not matter. The seasonal adjustment does not matter *at
+all* — the statistic is identical to the digit, because the centred seasonal
+dummies are already in the auxiliary regressions and adjusting beforehand is
+redundant. **The three break dummies carry the entire result.**
+
+### 7.3 And the dummies are a modelling choice, not a measurement
+
+None of the three is dated in **2008-09**, which is the largest episode in the
+sample and the one every series in the system identifies. Adding it, in the eight
+forms a careful analyst might defend:
+
+| form added to the published specification | trace `r=0` | verdict |
+|---|---|---|
+| step from 2008Q2 | **45.367** | r = 1 |
+| step from 2008Q3 | 32.006 | r = 1 |
+| **step from 2008Q4** | **29.773** | **r = 0** |
+| step from 2009Q1 | 43.386 | r = 1 |
+| impulse at 2008Q4 only | 39.490 | r = 1 |
+| pulse 2008Q4–2009Q1 | 42.942 | r = 1 |
+| pulse 2008Q2–2009Q2 | 41.431 | r = 1 |
+
+**Between 29.77 and 45.37**, for the same episode, the same data and the same
+sample. Moving the start date by one quarter — 2008Q3 to 2008Q4 — moves the
+statistic 2.2 points and crosses the threshold. The verdict is decided in the
+third decimal place of a statistic whose critical value, with step and pulse
+dummies in the auxiliary regressions, is not the tabulated one anyway and errs
+in the unfavourable direction (Johansen, Mosconi and Nielsen 2000).
+
+### 7.4 What the ladder does about it
+
+The forms above are not equally supported by the data, and the univariate rung
+is where that is decided — **with a contrast, not by hand**:
+
+| the ladder's instrument | what it settles about the episode |
+|---|---|
+| `residual_episodes` / `incident_configurations` | how many periods of the **level** the event alters, and which configurations the data admits at all |
+| the **gain contrast** `H0: ω(1) = 0` | permanent or transitory — the difference between a step and a pulse, which above is worth 12 points of trace |
+| the **Treadway rule** | whether the chosen form left an anomalous neighbour, i.e. whether the date is off by one — worth 2.2 points and the verdict |
+| the **Ockham ladder** | climbs a rung only when something justifies it, and **the AIC does not arbitrate the climb** |
+
+On this case the ladder answers: for `RATIO`, a **permanent step at 2008Q4**
+(ω = 18.12, t = 5.22; the gain contrast rejects `ω(1) = 0` at p = 0.0002, and the
+`×5` general form was abandoned for collinearity after it had served as a probe).
+For `PGAS`, **three impulses, transitory**. The two series do not ask for the same
+form, and that is itself information the system-level dummy cannot represent.
+
+And the form the univariate contrast supports — the step at 2008Q4 — is exactly
+the one that leaves the published result at **29.773 against 29.80**.
+
+### 7.5 The architectural claim, stated so it can be argued with
+
+> **A cointegration verdict that moves 15 points of trace according to how one
+> episode is dated and shaped is not a property of the data. It is a property of
+> the specification — and the specification is being chosen at the level where
+> there is no contrast to choose it with.**
+
+At the system level, an intervention is an exogenous column: the analyst types a
+date and a shape and the estimator accepts them. There is no `ω(1) = 0` test, no
+Treadway neighbour, no ladder — nothing that can say *this form and not that
+one*. At the univariate level all four exist, they run on one series at a time
+where they have power, and they leave their reasons written in the `guion`.
+
+So the order of the suite is not a convenience. **`fue` and `art` are where the
+deterministic part of a system model becomes falsifiable**, and passing through
+them is what stops a rank from resting on an undocumented dummy. This case is the
+measurement of what that is worth: on a published result, the difference between
+`r = 1` and `r = 0`.
+
+Two consequences for `drvec` itself, which are work items and not rhetoric:
+
+1. **The `.pre` route already does the right thing and does not say so.** It
+   subtracts each series' deterministic terms *with its own dates and forms*,
+   which is how the univariate verdict reaches the system. The report does not
+   record which terms were subtracted, so a reader cannot tell a fit that
+   inherited a contrasted form from one that inherited a guess. It should print
+   them.
+2. **A rank test is worth little without its specification alongside.**
+   `-lrtest` reports the sequence; it could report, next to it, what deterministic
+   terms each series brought — the closest thing to a robustness statement that
+   costs nothing to produce.
+
+**Provenance.** Measured on the Bolivia replication, 9 September 2026; the full
+figures, including `drvec`'s own `-lrtest` sequence (`LR = 3.07` for `r=0`
+against `r=1`; AIC and BIC both selecting `r = 0`) and the adjustment coefficient
+of the normalising series under an imposed `r = 1` (`-0.0033`, t = −0.07), are in
+`TFM_UCM/Tesis_Michael/replica/run5_guiado/COINTEGRACION.md`. The Johansen
+implementation used was verified against an independent replication that
+reproduces the published tables exactly.

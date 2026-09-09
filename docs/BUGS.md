@@ -220,6 +220,93 @@ this program *has*, and whoever knows them will look for them first:
 
 ---
 
+## BUG-18 — `Q` and `Sigma` are printed in the internal row order and labelled in the `.inp`'s
+
+**Status: OPEN.** Found 2026-09-09 on a third party's data (Bolivia TFM
+replication, `M = 3`, `r = 1`, case 3, the `.pre` route).
+
+**What it is.** Exactly the disease BUG-17 named — *«`drvec` carries two row
+orders and the report mixed them»* — surviving in the covariance block. BUG-17
+fixed `Lambda` and `B`; `Q` and `Sigma` were not looked at.
+
+The fit prints, with `Sigma = sigma2 * Q`:
+
+```
+Q matrix (lower triangle; Q[1,1] = 1 by normalisation):
+      1.000000
+      0.382008    9.343358
+     -0.496808   -0.308768    3.420599
+Sigma = sigma2 * Q:
+      3.515594
+      1.342983   32.847451
+     -1.746576   -1.085501   12.025435
+```
+
+and labels the entries in the parameter table `var RATIO`, `var ITCER`,
+`cov ITCER, PGAS` — the `.inp`'s order `PGAS RATIO ITCER`. **The rows are in the
+internal order `[Y1 ; Y2]`**, i.e. `ITCER PGAS RATIO`.
+
+**How it was established** (three independent checks, all on the same fit):
+
+| | |
+|---|---|
+| innovation sd from `Sigma` | 1.875 · 5.731 · 3.468 |
+| the report's own `residual sd` line | 5.707 · 3.397 · 7.128 |
+| read `Sigma` as `[Y1;Y2]` | PGAS 5.731 vs 5.707 ✓ · RATIO 3.468 vs 3.397 ✓ |
+| `Q`'s correlation between its rows 2 and 3 | −0.0546 |
+| the residuals' `R(0)` between PGAS and RATIO | −0.057 — the same pair, the same number |
+
+**Why it matters, and it is not cosmetic.** The reader compares the innovation sd
+of a series against its univariate `sigma` — that is what the `.pre` route is
+*for*. Here `ITCER`'s true innovation sd is **1.875**, better than its univariate
+2.158 and than the 2.702 of its own differenced series: the system fits it well.
+Reading the labels as printed makes it 3.468 or 7.128 and invites the conclusion
+that the model is broken. That conclusion was actually reached during the
+replication, with the documentation open, and held for several steps.
+
+---
+
+## BUG-19 — the residual series of the `Y1` block is labelled with its file's name
+
+**Status: OPEN.** Same fit as BUG-18.
+
+**What it is.** The transformed system is `Ybar = (nabla Y2' , W')'` with
+`W = Y1 + B2' Y2` (MODEL.md §2). Its third residual series is therefore the
+innovation of `W`, not of `nabla ITCER`. The report calls it
+
+```
+--- Residual series a[3] (ITCER) ---
+```
+
+and its `residual sd` is 7.128 while `nabla ITCER` has sd 2.702 — a residual
+larger than its supposed dependent variable, which is what makes a reader stop.
+Its cross-correlations do not match any row of `Sigma` either: `R(0)[2][3] =
+0.869`, which is the mechanical consequence of `W` carrying `2.0221 x RATIO`, not
+a contemporaneous relation between the real exchange rate and public spending.
+
+**Suggested fix.** Name it for what it is — `W` or `ec1` — or state in the block
+header that the third series is the equilibrium error. The `.pre` route makes
+this worse, because there the name comes from a file the user chose.
+
+---
+
+## BUG-20 — the closing message prints the first input path, not the output's
+
+**Status: OPEN.** Same session.
+
+`drvec a.pre b.pre c.pre 5 0 1 -name /path/out` finishes with
+
+```
+Done. Output written to /…/PGAS_m30.pre
+```
+
+which is the **first input file**. The `.out` is written correctly to the path
+`-name` asked for; only the message is wrong. On the `.pre` route it reads as an
+announcement that the program has just overwritten one of the user's estimated
+models, which is alarming enough to stop the work and check.
+
+---
+
 ## Watched, and not defects
 
 The live list is `DEVELOPMENT_RECORD.md` §10. What matters most when reading an

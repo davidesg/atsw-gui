@@ -121,7 +121,8 @@ help:
 	@echo "  (Ensure the MXE toolchain is in PATH and PKG_CONFIG_PATH is set)"
 
 # Header dependencies (explicit)
-$(BUILD_DIR)/fue.o:             include/fue.h include/nlatools.h include/gnuplot_i.h include/gnuplot_graphics.h
+$(BUILD_DIR)/fue.o:             include/fue.h include/nlatools.h include/gnuplot_i.h include/gnuplot_graphics.h include/inpcheck.h
+$(BUILD_DIR)/inpcheck.o:        include/inpcheck.h
 $(BUILD_DIR)/diagnose.o:        include/fue.h include/nlatools.h include/gnuplot_i.h
 $(BUILD_DIR)/gnuplot_graphics.o: include/fue.h include/nlatools.h include/gnuplot_i.h include/gnuplot_graphics.h
 $(BUILD_DIR)/gnuplot_i.o:       include/gnuplot_i.h

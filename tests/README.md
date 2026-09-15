@@ -7,7 +7,7 @@ sh tests/run_tests.sh --update       # rehace tests/golden/ y los estados de run
 
 ## Qué comprueban
 
-`tests/runs.tsv` enumera las ejecuciones: un fichero de `tests/corpus/`, los
+`tests/runs.tsv` enumera las ejecuciones (y `tests/errors.tsv` los errores): un fichero de `tests/corpus/`, los
 argumentos de fue (`-` sin argumentos), el formato del fichero y el código de
 salida esperado. Cada ejecución debe terminar con ese código y, si termina bien
 (0), escribir los mismos `.out`, `.pre` y ficheros LaTeX (`.tex`, `_res.tex`,
@@ -51,6 +51,15 @@ Cada commit que cambia un código de salida de `runs.tsv` lo explica aquí.
   Con este arreglo, 7 ficheros de fuf y fug que antes terminaban mal
   "terminan bien" con resultados sin sentido: fue todavía no valida el
   formato de la entrada (siguiente commit).
+
+- **Validación de la entrada** (commit de la validación): fue comprueba el
+  `.inp` antes de escribir nada (`src/inpcheck.c`, que lo lee con las mismas
+  llamadas y en el mismo orden que fue). Los 12 ficheros de fuf y los 5 de fug
+  terminan con código 2 y un mensaje que dice qué son. Ningún fichero de fue
+  cambia de estado ni de salida. Los códigos de salida y los errores
+  provocados a propósito están en `errors.tsv` (ficheros
+  `tests/corpus/bad_*.inp`): cada uno debe terminar con su código, decir qué
+  pasa y, con código 2, no escribir nada.
 
 ## La batería sintética
 

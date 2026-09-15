@@ -100,6 +100,7 @@ El ejecutable queda en `bin/fue.exe`.
 ### Otros targets
 
 ```
+make check       # pruebas de regresión (tests/README.md)
 make clean       # elimina objetos y ejecutable
 make distclean   # elimina obj/ y bin/
 make install     # copia bin/fue a /usr/local/bin
@@ -122,6 +123,20 @@ fue input [eml|aml] [chk|nochk] [-f [horizonte]]
 FUE genera un archivo de salida `input.out` con resultados en texto y,
 si Gnuplot está disponible, un archivo `input.ps` con los gráficos en alta
 definición.
+
+Antes de escribir nada, FUE comprueba el `.inp` y, si algo está mal, dice qué
+y en qué línea (por ejemplo, si es un fichero de FUF o de FUG en lugar de uno
+de FUE). Códigos de salida:
+
+| código | significado |
+|---|---|
+| 0 | resultados escritos |
+| 1 | error en la línea de órdenes, o un fichero no se puede abrir |
+| 2 | el `.inp` no es válido: no se escribe nada |
+| 3 | el modelo no se puede estimar desde sus valores iniciales: se escriben los resultados, avisando en el `.out` de que no son válidos |
+| 4 | error interno durante el cálculo |
+
+Los mensajes de error van a la salida de errores (stderr).
 
 ## Flujo de trabajo con FUF y gtk\_fue
 

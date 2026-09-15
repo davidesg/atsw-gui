@@ -33,8 +33,9 @@ printf '#!/bin/sh\nexit 0\n' > "$WORK/bin/pdflatex"
 chmod +x "$WORK/bin/gnuplot" "$WORK/bin/pdflatex"
 ulimit -c 0 2>/dev/null
 
-# the files a run writes and the golden copies (LaTeX: .tex, _res.tex, _dist.tex)
-results() { echo "$1.out $1.pre $1.tex $1_res.tex $1_dist.tex"; }
+# the files a run writes and the golden copies (LaTeX: .tex, _res.tex, _dist.tex;
+# with -f, the input file of fuf forecast_<input>.inp instead of the .pre)
+results() { echo "$1.out $1.pre forecast_$1.inp $1.tex $1_res.tex $1_dist.tex"; }
 
 NEWRUNS="$WORK/runs.tsv"
 grep '^#' "$TESTS/runs.tsv" > "$NEWRUNS"
@@ -139,6 +140,48 @@ if [ $UPDATE = 0 ]; then
     done
 fi
 
+# A missing input file: exit status 1
+if [ $UPDATE = 0 ]; then
+    mkdir -p "$WORK/nofile"
+    ( cd "$WORK/nofile" && "$FUE" NOFILE > console.txt 2>&1; echo $? > status ) 2>/dev/null
+    if [ "$(cat "$WORK/nofile/status")" = 1 ] &&
+       grep -q "Error opening input file: NOFILE.inp" "$WORK/nofile/console.txt"; then
+        echo "x" >> "$WORK/errors"
+    else
+        echo "FAIL: a missing input file is not reported with exit status 1"
+        echo "x" >> "$WORK/failed"
+    fi
+fi
+
+# Errors: tests/errors.tsv lists damaged .inp files (tests/corpus/bad_*) and
+# models that can not be estimated. Each run must end with its exit status
+# and say what is wrong; an invalid .inp (status 2) must not write anything.
+
+if [ $UPDATE = 0 ]; then
+    grep -v '^#' "$TESTS/errors.tsv" | while IFS='	' read -r id status message; do
+        [ -n "$id" ] || continue
+        dir="$WORK/bad_$id"
+        mkdir -p "$dir"
+        cp "$TESTS/corpus/bad_$id.inp" "$dir/"
+        ( cd "$dir" && PATH="$WORK/bin:$PATH" timeout "$TIMEOUT" "$FUE" "bad_$id" \
+              > console.txt 2>&1; echo $? > "$dir/status" ) 2>/dev/null
+        rc=$(cat "$dir/status")
+        if [ "$rc" != "$status" ]; then
+            echo "FAIL: bad_$id: exit status $rc (expected $status)"
+        elif ! grep -qF "$message" "$dir/console.txt"; then
+            echo "FAIL: bad_$id: the message '$message' is missing"
+        elif [ "$status" = 2 ] && [ -e "$dir/bad_$id.out" ]; then
+            echo "FAIL: bad_$id: invalid input, but bad_$id.out was written"
+        elif [ "$status" = 3 ] && [ ! -s "$dir/bad_$id.out" ]; then
+            echo "FAIL: bad_$id: bad_$id.out was not written"
+        else
+            echo "x" >> "$WORK/errors"
+            continue
+        fi
+        echo "x" >> "$WORK/failed"
+    done
+fi
+
 if [ $UPDATE = 1 ]; then
     cp "$NEWRUNS" "$TESTS/runs.tsv"
     echo "tests/golden and tests/runs.tsv updated with $FUE"
@@ -152,5 +195,8 @@ total=$(grep -vc '^#' "$TESTS/runs.tsv")
 equivalent=0
 [ -f "$WORK/equivalent" ] && equivalent=$(wc -l < "$WORK/equivalent")
 echo
-echo "$total runs ($equivalent models without ARMA checked against an AR(1) fixed at 0), $failed failures"
+errors=0
+[ -f "$WORK/errors" ] && errors=$(wc -l < "$WORK/errors")
+echo "$total runs ($equivalent models without ARMA checked against an AR(1) fixed at 0),"
+echo "$errors damaged inputs and failed estimations reported, $failed failures"
 [ "$failed" = 0 ] && [ "$runs" -gt 0 ]

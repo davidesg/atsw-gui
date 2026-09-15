@@ -99,6 +99,7 @@ The executable is placed in `bin/fue.exe`.
 ### Other targets
 
 ```
+make check       # regression tests (tests/README.md)
 make clean       # remove object files and executable
 make distclean   # remove obj/ and bin/
 make install     # copy bin/fue to /usr/local/bin
@@ -120,6 +121,20 @@ fue input [eml|aml] [chk|nochk] [-f [horizon]]
 
 FUE produces a text output file `input.out` and, when Gnuplot is available,
 a PostScript report `input.ps` with high-resolution plots.
+
+Before writing anything, FUE checks the `.inp` file and, if something is
+wrong, says what and in which line (for instance, when it is an input file of
+FUF or FUG instead of FUE). Exit status:
+
+| status | meaning |
+|---|---|
+| 0 | results written |
+| 1 | command line error, or a file can not be opened |
+| 2 | the `.inp` file is not valid: nothing is written |
+| 3 | the model can not be estimated from its initial values: the results are written, with a warning in the `.out` that they are not valid |
+| 4 | internal run-time error |
+
+Error messages go to the standard error.
 
 ## Workflow with FUF and gtk\_fue
 

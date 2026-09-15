@@ -1,0 +1,13 @@
+# id (tests/corpus/bad_<id>.inp)	exit status	message expected in the output
+truncated	2	line 19: the file ends too soon
+word_order	2	line 17: the order of the operator expected
+flag2	2	must be between 0 and 1 (it is 2)
+flag_missing	2	is missing: fue would read the next number as the flag
+neg_diff	2	the number of regular differences must be between 0 and 100 (it is -1)
+few_obs	2	216 observations are not enough for 100 regular and 10 annual differences
+nan_data	2	observation 3 is not a finite number
+short_data	2	observation 216 of 216 expected
+season	2	the first season must be between 1 and 12 (it is 13)
+freq_word	2	the frequency must be 1, 4, 12 or 'number' (it is 'mensual')
+factor2	2	an individual factor of the annual difference (0 or 1) must be between 0 and 1 (it is 2)
+nonstationary	3	the model could not be estimated from the initial values

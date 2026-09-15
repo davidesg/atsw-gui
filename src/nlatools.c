@@ -410,7 +410,7 @@ void nrerror( char error_text[] )
 {
    fprintf( stderr, "Unrecoverable run-time error:\n%s\n... Exiting to system ...\n",
             error_text );
-   exit( 1 );
+   exit( 4 );                         /* FUE_ERR_INTERNAL (inpcheck.h)       */
 }
 
 /****************************************************************************/

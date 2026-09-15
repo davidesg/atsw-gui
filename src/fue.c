@@ -43,6 +43,38 @@ double **DataMat;                    /* whose names are equal to the  names of *
 /*****************************************************************************/
 /*****************************************************************************/
 
+/*****************************************************************************/
+/* A model without free parameters (npar = 0): est() would call the          */
+/* quasi-Newton optimizer with no parameters, which reads out of its         */
+/* vectors. The model is evaluated as in the first and last steps of est()  */
+/* (drvmlest.c [1] and [4]): log-likelihood, residuals and sigma2.           */
+/*****************************************************************************/
+
+static void eval_model( void (*cast)( real *, struct Tvarma *, int *, int, int ),
+                        real *par, real xitol, int chkma, real **a, real *sigma2,
+                        real *logelf, int *ifault )
+{
+   const real LOG2PI = 1.837877066;
+   struct Tvarma v;
+   real pi1, pi2, pi3;
+   int  dummy = 0;
+
+   *ifault = 0;
+   v.xitol = xitol;
+   v.chkma = chkma;
+   (*cast)( par, &v, ifault, 1, 0 );                /* allocate the model    */
+   if ( *ifault > 0 ) return;
+   elf( v.m, v.n, v.p, v.q, v.mu, v.phi, v.theta, v.qq, v.w, 1.0, v.xitol, v.chkma,
+        TRUE, a, &pi1, &pi2, &pi3, ifault );
+   if ( *ifault == 0 )
+      {
+      *logelf = -0.5 * v.m * v.n * ( LOG2PI - log( v.m ) - log( v.n ) + 1.0 )
+                - 0.5 * v.n * ( v.m * log( pi1 ) + log( pi2 ) );
+      *sigma2 = pi1 / (v.n * v.m);
+      }
+   (*cast)( par, &v, &dummy, 0, 1 );                /* free it               */
+}
+
 int main( int argc, char *argv[] )
 
 {
@@ -1093,9 +1125,13 @@ BoxCox ( Ts.data, DataMat[0], Tm.boxlam, 0.0, Ts.nobs, Ts.refactor, geom);
 
 /* [7.2]: Estimate the model specified in function cast_us:                  */
 
-   est( cast_us, npar, x, dev, cov, maxits, nrits, gradtol, steptol,
-        varma1.xitol, varma1.chkma,
-        varma1.a, &varma1.sigma2, &varma1.logelf, &ifault );
+   if ( npar > 0 )
+      est( cast_us, npar, x, dev, cov, maxits, nrits, gradtol, steptol,
+           varma1.xitol, varma1.chkma,
+           varma1.a, &varma1.sigma2, &varma1.logelf, &ifault );
+   else                          /* nothing to estimate: evaluate the model  */
+      eval_model( cast_us, x, varma1.xitol, varma1.chkma,
+                  varma1.a, &varma1.sigma2, &varma1.logelf, &ifault );
 
    if ( ifault ) printf( "Bad initial guess: " );
    switch ( ifault )

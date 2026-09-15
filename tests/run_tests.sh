@@ -83,6 +83,62 @@ grep -v '^#' "$TESTS/runs.tsv" | while IFS='	' read -r id input args format stat
     echo "x" >> "$WORK/runs"
 done
 
+# A model without AR or MA operators is the same model as with one AR(1)
+# factor fixed at 0 (the way .inp files avoided the crash of fue <= 1.13.1):
+# for every such run, the variant must give the same .out (but for the lines
+# of that factor) and the same LaTeX files.
+
+# exit status 0 if the .inp declares its six sections of operators, all empty
+no_arma() {
+    awk 'want && NF { if ($1 != 0) bad = 1; want = 0; next }
+         /^\*\*/ && tolower($0) ~ /operators/ { n++; want = 1 }
+         END { exit (bad || n != 6) }' "$1"
+}
+# the .inp with one regular AR(1) factor fixed at 0
+ar0_variant() {
+    awk 'rep && NF { print "1 1"; print "**"; print "0.000000  0"; rep = 0; next }
+         { print }
+         /^\*\*/ && tolower($0) ~ /regular ar operators/ { rep = 1 }' "$1" > "$2"
+}
+# the .out without the lines of that factor
+no_ar0_lines() {
+    awk '/^Coefficients for regular AR factor 1:$/ { skip = 1; next }
+         skip { skip = 0; next }
+         /^ *phi\[ *1\] *= *0\.0+$/ { next }
+         { print }' "$1"
+}
+
+if [ $UPDATE = 0 ]; then
+    grep -v '^#' "$TESTS/runs.tsv" | while IFS='	' read -r id input args format status; do
+        [ "$format" = fue ] && [ "$status" = 0 ] || continue
+        no_arma "$TESTS/corpus/$input.inp" || continue
+        [ "$args" = "-" ] && args=""
+        dir="$WORK/$id.ar0"
+        mkdir -p "$dir"
+        ar0_variant "$TESTS/corpus/$input.inp" "$dir/$input.inp"
+        ( cd "$dir" && PATH="$WORK/bin:$PATH" timeout "$TIMEOUT" "$FUE" "$input" $args \
+              > console.txt 2>&1; echo $? > "$dir/status" ) 2>/dev/null
+        rc=$(cat "$dir/status")
+        same=1
+        if [ "$rc" != 0 ]; then
+            same=0
+        else
+            no_ar0_lines "$WORK/$id/$input.out" > "$dir/a.out"
+            no_ar0_lines "$dir/$input.out" > "$dir/b.out"
+            cmp -s "$dir/a.out" "$dir/b.out" || same=0
+            for f in "$input.tex" "${input}_res.tex" "${input}_dist.tex"; do
+                [ -f "$WORK/$id/$f" ] && ! cmp -s "$WORK/$id/$f" "$dir/$f" && same=0
+            done
+        fi
+        if [ $same = 1 ]; then
+            echo "x" >> "$WORK/equivalent"
+        else
+            echo "FAIL: $id: differs from the same model with an AR(1) factor fixed at 0 ($dir)"
+            echo "x" >> "$WORK/failed"
+        fi
+    done
+fi
+
 if [ $UPDATE = 1 ]; then
     cp "$NEWRUNS" "$TESTS/runs.tsv"
     echo "tests/golden and tests/runs.tsv updated with $FUE"
@@ -93,6 +149,8 @@ runs=0; failed=0
 [ -f "$WORK/runs" ] && runs=$(wc -l < "$WORK/runs")
 [ -f "$WORK/failed" ] && failed=$(wc -l < "$WORK/failed")
 total=$(grep -vc '^#' "$TESTS/runs.tsv")
+equivalent=0
+[ -f "$WORK/equivalent" ] && equivalent=$(wc -l < "$WORK/equivalent")
 echo
-echo "$total runs, $failed failures"
+echo "$total runs ($equivalent models without ARMA checked against an AR(1) fixed at 0), $failed failures"
 [ "$failed" = 0 ] && [ "$runs" -gt 0 ]

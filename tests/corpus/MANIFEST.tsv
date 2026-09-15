@@ -91,3 +91,13 @@ IPC_ES_m00_2	fue	d49627a746b761a7	~/Dropbox/SRC/ART/art-python/cases/IPC_ES/work
 IPC_ES_m01_ar1.fuf	fuf	cad0a3c5a491011a	~/Dropbox/SRC/ART/art-python/cases/IPC_ES/work/IPC_ES_m01_ar1.fuf.inp
 IPC_ES_m01_ar1	fue	23efeaecb8e2b9dc	~/Dropbox/SRC/ART/art-python/cases/IPC_ES/work/IPC_ES_m01_ar1.inp
 IPC_ES_m01_ma1	fue	966d53127867f2cf	~/Dropbox/SRC/ART/art-python/cases/IPC_ES/work/IPC_ES_m01_ma1.inp
+syn_WN	fue	-	synthetic: white noise, nothing free (p = q = 0, npar = 0); series IPCM of fug/examples
+syn_WNMU	fue	-	synthetic: white noise with the mean free (p = q = 0); series IPCM of fug/examples
+syn_DET	fue	-	synthetic: one deterministic variable (cos 1), no ARMA; series IPCM of fug/examples
+syn_AR0FIX	fue	-	synthetic: AR(1) fixed at 0, nothing free (= syn_WN); series IPCM of fug/examples
+syn_AR0MU	fue	-	synthetic: AR(1) fixed at 0, mean free (= syn_WNMU); series IPCM of fug/examples
+syn_AR1	fue	-	synthetic: regular AR(1); series IPCM of fug/examples
+syn_MA1	fue	-	synthetic: regular MA(1); series IPCM of fug/examples
+syn_SMA	fue	-	synthetic: annual MA(1); series IPCM of fug/examples
+syn_ARF	fue	-	synthetic: AR(2) with fixed frequency; series IPCM of fug/examples
+syn_MAF	fue	-	synthetic: MA(2) with fixed frequency; series IPCM of fug/examples

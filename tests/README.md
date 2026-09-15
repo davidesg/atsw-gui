@@ -37,6 +37,28 @@ la línea Box-Cox tras la fecha) no son entradas de fue: están para comprobar
 que fue 1.14 los rechaza con un mensaje y un código de error, en lugar de
 corromper la memoria o, peor, escribir resultados sin sentido.
 
+## Cambios de estado respecto a la línea base
+
+Cada commit que cambia un código de salida de `runs.tsv` lo explica aquí.
+
+- **Modelos sin operadores AR ni MA** (commit del arreglo del caso vacío):
+  los 16 ficheros de fue que terminaban en segmentation fault terminan bien.
+  Su salida no tenía referencia en 1.13.1, así que se valida de otra forma:
+  para todo modelo sin AR ni MA, `run_tests.sh` ejecuta también el mismo
+  modelo con un factor AR(1) fijado en 0 (la forma en que los `.inp` evitaban
+  el fallo) y exige el mismo `.out` —salvo las líneas de ese factor— y los
+  mismos ficheros LaTeX. Ninguna de las 65 referencias de 1.13.1 cambia.
+  Con este arreglo, 7 ficheros de fuf y fug que antes terminaban mal
+  "terminan bien" con resultados sin sentido: fue todavía no valida el
+  formato de la entrada (siguiente commit).
+
+## La batería sintética
+
+`syn_*.inp` (serie IPCM de `fug/examples`): ruido blanco sin nada libre y con
+la media libre, una variable determinista sin ARMA, sus equivalentes con un
+AR(1) fijado en 0, y un modelo mínimo de cada tipo de operador (AR, MA, MA
+anual, AR(2) y MA(2) de frecuencia fija).
+
 ## El corpus
 
 `tests/corpus/` reúne sin duplicados los `.inp` de gtk_fue.09 (`data/`), de

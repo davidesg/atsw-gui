@@ -10,11 +10,12 @@ sh tests/run_tests.sh --update       # rehace tests/golden/ y los estados de run
 `tests/runs.tsv` enumera las ejecuciones (y `tests/errors.tsv` los errores): un fichero de `tests/corpus/`, los
 argumentos de fue (`-` sin argumentos), el formato del fichero y el código de
 salida esperado. Cada ejecución debe terminar con ese código y, si termina bien
-(0), escribir los mismos `.out`, `.pre` y ficheros LaTeX (`.tex`, `_res.tex`,
-`_dist.tex`) que `tests/golden/<id>/`, byte a byte.
+(0), escribir los mismos `.out`, `.pre`, ficheros LaTeX (`.tex`, `_res.tex`,
+`_dist.tex`) y gráfico de los residuos (`A<input>.eps`) que
+`tests/golden/<id>/`, byte a byte.
 
-gnuplot y pdflatex se sustituyen por programas que no hacen nada: lo que se
-compara no depende de ellos, y la batería tarda unos segundos.
+pdflatex se sustituye por un programa que no hace nada: lo que se compara no
+depende de él, y la batería tarda unos segundos. (fue 1.14 ya no usa gnuplot.)
 
 ## La línea base (fue 1.13.1)
 
@@ -60,6 +61,11 @@ Cada commit que cambia un código de salida de `runs.tsv` lo explica aquí.
   provocados a propósito están en `errors.tsv` (ficheros
   `tests/corpus/bad_*.inp`): cada uno debe terminar con su código, decir qué
   pasa y, con código 2, no escribir nada.
+
+- **Gráficos nativos** (commit de los gráficos): el gráfico de los residuos
+  `A<input>.eps` lo dibuja fugdraw (`src/fugdraw.c`, `src/fugplot.c`, los
+  mismos ficheros que en fug) y se añade a las referencias. Ningún `.out`,
+  `.pre` ni `.tex` cambia.
 
 ## La batería sintética
 

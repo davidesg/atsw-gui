@@ -12,8 +12,9 @@
 # 1.13.1, the base line). Files of fuf and fug are not compared: fue does not
 # read them, and what it writes with them has no meaning.
 #
-# gnuplot and pdflatex are replaced by programs that do nothing: the results
-# compared do not depend on them, and the tests run in seconds.
+# pdflatex is replaced by a program that does nothing: the results compared
+# do not depend on it, and the tests run in seconds. (fue 1.14 does not use
+# gnuplot; the fake gnuplot is there so that fue 1.13.1 can run the tests too.)
 
 UPDATE=0
 if [ "$1" = "--update" ]; then UPDATE=1; shift; fi
@@ -34,8 +35,9 @@ chmod +x "$WORK/bin/gnuplot" "$WORK/bin/pdflatex"
 ulimit -c 0 2>/dev/null
 
 # the files a run writes and the golden copies (LaTeX: .tex, _res.tex, _dist.tex;
-# with -f, the input file of fuf forecast_<input>.inp instead of the .pre)
-results() { echo "$1.out $1.pre forecast_$1.inp $1.tex $1_res.tex $1_dist.tex"; }
+# with -f, the input file of fuf forecast_<input>.inp instead of the .pre; the
+# graph of the residuals A<input>.eps, drawn by fugdraw since fue 1.14)
+results() { echo "$1.out $1.pre forecast_$1.inp $1.tex $1_res.tex $1_dist.tex A$1.eps"; }
 
 NEWRUNS="$WORK/runs.tsv"
 grep '^#' "$TESTS/runs.tsv" > "$NEWRUNS"

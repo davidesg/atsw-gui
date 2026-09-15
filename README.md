@@ -37,19 +37,22 @@ Two companion modules complete the univariate analysis toolkit:
 
 - C compiler: GCC ≥ 9 (Linux/macOS) or MinGW-w64 (Windows)
 - [GNU Scientific Library (GSL)](https://www.gnu.org/software/gsl/) ≥ 2.0
-- [Gnuplot](http://www.gnuplot.info/) ≥ 5.0 (for high-resolution plots)
 - GNU Make
+- pdflatex (TeX Live or MiKTeX), for the PDF report.
+
+Since version 1.14 FUE draws the graph of the residuals itself (with the
+graphics engine of FUG, `fugdraw`): Gnuplot is no longer needed.
 
 On Debian/Ubuntu:
 
 ```
-sudo apt install build-essential libgsl-dev gnuplot
+sudo apt install build-essential libgsl-dev texlive-latex-base
 ```
 
 On macOS (Homebrew):
 
 ```
-brew install gsl gnuplot
+brew install gsl   # and MacTeX for pdflatex
 ```
 
 ## File structure
@@ -119,8 +122,9 @@ fue input [eml|aml] [chk|nochk] [-f [horizon]]
 | `chk`\|`nochk`     | check \| skip MA invertibility check (default: `chk`) |
 | `-f [horizon]`     | generate `forecast_input.inp` for FUF; `horizon` is the number of forecast periods (default: 24) |
 
-FUE produces a text output file `input.out` and, when Gnuplot is available,
-a PostScript report `input.ps` with high-resolution plots.
+FUE produces a text output file `input.out`, the graph of the residuals
+`Ainput.eps`, the continuation file `input.pre` and the report `input.pdf`
+(with pdflatex, from `input.tex`).
 
 Before writing anything, FUE checks the `.inp` file and, if something is
 wrong, says what and in which line (for instance, when it is an input file of

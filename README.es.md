@@ -38,19 +38,22 @@ Existen dos módulos adicionales que completan el taller de análisis univariant
 
 - Compilador C: GCC ≥ 9 (Linux/macOS) o MinGW-w64 (Windows)
 - [GNU Scientific Library (GSL)](https://www.gnu.org/software/gsl/) ≥ 2.0
-- [Gnuplot](http://www.gnuplot.info/) ≥ 5.0 (para gráficos en alta definición)
 - GNU Make
+- pdflatex (TeX Live o MiKTeX), para el informe en PDF.
+
+Desde la versión 1.14, FUE dibuja él mismo el gráfico de los residuos (con
+el motor gráfico de FUG, `fugdraw`): ya no necesita Gnuplot.
 
 En Debian/Ubuntu:
 
 ```
-sudo apt install build-essential libgsl-dev gnuplot
+sudo apt install build-essential libgsl-dev texlive-latex-base
 ```
 
 En macOS (Homebrew):
 
 ```
-brew install gsl gnuplot
+brew install gsl   # y MacTeX para pdflatex
 ```
 
 ## Estructura de archivos
@@ -120,9 +123,9 @@ fue input [eml|aml] [chk|nochk] [-f [horizonte]]
 | `chk`\|`nochk`      | comprobar \| no comprobar invertibilidad MA (por defecto: `chk`) |
 | `-f [horizonte]`    | genera `forecast_input.inp` para FUF; `horizonte` es el número de períodos a predecir (por defecto: 24) |
 
-FUE genera un archivo de salida `input.out` con resultados en texto y,
-si Gnuplot está disponible, un archivo `input.ps` con los gráficos en alta
-definición.
+FUE genera un archivo de salida `input.out` con resultados en texto, el
+gráfico de los residuos `Ainput.eps`, el fichero de continuación `input.pre`
+y el informe `input.pdf` (con pdflatex, a partir de `input.tex`).
 
 Antes de escribir nada, FUE comprueba el `.inp` y, si algo está mal, dice qué
 y en qué línea (por ejemplo, si es un fichero de FUF o de FUG en lugar de uno

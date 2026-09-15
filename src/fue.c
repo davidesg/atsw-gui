@@ -23,8 +23,7 @@
 #include <math.h>
 #include "fue.h"                  /* Header file (prototype declarations).  */
 #include "nlatools.h"            /* Header file (prototype declarations)    */
-#include "gnuplot_i.h"             /* gnuplot interface                     */
-#include "gnuplot_graphics.h"
+#include "fugplot.h"               /* graphs drawn with fugdraw (no gnuplot) */
 #include "inpcheck.h"               /* validation of the .inp, exit status */
 
 double macheps;                      /* Machine epsilon: global variable.   */
@@ -1560,11 +1559,14 @@ snprintf ( file_output, 4096, "A%s", x11out );
    else
       lags = 3 * ( Ts.freq + 1);
 
+/* The graph of the residuals, A<input>.eps, drawn by fugdraw (fugplot.c,    */
+/* the same graph as fug -c). The residuals are not transformed: lambda 1    */
+/* and no differences, so the title is just their name, as in fue 1.13.1.    */
 	if ( Ts.freq > 1 ) 
-		gnuplot_File_PlotSer_CorrSer ( &res, nparma, Ts.nobs, timeout, Ts.begyear, Tm.boxlam, Tm.nrdiff, Tm.nadiff, lags, Tm.cbands, file_output, res.name );
+		fd_fig_free( fp_PlotSer_CorrSer ( &res, nparma, Ts.nobs, timeout, Ts.begyear, 1.0, 0, 0, lags, Tm.cbands, file_output, res.name ) );
 
 	else
-		gnuplot_File_PlotSer_CorrSer ( &res, nparma, Ts.nobs, timeout, Ts.begyear - outyear, Tm.boxlam, Tm.nrdiff, Tm.nadiff, lags, Tm.cbands, file_output, res.name );
+		fd_fig_free( fp_PlotSer_CorrSer ( &res, nparma, Ts.nobs, timeout, Ts.begyear - outyear, 1.0, 0, 0, lags, Tm.cbands, file_output, res.name ) );
 
 FREE_STR( file_output );
 /*

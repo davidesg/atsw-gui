@@ -21,6 +21,9 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
+#ifndef FUE_H
+#define FUE_H
+
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
@@ -222,6 +225,6 @@ void File_CorrSer( struct Tseries *ser, int npar );
 /*****************************************************************************/
 /*****************************************************************************/
 
-double Acf_Pacf_Max ( struct Tseries *ser,  int lags );
 void BoxCox  ( double *DataInput, double *DataOutput, double boxlam, double boxm, int nobs, double refactor, int geometric);
 
+#endif /* FUE_H */

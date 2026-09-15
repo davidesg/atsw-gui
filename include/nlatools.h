@@ -24,6 +24,9 @@
  ***************************************************************************/
 
 
+#ifndef NLATOOLS_H
+#define NLATOOLS_H
+
 #define OK      1
 #define WRONG   0
 #define MAXSTR 90
@@ -91,3 +94,5 @@ void UPCASE_STR( STRING s );
 /*****************************************************************************/
 
 void Easter( int *day, int *month, int year );
+
+#endif /* NLATOOLS_H */

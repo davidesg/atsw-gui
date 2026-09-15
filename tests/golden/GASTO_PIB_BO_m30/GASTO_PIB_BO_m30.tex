@@ -1,0 +1,42 @@
+
+\documentclass[12pt,a4paper,landscape]{article}
+\usepackage[latin1]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{lscape}
+\usepackage{multicol}
+\usepackage{setspace}
+\usepackage[margin=2.5cm]{geometry}
+\newcommand{\est}[2]{\begin{array}[t]{c}
+\hspace{-.125in}#1\hspace{-.125in}\vspace{-.13in}\\ 
+\hspace{-.125in}#2\hspace{-.125in}
+\end{array}}
+\linespread{1.6}
+\newcommand{\deter}{\ln \mathsf{GASTO_PIB_BO_{t}} =
++     \est{\mathsf{0.051}}{(\mathsf{0.014})}\cos\frac{\pi}{\mathsf{2}}t
+-     \est{\mathsf{0.092}}{(\mathsf{0.014})}\sin\frac{\pi}{\mathsf{2}}t
++     \est{\mathsf{0.075}}{(\mathsf{0.007})}(\mathsf{-1})^{t}
++ (    \est{\mathsf{0.20}} {(\mathsf{0.03})}   + \est{\mathsf{0.074}}{(\mathsf{0.025})} B)\xi_{t}^{I,\mathsf{2/2020}}
++     \est{\mathsf{0.18}} {(\mathsf{0.04})}    \xi_{t}^{S,\mathsf{4/2008}}
++     \est{\mathsf{0.0022}}{\mathsf{(0.0342)}}   \xi_{t}^{S,\mathsf{4/2009}}
++ \mathsf{N_t}}
+\newcommand{\ara}{ (1   - \est{\mathsf{  0.73}}{(\mathsf{  0.08})} B^{\mathsf{4}} ) }
+\newcommand{\nrdiff}{\nabla} 
+\newcommand{\ifadf}{ }
+\begin{document}
+\begin{flushleft}
+\thispagestyle{empty}
+\includegraphics[scale=1]{AGASTO_PIB_BO_m30.eps}
+\begin{footnotesize}
+$\deter$ \\ 
+ $ \ara 
+\nrdiff 
+\ifadf \mathsf{N_t} 
+ = \mathsf{AGASTO_PIB_BO_m30_{t}} ; \quad 
+\hat{\sigma}_{\mathsf{AGASTO_PIB_BO_m30}}=  \mathsf{ 4.02 } \%  $ 
+\input {GASTO_PIB_BO_m30_res}
+\end{footnotesize}
+\end{flushleft}
+\end{document}

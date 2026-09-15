@@ -1,0 +1,50 @@
+
+\documentclass[12pt,a4paper,landscape]{article}
+\usepackage[latin1]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{lscape}
+\usepackage{multicol}
+\usepackage{setspace}
+\usepackage[margin=2.5cm]{geometry}
+\newcommand{\est}[2]{\begin{array}[t]{c}
+\hspace{-.125in}#1\hspace{-.125in}\vspace{-.13in}\\ 
+\hspace{-.125in}#2\hspace{-.125in}
+\end{array}}
+\linespread{1.6}
+\newcommand{\deter}{\ln \mathsf{IPC_ES_{t}} =
+-     \est{\mathsf{0.0016}}{\mathsf{(0.0009)}}\cos\frac{\pi}{\mathsf{6}}t
+-     \est{\mathsf{0.0017}}{\mathsf{(0.0007)}}\sin\frac{\pi}{\mathsf{6}}t
++     \est{\mathsf{0.0029}}{\mathsf{(0.0003)}}\cos\frac{\pi}{\mathsf{3}}t
+-     \est{\mathsf{0.0058}}{\mathsf{(0.0003)}}\sin\frac{\pi}{\mathsf{3}}t
++     \est{\mathsf{0.00086}}{(\mathsf{0.00019})}\cos\frac{\pi}{\mathsf{2}}t
+-     \est{\mathsf{0.00033}}{(\mathsf{0.00019})}\sin\frac{\pi}{\mathsf{2} }t
++     \est{\mathsf{0.00059}}{(\mathsf{0.00012})}\cos\frac{\mathsf{2}\pi}{\mathsf{3}}t
+-     \est{\mathsf{0.00017}}{(\mathsf{0.00012})}\sin\frac{\mathsf{2}\pi}{\mathsf{3}}t
+-     \est{\mathsf{0.000026}}{(\mathsf{0.000083})}\cos\frac{\mathsf{5}\pi}{\mathsf{6}}t
++     \est{\mathsf{0.00012}}{(\mathsf{0.00008})}\sin\frac{\mathsf{5}\pi}{\mathsf{6}}t
++     \est{\mathsf{0.0011}}{\mathsf{(0.0000)}}(\mathsf{-1})^{t}
++ \mathsf{N_t}}
+\newcommand{\mar}{ (\mathsf{1}   + \est{\mathsf{  0.43}}{(\mathsf{  0.06})} B ) }
+\newcommand{\ifmu}{- \est{\mathsf{0.0015}}  {(\mathsf{0.0002})}} 
+ \newcommand{\nrdiff}{\nabla} 
+\newcommand{\ifadf}{ }
+\begin{document}
+\begin{flushleft}
+\thispagestyle{empty}
+\includegraphics[scale=1]{AIPC_ES_m01_ma1.eps}
+\begin{footnotesize}
+$\deter$ \\ 
+ $ \left[ 
+\nrdiff 
+\ifadf \mathsf{N_t} 
+\ifmu \right] 
+ = \mar 
+\mathsf{AIPC_ES_m01_ma1_{t}} ; \quad 
+\hat{\sigma}_{\mathsf{AIPC_ES_m01_ma1}}=  \mathsf{ 0.25 } \%  $ 
+\input {IPC_ES_m01_ma1_res}
+\end{footnotesize}
+\end{flushleft}
+\end{document}

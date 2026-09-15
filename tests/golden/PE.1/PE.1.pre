@@ -1,0 +1,116 @@
+************************************************
+*        Input file for program DRVUS          *
+* Copyright (C) 1996 Jose Alberto Mauricio     *
+************************************************
+
+** Frequency of time series: either 1(A), 4(Q) or 12(M):
+ 4
+** Number of observations and starting date of time series:
+ 68  1 2003 PE
+** Number of deterministic variables (including seasonal components):
+3
+**
+cos 1
+sin 1
+alter
+**
+0 0 0 
+**
+-0.278127  1
+**
+0.121157  1
+**
+0.027162  1
+**
+0 0 0 
+**Number and orders of regular AR operators:
+1 1
+**
+0.0000 0
+** Number and orders of annual AR operators:
+0
+** Number and orders of regular MA operators:
+0
+** Number and orders of anual MA operators:
+0
+** Number and frequencies of regular AR(2) operators with fixed frequency:
+0
+** Number and frequencies of regular MA(2) operators with fixed frequency:
+0
+** Mean parameter (mu):
+0.752943 1
+** Box-Cox lambda, regular differences and complete annual differences:
+0.00 1 0
+** Individual factors of the annual difference (from freq 0.0): 
+ 0 0 0
+** ACF/PACF bands (0 Automatic) and reescaling factor: 
+ 0.00 100.00
+** Time series (stochastic and non-standard deterministic variables): 
+40.2469192169 
+40.9138381268 
+41.0193080614 
+41.3305066762 
+41.8219444596 
+42.2090451756 
+41.8357654392 
+42.1292913260 
+42.3869689840 
+42.9158377275 
+42.9547797798 
+43.3810795639 
+44.0012764583 
+44.2511734352 
+44.3238098890 
+44.7243341304 
+44.9068708256 
+45.0085016923 
+45.4471996685 
+45.9737108602 
+47.2795069488 
+49.0831138970 
+49.9704592953 
+50.2356246551 
+51.0050531227 
+51.7749877878 
+51.7142205319 
+52.2173261929 
+53.0606432977 
+53.4578522079 
+53.5518323420 
+53.9885696295 
+54.8539716862 
+55.6653267027 
+56.1709743854 
+56.9467599776 
+57.9512230493 
+58.4988118974 
+59.0150584325 
+59.5812786470 
+59.9956969878 
+60.1988380191 
+60.2691927072 
+60.9800795308 
+61.7722060317 
+62.2688993945 
+62.7702218299 
+63.2984298084 
+64.1081167745 
+65.1197680027 
+65.3399201847 
+65.4629213584 
+65.8200161027 
+66.2055731734 
+66.2758048223 
+66.2233513006 
+66.4376350674 
+66.7235729189 
+66.3545398830 
+66.1123780105 
+66.3387281435 
+66.1672887546 
+66.2082399571 
+66.3191619052 
+66.4669229725 
+66.4263016996 
+66.4213802493 
+66.4238359031 

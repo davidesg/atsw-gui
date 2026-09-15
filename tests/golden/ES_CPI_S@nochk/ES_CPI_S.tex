@@ -1,0 +1,51 @@
+
+\documentclass[12pt,a4paper,landscape]{article}
+\usepackage[latin1]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{lscape}
+\usepackage{multicol}
+\usepackage{setspace}
+\usepackage[margin=2.5cm]{geometry}
+\newcommand{\est}[2]{\begin{array}[t]{c}
+\hspace{-.125in}#1\hspace{-.125in}\vspace{-.13in}\\ 
+\hspace{-.125in}#2\hspace{-.125in}
+\end{array}}
+\linespread{1.6}
+\newcommand{\deter}{\ln \mathsf{ES_CPI_{t}} =
+-     \est{\mathsf{0.0016}}{\mathsf{(0.0009)}}\cos\frac{\pi}{\mathsf{6}}t
+-     \est{\mathsf{0.0016}}{\mathsf{(0.0008)}}\sin\frac{\pi}{\mathsf{6}}t
++     \est{\mathsf{0.0029}}{\mathsf{(0.0003)}}\cos\frac{\pi}{\mathsf{3}}t
+-     \est{\mathsf{0.0058}}{\mathsf{(0.0003)}}\sin\frac{\pi}{\mathsf{3}}t
++     \est{\mathsf{0.00059}}{(\mathsf{0.00011})}\cos\frac{\mathsf{2}\pi}{\mathsf{3}}t
+-     \est{\mathsf{0.00017}}{(\mathsf{0.00011})}\sin\frac{\mathsf{2}\pi}{\mathsf{3}}t
+-     \est{\mathsf{0.000026}}{(\mathsf{0.000088})}\cos\frac{\mathsf{5}\pi}{\mathsf{6}}t
++     \est{\mathsf{0.00012}}{(\mathsf{0.00009})}\sin\frac{\mathsf{5}\pi}{\mathsf{6}}t
++     \est{\mathsf{0.0011}}{\mathsf{(0.0001)}}(\mathsf{-1})^{t}
++ \mathsf{N_t}}
+\newcommand{\arr}{  (\mathsf{1}   - \est{\mathsf{  0.41}}{(\mathsf{  0.06})} B ) }
+\newcommand{\maf}{ \underset{f = \mathsf{ 3}}{(\mathsf{1}+ \est{\mathsf{  0.95}}{(\mathsf{  0.03})}B^\mathsf{2})}}
+\newcommand{\ifmu}{- \est{\mathsf{0.0031}}  {(\mathsf{0.0006})}} 
+ \newcommand{\nrdiff}{\nabla} 
+\newcommand{\ifadf}{ \underset{f=\mathsf{3}}{(\mathsf{1} + B^\mathsf{2})}
+}
+\begin{document}
+\begin{flushleft}
+\thispagestyle{empty}
+\includegraphics[scale=1]{AES_CPI_S.eps}
+\begin{footnotesize}
+$\deter$ \\ 
+ $ \arr 
+\left[ 
+\nrdiff 
+\ifadf \mathsf{N_t} 
+\ifmu \right] 
+ = \maf 
+\mathsf{AES_CPI_S_{t}} ; \quad 
+\hat{\sigma}_{\mathsf{AES_CPI_S}}=  \mathsf{ 0.25 } \%  $ 
+\input {ES_CPI_S_res}
+\end{footnotesize}
+\end{flushleft}
+\end{document}

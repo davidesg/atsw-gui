@@ -1,0 +1,40 @@
+
+\documentclass[12pt,a4paper,landscape]{article}
+\usepackage[latin1]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{lscape}
+\usepackage{multicol}
+\usepackage{setspace}
+\usepackage[margin=2.5cm]{geometry}
+\newcommand{\est}[2]{\begin{array}[t]{c}
+\hspace{-.125in}#1\hspace{-.125in}\vspace{-.13in}\\ 
+\hspace{-.125in}#2\hspace{-.125in}
+\end{array}}
+\linespread{1.6}
+\newcommand{\deter}{\ln \mathsf{PE_{t}} =
+-     \est{\mathsf{0.0028}}{\mathsf{(0.0010)}}\cos\frac{\pi}{\mathsf{2}}t
++     \est{\mathsf{0.0012}}{\mathsf{(0.0009)}}\sin\frac{\pi}{\mathsf{2}}t
++     \est{\mathsf{0.00027}}{(\mathsf{0.00041})}(\mathsf{-1})^{t}
++ \mathsf{N_t}}
+\newcommand{\ifmu}{- \est{\mathsf{0.0075}}  {(\mathsf{0.0008})}} 
+ \newcommand{\nrdiff}{\nabla} 
+\newcommand{\ifadf}{ }
+\begin{document}
+\begin{flushleft}
+\thispagestyle{empty}
+\includegraphics[scale=1]{APE.1.eps}
+\begin{footnotesize}
+$\deter$ \\ 
+ $ \left[ 
+\nrdiff 
+\ifadf \mathsf{N_t} 
+\ifmu \right] 
+ = \mathsf{APE.1_{t}} ; \quad 
+\hat{\sigma}_{\mathsf{APE.1}}=  \mathsf{ 0.68 } \%  $ 
+\input {PE.1_res}
+\end{footnotesize}
+\end{flushleft}
+\end{document}

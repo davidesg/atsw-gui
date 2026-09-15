@@ -1,0 +1,49 @@
+
+\documentclass[12pt,a4paper,landscape]{article}
+\usepackage[latin1]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{lscape}
+\usepackage{multicol}
+\usepackage{setspace}
+\usepackage[margin=2.5cm]{geometry}
+\newcommand{\est}[2]{\begin{array}[t]{c}
+\hspace{-.125in}#1\hspace{-.125in}\vspace{-.13in}\\ 
+\hspace{-.125in}#2\hspace{-.125in}
+\end{array}}
+\linespread{1.6}
+\newcommand{\deter}{\ln \mathsf{IPC_DE_{t}} =
+-     \est{\mathsf{0.0024}}{\mathsf{(0.0006)}}\cos\frac{\pi}{\mathsf{6}}t
+-     \est{\mathsf{0.00073}}{(\mathsf{0.00061})}\sin\frac{\pi}{\mathsf{6}}t
+-     \est{\mathsf{0.00045}}{(\mathsf{0.00025})}\cos\frac{\pi}{\mathsf{3}}t
++     \est{\mathsf{0.000093}}{(\mathsf{0.000251})}\sin\frac{\pi}{\mathsf{3}}t
++     \est{\mathsf{0.00060}}{(\mathsf{0.00014})}\cos\frac{\pi}{\mathsf{2}}t
+-     \est{\mathsf{0.00071}}{(\mathsf{0.00014})}\sin\frac{\pi}{\mathsf{2} }t
++     \est{\mathsf{0.00088}}{(\mathsf{0.00010})}\cos\frac{\mathsf{2}\pi}{\mathsf{3}}t
++     \est{\mathsf{0.000031}}{(\mathsf{0.000108})}\sin\frac{\mathsf{2}\pi}{\mathsf{3}}t
++     \est{\mathsf{0.0013}}{\mathsf{(0.0001)}}\cos\frac{\mathsf{5}\pi}{\mathsf{6}}t
++     \est{\mathsf{0.00014}}{(\mathsf{0.00011})}\sin\frac{\mathsf{5}\pi}{\mathsf{6}}t
++     \est{\mathsf{0.00046}}{(\mathsf{0.00008})}(\mathsf{-1})^{t}
+-     \est{\mathsf{0.0037}}{\mathsf{(0.0015)}}\xi_{t}^{I,\mathsf{3/2019}}
+-     \est{\mathsf{0.0027}}{\mathsf{(0.0015)}}\xi_{t}^{I,\mathsf{10/2007}}
++ \mathsf{N_t}}
+\newcommand{\mar}{ (\mathsf{1}   + \est{\mathsf{  0.23}}{(\mathsf{  0.07})} B + \est{\mathsf{  0.20}}{(\mathsf{  0.06})} B^{\mathsf{2}} ) }
+\newcommand{\nrdiff}{\nabla} 
+\newcommand{\ifadf}{ }
+\begin{document}
+\begin{flushleft}
+\thispagestyle{empty}
+\includegraphics[scale=1]{AIPC_DE_model.eps}
+\begin{footnotesize}
+$\deter$ \\ 
+ $ \nrdiff 
+\ifadf \mathsf{N_t} 
+ = \mar 
+\mathsf{AIPC_DE_model_{t}} ; \quad 
+\hat{\sigma}_{\mathsf{AIPC_DE_model}}=  \mathsf{ 0.25 } \%  $ 
+\input {IPC_DE_model_res}
+\end{footnotesize}
+\end{flushleft}
+\end{document}

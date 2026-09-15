@@ -1,0 +1,39 @@
+
+\documentclass[12pt,a4paper,landscape]{article}
+\usepackage[latin1]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{lscape}
+\usepackage{multicol}
+\usepackage{setspace}
+\usepackage[margin=2.5cm]{geometry}
+\newcommand{\est}[2]{\begin{array}[t]{c}
+\hspace{-.125in}#1\hspace{-.125in}\vspace{-.13in}\\ 
+\hspace{-.125in}#2\hspace{-.125in}
+\end{array}}
+\linespread{1.6}
+\newcommand{\deter}{\ln \mathsf{GASTO_PIB_BO_{t}} =
++     \est{\mathsf{0.049}}{(\mathsf{0.012})}\cos\frac{\pi}{\mathsf{2}}t
+-     \est{\mathsf{0.093}}{(\mathsf{0.013})}\sin\frac{\pi}{\mathsf{2}}t
++     \est{\mathsf{0.077}}{(\mathsf{0.006})}(\mathsf{-1})^{t}
++ \mathsf{N_t}}
+\newcommand{\ara}{ (1   - \est{\mathsf{  0.55}}{(\mathsf{  0.09})} B^{\mathsf{4}} ) }
+\newcommand{\nrdiff}{\nabla} 
+\newcommand{\ifadf}{ }
+\begin{document}
+\begin{flushleft}
+\thispagestyle{empty}
+\includegraphics[scale=1]{AGASTO_PIB_BO_m10.eps}
+\begin{footnotesize}
+$\deter$ \\ 
+ $ \ara 
+\nrdiff 
+\ifadf \mathsf{N_t} 
+ = \mathsf{AGASTO_PIB_BO_m10_{t}} ; \quad 
+\hat{\sigma}_{\mathsf{AGASTO_PIB_BO_m10}}=  \mathsf{ 5.73 } \%  $ 
+\input {GASTO_PIB_BO_m10_res}
+\end{footnotesize}
+\end{flushleft}
+\end{document}

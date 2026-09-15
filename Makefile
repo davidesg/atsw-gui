@@ -86,6 +86,10 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
 $(TARGET): $(OBJS) | $(BIN_DIR)
 	$(CC) $(LDFLAGS) -o $@ $^ $(ALL_LIBS)
 
+# Regression tests (tests/run_tests.sh; see tests/README.md)
+check: $(TARGET)
+	sh tests/run_tests.sh $(TARGET)
+
 # Clean
 clean:
 	rm -rf $(BUILD_DIR)/*.o $(TARGET)
@@ -106,6 +110,7 @@ help:
 	@echo "  all       - build fue (default)"
 	@echo "  clean     - remove object files and executable"
 	@echo "  distclean - remove obj/ and bin/ directories"
+	@echo "  check     - regression tests (tests/run_tests.sh)"
 	@echo "  install   - install fue to /usr/local/bin"
 	@echo "  uninstall - remove fue from /usr/local/bin"
 	@echo "  help      - show this message"
@@ -126,4 +131,4 @@ $(BUILD_DIR)/elfvarma.o:        include/fue.h include/nlatools.h
 $(BUILD_DIR)/qnewtopt.o:        include/fue.h include/nlatools.h
 $(BUILD_DIR)/usmelard.o:        include/fue.h include/nlatools.h
 
-.PHONY: all clean distclean install uninstall help
+.PHONY: all check clean distclean install uninstall help

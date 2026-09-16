@@ -80,6 +80,31 @@ la media libre, una variable determinista sin ARMA, sus equivalentes con un
 AR(1) fijado en 0, y un modelo mínimo de cada tipo de operador (AR, MA, MA
 anual, AR(2) y MA(2) de frecuencia fija).
 
+## Ver el informe
+
+El informe en PDF no se compara en la batería (lo que se compara es lo que lo
+determina: el `.out`, el `.tex` y el EPS). Para verlo:
+
+```sh
+mkdir -p samples && cd samples
+cp ../tests/corpus/D.inp .
+../bin/fue D            # el PDF lo dibuja fue
+../bin/fue D -latex     # el PDF lo compila pdflatex desde el .tex
+```
+
+`samples/` está en `.gitignore`: se regenera cuando haga falta.
+
+Modelos del corpus que conviene mirar, porque cada uno enseña una cosa:
+
+| modelo | qué tiene |
+|---|---|
+| `D` | mensual: once armónicos deterministas, AR(3) y media |
+| `ES_CPI_S` | armónicos y operadores AR y MA de frecuencia fija (`f = 3`) |
+| `R.2` | trimestral: una intervención con su fecha (impulso de 2/2008) |
+| `R.6` | trimestral con pocos datos: el informe sale en vertical |
+| `syn_ARF` | AR(2) de frecuencia fija y diferencia anual completa |
+| `en4_ar18` | anual, AR(18): la ecuación más larga, parte de línea |
+
 ## El corpus
 
 `tests/corpus/` reúne sin duplicados los `.inp` de gtk_fue.09 (`data/`), de

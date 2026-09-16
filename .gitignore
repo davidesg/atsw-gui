@@ -1,5 +1,7 @@
 # Build artifacts
 tests/work/
+# muestras del informe: se regeneran (ver tests/README.md)
+samples/
 obj/
 bin/
 *.o

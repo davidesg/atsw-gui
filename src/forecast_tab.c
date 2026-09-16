@@ -1,5 +1,6 @@
 #include "forecast_tab.h"
 #include "engine.h"
+#include "preview.h"
 #include <glib/gstdio.h>
 #include <string.h>
 #include <errno.h>
@@ -335,8 +336,12 @@ static void on_forecast_view_pdf_clicked(GtkButton *btn, FueContext *ctx) {
     g_free(pdf_filename);
 
     if (g_file_test(pdf_path, G_FILE_TEST_EXISTS)) {
-        open_pdf_file(pdf_path);
-        gtk_label_set_text(GTK_LABEL(ctx->forecast_status_label), "Opening PDF.");
+        if (preview_show(ctx, pdf_path))
+            gtk_label_set_text(GTK_LABEL(ctx->forecast_status_label), "Graph window.");
+        else {
+            open_pdf_file(pdf_path);
+            gtk_label_set_text(GTK_LABEL(ctx->forecast_status_label), "Opening PDF.");
+        }
     } else {
         gtk_label_set_text(GTK_LABEL(ctx->forecast_status_label),
                            "PDF file not found. Run fuf first.");

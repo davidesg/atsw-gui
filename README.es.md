@@ -7,6 +7,20 @@ Licencia: GNU General Public License v2 o posterior.
 
 ---
 
+## Ventana de gráficos
+
+El PDF que escriben FUE y FUF lo dibujan los propios motores
+(`src/fugdraw.c`), no un programa externo, así que el GUI puede leer la
+página y redibujarla con Cairo: **View PDF** abre una ventana con la página,
+los botones de página, *Save As* (PDF, EPS, PNG o SVG) e *Imprimir*. Un PDF
+que no hayan dibujado los motores —uno compilado por pdflatex, por ejemplo—
+se le pasa al visor del sistema, como antes.
+
+`src/preview.c` es el mismo fichero que `gui/src/preview.c` de FUG, portado
+a GTK+3; lo que cada programa tiene que aportar está en
+`include/previewhost.h`. Las dos copias están para acabar siendo una
+biblioteca.
+
 ## Índice
 
 1. [Introducción](#introducción)
@@ -140,6 +154,7 @@ gtk_fue.09/
 ├── include/                      Ficheros de cabecera
 ├── engine/                       Binarios precompilados de FUE y FUF (Windows)
 ├── data/                         Ficheros de entrada y series de datos de ejemplo
+├── tests/                        Pruebas (make check)
 ├── obj/                          Objetos compilados (generado por make)
 ├── bin/                          Ejecutable compilado (generado por make)
 ├── Makefile

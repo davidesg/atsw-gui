@@ -30,6 +30,32 @@ $CC -O0 -g -Wall -I"$TOP/include" $GTK_CFLAGS \
 PATH="$TOP/tests/fake:$PATH" "$WORK/test_units"
 rc=$?
 
+# --------------------------------------------------------------------------
+# La ventana de graficos (src/preview.c) sin ventana: se dibuja una pagina
+# con fugdraw, se escribe como PDF y como EPS, y se vuelven a leer con el
+# mismo codigo que usa la ventana. La tinta tiene que caer donde se dibujo,
+# y los dos caminos tienen que dar la misma imagen.
+# --------------------------------------------------------------------------
+$CC -O0 -g -Wall -I"$TOP/include" $GTK_CFLAGS \
+    "$TOP/tests/test_preview.c" "$TOP/src/fugdraw.c" "$TOP/src/utils.c" \
+    -o "$WORK/test_preview" $GTK_LIBS -lm || exit 1
+
+pv_fail=0
+( cd "$WORK" && ./test_preview make f.pdf f.eps ) || { echo "FAIL: no se pudo dibujar la pagina"; pv_fail=1; }
+for f in pdf eps; do
+    out=$( cd "$WORK" && ./test_preview show f.$f 150 f_$f.png )
+    echo "$out" | grep -q '^pages 1$'              || { echo "FAIL: f.$f: paginas: $out"; pv_fail=1; }
+    echo "$out" | grep -q '^points 200.00 100.00$' || { echo "FAIL: f.$f: tamano: $out";  pv_fail=1; }
+    # el marco va de (20,20) a (180,80) pt; a 150 ppp, x 41..375 e y 41..167
+    ink=$(echo "$out" | sed -n 's/^ink //p')
+    ok=$(echo "$ink" | awk '{ print ($1>=39 && $1<=43 && $2>=373 && $2<=377 &&
+                                     $3>=39 && $3<=43 && $4>=165 && $4<=169) ? 1 : 0 }')
+    [ "$ok" = 1 ] || { echo "FAIL: f.$f: la tinta esta en [$ink], se dibujo en [41 375 41 167]"; pv_fail=1; }
+done
+cmp -s "$WORK/f_pdf.png" "$WORK/f_eps.png" ||
+    { echo "FAIL: el PDF y el EPS de la misma pagina no dan la misma imagen"; pv_fail=1; }
+[ $pv_fail = 0 ] && echo "la ventana de graficos dibuja la pagina donde se dibujo" || rc=1
+
 # The engines the GUI will really call: it must find them and they must
 # answer with a status it understands. Only a note when they are not there.
 for e in fue fuf; do

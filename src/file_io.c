@@ -6,10 +6,12 @@
 #include "utils.h"
 #include <glib/gstdio.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <string.h>
 #include <errno.h>
 #include "forecast_tab.h"   // para acceder a los widgets de Forecast
 #include "engine.h"         // ejecutar fue/fuf sin shell, con sus codigos
+#include "preview.h"        // la ventana de graficos
 
 #ifdef _WIN32
 #include <windows.h>
@@ -1239,8 +1241,14 @@ void on_view_output(GtkWidget *widget, FueContext *ctx) {
 
     /* Verificar si el archivo existe */
     if (g_file_test(pdf_path, G_FILE_TEST_EXISTS)) {
-        open_pdf_file(pdf_path);
-        gtk_label_set_text(GTK_LABEL(ctx->status_label), "Opening PDF output.");
+        /* La ventana propia si el PDF lo dibujo el motor; si no, el visor
+         * del sistema (un PDF de pdflatex, por ejemplo).                  */
+        if (preview_show(ctx, pdf_path))
+            gtk_label_set_text(GTK_LABEL(ctx->status_label), "Graph window.");
+        else {
+            open_pdf_file(pdf_path);
+            gtk_label_set_text(GTK_LABEL(ctx->status_label), "Opening PDF output.");
+        }
     } else {
         gchar *msg = g_strdup_printf("PDF file not found: %s", pdf_path);
         gtk_label_set_text(GTK_LABEL(ctx->status_label), msg);
@@ -1337,4 +1345,24 @@ void on_forecast_button_clicked(GtkToolButton *btn, FueContext *ctx) {
     g_free(forecast_inp_path);
     g_free(forecast_base);
     g_free(workspace);
+}
+
+/* ========================================================================= */
+/* La ventana de graficos (src/preview.c) pide esto al programa que la usa   */
+/* ========================================================================= */
+void preview_open_external(PreviewApp *app, const gchar *path) {
+    (void) app;
+    open_pdf_file(path);
+}
+
+void preview_show_status(PreviewApp *app, const gchar *format, ...) {
+    va_list ap;
+    gchar  *text;
+
+    if (!app || !app->status_label) return;
+    va_start(ap, format);
+    text = g_strdup_vprintf(format, ap);
+    va_end(ap);
+    gtk_label_set_text(GTK_LABEL(app->status_label), text);
+    g_free(text);
 }

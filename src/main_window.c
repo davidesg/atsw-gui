@@ -161,6 +161,14 @@ GtkWidget* create_main_window(GtkApplication *app, FueContext *ctx) {
     gtk_label_set_xalign(GTK_LABEL(ctx->status_label), 0.0);
     gtk_box_pack_start(GTK_BOX(status_bar), ctx->status_label, TRUE, TRUE, 0);
 
+    /* El avance del motor: se ve solo mientras corre */
+    ctx->progress = gtk_progress_bar_new();
+    gtk_progress_bar_set_show_text(GTK_PROGRESS_BAR(ctx->progress), TRUE);
+    gtk_widget_set_size_request(ctx->progress, 260, -1);
+    gtk_widget_set_valign(ctx->progress, GTK_ALIGN_CENTER);
+    gtk_box_pack_start(GTK_BOX(status_bar), ctx->progress, FALSE, FALSE, 4);
+    gtk_widget_set_no_show_all(ctx->progress, TRUE);
+
     GtkWidget *model_label_title = gtk_label_new("Model: ");
     gtk_box_pack_start(GTK_BOX(status_bar), model_label_title, FALSE, FALSE, 0);
     ctx->model_label = gtk_label_new("(none)");

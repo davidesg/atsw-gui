@@ -76,6 +76,8 @@ typedef struct {
     GtkWidget *edit_inp_button;
     GtkWidget *save_inp_button;
     GtkWidget *model_label;
+    GtkWidget *progress;          /* el avance del motor, en la barra     */
+    gboolean   running;           /* hay un motor corriendo               */
 
 } FueContext;
 

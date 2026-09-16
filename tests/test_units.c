@@ -120,6 +120,45 @@ static void test_engine_argv(void) {
 }
 
 /* ------------------------------------------------------------------------ */
+/* El avance: el optimizador escribe la iteracion y el valor de la funcion   */
+/* todas seguidas y sin salto de linea, asi que el lector tiene que sacarlas */
+/* del chorro de bytes segun llegan.                                        */
+
+typedef struct { int n, last_k; double last_f; GMainLoop *loop; int status; } Seen;
+
+static void seen_iteration(int k, double f, gpointer data) {
+    Seen *s = data;
+
+    s->n++;
+    s->last_k = k;
+    s->last_f = f;
+}
+
+static void seen_done(const EngineResult *r, gpointer data) {
+    Seen *s = data;
+
+    s->status = r->status;
+    g_main_loop_quit(s->loop);
+}
+
+static void test_engine_progress(void) {
+    const char *args[] = { "iter", NULL };
+    Seen s = { 0, -1, 0.0, NULL, -99 };
+
+    s.loop = g_main_loop_new(NULL, FALSE);
+    check(engine_run_async(NULL, "fue", args, seen_iteration, seen_done, &s),
+          "el motor deberia poder lanzarse");
+    g_main_loop_run(s.loop);
+    g_main_loop_unref(s.loop);
+
+    check(s.n == 13, "el motor conto 13 iteraciones (0..12), se leyeron %d", s.n);
+    check(s.last_k == 12, "la ultima es la 12, se leyo la %d", s.last_k);
+    check(s.last_f > 0.911 && s.last_f < 0.913,
+          "y su valor 0.912, se leyo %.10f", s.last_f);
+    check(s.status == 0, "y acabo bien, no con %d", s.status);
+}
+
+/* ------------------------------------------------------------------------ */
 /* Antes de leerlo: el .inp que le dan al GUI es de fue, de fuf, o no vale   */
 
 static void test_inp_check(const char *dir) {
@@ -166,6 +205,7 @@ int main(int argc, char **argv) {
     test_engine_signal();
     test_engine_not_found();
     test_engine_argv();
+    test_engine_progress();
     if (argc > 1) test_inp_check(argv[1]);
 
     printf("\n%d checks, %d failures\n", checks, fails);

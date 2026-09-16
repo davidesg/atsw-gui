@@ -23,5 +23,16 @@ case "$1" in
   argv)
       # how many arguments arrived, and what the first one was
       printf '%d\n%s\n' "$#" "$1$2" ;;
+  iter)
+      # what the optimizer writes: the iteration and the objective, all in
+      # one line and with no newline between them
+      echo "FUE: banner"
+      k=0
+      while [ $k -le 12 ]; do
+          printf '%4d F: %0.10f' "$k" "0.9$k"
+          k=$((k + 1))
+      done
+      printf '\n'
+      exit 0 ;;
 esac
 exit 1

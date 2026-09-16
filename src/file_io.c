@@ -993,6 +993,94 @@ void on_save_inp(GtkToolButton *btn, FueContext *ctx) {
     save_inp_file(ctx);
 }
 
+/* ------------------------------------------------------------------------ */
+/* Como acabo la estimacion: el optimizador lo escribe en el .out, en las    */
+/* lineas que empiezan por ****. Son dos: de que criterio de parada se trata */
+/* y en cuantas iteraciones, con la norma del gradiente.                     */
+/* ------------------------------------------------------------------------ */
+static gchar *convergence_of(const char *out_path) {
+    gchar  *text = NULL, **lines, *how = NULL, *many = NULL, *result = NULL;
+    gsize   len = 0;
+    int     i;
+
+    if (!g_file_get_contents(out_path, &text, &len, NULL)) return NULL;
+    lines = g_strsplit(text, "\n", -1);
+    for (i = 0; lines[i] != NULL; i++) {
+        if (!g_str_has_prefix(lines[i], "****")) continue;
+        if (strstr(lines[i], "CONVERGENCE OBTAINED")) {
+            g_free(many);
+            many = g_strdup(g_strstrip(lines[i] + 4));
+        } else {
+            g_free(how);
+            how = g_strdup(g_strstrip(lines[i] + 4));
+        }
+    }
+    if (many != NULL && how != NULL) result = g_strdup_printf("%s; %s", many, how);
+    else if (many != NULL) result = g_strdup(many);
+    else if (how != NULL)  result = g_strdup(how);
+    g_free(how);
+    g_free(many);
+    g_strfreev(lines);
+    g_free(text);
+    return result;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Correr fue sin bloquear la interfaz                                       */
+/* ------------------------------------------------------------------------ */
+
+static void run_busy(FueContext *ctx, gboolean busy) {
+    ctx->running = busy;
+    gtk_widget_set_visible(ctx->progress, busy);
+    if (ctx->btn_run)   gtk_widget_set_sensitive(ctx->btn_run, !busy);
+    if (busy) {
+        gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(ctx->progress), 0.0);
+        gtk_progress_bar_set_text(GTK_PROGRESS_BAR(ctx->progress), "starting...");
+    }
+}
+
+static void on_fue_iteration(int k, double f, gpointer data) {
+    FueContext *ctx = data;
+    gchar *text = g_strdup_printf("iteration %d   F = %.6f", k, f);
+
+    gtk_progress_bar_set_text(GTK_PROGRESS_BAR(ctx->progress), text);
+    gtk_progress_bar_pulse(GTK_PROGRESS_BAR(ctx->progress));
+    g_free(text);
+}
+
+static void on_fue_done(const EngineResult *r, gpointer data) {
+    FueContext *ctx = data;
+
+    run_busy(ctx, FALSE);
+    if (engine_wrote_results(r)) {
+        char  *workspace = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(ctx->workspace_file_chooser));
+        const char *name = gtk_entry_get_text(GTK_ENTRY(ctx->input_name_entry));
+        gchar *how = NULL;
+
+        if (workspace != NULL && name != NULL && *name) {
+            gchar *file = g_strdup_printf("%s.out", name);
+            gchar *path = g_build_filename(workspace, file, NULL);
+
+            how = convergence_of(path);
+            g_free(file);
+            g_free(path);
+        }
+        g_free(workspace);
+        load_output_to_console(ctx);
+        if (how != NULL) {
+            gchar *text = g_strdup_printf("%s  %s", r->message, how);
+
+            gtk_label_set_text(GTK_LABEL(ctx->status_label), text);
+            g_free(text);
+            g_free(how);
+        } else
+            gtk_label_set_text(GTK_LABEL(ctx->status_label), r->message);
+    } else {
+        gtk_label_set_text(GTK_LABEL(ctx->status_label), r->message);
+        show_engine_output(ctx, r);
+    }
+}
+
 void on_run_fue(GtkWidget *widget, FueContext *ctx) {
     on_save_inp(NULL, ctx);   /* guarda el .inp actual */
     const char *input_name = gtk_entry_get_text(GTK_ENTRY(ctx->input_name_entry));
@@ -1002,13 +1090,21 @@ void on_run_fue(GtkWidget *widget, FueContext *ctx) {
         return;
     }
 
-    EngineResult r = engine_run(workspace, "fue", input_name, NULL);
-    gtk_label_set_text(GTK_LABEL(ctx->status_label), r.message);
-    if (engine_wrote_results(&r))
-        load_output_to_console(ctx);       /* el .out, a la consola */
-    else
-        show_engine_output(ctx, &r);       /* por que no salio */
-    engine_result_clear(&r);
+    {
+    const char *args[] = { input_name, NULL };
+
+    if (ctx->running) {
+        gtk_label_set_text(GTK_LABEL(ctx->status_label), "fue is already running.");
+        g_free(workspace);
+        return;
+    }
+    run_busy(ctx, TRUE);
+    gtk_label_set_text(GTK_LABEL(ctx->status_label), "Running fue...");
+    if (!engine_run_async(workspace, "fue", args, on_fue_iteration, on_fue_done, ctx)) {
+        run_busy(ctx, FALSE);
+        gtk_label_set_text(GTK_LABEL(ctx->status_label), "fue could not be run.");
+    }
+    }
     g_free(workspace);
 }
 

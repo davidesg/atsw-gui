@@ -41,4 +41,27 @@ gboolean engine_wrote_results(const EngineResult *r);
 
 void engine_result_clear(EngineResult *r);
 
+/* ------------------------------------------------------------------------ */
+/* Sin bloquear la interfaz, y con el avance                                 */
+/*                                                                           */
+/* El optimizador de fue y de fuf escribe una linea por iteracion -- sin      */
+/* salto de linea, todas seguidas -- con el numero y el valor de la funcion.  */
+/* Desde fue 1.14 y fuf 1.09 sale sin buffer, asi que llega segun ocurre.     */
+/* ------------------------------------------------------------------------ */
+
+/* Una iteracion del optimizador */
+typedef void (*EngineProgress)(int iteration, double objective, gpointer data);
+
+/* El final: r vale solo mientras dura la llamada */
+typedef void (*EngineDone)(const EngineResult *r, gpointer data);
+
+/* Lanza <program> en workdir con argv (terminado en NULL, sin el nombre del
+ * programa) y vuelve enseguida. progress se llama por cada iteracion que el
+ * motor cuenta y done cuando acaba. FALSE si no se pudo lanzar, y entonces
+ * done no se llama.                                                        */
+gboolean engine_run_async(const char *workdir, const char *program,
+                          const char *const *argv,
+                          EngineProgress progress, EngineDone done,
+                          gpointer data);
+
 #endif /* ENGINE_H */

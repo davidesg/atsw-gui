@@ -54,6 +54,10 @@ static gchar *status_message(const char *program, int status, int signal_no,
     return g_strdup_printf("%s %s.", program, what);
 }
 
+/* Se declara antes: la usan el camino sincrono y el asincrono */
+static gchar *status_message(const char *program, int status, int signal_no,
+                             const char *err, const char *out);
+
 EngineResult engine_run(const char *workdir, const char *program, ...) {
     EngineResult r = { ENGINE_NORUN, 0, NULL, NULL };
     GPtrArray   *args;
@@ -150,4 +154,176 @@ void engine_result_clear(EngineResult *r) {
     g_free(r->output);
     g_free(r->message);
     r->output = r->message = NULL;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Sin bloquear la interfaz, y con el avance                                  */
+/* ------------------------------------------------------------------------ */
+
+typedef struct {
+    gchar          *program;
+    EngineProgress  progress;
+    EngineDone      done;
+    gpointer        data;
+    GString        *out, *err;
+    gsize           scanned;    /* hasta donde se busco la iteracion        */
+    int             status, signal_no;
+    guint           pending;    /* tuberias abiertas + el hijo              */
+} Run;
+
+/* El optimizador escribe "%4d F: %0.10f" por iteracion, todas seguidas y sin
+ * salto de linea. Se buscan las que ya estan enteras -- el numero termina
+ * cuando llega algo que no es digito ni punto -- y se deja el resto para la
+ * proxima vez.                                                             */
+static void scan_iterations(Run *run) {
+    const char *base = run->out->str;
+    gsize       len  = run->out->len;
+
+    for (;;) {
+        const char *at = strstr(base + run->scanned, " F: ");
+        const char *p, *q;
+        char       *end;
+        double      value;
+        int         iteration;
+
+        if (at == NULL) {
+            /* se guarda lo justo por si la marca llega partida en dos */
+            if (len > 4) run->scanned = len - 4;
+            return;
+        }
+        p = at + 4;
+        q = p;
+        while (q < base + len && (g_ascii_isdigit(*q) || *q == '.' ||
+                                  *q == '-' || *q == '+' || *q == 'e' || *q == 'E'))
+            q++;
+        if (q >= base + len)            /* el numero aun no ha llegado entero */
+            return;
+        value = g_ascii_strtod(p, &end);
+        if (end == p) { run->scanned = (gsize)(p - base); continue; }
+
+        /* el numero de iteracion, justo antes de la marca */
+        q = at;
+        while (q > base && g_ascii_isdigit(q[-1])) q--;
+        iteration = (q < at) ? atoi(q) : -1;
+
+        run->scanned = (gsize)(end - base);
+        if (iteration >= 0 && run->progress != NULL)
+            run->progress(iteration, value, run->data);
+    }
+}
+
+static void run_finish(Run *run) {
+    EngineResult r = { run->status, run->signal_no, NULL, NULL };
+
+    r.message = status_message(run->program, run->status, run->signal_no,
+                               run->err->str, run->out->str);
+    r.output  = g_strconcat(run->err->str,
+                            (*run->err->str && *run->out->str) ? "\n" : "",
+                            run->out->str, NULL);
+    if (r.output && !*r.output) { g_free(r.output); r.output = NULL; }
+    if (run->done != NULL)
+        run->done(&r, run->data);
+    engine_result_clear(&r);
+
+    g_string_free(run->out, TRUE);
+    g_string_free(run->err, TRUE);
+    g_free(run->program);
+    g_free(run);
+}
+
+typedef struct { Run *run; gboolean is_err; } Pipe;
+
+static gboolean on_pipe(GIOChannel *channel, GIOCondition cond, gpointer data) {
+    Pipe    *pipe = data;
+    Run     *run  = pipe->run;
+    GString *to   = pipe->is_err ? run->err : run->out;
+    gchar    buffer[4096];
+    gsize    n = 0;
+
+    while (g_io_channel_read_chars(channel, buffer, sizeof(buffer), &n, NULL)
+           == G_IO_STATUS_NORMAL && n > 0) {
+        g_string_append_len(to, buffer, (gssize) n);
+        if (to == run->out) scan_iterations(run);
+    }
+    if ((cond & (G_IO_HUP | G_IO_ERR)) == 0)
+        return TRUE;
+
+    g_io_channel_shutdown(channel, FALSE, NULL);
+    g_io_channel_unref(channel);
+    g_free(pipe);
+    if (--run->pending == 0) run_finish(run);
+    return FALSE;
+}
+
+static void on_child(GPid pid, gint wait_status, gpointer data) {
+    Run *run = data;
+
+#ifdef G_OS_WIN32
+    run->status = wait_status;
+#else
+    if (WIFEXITED(wait_status))
+        run->status = WEXITSTATUS(wait_status);
+    else if (WIFSIGNALED(wait_status)) {
+        run->status    = ENGINE_SIGNAL;
+        run->signal_no = WTERMSIG(wait_status);
+    }
+#endif
+    g_spawn_close_pid(pid);
+    if (--run->pending == 0) run_finish(run);
+}
+
+static void watch_pipe(gint fd, Run *run, gboolean is_err) {
+#ifdef G_OS_WIN32
+    GIOChannel *channel = g_io_channel_win32_new_fd(fd);
+#else
+    GIOChannel *channel = g_io_channel_unix_new(fd);
+#endif
+    Pipe *pipe = g_new0(Pipe, 1);
+
+    pipe->run    = run;
+    pipe->is_err = is_err;
+    g_io_channel_set_encoding(channel, NULL, NULL);      /* bytes, sin UTF-8 */
+    g_io_channel_set_flags(channel, G_IO_FLAG_NONBLOCK, NULL);
+    g_io_channel_set_close_on_unref(channel, TRUE);
+    g_io_add_watch(channel, G_IO_IN | G_IO_HUP | G_IO_ERR, on_pipe, pipe);
+}
+
+gboolean engine_run_async(const char *workdir, const char *program,
+                          const char *const *argv,
+                          EngineProgress progress, EngineDone done,
+                          gpointer data) {
+    GPtrArray  *args = g_ptr_array_new_with_free_func(g_free);
+    gchar      *path = g_find_program_in_path(program);
+    GError     *error = NULL;
+    GPid        pid;
+    gint        out_fd = -1, err_fd = -1;
+    Run        *run;
+    int         i;
+
+    g_ptr_array_add(args, path ? path : g_strdup(program));
+    for (i = 0; argv != NULL && argv[i] != NULL; i++)
+        g_ptr_array_add(args, g_strdup(argv[i]));
+    g_ptr_array_add(args, NULL);
+
+    if (!g_spawn_async_with_pipes(workdir, (gchar **) args->pdata, NULL,
+                                  G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD,
+                                  NULL, NULL, &pid, NULL, &out_fd, &err_fd, &error)) {
+        if (error) g_error_free(error);
+        g_ptr_array_free(args, TRUE);
+        return FALSE;
+    }
+    g_ptr_array_free(args, TRUE);
+
+    run = g_new0(Run, 1);
+    run->program  = g_strdup(program);
+    run->progress = progress;
+    run->done     = done;
+    run->data     = data;
+    run->out      = g_string_new(NULL);
+    run->err      = g_string_new(NULL);
+    run->pending  = 3;                       /* las dos tuberias y el hijo  */
+    watch_pipe(out_fd, run, FALSE);
+    watch_pipe(err_fd, run, TRUE);
+    g_child_watch_add(pid, on_child, run);
+    return TRUE;
 }

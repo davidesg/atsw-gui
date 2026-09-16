@@ -7,6 +7,25 @@ Licencia: GNU General Public License v2 o posterior.
 
 ---
 
+## Correr los motores
+
+**Run FUE** ya no bloquea la interfaz: el motor corre por detrás y la barra
+de abajo enseña la iteración en la que va el optimizador y el valor de la
+función objetivo, según ocurren. Al acabar, la barra dice cómo terminó,
+sacándolo de las líneas `****` que el optimizador escribe en el `.out`:
+
+```
+fue finished.  CONVERGENCE OBTAINED AFTER 20 ITERATIONS [GRADIENT NORM = 0.0000];
+GRADIENT STOPPING CRITERIUM SATISFIED TO WITHIN TOLERANCE LIMITS
+```
+
+y si no terminó bien, lo que dijo el motor y por qué. Los motores se lanzan
+directamente, nunca a través de un shell.
+
+Hace falta **FUE 1.14 o posterior y FUF 1.09 o posterior**: el optimizador
+escribe las iteraciones todas en una línea, sin salto entre ellas, así que
+antes de esas versiones el buffer de la tubería las retenía hasta el final.
+
 ## Ventana de gráficos
 
 El PDF que escriben FUE y FUF lo dibujan los propios motores

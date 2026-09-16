@@ -94,13 +94,65 @@ char *inp_format(char *buf, size_t size, double v) {
 /* Un .inp que el motor no podria leer: se dice por que y no se carga. El
  * aviso va en una ventana porque no cabe en la barra de estado -- la razon
  * de inpcheck lleva la recomendacion al final, que es lo que hace falta.  */
+/* Lo que CABE en el GUI, que es menos de lo que admite el motor.
+ *
+ * inpcheck dice lo que fue puede leer: hasta 1000 deterministas y hasta diez
+ * millones de observaciones. Pero el GUI los guarda en vectores estaticos y
+ * CONSECUTIVOS --It[50], Arr[20], ... Data[2000] en model_globals.c-- y los
+ * llena sin comprobar, asi que un fichero que el motor lee tan feliz escribe
+ * encima de los punteros del vecino, que luego se desreferencian y se
+ * liberan.
+ *
+ * El limite es del GUI, no del formato. Por eso se comprueba aqui, en su
+ * propia puerta, y NO en la copia de inpcheck: esa tiene que seguir siendo
+ * identica a la del motor, que es lo unico que garantiza que el GUI acepte
+ * exactamente lo que el motor acepta.                                     */
+#define GUI_MAX_DET   50          /* It[50]  en model_globals.c            */
+#define GUI_MAX_NOBS  2000        /* Data[2000]                            */
+
+int inp_fits_gui( const char *path, char *why, size_t size )
+{
+    FILE *f;
+    char  s[512];
+    int   i, nobs, ndet;
+
+    if ( ( f = fopen( path, "r" ) ) == NULL ) return 1;   /* ya lo dira otro */
+
+    /* Cinco de banner, etiqueta y valor de la frecuencia, y la etiqueta de la
+     * fecha: el fichero ya ha pasado por inpcheck, asi que la cuenta cuadra. */
+    for ( i = 0; i < 8; i++ )
+        if ( fgets( s, sizeof s, f ) == NULL ) { fclose( f ); return 1; }
+
+    if ( fscanf( f, "%d", &nobs ) == 1 && nobs > GUI_MAX_NOBS ) {
+        fclose( f );
+        g_snprintf( why, size,
+                    "%d observations, and this interface holds %d. The engine "
+                    "reads the file: run fue on it from the command line.",
+                    nobs, GUI_MAX_NOBS );
+        return 0;
+    }
+    if ( fgets( s, sizeof s, f ) == NULL ) { fclose( f ); return 1; }  /* resto */
+    if ( fgets( s, sizeof s, f ) == NULL ) { fclose( f ); return 1; }  /* etiqueta */
+    if ( fscanf( f, "%d", &ndet ) == 1 && ndet > GUI_MAX_DET ) {
+        fclose( f );
+        g_snprintf( why, size,
+                    "%d deterministic variables, and this interface holds %d. "
+                    "The engine reads the file: run fue on it from the command line.",
+                    ndet, GUI_MAX_DET );
+        return 0;
+    }
+    fclose( f );
+    return 1;
+}
+
 gboolean inp_ok_to_load(GtkWidget *parent, const char *path, int forecast) {
     char why[512];
     GtkWidget *dialog;
     gchar *base;
 
     if ((forecast ? inp_check_fuf(path, why, sizeof(why))
-                  : inp_check_fue(path, why, sizeof(why))) == 0)
+                  : inp_check_fue(path, why, sizeof(why))) == 0
+        && inp_fits_gui(path, why, sizeof(why)))
         return TRUE;
 
     base = g_path_get_basename(path);

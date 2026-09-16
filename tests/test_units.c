@@ -197,6 +197,32 @@ static void test_inp_check(const char *dir) {
     check(inp_check_fue("no-existe.inp", why, sizeof(why)) != 0,
           "un fichero que no esta tiene que rechazarse");
 
+    /* Y el limite PROPIO del GUI, que es mas estrecho que el del motor: el
+     * motor lee hasta 1000 deterministas y el GUI los mete en It[50].      */
+    check(inp_fits_gui(model, why, sizeof(why)) == 1,
+          "D1.inp cabe en el GUI: %s", why);
+    {
+    gchar *grande = g_build_filename(dir, "muchos.inp", NULL);
+    if (g_file_get_contents(model, &text, &len, NULL)) {
+        gchar **l = g_strsplit(text, "\n", -1);
+        int i;
+        for (i = 0; l[i]; i++)
+            if (strstr(l[i], "Number of deterministic") && l[i + 1]) {
+                g_free(l[i + 1]); l[i + 1] = g_strdup("999"); break;
+            }
+        {
+        gchar *j = g_strjoinv("\n", l);
+        if (g_file_set_contents(grande, j, -1, NULL))
+            check(inp_fits_gui(grande, why, sizeof(why)) == 0,
+                  "999 deterministas no caben en It[50] y hay que decirlo antes "
+                  "de cargarlos, no despues de pisar la memoria del vecino");
+        g_free(j);
+        }
+        g_strfreev(l); g_unlink(grande); g_free(text); text = NULL;
+    }
+    g_free(grande);
+    }
+
     g_free(model); g_free(forecast); g_free(broken);
 }
 

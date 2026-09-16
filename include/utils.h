@@ -29,6 +29,11 @@ char *single_token(const char *input);
 
 /* Un .inp que el motor no podria leer: se dice por que, en una ventana, y
  * se devuelve FALSE. forecast != 0 para los ficheros de fuf.              */
+/* 1 si el fichero cabe en los vectores estaticos del GUI, 0 con el motivo en
+ * msg[size]. Es un limite del GUI, no del formato: el motor lee ficheros mas
+ * grandes. inp_ok_to_load() lo llama despues de inpcheck.                  */
+int inp_fits_gui( const char *path, char *msg, size_t size );
+
 gboolean inp_ok_to_load(GtkWidget *parent, const char *path, int forecast);
 void reload_number_int(GtkTreeModel *model, GtkTreeIter iter);
 /* possibly other string functions */

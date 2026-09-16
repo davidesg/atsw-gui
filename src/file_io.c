@@ -623,6 +623,12 @@ free_model_globals();
           else
              {
              nstdet += 1;          /* Update number of non-standard detvars: */
+             /* det es ivector( 1, NT ) con NT = 10 y nonstd_name tiene
+              * MAX_DET: sin cota, el numero once escribia fuera del bloque.
+              * inpcheck para el primero e inp_ok_to_load el segundo; esto es
+              * el cinturon, para cuando se llame al lector sin pasar por la
+              * puerta -- como hace el banco de conformidad.               */
+             if ( nstdet > NT || i - 1 >= MAX_DET ) { nstdet--; break; }
              det[nstdet] = i;
              /* Tiene tipo propio: sin el se quedaba en 0, que el escritor
               * interpreta como "impulse", y al guardar salia

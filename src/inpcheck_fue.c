@@ -5,7 +5,7 @@
 /* fue reads the .inp with fscanf and fgets, and never checked what it read: */
 /* a file of fuf or fug, a missing value or a word where a number should be  */
 /* made fue corrupt its memory, crash, or write results that mean nothing.   */
-/* inp_check_fue() reads the file first with the SAME calls in the SAME order    */
+/* inp_check() reads the file first with the SAME calls in the SAME order    */
 /* as fue.c [3.0]-[3.7] (so it accepts exactly what fue reads well), checks  */
 /* every value, and says what is wrong and in which line.                    */
 /*****************************************************************************/
@@ -20,6 +20,7 @@
 
 #define LABEL_MAX  90             /* fue reads the labels with fgets( s, 90 )   */
 #define MAX_COUNT  1000           /* limit for counts and orders                */
+#define NON_STANDARD_MAX 10       /* the NT of fue.c: det = ivector( 1, NT )    */
 
 typedef struct {
    FILE   *f;
@@ -273,6 +274,16 @@ static int check( Check *k )
           else                            /* non-standard: one data column    */
              {
              nstdet++;
+             /* fue keeps their indices in det = ivector( 1, NT ) with NT = 10
+              * (fue.c:84,359) and fills it without checking, so the eleventh
+              * one writes past the end of the block. The limit is the
+              * engine's; it is said here, where nothing has been written
+              * yet, which is what this pass is for.                        */
+             if ( nstdet > NON_STANDARD_MAX )
+                return( fail( k, "too many non-standard deterministic variables: %d, "
+                                 "and fue takes at most %d (they are the ones that "
+                                 "bring a data column of their own)",
+                                 nstdet, NON_STANDARD_MAX ) );
              if ( fgets( s, LABEL_MAX, f ) == NULL ) return( fail( k, "the file ends too soon" ) );
              }
           }

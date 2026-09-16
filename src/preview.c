@@ -34,8 +34,10 @@
 #define ZOOM_MIN   0.10
 #define ZOOM_MAX  16.00
 #define ZOOM_STEP  1.25        /* one notch of the zoom                   */
-#define GLASS     420          /* the magnifier, in pixels (a square)     */
-#define GLASS_X     4.0        /* and how much it magnifies               */
+#define GLASS     640          /* the magnifier, in pixels (a square): at  */
+#define GLASS_X     4.0        /* GLASS_X it shows GLASS/GLASS_X points of */
+                               /* the page, so it takes in the whole of an */
+                               /* incident and not only the point of it    */
 
 typedef struct {
     double w, h;               /* page size (points)                      */
@@ -65,6 +67,7 @@ typedef struct {
     GtkWidget  *glass_area;
     double      glass_px, glass_py;   /* the point of the page it is on    */
     double      glass_zoom;
+    int         glass_size;    /* GLASS, or less on a small screen         */
 } Preview;
 
 static GHashTable *previews = NULL;          /* path -> Preview           */
@@ -1106,19 +1109,22 @@ static gboolean on_draw(GtkWidget *area, cairo_t *cr, Preview *pv)
 /* lets one look at an incident in the data.                               */
 /* ---------------------------------------------------------------------- */
 
+static void preview_screen_size(GtkWidget *window, int *w, int *h);
+
 static gboolean on_glass_draw(GtkWidget *w, cairo_t *cr, Preview *pv)
 {
     const Page *pg = &g_array_index(pv->pages, Page, pv->current);
     double s = page_scale(pv) * pv->glass_zoom;
+    double half = pv->glass_size / 2.0;
 
     cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
     cairo_paint(cr);
     /* the point of the page under the pointer, in the middle of the glass */
-    draw_page(cr, pg, GLASS / 2.0 - s * pv->glass_px,
-                      GLASS / 2.0 - s * (pg->h - pv->glass_py), s);
+    draw_page(cr, pg, half - s * pv->glass_px,
+                      half - s * (pg->h - pv->glass_py), s);
     cairo_set_source_rgb(cr, 0.0, 0.0, 0.0);
     cairo_set_line_width(cr, 2.0);
-    cairo_rectangle(cr, 1.0, 1.0, GLASS - 2.0, GLASS - 2.0);
+    cairo_rectangle(cr, 1.0, 1.0, pv->glass_size - 2.0, pv->glass_size - 2.0);
     cairo_stroke(cr);
     return TRUE;
 }
@@ -1143,16 +1149,22 @@ static void glass_move(Preview *pv)
     int rx, ry;
 
     gdk_device_get_position(mouse, NULL, &rx, &ry);
-    gtk_window_move(GTK_WINDOW(pv->glass), rx - GLASS / 2, ry - GLASS / 2);
+    gtk_window_move(GTK_WINDOW(pv->glass), rx - pv->glass_size / 2,
+                                           ry - pv->glass_size / 2);
     gtk_widget_queue_draw(pv->glass_area);
 }
 
 static void glass_show(Preview *pv, double wx, double wy)
 {
     if (pv->glass == NULL) {
+        int screen_w = 1280, screen_h = 1024;
+
+        /* GLASS, unless the screen is small */
+        preview_screen_size(pv->window, &screen_w, &screen_h);
+        pv->glass_size = MIN(GLASS, (int) (0.7 * MIN(screen_w, screen_h)));
         pv->glass = gtk_window_new(GTK_WINDOW_POPUP);
         gtk_window_set_transient_for(GTK_WINDOW(pv->glass), GTK_WINDOW(pv->window));
-        gtk_widget_set_size_request(pv->glass, GLASS, GLASS);
+        gtk_widget_set_size_request(pv->glass, pv->glass_size, pv->glass_size);
         pv->glass_area = gtk_drawing_area_new();
         gtk_container_add(GTK_CONTAINER(pv->glass), pv->glass_area);
         g_signal_connect(pv->glass_area, "draw", G_CALLBACK(on_glass_draw), pv);

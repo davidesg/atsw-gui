@@ -410,10 +410,15 @@ static void draw_part( Pen *p, const Equation *eq, int part, int wrap )
    for ( i = ( part == EQ_DETER ) ? 2 : 0; i < n; )
        {
        start = i;
-       /* a term goes up to the next operator that starts one, or to the end */
+       /* A chunk goes up to the next term: an operator that starts one, or a
+        * coefficient with its sign (inside a factor, so that a long AR or MA
+        * operator can also be broken). Each coefficient keeps its B.        */
        do { i++; }
-       while ( i < n && !( item[i].kind == EI_OP &&
-                           ( item[i].sign == '+' || item[i].sign == '-' ) ) );
+       while ( i < n &&
+               !( item[i].kind == EI_OP &&
+                  ( item[i].sign == '+' || item[i].sign == '-' ) ) &&
+               !( item[i].kind == EI_COEF &&
+                  ( item[i].sign == '+' || item[i].sign == '-' ) ) );
        r.from = start;
        r.to   = i;
        if ( wrap && p->x > p->left && p->x + width_of( p, draw_range, &r ) > p->right )
@@ -426,40 +431,20 @@ static void draw_part( Pen *p, const Equation *eq, int part, int wrap )
 /* The equation, from the deterministic part to sigma                        */
 /*****************************************************************************/
 
-static void draw_equation( Pen *p, const Equation *eq )
+/* [ nabla ... N_t - mu ]: the differences of the series, with the mean */
+static void draw_bracket_group( Pen *p, const void *arg )
 {
-   char   text[64];
-   double sz = p->size, half;
+   const Equation *eq = *(const Equation **)arg;
+   double          sz = p->size, half = 1.15 * sz;
+   int             i;
 
-   if ( eq->used[EQ_DETER] )
-      {
-      if ( eq->is_log ) { put( p, F_ROMAN, sz, 0.0, "ln" ); space( p, 0.2 ); }
-      with_scripts( p, F_VAR, eq->name, "t", NULL );
-      space( p, 0.35 );
-      put( p, F_ROMAN, sz, 0.0, "=" );
-      space( p, 0.35 );
-      draw_part( p, eq, EQ_DETER, 1 );  /* its first two items are skipped  */
-      newline( p );
-      newline( p );
-      }
-
-   draw_part( p, eq, EQ_ARR, 1 );
-   draw_part( p, eq, EQ_ARA, 1 );
-   draw_part( p, eq, EQ_ARF, 1 );
-
-   /* [ differences of the series - mu ] */
-   half = 1.15 * sz;
    if ( eq->used[EQ_MU] ) { space( p, 0.2 ); bracket( p, 0, half ); }
    draw_part( p, eq, EQ_NRDIFF, 0 );
    draw_part( p, eq, EQ_NADIFF, 0 );
    if ( eq->used[EQ_IFADF] )
-      {
-      int i;
-
       for ( i = 0; i < eq->n[EQ_IFADF]; i++ )
           draw_ifadf_factor( p, ( eq->item[EQ_IFADF][i].kind == EI_NABLA ) ? 0
                                 : eq->item[EQ_IFADF][i].a, eq->freq );
-      }
    space( p, 0.15 );
    if ( eq->used[EQ_DETER] )
       with_scripts( p, F_VAR, "N", "t", NULL );
@@ -474,6 +459,15 @@ static void draw_equation( Pen *p, const Equation *eq )
       space( p, 0.2 );
       bracket( p, 1, half );
       }
+}
+
+/* = MA factors A_t ;  sigma-hat_A = x %   */
+static void draw_tail( Pen *p, const void *arg )
+{
+   const Equation *eq = *(const Equation **)arg;
+   double          sz = p->size;
+   char            text[64];
+   FDRun           r[2];
 
    space( p, 0.35 );
    put( p, F_ROMAN, sz, 0.0, "=" );
@@ -484,23 +478,49 @@ static void draw_equation( Pen *p, const Equation *eq )
    space( p, 0.15 );
    with_scripts( p, F_VAR, eq->residuals, "t", NULL );
 
-   /* ;   sigma-hat_A = x %   */
    space( p, 0.5 );
    put( p, F_ROMAN, sz, 0.0, ";" );
    space( p, 0.9 );
-   {
-   FDRun r[2];
-
    r[0] = (FDRun){ F_GREEK, sz, 0.0, SYM_SIGMA, FD_ACC_HAT };
    r[1] = (FDRun){ F_VAR, SMALL * sz, SUB_RISE * sz, eq->residuals, FD_ACC_NONE };
    if ( p->f != NULL ) fd_runs( p->f, p->x, p->y, FD_LEFT, r, 2 );
    p->x += fd_runs_width( r, 2 );
-   }
    space( p, 0.3 );
    put( p, F_ROMAN, sz, 0.0, "=" );
    space( p, 0.3 );
    snprintf( text, sizeof( text ), "%2.2f %%", eq->sigma );
    put( p, F_NUM, sz, 0.0, text );
+}
+
+/* Break the line if what comes next does not fit in it */
+static void fit( Pen *p, void (*draw)( Pen *, const void * ), const void *arg )
+{
+   if ( p->x > p->left && p->x + width_of( p, draw, arg ) > p->right ) newline( p );
+}
+
+static void draw_equation( Pen *p, const Equation *eq )
+{
+   const Equation *arg = eq;
+
+   if ( eq->used[EQ_DETER] )
+      {
+      if ( eq->is_log ) { put( p, F_ROMAN, p->size, 0.0, "ln" ); space( p, 0.2 ); }
+      with_scripts( p, F_VAR, eq->name, "t", NULL );
+      space( p, 0.35 );
+      put( p, F_ROMAN, p->size, 0.0, "=" );
+      space( p, 0.35 );
+      draw_part( p, eq, EQ_DETER, 1 );  /* its first two items are skipped  */
+      newline( p );
+      newline( p );
+      }
+
+   draw_part( p, eq, EQ_ARR, 1 );
+   draw_part( p, eq, EQ_ARA, 1 );
+   draw_part( p, eq, EQ_ARF, 1 );
+   fit( p, draw_bracket_group, &arg );
+   draw_bracket_group( p, &arg );
+   fit( p, draw_tail, &arg );
+   draw_tail( p, &arg );
 }
 
 /*****************************************************************************/
@@ -591,7 +611,7 @@ int report_write_pdf( const char *filename, FDFig *graph, const Equation *eq,
    p.size    = size;
    p.left    = margin;
    p.right   = PW - margin;
-   p.leading = 2.1 * size;
+   p.leading = 2.6 * size;          /* room for the standard errors and the brackets */
    p.x       = margin;
    p.y       = PH - margin - s * gh - 2.6 * size;
    draw_equation( &p, eq );

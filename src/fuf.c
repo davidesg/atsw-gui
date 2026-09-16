@@ -117,6 +117,12 @@ int main( int argc, char *argv[] )
 /* [1]: Check and process command-line arguments:                            */
 /*****************************************************************************/
 
+   /* Sin buffer: el optimizador escribe la iteracion y el valor de la
+    * funcion SIN salto de linea (qnewtopt.c), asi que con el buffer de la
+    * tuberia un programa que llame a fuf no ve nada hasta el final. Asi
+    * ve cada iteracion cuando ocurre. No cambia lo que se escribe.      */
+   setvbuf( stdout, NULL, _IONBF, 0 );
+
    printf( "\n" );
    printf( "FUF 1.09: Copyright (C) 2026 Arthur B. Treadway and David E. Guerrero \n" );
    printf( "Non-Final version. May contain errors. Please report\n" );

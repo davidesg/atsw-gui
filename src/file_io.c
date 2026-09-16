@@ -1008,11 +1008,11 @@ static void run_busy(FueContext *ctx, gboolean busy) {
     if (busy) {
         ctx->iterations = -1;
         gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(ctx->progress), 0.0);
-        gtk_progress_bar_set_text(GTK_PROGRESS_BAR(ctx->progress), "running...");
+        gtk_progress_bar_set_text(GTK_PROGRESS_BAR(ctx->progress), "...");
     } else {
         gchar *text = (ctx->iterations >= 0)
-                      ? g_strdup_printf("%d iterations", ctx->iterations)
-                      : g_strdup("no iterations");
+                      ? g_strdup_printf("%d it.", ctx->iterations)
+                      : g_strdup("--");
 
         gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(ctx->progress), 1.0);
         gtk_progress_bar_set_text(GTK_PROGRESS_BAR(ctx->progress), text);
@@ -1022,12 +1022,24 @@ static void run_busy(FueContext *ctx, gboolean busy) {
 
 static void on_fue_iteration(int k, double f, gpointer data) {
     FueContext *ctx = data;
-    gchar *text = g_strdup_printf("iteration %d   F = %.6f", k, f);
+    gchar *text = g_strdup_printf("it. %d", k);
 
     ctx->iterations = k;
     gtk_progress_bar_set_text(GTK_PROGRESS_BAR(ctx->progress), text);
     gtk_progress_bar_pulse(GTK_PROGRESS_BAR(ctx->progress));
     g_free(text);
+}
+
+/* El mensaje corto, y el largo en el globo */
+static void say(FueContext *ctx, const char *brief, const char *full) {
+    gtk_label_set_text(GTK_LABEL(ctx->status_label), brief);
+    gtk_widget_set_tooltip_text(ctx->status_label, full ? full : brief);
+}
+
+/* A la consola, que es donde esta todo lo que el motor escribio */
+static void go_to_console(FueContext *ctx) {
+    if (ctx->notebook != NULL)
+        gtk_notebook_set_current_page(GTK_NOTEBOOK(ctx->notebook), ctx->console_page);
 }
 
 static void on_fue_done(const EngineResult *r, gpointer data) {
@@ -1037,30 +1049,33 @@ static void on_fue_done(const EngineResult *r, gpointer data) {
     if (engine_wrote_results(r)) {
         char  *workspace = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(ctx->workspace_file_chooser));
         const char *name = gtk_entry_get_text(GTK_ENTRY(ctx->input_name_entry));
-        gchar *how = NULL;
+        Convergence c = { CONV_NONE, -1, -1.0, NULL, NULL };
 
         if (workspace != NULL && name != NULL && *name) {
             gchar *file = g_strdup_printf("%s.out", name);
             gchar *path = g_build_filename(workspace, file, NULL);
 
-            how = convergence_of(path);
+            convergence_of(path, &c);
             g_free(file);
             g_free(path);
         }
         g_free(workspace);
         load_output_to_console(ctx);
-        if (how != NULL) {
-            gchar *text = g_strdup_printf("%s  %s", r->message, how);
+        if (c.brief != NULL) {
+            gchar *brief = g_strdup_printf("fue finished: %s", c.brief);
+            gchar *full  = g_strdup_printf("%s\n\n%s", brief, c.full ? c.full : "");
 
-            gtk_label_set_text(GTK_LABEL(ctx->status_label), text);
-            g_free(text);
-            g_free(how);
+            say(ctx, brief, full);
+            g_free(brief);
+            g_free(full);
         } else
-            gtk_label_set_text(GTK_LABEL(ctx->status_label), r->message);
+            say(ctx, r->message, r->output);
+        convergence_clear(&c);
     } else {
-        gtk_label_set_text(GTK_LABEL(ctx->status_label), r->message);
+        say(ctx, r->message, r->output);
         show_engine_output(ctx, r);
     }
+    go_to_console(ctx);       /* todo lo que escribio, a la vista */
 }
 
 void on_run_fue(GtkWidget *widget, FueContext *ctx) {

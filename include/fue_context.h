@@ -79,6 +79,8 @@ typedef struct {
     GtkWidget *progress;          /* el avance del motor, en la barra     */
     gboolean   running;           /* hay un motor corriendo               */
     int        iterations;        /* las que conto en la ultima corrida   */
+    GtkWidget *notebook;          /* las pestanas, para saltar a la consola */
+    int        console_page;
 
 } FueContext;
 

@@ -11,16 +11,29 @@ Licencia: GNU General Public License v2 o posterior.
 
 **Run FUE** ya no bloquea la interfaz: el motor corre por detrás y la barra
 de abajo enseña la iteración en la que va el optimizador y el valor de la
-función objetivo, según ocurren. Al acabar, la barra dice cómo terminó,
-sacándolo de las líneas `****` que el optimizador escribe en el `.out`:
+función objetivo, según ocurren.
+
+Al acabar lo dice corto, sacándolo de las líneas `****` que el optimizador
+escribe en el `.out`:
 
 ```
-fue finished.  CONVERGENCE OBTAINED AFTER 20 ITERATIONS [GRADIENT NORM = 0.0000];
-GRADIENT STOPPING CRITERIUM SATISFIED TO WITHIN TOLERANCE LIMITS
+fue finished: converged (gradtol)        [ 18 it. ]
 ```
 
-y si no terminó bien, lo que dijo el motor y por qué. Los motores se lanzan
-directamente, nunca a través de un shell.
+y lo que escribió el optimizador entero queda en el globo. Los cinco
+criterios de parada no son todos convergencia —el motor escribe
+«CONVERGENCE OBTAINED» también cuando lo que pasó es que se le acabaron las
+iteraciones—, así que se distinguen:
+
+| lo que dice el motor | lo que dice la barra |
+|---|---|
+| GRADIENT STOPPING CRITERIUM | `converged (gradtol)` |
+| PARAMETER STOPPING CRITERIUM | `converged (steptol)` |
+| LAST GLOBAL STEP FAILED TO LOCATE A LOWER POINT | `stopped: no lower point` |
+| ITERATION LIMIT REACHED | `NOT converged: iteration limit` |
+| FIVE CONSECUTIVE STEPS OF MAX-LENGTH TAKEN | `stopped: five max-length steps` |
+
+y la ventana salta a la **Console**, donde está el `.out` entero.
 
 Hace falta **FUE 1.14 o posterior y FUF 1.09 o posterior**: el optimizador
 escribe las iteraciones todas en una línea, sin salto entre ellas, así que

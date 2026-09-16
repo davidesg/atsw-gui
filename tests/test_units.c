@@ -205,39 +205,46 @@ static void test_inp_check(const char *dir) {
 
 static void test_convergence(const char *dir) {
     gchar *path = g_build_filename(dir, "conv.out", NULL);
-    gchar *how;
+    Convergence c;
 
     g_file_set_contents(path,
         "Observations: 216.\n"
-        "Parameters  : 12.\n"
-        "\n"
         "**** GRADIENT STOPPING CRITERIUM SATISFIED TO WITHIN TOLERANCE LIMITS\n"
-        "**** CONVERGENCE OBTAINED AFTER 20 ITERATIONS [GRADIENT NORM = 0.0000]\n"
-        "\n", -1, NULL);
-    how = convergence_of(path);
-    check(how != NULL, "la convergencia tiene que salir del .out");
-    if (how != NULL) {
-        check(strstr(how, "20 ITERATIONS") != NULL,
-              "con el numero de iteraciones: \"%s\"", how);
-        check(strstr(how, "GRADIENT STOPPING") != NULL,
-              "y con el criterio de parada: \"%s\"", how);
-    }
-    g_free(how);
+        "**** CONVERGENCE OBTAINED AFTER 20 ITERATIONS [GRADIENT NORM = 0.0000]\n", -1, NULL);
+    check(convergence_of(path, &c), "la convergencia tiene que salir del .out");
+    check(c.kind == CONV_GRADTOL, "el criterio es el del gradiente, no %d", c.kind);
+    check(convergence_is_good(&c), "y eso es convergencia de verdad");
+    check(c.iterations == 20, "en 20 iteraciones, no %d", c.iterations);
+    check(c.brief && strcmp(c.brief, "converged (gradtol)") == 0,
+          "y se dice corto: \"%s\"", c.brief ? c.brief : "(null)");
+    convergence_clear(&c);
 
-    /* uno que no llego a converger */
+    g_file_set_contents(path,
+        "**** PARAMETER STOPPING CRITERIUM SATISFIED TO WITHIN TOLERANCE LIMITS\n"
+        "**** CONVERGENCE OBTAINED AFTER 7 ITERATIONS [GRADIENT NORM = 0.0012]\n", -1, NULL);
+    convergence_of(path, &c);
+    check(c.kind == CONV_STEPTOL, "el criterio de los parametros es steptol, no %d", c.kind);
+    check(convergence_is_good(&c), "y tambien es convergencia");
+    check(c.gradient > 0.0011 && c.gradient < 0.0013,
+          "con la norma del gradiente, no %f", c.gradient);
+    convergence_clear(&c);
+
+    /* el limite de iteraciones NO es convergencia, por mucho que el motor
+     * escriba "CONVERGENCE OBTAINED" tambien en ese caso                  */
     g_file_set_contents(path,
         "**** ITERATION LIMIT REACHED\n"
         "**** CONVERGENCE OBTAINED AFTER 500 ITERATIONS [GRADIENT NORM = 1.3000]\n", -1, NULL);
-    how = convergence_of(path);
-    check(how != NULL && strstr(how, "ITERATION LIMIT") != NULL,
-          "el limite de iteraciones tiene que decirse: \"%s\"", how ? how : "(null)");
-    g_free(how);
+    convergence_of(path, &c);
+    check(c.kind == CONV_MAXITS, "el limite de iteraciones, no %d", c.kind);
+    check(!convergence_is_good(&c),
+          "y eso NO es convergencia, aunque el motor diga CONVERGENCE OBTAINED");
+    check(c.brief && strstr(c.brief, "NOT converged") != NULL,
+          "y hay que decirlo: \"%s\"", c.brief ? c.brief : "(null)");
+    convergence_clear(&c);
 
-    /* un .out sin esas lineas */
     g_file_set_contents(path, "nada que ver\n", -1, NULL);
-    how = convergence_of(path);
-    check(how == NULL, "un .out sin lineas **** no dice nada de convergencia");
-    g_free(how);
+    check(!convergence_of(path, &c), "un .out sin lineas **** no dice nada");
+    convergence_clear(&c);
 
     g_unlink(path);
     g_free(path);

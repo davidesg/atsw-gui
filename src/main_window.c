@@ -114,7 +114,9 @@ GtkWidget* create_main_window(GtkApplication *app, FueContext *ctx) {
     gtk_notebook_append_page(GTK_NOTEBOOK(model_notebook), stoch_tab, gtk_label_new("Stochastic Component"));
 
     GtkWidget *console_tab = create_console_tab(ctx);
+    ctx->console_page =
     gtk_notebook_append_page(GTK_NOTEBOOK(model_notebook), console_tab, gtk_label_new("Console"));
+    ctx->notebook = model_notebook;
 
     GtkWidget *forecast_tab = create_forecast_tab(ctx);
     gtk_notebook_append_page(GTK_NOTEBOOK(model_notebook), forecast_tab, gtk_label_new("Forecast"));
@@ -159,12 +161,16 @@ GtkWidget* create_main_window(GtkApplication *app, FueContext *ctx) {
 
     ctx->status_label = gtk_label_new(NULL);
     gtk_label_set_xalign(GTK_LABEL(ctx->status_label), 0.0);
+    /* Que un mensaje largo no estire la ventana: se corta con puntos
+     * suspensivos y el texto entero queda en el globo.                   */
+    gtk_label_set_ellipsize(GTK_LABEL(ctx->status_label), PANGO_ELLIPSIZE_END);
+    gtk_widget_set_size_request(ctx->status_label, 120, -1);
     gtk_box_pack_start(GTK_BOX(status_bar), ctx->status_label, TRUE, TRUE, 0);
 
     /* El avance del motor: se ve solo mientras corre */
     ctx->progress = gtk_progress_bar_new();
     gtk_progress_bar_set_show_text(GTK_PROGRESS_BAR(ctx->progress), TRUE);
-    gtk_widget_set_size_request(ctx->progress, 260, -1);
+    gtk_widget_set_size_request(ctx->progress, 110, -1);
     gtk_widget_set_valign(ctx->progress, GTK_ALIGN_CENTER);
     gtk_box_pack_start(GTK_BOX(status_bar), ctx->progress, FALSE, FALSE, 4);
     gtk_widget_set_no_show_all(ctx->progress, TRUE);

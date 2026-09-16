@@ -42,8 +42,10 @@ static void pump(int ms) {
 
 int main(int argc, char **argv) {
     FueContext *ctx;
+    GtkApplication *app;
     const char *dir, *model;
     const char *status, *bar_text;
+    gchar *tip;
     gchar *inp;
 
     if (argc < 3) { fprintf(stderr, "usage: test_gui <dir> <model>\n"); return 2; }
@@ -56,9 +58,13 @@ int main(int argc, char **argv) {
     }
 
     ctx = g_new0(FueContext, 1);
-    ctx->main_window = create_main_window(NULL, ctx);
-    /* No se ensena: no hace falta para que los widgets funcionen y asi no
-     * aparece una ventana por sorpresa.                                   */
+    app = gtk_application_new("org.atsw.fue.test", G_APPLICATION_FLAGS_NONE);
+    g_application_register(G_APPLICATION(app), NULL, NULL);
+    ctx->main_window = create_main_window(app, ctx);
+    /* Se "ensenan" los widgets -- hace falta para que el cuaderno pueda
+     * cambiar de pestana -- pero la ventana NO se muestra, asi que no
+     * aparece nada en la pantalla.                                       */
+    gtk_widget_show_all(gtk_bin_get_child(GTK_BIN(ctx->main_window)));
 
     check(ctx->progress != NULL, "la barra de avance tiene que existir", NULL);
     check(ctx->status_label != NULL, "la barra de estado tiene que existir", NULL);
@@ -83,22 +89,33 @@ int main(int argc, char **argv) {
 
     status   = gtk_label_get_text(GTK_LABEL(ctx->status_label));
     bar_text = gtk_progress_bar_get_text(GTK_PROGRESS_BAR(ctx->progress));
+    tip      = gtk_widget_get_tooltip_text(ctx->status_label);
 
     printf("barra de estado : %s\n", status ? status : "(nada)");
     printf("barra de avance : %s  (visible: %s, %.0f%%)\n",
            bar_text ? bar_text : "(nada)",
            gtk_widget_get_visible(ctx->progress) ? "si" : "NO",
            100.0 * gtk_progress_bar_get_fraction(GTK_PROGRESS_BAR(ctx->progress)));
+    printf("globo           : %s\n", tip ? g_strdelimit(tip, "\n", ' ') : "(nada)");
+    printf("pestana         : %d (la consola es la %d)\n",
+           gtk_notebook_get_current_page(GTK_NOTEBOOK(ctx->notebook)), ctx->console_page);
 
     check(gtk_widget_get_visible(ctx->progress),
           "la barra de avance tiene que quedarse a la vista", bar_text);
-    check(bar_text != NULL && strstr(bar_text, "iteration") != NULL,
+    check(bar_text != NULL && strstr(bar_text, "it.") != NULL,
           "y decir cuantas iteraciones hubo", bar_text);
     check(status != NULL && strstr(status, "finished") != NULL,
           "la barra de estado tiene que decir que fue acabo", status);
-    check(status != NULL && strstr(status, "CONVERGENCE") != NULL,
-          "y como convergio", status);
+    check(status != NULL && strstr(status, "converged") != NULL,
+          "y si convergio", status);
+    check(status != NULL && strlen(status) < 60,
+          "y ser corta, para no estirar la ventana", status);
+    check(tip != NULL && strstr(tip, "GRADIENT") != NULL,
+          "el texto entero del motor tiene que quedar en el globo", tip);
+    check(gtk_notebook_get_current_page(GTK_NOTEBOOK(ctx->notebook)) == ctx->console_page,
+          "y saltar a la consola, donde esta todo lo que escribio", status);
     check(!ctx->running, "y no quedarse pensando que sigue corriendo", status);
+    g_free(tip);
 
     printf("\n%d fallos\n", fails);
     return fails == 0 ? 0 : 1;

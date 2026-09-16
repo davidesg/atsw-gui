@@ -150,17 +150,29 @@ gtk_fue.09/
 
 **Run FUE** does not block the interface any more: the engine runs in the
 background and the bar at the bottom shows the iteration the optimizer is
-on and the value of the objective function, as they happen. When it is done
-the bar says how it ended, taking it from the `****` lines the optimizer
-writes in the `.out`:
+on and the value of the objective function, as they happen.
+
+When it is done it says so, short, taking it from the `****` lines the
+optimizer writes in the `.out`:
 
 ```
-fue finished.  CONVERGENCE OBTAINED AFTER 20 ITERATIONS [GRADIENT NORM = 0.0000];
-GRADIENT STOPPING CRITERIUM SATISFIED TO WITHIN TOLERANCE LIMITS
+fue finished: converged (gradtol)        [ 18 it. ]
 ```
 
-and if it did not, what the engine said and why. The engines are run
-directly, never through a shell.
+and the whole of what the optimizer wrote is in the tooltip. The five
+stopping criteria are not all convergence -- the engine writes "CONVERGENCE
+OBTAINED" even when what happened is that it ran out of iterations -- so
+they are told apart:
+
+| the engine says | the bar says |
+|---|---|
+| GRADIENT STOPPING CRITERIUM | `converged (gradtol)` |
+| PARAMETER STOPPING CRITERIUM | `converged (steptol)` |
+| LAST GLOBAL STEP FAILED TO LOCATE A LOWER POINT | `stopped: no lower point` |
+| ITERATION LIMIT REACHED | `NOT converged: iteration limit` |
+| FIVE CONSECUTIVE STEPS OF MAX-LENGTH TAKEN | `stopped: five max-length steps` |
+
+and the window jumps to the **Console**, where the whole `.out` is.
 
 This needs **FUE 1.14 or later and FUF 1.09 or later**: the optimizer writes
 the iterations all in one line, with no newline between them, so before

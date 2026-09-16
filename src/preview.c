@@ -31,6 +31,11 @@
 
 #define PNG_DPI 300.0          /* resolution of the PNG files            */
 #define MARGIN  16             /* around the page in the window (pixels) */
+#define ZOOM_MIN   0.10
+#define ZOOM_MAX  16.00
+#define ZOOM_STEP  1.25        /* one notch of the zoom                   */
+#define GLASS     280          /* the magnifier, in pixels (a square)     */
+#define GLASS_X     4.0        /* and how much it magnifies               */
 
 typedef struct {
     double w, h;               /* page size (points)                      */
@@ -40,14 +45,26 @@ typedef struct {
 
 typedef struct {
     PreviewApp *app;
-    GtkWidget  *window, *area, *prev, *next, *page_label, *page_item;
+    GtkWidget  *window, *area, *scroller, *prev, *next, *page_label, *page_item;
+    GtkWidget  *zoom_label;
     gchar      *path;          /* file shown                              */
     gboolean    is_pdf;
     GArray     *pages;         /* of Page                                 */
     guint       current;
+    double      zoom;          /* 0: the page fits the window; else the    */
+                               /* scale, 1.0 being one point one pixel     */
     cairo_surface_t *cache;    /* the page drawn at the window size       */
     int         cache_w, cache_h;
     guint       cache_page;
+    double      cache_scale;
+    /* Panning with button 1 when the page is larger than the window */
+    gboolean    panning;
+    double      pan_x, pan_y;
+    /* The magnifier, as gv has it: button 3 over the page                 */
+    GtkWidget  *glass;         /* a window without decoration             */
+    GtkWidget  *glass_area;
+    double      glass_px, glass_py;   /* the point of the page it is on    */
+    double      glass_zoom;
 } Preview;
 
 static GHashTable *previews = NULL;          /* path -> Preview           */
@@ -926,6 +943,95 @@ static void invalidate(Preview *pv)
         gtk_widget_queue_draw(pv->area);
 }
 
+/* ---------------------------------------------------------------------- */
+/* Zoom                                                                   */
+/* ---------------------------------------------------------------------- */
+
+/* The scale the page is drawn at: pv->zoom, or the one that makes it fit
+ * the window when pv->zoom is 0.                                         */
+static double page_scale(Preview *pv)
+{
+    const Page *pg = &g_array_index(pv->pages, Page, pv->current);
+    GtkAllocation a;
+    double s;
+
+    if (pv->zoom > 0.0) return pv->zoom;
+    gtk_widget_get_allocation(pv->scroller, &a);
+    s = MIN((a.width - 2.0 * MARGIN) / pg->w, (a.height - 2.0 * MARGIN) / pg->h);
+    return (s > 0.0) ? s : 1.0;
+}
+
+/* Where the page is drawn inside the area: in the middle when it is
+ * smaller than the window, against the margin when it is bigger.         */
+static void page_origin(Preview *pv, double s, double *x, double *y)
+{
+    const Page *pg = &g_array_index(pv->pages, Page, pv->current);
+    GtkAllocation a;
+
+    gtk_widget_get_allocation(pv->area, &a);
+    *x = floor(MAX(MARGIN, (a.width  - s * pg->w) / 2.0));
+    *y = floor(MAX(MARGIN, (a.height - s * pg->h) / 2.0));
+}
+
+static void update_zoom(Preview *pv)
+{
+    const Page *pg = &g_array_index(pv->pages, Page, pv->current);
+    double s = page_scale(pv);
+    gchar *text;
+
+    /* The area is as large as the page, so that the scrolled window
+     * scrolls when it does not fit; when it fits, it follows the window. */
+    if (pv->zoom > 0.0)
+        gtk_widget_set_size_request(pv->area, (int) (s * pg->w) + 2 * MARGIN,
+                                              (int) (s * pg->h) + 2 * MARGIN);
+    else
+        gtk_widget_set_size_request(pv->area, 240, 160);
+
+    text = g_strdup_printf(" %d%% ", (int) (s * 100.0 + 0.5));
+    gtk_label_set_text(GTK_LABEL(pv->zoom_label), text);
+    g_free(text);
+    invalidate(pv);
+}
+
+/* Zoom around a point of the window (the pointer), so that what is under
+ * it stays under it.                                                     */
+static void zoom_to(Preview *pv, double want, double at_x, double at_y)
+{
+    GtkAdjustment *ha, *va;
+    double s0 = page_scale(pv), x0, y0, px, py, s1, x1, y1;
+
+    want = CLAMP(want, ZOOM_MIN, ZOOM_MAX);
+    if (want == pv->zoom) return;
+    page_origin(pv, s0, &x0, &y0);
+    ha = gtk_scrolled_window_get_hadjustment(GTK_SCROLLED_WINDOW(pv->scroller));
+    va = gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(pv->scroller));
+    /* the point of the page under (at_x, at_y) */
+    px = (gtk_adjustment_get_value(ha) + at_x - x0) / s0;
+    py = (gtk_adjustment_get_value(va) + at_y - y0) / s0;
+
+    pv->zoom = want;
+    update_zoom(pv);
+
+    s1 = page_scale(pv);
+    page_origin(pv, s1, &x1, &y1);
+    gtk_adjustment_set_value(ha, px * s1 + x1 - at_x);
+    gtk_adjustment_set_value(va, py * s1 + y1 - at_y);
+}
+
+static void zoom_by(Preview *pv, double factor)
+{
+    GtkAllocation a;
+
+    gtk_widget_get_allocation(pv->scroller, &a);
+    zoom_to(pv, page_scale(pv) * factor, a.width / 2.0, a.height / 2.0);
+}
+
+static void zoom_fit(Preview *pv)
+{
+    pv->zoom = 0.0;
+    update_zoom(pv);
+}
+
 static void update_pages(Preview *pv)
 {
     gchar *text;
@@ -937,7 +1043,7 @@ static void update_pages(Preview *pv)
     gtk_widget_set_visible(pv->page_item, several);
     gtk_widget_set_sensitive(pv->prev, pv->current > 0);
     gtk_widget_set_sensitive(pv->next, pv->current + 1 < pv->pages->len);
-    invalidate(pv);
+    update_zoom(pv);
 }
 
 static void go_to(Preview *pv, gint page)
@@ -954,11 +1060,11 @@ static gboolean on_draw(GtkWidget *area, cairo_t *cr, Preview *pv)
     GtkAllocation a;
     const Page *pg = &g_array_index(pv->pages, Page, pv->current);
     cairo_t *cache_cr;
-    double s, x, y;
+    double s = page_scale(pv), x, y;
 
     gtk_widget_get_allocation(area, &a);
     if (pv->cache == NULL || pv->cache_w != a.width || pv->cache_h != a.height ||
-        pv->cache_page != pv->current) {
+        pv->cache_page != pv->current || pv->cache_scale != s) {
         if (pv->cache != NULL)
             cairo_surface_destroy(pv->cache);
         pv->cache = gdk_window_create_similar_surface(gtk_widget_get_window(area),
@@ -966,14 +1072,13 @@ static gboolean on_draw(GtkWidget *area, cairo_t *cr, Preview *pv)
         pv->cache_w = a.width;
         pv->cache_h = a.height;
         pv->cache_page = pv->current;
+        pv->cache_scale = s;
 
         cache_cr = cairo_create(pv->cache);
         cairo_set_source_rgb(cache_cr, 0.62, 0.62, 0.62);
         cairo_paint(cache_cr);
-        s = MIN((a.width - 2.0 * MARGIN) / pg->w, (a.height - 2.0 * MARGIN) / pg->h);
         if (s > 0.0) {
-            x = floor((a.width - s * pg->w) / 2.0);
-            y = floor((a.height - s * pg->h) / 2.0);
+            page_origin(pv, s, &x, &y);
             cairo_set_source_rgb(cache_cr, 0.40, 0.40, 0.40);   /* shadow */
             cairo_rectangle(cache_cr, x + 3, y + 3, s * pg->w, s * pg->h);
             cairo_fill(cache_cr);
@@ -987,10 +1092,169 @@ static gboolean on_draw(GtkWidget *area, cairo_t *cr, Preview *pv)
 
     /* GTK+3 hands the cairo context in, already clipped to what needs
      * redrawing: the page is only redrawn into the cache when the window
-     * changes size or the page changes.                                  */
+     * changes size, the page changes or the zoom changes.                */
     cairo_set_source_surface(cr, pv->cache, 0, 0);
     cairo_paint(cr);
     return TRUE;
+}
+
+/* ---------------------------------------------------------------------- */
+/* The magnifier, as gv has it: hold button 3 over the page and the bit    */
+/* under the pointer is drawn again, larger, in a window that follows it.  */
+/* It is drawn from the content stream, not from the cache, so what it     */
+/* shows has the resolution of the page, not of the screen: that is what   */
+/* lets one look at an incident in the data.                               */
+/* ---------------------------------------------------------------------- */
+
+static gboolean on_glass_draw(GtkWidget *w, cairo_t *cr, Preview *pv)
+{
+    const Page *pg = &g_array_index(pv->pages, Page, pv->current);
+    double s = page_scale(pv) * pv->glass_zoom;
+
+    cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
+    cairo_paint(cr);
+    /* the point of the page under the pointer, in the middle of the glass */
+    draw_page(cr, pg, GLASS / 2.0 - s * pv->glass_px,
+                      GLASS / 2.0 - s * (pg->h - pv->glass_py), s);
+    cairo_set_source_rgb(cr, 0.0, 0.0, 0.0);
+    cairo_set_line_width(cr, 2.0);
+    cairo_rectangle(cr, 1.0, 1.0, GLASS - 2.0, GLASS - 2.0);
+    cairo_stroke(cr);
+    return TRUE;
+}
+
+/* Where the pointer is, in points of the page (y from the bottom, as the
+ * page has it).                                                          */
+static void glass_point(Preview *pv, double wx, double wy)
+{
+    const Page *pg = &g_array_index(pv->pages, Page, pv->current);
+    double s = page_scale(pv), x, y;
+
+    page_origin(pv, s, &x, &y);
+    pv->glass_px = (wx - x) / s;
+    pv->glass_py = pg->h - (wy - y) / s;
+}
+
+static void glass_move(Preview *pv)
+{
+    GdkDisplay *display = gtk_widget_get_display(pv->window);
+    GdkSeat *seat = gdk_display_get_default_seat(display);
+    GdkDevice *mouse = gdk_seat_get_pointer(seat);
+    int rx, ry;
+
+    gdk_device_get_position(mouse, NULL, &rx, &ry);
+    gtk_window_move(GTK_WINDOW(pv->glass), rx - GLASS / 2, ry - GLASS / 2);
+    gtk_widget_queue_draw(pv->glass_area);
+}
+
+static void glass_show(Preview *pv, double wx, double wy)
+{
+    if (pv->glass == NULL) {
+        pv->glass = gtk_window_new(GTK_WINDOW_POPUP);
+        gtk_window_set_transient_for(GTK_WINDOW(pv->glass), GTK_WINDOW(pv->window));
+        gtk_widget_set_size_request(pv->glass, GLASS, GLASS);
+        pv->glass_area = gtk_drawing_area_new();
+        gtk_container_add(GTK_CONTAINER(pv->glass), pv->glass_area);
+        g_signal_connect(pv->glass_area, "draw", G_CALLBACK(on_glass_draw), pv);
+        gtk_widget_show_all(pv->glass_area);
+    }
+    pv->glass_zoom = GLASS_X;
+    glass_point(pv, wx, wy);
+    gtk_widget_show(pv->glass);
+    glass_move(pv);
+}
+
+static void glass_hide(Preview *pv)
+{
+    if (pv->glass != NULL)
+        gtk_widget_hide(pv->glass);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Mouse: button 1 drags the page when it does not fit, button 3 is the    */
+/* magnifier, and the wheel with Ctrl zooms where the pointer is.          */
+/* ---------------------------------------------------------------------- */
+
+/* With "fit", the scale follows the window: the label has to follow too. */
+static void on_area_resize(GtkWidget *w, GdkRectangle *alloc, Preview *pv)
+{
+    if (pv->zoom == 0.0 && pv->zoom_label != NULL) {
+        gchar *text = g_strdup_printf(" %d%% ", (int) (page_scale(pv) * 100.0 + 0.5));
+
+        gtk_label_set_text(GTK_LABEL(pv->zoom_label), text);
+        g_free(text);
+    }
+}
+
+static gboolean on_button_press(GtkWidget *area, GdkEventButton *ev, Preview *pv)
+{
+    if (ev->button == 3 || (ev->button == 1 && (ev->state & GDK_SHIFT_MASK))) {
+        glass_show(pv, ev->x, ev->y);
+        return TRUE;
+    }
+    if (ev->button == 1) {
+        pv->panning = TRUE;
+        pv->pan_x = ev->x_root;
+        pv->pan_y = ev->y_root;
+        gdk_window_set_cursor(gtk_widget_get_window(area),
+                              gdk_cursor_new_from_name(gtk_widget_get_display(area), "grabbing"));
+        return TRUE;
+    }
+    return FALSE;
+}
+
+static gboolean on_button_release(GtkWidget *area, GdkEventButton *ev, Preview *pv)
+{
+    glass_hide(pv);
+    if (pv->panning) {
+        pv->panning = FALSE;
+        gdk_window_set_cursor(gtk_widget_get_window(area), NULL);
+    }
+    return TRUE;
+}
+
+static gboolean on_motion(GtkWidget *area, GdkEventMotion *ev, Preview *pv)
+{
+    if (pv->glass != NULL && gtk_widget_get_visible(pv->glass)) {
+        glass_point(pv, ev->x, ev->y);
+        glass_move(pv);
+        return TRUE;
+    }
+    if (pv->panning) {
+        GtkAdjustment *ha = gtk_scrolled_window_get_hadjustment(GTK_SCROLLED_WINDOW(pv->scroller));
+        GtkAdjustment *va = gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(pv->scroller));
+
+        gtk_adjustment_set_value(ha, gtk_adjustment_get_value(ha) - (ev->x_root - pv->pan_x));
+        gtk_adjustment_set_value(va, gtk_adjustment_get_value(va) - (ev->y_root - pv->pan_y));
+        pv->pan_x = ev->x_root;
+        pv->pan_y = ev->y_root;
+        return TRUE;
+    }
+    return FALSE;
+}
+
+static gboolean on_scroll(GtkWidget *area, GdkEventScroll *ev, Preview *pv)
+{
+    if ((ev->state & GDK_CONTROL_MASK) == 0)
+        return FALSE;                         /* sin Ctrl, que se desplace */
+    if (ev->direction == GDK_SCROLL_UP)
+        zoom_to(pv, page_scale(pv) * ZOOM_STEP, ev->x, ev->y);
+    else if (ev->direction == GDK_SCROLL_DOWN)
+        zoom_to(pv, page_scale(pv) / ZOOM_STEP, ev->x, ev->y);
+    else if (ev->direction == GDK_SCROLL_SMOOTH && ev->delta_y != 0.0)
+        zoom_to(pv, page_scale(pv) * pow(ZOOM_STEP, -ev->delta_y), ev->x, ev->y);
+    return TRUE;
+}
+
+static void on_zoom_in(GtkButton *b, Preview *pv)  { zoom_by(pv, ZOOM_STEP); }
+static void on_zoom_out(GtkButton *b, Preview *pv) { zoom_by(pv, 1.0 / ZOOM_STEP); }
+static void on_zoom_fit(GtkButton *b, Preview *pv) { zoom_fit(pv); }
+static void on_zoom_one(GtkButton *b, Preview *pv)
+{
+    GtkAllocation a;
+
+    gtk_widget_get_allocation(pv->scroller, &a);
+    zoom_to(pv, 1.0, a.width / 2.0, a.height / 2.0);
 }
 
 static void on_save(GtkButton *b, Preview *pv)    { save_dialog(pv); }
@@ -1020,6 +1284,18 @@ static gboolean on_key(GtkWidget *w, GdkEventKey *event, Preview *pv)
     case GDK_KEY_Escape:
         gtk_widget_destroy(pv->window);
         return TRUE;
+    case GDK_KEY_plus: case GDK_KEY_equal: case GDK_KEY_KP_Add:
+        zoom_by(pv, ZOOM_STEP);
+        return TRUE;
+    case GDK_KEY_minus: case GDK_KEY_KP_Subtract:
+        zoom_by(pv, 1.0 / ZOOM_STEP);
+        return TRUE;
+    case GDK_KEY_0: case GDK_KEY_KP_0:
+        zoom_fit(pv);
+        return TRUE;
+    case GDK_KEY_1: case GDK_KEY_KP_1:
+        on_zoom_one(NULL, pv);
+        return TRUE;
     case GDK_KEY_s: case GDK_KEY_S:
         if (ctrl) { save_dialog(pv); return TRUE; }
         break;
@@ -1036,6 +1312,8 @@ static gboolean on_key(GtkWidget *w, GdkEventKey *event, Preview *pv)
 static void on_destroy(GtkWidget *w, Preview *pv)
 {
     g_hash_table_remove(previews, pv->path);
+    if (pv->glass != NULL)
+        gtk_widget_destroy(pv->glass);
     if (pv->cache != NULL)
         cairo_surface_destroy(pv->cache);
     pages_free(pv->pages);
@@ -1089,7 +1367,7 @@ static void preview_screen_size(GtkWidget *window, int *w, int *h)
 static Preview *preview_new(PreviewApp *app, const gchar *path)
 {
     Preview *pv = g_new0(Preview, 1);
-    GtkWidget *vbox, *bar;
+    GtkWidget *vbox, *bar, *zoom_item;
 
     pv->app = app;
     pv->path = g_strdup(path);
@@ -1108,6 +1386,19 @@ static Preview *preview_new(PreviewApp *app, const gchar *path)
                FALSE, G_CALLBACK(on_print), pv);
     bar_button(bar, "document-open", "_External Viewer", "Open the file with the viewer of the system",
                FALSE, G_CALLBACK(on_viewer), pv);
+    zoom_item = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    gtk_box_pack_start(GTK_BOX(bar), zoom_item, FALSE, FALSE, 12);
+    bar_button(zoom_item, "zoom-out", NULL, "Smaller (-)",
+               FALSE, G_CALLBACK(on_zoom_out), pv);
+    pv->zoom_label = gtk_label_new(NULL);
+    gtk_box_pack_start(GTK_BOX(zoom_item), pv->zoom_label, FALSE, FALSE, 0);
+    bar_button(zoom_item, "zoom-in", NULL, "Larger (+)",
+               FALSE, G_CALLBACK(on_zoom_in), pv);
+    bar_button(zoom_item, "zoom-fit-best", NULL, "Fit the page in the window (0)",
+               FALSE, G_CALLBACK(on_zoom_fit), pv);
+    bar_button(zoom_item, "zoom-original", NULL, "One point, one pixel (1)",
+               FALSE, G_CALLBACK(on_zoom_one), pv);
+
     pv->page_item = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
     gtk_box_pack_start(GTK_BOX(bar), pv->page_item, FALSE, FALSE, 12);
     pv->prev = bar_button(pv->page_item, "go-previous", NULL, "Previous page (Page Up)",
@@ -1119,10 +1410,25 @@ static Preview *preview_new(PreviewApp *app, const gchar *path)
     bar_button(bar, "window-close", "_Close", "Close the window (Esc)",
                TRUE, G_CALLBACK(on_close), pv);
 
+    /* The page goes inside a scrolled window: when the zoom makes it
+     * larger than the window there is something to scroll.               */
+    pv->scroller = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(pv->scroller),
+                                   GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+    gtk_box_pack_start(GTK_BOX(vbox), pv->scroller, TRUE, TRUE, 0);
+
     pv->area = gtk_drawing_area_new();
     gtk_widget_set_app_paintable(pv->area, TRUE);
-    gtk_box_pack_start(GTK_BOX(vbox), pv->area, TRUE, TRUE, 0);
+    gtk_widget_add_events(pv->area, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK |
+                                    GDK_POINTER_MOTION_MASK | GDK_SCROLL_MASK |
+                                    GDK_SMOOTH_SCROLL_MASK);
+    gtk_container_add(GTK_CONTAINER(pv->scroller), pv->area);
     g_signal_connect(pv->area, "draw", G_CALLBACK(on_draw), pv);
+    g_signal_connect(pv->area, "button-press-event", G_CALLBACK(on_button_press), pv);
+    g_signal_connect(pv->area, "button-release-event", G_CALLBACK(on_button_release), pv);
+    g_signal_connect(pv->area, "motion-notify-event", G_CALLBACK(on_motion), pv);
+    g_signal_connect(pv->area, "scroll-event", G_CALLBACK(on_scroll), pv);
+    g_signal_connect(pv->area, "size-allocate", G_CALLBACK(on_area_resize), pv);
     g_signal_connect(pv->window, "key-press-event", G_CALLBACK(on_key), pv);
     g_signal_connect(pv->window, "destroy", G_CALLBACK(on_destroy), pv);
 

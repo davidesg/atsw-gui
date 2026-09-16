@@ -155,6 +155,19 @@ page buttons, *Save As* (PDF, EPS, PNG or SVG) and *Print*. A PDF that was
 not drawn by the engines -- one compiled by pdflatex, for instance -- is
 handed to the viewer of the system, as before.
 
+| | |
+|---|---|
+| `+` `-` or **Ctrl+wheel** | larger, smaller (around the pointer) |
+| `0` / `1` | fit the page in the window / one point, one pixel |
+| **drag with button 1** | move the page when it does not fit |
+| **hold button 3** | the magnifier: the bit under the pointer, drawn again and larger, in a window that follows it |
+| `Page Up` `Page Down` `Home` `End` | pages |
+| `Ctrl+S` `Ctrl+P` `Esc` | save as, print, close |
+
+The magnifier draws from the content stream, not from what is on the
+screen, so it has the resolution of the page however small the window is:
+that is what lets one look closely at an incident in the data.
+
 `src/preview.c` is the same file as `gui/src/preview.c` of FUG, ported to
 GTK+3; what each program has to supply is in `include/previewhost.h`. The
 two copies are meant to become one library.

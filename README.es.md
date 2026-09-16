@@ -16,6 +16,19 @@ los botones de página, *Save As* (PDF, EPS, PNG o SVG) e *Imprimir*. Un PDF
 que no hayan dibujado los motores —uno compilado por pdflatex, por ejemplo—
 se le pasa al visor del sistema, como antes.
 
+| | |
+|---|---|
+| `+` `-` o **Ctrl+rueda** | ampliar, reducir (alrededor del puntero) |
+| `0` / `1` | ajustar la página a la ventana / un punto, un píxel |
+| **arrastrar con el botón 1** | mover la página cuando no cabe |
+| **mantener el botón 3** | la lupa: lo que hay bajo el puntero, redibujado más grande, en una ventana que lo sigue |
+| `Re Pág` `Av Pág` `Inicio` `Fin` | páginas |
+| `Ctrl+S` `Ctrl+P` `Esc` | guardar como, imprimir, cerrar |
+
+La lupa dibuja desde el flujo de la página, no desde lo que hay en la
+pantalla, así que tiene la resolución de la página por pequeña que sea la
+ventana: eso es lo que permite mirar de cerca un incidente en los datos.
+
 `src/preview.c` es el mismo fichero que `gui/src/preview.c` de FUG, portado
 a GTK+3; lo que cada programa tiene que aportar está en
 `include/previewhost.h`. Las dos copias están para acabar siendo una

@@ -5,9 +5,25 @@
 /* The page has the same parts as the one that pdflatex made: the heading of */
 /* the series, the table of the forecasts with their standard errors, and    */
 /* the graph. The forecast rows keep the grey background they had.           */
+/*                                                                           */
+/* The measures are those of the report as it is published (the table of     */
+/* PO11.1_prev.7.2004 of the thesis, compiled with the preamble that         */
+/* make_latex_forecast() writes): the head is a box with a rule between its  */
+/* columns, the rule of \cline{2-7} under LEVEL and LOG RATE OF CHANGE, and  */
+/* the rule that closes it; the rows are 12.96 pt apart; the graph goes at   */
+/* 0.60 of its size, 18.10 pt to the right of the table and with its top     */
+/* against the top of the table. There is no rule under the last row.        */
+/*                                                                           */
+/* The units: when the series is in logarithms the changes are rates, and    */
+/* they are written in per cent as they always were. When it is not, they    */
+/* are changes in the units of the series, and multiplying them by 100 only  */
+/* filled the table with numbers that did not fit. What is in the units of   */
+/* the series is then divided, if it is large, by a thousand or a million,   */
+/* and the heading of the page says so after "Base/Unit:".                   */
 /*****************************************************************************/
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include "report.h"
@@ -18,36 +34,69 @@ extern void ObsToDate( int beg_per, int beg_sub, int obs_no, int freq,
 #define F_TEXT  FD_HELV
 #define F_BOLD  FD_HELV_BOLD
 
-#define SZ      8.0                  /* the table                            */
-#define SZ_HEAD 10.0                 /* the heading of the page              */
-#define ROW     (1.55 * SZ)
-#define GREY    0.93                 /* the background of the forecast rows  */
+#define SZ       10.7                /* the data of the table                */
+#define SZ_LAB    9.4                /* its headings                         */
+#define SZ_HEAD  11.0                /* the heading of the page              */
+#define ROW      12.96               /* from one row to the next             */
+#define PAD       6.0                /* at each side of a column (\tabcolsep)*/
+#define GREY      0.95               /* the background of the forecast rows  */
+#define LW_RULE   0.5
 
-/* The eight columns of the table, as in the LaTeX one */
+/* The head, from the top rule down (the rule itself is at 0) */
+#define H_GRP    16.40               /* LEVEL, LOG RATE OF CHANGE            */
+#define H_CLINE  26.96               /* the rule under them (columns 2..7)   */
+#define H_LAB    45.68               /* DATE VALUE Std ...                   */
+#define H_UNIT   58.10               /* the (%)                              */
+#define H_RULE   63.36               /* the rule that closes the head        */
+#define H_DATA   86.08               /* the first row of data                */
+
+#define BAND_UP   9.76               /* the grey band, over the base line    */
+
+/* The page */
+#define PW      841.89
+#define PH      595.276
+#define MARGIN   36.0
+#define Y_NAME   65.76               /* base lines of the heading, from the  */
+#define Y_DESC   79.36               /* top of the page                      */
+#define Y_ORIG   92.96
+#define Y_TABLE 108.48               /* the top rule of the table            */
+
+#define GRAPH_SCALE 0.60
+#define GRAPH_GAP   18.10
+
 #define NCOL 8
-static const double col_w[NCOL] = { 5.6, 5.4, 4.2, 4.6, 4.2, 4.6, 4.2, 4.6 };
+#define CELL 24
+#define BIG  100000.0                /* more digits than a column can hold   */
 
-static double table_width( void )
+typedef struct {
+   char   date[CELL];
+   char   text[NCOL][CELL];
+   double v[NCOL];                   /* the numbers, before they are scaled  */
+   char   has[NCOL];                 /* 0: the column shows a dash           */
+   int    shaded;                    /* a forecast row                       */
+   int    gap;                       /* a blank row before it                */
+} Row;
+
+/* The metrics above, shrunk by fit when the table would not fit the page */
+typedef struct {
+   double sz, lab, row, pad;
+   double grp, cline, lab_y, unit, rule, data, band;
+} Metrics;
+
+static void rule( FDFig *f, double x, double y, double w )
 {
-   double w = 0.0;
-   int    i;
-
-   for ( i = 0; i < NCOL; i++ ) w += col_w[i] * SZ;
-   return( w );
+   fd_gray( f, 0.0 );
+   fd_linewidth( f, LW_RULE );
+   fd_dash( f, 0.0, 0.0 );
+   fd_line( f, x, y, x + w, y );
 }
 
-/* One row of the table: text[] has one string for each column */
-static void row( FDFig *f, double x, double y, char text[NCOL][32] )
+static void vrule( FDFig *f, double x, double y0, double y1 )
 {
-   double cx = x;
-   int    i;
-
-   for ( i = 0; i < NCOL; i++ )
-       {
-       if ( text[i][0] != '\0' )
-          fd_text( f, cx + col_w[i] * SZ / 2.0, y, F_TEXT, SZ, FD_CENTER, text[i] );
-       cx += col_w[i] * SZ;
-       }
+   fd_gray( f, 0.0 );
+   fd_linewidth( f, LW_RULE );
+   fd_dash( f, 0.0, 0.0 );
+   fd_line( f, x, y0, x, y1 );
 }
 
 /* A grey band is drawn as a very thick line inside a clip: fugdraw has no
@@ -56,17 +105,27 @@ static void band( FDFig *f, double x, double y, double w, double h, double gray 
 {
    fd_gray( f, gray );
    fd_linewidth( f, h );
+   fd_dash( f, 0.0, 0.0 );
    fd_line( f, x, y + h / 2.0, x + w, y + h / 2.0 );
    fd_gray( f, 0.0 );
-   fd_linewidth( f, 0.4 );
+   fd_linewidth( f, LW_RULE );
 }
 
-static void rule( FDFig *f, double x, double y, double w )
+/* One row of the table: a number goes against the right of its column and a
+ * dash, which says that there is no number, goes in the middle.            */
+static void draw_row( FDFig *f, const double *cx, double y, const Row *r,
+                      const Metrics *m )
 {
-   fd_gray( f, 0.0 );
-   fd_linewidth( f, 0.5 );
-   fd_dash( f, 0.0, 0.0 );
-   fd_line( f, x, y, x + w, y );
+   int i;
+
+   fd_text( f, cx[1] - m->pad, y, F_TEXT, m->sz, FD_RIGHT, r->date );
+   for ( i = 1; i < NCOL; i++ )
+       {
+       if ( r->has[i] )
+          fd_text( f, cx[i+1] - m->pad, y, F_TEXT, m->sz, FD_RIGHT, r->text[i] );
+       else
+          fd_text( f, ( cx[i] + cx[i+1] ) / 2.0, y, F_TEXT, m->sz, FD_CENTER, "-" );
+       }
 }
 
 /*****************************************************************************/
@@ -77,128 +136,223 @@ int report_write_pdf( const char *filename, FDFig *graph, const char *name,
                       double **f3, double ***v1, double ***v2, double ***v3,
                       double boxlam, double refactor )
 {
-   const double PW = 841.89, PH = 595.276, margin = 36.0;
-   double       x[2], y[2], scale[2], gw, gh, s, tx, ty, w, top;
-   char         text[NCOL][32];
+   const char  *label[NCOL], *unit[NCOL];
+   const char  *grp1 = "LEVEL", *grp2;
+   const char  *scale_word = "";
+   double       cx[NCOL+1], w[NCOL], tw, gw, gh, s, ty, top, left, block;
+   double       x[2], y[2], scale[2], need, avail, fit, d, pct, div, big;
+   char         line[160];
+   Metrics      m;
+   Row         *rows;
    FDFig       *page, *figs[2];
    FDPdf       *pdf;
-   int          i, n = 0, status, period, season, last_year = 1;
+   int          i, j, n = 0, nr = 0, cap, status, period, season;
+   int          last_year = 1, logs;
 
-   if ( ( page = fd_fig_new( PW, PH ) ) == NULL ) return( 1 );
+   logs = ( boxlam == 0.0 );
+   pct  = logs ? 100.0 : 1.0;      /* in logarithms a change is a rate, in % */
+   grp2 = logs ? "LOG RATE OF CHANGE" : "CHANGE";
 
-/* [1]: the heading                                                          */
+   label[0] = "DATE";
+   label[1] = "VALUE";
+   label[2] = "Std";
+   label[3] = ( freq == 4 ) ? "QUART" : "MONT";
+   label[4] = "Std";
+   label[5] = "ANUAL";
+   label[6] = "Std";
+   label[7] = "ERR";
+   for ( i = 0; i < NCOL; i++ ) unit[i] = "";
+   if ( logs ) for ( i = 2; i < NCOL; i++ ) unit[i] = "(%)";
 
-   ty = PH - margin - SZ_HEAD;
-   fd_text( page, PW / 2.0, ty, F_BOLD, SZ_HEAD + 2.0, FD_CENTER, name );
-   ty -= 1.8 * SZ_HEAD;
-   fd_text( page, PW / 2.0, ty, F_BOLD, SZ_HEAD, FD_CENTER, "Series brief description" );
-   ty -= 1.8 * SZ_HEAD;
-   ObsToDate( begyear, begtime, nobs, freq, &period, &season );
-   if ( freq == 1 )
-      snprintf( text[0], sizeof( text[0] ), "%d", period );
-   else
-      snprintf( text[0], sizeof( text[0] ), "%d/%d", season, period );
-   {
-   char line[160];
+/* [1]: the rows of the table, before anything is drawn: their width is what
+ *      says how wide each column has to be.                                 */
 
-   snprintf( line, sizeof( line ), "Base/Unit:      Data Source:      Forecast Origin: %s",
-             text[0] );
-   fd_text( page, PW / 2.0, ty, F_TEXT, SZ_HEAD, FD_CENTER, line );
-   }
+   cap = L + L / 2 + 8;
+   if ( ( rows = calloc( (size_t)cap, sizeof( Row ) ) ) == NULL ) return( 1 );
 
-   top = ty - 1.6 * SZ_HEAD;        /* under the heading: the table and the graph */
-
-/* [2]: the table, at the left                                               */
-
-   w  = table_width();
-   tx = margin + 10.0;
-   ty = top - 1.4 * SZ_HEAD;
-
-   rule( page, tx, ty + 1.5 * SZ, w );
-   memset( text, 0, sizeof( text ) );
-   snprintf( text[1], sizeof( text[1] ), "LEVEL" );
-   snprintf( text[4], sizeof( text[4] ), "LOG RATE OF CHANGE" );
-   fd_text( page, tx + (col_w[1] + col_w[2]) * SZ / 2.0 + col_w[0] * SZ, ty, F_TEXT,
-            SZ, FD_CENTER, "LEVEL" );
-   fd_text( page, tx + (col_w[0] + col_w[1] + col_w[2]) * SZ
-                  + (col_w[3] + col_w[4] + col_w[5] + col_w[6]) * SZ / 2.0, ty,
-            F_TEXT, SZ, FD_CENTER, "LOG RATE OF CHANGE" );
-   ty -= ROW;
-   memset( text, 0, sizeof( text ) );
-   snprintf( text[0], sizeof( text[0] ), "DATE" );
-   snprintf( text[1], sizeof( text[1] ), "VALUE" );
-   snprintf( text[2], sizeof( text[2] ), "Std" );
-   snprintf( text[3], sizeof( text[3] ), "%s", ( freq == 4 ) ? "QUART" : "MONT" );
-   snprintf( text[4], sizeof( text[4] ), "Std" );
-   snprintf( text[5], sizeof( text[5] ), "ANUAL" );
-   snprintf( text[6], sizeof( text[6] ), "Std" );
-   snprintf( text[7], sizeof( text[7] ), "ERR" );
-   row( page, tx, ty, text );
-   ty -= ROW;
-   memset( text, 0, sizeof( text ) );
-   for ( i = 2; i < NCOL; i++ ) snprintf( text[i], sizeof( text[i] ), "(%%)" );
-   row( page, tx, ty, text );
-   ty -= 0.5 * ROW;
-   rule( page, tx, ty + 0.9 * SZ, w );
-
-   /* the last observations */
    for ( i = nobs - L / 2; i <= nobs; i++ )
        {
-       ty -= ROW;
-       memset( text, 0, sizeof( text ) );
+       Row *r = &rows[nr++];
+
        ObsToDate( begyear, begtime, i, freq, &period, &season );
-       if ( freq == 1 ) snprintf( text[0], sizeof( text[0] ), "%d", period );
-       else snprintf( text[0], sizeof( text[0] ), "%d/%d", season, period );
-       snprintf( text[1], sizeof( text[1] ), "%.2f",
-                 ( boxlam == 0 ) ? exp( data[i] / refactor ) : data[i] / refactor );
-       snprintf( text[2], sizeof( text[2] ), "-" );
-       snprintf( text[3], sizeof( text[3] ), "%.2f", 100 * (data[i] - data[i-1]) / refactor );
-       snprintf( text[4], sizeof( text[4] ), "-" );
-       snprintf( text[5], sizeof( text[5] ), "%.2f",
-                 100 * (data[i] - data[i-freq]) / refactor );
-       snprintf( text[6], sizeof( text[6] ), "-" );
-       snprintf( text[7], sizeof( text[7] ), "%.2f", 100 * a[1][i-ornsop] / refactor );
-       row( page, tx, ty, text );
+       if ( freq == 1 ) snprintf( r->date, CELL, "%d", period );
+       else snprintf( r->date, CELL, "%d/%d", season, period );
+       r->v[1] = logs ? exp( data[i] / refactor ) : data[i] / refactor;
+       r->v[3] = pct * ( data[i] - data[i-1] ) / refactor;
+       r->v[5] = pct * ( data[i] - data[i-freq] ) / refactor;
+       r->v[7] = pct * a[1][i-ornsop] / refactor;
+       r->has[1] = r->has[3] = r->has[5] = r->has[7] = 1;
        }
 
    /* The forecasts, shaded as they were in the LaTeX table: the first L/2
     * one by one and, after a gap, only the ends of year of the rest.       */
-   for ( i = 1; i <= L; i++ )
+   for ( i = 1; i <= L && nr < cap; i++ )
        {
+       Row *r;
+
        ObsToDate( begyear, begtime, nobs + i, freq, &period, &season );
        if ( i > L / 2 )
           {
           if ( freq > 1 && season != freq ) continue;
-          if ( i == L / 2 + 1 || last_year ) ty -= 0.7 * ROW;   /* the gap   */
+          if ( i == L / 2 + 1 || last_year ) rows[nr].gap = 1;
           last_year = 0;
           }
-       ty -= ROW;
-       band( page, tx, ty - 0.32 * SZ, w, ROW, GREY );
-       memset( text, 0, sizeof( text ) );
-       if ( freq == 1 ) snprintf( text[0], sizeof( text[0] ), "%d", period );
-       else snprintf( text[0], sizeof( text[0] ), "%d/%d", season, period );
-       snprintf( text[1], sizeof( text[1] ), "%.2f",
-                 ( boxlam == 0 ) ? exp( f1[1][i] / refactor ) : f1[1][i] / refactor );
-       snprintf( text[2], sizeof( text[2] ), "%.2f",
-                 100 * (double)sqrtl( v1[i][1][1] ) / refactor );
-       snprintf( text[3], sizeof( text[3] ), "%.2f", 100 * f2[1][i] / refactor );
-       snprintf( text[4], sizeof( text[4] ), "%.2f",
-                 100 * (double)sqrtl( v2[i][1][1] ) / refactor );
-       snprintf( text[5], sizeof( text[5] ), "%.2f", 100 * f3[1][i] / refactor );
-       snprintf( text[6], sizeof( text[6] ), "%.2f",
-                 100 * (double)sqrtl( v3[i][1][1] ) / refactor );
-       row( page, tx, ty, text );
+       r = &rows[nr++];
+       r->shaded = 1;
+       if ( freq == 1 ) snprintf( r->date, CELL, "%d", period );
+       else snprintf( r->date, CELL, "%d/%d", season, period );
+       r->v[1] = logs ? exp( f1[1][i] / refactor ) : f1[1][i] / refactor;
+       r->v[2] = pct * (double)sqrtl( v1[i][1][1] ) / refactor;
+       r->v[3] = pct * f2[1][i] / refactor;
+       r->v[4] = pct * (double)sqrtl( v2[i][1][1] ) / refactor;
+       r->v[5] = pct * f3[1][i] / refactor;
+       r->v[6] = pct * (double)sqrtl( v3[i][1][1] ) / refactor;
+       for ( j = 1; j <= 6; j++ ) r->has[j] = 1;
        }
-   rule( page, tx, ty - 0.55 * ROW, w );
 
-/* [3]: the graph, at the right                                              */
+/* [2]: the units. What is in the units of the series (the level always, and
+ *      the changes when there are no logarithms) is divided by a thousand or
+ *      a million if it does not fit in a column.                            */
 
-   /* under the heading, so that it does not run into it, and as large as
-    * the page allows                                                       */
-   gw = ( graph != NULL ) ? graph->w : 0.0;
-   gh = ( graph != NULL ) ? graph->h : 0.0;
-   s  = 1.0;
-   if ( gh > 0.0 && s * gh > top - margin ) s = ( top - margin ) / gh;
+   big = 0.0;
+   for ( i = 0; i < nr; i++ )
+       for ( j = 1; j < NCOL; j++ )
+           if ( rows[i].has[j] && ( j == 1 || !logs ) )
+              if ( fabs( rows[i].v[j] ) > big ) big = fabs( rows[i].v[j] );
+   div = 1.0;
+   while ( big / div >= BIG && div < 1e12 ) div *= 1000.0;
+   if ( div >= 1e12 )     scale_word = "billions";
+   else if ( div >= 1e9 ) scale_word = "thousand millions";
+   else if ( div >= 1e6 ) scale_word = "millions";
+   else if ( div >= 1e3 ) scale_word = "thousands";
+
+   for ( i = 0; i < nr; i++ )
+       for ( j = 1; j < NCOL; j++ )
+           if ( rows[i].has[j] )
+              snprintf( rows[i].text[j], CELL, "%.2f",
+                        ( j == 1 || !logs ) ? rows[i].v[j] / div : rows[i].v[j] );
+
+/* [3]: the metrics. The table keeps its measures unless it is too long for
+ *      the page, and then everything in it is shrunk by the same factor.    */
+
+   m.sz = SZ; m.lab = SZ_LAB; m.row = ROW; m.pad = PAD;
+   m.grp = H_GRP; m.cline = H_CLINE; m.lab_y = H_LAB; m.unit = H_UNIT;
+   m.rule = H_RULE; m.data = H_DATA; m.band = BAND_UP;
+
+   for ( i = 0, j = 0; i < nr; i++ ) j += 1 + rows[i].gap;
+   need  = H_DATA + ( j - 1 ) * ROW + 0.4 * SZ;
+   avail = PH - Y_TABLE - MARGIN;
+   if ( need > avail && need > 0.0 )
+      {
+      fit = avail / need;
+      m.sz *= fit; m.lab *= fit; m.row *= fit; m.pad *= fit;
+      m.grp *= fit; m.cline *= fit; m.lab_y *= fit; m.unit *= fit;
+      m.rule *= fit; m.data *= fit; m.band *= fit;
+      }
+
+   for ( i = 0; i < NCOL; i++ )
+       {
+       w[i] = fd_text_width( F_TEXT, m.lab, label[i] );
+       d = fd_text_width( F_TEXT, m.lab, unit[i] );
+       if ( d > w[i] ) w[i] = d;
+       for ( j = 0; j < nr; j++ )
+           {
+           d = fd_text_width( F_TEXT, m.sz,
+                              ( i == 0 ) ? rows[j].date : rows[j].text[i] );
+           if ( d > w[i] ) w[i] = d;
+           }
+       w[i] += 2 * m.pad;
+       }
+   /* the two headings that span several columns have to fit as well */
+   d = fd_text_width( F_TEXT, m.lab, grp1 ) + 2 * m.pad - ( w[1] + w[2] );
+   if ( d > 0.0 ) { w[1] += d / 2.0; w[2] += d / 2.0; }
+   d = fd_text_width( F_TEXT, m.lab, grp2 ) + 2 * m.pad
+       - ( w[3] + w[4] + w[5] + w[6] );
+   if ( d > 0.0 ) for ( i = 3; i <= 6; i++ ) w[i] += d / 4.0;
+
+   tw = 0.0;
+   for ( i = 0; i < NCOL; i++ ) tw += w[i];
+
+/* [4]: where the table and the graph go. They keep the distance they have
+ *      in the published report, and the block is centred on the page.       */
+
+   gw = ( graph != NULL ) ? graph->w * GRAPH_SCALE : 0.0;
+   gh = ( graph != NULL ) ? graph->h * GRAPH_SCALE : 0.0;
+   s  = GRAPH_SCALE;
+   if ( gh > PH - Y_TABLE - MARGIN )            /* a graph that does not fit */
+      {
+      s  = GRAPH_SCALE * ( PH - Y_TABLE - MARGIN ) / gh;
+      gw = graph->w * s;
+      gh = graph->h * s;
+      }
+   block = tw + ( ( graph != NULL ) ? GRAPH_GAP + gw : 0.0 );
+   left  = ( PW - block ) / 2.0;
+   if ( left < MARGIN ) left = MARGIN;
+
+   if ( ( page = fd_fig_new( PW, PH ) ) == NULL ) { free( rows ); return( 1 ); }
+
+/* [5]: the heading of the page                                              */
+
+   fd_text( page, PW / 2.0, PH - Y_NAME, F_BOLD, SZ_HEAD + 1.0, FD_CENTER, name );
+   fd_text( page, PW / 2.0, PH - Y_DESC, F_BOLD, SZ_HEAD, FD_CENTER,
+            "Series brief description" );
+   ObsToDate( begyear, begtime, nobs, freq, &period, &season );
+   if ( freq == 1 )
+      snprintf( line, sizeof( line ),
+                "Base/Unit: %s      Data Source:      Forecast Origin: %d",
+                scale_word, period );
+   else
+      snprintf( line, sizeof( line ),
+                "Base/Unit: %s      Data Source:      Forecast Origin: %d/%d",
+                scale_word, season, period );
+   fd_text( page, PW / 2.0, PH - Y_ORIG, F_TEXT, SZ_HEAD, FD_CENTER, line );
+
+/* [6]: the head of the table: the box, the two headings that span several
+ *      columns with their rule, the labels and the units.                   */
+
+   top   = PH - Y_TABLE;
+   cx[0] = left;
+   for ( i = 0; i < NCOL; i++ ) cx[i+1] = cx[i] + w[i];
+
+   rule( page, cx[0], top, tw );                          /* \hline          */
+   rule( page, cx[1], top - m.cline, cx[7] - cx[1] );     /* \cline{2-7}     */
+   rule( page, cx[0], top - m.rule, tw );                 /* \hline          */
+   vrule( page, cx[0], top, top - m.rule );
+   vrule( page, cx[1], top, top - m.rule );
+   vrule( page, cx[3], top, top - m.rule );
+   vrule( page, cx[7], top, top - m.rule );
+   vrule( page, cx[8], top, top - m.rule );
+   for ( i = 2; i <= 6; i++ )
+       if ( i != 3 ) vrule( page, cx[i], top - m.cline, top - m.rule );
+
+   fd_text( page, ( cx[1] + cx[3] ) / 2.0, top - m.grp, F_TEXT, m.lab,
+            FD_CENTER, grp1 );
+   fd_text( page, ( cx[3] + cx[7] ) / 2.0, top - m.grp, F_TEXT, m.lab,
+            FD_CENTER, grp2 );
+   for ( i = 0; i < NCOL; i++ )
+       {
+       fd_text( page, ( cx[i] + cx[i+1] ) / 2.0, top - m.lab_y, F_TEXT, m.lab,
+                FD_CENTER, label[i] );
+       if ( unit[i][0] != '\0' )
+          fd_text( page, ( cx[i] + cx[i+1] ) / 2.0, top - m.unit, F_TEXT, m.lab,
+                   FD_CENTER, unit[i] );
+       }
+
+/* [7]: the rows                                                             */
+
+   ty = top - m.data;
+   for ( i = 0; i < nr; i++ )
+       {
+       if ( rows[i].gap ) ty -= m.row;
+       if ( rows[i].shaded )
+          band( page, cx[0], ty - ( m.row - m.band ), tw, m.row, GREY );
+       draw_row( page, cx, ty, &rows[i], &m );
+       ty -= m.row;
+       }
+   free( rows );
+
+/* [8]: the graph, to the right of the table and with its top against the
+ *      top rule, as the published report has it                             */
 
    if ( ( pdf = fd_pdf_open( filename ) ) == NULL )
       {
@@ -213,8 +367,8 @@ int report_write_pdf( const char *filename, FDFig *graph, const char *name,
    if ( graph != NULL )
       {
       figs[n] = graph;
-      x[n] = PW - margin - s * gw;
-      y[n] = top - s * gh;
+      x[n] = cx[NCOL] + GRAPH_GAP;
+      y[n] = top - gh;
       scale[n] = s;
       n++;
       }

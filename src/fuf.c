@@ -1233,7 +1233,7 @@ int main( int argc, char *argv[] )
 /* [8.6] High definition Graphic Forcasting Module   DG 17/02/04                    */               
 
     if (Tm.boxlam < 0) graph_fig = forecast_graphic_BC (  Fs.data, varma1.a, Fs.f1, Fs.v1, Tm.ornsop, 100*sqrt(Fs.sigma2), Ts.begyear, Ts.begtime, Ts.nobs, Fs.L, Ts.freq, Tm.boxlam, x11out, Ts.refactor );
-    else graph_fig = forecast_graphic (  Fs.data, varma1.a, Fs.f3, Fs.v3, Tm.ornsop, 100*Fs.sigma2/Ts.refactor, Ts.begyear, Ts.begtime, Ts.nobs, Fs.L, Ts.freq, x11out, Ts.refactor );
+    else graph_fig = forecast_graphic (  Fs.data, varma1.a, Fs.f3, Fs.v3, Tm.ornsop, Fs.sigma2, Ts.begyear, Ts.begtime, Ts.nobs, Fs.L, Ts.freq, Tm.boxlam, x11out, Ts.refactor );
 
 /* The report in PDF, drawn by fuf itself (src/report.c): the heading, the
  * table of the forecasts and the graph. With -latex the .tex file is
@@ -1258,8 +1258,10 @@ int main( int argc, char *argv[] )
     
     
    fprintf( prevputv,"\\begin{flushleft} \n");
-   if (Fs.L > 20 ) fprintf( prevputv,"\\includegraphics[scale=.90]{prev%s.%d%d.eps} \n", x11out, Fs.Asub, Fs.Aper );
-   else fprintf( prevputv,"\\includegraphics[scale=.70]{prev%s.%d%d.eps} \n", x11out, Fs.Asub, Fs.Aper );
+   /* .60 is the scale of the published report: the graph is 324 x 453 pt and
+    * at .60 it fits the column of the multicols, beside the table. The .90
+    * and the .70 that were here made it overflow the page.                 */
+   fprintf( prevputv,"\\includegraphics[scale=.60]{prev%s.%d%d.eps} \n", x11out, Fs.Asub, Fs.Aper );
 
    fprintf( prevputv,"\\end{flushleft} \n");
    fprintf( prevputv,"} \n" );

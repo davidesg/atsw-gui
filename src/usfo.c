@@ -446,10 +446,18 @@ if ( boxlam < 0.0 ){
 fprintf( outputv, "\n" );
 }
 
+/* The table of the forecasts. When the model is in logarithms (boxlam = 0)
+ * the changes are rates and are written in per cent; when it is not, they
+ * are changes in the units of the series and multiplying them by a hundred
+ * only filled the table with numbers that did not fit.                     */
+
 void forecast_table_latex ( FILE *prevputv, int nobs, int freq, int begyear, int begtime, int ornsop, int L, double *data, double **a, double **f1, double **f2, double **f3, double ***v1, double ***v2, double ***v3, double boxlam, double refactor)
 
 {
 int i, Aper1, Asub1;
+double pct = ( boxlam == 0 ) ? 100.0 : 1.0;
+const char *head = ( boxlam == 0 ) ? "LOG RATE OF CHANGE" : "CHANGE";
+const char *unit = ( boxlam == 0 ) ? "($\\%$)" : " ";
 
 
    fprintf( prevputv,"\\begin{tabular}{rccrcrcr} \n");
@@ -459,7 +467,7 @@ int i, Aper1, Asub1;
 /*   fprintf( prevputv,"\\multicolumn{1}{|c|}{}  &  \\multicolumn{2}{c|}{NIVEL} & \n"); */
    fprintf( prevputv,"\\multicolumn{1}{|c|}{}  &  \\multicolumn{2}{c|}{LEVEL} & \n"); 
 /*   fprintf( prevputv,"\\multicolumn{4}{c}{TASAS LOG DE VARIACI�N} & \\multicolumn{1}{|c|}{}    \\\\  \n"); */
-   fprintf( prevputv,"\\multicolumn{4}{c}{LOG RATE OF CHANCE} & \\multicolumn{1}{|c|}{}    \\\\  \n"); 
+   fprintf( prevputv,"\\multicolumn{4}{c}{%s} & \\multicolumn{1}{|c|}{}    \\\\  \n", head ); 
    fprintf( prevputv,"\\multicolumn{1}{|c|}{}  &  \\multicolumn{2}{c|}{} & \n");
    fprintf( prevputv,"\\multicolumn{4}{c}{} & \\multicolumn{1}{|c|}{}\\vspace{-.10in}\\\\ \\cline{2-7} \n");
    fprintf( prevputv,"\\multicolumn{1}{|c|}{ } &\\multicolumn{1}{c|}{ } & \\multicolumn{1}{c|}{} & \\multicolumn{1}{c|}{} & \\multicolumn{1}{c|}{}     & \\multicolumn{1}{c|}{} & \\multicolumn{1}{c|}{}  & \\multicolumn{1}{c|}{}  \\vspace{-.05in}\\\\  \n");
@@ -469,7 +477,7 @@ int i, Aper1, Asub1;
    if (freq==12)fprintf( prevputv,"\\multicolumn{1}{|c|}{DATE } &\\multicolumn{1}{c|}{ VALUE} & \\multicolumn{1}{c|}{Std} & \\multicolumn{1}{c|}{MONT} & \\multicolumn{1}{c|}{Std}     & \\multicolumn{1}{c|}{ANUAL} & \\multicolumn{1}{c|}{Std}  & \\multicolumn{1}{c|}{ERR}\\\\  \n"); 
    if (freq==4) fprintf( prevputv,"\\multicolumn{1}{|c|}{DATE } &\\multicolumn{1}{c|}{ VALUE} & \\multicolumn{1}{c|}{Std} & \\multicolumn{1}{c|}{QUART} & \\multicolumn{1}{c|}{Std}     & \\multicolumn{1}{c|}{ANUAL} & \\multicolumn{1}{c|}{Std}  & \\multicolumn{1}{c|}{ERR}\\\\  \n");
 
-   fprintf( prevputv,"\\multicolumn{1}{|c|}{ }      & \\multicolumn{1}{c|}{  }    & \\multicolumn{1}{c|}{($\\%%$)}&  \\multicolumn{1}{c|}{($\\%%$)  }  & \\multicolumn{1}{c|}{($\\%%$)} & \\multicolumn{1}{c|}{($\\%%$) }     & \\multicolumn{1}{c|}{ ($\\%%$) }  &  \\multicolumn{1}{c|}{ ($\\%%$) } \\\\  \n ");
+   fprintf( prevputv,"\\multicolumn{1}{|c|}{ }      & \\multicolumn{1}{c|}{  }    & \\multicolumn{1}{c|}{%s}&  \\multicolumn{1}{c|}{%s  }  & \\multicolumn{1}{c|}{%s} & \\multicolumn{1}{c|}{%s }     & \\multicolumn{1}{c|}{ %s }  &  \\multicolumn{1}{c|}{ %s } \\\\  \n ", unit, unit, unit, unit, unit, unit );
    fprintf( prevputv,"\\hline \n \\\\");
    for ( i = nobs - L/2; i <= nobs; i++ )   /* Print data and errors:     */
 	{
@@ -478,11 +486,11 @@ int i, Aper1, Asub1;
 	if (boxlam==0) fprintf( prevputv,"$\\mathsf{%9.2f}$ &", exp(data[i]/refactor) );
         else  fprintf( prevputv,"$\\mathsf{%9.2f}$ &",  data[i]/refactor );
 	fprintf( prevputv,"     - &");
-	fprintf( prevputv,"$\\mathsf{%8.2f}$ &", 100*(data[i] - data[i-1])/refactor );
+	fprintf( prevputv,"$\\mathsf{%8.2f}$ &", pct*(data[i] - data[i-1])/refactor );
 	fprintf( prevputv,"     - &");
-	fprintf( prevputv,"$\\mathsf{%9.2f }$ &", 100*(data[i] - data[i-freq])/refactor );
+	fprintf( prevputv,"$\\mathsf{%9.2f }$ &", pct*(data[i] - data[i-freq])/refactor );
 	fprintf( prevputv,"     - &");
-	fprintf( prevputv,"$\\mathsf{%7.2f} $ \\vspace{-.005in}\\\\ \n", 100*a[1][i-ornsop]/refactor );
+	fprintf( prevputv,"$\\mathsf{%7.2f} $ \\vspace{-.005in}\\\\ \n", pct*a[1][i-ornsop]/refactor );
 	}
    for ( i = 1; i <= L/2; i++ )              /* Print forecasts and sds:   */
 	{
@@ -490,11 +498,11 @@ int i, Aper1, Asub1;
 	fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{ %8d/%4d}$} &", Asub1, Aper1);
 	if (boxlam==0) fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}c}{$\\mathsf{%9.2f}$} &", exp(f1[1][i]/refactor) );
 	else fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}c}{$\\mathsf{%9.2f}$} &", f1[1][i]/refactor );
-	fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}c}{$\\mathsf{%7.2Lf}$} &", 100*sqrtl( v1[i][1][1] )/refactor );
-	fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%7.2f}$} &", 100*f2[1][i]/refactor );
-	fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%7.2Lf}$} &", 100*sqrtl( v2[i][1][1] )/refactor );
-	fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%8.2f}$} &", 100*f3[1][i]/refactor );
-	fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%7.2Lf}$} & \\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}c}{  - }\\vspace{-.005in} \\\\ \n ", 100*sqrtl( v3[i][1][1] )/refactor );
+	fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}c}{$\\mathsf{%7.2Lf}$} &", pct*sqrtl( v1[i][1][1] )/refactor );
+	fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%7.2f}$} &", pct*f2[1][i]/refactor );
+	fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%7.2Lf}$} &", pct*sqrtl( v2[i][1][1] )/refactor );
+	fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%8.2f}$} &", pct*f3[1][i]/refactor );
+	fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%7.2Lf}$} & \\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}c}{  - }\\vspace{-.005in} \\\\ \n ", pct*sqrtl( v3[i][1][1] )/refactor );
 	}
    fprintf( prevputv," \\\\ \n ");
    for ( i = L/2 + 1; i <= L; i++ )
@@ -505,11 +513,11 @@ int i, Aper1, Asub1;
 	       fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}c}{$\\mathsf{ %8d/%4d}$} &", Asub1, Aper1);
 	       if (boxlam==0) fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}c}{$\\mathsf{%9.2f}$} &", exp(f1[1][i]/refactor) );
 	       else fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}c}{$\\mathsf{%9.2f}$} &", f1[1][i]/refactor );
-	       fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%7.2Lf}$} &", 100*sqrtl( v1[i][1][1] )/refactor );
-	       fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%7.2f }$}&", 100*f2[1][i]/refactor );
-	       fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%7.2Lf}$} &", 100*sqrtl( v2[i][1][1] )/refactor );
-	       fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%8.2f}$} &", 100*f3[1][i]/refactor );
-	       fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%7.2Lf}$} & \\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}c}{  - }\\vspace{-.005in} \\\\  \n ", 100*sqrtl( v3[i][1][1] )/refactor );
+	       fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%7.2Lf}$} &", pct*sqrtl( v1[i][1][1] )/refactor );
+	       fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%7.2f }$}&", pct*f2[1][i]/refactor );
+	       fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%7.2Lf}$} &", pct*sqrtl( v2[i][1][1] )/refactor );
+	       fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%8.2f}$} &", pct*f3[1][i]/refactor );
+	       fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%7.2Lf}$} & \\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}c}{  - }\\vspace{-.005in} \\\\  \n ", pct*sqrtl( v3[i][1][1] )/refactor );
 	     }
 	 }
     fprintf( prevputv,"\\end{tabular} \n\n\n\n\n");
@@ -565,14 +573,20 @@ int i, Aper1, Asub1;
 }
 
 /* The graph of the forecasts, drawn by fuf itself (src/fufplot.c): the same
- * two panels that gnuplot drew. The series is the annual rate of change, in
- * per cent, of the last L observations and of the L forecasts.             */
+ * two panels that gnuplot drew. The series is the annual change of the last
+ * L observations and of the L forecasts: a rate, in per cent, when the model
+ * is in logarithms (boxlam = 0), and a change in the units of the series
+ * when it is not -- multiplying that one by a hundred only took the graph
+ * off its scale. sigma2 is the variance of the residuals, in the units of
+ * the estimation; the panel of the errors shows them in the same units as
+ * the residuals it draws.                                                  */
 
-FDFig *forecast_graphic ( double *data, double **res, double **f3, double ***v3, int ornsop, double sigma2, int begyear, int begtime, int nobs, int L, int freq, char *x11out, double refactor )
+FDFig *forecast_graphic ( double *data, double **res, double **f3, double ***v3, int ornsop, double sigma2, int begyear, int begtime, int nobs, int L, int freq, double boxlam, char *x11out, double refactor )
 
 {
 int i, Asub1, Aper1, Asub0, Aper0;
 double *y, *y1, *y2, *a;
+double pct = ( boxlam == 0.0 ) ? 100.0 : 1.0;
 char name[4096];
 FDFig *fig;
 
@@ -583,25 +597,26 @@ a  = vector (0, L-1);
 
        for(i=0; i < L; i++)
 	 {
-	   y[i]= 100*(data[i + 1 + nobs - L] - data[i + 1 + nobs - L - freq])/refactor;	    
+	   y[i]= pct*(data[i + 1 + nobs - L] - data[i + 1 + nobs - L - freq])/refactor;	    
 	   y1[i]= 0.0;
 	   y2[i]= 0.0;
-	   a[i]= 100*(res[1][(i+1) +(nobs - ornsop - L)])/refactor;
+	   a[i]= pct*(res[1][(i+1) +(nobs - ornsop - L)])/refactor;
 	 }
 
        for(i=0; i < L; i++)
 	 {
-	   y[i+L]= 100*f3[1][i+1]/refactor;
-	   y1[i+L]= 100*(f3[1][i+1]+sqrtl( v3[i+1][1][1] ))/refactor;
-	   y2[i+L]= 100*(f3[1][i+1]-sqrtl( v3[i+1][1][1] ))/refactor;
+	   y[i+L]= pct*f3[1][i+1]/refactor;
+	   y1[i+L]= pct*(f3[1][i+1]+sqrtl( v3[i+1][1][1] ))/refactor;
+	   y2[i+L]= pct*(f3[1][i+1]-sqrtl( v3[i+1][1][1] ))/refactor;
 	 } 
 
   ObsToDate( begyear, begtime, nobs+1, freq, &Aper1, &Asub1 );
   ObsToDate( begyear, begtime, nobs+1-L, freq, &Aper0, &Asub0 );
   snprintf( name, sizeof( name ), "prev%s.%d%d.eps", x11out, Asub1, Aper1 );
 
-  fig = fp_forecast( y, y1, y2, a, L, sqrt( sigma2 ), freq, Aper0, Asub0,
-                     "LRC anual (%)" );
+  fig = fp_forecast( y, y1, y2, a, L, pct * sqrt( sigma2 ) / refactor, freq,
+                     Aper0, Asub0,
+                     ( boxlam == 0.0 ) ? "LRC anual (%)" : "Annual change" );
   if ( fig != NULL && fd_write_eps( fig, name ) != 0 )
      fprintf( stderr, "Warning: %s was not written\n", name );
 

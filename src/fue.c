@@ -499,6 +499,16 @@ int main( int argc, char *argv[] )
           else
              {
              nstdet += 1;          /* Update number of non-standard detvars: */
+             /* det is ivector( 1, NT ): past NT this was writing outside the
+              * block. inpcheck stops it before we get here and says so with
+              * the line; this is the belt to that pair of braces.          */
+             if ( nstdet > NT )
+                {
+                fprintf( stderr, "\nError in the input file %s: too many non-standard "
+                                 "deterministic variables (%d), and fue takes at most %d\n",
+                                 inputf, nstdet, NT );
+                exit( 2 );
+                }
              det[nstdet] = i;
              fgets( dumstrg, MAXSTR, inputv );
              }

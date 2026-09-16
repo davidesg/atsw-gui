@@ -13,6 +13,10 @@ char *sanitize_to_utf8(const char *input);
  * would cut the line of the .inp in two. Letters, digits and _ - . survive;
  * everything else is dropped. Returns a new string, never NULL.           */
 char *token_name(const char *input);
+
+/* Un .inp que el motor no podria leer: se dice por que, en una ventana, y
+ * se devuelve FALSE. forecast != 0 para los ficheros de fuf.              */
+gboolean inp_ok_to_load(GtkWidget *parent, const char *path, int forecast);
 void reload_number_int(GtkTreeModel *model, GtkTreeIter iter);
 /* possibly other string functions */
 

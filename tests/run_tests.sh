@@ -39,6 +39,7 @@ rc=$?
 # --------------------------------------------------------------------------
 $CC -O0 -g -Wall -I"$TOP/include" $GTK_CFLAGS \
     "$TOP/tests/test_preview.c" "$TOP/src/fugdraw.c" "$TOP/src/utils.c" \
+    "$TOP/src/inpcheck_fue.c" "$TOP/src/inpcheck_fuf.c" \
     -o "$WORK/test_preview" $GTK_LIBS -lm || exit 1
 
 pv_fail=0

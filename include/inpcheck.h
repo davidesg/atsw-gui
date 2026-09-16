@@ -24,4 +24,7 @@
 int inp_check_fue( const char *path, char *msg, size_t size );   /* a model    */
 int inp_check_fuf( const char *path, char *msg, size_t size );   /* a forecast */
 
+/* Lo que usa el GUI es inp_ok_to_load() (utils.h), que llama a una de las
+ * dos y, si el fichero no vale, lo dice en una ventana y no lo carga.     */
+
 #endif

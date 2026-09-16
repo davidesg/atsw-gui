@@ -1,5 +1,6 @@
 /* utils.c */
 #include "utils.h"
+#include "inpcheck.h"
 #include <string.h>
 #include <ctype.h>
 
@@ -60,4 +61,30 @@ void reload_number_int(GtkTreeModel *model, GtkTreeIter iter) {
         row++;
         valid = gtk_tree_model_iter_next(model, &iter);
     }
+}
+
+/* Un .inp que el motor no podria leer: se dice por que y no se carga. El
+ * aviso va en una ventana porque no cabe en la barra de estado -- la razon
+ * de inpcheck lleva la recomendacion al final, que es lo que hace falta.  */
+gboolean inp_ok_to_load(GtkWidget *parent, const char *path, int forecast) {
+    char why[512];
+    GtkWidget *dialog;
+    gchar *base;
+
+    if ((forecast ? inp_check_fuf(path, why, sizeof(why))
+                  : inp_check_fue(path, why, sizeof(why))) == 0)
+        return TRUE;
+
+    base = g_path_get_basename(path);
+    dialog = gtk_message_dialog_new(parent ? GTK_WINDOW(parent) : NULL,
+                                    GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+                                    GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE,
+                                    "%s was not loaded", base);
+    gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(dialog), "%s", why);
+    gtk_window_set_title(GTK_WINDOW(dialog),
+                         forecast ? "Not a forecast input file" : "Not a model input file");
+    gtk_dialog_run(GTK_DIALOG(dialog));
+    gtk_widget_destroy(dialog);
+    g_free(base);
+    return FALSE;
 }

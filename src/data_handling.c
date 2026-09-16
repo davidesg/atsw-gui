@@ -87,18 +87,13 @@ void on_data_file_selected(GtkFileChooserButton *button, FueContext *ctx) {
 
     const char *ext = getExt(filename);
     if (g_strcmp0(ext, ".inp") == 0 || g_strcmp0(ext, ".pre") == 0) {
-        char why[512];
-
         /* Se mira antes de leerlo: load_input_fue() se fia del fichero, y
          * uno de previsiones le mete el horizonte donde espera el numero de
          * variables deterministas -- seguia leyendo hasta llevarse el
          * monton por delante. El aviso es el mismo que da el motor.      */
-        if (inp_check_fue(filename, why, sizeof(why)) != 0) {
-            GtkTextBuffer *buf;
-
-            gtk_label_set_text(GTK_LABEL(ctx->status_label), why);
-            buf = gtk_text_view_get_buffer(GTK_TEXT_VIEW(ctx->text_view));
-            gtk_text_buffer_set_text(buf, why, -1);
+        if (!inp_ok_to_load(ctx->main_window, filename, 0)) {
+            gtk_label_set_text(GTK_LABEL(ctx->status_label), "File not loaded.");
+            gtk_file_chooser_unselect_all(GTK_FILE_CHOOSER(button));
             g_free(filename);
             return;
         }

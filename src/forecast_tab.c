@@ -1,5 +1,6 @@
 #include "forecast_tab.h"
 #include "engine.h"
+#include "utils.h"
 #include "preview.h"
 #include <glib/gstdio.h>
 #include <string.h>
@@ -215,6 +216,12 @@ static void on_forecast_load_clicked(GtkButton *btn, FueContext *ctx) {
     char *filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(ctx->forecast_file_chooser));
     if (!filename) {
         gtk_label_set_text(GTK_LABEL(ctx->forecast_status_label), "No file selected.");
+        return;
+    }
+    if (!inp_ok_to_load(ctx->main_window, filename, 1)) {
+        gtk_label_set_text(GTK_LABEL(ctx->forecast_status_label), "File not loaded.");
+        gtk_file_chooser_unselect_all(GTK_FILE_CHOOSER(ctx->forecast_file_chooser));
+        g_free(filename);
         return;
     }
     load_file_to_editor(ctx, filename);

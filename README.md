@@ -40,20 +40,29 @@ FUF is part of the univariate time series toolkit:
 
 - C compiler: GCC ≥ 9 (Linux/macOS) or MinGW-w64 (Windows)
 - [GNU Scientific Library (GSL)](https://www.gnu.org/software/gsl/) ≥ 2.0
-- [Gnuplot](http://www.gnuplot.info/) ≥ 5.0 (residual graphics)
-- LaTeX distribution with `pdflatex` (forecast PDF report)
+- `pdflatex` (TeX Live or MiKTeX), **only** for the `-latex` option
+
+Since version 1.09 FUF draws the forecast graph and the PDF report itself
+(with the graphics engine of FUG, `fugdraw`): it needs neither Gnuplot nor
+LaTeX, and has no dependency other than GSL.
+
+Exit status: 0 results written; 1 command line or file error; 2 the `.inp`
+file is not valid (nothing written); 3 the model can not be estimated from
+its initial values; 4 internal error. Before writing anything, FUF checks the
+`.inp` file and says what is wrong and in which line (for instance, when it
+is an input file of FUE instead of FUF).
 - GNU Make
 
 On Debian/Ubuntu:
 
 ```
-sudo apt install build-essential libgsl-dev gnuplot texlive-latex-base
+sudo apt install build-essential libgsl-dev
 ```
 
 On macOS (Homebrew):
 
 ```
-brew install gsl gnuplot
+brew install gsl
 ```
 
 ## File structure

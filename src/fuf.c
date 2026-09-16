@@ -24,6 +24,7 @@
 #include "nlatools.h"             /* Header file (prototype declarations)  */
 #include "usfo.h"
 #include "inpcheck.h"               /* validation of the .inp, exit status */
+#include "report.h"                 /* the report in PDF, drawn without LaTeX  */
 
 double macheps;                      /* Machine epsilon: global variable.   */
 FILE *outputv;                       /* Output file: global variable.         */
@@ -92,6 +93,8 @@ int main( int argc, char *argv[] )
 
    struct Tvarma varma1;                 /* Standard VARMA structure.        */
    int  est_fault = 0;         /* ifault of the estimation (exit status 3)   */
+   int  latex_flag = 0;        /* -latex: also compile the .tex with pdflatex */
+   FDFig *graph_fig = NULL;    /* the graph of the forecasts (report.c)       */
    struct Tseries res;                   /* Tseries structure for residuals. */
    int  nstdet, *det, met, chk, hdm;
    int  i1, i2, i3, i4;
@@ -155,7 +158,9 @@ int main( int argc, char *argv[] )
              met = 0;
           else if ( strcmp( argv[i], "chk" ) == 0 )
              chk = 1;
-          else if ( strcmp( argv[i], "nochk" ) == 0 )
+          else if ( strcmp( argv[i], "-latex" ) == 0 )
+             latex_flag = 1;
+         else if ( strcmp( argv[i], "nochk" ) == 0 )
              chk = 0;
 
       strcpy( outputf, inputf );
@@ -1227,8 +1232,28 @@ int main( int argc, char *argv[] )
                            Fs.data,  varma1.a,  Fs.f1,  Fs.f2,  Fs.f3,  Fs.v1, Fs.v2,  Fs.v3, Tm.boxlam, Ts.refactor);}
 /* [8.6] High definition Graphic Forcasting Module   DG 17/02/04                    */               
 
-    if (Tm.boxlam < 0) forecast_graphic_BC (  Fs.data, varma1.a, Fs.f1, Fs.v1, Tm.ornsop, 100*sqrt(Fs.sigma2), Ts.begyear, Ts.begtime, Ts.nobs, Fs.L, Ts.freq, Tm.boxlam, x11out, Ts.refactor );
-    else forecast_graphic (  Fs.data, varma1.a, Fs.f3, Fs.v3, Tm.ornsop, 100*Fs.sigma2/Ts.refactor, Ts.begyear, Ts.begtime, Ts.nobs, Fs.L, Ts.freq, x11out, Ts.refactor );
+    if (Tm.boxlam < 0) graph_fig = forecast_graphic_BC (  Fs.data, varma1.a, Fs.f1, Fs.v1, Tm.ornsop, 100*sqrt(Fs.sigma2), Ts.begyear, Ts.begtime, Ts.nobs, Fs.L, Ts.freq, Tm.boxlam, x11out, Ts.refactor );
+    else graph_fig = forecast_graphic (  Fs.data, varma1.a, Fs.f3, Fs.v3, Tm.ornsop, 100*Fs.sigma2/Ts.refactor, Ts.begyear, Ts.begtime, Ts.nobs, Fs.L, Ts.freq, x11out, Ts.refactor );
+
+/* The report in PDF, drawn by fuf itself (src/report.c): the heading, the
+ * table of the forecasts and the graph. With -latex the .tex file is
+ * compiled with pdflatex instead.                                          */
+
+    if ( !latex_flag )
+       {
+       char pdfputf[4096 + 8];
+
+       snprintf( pdfputf, sizeof( pdfputf ), "%s.pdf", x11out );
+       if ( report_write_pdf( pdfputf, graph_fig, namef, Ts.nobs, Ts.freq, Ts.begyear,
+                              Ts.begtime, Tm.ornsop, Fs.L, Fs.data, varma1.a, Fs.f1,
+                              Fs.f2, Fs.f3, Fs.v1, Fs.v2, Fs.v3, Tm.boxlam,
+                              Ts.refactor ) != 0 )
+          fprintf( stderr, "Warning: %s was not written\n", pdfputf );
+       else
+          printf( "\nCreated %s\n", pdfputf );
+       }
+    fd_fig_free( graph_fig );
+    graph_fig = NULL;
 
     
     
@@ -1358,6 +1383,7 @@ int main( int argc, char *argv[] )
    fclose( texputv );
 
 
+ if ( latex_flag ) {
  printf( "\nOpening LaTex file: %s", texputf );
 
    if ( NULL == (texputv = fopen( texputf, "r" )) )
@@ -1392,6 +1418,7 @@ int main( int argc, char *argv[] )
 		  remove(auxfile); remove(logfile); }
 
    }
+ }
 
 /*
  *

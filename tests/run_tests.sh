@@ -88,18 +88,18 @@ grep -v '^#' "$TESTS/runs.tsv" | while IFS='	' read -r id input args status; do
     echo "x" >> "$WORK/runs"
 done
 
-# The graph no longer needs gnuplot: with an empty PATH fuf writes it just
-# the same (it still ends badly, because the PDF needs pdflatex).
+# fuf needs no other program: with an empty PATH it must write its report
 if [ $UPDATE = 0 ]; then
     mkdir -p "$WORK/nopath"
     cp "$TESTS/corpus/forecast_D1.inp" "$WORK/nopath/"
     ( cd "$WORK/nopath" && env PATH=/nonexistent "$FUF" forecast_D1 > console.txt 2>&1
       echo $? > status ) 2>/dev/null
-    if [ -s "$WORK/nopath/forecast_D1.out" ] &&
-       [ -s "$WORK/nopath/prevforecast_D1.12020.eps" ]; then
+    if [ "$(cat "$WORK/nopath/status")" = 0 ] && [ -s "$WORK/nopath/forecast_D1.out" ] &&
+       [ -s "$WORK/nopath/prevforecast_D1.12020.eps" ] &&
+       head -c 8 "$WORK/nopath/forecast_D1.pdf" | grep -q "PDF-1.4"; then
         echo "x" >> "$WORK/errors"
     else
-        echo "FAIL: with an empty PATH fuf does not write its graph"
+        echo "FAIL: with an empty PATH fuf does not write its report in PDF"
         echo "x" >> "$WORK/failed"
     fi
 fi

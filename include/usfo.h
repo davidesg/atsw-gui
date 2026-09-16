@@ -19,6 +19,8 @@
  ***************************************************************************/
 
 #ifndef __USFO_H__
+
+#include "fugdraw.h"
 #define __USFO_H__
 
 #include <stdio.h>
@@ -61,8 +63,8 @@ void forecast_table_latex ( FILE *prevputv, int nobs, int freq, int begyear, int
 void forecast_table_latex_BC ( FILE *prevputv, int nobs, int freq, int begyear, int begtime, int ornsop, int L, double *data, double **a, double **f1, double **f2, double **f3, double ***v1, double ***v2, double ***v3, double boxlam, double refactor);
 
 
-void forecast_graphic ( double *data, double **res, double **f3, double ***v3, int ornsop, double sigma2, int begyear, int begtime, int nobs, int L, int freq, char *x11out, double refactor );
-void forecast_graphic_BC ( double *data, double **res, double **f3, double ***v3, int ornsop, double sigma, int begyear, int begtime, int nobs, int L, int freq, double boxlam, char *x11out, double refactor );
+FDFig *forecast_graphic ( double *data, double **res, double **f3, double ***v3, int ornsop, double sigma2, int begyear, int begtime, int nobs, int L, int freq, char *x11out, double refactor );
+FDFig *forecast_graphic_BC ( double *data, double **res, double **f3, double ***v3, int ornsop, double sigma, int begyear, int begtime, int nobs, int L, int freq, double boxlam, char *x11out, double refactor );
 
 
 void make_latex_forecast (FILE *textputv, char *prevputf, int Aper, int Asub, int freq, char *name );

@@ -72,6 +72,12 @@ Cada commit que cambia un código de salida de `runs.tsv` lo explica aquí.
   referencias, y se comprueba que con el PATH vacío el gráfico se escribe
   igual. Ningún `.out` ni fichero LaTeX cambia.
 
+- **Informe nativo** (commit del informe): fuf dibuja su informe
+  (`src/report.c`: encabezamiento, tabla de previsiones con su sombreado y
+  gráfico) y ya no llama a pdflatex salvo con `-latex`. Se comprueba que con
+  el PATH vacío escribe el PDF y que es de fugdraw. Ningún `.out` ni fichero
+  LaTeX cambia: el `.tex` se sigue escribiendo siempre.
+
 ## El corpus
 
 `tests/corpus/` reúne los ficheros de entrada de fuf que hay: los que escribe

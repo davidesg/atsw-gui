@@ -41,20 +41,29 @@ FUF forma parte del conjunto de herramientas de series temporales univariantes:
 
 - Compilador C: GCC ≥ 9 (Linux/macOS) o MinGW-w64 (Windows)
 - [GNU Scientific Library (GSL)](https://www.gnu.org/software/gsl/) ≥ 2.0
-- [Gnuplot](http://www.gnuplot.info/) ≥ 5.0 (gráfico de residuos)
-- Distribución LaTeX con `pdflatex` (informe PDF de predicción)
+- `pdflatex` (TeX Live o MiKTeX), **solo** si se usa la opción `-latex`
+
+Desde la versión 1.09, FUF dibuja él mismo el gráfico de previsión y el
+informe en PDF (con el motor gráfico de FUG, `fugdraw`): no necesita Gnuplot
+ni LaTeX, y no tiene más dependencia que GSL.
+
+Códigos de salida: 0 resultados escritos; 1 error en la línea de órdenes o al
+abrir un fichero; 2 el `.inp` no es válido (no se escribe nada); 3 el modelo
+no se puede estimar desde sus valores iniciales; 4 error interno. Antes de
+escribir nada, FUF comprueba el `.inp` y dice qué falla y en qué línea (por
+ejemplo, si es un fichero de FUE en lugar de uno de FUF).
 - GNU Make
 
 En Debian/Ubuntu:
 
 ```
-sudo apt install build-essential libgsl-dev gnuplot texlive-latex-base
+sudo apt install build-essential libgsl-dev
 ```
 
 En macOS (Homebrew):
 
 ```
-brew install gsl gnuplot
+brew install gsl
 ```
 
 ## Estructura de ficheros

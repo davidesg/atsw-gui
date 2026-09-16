@@ -568,7 +568,7 @@ int i, Aper1, Asub1;
  * two panels that gnuplot drew. The series is the annual rate of change, in
  * per cent, of the last L observations and of the L forecasts.             */
 
-void forecast_graphic ( double *data, double **res, double **f3, double ***v3, int ornsop, double sigma2, int begyear, int begtime, int nobs, int L, int freq, char *x11out, double refactor )
+FDFig *forecast_graphic ( double *data, double **res, double **f3, double ***v3, int ornsop, double sigma2, int begyear, int begtime, int nobs, int L, int freq, char *x11out, double refactor )
 
 {
 int i, Asub1, Aper1, Asub0, Aper0;
@@ -602,24 +602,21 @@ a  = vector (0, L-1);
 
   fig = fp_forecast( y, y1, y2, a, L, sqrt( sigma2 ), freq, Aper0, Asub0,
                      "LRC anual (%)" );
-  if ( fig != NULL )
-     {
-     if ( fd_write_eps( fig, name ) != 0 )
-        fprintf( stderr, "Warning: %s was not written\n", name );
-     fd_fig_free( fig );
-     }
+  if ( fig != NULL && fd_write_eps( fig, name ) != 0 )
+     fprintf( stderr, "Warning: %s was not written\n", name );
 
 free_vector( y, 0, 2*L );
 free_vector( y1, 0, 2*L );
 free_vector( y2, 0, 2*L );
 free_vector( a, 0, L-1 );
+return( fig );                    /* the report puts it on its page */
 }
 
 /* The same graph for a series transformed with a Box-Cox lambda other than
  * 0: the level is the transformation undone, and the band is of two standard
  * deviations (src/fufplot.c).                                              */
 
-void forecast_graphic_BC ( double *data, double **res, double **f1, double ***v1, int ornsop, double sigma, int begyear, int begtime, int nobs, int L, int freq, double boxlam, char *x11out, double refactor )
+FDFig *forecast_graphic_BC ( double *data, double **res, double **f1, double ***v1, int ornsop, double sigma, int begyear, int begtime, int nobs, int L, int freq, double boxlam, char *x11out, double refactor )
 
 {
 int i, Asub1, Aper1, Asub0, Aper0;
@@ -652,17 +649,14 @@ a  = vector (0, L-1);
   snprintf( name, sizeof( name ), "prev%s.%d%d.eps", x11out, Asub1, Aper1 );
 
   fig = fp_forecast( y, y1, y2, a, L, sigma / 100.0, freq, Aper0, Asub0, "LEVEL" );
-  if ( fig != NULL )
-     {
-     if ( fd_write_eps( fig, name ) != 0 )
-        fprintf( stderr, "Warning: %s was not written\n", name );
-     fd_fig_free( fig );
-     }
+  if ( fig != NULL && fd_write_eps( fig, name ) != 0 )
+     fprintf( stderr, "Warning: %s was not written\n", name );
 
 free_vector( y, 0, 2*L );
 free_vector( y1, 0, 2*L );
 free_vector( y2, 0, 2*L );
 free_vector( a, 0, L-1 );
+return( fig );                    /* the report puts it on its page */
 }
 
 void make_latex_forecast (FILE *texputv, char *prevputf, int Aper, int Asub, int freq, char *name )

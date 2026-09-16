@@ -824,6 +824,21 @@ void File_PlotSer( struct Tseries *ser )
       goto p1;
       }
 
+/* A DEGENERATE series (zero variance): there is nothing to draw, and AbsMax
+ * comes out as NaN -- 0/0 -- which NEITHER of the two guards above catches,
+ * because every comparison with NaN is false. From there HorInc = 25/NaN,
+ * BandPos = NaN, iround(NaN) = rubbish, and Tmpstr[27 +- rubbish] kills the
+ * process. It happens: a degenerate fit leaves the residuals at zero and the
+ * program dies when it goes to draw them (BUG-0008 of fue, ported here). The
+ * test is !(x > 0) and x == x instead of <= and isnan, so that the NaN is
+ * caught without depending on the flags of the compiler.                    */
+
+   if ( !(rtmp4 > 0.0) || !(AbsMax == AbsMax) )
+      {
+      fprintf( outputv, "Warning: series with zero variance; plot skipped\n" );
+      goto p1;
+      }
+
 /* The value of each character + positions of � and 2� bands:                */
 
    HorInc   = 25.0 / AbsMax;
@@ -1322,6 +1337,12 @@ void PlotCor( real *corr, int lags, int isacf, struct Tseries *ser, int npar )
           }
        pos  = corr[i] * HorInc;
        posi = abs( iround( pos ) );
+       /* A degenerate fit leaves the residuals at zero, and then every
+        * correlation is NaN -- 0/0 --: iround(NaN) is rubbish and the bar
+        * would be written far outside TmpStr. Same defect as the one of
+        * File_PlotSer (BUG-0008 of fue), in the plot of the acf.           */
+       if ( !(corr[i] == corr[i]) ) { pos = 0.0; posi = 0; }
+       if ( posi > 25 ) posi = 25;               /* |corr| > 1: out of range */
        if ( pos <= 0.0 )
           for ( j = 25 - posi; j <= 25; j++ ) TmpStr[j] = symbol;
        else

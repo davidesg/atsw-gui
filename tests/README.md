@@ -30,6 +30,28 @@ segmentation fault** (`forecast_RIPC.1`), un modelo sin operadores AR ni MA.
 Es el mismo defecto que fue 1.13.1 tenía, en el mismo sitio: `cholfor`
 (`nlatools.c`) con n = 0, desde `elf` (`elfvarma.c`), porque max(p, q) = 0.
 
+## Cambios de estado respecto a la línea base
+
+Cada commit que cambia un código de salida de `runs.tsv` lo explica aquí.
+
+- **Modelos sin operadores AR ni MA** (commit del arreglo del caso vacío):
+  `forecast_RIPC.1` ya no termina en segmentation fault. Se arreglaron tres
+  cosas de la misma familia —el C muere en vez de avisar—, las dos últimas
+  portadas del BUG-0008 de fue:
+  1. `nlatools.c`: matrices vacías válidas y liberables, y `cholfor`/`cholbak`
+     no hacen nada con n < 1; `fuf.c` no llama al optimizador con 0 parámetros;
+  2. `File_PlotSer`: una serie degenerada (varianza cero) daba AbsMax = NaN y
+     el índice del gráfico de caracteres se iba fuera del buffer;
+  3. `PlotCor`: con los residuos a cero, todas las correlaciones son NaN y la
+     barra de la acf se escribía fuera del buffer.
+
+  Ninguna de las 13 ejecuciones que ya funcionaban cambia.
+
+  **`forecast_RIPC.1` no es un fichero de fuf**: es un `.inp` de fue (no tiene
+  la sección del horizonte de previsión), así que fuf lo lee desplazado y
+  escribe resultados sin sentido. Ahora termina con 0; el commit de la
+  validación de la entrada lo rechazará con un mensaje y código 2.
+
 ## El corpus
 
 `tests/corpus/` reúne los ficheros de entrada de fuf que hay: los que escribe

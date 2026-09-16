@@ -8,3 +8,5 @@ bin/
 *~
 *.bak
 tests/work/
+# muestras del informe: se regeneran (ver tests/README.md)
+samples/

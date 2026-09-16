@@ -78,6 +78,20 @@ Cada commit que cambia un código de salida de `runs.tsv` lo explica aquí.
   el PATH vacío escribe el PDF y que es de fugdraw. Ningún `.out` ni fichero
   LaTeX cambia: el `.tex` se sigue escribiendo siempre.
 
+## Ver el informe
+
+El informe en PDF no se compara en la batería (lo que se compara es lo que lo
+determina: el `.out`, los ficheros LaTeX y el EPS). Para verlo:
+
+```sh
+mkdir -p samples && cd samples
+cp ../tests/corpus/forecast_D1.inp .
+../bin/fuf forecast_D1            # el PDF lo dibuja fuf
+../bin/fuf forecast_D1 -latex     # el PDF lo compila pdflatex desde el .tex
+```
+
+`samples/` está en `.gitignore`: se regenera cuando haga falta.
+
 ## El corpus
 
 `tests/corpus/` reúne los ficheros de entrada de fuf que hay: los que escribe

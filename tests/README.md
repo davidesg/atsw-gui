@@ -25,6 +25,10 @@ ce00ecd), compilado en Linux x86-64 con gcc. Son la referencia de fuf 1.09: lo
 que ya funcionaba debe dar exactamente lo mismo, y cada cambio de un código de
 salida tiene que ser una decisión, hecha en el commit que lo cambia.
 
+Códigos de salida de fuf 1.09: 0 resultados escritos; 1 error en la línea de
+órdenes o al abrir un fichero; 2 el `.inp` no es válido (no se escribe nada);
+3 el modelo no se puede estimar desde sus valores iniciales; 4 error interno.
+
 Estado de partida (14 ejecuciones): 13 terminan bien y **una termina en
 segmentation fault** (`forecast_RIPC.1`), un modelo sin operadores AR ni MA.
 Es el mismo defecto que fue 1.13.1 tenía, en el mismo sitio: `cholfor`
@@ -51,6 +55,15 @@ Cada commit que cambia un código de salida de `runs.tsv` lo explica aquí.
   la sección del horizonte de previsión), así que fuf lo lee desplazado y
   escribe resultados sin sentido. Ahora termina con 0; el commit de la
   validación de la entrada lo rechazará con un mensaje y código 2.
+
+- **Validación de la entrada** (commit de la validación): fuf comprueba el
+  `.inp` antes de escribir nada (`src/inpcheck.c`, adaptado del de fue: el
+  `.inp` de fuf es el de fue con el horizonte de previsión y la varianza de
+  la innovación tras la fecha, y eso es lo que los distingue).
+  `forecast_RIPC.1` pasa a terminar con código 2 y un mensaje que dice que es
+  un fichero de fue. Ninguna de las 13 ejecuciones que funcionaban cambia.
+  Los errores provocados a propósito están en `errors.tsv` (ficheros
+  `tests/corpus/bad_*.inp`).
 
 ## El corpus
 

@@ -24,6 +24,7 @@
 #include "nlatools.h"             /* Header file (prototype declarations)  */
 #include "gnuplot_i.h"            /* gnuplot interface                     */
 #include "usfo.h"
+#include "inpcheck.h"               /* validation of the .inp, exit status */
 
 double macheps;                      /* Machine epsilon: global variable.   */
 FILE *outputv;                       /* Output file: global variable.         */
@@ -91,6 +92,7 @@ int main( int argc, char *argv[] )
 /* The following variables have to do with the time series model and data:   */
 
    struct Tvarma varma1;                 /* Standard VARMA structure.        */
+   int  est_fault = 0;         /* ifault of the estimation (exit status 3)   */
    struct Tseries res;                   /* Tseries structure for residuals. */
    int  nstdet, *det, met, chk, hdm;
    int  i1, i2, i3, i4;
@@ -133,7 +135,11 @@ int main( int argc, char *argv[] )
       printf( "input      : model-data file name (omit extension .inp)\n" );
       printf( "[eml|aml]  : exact | approximate maximum likelihood (default: eml)\n" );
       printf( "[chk|nochk]: check | do not check for invertibility (default: chk)\n" );
-      exit( 1 );
+      printf( "[-latex]   : also compile the .tex file with pdflatex\n" );
+      printf( "\nExit status: 0 results written; 1 command line or file error; 2 the input\n" );
+      printf( "file is not valid (nothing written); 3 the model could not be estimated\n" );
+      printf( "(results written with the initial values); 4 run-time error.\n" );
+      exit( FUF_ERR_USAGE );
       }
 
    if ( argc >= 2 )                     /* Process command-line arguments:   */
@@ -179,12 +185,31 @@ int main( int argc, char *argv[] )
       }
 
 /*****************************************************************************/
+/* [1.1]: Check the input file before any file is written (fuf 1.09):       */
+/*****************************************************************************/
+
+   {
+   char msg[600];
+
+   if ( inp_check( inputf, msg, sizeof( msg ) ) != 0 )
+      {
+      if ( strcmp( msg, "can not open the file" ) == 0 )
+         {
+         fprintf( stderr, "Error opening input file: %s\n", inputf );
+         exit( FUF_ERR_USAGE );
+         }
+      fprintf( stderr, "Error in the input file %s, %s\n", inputf, msg );
+      exit( FUF_ERR_INPUT );
+      }
+   }
+
+/*****************************************************************************/
 /* [2]: Open output and texput files for writing:                                        */
 /*****************************************************************************/
 
    if ( NULL == (outputv = fopen( outputf, "w" )) )
       {
-      printf( "\nError opening output file: %s\n", outputf );
+      fprintf( stderr, "Error opening output file: %s\n", outputf );
       printf( "... Exiting to system ...\n" );
       exit( 1 );
       }
@@ -192,7 +217,7 @@ int main( int argc, char *argv[] )
 
    if ( NULL == (texputv = fopen( texputf, "w" )) )
       {
-      printf( "\nError opening output file: %s\n", texputf );
+      fprintf( stderr, "Error opening output file: %s\n", texputf );
       printf( "... Exiting to system ...\n" );
       exit( 1 );
       }
@@ -209,7 +234,7 @@ int main( int argc, char *argv[] )
 
    if ( NULL == (inputv = fopen( inputf, "r" )) )
       {
-      printf( "\nError opening input file: %s\n", inputf );
+      fprintf( stderr, "Error opening input file: %s\n", inputf );
       printf( "... Exiting to system ...\n" );
       exit( 1 );
       }
@@ -1113,6 +1138,23 @@ int main( int argc, char *argv[] )
       case 6: printf( "See cast_us().\n" );
               break;
       }
+   /* The results are still written (with the initial values, as always),
+    * but fuf ends with exit status 3 and says why (fuf 1.09)               */
+   est_fault = ifault;
+   if ( ifault )
+      {
+      static const char *why[] = { "", "matrix Q is not positive definite",
+         "the AR operator has at least one unit root",
+         "the AR operator is strictly non-stationary",
+         "the MA operator is strictly non-invertible",
+         "unknown numerical problem", "invalid parameters (see cast_us())" };
+      fprintf( stderr, "Error: the model could not be estimated from the initial values "
+                       "of %s: %s (ifault %d).\n", inputf,
+               (ifault >= 1 && ifault <= 6) ? why[ifault] : "unknown problem", ifault );
+      fprintf( outputv, "\n*** THE MODEL COULD NOT BE ESTIMATED FROM THE INITIAL VALUES:\n"
+                        "*** %s (ifault %d). The forecasts below are not valid.\n",
+               (ifault >= 1 && ifault <= 6) ? why[ifault] : "unknown problem", ifault );
+      }
 
 /* [7.3]: Put final estimates into the standard VARMA structure:             */
 
@@ -1532,7 +1574,7 @@ int main( int argc, char *argv[] )
    FREE_STR( namef );
    FREE_STR( Tm.residuals );
 /* printf( "\nFINAL RAM  : %lu\n", coreleft() );                             */
-return 0;
+return( est_fault ? FUF_ERR_ESTIMATE : FUF_OK );
 }
 
 /*****************************************************************************/

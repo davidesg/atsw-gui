@@ -87,6 +87,46 @@ grep -v '^#' "$TESTS/runs.tsv" | while IFS='	' read -r id input args status; do
     echo "x" >> "$WORK/runs"
 done
 
+# A missing input file: exit status 1
+if [ $UPDATE = 0 ]; then
+    mkdir -p "$WORK/nofile"
+    ( cd "$WORK/nofile" && "$FUF" NOFILE > console.txt 2>&1; echo $? > status ) 2>/dev/null
+    if [ "$(cat "$WORK/nofile/status")" = 1 ] &&
+       grep -q "Error opening input file: NOFILE.inp" "$WORK/nofile/console.txt"; then
+        echo "x" >> "$WORK/errors"
+    else
+        echo "FAIL: a missing input file is not reported with exit status 1"
+        echo "x" >> "$WORK/failed"
+    fi
+fi
+
+# Errors: tests/errors.tsv lists damaged .inp files (tests/corpus/bad_*) and
+# files of other programs. Each run must end with its exit status and say
+# what is wrong; an invalid .inp (status 2) must not write anything.
+
+if [ $UPDATE = 0 ]; then
+    grep -v '^#' "$TESTS/errors.tsv" | while IFS='	' read -r id status message; do
+        [ -n "$id" ] || continue
+        dir="$WORK/bad_$id"
+        mkdir -p "$dir"
+        cp "$TESTS/corpus/bad_$id.inp" "$dir/"
+        ( cd "$dir" && PATH="$WORK/bin:$PATH" timeout "$TIMEOUT" "$FUF" "bad_$id" \
+              > console.txt 2>&1; echo $? > "$dir/status" ) 2>/dev/null
+        rc=$(cat "$dir/status")
+        if [ "$rc" != "$status" ]; then
+            echo "FAIL: bad_$id: exit status $rc (expected $status)"
+        elif ! grep -qF "$message" "$dir/console.txt"; then
+            echo "FAIL: bad_$id: the message '$message' is missing"
+        elif [ "$status" = 2 ] && [ -e "$dir/bad_$id.out" ]; then
+            echo "FAIL: bad_$id: invalid input, but bad_$id.out was written"
+        else
+            echo "x" >> "$WORK/errors"
+            continue
+        fi
+        echo "x" >> "$WORK/failed"
+    done
+fi
+
 if [ $UPDATE = 1 ]; then
     cp "$NEWRUNS" "$TESTS/runs.tsv"
     echo "tests/golden and tests/runs.tsv updated with $FUF"
@@ -98,5 +138,7 @@ runs=0; failed=0
 [ -f "$WORK/failed" ] && failed=$(wc -l < "$WORK/failed")
 total=$(grep -vc '^#' "$TESTS/runs.tsv")
 echo
-echo "$total runs, $failed failures"
+errors=0
+[ -f "$WORK/errors" ] && errors=$(wc -l < "$WORK/errors")
+echo "$total runs, $errors damaged or foreign inputs reported, $failed failures"
 [ "$failed" = 0 ] && [ "$runs" -gt 0 ]

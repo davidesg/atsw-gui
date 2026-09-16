@@ -14,7 +14,10 @@ struct intervention {
     int ar_order;
     double *ar_parameter;
     int *ar_fixed;
-    int freq;
+    /* El armonico de un cos/sin. Es double porque el fichero lo trae como tal
+     * y el motor lo lee con %lf: siendo int, un `cos 1.5` se cargaba como
+     * `cos 1` y se guardaba truncado.                                     */
+    double freq;
 };
 
 /* Operator structure (AR/MA) */

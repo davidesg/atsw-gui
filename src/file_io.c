@@ -81,18 +81,24 @@ static void write_inp_file(FILE *f, FueContext *ctx) {
                 default: type_str = "unknown";
             }
             fprintf(f, "%s", type_str);
-            if (It[i].type == 9) {
-                fprintf(f, "\n");          /* su nombre y nada mas */
-            } else if (It[i].type < 6) {
+            /* Que lleva cada tipo detras del nombre, segun lo que el motor
+             * lee (fue.c [3.2]): los cuatro fechados llevan fecha; trend,
+             * easter y alter no llevan nada -- el motor hace fscanf("\n") y
+             * pasa a la siguiente palabra--; cos y sin llevan el armonico.
+             * Antes, la guarda era `type < 6` y metia una fecha detras de
+             * trend y de easter, que no la tienen: salia "trend 0 0", que el
+             * propio inpcheck rechaza ("...not '0'").                     */
+            if (It[i].type <= 3) {                      /* impulse..ramp    */
                 if (Ts.freq > 1)
                     fprintf(f, " %d %d\n", It[i].period, It[i].year);
                 else
                     fprintf(f, " %d\n", It[i].year);
-            } else if (It[i].type >= 6 && It[i].type <= 8) {
-                if (It[i].type == 8)
-                    fprintf(f, "\n");
-                else
-                    fprintf(f, " %d\n", It[i].freq);
+            } else if (It[i].type == 6 || It[i].type == 7) {   /* cos, sin  */
+                char buf[64];
+                /* el armonico es del usuario, no un entero nuestro */
+                fprintf(f, " %s\n", inp_format(buf, sizeof(buf), It[i].freq));
+            } else {                      /* trend, easter, alter, y el 9   */
+                fprintf(f, "\n");
             }
         }
         fprintf(f, "**\n");
@@ -201,8 +207,15 @@ static void write_inp_file(FILE *f, FueContext *ctx) {
 
     /* Mean */
     fprintf(f, "** Mean parameter (mu):\n");
-    if (Tm.Imu) fprintf(f, "%.6f 1\n", Tm.mu);
-    else fprintf(f, "0\n");
+    {
+    char buf[64];
+    /* El valor SIEMPRE, y la bandera aparte. Antes, con la media fija se
+     * escribia un "0" pelado que tiraba el valor ademas de la bandera: una
+     * media fija en -88.72 volvia fijada en cero, que es otro modelo. El
+     * formato lo admite -- los dos lectores leen "valor bandera" -- y es
+     * solo el escritor el que no lo escribia.                            */
+    fprintf(f, "%s %d\n", inp_format(buf, sizeof(buf), Tm.mu), Tm.Imu ? 1 : 0);
+    }
 
     /* Box‑Cox and differences */
     fprintf(f, "** Box-Cox lambda, m. Regular differences and complete annual differences:\n");

@@ -206,11 +206,16 @@ FDFig *fp_forecast( const double *y, const double *band, const double *band2,
    for ( i = 0; i < n; i++ )
        fd_disc( f, px[i], py[i], ( i < L ) ? DOT_OBS : DOT_FOR );
 
-/* [2]: the panel of the errors, narrower, as in FUF 1.08                    */
+/* [2]: the panel of the errors, under the observations it belongs to        */
 
    y0 = 40.0;
    y1 = 195.0;
-   x1 = x0 + 0.68 * (W - MARGIN_R - MARGIN_L);
+   /* The error of a month goes UNDER its realisation: the panel keeps the
+    * scale of the one above (the same date on the same x) and stops at the
+    * origin of the forecast, so it is narrower. That is how the published
+    * report has it, and it is what lets the analyst read the errors the
+    * model is making against the series.                                   */
+   x1 = x0 + ( x1 - x0 ) * ( L - 1 ) / (double)( n - 1 );
 
    cmax = 4.0 * sigma;
    for ( i = 0; i < L; i++ ) if ( fabs( err[i] ) > cmax ) cmax = fabs( err[i] );

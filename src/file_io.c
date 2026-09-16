@@ -186,7 +186,10 @@ static void write_inp_file(FILE *f, FueContext *ctx) {
 
     /* Box‑Cox and differences */
     fprintf(f, "** Box-Cox lambda, m. Regular differences and complete annual differences:\n");
-    fprintf(f, " %2.2f", Tm.boxlam);
+    {
+    char buf[64];   /* lambda tambien es del usuario: 1/3 no cabe en %2.2f */
+    fprintf(f, " %s", inp_format(buf, sizeof(buf), Tm.boxlam));
+    }
     fprintf(f, " %2d", Tm.nrdiff);
     fprintf(f, " %2d\n", Tm.nadiff);
     fprintf(f, "** Individual factors of the annual difference (starting at freq 0.0):\n");
@@ -204,8 +207,13 @@ fprintf(f, "** Time series (stochastic and non-standard deterministic variables)
 if (!Ts.data || Ts.nobs == 0) {
     fprintf(f, "\n");
 } else {
+    char buf[64];
+
     for (int i = 1; i <= Ts.nobs; i++) {
-        fprintf(f, "%lf\n", Ts.data[i]);
+        /* Los datos son del usuario, no una estimacion: se escriben con las
+         * cifras que hagan falta para que vuelvan a leerse iguales. Con el
+         * "%lf" de antes, 0.3680397019 salia 0.368040.                    */
+        fprintf(f, "%s\n", inp_format(buf, sizeof(buf), Ts.data[i]));
     }
 }
 }

@@ -3,6 +3,9 @@
 #include "inpcheck.h"
 #include <string.h>
 #include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
 
 const char *getExt(const char *fspec) {
     const char *dot = strrchr(fspec, '.');
@@ -61,6 +64,20 @@ void reload_number_int(GtkTreeModel *model, GtkTreeIter iter) {
         row++;
         valid = gtk_tree_model_iter_next(model, &iter);
     }
+}
+
+/* Un numero escrito de modo que vuelva a leerse EXACTAMENTE igual. Copia de
+ * fug src/inpfile.c:inp_format(): el mismo fichero en los dos sitios, como
+ * fugdraw.                                                                */
+char *inp_format(char *buf, size_t size, double v) {
+    int decimals;
+
+    for (decimals = 6; decimals <= 17; decimals++) {
+        snprintf(buf, size, "%.*f", decimals, v);
+        if (fabs(v) < 1e21 && strtod(buf, NULL) == v) return buf;
+    }
+    snprintf(buf, size, "%.17g", v);        /* muy grande o muy pequeno     */
+    return buf;
 }
 
 /* Un .inp que el motor no podria leer: se dice por que y no se carga. El

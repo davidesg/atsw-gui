@@ -2,6 +2,7 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+#include <stddef.h>
 #include <glib.h>
 #include <gtk/gtk.h>
 
@@ -13,6 +14,12 @@ char *sanitize_to_utf8(const char *input);
  * would cut the line of the .inp in two. Letters, digits and _ - . survive;
  * everything else is dropped. Returns a new string, never NULL.           */
 char *token_name(const char *input);
+
+/* Un numero escrito de modo que vuelva a leerse EXACTAMENTE igual: prueba de
+ * 6 decimales en adelante y se queda con el primero que cumple. Es la misma
+ * funcion que fug tiene en src/inpfile.c; el GUI escribia la serie con "%lf"
+ * -- seis decimales -- y le quitaba cifras a los datos del usuario.        */
+char *inp_format(char *buf, size_t size, double v);
 
 /* Un .inp que el motor no podria leer: se dice por que, en una ventana, y
  * se devuelve FALSE. forecast != 0 para los ficheros de fuf.              */

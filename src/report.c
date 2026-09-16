@@ -47,6 +47,8 @@ typedef struct {
    double size;                /* size of the text                           */
    double left, right;         /* margins                                    */
    double leading;             /* between lines                              */
+   double fixed_x0, fixed_y;   /* where the operator of fixed frequency began */
+   int    fixed_f;             /* its frequency (0: there is none open)       */
 } Pen;
 
 static void put( Pen *p, int font, double size, double rise, const char *s )
@@ -75,6 +77,22 @@ static void newline( Pen *p )
    p->y -= p->leading;
 }
 
+/* "f = k" centred under the operator of fixed frequency that has just been
+ * closed (it is not written when the operator was broken over two lines).  */
+static void close_fixed( Pen *p )
+{
+   char label[32];
+
+   if ( p->fixed_f == 0 ) return;
+   if ( p->f != NULL && p->y == p->fixed_y )
+      {
+      snprintf( label, sizeof( label ), "f = %d", p->fixed_f );
+      fd_text( p->f, (p->fixed_x0 + p->x) / 2.0, p->y - 2.05 * p->size, F_NUM,
+               SMALL * p->size, FD_CENTER, label );
+      }
+   p->fixed_f = 0;
+}
+
 /* Measure what draw() would take, without drawing it */
 static double width_of( const Pen *p, void (*draw)( Pen *, const void * ), const void *arg )
 {
@@ -95,18 +113,18 @@ static double width_of( const Pen *p, void (*draw)( Pen *, const void * ), const
 static void stacked( Pen *p, double value, double se, int decimals, int has_se )
 {
    char   top[64], bottom[64];
-   double wt, wb, w, sz = p->size, small = 0.82 * p->size;
+   double wt, wb, w, sz = p->size;
 
    snprintf( top, sizeof( top ), "%.*f", decimals, value );
    snprintf( bottom, sizeof( bottom ), "(%.*f)", decimals, se );
    wt = fd_text_width( F_NUM, sz, top );
-   wb = has_se ? fd_text_width( F_NUM, small, bottom ) : 0.0;
+   wb = has_se ? fd_text_width( F_NUM, sz, bottom ) : 0.0;
    w  = ( wt > wb ) ? wt : wb;
    if ( p->f != NULL )
       {
       fd_text( p->f, p->x + (w - wt) / 2.0, p->y, F_NUM, sz, FD_LEFT, top );
       if ( has_se )
-         fd_text( p->f, p->x + (w - wb) / 2.0, p->y - 0.95 * sz, F_NUM, small,
+         fd_text( p->f, p->x + (w - wb) / 2.0, p->y - 1.05 * sz, F_NUM, sz,
                   FD_LEFT, bottom );
       }
    p->x += w;
@@ -328,7 +346,7 @@ static void draw_ifadf_factor( Pen *p, int i, int freq )
    put( p, F_ROMAN, sz, 0.0, ")" );
    snprintf( label, sizeof( label ), "f = %d", i );
    if ( p->f != NULL )
-      fd_text( p->f, (x0 + p->x) / 2.0, p->y - 1.05 * sz, F_NUM, SMALL * sz,
+      fd_text( p->f, (x0 + p->x) / 2.0, p->y - 2.05 * sz, F_NUM, SMALL * sz,
                FD_CENTER, label );
 }
 
@@ -344,8 +362,8 @@ static void draw_range( Pen *p, const void *arg )
 {
    const Range  *r = (const Range *)arg;
    const EqItem *item = r->eq->item[r->part];
-   double        x0 = p->x, sz = p->size;
-   int           i, fixed = 0, f = 0;
+   double        sz = p->size;
+   int           i;
 
    for ( i = r->from; i < r->to; i++ )
        {
@@ -354,11 +372,17 @@ static void draw_range( Pen *p, const void *arg )
        switch ( it->kind )
           {
           case EI_OPEN:
-               if ( it->bracket == 'f' ) { fixed = 1; f = it->a; }
+               if ( it->bracket == 'f' )
+                  {
+                  p->fixed_x0 = p->x;
+                  p->fixed_y  = p->y;
+                  p->fixed_f  = it->a;
+                  }
                put( p, F_ROMAN, sz, 0.0, "(" );
                break;
           case EI_CLOSE:
                put( p, F_ROMAN, sz, 0.0, ")" );
+               close_fixed( p );
                break;
           case EI_TEXT:
                if ( strcmp( it->text, "1" ) == 0 ) put( p, F_NUM, sz, 0.0, "1" );
@@ -385,15 +409,6 @@ static void draw_range( Pen *p, const void *arg )
           default: break;
           }
        }
-   if ( fixed && p->f != NULL )
-      {
-      char label[32];
-
-      /* under the standard errors, which are at -0.95 of the size */
-      snprintf( label, sizeof( label ), "f = %d", f );
-      fd_text( p->f, (x0 + p->x) / 2.0, p->y - 1.95 * sz, F_NUM, SMALL * sz,
-               FD_CENTER, label );
-      }
 }
 
 /* A part, breaking the line before a term that does not fit */
@@ -422,7 +437,7 @@ static void draw_part( Pen *p, const Equation *eq, int part, int wrap )
        r.from = start;
        r.to   = i;
        if ( wrap && p->x > p->left && p->x + width_of( p, draw_range, &r ) > p->right )
-          newline( p );
+          newline( p );                    /* close_fixed() checks the line  */
        draw_range( p, &r );
        }
 }
@@ -587,40 +602,47 @@ static double draw_outliers( FDFig *f, struct Tseries *res, double x, double y,
 int report_write_pdf( const char *filename, FDFig *graph, const Equation *eq,
                       struct Tseries *res )
 {
-   const double PW = 841.89, PH = 595.276, margin = 36.0;
-   double       size = 9.0, x[2], y[2], scale[2], gw, gh, s, height;
+   const double A4_SHORT = 595.276, A4_LONG = 841.89, margin = 36.0;
+   double       PW, PH, size = 9.0, x[2], y[2], scale[2], gw, gh, s, left;
    FDFig       *page, *figs[2];
    FDPdf       *pdf;
    Pen          p;
-   int          status, n = 0;
+   int          status, n = 0, landscape;
+
+/* [1]: the page is landscape only when the graph does not fit across an A4
+ * portrait page: with quarterly or annual data of few observations the graph
+ * is the small one (468 points) and the page is portrait.                   */
+
+   gw = ( graph != NULL ) ? graph->w : 0.0;
+   gh = ( graph != NULL ) ? graph->h : 0.0;
+   landscape = ( gw > A4_SHORT - 2 * margin );
+   PW = landscape ? A4_LONG : A4_SHORT;
+   PH = landscape ? A4_SHORT : A4_LONG;
 
    page = fd_fig_new( PW, PH );
    if ( page == NULL ) return( 1 );
 
-/* [1]: the graph at the top, as large as it fits                            */
-
-   gw = ( graph != NULL ) ? graph->w : 0.0;
-   gh = ( graph != NULL ) ? graph->h : 0.0;
-   s  = 1.0;
+   s = 1.0;
    if ( gw > 0.0 && s * gw > PW - 2 * margin ) s = ( PW - 2 * margin ) / gw;
 
-/* [2]: the equation under it, and the table of residuals at the bottom      */
+/* [2]: the equation under the graph and the table of residuals under it.
+ * The graph is against the left margin and the equation begins at the same
+ * point, so that the three parts are aligned.                               */
 
+   left = margin;
    memset( &p, 0, sizeof( p ) );
    p.f       = page;
    p.size    = size;
-   p.left    = margin;
+   p.left    = left;
    p.right   = PW - margin;
-   p.leading = 2.6 * size;          /* room for the standard errors and the brackets */
-   p.x       = margin;
+   p.leading = 2.9 * size;          /* room for the standard errors and the brackets */
+   p.x       = left;
    p.y       = PH - margin - s * gh - 2.6 * size;
    draw_equation( &p, eq );
 
    /* the table under the equation, leaving room for the "f = k" of a factor
     * of fixed frequency, which hangs below its line                         */
-   height = draw_outliers( NULL, res, margin, 0.0, size );
-   (void) height;
-   draw_outliers( page, res, margin, p.y - 4.4 * size, size );
+   draw_outliers( page, res, left, p.y - 4.6 * size, size );
 
 /* [3]: the page                                                             */
 
@@ -632,7 +654,7 @@ int report_write_pdf( const char *filename, FDFig *graph, const Equation *eq,
    if ( graph != NULL )
       {
       figs[n] = graph;
-      x[n] = ( PW - s * gw ) / 2.0;
+      x[n] = left;
       y[n] = PH - margin - s * gh;
       scale[n] = s;
       n++;

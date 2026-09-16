@@ -31,7 +31,12 @@ struct oper {
 /* Fixed‑frequency operator structure */
 struct freq_fix {
     int type;
-    int freq;
+    /* El indice armonico k del operador. Como el armonico de un cos/sin, el
+     * fichero lo trae como real y el motor lo lee con %lf. Siendo int, un
+     * `1 3.5` se guardaba como `1 3`. El diselogo sigue editandolo con un
+     * spin entero -- el GUI no sabe expresar un k fraccionario -- pero lo que
+     * viene del fichero se conserva.                                      */
+    double freq;
     double op_parameter;
     int op_fixed;
 };

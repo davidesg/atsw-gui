@@ -551,7 +551,7 @@ static void edit_ar2f(FueContext *ctx, int type_op, int index) {
             char *restriction_str = g_strdup_printf("%d", fixed);
             gtk_list_store_set(GTK_LIST_STORE(model), &iter,
                                1, restriction_str,
-                               2, fix[index].freq,
+                               2, (guint)fix[index].freq,
                                -1);
             g_free(restriction_str);
         }
@@ -585,7 +585,7 @@ static void save_insert_ar2f(FueContext *ctx, int type_op, int position) {
         gtk_list_store_set(store, &iter,
                            0, position + 1,
                            1, restriction_str,
-                           2, fix[position].freq,
+                           2, (guint)fix[position].freq,
                            -1);
         g_free(restriction_str);
         reload_number_int(GTK_TREE_MODEL(store), iter);

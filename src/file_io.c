@@ -186,7 +186,10 @@ static void write_inp_file(FILE *f, FueContext *ctx) {
     fprintf(f, "** Number and frequencies of regular AR(2) operators with fixed frequency:\n");
     fprintf(f, "%d", NumAr2f);
     if (NumAr2f > 0) {
-        for (int i = 0; i < NumAr2f; i++) fprintf(f, " %d", Ar2f[i].freq);
+        for (int i = 0; i < NumAr2f; i++) {
+            char buf[64];   /* k puede ser fraccionario: viene del fichero */
+            fprintf(f, " %s", inp_format(buf, sizeof(buf), Ar2f[i].freq));
+        }
         fprintf(f, "\n**");
         for (int i = 0; i < NumAr2f; i++) {
             fprintf(f, "\n%.6f", Ar2f[i].op_parameter);
@@ -197,7 +200,10 @@ static void write_inp_file(FILE *f, FueContext *ctx) {
     fprintf(f, "** Number and frequencies of regular MA(2) operators with fixed frequency:\n");
     fprintf(f, "%d", NumMa2f);
     if (NumMa2f > 0) {
-        for (int i = 0; i < NumMa2f; i++) fprintf(f, " %d", Ma2f[i].freq);
+        for (int i = 0; i < NumMa2f; i++) {
+            char buf[64];
+            fprintf(f, " %s", inp_format(buf, sizeof(buf), Ma2f[i].freq));
+        }
         fprintf(f, "\n**");
         for (int i = 0; i < NumMa2f; i++) {
             fprintf(f, "\n%.6f", Ma2f[i].op_parameter);

@@ -9,6 +9,7 @@
 #include <string.h>
 #include <errno.h>
 #include "forecast_tab.h"   // para acceder a los widgets de Forecast
+#include "engine.h"         // ejecutar fue/fuf sin shell, con sus codigos
 
 #ifdef _WIN32
 #include <windows.h>
@@ -34,7 +35,12 @@ static void write_inp_file(FILE *f, FueContext *ctx) {
     else
         fprintf(f, " %2d", Ts.outyear);
     fprintf(f, " %2d ", Ts.begyear);
-    fprintf(f, "%s\n", Ts.name ? Ts.name : "");
+    {
+    /* a single token: the engines read the name with %s */
+    char *token = token_name(Ts.name ? Ts.name : "");
+    fprintf(f, "%s\n", *token ? token : "series");
+    g_free(token);
+    }
     fprintf(f, "** Number of deterministic variables (including seasonal components):\n");
     fprintf(f, "%d\n", NdetVar);
     if (NdetVar > 0) {
@@ -976,36 +982,6 @@ void on_new_file(GtkToolButton *btn, FueContext *ctx) {
 /* ========================================================================= */
 /* Cross‑platform run of the fue executable                                 */
 /* ========================================================================= */
-#ifdef _WIN32
-static gboolean run_fue_win32(const char *inp_base, const char *workdir) {
-    char *full_path = g_find_program_in_path("fue.exe");
-    if (!full_path) {
-        g_print("fue.exe not found in PATH.\n");
-        return FALSE;
-    }
-    char cmd[1024];
-    snprintf(cmd, sizeof(cmd), "\"%s\" %s", full_path, inp_base);
-    g_free(full_path);
-
-    STARTUPINFOW si = { sizeof(si) };
-    PROCESS_INFORMATION pi = {0};
-    wchar_t *wcmd = g_utf8_to_utf16(cmd, -1, NULL, NULL, NULL);
-    wchar_t *wdir = g_utf8_to_utf16(workdir, -1, NULL, NULL, NULL);
-    BOOL success = CreateProcessW(NULL, wcmd, NULL, NULL, FALSE, CREATE_NO_WINDOW,
-                                  NULL, wdir, &si, &pi);
-    g_free(wcmd);
-    g_free(wdir);
-    if (success) {
-        WaitForSingleObject(pi.hProcess, INFINITE);
-        DWORD exit_code = 0;
-        GetExitCodeProcess(pi.hProcess, &exit_code);
-        CloseHandle(pi.hProcess);
-        CloseHandle(pi.hThread);
-        return exit_code == 0;
-    }
-    return FALSE;
-}
-#endif
 
 /* ========================================================================= */
 /* Callbacks for toolbar buttons                                            */
@@ -1024,26 +1000,13 @@ void on_run_fue(GtkWidget *widget, FueContext *ctx) {
         return;
     }
 
-#ifdef _WIN32
-    if (!run_fue_win32(input_name, workspace))
-        gtk_label_set_text(GTK_LABEL(ctx->status_label), "Failed to run fue.exe.");
-    else {
-        gtk_label_set_text(GTK_LABEL(ctx->status_label), "fue finished.");
-        load_output_to_console(ctx);   /* Cargar el .out en la consola */
-    }
-#else
-    char *full_path = g_find_program_in_path("fue");
-    if (!full_path) full_path = g_strdup("./fue");
-    char *cmd = g_strdup_printf("cd \"%s\" && \"%s\" %s", workspace, full_path, input_name);
-    int ret = system(cmd);
-    g_free(cmd);
-    g_free(full_path);
-    if (ret == 0) {
-        gtk_label_set_text(GTK_LABEL(ctx->status_label), "fue finished.");
-        load_output_to_console(ctx);
-    } else
-        gtk_label_set_text(GTK_LABEL(ctx->status_label), "fue failed.");
-#endif
+    EngineResult r = engine_run(workspace, "fue", input_name, NULL);
+    gtk_label_set_text(GTK_LABEL(ctx->status_label), r.message);
+    if (engine_wrote_results(&r))
+        load_output_to_console(ctx);       /* el .out, a la consola */
+    else
+        show_engine_output(ctx, &r);       /* por que no salio */
+    engine_result_clear(&r);
     g_free(workspace);
 }
 
@@ -1195,6 +1158,19 @@ void on_save_inp_clicked(GtkButton *button, FueContext *ctx) {
     g_free(workspace);
 }
 
+/* Lo que el motor dijo, en la consola: cuando no deja fichero de salida es
+ * lo unico que explica por que.                                            */
+void show_engine_output(FueContext *ctx, const EngineResult *r) {
+    GtkTextBuffer *buf;
+
+    if (!ctx || !ctx->text_view || !r) return;
+    buf = gtk_text_view_get_buffer(GTK_TEXT_VIEW(ctx->text_view));
+    if (r->output && *r->output)
+        gtk_text_buffer_set_text(buf, r->output, -1);
+    else if (r->message)
+        gtk_text_buffer_set_text(buf, r->message, -1);
+}
+
 /* Función para cargar el .out en la consola (llamada desde on_run_fue) */
 
  void load_output_to_console(FueContext *ctx) {
@@ -1233,15 +1209,19 @@ void load_output_to_console(FueContext *ctx) {
 /* ========================================================================= */
 static void open_pdf_file(const char *pdf_path) {
 #ifdef _WIN32
-    /* Windows: usa el comando start */
     char cmd[1024];
     snprintf(cmd, sizeof(cmd), "start \"\" \"%s\"", pdf_path);
-    system(cmd);
+    (void)system(cmd);
+#elif defined(__APPLE__)
+    char *argv[] = { "open", (char *)pdf_path, NULL };
+    g_spawn_async(NULL, argv, NULL,
+                  G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL,
+                  NULL, NULL, NULL, NULL);
 #else
-    /* Linux / Unix: usa xdg-open */
-    char *cmd = g_strdup_printf("xdg-open \"%s\"", pdf_path);
-    system(cmd);
-    g_free(cmd);
+    char *argv[] = { "xdg-open", (char *)pdf_path, NULL };
+    g_spawn_async(NULL, argv, NULL,
+                  G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL,
+                  NULL, NULL, NULL, NULL);
 #endif
 }
 
@@ -1286,13 +1266,16 @@ void on_forecast_button_clicked(GtkToolButton *btn, FueContext *ctx) {
 
     // 1) Ejecutar fue -f para generar forecast_<base>.inp
     gtk_label_set_text(GTK_LABEL(ctx->status_label), "Generating forecast input file...");
-    gchar *fue_cmd = g_strdup_printf("cd \"%s\" && fue \"%s\" -f", workspace, base_name);
-    int ret_fue = system(fue_cmd);
-    g_free(fue_cmd);
-    if (ret_fue != 0) {
-        gtk_label_set_text(GTK_LABEL(ctx->status_label), "fue -f failed.");
+    {
+    EngineResult r = engine_run(workspace, "fue", base_name, "-f", NULL);
+    if (!engine_wrote_results(&r)) {
+        gtk_label_set_text(GTK_LABEL(ctx->status_label), r.message);
+        show_engine_output(ctx, &r);
+        engine_result_clear(&r);
         g_free(workspace);
         return;
+    }
+    engine_result_clear(&r);
     }
 
     // 2) Construir el nombre base del archivo generado (sin extensión)
@@ -1311,15 +1294,18 @@ void on_forecast_button_clicked(GtkToolButton *btn, FueContext *ctx) {
 
     // 3) Ejecutar fuf sobre forecast_<base>
     gtk_label_set_text(GTK_LABEL(ctx->status_label), "Running FUF forecast...");
-    gchar *fuf_cmd = g_strdup_printf("cd \"%s\" && fuf \"%s\"", workspace, forecast_base);
-    int ret_fuf = system(fuf_cmd);
-    g_free(fuf_cmd);
-    if (ret_fuf != 0) {
-        gtk_label_set_text(GTK_LABEL(ctx->status_label), "fuf failed.");
+    {
+    EngineResult r = engine_run(workspace, "fuf", forecast_base, NULL);
+    if (!engine_wrote_results(&r)) {
+        gtk_label_set_text(GTK_LABEL(ctx->status_label), r.message);
+        show_engine_output(ctx, &r);
+        engine_result_clear(&r);
         g_free(forecast_base);
         g_free(forecast_inp_path);
         g_free(workspace);
         return;
+    }
+    engine_result_clear(&r);
     }
 
     // 4) Construir ruta del archivo .out generado

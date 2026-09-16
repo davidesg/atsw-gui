@@ -59,20 +59,29 @@ OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS))
 # Executable name
 TARGET = $(BIN_DIR)/fue_gui$(EXE_EXT)
 
+# On macOS: locate Homebrew prefix dynamically (handles both Intel /usr/local
+# and Apple Silicon /opt/homebrew), then expose pkg-config and GTK3 paths.
+# Must come BEFORE the $(shell pkg-config ...) calls below (:= evaluates immediately).
+ifeq ($(OS),macos)
+    _BREW := $(shell brew --prefix 2>/dev/null)
+    ifeq ($(_BREW),)
+        _BREW := $(shell [ -d /opt/homebrew ] && echo /opt/homebrew || echo /usr/local)
+    endif
+    export PATH            := $(_BREW)/bin:$(PATH)
+    export PKG_CONFIG_PATH := $(_BREW)/lib/pkgconfig:$(_BREW)/opt/gtk+3/lib/pkgconfig$(if $(PKG_CONFIG_PATH),:$(PKG_CONFIG_PATH))
+    PKG_CONFIG = pkg-config
+endif
+
 # pkg‑config flags for GTK+3
 GTK_CFLAGS  := $(shell $(PKG_CONFIG) --cflags gtk+-3.0 2>/dev/null)
 GTK_LIBS    := $(shell $(PKG_CONFIG) --libs   gtk+-3.0 2>/dev/null)
 
-# Fallback in case pkg‑config fails
 ifeq ($(GTK_CFLAGS),)
-    GTK_CFLAGS = $(shell pkg-config --cflags gtk+-3.0 2>/dev/null || echo "")
-    GTK_LIBS   = $(shell pkg-config --libs   gtk+-3.0 2>/dev/null || echo "-lgtk-3 -lgdk-3 -lgobject-2.0 -lglib-2.0")
-endif
-
-# On macOS, pkg‑config may need additional paths for Homebrew
-ifeq ($(OS),macos)
-    PKG_CONFIG_PATH ?= /usr/local/lib/pkgconfig:/opt/homebrew/lib/pkgconfig
-    export PKG_CONFIG_PATH
+  ifeq ($(OS),macos)
+    $(error GTK+3 not found. Install it with:  brew install gtk+3  pkg-config)
+  else
+    $(error GTK+3 not found. Install libgtk-3-dev (Debian/Ubuntu) or gtk3-devel (Fedora/RHEL))
+  endif
 endif
 
 # Combine flags
@@ -100,12 +109,16 @@ $(TARGET): $(OBJS) | $(BIN_DIR)
 # Convenience target
 gui: $(TARGET)
 
+# Tests (tests/run_tests.sh)
+check:
+	sh tests/run_tests.sh
+
 # Clean
 clean:
-	rm -rf $(BUILD_DIR)/*.o $(TARGET)
+	rm -rf $(BUILD_DIR)/*.o $(TARGET) tests/work
 
 distclean: clean
-	rm -rf $(BUILD_DIR) $(BIN_DIR)
+	rm -rf $(BUILD_DIR) $(BIN_DIR) tests/work
 
 # Install (optional)
 install: $(TARGET)
@@ -119,6 +132,7 @@ help:
 	@echo "Available targets:"
 	@echo "  all       - build fue_gui (default)"
 	@echo "  gui       - same as all"
+	@echo "  check     - run the tests (tests/run_tests.sh)"
 	@echo "  clean     - remove object files and executable"
 	@echo "  distclean - remove obj/ and bin/ directories"
 	@echo "  install   - install fue_gui to /usr/local/bin"
@@ -143,4 +157,4 @@ $(BUILD_DIR)/nlutils.o: include/nlutils.h
 $(BUILD_DIR)/operator_dialog.o: include/operator_dialog.h include/fue_globals.h include/deterministic_dialog.h include/model_spec.h include/utils.h
 $(BUILD_DIR)/utils.o: include/utils.h
 
-.PHONY: all gui clean distclean install uninstall help
+.PHONY: all gui check clean distclean install uninstall help

@@ -1,4 +1,5 @@
 #include "forecast_tab.h"
+#include "engine.h"
 #include <glib/gstdio.h>
 #include <string.h>
 #include <errno.h>
@@ -11,7 +12,6 @@
 //static void load_file_to_editor(FueContext *ctx, const char *filename);
 static void save_editor_to_file(FueContext *ctx, const char *filename);
 //static void set_current_inp_from_path(FueContext *ctx, const char *inp_path);
-static gboolean run_fuf_process(const char *base_name, const char *workdir);
 static void open_pdf_file(const char *pdf_path);
 
 /* Callbacks */
@@ -187,68 +187,6 @@ void set_current_inp_from_path(FueContext *ctx, const char *inp_path) {
 }
 
 /* ------------------------------------------------------------------------- */
-/* Ejecuta el proceso fuf (multiplataforma)                                 */
-/* ------------------------------------------------------------------------- */
-static gboolean run_fuf_process(const char *base_name, const char *workdir) {
-    if (!base_name || !workdir) return FALSE;
-
-#ifdef _WIN32
-    char *full_path = g_find_program_in_path("fuf.exe");
-    if (!full_path) {
-        /* Buscar en el mismo directorio que el ejecutable principal */
-        char *exe_path = g_win32_get_package_installation_directory_of_module(NULL);
-        if (exe_path) {
-            full_path = g_build_filename(exe_path, "fuf.exe", NULL);
-            g_free(exe_path);
-            if (!g_file_test(full_path, G_FILE_TEST_EXISTS)) {
-                g_free(full_path);
-                full_path = NULL;
-            }
-        }
-    }
-    if (!full_path) {
-        g_print("fuf.exe not found.\n");
-        return FALSE;
-    }
-
-    char *cmd_line = g_strdup_printf("\"%s\" \"%s\"", full_path, base_name);
-    g_free(full_path);
-
-    STARTUPINFOW si = { sizeof(si) };
-    PROCESS_INFORMATION pi = {0};
-    wchar_t *wcmd = g_utf8_to_utf16(cmd_line, -1, NULL, NULL, NULL);
-    wchar_t *wdir = g_utf8_to_utf16(workdir, -1, NULL, NULL, NULL);
-    g_free(cmd_line);
-
-    BOOL success = CreateProcessW(NULL, wcmd, NULL, NULL, FALSE, CREATE_NO_WINDOW,
-                                  NULL, wdir, &si, &pi);
-    g_free(wcmd);
-    g_free(wdir);
-    if (success) {
-        WaitForSingleObject(pi.hProcess, INFINITE);
-        DWORD exit_code = 0;
-        GetExitCodeProcess(pi.hProcess, &exit_code);
-        CloseHandle(pi.hProcess);
-        CloseHandle(pi.hThread);
-        return exit_code == 0;
-    }
-    return FALSE;
-#else
-    char *full_path = g_find_program_in_path("fuf");
-    if (!full_path) full_path = g_strdup("./fuf");
-    char *argv[] = { full_path, (char *)base_name, NULL };
-    GError *error = NULL;
-    gint exit_status = 0;
-    gboolean ok = g_spawn_sync(workdir, argv, NULL,
-                               G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL,
-                               NULL, NULL, NULL, NULL, &exit_status, &error);
-    g_free(full_path);
-    if (error) g_error_free(error);
-    return ok && exit_status == 0;
-#endif
-}
-
-/* ------------------------------------------------------------------------- */
 /* Abre el PDF con el visor predeterminado                                   */
 /* ------------------------------------------------------------------------- */
 static void open_pdf_file(const char *pdf_path) {
@@ -256,6 +194,11 @@ static void open_pdf_file(const char *pdf_path) {
     char cmd[1024];
     snprintf(cmd, sizeof(cmd), "start \"\" \"%s\"", pdf_path);
     (void)system(cmd);
+#elif defined(__APPLE__)
+    char *argv[] = { "open", (char *)pdf_path, NULL };
+    g_spawn_async(NULL, argv, NULL,
+                  G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL,
+                  NULL, NULL, NULL, NULL);
 #else
     char *argv[] = { "xdg-open", (char *)pdf_path, NULL };
     g_spawn_async(NULL, argv, NULL,
@@ -337,10 +280,8 @@ static void on_forecast_run_clicked(GtkButton *btn, FueContext *ctx) {
 
     gtk_label_set_text(GTK_LABEL(ctx->forecast_status_label), "Running fuf...");
 
-    gboolean process_ok = run_fuf_process(ctx->forecast_current_base, workdir);
-
-    /* Pequeña pausa para que el sistema escriba los archivos */
-    g_usleep(500000);
+    EngineResult r = engine_run(workdir, "fuf", ctx->forecast_current_base, NULL);
+    gboolean process_ok = engine_wrote_results(&r);
 
     /* Construir correctamente las rutas de salida */
     char *out_filename = g_strdup_printf("%s.out", ctx->forecast_current_base);
@@ -351,16 +292,21 @@ static void on_forecast_run_clicked(GtkButton *btn, FueContext *ctx) {
     char *pdf_path = g_build_filename(workdir, pdf_filename, NULL);
     g_free(pdf_filename);
 
-    if (g_file_test(out_path, G_FILE_TEST_EXISTS)) {
-        gtk_label_set_text(GTK_LABEL(ctx->forecast_status_label), "fuf finished successfully.");
+    if (process_ok && g_file_test(out_path, G_FILE_TEST_EXISTS)) {
+        gtk_label_set_text(GTK_LABEL(ctx->forecast_status_label), r.message);
         load_file_to_editor(ctx, out_path);
+    } else if (process_ok) {
+        gtk_label_set_text(GTK_LABEL(ctx->forecast_status_label),
+                           "fuf finished but .out file not found.");
     } else {
-        if (process_ok)
-            gtk_label_set_text(GTK_LABEL(ctx->forecast_status_label),
-                               "fuf finished but .out file not found.");
-        else
-            gtk_label_set_text(GTK_LABEL(ctx->forecast_status_label), "fuf failed.");
+        /* lo que dijo el motor, que es lo que explica por que */
+        gtk_label_set_text(GTK_LABEL(ctx->forecast_status_label), r.message);
+        if (r.output && *r.output)
+            gtk_text_buffer_set_text(
+                gtk_text_view_get_buffer(GTK_TEXT_VIEW(ctx->forecast_editor)),
+                r.output, -1);
     }
+    engine_result_clear(&r);
 
     g_free(out_path);
     g_free(pdf_path);

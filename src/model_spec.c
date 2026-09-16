@@ -1,26 +1,23 @@
 /* model_spec.c */
 #include "model_spec.h"
 #include "fue_globals.h"
+#include "utils.h"
 #include <string.h>
 
 extern struct Tseries Ts;
 extern struct Tusmodel Tm;
 
+/* The input name follows the series name, with whatever cannot go in a file
+ * name (or in the %s that the engines read) taken out. The loop that did
+ * this never advanced the pointer on a space or a punctuation mark, so the
+ * GUI hung as soon as one was typed; and the copy itself was wrong, a
+ * self-assignment with the pointer moved in the same expression.          */
 void on_series_name_changed(GtkEntry *entry, FueContext *ctx) {
     const char *name = gtk_entry_get_text(entry);
-    /* Remove punctuation and spaces to generate input name */
-    char *name2 = g_strdup(name);
-    char *p = name2;
-    while (*p) {
-        if (ispunct(*p) || isspace(*p)) {
-            /* skip */
-        } else {
-            *p++ = *p;
-        }
-    }
-    *p = '\0';
-    gtk_entry_set_text(GTK_ENTRY(ctx->input_name_entry), name2);
-    g_free(name2);
+    char *token = token_name(name);
+
+    gtk_entry_set_text(GTK_ENTRY(ctx->input_name_entry), token);
+    g_free(token);
     Ts.name = g_strdup(name); /* store in Ts */
 }
 

@@ -37,6 +37,21 @@ char *sanitize_to_utf8(const char *input) {
     return g_string_free(result, FALSE);
 }
 
+/* The name as a single token: fue and fuf read it with %s, so a space in it
+ * would cut the line of the .inp in two and the rest would be read as the
+ * next field.                                                             */
+char *token_name(const char *input) {
+    GString *out = g_string_new(NULL);
+    const char *p;
+
+    for (p = input ? input : ""; *p; p++) {
+        unsigned char c = (unsigned char)*p;
+        if (isalnum(c) || c == '_' || c == '-' || c == '.' || c >= 0x80)
+            g_string_append_c(out, (char)c);
+    }
+    return g_string_free(out, FALSE);
+}
+
 void reload_number_int(GtkTreeModel *model, GtkTreeIter iter) {
     gboolean valid = gtk_tree_model_get_iter_first(model, &iter);
     int row = 1;

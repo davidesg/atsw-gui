@@ -1,0 +1,27 @@
+#!/bin/sh
+# A stand-in for the engine, so that the tests do not depend on fue being
+# installed: it answers with the exit status the first argument asks for and
+# writes the kind of message the real one writes.
+case "$1" in
+  ok)
+      echo "FUE: banner"
+      echo "Created ok.pdf"
+      exit 0 ;;
+  bad)
+      echo "Error in the input file bad.inp, line 2: the file ends too soon" >&2
+      echo "FUE: banner"
+      exit 2 ;;
+  nofile)
+      echo "Error opening input file: nofile.inp" >&2
+      exit 1 ;;
+  noest)
+      echo "FUE: banner"
+      echo "Warning: the model could not be estimated" >&2
+      exit 3 ;;
+  crash)
+      kill -SEGV $$ ;;
+  argv)
+      # how many arguments arrived, and what the first one was
+      printf '%d\n%s\n' "$#" "$1$2" ;;
+esac
+exit 1

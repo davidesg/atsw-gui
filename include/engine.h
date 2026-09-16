@@ -1,0 +1,44 @@
+/* engine.h -- running fue and fuf from the GUI.
+ *
+ * The engines are run directly, never through a shell: a series name with a
+ * space, a quote or a semicolon used to be handed to /bin/sh, which either
+ * broke the command or ran something else.
+ *
+ * They also say how they ended, and the GUI passes that on instead of the
+ * bare "failed" it used to show:
+ *
+ *   0  the results are written
+ *   1  the command line or the input file could not be read
+ *   2  the input file is not valid; nothing was written
+ *   3  the model could not be estimated; the results carry the initial values
+ *   4  the engine stopped on a run-time error
+ *
+ * Anything else (a signal, an unknown status) is reported as it comes.
+ */
+
+#ifndef ENGINE_H
+#define ENGINE_H
+
+#include <glib.h>
+
+typedef struct {
+    int    status;     /* the exit status; ENGINE_NORUN or ENGINE_SIGNAL    */
+    int    signal_no;  /* the signal, when status is ENGINE_SIGNAL          */
+    gchar *output;     /* what it wrote (stdout and stderr), or NULL        */
+    gchar *message;    /* one line for the status bar; never NULL           */
+} EngineResult;
+
+#define ENGINE_NORUN  (-1)   /* the program could not be started            */
+#define ENGINE_SIGNAL (-2)   /* it died on a signal                         */
+
+/* Run <program> in workdir with the arguments that follow (a NULL-terminated
+ * list) and wait for it. The program is looked up in the PATH.             */
+EngineResult engine_run(const char *workdir, const char *program, ...) G_GNUC_NULL_TERMINATED;
+
+/* TRUE when the run left its files behind: it finished (0), or it could not
+ * estimate the model and wrote the results with the initial values (3).    */
+gboolean engine_wrote_results(const EngineResult *r);
+
+void engine_result_clear(EngineResult *r);
+
+#endif /* ENGINE_H */

@@ -1,0 +1,50 @@
+#!/bin/sh
+# Tests of fue_gui (make check).
+#
+#   sh tests/run_tests.sh
+#
+# What the GUI does without a window: the name it derives from what the user
+# types (src/utils.c) and the way it runs the engines (src/engine.c). The
+# engine is a stand-in, tests/fake/fue, so nothing here depends on fue or fuf
+# being installed; what is tested is that the GUI reads the exit status, that
+# it passes on what the engine said, and that an argument with a space or a
+# semicolon reaches the engine whole -- it used to go through /bin/sh.
+#
+# There is no window: a test that opens one needs an X server (xvfb-run),
+# which is not assumed here.
+
+TOP=$(cd "$(dirname "$0")/.." && pwd)
+WORK="$TOP/tests/work"
+CC=${CC:-gcc}
+
+GTK_CFLAGS=$(pkg-config --cflags gtk+-3.0 2>/dev/null)
+GTK_LIBS=$(pkg-config --libs   gtk+-3.0 2>/dev/null)
+[ -n "$GTK_CFLAGS" ] || { echo "GTK+3 not found (pkg-config gtk+-3.0)"; exit 1; }
+
+rm -rf "$WORK"; mkdir -p "$WORK" || exit 1
+
+$CC -O0 -g -Wall -I"$TOP/include" $GTK_CFLAGS \
+    "$TOP/tests/test_units.c" "$TOP/src/engine.c" "$TOP/src/utils.c" \
+    -o "$WORK/test_units" $GTK_LIBS -lm || exit 1
+
+PATH="$TOP/tests/fake:$PATH" "$WORK/test_units"
+rc=$?
+
+# The engines the GUI will really call: it must find them and they must
+# answer with a status it understands. Only a note when they are not there.
+for e in fue fuf; do
+    if command -v $e > /dev/null 2>&1; then
+        ( cd "$WORK" && $e NO_SUCH_MODEL > /dev/null 2>&1 )
+        s=$?
+        if [ $s = 1 ]; then
+            echo "note: $e is installed and reports a missing file with status 1"
+        else
+            echo "note: $e is installed but reports a missing file with status $s"
+            echo "      (fue >= 1.14 and fuf >= 1.09 are the ones with the exit codes)"
+        fi
+    else
+        echo "note: $e is not in the PATH"
+    fi
+done
+
+exit $rc

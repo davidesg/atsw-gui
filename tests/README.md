@@ -11,12 +11,13 @@ sh tests/run_tests.sh --update       # rehace tests/golden/ y los estados de run
 argumentos de fuf (`-` sin argumentos) y el código de salida esperado. Cada
 ejecución debe terminar con ese código y, si termina bien (0), escribir los
 mismos ficheros que `tests/golden/<id>/`, byte a byte: el `.out`, los ficheros
-LaTeX (`.tex` y `<input>_prev.<sub>.<año>.tex`) y el gráfico
-`prev<input>.<sub><año>.eps`. El PDF no se compara, porque lo que lo determina
+LaTeX (`.tex` y `<input>_prev.<sub>.<año>.tex`) y el gráfico de previsión
+`prev<input>.<sub><año>.eps`, que desde fuf 1.09 dibuja el propio programa. El PDF no se compara, porque lo que lo determina
 sí se compara.
 
-gnuplot y pdflatex se sustituyen por programas que no hacen nada: lo que se
-compara no depende de ellos, y la batería tarda unos segundos.
+pdflatex se sustituye por un programa que no hace nada: lo que se compara no
+depende de él, y la batería tarda unos segundos. (fuf 1.09 ya no usa gnuplot;
+el falso está para que fuf 1.08.2 pueda pasar la misma batería.)
 
 ## La línea base (fuf 1.08.2)
 
@@ -64,6 +65,12 @@ Cada commit que cambia un código de salida de `runs.tsv` lo explica aquí.
   un fichero de fue. Ninguna de las 13 ejecuciones que funcionaban cambia.
   Los errores provocados a propósito están en `errors.tsv` (ficheros
   `tests/corpus/bad_*.inp`).
+
+- **Gráfico nativo** (commit del gráfico): el gráfico de previsión
+  `prev<input>.<sub><año>.eps` lo dibuja fuf (`src/fufplot.c`, con el motor
+  gráfico de fug) y ya no llama a gnuplot. Los 13 EPS entran en las
+  referencias, y se comprueba que con el PATH vacío el gráfico se escribe
+  igual. Ningún `.out` ni fichero LaTeX cambia.
 
 ## El corpus
 

@@ -121,14 +121,16 @@ help:
 	@echo "  (Ensure the MXE toolchain is in PATH and PKG_CONFIG_PATH is set)"
 
 # Header dependencies (explicit)
-$(BUILD_DIR)/fuf.o:       include/fuf.h include/nlatools.h include/gnuplot_i.h include/usfo.h
-$(BUILD_DIR)/diagnose.o:  include/fuf.h include/nlatools.h include/gnuplot_i.h
+$(BUILD_DIR)/fuf.o:       include/fuf.h include/nlatools.h include/usfo.h
+$(BUILD_DIR)/diagnose.o:  include/fuf.h include/nlatools.h
 $(BUILD_DIR)/drvmlest.o:  include/fuf.h include/nlatools.h
 $(BUILD_DIR)/elfvarma.o:  include/fuf.h include/nlatools.h
-$(BUILD_DIR)/gnuplot_i.o: include/gnuplot_i.h
 $(BUILD_DIR)/nlatools.o:  include/nlatools.h
 $(BUILD_DIR)/qnewtopt.o:  include/fuf.h include/nlatools.h
-$(BUILD_DIR)/usfo.o:      include/usfo.h include/gnuplot_i.h include/nlatools.h include/fuf.h
+$(BUILD_DIR)/fugdraw.o:         include/fugdraw.h include/fd_metrics.h
+$(BUILD_DIR)/fufplot.o:         include/fufplot.h include/fugdraw.h
+$(BUILD_DIR)/inpcheck.o:        include/inpcheck.h
+$(BUILD_DIR)/usfo.o:      include/usfo.h include/nlatools.h include/fuf.h
 $(BUILD_DIR)/usmelard.o:  include/fuf.h include/nlatools.h
 
 .PHONY: all check clean distclean install uninstall help

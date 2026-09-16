@@ -11,8 +11,9 @@
 # the .out, the LaTeX files and the EPS graph. The PDF is not compared (what
 # determines it is compared), and neither is anything pdflatex leaves behind.
 #
-# gnuplot and pdflatex are replaced by programs that do nothing: what is
-# compared does not depend on them, and the tests run in seconds.
+# pdflatex is replaced by a program that does nothing: what is compared does
+# not depend on it, and the tests run in seconds. (fuf 1.09 does not use
+# gnuplot; the fake one is there so that fuf 1.08.2 can run the same tests.)
 
 UPDATE=0
 if [ "$1" = "--update" ]; then UPDATE=1; shift; fi
@@ -86,6 +87,22 @@ grep -v '^#' "$TESTS/runs.tsv" | while IFS='	' read -r id input args status; do
     fi
     echo "x" >> "$WORK/runs"
 done
+
+# The graph no longer needs gnuplot: with an empty PATH fuf writes it just
+# the same (it still ends badly, because the PDF needs pdflatex).
+if [ $UPDATE = 0 ]; then
+    mkdir -p "$WORK/nopath"
+    cp "$TESTS/corpus/forecast_D1.inp" "$WORK/nopath/"
+    ( cd "$WORK/nopath" && env PATH=/nonexistent "$FUF" forecast_D1 > console.txt 2>&1
+      echo $? > status ) 2>/dev/null
+    if [ -s "$WORK/nopath/forecast_D1.out" ] &&
+       [ -s "$WORK/nopath/prevforecast_D1.12020.eps" ]; then
+        echo "x" >> "$WORK/errors"
+    else
+        echo "FAIL: with an empty PATH fuf does not write its graph"
+        echo "x" >> "$WORK/failed"
+    fi
+fi
 
 # A missing input file: exit status 1
 if [ $UPDATE = 0 ]; then

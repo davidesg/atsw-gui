@@ -22,7 +22,6 @@
 #include <math.h>
 #include "fuf.h"                  /* Header file (prototype declarations). */
 #include "nlatools.h"             /* Header file (prototype declarations)  */
-#include "gnuplot_i.h"            /* gnuplot interface                     */
 #include "usfo.h"
 #include "inpcheck.h"               /* validation of the .inp, exit status */
 

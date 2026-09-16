@@ -76,6 +76,32 @@ ok=$(echo "$ink" | awk -v c=$half '{ cx=($1+$2)/2; cy=($3+$4)/2;
 [ "$ok" = 1 ] || { echo "FAIL: la lupa fuera del centro da [$ink], se esperaba ($((half+60)),$((half-40)))"; pv_fail=1; }
 [ $pv_fail = 0 ] && echo "la ventana de graficos: la pagina y la lupa, donde se dibujaron" || rc=1
 
+# --------------------------------------------------------------------------
+# El programa de verdad, conducido desde el codigo: se levanta la ventana
+# principal (sin ensenarla), se pone el modelo y se llama al boton de Run.
+# Comprueba lo que el usuario acaba viendo. Hace falta un servidor grafico;
+# si no lo hay, se salta.
+# --------------------------------------------------------------------------
+GUI_SRCS=$(ls "$TOP"/src/*.c | grep -v '/main\.c$')
+$CC -O0 -g -Wall -I"$TOP/include" $GTK_CFLAGS \
+    "$TOP/tests/test_gui.c" $GUI_SRCS \
+    -o "$WORK/test_gui" $GTK_LIBS -lm 2> "$WORK/gui_build.txt" ||
+    { cat "$WORK/gui_build.txt"; exit 1; }
+
+if command -v fue > /dev/null 2>&1; then
+    mkdir -p "$WORK/gui"
+    cp "$TOP/data/D1.inp" "$WORK/gui/"
+    ( cd "$WORK/gui" && "$WORK/test_gui" "$PWD" D1 ) 2>/dev/null > "$WORK/gui.txt"
+    if [ $? = 0 ]; then
+        sed -n 's/^barra/  &/p' "$WORK/gui.txt"
+    else
+        grep -E '^FAIL|^no hay' "$WORK/gui.txt"
+        grep -q '^no hay' "$WORK/gui.txt" || rc=1
+    fi
+else
+    echo "note: sin fue instalado no se puede probar la ventana con el motor"
+fi
+
 # The engines the GUI will really call: it must find them and they must
 # answer with a status it understands. Only a note when they are not there.
 for e in fue fuf; do

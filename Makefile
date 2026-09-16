@@ -121,8 +121,10 @@ help:
 	@echo "  (Ensure the MXE toolchain is in PATH and PKG_CONFIG_PATH is set)"
 
 # Header dependencies (explicit)
-$(BUILD_DIR)/fue.o:             include/fue.h include/nlatools.h include/fugplot.h include/fugdraw.h include/plothost.h include/inpcheck.h
+$(BUILD_DIR)/fue.o:             include/fue.h include/nlatools.h include/fugplot.h include/fugdraw.h include/plothost.h include/inpcheck.h include/equation.h
 $(BUILD_DIR)/inpcheck.o:        include/inpcheck.h
+$(BUILD_DIR)/equation.o:        include/equation.h include/fue.h include/nlatools.h
+$(BUILD_DIR)/eqlatex.o:         include/equation.h
 $(BUILD_DIR)/diagnose.o:        include/fue.h include/nlatools.h
 $(BUILD_DIR)/fugdraw.o:         include/fugdraw.h include/fd_metrics.h
 $(BUILD_DIR)/fugplot.o:         include/fugplot.h include/fugdraw.h include/plothost.h include/fue.h include/nlatools.h

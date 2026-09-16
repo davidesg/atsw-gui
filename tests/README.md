@@ -67,6 +67,12 @@ Cada commit que cambia un código de salida de `runs.tsv` lo explica aquí.
   mismos ficheros que en fug) y se añade a las referencias. Ningún `.out`,
   `.pre` ni `.tex` cambia.
 
+- **La ecuación, separada de LaTeX** (commit de la ecuación): `src/equation.c`
+  recorre el modelo una vez y construye la ecuación (`include/equation.h`);
+  `src/eqlatex.c` la escribe como el fichero LaTeX de siempre. Los 81 `.tex`
+  de referencia salen idénticos byte a byte, que es lo que dice que la
+  reorganización no cambió nada. Ningún `.out`, `.pre` ni EPS cambia.
+
 ## La batería sintética
 
 `syn_*.inp` (serie IPCM de `fug/examples`): ruido blanco sin nada libre y con

@@ -5,6 +5,11 @@
 #include <gtk/gtk.h>
 #include "fue_context.h"
 
+/* Ts.name es un const char * que nadie libera: cada pulsacion dejaba una
+ * copia perdida, y unas veces guardaba una cadena propia y otras el buffer
+ * del GtkEntry. Aqui hay un solo dueno.                                   */
+void ts_set_name(const char *name);
+
 void on_series_name_changed(GtkEntry *entry, FueContext *ctx);
 void on_freq_changed(GtkComboBox *combo, FueContext *ctx);
 void on_refactor_changed(GtkSpinButton *spin, FueContext *ctx);

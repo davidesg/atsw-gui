@@ -7,6 +7,16 @@
 extern struct Tseries Ts;
 extern struct Tusmodel Tm;
 
+/* El unico dueno del nombre de la serie: Ts.name apunta siempre a esta
+ * copia, que se libera al sustituirla.                                    */
+void ts_set_name(const char *name) {
+    static char *owned = NULL;
+
+    g_free(owned);
+    owned = g_strdup(name ? name : "");
+    Ts.name = owned;
+}
+
 /* The input name follows the series name, with whatever cannot go in a file
  * name (or in the %s that the engines read) taken out. The loop that did
  * this never advanced the pointer on a space or a punctuation mark, so the
@@ -18,7 +28,7 @@ void on_series_name_changed(GtkEntry *entry, FueContext *ctx) {
 
     gtk_entry_set_text(GTK_ENTRY(ctx->input_name_entry), token);
     g_free(token);
-    Ts.name = g_strdup(name); /* store in Ts */
+    ts_set_name(name);
 }
 
 void on_freq_changed(GtkComboBox *combo, FueContext *ctx) {
@@ -108,7 +118,7 @@ void sync_all_from_ui(FueContext *ctx) {
     Ts.nobs = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(ctx->n_obs_spin));
     Ts.begtime = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(ctx->start_period_spin));
     Ts.begyear = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(ctx->start_year_spin));
-    Ts.name = gtk_entry_get_text(GTK_ENTRY(ctx->series_name_entry));
+    ts_set_name(gtk_entry_get_text(GTK_ENTRY(ctx->series_name_entry)));
     Ts.refactor = gtk_spin_button_get_value(GTK_SPIN_BUTTON(ctx->refactor_spin));
     /* Frequency already set by on_freq_changed */
 }

@@ -380,7 +380,7 @@ free_model_globals();
       Ts.begtime = 1;
       }
 
-      Ts.name = g_strconcat( series_name, NULL );
+      ts_set_name( series_name );
       Tm.residuals = g_strconcat( model_residuals, NULL );
  //  strcpy( Ts.name,  series_name);
 
@@ -929,7 +929,7 @@ void on_new_file(GtkToolButton *btn, FueContext *ctx) {
     Ts.freq = 12;
     Ts.begyear = 2000;
     Ts.begtime = 1;
-    Ts.name = NULL;
+    ts_set_name(NULL);
     Ts.refactor = 1.0;
     Tm.boxlam = 1.0;
     Tm.boxm = 1.0;

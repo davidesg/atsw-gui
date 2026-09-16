@@ -50,7 +50,7 @@ gboolean load_data_file(const char *filename, FueContext *ctx) {
     Ts.freq = (freq_idx == 0) ? 1 : (freq_idx == 1) ? 4 : 12;
     Ts.begyear = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(ctx->start_year_spin));
     Ts.begtime = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(ctx->start_period_spin));
-    Ts.name = NULL;
+    ts_set_name(NULL);
 
     rewind(f);
     for (int i = 1; i <= n_rows; i++) {
@@ -101,7 +101,7 @@ void on_data_file_selected(GtkFileChooserButton *button, FueContext *ctx) {
         g_free(dir);
     } else {
         if (load_data_file(filename, ctx)) {
-            Ts.name = g_strdup(gtk_entry_get_text(GTK_ENTRY(ctx->series_name_entry)));
+            ts_set_name(gtk_entry_get_text(GTK_ENTRY(ctx->series_name_entry)));
             Ts.refactor = 1.0;
             Tm.boxlam = 1.0;
             Tm.boxm = 1.0;
@@ -150,7 +150,7 @@ void on_data_file_selected(GtkFileChooserButton *button, FueContext *ctx) {
         gtk_widget_set_sensitive(ctx->btn_run, TRUE);
     } else {
         if (load_data_file(filename, ctx)) {
-            Ts.name = g_strdup(gtk_entry_get_text(GTK_ENTRY(ctx->series_name_entry)));
+            ts_set_name(gtk_entry_get_text(GTK_ENTRY(ctx->series_name_entry)));
             Ts.refactor = 1.0;
             Tm.boxlam = 1.0;
             Tm.boxm = 1.0;

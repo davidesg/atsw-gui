@@ -1977,10 +1977,15 @@ FREE_STR( file_output );
               fprintf (  preputv, "%.4f", Tm.Delta[i][j] );
 	      if ( Tm.Ielta[i][j] == 1 )
 		fprintf( preputv, "  1" );
-	      else 
+	      else
 		fprintf( preputv, "  0" );
+	      /* Un par por linea, como en la seccion de omega de arriba. Sin
+	       * este salto los pares salian pegados -- "1.8400  1-0.8631  1" --
+	       * y el .pre no lo podia releer ni el propio motor, que aborta con
+	       * "the flag ... must be 0 or 1". Solo se veia con dos o mas
+	       * deltas, y no habia ningun fichero asi en los 115 de tests/.   */
+	      fprintf( preputv, "\n" );
               }
-	  fprintf( preputv, "\n" );
           }
 
    }

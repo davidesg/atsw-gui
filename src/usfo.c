@@ -678,16 +678,19 @@ void make_latex_forecast (FILE *texputv, char *prevputf, int Aper, int Asub, int
 
 {
 
-fprintf(texputv, "\\documentclass[a4paper,12pt]{article}\n");
+/* 10pt with \\footnotesize and single spacing: the size of the published
+ * report, where the table and the graph at scale .60 end together.        */
+fprintf(texputv, "\\documentclass[a4paper,10pt]{article}\n");
 fprintf(texputv, "\\usepackage[latin1]{inputenc}\n");
 fprintf(texputv, "\\usepackage{color}\n");
 fprintf(texputv, "\\usepackage{colortbl}\n");
 fprintf(texputv, "\\usepackage{lscape}\n");
 fprintf(texputv, "\\usepackage{multicol}\n");
 fprintf(texputv, "\\usepackage{graphicx}\n");
+fprintf(texputv, "\\usepackage{setspace}\n");
 fprintf(texputv, "\\setlength{\\columnsep}{2.5pc}\n");
 fprintf(texputv, "\\oddsidemargin -.25 in \\textwidth 6.60in \\topmargin -.10in \n");
-fprintf(texputv, "\\headheight 0in \\textheight 24.06cm \\linespread{1.6}\n");
+fprintf(texputv, "\\headheight 0in \\textheight 24.06cm \n");
 fprintf(texputv, "\\renewcommand{\\baselinestretch}{.98} \n");
 fprintf(texputv, "\n");
 fprintf(texputv, "\\begin{document}\n");
@@ -705,7 +708,7 @@ if ( freq == 1) fprintf(texputv, "\\space \\space \\space Forecast Origin: %d \\
 else fprintf(texputv, "\\space \\space \\space Forecast Origin: %d/%d \\\\ \n", Asub, Aper );
 fprintf(texputv, "\\end{center}\n");
 fprintf(texputv, "\n");
-fprintf(texputv, "\\begin{small}  \\input{%s} \\end{small} \n", prevputf);
+fprintf(texputv, "\\begin{footnotesize} \\singlespacing \\input{%s} \\end{footnotesize} \n", prevputf);
 fprintf(texputv, "\n");
 fprintf(texputv, "\\end{landscape}\n");
 fprintf(texputv, "\\end{document}\n");

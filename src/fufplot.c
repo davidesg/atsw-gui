@@ -25,11 +25,14 @@
 
 #define LW_AXIS    0.80           /* gnuplot lw 1.6                         */
 #define LW_GRID    0.50
-#define LW_LINE    0.70           /* the series                             */
+#define LW_LINE    0.80           /* the series, solid                      */
 #define LW_BAND    0.75           /* the bands, dashed                      */
 #define LW_IMPULSE 1.40           /* gnuplot ls 5 lw 9, halved and thinned  */
 #define TIC        3.0
-#define DOT        1.7            /* radius of the points of the series     */
+/* The observed part carries a larger point than the forecast, which is what
+ * tells the two apart in the published report; the line is solid in both.  */
+#define DOT_OBS    2.35
+#define DOT_FOR    2.00
 
 static double mapv( double v, double v0, double v1, double p0, double p1 )
 {
@@ -72,6 +75,18 @@ static void tick_label( char *text, size_t size, double v, double step )
       if ( *p == '.' ) *p = '\0';
       }
    if ( strcmp( text, "-0" ) == 0 ) snprintf( text, size, "0" );
+}
+
+/* One year every how many, so that the labels do not run into one another:
+ * never fewer than the graph of gnuplot had.                               */
+static int year_step( double x0, double x1, int n, int freq, int every )
+{
+   double w = fd_text_width( FD_HELV, SZ_TICK, "0000" ) * 1.15;
+
+   if ( n < 2 || freq < 1 ) return( every );
+   while ( every < 100 &&
+           ( x1 - x0 ) * every * freq / ( n - 1 ) < w ) every++;
+   return( every );
 }
 
 /* The vertical lines and the labels of the years: one for each first season
@@ -162,7 +177,8 @@ FDFig *fp_forecast( const double *y, const double *band, const double *band2,
    v1 = ceil( v1 / step ) * step;
 
    fd_text( f, x0 - 20.0, y1 + 14.0, FD_HELV_BOLD, SZ_TITLE, FD_LEFT, title );
-   year_axis( f, x0, x1, y0, y1, n, freq, first_year, first_season, every );
+   year_axis( f, x0, x1, y0, y1, n, freq, first_year, first_season,
+              year_step( x0, x1, n, freq, every ) );
    yaxis( f, x0, x1, y0, y1, v0, v1, step );
 
    /* the bands of the forecast, dashed */
@@ -177,8 +193,9 @@ FDFig *fp_forecast( const double *y, const double *band, const double *band2,
    for ( i = L; i < n; i++ ) py[i - L] = mapv( band2[i], v0, v1, y0, y1 );
    fd_polyline( f, px, py, L );
 
-   /* the series, observed and forecast, with its points */
-   fd_dash( f, 1.5, 2.0 );
+   /* the series, observed and forecast: one solid line, and a point at each
+    * observation -- larger in the observed part than in the forecast       */
+   fd_dash( f, 0.0, 0.0 );
    fd_linewidth( f, LW_LINE );
    for ( i = 0; i < n; i++ )
        {
@@ -186,22 +203,8 @@ FDFig *fp_forecast( const double *y, const double *band, const double *band2,
        py[i] = mapv( y[i], v0, v1, y0, y1 );
        }
    fd_polyline( f, px, py, n );
-   fd_dash( f, 0.0, 0.0 );
-   for ( i = 0; i < n; i++ ) fd_disc( f, px[i], py[i], DOT );
-   /* the observed part also carries a square, as the fourth column of the
-    * gnuplot graph did, so that it is told apart from the forecast          */
-   fd_linewidth( f, 0.6 );
-   for ( i = 0; i < L; i++ )
-       {
-       double q[5], r[5], d = DOT + 0.5;
-
-       q[0] = px[i] - d; r[0] = py[i] - d;
-       q[1] = px[i] + d; r[1] = py[i] - d;
-       q[2] = px[i] + d; r[2] = py[i] + d;
-       q[3] = px[i] - d; r[3] = py[i] + d;
-       q[4] = q[0];      r[4] = r[0];
-       fd_polyline( f, q, r, 5 );
-       }
+   for ( i = 0; i < n; i++ )
+       fd_disc( f, px[i], py[i], ( i < L ) ? DOT_OBS : DOT_FOR );
 
 /* [2]: the panel of the errors, narrower, as in FUF 1.08                    */
 
@@ -221,7 +224,8 @@ FDFig *fp_forecast( const double *y, const double *band, const double *band2,
    if ( floor( cmax * 10.0 + 0.5 ) > 0.0 ) cmax = floor( cmax * 10.0 + 0.5 ) / 10.0;
 
    fd_text( f, x0 - 20.0, y1 + 14.0, FD_HELV_BOLD, SZ_TITLE, FD_LEFT, "ERR" );
-   year_axis( f, x0, x1, y0, y1, L, freq, first_year, first_season, every );
+   year_axis( f, x0, x1, y0, y1, L, freq, first_year, first_season,
+              year_step( x0, x1, L, freq, every ) );
    /* the ticks every two standard deviations, rounded to one decimal as
     * gnuplot rounded them ("set ytics %.1f")                                */
    step = floor( 2.0 * sigma * 10.0 + 0.5 ) / 10.0;

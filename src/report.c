@@ -34,23 +34,31 @@ extern void ObsToDate( int beg_per, int beg_sub, int obs_no, int freq,
 #define F_TEXT  FD_HELV
 #define F_BOLD  FD_HELV_BOLD
 
-#define SZ       10.7                /* the data of the table                */
-#define SZ_LAB    9.4                /* its headings                         */
-#define SZ_HEAD  11.0                /* the heading of the page              */
-#define ROW      12.96               /* from one row to the next             */
-#define PAD       6.0                /* at each side of a column (\tabcolsep)*/
-#define GREY      0.95               /* the background of the forecast rows  */
-#define LW_RULE   0.5
+/* The table of the published report, measured on it: one unit of what
+ * follows is one point of that page. The whole block (table and graph
+ * together) is then multiplied by the factor that makes the table fill the
+ * page, so what changes is the size, never the proportions.                */
+
+#define SZ        7.43               /* the data of the table                */
+#define SZ_LAB    6.55               /* its headings                         */
+#define ROW       9.00               /* from one row to the next             */
+#define PAD       6.00               /* at each side of a column (\tabcolsep)*/
 
 /* The head, from the top rule down (the rule itself is at 0) */
-#define H_GRP    16.40               /* LEVEL, LOG RATE OF CHANGE            */
-#define H_CLINE  26.96               /* the rule under them (columns 2..7)   */
-#define H_LAB    45.68               /* DATE VALUE Std ...                   */
-#define H_UNIT   58.10               /* the (%)                              */
-#define H_RULE   63.36               /* the rule that closes the head        */
-#define H_DATA   86.08               /* the first row of data                */
+#define H_GRP     9.72               /* LEVEL, LOG RATE OF CHANGE            */
+#define H_CLINE  15.24               /* the rule under them (columns 2..7)   */
+#define H_LAB    27.00               /* DATE VALUE Std ...                   */
+#define H_UNIT   35.75               /* the (%)                              */
+#define H_RULE   39.36               /* the rule that closes the head        */
+#define H_DATA   54.64               /* the first row of data                */
 
-#define BAND_UP   9.76               /* the grey band, over the base line    */
+#define BAND_UP   7.24               /* the grey band, over the base line    */
+#define GRAPH_GAP 0.0                /* the graph carries its own margin     */
+#define FIT_MAX   1.55               /* a short table does not grow for ever */
+
+#define SZ_HEAD  11.0                /* the heading of the page              */
+#define GREY      0.95               /* the background of the forecast rows  */
+#define LW_RULE   0.5
 
 /* The page */
 #define PW      841.89
@@ -60,9 +68,6 @@ extern void ObsToDate( int beg_per, int beg_sub, int obs_no, int freq,
 #define Y_DESC   79.36               /* top of the page                      */
 #define Y_ORIG   92.96
 #define Y_TABLE 108.48               /* the top rule of the table            */
-
-#define GRAPH_SCALE 0.60
-#define GRAPH_GAP   18.10
 
 #define NCOL 8
 #define CELL 24
@@ -232,60 +237,58 @@ int report_write_pdf( const char *filename, FDFig *graph, const char *name,
               snprintf( rows[i].text[j], CELL, "%.2f",
                         ( j == 1 || !logs ) ? rows[i].v[j] / div : rows[i].v[j] );
 
-/* [3]: the metrics. The table keeps its measures unless it is too long for
- *      the page, and then everything in it is shrunk by the same factor.    */
+/* [3]: the metrics. The table is measured at the size of the published
+ *      report and the whole block is then multiplied by the factor that
+ *      makes it fill the page: the graph is as tall as the table, as it is
+ *      there, so the two end together whatever the horizon.                 */
 
-   m.sz = SZ; m.lab = SZ_LAB; m.row = ROW; m.pad = PAD;
-   m.grp = H_GRP; m.cline = H_CLINE; m.lab_y = H_LAB; m.unit = H_UNIT;
-   m.rule = H_RULE; m.data = H_DATA; m.band = BAND_UP;
-
-   for ( i = 0, j = 0; i < nr; i++ ) j += 1 + rows[i].gap;
-   need  = H_DATA + ( j - 1 ) * ROW + 0.4 * SZ;
-   avail = PH - Y_TABLE - MARGIN;
-   if ( need > avail && need > 0.0 )
-      {
-      fit = avail / need;
-      m.sz *= fit; m.lab *= fit; m.row *= fit; m.pad *= fit;
-      m.grp *= fit; m.cline *= fit; m.lab_y *= fit; m.unit *= fit;
-      m.rule *= fit; m.data *= fit; m.band *= fit;
-      }
-
-   for ( i = 0; i < NCOL; i++ )
+   for ( i = 0; i < NCOL; i++ )       /* the columns, at the published size  */
        {
-       w[i] = fd_text_width( F_TEXT, m.lab, label[i] );
-       d = fd_text_width( F_TEXT, m.lab, unit[i] );
+       w[i] = fd_text_width( F_TEXT, SZ_LAB, label[i] );
+       d = fd_text_width( F_TEXT, SZ_LAB, unit[i] );
        if ( d > w[i] ) w[i] = d;
        for ( j = 0; j < nr; j++ )
            {
-           d = fd_text_width( F_TEXT, m.sz,
+           d = fd_text_width( F_TEXT, SZ,
                               ( i == 0 ) ? rows[j].date : rows[j].text[i] );
            if ( d > w[i] ) w[i] = d;
            }
-       w[i] += 2 * m.pad;
+       w[i] += 2 * PAD;
        }
    /* the two headings that span several columns have to fit as well */
-   d = fd_text_width( F_TEXT, m.lab, grp1 ) + 2 * m.pad - ( w[1] + w[2] );
+   d = fd_text_width( F_TEXT, SZ_LAB, grp1 ) + 2 * PAD - ( w[1] + w[2] );
    if ( d > 0.0 ) { w[1] += d / 2.0; w[2] += d / 2.0; }
-   d = fd_text_width( F_TEXT, m.lab, grp2 ) + 2 * m.pad
+   d = fd_text_width( F_TEXT, SZ_LAB, grp2 ) + 2 * PAD
        - ( w[3] + w[4] + w[5] + w[6] );
    if ( d > 0.0 ) for ( i = 3; i <= 6; i++ ) w[i] += d / 4.0;
 
    tw = 0.0;
    for ( i = 0; i < NCOL; i++ ) tw += w[i];
 
-/* [4]: where the table and the graph go. They keep the distance they have
- *      in the published report, and the block is centred on the page.       */
-
-   gw = ( graph != NULL ) ? graph->w * GRAPH_SCALE : 0.0;
-   gh = ( graph != NULL ) ? graph->h * GRAPH_SCALE : 0.0;
-   s  = GRAPH_SCALE;
-   if ( gh > PH - Y_TABLE - MARGIN )            /* a graph that does not fit */
-      {
-      s  = GRAPH_SCALE * ( PH - Y_TABLE - MARGIN ) / gh;
-      gw = graph->w * s;
-      gh = graph->h * s;
-      }
+   for ( i = 0, j = 0; i < nr; i++ ) j += 1 + rows[i].gap;
+   need  = H_DATA + ( j - 1 ) * ROW + ( ROW - BAND_UP );   /* the table      */
+   avail = PH - Y_TABLE - MARGIN;
+   fit   = ( need > 0.0 ) ? avail / need : 1.0;
+   if ( fit > FIT_MAX ) fit = FIT_MAX;
+   /* the graph is as tall as the table and keeps its own proportions */
+   gw = ( graph != NULL && graph->h > 0.0 ) ? need * graph->w / graph->h : 0.0;
    block = tw + ( ( graph != NULL ) ? GRAPH_GAP + gw : 0.0 );
+   if ( block * fit > PW - 2 * MARGIN && block > 0.0 )
+      fit = ( PW - 2 * MARGIN ) / block;
+
+   m.sz = SZ * fit; m.lab = SZ_LAB * fit; m.row = ROW * fit; m.pad = PAD * fit;
+   m.grp = H_GRP * fit; m.cline = H_CLINE * fit; m.lab_y = H_LAB * fit;
+   m.unit = H_UNIT * fit; m.rule = H_RULE * fit; m.data = H_DATA * fit;
+   m.band = BAND_UP * fit;
+   for ( i = 0; i < NCOL; i++ ) w[i] *= fit;
+   tw    *= fit;
+   gh     = need * fit;                          /* as tall as the table     */
+   gw    *= fit;
+   block *= fit;
+   s      = ( graph != NULL && graph->h > 0.0 ) ? gh / graph->h : 1.0;
+
+/* [4]: where the table and the graph go: the block, centred on the page.    */
+
    left  = ( PW - block ) / 2.0;
    if ( left < MARGIN ) left = MARGIN;
 

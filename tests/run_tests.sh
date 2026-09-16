@@ -12,9 +12,9 @@
 # 1.13.1, the base line). Files of fuf and fug are not compared: fue does not
 # read them, and what it writes with them has no meaning.
 #
-# pdflatex is replaced by a program that does nothing: the results compared
-# do not depend on it, and the tests run in seconds. (fue 1.14 does not use
-# gnuplot; the fake gnuplot is there so that fue 1.13.1 can run the tests too.)
+# gnuplot and pdflatex are replaced by programs that do nothing: fue 1.14
+# uses neither (it draws its graph and its report itself), but fue 1.13.1 can
+# then run the same tests, and -latex does not compile anything here.
 
 UPDATE=0
 if [ "$1" = "--update" ]; then UPDATE=1; shift; fi
@@ -140,6 +140,21 @@ if [ $UPDATE = 0 ]; then
             echo "x" >> "$WORK/failed"
         fi
     done
+fi
+
+# fue needs no other program: with an empty PATH it must write its report
+if [ $UPDATE = 0 ]; then
+    mkdir -p "$WORK/nopath"
+    cp "$TESTS/corpus/DE.2.inp" "$WORK/nopath/"
+    ( cd "$WORK/nopath" && env PATH=/nonexistent "$FUE" DE.2 > console.txt 2>&1
+      echo $? > status ) 2>/dev/null
+    if [ "$(cat "$WORK/nopath/status")" = 0 ] && [ -s "$WORK/nopath/DE.2.pdf" ] &&
+       head -c 8 "$WORK/nopath/DE.2.pdf" | grep -q "PDF-1.4"; then
+        echo "x" >> "$WORK/errors"
+    else
+        echo "FAIL: with an empty PATH fue does not write its report in PDF"
+        echo "x" >> "$WORK/failed"
+    fi
 fi
 
 # A missing input file: exit status 1

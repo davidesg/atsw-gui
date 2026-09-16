@@ -39,21 +39,22 @@ Existen dos módulos adicionales que completan el taller de análisis univariant
 - Compilador C: GCC ≥ 9 (Linux/macOS) o MinGW-w64 (Windows)
 - [GNU Scientific Library (GSL)](https://www.gnu.org/software/gsl/) ≥ 2.0
 - GNU Make
-- pdflatex (TeX Live o MiKTeX), para el informe en PDF.
+- pdflatex (TeX Live o MiKTeX), **solo** si se usa la opción `-latex`.
 
-Desde la versión 1.14, FUE dibuja él mismo el gráfico de los residuos (con
-el motor gráfico de FUG, `fugdraw`): ya no necesita Gnuplot.
+Desde la versión 1.14, FUE dibuja él mismo el gráfico de los residuos y el
+informe en PDF (con el motor gráfico de FUG, `fugdraw`): no necesita Gnuplot
+ni LaTeX, y no tiene más dependencia que GSL.
 
 En Debian/Ubuntu:
 
 ```
-sudo apt install build-essential libgsl-dev texlive-latex-base
+sudo apt install build-essential libgsl-dev
 ```
 
 En macOS (Homebrew):
 
 ```
-brew install gsl   # y MacTeX para pdflatex
+brew install gsl
 ```
 
 ## Estructura de archivos
@@ -122,10 +123,18 @@ fue input [eml|aml] [chk|nochk] [-f [horizonte]]
 | `eml`\|`aml`        | máxima verosimilitud exacta \| aproximada (por defecto: `eml`) |
 | `chk`\|`nochk`      | comprobar \| no comprobar invertibilidad MA (por defecto: `chk`) |
 | `-f [horizonte]`    | genera `forecast_input.inp` para FUF; `horizonte` es el número de períodos a predecir (por defecto: 24) |
+| `-latex`            | compila `input.tex` con pdflatex en lugar de dibujar el PDF |
 
 FUE genera un archivo de salida `input.out` con resultados en texto, el
 gráfico de los residuos `Ainput.eps`, el fichero de continuación `input.pre`
-y el informe `input.pdf` (con pdflatex, a partir de `input.tex`).
+y el informe `input.pdf`: el gráfico, la ecuación del modelo con los errores
+estándar bajo cada coeficiente, y los residuos que superan tres desviaciones
+típicas.
+
+El fichero `input.tex` se escribe siempre, para poder incluir la ecuación en
+un documento propio. Con `-latex`, el PDF lo compila pdflatex desde ese
+fichero en lugar de dibujarlo FUE: es el mismo informe con la tipografía de
+LaTeX, unas 40 veces más lento.
 
 Antes de escribir nada, FUE comprueba el `.inp` y, si algo está mal, dice qué
 y en qué línea (por ejemplo, si es un fichero de FUF o de FUG en lugar de uno

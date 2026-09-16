@@ -26,6 +26,7 @@
 #include "fugplot.h"               /* graphs drawn with fugdraw (no gnuplot) */
 #include "inpcheck.h"               /* validation of the .inp, exit status */
 #include "equation.h"               /* the equation of the model, and its writers */
+#include "report.h"                 /* the report in PDF, drawn without LaTeX  */
 
 double macheps;                      /* Machine epsilon: global variable.   */
 FILE *outputv;                     /* Output file: global variable.         */
@@ -85,7 +86,7 @@ int main( int argc, char *argv[] )
    STRING inputf, outputf, texputf, distputf, restputf, x11out, dvif, preputf, namef, dumstrg;
    int    outyear;
    FILE   *inputv;
-   FILE   *dviv;
+   /* dviv: the DVI file of latex + dvips, no longer used */
 
 /* The following variables have to do with the time series model and data:   */
 
@@ -99,6 +100,8 @@ int main( int argc, char *argv[] )
    char base_name[4096];
    int  est_fault = 0;         /* ifault of the estimation (exit status 3) */
    Equation equation;          /* the estimated model, written as an equation */
+   FDFig *graph_fig = NULL;    /* the graph of the residuals (report.c)       */
+   int  latex_flag = 0;        /* -latex: also compile the .tex with pdflatex */
 
    void cast_us( double *, struct Tvarma *, int *, int, int );
    void CalcNonsOp( int, int, int, int *, int, double * );
@@ -137,6 +140,7 @@ int main( int argc, char *argv[] )
       printf( "[eml|aml]  : exact | approximate maximum likelihood (default: eml)\n" );
       printf( "[chk|nochk]: check | do not check for invertibility (default: chk)\n" );
       printf("[-f [horizon]] : generate input file for FUF (forecast)\n");
+      printf( "[-latex]   : also compile the .tex file with pdflatex\n" );
       printf( "\nExit status: 0 results written; 1 command line or file error; 2 the input\n" );
       printf( "file is not valid (nothing written); 3 the model could not be estimated\n" );
       printf( "(results written with the initial values); 4 run-time error.\n" );
@@ -162,6 +166,8 @@ int main( int argc, char *argv[] )
              chk = 0;
           else if ( strcmp( argv[i], "geom" ) == 0 )
              geom = 1;
+         else if ( strcmp( argv[i], "-latex" ) == 0 )
+             latex_flag = 1;
          else if ( strcmp( argv[i], "-f" ) == 0 ) {
                forecast_flag = 1;
                   if ( i+1 <= argc-1 && argv[i+1][0] != '-' ) {
@@ -1565,10 +1571,10 @@ snprintf ( file_output, 4096, "A%s", x11out );
 /* the same graph as fug -c). The residuals are not transformed: lambda 1    */
 /* and no differences, so the title is just their name, as in fue 1.13.1.    */
 	if ( Ts.freq > 1 ) 
-		fd_fig_free( fp_PlotSer_CorrSer ( &res, nparma, Ts.nobs, timeout, Ts.begyear, 1.0, 0, 0, lags, Tm.cbands, file_output, res.name ) );
+		graph_fig = fp_PlotSer_CorrSer ( &res, nparma, Ts.nobs, timeout, Ts.begyear, 1.0, 0, 0, lags, Tm.cbands, file_output, res.name );
 
 	else
-		fd_fig_free( fp_PlotSer_CorrSer ( &res, nparma, Ts.nobs, timeout, Ts.begyear - outyear, 1.0, 0, 0, lags, Tm.cbands, file_output, res.name ) );
+		graph_fig = fp_PlotSer_CorrSer ( &res, nparma, Ts.nobs, timeout, Ts.begyear - outyear, 1.0, 0, 0, lags, Tm.cbands, file_output, res.name );
 
 FREE_STR( file_output );
 /*
@@ -1596,7 +1602,6 @@ FREE_STR( file_output );
 /* DG 06/30/04 **************************************************************/
       Acf_disttex( &res, distputf );
 /****************************************************************************/
-   free_vector( res.data, 1, res.nobs );
 
 
 /*****************************************************************************/
@@ -1617,7 +1622,24 @@ FREE_STR( file_output );
    eq_build( &equation, inputv, dev, namef );
    equation.sigma = 100 * sqrt( varma1.sigma2 ) / Ts.refactor;
    eq_write_latex( texputv, &equation, x11out );
+
+/* The report in PDF, drawn by fue itself (src/report.c): the graph, the
+ * equation and the residuals over three standard deviations. With -latex
+ * the .tex file is compiled with pdflatex instead.                         */
+
+   if ( !latex_flag )
+      {
+      char pdfputf[4096 + 8];
+
+      snprintf( pdfputf, sizeof( pdfputf ), "%s.pdf", base_name );
+      if ( report_write_pdf( pdfputf, graph_fig, &equation, &res ) != 0 )
+         fprintf( stderr, "Warning: %s was not written\n", pdfputf );
+      else
+         printf( "\nCreated %s\n", pdfputf );
+      }
    eq_free( &equation );
+   fd_fig_free( graph_fig );
+   free_vector( res.data, 1, res.nobs );
 
 
 
@@ -1630,6 +1652,7 @@ FREE_STR( file_output );
    fclose( inputv  );
    fclose( restputv  );
 
+ if ( latex_flag ) {
  printf( "\nOpening LaTex file: %s", texputf );
 
    if ( NULL == (texputv = fopen( texputf, "r" )) )
@@ -1667,6 +1690,7 @@ FREE_STR( file_output );
 //   latex_cmd(h, "%s", x11out) ;
 //   latex_close(h) ;
    }
+ }
 /*
  printf( "\nOpening DVI file: %s", dvif );
 

@@ -7,9 +7,11 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <glib/gstdio.h>
 
 #include "engine.h"
 #include "utils.h"
+#include "inpcheck.h"
 
 static int fails = 0;
 static int checks = 0;
@@ -117,12 +119,54 @@ static void test_engine_argv(void) {
     engine_result_clear(&r);
 }
 
-int main(void) {
+/* ------------------------------------------------------------------------ */
+/* Antes de leerlo: el .inp que le dan al GUI es de fue, de fuf, o no vale   */
+
+static void test_inp_check(const char *dir) {
+    char  why[512];
+    gchar *model    = g_build_filename(dir, "D1.inp",  NULL);   /* de fue  */
+    gchar *forecast = g_build_filename(dir, "S.3.inp", NULL);   /* de fuf  */
+    gchar *broken   = g_build_filename(dir, "roto.inp", NULL);
+    gchar *text     = NULL;
+    gsize  len      = 0;
+
+    check(inp_check_fue(model, why, sizeof(why)) == 0,
+          "D1.inp es un modelo y fue deberia aceptarlo: %s", why);
+    check(inp_check_fuf(model, why, sizeof(why)) != 0,
+          "D1.inp no es un fichero de previsiones y fuf deberia rechazarlo");
+
+    check(inp_check_fuf(forecast, why, sizeof(why)) == 0,
+          "S.3.inp es de previsiones y fuf deberia aceptarlo: %s", why);
+    check(inp_check_fue(forecast, why, sizeof(why)) != 0,
+          "S.3.inp es de previsiones: fue tiene que rechazarlo -- el lector del "
+          "GUI se llevaba el monton por delante con el");
+    if (inp_check_fue(forecast, why, sizeof(why)) != 0)
+        check(strstr(why, "input file of fuf") != NULL,
+              "y decir de quien es: \"%s\"", why);
+
+    /* un fichero cortado por la mitad */
+    if (g_file_get_contents(model, &text, &len, NULL)) {
+        gsize half = len / 3;
+        if (g_file_set_contents(broken, text, half, NULL))
+            check(inp_check_fue(broken, why, sizeof(why)) != 0,
+                  "un .inp cortado tiene que rechazarse");
+        g_unlink(broken);
+        g_free(text);
+    }
+
+    check(inp_check_fue("no-existe.inp", why, sizeof(why)) != 0,
+          "un fichero que no esta tiene que rechazarse");
+
+    g_free(model); g_free(forecast); g_free(broken);
+}
+
+int main(int argc, char **argv) {
     test_token_name();
     test_engine_status();
     test_engine_signal();
     test_engine_not_found();
     test_engine_argv();
+    if (argc > 1) test_inp_check(argv[1]);
 
     printf("\n%d checks, %d failures\n", checks, fails);
     return fails == 0 ? 0 : 1;

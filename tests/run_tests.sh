@@ -25,9 +25,10 @@ rm -rf "$WORK"; mkdir -p "$WORK" || exit 1
 
 $CC -O0 -g -Wall -I"$TOP/include" $GTK_CFLAGS \
     "$TOP/tests/test_units.c" "$TOP/src/engine.c" "$TOP/src/utils.c" \
+    "$TOP/src/inpcheck_fue.c" "$TOP/src/inpcheck_fuf.c" \
     -o "$WORK/test_units" $GTK_LIBS -lm || exit 1
 
-PATH="$TOP/tests/fake:$PATH" "$WORK/test_units"
+PATH="$TOP/tests/fake:$PATH" "$WORK/test_units" "$TOP/data"
 rc=$?
 
 # --------------------------------------------------------------------------

@@ -332,9 +332,9 @@ double r1;
 
    if ( NULL == inputv)
       {
-      printf( "\nError opening input file: %s\n", inputf );
-      printf( "... Exiting to system ...\n" );
-      exit( 1 );
+      /* Esto era exit(1): se llevaba el GUI por delante.                 */
+      g_warning( "Error opening input file: %s", inputf );
+      return;
       }
    npar   = 0;                /* Total number of parameters:                 */
    nparma = 0;                /* Number of parameters of the ARMA structure: */

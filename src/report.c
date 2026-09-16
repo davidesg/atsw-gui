@@ -313,9 +313,9 @@ int report_write_pdf( const char *filename, FDFig *graph, const char *name,
        lrow[j++] = i;
        }
 
-   /* How many columns the table runs into: the one that leaves the largest
-    * type. A long horizon does not fit in one column without shrinking the
-    * table to nothing, and two or three columns keep it readable.          */
+   /* How many columns the table runs into: one, as the published report has
+    * it, unless a long horizon would then shrink it below its own size; in
+    * that case as few columns as keep it at that size or above.            */
    avail = PH - Y_TABLE - MARGIN;
    maxw  = PW - 2 * MARGIN;
    fit   = 0.0;
@@ -331,6 +331,7 @@ int report_write_pdf( const char *filename, FDFig *graph, const char *name,
        if ( f > FIT_MAX ) f = FIT_MAX;
        if ( bb > 0.0 && f * bb > maxw ) f = maxw / bb;
        if ( f > fit ) { fit = f; ncols = k; per = p; need = hb; }
+       if ( f >= 1.0 ) break;             /* no need to split it any further */
        }
 
    m.sz = SZ * fit; m.lab = SZ_LAB * fit; m.row = ROW * fit; m.pad = PAD * fit;

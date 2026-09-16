@@ -34,7 +34,7 @@
 #define ZOOM_MIN   0.10
 #define ZOOM_MAX  16.00
 #define ZOOM_STEP  1.25        /* one notch of the zoom                   */
-#define GLASS     280          /* the magnifier, in pixels (a square)     */
+#define GLASS     420          /* the magnifier, in pixels (a square)     */
 #define GLASS_X     4.0        /* and how much it magnifies               */
 
 typedef struct {

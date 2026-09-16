@@ -125,9 +125,9 @@ static int show(const char *path, double dpi, const char *png_path) {
     return 0;
 }
 
-/* Lo que dibuja la lupa: el punto (px, py) de la pagina, en el centro de un
- * cuadrado de side pixeles, a escala s. Es la cuenta de on_glass_draw().  */
-#define GLASS 280
+/* Lo que dibuja la lupa: el punto (px, py) de la pagina, en el centro del
+ * cristal, a escala s. Es la cuenta de on_glass_draw(), y GLASS es el de
+ * preview.c, que se incluye arriba.                                      */
 
 static int glass(const char *path, double px, double py, double s, const char *png_path) {
     GArray *pages;
@@ -160,7 +160,7 @@ static int glass(const char *path, double px, double py, double s, const char *p
                 if (y0 < 0) y0 = j;
                 y1 = j;
             }
-    printf("ink %d %d %d %d\n", x0, x1, y0, y1);
+    printf("glass %d\nink %d %d %d %d\n", GLASS, x0, x1, y0, y1);
     if (png_path != NULL) cairo_surface_write_to_png(surface, png_path);
     cairo_surface_destroy(surface);
     pages_free(pages);

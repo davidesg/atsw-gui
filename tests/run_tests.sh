@@ -61,15 +61,19 @@ cmp -s "$WORK/f_pdf.png" "$WORK/f_eps.png" ||
 # disco tiene que salir centrado en el cristal (280x280 -> 140,140) y con
 # radio 6*aumento; puesta en (85,40), desplazado 4*15 y 4*10 pixeles.
 for z in 2 4 8; do
-    ink=$( cd "$WORK" && ./test_preview glass g.pdf 100 50 $z )
-    ok=$(echo "${ink#ink }" | awk -v z=$z '{ cx=($1+$2)/2; cy=($3+$4)/2; r=($2-$1)/2;
-         print (cx>138 && cx<142 && cy>138 && cy<142 && r>z*6-2 && r<z*6+2) ? 1 : 0 }')
-    [ "$ok" = 1 ] || { echo "FAIL: la lupa x$z sobre el disco da [${ink#ink }]"; pv_fail=1; }
+    out=$( cd "$WORK" && ./test_preview glass g.pdf 100 50 $z )
+    half=$(( $(echo "$out" | sed -n 's/^glass //p') / 2 ))
+    ink=$(echo "$out" | sed -n 's/^ink //p')
+    ok=$(echo "$ink" | awk -v z=$z -v c=$half '{ cx=($1+$2)/2; cy=($3+$4)/2; r=($2-$1)/2;
+         print (cx>c-2 && cx<c+2 && cy>c-2 && cy<c+2 && r>z*6-2 && r<z*6+2) ? 1 : 0 }')
+    [ "$ok" = 1 ] || { echo "FAIL: la lupa x$z sobre el disco da [$ink], centro esperado $half"; pv_fail=1; }
 done
-ink=$( cd "$WORK" && ./test_preview glass g.pdf 85 40 4 )
-ok=$(echo "${ink#ink }" | awk '{ cx=($1+$2)/2; cy=($3+$4)/2;
-     print (cx>198 && cx<202 && cy>98 && cy<102) ? 1 : 0 }')
-[ "$ok" = 1 ] || { echo "FAIL: la lupa fuera del centro da [${ink#ink }], se esperaba (200,100)"; pv_fail=1; }
+out=$( cd "$WORK" && ./test_preview glass g.pdf 85 40 4 )
+half=$(( $(echo "$out" | sed -n 's/^glass //p') / 2 ))
+ink=$(echo "$out" | sed -n 's/^ink //p')
+ok=$(echo "$ink" | awk -v c=$half '{ cx=($1+$2)/2; cy=($3+$4)/2;
+     print (cx>c+58 && cx<c+62 && cy>c-42 && cy<c-38) ? 1 : 0 }')
+[ "$ok" = 1 ] || { echo "FAIL: la lupa fuera del centro da [$ink], se esperaba ($((half+60)),$((half-40)))"; pv_fail=1; }
 [ $pv_fail = 0 ] && echo "la ventana de graficos: la pagina y la lupa, donde se dibujaron" || rc=1
 
 # The engines the GUI will really call: it must find them and they must

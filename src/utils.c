@@ -66,6 +66,17 @@ void reload_number_int(GtkTreeModel *model, GtkTreeIter iter) {
     }
 }
 
+/* El nombre tal como va en el .inp: sin espacios, y lo demas tal cual. */
+char *single_token(const char *input) {
+    GString *out = g_string_new(NULL);
+    const char *p;
+
+    for (p = input ? input : ""; *p; p++)
+        if (!g_ascii_isspace((unsigned char) *p))
+            g_string_append_c(out, *p);
+    return g_string_free(out, FALSE);
+}
+
 /* Un numero escrito de modo que vuelva a leerse EXACTAMENTE igual. Copia de
  * fug src/inpfile.c:inp_format(): el mismo fichero en los dos sitios, como
  * fugdraw.                                                                */

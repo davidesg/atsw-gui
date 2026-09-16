@@ -21,6 +21,20 @@
 /* ========================================================================= */
 /* Helper to write the .inp file using the current model (Ts, Tm, etc.)     */
 /* ========================================================================= */
+/* Los deterministas no estandar: cuantos hay y en que columna va cada uno.
+ * Los rellena load_input_fue(); el escritor los necesita para volver a
+ * poner sus datos detras de la serie, que si no se pierden. Estaban
+ * declarados DENTRO de load_input_fue, asi que el escritor no podia verlos.
+ */
+static int nstdet = 0;
+static int *det = NULL;
+
+/* El nombre con el que venia cada determinista no estandar: el formato no lo
+ * fija (fue escribe "non-standard", art escribe "custom") y hay que devolver
+ * el que se leyo, no inventar otro.                                       */
+#define MAX_DET 50
+static char *nonstd_name[MAX_DET];
+
 static void write_inp_file(FILE *f, FueContext *ctx) {
     /* Copy of the old SaveInpFile_fue logic, but using ctx to get values */
     /* We'll write the same format as the original */
@@ -39,8 +53,9 @@ static void write_inp_file(FILE *f, FueContext *ctx) {
         fprintf(f, " %2d", Ts.outyear);
     fprintf(f, " %2d ", Ts.begyear);
     {
-    /* a single token: the engines read the name with %s */
-    char *token = token_name(Ts.name ? Ts.name : "");
+    /* un token: los motores lo leen con %s. Se quitan los espacios y nada
+     * mas -- "PE/PU" es un nombre legitimo.                              */
+    char *token = single_token(Ts.name ? Ts.name : "");
     fprintf(f, "%s\n", *token ? token : "series");
     g_free(token);
     }
@@ -60,10 +75,15 @@ static void write_inp_file(FILE *f, FueContext *ctx) {
                 case 6: type_str = "cos"; break;
                 case 7: type_str = "sin"; break;
                 case 8: type_str = "alter"; break;
+                case 9: type_str = (i < MAX_DET && nonstd_name[i]) ? nonstd_name[i]
+                                                                  : "non-standard";
+                        break;
                 default: type_str = "unknown";
             }
             fprintf(f, "%s", type_str);
-            if (It[i].type < 6) {
+            if (It[i].type == 9) {
+                fprintf(f, "\n");          /* su nombre y nada mas */
+            } else if (It[i].type < 6) {
                 if (Ts.freq > 1)
                     fprintf(f, " %d %d\n", It[i].period, It[i].year);
                 else
@@ -213,7 +233,13 @@ if (!Ts.data || Ts.nobs == 0) {
         /* Los datos son del usuario, no una estimacion: se escriben con las
          * cifras que hagan falta para que vuelvan a leerse iguales. Con el
          * "%lf" de antes, 0.3680397019 salia 0.368040.                    */
-        fprintf(f, "%s\n", inp_format(buf, sizeof(buf), Ts.data[i]));
+        fprintf(f, "%s", inp_format(buf, sizeof(buf), Ts.data[i]));
+        /* Y detras, una columna por cada determinista NO ESTANDAR: son
+         * datos que trae el fichero, no una receta, asi que si no se
+         * vuelven a escribir se pierden. El lector los espera aqui.      */
+        for (int k = 1; k <= nstdet; k++)
+            fprintf(f, " %s", inp_format(buf, sizeof(buf), DataMat[det[k]][i]));
+        fprintf(f, "\n");
     }
 }
 }
@@ -328,7 +354,6 @@ int i, j, i1, i2, i3, i4;
 
 /* The following variables have to do with the quasi-Newton optimizer:       */
 int  npar, nparma;
-int nstdet = 0, *det = NULL;
 double r1;
 
 #ifdef _WIN32
@@ -580,6 +605,13 @@ free_model_globals();
              {
              nstdet += 1;          /* Update number of non-standard detvars: */
              det[nstdet] = i;
+             /* Tiene tipo propio: sin el se quedaba en 0, que el escritor
+              * interpreta como "impulse", y al guardar salia
+              * "impulse 0 0" -- un impulso en el ano cero. Su nombre, tal
+              * como venia, se guarda para volver a escribirlo.           */
+             It[ i - 1 ].type = 9;
+             g_free( nonstd_name[ i - 1 ] );
+             nonstd_name[ i - 1 ] = g_strdup( g_strstrip( dumstrg ) );
              fgets( dumstrg, MAXSTR, inputv );
              }
           }
@@ -622,9 +654,15 @@ free_model_globals();
    /* [3.2.3]: Read deltas for each deterministic variable (if any):         */
 
       fgets( dumstrg, MAXSTR, inputv );
+      /* El cuerpo del bucle era SOLO el fscanf: la asignacion de ar_order
+       * quedaba fuera, la sangria enganaba, y al salir i valia NdetVar+1.
+       * Resultado: ningun determinista se quedaba con su orden de delta, el
+       * escritor los ponia todos a cero y el denominador se perdia.       */
       for ( i = 1; i <= Tm.NdetVar; i++ )
+          {
           fscanf( inputv, "%d", &Tm.Ndelta[i] );
-	It[ i - 1 ].ar_order = Tm.Ndelta[i];
+          It[ i - 1 ].ar_order = Tm.Ndelta[i];
+          }
       fscanf( inputv, "\n" );
 
       for ( i = 1; i <= Tm.NdetVar; i++ ) if ( Tm.Ndelta[i] > 0 )
@@ -639,7 +677,9 @@ free_model_globals();
               fscanf( inputv, "%lf", &Tm.Delta[i][j] );
               fscanf( inputv, "%d\n", &Tm.Ielta[i][j] );
 	      It[ i - 1 ].ar_parameter[j] = Tm.Delta[i][j];
-	      It[ i - 1 ].ma_fixed[j]     = Tm.Ielta[i][j];
+	      /* Era ma_fixed: la bandera del delta se escribia encima de la
+	       * del omega, y ar_fixed se quedaba sin poner.                */
+	      It[ i - 1 ].ar_fixed[j]     = Tm.Ielta[i][j];
               if ( Tm.Ielta[i][j] == 1 ) npar += 1;
               }
           }

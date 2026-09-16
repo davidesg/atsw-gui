@@ -21,6 +21,12 @@ char *token_name(const char *input);
  * -- seis decimales -- y le quitaba cifras a los datos del usuario.        */
 char *inp_format(char *buf, size_t size, double v);
 
+/* El nombre tal como va en el .inp: los motores lo leen con %s, asi que lo
+ * unico que no puede llevar es un espacio. Un nombre como "PE/PU" es
+ * legitimo y hay que respetarlo -- token_name() es para el nombre de
+ * FICHERO, que es otra cosa.                                              */
+char *single_token(const char *input);
+
 /* Un .inp que el motor no podria leer: se dice por que, en una ventana, y
  * se devuelve FALSE. forecast != 0 para los ficheros de fuf.              */
 gboolean inp_ok_to_load(GtkWidget *parent, const char *path, int forecast);

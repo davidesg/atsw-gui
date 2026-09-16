@@ -12,6 +12,7 @@
 #include "engine.h"
 #include "utils.h"
 #include "inpcheck.h"
+#include "outfile.h"
 
 static int fails = 0;
 static int checks = 0;
@@ -199,6 +200,49 @@ static void test_inp_check(const char *dir) {
     g_free(model); g_free(forecast); g_free(broken);
 }
 
+/* ------------------------------------------------------------------------ */
+/* Como acabo la estimacion, sacado del .out                                 */
+
+static void test_convergence(const char *dir) {
+    gchar *path = g_build_filename(dir, "conv.out", NULL);
+    gchar *how;
+
+    g_file_set_contents(path,
+        "Observations: 216.\n"
+        "Parameters  : 12.\n"
+        "\n"
+        "**** GRADIENT STOPPING CRITERIUM SATISFIED TO WITHIN TOLERANCE LIMITS\n"
+        "**** CONVERGENCE OBTAINED AFTER 20 ITERATIONS [GRADIENT NORM = 0.0000]\n"
+        "\n", -1, NULL);
+    how = convergence_of(path);
+    check(how != NULL, "la convergencia tiene que salir del .out");
+    if (how != NULL) {
+        check(strstr(how, "20 ITERATIONS") != NULL,
+              "con el numero de iteraciones: \"%s\"", how);
+        check(strstr(how, "GRADIENT STOPPING") != NULL,
+              "y con el criterio de parada: \"%s\"", how);
+    }
+    g_free(how);
+
+    /* uno que no llego a converger */
+    g_file_set_contents(path,
+        "**** ITERATION LIMIT REACHED\n"
+        "**** CONVERGENCE OBTAINED AFTER 500 ITERATIONS [GRADIENT NORM = 1.3000]\n", -1, NULL);
+    how = convergence_of(path);
+    check(how != NULL && strstr(how, "ITERATION LIMIT") != NULL,
+          "el limite de iteraciones tiene que decirse: \"%s\"", how ? how : "(null)");
+    g_free(how);
+
+    /* un .out sin esas lineas */
+    g_file_set_contents(path, "nada que ver\n", -1, NULL);
+    how = convergence_of(path);
+    check(how == NULL, "un .out sin lineas **** no dice nada de convergencia");
+    g_free(how);
+
+    g_unlink(path);
+    g_free(path);
+}
+
 int main(int argc, char **argv) {
     test_token_name();
     test_engine_status();
@@ -207,6 +251,7 @@ int main(int argc, char **argv) {
     test_engine_argv();
     test_engine_progress();
     if (argc > 1) test_inp_check(argv[1]);
+    test_convergence(g_get_tmp_dir());
 
     printf("\n%d checks, %d failures\n", checks, fails);
     return fails == 0 ? 0 : 1;

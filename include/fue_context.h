@@ -78,6 +78,7 @@ typedef struct {
     GtkWidget *model_label;
     GtkWidget *progress;          /* el avance del motor, en la barra     */
     gboolean   running;           /* hay un motor corriendo               */
+    int        iterations;        /* las que conto en la ultima corrida   */
 
 } FueContext;
 

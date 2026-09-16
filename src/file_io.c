@@ -12,6 +12,7 @@
 #include "forecast_tab.h"   // para acceder a los widgets de Forecast
 #include "engine.h"         // ejecutar fue/fuf sin shell, con sus codigos
 #include "preview.h"        // la ventana de graficos
+#include "outfile.h"        // lo que se lee del .out
 
 #ifdef _WIN32
 #include <windows.h>
@@ -994,48 +995,28 @@ void on_save_inp(GtkToolButton *btn, FueContext *ctx) {
 }
 
 /* ------------------------------------------------------------------------ */
-/* Como acabo la estimacion: el optimizador lo escribe en el .out, en las    */
-/* lineas que empiezan por ****. Son dos: de que criterio de parada se trata */
-/* y en cuantas iteraciones, con la norma del gradiente.                     */
-/* ------------------------------------------------------------------------ */
-static gchar *convergence_of(const char *out_path) {
-    gchar  *text = NULL, **lines, *how = NULL, *many = NULL, *result = NULL;
-    gsize   len = 0;
-    int     i;
-
-    if (!g_file_get_contents(out_path, &text, &len, NULL)) return NULL;
-    lines = g_strsplit(text, "\n", -1);
-    for (i = 0; lines[i] != NULL; i++) {
-        if (!g_str_has_prefix(lines[i], "****")) continue;
-        if (strstr(lines[i], "CONVERGENCE OBTAINED")) {
-            g_free(many);
-            many = g_strdup(g_strstrip(lines[i] + 4));
-        } else {
-            g_free(how);
-            how = g_strdup(g_strstrip(lines[i] + 4));
-        }
-    }
-    if (many != NULL && how != NULL) result = g_strdup_printf("%s; %s", many, how);
-    else if (many != NULL) result = g_strdup(many);
-    else if (how != NULL)  result = g_strdup(how);
-    g_free(how);
-    g_free(many);
-    g_strfreev(lines);
-    g_free(text);
-    return result;
-}
-
-/* ------------------------------------------------------------------------ */
 /* Correr fue sin bloquear la interfaz                                       */
 /* ------------------------------------------------------------------------ */
 
+/* La barra se queda puesta al acabar, con lo que conto: una estimacion de
+ * estas tarda diez milisegundos, asi que si se escondiera al terminar no
+ * daria tiempo ni a dibujarla y no se veria nada.                        */
 static void run_busy(FueContext *ctx, gboolean busy) {
     ctx->running = busy;
-    gtk_widget_set_visible(ctx->progress, busy);
-    if (ctx->btn_run)   gtk_widget_set_sensitive(ctx->btn_run, !busy);
+    if (ctx->btn_run) gtk_widget_set_sensitive(ctx->btn_run, !busy);
+    gtk_widget_set_visible(ctx->progress, TRUE);
     if (busy) {
+        ctx->iterations = -1;
         gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(ctx->progress), 0.0);
-        gtk_progress_bar_set_text(GTK_PROGRESS_BAR(ctx->progress), "starting...");
+        gtk_progress_bar_set_text(GTK_PROGRESS_BAR(ctx->progress), "running...");
+    } else {
+        gchar *text = (ctx->iterations >= 0)
+                      ? g_strdup_printf("%d iterations", ctx->iterations)
+                      : g_strdup("no iterations");
+
+        gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(ctx->progress), 1.0);
+        gtk_progress_bar_set_text(GTK_PROGRESS_BAR(ctx->progress), text);
+        g_free(text);
     }
 }
 
@@ -1043,6 +1024,7 @@ static void on_fue_iteration(int k, double f, gpointer data) {
     FueContext *ctx = data;
     gchar *text = g_strdup_printf("iteration %d   F = %.6f", k, f);
 
+    ctx->iterations = k;
     gtk_progress_bar_set_text(GTK_PROGRESS_BAR(ctx->progress), text);
     gtk_progress_bar_pulse(GTK_PROGRESS_BAR(ctx->progress));
     g_free(text);

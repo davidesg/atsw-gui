@@ -118,7 +118,7 @@ int main( int argc, char *argv[] )
 /*****************************************************************************/
 
    printf( "\n" );
-   printf( "FUF 1.08: Copyright (C) 2026 Arthur B. Treadway and David E. Guerrero \n" );
+   printf( "FUF 1.09: Copyright (C) 2026 Arthur B. Treadway and David E. Guerrero \n" );
    printf( "Non-Final version. May contain errors. Please report\n" );
    printf( "\n" );
 
@@ -134,7 +134,7 @@ int main( int argc, char *argv[] )
 
    if ( argc == 1 )                     /* No command-line arguments (help): */
       {
-      printf( "fuf input [eml|aml] [chk|nochk]\n");
+      printf( "fuf input [eml|aml] [chk|nochk] [-latex] [-full]\n");
       printf( "input      : model-data file name (omit extension .inp)\n" );
       printf( "[eml|aml]  : exact | approximate maximum likelihood (default: eml)\n" );
       printf( "[chk|nochk]: check | do not check for invertibility (default: chk)\n" );

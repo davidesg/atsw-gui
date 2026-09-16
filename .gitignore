@@ -7,3 +7,4 @@ bin/
 # Backup and temporary files
 *~
 *.bak
+tests/work/

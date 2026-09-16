@@ -86,6 +86,10 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
 $(TARGET): $(OBJS) | $(BIN_DIR)
 	$(CC) $(LDFLAGS) -o $@ $^ $(ALL_LIBS)
 
+# Regression tests (tests/run_tests.sh; see tests/README.md)
+check: $(TARGET)
+	sh tests/run_tests.sh $(TARGET)
+
 # Clean
 clean:
 	rm -rf $(BUILD_DIR)/*.o $(TARGET)
@@ -127,4 +131,4 @@ $(BUILD_DIR)/qnewtopt.o:  include/fuf.h include/nlatools.h
 $(BUILD_DIR)/usfo.o:      include/usfo.h include/gnuplot_i.h include/nlatools.h include/fuf.h
 $(BUILD_DIR)/usmelard.o:  include/fuf.h include/nlatools.h
 
-.PHONY: all clean distclean install uninstall help
+.PHONY: all check clean distclean install uninstall help

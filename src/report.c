@@ -6,13 +6,14 @@
 /* the series, the table of the forecasts with their standard errors, and    */
 /* the graph. The forecast rows keep the grey background they had.           */
 /*                                                                           */
-/* The measures are those of the report as it is published (the table of     */
-/* PO11.1_prev.7.2004 of the thesis, compiled with the preamble that         */
-/* make_latex_forecast() writes): the head is a box with a rule between its  */
-/* columns, the rule of \cline{2-7} under LEVEL and LOG RATE OF CHANGE, and  */
-/* the rule that closes it; the rows are 12.96 pt apart; the graph goes at   */
-/* 0.60 of its size, 18.10 pt to the right of the table and with its top     */
-/* against the top of the table. There is no rule under the last row.        */
+/* The measures are those of the report as it is published                   */
+/* (tesisdeg/prevision/po/colombia.*.ps): the head is a box with a rule      */
+/* between its columns, the rule of \cline{2-7} under LEVEL and LOG RATE OF  */
+/* CHANGE, and the rule that closes it; the rows are 9.00 pt apart; the      */
+/* graph has its top against the top of the table and is as tall as it, so   */
+/* the two end together. There is no rule under the last row. The whole      */
+/* block is then multiplied by the factor that makes it fill the page, and   */
+/* a table too long for one column runs into two or three.                   */
 /*                                                                           */
 /* The units: when the series is in logarithms the changes are rates, and    */
 /* they are written in per cent as they always were. When it is not, they    */
@@ -55,6 +56,8 @@ extern void ObsToDate( int beg_per, int beg_sub, int obs_no, int freq,
 #define BAND_UP   7.24               /* the grey band, over the base line    */
 #define GRAPH_GAP 0.0                /* the graph carries its own margin     */
 #define FIT_MAX   1.55               /* a short table does not grow for ever */
+#define COLSEP   14.0                /* between two columns of the table     */
+#define MAXCOLS   3                  /* a long horizon runs into columns     */
 
 #define SZ_HEAD  11.0                /* the heading of the page              */
 #define GREY      0.95               /* the background of the forecast rows  */
@@ -133,26 +136,61 @@ static void draw_row( FDFig *f, const double *cx, double y, const Row *r,
        }
 }
 
+/* The head of one column of the table: the box, the two headings that span
+ * several columns with their rule, the labels and the units.               */
+static void draw_head( FDFig *f, const double *cx, double top, double tw,
+                       const Metrics *m, const char **label, const char **unit,
+                       const char *grp1, const char *grp2 )
+{
+   int i;
+
+   rule( f, cx[0], top, tw );                          /* \hline          */
+   rule( f, cx[1], top - m->cline, cx[7] - cx[1] );     /* \cline{2-7}     */
+   rule( f, cx[0], top - m->rule, tw );                 /* \hline          */
+   vrule( f, cx[0], top, top - m->rule );
+   vrule( f, cx[1], top, top - m->rule );
+   vrule( f, cx[3], top, top - m->rule );
+   vrule( f, cx[7], top, top - m->rule );
+   vrule( f, cx[8], top, top - m->rule );
+   for ( i = 2; i <= 6; i++ )
+       if ( i != 3 ) vrule( f, cx[i], top - m->cline, top - m->rule );
+
+   fd_text( f, ( cx[1] + cx[3] ) / 2.0, top - m->grp, F_TEXT, m->lab,
+            FD_CENTER, grp1 );
+   fd_text( f, ( cx[3] + cx[7] ) / 2.0, top - m->grp, F_TEXT, m->lab,
+            FD_CENTER, grp2 );
+   for ( i = 0; i < NCOL; i++ )
+       {
+       fd_text( f, ( cx[i] + cx[i+1] ) / 2.0, top - m->lab_y, F_TEXT, m->lab,
+                FD_CENTER, label[i] );
+       if ( unit[i][0] != '\0' )
+          fd_text( f, ( cx[i] + cx[i+1] ) / 2.0, top - m->unit, F_TEXT, m->lab,
+                   FD_CENTER, unit[i] );
+       }
+}
+
 /*****************************************************************************/
 
 int report_write_pdf( const char *filename, FDFig *graph, const char *name,
                       int nobs, int freq, int begyear, int begtime, int ornsop,
                       int L, double *data, double **a, double **f1, double **f2,
                       double **f3, double ***v1, double ***v2, double ***v3,
-                      double boxlam, double refactor )
+                      double boxlam, double refactor, int full )
 {
    const char  *label[NCOL], *unit[NCOL];
    const char  *grp1 = "LEVEL", *grp2;
    const char  *scale_word = "";
    double       cx[NCOL+1], w[NCOL], tw, gw, gh, s, ty, top, left, block;
-   double       x[2], y[2], scale[2], need, avail, fit, d, pct, div, big;
+   double       x[2], y[2], scale[2], need = 0.0, avail, fit, d, pct, div, big;
+   double       colsep, maxw, x0;
    char         line[160];
    Metrics      m;
    Row         *rows;
+   int         *lrow;
    FDFig       *page, *figs[2];
    FDPdf       *pdf;
-   int          i, j, n = 0, nr = 0, cap, status, period, season;
-   int          last_year = 1, logs;
+   int          i, j, k, c, n = 0, nr = 0, cap, status, period, season;
+   int          last_year = 1, logs, nlines = 0, ncols = 1, per = 0;
 
    logs = ( boxlam == 0.0 );
    pct  = logs ? 100.0 : 1.0;      /* in logarithms a change is a rate, in % */
@@ -196,7 +234,7 @@ int report_write_pdf( const char *filename, FDFig *graph, const char *name,
        Row *r;
 
        ObsToDate( begyear, begtime, nobs + i, freq, &period, &season );
-       if ( i > L / 2 )
+       if ( !full && i > L / 2 )
           {
           if ( freq > 1 && season != freq ) continue;
           if ( i == L / 2 + 1 || last_year ) rows[nr].gap = 1;
@@ -265,16 +303,35 @@ int report_write_pdf( const char *filename, FDFig *graph, const char *name,
    tw = 0.0;
    for ( i = 0; i < NCOL; i++ ) tw += w[i];
 
-   for ( i = 0, j = 0; i < nr; i++ ) j += 1 + rows[i].gap;
-   need  = H_DATA + ( j - 1 ) * ROW + ( ROW - BAND_UP );   /* the table      */
+   /* the lines of the table: a blank one where it leaves a gap */
+   for ( i = 0; i < nr; i++ ) nlines += 1 + rows[i].gap;
+   if ( ( lrow = malloc( (size_t)( nlines + 1 ) * sizeof( int ) ) ) == NULL )
+      { free( rows ); return( 1 ); }
+   for ( i = 0, j = 0; i < nr; i++ )
+       {
+       if ( rows[i].gap ) lrow[j++] = -1;
+       lrow[j++] = i;
+       }
+
+   /* How many columns the table runs into: the one that leaves the largest
+    * type. A long horizon does not fit in one column without shrinking the
+    * table to nothing, and two or three columns keep it readable.          */
    avail = PH - Y_TABLE - MARGIN;
-   fit   = ( need > 0.0 ) ? avail / need : 1.0;
-   if ( fit > FIT_MAX ) fit = FIT_MAX;
-   /* the graph is as tall as the table and keeps its own proportions */
-   gw = ( graph != NULL && graph->h > 0.0 ) ? need * graph->w / graph->h : 0.0;
-   block = tw + ( ( graph != NULL ) ? GRAPH_GAP + gw : 0.0 );
-   if ( block * fit > PW - 2 * MARGIN && block > 0.0 )
-      fit = ( PW - 2 * MARGIN ) / block;
+   maxw  = PW - 2 * MARGIN;
+   fit   = 0.0;
+   for ( k = 1; k <= MAXCOLS; k++ )
+       {
+       int    p  = ( nlines + k - 1 ) / k;
+       double hb = H_DATA + ( p - 1 ) * ROW + ( ROW - BAND_UP );
+       double gb = ( graph != NULL && graph->h > 0.0 )
+                   ? hb * graph->w / graph->h : 0.0;
+       double bb = k * tw + ( k - 1 ) * COLSEP + gb + ( ( gb > 0.0 ) ? GRAPH_GAP : 0.0 );
+       double f  = ( hb > 0.0 ) ? avail / hb : 1.0;
+
+       if ( f > FIT_MAX ) f = FIT_MAX;
+       if ( bb > 0.0 && f * bb > maxw ) f = maxw / bb;
+       if ( f > fit ) { fit = f; ncols = k; per = p; need = hb; }
+       }
 
    m.sz = SZ * fit; m.lab = SZ_LAB * fit; m.row = ROW * fit; m.pad = PAD * fit;
    m.grp = H_GRP * fit; m.cline = H_CLINE * fit; m.lab_y = H_LAB * fit;
@@ -282,17 +339,20 @@ int report_write_pdf( const char *filename, FDFig *graph, const char *name,
    m.band = BAND_UP * fit;
    for ( i = 0; i < NCOL; i++ ) w[i] *= fit;
    tw    *= fit;
+   colsep = COLSEP * fit;
    gh     = need * fit;                          /* as tall as the table     */
-   gw    *= fit;
-   block *= fit;
+   gw     = ( graph != NULL && graph->h > 0.0 ) ? gh * graph->w / graph->h : 0.0;
    s      = ( graph != NULL && graph->h > 0.0 ) ? gh / graph->h : 1.0;
+   block  = ncols * tw + ( ncols - 1 ) * colsep
+            + ( ( graph != NULL ) ? GRAPH_GAP + gw : 0.0 );
 
 /* [4]: where the table and the graph go: the block, centred on the page.    */
 
    left  = ( PW - block ) / 2.0;
    if ( left < MARGIN ) left = MARGIN;
 
-   if ( ( page = fd_fig_new( PW, PH ) ) == NULL ) { free( rows ); return( 1 ); }
+   if ( ( page = fd_fig_new( PW, PH ) ) == NULL )
+      { free( rows ); free( lrow ); return( 1 ); }
 
 /* [5]: the heading of the page                                              */
 
@@ -310,49 +370,32 @@ int report_write_pdf( const char *filename, FDFig *graph, const char *name,
                 scale_word, season, period );
    fd_text( page, PW / 2.0, PH - Y_ORIG, F_TEXT, SZ_HEAD, FD_CENTER, line );
 
-/* [6]: the head of the table: the box, the two headings that span several
- *      columns with their rule, the labels and the units.                   */
+/* [6]: the table, one head and its rows for each column                     */
 
-   top   = PH - Y_TABLE;
-   cx[0] = left;
-   for ( i = 0; i < NCOL; i++ ) cx[i+1] = cx[i] + w[i];
-
-   rule( page, cx[0], top, tw );                          /* \hline          */
-   rule( page, cx[1], top - m.cline, cx[7] - cx[1] );     /* \cline{2-7}     */
-   rule( page, cx[0], top - m.rule, tw );                 /* \hline          */
-   vrule( page, cx[0], top, top - m.rule );
-   vrule( page, cx[1], top, top - m.rule );
-   vrule( page, cx[3], top, top - m.rule );
-   vrule( page, cx[7], top, top - m.rule );
-   vrule( page, cx[8], top, top - m.rule );
-   for ( i = 2; i <= 6; i++ )
-       if ( i != 3 ) vrule( page, cx[i], top - m.cline, top - m.rule );
-
-   fd_text( page, ( cx[1] + cx[3] ) / 2.0, top - m.grp, F_TEXT, m.lab,
-            FD_CENTER, grp1 );
-   fd_text( page, ( cx[3] + cx[7] ) / 2.0, top - m.grp, F_TEXT, m.lab,
-            FD_CENTER, grp2 );
-   for ( i = 0; i < NCOL; i++ )
+   top = PH - Y_TABLE;
+   for ( c = 0; c < ncols; c++ )
        {
-       fd_text( page, ( cx[i] + cx[i+1] ) / 2.0, top - m.lab_y, F_TEXT, m.lab,
-                FD_CENTER, label[i] );
-       if ( unit[i][0] != '\0' )
-          fd_text( page, ( cx[i] + cx[i+1] ) / 2.0, top - m.unit, F_TEXT, m.lab,
-                   FD_CENTER, unit[i] );
-       }
+       x0    = left + c * ( tw + colsep );
+       cx[0] = x0;
+       for ( i = 0; i < NCOL; i++ ) cx[i+1] = cx[i] + w[i];
+       draw_head( page, cx, top, tw, &m, label, unit, grp1, grp2 );
 
-/* [7]: the rows                                                             */
-
-   ty = top - m.data;
-   for ( i = 0; i < nr; i++ )
-       {
-       if ( rows[i].gap ) ty -= m.row;
-       if ( rows[i].shaded )
-          band( page, cx[0], ty - ( m.row - m.band ), tw, m.row, GREY );
-       draw_row( page, cx, ty, &rows[i], &m );
-       ty -= m.row;
+       ty = top - m.data;
+       for ( k = c * per; k < ( c + 1 ) * per && k < nlines; k++ )
+           {
+           if ( lrow[k] < 0 )               /* the blank line of the gap     */
+              {
+              if ( k > c * per ) ty -= m.row;
+              continue;
+              }
+           if ( rows[lrow[k]].shaded )
+              band( page, cx[0], ty - ( m.row - m.band ), tw, m.row, GREY );
+           draw_row( page, cx, ty, &rows[lrow[k]], &m );
+           ty -= m.row;
+           }
        }
    free( rows );
+   free( lrow );
 
 /* [8]: the graph, to the right of the table and with its top against the
  *      top rule, as the published report has it                             */
@@ -370,7 +413,7 @@ int report_write_pdf( const char *filename, FDFig *graph, const char *name,
    if ( graph != NULL )
       {
       figs[n] = graph;
-      x[n] = cx[NCOL] + GRAPH_GAP;
+      x[n] = left + block - gw;
       y[n] = top - gh;
       scale[n] = s;
       n++;

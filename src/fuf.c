@@ -94,6 +94,7 @@ int main( int argc, char *argv[] )
    struct Tvarma varma1;                 /* Standard VARMA structure.        */
    int  est_fault = 0;         /* ifault of the estimation (exit status 3)   */
    int  latex_flag = 0;        /* -latex: also compile the .tex with pdflatex */
+   int  full_flag  = 0;        /* -full: the report lists every forecast      */
    FDFig *graph_fig = NULL;    /* the graph of the forecasts (report.c)       */
    struct Tseries res;                   /* Tseries structure for residuals. */
    int  nstdet, *det, met, chk, hdm;
@@ -138,6 +139,8 @@ int main( int argc, char *argv[] )
       printf( "[eml|aml]  : exact | approximate maximum likelihood (default: eml)\n" );
       printf( "[chk|nochk]: check | do not check for invertibility (default: chk)\n" );
       printf( "[-latex]   : also compile the .tex file with pdflatex\n" );
+      printf( "[-full]    : the report lists every forecast, not only the\n" );
+      printf( "             first half and the year ends of the rest\n" );
       printf( "\nExit status: 0 results written; 1 command line or file error; 2 the input\n" );
       printf( "file is not valid (nothing written); 3 the model could not be estimated\n" );
       printf( "(results written with the initial values); 4 run-time error.\n" );
@@ -160,6 +163,8 @@ int main( int argc, char *argv[] )
              chk = 1;
           else if ( strcmp( argv[i], "-latex" ) == 0 )
              latex_flag = 1;
+          else if ( strcmp( argv[i], "-full" ) == 0 )
+             full_flag = 1;
          else if ( strcmp( argv[i], "nochk" ) == 0 )
              chk = 0;
 
@@ -1247,7 +1252,7 @@ int main( int argc, char *argv[] )
        if ( report_write_pdf( pdfputf, graph_fig, namef, Ts.nobs, Ts.freq, Ts.begyear,
                               Ts.begtime, Tm.ornsop, Fs.L, Fs.data, varma1.a, Fs.f1,
                               Fs.f2, Fs.f3, Fs.v1, Fs.v2, Fs.v3, Tm.boxlam,
-                              Ts.refactor ) != 0 )
+                              Ts.refactor, full_flag ) != 0 )
           fprintf( stderr, "Warning: %s was not written\n", pdfputf );
        else
           printf( "\nCreated %s\n", pdfputf );

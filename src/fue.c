@@ -115,6 +115,12 @@ int main( int argc, char *argv[] )
 /* [1]: Check and process command-line arguments:                            */
 /*****************************************************************************/
 
+   /* Sin buffer: el optimizador escribe la iteracion y el valor de la
+    * funcion SIN salto de linea (qnewtopt.c), asi que con el buffer de la
+    * tuberia un programa que llame a fue no ve nada hasta el final. Asi
+    * ve cada iteracion cuando ocurre. No cambia lo que se escribe.      */
+   setvbuf( stdout, NULL, _IONBF, 0 );
+
    printf( "\n" );
    printf( "FUE 1.14: Copyright (C) 2026 A.B. Treadway & D.E. Guerrero \n" );
    printf( "Non-Final version. May contain errors. Please report\n" );

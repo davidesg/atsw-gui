@@ -116,7 +116,7 @@ int main( int argc, char *argv[] )
 /*****************************************************************************/
 
    printf( "\n" );
-   printf( "FUE 1.13: Copyright (C) 2026 A.B. Treadway & D.E. Guerrero \n" );
+   printf( "FUE 1.14: Copyright (C) 2026 A.B. Treadway & D.E. Guerrero \n" );
    printf( "Non-Final version. May contain errors. Please report\n" );
    printf( "\n" );
 

@@ -1,0 +1,27 @@
+# Build artifacts
+tests/work/
+# muestras del informe: se regeneran (ver tests/README.md)
+samples/
+obj/
+bin/
+*.o
+*.exe
+*.a
+*.so
+*.dylib
+
+# Backup and temporary files
+*~
+*.bak
+*.kate-swp
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.kdevelop.pcs
+*.kdevses

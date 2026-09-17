@@ -1,0 +1,41 @@
+
+\documentclass[12pt,a4paper,landscape]{article}
+\usepackage[latin1]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{lscape}
+\usepackage{multicol}
+\usepackage{setspace}
+\usepackage[margin=2.5cm]{geometry}
+\newcommand{\est}[2]{\begin{array}[t]{c}
+\hspace{-.125in}#1\hspace{-.125in}\vspace{-.13in}\\ 
+\hspace{-.125in}#2\hspace{-.125in}
+\end{array}}
+\linespread{1.6}
+\newcommand{\deter}{\ln \mathsf{R1_{t}} =
++     \est{\mathsf{0.00057}}{(\mathsf{0.00249})}\cos\frac{\pi}{\mathsf{2}}t
++     \est{\mathsf{0.0076}}{\mathsf{(0.0025)}}\sin\frac{\pi}{\mathsf{2}}t
+-     \est{\mathsf{0.00051}}{(\mathsf{0.00125})}(\mathsf{-1})^{t}
++     \mathsf{1.09}    \xi_t
++ \mathsf{N_t}}
+\newcommand{\arr}{  (\mathsf{1}   - \est{\mathsf{  0.82}}{(\mathsf{  0.07})} B ) }
+\newcommand{\ifmu}{+ \est{\mathsf{0.94}}  {(\mathsf{0.01})}} 
+ \newcommand{\ifadf}{ }
+\begin{document}
+\begin{flushleft}
+\thispagestyle{empty}
+\includegraphics[scale=1]{AR.4.eps}
+\begin{footnotesize}
+$\deter$ \\ 
+ $ \arr 
+\left[ 
+\ifadf \mathsf{N_t} 
+\ifmu \right] 
+ = \mathsf{AR.4_{t}} ; \quad 
+\hat{\sigma}_{\mathsf{AR.4}}=  \mathsf{ 1.85 } \%  $ 
+\input {R.4_res}
+\end{footnotesize}
+\end{flushleft}
+\end{document}

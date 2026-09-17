@@ -1,0 +1,40 @@
+
+\documentclass[12pt,a4paper,landscape]{article}
+\usepackage[latin1]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{lscape}
+\usepackage{multicol}
+\usepackage{setspace}
+\usepackage[margin=2.5cm]{geometry}
+\newcommand{\est}[2]{\begin{array}[t]{c}
+\hspace{-.125in}#1\hspace{-.125in}\vspace{-.13in}\\ 
+\hspace{-.125in}#2\hspace{-.125in}
+\end{array}}
+\linespread{1.6}
+\newcommand{\deter}{\ln \mathsf{PE_{t}} =
++     \est{\mathsf{0.00077}}{(\mathsf{0.00104})}\cos\frac{\pi}{\mathsf{2}}t
++     \est{\mathsf{0.0042}}{\mathsf{(0.0011)}}\sin\frac{\pi}{\mathsf{2}}t
++     \est{\mathsf{0.00025}}{(\mathsf{0.00049})}(\mathsf{-1})^{t}
++ \mathsf{N_t}}
+\newcommand{\ifmu}{- \est{\mathsf{0.0024}}  {(\mathsf{0.0013})}} 
+ \newcommand{\nrdiff}{\nabla} 
+\newcommand{\ifadf}{ }
+\begin{document}
+\begin{flushleft}
+\thispagestyle{empty}
+\includegraphics[scale=1]{AR.1_6.eps}
+\begin{footnotesize}
+$\deter$ \\ 
+ $ \left[ 
+\nrdiff 
+\ifadf \mathsf{N_t} 
+\ifmu \right] 
+ = \mathsf{AR.1_6_{t}} ; \quad 
+\hat{\sigma}_{\mathsf{AR.1_6}}=  \mathsf{ 0.81 } \%  $ 
+\input {R.1_6_res}
+\end{footnotesize}
+\end{flushleft}
+\end{document}

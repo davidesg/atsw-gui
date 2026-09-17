@@ -1,0 +1,51 @@
+
+\documentclass[12pt,a4paper,landscape]{article}
+\usepackage[latin1]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{lscape}
+\usepackage{multicol}
+\usepackage{setspace}
+\usepackage[margin=2.5cm]{geometry}
+\newcommand{\est}[2]{\begin{array}[t]{c}
+\hspace{-.125in}#1\hspace{-.125in}\vspace{-.13in}\\ 
+\hspace{-.125in}#2\hspace{-.125in}
+\end{array}}
+\linespread{1.6}
+\newcommand{\deter}{\mathsf{CPI_USA_{t}} =
+-     \est{\mathsf{1.10}} {(\mathsf{0.18})} \cos\frac{\pi}{\mathsf{6}}t
+-     \est{\mathsf{0.20}} {(\mathsf{0.18})} \sin\frac{\pi}{\mathsf{6}}t
+-     \est{\mathsf{0.32}} {(\mathsf{0.06})} \cos\frac{\pi}{\mathsf{3}}t
+-     \est{\mathsf{0.20}} {(\mathsf{0.06})} \sin\frac{\pi}{\mathsf{3}}t
+-     \est{\mathsf{0.12}} {(\mathsf{0.03})} \cos\frac{\pi}{\mathsf{2}}t
++     \est{\mathsf{0.024}}{(\mathsf{0.032})}\sin\frac{\pi}{\mathsf{2} }t
+-     \est{\mathsf{0.010}}{(\mathsf{0.022})}\cos\frac{\mathsf{2}\pi}{\mathsf{3}}t
++     \est{\mathsf{0.0096}}{\mathsf{(0.0218)}}\sin\frac{\mathsf{2}\pi}{\mathsf{3}}t
+-     \est{\mathsf{0.074}}{(\mathsf{0.017})}\cos\frac{\mathsf{5}\pi}{\mathsf{6}}t
++     \est{\mathsf{0.026}}{(\mathsf{0.018})}\sin\frac{\mathsf{5}\pi}{\mathsf{6}}t
+-     \est{\mathsf{0.021}}{(\mathsf{0.012})}(\mathsf{-1})^{t}
++     \est{\mathsf{1.40}} {(\mathsf{0.38})} \xi_{t}^{I,\mathsf{10/2008}}
++     \est{\mathsf{0.60}} {(\mathsf{0.29})} \xi_{t}^{I,\mathsf{7/2008}}
++     \est{\mathsf{1.21}} {(\mathsf{0.38})} \xi_{t}^{I,\mathsf{9/2008}}
+-     \est{\mathsf{0.78}} {(\mathsf{0.28})} \xi_{t}^{I,\mathsf{8/2005}}
++ \mathsf{N_t}}
+\newcommand{\arr}{  (\mathsf{1}   - \est{\mathsf{  0.61}}{(\mathsf{  0.05})} B ) }
+\newcommand{\nrdiff}{\nabla} 
+\newcommand{\ifadf}{ }
+\begin{document}
+\begin{flushleft}
+\thispagestyle{empty}
+\includegraphics[scale=1]{ACPI_USA_model_AR.eps}
+\begin{footnotesize}
+$\deter$ \\ 
+ $ \arr 
+\nrdiff 
+\ifadf \mathsf{N_t} 
+ = \mathsf{ACPI_USA_model_AR_{t}} ; \quad 
+\hat{\sigma}_{\mathsf{ACPI_USA_model_AR}}=  \mathsf{ 56.11 } \%  $ 
+\input {CPI_USA_model_AR_res}
+\end{footnotesize}
+\end{flushleft}
+\end{document}

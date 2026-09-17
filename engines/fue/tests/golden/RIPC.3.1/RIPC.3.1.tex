@@ -1,0 +1,47 @@
+
+\documentclass[12pt,a4paper,landscape]{article}
+\usepackage[latin1]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{lscape}
+\usepackage{multicol}
+\usepackage{setspace}
+\usepackage[margin=2.5cm]{geometry}
+\newcommand{\est}[2]{\begin{array}[t]{c}
+\hspace{-.125in}#1\hspace{-.125in}\vspace{-.13in}\\ 
+\hspace{-.125in}#2\hspace{-.125in}
+\end{array}}
+\linespread{1.6}
+\newcommand{\deter}{\ln \mathsf{RIPC_{t}} =
++     \est{\mathsf{0.0019}}{\mathsf{(0.0018)}}\cos\frac{\pi}{\mathsf{6}}t
++     \est{\mathsf{0.0053}}{\mathsf{(0.0013)}}\sin\frac{\pi}{\mathsf{6}}t
++     \est{\mathsf{0.00083}}{(\mathsf{0.00089})}\cos\frac{\pi}{\mathsf{3}}t
+-     \est{\mathsf{0.00050}}{(\mathsf{0.00097})}\sin\frac{\pi}{\mathsf{3}}t
+-     \est{\mathsf{0.000007}}{(\mathsf{0.000495})}\cos\frac{\pi}{\mathsf{2}}t
++     \est{\mathsf{0.00058}}{(\mathsf{0.00050})}\sin\frac{\pi}{\mathsf{2} }t
+-     \est{\mathsf{0.00017}}{(\mathsf{0.00029})}\cos\frac{\mathsf{2}\pi}{\mathsf{3}}t
++     \est{\mathsf{0.00024}}{(\mathsf{0.00030})}\sin\frac{\mathsf{2}\pi}{\mathsf{3}}t
+-     \est{\mathsf{0.00027}}{(\mathsf{0.00022})}\cos\frac{\mathsf{5}\pi}{\mathsf{6}}t
+-     \est{\mathsf{0.00061}}{(\mathsf{0.00022})}\sin\frac{\mathsf{5}\pi}{\mathsf{6}}t
+-     \est{\mathsf{0.000039}}{(\mathsf{0.000116})}(\mathsf{-1})^{t}
++     \est{\mathsf{0.0084}}{\mathsf{(0.0026)}} \,  / ( 1   - \est{\mathsf{0.91}} {(\mathsf{0.03})}  B)   \xi_{t}^{S,\mathsf{2/2002}}
++ \mathsf{N_t}}
+\newcommand{\ifmu}{+ \est{\mathsf{0.89}}  {(\mathsf{0.00})}} 
+ \newcommand{\ifadf}{ }
+\begin{document}
+\begin{flushleft}
+\thispagestyle{empty}
+\includegraphics[scale=1]{ARIPC.3.1.eps}
+\begin{footnotesize}
+$\deter$ \\ 
+ $ \left[ 
+\ifadf \mathsf{N_t} 
+\ifmu \right] 
+ = \mathsf{ARIPC.3.1_{t}} ; \quad 
+\hat{\sigma}_{\mathsf{ARIPC.3.1}}=  \mathsf{ 0.40 } \%  $ 
+\input {RIPC.3.1_res}
+\end{footnotesize}
+\end{flushleft}
+\end{document}

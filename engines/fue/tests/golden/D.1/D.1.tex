@@ -1,0 +1,50 @@
+
+\documentclass[12pt,a4paper,landscape]{article}
+\usepackage[latin1]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{lscape}
+\usepackage{multicol}
+\usepackage{setspace}
+\usepackage[margin=2.5cm]{geometry}
+\newcommand{\est}[2]{\begin{array}[t]{c}
+\hspace{-.125in}#1\hspace{-.125in}\vspace{-.13in}\\ 
+\hspace{-.125in}#2\hspace{-.125in}
+\end{array}}
+\linespread{1.6}
+\newcommand{\deter}{\ln \mathsf{D_{t}} =
+-     \est{\mathsf{0.0024}}{\mathsf{(0.0005)}}\cos\frac{\pi}{\mathsf{6}}t
+-     \est{\mathsf{0.00071}}{(\mathsf{0.00045})}\sin\frac{\pi}{\mathsf{6}}t
+-     \est{\mathsf{0.00041}}{(\mathsf{0.00026})}\cos\frac{\pi}{\mathsf{3}}t
++     \est{\mathsf{0.00012}}{(\mathsf{0.00023})}\sin\frac{\pi}{\mathsf{3}}t
++     \est{\mathsf{0.00062}}{(\mathsf{0.00015})}\cos\frac{\pi}{\mathsf{2}}t
+-     \est{\mathsf{0.00068}}{(\mathsf{0.00015})}\sin\frac{\pi}{\mathsf{2} }t
++     \est{\mathsf{0.00085}}{(\mathsf{0.00011})}\cos\frac{\mathsf{2}\pi}{\mathsf{3}}t
++     \est{\mathsf{0.000011}}{(\mathsf{0.000105})}\sin\frac{\mathsf{2}\pi}{\mathsf{3}}t
++     \est{\mathsf{0.0013}}{\mathsf{(0.0001)}}\cos\frac{\mathsf{5}\pi}{\mathsf{6}}t
++     \est{\mathsf{0.000088}}{(\mathsf{0.000116})}\sin\frac{\mathsf{5}\pi}{\mathsf{6}}t
++     \est{\mathsf{0.00046}}{(\mathsf{0.00009})}(\mathsf{-1})^{t}
++ \mathsf{N_t}}
+\newcommand{\arr}{  (\mathsf{1}   - \est{\mathsf{  0.09}}{(\mathsf{  0.07})} B - \est{\mathsf{  0.08}}{(\mathsf{  0.07})} B^{\mathsf{2}} + \est{\mathsf{  0.15}}{(\mathsf{  0.07})} B^{\mathsf{3}} ) }
+\newcommand{\ifmu}{- \est{\mathsf{0.0012}}  {(\mathsf{0.0002})}} 
+ \newcommand{\nrdiff}{\nabla} 
+\newcommand{\ifadf}{ }
+\begin{document}
+\begin{flushleft}
+\thispagestyle{empty}
+\includegraphics[scale=1]{AD.1.eps}
+\begin{footnotesize}
+$\deter$ \\ 
+ $ \arr 
+\left[ 
+\nrdiff 
+\ifadf \mathsf{N_t} 
+\ifmu \right] 
+ = \mathsf{AD.1_{t}} ; \quad 
+\hat{\sigma}_{\mathsf{AD.1}}=  \mathsf{ 0.23 } \%  $ 
+\input {D.1_res}
+\end{footnotesize}
+\end{flushleft}
+\end{document}

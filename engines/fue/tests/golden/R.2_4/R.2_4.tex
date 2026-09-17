@@ -1,0 +1,42 @@
+
+\documentclass[12pt,a4paper,landscape]{article}
+\usepackage[latin1]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{lscape}
+\usepackage{multicol}
+\usepackage{setspace}
+\usepackage[margin=2.5cm]{geometry}
+\newcommand{\est}[2]{\begin{array}[t]{c}
+\hspace{-.125in}#1\hspace{-.125in}\vspace{-.13in}\\ 
+\hspace{-.125in}#2\hspace{-.125in}
+\end{array}}
+\linespread{1.6}
+\newcommand{\deter}{\ln \mathsf{PE_{t}} =
++     \est{\mathsf{0.00081}}{(\mathsf{0.00078})}\cos\frac{\pi}{\mathsf{2}}t
++     \est{\mathsf{0.0043}}{\mathsf{(0.0008)}}\sin\frac{\pi}{\mathsf{2}}t
++     \est{\mathsf{0.00023}}{(\mathsf{0.00029})}(\mathsf{-1})^{t}
++ \mathsf{N_t}}
+\newcommand{\arr}{  (\mathsf{1}   - \est{\mathsf{  0.49}}{(\mathsf{  0.11})} B ) }
+\newcommand{\ifmu}{- \est{\mathsf{0.0025}}  {(\mathsf{0.0017})}} 
+ \newcommand{\nrdiff}{\nabla} 
+\newcommand{\ifadf}{ }
+\begin{document}
+\begin{flushleft}
+\thispagestyle{empty}
+\includegraphics[scale=1]{AR.2_4.eps}
+\begin{footnotesize}
+$\deter$ \\ 
+ $ \arr 
+\left[ 
+\nrdiff 
+\ifadf \mathsf{N_t} 
+\ifmu \right] 
+ = \mathsf{AR.2_4_{t}} ; \quad 
+\hat{\sigma}_{\mathsf{AR.2_4}}=  \mathsf{ 0.71 } \%  $ 
+\input {R.2_4_res}
+\end{footnotesize}
+\end{flushleft}
+\end{document}

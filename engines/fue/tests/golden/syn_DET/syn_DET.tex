@@ -1,0 +1,37 @@
+
+\documentclass[12pt,a4paper,landscape]{article}
+\usepackage[latin1]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{lscape}
+\usepackage{multicol}
+\usepackage{setspace}
+\usepackage[margin=2.5cm]{geometry}
+\newcommand{\est}[2]{\begin{array}[t]{c}
+\hspace{-.125in}#1\hspace{-.125in}\vspace{-.13in}\\ 
+\hspace{-.125in}#2\hspace{-.125in}
+\end{array}}
+\linespread{1.6}
+\newcommand{\deter}{\ln \mathsf{IPCM_{t}} =
+    \est{\mathsf{0.000000}}{(\mathsf{0.099258})}\cos\frac{\pi}{\mathsf{6}}t
++ \mathsf{N_t}}
+\newcommand{\nrdiff}{\nabla} 
+\newcommand{\nadiff}{\nabla_{\mathsf{12}}}
+\newcommand{\ifadf}{ }
+\begin{document}
+\begin{flushleft}
+\thispagestyle{empty}
+\includegraphics[scale=1]{Asyn_DET.eps}
+\begin{footnotesize}
+$\deter$ \\ 
+ $ \nrdiff 
+\nadiff 
+\ifadf \mathsf{N_t} 
+ = \mathsf{Asyn_DET_{t}} ; \quad 
+\hat{\sigma}_{\mathsf{Asyn_DET}}=  \mathsf{ 0.30 } \%  $ 
+\input {syn_DET_res}
+\end{footnotesize}
+\end{flushleft}
+\end{document}

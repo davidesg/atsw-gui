@@ -167,6 +167,29 @@ estudio: es diseño de programa.
 
 ---
 
+## DECIDIDO (2026-09-17) — fug y el repositorio
+
+- **La rama buena de fug es `fug-1.14-proto`**, motor y GUI. Habia dos GUIs de
+  fug, los dos en GTK2, los dos vivos y los dos tocados en septiembre:
+
+        gtk_fmg.11/src                    2519 lineas, sin preview   13-sep
+        atws/fug/fug-1.14-proto/gui/src   3765 lineas, CON preview   15-sep
+
+  Han divergido de verdad —`data_load.c` en 218 lineas, `fug_run.c` en 138—,
+  asi que **`gtk_fmg.11` pasa a ser archivo**. El GUI que hay que portar a GTK3
+  es el de `fug-1.14-proto/gui`, y son ~74 sitios de API vieja, 50 de ellos en
+  un solo fichero: medio dia.
+
+- **`atws/` bajo git** (2026-09-17, `527f882`, local, sin remoto). Con lista
+  blanca: se ignora todo y entran solo los seis documentos del estudio y
+  `conformidad/`. 142 ficheros, 856K.
+
+  El arbol completo son 908 MB con GSL dentro, diez repositorios anidados, los
+  manuales, los zips de Windows **y un fichero de codigos de recuperacion de
+  PyPI en texto plano**. Un `git init` a secas se lo habria llevado todo.
+
+---
+
 ## DECIDIDO (2026-09-17) — drvarma
 
 - **drvarma entra en la escalera y cumple el contrato**: tiene que **leer y

@@ -1,0 +1,15 @@
+# id	input	arguments (- none)	expected exit status (tests/run_tests.sh --update writes it)
+CPI_USA_model.fuf	CPI_USA_model.fuf	-	0
+CPI_USA_model_AR.fuf	CPI_USA_model_AR.fuf	-	0
+FR_CPI.fuf	FR_CPI.fuf	-	0
+IPC_DE_model.fuf	IPC_DE_model.fuf	-	0
+IPC_DE_model_AR.fuf	IPC_DE_model_AR.fuf	-	0
+IPC_ES_m01_ar1.fuf	IPC_ES_m01_ar1.fuf	-	0
+IPC_ES_m02	IPC_ES_m02	-	0
+IPC_FR_model.fuf	IPC_FR_model.fuf	-	0
+S.3	S.3	-	0
+forecast_D.1	forecast_D.1	-	0
+forecast_D1	forecast_D1	-	0
+forecast_DE.3	forecast_DE.3	-	0
+forecast_DE.3.1	forecast_DE.3.1	-	0
+forecast_RIPC.1	forecast_RIPC.1	-	2

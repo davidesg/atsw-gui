@@ -1,0 +1,20 @@
+************************************************
+*        Input file for program FUF            *
+* Copyright (C) 2009 David E. Guerrero         *
+************************************************
+
+** Frequency of time series: either 1(A), 4(Q) or 12(M):
+ 12
+** Number of observations and starting date of time series:
+ 216  1 2002  D
+** Forecast horizon and estimated innovation variance:
+24  0.0539830068
+** Number of deterministic variables (including seasonal components):
+11
+**
+cos 1
+sin 1
+cos 2
+sin 2
+cos 3
+sin 3

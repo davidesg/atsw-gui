@@ -1,0 +1,12 @@
+# Build artifacts
+obj/
+bin/
+*.o
+*.exe
+
+# Backup and temporary files
+*~
+*.bak
+tests/work/
+# muestras del informe: se regeneran (ver tests/README.md)
+samples/

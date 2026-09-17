@@ -32,7 +32,7 @@ else
 endif
 
 # Compiler flags
-CFLAGS  = -O2 -g -Wall -Iinclude
+CFLAGS  = -O2 -g -Wall -Iinclude -I../../lib/fugdraw
 LDFLAGS +=
 LIBS    = -lm
 
@@ -42,8 +42,14 @@ BUILD_DIR = obj
 BIN_DIR   = bin
 
 # Source and object files
+# La biblioteca compartida. fugdraw.c es el mismo fichero en los cuatro
+# programas -- byte a byte -- y por eso vive en lib/ y no aqui.
+LIB_DIR  = ../../lib
+LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c
+
 SRCS = $(wildcard $(SRC_DIR)/*.c)
-OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS))
+OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS)) \
+       $(patsubst $(LIB_DIR)/%.c,$(BUILD_DIR)/lib_%.o,$(LIB_SRCS))
 
 # Executable name
 TARGET = $(BIN_DIR)/fue$(EXE_EXT)
@@ -79,6 +85,10 @@ $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 
 # Compile
+$(BUILD_DIR)/lib_fugdraw/%.o: $(LIB_DIR)/fugdraw/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(ALL_CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
 	$(CC) $(ALL_CFLAGS) -c $< -o $@
 
@@ -121,14 +131,14 @@ help:
 	@echo "  (Ensure the MXE toolchain is in PATH and PKG_CONFIG_PATH is set)"
 
 # Header dependencies (explicit)
-$(BUILD_DIR)/fue.o:             include/fue.h include/nlatools.h include/fugplot.h include/fugdraw.h include/plothost.h include/inpcheck.h include/equation.h include/report.h
+$(BUILD_DIR)/fue.o:             include/fue.h include/nlatools.h include/fugplot.h $(LIB_DIR)/fugdraw/fugdraw.h include/plothost.h include/inpcheck.h include/equation.h include/report.h
 $(BUILD_DIR)/inpcheck.o:        include/inpcheck.h
 $(BUILD_DIR)/equation.o:        include/equation.h include/fue.h include/nlatools.h
 $(BUILD_DIR)/eqlatex.o:         include/equation.h
-$(BUILD_DIR)/report.o:          include/report.h include/equation.h include/fugdraw.h include/plothost.h
+$(BUILD_DIR)/report.o:          include/report.h include/equation.h $(LIB_DIR)/fugdraw/fugdraw.h include/plothost.h
 $(BUILD_DIR)/diagnose.o:        include/fue.h include/nlatools.h
-$(BUILD_DIR)/fugdraw.o:         include/fugdraw.h include/fd_metrics.h
-$(BUILD_DIR)/fugplot.o:         include/fugplot.h include/fugdraw.h include/plothost.h include/fue.h include/nlatools.h
+$(BUILD_DIR)/fugdraw.o:         $(LIB_DIR)/fugdraw/fugdraw.h $(LIB_DIR)/fugdraw/fd_metrics.h
+$(BUILD_DIR)/fugplot.o:         include/fugplot.h $(LIB_DIR)/fugdraw/fugdraw.h include/plothost.h include/fue.h include/nlatools.h
 $(BUILD_DIR)/plotsupport.o:     include/plothost.h include/fue.h include/nlatools.h
 $(BUILD_DIR)/nlatools.o:        include/nlatools.h
 $(BUILD_DIR)/drvmlest.o:        include/fue.h include/nlatools.h

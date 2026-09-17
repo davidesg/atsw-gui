@@ -32,7 +32,7 @@ else
 endif
 
 # Compiler flags
-CFLAGS  = -O2 -g -Wall -Iinclude
+CFLAGS  = -O2 -g -Wall -Iinclude -I../../lib/fugdraw
 LDFLAGS +=
 LIBS    = -lm
 
@@ -42,8 +42,14 @@ BUILD_DIR = obj
 BIN_DIR   = bin
 
 # Source and object files
+# La biblioteca compartida. fugdraw.c es el mismo fichero en los cuatro
+# programas -- byte a byte -- y por eso vive en lib/ y no aqui.
+LIB_DIR  = ../../lib
+LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c
+
 SRCS = $(wildcard $(SRC_DIR)/*.c)
-OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS))
+OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS)) \
+       $(patsubst $(LIB_DIR)/%.c,$(BUILD_DIR)/lib_%.o,$(LIB_SRCS))
 
 # Executable name
 TARGET = $(BIN_DIR)/fuf$(EXE_EXT)
@@ -79,6 +85,10 @@ $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 
 # Compile
+$(BUILD_DIR)/lib_fugdraw/%.o: $(LIB_DIR)/fugdraw/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(ALL_CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
 	$(CC) $(ALL_CFLAGS) -c $< -o $@
 
@@ -127,8 +137,8 @@ $(BUILD_DIR)/drvmlest.o:  include/fuf.h include/nlatools.h
 $(BUILD_DIR)/elfvarma.o:  include/fuf.h include/nlatools.h
 $(BUILD_DIR)/nlatools.o:  include/nlatools.h
 $(BUILD_DIR)/qnewtopt.o:  include/fuf.h include/nlatools.h
-$(BUILD_DIR)/fugdraw.o:         include/fugdraw.h include/fd_metrics.h
-$(BUILD_DIR)/fufplot.o:         include/fufplot.h include/fugdraw.h
+$(BUILD_DIR)/fugdraw.o:         $(LIB_DIR)/fugdraw/fugdraw.h $(LIB_DIR)/fugdraw/fd_metrics.h
+$(BUILD_DIR)/fufplot.o:         include/fufplot.h $(LIB_DIR)/fugdraw/fugdraw.h
 $(BUILD_DIR)/inpcheck.o:        include/inpcheck.h
 $(BUILD_DIR)/usfo.o:      include/usfo.h include/nlatools.h include/fuf.h
 $(BUILD_DIR)/usmelard.o:  include/fuf.h include/nlatools.h

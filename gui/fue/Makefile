@@ -38,7 +38,7 @@ else
 endif
 
 # Compiler and basic flags
-CFLAGS   = -O2 -g -Wall -Iinclude
+CFLAGS   = -O2 -g -Wall -Iinclude -I../../lib/fugdraw
 LDFLAGS  +=
 LIBS     = -lm
 
@@ -53,8 +53,14 @@ BUILD_DIR = obj
 BIN_DIR   = bin
 
 # All source files in src/
+# La biblioteca compartida. fugdraw.c es el mismo fichero en los cuatro
+# programas -- byte a byte -- y por eso vive en lib/ y no aqui.
+LIB_DIR  = ../../lib
+LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c
+
 SRCS = $(wildcard $(SRC_DIR)/*.c)
-OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS))
+OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS)) \
+       $(patsubst $(LIB_DIR)/%.c,$(BUILD_DIR)/lib_%.o,$(LIB_SRCS))
 
 # Executable name
 TARGET = $(BIN_DIR)/fue_gui$(EXE_EXT)
@@ -99,6 +105,10 @@ $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 
 # Compile each source file
+$(BUILD_DIR)/lib_fugdraw/%.o: $(LIB_DIR)/fugdraw/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(ALL_CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
 	$(CC) $(GUI_CFLAGS) -c $< -o $@
 

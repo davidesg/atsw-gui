@@ -13,10 +13,12 @@
 # fug draws its EPS and PDF files itself (src/fugdraw.c): it needs no other
 # program or library (neither gnuplot nor pdflatex). The GUI runs the fug
 # that is next to it and shows the graphs in its own window, with the same
-# fugdraw code (gui/src/preview.c).
+# fugdraw code (../../gui/fug/src/preview.c).
 
 CC      ?= cc
 CFLAGS  ?= -O2 -Wall -Wextra -Wno-unused-parameter
+# fugdraw es el mismo fichero en los cuatro programas: vive en lib/
+CFLAGS  += -I../../lib/fugdraw
 LDLIBS  = -lm
 PREFIX  ?= /usr/local
 
@@ -29,16 +31,16 @@ MXE_CC      = $(MXE)/usr/bin/$(MXE_TARGET)-gcc
 MXE_PKG     = $(MXE)/usr/bin/$(MXE_TARGET)-pkg-config
 
 SRC = src/fug.c src/diagnose.c src/delop.c src/nlutils.c src/port.c \
-      src/fugdraw.c src/fugplot.c src/inpfile.c
-HDR = src/fug.h src/delop.h src/port.h src/fugdraw.h src/fugplot.h src/fd_metrics.h src/inpfile.h src/plothost.h
+      ../../lib/fugdraw/fugdraw.c src/fugplot.c src/inpfile.c
+HDR = src/fug.h src/delop.h src/port.h ../../lib/fugdraw/fugdraw.h src/fugplot.h ../../lib/fugdraw/fd_metrics.h src/inpfile.h src/plothost.h
 
-GUI_SRC = gui/src/main.c gui/src/callbacks.c gui/src/data_load.c gui/src/nlutils.c \
-          gui/src/fug_run.c gui/src/preview.c src/fugdraw.c src/inpfile.c
-GUI_HDR = gui/include/callbacks.h gui/include/data_load.h gui/include/fug_run.h \
-          gui/include/gui.h gui/include/nlutils.h gui/include/preview.h \
-          src/fugdraw.h src/fd_metrics.h src/inpfile.h
+GUI_SRC = ../../gui/fug/src/main.c ../../gui/fug/src/callbacks.c ../../gui/fug/src/data_load.c ../../gui/fug/src/nlutils.c \
+          ../../gui/fug/src/fug_run.c ../../gui/fug/src/preview.c ../../lib/fugdraw/fugdraw.c src/inpfile.c
+GUI_HDR = ../../gui/fug/include/callbacks.h ../../gui/fug/include/data_load.h ../../gui/fug/include/fug_run.h \
+          ../../gui/fug/include/gui.h ../../gui/fug/include/nlutils.h ../../gui/fug/include/preview.h \
+          ../../lib/fugdraw/fugdraw.h ../../lib/fugdraw/fd_metrics.h src/inpfile.h
 GUI_CFLAGS ?= -O2 -Wall -Wno-deprecated-declarations
-GUI_INC     = -Igui/include -Isrc
+GUI_INC     = -I../../gui/fug/include -Isrc -I../../lib/fugdraw
 
 GTK_CFLAGS := $(shell pkg-config --cflags gtk+-2.0 2>/dev/null)
 GTK_LIBS   := $(shell pkg-config --libs gtk+-2.0 2>/dev/null)

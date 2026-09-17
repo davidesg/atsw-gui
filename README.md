@@ -89,7 +89,8 @@ mueve números.
 
 Los artículos que justifican el diseño **no están aquí** —tienen copyright y
 este repositorio puede acabar siendo público— pero están en esta máquina, en
-`~/Dropbox/SRC/literatura/`, y catalogados en **`docs/LITERATURA.md`**.
+`~/Dropbox/SRC/drtran/literature/` —el repositorio privado de donde vienen—,
+y catalogados en **`docs/LITERATURA.md`**.
 
 La identidad y la referencia van en el repositorio; el contenido, fuera. Es la
 misma regla que `docs/DISENO-proyecto.md` propone para el manifiesto de

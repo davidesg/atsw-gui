@@ -152,6 +152,41 @@ int net_write( const char *path, const char * const *nombre,
    return fclose( f ) != 0;
 }
 
+void net_perm_move( int nser, int de, int a, int *perm )
+{
+   int i;
+
+   for ( i = 1; i <= nser; i++ ) perm[i] = i;
+   if ( de < 1 || a < 1 || de > nser || a > nser || de == a ) return;
+
+   perm[de] = a;
+   if ( de < a ) for ( i = de + 1; i <= a; i++ ) perm[i] = i - 1;
+   else          for ( i = a; i <= de - 1; i++ ) perm[i] = i + 1;
+}
+
+void net_perm_drop( int nser, int i, int *perm )
+{
+   int k;
+
+   for ( k = 1; k <= nser; k++ ) perm[k] = k < i ? k : ( k == i ? 0 : k - 1 );
+}
+
+int net_remap( NetLink *lnk, int nlinks, const int *perm )
+{
+   int k, n = 0;
+
+   for ( k = 0; k < nlinks; k++ ) {
+      int o = perm[lnk[k].out], e = perm[lnk[k].inp];
+
+      if ( o == 0 || e == 0 ) continue;      /* nombraba a la que se fue */
+      lnk[n] = lnk[k];
+      lnk[n].out = o;
+      lnk[n].inp = e;
+      n++;
+   }
+   return n;
+}
+
 int net_indegree( const NetLink *lnk, int nlinks, int i )
 {
    int k, n = 0;

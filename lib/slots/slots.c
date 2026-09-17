@@ -192,6 +192,68 @@ int slots_line( const SlotTable *st, int i, char *out, size_t size )
     return 0;
 }
 
+int slots_carry( SlotTable *nuevo, const SlotTable *viejo, int *perdidas )
+{
+    int i, n = 0, p = 0;
+
+    if ( perdidas ) *perdidas = 0;
+
+    for ( i = 1; i <= viejo->n; i++ ) {
+        int j, t, ok = 1;
+
+        /* Un slot que estaba LIBRE no dice nada que conservar, salvo las
+         * covarianzas, que nacen fijas: una q libre SI es una decision. */
+        if ( viejo->kind[i] == SLOT_FREE &&
+             strncmp( viejo->name[i], "q[", 2 ) != 0 ) continue;
+        if ( viejo->kind[i] == SLOT_FIXED &&
+             strncmp( viejo->name[i], "q[", 2 ) == 0 &&
+             viejo->value[i] == 0.0 ) continue;      /* como nacio */
+
+        j = slots_find( nuevo, viejo->name[i] );
+        if ( !j ) { p++; continue; }
+
+        /* Los slots a los que apunta tambien tienen que existir: una
+         * restriccion a medias seria peor que no llevarla.            */
+        switch ( viejo->kind[i] ) {
+        case SLOT_ALIAS:
+            if ( !slots_find( nuevo, viejo->name[viejo->alias[i]] ) ) ok = 0;
+            break;
+        case SLOT_PRODUCT:
+            if ( !slots_find( nuevo, viejo->name[viejo->pa[i]] ) ||
+                 !slots_find( nuevo, viejo->name[viejo->pb[i]] ) ) ok = 0;
+            break;
+        case SLOT_LINCOMB:
+            for ( t = 0; t < viejo->nlc[i]; t++ ) {
+                if ( !slots_find( nuevo, viejo->name[viejo->lc_a[i][t]] ) ) ok = 0;
+                if ( viejo->lc_b[i][t] &&
+                     !slots_find( nuevo, viejo->name[viejo->lc_b[i][t]] ) ) ok = 0;
+            }
+            break;
+        }
+        if ( !ok ) { p++; continue; }
+
+        nuevo->kind[j]  = viejo->kind[i];
+        nuevo->value[j] = viejo->value[i];
+        nuevo->nlc[j]   = viejo->nlc[i];
+        nuevo->alias[j] = viejo->kind[i] == SLOT_ALIAS
+                        ? slots_find( nuevo, viejo->name[viejo->alias[i]] ) : 0;
+        nuevo->pa[j]    = viejo->kind[i] == SLOT_PRODUCT
+                        ? slots_find( nuevo, viejo->name[viejo->pa[i]] ) : 0;
+        nuevo->pb[j]    = viejo->kind[i] == SLOT_PRODUCT
+                        ? slots_find( nuevo, viejo->name[viejo->pb[i]] ) : 0;
+        for ( t = 0; t < viejo->nlc[i]; t++ ) {
+            nuevo->lc_sign[j][t] = viejo->lc_sign[i][t];
+            nuevo->lc_a[j][t] = slots_find( nuevo, viejo->name[viejo->lc_a[i][t]] );
+            nuevo->lc_b[j][t] = viejo->lc_b[i][t]
+                              ? slots_find( nuevo, viejo->name[viejo->lc_b[i][t]] ) : 0;
+        }
+        n++;
+    }
+
+    if ( perdidas ) *perdidas = p;
+    return n;
+}
+
 /* ------------------------------------------------------------------------ */
 /* El .cns                                                                   */
 /* ------------------------------------------------------------------------ */

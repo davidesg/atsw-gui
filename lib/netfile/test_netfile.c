@@ -184,6 +184,83 @@ int main( int argc, char **argv )
    }
    }
 
+   /* --- REORDENAR LAS SERIES -------------------------------------------- */
+   /* La comprobacion no es que la permutacion sea la que yo creo: es que los
+    * enlaces SIGAN NOMBRANDO A LAS MISMAS SERIES. Eso es lo unico que importa
+    * y es lo unico que no se puede falsear con un indice mal puesto.     */
+   {
+   NetLink orig[NET_MAX_LINK], mov[NET_MAX_LINK];
+   char    antes[NET_MAX_LINK][32], despues[NET_MAX_LINK][32];
+   int     perm[NET_MAX_SER + 1];
+   int     nm, de, a, k, bien, casos = 0;
+
+   n = net_read( argv[1], NOM, NSER, orig, NET_MAX_LINK, &e );
+
+   printf( "\n  reordenar: los enlaces tienen que seguir nombrando lo mismo\n" );
+
+   for ( de = 1; de <= NSER; de++ )
+      for ( a = 1; a <= NSER; a++ ) {
+         const char *nom2[NSER + 1];
+         int         i2;
+
+         if ( de == a ) continue;
+
+         /* Como se llamaban los enlaces ANTES */
+         for ( k = 0; k < n; k++ )
+            snprintf( antes[k], sizeof antes[k], "%s<-%s",
+                      NOM[orig[k].out], NOM[orig[k].inp] );
+
+         /* Los nombres, movidos igual que las series */
+         net_perm_move( NSER, de, a, perm );
+         for ( i2 = 1; i2 <= NSER; i2++ ) nom2[perm[i2]] = NOM[i2];
+         nom2[0] = NULL;
+
+         memcpy( mov, orig, sizeof orig );
+         nm = net_remap( mov, n, perm );
+
+         for ( k = 0; k < nm; k++ )
+            snprintf( despues[k], sizeof despues[k], "%s<-%s",
+                      nom2[mov[k].out], nom2[mov[k].inp] );
+
+         bien = ( nm == n );
+         for ( k = 0; k < nm && bien; k++ )
+            if ( strcmp( antes[k], despues[k] ) ) bien = 0;
+         if ( !bien ) {
+            printf( "     FALLA moviendo %s de %d a %d: %s -> %s\n",
+                    NOM[de], de, a, antes[0], despues[0] );
+            fallos++;
+         }
+         casos++;
+      }
+   printf( "     %d movimientos probados, los %d x %d posibles\n",
+           casos, NSER, NSER - 1 );
+   ok( casos == NSER * ( NSER - 1 ), "se probaron todos los movimientos" );
+
+   /* Y el caso concreto que destapo esto: si EP e EI se intercambian y nadie
+    * remapea, "EP <- EI" pasa a leerse "EI <- EP". Al reves.           */
+   {
+   NetLink uno = { 1, 2, 1, 0, 1 };
+
+   net_perm_move( NSER, 1, 2, perm );
+   memcpy( mov, &uno, sizeof uno );
+   net_remap( mov, 1, perm );
+   ok( mov[0].out == 2 && mov[0].inp == 1,
+       "  EP<-EI, con EP y EI intercambiadas, pasa a ser 2<-1: sigue siendo EP<-EI" );
+   }
+
+   /* Quitar una serie se lleva por delante los enlaces que la nombraban. */
+   {
+   int nq;
+
+   net_perm_drop( NSER, 4, perm );          /* fuera EU */
+   memcpy( mov, orig, sizeof orig );
+   nq = net_remap( mov, n, perm );
+   ok( nq == 2, "quitar EU deja 2 de los 4 enlaces: los otros la nombraban" );
+   ok( perm[1] == 1 && perm[4] == 0 && perm[3] == 3,
+       "  y las de detras corren una plaza, la quitada recibe 0" );
+   }
+   }
+
    /* --- y si nos lo piden, lo reescribimos: el guion comprueba luego que EL
     * MOTOR se lo traga y da la misma red. Que el GUI y el motor lean igual lo
     * garantiza compartir el lector; que lo que el GUI ESCRIBE sea legible por

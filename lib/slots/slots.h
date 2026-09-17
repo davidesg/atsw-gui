@@ -100,6 +100,21 @@ int  slots_nfree( const SlotTable *st );
  * Un slot LIBRE que nacio libre no necesita linea: devuelve 0 y no escribe. */
 int  slots_line( const SlotTable *st, int i, char *out, size_t size );
 
+/* Lleva a la tabla NUEVA lo que decia la VIEJA, emparejando POR NOMBRE.
+ *
+ * Hace falta porque la tabla se reconstruye entera cada vez que cambia algo
+ * --cargar una serie, tocar un enlace-- y sin esto lo que el analista haya
+ * dicho se pierde en silencio, que es la peor forma de perderse.
+ *
+ * Devuelve cuantas restricciones se llevo; en *perdidas, cuantas nombraban un
+ * slot que ya no existe.
+ *
+ * OJO CON REORDENAR LAS SERIES. Los nombres llevan la POSICION dentro --
+ * q[3,2], phi_2[B^1], mu[4]-- asi que despues de mover una serie el mismo
+ * nombre significa otra cosa y emparejar por nombre seria EXACTAMENTE lo
+ * contrario de conservar. Para eso no se usa esto: se tira y se dice.    */
+int slots_carry( SlotTable *nuevo, const SlotTable *viejo, int *perdidas );
+
 /* ------------------------------------------------------------------------ */
 /* El .cns                                                                   */
 /* ------------------------------------------------------------------------ */

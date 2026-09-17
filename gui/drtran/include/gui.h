@@ -54,6 +54,9 @@ typedef struct {
 
     SlotTable  st;
     gboolean   vale;
+    int        perdidas;      /* restricciones que no cupieron al rehacer   */
+    gboolean   orden_cambio;  /* las series se movieron: los nombres ya no
+                                 significan lo mismo                        */
     gchar     *path;
 } Modelo;
 
@@ -115,6 +118,7 @@ typedef struct {
     GtkWidget *compat;        /* la compatibilidad de operadores            */
     GtkWidget *estado;        /* la barra de abajo                          */
     Conjunto   c;             /* las series cargadas                        */
+    gboolean   recolocando;   /* repintando la lista: no leer su orden      */
     Red        red;           /* la pantalla de la red                      */
     Ident      id;            /* la pantalla de identificacion              */
     Modelo     mod;           /* la pantalla del modelo                     */

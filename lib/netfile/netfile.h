@@ -91,6 +91,28 @@ int net_topo( const NetLink *lnk, int nlinks, int nser, int *topo );
  * esta aqui y no alli: no cambia ningun veredicto, añade el detalle.     */
 int net_cycle( const NetLink *lnk, int nlinks, int nser, int *ciclo, int *n );
 
+/* ------------------------------------------------------------------------ */
+/* Reordenar las series                                                      */
+/*                                                                           */
+/* Los enlaces nombran a las series POR SU POSICION, asi que mover una serie */
+/* sin remapear la red deja los enlaces apuntando a otra cosa -- y en        */
+/* silencio: un EP <- EI se convierte en un EI <- EP y sigue estimando tan   */
+/* campante. Esto vive aqui, y no en el GUI, para que se pueda probar.       */
+/* ------------------------------------------------------------------------ */
+
+/* La permutacion de llevar la serie de la posicion 'de' a la posicion 'a'
+ * (1..nser). perm[vieja] = nueva, con perm[0] sin usar.                 */
+void net_perm_move( int nser, int de, int a, int *perm );
+
+/* La de quitar la serie 'i': las de detras corren una plaza. La propia i
+ * recibe 0, que no es ninguna posicion.                                 */
+void net_perm_drop( int nser, int i, int *perm );
+
+/* Aplica la permutacion a los enlaces. Los que tocan una serie cuya nueva
+ * posicion es 0 --la que se quita-- se ELIMINAN, porque ya no nombran nada.
+ * Devuelve cuantos quedan.                                              */
+int  net_remap( NetLink *lnk, int nlinks, const int *perm );
+
 /* Cuantos enlaces entran en la serie i, y cuantos salen de ella. */
 int net_indegree( const NetLink *lnk, int nlinks, int i );
 int net_outdegree( const NetLink *lnk, int nlinks, int i );

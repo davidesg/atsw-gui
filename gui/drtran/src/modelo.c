@@ -71,14 +71,25 @@ static const char *que_es( int kind )
 /* Construir la tabla a partir de lo que hay cargado                         */
 /* ------------------------------------------------------------------------ */
 
+/* La tabla se reconstruye entera cada vez que cambia algo --cargar una serie,
+ * tocar un enlace-- porque su forma DEPENDE de eso. Pero lo que el analista
+ * haya dicho de cada parametro no se pierde por el camino: se lleva a la tabla
+ * nueva emparejando por nombre. Perderlo en silencio seria la peor forma de
+ * perderlo.                                                               */
 static void construye( Mtram *m )
 {
     Modelo          *M = &m->mod;
     struct Tusmodel  Tm[GUI_MAX_SER + 1];
+    SlotTable        viejo;
+    gboolean         habia;
     int              i;
+
+    habia   = M->vale;
+    if (habia) viejo = M->st;
 
     M->vale = FALSE;
     M->st.n = 0;
+    M->perdidas = 0;
     if (m->c.n < 2) return;
 
     for (i = 1; i <= m->c.n; i++) Tm[i] = m->c.s[i - 1]->tm;
@@ -87,6 +98,15 @@ static void construye( Mtram *m )
      * fijo se respeta, que es lo unico que hay que respetar.              */
     slots_build( &M->st, Tm, m->c.n, m->red.lnk, m->red.n, NULL );
     M->vale = TRUE;
+
+    /* Salvo que las series se hayan MOVIDO: los nombres llevan la posicion
+     * dentro --q[3,2], phi_2[B^1], mu[4]-- asi que despues de reordenar el
+     * mismo nombre significa otra cosa, y emparejar por nombre seria
+     * exactamente lo contrario de conservar.                            */
+    if (habia && !M->orden_cambio)
+        slots_carry( &M->st, &viejo, &M->perdidas );
+
+    M->orden_cambio = FALSE;
 }
 
 /* ------------------------------------------------------------------------ */
@@ -139,6 +159,14 @@ static void refresca_cuenta( Mtram *m )
     g_string_append_printf( t,
         "%d parámetros estructurales.   %d libres,  %d fijos o atados.\n",
         M->st.n, libres, M->st.n - libres );
+
+    if (M->perdidas)
+        g_string_append_printf( t,
+            "\n%d restricción%s se quedó%s por el camino: nombraba%s un "
+            "parámetro que este modelo\nya no tiene. Revísalas antes de "
+            "estimar.\n",
+            M->perdidas, M->perdidas == 1 ? "" : "es",
+            M->perdidas == 1 ? "" : "n", M->perdidas == 1 ? "" : "n" );
 
     g_string_append_printf( t,
         "\nDe las %d covarianzas de las innovaciones hay %d liberada%s. "

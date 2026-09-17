@@ -17,7 +17,11 @@
 #include "gui.h"
 
 enum { COL_PAPEL, COL_NOMBRE, COL_NOBS, COL_DESDE, COL_HASTA,
-       COL_OPERADOR, COL_RUTA, N_COLS };
+       COL_OPERADOR, COL_RUTA, COL_PTR, N_COLS };
+
+/* Se guarda el puntero a la Serie en cada fila. Identificar la fila por su
+ * RUTA parece mas limpio y no lo es: cargar dos veces el mismo .pre --que es
+ * legitimo-- daria dos filas indistinguibles.                            */
 
 /* ------------------------------------------------------------------------ */
 
@@ -47,6 +51,7 @@ static void refresca_lista(Mtram *m)
     GtkTreeIter it;
     int i;
 
+    m->recolocando = TRUE;
     gtk_list_store_clear(st);
     for (i = 0; i < m->c.n; i++) {
         Serie *s = m->c.s[i];
@@ -62,9 +67,11 @@ static void refresca_lista(Mtram *m)
             COL_HASTA,    h,
             COL_OPERADOR, s->operador,
             COL_RUTA,     s->path,
+            COL_PTR,      s,
             -1);
         g_free(d); g_free(h);
     }
+    m->recolocando = FALSE;
 }
 
 /* La ventana comun, y lo que cuesta */
@@ -162,7 +169,7 @@ static void refresca(Mtram *m)
 
 static void on_anadir(GtkButton *b, Mtram *m)
 {
-    GtkWidget *d;
+    GtkWidget     *d;
     GtkFileFilter *f;
 
     if (m->c.n >= GUI_MAX_SER) {
@@ -171,30 +178,70 @@ static void on_anadir(GtkButton *b, Mtram *m)
         return;
     }
 
-    d = gtk_file_chooser_dialog_new("Abrir un .pre", GTK_WINDOW(m->ventana_p),
+    d = gtk_file_chooser_dialog_new("Abrir .pre", GTK_WINDOW(m->ventana_p),
                                     GTK_FILE_CHOOSER_ACTION_OPEN,
                                     "_Cancelar", GTK_RESPONSE_CANCEL,
                                     "_Abrir",    GTK_RESPONSE_ACCEPT, NULL);
+    /* De golpe: un sistema son seis o siete .pre y abrirlos de uno en uno es
+     * un peaje sin motivo. Con Ctrl+A entran todos los de la carpeta.    */
+    gtk_file_chooser_set_select_multiple(GTK_FILE_CHOOSER(d), TRUE);
+
     f = gtk_file_filter_new();
     gtk_file_filter_set_name(f, "Modelos estimados (*.pre)");
     gtk_file_filter_add_pattern(f, "*.pre");
     gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(d), f);
 
     if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT) {
-        gchar *p = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));
-        char   why[512];
-        Serie *s = serie_cargar(p, why, sizeof why);
+        GSList  *lista = gtk_file_chooser_get_filenames(GTK_FILE_CHOOSER(d));
+        GSList  *l;
+        GString *fallos = g_string_new(NULL);
+        int      puestas = 0, sitio = 1;
 
-        if (s) {
-            m->c.s[m->c.n++] = s;
-            barra(m, "%s: %d obs, frecuencia %d, operador %s",
-                  s->ts.name ? s->ts.name : "(sin nombre)",
-                  s->ts.nobs, s->ts.freq, s->operador);
-            refresca(m);
-        } else {
-            barra(m, "%s", why);
+        /* Por nombre, para que el resultado no dependa de en que orden los
+         * devuelva el dialogo: con varios ficheros eso no esta garantizado y
+         * aqui el orden SIGNIFICA algo -- la primera es la salida.       */
+        lista = g_slist_sort(lista, (GCompareFunc) g_strcmp0);
+
+        for (l = lista; l; l = l->next) {
+            char   why[512];
+            Serie *s;
+
+            if (m->c.n >= GUI_MAX_SER) { sitio = 0; break; }
+
+            s = serie_cargar((const char *) l->data, why, sizeof why);
+            if (s) {
+                m->c.s[m->c.n++] = s;
+                puestas++;
+            } else {
+                gchar *base = g_path_get_basename((const char *) l->data);
+
+                g_string_append_printf(fallos, "%s%s: %s",
+                                       fallos->len ? "; " : "", base, why);
+                g_free(base);
+            }
         }
-        g_free(p);
+
+        refresca(m);
+
+        if (!sitio)
+            barra(m, "%d cargada%s. El motor lleva %d series como mucho, así "
+                     "que las demás se quedaron fuera.",
+                  puestas, puestas == 1 ? "" : "s", GUI_MAX_SER);
+        else if (fallos->len)
+            barra(m, "%d cargada%s. No pude con %s", puestas,
+                  puestas == 1 ? "" : "s", fallos->str);
+        else if (puestas > 1)
+            barra(m, "%d series. La SALIDA es «%s», la primera por orden "
+                     "alfabético: arrastra otra arriba si no es la que toca.",
+                  puestas, m->c.s[0]->ts.name ? m->c.s[0]->ts.name : "?");
+        else if (puestas == 1)
+            barra(m, "%s: %d obs, frecuencia %d, operador %s",
+                  m->c.s[m->c.n - 1]->ts.name ? m->c.s[m->c.n - 1]->ts.name : "(sin nombre)",
+                  m->c.s[m->c.n - 1]->ts.nobs, m->c.s[m->c.n - 1]->ts.freq,
+                  m->c.s[m->c.n - 1]->operador);
+
+        g_string_free(fallos, TRUE);
+        g_slist_free_full(lista, g_free);
     }
     gtk_widget_destroy(d);
 }
@@ -214,16 +261,89 @@ static int fila_marcada(Mtram *m)
     return n;
 }
 
+/* Reordenar NO es cosmetico: los enlaces del .dag se refieren a las series por
+ * su POSICION, y tambien lo hacen las covarianzas q[i,j] del .cns. Mover una
+ * serie sin remapear la red deja los enlaces apuntando a otra cosa -- y en
+ * silencio, que es lo peor: un EP <- EI se convierte en un EI <- EP y sigue
+ * estimando tan campante.
+ *
+ * perm[vieja] = nueva, indices 1..n.                                      */
+static void remapea_red(Mtram *m, const int *perm)
+{
+    m->red.n = net_remap(m->red.lnk, m->red.n, perm);
+}
+
 static void mueve(Mtram *m, int de, int a)
 {
     Serie *s;
+    int    perm[NET_MAX_SER + 1];
 
     if (de < 0 || a < 0 || de >= m->c.n || a >= m->c.n || de == a) return;
+
+    net_perm_move(m->c.n, de + 1, a + 1, perm);
+
     s = m->c.s[de];
     if (de < a) memmove(&m->c.s[de], &m->c.s[de + 1], (a - de) * sizeof(Serie *));
     else        memmove(&m->c.s[a + 1], &m->c.s[a], (de - a) * sizeof(Serie *));
     m->c.s[a] = s;
+
+    remapea_red(m, perm);
+    m->mod.orden_cambio = TRUE;
     refresca(m);
+}
+
+/* ------------------------------------------------------------------------ */
+/* Arrastrar y soltar dentro de la lista                                     */
+/*                                                                           */
+/* GTK reordena SU modelo; el orden que manda es el de m->c.s, asi que hay que */
+/* traerlo de vuelta. Se lee el modelo y se reconstruye el conjunto en ese     */
+/* orden, identificando cada fila por el PUNTERO a la Serie.                  */
+/* ------------------------------------------------------------------------ */
+
+static void sincroniza_orden(GtkTreeModel *mod, Mtram *m)
+{
+    Serie       *nuevo[GUI_MAX_SER];
+    int          perm[NET_MAX_SER + 1];
+    GtkTreeIter  it;
+    int          n = 0, i, cambio = 0;
+
+    if (m->recolocando) return;           /* lo estamos repintando nosotros */
+    if (!gtk_tree_model_get_iter_first(mod, &it)) return;
+
+    do {
+        Serie *s = NULL;
+
+        gtk_tree_model_get(mod, &it, COL_PTR, &s, -1);
+        if (!s || n >= GUI_MAX_SER) return;
+
+        for (i = 0; i < m->c.n; i++)
+            if (m->c.s[i] == s) { perm[i + 1] = n + 1; break; }
+        if (i == m->c.n) return;          /* una fila que no es de nadie */
+
+        nuevo[n++] = s;
+    } while (gtk_tree_model_iter_next(mod, &it));
+
+    /* A media faena el modelo tiene una fila de mas o de menos: no tocar. */
+    if (n != m->c.n) return;
+
+    for (i = 0; i < n; i++) if (m->c.s[i] != nuevo[i]) cambio = 1;
+    if (!cambio) return;
+
+    for (i = 0; i < n; i++) m->c.s[i] = nuevo[i];
+    remapea_red(m, perm);
+    m->mod.orden_cambio = TRUE;
+    refresca(m);
+
+    barra(m, "%s es ahora la salida. Los enlaces se han remapeado; las "
+             "restricciones del .cns, NO: sus nombres llevan la posición "
+             "dentro.",
+          m->c.s[0]->ts.name ? m->c.s[0]->ts.name : "?");
+}
+
+static void on_fila_borrada(GtkTreeModel *mod, GtkTreePath *path, Mtram *m)
+{
+    /* GTK reordena insertando y borrando: cuando llega el borrado, ya esta. */
+    sincroniza_orden(mod, m);
 }
 
 static void on_subir(GtkButton *b, Mtram *m)  { int i = fila_marcada(m); mueve(m, i, i - 1); }
@@ -241,13 +361,30 @@ static void on_salida(GtkButton *b, Mtram *m)
 
 static void on_quitar(GtkButton *b, Mtram *m)
 {
-    int i = fila_marcada(m);
+    int i = fila_marcada(m), k, j, quitados = 0;
 
     if (i < 0) return;
+
+    /* Los enlaces que nombraban a esta serie dejan de tener sentido y se van
+     * con ella; los demas se corren una plaza. Callarse y dejarlos apuntando
+     * a otra serie seria el mismo fallo que no remapear al mover.      */
+    {
+    int perm[NET_MAX_SER + 1], antes = m->red.n;
+
+    net_perm_drop(m->c.n, i + 1, perm);
+    m->red.n = net_remap(m->red.lnk, m->red.n, perm);
+    quitados = antes - m->red.n;
+    }
+    (void) k;  (void) j;
+
     serie_libre(m->c.s[i]);
     memmove(&m->c.s[i], &m->c.s[i + 1], (m->c.n - i - 1) * sizeof(Serie *));
     m->c.n--;
     refresca(m);
+
+    if (quitados)
+        barra(m, "Y con ella %d enlace%s que la nombraba%s.",
+              quitados, quitados == 1 ? "" : "s", quitados == 1 ? "" : "n");
 }
 
 /* ------------------------------------------------------------------------ */
@@ -298,11 +435,14 @@ GtkWidget *mtram_window_new(GtkApplication *app, Mtram *m)
     g_signal_connect(b, "clicked", G_CALLBACK(fn), m); \
     gtk_box_pack_start(GTK_BOX(barra_b), b, FALSE, FALSE, 0);
 
-    BOTON("Añadir .pre", on_anadir,
+    BOTON("Añadir .pre…", on_anadir,
           "Un modelo YA ESTIMADO con fue. drtran parte de óptimos, no de datos "
-          "crudos: el escalón univariante va antes.")
-    BOTON("Subir", on_subir, "El orden es el índice de q[i,j] en el .cns.")
-    BOTON("Bajar", on_bajar, "El orden es el índice de q[i,j] en el .cns.")
+          "crudos: el escalón univariante va antes.\n\nSe pueden abrir VARIOS de "
+          "golpe: Ctrl+A en el diálogo carga todos los .pre de la carpeta.")
+    BOTON("Subir", on_subir,
+          "O arrastra la fila. El orden es el índice de q[i,j] en el .cns.")
+    BOTON("Bajar", on_bajar,
+          "O arrastra la fila. El orden es el índice de q[i,j] en el .cns.")
     BOTON("Hacer salida", on_salida, "La salida es la primera: la Y del modelo.")
     BOTON("Quitar", on_quitar, "")
 #undef BOTON
@@ -310,7 +450,7 @@ GtkWidget *mtram_window_new(GtkApplication *app, Mtram *m)
     /* --- la lista --- */
     st = gtk_list_store_new(N_COLS, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_INT,
                             G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING,
-                            G_TYPE_STRING);
+                            G_TYPE_STRING, G_TYPE_POINTER);
     m->lista = gtk_tree_view_new_with_model(GTK_TREE_MODEL(st));
     columna(m->lista, "Papel",     COL_PAPEL, 0);
     columna(m->lista, "Serie",     COL_NOMBRE, 0);
@@ -319,6 +459,16 @@ GtkWidget *mtram_window_new(GtkApplication *app, Mtram *m)
     columna(m->lista, "Hasta",     COL_HASTA, 0);
     columna(m->lista, "Operador ∇", COL_OPERADOR, 0);
     columna(m->lista, "Fichero",   COL_RUTA, 0);
+
+    /* Arrastrar para reordenar. El orden no es cosmetico --la primera es la
+     * salida, y es el indice de q[i,j] en el .cns-- asi que se cambia a la
+     * vista y con la mano.                                              */
+    gtk_tree_view_set_reorderable(GTK_TREE_VIEW(m->lista), TRUE);
+    g_signal_connect(st, "row-deleted", G_CALLBACK(on_fila_borrada), m);
+    gtk_widget_set_tooltip_text(m->lista,
+        "Arrastra para cambiar el orden. La PRIMERA es la salida, y el orden "
+        "es el índice de q[i,j] en el .cns: al mover, los enlaces de la red se "
+        "remapean solos.");
 
     sc = gtk_scrolled_window_new(NULL, NULL);
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sc),

@@ -162,8 +162,15 @@ Las cuatro decisiones:
     fase 4   ESTUDIO-taste.md                                     TASTE
     fase 5   DISENO-proyecto.md                                   el proyecto
 
-Queda **fase 6**: la interfaz madre y el GUI de drtran. Lo que sigue ya no es
-estudio: es diseño de programa.
+**Fase 6 — la interfaz madre y el GUI de drtran — ABIERTA (2026-09-17).**
+Su documento es `DISENO-mtram.md`: las siete pantallas, qué fabrica cada una y
+qué pide a la anterior. Lo que sigue ya no es estudio: es diseño de programa.
+
+La fase 4 dejó a TASTE como diseño. La 6 lo usa, y marca el límite: **TASTE es
+una familia de modelos —un solo output, un solo operador de diferenciación, sin
+fijo/libre, sin restricciones— y mtram es un grafo de ecuaciones.** Se rescata
+el principio (ninguna pantalla se bloquea; cada paso pide por su nombre lo que
+sólo el anterior fabrica) y se deja atrás la forma.
 
 ---
 

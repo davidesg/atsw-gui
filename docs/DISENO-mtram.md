@@ -269,9 +269,9 @@ Cada una fabrica lo que la siguiente pide. **Ninguna se bloquea.**
 | 4 | **Modelo** (`.cns`) | los órdenes propuestos | la especificación, con banderas fijo/libre | ✔ |
 | 5 | **Estimación** | un `.cns` completo | el `.out`, y los residuos **de este modelo** | ✔ |
 | 6 | **Diagnosis** | residuos | el veredicto, con la batería de identificación | ✔ |
-| 7 | **Previsión** | un modelo estimado y diagnosticado | las previsiones y su evaluación | |
+| 7 | **Previsión** | un modelo estimado y diagnosticado | las previsiones y su evaluación | ✔ |
 
-Estado hoy: **1 a 6 hechas**. Falta la previsión.
+Estado hoy: **las siete hechas**.
 
 De la 2 salió una lección que vale para las que quedan. Al sacar el lector del
 `.dag` a `lib/netfile` puse su mensaje de error en español, y la batería del
@@ -309,6 +309,17 @@ diagnósticos opuestos que se arreglan de forma opuesta (k ≥ 0 → cambiar
 (b, r, s); k < 0 → quitar el enlace o subir al VARMA). En el m6, dos de los
 cuatro enlaces no son adecuados y los cuatro pasan la exogeneidad: si la
 pantalla mezclara los dos contrastes, ese caso se leería mal.
+
+La 7 cierra el recorrido con la distinción que existe para no dejar confundir:
+**las bandas de la previsión son TEÓRICAS** —dicen lo que el modelo implica— y
+**la evaluación fuera de muestra es EMPÍRICA**. Un modelo puede dar bandas
+estrechas y fallar.
+
+Y ahí está el pago de §2.4. TASTE no podía comparar dos modelos porque tenía
+una sola ranura de residuos; aquí la evaluación de una corrida **se guarda** y
+la siguiente trae al lado la diferencia relativa del RMSE por horizonte. Eso es
+lo único que decide empíricamente si un modelo predice mejor que otro: no el
+ajuste, no la verosimilitud, no las bandas.
 
 Y un principio que la 2 estrena y las siguientes heredan: **lo que el GUI
 escribe se le pregunta al motor.** Que los dos *lean* igual lo garantiza

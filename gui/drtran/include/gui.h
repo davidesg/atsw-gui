@@ -11,6 +11,7 @@
 #include "slots.h"
 #include "verdict.h"
 #include "outdiag.h"
+#include "outfcst.h"
 
 #define IDENT_MAX_LAGS 64
 
@@ -85,6 +86,28 @@ typedef struct {
     gchar     *path;          /* el .out del que salio                      */
 } Diag;
 
+/* La pantalla de prevision y evaluacion.
+ *
+ * Las bandas de la prevision son TEORICAS; la evaluacion fuera de muestra es
+ * EMPIRICA. La pantalla existe para no dejar confundirlas -- y para poder
+ * comparar dos modelos, que es lo que TASTE no podia hacer.            */
+typedef struct {
+    GtkWidget *lista;         /* el error por horizonte                     */
+    GtkWidget *texto;         /* la prevision y lo que significa            */
+    GtkWidget *c_prever, *c_eval, *s_hor, *s_win;
+
+    Forecast   f;
+    gboolean   vale;
+
+    gboolean   prever, evaluar;
+    int        horizonte;     /* -f L                                       */
+    int        ventana;       /* -estwin E, 0 = sin ventana                 */
+
+    OfEval     ref;           /* la evaluacion guardada, para comparar      */
+    gboolean   tiene_ref;
+    char       ref_que[80];
+} Prev;
+
 typedef struct {
     GtkWidget *ventana_p;     /* la ventana principal                       */
     GtkWidget *lista;         /* las series, en orden                       */
@@ -97,6 +120,7 @@ typedef struct {
     Modelo     mod;           /* la pantalla del modelo                     */
     Estima     est;           /* la pantalla de estimacion                  */
     Diag       dia;           /* la pantalla de diagnosis                   */
+    Prev       prev;          /* la pantalla de prevision                   */
 } Mtram;
 
 GtkWidget *mtram_window_new(GtkApplication *app, Mtram *m);
@@ -112,6 +136,11 @@ void       modelo_refresca(Mtram *m);
 /* estima.c */
 GtkWidget *estima_pagina_new(Mtram *m);
 void       estima_refresca(Mtram *m);
+
+/* prevision.c */
+GtkWidget *prevision_pagina_new(Mtram *m);
+void       prevision_refresca(Mtram *m);
+void       prevision_desde(Mtram *m, const char *path);
 
 /* diagnosis.c */
 GtkWidget *diagnosis_pagina_new(Mtram *m);

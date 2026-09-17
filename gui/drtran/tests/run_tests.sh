@@ -158,3 +158,40 @@ if [ -f "$W/est.out" ]; then
 else
     echo "  (sin est.out: no compruebo la diagnosis)"
 fi
+
+# --- la prevision y la evaluacion fuera de muestra --------------------------
+# Otra vez contra .out DE VERDAD: uno con -f sobre el m6 (la prevision de una
+# RED, que es lo que distingue a drtran) y otro con -estwin/-C sobre un par,
+# que es la evaluacion recursiva.
+echo
+$CC -O2 -Wall -Wextra -I"$L/outfcst" \
+    "$L/outfcst/test_outfcst.c" "$L/outfcst/outfcst.c" \
+    -o "$W/test_outfcst" -lm || exit 1
+
+M6D="$E/tests/data/m6"
+C="$E/tests/cases"
+if [ -x "$E/bin/drtran" ] && [ -f "$M6D/M6_EP.pre" ]; then
+    ( cd "$W" && "$E/bin/drtran" \
+        "$M6D/M6_EP.pre" "$M6D/M6_EI.pre" "$M6D/M6_EU.pre" \
+        "$M6D/M6_EC.pre" "$M6D/M6_EA.pre" "$M6D/M6_P.pre" \
+        -n "$M6D/m6_net.dag" -c "$M6D/m6_net_full.cns" -f 8 \
+        -o "$W/fcst.out" >/dev/null 2>&1 )
+    ( cd "$W" && "$E/bin/drtran" \
+        "$C/ES_CPI_airline.pre" "$C/WTI_ar1.pre" \
+        -estwin 180 -f 6 -C "$W/evaluacion.csv" \
+        -o "$W/eval.out" >/dev/null 2>&1 )
+
+    "$W/test_outfcst" "$W/fcst.out" "$W/eval.out" || exit 1
+
+    # El CSV por origen: la evaluacion tiene que dejarlo, y con una fila por
+    # (origen, horizonte). 31 origenes x 6 horizontes + cabecera.
+    if [ -f "$W/evaluacion.csv" ]; then
+        n=$(wc -l < "$W/evaluacion.csv")
+        if [ "$n" -eq 187 ]; then
+            echo "  el CSV por origen: 31 x 6 filas mas la cabecera          ok"
+        else
+            echo "  el CSV por origen: 31 x 6 filas mas la cabecera          FALLA ($n)"
+            exit 1
+        fi
+    fi
+fi

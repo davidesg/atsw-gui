@@ -133,6 +133,21 @@ static gchar **arma_argv( Mtram *m, const gchar *dag, const gchar *cns,
     if (cns) { g_ptr_array_add( a, g_strdup( "-c" ) );
                g_ptr_array_add( a, g_strdup( cns ) ); }
 
+    /* La prevision y la evaluacion las pide la pestaña Prevision; van en la
+     * MISMA corrida porque el motor las hace en la misma pasada.       */
+    if (m->prev.prever || m->prev.evaluar) {
+        g_ptr_array_add( a, g_strdup( "-f" ) );
+        g_ptr_array_add( a, g_strdup_printf( "%d", m->prev.horizonte ) );
+    }
+    if (m->prev.evaluar && m->prev.ventana > 0) {
+        gchar *csv = g_build_filename( d, "evaluacion.csv", NULL );
+
+        g_ptr_array_add( a, g_strdup( "-estwin" ) );
+        g_ptr_array_add( a, g_strdup_printf( "%d", m->prev.ventana ) );
+        g_ptr_array_add( a, g_strdup( "-C" ) );
+        g_ptr_array_add( a, csv );
+    }
+
     if (m->est.diagonal)  g_ptr_array_add( a, g_strdup( "-0" ) );
     if (m->est.cast_resta) g_ptr_array_add( a, g_strdup( "-S" ) );
     if (m->est.traza)     g_ptr_array_add( a, g_strdup( "-v" ) );
@@ -333,6 +348,7 @@ static void on_done( const EngineResult *r, gpointer data )
      * del diseño de TASTE -- una sola ranura RESIDUOS, que hacia imposible
      * comparar dos modelos.                                            */
     diagnosis_desde( m, E->out_path );
+    prevision_desde( m, E->out_path );
 
     if (r->status == ENGINE_NORUN)
         preview_show_status( m, "No pude lanzar drtran. ¿Está en el PATH? "

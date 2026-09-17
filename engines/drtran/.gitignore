@@ -1,0 +1,13 @@
+# Artefactos de compilación
+*.o
+bin/
+build/
+
+# Salidas de trabajo (se regeneran; no son fuente)
+*.log
+
+# salidas de ejecuciones sueltas
+*.out
+docs/*.aux
+docs/*.log
+docs/*.pdf

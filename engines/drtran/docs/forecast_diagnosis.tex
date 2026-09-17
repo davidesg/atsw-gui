@@ -1,0 +1,291 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+\newtheorem{proposition}{Proposition}
+\newtheorem{definition}{Definition}
+
+\title{Predictive validation of a transfer-function model:\\
+       the out-of-sample forecast diagnosis of \texttt{drtran}}
+\author{drtran / ATSW suite}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+A multivariate transfer-function model is worth building \emph{only if it
+forecasts better than the univariate model it extends}. This note fixes the
+mathematics of the out-of-sample comparison that \texttt{drtran} uses to decide
+this: a fixed-parameter recursive forecast over balanced origins, the
+root-mean-square error by horizon, the ratio between two models, and the
+Diebold--Mariano test with its heteroskedasticity-and-autocorrelation-consistent
+(HAC) variance and Harvey--Leybourne--Newbold (HLN) small-sample correction. It
+also makes explicit the overlap structure of multi-step forecasts and the
+resulting effective sample size, which governs how much the long-horizon test
+can be trusted.
+\end{abstract}
+
+\section{The instrumentalist criterion}
+
+Let $A$ be a univariate model for an output series $y_t$ and $B$ a multivariate
+model that adds one or more inputs (a transfer function, $y_t=\nu(B)x_t+N_t$).
+$B$ nests $A$: with $\nu\equiv 0$, $B$ collapses to $A$. In sample, $B$ can never
+fit worse than $A$ (the likelihood is monotone in the free parameters); a
+significant $\hat\omega$ or a higher log-likelihood is therefore \emph{necessary
+but not sufficient} to justify $B$.
+
+Following Friedman's instrumentalism, the model is judged by what it predicts.
+The operational criterion is:
+\[
+\boxed{\;B \text{ is justified over } A \iff B \text{ forecasts } y \text{ better
+out of sample than } A.\;}
+\]
+Everything below is the machinery to make ``better out of sample'' precise and
+testable.
+
+\section{The fixed-parameter recursive forecast}
+
+Let $y_1,\dots,y_n$ be the observed output (and $x_1,\dots,x_n$ the inputs).
+Split the sample at $E$ (the \emph{estimation window}, \texttt{-estwin E}): the
+training span is $1,\dots,E$ and the evaluation span is $E+1,\dots,n$.
+
+\begin{definition}[Fixed-parameter forecast from an origin]
+Estimate the model once on $1,\dots,E$, obtaining $\hat\theta_E$. For a
+\emph{forecast origin} $e\ge E$, condition on the data through $e$ and produce the
+$h$-step-ahead point forecast of the output,
+\[
+\hat y_{e+h\mid e}(\hat\theta_E), \qquad h=1,\dots,H,
+\]
+holding $\hat\theta_E$ \emph{fixed} (no re-estimation as $e$ advances). For a
+transfer model, $\hat y_{e+h\mid e}$ requires the input forecast
+$\hat x_{e+j\mid e}$, so the input's own model is projected forward too.
+\end{definition}
+
+The parameters come from the training window $E$; the origin $e$ is independent of
+$E$ (\texttt{drtran} exposes them as \texttt{-estwin E} and \texttt{-O e}). The SPS
+real-time use sets $e=n$ (the current data end); the evaluation use rolls $e$ over
+the hold-out (below).
+
+\section{Balanced origins and the error panel}
+
+\begin{definition}[Balanced origins]
+For a fixed horizon $H$, roll the origin over
+\[
+e = E,\,E+1,\,\dots,\,n-H,
+\]
+so that \emph{every} origin has a full set of $H$ realised values
+$y_{e+1},\dots,y_{e+H}$ to be scored against. There are $N=n-H-E+1$ origins, and
+each contributes exactly one error at each horizon $h\le H$. Hence every horizon is
+scored on the same number of errors $N$ (no horizon is scored on fewer, noisier
+points).
+\end{definition}
+
+Define the $h$-step forecast error of model $M\in\{A,B\}$ from origin $e$:
+\[
+\varepsilon^{M}_{e,h} \;=\; \hat y^{M}_{e+h\mid e}(\hat\theta_E) \;-\; y_{e+h}.
+\]
+This is the \emph{error panel} $\{\varepsilon^M_{e,h}\}$, indexed by origin $e$ and
+horizon $h$ --- exactly the CSV that \texttt{drtran -C} writes
+(\texttt{origin,horizon,actual,forecast,error}).
+
+\section{Accuracy by horizon and the ratio}
+
+For each horizon $h$, aggregate over the $N$ origins:
+\[
+\mathrm{RMSE}^{M}(h)=\sqrt{\frac1N\sum_{e=E}^{\,n-H}\!\big(\varepsilon^{M}_{e,h}\big)^2},
+\qquad
+\mathrm{MAE}^{M}(h)=\frac1N\sum_{e}\big|\varepsilon^{M}_{e,h}\big|.
+\]
+The head-to-head summary is the ratio
+\[
+r(h)=\frac{\mathrm{RMSE}^{B}(h)}{\mathrm{RMSE}^{A}(h)},
+\qquad r(h)<1 \iff B \text{ more accurate at horizon } h.
+\]
+
+\section{The Diebold--Mariano test}
+
+The ratio is a point estimate; whether $B$ beats $A$ \emph{significantly} at
+horizon $h$ is a hypothesis test on the loss differential. With squared-error loss,
+define, for each origin $e$,
+\[
+d_{e,h} \;=\; \big(\varepsilon^{A}_{e,h}\big)^2 - \big(\varepsilon^{B}_{e,h}\big)^2,
+\qquad
+\bar d_h=\frac1N\sum_e d_{e,h}.
+\]
+$\bar d_h>0$ means $B$ has the smaller mean squared error. Diebold and Mariano
+(1995) test $H_0:\ \mathbb E[d_{e,h}]=0$ (equal predictive accuracy) against
+$H_1:\ \mathbb E[d_{e,h}]\neq 0$.
+
+\paragraph{Why a HAC variance is unavoidable.}
+The $h$-step forecasts from consecutive origins overlap.
+
+\begin{proposition}[Overlap induces $\mathrm{MA}(h-1)$ dependence]
+Two $h$-step-ahead forecasts made from origins $e$ and $e+k$ target the windows
+$[e+1,e+h]$ and $[e+k+1,e+k+h]$, which \emph{overlap} whenever $k<h$. Under
+correct specification the $h$-step error is a moving average of the $h$ innovations
+entering the forecast window, so $\{d_{e,h}\}_e$ is serially correlated up to lag
+$h-1$ and uncorrelated beyond. Hence a consistent estimate of
+$\mathrm{Var}(\bar d_h)$ must sum autocovariances to lag $h-1$.
+\end{proposition}
+
+Accordingly, use the rectangular (truncated) HAC long-run variance to lag $h-1$,
+\[
+\widehat{\mathrm{LRV}}_h
+=\hat\gamma_0+2\sum_{k=1}^{h-1}\hat\gamma_k,
+\qquad
+\hat\gamma_k=\frac1N\sum_{e}\big(d_{e,h}-\bar d_h\big)\big(d_{e+k,h}-\bar d_h\big).
+\]
+The raw statistic is $\mathrm{DM}_h=\bar d_h\big/\sqrt{\widehat{\mathrm{LRV}}_h/N}$.
+
+\paragraph{Small-sample (HLN) correction.}
+Harvey, Leybourne and Newbold (1997) show $\mathrm{DM}_h$ is oversized in small
+samples at long horizons and propose the correction factor
+\[
+c_{N,h}=\sqrt{\frac{N+1-2h+h(h-1)/N}{N}},
+\qquad
+\mathrm{DM}^{\*}_h=c_{N,h}\,\mathrm{DM}_h,
+\]
+compared against the Student-$t$ distribution with $N-1$ degrees of freedom:
+\[
+p_h = 2\,\Pr\!\big(t_{N-1} > |\mathrm{DM}^{\*}_h|\big).
+\]
+(If $\widehat{\mathrm{LRV}}_h\le 0$ the estimator falls back to the i.i.d.
+variance $\hat\gamma_0$.) This is the exact statistic implemented in
+\texttt{forecast\_compare.py::dm}.
+
+\section{Overlap and the effective sample size}
+
+The RMSE at horizon $h$ is a clean point estimate: it averages $N$ errors, the
+same $N$ for every $h$ (balanced origins). The \emph{test}, however, cannot treat
+those $N$ errors as independent, because they overlap. A set of \emph{non-overlapping}
+$h$-step forecasts is obtained by spacing origins $h$ apart, giving
+\[
+N_{\mathrm{eff}}(h) \;\approx\; \frac{N}{h}
+\]
+effectively independent blocks. Thus:
+\begin{itemize}
+\item at $h=1$, $N_{\mathrm{eff}}=N$ --- the test is at full strength;
+\item at long horizons, $N_{\mathrm{eff}}\to N/h$ becomes tiny (e.g.\ $N=37,\ h=24
+      \Rightarrow N_{\mathrm{eff}}\approx1.5$).
+\end{itemize}
+The HAC-to-$(h-1)$ and HLN correction are precisely what keep the test honest under
+this overlap, but no correction manufactures independent data. \textbf{Reading
+rule:} the \emph{ratio} $r(h)$ and its \emph{sign} are trustworthy at all horizons;
+the \emph{$p$-value} is strong at short horizons and fragile at long horizons, where
+$N_{\mathrm{eff}}$ is small. \texttt{forecast\_compare.py} prints $N_{\mathrm{eff}}$
+alongside $N$ for this reason.
+
+\section{The verdict}
+
+For horizons $h\in\{1,2,6,12,24\}$ (short to long), report
+$\big(N,\ N_{\mathrm{eff}},\ \mathrm{RMSE}^A,\ \mathrm{RMSE}^B,\ r,\ \mathrm{DM}^{\*},\ p\big)$.
+The instrumentalist verdict is:
+\[
+\text{keep } B \text{ over } A \iff r(h)<1 \text{ (materially, and with }
+\mathrm{DM}^{\*}_h>0\text{) over the horizons of interest.}
+\]
+A model that fits better in sample but does not lower $r(h)$ below $1$ out of
+sample fails the criterion. Because $r(h)$ can depend on the regime of the
+evaluation span (the input may be predictable in calm periods and unpredictable in
+crises), the diagnosis should be run over more than one hold-out period; a sign
+change of $r-1$ across regimes is itself the finding.
+
+\section{A worked example: oil pass-through to Spanish inflation}
+
+We instantiate the whole procedure on the canonical bivariate case: does adding
+crude oil (WTI) improve the out-of-sample forecast of the Spanish CPI?
+
+\paragraph{Data and models.}
+Monthly, 2002:01--2025:12 (Spanish CPI general index, INE; WTI spot, FRED). The two
+nested models, both with $\lambda=0$ (log), $d=1$:
+\[
+\text{(A) univariate: } (1-0.40B)\,(\nabla\ln\mathrm{IPC}_t-\mu)=a_t
+\;+\;\text{11 seasonal harmonics},
+\]
+\[
+\text{(B) transfer: } \ln\mathrm{IPC}_t=\nu(B)\,\ln\mathrm{WTI}_t+N_t,
+\qquad \nu(B)=\omega_0-\omega_1B,\quad(b,r,s)=(0,0,1),
+\]
+with $N_t$ the AR(1)+harmonics noise of (A). The pass-through is \emph{strongly
+significant in sample} in every window ($\hat\omega_0\approx0.016$, $t\approx9$; the
+joint log-likelihood rises from $-767$ to $-718$). By the criterion of \S1 this settles
+nothing; we must look out of sample.
+
+\paragraph{Two regimes.}
+We run the diagnosis over two hold-outs, each with parameters estimated only on the
+data \emph{preceding} it (genuine out-of-sample), $H=24$, balanced origins:
+\begin{itemize}\itemsep0pt
+\item \textbf{P1 (calm):} train 2002--2014, evaluate 2015--2019 ($N=37$ origins);
+\item \textbf{P2 (turbulent):} train 2002--2019, evaluate 2020--2025 ($N=49$; COVID and
+      the 2022 energy shock).
+\end{itemize}
+
+\begin{table}[h]
+\centering\small
+\begin{tabular}{rrrrrrr}
+\toprule
+\multicolumn{7}{c}{\textbf{P1: 2015--2019 (calm)} \quad train 2002--2014, $N=37$}\\
+\midrule
+$h$ & $N_{\mathrm{eff}}$ & $\mathrm{RMSE}_A$ & $\mathrm{RMSE}_B$ & $r=B/A$ & $\mathrm{DM}^{\*}$ & $p$\\
+\midrule
+ 1 & 37.0 & 0.299 & 0.279 & 0.931 & $+1.26$ & 0.217\\
+ 2 & 18.5 & 0.528 & 0.480 & 0.908 & $+1.89$ & 0.067\\
+ 6 &  6.2 & 1.005 & 0.955 & 0.950 & $+1.02$ & 0.315\\
+12 &  3.1 & 1.465 & 1.352 & 0.923 & $+1.93$ & 0.061\\
+24 &  1.5 & 1.929 & 1.593 & \textbf{0.826} & $+2.87$ & \textbf{0.007}\\
+\bottomrule
+\end{tabular}
+\hfill
+\begin{tabular}{rrrrrrr}
+\toprule
+\multicolumn{7}{c}{\textbf{P2: 2020--2025 (turbulent)} \quad train 2002--2019, $N=49$}\\
+\midrule
+$h$ & $N_{\mathrm{eff}}$ & $\mathrm{RMSE}_A$ & $\mathrm{RMSE}_B$ & $r=B/A$ & $\mathrm{DM}^{\*}$ & $p$\\
+\midrule
+ 1 & 49.0 & 0.743 & 0.738 & 0.993 & $+0.29$ & 0.777\\
+ 2 & 24.5 & 1.162 & 1.157 & 0.995 & $+0.18$ & 0.858\\
+ 6 &  8.2 & 2.134 & 2.225 & 1.043 & $-1.29$ & 0.204\\
+12 &  4.1 & 3.639 & 3.766 & 1.035 & $-1.70$ & 0.096\\
+24 &  2.0 & 6.050 & 6.354 & \textbf{1.050} & $-2.63$ & \textbf{0.011}\\
+\bottomrule
+\end{tabular}
+\caption{Out-of-sample diagnosis of the transfer model (B) against its nested
+univariate (A). $r<1$ and $\mathrm{DM}^{\*}>0$ favour B. Note the sign of $r-1$
+\emph{reverses} between regimes.}
+\end{table}
+
+\paragraph{Reading.} The verdict \emph{reverses with the regime}:
+\begin{itemize}\itemsep0pt
+\item \textbf{P1 (calm): B wins}, and more at longer horizons ($r=0.83$ at $h=24$, a
+      $17\%$ RMSE cut, $p=0.007$). Oil is informative and its random-walk forecast
+      suffices.
+\item \textbf{P2 (turbulent): B loses} at long horizons ($r=1.05$ at $h=24$,
+      $p=0.011$). Oil becomes unpredictable, so the transfer injects the error of its
+      \emph{own} input forecast (\S2) without predictive gain.
+\end{itemize}
+The pass-through is equally significant \emph{in sample} in both periods, yet its
+\emph{out-of-sample} value changes sign. This is the point of the criterion, and the
+reason the diagnosis is run over more than one hold-out: the sign change of $r-1$
+across regimes is itself the finding. Consistent with the reading rule of \S6, the
+$r(h)$ pattern (monotone in $h$, opposite slopes across regimes) is clean, while the
+$h=24$ $p$-values rest on $N_{\mathrm{eff}}\approx1.5$--$2$ and should be read as
+indicative. The command sequence that produces both panels is in
+\texttt{docs/FORECAST\_DIAGNOSIS.md} (\texttt{drtran -estwin/-O/-C} then
+\texttt{examples/passthrough/forecast\_compare.py}).
+
+\section*{References}
+\begin{itemize}\itemsep0pt
+\item Diebold, F.X.\ and Mariano, R.S.\ (1995). Comparing predictive accuracy.
+      \emph{J.\ Business \& Economic Statistics} 13(3), 253--263.
+\item Harvey, D., Leybourne, S.\ and Newbold, P.\ (1997). Testing the equality of
+      prediction mean squared errors. \emph{Int.\ J.\ Forecasting} 13(2), 281--291.
+\item Abraham, B.\ and Box, G.E.P.\ (1978). Deterministic and forecast-adaptive
+      time-dependent models. \emph{Applied Statistics} 27(2), 120--130.
+\item Friedman, M.\ (1953). The methodology of positive economics. In
+      \emph{Essays in Positive Economics}, Univ.\ of Chicago Press.
+\end{itemize}
+
+\end{document}

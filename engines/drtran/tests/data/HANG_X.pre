@@ -1,0 +1,103 @@
+************************************************
+*        Input file for program DRVUS          *
+*   Caso sintetico generado por gen_synthetic  *
+************************************************
+
+** Frequency of time series: either 1(A), 4(Q) or 12(M):
+ 12
+** Number of observations and starting date of time series:
+ 69  1 2000 T_X
+** Number of deterministic variables (including seasonal components):
+0
+**Number and orders of regular AR operators:
+1 1
+**
+0.5000 1
+** Number and orders of annual AR operators:
+0
+** Number and orders of regular MA operators:
+0
+** Number and orders of anual MA operators:
+0
+** Number and frequencies of regular AR(2) operators with fixed frequency:
+0
+** Number and frequencies of regular MA(2) operators with fixed frequency:
+0
+** Mean parameter (mu):
+0
+** Box-Cox lambda, regular differences and complete annual differences:
+0.00 1 0
+** Individual factors of the annual difference (from freq 0.0): 
+ 0 0 0 0 0 0 0
+** ACF/PACF bands (0 Automatic) and reescaling factor: 
+ 0.00 100.00
+** Time series (stochastic and non-standard deterministic variables): 
+49.8423312939 
+50.4809026942 
+49.9453027248 
+50.0503158930 
+49.5911565059 
+49.7897220111 
+49.7586085716 
+49.4798689770 
+49.1246512749 
+49.1785913618 
+49.6106971541 
+50.7187746526 
+51.0613785776 
+50.8370059447 
+51.1723611985 
+51.2432834767 
+51.0461630000 
+52.1952533488 
+52.3474747638 
+53.2515237058 
+53.3152101669 
+53.1526700034 
+52.7602976067 
+52.3981576825 
+52.3305003590 
+52.0127404178 
+51.8998302049 
+51.4338815525 
+51.0780382720 
+50.7479389865 
+50.4284911448 
+50.8253824326 
+50.9807557184 
+51.1711279920 
+51.5647281541 
+51.7586842177 
+51.7890785473 
+51.9161103641 
+52.1267813566 
+51.9945771910 
+52.6546195902 
+52.6201633750 
+52.0821256832 
+52.4679331243 
+51.9779483948 
+51.4129544101 
+50.8307482550 
+50.4956167242 
+50.1389435679 
+49.0331443828 
+48.7109426436 
+47.8242536536 
+48.0108085446 
+48.3398423862 
+48.2158835495 
+48.1748097341 
+48.4034058659 
+48.5435850546 
+48.6372020855 
+47.6449164765 
+46.9647935063 
+47.0079727584 
+46.9874202843 
+47.1538556693 
+47.4085244506 
+47.6929927740 
+47.7944925560 
+47.9606845381 
+48.2948473481 

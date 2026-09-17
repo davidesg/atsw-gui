@@ -1,0 +1,4 @@
+EP <- EI   1 0 1
+EP <- EC   1 0 2
+EI <- EU   1 0 3
+EU <- EC   2 0 1

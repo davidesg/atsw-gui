@@ -1,0 +1,26 @@
+# Este repositorio guarda EL ESTUDIO y su banco de pruebas, no el arbol de
+# trabajo. atws/ son 908 MB con GSL dentro, diez repositorios anidados, los
+# manuales, los zips de las versiones de Windows y ficheros privados.
+#
+# Por eso la regla es al reves de lo normal: se ignora TODO y se deja entrar
+# solo lo que se nombra. Asi nada se cuela por descuido -- que es exactamente
+# como se cuelan las cosas que no deben estar en un repositorio.
+
+/*
+
+# --- los documentos del estudio -------------------------------------------
+!/ESTUDIO-atsw-PLAN.md
+!/CONTRATO.md
+!/REGLAS-NO-ESCRITAS.md
+!/DISENO-editor.md
+!/DISENO-escalera.md
+!/ESTUDIO-taste.md
+!/DISENO-proyecto.md
+!/REVIEW_2026-08-11.md
+
+# --- el banco de conformidad ----------------------------------------------
+# (conformidad/.gitignore se encarga de los binarios y de los rt.*)
+!/conformidad/
+
+!/.gitignore
+!/README.md

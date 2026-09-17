@@ -24,6 +24,7 @@ largo.
 | **DISENO-escalera.md** | el paso univariante → transferencia, y el fichero de sesión que falta |
 | **ESTUDIO-taste.md** | TASTE (1987-2001) como **diseño**: qué resolvió y qué sigue siendo buena idea |
 | **DISENO-proyecto.md** | el manifiesto de proyecto, que hoy no existe |
+| **DISENO-repositorio.md** | `atsw-gui`: por qué monorepo, qué entra, y cómo mudarse sin perder los 182 commits |
 
 Dos reglas de lectura, porque el estudio se escribió con ellas:
 

@@ -167,6 +167,29 @@ estudio: es diseño de programa.
 
 ---
 
+## DECIDIDO (2026-09-17) — el repositorio del lado C
+
+- **`atsw-gui`**: un monorepo con **los GUIs y sus motores**. La mitad en
+  Python no se toca. Razonado en `DISENO-repositorio.md`.
+
+  El criterio en una linea: **cada divergencia que aparecio en las seis fases
+  tiene la misma causa, el mismo fichero viviendo en dos arboles** — y una de
+  ellas, `inpcheck_fue.c`, divergio dentro de una sola sesion de trabajo. La
+  estructura tiene que hacer imposible la copia, no detectable.
+
+  Por que monorepo y no submodulos: **el corpus de conformidad cruza los
+  programas**, y esa prueba no tiene sitio en un repo por programa.
+
+  El nombre: `atsw` ya es la familia (1.4.0 en PyPI). `atsw-gui` quita la
+  ambiguedad sobre que trae `pip install atsw`.
+
+- **La mudanza toma la historia de LOCAL, no de los remotos.** Cuatro de los
+  cinco repos tienen trabajo sin subir, y dos estan en ramas sin upstream:
+  fue (29 commits, sin upstream), fuf (25, sin upstream), gtk_fue (23 sin
+  subir), drvarma (3 sin subir). Son 182 commits; `git subtree` los trae.
+
+---
+
 ## DECIDIDO (2026-09-17) — fug y el repositorio
 
 - **La rama buena de fug es `fug-1.14-proto`**, motor y GUI. Habia dos GUIs de

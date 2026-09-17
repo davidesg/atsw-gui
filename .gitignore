@@ -1,0 +1,38 @@
+# Lo compilado y lo generado no entra. Los subarboles que venian de un
+# repositorio traen ademas su propio .gitignore, que sigue mandando dentro
+# de su directorio.
+
+# --- objetos y binarios ---------------------------------------------------
+*.o
+*.a
+*.so
+*.exe
+*.dll
+*.ppu
+*.tpu
+obj/
+bin/
+build/
+
+# --- lo que producen los motores ------------------------------------------
+*.out
+*.pre
+*.aux
+*.log
+*.dvi
+*.toc
+*.eps
+*.pdf
+*.ps
+
+# --- samples -------------------------------------------------------------
+# Por decision del proyecto: las muestras NO se versionan.
+samples/
+
+# --- lo del banco ---------------------------------------------------------
+rt.*/
+
+# binarios sin extension que los Makefile dejan en su sitio
+engines/fug/fug
+engines/fug/gtk_fmg
+engines/fug/tests/gui/work/

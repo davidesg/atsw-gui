@@ -1,0 +1,40 @@
+************************************************
+* Input file for program FUE                   *
+* DOCTYPE ATSW-interface SYSTEM                *
+************************************************
+
+** Frequency of time series: either 1(A), 4(Q) or 12(M):
+ 12
+** Number of observations and starting date of time series:
+ 216  1 2002 IPCM RIPCM
+** Number of deterministic variables (including seasonal components):
+6
+**
+impulse 5 2008
+step 1 2010
+easter
+trend
+cos 2
+huelga
+**
+0 0 0 0 0 1
+**
+0.01  1
+**
+0.02  1
+**
+0.00  0
+**
+0.001 1
+**
+0.1 1
+**
+0.5 1
+-0.2 1
+**
+0 0 0 0 0 1
+**
+0.3 1
+** Number and orders of regular AR operators:
+1 2
+**

@@ -1,0 +1,86 @@
+************************************************
+* Input file for program FUG                   *
+* DOCTYPE ATSW-interface SYSTEM                *
+************************************************
+
+** Frequency of time series: either 1(A), 4(Q) or 12(M):
+ 4
+** Number of observations and starting date of time series:
+ 72  1 2002 IPCQ
+Box-Cox lambda, m. Regular differences and complete annual differences:
+ 1.00 0.00  0  0
+** Individual factors of the annual difference (starting at freq 0.0): 
+   0 0 0
+** Time series (stochastic and non-standard deterministic variables): 
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0
+5.0

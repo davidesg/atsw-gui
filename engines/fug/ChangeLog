@@ -1,0 +1,326 @@
+FUG - historial de versiones
+============================
+
+Estudio de las versiones 1.10 - 1.12 (septiembre de 2026) y cambios de la 1.13.
+Ficheros que se compilan: fug.c fug.h diagnose.c delop.c/h nlutils.c
+gnuplot_i.c/h gnuplot_graphics.c/h (el resto de src/ de las versiones antiguas,
+histogram.c, m_dt.c, m-dt.c, randmedia*.c, *.old.c, no se compilaba).
+
+delop.c, delop.h, nlutils.c y gnuplot_graphics.h son idénticos de la 1.10 a la
+1.12.02_win. Las diferencias están en fug.c, fug.h, diagnose.c, gnuplot_i.c/h y
+gnuplot_graphics.c.
+
+
+Formato de la línea Box-Cox del .inp a lo largo del tiempo
+----------------------------------------------------------
+  1.01 - 1.08      lambda d D                (ejemplo PU.inp)
+  1.09             lambda m d D              (gtk_fmg.10 y gtk_fmg.11 escriben esto)
+  1.10 - 1.12.01   lambda m geom d D         (también pyfug)
+  1.12 (nov 2025)  lambda m d D              (la lectura de geom está comentada)
+Cada versión solo leía su formato: un .inp de otra época se leía desplazado sin
+ningún aviso. Por ejemplo, 1.12.01 leía el d de gtk_fmg como "geom" y el D como d.
+
+
+1.10 (dic 2010)
+  - Añade la transformación Box-Cox con media geométrica (boxgeom) y el campo
+    geom en el .inp.
+  - Calcula la pacf con Pacf_New() (regresiones con GSL).
+
+1.11 (2011, retocada en feb 2025)
+  - Vuelve a Pacf() (Durbin-Levinson): según el propio comentario, Pacf_New
+    "a veces hace fallar el programa". GSL sigue enlazada aunque ya no se usa.
+  - Fuentes Helvetica -> Arial. Añade `offset` a parte de las órdenes de
+    gnuplot, pero no a todas.
+  - El documento LaTeX deja de ser landscape para todas las páginas.
+
+1.12.01 (feb 2025, Linux; SRC_MAC/1.12.01 es la misma con retoques)
+  - Comprueba los argumentos de la línea de órdenes, añade el texto de ayuda y
+    detecta opciones desconocidas.
+  - Genera el PDF con pdflatex en vez de latex + dvips (PostScript).
+  - Comprueba datos positivos en Box-Cox con lambda = 0.
+  - gnuplot_i.c sustituido por la versión nueva de la biblioteca gnuplot_i.
+  - Mac: malloc.h condicional, terminal qt, dos `offset` más.
+
+1.12_win / 1.12.02_win (feb 2025, Windows, compilada con MinGW desde Linux)
+  - Mismo fug.c que 1.12.01. La 1.12.02 corrige la ayuda (-e) y usa
+    documentclass landscape.
+  - gnuplot_i.c con ficheros temporales de Windows (GetTempFileName) y
+    búsqueda de gnuplot.exe en GNUPLOT_PATH.
+  - gnuplot_graphics.c más corregido que el de Linux: Helvetica, casi todos los
+    `offset`, quita `set ticscale` (no existe en gnuplot 5), escapa el % del eje
+    del histograma, añade `unset multiplot` y evita dividir por una desviación
+    típica 0 en meandv (pero con exit(1)).
+  - Enlaza GSL estática: fug.exe de 2,6 MB.
+  - Diferencia real con Linux: la capa gnuplot (ficheros temporales y búsqueda
+    del programa) y las correcciones de sintaxis de gnuplot_graphics.c. Nada
+    del cálculo estadístico cambia.
+
+1.12 (nov 2025, Linux; es el /usr/local/bin/fug instalado)
+  - Opción -x: estimación de lambda por máxima verosimilitud (rejilla).
+  - Vuelve al .inp de 4 valores (no lee geom) y usa siempre Box-Cox estándar
+    en los gráficos.
+  - Box-Cox exige datos + m > 0 para cualquier lambda y con lambda = 1 calcula
+    x + m - 1 (antes: x sin transformar).
+  - Corrige free_vector(Tm.rnsop) -> free_vector(rnsop).
+
+
+Problemas encontrados en 1.12 / 1.12.01 / 1.12.02_win
+-----------------------------------------------------
+Gráficos (gnuplot 5/6):
+  - 13 órdenes con sintaxis antigua (sin `offset`, `set ticscale`,
+    `set noxtics`, `set nolabel`) dan error y se ignoran en parte: con -a, -b,
+    -d y -e la etiqueta de media/desviación, Q de Ljung-Box, S/K/JB y los ejes
+    de media-desviación salen sin su fuente ni su posición (Q se superpone a
+    los números de los retardos). Con 1.12 en Linux, los errores salen por
+    stderr y el usuario no los ve.
+  - set ylabel '%' se pasaba a vsprintf como formato: comportamiento indefinido.
+  - gnuplot_plot_acf escribía d[0], fuera del vector (1..lags): el retardo 0
+    tomaba un valor de memoria cualquiera.
+  - -a de series anuales: las etiquetas de los años iban un año por detrás de
+    las de -c.
+  - -a de series mensuales: el título quedaba fuera del gráfico (offset 3.75).
+  - -a en Linux: el estilo de línea 1 (pt 31) se había perdido; -a y -c tenían
+    puntos distintos.
+  - gnuplot_init exigía la variable DISPLAY y abría una terminal interactiva
+    (wxt/x11/qt/windows) aunque solo se escriben EPS: fug fallaba por ssh, en
+    cron o en WSL.
+  - Ficheros temporales: con mkstemp/write (solo POSIX) en Linux; en Windows,
+    una mezcla de GetTempFileName, un mkstemp propio con rand() y printf de
+    depuración, y reintentos para borrarlos.
+  - Acf_Pacf_Max no liberaba su vector de correlaciones.
+
+Cálculo:
+  - Jarque-Bera: `nobs / 6 * (...)` en división entera. Por ejemplo, con 203
+    observaciones daba 1,922 en lugar de 1,971.
+  - Factores individuales de la diferencia anual: DiffGraph no los incluía en el
+    orden del operador y DelOp escribía fuera del vector. Con los 7 factores de
+    una serie mensual 1.12 aborta ("core dumped"); valgrind muestra lecturas y
+    escrituras inválidas.
+  - Box-Cox con media geométrica: el producto de todas las observaciones se
+    desborda (inf) con series largas, p. ej. 216 datos del orden de 100.
+  - Serie constante: divisiones por varianza 0 y, en la acf del .out, un NaN
+    convertido a entero que se usa como índice.
+  - meandv (Windows) terminaba el programa con exit(1) si los grupos tenían
+    la misma desviación típica.
+  - Número de retardos por defecto distinto en el .out (45 para series anuales
+    de más de 200 datos) y en los gráficos (9).
+  - -x no admitía un mínimo negativo (-x -2 2 0.1 no se reconocía), ignoraba m
+    y podía acabar con lambda = 2.7e-16 en lugar de 0 (nombres "l0.0").
+
+Entrada / salida:
+  - Solo se leía un formato de la línea Box-Cox (ver arriba).
+  - strcpy de argv[1] en un buffer de 80 bytes y fscanf("%s") del nombre sin
+    límite: desbordamiento con nombres largos.
+  - `fug datos/D` escribía los EPS con nombres como "d0datos/D.eps".
+  - LaTeX: en el modo de un gráfico (-a, -c) el .tex no tenía en cuenta lambda:
+    con lambda != 1 el PDF salía sin la figura. En set, las figuras con D > 1 o
+    las series anuales con D > 0 tampoco coincidían con los ficheros creados.
+  - remove("*.aux") no hace nada (remove no expande comodines).
+  - Se ignoraba el resultado de pdflatex.
+  - El .out decía "FUG 1.07" y usaba caracteres de DOS (CP437: \361 para +/-,
+    \257, \256), que en UTF-8 se ven como ñ, ¯, ®.
+  - La ayuda describía -h como el gráfico media-desviación (es -e).
+  - DELETE_STR hacía strcat sobre la misma cadena (solapamiento indefinido).
+  - main no devolvía un código de salida explícito.
+
+
+1.13 (septiembre 2026)
+======================
+Una sola fuente para Linux, macOS y Windows. Todo lo anterior está corregido.
+
+Portabilidad
+  - Nuevo port.c/port.h: búsqueda de programas (PATH, carpetas conocidas,
+    variables de entorno), entrecomillado para sh y cmd.exe, ejecución
+    silenciosa y chdir.
+  - gnuplot_i.c reescrito y reducido a lo que usa fug. Los datos van a gnuplot
+    como datablocks ($fugN << EOD, gnuplot >= 5): no hay ficheros temporales.
+    No se abre ninguna terminal interactiva ni se exige DISPLAY.
+  - gnuplot: FUG_GNUPLOT (ruta del programa), GNUPLOT_PATH (carpeta, como en la
+    versión Windows), PATH y, en Windows, C:\Program Files\gnuplot\bin.
+    pdflatex: FUG_PDFLATEX o PATH.
+  - Sin GSL (Pacf_New eliminada), sin malloc.h, sin getopt.h y sin extensiones
+    de GCC. Compila con -std=c99 -Wall -Wextra sin avisos, con gcc y MinGW-w64
+    de 64 y 32 bits. fug.exe estático de 520 KB.
+  - Un Makefile sustituye a autotools: make, make windows, make check, make install.
+  - Fuentes en UTF-8 con finales de línea LF.
+
+Gráficos
+  - Sintaxis de gnuplot 5/6: offset, unset xtics/label, sin ticscale ni
+    ticslevel. Cero errores de gnuplot en todos los modos.
+  - Helvetica (fuente PostScript estándar), como la versión Windows.
+  - Correcciones de años en -a anual, del título en -a, de d[0] en la acf y del
+    estilo de puntos de -a.
+  - Un gráfico que no se puede hacer (serie constante, menos de 2 grupos) se
+    omite con un aviso y el resto se genera.
+  - Títulos: se escapan los caracteres especiales del texto enriquecido de
+    gnuplot en el nombre de la serie (_ ^ @ & ~ { } ').
+
+PDF
+  - El .tex se construye con la lista de gráficos que realmente se han creado,
+    en su orden. Así los nombres siempre coinciden con los ficheros.
+  - pdflscape: las páginas apaisadas (series mensuales o de más de 200 datos)
+    salen giradas en el PDF y los visores las muestran bien sin opciones.
+  - Se comprueba el resultado de pdflatex. Si todo va bien se borran .aux y
+    .log; si falla, se avisa y en modo set se termina con código 3.
+
+Cálculo
+  - Jarque-Bera con nobs / 6.0.
+  - El orden del operador incluye los factores individuales. Comprobado: el
+    factor de frecuencia 0 da lo mismo que d = 1 y los 7 factores juntos lo
+    mismo que D = 1.
+  - Box-Cox: lambda = 1 no transforma (como hasta 1.12.01) y admite datos
+    negativos. Para lambda != 1 exige datos + m > 0 con un mensaje claro.
+    Media geométrica calculada con logaritmos.
+  - Retardos por defecto: una sola regla (default_lags) para el .out, los
+    gráficos y el GUI, limitada a n - 2.
+  - Protección contra divisiones por 0 en Pacf, series constantes y
+    media-desviación.
+  - -x admite un mínimo negativo, usa m, recorre una rejilla sin deriva y
+    redondea lambda a 2 decimales (como en el .inp).
+
+Entrada / salida
+  - Lee los tres formatos de la línea Box-Cox, finales de línea CRLF, y comprueba
+    frecuencia, fechas, número de observaciones y datos, con mensajes claros.
+  - fug admite el nombre con .inp y con carpeta (se trabaja en la carpeta del .inp).
+  - Opciones combinables (-ce), comprobación de los valores numéricos, -v y
+    --help, y códigos de salida: 0 bien, 1 error, 3 PDF del conjunto sin crear.
+  - El .out indica la versión real, m y geom (con lambda != 1) y los factores
+    individuales, y usa solo ASCII.
+  - Sin fugas de memoria (valgrind) y sin desbordamientos de buffer.
+
+Corrección posterior (septiembre 2026)
+  - Datos anuales: la rejilla vertical y las etiquetas de los años iban cada
+    20 años (regla heredada de gnuplot_graphics.c), así que una serie de menos
+    de 20 años solo tenía la primera etiqueta y ninguna línea. Ahora, como en
+    GraphMaker, van cada 5 años en los múltiplos de 5 (1980, 1985...), con una
+    marca por año; si no caben, el paso pasa a 10, 20, 25, 50... años
+    (annual_step() en diagnose.c). Tampoco se rotulan años posteriores al
+    final de la serie. Los datos mensuales y trimestrales no cambian.
+
+Verificación
+  - tests/run_tests.sh (make check): 128 comprobaciones que cubren todos los
+    modos, 4 series de ejemplo (mensual, trimestral, anual y el PU.inp
+    antiguo), los 3 formatos, CRLF, factores individuales, ejecución sin
+    DISPLAY, rutas con espacios, errores, serie constante y -x.
+  - Los .out coinciden número a número con los de 1.12. Solo cambian
+    Jarque-Bera y los caracteres CP437.
+  - fug.exe (MinGW) ejecutado con Wine: el .out es idéntico al de Linux y la
+    secuencia de órdenes que envía a gnuplot por cmd.exe genera EPS idénticos
+    a los de Linux.
+
+
+1.15 (septiembre 2026)
+======================
+fug y fue comparten el .inp (el de fue), como en el porte a Python (ART).
+
+Motor
+  - src/inpfile.c lee el .inp de fue: usa la serie, la línea Box-Cox (lambda
+    d D), los factores individuales y la escala de la acf/pacf, y salta el
+    modelo con las mismas llamadas que fue 1.13.1 (fue.c [3.0]-[3.7]),
+    incluidas las columnas de las variables deterministas no estándar. Sigue
+    leyendo los .inp de fug 1.01 - 1.14 (se distinguen por la línea que sigue
+    a la fecha). Comprobado contra fue (C) y contra el lector de fue en Python
+    con un .inp que tiene un modelo de cada tipo (tests/data/FULL.inp).
+  - Opción -B lambda m d D: la transformación de la línea de órdenes en lugar
+    de la del .inp (así el GUI no necesita reescribir un .inp con modelo).
+  - Resultados <input>_fug.out y <input>_fug.pdf, para no pisar el .out y el
+    .pdf de fue. Los EPS no cambian de nombre.
+  - La escala de la acf/pacf del .inp de fue se usa si no se da -f.
+  - make check: 161 comprobaciones (23 nuevas para el .inp de fue y -B).
+  - fugplot.c/h incluyen plothost.h (lo que necesitan del programa) en vez de
+    fug.h: fugdraw.c/h, fd_metrics.h y fugplot.c/h son los mismos ficheros en
+    fug y en fue 1.14, cada uno con su plothost.h.
+
+GUI
+  - Lee los .inp de fue y de fug con el mismo lector que fug (src/inpfile.c).
+  - Escribe el .inp de fue sin modelo, y solo si hace falta: si el .inp ya
+    tiene la misma serie lo deja (aunque tenga un modelo de fue); si tiene un
+    modelo de fue de otra serie, pregunta antes de sustituirlo.
+  - Pasa lambda, m, d y D a fug con -B; abre <input>_fug.out y _fug.pdf.
+  - Prueba del GUI: 24 pasos (el .inp de fue, un modelo que se conserva y uno
+    de otra serie que no se sustituye al cancelar).
+
+Encontrado de paso (fue, no fug)
+  - fue 1.13.1 termina con segmentation fault con un modelo sin operadores
+    AR ni MA (p = q = 0), también con el .inp sin modelo que escribe ART:
+    cholfor (nlatools.c:221) con n = 0, desde elf (elfvarma.c:457). Queda
+    para fue 1.14.
+
+
+1.14 (septiembre 2026)
+======================
+Motor gráfico propio: fug escribe sus EPS y su PDF sin gnuplot ni pdflatex.
+
+Motor (src/fugdraw.c, src/fd_metrics.h)
+  - Cada figura se guarda una vez como flujo de contenido PDF. El mismo flujo
+    se escribe como EPS (el prólogo define en PostScript los operadores de
+    PDF) y como página del PDF: las dos salidas son idénticas.
+  - Líneas, polilíneas, puntos, recortes, texto horizontal y vertical, y
+    texto con subíndices, superíndices y acentos (w-barra, sigma-sombrero,
+    nabla) colocados con los anchos de las fuentes.
+  - Fuentes estándar de PDF/PostScript (Helvetica, Helvetica-Bold, Times,
+    Symbol) sin incrustar. Sus anchos se generan desde los AFM de Adobe
+    (tools/gen_metrics.py, con el aviso de copyright y la licencia de Adobe).
+  - PDF comprimido con Flate (LZ77 + Huffman fijo) implementado en fugdraw:
+    no hace falta zlib.
+
+Gráficos (src/fugplot.c)
+  - -a, -b, -c, -d y -e con el diseño de la versión gnuplot: mismos lienzos,
+    paneles, fuentes, grosores y escalas.
+  - Mejoras frente a gnuplot: las etiquetas de retardo de la pacf ya no salen
+    cortadas en series trimestrales y anuales, ni el último retardo de -b con
+    pocos retardos. El título de -a se alinea con el final del panel, como en -c.
+  - El PDF reúne los gráficos -a, -c y -e (antes el .tex) en páginas A4,
+    centrados; apaisado para series mensuales o de más de 200 datos.
+
+Eliminado
+  - gnuplot_i.c/h y gnuplot_graphics.c/h. meandv() pasa a diagnose.c; las
+    escalas (SeriesMax, Acf_Pacf_Max) a fugplot.c.
+  - La generación del .tex, la llamada a pdflatex y las variables FUG_GNUPLOT,
+    GNUPLOT_PATH y FUG_PDFLATEX. port.c queda con strdup y chdir.
+
+Resultados
+  - fug IPCM set 2 1 -c -h -e (9 gráficos, PDF de 5 páginas): 0,05 s, frente a
+    6 s con gnuplot + pdflatex. PDF de 154 KB (159 KB el de pdflatex, con menos
+    gráficos).
+  - make check: 138 comprobaciones, incluida una ejecución con el PATH vacío.
+  - valgrind sin errores ni fugas en todos los modos.
+  - El .out es idéntico al de la 1.13 (salvo la línea de versión).
+  - fug.exe (MinGW, 150 KB, solo KERNEL32 y msvcrt) ejecutado con Wine: los
+    18 EPS y el PDF de un conjunto completo son idénticos byte a byte a los de
+    Linux.
+  - El GUI gtk_fmg.11 funciona sin cambios con este motor.
+
+GUI gtk_fmg en el mismo árbol (gui/)
+  - Viene de gtk_fmg.11. Un solo Makefile compila, prueba e instala fug y
+    gtk_fmg (make, make gui, make check-gui, make install, make windows);
+    sin GTK 2 se compila solo fug.
+  - El GUI ejecuta el fug que está junto a él (FUG sigue permitiendo otro).
+  - Ventana de gráficos (gui/src/preview.c) en lugar de gv: lee el flujo de
+    contenido de fugdraw del EPS o de las páginas del PDF (inflado con zlib
+    de GLib) y lo dibuja con Cairo; el texto con Pango, sin hinting ni
+    redondeo y ajustado a los anchos AFM, en la posición exacta. El nabla se
+    dibuja con el contorno de Standard Symbols PS (Arial y Times New Roman no
+    lo tienen). Comparado con Ghostscript a 300 ppp, la imagen coincide.
+  - Guardar como PDF (todas las páginas) o EPS escritos con fugdraw, PNG a
+    300 ppp y SVG con Cairo; imprimir con GtkPrintOperation; visor externo;
+    navegación por páginas; la ventana se actualiza si fug rehace el fichero.
+    Los EPS que no son de fugdraw (versiones antiguas) van al visor externo.
+  - El lector de .inp del GUI acepta también el formato de 3 valores
+    (lambda d D), como fug.
+  - El GUI escribe el .inp con al menos 6 decimales: lambda y m (antes %.2f)
+    y los datos (antes %.10g, 10 cifras significativas). Si hacen falta más
+    decimales para no perder precisión se escriben (hasta 17), de modo que
+    fug lee exactamente los mismos números que tiene el GUI. Los campos
+    lambda y m del GUI admiten 6 decimales (antes 2).
+  - nlutils.c del GUI: DELETE_STR usaba strcat con origen y destino
+    solapados (comportamiento indefinido); ahora memmove, como en fug.
+  - Windows: gtk_fmg.exe estático con MXE (GTK 2.24); make windows copia
+    gspawn-win32-helper*.exe, que GLib necesita para ejecutar fug.exe. En
+    Windows los gráficos usan Arial y Times New Roman (mismos anchos que
+    Helvetica y Times) y los .inp/.out se abren con el Bloc de notas.
+  - tests/gui/driver.c (make check-gui): 23 pasos sobre el GUI real: carga de
+    datos, cada botón con fug, ventanas de gráficos, guardar en los cuatro
+    formatos (también con el diálogo), releer lo guardado, visor externo para
+    EPS ajenos, errores. Con Wine pasan todos los pasos de gráficos, con
+    salidas idénticas byte a byte a las de Linux.

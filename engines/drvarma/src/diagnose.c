@@ -706,8 +706,17 @@ p1:FREE_STR( Tmpstr );
     shist  = (char **)malloc(NumFil * sizeof(char *));
     aux    = (char **)malloc(NumFil * sizeof(char *));
     for (i = 0; i < NumFil; i++) {
-        shist[i] = (char *)malloc(NumCol + 1);
-        aux[i]   = (char *)malloc(NumCol + 1);
+        /*  BUG-16.  NumCol + 1 is one byte short.  The rows carry NumCat
+         *  categories of nphor characters each, and NumCat*nphor is exactly
+         *  NumCol (16*4 with xmax = 4, 32*2 with xmax = 8); then a closing
+         *  "|" is appended, so the string is NumCol + 1 characters and needs
+         *  NumCol + 2 bytes with its terminator.  strcat wrote the NUL one
+         *  past the end of the block on every histogram this routine has ever
+         *  drawn.  Found on 2026-08-24 by drvec's valgrind block, the first
+         *  time this file was linked into a program that runs valgrind over
+         *  its whole output.                                                 */
+        shist[i] = (char *)malloc(NumCol + 2);
+        aux[i]   = (char *)malloc(NumCol + 2);
         shist[i][0] = '\0';
         aux[i][0]   = '\0';
     }

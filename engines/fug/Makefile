@@ -18,7 +18,7 @@
 CC      ?= cc
 CFLAGS  ?= -O2 -Wall -Wextra -Wno-unused-parameter
 # fugdraw es el mismo fichero en los cuatro programas: vive en lib/
-CFLAGS  += -I../../lib/fugdraw
+CFLAGS  += -I../../lib/fugdraw -I../../lib/fugplot
 LDLIBS  = -lm
 PREFIX  ?= /usr/local
 
@@ -31,8 +31,8 @@ MXE_CC      = $(MXE)/usr/bin/$(MXE_TARGET)-gcc
 MXE_PKG     = $(MXE)/usr/bin/$(MXE_TARGET)-pkg-config
 
 SRC = src/fug.c src/diagnose.c src/delop.c src/nlutils.c src/port.c \
-      ../../lib/fugdraw/fugdraw.c src/fugplot.c src/inpfile.c
-HDR = src/fug.h src/delop.h src/port.h ../../lib/fugdraw/fugdraw.h src/fugplot.h ../../lib/fugdraw/fd_metrics.h src/inpfile.h src/plothost.h
+      ../../lib/fugdraw/fugdraw.c ../../lib/fugplot/fugplot.c src/inpfile.c
+HDR = src/fug.h src/delop.h src/port.h ../../lib/fugdraw/fugdraw.h ../../lib/fugplot/fugplot.h ../../lib/fugdraw/fd_metrics.h src/inpfile.h src/plothost.h
 
 GUI_SRC = ../../gui/fug/src/main.c ../../gui/fug/src/callbacks.c ../../gui/fug/src/data_load.c ../../gui/fug/src/nlutils.c \
           ../../gui/fug/src/fug_run.c ../../gui/fug/src/preview.c ../../lib/fugdraw/fugdraw.c src/inpfile.c

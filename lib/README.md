@@ -23,6 +23,22 @@ necesitará el GUI de drtran, si drtran adopta `fugdraw` para dibujar la CCF
 preblanqueada en vez de EPS de gnuplot — que es lo que haría coherente la
 biblioteca, porque entonces `preview.c` la muestra tal cual, con zoom y lupa.
 
+## `fugplot/` — los gráficos del informe
+
+Dibuja sobre `fugdraw` lo que el informe necesita: la serie, los residuos, la
+ACF y la PACF con sus bandas, el histograma, el gráfico media-desviación.
+
+Estaba en **dos copias idénticas**, en `engines/fue` y `engines/fug`. Y el
+patrón ya estaba articulado por escrito, en la cabecera de `plothost.h`:
+
+> *«fugdraw.c/h, fd_metrics.h and fugplot.c/h are the same files in fug and
+> fue; each program has its own plothost.h.»*
+
+Así que `fugplot.c` y `fugplot.h` vienen aquí y **`plothost.h` se queda en cada
+programa** — 28 líneas en fue, 15 en fug. Es lo que cada uno tiene que aportar:
+`struct Tseries`, `vector()`, `Acf()`, `Pacf()`, `ChiTest()` y los
+estadísticos. La misma forma que `previewhost.h` tiene para `preview.c`.
+
 ## Cómo se usa
 
 En el `Makefile` del programa:
@@ -49,7 +65,6 @@ Por orden de facilidad:
 
 | pieza | dónde está | estado |
 |---|---|---|
-| `fugplot.c` | `engines/fue`, `engines/fug` | **2 copias idénticas** — el siguiente |
 | `preview.c` | `gui/fue` (1496), `gui/fug` (1154) | **divergidas**, y en dos toolkits; la de fue es la de fug portada a GTK3 y ampliada con zoom y lupa. Su `previewhost.h` ya dice en su cabecera que la factorización estaba prevista |
 | `engine.c`, `outfile.c`, `utils.c` | `gui/fue` | copia única: traerlos es preparación, no desduplicación |
 | `inpcheck_*.c` | `gui/fue` + los motores | copias vigiladas por `conformidad/copias.sh` |

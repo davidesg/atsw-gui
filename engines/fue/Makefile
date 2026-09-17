@@ -32,7 +32,7 @@ else
 endif
 
 # Compiler flags
-CFLAGS  = -O2 -g -Wall -Iinclude -I../../lib/fugdraw -I../../lib/fugplot
+CFLAGS  = -O2 -g -Wall -Iinclude -I../../lib/fugdraw -I../../lib/fugplot -I../../lib/equation
 LDFLAGS +=
 LIBS    = -lm
 
@@ -45,7 +45,8 @@ BIN_DIR   = bin
 # La biblioteca compartida. fugdraw.c es el mismo fichero en los cuatro
 # programas -- byte a byte -- y por eso vive en lib/ y no aqui.
 LIB_DIR  = ../../lib
-LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c $(LIB_DIR)/fugplot/fugplot.c
+LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c $(LIB_DIR)/fugplot/fugplot.c \
+           $(LIB_DIR)/equation/eqlatex.c
 
 SRCS = $(wildcard $(SRC_DIR)/*.c)
 OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS)) \
@@ -85,6 +86,10 @@ $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 
 # Compile
+$(BUILD_DIR)/lib_equation/%.o: $(LIB_DIR)/equation/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(ALL_CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/lib_fugplot/%.o: $(LIB_DIR)/fugplot/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
 	$(CC) $(ALL_CFLAGS) -c $< -o $@
@@ -135,11 +140,11 @@ help:
 	@echo "  (Ensure the MXE toolchain is in PATH and PKG_CONFIG_PATH is set)"
 
 # Header dependencies (explicit)
-$(BUILD_DIR)/fue.o:             include/fue.h include/nlatools.h $(LIB_DIR)/fugplot/fugplot.h $(LIB_DIR)/fugdraw/fugdraw.h include/plothost.h include/inpcheck.h include/equation.h include/report.h
+$(BUILD_DIR)/fue.o:             include/fue.h include/nlatools.h $(LIB_DIR)/fugplot/fugplot.h $(LIB_DIR)/fugdraw/fugdraw.h include/plothost.h include/inpcheck.h $(LIB_DIR)/equation/equation.h include/report.h
 $(BUILD_DIR)/inpcheck.o:        include/inpcheck.h
-$(BUILD_DIR)/equation.o:        include/equation.h include/fue.h include/nlatools.h
-$(BUILD_DIR)/eqlatex.o:         include/equation.h
-$(BUILD_DIR)/report.o:          include/report.h include/equation.h $(LIB_DIR)/fugdraw/fugdraw.h include/plothost.h
+$(BUILD_DIR)/equation.o:        $(LIB_DIR)/equation/equation.h include/fue.h include/nlatools.h
+$(BUILD_DIR)/eqlatex.o:         $(LIB_DIR)/equation/equation.h
+$(BUILD_DIR)/report.o:          include/report.h $(LIB_DIR)/equation/equation.h $(LIB_DIR)/fugdraw/fugdraw.h include/plothost.h
 $(BUILD_DIR)/diagnose.o:        include/fue.h include/nlatools.h
 $(BUILD_DIR)/fugdraw.o:         $(LIB_DIR)/fugdraw/fugdraw.h $(LIB_DIR)/fugdraw/fd_metrics.h
 $(BUILD_DIR)/fugplot.o:         $(LIB_DIR)/fugplot/fugplot.h $(LIB_DIR)/fugdraw/fugdraw.h include/plothost.h include/fue.h include/nlatools.h

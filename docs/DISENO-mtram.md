@@ -267,11 +267,11 @@ Cada una fabrica lo que la siguiente pide. **Ninguna se bloquea.**
 | 2 | **Red** (`.dag`) | series con papel | el grafo, sin ciclos | ✔ |
 | 3 | **Identificación** | salida + entrada con sus `.pre` | (b, r, s) y el veredicto de exogeneidad | ✔ |
 | 4 | **Modelo** (`.cns`) | los órdenes propuestos | la especificación, con banderas fijo/libre | ✔ |
-| 5 | **Estimación** | un `.cns` completo | el `.out`, y los residuos **de este modelo** | |
+| 5 | **Estimación** | un `.cns` completo | el `.out`, y los residuos **de este modelo** | ✔ |
 | 6 | **Diagnosis** | residuos | el veredicto, con la batería de identificación | |
 | 7 | **Previsión** | un modelo estimado y diagnosticado | las previsiones y su evaluación | |
 
-Estado hoy: **1, 2, 3 y 4 hechas**. Faltan estimación, diagnosis y previsión.
+Estado hoy: **1 a 5 hechas**. Faltan diagnosis y previsión.
 
 De la 2 salió una lección que vale para las que quedan. Al sacar el lector del
 `.dag` a `lib/netfile` puse su mensaje de error en español, y la batería del
@@ -280,6 +280,22 @@ letra**: la salida del motor en inglés es una propiedad declarada del puerto.
 La corrección no fue traducir de vuelta, fue que **la librería devuelve el
 hecho, no la frase** (`NetError`: qué falló, en qué línea, con qué palabra), y
 cada frente lo redacta. El fallo tenía razón, y arreglarlo mejoró el diseño.
+
+La 5 añadió tres reglas propias, porque es la primera que **lanza el motor
+como programa**:
+
+- **La orden se ve.** Completa y seleccionable, antes de ejecutarla. Es lo que
+  permite reproducir en un terminal lo que el GUI hizo, pegarlo en un guion o
+  mandarlo con un informe de error. *Un GUI que esconde la orden convierte cada
+  duda en una arqueología.*
+- **Se dice QUÉ binario se va a lanzar, y de cuándo.** El motor se busca en el
+  `PATH`, y uno instalado hace meses se ejecuta igual de callado que el recién
+  compilado: los resultados serían de otro programa y nada lo diría. (Comprobado
+  en esta máquina: el `drtran` del `PATH` era de julio y el del repo de hoy.)
+- **No se inventan controles que no existen.** TASTE dejaba tocar iteraciones,
+  tolerancia y longitud de paso (`TFEST.PAS:295-300`); drtran los tiene clavados
+  en `drtran.c:3256-3257`. Se **enseñan** como el criterio de parada que rige, y
+  no se ofrece una casilla que no llega a ningún sitio.
 
 Y un principio que la 2 estrena y las siguientes heredan: **lo que el GUI
 escribe se le pregunta al motor.** Que los dos *lean* igual lo garantiza

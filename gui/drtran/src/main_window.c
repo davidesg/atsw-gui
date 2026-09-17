@@ -153,6 +153,7 @@ static void refresca(Mtram *m)
     red_refresca(m);
     identifica_refresca(m);
     modelo_refresca(m);
+    estima_refresca(m);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -363,6 +364,8 @@ GtkWidget *mtram_window_new(GtkApplication *app, Mtram *m)
                              gtk_label_new("Identificación"));
     gtk_notebook_append_page(GTK_NOTEBOOK(libro), modelo_pagina_new(m),
                              gtk_label_new("Modelo"));
+    gtk_notebook_append_page(GTK_NOTEBOOK(libro), estima_pagina_new(m),
+                             gtk_label_new("Estimación"));
 
     return w;
 }

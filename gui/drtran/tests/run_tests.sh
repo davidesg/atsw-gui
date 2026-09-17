@@ -107,3 +107,39 @@ if [ -f "$M6D/M6_EP.pre" ]; then
         fi
     fi
 fi
+
+# --- la estimacion: como acabo el optimizador -------------------------------
+# Primero las frases del motor, con sus cinco desenlaces. Y luego de verdad: se
+# LANZA drtran sobre el m6 y se lee su salida con el mismo codigo que usa la
+# pantalla. Si un dia el motor cambiara como lo dice, esto se entera.
+echo
+$CC -O2 -Wall -Wextra -I"$L/verdict" \
+    "$L/verdict/test_verdict.c" "$L/verdict/verdict.c" \
+    -o "$W/test_verdict" -lm || exit 1
+"$W/test_verdict" || exit 1
+
+M6D="$E/tests/data/m6"
+if [ -x "$E/bin/drtran" ] && [ -f "$M6D/M6_EP.pre" ]; then
+    echo
+    echo "  y ahora de verdad: se lanza drtran sobre el m6"
+    ( cd "$W" && "$E/bin/drtran" \
+        "$M6D/M6_EP.pre" "$M6D/M6_EI.pre" "$M6D/M6_EU.pre" \
+        "$M6D/M6_EC.pre" "$M6D/M6_EA.pre" "$M6D/M6_P.pre" \
+        -n "$M6D/m6_net.dag" -c "$M6D/m6_net_full.cns" \
+        -o "$W/est.out" > "$W/est.log" 2>&1 )
+
+    "$W/test_verdict" --file "$W/est.log" | sed 's/^/     /'
+
+    # Lo que el motor dijo, contra lo que lib/verdict leyo.
+    motor_it=$(sed -n 's/.*AFTER \([0-9]*\) ITERATIONS.*/\1/p' "$W/est.log" | head -1)
+    leido_it=$("$W/test_verdict" --file "$W/est.log" | sed -n 's/^iters: //p')
+    leido_ok=$("$W/test_verdict" --file "$W/est.log" | sed -n 's/^ok: //p')
+
+    if [ "$motor_it" = "$leido_it" ] && [ "$leido_ok" = "1" ]; then
+        echo "  las iteraciones leidas son las que el motor escribio     ok"
+    else
+        echo "  las iteraciones leidas son las que el motor escribio     FALLA"
+        echo "    motor: $motor_it   leido: $leido_it   ok: $leido_ok"
+        exit 1
+    fi
+fi

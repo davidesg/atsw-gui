@@ -9,6 +9,7 @@
 #include "series.h"
 #include "netfile.h"
 #include "slots.h"
+#include "verdict.h"
 
 #define IDENT_MAX_LAGS 64
 
@@ -54,6 +55,23 @@ typedef struct {
     gchar     *path;
 } Modelo;
 
+/* La pantalla de estimacion: la unica que LANZA EL MOTOR como programa. */
+typedef struct {
+    GtkWidget *boton;         /* Estimar                                    */
+    GtkWidget *que;           /* que se va a estimar, antes de estimarlo    */
+    GtkWidget *orden;         /* la orden entera, copiable                  */
+    GtkWidget *desenlace;     /* como acabo el optimizador, con nombre      */
+    GtkWidget *salida;        /* lo que dijo el motor, entero               */
+    GtkWidget *c_diag, *c_resta, *c_traza;
+
+    gboolean   corriendo;
+    gboolean   diagonal;      /* -0 : sin transferencia (homologacion)      */
+    gboolean   cast_resta;    /* -S : el cast antiguo                       */
+    gboolean   traza;         /* -v                                         */
+    gchar     *out_path;
+    VerdictInfo v;
+} Estima;
+
 typedef struct {
     GtkWidget *ventana_p;     /* la ventana principal                       */
     GtkWidget *lista;         /* las series, en orden                       */
@@ -64,6 +82,7 @@ typedef struct {
     Red        red;           /* la pantalla de la red                      */
     Ident      id;            /* la pantalla de identificacion              */
     Modelo     mod;           /* la pantalla del modelo                     */
+    Estima     est;           /* la pantalla de estimacion                  */
 } Mtram;
 
 GtkWidget *mtram_window_new(GtkApplication *app, Mtram *m);
@@ -75,6 +94,10 @@ void       red_refresca(Mtram *m);
 /* modelo.c */
 GtkWidget *modelo_pagina_new(Mtram *m);
 void       modelo_refresca(Mtram *m);
+
+/* estima.c */
+GtkWidget *estima_pagina_new(Mtram *m);
+void       estima_refresca(Mtram *m);
 
 /* identifica.c */
 GtkWidget *identifica_pagina_new(Mtram *m);

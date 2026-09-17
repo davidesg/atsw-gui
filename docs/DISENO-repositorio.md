@@ -135,27 +135,60 @@ con zoom y lupa incluidos.
 ramas sin upstream. La mudanza tiene que tomar la historia **de los
 directorios locales**, no de los remotos, o se pierde.
 
+### Dos cosas que la mudanza enseñó, y que no estaban previstas
+
+**`fue-1.14` y `fuf-1.09` no son repositorios: son *worktrees*.** Su `.git`
+pesa 4 KB porque es un fichero, no un directorio. Los repositorios de verdad
+están en `fue-1.13.1` y `fuf-1.08.1`, y lo que parecían «dos copias de trabajo
+del mismo repo» son exactamente eso: `git worktree`. Así que el subtree tiene
+que apuntar **al repositorio y a la rama**, no al directorio de trabajo.
+
+**No se puede construir el repositorio dentro de Dropbox.** `git subtree`
+comprueba que el árbol esté limpio antes de cada `add`, y Dropbox, sincronizando
+los 30 000 ficheros recién creados, toca sus `mtime` entre la comprobación y la
+siguiente: `git status` sale limpio y `subtree` falla con *«working tree has
+modifications»*. Se construye fuera y se mueve entero al final — que además es
+una sola operación de sincronización en vez de decenas de miles.
+
 ### El orden
 
 ```sh
 # 0. El repo, con lo que ya está versionado como raíz
-git init atsw-gui && cd atsw-gui
-git subtree add --prefix=docs          ~/Dropbox/SRC/atws          master
+git init -b main atsw-gui && cd atsw-gui
+git commit --allow-empty -m "atsw-gui: los GUIs de la suite ATSW y sus motores"
+git subtree add --prefix=docs  ~/Dropbox/SRC/atws  master
 
-# 1. Los cinco, cada uno desde su rama LOCAL
-git subtree add --prefix=engines/fue     ~/Dropbox/SRC/atws/fue/fue-1.14   fue-1.14
-git subtree add --prefix=engines/fuf     ~/Dropbox/SRC/atws/fuf/fuf-1.09   fuf-1.09
-git subtree add --prefix=engines/drtran  ~/Dropbox/SRC/drtran              main
+# 1. Los cinco, cada uno desde su REPOSITORIO y su rama LOCAL
+git subtree add --prefix=engines/fue     ~/Dropbox/SRC/atws/fue/fue-1.13.1  fue-1.14
+git subtree add --prefix=engines/fuf     ~/Dropbox/SRC/atws/fuf/fuf-1.08.1  fuf-1.09
+git subtree add --prefix=engines/drtran  ~/Dropbox/SRC/drtran               main
 git subtree add --prefix=engines/drvarma ~/Dropbox/SRC/drvarma_source/drvarma_v.04.1 master
-git subtree add --prefix=gui/fue         ~/Dropbox/SRC/gtk_fue.09          master
+git subtree add --prefix=gui/fue         ~/Dropbox/SRC/gtk_fue.09           master
 
 # 2. fug no tiene git: entra como commit normal, y se dice que no tenía
-cp -a ~/Dropbox/SRC/atws/fug/fug-1.14-proto engines/fug
-git add engines/fug && git commit -m "fug 1.14-proto, que no estaba bajo git"
+cp -a ~/Dropbox/SRC/atws/fug/fug-1.14-proto engines/fug   # menos gui/
+cp -a ~/Dropbox/SRC/atws/fug/fug-1.14-proto/gui gui/fug
+
+# 3. conformidad no es documentación
+git mv docs/conformidad conformidad
 ```
 
 `conformidad/` y `docs/` vienen juntos en el primer subtree, porque el repo de
 `atws` (`527f882`) ya contiene los dos.
+
+### Hecha (2026-09-17)
+
+**194 commits**, y la historia de los seis subárboles entera y alcanzable.
+
+Y la prueba de que no cambió nada, cobrada el primer día porque el banco está
+en el mismo repositorio:
+
+    los cuatro Makefile          compilan
+    bateria.sh gtkfue            102 pasan, 0 fallan, 18 apartados
+    acuerdo.sh                   118 de acuerdo, 1 C-no, 1 leido distinto
+    copias.sh                    las copias estan al dia
+
+**Idénticos a los de antes de mover nada.**
 
 ### Después de la mudanza, y sólo después: `lib/`
 

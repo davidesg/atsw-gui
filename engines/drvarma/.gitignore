@@ -1,0 +1,18 @@
+# Build artifacts
+build/
+*.o
+*.obj
+*.a
+*.so
+
+# Compiled binaries (rebuilt from source via Makefile)
+bin/drvarma
+bin/drvarma_gui
+
+# Python caches
+__pycache__/
+*.pyc
+
+# Editor / OS
+*.swp
+.DS_Store

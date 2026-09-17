@@ -1,0 +1,81 @@
+# Makefile para drvarma (Estimación VARMA por máxima verosimilitud exacta)
+# Basado en el Makefile original de drv, adaptado para drvarma.
+
+# Compilador y flags
+CC = gcc
+CFLAGS = -O2 -g -Wall -I./include
+LDFLAGS =
+LIBS = -lm
+
+# Directorios
+SRC_DIR = src
+BUILD_DIR = build
+BIN_DIR = bin
+INCLUDE_DIR = include
+
+# Archivos fuente (lista manual o automática)
+SRCS = $(SRC_DIR)/drvarma.c \
+       $(SRC_DIR)/elfvarma.c \
+       $(SRC_DIR)/drvmlest.c \
+       $(SRC_DIR)/qnewtopt.c \
+       $(SRC_DIR)/diagnose.c \
+       $(SRC_DIR)/volatility.c \
+       $(SRC_DIR)/nlatools.c
+
+OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS))
+EXEC = $(BIN_DIR)/drvarma
+
+# Objetivo por defecto
+all: $(EXEC)
+
+# Crear directorios si no existen
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
+
+$(BIN_DIR):
+	mkdir -p $(BIN_DIR)
+
+# Compilar archivos .c a .o
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Enlazar el ejecutable
+$(EXEC): $(OBJS) | $(BIN_DIR)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+
+# Limpieza
+clean:
+	rm -rf $(BUILD_DIR)/*.o $(EXEC)
+
+# Limpieza profunda
+distclean: clean
+	rm -rf $(BUILD_DIR) $(BIN_DIR)
+
+# Recompilar todo
+rebuild: distclean all
+
+# Instalación (opcional)
+install: $(EXEC)
+	cp $(EXEC) /usr/local/bin/
+
+uninstall:
+	rm -f /usr/local/bin/drvarma
+
+# Dependencias de cabeceras (simplificadas)
+$(BUILD_DIR)/drvarma.o: $(INCLUDE_DIR)/main.h
+$(BUILD_DIR)/elfvarma.o: $(INCLUDE_DIR)/main.h
+$(BUILD_DIR)/drvmlest.o: $(INCLUDE_DIR)/main.h
+$(BUILD_DIR)/nlatools.o: $(INCLUDE_DIR)/main.h
+
+# Ayuda
+help:
+	@echo "Opciones disponibles:"
+	@echo "  make all     - Compila el proyecto (por defecto)"
+	@echo "  make clean   - Limpia archivos objeto y ejecutable"
+	@echo "  make distclean - Limpia todo (objetos y binarios)"
+	@echo "  make rebuild - Recompilación completa"
+	@echo "  make install - Instala en /usr/local/bin"
+	@echo "  make uninstall - Desinstala"
+	@echo "  make help    - Muestra esta ayuda"
+
+.PHONY: all clean distclean rebuild install uninstall help

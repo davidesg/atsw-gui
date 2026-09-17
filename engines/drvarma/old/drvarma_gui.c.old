@@ -1,0 +1,1584 @@
+/**
+ * drvarma_gui.c – GTK+ 3 graphical interface for DRVARMA
+ *                 (Exact maximum likelihood estimation of VARMA models)
+ *
+ * Features:
+ *   - Load any number of time series from a whitespace‑separated file.
+ *   - Set frequency (annual, quarterly, monthly) and start date (metadata).
+ *   - Apply log transformation, scaling, and differencing (0,1,2) to achieve stationarity.
+ *   - Configure all DRVARMA options: p, q, -mean, -diagar, -diagma, -diagcov,
+ *     -m {1|2}, -twostep, -volexp [α window], -volmov [window].
+ *   - Generate the required .inp file and run the drvarma executable.
+ *   - View the resulting .out and .inp files in an integrated text viewer.
+ *   - Johansen cointegration test (any number of series) using GSL.
+ *   - VAR order selection (AIC, BIC, HQ) for choosing lag length.
+ *
+ * Build with (Linux/macOS):
+ *   gcc -o drvarma_gui drvarma_gui.c `pkg-config --cflags --libs gtk+-3.0` -lm -lgsl -lgslcblas
+ *
+ * On Windows (MSYS2 with mingw-w64):
+ *   gcc -o drvarma_gui.exe drvarma_gui.c `pkg-config --cflags --libs gtk+-3.0` -lm -lgsl -lgslcblas -mwindows
+ */
+
+#include <gtk/gtk.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+#include <math.h>
+#include <glib/gstdio.h>
+#include <errno.h>
+#include <locale.h>
+#include <gsl/gsl_matrix.h>
+#include <gsl/gsl_vector.h>
+#include <gsl/gsl_linalg.h>
+#include <gsl/gsl_eigen.h>
+#include <gsl/gsl_statistics.h>
+#include <gsl/gsl_errno.h>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
+
+/* ---------- Data structures ---------- */
+typedef struct {
+    double **data;          /* raw data matrix [obs][var] */
+    int n_obs;              /* number of raw observations */
+    int n_var;              /* number of variables (series) */
+    char *input_filename;   /* full path of the loaded text file */
+    char *base_name;        /* basename (without extension) for .inp/.out */
+} Data;
+
+typedef struct {
+    /* Model options (match DRVARMA command line) */
+    int p;                  /* AR order */
+    int q;                  /* MA order */
+    int include_mean;       /* 0/1 = -mean flag */
+    int diag_ar;            /* 0/1 = -diagar flag */
+    int diag_ma;            /* 0/1 = -diagma flag */
+    int diag_cov;           /* 0/1 = -diagcov flag */
+    int method;             /* 1 = exact, 2 = approximate */
+    int twostep;            /* 0/1 = -twostep flag */
+    /* Volatility options */
+    int use_exp_vol;        /* 0/1 = -volexp flag */
+    double exp_alpha;       /* alpha parameter for exp. volatility */
+    int exp_window;         /* window for exp. volatility */
+    int use_mov_vol;        /* 0/1 = -volmov flag */
+    int mov_window;         /* window for moving volatility */
+    /* Path to drvarma executable */
+    char drv_path[512];
+    /* Data properties (metadata, not used by drvarma but displayed) */
+    int freq;               /* 1,4,12 */
+    int start_year;
+    int start_sub;          /* 1..freq */
+    int props_set;          /* flag: 1 if properties have been defined */
+    /* Data transformation (applied before writing .inp) */
+    int use_logs;           /* 0/1 : apply log transform */
+    double scale_factor;    /* multiply data (or log(data)) by this factor */
+    int diff_order;         /* number of differences to apply (0,1,2) */
+} Options;
+
+Data data = {0};
+Options opts = {
+    .p = 1,
+    .q = 1,
+    .include_mean = 0,
+    .diag_ar = 0,
+    .diag_ma = 0,
+    .diag_cov = 0,
+    .method = 1,
+    .twostep = 0,
+    .use_exp_vol = 0,
+    .exp_alpha = 0.05,
+    .exp_window = 20,
+    .use_mov_vol = 0,
+    .mov_window = 20,
+    #ifdef _WIN32
+    .drv_path = "drvarma.exe",
+    #else
+    .drv_path = "./drvarma",
+    #endif
+    .freq = 12,
+    .start_year = 2000,
+    .start_sub = 1,
+    .props_set = 0,
+    .use_logs = 0,
+    .scale_factor = 1.0,
+    .diff_order = 0
+};
+
+/* UI widgets that need to be accessed from callbacks */
+GtkWidget *status_label;
+GtkWidget *text_view;
+GtkWidget *main_window;
+GtkWidget *btn_run;
+GtkWidget *drv_path_entry;   /* entry to show/set drvarma path */
+
+/* ---------- Helper: set basename from full path ---------- */
+static void set_basename_from_path(const char *fullpath) {
+    if (data.base_name) {
+        g_free(data.base_name);
+        data.base_name = NULL;
+    }
+    char *basename = g_path_get_basename(fullpath);
+    char *dot = strrchr(basename, '.');
+    if (dot) *dot = '\0';
+    data.base_name = g_strdup(basename);
+    g_free(basename);
+}
+
+/* ---------- Load data file (any number of columns) ---------- */
+static gboolean load_data_file(const char *filename) {
+    FILE *f = fopen(filename, "r");
+    if (!f) return FALSE;
+
+    /* First pass: count rows and columns */
+    int n_cols = 0, n_rows = 0;
+    char line[8192];
+    while (fgets(line, sizeof(line), f)) {
+        if (n_rows == 0) {
+            /* Count columns in first line */
+            char *p = line;
+            int in_field = 0;
+            while (*p) {
+                if (!isspace((unsigned char)*p) && !in_field) {
+                    in_field = 1;
+                    n_cols++;
+                } else if (isspace((unsigned char)*p)) {
+                    in_field = 0;
+                }
+                p++;
+            }
+            if (n_cols == 0) { fclose(f); return FALSE; }
+        }
+        n_rows++;
+    }
+    if (n_rows < 2) { fclose(f); return FALSE; }
+
+    /* Allocate data matrix */
+    data.data = g_new(double *, n_rows);
+    for (int i = 0; i < n_rows; i++)
+        data.data[i] = g_new(double, n_cols);
+
+    /* Second pass: read numbers */
+    rewind(f);
+    for (int i = 0; i < n_rows; i++) {
+        for (int j = 0; j < n_cols; j++) {
+            if (fscanf(f, "%lf", &data.data[i][j]) != 1) {
+                /* Error: not enough numbers in line */
+                for (int k = 0; k <= i; k++) g_free(data.data[k]);
+                g_free(data.data);
+                data.data = NULL;
+                fclose(f);
+                return FALSE;
+            }
+        }
+    }
+    fclose(f);
+
+    data.n_obs = n_rows;
+    data.n_var = n_cols;
+    data.input_filename = g_strdup(filename);
+    set_basename_from_path(filename);
+    return TRUE;
+}
+
+/* ---------- Apply log and scale transformation to raw data ---------- */
+/* Returns a new matrix (same dimensions) or NULL on error (e.g. log of non-positive) */
+static double **transform_data(int *new_nobs) {
+    double **newdata = g_new(double *, data.n_obs);
+    for (int i = 0; i < data.n_obs; i++) {
+        newdata[i] = g_new(double, data.n_var);
+        for (int j = 0; j < data.n_var; j++) {
+            double val = data.data[i][j];
+            if (opts.use_logs) {
+                if (val <= 0.0) {
+                    for (int k = 0; k <= i; k++) g_free(newdata[k]);
+                    g_free(newdata);
+                    return NULL;
+                }
+                val = opts.scale_factor * log(val);
+            } else {
+                val = opts.scale_factor * val;
+            }
+            newdata[i][j] = val;
+        }
+    }
+    *new_nobs = data.n_obs;
+    return newdata;
+}
+
+/* ---------- Apply differences to a given matrix (will be freed by caller) ---------- */
+static double **apply_differences_to_matrix(double **mat, int n_obs, int n_var, int diff_order, int *new_nobs) {
+    if (diff_order == 0) {
+        *new_nobs = n_obs;
+        double **newmat = g_new(double *, n_obs);
+        for (int i = 0; i < n_obs; i++) {
+            newmat[i] = g_new(double, n_var);
+            memcpy(newmat[i], mat[i], n_var * sizeof(double));
+        }
+        return newmat;
+    }
+
+    int d = diff_order;
+    if (n_obs <= d) {
+        *new_nobs = 0;
+        return NULL;
+    }
+
+    *new_nobs = n_obs - d;
+    double **newmat = g_new(double *, *new_nobs);
+
+    for (int i = 0; i < *new_nobs; i++) {
+        newmat[i] = g_new(double, n_var);
+        int orig_idx = i + d;
+        for (int j = 0; j < n_var; j++) {
+            double val = mat[orig_idx][j];
+            for (int k = 1; k <= d; k++)
+                val -= mat[orig_idx - k][j];
+            newmat[i][j] = val;
+        }
+    }
+    return newmat;
+}
+
+/* ---------- Generate .inp file from transformed and differenced data ---------- */
+static gboolean generate_inp_file(const char *inp_path) {
+    int nobs_trans;
+    double **trans = transform_data(&nobs_trans);
+    if (!trans) {
+        gtk_label_set_text(GTK_LABEL(status_label), "Cannot apply log: non-positive values found.");
+        return FALSE;
+    }
+
+    int nobs_diff;
+    double **diff = apply_differences_to_matrix(trans, nobs_trans, data.n_var, opts.diff_order, &nobs_diff);
+    /* free trans */
+    for (int i = 0; i < nobs_trans; i++) g_free(trans[i]);
+    g_free(trans);
+
+    if (!diff || nobs_diff < 1) {
+        gtk_label_set_text(GTK_LABEL(status_label), "Not enough observations after differencing.");
+        return FALSE;
+    }
+
+    FILE *f = fopen(inp_path, "w");
+    if (!f) {
+        for (int i = 0; i < nobs_diff; i++) g_free(diff[i]);
+        g_free(diff);
+        return FALSE;
+    }
+
+    fprintf(f, "%d  ", data.n_var);
+    fprintf(f, "%d\n", nobs_diff);
+    for (int i = 0; i < nobs_diff; i++) {
+        for (int j = 0; j < data.n_var; j++) {
+            fprintf(f, "%f ", diff[i][j]);
+        }
+        fprintf(f, "\n");
+    }
+    fclose(f);
+
+    for (int i = 0; i < nobs_diff; i++) g_free(diff[i]);
+    g_free(diff);
+    return TRUE;
+}
+
+/* ---------- Build command line and run drvarma ---------- */
+static void run_drvarma(const char *inp_base, const char *inp_dir) {
+    GString *cmd = g_string_new(NULL);
+    g_string_printf(cmd, "%s %s %d %d", opts.drv_path, inp_base, opts.p, opts.q);
+
+    if (opts.include_mean)  g_string_append(cmd, " -mean");
+    if (opts.diag_ar)       g_string_append(cmd, " -diagar");
+    if (opts.diag_ma)       g_string_append(cmd, " -diagma");
+    if (opts.diag_cov)      g_string_append(cmd, " -diagcov");
+    if (opts.twostep)       g_string_append(cmd, " -twostep");
+    g_string_append_printf(cmd, " -m %d", opts.method);
+
+    if (opts.use_exp_vol) {
+        g_string_append_printf(cmd, " -volexp %f %d", opts.exp_alpha, opts.exp_window);
+    }
+    if (opts.use_mov_vol) {
+        g_string_append_printf(cmd, " -volmov %d", opts.mov_window);
+    }
+
+    g_print("DEBUG: Executing: %s\n", cmd->str);
+
+    GError *error = NULL;
+    gchar **argv = NULL;
+    gint argc = 0;
+    if (!g_shell_parse_argv(cmd->str, &argc, &argv, &error)) {
+        gchar *msg = g_strdup_printf("Failed to parse command: %s", error->message);
+        gtk_label_set_text(GTK_LABEL(status_label), msg);
+        g_free(msg);
+        g_error_free(error);
+        g_string_free(cmd, TRUE);
+        return;
+    }
+
+    gboolean ok = g_spawn_sync(inp_dir, argv, NULL,
+                               G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL,
+                               NULL, NULL, NULL, NULL, NULL, &error);
+    g_strfreev(argv);
+
+    if (!ok) {
+        gchar *msg = g_strdup_printf("Failed to run drvarma: %s", error->message);
+        gtk_label_set_text(GTK_LABEL(status_label), msg);
+        g_free(msg);
+        g_error_free(error);
+    } else {
+        gtk_label_set_text(GTK_LABEL(status_label), "DRVARMA finished successfully.");
+    }
+    g_string_free(cmd, TRUE);
+}
+
+/* ---------- Sanitize a string to contain only valid UTF-8 ---------- */
+static char *sanitize_to_utf8(const char *input) {
+    GString *result = g_string_new(NULL);
+    const char *p = input;
+    while (*p) {
+        if (g_utf8_validate(p, -1, NULL)) {
+            gunichar c = g_utf8_get_char(p);
+            g_string_append_unichar(result, c);
+            p = g_utf8_next_char(p);
+        } else {
+            g_string_append_c(result, '?');
+            p++;
+        }
+    }
+    return g_string_free(result, FALSE);
+}
+
+/* ---------- Display a file in the text view ---------- */
+static void display_file_in_view(const char *file_path) {
+    gchar *content = NULL;
+    gsize length = 0;
+    if (!g_file_get_contents(file_path, &content, &length, NULL)) {
+        gchar *msg = g_strdup_printf("Cannot read file: %s", file_path);
+        gtk_label_set_text(GTK_LABEL(status_label), msg);
+        g_free(msg);
+        return;
+    }
+
+    char *safe_content = sanitize_to_utf8(content);
+    GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(text_view));
+    gtk_text_buffer_set_text(buffer, safe_content, -1);
+
+    g_free(safe_content);
+    g_free(content);
+}
+
+/* ---------- Helper: append formatted text to the text view ---------- */
+static void append_to_view(const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    char *buf = g_strdup_vprintf(fmt, args);
+    va_end(args);
+
+    GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(text_view));
+    GtkTextIter end;
+    gtk_text_buffer_get_end_iter(buffer, &end);
+    gtk_text_buffer_insert(buffer, &end, buf, -1);
+    g_free(buf);
+}
+
+/* ---------- Johansen test (unchanged) ---------- */
+typedef enum {
+    DET_NONE,
+    DET_CONST,
+    DET_CONST_TREND,
+    DET_CONST_DUMMY
+} DetType;
+
+static const double johansen_cv[5][2][2][3] = {
+    /* n=1 */ { /* const */ { {2.71,3.84,6.64},{2.71,3.84,6.64} }, /* trend */ { {5.42,6.79,10.04},{5.42,6.79,10.04} } },
+    /* n=2 */ { /* const */ { {13.31,15.41,20.04},{12.07,14.07,18.63} }, /* trend */ { {18.90,21.07,26.15},{16.18,18.11,23.46} } },
+    /* n=3 */ { /* const */ { {27.07,29.80,35.46},{18.90,20.97,25.78} }, /* trend */ { {34.40,37.22,44.31},{22.89,24.99,30.57} } },
+    /* n=4 */ { /* const */ { {44.49,47.86,54.68},{25.12,27.34,32.62} }, /* trend */ { {53.35,56.74,65.17},{28.86,31.24,37.22} } },
+    /* n=5 */ { /* const */ { {65.82,69.82,78.12},{30.58,33.26,38.86} }, /* trend */ { {76.07,80.11,90.07},{34.55,37.15,43.45} } }
+};
+
+static int johansen_test(int p, DetType det, int use_logs,
+                         double *trace_stat, double *max_stat,
+                         double *cvals_trace, double *cvals_max) {
+    if (data.n_obs < p + 2) return -1;
+
+    int T = data.n_obs;
+    int n = data.n_var;
+    if (n > 5) g_print("Warning: Johansen critical values available only for up to 5 variables. Using n=5.\n");
+
+    double **y = g_new(double *, T);
+    for (int i = 0; i < T; i++) {
+        y[i] = g_new(double, n);
+        for (int j = 0; j < n; j++) {
+            if (use_logs) {
+                if (data.data[i][j] <= 0) {
+                    for (int k = 0; k <= i; k++) g_free(y[k]);
+                    g_free(y);
+                    return -2;
+                }
+                y[i][j] = log(data.data[i][j]);
+            } else {
+                y[i][j] = data.data[i][j];
+            }
+        }
+    }
+
+    int nobs = T - p;
+    int d = (det == DET_CONST) ? 1 : (det == DET_CONST_TREND || det == DET_CONST_DUMMY) ? 2 : 0;
+    int nz = n * p + d;
+
+    gsl_matrix *Z0 = gsl_matrix_alloc(n, nobs);
+    gsl_matrix *Z1 = gsl_matrix_alloc(n, nobs);
+    gsl_matrix *Z2 = gsl_matrix_alloc(nz, nobs);
+
+    for (int t = p; t < T; t++) {
+        int col = t - p;
+        for (int i = 0; i < n; i++) {
+            gsl_matrix_set(Z0, i, col, y[t][i] - y[t-1][i]);
+            gsl_matrix_set(Z1, i, col, y[t-1][i]);
+        }
+        int row = 0;
+        for (int lag = 1; lag <= p; lag++)
+            for (int i = 0; i < n; i++) {
+                double val = (t - lag >= 0) ? (y[t-lag][i] - y[t-lag-1][i]) : 0.0;
+                gsl_matrix_set(Z2, row++, col, val);
+            }
+        if (det == DET_CONST) {
+            gsl_matrix_set(Z2, row++, col, 1.0);
+        } else if (det == DET_CONST_TREND) {
+            gsl_matrix_set(Z2, row++, col, 1.0);
+            gsl_matrix_set(Z2, row++, col, (double)(t + 1));
+        } else if (det == DET_CONST_DUMMY) {
+            int break_obs = T / 2;
+            double step = (t >= break_obs) ? 1.0 : 0.0;
+            gsl_matrix_set(Z2, row++, col, 1.0);
+            gsl_matrix_set(Z2, row++, col, step);
+        }
+    }
+
+    for (int i = 0; i < T; i++) g_free(y[i]);
+    g_free(y);
+
+    gsl_matrix *R00 = gsl_matrix_alloc(n, n);
+    gsl_matrix *R01 = gsl_matrix_alloc(n, n);
+    gsl_matrix *R11 = gsl_matrix_alloc(n, n);
+    gsl_matrix *R0Z = gsl_matrix_alloc(n, nz);
+    gsl_matrix *R1Z = gsl_matrix_alloc(n, nz);
+    gsl_matrix *RZZ = gsl_matrix_alloc(nz, nz);
+
+    double scale = 1.0 / nobs;
+    gsl_matrix_set_zero(R00);
+    gsl_matrix_set_zero(R01);
+    gsl_matrix_set_zero(R11);
+    gsl_matrix_set_zero(R0Z);
+    gsl_matrix_set_zero(R1Z);
+    gsl_matrix_set_zero(RZZ);
+
+    for (int col = 0; col < nobs; col++) {
+        gsl_vector_view z0 = gsl_matrix_column(Z0, col);
+        gsl_vector_view z1 = gsl_matrix_column(Z1, col);
+        gsl_vector_view z2 = gsl_matrix_column(Z2, col);
+        gsl_blas_dger(scale, &z0.vector, &z0.vector, R00);
+        gsl_blas_dger(scale, &z0.vector, &z1.vector, R01);
+        gsl_blas_dger(scale, &z1.vector, &z1.vector, R11);
+        gsl_blas_dger(scale, &z0.vector, &z2.vector, R0Z);
+        gsl_blas_dger(scale, &z1.vector, &z2.vector, R1Z);
+        gsl_blas_dger(scale, &z2.vector, &z2.vector, RZZ);
+    }
+
+    gsl_matrix_free(Z0);
+    gsl_matrix_free(Z1);
+    gsl_matrix_free(Z2);
+
+    gsl_error_handler_t *old_handler = gsl_set_error_handler_off();
+
+    // Projection onto Z2
+    gsl_matrix *RZZ_copy = gsl_matrix_alloc(nz, nz);
+    gsl_matrix_memcpy(RZZ_copy, RZZ);
+    gsl_permutation *perm = gsl_permutation_alloc(nz);
+    int signum;
+    int lu_status = gsl_linalg_LU_decomp(RZZ_copy, perm, &signum);
+    if (lu_status) {
+        gsl_matrix_free(RZZ_copy);
+        gsl_permutation_free(perm);
+        double diag_sum = 0.0;
+        for (int i = 0; i < nz; i++) diag_sum += gsl_matrix_get(RZZ, i, i);
+        double lambda = 1e-3 * (diag_sum / nz);
+        if (lambda < 1e-12) lambda = 1e-3;
+        RZZ_copy = gsl_matrix_alloc(nz, nz);
+        gsl_matrix_memcpy(RZZ_copy, RZZ);
+        for (int i = 0; i < nz; i++) {
+            double val = gsl_matrix_get(RZZ_copy, i, i);
+            gsl_matrix_set(RZZ_copy, i, i, val + lambda);
+        }
+        perm = gsl_permutation_alloc(nz);
+        lu_status = gsl_linalg_LU_decomp(RZZ_copy, perm, &signum);
+        if (lu_status) {
+            gsl_matrix_free(RZZ_copy); gsl_permutation_free(perm);
+            gsl_matrix_free(R00); gsl_matrix_free(R01); gsl_matrix_free(R11);
+            gsl_matrix_free(R0Z); gsl_matrix_free(R1Z); gsl_matrix_free(RZZ);
+            gsl_set_error_handler(old_handler);
+            return -4;
+        }
+    }
+    gsl_matrix *invRZZ = gsl_matrix_alloc(nz, nz);
+    gsl_linalg_LU_invert(RZZ_copy, perm, invRZZ);
+    gsl_permutation_free(perm);
+    gsl_matrix_free(RZZ_copy);
+
+    gsl_matrix *R0Z_inv = gsl_matrix_alloc(n, nz);
+    gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1.0, R0Z, invRZZ, 0.0, R0Z_inv);
+    gsl_matrix *R1Z_inv = gsl_matrix_alloc(n, nz);
+    gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1.0, R1Z, invRZZ, 0.0, R1Z_inv);
+    gsl_matrix_free(invRZZ);
+
+    gsl_matrix *S00 = gsl_matrix_alloc(n, n);
+    gsl_matrix_memcpy(S00, R00);
+    gsl_matrix *tmp = gsl_matrix_alloc(n, n);
+    gsl_blas_dgemm(CblasNoTrans, CblasTrans, 1.0, R0Z_inv, R0Z, 0.0, tmp);
+    gsl_matrix_sub(S00, tmp);
+
+    gsl_matrix *S01 = gsl_matrix_alloc(n, n);
+    gsl_matrix_memcpy(S01, R01);
+    gsl_blas_dgemm(CblasNoTrans, CblasTrans, 1.0, R0Z_inv, R1Z, 0.0, tmp);
+    gsl_matrix_sub(S01, tmp);
+
+    gsl_matrix *S11 = gsl_matrix_alloc(n, n);
+    gsl_matrix_memcpy(S11, R11);
+    gsl_blas_dgemm(CblasNoTrans, CblasTrans, 1.0, R1Z_inv, R1Z, 0.0, tmp);
+    gsl_matrix_sub(S11, tmp);
+
+    gsl_matrix_free(R00); gsl_matrix_free(R01); gsl_matrix_free(R11);
+    gsl_matrix_free(R0Z); gsl_matrix_free(R1Z); gsl_matrix_free(RZZ);
+    gsl_matrix_free(R0Z_inv); gsl_matrix_free(R1Z_inv);
+    gsl_matrix_free(tmp);
+
+    gsl_matrix *S10 = gsl_matrix_alloc(n, n);
+    gsl_matrix_transpose_memcpy(S10, S01);
+
+    gsl_matrix *S00_copy = gsl_matrix_alloc(n, n);
+    gsl_matrix_memcpy(S00_copy, S00);
+    gsl_permutation *perm2 = gsl_permutation_alloc(n);
+    lu_status = gsl_linalg_LU_decomp(S00_copy, perm2, &signum);
+    if (lu_status) {
+        gsl_matrix_free(S00_copy); gsl_permutation_free(perm2);
+        double diag_sum = 0.0;
+        for (int i = 0; i < n; i++) diag_sum += gsl_matrix_get(S00, i, i);
+        double lambda = 1e-3 * (diag_sum / n);
+        if (lambda < 1e-12) lambda = 1e-3;
+        S00_copy = gsl_matrix_alloc(n, n);
+        gsl_matrix_memcpy(S00_copy, S00);
+        for (int i = 0; i < n; i++) {
+            double val = gsl_matrix_get(S00_copy, i, i);
+            gsl_matrix_set(S00_copy, i, i, val + lambda);
+        }
+        perm2 = gsl_permutation_alloc(n);
+        lu_status = gsl_linalg_LU_decomp(S00_copy, perm2, &signum);
+        if (lu_status) {
+            gsl_matrix_free(S00_copy); gsl_permutation_free(perm2);
+            gsl_matrix_free(S10); gsl_matrix_free(S01); gsl_matrix_free(S11);
+            gsl_set_error_handler(old_handler);
+            return -5;
+        }
+    }
+    gsl_matrix *invS00 = gsl_matrix_alloc(n, n);
+    gsl_linalg_LU_invert(S00_copy, perm2, invS00);
+    gsl_permutation_free(perm2);
+    gsl_matrix_free(S00_copy);
+
+    gsl_matrix *tmp2 = gsl_matrix_alloc(n, n);
+    gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1.0, S10, invS00, 0.0, tmp2);
+    gsl_matrix *A = gsl_matrix_alloc(n, n);
+    gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1.0, tmp2, S01, 0.0, A);
+    gsl_matrix_free(tmp2);
+    gsl_matrix_free(invS00);
+    gsl_matrix_free(S10);
+    gsl_matrix_free(S01);
+
+    gsl_matrix *A_mat = gsl_matrix_alloc(n, n);
+    gsl_matrix_memcpy(A_mat, A);
+    gsl_matrix *B_mat = gsl_matrix_alloc(n, n);
+    gsl_matrix_memcpy(B_mat, S11);
+    gsl_matrix_free(A);
+    gsl_matrix_free(S11);
+
+    gsl_eigen_gen_workspace *w = gsl_eigen_gen_alloc(n);
+    gsl_vector_complex *alpha = gsl_vector_complex_alloc(n);
+    gsl_vector *beta = gsl_vector_alloc(n);
+
+    int status = gsl_eigen_gen(A_mat, B_mat, alpha, beta, w);
+    if (status) {
+        gsl_eigen_gen_free(w);
+        gsl_vector_complex_free(alpha);
+        gsl_vector_free(beta);
+        gsl_matrix_free(A_mat); gsl_matrix_free(B_mat);
+        gsl_set_error_handler(old_handler);
+        return -3;
+    }
+    gsl_eigen_gen_free(w);
+
+    double *lambda = g_new(double, n);
+    for (int i = 0; i < n; i++) {
+        gsl_complex a = gsl_vector_complex_get(alpha, i);
+        double b = gsl_vector_get(beta, i);
+        lambda[i] = (fabs(b) > 1e-12) ? GSL_REAL(a) / b : 0.0;
+    }
+    gsl_vector_complex_free(alpha);
+    gsl_vector_free(beta);
+    gsl_matrix_free(A_mat); gsl_matrix_free(B_mat);
+
+    for (int i = 0; i < n-1; i++)
+        for (int j = i+1; j < n; j++)
+            if (lambda[j] > lambda[i]) {
+                double tmp = lambda[i];
+                lambda[i] = lambda[j];
+                lambda[j] = tmp;
+            }
+
+    *trace_stat = 0.0;
+    for (int i = 0; i < n; i++)
+        if (lambda[i] > 0 && lambda[i] < 1)
+            *trace_stat += -nobs * log(1.0 - lambda[i]);
+    *max_stat = (lambda[0] > 0 && lambda[0] < 1) ? -nobs * log(1.0 - lambda[0]) : 0.0;
+    g_free(lambda);
+
+    gsl_set_error_handler(old_handler);
+
+    int idx_n = (n-1 < 5) ? n-1 : 4;
+    int idx_det = (det == DET_CONST_TREND) ? 1 : 0;
+    for (int q = 0; q < 3; q++) {
+        cvals_trace[q] = johansen_cv[idx_n][idx_det][0][q];
+        cvals_max[q]   = johansen_cv[idx_n][idx_det][1][q];
+    }
+    return 0;
+}
+
+/* ---------- Callback for Johansen test button ---------- */
+static void on_johansen_test(GtkWidget *widget, gpointer user_data) {
+    if (!opts.props_set) {
+        gtk_label_set_text(GTK_LABEL(status_label), "Please set data properties first.");
+        return;
+    }
+    if (data.n_obs == 0) {
+        gtk_label_set_text(GTK_LABEL(status_label), "No data loaded.");
+        return;
+    }
+
+    GtkWidget *dialog = gtk_dialog_new_with_buttons("Johansen Cointegration Test",
+                                                    GTK_WINDOW(main_window),
+                                                    GTK_DIALOG_MODAL,
+                                                    "_OK", GTK_RESPONSE_OK,
+                                                    "_Cancel", GTK_RESPONSE_CANCEL,
+                                                    NULL);
+    GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+    gtk_container_set_border_width(GTK_CONTAINER(content), 10);
+
+    GtkWidget *grid = gtk_grid_new();
+    gtk_grid_set_row_spacing(GTK_GRID(grid), 6);
+    gtk_grid_set_column_spacing(GTK_GRID(grid), 8);
+    gtk_container_add(GTK_CONTAINER(content), grid);
+
+    int row = 0;
+
+    gtk_grid_attach(GTK_GRID(grid), gtk_label_new("Lag order (p):"), 0, row, 1, 1);
+    GtkWidget *lag_spin = gtk_spin_button_new_with_range(1, 10, 1);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(lag_spin), 1);
+    gtk_grid_attach(GTK_GRID(grid), lag_spin, 1, row, 1, 1);
+    row++;
+
+    gtk_grid_attach(GTK_GRID(grid), gtk_label_new("Deterministic terms:"), 0, row, 1, 1);
+    GtkWidget *det_combo = gtk_combo_box_text_new();
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(det_combo), NULL, "None");
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(det_combo), NULL, "Constant (restricted)");
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(det_combo), NULL, "Constant + Trend (restricted)");
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(det_combo), NULL, "Constant + Step dummy (restricted)");
+    gtk_combo_box_set_active(GTK_COMBO_BOX(det_combo), 1);
+    gtk_grid_attach(GTK_GRID(grid), det_combo, 1, row, 1, 1);
+    row++;
+
+    gtk_grid_attach(GTK_GRID(grid), gtk_label_new("Use logs:"), 0, row, 1, 1);
+    GtkWidget *logs_check = gtk_check_button_new();
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(logs_check), TRUE);
+    gtk_grid_attach(GTK_GRID(grid), logs_check, 1, row, 1, 1);
+    row++;
+
+    gtk_widget_show_all(content);
+
+    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_OK) {
+        int p = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(lag_spin));
+        int det_idx = gtk_combo_box_get_active(GTK_COMBO_BOX(det_combo));
+        DetType det;
+        switch (det_idx) {
+            case 0: det = DET_NONE; break;
+            case 1: det = DET_CONST; break;
+            case 2: det = DET_CONST_TREND; break;
+            case 3: det = DET_CONST_DUMMY; break;
+            default: det = DET_CONST;
+        }
+        int use_logs = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(logs_check));
+
+        double trace_stat, max_stat;
+        double cvals_trace[3], cvals_max[3];
+        int ret = johansen_test(p, det, use_logs, &trace_stat, &max_stat,
+                                cvals_trace, cvals_max);
+        if (ret < 0) {
+            if (ret == -1)
+                gtk_label_set_text(GTK_LABEL(status_label), "Insufficient observations for this lag order.");
+            else if (ret == -2)
+                gtk_label_set_text(GTK_LABEL(status_label), "Non-positive values in series (cannot take log).");
+            else if (ret == -3)
+                gtk_label_set_text(GTK_LABEL(status_label), "Eigenvalue computation failed.");
+            else
+                gtk_label_set_text(GTK_LABEL(status_label), "Johansen test failed.");
+            gtk_widget_destroy(dialog);
+            return;
+        }
+
+        GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(text_view));
+        gtk_text_buffer_set_text(buffer, "", -1);
+        append_to_view("Johansen Cointegration Test\n");
+        append_to_view("==========================\n");
+        append_to_view("Lag order p = %d\n", p);
+        append_to_view("Deterministic specification: ");
+        switch (det) {
+            case DET_NONE: append_to_view("None\n"); break;
+            case DET_CONST: append_to_view("Constant (restricted)\n"); break;
+            case DET_CONST_TREND: append_to_view("Constant + Trend (restricted)\n"); break;
+            case DET_CONST_DUMMY: append_to_view("Constant + Step dummy (restricted)\n"); break;
+        }
+        append_to_view("Logs: %s\n", use_logs ? "yes" : "no");
+        append_to_view("\n");
+
+        append_to_view("Trace test:\n");
+        append_to_view("  H0: r=0   statistic = %.4f\n", trace_stat);
+        append_to_view("  Critical values: 10%% = %.2f, 5%% = %.2f, 1%% = %.2f\n",
+                       cvals_trace[0], cvals_trace[1], cvals_trace[2]);
+
+        append_to_view("\nMax eigenvalue test:\n");
+        append_to_view("  H0: r=0   statistic = %.4f\n", max_stat);
+        append_to_view("  Critical values: 10%% = %.2f, 5%% = %.2f, 1%% = %.2f\n",
+                       cvals_max[0], cvals_max[1], cvals_max[2]);
+
+        gtk_label_set_text(GTK_LABEL(status_label), "Johansen test completed.");
+    }
+
+    gtk_widget_destroy(dialog);
+}
+
+/* ---------- VAR order selection (unchanged) ---------- */
+static void on_select_var_order(GtkWidget *widget, gpointer user_data) {
+    if (!opts.props_set) {
+        gtk_label_set_text(GTK_LABEL(status_label), "Please set data properties first.");
+        return;
+    }
+    if (data.n_obs == 0) {
+        gtk_label_set_text(GTK_LABEL(status_label), "No data loaded.");
+        return;
+    }
+
+    GtkWidget *dialog = gtk_dialog_new_with_buttons("Select VAR Order",
+                                                    GTK_WINDOW(main_window),
+                                                    GTK_DIALOG_MODAL,
+                                                    "_OK", GTK_RESPONSE_OK,
+                                                    "_Cancel", GTK_RESPONSE_CANCEL,
+                                                    NULL);
+    GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+    gtk_container_set_border_width(GTK_CONTAINER(content), 10);
+
+    GtkWidget *grid = gtk_grid_new();
+    gtk_grid_set_row_spacing(GTK_GRID(grid), 6);
+    gtk_grid_set_column_spacing(GTK_GRID(grid), 8);
+    gtk_container_add(GTK_CONTAINER(content), grid);
+
+    int row = 0;
+    gtk_grid_attach(GTK_GRID(grid), gtk_label_new("Maximum lag order:"), 0, row, 1, 1);
+    GtkWidget *maxlag_spin = gtk_spin_button_new_with_range(1, 20, 1);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(maxlag_spin), 8);
+    gtk_grid_attach(GTK_GRID(grid), maxlag_spin, 1, row, 1, 1);
+    row++;
+
+    gtk_grid_attach(GTK_GRID(grid), gtk_label_new("Use differenced data:"), 0, row, 1, 1);
+    GtkWidget *diff_check = gtk_check_button_new();
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(diff_check), TRUE);
+    gtk_grid_attach(GTK_GRID(grid), diff_check, 1, row, 1, 1);
+    row++;
+
+    gtk_widget_show_all(content);
+
+    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_OK) {
+        int maxlag = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(maxlag_spin));
+        int use_diff = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(diff_check));
+
+        gtk_widget_destroy(dialog);
+
+        int nobs_eff;
+        double **usedata;
+        if (use_diff) {
+            double **trans = transform_data(&nobs_eff);
+            if (!trans) {
+                gtk_label_set_text(GTK_LABEL(status_label), "Cannot apply log: non-positive values.");
+                return;
+            }
+            usedata = apply_differences_to_matrix(trans, nobs_eff, data.n_var, opts.diff_order, &nobs_eff);
+            for (int i = 0; i < data.n_obs; i++) g_free(trans[i]);
+            g_free(trans);
+            if (!usedata || nobs_eff < maxlag + 2) {
+                if (usedata) {
+                    for (int i = 0; i < nobs_eff; i++) g_free(usedata[i]);
+                    g_free(usedata);
+                }
+                gtk_label_set_text(GTK_LABEL(status_label), "Not enough observations after differencing.");
+                return;
+            }
+        } else {
+            nobs_eff = data.n_obs;
+            usedata = g_new(double *, nobs_eff);
+            for (int i = 0; i < nobs_eff; i++) {
+                usedata[i] = g_new(double, data.n_var);
+                memcpy(usedata[i], data.data[i], data.n_var * sizeof(double));
+            }
+        }
+
+        int n = data.n_var;
+        double *aic = g_new(double, maxlag+1);
+        double *bic = g_new(double, maxlag+1);
+        double *hq  = g_new(double, maxlag+1);
+
+        for (int p = 0; p <= maxlag; p++) {
+            if (p == 0) {
+                int nobs = nobs_eff;
+                double *mean = g_new(double, n);
+                for (int j = 0; j < n; j++) {
+                    mean[j] = 0.0;
+                    for (int t = 0; t < nobs; t++) mean[j] += usedata[t][j];
+                    mean[j] /= nobs;
+                }
+                double ssr_sum = 0.0;
+                for (int j = 0; j < n; j++) {
+                    double ssr = 0.0;
+                    for (int t = 0; t < nobs; t++) ssr += pow(usedata[t][j] - mean[j], 2);
+                    ssr_sum += log(ssr / nobs);
+                }
+                double logdet = ssr_sum;
+                int k = n;
+                aic[p] = logdet + 2.0 * k / nobs;
+                bic[p] = logdet + log(nobs) * k / nobs;
+                hq[p]  = logdet + 2.0 * log(log(nobs)) * k / nobs;
+                g_free(mean);
+            } else {
+                int nobs = nobs_eff - p;
+                if (nobs < p + 2) {
+                    aic[p] = 1e10; bic[p] = 1e10; hq[p] = 1e10;
+                    continue;
+                }
+                int nreg = n * p + 1;
+                gsl_matrix *Y = gsl_matrix_alloc(n, nobs);
+                gsl_matrix *X = gsl_matrix_alloc(nreg, nobs);
+
+                for (int t = p; t < nobs_eff; t++) {
+                    int col = t - p;
+                    for (int j = 0; j < n; j++) {
+                        gsl_matrix_set(Y, j, col, usedata[t][j]);
+                    }
+                    int row = 0;
+                    for (int lag = 1; lag <= p; lag++) {
+                        for (int j = 0; j < n; j++) {
+                            gsl_matrix_set(X, row++, col, usedata[t - lag][j]);
+                        }
+                    }
+                    gsl_matrix_set(X, row, col, 1.0);
+                }
+
+                gsl_matrix *XX = gsl_matrix_alloc(nreg, nreg);
+                gsl_matrix *XY = gsl_matrix_alloc(nreg, n);
+                gsl_blas_dgemm(CblasNoTrans, CblasTrans, 1.0, X, X, 0.0, XX);
+                gsl_blas_dgemm(CblasNoTrans, CblasTrans, 1.0, X, Y, 0.0, XY);
+
+                gsl_matrix *XX_copy = gsl_matrix_alloc(nreg, nreg);
+                gsl_matrix_memcpy(XX_copy, XX);
+                gsl_permutation *perm = gsl_permutation_alloc(nreg);
+                int signum;
+                gsl_linalg_LU_decomp(XX_copy, perm, &signum);
+
+                gsl_matrix *beta = gsl_matrix_alloc(nreg, n);
+                for (int eq = 0; eq < n; eq++) {
+                    gsl_vector_view xy_col = gsl_matrix_column(XY, eq);
+                    gsl_vector_view beta_col = gsl_matrix_column(beta, eq);
+                    gsl_linalg_LU_solve(XX_copy, perm, &xy_col.vector, &beta_col.vector);
+                }
+
+                gsl_matrix *resid = gsl_matrix_alloc(n, nobs);
+                gsl_matrix_memcpy(resid, Y);
+                gsl_matrix *pred = gsl_matrix_alloc(n, nobs);
+                gsl_blas_dgemm(CblasTrans, CblasNoTrans, 1.0, beta, X, 0.0, pred);
+                gsl_matrix_sub(resid, pred);
+
+                gsl_matrix *cov = gsl_matrix_alloc(n, n);
+                gsl_blas_dgemm(CblasNoTrans, CblasTrans, 1.0/nobs, resid, resid, 0.0, cov);
+
+                gsl_matrix *cov_copy = gsl_matrix_alloc(n, n);
+                gsl_matrix_memcpy(cov_copy, cov);
+                gsl_permutation *perm2 = gsl_permutation_alloc(n);
+                gsl_linalg_LU_decomp(cov_copy, perm2, &signum);
+                double logdet = gsl_linalg_LU_lndet(cov_copy);
+
+                int k = nreg * n;
+                aic[p] = logdet + 2.0 * k / nobs;
+                bic[p] = logdet + log(nobs) * k / nobs;
+                hq[p]  = logdet + 2.0 * log(log(nobs)) * k / nobs;
+
+                gsl_matrix_free(Y); gsl_matrix_free(X); gsl_matrix_free(XX);
+                gsl_matrix_free(XY); gsl_matrix_free(XX_copy); gsl_matrix_free(beta);
+                gsl_matrix_free(resid); gsl_matrix_free(pred); gsl_matrix_free(cov);
+                gsl_matrix_free(cov_copy);
+                gsl_permutation_free(perm); gsl_permutation_free(perm2);
+            }
+        }
+
+        int best_aic = 0, best_bic = 0, best_hq = 0;
+        for (int p = 1; p <= maxlag; p++) {
+            if (aic[p] < aic[best_aic]) best_aic = p;
+            if (bic[p] < bic[best_bic]) best_bic = p;
+            if (hq[p] < hq[best_hq]) best_hq = p;
+        }
+
+        GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(text_view));
+        gtk_text_buffer_set_text(buffer, "", -1);
+        append_to_view("VAR Order Selection\n");
+        append_to_view("===================\n");
+        append_to_view("Data: %s\n", use_diff ? "differenced" : "raw levels");
+        append_to_view("Maximum lag considered: %d\n", maxlag);
+        append_to_view("\n");
+        append_to_view("p\tAIC\t\tBIC\t\tHQ\n");
+        for (int p = 0; p <= maxlag; p++) {
+            if (aic[p] < 1e9) {
+                append_to_view("%d\t%.4f\t%.4f\t%.4f\n", p, aic[p], bic[p], hq[p]);
+            } else {
+                append_to_view("%d\t(insufficient data)\n", p);
+            }
+        }
+        append_to_view("\nOptimal order (AIC): %d\n", best_aic);
+        append_to_view("Optimal order (BIC): %d\n", best_bic);
+        append_to_view("Optimal order (HQ): %d\n", best_hq);
+
+        g_free(aic); g_free(bic); g_free(hq);
+        for (int i = 0; i < nobs_eff; i++) g_free(usedata[i]);
+        g_free(usedata);
+
+        gtk_label_set_text(GTK_LABEL(status_label), "VAR order selection completed.");
+    } else {
+        gtk_widget_destroy(dialog);
+    }
+}
+
+/* ---------- Data properties dialog (unchanged) ---------- */
+typedef struct {
+    GtkWidget *freq_combo;
+    GtkWidget *start_year_spin;
+    GtkWidget *start_sub_spin;
+    GtkWidget *sub_label;
+    GtkWidget *end_label;
+} PropWidgets;
+
+static void on_freq_changed(GtkComboBox *combo, gpointer user_data) {
+    PropWidgets *w = (PropWidgets *)user_data;
+    int freq = 1;
+    const char *active_text = gtk_combo_box_text_get_active_text(GTK_COMBO_BOX_TEXT(combo));
+    if (active_text) {
+        if (strstr(active_text, "Quarterly")) freq = 4;
+        else if (strstr(active_text, "Monthly")) freq = 12;
+        g_free((gchar*)active_text);
+    }
+
+    gtk_spin_button_set_range(GTK_SPIN_BUTTON(w->start_sub_spin), 1, freq);
+
+    if (freq == 1) {
+        gtk_widget_hide(w->sub_label);
+        gtk_widget_hide(w->start_sub_spin);
+    } else {
+        gtk_widget_show(w->sub_label);
+        gtk_widget_show(w->start_sub_spin);
+    }
+
+    int start_year = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(w->start_year_spin));
+    int start_sub = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(w->start_sub_spin));
+    int nobs = data.n_obs;
+    int end_year, end_sub;
+
+    if (freq == 1) {
+        end_year = start_year + nobs - 1;
+        end_sub = 1;
+    } else {
+        int total_periods = (nobs - 1) + start_sub;
+        end_year = start_year + (total_periods - 1) / freq;
+        end_sub = ((total_periods - 1) % freq) + 1;
+    }
+
+    char buf[128];
+    if (freq == 1)
+        snprintf(buf, sizeof(buf), "End date: %d", end_year);
+    else if (freq == 4)
+        snprintf(buf, sizeof(buf), "End date: Q%d %d", end_sub, end_year);
+    else
+        snprintf(buf, sizeof(buf), "End date: %d/%d", end_sub, end_year);
+
+    gtk_label_set_text(GTK_LABEL(w->end_label), buf);
+}
+
+static void on_start_year_changed(GtkSpinButton *spin, gpointer user_data) {
+    PropWidgets *w = (PropWidgets *)user_data;
+    on_freq_changed(GTK_COMBO_BOX(w->freq_combo), w);
+}
+
+static void on_start_sub_changed(GtkSpinButton *spin, gpointer user_data) {
+    PropWidgets *w = (PropWidgets *)user_data;
+    on_freq_changed(GTK_COMBO_BOX(w->freq_combo), w);
+}
+
+static void show_data_properties_dialog(GtkWidget *parent) {
+    GtkWidget *dialog = gtk_dialog_new_with_buttons("Data Properties",
+                                                    GTK_WINDOW(parent),
+                                                    GTK_DIALOG_MODAL,
+                                                    "_OK", GTK_RESPONSE_OK,
+                                                    "_Cancel", GTK_RESPONSE_CANCEL,
+                                                    NULL);
+    GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+    gtk_container_set_border_width(GTK_CONTAINER(content), 10);
+
+    GtkWidget *grid = gtk_grid_new();
+    gtk_grid_set_row_spacing(GTK_GRID(grid), 6);
+    gtk_grid_set_column_spacing(GTK_GRID(grid), 8);
+    gtk_container_add(GTK_CONTAINER(content), grid);
+
+    int row = 0;
+
+    gtk_grid_attach(GTK_GRID(grid), gtk_label_new("Frequency:"), 0, row, 1, 1);
+    GtkWidget *freq_combo = gtk_combo_box_text_new();
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(freq_combo), NULL, "Annual (1)");
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(freq_combo), NULL, "Quarterly (4)");
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(freq_combo), NULL, "Monthly (12)");
+    gtk_combo_box_set_active(GTK_COMBO_BOX(freq_combo), 2);
+    gtk_grid_attach(GTK_GRID(grid), freq_combo, 1, row, 1, 1);
+    row++;
+
+    gtk_grid_attach(GTK_GRID(grid), gtk_label_new("Start year:"), 0, row, 1, 1);
+    GtkWidget *start_year_spin = gtk_spin_button_new_with_range(1000, 3000, 1);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(start_year_spin), 2000);
+    gtk_grid_attach(GTK_GRID(grid), start_year_spin, 1, row, 1, 1);
+    row++;
+
+    GtkWidget *sub_label = gtk_label_new("Start month/quarter:");
+    gtk_grid_attach(GTK_GRID(grid), sub_label, 0, row, 1, 1);
+    GtkWidget *sub_spin = gtk_spin_button_new_with_range(1, 12, 1);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(sub_spin), 1);
+    gtk_grid_attach(GTK_GRID(grid), sub_spin, 1, row, 1, 1);
+    row++;
+
+    GtkWidget *end_label = gtk_label_new("End date: (not computed)");
+    gtk_grid_attach(GTK_GRID(grid), end_label, 0, row, 2, 1);
+    row++;
+
+    PropWidgets *widgets = g_new(PropWidgets, 1);
+    widgets->freq_combo = freq_combo;
+    widgets->start_year_spin = start_year_spin;
+    widgets->start_sub_spin = sub_spin;
+    widgets->sub_label = sub_label;
+    widgets->end_label = end_label;
+
+    g_signal_connect(freq_combo, "changed", G_CALLBACK(on_freq_changed), widgets);
+    g_signal_connect(start_year_spin, "value-changed", G_CALLBACK(on_start_year_changed), widgets);
+    g_signal_connect(sub_spin, "value-changed", G_CALLBACK(on_start_sub_changed), widgets);
+
+    on_freq_changed(GTK_COMBO_BOX(freq_combo), widgets);
+
+    gtk_widget_show_all(content);
+
+    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_OK) {
+        int freq = 1;
+        const char *active_text = gtk_combo_box_text_get_active_text(GTK_COMBO_BOX_TEXT(freq_combo));
+        if (active_text) {
+            if (strstr(active_text, "Quarterly")) freq = 4;
+            else if (strstr(active_text, "Monthly")) freq = 12;
+            g_free((gchar*)active_text);
+        }
+        opts.freq = freq;
+        opts.start_year = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(start_year_spin));
+        opts.start_sub = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(sub_spin));
+        opts.props_set = 1;
+        g_print("DEBUG: Properties set: freq=%d, start_year=%d, start_sub=%d\n",
+                opts.freq, opts.start_year, opts.start_sub);
+
+        gtk_widget_set_sensitive(btn_run, TRUE);
+        gtk_label_set_text(GTK_LABEL(status_label), "Data properties set. Ready.");
+    }
+
+    g_free(widgets);
+    gtk_widget_destroy(dialog);
+}
+
+/* ---------- Callback to set drvarma executable path ---------- */
+static void on_set_drv_path(GtkWidget *widget, gpointer user_data) {
+    GtkWidget *dialog = gtk_file_chooser_dialog_new("Select drvarma executable",
+                                                    GTK_WINDOW(main_window),
+                                                    GTK_FILE_CHOOSER_ACTION_OPEN,
+                                                    "_Cancel", GTK_RESPONSE_CANCEL,
+                                                    "_Open", GTK_RESPONSE_ACCEPT,
+                                                    NULL);
+    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
+        char *filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+        g_strlcpy(opts.drv_path, filename, sizeof(opts.drv_path));
+        gtk_entry_set_text(GTK_ENTRY(drv_path_entry), filename);
+        g_free(filename);
+    }
+    gtk_widget_destroy(dialog);
+}
+
+/* ---------- Callbacks for main window ---------- */
+static void on_load_series(GtkWidget *widget, gpointer user_data) {
+    GtkWidget *dialog = gtk_file_chooser_dialog_new("Open data file",
+                                                    GTK_WINDOW(main_window),
+                                                    GTK_FILE_CHOOSER_ACTION_OPEN,
+                                                    "_Cancel", GTK_RESPONSE_CANCEL,
+                                                    "_Open", GTK_RESPONSE_ACCEPT,
+                                                    NULL);
+    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
+        char *filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+        if (load_data_file(filename)) {
+            gchar *msg = g_strdup_printf("Loaded %d series, %d observations", data.n_var, data.n_obs);
+            gtk_label_set_text(GTK_LABEL(status_label), msg);
+            g_free(msg);
+            opts.props_set = 0;
+            gtk_widget_set_sensitive(btn_run, FALSE);
+            show_data_properties_dialog(main_window);
+        } else {
+            gtk_label_set_text(GTK_LABEL(status_label), "Error reading file. Need at least 2 rows, all numeric.");
+        }
+        g_free(filename);
+    }
+    gtk_widget_destroy(dialog);
+}
+
+static void on_run(GtkWidget *widget, gpointer user_data) {
+    if (!opts.props_set) {
+        gtk_label_set_text(GTK_LABEL(status_label), "Please set data properties first.");
+        return;
+    }
+    if (data.n_obs == 0) {
+        gtk_label_set_text(GTK_LABEL(status_label), "No data loaded.");
+        return;
+    }
+    if (!data.base_name) {
+        gtk_label_set_text(GTK_LABEL(status_label), "Internal error: base_name is NULL");
+        return;
+    }
+
+    char *dir = g_path_get_dirname(data.input_filename);
+    char *inp_filename = g_strconcat(data.base_name, ".inp", NULL);
+    char *inp_path = g_build_filename(dir, inp_filename, NULL);
+    g_free(inp_filename);
+    g_print("DEBUG: Generating .inp at %s\n", inp_path);
+
+    if (!generate_inp_file(inp_path)) {
+        g_free(dir); g_free(inp_path);
+        return;
+    }
+
+    gchar *msg = g_strdup_printf("Created %s", inp_path);
+    gtk_label_set_text(GTK_LABEL(status_label), msg);
+    g_free(msg);
+
+    run_drvarma(data.base_name, dir);
+
+    g_free(dir);
+    g_free(inp_path);
+}
+
+static void on_view_output(GtkWidget *widget, gpointer user_data) {
+    if (!data.base_name || !data.input_filename) {
+        gtk_label_set_text(GTK_LABEL(status_label), "No output file available.");
+        return;
+    }
+
+    char *dir = g_path_get_dirname(data.input_filename);
+    char *out_filename = g_strconcat(data.base_name, ".out", NULL);
+    char *out_path = g_build_filename(dir, out_filename, NULL);
+    g_free(out_filename);
+    g_free(dir);
+
+    g_print("DEBUG: Viewing output %s\n", out_path);
+    display_file_in_view(out_path);
+    g_free(out_path);
+    gtk_label_set_text(GTK_LABEL(status_label), "Output displayed.");
+}
+
+static void on_view_inp(GtkWidget *widget, gpointer user_data) {
+    if (!data.base_name || !data.input_filename) {
+        gtk_label_set_text(GTK_LABEL(status_label), "No input file generated yet.");
+        return;
+    }
+
+    char *dir = g_path_get_dirname(data.input_filename);
+    char *inp_filename = g_strconcat(data.base_name, ".inp", NULL);
+    char *inp_path = g_build_filename(dir, inp_filename, NULL);
+    g_free(inp_filename);
+    g_free(dir);
+
+    g_print("DEBUG: Viewing .inp %s\n", inp_path);
+    if (g_file_test(inp_path, G_FILE_TEST_EXISTS)) {
+        display_file_in_view(inp_path);
+        gtk_label_set_text(GTK_LABEL(status_label), "Input file displayed.");
+    } else {
+        gchar *msg = g_strdup_printf("File %s does not exist. Run DRVARMA first.", inp_path);
+        gtk_label_set_text(GTK_LABEL(status_label), msg);
+        g_free(msg);
+    }
+    g_free(inp_path);
+}
+
+static void on_quit(GtkWidget *widget, gpointer user_data) {
+    gtk_main_quit();
+}
+
+/* ---------- Callbacks for model option widgets ---------- */
+static void on_p_value_changed(GtkSpinButton *btn, gpointer user_data) {
+    opts.p = gtk_spin_button_get_value_as_int(btn);
+}
+static void on_q_value_changed(GtkSpinButton *btn, gpointer user_data) {
+    opts.q = gtk_spin_button_get_value_as_int(btn);
+}
+static void on_mean_toggled(GtkToggleButton *btn, gpointer user_data) {
+    opts.include_mean = gtk_toggle_button_get_active(btn) ? 1 : 0;
+}
+static void on_diagar_toggled(GtkToggleButton *btn, gpointer user_data) {
+    opts.diag_ar = gtk_toggle_button_get_active(btn) ? 1 : 0;
+}
+static void on_diagma_toggled(GtkToggleButton *btn, gpointer user_data) {
+    opts.diag_ma = gtk_toggle_button_get_active(btn) ? 1 : 0;
+}
+static void on_diagcov_toggled(GtkToggleButton *btn, gpointer user_data) {
+    opts.diag_cov = gtk_toggle_button_get_active(btn) ? 1 : 0;
+}
+static void on_method_exact_toggled(GtkToggleButton *btn, gpointer user_data) {
+    if (gtk_toggle_button_get_active(btn)) opts.method = 1;
+}
+static void on_method_approx_toggled(GtkToggleButton *btn, gpointer user_data) {
+    if (gtk_toggle_button_get_active(btn)) opts.method = 2;
+}
+static void on_twostep_toggled(GtkToggleButton *btn, gpointer user_data) {
+    opts.twostep = gtk_toggle_button_get_active(btn) ? 1 : 0;
+}
+static void on_exp_vol_toggled(GtkToggleButton *btn, gpointer user_data) {
+    opts.use_exp_vol = gtk_toggle_button_get_active(btn) ? 1 : 0;
+}
+static void on_exp_alpha_changed(GtkSpinButton *btn, gpointer user_data) {
+    opts.exp_alpha = gtk_spin_button_get_value(btn);
+}
+static void on_exp_window_changed(GtkSpinButton *btn, gpointer user_data) {
+    opts.exp_window = gtk_spin_button_get_value_as_int(btn);
+}
+static void on_mov_vol_toggled(GtkToggleButton *btn, gpointer user_data) {
+    opts.use_mov_vol = gtk_toggle_button_get_active(btn) ? 1 : 0;
+}
+static void on_mov_window_changed(GtkSpinButton *btn, gpointer user_data) {
+    opts.mov_window = gtk_spin_button_get_value_as_int(btn);
+}
+static void on_logs_toggled(GtkToggleButton *btn, gpointer user_data) {
+    opts.use_logs = gtk_toggle_button_get_active(btn) ? 1 : 0;
+}
+static void on_scale_factor_changed(GtkSpinButton *btn, gpointer user_data) {
+    opts.scale_factor = gtk_spin_button_get_value(btn);
+}
+static void on_diff_order_changed(GtkSpinButton *btn, gpointer user_data) {
+    opts.diff_order = gtk_spin_button_get_value_as_int(btn);
+}
+
+/* ---------- Build the main UI with GtkNotebook ---------- */
+static void create_ui(GtkApplication *app, gpointer user_data) {
+    main_window = gtk_application_window_new(app);
+    gtk_window_set_title(GTK_WINDOW(main_window), "DRVARMA - VARMA Estimation");
+    gtk_window_set_default_size(GTK_WINDOW(main_window), 1200, 800);
+    g_signal_connect(main_window, "destroy", G_CALLBACK(on_quit), NULL);
+
+    GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    gtk_container_set_border_width(GTK_CONTAINER(vbox), 10);
+    gtk_container_add(GTK_CONTAINER(main_window), vbox);
+
+    /* ----- Top bar: file loading and drvarma path ----- */
+    GtkWidget *hbox_file = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    gtk_box_pack_start(GTK_BOX(vbox), hbox_file, FALSE, FALSE, 0);
+
+    GtkWidget *btn_load = gtk_button_new_with_label("Load Data File");
+    g_signal_connect(btn_load, "clicked", G_CALLBACK(on_load_series), NULL);
+    gtk_box_pack_start(GTK_BOX(hbox_file), btn_load, FALSE, FALSE, 0);
+
+    status_label = gtk_label_new("No data loaded.");
+    gtk_box_pack_start(GTK_BOX(hbox_file), status_label, TRUE, TRUE, 0);
+
+    /* drvarma path */
+    GtkWidget *hbox_path = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    gtk_box_pack_start(GTK_BOX(vbox), hbox_path, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(hbox_path), gtk_label_new("drvarma executable:"), FALSE, FALSE, 0);
+    drv_path_entry = gtk_entry_new();
+    gtk_entry_set_text(GTK_ENTRY(drv_path_entry), opts.drv_path);
+    gtk_box_pack_start(GTK_BOX(hbox_path), drv_path_entry, TRUE, TRUE, 0);
+    GtkWidget *btn_browse = gtk_button_new_with_label("Browse...");
+    g_signal_connect(btn_browse, "clicked", G_CALLBACK(on_set_drv_path), NULL);
+    gtk_box_pack_start(GTK_BOX(hbox_path), btn_browse, FALSE, FALSE, 0);
+
+    /* ----- Notebook ----- */
+    GtkWidget *notebook = gtk_notebook_new();
+    gtk_box_pack_start(GTK_BOX(vbox), notebook, FALSE, FALSE, 0);
+
+    /* Page 1: Model */
+    GtkWidget *grid_model = gtk_grid_new();
+    gtk_grid_set_row_spacing(GTK_GRID(grid_model), 10);
+    gtk_grid_set_column_spacing(GTK_GRID(grid_model), 15);
+    gtk_container_set_border_width(GTK_CONTAINER(grid_model), 10);
+
+    int r = 0;
+    gtk_grid_attach(GTK_GRID(grid_model), gtk_label_new("AR order (p):"), 0, r, 1, 1);
+    GtkWidget *spin_p = gtk_spin_button_new_with_range(0, 10, 1);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(spin_p), opts.p);
+    g_signal_connect(spin_p, "value-changed", G_CALLBACK(on_p_value_changed), NULL);
+    gtk_grid_attach(GTK_GRID(grid_model), spin_p, 1, r, 1, 1);
+    r++;
+
+    gtk_grid_attach(GTK_GRID(grid_model), gtk_label_new("MA order (q):"), 0, r, 1, 1);
+    GtkWidget *spin_q = gtk_spin_button_new_with_range(0, 10, 1);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(spin_q), opts.q);
+    g_signal_connect(spin_q, "value-changed", G_CALLBACK(on_q_value_changed), NULL);
+    gtk_grid_attach(GTK_GRID(grid_model), spin_q, 1, r, 1, 1);
+    r++;
+
+    GtkWidget *check_mean = gtk_check_button_new_with_label("Include mean (-mean)");
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(check_mean), opts.include_mean);
+    g_signal_connect(check_mean, "toggled", G_CALLBACK(on_mean_toggled), NULL);
+    gtk_grid_attach(GTK_GRID(grid_model), check_mean, 0, r, 2, 1);
+    r++;
+
+    GtkWidget *check_twostep = gtk_check_button_new_with_label("Two-step initialisation (-twostep)");
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(check_twostep), opts.twostep);
+    g_signal_connect(check_twostep, "toggled", G_CALLBACK(on_twostep_toggled), NULL);
+    gtk_grid_attach(GTK_GRID(grid_model), check_twostep, 0, r, 2, 1);
+    r++;
+
+    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), grid_model, gtk_label_new("Model"));
+
+    /* Page 2: Matrix Structure */
+    GtkWidget *grid_matrix = gtk_grid_new();
+    gtk_grid_set_row_spacing(GTK_GRID(grid_matrix), 10);
+    gtk_grid_set_column_spacing(GTK_GRID(grid_matrix), 15);
+    gtk_container_set_border_width(GTK_CONTAINER(grid_matrix), 10);
+
+    r = 0;
+    GtkWidget *check_diagar = gtk_check_button_new_with_label("Diagonal AR (-diagar)");
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(check_diagar), opts.diag_ar);
+    g_signal_connect(check_diagar, "toggled", G_CALLBACK(on_diagar_toggled), NULL);
+    gtk_grid_attach(GTK_GRID(grid_matrix), check_diagar, 0, r++, 2, 1);
+
+    GtkWidget *check_diagma = gtk_check_button_new_with_label("Diagonal MA (-diagma)");
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(check_diagma), opts.diag_ma);
+    g_signal_connect(check_diagma, "toggled", G_CALLBACK(on_diagma_toggled), NULL);
+    gtk_grid_attach(GTK_GRID(grid_matrix), check_diagma, 0, r++, 2, 1);
+
+    GtkWidget *check_diagcov = gtk_check_button_new_with_label("Diagonal covariance (-diagcov)");
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(check_diagcov), opts.diag_cov);
+    g_signal_connect(check_diagcov, "toggled", G_CALLBACK(on_diagcov_toggled), NULL);
+    gtk_grid_attach(GTK_GRID(grid_matrix), check_diagcov, 0, r++, 2, 1);
+
+    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), grid_matrix, gtk_label_new("Matrix Structure"));
+
+    /* Page 3: Estimation */
+    GtkWidget *grid_est = gtk_grid_new();
+    gtk_grid_set_row_spacing(GTK_GRID(grid_est), 10);
+    gtk_grid_set_column_spacing(GTK_GRID(grid_est), 15);
+    gtk_container_set_border_width(GTK_CONTAINER(grid_est), 10);
+
+    r = 0;
+    gtk_grid_attach(GTK_GRID(grid_est), gtk_label_new("Method:"), 0, r, 1, 1);
+    GtkWidget *radio_exact = gtk_radio_button_new_with_label(NULL, "Exact (1)");
+    g_signal_connect(radio_exact, "toggled", G_CALLBACK(on_method_exact_toggled), NULL);
+    gtk_grid_attach(GTK_GRID(grid_est), radio_exact, 1, r, 1, 1);
+    GtkWidget *radio_approx = gtk_radio_button_new_with_label_from_widget(GTK_RADIO_BUTTON(radio_exact), "Approximate (2)");
+    g_signal_connect(radio_approx, "toggled", G_CALLBACK(on_method_approx_toggled), NULL);
+    gtk_grid_attach(GTK_GRID(grid_est), radio_approx, 2, r, 1, 1);
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(radio_exact), opts.method == 1);
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(radio_approx), opts.method == 2);
+    r++;
+
+    gtk_grid_attach(GTK_GRID(grid_est), gtk_label_new("(Executable path set above)"), 0, r++, 3, 1);
+
+    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), grid_est, gtk_label_new("Estimation"));
+
+    /* Page 4: Volatility */
+    GtkWidget *grid_vol = gtk_grid_new();
+    gtk_grid_set_row_spacing(GTK_GRID(grid_vol), 10);
+    gtk_grid_set_column_spacing(GTK_GRID(grid_vol), 15);
+    gtk_container_set_border_width(GTK_CONTAINER(grid_vol), 10);
+
+    r = 0;
+    GtkWidget *exp_check = gtk_check_button_new_with_label("Exponential volatility (-volexp)");
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(exp_check), opts.use_exp_vol);
+    g_signal_connect(exp_check, "toggled", G_CALLBACK(on_exp_vol_toggled), NULL);
+    gtk_grid_attach(GTK_GRID(grid_vol), exp_check, 0, r, 3, 1);
+    r++;
+
+    gtk_grid_attach(GTK_GRID(grid_vol), gtk_label_new("  Alpha:"), 0, r, 1, 1);
+    GtkWidget *exp_alpha_spin = gtk_spin_button_new_with_range(0.001, 0.5, 0.01);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(exp_alpha_spin), opts.exp_alpha);
+    g_signal_connect(exp_alpha_spin, "value-changed", G_CALLBACK(on_exp_alpha_changed), NULL);
+    gtk_grid_attach(GTK_GRID(grid_vol), exp_alpha_spin, 1, r, 1, 1);
+    r++;
+
+    gtk_grid_attach(GTK_GRID(grid_vol), gtk_label_new("  Window:"), 0, r, 1, 1);
+    GtkWidget *exp_win_spin = gtk_spin_button_new_with_range(1, 100, 1);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(exp_win_spin), opts.exp_window);
+    g_signal_connect(exp_win_spin, "value-changed", G_CALLBACK(on_exp_window_changed), NULL);
+    gtk_grid_attach(GTK_GRID(grid_vol), exp_win_spin, 1, r, 1, 1);
+    r++;
+
+    GtkWidget *mov_check = gtk_check_button_new_with_label("Moving volatility (-volmov)");
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(mov_check), opts.use_mov_vol);
+    g_signal_connect(mov_check, "toggled", G_CALLBACK(on_mov_vol_toggled), NULL);
+    gtk_grid_attach(GTK_GRID(grid_vol), mov_check, 0, r, 3, 1);
+    r++;
+
+    gtk_grid_attach(GTK_GRID(grid_vol), gtk_label_new("  Window:"), 0, r, 1, 1);
+    GtkWidget *mov_win_spin = gtk_spin_button_new_with_range(1, 100, 1);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(mov_win_spin), opts.mov_window);
+    g_signal_connect(mov_win_spin, "value-changed", G_CALLBACK(on_mov_window_changed), NULL);
+    gtk_grid_attach(GTK_GRID(grid_vol), mov_win_spin, 1, r, 1, 1);
+    r++;
+
+    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), grid_vol, gtk_label_new("Volatility"));
+
+    /* Page 5: Data Transformation */
+    GtkWidget *grid_trans = gtk_grid_new();
+    gtk_grid_set_row_spacing(GTK_GRID(grid_trans), 10);
+    gtk_grid_set_column_spacing(GTK_GRID(grid_trans), 15);
+    gtk_container_set_border_width(GTK_CONTAINER(grid_trans), 10);
+
+    r = 0;
+    GtkWidget *check_logs = gtk_check_button_new_with_label("Apply log transform");
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(check_logs), opts.use_logs);
+    g_signal_connect(check_logs, "toggled", G_CALLBACK(on_logs_toggled), NULL);
+    gtk_grid_attach(GTK_GRID(grid_trans), check_logs, 0, r++, 2, 1);
+
+    gtk_grid_attach(GTK_GRID(grid_trans), gtk_label_new("Scale factor:"), 0, r, 1, 1);
+    GtkWidget *scale_spin = gtk_spin_button_new_with_range(0.001, 1e6, 1.0);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(scale_spin), opts.scale_factor);
+    g_signal_connect(scale_spin, "value-changed", G_CALLBACK(on_scale_factor_changed), NULL);
+    gtk_grid_attach(GTK_GRID(grid_trans), scale_spin, 1, r, 1, 1);
+    r++;
+
+    gtk_grid_attach(GTK_GRID(grid_trans), gtk_label_new("Differencing order:"), 0, r, 1, 1);
+    GtkWidget *diff_spin = gtk_spin_button_new_with_range(0, 2, 1);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(diff_spin), opts.diff_order);
+    g_signal_connect(diff_spin, "value-changed", G_CALLBACK(on_diff_order_changed), NULL);
+    gtk_grid_attach(GTK_GRID(grid_trans), diff_spin, 1, r, 1, 1);
+    r++;
+
+    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), grid_trans, gtk_label_new("Data Transformation"));
+
+    /* ----- Action buttons (single row) ----- */
+    GtkWidget *hbox_actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    gtk_box_pack_start(GTK_BOX(vbox), hbox_actions, FALSE, FALSE, 0);
+
+    btn_run = gtk_button_new_with_label("Run DRVARMA");
+    g_signal_connect(btn_run, "clicked", G_CALLBACK(on_run), NULL);
+    gtk_box_pack_start(GTK_BOX(hbox_actions), btn_run, FALSE, FALSE, 0);
+    gtk_widget_set_sensitive(btn_run, FALSE);
+
+    GtkWidget *btn_view_out = gtk_button_new_with_label("View Output");
+    g_signal_connect(btn_view_out, "clicked", G_CALLBACK(on_view_output), NULL);
+    gtk_box_pack_start(GTK_BOX(hbox_actions), btn_view_out, FALSE, FALSE, 0);
+
+    GtkWidget *btn_view_inp = gtk_button_new_with_label("View .inp");
+    g_signal_connect(btn_view_inp, "clicked", G_CALLBACK(on_view_inp), NULL);
+    gtk_box_pack_start(GTK_BOX(hbox_actions), btn_view_inp, FALSE, FALSE, 0);
+
+    GtkWidget *btn_johansen = gtk_button_new_with_label("Johansen Test");
+    g_signal_connect(btn_johansen, "clicked", G_CALLBACK(on_johansen_test), NULL);
+    gtk_box_pack_start(GTK_BOX(hbox_actions), btn_johansen, FALSE, FALSE, 0);
+
+    GtkWidget *btn_varorder = gtk_button_new_with_label("Select VAR Order");
+    g_signal_connect(btn_varorder, "clicked", G_CALLBACK(on_select_var_order), NULL);
+    gtk_box_pack_start(GTK_BOX(hbox_actions), btn_varorder, FALSE, FALSE, 0);
+
+    GtkWidget *btn_quit = gtk_button_new_with_label("Quit");
+    g_signal_connect(btn_quit, "clicked", G_CALLBACK(on_quit), NULL);
+    gtk_box_pack_start(GTK_BOX(hbox_actions), btn_quit, FALSE, FALSE, 0);
+
+    /* ----- Output viewer (large) ----- */
+    GtkWidget *scrolled = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled),
+                                   GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+    gtk_box_pack_start(GTK_BOX(vbox), scrolled, TRUE, TRUE, 0);
+
+     text_view = gtk_text_view_new();
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(text_view), FALSE);
+    gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(text_view), GTK_WRAP_NONE);  // no wrapping
+
+    // Set monospace font via CSS
+    GtkCssProvider *provider = gtk_css_provider_new();
+    gtk_css_provider_load_from_data(provider,
+        "textview { font-family: monospace; }", -1, NULL);
+    gtk_style_context_add_provider(gtk_widget_get_style_context(text_view),
+                                   GTK_STYLE_PROVIDER(provider),
+                                   GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    g_object_unref(provider);
+
+    gtk_container_add(GTK_CONTAINER(scrolled), text_view);
+
+    gtk_widget_show_all(main_window);
+}
+
+/* ---------- main ---------- */
+int main(int argc, char *argv[]) {
+    setlocale(LC_ALL, "C");
+
+#ifdef _WIN32
+    // Obtener la ruta del directorio que contiene el ejecutable
+    wchar_t wpath[MAX_PATH];
+    GetModuleFileNameW(NULL, wpath, MAX_PATH);
+    char *exe_path = g_utf16_to_utf8(wpath, -1, NULL, NULL, NULL);
+    char *exe_dir = g_path_get_dirname(exe_path);
+    g_free(exe_path);
+
+    // Construir rutas absolutas para los recursos
+    char *data_dir = g_build_filename(exe_dir, "share", NULL);
+    char *pixbuf_cache = g_build_filename(exe_dir, "lib", "gdk-pixbuf-2.0", "2.10.0", "loaders.cache", NULL);
+    char *schema_dir = g_build_filename(exe_dir, "share", "glib-2.0", "schemas", NULL);
+
+    // Establecer variables de entorno
+    g_setenv("XDG_DATA_DIRS", data_dir, TRUE);
+    g_setenv("GDK_PIXBUF_MODULE_FILE", pixbuf_cache, TRUE);
+    g_setenv("GSETTINGS_SCHEMA_DIR", schema_dir, TRUE);
+    // Opcional: usar backend memory si los esquemas no son críticos
+    // g_setenv("GSETTINGS_BACKEND", "memory", TRUE);
+    g_setenv("GTK_THEME", "Windows", TRUE);  // Tema básico
+
+    g_free(data_dir);
+    g_free(pixbuf_cache);
+    g_free(schema_dir);
+    g_free(exe_dir);
+#endif
+
+
+    GtkApplication *app = gtk_application_new("org.example.drvarmagui", G_APPLICATION_DEFAULT_FLAGS);
+    g_signal_connect(app, "activate", G_CALLBACK(create_ui), NULL);
+    int status = g_application_run(G_APPLICATION(app), argc, argv);
+    g_object_unref(app);
+
+    /* Clean up data */
+    if (data.data) {
+        for (int i = 0; i < data.n_obs; i++) g_free(data.data[i]);
+        g_free(data.data);
+    }
+    if (data.input_filename) g_free(data.input_filename);
+    if (data.base_name) g_free(data.base_name);
+    return status;
+}

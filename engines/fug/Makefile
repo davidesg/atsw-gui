@@ -1,4 +1,5 @@
-# FUG 1.15 - the engine (fug) and its GUI (gtk_fmg) from one source tree,
+# FUG 1.15 - el motor. Su GUI (gtk_fmg) esta en gui/fug y tiene su propio
+# Makefile: se separaron al montar atsw-gui, y el GUI paso a GTK3.
 # for Linux, macOS and Windows
 #
 #   make                 fug and, if the GTK 2 development files are installed, gtk_fmg
@@ -34,16 +35,6 @@ SRC = src/fug.c src/diagnose.c src/delop.c src/nlutils.c src/port.c \
       ../../lib/fugdraw/fugdraw.c ../../lib/fugplot/fugplot.c src/inpfile.c
 HDR = src/fug.h src/delop.h src/port.h ../../lib/fugdraw/fugdraw.h ../../lib/fugplot/fugplot.h ../../lib/fugdraw/fd_metrics.h src/inpfile.h src/plothost.h
 
-GUI_SRC = ../../gui/fug/src/main.c ../../gui/fug/src/callbacks.c ../../gui/fug/src/data_load.c ../../gui/fug/src/nlutils.c \
-          ../../gui/fug/src/fug_run.c ../../gui/fug/src/preview.c ../../lib/fugdraw/fugdraw.c src/inpfile.c
-GUI_HDR = ../../gui/fug/include/callbacks.h ../../gui/fug/include/data_load.h ../../gui/fug/include/fug_run.h \
-          ../../gui/fug/include/gui.h ../../gui/fug/include/nlutils.h ../../gui/fug/include/preview.h \
-          ../../lib/fugdraw/fugdraw.h ../../lib/fugdraw/fd_metrics.h src/inpfile.h
-GUI_CFLAGS ?= -O2 -Wall -Wno-deprecated-declarations
-GUI_INC     = -I../../gui/fug/include -Isrc -I../../lib/fugdraw
-
-GTK_CFLAGS := $(shell pkg-config --cflags gtk+-2.0 2>/dev/null)
-GTK_LIBS   := $(shell pkg-config --libs gtk+-2.0 2>/dev/null)
 
 ifeq ($(OS),Windows_NT)
   EXE = .exe
@@ -53,7 +44,7 @@ endif
 ifneq ($(GTK_LIBS),)
   ALL = fug$(EXE) gtk_fmg$(EXE)
 else
-  ALL = fug$(EXE) no-gtk
+  ALL = fug$(EXE) 
 endif
 
 all: $(ALL)
@@ -65,15 +56,6 @@ endif
 
 fug$(EXE): $(SRC) $(HDR)
 	$(CC) $(CFLAGS) -std=c99 -o $@ $(SRC) $(LDLIBS)
-
-gtk_fmg$(EXE): $(GUI_SRC) $(GUI_HDR)
-	@if [ -z "$(GTK_LIBS)" ]; then \
-	    echo "The GUI needs the GTK 2 development files (Debian/Ubuntu: sudo apt install libgtk2.0-dev)"; \
-	    exit 1; fi
-	$(CC) $(GUI_CFLAGS) $(GTK_CFLAGS) $(GUI_INC) $(GUI_LDFLAGS) -o $@ $(GUI_SRC) $(GTK_LIBS) -lm
-
-no-gtk:
-	@echo "Note: only fug was built; gtk_fmg needs the GTK 2 development files (libgtk2.0-dev)."
 
 windows: fug.exe
 	@if [ -x "$(MXE_CC)" ]; then $(MAKE) --no-print-directory gtk_fmg.exe; \
@@ -106,4 +88,4 @@ clean:
 	rm -f fug fug.exe gtk_fmg gtk_fmg.exe gspawn-win32-helper.exe gspawn-win32-helper-console.exe
 	rm -rf tests/work tests/gui/work
 
-.PHONY: all gui no-gtk windows check check-gui install clean
+.PHONY: all gui  windows check check-gui install clean

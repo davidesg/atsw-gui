@@ -55,16 +55,11 @@ for f in "$RAIZ"/lib/*/*.c; do
     base=$(basename "$f")
     otras=$(find "$RAIZ/engines" "$RAIZ/gui" -name "$base" -not -path "*/obj/*" 2>/dev/null)
 
-    # Excepciones CONOCIDAS, con su razon y su fecha de caducidad. Una
-    # excepcion escrita es mejor que un guardian en rojo permanente, que es
-    # como se aprende a ignorarlo.
-    case "$base:$otras" in
-      preview.c:*gui/fug/src/preview.c*)
-        echo "  pendiente $base  tambien en gui/fug/src (GTK2)"
-        echo "            la de lib/ es esa misma portada a GTK3 y ampliada con"
-        echo "            zoom y lupa. Se va cuando fug se porte -- paso 2 del plan."
-        continue ;;
-    esac
+    # Aqui irian las excepciones conocidas, con su razon. Hubo una --la copia
+    # GTK2 de preview.c en gui/fug-- y duro lo que tardo fug en portarse a
+    # GTK3. Una excepcion escrita es mejor que un guardian en rojo permanente,
+    # que es como se aprende a ignorarlo; y una excepcion que caduca es mejor
+    # todavia.
 
     if [ -z "$otras" ]; then
         echo "  ok        $base"

@@ -189,7 +189,7 @@ static gboolean replace_input(AppWidgets *app, const gchar *path, InputStatus st
         ? "fug and fue share the .inp file. If it is replaced with the series shown, "
           "the fue model is lost. Choose another input name to keep it."
         : "Replace it with the series shown?");
-    gtk_dialog_add_buttons(GTK_DIALOG(dialog), GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
+    gtk_dialog_add_buttons(GTK_DIALOG(dialog), "_Cancel", GTK_RESPONSE_CANCEL,
                            "_Replace", GTK_RESPONSE_ACCEPT, NULL);
     gtk_dialog_set_default_response(GTK_DIALOG(dialog), GTK_RESPONSE_CANCEL);
     gtk_window_set_title(GTK_WINDOW(dialog), "FUG");

@@ -161,10 +161,12 @@ static void set_busy(AppWidgets *app, gboolean busy)
     GdkWindow *window = gtk_widget_get_window(app->window);
 
     if (busy) {
-        GdkCursor *cursor = gdk_cursor_new(GDK_WATCH);
+        /* En GTK3 el cursor se pide al display, y se libera con g_object_unref */
+        GdkCursor *cursor = gdk_cursor_new_for_display(gdk_display_get_default(),
+                                                       GDK_WATCH);
         if (window != NULL)
             gdk_window_set_cursor(window, cursor);
-        gdk_cursor_unref(cursor);
+        if (cursor != NULL) g_object_unref(cursor);
         gtk_widget_set_sensitive(app->window, FALSE);
     }
     /* Clicks made while fug runs reach an insensitive window: dropped */

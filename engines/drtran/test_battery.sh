@@ -24,6 +24,14 @@
 set -uo pipefail
 
 DRTRAN="./bin/drtran"
+# La ruta ABSOLUTA del motor, para los casos que tienen que correr desde otro
+# directorio (el informe LaTeX: pdflatex escribe en su cwd). Concatenar $(pwd)
+# con $DRTRAN solo funciona si $DRTRAN es relativo, y deja de funcionar en
+# cuanto alguien apunta la bateria a un drtran instalado.
+case "$DRTRAN" in
+    /*) DRTRAN_ABS="$DRTRAN" ;;
+    *)  DRTRAN_ABS="$(pwd)/$DRTRAN" ;;
+esac
 WORK="tests/cases"     # los .pre de trabajo viven aquí; examples/ es solo ilustrativo
 SYN="tests/data"
 PASS=0; FAIL=0
@@ -1112,7 +1120,7 @@ python3 -c "import sys; sys.exit(0 if abs($WS1-8.30)<0.05 else 1)" 2>/dev/null \
 # --- INFORME LaTeX/PDF (-L): tabla + el MODULO GRAFICO de fuf (forecast_graphic) ---
 # Se corre DENTRO de $TMPDIR (pdflatex escribe en su cwd) con rutas absolutas.
 RD_2j=$(pwd)
-( cd "$TMPDIR" && "$RD_2j/$DRTRAN" "$RD_2j/$WORK/ES_CPI_m10.pre" "$RD_2j/$WORK/WTI_ar1.pre" \
+( cd "$TMPDIR" && "$DRTRAN_ABS" "$RD_2j/$WORK/ES_CPI_m10.pre" "$RD_2j/$WORK/WTI_ar1.pre" \
       -0 -f 12 -m fcx -L -o fcx.out >/dev/null 2>&1 )
 { [ -f "$TMPDIR/fcx_forecast.tex" ] && grep -q "tabular" "$TMPDIR/fcx_forecast.tex"; } \
     && pass "-L escribe el .tex con la tabla de previsión" \

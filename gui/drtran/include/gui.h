@@ -7,6 +7,7 @@
 
 #include <gtk/gtk.h>
 #include "series.h"
+#include "netfile.h"
 
 #define IDENT_MAX_LAGS 64
 
@@ -27,6 +28,19 @@ typedef struct {
     int        df;
 } Ident;
 
+/* La pantalla de la red: el .dag. El motor resuelve el sistema por recursion
+ * en orden topologico, asi que la red decide si el modelo se puede estimar.
+ * Un ciclo no es un error de sintaxis: es un sistema simultaneo, y ese es de
+ * drvarma, no de aqui.                                                    */
+typedef struct {
+    GtkWidget *lista;         /* los enlaces                                */
+    GtkWidget *veredicto;     /* aciclica y su orden, o el ciclo por su nombre */
+
+    NetLink    lnk[NET_MAX_LINK];
+    int        n;
+    gchar     *path;          /* de donde se leyo, o donde se guardo        */
+} Red;
+
 typedef struct {
     GtkWidget *ventana_p;     /* la ventana principal                       */
     GtkWidget *lista;         /* las series, en orden                       */
@@ -34,10 +48,15 @@ typedef struct {
     GtkWidget *compat;        /* la compatibilidad de operadores            */
     GtkWidget *estado;        /* la barra de abajo                          */
     Conjunto   c;             /* las series cargadas                        */
+    Red        red;           /* la pantalla de la red                      */
     Ident      id;            /* la pantalla de identificacion              */
 } Mtram;
 
 GtkWidget *mtram_window_new(GtkApplication *app, Mtram *m);
+
+/* red.c */
+GtkWidget *red_pagina_new(Mtram *m);
+void       red_refresca(Mtram *m);
 
 /* identifica.c */
 GtkWidget *identifica_pagina_new(Mtram *m);

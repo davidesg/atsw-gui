@@ -50,3 +50,4 @@ gui/*/engine/
 gui/drtran/mtram
 gui/fue/gtk_fue
 gui/fug/gtk_fug
+gui/drtran/tests/work/

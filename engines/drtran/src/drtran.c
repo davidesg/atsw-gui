@@ -24,6 +24,7 @@
 #include "main.h"
 #include "dates.h"
 #include "prewhiten.h"
+#include "netfile.h"
 #include "drtran.h"
 #include "fue_pre_reader.h"
 #include "forecast.h"
@@ -2346,73 +2347,50 @@ static void build_default_links(void)
     }
 }
 
-static int series_index(const char *tok)
+/* series_index, read_network y topo_sort viven en lib/netfile: el GUI tiene que
+   leer y validar EXACTAMENTE el mismo .dag, y la unica forma de garantizarlo es
+   que sea el mismo codigo. Lo que queda aqui es el trasvase de los globales.  */
+
+static void net_names(const char **nombre)
 {
     int i;
-    char *end;
-    long v = strtol(tok, &end, 10);
+    for (i = 1; i <= n_ser; i++) nombre[i] = Ts[i].name;
+}
 
-    if (*end == '\0' && v >= 1 && v <= n_ser) return (int)v;
+/* Lo usa tambien el lector de agregados. */
+static int series_index(const char *tok)
+{
+    const char *nombre[MAX_SER + 1];
 
-    for (i = 1; i <= n_ser; i++)
-        if (Ts[i].name && strcasecmp(Ts[i].name, tok) == 0) return i;
-    return 0;
+    net_names(nombre);
+    return net_series_index(nombre, n_ser, tok);
 }
 
 static int read_network(const char *path)
 {
-    FILE *f = fopen(path, "r");
-    char line[256];
-    int  nl = 0;
+    const char *nombre[MAX_SER + 1];
+    NetLink     tmp[MAX_LINK];
+    NetError    e;
+    char        why[512];
+    int         n, k;
 
-    if (f == NULL) {
-        fprintf(stderr, "Error: cannot open the network file %s\n", path);
+    net_names(nombre);
+    n = net_read(path, nombre, n_ser, tmp,
+                 MAX_LINK < NET_MAX_LINK ? MAX_LINK : NET_MAX_LINK, &e);
+    if (n < 0) {
+        fprintf(stderr, "Error: %s\n", net_error_en(&e, why, sizeof why));
         return -1;
     }
 
-    n_link = 0;
-    while (fgets(line, sizeof line, f)) {
-        char lhs[64], arrow[8], rhs[64];
-        int  b, r, sO, io, ii;
-        char *h = strchr(line, '#');
-        if (h) *h = '\0';
-        if (sscanf(line, "%63s %7s %63s %d %d %d",
-                   lhs, arrow, rhs, &b, &r, &sO) != 6) {
-            int only_ws = 1; char *c;
-            for (c = line; *c; c++) if (!isspace((unsigned char)*c)) only_ws = 0;
-            if (only_ws) continue;
-            fprintf(stderr, "Error: bad line in %s: %s", path, line);
-            fclose(f); return -1;
-        }
-        if (strcmp(arrow, "<-") != 0) {
-            fprintf(stderr, "Error: expected '<-' in %s, found '%s'\n", path, arrow);
-            fclose(f); return -1;
-        }
-        io = series_index(lhs);
-        ii = series_index(rhs);
-        if (io == 0 || ii == 0) {
-            fprintf(stderr, "Error: unknown series in %s: '%s <- %s'\n",
-                    path, lhs, rhs);
-            fclose(f); return -1;
-        }
-        if (io == ii) {
-            fprintf(stderr, "Error: a series cannot feed itself (%s)\n", lhs);
-            fclose(f); return -1;
-        }
-        if (n_link >= MAX_LINK) {
-            fprintf(stderr, "Error: too many links (max %d)\n", MAX_LINK);
-            fclose(f); return -1;
-        }
-        n_link++;
-        lnk[n_link].out = io;
-        lnk[n_link].inp = ii;
-        lnk[n_link].b   = b;
-        lnk[n_link].r   = r;
-        lnk[n_link].s   = sO;
-        nl++;
+    n_link = n;
+    for (k = 0; k < n; k++) {
+        lnk[k + 1].out = tmp[k].out;
+        lnk[k + 1].inp = tmp[k].inp;
+        lnk[k + 1].b   = tmp[k].b;
+        lnk[k + 1].r   = tmp[k].r;
+        lnk[k + 1].s   = tmp[k].s;
     }
-    fclose(f);
-    return nl;
+    return n;
 }
 
 /* Fichero de agregados:  NOMBRE = + SERIE - SERIE ...
@@ -2480,34 +2458,25 @@ static int read_aggregates(const char *path)
 
 /* Orden topologico: una serie solo se puede construir (y prever) despues de
    TODAS las que la alimentan. Si hay un ciclo el sistema es simultaneo y no se
-   puede resolver restando transferencias: hay que decirlo, no estimar basura. */
+   puede resolver restando transferencias: hay que decirlo, no estimar basura.
+   La cuenta esta en lib/netfile (net_topo); aqui solo el trasvase.         */
 static int topo_sort(void)
 {
-    int indeg[MAX_SER + 1], i, k, nt = 0, changed;
-    char done[MAX_SER + 1];
+    NetLink tmp[MAX_LINK];
+    int     k;
 
-    for (i = 1; i <= n_ser; i++) { indeg[i] = 0; done[i] = 0; }
-    for (k = 1; k <= n_link; k++) indeg[lnk[k].out]++;
-
-    do {
-        changed = 0;
-        for (i = 1; i <= n_ser; i++) {
-            if (done[i] || indeg[i] > 0) continue;
-            topo[++nt] = i;
-            done[i] = 1;
-            changed = 1;
-            for (k = 1; k <= n_link; k++)
-                if (lnk[k].inp == i) indeg[lnk[k].out]--;
-        }
-    } while (changed);
-
-    if (nt < n_ser) {
-        fprintf(stderr, "Error: the transfer network has a CYCLE: the system is\n"
-                        "       simultaneous and cannot be cast as a triangular\n"
-                        "       VARMA by subtracting transfers.\n");
-        return 0;
+    for (k = 1; k <= n_link; k++) {
+        tmp[k - 1].out = lnk[k].out;
+        tmp[k - 1].inp = lnk[k].inp;
+        tmp[k - 1].b = lnk[k].b; tmp[k - 1].r = lnk[k].r; tmp[k - 1].s = lnk[k].s;
     }
-    return 1;
+
+    if (net_topo(tmp, n_link, n_ser, topo)) return 1;
+
+    fprintf(stderr, "Error: the transfer network has a CYCLE: the system is\n"
+                    "       simultaneous and cannot be cast as a triangular\n"
+                    "       VARMA by subtracting transfers.\n");
+    return 0;
 }
 
 static void print_network(FILE *out)

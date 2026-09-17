@@ -18,11 +18,12 @@ ENG = ../../engines/drtran
 
 # diagnose.c entra por Ccf, Mean, Stdev y hosking_test: el estadistico de la
 # identificacion es el que ya calcula el motor, no uno parecido.
-SRC = src/main.c src/main_window.c src/series.c src/identifica.c \
+SRC = src/main.c src/main_window.c src/series.c src/identifica.c src/red.c \
       $(ENG)/src/fue_pre_reader.c \
       $(ENG)/src/nlatools.c \
       $(ENG)/src/diagnose.c \
       $(LIB)/prewhiten/prewhiten.c \
+      $(LIB)/netfile/netfile.c \
       $(LIB)/ccfplot/ccfplot.c \
       $(LIB)/fugdraw/fugdraw.c \
       $(LIB)/equation/eqtran.c \
@@ -33,7 +34,7 @@ SRC = src/main.c src/main_window.c src/series.c src/identifica.c \
 HDR = include/gui.h include/series.h include/previewhost.h
 
 INC = -Iinclude -I$(ENG)/include \
-      -I$(LIB)/dates -I$(LIB)/prewhiten -I$(LIB)/ccfplot -I$(LIB)/fugdraw \
+      -I$(LIB)/dates -I$(LIB)/prewhiten -I$(LIB)/netfile -I$(LIB)/ccfplot -I$(LIB)/fugdraw \
       -I$(LIB)/equation -I$(LIB)/preview -I$(LIB)/utils -I$(LIB)/inpcheck
 
 GTK_CFLAGS := $(shell pkg-config --cflags gtk+-3.0 2>/dev/null)

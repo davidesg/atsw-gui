@@ -36,3 +36,37 @@ if [ -f "$C/ES_CPI_airline.pre" ] && [ -f "$C/WTI_ar1.pre" ]; then
 else
     echo "no encuentro los .pre de la prueba en $C"
 fi
+
+# --- el .dag: la red -------------------------------------------------------
+# Que el GUI y el motor LEAN igual lo garantiza compartir lib/netfile. Que lo
+# que el GUI ESCRIBE lo lea el motor hay que preguntarselo al motor.
+echo
+$CC -O2 -Wall -Wextra -I"$L/netfile" \
+    "$L/netfile/test_netfile.c" "$L/netfile/netfile.c" \
+    -o "$W/test_netfile" || exit 1
+
+DAG="$E/tests/data/m6/m6_net.dag"
+if [ -f "$DAG" ]; then
+    "$W/test_netfile" "$DAG" "$W/reescrita.dag" || exit 1
+
+    M6D="$E/tests/data/m6"
+    if [ -x "$E/bin/drtran" ] && [ -f "$M6D/M6_EP.pre" ]; then
+        for f in "$DAG" "$W/reescrita.dag"; do
+            ( cd "$W" && "$E/bin/drtran" "$M6D/M6_EP.pre" "$M6D/M6_EI.pre" \
+                 "$M6D/M6_EC.pre" "$M6D/M6_EU.pre" -n "$f" \
+                 -o "$W/$(basename $f).out" >/dev/null 2>&1 )
+        done
+        a=$(sed -n '/Transfer network/,/^$/p' "$W/$(basename $DAG).out" 2>/dev/null)
+        b=$(sed -n '/Transfer network/,/^$/p' "$W/reescrita.dag.out" 2>/dev/null)
+        if [ -n "$a" ] && [ "$a" = "$b" ]; then
+            echo "  el motor lee la red reescrita y da la MISMA               ok"
+        else
+            echo "  el motor lee la red reescrita y da la MISMA               FALLA"
+            echo "--- original ---"; echo "$a"
+            echo "--- reescrita ---"; echo "$b"
+            exit 1
+        fi
+    else
+        echo "  (sin bin/drtran o sin los .pre del m6: no compruebo el motor)"
+    fi
+fi

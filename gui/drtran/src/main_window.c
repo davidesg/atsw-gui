@@ -150,6 +150,7 @@ static void refresca(Mtram *m)
     refresca_lista(m);
     refresca_ventana(m);
     refresca_compat(m);
+    red_refresca(m);
     identifica_refresca(m);
 }
 
@@ -351,7 +352,12 @@ GtkWidget *mtram_window_new(GtkApplication *app, Mtram *m)
     gtk_widget_set_margin_bottom(m->estado, 4);
     gtk_box_pack_start(GTK_BOX(raiz), m->estado, FALSE, FALSE, 0);
 
-    /* --- la identificacion --- */
+    /* --- la red, y la identificacion --- */
+    /* El orden de las pestañas es el orden del metodo: que series hay, como se
+     * enlazan, y que forma tiene cada enlace. Ninguna se bloquea: cada una
+     * pide por su nombre lo que la anterior fabrica.                      */
+    gtk_notebook_append_page(GTK_NOTEBOOK(libro), red_pagina_new(m),
+                             gtk_label_new("Red"));
     gtk_notebook_append_page(GTK_NOTEBOOK(libro), identifica_pagina_new(m),
                              gtk_label_new("Identificación"));
 

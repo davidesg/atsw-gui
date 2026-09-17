@@ -38,7 +38,7 @@ else
 endif
 
 # Compiler and basic flags
-CFLAGS   = -O2 -g -Wall -Iinclude -I../../lib/fugdraw
+CFLAGS   = -O2 -g -Wall -Iinclude -I../../lib/fugdraw -I../../lib/preview -I../../lib/engine -I../../lib/outfile -I../../lib/utils -I../../lib/inpcheck -I$(ENG_DIR)/fue/include
 LDFLAGS  +=
 LIBS     = -lm
 
@@ -56,10 +56,21 @@ BIN_DIR   = bin
 # La biblioteca compartida. fugdraw.c es el mismo fichero en los cuatro
 # programas -- byte a byte -- y por eso vive en lib/ y no aqui.
 LIB_DIR  = ../../lib
-LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c
+LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c \
+           $(LIB_DIR)/preview/preview.c \
+           $(LIB_DIR)/engine/engine.c \
+           $(LIB_DIR)/outfile/outfile.c \
+           $(LIB_DIR)/utils/utils.c
+
+# inpcheck NO se copia: se compila el fichero del motor, renombrando la
+# funcion al vuelo. Es la misma que corre el motor, por construccion, y no
+# la copia de la misma -- que fue lo que divergio y dejo al GUI cargando un
+# fichero que le destruia el monton.
+ENG_DIR  = ../../engines
 
 SRCS = $(wildcard $(SRC_DIR)/*.c)
 OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS)) \
+       $(BUILD_DIR)/inpcheck_fue.o $(BUILD_DIR)/inpcheck_fuf.o \
        $(patsubst $(LIB_DIR)/%.c,$(BUILD_DIR)/lib_%.o,$(LIB_SRCS))
 
 # Executable name
@@ -105,9 +116,31 @@ $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 
 # Compile each source file
+$(BUILD_DIR)/inpcheck_fue.o: $(ENG_DIR)/fue/src/inpcheck.c $(LIB_DIR)/inpcheck/inpcheck.h | $(BUILD_DIR)
+	$(CC) $(GUI_CFLAGS) -Dinp_check=inp_check_fue -c $< -o $@
+
+$(BUILD_DIR)/inpcheck_fuf.o: $(ENG_DIR)/fuf/src/inpcheck.c $(LIB_DIR)/inpcheck/inpcheck.h | $(BUILD_DIR)
+	$(CC) $(GUI_CFLAGS) -I$(ENG_DIR)/fuf/include -Dinp_check=inp_check_fuf -c $< -o $@
+
+$(BUILD_DIR)/lib_preview/%.o: $(LIB_DIR)/preview/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(GUI_CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/lib_engine/%.o: $(LIB_DIR)/engine/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(GUI_CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/lib_outfile/%.o: $(LIB_DIR)/outfile/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(GUI_CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/lib_utils/%.o: $(LIB_DIR)/utils/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(GUI_CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/lib_fugdraw/%.o: $(LIB_DIR)/fugdraw/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
-	$(CC) $(ALL_CFLAGS) -c $< -o $@
+	$(CC) $(GUI_CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
 	$(CC) $(GUI_CFLAGS) -c $< -o $@
@@ -155,16 +188,16 @@ help:
 	@echo "  (Ensure the MXE toolchain is in PATH and PKG_CONFIG_PATH is set)"
 
 # Header dependencies (explicit)
-$(BUILD_DIR)/data_handling.o: include/data_handling.h include/fue_globals.h include/file_io.h include/model_spec.h include/utils.h
-$(BUILD_DIR)/deterministic_dialog.o: include/deterministic_dialog.h include/fue_globals.h include/utils.h
-$(BUILD_DIR)/file_io.o: include/file_io.h include/fue_globals.h include/model_spec.h include/utils.h include/forecast_tab.h
+$(BUILD_DIR)/data_handling.o: include/data_handling.h include/fue_globals.h include/file_io.h include/model_spec.h $(LIB_DIR)/utils/utils.h
+$(BUILD_DIR)/deterministic_dialog.o: include/deterministic_dialog.h include/fue_globals.h $(LIB_DIR)/utils/utils.h
+$(BUILD_DIR)/file_io.o: include/file_io.h include/fue_globals.h include/model_spec.h $(LIB_DIR)/utils/utils.h include/forecast_tab.h
 $(BUILD_DIR)/forecast_tab.o: include/forecast_tab.h include/fue_globals.h
 $(BUILD_DIR)/main.o: include/main_window.h include/fue_globals.h include/data_handling.h include/model_spec.h include/deterministic_dialog.h include/operator_dialog.h include/file_io.h
 $(BUILD_DIR)/main_window.o: include/main_window.h include/fue_globals.h include/data_handling.h include/model_spec.h include/file_io.h include/deterministic_dialog.h include/operator_dialog.h include/forecast_tab.h
 $(BUILD_DIR)/model_globals.o: include/fue_globals.h include/nlutils.h
 $(BUILD_DIR)/model_spec.o: include/model_spec.h include/fue_globals.h
 $(BUILD_DIR)/nlutils.o: include/nlutils.h
-$(BUILD_DIR)/operator_dialog.o: include/operator_dialog.h include/fue_globals.h include/deterministic_dialog.h include/model_spec.h include/utils.h
-$(BUILD_DIR)/utils.o: include/utils.h
+$(BUILD_DIR)/operator_dialog.o: include/operator_dialog.h include/fue_globals.h include/deterministic_dialog.h include/model_spec.h $(LIB_DIR)/utils/utils.h
+$(BUILD_DIR)/utils.o: $(LIB_DIR)/utils/utils.h
 
 .PHONY: all gui check clean distclean install uninstall help

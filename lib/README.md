@@ -39,6 +39,75 @@ programa** — 28 líneas en fue, 15 en fug. Es lo que cada uno tiene que aporta
 `struct Tseries`, `vector()`, `Acf()`, `Pacf()`, `ChiTest()` y los
 estadísticos. La misma forma que `previewhost.h` tiene para `preview.c`.
 
+## `preview/` — la ventana de gráficos
+
+Muestra lo que `fugdraw` escribe, con **zoom** y con una **lupa** estilo `gv`
+para mirar un incidente en los datos. Exporta a PDF, EPS, PNG y SVG, imprime, y
+lleva una tabla global `ruta → ventana` para no abrir dos veces el mismo
+fichero.
+
+Lo que cada programa tiene que aportar vive en **su** `previewhost.h`, y son
+tres cosas: un `typedef` del contexto, `preview_open_external()` y
+`preview_show_status()`. La cabecera de `gui/fue/include/previewhost.h` ya
+decía que esto iba a pasar:
+
+> *«When the two are factored into a library this is the header that stays
+> different.»*
+
+**Queda una copia, en `gui/fug`, y es deliberado**: es GTK2, y ésta es esa
+misma portada a GTK3 y ampliada. Se va cuando fug se porte — paso 2 del plan.
+`conformidad/copias.sh` lo lleva anotado como excepción con su razón.
+
+## `engine/` — correr un motor sin shell
+
+`engine_run()` y `engine_run_async()`, con barra de progreso por iteración. Los
+motores se lanzan **directamente, nunca por un shell**: un nombre de serie con
+un espacio, una comilla o un punto y coma acababa en `/bin/sh`.
+
+Traduce el estado de salida a un mensaje —0 escrito, 1 línea de órdenes, 2
+`.inp` inválido, 3 no estimable pero escrito con los valores iniciales, 4 error
+en ejecución— y distingue «hay ficheros» de «salió bien».
+
+## `outfile/` — cómo acabó la estimación
+
+Lee el `.out` y dice si convergió **de verdad**. Importa porque el motor
+escribe `"CONVERGENCE OBTAINED"` para los cinco criterios de parada, **también
+cuando lo que pasó fue que se acabaron las iteraciones**. Aquí se separan los
+dos que son convergencia (gradtol, steptol) de los tres que son una parada sin
+más.
+
+Depende sólo de `qnewtopt.c`, que es **el mismo optimizador en fue, fuf y
+drtran**. Entra en un GUI de drtran sin tocar una línea.
+
+## `utils/` — formato y nombres
+
+`inp_format()` escribe un número de modo que **vuelva a leerse exactamente
+igual** —prueba de 6 decimales en adelante y se queda con el primero que
+cumple—, que es lo que arregló que el GUI le quitara cifras a los datos del
+usuario. Y `token_name()` frente a `single_token()`: el nombre de un fichero y
+el nombre dentro del `.inp` no tienen las mismas reglas — ahí `PE/PU` es
+legítimo y sólo el espacio está prohibido.
+
+## `inpcheck/` — y por qué aquí sólo está la cabecera
+
+**`inpcheck.c` no se copia.** El GUI compila **el fichero del motor**,
+renombrando la función al vuelo:
+
+    $(CC) -Dinp_check=inp_check_fue -c ../../engines/fue/src/inpcheck.c
+
+La única razón del fork era la colisión de nombres —`inp_check` se llama igual
+en fue y en fuf— y un `-D` la resuelve sin duplicar nada. Así que es
+literalmente el mismo código que corre el motor, **por construcción y no por
+vigilancia**.
+
+Aquí sólo está `inpcheck.h`, que es la vista de los dos dialectos que cualquier
+GUI necesita.
+
+Esto importa más que las otras piezas porque es la que **ya divergió**: se
+arregló una cota en el motor y no la copia, y el GUI se quedó cargando un
+fichero que le destruía el montón. `conformidad/copias.sh`, que antes vigilaba
+esa copia, comprueba ahora lo contrario: que nadie vuelva a hacer una.
+
 ## Cómo se usa
 
 En el `Makefile` del programa:
@@ -65,7 +134,4 @@ Por orden de facilidad:
 
 | pieza | dónde está | estado |
 |---|---|---|
-| `preview.c` | `gui/fue` (1496), `gui/fug` (1154) | **divergidas**, y en dos toolkits; la de fue es la de fug portada a GTK3 y ampliada con zoom y lupa. Su `previewhost.h` ya dice en su cabecera que la factorización estaba prevista |
-| `engine.c`, `outfile.c`, `utils.c` | `gui/fue` | copia única: traerlos es preparación, no desduplicación |
-| `inpcheck_*.c` | `gui/fue` + los motores | copias vigiladas por `conformidad/copias.sh` |
 | `nlatools.c` | los siete programas | **NO por ahora.** Siete copias vivas separadas entre 13 y 80 líneas. Son primos cercanos —drtran y drvarma difieren en 13 líneas de 1106— pero es el núcleo numérico y tocarlo mueve números. La mudanza tiene que preservar el comportamiento; reconciliar numéricas no lo preserva |

@@ -20,7 +20,7 @@
  * fugdraw and back.
  */
 
-#include "../src/preview.c"
+#include "preview.c"
 
 /* What the program gives the window; there is no window here, so these
  * have to exist.                                                         */

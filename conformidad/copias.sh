@@ -1,52 +1,93 @@
-#!/bin/bash
-# copias.sh -- las copias de inpcheck tienen que seguir siendo copias.
+#!/bin/sh
+# copias.sh -- que no vuelva a haber copias.
 #
-#     bash copias.sh   (usa sustitucion de procesos: no es POSIX sh)
+#     sh copias.sh
 #
-# gtk_fue.09/src/inpcheck_fue.c es fue-1.14/src/inpcheck.c copiado, y
-# gtk_fue.09/src/inpcheck_fuf.c es el de fuf-1.09. Lo unico que cambia es el
-# nombre de la funcion, que alli es inp_check en los dos y aqui tiene que
-# distinguirlos.
+# Antes este guion comparaba la copia de inpcheck.c del GUI con la del motor y
+# avisaba si habian divergido. Hacia falta, y sirvio: divergieron -- se arreglo
+# una cota en el motor y no la copia, y el GUI se quedo cargando un fichero que
+# le destruia el monton.
 #
-# Esa identidad no es estetica: es lo UNICO que garantiza que el GUI acepte
-# exactamente lo que el motor acepta. En cuanto divergen, el GUI carga
-# ficheros que el motor rechaza, o rechaza los que acepta, y en los dos casos
-# el usuario se entera tarde.
+# Desde que existe lib/, ya no hay copia que comparar. El GUI compila EL
+# FICHERO DEL MOTOR, renombrando la funcion al vuelo:
 #
-# Ya paso: el motor gano la cota de 10 deterministas no estandar y la copia se
-# quedo sin ella, asi que el GUI seguia cargando un fichero que le destruia el
-# monton. Lo destapo acuerdo.sh, de rebote. Esto lo dice de frente.
+#     $(CC) -Dinp_check=inp_check_fue -c ../../engines/fue/src/inpcheck.c
 #
-# Los limites PROPIOS del GUI --sus vectores estaticos son mas pequenos que
-# los del motor-- no van aqui: viven en inp_fits_gui() (gtk_fue/src/utils.c),
+# de modo que es literalmente el mismo codigo, por construccion y no por
+# vigilancia. La unica razon del fork era la colision de nombres --inp_check en
+# fue y en fuf-- y un -D la resuelve sin duplicar nada.
+#
+# Asi que lo que se comprueba ahora es lo contrario: que nadie haya vuelto a
+# copiar. Es mas barato de mantener y no puede dar un falso verde.
+#
+# Los limites PROPIOS del GUI --sus vectores estaticos son mas pequenos que los
+# del motor-- siguen sin ir aqui: viven en inp_fits_gui() (lib/utils/utils.c),
 # que es su puerta y no la compartida.
 
 TOP=$(cd "$(dirname "$0")" && pwd)
-GUI=${GUI:-$TOP/../../gtk_fue.09}
-FUE=${FUE:-$TOP/../fue/fue-1.14}
-FUF=${FUF:-$TOP/../fuf/fuf-1.09}
+RAIZ=$(cd "$TOP/.." && pwd)
 
 malas=0
 
-comprueba() {
-    copia=$1; original=$2; funcion=$3
+# ---------------------------------------------------------------------------
+# 1. inpcheck.c solo puede estar en los motores
+# ---------------------------------------------------------------------------
+echo "inpcheck:"
+for f in $(find "$RAIZ" -name "inpcheck*.c" -not -path "*/obj/*" 2>/dev/null); do
+    rel=${f#$RAIZ/}
+    case "$rel" in
+        engines/*/src/inpcheck.c)
+            echo "  ok        $rel" ;;
+        *)
+            echo "  COPIA     $rel"
+            echo "            deberia compilarse del motor con -Dinp_check=..."
+            malas=$((malas + 1)) ;;
+    esac
+done
 
-    if [ ! -f "$copia" ]    ; then echo "no esta $copia";    malas=$((malas+1)); return; fi
-    if [ ! -f "$original" ] ; then echo "no esta $original"; malas=$((malas+1)); return; fi
+# ---------------------------------------------------------------------------
+# 2. lo que esta en lib/ no puede estar tambien dentro de un programa
+# ---------------------------------------------------------------------------
+echo
+echo "lo de lib/:"
+for f in "$RAIZ"/lib/*/*.c; do
+    [ -f "$f" ] || continue
+    base=$(basename "$f")
+    otras=$(find "$RAIZ/engines" "$RAIZ/gui" -name "$base" -not -path "*/obj/*" 2>/dev/null)
 
-    if diff -q "$original" \
-            <(sed "s/$funcion/inp_check/g" "$copia") > /dev/null 2>&1; then
-        echo "ok        $(basename "$copia")  ==  $(cd "$(dirname "$original")" && pwd)/$(basename "$original")"
+    # Excepciones CONOCIDAS, con su razon y su fecha de caducidad. Una
+    # excepcion escrita es mejor que un guardian en rojo permanente, que es
+    # como se aprende a ignorarlo.
+    case "$base:$otras" in
+      preview.c:*gui/fug/src/preview.c*)
+        echo "  pendiente $base  tambien en gui/fug/src (GTK2)"
+        echo "            la de lib/ es esa misma portada a GTK3 y ampliada con"
+        echo "            zoom y lupa. Se va cuando fug se porte -- paso 2 del plan."
+        continue ;;
+    esac
+
+    if [ -z "$otras" ]; then
+        echo "  ok        $base"
     else
+        echo "  COPIA     $base  tambien en:"
+        echo "$otras" | sed "s#$RAIZ/#              #"
         malas=$((malas + 1))
-        echo "DIVERGEN  $(basename "$copia")  y  $(cd "$(dirname "$original")" && pwd)/$(basename "$original")"
-        diff "$original" <(sed "s/$funcion/inp_check/g" "$copia") | sed 's/^/          /' | head -30
     fi
-}
+done
 
-comprueba "$GUI/src/inpcheck_fue.c" "$FUE/src/inpcheck.c" inp_check_fue
-comprueba "$GUI/src/inpcheck_fuf.c" "$FUF/src/inpcheck.c" inp_check_fuf
+# ---------------------------------------------------------------------------
+# 3. nlatools / nlutils: aqui TODAVIA hay copias, y es a proposito
+# ---------------------------------------------------------------------------
+echo
+echo "nlatools / nlutils  (copias conocidas -- ver lib/README.md):"
+find "$RAIZ/engines" "$RAIZ/gui" \( -name "nlatools.c" -o -name "nlutils.c" \) \
+     -not -path "*/obj/*" 2>/dev/null | while read -r f; do
+    printf '  %-10s %5s lineas  %s\n' "$(md5sum "$f" | cut -c1-8)" \
+           "$(wc -l < "$f")" "${f#$RAIZ/}"
+done
+echo "  son el nucleo numerico: tocarlas mueve numeros, y no entran en la"
+echo "  biblioteca hasta que la bateria pueda medir el cambio."
 
 echo
-[ $malas = 0 ] && echo "las copias estan al dia" || echo "$malas copia(s) fuera de fecha"
-[ $malas = 0 ]
+if [ "$malas" = 0 ]; then echo "no hay copias indebidas"; else echo "$malas copia(s) que no deberian estar"; fi
+[ "$malas" = 0 ]

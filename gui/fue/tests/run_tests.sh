@@ -14,6 +14,15 @@
 # which is not assumed here.
 
 TOP=$(cd "$(dirname "$0")/.." && pwd)
+# La biblioteca compartida y los dos inpcheck, que NO son copias: se compila
+# el fichero del motor renombrando la funcion, asi que es literalmente el
+# mismo que corre el motor.
+LIB="$TOP/../../lib"
+ENG="$TOP/../../engines"
+LIB_SRCS="$LIB/preview/preview.c $LIB/engine/engine.c $LIB/outfile/outfile.c $LIB/utils/utils.c $LIB/fugdraw/fugdraw.c"
+LIB_INC="-I$LIB/preview -I$LIB/engine -I$LIB/outfile -I$LIB/utils -I$LIB/fugdraw -I$LIB/inpcheck -I$ENG/fue/include"
+WORK_EARLY="${WORK:-$TOP/tests/work}"
+
 WORK="$TOP/tests/work"
 CC=${CC:-gcc}
 
@@ -23,9 +32,16 @@ GTK_LIBS=$(pkg-config --libs   gtk+-3.0 2>/dev/null)
 
 rm -rf "$WORK"; mkdir -p "$WORK" || exit 1
 
-$CC -O0 -g -Wall -I"$TOP/include" $GTK_CFLAGS \
-    "$TOP/tests/test_units.c" "$TOP/src/engine.c" "$TOP/src/utils.c" \
-    "$TOP/src/inpcheck_fue.c" "$TOP/src/inpcheck_fuf.c" "$TOP/src/outfile.c" \
+mkdir -p "$WORK_EARLY"
+INPCHECK_O="$WORK_EARLY/inpcheck_fue.o $WORK_EARLY/inpcheck_fuf.o"
+$CC -O0 -g -w -I"$TOP/include" $LIB_INC $GTK_CFLAGS -Dinp_check=inp_check_fue \
+    -c "$ENG/fue/src/inpcheck.c" -o "$WORK_EARLY/inpcheck_fue.o" || exit 1
+$CC -O0 -g -w -I"$TOP/include" -I"$ENG/fuf/include" $LIB_INC $GTK_CFLAGS \
+    -Dinp_check=inp_check_fuf -c "$ENG/fuf/src/inpcheck.c" \
+    -o "$WORK_EARLY/inpcheck_fuf.o" || exit 1
+
+$CC -O0 -g -Wall -I"$TOP/include" $LIB_INC $GTK_CFLAGS \
+    "$TOP/tests/test_units.c" $LIB/engine/engine.c $LIB/utils/utils.c $LIB/outfile/outfile.c $INPCHECK_O \
     -o "$WORK/test_units" $GTK_LIBS -lm || exit 1
 
 PATH="$TOP/tests/fake:$PATH" "$WORK/test_units" "$TOP/data"
@@ -37,9 +53,8 @@ rc=$?
 # mismo codigo que usa la ventana. La tinta tiene que caer donde se dibujo,
 # y los dos caminos tienen que dar la misma imagen.
 # --------------------------------------------------------------------------
-$CC -O0 -g -Wall -I"$TOP/include" $GTK_CFLAGS \
-    "$TOP/tests/test_preview.c" "$TOP/src/fugdraw.c" "$TOP/src/utils.c" \
-    "$TOP/src/inpcheck_fue.c" "$TOP/src/inpcheck_fuf.c" \
+$CC -O0 -g -Wall -I"$TOP/include" $LIB_INC $GTK_CFLAGS \
+    "$TOP/tests/test_preview.c" $LIB/fugdraw/fugdraw.c $LIB/utils/utils.c $INPCHECK_O \
     -o "$WORK/test_preview" $GTK_LIBS -lm || exit 1
 
 pv_fail=0
@@ -82,8 +97,8 @@ ok=$(echo "$ink" | awk -v c=$half '{ cx=($1+$2)/2; cy=($3+$4)/2;
 # Comprueba lo que el usuario acaba viendo. Hace falta un servidor grafico;
 # si no lo hay, se salta.
 # --------------------------------------------------------------------------
-GUI_SRCS=$(ls "$TOP"/src/*.c | grep -v '/main\.c$')
-$CC -O0 -g -Wall -I"$TOP/include" $GTK_CFLAGS \
+GUI_SRCS="$(ls "$TOP"/src/*.c | grep -v '/main\.c$') $LIB_SRCS $INPCHECK_O"
+$CC -O0 -g -Wall -I"$TOP/include" $LIB_INC $GTK_CFLAGS \
     "$TOP/tests/test_gui.c" $GUI_SRCS \
     -o "$WORK/test_gui" $GTK_LIBS -lm 2> "$WORK/gui_build.txt" ||
     { cat "$WORK/gui_build.txt"; exit 1; }
@@ -92,7 +107,7 @@ $CC -O0 -g -Wall -I"$TOP/include" $GTK_CFLAGS \
 # El editor del .inp: Edit, tocar el texto, Save, Run -- y que lo editado
 # siga ahi cuando el motor lo lee.
 # --------------------------------------------------------------------------
-$CC -O0 -g -Wall -I"$TOP/include" $GTK_CFLAGS \
+$CC -O0 -g -Wall -I"$TOP/include" $LIB_INC $GTK_CFLAGS \
     "$TOP/tests/test_editor.c" $GUI_SRCS \
     -o "$WORK/test_editor" $GTK_LIBS -lm 2> "$WORK/ed_build.txt" ||
     { cat "$WORK/ed_build.txt"; exit 1; }

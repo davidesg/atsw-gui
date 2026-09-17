@@ -1,0 +1,30 @@
+# Build artifacts
+obj/
+bin/
+
+# Old/archived versions
+old/
+
+# Tests
+tests/work/
+
+# Generated data and output files
+data/*.pdf
+data/*.log
+data/*.aux
+data/*.out
+data/*.pre
+data/*.tex
+data/*.eps
+data/forecast_*.inp
+
+# Packages
+*.zip
+*.tar.xz
+
+# Editor and OS files
+*~
+.DS_Store
+*.swp
+*.kate-swp
+*.bak

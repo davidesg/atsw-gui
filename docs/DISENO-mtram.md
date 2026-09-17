@@ -268,10 +268,10 @@ Cada una fabrica lo que la siguiente pide. **Ninguna se bloquea.**
 | 3 | **Identificación** | salida + entrada con sus `.pre` | (b, r, s) y el veredicto de exogeneidad | ✔ |
 | 4 | **Modelo** (`.cns`) | los órdenes propuestos | la especificación, con banderas fijo/libre | ✔ |
 | 5 | **Estimación** | un `.cns` completo | el `.out`, y los residuos **de este modelo** | ✔ |
-| 6 | **Diagnosis** | residuos | el veredicto, con la batería de identificación | |
+| 6 | **Diagnosis** | residuos | el veredicto, con la batería de identificación | ✔ |
 | 7 | **Previsión** | un modelo estimado y diagnosticado | las previsiones y su evaluación | |
 
-Estado hoy: **1 a 5 hechas**. Faltan diagnosis y previsión.
+Estado hoy: **1 a 6 hechas**. Falta la previsión.
 
 De la 2 salió una lección que vale para las que quedan. Al sacar el lector del
 `.dag` a `lib/netfile` puse su mensaje de error en español, y la batería del
@@ -296,6 +296,19 @@ como programa**:
   tolerancia y longitud de paso (`TFEST.PAS:295-300`); drtran los tiene clavados
   en `drtran.c:3256-3257`. Se **enseñan** como el criterio de parada que rige, y
   no se ofrece una casilla que no llega a ningún sitio.
+
+La 6 confirmó §1.7 y §2.4 de golpe. **El motor ya hacía la diagnosis entera**,
+y con la lectura pegada al gráfico que §1.4 pedía: histograma con observado
+contra esperado, ACF con el Ljung-Box escalonado. Así que la pantalla no
+recalcula nada — **lee el `.out`** y lo convierte en un veredicto. Y los
+residuos son los de *esa* corrida, que es la corrección obligada a la única
+cosa verdaderamente mala del diseño de TASTE.
+
+Lo que se pone delante es el veredicto **por enlace**, porque son dos
+diagnósticos opuestos que se arreglan de forma opuesta (k ≥ 0 → cambiar
+(b, r, s); k < 0 → quitar el enlace o subir al VARMA). En el m6, dos de los
+cuatro enlaces no son adecuados y los cuatro pasan la exogeneidad: si la
+pantalla mezclara los dos contrastes, ese caso se leería mal.
 
 Y un principio que la 2 estrena y las siguientes heredan: **lo que el GUI
 escribe se le pregunta al motor.** Que los dos *lean* igual lo garantiza

@@ -366,6 +366,8 @@ GtkWidget *mtram_window_new(GtkApplication *app, Mtram *m)
                              gtk_label_new("Modelo"));
     gtk_notebook_append_page(GTK_NOTEBOOK(libro), estima_pagina_new(m),
                              gtk_label_new("Estimación"));
+    gtk_notebook_append_page(GTK_NOTEBOOK(libro), diagnosis_pagina_new(m),
+                             gtk_label_new("Diagnosis"));
 
     return w;
 }

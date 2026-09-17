@@ -18,7 +18,7 @@ ENG = ../../engines/drtran
 
 # diagnose.c entra por Ccf, Mean, Stdev y hosking_test: el estadistico de la
 # identificacion es el que ya calcula el motor, no uno parecido.
-SRC = src/main.c src/main_window.c src/series.c src/identifica.c src/red.c src/modelo.c src/estima.c \
+SRC = src/main.c src/main_window.c src/series.c src/identifica.c src/red.c src/modelo.c src/estima.c src/diagnosis.c \
       $(ENG)/src/fue_pre_reader.c \
       $(ENG)/src/nlatools.c \
       $(ENG)/src/diagnose.c \
@@ -26,6 +26,7 @@ SRC = src/main.c src/main_window.c src/series.c src/identifica.c src/red.c src/m
       $(LIB)/netfile/netfile.c \
       $(LIB)/slots/slots.c \
       $(LIB)/verdict/verdict.c \
+      $(LIB)/outdiag/outdiag.c \
       $(LIB)/engine/engine.c \
       $(LIB)/ccfplot/ccfplot.c \
       $(LIB)/fugdraw/fugdraw.c \
@@ -37,7 +38,7 @@ SRC = src/main.c src/main_window.c src/series.c src/identifica.c src/red.c src/m
 HDR = include/gui.h include/series.h include/previewhost.h
 
 INC = -Iinclude -I$(ENG)/include \
-      -I$(LIB)/dates -I$(LIB)/prewhiten -I$(LIB)/netfile -I$(LIB)/slots -I$(LIB)/verdict -I$(LIB)/engine -I$(LIB)/ccfplot -I$(LIB)/fugdraw \
+      -I$(LIB)/dates -I$(LIB)/prewhiten -I$(LIB)/netfile -I$(LIB)/slots -I$(LIB)/verdict -I$(LIB)/outdiag -I$(LIB)/engine -I$(LIB)/ccfplot -I$(LIB)/fugdraw \
       -I$(LIB)/equation -I$(LIB)/preview -I$(LIB)/utils -I$(LIB)/inpcheck
 
 GTK_CFLAGS := $(shell pkg-config --cflags gtk+-3.0 2>/dev/null)

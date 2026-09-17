@@ -328,6 +328,12 @@ static void on_done( const EngineResult *r, gpointer data )
 
     cuenta_desenlace( m, r );
 
+    /* Los residuos son DE ESTA CORRIDA: la diagnosis se alimenta aqui y no
+     * de un sitio global. Es la correccion a lo unico verdaderamente malo
+     * del diseño de TASTE -- una sola ranura RESIDUOS, que hacia imposible
+     * comparar dos modelos.                                            */
+    diagnosis_desde( m, E->out_path );
+
     if (r->status == ENGINE_NORUN)
         preview_show_status( m, "No pude lanzar drtran. ¿Está en el PATH? "
                                 "(make install en engines/drtran)" );

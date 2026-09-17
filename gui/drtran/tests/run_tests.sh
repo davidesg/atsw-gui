@@ -143,3 +143,18 @@ if [ -x "$E/bin/drtran" ] && [ -f "$M6D/M6_EP.pre" ]; then
         exit 1
     fi
 fi
+
+# --- la diagnosis: leer el .out que el motor acaba de escribir --------------
+# Es un lector de TEXTO FORMATEADO, fragil por naturaleza: el motor no emite
+# nada legible por maquina. Por eso se prueba contra el .out que la seccion
+# anterior acaba de generar, no contra uno guardado.
+echo
+$CC -O2 -Wall -Wextra -I"$L/outdiag" \
+    "$L/outdiag/test_outdiag.c" "$L/outdiag/outdiag.c" \
+    -o "$W/test_outdiag" -lm || exit 1
+
+if [ -f "$W/est.out" ]; then
+    "$W/test_outdiag" "$W/est.out" || exit 1
+else
+    echo "  (sin est.out: no compruebo la diagnosis)"
+fi

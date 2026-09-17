@@ -10,6 +10,7 @@
 #include "netfile.h"
 #include "slots.h"
 #include "verdict.h"
+#include "outdiag.h"
 
 #define IDENT_MAX_LAGS 64
 
@@ -72,6 +73,18 @@ typedef struct {
     VerdictInfo v;
 } Estima;
 
+/* La pantalla de diagnosis. Los residuos son los de ESTA corrida: TASTE tenia
+ * una sola ranura 'RESIDUOS' (TASTECTV.PAS:475) y por eso no se podian comparar
+ * dos modelos. Aqui cada .out trae los suyos.                            */
+typedef struct {
+    GtkWidget *lista;         /* los contrastes, uno por linea              */
+    GtkWidget *veredicto;     /* que hay que hacer con esto                 */
+
+    Diagnosis  d;
+    gboolean   vale;
+    gchar     *path;          /* el .out del que salio                      */
+} Diag;
+
 typedef struct {
     GtkWidget *ventana_p;     /* la ventana principal                       */
     GtkWidget *lista;         /* las series, en orden                       */
@@ -83,6 +96,7 @@ typedef struct {
     Ident      id;            /* la pantalla de identificacion              */
     Modelo     mod;           /* la pantalla del modelo                     */
     Estima     est;           /* la pantalla de estimacion                  */
+    Diag       dia;           /* la pantalla de diagnosis                   */
 } Mtram;
 
 GtkWidget *mtram_window_new(GtkApplication *app, Mtram *m);
@@ -98,6 +112,11 @@ void       modelo_refresca(Mtram *m);
 /* estima.c */
 GtkWidget *estima_pagina_new(Mtram *m);
 void       estima_refresca(Mtram *m);
+
+/* diagnosis.c */
+GtkWidget *diagnosis_pagina_new(Mtram *m);
+void       diagnosis_refresca(Mtram *m);
+void       diagnosis_desde(Mtram *m, const char *path);
 
 /* identifica.c */
 GtkWidget *identifica_pagina_new(Mtram *m);

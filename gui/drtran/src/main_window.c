@@ -152,6 +152,7 @@ static void refresca(Mtram *m)
     refresca_compat(m);
     red_refresca(m);
     identifica_refresca(m);
+    modelo_refresca(m);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -360,6 +361,8 @@ GtkWidget *mtram_window_new(GtkApplication *app, Mtram *m)
                              gtk_label_new("Red"));
     gtk_notebook_append_page(GTK_NOTEBOOK(libro), identifica_pagina_new(m),
                              gtk_label_new("Identificación"));
+    gtk_notebook_append_page(GTK_NOTEBOOK(libro), modelo_pagina_new(m),
+                             gtk_label_new("Modelo"));
 
     return w;
 }

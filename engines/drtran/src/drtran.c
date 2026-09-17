@@ -25,6 +25,7 @@
 #include "dates.h"
 #include "prewhiten.h"
 #include "netfile.h"
+#include "slots.h"
 #include "drtran.h"
 #include "fue_pre_reader.h"
 #include "forecast.h"
@@ -2735,115 +2736,57 @@ static void usage(const char *prog)
 /*     omega1[0] = omega2[0]       # compartir entre entradas                  */
 /*     omega2[1] = 0.0             # fijar                                     */
 /* -------------------------------------------------------------------------- */
-#define MAX_SLOT    400
-#define SLOT_FREE    0
-#define SLOT_FIXED   1
-#define SLOT_ALIAS   2
-#define SLOT_PRODUCT 3   /* x = y * z : el coeficiente ES un producto de otros dos */
-#define SLOT_LINCOMB 4   /* x = [±]t1 [±]t2 ... : suma de terminos (ti = slot o slot*slot) */
-#define MAX_LC_TERMS 6   /* terminos por combinacion lineal (basta para m6)              */
+#define MAX_LC_TERMS SLOT_LC_TERMS
+#define MAX_SLOT     SLOT_MAX
 
-static char slot_name[MAX_SLOT + 1][40];
-static int  slot_kind[MAX_SLOT + 1];
-static int  slot_alias[MAX_SLOT + 1];
-static real slot_value[MAX_SLOT + 1];
-static int  slot_pa[MAX_SLOT + 1], slot_pb[MAX_SLOT + 1];  /* operandos del PRODUCTO */
-static int  slot_nlc[MAX_SLOT + 1];                        /* nº de terminos (LINCOMB) */
-static real slot_lc_sign[MAX_SLOT + 1][MAX_LC_TERMS];      /* +1/-1 por termino        */
-static int  slot_lc_a[MAX_SLOT + 1][MAX_LC_TERMS];         /* factor 1 de cada termino */
-static int  slot_lc_b[MAX_SLOT + 1][MAX_LC_TERMS];         /* factor 2 (0 = sin producto) */
-static int  free_of_slot[MAX_SLOT + 1];   /* slot -> índice libre (0 si no)  */
-static int  slot_of_free[MAX_SLOT + 1];   /* índice libre -> slot            */
-static int  n_slot = 0, n_free = 0;
-static real xfull[MAX_SLOT + 1];          /* la estructura completa          */
+/* La tabla de slots vive en lib/slots: la construye slots_build y el .cns lo
+   lee cns_read, las mismas que usa el GUI. Lo que queda aqui son los NOMBRES:
+   estos macros hacen que los 66 puntos de uso de abajo --el optimizador, el
+   informe, resolve_slots-- no cambien una sola letra.                       */
+static SlotTable ST;
 
-static void add_slot(const char *fmt, ...)
-{
-    va_list ap;
-    if (n_slot >= MAX_SLOT) return;
-    n_slot++;
-    va_start(ap, fmt);
-    vsnprintf(slot_name[n_slot], sizeof slot_name[0], fmt, ap);
-    va_end(ap);
-    slot_kind[n_slot]  = SLOT_FREE;
-    slot_alias[n_slot] = 0;
-    slot_value[n_slot] = 0.0;
-    slot_pa[n_slot]    = 0;
-    slot_pb[n_slot]    = 0;
-    slot_nlc[n_slot]   = 0;
-}
+#define slot_name    ST.name
+#define slot_kind    ST.kind
+#define slot_alias   ST.alias
+#define slot_value   ST.value
+#define slot_pa      ST.pa
+#define slot_pb      ST.pb
+#define slot_nlc     ST.nlc
+#define slot_lc_sign ST.lc_sign
+#define slot_lc_a    ST.lc_a
+#define slot_lc_b    ST.lc_b
+#define n_slot       ST.n
 
-/* Nombres de los factores ARMA, en el MISMO orden que pack_ar/ma_factors */
-static void add_arma_slots(struct Tusmodel *Tmi, int i, int is_ar)
-{
-    const char *sym = is_ar ? "phi" : "theta";
-    int Num1 = is_ar ? Tmi->NumAr1  : Tmi->NumMa1;
-    int Num2 = is_ar ? Tmi->NumAr2  : Tmi->NumMa2;
-    int Numf = is_ar ? Tmi->NumAr1f : Tmi->NumMa1f;
-    int *o1 = is_ar ? Tmi->p1 : Tmi->q1;
-    int *o2 = is_ar ? Tmi->p2 : Tmi->q2;
-    int **f1 = is_ar ? Tmi->Ia1  : Tmi->Im1;
-    int **f2 = is_ar ? Tmi->Ia2  : Tmi->Im2;
-    int  *ff = is_ar ? Tmi->Ia1f : Tmi->Im1f;
-    int  *fr = is_ar ? Tmi->pfre1 : Tmi->qfre1;
-    int k, j;
+static int find_slot(const char *name) { return slots_find(&ST, name); }
 
-    for (k = 1; k <= Num1; k++)
-        for (j = 1; j <= o1[k]; j++)
-            if (f1[k][j] == 1) add_slot("%s_%d[B^%d]", sym, i, j);
-    for (k = 1; k <= Num2; k++)
-        for (j = 1; j <= o2[k]; j++)
-            if (f2[k][j] == 1) add_slot("%s_%d[B^%d]", sym, i, j * Tmi->sper);
-    for (k = 1; k <= Numf; k++)
-        if (ff[k] == 1) add_slot("%s_%d[f=%d]", sym, i, fr[k]);
-}
-
-/* Construye la tabla de slots EN EL MISMO ORDEN que el vector de parámetros */
+/* Los envoltorios que trasvasan los globales del motor. */
 static void build_slots(void)
 {
-    int i, j, k;
+    NetLink tmp[MAX_LINK];
+    SlotFix fix;
+    int     k;
 
-    n_slot = 0;
-
-    for (j = 1; j <= n_link; j++) {
-        for (k = 0; k <= lnk[j].s; k++) add_slot("omega%d[%d]", j, k);
-        for (k = 1; k <= lnk[j].r; k++) add_slot("delta%d[%d]", j, k);
+    for (k = 1; k <= n_link; k++) {
+        tmp[k - 1].out = lnk[k].out;  tmp[k - 1].inp = lnk[k].inp;
+        tmp[k - 1].b = lnk[k].b;  tmp[k - 1].r = lnk[k].r;  tmp[k - 1].s = lnk[k].s;
     }
-    for (i = 1; i <= n_ser; i++) {
-        if (fix_arma[i]) continue;
-        add_arma_slots(&Tm[i], i, 1);
-        add_arma_slots(&Tm[i], i, 0);
-    }
-    for (i = 1; i <= n_ser; i++) {
-        int iv, kk;
-        if (fix_det[i]) continue;
-        for (iv = 1; iv <= Tm[i].NdetVar; iv++) {
-            for (kk = 0; kk <= Tm[i].Nomega[iv]; kk++)
-                if (Tm[i].Imega[iv][kk] == 1)
-                    add_slot("omega_d%d[%d,%d]", i, iv, kk);
-            for (kk = 1; kk <= Tm[i].Ndelta[iv]; kk++)
-                if (Tm[i].Ielta[iv][kk] == 1)
-                    add_slot("delta_d%d[%d,%d]", i, iv, kk);
-        }
-    }
-    for (i = 1; i <= n_ser; i++)
-        if (!fix_mu[i]) add_slot("mu[%d]", i);
-    for (i = 2; i <= n_ser; i++)
-        add_slot("log(var%d/var1)", i);
-
-    /* Covarianzas de las innovaciones. Van SIEMPRE al mapa, pero FIJAS EN CERO:
-       la covarianza diagonal es el caso por defecto, y liberar una covarianza es
-       una decision del analista, no algo que se active en bloque. m6-1 no libera
-       las 15 de su sistema: libera TRES (sigma42, sigma62, sigma54). El fichero
-       de restricciones lo dice en el mismo sitio y con el mismo lenguaje que
-       todo lo demas:   q[4,2] = free                                          */
-    for (i = 2; i <= n_ser; i++)
-        for (j = 1; j < i; j++) {
-            add_slot("q[%d,%d]", i, j);
-            slot_kind[n_slot]  = SLOT_FIXED;
-            slot_value[n_slot] = 0.0;
-        }
+    fix.arma = fix_arma;  fix.det = fix_det;  fix.mu = fix_mu;
+    slots_build(&ST, Tm, n_ser, tmp, n_link, &fix);
 }
+
+static int read_constraints(const char *path)
+{
+    CnsError e;
+    char     why[512];
+    int      nc = cns_read(path, &ST, &e);
+
+    if (nc < 0) fprintf(stderr, "Error: %s\n", cns_error_en(&e, why, sizeof why));
+    return nc;
+}
+static int  free_of_slot[MAX_SLOT + 1];   /* slot -> índice libre (0 si no)  */
+static int  slot_of_free[MAX_SLOT + 1];   /* índice libre -> slot            */
+static int  n_free = 0;      /* n_slot es ST.n, ver los macros de arriba */
+static real xfull[MAX_SLOT + 1];          /* la estructura completa          */
 
 static int find_slot(const char *name);
 
@@ -2892,172 +2835,6 @@ static void warn_contemp_collinear(FILE *out)
     }
 }
 
-static int find_slot(const char *name)
-{
-    int i;
-    for (i = 1; i <= n_slot; i++)
-        if (strcmp(slot_name[i], name) == 0) return i;
-    return 0;
-}
-
-/* Lee el fichero de restricciones:
-     NOMBRE = NOMBRE   compartir (un solo grado de libertad en varios sitios)
-     NOMBRE = valor    fijar
-     NOMBRE = free     liberar (las covarianzas q[i,j] nacen fijas en cero)
-   Comentarios con '#'.                                                       */
-static int read_constraints(const char *path)
-{
-    FILE *f = fopen(path, "r");
-    char line[256];
-    int nc = 0;
-
-    if (f == NULL) {
-        fprintf(stderr, "Error opening constraints file: %s\n", path);
-        return -1;
-    }
-
-    while (fgets(line, sizeof line, f)) {
-        char lhs[64], rhs[64], rhsfull[128];
-        char *hash = strchr(line, '#');
-        char *star;
-        int a, b;
-        double v;
-
-        if (hash) *hash = '\0';
-        if (sscanf(line, " %63[^= \t] = %127[^\n]", lhs, rhsfull) != 2) continue;
-
-        a = find_slot(lhs);
-        if (a == 0) {
-            fprintf(stderr, "Error: unknown parameter '%s' in %s\n", lhs, path);
-            fclose(f);
-            return -1;
-        }
-
-        /* COMBINACION LINEAL:  x = [±]t1 [±]t2 ...  con ti = slot o slot*slot.
-           Generaliza el PRODUCTO a sumas/diferencias de terminos.  Cubre el factor
-           FIJO (1−B) de una FLT — que impone nu_num(1)=0, i.e. omega[0]=omega[1]+
-           omega[2]+... — y los coeficientes producto±termino de un numerador
-           factorizado (p.ej. x12*x14 − x13 del legacy).  Se detecta por un
-           separador +/- interno (los nombres de slot no llevan +/-).  El gradiente
-           lo capta cdgrad por diferencias finitas, como el producto.              */
-        {
-            char *q = rhsfull;
-            int   is_lc = 0;
-            while (*q == ' ' || *q == '\t') q++;
-            if (*q == '+' || *q == '-') q++;          /* signo inicial: no separa */
-            for (; *q; q++) if (*q == '+' || *q == '-') { is_lc = 1; break; }
-            if (is_lc) {
-                char *p = rhsfull;
-                real  sg = 1.0;
-                int   nt = 0, ok = 1;
-                while (*p) {
-                    char tok[80], f1[64], f2[64], *st, *ast;
-                    while (*p == ' ' || *p == '\t') p++;
-                    if (*p == '+') { sg =  1.0; p++; continue; }
-                    if (*p == '-') { sg = -1.0; p++; continue; }
-                    if (!*p) break;
-                    st = tok;                          /* leer termino hasta +/- o fin */
-                    while (*p && *p != '+' && *p != '-' &&
-                           (size_t)(st - tok) < sizeof tok - 1) *st++ = *p++;
-                    *st = '\0';
-                    if (nt >= MAX_LC_TERMS) { ok = 0; break; }
-                    ast = strchr(tok, '*');
-                    if (ast) {
-                        int s1, s2;
-                        *ast = '\0';
-                        if (sscanf(tok, " %63s", f1) != 1 ||
-                            sscanf(ast + 1, " %63s", f2) != 1) { ok = 0; break; }
-                        s1 = find_slot(f1); s2 = find_slot(f2);
-                        if (!s1 || !s2 || s1 == a || s2 == a) { ok = 0; break; }
-                        slot_lc_sign[a][nt] = sg;
-                        slot_lc_a[a][nt] = s1; slot_lc_b[a][nt] = s2; nt++;
-                    } else {
-                        int s1;
-                        if (sscanf(tok, " %63s", f1) != 1) { ok = 0; break; }
-                        s1 = find_slot(f1);
-                        if (!s1 || s1 == a) { ok = 0; break; }
-                        slot_lc_sign[a][nt] = sg;
-                        slot_lc_a[a][nt] = s1; slot_lc_b[a][nt] = 0; nt++;
-                    }
-                }
-                if (!ok || nt < 1) {
-                    fprintf(stderr,
-                        "Error: cannot parse linear combination '%s = %s' in %s\n",
-                        lhs, rhsfull, path);
-                    fclose(f); return -1;
-                }
-                slot_kind[a] = SLOT_LINCOMB;
-                slot_nlc[a]  = nt;
-                nc++;
-                continue;
-            }
-        }
-
-        /* PRODUCTO:  x = [-] y * z.  El coeficiente ES el producto de otros dos
-           slots, con un signo opcional (numerador factorizado del legacy: p.ej.
-           omega1[1] = -omega1[0] * theta_4 reproduce -x5*(1-x6B) con x6 compartido
-           con la MA del input).  El gradiente lo maneja cdgrad por diferencias
-           finitas: no hace falta regla de la cadena analitica.                    */
-        star = strchr(rhsfull, '*');
-        if (star) {
-            char pa[64], pb[64];
-            char *p = rhsfull;
-            real sign = 1.0;
-            *star = '\0';
-            while (*p == ' ' || *p == '\t') p++;
-            if (*p == '-') { sign = -1.0; p++; while (*p == ' ' || *p == '\t') p++; }
-            if (sscanf(p, "%63s", pa) == 1 && sscanf(star + 1, " %63s", pb) == 1) {
-                int sa = find_slot(pa), sb = find_slot(pb);
-                if (sa == 0 || sb == 0) {
-                    fprintf(stderr, "Error: unknown operand in product '%s = %s * %s' in %s\n",
-                            lhs, pa, pb, path);
-                    fclose(f); return -1;
-                }
-                if (sa == a || sb == a) {
-                    fprintf(stderr, "Error: '%s' cannot be a factor of itself\n", lhs);
-                    fclose(f); return -1;
-                }
-                slot_kind[a]  = SLOT_PRODUCT;
-                slot_pa[a] = sa;  slot_pb[a] = sb;
-                slot_value[a] = sign;         /* +1 o -1: el signo del producto */
-                nc++;
-                continue;
-            }
-        }
-
-        if (sscanf(rhsfull, " %63s", rhs) != 1) continue;
-
-        if (strcmp(rhs, "free") == 0) {     /* LIBERAR (una covarianza) */
-            slot_kind[a]  = SLOT_FREE;
-            slot_alias[a] = 0;
-            nc++;
-            continue;
-        }
-
-        b = find_slot(rhs);
-        if (b != 0) {                       /* COMPARTIDO */
-            /* seguir la cadena hasta el representante final */
-            while (slot_kind[b] == SLOT_ALIAS) b = slot_alias[b];
-            if (b == a) {
-                fprintf(stderr, "Error: '%s' cannot be shared with itself\n", lhs);
-                fclose(f);
-                return -1;
-            }
-            slot_kind[a]  = SLOT_ALIAS;
-            slot_alias[a] = b;
-        } else if (sscanf(rhs, "%lf", &v) == 1) {   /* FIJO */
-            slot_kind[a]  = SLOT_FIXED;
-            slot_value[a] = v;
-        } else {
-            fprintf(stderr, "Error: cannot parse '%s = %s' in %s\n", lhs, rhs, path);
-            fclose(f);
-            return -1;
-        }
-        nc++;
-    }
-    fclose(f);
-    return nc;
-}
 
 /* Mapas libre <-> slot. n_free es lo que ve el optimizador. */
 static void resolve_slots(void)

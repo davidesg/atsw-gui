@@ -8,6 +8,7 @@
 #include <gtk/gtk.h>
 #include "series.h"
 #include "netfile.h"
+#include "slots.h"
 
 #define IDENT_MAX_LAGS 64
 
@@ -41,6 +42,18 @@ typedef struct {
     gchar     *path;          /* de donde se leyo, o donde se guardo        */
 } Red;
 
+/* La pantalla del modelo: el .cns. La tabla de slots ES la forma del modelo
+ * --tantos omega como diga s, tantos phi como el .pre deje libres-- asi que la
+ * pantalla no es un editor de texto: es una vista de esa tabla.          */
+typedef struct {
+    GtkWidget *lista;         /* los parametros, uno por linea              */
+    GtkWidget *cuenta;        /* cuantos hay, cuantos libres, y los avisos  */
+
+    SlotTable  st;
+    gboolean   vale;
+    gchar     *path;
+} Modelo;
+
 typedef struct {
     GtkWidget *ventana_p;     /* la ventana principal                       */
     GtkWidget *lista;         /* las series, en orden                       */
@@ -50,6 +63,7 @@ typedef struct {
     Conjunto   c;             /* las series cargadas                        */
     Red        red;           /* la pantalla de la red                      */
     Ident      id;            /* la pantalla de identificacion              */
+    Modelo     mod;           /* la pantalla del modelo                     */
 } Mtram;
 
 GtkWidget *mtram_window_new(GtkApplication *app, Mtram *m);
@@ -57,6 +71,10 @@ GtkWidget *mtram_window_new(GtkApplication *app, Mtram *m);
 /* red.c */
 GtkWidget *red_pagina_new(Mtram *m);
 void       red_refresca(Mtram *m);
+
+/* modelo.c */
+GtkWidget *modelo_pagina_new(Mtram *m);
+void       modelo_refresca(Mtram *m);
 
 /* identifica.c */
 GtkWidget *identifica_pagina_new(Mtram *m);

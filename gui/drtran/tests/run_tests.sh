@@ -70,3 +70,40 @@ if [ -f "$DAG" ]; then
         echo "  (sin bin/drtran o sin los .pre del m6: no compruebo el motor)"
     fi
 fi
+
+# --- el .cns: la tabla de slots --------------------------------------------
+# El oraculo es el recuento que imprime el motor:
+#   Structural parameters: 67   (free: 52, fixed/shared: 15)
+echo
+$CC -O2 -w -I"$L/slots" -I"$L/netfile" -I"$L/dates" -I"$E/include" \
+    "$L/slots/test_slots.c" "$L/slots/slots.c" "$L/netfile/netfile.c" \
+    "$E/src/fue_pre_reader.c" "$E/src/nlatools.c" "$L/dates/dates.c" \
+    -o "$W/test_slots" -lgsl -lgslcblas -lm || exit 1
+
+M6D="$E/tests/data/m6"
+if [ -f "$M6D/M6_EP.pre" ]; then
+    "$W/test_slots" "$M6D" || exit 1
+
+    # Y lo que mtram ESCRIBE, que lo lea el motor y de el mismo recuento.
+    if [ -x "$E/bin/drtran" ]; then
+        SER="$M6D/M6_EP.pre $M6D/M6_EI.pre $M6D/M6_EU.pre $M6D/M6_EC.pre \
+             $M6D/M6_EA.pre $M6D/M6_P.pre"
+        for f in "$M6D/m6_net_full.cns" "$W/reescrito.cns"; do
+            [ "$f" = "$W/reescrito.cns" ] && \
+                "$W/test_slots" "$M6D" --write "$W/reescrito.cns" >/dev/null 2>&1
+            ( cd "$W" && "$E/bin/drtran" $SER -n "$M6D/m6_net.dag" -c "$f" \
+                 -o "$W/$(basename $f).out" >/dev/null 2>&1 )
+        done
+        a=$(grep "Structural parameters" "$W/m6_net_full.cns.out" 2>/dev/null)
+        b=$(grep "Structural parameters" "$W/reescrito.cns.out" 2>/dev/null)
+        if [ -n "$a" ] && [ "$a" = "$b" ]; then
+            echo "  el motor lee el .cns reescrito y cuenta lo MISMO         ok"
+            echo "     $a"
+        else
+            echo "  el motor lee el .cns reescrito y cuenta lo MISMO         FALLA"
+            echo "--- original  --- $a"
+            echo "--- reescrito --- $b"
+            exit 1
+        fi
+    fi
+fi

@@ -519,6 +519,13 @@ static GtkWidget* create_console_tab(FueContext *ctx) {
     g_signal_connect(ctx->edit_inp_button, "clicked", G_CALLBACK(on_edit_inp_clicked), ctx);
     gtk_container_add(GTK_CONTAINER(button_box), ctx->edit_inp_button);
 
+    ctx->edit_pre_button = gtk_button_new_with_label("Edit .pre");
+    gtk_widget_set_tooltip_text(ctx->edit_pre_button,
+        "Open the .pre. A .pre is an optimum: touching it makes it a "
+        "specification again, so saving writes the .inp.");
+    g_signal_connect(ctx->edit_pre_button, "clicked", G_CALLBACK(on_edit_pre_clicked), ctx);
+    gtk_container_add(GTK_CONTAINER(button_box), ctx->edit_pre_button);
+
     ctx->save_inp_button = gtk_button_new_with_label("Save .inp");
     g_signal_connect(ctx->save_inp_button, "clicked", G_CALLBACK(on_save_inp_clicked), ctx);
     gtk_widget_set_sensitive(ctx->save_inp_button, FALSE);

@@ -88,6 +88,28 @@ $CC -O0 -g -Wall -I"$TOP/include" $GTK_CFLAGS \
     -o "$WORK/test_gui" $GTK_LIBS -lm 2> "$WORK/gui_build.txt" ||
     { cat "$WORK/gui_build.txt"; exit 1; }
 
+# --------------------------------------------------------------------------
+# El editor del .inp: Edit, tocar el texto, Save, Run -- y que lo editado
+# siga ahi cuando el motor lo lee.
+# --------------------------------------------------------------------------
+$CC -O0 -g -Wall -I"$TOP/include" $GTK_CFLAGS \
+    "$TOP/tests/test_editor.c" $GUI_SRCS \
+    -o "$WORK/test_editor" $GTK_LIBS -lm 2> "$WORK/ed_build.txt" ||
+    { cat "$WORK/ed_build.txt"; exit 1; }
+
+if command -v fue > /dev/null 2>&1; then
+    mkdir -p "$WORK/ed"
+    cp "$TOP/data/D1.inp" "$WORK/ed/"
+    ( cd "$WORK/ed" && "$WORK/test_editor" "$PWD" D1 ) 2>/dev/null > "$WORK/ed.txt"
+    if [ $? = 0 ]; then
+        echo "  editor          : Edit/Save/Run conserva la edicion"
+        sed -n 's/^\(rechazo\|aviso\|tras guardar\)/  &/p' "$WORK/ed.txt"
+    else
+        grep -E '^FAIL|^no hay' "$WORK/ed.txt"
+        grep -q '^no hay' "$WORK/ed.txt" || rc=1
+    fi
+fi
+
 if command -v fue > /dev/null 2>&1; then
     mkdir -p "$WORK/gui"
     cp "$TOP/data/D1.inp" "$WORK/gui/"

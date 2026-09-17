@@ -4,6 +4,7 @@
 //#include "fue_core.h"
 #include "model_spec.h"
 #include "utils.h"
+#include "inpcheck.h"
 #include <glib/gstdio.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -1263,67 +1264,196 @@ static void load_file_to_console(FueContext *ctx, const char *filename, gboolean
     }
 }
 
+/* ------------------------------------------------------------------------ */
+/* El editor del .inp, en la consola.                                        */
+/*                                                                           */
+/* El modelo tiene UN dueno en cada momento. Mientras se edita, el dueno es   */
+/* el texto; en cuanto se guarda, vuelve a serlo el modelo -- por eso guardar */
+/* RECARGA. Antes no lo hacia, y entonces habia dos duenos y ganaba el que    */
+/* escribia el ultimo: al darle a Run, on_run_fue reescribia el .inp desde el */
+/* modelo y la edicion desaparecia sin decir nada.                           */
+/* ------------------------------------------------------------------------ */
+
+/* La ruta del fichero <modelo><ext> del area de trabajo. Nueva; liberar. */
+static char *workspace_file(FueContext *ctx, const char *ext) {
+    const char *name = gtk_entry_get_text(GTK_ENTRY(ctx->input_name_entry));
+    char *ws = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(ctx->workspace_file_chooser));
+    char *path, *base;
+
+    if (!ws || !name || !*name) { g_free(ws); return NULL; }
+    base = g_strdup_printf("%s%s", name, ext);
+    path = g_build_filename(ws, base, NULL);
+    g_free(base);
+    g_free(ws);
+    return path;
+}
+
 /* Callback para el botón "Edit .inp" */
 void on_edit_inp_clicked(GtkButton *button, FueContext *ctx) {
-    const char *input_name = gtk_entry_get_text(GTK_ENTRY(ctx->input_name_entry));
-    char *workspace = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(ctx->workspace_file_chooser));
-    if (!workspace || !input_name || strlen(input_name) == 0) {
+    char *inp_path = workspace_file(ctx, ".inp");
+
+    if (!inp_path) {
         gtk_label_set_text(GTK_LABEL(ctx->status_label), "Workspace or input name not set.");
         return;
     }
-    char *filename = g_strdup_printf("%s.inp", input_name);
-    char *inp_path = g_build_filename(workspace, filename, NULL);
-    g_free(filename);
     load_file_to_console(ctx, inp_path, TRUE);
     gtk_widget_set_sensitive(ctx->save_inp_button, TRUE);
+
+    g_free(ctx->editing_path);
+    ctx->editing_path = g_strdup(inp_path);
     g_free(inp_path);
-    g_free(workspace);
-    gtk_label_set_text(GTK_LABEL(ctx->status_label), "Editing .inp file. Click 'Save .inp' to save changes.");
+
+    gtk_label_set_text(GTK_LABEL(ctx->status_label),
+                       "Editing the .inp. Save reloads it into the tabs.");
+}
+
+/* Callback para el botón "Edit .pre".
+ *
+ * El .pre es un OPTIMO: su promesa es que corriendo fue sobre el los numeros
+ * no se mueven. Tocarlo deshace esa promesa -- pasa a ser una especificacion
+ * otra vez -- asi que aqui se abre para mirarlo y para partir de el, y al
+ * guardar se escribe el .inp. El .pre no se pisa nunca desde el editor.   */
+void on_edit_pre_clicked(GtkButton *button, FueContext *ctx) {
+    char *pre_path = workspace_file(ctx, ".pre");
+
+    if (!pre_path) {
+        gtk_label_set_text(GTK_LABEL(ctx->status_label), "Workspace or input name not set.");
+        return;
+    }
+    if (!g_file_test(pre_path, G_FILE_TEST_EXISTS)) {
+        gtk_label_set_text(GTK_LABEL(ctx->status_label),
+                           "There is no .pre yet: run fue first.");
+        g_free(pre_path);
+        return;
+    }
+    load_file_to_console(ctx, pre_path, TRUE);
+    gtk_widget_set_sensitive(ctx->save_inp_button, TRUE);
+
+    g_free(ctx->editing_path);
+    ctx->editing_path = g_strdup(pre_path);
+    g_free(pre_path);
+
+    gtk_label_set_text(GTK_LABEL(ctx->status_label),
+                       "Editing the .pre. Saving writes the .inp: a .pre that is "
+                       "touched is a specification again.");
+    gtk_widget_set_tooltip_text(ctx->status_label,
+                       "The .pre says \"these values are the optimum\". Change one and "
+                       "that is no longer true, so what you save is an .inp.");
+}
+
+/* Los hermanos .pre y .out de un .inp que acaba de cambiar son de OTRO
+ * modelo. No se borran -- borrar trabajo ajeno no es cosa del editor -- pero
+ * hay que decirlo, porque el contrato dice que los errores tipicos se leen
+ * del .out y ese .out ya no corresponde.                                   */
+static char *stale_siblings(const char *inp_path) {
+    char *base = g_strdup(inp_path);
+    char *dot  = strrchr(base, '.');
+    GString *s = g_string_new(NULL);
+    const char *ext[] = { ".pre", ".out", NULL };
+    int i;
+
+    if (dot) *dot = 0;
+    for (i = 0; ext[i]; i++) {
+        char *p = g_strconcat(base, ext[i], NULL);
+        if (g_file_test(p, G_FILE_TEST_EXISTS))
+            g_string_append_printf(s, "%s%s", s->len ? " and " : "", ext[i]);
+        g_free(p);
+    }
+    g_free(base);
+    return g_string_free(s, s->len == 0);
 }
 
 /* Callback para el botón "Save .inp" */
 void on_save_inp_clicked(GtkButton *button, FueContext *ctx) {
-    const char *input_name = gtk_entry_get_text(GTK_ENTRY(ctx->input_name_entry));
-    char *workspace = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(ctx->workspace_file_chooser));
-    if (!workspace || !input_name || strlen(input_name) == 0) {
+    char *inp_path = workspace_file(ctx, ".inp");
+    /* Se venia de un .pre? Entonces esto es una degradacion, y hay que
+     * decirlo: el .pre de al lado deja de describir este modelo.         */
+    gboolean desde_pre = ctx->editing_path
+                      && g_str_has_suffix(ctx->editing_path, ".pre");
+    char *tmp_path = NULL, *content = NULL, *stale = NULL;
+    char  why[512];
+    GtkTextBuffer *buffer;
+    GtkTextIter start, end;
+    FILE *f;
+
+    if (!inp_path) {
         gtk_label_set_text(GTK_LABEL(ctx->status_label), "Workspace or input name not set.");
         return;
     }
-    char *filename = g_strdup_printf("%s.inp", input_name);
-    char *inp_path = g_build_filename(workspace, filename, NULL);
-    g_free(filename);
 
-    GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(ctx->console_text_view));
-    GtkTextIter start, end;
+    buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(ctx->console_text_view));
     gtk_text_buffer_get_bounds(buffer, &start, &end);
-    gchar *content = gtk_text_buffer_get_text(buffer, &start, &end, FALSE);
+    content = gtk_text_buffer_get_text(buffer, &start, &end, FALSE);
 
-    FILE *f = NULL;
-#ifdef _WIN32
-    wchar_t *wpath = g_utf8_to_utf16(inp_path, -1, NULL, NULL, NULL);
-    if (wpath) {
-        f = _wfopen(wpath, L"w");
-        g_free(wpath);
-    }
-#else
-    f = fopen(inp_path, "w");
-#endif
-
-    if (f) {
-        fwrite(content, 1, strlen(content), f);
-        fclose(f);
-        gtk_label_set_text(GTK_LABEL(ctx->status_label), ".inp file saved.");
-        gtk_text_view_set_editable(GTK_TEXT_VIEW(ctx->console_text_view), FALSE);
-        gtk_widget_set_sensitive(ctx->save_inp_button, FALSE);
-    } else {
-        gchar *msg = g_strdup_printf("Error saving .inp: %s", strerror(errno));
+    /* [1] A un temporal, NO encima del bueno: si lo que se escribio no vale,
+     *     el fichero que habia tiene que seguir intacto.                    */
+    tmp_path = g_strconcat(inp_path, ".editing", NULL);
+    f = fopen(tmp_path, "w");
+    if (!f) {
+        char *msg = g_strdup_printf("Cannot write: %s", strerror(errno));
         gtk_label_set_text(GTK_LABEL(ctx->status_label), msg);
+        g_free(msg); goto salir;
+    }
+    fwrite(content, 1, strlen(content), f);
+    fclose(f);
+
+    /* [2] Por la misma puerta que usa el motor. Guardar algo que fue no
+     *     podria leer es dejar el sistema mintiendo.                       */
+    if (inp_check_fue(tmp_path, why, sizeof why) != 0) {
+        char *msg = g_strdup_printf("Not saved -- %s", why);
+        gtk_label_set_text(GTK_LABEL(ctx->status_label), msg);
+        gtk_widget_set_tooltip_text(ctx->status_label, why);
         g_free(msg);
+        g_unlink(tmp_path);
+        goto salir;      /* sigue editable, para que se pueda corregir */
     }
 
+    /* [3] Ahora si, a su sitio. */
+    g_unlink(inp_path);
+    if (g_rename(tmp_path, inp_path) != 0) {
+        char *msg = g_strdup_printf("Cannot save: %s", strerror(errno));
+        gtk_label_set_text(GTK_LABEL(ctx->status_label), msg);
+        g_free(msg); goto salir;
+    }
+
+    /* [4] Y RECARGAR: el modelo vuelve a ser el dueno. Sin esto, las
+     *     pestanas siguen con lo viejo y el siguiente Run lo reescribe.   */
+    stale = stale_siblings(inp_path);
+    load_input_fue(inp_path);
+    update_ui_from_model(ctx);
+
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(ctx->console_text_view), FALSE);
+    gtk_widget_set_sensitive(ctx->save_inp_button, FALSE);
+    g_free(ctx->editing_path); ctx->editing_path = NULL;
+
+    if (desde_pre) {
+        char *msg = g_strdup_printf(
+            "Saved as .inp and reloaded: it came from the .pre, so it is a "
+            "specification again%s%s%s.",
+            stale ? ", and the " : "", stale ? stale : "",
+            stale ? " beside it no longer describe it" : "");
+        gtk_label_set_text(GTK_LABEL(ctx->status_label), msg);
+        gtk_widget_set_tooltip_text(ctx->status_label,
+            "The .pre was not touched. But it is the optimum of the model you "
+            "just changed, so it -- and the .out with its standard errors -- "
+            "no longer describe what is in the .inp.");
+        g_free(msg);
+    } else if (stale) {
+        char *msg = g_strdup_printf("Saved and reloaded. The %s next to it is now "
+                                    "of another model.", stale);
+        gtk_label_set_text(GTK_LABEL(ctx->status_label), msg);
+        gtk_widget_set_tooltip_text(ctx->status_label, msg);
+        g_free(msg);
+    } else {
+        gtk_label_set_text(GTK_LABEL(ctx->status_label), "Saved and reloaded.");
+        gtk_widget_set_tooltip_text(ctx->status_label, NULL);
+    }
+
+salir:
     g_free(content);
+    g_free(tmp_path);
     g_free(inp_path);
-    g_free(workspace);
+    g_free(stale);
 }
 
 /* Lo que el motor dijo, en la consola: cuando no deja fichero de salida es

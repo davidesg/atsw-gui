@@ -74,7 +74,12 @@ typedef struct {
     /* Console tab widgets */
     GtkWidget *console_text_view;
     GtkWidget *edit_inp_button;
+    GtkWidget *edit_pre_button;
     GtkWidget *save_inp_button;
+    /* Que se esta editando en la consola. Mientras esto no sea NULL, el
+     * fichero y las pestanas pueden discrepar: es el unico rato en que el
+     * modelo tiene dos duenos, y por eso al guardar se recarga.          */
+    char      *editing_path;
     GtkWidget *model_label;
     GtkWidget *progress;          /* el avance del motor, en la barra     */
     gboolean   running;           /* hay un motor corriendo               */

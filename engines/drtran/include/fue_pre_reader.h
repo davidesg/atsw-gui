@@ -36,4 +36,9 @@ int read_fue_pre(const char *filename,
 void build_det_component(struct Tusmodel *Tm, struct Tseries *Ts,
                          int nobs_ext, real *det_out);
 
+/* Los dos operadores no estacionarios, comparados por su POLINOMIO. La usan
+   el motor (operators_differ) y el GUI, que necesita decir antes de lanzar
+   si un enlace va a forzar el cast por resta. */
+int operators_differ_tm( const struct Tusmodel *a, const struct Tusmodel *b );
+
 #endif

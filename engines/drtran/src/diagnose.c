@@ -20,6 +20,7 @@
 /*****************************************************************************/
 
 #include "main.h"
+#include "dates.h"
 #include <math.h>
 #include <string.h>
 
@@ -125,23 +126,7 @@ real ChiTest(real *corr, int lags, int nobs) {
 }
 
 /*---------------------------------------------------------------------------*/
-void ObsToDate(int beg_per, int beg_sub, int obs_no, int freq,
-                       int *per, int *sub) {
-    div_t cad;
-    if (obs_no + beg_sub - 1 <= freq) {
-        *per = beg_per;
-        *sub = beg_sub + obs_no - 1;
-    } else {
-        cad = div(obs_no - (freq - beg_sub + 1), freq);
-        if (cad.rem > 0) {
-            *per = beg_per + cad.quot + 1;
-            *sub = cad.rem;
-        } else {
-            *per = beg_per + cad.quot;
-            *sub = freq;
-        }
-    }
-}
+/* ObsToDate vive ahora en lib/dates, junto a DateToObs. */
 
 
 /*---------------------------------------------------------------------------*/

@@ -199,8 +199,6 @@ int    COPY_STR( STRING source, int i, int n, STRING dest );
 
 void ObsToDate( int beg_per, int beg_sub, int obs_no, int freq,
                 int *per, int *sub );
-void DateToObs( int beg_per, int beg_sub, int per, int sub, int freq,
-                int *obs_no );
 void Easter( int *day, int *month, int year );
 real Mean( real *data, int nobs );
 real Stdev( real *data, int nobs );

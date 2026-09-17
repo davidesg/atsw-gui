@@ -10,7 +10,7 @@
 # Uses the drvarma exact-VARMA likelihood engine
 
 CC       = gcc
-CFLAGS   = -Wall -Wextra -O2 -fPIC
+CFLAGS   = -Wall -Wextra -O2 -fPIC -I../../lib/dates
 LDFLAGS  = -lgsl -lgslcblas -lm
 
 SRCDIR   = src
@@ -28,7 +28,8 @@ SRCS = $(SRCDIR)/drtran.c       \
        $(SRCDIR)/diagnose.c   \
        $(SRCDIR)/forecast.c   \
        $(SRCDIR)/gnuplot_i.c  \
-       $(SRCDIR)/fuf_graphic.c
+       $(SRCDIR)/fuf_graphic.c \
+       ../../lib/dates/dates.c
 
 OBJS = $(SRCS:.c=.o)
 

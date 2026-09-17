@@ -22,6 +22,7 @@
 /*****************************************************************************/
 
 #include "main.h"
+#include "dates.h"
 #include "drtran.h"
 #include "fue_pre_reader.h"
 #include "forecast.h"
@@ -389,11 +390,7 @@ static void trim_to_common(real *v, int nstat, int ncommon)
    desajuste. rnsop ya trae el polinomio armado, ifadf incluido.             */
 int operators_differ(int out, int inp)
 {
-    int j;
-    if (Tm[out].ornsop != Tm[inp].ornsop) return 1;
-    for (j = 0; j <= Tm[out].ornsop; j++)
-        if (fabs(Tm[out].rnsop[j] - Tm[inp].rnsop[j]) > 1e-9) return 1;
-    return 0;
+    return operators_differ_tm(&Tm[out], &Tm[inp]);
 }
 
 /* links_need_subtracting: 1 si algun enlace cruza operadores distintos.
@@ -835,21 +832,8 @@ void expand_ma_factors(struct Tusmodel *Tm, real *theta_out, int q)
 /* -------------------------------------------------------------------------- */
 /* DateToObs: convierte (año, periodo) a número de observación               */
 /* -------------------------------------------------------------------------- */
-void DateToObs(int beg_per, int beg_sub, int per, int sub, int freq,
-               int *obs_no)
-{
-    int srest, pcad, sad;
-
-    srest = freq - beg_sub + 1;
-    if (sub == freq) {
-        pcad = per - beg_per;
-        *obs_no = srest + freq * pcad;
-    } else {
-        pcad = per - beg_per - 1;
-        sad  = sub;
-        *obs_no = srest + freq * pcad + sad;
-    }
-}
+/* DateToObs vive ahora en lib/dates: el GUI la necesita para poder
+   enlazar fue_pre_reader.c, y aqui estaba encerrada con el main(). */
 
 /* -------------------------------------------------------------------------- */
 /* apply_univariate_model: aplica las transformaciones del modelo univariante */

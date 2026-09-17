@@ -21,6 +21,7 @@
 #include "main.h"
 #include "drtran.h"
 #include "fue_pre_reader.h"
+#include "dates.h"
 #include <string.h>
 #include <math.h>
 
@@ -782,3 +783,27 @@ void free_fue_pre( struct Tusmodel *Tm, struct Tseries *Ts, real **DataMat )
     Tm->ifadf = NULL; Tm->rnsop = NULL; Tm->residuals = NULL;
 }
 
+
+
+/*****************************************************************************/
+/*  operators_differ_tm -- los DOS operadores no estacionarios, comparados.   */
+/*                                                                           */
+/*  Compara el POLINOMIO, no el par (nrdiff, nadiff), y la diferencia         */
+/*  importa: nabla nabla_4 escrito a la manera de la escuela --nrdiff=2,      */
+/*  nadiff=0, ifadf=[0,1,1], como lo lleva EA de m6-- es EL MISMO OPERADOR    */
+/*  que nrdiff=1, nadiff=1, y comparando los enteros esas dos codificaciones  */
+/*  se leerian como desajuste. rnsop ya trae el polinomio armado.            */
+/*                                                                           */
+/*  Vive aqui, y no en drtran.c con el main(), para que el GUI pueda usar la  */
+/*  misma comparacion que usa el motor en vez de escribir otra.              */
+/*****************************************************************************/
+
+int operators_differ_tm( const struct Tusmodel *a, const struct Tusmodel *b )
+{
+   int j;
+
+   if ( a->ornsop != b->ornsop ) return 1;
+   for ( j = 0; j <= a->ornsop; j++ )
+       if ( fabs( a->rnsop[j] - b->rnsop[j] ) > 1e-9 ) return 1;
+   return 0;
+}

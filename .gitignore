@@ -45,3 +45,8 @@ literature/
 engines/*/literature/
 engine/*.exe
 gui/*/engine/
+
+# los binarios de los GUI: se construyen, no se guardan
+gui/drtran/mtram
+gui/fue/gtk_fue
+gui/fug/gtk_fug

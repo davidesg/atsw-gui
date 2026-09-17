@@ -150,6 +150,7 @@ static void refresca(Mtram *m)
     refresca_lista(m);
     refresca_ventana(m);
     refresca_compat(m);
+    identifica_refresca(m);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -262,7 +263,7 @@ static GtkWidget *columna(GtkWidget *tv, const char *titulo, int col, int num)
 
 GtkWidget *mtram_window_new(GtkApplication *app, Mtram *m)
 {
-    GtkWidget *w, *caja, *barra_b, *b, *sc, *marco, *vb;
+    GtkWidget *w, *raiz, *libro, *caja, *barra_b, *b, *sc, *marco, *vb;
     GtkListStore *st;
 
     w = gtk_application_window_new(app);
@@ -270,9 +271,19 @@ GtkWidget *mtram_window_new(GtkApplication *app, Mtram *m)
     gtk_window_set_title(GTK_WINDOW(w), "mtram — función de transferencia");
     gtk_window_set_default_size(GTK_WINDOW(w), 900, 620);
 
+    /* El cuaderno: las dos cosas que hay que resolver, en este orden. Primero
+     * QUE series y en que papel --sin eso el motor no puede ni arrancar--, y
+     * despues QUE forma tiene cada enlace, que es lo que decide la CCF.    */
+    raiz = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_container_add(GTK_CONTAINER(w), raiz);
+
+    libro = gtk_notebook_new();
+    gtk_box_pack_start(GTK_BOX(raiz), libro, TRUE, TRUE, 0);
+
     caja = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
     gtk_container_set_border_width(GTK_CONTAINER(caja), 8);
-    gtk_container_add(GTK_CONTAINER(w), caja);
+    gtk_notebook_append_page(GTK_NOTEBOOK(libro), caja,
+                             gtk_label_new("Series"));
 
     /* --- los botones --- */
     barra_b = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
@@ -332,11 +343,17 @@ GtkWidget *mtram_window_new(GtkApplication *app, Mtram *m)
     gtk_container_add(GTK_CONTAINER(marco), vb);
     gtk_box_pack_start(GTK_BOX(caja), marco, FALSE, FALSE, 0);
 
-    /* --- la barra de estado --- */
+    /* --- la barra de estado: de la ventana, no de una pagina --- */
     m->estado = gtk_label_new("Añade los .pre. El primero es la salida.");
     gtk_widget_set_halign(m->estado, GTK_ALIGN_START);
     gtk_label_set_ellipsize(GTK_LABEL(m->estado), PANGO_ELLIPSIZE_END);
-    gtk_box_pack_start(GTK_BOX(caja), m->estado, FALSE, FALSE, 0);
+    gtk_widget_set_margin_start(m->estado, 8);
+    gtk_widget_set_margin_bottom(m->estado, 4);
+    gtk_box_pack_start(GTK_BOX(raiz), m->estado, FALSE, FALSE, 0);
+
+    /* --- la identificacion --- */
+    gtk_notebook_append_page(GTK_NOTEBOOK(libro), identifica_pagina_new(m),
+                             gtk_label_new("Identificación"));
 
     return w;
 }

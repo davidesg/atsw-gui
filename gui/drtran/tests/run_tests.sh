@@ -19,3 +19,20 @@ if [ -d "$M6" ]; then
 else
     echo "no encuentro los .pre del m6 en $M6 (pon M6=...)"
 fi
+
+# --- la CCF preblanqueada, contra la que imprime el propio motor -------------
+# El oraculo es  drtran -p ES_CPI_airline.pre WTI_ar1.pre ; los numeros que se
+# exigen aqui estan copiados de su .out.
+echo
+$CC -O2 -w -I"$TOP/include" -I"$E/include" -I"$L/prewhiten" -I"$L/dates" \
+    "$TOP/tests/test_prewhiten.c" "$E/src/fue_pre_reader.c" \
+    "$E/src/nlatools.c" "$E/src/diagnose.c" \
+    "$L/prewhiten/prewhiten.c" "$L/dates/dates.c" \
+    -o "$W/test_prewhiten" -lgsl -lgslcblas -lm || exit 1
+
+C="$E/tests/cases"
+if [ -f "$C/ES_CPI_airline.pre" ] && [ -f "$C/WTI_ar1.pre" ]; then
+    "$W/test_prewhiten" "$C/ES_CPI_airline.pre" "$C/WTI_ar1.pre"
+else
+    echo "no encuentro los .pre de la prueba en $C"
+fi

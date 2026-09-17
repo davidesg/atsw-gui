@@ -10,7 +10,7 @@
 # Uses the drvarma exact-VARMA likelihood engine
 
 CC       = gcc
-CFLAGS   = -Wall -Wextra -O2 -fPIC -I../../lib/dates
+CFLAGS   = -Wall -Wextra -O2 -fPIC -Iinclude -I../../lib/dates -I../../lib/prewhiten
 LDFLAGS  = -lgsl -lgslcblas -lm
 
 SRCDIR   = src
@@ -29,6 +29,7 @@ SRCS = $(SRCDIR)/drtran.c       \
        $(SRCDIR)/forecast.c   \
        $(SRCDIR)/gnuplot_i.c  \
        $(SRCDIR)/fuf_graphic.c \
+       ../../lib/prewhiten/prewhiten.c \
        ../../lib/dates/dates.c
 
 OBJS = $(SRCS:.c=.o)

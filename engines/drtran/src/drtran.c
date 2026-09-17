@@ -23,6 +23,7 @@
 
 #include "main.h"
 #include "dates.h"
+#include "prewhiten.h"
 #include "drtran.h"
 #include "fue_pre_reader.h"
 #include "forecast.h"
@@ -160,7 +161,6 @@ real macheps;          /* épsilon de máquina (inicializado con cmacheps())  */
 FILE *outputv;         /* archivo de salida global (usado por diagnose.c)  */
 int quiet_mode = 1;    /* suprimir traza del optimizador (0 = verbose) */
 
-#define DRTRAN_PI 3.14159265358979323846
 #define DRTRAN_VERSION "1.0"
 
 /* ── Resumen para la consola ────────────────────────────────────────────
@@ -213,26 +213,9 @@ extern void shootx(real *x, struct Tvarma *armax, int *ifaultx,
 /* Funciones auxiliares: extraer órdenes y coeficientes ARMA de Tusmodel      */
 /* -------------------------------------------------------------------------- */
 
-/* Calcula el orden AR total (suma de órdenes de todos los factores) */
-static int total_ar_order(struct Tusmodel *Tm)
-{
-    int ord = 0, i;
-    for (i = 1; i <= Tm->NumAr1;  i++) ord += Tm->p1[i];
-    /* Un factor ANUAL de orden p actúa en los retardos sper, 2·sper, …, p·sper */
-    for (i = 1; i <= Tm->NumAr2;  i++) ord += Tm->p2[i] * Tm->sper;
-    for (i = 1; i <= Tm->NumAr1f; i++) ord += 2;   /* cada factor fijo es orden 2 */
-    return ord;
-}
-
-/* Calcula el orden MA total */
-static int total_ma_order(struct Tusmodel *Tm)
-{
-    int ord = 0, i;
-    for (i = 1; i <= Tm->NumMa1;  i++) ord += Tm->q1[i];
-    for (i = 1; i <= Tm->NumMa2;  i++) ord += Tm->q2[i] * Tm->sper;
-    for (i = 1; i <= Tm->NumMa1f; i++) ord += 2;
-    return ord;
-}
+/* total_ar_order / total_ma_order viven ahora en lib/prewhiten (prewhiten.h):
+   el orden expandido de un factor anual --p*sper-- es justo lo que el GUI
+   tiene que saber para preblanquear igual que el motor. */
 
 /* ── Factores ARMA: solo los coeficientes que el .pre marca como estimables ──
    fue lleva un flag por coeficiente (Ia1/Ia2/Ia1f para el AR, Im1/Im2/Im1f para
@@ -703,131 +686,9 @@ void unpack_ma_factors(struct Tusmodel *Tm, real *x, int *idx)
         if (Tm->Im1f[i] == 1) Tm->Ma1f[i][2] = x[(*idx)++];
 }
 
-/* Expande todos los factores AR en un único polinomio Φ(B)=1-φ₁B-φ₂B²-...
-   phi_out[1..p] recibe los coeficientes (phi_out[0] = 1 implícito).
-   Se asume que phi_out está pre-dimensionado con vector(1, p).            */
-void expand_ar_factors(struct Tusmodel *Tm, real *phi_out, int p)
-{
-    int i, j, k;
-    real *work;
-
-    if (p == 0) return;
-
-    work = vector(0, p);
-
-    /* Inicializar: polinomio identidad 1 (coefs en work[1..p] = 0) */
-    work[0] = 1.0;
-    for (k = 1; k <= p; k++) work[k] = 0.0;
-
-    /* Factores AR regulares: P_i(B) = -1 + a₁B + a₂B² + ...
-       Convertido a VARMA:  -P_i(B) = 1 - a₁B - a₂B² - ...            */
-    for (i = 1; i <= Tm->NumAr1; i++) {
-        int ord_i = Tm->p1[i];
-        for (k = p; k >= 0; k--) {
-            real acc = work[k];
-            for (j = 1; j <= ord_i && j <= k; j++)
-                acc -= Tm->Ar1[i][j] * work[k - j];
-            work[k] = acc;
-        }
-    }
-
-    /* Factores AR ANUALES: 1 - a₁B^s - a₂B^2s - … (retardos múltiplos de sper) */
-    for (i = 1; i <= Tm->NumAr2; i++) {
-        int ord_i = Tm->p2[i];
-        for (k = p; k >= 0; k--) {
-            real acc = work[k];
-            for (j = 1; j <= ord_i; j++) {
-                int lag = j * Tm->sper;
-                if (lag <= k) acc -= Tm->Ar2[i][j] * work[k - lag];
-            }
-            work[k] = acc;
-        }
-    }
-
-    /* Factores AR de FRECUENCIA FIJA (irreducibles). fue los parametriza con un
-       ÚNICO coeficiente libre c₂ (<0); el término en B se DERIVA de él y de la
-       frecuencia (fue.c:4064):
-           c₁ = 2·cos(2πf/s)·sqrt(−c₂)     →   1 − c₁B − c₂B²
-       que es (1 − 2r·cos(ω)B + r²B²) con r = sqrt(−c₂).                     */
-    for (i = 1; i <= Tm->NumAr1f; i++) {
-        real c2 = Tm->Ar1f[i][2];
-        real r  = (c2 < 0.0) ? sqrt(-c2) : 0.0;
-        real c1 = 2.0 * cos(2.0 * DRTRAN_PI * Tm->pfre1[i] / Tm->sper) * r;
-
-        Tm->Ar1f[i][1] = c1;   /* fue guarda el término en B junto al factor */
-
-        for (k = p; k >= 0; k--) {
-            real acc = work[k];
-            if (k >= 1) acc -= c1 * work[k - 1];
-            if (k >= 2) acc -= c2 * work[k - 2];
-            work[k] = acc;
-        }
-    }
-
-    /* Copiar a phi_out[1..p] (negar porque work almacena P(B),
-       pero VARMA usa Φ(B)=1-φ₁B-φ₂B²-... = 1 - work[1]B - work[2]B²-...) */
-    for (k = 1; k <= p; k++) phi_out[k] = -work[k];
-
-    free_vector(work, 0, p);
-}
-
-/* Expande todos los factores MA en un único polinomio Θ(B)=1-θ₁B-θ₂B²-...
-   Misma lógica que expand_ar_factors.                                   */
-void expand_ma_factors(struct Tusmodel *Tm, real *theta_out, int q)
-{
-    int i, j, k;
-    real *work;
-
-    if (q == 0) return;
-
-    work = vector(0, q);
-    work[0] = 1.0;
-    for (k = 1; k <= q; k++) work[k] = 0.0;
-
-    for (i = 1; i <= Tm->NumMa1; i++) {
-        int ord_i = Tm->q1[i];
-        for (k = q; k >= 0; k--) {
-            real acc = work[k];
-            for (j = 1; j <= ord_i && j <= k; j++)
-                acc -= Tm->Ma1[i][j] * work[k - j];
-            work[k] = acc;
-        }
-    }
-
-    /* Factores MA ANUALES: 1 - θ₁B^s - θ₂B^2s - … (retardos múltiplos de sper) */
-    for (i = 1; i <= Tm->NumMa2; i++) {
-        int ord_i = Tm->q2[i];
-        for (k = q; k >= 0; k--) {
-            real acc = work[k];
-            for (j = 1; j <= ord_i; j++) {
-                int lag = j * Tm->sper;
-                if (lag <= k) acc -= Tm->Ma2[i][j] * work[k - lag];
-            }
-            work[k] = acc;
-        }
-    }
-
-    /* Factores MA de FRECUENCIA FIJA: igual que los AR (fue.c:4202) */
-    for (i = 1; i <= Tm->NumMa1f; i++) {
-        real c2 = Tm->Ma1f[i][2];
-        real r  = (c2 < 0.0) ? sqrt(-c2) : 0.0;
-        real c1 = 2.0 * cos(2.0 * DRTRAN_PI * Tm->qfre1[i] / Tm->sper) * r;
-
-        Tm->Ma1f[i][1] = c1;
-
-        for (k = q; k >= 0; k--) {
-            real acc = work[k];
-            if (k >= 1) acc -= c1 * work[k - 1];
-            if (k >= 2) acc -= c2 * work[k - 2];
-            work[k] = acc;
-        }
-    }
-
-    /* Copiar a theta_out[1..q] (misma convención de signos que AR) */
-    for (k = 1; k <= q; k++) theta_out[k] = -work[k];
-
-    free_vector(work, 0, q);
-}
+/* expand_ar_factors / expand_ma_factors viven ahora en lib/prewhiten, con
+   apply_univariate_model: son puras y el GUI las necesita para preblanquear
+   con EL MISMO codigo que el motor. */
 
 /* -------------------------------------------------------------------------- */
 /* DateToObs: convierte (año, periodo) a número de observación               */
@@ -836,136 +697,10 @@ void expand_ma_factors(struct Tusmodel *Tm, real *theta_out, int q)
    enlazar fue_pre_reader.c, y aqui estaba encerrada con el main(). */
 
 /* -------------------------------------------------------------------------- */
-/* apply_univariate_model: aplica las transformaciones del modelo univariante */
-/* (Box-Cox, sustracción de deterministas, diferenciación) y devuelve la      */
-/* serie estacionaria w[1..nstat_out].                                        */
-/*                                                                           */
-/* DataMat se asume con DataMat[0][1..nobs] disponible para la serie          */
-/* transformada, y DataMat[1..NdetVar][1..nobs] para las deterministas.       */
+/* apply_univariate_model vive ahora en lib/prewhiten: es una funcion PURA    */
+/* --no toca un solo global-- y el GUI la necesita para poder preblanquear    */
+/* con el mismo codigo que el motor. Misma razon por la que salio DateToObs.  */
 /* -------------------------------------------------------------------------- */
-void apply_univariate_model(struct Tusmodel *Tm, struct Tseries *Ts,
-                            real **DataMat, real **w_out, int *nstat_out)
-{
-    int nobs = Ts->nobs;
-    real lam = Tm->boxlam;
-    int i, t, j;
-    real *detrended;
-    real *filt_num;   /* resultado intermedio del filtro numerador */
-    real *filt_out;   /* resultado del filtro completo Ω(B)/Δ(B)  */
-
-    /* 1. Box-Cox: DataMat[0][t] = refactor * (data[t]^λ - 1)/λ  (o log si λ≈0).
-       El factor de reescalado de FUE MULTIPLICA la serie transformada: deja las
-       varianzas en O(10), que es el rango en el que el optimizador puede
-       trabajar (el paso de diferencias finitas de cdgrad es ~6e-6 absoluto).  */
-    for (t = 1; t <= nobs; t++) {
-        real y = Ts->data[t];
-        if (y <= 0.0) {
-            fprintf(stderr, "Error: dato no positivo para Box-Cox (t=%d, y=%g)\n",
-                    t, y);
-            *w_out = NULL;
-            *nstat_out = 0;
-            return;
-        }
-        if (fabs(lam) < 1e-8)
-            DataMat[0][t] = log(y) * Ts->refactor;
-        else
-            DataMat[0][t] = ((pow(y, lam) - 1.0) / lam) * Ts->refactor;
-    }
-
-    /* 2. Sustraer componentes deterministas */
-    detrended = vector(1, nobs);
-    for (t = 1; t <= nobs; t++) detrended[t] = DataMat[0][t];
-
-    if (Tm->NdetVar > 0) {
-        /* DataMat lo rellena read_fue_pre a partir de la especificación del
-           .pre (impulse/compimp/step/ramp/easter/trend/cos/sin/alter).      */
-        filt_num = vector(1, nobs);
-        filt_out = vector(1, nobs);
-
-        for (i = 1; i <= Tm->NdetVar; i++) {
-            int nw = Tm->Nomega[i];
-            int nd = Tm->Ndelta[i];
-
-            /* Inicializar a cero */
-            for (t = 1; t <= nobs; t++) {
-                filt_num[t] = 0.0;
-                filt_out[t] = 0.0;
-            }
-
-            /* --- Aplicar numerador Ω(B) = ω₀ - ω₁B - ω₂B² - ... (convencion
-               Box-Jenkins, como fue: calcnu en fue.c:4505 hace nu[j] = ... - ω[j]).
-               El termino lider (j=0) suma; los demas RESTAN.  Antes se sumaban
-               todos (+), lo que invertia el signo de los ω no lideres: latente
-               porque la homologacion solo tiene Nomega=0; lo destapo m6 con las
-               intervenciones compuestas. --- */
-            for (t = 1; t <= nobs; t++) {
-                real sum = 0.0;
-                for (j = 0; j <= nw; j++) {
-                    if (t - j >= 1)
-                        sum += (j == 0 ? Tm->Omega[i][j] : -Tm->Omega[i][j])
-                               * DataMat[i][t - j];
-                }
-                filt_num[t] = sum;
-            }
-
-            /* --- Aplicar denominador 1/Δ(B) = 1/(1-δ₁B-δ₂B²-...) --- */
-            /* El filtro recursivo: out[t] = num[t] + Σ δⱼ·out[t-j]   */
-            if (nd > 0) {
-                for (t = 1; t <= nobs; t++) {
-                    real sum = filt_num[t];
-                    for (j = 1; j <= nd; j++) {
-                        if (t - j >= 1)
-                            sum += Tm->Delta[i][j] * filt_out[t - j];
-                    }
-                    filt_out[t] = sum;
-                }
-            } else {
-                /* Sin denominador: out = num directamente */
-                for (t = 1; t <= nobs; t++)
-                    filt_out[t] = filt_num[t];
-            }
-
-            /* Restar la contribución filtrada */
-            for (t = 1; t <= nobs; t++)
-                detrended[t] -= filt_out[t];
-        }
-
-        free_vector(filt_out, 1, nobs);
-        free_vector(filt_num, 1, nobs);
-    }
-
-    /* 3. Aplicar operador no estacionario (diferenciación) */
-    {
-        int ornsop = Tm->ornsop;
-        int nstat  = nobs - ornsop;
-
-        if (nstat <= 0) {
-            fprintf(stderr, "Error: demasiadas diferencias (ornsop=%d >= nobs=%d)\n",
-                    ornsop, nobs);
-            free_vector(detrended, 1, nobs);
-            *w_out = NULL;
-            *nstat_out = 0;
-            return;
-        }
-
-        *w_out = vector(1, nstat);
-
-        /* w[t] = Σ_{j=0}^{ornsop} (-rnsop[j]) * detrended[t+ornsop-j]
-           donde rnsop[0] = -1, así que -rnsop[0] = +1                  */
-        for (t = 1; t <= nstat; t++) {
-            real sum = 0.0;
-            int base = t + ornsop;   /* índice en la serie original */
-            for (j = 0; j <= ornsop; j++) {
-                sum += (-Tm->rnsop[j]) * detrended[base - j];
-            }
-            (*w_out)[t] = sum;
-        }
-
-        *nstat_out = nstat;
-    }
-
-    free_vector(detrended, 1, nobs);
-}
 
 /* -------------------------------------------------------------------------- */
 /* prewhiten_and_identify — identificación Box–Jenkins de (b, r, s)           */

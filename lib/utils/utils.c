@@ -7,11 +7,7 @@
 #include <stdlib.h>
 #include <math.h>
 
-const char *getExt(const char *fspec) {
-    const char *dot = strrchr(fspec, '.');
-    if (!dot) return "";
-    return dot;
-}
+/* getExt vive en ext.c: la usa lib/preview, y lo demas de aqui no. */
 
 int default_lags(int nobs, int freq) {
     if (nobs < 3 * (freq + 1)) return nobs - freq / 2;

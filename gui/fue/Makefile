@@ -60,7 +60,7 @@ LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c \
            $(LIB_DIR)/preview/preview.c \
            $(LIB_DIR)/engine/engine.c \
            $(LIB_DIR)/outfile/outfile.c \
-           $(LIB_DIR)/utils/utils.c
+           $(LIB_DIR)/utils/utils.c $(LIB_DIR)/utils/ext.c
 
 # inpcheck NO se copia: se compila el fichero del motor, renombrando la
 # funcion al vuelo. Es la misma que corre el motor, por construccion, y no

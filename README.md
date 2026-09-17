@@ -85,6 +85,16 @@ la batería pueda medirlo: **reconciliar `nlatools`**. Siete copias separadas
 entre 13 y 80 líneas, primos cercanos, pero es el núcleo numérico y tocarlo
 mueve números.
 
+## La literatura
+
+Los artículos que justifican el diseño **no están aquí** —tienen copyright y
+este repositorio puede acabar siendo público— pero están en esta máquina, en
+`~/Dropbox/SRC/literatura/`, y catalogados en **`docs/LITERATURA.md`**.
+
+La identidad y la referencia van en el repositorio; el contenido, fuera. Es la
+misma regla que `docs/DISENO-proyecto.md` propone para el manifiesto de
+proyecto.
+
 ## Licencia
 
 Los motores llevan GPL v2 o posterior. `docs/DISENO-repositorio.md` §8 deja

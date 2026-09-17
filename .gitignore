@@ -36,3 +36,12 @@ rt.*/
 engines/fug/fug
 engines/fug/gtk_fmg
 engines/fug/tests/gui/work/
+
+# --- literatura y binarios precompilados ----------------------------------
+# Los articulos tienen copyright y NO van a un repositorio que puede ser
+# publico: viven en ~/Dropbox/SRC/literatura/ y se catalogan en
+# docs/LITERATURA.md. Los motores compilados no tienen sentido en un repo.
+literature/
+engines/*/literature/
+engine/*.exe
+gui/*/engine/

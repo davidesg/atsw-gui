@@ -49,6 +49,11 @@ que diga *qué pasa*, y el desglose sólo cuando se pregunte. Es la idea del
 **R4 — La altura de la ventana se la queda la lista.** Todo lo demás es de
 altura fija. Si algo no cabe en su altura fija, se resume y se abre aparte.
 
+**R5 — Todo lo que va en un panel es de ancho fijo.** Casi todo lo que se
+enseña ahí son tablas hechas con espacios; con fuente proporcional se
+descuadran y dejan de leerse. Y lo que sea una matriz, rejilla de verdad, que
+además se puede colorear. *(Salió de usarlo: §3.)*
+
 ---
 
 ## 2. Cómo se llaman los botones
@@ -393,6 +398,42 @@ mismo fichero que iría al papel, como todo lo demás.
 
 No entra en esta pasada. Lo apunto porque un grafo de seis nodos se lee mejor
 dibujado que en cualquier tabla, y porque la maquinaria ya está.
+
+### Una corrección que salió de usarlo: las tablas van a ancho fijo
+
+La matriz se descuadraba. Era una tabla hecha con **espacios** pintada con una
+fuente **proporcional**: las columnas no caían donde debían y la información
+dejaba de reconocerse.
+
+Y no era sólo la matriz — el desglose de la ventana, los papeles de cada serie
+y el orden de construcción son tablas igual. De ahí una regla más:
+
+**R5 — Todo lo que va en un panel es de ancho fijo.** Es lo que toca: el `.out`
+del motor también lo es.
+
+Y la matriz, además, **como rejilla de verdad** y no como texto. Gana dos
+cosas: la alineación deja de depender de la fuente, y **se puede colorear** —
+con los mismos tres colores de los veredictos, así que la lectura es la misma
+en toda la interfaz y la casilla distinta salta a la vista.
+
+De paso gana precisión: el anidamiento ya no es un símbolo neutro. Se compara
+el orden de los dos polinomios y se dice **cuál contiene a cuál**:
+
+```
+            EP    EI    EU    EC    EA    P
+   1 EP     ·     =     =     =     ⊂     =
+   2 EI     =     ·     =     =     ⊂     =
+   3 EU     =     =     ·     =     ⊂     =
+   4 EC     =     =     =     ·     ⊂     =
+   5 EA     ⊃     ⊃     ⊃     ⊃     ·     ⊃
+   6 P      =     =     =     =     ⊂     ·
+
+   =  el mismo ∇            ⊂  el mío divide al suyo
+   ✗  incompatibles         ⊃  el suyo divide al mío
+```
+
+La fila de **EA** con seis símbolos apuntando al revés que las demás es
+exactamente lo que pasa: su operador contiene al de las otras cinco.
 
 ---
 

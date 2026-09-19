@@ -110,7 +110,7 @@ static void refresca_veredicto( Mtram *m )
     }
     if (r->n == 0) {
         mtram_verdicto( r->ver_topo, MT_AMBAR,
-            "La red está vacía \xc2\xb7 sin enlaces esto es la homologación "
+            "La red está vacía · sin enlaces esto es la homologación "
             "con fue, no un modelo de transferencia" );
         mtram_verdicto( r->ver_forma, MT_AMBAR,
             "Añade un enlace, o pulsa «Estrella»: todas las entradas a la "
@@ -126,13 +126,13 @@ static void refresca_veredicto( Mtram *m )
 
         if (net_cycle( r->lnk, r->n, m->c.n, ciclo, &nc ))
             for (i = 0; i < nc; i++)
-                g_string_append_printf( c, "%s%s", i ? " \xe2\x86\x92 " : "",
+                g_string_append_printf( c, "%s%s", i ? " → " : "",
                                         nom_de( m, ciclo[i] ) );
         else
             g_string_append( c, "la red no admite orden de construcción" );
 
         mtram_verdicto( r->ver_topo, MT_ROJO,
-            "%s \xc2\xb7 el sistema es simultáneo \xe2\x80\x94 esto es drvarma",
+            "%s · el sistema es simultáneo — esto es drvarma",
             c->str );
         mtram_verdicto( r->ver_forma, MT_AMBAR,
             "Mira la CCF del enlace que lo cierra: si sus retardos negativos "
@@ -146,11 +146,11 @@ static void refresca_veredicto( Mtram *m )
     GString *o = g_string_new( NULL );
 
     for (i = 1; i <= m->c.n; i++)
-        g_string_append_printf( o, "%s%s", i > 1 ? " \xe2\x86\x92 " : "",
+        g_string_append_printf( o, "%s%s", i > 1 ? " → " : "",
                                 nom_de( m, topo[i] ) );
 
     mtram_verdicto( r->ver_topo, MT_VERDE,
-        "Acíclica \xc2\xb7 orden  %s \xc2\xb7 %d enlace%s, %d parámetro%s",
+        "Acíclica · orden  %s · %d enlace%s, %d parámetro%s",
         o->str, r->n, r->n == 1 ? "" : "s", par, par == 1 ? "" : "s" );
     g_string_free( o, TRUE );
     }
@@ -158,13 +158,13 @@ static void refresca_veredicto( Mtram *m )
     if (intermedias)
         mtram_verdicto( r->ver_forma, MT_VERDE,
             "%d serie%s %s salida Y entrada: es una RED, no una estrella "
-            "\xc2\xb7 %d suelta%s",
+            "· %d suelta%s",
             intermedias, intermedias == 1 ? "" : "s",
             intermedias == 1 ? "es" : "son", sueltas, sueltas == 1 ? "" : "s" );
     else
         mtram_verdicto( r->ver_forma, MT_AMBAR,
             "Ninguna serie es salida y entrada a la vez: esto es una ESTRELLA "
-            "\xc2\xb7 %d suelta%s", sueltas, sueltas == 1 ? "" : "s" );
+            "· %d suelta%s", sueltas, sueltas == 1 ? "" : "s" );
 }
 
 /* ------------------------------------------------------------------------ */

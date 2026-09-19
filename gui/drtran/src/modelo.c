@@ -264,27 +264,27 @@ static void nombre_modelo( Mtram *m, const char *n, char *out, size_t size )
     char resto[32];
 
     if (sscanf( n, "theta_%d[B^%d]", &i, &j ) == 2) {
-        if (j == 1) snprintf( out, size, "\xce\xb8_%s", nom_serie( m, i ) );
-        else snprintf( out, size, "\xce\xb8_%s[B^%d]", nom_serie( m, i ), j );
+        if (j == 1) snprintf( out, size, "θ_%s", nom_serie( m, i ) );
+        else snprintf( out, size, "θ_%s[B^%d]", nom_serie( m, i ), j );
         return;
     }
     if (sscanf( n, "phi_%d[B^%d]", &i, &j ) == 2) {
-        if (j == 1) snprintf( out, size, "\xcf\x86_%s", nom_serie( m, i ) );
-        else snprintf( out, size, "\xcf\x86_%s[B^%d]", nom_serie( m, i ), j );
+        if (j == 1) snprintf( out, size, "φ_%s", nom_serie( m, i ) );
+        else snprintf( out, size, "φ_%s[B^%d]", nom_serie( m, i ), j );
         return;
     }
     if (sscanf( n, "mu[%d]", &i ) == 1) {
-        snprintf( out, size, "\xce\xbc_%s", nom_serie( m, i ) );
+        snprintf( out, size, "μ_%s", nom_serie( m, i ) );
         return;
     }
     if (sscanf( n, "omega%d[%31[^]]]", &i, resto ) == 2 &&
         strncmp( n, "omega_d", 7 )) {
-        snprintf( out, size, "\xcf\x89%d[%s]", i, resto );
+        snprintf( out, size, "ω%d[%s]", i, resto );
         return;
     }
     if (sscanf( n, "delta%d[%31[^]]]", &i, resto ) == 2 &&
         strncmp( n, "delta_d", 7 )) {
-        snprintf( out, size, "\xce\xb4%d[%s]", i, resto );
+        snprintf( out, size, "δ%d[%s]", i, resto );
         return;
     }
     snprintf( out, size, "%s", n );
@@ -338,12 +338,12 @@ static int enunciado( Mtram *m, int k, char *out, size_t size, int *ruido )
             sscanf( st->name[st->pa[k]], "omega%d[0]", &i2 ) == 1 && i1 == i2 &&
             st->value[k] > 0.0)
             snprintf( out, size,
-                "\xcf\x89%d(B) = \xcf\x89%d\xe2\x82\x80 (1 \xe2\x88\x92 %s B)",
+                "ω%d(B) = ω%d₀ (1 − %s B)",
                 i1, i1, b );
         else {
             nombre_modelo( m, st->name[k], a, sizeof a );
-            snprintf( out, size, "%s = %s%s \xc2\xb7 %s", a,
-                      st->value[k] < 0.0 ? "\xe2\x88\x92" : "",
+            snprintf( out, size, "%s = %s%s · %s", a,
+                      st->value[k] < 0.0 ? "−" : "",
                       st->name[st->pa[k]], b );
         }
         return 1;
@@ -364,7 +364,7 @@ static int enunciado( Mtram *m, int k, char *out, size_t size, int *ruido )
             }
             if (todos && st->nlc[k]) {
                 snprintf( out, size,
-                    "\xcf\x89%d(1) = 0 \xc2\xb7 un (1\xe2\x88\x92B) FIJO: "
+                    "ω%d(1) = 0 · un (1−B) FIJO: "
                     "ganancia a largo plazo CERO", i1 );
                 return 1;
             }
@@ -378,10 +378,10 @@ static int enunciado( Mtram *m, int k, char *out, size_t size, int *ruido )
         for (t = 0; t < st->nlc[k]; t++) {
             nombre_modelo( m, st->name[st->lc_a[k][t]], b, sizeof b );
             g_string_append_printf( g, " %s%s",
-                st->lc_sign[k][t] < 0.0 ? "\xe2\x88\x92 " : (t ? "+ " : ""), b );
+                st->lc_sign[k][t] < 0.0 ? "− " : (t ? "+ " : ""), b );
             if (st->lc_b[k][t]) {
                 nombre_modelo( m, st->name[st->lc_b[k][t]], b, sizeof b );
-                g_string_append_printf( g, " \xc2\xb7 %s", b );
+                g_string_append_printf( g, " · %s", b );
             }
             if (!*ruido) *ruido = serie_del_ruido( st->name[st->lc_a[k][t]] );
         }
@@ -414,7 +414,7 @@ static gchar *ecuacion_nivel( Mtram *m, int i )
 
     for (k = 0; k < m->red.n; k++) {
         if (m->red.lnk[k].out != i) continue;
-        g_string_append_printf( t, "%s\xce\xbd%d(B) %s_t", primero ? "" : " + ",
+        g_string_append_printf( t, "%sν%d(B) %s_t", primero ? "" : " + ",
                                 k + 1, nom_serie( m, m->red.lnk[k].inp ) );
         primero = 0;  hay = 1;
     }
@@ -441,16 +441,16 @@ static gchar *ecuacion_ruido( Mtram *m, int i, int ndet )
                 m->c.s[i - 1]->tm.sper, &o );
     nsop_texto( &o, m->c.s[i - 1]->tm.sper, pol, sizeof pol );
 
-    if (p1) g_string_append_printf( t, "\xcf\x86_%s(B) ", nom_serie( m, i ) );
+    if (p1) g_string_append_printf( t, "φ_%s(B) ", nom_serie( m, i ) );
     if (o.d || o.D || o.nf) g_string_append_printf( t, "%s ", pol );
 
     if (ndet)
-        g_string_append_printf( t, "[ N_%s,t \xe2\x88\x92 D_%s,t ]",
+        g_string_append_printf( t, "[ N_%s,t − D_%s,t ]",
                                 nom_serie( m, i ), nom_serie( m, i ) );
     else
         g_string_append_printf( t, "N_%s,t", nom_serie( m, i ) );
 
-    g_string_append_printf( t, "  =  \xce\xb8_%s(B) a_%s,t",
+    g_string_append_printf( t, "  =  θ_%s(B) a_%s,t",
                             nom_serie( m, i ), nom_serie( m, i ) );
     return g_string_free( t, FALSE );
 }
@@ -527,12 +527,12 @@ static void refresca_lista( Mtram *m )
             {
             GString *v = g_string_new( NULL );
 
-            g_string_append_printf( v, "   \xce\xbd%d = \xcf\x89%d(B)", k + 1, k + 1 );
+            g_string_append_printf( v, "   ν%d = ω%d(B)", k + 1, k + 1 );
             if (m->red.lnk[k].r)
-                g_string_append_printf( v, " / \xce\xb4%d(B)", k + 1 );
+                g_string_append_printf( v, " / δ%d(B)", k + 1 );
             if (m->red.lnk[k].b)
                 g_string_append_printf( v, " B^%d", m->red.lnk[k].b );
-            g_string_append_printf( v, "      \xe2\x86\x90 %s",
+            g_string_append_printf( v, "      ← %s",
                                     nom_serie( m, m->red.lnk[k].inp ) );
             nmb = g_string_free( v, FALSE );
             }
@@ -615,7 +615,7 @@ static void refresca_lista( Mtram *m )
     q = g_strdup_printf( "%d de %d covarianzas libres", cl, ct );
 
     gtk_tree_store_append( st, &ec, NULL );
-    gtk_tree_store_set( st, &ec, M_NOMBRE, "\xce\xa3   (innovaciones)",
+    gtk_tree_store_set( st, &ec, M_NOMBRE, "Σ   (innovaciones)",
                         M_QUE, q, M_IDX, 0, -1 );
     g_free( q );
 
@@ -686,14 +686,14 @@ static void refresca_cuenta( Mtram *m )
 
     if (emp)
         mtram_verdicto( M->ver_cuenta, MT_VERDE,
-            "%d de transferencia + %d covarianzas libres \xe2\x80\x94 esto es "
-            "lo que se decide aquí \xc2\xb7 los otros %d vienen de los .pre "
-            "\xc2\xb7 %d restricción%s del empotrado, del .cns",
+            "%d de transferencia + %d covarianzas libres — esto es "
+            "lo que se decide aquí · los otros %d vienen de los .pre "
+            "· %d restricción%s del empotrado, del .cns",
             tr, cl, M->st.n - tr - ct, emp, emp == 1 ? "" : "es" );
     else
         mtram_verdicto( M->ver_cuenta, MT_VERDE,
-            "%d de transferencia + %d covarianzas libres \xe2\x80\x94 esto es lo "
-            "que se decide aquí \xc2\xb7 los otros %d vienen de los .pre y de "
+            "%d de transferencia + %d covarianzas libres — esto es lo "
+            "que se decide aquí · los otros %d vienen de los .pre y de "
             "juntarlos",
             tr, cl, M->st.n - tr - ct );
     }

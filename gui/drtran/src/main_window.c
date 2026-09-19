@@ -120,7 +120,7 @@ void mtram_verdicto(GtkWidget *w, const char *color, const char *fmt, ...)
     va_end(ap);
 
     esc = g_markup_escape_text(t, -1);
-    mk  = g_strdup_printf("<span foreground=\"%s\">\xe2\x97\x8f</span>  %s",
+    mk  = g_strdup_printf("<span foreground=\"%s\">●</span>  %s",
                           color, esc);
     gtk_label_set_markup(GTK_LABEL(w), mk);
     g_free(mk); g_free(esc); g_free(t);
@@ -152,12 +152,12 @@ static void refresca_ventana(Mtram *m)
 
     if (!recortan)
         mtram_verdicto(m->ver_ventana, MT_VERDE,
-                     "%s \xe2\x80\x93 %s \xc2\xb7 %d obs \xc2\xb7 todas completas",
+                     "%s – %s · %d obs · todas completas",
                      d, h, obs);
     else
         mtram_verdicto(m->ver_ventana, MT_AMBAR,
-                     "%s \xe2\x80\x93 %s \xc2\xb7 %d obs \xc2\xb7 %d serie%s "
-                     "recorta%s \xe2\x80\x94 el motor NO recorta por fecha",
+                     "%s – %s · %d obs · %d serie%s "
+                     "recorta%s — el motor NO recorta por fecha",
                      d, h, obs, recortan, recortan == 1 ? "" : "s",
                      recortan == 1 ? "" : "n");
     g_free(d); g_free(h);
@@ -182,17 +182,17 @@ static void refresca_compat(Mtram *m)
      * el hecho: como son los operadores entre si.                       */
     if (malos)
         mtram_verdicto(m->ver_oper, MT_ROJO,
-            "%d par%s con operadores \xe2\x88\x87 INCOMPATIBLES",
+            "%d par%s con operadores ∇ INCOMPATIBLES",
             malos, malos == 1 ? "" : "es");
     else if (anidados)
         mtram_verdicto(m->ver_oper, MT_AMBAR,
-            "Operadores \xe2\x88\x87: %d par%s igual%s, %d anidado%s "
+            "Operadores ∇: %d par%s igual%s, %d anidado%s "
             "(uno divide al otro)",
             iguales, iguales == 1 ? "" : "es", iguales == 1 ? "" : "es",
             anidados, anidados == 1 ? "" : "s");
     else
         mtram_verdicto(m->ver_oper, MT_VERDE,
-            "Operadores \xe2\x88\x87: los %d pares, iguales", iguales);
+            "Operadores ∇: los %d pares, iguales", iguales);
 }
 
 static void refresca(Mtram *m)
@@ -467,7 +467,7 @@ static GtkWidget *matriz_operadores(Mtram *m)
         for (j = 0; j < m->c.n; j++) {
             const char *c, *col;
 
-            if (i == j) { c = "\xc2\xb7"; col = NULL; }   /* · */
+            if (i == j) { c = "·"; col = NULL; }   /* · */
             else switch (conjunto_compat(&m->c, i, j)) {
                  case OP_IGUALES:
                      c = "=";  col = MT_VERDE;  break;
@@ -475,11 +475,11 @@ static GtkWidget *matriz_operadores(Mtram *m)
                      /* Cual contiene a cual: el de mayor orden. Asi la fila se
                       * lee "el mio esta DENTRO del suyo" o al reves.      */
                      c = m->c.s[i]->tm.ornsop < m->c.s[j]->tm.ornsop
-                         ? "\xe2\x8a\x82"    /* ⊂ */
-                         : "\xe2\x8a\x83";   /* ⊃ */
+                         ? "⊂"    /* ⊂ */
+                         : "⊃";   /* ⊃ */
                      col = MT_AMBAR;  break;
                  default:
-                     c = "\xe2\x9c\x97";     /* ✗ */
+                     c = "✗";     /* ✗ */
                      col = MT_ROJO;   break;
                  }
             gtk_grid_attach(GTK_GRID(g), celda(c, col), j + 1, i + 1, 1, 1);
@@ -531,10 +531,10 @@ static void on_operadores(GtkButton *b, Mtram *m)
                       gtk_separator_new(GTK_ORIENTATION_HORIZONTAL));
 
     gtk_container_add(GTK_CONTAINER(caja), mtram_mono(
-        "=  el mismo \xe2\x88\x87\n"
-        "\xe2\x8a\x82  el mio divide al suyo\n"
-        "\xe2\x8a\x83  el suyo divide al mio\n"
-        "\xe2\x9c\x97  incompatibles\n\n"
+        "=  el mismo ∇\n"
+        "⊂  el mio divide al suyo\n"
+        "⊃  el suyo divide al mio\n"
+        "✗  incompatibles\n\n"
         "Es un hecho de los .pre. Lo que el motor haga con el --que cast usa--\n"
         "es cosa de la estimacion, y se dice alli."));
 

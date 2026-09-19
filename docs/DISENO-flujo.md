@@ -90,7 +90,7 @@ dónde se especifica: la etapa no tiene nombre en la interfaz.
 | las restricciones de ω y δ | — | **Modelo** |
 | Σ, las covarianzas | — | **Modelo** |
 | qué mantiene fijo el estimador | — | **Estimación** |
-| el cast `-V` / `-S` | — | **Estimación** |
+| el cast `-V` / `-S` | — | **Estimación** — y en Series NO se menciona |
 
 Las dos últimas filas son la corrección que hizo falta: `-N/-X/-D/-E/-M` y el
 cast dicen **cómo se estima**, no **qué es el modelo**. Estaban en Modelo y van
@@ -122,26 +122,48 @@ verla**. Escondérsela sería peor que confundirle.
 > `omega1[1] = ...` vive en el `.cns` y ahí se queda; en pantalla va lo que
 > significa.
 
-### Y hay algo más, que es lo que de verdad hay que ver
+### RECTIFICACIÓN: los PRODUCTOS son empotramiento, no especificación
 
-`ω1[1]` **no es un parámetro de la transferencia**. Es un producto que **ata la
-transferencia al modelo de ruido de EI**: θ_EI es la MA del `.pre` de EI.
+Escribí aquí que el producto `ω1(B) = ω1₀(1 − θ_EI B)` había que enseñarlo
+porque «ata la transferencia al modelo de ruido de EI». **Era un error**, y la
+prueba está en este mismo repositorio.
 
-Enseñarlo como un coeficiente más de ω1 esconde justo lo único que importa —
-que la transferencia **deja de ser separable** del modelo univariante de su
-entrada. Así que la pantalla lo dice:
+`LEGACY_M6.md` §9 — *«la tabla de slots necesita PRODUCTOS»*:
 
-```
-     ν1 = ω1(B) B¹   ← EI       b=1 r=0 s=1      2 par, 1 libre
-          ω1(B) = ω1₀ (1 − θ_EI B)   ⇄ atado al ruido de EI
-```
+> Los coeficientes **fuera de la diagonal** del `shootx` de m6-1 son
+> **productos de parámetros**: `x5*x6`, `x12*x14 − x13`, `x2*x3*x4`. Al
+> factorizarlos se ve lo que son: `Theta_34(B) = x5·B·(1 − x6 B)`.
 
-La flecha `⇄` aparece **siempre** que una restricción de transferencia
-referencia un parámetro de un modelo univariante —θ, φ, una determinista o una
-media—, sea del tipo que sea la restricción.
+`Θ₃₄` es un elemento **fuera de la diagonal de la matriz MA del VARMA**. El
+mecanismo PRODUCTO se añadió para poder **reproducir el m6-1 como un VARMA
+restringido** — es decir, para expresar la forma **empotrada**.
 
-Y el otro caso de la escuela, la combinación lineal, se enuncia por lo que
-afirma y no por cómo se impone:
+> **Un analista que especifica una FLT elige `(b, r, s)`. Nada más.** Los
+> productos aparecen cuando esa FLT se escribe como VARMA restringido, y eso es
+> cosa de la máquina.
+
+Ponerle la etiqueta «atado al ruido de EI» era **vestir la máquina de modelo**,
+que es exactamente lo que este documento dice que no se haga.
+
+### Pero no todas las restricciones son lo mismo
+
+Y esto sí hay que distinguirlo, porque las tres del `.cns` no tienen la misma
+naturaleza:
+
+| restricción | qué es |
+|---|---|
+| `omega3[0] = omega3[1]+…` | **modelo**: ω(1) = 0, ganancia a largo plazo cero |
+| `delta1[1] = phi_2[B^1]` | **modelo**: el denominador ES el AR de la entrada — *«a rational transfer»*, lo dice el `-h` del motor |
+| `omega1[1] = omega1[0]*theta_2` | **empotramiento**: reproduce un Θ fuera de la diagonal |
+
+Las dos primeras son afirmaciones sobre ν(B) y se enuncian. La tercera es la
+forma empotrada y **no se disfraza de especificación**.
+
+### Lo que sí hay que ver del enunciado
+
+Lo que se enseña es el **enunciado**, no la mecánica del `.cns`:
+
+La combinación lineal se enuncia por lo que **afirma** y no por cómo se impone:
 
 ```
           ω3(1) = 0 · un (1−B) FIJO: ganancia a largo plazo CERO

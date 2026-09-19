@@ -523,10 +523,15 @@ static void refresca_lista( Mtram *m )
                     snprintf( p, sizeof p, "delta%d[", k + 1 );
                     if (strncmp( M->st.name[kk], p, strlen( p ) )) continue;
                 }
-                /* EN EL IDIOMA DEL MODELO, no en el del motor. Y si la
-                 * restriccion ata la transferencia a un parametro del
-                 * modelo de ruido de alguna serie, SE DICE: eso es lo
-                 * unico que hay que ver de un producto asi.          */
+                /* En el idioma del modelo, no en el del motor.
+                 *
+                 * Y SIN ETIQUETARLO DE NADA. Un producto como
+                 * omega1[1] = omega1[0]*theta_2 es la forma EMPOTRADA --los
+                 * coeficientes fuera de la diagonal de Theta(B) del VARMA son
+                 * productos de parametros, LEGACY_M6.md §9-- y el analista
+                 * que especifica una FLT elige (b, r, s), no productos.
+                 * Ponerle "atado al ruido de EI" era vestir la maquina de
+                 * modelo.                                             */
                 {
                 int   ruido = 0;
                 gchar *nmr;
@@ -536,10 +541,7 @@ static void refresca_lista( Mtram *m )
                     snprintf( dice, sizeof dice, "libre" );
                 }
                 nombre_modelo( m, M->st.name[kk], nom, sizeof nom );
-                nmr = ruido
-                    ? g_strdup_printf( "      %s   \xe2\x87\x84 atado al ruido "
-                                       "de %s", dice, nom_serie( m, ruido ) )
-                    : g_strdup_printf( "      %s", dice );
+                nmr = g_strdup_printf( "      %s", dice );
 
                 gtk_tree_store_append( st, &fila, &enl );
                 gtk_tree_store_set( st, &fila,

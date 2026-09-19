@@ -178,21 +178,21 @@ static void refresca_compat(Mtram *m)
             default:          malos++;    break;
             }
 
+    /* Que cast elige el motor es MAQUINA y vive en Estimacion. Aqui se dice
+     * el hecho: como son los operadores entre si.                       */
     if (malos)
         mtram_verdicto(m->ver_oper, MT_ROJO,
-            "%d par%s incompatible%s \xc2\xb7 cast \xe2\x88\x92S por resta",
-            malos, malos == 1 ? "" : "es", malos == 1 ? "" : "s");
+            "%d par%s con operadores \xe2\x88\x87 INCOMPATIBLES",
+            malos, malos == 1 ? "" : "es");
     else if (anidados)
         mtram_verdicto(m->ver_oper, MT_AMBAR,
-            "%d par%s igual%s, %d anidado%s \xc2\xb7 cast \xe2\x88\x92V "
-            "empotrado (sigue exacto)",
+            "Operadores \xe2\x88\x87: %d par%s igual%s, %d anidado%s "
+            "(uno divide al otro)",
             iguales, iguales == 1 ? "" : "es", iguales == 1 ? "" : "es",
             anidados, anidados == 1 ? "" : "s");
     else
         mtram_verdicto(m->ver_oper, MT_VERDE,
-            "%d par%s igual%s \xc2\xb7 cast \xe2\x88\x92V empotrado "
-            "(verosimilitud exacta)",
-            iguales, iguales == 1 ? "" : "es", iguales == 1 ? "" : "es");
+            "Operadores \xe2\x88\x87: los %d pares, iguales", iguales);
 }
 
 static void refresca(Mtram *m)
@@ -531,13 +531,12 @@ static void on_operadores(GtkButton *b, Mtram *m)
                       gtk_separator_new(GTK_ORIENTATION_HORIZONTAL));
 
     gtk_container_add(GTK_CONTAINER(caja), mtram_mono(
-        "=  el mismo \xe2\x88\x87          cast \xe2\x88\x92V empotrado, "
-        "verosimilitud exacta\n"
+        "=  el mismo \xe2\x88\x87\n"
         "\xe2\x8a\x82  el mio divide al suyo\n"
-        "\xe2\x8a\x83  el suyo divide al mio    hay \xce\x94(B), sigue siendo "
-        "exacta\n"
-        "\xe2\x9c\x97  incompatibles         el motor despacha al cast "
-        "\xe2\x88\x92S por resta"));
+        "\xe2\x8a\x83  el suyo divide al mio\n"
+        "\xe2\x9c\x97  incompatibles\n\n"
+        "Es un hecho de los .pre. Lo que el motor haga con el --que cast usa--\n"
+        "es cosa de la estimacion, y se dice alli."));
 
 pinta:
     mtram_popover_popup(pop);

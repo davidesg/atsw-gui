@@ -159,6 +159,26 @@ naturaleza:
 Las dos primeras son afirmaciones sobre ν(B) y se enuncian. La tercera es la
 forma empotrada y **no se disfraza de especificación**.
 
+### Cómo queda: se respeta, se dice aparte, no se ofrece
+
+La marca de «forma empotrada» es el **producto de dos parámetros** — que es
+exactamente lo que §9 identifica como los coeficientes de fuera de la diagonal.
+Con esa regla:
+
+- **el árbol de especificación no las lleva**: ahí van `(b, r, s)` y las
+  afirmaciones sobre ν(B);
+- **se conservan tal cual vienen del fichero** y quitan grados de libertad, así
+  que **el recuento las cuenta** — esconderlas haría que la página mintiera
+  sobre cuántos parámetros hay;
+- **tienen su propio panel**, `Empotrado…`, que dice qué son, de dónde vienen y
+  por qué no se editan ahí;
+- **el veredicto las menciona**: *«… · 2 restricciones del empotrado, del
+  .cns»*.
+
+Es la opción C con A: mtram especifica `(b, r, s)` y las afirmaciones sobre
+ν(B); si el `.cns` cargado trae productos, es un modelo legado que se
+reproduce, no uno que se especifica aquí.
+
 ### Lo que sí hay que ver del enunciado
 
 Lo que se enseña es el **enunciado**, no la mecánica del `.cns`:

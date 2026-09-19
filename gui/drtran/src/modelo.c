@@ -207,6 +207,36 @@ static int colineales( Mtram *m, int *primero )
 /* esconde justo lo unico que hay que ver.                                    */
 /* ------------------------------------------------------------------------ */
 
+/* ¿Es esta restriccion la FORMA EMPOTRADA y no una afirmacion sobre nu(B)?
+ *
+ * La marca es el PRODUCTO de dos parametros. LEGACY_M6.md §9 lo dice: los
+ * coeficientes FUERA DE LA DIAGONAL del shootx de m6-1 son productos --x5*x6,
+ * x12*x14-x13, x2*x3*x4-- y al factorizarlos salen los numeradores. El
+ * mecanismo PRODUCTO del .cns se añadio para poder reproducir ese VARMA
+ * restringido, no para especificar una FLT.
+ *
+ * Un analista que especifica una FLT elige (b, r, s). Estas no se le ofrecen:
+ * se conservan tal como vienen del fichero, se dicen aparte, y no se mezclan
+ * con la especificacion.
+ *
+ * Lo que SI es afirmacion sobre nu, y por tanto se queda en el arbol:
+ *    omega_j(1) = 0        un (1-B) fijo: ganancia a largo plazo cero
+ *    delta_j = phi_X       el denominador ES el AR de la entrada
+ *    omega_j[i] = valor    un coeficiente fijado                        */
+static int n_empotradas( const SlotTable *st );
+
+static int es_empotrado( const SlotTable *st, int k )
+{
+    int t;
+
+    if (k < 1 || k > st->n) return 0;
+    if (st->kind[k] == SLOT_PRODUCT) return 1;
+    if (st->kind[k] == SLOT_LINCOMB)
+        for (t = 0; t < st->nlc[k]; t++)
+            if (st->lc_b[k][t]) return 1;     /* un producto por dentro */
+    return 0;
+}
+
 /* Un slot que pertenece al modelo univariante de alguna serie. */
 static int es_del_ruido( const char *n )
 {
@@ -536,6 +566,9 @@ static void refresca_lista( Mtram *m )
                 int   ruido = 0;
                 gchar *nmr;
 
+                /* Las del empotrado no son especificacion: van a su panel. */
+                if (es_empotrado( &M->st, kk )) continue;
+
                 if (!enunciado( m, kk, dice, sizeof dice, &ruido )) {
                     if (M->solo) continue;
                     snprintf( dice, sizeof dice, "libre" );
@@ -648,11 +681,22 @@ static void refresca_cuenta( Mtram *m )
         else if (!strncmp( M->st.name[k], "delta", 5 ) &&
                  strncmp( M->st.name[k], "delta_d", 7 )) tr++;
 
-    mtram_verdicto( M->ver_cuenta, MT_VERDE,
-        "%d de transferencia + %d covarianzas libres \xe2\x80\x94 esto es lo "
-        "que se decide aquí \xc2\xb7 los otros %d vienen de los .pre y de "
-        "juntarlos",
-        tr, cl, M->st.n - tr - ct );
+    {
+    int emp = n_empotradas( &M->st );
+
+    if (emp)
+        mtram_verdicto( M->ver_cuenta, MT_VERDE,
+            "%d de transferencia + %d covarianzas libres \xe2\x80\x94 esto es "
+            "lo que se decide aquí \xc2\xb7 los otros %d vienen de los .pre "
+            "\xc2\xb7 %d restricción%s del empotrado, del .cns",
+            tr, cl, M->st.n - tr - ct, emp, emp == 1 ? "" : "es" );
+    else
+        mtram_verdicto( M->ver_cuenta, MT_VERDE,
+            "%d de transferencia + %d covarianzas libres \xe2\x80\x94 esto es lo "
+            "que se decide aquí \xc2\xb7 los otros %d vienen de los .pre y de "
+            "juntarlos",
+            tr, cl, M->st.n - tr - ct );
+    }
 
     if (mal)
         mtram_verdicto( M->ver_ojo, MT_ROJO,
@@ -931,6 +975,72 @@ static void on_covarianzas( GtkButton *bt, Mtram *m )
         return;
     }
     gtk_widget_destroy( d );
+}
+
+/* ------------------------------------------------------------------------ */
+/* Lo que viene del .cns y NO es especificacion                              */
+/* ------------------------------------------------------------------------ */
+
+static int n_empotradas( const SlotTable *st )
+{
+    int k, n = 0;
+
+    for (k = 1; k <= st->n; k++) if (es_empotrado( st, k )) n++;
+    return n;
+}
+
+static void on_empotrado( GtkButton *b, Mtram *m )
+{
+    Modelo  *M = &m->mod;
+    GString *t = g_string_new( NULL );
+    char     dice[256], nom[80];
+    int      k, n = 0, ruido;
+
+    if (!M->vale) {
+        g_string_append( t, "Carga las series y define la red." );
+        goto pinta;
+    }
+
+    for (k = 1; k <= M->st.n; k++) {
+        if (!es_empotrado( &M->st, k )) continue;
+        if (!n++)
+            g_string_append( t, "RESTRICCIONES DE LA FORMA EMPOTRADA\n\n" );
+
+        nombre_modelo( m, M->st.name[k], nom, sizeof nom );
+        enunciado( m, k, dice, sizeof dice, &ruido );
+        g_string_append_printf( t, "   %-14s %s\n", nom, dice );
+        g_string_append_printf( t, "   %-14s   en el .cns:  %s\n\n", "",
+                                M->st.name[k] );
+    }
+
+    if (!n) {
+        g_string_append( t,
+            "Ninguna.\n\n"
+            "Aquí saldrían las restricciones del .cns que NO son una\n"
+            "afirmación sobre ν(B) sino la forma en que el modelo se empotra\n"
+            "en el VARMA: los PRODUCTOS de dos parámetros." );
+        goto pinta;
+    }
+
+    g_string_append( t,
+        "Éstas NO son especificación de la función de transferencia.\n\n"
+        "Un analista que especifica una FLT elige (b, r, s). Los productos de\n"
+        "dos parámetros aparecen cuando esa FLT se escribe como un VARMA\n"
+        "RESTRINGIDO: son los coeficientes de fuera de la diagonal de Θ(B).\n\n"
+        "Está documentado en LEGACY_M6.md §9 — los coeficientes fuera de la\n"
+        "diagonal del m6-1 son x5*x6, x12*x14−x13, x2*x3*x4, y al factorizarlos\n"
+        "salen los numeradores. El mecanismo PRODUCTO del .cns se añadió para\n"
+        "poder reproducir ese VARMA, no para especificar una transferencia.\n\n"
+        "Vienen del fichero y SE RESPETAN: quitan grados de libertad y el\n"
+        "recuento las cuenta. Pero no se ofrecen para editar aquí, y no se\n"
+        "mezclan con la especificación.\n\n"
+        "Lo que SÍ es afirmación sobre ν(B) se queda en el árbol:\n"
+        "   ω(1) = 0            un (1−B) fijo: ganancia a largo plazo cero\n"
+        "   δ = φ de la entrada  el denominador ES el AR de la entrada" );
+
+pinta:
+    mtram_popover_mostrar( GTK_WIDGET(b), t->str );
+    g_string_free( t, TRUE );
 }
 
 /* ------------------------------------------------------------------------ */
@@ -1252,6 +1362,10 @@ GtkWidget *modelo_pagina_new( Mtram *m )
     g_signal_connect( b, "clicked", G_CALLBACK(fn), m ); \
     gtk_box_pack_end( GTK_BOX(barra), b, FALSE, FALSE, 0 );
 
+    BOTON_DER( "Empotrado…", on_empotrado,
+               "Lo que el .cns trae y NO es especificación: los productos de "
+               "parámetros, que son la forma en que el modelo se empotra en el "
+               "VARMA. Se respetan, pero no se editan aquí." )
     BOTON_DER( "Avisos…", on_avisos,
                "La casi-colinealidad: un enlace contemporáneo y su covarianza "
                "libre explican lo mismo dos veces." )

@@ -90,20 +90,20 @@ Lo que hay hoy, contra lo que queda:
 
 ```
 ┌───────────────────────────────────────────────────────────────────────────┐
-│ Abrir…  Quitar  │  Salida  ↑  ↓                        Ventana…  Operadores… │
-├───┬────────┬─────┬─────────┬─────────┬────────┬──────────────┬────────────┤
-│ # │ Serie  │ Obs │ Desde   │ Hasta   │ Pierde │ Operador ∇   │ Fichero    │
-├───┼────────┼─────┼─────────┼─────────┼────────┼──────────────┼────────────┤
-│1 Y│ EP     │  69 │ 03/1976 │ 03/1993 │      0 │ (1-B)(1-B)   │ M6_EP.pre  │
-│ 2 │ EI     │  69 │ 03/1976 │ 03/1993 │      0 │ (1-B)(1-B)   │ M6_EI.pre  │
-│ 3 │ EU     │  69 │ 03/1976 │ 03/1993 │      0 │ (1-B)(1-B)   │ M6_EU.pre  │
-│ 4 │ EC     │  69 │ 03/1976 │ 03/1993 │      0 │ (1-B)(1-B)   │ M6_EC.pre  │
-│ 5 │ EA     │  69 │ 03/1976 │ 03/1993 │      0 │ (1-B)(1-B)[f]│ M6_EA.pre  │
-│ 6 │ P      │  69 │ 03/1976 │ 03/1993 │      0 │ (1-B)(1-B)   │ M6_P.pre   │
+│ Abrir…  Quitar  │  Salida  ↑  ↓                      Ventana…  Operadores… │
+├───┬────────┬─────┬─────────┬─────────┬────────┬───┬───┬───┬──────────────┤
+│ # │ Serie  │ Obs │ Desde   │ Hasta   │ Pierde │ d │ D │ f │ Fichero      │
+├───┼────────┼─────┼─────────┼─────────┼────────┼───┼───┼───┼──────────────┤
+│1 Y│ EP     │  69 │ 03/1976 │ 03/1993 │      0 │ 2 │ 0 │ — │ M6_EP.pre    │
+│ 2 │ EI     │  69 │ 03/1976 │ 03/1993 │      0 │ 2 │ 0 │ — │ M6_EI.pre    │
+│ 3 │ EU     │  69 │ 03/1976 │ 03/1993 │      0 │ 2 │ 0 │ — │ M6_EU.pre    │
+│ 4 │ EC     │  69 │ 03/1976 │ 03/1993 │      0 │ 2 │ 0 │ — │ M6_EC.pre    │
+│ 5 │ EA     │  69 │ 03/1976 │ 03/1993 │      0 │ 1 │ 1 │ — │ M6_EA.pre    │
+│ 6 │ P      │  69 │ 03/1976 │ 03/1993 │      0 │ 2 │ 0 │ — │ M6_P.pre     │
 │   │                                                                        │
 │   │              (la lista se queda TODO el alto que sobre)                 │
 │   │                                                                        │
-├───┴────────┴─────┴─────────┴─────────┴────────┴──────────────┴────────────┤
+├───┴────────┴─────┴─────────┴─────────┴────────┴───┴───┴───┴──────────────┤
 │ ● 03/1976 – 03/1993 · 69 obs · todas completas                             │
 │ ● 15 pares iguales · cast −V empotrado (verosimilitud exacta)              │
 ├───────────────────────────────────────────────────────────────────────────┤
@@ -123,6 +123,50 @@ lo hace visible sin decir una palabra.
 
 La salida lleva además una `Y` — la letra con la que aparece en la ecuación y
 en el informe del motor.
+
+### Las columnas `d`, `D`, `f` — y por qué NO se leen del fichero
+
+El operador no estacionario se enseñaba como una cadena, `(1-B)(1-B)[f=1][f=2]`.
+Se parte en tres columnas cortas:
+
+| columna | qué es | valores típicos |
+|---|---|---|
+| `d` | cuántas veces ∇ = (1−B) | 0, 1, 2 |
+| `D` | cuántas veces ∇ₛ = (1−Bˢ) | 0, 1 |
+| `f` | las frecuencias irreducibles que sobran | casi siempre `—` |
+
+**Y aquí está la trampa, que está medida.** `d` y `D` **no** son `nrdiff` y
+`nadiff`: la escuela escribe ∇∇₄ como `nrdiff=2` con `ifadf={1,2}`, que es el
+**mismo operador** que `nrdiff=1, nadiff=1`. El propio `serie_operador` lo deja
+escrito, y por eso `conjunto_compat` compara el polinomio y no los enteros.
+
+En el m6:
+
+| serie | `nrdiff` | `nadiff` | el polinomio | `d` | `D` |
+|---|---|---|---|---|---|
+| EP, EI, EU, EC, P | 2 | 0 | (1−B)² | 2 | 0 |
+| **EA** | **2** | **0** | **(1−B)(1−B⁴)** | **1** | **1** |
+
+Las seis tienen `nrdiff = 2`. Cinco son ∇² y la sexta es ∇∇₄. **Una columna que
+leyera `nrdiff` pondría un 2 en las seis y diría que son iguales cuando no lo
+son** — y EA es precisamente la que está anidada con las otras cinco.
+
+Así que las tres columnas se calculan **del polinomio** `rnsop`, por división:
+
+    1. dividir por (1−Bˢ) mientras se pueda   -> D
+    2. dividir el resto por (1−B) mientras se pueda  -> d
+    3. lo que sobre son los factores irreducibles   -> f
+
+Es la forma canónica de la escuela, ∇^d ∇ₛ^D, y tiene la propiedad que hacía
+falta: **dos escrituras del mismo operador dan las mismas tres columnas.**
+
+Ganancia de lectura, con los datos reales: `EA` con `d=1 D=1` frente a `d=2 D=0`
+**salta a la vista**. La cadena de hoy no lo consigue, porque
+`(1-B)(1-B)[f=1][f=2]` *empieza igual* que `(1-B)(1-B)` y hay que leerla entera
+para ver que no es lo mismo.
+
+Si el paso 3 dejara algo que no se sabe nombrar, la columna `f` pone `?` y el
+polinomio entero está en el panel. Un `?` es mejor que un número que miente.
 
 ### La columna `Pierde`
 
@@ -159,23 +203,48 @@ no se puede perder:
 > desalineadas, en silencio. Está medido: catorce años de desfase mueven la
 > verosimilitud 31 unidades y drtran sale con 0.
 
-**`Operadores…`** — la matriz de compatibilidad, que es `n×n` y por tanto
-**nunca** debe estar en la página (R1). Como matriz y no como lista de parejas:
-con 6 series son 15 casillas en una rejilla, no 15 renglones.
+**`Operadores…`** — un panel emergente (*popover*) anclado al botón. Dos
+bloques, y ninguno crece con `n²` en la página porque la página no lo tiene.
+
+Arriba, **el polinomio entero de cada serie**, que es lo que las tres columnas
+resumen. Ahí es donde vive la cadena larga que se va de la lista:
+
+```
+   EP   (1-B)^2                     d=2  D=0
+   EI   (1-B)^2                     d=2  D=0
+   EU   (1-B)^2                     d=2  D=0
+   EC   (1-B)^2                     d=2  D=0
+   EA   (1-B)(1-B^4)                d=1  D=1    [escrito como nrdiff=2, f={1,2}]
+   P    (1-B)^2                     d=2  D=0
+```
+
+La coletilla entre corchetes sólo aparece cuando el fichero lo escribe de una
+forma distinta de la canónica. Es el sitio donde decirlo: en la lista sería
+ruido, y callarlo del todo dejaría al analista sin entender por qué su
+`nrdiff = 2` sale como `d = 1`.
+
+Abajo, **la matriz de compatibilidad**, que es `n×n` y por eso **nunca** puede
+estar en la página (R1). Como matriz y no como lista de parejas: con 6 series
+son 15 casillas en una rejilla, no 15 renglones.
 
 ```
         EP   EI   EU   EC   EA   P
-   EP    ·   =    =    =    ⊂    =
-   EI         ·   =    =    ⊂    =
-   EU              ·   =    ⊂    =
-   EC                   ·   ⊂    =
-   EA                        ·   ⊃
+   EP    ·   =    =    =    ⊃    =
+   EI         ·   =    =    ⊃    =
+   EU              ·   =    ⊃    =
+   EC                   ·   ⊃    =
+   EA                        ·   ⊂
    P                              ·
 
    =  el mismo ∇          cast empotrado, verosimilitud exacta
    ⊂  uno divide al otro  hay Δ(B), sigue siendo exacta
    ✗  incompatibles       el motor despacha al cast por resta
 ```
+
+Léase por filas: *«EP ⊃ EA»* = el operador de EA contiene al de EP. Los diez
+`=` y los cinco `⊃` son los «10 pares iguales» que hoy dice la barra: la matriz
+enseña además **cuál** es la distinta de un vistazo, que la lista de parejas no
+hace.
 
 ### Qué se va de la página
 
@@ -184,6 +253,7 @@ con 6 series son 15 casillas en una rejilla, no 15 renglones.
 | el marco «Ventana muestral común» entero | a la línea de veredicto + panel `Ventana…` |
 | el marco «Operadores no estacionarios» entero | a la línea de veredicto + panel `Operadores…` |
 | la columna `Papel` con las palabras `SALIDA Y` / `entrada` | a la columna `#` |
+| la columna `Operador ∇` con la cadena entera | a las tres columnas `d` `D` `f`; la cadena, al panel |
 
 Y entra: la columna `Pierde`.
 

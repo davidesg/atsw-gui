@@ -148,14 +148,13 @@ static gchar **arma_argv( Mtram *m, const gchar *dag, const gchar *cns,
         g_ptr_array_add( a, csv );
     }
 
-    /* Lo que la pagina Modelo dice que se MANTIENE del .pre en vez de
-     * reestimarlo al juntar. Va aqui porque es una opcion del motor, pero
-     * se decide alli, que es donde se ve lo que cuesta.                */
-    if (m->mod.fix_N) g_ptr_array_add( a, g_strdup( "-N" ) );
-    if (m->mod.fix_X) g_ptr_array_add( a, g_strdup( "-X" ) );
-    if (m->mod.fix_D) g_ptr_array_add( a, g_strdup( "-D" ) );
-    if (m->mod.fix_E) g_ptr_array_add( a, g_strdup( "-E" ) );
-    if (m->mod.fix_M) g_ptr_array_add( a, g_strdup( "-M" ) );
+    /* Lo que se MANTIENE del .pre en vez de reestimarlo al juntar. Es de
+     * aqui: dice COMO SE ESTIMA, no que es el modelo -- igual que el cast. */
+    if (m->est.fix_N) g_ptr_array_add( a, g_strdup( "-N" ) );
+    if (m->est.fix_X) g_ptr_array_add( a, g_strdup( "-X" ) );
+    if (m->est.fix_D) g_ptr_array_add( a, g_strdup( "-D" ) );
+    if (m->est.fix_E) g_ptr_array_add( a, g_strdup( "-E" ) );
+    if (m->est.fix_M) g_ptr_array_add( a, g_strdup( "-M" ) );
 
     if (m->est.diagonal)  g_ptr_array_add( a, g_strdup( "-0" ) );
     if (m->est.cast_resta) g_ptr_array_add( a, g_strdup( "-S" ) );
@@ -427,6 +426,81 @@ static void on_ver_out( GtkButton *b, Mtram *m )
     preview_open_external( m, m->est.out_path );
 }
 
+/* ------------------------------------------------------------------------ */
+/* Que se MANTIENE del .pre                                                  */
+/*                                                                           */
+/* Al unir varios univariantes en un sistema, sus parametros pueden dejarse   */
+/* correr --y se mueven, porque ahora hay covarianzas-- o clavarse en lo que  */
+/* fue dijo. Es -N/-X/-D/-E/-M, y esta aqui y no en Modelo porque dice COMO   */
+/* SE ESTIMA y no QUE ES EL MODELO, igual que el cast.                        */
+/*                                                                           */
+/* Cambia la cuenta de parametros, asi que al aceptar se refresca Modelo: ahi */
+/* se ve lo que cuesta cada casilla.                                          */
+/* ------------------------------------------------------------------------ */
+
+static void on_mantener( GtkButton *bt, Mtram *m )
+{
+    Estima    *E = &m->est;
+    GtkWidget *d, *caja, *c[5], *av;
+    static const struct { const char *txt, *tip; } OP[5] = {
+      { "-N   el ARMA del ruido de la SALIDA",
+        "Los phi y theta de la primera serie: se mantienen los del .pre." },
+      { "-X   el ARMA de las ENTRADAS",
+        "Los phi y theta de las demás series." },
+      { "-D   los deterministas de la SALIDA",
+        "Todos los omega y delta de las variables deterministas de la primera." },
+      { "-E   los deterministas de las ENTRADAS",
+        "Ídem, en las demás series." },
+      { "-M   las medias",
+        "Las mu de todas. Una media que el .pre ya declara FIJA lo está de "
+        "todos modos; esto clava además las que estaban libres." },
+    };
+    gboolean *campo[5];
+    int       i;
+
+    campo[0] = &E->fix_N;  campo[1] = &E->fix_X;  campo[2] = &E->fix_D;
+    campo[3] = &E->fix_E;  campo[4] = &E->fix_M;
+
+    d = gtk_dialog_new_with_buttons( "Qué se mantiene del .pre",
+            GTK_WINDOW(m->ventana_p),
+            GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+            "_Cancelar", GTK_RESPONSE_CANCEL,
+            "_Aceptar",  GTK_RESPONSE_ACCEPT, NULL );
+    caja = gtk_dialog_get_content_area( GTK_DIALOG(d) );
+    gtk_container_set_border_width( GTK_CONTAINER(caja), 12 );
+    gtk_box_set_spacing( GTK_BOX(caja), 6 );
+
+    av = gtk_label_new(
+        "Al juntar varios univariantes en un sistema, sus parámetros pueden\n"
+        "dejarse correr — y se mueven, porque ahora hay covarianzas — o\n"
+        "clavarse en lo que fue dijo. Marcar es MANTENER.\n\n"
+        "Lo que el .pre ya declare FIJO lo está de todos modos: esto sólo\n"
+        "añade, nunca libera.\n\n"
+        "La pestaña Modelo enseña lo que cuesta cada casilla." );
+    gtk_widget_set_halign( av, GTK_ALIGN_START );
+    gtk_container_add( GTK_CONTAINER(caja), av );
+    gtk_container_add( GTK_CONTAINER(caja),
+                       gtk_separator_new( GTK_ORIENTATION_HORIZONTAL ) );
+
+    for (i = 0; i < 5; i++) {
+        c[i] = gtk_check_button_new_with_label( OP[i].txt );
+        gtk_widget_set_tooltip_text( c[i], OP[i].tip );
+        gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(c[i]), *campo[i] );
+        gtk_container_add( GTK_CONTAINER(caja), c[i] );
+    }
+
+    gtk_widget_show_all( d );
+    if (gtk_dialog_run( GTK_DIALOG(d) ) == GTK_RESPONSE_ACCEPT) {
+        for (i = 0; i < 5; i++)
+            *campo[i] = gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(c[i]) );
+        gtk_widget_destroy( d );
+        modelo_refresca( m );          /* la cuenta cambia: se ve alli */
+        estima_refresca( m );          /* y la orden, aqui            */
+        return;
+    }
+    gtk_widget_destroy( d );
+}
+
 static void on_cambio( GtkToggleButton *b, Mtram *m )
 {
     Estima *E = &m->est;
@@ -500,6 +574,7 @@ GtkWidget *estima_pagina_new( Mtram *m )
     E->corriendo = FALSE;
     E->out_path  = NULL;
     E->diagonal = E->cast_resta = E->traza = FALSE;
+    E->fix_N = E->fix_X = E->fix_D = E->fix_E = E->fix_M = FALSE;
 
     caja = gtk_box_new( GTK_ORIENTATION_VERTICAL, 6 );
     gtk_container_set_border_width( GTK_CONTAINER(caja), 8 );
@@ -514,6 +589,13 @@ GtkWidget *estima_pagina_new( Mtram *m )
         "en el directorio de trabajo." );
     g_signal_connect( E->boton, "clicked", G_CALLBACK(on_estimar), m );
     gtk_box_pack_start( GTK_BOX(barra), E->boton, FALSE, FALSE, 0 );
+
+    b = gtk_button_new_with_label( "Mantener…" );
+    gtk_widget_set_tooltip_text( b,
+        "Qué se mantiene del .pre en vez de reestimarlo al juntar las "
+        "ecuaciones: -N, -X, -D, -E, -M." );
+    g_signal_connect( b, "clicked", G_CALLBACK(on_mantener), m );
+    gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
 
     b = gtk_button_new_with_label( "Ver el .out" );
     g_signal_connect( b, "clicked", G_CALLBACK(on_ver_out), m );

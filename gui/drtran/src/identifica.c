@@ -297,6 +297,72 @@ static void on_ccf( GtkButton *b, Mtram *m )
     g_free( path );
 }
 
+/* ------------------------------------------------------------------------ */
+/* EL GESTO QUE FALTABA                                                      */
+/*                                                                           */
+/* La red SE PUEBLA con la identificacion. Eso es el metodo, y hasta ahora no */
+/* tenia forma de hacerse dentro del programa: la CCF proponia (b, s) y habia */
+/* que irse a la pestaña Red a teclearlo a mano. La pregunta "¿como se puebla */
+/* la red?" no tenia respuesta en la interfaz.                                */
+/* ------------------------------------------------------------------------ */
+
+static void on_a_la_red( GtkButton *b, Mtram *m )
+{
+    Ident          *id = &m->id;
+    const IdentUno *u;
+    NetLink        *l;
+    int             k;
+
+    if (id->marcada < 0 || id->marcada >= id->nent) {
+        preview_show_status( m, "Marca una entrada." );
+        return;
+    }
+    u = &id->u[id->marcada];
+
+    if (!u->vale || u->b < 0) {
+        preview_show_status( m, "La CCF de «%s» no propone transferencia: "
+            "ningún retardo k ≥ 0 sale de la banda.",
+            m->c.s[u->serie]->ts.name ? m->c.s[u->serie]->ts.name : "?" );
+        return;
+    }
+
+    /* Si ya estaba, se le ponen los ordenes que propone la CCF en vez de
+     * duplicar el enlace: reidentificar es lo normal y no debe ensuciar. */
+    for (k = 0; k < m->red.n; k++)
+        if (m->red.lnk[k].out == 1 && m->red.lnk[k].inp == u->serie + 1) {
+            m->red.lnk[k].b = u->b;
+            m->red.lnk[k].s = u->s;
+            red_refresca( m );
+            modelo_refresca( m );
+            preview_show_status( m, "«%s» ya estaba: se le ponen b=%d s=%d.",
+                m->c.s[u->serie]->ts.name, u->b, u->s );
+            return;
+        }
+
+    if (m->red.n >= NET_MAX_LINK) {
+        preview_show_status( m, "La red lleva %d enlaces como mucho.",
+                             NET_MAX_LINK );
+        return;
+    }
+
+    l = &m->red.lnk[m->red.n++];
+    l->out = 1;                       /* la salida es siempre la primera */
+    l->inp = u->serie + 1;
+    l->b = u->b;  l->r = 0;  l->s = u->s;
+
+    red_refresca( m );
+    modelo_refresca( m );
+
+    if (u->neg)
+        preview_show_status( m, "Añadido %s ← %s con b=%d s=%d. OJO: tiene %d "
+            "retardo%s negativo%s fuera de banda — mira si debe estar.",
+            m->c.s[0]->ts.name, m->c.s[u->serie]->ts.name, u->b, u->s,
+            u->neg, u->neg == 1 ? "" : "s", u->neg == 1 ? "" : "s" );
+    else
+        preview_show_status( m, "Añadido %s ← %s con b=%d  r=0  s=%d.",
+            m->c.s[0]->ts.name, m->c.s[u->serie]->ts.name, u->b, u->s );
+}
+
 static void on_ecuacion( GtkButton *b, Mtram *m )
 {
     EqLink  lnk[GUI_MAX_SER];
@@ -405,6 +471,9 @@ GtkWidget *identifica_pagina_new( Mtram *m )
     g_signal_connect( b, "clicked", G_CALLBACK(fn), m ); \
     gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
 
+    BOTON( "Añadir a la red", on_a_la_red,
+           "Mete la entrada marcada en la red, con el (b, s) que propone la "
+           "CCF. Es lo que puebla el .dag: la red sale de la identificación." )
     BOTON( "CCF…", on_ccf,
            "El gráfico bidireccional de la entrada marcada: a la derecha la "
            "transferencia, a la izquierda la retroalimentación." )

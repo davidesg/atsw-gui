@@ -73,16 +73,6 @@ typedef struct {
 
     gboolean   solo;          /* la casilla                                 */
 
-    /* Lo que el motor puede MANTENER del .pre en vez de reestimarlo al
-     * juntar las ecuaciones. Es una decision de ESTE escalon --al unir los
-     * univariantes, ¿se dejan correr sus parametros o se clavan?-- y cambia
-     * la cuenta de libres, que es la realimentacion que hace falta.      */
-    gboolean   fix_N;         /* -N  el ARMA del ruido de la SALIDA         */
-    gboolean   fix_X;         /* -X  el ARMA de las ENTRADAS                */
-    gboolean   fix_D;         /* -D  los deterministas de la salida         */
-    gboolean   fix_E;         /* -E  los deterministas de las entradas      */
-    gboolean   fix_M;         /* -M  las medias                             */
-
     SlotTable  st;
     gboolean   vale;
     int        perdidas;      /* restricciones que no cupieron al rehacer   */
@@ -104,6 +94,16 @@ typedef struct {
     gboolean   diagonal;      /* -0 : sin transferencia (homologacion)      */
     gboolean   cast_resta;    /* -S : el cast antiguo                       */
     gboolean   traza;         /* -v                                         */
+
+    /* Lo que el estimador MANTIENE del .pre en vez de reestimarlo al juntar
+     * las ecuaciones. Vive aqui y no en Modelo porque dice COMO SE ESTIMA,
+     * no QUE ES EL MODELO -- igual que el cast. Pero cambia la cuenta de
+     * parametros, asi que la pagina Modelo la lee de aqui.             */
+    gboolean   fix_N;         /* -N  el ARMA del ruido de la SALIDA         */
+    gboolean   fix_X;         /* -X  el ARMA de las ENTRADAS                */
+    gboolean   fix_D;         /* -D  los deterministas de la salida         */
+    gboolean   fix_E;         /* -E  los deterministas de las entradas      */
+    gboolean   fix_M;         /* -M  las medias                             */
     gchar     *out_path;
     VerdictInfo v;
 } Estima;

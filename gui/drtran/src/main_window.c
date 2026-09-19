@@ -745,7 +745,7 @@ GtkWidget *mtram_window_new(GtkApplication *app, Mtram *m)
     caja = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
     gtk_container_set_border_width(GTK_CONTAINER(caja), 8);
     gtk_notebook_append_page(GTK_NOTEBOOK(libro), caja,
-                             gtk_label_new("Series"));
+                             gtk_label_new("1 · Series"));
 
     /* --- los botones --- */
     barra_b = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
@@ -859,22 +859,28 @@ GtkWidget *mtram_window_new(GtkApplication *app, Mtram *m)
     gtk_widget_set_margin_bottom(m->estado, 4);
     gtk_box_pack_start(GTK_BOX(raiz), m->estado, FALSE, FALSE, 0);
 
-    /* --- la red, y la identificacion --- */
-    /* El orden de las pestañas es el orden del metodo: que series hay, como se
-     * enlazan, y que forma tiene cada enlace. Ninguna se bloquea: cada una
-     * pide por su nombre lo que la anterior fabrica.                      */
-    gtk_notebook_append_page(GTK_NOTEBOOK(libro), red_pagina_new(m),
-                             gtk_label_new("Red"));
+    /* EL ORDEN DE LAS PESTAÑAS ES EL DEL METODO, y por eso Identificacion va
+     * ANTES que Red: la red SE PUEBLA con la identificacion. Estaba al reves.
+     *
+     * Los numeros no son adorno: dicen que hay un orden, y cual. Pero ninguna
+     * se bloquea -- cada una pide por su nombre lo que la anterior fabrica,
+     * que es la regla que salio de TASTE y lo mejor de su diseño.
+     *
+     * Red y Modelo son UNA etapa, especificacion, partida en dos por el
+     * formato de ficheros (.dag y .cns) y no por el metodo. Ver
+     * DISENO-flujo.md, donde se propone fundirlas.                      */
     gtk_notebook_append_page(GTK_NOTEBOOK(libro), identifica_pagina_new(m),
-                             gtk_label_new("Identificación"));
+                             gtk_label_new("2 · Identificación"));
+    gtk_notebook_append_page(GTK_NOTEBOOK(libro), red_pagina_new(m),
+                             gtk_label_new("3 · Red"));
     gtk_notebook_append_page(GTK_NOTEBOOK(libro), modelo_pagina_new(m),
-                             gtk_label_new("Modelo"));
+                             gtk_label_new("4 · Modelo"));
     gtk_notebook_append_page(GTK_NOTEBOOK(libro), estima_pagina_new(m),
-                             gtk_label_new("Estimación"));
+                             gtk_label_new("5 · Estimación"));
     gtk_notebook_append_page(GTK_NOTEBOOK(libro), diagnosis_pagina_new(m),
-                             gtk_label_new("Diagnosis"));
+                             gtk_label_new("6 · Diagnosis"));
     gtk_notebook_append_page(GTK_NOTEBOOK(libro), prevision_pagina_new(m),
-                             gtk_label_new("Previsión"));
+                             gtk_label_new("7 · Previsión"));
 
     return w;
 }

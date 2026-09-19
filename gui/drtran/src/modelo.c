@@ -109,9 +109,9 @@ static void construye( Mtram *m )
     SlotFix fix;
 
     for (i = 1; i <= m->c.n; i++) {
-        arma[i] = i == 1 ? M->fix_N : M->fix_X;
-        det[i]  = i == 1 ? M->fix_D : M->fix_E;
-        mu[i]   = M->fix_M;
+        arma[i] = i == 1 ? m->est.fix_N : m->est.fix_X;
+        det[i]  = i == 1 ? m->est.fix_D : m->est.fix_E;
+        mu[i]   = m->est.fix_M;
     }
     fix.arma = arma;  fix.det = det;  fix.mu = mu;
     slots_build( &M->st, Tm, m->c.n, m->red.lnk, m->red.n, &fix );
@@ -247,9 +247,41 @@ static void refresca_lista( Mtram *m )
         gchar *eq = ecuacion_de( m, i );
         int    pa, pal, qa, qal, nd, ndl, nm, nml, total;
 
+        /* El ruido NO es una rama: el modelo que se especifica aqui son las
+         * TRANSFERENCIAS. El ruido viene de fue y es un dato -- va en las
+         * columnas de la propia ecuacion, con su estructura y su cuenta,
+         * sin desglose, porque no se toca.                             */
+        {
+        NsopForm o;
+        char     pol[64];
+        gchar   *estr, *par;
+
+        nsop_canon( m->c.s[i - 1]->tm.rnsop, m->c.s[i - 1]->tm.ornsop,
+                    m->c.s[i - 1]->tm.sper, &o );
+        nsop_texto( &o, m->c.s[i - 1]->tm.sper, pol, sizeof pol );
+
+        cuenta_pref( &M->st, "phi",     i, &pa, &pal );
+        cuenta_pref( &M->st, "theta",   i, &qa, &qal );
+        cuenta_pref( &M->st, "omega_d", i, &nd, &ndl );
+        {
+        char q[16];
+        snprintf( q, sizeof q, "mu[%d]", i );
+        nm = slots_find( &M->st, q ) ? 1 : 0;
+        }
+        nml = nm;  total = pa + qa + nd + nm;
+
+        estr = g_strdup_printf( "N_%s: %s · AR %d · MA %d · det %d · media %s",
+                                nom_serie( m, i ), pol, pa, qa, nd,
+                                nm ? "libre" : "fija" );
+        par  = g_strdup_printf( "%d par · de fue", total );
+
         gtk_tree_store_append( st, &ec, NULL );
-        gtk_tree_store_set( st, &ec, M_NOMBRE, eq, M_IDX, 0, -1 );
+        gtk_tree_store_set( st, &ec, M_NOMBRE, eq, M_QUE, estr,
+                            M_DICE, par, M_IDX, 0, -1 );
+        g_free( estr ); g_free( par );
+        }
         g_free( eq );
+        (void) pal; (void) qal; (void) ndl; (void) nml;
 
         /* --- las transferencias: LO QUE SE DECIDE AQUI ----------------- */
         for (k = 0; k < m->red.n; k++) {
@@ -302,40 +334,6 @@ static void refresca_lista( Mtram *m )
             }
         }
 
-        /* --- el ruido: VIENE DE fue, aqui no se re-especifica ---------- */
-        {
-        NsopForm o;
-        char     pol[64];
-        gchar   *nmb, *estr, *par;
-
-        nsop_canon( m->c.s[i - 1]->tm.rnsop, m->c.s[i - 1]->tm.ornsop,
-                    m->c.s[i - 1]->tm.sper, &o );
-        nsop_texto( &o, m->c.s[i - 1]->tm.sper, pol, sizeof pol );
-
-        cuenta_pref( &M->st, "phi",   i, &pa, &pal );
-        cuenta_pref( &M->st, "theta", i, &qa, &qal );
-        cuenta_pref( &M->st, "omega_d", i, &nd, &ndl );
-        {
-        char q[16];
-        snprintf( q, sizeof q, "mu[%d]", i );
-        nm = slots_find( &M->st, q ) ? 1 : 0;
-        nml = nm;
-        }
-        total = pa + qa + nd + nm;
-
-        nmb  = g_strdup_printf( "   N_%s", nom_serie( m, i ) );
-        estr = g_strdup_printf( "%s \xc2\xb7 AR %d \xc2\xb7 MA %d \xc2\xb7 "
-                                "det %d \xc2\xb7 media %s",
-                                pol, pa, qa, nd, nm ? "libre" : "fija" );
-        par  = g_strdup_printf( "%d par \xc2\xb7 de fue%s", total,
-                                total && !(pal + qal + ndl + nml)
-                                ? ", mantenido" : "" );
-
-        gtk_tree_store_append( st, &enl, &ec );
-        gtk_tree_store_set( st, &enl, M_NOMBRE, nmb, M_QUE, estr,
-                            M_DICE, par, M_IDX, 0, -1 );
-        g_free( nmb ); g_free( estr ); g_free( par );
-        }
     }
 
     /* --- Sigma ------------------------------------------------------- */
@@ -686,82 +684,6 @@ static void on_covarianzas( GtkButton *bt, Mtram *m )
 }
 
 /* ------------------------------------------------------------------------ */
-/* El ruido: reestimarlo al juntar, o mantenerlo del .pre                    */
-/*                                                                           */
-/* Es una decision de ESTE escalon y hasta ahora no estaba en ninguna parte.  */
-/* Al unir varios univariantes en un sistema, sus parametros pueden dejarse   */
-/* correr --y se mueven, porque ahora hay covarianzas-- o clavarse en lo que  */
-/* fue dijo. El motor lo ofrece con -N/-X/-D/-E/-M y el GUI no lo ofrecia.    */
-/*                                                                           */
-/* Y se nota al momento: al marcarlos, esos slots salen de la tabla y la      */
-/* cuenta de libres baja. Esa es la realimentacion que hace util la casilla.  */
-/* ------------------------------------------------------------------------ */
-
-static void on_ruido( GtkButton *bt, Mtram *m )
-{
-    Modelo    *M = &m->mod;
-    GtkWidget *d, *caja, *c[5], *av;
-    static const struct { const char *txt, *tip; } OP[5] = {
-      { "-N  el ARMA del ruido de la SALIDA",
-        "Los phi y theta de la primera serie: se mantienen los del .pre." },
-      { "-X  el ARMA de las ENTRADAS",
-        "Los phi y theta de las demas series." },
-      { "-D  los deterministas de la SALIDA",
-        "Todos los omega y delta de las variables deterministas de la primera." },
-      { "-E  los deterministas de las ENTRADAS",
-        "Idem, en las demas series." },
-      { "-M  las medias",
-        "Las mu de todas. Ojo: una media que el .pre ya declara FIJA lo esta de "
-        "todos modos; esto clava ademas las que estaban libres." },
-    };
-    gboolean  *campo[5];
-    int        i;
-
-    campo[0] = &M->fix_N;  campo[1] = &M->fix_X;  campo[2] = &M->fix_D;
-    campo[3] = &M->fix_E;  campo[4] = &M->fix_M;
-
-    d = gtk_dialog_new_with_buttons( "Qué se mantiene del .pre",
-            GTK_WINDOW(m->ventana_p),
-            GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
-            "_Cancelar", GTK_RESPONSE_CANCEL,
-            "_Aceptar",  GTK_RESPONSE_ACCEPT, NULL );
-    caja = gtk_dialog_get_content_area( GTK_DIALOG(d) );
-    gtk_container_set_border_width( GTK_CONTAINER(caja), 12 );
-    gtk_box_set_spacing( GTK_BOX(caja), 6 );
-
-    av = gtk_label_new(
-        "Al juntar varios univariantes en un sistema, sus parámetros pueden\n"
-        "dejarse correr — y se mueven, porque ahora hay covarianzas — o\n"
-        "clavarse en lo que fue dijo. Marcar es MANTENER.\n\n"
-        "Lo que el .pre ya declare FIJO lo está de todos modos: esto sólo\n"
-        "añade, nunca libera." );
-    gtk_widget_set_halign( av, GTK_ALIGN_START );
-    gtk_container_add( GTK_CONTAINER(caja), av );
-    gtk_container_add( GTK_CONTAINER(caja),
-                       gtk_separator_new( GTK_ORIENTATION_HORIZONTAL ) );
-
-    for (i = 0; i < 5; i++) {
-        c[i] = gtk_check_button_new_with_label( OP[i].txt );
-        gtk_widget_set_tooltip_text( c[i], OP[i].tip );
-        gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(c[i]), *campo[i] );
-        gtk_container_add( GTK_CONTAINER(caja), c[i] );
-    }
-
-    gtk_widget_show_all( d );
-    if (gtk_dialog_run( GTK_DIALOG(d) ) == GTK_RESPONSE_ACCEPT) {
-        for (i = 0; i < 5; i++)
-            *campo[i] = gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(c[i]) );
-        gtk_widget_destroy( d );
-        modelo_refresca( m );
-        estima_refresca( m );          /* la orden cambia: se ve al momento */
-        preview_show_status( m,
-            "%d parámetros, %d libres.", m->mod.st.n, slots_nfree( &m->mod.st ) );
-        return;
-    }
-    gtk_widget_destroy( d );
-}
-
-/* ------------------------------------------------------------------------ */
 /* Los avisos                                                                */
 /* ------------------------------------------------------------------------ */
 
@@ -1080,9 +1002,6 @@ GtkWidget *modelo_pagina_new( Mtram *m )
     g_signal_connect( b, "clicked", G_CALLBACK(fn), m ); \
     gtk_box_pack_end( GTK_BOX(barra), b, FALSE, FALSE, 0 );
 
-    BOTON_DER( "Ruido…", on_ruido,
-               "Qué se mantiene del .pre en vez de reestimarlo al juntar las "
-               "ecuaciones: -N, -X, -D, -E, -M." )
     BOTON_DER( "Avisos…", on_avisos,
                "La casi-colinealidad: un enlace contemporáneo y su covarianza "
                "libre explican lo mismo dos veces." )

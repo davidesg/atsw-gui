@@ -868,6 +868,16 @@ static void on_compartir( GtkButton *b, Mtram *m )
 /* sitio para varios clics seguidos.                                          */
 /* ------------------------------------------------------------------------ */
 
+/* El rotulo tiene que cambiar al pulsar. Sin esto el boton se hunde --que es
+ * un cambio casi invisible-- y sigue poniendo "0", asi que parece que no hace
+ * nada aunque el valor SI quede guardado. Es el fallo de dar por hecho que el
+ * estado de un GtkToggleButton se ve.                                    */
+static void on_cov_pulsa( GtkToggleButton *b, gpointer d )
+{
+    gtk_button_set_label( GTK_BUTTON(b),
+        gtk_toggle_button_get_active( b ) ? "libre" : "0" );
+}
+
 static void on_covarianzas( GtkButton *bt, Mtram *m )
 {
     Modelo    *M = &m->mod;
@@ -928,16 +938,23 @@ static void on_covarianzas( GtkButton *bt, Mtram *m )
                             M->st.kind[k] == SLOT_FREE ? "libre" : "0" );
             gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(bot[i][j]),
                                           M->st.kind[k] == SLOT_FREE );
+            g_signal_connect( bot[i][j], "toggled",
+                              G_CALLBACK(on_cov_pulsa), NULL );
             gtk_widget_set_tooltip_text( bot[i][j], nm );
-            gtk_widget_set_size_request( bot[i][j], 56, -1 );
+            gtk_widget_set_size_request( bot[i][j], 60, -1 );
             gtk_grid_attach( GTK_GRID(rej), bot[i][j], j, i - 1, 1, 1 );
         }
     }
 
     av = gtk_label_new(
+        "Pulsa una casilla para pasarla de 0 a libre y al revés.\n\n"
         "Las covarianzas nacen FIJAS en cero: la diagonal es el caso por "
-        "defecto\ny liberar una es una decisión, no algo que se active en "
-        "bloque.\nEl m6-1 no libera las quince de su sistema: libera tres." );
+        "defecto y\nliberar una es una decisión de modelo, no un interruptor. "
+        "El m6-1 no libera\nlas quince de su sistema: libera tres.\n\n"
+        "Es, junto con los órdenes (b, r, s), lo único que se decide en esta "
+        "etapa.\nY hay una cautela: si un enlace es CONTEMPORÁNEO (b=0) y su "
+        "covarianza\nestá libre, las dos cosas explican lo mismo en k = 0 — "
+        "usa una, no las dos.\nEl panel «Avisos…» lo dice con los números." );
     gtk_widget_set_halign( av, GTK_ALIGN_START );
     gtk_container_add( GTK_CONTAINER(caja), av );
 

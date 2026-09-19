@@ -420,8 +420,19 @@ static void on_editar( GtkButton *b, Mtram *m )
     int i = fila_marcada( m );
 
     if (i < 0) { preview_show_status( m, "Marca primero un enlace." ); return; }
-    if (!pide_enlace( m, &m->red.lnk[i], "El enlace" )) return;
+    red_edita_enlace( m, i );
+}
+
+/* El mismo dialogo, desde fuera: la pagina Modelo enseña la estructura de cada
+ * transferencia y tiene que poder cambiarla sin mandar al analista a otra
+ * pestaña a buscar la misma fila.                                       */
+gboolean red_edita_enlace( Mtram *m, int k )
+{
+    if (k < 0 || k >= m->red.n) return FALSE;
+    if (!pide_enlace( m, &m->red.lnk[k], "El enlace" )) return FALSE;
     red_refresca( m );
+    modelo_refresca( m );
+    return TRUE;
 }
 
 static void on_quitar( GtkButton *b, Mtram *m )

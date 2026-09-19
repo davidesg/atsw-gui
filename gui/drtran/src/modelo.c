@@ -36,6 +36,7 @@
 #include "gui.h"
 #include "previewhost.h"
 #include "slots.h"
+#include "nsop.h"
 
 enum { M_NOMBRE, M_QUE, M_DICE, M_IDX, M_N };
 
@@ -99,9 +100,22 @@ static void construye( Mtram *m )
 
     for (i = 1; i <= m->c.n; i++) Tm[i] = m->c.s[i - 1]->tm;
 
-    /* fix = NULL: mtram no clava nada desde fuera. Lo que el .pre declare
-     * fijo se respeta, que es lo unico que hay que respetar.              */
-    slots_build( &M->st, Tm, m->c.n, m->red.lnk, m->red.n, NULL );
+    /* Lo que el .pre declare fijo se respeta siempre. Ademas, el analista
+     * puede MANTENER partes enteras en vez de reestimarlas al juntar: es
+     * -N/-X/-D/-E/-M, y pasarselo a slots_build hace que la cuenta de libres
+     * lo refleje AL MOMENTO, que es la realimentacion que hace falta.   */
+    {
+    int     arma[GUI_MAX_SER + 1], det[GUI_MAX_SER + 1], mu[GUI_MAX_SER + 1];
+    SlotFix fix;
+
+    for (i = 1; i <= m->c.n; i++) {
+        arma[i] = i == 1 ? M->fix_N : M->fix_X;
+        det[i]  = i == 1 ? M->fix_D : M->fix_E;
+        mu[i]   = M->fix_M;
+    }
+    fix.arma = arma;  fix.det = det;  fix.mu = mu;
+    slots_build( &M->st, Tm, m->c.n, m->red.lnk, m->red.n, &fix );
+    }
     M->vale = TRUE;
 
     /* Salvo que las series se hayan MOVIDO: los nombres llevan la posicion
@@ -115,6 +129,13 @@ static void construye( Mtram *m )
 }
 
 /* ------------------------------------------------------------------------ */
+
+/* El nombre de la serie i (1..n). */
+static const char *nom_serie( Mtram *m, int i )
+{
+    if (i < 1 || i > m->c.n) return "?";
+    return m->c.s[i - 1]->ts.name ? m->c.s[i - 1]->ts.name : "?";
+}
 
 /* Cuantas covarianzas hay libres, y cuantas hay. */
 static void covarianzas( const SlotTable *st, int *libres, int *total )
@@ -154,80 +175,212 @@ static int colineales( Mtram *m, int *primero )
 }
 
 /* ------------------------------------------------------------------------ */
-/* El arbol                                                                  */
+/* El arbol: UNA RAMA POR ECUACION                                           */
+/*                                                                           */
+/* No por tipo de parametro. Un grupo "ARMA del ruido" con los theta de las   */
+/* seis series juntos es el vector de parametros DEL MOTOR, no el modelo del  */
+/* analista -- y enseñandolo asi no hay forma de saber que sistema se esta    */
+/* estimando.                                                                */
+/*                                                                           */
+/* El modelo es un SISTEMA DE ECUACIONES, una por serie. Dentro de cada una,  */
+/* sus transferencias --que es lo que se decide aqui-- y su ruido, que VIENE  */
+/* DE fue y aqui no se re-especifica: de el solo interesa cuantos parametros  */
+/* mete y que estructura tiene.                                              */
+/*                                                                           */
+/* De los 67 del m6: 11 de transferencia y 15 covarianzas son de este         */
+/* escalon; 36 son ruido que viene de los .pre --y 28 de esos, deterministas, */
+/* mas que todo lo demas junto-- y 5 son varianzas relativas, consecuencia de */
+/* juntarlas.                                                                */
 /* ------------------------------------------------------------------------ */
+
+/* Lo que se escribe en la rama de la ecuacion. */
+static gchar *ecuacion_de( Mtram *m, int i )
+{
+    GString *t = g_string_new( NULL );
+    int      k, primero = 1, hay = 0;
+
+    g_string_append_printf( t, "%s_t  =  ", nom_serie( m, i ) );
+
+    for (k = 0; k < m->red.n; k++) {
+        if (m->red.lnk[k].out != i) continue;
+        g_string_append_printf( t, "%s[\xcf\x89%d(B)", primero ? "" : " + ", k + 1 );
+        if (m->red.lnk[k].r) g_string_append_printf( t, "/\xce\xb4%d(B)", k + 1 );
+        g_string_append_c( t, ']' );
+        if (m->red.lnk[k].b) g_string_append_printf( t, "B^%d", m->red.lnk[k].b );
+        g_string_append_printf( t, " %s", nom_serie( m, m->red.lnk[k].inp ) );
+        primero = 0;  hay = 1;
+    }
+    g_string_append_printf( t, "%sN_%s,t", hay ? "  +  " : "", nom_serie( m, i ) );
+    return g_string_free( t, FALSE );
+}
+
+/* Cuantos slots de esta serie y de este prefijo, y cuantos libres. */
+static void cuenta_pref( const SlotTable *st, const char *pref, int i,
+                         int *n, int *libres )
+{
+    char p[64];
+    int  k;
+
+    *n = *libres = 0;
+    snprintf( p, sizeof p, pref[0] == 'q' ? "%s" : "%s_%d[", pref, i );
+    if (pref[0] == 'o') snprintf( p, sizeof p, "omega_d%d[", i );
+    for (k = 1; k <= st->n; k++)
+        if (!strncmp( st->name[k], p, strlen( p ) )) {
+            (*n)++;
+            if (st->kind[k] == SLOT_FREE) (*libres)++;
+        }
+}
 
 static void refresca_lista( Mtram *m )
 {
     Modelo       *M  = &m->mod;
     GtkTreeStore *st = GTK_TREE_STORE( gtk_tree_view_get_model(
                                            GTK_TREE_VIEW(M->lista) ) );
-    GtkTreeIter   grupo, fila;
+    GtkTreeIter   ec, enl, fila;
     char          dice[256];
-    int           g, i;
+    int           i, k, kk;
 
     gtk_tree_store_clear( st );
     if (!M->vale) return;
 
-    for (g = 0; g < N_GRUPOS; g++) {
-        int hay = 0, libres = 0, puestos = 0;
-        gchar *cab;
+    for (i = 1; i <= m->c.n; i++) {
+        gchar *eq = ecuacion_de( m, i );
+        int    pa, pal, qa, qal, nd, ndl, nm, nml, total;
 
-        /* Cuantos caen en este grupo, y cuantos de ellos se van a enseñar. */
-        for (i = 1; i <= M->st.n; i++)
-            if (grupo_de( M->st.name[i] ) == GRUPOS[g]) {
-                hay++;
-                if (M->st.kind[i] == SLOT_FREE) libres++;
-                if (!M->solo || slots_line( &M->st, i, dice, sizeof dice ))
-                    puestos++;
+        gtk_tree_store_append( st, &ec, NULL );
+        gtk_tree_store_set( st, &ec, M_NOMBRE, eq, M_IDX, 0, -1 );
+        g_free( eq );
+
+        /* --- las transferencias: LO QUE SE DECIDE AQUI ----------------- */
+        for (k = 0; k < m->red.n; k++) {
+            gchar *nmb, *ords, *par;
+            int    tot = 0, lib = 0;
+
+            if (m->red.lnk[k].out != i) continue;
+
+            for (kk = 1; kk <= M->st.n; kk++) {
+                char p[32];
+
+                snprintf( p, sizeof p, "omega%d[", k + 1 );
+                if (strncmp( M->st.name[kk], p, strlen( p ) )) {
+                    snprintf( p, sizeof p, "delta%d[", k + 1 );
+                    if (strncmp( M->st.name[kk], p, strlen( p ) )) continue;
+                }
+                tot++;
+                if (M->st.kind[kk] == SLOT_FREE) lib++;
             }
-        if (!hay || !puestos) continue;
 
-        cab = g_strdup_printf( "%s (%d)", GRUPOS[g], hay );
-        gtk_tree_store_append( st, &grupo, NULL );
-        gtk_tree_store_set( st, &grupo,
-            M_NOMBRE, cab,
-            /* En las covarianzas, lo que importa del grupo es cuantas se han
-             * liberado: nacen fijas en cero y liberarlas es la decision.  */
-            M_QUE, g == 5 ? g_strdup_printf( "%d libre%s", libres,
-                                             libres == 1 ? "" : "s" ) : "",
-            M_IDX, 0,
-            -1 );
-        g_free( cab );
+            nmb  = g_strdup_printf( "   \xcf\x89%d  \xe2\x86\x90 %s", k + 1,
+                                    nom_serie( m, m->red.lnk[k].inp ) );
+            ords = g_strdup_printf( "b=%d  r=%d  s=%d", m->red.lnk[k].b,
+                                    m->red.lnk[k].r, m->red.lnk[k].s );
+            par  = g_strdup_printf( "%d par, %d libres", tot, lib );
 
-        for (i = 1; i <= M->st.n; i++) {
-            if (grupo_de( M->st.name[i] ) != GRUPOS[g]) continue;
-            if (!slots_line( &M->st, i, dice, sizeof dice )) {
-                if (M->solo) continue;
-                dice[0] = 0;
+            gtk_tree_store_append( st, &enl, &ec );
+            gtk_tree_store_set( st, &enl, M_NOMBRE, nmb, M_QUE, ords,
+                                M_DICE, par, M_IDX, -( k + 1 ), -1 );
+            g_free( nmb ); g_free( ords ); g_free( par );
+
+            for (kk = 1; kk <= M->st.n; kk++) {
+                char p[32];
+
+                snprintf( p, sizeof p, "omega%d[", k + 1 );
+                if (strncmp( M->st.name[kk], p, strlen( p ) )) {
+                    snprintf( p, sizeof p, "delta%d[", k + 1 );
+                    if (strncmp( M->st.name[kk], p, strlen( p ) )) continue;
+                }
+                if (!slots_line( &M->st, kk, dice, sizeof dice )) {
+                    if (M->solo) continue;
+                    dice[0] = 0;
+                }
+                gtk_tree_store_append( st, &fila, &enl );
+                gtk_tree_store_set( st, &fila,
+                    M_NOMBRE, M->st.name[kk],
+                    M_QUE,    que_es( M->st.kind[kk] ),
+                    M_DICE,   dice,
+                    M_IDX,    kk, -1 );
             }
-            gtk_tree_store_append( st, &fila, &grupo );
-            gtk_tree_store_set( st, &fila,
-                M_NOMBRE, M->st.name[i],
-                M_QUE,    que_es( M->st.kind[i] ),
-                M_DICE,   dice,
-                M_IDX,    i,
-                -1 );
+        }
+
+        /* --- el ruido: VIENE DE fue, aqui no se re-especifica ---------- */
+        {
+        NsopForm o;
+        char     pol[64];
+        gchar   *nmb, *estr, *par;
+
+        nsop_canon( m->c.s[i - 1]->tm.rnsop, m->c.s[i - 1]->tm.ornsop,
+                    m->c.s[i - 1]->tm.sper, &o );
+        nsop_texto( &o, m->c.s[i - 1]->tm.sper, pol, sizeof pol );
+
+        cuenta_pref( &M->st, "phi",   i, &pa, &pal );
+        cuenta_pref( &M->st, "theta", i, &qa, &qal );
+        cuenta_pref( &M->st, "omega_d", i, &nd, &ndl );
+        {
+        char q[16];
+        snprintf( q, sizeof q, "mu[%d]", i );
+        nm = slots_find( &M->st, q ) ? 1 : 0;
+        nml = nm;
+        }
+        total = pa + qa + nd + nm;
+
+        nmb  = g_strdup_printf( "   N_%s", nom_serie( m, i ) );
+        estr = g_strdup_printf( "%s \xc2\xb7 AR %d \xc2\xb7 MA %d \xc2\xb7 "
+                                "det %d \xc2\xb7 media %s",
+                                pol, pa, qa, nd, nm ? "libre" : "fija" );
+        par  = g_strdup_printf( "%d par \xc2\xb7 de fue%s", total,
+                                total && !(pal + qal + ndl + nml)
+                                ? ", mantenido" : "" );
+
+        gtk_tree_store_append( st, &enl, &ec );
+        gtk_tree_store_set( st, &enl, M_NOMBRE, nmb, M_QUE, estr,
+                            M_DICE, par, M_IDX, 0, -1 );
+        g_free( nmb ); g_free( estr ); g_free( par );
         }
     }
 
-    /* Con el filtro puesto son pocas filas: se abren. Sin el, plegado, que es
-     * lo que hace que 67 renglones quepan en la pantalla.               */
-    if (M->solo) gtk_tree_view_expand_all( GTK_TREE_VIEW(M->lista) );
-    else         gtk_tree_view_collapse_all( GTK_TREE_VIEW(M->lista) );
+    /* --- Sigma ------------------------------------------------------- */
+    {
+    int    cl, ct;
+    gchar *q;
+
+    covarianzas( &M->st, &cl, &ct );
+    q = g_strdup_printf( "%d de %d covarianzas libres", cl, ct );
+
+    gtk_tree_store_append( st, &ec, NULL );
+    gtk_tree_store_set( st, &ec, M_NOMBRE, "\xce\xa3   (innovaciones)",
+                        M_QUE, q, M_IDX, 0, -1 );
+    g_free( q );
+
+    for (k = 1; k <= M->st.n; k++) {
+        if (strncmp( M->st.name[k], "q[", 2 )) continue;
+        if (!slots_line( &M->st, k, dice, sizeof dice )) {
+            if (M->solo) continue;
+            dice[0] = 0;
+        }
+        gtk_tree_store_append( st, &fila, &ec );
+        gtk_tree_store_set( st, &fila,
+            M_NOMBRE, M->st.name[k],
+            M_QUE,    que_es( M->st.kind[k] ),
+            M_DICE,   dice,
+            M_IDX,    k, -1 );
+    }
+    }
+
+    gtk_tree_view_expand_all( GTK_TREE_VIEW(M->lista) );
 }
 
 /* ------------------------------------------------------------------------ */
 /* Los dos veredictos                                                        */
 /*                                                                           */
-/* El segundo es el primero que tiene que ELEGIR QUE CONTAR: lo que impide o  */
-/* compromete la estimacion va antes que lo que solo informa.                 */
+/* El primero contesta la pregunta que la pagina existe para contestar: QUE   */
+/* PARTE DEL MODELO SE ESTA MODELIZANDO AQUI.                                */
 /* ------------------------------------------------------------------------ */
 
 static void refresca_cuenta( Mtram *m )
 {
     Modelo *M = &m->mod;
     int     libres, cl, ct, mal, primero = 0;
+    int     tr = 0, k;
 
     if (!M->vale) {
         mtram_verdicto( M->ver_cuenta, MT_AMBAR,
@@ -241,15 +394,23 @@ static void refresca_cuenta( Mtram *m )
     covarianzas( &M->st, &cl, &ct );
     mal = colineales( m, &primero );
 
+    for (k = 1; k <= M->st.n; k++)
+        if (!strncmp( M->st.name[k], "omega", 5 ) &&
+            strncmp( M->st.name[k], "omega_d", 7 )) tr++;
+        else if (!strncmp( M->st.name[k], "delta", 5 ) &&
+                 strncmp( M->st.name[k], "delta_d", 7 )) tr++;
+
     mtram_verdicto( M->ver_cuenta, MT_VERDE,
-        "%d parámetros · %d libres · %d fijos o atados",
-        M->st.n, libres, M->st.n - libres );
+        "%d de transferencia + %d covarianzas libres \xe2\x80\x94 esto es lo "
+        "que se decide aquí \xc2\xb7 los otros %d vienen de los .pre y de "
+        "juntarlos",
+        tr, cl, M->st.n - tr - ct );
 
     if (mal)
         mtram_verdicto( M->ver_ojo, MT_ROJO,
             "OJO — %s ← %s es contemporáneo (b=0) y su covarianza está libre%s",
-            m->c.s[m->red.lnk[primero].out - 1]->ts.name,
-            m->c.s[m->red.lnk[primero].inp - 1]->ts.name,
+            nom_serie( m, m->red.lnk[primero].out ),
+            nom_serie( m, m->red.lnk[primero].inp ),
             mal > 1 ? " · y no es el único" : "" );
     else if (M->perdidas)
         mtram_verdicto( M->ver_ojo, MT_AMBAR,
@@ -259,7 +420,7 @@ static void refresca_cuenta( Mtram *m )
             M->perdidas == 1 ? "" : "n", M->perdidas == 1 ? "" : "n" );
     else
         mtram_verdicto( M->ver_ojo, MT_VERDE,
-            "%d de %d covarianzas liberadas · nacen FIJAS en cero", cl, ct );
+            "%d parámetros en total, %d libres", M->st.n, libres );
 }
 
 void modelo_refresca( Mtram *m )
@@ -519,6 +680,82 @@ static void on_covarianzas( GtkButton *bt, Mtram *m )
                                  cambios, cambios == 1 ? "" : "s",
                                  cambios == 1 ? "" : "s" );
         }
+        return;
+    }
+    gtk_widget_destroy( d );
+}
+
+/* ------------------------------------------------------------------------ */
+/* El ruido: reestimarlo al juntar, o mantenerlo del .pre                    */
+/*                                                                           */
+/* Es una decision de ESTE escalon y hasta ahora no estaba en ninguna parte.  */
+/* Al unir varios univariantes en un sistema, sus parametros pueden dejarse   */
+/* correr --y se mueven, porque ahora hay covarianzas-- o clavarse en lo que  */
+/* fue dijo. El motor lo ofrece con -N/-X/-D/-E/-M y el GUI no lo ofrecia.    */
+/*                                                                           */
+/* Y se nota al momento: al marcarlos, esos slots salen de la tabla y la      */
+/* cuenta de libres baja. Esa es la realimentacion que hace util la casilla.  */
+/* ------------------------------------------------------------------------ */
+
+static void on_ruido( GtkButton *bt, Mtram *m )
+{
+    Modelo    *M = &m->mod;
+    GtkWidget *d, *caja, *c[5], *av;
+    static const struct { const char *txt, *tip; } OP[5] = {
+      { "-N  el ARMA del ruido de la SALIDA",
+        "Los phi y theta de la primera serie: se mantienen los del .pre." },
+      { "-X  el ARMA de las ENTRADAS",
+        "Los phi y theta de las demas series." },
+      { "-D  los deterministas de la SALIDA",
+        "Todos los omega y delta de las variables deterministas de la primera." },
+      { "-E  los deterministas de las ENTRADAS",
+        "Idem, en las demas series." },
+      { "-M  las medias",
+        "Las mu de todas. Ojo: una media que el .pre ya declara FIJA lo esta de "
+        "todos modos; esto clava ademas las que estaban libres." },
+    };
+    gboolean  *campo[5];
+    int        i;
+
+    campo[0] = &M->fix_N;  campo[1] = &M->fix_X;  campo[2] = &M->fix_D;
+    campo[3] = &M->fix_E;  campo[4] = &M->fix_M;
+
+    d = gtk_dialog_new_with_buttons( "Qué se mantiene del .pre",
+            GTK_WINDOW(m->ventana_p),
+            GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+            "_Cancelar", GTK_RESPONSE_CANCEL,
+            "_Aceptar",  GTK_RESPONSE_ACCEPT, NULL );
+    caja = gtk_dialog_get_content_area( GTK_DIALOG(d) );
+    gtk_container_set_border_width( GTK_CONTAINER(caja), 12 );
+    gtk_box_set_spacing( GTK_BOX(caja), 6 );
+
+    av = gtk_label_new(
+        "Al juntar varios univariantes en un sistema, sus parámetros pueden\n"
+        "dejarse correr — y se mueven, porque ahora hay covarianzas — o\n"
+        "clavarse en lo que fue dijo. Marcar es MANTENER.\n\n"
+        "Lo que el .pre ya declare FIJO lo está de todos modos: esto sólo\n"
+        "añade, nunca libera." );
+    gtk_widget_set_halign( av, GTK_ALIGN_START );
+    gtk_container_add( GTK_CONTAINER(caja), av );
+    gtk_container_add( GTK_CONTAINER(caja),
+                       gtk_separator_new( GTK_ORIENTATION_HORIZONTAL ) );
+
+    for (i = 0; i < 5; i++) {
+        c[i] = gtk_check_button_new_with_label( OP[i].txt );
+        gtk_widget_set_tooltip_text( c[i], OP[i].tip );
+        gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(c[i]), *campo[i] );
+        gtk_container_add( GTK_CONTAINER(caja), c[i] );
+    }
+
+    gtk_widget_show_all( d );
+    if (gtk_dialog_run( GTK_DIALOG(d) ) == GTK_RESPONSE_ACCEPT) {
+        for (i = 0; i < 5; i++)
+            *campo[i] = gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(c[i]) );
+        gtk_widget_destroy( d );
+        modelo_refresca( m );
+        estima_refresca( m );          /* la orden cambia: se ve al momento */
+        preview_show_status( m,
+            "%d parámetros, %d libres.", m->mod.st.n, slots_nfree( &m->mod.st ) );
         return;
     }
     gtk_widget_destroy( d );
@@ -843,6 +1080,9 @@ GtkWidget *modelo_pagina_new( Mtram *m )
     g_signal_connect( b, "clicked", G_CALLBACK(fn), m ); \
     gtk_box_pack_end( GTK_BOX(barra), b, FALSE, FALSE, 0 );
 
+    BOTON_DER( "Ruido…", on_ruido,
+               "Qué se mantiene del .pre en vez de reestimarlo al juntar las "
+               "ecuaciones: -N, -X, -D, -E, -M." )
     BOTON_DER( "Avisos…", on_avisos,
                "La casi-colinealidad: un enlace contemporáneo y su covarianza "
                "libre explican lo mismo dos veces." )

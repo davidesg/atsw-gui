@@ -72,6 +72,17 @@ typedef struct {
     GtkWidget *c_solo;        /* solo lo restringido                        */
 
     gboolean   solo;          /* la casilla                                 */
+
+    /* Lo que el motor puede MANTENER del .pre en vez de reestimarlo al
+     * juntar las ecuaciones. Es una decision de ESTE escalon --al unir los
+     * univariantes, ¿se dejan correr sus parametros o se clavan?-- y cambia
+     * la cuenta de libres, que es la realimentacion que hace falta.      */
+    gboolean   fix_N;         /* -N  el ARMA del ruido de la SALIDA         */
+    gboolean   fix_X;         /* -X  el ARMA de las ENTRADAS                */
+    gboolean   fix_D;         /* -D  los deterministas de la salida         */
+    gboolean   fix_E;         /* -E  los deterministas de las entradas      */
+    gboolean   fix_M;         /* -M  las medias                             */
+
     SlotTable  st;
     gboolean   vale;
     int        perdidas;      /* restricciones que no cupieron al rehacer   */
@@ -181,6 +192,9 @@ GtkWidget *mtram_mono(const char *txt);
 /* red.c */
 GtkWidget *red_pagina_new(Mtram *m);
 void       red_refresca(Mtram *m);
+/* El dialogo de un enlace, para poder tocar (b,r,s) desde la pagina Modelo:
+ * la estructura de la transferencia se decide alli tanto como aqui.     */
+gboolean   red_edita_enlace(Mtram *m, int k);
 
 /* modelo.c */
 GtkWidget *modelo_pagina_new(Mtram *m);

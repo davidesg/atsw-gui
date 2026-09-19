@@ -528,7 +528,71 @@ heterogéneas —ω de transferencia, φ y θ del ruido, deterministas, medias,
 varianzas, covarianzas—. Una lista plana de 67 renglones no se recorre: se
 sufre. Y lo que el analista toca de verdad son **seis**.
 
-### Las dos cosas que lo arreglan
+### Y una corrección de fondo, que llegó al implementarlo
+
+Lo anterior arregla la **cantidad**. Pero la página seguía sin contestar la
+pregunta que existe para contestar: **¿qué modelo se está estimando?**
+
+Porque un grupo «ARMA del ruido» con los θ de las seis series juntos **es el
+vector de parámetros del motor, no el modelo del analista**. Y los univariantes
+**no se pueden ni deben re-especificar aquí**: vienen del GUI de fue. De ellos
+sólo interesa cuántos parámetros meten y qué estructura tienen.
+
+El modelo es un **sistema de ecuaciones**. Éste, en el m6:
+
+```
+EP_t  =  [ω1(B)]B¹ EI + [ω2(B)]B¹ EC  +  N_EP,t
+          N_EP : (1-B)²        AR 0  MA 1  det 4  media fija
+EI_t  =  [ω3(B)]B¹ EU  +  N_EI,t
+          N_EI : (1-B)²        AR 0  MA 1  det 9  media fija
+EU_t  =  [ω4(B)]B² EC  +  N_EU,t
+EC_t  =  N_EC,t     EA_t = N_EA,t     P_t = N_P,t
+
+Σ: q[3,2], q[5,2], q[5,4] libres — 3 de 15
+```
+
+**El reparto de los 67 parámetros:**
+
+| | cuántos | de dónde |
+|---|---|---|
+| transferencia (ω, δ) | **11** | **se decide aquí** |
+| covarianzas `q[i,j]` | **15** (3 libres) | **se decide aquí** |
+| varianzas relativas | 5 | consecuencia de juntarlas |
+| ruido: MA + deterministas | **36** | **vienen de fue** |
+
+Y dentro de los 36, **28 son deterministas** — más que todo lo demás junto.
+
+> **La rama del árbol es la ECUACIÓN, no el tipo de parámetro.** Dentro de cada
+> una, sus transferencias —editables— y su ruido —de sólo lectura, con su
+> estructura y su cuenta—. Así la forma de la página contesta la pregunta.
+
+Un matiz que el sistema destapó: `ω1[1] = ω1[0] · theta_2[B^1]` — la
+restricción de una transferencia **referencia un parámetro univariante**. Así
+que los univariantes no se re-especifican, pero **sí se nombran**: tienen que
+seguir visibles y nombrables.
+
+### `-N`, `-X`, `-D`, `-E`, `-M`: lo que se mantiene del `.pre`
+
+Ésta **sí** es una decisión de este escalón, y no estaba en ninguna parte. Al
+unir varios univariantes en un sistema, sus parámetros pueden dejarse correr —y
+se mueven, porque ahora hay covarianzas— o clavarse en lo que fue dijo.
+
+Y se nota al momento, que es lo que hace útil la casilla:
+
+```
+  nada (todo se reestima)          67 slots,  52 libres
+  -N  ARMA de la salida            66 slots,  51 libres
+  -X  ARMA de las entradas         60 slots,  45 libres
+  -D  det. de la salida            63 slots,  48 libres
+  -E  det. de las entradas         43 slots,  28 libres
+  -N -X -D -E  todo el ruido       31 slots,  16 libres
+```
+
+Con todo el ruido mantenido quedan **31 slots y 16 libres**: 11 ω + 5 varianzas
++ 15 covarianzas. **Lo que queda libre es exactamente lo que este escalón
+decide** — la confirmación numérica de todo lo anterior.
+
+### Las dos cosas que arreglan la cantidad
 
 **Un árbol por grupos, no una lista plana.** Los grupos ya existen en el código
 (`grupo_de`), pero hoy son una *columna*; deberían ser la **estructura**:

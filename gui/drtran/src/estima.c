@@ -148,6 +148,15 @@ static gchar **arma_argv( Mtram *m, const gchar *dag, const gchar *cns,
         g_ptr_array_add( a, csv );
     }
 
+    /* Lo que la pagina Modelo dice que se MANTIENE del .pre en vez de
+     * reestimarlo al juntar. Va aqui porque es una opcion del motor, pero
+     * se decide alli, que es donde se ve lo que cuesta.                */
+    if (m->mod.fix_N) g_ptr_array_add( a, g_strdup( "-N" ) );
+    if (m->mod.fix_X) g_ptr_array_add( a, g_strdup( "-X" ) );
+    if (m->mod.fix_D) g_ptr_array_add( a, g_strdup( "-D" ) );
+    if (m->mod.fix_E) g_ptr_array_add( a, g_strdup( "-E" ) );
+    if (m->mod.fix_M) g_ptr_array_add( a, g_strdup( "-M" ) );
+
     if (m->est.diagonal)  g_ptr_array_add( a, g_strdup( "-0" ) );
     if (m->est.cast_resta) g_ptr_array_add( a, g_strdup( "-S" ) );
     if (m->est.traza)     g_ptr_array_add( a, g_strdup( "-v" ) );

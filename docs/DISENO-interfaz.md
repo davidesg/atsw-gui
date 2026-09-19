@@ -516,17 +516,149 @@ para poder mirarla antes.
 
 ---
 
-## 6. Lo que queda por diseñar
+## 6. La página Modelo
 
-`Modelo`, `Estimación`, `Diagnosis` y `Previsión`, en ese orden. Las cuatro reglas de §1 y el criterio de nombres de §2 valen para
+### El problema, y uno que no es de sitio sino de cantidad
+
+El marco de abajo escribe **6 líneas de base**, más una por enlace
+casi-colineal, más seis de explicación cuando las hay. Lo de siempre.
+
+Pero aquí hay algo más: **la lista tiene 67 filas** en el m6, y son
+heterogéneas —ω de transferencia, φ y θ del ruido, deterministas, medias,
+varianzas, covarianzas—. Una lista plana de 67 renglones no se recorre: se
+sufre. Y lo que el analista toca de verdad son **seis**.
+
+### Las dos cosas que lo arreglan
+
+**Un árbol por grupos, no una lista plana.** Los grupos ya existen en el código
+(`grupo_de`), pero hoy son una *columna*; deberían ser la **estructura**:
+
+```
+▾ transferencia (11)
+     omega1[0]       libre
+     omega1[1]       producto      = omega1[0] * theta_2[B^1]
+     omega2[0]       libre
+     ...
+▸ ARMA del ruido (9)
+▸ deterministas (28)
+▸ varianzas (5)
+▾ covarianzas (15)
+     q[3,2]          libre
+     q[5,2]          libre
+     q[5,4]          libre
+     ...
+```
+
+Seis grupos plegados caben en la pantalla; se abre el que interesa.
+
+**Y una casilla «sólo lo restringido».** Lo que el `.cns` contiene son los
+slots que **dicen algo** — en el m6, **6 de 67**. Es la vista que casi siempre
+se quiere, porque es el fichero que se va a escribir.
+
+### El boceto
+
+```
+┌───────────────────────────────────────────────────────────────────────────┐
+│ Libre  Fijar…  Compartir… │ Abrir…  Guardar… │ ☐ Sólo lo restringido       │
+│                                                    Covarianzas…   Avisos… │
+├────────────────────────┬──────────────┬──────────────────────────────────┤
+│ Parámetro              │ Es           │ Dice                             │
+├────────────────────────┼──────────────┼──────────────────────────────────┤
+│ ▾ transferencia (11)   │              │                                  │
+│      omega1[0]         │ libre        │                                  │
+│      omega1[1]         │ producto     │ = omega1[0] * theta_2[B^1]       │
+│      omega3[0]         │ comb. lineal │ = omega3[1] + omega3[2] + omega…  │
+│ ▸ ARMA del ruido (9)   │              │                                  │
+│ ▸ deterministas (28)   │              │                                  │
+│ ▸ varianzas (5)        │              │                                  │
+│ ▾ covarianzas (15)     │ 3 libres     │                                  │
+│      q[3,2]            │ libre        │                                  │
+│                                                                           │
+├────────────────────────┴──────────────┴──────────────────────────────────┤
+│ ● 67 parámetros · 52 libres · 15 fijos o atados                           │
+│ ● 3 de 15 covarianzas liberadas · nacen FIJAS en cero                     │
+└───────────────────────────────────────────────────────────────────────────┘
+```
+
+Y cuando hay casi-colinealidad, la segunda línea pasa a rojo y dice eso, que es
+lo que hay que mirar:
+
+```
+│ ● OJO — EP ← EI es contemporáneo (b=0) y su covarianza está libre           │
+```
+
+### La segunda línea es «lo que hay que mirar»
+
+No es una línea fija de contenido, es una de **prioridad**:
+
+| | cuándo | color |
+|---|---|---|
+| casi-colinealidad | si la hay | rojo |
+| restricciones perdidas al rehacer | si las hay | ámbar |
+| estado de las covarianzas | si no hay nada peor | verde |
+
+Es la primera página donde la línea de veredicto tiene que **elegir qué
+contar**, y la regla es la evidente: lo que impide o compromete la estimación
+va antes que lo que sólo informa.
+
+### El panel `Covarianzas…`: una matriz, y **editable**
+
+Σ es una matriz, y enseñarla como matriz es ver la estructura de covarianzas de
+un golpe — igual que los operadores en Series:
+
+```
+            EP    EI    EU    EC    EA    P
+   1 EP     ·
+   2 EI     0     ·
+   3 EU     0    libre  ·
+   4 EC     0     0     0     ·
+   5 EA     0    libre  0    libre  ·
+   6 P      0     0     0     0     0     ·
+```
+
+Y aquí propongo un paso más que en Operadores: **que se pulse para liberar y
+fijar**. Liberar covarianzas es el uso más común del `.cns` —el m6-1 libera
+tres de quince— y hacerlo en una matriz es infinitamente más claro que buscar
+`q[5,4]` entre 67 renglones.
+
+La matriz de Operadores es de sólo lectura porque el operador viene del `.pre`
+y no se decide aquí. Ésta **sí** es una decisión del analista, así que se
+decide donde se ve.
+
+### El panel `Avisos…`
+
+La casi-colinealidad con su explicación entera: por qué un enlace
+contemporáneo y su covarianza libre explican lo mismo en k = 0, cómo se separan
+sólo por el decaimiento en k > 0, y qué pasa cuando los dos AR se parecen —la
+cresta plana, ω por las nubes, t-ratios de 2424—. Y la doctrina: **usar una de
+las dos, no las dos**.
+
+Hoy eso está en el marco y ocupa seis líneas fijas aunque no haya ningún aviso.
+
+### Qué se va de la página
+
+| se va | a dónde |
+|---|---|
+| el marco entero | dos líneas + `Covarianzas…` + `Avisos…` |
+| la columna `De` | pasa a ser el **grupo** del árbol |
+| el párrafo de las covarianzas | a la matriz |
+
+Y entran: el árbol por grupos, la casilla «sólo lo restringido», y la matriz de
+Σ editable.
+
+---
+
+## 7. Lo que queda por diseñar
+
+`Estimación`, `Diagnosis` y `Previsión`. Las dos primeras son distintas de
+todas las anteriores: no tienen una lista como protagonista sino **una orden
+que lanzar y un resultado que leer**, así que puede que las reglas haya que
+aplicarlas de otra forma. Las cuatro reglas de §1 y el criterio de nombres de §2 valen para
 todas; lo que cambia es qué es el hecho por fila y qué es el veredicto.
 
-Dos ya se sabe que tienen el mismo problema de §0:
-
-- **Modelo** enseña 67 renglones de parámetros y debajo un marco de texto que
-  crece con los avisos.
-- **Diagnosis** enseña dos filas por enlace más dos por serie, y debajo otro
-  marco que crece.
+**Diagnosis** ya se sabe que tiene el mismo problema de §0: dos filas por
+enlace más dos por serie, y debajo un marco que crece con los enlaces que
+fallan.
 
 **Estado: Series, Red e Identificación IMPLEMENTADAS.** El resto, sin
 diseñar.

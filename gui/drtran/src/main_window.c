@@ -725,7 +725,7 @@ static GtkWidget *columna(GtkWidget *tv, const char *titulo, int col, int num)
 
 GtkWidget *mtram_window_new(GtkApplication *app, Mtram *m)
 {
-    GtkWidget *w, *raiz, *libro, *caja, *barra_b, *b, *sc, *marco, *vb;
+    GtkWidget *w, *raiz, *libro, *caja, *barra_b, *b, *sc;
     GtkListStore *st;
 
     w = gtk_application_window_new(app);

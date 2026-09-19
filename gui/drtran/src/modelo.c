@@ -193,8 +193,17 @@ static int colineales( Mtram *m, int *primero )
 /* juntarlas.                                                                */
 /* ------------------------------------------------------------------------ */
 
-/* Lo que se escribe en la rama de la ecuacion. */
-static gchar *ecuacion_de( Mtram *m, int i )
+/* LA PRIMERA ECUACION: la transferencia, EN NIVELES.
+ *
+ * El modelo dice que la transferencia relaciona LOS NIVELES y que la
+ * diferenciacion la lleva el ruido -- esta escrito en drtran.c:51 y la bateria
+ * lo comprueba (BUG-8: si el cast empotrado ajustara nu*Delta con Delta(1)=0,
+ * la ganancia saldria aniquilada).
+ *
+ * Por eso aqui NO aparece ningun operador de diferencias: van en la segunda
+ * ecuacion, que es la del ruido. Escribirlo todo junto sugeriria que se
+ * diferencia la transferencia, y es justo lo contrario.              */
+static gchar *ecuacion_nivel( Mtram *m, int i )
 {
     GString *t = g_string_new( NULL );
     int      k, primero = 1, hay = 0;
@@ -203,14 +212,44 @@ static gchar *ecuacion_de( Mtram *m, int i )
 
     for (k = 0; k < m->red.n; k++) {
         if (m->red.lnk[k].out != i) continue;
-        g_string_append_printf( t, "%s[\xcf\x89%d(B)", primero ? "" : " + ", k + 1 );
-        if (m->red.lnk[k].r) g_string_append_printf( t, "/\xce\xb4%d(B)", k + 1 );
-        g_string_append_c( t, ']' );
-        if (m->red.lnk[k].b) g_string_append_printf( t, "B^%d", m->red.lnk[k].b );
-        g_string_append_printf( t, " %s", nom_serie( m, m->red.lnk[k].inp ) );
+        g_string_append_printf( t, "%s\xce\xbd%d(B) %s_t", primero ? "" : " + ",
+                                k + 1, nom_serie( m, m->red.lnk[k].inp ) );
         primero = 0;  hay = 1;
     }
     g_string_append_printf( t, "%sN_%s,t", hay ? "  +  " : "", nom_serie( m, i ) );
+    return g_string_free( t, FALSE );
+}
+
+/* LA SEGUNDA ECUACION: el ruido, que ES donde va la diferenciacion.
+ *
+ *     phi(B) grad^d [ N_t - D_t ]  =  theta(B) a_t
+ *
+ * Viene entera del .pre y aqui no se toca. Se enseña porque sin ella el
+ * modelo no esta escrito -- y porque su estructura y su cuenta SON la
+ * informacion relevante de la parte univariante.                     */
+static gchar *ecuacion_ruido( Mtram *m, int i, int ndet )
+{
+    GString  *t = g_string_new( NULL );
+    NsopForm  o;
+    char      pol[64];
+    int       p1 = m->c.s[i - 1]->tm.NumAr1 + m->c.s[i - 1]->tm.NumAr2
+                 + m->c.s[i - 1]->tm.NumAr1f;
+
+    nsop_canon( m->c.s[i - 1]->tm.rnsop, m->c.s[i - 1]->tm.ornsop,
+                m->c.s[i - 1]->tm.sper, &o );
+    nsop_texto( &o, m->c.s[i - 1]->tm.sper, pol, sizeof pol );
+
+    if (p1) g_string_append_printf( t, "\xcf\x86_%s(B) ", nom_serie( m, i ) );
+    if (o.d || o.D || o.nf) g_string_append_printf( t, "%s ", pol );
+
+    if (ndet)
+        g_string_append_printf( t, "[ N_%s,t \xe2\x88\x92 D_%s,t ]",
+                                nom_serie( m, i ), nom_serie( m, i ) );
+    else
+        g_string_append_printf( t, "N_%s,t", nom_serie( m, i ) );
+
+    g_string_append_printf( t, "  =  \xce\xb8_%s(B) a_%s,t",
+                            nom_serie( m, i ), nom_serie( m, i ) );
     return g_string_free( t, FALSE );
 }
 
@@ -244,21 +283,9 @@ static void refresca_lista( Mtram *m )
     if (!M->vale) return;
 
     for (i = 1; i <= m->c.n; i++) {
-        gchar *eq = ecuacion_de( m, i );
-        int    pa, pal, qa, qal, nd, ndl, nm, nml, total;
-
-        /* El ruido NO es una rama: el modelo que se especifica aqui son las
-         * TRANSFERENCIAS. El ruido viene de fue y es un dato -- va en las
-         * columnas de la propia ecuacion, con su estructura y su cuenta,
-         * sin desglose, porque no se toca.                             */
-        {
-        NsopForm o;
-        char     pol[64];
-        gchar   *estr, *par;
-
-        nsop_canon( m->c.s[i - 1]->tm.rnsop, m->c.s[i - 1]->tm.ornsop,
-                    m->c.s[i - 1]->tm.sper, &o );
-        nsop_texto( &o, m->c.s[i - 1]->tm.sper, pol, sizeof pol );
+        gchar *eq  = ecuacion_nivel( m, i );
+        gchar *eqr;
+        int    pa, pal, qa, qal, nd, ndl, nm, total;
 
         cuenta_pref( &M->st, "phi",     i, &pa, &pal );
         cuenta_pref( &M->st, "theta",   i, &qa, &qal );
@@ -268,22 +295,14 @@ static void refresca_lista( Mtram *m )
         snprintf( q, sizeof q, "mu[%d]", i );
         nm = slots_find( &M->st, q ) ? 1 : 0;
         }
-        nml = nm;  total = pa + qa + nd + nm;
+        total = pa + qa + nd + nm;
 
-        estr = g_strdup_printf( "N_%s: %s · AR %d · MA %d · det %d · media %s",
-                                nom_serie( m, i ), pol, pa, qa, nd,
-                                nm ? "libre" : "fija" );
-        par  = g_strdup_printf( "%d par · de fue", total );
-
+        /* LA PRIMERA ECUACION: la transferencia, en NIVELES. */
         gtk_tree_store_append( st, &ec, NULL );
-        gtk_tree_store_set( st, &ec, M_NOMBRE, eq, M_QUE, estr,
-                            M_DICE, par, M_IDX, 0, -1 );
-        g_free( estr ); g_free( par );
-        }
+        gtk_tree_store_set( st, &ec, M_NOMBRE, eq, M_IDX, 0, -1 );
         g_free( eq );
-        (void) pal; (void) qal; (void) ndl; (void) nml;
 
-        /* --- las transferencias: LO QUE SE DECIDE AQUI ----------------- */
+        /* Que es cada nu, y sus parametros: ESTO es lo que se especifica. */
         for (k = 0; k < m->red.n; k++) {
             gchar *nmb, *ords, *par;
             int    tot = 0, lib = 0;
@@ -302,8 +321,19 @@ static void refresca_lista( Mtram *m )
                 if (M->st.kind[kk] == SLOT_FREE) lib++;
             }
 
-            nmb  = g_strdup_printf( "   \xcf\x89%d  \xe2\x86\x90 %s", k + 1,
+            /* nu = omega(B)/delta(B) B^b, escrito tal cual. */
+            {
+            GString *v = g_string_new( NULL );
+
+            g_string_append_printf( v, "   \xce\xbd%d = \xcf\x89%d(B)", k + 1, k + 1 );
+            if (m->red.lnk[k].r)
+                g_string_append_printf( v, " / \xce\xb4%d(B)", k + 1 );
+            if (m->red.lnk[k].b)
+                g_string_append_printf( v, " B^%d", m->red.lnk[k].b );
+            g_string_append_printf( v, "      \xe2\x86\x90 %s",
                                     nom_serie( m, m->red.lnk[k].inp ) );
+            nmb = g_string_free( v, FALSE );
+            }
             ords = g_strdup_printf( "b=%d  r=%d  s=%d", m->red.lnk[k].b,
                                     m->red.lnk[k].r, m->red.lnk[k].s );
             par  = g_strdup_printf( "%d par, %d libres", tot, lib );
@@ -334,6 +364,23 @@ static void refresca_lista( Mtram *m )
             }
         }
 
+        /* LA SEGUNDA ECUACION: el ruido, que es DONDE VA LA DIFERENCIACION.
+         * Viene entera del .pre y aqui no se toca: se enseña porque sin ella
+         * el modelo no esta escrito.                                    */
+        {
+        gchar *estr, *par;
+
+        eqr  = ecuacion_ruido( m, i, nd );
+        estr = g_strdup_printf( "AR %d · MA %d · det %d · media %s",
+                                pa, qa, nd, nm ? "libre" : "fija" );
+        par  = g_strdup_printf( "%d par · de fue", total );
+
+        gtk_tree_store_append( st, &enl, &ec );
+        gtk_tree_store_set( st, &enl, M_NOMBRE, eqr, M_QUE, estr,
+                            M_DICE, par, M_IDX, 0, -1 );
+        g_free( eqr ); g_free( estr ); g_free( par );
+        }
+        (void) pal; (void) qal; (void) ndl;
     }
 
     /* --- Sigma ------------------------------------------------------- */

@@ -128,6 +128,50 @@ motor. El analista especifica ν(B); el cast es cosa de la máquina.
 
 ---
 
+## 4bis. La forma de ECUACIONES no es la forma en que se estima
+
+Es la corrección más importante del documento, y me la tuvieron que señalar.
+
+**Un modelo de transferencia son DOS ecuaciones por serie**, no una:
+
+```
+   EP_t  =  ν1(B) EI_t  +  ν2(B) EC_t  +  N_EP,t         ← LOS NIVELES
+
+   (1-B)² [ N_EP,t − D_EP,t ]  =  θ_EP(B) a_EP,t         ← el ruido, y AQUÍ
+                                                           va la diferenciación
+```
+
+Y la primera va **en niveles**. Lo dice el motor en tres sitios
+(`drtran.c:51`, `:3821`, y la batería en `test_battery.sh:2090`):
+
+> El modelo dice que la transferencia relaciona los **NIVELES** y que la
+> diferenciación la lleva el ruido.
+
+No es una convención de escritura: la batería lo comprueba (BUG-8). Si el cast
+empotrado ajustara ν·Δ con Δ(1) = 0, **la ganancia saldría aniquilada**.
+
+Yo tenía escrito `EP_t = [ω1(B)]B¹ EI + … + N_EP,t` con `(1-B)²` colgando de la
+misma línea, lo que sugiere que se diferencia la transferencia. Es justo lo
+contrario.
+
+### Y de ahí la regla general
+
+> **No se mezclan la especificación y el empotramiento.** Una cosa es el
+> modelo —dos ecuaciones, la transferencia en niveles y el ruido con su
+> diferenciación— y otra cómo drtran lo mete en un VARMA para estimarlo.
+
+El cast (`-V` / `-S`), que la transferencia acabe siendo coeficientes fuera de
+la diagonal de Φ(B), y qué se mantiene fijo (`-N/-X/…`) **son máquina**. Viven
+en Estimación. En Red y en Modelo no aparece ni la palabra.
+
+Esto explica por qué el orden de los ∇ importa aunque el modelo sea de
+niveles: si la salida va a ∇∇₁₂ y la entrada a ∇, el empotrado no puede
+representar la relación de niveles y el motor **despacha al cast por resta**.
+Es una consecuencia de la máquina sobre lo que la máquina puede, no un cambio
+del modelo.
+
+---
+
 ## 5. Cómo simplificar el GUI
 
 Siete pestañas para cinco etapas. Lo que sigue, por orden de lo que más
@@ -191,5 +235,7 @@ dice que hay un orden, y cuál.
 4. **El ruido sale del árbol de Modelo** y pasa a las columnas de la ecuación:
    una línea con su estructura y su cuenta, sin desglose, porque es un dato.
 5. **Pestañas numeradas.**
+6. **Las dos ecuaciones** (§4bis): la transferencia en niveles y el ruido con
+   su diferenciación, cada una en su línea.
 
 Queda propuesto y sin hacer: §5.1 (fundir Red y Modelo), §5.2 y §5.3.

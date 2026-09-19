@@ -160,6 +160,12 @@ Así que las tres columnas se calculan **del polinomio** `rnsop`, por división:
 Es la forma canónica de la escuela, ∇^d ∇ₛ^D, y tiene la propiedad que hacía
 falta: **dos escrituras del mismo operador dan las mismas tres columnas.**
 
+`D` se extrae **al máximo** (decidido): `(1−B)(1−B⁴)²` da `d=1, D=2`.
+
+Vive en `lib/nsop`, con pruebas. La que justifica el módulo no comprueba un
+número: comprueba que **las dos escrituras de ∇∇₄ dan lo mismo**, que es lo
+único que la columna promete.
+
 Ganancia de lectura, con los datos reales: `EA` con `d=1 D=1` frente a `d=2 D=0`
 **salta a la vista**. La cadena de hoy no lo consigue, porque
 `(1-B)(1-B)[f=1][f=2]` *empieza igual* que `(1-B)(1-B)` y hay que leerla entera
@@ -272,4 +278,5 @@ Dos ya se sabe que tienen el mismo problema de §0:
 - **Diagnosis** enseña dos filas por enlace más dos por serie, y debajo otro
   marco que crece.
 
-**Estado: propuesto, sin implementar.** A la espera de revisión.
+**Estado: Series IMPLEMENTADA** (`lib/nsop`, `gui/drtran/src/main_window.c`).
+El resto, propuesto y sin implementar.

@@ -114,8 +114,8 @@ typedef struct {
 typedef struct {
     GtkWidget *ventana_p;     /* la ventana principal                       */
     GtkWidget *lista;         /* las series, en orden                       */
-    GtkWidget *ventana;       /* la ventana muestral comun                  */
-    GtkWidget *compat;        /* la compatibilidad de operadores            */
+    GtkWidget *ver_ventana;   /* veredicto: la ventana comun, UNA linea     */
+    GtkWidget *ver_oper;      /* veredicto: los operadores, UNA linea       */
     GtkWidget *estado;        /* la barra de abajo                          */
     Conjunto   c;             /* las series cargadas                        */
     gboolean   recolocando;   /* repintando la lista: no leer su orden      */

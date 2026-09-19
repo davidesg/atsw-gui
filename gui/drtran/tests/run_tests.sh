@@ -195,3 +195,11 @@ if [ -x "$E/bin/drtran" ] && [ -f "$M6D/M6_EP.pre" ]; then
         fi
     fi
 fi
+
+# --- el operador no estacionario en forma canonica --------------------------
+# Las columnas d/D/f NO se leen de nrdiff/nadiff: no son canonicos. En el m6
+# las SEIS series traen nrdiff=2 y una de ellas es otro operador.
+echo
+$CC -O2 -Wall -Wextra -I"$L/nsop" \
+    "$L/nsop/test_nsop.c" "$L/nsop/nsop.c" -o "$W/test_nsop" -lm || exit 1
+"$W/test_nsop" || exit 1

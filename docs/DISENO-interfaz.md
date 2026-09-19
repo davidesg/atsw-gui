@@ -409,5 +409,9 @@ Dos ya se sabe que tienen el mismo problema de §0:
 - **Diagnosis** enseña dos filas por enlace más dos por serie, y debajo otro
   marco que crece.
 
-**Estado: Series IMPLEMENTADA** (`lib/nsop`, `gui/drtran/src/main_window.c`).
-**Red propuesta**, sin implementar. El resto, sin diseñar.
+**Estado: Series y Red IMPLEMENTADAS.** El resto, sin diseñar.
+
+De Red salió además el sitio donde viven los dos ayudantes que comparten las
+páginas: `mtram_verdicto()` —una línea con su punto de color— y
+`mtram_popover()`. Están en `gui.h` porque la regla R3 es de todas las páginas,
+no de una.

@@ -30,7 +30,7 @@
 #include "previewhost.h"
 #include "netfile.h"
 
-enum { R_SALIDA, R_FLECHA, R_ENTRADA, R_B, R_R, R_S, R_NOTA, R_N };
+enum { R_SALIDA, R_FLECHA, R_ENTRADA, R_B, R_R, R_S, R_PAR, R_NOTA, R_N };
 
 /* ------------------------------------------------------------------------ */
 /* Los nombres, como los quiere lib/netfile: 1..n                            */
@@ -52,102 +52,207 @@ static const char *nom_de( Mtram *m, int i )
     return m->c.s[i - 1]->ts.name ? m->c.s[i - 1]->ts.name : "(sin nombre)";
 }
 
+/* El nombre CON su numero, "1 EP". El numero es el mismo de la pagina Series
+ * y el de q[i,j] en el .cns; el nombre solo dejaria a las dos paginas
+ * hablando idiomas distintos, y el numero solo --"1 <- 2"-- seria ilegible.
+ * Devuelve un puntero a un corro de buffers: vale hasta la octava llamada. */
+static const char *nom_num( Mtram *m, int i )
+{
+    static char b[8][64];
+    static int  t = 0;
+
+    t = (t + 1) % 8;
+    if (i < 1 || i > m->c.n) snprintf( b[t], sizeof b[t], "?" );
+    else snprintf( b[t], sizeof b[t], "%d %s", i, nom_de( m, i ) );
+    return b[t];
+}
+
 /* ------------------------------------------------------------------------ */
-/* El veredicto: se puede estimar o no                                       */
+/* Los dos veredictos                                                        */
+/*                                                                           */
+/* De UNA LINEA. El marco que habia aqui escribia de 8 a 12 lineas SEGUN EL  */
+/* CASO --el del ciclo es el mas largo porque es el que mas hay que          */
+/* explicar-- asi que la lista DABA SALTOS mientras se editaba la red. Un    */
+/* sitio donde se trabaja no puede moverse bajo la mano.                     */
 /* ------------------------------------------------------------------------ */
+
+/* Los tres numeros de cada serie: cuantos enlaces entran, cuantos salen, y de
+ * ahi su papel. Es lo que distingue una RED de una estrella y hoy no se ve. */
+static void papeles( Mtram *m, int *intermedias, int *sueltas, int *par )
+{
+    Red *r = &m->red;
+    int  i, k;
+
+    *intermedias = *sueltas = *par = 0;
+
+    for (i = 1; i <= m->c.n; i++) {
+        int ent = net_indegree( r->lnk, r->n, i );
+        int sal = net_outdegree( r->lnk, r->n, i );
+
+        if (ent > 0 && sal > 0) (*intermedias)++;
+        if (ent == 0 && sal == 0) (*sueltas)++;
+    }
+    for (k = 0; k < r->n; k++) *par += r->lnk[k].s + 1 + r->lnk[k].r;
+}
 
 static void refresca_veredicto( Mtram *m )
 {
     Red     *r = &m->red;
-    GString *t = g_string_new( NULL );
     int      topo[NET_MAX_SER + 1];
     int      ciclo[NET_MAX_SER + 2], nc = 0;
-    int      i, huerfanas = 0;
+    int      intermedias, sueltas, par, i;
 
     if (m->c.n < 2) {
-        gtk_label_set_text( GTK_LABEL(r->veredicto),
+        mtram_verdicto( r->ver_topo, MT_AMBAR,
             "Carga al menos dos .pre en la pestaña Series." );
-        g_string_free( t, TRUE );
+        gtk_label_set_text( GTK_LABEL(r->ver_forma), "" );
         return;
     }
     if (r->n == 0) {
-        gtk_label_set_text( GTK_LABEL(r->veredicto),
-            "La red está vacía. Sin enlaces, drtran estima los modelos "
-            "univariantes en bloque y nada más: es la homologación con fue, "
-            "útil para comprobar, pero no es un modelo de transferencia.\n"
-            "Añade un enlace, o pulsa «Estrella» para que todas las entradas "
-            "apunten a la salida (es lo que hace el motor por omisión)." );
-        g_string_free( t, TRUE );
+        mtram_verdicto( r->ver_topo, MT_AMBAR,
+            "La red está vacía \xc2\xb7 sin enlaces esto es la homologación "
+            "con fue, no un modelo de transferencia" );
+        mtram_verdicto( r->ver_forma, MT_AMBAR,
+            "Añade un enlace, o pulsa «Estrella»: todas las entradas a la "
+            "salida, que es lo que el motor supone" );
         return;
     }
 
-    /* --- el ciclo, que es lo único que impide estimar ------------------- */
-    if (!net_topo( r->lnk, r->n, m->c.n, topo )) {
-        g_string_append( t, "CICLO: el sistema es SIMULTÁNEO.\n\n" );
+    papeles( m, &intermedias, &sueltas, &par );
 
+    /* --- el ciclo, que es lo unico que impide estimar ------------------- */
+    if (!net_topo( r->lnk, r->n, m->c.n, topo )) {
+        GString *c = g_string_new( "CICLO:  " );
+
+        if (net_cycle( r->lnk, r->n, m->c.n, ciclo, &nc ))
+            for (i = 0; i < nc; i++)
+                g_string_append_printf( c, "%s%s", i ? " \xe2\x86\x92 " : "",
+                                        nom_de( m, ciclo[i] ) );
+        else
+            g_string_append( c, "la red no admite orden de construcción" );
+
+        mtram_verdicto( r->ver_topo, MT_ROJO,
+            "%s \xc2\xb7 el sistema es simultáneo \xe2\x80\x94 esto es drvarma",
+            c->str );
+        mtram_verdicto( r->ver_forma, MT_AMBAR,
+            "Mira la CCF del enlace que lo cierra: si sus retardos negativos "
+            "están dentro de la banda, ese enlace sobra" );
+        g_string_free( c, TRUE );
+        return;
+    }
+
+    /* --- se puede ------------------------------------------------------- */
+    {
+    GString *o = g_string_new( NULL );
+
+    for (i = 1; i <= m->c.n; i++)
+        g_string_append_printf( o, "%s%s", i > 1 ? " \xe2\x86\x92 " : "",
+                                nom_de( m, topo[i] ) );
+
+    mtram_verdicto( r->ver_topo, MT_VERDE,
+        "Acíclica \xc2\xb7 orden  %s \xc2\xb7 %d enlace%s, %d parámetro%s",
+        o->str, r->n, r->n == 1 ? "" : "s", par, par == 1 ? "" : "s" );
+    g_string_free( o, TRUE );
+    }
+
+    if (intermedias)
+        mtram_verdicto( r->ver_forma, MT_VERDE,
+            "%d serie%s %s salida Y entrada: es una RED, no una estrella "
+            "\xc2\xb7 %d suelta%s",
+            intermedias, intermedias == 1 ? "" : "s",
+            intermedias == 1 ? "es" : "son", sueltas, sueltas == 1 ? "" : "s" );
+    else
+        mtram_verdicto( r->ver_forma, MT_AMBAR,
+            "Ninguna serie es salida y entrada a la vez: esto es una ESTRELLA "
+            "\xc2\xb7 %d suelta%s", sueltas, sueltas == 1 ? "" : "s" );
+}
+
+/* ------------------------------------------------------------------------ */
+/* Los dos paneles                                                           */
+/* ------------------------------------------------------------------------ */
+
+static void on_orden( GtkButton *b, Mtram *m )
+{
+    Red     *r = &m->red;
+    GString *t = g_string_new( NULL );
+    int      topo[NET_MAX_SER + 1], ciclo[NET_MAX_SER + 2], nc = 0, i;
+
+    if (m->c.n < 2 || r->n == 0) {
+        g_string_append( t, "Carga las series y define al menos un enlace." );
+        goto pinta;
+    }
+
+    g_string_append( t,
+        "El motor resuelve el sistema por RECURSIÓN: una serie sólo se puede\n"
+        "construir después de TODAS las que la alimentan. Ese orden es esto.\n\n" );
+
+    if (net_topo( r->lnk, r->n, m->c.n, topo )) {
+        for (i = 1; i <= m->c.n; i++)
+            g_string_append_printf( t, "   %d. %s\n", i, nom_num( m, topo[i] ) );
+        g_string_append( t,
+            "\nCada una va después de todo lo que le entra. Con este orden el\n"
+            "sistema se triangulariza y la verosimilitud es la exacta." );
+    } else {
+        g_string_append( t, "NO HAY ORDEN: la red tiene un ciclo.\n\n" );
         if (net_cycle( r->lnk, r->n, m->c.n, ciclo, &nc )) {
             g_string_append( t, "   " );
             for (i = 0; i < nc; i++)
                 g_string_append_printf( t, "%s%s", i ? " → " : "",
                                         nom_de( m, ciclo[i] ) );
-            g_string_append_c( t, '\n' );
+            g_string_append( t, "\n\n" );
         }
         g_string_append( t,
-            "\nEl motor construye cada serie por recursión, después de todas "
-            "las que la alimentan.\nCon un ciclo ese orden no existe: el "
-            "sistema no se puede triangularizar restando\ntransferencias, y "
-            "drtran se niega a estimar en vez de devolver algo sin sentido.\n\n"
-            "No es un fallo de escritura. Es un modelo que no es de este "
-            "escalón:\nun sistema simultáneo se estima con drvarma (sima), "
-            "no aquí.\nSi crees que el ciclo no debería estar, mira la CCF "
-            "del enlace que lo cierra:\nsi sus retardos negativos están dentro "
-            "de la banda, ese enlace sobra." );
-
-        gtk_label_set_text( GTK_LABEL(r->veredicto), t->str );
-        g_string_free( t, TRUE );
-        return;
+            "Con un ciclo ese orden no existe: el sistema no se puede\n"
+            "triangularizar restando transferencias, y drtran se niega a\n"
+            "estimar en vez de devolver algo sin sentido.\n\n"
+            "NO ES UN FALLO DE ESCRITURA. Es un modelo que no es de este\n"
+            "escalón: un sistema simultáneo se estima con drvarma (sima).\n\n"
+            "Si crees que el ciclo no debería estar, mira la CCF del enlace\n"
+            "que lo cierra: si sus retardos negativos están dentro de la\n"
+            "banda, ese enlace sobra." );
     }
 
-    /* --- se puede: cómo va a resolverlo -------------------------------- */
-    g_string_append( t, "La red es acíclica: se puede estimar.\n\n"
-                        "Orden de construcción:   " );
-    for (i = 1; i <= m->c.n; i++)
-        g_string_append_printf( t, "%s%s", i > 1 ? "  →  " : "",
-                                nom_de( m, topo[i] ) );
+pinta:
+    mtram_popover_mostrar( GTK_WIDGET(b), t->str );
+    g_string_free( t, TRUE );
+}
 
-    /* Las que no tocan a nadie: el motor las estima, pero no pintan nada. */
-    for (i = 1; i <= m->c.n; i++)
-        if (net_indegree( r->lnk, r->n, i ) == 0 &&
-            net_outdegree( r->lnk, r->n, i ) == 0) huerfanas++;
+static void on_series( GtkButton *b, Mtram *m )
+{
+    Red     *r = &m->red;
+    GString *t = g_string_new( NULL );
+    int      i;
 
-    g_string_append_printf( t, "\n\n%d enlace%s sobre %d series.",
-                            r->n, r->n == 1 ? "" : "s", m->c.n );
-
-    if (huerfanas)
-        g_string_append_printf( t,
-            "\n\n%d serie%s no aparece%s en ningún enlace: el motor la%s "
-            "estima igual, pero\nno recibe ni da transferencia. Si está de "
-            "más, quítala en la pestaña Series.",
-            huerfanas, huerfanas == 1 ? "" : "s",
-            huerfanas == 1 ? "" : "n", huerfanas == 1 ? "" : "s" );
-
-    /* Una serie que es salida Y entrada es lo que distingue una red de una
-     * estrella, y es lo que hace falta decir porque no se ve solo.        */
-    {
-    int intermedias = 0;
-
-    for (i = 1; i <= m->c.n; i++)
-        if (net_indegree( r->lnk, r->n, i ) > 0 &&
-            net_outdegree( r->lnk, r->n, i ) > 0) intermedias++;
-
-    if (intermedias)
-        g_string_append_printf( t,
-            "\n\n%d serie%s es a la vez salida y entrada. Eso es una RED, no "
-            "una estrella:\nsu ecuación se estima Y alimenta a otra.",
-            intermedias, intermedias == 1 ? "" : "s" );
+    if (m->c.n < 1) {
+        g_string_append( t, "Carga las series." );
+        goto pinta;
     }
 
-    gtk_label_set_text( GTK_LABEL(r->veredicto), t->str );
+    g_string_append( t, "              entra   sale   papel\n" );
+    for (i = 1; i <= m->c.n; i++) {
+        int ent = net_indegree( r->lnk, r->n, i );
+        int sal = net_outdegree( r->lnk, r->n, i );
+        const char *papel;
+
+        if (ent && sal)      papel = "INTERMEDIA";
+        else if (ent)        papel = "salida final";
+        else if (sal)        papel = "entrada pura";
+        else                 papel = "suelta";
+
+        g_string_append_printf( t, "   %-10s  %3d    %3d   %s\n",
+                                nom_num( m, i ), ent, sal, papel );
+    }
+
+    g_string_append( t,
+        "\nUna serie con ENTRA > 0 y SALE > 0 es lo que hace que esto sea una\n"
+        "RED: su ecuación se estima Y alimenta a otra. Si no hay ninguna, lo\n"
+        "que hay es una estrella, que es lo que el motor supone por omisión.\n\n"
+        "Una SUELTA no aparece en ningún enlace: el motor la estima igual\n"
+        "--entra en el VARMA-- pero no recibe ni da transferencia. Si está de\n"
+        "más, quítala en la pestaña Series." );
+
+pinta:
+    mtram_popover_mostrar( GTK_WIDGET(b), t->str );
     g_string_free( t, TRUE );
 }
 
@@ -178,12 +283,13 @@ static void refresca_lista( Mtram *m )
 
         gtk_list_store_append( st, &it );
         gtk_list_store_set( st, &it,
-            R_SALIDA,  nom_de( m, l->out ),
+            R_SALIDA,  nom_num( m, l->out ),
             R_FLECHA,  "←",
-            R_ENTRADA, nom_de( m, l->inp ),
+            R_ENTRADA, nom_num( m, l->inp ),
             R_B,       l->b,
             R_R,       l->r,
             R_S,       l->s,
+            R_PAR,     l->s + 1 + l->r,
             R_NOTA,    malo ? "cierra el ciclo" : "",
             -1 );
     }
@@ -493,7 +599,7 @@ static void columna( GtkWidget *tv, const char *titulo, int col )
 GtkWidget *red_pagina_new( Mtram *m )
 {
     Red          *r = &m->red;
-    GtkWidget    *caja, *barra, *b, *sc, *marco, *vb;
+    GtkWidget    *caja, *barra, *b, *sc, *vb;
     GtkListStore *st;
 
     r->n = 0;
@@ -512,32 +618,53 @@ GtkWidget *red_pagina_new( Mtram *m )
     g_signal_connect( b, "clicked", G_CALLBACK(fn), m ); \
     gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
 
-    BOTON( "Añadir enlace", on_anadir,
+    BOTON( "Nuevo…", on_anadir,
            "Quién alimenta a quién, y con qué (b, r, s)." )
-    BOTON( "Editar", on_editar, "" )
+    BOTON( "Editar…", on_editar, "Los órdenes del enlace marcado." )
     BOTON( "Quitar", on_quitar, "" )
+    gtk_box_pack_start( GTK_BOX(barra), gtk_separator_new(
+                            GTK_ORIENTATION_VERTICAL ), FALSE, FALSE, 6 );
     BOTON( "Estrella", on_estrella,
            "Todas las entradas apuntando a la salida: es lo que el motor "
            "supone cuando no se le da un .dag." )
     gtk_box_pack_start( GTK_BOX(barra), gtk_separator_new(
                             GTK_ORIENTATION_VERTICAL ), FALSE, FALSE, 6 );
-    BOTON( "Abrir .dag", on_abrir,
-           "Se lee con el lector del motor: lo que mtram acepte es lo que "
-           "acepta drtran." )
-    BOTON( "Guardar .dag", on_guardar, "El fichero que el motor lee con -n." )
+    BOTON( "Abrir…", on_abrir,
+           "Un .dag. Se lee con el lector del motor: lo que mtram acepte es "
+           "lo que acepta drtran." )
+    BOTON( "Guardar…", on_guardar, "El fichero que el motor lee con -n." )
 #undef BOTON
+
+    /* A la derecha, los dos que ABREN algo. */
+#define BOTON_DER(txt, fn, tip) \
+    b = gtk_button_new_with_label( txt ); \
+    gtk_widget_set_tooltip_text( b, tip ); \
+    g_signal_connect( b, "clicked", G_CALLBACK(fn), m ); \
+    gtk_box_pack_end( GTK_BOX(barra), b, FALSE, FALSE, 0 );
+
+    BOTON_DER( "Series…", on_series,
+               "Cuántos enlaces entran y salen de cada serie, y qué papel "
+               "hace: eso es lo que distingue una red de una estrella." )
+    BOTON_DER( "Orden…", on_orden,
+               "El orden de construcción, y por qué el motor lo necesita." )
+#undef BOTON_DER
 
     /* --- la lista --- */
     st = gtk_list_store_new( R_N, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING,
-                             G_TYPE_INT, G_TYPE_INT, G_TYPE_INT, G_TYPE_STRING );
+                             G_TYPE_INT, G_TYPE_INT, G_TYPE_INT, G_TYPE_INT,
+                             G_TYPE_STRING );
     r->lista = gtk_tree_view_new_with_model( GTK_TREE_MODEL(st) );
-    columna( r->lista, "Salida",     R_SALIDA );
-    columna( r->lista, "",           R_FLECHA );
-    columna( r->lista, "Entrada",    R_ENTRADA );
-    columna( r->lista, "b",          R_B );
-    columna( r->lista, "r",          R_R );
-    columna( r->lista, "s",          R_S );
-    columna( r->lista, "",           R_NOTA );
+    columna( r->lista, "Salida",  R_SALIDA );
+    columna( r->lista, "",        R_FLECHA );
+    columna( r->lista, "Entrada", R_ENTRADA );
+    columna( r->lista, "b",       R_B );
+    columna( r->lista, "r",       R_R );
+    columna( r->lista, "s",       R_S );
+    columna( r->lista, "par",     R_PAR );
+    columna( r->lista, "",        R_NOTA );
+    gtk_widget_set_tooltip_text( r->lista,
+        "b el retardo puro, r el denominador, s el numerador. «par» = s+1+r "
+        "son los parámetros que ese enlace mete en el modelo." );
 
     sc = gtk_scrolled_window_new( NULL, NULL );
     gtk_scrolled_window_set_policy( GTK_SCROLLED_WINDOW(sc),
@@ -546,17 +673,20 @@ GtkWidget *red_pagina_new( Mtram *m )
     gtk_box_pack_start( GTK_BOX(caja), sc, TRUE, TRUE, 0 );
 
     /* --- el veredicto --- */
-    marco = gtk_frame_new( "¿Se puede estimar?" );
-    vb = gtk_box_new( GTK_ORIENTATION_VERTICAL, 0 );
-    gtk_container_set_border_width( GTK_CONTAINER(vb), 6 );
-    r->veredicto = gtk_label_new( "Carga al menos dos .pre en la pestaña "
-                                  "Series." );
-    gtk_widget_set_halign( r->veredicto, GTK_ALIGN_START );
-    gtk_label_set_line_wrap( GTK_LABEL(r->veredicto), TRUE );
-    gtk_label_set_selectable( GTK_LABEL(r->veredicto), TRUE );
-    gtk_container_add( GTK_CONTAINER(vb), r->veredicto );
-    gtk_container_add( GTK_CONTAINER(marco), vb );
-    gtk_box_pack_start( GTK_BOX(caja), marco, FALSE, FALSE, 0 );
+    /* Dos lineas de altura FIJA. Todo lo demas del alto es de la lista. */
+    vb = gtk_box_new( GTK_ORIENTATION_VERTICAL, 2 );
+    gtk_widget_set_margin_top( vb, 2 );
+
+    r->ver_topo  = gtk_label_new( "Carga al menos dos .pre en la pestaña Series." );
+    r->ver_forma = gtk_label_new( "" );
+    gtk_widget_set_halign( r->ver_topo,  GTK_ALIGN_START );
+    gtk_widget_set_halign( r->ver_forma, GTK_ALIGN_START );
+    gtk_label_set_ellipsize( GTK_LABEL(r->ver_topo),  PANGO_ELLIPSIZE_END );
+    gtk_label_set_ellipsize( GTK_LABEL(r->ver_forma), PANGO_ELLIPSIZE_END );
+
+    gtk_box_pack_start( GTK_BOX(vb), r->ver_topo,  FALSE, FALSE, 0 );
+    gtk_box_pack_start( GTK_BOX(vb), r->ver_forma, FALSE, FALSE, 0 );
+    gtk_box_pack_start( GTK_BOX(caja), vb, FALSE, FALSE, 0 );
 
     return caja;
 }

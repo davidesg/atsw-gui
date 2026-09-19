@@ -38,7 +38,8 @@ typedef struct {
  * drvarma, no de aqui.                                                    */
 typedef struct {
     GtkWidget *lista;         /* los enlaces                                */
-    GtkWidget *veredicto;     /* aciclica y su orden, o el ciclo por su nombre */
+    GtkWidget *ver_topo;      /* veredicto: aciclica y su orden, o el ciclo */
+    GtkWidget *ver_forma;     /* veredicto: red o estrella, y las sueltas   */
 
     NetLink    lnk[NET_MAX_LINK];
     int        n;
@@ -128,6 +129,25 @@ typedef struct {
 } Mtram;
 
 GtkWidget *mtram_window_new(GtkApplication *app, Mtram *m);
+
+/* ------------------------------------------------------------------------ */
+/* Presentacion, compartida por las paginas                                  */
+/*                                                                           */
+/* Un VEREDICTO es una linea de altura FIJA con un punto de color. Existe    */
+/* porque los marcos que crecian con los datos dejaban la lista en dos filas */
+/* --y en Red, ademas, daban saltos mientras se editaba--. El detalle se     */
+/* pide con un panel; el veredicto esta siempre. Ver DISENO-interfaz.md.     */
+/* ------------------------------------------------------------------------ */
+
+#define MT_VERDE  "#1a7f37"
+#define MT_AMBAR  "#9a6700"
+#define MT_ROJO   "#b3261e"
+
+void mtram_verdicto(GtkWidget *w, const char *color, const char *fmt, ...)
+     G_GNUC_PRINTF(3, 4);
+
+GtkWidget *mtram_popover(GtkWidget *ancla, const char *txt);
+void       mtram_popover_mostrar(GtkWidget *ancla, const char *txt);
 
 /* red.c */
 GtkWidget *red_pagina_new(Mtram *m);

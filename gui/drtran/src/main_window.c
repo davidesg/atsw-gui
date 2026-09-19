@@ -110,14 +110,7 @@ static void refresca_lista(Mtram *m)
 /* El detalle se pide; el veredicto esta siempre.                            */
 /* ------------------------------------------------------------------------ */
 
-#define VERDE  "#1a7f37"
-#define AMBAR  "#9a6700"
-#define ROJO   "#b3261e"
-
-static void pon_verdicto(GtkWidget *w, const char *color, const char *fmt, ...)
-    G_GNUC_PRINTF(3, 4);
-
-static void pon_verdicto(GtkWidget *w, const char *color, const char *fmt, ...)
+void mtram_verdicto(GtkWidget *w, const char *color, const char *fmt, ...)
 {
     va_list ap;
     gchar  *t, *esc, *mk;
@@ -140,12 +133,12 @@ static void refresca_ventana(Mtram *m)
     int  i, recortan = 0, obs;
 
     if (m->c.n < 2) {
-        pon_verdicto(m->ver_ventana, AMBAR,
+        mtram_verdicto(m->ver_ventana, MT_AMBAR,
                      "Carga al menos dos .pre: la primera es la salida.");
         return;
     }
     if (!conjunto_ventana_comun(&m->c, desde, hasta, why, sizeof why)) {
-        pon_verdicto(m->ver_ventana, ROJO, "Sin ventana común: %s", why);
+        mtram_verdicto(m->ver_ventana, MT_ROJO, "Sin ventana común: %s", why);
         return;
     }
 
@@ -158,11 +151,11 @@ static void refresca_ventana(Mtram *m)
     gchar *h = serie_fecha(m->c.s[0], hasta[0]);
 
     if (!recortan)
-        pon_verdicto(m->ver_ventana, VERDE,
+        mtram_verdicto(m->ver_ventana, MT_VERDE,
                      "%s \xe2\x80\x93 %s \xc2\xb7 %d obs \xc2\xb7 todas completas",
                      d, h, obs);
     else
-        pon_verdicto(m->ver_ventana, AMBAR,
+        mtram_verdicto(m->ver_ventana, MT_AMBAR,
                      "%s \xe2\x80\x93 %s \xc2\xb7 %d obs \xc2\xb7 %d serie%s "
                      "recorta%s \xe2\x80\x94 el motor NO recorta por fecha",
                      d, h, obs, recortan, recortan == 1 ? "" : "s",
@@ -186,17 +179,17 @@ static void refresca_compat(Mtram *m)
             }
 
     if (malos)
-        pon_verdicto(m->ver_oper, ROJO,
+        mtram_verdicto(m->ver_oper, MT_ROJO,
             "%d par%s incompatible%s \xc2\xb7 cast \xe2\x88\x92S por resta",
             malos, malos == 1 ? "" : "es", malos == 1 ? "" : "s");
     else if (anidados)
-        pon_verdicto(m->ver_oper, AMBAR,
+        mtram_verdicto(m->ver_oper, MT_AMBAR,
             "%d par%s igual%s, %d anidado%s \xc2\xb7 cast \xe2\x88\x92V "
             "empotrado (sigue exacto)",
             iguales, iguales == 1 ? "" : "es", iguales == 1 ? "" : "es",
             anidados, anidados == 1 ? "" : "s");
     else
-        pon_verdicto(m->ver_oper, VERDE,
+        mtram_verdicto(m->ver_oper, MT_VERDE,
             "%d par%s igual%s \xc2\xb7 cast \xe2\x88\x92V empotrado "
             "(verosimilitud exacta)",
             iguales, iguales == 1 ? "" : "es", iguales == 1 ? "" : "es");
@@ -300,7 +293,7 @@ static void on_anadir(GtkButton *b, Mtram *m)
 /* Los dos paneles emergentes                                                */
 /* ------------------------------------------------------------------------ */
 
-static GtkWidget *popover_texto(GtkWidget *ancla, const char *txt)
+GtkWidget *mtram_popover(GtkWidget *ancla, const char *txt)
 {
     GtkWidget *pop = gtk_popover_new(ancla);
     GtkWidget *l   = gtk_label_new(txt);
@@ -320,6 +313,11 @@ static GtkWidget *popover_texto(GtkWidget *ancla, const char *txt)
     gtk_container_add(GTK_CONTAINER(pop), sc);
     gtk_widget_show_all(sc);
     return pop;
+}
+
+void mtram_popover_mostrar(GtkWidget *ancla, const char *txt)
+{
+    gtk_popover_popup(GTK_POPOVER(mtram_popover(ancla, txt)));
 }
 
 static void on_ventana(GtkButton *b, Mtram *m)
@@ -361,11 +359,7 @@ static void on_ventana(GtkButton *b, Mtram *m)
                 "Hay que escribir los .pre ya recortados.");
     }
 
-    {
-    GtkWidget *pop = popover_texto(GTK_WIDGET(b), t->str);
-
-    gtk_popover_popup(GTK_POPOVER(pop));
-    }
+    mtram_popover_mostrar(GTK_WIDGET(b), t->str);
     g_string_free(t, TRUE);
 }
 
@@ -432,11 +426,7 @@ static void on_operadores(GtkButton *b, Mtram *m)
         "   ✗  incompatibles         el motor despacha al cast −S por resta");
 
 pinta:
-    {
-    GtkWidget *pop = popover_texto(GTK_WIDGET(b), t->str);
-
-    gtk_popover_popup(GTK_POPOVER(pop));
-    }
+    mtram_popover_mostrar(GTK_WIDGET(b), t->str);
     g_string_free(t, TRUE);
 }
 

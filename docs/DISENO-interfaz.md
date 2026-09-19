@@ -265,10 +265,141 @@ Y entra: la columna `Pierde`.
 
 ---
 
-## 4. Lo que queda por diseñar
+## 4. La página Red
 
-`Red`, `Identificación`, `Modelo`, `Estimación`, `Diagnosis` y `Previsión`, en
-ese orden. Las cuatro reglas de §1 y el criterio de nombres de §2 valen para
+### El mismo mal, y uno nuevo
+
+El marco «¿Se puede estimar?» escribe **de 8 a 12 líneas** según el caso — el
+del ciclo es el más largo porque es el que más hay que explicar. No es tan
+grave como en Series, pero tiene algo peor: **cambia de alto según lo que
+pase**, así que la lista da saltos mientras se edita la red. Un sitio donde se
+trabaja no puede moverse bajo la mano.
+
+Y hay algo que hoy **no se ve y hace falta**: cuántos enlaces entran y salen de
+cada serie. Eso dice de un golpe quién es salida pura, quién entrada pura y
+**quién es las dos cosas** — que es lo único que distingue una RED de una
+estrella. Hoy está en prosa, al final del marco.
+
+### La decisión de fondo: una lista o dos
+
+La página tiene dos objetos: los **enlaces** y las **series**. La tentación es
+poner dos listas, y es un error: volvería a repartir el alto entre dos cosas
+que crecen (R1, R4).
+
+**Manda la lista de enlaces**, porque es lo que se edita aquí. Lo de las series
+es un *resumen* —tres números por serie— y por tanto veredicto y panel.
+
+### El boceto
+
+```
+┌───────────────────────────────────────────────────────────────────────────┐
+│ Nuevo…  Editar…  Quitar  │  Estrella  │  Abrir…  Guardar…    Orden…  Series… │
+├─────────┬───┬─────────┬───┬───┬───┬─────┬─────────────────────────────────┤
+│ Salida  │ ← │ Entrada │ b │ r │ s │ par │                                 │
+├─────────┼───┼─────────┼───┼───┼───┼─────┼─────────────────────────────────┤
+│ 1 EP    │ ← │ 2 EI    │ 1 │ 0 │ 1 │  2  │                                 │
+│ 1 EP    │ ← │ 4 EC    │ 1 │ 0 │ 2 │  3  │                                 │
+│ 2 EI    │ ← │ 3 EU    │ 1 │ 0 │ 3 │  4  │                                 │
+│ 3 EU    │ ← │ 4 EC    │ 2 │ 0 │ 1 │  2  │                                 │
+│                                                                           │
+│                  (la lista se queda TODO el alto que sobre)                │
+│                                                                           │
+├─────────┴───┴─────────┴───┴───┴───┴─────┴─────────────────────────────────┤
+│ ● Acíclica · orden  EC → EU → EI → EP · 4 enlaces, 11 parámetros           │
+│ ● 2 series son salida Y entrada: es una RED, no una estrella · 0 sueltas   │
+├───────────────────────────────────────────────────────────────────────────┤
+│ 6 series. La salida es «EP».                                              │
+└───────────────────────────────────────────────────────────────────────────┘
+```
+
+Y con un ciclo, la primera línea en rojo:
+
+```
+│ ● CICLO:  EU → EI → EP → EU · el sistema es simultáneo — esto es drvarma   │
+```
+
+### `b`, `r`, `s` en tres columnas
+
+Es la misma decisión que `d`, `D`, `f` en Series, y por la misma razón: tres
+números cortos se comparan de un vistazo entre filas, una cadena no. Además
+deja las dos páginas hablando igual.
+
+Aquí **sí** son los números del fichero y no hay forma canónica que buscar: el
+`.dag` los escribe tal cual y el motor los usa tal cual.
+
+### La columna `par`
+
+`s + 1 + r`: los parámetros que ese enlace mete en el modelo. Es un hecho por
+enlace (R2) y es lo que hace crecer la estimación. Verlo por fila explica de
+dónde salen los 11 del total, y cuál es el enlace caro.
+
+### La columna `#` delante del nombre
+
+`1 EP`, `2 EI`. El mismo número que la página Series, que es el de `q[i,j]`. No
+se pone el número solo —`1 ← 2` sería ilegible— ni el nombre solo, porque
+entonces las dos páginas hablarían idiomas distintos.
+
+### Los dos veredictos
+
+| línea | verde | ámbar | rojo |
+|---|---|---|---|
+| topología | acíclica, con su orden | — | **ciclo**, nombrado |
+| forma | es una red | es una estrella, o hay series sueltas | — |
+
+La segunda línea dice tres cosas en una: cuántas series son salida **y**
+entrada (la red de verdad), cuántas están sueltas (el motor las estima pero no
+pintan nada), y si la topología es una estrella.
+
+### Los dos paneles
+
+**`Orden…`** — el orden topológico y por qué importa: el motor construye cada
+serie por recursión, después de todas las que la alimentan. Cuando hay ciclo,
+es aquí donde va la explicación larga que hoy ocupa el marco: qué es un sistema
+simultáneo, por qué no se puede triangularizar, y que el escalón que toca es
+drvarma. También el consejo: *si crees que el ciclo no debería estar, mira la
+CCF del enlace que lo cierra; si sus retardos negativos están dentro de la
+banda, ese enlace sobra.*
+
+**`Series…`** — los tres números por serie, que es lo que no se ve hoy:
+
+```
+            entra   sale   papel
+   1 EP       2      0     salida final
+   2 EI       1      1     INTERMEDIA
+   3 EU       1      1     INTERMEDIA
+   4 EC       0      2     entrada pura
+   5 EA       0      0     suelta
+   6 P        0      0     suelta
+```
+
+Una serie con `entra > 0` **y** `sale > 0` es lo que hace que esto sea una red:
+su ecuación se estima **y** alimenta a otra.
+
+### Qué se va de la página
+
+| se va | a dónde |
+|---|---|
+| el marco «¿Se puede estimar?» entero | dos líneas de veredicto + `Orden…` |
+| la columna de notas («cierra el ciclo») | se queda, pero como marca corta |
+
+Y entran: `par`, el `#` delante de los nombres, y el panel `Series…`.
+
+### Una idea que dejo abierta
+
+`lib/fugdraw` dibuja vectores y `lib/preview` los enseña en pantalla. **Se
+podría dibujar el grafo** —cajas y flechas, con los `(b,r,s)` en las aristas— y
+enseñarlo en el panel `Orden…`, que es donde la topología se mira. Sería el
+mismo fichero que iría al papel, como todo lo demás.
+
+No entra en esta pasada. Lo apunto porque un grafo de seis nodos se lee mejor
+dibujado que en cualquier tabla, y porque la maquinaria ya está.
+
+---
+
+## 5. Lo que queda por diseñar
+
+`Identificación`, `Modelo`, `Estimación`, `Diagnosis` y `Previsión`, en ese
+orden. Las cuatro reglas de §1 y el criterio de nombres de §2 valen para
 todas; lo que cambia es qué es el hecho por fila y qué es el veredicto.
 
 Dos ya se sabe que tienen el mismo problema de §0:
@@ -279,4 +410,4 @@ Dos ya se sabe que tienen el mismo problema de §0:
   marco que crece.
 
 **Estado: Series IMPLEMENTADA** (`lib/nsop`, `gui/drtran/src/main_window.c`).
-El resto, propuesto y sin implementar.
+**Red propuesta**, sin implementar. El resto, sin diseñar.

@@ -660,7 +660,7 @@ todas; lo que cambia es qué es el hecho por fila y qué es el veredicto.
 enlace más dos por serie, y debajo un marco que crece con los enlaces que
 fallan.
 
-**Estado: Series, Red e Identificación IMPLEMENTADAS.** El resto, sin
+**Estado: Series, Red, Identificación y Modelo IMPLEMENTADAS.** El resto, sin
 diseñar.
 
 De Red salió además el sitio donde viven los dos ayudantes que comparten las

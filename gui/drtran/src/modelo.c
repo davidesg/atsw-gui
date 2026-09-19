@@ -37,22 +37,27 @@
 #include "previewhost.h"
 #include "slots.h"
 
-enum { M_NOMBRE, M_QUE, M_DICE, M_GRUPO, M_IDX, M_N };
+enum { M_NOMBRE, M_QUE, M_DICE, M_IDX, M_N };
 
-/* De que parte del modelo es un slot. Sale del nombre, que es como lo bautiza
- * el motor, y sirve para que la lista no sea una sopa de 67 renglones.     */
+/* Los grupos, en el orden en que se enseñan. Ya existian como columna; aqui
+ * son la ESTRUCTURA, porque 67 renglones heterogeneos en una lista plana no se
+ * recorren -- y lo que el analista toca de verdad son seis.              */
+static const char *GRUPOS[] = {
+    "transferencia", "ARMA del ruido", "deterministas",
+    "medias", "varianzas", "covarianzas", "otros"
+};
+#define N_GRUPOS ((int)(sizeof GRUPOS / sizeof GRUPOS[0]))
+
+/* De que grupo es un slot. Sale del nombre, que es como lo bautiza el motor. */
 static const char *grupo_de( const char *n )
 {
-    if (!strncmp(n, "omega_d", 7) || !strncmp(n, "delta_d", 7))
-        return "deterministas";
-    if (!strncmp(n, "omega", 5) || !strncmp(n, "delta", 5))
-        return "transferencia";
-    if (!strncmp(n, "phi_", 4) || !strncmp(n, "theta_", 6))
-        return "ARMA del ruido";
-    if (!strncmp(n, "mu[", 3))            return "medias";
-    if (!strncmp(n, "log(var", 7))        return "varianzas";
-    if (!strncmp(n, "q[", 2))             return "covarianzas";
-    return "otros";
+    if (!strncmp(n, "omega_d", 7) || !strncmp(n, "delta_d", 7)) return GRUPOS[2];
+    if (!strncmp(n, "omega", 5)   || !strncmp(n, "delta", 5))   return GRUPOS[0];
+    if (!strncmp(n, "phi_", 4)    || !strncmp(n, "theta_", 6))  return GRUPOS[1];
+    if (!strncmp(n, "mu[", 3))     return GRUPOS[3];
+    if (!strncmp(n, "log(var", 7)) return GRUPOS[4];
+    if (!strncmp(n, "q[", 2))      return GRUPOS[5];
+    return GRUPOS[6];
 }
 
 static const char *que_es( int kind )
@@ -111,75 +116,24 @@ static void construye( Mtram *m )
 
 /* ------------------------------------------------------------------------ */
 
-static void refresca_lista( Mtram *m )
+/* Cuantas covarianzas hay libres, y cuantas hay. */
+static void covarianzas( const SlotTable *st, int *libres, int *total )
 {
-    Modelo       *M  = &m->mod;
-    GtkListStore *store = GTK_LIST_STORE( gtk_tree_view_get_model(
-                                              GTK_TREE_VIEW(M->lista) ) );
-    GtkTreeIter   it;
-    char          dice[256];
-    int           i;
+    int i;
 
-    gtk_list_store_clear( store );
-    for (i = 1; i <= M->st.n; i++) {
-        const char *n = M->st.name[i];
-
-        if (!slots_line( &M->st, i, dice, sizeof dice )) dice[0] = '\0';
-
-        gtk_list_store_append( store, &it );
-        gtk_list_store_set( store, &it,
-            M_NOMBRE, n,
-            M_QUE,    que_es( M->st.kind[i] ),
-            M_DICE,   dice,
-            M_GRUPO,  grupo_de( n ),
-            M_IDX,    i,
-            -1 );
-    }
+    *libres = *total = 0;
+    for (i = 1; i <= st->n; i++)
+        if (!strncmp( st->name[i], "q[", 2 )) {
+            (*total)++;
+            if (st->kind[i] == SLOT_FREE) (*libres)++;
+        }
 }
 
-static void refresca_cuenta( Mtram *m )
+/* Los enlaces contemporaneos con su covarianza libre: explican lo mismo dos
+ * veces. Devuelve cuantos, y el primero en *k.                           */
+static int colineales( Mtram *m, int *primero )
 {
-    Modelo  *M = &m->mod;
-    GString *t = g_string_new( NULL );
-    int      libres, i, covar_libres = 0;
-
-    if (!M->vale) {
-        gtk_label_set_text( GTK_LABEL(M->cuenta),
-            "Carga las series y define la red: los parámetros salen de ahí, "
-            "no se escriben." );
-        g_string_free( t, TRUE );
-        return;
-    }
-
-    libres = slots_nfree( &M->st );
-    for (i = 1; i <= M->st.n; i++)
-        if (!strncmp( M->st.name[i], "q[", 2 ) && M->st.kind[i] == SLOT_FREE)
-            covar_libres++;
-
-    g_string_append_printf( t,
-        "%d parámetros estructurales.   %d libres,  %d fijos o atados.\n",
-        M->st.n, libres, M->st.n - libres );
-
-    if (M->perdidas)
-        g_string_append_printf( t,
-            "\n%d restricción%s se quedó%s por el camino: nombraba%s un "
-            "parámetro que este modelo\nya no tiene. Revísalas antes de "
-            "estimar.\n",
-            M->perdidas, M->perdidas == 1 ? "" : "es",
-            M->perdidas == 1 ? "" : "n", M->perdidas == 1 ? "" : "n" );
-
-    g_string_append_printf( t,
-        "\nDe las %d covarianzas de las innovaciones hay %d liberada%s. "
-        "Nacen FIJAS en cero:\nla diagonal es el caso por defecto y liberar "
-        "una es una decisión, no algo que se active en bloque.\n"
-        "El m6-1 no libera las 15 de su sistema: libera tres.",
-        (m->c.n * (m->c.n - 1)) / 2, covar_libres,
-        covar_libres == 1 ? "" : "s" );
-
-    /* El aviso de casi-colinealidad, que el motor da despues de estimar y aqui
-     * se puede dar ANTES, que es cuando sirve.                            */
-    {
-    int k, avisos = 0;
+    int k, n = 0;
 
     for (k = 0; k < m->red.n; k++) {
         char nm[40];
@@ -187,34 +141,125 @@ static void refresca_cuenta( Mtram *m )
 
         if (m->red.lnk[k].b != 0) continue;
         snprintf( nm, sizeof nm, "q[%d,%d]", m->red.lnk[k].out, m->red.lnk[k].inp );
-        s1 = slots_find( &M->st, nm );
+        s1 = slots_find( &m->mod.st, nm );
         snprintf( nm, sizeof nm, "q[%d,%d]", m->red.lnk[k].inp, m->red.lnk[k].out );
-        s2 = slots_find( &M->st, nm );
+        s2 = slots_find( &m->mod.st, nm );
 
-        if ((s1 && M->st.kind[s1] == SLOT_FREE) ||
-            (s2 && M->st.kind[s2] == SLOT_FREE)) {
-            if (!avisos++)
-                g_string_append( t, "\n\nOJO — casi-colinealidad:" );
-            g_string_append_printf( t,
-                "\n   %s ← %s es CONTEMPORÁNEO (b = 0) y su covarianza está "
-                "libre a la vez.",
-                m->c.s[m->red.lnk[k].out - 1]->ts.name,
-                m->c.s[m->red.lnk[k].inp - 1]->ts.name );
+        if ((s1 && m->mod.st.kind[s1] == SLOT_FREE) ||
+            (s2 && m->mod.st.kind[s2] == SLOT_FREE)) {
+            if (!n++ && primero) *primero = k;
         }
     }
-    if (avisos)
-        g_string_append( t,
-            "\n   En el retardo k = 0 las dos explican exactamente lo mismo; "
-            "sólo se separan por cómo\n   decae la covarianza cruzada en k > 0 "
-            "(φ_X^k la transferencia, φ_N^k la covarianza).\n"
-            "   Si los dos AR se parecen, la verosimilitud tiene una cresta "
-            "casi plana: el ajuste apenas\n   mejora mientras ω y la "
-            "correlación se van a una esquina con t enormes. Usa UNA de las "
-            "dos." );
+    return n;
+}
+
+/* ------------------------------------------------------------------------ */
+/* El arbol                                                                  */
+/* ------------------------------------------------------------------------ */
+
+static void refresca_lista( Mtram *m )
+{
+    Modelo       *M  = &m->mod;
+    GtkTreeStore *st = GTK_TREE_STORE( gtk_tree_view_get_model(
+                                           GTK_TREE_VIEW(M->lista) ) );
+    GtkTreeIter   grupo, fila;
+    char          dice[256];
+    int           g, i;
+
+    gtk_tree_store_clear( st );
+    if (!M->vale) return;
+
+    for (g = 0; g < N_GRUPOS; g++) {
+        int hay = 0, libres = 0, puestos = 0;
+        gchar *cab;
+
+        /* Cuantos caen en este grupo, y cuantos de ellos se van a enseñar. */
+        for (i = 1; i <= M->st.n; i++)
+            if (grupo_de( M->st.name[i] ) == GRUPOS[g]) {
+                hay++;
+                if (M->st.kind[i] == SLOT_FREE) libres++;
+                if (!M->solo || slots_line( &M->st, i, dice, sizeof dice ))
+                    puestos++;
+            }
+        if (!hay || !puestos) continue;
+
+        cab = g_strdup_printf( "%s (%d)", GRUPOS[g], hay );
+        gtk_tree_store_append( st, &grupo, NULL );
+        gtk_tree_store_set( st, &grupo,
+            M_NOMBRE, cab,
+            /* En las covarianzas, lo que importa del grupo es cuantas se han
+             * liberado: nacen fijas en cero y liberarlas es la decision.  */
+            M_QUE, g == 5 ? g_strdup_printf( "%d libre%s", libres,
+                                             libres == 1 ? "" : "s" ) : "",
+            M_IDX, 0,
+            -1 );
+        g_free( cab );
+
+        for (i = 1; i <= M->st.n; i++) {
+            if (grupo_de( M->st.name[i] ) != GRUPOS[g]) continue;
+            if (!slots_line( &M->st, i, dice, sizeof dice )) {
+                if (M->solo) continue;
+                dice[0] = 0;
+            }
+            gtk_tree_store_append( st, &fila, &grupo );
+            gtk_tree_store_set( st, &fila,
+                M_NOMBRE, M->st.name[i],
+                M_QUE,    que_es( M->st.kind[i] ),
+                M_DICE,   dice,
+                M_IDX,    i,
+                -1 );
+        }
     }
 
-    gtk_label_set_text( GTK_LABEL(M->cuenta), t->str );
-    g_string_free( t, TRUE );
+    /* Con el filtro puesto son pocas filas: se abren. Sin el, plegado, que es
+     * lo que hace que 67 renglones quepan en la pantalla.               */
+    if (M->solo) gtk_tree_view_expand_all( GTK_TREE_VIEW(M->lista) );
+    else         gtk_tree_view_collapse_all( GTK_TREE_VIEW(M->lista) );
+}
+
+/* ------------------------------------------------------------------------ */
+/* Los dos veredictos                                                        */
+/*                                                                           */
+/* El segundo es el primero que tiene que ELEGIR QUE CONTAR: lo que impide o  */
+/* compromete la estimacion va antes que lo que solo informa.                 */
+/* ------------------------------------------------------------------------ */
+
+static void refresca_cuenta( Mtram *m )
+{
+    Modelo *M = &m->mod;
+    int     libres, cl, ct, mal, primero = 0;
+
+    if (!M->vale) {
+        mtram_verdicto( M->ver_cuenta, MT_AMBAR,
+            "Carga las series y define la red: los parámetros salen de ahí, "
+            "no se escriben." );
+        gtk_label_set_text( GTK_LABEL(M->ver_ojo), "" );
+        return;
+    }
+
+    libres = slots_nfree( &M->st );
+    covarianzas( &M->st, &cl, &ct );
+    mal = colineales( m, &primero );
+
+    mtram_verdicto( M->ver_cuenta, MT_VERDE,
+        "%d parámetros · %d libres · %d fijos o atados",
+        M->st.n, libres, M->st.n - libres );
+
+    if (mal)
+        mtram_verdicto( M->ver_ojo, MT_ROJO,
+            "OJO — %s ← %s es contemporáneo (b=0) y su covarianza está libre%s",
+            m->c.s[m->red.lnk[primero].out - 1]->ts.name,
+            m->c.s[m->red.lnk[primero].inp - 1]->ts.name,
+            mal > 1 ? " · y no es el único" : "" );
+    else if (M->perdidas)
+        mtram_verdicto( M->ver_ojo, MT_AMBAR,
+            "%d restricción%s se quedó%s por el camino: nombraba%s un "
+            "parámetro que este modelo ya no tiene",
+            M->perdidas, M->perdidas == 1 ? "" : "es",
+            M->perdidas == 1 ? "" : "n", M->perdidas == 1 ? "" : "n" );
+    else
+        mtram_verdicto( M->ver_ojo, MT_VERDE,
+            "%d de %d covarianzas liberadas · nacen FIJAS en cero", cl, ct );
 }
 
 void modelo_refresca( Mtram *m )
@@ -353,6 +398,196 @@ static void on_compartir( GtkButton *b, Mtram *m )
     gtk_widget_destroy( d );
     g_free( idx );
     modelo_refresca( m );
+}
+
+/* ------------------------------------------------------------------------ */
+/* Sigma, como matriz y EDITABLE                                             */
+/*                                                                           */
+/* Sigma ES una matriz, y verla como matriz es ver su estructura de un golpe. */
+/* Y aqui se pulsa, al reves que la matriz de operadores de la pagina Series: */
+/* aquella es de solo lectura porque el operador viene del .pre y no se       */
+/* decide ahi; esta SI es una decision del analista, asi que se decide donde  */
+/* se ve. Liberar covarianzas es el uso mas comun del .cns --el m6-1 libera   */
+/* tres de quince-- y buscarlas entre 67 renglones es absurdo.                */
+/*                                                                           */
+/* Va en DIALOGO y no en panel: editar Sigma es un acto deliberado y conviene */
+/* poder cancelarlo entero. Un panel que se cierra al perder el foco no es    */
+/* sitio para varios clics seguidos.                                          */
+/* ------------------------------------------------------------------------ */
+
+static void on_covarianzas( GtkButton *bt, Mtram *m )
+{
+    Modelo    *M = &m->mod;
+    GtkWidget *d, *caja, *rej, *av;
+    GtkWidget *bot[NET_MAX_SER + 1][NET_MAX_SER + 1];
+    int        i, j, n = m->c.n;
+
+    if (!M->vale) {
+        preview_show_status( m, "Carga las series y define la red primero." );
+        return;
+    }
+
+    d = gtk_dialog_new_with_buttons( "Covarianzas de las innovaciones",
+            GTK_WINDOW(m->ventana_p),
+            GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+            "_Cancelar", GTK_RESPONSE_CANCEL,
+            "_Aceptar",  GTK_RESPONSE_ACCEPT, NULL );
+    caja = gtk_dialog_get_content_area( GTK_DIALOG(d) );
+    gtk_container_set_border_width( GTK_CONTAINER(caja), 12 );
+    gtk_box_set_spacing( GTK_BOX(caja), 10 );
+
+    rej = gtk_grid_new();
+    gtk_grid_set_row_spacing( GTK_GRID(rej), 3 );
+    gtk_grid_set_column_spacing( GTK_GRID(rej), 3 );
+    gtk_container_add( GTK_CONTAINER(caja), rej );
+
+    /* Solo por debajo de la diagonal: q[i,j] con i > j, que es como las
+     * nombra el motor y como las cuenta -- n(n-1)/2.                    */
+    for (j = 1; j < n; j++) {
+        GtkWidget *h = gtk_label_new( NULL );
+        gchar     *mk = g_strdup_printf( "<b>%s</b>",
+                            m->c.s[j - 1]->ts.name ? m->c.s[j - 1]->ts.name : "?" );
+
+        gtk_label_set_markup( GTK_LABEL(h), mk );
+        g_free( mk );
+        gtk_grid_attach( GTK_GRID(rej), h, j, 0, 1, 1 );
+    }
+
+    for (i = 2; i <= n; i++) {
+        GtkWidget *h = gtk_label_new( NULL );
+        gchar     *mk = g_strdup_printf( "<b>%d %s</b>", i,
+                            m->c.s[i - 1]->ts.name ? m->c.s[i - 1]->ts.name : "?" );
+
+        gtk_label_set_markup( GTK_LABEL(h), mk );
+        g_free( mk );
+        gtk_widget_set_halign( h, GTK_ALIGN_START );
+        gtk_grid_attach( GTK_GRID(rej), h, 0, i - 1, 1, 1 );
+
+        for (j = 1; j < i; j++) {
+            char nm[40];
+            int  k;
+
+            snprintf( nm, sizeof nm, "q[%d,%d]", i, j );
+            k = slots_find( &M->st, nm );
+            if (!k) { bot[i][j] = NULL; continue; }
+
+            bot[i][j] = gtk_toggle_button_new_with_label(
+                            M->st.kind[k] == SLOT_FREE ? "libre" : "0" );
+            gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(bot[i][j]),
+                                          M->st.kind[k] == SLOT_FREE );
+            gtk_widget_set_tooltip_text( bot[i][j], nm );
+            gtk_widget_set_size_request( bot[i][j], 56, -1 );
+            gtk_grid_attach( GTK_GRID(rej), bot[i][j], j, i - 1, 1, 1 );
+        }
+    }
+
+    av = gtk_label_new(
+        "Las covarianzas nacen FIJAS en cero: la diagonal es el caso por "
+        "defecto\ny liberar una es una decisión, no algo que se active en "
+        "bloque.\nEl m6-1 no libera las quince de su sistema: libera tres." );
+    gtk_widget_set_halign( av, GTK_ALIGN_START );
+    gtk_container_add( GTK_CONTAINER(caja), av );
+
+    gtk_widget_show_all( d );
+
+    if (gtk_dialog_run( GTK_DIALOG(d) ) == GTK_RESPONSE_ACCEPT) {
+        int cambios = 0;
+
+        for (i = 2; i <= n; i++)
+            for (j = 1; j < i; j++) {
+                char nm[40];
+                int  k, quiere;
+
+                if (!bot[i][j]) continue;
+                snprintf( nm, sizeof nm, "q[%d,%d]", i, j );
+                k = slots_find( &M->st, nm );
+                if (!k) continue;
+
+                quiere = gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(bot[i][j]) );
+                if (quiere && M->st.kind[k] != SLOT_FREE) {
+                    M->st.kind[k] = SLOT_FREE;  M->st.alias[k] = 0;  cambios++;
+                } else if (!quiere && M->st.kind[k] != SLOT_FIXED) {
+                    M->st.kind[k] = SLOT_FIXED; M->st.value[k] = 0.0; cambios++;
+                }
+            }
+        gtk_widget_destroy( d );
+
+        if (cambios) {
+            refresca_lista( m );
+            refresca_cuenta( m );
+            preview_show_status( m, "%d covarianza%s cambiada%s.",
+                                 cambios, cambios == 1 ? "" : "s",
+                                 cambios == 1 ? "" : "s" );
+        }
+        return;
+    }
+    gtk_widget_destroy( d );
+}
+
+/* ------------------------------------------------------------------------ */
+/* Los avisos                                                                */
+/* ------------------------------------------------------------------------ */
+
+static void on_avisos( GtkButton *b, Mtram *m )
+{
+    Modelo  *M = &m->mod;
+    GString *t = g_string_new( NULL );
+    int      k, n = 0;
+
+    if (!M->vale) {
+        g_string_append( t, "Carga las series y define la red." );
+        goto pinta;
+    }
+
+    for (k = 0; k < m->red.n; k++) {
+        char nm[40];
+        int  s1, s2;
+
+        if (m->red.lnk[k].b != 0) continue;
+        snprintf( nm, sizeof nm, "q[%d,%d]", m->red.lnk[k].out, m->red.lnk[k].inp );
+        s1 = slots_find( &M->st, nm );
+        snprintf( nm, sizeof nm, "q[%d,%d]", m->red.lnk[k].inp, m->red.lnk[k].out );
+        s2 = slots_find( &M->st, nm );
+
+        if ((s1 && M->st.kind[s1] == SLOT_FREE) ||
+            (s2 && M->st.kind[s2] == SLOT_FREE)) {
+            if (!n++)
+                g_string_append( t, "CASI-COLINEALIDAD\n\n" );
+            g_string_append_printf( t, "   %s ← %s  es contemporáneo (b=0) y "
+                "su covarianza está libre\n",
+                m->c.s[m->red.lnk[k].out - 1]->ts.name,
+                m->c.s[m->red.lnk[k].inp - 1]->ts.name );
+        }
+    }
+
+    if (!n) {
+        g_string_append( t, "Ningún aviso.\n\n"
+            "Aquí saldría la casi-colinealidad: un enlace contemporáneo (b=0)\n"
+            "con su covarianza de innovaciones libre al mismo tiempo." );
+        goto pinta;
+    }
+
+    g_string_append( t,
+        "\nEn el retardo k = 0 las dos cosas explican EXACTAMENTE LO MISMO.\n"
+        "Sólo se separan por cómo decae la covarianza cruzada en k > 0:\n"
+        "   phi_X^k   si es transferencia\n"
+        "   phi_N^k   si es covarianza\n\n"
+        "Cuando los dos AR se parecen, la verosimilitud tiene una cresta casi\n"
+        "plana: el ajuste apenas mejora mientras omega y la correlación se van\n"
+        "a una esquina. Medido en IPC<-WTI (phi_X=0.30, phi_N=0.40): LR = 0.03,\n"
+        "la correlación se va a -0.98, omega se multiplica por 9 y los t-ratios\n"
+        "llegan a 2424.\n\n"
+        "LA DOCTRINA DE LA ESCUELA ES USAR UNA DE LAS DOS, NO LAS DOS.\n"
+        "El m6-1 tiene covarianzas fuera de la diagonal y NINGUNA estructura\n"
+        "contemporánea. La tesis de Muñoz Polo (2001, §2.4) dice que la\n"
+        "especificación de una relación bivariante «puede comenzar con la\n"
+        "modificación de la matriz Sigma».\n\n"
+        "El motor da este aviso DESPUÉS de estimar. Aquí se da antes, que es\n"
+        "cuando sirve." );
+
+pinta:
+    mtram_popover_mostrar( GTK_WIDGET(b), t->str );
+    g_string_free( t, TRUE );
 }
 
 /* ------------------------------------------------------------------------ */
@@ -534,6 +769,12 @@ static void on_guardar( GtkButton *b, Mtram *m )
 
 /* ------------------------------------------------------------------------ */
 
+static void on_solo( GtkToggleButton *b, Mtram *m )
+{
+    m->mod.solo = gtk_toggle_button_get_active( b );
+    refresca_lista( m );
+}
+
 static void columna( GtkWidget *tv, const char *titulo, int col )
 {
     GtkCellRenderer   *r = gtk_cell_renderer_text_new();
@@ -547,12 +788,13 @@ static void columna( GtkWidget *tv, const char *titulo, int col )
 GtkWidget *modelo_pagina_new( Mtram *m )
 {
     Modelo       *M = &m->mod;
-    GtkWidget    *caja, *barra, *b, *sc, *marco, *vb;
-    GtkListStore *store;
+    GtkWidget    *caja, *barra, *b, *sc, *vb;
+    GtkTreeStore *store;
 
     M->vale = FALSE;
     M->path = NULL;
     M->st.n = 0;
+    M->solo = FALSE;
 
     caja = gtk_box_new( GTK_ORIENTATION_VERTICAL, 6 );
     gtk_container_set_border_width( GTK_CONTAINER(caja), 8 );
@@ -575,20 +817,50 @@ GtkWidget *modelo_pagina_new( Mtram *m )
            "Un solo grado de libertad, estimado una vez y usado en dos sitios." )
     gtk_box_pack_start( GTK_BOX(barra), gtk_separator_new(
                             GTK_ORIENTATION_VERTICAL ), FALSE, FALSE, 6 );
-    BOTON( "Abrir .cns", on_abrir,
-           "Se lee con el lector del motor: lo que mtram acepte es lo que "
-           "acepta drtran." )
-    BOTON( "Guardar .cns", on_guardar, "El fichero que el motor lee con -c." )
+    BOTON( "Abrir…", on_abrir,
+           "Un .cns. Se lee con el lector del motor: lo que mtram acepte es "
+           "lo que acepta drtran." )
+    BOTON( "Guardar…", on_guardar, "El fichero que el motor lee con -c." )
 #undef BOTON
 
-    store = gtk_list_store_new( M_N, G_TYPE_STRING, G_TYPE_STRING,
-                                G_TYPE_STRING, G_TYPE_STRING, G_TYPE_INT );
+    gtk_box_pack_start( GTK_BOX(barra), gtk_separator_new(
+                            GTK_ORIENTATION_VERTICAL ), FALSE, FALSE, 6 );
+
+    /* Lo que el .cns CONTIENE son los slots que dicen algo: en el m6, seis de
+     * 67. Es la vista que casi siempre se quiere, porque es el fichero que se
+     * va a escribir.                                                     */
+    M->c_solo = gtk_check_button_new_with_label( "Sólo lo restringido" );
+    gtk_widget_set_tooltip_text( M->c_solo,
+        "Sólo los parámetros que dicen algo — que es lo que el .cns contiene. "
+        "En el m6 son 6 de 67." );
+    g_signal_connect( M->c_solo, "toggled", G_CALLBACK(on_solo), m );
+    gtk_box_pack_start( GTK_BOX(barra), M->c_solo, FALSE, FALSE, 0 );
+
+    /* A la derecha, los dos que ABREN algo. */
+#define BOTON_DER(txt, fn, tip) \
+    b = gtk_button_new_with_label( txt ); \
+    gtk_widget_set_tooltip_text( b, tip ); \
+    g_signal_connect( b, "clicked", G_CALLBACK(fn), m ); \
+    gtk_box_pack_end( GTK_BOX(barra), b, FALSE, FALSE, 0 );
+
+    BOTON_DER( "Avisos…", on_avisos,
+               "La casi-colinealidad: un enlace contemporáneo y su covarianza "
+               "libre explican lo mismo dos veces." )
+    BOTON_DER( "Covarianzas…", on_covarianzas,
+               "Σ como matriz, y se pulsa para liberar o fijar. Es el uso más "
+               "común del .cns." )
+#undef BOTON_DER
+
+    /* Un ARBOL, no una lista: 67 renglones heterogeneos en una lista plana no
+     * se recorren. Plegado son seis filas.                              */
+    store = gtk_tree_store_new( M_N, G_TYPE_STRING, G_TYPE_STRING,
+                                G_TYPE_STRING, G_TYPE_INT );
     M->lista = gtk_tree_view_new_with_model( GTK_TREE_MODEL(store) );
     columna( M->lista, "Parámetro", M_NOMBRE );
     columna( M->lista, "Es",        M_QUE );
     columna( M->lista, "Dice",      M_DICE );
-    columna( M->lista, "De",        M_GRUPO );
     gtk_tree_view_set_search_column( GTK_TREE_VIEW(M->lista), M_NOMBRE );
+    gtk_tree_view_set_enable_tree_lines( GTK_TREE_VIEW(M->lista), TRUE );
 
     sc = gtk_scrolled_window_new( NULL, NULL );
     gtk_scrolled_window_set_policy( GTK_SCROLLED_WINDOW(sc),
@@ -596,16 +868,20 @@ GtkWidget *modelo_pagina_new( Mtram *m )
     gtk_container_add( GTK_CONTAINER(sc), M->lista );
     gtk_box_pack_start( GTK_BOX(caja), sc, TRUE, TRUE, 0 );
 
-    marco = gtk_frame_new( "Los parámetros que el modelo tiene" );
-    vb = gtk_box_new( GTK_ORIENTATION_VERTICAL, 0 );
-    gtk_container_set_border_width( GTK_CONTAINER(vb), 6 );
-    M->cuenta = gtk_label_new( "Carga las series y define la red." );
-    gtk_widget_set_halign( M->cuenta, GTK_ALIGN_START );
-    gtk_label_set_line_wrap( GTK_LABEL(M->cuenta), TRUE );
-    gtk_label_set_selectable( GTK_LABEL(M->cuenta), TRUE );
-    gtk_container_add( GTK_CONTAINER(vb), M->cuenta );
-    gtk_container_add( GTK_CONTAINER(marco), vb );
-    gtk_box_pack_start( GTK_BOX(caja), marco, FALSE, FALSE, 0 );
+    /* Dos lineas de altura fija. El segundo elige que contar. */
+    vb = gtk_box_new( GTK_ORIENTATION_VERTICAL, 2 );
+    gtk_widget_set_margin_top( vb, 2 );
+
+    M->ver_cuenta = gtk_label_new( "Carga las series y define la red." );
+    M->ver_ojo    = gtk_label_new( "" );
+    gtk_widget_set_halign( M->ver_cuenta, GTK_ALIGN_START );
+    gtk_widget_set_halign( M->ver_ojo,    GTK_ALIGN_START );
+    gtk_label_set_ellipsize( GTK_LABEL(M->ver_cuenta), PANGO_ELLIPSIZE_END );
+    gtk_label_set_ellipsize( GTK_LABEL(M->ver_ojo),    PANGO_ELLIPSIZE_END );
+
+    gtk_box_pack_start( GTK_BOX(vb), M->ver_cuenta, FALSE, FALSE, 0 );
+    gtk_box_pack_start( GTK_BOX(vb), M->ver_ojo,    FALSE, FALSE, 0 );
+    gtk_box_pack_start( GTK_BOX(caja), vb, FALSE, FALSE, 0 );
 
     return caja;
 }

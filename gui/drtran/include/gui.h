@@ -66,9 +66,12 @@ typedef struct {
  * --tantos omega como diga s, tantos phi como el .pre deje libres-- asi que la
  * pantalla no es un editor de texto: es una vista de esa tabla.          */
 typedef struct {
-    GtkWidget *lista;         /* los parametros, uno por linea              */
-    GtkWidget *cuenta;        /* cuantos hay, cuantos libres, y los avisos  */
+    GtkWidget *lista;         /* los parametros, en un ARBOL por grupos     */
+    GtkWidget *ver_cuenta;    /* veredicto: cuantos hay y cuantos libres    */
+    GtkWidget *ver_ojo;       /* veredicto: LO QUE HAY QUE MIRAR            */
+    GtkWidget *c_solo;        /* solo lo restringido                        */
 
+    gboolean   solo;          /* la casilla                                 */
     SlotTable  st;
     gboolean   vale;
     int        perdidas;      /* restricciones que no cupieron al rehacer   */

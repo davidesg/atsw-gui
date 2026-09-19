@@ -868,22 +868,89 @@ static void on_compartir( GtkButton *b, Mtram *m )
 /* sitio para varios clics seguidos.                                          */
 /* ------------------------------------------------------------------------ */
 
+/* Lo que el dialogo necesita saber para avisar mientras se pulsa. */
+typedef struct {
+    Mtram     *m;
+    GtkWidget *aviso;
+    GtkWidget *bot[NET_MAX_SER + 1][NET_MAX_SER + 1];
+} CovDlg;
+
+/* AVISAR SI, BLOQUEAR NO.
+ *
+ * Un enlace contemporaneo (b=0) con su covarianza libre explica lo mismo dos
+ * veces en k=0. Es tentador impedirlo, y seria un error por dos razones.
+ *
+ * LA PRIMERA es que NO es una especificacion incompatible. El motor lo llama
+ * "near-collinearity" --near-- y dice que las dos cosas se separan por como
+ * decae la covarianza cruzada en k>0: phi_X^k la transferencia, phi_N^k la
+ * covarianza. La cresta plana aparece CUANDO los dos AR se parecen; si
+ * difieren, el modelo esta identificado y tener las dos es legitimo.
+ *
+ * LA SEGUNDA es que el motor LO ESTIMA y avisa. Si mtram lo prohibiera, el GUI
+ * y el motor discreparian sobre que es admisible -- y la regla de todo este
+ * programa es la contraria: lo que mtram acepte es lo que acepta drtran.
+ *
+ * Asi que se avisa EN EL MOMENTO de pulsar, que es cuando sirve, y se deja
+ * hacer. Es ademas la regla que salio de TASTE: nada se grisa.          */
+static void cov_revisa( CovDlg *c )
+{
+    Mtram   *m = c->m;
+    GString *t = g_string_new( NULL );
+    int      k, n = 0;
+
+    for (k = 0; k < m->red.n; k++) {
+        int o = m->red.lnk[k].out, e = m->red.lnk[k].inp;
+        int i = o > e ? o : e, j = o > e ? e : o;
+        GtkWidget *b = c->bot[i][j];
+
+        if (m->red.lnk[k].b != 0 || !b) continue;
+        if (!gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(b) )) continue;
+
+        if (!n++)
+            g_string_append( t, "OJO — la interacción contemporánea está "
+                                "especificada DOS VECES:\n" );
+        g_string_append_printf( t,
+            "   %s ← %s tiene b=0 y q(%s, %s) libre\n",
+            nom_serie( m, o ), nom_serie( m, e ),
+            nom_serie( m, i ), nom_serie( m, j ) );
+    }
+
+    if (n)
+        g_string_append( t,
+            "\nEn k = 0 las dos cosas explican lo mismo. Sólo se separan por "
+            "cómo decae la\ncovarianza cruzada en k > 0 — φ_X^k la "
+            "transferencia, φ_N^k la covarianza — así\nque si los dos AR se "
+            "parecen, la verosimilitud tiene una cresta casi plana.\n"
+            "La doctrina de la escuela es usar UNA de las dos, no las dos.\n\n"
+            "No se impide: el motor lo estima y avisa, y si los AR difieren el "
+            "modelo está\nidentificado. Pero conviene saberlo antes." );
+
+    gtk_label_set_text( GTK_LABEL(c->aviso), t->str );
+    gtk_widget_set_visible( c->aviso, n > 0 );
+    g_string_free( t, TRUE );
+}
+
 /* El rotulo tiene que cambiar al pulsar. Sin esto el boton se hunde --que es
  * un cambio casi invisible-- y sigue poniendo "0", asi que parece que no hace
  * nada aunque el valor SI quede guardado. Es el fallo de dar por hecho que el
  * estado de un GtkToggleButton se ve.                                    */
-static void on_cov_pulsa( GtkToggleButton *b, gpointer d )
+static void on_cov_pulsa( GtkToggleButton *b, CovDlg *c )
 {
     gtk_button_set_label( GTK_BUTTON(b),
         gtk_toggle_button_get_active( b ) ? "libre" : "0" );
+    cov_revisa( c );
 }
 
 static void on_covarianzas( GtkButton *bt, Mtram *m )
 {
     Modelo    *M = &m->mod;
     GtkWidget *d, *caja, *rej, *av;
-    GtkWidget *bot[NET_MAX_SER + 1][NET_MAX_SER + 1];
+    CovDlg     c;
     int        i, j, n = m->c.n;
+
+    memset( &c, 0, sizeof c );
+    c.m = m;
+#define bot c.bot
 
     if (!M->vale) {
         preview_show_status( m, "Carga las series y define la red primero." );
@@ -939,7 +1006,7 @@ static void on_covarianzas( GtkButton *bt, Mtram *m )
             gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(bot[i][j]),
                                           M->st.kind[k] == SLOT_FREE );
             g_signal_connect( bot[i][j], "toggled",
-                              G_CALLBACK(on_cov_pulsa), NULL );
+                              G_CALLBACK(on_cov_pulsa), &c );
             gtk_widget_set_tooltip_text( bot[i][j], nm );
             gtk_widget_set_size_request( bot[i][j], 60, -1 );
             gtk_grid_attach( GTK_GRID(rej), bot[i][j], j, i - 1, 1, 1 );
@@ -992,6 +1059,7 @@ static void on_covarianzas( GtkButton *bt, Mtram *m )
         return;
     }
     gtk_widget_destroy( d );
+#undef bot
 }
 
 /* ------------------------------------------------------------------------ */

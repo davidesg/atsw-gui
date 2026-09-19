@@ -280,7 +280,32 @@ El veredicto ya sabe a dónde hay que volver (§2). Que sea un **enlace**: pulsa
 `1 Series · 2 Identificación · 3 Red · 4 Modelo · …` El número no es adorno:
 dice que hay un orden, y cuál.
 
-### 5.5 Lo que NO simplifica y conviene no hacer
+### 5.5 Avisar sí, bloquear no
+
+Salió de una pregunta concreta: si un enlace es contemporáneo (`b = 0`),
+¿debería impedirse liberar su covarianza, porque se estaría especificando la
+interacción contemporánea dos veces?
+
+**No, y por dos razones.**
+
+**No es una especificación incompatible.** El motor lo llama
+*near-collinearity* —*near*— y dice que las dos cosas *«se separan sólo por
+cómo decae la covarianza cruzada en k > 0: φ_X^k la transferencia, φ_N^k la
+covarianza»*. La cresta plana aparece **cuando** los dos AR se parecen; si
+difieren, el modelo está identificado y tener las dos es legítimo.
+
+**Y el motor lo estima.** Si mtram lo prohibiera, el GUI y el motor
+discreparían sobre qué es admisible — y la regla de todo este programa es la
+contraria: *lo que mtram acepte es lo que acepta drtran*.
+
+> **La regla: se avisa en el momento de la decisión, y se deja hacer.** Es la
+> misma que salió de TASTE —*nada se grisa*— aplicada a un caso donde bloquear
+> parecía razonable.
+
+Lo que sí cambia es **cuándo** se avisa: el motor lo dice después de estimar;
+la pantalla lo dice **al pulsar**, que es cuando sirve.
+
+### 5.6 Lo que NO simplifica y conviene no hacer
 
 - **Un asistente que encadene los pasos.** La escuela no trabaja así: se vuelve
   atrás constantemente, y un asistente lineal estorba en cuanto la diagnosis

@@ -437,10 +437,88 @@ exactamente lo que pasa: su operador contiene al de las otras cinco.
 
 ---
 
-## 5. Lo que queda por diseñar
+## 5. La página Identificación
 
-`Identificación`, `Modelo`, `Estimación`, `Diagnosis` y `Previsión`, en ese
-orden. Las cuatro reglas de §1 y el criterio de nombres de §2 valen para
+### El mal aquí es otro: no había lista
+
+El marco de la lectura escribe de 6 a 12 líneas, como en Red. Pero lo grave es
+lo otro: **la página no tenía lista**, sólo un combo. Para comparar qué entrada
+tiene la CCF más limpia había que ir **una por una**, recordando de memoria lo
+que decía la anterior — **y esa comparación es la decisión que se toma aquí**.
+
+### Una fila por entrada CANDIDATA, no por enlace
+
+Identificar es decidir **cuáles** merecen estar en la red, así que se calcula
+la CCF preblanqueada de la salida contra **todas** las series cargadas, estén o
+no en el `.dag`. Son *n−1* preblanqueos en vez de uno; milisegundos, y cambia
+el sentido de la pantalla.
+
+```
+┌───────────────────────────────────────────────────────────────────────────┐
+│ CCF…   Ecuación…                                    Retardos  [ 0 ]▾      │
+├──────────┬───┬───┬───────┬─────┬──────────┬──────────────────────────────┤
+│ Entrada  │ b │ s │ k máx │ neg │ P (df)   │                              │
+├──────────┼───┼───┼───────┼─────┼──────────┼──────────────────────────────┤
+│ 2 EI     │ 1 │ 1 │   2   │  0  │ 138 (96) │ transferencia                │
+│ 3 EU     │ 0 │ 3 │   3   │  0  │ 214 (96) │ transferencia                │
+│ 4 EC     │ — │ — │   —   │  2  │ 301 (96) │ sin transferencia · OJO       │
+│ 5 EA     │ 2 │ 0 │   2   │  0  │  97 (96) │ transferencia, un solo ω     │
+│                                                                           │
+│                   (la lista se queda TODO el alto)                        │
+├──────────┴───┴───┴───────┴─────┴──────────┴──────────────────────────────┤
+│ ● EI · b=1  s=1 · pico en k=2 · banda ±0.140 sobre 203 obs estacionarias  │
+│ ● Exogeneidad: ningún retardo negativo fuera · EI puede tratarse como     │
+│   exógena                                                                 │
+└───────────────────────────────────────────────────────────────────────────┘
+```
+
+### La columna que manda es `neg`
+
+Los retardos **negativos** fuera de banda son el contraste de exogeneidad, y
+son los que deciden si ese enlace **puede existir siquiera**. Va en columna y
+no escondido tras una selección, porque es lo que hace que una fila merezca
+mirarse.
+
+Y es un diagnóstico que **no se arregla con (b, s)**: si la salida antecede a
+la entrada, no hay orden que lo salve — o el enlace sobra, o el escalón es
+drvarma. El veredicto lo dice con esas palabras.
+
+### Las demás columnas
+
+| | qué es |
+|---|---|
+| `b` `s` | lo que propone la CCF: primer y último retardo significativo en k ≥ 0 |
+| `k máx` | dónde está el **pico** — no sólo cuánta señal hay, sino dónde |
+| `P (df)` | Hosking sobre los preblanqueados |
+
+`b` y `s` en columnas cortas, como `d D f` en Series y `b r s` en Red.
+
+### `Retardos` es un control de verdad
+
+`prewhiten_ccf` recibe `nlags` y hasta ahora se calculaba solo. GraphMaker
+dejaba elegir de 8 a 39. `0` significa *los que elige el motor*: `n/4`, con
+tope 24 y suelo 10.
+
+Es la diferencia con el criterio de parada de la Estimación (§ `DISENO-mtram`),
+que **no** se ofrece porque el motor no lo expone: aquí el parámetro existe de
+verdad.
+
+### Dónde va lo demás
+
+**`CCF…`** sigue abriendo la ventana de `lib/preview` — con zoom, guardar e
+imprimir, y siendo el mismo fichero que va al papel. Es lo que se mira despacio,
+y no cabe dentro de una página que además lleva la lista.
+
+**`Ecuación…`** a panel: crece con el número de enlaces (R1). Enseña la
+ecuación con los órdenes que propone la CCF, con los ω a 1 — porque es la
+**especificación**, no una estimación, y se enseña antes de estimar justamente
+para poder mirarla antes.
+
+---
+
+## 6. Lo que queda por diseñar
+
+`Modelo`, `Estimación`, `Diagnosis` y `Previsión`, en ese orden. Las cuatro reglas de §1 y el criterio de nombres de §2 valen para
 todas; lo que cambia es qué es el hecho por fila y qué es el veredicto.
 
 Dos ya se sabe que tienen el mismo problema de §0:
@@ -450,7 +528,8 @@ Dos ya se sabe que tienen el mismo problema de §0:
 - **Diagnosis** enseña dos filas por enlace más dos por serie, y debajo otro
   marco que crece.
 
-**Estado: Series y Red IMPLEMENTADAS.** El resto, sin diseñar.
+**Estado: Series, Red e Identificación IMPLEMENTADAS.** El resto, sin
+diseñar.
 
 De Red salió además el sitio donde viven los dos ayudantes que comparten las
 páginas: `mtram_verdicto()` —una línea con su punto de color— y

@@ -1,5 +1,5 @@
 /*
- * identifica.c -- la pantalla de identificacion de un enlace.
+ * identifica.c -- la pantalla de identificacion.
  *
  * Lo que se mira para decidir (b, r, s) de una entrada, y lo que se mira para
  * decidir si esa entrada puede ser una entrada.
@@ -18,6 +18,16 @@
  * Sobre el m6, la CCF cruda de EI contra EP da P(60) = 944, y eso no es senal.
  * Preblanquear exige el modelo univariante de cada serie, que es exactamente
  * lo que trae un .pre: aqui es donde la escalera se paga sola.
+ *
+ * UNA FILA POR ENTRADA CANDIDATA, NO POR ENLACE. Identificar es decidir CUALES
+ * merecen estar en la red, asi que se calculan todas las CCF y se comparan de
+ * un vistazo. Con un combo habia que ir una por una recordando de memoria lo
+ * que decia la anterior -- y esa comparacion ES la decision de esta pantalla.
+ *
+ * Y LA COLUMNA QUE MANDA ES "neg". Los retardos negativos fuera de banda son
+ * el contraste de exogeneidad, y es el que decide si ese enlace puede existir
+ * siquiera. Va en columna, no escondido tras una seleccion, porque es lo que
+ * hace que una fila merezca mirarse.
  */
 
 #include <string.h>
@@ -31,7 +41,7 @@
 #include "ccfplot.h"
 #include "eqtran.h"
 
-#define MAX_LAGS  64
+enum { I_ENT, I_B, I_S, I_KMAX, I_NEG, I_P, I_NOTA, I_IDX, I_N };
 
 /* diagnose.c escribe su informe a este global, que en el motor es el .out. El
  * GUI no quiere informe: se lo lleva stderr y lo que se enseña es el grafico.
@@ -67,171 +77,255 @@ void preview_show_status(PreviewApp *app, const gchar *format, ...)
 }
 
 /* ------------------------------------------------------------------------ */
-/* La CCF del enlace marcado                                                 */
+/* Calcular: una CCF por entrada candidata                                   */
 /* ------------------------------------------------------------------------ */
 
-/* Calcula. Devuelve TRUE y deja la CCF en id->ccf, o FALSE con el motivo en
- * la barra de estado. */
-static gboolean calcula(Mtram *m, Ident *id)
-{
-    Serie *sal, *ent;
-    real **res = NULL;
-    real   Q = 0.0, p = 0.0;
-    char   why[512] = "";
-
-    id->vale = FALSE;
-    if (m->c.n < 2) return FALSE;
-    if (id->entrada < 1 || id->entrada >= m->c.n) id->entrada = 1;
-
-    sal = m->c.s[0];
-    ent = m->c.s[id->entrada];
-
-    id->nlags = prewhiten_nlags(sal->ts.nobs);
-    if (id->nlags > MAX_LAGS) id->nlags = MAX_LAGS;
-
-    if (prewhiten_ccf(&ent->tm, &ent->ts, ent->datamat,
-                      &sal->tm, &sal->ts, sal->datamat,
-                      id->nlags, id->ccf, id->nu, &id->n,
-                      &res, why, sizeof why) != 0) {
-        preview_show_status(m, "%s", why[0] ? why : "no pude preblanquear");
-        return FALSE;
-    }
-
-    /* El portmanteau multivariante de Hosking, con la rutina del motor y
-     * sobre los residuos PREBLANQUEADOS, que es donde significa algo.      */
-    hosking_test(res, id->n, 2, id->nlags, &Q, &p);
-    free_matrix(res, 1, id->n, 1, 2);
-
-    id->Q  = (double) Q;
-    id->df = 4 * id->nlags;          /* m^2 (k - p - q), m = 2, sin ajustar */
-    id->banda = 2.0 / sqrt((double) id->n);
-    id->vale = TRUE;
-
-    if (why[0]) preview_show_status(m, "%s", why);
-    return TRUE;
-}
-
-/* ------------------------------------------------------------------------ */
-/* La lectura: (b, r, s) y la exogeneidad                                    */
-/* ------------------------------------------------------------------------ */
-
-/* Primer retardo positivo que sale de la banda: el b que propone el grafico. */
-static int b_propuesto(const Ident *id)
+/* Lo que se lee del grafico, que es lo que va a las columnas. */
+static void lee( IdentUno *u )
 {
     int k;
 
-    for (k = 0; k <= id->nlags; k++)
-        if (fabs(id->ccf[id->nlags + k]) > id->banda) return k;
-    return -1;
+    u->b = u->ultimo = -1;
+    u->kmax = 0;
+    u->neg  = 0;
+
+    for (k = 0; k <= u->nlags; k++)
+        if (fabs( u->ccf[u->nlags + k] ) > u->banda) {
+            if (u->b < 0) u->b = k;
+            u->ultimo = k;
+        }
+    for (k = 0; k <= u->nlags; k++)
+        if (fabs( u->ccf[u->nlags + k] ) > fabs( u->ccf[u->nlags + u->kmax] ))
+            u->kmax = k;
+
+    /* El contraste de exogeneidad: si la salida antecede a la entrada, el
+     * modelo de transferencia no se sostiene y no hay (b,s) que lo arregle. */
+    for (k = 1; k <= u->nlags; k++)
+        if (fabs( u->ccf[u->nlags - k] ) > u->banda) u->neg++;
+
+    u->s = u->b >= 0 ? u->ultimo - u->b : -1;
 }
 
-/* Cuantos retardos NEGATIVOS salen de la banda: el contraste de exogeneidad.
- * Si hay, la salida antecede a la entrada y el modelo no se sostiene.      */
-static int negativos_fuera(const Ident *id)
+static void calcula( Mtram *m )
 {
-    int k, n = 0;
+    Ident *id = &m->id;
+    int    j;
 
-    for (k = 1; k <= id->nlags; k++)
-        if (fabs(id->ccf[id->nlags - k]) > id->banda) n++;
-    return n;
+    id->nent = 0;
+    if (m->c.n < 2) return;
+
+    for (j = 1; j < m->c.n; j++) {
+        IdentUno *u = &id->u[id->nent];
+        Serie    *sal = m->c.s[0], *ent = m->c.s[j];
+        real    **res = NULL;
+        real      Q = 0.0, p = 0.0;
+        char      why[512] = "";
+
+        memset( u, 0, sizeof *u );
+        u->serie = j;
+        u->nlags = id->nlags > 0 ? id->nlags
+                                 : prewhiten_nlags( sal->ts.nobs );
+        if (u->nlags > IDENT_MAX_LAGS) u->nlags = IDENT_MAX_LAGS;
+
+        if (prewhiten_ccf( &ent->tm, &ent->ts, ent->datamat,
+                           &sal->tm, &sal->ts, sal->datamat,
+                           u->nlags, u->ccf, u->nu, &u->n,
+                           &res, why, sizeof why ) == 0) {
+            /* El portmanteau con la rutina del motor, sobre los residuos
+             * PREBLANQUEADOS, que es donde significa algo.               */
+            hosking_test( res, u->n, 2, u->nlags, &Q, &p );
+            free_matrix( res, 1, u->n, 1, 2 );
+
+            u->Q     = (double) Q;
+            u->df    = 4 * u->nlags;
+            u->banda = 2.0 / sqrt( (double) u->n );
+            u->vale  = TRUE;
+            lee( u );
+        }
+        id->nent++;
+    }
+
+    if (id->marcada >= id->nent) id->marcada = id->nent ? 0 : -1;
+    if (id->marcada < 0 && id->nent)  id->marcada = 0;
 }
 
-static void refresca_lectura(Mtram *m, Ident *id)
-{
-    GString *t = g_string_new(NULL);
-    int      b, neg, k, ultimo = -1;
+/* ------------------------------------------------------------------------ */
 
-    if (!id->vale) {
-        gtk_label_set_text(GTK_LABEL(id->lectura),
-            "Marca una entrada. Hace falta la salida y al menos una entrada.");
-        g_string_free(t, TRUE);
+static void refresca_lista( Mtram *m )
+{
+    Ident        *id = &m->id;
+    GtkListStore *st = GTK_LIST_STORE( gtk_tree_view_get_model(
+                                           GTK_TREE_VIEW(id->lista) ) );
+    GtkTreeIter   it;
+    char          b[16], s[16], k[16], p[32];
+    int           i;
+
+    gtk_list_store_clear( st );
+    for (i = 0; i < id->nent; i++) {
+        const IdentUno *u = &id->u[i];
+        gchar          *nm;
+        const char     *nota;
+
+        nm = g_strdup_printf( "%d %s", u->serie + 1,
+                 m->c.s[u->serie]->ts.name ? m->c.s[u->serie]->ts.name : "?" );
+
+        if (!u->vale)        { nota = "no se pudo preblanquear";
+                               strcpy(b,"—"); strcpy(s,"—"); strcpy(k,"—");
+                               strcpy(p,"—"); }
+        else {
+            if (u->b < 0) { strcpy(b,"—"); strcpy(s,"—"); strcpy(k,"—"); }
+            else {
+                snprintf( b, sizeof b, "%d", u->b );
+                snprintf( s, sizeof s, "%d", u->s );
+                snprintf( k, sizeof k, "%d", u->kmax );
+            }
+            snprintf( p, sizeof p, "%.0f (%d)", u->Q, u->df );
+
+            if (u->neg)      nota = u->b < 0
+                                  ? "sin transferencia · OJO retroalimentación"
+                                  : "transferencia · OJO retroalimentación";
+            else if (u->b < 0) nota = "sin transferencia";
+            else if (u->s == 0) nota = "transferencia, un solo ω";
+            else               nota = "transferencia";
+        }
+
+        gtk_list_store_append( st, &it );
+        gtk_list_store_set( st, &it,
+            I_ENT,  nm,
+            I_B,    b,
+            I_S,    s,
+            I_KMAX, k,
+            I_NEG,  u->vale ? u->neg : -1,
+            I_P,    p,
+            I_NOTA, nota,
+            I_IDX,  i,
+            -1 );
+        g_free( nm );
+    }
+
+    if (id->marcada >= 0 && id->marcada < id->nent) {
+        GtkTreePath *path = gtk_tree_path_new_from_indices( id->marcada, -1 );
+
+        gtk_tree_view_set_cursor( GTK_TREE_VIEW(id->lista), path, NULL, FALSE );
+        gtk_tree_path_free( path );
+    }
+}
+
+static void refresca_veredicto( Mtram *m )
+{
+    Ident          *id = &m->id;
+    const IdentUno *u;
+    const char     *nom;
+
+    if (m->c.n < 2 || id->marcada < 0 || id->marcada >= id->nent) {
+        mtram_verdicto( id->ver_tran, MT_AMBAR,
+            "Carga la salida y al menos una entrada en la pestaña Series." );
+        gtk_label_set_text( GTK_LABEL(id->ver_exo), "" );
         return;
     }
 
-    b   = b_propuesto(id);
-    neg = negativos_fuera(id);
-    for (k = 0; k <= id->nlags; k++)
-        if (fabs(id->ccf[id->nlags + k]) > id->banda) ultimo = k;
+    u   = &id->u[id->marcada];
+    nom = m->c.s[u->serie]->ts.name ? m->c.s[u->serie]->ts.name : "?";
 
-    g_string_append_printf(t,
-        "%d observaciones estacionarias, %d retardos, banda ±%.3f\n\n",
-        id->n, id->nlags, id->banda);
-
-    /* --- los positivos: la transferencia --- */
-    if (b < 0)
-        g_string_append(t,
-            "Ningún retardo positivo sale de la banda: la CCF preblanqueada "
-            "no ve transferencia.\n");
-    else {
-        g_string_append_printf(t,
-            "Transferencia: el primer retardo significativo es k = %d, "
-            "y el último, k = %d.\n"
-            "   propuesta:  b = %d   s = %d   r = 0\n",
-            b, ultimo, b, ultimo - b);
-        if (ultimo - b >= 3)
-            g_string_append(t,
-                "   (una cola larga suele ser r = 1 con pocos ω, no un s "
-                "grande: mira si decae geométricamente)\n");
+    if (!u->vale) {
+        mtram_verdicto( id->ver_tran, MT_ROJO,
+            "%s: no se pudo preblanquear", nom );
+        gtk_label_set_text( GTK_LABEL(id->ver_exo), "" );
+        return;
     }
 
-    /* --- los negativos: la exogeneidad --- */
-    g_string_append_c(t, '\n');
-    if (neg == 0)
-        g_string_append(t,
-            "Exogeneidad: ningún retardo negativo fuera de la banda. "
-            "La entrada puede tratarse como exógena.\n");
+    if (u->b < 0)
+        mtram_verdicto( id->ver_tran, MT_AMBAR,
+            "%s · ningún retardo k ≥ 0 sale de la banda "
+            "· banda ±%.3f sobre %d obs estacionarias",
+            nom, u->banda, u->n );
     else
-        g_string_append_printf(t,
-            "OJO — exogeneidad: %d retardo%s negativo%s fuera de la banda. "
-            "La salida antecede a la entrada.\nUn modelo de transferencia "
-            "supone que la entrada NO responde a la salida; si eso no se "
-            "sostiene,\nel escalón que toca es el VARMA simultáneo, no éste.\n",
-            neg, neg == 1 ? "" : "s", neg == 1 ? "" : "s");
+        mtram_verdicto( id->ver_tran, MT_VERDE,
+            "%s · b=%d  s=%d · pico en k=%d · banda "
+            "±%.3f sobre %d obs estacionarias",
+            nom, u->b, u->s, u->kmax, u->banda, u->n );
 
-    g_string_append_printf(t,
-        "\nHosking sobre los preblanqueados:  P(%d) = %.1f\n", id->df, id->Q);
+    if (u->neg == 0)
+        mtram_verdicto( id->ver_exo, MT_VERDE,
+            "Exogeneidad: ningún retardo negativo fuera de la banda · "
+            "%s puede tratarse como exógena", nom );
+    else
+        mtram_verdicto( id->ver_exo, MT_ROJO,
+            "Exogeneidad: %d retardo%s negativo%s fuera · la salida "
+            "antecede a %s — esto no lo arregla (b,s)",
+            u->neg, u->neg == 1 ? "" : "s", u->neg == 1 ? "" : "s", nom );
+}
 
-    gtk_label_set_text(GTK_LABEL(id->lectura), t->str);
-    g_string_free(t, TRUE);
+void identifica_refresca( Mtram *m )
+{
+    calcula( m );
+    refresca_lista( m );
+    refresca_veredicto( m );
 }
 
 /* ------------------------------------------------------------------------ */
-/* La ecuacion                                                               */
+/* El grafico y la ecuacion                                                  */
 /* ------------------------------------------------------------------------ */
 
-static void refresca_ecuacion(Mtram *m, Ident *id)
+static void on_ccf( GtkButton *b, Mtram *m )
 {
-    EqLink lnk[GUI_MAX_SER];
-    double omega[GUI_MAX_SER][8];
-    char   texto[4096];
-    int    j, k, n = 0;
+    Ident          *id = &m->id;
+    const IdentUno *u;
+    gchar          *path;
+
+    if (id->marcada < 0 || id->marcada >= id->nent ||
+        !id->u[id->marcada].vale) {
+        preview_show_status( m, "Marca una entrada." );
+        return;
+    }
+    u = &id->u[id->marcada];
+
+    /* El EPS se escribe de verdad, y es el que se ve: lib/preview interpreta
+     * el fichero de fugdraw, asi que la pantalla y el papel no discrepan. */
+    path = g_build_filename( g_get_user_cache_dir(), "mtram", NULL );
+    g_mkdir_with_parents( path, 0700 );
+    g_free( path );
+    path = g_build_filename( g_get_user_cache_dir(), "mtram", "ccf.eps", NULL );
+
+    if (ccf_write_eps( path, u->ccf, u->nlags, u->n,
+                       m->c.s[u->serie]->ts.name, m->c.s[0]->ts.name,
+                       u->Q, u->df ) != 0)
+        preview_show_status( m, "No pude escribir %s", path );
+    else if (!preview_show( m, path ))
+        preview_show_status( m, "No pude dibujar %s", path );
+
+    g_free( path );
+}
+
+static void on_ecuacion( GtkButton *b, Mtram *m )
+{
+    EqLink  lnk[GUI_MAX_SER];
+    double  omega[GUI_MAX_SER][IDENT_MAX_LAGS + 2];
+    char    texto[4096];
+    GString *t = g_string_new( NULL );
+    int     i, k, n = 0;
 
     if (m->c.n < 2) {
-        gtk_label_set_text(GTK_LABEL(id->ecuacion), "");
-        return;
+        g_string_append( t, "Carga la salida y al menos una entrada." );
+        goto pinta;
     }
 
-    /* Un enlace por entrada, con los ordenes que hay puestos y ω a 1: es la
-     * ESPECIFICACION que se va a estimar, no una estimacion. La ecuacion se
-     * enseña antes de estimar justamente para poder mirarla antes.        */
-    for (j = 1; j < m->c.n; j++) {
-        Serie *e = m->c.s[j];
-        int    b = 0, s = 0;
+    /* Un enlace por entrada, con los ordenes que propone la CCF y ω a 1: es
+     * la ESPECIFICACION que se va a estimar, no una estimacion. Se enseña
+     * antes de estimar justamente para poder mirarla antes.            */
+    for (i = 0; i < m->id.nent; i++) {
+        const IdentUno *u = &m->id.u[i];
+        int             bb = 0, ss = 0;
 
-        if (j == id->entrada && id->vale) {
-            int bb = b_propuesto(id), ul = -1;
+        if (u->vale && u->b >= 0) { bb = u->b; ss = u->s; }
+        if (ss > IDENT_MAX_LAGS) ss = IDENT_MAX_LAGS;
 
-            for (k = 0; k <= id->nlags; k++)
-                if (fabs(id->ccf[id->nlags + k]) > id->banda) ul = k;
-            if (bb >= 0) { b = bb; s = ul - bb; }
-        }
-        if (s > 7) s = 7;
+        for (k = 0; k <= ss; k++) omega[n][k] = 1.0;
 
-        for (k = 0; k <= s; k++) omega[n][k] = 1.0;
-
-        lnk[n].entrada  = e->ts.name ? e->ts.name : "?";
-        lnk[n].b        = b;
-        lnk[n].s        = s;
+        lnk[n].entrada  = m->c.s[u->serie]->ts.name
+                        ? m->c.s[u->serie]->ts.name : "?";
+        lnk[n].b        = bb;
+        lnk[n].s        = ss;
         lnk[n].r        = 0;
         lnk[n].omega    = omega[n];
         lnk[n].delta    = NULL;
@@ -240,133 +334,139 @@ static void refresca_ecuacion(Mtram *m, Ident *id)
         n++;
     }
 
-    eqtran_texto(texto, sizeof texto,
-                 m->c.s[0]->ts.name ? m->c.s[0]->ts.name : "Y", lnk, n, NULL);
-    gtk_label_set_text(GTK_LABEL(id->ecuacion), texto);
+    eqtran_texto( texto, sizeof texto,
+                  m->c.s[0]->ts.name ? m->c.s[0]->ts.name : "Y", lnk, n, NULL );
+
+    g_string_append( t, "Con los órdenes que propone la CCF:\n\n   " );
+    g_string_append( t, texto );
+    g_string_append( t,
+        "\n\nLos ω están a 1: esto es la ESPECIFICACIÓN, no una estimación.\n"
+        "Se enseña antes de estimar justamente para poder mirarla antes.\n\n"
+        "El convenio es el de Box-Jenkins:\n"
+        "   ω(B) = ω₀ − ω₁B − … − ωₛBˢ      el primero SUMA, el resto RESTAN\n"
+        "   δ(B) = 1  − δ₁B − … − δᵣBʳ" );
+
+pinta:
+    mtram_popover_mostrar( GTK_WIDGET(b), t->str );
+    g_string_free( t, TRUE );
 }
 
 /* ------------------------------------------------------------------------ */
-/* El grafico                                                                */
-/* ------------------------------------------------------------------------ */
 
-static void on_ver_ccf(GtkButton *b, Mtram *m)
+static void on_marcada( GtkTreeSelection *sel, Mtram *m )
 {
-    Ident *id = &m->id;
-    gchar *path;
+    GtkTreeModel *mod;
+    GtkTreeIter   it;
+    int           i = -1;
 
-    if (!id->vale) {
-        preview_show_status(m, "No hay CCF que enseñar todavía.");
-        return;
+    if (gtk_tree_selection_get_selected( sel, &mod, &it ))
+        gtk_tree_model_get( mod, &it, I_IDX, &i, -1 );
+    if (i >= 0 && i != m->id.marcada) {
+        m->id.marcada = i;
+        refresca_veredicto( m );
     }
-
-    /* El EPS se escribe de verdad, y es el que se ve: lib/preview interpreta
-     * el fichero de fugdraw, asi que la pantalla y el papel no pueden
-     * discrepar.                                                          */
-    path = g_build_filename(g_get_user_cache_dir(), "mtram", NULL);
-    g_mkdir_with_parents(path, 0700);
-    g_free(path);
-    path = g_build_filename(g_get_user_cache_dir(), "mtram", "ccf.eps", NULL);
-
-    if (ccf_write_eps(path, id->ccf, id->nlags, id->n,
-                      m->c.s[id->entrada]->ts.name, m->c.s[0]->ts.name,
-                      id->Q, id->df) != 0)
-        preview_show_status(m, "No pude escribir %s", path);
-    else if (!preview_show(m, path))
-        preview_show_status(m, "No pude dibujar %s", path);
-
-    g_free(path);
 }
 
-/* ------------------------------------------------------------------------ */
-
-static void on_entrada(GtkComboBox *cb, Mtram *m)
+static void on_lags( GtkSpinButton *sb, Mtram *m )
 {
-    int i = gtk_combo_box_get_active(cb);
-
-    if (i < 0) return;
-    m->id.entrada = i + 1;              /* la 0 es la salida */
-    calcula(m, &m->id);
-    refresca_lectura(m, &m->id);
-    refresca_ecuacion(m, &m->id);
+    m->id.nlags = gtk_spin_button_get_value_as_int( sb );
+    identifica_refresca( m );
 }
 
-void identifica_refresca(Mtram *m)
+static void columna( GtkWidget *tv, const char *titulo, int col )
 {
-    Ident       *id = &m->id;
-    GtkComboBoxText *cb = GTK_COMBO_BOX_TEXT(id->combo);
-    int i;
+    GtkCellRenderer   *r = gtk_cell_renderer_text_new();
+    GtkTreeViewColumn *c = gtk_tree_view_column_new_with_attributes(
+                               titulo, r, "text", col, NULL );
 
-    g_signal_handlers_block_by_func(id->combo, G_CALLBACK(on_entrada), m);
-    gtk_combo_box_text_remove_all(cb);
-    for (i = 1; i < m->c.n; i++)
-        gtk_combo_box_text_append_text(cb,
-            m->c.s[i]->ts.name ? m->c.s[i]->ts.name : "(sin nombre)");
-    if (id->entrada < 1 || id->entrada >= m->c.n) id->entrada = 1;
-    if (m->c.n > 1) gtk_combo_box_set_active(GTK_COMBO_BOX(id->combo),
-                                             id->entrada - 1);
-    g_signal_handlers_unblock_by_func(id->combo, G_CALLBACK(on_entrada), m);
-
-    calcula(m, id);
-    refresca_lectura(m, id);
-    refresca_ecuacion(m, id);
+    gtk_tree_view_column_set_resizable( c, TRUE );
+    gtk_tree_view_append_column( GTK_TREE_VIEW(tv), c );
 }
 
-GtkWidget *identifica_pagina_new(Mtram *m)
+GtkWidget *identifica_pagina_new( Mtram *m )
 {
-    Ident     *id = &m->id;
-    GtkWidget *caja, *fila, *b, *marco, *vb, *sc;
+    Ident        *id = &m->id;
+    GtkWidget    *caja, *barra, *b, *sc, *vb;
+    GtkListStore *st;
 
-    caja = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
-    gtk_container_set_border_width(GTK_CONTAINER(caja), 8);
+    id->nent = 0;
+    id->marcada = -1;
+    id->nlags = 0;                        /* 0 = el que elige el motor */
 
-    /* --- que entrada --- */
-    fila = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-    gtk_box_pack_start(GTK_BOX(fila), gtk_label_new("Entrada:"), FALSE, FALSE, 0);
+    caja = gtk_box_new( GTK_ORIENTATION_VERTICAL, 6 );
+    gtk_container_set_border_width( GTK_CONTAINER(caja), 8 );
 
-    id->combo = gtk_combo_box_text_new();
-    gtk_widget_set_tooltip_text(id->combo,
-        "La salida es siempre la primera de la lista. Aquí se elige contra "
-        "cuál de las entradas se mira la CCF.");
-    g_signal_connect(id->combo, "changed", G_CALLBACK(on_entrada), m);
-    gtk_box_pack_start(GTK_BOX(fila), id->combo, FALSE, FALSE, 0);
+    barra = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 6 );
+    gtk_box_pack_start( GTK_BOX(caja), barra, FALSE, FALSE, 0 );
 
-    b = gtk_button_new_with_label("Ver la CCF");
-    gtk_widget_set_tooltip_text(b,
-        "El gráfico bidireccional: a la derecha la transferencia, a la "
-        "izquierda la retroalimentación.");
-    g_signal_connect(b, "clicked", G_CALLBACK(on_ver_ccf), m);
-    gtk_box_pack_start(GTK_BOX(fila), b, FALSE, FALSE, 0);
+#define BOTON(txt, fn, tip) \
+    b = gtk_button_new_with_label( txt ); \
+    gtk_widget_set_tooltip_text( b, tip ); \
+    g_signal_connect( b, "clicked", G_CALLBACK(fn), m ); \
+    gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
 
-    gtk_box_pack_start(GTK_BOX(caja), fila, FALSE, FALSE, 0);
+    BOTON( "CCF…", on_ccf,
+           "El gráfico bidireccional de la entrada marcada: a la derecha la "
+           "transferencia, a la izquierda la retroalimentación." )
+    BOTON( "Ecuación…", on_ecuacion,
+           "La ecuación con los órdenes que propone la CCF." )
+#undef BOTON
 
-    /* --- la lectura --- */
-    marco = gtk_frame_new("CCF preblanqueada");
-    vb = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-    gtk_container_set_border_width(GTK_CONTAINER(vb), 6);
-    id->lectura = gtk_label_new(
-        "Carga la salida y al menos una entrada.");
-    gtk_widget_set_halign(id->lectura, GTK_ALIGN_START);
-    gtk_label_set_line_wrap(GTK_LABEL(id->lectura), TRUE);
-    gtk_container_add(GTK_CONTAINER(vb), id->lectura);
-    gtk_container_add(GTK_CONTAINER(marco), vb);
+    /* Los retardos SI son un control de verdad: prewhiten_ccf los recibe, y
+     * GraphMaker dejaba elegir de 8 a 39.                              */
+    gtk_box_pack_end( GTK_BOX(barra),
+        id->s_lags = gtk_spin_button_new_with_range( 0, IDENT_MAX_LAGS, 1 ),
+        FALSE, FALSE, 0 );
+    gtk_widget_set_tooltip_text( id->s_lags,
+        "Retardos a cada lado. 0 = los que elige el motor: n/4, con tope 24 y "
+        "suelo 10." );
+    gtk_spin_button_set_value( GTK_SPIN_BUTTON(id->s_lags), 0 );
+    g_signal_connect( id->s_lags, "value-changed", G_CALLBACK(on_lags), m );
+    gtk_box_pack_end( GTK_BOX(barra), gtk_label_new( "Retardos" ),
+                      FALSE, FALSE, 0 );
 
-    sc = gtk_scrolled_window_new(NULL, NULL);
-    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sc),
-                                   GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
-    gtk_container_add(GTK_CONTAINER(sc), marco);
-    gtk_box_pack_start(GTK_BOX(caja), sc, TRUE, TRUE, 0);
+    /* --- la lista: UNA FILA POR ENTRADA CANDIDATA --- */
+    st = gtk_list_store_new( I_N, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING,
+                             G_TYPE_STRING, G_TYPE_INT, G_TYPE_STRING,
+                             G_TYPE_STRING, G_TYPE_INT );
+    id->lista = gtk_tree_view_new_with_model( GTK_TREE_MODEL(st) );
+    columna( id->lista, "Entrada", I_ENT );
+    columna( id->lista, "b",       I_B );
+    columna( id->lista, "s",       I_S );
+    columna( id->lista, "k máx",   I_KMAX );
+    columna( id->lista, "neg",     I_NEG );
+    columna( id->lista, "P (df)",  I_P );
+    columna( id->lista, "",        I_NOTA );
+    gtk_widget_set_tooltip_text( id->lista,
+        "b y s los propone la CCF: primer y último retardo significativo en "
+        "k ≥ 0. «k máx» es dónde está el pico.\n\n"
+        "«neg» son los retardos NEGATIVOS fuera de banda: es el contraste de "
+        "exogeneidad, y es el que decide si ese enlace puede existir. Un "
+        "valor distinto de cero es lo que hace que una fila merezca mirarse." );
 
-    /* --- la ecuacion --- */
-    marco = gtk_frame_new("La ecuación que se va a estimar");
-    vb = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-    gtk_container_set_border_width(GTK_CONTAINER(vb), 6);
-    id->ecuacion = gtk_label_new("");
-    gtk_widget_set_halign(id->ecuacion, GTK_ALIGN_START);
-    gtk_label_set_selectable(GTK_LABEL(id->ecuacion), TRUE);
-    gtk_label_set_line_wrap(GTK_LABEL(id->ecuacion), TRUE);
-    gtk_container_add(GTK_CONTAINER(vb), id->ecuacion);
-    gtk_container_add(GTK_CONTAINER(marco), vb);
-    gtk_box_pack_start(GTK_BOX(caja), marco, FALSE, FALSE, 0);
+    g_signal_connect( gtk_tree_view_get_selection( GTK_TREE_VIEW(id->lista) ),
+                      "changed", G_CALLBACK(on_marcada), m );
+
+    sc = gtk_scrolled_window_new( NULL, NULL );
+    gtk_scrolled_window_set_policy( GTK_SCROLLED_WINDOW(sc),
+                                    GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC );
+    gtk_container_add( GTK_CONTAINER(sc), id->lista );
+    gtk_box_pack_start( GTK_BOX(caja), sc, TRUE, TRUE, 0 );
+
+    /* --- los dos veredictos, altura fija --- */
+    vb = gtk_box_new( GTK_ORIENTATION_VERTICAL, 2 );
+    gtk_widget_set_margin_top( vb, 2 );
+
+    id->ver_tran = gtk_label_new( "Carga la salida y al menos una entrada." );
+    id->ver_exo  = gtk_label_new( "" );
+    gtk_widget_set_halign( id->ver_tran, GTK_ALIGN_START );
+    gtk_widget_set_halign( id->ver_exo,  GTK_ALIGN_START );
+    gtk_label_set_ellipsize( GTK_LABEL(id->ver_tran), PANGO_ELLIPSIZE_END );
+    gtk_label_set_ellipsize( GTK_LABEL(id->ver_exo),  PANGO_ELLIPSIZE_END );
+
+    gtk_box_pack_start( GTK_BOX(vb), id->ver_tran, FALSE, FALSE, 0 );
+    gtk_box_pack_start( GTK_BOX(vb), id->ver_exo,  FALSE, FALSE, 0 );
+    gtk_box_pack_start( GTK_BOX(caja), vb, FALSE, FALSE, 0 );
 
     return caja;
 }

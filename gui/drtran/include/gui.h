@@ -15,21 +15,37 @@
 
 #define IDENT_MAX_LAGS 64
 
-/* La pantalla de identificacion de un enlace: la CCF preblanqueada de la
- * salida contra UNA de las entradas, y lo que se lee de ella.            */
+/* La pantalla de identificacion.
+ *
+ * UNA FILA POR ENTRADA CANDIDATA, no por enlace. Identificar es precisamente
+ * decidir CUALES merecen estar en la red, asi que se calcula la CCF
+ * preblanqueada de la salida contra TODAS, y se comparan de un vistazo. Con un
+ * combo habia que ir una por una recordando de memoria lo que decia la
+ * anterior -- y eso es justo la decision que se toma aqui.               */
 typedef struct {
-    GtkWidget *combo;         /* contra que entrada                         */
-    GtkWidget *lectura;       /* (b, r, s) y la exogeneidad, en palabras    */
-    GtkWidget *ecuacion;      /* la ecuacion del modelo                     */
+    int      serie;           /* 1..n-1: la entrada, en indice de Conjunto  */
+    gboolean vale;
+    int      nlags, n;
+    double   ccf[2 * IDENT_MAX_LAGS + 1];   /* k = i - nlags               */
+    double   nu [2 * IDENT_MAX_LAGS + 1];
+    double   banda;           /* 2/sqrt(n)                                  */
+    double   Q;               /* el portmanteau de Hosking                  */
+    int      df;
 
-    int        entrada;       /* indice en Conjunto: 1..n-1                 */
-    gboolean   vale;          /* hay CCF calculada                          */
-    int        nlags, n;
-    double     ccf[2 * IDENT_MAX_LAGS + 1];   /* k = i - nlags              */
-    double     nu [2 * IDENT_MAX_LAGS + 1];
-    double     banda;         /* 2/sqrt(n)                                  */
-    double     Q;             /* el portmanteau de Hosking                  */
-    int        df;
+    /* lo que se lee del grafico */
+    int      b, s, kmax, ultimo, neg;
+} IdentUno;
+
+typedef struct {
+    GtkWidget *lista;
+    GtkWidget *ver_tran;      /* veredicto: la transferencia                */
+    GtkWidget *ver_exo;       /* veredicto: la exogeneidad                  */
+    GtkWidget *s_lags;
+
+    IdentUno   u[GUI_MAX_SER];
+    int        nent;          /* cuantas entradas candidatas                */
+    int        marcada;       /* indice en u[], -1 si ninguna               */
+    int        nlags;         /* el que se pide; 0 = el que elige el motor   */
 } Ident;
 
 /* La pantalla de la red: el .dag. El motor resuelve el sistema por recursion

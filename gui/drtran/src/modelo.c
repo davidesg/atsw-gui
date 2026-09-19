@@ -193,6 +193,178 @@ static int colineales( Mtram *m, int *primero )
 /* juntarlas.                                                                */
 /* ------------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------------ */
+/* Del idioma del motor al idioma del modelo                                 */
+/*                                                                           */
+/* El .cns habla de slots: "omega1[1] = omega1[0] * theta_2[B^1]". Eso es     */
+/* COMO el motor lo impone, no QUE dice. Lo que dice es que el numerador se   */
+/* factoriza, omega1(B) = w0 (1 - theta_EI B), y que theta_EI ES LA MA DEL    */
+/* MODELO UNIVARIANTE DE EI.                                                  */
+/*                                                                           */
+/* Y ESO HAY QUE DECIRLO. Un producto asi NO es un parametro mas de la        */
+/* transferencia: ATA la transferencia al modelo de ruido de la entrada, y    */
+/* deja de ser separable de el. Enseñarlo como un coeficiente mas de omega1   */
+/* esconde justo lo unico que hay que ver.                                    */
+/* ------------------------------------------------------------------------ */
+
+/* Un slot que pertenece al modelo univariante de alguna serie. */
+static int es_del_ruido( const char *n )
+{
+    return !strncmp( n, "phi_", 4 ) || !strncmp( n, "theta_", 6 ) ||
+           !strncmp( n, "omega_d", 7 ) || !strncmp( n, "delta_d", 7 ) ||
+           !strncmp( n, "mu[", 3 );
+}
+
+/* De que serie es, si es del ruido. 0 si no lo es. */
+static int serie_del_ruido( const char *n )
+{
+    const char *p = strchr( n, '_' );
+
+    if (!strncmp( n, "mu[", 3 )) return atoi( n + 3 );
+    if (!es_del_ruido( n )) return 0;
+    if (!strncmp( n, "omega_d", 7 )) return atoi( n + 7 );
+    if (!strncmp( n, "delta_d", 7 )) return atoi( n + 7 );
+    return p ? atoi( p + 1 ) : 0;
+}
+
+/* El nombre del slot en el idioma del modelo. */
+static void nombre_modelo( Mtram *m, const char *n, char *out, size_t size )
+{
+    int  i, j;
+    char resto[32];
+
+    if (sscanf( n, "theta_%d[B^%d]", &i, &j ) == 2) {
+        if (j == 1) snprintf( out, size, "\xce\xb8_%s", nom_serie( m, i ) );
+        else snprintf( out, size, "\xce\xb8_%s[B^%d]", nom_serie( m, i ), j );
+        return;
+    }
+    if (sscanf( n, "phi_%d[B^%d]", &i, &j ) == 2) {
+        if (j == 1) snprintf( out, size, "\xcf\x86_%s", nom_serie( m, i ) );
+        else snprintf( out, size, "\xcf\x86_%s[B^%d]", nom_serie( m, i ), j );
+        return;
+    }
+    if (sscanf( n, "mu[%d]", &i ) == 1) {
+        snprintf( out, size, "\xce\xbc_%s", nom_serie( m, i ) );
+        return;
+    }
+    if (sscanf( n, "omega%d[%31[^]]]", &i, resto ) == 2 &&
+        strncmp( n, "omega_d", 7 )) {
+        snprintf( out, size, "\xcf\x89%d[%s]", i, resto );
+        return;
+    }
+    if (sscanf( n, "delta%d[%31[^]]]", &i, resto ) == 2 &&
+        strncmp( n, "delta_d", 7 )) {
+        snprintf( out, size, "\xce\xb4%d[%s]", i, resto );
+        return;
+    }
+    snprintf( out, size, "%s", n );
+}
+
+/* Lo que el slot k DICE, en el idioma del modelo. Devuelve 0 si no dice nada
+ * --esta libre y nacio libre-- y en *ruido, la serie del modelo univariante
+ * con la que interactua, si la hay.                                     */
+static int enunciado( Mtram *m, int k, char *out, size_t size, int *ruido )
+{
+    const SlotTable *st = &m->mod.st;
+    char             a[64], b[64];
+    int              t;
+
+    *ruido = 0;
+    if (k < 1 || k > st->n) { if (size) out[0] = 0; return 0; }
+
+    switch (st->kind[k]) {
+
+    case SLOT_FREE:
+        if (strncmp( st->name[k], "q[", 2 )) { out[0] = 0; return 0; }
+        snprintf( out, size, "libre" );
+        return 1;
+
+    case SLOT_FIXED:
+        if (!strncmp( st->name[k], "q[", 2 ) && st->value[k] == 0.0 )
+            { out[0] = 0; return 0; }
+        nombre_modelo( m, st->name[k], a, sizeof a );
+        snprintf( out, size, "%s = %g", a, (double) st->value[k] );
+        return 1;
+
+    case SLOT_ALIAS:
+        nombre_modelo( m, st->name[k], a, sizeof a );
+        nombre_modelo( m, st->name[st->alias[k]], b, sizeof b );
+        snprintf( out, size, "%s = %s", a, b );
+        *ruido = serie_del_ruido( st->name[st->alias[k]] );
+        return 1;
+
+    case SLOT_PRODUCT: {
+        /* El caso de la escuela: omega_j[1] = omega_j[0] * theta_X, que es
+         * el numerador factorizado w0 (1 - theta_X B).                 */
+        int i1, i2, jj;
+
+        nombre_modelo( m, st->name[st->pa[k]], a, sizeof a );
+        nombre_modelo( m, st->name[st->pb[k]], b, sizeof b );
+
+        *ruido = serie_del_ruido( st->name[st->pa[k]] );
+        if (!*ruido) *ruido = serie_del_ruido( st->name[st->pb[k]] );
+
+        if (sscanf( st->name[k], "omega%d[%d]", &i1, &jj ) == 2 && jj == 1 &&
+            sscanf( st->name[st->pa[k]], "omega%d[0]", &i2 ) == 1 && i1 == i2 &&
+            st->value[k] > 0.0)
+            snprintf( out, size,
+                "\xcf\x89%d(B) = \xcf\x89%d\xe2\x82\x80 (1 \xe2\x88\x92 %s B)",
+                i1, i1, b );
+        else {
+            nombre_modelo( m, st->name[k], a, sizeof a );
+            snprintf( out, size, "%s = %s%s \xc2\xb7 %s", a,
+                      st->value[k] < 0.0 ? "\xe2\x88\x92" : "",
+                      st->name[st->pa[k]], b );
+        }
+        return 1;
+    }
+
+    case SLOT_LINCOMB: {
+        /* omega_j[0] = omega_j[1] + omega_j[2] + ... es el factor (1-B) fijo:
+         * impone omega_j(1) = 0, o sea GANANCIA A LARGO PLAZO CERO.      */
+        int i1, jj, todos = 1;
+
+        if (sscanf( st->name[k], "omega%d[%d]", &i1, &jj ) == 2 && jj == 0) {
+            for (t = 0; t < st->nlc[k]; t++) {
+                int i2, j2;
+
+                if (st->lc_b[k][t] || st->lc_sign[k][t] < 0.0 ||
+                    sscanf( st->name[st->lc_a[k][t]], "omega%d[%d]", &i2, &j2 ) != 2 ||
+                    i2 != i1) { todos = 0; break; }
+            }
+            if (todos && st->nlc[k]) {
+                snprintf( out, size,
+                    "\xcf\x89%d(1) = 0 \xc2\xb7 un (1\xe2\x88\x92B) FIJO: "
+                    "ganancia a largo plazo CERO", i1 );
+                return 1;
+            }
+        }
+
+        nombre_modelo( m, st->name[k], a, sizeof a );
+        {
+        GString *g = g_string_new( NULL );
+
+        g_string_append_printf( g, "%s =", a );
+        for (t = 0; t < st->nlc[k]; t++) {
+            nombre_modelo( m, st->name[st->lc_a[k][t]], b, sizeof b );
+            g_string_append_printf( g, " %s%s",
+                st->lc_sign[k][t] < 0.0 ? "\xe2\x88\x92 " : (t ? "+ " : ""), b );
+            if (st->lc_b[k][t]) {
+                nombre_modelo( m, st->name[st->lc_b[k][t]], b, sizeof b );
+                g_string_append_printf( g, " \xc2\xb7 %s", b );
+            }
+            if (!*ruido) *ruido = serie_del_ruido( st->name[st->lc_a[k][t]] );
+        }
+        snprintf( out, size, "%s", g->str );
+        g_string_free( g, TRUE );
+        }
+        return 1;
+    }
+    }
+    out[0] = 0;
+    return 0;
+}
+
 /* LA PRIMERA ECUACION: la transferencia, EN NIVELES.
  *
  * El modelo dice que la transferencia relaciona LOS NIVELES y que la
@@ -276,7 +448,7 @@ static void refresca_lista( Mtram *m )
     GtkTreeStore *st = GTK_TREE_STORE( gtk_tree_view_get_model(
                                            GTK_TREE_VIEW(M->lista) ) );
     GtkTreeIter   ec, enl, fila;
-    char          dice[256];
+    char          dice[256], nom[80];
     int           i, k, kk;
 
     gtk_tree_store_clear( st );
@@ -351,16 +523,32 @@ static void refresca_lista( Mtram *m )
                     snprintf( p, sizeof p, "delta%d[", k + 1 );
                     if (strncmp( M->st.name[kk], p, strlen( p ) )) continue;
                 }
-                if (!slots_line( &M->st, kk, dice, sizeof dice )) {
+                /* EN EL IDIOMA DEL MODELO, no en el del motor. Y si la
+                 * restriccion ata la transferencia a un parametro del
+                 * modelo de ruido de alguna serie, SE DICE: eso es lo
+                 * unico que hay que ver de un producto asi.          */
+                {
+                int   ruido = 0;
+                gchar *nmr;
+
+                if (!enunciado( m, kk, dice, sizeof dice, &ruido )) {
                     if (M->solo) continue;
-                    dice[0] = 0;
+                    snprintf( dice, sizeof dice, "libre" );
                 }
+                nombre_modelo( m, M->st.name[kk], nom, sizeof nom );
+                nmr = ruido
+                    ? g_strdup_printf( "      %s   \xe2\x87\x84 atado al ruido "
+                                       "de %s", dice, nom_serie( m, ruido ) )
+                    : g_strdup_printf( "      %s", dice );
+
                 gtk_tree_store_append( st, &fila, &enl );
                 gtk_tree_store_set( st, &fila,
-                    M_NOMBRE, M->st.name[kk],
+                    M_NOMBRE, nmr,
                     M_QUE,    que_es( M->st.kind[kk] ),
-                    M_DICE,   dice,
+                    M_DICE,   nom,
                     M_IDX,    kk, -1 );
+                g_free( nmr );
+                }
             }
         }
 
@@ -398,16 +586,29 @@ static void refresca_lista( Mtram *m )
 
     for (k = 1; k <= M->st.n; k++) {
         if (strncmp( M->st.name[k], "q[", 2 )) continue;
-        if (!slots_line( &M->st, k, dice, sizeof dice )) {
+        {
+        int ruido = 0;
+
+        if (!enunciado( m, k, dice, sizeof dice, &ruido )) {
             if (M->solo) continue;
-            dice[0] = 0;
+            snprintf( dice, sizeof dice, "fija en 0" );
+        }
+        /* q[i,j] se lee mejor con los nombres de las dos series. */
+        {
+        int a1, a2;
+
+        if (sscanf( M->st.name[k], "q[%d,%d]", &a1, &a2 ) == 2)
+            snprintf( nom, sizeof nom, "   q(%s, %s)",
+                      nom_serie( m, a1 ), nom_serie( m, a2 ) );
+        else snprintf( nom, sizeof nom, "   %s", M->st.name[k] );
         }
         gtk_tree_store_append( st, &fila, &ec );
         gtk_tree_store_set( st, &fila,
-            M_NOMBRE, M->st.name[k],
+            M_NOMBRE, nom,
             M_QUE,    que_es( M->st.kind[k] ),
             M_DICE,   dice,
             M_IDX,    k, -1 );
+        }
     }
     }
 
@@ -1062,9 +1263,9 @@ GtkWidget *modelo_pagina_new( Mtram *m )
     store = gtk_tree_store_new( M_N, G_TYPE_STRING, G_TYPE_STRING,
                                 G_TYPE_STRING, G_TYPE_INT );
     M->lista = gtk_tree_view_new_with_model( GTK_TREE_MODEL(store) );
-    columna( M->lista, "Parámetro", M_NOMBRE );
+    columna( M->lista, "El modelo",  M_NOMBRE );
     columna( M->lista, "Es",        M_QUE );
-    columna( M->lista, "Dice",      M_DICE );
+    columna( M->lista, "Parámetro",  M_DICE );
     gtk_tree_view_set_search_column( GTK_TREE_VIEW(M->lista), M_NOMBRE );
     gtk_tree_view_set_enable_tree_lines( GTK_TREE_VIEW(M->lista), TRUE );
 

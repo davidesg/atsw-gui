@@ -122,6 +122,31 @@ verla**. Escondérsela sería peor que confundirle.
 > `omega1[1] = ...` vive en el `.cns` y ahí se queda; en pantalla va lo que
 > significa.
 
+### Y hay algo más, que es lo que de verdad hay que ver
+
+`ω1[1]` **no es un parámetro de la transferencia**. Es un producto que **ata la
+transferencia al modelo de ruido de EI**: θ_EI es la MA del `.pre` de EI.
+
+Enseñarlo como un coeficiente más de ω1 esconde justo lo único que importa —
+que la transferencia **deja de ser separable** del modelo univariante de su
+entrada. Así que la pantalla lo dice:
+
+```
+     ν1 = ω1(B) B¹   ← EI       b=1 r=0 s=1      2 par, 1 libre
+          ω1(B) = ω1₀ (1 − θ_EI B)   ⇄ atado al ruido de EI
+```
+
+La flecha `⇄` aparece **siempre** que una restricción de transferencia
+referencia un parámetro de un modelo univariante —θ, φ, una determinista o una
+media—, sea del tipo que sea la restricción.
+
+Y el otro caso de la escuela, la combinación lineal, se enuncia por lo que
+afirma y no por cómo se impone:
+
+```
+          ω3(1) = 0 · un (1−B) FIJO: ganancia a largo plazo CERO
+```
+
 Lo que **sí** hay que esconder es **cómo se empotra**: que la transferencia se
 convierte en coeficientes fuera de la diagonal de Φ(B) del VARMA es asunto del
 motor. El analista especifica ν(B); el cast es cosa de la máquina.

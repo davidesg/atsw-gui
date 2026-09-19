@@ -293,25 +293,53 @@ static void on_anadir(GtkButton *b, Mtram *m)
 /* Los dos paneles emergentes                                                */
 /* ------------------------------------------------------------------------ */
 
-GtkWidget *mtram_popover(GtkWidget *ancla, const char *txt)
+/* El armazon: un panel con una caja dentro de un scroll. Quien llama la
+ * rellena con lo que sea.                                                */
+GtkWidget *mtram_popover_caja(GtkWidget *ancla, GtkWidget **caja)
 {
     GtkWidget *pop = gtk_popover_new(ancla);
-    GtkWidget *l   = gtk_label_new(txt);
     GtkWidget *sc  = gtk_scrolled_window_new(NULL, NULL);
+    GtkWidget *c   = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
 
-    gtk_widget_set_halign(l, GTK_ALIGN_START);
-    gtk_label_set_selectable(GTK_LABEL(l), TRUE);
-    gtk_widget_set_margin_start(l, 10);   gtk_widget_set_margin_end(l, 10);
-    gtk_widget_set_margin_top(l, 10);     gtk_widget_set_margin_bottom(l, 10);
+    gtk_widget_set_margin_start(c, 12);  gtk_widget_set_margin_end(c, 12);
+    gtk_widget_set_margin_top(c, 10);    gtk_widget_set_margin_bottom(c, 10);
 
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sc),
                                    GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
     gtk_scrolled_window_set_propagate_natural_width(GTK_SCROLLED_WINDOW(sc), TRUE);
     gtk_scrolled_window_set_propagate_natural_height(GTK_SCROLLED_WINDOW(sc), TRUE);
-    gtk_scrolled_window_set_max_content_height(GTK_SCROLLED_WINDOW(sc), 420);
-    gtk_container_add(GTK_CONTAINER(sc), l);
+    gtk_scrolled_window_set_max_content_height(GTK_SCROLLED_WINDOW(sc), 460);
+    gtk_container_add(GTK_CONTAINER(sc), c);
     gtk_container_add(GTK_CONTAINER(pop), sc);
-    gtk_widget_show_all(sc);
+
+    *caja = c;
+    return pop;
+}
+
+/* Un bloque de texto de ancho fijo. TIENE que ser de ancho fijo: casi todo lo
+ * que se enseña en estos paneles son TABLAS hechas con espacios --el desglose
+ * de la ventana, los papeles de cada serie, el orden-- y con una fuente
+ * proporcional las columnas se descuadran y la tabla deja de leerse.      */
+GtkWidget *mtram_mono(const char *txt)
+{
+    GtkWidget            *l = gtk_label_new(txt);
+    PangoAttrList        *al = pango_attr_list_new();
+
+    pango_attr_list_insert(al, pango_attr_family_new("monospace"));
+    gtk_label_set_attributes(GTK_LABEL(l), al);
+    pango_attr_list_unref(al);
+
+    gtk_widget_set_halign(l, GTK_ALIGN_START);
+    gtk_label_set_selectable(GTK_LABEL(l), TRUE);
+    return l;
+}
+
+GtkWidget *mtram_popover(GtkWidget *ancla, const char *txt)
+{
+    GtkWidget *caja, *pop = mtram_popover_caja(ancla, &caja);
+
+    gtk_container_add(GTK_CONTAINER(caja), mtram_mono(txt));
+    gtk_widget_show_all(caja);
     return pop;
 }
 
@@ -363,13 +391,94 @@ static void on_ventana(GtkButton *b, Mtram *m)
     g_string_free(t, TRUE);
 }
 
+/* Una celda de la matriz: el simbolo, con su color. Los mismos tres colores
+ * que los veredictos, para que la lectura sea la misma en toda la interfaz. */
+static GtkWidget *celda(const char *txt, const char *color)
+{
+    GtkWidget *l = gtk_label_new(NULL);
+    gchar     *mk;
+
+    mk = color ? g_strdup_printf("<span foreground=\"%s\"><b>%s</b></span>",
+                                 color, txt)
+               : g_strdup_printf("<span foreground=\"#999999\">%s</span>", txt);
+    gtk_label_set_markup(GTK_LABEL(l), mk);
+    g_free(mk);
+
+    gtk_widget_set_size_request(l, 34, -1);
+    return l;
+}
+
+static GtkWidget *cabecera(const char *txt)
+{
+    GtkWidget *l = gtk_label_new(NULL);
+    gchar     *esc = g_markup_escape_text(txt, -1);
+    gchar     *mk  = g_strdup_printf("<b>%s</b>", esc);
+
+    gtk_label_set_markup(GTK_LABEL(l), mk);
+    g_free(mk); g_free(esc);
+    gtk_widget_set_size_request(l, 34, -1);
+    return l;
+}
+
+/* La matriz de compatibilidad, como REJILLA y no como texto. Con una fuente
+ * proporcional una matriz de espacios se descuadra y deja de leerse; y ademas
+ * una rejilla de verdad permite colorear, que es lo que hace que la casilla
+ * distinta salte a la vista.                                              */
+static GtkWidget *matriz_operadores(Mtram *m)
+{
+    GtkWidget *g = gtk_grid_new();
+    int        i, j;
+
+    gtk_grid_set_row_spacing(GTK_GRID(g), 2);
+    gtk_grid_set_column_spacing(GTK_GRID(g), 2);
+
+    for (j = 0; j < m->c.n; j++)
+        gtk_grid_attach(GTK_GRID(g),
+            cabecera(m->c.s[j]->ts.name ? m->c.s[j]->ts.name : "?"),
+            j + 1, 0, 1, 1);
+
+    for (i = 0; i < m->c.n; i++) {
+        gchar *nm = g_strdup_printf("%d %s", i + 1,
+                        m->c.s[i]->ts.name ? m->c.s[i]->ts.name : "?");
+        GtkWidget *h = cabecera(nm);
+
+        gtk_widget_set_size_request(h, 70, -1);
+        gtk_widget_set_halign(h, GTK_ALIGN_START);
+        gtk_grid_attach(GTK_GRID(g), h, 0, i + 1, 1, 1);
+        g_free(nm);
+
+        for (j = 0; j < m->c.n; j++) {
+            const char *c, *col;
+
+            if (i == j) { c = "\xc2\xb7"; col = NULL; }   /* · */
+            else switch (conjunto_compat(&m->c, i, j)) {
+                 case OP_IGUALES:
+                     c = "=";  col = MT_VERDE;  break;
+                 case OP_ANIDADOS:
+                     /* Cual contiene a cual: el de mayor orden. Asi la fila se
+                      * lee "el mio esta DENTRO del suyo" o al reves.      */
+                     c = m->c.s[i]->tm.ornsop < m->c.s[j]->tm.ornsop
+                         ? "\xe2\x8a\x82"    /* ⊂ */
+                         : "\xe2\x8a\x83";   /* ⊃ */
+                     col = MT_AMBAR;  break;
+                 default:
+                     c = "\xe2\x9c\x97";     /* ✗ */
+                     col = MT_ROJO;   break;
+                 }
+            gtk_grid_attach(GTK_GRID(g), celda(c, col), j + 1, i + 1, 1, 1);
+        }
+    }
+    return g;
+}
+
 static void on_operadores(GtkButton *b, Mtram *m)
 {
-    GString *t = g_string_new(NULL);
-    int      i, j;
+    GtkWidget *caja, *pop = mtram_popover_caja(GTK_WIDGET(b), &caja);
+    GString   *t = g_string_new(NULL);
+    int        i;
 
     if (m->c.n < 1) {
-        g_string_append(t, "Carga los .pre.");
+        gtk_container_add(GTK_CONTAINER(caja), mtram_mono("Carga los .pre."));
         goto pinta;
     }
 
@@ -385,48 +494,37 @@ static void on_operadores(GtkButton *b, Mtram *m)
         nsop_canon(s->tm.rnsop, s->tm.ornsop, s->tm.sper, &o);
         nsop_texto(&o, s->tm.sper, pol, sizeof pol);
 
-        g_string_append_printf(t, "   %-8s %-22s d=%d  D=%d",
-            s->ts.name ? s->ts.name : "?", pol, o.d, o.D);
+        g_string_append_printf(t, "%d %-8s %-22s d=%d  D=%d",
+            i + 1, s->ts.name ? s->ts.name : "?", pol, o.d, o.D);
         if (nsop_difiere(&o, s->tm.nrdiff, s->tm.nadiff))
-            g_string_append_printf(t, "    [el .pre lo escribe nrdiff=%d nadiff=%d]",
+            g_string_append_printf(t, "   [el .pre lo escribe nrdiff=%d nadiff=%d]",
                                    s->tm.nrdiff, s->tm.nadiff);
         g_string_append_c(t, '\n');
     }
+    if (t->len) g_string_truncate(t, t->len - 1);
+    gtk_container_add(GTK_CONTAINER(caja), mtram_mono(t->str));
 
     if (m->c.n < 2) goto pinta;
 
     /* Abajo: la matriz. Es n x n y por eso NO puede estar en la pagina. */
-    g_string_append(t, "\n   ");
-    for (j = 0; j < m->c.n; j++)
-        g_string_append_printf(t, "%-5.4s", m->c.s[j]->ts.name ?
-                               m->c.s[j]->ts.name : "?");
-    g_string_append_c(t, '\n');
+    gtk_container_add(GTK_CONTAINER(caja),
+                      gtk_separator_new(GTK_ORIENTATION_HORIZONTAL));
+    gtk_container_add(GTK_CONTAINER(caja), matriz_operadores(m));
+    gtk_container_add(GTK_CONTAINER(caja),
+                      gtk_separator_new(GTK_ORIENTATION_HORIZONTAL));
 
-    for (i = 0; i < m->c.n; i++) {
-        g_string_append_printf(t, "%-4.4s ", m->c.s[i]->ts.name ?
-                               m->c.s[i]->ts.name : "?");
-        for (j = 0; j < m->c.n; j++) {
-            const char *c;
-
-            if (i == j)     c = "·";
-            else if (j < i) c = " ";
-            else switch (conjunto_compat(&m->c, i, j)) {
-                 case OP_IGUALES:  c = "=";  break;
-                 case OP_ANIDADOS: c = "\xe2\x8a\x83"; break;   /* ⊃ */
-                 default:          c = "\xe2\x9c\x97"; break;   /* ✗ */
-                 }
-            g_string_append_printf(t, "%-5s", c);
-        }
-        g_string_append_c(t, '\n');
-    }
-
-    g_string_append(t,
-        "\n   =  el mismo ∇            cast −V empotrado, verosimilitud exacta\n"
-        "   ⊃  uno divide al otro    hay Δ(B), sigue siendo exacta\n"
-        "   ✗  incompatibles         el motor despacha al cast −S por resta");
+    gtk_container_add(GTK_CONTAINER(caja), mtram_mono(
+        "=  el mismo \xe2\x88\x87          cast \xe2\x88\x92V empotrado, "
+        "verosimilitud exacta\n"
+        "\xe2\x8a\x82  el mio divide al suyo\n"
+        "\xe2\x8a\x83  el suyo divide al mio    hay \xce\x94(B), sigue siendo "
+        "exacta\n"
+        "\xe2\x9c\x97  incompatibles         el motor despacha al cast "
+        "\xe2\x88\x92S por resta"));
 
 pinta:
-    mtram_popover_mostrar(GTK_WIDGET(b), t->str);
+    gtk_widget_show_all(caja);
+    gtk_popover_popup(GTK_POPOVER(pop));
     g_string_free(t, TRUE);
 }
 

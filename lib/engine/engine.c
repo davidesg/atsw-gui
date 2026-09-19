@@ -163,12 +163,15 @@ void engine_result_clear(EngineResult *r) {
 typedef struct {
     gchar          *program;
     EngineProgress  progress;
+    EngineSalida    salida;     /* lo que va llegando, segun llega          */
     EngineDone      done;
     gpointer        data;
     GString        *out, *err;
     gsize           scanned;    /* hasta donde se busco la iteracion        */
     int             status, signal_no;
     guint           pending;    /* tuberias abiertas + el hijo              */
+    GPid            pid;        /* para poder pararlo                       */
+    gboolean        vivo;
 } Run;
 
 /* El optimizador escribe "%4d F: %0.10f" por iteracion, todas seguidas y sin
@@ -243,7 +246,12 @@ static gboolean on_pipe(GIOChannel *channel, GIOCondition cond, gpointer data) {
     while (g_io_channel_read_chars(channel, buffer, sizeof(buffer), &n, NULL)
            == G_IO_STATUS_NORMAL && n > 0) {
         g_string_append_len(to, buffer, (gssize) n);
-        if (to == run->out) scan_iterations(run);
+        if (to == run->out) {
+            scan_iterations(run);
+            /* EN VIVO. Sin esto el que llama solo ve la salida al acabar, y
+             * en una corrida larga se queda mirando una caja vacia.      */
+            if (run->salida) run->salida(buffer, n, run->data);
+        }
     }
     if ((cond & (G_IO_HUP | G_IO_ERR)) == 0)
         return TRUE;
@@ -269,6 +277,7 @@ static void on_child(GPid pid, gint wait_status, gpointer data) {
     }
 #endif
     g_spawn_close_pid(pid);
+    run->vivo = FALSE;
     if (--run->pending == 0) run_finish(run);
 }
 
@@ -288,10 +297,40 @@ static void watch_pipe(gint fd, Run *run, gboolean is_err) {
     g_io_add_watch(channel, G_IO_IN | G_IO_HUP | G_IO_ERR, on_pipe, pipe);
 }
 
+/* Parar una corrida. Es lo que faltaba: el pid estaba aqui dentro y no salia,
+ * asi que una estimacion larga --o una evaluacion recursiva, que son muchas
+ * seguidas-- no se podia abortar.
+ *
+ * Se manda SIGTERM y se deja que el ciclo normal recoja al hijo: el resultado
+ * llega por done() como cualquier otro final, con status ENGINE_SIGNAL. No se
+ * inventa un camino aparte para la cancelacion.                          */
+void engine_stop(EngineJob *job) {
+    Run *run = (Run *) job;
+
+#ifndef G_OS_WIN32
+    if (run && run->vivo) kill((pid_t) run->pid, SIGTERM);
+#else
+    if (run && run->vivo) TerminateProcess((HANDLE) run->pid, 1);
+#endif
+}
+
+EngineJob *engine_start(const char *workdir, const char *program,
+                        const char *const *argv,
+                        EngineProgress progress, EngineSalida salida,
+                        EngineDone done, gpointer data);
+
 gboolean engine_run_async(const char *workdir, const char *program,
                           const char *const *argv,
                           EngineProgress progress, EngineDone done,
                           gpointer data) {
+    return engine_start(workdir, program, argv, progress, NULL, done,
+                        data) != NULL;
+}
+
+EngineJob *engine_start(const char *workdir, const char *program,
+                        const char *const *argv,
+                        EngineProgress progress, EngineSalida salida,
+                        EngineDone done, gpointer data) {
     GPtrArray  *args = g_ptr_array_new_with_free_func(g_free);
     gchar      *path = g_find_program_in_path(program);
     GError     *error = NULL;
@@ -310,20 +349,23 @@ gboolean engine_run_async(const char *workdir, const char *program,
                                   NULL, NULL, &pid, NULL, &out_fd, &err_fd, &error)) {
         if (error) g_error_free(error);
         g_ptr_array_free(args, TRUE);
-        return FALSE;
+        return NULL;
     }
     g_ptr_array_free(args, TRUE);
 
     run = g_new0(Run, 1);
     run->program  = g_strdup(program);
     run->progress = progress;
+    run->salida   = salida;
     run->done     = done;
     run->data     = data;
     run->out      = g_string_new(NULL);
     run->err      = g_string_new(NULL);
     run->pending  = 3;                       /* las dos tuberias y el hijo  */
+    run->pid      = pid;
+    run->vivo     = TRUE;
     watch_pipe(out_fd, run, FALSE);
     watch_pipe(err_fd, run, TRUE);
     g_child_watch_add(pid, on_child, run);
-    return TRUE;
+    return (EngineJob *) run;
 }

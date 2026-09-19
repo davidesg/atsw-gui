@@ -10,6 +10,7 @@
 #include "netfile.h"
 #include "slots.h"
 #include "verdict.h"
+#include "engine.h"
 #include "outdiag.h"
 #include "outfcst.h"
 
@@ -84,12 +85,18 @@ typedef struct {
 /* La pantalla de estimacion: la unica que LANZA EL MOTOR como programa. */
 typedef struct {
     GtkWidget *boton;         /* Estimar                                    */
-    GtkWidget *que;           /* que se va a estimar, antes de estimarlo    */
-    GtkWidget *orden;         /* la orden entera, copiable                  */
-    GtkWidget *desenlace;     /* como acabo el optimizador, con nombre      */
-    GtkWidget *salida;        /* lo que dijo el motor, entero               */
-    GtkWidget *c_diag, *c_resta, *c_traza;
+    GtkWidget *b_parar;       /* Detener                                    */
+    GtkWidget *orden;         /* la orden, en una linea COPIABLE            */
+    GtkWidget *titulo;        /* el estado, encima de la salida             */
+    GtkWidget *barra;         /* en PULSO: no se puede saber el avance      */
+    GtkWidget *salida;        /* lo que dice el motor, EN VIVO              */
+    GtkWidget *ver_fin;       /* veredicto: como acabo                      */
+    GtkWidget *ver_que;       /* veredicto: que se estima                   */
+    GtkWidget *motor;         /* que drtran, y de cuando                    */
+    GtkWidget *c_diag;        /* Diagonal: es un MODO, no una opcion        */
 
+    EngineJob *trabajo;       /* la corrida en marcha, para poder pararla   */
+    guint      pulso;         /* el temporizador de la barra                */
     gboolean   corriendo;
     gboolean   diagonal;      /* -0 : sin transferencia (homologacion)      */
     gboolean   cast_resta;    /* -S : el cast antiguo                       */

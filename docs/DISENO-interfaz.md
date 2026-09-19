@@ -516,6 +516,81 @@ para poder mirarla antes.
 
 ---
 
+## 5bis. La página Estimación
+
+Es la primera que **no tiene una lista como protagonista**: lo que se queda el
+alto es **la salida del motor**. Las reglas valen igual, pero lo que protegen
+es otra cosa.
+
+### Lo que estaba mal — ocho cosas
+
+1. **Cuatro marcos apilados, todos de altura variable.** El del desenlace
+   escribía hasta **13 líneas** y el de «qué se va a estimar» **8**: con un
+   desenlace malo, la salida del motor quedaba en dos líneas.
+2. **La orden no se podía copiar entera** — era una etiqueta con salto de
+   línea, y copiarla arrastraba los saltos. Su propósito declarado es pegarla
+   en un terminal.
+3. **La salida aparecía sólo al final.** Con una corrida larga te quedabas
+   mirando una caja vacía.
+4. **No había forma de parar una corrida.** El `pid` estaba dentro de
+   `lib/engine` y no salía.
+5. **El cast podía contradecir al motor sin decirlo**: drtran **despacha solo**
+   al cast por resta cuando los operadores son incompatibles.
+6. **`-0` estaba como una casilla más**, cuando es un **modo** — la
+   homologación con fue.
+7. **Qué `drtran` se iba a lanzar** estaba al final de un párrafo.
+8. **Nada indicaba que estuviera corriendo** salvo un botón insensible.
+
+### Cómo queda
+
+```
+┌───────────────────────────────────────────────────────────────────────────┐
+│ Estimar  Detener │ ☐ Diagonal (-0) │ Opciones…  Mantener…  Ver el .out…   │
+│                   Desenlace…              drtran ~/.local/bin (19/09/2026)│
+├───────────────────────────────────────────────────────────────────────────┤
+│ drtran M6_EP.pre … -o modelo.out -n red.dag -c modelo.cns                 │ ← entrada
+├───────────────────────────────────────────────────────────────────────────┤
+│ drtran — ejecutando…   ▓▓▒▒░░▒▒▓▓  (pulso)                                │
+│                                                                           │
+│      lo que dice el motor, EN VIVO         (todo el alto)                 │
+│                                                                           │
+├───────────────────────────────────────────────────────────────────────────┤
+│ ● CONVERGE por el parámetro · 349 iteraciones de 500 · logL −1701.348826  │
+│ ● 6 series · 4 enlaces · 52 parámetros libres · cast −V empotrado         │
+└───────────────────────────────────────────────────────────────────────────┘
+```
+
+### La barra va en PULSO, y es una decisión, no una pereza
+
+**No se puede saber el avance.** drtran no imprime nada por iteración: con
+`-v`, su salida crece en **una línea** —36 frente a 35—. Un porcentaje sería
+inventado.
+
+> El pulso dice *«trabajando»* sin fingir que sabe cuánto queda. Es la misma
+> regla que el `?` de la columna `f` en Series: **mejor no saber que mentir**.
+
+### La versión del motor no sirve; la fecha sí
+
+`DRTRAN_VERSION` es `"1.0"` — una constante que **no cambia nunca**. No
+distingue el binario de julio del de hoy, que es el problema real que hubo. Lo
+que lo distingue es la **fecha del fichero**, y eso es lo que se enseña.
+
+Añadir un campo «versión» que siempre dice lo mismo sería informar de nada.
+*(Si alguna vez interesa, lo que haría falta es que el motor incluyera la fecha
+de compilación o el hash de git — un cambio en el motor, no en el GUI.)*
+
+### Lo que se añadió a `lib/engine`
+
+Dos cosas, ambas **añadidos**: `engine_start()` con un callback de salida en
+vivo y `engine_stop()`. `engine_run_async()` se conserva tal cual —es lo que
+usa `gui/fue`— y ahora es un envoltorio de `engine_start()` con el callback a
+`NULL`.
+
+La cancelación **no inventa un camino aparte**: manda `SIGTERM` y el final
+llega por `done()` como cualquier otro, con `status = ENGINE_SIGNAL`.
+
+---
+
 ## 6. La página Modelo
 
 ### El problema, y uno que no es de sitio sino de cantidad
@@ -724,8 +799,8 @@ todas; lo que cambia es qué es el hecho por fila y qué es el veredicto.
 enlace más dos por serie, y debajo un marco que crece con los enlaces que
 fallan.
 
-**Estado: Series, Red, Identificación y Modelo IMPLEMENTADAS.** El resto, sin
-diseñar.
+**Estado: Series, Identificación, Red, Modelo y Estimación IMPLEMENTADAS.**
+Faltan Diagnosis y Previsión.
 
 De Red salió además el sitio donde viven los dos ayudantes que comparten las
 páginas: `mtram_verdicto()` —una línea con su punto de color— y

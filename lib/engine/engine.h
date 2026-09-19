@@ -64,4 +64,28 @@ gboolean engine_run_async(const char *workdir, const char *program,
                           EngineProgress progress, EngineDone done,
                           gpointer data);
 
+/* ------------------------------------------------------------------------ */
+/* Lo mismo, pero EN VIVO y con la posibilidad de pararlo                    */
+/*                                                                           */
+/* engine_run_async entrega la salida entera al final. En una corrida larga  */
+/* --o en una evaluacion recursiva, que son muchas estimaciones seguidas--   */
+/* eso deja al que llama mirando una caja vacia, y sin forma de abortar.     */
+/* ------------------------------------------------------------------------ */
+
+/* Un trozo de la salida, segun llega. No termina en cero: len manda. */
+typedef void (*EngineSalida)(const char *txt, gsize len, gpointer data);
+
+typedef struct EngineJob EngineJob;      /* opaco */
+
+/* Devuelve el trabajo, o NULL si no se pudo lanzar (y entonces done no se
+ * llama). salida y progress pueden ser NULL.                            */
+EngineJob *engine_start(const char *workdir, const char *program,
+                        const char *const *argv,
+                        EngineProgress progress, EngineSalida salida,
+                        EngineDone done, gpointer data);
+
+/* Pide al proceso que se pare. El final llega por done() como cualquier otro,
+ * con status ENGINE_SIGNAL: no hay un camino aparte para la cancelacion.  */
+void engine_stop(EngineJob *job);
+
 #endif /* ENGINE_H */

@@ -252,11 +252,13 @@ static gchar *quien_es_drtran( void )
 /* El desenlace                                                              */
 /* ------------------------------------------------------------------------ */
 
+/* El titular del desenlace: UNA linea. Lo largo va al panel. */
 static void cuenta_desenlace( Mtram *m, const EngineResult *r )
 {
     Estima      *E = &m->est;
     VerdictInfo  v;
     GString     *t = g_string_new( NULL );
+    const char  *color = MT_AMBAR;
 
     verdict_parse( r->output, &v );
     E->v = v;
@@ -265,71 +267,130 @@ static void cuenta_desenlace( Mtram *m, const EngineResult *r )
 
     case VER_GRADIENTE:
     case VER_PARAMETRO:
-        g_string_append_printf( t, "CONVERGE, por el %s.\n",
+        color = MT_VERDE;
+        g_string_append_printf( t, "CONVERGE por el %s",
             v.ver == VER_GRADIENTE ? "gradiente" : "parámetro" );
+        break;
+
+    /* El que hay que entender: suena a fracaso y es que el .pre YA ERA el
+     * optimo, o sea la invariante del contrato.                        */
+    case VER_SIN_MEJORA:
+        color = MT_VERDE;
+        g_string_append( t, "Se paró sin mejorar — el .pre YA ERA el óptimo" );
+        break;
+
+    case VER_ITERACIONES:
+        color = MT_ROJO;
+        g_string_append( t, "NO CONVERGE: agotó el límite de iteraciones" );
+        break;
+
+    case VER_PASOS:
+        color = MT_ROJO;
+        g_string_append( t, "NO CONVERGE: cinco pasos de longitud máxima" );
+        break;
+
+    case VER_OTRO:
+        g_string_append( t, "Desenlace no reconocido" );
+        break;
+
+    case VER_NADA:
+        color = MT_ROJO;
+        g_string_append( t, r->status == ENGINE_SIGNAL
+            ? "Detenido" : "No llegó a estimar" );
+        break;
+    }
+
+    if (v.iters >= 0) {
+        if (v.maxits > 0)
+            g_string_append_printf( t, " · %d iteraciones de %d", v.iters, v.maxits );
+        else
+            g_string_append_printf( t, " · %d iteraciones", v.iters );
+    }
+    if (v.tiene_logl)
+        g_string_append_printf( t, " · logL %.6f", v.logl );
+    if (v.ifault)
+        g_string_append_printf( t, " · ifault %d: las D.T. no son de fiar",
+                                v.ifault );
+    if (r->status != 0 && r->status != ENGINE_SIGNAL)
+        g_string_append_printf( t, " · el motor salió con %d", r->status );
+
+    mtram_verdicto( E->ver_fin, color, "%s", t->str );
+    g_string_free( t, TRUE );
+}
+
+/* Y la explicacion larga, a su panel. */
+static void on_desenlace( GtkButton *b, Mtram *m )
+{
+    const VerdictInfo *v = &m->est.v;
+    GString           *t = g_string_new( NULL );
+
+    switch (v->ver) {
+
+    case VER_GRADIENTE:
+    case VER_PARAMETRO:
+        g_string_append_printf( t,
+            "CONVERGE, por el criterio del %s.\n\n"
+            "El motor tiene dos criterios de parada y los distingue: el del\n"
+            "gradiente y el del parámetro. Los dos son convergencia.",
+            v->ver == VER_GRADIENTE ? "gradiente" : "parámetro" );
         break;
 
     case VER_SIN_MEJORA:
         g_string_append( t,
             "Se paró sin mejorar — y eso aquí es una BUENA noticia.\n\n"
-            "El último paso no encontró ningún punto mejor, que es justo lo "
-            "que ocurre cuando\nse arranca YA EN el óptimo. Es la invariante "
-            "del contrato: corre el motor sobre\nun .pre y los números no se "
-            "mueven. El titular del motor suena a fracaso;\nlo que describe "
-            "es que no había nada que mejorar.\n" );
+            "El último paso no encontró ningún punto mejor, que es justo lo\n"
+            "que ocurre cuando se arranca YA EN el óptimo. Es la invariante\n"
+            "del contrato: corre el motor sobre un .pre y los números no se\n"
+            "mueven.\n\n"
+            "El titular del motor suena a fracaso —«STOPPED AT A POINT WITH\n"
+            "NO IMPROVEMENT»— y lo que describe es que no había nada que\n"
+            "mejorar. Confundirlo con un fallo es confundir el éxito con el\n"
+            "fracaso." );
         break;
 
     case VER_ITERACIONES:
         g_string_append( t,
             "NO CONVERGE: agotó el límite de iteraciones.\n\n"
-            "Las estimaciones que hay en el .out son el último punto "
-            "visitado, no un óptimo.\nMirar: ¿hay parámetros corriéndose a un "
-            "extremo? ¿dos cosas explicando lo mismo\n(un enlace "
-            "contemporáneo y su covarianza libre)? ¿sobra estructura?\n" );
+            "Las estimaciones del .out son el último punto visitado, NO un\n"
+            "óptimo.\n\n"
+            "Qué mirar:\n"
+            "   ¿hay parámetros corriéndose a un extremo?\n"
+            "   ¿dos cosas explicando lo mismo — un enlace contemporáneo y\n"
+            "    su covarianza libre? (pestaña Modelo, «Avisos…»)\n"
+            "   ¿sobra estructura?" );
         break;
 
     case VER_PASOS:
         g_string_append( t,
             "NO CONVERGE: cinco pasos seguidos de longitud máxima.\n\n"
-            "El optimizador se está yendo por una cresta casi plana: la "
-            "verosimilitud apenas\nmejora mientras los parámetros corren. "
-            "Suele ser un problema de identificación,\nno de optimizador.\n" );
-        break;
-
-    case VER_OTRO:
-        g_string_append( t, "El motor dio un desenlace que no reconozco.\n" );
+            "El optimizador se está yendo por una cresta casi plana: la\n"
+            "verosimilitud apenas mejora mientras los parámetros corren.\n"
+            "Suele ser un problema de IDENTIFICACIÓN, no de optimizador." );
         break;
 
     case VER_NADA:
         g_string_append( t,
-            "No llegó a estimar: no hay veredicto del optimizador.\n"
-            "Lo que dijo el motor está abajo, entero.\n" );
+            "No hay veredicto del optimizador: no llegó a estimar, o se\n"
+            "detuvo antes. Lo que dijo el motor está en la caja de abajo,\n"
+            "entero." );
+        break;
+
+    default:
+        g_string_append( t, "El motor dio un desenlace que no reconozco." );
         break;
     }
 
-    if (v.frase[0])
-        g_string_append_printf( t, "\n   %s\n", v.frase );
-    if (v.iters >= 0) {
-        if (v.maxits > 0)
-            g_string_append_printf( t, "   %d iteraciones de %d.\n",
-                                    v.iters, v.maxits );
-        else
-            g_string_append_printf( t, "   %d iteraciones.\n", v.iters );
-    }
-    if (v.tiene_logl)
-        g_string_append_printf( t, "   log-verosimilitud = %.6f\n", v.logl );
+    if (v->frase[0])
+        g_string_append_printf( t, "\n\nLo que escribió el motor:\n   %s",
+                                v->frase );
 
-    if (v.ifault)
-        g_string_append_printf( t,
-            "\nOJO: ifault = %d. El evaluador de la verosimilitud se quejó, "
-            "así que las\ndesviaciones típicas que salgan no son de fiar.\n",
-            v.ifault );
+    g_string_append( t,
+        "\n\n——\nCriterio de parada del motor: 500 iteraciones como máximo,\n"
+        "tolerancias 1e-7 en gradiente y en paso. NO son ajustables desde la\n"
+        "línea de órdenes (drtran.c:3256-3257), así que no se ofrece una\n"
+        "casilla que no llegaría a ningún sitio." );
 
-    if (r->status != 0)
-        g_string_append_printf( t, "\n(el motor salió con estado %d)\n",
-                                r->status );
-
-    gtk_label_set_text( GTK_LABEL(E->desenlace), t->str );
+    mtram_popover_mostrar( GTK_WIDGET(b), t->str );
     g_string_free( t, TRUE );
 }
 
@@ -337,17 +398,66 @@ static void cuenta_desenlace( Mtram *m, const EngineResult *r )
 /* Lanzar                                                                    */
 /* ------------------------------------------------------------------------ */
 
+/* La barra va EN PULSO, no con porcentaje: no hay forma de saber el avance.
+ * drtran no imprime nada por iteracion --con -v la salida crece en UNA linea,
+ * 36 frente a 35-- asi que un porcentaje seria inventado. El pulso dice
+ * "trabajando" sin fingir que sabe cuanto queda.                         */
+static gboolean late( gpointer d )
+{
+    Mtram *m = d;
+
+    gtk_progress_bar_pulse( GTK_PROGRESS_BAR(m->est.barra) );
+    return G_SOURCE_CONTINUE;
+}
+
+static void para_pulso( Mtram *m )
+{
+    if (m->est.pulso) { g_source_remove( m->est.pulso ); m->est.pulso = 0; }
+    gtk_widget_hide( m->est.barra );
+}
+
+/* La salida, SEGUN LLEGA. */
+static void on_salida( const char *txt, gsize len, gpointer data )
+{
+    Mtram         *m = data;
+    GtkTextBuffer *b = gtk_text_view_get_buffer( GTK_TEXT_VIEW(m->est.salida) );
+    GtkTextIter    fin;
+
+    gtk_text_buffer_get_end_iter( b, &fin );
+    gtk_text_buffer_insert( b, &fin, txt, (gint) len );
+
+    /* que se vea lo ultimo */
+    gtk_text_buffer_get_end_iter( b, &fin );
+    gtk_text_view_scroll_to_iter( GTK_TEXT_VIEW(m->est.salida), &fin,
+                                  0.0, FALSE, 0.0, 0.0 );
+}
+
 static void on_done( const EngineResult *r, gpointer data )
 {
     Mtram  *m = data;
     Estima *E = &m->est;
 
     E->corriendo = FALSE;
+    E->trabajo   = NULL;
+    para_pulso( m );
     gtk_widget_set_sensitive( E->boton, TRUE );
+    gtk_widget_set_sensitive( E->b_parar, FALSE );
+    gtk_label_set_text( GTK_LABEL(E->titulo),
+        r->status == ENGINE_SIGNAL ? "drtran — detenido" : "drtran — terminado" );
 
-    /* Lo que dijo por pantalla, entero. */
-    gtk_text_buffer_set_text( gtk_text_view_get_buffer( GTK_TEXT_VIEW(E->salida) ),
-                              r->output ? r->output : "", -1 );
+    /* La salida ya se fue pintando en vivo; solo se completa si algo falto
+     * --por ejemplo lo que fue a stderr, que no pasa por on_salida--.   */
+    {
+    GtkTextBuffer *b = gtk_text_view_get_buffer( GTK_TEXT_VIEW(E->salida) );
+    GtkTextIter    a, z;
+    gchar         *hay;
+
+    gtk_text_buffer_get_bounds( b, &a, &z );
+    hay = gtk_text_buffer_get_text( b, &a, &z, FALSE );
+    if (r->output && strlen( r->output ) > strlen( hay ))
+        gtk_text_buffer_set_text( b, r->output, -1 );
+    g_free( hay );
+    }
 
     cuenta_desenlace( m, r );
 
@@ -388,28 +498,39 @@ static void on_estimar( GtkButton *b, Mtram *m )
     g_free( E->out_path );
     E->out_path = g_strdup( out );
 
-    /* Lo que se va a ejecutar, con las rutas enteras: esto es lo que hay que
-     * poder copiar a un terminal.                                        */
+    /* Lo que se va a ejecutar, con las rutas ENTERAS. Va en una ENTRADA y no
+     * en una etiqueta: de una etiqueta partida en lineas no se copia una
+     * orden, y copiarla es justo para lo que esta.                     */
     aviso = g_string_new( "drtran" );
     for (i = 0; argv[i]; i++) g_string_append_printf( aviso, " %s", argv[i] );
-    gtk_label_set_text( GTK_LABEL(E->orden), aviso->str );
+    gtk_entry_set_text( GTK_ENTRY(E->orden), aviso->str );
     g_string_free( aviso, TRUE );
 
-    gtk_label_set_text( GTK_LABEL(E->desenlace), "Estimando…" );
+    gtk_label_set_text( GTK_LABEL(E->titulo), "drtran — ejecutando…" );
+    gtk_label_set_text( GTK_LABEL(E->ver_fin), "" );
     gtk_text_buffer_set_text(
         gtk_text_view_get_buffer( GTK_TEXT_VIEW(E->salida) ), "", -1 );
 
     E->corriendo = TRUE;
     gtk_widget_set_sensitive( E->boton, FALSE );
+    gtk_widget_set_sensitive( E->b_parar, TRUE );
+    gtk_widget_show( E->barra );
+    gtk_progress_bar_pulse( GTK_PROGRESS_BAR(E->barra) );
+    E->pulso = g_timeout_add( 120, late, m );
 
     d = trabajo();
-    if (!engine_run_async( d, "drtran", (const char * const *) argv,
-                           NULL, on_done, m )) {
+    E->trabajo = engine_start( d, "drtran", (const char * const *) argv,
+                               NULL, on_salida, on_done, m );
+    if (!E->trabajo) {
         E->corriendo = FALSE;
+        para_pulso( m );
         gtk_widget_set_sensitive( E->boton, TRUE );
-        gtk_label_set_text( GTK_LABEL(E->desenlace),
-            "No pude lanzar drtran.\n\nTiene que estar en el PATH: "
-            "«make install» en engines/drtran, o poner bin/ en el PATH." );
+        gtk_widget_set_sensitive( E->b_parar, FALSE );
+        gtk_label_set_text( GTK_LABEL(E->titulo),
+                            "drtran — no se pudo lanzar" );
+        mtram_verdicto( E->ver_fin, MT_ROJO,
+            "No pude lanzar drtran: tiene que estar en el PATH "
+            "(«make install» en engines/drtran)" );
     }
     g_free( d );
 
@@ -425,6 +546,15 @@ static void on_ver_out( GtkButton *b, Mtram *m )
     }
     preview_open_external( m, m->est.out_path );
 }
+
+static void on_parar( GtkButton *b, Mtram *m )
+{
+    if (!m->est.corriendo || !m->est.trabajo) return;
+    gtk_widget_set_sensitive( m->est.b_parar, FALSE );
+    gtk_label_set_text( GTK_LABEL(m->est.titulo), "drtran — deteniendo…" );
+    engine_stop( m->est.trabajo );
+}
+
 
 /* ------------------------------------------------------------------------ */
 /* Que se MANTIENE del .pre                                                  */
@@ -501,15 +631,6 @@ static void on_mantener( GtkButton *bt, Mtram *m )
     gtk_widget_destroy( d );
 }
 
-static void on_cambio( GtkToggleButton *b, Mtram *m )
-{
-    Estima *E = &m->est;
-
-    E->diagonal   = gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(E->c_diag) );
-    E->cast_resta = gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(E->c_resta) );
-    E->traza      = gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(E->c_traza) );
-    estima_refresca( m );
-}
 
 /* ------------------------------------------------------------------------ */
 
@@ -521,65 +642,117 @@ void estima_refresca( Mtram *m )
     if (E->corriendo) return;
 
     s = orden_texto( m );
-    gtk_label_set_text( GTK_LABEL(E->orden), s );
+    gtk_entry_set_text( GTK_ENTRY(E->orden), s );
     g_free( s );
 
-    /* Qué se va a estimar, dicho antes de estimarlo. */
-    {
-    GString *t = g_string_new( NULL );
+    /* QUE drtran se va a lanzar, y DE CUANDO. La version no sirve para esto:
+     * DRTRAN_VERSION es "1.0", una constante que no cambia nunca y que no
+     * distingue el binario de julio del de hoy. La FECHA si.           */
+    s = quien_es_drtran();
+    gtk_label_set_text( GTK_LABEL(E->motor), s );
+    gtk_widget_set_tooltip_text( E->motor, s );
+    g_free( s );
 
+    /* Que se va a estimar: UNA linea. */
     if (m->c.n < 2)
-        g_string_append( t, "Carga al menos dos .pre en la pestaña Series." );
+        mtram_verdicto( E->ver_que, MT_AMBAR,
+            "Carga al menos dos .pre en la pestaña Series." );
     else {
         int libres = m->mod.vale ? slots_nfree( &m->mod.st ) : 0;
 
-        g_string_append_printf( t,
-            "%d series, %d enlace%s, %d parámetro%s libre%s.",
-            m->c.n, m->red.n, m->red.n == 1 ? "" : "s",
-            libres, libres == 1 ? "" : "s", libres == 1 ? "" : "s" );
-
         if (E->diagonal)
-            g_string_append( t,
-                "\n\nDIAGONAL (-0): sin transferencia. Estima los univariantes "
-                "conjuntamente, y\ntiene que reproducir fue corrido sobre cada "
-                "serie por separado — es la\nhomologación, y el primer paso "
-                "del método." );
+            mtram_verdicto( E->ver_que, MT_AMBAR,
+                "DIAGONAL (-0): sin transferencia · %d series · %d libres · "
+                "es la homologación con fue y tiene que reproducirlo serie a "
+                "serie", m->c.n, libres );
         else if (m->red.n == 0)
-            g_string_append( t,
-                "\n\nSin enlaces no hay transferencia que estimar. Define la "
-                "red, o marca Diagonal." );
-
-        g_string_append( t,
-            "\n\nCriterio de parada del motor: 500 iteraciones como máximo, "
-            "tolerancias 1e-7\nen gradiente y en paso. No son ajustables desde "
-            "la línea de órdenes." );
-
-        {
-        gchar *quien = quien_es_drtran();
-
-        g_string_append_printf( t, "\n\nSe va a lanzar:  %s", quien );
-        g_free( quien );
-        }
+            mtram_verdicto( E->ver_que, MT_AMBAR,
+                "%d series y NINGÚN enlace: no hay transferencia que estimar "
+                "· define la red, o marca Diagonal", m->c.n );
+        else
+            mtram_verdicto( E->ver_que, MT_VERDE,
+                "%d series · %d enlace%s · %d parámetros libres · cast %s",
+                m->c.n, m->red.n, m->red.n == 1 ? "" : "s", libres,
+                E->cast_resta ? "−S por resta" : "−V empotrado" );
     }
-    gtk_label_set_text( GTK_LABEL(E->que), t->str );
-    g_string_free( t, TRUE );
+}
+
+/* Las opciones que NO son un modo: el cast y la traza. */
+static void on_opciones( GtkButton *bt, Mtram *m )
+{
+    Estima    *E = &m->est;
+    GtkWidget *d, *caja, *c_resta, *c_traza, *av;
+
+    d = gtk_dialog_new_with_buttons( "Opciones de estimación",
+            GTK_WINDOW(m->ventana_p),
+            GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+            "_Cancelar", GTK_RESPONSE_CANCEL,
+            "_Aceptar",  GTK_RESPONSE_ACCEPT, NULL );
+    caja = gtk_dialog_get_content_area( GTK_DIALOG(d) );
+    gtk_container_set_border_width( GTK_CONTAINER(caja), 12 );
+    gtk_box_set_spacing( GTK_BOX(caja), 6 );
+
+    c_resta = gtk_check_button_new_with_label( "-S   cast por resta" );
+    gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(c_resta), E->cast_resta );
+    gtk_container_add( GTK_CONTAINER(caja), c_resta );
+
+    /* Y AQUI EL AVISO QUE FALTABA: el motor DESPACHA SOLO al cast por resta
+     * cuando los operadores son incompatibles. La casilla puede quedar
+     * contradicha sin que nadie lo diga.                              */
+    av = gtk_label_new(
+        "Por omisión el cast es EMPOTRADO (-V) y la verosimilitud es la\n"
+        "exacta. El cast por resta construye el ruido fuera del motor y en\n"
+        "t=1 necesita valores de la entrada que no existen: los pone a cero.\n\n"
+        "OJO: el motor DESPACHA SOLO al cast por resta cuando los operadores\n"
+        "∇ de dos series son incompatibles — lo dice al empezar, en su\n"
+        "salida. Así que esta casilla puede quedar contradicha, y no es un\n"
+        "fallo: es que el empotrado no puede representar esa relación de\n"
+        "niveles (BUG-8). La pestaña Series dice cómo son los operadores." );
+    gtk_widget_set_halign( av, GTK_ALIGN_START );
+    gtk_container_add( GTK_CONTAINER(caja), av );
+    gtk_container_add( GTK_CONTAINER(caja),
+                       gtk_separator_new( GTK_ORIENTATION_HORIZONTAL ) );
+
+    c_traza = gtk_check_button_new_with_label( "-v   traza del optimizador" );
+    gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(c_traza), E->traza );
+    gtk_widget_set_tooltip_text( c_traza,
+        "Añade poco: drtran no imprime por iteración. De ahí que la barra "
+        "de progreso vaya en pulso y no con porcentaje." );
+    gtk_container_add( GTK_CONTAINER(caja), c_traza );
+
+    gtk_widget_show_all( d );
+    if (gtk_dialog_run( GTK_DIALOG(d) ) == GTK_RESPONSE_ACCEPT) {
+        E->cast_resta = gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(c_resta) );
+        E->traza      = gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(c_traza) );
+        gtk_widget_destroy( d );
+        estima_refresca( m );
+        return;
     }
+    gtk_widget_destroy( d );
+}
+
+static void on_diagonal( GtkToggleButton *b, Mtram *m )
+{
+    m->est.diagonal = gtk_toggle_button_get_active( b );
+    estima_refresca( m );
 }
 
 GtkWidget *estima_pagina_new( Mtram *m )
 {
     Estima    *E = &m->est;
-    GtkWidget *caja, *barra, *b, *marco, *vb, *sc;
+    GtkWidget *caja, *barra, *b, *sc, *vb, *marco;
 
     E->corriendo = FALSE;
     E->out_path  = NULL;
+    E->trabajo   = NULL;
+    E->pulso     = 0;
     E->diagonal = E->cast_resta = E->traza = FALSE;
     E->fix_N = E->fix_X = E->fix_D = E->fix_E = E->fix_M = FALSE;
 
     caja = gtk_box_new( GTK_ORIENTATION_VERTICAL, 6 );
     gtk_container_set_border_width( GTK_CONTAINER(caja), 8 );
 
-    /* --- los botones y las opciones --- */
+    /* --- los botones --- */
     barra = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 6 );
     gtk_box_pack_start( GTK_BOX(caja), barra, FALSE, FALSE, 0 );
 
@@ -590,76 +763,83 @@ GtkWidget *estima_pagina_new( Mtram *m )
     g_signal_connect( E->boton, "clicked", G_CALLBACK(on_estimar), m );
     gtk_box_pack_start( GTK_BOX(barra), E->boton, FALSE, FALSE, 0 );
 
-    b = gtk_button_new_with_label( "Mantener…" );
-    gtk_widget_set_tooltip_text( b,
-        "Qué se mantiene del .pre en vez de reestimarlo al juntar las "
-        "ecuaciones: -N, -X, -D, -E, -M." );
-    g_signal_connect( b, "clicked", G_CALLBACK(on_mantener), m );
-    gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
-
-    b = gtk_button_new_with_label( "Ver el .out" );
-    g_signal_connect( b, "clicked", G_CALLBACK(on_ver_out), m );
-    gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
+    E->b_parar = gtk_button_new_with_label( "Detener" );
+    gtk_widget_set_tooltip_text( E->b_parar,
+        "Para la corrida. Hace falta de verdad con la evaluación fuera de "
+        "muestra, que son muchas estimaciones seguidas." );
+    gtk_widget_set_sensitive( E->b_parar, FALSE );
+    g_signal_connect( E->b_parar, "clicked", G_CALLBACK(on_parar), m );
+    gtk_box_pack_start( GTK_BOX(barra), E->b_parar, FALSE, FALSE, 0 );
 
     gtk_box_pack_start( GTK_BOX(barra), gtk_separator_new(
                             GTK_ORIENTATION_VERTICAL ), FALSE, FALSE, 6 );
 
-#define CASILLA(campo, txt, tip) \
-    E->campo = gtk_check_button_new_with_label( txt ); \
-    gtk_widget_set_tooltip_text( E->campo, tip ); \
-    g_signal_connect( E->campo, "toggled", G_CALLBACK(on_cambio), m ); \
-    gtk_box_pack_start( GTK_BOX(barra), E->campo, FALSE, FALSE, 0 );
+    /* Diagonal NO es una opcion: es un MODO. Es la homologacion con fue, el
+     * primer paso del metodo, asi que se queda a la vista.             */
+    E->c_diag = gtk_check_button_new_with_label( "Diagonal (-0)" );
+    gtk_widget_set_tooltip_text( E->c_diag,
+        "Sin transferencia: los univariantes estimados juntos. Tiene que "
+        "reproducir fue serie a serie — es la homologación, y el primer paso "
+        "del método. No es una opción más: es otro modelo." );
+    g_signal_connect( E->c_diag, "toggled", G_CALLBACK(on_diagonal), m );
+    gtk_box_pack_start( GTK_BOX(barra), E->c_diag, FALSE, FALSE, 0 );
 
-    CASILLA( c_diag, "Diagonal (-0)",
-             "Sin transferencia: los univariantes estimados juntos. Tiene que "
-             "reproducir fue serie a serie — es la homologación." )
-    CASILLA( c_resta, "Cast por resta (-S)",
-             "El cast antiguo. Por omisión se EMPOTRA (-V), que es exacto; "
-             "sólo hace falta -S cuando los operadores ∇ son incompatibles, y "
-             "en ese caso el motor lo despacha solo." )
-    CASILLA( c_traza, "Traza (-v)", "La traza del optimizador." )
-#undef CASILLA
+    gtk_box_pack_start( GTK_BOX(barra), gtk_separator_new(
+                            GTK_ORIENTATION_VERTICAL ), FALSE, FALSE, 6 );
 
-    /* --- qué se va a estimar --- */
-    marco = gtk_frame_new( "Qué se va a estimar" );
-    vb = gtk_box_new( GTK_ORIENTATION_VERTICAL, 0 );
-    gtk_container_set_border_width( GTK_CONTAINER(vb), 6 );
-    E->que = gtk_label_new( "" );
-    gtk_widget_set_halign( E->que, GTK_ALIGN_START );
-    gtk_label_set_line_wrap( GTK_LABEL(E->que), TRUE );
-    gtk_container_add( GTK_CONTAINER(vb), E->que );
-    gtk_container_add( GTK_CONTAINER(marco), vb );
-    gtk_box_pack_start( GTK_BOX(caja), marco, FALSE, FALSE, 0 );
+#define BOTON(txt, fn, tip) \
+    b = gtk_button_new_with_label( txt ); \
+    gtk_widget_set_tooltip_text( b, tip ); \
+    g_signal_connect( b, "clicked", G_CALLBACK(fn), m ); \
+    gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
 
-    /* --- la orden, copiable --- */
-    marco = gtk_frame_new( "La orden" );
-    vb = gtk_box_new( GTK_ORIENTATION_VERTICAL, 0 );
-    gtk_container_set_border_width( GTK_CONTAINER(vb), 6 );
-    E->orden = gtk_label_new( "" );
-    gtk_widget_set_halign( E->orden, GTK_ALIGN_START );
-    gtk_label_set_selectable( GTK_LABEL(E->orden), TRUE );
-    gtk_label_set_line_wrap( GTK_LABEL(E->orden), TRUE );
-    gtk_label_set_line_wrap_mode( GTK_LABEL(E->orden), PANGO_WRAP_WORD_CHAR );
+    BOTON( "Opciones…", on_opciones, "El cast y la traza." )
+    BOTON( "Mantener…", on_mantener,
+           "Qué se mantiene del .pre en vez de reestimarlo al juntar las "
+           "ecuaciones: -N, -X, -D, -E, -M." )
+    BOTON( "Ver el .out…", on_ver_out, "El informe entero, en el visor." )
+    BOTON( "Desenlace…", on_desenlace,
+           "Cómo acabó el optimizador, con su explicación." )
+#undef BOTON
+
+    /* Que binario, y de cuando: a la derecha y pequeño. Es lo unico que caza
+     * un drtran instalado hace meses -- la version no, porque es una
+     * constante que no cambia.                                        */
+    E->motor = gtk_label_new( "" );
+    gtk_label_set_ellipsize( GTK_LABEL(E->motor), PANGO_ELLIPSIZE_MIDDLE );
+    gtk_widget_set_halign( E->motor, GTK_ALIGN_END );
+    gtk_box_pack_end( GTK_BOX(barra), E->motor, FALSE, FALSE, 0 );
+
+    /* --- la orden, EN UNA LINEA Y COPIABLE --- */
+    E->orden = gtk_entry_new();
+    gtk_editable_set_editable( GTK_EDITABLE(E->orden), FALSE );
     gtk_widget_set_tooltip_text( E->orden,
-        "Se puede copiar y pegar en un terminal: es exactamente lo que mtram "
-        "ejecuta." );
-    gtk_container_add( GTK_CONTAINER(vb), E->orden );
-    gtk_container_add( GTK_CONTAINER(marco), vb );
-    gtk_box_pack_start( GTK_BOX(caja), marco, FALSE, FALSE, 0 );
+        "Exactamente lo que mtram ejecuta. Se puede copiar y pegar en un "
+        "terminal: Ctrl+A, Ctrl+C." );
+    {
+    PangoAttrList *al = pango_attr_list_new();
 
-    /* --- el desenlace --- */
-    marco = gtk_frame_new( "Cómo acabó" );
-    vb = gtk_box_new( GTK_ORIENTATION_VERTICAL, 0 );
-    gtk_container_set_border_width( GTK_CONTAINER(vb), 6 );
-    E->desenlace = gtk_label_new( "Sin estimar todavía." );
-    gtk_widget_set_halign( E->desenlace, GTK_ALIGN_START );
-    gtk_label_set_selectable( GTK_LABEL(E->desenlace), TRUE );
-    gtk_label_set_line_wrap( GTK_LABEL(E->desenlace), TRUE );
-    gtk_container_add( GTK_CONTAINER(vb), E->desenlace );
-    gtk_container_add( GTK_CONTAINER(marco), vb );
-    gtk_box_pack_start( GTK_BOX(caja), marco, FALSE, FALSE, 0 );
+    pango_attr_list_insert( al, pango_attr_family_new( "monospace" ) );
+    gtk_entry_set_attributes( GTK_ENTRY(E->orden), al );
+    pango_attr_list_unref( al );
+    }
+    gtk_box_pack_start( GTK_BOX(caja), E->orden, FALSE, FALSE, 0 );
 
-    /* --- lo que dijo el motor, entero --- */
+    /* --- lo que dice el motor, EN VIVO, con todo el alto --- */
+    vb = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 8 );
+    E->titulo = gtk_label_new( "drtran — sin lanzar" );
+    gtk_widget_set_halign( E->titulo, GTK_ALIGN_START );
+    gtk_box_pack_start( GTK_BOX(vb), E->titulo, FALSE, FALSE, 0 );
+
+    /* En PULSO: no se puede saber el avance, y un porcentaje seria inventado. */
+    E->barra = gtk_progress_bar_new();
+    gtk_widget_set_valign( E->barra, GTK_ALIGN_CENTER );
+    gtk_widget_set_no_show_all( E->barra, TRUE );
+    gtk_widget_set_tooltip_text( E->barra,
+        "En pulso, no con porcentaje: drtran no informa de su avance, así "
+        "que un porcentaje sería inventado." );
+    gtk_box_pack_start( GTK_BOX(vb), E->barra, TRUE, TRUE, 0 );
+
     E->salida = gtk_text_view_new();
     gtk_text_view_set_editable( GTK_TEXT_VIEW(E->salida), FALSE );
     gtk_text_view_set_monospace( GTK_TEXT_VIEW(E->salida), TRUE );
@@ -667,9 +847,26 @@ GtkWidget *estima_pagina_new( Mtram *m )
     gtk_scrolled_window_set_policy( GTK_SCROLLED_WINDOW(sc),
                                     GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC );
     gtk_container_add( GTK_CONTAINER(sc), E->salida );
-    marco = gtk_frame_new( "Lo que dijo el motor" );
-    gtk_container_add( GTK_CONTAINER(marco), sc );
+
+    marco = gtk_box_new( GTK_ORIENTATION_VERTICAL, 4 );
+    gtk_box_pack_start( GTK_BOX(marco), vb, FALSE, FALSE, 0 );
+    gtk_box_pack_start( GTK_BOX(marco), sc, TRUE, TRUE, 0 );
     gtk_box_pack_start( GTK_BOX(caja), marco, TRUE, TRUE, 0 );
+
+    /* --- los dos veredictos, altura fija --- */
+    vb = gtk_box_new( GTK_ORIENTATION_VERTICAL, 2 );
+    gtk_widget_set_margin_top( vb, 2 );
+
+    E->ver_fin = gtk_label_new( "" );
+    E->ver_que = gtk_label_new( "" );
+    gtk_widget_set_halign( E->ver_fin, GTK_ALIGN_START );
+    gtk_widget_set_halign( E->ver_que, GTK_ALIGN_START );
+    gtk_label_set_ellipsize( GTK_LABEL(E->ver_fin), PANGO_ELLIPSIZE_END );
+    gtk_label_set_ellipsize( GTK_LABEL(E->ver_que), PANGO_ELLIPSIZE_END );
+
+    gtk_box_pack_start( GTK_BOX(vb), E->ver_fin, FALSE, FALSE, 0 );
+    gtk_box_pack_start( GTK_BOX(vb), E->ver_que, FALSE, FALSE, 0 );
+    gtk_box_pack_start( GTK_BOX(caja), vb, FALSE, FALSE, 0 );
 
     return caja;
 }

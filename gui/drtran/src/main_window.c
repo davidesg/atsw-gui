@@ -469,6 +469,24 @@ static void remapea_red(Mtram *m, const int *perm)
     m->red.n = net_remap(m->red.lnk, m->red.n, perm);
 }
 
+/* Dejar marcada la fila i. Refrescar la lista la vacia y la vuelve a llenar,
+ * asi que la marca se pierde -- y entonces subir dos plazas obliga a volver a
+ * marcar entre flecha y flecha. Se remarca donde ha quedado, para poder
+ * pulsar en secuencia.                                                    */
+static void marca_fila(Mtram *m, int i)
+{
+    GtkTreePath *path;
+
+    if (i < 0 || i >= m->c.n) return;
+
+    path = gtk_tree_path_new_from_indices(i, -1);
+    gtk_tree_view_set_cursor(GTK_TREE_VIEW(m->lista), path, NULL, FALSE);
+    gtk_tree_view_scroll_to_cell(GTK_TREE_VIEW(m->lista), path, NULL,
+                                 FALSE, 0.0, 0.0);
+    gtk_tree_path_free(path);
+    gtk_widget_grab_focus(m->lista);
+}
+
 static void mueve(Mtram *m, int de, int a)
 {
     Serie *s;
@@ -486,6 +504,7 @@ static void mueve(Mtram *m, int de, int a)
     remapea_red(m, perm);
     m->mod.orden_cambio = TRUE;
     refresca(m);
+    marca_fila(m, a);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -550,6 +569,8 @@ static void on_salida(GtkButton *b, Mtram *m)
     int i = fila_marcada(m);
 
     if (i < 0) { barra(m, "Marca primero una serie."); return; }
+    if (i == 0) { barra(m, "«%s» ya es la salida.",
+                        m->c.s[0]->ts.name ? m->c.s[0]->ts.name : "?"); return; }
     mueve(m, i, 0);
     barra(m, "%s es ahora la salida. Ojo: el orden es el índice de q[i,j] "
              "en el .cns.", m->c.s[0]->ts.name ? m->c.s[0]->ts.name : "?");
@@ -577,6 +598,7 @@ static void on_quitar(GtkButton *b, Mtram *m)
     memmove(&m->c.s[i], &m->c.s[i + 1], (m->c.n - i - 1) * sizeof(Serie *));
     m->c.n--;
     refresca(m);
+    marca_fila(m, i < m->c.n ? i : m->c.n - 1);
 
     if (quitados)
         barra(m, "Y con ella %d enlace%s que la nombraba%s.",

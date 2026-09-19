@@ -144,6 +144,29 @@ const char *cns_error_en( const CnsError *e, char *out, size_t size );
  * restricciones aplico, o -1 con el hecho en *e (que puede ser NULL).     */
 int cns_read( const char *path, SlotTable *st, CnsError *e );
 
+/* ------------------------------------------------------------------------ */
+/* El orden que el .cns DECLARA en sus comentarios                           */
+/*                                                                           */
+/* Las q[i,j] nombran a las series POR SU POSICION, y esa posicion no esta en */
+/* el fichero: esta en la linea de ordenes. Por eso los .cns de la escuela la */
+/* escriben en un comentario:                                                */
+/*                                                                           */
+/*     # ORDEN de series: 1=EP  2=EI  3=EU  4=EC  5=EA  6=P                  */
+/*                                                                           */
+/* Y no es un adorno. En el m6, m6.cns espera 1=P 2=EA 3=EP 4=EI 5=EU 6=EC y */
+/* m6_net.cns espera 1=EP 2=EI 3=EU 4=EC 5=EA 6=P: SON DISTINTOS. Abrir uno  */
+/* con el orden del otro aplica las covarianzas a parejas que no son, y nada */
+/* lo dice, porque el .cns solo lleva numeros.                               */
+/*                                                                           */
+/* Esto lo lee para poder AVISAR. Es advertencia y nada mas: no reordena, no  */
+/* cambia lo que se estima, y si el fichero no lo declara no pasa nada. Un    */
+/* comentario no manda sobre el analista.                                     */
+/* ------------------------------------------------------------------------ */
+
+/* Deja en nombre[1..n] lo que el fichero declara. Devuelve n, o 0 si no lo
+ * declara (o lo declara a medias, que para el caso es lo mismo).         */
+int cns_orden_declarado( const char *path, char nombre[][SLOT_NAME], int max );
+
 /* Escribe el .cns que reproduce el estado de la tabla: solo los slots que
  * dicen algo, o sea los que no nacieron libres. Devuelve cuantas lineas.  */
 int cns_write( const char *path, const SlotTable *st, const char *cabecera );

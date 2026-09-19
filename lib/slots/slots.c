@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <ctype.h>
 
 #include "slots.h"
 
@@ -455,6 +456,55 @@ int cns_read( const char *path, SlotTable *st, CnsError *e )
     fclose(f);
     return nc;
 }
+int cns_orden_declarado( const char *path, char nombre[][SLOT_NAME], int max )
+{
+    FILE *f = fopen(path, "r");
+    char  line[512];
+    int   visto[64], i, n = 0;
+
+    for (i = 0; i < 64; i++) visto[i] = 0;
+    if (!f) return 0;
+
+    while (fgets(line, sizeof line, f)) {
+        char *p = strchr(line, '#');
+
+        if (!p) continue;                     /* solo en los comentarios */
+
+        /* Cada "<k>=<NOMBRE>" que haya en la linea, venga donde venga: la
+         * declaracion se parte en dos lineas en la mitad de los ficheros. */
+        for (p++; *p; p++) {
+            char *fin;
+            long  k;
+            int   j = 0;
+
+            if (*p < '0' || *p > '9') continue;
+            if (p > line && (p[-1] == '=' || isalnum((unsigned char) p[-1])))
+                continue;                     /* va pegado a otra cosa */
+
+            k = strtol(p, &fin, 10);
+            if (*fin != '=' || k < 1 || k >= 64) { p = fin - 1; continue; }
+
+            fin++;
+            /* El nombre: letras, digitos y _ . El punto final de "6=EC."
+             * no es parte del nombre.                                  */
+            while ((isalnum((unsigned char) fin[j]) || fin[j] == '_') &&
+                   j < SLOT_NAME - 1) {
+                nombre[k][j] = fin[j];
+                j++;
+            }
+            nombre[k][j] = 0;
+            if (j && k < max) visto[k] = 1;
+            p = fin + j - 1;
+        }
+    }
+    fclose(f);
+
+    /* Vale solo si estan el 1, el 2, ... sin huecos. Una declaracion a
+     * medias no se puede comparar con nada.                            */
+    for (i = 1; i < 64 && visto[i]; i++) n = i;
+    return n >= 2 ? n : 0;
+}
+
 int cns_write( const char *path, const SlotTable *st, const char *cabecera )
 {
     FILE *f = fopen(path, "w");

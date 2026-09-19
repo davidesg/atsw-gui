@@ -244,6 +244,47 @@ int main( int argc, char **argv )
    remove( "/tmp/_test_slots_bad.cns" );
    }
 
+   /* --- el ORDEN que el .cns declara en sus comentarios ------------------ */
+   /* Las q[i,j] nombran por POSICION, y la posicion no esta en el fichero:
+    * esta en la linea de ordenes. Los .cns de la escuela la declaran en un
+    * comentario, y en el m6 LOS DOS NO COINCIDEN -- que es justo lo que hace
+    * falta avisar.                                                      */
+   {
+   char dice[64][SLOT_NAME];
+   int  k, nred, ndiag, distinto = 0;
+
+   snprintf( path, sizeof path, "%s/m6_net.cns", argv[1] );
+   nred = cns_orden_declarado( path, dice, 64 );
+   printf( "\n  m6_net.cns declara:  " );
+   for ( k = 1; k <= nred; k++ ) printf( "%d=%s ", k, dice[k] );
+   printf( "\n" );
+   ok( nred == 6 && !strcmp( dice[1], "EP" ) && !strcmp( dice[6], "P" ),
+       "el orden de la red se lee: 1=EP ... 6=P" );
+
+   {
+   char otro[64][SLOT_NAME];
+
+   snprintf( path, sizeof path, "%s/m6.cns", argv[1] );
+   ndiag = cns_orden_declarado( path, otro, 64 );
+   printf( "  m6.cns declara:      " );
+   for ( k = 1; k <= ndiag; k++ ) printf( "%d=%s ", k, otro[k] );
+   printf( "\n\n" );
+
+   ok( ndiag == 6, "el del diagonal tambien, y va en la misma linea que texto" );
+   ok( !strcmp( otro[6], "EC" ),
+       "  y el punto final de \"6=EC.\" no se cuela en el nombre" );
+
+   for ( k = 1; k <= 6; k++ ) if ( strcmp( dice[k], otro[k] ) ) distinto = 1;
+   ok( distinto,
+       "LOS DOS .cns DEL m6 ESPERAN ORDENES DISTINTOS -- por eso se avisa" );
+   }
+
+   /* Y el que no lo declara no se inventa uno. */
+   snprintf( path, sizeof path, "%s/../SYNQ.cns", argv[1] );
+   ok( cns_orden_declarado( path, dice, 64 ) == 0,
+       "un .cns que no lo declara devuelve 0, no medio orden" );
+   }
+
    /* Si nos lo piden, dejamos el .cns escrito: el guion comprueba luego que EL
     * MOTOR lo lee y cuenta lo mismo. Que los dos LEAN igual lo garantiza
     * compartir el lector; que lo que mtram ESCRIBE lo lea drtran hay que

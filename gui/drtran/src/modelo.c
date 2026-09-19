@@ -421,6 +421,62 @@ static void por_que( Mtram *m, const CnsError *e, const char *path )
     g_free( base );
 }
 
+/* Las q[i,j] nombran a las series POR SU POSICION, y esa posicion no esta en
+ * el fichero: esta en la linea de ordenes. Por eso los .cns de la escuela la
+ * escriben en un comentario, y por eso conviene compararla.
+ *
+ * No es hipotetico: en el m6, m6.cns espera 1=P 2=EA 3=EP... y m6_net.cns
+ * espera 1=EP 2=EI 3=EU... SON DISTINTOS, y abrir uno con el orden del otro
+ * aplica las covarianzas a parejas que no son -- sin que nada lo diga, porque
+ * el .cns solo lleva numeros.
+ *
+ * Es UN AVISO. No reordena nada: un comentario no manda sobre el analista.  */
+static void avisa_orden( Mtram *m, const char *path )
+{
+    char     dice[64][SLOT_NAME];
+    int      n = cns_orden_declarado( path, dice, 64 );
+    GString *t;
+    int      i, mal = 0;
+
+    if ( n == 0 ) return;                 /* no lo declara: nada que decir */
+
+    for ( i = 1; i <= n && i <= m->c.n; i++ )
+        if ( g_ascii_strcasecmp( dice[i],
+                 m->c.s[i - 1]->ts.name ? m->c.s[i - 1]->ts.name : "" ) )
+            mal++;
+
+    if ( !mal && n == m->c.n ) return;     /* coincide: callarse */
+
+    t = g_string_new( NULL );
+    g_string_append_printf( t, "OJO — %s dice que espera este orden:\n   ",
+                            g_path_get_basename( path ) );
+    for ( i = 1; i <= n; i++ )
+        g_string_append_printf( t, "%d=%s  ", i, dice[i] );
+
+    g_string_append( t, "\n\ny las series cargadas van en este:\n   " );
+    for ( i = 0; i < m->c.n; i++ )
+        g_string_append_printf( t, "%d=%s  ", i + 1,
+            m->c.s[i]->ts.name ? m->c.s[i]->ts.name : "?" );
+
+    g_string_append( t,
+        "\n\nLas q[i,j] nombran a las series por su POSICIÓN, así que con "
+        "otro orden\nse aplican a parejas distintas de las que el fichero "
+        "quería — y nada lo dice,\nporque el .cns sólo lleva números.\n\n"
+        "Reordena en la pestaña Series si el fichero tiene razón. No se toca "
+        "nada solo:\nun comentario no manda sobre el analista." );
+
+    {
+    GtkWidget *d = gtk_message_dialog_new( GTK_WINDOW(m->ventana_p),
+        GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+        GTK_MESSAGE_WARNING, GTK_BUTTONS_CLOSE, "%s", t->str );
+
+    gtk_window_set_title( GTK_WINDOW(d), "El orden de las series" );
+    gtk_dialog_run( GTK_DIALOG(d) );
+    gtk_widget_destroy( d );
+    }
+    g_string_free( t, TRUE );
+}
+
 static void on_abrir( GtkButton *b, Mtram *m )
 {
     CnsError e;
@@ -446,6 +502,7 @@ static void on_abrir( GtkButton *b, Mtram *m )
         m->mod.path = g_strdup( p );
         preview_show_status( m, "%d restricción%s de %s.",
                              nc, nc == 1 ? "" : "es", g_path_get_basename( p ) );
+        avisa_orden( m, p );
     }
     refresca_lista( m );
     refresca_cuenta( m );

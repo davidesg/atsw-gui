@@ -166,8 +166,10 @@ GtkWidget *mtram_popover(GtkWidget *ancla, const char *txt);
 void       mtram_popover_mostrar(GtkWidget *ancla, const char *txt);
 
 /* Para un panel que no es solo texto. *caja recibe la caja que hay que llenar;
- * al acabar, gtk_widget_show_all(caja) y gtk_popover_popup(pop).          */
+ * al acabar, mtram_popover_popup(pop) -- y NO gtk_popover_popup a secas: ver
+ * el porque en main_window.c.                                            */
 GtkWidget *mtram_popover_caja(GtkWidget *ancla, GtkWidget **caja);
+void       mtram_popover_popup(GtkWidget *pop);
 
 /* Texto de ANCHO FIJO. Casi todo lo que va en estos paneles son tablas hechas
  * con espacios: con fuente proporcional se descuadran y dejan de leerse.  */

@@ -316,6 +316,24 @@ GtkWidget *mtram_popover_caja(GtkWidget *ancla, GtkWidget **caja)
     return pop;
 }
 
+/* Enseñar un panel.
+ *
+ * TIENE que hacerse asi. El panel es popover > scroll > caja, y quien lo
+ * rellena solo conoce la CAJA: si hace show_all sobre ella, muestra la caja y
+ * lo que hay dentro, pero NO al scroll que la contiene -- y un padre oculto
+ * deja oculto todo lo de abajo, asi que el panel sale vacio o no sale. Eso es
+ * justo lo que pasaba.
+ *
+ * Aqui se muestra el arbol entero desde el hijo del panel, asi que da igual lo
+ * que haya hecho quien llama.                                            */
+void mtram_popover_popup(GtkWidget *pop)
+{
+    GtkWidget *hijo = gtk_bin_get_child(GTK_BIN(pop));
+
+    if (hijo) gtk_widget_show_all(hijo);
+    gtk_popover_popup(GTK_POPOVER(pop));
+}
+
 /* Un bloque de texto de ancho fijo. TIENE que ser de ancho fijo: casi todo lo
  * que se enseña en estos paneles son TABLAS hechas con espacios --el desglose
  * de la ventana, los papeles de cada serie, el orden-- y con una fuente
@@ -339,13 +357,12 @@ GtkWidget *mtram_popover(GtkWidget *ancla, const char *txt)
     GtkWidget *caja, *pop = mtram_popover_caja(ancla, &caja);
 
     gtk_container_add(GTK_CONTAINER(caja), mtram_mono(txt));
-    gtk_widget_show_all(caja);
     return pop;
 }
 
 void mtram_popover_mostrar(GtkWidget *ancla, const char *txt)
 {
-    gtk_popover_popup(GTK_POPOVER(mtram_popover(ancla, txt)));
+    mtram_popover_popup(mtram_popover(ancla, txt));
 }
 
 static void on_ventana(GtkButton *b, Mtram *m)
@@ -523,8 +540,7 @@ static void on_operadores(GtkButton *b, Mtram *m)
         "\xe2\x88\x92S por resta"));
 
 pinta:
-    gtk_widget_show_all(caja);
-    gtk_popover_popup(GTK_POPOVER(pop));
+    mtram_popover_popup(pop);
     g_string_free(t, TRUE);
 }
 

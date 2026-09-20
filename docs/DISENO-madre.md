@@ -284,6 +284,89 @@ razón de P3. Hacerla antes de que existan `lib/proyecto`, `lib/datos` y
 
 ---
 
+## 8 bis. El gestor de MODELOS, que es otra entidad
+
+**La ventana principal gestiona tres cosas, no una: datos, modelos y
+proyectos.** Yo había diseñado `lib/proyecto` para agrupar n series × n
+modelos, y eso es la tercera. La segunda —**la cadena de iteración**— es
+distinta y no estaba.
+
+### La cadena, y por qué necesita gestor
+
+```
+.inp(-1) ──estimar──→ .pre(-1) ──copiar──→ .inp(0) ──estimar──→ .pre(0) …
+especificación        óptimo               especificación
+valores = SEMILLA     reejecutable         del paso siguiente
+```
+
+`.pre` e `.inp` **son el mismo formato** —el contrato lo dice y lo verifiqué en
+máquina: copié un `.pre` a `Z.inp`, corrí `fue Z` y salió `Z.pre`—, pero el
+motor **exige la extensión `.inp`**. Así que el paso `.pre(-1) → .inp(0)` es
+una **copia física real**, no una manera de hablar.
+
+Y nadie la numera. De ahí el hallazgo de `DISENO-proyecto.md` §2: con acceso
+total, todos los ficheros delante y una hora de trabajo, la convención `_mNN`
+se puede deducir **mal**, y en el mismo árbol `_m01` significa dos cosas
+distintas para la misma serie.
+
+> **El número de versión tiene que ser un campo, no un trozo del nombre que
+> cada lector reinterpreta.**
+
+### La decisión: el porqué se registra; el linaje **no se puede perder**
+
+Decisión del analista, 2026-09-20:
+
+> «Debería registrar el porqué de cada iteración, pero **el linaje es lo mínimo
+> que se debería mantener**.»
+
+Son dos exigencias de rango distinto, y el diseño tiene que tratarlas distinto:
+
+| | rango | cómo |
+|---|---|---|
+| **linaje** | obligatorio, nunca se pierde | **automático**: el programa ya sabe de qué `.pre` salió este `.inp`. No se pregunta porque no hace falta preguntarlo |
+| **el porqué** | se quiere, no bloquea | se **pide**, no se exige; y se puede rellenar después |
+
+**Por qué no se exige, aunque `art` sí lo exija.** En la encarnación Python,
+`guion_node` **rechaza la llamada sin razón**, y funciona: 881 de 924 nodos la
+llevan. Pero eso es un LLM escribiendo. Un diálogo modal *«¿por qué?»* en cada
+estimación de un GUI se contesta `asdf` a la tercera — y **una razón falsa es
+peor que ninguna**, porque no se distingue de una de verdad.
+
+Así que:
+
+- el linaje se escribe **siempre**, sin preguntar;
+- el porqué tiene su sitio a la vista y **se puede escribir en cualquier
+  momento**, también más tarde, mirando el `.out`;
+- y **«sin razón» se ve como sin razón**. Nunca se infiere una, nunca se pone
+  un texto de relleno. Es la misma regla que la huella vacía del guion: *no
+  consta* nunca significa *cuadra*.
+
+### Lo que eso le añade a `lib/proyecto`
+
+```c
+/* De que .pre sale este .inp. Se escribe SOLO, al copiar. */
+int pr_deriva( Proyecto *p, const char *serie,
+               const char *padre, const char *hijo );
+
+/* El porque. Se puede llamar despues, y se puede no llamar. */
+int pr_razon( Proyecto *p, const char *serie, const char *modelo,
+              const char *razon );
+
+/* Los que no la tienen. La ventana los enseña, no los esconde. */
+int pr_sin_razon( const Proyecto *p, char nombres[][64], int max );
+```
+
+Y una consulta que hoy no existe en el lado C y que es la que da valor al
+registro: **`pr_camino()`** — de dónde viene este modelo, hasta la raíz. Es
+`path_to_root` de `guion.py`, que ya está escrita… en la otra encarnación.
+
+> Esto **no** es reimplementar el `guion.json`. Es el mínimo que hace falta
+> para que la cadena de iteración del GUI sea reconstruible, en el formato del
+> `proyecto.yaml`. Las dos encarnaciones gestionan proyectos de forma distinta
+> —§10— y ésta es la de aquí.
+
+---
+
 ## 9. Lo que queda decidido y lo que no
 
 **Decidido aquí:** la madre lanza y agrupa, no absorbe; tres bibliotecas

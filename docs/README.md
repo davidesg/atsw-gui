@@ -27,6 +27,7 @@ largo.
 | **DISENO-repositorio.md** | `atsw-gui`: por qué monorepo, qué entra, y cómo mudarse sin perder los 182 commits |
 | **DISENO-mtram.md** | las siete pantallas del GUI de drtran: qué se rescata de TASTE, y dónde TASTE no llega porque mtram es un grafo y no una familia |
 | **DISENO-flujo.md** | dónde está cada página en el ciclo de Box-Jenkins: qué nace dónde, qué se modifica dónde, y cómo simplificar |
+| **DISENO-diagnosis.md** | la página Diagnosis: por qué LR contra el diagonal y no R², y por qué los gráficos necesitan que el motor escriba los residuos |
 | **DISENO-interfaz.md** | cómo se presenta cada pantalla y cómo se llaman los botones. Página a página; hoy, Series |
 
 Dos reglas de lectura, porque el estudio se escribió con ellas:

@@ -13,6 +13,7 @@
 #include "engine.h"
 #include "outdiag.h"
 #include "outfcst.h"
+#include "proyecto.h"
 
 /* El directorio de trabajo, bajo la cache del usuario: los .dag, .cns, .out,
  * los residuos y los EPS que se ensenan. Se llama COMO EL PROGRAMA, y el
@@ -230,7 +231,37 @@ typedef struct {
     Estima     est;           /* la pantalla de estimacion                  */
     Diag       dia;           /* la pantalla de diagnosis                   */
     Prev       prev;          /* la pantalla de prevision                   */
+
+    /* EL PROYECTO, si se abrio con --proyecto. Sin el, el programa funciona
+     * como siempre --en la cache, con nombres fijos-- y entonces NO CABEN DOS
+     * MODELOS: es la ranura unica RESIDUOS de TASTE. Con el, cada estimacion
+     * es una CORRIDA con su nombre y su linaje.                        */
+    Proyecto  *proy;
+    gboolean   hay_proy;
+    char       corrida[PR_ID];   /* el id de la corrida en curso           */
+    char       previa[PR_ID];    /* la anterior: el PADRE de la siguiente   */
 } Mtram;
+
+/* --- el proyecto (proyecto_gui.c) --------------------------------------- */
+
+/* Abre el manifiesto. Devuelve FALSE y pone el motivo en why.            */
+gboolean mtram_proyecto_abre(Mtram *m, const char *path, char *why, size_t n);
+
+/* La ruta de un artefacto de la corrida en curso. sufijo lleva su punto o su
+ * guion: ".out", ".dag", "_res.txt".
+ *
+ * SIN PROYECTO devuelve el nombre FIJO de siempre en la cache, que es lo que
+ * hace que no quepan dos modelos. CON proyecto, el nombre de cortesia de la
+ * corrida: <raiz>/<salida>/work/<salida>_<id><sufijo>. Nueva; g_free.   */
+gchar *mtram_artefacto(Mtram *m, const char *sufijo);
+
+/* Abre una corrida nueva: deriva del ultimo modelo de la serie de salida y
+ * registra el LINAJE sin preguntar. Sin proyecto no hace nada y devuelve
+ * TRUE. FALSE con el motivo en why.                                     */
+gboolean mtram_corrida_nueva(Mtram *m, char *why, size_t n);
+
+/* Guarda el manifiesto. Sin proyecto, no hace nada.                     */
+gboolean mtram_proyecto_guarda(Mtram *m, char *why, size_t n);
 
 GtkWidget *mtram_window_new(GtkApplication *app, Mtram *m);
 

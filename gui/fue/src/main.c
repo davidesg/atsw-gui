@@ -9,6 +9,7 @@
 #include "main_window.h"
 #include "fue_globals.h"       /* provides global structures */
 #include "data_handling.h"  /* for load_data_file, etc. */
+#include "proyecto.h"
 #include "model_spec.h"
 #include "deterministic_dialog.h"
 #include "operator_dialog.h"
@@ -46,8 +47,72 @@ static void activate(GtkApplication *app, gpointer user_data) {
     g_signal_connect(ctx->main_window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 }
 
+/* --proyecto FICHERO: el espacio de trabajo sale de la RAIZ del proyecto.
+ *
+ * Es lo minimo que fue_gui necesita de la interfaz madre y lo que de verdad
+ * le falta hoy: NO GUARDA NADA entre ejecuciones --ni sesion, ni preferencias,
+ * ni recientes-- asi que cada arranque empieza preguntando donde esta todo.
+ * Con esto arranca sabiendo en que proyecto esta.
+ *
+ * Sin la opcion funciona como siempre. La madre todavia no existe.     */
+static char g_raiz_proyecto[1024];
+
+const char *fue_raiz_proyecto(void)
+{
+    return g_raiz_proyecto[0] ? g_raiz_proyecto : NULL;
+}
+
+static int lee_opciones(int argc, char *argv[])
+{
+    const char *proy = NULL;
+    Proyecto   *p;
+    PrError     e;
+    int         i;
+
+    for (i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "--proyecto") && i + 1 < argc) proy = argv[++i];
+        else if (!strncmp(argv[i], "--proyecto=", 11)) proy = argv[i] + 11;
+        else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
+            printf("uso: %s [--proyecto FICHERO]\n\n"
+                   "  --proyecto F  el espacio de trabajo sale de la raiz\n"
+                   "                del proyecto F.\n", argv[0]);
+            return 1;
+        }
+    }
+    if (!proy) return 0;
+
+    p = calloc(1, sizeof *p);
+    if (!p) return 0;
+    if (pr_leer(proy, p, &e) != 0) {
+        char why[512];
+
+        /* Un manifiesto roto se dice y se para: arrancar ignorandolo es
+           arrancar creyendo que se esta en un sitio y estar en otro.   */
+        pr_error_es(&e, why, sizeof why);
+        fprintf(stderr, "%s: %s\n", proy, why);
+        free(p);
+        return 2;
+    }
+    /* La raiz, resuelta: pr_ruta con id vacio da el directorio.       */
+    pr_ruta(p, "", NULL, NULL, g_raiz_proyecto, sizeof g_raiz_proyecto);
+    if (!g_raiz_proyecto[0]) {
+        char *d = g_path_get_dirname(proy);
+
+        snprintf(g_raiz_proyecto, sizeof g_raiz_proyecto, "%s", d);
+        g_free(d);
+    }
+    free(p);
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
+    int opt;
+
     setlocale(LC_ALL, "C");
+
+    opt = lee_opciones(argc, argv);
+    if (opt == 1) return 0;
+    if (opt == 2) return 3;
 
 #ifdef _WIN32
     /* On Windows, set up resource paths for GTK (if needed) */

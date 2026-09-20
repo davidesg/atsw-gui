@@ -1,5 +1,8 @@
 /* main_window.c – builds the main UI */
 #include "main_window.h"
+
+/* main.c: la raiz del --proyecto, o NULL. */
+const char *fue_raiz_proyecto(void);
 #include "fue_globals.h"       /* needed for tree view column constants and structures */
 #include "data_handling.h"
 #include "model_spec.h"
@@ -242,6 +245,14 @@ static GtkWidget* create_data_input_tab(FueContext *ctx) {
     GtkWidget *label_ws = gtk_label_new("Workspace:");
     gtk_box_pack_start(GTK_BOX(hbox_files), label_ws, FALSE, FALSE, 0);
     ctx->workspace_file_chooser = gtk_file_chooser_button_new("Select workspace", GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER);
+    /* Con --proyecto, el espacio de trabajo ya se sabe al arrancar. */
+    {
+    const char *raiz = fue_raiz_proyecto();
+
+    if (raiz)
+        gtk_file_chooser_set_current_folder(
+            GTK_FILE_CHOOSER(ctx->workspace_file_chooser), raiz);
+    }
     gtk_box_pack_start(GTK_BOX(hbox_files), ctx->workspace_file_chooser, TRUE, TRUE, 0);
 
     GtkWidget *label_inp = gtk_label_new("Input Name:");

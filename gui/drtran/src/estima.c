@@ -78,7 +78,7 @@ static gboolean artefactos( Mtram *m, gchar **dag, gchar **cns, char *why,
     nom[0] = NULL;
 
     if (m->red.n > 0) {
-        *dag = g_build_filename( d, "red.dag", NULL );
+        *dag = mtram_artefacto( m, ".dag" );
         if (net_write( *dag, nom, m->red.lnk, m->red.n,
                        "escrito por mtram desde la pestaña Red" ) != 0) {
             snprintf( why, size, "no pude escribir %s", *dag );
@@ -94,7 +94,7 @@ static gboolean artefactos( Mtram *m, gchar **dag, gchar **cns, char *why,
             if (slots_line( &m->mod.st, i, b, sizeof b )) dice++;
 
         if (dice) {
-            *cns = g_build_filename( d, "modelo.cns", NULL );
+            *cns = mtram_artefacto( m, ".cns" );
             if (cns_write( *cns, &m->mod.st,
                            "escrito por mtram desde la pestaña Modelo" ) < 0) {
                 snprintf( why, size, "no pude escribir %s", *cns );
@@ -124,7 +124,7 @@ static gchar **arma_argv( Mtram *m, const gchar *dag, const gchar *cns,
     for (i = 0; i < m->c.n; i++)
         g_ptr_array_add( a, g_strdup( m->c.s[i]->path ) );
 
-    *out = g_build_filename( d, "modelo.out", NULL );
+    *out = mtram_artefacto( m, ".out" );
     g_ptr_array_add( a, g_strdup( "-o" ) );
     g_ptr_array_add( a, g_strdup( *out ) );
 
@@ -145,7 +145,7 @@ static gchar **arma_argv( Mtram *m, const gchar *dag, const gchar *cns,
      * la bateria de fue, y sacarlos de la columna derecha del grafico ASCII
      * del .out seria construir un grafico a partir de otro grafico.     */
     g_ptr_array_add( a, g_strdup( "-e" ) );
-    g_ptr_array_add( a, g_build_filename( d, "residuos.txt", NULL ) );
+    g_ptr_array_add( a, mtram_artefacto( m, "_res.txt" ) );
 
     /* La prevision y la evaluacion las pide la pestaña Prevision; van en la
      * MISMA corrida porque el motor las hace en la misma pasada.       */
@@ -154,7 +154,7 @@ static gchar **arma_argv( Mtram *m, const gchar *dag, const gchar *cns,
         g_ptr_array_add( a, g_strdup_printf( "%d", m->prev.horizonte ) );
     }
     if (m->prev.evaluar && m->prev.ventana > 0) {
-        gchar *csv = g_build_filename( d, "evaluacion.csv", NULL );
+        gchar *csv = mtram_artefacto( m, "_eval.csv" );
 
         g_ptr_array_add( a, g_strdup( "-estwin" ) );
         g_ptr_array_add( a, g_strdup_printf( "%d", m->prev.ventana ) );
@@ -194,14 +194,14 @@ static gchar *orden_texto( Mtram *m )
     {
     gchar *d = trabajo();
 
-    if (m->red.n > 0)  dag = g_build_filename( d, "red.dag", NULL );
+    if (m->red.n > 0)  dag = mtram_artefacto( m, ".dag" );
     if (m->mod.vale) {
         char b[256];
         int  dice = 0;
 
         for (i = 1; i <= m->mod.st.n; i++)
             if (slots_line( &m->mod.st, i, b, sizeof b )) dice++;
-        if (dice) cns = g_build_filename( d, "modelo.cns", NULL );
+        if (dice) cns = mtram_artefacto( m, ".cns" );
     }
     g_free( d );
     }
@@ -489,6 +489,17 @@ static void on_done( const EngineResult *r, gpointer data )
     diagnosis_desde( m, E->out_path );
     prevision_desde( m, E->out_path );
 
+    /* La corrida ya existe en el disco: el manifiesto tiene que decirlo. Y la
+     * siguiente colgara de esta -- ahi esta la cadena.               */
+    if (m->hay_proy) {
+        char why2[256];
+
+        snprintf( m->previa, sizeof m->previa, "%s", m->corrida );
+        if (!mtram_proyecto_guarda( m, why2, sizeof why2 ))
+            preview_show_status( m, "La corrida esta, pero no pude guardar el "
+                                    "proyecto: %s", why2 );
+    }
+
     if (r->status == ENGINE_NORUN)
         preview_show_status( m, "No pude lanzar drtran. ¿Está en el PATH? "
                                 "(make install en engines/drtran)" );
@@ -519,6 +530,15 @@ gboolean estima_lanzar( Mtram *m )
     if (E->corriendo) return FALSE;
     if (m->c.n < 2) {
         preview_show_status( m, "Carga al menos dos .pre." );
+        return FALSE;
+    }
+
+    /* UNA CORRIDA NUEVA POR ESTIMACION. Con proyecto, cada una tiene su
+     * nombre y cuelga de la anterior: es la cadena de iteracion, y es lo que
+     * hace que quepan dos modelos. Sin proyecto no hace nada y los nombres
+     * siguen siendo los fijos de la cache.                            */
+    if (!mtram_corrida_nueva( m, why, sizeof why )) {
+        preview_show_status( m, "%s", why );
         return FALSE;
     }
 

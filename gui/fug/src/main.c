@@ -17,6 +17,7 @@
 
 //#include "config.h"
 #include "callbacks.h"
+#include "proyecto.h"
 #include "gui.h"
 #include "fug_run.h"
 
@@ -31,8 +32,61 @@ static void create_plot_dialog(AppWidgets *app);
 static void create_output_dialog(AppWidgets *app);
 static void create_iden_dialog(AppWidgets *app);
 
+/* --proyecto FICHERO: el espacio de trabajo sale de la RAIZ del proyecto.
+ *
+ * Es lo minimo que fug necesita de la interfaz madre. Hoy no guarda nada entre
+ * ejecuciones, asi que cada arranque empieza preguntando donde esta todo.
+ * Sin la opcion funciona como siempre.                                 */
+static char g_raiz[1024];
+
+static int lee_opciones(int argc, char *argv[])
+{
+    const char *proy = NULL;
+    Proyecto   *p;
+    PrError     e;
+    int         i;
+
+    for (i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "--proyecto") && i + 1 < argc) proy = argv[++i];
+        else if (!strncmp(argv[i], "--proyecto=", 11)) proy = argv[i] + 11;
+        else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
+            printf("uso: %s [--proyecto FICHERO]\n\n"
+                   "  --proyecto F  el espacio de trabajo sale de la raiz\n"
+                   "                del proyecto F.\n", argv[0]);
+            return 1;
+        }
+    }
+    if (!proy) return 0;
+
+    p = calloc(1, sizeof *p);
+    if (!p) return 0;
+    if (pr_leer(proy, p, &e) != 0) {
+        char why[512];
+
+        /* Un manifiesto roto se dice y se para. */
+        pr_error_es(&e, why, sizeof why);
+        fprintf(stderr, "%s: %s\n", proy, why);
+        free(p);
+        return 2;
+    }
+    pr_ruta(p, "", NULL, NULL, g_raiz, sizeof g_raiz);
+    if (!g_raiz[0]) {
+        char *d = g_path_get_dirname(proy);
+
+        snprintf(g_raiz, sizeof g_raiz, "%s", d);
+        g_free(d);
+    }
+    free(p);
+    return 0;
+}
+
 int main(int argc, char *argv[])
 {
+    int opt = lee_opciones(argc, argv);
+
+    if (opt == 1) return 0;
+    if (opt == 2) return 3;
+
 #ifdef ENABLE_NLS
     bindtextdomain(GETTEXT_PACKAGE, PACKAGE_LOCALE_DIR);
     bind_textdomain_codeset(GETTEXT_PACKAGE, "UTF-8");
@@ -84,6 +138,9 @@ int main(int argc, char *argv[])
     gtk_combo_box_set_active(GTK_COMBO_BOX(app->option_output_dialog_combobox), 0);
 
     gtk_widget_show_all(app->window);
+    /* Con --proyecto, el espacio de trabajo ya se sabe al arrancar. */
+    if (g_raiz[0]) set_workspace(app, g_raiz);
+
     gtk_main();
 
     g_slice_free(AppWidgets, app);

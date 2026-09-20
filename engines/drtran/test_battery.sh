@@ -2147,6 +2147,39 @@ fi
 
 # ─────────────────────────────────────────────────────────────────────────
 echo ""
+# ── EL RESUMEN DE stdout LEE POR NOMBRE, NO POR POSICIÓN ──────────────────
+echo
+echo "── 12. El resumen del modelo, con el .cns puesto ──"
+echo "   El bloque 'Estimated model' de stdout recorria el vector del"
+echo "   OPTIMIZADOR, que se salta los slots restringidos: con un .cns que"
+echo "   ate un omega, todo lo de detras salia corrido un puesto. Las"
+echo "   ganancias si salian bien --se calculan aparte-- asi que el fallo"
+echo "   solo se veia comparando coeficiente a coeficiente con la tabla."
+echo
+M6D="$SYN/m6"
+if [ -f "$M6D/M6_EP.pre" ]; then
+    $DRTRAN "$M6D/M6_EP.pre" "$M6D/M6_EI.pre" "$M6D/M6_EU.pre" \
+            "$M6D/M6_EC.pre" "$M6D/M6_EA.pre" "$M6D/M6_P.pre" \
+            -n "$M6D/m6_net.dag" -c "$M6D/m6_net_full.cns" \
+            -o "$TMPDIR/res.out" > "$TMPDIR/res.log" 2>&1
+
+    # lo que dice la TABLA del .out, que es lo autoritativo
+    TAB=$(awk '/^omega1\[1\]/{print $2; exit}' "$TMPDIR/res.out")
+    # lo que dice el RESUMEN de stdout para ese mismo coeficiente
+    RES=$(awk '/EP <- EI/{f=1} f && /omega_1 =/{print $3; exit}' "$TMPDIR/res.log")
+
+    check "el resumen da el mismo omega1[1] que la tabla" "$TAB" "$RES" 0.000001
+
+    grep -q "atado por el .cns" "$TMPDIR/res.log" \
+        && pass "y un coeficiente atado se dice, en vez de inventarle una d.t." \
+        || fail "un coeficiente atado por el .cns no se distingue de uno libre"
+
+    # la d.t. tambien, que antes no salia
+    DT=$(awk '/EP <- EI/{f=1} f && /omega_0 =/{print $5; exit}' "$TMPDIR/res.log" | tr -d ',')
+    TDT=$(awk '/^omega1\[0\]/{print $3; exit}' "$TMPDIR/res.out")
+    check "y la desviacion tipica, que antes no se imprimia" "$TDT" "$DT" 0.000001
+fi
+
 echo "============================================"
 echo -e "  RESULTADO: ${GREEN}$PASS PASS${NC}, ${RED}$FAIL FAIL${NC}"
 echo "============================================"

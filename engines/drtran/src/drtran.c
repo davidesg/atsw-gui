@@ -2805,6 +2805,30 @@ static int find_slot(const char *name);
    la tesis de Munoz Polo (2001, sec. 2.4) dice que la especificacion de una
    relacion bivariante "puede comenzar con la modificacion de la matriz Sigma".
    -------------------------------------------------------------------------- */
+/* Un coeficiente del resumen: el valor, su desviacion tipica y su t.
+ *
+ * Se busca POR NOMBRE, no por posicion: el vector del optimizador se salta los
+ * slots restringidos y contar puestos los descoloca todos. Un slot atado por
+ * el .cns no tiene desviacion tipica propia --no es un grado de libertad-- y
+ * se dice, en vez de inventarle una.                                     */
+static void print_coef(real *xf, real *dev, const char *que, int j, int k)
+{
+    char nm[40];
+    int  slot, pi;
+
+    snprintf(nm, sizeof nm, "%s%d[%d]", que, j, k);
+    slot = find_slot(nm);
+    if (!slot) return;
+
+    pi = free_of_slot[slot];
+    if (pi && dev[pi] > 1e-15)
+        printf("                %s_%d = %10.6f   (d.t. %9.6f,  t = %6.2f)\n",
+               que, k, xf[slot], dev[pi], xf[slot] / dev[pi]);
+    else
+        printf("                %s_%d = %10.6f   (atado por el .cns)\n",
+               que, k, xf[slot]);
+}
+
 static void warn_contemp_collinear(FILE *out)
 {
     int k, s1, s2;
@@ -3555,7 +3579,22 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
     }
 
     {
-        int k, idx = 1;
+        /* El resumen del modelo estimado.
+         *
+         * BUG: este bloque recorria x[idx] avanzando UN PUESTO POR COEFICIENTE
+         * de (b,r,s). Pero x es el vector de parametros LIBRES del optimizador,
+         * que SE SALTA los slots restringidos: con un .cns que ate un omega
+         * --un producto, una combinacion lineal-- todo lo de detras salia
+         * corrido un puesto. En el m6, "EP <- EI omega_1" imprimia 0.355919,
+         * que es omega2[0]; el valor bueno, 0.295418, esta en la tabla del
+         * .out. Las ganancias SI salian bien, porque se calculan aparte.
+         *
+         * Se busca cada coeficiente POR SU NOMBRE DE SLOT, que es como lo hace
+         * la tabla del .out, y de ahi salen el valor completo (xf) y, si es
+         * libre, su desviacion tipica (dev del indice libre).            */
+        real *xf = expand_params(x);
+        int   k;
+
         printf("Observations           : %d\n", n_stat);
         printf("Parameters             : %d\n", sum_npar);
         printf("\n**** %s AFTER %d ITERATIONS\n", sum_conv, opt_iters);
@@ -3573,12 +3612,10 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
             else
                 printf("  %s <- %s : nu(B) = omega(B)/delta(B) * B^%d\n",
                        Ts[lnk[j].out].name, Ts[lnk[j].inp].name, lnk[j].b);
-            for (k = 0; k <= lnk[j].s; k++, idx++)
-                printf("                omega_%d = %10.6f  (t = %6.2f)\n", k,
-                       x[idx], dev[idx] > 1e-15 ? x[idx] / dev[idx] : 0.0);
-            for (k = 1; k <= lnk[j].r; k++, idx++)
-                printf("                delta_%d = %10.6f  (t = %6.2f)\n", k,
-                       x[idx], dev[idx] > 1e-15 ? x[idx] / dev[idx] : 0.0);
+            for (k = 0; k <= lnk[j].s; k++)
+                print_coef(xf, dev, "omega", j, k);
+            for (k = 1; k <= lnk[j].r; k++)
+                print_coef(xf, dev, "delta", j, k);
             if (sum_gain[j] != 0.0 || sum_mlag[j] != 0.0)
                 printf("                gain    = %10.6f   mean lag = %.2f\n",
                        sum_gain[j], sum_mlag[j]);

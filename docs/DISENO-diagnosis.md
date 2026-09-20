@@ -146,7 +146,7 @@ etiquetados en el `.out`— y los gráficos quedan pendientes.
 
 ```
 ┌───────────────────────────────────────────────────────────────────────────┐
-│ Releer │  ◀  EP  ▶  │ Gráficos… │              Ir a…   Calcular baseline │
+│ Releer │ ◀ EP ▶ Gráficos… │ Exportar… │    Ir a…   Calcular baseline │
 ├───────────────────────────────────────────────────────────────────────────┤
 │ Exogeneidad │ Adecuación │ Ajuste │ Residuos │ Modelo estimado │ Salida    │
 ├───────────────────────────────────────────────────────────────────────────┤

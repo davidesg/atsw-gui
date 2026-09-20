@@ -1195,20 +1195,26 @@ GtkWidget *diagnosis_pagina_new( Mtram *m )
     g_signal_connect( b, "clicked", G_CALLBACK(on_sig), m );
     gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
 
-    b = gtk_button_new_with_label( "Exportar…" );
-    gtk_widget_set_tooltip_text( b,
-        "La tabla de la pestaña en la que estés, a CSV, texto de ancho fijo o "
-        "LaTeX. La extensión elige el formato.\n\nVa con la PROCEDENCIA "
-        "dentro —series, modelo, muestra, logL y fichero—: una tabla que sale "
-        "sin decir de dónde viene no se puede reproducir." );
-    g_signal_connect( b, "clicked", G_CALLBACK(on_exportar), m );
-    gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
-
+    /* Graficos VA CON LAS FLECHAS: opera sobre la ecuacion que ellas eligen,
+     * asi que pertenece a ese grupo. Exportar es de la PESTAÑA, no de la
+     * ecuacion, y por eso va despues y tras el separador.              */
     b = gtk_button_new_with_label( "Gráficos…" );
     gtk_widget_set_tooltip_text( b,
         "De la ecuación marcada: la batería de fue sobre sus residuos, y las "
         "CCF con cada una de sus entradas." );
     g_signal_connect( b, "clicked", G_CALLBACK(on_graficos), m );
+    gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
+
+    gtk_box_pack_start( GTK_BOX(barra), gtk_separator_new(
+                            GTK_ORIENTATION_VERTICAL ), FALSE, FALSE, 6 );
+
+    b = gtk_button_new_with_label( "Exportar…" );
+    gtk_widget_set_tooltip_text( b,
+        "La tabla de la PESTAÑA en la que estés —no de la ecuación—, a CSV, "
+        "texto de ancho fijo o LaTeX. La extensión elige el formato.\n\nVa "
+        "con la PROCEDENCIA dentro —series, modelo, muestra, logL y fichero—: "
+        "una tabla que sale sin decir de dónde viene no se puede reproducir." );
+    g_signal_connect( b, "clicked", G_CALLBACK(on_exportar), m );
     gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
 
     /* A la derecha: el baseline del LR. */

@@ -418,6 +418,19 @@ static void on_nuevo_modelo( GtkButton *b, Atsw *a )
     barra_pub( a, why );
 }
 
+/* DOBLE CLIC EN UN MODELO: a fue, que es lo que se va a hacer con el.
+ *
+ * La fila ya esta marcada cuando llega esto --activar marca-- asi que se
+ * delega en on_fue y no hay dos caminos que puedan decidir distinto. Si la
+ * fila son los DATOS, on_fue deriva: el doble clic no es una excepcion a la
+ * regla, es el mismo gesto con menos vueltas.                         */
+static void on_modelo_activado( GtkTreeView *tv, GtkTreePath *ruta,
+                                GtkTreeViewColumn *col, Atsw *a )
+{
+    (void) tv; (void) ruta; (void) col;
+    on_fue( NULL, a );
+}
+
 static void on_iterar( GtkButton *b, Atsw *a )
 {
     gchar *padre = marcada( a->l_modelos, 0 );
@@ -634,7 +647,11 @@ static void activate( GtkApplication *app, gpointer d )
         "Los números salen del .out, no del manifiesto, y se releen cuando el "
         "fichero cambia. Cachearlos podría mentir: si alguien reestima por "
         "fuera, el número guardado seguiría diciendo lo de antes.\n\nEl "
-        "manifiesto guarda linaje y razón, que son DECISIONES." );
+        "manifiesto guarda linaje y razón, que son DECISIONES.\n\nDoble clic "
+        "en un modelo lo abre en fue." );
+    /* Doble clic --o Intro-- sobre un modelo lo abre en fue. */
+    g_signal_connect( a->l_modelos, "row-activated",
+                      G_CALLBACK(on_modelo_activado), a );
     gtk_box_pack_start( GTK_BOX(der), en_scroll( a->l_modelos ), TRUE, TRUE, 0 );
     gtk_paned_pack2( GTK_PANED(pan), der, TRUE, FALSE );
     gtk_paned_set_position( GTK_PANED(pan), 300 );

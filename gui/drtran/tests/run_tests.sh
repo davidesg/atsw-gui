@@ -243,9 +243,29 @@ $CC -O2 -Wall -Wextra -I"$L/tabla" \
 # El primer caso es el fichero de dos columnas con el que fue y fug daban DOS
 # SERIES DISTINTAS. Aqui se fija cual es la buena.
 echo
-$CC -O2 -Wall -Wextra -I"$L/datos" \
-    "$L/datos/test_datos.c" "$L/datos/datos.c" -o "$W/test_datos" || exit 1
-"$W/test_datos" "$W" || exit 1
+$CC -O2 -Wall -Wextra -I"$L/datos" -I"$L/xlsx" \
+    "$L/datos/test_datos.c" "$L/datos/datos.c" "$L/xlsx/xlsx.c" \
+    -o "$W/test_datos" -lz || exit 1
+# El .xlsx de prueba lo fabrica Python si hay openpyxl: asi la prueba no
+# depende de que haya un libro del analista a mano.
+XLSX=""
+if python3 -c "import openpyxl" 2>/dev/null; then
+    python3 - "$W/prueba.xlsx" <<'XL' && XLSX="$W/prueba.xlsx"
+import sys, datetime, openpyxl
+wb = openpyxl.Workbook(); ws = wb.active
+ws.append(["Fecha", "UEM", "ES"])
+for i in range(24):
+    a, m = 1996 + i // 12, i % 12 + 1
+    # fecha de FIN DE MES: el salto en DIAS no dice nada (31, 29, 31) y el
+    # de MESES si. Es el caso real del fichero del analista.
+    fin = datetime.date(a + (m == 12), m % 12 + 1, 1) - datetime.timedelta(days=1)
+    ws.append([fin, 55.0 + i, 50.0 + 2 * i])
+for c in ws["A"][1:]:
+    c.number_format = "mmm-yy"
+wb.save(sys.argv[1])
+XL
+fi
+"$W/test_datos" "$W" $XLSX || exit 1
 
 # --- el proyecto: la cadena de iteracion -----------------------------------
 # El nombre del fichero es CORTESIA: la identidad esta en el manifiesto.

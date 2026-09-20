@@ -174,6 +174,32 @@ int main( int argc, char **argv )
     ok( e.cod == DT_EVACIO, "y lo dice" );
     }
 
+    /* ------------------------------------------------------------------ */
+    printf( "\nUN .xlsx, SI HAY UNO A MANO\n" );
+    printf( "   Se reconoce POR SU CONTENIDO (PK\\3\\4), no por la extensión.\n" );
+    if ( argc > 2 )
+        {
+        ok( dt_leer( argv[2], &d, &e ) == 0, "se lee el libro" );
+        ok( d.ncol >= 1, "y trae columnas" );
+        ok( d.nobs > 2, "y observaciones" );
+        /* LA FRECUENCIA SALE DEL SALTO DE MESES. Una fecha de Excel es un
+         * numero con estilo de fecha; con fechas de fin de mes el salto en
+         * DIAS no dice nada (31, 29, 31) y el de MESES si.             */
+        ok( d.freq == 12 || d.freq == 4 || d.freq == 1,
+            "y una frecuencia reconocible, del salto de MESES" );
+        ok( d.anio > 1800 && d.anio < 2200, "y un año que tiene sentido" );
+        }
+    else
+        printf( "  (sin .xlsx de prueba: pásame uno como segundo argumento)\n" );
+
+    /* Un texto llamado .xlsx NO se toma por un libro. */
+    {
+    const char *p = pon( "mentira.xlsx", "1.0\n2.0\n3.0\n" );
+
+    ok( dt_leer( p, &d, &e ) == 0 && d.nobs == 3,
+        "un texto llamado .xlsx se lee como texto: manda el CONTENIDO" );
+    }
+
     printf( "\n%d fallos\n", fallos );
     return fallos ? 1 : 0;
 }

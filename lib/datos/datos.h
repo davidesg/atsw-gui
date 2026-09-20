@@ -70,7 +70,8 @@ typedef enum {
    DT_ECOLS,            /* una fila con distinto numero de campos           */
    DT_EMUCHAS,          /* mas columnas de las que caben                    */
    DT_ELARGA,           /* mas observaciones de las que caben               */
-   DT_EFECHA            /* una columna de fechas que no se entiende         */
+   DT_EFECHA,           /* una columna de fechas que no se entiende         */
+   DT_EXLSX             /* el libro no se pudo leer; el motivo va en texto  */
 } DtCodigo;
 
 typedef struct {
@@ -101,7 +102,16 @@ typedef struct {
 } DtDatos;
 
 /* Lee el fichero. 0 si pudo; si no, e dice que paso.
- * d->freq / anio / per salen a 0 si el fichero no los declara.             */
+ * d->freq / anio / per salen a 0 si el fichero no los declara.
+ *
+ * .xlsx TAMBIEN, y se reconoce POR SU CONTENIDO --los cuatro bytes PK\3\4--
+ * y no por la extension: un libro con otro nombre se lee igual, y un texto
+ * llamado .xlsx no se toma por un libro.
+ *
+ * Con un .xlsx la frecuencia y la fecha salen MEJOR que de un texto: una fecha
+ * de Excel es un numero con un estilo de fecha, asi que se sabe el dia exacto
+ * y la frecuencia se deduce del salto de MESES. Ver lib/xlsx, donde esta
+ * explicado por que los estilos no son opcionales.                       */
 int dt_leer( const char *path, DtDatos *d, DtError *e );
 
 /* El error en castellano, para los GUIs. Devuelve out.                     */

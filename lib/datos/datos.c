@@ -8,6 +8,7 @@
 #include <ctype.h>
 
 #include "datos.h"
+#include "xlsx.h"
 
 #define LINEA  8192
 
@@ -135,7 +136,203 @@ static void falla( DtError *e, DtCodigo c, int linea, int campo,
    e->campo = campo;
    e->esperaba = esp;
    e->encontro = enc;
-   snprintf( e->texto, sizeof e->texto, "%s", texto ? texto : "" );
+   /* Se recorta a proposito: es para el mensaje. La precision explicita le
+      dice al compilador que el truncamiento es intencionado.          */
+   snprintf( e->texto, sizeof e->texto, "%.*s",
+             (int) sizeof e->texto - 1, texto ? texto : "" );
+}
+
+/* ------------------------------------------------------------------------ */
+/* Un .xlsx                                                                  */
+/*                                                                           */
+/* La rejilla la da lib/xlsx; aqui se decide QUE es cada cosa, con las mismas */
+/* reglas que para un texto: la cabecera nombra, la columna 1 es la serie y   */
+/* las demas regresores, y una columna de fechas no es una serie.            */
+/*                                                                           */
+/* Y AQUI LA FRECUENCIA SALE MEJOR QUE DE UN TEXTO: una fecha de Excel es un  */
+/* numero con un estilo de fecha, asi que se sabe el dia exacto y la          */
+/* frecuencia se deduce del salto de MESES -- 1 mensual, 3 trimestral, 12     */
+/* anual. Con fechas de fin de mes (31/1, 29/2, 31/3) el salto en DIAS no     */
+/* dice nada y el de meses si.                                               */
+/* ------------------------------------------------------------------------ */
+
+static int dt_de_xlsx( const char *path, DtDatos *d, DtError *e )
+{
+   XlHoja  h;
+   XlError xe;
+   int     f, c, fila0 = 0, col0 = 0, i;
+   int     a1 = 0, m1 = 0, a2 = 0, m2 = 0, vistas = 0;
+
+   if ( xl_leer( path, &h, &xe ) != 0 )
+       {
+       char b[160];
+
+       xl_error_en( &xe, b, sizeof b );
+       falla( e, DT_EXLSX, 0, 0, b, 0, 0 );
+       return 1;
+       }
+
+   /* La primera fila con algun numero es la primera de DATOS; la de encima,
+      si la hay y es texto, es la cabecera. Asi se saltan las filas sueltas
+      que traen las descargas de los institutos.                        */
+   for ( f = 0; f < h.nfila; f++ )
+       {
+       int num = 0;
+
+       for ( c = 0; c < h.ncol; c++ )
+           {
+           const XlCelda *k = xl_celda( &h, f, c );
+
+           if ( k && ( k->tipo == XL_NUM || k->tipo == XL_FECHA ) ) num++;
+           }
+       if ( num ) { fila0 = f; break; }
+       }
+   if ( f >= h.nfila ) { xl_libre( &h ); falla( e, DT_EVACIO, 0, 0, path, 0, 0 );
+                         return 1; }
+
+   /* La columna de fechas: la 1, si en la primera fila de datos es una fecha
+      de verdad o un texto que se lee como fecha.                       */
+   {
+   const XlCelda *k = xl_celda( &h, fila0, 0 );
+   int            pp, aa;
+
+   if ( k && ( k->tipo == XL_FECHA ||
+               ( k->tipo == XL_TXT && fecha( k->s, &pp, &aa ) ) ) )
+       { d->tiene_fechas = 1; col0 = 1; }
+   }
+
+   if ( h.ncol - col0 > DT_MAX_COL )
+       { xl_libre( &h ); falla( e, DT_EMUCHAS, 0, 0, "", DT_MAX_COL,
+                                h.ncol - col0 ); return 1; }
+
+   /* La cabecera. */
+   if ( fila0 > 0 )
+       {
+       int txt = 0;
+
+       for ( c = col0; c < h.ncol; c++ )
+           {
+           const XlCelda *k = xl_celda( &h, fila0 - 1, c );
+
+           if ( k && k->tipo == XL_TXT ) txt++;
+           }
+       if ( txt )
+           {
+           d->tiene_cabecera = 1;
+           for ( c = col0; c < h.ncol; c++ )
+               {
+               const XlCelda *k = xl_celda( &h, fila0 - 1, c );
+
+               /* El nombre se RECORTA a proposito si no cabe: es un nombre
+                  para enseñar, no una clave. Quien lo convierta en id de
+                  serie tendra que mirar si dos quedan iguales.        */
+               if ( k && k->tipo == XL_TXT )
+                   snprintf( d->nombre[c - col0], DT_NOMBRE, "%.*s",
+                             DT_NOMBRE - 1, k->s );
+               }
+           }
+       }
+
+   /* Los datos. */
+   for ( f = fila0; f < h.nfila; f++ )
+       {
+       int num = 0;
+
+       for ( c = col0; c < h.ncol; c++ )
+           {
+           const XlCelda *k = xl_celda( &h, f, c );
+
+           if ( k && k->tipo == XL_NUM ) num++;
+           }
+       /* Una fila sin ningun numero cierra la tabla: las descargas suelen
+          llevar notas al pie, y no son datos.                          */
+       if ( !num ) break;
+       if ( d->nobs >= DT_MAX_OBS )
+           { xl_libre( &h ); falla( e, DT_ELARGA, f + 1, 0, "", DT_MAX_OBS,
+                                    d->nobs + 1 ); return 1; }
+
+       if ( d->tiene_fechas )
+           {
+           const XlCelda *k = xl_celda( &h, f, 0 );
+           int            aa = 0, mm = 0, dd = 0, pp = 0;
+
+           if ( k && k->tipo == XL_FECHA )
+               xl_fecha( k->v, &aa, &mm, &dd );
+           else if ( k && k->tipo == XL_TXT && fecha( k->s, &pp, &aa ) )
+               mm = pp;
+
+           if ( vistas == 0 ) { a1 = aa; m1 = mm; }
+           else if ( vistas == 1 ) { a2 = aa; m2 = mm; }
+           vistas++;
+
+           snprintf( d->fecha[d->nobs], DT_FECHA, "%d/%d", mm, aa );
+           }
+
+       for ( c = col0; c < h.ncol; c++ )
+           {
+           const XlCelda *k = xl_celda( &h, f, c );
+
+           d->v[c - col0][d->nobs] = ( k && k->tipo == XL_NUM ) ? k->v : 0.0;
+           }
+       d->nobs++;
+       if ( d->ncol < h.ncol - col0 ) d->ncol = h.ncol - col0;
+       }
+
+   /* LA FRECUENCIA, DEL SALTO DE MESES. */
+   if ( vistas >= 2 && a1 > 0 )
+       {
+       int salto = ( a2 - a1 ) * 12 + ( m2 - m1 );
+
+       if ( salto == 1 )      d->freq = 12;
+       else if ( salto == 3 ) d->freq = 4;
+       else if ( salto == 12 ) d->freq = 1;
+
+       d->anio = a1;
+       if ( d->freq == 12 )     d->per = m1;
+       else if ( d->freq == 4 ) d->per = ( m1 - 1 ) / 3 + 1;
+       else                     d->per = 1;
+
+       /* Y las fechas, en el convenio de la casa: periodo/año. */
+       if ( d->freq == 4 )
+           for ( i = 0; i < d->nobs; i++ )
+               {
+               int mm, aa;
+
+               if ( sscanf( d->fecha[i], "%d/%d", &mm, &aa ) == 2 )
+                   snprintf( d->fecha[i], DT_FECHA, "%d/%d",
+                             ( mm - 1 ) / 3 + 1, aa );
+               }
+       else if ( d->freq == 1 )
+           for ( i = 0; i < d->nobs; i++ )
+               {
+               int mm, aa;
+
+               if ( sscanf( d->fecha[i], "%d/%d", &mm, &aa ) == 2 )
+                   snprintf( d->fecha[i], DT_FECHA, "1/%d", aa );
+               }
+       }
+
+   d->sep = ' ';
+   d->dec = '.';
+   xl_libre( &h );
+   if ( d->nobs == 0 ) { falla( e, DT_EVACIO, 0, 0, path, 0, 0 ); return 1; }
+   return 0;
+}
+
+/* Los cuatro bytes de un ZIP. Un .xlsx SE RECONOCE POR SU CONTENIDO y no por
+ * la extension: un libro con otro nombre se lee igual, y un texto llamado
+ * .xlsx no se toma por un libro.                                        */
+static int es_zip( const char *path )
+{
+   FILE         *f = fopen( path, "rb" );
+   unsigned char b[4];
+   int           si;
+
+   if ( f == NULL ) return 0;
+   si = ( fread( b, 1, 4, f ) == 4 && b[0] == 'P' && b[1] == 'K' &&
+          b[2] == 3 && b[3] == 4 );
+   fclose( f );
+   return si;
 }
 
 int dt_leer( const char *path, DtDatos *d, DtError *e )
@@ -151,6 +348,8 @@ int dt_leer( const char *path, DtDatos *d, DtError *e )
    d->sep = ' ';
    d->dec = '.';
    falla( e, DT_OK, 0, 0, "", 0, 0 );
+
+   if ( es_zip( path ) ) return dt_de_xlsx( path, d, e );
 
    f = fopen( path, "r" );
    if ( f == NULL ) { falla( e, DT_ENOFILE, 0, 0, path, 0, 0 ); return 1; }
@@ -330,6 +529,8 @@ const char *dt_error_es( const DtError *e, char *out, size_t n )
        case DT_EFECHA:
            snprintf( out, n, "Línea %d: «%s» no es una fecha, y las anteriores "
                      "sí lo eran.", e->linea, e->texto ); break;
+       case DT_EXLSX:
+           snprintf( out, n, "El libro no se pudo leer: %s", e->texto ); break;
        default:
            snprintf( out, n, "Error %d.", (int) e->cod ); break;
        }
@@ -364,6 +565,8 @@ const char *dt_error_en( const DtError *e, char *out, size_t n )
        case DT_EFECHA:
            snprintf( out, n, "line %d: %s is not a date", e->linea, e->texto );
            break;
+       case DT_EXLSX:
+           snprintf( out, n, "can not read the workbook: %s", e->texto ); break;
        default:
            snprintf( out, n, "error %d", (int) e->cod ); break;
        }

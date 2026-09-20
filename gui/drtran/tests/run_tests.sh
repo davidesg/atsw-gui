@@ -246,3 +246,30 @@ echo
 $CC -O2 -Wall -Wextra -I"$L/datos" \
     "$L/datos/test_datos.c" "$L/datos/datos.c" -o "$W/test_datos" || exit 1
 "$W/test_datos" "$W" || exit 1
+
+# --- el proyecto: la cadena de iteracion -----------------------------------
+# El nombre del fichero es CORTESIA: la identidad esta en el manifiesto.
+echo
+$CC -O2 -Wall -Wextra -I"$L/proyecto" \
+    "$L/proyecto/test_proyecto.c" "$L/proyecto/proyecto.c" \
+    -o "$W/test_proyecto" || exit 1
+"$W/test_proyecto" "$W" || exit 1
+
+# Y lo que hace convivir a las dos encarnaciones del taller: que el manifiesto
+# que escribimos lo lea un yaml.safe_load de Python, con sus acentos.
+if python3 -c "import yaml" 2>/dev/null; then
+    python3 - "$W/proyecto.yaml" <<'PY' || exit 1
+import sys, yaml
+d = yaml.safe_load(open(sys.argv[1]))
+assert d["id"] == "SF_MEG", d["id"]
+assert d["titulo"] == "Inflación del área euro", d["titulo"]
+assert d["series"]["IPC_ES"]["elegido"] == "m02"
+assert d["modelos"]["IPC_ES/m01"]["padre"] == "m00"
+assert d["modelos"]["IPC_ES/m01"]["version"] == 1
+sin = [k for k, v in d["modelos"].items() if not v.get("razon")]
+assert sin == ["IPC_ES/m00", "IPC_ES/m02"], sin
+print("  ok    yaml.safe_load de Python lee el manifiesto entero")
+PY
+else
+    echo "  (sin PyYAML: me salto la lectura desde Python)"
+fi

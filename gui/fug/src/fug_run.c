@@ -39,26 +39,51 @@ void fug_run_init(const char *argv0)
     }
 }
 
+/* DONDE ESTA EL MOTOR, y el orden importa.
+ *
+ * Se buscaba al lado del GUI y, si no, en el PATH. Pero EN EL MONOREPO EL
+ * MOTOR NO ESTA AL LADO: el GUI vive en gui/fug y el motor en engines/fug, asi
+ * que la busqueda de al lado fallaba siempre y mandaba el PATH.
+ *
+ * Y en el PATH podia haber --habia-- un fug 1.14 de una instalacion vieja, que
+ * NO CONOCE -B. Lo peor no es que lo rechace: es que SALE CON CODIGO 0, asi
+ * que el GUI creia que habia ido bien y se quedaba esperando unos graficos que
+ * nunca se hicieron. Eso es lo que parecia un cuelgue.
+ *
+ * Orden: la variable FUG manda --es un override explicito--, despues los
+ * sitios del arbol de compilacion, y por ultimo el PATH.               */
 const gchar *fug_program(void)
 {
     static gchar *program = NULL;
     const gchar *fug = g_getenv("FUG");
+#ifdef G_OS_WIN32
+    static const char *EXE = "fug.exe";
+#else
+    static const char *EXE = "fug";
+#endif
+    static const char *sitio[] = {
+        "%s",                        /* al lado, como estaba              */
+        "../../engines/fug/%s",      /* el monorepo: gui/fug -> engines/fug */
+        "../../engines/fug/bin/%s",
+        NULL
+    };
+    int i;
 
     if (fug && *fug)
         return fug;
-    if (program == NULL) {
-#ifdef G_OS_WIN32
-        gchar *near = gui_dir ? g_build_filename(gui_dir, "fug.exe", NULL) : NULL;
-#else
-        gchar *near = gui_dir ? g_build_filename(gui_dir, "fug", NULL) : NULL;
-#endif
-        if (near != NULL && g_file_test(near, G_FILE_TEST_IS_EXECUTABLE))
-            program = near;
-        else {
-            g_free(near);
-            program = g_strdup("fug");
-        }
+    if (program != NULL)
+        return program;
+
+    for (i = 0; gui_dir && sitio[i]; i++) {
+        gchar *rel = g_strdup_printf(sitio[i], EXE);
+        gchar *p   = g_build_filename(gui_dir, rel, NULL);
+
+        g_free(rel);
+        if (g_file_test(p, G_FILE_TEST_IS_EXECUTABLE)) { program = p; return program; }
+        g_free(p);
     }
+
+    program = g_strdup(EXE);
     return program;
 }
 

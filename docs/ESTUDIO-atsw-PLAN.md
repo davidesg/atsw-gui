@@ -415,7 +415,17 @@ porque habrá dos programas pidiéndoselo. Hacer la madre primero es diseñar
 un gestor para un solo cliente, que es como se diseñan los gestores que no
 sirven.
 
-### P4 — ¿Qué es «atsw»: un programa, o una familia?
+### P4 — ¿Qué es «atsw»: un programa, o una familia?  ▸ **RESUELTA (2026-09-20)**
+
+> **ATSW es un TALLER, y tiene dos encarnaciones:** ATSW GUI (motores en C,
+> multiplataforma, para educación y para el analista que quiere control total
+> del proceso) y ATSW Python (interfaz de última tecnología conducida por un
+> LLM, los mismos motores, **gestión de proyectos distinta**).
+> **Distribuciones separadas**: `pip install atsw` no trae el GUI. La familia
+> es `atsw`; el programa, `atsw_gui`.
+> El razonamiento y sus consecuencias, en `DISENO-madre.md` §10.
+
+El planteamiento original era éste:
 
 `atsw` ya existe como paquete paraguas de Python (1.3.0) que instala fue,
 pyfug, art, drtran y drvarma con sus tres asistentes. Si el GUI también se

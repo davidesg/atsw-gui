@@ -217,6 +217,32 @@ int pr_deriva( Proyecto *p, const char *serie, const char *padre,
                char *id_out, size_t nid, char *ruta_out, size_t nruta,
                PrError *e )
 {
+   return pr_deriva_rol( p, serie, padre, PR_MODELO, id_out, nid,
+                         ruta_out, nruta, e );
+}
+
+const char *pr_datos_de( const Proyecto *p, const char *serie )
+{
+   int i;
+
+   if ( p == NULL || serie == NULL ) return "";
+   for ( i = 0; i < p->nm; i++ )
+      if ( p->m[i].rol == PR_DATOS && strcmp( p->m[i].serie, serie ) == 0 )
+         return p->m[i].id;
+   return "";
+}
+
+int pr_es_datos( const Proyecto *p, const char *serie, const char *id )
+{
+   int i = pr_modelo_idx( p, serie, id );
+
+   return ( i >= 0 && p->m[i].rol == PR_DATOS );
+}
+
+int pr_deriva_rol( Proyecto *p, const char *serie, const char *padre,
+                   PrRol rol, char *id_out, size_t nid,
+                   char *ruta_out, size_t nruta, PrError *e )
+{
    char id[PR_ID];
    int  i, v = 0;
 
@@ -234,6 +260,11 @@ int pr_deriva( Proyecto *p, const char *serie, const char *padre,
        if ( strcmp( p->m[i].serie, serie ) == 0 && p->m[i].version >= v )
            v = p->m[i].version + 1;
 
+   /* m00 ES DE LOS DATOS, SIEMPRE. Un modelo nunca lo ocupa, ni siquiera en
+      una serie que llegase sin pasar por la carga: asi "m00 son los datos"
+      vale mirando el proyecto, y no hace falta saber en que orden se hizo. */
+   if ( rol != PR_DATOS && v == 0 ) v = 1;
+
    snprintf( id, sizeof id, "m%02d", v );
    while ( pr_modelo_idx( p, serie, id ) >= 0 )
        snprintf( id, sizeof id, "m%02d", ++v );
@@ -244,6 +275,7 @@ int pr_deriva( Proyecto *p, const char *serie, const char *padre,
    p->m[p->nm].version = v;
    /* EL LINAJE, SIN PREGUNTAR. Es lo minimo que no se puede perder. */
    snprintf( p->m[p->nm].padre, PR_ID, "%s", ( padre && *padre ) ? padre : "" );
+   p->m[p->nm].rol = rol;
    /* La razon NO se pone: "sin razon" tiene que verse como sin razon. */
    p->nm++;
 
@@ -268,7 +300,9 @@ int pr_sin_razon( const Proyecto *p, char ids[][PR_ID], int max )
 
    if ( p == NULL ) return 0;
    for ( i = 0; i < p->nm; i++ )
-       if ( p->m[i].razon[0] == '\0' )
+       /* Los DATOS no llevan razon porque no son una decision. Contarlos
+          entre los que la deben daria un aviso imposible de apagar.   */
+       if ( p->m[i].razon[0] == '\0' && p->m[i].rol != PR_DATOS )
            {
            if ( n < max )
                snprintf( ids[n], PR_ID, "%s/%s", p->m[i].serie, p->m[i].id );
@@ -328,6 +362,9 @@ int pr_escribir( const Proyecto *p, const char *path, PrError *e )
        fputc( '\n', f );
        fprintf( f, "    razon: " );  escribe_valor( f, p->m[i].razon );
        fputc( '\n', f );
+       /* El rol SOLO cuando no es lo normal: un manifiesto lleno de
+          "rol: modelo" no dice nada y se lee peor.                    */
+       if ( p->m[i].rol == PR_DATOS ) fprintf( f, "    rol: datos\n" );
        if ( p->m[i].creado[0] )
            { fprintf( f, "    creado: " ); escribe_valor( f, p->m[i].creado );
              fputc( '\n', f ); }
@@ -491,6 +528,9 @@ int pr_leer( const char *path, Proyecto *p, PrError *e )
                    snprintf( p->m[cur].razon, PR_RAZON, "%s", valor );
                else if ( strcmp( clave, "creado" ) == 0 )
                    snprintf( p->m[cur].creado, 16, "%s", valor );
+               else if ( strcmp( clave, "rol" ) == 0 )
+                   p->m[cur].rol = !strcmp( valor, "datos" ) ? PR_DATOS
+                                                             : PR_MODELO;
                else
                    { falla( e, PR_ECLAVE, nl, clave ); fclose( f ); return 1; }
                }

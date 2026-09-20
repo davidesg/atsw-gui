@@ -287,7 +287,10 @@ assert d["series"]["IPC_ES"]["elegido"] == "m02"
 assert d["modelos"]["IPC_ES/m01"]["padre"] == "m00"
 assert d["modelos"]["IPC_ES/m01"]["version"] == 1
 sin = [k for k, v in d["modelos"].items() if not v.get("razon")]
-assert sin == ["IPC_ES/m00", "IPC_ES/m02"], sin
+assert sin == ["IPC_ES/m00", "IPC_ES/m02", "SUELTA/m01"], sin
+# m00 son LOS DATOS, y lo dice el manifiesto: no se deduce del numero.
+assert d["modelos"]["IPC_ES/m00"]["rol"] == "datos"
+assert "rol" not in d["modelos"]["IPC_ES/m01"]
 print("  ok    yaml.safe_load de Python lee el manifiesto entero")
 PY
 else

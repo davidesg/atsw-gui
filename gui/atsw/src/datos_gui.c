@@ -93,9 +93,22 @@ static int escribe_inp( Atsw *a, const DtDatos *d, int col, const char *serie,
          pr_serie_add( a->p, serie, &e ) != 0 )
         { pr_error_es( &e, why, n ); return 1; }
 
-    /* La PRIMERA iteracion de esa serie: sin padre, porque no lo tiene.
-       El linaje empieza aqui.                                          */
-    if ( pr_deriva( a->p, serie, NULL, id, sizeof id, ruta, sizeof ruta, &e ) != 0 )
+    /* UNA SERIE TIENE UNOS DATOS, Y SON ESTOS. Volver a cargarla encima
+       cambiaria el suelo bajo modelos ya estimados sin que nada lo dijera:
+       el .out seguiria ahi, calculado sobre otros numeros. Asi que se para
+       y lo decide el analista -- otro nombre, u otro proyecto.         */
+    if ( pr_datos_de( a->p, serie )[0] )
+        { snprintf( why, n, "«%s» ya tiene datos en este proyecto. No los "
+                            "piso: cárgala con otro nombre, o en otro "
+                            "proyecto.", serie );
+          return 1; }
+
+    /* LA RAIZ DE LA CADENA SON LOS DATOS, y se declara como tal. No es un
+       modelo: nadie la eligio. Y NADIE LA EDITA -- quien vaya a especificar
+       deriva uno nuevo, asi que este .inp sigue estando para los graficos y
+       el linaje conserva su raiz.                                      */
+    if ( pr_deriva_rol( a->p, serie, NULL, PR_DATOS, id, sizeof id,
+                        ruta, sizeof ruta, &e ) != 0 )
         { pr_error_es( &e, why, n ); return 1; }
 
     dir = g_path_get_dirname( ruta );

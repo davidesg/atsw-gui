@@ -282,8 +282,76 @@ static void manda( Atsw *a, const char *programa, const char *para,
     atsw_lanza( a, programa, f );
 }
 
+/* A fue SE LE MANDA UN MODELO, NUNCA LOS DATOS.
+ *
+ * Especificar en fue y guardar reescribe el .inp. Si eso cayera sobre el nodo
+ * de DATOS, ese fichero dejaria de ser los datos: se perderia el .inp de los
+ * graficos y la cadena se quedaria sin raiz. Asi que si lo marcado son los
+ * datos se deriva un modelo ANTES de mandarlo, con su linaje ya puesto.   */
+/* A FUE SE VA A ESTIMAR, Y LOS DATOS NO SE ESTIMAN.
+ *
+ * m00 son los datos tal como entraron, y de ahi cuelga todo: es el .inp que
+ * fug dibuja y la raiz del linaje. Si fue escribiera encima, el proyecto se
+ * quedaria sin el uno y sin el otro. Asi que cuando lo que toca mandar son
+ * los datos, se DERIVA un modelo de ellos y va ese.
+ *
+ * Se mira el id EFECTIVO --el marcado, y si no el que la madre mandaria-- y
+ * no solo el marcado: recien cargada la serie no hay nada marcado, y ese es
+ * justo el caso en que el fichero que tocaba era el de los datos.      */
 static void on_fue( GtkButton *b, Atsw *a )
-     { (void)b; manda( a, "fue_gui", "estimarla", TRUE ); }
+{
+    gchar      *marca = marcada( a->l_modelos, 0 );
+    const char *id    = marca;
+
+    (void) b;
+    if ( a->hay && a->serie[0] && !id )
+        id = atsw_modelo_por_defecto( a->p, a->serie );
+
+    if ( a->hay && a->serie[0] && id && *id &&
+         pr_es_datos( a->p, a->serie, id ) )
+        {
+        PrError e;
+        char    nuevo[PR_ID], ruta[PR_RUTA], *dir;
+        gchar  *orig;
+
+        if ( pr_deriva( a->p, a->serie, id, nuevo, sizeof nuevo,
+                        ruta, sizeof ruta, &e ) != 0 )
+            { char why[512]; pr_error_es( &e, why, sizeof why );
+              barra_pub( a, why ); g_free( marca ); return; }
+
+        /* El .inp del modelo nuevo arranca siendo COPIA de los datos: es lo
+           que el analista va a especificar encima.                     */
+        dir = g_path_get_dirname( ruta );
+        g_mkdir_with_parents( dir, 0700 );
+        g_free( dir );
+
+        if ( pr_ruta( a->p, a->serie, id, ".inp", ( orig = g_malloc( PR_RUTA ) ),
+                      PR_RUTA ) == 0 )
+            {
+            gchar *c = NULL;
+            gsize  n = 0;
+
+            if ( g_file_get_contents( orig, &c, &n, NULL ) )
+                { g_file_set_contents( ruta, c, (gssize) n, NULL ); g_free( c ); }
+            }
+        g_free( orig );
+
+        pr_escribir( a->p, a->p->path, &e );
+        atsw_refresca( a );
+        atsw_lanza( a, "fue_gui", ruta );
+        {
+        gchar *s = g_strdup_printf( "%s: los datos no se tocan, así que va "
+                                    "%s, derivado de ellos.", a->serie, nuevo );
+
+        barra_pub( a, s );
+        g_free( s );
+        }
+        g_free( marca );
+        return;
+        }
+    g_free( marca );
+    manda( a, "fue_gui", "estimarla", TRUE );
+}
 /* A fug NO se le manda un .pre: se identifica antes de que haya modelo. */
 static void on_fug( GtkButton *b, Atsw *a )
      { (void)b; manda( a, "gtk_fmg", "identificarla", FALSE ); }

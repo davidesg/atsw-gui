@@ -16,6 +16,12 @@ const char *atsw_modelo_por_defecto( const Proyecto *p, const char *serie );
 
 static int fallos = 0;
 
+static void ok( int c, const char *que )
+{
+    printf( c ? "  ok    %s\n" : "  FALLO %s\n", que );
+    if ( !c ) fallos++;
+}
+
 static void es( const char *dio, const char *debe, const char *que )
 {
     int c = strcmp( dio, debe ) == 0;
@@ -38,14 +44,20 @@ int main( void )
     es( atsw_modelo_por_defecto( p, "EP" ), "",
         "una serie sin modelos: a nada" );
 
-    pr_deriva( p, "EP", NULL, id, sizeof id, ruta, sizeof ruta, &e );
+    /* Los datos son m00 y son un nodo mas: recien cargada la serie, el boton
+     * apunta a ellos. Es lo que quiere fug --se identifica sobre los datos--
+     * y es lo que on_fue tiene que ver para derivar en vez de pisarlos.  */
+    pr_deriva_rol( p, "EP", NULL, PR_DATOS, id, sizeof id, ruta, sizeof ruta, &e );
     es( atsw_modelo_por_defecto( p, "EP" ), "m00",
-        "con uno: a ese" );
+        "recien cargada: a los datos, que es lo unico que hay" );
+    ok( pr_es_datos( p, "EP", atsw_modelo_por_defecto( p, "EP" ) ),
+        "y se ve que lo son sin mirar el numero" );
 
     pr_deriva( p, "EP", "m00", id, sizeof id, ruta, sizeof ruta, &e );
     pr_deriva( p, "EP", "m01", id, sizeof id, ruta, sizeof ruta, &e );
     es( atsw_modelo_por_defecto( p, "EP" ), "m02",
-        "con tres: al ULTIMO, que es lo que casi siempre se quiere" );
+        "con dos modelos: al ULTIMO, que es lo que casi siempre se quiere" );
+    ok( !pr_es_datos( p, "EP", "m02" ), "y ese ya no son los datos" );
 
     pr_elige( p, "EP", "m01", "el SAR no se gana su sitio", &e );
     es( atsw_modelo_por_defecto( p, "EP" ), "m01",

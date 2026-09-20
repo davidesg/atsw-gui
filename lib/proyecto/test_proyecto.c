@@ -57,18 +57,31 @@ int main( int argc, char **argv )
     ok( pr_serie_add( p, "IPC_ES", &e ) != 0 && e.cod == PR_EDUP,
         "y dos veces no" );
 
+    /* m00 SON LOS DATOS. Los pone la carga, y de ahi cuelga todo.  */
+    ok( pr_deriva_rol( p, "IPC_ES", NULL, PR_DATOS, id, sizeof id,
+                       ruta, sizeof ruta, &e ) == 0, "los datos entran" );
+    es( id, "m00", "y son m00" );
+    ok( pr_es_datos( p, "IPC_ES", "m00" ), "y se sabe que lo son" );
+    es( pr_datos_de( p, "IPC_ES" ), "m00", "y se encuentran por la serie" );
+
     /* .inp(-1) -> .pre(-1) -> .inp(0) ... */
-    ok( pr_deriva( p, "IPC_ES", NULL, id, sizeof id, ruta, sizeof ruta, &e ) == 0,
-        "la primera iteración no tiene padre" );
-    es( id, "m00", "y se llama m00" );
     ok( pr_deriva( p, "IPC_ES", "m00", id, sizeof id, ruta, sizeof ruta, &e ) == 0,
-        "la segunda cuelga de la primera" );
+        "el primer modelo cuelga de los datos" );
     es( id, "m01", "y se llama m01" );
+    ok( !pr_es_datos( p, "IPC_ES", "m01" ), "y NO es datos" );
     pr_deriva( p, "IPC_ES", "m01", id, sizeof id, ruta, sizeof ruta, &e );
-    es( id, "m02", "y la tercera, m02" );
+    es( id, "m02", "y el segundo, m02" );
 
     ok( pr_deriva( p, "IPC_ES", "m99", id, sizeof id, NULL, 0, &e ) != 0 &&
         e.cod == PR_EPADRE, "un padre que no existe se rechaza" );
+    {
+    /* La reserva del m00 NO depende de que la carga haya pasado antes: una
+       serie que llega sin datos tampoco lo ocupa.                       */
+    pr_serie_add( p, "SUELTA", &e );
+    pr_deriva( p, "SUELTA", NULL, id, sizeof id, NULL, 0, &e );
+    es( id, "m01", "una serie sin datos: su primer modelo TAMBIEN es m01" );
+    es( pr_datos_de( p, "SUELTA" ), "", "y no tiene datos que dar" );
+    }
     ok( pr_deriva( p, "NO_ESTA", NULL, id, sizeof id, NULL, 0, &e ) != 0 &&
         e.cod == PR_ENOSERIE, "y una serie que no esta, tambien" );
 
@@ -93,8 +106,10 @@ int main( int argc, char **argv )
 
     printf( "\nLA RAZON: SE PIDE, NO SE EXIGE, Y SE VE CUANDO FALTA\n" );
     n = pr_sin_razon( p, sin, 16 );
-    ok( n == 3, "los tres nacen sin razon: no se inventa ninguna" );
-    es( sin[0], "IPC_ES/m00", "y se dicen con nombre y apellido" );
+    ok( n == 3, "los tres MODELOS nacen sin razon: no se inventa ninguna" );
+    es( sin[0], "IPC_ES/m01", "y se dicen con nombre y apellido" );
+    ok( pr_es_datos( p, "IPC_ES", "m00" ),
+        "los datos no estan entre ellos: no son una decision" );
 
     ok( pr_razon( p, "IPC_ES", "m01",
                   "el residuo de 2020-03 pedía intervención", &e ) == 0,
@@ -118,7 +133,10 @@ int main( int argc, char **argv )
     ok( pr_leer( path, q, &e ) == 0, "se lee" );
     es( q->id, "SF_MEG", "  el id" );
     es( q->titulo, "Inflación del área euro", "  el titulo, con sus acentos" );
-    ok( q->ns == 1 && q->nm == 3, "  una serie y tres modelos" );
+    ok( q->ns == 2 && q->nm == 4, "  dos series, los datos y tres modelos" );
+    ok( pr_es_datos( q, "IPC_ES", "m00" ), "  y m00 sigue siendo los datos" );
+    es( pr_datos_de( q, "IPC_ES" ), "m00", "  que se encuentran por la serie" );
+    ok( !pr_es_datos( q, "IPC_ES", "m01" ), "  mientras que m01 no lo es" );
     es( pr_elegido( q, "IPC_ES" ), "m02", "  el elegido" );
     {
     int i = pr_modelo_idx( q, "IPC_ES", "m02" );

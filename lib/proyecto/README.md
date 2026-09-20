@@ -41,10 +41,42 @@ estimación de un GUI se contesta `asdf` a la tercera, y **una razón falsa es
 peor que ninguna** porque no se distingue de una de verdad. Es la regla de la
 huella vacía del guion: *no consta* nunca significa *cuadra*.
 
+## `m00` son los datos, y el manifiesto lo dice
+
+La raíz de toda cadena es **los datos tal como entraron**, y no es un modelo:
+nadie la eligió, no lleva razón, y **nadie la edita**.
+
+```yaml
+  IPC_ES/m00:
+    version: 0
+    padre: ""
+    razon: ""
+    rol: datos          # <- SOLO cuando no es lo normal
+```
+
+Tres consecuencias, y las tres son reglas del código, no convenios de lectura:
+
+1. **`pr_deriva()` nunca devuelve `m00`.** Un modelo arranca en `m01` aunque la
+   serie llegara sin pasar por la carga. Así *«`m00` son los datos»* se
+   comprueba mirando el proyecto y no hay que saber en qué orden se hizo.
+2. **El rol se registra, no se deduce.** Saber que «versión 0 significa datos»
+   sería exactamente lo que el aviso de arriba prohíbe: si hay que parsear el
+   nombre —o el número— para saberlo, ese algo no está registrado.
+   `pr_es_datos()` y `pr_datos_de()` lo preguntan.
+3. **Quien vaya a especificar, deriva.** La madre manda a `fue` un modelo nuevo
+   colgado de los datos en vez del `.inp` de los datos: si `fue` escribiera
+   encima, el proyecto se quedaría sin el fichero que `fug` dibuja **y** sin la
+   raíz del linaje. Y una serie no se vuelve a cargar encima de sí misma —el
+   `.out` de los modelos ya estimados seguiría ahí, calculado sobre otros
+   números.
+
+El rol se escribe **sólo cuando no es el normal**: un manifiesto lleno de
+`rol: modelo` no dice nada y se lee peor.
+
 ## La cadena que esto registra
 
 ```
-.inp(-1) ──estimar──→ .pre(-1) ──copiar──→ .inp(0) ──estimar──→ .pre(0) …
+datos(m00) ──derivar──→ .inp(m01) ──estimar──→ .pre(m01) ──copiar──→ .inp(m02) …
 ```
 
 `.pre` e `.inp` **son el mismo formato** —verificado: se copia un `.pre` a
@@ -84,6 +116,7 @@ modelos:
     version: 0
     padre: ""
     razon: ""
+    rol: datos
   IPC_ES/m01:
     version: 1
     padre: m00

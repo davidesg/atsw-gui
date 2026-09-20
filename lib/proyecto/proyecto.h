@@ -93,14 +93,35 @@ typedef struct {
    char     texto[PR_TEXTO];      /* la clave, el nombre, lo que sea      */
 } PrError;
 
+/* EL ROL DE UN NODO DE LA CADENA.
+ *
+ * LA RAIZ DEL LINAJE SON LOS DATOS, Y ESO NO ES UN MODELO. Todo modelo es una
+ * eleccion del analista; los datos no lo son. Si la cadena empezara en algo
+ * que alguien eligio no habria donde volver: con un nodo de DATOS, pr_camino
+ * siempre acaba en «esto es lo que entro».
+ *
+ * Y HAY UN DAÑO CONCRETO QUE ESTO EVITA. Sin el, el primer .inp servia a la
+ * vez de datos y de primera especificacion: en cuanto el analista guardaba un
+ * modelo en fue, ese fichero dejaba de ser los datos. Se perdia el .inp de los
+ * graficos Y la cadena se quedaba sin raiz.
+ *
+ * SE DECLARA, NO SE DEDUCE. Podria bastar con «version 0 son los datos», pero
+ * eso es una convencion que hay que saber -- y si hay que saberla, no esta
+ * registrada. Es la misma regla que hizo del numero de version un campo.  */
+typedef enum {
+   PR_MODELO = 0,     /* una especificacion: una DECISION del analista     */
+   PR_DATOS           /* los datos tal como entraron. NADIE los edita.     */
+} PrRol;
+
 /* Un modelo: UNA iteracion de la cadena. */
 typedef struct {
-   char id[PR_ID];                /* la CLAVE. "m03". No se parsea.       */
-   char serie[PR_ID];
-   int  version;                  /* el numero, COMO CAMPO                */
-   char padre[PR_ID];             /* "" si es raiz                        */
-   char razon[PR_RAZON];          /* "" si no consta. NO se rellena.      */
-   char creado[16];               /* AAAA-MM-DD                           */
+   char  id[PR_ID];               /* la CLAVE. "m03". No se parsea.       */
+   char  serie[PR_ID];
+   int   version;                 /* el numero, COMO CAMPO                */
+   char  padre[PR_ID];            /* "" si es raiz                        */
+   char  razon[PR_RAZON];         /* "" si no consta. NO se rellena.      */
+   char  creado[16];              /* AAAA-MM-DD                           */
+   PrRol rol;                     /* datos o modelo. Ver PrRol.           */
 } PrModelo;
 
 typedef struct {
@@ -171,6 +192,19 @@ int  pr_elige( Proyecto *p, const char *serie, const char *id,
 int pr_deriva( Proyecto *p, const char *serie, const char *padre,
                char *id_out, size_t nid, char *ruta_out, size_t nruta,
                PrError *e );
+
+/* La misma iteracion, pero declarando su ROL. pr_deriva es esta con
+ * PR_MODELO: la que se usa casi siempre.                                */
+int pr_deriva_rol( Proyecto *p, const char *serie, const char *padre,
+                   PrRol rol, char *id_out, size_t nid,
+                   char *ruta_out, size_t nruta, PrError *e );
+
+/* El nodo de DATOS de una serie, si lo tiene. "" si no.                 */
+const char *pr_datos_de( const Proyecto *p, const char *serie );
+
+/* Si ese nodo son los datos. Los datos NO SE EDITAN: quien vaya a
+ * especificar un modelo tiene que derivar uno nuevo.                    */
+int pr_es_datos( const Proyecto *p, const char *serie, const char *id );
 
 /* La razon, DESPUES. Se puede no llamar nunca.                           */
 int pr_razon( Proyecto *p, const char *serie, const char *id,

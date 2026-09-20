@@ -194,6 +194,14 @@ gboolean atsw_itera( Atsw *a, const char *serie, const char *padre,
                              "primera iteración la trae fue." );
         return FALSE;
         }
+    /* De los DATOS no se itera: no tienen .pre porque no se estiman. Decir
+       «ese modelo no se ha estimado» seria cierto y no ayudaria nada.   */
+    if ( pr_es_datos( a->p, serie, padre ) )
+        {
+        if ( why ) snprintf( why, n, "Los datos no se iteran. Mándalos a fue "
+                             "y de ellos sale el primer modelo." );
+        return FALSE;
+        }
     if ( pr_ruta( a->p, serie, padre, ".pre", origen, sizeof origen ) != 0 )
         { if ( why ) snprintf( why, n, "No pude componer la ruta." );
           return FALSE; }

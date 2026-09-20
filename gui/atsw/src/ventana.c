@@ -240,7 +240,12 @@ static void pinta_modelos( Atsw *a )
             M_BLANCO,   ( r && r->hay ) ? ( r->blanco ? "sí" : "NO" ) : "—",
             /* "SIN RAZON" SE VE COMO SIN RAZON. Nunca se infiere ni se
                rellena: es la regla de la huella vacia del guion.        */
-            M_RAZON,    m->razon[0] ? m->razon : "(sin razón)",
+            /* LOS DATOS SE DICEN. Un nodo sin razon y sin estimar podria
+             * parecer un modelo a medias, y no lo es: es la raiz, y no se
+             * edita.                                                   */
+            M_RAZON,    m->rol == PR_DATOS
+                        ? "los datos, tal como entraron — no se editan"
+                        : ( m->razon[0] ? m->razon : "(sin razón)" ),
             M_ESTRELLA, ( eleg && !strcmp( eleg, m->id ) ) ? "★" : "",
             -1 );
 
@@ -256,7 +261,7 @@ static void pinta_modelos( Atsw *a )
 static void pinta_veredictos( Atsw *a )
 {
     char sin[32][PR_ID];
-    int  n, i, estimados = 0, elegidos = 0;
+    int  n, i, estimados = 0, elegidos = 0, datos = 0;
 
     if ( !a->hay )
         {
@@ -266,10 +271,14 @@ static void pinta_veredictos( Atsw *a )
         return;
         }
 
+    /* Los DATOS no son un modelo sin estimar: no se estiman. Contarlos
+     * entre los pendientes daria un aviso que nunca se puede apagar.  */
     for ( i = 0; i < a->p->nm; i++ )
         {
-        const AtRes *r = atsw_resultado( a, a->p->m[i].serie, a->p->m[i].id );
+        const AtRes *r;
 
+        if ( a->p->m[i].rol == PR_DATOS ) { datos++; continue; }
+        r = atsw_resultado( a, a->p->m[i].serie, a->p->m[i].id );
         if ( r && r->hay ) estimados++;
         }
     for ( i = 0; i < a->p->ns; i++ )
@@ -278,7 +287,7 @@ static void pinta_veredictos( Atsw *a )
     verdicto( a->ver_cuenta, a->p->ns ? AT_VERDE : AT_AMBAR,
         "%d serie%s, %d modelo%s, %d estimado%s · %d con el elegido declarado",
         a->p->ns, a->p->ns == 1 ? "" : "s",
-        a->p->nm, a->p->nm == 1 ? "" : "s",
+        a->p->nm - datos, a->p->nm - datos == 1 ? "" : "s",
         estimados, estimados == 1 ? "" : "s", elegidos );
 
     /* El segundo ELIGE lo que hay que mirar, en orden de gravedad. */
@@ -293,17 +302,21 @@ static void pinta_veredictos( Atsw *a )
         verdicto( a->ver_ojo, AT_AMBAR,
             "%d iteración%s sin razón (%s%s). El linaje está; el porqué, no.",
             n, n == 1 ? "" : "es", sin[0], n > 1 ? ", …" : "" );
-    else if ( a->p->nm && estimados < a->p->nm )
+    else if ( a->p->nm - datos > estimados )
         verdicto( a->ver_ojo, AT_AMBAR,
             "%d modelo%s declarado%s pero sin estimar.",
-            a->p->nm - estimados, a->p->nm - estimados == 1 ? "" : "s",
-            a->p->nm - estimados == 1 ? "" : "s" );
-    else if ( a->p->nm )
+            a->p->nm - datos - estimados,
+            a->p->nm - datos - estimados == 1 ? "" : "s",
+            a->p->nm - datos - estimados == 1 ? "" : "s" );
+    else if ( a->p->nm - datos )
         verdicto( a->ver_ojo, AT_VERDE,
             "Todo estimado, con su razón y con su elegido." );
     else
         verdicto( a->ver_ojo, AT_AMBAR,
-            "Todavía no hay modelos: abre una serie en fue." );
+            datos   ? "Los datos están; no hay ningún modelo todavía. Marca "
+                      "una serie y mándala a fue."
+          : a->p->ns ? "Hay series, pero ningún fichero: cárgalas con «Datos…»."
+                     : "Todavía no hay series: «Datos…»." );
 }
 
 void atsw_refresca( Atsw *a )

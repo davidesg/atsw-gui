@@ -14,6 +14,12 @@
 #include "outdiag.h"
 #include "outfcst.h"
 
+/* El directorio de trabajo, bajo la cache del usuario: los .dag, .cns, .out,
+ * los residuos y los EPS que se ensenan. Se llama COMO EL PROGRAMA, y el
+ * programa se llama como su motor -- "mtram" es el servidor MCP de
+ * drtran-python, y en esta suite un nombre senala una cosa sola.       */
+#define GUI_CACHE "drtran_gui"
+
 #define IDENT_MAX_LAGS 64
 
 /* La pantalla de identificacion.
@@ -120,13 +126,70 @@ typedef struct {
 /* La pantalla de diagnosis. Los residuos son los de ESTA corrida: TASTE tenia
  * una sola ranura 'RESIDUOS' (TASTECTV.PAS:475) y por eso no se podian comparar
  * dos modelos. Aqui cada .out trae los suyos.                            */
+/* Las paginas, en el orden del metodo. La diagnosis las nombra porque su
+ * veredicto dice A DONDE VOLVER.                                        */
+enum { PG_SERIES, PG_IDENT, PG_RED, PG_MODELO, PG_ESTIMA, PG_DIAG, PG_PREV };
+
+/* La pagina Diagnosis.
+ *
+ * Seis pestañas EN EL ORDEN DE LAS PREGUNTAS del analista, que va de lo que
+ * INVALIDA el modelo a lo que lo matiza:
+ *
+ *   1 exogeneidad   ¿transferencia, o esto es un VARMA?
+ *   2 adecuacion    ¿la forma (b,r,s) agota la relacion?
+ *   3 ajuste        ¿aportan algo las transferencias? (LR contra el diagonal)
+ *   4 residuos      ¿son ruido blanco?
+ *   5 modelo        los parametros, con su d.t. -- y de donde viene cada uno
+ *   6 salida        el .out entero
+ *
+ * Si (1) falla, las otras cinco no importan.                            */
 typedef struct {
-    GtkWidget *lista;         /* los contrastes, uno por linea              */
-    GtkWidget *veredicto;     /* que hay que hacer con esto                 */
+    GtkWidget *libreta;
+    GtkWidget *l_exo, *l_ade, *l_res, *l_par, *l_aju;  /* las cinco listas  */
+    GtkWidget *l_lr;          /* el LR, encima de la tabla de ajuste        */
+    GtkWidget *t_out;
+    GtkWidget *ver_global, *ver_ojo;
+    GtkWidget *b_volver, *l_ecu;
+
+    int        ir_a;          /* la pagina a la que hay que volver, o -1    */
+    int        actual;        /* la ecuacion en la que se esta, 1..n        */
 
     Diagnosis  d;
-    gboolean   vale;
+    OdResiduos res;           /* los residuos, como NUMEROS                 */
+    OdParams   par;           /* la tabla con las desviaciones tipicas      */
+    gboolean   vale, hay_res, hay_par;
     gchar     *path;          /* el .out del que salio                      */
+
+    /* EL BASELINE: el modelo DIAGONAL. Contesta "¿aportan algo las
+     * transferencias?" de tres formas, y la escuela cierra cada caso con las
+     * tres (Brajin 6.4, Muñoz 6.4.1):
+     *
+     *   LR = 2(logL - logL_base) ~ chi2(k)   -- el diagonal esta ANIDADO
+     *   la desviacion tipica residual, que pasa de una a otra
+     *   el R² de Brajin (A.28), que pasa de una a otra
+     *
+     * EL R² SI TIENE SENTIDO, Y ES ESTE. Va sobre la serie ESTACIONARIA
+     *
+     *     R² = 1 - SUM (a_t - abar)² / SUM (w_t - wbar)²,  w = nabla^d z
+     *
+     * y no sobre el nivel: sobre el nivel de una I(1) sale cerca de 1 por
+     * construccion y no dice nada. El denominador es PROPIEDAD DE LOS DATOS
+     * --no lleva parametros-- asi que es el mismo en las dos estimaciones y
+     * por eso los dos R² se pueden comparar. Deja de ser comparable entre d
+     * distintas, donde w_t es otra variable: es una TRANSICION entre dos
+     * ajustes de una especificacion, nunca una nota para ordenar modelos.  */
+    double     logl_base;
+    int        npar_base;
+    gboolean   hay_base;
+    char       base_que[80];
+    OdResiduos res_base;      /* los residuos del diagonal: de ahi el R² y  */
+    gboolean   hay_res_base;  /* la d.t. "univariante" de cada ecuacion     */
+
+    /* La corrida en marcha es la del baseline, pedida desde aqui: al acabar
+     * se fija sola y se vuelve a dejar el modo como estaba. Sin esto habia
+     * que ir a Estimacion, marcar Diagonal, estimar, volver, fijar, ir otra
+     * vez, desmarcar y estimar -- ocho pasos para un boton.            */
+    gboolean   pidiendo_base;
 } Diag;
 
 /* La pantalla de prevision y evaluacion.
@@ -137,6 +200,7 @@ typedef struct {
 typedef struct {
     GtkWidget *lista;         /* el error por horizonte                     */
     GtkWidget *texto;         /* la prevision y lo que significa            */
+    GtkWidget *b_calc;        /* Calcular: LANZA EL MOTOR desde aqui        */
     GtkWidget *c_prever, *c_eval, *s_hor, *s_win;
 
     Forecast   f;
@@ -157,6 +221,7 @@ typedef struct {
     GtkWidget *ver_ventana;   /* veredicto: la ventana comun, UNA linea     */
     GtkWidget *ver_oper;      /* veredicto: los operadores, UNA linea       */
     GtkWidget *estado;        /* la barra de abajo                          */
+    GtkWidget *libro;         /* el cuaderno: la diagnosis lo usa para volver */
     Conjunto   c;             /* las series cargadas                        */
     gboolean   recolocando;   /* repintando la lista: no leer su orden      */
     Red        red;           /* la pantalla de la red                      */
@@ -218,6 +283,13 @@ void       modelo_refresca(Mtram *m);
 /* estima.c */
 GtkWidget *estima_pagina_new(Mtram *m);
 void       estima_refresca(Mtram *m);
+
+/* LANZA EL MOTOR, desde donde sea. La orden la arman entre varias paginas
+ * --Prevision pone -f y -C, Diagnosis quiere el -e-- asi que obligar a ir a
+ * la pagina 5 a pulsar un boton es contrario a la regla: cada pantalla
+ * fabrica lo que la siguiente pide, y si una necesita una corrida, la pide.
+ * Devuelve TRUE si arranco.                                            */
+gboolean   estima_lanzar(Mtram *m);
 
 /* prevision.c */
 GtkWidget *prevision_pagina_new(Mtram *m);

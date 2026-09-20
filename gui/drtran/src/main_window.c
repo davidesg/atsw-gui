@@ -212,6 +212,11 @@ static void refresca(Mtram *m)
     identifica_refresca(m);
     modelo_refresca(m);
     estima_refresca(m);
+    /* Y las dos ultimas: los nombres de las ecuaciones, el recorrido por el
+     * grafo y el menu de CCF salen de las series y de la red; y el boton
+     * Calcular de Prevision, de si el motor esta corriendo.            */
+    diagnosis_refresca(m);
+    prevision_refresca(m);
 }
 
 void mtram_refresca(Mtram *m) { refresca(m); }
@@ -751,6 +756,7 @@ GtkWidget *mtram_window_new(GtkApplication *app, Mtram *m)
     gtk_container_add(GTK_CONTAINER(w), raiz);
 
     libro = gtk_notebook_new();
+    m->libro = libro;
     gtk_box_pack_start(GTK_BOX(raiz), libro, TRUE, TRUE, 0);
 
     caja = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);

@@ -282,10 +282,10 @@ static void on_ccf( GtkButton *b, Mtram *m )
 
     /* El EPS se escribe de verdad, y es el que se ve: lib/preview interpreta
      * el fichero de fugdraw, asi que la pantalla y el papel no discrepan. */
-    path = g_build_filename( g_get_user_cache_dir(), "mtram", NULL );
+    path = g_build_filename( g_get_user_cache_dir(), GUI_CACHE, NULL );
     g_mkdir_with_parents( path, 0700 );
     g_free( path );
-    path = g_build_filename( g_get_user_cache_dir(), "mtram", "ccf.eps", NULL );
+    path = g_build_filename( g_get_user_cache_dir(), GUI_CACHE, "ccf.eps", NULL );
 
     if (ccf_write_eps( path, u->ccf, u->nlags, u->n,
                        m->c.s[u->serie]->ts.name, m->c.s[0]->ts.name,

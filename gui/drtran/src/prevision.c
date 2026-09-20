@@ -86,7 +86,8 @@ static void refresca_texto( Mtram *m )
 
     if (!P->vale) {
         gtk_label_set_text( GTK_LABEL(P->texto),
-            "Marca «Prever» y estima: la previsión sale del mismo .out." );
+            "Pulsa «Calcular»: la previsión sale de la misma corrida del\n"
+            "motor que la estimación, y el botón la pide él solo." );
         g_string_free( t, TRUE );
         return;
     }
@@ -148,9 +149,9 @@ static void refresca_texto( Mtram *m )
             P->f.ev.salida, P->f.ev.origenes, P->f.ev.desde, P->f.ev.hasta );
     else
         g_string_append( t,
-            "\n\nSin evaluación fuera de muestra. Marca «Evaluar» y da una "
-            "ventana de estimación:\nlas bandas de arriba no se pueden "
-            "contrastar con nada mientras no la haya." );
+            "\n\nSin evaluación fuera de muestra. Marca «Evaluar», da una "
+            "ventana de estimación y pulsa\n«Calcular»: las bandas de arriba no "
+            "se pueden contrastar con nada mientras no la haya." );
 
     if (P->tiene_ref)
         g_string_append_printf( t,
@@ -165,6 +166,11 @@ void prevision_refresca( Mtram *m )
 {
     refresca_tabla( m );
     refresca_texto( m );
+
+    /* El boton se apaga mientras el motor corre: no hay dos corridas a la vez,
+     * y un boton que se puede pulsar y no hace nada miente.             */
+    if (m->prev.b_calc)
+        gtk_widget_set_sensitive( m->prev.b_calc, !m->est.corriendo );
 }
 
 /* La llama la estimacion al acabar, con SU .out. */
@@ -187,15 +193,15 @@ static void on_guardar_ref( GtkButton *b, Mtram *m )
 
     if (!P->vale || !P->f.tiene_ev) {
         preview_show_status( m, "No hay evaluación que guardar: marca "
-                                "«Evaluar» y estima." );
+                                "«Evaluar», da una ventana y pulsa «Calcular»." );
         return;
     }
     P->ref = P->f.ev;
     P->tiene_ref = TRUE;
     snprintf( P->ref_que, sizeof P->ref_que, "%d enlaces, %d orígenes",
               m->red.n, P->f.ev.origenes );
-    preview_show_status( m, "Guardada. Cambia el modelo, vuelve a estimar y la "
-                            "tabla dirá si mejora." );
+    preview_show_status( m, "Guardada. Cambia el modelo, vuelve a pulsar "
+                            "«Calcular» y la tabla dirá si mejora." );
     prevision_refresca( m );
 }
 
@@ -203,6 +209,44 @@ static void on_olvidar_ref( GtkButton *b, Mtram *m )
 {
     m->prev.tiene_ref = FALSE;
     prevision_refresca( m );
+}
+
+/* CALCULAR DESDE AQUI.
+ *
+ * La prevision no se calcula aparte: sale de la MISMA corrida del motor que la
+ * estimacion, porque drtran la hace en la misma pasada. Pero eso obligaba a
+ * marcar la casilla aqui, irse a la pagina 5, pulsar «Estimar» y volver -- y
+ * la casilla no dice en ninguna parte que haya que hacer ese viaje.
+ *
+ * Asi que el boton lo hace entero: marca lo que haga falta y lanza. Es la
+ * regla del diseño, la de TASTE: cada pantalla fabrica lo que pide, y no manda
+ * al analista a otra pagina a buscar el interruptor.                     */
+static void on_calcular( GtkButton *b, Mtram *m )
+{
+    Prev *P = &m->prev;
+
+    if (m->est.corriendo) {
+        preview_show_status( m, "El motor ya está corriendo." );
+        return;
+    }
+
+    /* Si no hay nada marcado, marcar «Prever» es lo unico que el boton puede
+     * querer decir. No se pregunta: se hace, y se ve marcado.          */
+    if (!P->prever && !P->evaluar)
+        gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(P->c_prever), TRUE );
+
+    if (P->evaluar && P->ventana <= 0) {
+        preview_show_status( m, "La evaluación necesita una ventana de "
+            "estimación: ponla en «ventana», o desmarca «Evaluar»." );
+        return;
+    }
+
+    if (estima_lanzar( m )) {
+        prevision_refresca( m );        /* apaga el boton mientras corre */
+        preview_show_status( m, "Estimando con %s… la tabla se llena al "
+            "acabar; la consola está en Estimación.",
+            P->evaluar ? "previsión y evaluación" : "previsión" );
+    }
 }
 
 static void on_cambio( GtkWidget *w, Mtram *m )
@@ -239,6 +283,7 @@ GtkWidget *prevision_pagina_new( Mtram *m )
     GtkWidget    *caja, *barra, *b, *sc, *marco, *vb;
     GtkListStore *st;
 
+    P->b_calc = NULL;
     P->vale = P->tiene_ref = FALSE;
     P->prever = P->evaluar = FALSE;
     P->horizonte = 8;
@@ -250,6 +295,19 @@ GtkWidget *prevision_pagina_new( Mtram *m )
 
     barra = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 6 );
     gtk_box_pack_start( GTK_BOX(caja), barra, FALSE, FALSE, 0 );
+
+    /* EL BOTON VA PRIMERO, porque es lo que se viene a hacer aqui. Lo demas
+     * de la barra son sus ajustes.                                      */
+    P->b_calc = gtk_button_new_with_label( "Calcular" );
+    gtk_widget_set_tooltip_text( P->b_calc,
+        "Lanza drtran pidiéndole la previsión. Sale de la MISMA corrida que "
+        "la estimación —el motor la hace en la misma pasada—, así que no hay "
+        "que ir a la página de Estimación a pulsar nada." );
+    g_signal_connect( P->b_calc, "clicked", G_CALLBACK(on_calcular), m );
+    gtk_box_pack_start( GTK_BOX(barra), P->b_calc, FALSE, FALSE, 0 );
+
+    gtk_box_pack_start( GTK_BOX(barra), gtk_separator_new(
+                            GTK_ORIENTATION_VERTICAL ), FALSE, FALSE, 6 );
 
     P->c_prever = gtk_check_button_new_with_label( "Prever (-f)" );
     gtk_widget_set_tooltip_text( P->c_prever,

@@ -203,3 +203,24 @@ echo
 $CC -O2 -Wall -Wextra -I"$L/nsop" \
     "$L/nsop/test_nsop.c" "$L/nsop/nsop.c" -o "$W/test_nsop" -lm || exit 1
 "$W/test_nsop" || exit 1
+
+# --- el R² de Brajin --------------------------------------------------------
+# La bondad del ajuste que la escuela usa: sobre la serie ESTACIONARIA, con un
+# denominador que es propiedad de los DATOS. Que ese denominador no se mueva
+# entre las dos corridas es lo unico que hace comparables los dos R².
+echo
+$CC -O2 -w -I"$TOP/include" -I"$E/include" -I"$L/outdiag" -I"$L/gof" -I"$L/dates" \
+    "$TOP/tests/test_gof.c" "$L/gof/gof.c" "$L/outdiag/outdiag.c" \
+    "$E/src/fue_pre_reader.c" "$E/src/nlatools.c" "$L/dates/dates.c" \
+    -o "$W/test_gof" -lgsl -lgslcblas -lm || exit 1
+
+DR="$E/bin/drtran"
+if [ -x "$DR" ] && [ -d "$M6" ]; then
+    S="$M6/M6_EP.pre $M6/M6_EI.pre $M6/M6_EU.pre $M6/M6_EC.pre $M6/M6_EA.pre $M6/M6_P.pre"
+    $DR $S -n "$M6/m6_net.dag" -c "$M6/m6_net.cns" \
+        -e "$W/gof_t.txt" -o "$W/gof_t.out" >/dev/null 2>&1
+    $DR $S -0 -e "$W/gof_d.txt" -o "$W/gof_d.out" >/dev/null 2>&1
+    "$W/test_gof" "$M6" "$W/gof_t.txt" "$W/gof_d.txt" || exit 1
+else
+    echo "  sin drtran compilado en $DR, me salto el R²"
+fi

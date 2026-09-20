@@ -56,7 +56,7 @@
 
 static gchar *trabajo( void )
 {
-    gchar *d = g_build_filename( g_get_user_cache_dir(), "mtram", NULL );
+    gchar *d = g_build_filename( g_get_user_cache_dir(), GUI_CACHE, NULL );
 
     g_mkdir_with_parents( d, 0700 );
     return d;
@@ -128,10 +128,24 @@ static gchar **arma_argv( Mtram *m, const gchar *dag, const gchar *cns,
     g_ptr_array_add( a, g_strdup( "-o" ) );
     g_ptr_array_add( a, g_strdup( *out ) );
 
-    if (dag) { g_ptr_array_add( a, g_strdup( "-n" ) );
-               g_ptr_array_add( a, g_strdup( dag ) ); }
-    if (cns) { g_ptr_array_add( a, g_strdup( "-c" ) );
-               g_ptr_array_add( a, g_strdup( cns ) ); }
+    /* EL DIAGONAL NO LLEVA NI RED NI RESTRICCIONES, y no es una economia: es
+     * lo que ES. El baseline contra el que se contrasta son las mismas series
+     * con sus modelos univariantes del .pre y NADA mas -- es el ajuste cuya
+     * verosimilitud tiene que coincidir con la suma de las de fue, que es la
+     * puerta que certifica el puente. Un .cns que ata omegas ni siquiera
+     * nombra slots que existan aqui.                                     */
+    if (!m->est.diagonal) {
+        if (dag) { g_ptr_array_add( a, g_strdup( "-n" ) );
+                   g_ptr_array_add( a, g_strdup( dag ) ); }
+        if (cns) { g_ptr_array_add( a, g_strdup( "-c" ) );
+                   g_ptr_array_add( a, g_strdup( cns ) ); }
+    }
+
+    /* Los residuos, COMO NUMEROS. Van siempre: es lo que Diagnosis dibuja con
+     * la bateria de fue, y sacarlos de la columna derecha del grafico ASCII
+     * del .out seria construir un grafico a partir de otro grafico.     */
+    g_ptr_array_add( a, g_strdup( "-e" ) );
+    g_ptr_array_add( a, g_build_filename( d, "residuos.txt", NULL ) );
 
     /* La prevision y la evaluacion las pide la pestaña Prevision; van en la
      * MISMA corrida porque el motor las hace en la misma pasada.       */
@@ -482,7 +496,19 @@ static void on_done( const EngineResult *r, gpointer data )
         preview_show_status( m, "%s", r->message ? r->message : "" );
 }
 
-static void on_estimar( GtkButton *b, Mtram *m )
+/* LANZAR NO ES PROPIEDAD DE UN BOTON.
+ *
+ * Esto estaba dentro del manejador de «Estimar», asi que la unica forma de
+ * correr el motor era ir a la pagina 5 y pulsar alli. Pero la orden la arman
+ * entre varias paginas --Prevision pone -f y -C, Diagnosis quiere el -e-- y
+ * obligar a marcar una casilla aqui y volver alla es justo lo que la regla del
+ * diseño dice que no: cada pantalla fabrica lo que la siguiente pide, y si una
+ * pantalla necesita una corrida, puede pedirla.
+ *
+ * Devuelve TRUE si el motor arranco. Quien llame no tiene que estar en la
+ * pagina de estimacion: la consola se llena igual y, al acabar, on_done
+ * refresca todas.                                                        */
+gboolean estima_lanzar( Mtram *m )
 {
     Estima  *E = &m->est;
     gchar   *dag = NULL, *cns = NULL, *out = NULL, **argv, *d;
@@ -490,15 +516,15 @@ static void on_estimar( GtkButton *b, Mtram *m )
     GString *aviso;
     int      i;
 
-    if (E->corriendo) return;
+    if (E->corriendo) return FALSE;
     if (m->c.n < 2) {
         preview_show_status( m, "Carga al menos dos .pre." );
-        return;
+        return FALSE;
     }
 
     if (!artefactos( m, &dag, &cns, why, sizeof why )) {
         preview_show_status( m, "%s", why );
-        return;
+        return FALSE;
     }
 
     argv = arma_argv( m, dag, cns, &out );
@@ -544,6 +570,12 @@ static void on_estimar( GtkButton *b, Mtram *m )
 
     g_strfreev( argv );
     g_free( out ); g_free( dag ); g_free( cns );
+    return E->corriendo;
+}
+
+static void on_estimar( GtkButton *b, Mtram *m )
+{
+    estima_lanzar( m );
 }
 
 /* El .out, EN SU PESTAÑA.

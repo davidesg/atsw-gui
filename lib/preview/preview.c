@@ -49,6 +49,8 @@ typedef struct {
     PreviewApp *app;
     GtkWidget  *window, *area, *scroller, *prev, *next, *page_label, *page_item;
     GtkWidget  *zoom_label;
+    GtkWidget  *vbox;          /* para colgarle un pie                    */
+    GtkWidget  *footer;        /* los controles del que la abrio, o NULL  */
     gchar      *path;          /* file shown                              */
     gboolean    is_pdf;
     GArray     *pages;         /* of Page                                 */
@@ -770,6 +772,25 @@ guint preview_n_pages(const gchar *path)
     return pv ? pv->pages->len : 0;
 }
 
+gboolean preview_set_footer(const gchar *path, GtkWidget *footer)
+{
+    Preview *pv = previews ? g_hash_table_lookup(previews, path) : NULL;
+
+    if (pv == NULL || pv->vbox == NULL) return FALSE;
+
+    if (pv->footer != NULL) {
+        gtk_widget_destroy(pv->footer);
+        pv->footer = NULL;
+    }
+    if (footer != NULL) {
+        /* pack_end: AL PIE, debajo del dibujo. */
+        gtk_box_pack_end(GTK_BOX(pv->vbox), footer, FALSE, FALSE, 0);
+        gtk_widget_show_all(footer);
+        pv->footer = footer;
+    }
+    return TRUE;
+}
+
 /* Change the extension of the name typed when the file type is changed */
 static void on_filter_changed(GObject *chooser, GParamSpec *spec, gpointer data)
 {
@@ -1388,6 +1409,7 @@ static Preview *preview_new(PreviewApp *app, const gchar *path)
 
     vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     gtk_container_add(GTK_CONTAINER(pv->window), vbox);
+    pv->vbox = vbox;
     bar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
     gtk_container_set_border_width(GTK_CONTAINER(bar), 3);
     gtk_box_pack_start(GTK_BOX(vbox), bar, FALSE, FALSE, 0);

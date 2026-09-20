@@ -14,6 +14,7 @@ void atsw_lanza( Atsw *a, const char *programa, const char *fichero );
 gboolean atsw_itera( Atsw *a, const char *serie, const char *padre,
                      char *why, size_t n );
 void atsw_datos( Atsw *a );
+void atsw_vistazo( Atsw *a, const char *inp, int modo, double lam );
 
 static Atsw A;
 
@@ -42,6 +43,23 @@ static gchar *marcada( GtkWidget *tv, int columna )
 /* Definidos mas abajo: el menu los usa. */
 static void on_fue( GtkButton *b, Atsw *a );
 static void on_fug( GtkButton *b, Atsw *a );
+static gboolean que_mandar( Atsw *a, gboolean acepta_pre, char *out, size_t n );
+
+/* EL VISTAZO: el .inp de la serie marcada, nunca el .pre. Identificar es
+ * antes de que haya modelo, y esto es identificar.                     */
+static void vistazo( Atsw *a, int modo, double lam )
+{
+    char f[PR_RUTA];
+
+    if ( !que_mandar( a, FALSE, f, sizeof f ) )
+        { barra_pub( a, "Esa serie no tiene todavía ningún fichero que mirar." );
+          return; }
+    atsw_vistazo( a, f, modo, lam );
+}
+
+static void on_mdt   ( GtkMenuItem *m, Atsw *a ) { (void)m; vistazo( a, 1, 1.0 ); }
+static void on_mdtlog( GtkMenuItem *m, Atsw *a ) { (void)m; vistazo( a, 1, 0.0 ); }
+static void on_serie_acf( GtkMenuItem *m, Atsw *a ) { (void)m; vistazo( a, 0, 1.0 ); }
 
 /* EL MENU DE LA SERIE.
  *
@@ -71,6 +89,32 @@ static void menu_serie( Atsw *a, GdkEventButton *ev )
         "Estima el modelo de esta serie. Se manda el .pre si lo hay —es un "
         "óptimo reejecutable— y si no el .inp." );
     g_signal_connect( mi, "activate", G_CALLBACK(on_fue), a );
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
+
+    /* LOS ATAJOS. Dibuja fug, aqui mismo, sin levantar la herramienta
+     * completa. Para mirar, no para decidir: no tocan el proyecto.    */
+    mi = gtk_menu_item_new_with_label( "Media – desviación típica" );
+    gtk_widget_set_tooltip_text( mi,
+        "¿La dispersión crece con el nivel? Es la pregunta de la "
+        "transformación, y se contesta mirando este dibujo y el de logaritmos." );
+    g_signal_connect( mi, "activate", G_CALLBACK(on_mdt), a );
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+
+    mi = gtk_menu_item_new_with_label( "Media – desviación típica (logaritmos)" );
+    gtk_widget_set_tooltip_text( mi,
+        "El mismo dibujo con λ = 0. Si aquí la nube se endereza y en el otro "
+        "no, la serie pide logaritmos." );
+    g_signal_connect( mi, "activate", G_CALLBACK(on_mdtlog), a );
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+
+    mi = gtk_menu_item_new_with_label( "Serie y ACF / PACF…" );
+    gtk_widget_set_tooltip_text( mi,
+        "Con λ, d y D AL PIE DEL GRÁFICO: se tocan y el dibujo se rehace ahí "
+        "mismo. Es la pregunta abierta —cuántas diferencias— y se contesta "
+        "probando." );
+    g_signal_connect( mi, "activate", G_CALLBACK(on_serie_acf), a );
     gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
 
     gtk_widget_show_all( menu );

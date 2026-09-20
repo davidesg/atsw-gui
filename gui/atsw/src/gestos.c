@@ -7,6 +7,7 @@
 #include <glib/gstdio.h>
 
 #include "atsw.h"
+#include "previewhost.h"
 
 void       barra_pub( Atsw *a, const char *s );
 GtkWidget *atsw_dialogo_texto( GtkWidget *padre, const char *titulo,
@@ -19,6 +20,42 @@ GtkWidget *atsw_dialogo_texto( GtkWidget *padre, const char *titulo,
 /* contexto que no tenian -- ninguno de los tres guardaba NADA entre          */
 /* ejecuciones, asi que cada arranque empezaba preguntando donde esta todo.   */
 /* ------------------------------------------------------------------------ */
+
+/* ------------------------------------------------------------------------ */
+/* Lo que la madre le debe a lib/preview                                     */
+/* ------------------------------------------------------------------------ */
+
+void preview_open_external( PreviewApp *app, const gchar *path )
+{
+    gchar *uri = g_filename_to_uri( path, NULL, NULL );
+
+    if ( uri ) {
+        gtk_show_uri_on_window( GTK_WINDOW(app->ventana), uri,
+                                GDK_CURRENT_TIME, NULL );
+        g_free( uri );
+    }
+}
+
+void preview_show_status( PreviewApp *app, const gchar *format, ... )
+{
+    va_list ap;
+    gchar  *s;
+
+    va_start( ap, format );
+    s = g_strdup_vprintf( format, ap );
+    va_end( ap );
+    barra_pub( app, s );
+    g_free( s );
+}
+
+/* La extension de un nombre, con su punto. La de lib/utils arrastra GTK y el
+ * contexto del GUI de fue; esta son cuatro lineas.                      */
+const char *getExt( const char *fspec )
+{
+    const char *e = strrchr( fspec, '.' );
+
+    return ( e == NULL ) ? "" : e;
+}
 
 /* DONDE ESTA EL PROGRAMA, y el orden importa.
  *

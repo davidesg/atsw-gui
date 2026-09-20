@@ -14,11 +14,13 @@ PREFIX  ?= /usr/local
 
 LIB = ../../lib
 
-SRC = src/main.c src/ventana.c src/gestos.c src/datos_gui.c \
+SRC = src/main.c src/ventana.c src/gestos.c src/datos_gui.c src/vistazo.c \
       $(LIB)/proyecto/proyecto.c \
       $(LIB)/outdiag/outdiag.c \
       $(LIB)/tabla/tabla.c \
       $(LIB)/rutas/rutas.c \
+      $(LIB)/preview/preview.c \
+      $(LIB)/fugdraw/fugdraw.c \
       $(LIB)/datos/datos.c \
       $(LIB)/xlsx/xlsx.c \
       ../../engines/fug/src/inpfile.c \
@@ -28,7 +30,7 @@ HDR = include/atsw.h
 
 INC = -Iinclude -I$(LIB)/proyecto -I$(LIB)/outdiag -I$(LIB)/tabla \
       -I$(LIB)/rutas -I$(LIB)/dates -I$(LIB)/datos -I$(LIB)/xlsx \
-      -I../../engines/fug/src
+      -I../../engines/fug/src -I$(LIB)/preview -I$(LIB)/fugdraw
 
 GTK_CFLAGS := $(shell pkg-config --cflags gtk+-3.0 2>/dev/null)
 GTK_LIBS   := $(shell pkg-config --libs   gtk+-3.0 2>/dev/null)

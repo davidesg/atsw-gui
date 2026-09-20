@@ -232,3 +232,9 @@ echo
 $CC -O2 -Wall -Wextra -I"$L/rutas" \
     "$L/rutas/test_rutas.c" "$L/rutas/rutas.c" -o "$W/test_rutas" || exit 1
 "$W/test_rutas" || exit 1
+
+# --- la tabla publicable: el modulo que TASTE declaro y nunca escribio ------
+echo
+$CC -O2 -Wall -Wextra -I"$L/tabla" \
+    "$L/tabla/test_tabla.c" "$L/tabla/tabla.c" -o "$W/test_tabla" || exit 1
+"$W/test_tabla" "$W" || exit 1

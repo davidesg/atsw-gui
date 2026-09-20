@@ -40,6 +40,7 @@
 #include "preview.h"
 #include "outdiag.h"
 #include "gof.h"
+#include "tabla.h"
 #include "netfile.h"
 #include "fugplot.h"
 #include "ccfplot.h"
@@ -678,6 +679,277 @@ static void fija_baseline( Mtram *m, gboolean callado )
 }
 
 /* ------------------------------------------------------------------------ */
+/* EXPORTAR                                                                  */
+/*                                                                           */
+/* Es el modulo que TASTE declaro y nunca escribio --TABLA, Graba_Ser_PRN,   */
+/* Graba_Ser_TSF, los tres vacios-- y que el inventario encontro igual de    */
+/* vacio treinta años despues: siete pantallas y la unica forma de sacar un  */
+/* numero era copiarlo de una etiqueta.                                      */
+/*                                                                           */
+/* LA TABLA SE ARMA DE LOS DATOS, NO DEL WIDGET. Raspar el GtkTreeView seria */
+/* mas corto y convertiria todo en texto: un numero dejaria de ser un numero */
+/* y el CSV no valdria para nada. Los decimales los declara la columna.      */
+/*                                                                           */
+/* Y LA PROCEDENCIA VA DENTRO. Una tabla que sale sin decir de que modelo y  */
+/* de que muestra viene es la forma mas facil de que un numero acabe en un   */
+/* paper sin poder reproducirlo.                                             */
+/* ------------------------------------------------------------------------ */
+
+static void procedencia( Mtram *m, Tabla *t )
+{
+    Diag    *D = &m->dia;
+    GString *s = g_string_new( NULL );
+    char     b[192];
+    int      i;
+
+    /* tb_procedencia COPIA, asi que aqui se le pasa un buffer y no un
+     * g_strdup_printf: eso seria una fuga en cada exportacion.        */
+    for (i = 1; i <= m->c.n; i++)
+        g_string_append_printf( s, "%s%s", i > 1 ? ", " : "", nom_ser( m, i ) );
+    tb_procedencia( t, "Series", s->str );
+    g_string_free( s, TRUE );
+
+    snprintf( b, sizeof b, "%d enlace%s%s", m->red.n,
+              m->red.n == 1 ? "" : "s",
+              m->est.diagonal ? ", DIAGONAL (-0)" : "" );
+    tb_procedencia( t, "Modelo", b );
+
+    if (D->hay_res && D->res.n > 0) {
+        snprintf( b, sizeof b, "%s - %s, %d obs", D->res.fecha[0],
+                  D->res.fecha[D->res.n - 1], D->res.n );
+        tb_procedencia( t, "Muestra", b );
+    }
+
+    if (D->d.tiene_logl) {
+        snprintf( b, sizeof b, "%.6f", D->d.logl );
+        tb_procedencia( t, "logL", b );
+    }
+
+    if (D->path) tb_procedencia( t, "Fichero", D->path );
+
+    /* Que motor. Hoy drtran no estampa version ni fecha de compilacion --
+     * queda anotado en DISENO-madre.md-- asi que se dice lo que se sabe. */
+    tb_procedencia( t, "Motor", "drtran" );
+}
+
+/* La tabla de la pestaña en la que se este. NULL si esa no tiene tabla. */
+static Tabla *tabla_actual( Mtram *m, int pagina )
+{
+    Diag  *D = &m->dia;
+    Tabla *t = NULL;
+    int    i;
+
+    if (!D->vale) return NULL;
+
+    switch (pagina) {
+    case 0:                                        /* exogeneidad */
+        t = tb_new( "Exogeneidad: ¿transferencia, o VARMA?" );
+        tb_col( t, "Entrada",   NULL, TB_TXT, 0 );
+        tb_col( t, "Q",         NULL, TB_NUM, 4 );
+        tb_col( t, "g.l.",      NULL, TB_ENT, 0 );
+        tb_col( t, "p",         NULL, TB_NUM, 4 );
+        tb_col( t, "signif.",   NULL, TB_ENT, 0 );
+        tb_col( t, "Exógena",   NULL, TB_TXT, 0 );
+        for (i = 0; i < D->d.ne; i++) {
+            const OdEnlace *e = &D->d.e[i];
+
+            tb_fila( t );
+            tb_pon_txt( t, 0, e->entrada );
+            tb_pon_num( t, 1, e->exogen.q );
+            tb_pon_num( t, 2, e->exogen.df );
+            tb_pon_num( t, 3, e->exogen.p );
+            if (e->exogen_signif >= 0) tb_pon_num( t, 4, e->exogen_signif );
+            tb_pon_txt( t, 5, e->exogeno ? "sí" : "NO" );
+        }
+        break;
+
+    case 1:                                        /* adecuacion */
+        t = tb_new( "Adecuación: ¿la forma (b, r, s) agota la relación?" );
+        tb_col( t, "Entrada",  NULL, TB_TXT, 0 );
+        tb_col( t, "Q",        NULL, TB_NUM, 4 );
+        tb_col( t, "g.l.",     NULL, TB_ENT, 0 );
+        tb_col( t, "p",        NULL, TB_NUM, 4 );
+        tb_col( t, "Adecuada", NULL, TB_TXT, 0 );
+        for (i = 0; i < D->d.ne; i++) {
+            const OdEnlace *e = &D->d.e[i];
+
+            tb_fila( t );
+            tb_pon_txt( t, 0, e->entrada );
+            tb_pon_num( t, 1, e->transfer.q );
+            tb_pon_num( t, 2, e->transfer.df );
+            tb_pon_num( t, 3, e->transfer.p );
+            tb_pon_txt( t, 4, e->adecuado ? "sí" : "NO" );
+        }
+        break;
+
+    case 2:                                        /* ajuste */
+        if (!D->hay_res) return NULL;
+        t = tb_new( "Ajuste: la desviación típica residual y el R² de Brajín (A.28)" );
+        tb_col( t, "Ecuación",        NULL, TB_TXT, 0 );
+        tb_col( t, "d.t. diagonal",   NULL, TB_NUM, 4 );
+        tb_col( t, "d.t. transfer.",  NULL, TB_NUM, 4 );
+        tb_col( t, "R² diagonal",     NULL, TB_NUM, 4 );
+        tb_col( t, "R² transfer.",    NULL, TB_NUM, 4 );
+        tb_col( t, "Varianza",        "%",  TB_NUM, 1 );
+        for (i = 0; i < D->res.m && i < m->c.n; i++) {
+            double  sw, r2u = 0, dtu = 0, r2t = 0, dtt = 0, *w;
+            int     nw;
+            gboolean hay_u;
+
+            w  = gof_estacionaria( &m->c.s[i]->ts, &m->c.s[i]->tm, &nw );
+            sw = w ? gof_suma_cuad_cola( w, nw, D->res.n ) : 0.0;
+            free( w );
+
+            tb_fila( t );
+            tb_pon_txt( t, 0, nom_ser( m, i + 1 ) );
+
+            if (gof_r2_brajin( D->res.v[i], D->res.n, sw, &r2t, &dtt ) == 0) {
+                tb_pon_num( t, 2, dtt );
+                tb_pon_num( t, 4, r2t );
+            }
+            hay_u = D->hay_res_base && i < D->res_base.m &&
+                    gof_r2_brajin( D->res_base.v[i], D->res_base.n, sw,
+                                   &r2u, &dtu ) == 0;
+            if (hay_u) {
+                tb_pon_num( t, 1, dtu );
+                tb_pon_num( t, 3, r2u );
+                tb_pon_num( t, 5, 100.0 * gof_reduccion( dtu, dtt ) );
+            }
+        }
+        break;
+
+    case 3:                                        /* residuos */
+        t = tb_new( "Residuos: ¿son ruido blanco?" );
+        tb_col( t, "Ecuación",   NULL, TB_TXT, 0 );
+        tb_col( t, "n",          NULL, TB_ENT, 0 );
+        tb_col( t, "media",      NULL, TB_NUM, 4 );
+        tb_col( t, "d.t.",       NULL, TB_NUM, 4 );
+        tb_col( t, "asimetría",  NULL, TB_NUM, 3 );
+        tb_col( t, "curtosis",   NULL, TB_NUM, 3 );
+        tb_col( t, "Jarque-Bera", NULL, TB_NUM, 2 );
+        tb_col( t, "Ljung-Box",  NULL, TB_NUM, 2 );
+        tb_col( t, "g.l.",       NULL, TB_ENT, 0 );
+        for (i = 0; i < D->d.ns; i++) {
+            const OdSerie *s = &D->d.s[i];
+
+            tb_fila( t );
+            tb_pon_txt( t, 0, i < m->c.n ? nom_ser( m, i + 1 ) : s->nombre );
+            tb_pon_num( t, 1, s->nobs );
+            if (s->tiene_stats) {
+                tb_pon_num( t, 2, s->media );
+                tb_pon_num( t, 3, s->sd );
+                tb_pon_num( t, 4, s->skew );
+                tb_pon_num( t, 5, s->kurt );
+                if (s->nobs > 0)
+                    tb_pon_num( t, 6, JarqueBera( s->skew, s->kurt, s->nobs ) );
+            }
+            tb_pon_num( t, 7, s->lb.q );
+            tb_pon_num( t, 8, s->lb.df );
+        }
+        break;
+
+    case 4:                                        /* modelo estimado */
+        if (!D->hay_par) return NULL;
+        t = tb_new( "Modelo estimado" );
+        tb_col( t, "Parámetro", NULL, TB_TXT, 0 );
+        tb_col( t, "Estimado",  NULL, TB_NUM, 6 );
+        tb_col( t, "d.t.",      NULL, TB_NUM, 6 );
+        tb_col( t, "t",         NULL, TB_NUM, 3 );
+        tb_col( t, "p",         NULL, TB_NUM, 4 );
+        tb_col( t, "Nota",      NULL, TB_TXT, 0 );
+        for (i = 0; i < D->par.n; i++) {
+            const OdPar *q = &D->par.p[i];
+            const char  *de;
+
+            tb_fila( t );
+            tb_pon_txt( t, 0, q->nombre );
+            tb_pon_num( t, 1, q->valor );
+            if (q->libre) {
+                tb_pon_num( t, 2, q->dt );
+                tb_pon_num( t, 3, q->t );
+                tb_pon_num( t, 4, q->p );
+                /* La misma nota que en pantalla: lo que se ve es lo que se
+                 * exporta, o son dos tablas distintas.                 */
+                de = de_donde( m, q->nombre );
+                if (!de[0]) de = q->p < 0.05 ? "" : "no significativo";
+                tb_pon_txt( t, 5, de );
+            } else
+                tb_pon_txt( t, 5, q->atado[0] ? q->atado : "atado" );
+        }
+        break;
+
+    default:
+        return NULL;
+    }
+
+    if (t) procedencia( m, t );
+    return t;
+}
+
+static void on_exportar( GtkButton *b, Mtram *m )
+{
+    int        pg = gtk_notebook_get_current_page( GTK_NOTEBOOK(m->dia.libreta) );
+    Tabla     *t  = tabla_actual( m, pg );
+    GtkWidget *d;
+    GtkFileFilter *f;
+    gchar     *sug;
+
+    if (t == NULL) {
+        preview_show_status( m, pg == 5
+            ? "La pestaña Salida ya ES un fichero: el .out está en %s"
+            : "No hay tabla que exportar en esta pestaña.",
+            m->dia.path ? m->dia.path : "" );
+        return;
+    }
+    if (tb_nfilas( t ) == 0) {
+        preview_show_status( m, "Esa tabla está vacía." );
+        tb_free( t );
+        return;
+    }
+
+    d = gtk_file_chooser_dialog_new( "Exportar la tabla",
+            GTK_WINDOW(m->ventana_p), GTK_FILE_CHOOSER_ACTION_SAVE,
+            "_Cancelar", GTK_RESPONSE_CANCEL, "_Guardar", GTK_RESPONSE_ACCEPT,
+            NULL );
+    gtk_file_chooser_set_do_overwrite_confirmation( GTK_FILE_CHOOSER(d), TRUE );
+
+    /* La extension elige el formato, y se dice en el propio filtro. */
+    f = gtk_file_filter_new();
+    gtk_file_filter_set_name( f, "CSV — para una hoja de cálculo (*.csv)" );
+    gtk_file_filter_add_pattern( f, "*.csv" );
+    gtk_file_chooser_add_filter( GTK_FILE_CHOOSER(d), f );
+
+    f = gtk_file_filter_new();
+    gtk_file_filter_set_name( f, "Texto de ancho fijo — para pegar (*.txt)" );
+    gtk_file_filter_add_pattern( f, "*.txt" );
+    gtk_file_chooser_add_filter( GTK_FILE_CHOOSER(d), f );
+
+    f = gtk_file_filter_new();
+    gtk_file_filter_set_name( f, "LaTeX — un tabular con su caption (*.tex)" );
+    gtk_file_filter_add_pattern( f, "*.tex" );
+    gtk_file_chooser_add_filter( GTK_FILE_CHOOSER(d), f );
+
+    sug = g_strdup_printf( "%s.csv",
+              pg == 0 ? "exogeneidad" : pg == 1 ? "adecuacion" :
+              pg == 2 ? "ajuste"      : pg == 3 ? "residuos"   : "parametros" );
+    gtk_file_chooser_set_current_name( GTK_FILE_CHOOSER(d), sug );
+    g_free( sug );
+
+    if (gtk_dialog_run( GTK_DIALOG(d) ) == GTK_RESPONSE_ACCEPT) {
+        gchar *path = gtk_file_chooser_get_filename( GTK_FILE_CHOOSER(d) );
+
+        if (tb_write( t, path ) == 0)
+            preview_show_status( m, "Escrito %s — con la procedencia dentro.",
+                                 path );
+        else
+            preview_show_status( m, "No pude escribir %s", path );
+        g_free( path );
+    }
+    gtk_widget_destroy( d );
+    tb_free( t );
+}
+
+/* ------------------------------------------------------------------------ */
 /* Los graficos                                                              */
 /* ------------------------------------------------------------------------ */
 
@@ -921,6 +1193,15 @@ GtkWidget *diagnosis_pagina_new( Mtram *m )
 
     b = gtk_button_new_with_label( "▶" );
     g_signal_connect( b, "clicked", G_CALLBACK(on_sig), m );
+    gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
+
+    b = gtk_button_new_with_label( "Exportar…" );
+    gtk_widget_set_tooltip_text( b,
+        "La tabla de la pestaña en la que estés, a CSV, texto de ancho fijo o "
+        "LaTeX. La extensión elige el formato.\n\nVa con la PROCEDENCIA "
+        "dentro —series, modelo, muestra, logL y fichero—: una tabla que sale "
+        "sin decir de dónde viene no se puede reproducir." );
+    g_signal_connect( b, "clicked", G_CALLBACK(on_exportar), m );
     gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
 
     b = gtk_button_new_with_label( "Gráficos…" );

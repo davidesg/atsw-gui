@@ -1,0 +1,49 @@
+# atsw_gui -- la interfaz madre, GTK+3.
+#
+# LA FAMILIA se llama atsw y EL PROGRAMA atsw_gui, por el mismo convenio que
+# gui/fue -> fue_gui y gui/drtran -> drtran_gui. Un nombre señala una cosa
+# sola, y esa regla ya costo un renombrado.
+#
+# No enlaza ningun motor: la madre LANZA los tres GUIs con --proyecto, no los
+# absorbe. Lo unico que comparte con ellos son las bibliotecas de lib/, que es
+# justo lo que hace innecesario absorberlos.
+
+CC      ?= cc
+CFLAGS  ?= -O2 -g -Wall
+PREFIX  ?= /usr/local
+
+LIB = ../../lib
+
+SRC = src/main.c src/ventana.c src/gestos.c \
+      $(LIB)/proyecto/proyecto.c \
+      $(LIB)/outdiag/outdiag.c \
+      $(LIB)/tabla/tabla.c \
+      $(LIB)/rutas/rutas.c \
+      $(LIB)/dates/dates.c
+
+HDR = include/atsw.h
+
+INC = -Iinclude -I$(LIB)/proyecto -I$(LIB)/outdiag -I$(LIB)/tabla \
+      -I$(LIB)/rutas -I$(LIB)/dates
+
+GTK_CFLAGS := $(shell pkg-config --cflags gtk+-3.0 2>/dev/null)
+GTK_LIBS   := $(shell pkg-config --libs   gtk+-3.0 2>/dev/null)
+
+TARGET = atsw_gui
+
+all: $(TARGET)
+
+$(TARGET): $(SRC) $(HDR)
+	@if [ -z "$(GTK_LIBS)" ]; then \
+	    echo "atsw_gui necesita los ficheros de desarrollo de GTK 3"; \
+	    echo "(Debian/Ubuntu: sudo apt install libgtk-3-dev)"; exit 1; fi
+	$(CC) $(CFLAGS) $(GTK_CFLAGS) $(INC) -o $@ $(SRC) $(GTK_LIBS) -lm
+
+install: $(TARGET)
+	install -d $(DESTDIR)$(PREFIX)/bin
+	install -m 755 $(TARGET) $(DESTDIR)$(PREFIX)/bin/
+
+clean:
+	rm -f $(TARGET)
+
+.PHONY: all install clean

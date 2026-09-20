@@ -58,3 +58,6 @@ gui/drtran/tests/work/
 # quedan como estaban -- son de quien los puso, y el driver los regenera.
 gui/fug/gtk_fmg
 engines/fug/tests/gui/work/fug
+
+# el binario de la madre
+gui/atsw/atsw_gui

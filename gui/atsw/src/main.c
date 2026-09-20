@@ -39,6 +39,62 @@ static gchar *marcada( GtkWidget *tv, int columna )
     return s;
 }
 
+/* Definidos mas abajo: el menu los usa. */
+static void on_fue( GtkButton *b, Atsw *a );
+static void on_fug( GtkButton *b, Atsw *a );
+
+/* EL MENU DE LA SERIE.
+ *
+ * Marcar una serie con el boton izquierdo despliega lo que se puede HACER con
+ * ella. Antes marcar no hacia nada visible: la rejilla se llenaba y habia que
+ * saber que los botones de la derecha existian y a que apuntaban. El gesto de
+ * marcar tiene que OFRECER, no quedarse mudo.
+ *
+ * La seleccion se hace ANTES de desplegar, asi que el menu actua sobre la
+ * serie que se acaba de marcar y la rejilla de al lado ya la enseña.
+ *
+ * Se cierra con Escape o pulsando fuera, y la serie se queda marcada.     */
+static void menu_serie( Atsw *a, GdkEventButton *ev )
+{
+    GtkWidget *menu = gtk_menu_new();
+    GtkWidget *mi;
+
+    mi = gtk_menu_item_new_with_label( "Identificación con fug" );
+    gtk_widget_set_tooltip_text( mi,
+        "Los gráficos de la serie, su ACF y su PACF. Se manda el .inp: se "
+        "identifica ANTES de que haya modelo." );
+    g_signal_connect( mi, "activate", G_CALLBACK(on_fug), a );
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+
+    mi = gtk_menu_item_new_with_label( "Modelo univariante con fue" );
+    gtk_widget_set_tooltip_text( mi,
+        "Estima el modelo de esta serie. Se manda el .pre si lo hay —es un "
+        "óptimo reejecutable— y si no el .inp." );
+    g_signal_connect( mi, "activate", G_CALLBACK(on_fue), a );
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+
+    gtk_widget_show_all( menu );
+    gtk_menu_popup_at_pointer( GTK_MENU(menu), (GdkEvent *) ev );
+}
+
+static gboolean on_serie_click( GtkWidget *tv, GdkEventButton *ev, Atsw *a )
+{
+    GtkTreePath *ruta = NULL;
+
+    if ( ev->type != GDK_BUTTON_PRESS || ev->button != 1 ) return FALSE;
+    if ( !gtk_tree_view_get_path_at_pos( GTK_TREE_VIEW(tv), (gint) ev->x,
+                                         (gint) ev->y, &ruta, NULL, NULL, NULL ) )
+        return FALSE;                       /* se pulso fuera de toda fila */
+
+    /* Primero se MARCA --y eso llena la rejilla de al lado-- y despues se
+       ofrece: el menu actua sobre lo que ya esta marcado.              */
+    gtk_tree_view_set_cursor( GTK_TREE_VIEW(tv), ruta, NULL, FALSE );
+    gtk_tree_path_free( ruta );
+
+    menu_serie( a, ev );
+    return TRUE;                            /* la seleccion ya esta hecha */
+}
+
 static void on_serie( GtkTreeSelection *sel, gpointer d )
 {
     Atsw  *a = d;
@@ -384,6 +440,9 @@ static void activate( GtkApplication *app, gpointer d )
         "diccionario a pelo repetido en tres guiones de cases/." );
     g_signal_connect( gtk_tree_view_get_selection( GTK_TREE_VIEW(a->l_series) ),
                       "changed", G_CALLBACK(on_serie), a );
+    /* Marcar con el boton izquierdo despliega lo que se puede hacer. */
+    g_signal_connect( a->l_series, "button-press-event",
+                      G_CALLBACK(on_serie_click), a );
     gtk_box_pack_start( GTK_BOX(izq), en_scroll( a->l_series ), TRUE, TRUE, 0 );
     gtk_paned_pack1( GTK_PANED(pan), izq, FALSE, FALSE );
 

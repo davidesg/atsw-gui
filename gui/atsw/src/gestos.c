@@ -20,6 +20,45 @@ GtkWidget *atsw_dialogo_texto( GtkWidget *padre, const char *titulo,
 /* ejecuciones, asi que cada arranque empezaba preguntando donde esta todo.   */
 /* ------------------------------------------------------------------------ */
 
+/* DONDE ESTA EL PROGRAMA, y el orden importa.
+ *
+ * Primero AL LADO DE LA MADRE, en el arbol de compilacion; despues el PATH.
+ * No al reves, y por una razon medida: en esta maquina habia un fue_gui de
+ * mayo en /usr/local/bin que no entiende --proyecto. Encontrar el equivocado
+ * es PEOR que no encontrar ninguno -- el programa abre, no hace lo que se le
+ * pidio, y nada lo explica.
+ *
+ * Un programa lanzado desde un arbol de compilacion tiene que lanzar a SUS
+ * hermanos. Instalado, no hay hermanos al lado y manda el PATH, que es lo
+ * correcto alli.
+ *
+ * Devuelve una ruta nueva (g_free) o NULL.                              */
+static gchar *donde_esta( const char *programa )
+{
+    static const char *sitio[] = {         /* relativos a gui/atsw/        */
+        "../fue/bin/%s", "../fug/%s", "../drtran/%s", "./%s", NULL
+    };
+    gchar *mio = g_file_read_link( "/proc/self/exe", NULL );
+    gchar *dir = mio ? g_path_get_dirname( mio ) : NULL;
+    int    i;
+
+    g_free( mio );
+
+    for ( i = 0; dir && sitio[i]; i++ )
+        {
+        gchar *rel = g_strdup_printf( sitio[i], programa );
+        gchar *p   = g_build_filename( dir, rel, NULL );
+
+        g_free( rel );
+        if ( g_file_test( p, G_FILE_TEST_IS_EXECUTABLE ) )
+            { g_free( dir ); return p; }
+        g_free( p );
+        }
+    g_free( dir );
+
+    return g_find_program_in_path( programa );
+}
+
 /* fichero puede ser NULL: entonces solo se abre el programa.
  *
  * MANDARLE LA SERIE ES LA MITAD DEL GESTO. Sin el fichero, "abrir en fue"
@@ -30,11 +69,24 @@ void atsw_lanza( Atsw *a, const char *programa, const char *fichero )
 {
     gchar  *argv[5];
     GError *e = NULL;
+    gchar  *exe;
     int     n = 0;
 
     if ( !a->hay ) return;
 
-    argv[n++] = (gchar *) programa;
+    exe = donde_esta( programa );
+    if ( exe == NULL )
+        {
+        gchar *s = g_strdup_printf(
+            "No encuentro «%s»: ni al lado de esta ventana ni en el PATH. "
+            "¿Está compilado?", programa );
+
+        barra_pub( a, s );
+        g_free( s );
+        return;
+        }
+
+    argv[n++] = exe;
     argv[n++] = (gchar *) "--proyecto";
     argv[n++] = a->p->path;
     if ( fichero && *fichero ) argv[n++] = (gchar *) fichero;
@@ -45,8 +97,8 @@ void atsw_lanza( Atsw *a, const char *programa, const char *fichero )
                          G_SPAWN_STDERR_TO_DEV_NULL,
                          NULL, NULL, NULL, &e ) )
         {
-        gchar *s = g_strdup_printf( "No pude lanzar %s: %s. ¿Está en el PATH?",
-                                    programa, e ? e->message : "" );
+        gchar *s = g_strdup_printf( "No pude lanzar %s: %s",
+                                    exe, e ? e->message : "" );
 
         barra_pub( a, s );
         g_free( s );
@@ -54,15 +106,18 @@ void atsw_lanza( Atsw *a, const char *programa, const char *fichero )
         }
     else
         {
+        /* SE DICE QUE BINARIO, con su ruta: asi una instalacion vieja que se
+           cuele por el PATH se ve a la primera.                        */
         gchar *s = ( fichero && *fichero )
-                 ? g_strdup_printf( "%s, con %s.", programa,
+                 ? g_strdup_printf( "%s, con %s.", exe,
                                     strrchr( fichero, '/' )
                                     ? strrchr( fichero, '/' ) + 1 : fichero )
-                 : g_strdup_printf( "%s, con este proyecto.", programa );
+                 : g_strdup_printf( "%s, con este proyecto.", exe );
 
         barra_pub( a, s );
         g_free( s );
         }
+    g_free( exe );
 }
 
 /* ------------------------------------------------------------------------ */

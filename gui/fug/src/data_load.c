@@ -4,6 +4,7 @@
 #include <math.h>
 #include <gtk/gtk.h>
 #include "inpfile.h"
+#include "datos.h"
 
 /* Global structures shared by the callbacks */
 struct Tseries Ts;
@@ -66,80 +67,75 @@ static void clear_input_extras (void)
 	input_refactor = 1.0;
 }
 
-/* Parse one number; accepts a decimal comma ("77,5") when there is no dot. */
-static gboolean parse_value (const char *token, double *value)
-{
-	gchar *copy, *end, *comma;
-	gboolean ok;
+/* Aqui vivian parse_value() y collect_values(), el lector que APLANABA todas
+ * las columnas en un vector. Los dos se fueron con el a lib/datos, que hace lo
+ * mismo con la coma decimal y ademas acierta con las columnas.          */
 
-	copy = g_strdup (token);
-	comma = strchr (copy, ',');
-	if (comma != NULL && strchr (copy, '.') == NULL && strchr (comma + 1, ',') == NULL)
-		*comma = '.';
-	*value = g_ascii_strtod (copy, &end);
-	ok = (end != copy && *end == '\0');
-	g_free (copy);
-	return ok;
-}
-
-/* Collect every number found in lines[first..]. Stops at the first token
- * that is not a number. Returns a newly allocated 0-based array. */
-static double *collect_values (gchar **lines, int first, int *nvalues, GError **error,
-                               const char *filename)
-{
-	GArray *values = g_array_new (FALSE, FALSE, sizeof (double));
-	int i, j;
-	double v;
-
-	for (i = first; lines[i] != NULL; i++) {
-		gchar **tokens = g_strsplit_set (lines[i], " \t\r;", -1);
-		for (j = 0; tokens[j] != NULL; j++) {
-			if (*tokens[j] == '\0')
-				continue;
-			if (!parse_value (tokens[j], &v)) {
-				g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_INVAL,
-				             "Invalid value \"%s\" at line %d of\n%s",
-				             tokens[j], i + 1, filename);
-				g_strfreev (tokens);
-				g_array_free (values, TRUE);
-				return NULL;
-			}
-			g_array_append_val (values, v);
-		}
-		g_strfreev (tokens);
-	}
-	*nvalues = values->len;
-	return (double *) g_array_free (values, FALSE);
-}
-
-/* Read a plain data file: numbers separated by blanks or new lines.
- * Leading lines that do not start with a number (headers) are skipped. */
+/* LOS DATOS ENTRAN POR lib/datos, QUE ES LA UNICA PUERTA.
+ *
+ * Aqui habia un lector del mismo formato que APLANABA todas las columnas de
+ * todas las filas en un solo vector. fue, con el mismo fichero, se quedaba con
+ * la primera columna: EL MISMO FICHERO DABA DOS SERIES DISTINTAS
+ * (INVENTARIO-madre.md §1).
+ *
+ * Y la de aqui era la equivocada: aplanar dos columnas fabrica una serie que
+ * no existe -- entrelaza dos. La decision esta razonada en DISENO-madre.md §4.
+ *
+ * ES UN CAMBIO DE COMPORTAMIENTO, y se nota: un fichero de dos columnas y 100
+ * filas daba 200 valores y ahora da 100. Por eso las columnas que se
+ * descartan SE DICEN, en vez de tragarselas: fug es univariante y no tiene
+ * donde poner un regresor, pero el analista tiene que enterarse de que su
+ * fichero traia mas cosas.
+ *
+ * Lo que se gana: un CSV de verdad se lee con sus comas, la coma decimal se
+ * acepta, la cabecera da NOMBRE a la serie, y la frecuencia y la fecha salen
+ * DEL FICHERO si las trae.
+ *
+ * aviso[naviso] recibe lo que haya que contar al cargar bien; puede ser NULL.
+ * Devuelve el vector de la serie (g_free por el que llama) o NULL con error. */
 double *read_data_values (const char *filename, int *nvalues, GError **error)
 {
-	gchar *contents, **lines;
-	double *data, v;
-	int first = 0;
+	return read_data_series (filename, nvalues, NULL, NULL, 0, error);
+}
 
+double *read_data_series (const char *filename, int *nvalues, DtDatos *fuera,
+                          char *aviso, size_t naviso, GError **error)
+{
+	DtDatos *d;
+	DtError  e;
+	double  *v;
+	char     b[256];
+	int      i;
+
+	if (aviso && naviso) aviso[0] = '\0';
 	clear_input_extras ();
 
-	if (!g_file_get_contents (filename, &contents, NULL, error))
+	d = g_new0 (DtDatos, 1);          /* 2 MB: en la pila no cabe */
+	if (dt_leer (filename, d, &e) != 0) {
+		dt_error_en (&e, b, sizeof b);
+		g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_INVAL,
+		             "%s\n%s", b, filename);
+		g_free (d);
 		return NULL;
-	lines = g_strsplit (contents, "\n", -1);
-	while (lines[first] != NULL) {
-		gchar **tokens = g_strsplit_set (g_strstrip (lines[first]), " \t\r;", 2);
-		gboolean numeric = (tokens[0] != NULL && parse_value (tokens[0], &v));
-		gboolean blank = (tokens[0] == NULL || *tokens[0] == '\0');
-		g_strfreev (tokens);
-		if (numeric)
-			break;
-		if (!blank && first > 0)   /* only one header line is allowed */
-			break;
-		first++;
 	}
-	data = collect_values (lines, first, nvalues, error, filename);
-	g_strfreev (lines);
-	g_free (contents);
-	return data;
+
+	v = (double *) g_malloc (sizeof (double) * (size_t) d->nobs);
+	for (i = 0; i < d->nobs; i++) v[i] = d->v[0][i];
+	*nvalues = d->nobs;
+
+	/* LAS COLUMNAS QUE SE DESCARTAN, DICHAS. fug es univariante. */
+	if (aviso && naviso && d->ncol > 1)
+		snprintf (aviso, naviso,
+		          "%d columns in the file: using the first%s%s%s. "
+		          "fug is univariate.",
+		          d->ncol,
+		          d->nombre[0][0] ? " (" : "",
+		          d->nombre[0][0] ? d->nombre[0] : "",
+		          d->nombre[0][0] ? ")" : "");
+
+	if (fuera) *fuera = *d;
+	g_free (d);
+	return v;
 }
 
 /* Read an .inp file (the .inp of fue, or of fug <= 1.14) into Ts and Tm,

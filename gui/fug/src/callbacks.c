@@ -87,6 +87,12 @@ gboolean get_main(AppWidgets *app)
     GError *error = NULL;
     double *data;
     int nvalues, nobs, freq_idx;
+    DtDatos dd;                  /* lo que el FICHERO dijo                */
+    char aviso[256];             /* lo que hay que contar aunque vaya bien */
+    gboolean del_fichero = FALSE;
+
+    memset(&dd, 0, sizeof dd);
+    aviso[0] = '\0';
 
     nobs = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(app->n_load_spinbutton));
     if (nobs < MIN_OBS) {
@@ -117,7 +123,11 @@ gboolean get_main(AppWidgets *app)
         Ts = ts_saved;      /* only the data are taken from the .inp file */
         Tm = tm_saved;
     } else {
-        data = read_data_values(filename, &nvalues, &error);
+        /* Con lo que el FICHERO diga: frecuencia, fecha y nombres. Antes
+         * salian siempre del combo, que por defecto dice 1.            */
+        data = read_data_series(filename, &nvalues, &dd, aviso, sizeof aviso,
+                                &error);
+        del_fichero = (data != NULL);
     }
     if (data == NULL) {
         show_error(app, "Error loading data:\n%s", error->message);
@@ -147,19 +157,45 @@ gboolean get_main(AppWidgets *app)
     g_free((gchar *) Ts.name);
     Ts.name = name;
 
-    freq_idx = gtk_combo_box_get_active(GTK_COMBO_BOX(app->freq_data_combobox));
-    if (freq_idx == 0) Ts.freq = 1;
-    else if (freq_idx == 1) Ts.freq = 4;
-    else Ts.freq = 12;
-
-    if (Ts.freq > 1) {
-        Ts.begtime = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(app->first_period_spinbutton));
-        Ts.outyear = 0;
+    /* LA FRECUENCIA, DEL FICHERO SI LA TRAE. Si no, del combo -- pero
+     * entonces la pone el analista y lo sabe. Una serie mal fechada al
+     * cargarla envenena todo lo que venga despues.                     */
+    if (del_fichero && dd.freq > 0) {
+        Ts.freq = dd.freq;
+        gtk_combo_box_set_active(GTK_COMBO_BOX(app->freq_data_combobox),
+                                 dd.freq == 1 ? 0 : dd.freq == 4 ? 1 : 2);
     } else {
-        Ts.begtime = 1;
-        Ts.outyear = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(app->first_period_spinbutton));
+        freq_idx = gtk_combo_box_get_active(GTK_COMBO_BOX(app->freq_data_combobox));
+        if (freq_idx == 0) Ts.freq = 1;
+        else if (freq_idx == 1) Ts.freq = 4;
+        else Ts.freq = 12;
     }
-    Ts.begyear = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(app->first_year_spinbutton));
+
+    /* LA FECHA, DEL FICHERO SI LA TRAE. Ojo con el orden: el begyear del
+     * spin se asignaba DESPUES del if/else y pisaba cualquier cosa puesta
+     * dentro, asi que va tambien en la rama.                           */
+    if (del_fichero && dd.anio > 0) {
+        Ts.begyear = dd.anio;
+        Ts.begtime = dd.per > 0 ? dd.per : 1;
+        Ts.outyear = 0;
+        gtk_spin_button_set_value(GTK_SPIN_BUTTON(app->first_year_spinbutton),
+                                  Ts.begyear);
+        gtk_spin_button_set_value(GTK_SPIN_BUTTON(app->first_period_spinbutton),
+                                  Ts.freq > 1 ? Ts.begtime : Ts.begyear);
+    } else {
+        if (Ts.freq > 1) {
+            Ts.begtime = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(app->first_period_spinbutton));
+            Ts.outyear = 0;
+        } else {
+            Ts.begtime = 1;
+            Ts.outyear = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(app->first_period_spinbutton));
+        }
+        Ts.begyear = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(app->first_year_spinbutton));
+    }
+
+    /* Y lo que haya que contar aunque la carga fuera bien: las columnas que
+     * fug descarta por ser univariante. Se dice, no se traga.          */
+    if (aviso[0]) show_status(app, "%s", aviso);
 
     /* The 6 decimals of the spin buttons, as fug reads them from -B, so the
      * plot file names computed here match the ones of fug */

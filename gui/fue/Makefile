@@ -38,7 +38,7 @@ else
 endif
 
 # Compiler and basic flags
-CFLAGS   = -O2 -g -Wall -Iinclude -I../../lib/fugdraw -I../../lib/preview -I../../lib/engine -I../../lib/outfile -I../../lib/utils -I../../lib/inpcheck -I$(ENG_DIR)/fue/include
+CFLAGS   = -O2 -g -Wall -Iinclude -I../../lib/fugdraw -I../../lib/preview -I../../lib/engine -I../../lib/outfile -I../../lib/utils -I../../lib/datos -I../../lib/inpcheck -I$(ENG_DIR)/fue/include
 LDFLAGS  +=
 LIBS     = -lm
 
@@ -60,6 +60,7 @@ LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c \
            $(LIB_DIR)/preview/preview.c \
            $(LIB_DIR)/engine/engine.c \
            $(LIB_DIR)/outfile/outfile.c \
+           $(LIB_DIR)/datos/datos.c \
            $(LIB_DIR)/utils/utils.c $(LIB_DIR)/utils/ext.c
 
 # inpcheck NO se copia: se compila el fichero del motor, renombrando la
@@ -133,6 +134,10 @@ $(BUILD_DIR)/lib_engine/%.o: $(LIB_DIR)/engine/%.c | $(BUILD_DIR)
 $(BUILD_DIR)/lib_outfile/%.o: $(LIB_DIR)/outfile/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
 	$(CC) $(GUI_CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/lib_datos/%.o: $(LIB_DIR)/datos/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(ALL_CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/lib_utils/%.o: $(LIB_DIR)/utils/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)

@@ -2,6 +2,7 @@
 #define DATA_LOAD_H
 
 #include <gtk/gtk.h>
+#include "datos.h"
 #include "nlutils.h"
 
 /* Series and model currently loaded in the GUI (defined in data_load.c).
@@ -23,6 +24,13 @@ typedef enum {
 } InputStatus;
 
 double *read_data_values(const char *filename, int *nvalues, GError **error);
+
+/* La misma lectura, pero contando lo que paso: *fuera recibe todo lo que el
+ * fichero dijo --frecuencia, fecha, nombres-- y aviso[naviso] lo que hay que
+ * contarle al analista AUNQUE LA CARGA FUERA BIEN (por ejemplo, que su fichero
+ * traia tres columnas y fug es univariante). Los dos pueden ser NULL.      */
+double *read_data_series(const char *filename, int *nvalues, DtDatos *fuera,
+                         char *aviso, size_t naviso, GError **error);
 gboolean load_input(const char *inputf, GError **error);
 InputStatus compare_input(const char *path);
 gboolean save_input(const char *outputf, GError **error);

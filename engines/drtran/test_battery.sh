@@ -2180,6 +2180,37 @@ if [ -f "$M6D/M6_EP.pre" ]; then
     check "y la desviacion tipica, que antes no se imprimia" "$TDT" "$DT" 0.000001
 fi
 
+# ── LOS RESIDUOS, A UN FICHERO (-e) ──────────────────────────────────────
+echo
+echo "── 13. Los residuos como numeros ──"
+echo "   Estaban aqui y solo salian como la columna derecha de un grafico de"
+echo "   caracteres. Dibujar a partir de eso es hacer un grafico desde otro"
+echo "   grafico. Con -e salen como numeros, con su fecha."
+echo
+if [ -f "$M6D/M6_EP.pre" ]; then
+    $DRTRAN "$M6D/M6_EP.pre" "$M6D/M6_EI.pre" "$M6D/M6_EU.pre" \
+            "$M6D/M6_EC.pre" "$M6D/M6_EA.pre" "$M6D/M6_P.pre" \
+            -n "$M6D/m6_net.dag" -c "$M6D/m6_net_full.cns" \
+            -e "$TMPDIR/res.txt" -o "$TMPDIR/res2.out" >/dev/null 2>&1
+
+    N=$(grep -vc '^#' "$TMPDIR/res.txt" 2>/dev/null)
+    check "una fila por observacion estacionaria" 64 "$N" 0.5
+
+    C=$(grep -v '^#' "$TMPDIR/res.txt" | head -1 | wc -w)
+    check "y una columna por ecuacion, mas obs y fecha" 8 "$C" 0.5
+
+    # EL CONTRASTE: el residuo escrito tiene que ser el que el .out dibuja en
+    # su columna derecha. Si no, se estaria volcando otra cosa.
+    ESC=$(grep -v '^#' "$TMPDIR/res.txt" | head -1 | awk '{print $3}')
+    DIB=$(awk '/--- Residual series a\[1\]/{f=1}
+               f && /^   1 /{print $NF; exit}' "$TMPDIR/res2.out")
+    check "y es EL MISMO que el .out dibuja" "$DIB" "$ESC" 0.000001
+
+    grep -q "^1 1/1977" "$TMPDIR/res.txt" \
+        && pass "la fecha arranca tras la diferenciacion (obs 3 = 1/1977)" \
+        || fail "la fecha del primer residuo no cuadra con el operador"
+fi
+
 echo "============================================"
 echo -e "  RESULTADO: ${GREEN}$PASS PASS${NC}, ${RED}$FAIL FAIL${NC}"
 echo "============================================"

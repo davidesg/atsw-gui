@@ -162,6 +162,7 @@ int diag_cov = 1;
 real macheps;          /* épsilon de máquina (inicializado con cmacheps())  */
 FILE *outputv;         /* archivo de salida global (usado por diagnose.c)  */
 int quiet_mode = 1;    /* suprimir traza del optimizador (0 = verbose) */
+static char *resid_file = NULL;   /* -e: donde volcar los residuos */
 
 #define DRTRAN_VERSION "1.0"
 
@@ -2691,6 +2692,10 @@ static void usage(const char *prog)
 "           for the chart and pdflatex for the PDF; degrades gracefully without.\n"
 "\n"
 "OTHER\n"
+"  -e FILE  write the RESIDUALS of every equation to FILE: one column per\n"
+"           equation, one row per observation, with its date. They are here\n"
+"           as numbers and used to come out only as the right-hand column of\n"
+"           a character plot -- which is no way to feed a plotter.\n"
 "  -v       optimizer trace\n"
 "  -h       this help\n"
 "\n"
@@ -2827,6 +2832,42 @@ static void print_coef(real *xf, real *dev, const char *que, int j, int k)
     else
         printf("                %s_%d = %10.6f   (atado por el .cns)\n",
                que, k, xf[slot]);
+}
+
+/* Los residuos de cada ecuacion, en un fichero legible por maquina.
+ *
+ * El formato se explica a si mismo: cabecera con el tamaño, la frecuencia y
+ * los nombres, y luego una fila por observacion con su fecha. Quien lo lea no
+ * tiene que saber nada mas.                                              */
+static void write_residuals(const char *path, real **a, int n, int m)
+{
+    FILE *f = fopen(path, "w");
+    int   t, i;
+
+    if (!f) {
+        fprintf(stderr, "Warning: cannot write the residuals to %s\n", path);
+        return;
+    }
+
+    fprintf(f, "# drtran residuals: one column per equation\n");
+    fprintf(f, "# n %d   m %d   freq %d\n", n, m, Ts[1].freq);
+    fprintf(f, "# obs date");
+    for (i = 1; i <= m; i++)
+        fprintf(f, " %s", Ts[i].name ? Ts[i].name : "?");
+    fprintf(f, "\n");
+
+    for (t = 1; t <= n; t++) {
+        int per, yr;
+
+        /* La fecha: el ajuste empieza donde acaba la diferenciacion, asi que
+         * la observacion t de los residuos es la t + ornsop de la serie.  */
+        ObsToDate(Ts[1].begyear, Ts[1].begtime, t + Tm[1].ornsop,
+                  Ts[1].freq, &per, &yr);
+        fprintf(f, "%d %d/%d", t, yr, per);
+        for (i = 1; i <= m; i++) fprintf(f, " %.10f", (double) a[t][i]);
+        fprintf(f, "\n");
+    }
+    fclose(f);
 }
 
 static void warn_contemp_collinear(FILE *out)
@@ -3529,6 +3570,16 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
             fprintf(outputv, "\n");
             diagnose(&vdiag, Ts[1].freq);
             fprintf(outputv, "\n--- Multivariate diagnostics (Hosking + JB) ---\n");
+            /* Los residuos, a un fichero, si se pidieron.
+             *
+             * Estan aqui como numeros y hasta ahora solo salian como la
+             * columna derecha de un grafico de caracteres. Sacarlos de ahi
+             * para volver a dibujarlos es construir un grafico a partir de
+             * otro grafico: fragil por la anchura fija, y absurdo teniendo
+             * los numeros. Una columna por ecuacion, una fila por
+             * observacion, con la fecha delante.                       */
+            if (resid_file) write_residuals(resid_file, a_est, n_stat, n_ser);
+
             multivariate_diagnostics(a_est, n_stat, n_ser, outputv);
 
             /* -i : identificar la RED a partir de las ccf residuales del diagonal.
@@ -3686,7 +3737,7 @@ int main(int argc, char *argv[])
             if (strcmp(argv[ai], "-estwin") == 0) argv[ai] = (char *)"-R";
     }
 
-    while ((opt = getopt(argc, argv, "r:s:b:f:m:c:n:a:R:C:g:O:Lp0iXNDEMVSvho:")) != -1) {
+    while ((opt = getopt(argc, argv, "r:s:b:f:m:c:n:a:R:C:g:O:e:Lp0iXNDEMVSvho:")) != -1) {
         switch (opt) {
         case 'r': opt_r = optarg; auto_id = 0; break;
         case 's': opt_s = optarg; auto_id = 0; break;
@@ -3708,6 +3759,7 @@ int main(int argc, char *argv[])
         case 'a': aggr_file = optarg;        break;
         case 'R': rec_start = atoi(optarg);  break;
         case 'C': snprintf(rec_csv, sizeof rec_csv, "%s", optarg); break;
+        case 'e': resid_file = optarg;       break;
         case '0': no_transfer = 1; auto_id = 0; break;
         case 'V': embed_varma = 1;           break;
         case 'S': embed_varma = 0;           break;

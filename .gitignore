@@ -51,3 +51,10 @@ gui/drtran/drtran_gui
 gui/fue/gtk_fue
 gui/fug/gtk_fug
 gui/drtran/tests/work/
+
+# BINARIOS: no van al repositorio. Ya paso una vez con gui/drtran/mtram, y
+# estos dos estaban rastreados desde antes: un "make" los ensuciaba en cada
+# commit. Los ARTEFACTOS de tests/gui/work (el .inp, los PNG y los SVG) se
+# quedan como estaban -- son de quien los puso, y el driver los regenera.
+gui/fug/gtk_fmg
+engines/fug/tests/gui/work/fug

@@ -284,6 +284,36 @@ int pr_deriva_rol( Proyecto *p, const char *serie, const char *padre,
    return 0;
 }
 
+int pr_borra( Proyecto *p, const char *serie, const char *id, PrError *e )
+{
+   int i = pr_modelo_idx( p, serie, id ), j;
+
+   if ( i < 0 ) { falla( e, PR_ENOMODELO, 0, id ? id : "" ); return 1; }
+
+   /* LOS DATOS NO SE BORRAN. Son la raiz: sin ellos los modelos que quedan
+      apuntan a un padre que no esta, que es justo lo que el lector rechaza
+      al abrir el manifiesto.                                           */
+   if ( p->m[i].rol == PR_DATOS )
+       { falla( e, PR_EDATOS, 0, id ); return 1; }
+
+   /* NI UNO CON HIJOS. Se dice CUAL cuelga, no "tiene hijos": el analista
+      tiene que saber por donde empezar.                                */
+   for ( j = 0; j < p->nm; j++ )
+       if ( j != i && strcmp( p->m[j].serie, serie ) == 0 &&
+            strcmp( p->m[j].padre, id ) == 0 )
+           { falla( e, PR_EHIJOS, 0, p->m[j].id ); return 1; }
+
+   /* Si era el elegido, la serie se queda sin elegido. */
+   j = pr_serie_idx( p, serie );
+   if ( j >= 0 && strcmp( p->s[j].elegido, id ) == 0 )
+       { p->s[j].elegido[0] = '\0'; p->s[j].razon[0] = '\0'; }
+
+   for ( j = i; j + 1 < p->nm; j++ ) p->m[j] = p->m[j + 1];
+   p->nm--;
+   memset( &p->m[p->nm], 0, sizeof p->m[0] );
+   return 0;
+}
+
 int pr_razon( Proyecto *p, const char *serie, const char *id,
               const char *razon, PrError *e )
 {
@@ -602,6 +632,12 @@ const char *pr_error_es( const PrError *e, char *out, size_t n )
            break;
        case PR_EESCRIBIR:
            snprintf( out, n, "No pude escribir «%s».", e->texto ); break;
+       case PR_EDATOS:
+           snprintf( out, n, "«%s» son los datos de la serie: no se borran, "
+                     "que de ahí cuelga todo.", e->texto ); break;
+       case PR_EHIJOS:
+           snprintf( out, n, "De ese modelo cuelga «%s». Borra antes lo que "
+                     "viene de él, o el linaje se rompe.", e->texto ); break;
        }
    return out;
 }
@@ -637,6 +673,11 @@ const char *pr_error_en( const PrError *e, char *out, size_t n )
            snprintf( out, n, "unknown model %s", e->texto ); break;
        case PR_EESCRIBIR:
            snprintf( out, n, "can not write %s", e->texto ); break;
+       case PR_EDATOS:
+           snprintf( out, n, "%s holds the data: it is the root", e->texto );
+           break;
+       case PR_EHIJOS:
+           snprintf( out, n, "%s hangs from it", e->texto ); break;
        }
    return out;
 }

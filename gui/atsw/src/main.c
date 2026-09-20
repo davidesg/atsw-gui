@@ -8,6 +8,8 @@
 
 #include <string.h>
 
+#include <glib/gstdio.h>
+
 #include "atsw.h"
 
 void atsw_lanza( Atsw *a, const char *programa, const char *fichero );
@@ -47,6 +49,7 @@ static gchar *marcada( GtkWidget *tv, int columna )
 static void on_fue( GtkButton *b, Atsw *a );
 static void on_fug( GtkButton *b, Atsw *a );
 static void on_nuevo_modelo( GtkButton *b, Atsw *a );
+static void on_iterar( GtkButton *b, Atsw *a );
 static gboolean que_mandar( Atsw *a, gboolean acepta_pre, char *out, size_t n );
 
 /* EL VISTAZO: el .inp de la serie marcada, nunca el .pre. Identificar es
@@ -418,6 +421,153 @@ static void on_nuevo_modelo( GtkButton *b, Atsw *a )
     barra_pub( a, why );
 }
 
+/* BORRAR UN MODELO, Y SUS FICHEROS CON EL.
+ *
+ * Dejar el .out en el disco despues de quitar el nodo seria una mentira con
+ * fecha: el siguiente modelo de la serie vuelve a llamarse igual --la version
+ * es el ultimo numero LIBRE-- y se encontraria con el .out de otro puesto
+ * como suyo. Asi que o se va entero o no se va.
+ *
+ * Se pregunta antes, con la lista de lo que se va delante: es el unico gesto
+ * de la madre que destruye algo.                                       */
+static void borra_ficheros( Atsw *a, const char *serie, const char *id )
+{
+    static const char *ext[] = { ".inp", ".pre", ".out", ".tex", ".pdf",
+                                 ".eps", "_res.tex", "_dist.tex", NULL };
+    int i;
+
+    for ( i = 0; ext[i]; i++ )
+        {
+        char f[PR_RUTA];
+
+        if ( pr_ruta( a->p, serie, id, ext[i], f, sizeof f ) == 0 )
+            g_unlink( f );
+        }
+}
+
+static void on_borrar( GtkMenuItem *m, Atsw *a )
+{
+    gchar     *id = marcada( a->l_modelos, M_ID );
+    GtkWidget *d;
+    PrError    e;
+    char       why[512], f[PR_RUTA];
+    int        resp;
+
+    (void) m;
+    if ( !a->hay || !a->serie[0] || !id ) { g_free( id ); return; }
+
+    /* Se pregunta A LA LIBRERIA ANTES de preguntar al analista: si no se
+       puede borrar, la pregunta sobraba y lo que hace falta es el porque. */
+    {
+    Proyecto tmp = *a->p;
+
+    if ( pr_borra( &tmp, a->serie, id, &e ) != 0 )
+        { pr_error_es( &e, why, sizeof why ); barra_pub( a, why );
+          g_free( id ); return; }
+    }
+
+    pr_ruta( a->p, a->serie, id, ".inp", f, sizeof f );
+    d = gtk_message_dialog_new( GTK_WINDOW(a->ventana), GTK_DIALOG_MODAL,
+            GTK_MESSAGE_WARNING, GTK_BUTTONS_OK_CANCEL,
+            "¿Borro %s de «%s»?", id, a->serie );
+    gtk_message_dialog_format_secondary_text( GTK_MESSAGE_DIALOG(d),
+        "Se van el nodo del manifiesto Y sus ficheros (%s y los que lleven "
+        "su nombre). No se puede deshacer.\n\nLos datos de la serie no se "
+        "tocan.", f );
+    resp = gtk_dialog_run( GTK_DIALOG(d) );
+    gtk_widget_destroy( d );
+    if ( resp != GTK_RESPONSE_OK ) { g_free( id ); return; }
+
+    borra_ficheros( a, a->serie, id );
+    pr_borra( a->p, a->serie, id, &e );
+    if ( pr_escribir( a->p, a->p->path, &e ) != 0 )
+        barra_pub( a, "Los ficheros se fueron, pero no pude guardar el "
+                      "proyecto." );
+    else
+        {
+        gchar *t = g_strdup_printf( "%s: %s borrado, con sus ficheros.",
+                                    a->serie, id );
+
+        barra_pub( a, t );
+        g_free( t );
+        }
+    g_free( id );
+    atsw_refresca( a );
+}
+
+/* EL MENU DEL MODELO. Lo que se puede hacer con ESTE, no con la serie. */
+static void menu_modelo( Atsw *a, GdkEventButton *ev )
+{
+    GtkWidget *menu = gtk_menu_new();
+    GtkWidget *mi;
+    gchar     *id = marcada( a->l_modelos, M_ID );
+    gboolean   datos = id && pr_es_datos( a->p, a->serie, id );
+    gchar     *txt;
+
+    txt = datos ? g_strdup( "Especificar un modelo con fue" )
+                : g_strdup_printf( "Abrir %s en fue", id ? id : "" );
+    mi = gtk_menu_item_new_with_label( txt );
+    g_free( txt );
+    gtk_widget_set_tooltip_text( mi, datos
+        ? "Los datos no se estiman: nace un modelo colgado de ellos y es ése "
+          "el que se abre."
+        : "Se lleva el .pre si lo hay —es un óptimo reejecutable— y si no el "
+          ".inp. Es lo mismo que el doble clic." );
+    g_signal_connect( mi, "activate", G_CALLBACK(on_fue), a );
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+
+    if ( !datos )
+        {
+        mi = gtk_menu_item_new_with_label( "Iterar: seguir desde su óptimo" );
+        gtk_widget_set_tooltip_text( mi,
+            "Copia su .pre a un .inp nuevo. Un .pre que se toca vuelve a ser "
+            "un .inp: sus valores vuelven a ser semillas." );
+        g_signal_connect( mi, "activate", G_CALLBACK(on_iterar), a );
+        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+        }
+
+    mi = gtk_menu_item_new_with_label( "Modelo nuevo, desde los datos" );
+    gtk_widget_set_tooltip_text( mi,
+        "Empieza de cero: cuelga de los datos, no de éste." );
+    g_signal_connect( mi, "activate", G_CALLBACK(on_nuevo_modelo), a );
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+
+    if ( !datos )
+        {
+        gtk_menu_shell_append( GTK_MENU_SHELL(menu),
+                               gtk_separator_menu_item_new() );
+        mi = gtk_menu_item_new_with_label( "Borrar…" );
+        gtk_widget_set_tooltip_text( mi,
+            "El nodo y sus ficheros. Se pregunta antes. Un modelo del que "
+            "cuelgue otro no se borra: rompería el linaje." );
+        g_signal_connect( mi, "activate", G_CALLBACK(on_borrar), a );
+        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+        }
+
+    g_free( id );
+    gtk_widget_show_all( menu );
+    gtk_menu_popup_at_pointer( GTK_MENU(menu), (GdkEvent *) ev );
+}
+
+static gboolean on_modelo_click( GtkWidget *tv, GdkEventButton *ev, Atsw *a )
+{
+    GtkTreePath *ruta = NULL;
+
+    if ( ev->type != GDK_BUTTON_PRESS || ev->button != 3 ) return FALSE;
+    if ( !a->hay || !a->serie[0] ) return FALSE;
+    if ( !gtk_tree_view_get_path_at_pos( GTK_TREE_VIEW(tv), (gint) ev->x,
+                                         (gint) ev->y, &ruta, NULL, NULL, NULL ) )
+        return FALSE;
+
+    /* Se marca PRIMERO: el menu actua sobre la fila donde se pulso, no sobre
+       la que estuviera marcada de antes.                                */
+    gtk_tree_view_set_cursor( GTK_TREE_VIEW(tv), ruta, NULL, FALSE );
+    gtk_tree_path_free( ruta );
+
+    menu_modelo( a, ev );
+    return TRUE;
+}
+
 /* DOBLE CLIC EN UN MODELO: a fue, que es lo que se va a hacer con el.
  *
  * La fila ya esta marcada cuando llega esto --activar marca-- asi que se
@@ -649,9 +799,12 @@ static void activate( GtkApplication *app, gpointer d )
         "fuera, el número guardado seguiría diciendo lo de antes.\n\nEl "
         "manifiesto guarda linaje y razón, que son DECISIONES.\n\nDoble clic "
         "en un modelo lo abre en fue." );
-    /* Doble clic --o Intro-- sobre un modelo lo abre en fue. */
+    /* Doble clic --o Intro-- sobre un modelo lo abre en fue; el boton
+       derecho despliega lo que se puede hacer con el.               */
     g_signal_connect( a->l_modelos, "row-activated",
                       G_CALLBACK(on_modelo_activado), a );
+    g_signal_connect( a->l_modelos, "button-press-event",
+                      G_CALLBACK(on_modelo_click), a );
     gtk_box_pack_start( GTK_BOX(der), en_scroll( a->l_modelos ), TRUE, TRUE, 0 );
     gtk_paned_pack2( GTK_PANED(pan), der, TRUE, FALSE );
     gtk_paned_set_position( GTK_PANED(pan), 300 );

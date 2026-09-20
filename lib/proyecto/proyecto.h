@@ -84,7 +84,9 @@ typedef enum {
    PR_ECICLO,        /* el linaje se muerde la cola                       */
    PR_ENOSERIE,      /* esa serie no esta en el proyecto                  */
    PR_ENOMODELO,     /* ese modelo no esta                                */
-   PR_EESCRIBIR      /* no se pudo escribir                               */
+   PR_EESCRIBIR,     /* no se pudo escribir                               */
+   PR_EDATOS,        /* los datos no se tocan                             */
+   PR_EHIJOS         /* tiene modelos colgados: se romperia el linaje     */
 } PrCodigo;
 
 typedef struct {
@@ -220,6 +222,16 @@ int pr_camino( const Proyecto *p, const char *serie, const char *id,
                char camino[][PR_ID], int max );
 
 int pr_modelo_idx( const Proyecto *p, const char *serie, const char *id );
+
+/* BORRA UN MODELO DEL MANIFIESTO. No toca ficheros: eso es del que llama,
+   que es quien sabe cuales son suyos.
+
+   Se niega en dos casos, y los dos son el linaje:
+     - los DATOS no se borran, que son la raiz de todo (PR_EDATOS);
+     - un modelo con HIJOS tampoco, que los dejaria colgando (PR_EHIJOS).
+   Si era el elegido de su serie, la serie se queda SIN elegido: la decision
+   desaparece con el modelo, no se hereda a otro a la fuerza.            */
+int pr_borra( Proyecto *p, const char *serie, const char *id, PrError *e );
 
 /* --- los errores, en los dos idiomas ------------------------------------ */
 

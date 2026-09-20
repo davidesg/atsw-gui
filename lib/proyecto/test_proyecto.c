@@ -154,6 +154,25 @@ int main( int argc, char **argv )
         "  y los que no la tienen SIGUEN sin tenerla" );
     }
 
+    printf( "\nBORRAR: LO QUE ROMPERIA EL LINAJE NO SE BORRA\n" );
+    ok( pr_borra( p, "IPC_ES", "m00", &e ) != 0 && e.cod == PR_EDATOS,
+        "los datos no se borran: son la raiz" );
+    ok( pr_borra( p, "IPC_ES", "m01", &e ) != 0 && e.cod == PR_EHIJOS,
+        "ni un modelo del que cuelga otro" );
+    es( e.texto, "m02", "y se dice CUAL cuelga, para saber por donde empezar" );
+    ok( pr_borra( p, "IPC_ES", "m77", &e ) != 0 && e.cod == PR_ENOMODELO,
+        "uno que no esta, tampoco" );
+
+    es( pr_elegido( p, "IPC_ES" ), "m02", "m02 era el elegido" );
+    ok( pr_borra( p, "IPC_ES", "m02", &e ) == 0, "una hoja SI se borra" );
+    ok( p->nm == 3, "y el modelo se va del manifiesto" );
+    es( pr_elegido( p, "IPC_ES" ), "",
+        "la serie se queda SIN elegido: la decision se va con el modelo" );
+    ok( pr_modelo_idx( p, "IPC_ES", "m02" ) < 0, "y ya no se encuentra" );
+    ok( pr_borra( p, "IPC_ES", "m01", &e ) == 0,
+        "ahora m01 es hoja y se puede borrar" );
+    ok( pr_es_datos( p, "IPC_ES", "m00" ), "y los datos siguen ahi" );
+
     printf( "\nUN MANIFIESTO ROTO LO DICE, NO LO ADIVINA\n" );
     {
     const char *path = pon( "ciclo.yaml",

@@ -412,7 +412,7 @@ static void on_anadir( GtkButton *b, Mtram *m )
     if (!pide_enlace( m, &l, "Un enlace nuevo" )) return;
 
     m->red.lnk[m->red.n++] = l;
-    red_refresca( m );
+    mtram_refresca( m );
 }
 
 static void on_editar( GtkButton *b, Mtram *m )
@@ -430,8 +430,7 @@ gboolean red_edita_enlace( Mtram *m, int k )
 {
     if (k < 0 || k >= m->red.n) return FALSE;
     if (!pide_enlace( m, &m->red.lnk[k], "El enlace" )) return FALSE;
-    red_refresca( m );
-    modelo_refresca( m );
+    mtram_refresca( m );
     return TRUE;
 }
 
@@ -443,7 +442,7 @@ static void on_quitar( GtkButton *b, Mtram *m )
     memmove( &m->red.lnk[i], &m->red.lnk[i + 1],
              (m->red.n - i - 1) * sizeof(NetLink) );
     m->red.n--;
-    red_refresca( m );
+    mtram_refresca( m );
 }
 
 /* La estrella: lo que el motor hace cuando no se le da un .dag. */
@@ -464,7 +463,7 @@ static void on_estrella( GtkButton *b, Mtram *m )
     preview_show_status( m, "Estrella: las %d entradas apuntan a «%s». Es lo "
                             "que el motor supone si no se le da un .dag.",
                          m->c.n - 1, nom_de( m, 1 ) );
-    red_refresca( m );
+    mtram_refresca( m );
 }
 
 /* ------------------------------------------------------------------------ */
@@ -564,7 +563,7 @@ static void on_abrir( GtkButton *b, Mtram *m )
         preview_show_status( m, "%d enlace%s leído%s de %s.",
                              n, n == 1 ? "" : "s", n == 1 ? "" : "s",
                              g_path_get_basename( p ) );
-        red_refresca( m );
+        mtram_refresca( m );
     }
     g_free( p );
 }

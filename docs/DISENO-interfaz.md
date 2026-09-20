@@ -49,6 +49,10 @@ que diga *qué pasa*, y el desglose sólo cuando se pregunte. Es la idea del
 **R4 — La altura de la ventana se la queda la lista.** Todo lo demás es de
 altura fija. Si algo no cabe en su altura fija, se resume y se abre aparte.
 
+**R6 — Quien cambia el estado compartido refresca TODO**, no sólo su página.
+Refrescar sólo la propia deja mintiendo a las de aguas abajo, en silencio.
+*(Salió de que Estimación dijera «ningún enlace» habiendo enlaces.)*
+
 **R5 — Todo lo que va en un panel es de ancho fijo.** Casi todo lo que se
 enseña ahí son tablas hechas con espacios; con fuente proporcional se
 descuadran y dejan de leerse. Y lo que sea una matriz, rejilla de verdad, que
@@ -408,6 +412,10 @@ dejaba de reconocerse.
 Y no era sólo la matriz — el desglose de la ventana, los papeles de cada serie
 y el orden de construcción son tablas igual. De ahí una regla más:
 
+**R6 — Quien cambia el estado compartido refresca TODO**, no sólo su página.
+Refrescar sólo la propia deja mintiendo a las de aguas abajo, en silencio.
+*(Salió de que Estimación dijera «ningún enlace» habiendo enlaces.)*
+
 **R5 — Todo lo que va en un panel es de ancho fijo.** Es lo que toca: el `.out`
 del motor también lo es.
 
@@ -578,6 +586,39 @@ que lo distingue es la **fecha del fichero**, y eso es lo que se enseña.
 Añadir un campo «versión» que siempre dice lo mismo sería informar de nada.
 *(Si alguna vez interesa, lo que haría falta es que el motor incluyera la fecha
 de compilación o el hash de git — un cambio en el motor, no en el GUI.)*
+
+### La segunda revisión: cuatro cosas más
+
+**El `.out` se abría con el visor del sistema.** No tiene sentido: el informe
+del modelo es **el resultado del trabajo**, no un adjunto. Va en una **libreta
+de dos pestañas** junto a la salida en vivo:
+
+| pestaña | qué |
+|---|---|
+| **Consola** | lo que el motor va diciendo, según llega |
+| **Salida del modelo** | el `.out`, aquí dentro |
+
+Al terminar bien, salta sola a la segunda.
+
+**`Opciones…` y `Mantener…` eran dos botones para la misma clase de cosa.** El
+cast y lo que se mantiene del `.pre` dicen los dos **cómo se estima**; tenerlos
+separados los presentaba como sistemas distintos. Un solo `Opciones…` con tres
+bloques: el cast, qué se mantiene, la traza.
+
+**«Desenlace» no era un desenlace: era ayuda.** El veredicto ya dice cómo
+acabó; el panel explica **qué significa y cuál es el criterio de parada**. Se
+llama `Criterio de parada…`.
+
+**Y un fallo de arquitectura**, que se vio porque Estimación decía *«ningún
+enlace»* habiendo enlaces: **cada página refrescaba sólo la suya.** Añadir un
+enlace en Red dejaba a Estimación y a Modelo con datos viejos. No era un
+despiste en un sitio — era que **nadie era dueño de la cadena**. Ahora hay una
+sola puerta, `mtram_refresca()`, y la llama cualquiera que toque el estado
+compartido.
+
+> **R6 — Quien cambia el estado compartido refresca TODO.** Una página que
+> refresca sólo la suya deja mintiendo a las de aguas abajo, y la mentira es
+> silenciosa.
 
 ### Lo que se añadió a `lib/engine`
 

@@ -402,6 +402,8 @@ static void on_desenlace( GtkButton *b, Mtram *m )
  * drtran no imprime nada por iteracion --con -v la salida crece en UNA linea,
  * 36 frente a 35-- asi que un porcentaje seria inventado. El pulso dice
  * "trabajando" sin fingir que sabe cuanto queda.                         */
+static void carga_informe( Mtram *m );
+
 static gboolean late( gpointer d )
 {
     Mtram *m = d;
@@ -461,6 +463,11 @@ static void on_done( const EngineResult *r, gpointer data )
 
     cuenta_desenlace( m, r );
 
+    /* El informe, en su pestaña, y alli se salta: es el resultado. */
+    carga_informe( m );
+    if (verdict_ok( &E->v ))
+        gtk_notebook_set_current_page( GTK_NOTEBOOK(E->libreta), 1 );
+
     /* Los residuos son DE ESTA CORRIDA: la diagnosis se alimenta aqui y no
      * de un sitio global. Es la correccion a lo unico verdaderamente malo
      * del diseño de TASTE -- una sola ranura RESIDUOS, que hacia imposible
@@ -508,6 +515,7 @@ static void on_estimar( GtkButton *b, Mtram *m )
 
     gtk_label_set_text( GTK_LABEL(E->titulo), "drtran — ejecutando…" );
     gtk_label_set_text( GTK_LABEL(E->ver_fin), "" );
+    gtk_notebook_set_current_page( GTK_NOTEBOOK(E->libreta), 0 );
     gtk_text_buffer_set_text(
         gtk_text_view_get_buffer( GTK_TEXT_VIEW(E->salida) ), "", -1 );
 
@@ -538,13 +546,32 @@ static void on_estimar( GtkButton *b, Mtram *m )
     g_free( out ); g_free( dag ); g_free( cns );
 }
 
-static void on_ver_out( GtkButton *b, Mtram *m )
+/* El .out, EN SU PESTAÑA.
+ *
+ * Antes se abria con el visor del sistema, y eso no tiene sentido: el informe
+ * del modelo es el resultado del trabajo, no un adjunto. Va en la segunda
+ * pestaña de la libreta, al lado de la consola.                         */
+static void carga_informe( Mtram *m )
 {
-    if (!m->est.out_path) {
-        preview_show_status( m, "Todavía no hay resultados." );
+    GtkTextBuffer *b = gtk_text_view_get_buffer( GTK_TEXT_VIEW(m->est.informe) );
+    gchar         *txt = NULL;
+    gsize          n = 0;
+
+    if (!m->est.out_path ||
+        !g_file_get_contents( m->est.out_path, &txt, &n, NULL )) {
+        gtk_text_buffer_set_text( b, "", -1 );
         return;
     }
-    preview_open_external( m, m->est.out_path );
+    /* El .out no tiene por que ser UTF-8 valido: los nombres de serie salen
+     * del .pre y pueden traer cualquier cosa.                          */
+    if (!g_utf8_validate( txt, n, NULL )) {
+        gchar *u = g_locale_to_utf8( txt, n, NULL, NULL, NULL );
+
+        if (u) { g_free( txt ); txt = u; }
+        else   { gchar *f = g_utf8_make_valid( txt, n ); g_free( txt ); txt = f; }
+    }
+    gtk_text_buffer_set_text( b, txt, -1 );
+    g_free( txt );
 }
 
 static void on_parar( GtkButton *b, Mtram *m )
@@ -556,80 +583,6 @@ static void on_parar( GtkButton *b, Mtram *m )
 }
 
 
-/* ------------------------------------------------------------------------ */
-/* Que se MANTIENE del .pre                                                  */
-/*                                                                           */
-/* Al unir varios univariantes en un sistema, sus parametros pueden dejarse   */
-/* correr --y se mueven, porque ahora hay covarianzas-- o clavarse en lo que  */
-/* fue dijo. Es -N/-X/-D/-E/-M, y esta aqui y no en Modelo porque dice COMO   */
-/* SE ESTIMA y no QUE ES EL MODELO, igual que el cast.                        */
-/*                                                                           */
-/* Cambia la cuenta de parametros, asi que al aceptar se refresca Modelo: ahi */
-/* se ve lo que cuesta cada casilla.                                          */
-/* ------------------------------------------------------------------------ */
-
-static void on_mantener( GtkButton *bt, Mtram *m )
-{
-    Estima    *E = &m->est;
-    GtkWidget *d, *caja, *c[5], *av;
-    static const struct { const char *txt, *tip; } OP[5] = {
-      { "-N   el ARMA del ruido de la SALIDA",
-        "Los phi y theta de la primera serie: se mantienen los del .pre." },
-      { "-X   el ARMA de las ENTRADAS",
-        "Los phi y theta de las demás series." },
-      { "-D   los deterministas de la SALIDA",
-        "Todos los omega y delta de las variables deterministas de la primera." },
-      { "-E   los deterministas de las ENTRADAS",
-        "Ídem, en las demás series." },
-      { "-M   las medias",
-        "Las mu de todas. Una media que el .pre ya declara FIJA lo está de "
-        "todos modos; esto clava además las que estaban libres." },
-    };
-    gboolean *campo[5];
-    int       i;
-
-    campo[0] = &E->fix_N;  campo[1] = &E->fix_X;  campo[2] = &E->fix_D;
-    campo[3] = &E->fix_E;  campo[4] = &E->fix_M;
-
-    d = gtk_dialog_new_with_buttons( "Qué se mantiene del .pre",
-            GTK_WINDOW(m->ventana_p),
-            GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
-            "_Cancelar", GTK_RESPONSE_CANCEL,
-            "_Aceptar",  GTK_RESPONSE_ACCEPT, NULL );
-    caja = gtk_dialog_get_content_area( GTK_DIALOG(d) );
-    gtk_container_set_border_width( GTK_CONTAINER(caja), 12 );
-    gtk_box_set_spacing( GTK_BOX(caja), 6 );
-
-    av = gtk_label_new(
-        "Al juntar varios univariantes en un sistema, sus parámetros pueden\n"
-        "dejarse correr — y se mueven, porque ahora hay covarianzas — o\n"
-        "clavarse en lo que fue dijo. Marcar es MANTENER.\n\n"
-        "Lo que el .pre ya declare FIJO lo está de todos modos: esto sólo\n"
-        "añade, nunca libera.\n\n"
-        "La pestaña Modelo enseña lo que cuesta cada casilla." );
-    gtk_widget_set_halign( av, GTK_ALIGN_START );
-    gtk_container_add( GTK_CONTAINER(caja), av );
-    gtk_container_add( GTK_CONTAINER(caja),
-                       gtk_separator_new( GTK_ORIENTATION_HORIZONTAL ) );
-
-    for (i = 0; i < 5; i++) {
-        c[i] = gtk_check_button_new_with_label( OP[i].txt );
-        gtk_widget_set_tooltip_text( c[i], OP[i].tip );
-        gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(c[i]), *campo[i] );
-        gtk_container_add( GTK_CONTAINER(caja), c[i] );
-    }
-
-    gtk_widget_show_all( d );
-    if (gtk_dialog_run( GTK_DIALOG(d) ) == GTK_RESPONSE_ACCEPT) {
-        for (i = 0; i < 5; i++)
-            *campo[i] = gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(c[i]) );
-        gtk_widget_destroy( d );
-        modelo_refresca( m );          /* la cuenta cambia: se ve alli */
-        estima_refresca( m );          /* y la orden, aqui            */
-        return;
-    }
-    gtk_widget_destroy( d );
-}
 
 
 /* ------------------------------------------------------------------------ */
@@ -677,55 +630,113 @@ void estima_refresca( Mtram *m )
     }
 }
 
-/* Las opciones que NO son un modo: el cast y la traza. */
+/* ------------------------------------------------------------------------ */
+/* UN SOLO sitio para las opciones                                           */
+/*                                                                           */
+/* El cast y lo que se mantiene del .pre son la misma clase de cosa: dicen    */
+/* COMO SE ESTIMA. Tenerlas en dos botones distintos --"Opciones" y           */
+/* "Mantener"-- las presentaba como si fueran sistemas separados, y no lo     */
+/* son. Un solo dialogo, con sus dos bloques.                                 */
+/* ------------------------------------------------------------------------ */
+
+static GtkWidget *bloque( GtkWidget *caja, const char *titulo )
+{
+    GtkWidget *l = gtk_label_new( NULL );
+    gchar     *mk = g_strdup_printf( "<b>%s</b>", titulo );
+
+    gtk_label_set_markup( GTK_LABEL(l), mk );
+    g_free( mk );
+    gtk_widget_set_halign( l, GTK_ALIGN_START );
+    gtk_widget_set_margin_top( l, 6 );
+    gtk_container_add( GTK_CONTAINER(caja), l );
+    return l;
+}
+
 static void on_opciones( GtkButton *bt, Mtram *m )
 {
     Estima    *E = &m->est;
-    GtkWidget *d, *caja, *c_resta, *c_traza, *av;
+    GtkWidget *d, *caja, *c_resta, *c_traza, *c[5], *av;
+    static const struct { const char *txt, *tip; } OP[5] = {
+      { "-N   el ARMA del ruido de la SALIDA",
+        "Los phi y theta de la primera serie: se mantienen los del .pre." },
+      { "-X   el ARMA de las ENTRADAS",
+        "Los phi y theta de las demás series." },
+      { "-D   los deterministas de la SALIDA", "" },
+      { "-E   los deterministas de las ENTRADAS", "" },
+      { "-M   las medias",
+        "Una media que el .pre ya declara FIJA lo está de todos modos; esto "
+        "clava además las que estaban libres." },
+    };
+    gboolean *campo[5];
+    int       i;
 
-    d = gtk_dialog_new_with_buttons( "Opciones de estimación",
+    campo[0] = &E->fix_N;  campo[1] = &E->fix_X;  campo[2] = &E->fix_D;
+    campo[3] = &E->fix_E;  campo[4] = &E->fix_M;
+
+    d = gtk_dialog_new_with_buttons( "Cómo se estima",
             GTK_WINDOW(m->ventana_p),
             GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
             "_Cancelar", GTK_RESPONSE_CANCEL,
             "_Aceptar",  GTK_RESPONSE_ACCEPT, NULL );
     caja = gtk_dialog_get_content_area( GTK_DIALOG(d) );
     gtk_container_set_border_width( GTK_CONTAINER(caja), 12 );
-    gtk_box_set_spacing( GTK_BOX(caja), 6 );
+    gtk_box_set_spacing( GTK_BOX(caja), 4 );
 
-    c_resta = gtk_check_button_new_with_label( "-S   cast por resta" );
+    /* --- el cast --- */
+    bloque( caja, "El cast" );
+
+    c_resta = gtk_check_button_new_with_label( "-S   por resta" );
     gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(c_resta), E->cast_resta );
     gtk_container_add( GTK_CONTAINER(caja), c_resta );
 
-    /* Y AQUI EL AVISO QUE FALTABA: el motor DESPACHA SOLO al cast por resta
-     * cuando los operadores son incompatibles. La casilla puede quedar
-     * contradicha sin que nadie lo diga.                              */
     av = gtk_label_new(
         "Por omisión el cast es EMPOTRADO (-V) y la verosimilitud es la\n"
-        "exacta. El cast por resta construye el ruido fuera del motor y en\n"
-        "t=1 necesita valores de la entrada que no existen: los pone a cero.\n\n"
+        "exacta. El de resta construye el ruido fuera del motor y en t=1\n"
+        "necesita valores de la entrada que no existen: los pone a cero.\n\n"
         "OJO: el motor DESPACHA SOLO al cast por resta cuando los operadores\n"
-        "∇ de dos series son incompatibles — lo dice al empezar, en su\n"
-        "salida. Así que esta casilla puede quedar contradicha, y no es un\n"
+        "∇ de dos series son incompatibles — lo dice al empezar, en la\n"
+        "consola. Así que esta casilla puede quedar contradicha, y no es un\n"
         "fallo: es que el empotrado no puede representar esa relación de\n"
-        "niveles (BUG-8). La pestaña Series dice cómo son los operadores." );
+        "niveles (BUG-8)." );
     gtk_widget_set_halign( av, GTK_ALIGN_START );
     gtk_container_add( GTK_CONTAINER(caja), av );
-    gtk_container_add( GTK_CONTAINER(caja),
-                       gtk_separator_new( GTK_ORIENTATION_HORIZONTAL ) );
 
+    /* --- lo que se mantiene del .pre --- */
+    bloque( caja, "Qué se mantiene del .pre" );
+
+    av = gtk_label_new(
+        "Al juntar varios univariantes, sus parámetros pueden dejarse correr\n"
+        "— y se mueven, porque ahora hay covarianzas — o clavarse en lo que\n"
+        "fue dijo. Marcar es MANTENER. Lo que el .pre ya declare FIJO lo está\n"
+        "de todos modos: esto sólo añade.\n"
+        "La pestaña Modelo enseña lo que cuesta cada casilla." );
+    gtk_widget_set_halign( av, GTK_ALIGN_START );
+    gtk_container_add( GTK_CONTAINER(caja), av );
+
+    for (i = 0; i < 5; i++) {
+        c[i] = gtk_check_button_new_with_label( OP[i].txt );
+        if (OP[i].tip[0]) gtk_widget_set_tooltip_text( c[i], OP[i].tip );
+        gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(c[i]), *campo[i] );
+        gtk_container_add( GTK_CONTAINER(caja), c[i] );
+    }
+
+    /* --- la traza --- */
+    bloque( caja, "Traza" );
     c_traza = gtk_check_button_new_with_label( "-v   traza del optimizador" );
     gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(c_traza), E->traza );
     gtk_widget_set_tooltip_text( c_traza,
         "Añade poco: drtran no imprime por iteración. De ahí que la barra "
-        "de progreso vaya en pulso y no con porcentaje." );
+        "vaya en pulso y no con porcentaje." );
     gtk_container_add( GTK_CONTAINER(caja), c_traza );
 
     gtk_widget_show_all( d );
     if (gtk_dialog_run( GTK_DIALOG(d) ) == GTK_RESPONSE_ACCEPT) {
         E->cast_resta = gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(c_resta) );
         E->traza      = gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(c_traza) );
+        for (i = 0; i < 5; i++)
+            *campo[i] = gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(c[i]) );
         gtk_widget_destroy( d );
-        estima_refresca( m );
+        mtram_refresca( m );          /* la cuenta de Modelo cambia */
         return;
     }
     gtk_widget_destroy( d );
@@ -793,13 +804,11 @@ GtkWidget *estima_pagina_new( Mtram *m )
     g_signal_connect( b, "clicked", G_CALLBACK(fn), m ); \
     gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
 
-    BOTON( "Opciones…", on_opciones, "El cast y la traza." )
-    BOTON( "Mantener…", on_mantener,
-           "Qué se mantiene del .pre en vez de reestimarlo al juntar las "
-           "ecuaciones: -N, -X, -D, -E, -M." )
-    BOTON( "Ver el .out…", on_ver_out, "El informe entero, en el visor." )
-    BOTON( "Desenlace…", on_desenlace,
-           "Cómo acabó el optimizador, con su explicación." )
+    BOTON( "Opciones…", on_opciones,
+           "Cómo se estima: el cast, qué se mantiene del .pre, y la traza." )
+    BOTON( "Criterio de parada…", on_desenlace,
+           "Qué significa cómo acabó el optimizador, y cuál es su criterio de "
+           "parada." )
 #undef BOTON
 
     /* Que binario, y de cuando: a la derecha y pequeño. Es lo unico que caza
@@ -840,6 +849,11 @@ GtkWidget *estima_pagina_new( Mtram *m )
         "que un porcentaje sería inventado." );
     gtk_box_pack_start( GTK_BOX(vb), E->barra, TRUE, TRUE, 0 );
 
+    /* Dos pestañas: la CONSOLA --lo que el motor va diciendo-- y el INFORME
+     * del modelo, que es el .out. El informe es el resultado del trabajo y
+     * abrirlo con el visor del sistema no tenia sentido: va aqui.      */
+    E->libreta = gtk_notebook_new();
+
     E->salida = gtk_text_view_new();
     gtk_text_view_set_editable( GTK_TEXT_VIEW(E->salida), FALSE );
     gtk_text_view_set_monospace( GTK_TEXT_VIEW(E->salida), TRUE );
@@ -847,10 +861,22 @@ GtkWidget *estima_pagina_new( Mtram *m )
     gtk_scrolled_window_set_policy( GTK_SCROLLED_WINDOW(sc),
                                     GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC );
     gtk_container_add( GTK_CONTAINER(sc), E->salida );
+    gtk_notebook_append_page( GTK_NOTEBOOK(E->libreta), sc,
+                              gtk_label_new( "Consola" ) );
+
+    E->informe = gtk_text_view_new();
+    gtk_text_view_set_editable( GTK_TEXT_VIEW(E->informe), FALSE );
+    gtk_text_view_set_monospace( GTK_TEXT_VIEW(E->informe), TRUE );
+    sc = gtk_scrolled_window_new( NULL, NULL );
+    gtk_scrolled_window_set_policy( GTK_SCROLLED_WINDOW(sc),
+                                    GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC );
+    gtk_container_add( GTK_CONTAINER(sc), E->informe );
+    gtk_notebook_append_page( GTK_NOTEBOOK(E->libreta), sc,
+                              gtk_label_new( "Salida del modelo" ) );
 
     marco = gtk_box_new( GTK_ORIENTATION_VERTICAL, 4 );
     gtk_box_pack_start( GTK_BOX(marco), vb, FALSE, FALSE, 0 );
-    gtk_box_pack_start( GTK_BOX(marco), sc, TRUE, TRUE, 0 );
+    gtk_box_pack_start( GTK_BOX(marco), E->libreta, TRUE, TRUE, 0 );
     gtk_box_pack_start( GTK_BOX(caja), marco, TRUE, TRUE, 0 );
 
     /* --- los dos veredictos, altura fija --- */

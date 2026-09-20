@@ -195,6 +195,14 @@ static void refresca_compat(Mtram *m)
             "Operadores ∇: los %d pares, iguales", iguales);
 }
 
+/* TODO se refresca por aqui.
+ *
+ * El fallo que esto cierra: cada pagina refrescaba SOLO LA SUYA, asi que
+ * añadir un enlace en Red dejaba a Estimacion diciendo "ningun enlace" y a
+ * Modelo con el arbol viejo. No era un despiste en un sitio: era que nadie
+ * era dueño de la cadena salvo esta funcion, que solo se llamaba al cargar
+ * series. Ahora cualquier pagina que cambie el estado compartido llama a
+ * mtram_refresca y lo de aguas abajo se entera.                        */
 static void refresca(Mtram *m)
 {
     refresca_lista(m);
@@ -205,6 +213,8 @@ static void refresca(Mtram *m)
     modelo_refresca(m);
     estima_refresca(m);
 }
+
+void mtram_refresca(Mtram *m) { refresca(m); }
 
 /* ------------------------------------------------------------------------ */
 /* Botones                                                                   */

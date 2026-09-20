@@ -332,8 +332,7 @@ static void on_a_la_red( GtkButton *b, Mtram *m )
         if (m->red.lnk[k].out == 1 && m->red.lnk[k].inp == u->serie + 1) {
             m->red.lnk[k].b = u->b;
             m->red.lnk[k].s = u->s;
-            red_refresca( m );
-            modelo_refresca( m );
+            mtram_refresca( m );
             preview_show_status( m, "«%s» ya estaba: se le ponen b=%d s=%d.",
                 m->c.s[u->serie]->ts.name, u->b, u->s );
             return;
@@ -350,8 +349,7 @@ static void on_a_la_red( GtkButton *b, Mtram *m )
     l->inp = u->serie + 1;
     l->b = u->b;  l->r = 0;  l->s = u->s;
 
-    red_refresca( m );
-    modelo_refresca( m );
+    mtram_refresca( m );
 
     if (u->neg)
         preview_show_status( m, "Añadido %s ← %s con b=%d s=%d. OJO: tiene %d "

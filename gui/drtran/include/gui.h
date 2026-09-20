@@ -89,7 +89,9 @@ typedef struct {
     GtkWidget *orden;         /* la orden, en una linea COPIABLE            */
     GtkWidget *titulo;        /* el estado, encima de la salida             */
     GtkWidget *barra;         /* en PULSO: no se puede saber el avance      */
-    GtkWidget *salida;        /* lo que dice el motor, EN VIVO              */
+    GtkWidget *salida;        /* la CONSOLA: lo que dice el motor, en vivo  */
+    GtkWidget *informe;       /* el .out del modelo, aqui dentro            */
+    GtkWidget *libreta;       /* las dos pestañas                           */
     GtkWidget *ver_fin;       /* veredicto: como acabo                      */
     GtkWidget *ver_que;       /* veredicto: que se estima                   */
     GtkWidget *motor;         /* que drtran, y de cuando                    */
@@ -166,6 +168,12 @@ typedef struct {
 } Mtram;
 
 GtkWidget *mtram_window_new(GtkApplication *app, Mtram *m);
+
+/* Refresca TODAS las paginas. La llama cualquiera que cambie el estado
+ * compartido --las series, la red, el modelo-- porque lo de aguas abajo
+ * depende de ello: añadir un enlace cambia lo que Estimacion va a lanzar y
+ * lo que Modelo enseña.                                                 */
+void mtram_refresca(Mtram *m);
 
 /* ------------------------------------------------------------------------ */
 /* Presentacion, compartida por las paginas                                  */

@@ -1050,8 +1050,7 @@ static void on_covarianzas( GtkButton *bt, Mtram *m )
         gtk_widget_destroy( d );
 
         if (cambios) {
-            refresca_lista( m );
-            refresca_cuenta( m );
+            mtram_refresca( m );
             preview_show_status( m, "%d covarianza%s cambiada%s.",
                                  cambios, cambios == 1 ? "" : "s",
                                  cambios == 1 ? "" : "s" );

@@ -739,7 +739,9 @@ GtkWidget *mtram_window_new(GtkApplication *app, Mtram *m)
 
     w = gtk_application_window_new(app);
     m->ventana_p = w;
-    gtk_window_set_title(GTK_WINDOW(w), "mtram — función de transferencia");
+    /* El titulo nombra EL MOTOR, como hace fue_gui: "mtram" es el servidor
+     * MCP, y en esta suite un nombre senala una cosa sola.             */
+    gtk_window_set_title(GTK_WINDOW(w), "drtran — función de transferencia");
     gtk_window_set_default_size(GTK_WINDOW(w), 900, 620);
 
     /* El cuaderno: las dos cosas que hay que resolver, en este orden. Primero

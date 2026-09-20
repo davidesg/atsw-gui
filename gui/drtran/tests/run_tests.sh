@@ -1,5 +1,5 @@
 #!/bin/sh
-# El banco de mtram. Contrasta lo que el GUI dice con lo que dice drtran sobre
+# El banco de drtran_gui. Contrasta lo que el GUI dice con lo que dice drtran sobre
 # los mismos ficheros, no con lo que nos parezca.
 TOP=$(cd "$(dirname "$0")/.." && pwd)
 L="$TOP/../../lib"; E="$TOP/../../engines/drtran"
@@ -84,7 +84,7 @@ M6D="$E/tests/data/m6"
 if [ -f "$M6D/M6_EP.pre" ]; then
     "$W/test_slots" "$M6D" || exit 1
 
-    # Y lo que mtram ESCRIBE, que lo lea el motor y de el mismo recuento.
+    # Y lo que drtran_gui ESCRIBE, que lo lea el motor y de el mismo recuento.
     if [ -x "$E/bin/drtran" ]; then
         SER="$M6D/M6_EP.pre $M6D/M6_EI.pre $M6D/M6_EU.pre $M6D/M6_EC.pre \
              $M6D/M6_EA.pre $M6D/M6_P.pre"

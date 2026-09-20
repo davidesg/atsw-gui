@@ -1,4 +1,10 @@
-# mtram -- el GUI de drtran, GTK+3.
+# drtran_gui -- el GUI de drtran, GTK+3.
+#
+# SE LLAMA COMO SU MOTOR, no como el asistente. "mtram" es el nombre del
+# SERVIDOR MCP de drtran-python (drtran.mcp_server:main), que pip instala en
+# ~/.local/bin/mtram; llamar igual al binario de GTK hacia que una instalacion
+# lo machacara sin avisar. El convenio del monorepo ya existia y es este:
+# gui/fue construye fue_gui.
 #
 # Lo que hace distinto a este Makefile: NO tiene un lector del .pre. Enlaza el
 # del motor -- engines/drtran/src/fue_pre_reader.c -- tal cual, con nlatools
@@ -51,19 +57,19 @@ ifeq ($(GSL_LIBS),)
   GSL_LIBS = -lgsl -lgslcblas
 endif
 
-TARGET = mtram
+TARGET = drtran_gui
 
 all: $(TARGET)
 
 $(TARGET): $(SRC) $(HDR)
 	@if [ -z "$(GTK_LIBS)" ]; then \
-	    echo "mtram necesita los ficheros de desarrollo de GTK 3"; \
+	    echo "drtran_gui necesita los ficheros de desarrollo de GTK 3"; \
 	    echo "(Debian/Ubuntu: sudo apt install libgtk-3-dev)"; exit 1; fi
 	$(CC) $(CFLAGS) $(GTK_CFLAGS) $(INC) -o $@ $(SRC) $(GTK_LIBS) $(GSL_LIBS) -lm
 
 install: $(TARGET)
-	install -d $(PREFIX)/bin
-	install -m 755 $(TARGET) $(PREFIX)/bin/
+	install -d $(DESTDIR)$(PREFIX)/bin
+	install -m 755 $(TARGET) $(DESTDIR)$(PREFIX)/bin/
 
 clean:
 	rm -f $(TARGET)

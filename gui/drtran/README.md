@@ -1,4 +1,4 @@
-# mtram — el GUI de drtran
+# drtran_gui — el GUI de drtran
 
 Modelos de **función de transferencia** y **redes** de transferencias.
 

@@ -2211,6 +2211,45 @@ if [ -f "$M6D/M6_EP.pre" ]; then
         || fail "la fecha del primer residuo no cuadra con el operador"
 fi
 
+# ── -0 GANA SOBRE -n ─────────────────────────────────────────────────────
+echo
+echo "── 14. El modo diagonal no se deja pisar por el .dag ──"
+echo "   -0 no es una opcion, es un MODO. El .dag se leia DESPUES y reponia"
+echo "   todos los enlaces, asi que -0 con -n se ignoraba EN SILENCIO: la"
+echo "   corrida 'diagonal' salia identica a la completa. Eso hace imposible"
+echo "   el baseline del contraste LR, que es para lo que existe el modo."
+echo
+if [ -f "$M6D/M6_EP.pre" ]; then
+    SER="$M6D/M6_EP.pre $M6D/M6_EI.pre $M6D/M6_EU.pre \
+         $M6D/M6_EC.pre $M6D/M6_EA.pre $M6D/M6_P.pre"
+
+    $DRTRAN $SER -n "$M6D/m6_net.dag" -o "$TMPDIR/dg_net.out" >/dev/null 2>&1
+    $DRTRAN $SER -0 -o "$TMPDIR/dg_d1.out" >/dev/null 2>&1
+    $DRTRAN $SER -0 -n "$M6D/m6_net.dag" -o "$TMPDIR/dg_d2.out" \
+            >"$TMPDIR/dg_d2.log" 2>&1
+
+    LL_NET=$(awk '/Log-likelihood/{print $3; exit}' "$TMPDIR/dg_net.out")
+    LL_D1=$(awk '/Log-likelihood/{print $3; exit}' "$TMPDIR/dg_d1.out")
+    LL_D2=$(awk '/Log-likelihood/{print $3; exit}' "$TMPDIR/dg_d2.out")
+
+    check "-0 con -n da el MISMO logL que -0 solo" "$LL_D1" "$LL_D2" 0.000001
+
+    # Y LO QUE FALLABA: que NO sea el de la red. Sin esto el LR sale 0.
+    if [ -n "$LL_NET" ] && [ -n "$LL_D2" ] && [ "$LL_NET" != "$LL_D2" ]; then
+        pass "y NO el de la red: el LR tiene contra que contrastar"
+    else
+        fail "-0 con -n reprodujo la red: el baseline del LR es inservible"
+    fi
+
+    grep -q "IGNORED: -0 fits the diagonal model" "$TMPDIR/dg_d2.log" \
+        && pass "y lo dice en voz alta, no se lo calla" \
+        || fail "-0 descarta el .dag sin anunciarlo"
+
+    # El diagonal ajusta PEOR, que es lo que lo hace un baseline: esta anidado.
+    PEOR=$(awk -v a="$LL_D1" -v b="$LL_NET" 'BEGIN{print (a < b) ? 1 : 0}')
+    check "y ajusta peor que la red, como debe un modelo anidado" 1 "$PEOR" 0.5
+fi
+
 echo "============================================"
 echo -e "  RESULTADO: ${GREEN}$PASS PASS${NC}, ${RED}$FAIL FAIL${NC}"
 echo "============================================"

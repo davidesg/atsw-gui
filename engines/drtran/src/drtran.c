@@ -3876,8 +3876,21 @@ int main(int argc, char *argv[])
     build_default_links();
 
     if (net_file != NULL) {
-        if (read_network(net_file) < 0) return 6;
-        auto_id = 0;             /* la red trae sus propios ordenes */
+        /* -0 GANA SOBRE -n, Y SE DICE.
+           -0 no es una opcion, es un MODO: "fit the two univariate models
+           jointly and diagonally". Antes el .dag se leia despues y reponia
+           todos los enlaces, asi que -0 con -n se ignoraba EN SILENCIO y la
+           corrida "diagonal" salia identica a la completa -- misma
+           verosimilitud, mismos residuos. Eso hace imposible el baseline del
+           contraste LR, que es justo para lo que existe el modo.           */
+        if (no_transfer) {
+            printf("Network file %s IGNORED: -0 fits the diagonal model.\n",
+                   net_file);
+            auto_id = 0;
+        } else {
+            if (read_network(net_file) < 0) return 6;
+            auto_id = 0;         /* la red trae sus propios ordenes */
+        }
     }
     if (!topo_sort()) return 7;
 

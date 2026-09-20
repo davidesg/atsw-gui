@@ -13,6 +13,7 @@
 void atsw_lanza( Atsw *a, const char *programa );
 gboolean atsw_itera( Atsw *a, const char *serie, const char *padre,
                      char *why, size_t n );
+void atsw_datos( Atsw *a );
 
 static Atsw A;
 
@@ -116,6 +117,7 @@ static void on_nuevo( GtkButton *b, Atsw *a )
     gtk_widget_destroy( d );
 }
 
+static void on_datos( GtkButton *b, Atsw *a )  { (void)b; atsw_datos( a ); }
 static void on_fue( GtkButton *b, Atsw *a )    { (void)b; atsw_lanza( a, "fue_gui" ); }
 static void on_fug( GtkButton *b, Atsw *a )    { (void)b; atsw_lanza( a, "gtk_fmg" ); }
 static void on_drtran( GtkButton *b, Atsw *a ) { (void)b; atsw_lanza( a, "drtran_gui" ); }
@@ -275,6 +277,10 @@ static void activate( GtkApplication *app, gpointer d )
     boton( barra, "Abrir…", "Un proyecto.yaml. Si está roto se dice y NO se "
                             "abre: nunca se pisa.", G_CALLBACK(on_abrir), a );
     boton( barra, "Nuevo…", NULL, G_CALLBACK(on_nuevo), a );
+    boton( barra, "Datos…",
+        "De un .xlsx, un .csv o un .txt a n SERIES del proyecto, cada una con "
+        "su primer .inp.\n\nEs el eslabón que faltaba: el camino datos → "
+        ".inp(-1) no lo recorría nadie.", G_CALLBACK(on_datos), a );
 
     a->l_proy = gtk_label_new( "(sin proyecto)" );
     gtk_label_set_ellipsize( GTK_LABEL(a->l_proy), PANGO_ELLIPSIZE_MIDDLE );

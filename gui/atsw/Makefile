@@ -14,17 +14,21 @@ PREFIX  ?= /usr/local
 
 LIB = ../../lib
 
-SRC = src/main.c src/ventana.c src/gestos.c \
+SRC = src/main.c src/ventana.c src/gestos.c src/datos_gui.c \
       $(LIB)/proyecto/proyecto.c \
       $(LIB)/outdiag/outdiag.c \
       $(LIB)/tabla/tabla.c \
       $(LIB)/rutas/rutas.c \
+      $(LIB)/datos/datos.c \
+      $(LIB)/xlsx/xlsx.c \
+      ../../engines/fug/src/inpfile.c \
       $(LIB)/dates/dates.c
 
 HDR = include/atsw.h
 
 INC = -Iinclude -I$(LIB)/proyecto -I$(LIB)/outdiag -I$(LIB)/tabla \
-      -I$(LIB)/rutas -I$(LIB)/dates
+      -I$(LIB)/rutas -I$(LIB)/dates -I$(LIB)/datos -I$(LIB)/xlsx \
+      -I../../engines/fug/src
 
 GTK_CFLAGS := $(shell pkg-config --cflags gtk+-3.0 2>/dev/null)
 GTK_LIBS   := $(shell pkg-config --libs   gtk+-3.0 2>/dev/null)
@@ -37,7 +41,7 @@ $(TARGET): $(SRC) $(HDR)
 	@if [ -z "$(GTK_LIBS)" ]; then \
 	    echo "atsw_gui necesita los ficheros de desarrollo de GTK 3"; \
 	    echo "(Debian/Ubuntu: sudo apt install libgtk-3-dev)"; exit 1; fi
-	$(CC) $(CFLAGS) $(GTK_CFLAGS) $(INC) -o $@ $(SRC) $(GTK_LIBS) -lm
+	$(CC) $(CFLAGS) $(GTK_CFLAGS) $(INC) -o $@ $(SRC) $(GTK_LIBS) -lz -lm
 
 install: $(TARGET)
 	install -d $(DESTDIR)$(PREFIX)/bin

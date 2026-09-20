@@ -19,7 +19,7 @@
 CC      ?= cc
 CFLAGS  ?= -O2 -Wall -Wextra -Wno-unused-parameter
 # fugdraw es el mismo fichero en los cuatro programas: vive en lib/
-CFLAGS  += -I../../lib/fugdraw -I../../lib/fugplot
+CFLAGS  += -Isrc -I../../lib/fugdraw -I../../lib/fugplot
 LDLIBS  = -lm
 PREFIX  ?= /usr/local
 

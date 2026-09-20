@@ -103,4 +103,47 @@ int od_parse_file( const char *path, Diagnosis *d );
 int od_no_adecuados( const Diagnosis *d );
 int od_no_exogenos( const Diagnosis *d );
 
+/* ------------------------------------------------------------------------ */
+/* Los residuos, como NUMEROS (el fichero de drtran -e)                      */
+/* ------------------------------------------------------------------------ */
+
+#define OD_MAX_OBS  2048
+
+typedef struct {
+   char   nombre[OD_MAX_SER][OD_NOMBRE];
+   double v[OD_MAX_SER][OD_MAX_OBS];      /* [serie][0..n-1]                */
+   char   fecha[OD_MAX_OBS][16];
+   int    n, m, freq;
+} OdResiduos;
+
+/* Lee el fichero que escribe "drtran -e". 0 si pudo. */
+int od_residuos( const char *path, OdResiduos *r );
+
+/* ------------------------------------------------------------------------ */
+/* La tabla de parametros del .out                                           */
+/*                                                                           */
+/* La que trae la DESVIACION TIPICA, y la que dice, de cada slot atado, por   */
+/* que lo esta. Es la autoritativa: el resumen de stdout leia por posicion y  */
+/* se descolocaba con el .cns.                                                */
+/* ------------------------------------------------------------------------ */
+
+#define OD_MAX_PAR  512
+
+typedef struct {
+   char   nombre[64];
+   double valor;
+   double dt;            /* 0 si esta atado                                 */
+   double t, p;
+   int    libre;         /* 0 = atado por el .cns                           */
+   char   atado[128];    /* "= omega1[0] * theta_2[B^1]", si lo esta        */
+} OdPar;
+
+typedef struct {
+   OdPar p[OD_MAX_PAR];
+   int   n;
+} OdParams;
+
+int od_params( const char *texto, OdParams *o );
+int od_params_file( const char *path, OdParams *o );
+
 #endif /* ATSW_OUTDIAG_H */

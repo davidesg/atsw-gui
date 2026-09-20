@@ -105,12 +105,19 @@ static double Acf_Pacf_Max( struct Tseries *ser, int lags )
    return( cmax );
 }
 
-/* Write the figure as <prefix><x11out>.eps */
+/* Write the figure as <prefix><x11out>.eps.
+ *
+ * The prefix goes on the BASE NAME, not in front of the whole path: with an
+ * x11out like "/tmp/mtram/res", "hist_" in front would give "hist_/tmp/...".
+ * For a plain name -- the way fue and fug use it -- nothing changes.       */
 static void save_eps( FDFig *f, const char *prefix, const char *x11out )
 {
-   char *file = (char *)malloc( strlen( prefix ) + strlen( x11out ) + 5 );
+   const char *s1 = strrchr( x11out, '/' ), *s2 = strrchr( x11out, '\\' );
+   const char *base = ( s1 > s2 ) ? s1 : s2;
+   int         dir  = base ? (int)( base + 1 - x11out ) : 0;
+   char       *file = (char *)malloc( strlen( prefix ) + strlen( x11out ) + 5 );
 
-   sprintf( file, "%s%s.eps", prefix, x11out );
+   sprintf( file, "%.*s%s%s.eps", dir, x11out, prefix, x11out + dir );
    if ( fd_write_eps( f, file ) != 0 )
       fprintf( stderr, "Warning: can not write %s\n", file );
    free( file );

@@ -46,6 +46,7 @@ BIN_DIR   = bin
 # programas -- byte a byte -- y por eso vive en lib/ y no aqui.
 LIB_DIR  = ../../lib
 LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c $(LIB_DIR)/fugplot/fugplot.c \
+           $(LIB_DIR)/fugplot/plotsupport.c \
            $(LIB_DIR)/equation/eqlatex.c
 
 SRCS = $(wildcard $(SRC_DIR)/*.c)
@@ -147,8 +148,8 @@ $(BUILD_DIR)/eqlatex.o:         $(LIB_DIR)/equation/equation.h
 $(BUILD_DIR)/report.o:          include/report.h $(LIB_DIR)/equation/equation.h $(LIB_DIR)/fugdraw/fugdraw.h include/plothost.h
 $(BUILD_DIR)/diagnose.o:        include/fue.h include/nlatools.h
 $(BUILD_DIR)/fugdraw.o:         $(LIB_DIR)/fugdraw/fugdraw.h $(LIB_DIR)/fugdraw/fd_metrics.h
-$(BUILD_DIR)/fugplot.o:         $(LIB_DIR)/fugplot/fugplot.h $(LIB_DIR)/fugdraw/fugdraw.h include/plothost.h include/fue.h include/nlatools.h
-$(BUILD_DIR)/plotsupport.o:     include/plothost.h include/fue.h include/nlatools.h
+$(BUILD_DIR)/lib_fugplot/fugplot.o: $(LIB_DIR)/fugplot/fugplot.h $(LIB_DIR)/fugdraw/fugdraw.h include/plothost.h include/fue.h include/nlatools.h
+$(BUILD_DIR)/lib_fugplot/plotsupport.o: include/plothost.h include/fue.h include/nlatools.h
 $(BUILD_DIR)/nlatools.o:        include/nlatools.h
 $(BUILD_DIR)/drvmlest.o:        include/fue.h include/nlatools.h
 $(BUILD_DIR)/elfvarma.o:        include/fue.h include/nlatools.h

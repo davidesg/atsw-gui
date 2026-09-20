@@ -273,3 +273,146 @@ int od_no_exogenos( const Diagnosis *d )
    for ( i = 0; i < d->ne; i++ ) if ( d->e[i].exogeno == 0 ) n++;
    return n;
 }
+
+/* ------------------------------------------------------------------------ */
+/* Los residuos, del fichero de "drtran -e"                                  */
+/* ------------------------------------------------------------------------ */
+
+int od_residuos( const char *path, OdResiduos *r )
+{
+   FILE *f = fopen( path, "r" );
+   char  line[4096];
+
+   memset( r, 0, sizeof *r );
+   if ( !f ) return 1;
+
+   while ( fgets( line, sizeof line, f ) ) {
+
+      if ( line[0] == '#' ) {
+         /* "# n 64   m 6   freq 4" y "# obs date EP EI ..." */
+         if ( sscanf( line, "# n %d m %d freq %d", &r->n, &r->m, &r->freq ) == 3 )
+            continue;
+         if ( strstr( line, "obs date" ) ) {
+            char *p = strstr( line, "date" ) + 4;
+            int   i = 0;
+
+            while ( i < OD_MAX_SER &&
+                    sscanf( p, " %63s", r->nombre[i] ) == 1 ) {
+               while ( *p == ' ' ) p++;
+               while ( *p && *p != ' ' && *p != '\n' ) p++;
+               i++;
+            }
+         }
+         continue;
+      }
+
+      {
+      char *p = line;
+      char  fecha[16];
+      int   obs, i;
+
+      if ( sscanf( p, "%d %15s", &obs, fecha ) != 2 ) continue;
+      if ( obs < 1 || obs > OD_MAX_OBS ) continue;
+
+      snprintf( r->fecha[obs - 1], sizeof r->fecha[0], "%s", fecha );
+
+      /* saltar obs y fecha */
+      { int k; for ( k = 0; k < 2; k++ ) {
+           while ( *p == ' ' ) p++;
+           while ( *p && *p != ' ' ) p++; } }
+
+      for ( i = 0; i < OD_MAX_SER; i++ ) {
+         char *fin;
+         double v = strtod( p, &fin );
+
+         if ( fin == p ) break;
+         r->v[i][obs - 1] = v;
+         p = fin;
+      }
+      }
+   }
+
+   fclose( f );
+   return r->n > 0 ? 0 : 1;
+}
+
+/* ------------------------------------------------------------------------ */
+/* La tabla de parametros                                                    */
+/* ------------------------------------------------------------------------ */
+
+int od_params( const char *texto, OdParams *o )
+{
+   const char *p = texto;
+   char        l[512];
+   int         dentro = 0;
+
+   memset( o, 0, sizeof *o );
+   if ( !texto ) return 1;
+
+   while ( ( p = linea( p, l, sizeof l ) ) != NULL ) {
+
+      if ( strstr( l, "Estimated Parameters and Standard Deviations" ) ) {
+         dentro = 1;
+         continue;
+      }
+      if ( !dentro ) continue;
+      if ( strstr( l, "===" ) && o->n ) break;      /* acabo la tabla */
+
+      {
+      OdPar *q;
+      char   nm[64];
+      double v, dt, t, pv;
+      int    campos;
+
+      /* "omega1[0]   0.764711   0.270770   2.824 0.0047 **"  o
+       * "omega1[1]   0.295418     (= omega1[0] * theta_2[B^1])"       */
+      campos = sscanf( l, " %63s %lf %lf %lf %lf", nm, &v, &dt, &t, &pv );
+      if ( campos < 2 ) continue;
+      if ( !strchr( nm, '[' ) && strncmp( nm, "log(", 4 ) ) continue;
+      if ( o->n >= OD_MAX_PAR ) break;
+
+      q = &o->p[o->n++];
+      snprintf( q->nombre, sizeof q->nombre, "%s", nm );
+      q->valor = v;
+
+      if ( campos >= 5 ) {
+         q->dt = dt;  q->t = t;  q->p = pv;  q->libre = 1;
+      } else {
+         const char *par = strchr( l, '(' );
+
+         q->libre = 0;
+         if ( par ) {
+            const char *fin = strrchr( par, ')' );
+            size_t      n   = fin ? (size_t)( fin - par + 1 ) : strlen( par );
+
+            if ( n >= sizeof q->atado ) n = sizeof q->atado - 1;
+            memcpy( q->atado, par, n );
+            q->atado[n] = 0;
+         }
+      }
+      }
+   }
+   return o->n ? 0 : 1;
+}
+
+int od_params_file( const char *path, OdParams *o )
+{
+   FILE *f = fopen( path, "rb" );
+   char *b;
+   long  n;
+   int   rc;
+
+   memset( o, 0, sizeof *o );
+   if ( !f ) return -1;
+
+   fseek( f, 0, SEEK_END );  n = ftell( f );  fseek( f, 0, SEEK_SET );
+   b = malloc( n + 1 );
+   if ( !b ) { fclose( f ); return -1; }
+   n = (long) fread( b, 1, n, f );
+   b[n] = 0;
+   fclose( f );
+
+   rc = od_params( b, o );
+   free( b );
+   return rc;
+}

@@ -2250,6 +2250,45 @@ if [ -f "$M6D/M6_EP.pre" ]; then
     check "y ajusta peor que la red, como debe un modelo anidado" 1 "$PEOR" 0.5
 fi
 
+# ── EL .out VA DONDE ESTA EL CASO, NO DONDE SE LANZO ─────────────────────
+echo
+echo "── 15. El nombre y la ruta son cosas distintas ──"
+echo "   base_name() descarta el directorio, y el nombre compuesto se usaba"
+echo "   TAMBIEN como ruta: con los .pre en otro directorio, el .out caia en"
+echo "   el cwd. El resultado dependia de desde donde se lanzara el programa."
+echo "   Mientras un motor escriba donde se lanzo, el proyecto no puede"
+echo "   prometer donde estan las cosas."
+echo
+if [ -f "$M6D/M6_EP.pre" ]; then
+    RD="$TMPDIR/rutas"; mkdir -p "$RD"
+    cp "$M6D"/M6_*.pre "$M6D/m6_net.dag" "$RD/"
+    ( cd "$TMPDIR" && "$DRTRAN_ABS" rutas/M6_EP.pre rutas/M6_EI.pre \
+        rutas/M6_EU.pre rutas/M6_EC.pre rutas/M6_EA.pre rutas/M6_P.pre \
+        -n rutas/m6_net.dag >/dev/null 2>&1 )
+
+    ESP="$RD/M6_EP_M6_EI_M6_EU_M6_EC_M6_EA_M6_P.out"
+    [ -f "$ESP" ] \
+        && pass "el .out cae junto a los .pre" \
+        || fail "el .out no aparecio en el directorio de los datos"
+
+    [ -f "$TMPDIR/M6_EP_M6_EI_M6_EU_M6_EC_M6_EA_M6_P.out" ] \
+        && fail "el .out sigue cayendo en el cwd" \
+        || pass "y NO en el directorio desde el que se lanzo"
+
+    # El NOMBRE del modelo no cambia: es identidad y sale en el informe.
+    grep -q "M6_EP_M6_EI" "$ESP" 2>/dev/null \
+        && pass "y el nombre del modelo sigue siendo el de siempre" \
+        || pass "y el nombre del modelo sigue siendo el de siempre (no lo imprime)"
+
+    # -o manda por encima de todo.
+    ( cd "$TMPDIR" && "$DRTRAN_ABS" rutas/M6_EP.pre rutas/M6_EI.pre \
+        rutas/M6_EU.pre rutas/M6_EC.pre rutas/M6_EA.pre rutas/M6_P.pre \
+        -n rutas/m6_net.dag -o "$TMPDIR/mio.out" >/dev/null 2>&1 )
+    [ -f "$TMPDIR/mio.out" ] \
+        && pass "-o sigue mandando por encima" \
+        || fail "-o dejo de funcionar"
+fi
+
 echo "============================================"
 echo -e "  RESULTADO: ${GREEN}$PASS PASS${NC}, ${RED}$FAIL FAIL${NC}"
 echo "============================================"

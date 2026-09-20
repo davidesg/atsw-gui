@@ -10,7 +10,7 @@
 # Uses the drvarma exact-VARMA likelihood engine
 
 CC       = gcc
-CFLAGS   = -Wall -Wextra -O2 -fPIC -Iinclude -I../../lib/dates -I../../lib/prewhiten -I../../lib/netfile -I../../lib/slots
+CFLAGS   = -Wall -Wextra -O2 -fPIC -Iinclude -I../../lib/dates -I../../lib/prewhiten -I../../lib/netfile -I../../lib/slots -I../../lib/rutas
 LDFLAGS  = -lgsl -lgslcblas -lm
 
 SRCDIR   = src
@@ -31,6 +31,7 @@ SRCS = $(SRCDIR)/drtran.c       \
        $(SRCDIR)/fuf_graphic.c \
        ../../lib/prewhiten/prewhiten.c \
        ../../lib/netfile/netfile.c \
+       ../../lib/rutas/rutas.c \
        ../../lib/slots/slots.c \
        ../../lib/dates/dates.c
 

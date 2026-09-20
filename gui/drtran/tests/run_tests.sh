@@ -224,3 +224,11 @@ if [ -x "$DR" ] && [ -d "$M6" ]; then
 else
     echo "  sin drtran compilado en $DR, me salto el R²"
 fi
+
+# --- las rutas: el prefijo va en el NOMBRE, no delante de la ruta -----------
+# Los tres primeros casos son las tres invocaciones que fallaban de verdad,
+# reproducidas en INVENTARIO-madre.md §2.
+echo
+$CC -O2 -Wall -Wextra -I"$L/rutas" \
+    "$L/rutas/test_rutas.c" "$L/rutas/rutas.c" -o "$W/test_rutas" || exit 1
+"$W/test_rutas" || exit 1

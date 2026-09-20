@@ -32,7 +32,7 @@ else
 endif
 
 # Compiler flags
-CFLAGS  = -O2 -g -Wall -Iinclude -I../../lib/fugdraw -I../../lib/fugplot -I../../lib/equation
+CFLAGS  = -O2 -g -Wall -Iinclude -I../../lib/fugdraw -I../../lib/fugplot -I../../lib/equation -I../../lib/rutas
 LDFLAGS +=
 LIBS    = -lm
 
@@ -46,6 +46,7 @@ BIN_DIR   = bin
 # programas -- byte a byte -- y por eso vive en lib/ y no aqui.
 LIB_DIR  = ../../lib
 LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c $(LIB_DIR)/fugplot/fugplot.c \
+           $(LIB_DIR)/rutas/rutas.c \
            $(LIB_DIR)/fugplot/plotsupport.c \
            $(LIB_DIR)/equation/eqlatex.c
 
@@ -92,6 +93,10 @@ $(BUILD_DIR)/lib_equation/%.o: $(LIB_DIR)/equation/%.c | $(BUILD_DIR)
 	$(CC) $(ALL_CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/lib_fugplot/%.o: $(LIB_DIR)/fugplot/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(ALL_CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/lib_rutas/%.o: $(LIB_DIR)/rutas/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
 	$(CC) $(ALL_CFLAGS) -c $< -o $@
 
@@ -150,6 +155,7 @@ $(BUILD_DIR)/diagnose.o:        include/fue.h include/nlatools.h
 $(BUILD_DIR)/fugdraw.o:         $(LIB_DIR)/fugdraw/fugdraw.h $(LIB_DIR)/fugdraw/fd_metrics.h
 $(BUILD_DIR)/lib_fugplot/fugplot.o: $(LIB_DIR)/fugplot/fugplot.h $(LIB_DIR)/fugdraw/fugdraw.h include/plothost.h include/fue.h include/nlatools.h
 $(BUILD_DIR)/lib_fugplot/plotsupport.o: include/plothost.h include/fue.h include/nlatools.h
+$(BUILD_DIR)/lib_rutas/rutas.o: $(LIB_DIR)/rutas/rutas.h
 $(BUILD_DIR)/nlatools.o:        include/nlatools.h
 $(BUILD_DIR)/drvmlest.o:        include/fue.h include/nlatools.h
 $(BUILD_DIR)/elfvarma.o:        include/fue.h include/nlatools.h

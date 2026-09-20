@@ -27,6 +27,7 @@
 #include "inpcheck.h"               /* validation of the .inp, exit status */
 #include "equation.h"               /* the equation of the model, and its writers */
 #include "report.h"                 /* the report in PDF, drawn without LaTeX  */
+#include "rutas.h"                  /* prefixes go on the NAME, not on the path */
 
 double macheps;                      /* Machine epsilon: global variable.   */
 FILE *outputv;                     /* Output file: global variable.         */
@@ -202,7 +203,10 @@ int main( int argc, char *argv[] )
          strcpy( preputf, base_name );
          strcat( preputf, ".pre" );
       } else {
-               snprintf( preputf, 4096, "forecast_%s.inp", base_name );
+               /* El prefijo va en el NOMBRE. Con "forecast_%s" y una ruta
+                  --fue caso/X -f-- salia "forecast_caso/X.inp", un directorio
+                  que no existe, y abortaba. Ver lib/rutas.              */
+               ruta_componer( base_name, "forecast_", ".inp", preputf, 4096 );
             }
 
       printf( "Input file             : %s\n", inputf );
@@ -1542,7 +1546,19 @@ fprintf( outputv, "Transformed-Differenced-Stochastic series: \n" );
    res.nobs = Ts.nobs - Tm.ornsop;
    res.freq = Tm.sper;
    res.numbering = Ts.numbering;
-   if ( strcmp( Tm.residuals, "**" ) == 0 )  snprintf(Tm.residuals, 4096, "A%s", x11out);
+   /* El nombre con que se TITULA la serie de residuos. Es identidad, no
+      ruta: con "A%s" y un x11out con directorio salia "Acaso/X" en el
+      titulo del grafico.                                                */
+   if ( strcmp( Tm.residuals, "**" ) == 0 )
+      {
+      char nm[4096];
+
+      /* ruta_base y NO ruta_nombre: en fue el nombre base puede llevar
+         puntos que no son extension -- "DE.2" es el nombre entero, y
+         quitarle el ".2" renombraba la serie de ADE.2 a ADE.       */
+      ruta_base( x11out, nm, sizeof nm );
+      snprintf( Tm.residuals, 4096, "A%s", nm );
+      }
 //   if (Tm.residuals == " ") res.name = namef;      strcat( inputf, ".inp" );
    res.name = Tm.residuals;
    res.data = vector( 1, res.nobs );
@@ -1564,7 +1580,10 @@ int timeout;
 int lags;
 STRING file_output;
 file_output = NEW_STR( 4096 );
-snprintf ( file_output, 4096, "A%s", x11out );
+/* EL FICHERO. Con "A%s" y una ruta salia "Acaso/X.eps": el EPS no se
+   escribia, fugplot AVISABA y el informe salia SIN el grafico de residuos.
+   Un fallo que solo avisa es mas caro que uno que para.                 */
+ruta_componer( x11out, "A", NULL, file_output, 4096 );
 
     if ( Ts.begtime == 1 && Ts.freq > 1 ) timeout = Tm.ornsop;
     else if ( Ts.freq > 1 ) timeout = (Tm.ornsop+(Ts.begtime-1));

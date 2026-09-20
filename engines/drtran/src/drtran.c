@@ -22,6 +22,7 @@
 /*****************************************************************************/
 
 #include "main.h"
+#include "rutas.h"   /* el nombre y la ruta son cosas distintas */
 #include "dates.h"
 #include "prewhiten.h"
 #include "netfile.h"
@@ -3785,7 +3786,17 @@ int main(int argc, char *argv[])
     }
     n_inp = n_ser - 1;
 
-    /* --- Nombre del modelo y fichero de resultados --- */
+    /* --- Nombre del modelo y fichero de resultados ---
+
+       EL NOMBRE Y LA RUTA SON COSAS DISTINTAS, y confundirlas hacia que el
+       .out cayera donde se hubiera lanzado el programa y no junto a los datos:
+       base_name() descarta el directorio, y el nombre compuesto se usaba
+       tambien como ruta. Con los .pre en dt/ y lanzando desde arriba, el
+       informe aparecia en el cwd. El resultado dependia del cwd.
+
+       El NOMBRE sigue siendo la concatenacion de los nombres a secas: es la
+       identidad del modelo y sale asi en el informe. La RUTA por defecto va
+       al directorio de la PRIMERA serie, que es donde esta el caso.      */
     if (model_name == NULL) {
         char nb[128];
         outname[0] = '\0';
@@ -3800,7 +3811,15 @@ int main(int argc, char *argv[])
     {
         char path[600];
         if (outfile != NULL) snprintf(path, sizeof path, "%s", outfile);
-        else                 snprintf(path, sizeof path, "%s.out", model_name);
+        else {
+            char dir[400];
+
+            ruta_dir(argv[optind], dir, sizeof dir);
+            if (strcmp(dir, ".") == 0)
+                snprintf(path, sizeof path, "%s.out", model_name);
+            else
+                snprintf(path, sizeof path, "%s/%s.out", dir, model_name);
+        }
         outputv = fopen(path, "w");
         if (outputv == NULL) {
             fprintf(stderr, "Error opening output file: %s\n", path);

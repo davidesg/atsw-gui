@@ -98,8 +98,11 @@ static gboolean dibuja( Vistazo *v, char *why, size_t n )
     gint    st;
     gboolean ok;
     double  lam = gtk_spin_button_get_value( GTK_SPIN_BUTTON(v->s_lam) );
-    int     d   = gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(v->s_d) );
-    int     D   = gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(v->s_D) );
+    /* En media - desviacion tipica no hay d ni D, y no es una omision: ese
+     * grafico es de la serie EN NIVEL. Comprobado -- con d=1 D=1 en el .inp,
+     * "fug -e" sigue escribiendo m_dt_d0...                            */
+    int     d   = v->s_d ? gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(v->s_d) ) : 0;
+    int     D   = v->s_D ? gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(v->s_D) ) : 0;
     gchar  *argv[6];
     char    inp[PR_RUTA + 8];
 
@@ -236,7 +239,15 @@ static void on_cambio( GtkWidget *w, Vistazo *v ) { (void) w; repinta( v ); }
 
 /* ------------------------------------------------------------------------ */
 
-/* El pie: lambda, d y D, AL PIE DEL GRAFICO. */
+/* EL PIE, Y LO QUE LLEVA DEPENDE DEL GRAFICO.
+ *
+ *   serie + acf/pacf   lambda, d y D: la pregunta es cuantas diferencias.
+ *   media - desv. tip. SOLO lambda: ese grafico es de la serie EN NIVEL, asi
+ *                      que d y D no le dicen nada. Poner unos mandos que no
+ *                      hacen nada seria peor que no ponerlos.
+ *
+ * Lo que los dos comparten es lo que importa: la transformacion se toca AL
+ * PIE DEL DIBUJO y el dibujo se rehace ahi mismo.                       */
 static GtkWidget *pie_nuevo( Vistazo *v, double lam, int d, int D )
 {
     GtkWidget *caja = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 6 );
@@ -244,6 +255,7 @@ static GtkWidget *pie_nuevo( Vistazo *v, double lam, int d, int D )
     gtk_container_set_border_width( GTK_CONTAINER(caja), 6 );
 
     v->armando = TRUE;
+    v->s_d = v->s_D = NULL;
 
     gtk_box_pack_start( GTK_BOX(caja), gtk_label_new( "λ" ), FALSE, FALSE, 0 );
     v->s_lam = gtk_spin_button_new_with_range( -2.0, 2.0, 0.5 );
@@ -253,30 +265,34 @@ static GtkWidget *pie_nuevo( Vistazo *v, double lam, int d, int D )
         "Box-Cox. 0 son logaritmos, 1 la serie sin transformar." );
     gtk_box_pack_start( GTK_BOX(caja), v->s_lam, FALSE, FALSE, 0 );
 
-    gtk_box_pack_start( GTK_BOX(caja), gtk_label_new( "  d" ), FALSE, FALSE, 0 );
-    v->s_d = gtk_spin_button_new_with_range( 0, 3, 1 );
-    gtk_spin_button_set_value( GTK_SPIN_BUTTON(v->s_d), d );
-    gtk_widget_set_tooltip_text( v->s_d, "Diferencias regulares." );
-    gtk_box_pack_start( GTK_BOX(caja), v->s_d, FALSE, FALSE, 0 );
+    if ( v->modo == 0 )
+        {
+        gtk_box_pack_start( GTK_BOX(caja), gtk_label_new( "  d" ), FALSE, FALSE, 0 );
+        v->s_d = gtk_spin_button_new_with_range( 0, 3, 1 );
+        gtk_spin_button_set_value( GTK_SPIN_BUTTON(v->s_d), d );
+        gtk_widget_set_tooltip_text( v->s_d, "Diferencias regulares." );
+        gtk_box_pack_start( GTK_BOX(caja), v->s_d, FALSE, FALSE, 0 );
 
-    gtk_box_pack_start( GTK_BOX(caja), gtk_label_new( "  D" ), FALSE, FALSE, 0 );
-    v->s_D = gtk_spin_button_new_with_range( 0, 2, 1 );
-    gtk_spin_button_set_value( GTK_SPIN_BUTTON(v->s_D), D );
-    gtk_widget_set_tooltip_text( v->s_D, "Diferencias estacionales." );
-    gtk_box_pack_start( GTK_BOX(caja), v->s_D, FALSE, FALSE, 0 );
+        gtk_box_pack_start( GTK_BOX(caja), gtk_label_new( "  D" ), FALSE, FALSE, 0 );
+        v->s_D = gtk_spin_button_new_with_range( 0, 2, 1 );
+        gtk_spin_button_set_value( GTK_SPIN_BUTTON(v->s_D), D );
+        gtk_widget_set_tooltip_text( v->s_D, "Diferencias estacionales." );
+        gtk_box_pack_start( GTK_BOX(caja), v->s_D, FALSE, FALSE, 0 );
+        }
 
     {
-    GtkWidget *l = gtk_label_new(
-        "  El dibujo lo hace fug: es el mismo que verías en la herramienta "
-        "completa." );
+    GtkWidget *l = gtk_label_new( v->modo
+        ? "  La serie EN NIVEL: d y D no entran aquí. El dibujo lo hace fug."
+        : "  El dibujo lo hace fug: es el mismo que verías en la herramienta "
+          "completa." );
 
     gtk_label_set_ellipsize( GTK_LABEL(l), PANGO_ELLIPSIZE_END );
     gtk_box_pack_start( GTK_BOX(caja), l, TRUE, TRUE, 0 );
     }
 
     g_signal_connect( v->s_lam, "value-changed", G_CALLBACK(on_cambio), v );
-    g_signal_connect( v->s_d,   "value-changed", G_CALLBACK(on_cambio), v );
-    g_signal_connect( v->s_D,   "value-changed", G_CALLBACK(on_cambio), v );
+    if ( v->s_d ) g_signal_connect( v->s_d, "value-changed", G_CALLBACK(on_cambio), v );
+    if ( v->s_D ) g_signal_connect( v->s_D, "value-changed", G_CALLBACK(on_cambio), v );
 
     v->armando = FALSE;
     return caja;
@@ -322,12 +338,12 @@ void atsw_vistazo( Atsw *a, const char *inp, int modo, double lam )
 
     /* El pie se arma antes de dibujar para que dibuja() lea sus valores. */
     {
-    GtkWidget *pie = pie_nuevo( &V, lam, modo ? 0 : d, modo ? 0 : D );
+    GtkWidget *pie = pie_nuevo( &V, lam, d, D );
 
     repinta( &V );
-    if ( !preview_set_footer( V.eps, modo ? NULL : pie ) && !modo )
-        gtk_widget_destroy( pie );
-    else if ( modo )
+    /* El pie va en LOS DOS graficos: el de media - desviacion tipica tambien
+     * deja tocar lambda, que es justo la pregunta que contesta.        */
+    if ( !preview_set_footer( V.eps, pie ) )
         gtk_widget_destroy( pie );
     }
     (void) why;

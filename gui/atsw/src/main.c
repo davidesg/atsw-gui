@@ -58,7 +58,6 @@ static void vistazo( Atsw *a, int modo, double lam )
 }
 
 static void on_mdt   ( GtkMenuItem *m, Atsw *a ) { (void)m; vistazo( a, 1, 1.0 ); }
-static void on_mdtlog( GtkMenuItem *m, Atsw *a ) { (void)m; vistazo( a, 1, 0.0 ); }
 static void on_serie_acf( GtkMenuItem *m, Atsw *a ) { (void)m; vistazo( a, 0, 1.0 ); }
 
 /* EL MENU DE LA SERIE.
@@ -97,16 +96,10 @@ static void menu_serie( Atsw *a, GdkEventButton *ev )
      * completa. Para mirar, no para decidir: no tocan el proyecto.    */
     mi = gtk_menu_item_new_with_label( "Media – desviación típica" );
     gtk_widget_set_tooltip_text( mi,
-        "¿La dispersión crece con el nivel? Es la pregunta de la "
-        "transformación, y se contesta mirando este dibujo y el de logaritmos." );
+        "¿La dispersión crece con el nivel? Empieza en la serie EN NIVEL "
+        "(λ = 1) y se mueve λ al pie del gráfico: si la nube se endereza con "
+        "logaritmos, la serie los pide." );
     g_signal_connect( mi, "activate", G_CALLBACK(on_mdt), a );
-    gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
-
-    mi = gtk_menu_item_new_with_label( "Media – desviación típica (logaritmos)" );
-    gtk_widget_set_tooltip_text( mi,
-        "El mismo dibujo con λ = 0. Si aquí la nube se endereza y en el otro "
-        "no, la serie pide logaritmos." );
-    g_signal_connect( mi, "activate", G_CALLBACK(on_mdtlog), a );
     gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
 
     mi = gtk_menu_item_new_with_label( "Serie y ACF / PACF…" );

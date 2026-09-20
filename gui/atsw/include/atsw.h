@@ -74,7 +74,7 @@ typedef struct {
    GtkWidget *ver_cuenta;         /* veredicto: cuantas cosas hay           */
    GtkWidget *ver_ojo;            /* veredicto: LO QUE HAY QUE MIRAR        */
    GtkWidget *estado;             /* la barra de abajo                      */
-   GtkWidget *b_fue, *b_fug, *b_drtran, *b_iterar, *b_elegir, *b_razon;
+   GtkWidget *b_fue, *b_fug, *b_drtran, *b_nuevo, *b_iterar, *b_elegir, *b_razon;
 
    Proyecto  *p;
    gboolean   hay;

@@ -243,3 +243,87 @@ gboolean atsw_itera( Atsw *a, const char *serie, const char *padre,
                          serie, padre, id );
     return TRUE;
 }
+
+/* ------------------------------------------------------------------------ */
+/* UN MODELO NUEVO: nace de los DATOS, no de un optimo.                      */
+/*                                                                           */
+/* Es el gesto hermano de Iterar, y la diferencia es de donde copia:         */
+/*                                                                           */
+/*   Iterar        del .pre del modelo marcado -- SEGUIR desde su optimo.    */
+/*   Modelo nuevo  del .inp de los datos       -- EMPEZAR otra vez.          */
+/*                                                                           */
+/* Por eso cuelga siempre de m00 y no del modelo que hubiera marcado: un     */
+/* modelo que empieza de cero no viene del anterior, viene de la serie.      */
+/*                                                                           */
+/* Y por eso existe: especificar el PRIMER modelo no tenia gesto propio. Se  */
+/* mandaba la serie a fue y fue escribia sobre el .inp de los datos, que es  */
+/* el que fug dibuja y la raiz del linaje.                                   */
+/* ------------------------------------------------------------------------ */
+
+gboolean atsw_modelo_nuevo( Atsw *a, const char *serie,
+                            char *id_out, size_t nid,
+                            char *ruta_out, size_t nruta, char *why, size_t n )
+{
+    PrError     e;
+    const char *datos;
+    char        id[PR_ID], origen[PR_RUTA], destino[PR_RUTA];
+    gchar      *contenido = NULL, *dir;
+    gsize       largo = 0;
+
+    if ( why && n ) why[0] = '\0';
+    if ( id_out && nid ) id_out[0] = '\0';
+    if ( ruta_out && nruta ) ruta_out[0] = '\0';
+    if ( !a->hay ) return FALSE;
+
+    if ( serie == NULL || *serie == '\0' )
+        { if ( why ) snprintf( why, n, "Marca una serie." ); return FALSE; }
+
+    datos = pr_datos_de( a->p, serie );
+    if ( !*datos )
+        {
+        /* SE DICE QUE FALTAN LOS DATOS. Derivar de la nada daria un .inp
+           vacio que fue rechazaria con un error del motor, mas lejos del
+           sitio donde se puede arreglar.                                */
+        if ( why ) snprintf( why, n, "«%s» no tiene datos cargados en este "
+                             "proyecto: cárgalos con «Datos…».", serie );
+        return FALSE;
+        }
+
+    if ( pr_ruta( a->p, serie, datos, ".inp", origen, sizeof origen ) != 0 ||
+         !g_file_get_contents( origen, &contenido, &largo, NULL ) )
+        {
+        if ( why ) snprintf( why, n, "No pude leer los datos de «%s».", serie );
+        return FALSE;
+        }
+
+    if ( pr_deriva( a->p, serie, datos, id, sizeof id,
+                    destino, sizeof destino, &e ) != 0 )
+        { if ( why ) pr_error_es( &e, why, n ); g_free( contenido ); return FALSE; }
+
+    dir = g_path_get_dirname( destino );
+    g_mkdir_with_parents( dir, 0700 );
+    g_free( dir );
+
+    /* El .inp nuevo arranca siendo COPIA de los datos: los mismos numeros,
+       sin modelo. Es lo que el analista va a especificar encima.        */
+    if ( !g_file_set_contents( destino, contenido, (gssize) largo, NULL ) )
+        {
+        if ( why ) snprintf( why, n, "No pude escribir %s", destino );
+        g_free( contenido );
+        return FALSE;
+        }
+    g_free( contenido );
+
+    if ( pr_escribir( a->p, a->p->path, &e ) != 0 )
+        {
+        if ( why ) snprintf( why, n, "El .inp está, pero no pude guardar el "
+                             "proyecto." );
+        return FALSE;
+        }
+
+    if ( id_out && nid ) snprintf( id_out, nid, "%s", id );
+    if ( ruta_out && nruta ) snprintf( ruta_out, nruta, "%s", destino );
+    if ( why ) snprintf( why, n, "%s: %s nace de los datos (%s), que siguen "
+                         "intactos. Especifícalo en fue.", serie, id, datos );
+    return TRUE;
+}

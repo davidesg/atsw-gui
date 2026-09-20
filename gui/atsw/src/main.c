@@ -11,6 +11,9 @@
 #include "atsw.h"
 
 void atsw_lanza( Atsw *a, const char *programa, const char *fichero );
+gboolean atsw_modelo_nuevo( Atsw *a, const char *serie,
+                            char *id_out, size_t nid,
+                            char *ruta_out, size_t nruta, char *why, size_t n );
 gboolean atsw_itera( Atsw *a, const char *serie, const char *padre,
                      char *why, size_t n );
 void atsw_datos( Atsw *a );
@@ -43,6 +46,7 @@ static gchar *marcada( GtkWidget *tv, int columna )
 /* Definidos mas abajo: el menu los usa. */
 static void on_fue( GtkButton *b, Atsw *a );
 static void on_fug( GtkButton *b, Atsw *a );
+static void on_nuevo_modelo( GtkButton *b, Atsw *a );
 static gboolean que_mandar( Atsw *a, gboolean acepta_pre, char *out, size_t n );
 
 /* EL VISTAZO: el .inp de la serie marcada, nunca el .pre. Identificar es
@@ -83,12 +87,42 @@ static void menu_serie( Atsw *a, GdkEventButton *ev )
     g_signal_connect( mi, "activate", G_CALLBACK(on_fug), a );
     gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
 
-    mi = gtk_menu_item_new_with_label( "Modelo univariante con fue" );
-    gtk_widget_set_tooltip_text( mi,
-        "Estima el modelo de esta serie. Se manda el .pre si lo hay —es un "
-        "óptimo reejecutable— y si no el .inp." );
+    /* LO QUE VA A PASAR, DICHO EN LA ETIQUETA. Que el envio a fue derive un
+     * modelo cuando lo unico que hay son los datos es correcto, pero si el
+     * menu no lo dice el analista no sabe que puede empezar uno: «no es
+     * obvio como hacerlo» era exactamente esto.                        */
+    {
+    const char *porde = atsw_modelo_por_defecto( a->p, a->serie );
+    gboolean    solo_datos = ( !*porde || pr_es_datos( a->p, a->serie, porde ) );
+    gchar      *txt;
+
+    if ( solo_datos )
+        txt = g_strdup( "Especificar el primer modelo con fue" );
+    else
+        txt = g_strdup_printf( "Estimar %s en fue", porde );
+
+    mi = gtk_menu_item_new_with_label( txt );
+    g_free( txt );
+    gtk_widget_set_tooltip_text( mi, solo_datos
+        ? "Los datos no se estiman: nace un modelo colgado de ellos —el "
+          "primero de la serie— y es ése el que se abre en fue. El .inp de "
+          "los datos sigue intacto."
+        : "Se manda el .pre si lo hay —es un óptimo reejecutable— y si no "
+          "el .inp, que es la especificación." );
     g_signal_connect( mi, "activate", G_CALLBACK(on_fue), a );
     gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+
+    /* Y empezar OTRO desde los datos, que no es lo mismo que iterar. */
+    if ( !solo_datos && pr_datos_de( a->p, a->serie )[0] )
+        {
+        mi = gtk_menu_item_new_with_label( "Otro modelo, desde los datos" );
+        gtk_widget_set_tooltip_text( mi,
+            "Empieza de cero: cuelga de los datos, no del modelo de ahora. "
+            "Para seguir desde un óptimo está «Iterar»." );
+        g_signal_connect( mi, "activate", G_CALLBACK(on_nuevo_modelo), a );
+        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+        }
+    }
 
     gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
 
@@ -293,7 +327,8 @@ static void manda( Atsw *a, const char *programa, const char *para,
  * m00 son los datos tal como entraron, y de ahi cuelga todo: es el .inp que
  * fug dibuja y la raiz del linaje. Si fue escribiera encima, el proyecto se
  * quedaria sin el uno y sin el otro. Asi que cuando lo que toca mandar son
- * los datos, se DERIVA un modelo de ellos y va ese.
+ * los datos, se DERIVA un modelo de ellos -- el mismo gesto que el boton
+ * «Modelo nuevo», para que no haya dos maneras de hacer lo mismo -- y va ese.
  *
  * Se mira el id EFECTIVO --el marcado, y si no el que la madre mandaria-- y
  * no solo el marcado: recien cargada la serie no hay nada marcado, y ese es
@@ -310,42 +345,15 @@ static void on_fue( GtkButton *b, Atsw *a )
     if ( a->hay && a->serie[0] && id && *id &&
          pr_es_datos( a->p, a->serie, id ) )
         {
-        PrError e;
-        char    nuevo[PR_ID], ruta[PR_RUTA], *dir;
-        gchar  *orig;
+        char ruta[PR_RUTA], why[512];
 
-        if ( pr_deriva( a->p, a->serie, id, nuevo, sizeof nuevo,
-                        ruta, sizeof ruta, &e ) != 0 )
-            { char why[512]; pr_error_es( &e, why, sizeof why );
-              barra_pub( a, why ); g_free( marca ); return; }
+        if ( !atsw_modelo_nuevo( a, a->serie, NULL, 0,
+                                 ruta, sizeof ruta, why, sizeof why ) )
+            { barra_pub( a, why ); g_free( marca ); return; }
 
-        /* El .inp del modelo nuevo arranca siendo COPIA de los datos: es lo
-           que el analista va a especificar encima.                     */
-        dir = g_path_get_dirname( ruta );
-        g_mkdir_with_parents( dir, 0700 );
-        g_free( dir );
-
-        if ( pr_ruta( a->p, a->serie, id, ".inp", ( orig = g_malloc( PR_RUTA ) ),
-                      PR_RUTA ) == 0 )
-            {
-            gchar *c = NULL;
-            gsize  n = 0;
-
-            if ( g_file_get_contents( orig, &c, &n, NULL ) )
-                { g_file_set_contents( ruta, c, (gssize) n, NULL ); g_free( c ); }
-            }
-        g_free( orig );
-
-        pr_escribir( a->p, a->p->path, &e );
         atsw_refresca( a );
         atsw_lanza( a, "fue_gui", ruta );
-        {
-        gchar *s = g_strdup_printf( "%s: los datos no se tocan, así que va "
-                                    "%s, derivado de ellos.", a->serie, nuevo );
-
-        barra_pub( a, s );
-        g_free( s );
-        }
+        barra_pub( a, why );
         g_free( marca );
         return;
         }
@@ -390,6 +398,24 @@ static gboolean pide_texto( Atsw *a, const char *titulo, const char *aviso,
         { snprintf( out, n, "%s", gtk_entry_get_text( GTK_ENTRY(e) ) ); si = TRUE; }
     gtk_widget_destroy( d );
     return si;
+}
+
+/* El gesto EXPLICITO. Antes especificar el primer modelo no tenia boton: se
+ * mandaba la serie a fue y habia que saber que ese envio derivaba uno. Un
+ * gesto que solo existe como efecto lateral de otro no se encuentra. */
+static void on_nuevo_modelo( GtkButton *b, Atsw *a )
+{
+    char ruta[PR_RUTA], why[512];
+
+    (void) b;
+    if ( !a->hay ) { barra_pub( a, "Abre un proyecto antes." ); return; }
+    if ( !atsw_modelo_nuevo( a, a->serie, NULL, 0,
+                             ruta, sizeof ruta, why, sizeof why ) )
+        { barra_pub( a, why ); return; }
+
+    atsw_refresca( a );
+    atsw_lanza( a, "fue_gui", ruta );
+    barra_pub( a, why );
 }
 
 static void on_iterar( GtkButton *b, Atsw *a )
@@ -555,6 +581,13 @@ static void activate( GtkApplication *app, gpointer d )
     {
     GtkWidget *b2 = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 6 );
 
+    a->b_nuevo = boton( b2, "Modelo nuevo",
+        "Empieza un modelo DESDE LOS DATOS y lo abre en fue.\n\nCuelga "
+        "siempre de m00, no del modelo marcado: uno que empieza de cero no "
+        "viene del anterior, viene de la serie. Los datos no se tocan.\n\n"
+        "Es el hermano de Iterar, y la diferencia es de dónde copia: Iterar "
+        "sigue desde un óptimo, esto empieza otra vez.",
+        G_CALLBACK(on_nuevo_modelo), a );
     a->b_iterar = boton( b2, "Iterar",
         "Copia el .pre del modelo marcado a un .inp nuevo y registra su "
         "linaje.\n\n.pre e .inp son el mismo formato, pero el motor exige "

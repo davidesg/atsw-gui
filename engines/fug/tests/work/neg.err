@@ -1,2 +1,0 @@
-Error: the Box-Cox transformation (lambda = 0) requires data + m > 0,
-but observation 1 + m = -1. Use a larger m or lambda = 1.

@@ -52,12 +52,20 @@ gui/fue/gtk_fue
 gui/fug/gtk_fug
 gui/drtran/tests/work/
 
-# BINARIOS: no van al repositorio. Ya paso una vez con gui/drtran/mtram, y
-# estos dos estaban rastreados desde antes: un "make" los ensuciaba en cada
-# commit. Los ARTEFACTOS de tests/gui/work (el .inp, los PNG y los SVG) se
-# quedan como estaban -- son de quien los puso, y el driver los regenera.
+# BINARIOS: no van al repositorio. Ya paso una vez con gui/drtran/mtram.
 gui/fug/gtk_fmg
-engines/fug/tests/gui/work/fug
+gui/atsw/atsw_gui
+
+# LOS DIRECTORIOS DE TRABAJO DE LAS PRUEBAS. Habia 94 + 8 ficheros RASTREADOS
+# en dos carpetas que el propio banco empieza borrando con "rm -rf $WORK": no
+# podian ser fixtures --la primera corrida los destruye-- y ensuciaban cada
+# commit con la salida de la ultima ejecucion.
+#
+# OJO: los work/ de engines/drvarma/cases NO son esto. Ahi viven los .inp,
+# .pre y .out de los modelos del analista, que son el trabajo, no la salida de
+# un banco. Esos se quedan.
+engines/fug/tests/work/
+engines/fug/tests/gui/work/
 
 # el binario de la madre
 gui/atsw/atsw_gui

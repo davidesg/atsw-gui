@@ -31,6 +31,9 @@ static void init_global_flags(FueContext *ctx) {
 }
 
 
+/* Definidas mas abajo: activate() las usa. */
+const char *fue_abrir(void);
+
 static void activate(GtkApplication *app, gpointer user_data) {
     FueContext *ctx = g_new0(FueContext, 1);
 
@@ -40,6 +43,12 @@ static void activate(GtkApplication *app, gpointer user_data) {
     /* Build the main window */
     ctx->main_window = create_main_window(app, ctx);
     gtk_widget_show_all(ctx->main_window);
+
+    /* Lo que la madre mando. Se hace DESPUES de mostrar la ventana para que,
+     * si el fichero tiene algo raro, el aviso salga sobre una ventana que ya
+     * esta ahi y no sobre el vacio.                                     */
+    if (fue_abrir())
+        fue_abre_al_arrancar(ctx, fue_abrir());
 
     /* Set up status label and text view (already done in create_main_window) */
 
@@ -56,10 +65,21 @@ static void activate(GtkApplication *app, gpointer user_data) {
  *
  * Sin la opcion funciona como siempre. La madre todavia no existe.     */
 static char g_raiz_proyecto[1024];
+static char g_abrir[1024];        /* el fichero que hay que abrir al arrancar */
 
 const char *fue_raiz_proyecto(void)
 {
     return g_raiz_proyecto[0] ? g_raiz_proyecto : NULL;
+}
+
+/* EL FICHERO QUE LA MADRE MANDA.
+ *
+ * Sin esto, "abrir en fue" solo arrancaba fue: el analista tenia que ir a
+ * buscar a mano la serie que acababa de marcar en la ventana de al lado. Una
+ * madre que lanza programas sin decirles a que vienen no gestiona nada. */
+const char *fue_abrir(void)
+{
+    return g_abrir[0] ? g_abrir : NULL;
 }
 
 static int lee_opciones(int argc, char *argv[])
@@ -73,11 +93,16 @@ static int lee_opciones(int argc, char *argv[])
         if (!strcmp(argv[i], "--proyecto") && i + 1 < argc) proy = argv[++i];
         else if (!strncmp(argv[i], "--proyecto=", 11)) proy = argv[i] + 11;
         else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
-            printf("uso: %s [--proyecto FICHERO]\n\n"
+            printf("uso: %s [--proyecto FICHERO] [FICHERO.inp]\n\n"
                    "  --proyecto F  el espacio de trabajo sale de la raiz\n"
-                   "                del proyecto F.\n", argv[0]);
+                   "                del proyecto F.\n"
+                   "  FICHERO.inp   se abre al arrancar. Es lo que la madre\n"
+                   "                manda al decir «estimar esta serie».\n",
+                   argv[0]);
             return 1;
         }
+        else if (argv[i][0] != '-')
+            snprintf(g_abrir, sizeof g_abrir, "%s", argv[i]);
     }
     if (!proy) return 0;
 
@@ -113,6 +138,10 @@ int main(int argc, char *argv[]) {
     opt = lee_opciones(argc, argv);
     if (opt == 1) return 0;
     if (opt == 2) return 3;
+
+    /* Las opciones ya estan leidas: al GTK solo le llega el nombre. Si no,
+       g_application_run se las encuentra y dice "Unknown option".      */
+    argc = 1;
 
 #ifdef _WIN32
     /* On Windows, set up resource paths for GTK (if needed) */

@@ -38,9 +38,9 @@ else
 endif
 
 # Compiler and basic flags
-CFLAGS   = -O2 -g -Wall -Iinclude -I../../lib/fugdraw -I../../lib/preview -I../../lib/engine -I../../lib/outfile -I../../lib/utils -I../../lib/datos -I../../lib/proyecto -I../../lib/inpcheck -I$(ENG_DIR)/fue/include
+CFLAGS   = -O2 -g -Wall -Iinclude -I../../lib/fugdraw -I../../lib/preview -I../../lib/engine -I../../lib/outfile -I../../lib/utils -I../../lib/datos -I../../lib/xlsx -I../../lib/proyecto -I../../lib/inpcheck -I$(ENG_DIR)/fue/include
 LDFLAGS  +=
-LIBS     = -lm
+LIBS     = -lz -lm
 
 # Windows‑specific: hide console window
 ifeq ($(OS),windows)
@@ -61,6 +61,7 @@ LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c \
            $(LIB_DIR)/engine/engine.c \
            $(LIB_DIR)/outfile/outfile.c \
            $(LIB_DIR)/datos/datos.c \
+           $(LIB_DIR)/xlsx/xlsx.c \
            $(LIB_DIR)/proyecto/proyecto.c \
            $(LIB_DIR)/utils/utils.c $(LIB_DIR)/utils/ext.c
 
@@ -105,7 +106,13 @@ endif
 
 # Combine flags
 GUI_CFLAGS = $(CFLAGS) $(GTK_CFLAGS)
-GUI_LIBS   = $(GTK_LIBS) -lm
+GUI_LIBS   = $(GTK_LIBS) -lz -lm
+
+# ALL_CFLAGS se usaba en las reglas de lib/ y NO ESTABA DEFINIDA: esos ficheros
+# se compilaban sin un solo -I. Funcionaba de casualidad, porque cada .c de
+# lib/ solo incluia su propia cabecera, que esta a su lado. En cuanto uno
+# incluyo otra --datos.c a xlsx.h-- salio a la luz.
+ALL_CFLAGS = $(GUI_CFLAGS)
 
 # Default target: build GUI
 all: $(TARGET)
@@ -137,6 +144,10 @@ $(BUILD_DIR)/lib_outfile/%.o: $(LIB_DIR)/outfile/%.c | $(BUILD_DIR)
 	$(CC) $(GUI_CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/lib_proyecto/%.o: $(LIB_DIR)/proyecto/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(ALL_CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/lib_xlsx/%.o: $(LIB_DIR)/xlsx/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
 	$(CC) $(ALL_CFLAGS) -c $< -o $@
 

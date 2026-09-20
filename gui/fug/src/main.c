@@ -38,6 +38,7 @@ static void create_iden_dialog(AppWidgets *app);
  * ejecuciones, asi que cada arranque empieza preguntando donde esta todo.
  * Sin la opcion funciona como siempre.                                 */
 static char g_raiz[1024];
+static char g_abrir[1024];        /* el fichero que la madre manda */
 
 static int lee_opciones(int argc, char *argv[])
 {
@@ -50,11 +51,16 @@ static int lee_opciones(int argc, char *argv[])
         if (!strcmp(argv[i], "--proyecto") && i + 1 < argc) proy = argv[++i];
         else if (!strncmp(argv[i], "--proyecto=", 11)) proy = argv[i] + 11;
         else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
-            printf("uso: %s [--proyecto FICHERO]\n\n"
+            printf("uso: %s [--proyecto FICHERO] [FICHERO]\n\n"
                    "  --proyecto F  el espacio de trabajo sale de la raiz\n"
-                   "                del proyecto F.\n", argv[0]);
+                   "                del proyecto F.\n"
+                   "  FICHERO       se abre al arrancar. Es lo que la madre\n"
+                   "                manda al decir «identificar esta serie».\n",
+                   argv[0]);
             return 1;
         }
+        else if (argv[i][0] != '-')
+            snprintf(g_abrir, sizeof g_abrir, "%s", argv[i]);
     }
     if (!proy) return 0;
 
@@ -86,6 +92,9 @@ int main(int argc, char *argv[])
 
     if (opt == 1) return 0;
     if (opt == 2) return 3;
+
+    /* Las opciones ya estan leidas: a gtk_init solo le llega el nombre. */
+    argc = 1;
 
 #ifdef ENABLE_NLS
     bindtextdomain(GETTEXT_PACKAGE, PACKAGE_LOCALE_DIR);
@@ -140,6 +149,16 @@ int main(int argc, char *argv[])
     gtk_widget_show_all(app->window);
     /* Con --proyecto, el espacio de trabajo ya se sabe al arrancar. */
     if (g_raiz[0]) set_workspace(app, g_raiz);
+
+    /* LO QUE LA MADRE MANDA. Se pone en el chooser de siempre y se dispara su
+     * handler: no hay una segunda forma de cargar --que es como se crean las
+     * divergencias-- y pasa exactamente lo que pasaria eligiendolo a mano. */
+    if (g_abrir[0]) {
+        gtk_file_chooser_set_filename(
+            GTK_FILE_CHOOSER(app->data_filechooserbutton), g_abrir);
+        on_data_filechooserbutton_file_set(
+            GTK_FILE_CHOOSER_BUTTON(app->data_filechooserbutton), app);
+    }
 
     gtk_main();
 

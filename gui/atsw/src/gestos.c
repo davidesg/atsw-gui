@@ -20,17 +20,25 @@ GtkWidget *atsw_dialogo_texto( GtkWidget *padre, const char *titulo,
 /* ejecuciones, asi que cada arranque empezaba preguntando donde esta todo.   */
 /* ------------------------------------------------------------------------ */
 
-void atsw_lanza( Atsw *a, const char *programa )
+/* fichero puede ser NULL: entonces solo se abre el programa.
+ *
+ * MANDARLE LA SERIE ES LA MITAD DEL GESTO. Sin el fichero, "abrir en fue"
+ * solo arrancaba fue y el analista tenia que ir a buscar a mano la serie que
+ * acababa de marcar en la ventana de al lado. Una madre que lanza programas
+ * sin decirles a que vienen no gestiona nada.                          */
+void atsw_lanza( Atsw *a, const char *programa, const char *fichero )
 {
-    gchar  *argv[4];
+    gchar  *argv[5];
     GError *e = NULL;
+    int     n = 0;
 
     if ( !a->hay ) return;
 
-    argv[0] = (gchar *) programa;
-    argv[1] = (gchar *) "--proyecto";
-    argv[2] = a->p->path;
-    argv[3] = NULL;
+    argv[n++] = (gchar *) programa;
+    argv[n++] = (gchar *) "--proyecto";
+    argv[n++] = a->p->path;
+    if ( fichero && *fichero ) argv[n++] = (gchar *) fichero;
+    argv[n] = NULL;
 
     if ( !g_spawn_async( NULL, argv, NULL,
                          G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL |
@@ -46,7 +54,11 @@ void atsw_lanza( Atsw *a, const char *programa )
         }
     else
         {
-        gchar *s = g_strdup_printf( "%s lanzado con este proyecto.", programa );
+        gchar *s = ( fichero && *fichero )
+                 ? g_strdup_printf( "%s, con %s.", programa,
+                                    strrchr( fichero, '/' )
+                                    ? strrchr( fichero, '/' ) + 1 : fichero )
+                 : g_strdup_printf( "%s, con este proyecto.", programa );
 
         barra_pub( a, s );
         g_free( s );

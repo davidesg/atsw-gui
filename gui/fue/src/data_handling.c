@@ -104,6 +104,19 @@ gboolean load_data_file(const char *filename, FueContext *ctx,
     return TRUE;
 }
 
+/* ABRIR UN FICHERO QUE VIENE DE FUERA, al arrancar.
+ *
+ * Se apoya en el mismo chooser que usa el analista: poner ahi el nombre
+ * dispara el handler de siempre, asi que no hay una segunda forma de cargar
+ * --que es como se crean las divergencias-- y lo que pase es exactamente lo
+ * que pasaria si lo hubiera elegido a mano.                             */
+void fue_abre_al_arrancar(FueContext *ctx, const char *path)
+{
+    if (!path || !*path) return;
+    gtk_file_chooser_set_filename(GTK_FILE_CHOOSER(ctx->data_file_chooser), path);
+    on_data_file_selected(GTK_FILE_CHOOSER_BUTTON(ctx->data_file_chooser), ctx);
+}
+
 void on_data_file_selected(GtkFileChooserButton *button, FueContext *ctx) {
     char *filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(button));
     if (!filename) return;
@@ -123,7 +136,12 @@ void on_data_file_selected(GtkFileChooserButton *button, FueContext *ctx) {
         load_input_fue(filename);
         update_ui_from_model(ctx);
         gtk_label_set_text(GTK_LABEL(ctx->status_label), "Model loaded from file.");
-        gtk_widget_set_sensitive(ctx->btn_run, TRUE);
+        /* btn_run NO SE ASIGNA EN NINGUN SITIO: se declara en el contexto y
+         * se usa tres veces, y nunca se le da valor. Cada carga de datos
+         * emitia un Gtk-CRITICAL -- solo que nadie miraba stderr hasta que
+         * la interfaz madre empezo a lanzar el programa. Se guarda como ya
+         * hacia file_io.c:1080, que era el unico sitio que lo comprobaba. */
+        if (ctx->btn_run) gtk_widget_set_sensitive(ctx->btn_run, TRUE);
         /* También establecer workspace y input name a partir del archivo .inp */
         char *dir = g_path_get_dirname(filename);
         char *basename = g_path_get_basename(filename);
@@ -154,7 +172,12 @@ void on_data_file_selected(GtkFileChooserButton *button, FueContext *ctx) {
             NumAr2f = NumMa2f = 0;
             update_ui_from_model(ctx);
             gtk_label_set_text(GTK_LABEL(ctx->status_label), "Data loaded successfully.");
-            gtk_widget_set_sensitive(ctx->btn_run, TRUE);
+            /* btn_run NO SE ASIGNA EN NINGUN SITIO: se declara en el contexto y
+         * se usa tres veces, y nunca se le da valor. Cada carga de datos
+         * emitia un Gtk-CRITICAL -- solo que nadie miraba stderr hasta que
+         * la interfaz madre empezo a lanzar el programa. Se guarda como ya
+         * hacia file_io.c:1080, que era el unico sitio que lo comprobaba. */
+        if (ctx->btn_run) gtk_widget_set_sensitive(ctx->btn_run, TRUE);
 
             /* Establecer workspace al directorio del archivo de datos */
             char *dir = g_path_get_dirname(filename);

@@ -10,7 +10,7 @@
 
 #include "atsw.h"
 
-void atsw_lanza( Atsw *a, const char *programa );
+void atsw_lanza( Atsw *a, const char *programa, const char *fichero );
 gboolean atsw_itera( Atsw *a, const char *serie, const char *padre,
                      char *why, size_t n );
 void atsw_datos( Atsw *a );
@@ -24,6 +24,8 @@ void barra_pub( Atsw *a, const char *s )
 }
 
 /* ------------------------------------------------------------------------ */
+
+static gchar *marcada( GtkWidget *tv, int columna );
 
 static gchar *marcada( GtkWidget *tv, int columna )
 {
@@ -118,9 +120,77 @@ static void on_nuevo( GtkButton *b, Atsw *a )
 }
 
 static void on_datos( GtkButton *b, Atsw *a )  { (void)b; atsw_datos( a ); }
-static void on_fue( GtkButton *b, Atsw *a )    { (void)b; atsw_lanza( a, "fue_gui" ); }
-static void on_fug( GtkButton *b, Atsw *a )    { (void)b; atsw_lanza( a, "gtk_fmg" ); }
-static void on_drtran( GtkButton *b, Atsw *a ) { (void)b; atsw_lanza( a, "drtran_gui" ); }
+
+/* EL FICHERO QUE SE MANDA, Y NO ES EL MISMO SEGUN A DONDE.
+ *
+ * La distincion es de METODO, no de formato:
+ *
+ *   a fug  SE IDENTIFICA, y se identifica ANTES de que haya modelo. Se manda
+ *          el .inp -- la especificacion con sus datos. Mandarle un .pre seria
+ *          sugerir que se identifica algo ya estimado, que es al reves.
+ *
+ *   a fue  SE ESTIMA, y ahi el .pre SI vale y vale mas: es un optimo
+ *          reejecutable, asi que arrancar de el ahorra la busqueda. Si no lo
+ *          hay todavia, el .inp.
+ *
+ * Si no hay modelo marcado se usa el elegido de la serie.              */
+static gboolean que_mandar( Atsw *a, gboolean acepta_pre, char *out, size_t n )
+{
+    gchar *id = marcada( a->l_modelos, 0 );
+    const char *m;
+
+    if ( !a->hay || !a->serie[0] ) { out[0] = '\0'; return FALSE; }
+
+    m = id ? id : pr_elegido( a->p, a->serie );
+    if ( !m || !*m ) { g_free( id ); out[0] = '\0'; return FALSE; }
+
+    if ( acepta_pre &&
+         pr_ruta( a->p, a->serie, m, ".pre", out, n ) == 0 &&
+         g_file_test( out, G_FILE_TEST_EXISTS ) )
+        { g_free( id ); return TRUE; }
+
+    if ( pr_ruta( a->p, a->serie, m, ".inp", out, n ) == 0 &&
+         g_file_test( out, G_FILE_TEST_EXISTS ) )
+        { g_free( id ); return TRUE; }
+
+    g_free( id );
+    out[0] = '\0';
+    return FALSE;
+}
+
+static void manda( Atsw *a, const char *programa, const char *para,
+                   gboolean acepta_pre )
+{
+    char f[PR_RUTA];
+
+    if ( !a->hay ) { barra_pub( a, "Abre un proyecto antes." ); return; }
+    if ( !que_mandar( a, acepta_pre, f, sizeof f ) )
+        {
+        /* SE DICE QUE NO HAY QUE MANDAR, en vez de abrir el programa vacio y
+         * dejar al analista preguntandose si fallo algo.               */
+        gchar *s = g_strdup_printf(
+            a->serie[0] ? "«%s» no tiene todavía ningún fichero que mandar: "
+                          "carga los datos o marca un modelo."
+                        : "Marca una serie para %s.",
+            a->serie[0] ? a->serie : para );
+
+        barra_pub( a, s );
+        g_free( s );
+        atsw_lanza( a, programa, NULL );
+        return;
+        }
+    atsw_lanza( a, programa, f );
+}
+
+static void on_fue( GtkButton *b, Atsw *a )
+     { (void)b; manda( a, "fue_gui", "estimarla", TRUE ); }
+/* A fug NO se le manda un .pre: se identifica antes de que haya modelo. */
+static void on_fug( GtkButton *b, Atsw *a )
+     { (void)b; manda( a, "gtk_fmg", "identificarla", FALSE ); }
+/* drtran es de la RED: trabaja con n series, no con una. Se abre con el
+ * proyecto y alli se eligen.                                          */
+static void on_drtran( GtkButton *b, Atsw *a )
+     { (void)b; atsw_lanza( a, "drtran_gui", NULL ); }
 
 /* Un texto en una linea. Devuelve TRUE si se acepto. */
 static gboolean pide_texto( Atsw *a, const char *titulo, const char *aviso,
@@ -286,12 +356,9 @@ static void activate( GtkApplication *app, gpointer d )
     gtk_label_set_ellipsize( GTK_LABEL(a->l_proy), PANGO_ELLIPSIZE_MIDDLE );
     gtk_box_pack_start( GTK_BOX(barra), a->l_proy, TRUE, TRUE, 8 );
 
-    a->b_fue = boton( barra, "fue",
-        "El escalón univariante. Se lanza con este proyecto.",
-        G_CALLBACK(on_fue), a );
-    a->b_fug = boton( barra, "fug", "Los gráficos.", G_CALLBACK(on_fug), a );
     a->b_drtran = boton( barra, "drtran",
-        "Las transferencias. Parte de los .pre ya estimados.",
+        "Las transferencias. Trabaja con VARIAS series a la vez, así que se "
+        "abre con el proyecto y allí se eligen.",
         G_CALLBACK(on_drtran), a );
 
     /* --- las dos listas --- */
@@ -329,6 +396,21 @@ static void activate( GtkApplication *app, gpointer d )
         "El porqué de esta iteración. Se puede poner después —mirando el "
         ".out, que es cuando de verdad se sabe— o no ponerse.",
         G_CALLBACK(on_razon), a );
+
+    gtk_box_pack_start( GTK_BOX(b2), gtk_separator_new(
+                            GTK_ORIENTATION_VERTICAL ), FALSE, FALSE, 6 );
+
+    /* LOS DOS ENVIOS. Van aqui, con la rejilla, porque actuan sobre el modelo
+     * MARCADO -- el mismo sujeto que Iterar, Elegir y Razón.           */
+    a->b_fug = boton( b2, "→ fug",
+        "Manda esta serie a fug para IDENTIFICARLA: sus gráficos, su ACF y "
+        "su PACF.\n\nSe manda el .inp, nunca el .pre: se identifica ANTES "
+        "de que haya modelo.", G_CALLBACK(on_fug), a );
+    a->b_fue = boton( b2, "→ fue",
+        "Manda esta serie a fue para ESTIMAR su modelo.\n\nSe manda el .pre "
+        "si lo hay —es un óptimo reejecutable— y si no el .inp, que es la "
+        "especificación.", G_CALLBACK(on_fue), a );
+
     gtk_box_pack_start( GTK_BOX(der), b2, FALSE, FALSE, 0 );
     }
 

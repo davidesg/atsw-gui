@@ -42,10 +42,17 @@ static gchar *marcada( GtkWidget *tv, int columna )
 static void on_serie( GtkTreeSelection *sel, gpointer d )
 {
     Atsw  *a = d;
-    gchar *s = marcada( a->l_series, 0 );
+    gchar *s;
 
     (void) sel;
-    snprintf( a->serie, sizeof a->serie, "%s", s ? s : "" );
+    /* REPINTANDO: la lista se esta rehaciendo y "changed" no dice nada del
+       analista. Leerla aqui borraba la marca que acababa de ponerse.  */
+    if ( a->recolocando ) return;
+
+    s = marcada( a->l_series, 0 );
+    if ( s == NULL ) return;          /* deseleccion: se conserva la marca */
+
+    snprintf( a->serie, sizeof a->serie, "%s", s );
     g_free( s );
     atsw_refresca( a );
 }
@@ -141,7 +148,7 @@ static gboolean que_mandar( Atsw *a, gboolean acepta_pre, char *out, size_t n )
 
     if ( !a->hay || !a->serie[0] ) { out[0] = '\0'; return FALSE; }
 
-    m = id ? id : pr_elegido( a->p, a->serie );
+    m = id ? id : atsw_modelo_por_defecto( a->p, a->serie );
     if ( !m || !*m ) { g_free( id ); out[0] = '\0'; return FALSE; }
 
     if ( acepta_pre &&

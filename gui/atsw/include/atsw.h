@@ -83,6 +83,14 @@ typedef struct {
    int        nr;
 
    char       serie[PR_ID];       /* la serie marcada                       */
+
+   /* REPINTANDO: no leer la seleccion.
+    *
+    * gtk_list_store_clear dispara "changed" con nada marcado, asi que marcar
+    * una serie borraba la marca que acababa de ponerse: click -> changed ->
+    * refresco -> clear -> changed -> serie vacia. Es el mismo guardia que
+    * main_window.c de drtran_gui llama «recolocando».                 */
+   gboolean   recolocando;
 } Atsw;
 
 GtkWidget *atsw_ventana_new( GtkApplication *app, Atsw *a );
@@ -91,5 +99,13 @@ gboolean   atsw_abre( Atsw *a, const char *path, char *why, size_t n );
 
 /* El resultado de un modelo, releyendo el .out si la huella cambio. */
 const AtRes *atsw_resultado( Atsw *a, const char *serie, const char *id );
+
+/* EL MODELO AL QUE APUNTAN LOS BOTONES si el analista no marca otro: el
+ * ELEGIDO si lo hay, y si no el ULTIMO -- la iteracion mas reciente, que es
+ * lo que casi siempre se quiere. "" si la serie no tiene ninguno.
+ *
+ * Es una REGLA, no un asunto de interfaz, asi que vive aqui y se prueba
+ * aparte: la rejilla la usa para marcar y los envios para apuntar.    */
+const char *atsw_modelo_por_defecto( const Proyecto *p, const char *serie );
 
 #endif /* ATSW_GUI_H */

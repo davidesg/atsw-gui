@@ -106,6 +106,25 @@ const AtRes *atsw_resultado( Atsw *a, const char *serie, const char *id )
 
 /* ------------------------------------------------------------------------ */
 
+const char *atsw_modelo_por_defecto( const Proyecto *p, const char *serie )
+{
+    const char *eleg;
+    const char *ultimo = "";
+    int         i, maxv = -1;
+
+    if ( p == NULL || serie == NULL || !*serie ) return "";
+
+    eleg = pr_elegido( p, serie );
+    if ( eleg && *eleg ) return eleg;
+
+    /* El ULTIMO por version, que es un CAMPO -- no se deduce del nombre. */
+    for ( i = 0; i < p->nm; i++ )
+        if ( !strcmp( p->m[i].serie, serie ) && p->m[i].version > maxv )
+            { maxv = p->m[i].version; ultimo = p->m[i].id; }
+
+    return ultimo;
+}
+
 gboolean atsw_abre( Atsw *a, const char *path, char *why, size_t n )
 {
     PrError e;
@@ -136,9 +155,15 @@ static void pinta_series( Atsw *a )
                                            GTK_TREE_VIEW(a->l_series) ) );
     GtkTreeIter   it;
     int           i, j;
+    char          marcada[PR_ID];
 
+    /* La marca se GUARDA y se repone: repintar no puede cambiar lo que el
+       analista tenia elegido.                                          */
+    snprintf( marcada, sizeof marcada, "%s", a->serie );
+
+    a->recolocando = TRUE;
     gtk_list_store_clear( st );
-    if ( !a->hay ) return;
+    if ( !a->hay ) { a->recolocando = FALSE; return; }
 
     for ( i = 0; i < a->p->ns; i++ )
         {
@@ -156,7 +181,12 @@ static void pinta_series( Atsw *a )
             S_NMOD,    nm,
             S_RAZON,   a->p->s[i].razon,
             -1 );
+
+        if ( marcada[0] && !strcmp( marcada, a->p->s[i].id ) )
+            gtk_tree_selection_select_iter(
+                gtk_tree_view_get_selection( GTK_TREE_VIEW(a->l_series) ), &it );
         }
+    a->recolocando = FALSE;
 }
 
 static void pinta_modelos( Atsw *a )
@@ -164,13 +194,14 @@ static void pinta_modelos( Atsw *a )
     GtkListStore *st = GTK_LIST_STORE( gtk_tree_view_get_model(
                                            GTK_TREE_VIEW(a->l_modelos) ) );
     GtkTreeIter   it;
-    const char   *eleg;
+    const char   *eleg, *porde;
     int           i;
 
     gtk_list_store_clear( st );
     if ( !a->hay || a->serie[0] == '\0' ) return;
 
-    eleg = pr_elegido( a->p, a->serie );
+    eleg  = pr_elegido( a->p, a->serie );
+    porde = atsw_modelo_por_defecto( a->p, a->serie );
 
     for ( i = 0; i < a->p->nm; i++ )
         {
@@ -212,6 +243,13 @@ static void pinta_modelos( Atsw *a )
             M_RAZON,    m->razon[0] ? m->razon : "(sin razón)",
             M_ESTRELLA, ( eleg && !strcmp( eleg, m->id ) ) ? "★" : "",
             -1 );
+
+        /* SE MARCA EL DE POR DEFECTO, para que los botones tengan a que
+         * apuntar sin exigir un segundo click. El analista puede marcar
+         * otro, claro.                                                */
+        if ( !strcmp( porde, m->id ) )
+            gtk_tree_selection_select_iter(
+                gtk_tree_view_get_selection( GTK_TREE_VIEW(a->l_modelos) ), &it );
         }
 }
 

@@ -238,3 +238,11 @@ echo
 $CC -O2 -Wall -Wextra -I"$L/tabla" \
     "$L/tabla/test_tabla.c" "$L/tabla/tabla.c" -o "$W/test_tabla" || exit 1
 "$W/test_tabla" "$W" || exit 1
+
+# --- la puerta de los datos: una, no cuatro --------------------------------
+# El primer caso es el fichero de dos columnas con el que fue y fug daban DOS
+# SERIES DISTINTAS. Aqui se fija cual es la buena.
+echo
+$CC -O2 -Wall -Wextra -I"$L/datos" \
+    "$L/datos/test_datos.c" "$L/datos/datos.c" -o "$W/test_datos" || exit 1
+"$W/test_datos" "$W" || exit 1

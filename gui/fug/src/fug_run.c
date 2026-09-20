@@ -159,16 +159,21 @@ GPtrArray *fug_args_new(const gchar *handler)
 {
     GPtrArray *args = g_ptr_array_new_with_free_func(g_free);
 
-    gchar buf[G_ASCII_DTOSTR_BUF_SIZE];
-
     g_ptr_array_add(args, g_strdup(fug_program()));
     g_ptr_array_add(args, g_strdup(handler));
-    /* The transformation of the main window: the .inp may be a fue model */
-    g_ptr_array_add(args, g_strdup("-B"));
-    g_ptr_array_add(args, g_strdup(g_ascii_formatd(buf, sizeof buf, "%.6f", Tm.boxlam)));
-    g_ptr_array_add(args, g_strdup(g_ascii_formatd(buf, sizeof buf, "%.6f", Tm.boxm)));
-    fug_args_add(args, "%d", Tm.nrdiff);
-    fug_args_add(args, "%d", Tm.nadiff);
+    /* LA TRANSFORMACION NO VA POR LA ORDEN. Aqui se pasaba
+     *
+     *     -B <lambda> <m> <d> <D>
+     *
+     * pisando lo que dijera el .inp. Y EL .inp ES EL FICHERO DE ENTRADA COMUN
+     * A fug Y A fue: la especificacion vive ahi. Pasarla por la orden hacia
+     * que el GUI dejara de actualizar el fichero --lo decia su propio
+     * comentario-- y entonces el .inp de disco, el que fue lee despues, decia
+     * una cosa y la pantalla otra.
+     *
+     * La forma es la del fug 1.13: la orden dice QUE GRAFICOS y el barrido
+     * "set r a"; la especificacion, el fichero. Decision del analista,
+     * 2026-09-20. -B se quito tambien del motor.                        */
     return args;
 }
 

@@ -24,7 +24,7 @@
 ** Mean parameter (mu):
 0
 ** Box-Cox lambda, regular differences and complete annual differences:
-1.00 0 0
+ 0.00  1  0
 ** Individual factors of the annual difference (from freq 0.0): 
  0 0 0 0 0 0 0
 ** ACF/PACF bands (0 Automatic) and reescaling factor: 

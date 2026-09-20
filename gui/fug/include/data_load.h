@@ -20,6 +20,9 @@ typedef enum {
     INPUT_SAME,         /* same series (and, without model, same transformation) */
     INPUT_DIFFERENT,    /* another series or transformation, without model    */
     INPUT_MODEL,        /* a fue model of another series                      */
+    INPUT_MODEL_TRANSF, /* la MISMA serie con modelo de fue, y la ventana pide
+                         * OTRA transformacion. Se dice y se para: ver
+                         * SaveInpFile.                                     */
     INPUT_UNREADABLE    /* not an .inp file                                   */
 } InputStatus;
 

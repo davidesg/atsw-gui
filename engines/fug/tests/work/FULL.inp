@@ -61,7 +61,7 @@ huelga
 ** Mean parameter (mu):
 0.01 1
 ** Box-Cox lambda, m. Regular differences and complete annual differences:
- 0.00  1  1
+ 0.00  1  0
 ** Individual factors of the annual difference (starting at freq 0.0):
  0 0 0 0 0 0 0
 ** ACF/PACF bands (0 Automatic) and reescaling factor:

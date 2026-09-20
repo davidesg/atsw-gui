@@ -266,6 +266,22 @@ gboolean SaveInpFile(AppWidgets *app)
     if (status == INPUT_SAME) {
         ok = TRUE;
         show_status(app, "Using %s", outputf);
+    } else if (status == INPUT_MODEL_TRANSF) {
+        /* NI SE PISA EL MODELO NI SE IGNORA LA VENTANA: SE DICE.
+         *
+         * El .inp lleva un modelo de fue --lo hizo el analista-- y su
+         * transformacion no es la de esta ventana. Reescribirlo destruiria el
+         * modelo; correr con la de la ventana sin escribirla dejaria el
+         * fichero COMPARTIDO diciendo otra cosa, que es justo lo que hacia
+         * "-B" y por lo que se quito.                                    */
+        ok = FALSE;
+        show_error(app,
+            "%s lleva un modelo de fue con otra transformación.\n\n"
+            "El .inp es el fichero de entrada COMÚN a fug y a fue: la "
+            "especificación vive ahí, y fug no la pisa.\n\n"
+            "Cambia la transformación en fue, o dale otro nombre de entrada "
+            "para trabajar sobre una copia.", outputf);
+        show_status(app, "%s: el modelo de fue manda", outputf);
     } else if ((status == INPUT_MODEL || status == INPUT_UNREADABLE) &&
                !replace_input(app, outputf, status)) {
         ok = FALSE;

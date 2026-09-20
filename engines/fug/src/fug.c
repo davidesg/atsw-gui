@@ -94,8 +94,6 @@ static void usage( void )
    printf( "  -m n        observations per group of the mean - std. dev. graph.\n" );
    printf( "  -f x        scale of the acf/pacf plots (default: automatic).\n" );
    printf( "  -g n        number of estimated ARMA parameters (degrees of freedom of Q).\n" );
-   printf( "  -B l m d D  Box-Cox lambda and m, regular and annual differences (instead\n" );
-   printf( "              of the ones of the input file).\n" );
    printf( "  -x [min max step]\n" );
    printf( "              estimate the Box-Cox lambda by maximum likelihood\n" );
    printf( "              (default search: -2 2 0.1).\n" );
@@ -203,8 +201,24 @@ int main(int argc, char **argv)
 int i, j, nparma, grapht, m_dt_nog=0, lags =0, status = 0, need;
 int max_nrdiff=0, max_nadiff=0;
 char *base, *inputf, *outputf, *pdff, *slash;
-int auto_lambda = 0, set_bc = 0, set_cbands = 0, bc_nrdiff = 0, bc_nadiff = 0;
-double lambda_min = -2.0, lambda_max = 2.0, lambda_step = 0.1, bc_lambda = 1.0, bc_m = 0.0;
+/* -B SE QUITO (2026-09-20, decision del analista).
+ *
+ * Daba la transformacion --lambda, m, d, D-- por la LINEA DE ORDENES, pisando
+ * la del .inp. Y el .inp ES COMUN A fug Y A fue: hacerle eso convierte el
+ * fichero compartido en un fichero que MIENTE. El GUI llego a dejar de
+ * actualizarlo a proposito, confiando en -B, asi que se podia cambiar lambda
+ * en la ventana y que el .inp de disco --el que fue lee despues-- siguiera
+ * diciendo lo de antes.
+ *
+ * La forma es la del fug 1.13: la linea de ordenes dice QUE GRAFICOS y el
+ * barrido "set r a"; la ESPECIFICACION sale del .inp. Un barrido no es una
+ * especificacion -- set recorre seis transformaciones y un fichero no puede
+ * llevar seis.
+ *
+ * -B entro el 2026-09-15 con el trabajo de la 1.15, dos dias antes de que
+ * este codigo tuviera control de versiones: no hay commit que revisar.    */
+int auto_lambda = 0, set_cbands = 0;
+double lambda_min = -2.0, lambda_max = 2.0, lambda_step = 0.1;
 double file_cbands;
 
 nparma    = 0;
@@ -253,18 +267,6 @@ Tm.cbands = 0.0;
              case 'f': Tm.cbands = arg_real( (i + 1 < argc) ? argv[++i] : NULL, "-f" );
                        set_cbands = 1;
                        break;
-             case 'B':                         /* -B lambda m d D */
-                  if ( i + 4 >= argc )
-                     {
-                     fprintf( stderr, "Error: option -B requires four values: lambda m d D.\n" );
-                     return( 1 );
-                     }
-                  bc_lambda = arg_real( argv[++i], "-B" );
-                  bc_m      = arg_real( argv[++i], "-B" );
-                  bc_nrdiff = arg_int( argv[++i], "-B" );
-                  bc_nadiff = arg_int( argv[++i], "-B" );
-                  set_bc = 1;
-                  break;
              case 'g': nparma = arg_int( (i + 1 < argc) ? argv[++i] : NULL, "-g" ); break;
              case 'x':
                   auto_lambda = 1;
@@ -345,13 +347,6 @@ Tm.cbands = 0.0;
 /*****************************************************************************/
 
    file_cbands = read_input( inputf, base );
-   if ( set_bc )                 /* -B: Box-Cox and differences of the command line */
-      {
-      Tm.boxlam = bc_lambda;
-      Tm.boxm   = bc_m;
-      Tm.nrdiff = bc_nrdiff;
-      Tm.nadiff = bc_nadiff;
-      }
    if ( !set_cbands && file_cbands > 0.0 ) Tm.cbands = file_cbands;
 
    if ( NULL == (outputv = fopen( outputf, "w" )) )

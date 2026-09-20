@@ -30,6 +30,19 @@ run() {
 quiet() {
     if [ -s "$1.err" ]; then bad "$1: unexpected messages:"; sed 's/^/    /' "$1.err" | head -5; else ok; fi
 }
+# LA ESPECIFICACION VA EN EL FICHERO. Antes estas pruebas pasaban lambda, m, d
+# y D por "-B", pisando lo que dijera el .inp -- y el .inp es COMUN a fug y a
+# fue, asi que eso convertia el fichero compartido en uno que miente. Se quito
+# -B (2026-09-20) y aqui se escribe la linea de Box-Cox, que es donde vive.
+#   bc_set FICHERO "linea"
+bc_set() {
+    # OJO: la linea de comentario NO siempre lleva "**" -- FULL.inp lo lleva e
+    # IPCM.inp no. Los lectores del .inp saltan los comentarios por POSICION,
+    # no por contenido, asi que aqui se busca el texto.
+    awk -v l="$2" '/Box-Cox lambda/ { print; getline; print l; next } { print }' \
+        "$1" > "$1.tmp" && mv "$1.tmp" "$1"
+}
+
 exists() {
     for f in "$@"; do
         if [ -s "$f" ]; then ok; else bad "missing file $f"; fi
@@ -101,10 +114,17 @@ echo "== the .inp of fue (shared by fug and fue)"
 # them non-standard with its own data column, AR, MA, fixed-frequency
 # operators and mean); ART.inp: the .inp without model written by ART.
 # fug must take the same series: same results as R1 (fug layout, d = 1)
-run full 0 FULL -B 0 0 1 0 -l 0 -m 12 -a && quiet full
-run art 0 ART -B 0 0 1 0 -l 0 -m 12 -a && quiet art
+# La linea del fichero manda, y es lo unico que manda: FULL trae lambda 0,
+# d 1, D 1.
+run fulld 0 FULL -a && exists d1D1lnFULL.eps
+
+# Los mismos datos con D = 0 dan lo mismo que R1. La transformacion se cambia
+# EN EL FICHERO, no por la orden.
 cp IPCM.inp BOPT.inp
-run bopt 0 BOPT -B 0 0 1 0 -l 0 -m 12 -a && quiet bopt
+for f in FULL ART BOPT; do bc_set $f.inp " 0.00  1  0"; done
+run full 0 FULL -l 0 -m 12 -a && quiet full
+run art 0 ART -l 0 -m 12 -a && quiet art
+run bopt 0 BOPT -l 0 -m 12 -a && quiet bopt
 for f in FULL ART BOPT; do
     stats ${f}_fug.out > s$f
     cmp -s s$f sr1 && ok || bad "$f.inp: different series than R1.inp"
@@ -113,15 +133,16 @@ grep -q "Series Name *: IPCM" FULL_fug.out && ok || bad "FULL.inp: series name"
 # fug does not write the .out and .pdf of fue
 [ ! -e FULL.out ] && [ ! -e FULL.pdf ] && ok || bad "fug wrote FULL.out or FULL.pdf"
 # the scale of the acf/pacf of the fue file (1.0) is used when there is no -f
-run fullb 0 FULL -B 0 0 1 0 -b && quiet fullb
+run fullb 0 FULL -b && quiet fullb
 grep -aq "(-1) Tj" acf_d1lnFULL.eps && ok || bad "FULL.inp: acf/pacf scale of the file not used"
-run fullf 0 FULL -B 0 0 1 0 -b -f 0.6 && grep -aq "(-0.6) Tj" acf_d1lnFULL.eps && ok || bad "-f does not win over the file"
-# without -B, the Box-Cox line of the file (FULL: lambda 0, d 1, D 1)
-run fulld 0 FULL -a && exists d1D1lnFULL.eps
+run fullf 0 FULL -b -f 0.6 && grep -aq "(-0.6) Tj" acf_d1lnFULL.eps && ok || bad "-f does not win over the file"
+
+# Y -B YA NO EXISTE: la especificacion no se pisa por la linea de ordenes.
+run nobe 1 FULL -B 0 0 1 0 -a
+grep -q "Unknown option: -B" nobe.err && ok || bad "-B should be gone"
 # a damaged fue file is reported
 head -40 FULL.inp > CUT.inp
 run cut 1 CUT -a && grep -q "Error reading input file CUT.inp" cut.err && ok || bad "damaged fue file"
-run bopt4 1 BOPT -B 0 0 1 && grep -q "requires four values" bopt4.err && ok || bad "-B with three values"
 
 echo "== without a display, with spaces and extension in the path"
 mkdir -p "dir with space"

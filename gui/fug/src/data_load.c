@@ -215,8 +215,15 @@ InputStatus compare_input (const char *path)
 	same_series = inp.freq == now.freq && inp.nobs == now.nobs && inp.begyear == now.begyear &&
 	              (inp.freq > 1 ? inp.begtime == now.begtime : inp.outyear == now.outyear) &&
 	              memcmp (inp.data, now.data, now.nobs * sizeof (double)) == 0;
+	/* CON MODELO, LA TRANSFORMACION TAMBIEN CUENTA. Antes no se miraba: un
+	 * .inp con modelo de fue y lambda 0, d 1 se daba por «igual» aunque la
+	 * ventana dijera lambda 1, d 0 -- y el GUI lo dejaba intacto porque
+	 * contaba con que "-B" llevara la transformacion por la orden. Quitado
+	 * -B, esa discrepancia hay que verla.                              */
 	if (inp.model)
-		status = same_series ? INPUT_SAME : INPUT_MODEL;
+		status = !same_series ? INPUT_MODEL
+		       : (inp.boxlam == now.boxlam && inp.nrdiff == now.nrdiff &&
+		          inp.nadiff == now.nadiff) ? INPUT_SAME : INPUT_MODEL_TRANSF;
 	else
 		status = (same_series && inp.fue && strcmp (inp.name, now.name) == 0 &&
 		          inp.boxlam == now.boxlam && inp.nrdiff == now.nrdiff &&

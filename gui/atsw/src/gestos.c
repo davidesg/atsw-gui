@@ -48,15 +48,6 @@ void preview_show_status( PreviewApp *app, const gchar *format, ... )
     g_free( s );
 }
 
-/* La extension de un nombre, con su punto. La de lib/utils arrastra GTK y el
- * contexto del GUI de fue; esta son cuatro lineas.                      */
-const char *getExt( const char *fspec )
-{
-    const char *e = strrchr( fspec, '.' );
-
-    return ( e == NULL ) ? "" : e;
-}
-
 /* DONDE ESTA EL PROGRAMA, y el orden importa.
  *
  * Primero AL LADO DE LA MADRE, en el arbol de compilacion; despues el PATH.

@@ -19,8 +19,13 @@ TOP=$(cd "$(dirname "$0")/.." && pwd)
 # mismo que corre el motor.
 LIB="$TOP/../../lib"
 ENG="$TOP/../../engines"
-LIB_SRCS="$LIB/preview/preview.c $LIB/engine/engine.c $LIB/outfile/outfile.c $LIB/utils/utils.c $LIB/fugdraw/fugdraw.c"
-LIB_INC="-I$LIB/preview -I$LIB/engine -I$LIB/outfile -I$LIB/utils -I$LIB/fugdraw -I$LIB/inpcheck -I$ENG/fue/include"
+# ext.c va aparte de utils.c: lib/preview usa getExt, y lo demas de utils.c
+# arrastra inpcheck y las constantes de este GUI. Faltaba, y el enlace de
+# uno de los binarios auxiliares se caia por getExt.
+# Y la lista sigue al Makefile del GUI: lib/datos, lib/xlsx y lib/proyecto
+# entraron con la carga de datos y el proyecto, y aqui no se habian puesto.
+LIB_SRCS="$LIB/preview/preview.c $LIB/engine/engine.c $LIB/outfile/outfile.c $LIB/utils/utils.c $LIB/utils/ext.c $LIB/fugdraw/fugdraw.c $LIB/datos/datos.c $LIB/xlsx/xlsx.c $LIB/proyecto/proyecto.c"
+LIB_INC="-I$LIB/preview -I$LIB/engine -I$LIB/outfile -I$LIB/utils -I$LIB/fugdraw -I$LIB/inpcheck -I$LIB/datos -I$LIB/xlsx -I$LIB/proyecto -I$ENG/fue/include"
 WORK_EARLY="${WORK:-$TOP/tests/work}"
 
 WORK="$TOP/tests/work"
@@ -54,7 +59,7 @@ rc=$?
 # y los dos caminos tienen que dar la misma imagen.
 # --------------------------------------------------------------------------
 $CC -O0 -g -Wall -I"$TOP/include" $LIB_INC $GTK_CFLAGS \
-    "$TOP/tests/test_preview.c" $LIB/fugdraw/fugdraw.c $LIB/utils/utils.c $INPCHECK_O \
+    "$TOP/tests/test_preview.c" $LIB/fugdraw/fugdraw.c $LIB/utils/utils.c $LIB/utils/ext.c $INPCHECK_O \
     -o "$WORK/test_preview" $GTK_LIBS -lm || exit 1
 
 pv_fail=0

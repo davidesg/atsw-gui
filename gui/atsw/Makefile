@@ -23,6 +23,7 @@ SRC = src/main.c src/ventana.c src/gestos.c src/datos_gui.c src/vistazo.c \
       $(LIB)/tabla/tabla.c \
       $(LIB)/rutas/rutas.c \
       $(LIB)/preview/preview.c \
+      $(LIB)/utils/ext.c \
       $(LIB)/fugdraw/fugdraw.c \
       $(LIB)/datos/datos.c \
       $(LIB)/xlsx/xlsx.c \
@@ -33,7 +34,7 @@ HDR = include/atsw.h
 
 INC = -Iinclude -I$(LIB)/proyecto -I$(LIB)/outdiag -I$(LIB)/outfile -I$(LIB)/engine -I$(LIB)/inpcheck -I$(LIB)/tabla \
       -I$(LIB)/rutas -I$(LIB)/dates -I$(LIB)/datos -I$(LIB)/xlsx \
-      -I../../engines/fug/src -I$(LIB)/preview -I$(LIB)/fugdraw
+      -I../../engines/fug/src -I$(LIB)/preview -I$(LIB)/fugdraw -I$(LIB)/utils
 
 GTK_CFLAGS := $(shell pkg-config --cflags gtk+-3.0 2>/dev/null)
 GTK_LIBS   := $(shell pkg-config --libs   gtk+-3.0 2>/dev/null)

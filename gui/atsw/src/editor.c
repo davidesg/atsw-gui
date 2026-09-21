@@ -38,6 +38,8 @@
 #include <glib/gstdio.h>
 
 #include "engine.h"
+#include "preview.h"
+#include "rutas.h"
 #include "inpcheck.h"
 #include "outfile.h"
 
@@ -52,11 +54,14 @@ typedef struct {
     char       id[PR_ID];
 
     GtkWidget *win;
+    GtkWidget *libro;       /* Editor | Salida                             */
     GtkWidget *texto;       /* el .inp                                     */
-    GtkWidget *salida;      /* el .out, o lo que el motor va diciendo      */
+    GtkWidget *salida;      /* el .out, el informe                         */
+    GtkWidget *consola;     /* LO QUE PASA: la orden y lo que el motor dice */
     GtkWidget *estado;
     GtkWidget *b_guardar;
     GtkWidget *b_estimar;
+    GtkWidget *b_graficos;
 
     EngineJob *job;         /* la corrida en curso, o NULL                 */
 } Editor;
@@ -96,13 +101,38 @@ static void pon_texto( GtkWidget *tv, const char *s )
                               s ? s : "", -1 );
 }
 
+/* Añade al final Y SE QUEDA MIRANDO EL FINAL. Una consola que no sigue a lo
+ * que escribe obliga a arrastrar la barra en cada corrida.              */
 static void anade( GtkWidget *tv, const char *s, gsize n )
 {
     GtkTextBuffer *b = gtk_text_view_get_buffer( GTK_TEXT_VIEW(tv) );
     GtkTextIter    f;
+    GtkTextMark   *m;
 
     gtk_text_buffer_get_end_iter( b, &f );
     gtk_text_buffer_insert( b, &f, s, (gint) n );
+
+    gtk_text_buffer_get_end_iter( b, &f );
+    m = gtk_text_buffer_create_mark( b, NULL, &f, FALSE );
+    gtk_text_view_scroll_mark_onscreen( GTK_TEXT_VIEW(tv), m );
+    gtk_text_buffer_delete_mark( b, m );
+}
+
+/* LA CONSOLA ES UN REGISTRO, no una ventana de una corrida: lo de antes no
+ * se borra. Ver la orden anterior al lado de la de ahora es lo que deja
+ * entender que cambio entre las dos.                                    */
+static void consola( Editor *E, const char *fmt, ... ) G_GNUC_PRINTF( 2, 3 );
+
+static void consola( Editor *E, const char *fmt, ... )
+{
+    va_list ap;
+    gchar  *s;
+
+    va_start( ap, fmt );
+    s = g_strdup_vprintf( fmt, ap );
+    va_end( ap );
+    anade( E->consola, s, strlen( s ) );
+    g_free( s );
 }
 
 static void titula( Editor *E )
@@ -353,16 +383,68 @@ static void on_recargar( GtkButton *b, Editor *E )
 /* Estimar, sin congelar la ventana                                          */
 /* ------------------------------------------------------------------------ */
 
+/* EL GRAFICO DE LOS RESIDUOS LO ESCRIBE EL MOTOR, y hay que saber su nombre
+ * para encontrarlo: fue lo arma poniendo una "A" DELANTE DEL NOMBRE, no de
+ * la ruta -- "Acaso/X.eps" no se podia escribir, y era un aviso, no un
+ * error. Por eso el motor usa ruta_componer, y por eso aqui se compone
+ * igual en vez de pegar cadenas.
+ *
+ * Y es JUSTO lo que hace falta: fue lo dibuja con fp_PlotSer_CorrSer, "the
+ * same graph as fug -c" -- la serie de residuos con su ACF y su PACF. No
+ * hay que calcular nada ni lanzar nada: ya esta escrito desde la ultima
+ * estimacion.                                                          */
+static int eps_de( Editor *E, char *out, size_t n )
+{
+    char base[PR_RUTA];
+
+    out[0] = '\0';
+    if ( pr_ruta( E->a->p, E->serie, E->id, ".eps", base, sizeof base ) != 0 )
+        return 1;
+    return ruta_componer( base, "A", NULL, out, n );
+}
+
+static gboolean hay_eps( Editor *E )
+{
+    char f[PR_RUTA];
+
+    return eps_de( E, f, sizeof f ) == 0 &&
+           g_file_test( f, G_FILE_TEST_EXISTS );
+}
+
+static void on_graficos( GtkButton *b, Editor *E )
+{
+    char f[PR_RUTA];
+
+    (void) b;
+    if ( eps_de( E, f, sizeof f ) != 0 ||
+         !g_file_test( f, G_FILE_TEST_EXISTS ) )
+        {
+        /* SE DICE QUE NO ESTA. El grafico sale de estimar, asi que faltar
+           significa una cosa concreta y se puede decir cual.          */
+        di( E, "Todavía no hay gráfico de %s: sale al estimar.", E->id );
+        return;
+        }
+
+    if ( !preview_show( (PreviewApp *) E->a, f ) )
+        di( E, "No pude abrir %s.", f );
+    else
+        {
+        di( E, "Residuos, ACF y PACF de %s.", E->id );
+        consola( E, "* %s\n", f );
+        }
+}
+
 static void corriendo( Editor *E, gboolean si )
 {
     gtk_widget_set_sensitive( E->b_guardar, !si );
     gtk_widget_set_sensitive( E->b_estimar, !si );
+    gtk_widget_set_sensitive( E->b_graficos, !si && hay_eps( E ) );
     gtk_text_view_set_editable( GTK_TEXT_VIEW(E->texto), !si );
 }
 
 static void sale( const char *txt, gsize n, gpointer d )
 {
-    anade( ((Editor *) d)->salida, txt, n );
+    anade( ((Editor *) d)->consola, txt, n );
 }
 
 static void paso( int it, double obj, gpointer d )
@@ -384,7 +466,12 @@ static void acabo( const EngineResult *r, gpointer d )
         {
         trae_out( E );
         atsw_refresca( E->a );
+        /* El informe es lo que se mira despues de estimar: se pone delante
+           solo, que es lo que uno iba a hacer con el raton.           */
+        gtk_notebook_set_current_page( GTK_NOTEBOOK(E->libro), 1 );
         }
+    gtk_widget_set_sensitive( E->b_graficos, hay_eps( E ) );
+    consola( E, "\n%s\n\n", r->message ? r->message : "terminó" );
     di( E, "%s", r->message ? r->message : "Terminó." );
 }
 
@@ -417,9 +504,12 @@ static void on_estimar( GtkButton *b, Editor *E )
     base = g_path_get_basename( ruta );
     if ( strlen( base ) > 4 ) base[strlen( base ) - 4] = '\0';   /* sin .inp */
 
-    pon_texto( E->salida, "" );
     argv[0] = base;
     argv[1] = NULL;
+
+    /* LA ORDEN, TAL CUAL, con su directorio: es lo que hace reproducible lo
+       que acaba de pasar. Quien quiera repetirlo fuera lo tiene escrito. */
+    consola( E, "$ cd %s\n$ %s %s\n", dir, exe, base );
 
     corriendo( E, TRUE );
     di( E, "Estimando %s…", base );
@@ -542,6 +632,14 @@ void atsw_editor( Atsw *a, const char *serie, const char *id )
     g_signal_connect( b, "clicked", G_CALLBACK(on_estimar), E );
     gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
 
+    E->b_graficos = b = gtk_button_new_with_label( "Gráficos…" );
+    gtk_widget_set_tooltip_text( b,
+        "Los residuos con su ACF y su PACF — el mismo gráfico que «fug -c», "
+        "dibujado por el motor al estimar.\n\nSi está apagado es que este "
+        "modelo no se ha estimado todavía." );
+    g_signal_connect( b, "clicked", G_CALLBACK(on_graficos), E );
+    gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
+
     b = gtk_button_new_with_label( "Releer" );
     gtk_widget_set_tooltip_text( b, "Vuelve a traer el fichero del disco." );
     g_signal_connect( b, "clicked", G_CALLBACK(on_recargar), E );
@@ -552,25 +650,46 @@ void atsw_editor( Atsw *a, const char *serie, const char *id )
     gtk_widget_set_halign( E->estado, GTK_ALIGN_START );
     gtk_box_pack_start( GTK_BOX(barra), E->estado, TRUE, TRUE, 8 );
 
+    /* ARRIBA LO QUE SE MIRA, ABAJO LO QUE PASA.
+     *
+     * El .inp y el .out son dos vistas del MISMO modelo -- la especificacion
+     * y su informe -- asi que van en pestañas: se alternan, no se comparan.
+     * La consola es otra cosa: es el registro de lo que se ha ejecutado, y
+     * tiene que verse A LA VEZ que cualquiera de las dos.              */
     pan = gtk_paned_new( GTK_ORIENTATION_VERTICAL );
     gtk_box_pack_start( GTK_BOX(raiz), pan, TRUE, TRUE, 0 );
 
+    E->libro = gtk_notebook_new();
+    gtk_paned_pack1( GTK_PANED(pan), E->libro, TRUE, FALSE );
+
     E->texto = monoespaciado();
-    gtk_paned_pack1( GTK_PANED(pan), en_scroll( E->texto ), TRUE, FALSE );
+    gtk_notebook_append_page( GTK_NOTEBOOK(E->libro), en_scroll( E->texto ),
+                              gtk_label_new( "Especificación (.inp)" ) );
 
     E->salida = monoespaciado();
     gtk_text_view_set_editable( GTK_TEXT_VIEW(E->salida), FALSE );
     gtk_widget_set_tooltip_text( E->salida,
-        "Lo que escribe el motor, y el .out cuando termina. Se lee AQUI: los "
+        "El informe de la estimación con su diagnosis. Se lee AQUI: los "
         "errores típicos se leen del .out, nunca de reejecutar un .pre." );
-    gtk_paned_pack2( GTK_PANED(pan), en_scroll( E->salida ), TRUE, FALSE );
-    gtk_paned_set_position( GTK_PANED(pan), 420 );
+    gtk_notebook_append_page( GTK_NOTEBOOK(E->libro), en_scroll( E->salida ),
+                              gtk_label_new( "Informe (.out)" ) );
+
+    E->consola = monoespaciado();
+    gtk_text_view_set_editable( GTK_TEXT_VIEW(E->consola), FALSE );
+    gtk_widget_set_tooltip_text( E->consola,
+        "La orden que se ejecuta, con su directorio, y lo que el motor va "
+        "diciendo.\n\nNo se borra entre corridas: ver la anterior al lado "
+        "de la de ahora es lo que deja entender qué cambió." );
+    gtk_paned_pack2( GTK_PANED(pan), en_scroll( E->consola ), FALSE, TRUE );
+    gtk_paned_set_position( GTK_PANED(pan), 470 );
 
     g_signal_connect( E->win, "delete-event", G_CALLBACK(on_cerrar), E );
     g_signal_connect( E->win, "destroy", G_CALLBACK(on_destruir), E );
 
     if ( !trae_inp( E ) ) { gtk_widget_destroy( E->win ); return; }
     trae_out( E );
+    gtk_widget_set_sensitive( E->b_graficos, hay_eps( E ) );
+    consola( E, "* %s / %s\n", E->serie, E->id );
     di( E, "%s / %s.inp", E->serie, E->id );
 
     gtk_widget_show_all( E->win );

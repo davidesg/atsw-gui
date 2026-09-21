@@ -224,7 +224,45 @@ Se guarda primero, y si no se puede guardar no se corre: estimar lo que hay en
 el disco mientras la pantalla enseña otra cosa es exactamente el fallo de dos
 dueños con que empezó esta fase.
 
-### 7.4 El `.pre`, aquí
+### 7.4 Arriba lo que se mira, abajo lo que pasa
+
+> «Podríamos dividirlo por notebook entre el editor y output, y abajo una
+> consola donde se observan los comandos y se visualiza la ejecución. Dado que
+> es más avanzado.»
+
+El `.inp` y el `.out` son **dos vistas del mismo modelo** —la especificación y
+su informe—, así que van en pestañas: se alternan, no se comparan. Al terminar
+una estimación el informe se pone delante solo, que es lo que uno iba a hacer
+con el ratón.
+
+La **consola** es otra cosa y por eso está fuera del cuaderno, visible a la
+vez que cualquiera de las dos. Lleva la orden tal cual, con su directorio:
+
+    $ cd /tmp/imp/Alemania/work
+    $ ../../../engines/fue/bin/fue Alemania_m02
+
+Eso es lo que hace **reproducible** lo que acaba de pasar: quien quiera
+repetirlo fuera lo tiene escrito. Y **no se borra entre corridas** — ver la
+orden anterior al lado de la de ahora es lo que deja entender qué cambió.
+
+### 7.5 Los gráficos ya estaban escritos
+
+> «Además de un botón para ver los gráficos de residuos + acf/pacf.»
+
+No hay que calcular ni lanzar nada: el motor los dibuja **en cada
+estimación**, en `A<nombre>.eps`, con `fp_PlotSer_CorrSer` — *«the same graph
+as `fug -c`»*, dice el propio `fue.c`. Es exactamente la serie de residuos con
+su ACF y su PACF.
+
+El botón sólo tiene que encontrarlos, y los encuentra **componiendo el nombre
+como los compone el motor**: `ruta_componer(base, "A", NULL, ...)`, que pone la
+A delante del NOMBRE y no de la ruta. Pegar cadenas daría `Acaso/X.eps`, que es
+el fallo que el motor ya tuvo y que sólo avisaba.
+
+Si el modelo no se ha estimado, el botón está apagado: el gráfico sale de
+estimar, así que faltar significa una cosa concreta y se dice cuál.
+
+### 7.6 El `.pre`, aquí
 
 En la madre no hace falta un `Edit .pre`: **`Iterar` ya es eso**, y lo hace
 antes de abrir nada — copia el `.pre` a un `.inp` nuevo con su linaje, y ese

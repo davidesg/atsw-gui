@@ -22,9 +22,17 @@ int atsw_guarda_inp( const char *destino, const char *txt,
    prueba esta FUERA del widget a proposito, que es de lo que iba la fase 2
    -- un solo camino, y probable.                                        */
 typedef struct _Atsw Atsw;
+typedef struct _PreviewApp PreviewApp;
 void  barra_pub( Atsw *a, const char *s )       { (void) a; (void) s; }
 void  atsw_refresca( Atsw *a )                  { (void) a; }
 char *atsw_programa( const char *p )            { (void) p; return 0; }
+
+/* Los dos ganchos que lib/preview pide al anfitrion. Aqui no hay anfitrion:
+   el visor no entra en lo que se prueba.                               */
+void  preview_open_external( PreviewApp *a, const char *p )
+                                                { (void) a; (void) p; }
+void  preview_show_status( PreviewApp *a, const char *f, ... )
+                                                { (void) a; (void) f; }
 
 static int fallos = 0;
 

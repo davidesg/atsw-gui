@@ -316,10 +316,13 @@ $CC -O2 -Wall -Wextra -I"$TOP/../atsw/include" -I"$L/proyecto" -I"$L/inpcheck" \
     $(pkg-config --cflags glib-2.0) -o "$W/inpcheck_fue.o" || exit 1
 $CC -O2 -Wall -Wextra -I"$TOP/../atsw/include" -I"$L/proyecto" -I"$L/inpcheck" \
     -I"$L/engine" -I"$L/outfile" -I"$L/outdiag" -I"$L/tabla" -I"$L/dates" \
+    -I"$L/preview" -I"$L/rutas" -I"$L/fugdraw" -I"$L/utils" \
     $(pkg-config --cflags gtk+-3.0) \
     "$TOP/../atsw/tests/test_editor.c" "$TOP/../atsw/src/editor.c" \
     "$L/proyecto/proyecto.c" "$L/outfile/outfile.c" "$L/engine/engine.c" \
-    "$L/outdiag/outdiag.c" "$L/dates/dates.c" "$W/inpcheck_fue.o" \
+    "$L/outdiag/outdiag.c" "$L/dates/dates.c" "$L/rutas/rutas.c" \
+    "$L/preview/preview.c" "$L/fugdraw/fugdraw.c" "$L/utils/ext.c" \
+    "$W/inpcheck_fue.o" \
     -o "$W/test_editor" $(pkg-config --libs gtk+-3.0) -lm || exit 1
 "$W/test_editor" "$W" "$TOP/../../engines/fue/tests/corpus/CPI_USA_model.inp" \
     || exit 1

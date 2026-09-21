@@ -64,23 +64,12 @@ static void activate(GtkApplication *app, gpointer user_data) {
  * Con esto arranca sabiendo en que proyecto esta.
  *
  * Sin la opcion funciona como siempre. La madre todavia no existe.     */
-static char g_raiz_proyecto[1024];
-static char g_abrir[1024];        /* el fichero que hay que abrir al arrancar */
-
-const char *fue_raiz_proyecto(void)
-{
-    return g_raiz_proyecto[0] ? g_raiz_proyecto : NULL;
-}
-
-/* EL FICHERO QUE LA MADRE MANDA.
- *
- * Sin esto, "abrir en fue" solo arrancaba fue: el analista tenia que ir a
- * buscar a mano la serie que acababa de marcar en la ventana de al lado. Una
- * madre que lanza programas sin decirles a que vienen no gestiona nada. */
-const char *fue_abrir(void)
-{
-    return g_abrir[0] ? g_abrir : NULL;
-}
+/* Lo que la linea de ordenes deja dicho vive en arranque.c, NO AQUI: la
+ * ventana lo pregunta, y una prueba que levanta la ventana sin main() se
+ * quedaba sin ello. Un dato que la interfaz consulta no puede vivir en el
+ * unico fichero que las pruebas no pueden enlazar.                     */
+void fue_pon_raiz_proyecto(const char *s);
+void fue_pon_abrir(const char *s);
 
 static int lee_opciones(int argc, char *argv[])
 {
@@ -102,7 +91,7 @@ static int lee_opciones(int argc, char *argv[])
             return 1;
         }
         else if (argv[i][0] != '-')
-            snprintf(g_abrir, sizeof g_abrir, "%s", argv[i]);
+            fue_pon_abrir(argv[i]);
     }
     if (!proy) return 0;
 
@@ -119,12 +108,17 @@ static int lee_opciones(int argc, char *argv[])
         return 2;
     }
     /* La raiz, resuelta: pr_ruta con id vacio da el directorio.       */
-    pr_ruta(p, "", NULL, NULL, g_raiz_proyecto, sizeof g_raiz_proyecto);
-    if (!g_raiz_proyecto[0]) {
+    {
+    char raiz[1024] = "";
+
+    pr_ruta(p, "", NULL, NULL, raiz, sizeof raiz);
+    if (!raiz[0]) {
         char *d = g_path_get_dirname(proy);
 
-        snprintf(g_raiz_proyecto, sizeof g_raiz_proyecto, "%s", d);
+        snprintf(raiz, sizeof raiz, "%s", d);
         g_free(d);
+    }
+    fue_pon_raiz_proyecto(raiz);
     }
     free(p);
     return 0;

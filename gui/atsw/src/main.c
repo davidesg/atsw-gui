@@ -682,6 +682,22 @@ static GtkWidget *boton( GtkWidget *caja, const char *txt, const char *tip,
     return b;
 }
 
+/* AL VOLVER A LA VENTANA, RELEER.
+ *
+ * Quien estima es OTRO PROCESO --fue_gui, que la madre lanza-- y escribe el
+ * .out por su cuenta. La madre no se entera de nada: la rejilla se quedaba
+ * con la d.t. y el contraste de antes hasta que algo la tocara.
+ *
+ * Volver el foco a esta ventana ES el gesto de "vengo de estimar", asi que
+ * es el momento de releer. La huella (tamaño + mtime) hace que releer sea
+ * barato: si el .out no se ha movido, no se vuelve a analizar.        */
+static gboolean on_foco( GtkWidget *w, GdkEventFocus *ev, Atsw *a )
+{
+    (void) w; (void) ev;
+    if ( a->hay ) atsw_refresca( a );
+    return FALSE;
+}
+
 static void activate( GtkApplication *app, gpointer d )
 {
     Atsw         *a = d;
@@ -692,6 +708,7 @@ static void activate( GtkApplication *app, gpointer d )
     a->ventana = w;
     gtk_window_set_title( GTK_WINDOW(w), "ATSW — el taller" );
     gtk_window_set_default_size( GTK_WINDOW(w), 1000, 620 );
+    g_signal_connect( w, "focus-in-event", G_CALLBACK(on_foco), a );
 
     raiz = gtk_box_new( GTK_ORIENTATION_VERTICAL, 6 );
     gtk_container_set_border_width( GTK_CONTAINER(raiz), 8 );
@@ -781,24 +798,24 @@ static void activate( GtkApplication *app, gpointer d )
     gtk_box_pack_start( GTK_BOX(der), b2, FALSE, FALSE, 0 );
     }
 
-    st = gtk_list_store_new( M_N, G_TYPE_STRING, G_TYPE_INT, G_TYPE_STRING,
+    st = gtk_list_store_new( M_N, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING,
                              G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING,
-                             G_TYPE_STRING, G_TYPE_STRING );
+                             G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING );
     a->l_modelos = gtk_tree_view_new_with_model( GTK_TREE_MODEL(st) );
+    gtk_tree_view_set_tooltip_column( GTK_TREE_VIEW(a->l_modelos), M_GLOBO );
     columna( a->l_modelos, "",          M_ESTRELLA );
     columna( a->l_modelos, "Modelo",    M_ID );
-    columna( a->l_modelos, "Versión",   M_VER );
     columna( a->l_modelos, "Viene de",  M_PADRE );
+    columna( a->l_modelos, "Estructura", M_ESTRUCT );
     columna( a->l_modelos, "d.t. res.", M_SD );
-    columna( a->l_modelos, "Hosking",   M_Q );
-    columna( a->l_modelos, "Blancos",   M_BLANCO );
+    columna( a->l_modelos, "Q (g.l.)",  M_Q );
+    columna( a->l_modelos, "p",         M_P );
     columna( a->l_modelos, "Por qué",   M_RAZON );
     gtk_widget_set_tooltip_text( a->l_modelos,
         "Los números salen del .out, no del manifiesto, y se releen cuando el "
         "fichero cambia. Cachearlos podría mentir: si alguien reestima por "
         "fuera, el número guardado seguiría diciendo lo de antes.\n\nEl "
-        "manifiesto guarda linaje y razón, que son DECISIONES.\n\nDoble clic "
-        "en un modelo lo abre en fue." );
+        "manifiesto guarda linaje y razón, que son DECISIONES." );
     /* Doble clic --o Intro-- sobre un modelo lo abre en fue; el boton
        derecho despliega lo que se puede hacer con el.               */
     g_signal_connect( a->l_modelos, "row-activated",

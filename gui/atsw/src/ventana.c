@@ -7,6 +7,8 @@
 
 #include <glib/gstdio.h>
 
+#include "outfile.h"
+
 #include "atsw.h"
 
 /* Un veredicto: una linea de altura fija con su punto de color. Es la regla
@@ -65,7 +67,6 @@ const AtRes *atsw_resultado( Atsw *a, const char *serie, const char *id )
     AtRes      *r = hueco( a, serie, id );
     char        path[PR_RUTA];
     GStatBuf    st;
-    Diagnosis  *d;
 
     if ( r == NULL ) return NULL;
     if ( pr_ruta( a->p, serie, id, ".out", path, sizeof path ) != 0 )
@@ -88,19 +89,28 @@ const AtRes *atsw_resultado( Atsw *a, const char *serie, const char *id )
     r->mtime = (long) st.st_mtime;
     r->hay   = FALSE;
 
-    d = g_new0( Diagnosis, 1 );
-    if ( od_parse_file( path, d ) == 0 )
+    /* EL LECTOR DE fue, no el de drtran. Son dos formatos: aquel trae el
+       portmanteau de Hosking --multivariante-- y este el Ljung-Box de la
+       ACF de los residuos. Darle el .out de fue al otro no falla, no
+       encuentra nada, que es por lo que "Hosking" salia siempre vacia. */
+    {
+    FueOut o;
+
+    if ( fueout_read( path, &o ) )
         {
-        r->hay        = TRUE;
-        r->sd         = ( d->ns > 0 ) ? d->s[0].sd : 0.0;
-        r->logl       = d->logl;
-        r->tiene_logl = d->tiene_logl;
-        r->hq         = d->hosking.q;
-        r->hdf        = d->hosking.df;
-        r->hp         = d->hosking.p;
-        r->blanco     = d->hosking.hay ? d->hosking_blanco : TRUE;
+        r->hay  = TRUE;
+        r->sd   = o.sd;
+        r->npar = o.npar;
+        r->q    = o.tiene_lb ? o.lb_q : 0.0;
+        r->qdf  = o.tiene_lb ? o.lb_df : 0;
+        r->qp   = o.tiene_lb ? o.lb_p : -1.0;
+        r->jb   = o.tiene_jb ? o.jb : 0.0;
+        r->jbp  = o.tiene_jb ? o.jb_p : -1.0;
+        r->skew = o.skew;
+        r->kurt = o.kurt;
+        fueout_estructura( &o, r->estruct, sizeof r->estruct );
         }
-    g_free( d );
+    }
     return r;
 }
 
@@ -207,7 +217,8 @@ static void pinta_modelos( Atsw *a )
         {
         const PrModelo *m = &a->p->m[i];
         const AtRes    *r;
-        char            sd[32], q[48];
+        char            sd[32], q[48], pv[16];
+        gchar          *globo;
 
         if ( strcmp( m->serie, a->serie ) != 0 ) continue;
 
@@ -216,38 +227,51 @@ static void pinta_modelos( Atsw *a )
         if ( r && r->hay )
             {
             snprintf( sd, sizeof sd, "%.4f", r->sd );
-            if ( r->hdf > 0 )
-                snprintf( q, sizeof q, "P(%d) = %.1f, p = %.4f",
-                          r->hdf, r->hq, r->hp );
+            if ( r->qdf > 0 )
+                { snprintf( q, sizeof q, "%.1f (%d)", r->q, r->qdf );
+                  snprintf( pv, sizeof pv, "%.3f", r->qp ); }
             else
-                snprintf( q, sizeof q, "—" );
+                { snprintf( q, sizeof q, "—" ); snprintf( pv, sizeof pv, "—" ); }
+
+            /* EL GLOBO: lo que no decide entre modelos pero se pregunta
+               del elegido. Asi la normalidad esta sin robar una columna. */
+            globo = g_strdup_printf(
+                "%s · %d parámetro%s\n\n"
+                "Ljung-Box Q(%d) = %.2f, p = %.4f\n"
+                "Jarque-Bera = %.1f, p = %.4f  (asimetría %.2f, curtosis %.2f)"
+                "\n\nDoble clic para abrirlo en fue.",
+                r->estruct[0] ? r->estruct : "sin estructura",
+                r->npar, r->npar == 1 ? "" : "s",
+                r->qdf, r->q, r->qp, r->jb, r->jbp, r->skew, r->kurt );
             }
         else
             {
-            /* SIN .out NO SE INVENTA NADA. Que un modelo este declarado no
-               quiere decir que se haya estimado.                         */
             snprintf( sd, sizeof sd, "—" );
-            snprintf( q, sizeof q, "sin estimar" );
+            snprintf( q,  sizeof q,  "—" );
+            snprintf( pv, sizeof pv, "—" );
+            globo = g_strdup( m->rol == PR_DATOS
+                ? "Los datos de la serie. No se estiman: de aquí cuelga todo."
+                : "Sin estimar todavía. Doble clic para abrirlo en fue." );
             }
 
         gtk_list_store_append( st, &it );
         gtk_list_store_set( st, &it,
             M_ID,       m->id,
-            M_VER,      m->version,
             M_PADRE,    m->padre[0] ? m->padre : "—",
+            M_ESTRUCT,  ( r && r->hay && r->estruct[0] ) ? r->estruct
+                        : ( m->rol == PR_DATOS ? "los datos" : "—" ),
             M_SD,       sd,
             M_Q,        q,
-            M_BLANCO,   ( r && r->hay ) ? ( r->blanco ? "sí" : "NO" ) : "—",
+            M_P,        pv,
             /* "SIN RAZON" SE VE COMO SIN RAZON. Nunca se infiere ni se
                rellena: es la regla de la huella vacia del guion.        */
-            /* LOS DATOS SE DICEN. Un nodo sin razon y sin estimar podria
-             * parecer un modelo a medias, y no lo es: es la raiz, y no se
-             * edita.                                                   */
             M_RAZON,    m->rol == PR_DATOS
-                        ? "los datos, tal como entraron — no se editan"
+                        ? "tal como entraron — no se editan"
                         : ( m->razon[0] ? m->razon : "(sin razón)" ),
             M_ESTRELLA, ( eleg && !strcmp( eleg, m->id ) ) ? "★" : "",
+            M_GLOBO,    globo,
             -1 );
+        g_free( globo );
 
         /* SE MARCA EL DE POR DEFECTO, para que los botones tengan a que
          * apuntar sin exigir un segundo click. El analista puede marcar

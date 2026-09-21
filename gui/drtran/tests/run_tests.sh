@@ -297,13 +297,23 @@ else
     echo "  (sin PyYAML: me salto la lectura desde Python)"
 fi
 
+# --- el .out de fue, leido para la rejilla -----------------------------------
+# Contra los GOLDEN del motor, que estan en control de versiones: si el formato
+# de la salida cambia, cambia el golden y esto se entera el mismo dia.
+echo
+$CC -O2 -Wall -Wextra -I"$L/outfile" $(pkg-config --cflags glib-2.0) \
+    "$L/outfile/test_outfile.c" "$L/outfile/outfile.c" \
+    -o "$W/test_outfile" $(pkg-config --libs glib-2.0) -lm || exit 1
+"$W/test_outfile" "$TOP/../../engines/fue/tests/golden" || exit 1
+
 # --- las reglas de la interfaz madre, sin widgets ---------------------------
 # A que apuntan los botones cuando el analista no marca nada. Es una regla del
 # metodo, no de la interfaz, y por eso se puede probar.
 echo
 $CC -O2 -Wall -Wextra -I"$TOP/../atsw/include" -I"$L/proyecto" -I"$L/outdiag" \
-    -I"$L/tabla" -I"$L/dates" $(pkg-config --cflags gtk+-3.0) \
+    -I"$L/outfile" -I"$L/tabla" -I"$L/dates" $(pkg-config --cflags gtk+-3.0) \
     "$TOP/../atsw/tests/test_atsw.c" "$TOP/../atsw/src/ventana.c" \
-    "$L/proyecto/proyecto.c" "$L/outdiag/outdiag.c" "$L/dates/dates.c" \
+    "$L/proyecto/proyecto.c" "$L/outdiag/outdiag.c" "$L/outfile/outfile.c" \
+    "$L/dates/dates.c" \
     -o "$W/test_atsw" $(pkg-config --libs gtk+-3.0) -lm || exit 1
 "$W/test_atsw" || exit 1

@@ -47,7 +47,24 @@
 
 /* Las columnas de las dos listas. */
 enum { S_ID, S_ELEGIDO, S_NMOD, S_RAZON, S_N };
-enum { M_ID, M_VER, M_PADRE, M_SD, M_Q, M_BLANCO, M_RAZON, M_ESTRELLA, M_N };
+/* LAS COLUMNAS DE LA REJILLA.
+ *
+ * La rejilla contesta UNA pregunta: de estos modelos de la misma serie,
+ * ¿cual me quedo? Y eso son cuatro cosas -- que ES, como ajusta, si los
+ * residuos son blancos, y por que se hizo.
+ *
+ * Lo que se fue y por que:
+ *   Version   el id ya lo dice (m01 -> 1). Dos columnas para un dato.
+ *   Hosking   es el portmanteau MULTIVARIANTE, de drtran. fue no lo emite,
+ *             asi que en univariante salia siempre vacia.
+ *   Blancos   se deducia de Hosking. Con el p del Ljung-Box delante, el
+ *             veredicto sobra: .000 y .44 se leen solos.
+ *
+ * Y el Jarque-Bera NO es columna: la normalidad no decide entre modelos,
+ * se le pregunta al elegido. Va en el globo de la fila, con la asimetria
+ * y la curtosis, que es donde se mira cuando se mira.                   */
+enum { M_ID, M_PADRE, M_ESTRUCT, M_SD, M_Q, M_P, M_RAZON, M_ESTRELLA,
+       M_GLOBO, M_N };
 
 /* Lo que se leyo de un .out, con la huella del fichero del que salio. */
 typedef struct {
@@ -56,10 +73,15 @@ typedef struct {
    double   sd;                   /* la d.t. residual de la ecuacion 1      */
    double   logl;
    gboolean tiene_logl;
-   double   hq, hp;               /* Hosking                               */
-   int      hdf;
-   gboolean blanco;               /* el motor no rechaza H0                 */
+   /* EL LJUNG-BOX de la ACF de los residuos, que es el contraste del
+      modelo UNIVARIANTE. Antes aqui estaba el Hosking de drtran, que fue
+      no emite: la columna salia siempre vacia.                         */
+   double   q, qp;
+   int      qdf;
+   double   jb, jbp;              /* Jarque-Bera, para el globo            */
+   double   skew, kurt;
    int      npar;
+   char     estruct[64];          /* "(0,1,1)(0,1,1)12  log"               */
 
    /* LA HUELLA: tamaño y fecha. Si cambia, se relee. */
    long     tam;

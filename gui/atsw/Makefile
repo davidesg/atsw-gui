@@ -15,9 +15,11 @@ PREFIX  ?= /usr/local
 LIB = ../../lib
 
 SRC = src/main.c src/ventana.c src/gestos.c src/datos_gui.c src/vistazo.c \
+      src/editor.c \
       $(LIB)/proyecto/proyecto.c \
       $(LIB)/outdiag/outdiag.c \
       $(LIB)/outfile/outfile.c \
+      $(LIB)/engine/engine.c \
       $(LIB)/tabla/tabla.c \
       $(LIB)/rutas/rutas.c \
       $(LIB)/preview/preview.c \
@@ -29,7 +31,7 @@ SRC = src/main.c src/ventana.c src/gestos.c src/datos_gui.c src/vistazo.c \
 
 HDR = include/atsw.h
 
-INC = -Iinclude -I$(LIB)/proyecto -I$(LIB)/outdiag -I$(LIB)/outfile -I$(LIB)/tabla \
+INC = -Iinclude -I$(LIB)/proyecto -I$(LIB)/outdiag -I$(LIB)/outfile -I$(LIB)/engine -I$(LIB)/inpcheck -I$(LIB)/tabla \
       -I$(LIB)/rutas -I$(LIB)/dates -I$(LIB)/datos -I$(LIB)/xlsx \
       -I../../engines/fug/src -I$(LIB)/preview -I$(LIB)/fugdraw
 
@@ -38,19 +40,29 @@ GTK_LIBS   := $(shell pkg-config --libs   gtk+-3.0 2>/dev/null)
 
 TARGET = atsw_gui
 
+# inpcheck NO se copia: se compila el fichero DEL MOTOR, renombrando la
+# funcion. Lo que el motor acepta es lo que el editor acepta, por
+# construccion y no por parecido. Es el mismo convenio que gui/fue.
+INPCHECK = inpcheck_fue.o
+
 all: $(TARGET)
 
-$(TARGET): $(SRC) $(HDR)
+$(INPCHECK): ../../engines/fue/src/inpcheck.c $(LIB)/inpcheck/inpcheck.h
+	$(CC) $(CFLAGS) $(INC) -I../../engines/fue/include \
+	    -Dinp_check=inp_check_fue -c $< -o $@
+
+$(TARGET): $(SRC) $(HDR) $(INPCHECK)
 	@if [ -z "$(GTK_LIBS)" ]; then \
 	    echo "atsw_gui necesita los ficheros de desarrollo de GTK 3"; \
 	    echo "(Debian/Ubuntu: sudo apt install libgtk-3-dev)"; exit 1; fi
-	$(CC) $(CFLAGS) $(GTK_CFLAGS) $(INC) -o $@ $(SRC) $(GTK_LIBS) -lz -lm
+	$(CC) $(CFLAGS) $(GTK_CFLAGS) $(INC) -o $@ $(SRC) $(INPCHECK) \
+	    $(GTK_LIBS) -lz -lm
 
 install: $(TARGET)
 	install -d $(DESTDIR)$(PREFIX)/bin
 	install -m 755 $(TARGET) $(DESTDIR)$(PREFIX)/bin/
 
 clean:
-	rm -f $(TARGET)
+	rm -f $(TARGET) $(INPCHECK)
 
 .PHONY: all install clean

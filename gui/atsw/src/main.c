@@ -495,6 +495,15 @@ static void on_borrar( GtkMenuItem *m, Atsw *a )
     atsw_refresca( a );
 }
 
+static void on_editar( GtkMenuItem *m, Atsw *a )
+{
+    gchar *id = marcada( a->l_modelos, M_ID );
+
+    (void) m;
+    if ( a->hay && a->serie[0] && id ) atsw_editor( a, a->serie, id );
+    g_free( id );
+}
+
 /* EL MENU DEL MODELO. Lo que se puede hacer con ESTE, no con la serie. */
 static void menu_modelo( Atsw *a, GdkEventButton *ev )
 {
@@ -518,6 +527,15 @@ static void menu_modelo( Atsw *a, GdkEventButton *ev )
 
     if ( !datos )
         {
+        mi = gtk_menu_item_new_with_label( "Editar el .inp…" );
+        gtk_widget_set_tooltip_text( mi,
+            "El fichero, a mano, con la salida del motor al lado y fue a un "
+            "botón. La otra forma de iterar: el formulario de fue_gui sólo "
+            "puede expresar lo que tiene widgets; el .inp, todo lo que el "
+            "motor lee." );
+        g_signal_connect( mi, "activate", G_CALLBACK(on_editar), a );
+        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+
         mi = gtk_menu_item_new_with_label( "Iterar: seguir desde su óptimo" );
         gtk_widget_set_tooltip_text( mi,
             "Copia su .pre a un .inp nuevo. Un .pre que se toca vuelve a ser "

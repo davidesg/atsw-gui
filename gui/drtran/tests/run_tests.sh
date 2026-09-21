@@ -306,6 +306,24 @@ $CC -O2 -Wall -Wextra -I"$L/outfile" $(pkg-config --cflags glib-2.0) \
     -o "$W/test_outfile" $(pkg-config --libs glib-2.0) -lm || exit 1
 "$W/test_outfile" "$TOP/../../engines/fue/tests/golden" || exit 1
 
+# --- LA regla del editor del .inp -------------------------------------------
+# Un guardado fallido no puede costar trabajo. Se valida con el comprobador
+# DEL MOTOR -- se compila engines/fue/src/inpcheck.c, no una copia.
+echo
+$CC -O2 -Wall -Wextra -I"$TOP/../atsw/include" -I"$L/proyecto" -I"$L/inpcheck" \
+    -I"$L/engine" -I"$L/outfile" -I"$TOP/../../engines/fue/include" \
+    -Dinp_check=inp_check_fue -c "$TOP/../../engines/fue/src/inpcheck.c" \
+    $(pkg-config --cflags glib-2.0) -o "$W/inpcheck_fue.o" || exit 1
+$CC -O2 -Wall -Wextra -I"$TOP/../atsw/include" -I"$L/proyecto" -I"$L/inpcheck" \
+    -I"$L/engine" -I"$L/outfile" -I"$L/outdiag" -I"$L/tabla" -I"$L/dates" \
+    $(pkg-config --cflags gtk+-3.0) \
+    "$TOP/../atsw/tests/test_editor.c" "$TOP/../atsw/src/editor.c" \
+    "$L/proyecto/proyecto.c" "$L/outfile/outfile.c" "$L/engine/engine.c" \
+    "$L/outdiag/outdiag.c" "$L/dates/dates.c" "$W/inpcheck_fue.o" \
+    -o "$W/test_editor" $(pkg-config --libs gtk+-3.0) -lm || exit 1
+"$W/test_editor" "$W" "$TOP/../../engines/fue/tests/corpus/CPI_USA_model.inp" \
+    || exit 1
+
 # --- las reglas de la interfaz madre, sin widgets ---------------------------
 # A que apuntan los botones cuando el analista no marca nada. Es una regla del
 # metodo, no de la interfaz, y por eso se puede probar.

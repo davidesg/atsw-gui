@@ -70,10 +70,16 @@ const char *getExt( const char *fspec )
  * correcto alli.
  *
  * Devuelve una ruta nueva (g_free) o NULL.                              */
-static gchar *donde_esta( const char *programa )
+gchar *atsw_programa( const char *programa )
 {
     static const char *sitio[] = {         /* relativos a gui/atsw/        */
-        "../fue/bin/%s", "../fug/%s", "../drtran/%s", "./%s", NULL
+        "../fue/bin/%s", "../fug/%s", "../drtran/%s", "./%s",
+        /* Y LOS MOTORES, que el editor corre directamente. Van DESPUES de
+           los GUIs porque ninguno se llama igual, y ANTES del PATH por la
+           misma razon que ellos: una instalacion vieja en /usr/local se
+           cuela sin avisar -- ya paso con fue_gui de mayo.            */
+        "../../engines/fue/bin/%s", "../../engines/fug/%s",
+        "../../engines/fuf/bin/%s", NULL
     };
     gchar *mio = g_file_read_link( "/proc/self/exe", NULL );
     gchar *dir = mio ? g_path_get_dirname( mio ) : NULL;
@@ -111,7 +117,7 @@ void atsw_lanza( Atsw *a, const char *programa, const char *fichero )
 
     if ( !a->hay ) return;
 
-    exe = donde_esta( programa );
+    exe = atsw_programa( programa );
     if ( exe == NULL )
         {
         gchar *s = g_strdup_printf(

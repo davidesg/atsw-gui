@@ -163,6 +163,77 @@ Antes del arreglo fallaban la 3 y la 4, y ninguna más. Ahora no falla ninguna.
 
 ---
 
+## 7. Fase 6: el editor pasa a la madre, y el sujeto deja de ser un fichero
+
+> «En la interfaz de gtk_fue en consola hay un editor de `.inp` y un editor de
+> `.pre`. No le veo sentido ahora, y sí veo sentido a otra herramienta: un
+> editor de `.inp` **a partir de la lista**. Es decir, que puedas elegir si
+> iterar con gtk_fue o con un editor.»
+
+Las dos cosas que quedaban en §5 eran la misma cosa, y las dos esperaban al
+manifiesto. Ya está, así que el editor se muda: `gui/atsw/src/editor.c`, se
+abre desde el menú del botón derecho de la rejilla, y **su sujeto es un NODO
+del proyecto**, no un fichero suelto. Se llega a él por `pr_ruta()`, que es la
+única forma de componer una ruta dentro de la raíz declarada.
+
+### 7.1 Lo que no cambia
+
+Las tres reglas de la fase 2 están enteras, y la del guardado está ahora
+**fuera del widget** —`atsw_guarda_inp()`— justo para poder probarla:
+
+    UNO QUE EL MOTOR NO PODRIA LEER, NO
+      ok    se rechaza
+      ok    y se dice que NO se guardo, no que fallo algo
+      ok    con el motivo del propio motor
+            [No lo guardo — line 2: the file ends too soon]
+      ok    Y EL FICHERO QUE HABIA NO SE TOCO
+
+`inpcheck` sigue sin copiarse: el Makefile compila
+`engines/fue/src/inpcheck.c` renombrando la función. Lo que el motor acepta es
+lo que el editor acepta, por construcción y no por parecido.
+
+### 7.2 Lo que el manifiesto permite hacer mejor
+
+En §2.4 la terna se **avisaba**: «al guardar un `.inp` que cambia, el `.pre` y
+el `.out` de al lado son de otro modelo; no se borran, pero se nombra cuáles».
+Era lo máximo que se podía hacer sin un registro de versiones.
+
+Con el manifiesto hay una salida mejor, y es **derivar**. Al guardar sobre un
+nodo que ya está estimado, el editor pregunta:
+
+> «m02» ya está estimado. Si guardas aquí, el pre y el out de al lado quedan
+> describiendo otra cosa: no se borran, pero dejan de valer.
+> Derivar deja m02 como está y pone lo editado en un modelo nuevo, colgado de
+> él.
+>
+>     [Derivar un modelo nuevo]  [Guardar aquí]  [Cancelar]
+
+Derivar es lo predeterminado. No se impone —guardar encima sigue siendo del
+analista— pero la opción que **conserva el registro de lo que se estimó** es la
+que está bajo el dedo. Y si el guardado falla después de derivar, el nodo
+recién creado se deshace: un modelo sin `.inp` no es nada.
+
+### 7.3 Y estimar desde ahí
+
+`Guardar y estimar` corre `fue` sobre ese `.inp` con `engine_start()` —
+asíncrono, con la salida llegando al panel de abajo según ocurre y la ventana
+sin congelarse. Al terminar se trae el `.out` y **se refresca la rejilla de la
+madre**, que es donde se compara.
+
+Se guarda primero, y si no se puede guardar no se corre: estimar lo que hay en
+el disco mientras la pantalla enseña otra cosa es exactamente el fallo de dos
+dueños con que empezó esta fase.
+
+### 7.4 El `.pre`, aquí
+
+En la madre no hace falta un `Edit .pre`: **`Iterar` ya es eso**, y lo hace
+antes de abrir nada — copia el `.pre` a un `.inp` nuevo con su linaje, y ese
+`.inp` es el que se edita. La regla del contrato no se explica, se recorre.
+
+Y los datos no se editan: `m00` no tiene entrada de editor. Es la raíz.
+
+---
+
 ## 6. Estado de la fase 2
 
 **Cerrada, e implementada.** Lo que cambió respecto al plan:
@@ -178,4 +249,5 @@ Antes del arreglo fallaban la 3 y la 4, y ninguna más. Ahora no falla ninguna.
   que explicar en un manual: es un botón que al pulsarlo te dice por qué lo que
   vas a guardar ya no es lo que abriste.
 
-Queda la **fase 6**: la interfaz madre y el GUI de drtran.
+Queda la **fase 6**: la interfaz madre y el GUI de drtran. *(En curso; el
+editor se mudó a ella — §7.)*

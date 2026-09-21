@@ -117,6 +117,18 @@ typedef struct {
 
 GtkWidget *atsw_ventana_new( GtkApplication *app, Atsw *a );
 void       atsw_refresca( Atsw *a );
+
+/* EL EDITOR DEL .inp, sobre un NODO del proyecto. La otra puerta a la misma
+   iteracion: fue_gui especifica por formulario, y el formulario solo puede
+   expresar lo que tiene widgets. Ver docs/DISENO-editor.md.             */
+void       atsw_editor( Atsw *a, const char *serie, const char *id );
+gchar     *atsw_programa( const char *programa );
+
+/* Guardar un .inp VALIDANDO ANTES, con el comprobador del motor. Si no vale,
+   el fichero que habia NO se toca y why dice por que, con su linea. Fuera
+   del widget porque es LA regla del editor y ahi se puede probar.       */
+int        atsw_guarda_inp( const char *destino, const char *txt,
+                            char *why, size_t n );
 gboolean   atsw_abre( Atsw *a, const char *path, char *why, size_t n );
 
 /* El resultado de un modelo, releyendo el .out si la huella cambio. */

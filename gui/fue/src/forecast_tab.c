@@ -230,14 +230,32 @@ static void save_editor_to_file(FueContext *ctx, const char *filename) {
 /* ------------------------------------------------------------------------- */
 /* Establece la ruta del .inp actual y extrae el directorio y nombre base   */
 /* ------------------------------------------------------------------------- */
+/* SE COPIA PRIMERO Y SE LIBERA DESPUES, y no al reves.
+ *
+ * Liberaba el campo y luego leia inp_path -- que puede SER ese mismo campo.
+ * Quien llame con ctx->forecast_current_inp_path (y hay quien llama: el Run
+ * FUF recarga la entrada con que previo) le pasa a esta funcion un puntero
+ * que ella acaba de liberar, y de ahi sale el nombre: memoria muerta. En la
+ * barra se veia como «Active model:» seguido de simbolos raros.
+ *
+ * Un asignador que libera su campo ANTES de leer su argumento es una trampa
+ * para todo el que llame, no un descuido de quien llamo.               */
 void set_current_inp_from_path(FueContext *ctx, const char *inp_path) {
+    char *nueva, *base;
+
     if (!inp_path) return;
-    if (ctx->forecast_current_inp_path) g_free(ctx->forecast_current_inp_path);
-    ctx->forecast_current_inp_path = g_strdup(inp_path);
+
+    nueva = g_strdup(inp_path);          /* antes de soltar nada */
+    g_free(ctx->forecast_current_inp_path);
+    ctx->forecast_current_inp_path = nueva;
+
     if (ctx->forecast_current_base) g_free(ctx->forecast_current_base);
-    char *base = g_path_get_basename(inp_path);
+    base = g_path_get_basename(ctx->forecast_current_inp_path);
+    {
     char *dot = strrchr(base, '.');
+
     if (dot) *dot = '\0';
+    }
     ctx->forecast_current_base = g_strdup(base);
     g_free(base);
     /* EL NOMBRE SALE DEL SISTEMA DE FICHEROS, y ahi los nombres son BYTES:

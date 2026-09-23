@@ -20,6 +20,7 @@
 #include "data_handling.h"
 #include "model_spec.h"
 #include "file_io.h"
+#include "forecast_tab.h"
 
 static int fails = 0;
 
@@ -38,6 +39,31 @@ static void pump(int ms) {
         while (gtk_events_pending()) gtk_main_iteration_do(FALSE);
         g_usleep(2000);
     }
+}
+
+/* UN ASIGNADOR QUE LIBERA SU CAMPO ANTES DE LEER SU ARGUMENTO ES UNA TRAMPA.
+ *
+ * set_current_inp_from_path() hacia justo eso, y hay quien le pasa el propio
+ * campo: «Run FUF» recarga la entrada con que previo. Lo que se leia despues
+ * era memoria muerta, y en la barra salia «Active model:» seguido de
+ * simbolos raros -- el nombre, sacado de un hueco ya liberado.
+ *
+ * La trampa es del asignador, no de quien llama.                       */
+static void test_inp_path_desde_si_mismo(FueContext *ctx) {
+    set_current_inp_from_path(ctx, "/tmp/a/forecast_X.inp");
+    check(ctx->forecast_current_base
+          && strcmp(ctx->forecast_current_base, "forecast_X") == 0,
+          "el nombre base sale de la ruta", ctx->forecast_current_base);
+
+    /* Y ahora con SU PROPIO campo, que es lo que hace Run FUF. */
+    set_current_inp_from_path(ctx, ctx->forecast_current_inp_path);
+    check(ctx->forecast_current_base
+          && strcmp(ctx->forecast_current_base, "forecast_X") == 0,
+          "pasarle su propio campo NO puede leer memoria liberada",
+          ctx->forecast_current_base);
+    check(ctx->forecast_current_inp_path
+          && strcmp(ctx->forecast_current_inp_path, "/tmp/a/forecast_X.inp") == 0,
+          "y la ruta sigue siendo la que era", ctx->forecast_current_inp_path);
 }
 
 int main(int argc, char **argv) {
@@ -72,6 +98,8 @@ int main(int argc, char **argv) {
         printf("\n%d fallos\n", fails);
         return 1;
     }
+
+    test_inp_path_desde_si_mismo(ctx);
 
     /* El modelo, como lo carga el usuario */
     inp = g_build_filename(dir, model, NULL);

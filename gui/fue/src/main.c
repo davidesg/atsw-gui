@@ -111,7 +111,7 @@ static int lee_opciones(int argc, char *argv[])
     {
     char raiz[1024] = "";
 
-    pr_ruta(p, "", NULL, NULL, raiz, sizeof raiz);
+    pr_ruta(p, "", "", NULL, NULL, raiz, sizeof raiz);
     if (!raiz[0]) {
         char *d = g_path_get_dirname(proy);
 

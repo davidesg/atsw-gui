@@ -243,6 +243,53 @@ El punto de cuidado es **el repintado y la marca**: ya nos mordió una vez
 puede volver a morder. El guardia `recolocando` que ya existe tiene que cubrir
 el cambio de hoja también.
 
+### 2.3bis La clave es (serie, muestra, id)
+
+> «Yo mantendría el linaje propio para cada submuestra para no complicar los
+> nombres. Si se puede tener m01 tanto para la muestra completa como para la
+> submuestra, no veo el problema.»
+
+De acuerdo, y la razón es una regla que ya teníamos: `m01_A` mete la muestra
+**dentro del nombre**, que es exactamente lo que este proyecto no hace. Y
+encima el contador de versiones sería compartido, así que el primer modelo de
+`pre-covid` podría llamarse `m04_A`: el nombre diría dos mentiras a la vez.
+
+Así que la clave pasa a ser **(serie, muestra, id)**, que es además lo que es
+verdad: un modelo es *qué serie, qué ventana, qué iteración*. Y las carpetas
+caen solas:
+
+```
+IPC_DE/
+  datos.csv
+  work/                    <- la muestra completa
+    IPC_DE_m01.inp
+  pre-covid/work/
+    IPC_DE_m01.inp         <- otro modelo, mismo nombre, sin conflicto
+```
+
+En el manifiesto, `IPC_DE/m01` y `IPC_DE/pre-covid/m01`: dos barras o tres, y
+se distingue contándolas.
+
+**La completa no tiene carpeta**, y es deliberado: es `""` —no se crea, no se
+borra, no se declara— así que no tiene nombre que poner en una ruta. Meterle un
+`completa/` sería inventarle una identidad que el diseño le niega.
+
+Tres consecuencias:
+
+1. **No hay nodo de datos por muestra.** Los datos son la muestra total, uno
+   por serie. En `pre-covid` no aparece `m00` y sus modelos cuelgan del de la
+   completa: el linaje cruza la ventana, y debe, porque dice *estos datos,
+   esta ventana, esta iteración*.
+2. **`padre` nombra dentro de la misma muestra**, salvo el nodo de datos, que
+   sólo existe en la completa. Caso especial, pequeño y enunciable.
+3. **El elegido pasa a ser de (serie, muestra) y vive en el modelo.** Estaba en
+   la serie, y con hojas no se sostiene: «el modelo de esta serie» sólo
+   significa algo dentro de una ventana. Puesto en el modelo, la unicidad la
+   impone `pr_elige` y no hay dos sitios que puedan discrepar.
+
+Y en una submuestra los modelos **también empiezan en `m01`**: el hueco de
+`m00` se deja libre para que «m00 son los datos» valga mirando cualquier hoja.
+
 ### 2.4 Lo que se ve
 
 ```
@@ -259,6 +306,12 @@ el cambio de hoja también.
 ```
 
 Los dos veredictos de abajo del todo siguen contando **todo**, no la hoja.
+
+Y **la lista de la izquierda sí sigue a la hoja**: sus columnas «Elegido» y
+«Modelos» son de *esta* ventana. Contando el proyecto entero pondrían «3
+modelos» señalando modelos que no están ahí, y la lista mentiría sobre lo que
+se ve. Los veredictos no pueden filtrarse y la lista no puede no filtrarse: son
+dos cosas distintas y por eso se comportan distinto.
 
 ### 2.5 El gesto
 

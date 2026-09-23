@@ -71,7 +71,7 @@ enum { M_ID, M_PADRE, M_ESTRUCT, M_SD, M_Q, M_P, M_RAZON, M_ESTRELLA,
 
 /* Lo que se leyo de un .out, con la huella del fichero del que salio. */
 typedef struct {
-   char     serie[PR_ID], id[PR_ID];
+   char     serie[PR_ID], muestra[PR_ID], id[PR_ID];
    gboolean hay;                  /* se pudo leer                          */
    double   sd;                   /* la d.t. residual de la ecuacion 1      */
    double   logl;
@@ -134,7 +134,8 @@ void       atsw_refresca( Atsw *a );
 /* EL EDITOR DEL .inp, sobre un NODO del proyecto. La otra puerta a la misma
    iteracion: fue_gui especifica por formulario, y el formulario solo puede
    expresar lo que tiene widgets. Ver docs/DISENO-editor.md.             */
-void       atsw_editor( Atsw *a, const char *serie, const char *id );
+void       atsw_editor( Atsw *a, const char *serie, const char *muestra,
+                        const char *id );
 
 /* «Editar…» una serie: descripcion, unidades, fuente, url, bajada, notas.
    Nada de esto toca un numero -- son los campos que el .inp no puede
@@ -186,7 +187,8 @@ int        atsw_guarda_inp( const char *destino, const char *txt,
 gboolean   atsw_abre( Atsw *a, const char *path, char *why, size_t n );
 
 /* El resultado de un modelo, releyendo el .out si la huella cambio. */
-const AtRes *atsw_resultado( Atsw *a, const char *serie, const char *id );
+const AtRes *atsw_resultado( Atsw *a, const char *serie, const char *muestra,
+                             const char *id );
 
 /* EL MODELO AL QUE APUNTAN LOS BOTONES si el analista no marca otro: el
  * ELEGIDO si lo hay, y si no el ULTIMO -- la iteracion mas reciente, que es

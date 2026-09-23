@@ -94,7 +94,10 @@ gboolean mtram_corrida_nueva( Mtram *m, char *why, size_t n )
 
     /* EL LINAJE, SIN PREGUNTAR: la corrida nueva cuelga de la anterior de
      * esta misma serie. Eso ES la cadena de iteracion.                  */
-    if (pr_deriva( m->proy, ser, m->previa[0] ? m->previa : NULL,
+    /* drtran no tiene submuestras: sus corridas van en la muestra completa.
+     * Cruzar series recortadas de distinta forma seria justo lo que una red
+     * de transferencias no puede permitirse.                            */
+    if (pr_deriva( m->proy, ser, "", m->previa[0] ? m->previa : NULL,
                    id, sizeof id, ruta, sizeof ruta, &e ) != 0) {
         if (why) pr_error_es( &e, why, n );
         return FALSE;
@@ -103,7 +106,7 @@ gboolean mtram_corrida_nueva( Mtram *m, char *why, size_t n )
 
     /* El directorio de la corrida tiene que existir antes de que el motor
      * intente escribir en el.                                           */
-    pr_ruta( m->proy, ser, id, ".inp", ruta, sizeof ruta );
+    pr_ruta( m->proy, ser, "", id, ".inp", ruta, sizeof ruta );
     dir = g_path_get_dirname( ruta );
     g_mkdir_with_parents( dir, 0700 );
     g_free( dir );
@@ -144,7 +147,7 @@ gchar *mtram_artefacto( Mtram *m, const char *sufijo )
     }
 
     /* --- con proyecto: el nombre de cortesia de la corrida ------------ */
-    if (pr_ruta( m->proy, ser, m->corrida, sufijo, ruta, sizeof ruta ) != 0)
+    if (pr_ruta( m->proy, ser, "", m->corrida, sufijo, ruta, sizeof ruta ) != 0)
         return g_build_filename( g_get_user_cache_dir(), GUI_CACHE, "x", NULL );
 
     return g_strdup( ruta );

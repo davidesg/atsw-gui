@@ -60,19 +60,19 @@ int main( void )
     /* Los datos son m00 y son un nodo mas: recien cargada la serie, el boton
      * apunta a ellos. Es lo que quiere fug --se identifica sobre los datos--
      * y es lo que on_fue tiene que ver para derivar en vez de pisarlos.  */
-    pr_deriva_rol( p, "EP", NULL, PR_DATOS, id, sizeof id, ruta, sizeof ruta, &e );
+    pr_deriva_rol( p, "EP", "", NULL, PR_DATOS, id, sizeof id, ruta, sizeof ruta, &e );
     es( atsw_modelo_por_defecto( p, "EP" ), "m00",
         "recien cargada: a los datos, que es lo unico que hay" );
     ok( pr_es_datos( p, "EP", atsw_modelo_por_defecto( p, "EP" ) ),
         "y se ve que lo son sin mirar el numero" );
 
-    pr_deriva( p, "EP", "m00", id, sizeof id, ruta, sizeof ruta, &e );
-    pr_deriva( p, "EP", "m01", id, sizeof id, ruta, sizeof ruta, &e );
+    pr_deriva( p, "EP", "", "m00", id, sizeof id, ruta, sizeof ruta, &e );
+    pr_deriva( p, "EP", "", "m01", id, sizeof id, ruta, sizeof ruta, &e );
     es( atsw_modelo_por_defecto( p, "EP" ), "m02",
         "con dos modelos: al ULTIMO, que es lo que casi siempre se quiere" );
     ok( !pr_es_datos( p, "EP", "m02" ), "y ese ya no son los datos" );
 
-    pr_elige( p, "EP", "m01", "el SAR no se gana su sitio", &e );
+    pr_elige( p, "EP", "", "m01", "el SAR no se gana su sitio", &e );
     es( atsw_modelo_por_defecto( p, "EP" ), "m01",
         "y si hay ELEGIDO, al elegido: manda la decision, no la fecha" );
 
@@ -95,17 +95,20 @@ int main( void )
     es( atsw_modelo_por_defecto_en( p, "EP", "pre-covid" ), "",
         "y en una hoja vacía, NADA: el de al lado no es candidato" );
 
-    pr_deriva( p, "EP", "m00", nid, sizeof nid, NULL, 0, &e );
-    pr_pon_muestra( p, "EP", nid, "pre-covid", &e );
+    pr_deriva( p, "EP", "pre-covid", "m00", nid, sizeof nid, NULL, 0, &e );
     es( atsw_modelo_por_defecto_en( p, "EP", "pre-covid" ), nid,
         "con uno dentro, a ese" );
     es( atsw_modelo_por_defecto_en( p, "EP", "" ), "m01",
         "y la completa sigue con el suyo" );
 
     /* El ELEGIDO de otra hoja tampoco manda en esta. */
-    pr_elige( p, "EP", nid, "en pre-covid gana este", &e );
-    es( atsw_modelo_por_defecto_en( p, "EP", "" ), "m02",
-        "si el elegido está en otra muestra, aquí manda el ÚLTIMO" );
+    /* Y el elegido es de (serie, muestra): elegir en pre-covid no toca la
+       completa, que sigue con el suyo.                                */
+    pr_elige( p, "EP", "pre-covid", nid, "en pre-covid gana este", &e );
+    es( atsw_modelo_por_defecto_en( p, "EP", "pre-covid" ), nid,
+        "el elegido de esta hoja manda AQUI" );
+    es( atsw_modelo_por_defecto_en( p, "EP", "" ), "m01",
+        "y la completa conserva el suyo, que es otra decisión" );
     }
 
     printf( "\nEL ULTIMO SE DECIDE POR LA VERSION, NO POR EL NOMBRE\n" );

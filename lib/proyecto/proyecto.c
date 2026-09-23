@@ -141,13 +141,16 @@ int pr_serie_idx( const Proyecto *p, const char *serie )
    return -1;
 }
 
-int pr_modelo_idx( const Proyecto *p, const char *serie, const char *id )
+int pr_modelo_idx( const Proyecto *p, const char *serie, const char *muestra,
+                   const char *id )
 {
    int i;
 
    if ( p == NULL || serie == NULL || id == NULL ) return -1;
+   if ( muestra == NULL ) muestra = "";
    for ( i = 0; i < p->nm; i++ )
        if ( strcmp( p->m[i].serie, serie ) == 0 &&
+            strcmp( p->m[i].muestra, muestra ) == 0 &&
             strcmp( p->m[i].id, id ) == 0 ) return i;
    return -1;
 }
@@ -263,51 +266,65 @@ int pr_muestra_borra( Proyecto *p, const char *id, PrError *e )
    return 0;
 }
 
-const char *pr_muestra_de( const Proyecto *p, const char *serie,
-                           const char *id )
-{
-   int i = pr_modelo_idx( p, serie, id );
+/* EL ELEGIDO ES POR (serie, muestra), Y VIVE EN EL MODELO.
+ *
+ * Estaba en la serie, y con las hojas no se sostiene: "el modelo de esta
+ * serie" solo significa algo DENTRO de una ventana. Puesto en el modelo, la
+ * unicidad la impone pr_elige --se le quita la marca al que la tuviera-- y
+ * no hay dos sitios que puedan discrepar.                              */
 
-   return ( i < 0 ) ? "" : p->m[i].muestra;
+const char *pr_elegido( const Proyecto *p, const char *serie,
+                        const char *muestra )
+{
+   int i;
+
+   if ( p == NULL || serie == NULL ) return "";
+   if ( muestra == NULL ) muestra = "";
+   for ( i = 0; i < p->nm; i++ )
+       if ( p->m[i].elegido && strcmp( p->m[i].serie, serie ) == 0 &&
+            strcmp( p->m[i].muestra, muestra ) == 0 )
+           return p->m[i].id;
+   return "";
 }
 
-int pr_pon_muestra( Proyecto *p, const char *serie, const char *id,
-                    const char *muestra, PrError *e )
+const char *pr_razon_elegido( const Proyecto *p, const char *serie,
+                              const char *muestra )
 {
-   int i = pr_modelo_idx( p, serie, id );
+   int i;
 
-   if ( i < 0 ) { falla( e, PR_ENOMODELO, 0, id ? id : "" ); return 1; }
-
-   /* LOS DATOS SON LA MUESTRA TOTAL. Ponerlos en una ventana seria decir
-      que entraron recortados, y lo que entro es lo que entro.        */
-   if ( p->m[i].rol == PR_DATOS && muestra && *muestra )
-       { falla( e, PR_EDATOS, 0, id ); return 1; }
-
-   if ( muestra && *muestra && pr_muestra_idx( p, muestra ) < 0 )
-       { falla( e, PR_EMUESTRA, 0, muestra ); return 1; }
-
-   snprintf( p->m[i].muestra, PR_ID, "%s", muestra ? muestra : "" );
-   return 0;
+   if ( p == NULL || serie == NULL ) return "";
+   if ( muestra == NULL ) muestra = "";
+   for ( i = 0; i < p->nm; i++ )
+       if ( p->m[i].elegido && strcmp( p->m[i].serie, serie ) == 0 &&
+            strcmp( p->m[i].muestra, muestra ) == 0 )
+           return p->m[i].razon_elegido;
+   return "";
 }
 
-const char *pr_elegido( const Proyecto *p, const char *serie )
+int pr_elige( Proyecto *p, const char *serie, const char *muestra,
+              const char *id, const char *razon, PrError *e )
 {
-   int i = pr_serie_idx( p, serie );
+   int i, k;
 
-   return ( i < 0 ) ? "" : p->s[i].elegido;
-}
+   if ( pr_serie_idx( p, serie ) < 0 )
+       { falla( e, PR_ENOSERIE, 0, serie ? serie : "" ); return 1; }
+   if ( muestra == NULL ) muestra = "";
 
-int pr_elige( Proyecto *p, const char *serie, const char *id,
-              const char *razon, PrError *e )
-{
-   int i = pr_serie_idx( p, serie );
-
-   if ( i < 0 ) { falla( e, PR_ENOSERIE, 0, serie ); return 1; }
-   if ( id && *id && pr_modelo_idx( p, serie, id ) < 0 )
+   k = ( id && *id ) ? pr_modelo_idx( p, serie, muestra, id ) : -1;
+   if ( id && *id && k < 0 )
        { falla( e, PR_ENOMODELO, 0, id ); return 1; }
 
-   snprintf( p->s[i].elegido, PR_ID, "%s", id ? id : "" );
-   if ( razon ) snprintf( p->s[i].razon, PR_RAZON, "%s", razon );
+   /* DENTRO DE UNA VENTANA SOLO HAY UN ELEGIDO. */
+   for ( i = 0; i < p->nm; i++ )
+       if ( strcmp( p->m[i].serie, serie ) == 0 &&
+            strcmp( p->m[i].muestra, muestra ) == 0 )
+           { p->m[i].elegido = 0; p->m[i].razon_elegido[0] = '\0'; }
+
+   if ( k >= 0 )
+       {
+       p->m[k].elegido = 1;
+       if ( razon ) snprintf( p->m[k].razon_elegido, PR_RAZON, "%s", razon );
+       }
    return 0;
 }
 
@@ -341,8 +358,8 @@ static int raiz_real( const Proyecto *p, char *out, size_t n )
    return ( esc < 0 || (size_t) esc >= n );
 }
 
-int pr_ruta( const Proyecto *p, const char *serie, const char *id,
-             const char *ext, char *out, size_t n )
+int pr_ruta( const Proyecto *p, const char *serie, const char *muestra,
+             const char *id, const char *ext, char *out, size_t n )
 {
    char raiz[PR_RUTA];
    int  esc;
@@ -350,11 +367,19 @@ int pr_ruta( const Proyecto *p, const char *serie, const char *id,
    if ( p == NULL || out == NULL || n == 0 ) return 1;
    out[0] = '\0';
    if ( serie == NULL || *serie == '\0' ) return 1;
+   if ( muestra == NULL ) muestra = "";
 
    if ( raiz_real( p, raiz, sizeof raiz ) != 0 ) return 1;
 
    if ( id == NULL || *id == '\0' )
        esc = snprintf( out, n, "%s/%s", raiz, serie );
+   else if ( *muestra )
+       /* LA SUBMUESTRA TIENE CARPETA, y por eso m01 de la completa y m01 de
+          pre-covid pueden llamarse igual sin pisarse. La COMPLETA no la
+          tiene: es "" -- no se declara -- asi que no tiene nombre que
+          poner aqui.                                                     */
+       esc = snprintf( out, n, "%s/%s/%s/work/%s_%s%s", raiz, serie, muestra,
+                       serie, id, ext ? ext : "" );
    else
        /* EL NOMBRE ES CORTESIA: se compone para que el directorio se entienda
           a ojo, y NADIE lo vuelve a leer. La identidad esta en el
@@ -369,10 +394,29 @@ int pr_ruta( const Proyecto *p, const char *serie, const char *id,
 /* La cadena                                                                 */
 /* ------------------------------------------------------------------------ */
 
-int pr_camino( const Proyecto *p, const char *serie, const char *id,
-               char camino[][PR_ID], int max )
+/* EL PADRE SE BUSCA EN LA MISMA MUESTRA, salvo el nodo de DATOS.
+ *
+ * Los datos son de la muestra total --uno por serie, no uno por ventana--
+ * asi que en una submuestra no hay ninguno y sus modelos cuelgan del de la
+ * completa. El linaje cruza la ventana, y debe: dice "estos datos, esta
+ * ventana, esta iteracion".                                            */
+static int padre_idx( const Proyecto *p, const char *serie,
+                      const char *muestra, const char *padre )
 {
-   int n = 0, i = pr_modelo_idx( p, serie, id );
+   int i = pr_modelo_idx( p, serie, muestra, padre );
+
+   if ( i >= 0 ) return i;
+   if ( muestra == NULL || !*muestra ) return -1;
+
+   /* No estaba en esta ventana: solo vale si es el nodo de datos. */
+   i = pr_modelo_idx( p, serie, "", padre );
+   return ( i >= 0 && p->m[i].rol == PR_DATOS ) ? i : -1;
+}
+
+int pr_camino( const Proyecto *p, const char *serie, const char *muestra,
+               const char *id, char camino[][PR_ID], int max )
+{
+   int n = 0, i = pr_modelo_idx( p, serie, muestra, id );
    int vueltas = 0;
 
    while ( i >= 0 )
@@ -383,16 +427,17 @@ int pr_camino( const Proyecto *p, const char *serie, const char *id,
        /* Un linaje que se muerde la cola no puede dar mas pasos que modelos
           hay: si los da, es un ciclo.                                     */
        if ( ++vueltas > p->nm ) return -1;
-       i = pr_modelo_idx( p, serie, p->m[i].padre );
+       i = padre_idx( p, serie, p->m[i].muestra, p->m[i].padre );
        }
    return n;
 }
 
-int pr_deriva( Proyecto *p, const char *serie, const char *padre,
+int pr_deriva( Proyecto *p, const char *serie, const char *muestra,
+               const char *padre,
                char *id_out, size_t nid, char *ruta_out, size_t nruta,
                PrError *e )
 {
-   return pr_deriva_rol( p, serie, padre, PR_MODELO, id_out, nid,
+   return pr_deriva_rol( p, serie, muestra, padre, PR_MODELO, id_out, nid,
                          ruta_out, nruta, e );
 }
 
@@ -409,12 +454,15 @@ const char *pr_datos_de( const Proyecto *p, const char *serie )
 
 int pr_es_datos( const Proyecto *p, const char *serie, const char *id )
 {
-   int i = pr_modelo_idx( p, serie, id );
+   /* Los datos solo existen en la muestra total: buscarlos en otra seria
+      buscar algo que por definicion no esta ahi.                      */
+   int i = pr_modelo_idx( p, serie, "", id );
 
    return ( i >= 0 && p->m[i].rol == PR_DATOS );
 }
 
-int pr_deriva_rol( Proyecto *p, const char *serie, const char *padre,
+int pr_deriva_rol( Proyecto *p, const char *serie, const char *muestra,
+                   const char *padre,
                    PrRol rol, char *id_out, size_t nid,
                    char *ruta_out, size_t nruta, PrError *e )
 {
@@ -422,64 +470,64 @@ int pr_deriva_rol( Proyecto *p, const char *serie, const char *padre,
    int  i, v = 0;
 
    if ( p == NULL ) return 1;
+   if ( muestra == NULL ) muestra = "";
    if ( pr_serie_idx( p, serie ) < 0 )
        { falla( e, PR_ENOSERIE, 0, serie ); return 1; }
-   if ( padre && *padre && pr_modelo_idx( p, serie, padre ) < 0 )
+
+   /* LOS DATOS SON DE LA MUESTRA TOTAL. No hay un nodo de datos por
+      ventana: la ventana es un campo del modelo, no un dato distinto. */
+   if ( rol == PR_DATOS && *muestra )
+       { falla( e, PR_EDATOS, 0, serie ); return 1; }
+
+   if ( *muestra && pr_muestra_idx( p, muestra ) < 0 )
+       { falla( e, PR_EMUESTRA, 0, muestra ); return 1; }
+
+   /* El padre, en esta ventana o --si es el nodo de datos-- en la total. */
+   if ( padre && *padre && padre_idx( p, serie, muestra, padre ) < 0 )
        { falla( e, PR_EPADRE, 0, padre ); return 1; }
    if ( p->nm >= PR_MAX_MODELO )
        { falla( e, PR_EMUCHAS, 0, serie ); return 1; }
 
-   /* La VERSION es un campo: el siguiente numero libre de esta serie. El id
-      se compone de el, pero el id no se parsea nunca para recuperarlo.    */
+   /* LA VERSION ES DE (serie, muestra). Cada ventana lleva su propio linaje,
+      asi que m01 existe en la completa y en pre-covid a la vez y son dos
+      modelos distintos. Meter la muestra en el NOMBRE --"m01_A"-- seria
+      volver a parsear el nombre para saber algo, que es justo lo que este
+      proyecto no hace.                                                 */
    for ( i = 0; i < p->nm; i++ )
-       if ( strcmp( p->m[i].serie, serie ) == 0 && p->m[i].version >= v )
+       if ( strcmp( p->m[i].serie, serie ) == 0 &&
+            strcmp( p->m[i].muestra, muestra ) == 0 && p->m[i].version >= v )
            v = p->m[i].version + 1;
 
-   /* m00 ES DE LOS DATOS, SIEMPRE. Un modelo nunca lo ocupa, ni siquiera en
-      una serie que llegase sin pasar por la carga: asi "m00 son los datos"
-      vale mirando el proyecto, y no hace falta saber en que orden se hizo. */
+   /* m00 ES DE LOS DATOS, SIEMPRE -- y en una submuestra no hay datos, asi
+      que alli los modelos tambien empiezan en m01: el hueco de m00 se deja
+      para que "m00 son los datos" valga mirando cualquier hoja.      */
    if ( rol != PR_DATOS && v == 0 ) v = 1;
 
    snprintf( id, sizeof id, "m%02d", v );
-   while ( pr_modelo_idx( p, serie, id ) >= 0 )
+   while ( pr_modelo_idx( p, serie, muestra, id ) >= 0 )
        snprintf( id, sizeof id, "m%02d", ++v );
 
    memset( &p->m[p->nm], 0, sizeof p->m[0] );
    snprintf( p->m[p->nm].id, PR_ID, "%s", id );
    snprintf( p->m[p->nm].serie, PR_ID, "%s", serie );
+   snprintf( p->m[p->nm].muestra, PR_ID, "%s", muestra );
    p->m[p->nm].version = v;
    /* EL LINAJE, SIN PREGUNTAR. Es lo minimo que no se puede perder. */
    snprintf( p->m[p->nm].padre, PR_ID, "%s", ( padre && *padre ) ? padre : "" );
    p->m[p->nm].rol = rol;
-
-   /* LA MUESTRA SE HEREDA DEL PADRE. Iterar un modelo de "pre-covid" da otro
-      de "pre-covid": cambiar de ventana es una decision aparte y se pide
-      aparte, con pr_pon_muestra. Los DATOS son siempre la total.      */
-   if ( rol != PR_DATOS && padre && *padre )
-       {
-       int k = pr_modelo_idx( p, serie, padre );
-
-       /* Por un buffer aparte: el compilador no puede saber que el padre y
-          el hijo son ranuras distintas del mismo array.                */
-       if ( k >= 0 )
-           {
-           char mu[PR_ID];
-
-           memcpy( mu, p->m[k].muestra, PR_ID );
-           memcpy( p->m[p->nm].muestra, mu, PR_ID );
-           }
-       }
    /* La razon NO se pone: "sin razon" tiene que verse como sin razon. */
    p->nm++;
 
    if ( id_out && nid ) snprintf( id_out, nid, "%s", id );
-   if ( ruta_out && nruta ) pr_ruta( p, serie, id, ".inp", ruta_out, nruta );
+   if ( ruta_out && nruta )
+       pr_ruta( p, serie, muestra, id, ".inp", ruta_out, nruta );
    return 0;
 }
 
-int pr_borra( Proyecto *p, const char *serie, const char *id, PrError *e )
+int pr_borra( Proyecto *p, const char *serie, const char *muestra,
+              const char *id, PrError *e )
 {
-   int i = pr_modelo_idx( p, serie, id ), j;
+   int i = pr_modelo_idx( p, serie, muestra, id ), j;
 
    if ( i < 0 ) { falla( e, PR_ENOMODELO, 0, id ? id : "" ); return 1; }
 
@@ -490,16 +538,13 @@ int pr_borra( Proyecto *p, const char *serie, const char *id, PrError *e )
        { falla( e, PR_EDATOS, 0, id ); return 1; }
 
    /* NI UNO CON HIJOS. Se dice CUAL cuelga, no "tiene hijos": el analista
-      tiene que saber por donde empezar.                                */
+      tiene que saber por donde empezar. Un hijo de OTRA ventana tambien
+      cuenta -- un modelo de datos los tiene en todas.                 */
    for ( j = 0; j < p->nm; j++ )
        if ( j != i && strcmp( p->m[j].serie, serie ) == 0 &&
-            strcmp( p->m[j].padre, id ) == 0 )
+            strcmp( p->m[j].padre, id ) == 0 &&
+            padre_idx( p, serie, p->m[j].muestra, id ) == i )
            { falla( e, PR_EHIJOS, 0, p->m[j].id ); return 1; }
-
-   /* Si era el elegido, la serie se queda sin elegido. */
-   j = pr_serie_idx( p, serie );
-   if ( j >= 0 && strcmp( p->s[j].elegido, id ) == 0 )
-       { p->s[j].elegido[0] = '\0'; p->s[j].razon[0] = '\0'; }
 
    for ( j = i; j + 1 < p->nm; j++ ) p->m[j] = p->m[j + 1];
    p->nm--;
@@ -507,10 +552,10 @@ int pr_borra( Proyecto *p, const char *serie, const char *id, PrError *e )
    return 0;
 }
 
-int pr_razon( Proyecto *p, const char *serie, const char *id,
-              const char *razon, PrError *e )
+int pr_razon( Proyecto *p, const char *serie, const char *muestra,
+              const char *id, const char *razon, PrError *e )
 {
-   int i = pr_modelo_idx( p, serie, id );
+   int i = pr_modelo_idx( p, serie, muestra, id );
 
    if ( i < 0 ) { falla( e, PR_ENOMODELO, 0, id ); return 1; }
    snprintf( p->m[i].razon, PR_RAZON, "%s", razon ? razon : "" );
@@ -527,8 +572,17 @@ int pr_sin_razon( const Proyecto *p, char ids[][PR_ID], int max )
           entre los que la deben daria un aviso imposible de apagar.   */
        if ( p->m[i].razon[0] == '\0' && p->m[i].rol != PR_DATOS )
            {
+           /* Con nombre Y APELLIDO, y el apellido incluye la ventana:
+              "IPC_DE/m01" es ambiguo en cuanto hay dos hojas.     */
            if ( n < max )
-               snprintf( ids[n], PR_ID, "%s/%s", p->m[i].serie, p->m[i].id );
+               {
+               if ( p->m[i].muestra[0] )
+                   snprintf( ids[n], PR_ID, "%s/%s/%s", p->m[i].serie,
+                             p->m[i].muestra, p->m[i].id );
+               else
+                   snprintf( ids[n], PR_ID, "%s/%s", p->m[i].serie,
+                             p->m[i].id );
+               }
            n++;
            }
    return n;
@@ -576,11 +630,6 @@ int pr_escribir( const Proyecto *p, const char *path, PrError *e )
    for ( i = 0; i < p->ns; i++ )
        {
        fprintf( f, "  %s:\n", p->s[i].id );
-       fprintf( f, "    elegido: " ); escribe_valor( f, p->s[i].elegido );
-       fputc( '\n', f );
-       if ( p->s[i].razon[0] )
-           { fprintf( f, "    razon: " ); escribe_valor( f, p->s[i].razon );
-             fputc( '\n', f ); }
        /* LOS METADATOS, SOLO SI LOS HAY. Una serie sin ellos no escribe
           seis lineas vacias: el manifiesto se lee a ojo, y seis "" por
           serie lo entierran.                                          */
@@ -614,7 +663,14 @@ int pr_escribir( const Proyecto *p, const char *path, PrError *e )
                "modelos:\n" );
    for ( i = 0; i < p->nm; i++ )
        {
-       fprintf( f, "  %s/%s:\n", p->m[i].serie, p->m[i].id );
+       /* LA CLAVE ES (serie, muestra, id). La completa no pone muestra --
+          no tiene nombre-- asi que son dos barras o tres, y se distingue
+          contandolas.                                                   */
+       if ( p->m[i].muestra[0] )
+           fprintf( f, "  %s/%s/%s:\n", p->m[i].serie, p->m[i].muestra,
+                    p->m[i].id );
+       else
+           fprintf( f, "  %s/%s:\n", p->m[i].serie, p->m[i].id );
        fprintf( f, "    version: %d\n", p->m[i].version );
        fprintf( f, "    padre: " );  escribe_valor( f, p->m[i].padre );
        fputc( '\n', f );
@@ -625,7 +681,11 @@ int pr_escribir( const Proyecto *p, const char *path, PrError *e )
        if ( p->m[i].rol == PR_DATOS ) fprintf( f, "    rol: datos\n" );
        /* La muestra SOLO si no es la completa, por la misma razon que el
           rol: un manifiesto lleno de "muestra: completa" no dice nada. */
-       escribe_campo( f, "muestra", p->m[i].muestra );
+       if ( p->m[i].elegido )
+           {
+           fprintf( f, "    elegido: si\n" );
+           escribe_campo( f, "razon_elegido", p->m[i].razon_elegido );
+           }
        if ( p->m[i].creado[0] )
            { fprintf( f, "    creado: " ); escribe_valor( f, p->m[i].creado );
              fputc( '\n', f ); }
@@ -745,19 +805,27 @@ int pr_leer( const char *path, Proyecto *p, PrError *e )
                }
            else if ( seccion == 2 )
                {
-               char *barra = strchr( clave, '/' );
+               /* SERIE/id  -> la muestra completa
+                  SERIE/muestra/id -> una submuestra                     */
+               char *b1 = strchr( clave, '/' );
+               char *b2, *mu = "", *id;
 
-               if ( barra == NULL )
+               if ( b1 == NULL )
                    { falla( e, PR_ESINTAXIS, nl, clave ); fclose( f ); return 1; }
-               *barra = '\0';
+               *b1 = '\0';
+               b2 = strchr( b1 + 1, '/' );
+               if ( b2 ) { *b2 = '\0'; mu = b1 + 1; id = b2 + 1; }
+               else      { id = b1 + 1; }
+
                if ( p->nm >= PR_MAX_MODELO )
                    { falla( e, PR_EMUCHAS, nl, clave ); fclose( f ); return 1; }
-               if ( pr_modelo_idx( p, clave, barra + 1 ) >= 0 )
+               if ( pr_modelo_idx( p, clave, mu, id ) >= 0 )
                    { falla( e, PR_EDUP, nl, clave ); fclose( f ); return 1; }
 
                memset( &p->m[p->nm], 0, sizeof p->m[0] );
-               if ( pon_id( p->m[p->nm].serie, clave, e, nl ) ||
-                    pon_id( p->m[p->nm].id, barra + 1, e, nl ) )
+               if ( pon_id( p->m[p->nm].muestra, mu, e, nl ) ||
+                    pon_id( p->m[p->nm].serie, clave, e, nl ) ||
+                    pon_id( p->m[p->nm].id, id, e, nl ) )
                    { fclose( f ); return 1; }
                cur = p->nm++;
                }
@@ -777,12 +845,7 @@ int pr_leer( const char *path, Proyecto *p, PrError *e )
            {
            if ( seccion == 1 )
                {
-               if ( strcmp( clave, "elegido" ) == 0 )
-                   { if ( pon_id( p->s[cur].elegido, valor, e, nl ) )
-                       { fclose( f ); return 1; } }
-               else if ( strcmp( clave, "razon" ) == 0 )
-                   snprintf( p->s[cur].razon, PR_RAZON, "%s", valor );
-               else if ( strcmp( clave, "descripcion" ) == 0 )
+               if ( strcmp( clave, "descripcion" ) == 0 )
                    snprintf( p->s[cur].descripcion, PR_TEXTO, "%s", valor );
                else if ( strcmp( clave, "fuente" ) == 0 )
                    snprintf( p->s[cur].fuente, PR_TEXTO, "%s", valor );
@@ -817,8 +880,11 @@ int pr_leer( const char *path, Proyecto *p, PrError *e )
                        { fclose( f ); return 1; } }
                else if ( strcmp( clave, "razon" ) == 0 )
                    snprintf( p->m[cur].razon, PR_RAZON, "%s", valor );
-               else if ( strcmp( clave, "muestra" ) == 0 )
-                   snprintf( p->m[cur].muestra, PR_ID, "%s", valor );
+               else if ( strcmp( clave, "elegido" ) == 0 )
+                   p->m[cur].elegido = ( strcmp( valor, "si" ) == 0 ||
+                                         strcmp( valor, "sí" ) == 0 );
+               else if ( strcmp( clave, "razon_elegido" ) == 0 )
+                   snprintf( p->m[cur].razon_elegido, PR_RAZON, "%s", valor );
                else if ( strcmp( clave, "creado" ) == 0 )
                    snprintf( p->m[cur].creado, 16, "%s", valor );
                else if ( strcmp( clave, "rol" ) == 0 )
@@ -847,9 +913,10 @@ int pr_leer( const char *path, Proyecto *p, PrError *e )
        char camino[PR_MAX_MODELO][PR_ID];
 
        if ( p->m[i].padre[0] &&
-            pr_modelo_idx( p, p->m[i].serie, p->m[i].padre ) < 0 )
+            padre_idx( p, p->m[i].serie, p->m[i].muestra,
+                       p->m[i].padre ) < 0 )
            { falla( e, PR_EPADRE, 0, p->m[i].padre ); return 1; }
-       if ( pr_camino( p, p->m[i].serie, p->m[i].id, camino,
+       if ( pr_camino( p, p->m[i].serie, p->m[i].muestra, p->m[i].id, camino,
                        PR_MAX_MODELO ) < 0 )
            { falla( e, PR_ECICLO, 0, p->m[i].id ); return 1; }
        }

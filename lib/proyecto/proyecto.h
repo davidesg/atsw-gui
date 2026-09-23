@@ -127,11 +127,22 @@ typedef struct {
    char  razon[PR_RAZON];         /* "" si no consta. NO se rellena.      */
    char  creado[16];              /* AAAA-MM-DD                           */
    PrRol rol;                     /* datos o modelo. Ver PrRol.           */
-   /* EN QUE MUESTRA NACIO. "" = la completa. DECLARADO, no deducido: se
-      podria mirar el nobs del .inp y restar, pero eso es volver a parsear
-      para saber algo que nadie escribio -- la regla que ya costo el
-      "rol: datos".                                                     */
+   /* EN QUE MUESTRA NACIO. "" = la completa.
+    *
+    * Es PARTE DE LA CLAVE, no un campo suelto: un modelo es "que serie, que
+    * ventana, que iteracion". Por eso m01 puede existir a la vez en la
+    * completa y en pre-covid sin chocar -- son dos modelos distintos-- y por
+    * eso sus ficheros viven en carpetas distintas.                     */
    char  muestra[PR_ID];
+
+   /* EL ELEGIDO, Y VA EN EL MODELO.
+    *
+    * Estaba en la serie, y con hojas no se sostiene: "el modelo de esta
+    * serie" solo significa algo DENTRO de una ventana. Puesto aqui, la
+    * unicidad dentro de (serie, muestra) la impone pr_elige y no hay dos
+    * sitios que puedan discrepar.                                      */
+   int   elegido;
+   char  razon_elegido[PR_RAZON];  /* por que ese y no otro              */
 } PrModelo;
 
 /* LA SERIE: una CLAVE corta y unos cuantos campos de texto.
@@ -175,8 +186,6 @@ typedef struct {
 
 typedef struct {
    char id[PR_ID];
-   char elegido[PR_ID];           /* "" si no se ha declarado             */
-   char razon[PR_RAZON];          /* por que ese y no otro                */
 
    /* De que va la serie, para quien no reconozca el mnemotecnico. */
    char descripcion[PR_TEXTO];
@@ -228,8 +237,15 @@ int pr_escribir( const Proyecto *p, const char *path, PrError *e );
 /* <raiz>/<serie>/work/<serie>_<id><ext>, con la raiz resuelta contra el
  * directorio del propio manifiesto. ext lleva su punto ("­.inp").
  * Con id NULL o "", devuelve el directorio de la serie.                  */
-int pr_ruta( const Proyecto *p, const char *serie, const char *id,
-             const char *ext, char *out, size_t n );
+/* <raiz>/<serie>/[<muestra>/]work/<serie>_<id><ext>.
+ *
+ * LA MUESTRA COMPLETA NO TIENE CARPETA, y es deliberado: es "" -- no se
+ * crea, no se borra, no se declara-- asi que no tiene nombre que poner en
+ * una ruta. Meterle un "completa/" seria inventarle una identidad que el
+ * diseño le niega. Las submuestras si, y por eso m01 de la completa y m01
+ * de pre-covid pueden llamarse igual sin pisarse.                      */
+int pr_ruta( const Proyecto *p, const char *serie, const char *muestra,
+             const char *id, const char *ext, char *out, size_t n );
 
 /* --- las series --------------------------------------------------------- */
 
@@ -238,7 +254,11 @@ int  pr_serie_idx( const Proyecto *p, const char *serie );
 
 /* El modelo ELEGIDO de una serie: hoy esa decision vive en un diccionario a
  * pelo repetido en tres guiones de cases/. Devuelve "" si no se declaro.  */
-const char *pr_elegido( const Proyecto *p, const char *serie );
+/* El elegido de una serie EN UNA MUESTRA. "" si no se ha declarado. */
+const char *pr_elegido( const Proyecto *p, const char *serie,
+                        const char *muestra );
+const char *pr_razon_elegido( const Proyecto *p, const char *serie,
+                              const char *muestra );
 
 /* --- los metadatos de la serie ------------------------------------------ */
 
@@ -269,14 +289,13 @@ const PrMuestra *pr_muestra_ver( const Proyecto *p, const char *id );
 int pr_muestra_borra( Proyecto *p, const char *id, PrError *e );
 
 /* En que muestra nacio un modelo. "" es la completa. */
-const char *pr_muestra_de( const Proyecto *p, const char *serie,
-                           const char *id );
 
-/* Declara en que muestra esta un modelo. Los DATOS no: son la muestra
-   total, y ponerlos en una ventana seria decir que entraron recortados. */
-int pr_pon_muestra( Proyecto *p, const char *serie, const char *id,
-                    const char *muestra, PrError *e );
-int  pr_elige( Proyecto *p, const char *serie, const char *id,
+
+
+/* Declara cual es EL modelo de la serie EN ESA MUESTRA. Quita la marca al
+   que la tuviera: dentro de una ventana solo hay un elegido.          */
+int  pr_elige( Proyecto *p, const char *serie, const char *muestra,
+               const char *id,
                const char *razon, PrError *e );
 
 /* --- la cadena ---------------------------------------------------------- */
@@ -286,13 +305,15 @@ int  pr_elige( Proyecto *p, const char *serie, const char *id,
  * El id sale solo --m00, m01...-- y la version es su numero COMO CAMPO. En
  * id_out queda la clave; en ruta_out, el .inp que hay que escribir. El linaje
  * se registra aqui, SIN PREGUNTAR: es lo minimo que no se puede perder.   */
-int pr_deriva( Proyecto *p, const char *serie, const char *padre,
+int pr_deriva( Proyecto *p, const char *serie, const char *muestra,
+               const char *padre,
                char *id_out, size_t nid, char *ruta_out, size_t nruta,
                PrError *e );
 
 /* La misma iteracion, pero declarando su ROL. pr_deriva es esta con
  * PR_MODELO: la que se usa casi siempre.                                */
-int pr_deriva_rol( Proyecto *p, const char *serie, const char *padre,
+int pr_deriva_rol( Proyecto *p, const char *serie, const char *muestra,
+                   const char *padre,
                    PrRol rol, char *id_out, size_t nid,
                    char *ruta_out, size_t nruta, PrError *e );
 
@@ -301,10 +322,13 @@ const char *pr_datos_de( const Proyecto *p, const char *serie );
 
 /* Si ese nodo son los datos. Los datos NO SE EDITAN: quien vaya a
  * especificar un modelo tiene que derivar uno nuevo.                    */
+/* Los datos son de la muestra TOTAL: no hay uno por ventana, porque la
+   ventana es un campo del modelo y no un dato distinto.               */
 int pr_es_datos( const Proyecto *p, const char *serie, const char *id );
 
 /* La razon, DESPUES. Se puede no llamar nunca.                           */
-int pr_razon( Proyecto *p, const char *serie, const char *id,
+int pr_razon( Proyecto *p, const char *serie, const char *muestra,
+              const char *id,
               const char *razon, PrError *e );
 
 /* Los que no la tienen. La ventana los ENSEÑA, no los esconde.
@@ -313,10 +337,13 @@ int pr_sin_razon( const Proyecto *p, char ids[][PR_ID], int max );
 
 /* DE DONDE VIENE ESTE MODELO, hasta la raiz. camino[0] es el propio modelo.
  * Devuelve cuantos pasos, o -1 si el linaje se muerde la cola.           */
-int pr_camino( const Proyecto *p, const char *serie, const char *id,
+int pr_camino( const Proyecto *p, const char *serie, const char *muestra,
+               const char *id,
                char camino[][PR_ID], int max );
 
-int pr_modelo_idx( const Proyecto *p, const char *serie, const char *id );
+/* LA CLAVE DE UN MODELO ES (serie, muestra, id). */
+int pr_modelo_idx( const Proyecto *p, const char *serie, const char *muestra,
+                   const char *id );
 
 /* BORRA UN MODELO DEL MANIFIESTO. No toca ficheros: eso es del que llama,
    que es quien sabe cuales son suyos.
@@ -326,7 +353,8 @@ int pr_modelo_idx( const Proyecto *p, const char *serie, const char *id );
      - un modelo con HIJOS tampoco, que los dejaria colgando (PR_EHIJOS).
    Si era el elegido de su serie, la serie se queda SIN elegido: la decision
    desaparece con el modelo, no se hereda a otro a la fuerza.            */
-int pr_borra( Proyecto *p, const char *serie, const char *id, PrError *e );
+int pr_borra( Proyecto *p, const char *serie, const char *muestra,
+              const char *id, PrError *e );
 
 /* --- los errores, en los dos idiomas ------------------------------------ */
 

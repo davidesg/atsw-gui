@@ -51,6 +51,7 @@ gchar     *atsw_programa( const char *programa );
 typedef struct {
     Atsw      *a;
     char       serie[PR_ID];
+    char       muestra[PR_ID];
     char       id[PR_ID];
 
     GtkWidget *win;
@@ -151,7 +152,7 @@ static void trae_out( Editor *E )
     gchar *c = NULL;
     gsize  n = 0;
 
-    if ( pr_ruta( E->a->p, E->serie, E->id, ".out", path, sizeof path ) == 0 &&
+    if ( pr_ruta( E->a->p, E->serie, E->muestra, E->id, ".out", path, sizeof path ) == 0 &&
          g_file_get_contents( path, &c, &n, NULL ) )
         { pon_texto( E->salida, c ); g_free( c ); }
     else
@@ -164,7 +165,7 @@ static gboolean trae_inp( Editor *E )
     gchar *c = NULL;
     gsize  n = 0;
 
-    if ( pr_ruta( E->a->p, E->serie, E->id, ".inp", path, sizeof path ) != 0 ||
+    if ( pr_ruta( E->a->p, E->serie, E->muestra, E->id, ".inp", path, sizeof path ) != 0 ||
          !g_file_get_contents( path, &c, &n, NULL ) )
         { di( E, "No pude leer el .inp de %s/%s.", E->serie, E->id );
           return FALSE; }
@@ -193,7 +194,7 @@ static gchar *terna_rancia( Editor *E )
         {
         char f[PR_RUTA];
 
-        if ( pr_ruta( E->a->p, E->serie, E->id, ext[i], f, sizeof f ) == 0 &&
+        if ( pr_ruta( E->a->p, E->serie, E->muestra, E->id, ext[i], f, sizeof f ) == 0 &&
              g_file_test( f, G_FILE_TEST_EXISTS ) )
             g_string_append_printf( s, "%s%s", s->len ? " y el " : "",
                                     ext[i] + 1 );
@@ -251,7 +252,7 @@ static int escribe( Editor *E, const char *id, char *why, size_t n )
     gchar *txt;
     int    rc;
 
-    if ( pr_ruta( E->a->p, E->serie, id, ".inp", destino, sizeof destino ) != 0 )
+    if ( pr_ruta( E->a->p, E->serie, E->muestra, id, ".inp", destino, sizeof destino ) != 0 )
         { g_snprintf( why, n, "No pude componer la ruta." ); return 1; }
 
     txt = texto_de( E->texto );
@@ -305,7 +306,7 @@ static int guarda( Editor *E, char *id_out, size_t nid )
             PrError e;
             char    nuevo[PR_ID], ruta[PR_RUTA], *dir;
 
-            if ( pr_deriva( E->a->p, E->serie, E->id, nuevo, sizeof nuevo,
+            if ( pr_deriva( E->a->p, E->serie, E->muestra, E->id, nuevo, sizeof nuevo,
                             ruta, sizeof ruta, &e ) != 0 )
                 { char w[512]; pr_error_es( &e, w, sizeof w ); di( E, "%s", w );
                   return 1; }
@@ -324,7 +325,7 @@ static int guarda( Editor *E, char *id_out, size_t nid )
         /* Si se habia derivado un nodo para nada, se queda vacio en el
            manifiesto. Se deshace: un modelo sin .inp no es nada.      */
         if ( strcmp( id_out, E->id ) != 0 )
-            { PrError e; pr_borra( E->a->p, E->serie, id_out, &e );
+            { PrError e; pr_borra( E->a->p, E->serie, E->muestra, id_out, &e );
               g_snprintf( id_out, nid, "%s", E->id ); }
         di( E, "%s", why );
         return 1;
@@ -398,7 +399,7 @@ static int eps_de( Editor *E, char *out, size_t n )
     char base[PR_RUTA];
 
     out[0] = '\0';
-    if ( pr_ruta( E->a->p, E->serie, E->id, ".eps", base, sizeof base ) != 0 )
+    if ( pr_ruta( E->a->p, E->serie, E->muestra, E->id, ".eps", base, sizeof base ) != 0 )
         return 1;
     return ruta_componer( base, "A", NULL, out, n );
 }
@@ -492,7 +493,7 @@ static void on_estimar( GtkButton *b, Editor *E )
          guarda( E, id, sizeof id ) != 0 )
         return;
 
-    if ( pr_ruta( E->a->p, E->serie, E->id, ".inp", ruta, sizeof ruta ) != 0 )
+    if ( pr_ruta( E->a->p, E->serie, E->muestra, E->id, ".inp", ruta, sizeof ruta ) != 0 )
         { di( E, "No pude componer la ruta." ); return; }
 
     exe = atsw_programa( "fue" );
@@ -584,7 +585,8 @@ static GtkWidget *en_scroll( GtkWidget *w )
     return s;
 }
 
-void atsw_editor( Atsw *a, const char *serie, const char *id )
+void atsw_editor( Atsw *a, const char *serie, const char *muestra,
+                  const char *id )
 {
     Editor    *E;
     GtkWidget *raiz, *barra, *pan, *b;
@@ -603,6 +605,7 @@ void atsw_editor( Atsw *a, const char *serie, const char *id )
     E = g_new0( Editor, 1 );
     E->a = a;
     g_snprintf( E->serie, sizeof E->serie, "%s", serie );
+    g_snprintf( E->muestra, sizeof E->muestra, "%s", muestra ? muestra : "" );
     g_snprintf( E->id,    sizeof E->id,    "%s", id );
 
     E->win = gtk_window_new( GTK_WINDOW_TOPLEVEL );

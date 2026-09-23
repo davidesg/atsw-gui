@@ -145,7 +145,7 @@ int atsw_csv_de( const Proyecto *p, const char *serie, char *out, size_t n )
 
     if ( out == NULL || n == 0 ) return 1;
     out[0] = '\0';
-    if ( pr_ruta( p, serie, NULL, NULL, dir, sizeof dir ) != 0 ) return 1;
+    if ( pr_ruta( p, serie, "", NULL, NULL, dir, sizeof dir ) != 0 ) return 1;
     g_snprintf( out, n, "%s/datos.csv", dir );
     return 0;
 }

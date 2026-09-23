@@ -47,29 +47,37 @@ static void verdicto( GtkWidget *w, const char *color, const char *fmt, ... )
 /* fichero haya cambiado desde que se leyo, y para eso basta.                */
 /* ------------------------------------------------------------------------ */
 
-static AtRes *hueco( Atsw *a, const char *serie, const char *id )
+static AtRes *hueco( Atsw *a, const char *serie, const char *muestra,
+                     const char *id )
 {
     int i;
 
+    /* La huella es de (serie, muestra, id): con m01 en dos hojas, la
+       cache tiene que distinguirlos o una enseñaria los numeros de la
+       otra.                                                          */
     for ( i = 0; i < a->nr; i++ )
-        if ( !strcmp( a->r[i].serie, serie ) && !strcmp( a->r[i].id, id ) )
+        if ( !strcmp( a->r[i].serie, serie ) &&
+             !strcmp( a->r[i].muestra, muestra ) &&
+             !strcmp( a->r[i].id, id ) )
             return &a->r[i];
     if ( a->nr >= AT_MAX_RES ) return NULL;
 
     memset( &a->r[a->nr], 0, sizeof a->r[0] );
     snprintf( a->r[a->nr].serie, PR_ID, "%s", serie );
+    snprintf( a->r[a->nr].muestra, PR_ID, "%s", muestra );
     snprintf( a->r[a->nr].id, PR_ID, "%s", id );
     return &a->r[a->nr++];
 }
 
-const AtRes *atsw_resultado( Atsw *a, const char *serie, const char *id )
+const AtRes *atsw_resultado( Atsw *a, const char *serie, const char *muestra,
+                             const char *id )
 {
-    AtRes      *r = hueco( a, serie, id );
+    AtRes      *r = hueco( a, serie, muestra, id );
     char        path[PR_RUTA];
     GStatBuf    st;
 
     if ( r == NULL ) return NULL;
-    if ( pr_ruta( a->p, serie, id, ".out", path, sizeof path ) != 0 )
+    if ( pr_ruta( a->p, serie, muestra, id, ".out", path, sizeof path ) != 0 )
         { r->hay = FALSE; return r; }
 
     if ( g_stat( path, &st ) != 0 )
@@ -139,9 +147,8 @@ const char *atsw_modelo_por_defecto_en( const Proyecto *p, const char *serie,
 
     /* El ELEGIDO manda, pero SOLO si esta en esta muestra: el de otra
        ventana no es candidato aqui, porque no se compara con esto.   */
-    eleg = pr_elegido( p, serie );
-    if ( eleg && *eleg && !strcmp( pr_muestra_de( p, serie, eleg ), muestra ) )
-        return eleg;
+    eleg = pr_elegido( p, serie, muestra );
+    if ( eleg && *eleg ) return eleg;
 
     for ( i = 0; i < p->nm; i++ )
         if ( !strcmp( p->m[i].serie, serie ) &&
@@ -159,7 +166,7 @@ const char *atsw_modelo_por_defecto( const Proyecto *p, const char *serie )
 
     if ( p == NULL || serie == NULL || !*serie ) return "";
 
-    eleg = pr_elegido( p, serie );
+    eleg = pr_elegido( p, serie, "" );
     if ( eleg && *eleg ) return eleg;
 
     /* El ULTIMO por version, que es un CAMPO -- no se deduce del nombre. */
@@ -225,6 +232,7 @@ static void pinta_series( Atsw *a )
     GtkListStore *st = GTK_LIST_STORE( gtk_tree_view_get_model(
                                            GTK_TREE_VIEW(a->l_series) ) );
     GtkTreeIter   it;
+    const char   *mu;
     int           i, j;
     char          marcada[PR_ID];
 
@@ -236,13 +244,20 @@ static void pinta_series( Atsw *a )
     gtk_list_store_clear( st );
     if ( !a->hay ) { a->recolocando = FALSE; return; }
 
+    mu = atsw_muestra_actual( a );
     for ( i = 0; i < a->p->ns; i++ )
         {
-        gchar *globo;
-        int    nm = 0;
+        const char *eleg;
+        gchar      *globo;
+        int         nm = 0;
 
+        /* LA LISTA SIGUE A LA HOJA. Contar el proyecto entero aqui haria
+           que en la hoja "pre-covid" pusiera "3 modelos" señalando modelos
+           que no estan ahi: la lista mentiria sobre lo que se ve.     */
         for ( j = 0; j < a->p->nm; j++ )
-            if ( !strcmp( a->p->m[j].serie, a->p->s[i].id ) ) nm++;
+            if ( !strcmp( a->p->m[j].serie, a->p->s[i].id ) &&
+                 !strcmp( a->p->m[j].muestra, mu ) ) nm++;
+        eleg = pr_elegido( a->p, a->p->s[i].id, mu );
 
         globo = serie_globo( &a->p->s[i] );
         gtk_list_store_append( st, &it );
@@ -250,9 +265,9 @@ static void pinta_series( Atsw *a )
             S_ID,      a->p->s[i].id,
             /* EL ELEGIDO, A LA VISTA. Hoy esa decision vive en un diccionario
                a pelo repetido en tres guiones de cases/.                 */
-            S_ELEGIDO, a->p->s[i].elegido[0] ? a->p->s[i].elegido : "—",
+            S_ELEGIDO, eleg[0] ? eleg : "—",
             S_NMOD,    nm,
-            S_RAZON,   a->p->s[i].razon,
+            S_RAZON,   pr_razon_elegido( a->p, a->p->s[i].id, mu ),
             S_GLOBO,   globo,
             -1 );
         g_free( globo );
@@ -274,7 +289,7 @@ static void pinta_series( Atsw *a )
 static const char *cruce( Atsw *a, const PrModelo *m )
 {
     static char b[512];
-    const AtRes *mio = atsw_resultado( a, m->serie, m->id );
+    const AtRes *mio = atsw_resultado( a, m->serie, m->muestra, m->id );
     GString     *g;
     int          i;
 
@@ -289,7 +304,7 @@ static const char *cruce( Atsw *a, const PrModelo *m )
 
         if ( strcmp( o->serie, m->serie ) != 0 ) continue;
         if ( strcmp( o->muestra, m->muestra ) == 0 ) continue;  /* otra hoja */
-        r = atsw_resultado( a, o->serie, o->id );
+        r = atsw_resultado( a, o->serie, o->muestra, o->id );
         if ( r == NULL || !r->hay ) continue;
         if ( strcmp( r->estruct, mio->estruct ) != 0 ) continue;
 
@@ -320,7 +335,7 @@ static void pinta_hoja( Atsw *a, GtkWidget *vista, const char *muestra )
     gtk_list_store_clear( st );
     if ( !a->hay || a->serie[0] == '\0' ) { g_free( marca ); return; }
 
-    eleg  = pr_elegido( a->p, a->serie );
+    eleg  = pr_elegido( a->p, a->serie, muestra );
     porde = atsw_modelo_por_defecto_en( a->p, a->serie, muestra );
 
     for ( i = 0; i < a->p->nm; i++ )
@@ -333,7 +348,7 @@ static void pinta_hoja( Atsw *a, GtkWidget *vista, const char *muestra )
         if ( strcmp( m->serie, a->serie ) != 0 ) continue;
         if ( strcmp( m->muestra, muestra ) != 0 ) continue;
 
-        r = atsw_resultado( a, m->serie, m->id );
+        r = atsw_resultado( a, m->serie, m->muestra, m->id );
 
         if ( r && r->hay )
             {
@@ -424,11 +439,12 @@ static void pinta_veredictos( Atsw *a )
         const AtRes *r;
 
         if ( a->p->m[i].rol == PR_DATOS ) { datos++; continue; }
-        r = atsw_resultado( a, a->p->m[i].serie, a->p->m[i].id );
+        r = atsw_resultado( a, a->p->m[i].serie, a->p->m[i].muestra,
+                            a->p->m[i].id );
         if ( r && r->hay ) estimados++;
         }
-    for ( i = 0; i < a->p->ns; i++ )
-        if ( a->p->s[i].elegido[0] ) elegidos++;
+    for ( i = 0; i < a->p->nm; i++ )
+        if ( a->p->m[i].elegido ) elegidos++;
 
     verdicto( a->ver_cuenta, a->p->ns ? AT_VERDE : AT_AMBAR,
         "%d serie%s, %d modelo%s, %d estimado%s · %d con el elegido declarado",

@@ -283,11 +283,16 @@ import sys, yaml
 d = yaml.safe_load(open(sys.argv[1]))
 assert d["id"] == "SF_MEG", d["id"]
 assert d["titulo"] == "Inflación del área euro", d["titulo"]
-assert d["series"]["IPC_ES"]["elegido"] == "m02"
+# El elegido va EN EL MODELO y es de (serie, muestra): "el modelo de esta
+# serie" solo significa algo dentro de una ventana.
+assert d["modelos"]["IPC_ES/m02"]["elegido"] == "si"
+assert "elegido" not in d["series"]["IPC_ES"]
+assert d["modelos"]["IPC_ES/pre-covid/m01"]["elegido"] == "si"
 assert d["modelos"]["IPC_ES/m01"]["padre"] == "m00"
 assert d["modelos"]["IPC_ES/m01"]["version"] == 1
 sin = [k for k, v in d["modelos"].items() if not v.get("razon")]
-assert sin == ["IPC_ES/m00", "IPC_ES/m02", "SUELTA/m01"], sin
+assert sin == ["IPC_ES/m00", "IPC_ES/m02", "SUELTA/m01",
+               "IPC_ES/pre-covid/m01"], sin
 # m00 son LOS DATOS, y lo dice el manifiesto: no se deduce del numero.
 assert d["modelos"]["IPC_ES/m00"]["rol"] == "datos"
 assert "rol" not in d["modelos"]["IPC_ES/m01"]
@@ -297,8 +302,8 @@ assert d["series"]["IPC_ES"]["bajada"] == "2026-09-20"
 assert "descripcion" not in d["series"]["SUELTA"], d["series"]["SUELTA"]
 # Las muestras: la COMPLETA no se declara, y el modelo dice en cual nacio.
 assert d["muestras"]["pre-covid"]["hasta"] == "12/2019"
-assert d["modelos"]["IPC_ES/m01"]["muestra"] == "pre-covid"
-assert "muestra" not in d["modelos"]["IPC_ES/m02"], "la completa no se escribe"
+# La muestra es PARTE DE LA CLAVE, no un campo: m01 existe en las dos hojas.
+assert "IPC_ES/m01" in d["modelos"] and "IPC_ES/pre-covid/m01" in d["modelos"]
 print("  ok    yaml.safe_load de Python lee el manifiesto entero")
 PY
 else

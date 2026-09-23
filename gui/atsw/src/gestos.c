@@ -172,8 +172,8 @@ void atsw_lanza( Atsw *a, const char *programa, const char *fichero )
 /* esa afirmacion deja de valer y sus valores vuelven a ser SEMILLAS.         */
 /* ------------------------------------------------------------------------ */
 
-gboolean atsw_itera( Atsw *a, const char *serie, const char *padre,
-                     char *why, size_t n )
+gboolean atsw_itera( Atsw *a, const char *serie, const char *muestra,
+                     const char *padre, char *why, size_t n )
 {
     PrError e;
     char    id[PR_ID], origen[PR_RUTA], destino[PR_RUTA];
@@ -199,7 +199,8 @@ gboolean atsw_itera( Atsw *a, const char *serie, const char *padre,
                              "y de ellos sale el primer modelo." );
         return FALSE;
         }
-    if ( pr_ruta( a->p, serie, padre, ".pre", origen, sizeof origen ) != 0 )
+    if ( pr_ruta( a->p, serie, muestra, padre, ".pre", origen,
+                  sizeof origen ) != 0 )
         { if ( why ) snprintf( why, n, "No pude componer la ruta." );
           return FALSE; }
 
@@ -213,7 +214,9 @@ gboolean atsw_itera( Atsw *a, const char *serie, const char *padre,
         }
 
     /* La iteracion nueva, con su LINAJE, sin preguntar. */
-    if ( pr_deriva( a->p, serie, padre, id, sizeof id,
+    /* ITERAR SE QUEDA EN SU VENTANA: seguir desde un optimo es seguir
+       sobre las mismas observaciones. Cambiar de ventana es otro gesto. */
+    if ( pr_deriva( a->p, serie, muestra, padre, id, sizeof id,
                     destino, sizeof destino, &e ) != 0 )
         { if ( why ) pr_error_es( &e, why, n ); g_free( contenido ); return FALSE; }
 
@@ -257,7 +260,7 @@ gboolean atsw_itera( Atsw *a, const char *serie, const char *padre,
 /* el que fug dibuja y la raiz del linaje.                                   */
 /* ------------------------------------------------------------------------ */
 
-gboolean atsw_modelo_nuevo( Atsw *a, const char *serie,
+gboolean atsw_modelo_nuevo( Atsw *a, const char *serie, const char *muestra,
                             char *id_out, size_t nid,
                             char *ruta_out, size_t nruta, char *why, size_t n )
 {
@@ -286,14 +289,14 @@ gboolean atsw_modelo_nuevo( Atsw *a, const char *serie,
         return FALSE;
         }
 
-    if ( pr_ruta( a->p, serie, datos, ".inp", origen, sizeof origen ) != 0 ||
+    if ( pr_ruta( a->p, serie, "", datos, ".inp", origen, sizeof origen ) != 0 ||
          !g_file_get_contents( origen, &contenido, &largo, NULL ) )
         {
         if ( why ) snprintf( why, n, "No pude leer los datos de «%s».", serie );
         return FALSE;
         }
 
-    if ( pr_deriva( a->p, serie, datos, id, sizeof id,
+    if ( pr_deriva( a->p, serie, muestra, datos, id, sizeof id,
                     destino, sizeof destino, &e ) != 0 )
         { if ( why ) pr_error_es( &e, why, n ); g_free( contenido ); return FALSE; }
 
@@ -386,13 +389,10 @@ gboolean atsw_en_muestra( Atsw *a, const char *serie, const char *padre,
 
     /* Cuelga del PADRE si se dio uno --de ahi viene la idea-- y si no, de
        los datos. El linaje dice de donde salio cada estimacion.      */
-    if ( pr_deriva( a->p, serie, ( padre && *padre ) ? padre : datos,
+    if ( pr_deriva( a->p, serie, muestra,
+                    ( padre && *padre ) ? padre : datos,
                     id, sizeof id, destino, sizeof destino, &e ) != 0 )
         { if ( why ) pr_error_es( &e, why, n ); return FALSE; }
-
-    if ( pr_pon_muestra( a->p, serie, id, muestra, &e ) != 0 )
-        { if ( why ) pr_error_es( &e, why, n );
-          pr_borra( a->p, serie, id, &e ); return FALSE; }
 
     dir = g_path_get_dirname( destino );
     g_mkdir_with_parents( dir, 0700 );
@@ -400,7 +400,7 @@ gboolean atsw_en_muestra( Atsw *a, const char *serie, const char *padre,
 
     if ( atsw_genera_inp( csv, destino, serie,
                           mu ? mu->hasta : "", why, n ) != 0 )
-        { pr_borra( a->p, serie, id, &e ); return FALSE; }
+        { pr_borra( a->p, serie, muestra, id, &e ); return FALSE; }
 
     if ( pr_escribir( a->p, a->p->path, &e ) != 0 )
         { if ( why ) snprintf( why, n, "El .inp está, pero no pude guardar el "

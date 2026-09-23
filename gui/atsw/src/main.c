@@ -15,11 +15,11 @@
 #include "atsw.h"
 
 void atsw_lanza( Atsw *a, const char *programa, const char *fichero );
-gboolean atsw_modelo_nuevo( Atsw *a, const char *serie,
+gboolean atsw_modelo_nuevo( Atsw *a, const char *serie, const char *muestra,
                             char *id_out, size_t nid,
                             char *ruta_out, size_t nruta, char *why, size_t n );
-gboolean atsw_itera( Atsw *a, const char *serie, const char *padre,
-                     char *why, size_t n );
+gboolean atsw_itera( Atsw *a, const char *serie, const char *muestra,
+                     const char *padre, char *why, size_t n );
 void atsw_datos( Atsw *a );
 void atsw_vistazo( Atsw *a, const char *inp, int modo, double lam );
 
@@ -321,15 +321,16 @@ static gboolean que_mandar( Atsw *a, gboolean acepta_pre, char *out, size_t n )
 
     if ( !a->hay || !a->serie[0] ) { out[0] = '\0'; return FALSE; }
 
-    m = id ? id : atsw_modelo_por_defecto( a->p, a->serie );
+    m = id ? id : atsw_modelo_por_defecto_en( a->p, a->serie,
+                                              atsw_muestra_actual( a ) );
     if ( !m || !*m ) { g_free( id ); out[0] = '\0'; return FALSE; }
 
     if ( acepta_pre &&
-         pr_ruta( a->p, a->serie, m, ".pre", out, n ) == 0 &&
+         pr_ruta( a->p, a->serie, atsw_muestra_actual( a ), m, ".pre", out, n ) == 0 &&
          g_file_test( out, G_FILE_TEST_EXISTS ) )
         { g_free( id ); return TRUE; }
 
-    if ( pr_ruta( a->p, a->serie, m, ".inp", out, n ) == 0 &&
+    if ( pr_ruta( a->p, a->serie, atsw_muestra_actual( a ), m, ".inp", out, n ) == 0 &&
          g_file_test( out, G_FILE_TEST_EXISTS ) )
         { g_free( id ); return TRUE; }
 
@@ -393,7 +394,7 @@ static void on_fue( GtkButton *b, Atsw *a )
         {
         char ruta[PR_RUTA], why[512];
 
-        if ( !atsw_modelo_nuevo( a, a->serie, NULL, 0,
+        if ( !atsw_modelo_nuevo( a, a->serie, atsw_muestra_actual( a ), NULL, 0,
                                  ruta, sizeof ruta, why, sizeof why ) )
             { barra_pub( a, why ); g_free( marca ); return; }
 
@@ -455,7 +456,7 @@ static void on_nuevo_modelo( GtkButton *b, Atsw *a )
 
     (void) b;
     if ( !a->hay ) { barra_pub( a, "Abre un proyecto antes." ); return; }
-    if ( !atsw_modelo_nuevo( a, a->serie, NULL, 0,
+    if ( !atsw_modelo_nuevo( a, a->serie, atsw_muestra_actual( a ), NULL, 0,
                              ruta, sizeof ruta, why, sizeof why ) )
         { barra_pub( a, why ); return; }
 
@@ -473,7 +474,8 @@ static void on_nuevo_modelo( GtkButton *b, Atsw *a )
  *
  * Se pregunta antes, con la lista de lo que se va delante: es el unico gesto
  * de la madre que destruye algo.                                       */
-static void borra_ficheros( Atsw *a, const char *serie, const char *id )
+static void borra_ficheros( Atsw *a, const char *serie, const char *muestra,
+                            const char *id )
 {
     static const char *ext[] = { ".inp", ".pre", ".out", ".tex", ".pdf",
                                  ".eps", "_res.tex", "_dist.tex", NULL };
@@ -483,7 +485,7 @@ static void borra_ficheros( Atsw *a, const char *serie, const char *id )
         {
         char f[PR_RUTA];
 
-        if ( pr_ruta( a->p, serie, id, ext[i], f, sizeof f ) == 0 )
+        if ( pr_ruta( a->p, serie, muestra, id, ext[i], f, sizeof f ) == 0 )
             g_unlink( f );
         }
 }
@@ -504,12 +506,13 @@ static void on_borrar( GtkMenuItem *m, Atsw *a )
     {
     Proyecto tmp = *a->p;
 
-    if ( pr_borra( &tmp, a->serie, id, &e ) != 0 )
+    if ( pr_borra( &tmp, a->serie, atsw_muestra_actual( a ), id, &e ) != 0 )
         { pr_error_es( &e, why, sizeof why ); barra_pub( a, why );
           g_free( id ); return; }
     }
 
-    pr_ruta( a->p, a->serie, id, ".inp", f, sizeof f );
+    pr_ruta( a->p, a->serie, atsw_muestra_actual( a ), id, ".inp",
+             f, sizeof f );
     d = gtk_message_dialog_new( GTK_WINDOW(a->ventana), GTK_DIALOG_MODAL,
             GTK_MESSAGE_WARNING, GTK_BUTTONS_OK_CANCEL,
             "¿Borro %s de «%s»?", id, a->serie );
@@ -521,8 +524,8 @@ static void on_borrar( GtkMenuItem *m, Atsw *a )
     gtk_widget_destroy( d );
     if ( resp != GTK_RESPONSE_OK ) { g_free( id ); return; }
 
-    borra_ficheros( a, a->serie, id );
-    pr_borra( a->p, a->serie, id, &e );
+    borra_ficheros( a, a->serie, atsw_muestra_actual( a ), id );
+    pr_borra( a->p, a->serie, atsw_muestra_actual( a ), id, &e );
     if ( pr_escribir( a->p, a->p->path, &e ) != 0 )
         barra_pub( a, "Los ficheros se fueron, pero no pude guardar el "
                       "proyecto." );
@@ -543,7 +546,7 @@ static void on_editar( GtkMenuItem *m, Atsw *a )
     gchar *id = atsw_marcada( a->l_modelos, M_ID );
 
     (void) m;
-    if ( a->hay && a->serie[0] && id ) atsw_editor( a, a->serie, id );
+    if ( a->hay && a->serie[0] && id ) atsw_editor( a, a->serie, atsw_muestra_actual( a ), id );
     g_free( id );
 }
 
@@ -615,8 +618,16 @@ static GtkWidget *menu_muestras( Atsw *a, const char *padre,
 static void on_hoja( GtkNotebook *nb, GtkWidget *pag, guint n, Atsw *a )
 {
     (void) nb; (void) pag;
-    if ( (int) n < a->nhojas ) a->l_modelos = a->hoja[n];
-    if ( !a->recolocando ) barra_pub( a, "" );
+    if ( (int) n >= a->nhojas ) return;
+    a->l_modelos = a->hoja[n];
+    if ( a->recolocando ) return;
+
+    /* Y LA LISTA DE LA IZQUIERDA SIGUE A LA HOJA. Sus columnas --cuantos
+       modelos, cual es el elegido-- son de ESTA ventana; contando el
+       proyecto entero pondria "3 modelos" señalando modelos que no estan
+       aqui, y la lista mentiria sobre lo que se ve.                  */
+    atsw_refresca( a );
+    barra_pub( a, "" );
 }
 
 /* DECLARAR UNA SUBMUESTRA: hasta donde, y por que.
@@ -891,7 +902,7 @@ static void on_iterar( GtkButton *b, Atsw *a )
 
     (void) b;
     if ( !a->serie[0] ) { barra_pub( a, "Marca una serie." ); return; }
-    atsw_itera( a, a->serie, padre ? padre : "", why, sizeof why );
+    atsw_itera( a, a->serie, atsw_muestra_actual( a ), padre ? padre : "", why, sizeof why );
     barra_pub( a, why );
     g_free( padre );
     atsw_refresca( a );
@@ -909,9 +920,9 @@ static void on_elegir( GtkButton *b, Atsw *a )
     if ( pide_texto( a, "El modelo elegido",
             "Por qué éste y no otro. Se puede dejar en blanco: sin razón "
             "se verá como sin razón, que es mejor que una inventada.",
-            pr_elegido( a->p, a->serie ), razon, sizeof razon ) )
+            pr_elegido( a->p, a->serie, atsw_muestra_actual( a ) ), razon, sizeof razon ) )
         {
-        if ( pr_elige( a->p, a->serie, id, razon, &e ) != 0 ||
+        if ( pr_elige( a->p, a->serie, atsw_muestra_actual( a ), id, razon, &e ) != 0 ||
              pr_escribir( a->p, a->p->path, &e ) != 0 )
             { char why[512]; pr_error_es( &e, why, sizeof why );
               barra_pub( a, why ); }
@@ -931,7 +942,7 @@ static void on_razon( GtkButton *b, Atsw *a )
 
     (void) b;
     if ( !id ) { barra_pub( a, "Marca la iteración." ); return; }
-    i = pr_modelo_idx( a->p, a->serie, id );
+    i = pr_modelo_idx( a->p, a->serie, atsw_muestra_actual( a ), id );
 
     /* SE PIDE, NO SE EXIGE, y se puede poner DESPUES -- mirando el .out, que
      * es cuando de verdad se sabe por que.                              */
@@ -940,7 +951,7 @@ static void on_razon( GtkButton *b, Atsw *a )
             "blanco y ponerlo más tarde.",
             i >= 0 ? a->p->m[i].razon : "", razon, sizeof razon ) )
         {
-        if ( pr_razon( a->p, a->serie, id, razon, &e ) != 0 ||
+        if ( pr_razon( a->p, a->serie, atsw_muestra_actual( a ), id, razon, &e ) != 0 ||
              pr_escribir( a->p, a->p->path, &e ) != 0 )
             { char why[512]; pr_error_es( &e, why, sizeof why );
               barra_pub( a, why ); }

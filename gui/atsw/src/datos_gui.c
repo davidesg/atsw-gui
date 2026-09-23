@@ -171,7 +171,8 @@ static int da_de_alta( Atsw *a, const DtDatos *d, int col, const char *serie,
        modelo: nadie la eligio. Y NADIE LA EDITA -- quien vaya a especificar
        deriva uno nuevo, asi que este .inp sigue estando para los graficos y
        el linaje conserva su raiz.                                      */
-    if ( pr_deriva_rol( a->p, serie, NULL, PR_DATOS, id, sizeof id,
+    /* Los datos son de la muestra TOTAL, siempre: "" y no otra cosa. */
+    if ( pr_deriva_rol( a->p, serie, "", NULL, PR_DATOS, id, sizeof id,
                         ruta, sizeof ruta, &e ) != 0 )
         { pr_error_es( &e, why, n ); return 1; }
 

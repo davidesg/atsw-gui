@@ -513,6 +513,12 @@ which Mauricio's Table 3 does.
 **Suggested fix.** Force `-mafree` inside `-lrtest`, or refuse the critical values
 when `q > 0`.
 
+
+**Partly fixed on 2026-09-23.** With the free class as the default (BUG-48) the
+default `-lrtest` fits the same MA class at every rank, so the non-nesting between
+`r = 0` and `r ≥ 1` is gone unless a restricted class is asked for. The mismatch
+with Theorem 8's source (a trace test for the conditional likelihood; drvec runs a
+sequential lambda-max on the exact one) remains.
 ---
 
 ## BUG-28 — the `-alpha` file's rows are read in the internal order, and the test that should catch it compares a word with itself
@@ -1078,7 +1084,7 @@ used; implement the conditional likelihood if the CML comparison is wanted.
 
 ## BUG-48 — the default MA class rests on Corollary 6.3, and Corollary 6.3 is false: the engine's invertibility gate is not the admissibility condition
 
-**Status: OPEN** (a design decision to revisit, not a crash). Found 2026-09-23.
+**Status: FIXED on 2026-09-23** (`src/drvec.c`, `parse_cli`: the default is the free `Θ`). Found 2026-09-23.
 
 **What it is.** With `q >= 1` and no class chosen, drvec fits `-marow`
 (drvec.c:8169-8186), zeroing the `nabla Y2` rows of every `Theta_k`. The code
@@ -1119,6 +1125,15 @@ samples.
 as a restriction with its measured justification; report the left-coprimeness
 diagnostic of BUG-46; build the `-marow`-versus-free test.
 
+
+**Fixed.** The user's decision, taken on the two studies above: the default is
+the free `Θ`, Mauricio (2006)'s model, and the search of P12 carries the
+estimability problem that motivated the restriction (the free fit starts from
+the `-marow` and `-matri` optima, so it never ends below them). `-marow` remains
+as an option. Corollary 6.3 is marked false in `DEMOSTRACIONES.md`; the decision
+is `SPECIFICATION_PLAN.md` §11. Re-measured: the battery's flagless golden
+values now equal their `-mafree` counterparts to the digit; the `-marow` ones are
+kept with the flag. What is not done: the bootstrap test between classes.
 ---
 
 ## Watched, and not defects

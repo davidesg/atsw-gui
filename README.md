@@ -140,20 +140,24 @@ there is what is accepted. `drvec --version` prints the version.
 
 ### The specification of `Θ` and the short-run dynamics
 
-A free `Θ` — the default until 2026-08-20, now `-mafree` — lands on this data
-where the fitted model **denies the rank it was estimated at**, and its `B̂₂`
-then disagrees with every admissible route. The default is now the class where
-that cannot happen. See [docs/THEORY.md](docs/THEORY.md) for the condition,
-[docs/HOMOLOGATION.md](docs/HOMOLOGATION.md) §4g–§4r for the measurements, and
-`docs/SPECIFICATION_PLAN.md` §10 for the decision and what it reverses.
+The default is the **free** `Θ` — Mauricio (2006)'s model — again since
+2026-09-23. From 2026-08-20 to that date it was `-marow`, on an argument
+(Corollary 6.3) that turned out false, attributed to a source (the BVECM
+article) that does not estimate that class: [docs/ESTUDIO_MAROW_2026-09-23.md](docs/ESTUDIO_MAROW_2026-09-23.md).
+What made a restricted default attractive — the free `Θ` is hard to estimate in
+short samples from a single start — is answered by the search (P12): the free
+fit starts, among other places, from the optima of every class it contains, so
+it cannot end below them. The restricted classes remain, as hypotheses to test.
+See [docs/THEORY.md](docs/THEORY.md) for the rank condition and
+[docs/HOMOLOGATION.md](docs/HOMOLOGATION.md) §4g–§4t for the measurements.
 
 | Option | Description |
 |--------|-------------|
-| **default** | With `q ≥ 1` and `r ≥ 1`, `Θ = [T₁₁ T₁₂ ; 0 0]` — the `-marow` class. Not a restriction: by Corollary 6.3 the admissible region **is** the whole parameter space there, and the engine's invertibility gate enforces it. The `.out` names the class on its `MA :` line |
-| `-mafree` | The **free** `Θ`, the default before 2026-08-20. The widest class and the term of comparison; on this kind of data its optimum sits on the invertibility boundary |
+| **default** | The **free** `Θ` (Mauricio 2006), fitted by the search of P12. The `.out` names the class on its `MA :` line |
+| `-mafree` | The free `Θ`, asked for explicitly; the same fit as the default |
 | `-warma` | Parameterise the **transformed** system directly: `Φ*_k = [0 Ψ_k ; 0 Φ_k]`, `Θ*` in the `W` block, `B₂` entering only through the data. The class Phillips' triangular form and the BVECM theorems cover |
 | `-mawarma` | `Θ = [T₁₁ T₁₁B₂′ ; 0 0]`, the structure a WARMA process implies for its VEC representation |
-| `-marow` | `Θ = [T₁₁ T₁₂ ; 0 0]` — the differenced block carries no moving average of its own |
+| `-marow` | `Θ = [T₁₁ T₁₂ ; 0 0]` — the differenced block carries no moving average of its own. The default from 2026-08-20 to 2026-09-23 |
 | `-matri` | `Θ = [T₁₁ T₁₂ ; 0 T₂₂]`, block-triangular. Measured **not** to remove the pathology |
 | `-specs` | All five, in one run, with an **admissible** column and no `χ²` where the theory gives none |
 | `-rankadm [tol]` | Refuse parameter points where `σ_min(Λ⊥′Θ(1)B⊥) < tol`. The statistic is **reported always** |

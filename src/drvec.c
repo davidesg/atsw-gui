@@ -285,32 +285,23 @@ int global_matri = 0;
  *  the data reject is the second.  This rung separates them.                 */
 int global_marow = 0;
 
-/*  -mafree — THE FREE Theta, WHICH WAS THE DEFAULT UNTIL 2026-08-20.
+/*  -mafree -- THE FREE Theta, Mauricio (2006)'s model, and THE DEFAULT again
+ *  since 2026-09-23 (it was also the default until 2026-08-20).
  *
- *  WHY IT STOPPED BEING ONE.  Corollary 6.3 (docs/DEMOSTRACIONES.md) says that
- *  with the lower s rows of every Theta_k zero -- which is what -marow imposes
- *  -- one has det Theta(1) = det(I_r - sum T11_k), and that the eigenvalues of
- *  the M q x M q companion are those of the r q x r q companion of the r x r
- *  block plus s q zeros.  So in that class Theta(L) is invertible IF AND ONLY
- *  IF its r x r block is, and by Corollary 3.1 the rank condition of Theorem 3
- *  holds by itself.  The point of P \ C that Theorem 4 says the likelihood
- *  rewards and Theorem 5 says no root check of the engine can see IS NOT
- *  REACHABLE there: chekma on Theta IS chekma on the r x r block.  Theorem 5 is
- *  a statement about THE FREE CLASS.
- *
- *  Measured (HOMOLOGATION.md 4q): in the bank's regime -- moving averages of
- *  the form (1 - theta B), which is what differenced series of prices and
- *  populations give -- the free Theta is NOT recoverable even at n = 250, and
- *  -multistart makes it worse.  And 4r: with the structured class, theta = +0.9
- *  is recovered with bias 0.050 and IQR 0.272, interior, against a free one
- *  that stays at the door with twice the dispersion.
- *
- *  It is kept and offered because it is the widest class and the term of
- *  comparison of the whole earlier register; what it no longer is, is the
- *  answer the program gives when nobody asks it for another one.  See
- *  SPECIFICATION_PLAN.md 10, which reverses step 4 of the specification plan. */
+ *  Between those dates the default was -marow, on Corollary 6.3 of
+ *  docs/DEMOSTRACIONES.md: "with the lower s rows of every Theta_k zero,
+ *  chekma on Theta IS the admissibility condition, so the point of P \ C is
+ *  not reachable".  The study of 2026-09-23 found that false in both
+ *  directions (a -marow point with Theta_1 = [[1, .7], [0, 0]] passes chekma
+ *  and is inadmissible; Theta_1 = [[3, .4], [0, 0]] is rejected and is
+ *  admissible): the gate checks invertibility, admissibility is a condition
+ *  at z = 1.  What stays true is what HOMOLOGATION.md 4q/4r measured -- in
+ *  short samples the free Theta is hard to estimate from a single start --
+ *  and that is what the search of P12 answers, by starting the free fit from
+ *  the optimum of every class it contains.  The flag is kept so that an
+ *  explicit request is recorded as one.  See docs/ESTUDIO_MAROW_2026-09-23.md
+ *  and BUGS.md BUG-48. */
 int global_mafree = 0;
-int default_marow = 0;      /* 1 if -marow came from the default, not the user */
 
 /*  THE STRUCTURED CLASSES COLLAPSE AT r = 0, and that has to be said in one
  *  place only.  With r = 0 there is no W block: the model is a VARMA on
@@ -7143,16 +7134,14 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
                            "%s"
                            "      See the ladder:  drvec <file> %d %d %d "
                            "-specs\n", granger_sv, global_rankadm_tol,
-                           /*  P4 — and where it comes from.  Under the default this
-                            *  cannot happen (Corollary 6.3); if it is
-                            *  happening, the free class has been asked for, and
-                            *  that is the first thing to say.                */
-                           global_mafree
-                             ? "      This is -mafree: that class CONTAINS points"
-                               " the model does not\n"
-                               "      admit.  The default (-marow) cannot"
-                               " reach them.\n"
-                             : "",
+                           /*  Where it comes from: the free class CONTAINS points
+                            *  the model does not admit, and -marow only removes
+                            *  one route to them (BUG-48).                  */
+                           (!global_q || global_marow || global_mawarma || global_warma)
+                             ? ""
+                             : "      The free MA class CONTAINS points the model "
+                               "does not admit;\n"
+                               "      -marow removes one route to them (BUG-48).\n",
                            global_p, global_q, global_r);
                 fprintf(outputv,
                   "  *** This is ZERO to working precision, and it is not a\n"
@@ -8562,24 +8551,26 @@ static int parse_cli(int argc, char *argv[])
     /* -mean implies case 2 (E[W]≠0) unless a case was given explicitly */
     if (global_include_mean && global_case == 1) global_case = 2;
 
-    /*  P4 — THE MOVING-AVERAGE DEFAULT.  With q >= 1 and no class chosen by
-     *  the user, -marow is estimated: the lower s rows of Theta zero.  It is
-     *  not a restriction on the free class whose optimum has to be corrected:
-     *  by Corollary 6.3 it is the parameterisation in which the admissible
-     *  region IS the whole space, and the invertibility gate the engine already
-     *  applies imposes it.  -mafree returns the previous default.
+    /*  THE MOVING-AVERAGE DEFAULT, decided again on 2026-09-23: Theta FREE,
+     *  which is Mauricio (2006)'s model.
      *
-     *  -diagma is left alone: it is a different, older restriction, and it is
-     *  NOT in the protected class (it leaves T22 diagonal, not zero).  Whoever
-     *  asks for it knows what they are asking for.  See SPECIFICATION_PLAN.md
-     *  10.                                                                   */
-    if (global_q > 0 && !global_mafree && !global_marow && !global_mawarma
-        && !global_matri && !global_warma && !global_diag_ma) {
-        /*  Switched on always; ma_struct_on() switches it off in fits with
-         *  r = 0, which is the only case that needs distinguishing.          */
-        global_marow  = 1;
-        default_marow = 1;
-    }
+     *  From 2026-08-20 to 2026-09-23 the default was -marow (the s rows of
+     *  nabla Y2 in every Theta_k zero), on two legs.  The theoretical one --
+     *  Corollary 6.3, "the admissible region IS the whole space of that class
+     *  and the engine's gate imposes it" -- is false in both directions, and
+     *  the source it was attributed to (the BVECM article) does not estimate
+     *  that class: it and its accompanying program estimate the full model,
+     *  the program with an MA on the nabla Y2 equation -- exactly the entry
+     *  -marow zeroes.  The empirical leg was estimability in short samples
+     *  (HOMOLOGATION 4q/4r), and that is what the search of P12 addresses:
+     *  the free fit now starts, among other places, from the -marow and -matri
+     *  optima embedded, so it cannot end below them.  On the wheat pairs the
+     *  data want that entry (-matri beats -marow by LR >= 5.96 in 37 of 40),
+     *  and the free class forecast better in 8 of 9 cases (HOMOLOGATION 4t).
+     *  The free class also keeps -lrtest nested (BUG-27) and is what the rank
+     *  test's theory assumes.  -marow, -matri, -mawarma and -warma remain,
+     *  as restrictions to test.  See docs/ESTUDIO_MAROW_2026-09-23.md and
+     *  BUGS.md BUG-48.                                                       */
 
     /*  P9 — -interv is the .inp route's way of getting the deterministic terms
      *  out of a .pre.  On the .pre route they are already out, subtracted by
@@ -8852,9 +8843,8 @@ int main(int argc, char *argv[])
           : mawarma_on()  ? "= [T11  T11*B2' ; 0  0] (-mawarma)"
           : global_matri  ? "= [T11 T12 ; 0 T22] (-matri)"
           : global_diag_ma ? "diagonal (-diagma)"
-          : marow_on()    ? (default_marow ? "= [T11 T12 ; 0 0] (default)"
-                                           : "= [T11 T12 ; 0 0] (-marow)")
-                          : "free (-mafree)",
+          : marow_on()    ? "= [T11 T12 ; 0 0] (-marow)"
+                          : "free (the default; -mafree)",
             global_diag_cov ? "diagonal" : "free");
     fprintf(outputv, "Series           :");
     { int j; for (j = 1; j <= nser; j++)
@@ -8891,10 +8881,8 @@ int main(int argc, char *argv[])
           : mawarma_on()   ? "Theta = [T11  T11*B2' ; 0  0]  (-mawarma)"
           : global_matri   ? "Theta = [T11  T12 ; 0  T22]  (-matri)"
           : global_diag_ma ? "Theta diagonal  (-diagma)"
-          : marow_on()     ? (default_marow
-                ? "Theta = [T11  T12 ; 0  0]  (the default since 2026-08-20)"
-                : "Theta = [T11  T12 ; 0  0]  (-marow)")
-          :                  "Theta FREE  (-mafree; the default before 2026-08-20)";
+          : marow_on()     ? "Theta = [T11  T12 ; 0  0]  (-marow)"
+          :                  "Theta FREE  (the default, Mauricio 2006; -marow was the default 2026-08-20 to 2026-09-23)";
         if (!quiet_mode) printf("MA     : %s\n", cls);
     }
 

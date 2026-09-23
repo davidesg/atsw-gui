@@ -492,14 +492,18 @@ golden() {
 #  bajo -mafree, para que la parametrizacion anterior siga protegida: es la que
 #  sostiene todo el registro previo a esta fecha.
 #  -diagma no se movio: es una restriccion distinta, que el defecto no toca.
-golden  -4.0893040918 "$MM" 2 1 1 -case 1
-golden   2.3039690333 "$MM" 2 1 1 -case 2
-golden   2.3074789504 "$MM" 2 1 1 -case 3
-golden  -3.5511860134 "$MM" 2 1 1 -case 2 -diagar
+golden  -4.0893040918 "$MM" 2 1 1 -case 1 -marow
+golden   2.3039690333 "$MM" 2 1 1 -case 2 -marow
+golden   2.3074789504 "$MM" 2 1 1 -case 3 -marow
+golden  -3.5511860134 "$MM" 2 1 1 -case 2 -marow -diagar
 golden   0.9355032708 "$MM" 2 1 1 -case 2 -diagma
-golden  -2.6646873358 "$MM" 2 1 1 -case 2 -diagcov
-golden   2.1765180953 "$MM" 2 1 1 -case 2 -fixb2
-golden   0.7822395343 "$MM" 2 1 1 -case 2 -fixb2 0
+golden  -2.6646873358 "$MM" 2 1 1 -case 2 -marow -diagcov
+golden   2.1765180953 "$MM" 2 1 1 -case 2 -marow -fixb2
+golden   0.7822395343 "$MM" 2 1 1 -case 2 -marow -fixb2 0
+
+#  The default IS the free class since 2026-09-23 (BUG-48): with no class
+#  asked for, the fit must land exactly where -mafree does.
+golden   6.4786201604 "$MM" 2 1 1 -case 2
 
 #  La clase libre, con los valores que eran el defecto hasta el 2026-08-20.
 golden   3.6856397544 "$MM" 2 1 1 -case 1        -mafree
@@ -1539,19 +1543,17 @@ if [ -f datasets/synthetic/rank2.inp ]; then
 fi
 echo
 
-# 8c. P4 — THE DEFAULT CANNOT REACH THE BOUNDARY, AND THE FREE CLASS STILL CAN.
-#     This is criterion P4.3 of docs/PLAN_PRODUCCION.md, and it is the check
-#     that says the specification change did what it was made for.  By
-#     Corollary 6.3, with the bottom s rows of every Theta_k zero,
-#     det Theta(1) = det(I_r - sum T11_k) and the non-zero companion
-#     eigenvalues are exactly those of the r x r block -- so admissibility is
-#     the engine's own invertibility gate, and the degenerate point of P \ C is
-#     not reachable.  Checked on the cases that DO reach it in the free class:
-#     eight of the nine in the bank sit at 0.99995 there.
-#
-#     Both directions, as always: an alarm that cannot fire is not evidence,
-#     so the free class must still produce the boundary on the same data.
-echo "[8c] the default cannot reach the invertibility boundary (P4.3)"
+# 8c. -marow DOES NOT REACH THE BOUNDARY ON THE BANK, AND THE FREE CLASS DOES.
+#     This was criterion P4.3, the check that the -marow default (2026-08-20)
+#     did what it was made for.  The default is the free class again since
+#     2026-09-23, and the reason given for -marow -- Corollary 6.3, "the
+#     engine's gate IS the admissibility condition" -- turned out false in both
+#     directions (BUGS.md BUG-48).  What is left is a MEASURED property of the
+#     -marow class on these five cases, and it is kept as such: if it stops
+#     holding, the documentation that recommends -marow for short samples has
+#     to say so.  Both directions, as always: the free class must still produce
+#     the boundary on the same data, or the check proves nothing.
+echo "[8c] -marow does not reach the invertibility boundary on the bank (P4.3)"
 bound_free=0; bound_def=0; rows_ok=0; cases=0
 for f in datasets/mauricio/mink_muskrat.inp data/pairs/milan.inp \
          data/pairs/vienna.inp data/pairs/penn.inp data/pairs/utrecht.inp; do
@@ -1561,7 +1563,7 @@ for f in datasets/mauricio/mink_muskrat.inp data/pairs/milan.inp \
     run "$f" 2 1 1 -case 2 -mean -mafree
     grep -aq 'A root sits on the unit circle' "$TMP/case.out" && bound_free=$((bound_free+1))
 
-    run "$f" 2 1 1 -case 2 -mean
+    run "$f" 2 1 1 -case 2 -mean -marow
     grep -aq 'A root sits on the unit circle' "$TMP/case.out" && bound_def=$((bound_def+1))
     #  y las filas inferiores de Theta, cero EXACTO -- no cerca de cero
     z=$(awk '/^theta\(1\) matrix/{getline; getline; print $1" "$2}' "$TMP/case.out")
@@ -1573,8 +1575,8 @@ if [ "$cases" -eq 0 ]; then
     ok "P4.3 skipped: no bank case available"
 else
     [ "$bound_def" -eq 0 ] \
-        && ok "the default reaches the boundary in 0 of $cases bank cases" \
-        || bad "P4.3" "the default sat on the boundary in $bound_def of $cases"
+        && ok "-marow reaches the boundary in 0 of $cases bank cases" \
+        || bad "P4.3" "-marow sat on the boundary in $bound_def of $cases"
     [ "$bound_free" -gt 0 ] \
         && ok "and -mafree still does, in $bound_free of $cases -- the check bites" \
         || bad "P4.3" "-mafree reached the boundary in none: the check proves nothing"
@@ -1585,12 +1587,12 @@ fi
 
 #     And the shape the corollary predicts: r*q finite MA roots and s*q at
 #     infinity.  With M=2, r=1, q=1 that is one and one.
-run "$MM" 2 1 1 -case 2
+run "$MM" 2 1 1 -case 2 -marow
 nfin=$(grep -a 'MA (Theta)' "$TMP/case.out" | sed 's/.*MA (Theta)//' | tr ' ' '\n' \
        | grep -c '[0-9]')
 ninf=$(grep -a 'MA (Theta)' "$TMP/case.out" | grep -o 'inf' | wc -l)
 { [ "$nfin" -eq 1 ] && [ "$ninf" -eq 1 ]; } \
-    && ok "MA roots under the default: 1 finite (the r x r block) and 1 at infinity" \
+    && ok "MA roots under -marow: 1 finite (the r x r block) and 1 at infinity" \
     || bad "P4.3 root shape" "finite=$nfin infinite=$ninf, expected 1 and 1"
 echo
 

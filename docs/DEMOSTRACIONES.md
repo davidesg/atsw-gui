@@ -551,6 +551,15 @@ diferenciación.
 
 ### Corolario 6.3 (la puerta del motor **es** la condición de admisibilidad)  `[new here]`
 
+> **FALSO tal como está enunciado (2026-09-23).** Los puntos (1) y (2) son
+> correctos; la conclusión —«la puerta del motor ES la condición de
+> admisibilidad» y «el punto degenerado no es alcanzable en `-marow`»— no lo es,
+> en los dos sentidos: `Θ₁ = [[1, .7], [0, 0]]` pasa `chekma` y es inadmisible;
+> `Θ₁ = [[3, .4], [0, 0]]` es rechazado y es admisible. La puerta comprueba
+> invertibilidad; la admisibilidad es una condición en `z = 1`. Contraejemplos y
+> la versión correcta en `estudio_mauricio_2026-09-23/M3/STUDY_M3.md`. El defecto
+> por defecto que se apoyaba aquí se ha revertido (BUGS.md BUG-48).
+
 **Enunciado.** Sea `Θ̃(L) = I − Σ_{k=1}^{q}Θ̃_kL^k` con las `s` filas inferiores de
 **cada** `Θ̃_k` nulas — la condición (6) del Teorema 6, pero también la clase más
 débil que solo anula esas filas y deja libre el bloque cruzado. Escríbase

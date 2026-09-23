@@ -132,12 +132,11 @@ estimated at, and neither its standard errors nor a likelihood ratio against it
 has its usual distribution. `-marow` and `-warma` cannot degenerate by
 construction; the free model can and, on this kind of data, does.
 
-> **Since 2026-08-20 the default is `-marow`**, so step 3 already starts inside
-> the class that cannot degenerate. The ladder is still worth reading — it says
-> how much the structure costs in likelihood and whether a tighter rung would
-> do — but the `NO` you are looking for now appears only on the `free` rung.
-> `-mafree` estimates that rung on its own, and is the parameterisation every
-> figure in the register measured before that date belongs to.
+> **The default is the free `Θ`** (Mauricio's model), again since 2026-09-23;
+> from 2026-08-20 to that date it was `-marow`. Read the ladder for what the
+> structure costs and whether a tighter rung would do: a `NO` there means the
+> free fit sits on the boundary, and then a restricted class is a hypothesis
+> worth testing (`-matest`, `-artest`).
 
 **3. Then estimate, and read the rank condition in the output.**
 

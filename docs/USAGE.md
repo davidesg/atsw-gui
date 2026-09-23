@@ -223,27 +223,30 @@ condition is reported on the recovered parameters, where by Corollary 6.2 of
 
 ### The default, and the class it sits in
 
-Since **2026-08-20**, with `q ≥ 1` and `r ≥ 1` and no moving-average flag given,
-`drvec` estimates `Θ = [T₁₁  T₁₂ ; 0  0]` — the class `-marow` names. It is not
-a restriction whose optimum has to be corrected for: by Corollary 6.3 of the
-proofs, with the lower `s` rows zero,
+Since **2026-09-23**, with `q ≥ 1` and no moving-average flag given, `drvec`
+estimates the **free** `Θ` — Mauricio (2006)'s model. From 2026-08-20 to that
+date the default was `Θ = [T₁₁  T₁₂ ; 0  0]` (`-marow`), justified by Corollary
+6.3 of the proofs ("the engine's invertibility gate is the admissibility
+condition in that class"), which is false in both directions; and the source it
+was attributed to — the BVECM article — does not estimate that class, while its
+accompanying program estimates exactly the entry `-marow` zeroes
+([ESTUDIO_MAROW_2026-09-23.md](ESTUDIO_MAROW_2026-09-23.md), BUGS.md BUG-48).
 
-```
-det Θ(1) = det(I_r − Σ T₁₁ₖ)     and     eig(companion) = eig(r×r block) ∪ {0…}
-```
-
-so the moving average is invertible **iff** its `r × r` block is, the rank
-condition of Theorem 3 then holds automatically, and the degenerate point the
-likelihood otherwise reaches — and that no root check of the engine can see — is
-**not reachable**. The admissibility condition becomes the invertibility gate
-the engine already applies, on an `r × r` object instead of an `M × M` one.
+What remains true is what [HOMOLOGATION.md](HOMOLOGATION.md) §4q measured: in
+short samples the free `Θ` is hard to estimate **from one start**. The search
+(P12) answers that — the free fit starts, among other places, from the optima of
+`-marow` and `-matri` embedded, so it can never end below them — and the `.out`
+prints a table of every start. The free class also keeps `-lrtest` nested
+(BUG-27). The restricted classes stay, as hypotheses to test against it.
 
 The `.out` names the class in force on a `MA :` line in its header, so no output
-is ambiguous about which parameterisation it belongs to.
+is ambiguous about which parameterisation it belongs to — and a figure measured
+between 2026-08-20 and 2026-09-23 without a class flag belongs to `-marow`.
 
 | | |
 |---|---|
-| `-mafree` | the **free** `Θ`, which was the default until 2026-08-20. Kept because it is the widest class, the term of comparison, and the parameterisation every figure in the register measured before that date belongs to. On this kind of data its optimum sits on the invertibility boundary and it is not recoverable at these sample sizes ([HOMOLOGATION.md](HOMOLOGATION.md) §4q) |
+| `-mafree` | the free `Θ`, asked for explicitly: the same fit as the default |
+| `-marow` | `Θ = [T₁₁  T₁₂ ; 0  0]`, the default from 2026-08-20 to 2026-09-23. On the bank it does not reach the invertibility boundary where the free class does (`run_tests.sh` 8c, measured, not guaranteed) |
 
 At `r = 0` the structured classes are undefined — there is no `W` block, and
 zeroing the lower `s = M` rows would zero `Θ` entirely — so the moving average

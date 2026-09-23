@@ -7,6 +7,18 @@ publicación: `v*`.
 
 ## Sin publicar
 
+### La media móvil por defecto vuelve a ser libre
+
+Con `q ≥ 1` y sin clase pedida, `drvec` estima otra vez la `Θ` **libre**: el
+modelo de Mauricio (2006). Entre el 20-ago y el 23-sep el defecto fue `-marow`,
+justificado por el Corolario 6.3, que resultó falso, y atribuido al artículo
+BVECM, que no estima esa clase (su programa estima justo la entrada que `-marow`
+anula). Lo que hacía atractivo restringir —la `Θ` libre cuesta de estimar desde un
+solo arranque— lo resuelve la búsqueda de abajo. `-marow` sigue disponible. Una
+cifra medida entre esas dos fechas sin bandera de clase es de `-marow`. Decisión
+en `docs/SPECIFICATION_PLAN.md` §11; estudios en `docs/ESTUDIO_MAROW_2026-09-23.md`.
+Cierra BUG-48; `-lrtest` vuelve a comparar modelos anidados (BUG-27, en parte).
+
 ### La búsqueda (P12)
 
 Hasta ahora cada ajuste era **una** llamada al optimizador desde **un** punto de

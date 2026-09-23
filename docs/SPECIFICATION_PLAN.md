@@ -318,3 +318,41 @@ a univariate one. Nothing in this plan, or in the register, measures that; it is
 the acceptance criterion the whole specification question exists to serve, and
 it is in `PLAN_PRODUCCION.md` as the phase that closes the program rather than
 as an option.
+
+---
+
+## 11. The default, decided a third time — the free class, and a search to carry it
+
+*2026-09-23. §10 is superseded; it is left standing for the same reason §8 was.*
+
+**What §10 rested on, and what is left of it.** Two legs. The theoretical one —
+Corollary 6.3: with the lower `s` rows of `Θ` zero, "the admissible region is
+the whole space and the engine's gate imposes it" — is **false in both
+directions**: a `-marow` point with `Θ₁ = [[1, .7], [0, 0]]` passes the gate and
+is inadmissible, and `Θ₁ = [[3, .4], [0, 0]]` is refused and admissible
+([ESTUDIO_MAURICIO_2026-09-23.md](ESTUDIO_MAURICIO_2026-09-23.md) §4). The source
+it was attributed to, the BVECM article, uses its restricted class only to frame
+its proofs; what it and its program estimate is the full model — the program with
+an MA on exactly the entry `-marow` zeroes ([ESTUDIO_MAROW_2026-09-23.md](ESTUDIO_MAROW_2026-09-23.md)).
+The empirical leg — §4q, the free `Θ` is not recoverable at these sample sizes —
+stands, but it is a statement about **one start**.
+
+**What changed the balance.** The search (P12, `CHANGELOG.md`): the free fit
+starts from the optima of every class it contains, embedded, so it can never end
+below them; on the wheat pairs `marow ≤ matri ≤ free` now holds where one cold
+start gave them out of order. Against the restriction, the data of the suite
+itself: `-matri` beats `-marow` by LR ≥ 5.96 in 37 of 40 configurations, and the
+free class forecast better in 8 of 9 cases (§4t).
+
+**The decision** (the user's, 2026-09-23): the default is the free `Θ`, Mauricio
+(2006)'s model. `-marow`, `-matri`, `-mawarma` and `-warma` remain as
+restrictions to test against it. That also keeps `-lrtest` nested (BUG-27).
+
+**What it costs.** Every figure measured between 2026-08-20 and today without a
+class flag belongs to `-marow`; the note at the top of `HOMOLOGATION.md` says so.
+The battery's golden values without a class flag now read the free fit, and the
+`-marow` ones are kept, with the flag, so the class stays covered.
+
+**Still open.** The bootstrap test of one class against another, which is what
+would make choosing a restriction a measurement rather than an assumption.
+

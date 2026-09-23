@@ -28,6 +28,13 @@ The third is the weakest, and it is where the open item lives.
 > through §4p, which are explicitly about comparing classes and name theirs.
 > Sections written after that date state the class in the command. Every `.out`
 > names it on a `MA :` line in the header.
+>
+> **And on 2026-09-23 it changed back**: the default is the free `Θ` again, and
+> every fit is the best of several starts (P12, `SPECIFICATION_PLAN.md` §11). So
+> a figure measured **between 2026-08-20 and 2026-09-23** with `q ≥ 1` and no class
+> flag belongs to `-marow` (add `-marow` to reproduce its class), and any figure
+> before 2026-09-23 came from a single start: re-run today it may be higher,
+> never lower (six of the battery's golden values rose, none fell).
 
 ## 1. Identities — these must hold exactly
 

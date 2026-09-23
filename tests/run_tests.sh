@@ -673,18 +673,17 @@ for want in -20.0579 -14.5698; do
     else bad "gate: univariate $want" "constant not reproduced"; fi
 done
 
-# THE TOLERANCE IS THE TRUNCATION, and both halves of that are checked.  elf
-# truncates the xi sequence when its term falls below xitol, and the joint
-# system and the univariate ones do not truncate at the same term, so with
-# q > 0 the identity can only be claimed to xitol.  With q = 0 there is no
-# sequence to truncate and it must hold EXACTLY -- that is the strict half, and
-# it is what stops the tolerance from becoming a rubber stamp.  Milan is the
-# case that made this visible: it failed a fixed 1e-4 threshold with a relative
-# disagreement smaller than cases that passed it.
+# THE TOLERANCE IS ROUNDING, on both halves (BUG-47).  It used to be xitol with
+# q > 0, because the joint and univariate sides truncated the xi sequence at
+# different terms; the certificate now evaluates both untruncated, so with q > 0
+# the identity must hold to 1e-6 as well -- Milan, which once failed a fixed
+# 1e-4 and then passed only against xitol, is the case that shows it.  With
+# q = 0 it must hold EXACTLY, the strict half that stops the tolerance from
+# becoming a rubber stamp.
 run data/pairs/milan.inp 2 1 0 -case 1 -diagar -diagma -diagcov
 line=$(grep -a "crossing identity" "$TMP/case.out")
 case "$line" in
-  *"tolerance 1.0e-03"*VERIFIED*) ok "gate: q=1 verifies against the xi truncation";;
+  *"tolerance 1.0e-06"*VERIFIED*) ok "gate: q=1 verifies to rounding, both sides untruncated";;
   *) bad "gate: q=1 tolerance" "$line";;
 esac
 run data/pairs/milan.inp 2 0 0 -case 1 -diagar -diagma -diagcov
@@ -2465,6 +2464,25 @@ if echo "$row" | grep -q "H0 not rejected" && ! grep -q "did not converge" "$TMP
 else
     bad "negative LR" "$row"
 fi
+echo
+
+# 8s. -m AND THE ENTRY GATE (BUG-47).  -m 2 only switches the xi truncation off:
+#     both methods are the EXACT likelihood, and the report must say so.  And
+#     the gate certifies with both sides untruncated, so a correct independent
+#     pair with theta = 0.9 / 0.95 -- which failed by 1.8e-3 against a tolerance
+#     of xitol = 1e-3 -- passes at 1e-6 under either method.
+echo "[8s] -m and the entry gate (BUG-47)"
+for m in 1 2; do
+    run tests/repro/fixtures/gate_hi.inp 1 1 0 -diagar -diagma -diagcov -m $m
+    if grep -aq "crossing identity.*VERIFIED" "$TMP/case.out" &&
+       ! grep -aq "NOT VERIFIED" "$TMP/case.out"; then
+        ok "gate: a correct pair with theta near 1 verifies under -m $m"
+    else bad "gate -m $m" "$(grep -a 'crossing identity' "$TMP/case.out")"; fi
+done
+if grep -aq "^Estimation .*Exact.*NOT truncated" "$TMP/case.out" &&
+   ! grep -aq "Conditional (Approximate)" "$TMP/case.out"; then
+    ok "-m 2 is labelled as what it is: exact ML, xi not truncated"
+else bad "-m 2 label" "$(grep -a '^Estimation' "$TMP/case.out")"; fi
 echo
 
 # ================================================== 9 MEMORY (opt-in) ==

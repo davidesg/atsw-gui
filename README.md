@@ -103,7 +103,7 @@ drvec file p q r [-mean] [-case 1|2|3] [-diagar] [-diagma] [-diagcov] [-m 1|2]
 | `-mean` | Include mean in Ȳ_t |
 | `-case 1\|2\|3` | Deterministic specification (Remark 6) |
 | `-diagar` / `-diagma` / `-diagcov` | Diagonal restrictions |
-| `-m 1\|2` | Exact (1) or approximate (2) ML |
+| `-m 1\|2` | Both **exact** ML (AS 311): 1 truncates the `ξ` sequence at 1e-3 (default), 2 does not. There is no conditional ML in drvec (BUG-47) |
 | `-differenced` | Legacy layout: cols 1..s already hold ∇Y₂ (see below) |
 | `-fixb2 [v]` | Hold B₂ fixed instead of estimating it (see below) |
 | `-lrtest` | Sequential LR test for the cointegration rank (not with `-differenced`) |
@@ -184,7 +184,8 @@ cast keeps its state in module globals and is not reentrant.
 At `r = 0` with diagonal structure — the ladder's diagonal rung — the two
 contracts of the suite hold and `drvec` checks them itself: the joint likelihood
 evaluated at the stored `.pre` values equals the sum of the univariate ones
-(agreement 1.8e-5, which is the `ξ` truncation and falls to 1.6e-10 with `-m 2`;
+(both sides evaluated with the whole `ξ` sequence, so agreement is to rounding,
+~1e-11, under either `-m`; it used to be read against the truncation, BUG-47;
 see SUITE_INTEGRATION.md §3), and the fitted value cannot be
 below the evaluated one (certificate +2.4e-7 ≥ 0). **Above that rung the
 univariate information does not transport**: the marginal of a component of Ȳ is

@@ -7,6 +7,14 @@ publicación: `v*`.
 
 ## Sin publicar
 
+### `-m 2` es la ML exacta sin truncar, y la puerta certifica sin truncamiento (BUG-47)
+
+`-m 2` se etiquetaba «Conditional (Approximate)» y sólo apaga el truncamiento de
+la sucesión `ξ`: las dos son ML exacta, y la cabecera ya lo dice. La puerta
+comparaba contra `xitol` como tolerancia y suspendía un par independiente
+correcto con θ = 0,9/0,95 (hueco 1,8e-3); ahora evalúa los dos lados sin
+truncar y exige 1e-6. Las estimaciones no cambian.
+
 ### La condición de rango es la del Teorema 3 (BUG-46)
 
 `G` era `σ_min(Λ⊥′Θ(1)B⊥)`, más fuerte que el teorema: negaba rangos correctos

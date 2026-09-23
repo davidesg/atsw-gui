@@ -1132,8 +1132,14 @@ equivalent `sigma_M([Phi(1) Theta(1)])`, which is left-coprimeness at `z = 1`
 
 ## BUG-47 — `-m 2` is labelled "Conditional (Approximate) ML" and is the untruncated exact likelihood; the default is exact ML truncated at 1e-3, and the entry gate uses that truncation as its tolerance
 
-**Status: OPEN.** Found 2026-09-23. Noted before as H1/H2 in
-`external_review.md`; confirmed here from the engine.
+**Status: FIXED 2026-09-24** (label and gate; the conditional ML is not
+implemented).  The header now reads "Exact … xi sequence truncated at 1e-3" /
+"… NOT truncated (-m 2)".  `gate_contract` evaluates BOTH sides with the whole
+xi sequence at the fitted point and uses 1e-6: the independent pair with
+theta = 0.9 / 0.95 (`tests/repro/fixtures/gate_hi.inp`) that failed by 1.837e-3
+now verifies at 2e-8 under `-m 1` and 3e-12 under `-m 2`; Milan 7.6e-12.  Test 8s.
+Found 2026-09-23. Noted before as H1/H2 in `external_review.md`; confirmed here
+from the engine.
 
 **What it is.** `met` only sets `xitol = ±1e-3` (drvec.c:3693 and eight other
 places). In the engine `xitol` is the truncation threshold of the xi sequence

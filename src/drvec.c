@@ -189,7 +189,9 @@ int global_include_mean = 0;
 int global_diag_ar = 0;
 int global_diag_ma = 0;
 int global_diag_cov = 0;
-int met = 1;          /* 1 = exact, 2 = approximate */
+int met = 1;          /* both EXACT ML (AS 311): 1 truncates the xi sequence at
+                         1e-3, 2 does not (xitol < 0).  BUG-47: this said
+                         "2 = approximate", and the report followed it.      */
 int global_case = 1;  /* deterministic case (Mauricio Remark 6) */
 int global_lrtest = 0; /* if 1, perform sequential LR test for rank */
 int global_rungs  = 0; /* if 1, report the ladder's rungs 0-2 and their LRs   */
@@ -2600,7 +2602,7 @@ static void gate_contract(struct Tvarma *v)
         real pi1, pi2, pi3, ll = 0.0;
         int ifault = 0;
 
-        u.m = 1; u.n = n; u.p = p; u.q = q; u.xitol = v->xitol;
+        u.m = 1; u.n = n; u.p = p; u.q = q; u.xitol = -fabs(v->xitol);
         u.mu    = vector(1, 1);
         u.phi   = tensor(0, (p > 0 ? p : 1), 1, 1, 1, 1);
         u.theta = tensor(0, (q > 0 ? q : 1), 1, 1, 1, 1);
@@ -2644,55 +2646,55 @@ static void gate_contract(struct Tvarma *v)
         return;
     }
 
-    /*  THE TOLERANCE IS THE TRUNCATION, and it is measured, not chosen.
+    /*  BOTH SIDES UNTRUNCATED, and the tolerance is rounding (BUG-47).
      *
-     *  The identity is exact in algebra.  What separates the two sides on the
-     *  machine is that elf truncates the xi sequence when the sum of absolute
-     *  values of its term falls below xitol (elfvarma.c, cxi [1]), and the
-     *  joint system and the univariate ones do NOT truncate at the same term:
-     *  the joint one sums m entries and each univariate one a single entry.
-     *  Measured, by lowering xitol and rebuilding, on the bank's largest gap
-     *  (Milan, p = 2, q = 1):
+     *  The identity is exact in algebra.  What used to separate the two sides
+     *  is that elf truncates the xi sequence once its term falls below xitol
+     *  (elfvarma.c, cxi), and the joint system and the univariate ones do not
+     *  truncate at the same term.  The tolerance was then xitol itself, which
+     *  was measured on Milan (gap ~0.15 xitol) but is not a bound: the
+     *  truncation error grows like xitol / (1 - |theta|), and an independent
+     *  pair of ARIMA(0,1,1) with theta = 0.9 and 0.95 (tests/repro/fixtures/
+     *  gate_hi.inp) failed a correct model by 1.8e-3.
      *
-     *      xitol     joint - sum
-     *      1e-3       1.385e-04
-     *      1e-8       3.100e-09
-     *
-     *  The gap IS xitol, with a factor of ~0.15, and with q = 0 -- where there
-     *  is no sequence to truncate -- it is EXACTLY ZERO on all twelve series of
-     *  the bank.
-     *
-     *  The fixed 1e-4 threshold that used to be here therefore declared Milan's
-     *  gate NOT VERIFIED, when its RELATIVE disagreement (2.1e-6) is smaller
-     *  than Angers' (6.3e-6), which passed: it ordered the cases by the size of
-     *  their logL and not by their agreement, which is the opposite of what it
-     *  claims to check.  An alarm that rings at the size of the datum is not an
-     *  alarm.
-     *
-     *  Tied to xitol instead, the contract asserts the only thing that can be
-     *  asserted: that the two routes agree AS FAR AS THE APPROXIMATION REACHES.
-     *  The failures this gate has to catch -- the sign of Lambda in the
-     *  transformation, B2 read transposed -- open gaps of UNITS, three orders
-     *  above this threshold, so nothing real is loosened.                    */
+     *  A negative xitol switches the truncation off (that is all -m 2 does).
+     *  So the certificate evaluates both sides at the fitted point with the
+     *  whole sequence -- one more likelihood evaluation -- and the contract is
+     *  then exact to rounding whatever -m the fit used.  The failures this
+     *  gate has to catch -- the sign of Lambda, B2 read transposed -- open
+     *  gaps of units.                                                        */
     {
-        real gap = v->logelf - sum;
-        real tol = (q > 0) ? fabs(v->xitol) : 1.0e-6;
+        real pi1, pi2, pi3, joint = v->logelf;
+        int  ife = 0;
+        real **abuf = matrix(1, n, 1, M);
+        elf(M, n, p, q, v->mu, v->phi, v->theta, v->qq, v->w, 1.0,
+            -fabs(v->xitol), FALSE, abuf, &pi1, &pi2, &pi3, &ife);
+        free_matrix(abuf, 1, n, 1, M);
+        if (ife == 0)
+            joint = -0.5 * M * n * (LOG2PI - log((real) M) - log((real) n) + 1.0)
+                    - 0.5 * n * (M * log(pi1) + log(pi2));
+        {
+        real gap = joint - sum;
+        real tol = 1.0e-6;
 
         fprintf(outputv, "  %-28s   sum  = %18.10f\n", "", sum);
-        fprintf(outputv, "  %-28s   joint= %18.10f\n", "", v->logelf);
+        fprintf(outputv, "  %-28s   joint= %18.10f\n", "", joint);
+        if (v->xitol > 0.0)
+            fprintf(outputv, "  (both sides untruncated; the fit's own logL, "
+                             "xi truncated at %.0e, is %.10f)\n",
+                    v->xitol, v->logelf);
         fprintf(outputv, "\n  crossing identity (joint - sum) = %.3e   "
                          "(tolerance %.1e)   %s\n", gap, tol,
-                (fabs(gap) < tol) ? "VERIFIED" : "*** NOT VERIFIED ***");
-        if (fabs(gap) >= tol)
+                (ife == 0 && fabs(gap) < tol) ? "VERIFIED" : "*** NOT VERIFIED ***");
+        if (ife != 0 || fabs(gap) >= tol)
             fprintf(outputv,
-                "\n  The two sides must agree at this rung to within the xi\n"
-                "  truncation, which is what the tolerance is: with q > 0 it is\n"
-                "  xitol itself, and with q = 0, where there is no series to\n"
-                "  truncate, the identity holds exactly.  A gap LARGER than that\n"
-                "  is not truncation, and the fault is then upstream of the\n"
-                "  likelihood -- the transformation, the rank's differencing, the\n"
-                "  parameter walk, the deterministic terms or the scaling -- and\n"
-                "  never in elf() itself.\n");
+                "\n  The two sides must agree at this rung to rounding: both are\n"
+                "  evaluated with the whole xi sequence.  A gap is then not\n"
+                "  truncation, and the fault is upstream of the likelihood --\n"
+                "  the transformation, the rank's differencing, the parameter\n"
+                "  walk, the deterministic terms or the scaling -- and never in\n"
+                "  elf() itself.\n");
+        }
     }
 
     /*  THE OPTIMALITY CERTIFICATE.  Second of the two contracts, and it costs
@@ -9234,9 +9236,10 @@ int main(int argc, char *argv[])
      *  algorithm and citing it in parentheses is what a results file does; the
      *  full references are in docs/REFERENCES.md.                            */
     fprintf(outputv, "Estimation       : %s\n", (met == 2)
-            ? "Conditional (Approximate) Maximum Likelihood"
+            ? "Exact Unconditional Maximum Likelihood, Algorithm AS 311 "
+              "(Mauricio 1997), xi sequence NOT truncated (-m 2)"
             : "Exact Unconditional Maximum Likelihood, Algorithm AS 311 "
-              "(Mauricio 1997)");
+              "(Mauricio 1997), xi sequence truncated at 1e-3");
     fprintf(outputv, "Transformation   : VECM to stationary VARMA "
                      "(Mauricio 2006)\n");
     fprintf(outputv, "Deterministic    : case %d -- %s\n", global_case,

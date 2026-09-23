@@ -94,7 +94,7 @@ in case 1, where nothing does. `drvec` warns.
 | `-case 1\|2\|3` | the deterministic specification (Mauricio's Remark 6). Case 1: `E[∇Y₂] = E[W] = 0`. Case 2: `E[W] ≠ 0`. Case 3: both free. Default is 1 |
 | `-mean` | include a mean; implies case 2 unless a case was given |
 | `-diagar` `-diagma` `-diagcov` | restrict `Fᵢ`, `Θⱼ` or `Σ` to be diagonal |
-| `-m 1\|2` | exact (1, default) or approximate (2) maximum likelihood |
+| `-m 1\|2` | both **exact** maximum likelihood: 1 (default) truncates the `ξ` sequence at 1e-3, 2 does not. Not a conditional ML (BUG-47) |
 | `-differenced` | legacy layout: columns `1…s` already differenced |
 
 ### Restrictions
@@ -258,7 +258,7 @@ compare ranks in one class.
 | | |
 |---|---|
 | `-mawarma` | `Θ = [T₁₁  T₁₁B₂′ ; 0  0]`, the structure a WARMA process implies for its VEC representation. `q·r²` parameters instead of `q·M²` |
-| `-marow` | `Θ = [T₁₁  T₁₂ ; 0  0]` — the differenced block carries no moving average of its own, the cross block is free. **The recommended compromise** ([HOMOLOGATION.md](HOMOLOGATION.md) §4j) |
+| `-marow` | `Θ = [T₁₁  T₁₂ ; 0  0]` — the differenced block carries no moving average of its own, the cross block is free. Recommended in [HOMOLOGATION.md](HOMOLOGATION.md) §4j; no longer the default since 2026-09-23 ([ESTUDIO_MAROW_2026-09-23.md](ESTUDIO_MAROW_2026-09-23.md)) |
 | `-matri` | `Θ = [T₁₁  T₁₂ ; 0  T₂₂]`, block-triangular. Measured **not** to remove the pathology: the parameter that carries it is `T₂₂` |
 
 By default `Θ` is a free `M×M` matrix, which is Mauricio's model class. If the

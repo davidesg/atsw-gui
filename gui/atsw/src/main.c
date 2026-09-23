@@ -155,7 +155,13 @@ static gboolean on_serie_click( GtkWidget *tv, GdkEventButton *ev, Atsw *a )
 {
     GtkTreePath *ruta = NULL;
 
-    if ( ev->type != GDK_BUTTON_PRESS || ev->button != 1 ) return FALSE;
+    /* EL BOTON DERECHO, COMO EN LA REJILLA. Estaba en el izquierdo para que
+     * el menu se encontrara, pero eso cobraba un menu por cada vez que se
+     * marcaba una serie -- y marcar es lo que mas se hace aqui, porque es
+     * lo que llena la rejilla de al lado. Marcar y pedir son dos gestos
+     * distintos y ahora son dos botones distintos, el mismo reparto en las
+     * dos listas.                                                      */
+    if ( ev->type != GDK_BUTTON_PRESS || ev->button != 3 ) return FALSE;
     if ( !gtk_tree_view_get_path_at_pos( GTK_TREE_VIEW(tv), (gint) ev->x,
                                          (gint) ev->y, &ruta, NULL, NULL, NULL ) )
         return FALSE;                       /* se pulso fuera de toda fila */
@@ -766,10 +772,11 @@ static void activate( GtkApplication *app, gpointer d )
     columna( a->l_series, "Modelos", S_NMOD );
     gtk_widget_set_tooltip_text( a->l_series,
         "El modelo ELEGIDO de cada serie. Hoy esa decisión vive en un "
-        "diccionario a pelo repetido en tres guiones de cases/." );
+        "diccionario a pelo repetido en tres guiones de cases/.\n\nBotón "
+        "derecho: lo que se puede hacer con esta serie." );
     g_signal_connect( gtk_tree_view_get_selection( GTK_TREE_VIEW(a->l_series) ),
                       "changed", G_CALLBACK(on_serie), a );
-    /* Marcar con el boton izquierdo despliega lo que se puede hacer. */
+    /* El boton derecho despliega lo que se puede hacer con la serie. */
     g_signal_connect( a->l_series, "button-press-event",
                       G_CALLBACK(on_serie_click), a );
     gtk_box_pack_start( GTK_BOX(izq), en_scroll( a->l_series ), TRUE, TRUE, 0 );

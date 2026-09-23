@@ -123,7 +123,24 @@ especificación que el fichero declara — la regla que ya costó la opción `-B
 fug. Así que `fuf_gui` **edita esa línea del fichero** y después corre el motor
 sin decirle nada más.
 
-### 4.3 Un solo lector de previsiones
+### 4.3 La tabla y el informe son dos vistas de lo mismo
+
+> «El tab de previsión de fuf anterior mostraba el output de fuf. Eso estaba
+> bien y debería hacerlo. Además mostraba el informe de previsión completo, y
+> debería hacerlo igual.»
+
+La tabla es el informe **destilado**: las filas previstas y cuatro números. Va
+bien para leer la previsión de un vistazo, y se deja por el camino todo lo
+demás que el motor dice — la cabecera, los parámetros con que previó, la
+columna de error, las observaciones con que empalma el gráfico. Eso también
+hay que poder leerlo: **eso es el informe.**
+
+Así que van los dos, en pestañas —«Previsión» y «Output»—, con la consola
+debajo. Es la misma forma que el editor del `.inp` y por la misma razón: dos
+vistas del mismo objeto se alternan; lo que pasa mientras tanto tiene que
+verse a la vez.
+
+### 4.4 Un solo lector de previsiones
 
 `lib/outfcst` leía las de drtran. Ahora lee también las de fuf, y la única
 diferencia era el rótulo del horizonte:

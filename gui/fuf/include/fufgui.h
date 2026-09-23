@@ -33,7 +33,9 @@ typedef struct Fuf {
     GtkWidget *horizonte;      /* cuantos periodos                        */
     GtkWidget *b_prever;
     GtkWidget *b_grafico;
+    GtkWidget *libro;          /* Previsión | Output                      */
     GtkWidget *tabla;          /* la prevision, leida del .out            */
+    GtkWidget *salida;         /* el .out ENTERO, que es el informe       */
     GtkWidget *consola;        /* la orden y lo que el motor va diciendo  */
     GtkWidget *estado;
 

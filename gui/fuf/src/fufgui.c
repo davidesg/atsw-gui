@@ -126,10 +126,21 @@ int fuf_pon_horizonte( const char *inp, int h, char *why, size_t n )
 /* La tabla, leida del .out                                                  */
 /* ------------------------------------------------------------------------ */
 
+/* EL .out ENTERO Y LA TABLA, QUE NO SON LO MISMO.
+ *
+ * La tabla es el informe DESTILADO: las filas previstas y cuatro numeros. Va
+ * bien para leer la prevision de un vistazo, pero se deja por el camino todo
+ * lo demas que el motor dice -- la cabecera, los parametros con que previo,
+ * la columna de error, las observaciones con que empalma. Y eso tambien hay
+ * que poder leerlo, que es el informe.
+ *
+ * Asi que van los dos, en pestañas: son dos vistas de LO MISMO. Es la forma
+ * que ya tiene el editor del .inp, y por la misma razon.               */
 void fuf_trae_out( Fuf *f )
 {
     GtkListStore *st = GTK_LIST_STORE( gtk_tree_view_get_model(
                                            GTK_TREE_VIEW(f->tabla) ) );
+    GtkTextBuffer *tb = gtk_text_view_get_buffer( GTK_TEXT_VIEW(f->salida) );
     GtkTreeIter   it;
     Forecast     *fc;
     gchar        *txt = NULL, *out;
@@ -140,8 +151,17 @@ void fuf_trae_out( Fuf *f )
 
     out = g_strdup_printf( "%s/%s.out", f->dir, f->prev );
     if ( !g_file_get_contents( out, &txt, &n, NULL ) )
-        { g_free( out ); return; }
+        {
+        gtk_text_buffer_set_text( tb,
+            "Todavía no hay informe: sale al prever.", -1 );
+        g_free( out );
+        return;
+        }
     g_free( out );
+
+    /* EL INFORME, TAL CUAL LO ESCRIBIO EL MOTOR. Sin resumir: lo que se lee
+       aqui es lo que hay en el fichero.                                */
+    gtk_text_buffer_set_text( tb, txt, (gint) n );
 
     fc = g_new0( Forecast, 1 );
     of_parse( txt, fc );

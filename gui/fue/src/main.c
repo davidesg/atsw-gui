@@ -35,13 +35,27 @@ static void init_global_flags(FueContext *ctx) {
 const char *fue_abrir(void);
 
 static void activate(GtkApplication *app, gpointer user_data) {
-    FueContext *ctx = g_new0(FueContext, 1);
+    /* UNA VENTANA POR PROCESO, y el guardia es del PROCESO, no del contexto:
+     * el contexto se crea aqui, asi que mirarlo a el no dice nada.
+     *
+     * La bandera NON_UNIQUE lo garantiza hoy, pero la razon de fondo no es
+     * la bandera: EL MODELO ES ESTADO GLOBAL DEL PROCESO -- Ts, Tm, It[50],
+     * Arr[20]... en model_globals.c. Dos ventanas aqui dentro compartirian
+     * un solo modelo y se pisarian los operadores, que es peor que no
+     * abrirse.                                                          */
+    static GtkWidget *abierta = NULL;
+    FueContext *ctx;
+
+    if (abierta) { gtk_window_present(GTK_WINDOW(abierta)); return; }
+
+    ctx = g_new0(FueContext, 1);
 
     /* Initialize global flags from context (they start at 0) */
     init_global_flags(ctx);
 
     /* Build the main window */
     ctx->main_window = create_main_window(app, ctx);
+    abierta = ctx->main_window;
     gtk_widget_show_all(ctx->main_window);
 
     /* Lo que la madre mando. Se hace DESPUES de mostrar la ventana para que,
@@ -160,7 +174,23 @@ int main(int argc, char *argv[]) {
     g_free(exe_dir);
 #endif
 
-    GtkApplication *app = gtk_application_new("org.fue.gui", G_APPLICATION_DEFAULT_FLAGS);
+    /* NON_UNIQUE: UN PROCESO POR VENTANA, y no es un detalle de arranque.
+     *
+     * Con la bandera por defecto, GtkApplication es de INSTANCIA UNICA: el
+     * segundo "fue_gui ... m02.inp" se encuentra al primero por D-Bus, le
+     * manda "activate" y SE MUERE -- con su m02 dentro, que nunca cruza la
+     * frontera del proceso porque las opciones se leyeron aqui. El primero
+     * abre otra ventana con lo suyo, que era m01. Eso es lo que se veia.
+     *
+     * Y habria sido peor que ver el fichero equivocado: EL MODELO ES ESTADO
+     * GLOBAL DEL PROCESO -- Ts, Tm, It[50], Arr[20]... viven en
+     * model_globals.c -- asi que dos ventanas en un proceso comparten un
+     * solo modelo y se pisan los operadores. Un proceso por ventana las
+     * separa de verdad.
+     *
+     * Es ademas lo que ya hacia gui/drtran; fue_gui era el raro.        */
+    GtkApplication *app = gtk_application_new("org.fue.gui",
+                                              G_APPLICATION_NON_UNIQUE);
     g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
     int status = g_application_run(G_APPLICATION(app), argc, argv);
     g_object_unref(app);

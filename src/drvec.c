@@ -151,14 +151,19 @@ int  nobs_raw = 0;
    indexed by the number of common trends M-r = 1..11, at 10%, 5% and 1%.
    Non-standard Johansen distribution; MA terms do not affect it (Yap and
    Reinsel, 1995, Theorem 3), as noted in Mauricio (2006), Remark 5.
-   Extracted from R's `urca` 1.3.4 (ca.jo, type="eigen"), the same reference
-   implementation used throughout benchmark/; Osterwald-Lenum (1992) tables.  */
+   Case 1 has NO deterministic term at all, so its table is Johansen's model
+   with no constant: MacKinnon, Haug and Michelis (1999), the source Mauricio
+   (2006, section 4) computes his p-values with (statsmodels' c_sja(n, -1)).
+   The table this replaced came from urca's ca.jo(ecdet="none"), which still
+   fits an unrestricted intercept, and made case 1 badly undersized (BUG-24).
+   Case 2 (restricted constant): urca 1.3.4, ca.jo(ecdet="const",
+   type="eigen"), Osterwald-Lenum (1992).                                     */
 #define LR_MAXTRENDS 11
 static const real lr_cval_none[LR_MAXTRENDS][3] = {   /* case 1: no constant  */
-    {  6.50,   8.18,  11.65}, { 12.91,  14.90,  19.19}, { 18.90,  21.07,  25.75},
-    { 24.78,  27.14,  32.14}, { 30.84,  33.32,  38.78}, { 36.25,  39.43,  44.59},
-    { 42.06,  44.91,  51.30}, { 48.43,  51.07,  57.07}, { 54.01,  57.00,  63.37},
-    { 59.00,  62.42,  68.61}, { 65.07,  68.27,  74.36}
+    {   2.98,   4.13,   6.94}, {   9.47,  11.22,  15.09}, {  15.72,  17.80,  22.25},
+    {  21.84,  24.16,  29.06}, {  27.92,  30.44,  35.74}, {  33.93,  36.63,  42.23},
+    {  39.91,  42.77,  48.66}, {  45.89,  48.88,  55.03}, {  51.85,  54.96,  61.34},
+    {  57.80,  61.04,  67.64}, {  63.72,  67.08,  73.89}
 };
 static const real lr_cval_const[LR_MAXTRENDS][3] = {  /* case 2: restricted c */
     {  7.52,   9.24,  12.97}, { 13.75,  15.67,  20.20}, { 19.77,  22.00,  26.81},
@@ -1964,7 +1969,11 @@ static int bootstrap_rank(int rr, real *x, int npar, int N, real *cv, real *pval
             for (j = 1; j <= M; j++) rawmat[i][j] = sim[i][j];
         l0 = fit_ll(rr,   &ok0);
         l1 = fit_ll(rr+1, &ok1);
-        if (ok0 && ok1 && l1 >= l0) stat[++nok] = 2.0 * (l1 - l0);
+        /* Every converged draw counts, negative ones included: the exact LR
+           is not nested at Lambda = 0 and goes below zero under H0 in about
+           40 % of samples.  Dropping them censored the null from below and
+           pushed the quantiles up (BUG-26).                                 */
+        if (ok0 && ok1) stat[++nok] = 2.0 * (l1 - l0);
     }
     for (i = 1; i <= nobs_raw; i++)
         for (j = 1; j <= M; j++) rawmat[i][j] = saved[i][j];
@@ -2079,7 +2088,11 @@ static int bootstrap_ma(real *x0, int npar0, int N, real *cv, real *pval,
         /*  Replications where the free fit ends up BELOW the restricted one are
          *  discarded: the restricted model is nested, so a negative LR is a fit
          *  that did not converge, not a realisation of the statistic.        */
-        if (ok0 && ok1 && l1 >= l0) stat[++nok] = 2.0 * (l1 - l0);
+        /* Every converged draw counts, negative ones included: the exact LR
+           is not nested at Lambda = 0 and goes below zero under H0 in about
+           40 % of samples.  Dropping them censored the null from below and
+           pushed the quantiles up (BUG-26).                                 */
+        if (ok0 && ok1) stat[++nok] = 2.0 * (l1 - l0);
     }
     for (i = 1; i <= nobs_raw; i++)
         for (j = 1; j <= M; j++) rawmat[i][j] = saved[i][j];
@@ -8179,16 +8192,13 @@ static int run_lrtest(void)
             }
             real lr = 2.0 * (ll[rr+1] - ll[rr]);
             int  g  = M - rr;                    /* common trends under H0 */
-            /* Rank r is nested in rank r+1, so L(r+1) >= L(r) at the true
-               maxima.  A negative LR proves at least one of the two fits did
-               not reach its optimum, and the statistic means nothing.        */
-            if (lr < 0.0) {
-                fprintf(outputv,
-                        "  %-4d %4d %10.4f   NOT INTERPRETABLE: LR < 0, so at "
-                        "least one of the\n                              two fits "
-                        "did not converge (rank r is nested in r+1)\n", rr, g, lr);
-                continue;
-            }
+            /* Rank r is nested in rank r+1 in the PARAMETERS, but not in the
+               exact likelihood: at the boundary Lambda -> 0 of rank r+1 the
+               stationary initial-state term of W diverges, so sup L(r+1) can
+               sit below L(r) with both fits on their optimum (BUG-26).  A
+               negative LR is then a statistic like any other -- below every
+               critical value -- not a proof of a failed fit; a fit that did
+               stop early is flagged below from its own stop code.            */
             fprintf(outputv, "  %-4d %4d %10.4f", rr, g, lr);
             if (global_alpha) {
                 /* Under alpha = A*psi the statistic has ANOTHER distribution: the
@@ -8219,12 +8229,21 @@ static int run_lrtest(void)
                 fprintf(outputv, "   [check: rank %d stopped by criterion %d]",
                         (tcr[rr] > 2) ? rr : rr + 1,
                         (tcr[rr] > 2) ? tcr[rr] : tcr[rr+1]);
+            if (lr < 0.0)
+                fprintf(outputv, "   [LR < 0: exact likelihood, not nested at Lambda = 0]");
             fprintf(outputv, "\n");
         }
         fprintf(outputv,
             "\n  Distribution is the non-standard Johansen one; MA terms do not\n"
             "  affect it (Yap and Reinsel 1995, Thm. 3; Mauricio 2006, Remark 5).\n"
-            "  Values from R urca 1.3.4 ca.jo(type=\"eigen\"); Osterwald-Lenum (1992).\n"
+            "  Values: case 1, MacKinnon-Haug-Michelis (1999) with no deterministic\n"
+            "  term; case 2, urca 1.3.4 ca.jo(ecdet=\"const\"), Osterwald-Lenum (1992).\n"
+            "  CAUTION: the tables are for Johansen's CONDITIONAL LR.  This one is\n"
+            "  the EXACT likelihood, which carries W's stationary initial state and\n"
+            "  is not nested at Lambda = 0: under H0 it sits about log T below\n"
+            "  Johansen's and can be negative, so against these tables the test is\n"
+            "  UNDERSIZED (case 1, T = 500: 3.5%% at a nominal 5%%).  -bootstrap N\n"
+            "  calibrates the statistic that is actually computed (BUG-26).\n"
             "  r = 0 is the no-cointegration null (Pi = 0, a plain VARMA on\n"
             "  nabla Y); r = M would be a stationary process in levels and is not\n"
             "  expressible here, so the sequence ends at r = M-1.  Read it with\n"
@@ -8297,8 +8316,9 @@ static int run_lrtest(void)
                 "     cannot go below that however extreme the statistic is, which is\n"
                 "     why the verdict above is read from the critical values.  For a\n"
                 "     p-value that can resolve 1%%, B >= 999.\n"
-                "   - replications where either fit failed to converge, or gave\n"
-                "     LR < 0, are discarded and counted in the reps column.\n",
+                "   - replications where either fit failed are discarded and\n"
+                "     counted in the reps column; a NEGATIVE LR is kept, since the\n"
+                "     observed statistic can be negative too (BUG-26).\n",
                 global_boot, sqrt(0.05 * 0.95 / (real) global_boot),
                 1.0 / (real) (global_boot + 1));
             for (int rr = 0; rr <= M - 1; rr++)

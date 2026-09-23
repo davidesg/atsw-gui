@@ -405,7 +405,12 @@ which series a label names.
 
 ## BUG-24 — the case-1 critical values of the rank test belong to the model with an unrestricted constant
 
-**Status: OPEN.** Found 2026-09-23.
+**Status: FIXED 2026-09-23** (the table; the statistic it is read against is
+BUG-26's).  `lr_cval_none` now holds MacKinnon–Haug–Michelis (1999) with no
+deterministic term (statsmodels `c_sja(n, -1)`: 4.13 and 11.22 at 5 % for
+`M-r = 1, 2`), checked against an own simulation of Johansen's conditional
+lambda-max (20 000 reps, n = 500: 11.29 at 5 %).  On `mc_case1.py` the size at
+5 % goes from 1.0 % to 3.5 %; what is left is BUG-26.  Test 8r.  Found 2026-09-23.
 
 **What it is.** `lr_cval_none` (drvec.c:148) was extracted from `urca::ca.jo(ecdet
 = "none")`. But `ca.jo`'s `"none"` still fits an **unrestricted intercept**
@@ -483,7 +488,20 @@ needs `-multistart` to reach its best point; the default search does not jitter.
 
 ## BUG-26 — a negative rank LR is printed as proof that a fit did not converge, and the bootstrap throws those draws away
 
-**Status: OPEN.** Found 2026-09-23.
+**Status: FIXED 2026-09-23** in the report and the bootstrap; the statistic is
+unchanged.  A negative LR is read against the table like any other (H0 not
+rejected) with the note `[LR < 0: exact likelihood, not nested at Lambda = 0]`,
+and the fit is flagged only by its own stop code.  `bootstrap_rank` keeps every
+converged draw: on 100 samples under H0 (case 1, n = 500, B = 99) the bootstrap
+test rejects in 7 % at 5 % and 12 % at 10 %, against 3.5 % for the table.  The
+table block carries a CAUTION that it is Johansen's conditional LR.  Measured on
+the same 200 samples, drvec's exact LR is Johansen's minus 4.02 (sd 2.28, corr
+0.86); case 2 is worse (−5.39, 0/100 rejections at 5 %).  On the fixture, taking
+out the first observation's stationary marginal at each rank's optimum turns
+−2.43 into +1.93 (Johansen: 2.16) — the mechanism, verified.  OPEN, a decision
+for the analyst: whether `-lrtest` should report a conditional LR (the exact
+fits minus the initial-state term) so that the tables apply.  Test 8r.
+Found 2026-09-23.
 
 **What it is.** `run_lrtest` (~7331) prints *"NOT INTERPRETABLE: LR < 0, so at
 least one of the two fits did not converge (rank r is nested in r+1)"*, and

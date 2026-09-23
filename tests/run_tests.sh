@@ -2426,6 +2426,25 @@ if [ "${CLEANBUILD:-0}" = "1" ]; then
     echo
 fi
 
+# 8r. THE RANK TEST'S REFERENCE (BUG-24, BUG-26).  Case 1 has no deterministic
+#     term, so its table is MacKinnon-Haug-Michelis' no-constant one (11.22 at
+#     5 % for M-r = 2), not urca's ecdet="none" (14.90), which still fits an
+#     intercept.  And a negative exact LR -- the fixture is a true optimum at
+#     both ranks, under H0 -- is a statistic, not a failed fit.
+echo "[8r] the rank test's reference (BUG-24, BUG-26)"
+
+run tests/repro/fixtures/neg.inp 1 0 1 -case 1 -lrtest
+row=$(awk '/^  r    M-r/{t=1; next} t && /^ +0 +2 /{print; exit}' "$TMP/case.out")
+cv5=$(echo "$row" | awk '{print $5}')
+[ "$cv5" = "11.22" ] && ok "case 1 uses the no-constant table (5 % = 11.22 at M-r = 2)" \
+                     || bad "case-1 table" "5 % value $cv5, expected 11.22"
+if echo "$row" | grep -q "H0 not rejected" && ! grep -q "did not converge" "$TMP/case.out"; then
+    ok "a negative exact LR reads as not rejected, not as a failed fit"
+else
+    bad "negative LR" "$row"
+fi
+echo
+
 # ================================================== 9 MEMORY (opt-in) ==
 # Off by default so `make test` is deterministic on any machine; run it with
 #     VALGRIND=1 make test

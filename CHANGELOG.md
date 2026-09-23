@@ -7,6 +7,19 @@ publicación: `v*`.
 
 ## Sin publicar
 
+### El contraste de rango: la tabla del caso 1, y los LR negativos
+
+- **BUG-24.** El caso 1 (sin término determinista) se leía contra la tabla de
+  `urca` con `ecdet = "none"`, que aún ajusta una constante libre: 14,90 al 5 %
+  con `M−r = 2` donde corresponde 11,22 (MacKinnon–Haug–Michelis, 1999). El
+  tamaño al 5 % pasa del 1,0 % al 3,5 %.
+- **BUG-26.** Un LR negativo ya no se anuncia como «un ajuste no convergió»: la
+  verosimilitud exacta de `W` lleva su estado inicial estacionario y no está
+  anidada en `Λ = 0`; bajo H0 queda ≈ log T por debajo de la de Johansen. Se lee
+  como «H0 no rechazada» con su nota, y el `-bootstrap` conserva esas réplicas
+  (antes tiraba ~40 % de la masa nula): tamaño 7 % al 5 %. La tabla lleva la
+  advertencia de que es la del LR condicional.
+
 ### La escalera, como punto de partida por defecto
 
 Con `r ≥ 1` el ajuste parte ahora de donde dice el convenio de la suite: la

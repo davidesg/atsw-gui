@@ -1,0 +1,107 @@
+--- legacy/src/main.c	2026-09-23 20:40:22.318869309 +0200
++++ legacy_x/src/main.c	2026-09-23 20:48:45.931320294 +0200
+@@ -29,6 +29,28 @@
+ int  global_sin_convergencia = 0;   /* 0=con convergencia, 1=sin              */
+ //int  global_modelo_completo = 0;    /* 0=triangular, 1=completo             */
+ int global_structural = 0;   // 0 = no mostrar forma estructural, 1 = mostrar */
++/* ==== INSTRUMENT (study B): zero patterns on phi_k and theta_1 of Ybar_legacy = (W ; dY2) ==== */
++int X_inst = 0;              /* 1 if DRV_AR or DRV_MA set */
++int X_armask(int k, int i, int j) {   /* 1 = free */
++   const char *a = getenv("DRV_AR"); if (!a) return 1;
++   if (!strcmp(a,"vec")   && k == global_p && j == 2) return 0;   /* dY2 columns of last phi zero */
++   if (!strcmp(a,"warma") && j == 2) return 0;                    /* dY2 columns of every phi zero */
++   return 1;
++}
++int X_mamask(int i, int j) {          /* 1 = free */
++   const char *a = getenv("DRV_MA"); if (!a || !strcmp(a,"leg")) return (i==2 && j==2);
++   if (!strcmp(a,"none")) return 0;
++   if (!strcmp(a,"free")) return 1;
++   if (!strcmp(a,"tri"))  return !(i==2 && j==1);   /* drvec -matri   */
++   if (!strcmp(a,"wrow")) return (i==1);            /* drvec -marow   */
++   if (!strcmp(a,"ww"))   return (i==1 && j==1);    /* drvec -mawarma */
++   if (!strcmp(a,"diag")) return (i==j);
++   if (!strcmp(a,"dcol")) return (j==2);            /* both rows load on dY2 innovation */
++   fprintf(stderr,"bad DRV_MA\n"); exit(2);
++}
++int X_nar(void){int k,i,j,n=0;for(k=1;k<=global_p;k++)for(i=1;i<=2;i++)for(j=1;j<=2;j++)n+=X_armask(k,i,j);return n;}
++int X_nma(void){int i,j,n=0;for(i=1;i<=2;i++)for(j=1;j<=2;j++)n+=X_mamask(i,j);return n;}
++
+ /*****************************************************************************/
+ 
+ /*  Función para calcular número de parámetros  */
+@@ -43,10 +65,10 @@
+    }
+ 
+    /* 2. Matrices AR (Φ) - VAR COMPLETO: 4 parámetros por retardo */
+-   npar += 4 * global_p;  /* φ₁₁(k), φ₁₂(k), φ₂₁(k), φ₂₂(k) para k=1..p */
++   npar += X_nar();
+ 
+    /* 3. Matrices MA (Θ) - Estructura diagonal fija */
+-   if (global_q >= 1) npar += 1;  /* θ₂₂(1) */
++   npar += X_nma();
+ 
+    /* 4. Parámetros de convergencia */
+    if (!global_sin_convergencia) {
+@@ -401,12 +423,13 @@
+     }
+ 
+     /* AR */
+-    for (k = 1; k <= 4 * global_p; k++)
+-        x[idx++] = ar_coef[k];
++    for (k = 1; k <= global_p; k++) { int ii,jj; for (ii=1;ii<=2;ii++) for (jj=1;jj<=2;jj++)
++        if (X_armask(k,ii,jj)) x[idx++] = ar_coef[4*(k-1)+2*(ii-1)+jj]; }
+ 
+     /* MA */
+-    if (global_q >= 1)
+-        x[idx++] = theta22_est;
++    { int ii,jj; for (ii=1;ii<=2;ii++) for (jj=1;jj<=2;jj++) if (X_mamask(ii,jj)) {
++        const char *sd = getenv("DRV_MASEED");
++        x[idx++] = (ii==2&&jj==2) ? (getenv("DRV_A22SEED") ? atof(getenv("DRV_A22SEED")) : theta22_est) : (sd ? atof(sd) : 0.0); } }
+ 
+     /* Convergencia */
+     if (!global_sin_convergencia) {
+@@ -1219,7 +1242,7 @@
+        }
+        fprintf( outputv, "\n" );
+ 
+-   analisis_BEC(&varma1, x, dev, cov, npar, nobs, outputv);
++   if (!getenv("DRV_AR") && !getenv("DRV_MA")) analisis_BEC(&varma1, x, dev, cov, npar, nobs, outputv);
+ 
+    fprintf( outputv, "\n" );
+ 
+@@ -1564,7 +1587,7 @@
+    armax->m = 2;
+    armax->n = nobs;
+    armax->p = global_p;
+-   armax->q = global_q;
++   armax->q = (getenv("DRV_MA") && !strcmp(getenv("DRV_MA"),"none")) ? 0 : global_q;
+ 
+ /*****************************************************************************/
+ /* [2]: Do not move nor alter the following lines (NON-USER):                */
+@@ -1663,22 +1686,10 @@
+       qq1[2][2] = x[idx++];
+    }
+ 
+-   /* 2. Leer matrices AR */
+-
+-for (int k = 1; k <= global_p; k++) {
+-    phi1[k][1][1] = x[idx++];  /* φ₁₁(k) */
+-    phi1[k][1][2] = x[idx++];  /* φ₁₂(k) */
+-    phi1[k][2][1] = x[idx++];  /* φ₂₁(k) */
+-    phi1[k][2][2] = x[idx++];  /* φ₂₂(k) */
+-}
+-
+-   /* 3. Leer matrices MA - ESTRUCTURA DIAGONAL FIJA */
+-   if (global_q >= 1) {
+-      theta1[1][2][2] = x[idx++];  /* θ₂₂(1) - solo para ecuación 2 */
+-      theta1[1][1][1] = 0.0;       /* θ₁₁(1) = 0 */
+-      theta1[1][1][2] = 0.0;       /* θ₁₂(1) = 0 */
+-      theta1[1][2][1] = 0.0;       /* θ₂₁(1) = 0 */
+-   }
++   for (k = 1; k <= global_p; k++) { int ii,jj; for (ii=1;ii<=2;ii++) for (jj=1;jj<=2;jj++)
++       phi1[k][ii][jj] = X_armask(k,ii,jj) ? x[idx++] : 0.0; }
++   if (q1 >= 1) { int ii,jj; for (ii=1;ii<=2;ii++) for (jj=1;jj<=2;jj++)
++       theta1[1][ii][jj] = X_mamask(ii,jj) ? x[idx++] : 0.0; }
+    /* No hay MA(2) o superior - estructura fija */
+ 
+    /* 4. Leer parámetros de convergencia */

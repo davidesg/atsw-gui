@@ -9,6 +9,12 @@ Models»), contrastados con la refactorización de `drvec` documentada en
 
 **Fecha:** 2026-08-17.
 
+> **Corrección del 2026-09-23** ([ESTUDIO_MAROW_2026-09-23.md](ESTUDIO_MAROW_2026-09-23.md)):
+> la MA del legado es sólo `θ₂₂`, como dice §5, pero `θ₂₂` es la ecuación de
+> `∇Y₂` (`∇L`), no la de `W`: el legado estima justo el coeficiente que el defecto
+> `-marow` anula. Y el artículo no estima su clase restringida (Definición 3 del
+> apéndice): estima el modelo completo.
+
 El estudio en sí no modifica código. La única acción que salió de él y ya está
 aplicada es **§3.5 (r = 0 en `-lrtest`)**; el resto de §6 sigue pendiente.
 

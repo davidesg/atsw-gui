@@ -1068,6 +1068,18 @@ argument that does not hold. It may still be the right default — HOMOLOGATION
 distribution exists (`SPECIFICATION_PLAN.md` §9 says so). It also makes the
 default `-lrtest` non-nested (BUG-27).
 
+**Also, the source it was attributed to (`ESTUDIO_MAROW_2026-09-23.md`).** The
+BVECM article does not motivate `-marow`: its restricted class (Definition 3 of
+the appendix) is `-warma`, used only to frame the proofs, and the article says
+three times that what it estimates is the full model. The legacy program that
+accompanies it (`drv_project`) estimates a full AR plus **one** MA coefficient,
+`θ22` — the `nabla Y2` equation's own —, which is exactly the entry `-marow` sets
+to zero. On the wheat pairs that coefficient is significant whenever `nabla Y2`
+has an AR lag (`-matri` beats `-marow` by LR ≥ 5.96 in 37 of 40 configurations),
+and `HOMOLOGATION.md` §4t already found the free class forecasting better in 8 of
+9 cases. The remaining argument for the default is §4q/§4r: estimability in short
+samples.
+
 **Suggested fix.** Correct Corollary 6.3 and the code comment; state the default
 as a restriction with its measured justification; report the left-coprimeness
 diagnostic of BUG-46; build the `-marow`-versus-free test.

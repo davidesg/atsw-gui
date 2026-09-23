@@ -572,3 +572,111 @@ const char *dt_error_en( const DtError *e, char *out, size_t n )
        }
    return out;
 }
+
+
+/* ------------------------------------------------------------------------ */
+/* ESCRIBIR                                                                  */
+/* ------------------------------------------------------------------------ */
+
+/* UN DOBLE QUE VUELVE EXACTO, Y LO MAS CORTO QUE SE PUEDA.
+ *
+ * Si el ida y vuelta pierde una cifra, el .csv NO es el dato -- y eso es
+ * justo lo que se afirma al poner los numeros ahi. Diecisiete cifras lo
+ * garantizan siempre, pero llenan el fichero de 55.119999999999997 donde
+ * habia 55.12.
+ *
+ * Asi que se prueba con quince, con dieciseis y con diecisiete, y se escribe
+ * la primera que relee igual. Es el reparto clasico y da ficheros limpios
+ * sin renunciar a la exactitud.                                        */
+static void escribe_doble( FILE *f, double x )
+{
+   char b[64];
+   int  p;
+
+   for ( p = 15; p < 17; p++ )
+       {
+       snprintf( b, sizeof b, "%.*g", p, x );
+       if ( strtod( b, NULL ) == x ) { fputs( b, f ); return; }
+       }
+   fprintf( f, "%.17g", x );
+}
+
+const char *dt_fecha( int freq, int anio, int per, int i, char *out, size_t n )
+{
+   int k;
+
+   if ( out == NULL || n == 0 ) return out;
+   out[0] = '\0';
+   if ( freq <= 0 || anio <= 0 ) return out;      /* sin freq no hay fecha */
+
+   if ( freq == 1 ) { snprintf( out, n, "%d", anio + i ); return out; }
+
+   if ( per <= 0 ) per = 1;
+   k = ( per - 1 ) + i;                           /* periodos desde el 0    */
+   snprintf( out, n, "%d/%d", ( k % freq ) + 1, anio + k / freq );
+   return out;
+}
+
+int dt_escribir( const char *path, const DtDatos *d, DtError *e )
+{
+   FILE *f;
+   int   i, c, hay_fechas;
+
+   if ( e ) { e->cod = DT_OK; e->linea = e->campo = 0; e->texto[0] = '\0'; }
+   if ( path == NULL || d == NULL ) return 1;
+
+   f = fopen( path, "w" );
+   if ( f == NULL )
+       { falla( e, DT_ENOFILE, 0, 0, path, 0, 0 ); return 1; }
+
+   /* LO QUE EL FICHERO DICE DE SI MISMO. Sin esto la frecuencia vuelve a
+      salir de un combo con un valor por defecto distinto en cada programa,
+      que es el veneno que esta biblioteca existe para cortar.          */
+   if ( d->freq > 0 )  fprintf( f, "# freq %d\n", d->freq );
+   if ( d->freq > 0 && d->anio > 0 )
+       {
+       char b[DT_FECHA];
+
+       dt_fecha( d->freq, d->anio, d->per, 0, b, sizeof b );
+       if ( b[0] ) fprintf( f, "# start %s\n", b );
+       }
+
+   /* SIN FECHAS NO SE ESCRIBE LA COLUMNA DE FECHAS. Una columna vacia
+      delante deja lineas que empiezan por coma, y el lector --con razon--
+      no sabe que hacer con un campo que no esta. No consta es no consta:
+      la columna no aparece.                                          */
+   hay_fechas = ( d->tiene_fechas && d->fecha[0][0] ) ||
+                ( d->freq > 0 && d->anio > 0 );
+
+   /* La cabecera: "fecha" y los nombres. Una columna sin nombre sale sin
+      nombre -- inventarle uno seria decir que se sabe cual es.        */
+   if ( hay_fechas ) fputs( "fecha", f );
+   for ( c = 0; c < d->ncol; c++ )
+       fprintf( f, "%s%s", ( c || hay_fechas ) ? "," : "", d->nombre[c] );
+   fputc( '\n', f );
+
+   for ( i = 0; i < d->nobs; i++ )
+       {
+       char b[DT_FECHA];
+
+       if ( hay_fechas )
+           {
+           if ( d->tiene_fechas && d->fecha[i][0] )
+               snprintf( b, sizeof b, "%s", d->fecha[i] );
+           else
+               dt_fecha( d->freq, d->anio, d->per, i, b, sizeof b );
+           fputs( b, f );
+           }
+
+       for ( c = 0; c < d->ncol; c++ )
+           {
+           if ( c || hay_fechas ) fputc( ',', f );
+           escribe_doble( f, d->v[c][i] );
+           }
+       fputc( '\n', f );
+       }
+
+   if ( fclose( f ) != 0 )
+       { falla( e, DT_ENOFILE, 0, 0, path, 0, 0 ); return 1; }
+   return 0;
+}

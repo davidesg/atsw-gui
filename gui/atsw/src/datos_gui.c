@@ -80,14 +80,22 @@ static void on_usar( GtkCellRendererToggle *r, gchar *ruta, Dialogo *D )
     gtk_list_store_set( GTK_LIST_STORE(mo), &it, C_USAR, !v, -1 );
 }
 
-/* Escribe el .inp de una columna. 0 si pudo. */
-static int escribe_inp( Atsw *a, const DtDatos *d, int col, const char *serie,
-                        int freq, int anio, int per, char *why, size_t n )
+/* Da de alta la serie: ESCRIBE EL .csv Y GENERA EL .inp DE EL.
+ *
+ * El orden importa y es el del contrato nuevo: primero el dato --la muestra
+ * total, tal como entro-- y despues lo que se deriva de el. Si el .inp se
+ * escribiera aparte habria dos copias de los mismos numeros y, tarde o
+ * temprano, dos que no coinciden.
+ *
+ * 0 si pudo.                                                             */
+static int da_de_alta( Atsw *a, const DtDatos *d, int col, const char *serie,
+                       int freq, int anio, int per, char *why, size_t n )
 {
-    InpFile inp;
-    PrError e;
-    char    id[PR_ID], ruta[PR_RUTA], *dir;
-    int     i, rc;
+    DtDatos *uno;
+    DtError  de;
+    PrError  e;
+    char     id[PR_ID], ruta[PR_RUTA], csv[PR_RUTA], *dir;
+    int      i, rc;
 
     if ( pr_serie_idx( a->p, serie ) < 0 &&
          pr_serie_add( a->p, serie, &e ) != 0 )
@@ -103,6 +111,37 @@ static int escribe_inp( Atsw *a, const DtDatos *d, int col, const char *serie,
                             "proyecto.", serie );
           return 1; }
 
+    /* --- 1. EL DATO ----------------------------------------------------- */
+    if ( atsw_csv_de( a->p, serie, csv, sizeof csv ) != 0 )
+        { snprintf( why, n, "No pude componer la ruta de «%s».", serie );
+          return 1; }
+
+    dir = g_path_get_dirname( csv );
+    g_mkdir_with_parents( dir, 0700 );
+    g_free( dir );
+
+    /* Una columna del fichero es UNA serie: se saca a su propio DtDatos y
+       se escribe con lo que sabemos de frecuencia y fecha.            */
+    uno = g_new0( DtDatos, 1 );
+    uno->ncol = 1;
+    uno->nobs = d->nobs;
+    uno->freq = freq;
+    uno->anio = anio;
+    uno->per  = per;
+    snprintf( uno->nombre[0], DT_NOMBRE, "%s", serie );
+    for ( i = 0; i < d->nobs; i++ ) uno->v[0][i] = d->v[col][i];
+    if ( d->tiene_fechas )
+        {
+        uno->tiene_fechas = 1;
+        for ( i = 0; i < d->nobs; i++ )
+            snprintf( uno->fecha[i], DT_FECHA, "%s", d->fecha[i] );
+        }
+
+    rc = dt_escribir( csv, uno, &de );
+    g_free( uno );
+    if ( rc != 0 ) { dt_error_es( &de, why, n ); return 1; }
+
+    /* --- 2. LO QUE SE DERIVA DE EL -------------------------------------- */
     /* LA RAIZ DE LA CADENA SON LOS DATOS, y se declara como tal. No es un
        modelo: nadie la eligio. Y NADIE LA EDITA -- quien vaya a especificar
        deriva uno nuevo, asi que este .inp sigue estando para los graficos y
@@ -115,28 +154,8 @@ static int escribe_inp( Atsw *a, const DtDatos *d, int col, const char *serie,
     g_mkdir_with_parents( dir, 0700 );
     g_free( dir );
 
-    memset( &inp, 0, sizeof inp );
-    inp.fue     = 1;
-    inp.model   = 0;           /* SIN MODELO: identificar es de fue      */
-    inp.freq    = freq > 0 ? freq : 1;
-    inp.nobs    = d->nobs;
-    inp.begtime = per  > 0 ? per  : 1;
-    inp.begyear = anio > 0 ? anio : 1;
-    inp.boxlam  = 1.0;         /* sin transformar: la decide fue         */
-    inp.refactor = 1.0;
-    snprintf( inp.name, sizeof inp.name, "%s", serie );
-
-    inp.data = g_new( double, d->nobs );
-    for ( i = 0; i < d->nobs; i++ ) inp.data[i] = d->v[col][i];
-
-    rc = inp_write_bare( ruta, &inp );
-    g_free( inp.data );
-
-    /* La ruta se recorta si no cabe en el mensaje: es para leerlo. */
-    if ( rc != 0 )
-        { snprintf( why, n, "No pude escribir %.*s", (int) n - 24, ruta );
-          return 1; }
-    return 0;
+    /* Sin ventana: el nodo de datos es la muestra TOTAL. */
+    return atsw_genera_inp( csv, ruta, serie, "", why, n );
 }
 
 static void on_importar( GtkButton *b, Dialogo *D )
@@ -163,8 +182,8 @@ static void on_importar( GtkButton *b, Dialogo *D )
             char id[PR_ID];
 
             a_id( nombre, id, sizeof id );
-            if ( escribe_inp( D->a, D->d, col, id, D->d->freq, D->d->anio,
-                              D->d->per, why, sizeof why ) == 0 )
+            if ( da_de_alta( D->a, D->d, col, id, D->d->freq, D->d->anio,
+                             D->d->per, why, sizeof why ) == 0 )
                 { g_string_append_printf( hechas, "%s%s", n ? ", " : "", id );
                   n++; }
             else

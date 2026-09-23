@@ -125,4 +125,37 @@ const char *dt_error_en( const DtError *e, char *out, size_t n );
  * Hoy no hay huecos: esta para cuando los haya.                            */
 int dt_nobs( const DtDatos *d, int c );
 
+/* ------------------------------------------------------------------------ */
+/* ESCRIBIR, que es la otra mitad de la misma puerta                         */
+/*                                                                           */
+/* Hasta ahora los numeros de una serie solo existian DENTRO del .inp, en el  */
+/* formato del motor. Eso tiene tres costes: nadie mas los puede leer, no se  */
+/* puede alargar la muestra sin reimportar, y --el que importa-- no se puede  */
+/* generar el .inp de una ventana, porque para eso hacen falta los numeros de */
+/* esa ventana.                                                              */
+/*                                                                           */
+/* Con esto el dato vive en un .csv y los .inp SE GENERAN de el. No hay dos   */
+/* dueños: hay un dueño y una derivacion, como .pre -> .inp.                  */
+/*                                                                           */
+/* Se escribe lo que dt_leer sabe leer, y la prueba es el ida y vuelta: leer  */
+/* lo escrito tiene que dar los mismos numeros, la misma frecuencia y las     */
+/* mismas fechas.                                                            */
+/*                                                                           */
+/*   # freq 12                                                               */
+/*   # start 1/1996                                                          */
+/*   fecha,Alemania                                                          */
+/*   1/1996,55.12                                                            */
+/*                                                                           */
+/* Separador COMA y decimal PUNTO: es la unica combinacion que no depende de  */
+/* la regla europea, y por tanto la unica que no puede leerse al reves.       */
+/* ------------------------------------------------------------------------ */
+
+/* Escribe d en path. 0 si pudo. */
+int dt_escribir( const char *path, const DtDatos *d, DtError *e );
+
+/* La fecha de la observacion i (0..n-1) dadas freq y el comienzo, en el
+   formato "per/anio" que dt_leer entiende. Devuelve out.
+   freq 1 da solo el año. Sin freq no hay fecha y out sale vacio.        */
+const char *dt_fecha( int freq, int anio, int per, int i, char *out, size_t n );
+
 #endif /* ATSW_DATOS_H */

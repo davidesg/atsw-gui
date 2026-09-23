@@ -130,6 +130,27 @@ void       atsw_editor( Atsw *a, const char *serie, const char *id );
    Nada de esto toca un numero -- son los campos que el .inp no puede
    llevar y que hacen falta para volver al analisis meses despues.      */
 void       atsw_serie_edita( Atsw *a, const char *serie );
+
+/* --- el dato y lo que se deriva de el ----------------------------------- */
+
+/* EL .csv ES EL DATO; LOS .inp SE GENERAN DE EL. Un dueño y una derivacion,
+   como .pre -> .inp. <hasta> recorta la ventana ("" = la muestra entera) y
+   recorta el .inp QUE SALE, nunca el .csv: la muestra total es lo que
+   entro y no se toca.                                                   */
+int        atsw_genera_inp( const char *csv, const char *destino,
+                            const char *serie, const char *hasta,
+                            char *why, size_t n );
+
+/* Cuantas observaciones caben hasta esa fecha. Fuera para poder probarlo:
+   traducir "hasta 12/2019" a un numero de observaciones es lo unico de
+   esto que hay que hacer bien.                                          */
+int        atsw_hasta_n( int freq, int anio, int per, int nobs,
+                         const char *hasta );
+
+/* Donde vive el .csv de una serie: <raiz>/<serie>/datos.csv, FUERA de
+   work/, que es donde se corre y lo que se limpia.                      */
+int        atsw_csv_de( const Proyecto *p, const char *serie,
+                        char *out, size_t n );
 gchar     *atsw_programa( const char *programa );
 
 /* Guardar un .inp VALIDANDO ANTES, con el comprobador del motor. Si no vale,

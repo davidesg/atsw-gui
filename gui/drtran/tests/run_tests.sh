@@ -310,6 +310,21 @@ $CC -O2 -Wall -Wextra -I"$L/outfile" $(pkg-config --cflags glib-2.0) \
     -o "$W/test_outfile" $(pkg-config --libs glib-2.0) -lm || exit 1
 "$W/test_outfile" "$TOP/../../engines/fue/tests/golden" || exit 1
 
+# --- el dato y lo que se deriva de el ---------------------------------------
+# El .csv es el dato y los .inp se generan de el: si el ida y vuelta perdiera
+# algo, el .csv no seria el dato.
+echo
+$CC -O2 -Wall -Wextra -I"$TOP/../atsw/include" -I"$L/datos" -I"$L/xlsx" \
+    -I"$L/proyecto" -I"$L/outdiag" -I"$L/outfile" -I"$L/dates" \
+    -I"$L/tabla" -I"$L/preview" -I"$L/fugdraw" -I"$L/engine" -I"$L/inpcheck" \
+    $(pkg-config --cflags gtk+-3.0) \
+    "$TOP/../atsw/tests/test_genera.c" "$TOP/../atsw/src/genera.c" \
+    "$L/datos/datos.c" "$L/xlsx/xlsx.c" "$L/proyecto/proyecto.c" \
+    "$TOP/../../engines/fug/src/inpfile.c" \
+    -I"$TOP/../../engines/fug/src" \
+    -o "$W/test_genera" $(pkg-config --libs gtk+-3.0) -lz -lm || exit 1
+"$W/test_genera" "$W" || exit 1
+
 # --- LA regla del editor del .inp -------------------------------------------
 # Un guardado fallido no puede costar trabajo. Se valida con el comprobador
 # DEL MOTOR -- se compila engines/fue/src/inpcheck.c, no una copia.

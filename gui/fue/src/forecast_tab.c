@@ -240,9 +240,19 @@ void set_current_inp_from_path(FueContext *ctx, const char *inp_path) {
     if (dot) *dot = '\0';
     ctx->forecast_current_base = g_strdup(base);
     g_free(base);
-    gchar *msg = g_strdup_printf("Active model: %s", ctx->forecast_current_base);
+    /* EL NOMBRE SALE DEL SISTEMA DE FICHEROS, y ahi los nombres son BYTES:
+       no tienen por que ser UTF-8 valido. gtk_label_set_text con bytes
+       invalidos pinta simbolos raros y avisa por stderr -- que en un
+       programa lanzado por la madre va a /dev/null, asi que el aviso no lo
+       lee nadie y lo unico que queda es la basura en pantalla.        */
+    {
+    gchar *seguro = g_utf8_make_valid(ctx->forecast_current_base, -1);
+    gchar *msg = g_strdup_printf("Active model: %s", seguro);
+
     gtk_label_set_text(GTK_LABEL(ctx->forecast_status_label), msg);
     g_free(msg);
+    g_free(seguro);
+    }
 }
 
 /* ------------------------------------------------------------------------- */
@@ -271,7 +281,11 @@ static void open_pdf_file(const char *pdf_path) {
 /* ------------------------------------------------------------------------- */
 static void on_forecast_load_clicked(GtkButton *btn, FueContext *ctx) {
     char *filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(ctx->forecast_file_chooser));
-    char  why[512];
+    /* VACIO DE ENTRADA. Si algun comprobador devolviera error sin escribir
+       el motivo, aqui saldria la basura de la pila -- y una barra de estado
+       con simbolos raros no dice "no se por que": parece un fallo de otra
+       cosa.                                                            */
+    char  why[512] = "";
     char *dir = NULL, *base = NULL, *punto, *fuf_inp = NULL, *out = NULL;
 
     (void) btn;

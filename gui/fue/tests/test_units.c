@@ -97,6 +97,28 @@ static void test_engine_signal(void) {
     engine_result_clear(&r);
 }
 
+/* EL MENSAJE SE VA A ENSEÑAR, ASI QUE TIENE QUE PODER ENSEÑARSE.
+ *
+ * status_message() mete la primera linea de lo que dijo el motor DENTRO del
+ * mensaje, y los motores no prometen UTF-8: escriben lo que les llega. Con un
+ * byte invalido, gtk_label_set_text pinta simbolos raros y avisa por stderr
+ * -- y en un programa lanzado por la madre ese aviso se pierde, asi que al
+ * analista solo le queda la basura en pantalla.
+ *
+ * Se arregla en la biblioteca y no en cada etiqueta: un mensaje que no se
+ * puede enseñar no es un mensaje.                                       */
+static void test_engine_mensaje_utf8(void) {
+    EngineResult r = engine_run(NULL, "fue", "latin1", NULL);
+
+    check(r.message && g_utf8_validate(r.message, -1, NULL),
+          "the message must be valid UTF-8 even if the engine is not: \"%s\"",
+          r.message ? r.message : "(null)");
+    check(r.message && strstr(r.message, "Error en la serie") != NULL,
+          "and it must still say what the engine said: \"%s\"",
+          r.message ? r.message : "(null)");
+    engine_result_clear(&r);
+}
+
 static void test_engine_not_found(void) {
     EngineResult r = engine_run(NULL, "no-such-engine-at-all", "x", NULL);
 
@@ -280,6 +302,7 @@ int main(int argc, char **argv) {
     test_token_name();
     test_engine_status();
     test_engine_signal();
+    test_engine_mensaje_utf8();
     test_engine_not_found();
     test_engine_argv();
     test_engine_progress();

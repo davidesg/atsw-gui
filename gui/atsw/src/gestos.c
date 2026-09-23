@@ -139,9 +139,18 @@ void atsw_lanza_con( Atsw *a, const char *programa, const char *opcion,
     if ( fichero && *fichero ) argv[n++] = (gchar *) fichero;
     argv[n] = NULL;
 
+    /* EL stderr DE LOS HIJOS NO SE TIRA.
+     *
+     * Iba a /dev/null, y eso convierte cualquier queja suya en un sintoma
+     * sin causa: una ventana que se cuelga, unos simbolos raros en una
+     * barra, y nada que leer. Los avisos de GTK --UTF-8 invalido, un widget
+     * mal parentado-- salen justo por ahi.
+     *
+     * Heredando el de la madre van a donde va el suyo, que es el log con el
+     * que se la lanza. El stdout si se tira: son los motores hablando, y eso
+     * ya se enseña donde toca.                                         */
     if ( !g_spawn_async( NULL, argv, NULL,
-                         G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL |
-                         G_SPAWN_STDERR_TO_DEV_NULL,
+                         G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL,
                          NULL, NULL, NULL, &e ) )
         {
         gchar *s = g_strdup_printf( "No pude lanzar %s: %s",

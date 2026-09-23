@@ -18,6 +18,13 @@ case "$1" in
       echo "FUE: banner"
       echo "Warning: the model could not be estimated" >&2
       exit 3 ;;
+  latin1)
+      # UN MOTOR NO PROMETE UTF-8. Escribe lo que le llega: un nombre de
+      # serie con los bytes con que estaba escrito, la salida de pdflatex o
+      # la de gnuplot. Ese byte acaba en el mensaje y el mensaje en una
+      # etiqueta de GTK.
+      printf 'Error en la serie Espa\361a: no cuadra\n' >&2
+      exit 2 ;;
   crash)
       kill -SEGV $$ ;;
   argv)

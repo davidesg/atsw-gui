@@ -13,8 +13,21 @@
 
 /* The first line of text that says something, so that the status bar carries
  * what the engine itself complained about and not its banner.             */
+/* LA PRIMERA LINEA DE LO QUE DIJO EL MOTOR, Y EN UTF-8 PASE LO QUE PASE.
+ *
+ * Este trozo acaba DENTRO del mensaje, y el mensaje acaba en una etiqueta de
+ * GTK. Los motores no prometen UTF-8: escriben lo que les llega --un nombre
+ * de serie con los bytes con que se escribio, la salida de pdflatex o de
+ * gnuplot-- y con un byte invalido gtk_label_set_text pinta SIMBOLOS RAROS y
+ * avisa por stderr. En un programa lanzado por la madre ese aviso se pierde,
+ * asi que lo unico que le queda al analista es la basura en pantalla.
+ *
+ * Se arregla AQUI y no en cada etiqueta: la biblioteca devuelve QUE PASO, y
+ * un mensaje que no se puede enseñar no es un mensaje. Son veintiocho sitios
+ * solo en la pestaña de prevision.                                       */
 static gchar *first_line(const char *text) {
     const char *p = text, *end;
+    gchar      *cruda, *limpia;
 
     if (!text) return NULL;
     while (*p == '\n' || *p == '\r' || *p == ' ' || *p == '\t') p++;
@@ -22,7 +35,12 @@ static gchar *first_line(const char *text) {
     end = strpbrk(p, "\r\n");
     if (!end) end = p + strlen(p);
     while (end > p && (end[-1] == ' ' || end[-1] == '\t')) end--;
-    return (end > p) ? g_strndup(p, (gsize)(end - p)) : NULL;
+    if (end <= p) return NULL;
+
+    cruda  = g_strndup(p, (gsize)(end - p));
+    limpia = g_utf8_make_valid(cruda, -1);
+    g_free(cruda);
+    return limpia;
 }
 
 static gchar *status_message(const char *program, int status, int signal_no,

@@ -66,7 +66,9 @@ typedef struct {
     GtkWidget *forecast_save_inp_button;
     GtkWidget *forecast_run_button;
     GtkWidget *forecast_view_pdf_button;
-    GtkWidget *forecast_editor;
+    GtkWidget *forecast_notebook;   /* Entrada (.inp) | Informe (.out) */
+    GtkWidget *forecast_editor;     /* la ENTRADA, editable            */
+    GtkWidget *forecast_out_view;   /* el INFORME, de solo lectura     */
     GtkWidget *forecast_status_label;
     char *forecast_current_base;          /* nombre base sin extensión */
     char *forecast_current_inp_path;      /* ruta completa del último .inp guardado */

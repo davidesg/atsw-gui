@@ -11,7 +11,10 @@
 #endif
 
 /* Funciones auxiliares */
-//static void load_file_to_editor(FueContext *ctx, const char *filename);
+static void load_file_to_view(FueContext *ctx, GtkWidget *vista,
+                              const char *filename);
+static GtkWidget *forecast_vista(gboolean editable);
+static GtkWidget *en_scroll(GtkWidget *w);
 static void save_editor_to_file(FueContext *ctx, const char *filename);
 //static void set_current_inp_from_path(FueContext *ctx, const char *inp_path);
 static void open_pdf_file(const char *pdf_path);
@@ -21,6 +24,32 @@ static void on_forecast_load_clicked(GtkButton *btn, FueContext *ctx);
 static void on_forecast_save_as_clicked(GtkButton *btn, FueContext *ctx);
 static void on_forecast_run_clicked(GtkButton *btn, FueContext *ctx);
 static void on_forecast_view_pdf_clicked(GtkButton *btn, FueContext *ctx);
+
+/* Una vista monoespaciada. El .inp se edita; el informe no -- es lo que el
+ * motor escribio, y dejarlo editable invitaria a "corregirlo".          */
+static GtkWidget *forecast_vista(gboolean editable) {
+    GtkWidget *tv = gtk_text_view_new();
+    GtkCssProvider *provider = gtk_css_provider_new();
+
+    gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(tv), GTK_WRAP_NONE);
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(tv), editable);
+    gtk_css_provider_load_from_data(provider,
+        "textview { font-family: monospace; }", -1, NULL);
+    gtk_style_context_add_provider(gtk_widget_get_style_context(tv),
+                                   GTK_STYLE_PROVIDER(provider),
+                                   GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    g_object_unref(provider);
+    return tv;
+}
+
+static GtkWidget *en_scroll(GtkWidget *w) {
+    GtkWidget *s = gtk_scrolled_window_new(NULL, NULL);
+
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(s),
+                                   GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+    gtk_container_add(GTK_CONTAINER(s), w);
+    return s;
+}
 
 /* ------------------------------------------------------------------------- */
 /* Creación del tab completo                                                */
@@ -58,22 +87,29 @@ GtkWidget* create_forecast_tab(FueContext *ctx) {
 
     gtk_box_pack_start(GTK_BOX(vbox), top_bar, FALSE, FALSE, 0);
 
-    /* Editor de texto */
-    GtkWidget *scrolled = gtk_scrolled_window_new(NULL, NULL);
-    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled),
-                                   GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
-    ctx->forecast_editor = gtk_text_view_new();
-    gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(ctx->forecast_editor), GTK_WRAP_NONE);
-    gtk_text_view_set_editable(GTK_TEXT_VIEW(ctx->forecast_editor), TRUE);
-    GtkCssProvider *provider = gtk_css_provider_new();
-    gtk_css_provider_load_from_data(provider,
-        "textview { font-family: monospace; }", -1, NULL);
-    gtk_style_context_add_provider(gtk_widget_get_style_context(ctx->forecast_editor),
-                                   GTK_STYLE_PROVIDER(provider),
-                                   GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
-    g_object_unref(provider);
-    gtk_container_add(GTK_CONTAINER(scrolled), ctx->forecast_editor);
-    gtk_box_pack_start(GTK_BOX(vbox), scrolled, TRUE, TRUE, 0);
+    /* DOS VISTAS, DOS SITIOS.
+     *
+     * Habia UN editor para las dos cosas, asi que al correr fuf el .out
+     * entraba encima del .inp y la especificacion desaparecia de la pantalla:
+     * para volver a verla habia que cargarla otra vez, y entonces se perdia
+     * el informe. Lo que se acababa de pedir tapaba lo que se habia pedido
+     * antes.
+     *
+     * Son dos ficheros distintos --la entrada y el informe-- asi que cada uno
+     * en su hoja. Se alternan; ninguno pisa al otro.                     */
+    GtkWidget *libro = gtk_notebook_new();
+
+    ctx->forecast_editor  = forecast_vista(TRUE);
+    ctx->forecast_out_view = forecast_vista(FALSE);
+
+    gtk_notebook_append_page(GTK_NOTEBOOK(libro),
+                             en_scroll(ctx->forecast_editor),
+                             gtk_label_new("Entrada (.inp)"));
+    gtk_notebook_append_page(GTK_NOTEBOOK(libro),
+                             en_scroll(ctx->forecast_out_view),
+                             gtk_label_new("Informe (.out)"));
+    ctx->forecast_notebook = libro;
+    gtk_box_pack_start(GTK_BOX(vbox), libro, TRUE, TRUE, 0);
 
     /* Barra de estado */
     ctx->forecast_status_label = gtk_label_new("Ready");
@@ -84,10 +120,23 @@ GtkWidget* create_forecast_tab(FueContext *ctx) {
 }
 
 
+/* LO QUE DEJA VER UNA PREVISION: la entrada en su hoja y el informe en la
+ * suya. Lo usa tambien el boton "Forecast" de la barra, que hace el ciclo
+ * entero de una vez -- y hasta ahora dejaba en pantalla solo el .out.
+ *
+ * inp o out pueden ser NULL: se carga lo que haya.                      */
+void forecast_muestra(FueContext *ctx, const char *inp, const char *out) {
+    if (inp) load_file_to_view(ctx, ctx->forecast_editor, inp);
+    if (out) load_file_to_view(ctx, ctx->forecast_out_view, out);
+    gtk_notebook_set_current_page(GTK_NOTEBOOK(ctx->forecast_notebook),
+                                  out ? 1 : 0);
+}
+
 /* ------------------------------------------------------------------------- */
-/* Carga un archivo en el editor (mismo formato que la consola principal)   */
+/* Carga un archivo en una de las dos vistas                                 */
 /* ------------------------------------------------------------------------- */
-void load_file_to_editor(FueContext *ctx, const char *filename) {
+static void load_file_to_view(FueContext *ctx, GtkWidget *vista,
+                              const char *filename) {
     gchar *content = NULL;
     gsize len = 0;
     GError *error = NULL;
@@ -100,7 +149,7 @@ void load_file_to_editor(FueContext *ctx, const char *filename) {
     }
 
     if (g_file_get_contents(filename, &content, &len, &error)) {
-        GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(ctx->forecast_editor));
+        GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(vista));
         /* Verificar si el contenido es UTF-8 válido */
         if (g_utf8_validate(content, len, NULL)) {
             gtk_text_buffer_set_text(buffer, content, len);
@@ -224,7 +273,26 @@ static void on_forecast_load_clicked(GtkButton *btn, FueContext *ctx) {
         g_free(filename);
         return;
     }
-    load_file_to_editor(ctx, filename);
+    /* LA ENTRADA, Y SU INFORME SI YA LO TIENE.
+     *
+     * Van en pareja: el .out de al lado es el de ESTA entrada, y traerlo
+     * ahorra volver a correr el motor para ver lo que ya se corrió. Si no
+     * existe, la hoja del informe se queda con lo que hubiera -- que es
+     * mejor que vaciarla, porque vaciarla no dice nada.               */
+    {
+    char *dir  = g_path_get_dirname(filename);
+    char *base = g_path_get_basename(filename);
+    char *punto = strrchr(base, '.');
+    char *out;
+
+    if (punto) *punto = '\0';
+    out = g_strdup_printf("%s/%s.out", dir, base);
+
+    forecast_muestra(ctx, filename,
+                     g_file_test(out, G_FILE_TEST_EXISTS) ? out : NULL);
+
+    g_free(out); g_free(base); g_free(dir);
+    }
     g_free(filename);
 }
 
@@ -302,17 +370,28 @@ static void on_forecast_run_clicked(GtkButton *btn, FueContext *ctx) {
 
     if (process_ok && g_file_test(out_path, G_FILE_TEST_EXISTS)) {
         gtk_label_set_text(GTK_LABEL(ctx->forecast_status_label), r.message);
-        load_file_to_editor(ctx, out_path);
+
+        /* EL INFORME EN SU HOJA, Y LA ENTRADA SE QUEDA. Antes el .out
+           entraba encima del .inp y la especificación con que se previó
+           desaparecía justo cuando hacía falta para leer el informe. */
+        load_file_to_view(ctx, ctx->forecast_out_view, out_path);
+        if (ctx->forecast_current_inp_path)
+            load_file_to_view(ctx, ctx->forecast_editor,
+                              ctx->forecast_current_inp_path);
+        gtk_notebook_set_current_page(GTK_NOTEBOOK(ctx->forecast_notebook), 1);
     } else if (process_ok) {
         gtk_label_set_text(GTK_LABEL(ctx->forecast_status_label),
                            "fuf finished but .out file not found.");
     } else {
         /* lo que dijo el motor, que es lo que explica por que */
         gtk_label_set_text(GTK_LABEL(ctx->forecast_status_label), r.message);
-        if (r.output && *r.output)
+        if (r.output && *r.output) {
             gtk_text_buffer_set_text(
-                gtk_text_view_get_buffer(GTK_TEXT_VIEW(ctx->forecast_editor)),
+                gtk_text_view_get_buffer(GTK_TEXT_VIEW(ctx->forecast_out_view)),
                 r.output, -1);
+            gtk_notebook_set_current_page(
+                GTK_NOTEBOOK(ctx->forecast_notebook), 1);
+        }
     }
     engine_result_clear(&r);
 

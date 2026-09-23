@@ -1428,21 +1428,34 @@ void on_forecast_button_clicked(GtkToolButton *btn, FueContext *ctx) {
     if (g_file_test(out_path, G_FILE_TEST_EXISTS)) {
         // Actualizar el estado interno de Forecast con la ruta completa del .inp generado
         set_current_inp_from_path(ctx, forecast_inp_path);
-        // Cargar el contenido del .out en el editor de Forecast
-        load_file_to_editor(ctx, out_path);
+        /* LOS DOS: la entrada con que se previó y el informe. Antes se
+           cargaba sólo el .out, así que la especificación desaparecía
+           justo cuando hacía falta para leer el informe.             */
+        forecast_muestra(ctx, forecast_inp_path, out_path);
         gtk_label_set_text(GTK_LABEL(ctx->forecast_status_label), "Forecast completed. Output loaded.");
         gtk_label_set_text(GTK_LABEL(ctx->status_label), "Forecast finished successfully.");
     } else {
         gtk_label_set_text(GTK_LABEL(ctx->status_label), "Forecast output file not found.");
     }
 
-    // Cambiar a la pestaña Forecast (opcional, buscar por widget)
-    GtkWidget *notebook = gtk_widget_get_ancestor(ctx->forecast_editor, GTK_TYPE_NOTEBOOK);
-    if (notebook) {
-        int page_num = gtk_notebook_page_num(GTK_NOTEBOOK(notebook),
-                        gtk_widget_get_parent(ctx->forecast_editor));
+    /* Y a la pestaña Forecast de la ventana.
+     *
+     * Se sube DESDE EL CUADERNO DE DENTRO y no desde el editor: ahora el
+     * editor vive en un cuaderno propio --entrada e informe-- así que
+     * get_ancestor desde él encontraría ése y no el de la ventana. Un
+     * "el primero que haya hacia arriba" deja de valer en cuanto hay dos. */
+    {
+    GtkWidget *fuera = gtk_widget_get_ancestor(
+                           gtk_widget_get_parent(ctx->forecast_notebook),
+                           GTK_TYPE_NOTEBOOK);
+
+    if (fuera) {
+        GtkWidget *hoja = gtk_widget_get_parent(ctx->forecast_notebook);
+        int page_num = gtk_notebook_page_num(GTK_NOTEBOOK(fuera), hoja);
+
         if (page_num >= 0)
-            gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), page_num);
+            gtk_notebook_set_current_page(GTK_NOTEBOOK(fuera), page_num);
+    }
     }
 
     g_free(out_path);

@@ -422,7 +422,7 @@ fi
 #     a flat-ish surface, hence a 5% tolerance rather than equality.  This is the
 #     invariant F1 was really about: the dispersion across equivalent set-ups.
 sigdet2() {   # prints |Sigma| for an M=2 run, from the Sigma = sigma2*Q block
-    sed -n '/^Sigma = sigma2 \* Q:/,/^ *|Sigma|/p' "$1" | grep -aE '^ +-?[0-9]' \
+    sed -n '/^Sigma = sigma2 \* Q/,/^ *|Sigma|/p' "$1" | grep -aE '^ +-?[0-9]' \
       | awk 'NR==1{a=$1} NR==2{b=$1; c=$2} END{if(a=="")print ""; else printf "%.9f", a*c-b*b}'
 }
 run "$MM"    2 1 1 -case 2;               d_lev=$(sigdet2 "$TMP/case.out")
@@ -904,12 +904,16 @@ run data/pairs/milan.inp 2 1 1 -case 2 -mean -mawarma
 if ! grep -aq "^theta(1) matrix" "$TMP/case.out"; then
     bad "mawarma" "no inherited-structure Theta reported"
 else
-    z=$(awk '/^theta\(1\) matrix/{getline; getline; print $1+0, $2+0}' "$TMP/case.out")
-    [ "$z" = "0 0" ] && ok "mawarma: the last row of Theta is exactly zero" \
-                     || bad "mawarma: the last row of Theta is not zero" "$z"
+    #  the nabla Y2 row, which -mawarma zeroes, is row 1 in the .inp's order
+    #  (the report is in that order since BUG-23; it was the last internal row)
+    z=$(awk '/^theta\(1\) matrix/{getline; print $1+0, $2+0}' "$TMP/case.out")
+    [ "$z" = "0 0" ] && ok "mawarma: the nabla Y2 row of Theta is exactly zero" \
+                     || bad "mawarma: the nabla Y2 row of Theta is not zero" "$z"
     # T12 = T11 * B2' -- checked against the B2 the same fit reports
-    t11=$(awk '/^theta\(1\) matrix/{getline; print $1}' "$TMP/case.out")
-    t12=$(awk '/^theta\(1\) matrix/{getline; print $2}' "$TMP/case.out")
+    #  .inp order (M = 2, r = 1): row 2 is Y1; T11 is its Y1 column (2) and
+    #  T12 its nabla Y2 column (1)
+    t11=$(awk '/^theta\(1\) matrix/{getline; getline; print $2}' "$TMP/case.out")
+    t12=$(awk '/^theta\(1\) matrix/{getline; getline; print $1}' "$TMP/case.out")
     b2=$(grep -a -A1 "^beta_2 matrix (s x r)" "$TMP/case.out" | tail -1 | awk '{print $1}')
     if ! awk -v a="$t11" 'BEGIN{if(a<0)a=-a; exit !(a>1e-3)}'; then
         bad "mawarma: T11 is zero here" "the product check would not bite"
@@ -1057,11 +1061,11 @@ if awk -v a="$ll_1" -v b="$ll_2" -v c="$ll_3" -v d="$ll_4" \
 else bad "MA ladder: not monotone" "$ll_1 $ll_2 $ll_3 $ll_4"; fi
 
 run data/pairs/milan.inp 2 1 1 -case 2 -mean -marow
-z=$(awk '/^theta\(1\) matrix/{getline; getline; print $1+0, $2+0}' "$TMP/case.out")
+z=$(awk '/^theta\(1\) matrix/{getline; print $1+0, $2+0}' "$TMP/case.out")   # nabla Y2 row
 [ "$z" = "0 0" ] && ok "marow: the differenced block carries no moving average" \
                  || bad "marow: last row not zero" "$z"
 run data/pairs/milan.inp 2 1 1 -case 2 -mean -matri
-z=$(awk '/^theta\(1\) matrix/{getline; getline; print $1+0}' "$TMP/case.out")
+z=$(awk '/^theta\(1\) matrix/{getline; print $2+0}' "$TMP/case.out")   # T21: nabla Y2 row, Y1 column
 [ "$z" = "0" ] && ok "matri: the lower-left block is zero" \
                || bad "matri: T21 not zero" "$z"
 echo
@@ -1189,7 +1193,7 @@ echo "[6] alpha = A*psi: the restriction, its LR, and its guards"
 
 # A declaring equation 2 not to adjust: the same thing -weakex 2 builds.
 printf '* A: alpha_2 = 0\n2 1\n1\n0\n' > "$TMP/A_eq2.txt"
-lr_of() { grep -a 'LR = 2(free' "$1.out" 2>/dev/null | awk '{print $5}'; }
+lr_of() { grep -a 'LR = 2(free' "$1.out" 2>/dev/null | awk '{print $NF}'; }
 
 run "$MM" 2 1 1 -case 2 -weakex 2
 lr_short=$(lr_of "$TMP/case"); free_ll=$(grep -a 'logL H(r)' "$TMP/case.out" | awk '{print $5}')
@@ -1270,7 +1274,7 @@ fi
 #     flipping its sign raises 0 failures on M = 2 and 1 on M = 3.
 ldl_reconstruction_error() {   # <out file> -> worst absolute error
     awk '
-        /^Sigma = sigma2 \* Q:/ {mode="S"; n=0; next}
+        /^Sigma = sigma2 \* Q/ {mode="S"; n=0; next}
         /^P matrix/             {mode="P"; n=0; next}
         /^D vector/             {mode="D"; next}
         mode=="S" && /^ +[-0-9]/ {n++; for(j=1;j<=NF;j++) S[n","j]=$j; M=n; next}
@@ -1577,7 +1581,7 @@ for f in datasets/mauricio/mink_muskrat.inp data/pairs/milan.inp \
     run "$f" 2 1 1 -case 2 -mean -marow
     grep -aq 'A root sits on the unit circle' "$TMP/case.out" && bound_def=$((bound_def+1))
     #  y las filas inferiores de Theta, cero EXACTO -- no cerca de cero
-    z=$(awk '/^theta\(1\) matrix/{getline; getline; print $1" "$2}' "$TMP/case.out")
+    z=$(awk '/^theta\(1\) matrix/{getline; print $1" "$2}' "$TMP/case.out")   # nabla Y2 row
     case "$z" in
         "0.000000 0.000000") rows_ok=$((rows_ok+1)) ;;
     esac
@@ -1645,19 +1649,22 @@ if awk -v v="$sc2" 'BEGIN{exit !(v < 1e-10)}'; then
     ok "and with the truncation off it is machine zero ($sc2)"
 else bad "forecast self-check, -m 2" "$sc2, expected machine zero"; fi
 
-#  La banda a un paso contra la Sigma del vector de parametros, permutada.
+#  La banda a un paso contra la Sigma del informe.  Hasta BUG-18 (2026-09-23)
+#  esa Sigma salia en el orden interno con etiquetas del .inp y esta prueba la
+#  PERMUTABA para compararla; ahora sale en el orden del .inp y se compara tal
+#  cual: la banda de la serie i con Sigma[i][i].
 for cfg in "-case 2" "-case 3" "-case 2 -mafree"; do
     run "$MM" 2 1 1 $cfg -f 3
-    s11=$(grep -a -A2 '^Sigma = sigma2 \* Q:' "$TMP/case.out" | awk 'NR==2{print $1}')
-    s22=$(grep -a -A2 '^Sigma = sigma2 \* Q:' "$TMP/case.out" | awk 'NR==3{print $2}')
+    s11=$(grep -a -A2 '^Sigma = sigma2 \* Q' "$TMP/case.out" | awk 'NR==2{print $1}')
+    s22=$(grep -a -A2 '^Sigma = sigma2 \* Q' "$TMP/case.out" | awk 'NR==3{print $2}')
     e1=$(grep -a -A1 '^   h ' "$TMP/case.out" | awk 'NR==2{print $3}')
     e2=$(grep -a -A1 '^   h ' "$TMP/case.out" | awk 'NR==2{print $5}')
     if [ -z "$s11" ] || [ -z "$e1" ]; then
         bad "forecast h=1 variance ($cfg)" "could not read Sigma or the band"
-    elif awk -v a="$e1" -v b="$s22" -v c="$e2" -v d="$s11" \
+    elif awk -v a="$e1" -v b="$s11" -v c="$e2" -v d="$s22" \
         'BEGIN{exit !(((a*a-b)<1e-5 && (b-a*a)<1e-5) && ((c*c-d)<1e-5 && (d-c*c)<1e-5))}'; then
         ok "h=1 band is the innovation covariance in levels ($cfg)"
-    else bad "forecast h=1 variance ($cfg)" "band^2=($e1^2,$e2^2) vs Sigma=($s22,$s11)"; fi
+    else bad "forecast h=1 variance ($cfg)" "band^2=($e1^2,$e2^2) vs Sigma=($s11,$s22)"; fi
 done
 
 #  Y la banda no puede estrecharse: el error de nivel ACUMULA.
@@ -2369,6 +2376,33 @@ if [ "${SLOW:-0}" = "1" ]; then
         bad "-lrtest ignores -multistart" "r = 2 logL $l2 (the 30-start optimum is 573.96)"
     fi
 fi
+echo
+
+# ============================================================ 8q THE LABELS ==
+#  BUG-17, 18, 19, 23: drvec carries two row orders, the internal [Y1 ; Y2] of
+#  the VEC parameters and the .inp's [Y2 ; Y1], and the report mixed them in
+#  block after block.  255 checks passed with every one of those defects in,
+#  because none asked WHICH SERIES a label names.  These do, on a DGP whose
+#  answer is known: tests/repro/fixtures/sim2.inp, x = column 1 (Y2), y =
+#  column 2 (Y1), nabla x = 0.4 nabla y(-1) + e1, var e1 = 1, var e2 = 4.
+echo "[8q] the labels name the right series (BUG-17 family)"
+run tests/repro/fixtures/sim2.inp 2 0 1 -case 1
+g=$(grep -a 'D.xY2 <- D.yY1(-1)' "$TMP/case.out" | awk '{print $4}')
+if [ -n "$g" ] && awk -v v="$g" 'BEGIN{exit !(v > 0.35 && v < 0.45)}'; then
+    ok "Gamma: D.x <- D.y(-1) = $g (truth 0.4)"
+else bad "Gamma labels" "D.x <- D.y(-1) = $g, truth 0.4"; fi
+if grep -aq "REJECT H0 -> D.xY2 is driven by the others" "$TMP/case.out" && \
+   grep -aq "REJECT H0 -> D.yY1 drives the others" "$TMP/case.out"; then
+    ok "Wald: y drives x, as in the DGP"
+else bad "Wald labels" "the short-run tests do not say that y drives x"; fi
+vx=$(sed -n '/^Sigma = sigma2 \* Q/,+1p' "$TMP/case.out" | awk 'NR==2{print $1}')
+vy=$(sed -n '/^Sigma = sigma2 \* Q/,+2p' "$TMP/case.out" | awk 'NR==3{print $2}')
+if [ -n "$vx" ] && awk -v a="$vx" -v b="$vy" 'BEGIN{exit !(a > 0.8 && a < 1.2 && b > 3.5 && b < 4.5)}'; then
+    ok "Sigma in the .inp's order: var x = $vx, var y = $vy (truth 1, 4)"
+else bad "Sigma labels" "var x = $vx, var y = $vy, truth 1 and 4"; fi
+if grep -aq "Residual series a\[2\] (ec1)" "$TMP/case.out"; then
+    ok "the W block's residual is called ec1, not y"
+else bad "residual labels" "the W innovation is labelled with a series name"; fi
 echo
 
 # 0b. THE BUILD ITSELF, FROM CLEAN.  Opt-in with CLEANBUILD=1, and it exists

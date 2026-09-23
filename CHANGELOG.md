@@ -25,6 +25,19 @@ invertibilidad en casi todo el banco, con `-mafree` y también con los mejores
 óptimos de `-marow`. De paso, un `Σ` singular ya no se acepta como óptimo (dos
 series colineales daban logL 830 en una iteración).
 
+### Las etiquetas nombran la serie correcta (BUG-18, 19, 20, 23, 28, 29)
+
+drvec lleva dos órdenes de filas —el interno `[Y₁ ; Y₂]` de los parámetros VEC,
+que es el del artículo, y el del `.inp`, `[Y₂ ; Y₁]`— y el informe los mezclaba:
+`Γ`, `Θ`, `Q`, `Σ`, `P`/`D`, las pruebas de Wald «quién mueve a quién», los
+residuos, los ficheros de residuos, la matriz `A` de `-alpha` y `-weakex` en
+`-lrtest`. Todo sale ahora en el orden del `.inp`. Sobre un DGP conocido: el
+informe decía que x mueve a y cuando es y quien mueve a x; ahora lo dice bien, y
+la batería lo comprueba (8q). Una prueba de la batería **permutaba** la `Σ`
+impresa para compararla con la banda de previsión: el defecto, compensado
+dentro de la batería. El mensaje final nombra el `.out` y no el primer fichero de
+entrada.
+
 ### La frontera de invertibilidad, diagnosticada (BUG-49)
 
 Cuando la media móvil acaba con una raíz en la frontera —en el banco, casi

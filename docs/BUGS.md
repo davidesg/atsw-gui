@@ -225,7 +225,7 @@ this program *has*, and whoever knows them will look for them first:
 
 ## BUG-18 — `Q` and `Sigma` are printed in the internal row order and labelled in the `.inp`'s
 
-**Status: OPEN.** Found 2026-09-09 on a third party's data (Bolivia TFM
+**Status: FIXED on 2026-09-23** (`src/drvec.c`, `report_fit`: the Q table, the Q and Sigma matrices, the P/D block).
 replication, `M = 3`, `r = 1`, case 3, the `.pre` route).
 
 **What it is.** Exactly the disease BUG-17 named — *«`drvec` carries two row
@@ -277,11 +277,22 @@ of the IRF are (0.998, 2.002) in `x`-first order. The IRF itself is right
 P11 note that the report and the IRF share one factorisation is not true: there
 are two, and they disagree. `Gamma` and `Theta` have the same defect: BUG-23.
 
+
+**Fixed.** The Q block of the parameter table keeps the vector's order (each
+row is a parameter with its standard error) and is named through `lam2inp`; its
+header says which variance is normalised to 1. The Q and Sigma matrices and the
+P, D, own-share block are printed in the `.inp`'s order, so P and D now agree
+with the IRF's factorisation. A test in `run_tests.sh` 8d had been PERMUTING the
+printed Sigma to compare it with the forecast band — the defect, compensated
+inside the battery; it now compares them directly. Re-measured on a known DGP
+(`tests/repro/fixtures/sim2.inp`): var x 0.995, var y 4.014 (truth 1 and 4);
+guarded by 8q.
+
 ---
 
 ## BUG-19 — the residual series of the `Y1` block is labelled with its file's name
 
-**Status: OPEN.** Same fit as BUG-18.
+**Status: FIXED on 2026-09-23** (`src/drvec.c`, `diagnose_ybar`, `write_resid_inps`).
 
 **How it was found.** Same session as BUG-18: the residual sd did not match any
 series.
@@ -312,11 +323,18 @@ sees is wrong.
 header that the third series is the equilibrium error. The `.pre` route makes
 this worse, because there the name comes from a file the user chose.
 
+
+**Fixed.** The per-series diagnosis (vendored, untouched) is called through
+`diagnose_ybar`, which names the W block's innovations `ec1..ecr` — as the
+Lambda table does — for the duration of the call. `write_resid_inps` names each
+file after the series its column belongs to (`lam2inp`), keeping the numbering
+the `-seed` route reads. Guarded by 8q.
+
 ---
 
 ## BUG-20 — the closing message prints the first input path, not the output's
 
-**Status: OPEN.** Same session.
+**Status: FIXED on 2026-09-23** (`src/drvec.c`, `main`, `run_lrtest`).
 
 **How it was found.** Reading the terminal after a `.pre` run.
 
@@ -335,11 +353,15 @@ models, which is alarming enough to stop the work and check.
 found 2026-09-23:** `run_lrtest` has the same defect (~7447): it prints
 `base_name`, which on the `.pre` route is the first input file.
 
+
+**Fixed.** Both print the `.out` path, before `cleanup_names` frees it. On the
+`.pre` route: `Done. Output written to mmpre.muskrat_mmpre.mink.out`.
+
 ---
 
 ## BUG-23 — `Gamma` and `Theta` are printed in the internal order and labelled in the `.inp`'s, so the short-run Wald tests name the wrong series
 
-**Status: OPEN.** Found 2026-09-23 (review, three independent reports).
+**Status: FIXED on 2026-09-23** (`src/drvec.c`, `report_fit`, `hypothesis_block`).
 
 **What it is.** BUG-17 and BUG-18 again, in the two blocks neither of them
 touched. `vec_shootx` builds `Phi* = Cbar F Cinv` and `Theta* = Cbar Theta Cinv`
@@ -369,6 +391,15 @@ own and prints that block's only free `Theta` row under a `D.x...` label.
 report boundary and in the `ix_F`/`ix_Th` lookups of `hypothesis_block`; and a
 check in `run_tests.sh` that pins a label against a known DGP (none exists today:
 the 255 checks pass with this defect).
+
+
+**Fixed.** The Gamma and Theta tables and matrices walk the `.inp`'s order and
+read the internal entry (`inp2lam` on both indices), with its own standard
+error; the "who drives whom" Wald tests index F and Theta by `inp2lam(i)`.
+Re-measured on `sim2.inp`: `D.xY2 <- D.yY1(-1) 0.394751 (t = 43)` — the DGP's
+0.4 — and "REJECT H0 -> D.xY2 is driven by the others", "D.yY1 drives the
+others". Guarded by `run_tests.sh` 8q, the first checks in the battery that ask
+which series a label names.
 
 ---
 
@@ -523,7 +554,7 @@ sequential lambda-max on the exact one) remains.
 
 ## BUG-28 — the `-alpha` file's rows are read in the internal order, and the test that should catch it compares a word with itself
 
-**Status: OPEN.** Found 2026-09-23.
+**Status: FIXED on 2026-09-23** (`src/drvec.c`, `build_weakex_A`, `init_guess`, `vec_shootx`, `report_fit`).
 
 **What it is.** `load_alpha_A` (~2150) stores file row `i` at `alpha_A[i]`, which
 is the internal order `[Y1;Y2]`; `build_weakex_A` goes through `inp2lam`. So the
@@ -543,11 +574,18 @@ since the feature exists; and a check that has never been able to fail.
 **Suggested fix.** Store file row `i` at `alpha_A[inp2lam(i)]`; print `$NF` in
 `lr_of`.
 
+
+**Fixed.** A is kept in the `.inp`'s order (the order the user writes it and
+`-weakex` names) and permuted where it meets Lambda, with the current r:
+internal row i reads A's row `lam2inp(i)`. The battery's `lr_of` reads the last
+field (`$NF`), so its "exact agreement" check compares numbers again.
+Re-measured: `-alpha [1;0]` = `-weakex 2` (LR 7.3913497007).
+
 ---
 
 ## BUG-29 — `-lrtest` with `-weakex` or `-alpha` restricts a different series at each rank when `M >= 3`
 
-**Status: OPEN.** Found 2026-09-23.
+**Status: FIXED on 2026-09-23** (`src/drvec.c`: A permuted with the rank in force, see BUG-28).
 
 **What it is.** `A` is built once in `main` (~8342) with `inp2lam` at the
 command-line `r`; the internal order depends on `r` (`s = M - r`), so at other
@@ -563,6 +601,11 @@ at each rank.
 **Repro.** `sh tests/repro/repro.sh 29`.
 **Suggested fix.** Keep `A` in the `.inp`'s order and permute it inside the cast
 with the current `global_r`.
+
+
+**Fixed** by BUG-28's fix: A is no longer permuted once at the command-line r.
+Re-measured on `rank2.inp`: the r = 2 row of `-lrtest -weakex 1` is -480.7040,
+the standalone `-weakex 1` fit.
 
 ---
 

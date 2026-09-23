@@ -2281,7 +2281,11 @@ static int build_weakex_A(int eq)
      *  Until 2026-08-24 this zeroed the internal row directly, so on any fit
      *  with r < M it declared the wrong series weakly exogenous.  Part of
      *  BUG-17.                                                              */
-    eq = inp2lam(eq);
+    /*  BUG-28/29: A is kept in the .inp's order -- the order the user writes
+     *  it in -- and permuted to the internal one where it meets Lambda, with
+     *  the r of the fit in hand (lam2inp).  Permuting it HERE, once, fixed it
+     *  to the command-line r: -lrtest then restricted a different series at
+     *  every other rank.                                                    */
     alpha_sa = nser - 1;
     alpha_A  = matrix(1, nser, 1, (alpha_sa > 0 ? alpha_sa : 1));
     for (i = 1; i <= nser; i++)
@@ -2380,6 +2384,15 @@ static int inp2lam(int i)
 {
     int s = nser - global_r;
     return (i <= s) ? global_r + i : i - s;
+}
+
+/*  The inverse: the .inp column of internal row a.  Used to NAME a row of
+ *  something that is walked in the internal order (the parameter vector's Q
+ *  block, whose [1][1] is Y1's variance and not the first column's).       */
+static int lam2inp(int a)
+{
+    int s = nser - global_r;
+    return (a <= global_r) ? s + a : a - global_r;
 }
 
 /*  sname / cname — the names the rows are labelled with.  A parameter that
@@ -2977,7 +2990,11 @@ static int write_resid_inps(const char *prefix)
     for (i = 1; i <= M; i++) {
         char name[64], path[1024], what[64];
         for (t = 1; t <= T; t++) col[t] = cond_resid[t][i];
-        ascii_name(series_names[i], "e", name, sizeof name);
+        /*  BUG-19: the columns of cond_resid are internal ([nabla Y1 ;
+         *  nabla Y2]); the file keeps its number -- the -seed route reads it
+         *  back by that number, in that order -- and takes the NAME of the
+         *  series it belongs to.                                            */
+        ascii_name(series_names[lam2inp(i)], "e", name, sizeof name);
         snprintf(path, sizeof path, "%s.%d.inp", prefix, i);
         snprintf(what, sizeof what, "residual %d, MA(%d)", i, q);
         /* The residual's mean is a nuisance of the preliminary fit --- the
@@ -3607,7 +3624,7 @@ static void init_guess(real *x, int npar)
         for (j = 1; j <= r; j++) {
             for (a = 1; a <= alpha_sa; a++) {
                 real acc = 0.0;
-                for (i = 1; i <= M; i++) acc += alpha_A[i][a] * Lambda[i][j];
+                for (i = 1; i <= M; i++) acc += alpha_A[lam2inp(i)][a] * Lambda[i][j];
                 AtL[a] = acc;
             }
             lusol(AtA, AtL, alpha_sa, ind);
@@ -3925,8 +3942,8 @@ static void vec_shootx(real *x, struct Tvarma *armax,
         for (i = 1; i <= M; i++)
             for (j = 1; j <= r; j++) {
                 real acc = 0.0;
-                for (int kk = 1; kk <= alpha_sa; kk++) acc += alpha_A[i][kk] * psi[kk][j];
-                Lambda[i][j] = acc;
+                for (int kk = 1; kk <= alpha_sa; kk++) acc += alpha_A[lam2inp(i)][kk] * psi[kk][j];
+                Lambda[i][j] = acc;       /* internal row i: A's row lam2inp(i) */
             }
         free_matrix(psi, 1, alpha_sa, 1, (r > 0 ? r : 1));
     } else {
@@ -5786,16 +5803,22 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
                              "is already diagonal or structured).\n");
 
         for (i = 1; i <= M; i++) {                 /* the two directions  */
+            /*  BUG-23: i names a series (the .inp's order); F and Theta are
+             *  indexed in the internal order, so the row and the column that
+             *  belong to that series are li = inp2lam(i).  Indexing them by i,
+             *  as this did, tested one series and named another: on a DGP
+             *  where x is driven by y it concluded that x drives y.         */
+            int li = inp2lam(i);
             nm = series_names ? series_names[i] : "y";
             k = 0;
             for (kk = 1; kk <= nf; kk++)
                 for (j = 1; j <= M; j++)
-                    if (j != i && ix_F[(kk - 1) * M + i][j] > 0)
-                        idx[++k] = ix_F[(kk - 1) * M + i][j];
+                    if (j != li && ix_F[(kk - 1) * M + li][j] > 0)
+                        idx[++k] = ix_F[(kk - 1) * M + li][j];
             for (kk = 1; kk <= q; kk++)
                 for (j = 1; j <= M; j++)
-                    if (j != i && ix_Th[(kk - 1) * M + i][j] > 0)
-                        idx[++k] = ix_Th[(kk - 1) * M + i][j];
+                    if (j != li && ix_Th[(kk - 1) * M + li][j] > 0)
+                        idx[++k] = ix_Th[(kk - 1) * M + li][j];
             if (k > 0) {
                 snprintf(title, sizeof title,
                          "D.%s: what the others do to it:", nm);
@@ -5810,12 +5833,12 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
             k = 0;
             for (kk = 1; kk <= nf; kk++)
                 for (j = 1; j <= M; j++)
-                    if (j != i && ix_F[(kk - 1) * M + j][i] > 0)
-                        idx[++k] = ix_F[(kk - 1) * M + j][i];
+                    if (j != li && ix_F[(kk - 1) * M + j][li] > 0)
+                        idx[++k] = ix_F[(kk - 1) * M + j][li];
             for (kk = 1; kk <= q; kk++)
                 for (j = 1; j <= M; j++)
-                    if (j != i && ix_Th[(kk - 1) * M + j][i] > 0)
-                        idx[++k] = ix_Th[(kk - 1) * M + j][i];
+                    if (j != li && ix_Th[(kk - 1) * M + j][li] > 0)
+                        idx[++k] = ix_Th[(kk - 1) * M + j][li];
             if (k > 0) {
                 snprintf(title, sizeof title,
                          "D.%s: what it does to the others:", nm);
@@ -6585,6 +6608,33 @@ static void level_irf_fevd(struct Tvarma *v, real **B2, int K)
 /*                                                                           */
 /*  ifault comes in by value: main() does not read it back, it reads          */
 /*  estimation_failed, which this sets.                                      */
+/*  BUG-19.  The per-series diagnosis is vendored whole from drvarma and labels
+ *  residual i with series_names[i].  The components of Ybar are nabla Y2 --
+ *  those ARE series, and the name is right -- and then W = Y1 + B2'Y2, whose
+ *  innovation is not the Y1 series' and was read as one (a residual sd of 7.1
+ *  on a series whose differences have sd 2.7).  diagnose.c is not touched
+ *  (P3.1: byte-identical to drvarma); the W names are swapped for ec1..ecr --
+ *  what the Lambda table already calls them -- for the duration of the call. */
+static void diagnose_ybar(struct Tvarma *vp)
+{
+    int s = nser - global_r, j;
+    char **save = NULL;
+    if (series_names && global_r > 0) {
+        save = (char **) malloc((size_t) (nser + 1) * sizeof(char *));
+        for (j = 1; j <= nser; j++) save[j] = series_names[j];
+        for (j = 1; j <= global_r; j++) {
+            char lab[32];
+            snprintf(lab, sizeof lab, "ec%d", j);
+            series_names[s + j] = strdup(lab);
+        }
+    }
+    diagnose(vp);
+    if (save) {
+        for (j = s + 1; j <= nser; j++) { free(series_names[j]); series_names[j] = save[j]; }
+        free(save);
+    }
+}
+
 /*****************************************************************************/
 static void report_fit(real *x, real *dev, real **cov, int npar,
                        struct Tvarma *vp, int ifault, const char *outname,
@@ -6886,7 +6936,7 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
                 for (int j = 1; j <= r; j++) {
                     real acc = 0.0;
                     for (int kk = 1; kk <= alpha_sa; kk++)
-                        acc += alpha_A[i][kk] * psi_m[kk][j];
+                        acc += alpha_A[lam2inp(i)][kk] * psi_m[kk][j];
                     Lam_m[i][j] = acc;
                 }
         } else {
@@ -7088,45 +7138,57 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
             if (nf > 0) {
                 fprintf(outputv, "\nShort-run dynamics, Gamma(k) on "
                                  "nabla Y_{t-k}\n");
+                /*  BUG-23: F is internal in rows AND columns (vec_shootx builds
+                 *  Phi* = Cbar F Cinv), so the table walks the .inp's order and
+                 *  reads the internal entry, as the Lambda rows already did. */
                 for (k2 = 1; k2 <= nf; k2++)
                     for (a2 = 1; a2 <= nser; a2++)
-                        for (b2i = 1; b2i <= nser; b2i++)
-                            if (ix_F[(k2-1)*nser + a2][b2i]) {
+                        for (b2i = 1; b2i <= nser; b2i++) {
+                            int A2 = inp2lam(a2), B2c = inp2lam(b2i);
+                            if (ix_F[(k2-1)*nser + A2][B2c]) {
                                 snprintf(lb, sizeof lb, "  D.%s <- D.%s(-%d)",
                                          sname(a2), sname(b2i), k2);
-                                par_row(lb, F_m[k2][a2][b2i],
-                                        dev[ix_F[(k2-1)*nser + a2][b2i]]);
+                                par_row(lb, F_m[k2][A2][B2c],
+                                        dev[ix_F[(k2-1)*nser + A2][B2c]]);
                             }
+                        }
             }
             if (global_q > 0) {
                 fprintf(outputv, "\nMoving average on the innovations, "
                                  "Theta(k)\n");
                 for (k2 = 1; k2 <= global_q; k2++)
                     for (a2 = 1; a2 <= nser; a2++)
-                        for (b2i = 1; b2i <= nser; b2i++)
-                            if (ix_Th[(k2-1)*nser + a2][b2i]) {
+                        for (b2i = 1; b2i <= nser; b2i++) {
+                            int A2 = inp2lam(a2), B2c = inp2lam(b2i);
+                            if (ix_Th[(k2-1)*nser + A2][B2c]) {
                                 snprintf(lb, sizeof lb, "  D.%s <- A.%s(-%d)",
                                          sname(a2), sname(b2i), k2);
-                                par_row(lb, Th_m[k2][a2][b2i],
-                                        dev[ix_Th[(k2-1)*nser + a2][b2i]]);
+                                par_row(lb, Th_m[k2][A2][B2c],
+                                        dev[ix_Th[(k2-1)*nser + A2][B2c]]);
                             }
+                        }
             }
             /*  Q, not Sigma: the engine concentrates the scale, so what is
              *  estimated is the covariance up to a positive constant, with
              *  Q[1,1] = 1.  Sigma = sigma2 * Q is in the model block.        */
             {
                 int qi = ix_q0;
+                /*  BUG-18: the Q block of the vector is internal -- its [1][1] is
+                 *  Y1's variance -- so its rows keep that order (each row IS a
+                 *  parameter, with its standard error) and are NAMED through
+                 *  lam2inp.                                                  */
                 fprintf(outputv, "\nInnovation covariance up to scale, Q "
-                                 "(Sigma = sigma2 * Q, Q[1,1] = 1)\n");
+                                 "(Sigma = sigma2 * Q, var %s = 1)\n",
+                        sname(lam2inp(1)));
                 for (a2 = 2; a2 <= nser; a2++) {
-                    snprintf(lb, sizeof lb, "  var %s", sname(a2));
+                    snprintf(lb, sizeof lb, "  var %s", sname(lam2inp(a2)));
                     par_row(lb, Qm[a2][a2], dev[qi++]);
                 }
                 if (!global_diag_cov)
                     for (a2 = 2; a2 <= nser; a2++)
                         for (b2i = 1; b2i < a2; b2i++) {
                             snprintf(lb, sizeof lb, "  cov %s, %s",
-                                     sname(a2), sname(b2i));
+                                     sname(lam2inp(a2)), sname(lam2inp(b2i)));
                             par_row(lb, Qm[a2][b2i], dev[qi++]);
                         }
             }
@@ -7166,11 +7228,11 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
             fprintf(outputv, "\n");
         }
         for (int k2 = 1; k2 <= nf; k2++) {
-            fprintf(outputv, "Gamma(%d) matrix:\n", k2);
+            fprintf(outputv, "Gamma(%d) matrix, rows and columns in the .inp's order:\n", k2);
             for (int a2 = 1; a2 <= nser; a2++) {
                 fprintf(outputv, "  ");
                 for (int b2i = 1; b2i <= nser; b2i++)
-                    fprintf(outputv, "%12.6f", F_m[k2][a2][b2i]);
+                    fprintf(outputv, "%12.6f", F_m[k2][inp2lam(a2)][inp2lam(b2i)]);
                 fprintf(outputv, "\n");
             }
         }
@@ -7185,7 +7247,7 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
             for (int a2 = 1; a2 <= nser; a2++) {
                 fprintf(outputv, "  ");
                 for (int b2i = 1; b2i <= nser; b2i++)
-                    fprintf(outputv, "%12.6f", Th_m[k2][a2][b2i]);
+                    fprintf(outputv, "%12.6f", Th_m[k2][inp2lam(a2)][inp2lam(b2i)]);
                 fprintf(outputv, "\n");
             }
         }
@@ -7275,19 +7337,24 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
             free_vector(wr, 1, nser);
             free_matrix(Pi, 1, nser, 1, nser);
         }
-        fprintf(outputv, "Q matrix (lower triangle; Q[1,1] = 1 by "
-                         "normalisation):\n");
+        /*  BUG-18: Qm is internal ([Y1 ; Y2]); printed in the .inp's order,
+         *  like every other matrix of the report.  The normalisation is on
+         *  Y1's variance, which is no longer the [1][1] entry of this print. */
+#define QIN(a, b) (((a) >= (b)) ? Qm[(a)][(b)] : Qm[(b)][(a)])
+        fprintf(outputv, "Q matrix (lower triangle, rows and columns in the "
+                         ".inp's order; var %s = 1 by normalisation):\n",
+                sname(lam2inp(1)));
         for (int a2 = 1; a2 <= nser; a2++) {
             fprintf(outputv, "  ");
             for (int b2i = 1; b2i <= a2; b2i++)
-                fprintf(outputv, "%12.6f", Qm[a2][b2i]);
+                fprintf(outputv, "%12.6f", QIN(inp2lam(a2), inp2lam(b2i)));
             fprintf(outputv, "\n");
         }
-        fprintf(outputv, "Sigma = sigma2 * Q:\n");
+        fprintf(outputv, "Sigma = sigma2 * Q, in the .inp's order:\n");
         for (int a2 = 1; a2 <= nser; a2++) {
             fprintf(outputv, "  ");
             for (int b2i = 1; b2i <= a2; b2i++)
-                fprintf(outputv, "%12.6f", vp->sigma2 * Qm[a2][b2i]);
+                fprintf(outputv, "%12.6f", vp->sigma2 * QIN(inp2lam(a2), inp2lam(b2i)));
             fprintf(outputv, "\n");
         }
         /*  P2 — |Sigma| IS THIS PROGRAM'S HOMOLOGATION CRITERION and until
@@ -7347,7 +7414,7 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
             int a, b, k, ok_ldl = 1;
             for (a = 1; a <= nser; a++)
                 for (b = 1; b <= nser; b++)
-                    Sg[a][b] = vp->sigma2 * ((b <= a) ? Qm[a][b] : Qm[b][a]);
+                    Sg[a][b] = vp->sigma2 * QIN(inp2lam(a), inp2lam(b));   /* BUG-18 */
             for (a = 1; a <= nser; a++)
                 for (b = 1; b <= nser; b++) P[a][b] = (a == b) ? 1.0 : 0.0;
             for (b = 1; b <= nser; b++) {
@@ -7528,7 +7595,7 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
          *  bands and Ljung-Box.  Vendored whole in src/diagnose.c; drvec only
          *  calls it.  Measured against drvarma on the three-CPI case, this is
          *  most of the 1665 lines drvec was missing.                         */
-        diagnose(vp);
+        diagnose_ybar(vp);
 
         /*  P5 — the forecast, here: it is the last place where B2m is still
          *  alive and where the fit is already made and diagnosed.            */
@@ -7551,7 +7618,7 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
          *  lost them: 145 lines to 69.)                                      */
         if (warma_done) {
             residual_diagnostics(vp); operator_roots(vp);
-            diagnose(vp);
+            diagnose_ybar(vp);
         }
         if (warma_done) free_matrix(Lam_m, 1, nser, 1, (r > 0 ? r : 1));
 
@@ -8245,7 +8312,9 @@ static int run_lrtest(void)
         free_ivector(bnd, 0, M - 1);
         free_ivector(npr, 0, M - 1);
         free_vector(ll, 0, M - 1);
-        printf("Done. Output written to %s\n", base_name);
+        /*  BUG-20: the .out, not the base name (on the .pre route that is the
+         *  first input file, and read as a model just overwritten).        */
+        printf("Done. Output written to %s\n", outputf);
         fclose(outputv);
         cleanup_names(outputf, inputf, base_name);
         return 0;
@@ -9497,10 +9566,14 @@ int main(int argc, char *argv[])
      *  freed with `nobs` and not with the ALLOCATION's dimension, which with
      *  -estwin no longer coincide: the window trims nobs and the matrices stay
      *  whole.                                                                */
+    /*  BUG-20: the file WRITTEN, not argv[1] -- on the .pre route argv[1] is
+     *  the first input model, and the message read as an announcement that
+     *  it had just been overwritten.  Said before cleanup_names frees it.  */
+    if (!estimation_failed)
+        printf("Done. Output written to %s\n", outputf);
     fclose(outputv);
     cleanup_names(outputf, inputf, base_name);
 
     if (estimation_failed) return 2;
-    printf("Done. Output written to %s\n", argv[1]);
     return 0;
 }

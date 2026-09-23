@@ -101,7 +101,19 @@ gchar *atsw_programa( const char *programa )
  * sin decirles a que vienen no gestiona nada.                          */
 void atsw_lanza( Atsw *a, const char *programa, const char *fichero )
 {
-    gchar  *argv[5];
+    atsw_lanza_con( a, programa, NULL, fichero );
+}
+
+/* LANZAR CON UNA OPCION DE MAS.
+ *
+ * Los tres GUIs reciben "--proyecto P [fichero]". Alguno necesita ademas que
+ * se le diga QUE HACER al abrir --fue_gui con "--prever" arranca el ciclo de
+ * prevision en su pestaña-- y eso es una opcion, no un fichero. Va antes del
+ * fichero porque el fichero es el argumento posicional.               */
+void atsw_lanza_con( Atsw *a, const char *programa, const char *opcion,
+                     const char *fichero )
+{
+    gchar  *argv[6];
     GError *e = NULL;
     gchar  *exe;
     int     n = 0;
@@ -123,6 +135,7 @@ void atsw_lanza( Atsw *a, const char *programa, const char *fichero )
     argv[n++] = exe;
     argv[n++] = (gchar *) "--proyecto";
     argv[n++] = a->p->path;
+    if ( opcion && *opcion )   argv[n++] = (gchar *) opcion;
     if ( fichero && *fichero ) argv[n++] = (gchar *) fichero;
     argv[n] = NULL;
 

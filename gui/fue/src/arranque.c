@@ -16,6 +16,7 @@
 
 static char g_raiz_proyecto[1024];
 static char g_abrir[1024];
+static int  g_prever;
 
 /* --proyecto FICHERO: el espacio de trabajo sale de la RAIZ del proyecto.
  *
@@ -46,4 +47,23 @@ const char *fue_abrir(void)
 void fue_pon_abrir(const char *s)
 {
     snprintf(g_abrir, sizeof g_abrir, "%s", s ? s : "");
+}
+
+
+/* --prever: AL ABRIR, EL CICLO DE PREVISION.
+ *
+ * Es lo mismo que pulsar «Forecast» en la barra --corre "fue -f", corre fuf y
+ * carga las dos cosas en la pestaña-- pero pedido desde fuera. La madre lo usa
+ * para que «Prever con fuf» de su lista de modelos acabe donde acabaria el
+ * boton: en la pestaña de prevision, con el informe delante.
+ *
+ * Es una opcion y no un fichero: dice QUE HACER con lo que se abre.     */
+int fue_prever_al_arrancar(void)
+{
+    return g_prever;
+}
+
+void fue_pon_prever(int si)
+{
+    g_prever = si;
 }

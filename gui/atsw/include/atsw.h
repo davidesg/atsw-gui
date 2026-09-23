@@ -145,6 +145,11 @@ void       atsw_editor( Atsw *a, const char *serie, const char *muestra,
    llevar y que hacen falta para volver al analisis meses despues.      */
 void       atsw_serie_edita( Atsw *a, const char *serie );
 
+/* Lo mismo, con una opcion antes del fichero: fue_gui con «--prever»
+   arranca el ciclo de prevision al abrir.                              */
+void       atsw_lanza_con( Atsw *a, const char *programa, const char *opcion,
+                           const char *fichero );
+
 /* --- el dato y lo que se deriva de el ----------------------------------- */
 
 /* EL .csv ES EL DATO; LOS .inp SE GENERAN DE EL. Un dueño y una derivacion,

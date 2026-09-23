@@ -541,6 +541,36 @@ static void on_borrar( GtkMenuItem *m, Atsw *a )
     atsw_refresca( a );
 }
 
+/* PREVER ESTE MODELO: lo mismo que el botón «Forecast» de fue_gui, pedido
+ * desde la lista.
+ *
+ * Se manda el .inp --«fue -f» lee el .inp, no el .pre-- y «--prever», que es
+ * lo que hace que fue_gui acabe donde acabaría el botón: en su pestaña de
+ * previsión, con el informe delante.
+ *
+ * NO se exige que el modelo esté estimado: «fue -f» lo estima ahí mismo y
+ * escribe la entrada de previsión con sus parámetros. Prohibirlo sería
+ * decidir por el analista algo que el motor resuelve solo.             */
+static void on_prever( GtkMenuItem *m, Atsw *a )
+{
+    char   f[PR_RUTA];
+    gchar *id = atsw_marcada( a->l_modelos, M_ID );
+
+    (void) m;
+    if ( !a->hay || !a->serie[0] || !id ) { g_free( id ); return; }
+
+    if ( pr_ruta( a->p, a->serie, atsw_muestra_actual( a ), id, ".inp",
+                  f, sizeof f ) != 0 ||
+         !g_file_test( f, G_FILE_TEST_EXISTS ) )
+        {
+        barra_pub( a, "Ese modelo no tiene .inp que prever." );
+        g_free( id );
+        return;
+        }
+    g_free( id );
+    atsw_lanza_con( a, "fue_gui", "--prever", f );
+}
+
 static void on_editar( GtkMenuItem *m, Atsw *a )
 {
     gchar *id = atsw_marcada( a->l_modelos, M_ID );
@@ -821,6 +851,15 @@ static void menu_modelo( Atsw *a, GdkEventButton *ev )
             "puede expresar lo que tiene widgets; el .inp, todo lo que el "
             "motor lee." );
         g_signal_connect( mi, "activate", G_CALLBACK(on_editar), a );
+        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+
+        mi = gtk_menu_item_new_with_label( "Prever con fuf…" );
+        gtk_widget_set_tooltip_text( mi,
+            "Lo mismo que el botón «Forecast» de fue: corre «fue -f» para "
+            "escribir la entrada de previsión, corre fuf sobre ella y deja "
+            "las dos cosas en la pestaña de previsión.\n\nLos ficheros se "
+            "escriben AL LADO del modelo." );
+        g_signal_connect( mi, "activate", G_CALLBACK(on_prever), a );
         gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
 
         mi = gtk_menu_item_new_with_label( "Iterar: seguir desde su óptimo" );

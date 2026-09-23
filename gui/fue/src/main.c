@@ -61,8 +61,15 @@ static void activate(GtkApplication *app, gpointer user_data) {
     /* Lo que la madre mando. Se hace DESPUES de mostrar la ventana para que,
      * si el fichero tiene algo raro, el aviso salga sobre una ventana que ya
      * esta ahi y no sobre el vacio.                                     */
-    if (fue_abrir())
+    if (fue_abrir()) {
         fue_abre_al_arrancar(ctx, fue_abrir());
+
+        /* Y SI SE PIDIO PREVER, el ciclo entero, que es lo mismo que pulsar
+         * «Forecast»: se hace DESPUES de abrir el modelo, porque prever
+         * necesita saber de qué.                                       */
+        if (fue_prever_al_arrancar())
+            on_forecast_button_clicked(NULL, ctx);
+    }
 
     /* Set up status label and text view (already done in create_main_window) */
 
@@ -84,6 +91,8 @@ static void activate(GtkApplication *app, gpointer user_data) {
  * unico fichero que las pruebas no pueden enlazar.                     */
 void fue_pon_raiz_proyecto(const char *s);
 void fue_pon_abrir(const char *s);
+void fue_pon_prever(int si);
+int  fue_prever_al_arrancar(void);
 
 static int lee_opciones(int argc, char *argv[])
 {
@@ -95,10 +104,15 @@ static int lee_opciones(int argc, char *argv[])
     for (i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--proyecto") && i + 1 < argc) proy = argv[++i];
         else if (!strncmp(argv[i], "--proyecto=", 11)) proy = argv[i] + 11;
+        else if (!strcmp(argv[i], "--prever")) fue_pon_prever(1);
         else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
-            printf("uso: %s [--proyecto FICHERO] [FICHERO.inp]\n\n"
+            printf("uso: %s [--proyecto FICHERO] [--prever] [FICHERO.inp]\n\n"
                    "  --proyecto F  el espacio de trabajo sale de la raiz\n"
                    "                del proyecto F.\n"
+                   "  --prever      al abrir, el ciclo de prevision: corre\n"
+                   "                «fue -f», corre fuf y deja las dos cosas\n"
+                   "                en la pestaña. Lo mismo que pulsar\n"
+                   "                «Forecast», pero pedido desde fuera.\n"
                    "  FICHERO.inp   se abre al arrancar. Es lo que la madre\n"
                    "                manda al decir «estimar esta serie».\n",
                    argv[0]);

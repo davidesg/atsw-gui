@@ -140,6 +140,21 @@ debajo. Es la misma forma que el editor del `.inp` y por la misma razón: dos
 vistas del mismo objeto se alternan; lo que pasa mientras tanto tiene que
 verse a la vez.
 
+### 4.3bis El informe es el PDF, y eso ya estaba resuelto
+
+> «Gráfico está mal. Es el informe de previsión. El módulo gui de fuf ya
+> estaba diseñado, no reinventar la rueda.»
+
+Cierto, y la rueda estaba mejor hecha. El módulo anterior tenía **«View
+PDF»**, que abre `<previsión>.pdf` con la ventana de gráficos y, si ésa no
+puede con él, con el visor del sistema. Yo puse un «Gráfico» que buscaba el
+EPS — y el EPS es **sólo el dibujo**; el PDF es el **informe de previsión
+completo**: la tabla, el gráfico y lo que el motor escribe alrededor.
+
+El respaldo al visor del sistema tampoco era un adorno: el PDF lo escribe
+**pdflatex**, no `fugdraw`, así que `lib/preview` puede no saber leerlo — no
+por estar roto, sino por no ser suyo.
+
 ### 4.4 Un solo lector de previsiones
 
 `lib/outfcst` leía las de drtran. Ahora lee también las de fuf, y la única

@@ -76,24 +76,18 @@ static void corriendo( Fuf *f, gboolean si )
     gtk_widget_set_sensitive( f->horizonte, !si );
 }
 
-static void eps_hay( Fuf *f )
+/* EL INFORME ES EL PDF, y existe en cuanto fuf corre con pdflatex.
+ *
+ * Lo tenia bien el modulo de antes y yo lo reinvente peor: puse un boton
+ * "Grafico" que buscaba el EPS. El EPS es SOLO el dibujo; el PDF es el
+ * INFORME DE PREVISION completo --la tabla, el grafico y lo que el motor
+ * escribe alrededor-- que es lo que uno quiere ver despues de prever.   */
+static void informe_hay( Fuf *f )
 {
-    gchar *eps = g_strdup_printf( "%s/prev%s.eps", f->dir, f->prev );
-    gboolean hay = g_file_test( eps, G_FILE_TEST_EXISTS );
+    gchar   *pdf = g_strdup_printf( "%s/%s.pdf", f->dir, f->prev );
+    gboolean hay = g_file_test( pdf, G_FILE_TEST_EXISTS );
 
-    /* El motor le pone al EPS el origen detrás del nombre, así que el
-       nombre exacto no se compone: se busca lo que empiece por «prev».  */
-    if ( !hay )
-        {
-        GDir *d = g_dir_open( f->dir, 0, NULL );
-        const char *n;
-
-        while ( d && ( n = g_dir_read_name( d ) ) != NULL )
-            if ( g_str_has_prefix( n, "prev" ) && g_str_has_suffix( n, ".eps" ) )
-                { hay = TRUE; break; }
-        if ( d ) g_dir_close( d );
-        }
-    g_free( eps );
+    g_free( pdf );
     gtk_widget_set_sensitive( f->b_grafico, hay );
 }
 
@@ -118,7 +112,7 @@ static void acabo_fuf( const EngineResult *r, gpointer d )
     if ( engine_wrote_results( r ) )
         {
         fuf_trae_out( f );
-        eps_hay( f );
+        informe_hay( f );
         /* La previsión es lo que se iba a mirar: se pone delante sola. */
         gtk_notebook_set_current_page( GTK_NOTEBOOK(f->libro), 0 );
         }
@@ -176,28 +170,30 @@ static void on_prever( GtkButton *b, Fuf *f )
     g_free( exe );
 }
 
-static void on_grafico( GtkButton *b, Fuf *f )
+static void on_informe( GtkButton *b, Fuf *f )
 {
-    GDir       *d;
-    const char *n;
-    gchar      *eps = NULL;
+    gchar *pdf = g_strdup_printf( "%s/%s.pdf", f->dir, f->prev );
 
     (void) b;
-    /* SE BUSCA, NO SE COMPONE. El motor le pega el origen al nombre del EPS
-       --prevforecast_X.122021.eps-- y componerlo aquí sería parsear su
-       convención para adivinar un nombre que él ya escribió.           */
-    d = g_dir_open( f->dir, 0, NULL );
-    while ( d && ( n = g_dir_read_name( d ) ) != NULL )
-        if ( g_str_has_prefix( n, "prev" ) && g_str_has_suffix( n, ".eps" ) )
-            { eps = g_build_filename( f->dir, n, NULL ); break; }
-    if ( d ) g_dir_close( d );
+    if ( !g_file_test( pdf, G_FILE_TEST_EXISTS ) )
+        {
+        fuf_di( f, "Todavía no hay informe: sale al prever." );
+        g_free( pdf );
+        return;
+        }
 
-    if ( eps == NULL )
-        { fuf_di( f, "Todavía no hay gráfico: sale al prever." ); return; }
-
-    if ( !preview_show( (PreviewApp *) f, eps ) )
-        fuf_di( f, "No pude abrir %s.", eps );
-    g_free( eps );
+    /* Primero la ventana de gráficos, y si no puede con él, el visor del
+       sistema. Es lo que hacía el módulo de antes, y por una razón: el PDF
+       lo escribe pdflatex y no fugdraw, así que lib/preview puede no saber
+       leerlo -- no por estar roto, sino por no ser suyo.               */
+    if ( preview_show( (PreviewApp *) f, pdf ) )
+        fuf_di( f, "El informe de previsión." );
+    else
+        {
+        preview_open_external( (PreviewApp *) f, pdf );
+        fuf_di( f, "El informe, en el visor del sistema." );
+        }
+    g_free( pdf );
 }
 
 static void on_abrir( GtkButton *b, Fuf *f )
@@ -232,7 +228,7 @@ static void on_abrir( GtkButton *b, Fuf *f )
         gtk_label_set_text( GTK_LABEL(f->l_modelo), f->base );
         gtk_widget_set_sensitive( f->b_prever, TRUE );
         fuf_trae_out( f );
-        eps_hay( f );
+        informe_hay( f );
         fuf_consola( f, "* %s\n", f->inp );
         }
     gtk_widget_destroy( d );
@@ -317,9 +313,11 @@ GtkWidget *fuf_ventana_nueva( GtkApplication *app, Fuf *f )
     g_signal_connect( b, "clicked", G_CALLBACK(on_prever), f );
     gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
 
-    f->b_grafico = b = gtk_button_new_with_label( "Gráfico…" );
-    gtk_widget_set_tooltip_text( b, "La previsión dibujada, con su historia." );
-    g_signal_connect( b, "clicked", G_CALLBACK(on_grafico), f );
+    f->b_grafico = b = gtk_button_new_with_label( "Informe…" );
+    gtk_widget_set_tooltip_text( b,
+        "El informe de previsión completo, en PDF: la tabla, el gráfico y lo "
+        "que el motor escribe alrededor. Lo hace pdflatex al prever." );
+    g_signal_connect( b, "clicked", G_CALLBACK(on_informe), f );
     gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
 
     f->l_modelo = gtk_label_new( f->base[0] ? f->base : "(sin modelo)" );
@@ -382,7 +380,7 @@ GtkWidget *fuf_ventana_nueva( GtkApplication *app, Fuf *f )
         {
         fuf_consola( f, "* %s\n", f->inp );
         fuf_trae_out( f );
-        eps_hay( f );
+        informe_hay( f );
         }
     else
         {

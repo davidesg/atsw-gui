@@ -140,11 +140,12 @@ construction; the free model can and, on this kind of data, does.
 
 **3. Then estimate, and read the rank condition in the output.**
 
-Every fit reports `sigma_min(Λ⊥′Θ(1)B⊥)` next to the operator roots, and an
-inadmissible one says so on the terminal — which under the default cannot
-happen, so if you see it you are in `-mafree`, and the notice says so. That notice is the program declining to
-hand over as an answer something the theory does not license — not a suggestion
-that the number is slightly off.
+Every fit reports `sigma_s(Λ⊥′Θ(1))` (Theorem 3) next to the operator roots, and
+one below the floor says so on the terminal — as a *denial* of the rank only when
+it is zero, as *near* that set otherwise (the floor 0.2 is a convention). Under
+the default `-mafree` both can happen. Read it with the MA roots: on the bank the
+free fits' usual trouble is an MA root on the unit circle (BUG-49), which the
+report diagnoses separately.
 
 ## Three further steps
 

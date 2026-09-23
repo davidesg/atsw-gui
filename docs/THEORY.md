@@ -311,7 +311,8 @@ true `r` at 30 % against a nominal 5 % ([HOMOLOGATION.md](HOMOLOGATION.md) §2.3
 1. **The admissible set has to be part of the estimation problem, not of the
    commentary.** By Theorems 3–5 the condition is `rank(Λ⊥′Θ(1)) = s`, it is not
    implied by anything the engine checks, and it is violated in the direction the
-   fits actually take. `drvec` reports `σ_min(Λ⊥′Θ(1)B⊥)` at every fit and can
+   fits actually take. `drvec` reports `σ_s(Λ⊥′Θ(1))` at every fit (until BUG-46 it reported the
+   stronger `σ_min(Λ⊥′Θ(1)B⊥)`, which denied correct ranks) and can
    enforce a floor (`-rankadm`); by Corollary 3.1 the simpler sufficient
    condition `det Θ(1) ≠ 0` would also do, and is cheaper to state.
 

@@ -882,6 +882,17 @@ comparison rather than a verdict.
 
 ## 4h. The rank condition, and what the paper leaves unguarded
 
+> **Correction, 2026-09-24 (BUG-46).** The `G` of this section and of §4j is
+> `σ_min(Λ⊥′Θ(1)B⊥)`, which is stronger than Theorem 3's condition and denied
+> correct ranks. drvec now reports `σ_s(Λ⊥′Θ(1))`. Re-measured on the eight
+> pairs (`2 1 1 -case 2`): `-mafree` 0.025–0.31, `-matri` 0.10–0.30, `-marow`
+> 0.035–0.97, `-mawarma` 0.93–1.13. **The empty gap that fixed the floor at 0.2 is
+> gone** (Milan and Utrecht free are above it; Vienna `-marow` below), so 0.2 is
+> now a stated convention and only `G = 0` is reported as a denial of the rank.
+> The free fits' pathology that remains is BUG-49's: an MA root on the unit
+> circle, which `-specs` and `-lrtest` now flag by itself. The tables below are
+> kept as measured.
+
 *The question this answers: `-mawarma` fixes the pathology, but it does so by
 narrowing the model class. Is there something narrower still that is wrong — a
 condition the class itself needs and nobody is enforcing? There is.*

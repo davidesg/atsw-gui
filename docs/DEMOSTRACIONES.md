@@ -286,8 +286,9 @@ existe `c ≠ 0` (s-vector) con `c′Λ⊥′Θ(1) = 0`, es decir, `Λ⊥c` es u
 izquierdo de `Θ(1)`. ∎
 
 **Relevancia para el código.** Es la condición que el programa reporta como
-`Rank condition (Granger): sigma_min(Lambda_perp′ Theta(1) B_perp)` y que
-`-rankadm [tol]` puede imponer. Es **la** condición que la literatura asume sobre
+`Rank condition (Granger): sigma_s(alpha_perp′ Theta(1))` y que
+`-rankadm [tol]` puede imponer. (Hasta BUG-46 el programa reportaba
+`σ_min(Λ⊥′Θ(1)B⊥)`, una condición más fuerte: suficiente, no necesaria.) Es **la** condición que la literatura asume sobre
 el proceso pero no escribe en los parámetros estimados (ver §7). Su violación es
 exactamente el lugar donde los ajustes libres se estacionan.
 
@@ -300,8 +301,8 @@ cumple automáticamente. Toda la dificultad vive en la superficie `det Θ(1) = 0
 **Prueba.** `Λ⊥′` tiene rango fila completo `s` y `Θ(1)` es no singular, luego el
 producto tiene rango `s`. ∎
 
-**Relevancia para el código.** `-rankadm` impone la condición fuerte
-`σ_min(Λ⊥′Θ(1)B⊥) ≥ tol`; el corolario recuerda que la condición más simple
+**Relevancia para el código.** `-rankadm` impone
+`σ_s(Λ⊥′Θ(1)) ≥ tol` (la del Teorema 3 desde BUG-46); el corolario recuerda que la condición más simple
 `det Θ(1) ≠ 0` bastaría y es más barata de enunciar — aunque no distingue
 *direcciones* como sí hace la condición de rango (Corolario 3.2).
 

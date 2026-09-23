@@ -186,7 +186,7 @@ recorded in the `.out`.
 
 | | |
 |---|---|
-| `-rankadm [tol]` | refuse parameter points where `σ_min(Λ⊥′Θ(1)B⊥) < tol` (default `1e-3`) |
+| `-rankadm [tol]` | refuse parameter points where `σ_s(Λ⊥′Θ(1)) < tol` (Theorem 3; default `0.2`, a convention) |
 
 That statistic is **reported at every fit**, next to the operator roots, and it
 needs no flag. It is what makes the long-run impact `C(1)` carry `M−r`

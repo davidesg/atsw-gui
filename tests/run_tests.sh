@@ -936,9 +936,11 @@ elif awk -v a="$free_ll" -v b="$warm_ll" 'BEGIN{exit !(b <= a + 1e-6)}'; then
 else bad "mawarma: restricted beat free" "free=$free_ll warma=$warm_ll"; fi
 echo
 
-# 5j. THE RANK CONDITION.  sigma_min(Lambda_perp' Theta(1) B_perp) is what makes
-#     the long-run impact C(1) have rank M-r; where it degenerates the fitted
-#     model denies the rank it was estimated at.  It is REPORTED always and
+# 5j. THE RANK CONDITION.  sigma_s(Lambda_perp' Theta(1)) (Theorem 3; it was
+#     sigma_min(Lambda_perp' Theta(1) B_perp) until BUG-46) is what makes the
+#     long-run impact C(1) have rank M-r; where it is zero the fitted model
+#     denies the rank it was estimated at, and below the floor it is NEAR that.
+#     Vienna, not Milan: with the right statistic Milan's free fit is at 0.31.  It is REPORTED always and
 #     -rankadm refuses points below a tolerance.  Three checks: that it is
 #     reported, that the constraint actually binds (the optimiser wants to go
 #     below, which is the whole finding), and that constraining cannot buy
@@ -948,13 +950,13 @@ echo
 #     LIBRE; en la clase por defecto la condicion se cumple sola (Corolario
 #     6.3) y no hay nada que restringir, de modo que medir ahi si "liga" no
 #     tendria sentido.
-run data/pairs/milan.inp 2 1 1 -case 2 -mean -mafree
+run data/pairs/vienna.inp 2 1 1 -case 2 -mean -mafree
 g_free=$(awk '/Rank condition/{print $NF}' "$TMP/case.out")
 ll_free=$(logelf_of "$TMP/case")
 if [ -z "$g_free" ]; then bad "rank condition" "not reported at r=1, q=1"
 else ok "rank condition: reported ($g_free)"; fi
 
-run data/pairs/milan.inp 2 1 1 -case 2 -mean -mafree -rankadm 0.3
+run data/pairs/vienna.inp 2 1 1 -case 2 -mean -mafree -rankadm 0.3
 g_adm=$(awk '/Rank condition/{print $NF}' "$TMP/case.out")
 ll_adm=$(logelf_of "$TMP/case")
 if [ -z "$g_adm" ] || [ -z "$ll_adm" ]; then
@@ -970,20 +972,20 @@ else bad "rankadm: constraint violated" "G=$g_adm with tol 0.3"; fi
 # warning that fires on everything is not a warning.
 #  P4: el caso inadmisible hay que PEDIRLO con -mafree.  Que el defecto ya no
 #  pueda producirlo es el resultado de P4 y se comprueba aparte, mas abajo.
-run data/pairs/milan.inp 2 1 1 -case 2 -mean -mafree
-if printf '%s' "$STDERR" | grep -q "DENIES THE RANK" ||
-   grep -aq "DENIES THE RANK" "$TMP/case.out"; then
+run data/pairs/vienna.inp 2 1 1 -case 2 -mean -mafree
+if printf '%s' "$STDERR" | grep -q "WARNING: sigma_s" ||
+   grep -aq "below the floor" "$TMP/case.out"; then
     ok "rank verdict: an inadmissible fit says so where the user can see it"
 else
     # the notice goes to stdout, which run() discards; re-run capturing it
-    cp data/pairs/milan.inp "$TMP/case.inp"
-    if "$DRVEC" "$TMP/case" 2 1 1 -case 2 -mean -mafree 2>/dev/null | grep -q "DENIES THE RANK"
+    cp data/pairs/vienna.inp "$TMP/case.inp"
+    if "$DRVEC" "$TMP/case" 2 1 1 -case 2 -mean -mafree 2>/dev/null | grep -q "WARNING: sigma_s"
     then ok "rank verdict: an inadmissible fit says so on the terminal"
     else bad "rank verdict" "an inadmissible fit was reported silently"; fi
 fi
 cp data/pairs/milan.inp "$TMP/case.inp"
 if "$DRVEC" "$TMP/case" 2 1 1 -case 2 -mean -marow 2>/dev/null \
-   | grep -q "DENIES THE RANK"; then
+   | grep -q "WARNING: sigma_s"; then
     bad "rank verdict" "it fired on an admissible fit too"
 else ok "rank verdict: silent on an admissible fit"; fi
 
@@ -994,6 +996,17 @@ else bad "rankadm: does not bind here" "the free fit already has G=$g_free"; fi
 if awk -v a="$ll_free" -v b="$ll_adm" 'BEGIN{exit !(b <= a + 1e-6)}'; then
     ok "rankadm: the constrained fit cannot beat the free one ($ll_adm <= $ll_free)"
 else bad "rankadm: constrained beat free" "free=$ll_free adm=$ll_adm"; fi
+
+# BUG-46's counterexample: Lambda = (.5, -.2)', B2 = -1, Theta_1 = [[.5, 3],
+# [0, 0]] -- invertible MA, Lambda_perp' Theta(1) = (.1, -.1), rank exactly 1 --
+# 2001 observations.  The old statistic called it ZERO (1.7e-3); Theorem 3's
+# condition is 0.141 at the truth.  It must not be reported as a denial.
+run tests/repro/fixtures/g0.inp 1 1 1 -case 1
+g_g0=$(awk '/Rank condition/{print $NF}' "$TMP/case.out")
+if [ -n "$g_g0" ] && awk -v g="$g_g0" 'BEGIN{exit !(g > 0.05)}' &&
+   ! grep -aq "ZERO to working precision" "$TMP/case.out"; then
+    ok "rank condition: BUG-46's counterexample is not denied its rank ($g_g0)"
+else bad "rank condition on g0" "G=$g_g0"; fi
 
 # and the inherited structure cannot degenerate at all: Theta(1)'s lower block
 # is the identity by construction, so G stays O(1) with no constraint imposed.
@@ -1127,7 +1140,9 @@ echo
 #     off the rank condition and not invented; and a chi2 p-value must NOT be
 #     printed for a comparison involving an inadmissible rung, which is the
 #     whole point of the column (docs/THEORY.md, corollary 5.1).
-run data/pairs/milan.inp 2 1 1 -case 2 -mean -specs
+#     Vienna since BUG-46: with Theorem 3's statistic Milan's free rung is
+#     admissible (G = 0.31); Vienna's is not (0.11).
+run data/pairs/vienna.inp 2 1 1 -case 2 -mean -specs
 if ! grep -aq "The specification ladder" "$TMP/case.out"; then
     bad "specs" "no ladder emitted"
 else
@@ -1155,6 +1170,13 @@ else
         ok "specs: no chi2 p-value for a comparison with an inadmissible rung"
     else bad "specs" "it printed a p-value the theory does not license"; fi
 fi
+
+# ... and on Milan, where matri and free pass the rank condition but sit with an
+# MA root on the unit circle (BUG-49), the chi2 is withheld for THAT reason.
+run data/pairs/milan.inp 2 1 1 -case 2 -mean -specs
+if grep -aq "marow   -> matri .*MA root on the unit circle" "$TMP/case.out"; then
+    ok "specs: no chi2 p-value across an MA root on the unit circle (BUG-49)"
+else bad "specs: MA boundary" "$(grep -a 'marow   -> matri' "$TMP/case.out")"; fi
 echo
 
 # 5o. -artest: the AR half of the triangular class (Gamma_i = M_i alpha') against

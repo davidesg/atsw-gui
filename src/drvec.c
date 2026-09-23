@@ -378,32 +378,51 @@ int global_warma = 0;
  *  rejecting the point the way a non-positive-definite Sigma is rejected, so
  *  that the optimiser cannot enter.                                          */
 int  global_rankadm = 0;
-/*  THE FLOOR, SET WITH THE MEASUREMENT IN FRONT AND NOT BEFORE IT.  Over the
- *  whole bank, the admissible specifications give G between 0.52 and 1.00 and
- *  the degenerate ones between 0.016 and 0.133 (HOMOLOGATION.md 4h and 4j): an
- *  order of magnitude of separation and an empty gap in between.  0.2 is the
- *  round number in that gap.  It is a choice, it is said to be one, and
- *  -rankadm changes it -- but it is not an arbitrary choice: any cut between
- *  0.15 and 0.5 classifies the twenty-odd fits of the register identically.
- *  The previous value, 1e-3, did not bite in any measured case, which is
- *  another way of being badly chosen.                                        */
+/*  THE FLOOR, AND WHAT IS LEFT OF ITS CALIBRATION.  0.2 was set in the empty
+ *  gap between the degenerate fits (0.016-0.133) and the admissible ones
+ *  (0.52-1.00) of HOMOLOGATION.md 4h/4j -- but that G was the wrong statistic,
+ *  sigma_min(Lambda_perp' Theta(1) B_perp) (BUG-46).  Re-measured with
+ *  Theorem 3's sigma_s(Lambda_perp' Theta(1)) on the eight pairs, 2 1 1
+ *  -case 2 (2026-09-24): -mafree 0.025-0.31, -matri 0.10-0.30, -marow
+ *  0.035-0.97, -mawarma 0.93-1.13.  THERE IS NO GAP ANY MORE, and the BUG-46
+ *  counterexample -- a correct rank -- has G = 0.141.  So 0.2 stays as a
+ *  CONVENTION, said to be one: below it the report warns that the fit is
+ *  NEAR the rank-deficient set; only G < GRANGER_ZERO is a denial of the
+ *  rank.  -rankadm changes it.                                               */
 real global_rankadm_tol = 0.2;
 int  global_matest = 0;      /* -matest N: bootstrap of the inherited vs free MA */
 int  global_specs  = 0;      /* -specs: the specification ladder               */
 int  global_artest = 0;      /* -artest N: bootstrap of Gamma_i = m_i alpha'   */
-static real granger_sv = -1.0;   /* sigma_min(G) at the last evaluation */
+static real granger_sv = -1.0;
+/*  Below this, G is zero to working precision and the fit DENIES its rank;
+ *  between it and the floor, the fit is only NEAR that set (BUG-46).        */
+#define GRANGER_ZERO 1.0e-6   /* sigma_min(G) at the last evaluation */
 
-/*  granger_smin — sigma_min(Lambda_perp' Theta(1) B_perp), or -1 if it does not
- *  apply.  Lambda_perp and B_perp are orthonormalised (QR), so the scale of the
- *  statistic is Theta(1)'s and not that of however Lambda happens to be
- *  written.                                                                  */
+/*  granger_smin -- the rank condition of Theorem 3, or -1 if it does not apply:
+ *
+ *      sigma_s( Lambda_perp' Theta(1) ),   an s x M matrix, s = M - r,
+ *
+ *  its smallest (s-th) singular value.  The rank is exactly r iff it is
+ *  non-zero, and that is left-coprimeness of the levels VARMA at z = 1:
+ *  rank(Lambda_perp' Theta(1)) = s  <=>  rank[Phi(1) Theta(1)] = M, since
+ *  Phi(1) = Lambda B' with B' of full row rank (STUDY_M3.md s11, checked on
+ *  20 000 draws).  What it measures is a unit MA root cancelling a unit AR
+ *  root in a direction that must stay integrated.
+ *
+ *  It used to be sigma_min(Lambda_perp' Theta(1) B_perp), an s x s product:
+ *  sufficient, not necessary.  Multiplying by B_perp can only shrink the
+ *  singular values, so it denied correct ranks (the counterexample of BUG-46),
+ *  and under -mawarma / -warma, where Theta(1) B_perp = B_perp identically, it
+ *  did not depend on Theta at all.  Lambda_perp is orthonormalised (QR), so
+ *  the scale of the statistic is Theta(1)'s.                                 */
 static real granger_smin(real **Lam, real **B2, real ***Th, int M, int r, int q)
 {
     int s = M - r, i, j, k;
-    gsl_matrix *L, *Q, *Bp, *T1, *G, *V;
+    gsl_matrix *L, *Q, *T1, *Gt, *V;
     gsl_vector *tau, *sv, *wk;
     real out = -1.0;
 
+    (void) B2;   /* B_perp no longer enters: Theorem 3 does not need it */
     if (r <= 0 || s <= 0) return -1.0;
 
     /*  Lambda_perp: the last s columns of the Q of Lambda's QR.             */
@@ -419,22 +438,6 @@ static real granger_smin(real **Lam, real **B2, real ***Th, int M, int r, int q)
         gsl_matrix_free(R);
     }
 
-    /*  B_perp = [-B2' ; I_s], ortonormalizada igual.                         */
-    Bp = gsl_matrix_alloc(M, s);
-    for (j = 0; j < s; j++) {
-        for (i = 0; i < r; i++) gsl_matrix_set(Bp, i, j, -B2[j+1][i+1]);
-        for (i = 0; i < s; i++) gsl_matrix_set(Bp, r+i, j, (i == j) ? 1.0 : 0.0);
-    }
-    {
-        gsl_matrix *Qb = gsl_matrix_alloc(M, M), *Rb = gsl_matrix_alloc(M, s);
-        gsl_vector *tb = gsl_vector_alloc(s < M ? s : M);
-        gsl_linalg_QR_decomp(Bp, tb);
-        gsl_linalg_QR_unpack(Bp, tb, Qb, Rb);
-        for (i = 0; i < M; i++)
-            for (j = 0; j < s; j++) gsl_matrix_set(Bp, i, j, gsl_matrix_get(Qb, i, j));
-        gsl_vector_free(tb); gsl_matrix_free(Rb); gsl_matrix_free(Qb);
-    }
-
     /*  Theta(1) = I - sum_k Theta_k                                          */
     T1 = gsl_matrix_alloc(M, M);
     for (i = 0; i < M; i++)
@@ -444,24 +447,23 @@ static real granger_smin(real **Lam, real **B2, real ***Th, int M, int r, int q)
             gsl_matrix_set(T1, i, j, acc);
         }
 
-    /*  G = Lambda_perp' Theta(1) B_perp,  with Lambda_perp = Q[:, r..M-1]    */
-    G = gsl_matrix_alloc(s, s);
-    for (i = 0; i < s; i++)
+    /*  Gt = (Lambda_perp' Theta(1))' = Theta(1)' Lambda_perp, M x s: GSL's
+     *  SVD wants rows >= columns, and the singular values are the same.     */
+    Gt = gsl_matrix_alloc(M, s);
+    for (i = 0; i < M; i++)
         for (j = 0; j < s; j++) {
             real acc = 0.0;
             for (int a = 0; a < M; a++)
-                for (int b = 0; b < M; b++)
-                    acc += gsl_matrix_get(Q, a, r+i) * gsl_matrix_get(T1, a, b)
-                         * gsl_matrix_get(Bp, b, j);
-            gsl_matrix_set(G, i, j, acc);
+                acc += gsl_matrix_get(T1, a, i) * gsl_matrix_get(Q, a, r+j);
+            gsl_matrix_set(Gt, i, j, acc);
         }
 
     V  = gsl_matrix_alloc(s, s);
     sv = gsl_vector_alloc(s);
     wk = gsl_vector_alloc(s);
-    if (gsl_linalg_SV_decomp(G, V, sv, wk) == 0) out = gsl_vector_get(sv, s-1);
+    if (gsl_linalg_SV_decomp(Gt, V, sv, wk) == 0) out = gsl_vector_get(sv, s-1);
     gsl_vector_free(wk); gsl_vector_free(sv); gsl_matrix_free(V);
-    gsl_matrix_free(G); gsl_matrix_free(T1); gsl_matrix_free(Bp);
+    gsl_matrix_free(Gt); gsl_matrix_free(T1);
     gsl_vector_free(tau); gsl_matrix_free(Q); gsl_matrix_free(L);
     return out;
 }
@@ -6844,13 +6846,16 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
                 gg = granger_smin(Lw, B2w, Tw, nser, r, global_q);
                 if (gg >= 0.0)
                     fprintf(outputv,
-                      "\nRank condition (Granger): sigma_min(Lambda_perp' "
-                      "Theta(1) B_perp) = %.3e\n%s", gg,
-                      (gg < global_rankadm_tol)
+                      "\nRank condition (Granger): sigma_s(Lambda_perp' "
+                      "Theta(1)) = %.3e\n%s", gg,
+                      (gg < GRANGER_ZERO)
                         ? "  *** ZERO to working precision: this fit denies the "
                           "rank it was estimated at.\n"
-                        : "  Comfortably away from zero: the fit is a model of "
-                          "the rank it was estimated at.\n");
+                      : (gg < global_rankadm_tol)
+                        ? "  *** below the floor: NEAR the set where the fit would "
+                          "deny its rank.\n"
+                        : "  Away from zero: the fit is a model of the rank it "
+                          "was estimated at.\n");
                 /*  The residual of the map: if the point were not in the image of
                  *  the transformation, this would say so instead of letting an
                  *  invented Lambda be published.                             */
@@ -7476,8 +7481,8 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
          *  which is the one vec_shootx left just before.                     */
         if (global_r > 0 && global_q > 0 && granger_sv >= 0.0) {
             fprintf(outputv,
-                "\nRank condition (Granger): sigma_min(alpha_perp' Theta(1) "
-                "beta_perp) = %.3e\n", granger_sv);
+                "\nRank condition (Granger): sigma_s(alpha_perp' Theta(1)) "
+                "= %.3e\n", granger_sv);
             if (granger_sv < global_rankadm_tol) {
                 /*  AND TO THE TERMINAL AS WELL.  A fit that denies its own rank
                  *  is not a worse fit: it is the fit of another model, and
@@ -7487,17 +7492,26 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
                  *  the PRESENTATION stops offering as an answer something the
                  *  theory does not license (docs/THEORY.md, corollary 5.1).  */
                 if (!quiet_mode)
-                    printf("\n  *** WARNING: sigma_min(alpha_perp' Theta(1) "
-                           "beta_perp) = %.3e < %.1e\n"
-                           "      This fit DENIES THE RANK it was estimated "
-                           "at: it is not a\n"
-                           "      worse fit, it is the fit of another model.  Its "
-                           "standard errors\n"
-                           "      and any LR against it do NOT have their "
-                           "usual distribution.\n"
+                    printf("\n  *** WARNING: sigma_s(alpha_perp' Theta(1)) "
+                           "= %.3e < %.1e\n"
+                           "%s"
+                           "      Its standard errors and any LR against it "
+                           "need not have\n"
+                           "      their usual distribution.\n"
                            "%s"
                            "      See the ladder:  drvec <file> %d %d %d "
                            "-specs\n", granger_sv, global_rankadm_tol,
+                           /*  Two tiers (BUG-46).  Only G = 0 is a denial of
+                            *  the rank; below the floor it is a distance, and
+                            *  the floor is a convention.                    */
+                           (granger_sv < GRANGER_ZERO)
+                             ? "      This fit DENIES THE RANK it was estimated "
+                               "at: it is not a\n"
+                               "      worse fit, it is the fit of another model.\n"
+                             : "      This fit is NEAR the set where it would deny "
+                               "its rank (a\n"
+                               "      common factor at z = 1); the floor is a "
+                               "convention, -rankadm sets it.\n",
                            /*  Where it comes from: the free class CONTAINS points
                             *  the model does not admit, and -marow only removes
                             *  one route to them (BUG-48).                  */
@@ -7508,8 +7522,8 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
                                "      -marow removes one route to them (BUG-48).\n",
                            global_p, global_q, global_r);
                 fprintf(outputv,
-                  "  *** This is ZERO to working precision, and it is not a\n"
-                  "  detail: that matrix is what makes the long-run impact\n"
+                  "  *** %s the floor %.2f (a convention; -rankadm sets it).\n"
+                  "  That matrix is what makes the long-run impact\n"
                   "  C(1) = B_perp (Lambda_perp' Gamma B_perp)^-1 Lambda_perp'\n"
                   "  Theta(1) have rank M-r.  Where it degenerates the FITTED\n"
                   "  model denies the rank it was estimated at -- it says r and\n"
@@ -7518,7 +7532,9 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
                   "  standard errors and LR statistics do not have their usual\n"
                   "  distributions there.  -rankadm refuses such points; -mawarma\n"
                   "  makes them unreachable by construction.  See\n"
-                  "  docs/HOMOLOGATION.md 4h.\n");
+                  "  docs/HOMOLOGATION.md 4h.\n",
+                  (granger_sv < GRANGER_ZERO) ? "ZERO to working precision, under"
+                                              : "Not zero, but below", global_rankadm_tol);
             } else
                 fprintf(outputv,
                   "  admissible (tolerance %.2f)\n", global_rankadm_tol);
@@ -7905,13 +7921,22 @@ static int run_specs(void)
             if (lr < -1.0e-6)
                 fprintf(outputv, "NEGATIVE: the wider fit is worse, so it did "
                                  "not converge\n");
-            else if (adm[k] && adm[k+1])
-                fprintf(outputv, "chi2 p = %.4f\n",
-                        (df > 0) ? gsl_cdf_chisq_Q(lr, df) : 1.0);
-            else
+            else if (!adm[k] || !adm[k+1])
                 fprintf(outputv, "no p-value: %s is not admissible, so the "
                                  "statistic is not chi2 (-matest)\n",
                         adm[k] ? NM[k+1] : NM[k]);
+            /*  An MA root ON the unit circle is the other boundary (BUG-49):
+             *  the same threshold -lrtest uses.  Once BUG-46 made the rank
+             *  condition right, Milan's matri and free rungs passed it with
+             *  MAmin = 1.000, and a chi2 p = 0.0000 came out of a boundary.  */
+            else if ((mam[k] >= 0.0 && mam[k] < 1.0001) ||
+                     (mam[k+1] >= 0.0 && mam[k+1] < 1.0001))
+                fprintf(outputv, "no p-value: %s has an MA root on the unit "
+                                 "circle, so the statistic is not chi2 (-matest)\n",
+                        (mam[k] >= 0.0 && mam[k] < 1.0001) ? NM[k] : NM[k+1]);
+            else
+                fprintf(outputv, "chi2 p = %.4f\n",
+                        (df > 0) ? gsl_cdf_chisq_Q(lr, df) : 1.0);
         }
 
         fprintf(outputv,
@@ -7919,11 +7944,15 @@ static int run_specs(void)
           "  process has cointegrating rank r if and only if\n"
           "  rank(Lambda_perp' Theta(1)) = M - r, and by Theorem 4 the set where\n"
           "  that fails lies INSIDE the one the optimiser searches.  A rung with\n"
-          "  a small G is not a worse fit of this model: it is a fit of another\n"
-          "  one, whose rank is not the rank it was estimated at.  Corollary 5.1\n"
+          "  G = 0 is not a worse fit of this model: it is a fit of another\n"
+          "  one, whose rank is not the rank it was estimated at, and a small G\n"
+          "  is near that.  Corollary 5.1\n"
           "  then removes the usual distributions, which is why no chi2 p-value\n"
           "  is printed for a comparison involving it.  The floor used here is\n"
-          "  %.1e (-rankadm sets it).\n", global_rankadm_tol);
+          "  %.1e, a convention (-rankadm sets it): only G = 0 denies the rank.\n"
+          "  Nor is one printed where a rung's MA has a root on the unit circle\n"
+          "  (MAmin = 1.000): that is the other boundary (BUG-49).\n",
+          global_rankadm_tol);
 
         fclose(outputv);
         printf("Done. Output written to %s\n", outputf);

@@ -1092,7 +1092,15 @@ what the user asked or read, without saying so; P1 was meant to close this class
 
 ## BUG-46 — the rank diagnostic computes `sigma_min(Lambda_perp' Theta(1) B_perp)`, which is not Theorem 3's condition: it denies a correct rank
 
-**Status: OPEN.** Found 2026-09-23 (study of Mauricio 2006 against the code,
+**Status: FIXED 2026-09-24.** `granger_smin` computes `σ_s(Λ⊥′Θ(1))`. On the
+counterexample (`tests/repro/fixtures/g0.inp`, 2001 obs.) the same fit that the
+old statistic called ZERO (1.7e-3) now reads 0.262 (truth 0.141): admissible.
+Re-measured on the bank (HOMOLOGATION §4h correction): the gap that justified the
+0.2 floor is gone, so the report has two tiers — `G < 1e-6` DENIES the rank,
+`G < tol` is NEAR that set, with the floor stated as a convention. With the
+right statistic Milan's `matri`/`free` rungs pass it with an MA root at 1.000,
+so `-specs` withholds the χ² for that reason too (BUG-49). Tests 5j, 5n. Found
+2026-09-23 (study of Mauricio 2006 against the code,
 `docs/ESTUDIO_MAURICIO_2026-09-23.md`).
 
 **What it is.** Theorem 3 (`DEMOSTRACIONES.md`) proves that the rank is exactly

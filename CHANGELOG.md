@@ -7,6 +7,15 @@ publicación: `v*`.
 
 ## Sin publicar
 
+### La condición de rango es la del Teorema 3 (BUG-46)
+
+`G` era `σ_min(Λ⊥′Θ(1)B⊥)`, más fuerte que el teorema: negaba rangos correctos
+(el contraejemplo, 0,0017 → 0,262). Ahora es `σ_s(Λ⊥′Θ(1))`. Remedida en el
+banco, ya no hay hueco que justifique el umbral 0,2: queda como convención, y el
+informe distingue G = 0 («DENIES THE RANK») de G bajo el umbral («NEAR»). `-specs`
+retiene además el χ² cuando un peldaño tiene una raíz MA en el círculo unidad
+(BUG-49). Las estimaciones no cambian.
+
 ### El contraste de rango: la tabla del caso 1, y los LR negativos
 
 - **BUG-24.** El caso 1 (sin término determinista) se leía contra la tabla de

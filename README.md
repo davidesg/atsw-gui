@@ -160,7 +160,7 @@ See [docs/THEORY.md](docs/THEORY.md) for the rank condition and
 | `-marow` | `Θ = [T₁₁ T₁₂ ; 0 0]` — the differenced block carries no moving average of its own. The default from 2026-08-20 to 2026-09-23 |
 | `-matri` | `Θ = [T₁₁ T₁₂ ; 0 T₂₂]`, block-triangular. Measured **not** to remove the pathology |
 | `-specs` | All five, in one run, with an **admissible** column and no `χ²` where the theory gives none |
-| `-rankadm [tol]` | Refuse parameter points where `σ_min(Λ⊥′Θ(1)B⊥) < tol`. The statistic is **reported always** |
+| `-rankadm [tol]` | Refuse parameter points where `σ_s(Λ⊥′Θ(1)) < tol` (Theorem 3; default 0.2, a convention). The statistic is **reported always** |
 | `-matest N` | Bootstrap the inherited moving average against the free one |
 | `-artest N` | Bootstrap `Γ_i = M_iα′` (every lag through `W`) against free `F` |
 | `-rungs` | The rank-0 ladder: `F, Θ, Σ` diagonal → `Σ` free → `F, Θ` free, with their `χ²` LRs |

@@ -7,6 +7,14 @@ publicación: `v*`.
 
 ## Sin publicar
 
+### El lector `.pre` rechaza los ficheros mal formados (BUG-39)
+
+`MAXSTR` valía 80 dentro del lector (el de `main.h`), así que una línea larga
+desplazaba el fichero: un `.pre` con λ = 1 se leía con λ = 0. Ahora tiene su
+propia longitud de línea, y un `ifadf` vacío, una línea de muestra incompleta o
+una serie truncada o con `NA` dan error con mensaje en vez de un cuelgue o una
+estimación con ceros.
+
 ### Combinaciones de opciones que caían o mentían (BUG-30, BUG-31)
 
 `-warma` con `-alpha`/`-weakex` y `-differenced` con `-matest`/`-artest` se

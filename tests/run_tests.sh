@@ -2506,6 +2506,30 @@ if [ $rc -eq 0 ] && grep -aq "p-value  reps" "$TMP/case.out"; then
 else bad "-lrtest -fixb2 -bootstrap M=3" "exit $rc"; fi
 echo
 
+# 8u. THE .pre READER REFUSES MALFORMED FILES (BUG-39).  An empty ifadf line
+#     crashed; a truncated file was estimated with zeros; the DRVUS date line
+#     `62 1850' left the start year as garbage; and a name longer than 80
+#     characters shifted the file by one line (MAXSTR was main.h's 80), so a
+#     lambda = 1 file read as lambda = 0.  The first three must fail with a
+#     message, the last must fit exactly as the same file with a short name.
+echo "[8u] the .pre reader and malformed files (BUG-39)"
+R=tests/repro/fixtures
+ABSDRVEC=$(cd "$(dirname "$DRVEC")" && pwd)/$(basename "$DRVEC")
+for f in ifempty trunc shortdate; do
+    cp "$R/$f.pre" "$TMP/$f.pre"; cp tests/fixtures/mmdiag.2.pre "$TMP/"
+    msg=$( (cd "$TMP" && timeout "$RUN_TIMEOUT" "$ABSDRVEC" $f.pre mmdiag.2.pre 2 0 1) 2>&1 >/dev/null)
+    rc=$?
+    if [ $rc -eq 1 ] && printf '%s' "$msg" | grep -q "ERROR: $f.pre"; then
+        ok "reader: $f.pre is refused with a message"
+    else bad "reader: $f.pre" "exit $rc: $msg"; fi
+done
+cp "$R/long100.pre" "$TMP/"
+(cd "$TMP" && timeout "$RUN_TIMEOUT" "$ABSDRVEC" long100.pre mmdiag.2.pre 2 0 1 >/dev/null 2>&1)
+ll=$(awk '/^logelf/{print $3}' "$TMP/long100_mmdiag.2.out" 2>/dev/null)
+[ "$ll" = "64.9983443540" ] && ok "reader: a 100-character name reads like a short one (logL $ll)" \
+                            || bad "reader: long name" "logL '$ll', expected 64.9983443540"
+echo
+
 # ================================================== 9 MEMORY (opt-in) ==
 # Off by default so `make test` is deterministic on any machine; run it with
 #     VALGRIND=1 make test

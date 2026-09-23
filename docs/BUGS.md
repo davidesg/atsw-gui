@@ -883,7 +883,18 @@ reachable on 2026-09-23: fue's writer now emits a fixed non-zero mean as
 
 ## BUG-39 — the shared `.pre` reader accepts malformed files: stack overflow, uninitialised fields, a crash, and silent zeros
 
-**Status: OPEN.** Found 2026-09-23. **Shared**: `src/fue_pre_reader.c` is
+**Status: FIXED in drvec 2026-09-24; drtran's copy still OPEN.** The root of
+item 1 was worse than the overflow: the reader's `#ifndef MAXSTR / 512` never
+took effect, because `main.h` defines `MAXSTR 80`, so any line over 80
+characters was split by `fgets` and shifted the file — that, not the stack, is
+how `long100.pre` read λ = 1 as λ = 0.  The reader now has its own 4096-byte
+line; `Tm`/`Ts` are zeroed on entry and every error path releases what was
+reserved (`PRE_FAIL`); the sample line needs its three numbers; `ifadf` needs
+all its flags; every one of the `nobs` values must be a number; `refactor`
+cannot stay undefined; `detspec` is `calloc`'d; the message no longer says
+"drtran".  `long100` now fits to the same logL as a short name (64.9983443540);
+`ifempty`, `trunc` and `shortdate` (new fixture) exit 1 with a message; valgrind
+clean.  Test 8u.  Found 2026-09-23. **Shared**: `src/fue_pre_reader.c` is
 code-identical to drtran's (`drtran/src/fue_pre_reader.c`), so all of it applies
 to the drtran binary.
 

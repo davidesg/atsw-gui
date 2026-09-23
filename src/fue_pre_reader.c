@@ -48,9 +48,14 @@
 #include <string.h>
 #include <math.h>
 
-#ifndef MAXSTR
-#define MAXSTR 512
-#endif
+#include "fue_bridge.h"     /* free_fue_pre, for the error paths (BUG-39) */
+
+/*  BUG-39.  This used PRE_LINE, and main.h defines PRE_LINE as 80: the `#ifndef
+ *  PRE_LINE / 512' that stood here never took effect.  A line longer than 80
+ *  characters -- a long series name on the date line -- was split by fgets
+ *  into two reads, and everything after it shifted by one: a lambda = 1 file
+ *  was read as lambda = 0.  The reader has its own, generous line length.   */
+#define PRE_LINE 4096
 
 /* ─── CalcNonsOp (from fue.c) ─────────────────────────────────────────── */
 static void CalcNonsOp( int sp, int d, int ds, int *ifds, int ord, real *op )
@@ -286,7 +291,7 @@ static void read_arma_section(FILE *f, char *line, int *Num, int **ord,
 {
     int i, j;
 
-    fgets(line, MAXSTR, f);                     /* cabecera */
+    fgets(line, PRE_LINE, f);                     /* cabecera */
 
     *Num = 0;
     if (fscanf(f, "%d", Num) != 1 || *Num <= 0) {
@@ -307,7 +312,7 @@ static void read_arma_section(FILE *f, char *line, int *Num, int **ord,
         (*coef)[i] = vector(0, (*ord)[i]);
         (*flag)[i] = ivector(0, (*ord)[i]);
 
-        fgets(line, MAXSTR, f);                 /* "**" */
+        fgets(line, PRE_LINE, f);                 /* "**" */
         for (j = 1; j <= (*ord)[i]; j++) {
             if (fscanf(f, "%lf", &(*coef)[i][j]) != 1) (*coef)[i][j] = 0.0;
             if (fscanf(f, "%d\n", &(*flag)[i][j]) != 1) (*flag)[i][j] = 0;
@@ -324,7 +329,7 @@ static void read_fixfreq_section(FILE *f, char *line, int *Num, int **fre,
 {
     int i;
 
-    fgets(line, MAXSTR, f);                     /* cabecera */
+    fgets(line, PRE_LINE, f);                     /* cabecera */
 
     *Num = 0;
     if (fscanf(f, "%d", Num) != 1 || *Num <= 0) {
@@ -346,7 +351,7 @@ static void read_fixfreq_section(FILE *f, char *line, int *Num, int **fre,
 
     for (i = 1; i <= *Num; i++) {
         (*coef)[i] = vector(0, 2);
-        fgets(line, MAXSTR, f);                 /* "**" */
+        fgets(line, PRE_LINE, f);                 /* "**" */
         if (fscanf(f, "%lf", &(*coef)[i][2]) != 1) (*coef)[i][2] = 0.0;
         if (fscanf(f, "%d\n", &(*flag)[i]) != 1) (*flag)[i] = 0;
     }
@@ -412,13 +417,25 @@ int read_fue_pre(const char *filename,
                  struct Tusmodel *Tm, struct Tseries *Ts, real ***DataMat)
 {
     FILE *f;
-    char  line[MAXSTR];
+    char  line[PRE_LINE];
     int   i, j;
+
+    /*  Everything the reader hands back starts at zero, so that an error at
+     *  any point can release what was reserved without walking garbage
+     *  (BUG-39: on an early return free_fue_pre read uninitialised detspec
+     *  entries), and so that no field is left for the caller to trust unset. */
+    memset(Tm, 0, sizeof *Tm);
+    memset(Ts, 0, sizeof *Ts);
+    *DataMat = NULL;
+    Ts->refactor = 1.0;
 
     if (NULL == (f = fopen(filename, "r"))) {
         fprintf(stderr, "Error opening %s\n", filename);
         return 1;
     }
+
+#define PRE_FAIL(code) do { fclose(f); free_fue_pre(Tm, Ts, *DataMat); \
+                            *DataMat = NULL; return (code); } while (0)
 
     /*  LA CABECERA ES LIBRE, y por eso aqui NO se cuentan lineas.  El parser
      *  autoritativo (fue/src/fue/inp.py [3.0], FILE_CONTRACT.md 2.0) descarta
@@ -439,42 +456,53 @@ int read_fue_pre(const char *filename,
      *  memoria.  Ver docs/PLAN_BETA.md F2.1.                                 */
     {
         int seen = 0;
-        while (fgets(line, MAXSTR, f))
+        while (fgets(line, PRE_LINE, f))
             if (strstr(line, "requency")) { seen = 1; break; }
         if (!seen) {
             fprintf(stderr, "ERROR: %s no trae el separador de frecuencia;"
                             " no es un fichero del formato fue\n", filename);
-            fclose(f);
-            return 1;
+            PRE_FAIL(1);
         }
     }
 
-    Tm->residuals = (char *)malloc(MAXSTR);
+    Tm->residuals = (char *)malloc(PRE_LINE);
 
     /* ── Frequency ── */
-    fgets(line, MAXSTR, f);
+    fgets(line, PRE_LINE, f);
     if (strstr(line, "number") || strstr(line, "Number"))
         { Ts->freq = 1; Ts->numbering = 1; }
     else
         { sscanf(line, "%u", &Ts->freq); Ts->numbering = 0; }
 
     /* ── nobs, dates, name ── */
-    fgets(line, MAXSTR, f);  /* comment */
-    fgets(line, MAXSTR, f);
+    fgets(line, PRE_LINE, f);  /* comment */
+    fgets(line, PRE_LINE, f);
     {
-        char namef[80]; int outyear;
+        /*  BUG-39: the name was read with an unbounded %s into char[80], and
+         *  the count was not checked, so the DRVUS form `62 1850' (two tokens)
+         *  left the start year and the name as stack garbage.  The three
+         *  numbers are required; the name and the residuals flag are not.  */
+        char namef[PRE_LINE]; int outyear = 0, nread;
+        namef[0] = '\0'; Tm->residuals[0] = '\0';
         Ts->nobs = 0;             /* si la linea no trae numero, se ve abajo */
         if (Ts->freq > 1)
-            sscanf(line, "%d %d %d %s %s",
-                   &Ts->nobs, &Ts->begtime, &Ts->begyear,
-                   namef, Tm->residuals);
+            nread = sscanf(line, "%d %d %d %4095s %511s",
+                           &Ts->nobs, &Ts->begtime, &Ts->begyear,
+                           namef, Tm->residuals);
         else {
-            sscanf(line, "%d %d %d %s %s",
-                   &Ts->nobs, &outyear, &Ts->begyear,
-                   namef, Tm->residuals);
+            nread = sscanf(line, "%d %d %d %4095s %511s",
+                           &Ts->nobs, &outyear, &Ts->begyear,
+                           namef, Tm->residuals);
             Ts->begtime = 1;
         }
         Ts->name = strdup(namef);
+        if (nread < 3) {
+            line[strcspn(line, "\r\n")] = '\0';
+            fprintf(stderr, "ERROR: %s: the sample line needs `nobs period "
+                            "year [name]', and has %d number(s): \"%.60s\"\n",
+                    filename, (nread < 0 ? 0 : nread), line);
+            PRE_FAIL(1);
+        }
     }
 
     /*  Y si aun asi el numero no tiene sentido, se para AQUI.  Un nobs
@@ -484,15 +512,13 @@ int read_fue_pre(const char *filename,
     if (Ts->nobs <= 0) {
         fprintf(stderr, "ERROR: %s declara %d observaciones\n",
                 filename, Ts->nobs);
-        free(Tm->residuals);
-        fclose(f);
-        return 1;
+        PRE_FAIL(1);
     }
 
     Ts->data = vector(1, Ts->nobs);
 
     /* ── NdetVar ──  (puerto fiel de fue.c [3.2]: fgets cabecera + fscanf) */
-    fgets(line, MAXSTR, f);                 /* cabecera */
+    fgets(line, PRE_LINE, f);                 /* cabecera */
     Tm->NdetVar = 0;
     fscanf(f, "%d\n", &Tm->NdetVar);
 
@@ -503,12 +529,13 @@ int read_fue_pre(const char *filename,
         /* ── [3.2.0] Nombres de las deterministas y generación de DataMat ──
            fue lee el tipo con fscanf("%s") y a continuación sus argumentos.
            Aquí se lee la línea completa y se delega en gen_detvar.          */
-        fgets(line, MAXSTR, f);             /* "**" */
+        fgets(line, PRE_LINE, f);             /* "**" */
 
-        Tm->detspec = (char **)malloc((size_t)Tm->NdetVar * sizeof(char *)) - 1;
+        /* calloc: an error half-way must leave NULLs, not garbage (BUG-39) */
+        Tm->detspec = (char **)calloc((size_t)Tm->NdetVar, sizeof(char *)) - 1;
 
         for (i = 1; i <= Tm->NdetVar; i++) {
-            fgets(line, MAXSTR, f);
+            fgets(line, PRE_LINE, f);
             line[strcspn(line, "\r\n")] = '\0';
 
             /* Se guarda la especificacion: hace falta para regenerar la
@@ -518,15 +545,14 @@ int read_fue_pre(const char *filename,
             if (!gen_detvar(line, Ts, (*DataMat)[i])) {
                 fprintf(stderr,
                         "Error: variable determinista %d (\"%s\") no reconocida.\n"
-                        "  drtran admite: impulse, compimp, step, ramp, easter,\n"
+                        "  Este lector admite: impulse, compimp, step, ramp, easter,\n"
                         "  trend, cos, sin, alter.\n"
                         "  Las variables NO ESTÁNDAR no se admiten por diseño: son\n"
                         "  una versión rudimentaria de un modelo de transferencia con\n"
                         "  input X. Especifica esa relación como transferencia (ω/δ, b),\n"
                         "  que es precisamente lo que drtran estima.\n",
                         i, line);
-                fclose(f);
-                return 2;
+                PRE_FAIL(2);
             }
         }
 
@@ -539,7 +565,7 @@ int read_fue_pre(const char *filename,
         Tm->Ielta  = (int  **)malloc((size_t)Tm->NdetVar * sizeof(int  *)) - 1;
 
         /* ── [3.2.2] Omegas: ω(B) de cada determinista ── */
-        fgets(line, MAXSTR, f);             /* cabecera "**" */
+        fgets(line, PRE_LINE, f);             /* cabecera "**" */
         for (i = 1; i <= Tm->NdetVar; i++)
             if (fscanf(f, "%d", &Tm->Nomega[i]) != 1) Tm->Nomega[i] = 0;
         fscanf(f, "\n");
@@ -547,7 +573,7 @@ int read_fue_pre(const char *filename,
         for (i = 1; i <= Tm->NdetVar; i++) {
             Tm->Omega[i] = vector(0, Tm->Nomega[i]);
             Tm->Imega[i] = ivector(0, Tm->Nomega[i]);
-            fgets(line, MAXSTR, f);         /* "**" */
+            fgets(line, PRE_LINE, f);         /* "**" */
             for (j = 0; j <= Tm->Nomega[i]; j++) {
                 if (fscanf(f, "%lf", &Tm->Omega[i][j]) != 1) Tm->Omega[i][j] = 0.0;
                 if (fscanf(f, "%d\n", &Tm->Imega[i][j]) != 1) Tm->Imega[i][j] = 0;
@@ -555,7 +581,7 @@ int read_fue_pre(const char *filename,
         }
 
         /* ── [3.2.3] Deltas: δ(B) de cada determinista (solo si Ndelta > 0) ── */
-        fgets(line, MAXSTR, f);             /* cabecera "**" */
+        fgets(line, PRE_LINE, f);             /* cabecera "**" */
         for (i = 1; i <= Tm->NdetVar; i++)
             if (fscanf(f, "%d", &Tm->Ndelta[i]) != 1) Tm->Ndelta[i] = 0;
         fscanf(f, "\n");
@@ -565,7 +591,7 @@ int read_fue_pre(const char *filename,
 
             Tm->Delta[i] = vector(1, Tm->Ndelta[i]);
             Tm->Ielta[i] = ivector(1, Tm->Ndelta[i]);
-            fgets(line, MAXSTR, f);         /* "**" */
+            fgets(line, PRE_LINE, f);         /* "**" */
             for (j = 1; j <= Tm->Ndelta[i]; j++) {
                 if (fscanf(f, "%lf", &Tm->Delta[i][j]) != 1) Tm->Delta[i][j] = 0.0;
                 if (fscanf(f, "%d\n", &Tm->Ielta[i][j]) != 1) Tm->Ielta[i][j] = 0;
@@ -599,13 +625,13 @@ int read_fue_pre(const char *filename,
        FUE escribe "valor flag" si la media se estima (p.ej. "0.154472  1"),
        y un único "0" si la media NO forma parte del modelo. El flag es lo que
        decide si mu es un parámetro libre, no el que su valor sea o no cero.  */
-    fgets(line, MAXSTR, f); fgets(line, MAXSTR, f);
+    fgets(line, PRE_LINE, f); fgets(line, PRE_LINE, f);
     if (sscanf(line, "%lf %d", &Tm->mu, &Tm->Imu) < 2) {
         Tm->Imu = 0;   /* media fijada en el valor leído (típicamente 0) */
     }
 
     /* ── Box-Cox + diffs ── */
-    fgets(line, MAXSTR, f); fgets(line, MAXSTR, f);
+    fgets(line, PRE_LINE, f); fgets(line, PRE_LINE, f);
     sscanf(line, "%lf %d %d", &Tm->boxlam, &Tm->nrdiff, &Tm->nadiff);
 
     /* ── ifadf ──
@@ -619,29 +645,50 @@ int read_fue_pre(const char *filename,
        Comprobado sobre un .pre anual escrito por fue.  drtran no lo vio porque
        sus datos son mensuales; para drvec es el caso normal (el banco empieza
        en 1851).  Ver docs/PLAN_BETA.md F2.1.                                */
-    fgets(line, MAXSTR, f); fgets(line, MAXSTR, f);
+    fgets(line, PRE_LINE, f); fgets(line, PRE_LINE, f);
     if (Ts->freq > 1) {
         Tm->ifadf = ivector(0, Ts->freq / 2);
-        { char *p = line; for (i = 0; i <= Ts->freq / 2; i++)
-            { int off; sscanf(p, "%d%n", &Tm->ifadf[i], &off); p += off; } }
+        Tm->sper  = Ts->freq;     /* free_fue_pre keys the release on sper */
+        /*  BUG-39: an empty line left `off' uninitialised, and p += off
+         *  walked off the buffer.  Every flag has to be there.              */
+        { char *p = line; for (i = 0; i <= Ts->freq / 2; i++) {
+            int off = 0;
+            if (sscanf(p, "%d%n", &Tm->ifadf[i], &off) != 1) {
+                fprintf(stderr, "ERROR: %s: the ifadf line needs %d flags "
+                                "(frequency %d), and has %d\n",
+                        filename, Ts->freq / 2 + 1, Ts->freq, i);
+                PRE_FAIL(1);
+            }
+            p += off; } }
     } else {
         Tm->ifadf = NULL;   /* el original lo dejaba sin inicializar */
     }
 
     /* ── cbands + refactor ── */
-    fgets(line, MAXSTR, f); fgets(line, MAXSTR, f);
-    sscanf(line, "%lf %lf", &Tm->cbands, &Ts->refactor);
+    fgets(line, PRE_LINE, f); fgets(line, PRE_LINE, f);
+    if (sscanf(line, "%lf %lf", &Tm->cbands, &Ts->refactor) < 2)
+        Ts->refactor = 1.0;       /* a short line cannot leave it undefined */
     if (Ts->refactor == 0.0) Ts->refactor = 1.0;
 
     /* ── Data section ── */
 /* lectura de la serie */
-    fgets(line, MAXSTR, f);  /* "** Time series..." */
+    fgets(line, PRE_LINE, f);  /* "** Time series..." */
+    /*  BUG-39: a truncated file used to end in calloc zeros, an `NA' was read
+     *  as 0 and a blank line shifted the series -- all with exit 0, and the
+     *  zeros then estimated.  Every one of the nobs values has to be a number.
+     *  fue.load rejects the same files.                                      */
     for (i = 1; i <= Ts->nobs; i++) {
-        if (!fgets(line, MAXSTR, f)) break;
-        sscanf(line, "%lf", &Ts->data[i]);
+        if (!fgets(line, PRE_LINE, f) || sscanf(line, "%lf", &Ts->data[i]) != 1) {
+            fprintf(stderr, "ERROR: %s: observation %d of %d is %s\n",
+                    filename, i, Ts->nobs,
+                    feof(f) ? "missing (the file ends before the sample does)"
+                            : "not a number");
+            PRE_FAIL(1);
+        }
     }
 
     fclose(f);
+#undef PRE_FAIL
 
     /* ── Finalize model ── */
     Tm->sper = Ts->freq;

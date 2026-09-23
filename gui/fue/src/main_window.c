@@ -259,6 +259,16 @@ static GtkWidget* create_data_input_tab(FueContext *ctx) {
     gtk_box_pack_start(GTK_BOX(hbox_files), label_inp, FALSE, FALSE, 0);
     ctx->input_name_entry = gtk_entry_new();
     gtk_box_pack_start(GTK_BOX(hbox_files), ctx->input_name_entry, TRUE, TRUE, 0);
+    /* LA ESQUINA SIGUE A LA ENTRADA, no a un momento concreto.
+     *
+     * "Model:" se actualizaba SOLO al guardar el .inp, asi que al cargar un
+     * modelo --por el selector o mandado por la madre-- seguia diciendo el
+     * anterior, o "(none)". Un rotulo que dice lo que hay tiene que
+     * escucharlo, no que lo avisen: si depende de que alguien se acuerde de
+     * llamarlo, es cuestion de tiempo que un camino nuevo se olvide. Y eso
+     * es lo que paso con el camino que abre la madre.                  */
+    g_signal_connect_swapped(ctx->input_name_entry, "changed",
+                             G_CALLBACK(update_model_label), ctx);
     row++;
 
     /* Fila 5: Rescaling Factor (movido aquí) */

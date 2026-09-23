@@ -83,6 +83,19 @@ int main(int argc, char **argv) {
     gtk_entry_set_text(GTK_ENTRY(ctx->input_name_entry), model);
     g_free(inp);
 
+    /* LA ESQUINA DICE QUE MODELO HAY, Y LO DICE AL CARGARLO.
+     *
+     * Decia el anterior --o "(none)"-- hasta que se guardaba el .inp: el
+     * rotulo se actualizaba en UN sitio, el de guardar, en vez de escuchar a
+     * la entrada de la que sale. Se vio al abrir un modelo desde la madre,
+     * que es un camino que nunca pasa por guardar.                     */
+    {
+    const char *m = gtk_label_get_text(GTK_LABEL(ctx->model_label));
+
+    check(m && strstr(m, model) != NULL,
+          "«Model:» dice el modelo en cuanto se carga, sin guardar nada", m);
+    }
+
     /* Y le da a Run */
     on_run_fue(NULL, ctx);
     pump(1500);

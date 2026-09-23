@@ -106,6 +106,9 @@ typedef struct {
    GtkWidget *hoja[PR_MAX_MUESTRA + 1];
    char       hoja_mu[PR_MAX_MUESTRA + 1][PR_ID];
    int        nhojas;
+   /* LA HOJA DELANTE, de un campo: el widget no lo sabe todavia cuando
+      "switch-page" nos llama. Ver atsw_muestra_actual.                */
+   int        hoja_actual;
    GtkWidget *ver_cuenta;         /* veredicto: cuantas cosas hay           */
    GtkWidget *ver_ojo;            /* veredicto: LO QUE HAY QUE MIRAR        */
    GtkWidget *estado;             /* la barra de abajo                      */

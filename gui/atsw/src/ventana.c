@@ -125,14 +125,21 @@ const AtRes *atsw_resultado( Atsw *a, const char *serie, const char *muestra,
 /* ------------------------------------------------------------------------ */
 
 /* LA HOJA QUE ESTA DELANTE. "" es la completa. */
+/* LA HOJA QUE ESTA DELANTE, DE UN CAMPO Y NO DEL WIDGET.
+ *
+ * Preguntarselo al cuaderno no valia: "switch-page" es RUN_LAST, asi que el
+ * manejador de la aplicacion corre ANTES del que cambia la pagina de verdad
+ * y gtk_notebook_get_current_page todavia contesta LA ANTERIOR. El repintado
+ * salia con la muestra de antes, y al cambiar otra vez salia con la de antes
+ * de esa: la lista parecia ir un paso por detras, o "lenta".
+ *
+ * Asi que el numero de hoja se GUARDA cuando se sabe --lo trae la señal-- en
+ * vez de deducirlo del widget en un momento en que el widget miente.     */
 const char *atsw_muestra_actual( Atsw *a )
 {
-    int n;
-
-    if ( a == NULL || a->libro == NULL ) return "";
-    n = gtk_notebook_get_current_page( GTK_NOTEBOOK(a->libro) );
-    if ( n < 0 || n >= a->nhojas ) return "";
-    return a->hoja_mu[n];
+    if ( a == NULL || a->hoja_actual < 0 || a->hoja_actual >= a->nhojas )
+        return "";
+    return a->hoja_mu[a->hoja_actual];
 }
 
 const char *atsw_modelo_por_defecto_en( const Proyecto *p, const char *serie,
@@ -409,13 +416,19 @@ static void pinta_hoja( Atsw *a, GtkWidget *vista, const char *muestra )
     g_free( marca );
 }
 
+/* SOLO LA HOJA QUE SE VE.
+ *
+ * Pintarlas todas en cada refresco es trabajo que nadie mira: una hoja que
+ * no esta delante no necesita estar al dia, necesita estarlo CUANDO SE MIRE
+ * -- y cambiar de hoja repinta. Con varias muestras, pintarlas todas
+ * multiplicaba por el numero de hojas un refresco que ademas ocurre al
+ * volver el foco a la ventana.                                         */
 static void pinta_modelos( Atsw *a )
 {
-    int i;
+    if ( a->hoja_actual < 0 || a->hoja_actual >= a->nhojas ) return;
 
     a->recolocando = TRUE;
-    for ( i = 0; i < a->nhojas; i++ )
-        pinta_hoja( a, a->hoja[i], a->hoja_mu[i] );
+    pinta_hoja( a, a->hoja[a->hoja_actual], a->hoja_mu[a->hoja_actual] );
     a->recolocando = FALSE;
 }
 
@@ -609,7 +622,9 @@ void atsw_hojas( Atsw *a )
         if ( !strcmp( a->hoja_mu[i], vuelve ) )
             { gtk_notebook_set_current_page( GTK_NOTEBOOK(a->libro), i ); break; }
 
-    a->l_modelos = a->hoja[ gtk_notebook_get_current_page(
-                                GTK_NOTEBOOK(a->libro) ) ];
+    a->hoja_actual = gtk_notebook_get_current_page( GTK_NOTEBOOK(a->libro) );
+    if ( a->hoja_actual < 0 || a->hoja_actual >= a->nhojas )
+        a->hoja_actual = 0;
+    a->l_modelos = a->hoja[a->hoja_actual];
     a->recolocando = FALSE;
 }

@@ -619,6 +619,10 @@ static void on_hoja( GtkNotebook *nb, GtkWidget *pag, guint n, Atsw *a )
 {
     (void) nb; (void) pag;
     if ( (int) n >= a->nhojas ) return;
+
+    /* LA SEÑAL TRAE EL NUMERO, y es el unico sitio donde se sabe: el
+       cuaderno todavia contesta la hoja anterior.                    */
+    a->hoja_actual = (int) n;
     a->l_modelos = a->hoja[n];
     if ( a->recolocando ) return;
 

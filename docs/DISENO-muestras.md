@@ -163,9 +163,26 @@ serie, la fila de pestañas bailaría al cambiar de serie. Siendo del proyecto,
 la fila es estable: siempre las mismas hojas, y una vacía significa «aquí no
 has estimado nada todavía», que es una invitación y no un hueco.
 
+**La primera hoja es la muestra completa, y siempre está.** No se crea, no se
+borra y no se renombra: es lo que entró. Un proyecto que nunca trunque nada
+vive entero en ella y no se entera de que hay más.
+
+> «El primer tab, serie muestra completa, y puede ser necesario o no añadir
+> submuestras.»
+
+Eso es: **las submuestras son opcionales**. La fila se queda en
+
+    │ Completa │ + │
+
+y ya. Una sola hoja con su «+» al lado ocupa una línea y no pide nada; quien
+no la necesite no la usa. Prefiero eso a esconder la fila cuando hay una sola
+muestra, porque entonces el gesto de crear la primera no tendría dónde vivir
+—habría que inventarle un menú— y nadie descubriría que se puede.
+
 **La hoja «+».** Definir una submuestra es exactamente el botón de hoja nueva.
 Mejor sitio que cualquier menú, y con la misma pregunta al crearla: hasta
-dónde, y por qué.
+dónde, y por qué. Borrar una hoja **no borra modelos**: pregunta qué hacer con
+los que viven en ella, porque son estimaciones de verdad con su `.out`.
 
 #### Las dos condiciones
 

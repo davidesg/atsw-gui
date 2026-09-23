@@ -108,27 +108,13 @@ $CC -O0 -g -Wall -I"$TOP/include" $LIB_INC $GTK_CFLAGS \
     -o "$WORK/test_gui" $GTK_LIBS -lm 2> "$WORK/gui_build.txt" ||
     { cat "$WORK/gui_build.txt"; exit 1; }
 
-# --------------------------------------------------------------------------
-# El editor del .inp: Edit, tocar el texto, Save, Run -- y que lo editado
-# siga ahi cuando el motor lo lee.
-# --------------------------------------------------------------------------
-$CC -O0 -g -Wall -I"$TOP/include" $LIB_INC $GTK_CFLAGS \
-    "$TOP/tests/test_editor.c" $GUI_SRCS \
-    -o "$WORK/test_editor" $GTK_LIBS -lm 2> "$WORK/ed_build.txt" ||
-    { cat "$WORK/ed_build.txt"; exit 1; }
-
-if command -v fue > /dev/null 2>&1; then
-    mkdir -p "$WORK/ed"
-    cp "$TOP/data/D1.inp" "$WORK/ed/"
-    ( cd "$WORK/ed" && "$WORK/test_editor" "$PWD" D1 ) 2>/dev/null > "$WORK/ed.txt"
-    if [ $? = 0 ]; then
-        echo "  editor          : Edit/Save/Run conserva la edicion"
-        sed -n 's/^\(rechazo\|aviso\|tras guardar\)/  &/p' "$WORK/ed.txt"
-    else
-        grep -E '^FAIL|^no hay' "$WORK/ed.txt"
-        grep -q '^no hay' "$WORK/ed.txt" || rc=1
-    fi
-fi
+# El EDITOR DEL .inp ya no esta aqui: se mudo a la madre, sobre un nodo del
+# proyecto (gui/atsw/src/editor.c, docs/DISENO-editor.md §7). Con el se fue
+# tests/test_editor.c, que probaba los botones de esta consola.
+#
+# LA REGLA QUE PROBABA NO SE HA PERDIDO -- "un guardado fallido no puede
+# costar trabajo, y se dice la linea" -- : se prueba en el banco de la madre,
+# sobre atsw_guarda_inp(), que valida con ESTE MISMO inpcheck.
 
 if command -v fue > /dev/null 2>&1; then
     mkdir -p "$WORK/gui"

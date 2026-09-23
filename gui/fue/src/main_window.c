@@ -536,23 +536,25 @@ static GtkWidget* create_console_tab(FueContext *ctx) {
     GtkWidget *button_box = gtk_button_box_new(GTK_ORIENTATION_HORIZONTAL);
     gtk_button_box_set_layout(GTK_BUTTON_BOX(button_box), GTK_BUTTONBOX_END);
 
-    ctx->edit_inp_button = gtk_button_new_with_label("Edit .inp");
-    g_signal_connect(ctx->edit_inp_button, "clicked", G_CALLBACK(on_edit_inp_clicked), ctx);
-    gtk_container_add(GTK_CONTAINER(button_box), ctx->edit_inp_button);
-
-    ctx->edit_pre_button = gtk_button_new_with_label("Edit .pre");
-    gtk_widget_set_tooltip_text(ctx->edit_pre_button,
-        "Open the .pre. A .pre is an optimum: touching it makes it a "
-        "specification again, so saving writes the .inp.");
-    g_signal_connect(ctx->edit_pre_button, "clicked", G_CALLBACK(on_edit_pre_clicked), ctx);
-    gtk_container_add(GTK_CONTAINER(button_box), ctx->edit_pre_button);
-
-    ctx->save_inp_button = gtk_button_new_with_label("Save .inp");
-    g_signal_connect(ctx->save_inp_button, "clicked", G_CALLBACK(on_save_inp_clicked), ctx);
-    gtk_widget_set_sensitive(ctx->save_inp_button, FALSE);
-    gtk_container_add(GTK_CONTAINER(button_box), ctx->save_inp_button);
-
-    gtk_box_pack_start(GTK_BOX(vbox), button_box, FALSE, FALSE, 0);
+    /* AQUI ESTABAN «Edit .inp», «Edit .pre» y «Save .inp», y se han ido.
+     *
+     * El editor del fichero vive ahora en la madre, sobre un NODO del
+     * proyecto: gui/atsw/src/editor.c. Es la mudanza que docs/DISENO-editor
+     * §7 dejaba pendiente desde la fase 2 -- entonces el editor trabajaba
+     * sobre «<area de trabajo>/<modelo>», y abrir cualquier otro chocaba con
+     * que la raiz tiene que estar declarada. Ya lo esta.
+     *
+     * Aqui sobraban por dos razones y la segunda es la de peso:
+     *
+     *   - eran una TERCERA puerta al mismo fichero, al lado del formulario
+     *     de estas pestañas;
+     *   - y su ambito era «el modelo del area de trabajo», que no es un
+     *     nodo de nada. Desde que existe el manifiesto, editar un .inp que
+     *     ya se estimo puede DERIVAR uno nuevo en vez de dejar su .out
+     *     describiendo otra cosa. Eso aqui no se podia hacer.
+     *
+     * La consola se queda: es donde sale lo que escribe el motor.      */
+    gtk_widget_destroy(button_box);
     return vbox;
 }
 

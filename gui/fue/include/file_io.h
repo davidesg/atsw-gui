@@ -16,9 +16,6 @@ void on_view_output(GtkWidget *widget, FueContext *ctx);
 void on_view_inp(GtkWidget *widget, FueContext *ctx);
 void on_quit(GtkWidget *widget, FueContext *ctx);
 
-void on_edit_inp_clicked(GtkButton *button, FueContext *ctx);
-void on_edit_pre_clicked(GtkButton *button, FueContext *ctx);
-void on_save_inp_clicked(GtkButton *button, FueContext *ctx);
 void load_output_to_console(FueContext *ctx);
 
 /* Lo que el motor escribio, a la consola: cuando no deja fichero de salida

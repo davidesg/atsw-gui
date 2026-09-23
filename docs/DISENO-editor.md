@@ -266,7 +266,30 @@ el fallo que el motor ya tuvo y que sólo avisaba.
 Si el modelo no se ha estimado, el botón está apagado: el gráfico sale de
 estimar, así que faltar significa una cosa concreta y se dice cuál.
 
-### 7.6 El `.pre`, aquí
+### 7.6 Y los botones de la consola se han ido
+
+`Edit .inp`, `Edit .pre` y `Save .inp` ya no están en fue_gui. Sobraban por
+dos razones, y la segunda es la de peso:
+
+- eran una **tercera puerta al mismo fichero**, al lado del formulario de las
+  pestañas;
+- y su ámbito era *«el modelo del área de trabajo»*, que no es un nodo de
+  nada. Desde que existe el manifiesto, editar un `.inp` que ya se estimó
+  puede **derivar** uno nuevo en vez de dejar su `.out` describiendo otra
+  cosa — y eso allí no se podía hacer, porque allí no hay proyecto.
+
+La consola se queda: es donde sale lo que escribe el motor.
+
+Con ellos se fue `gui/fue/tests/test_editor.c`. **La regla que probaba no se
+ha perdido**: «un guardado fallido no puede costar trabajo, y se dice la
+línea» se prueba ahora en el banco de la madre sobre `atsw_guarda_inp()`, que
+valida con **este mismo** `inpcheck`.
+
+Lo que sí se pierde: quien use fue_gui **suelto**, sin la madre, ya no puede
+editar el fichero a mano. Es el precio de que el editor sea del proyecto, y
+se paga a sabiendas.
+
+### 7.7 El `.pre`, aquí
 
 En la madre no hace falta un `Edit .pre`: **`Iterar` ya es eso**, y lo hace
 antes de abrir nada — copia el `.pre` a un `.inp` nuevo con su linaje, y ese

@@ -653,7 +653,7 @@ void atsw_editor( Atsw *a, const char *serie, const char *id )
     /* ARRIBA LO QUE SE MIRA, ABAJO LO QUE PASA.
      *
      * El .inp y el .out son dos vistas del MISMO modelo -- la especificacion
-     * y su informe -- asi que van en pestañas: se alternan, no se comparan.
+     * y el output -- asi que van en pestañas: se alternan, no se comparan.
      * La consola es otra cosa: es el registro de lo que se ha ejecutado, y
      * tiene que verse A LA VEZ que cualquiera de las dos.              */
     pan = gtk_paned_new( GTK_ORIENTATION_VERTICAL );
@@ -664,7 +664,7 @@ void atsw_editor( Atsw *a, const char *serie, const char *id )
 
     E->texto = monoespaciado();
     gtk_notebook_append_page( GTK_NOTEBOOK(E->libro), en_scroll( E->texto ),
-                              gtk_label_new( "Especificación (.inp)" ) );
+                              gtk_label_new( "Especificación" ) );
 
     E->salida = monoespaciado();
     gtk_text_view_set_editable( GTK_TEXT_VIEW(E->salida), FALSE );
@@ -672,7 +672,7 @@ void atsw_editor( Atsw *a, const char *serie, const char *id )
         "El informe de la estimación con su diagnosis. Se lee AQUI: los "
         "errores típicos se leen del .out, nunca de reejecutar un .pre." );
     gtk_notebook_append_page( GTK_NOTEBOOK(E->libro), en_scroll( E->salida ),
-                              gtk_label_new( "Informe (.out)" ) );
+                              gtk_label_new( "Output" ) );
 
     E->consola = monoespaciado();
     gtk_text_view_set_editable( GTK_TEXT_VIEW(E->consola), FALSE );

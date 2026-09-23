@@ -231,9 +231,13 @@ dueños con que empezó esta fase.
 > es más avanzado.»
 
 El `.inp` y el `.out` son **dos vistas del mismo modelo** —la especificación y
-su informe—, así que van en pestañas: se alternan, no se comparan. Al terminar
-una estimación el informe se pone delante solo, que es lo que uno iba a hacer
+el output—, así que van en pestañas: se alternan, no se comparan. Al terminar
+una estimación el output se pone delante solo, que es lo que uno iba a hacer
 con el ratón.
+
+Las pestañas se llaman **Especificación** y **Output**, sin la extensión
+detrás. El nombre del fichero ya está en el título de la ventana, y repetirlo
+en cada pestaña era decirlo dos veces para decir lo mismo.
 
 La **consola** es otra cosa y por eso está fuera del cuaderno, visible a la
 vez que cualquiera de las dos. Lleva la orden tal cual, con su directorio:

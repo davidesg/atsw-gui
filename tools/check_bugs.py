@@ -28,6 +28,7 @@ import sys
 #  docs/BUGS.md, "How this register works".
 FOREIGN = {
     "drtran-python/docs/BUGS.md": range(1, 14),      # BUG-1 .. BUG-13
+    "drtran-python/docs/BUGS.md (2026-09-23)": range(21, 23),   # BUG-21, BUG-22
 }
 #  fue numbers with four digits (BUG-0005 ...), a separate sequence that cannot
 #  collide with this one.

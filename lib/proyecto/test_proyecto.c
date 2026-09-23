@@ -52,6 +52,10 @@ int main( int argc, char **argv )
 
     printf( "LA CADENA DE ITERACION\n" );
     pr_nuevo( p, "SF_MEG", "Inflación del área euro", "." );
+    /* CUANDO SE EMPEZO: nadie lo ponia y el campo salia siempre vacio. Es
+       una fecha que despues no se reconstruye mirando nada.          */
+    ok( strlen( p->creado ) == 10 && p->creado[4] == '-' && p->creado[7] == '-',
+        "un proyecto nuevo sabe cuándo se creó" );
     snprintf( p->path, sizeof p->path, "%s/proyecto.yaml", DIR );
     ok( pr_serie_add( p, "IPC_ES", &e ) == 0, "se da de alta una serie" );
     ok( pr_serie_add( p, "IPC_ES", &e ) != 0 && e.cod == PR_EDUP,

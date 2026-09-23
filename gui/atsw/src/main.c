@@ -291,6 +291,12 @@ static void on_abrir( GtkButton *b, Atsw *a )
     gtk_widget_destroy( d );
 }
 
+static void on_proyecto( GtkButton *b, Atsw *a )
+{
+    (void) b;
+    atsw_proyecto_edita( a );
+}
+
 static void on_nuevo( GtkButton *b, Atsw *a )
 {
     GtkWidget *d;
@@ -1148,12 +1154,23 @@ static void activate( GtkApplication *app, gpointer d )
     boton( barra, "Abrir…", "Un proyecto.yaml. Si está roto se dice y NO se "
                             "abre: nunca se pisa.", G_CALLBACK(on_abrir), a );
     boton( barra, "Nuevo…", NULL, G_CALLBACK(on_nuevo), a );
+    boton( barra, "Proyecto…",
+        "Identificador, título y analista. Y lo que no se edita pero hay que "
+        "saber: cuándo se creó, dónde está el manifiesto y dónde la raíz de "
+        "los datos.", G_CALLBACK(on_proyecto), a );
     boton( barra, "Datos…",
         "De un .xlsx, un .csv o un .txt a n SERIES del proyecto, cada una con "
         "su primer .inp.\n\nEs el eslabón que faltaba: el camino datos → "
         ".inp(-1) no lo recorría nadie.", G_CALLBACK(on_datos), a );
 
     a->l_proy = gtk_label_new( "(sin proyecto)" );
+    /* QUE SE GUARDA SOLO, DICHO. No hay botón de «Guardar» porque no hace
+       falta --cada cambio escribe el manifiesto-- pero no decirlo deja al
+       analista buscando uno que no existe.                            */
+    gtk_widget_set_tooltip_text( a->l_proy,
+        "El proyecto se guarda SOLO en cada cambio: dar de alta una serie, "
+        "derivar, iterar, elegir, poner una razón. No hay que guardarlo a "
+        "mano y no se puede perder.\n\n«Proyecto…» para su información." );
     gtk_label_set_ellipsize( GTK_LABEL(a->l_proy), PANGO_ELLIPSIZE_MIDDLE );
     gtk_box_pack_start( GTK_BOX(barra), a->l_proy, TRUE, TRUE, 8 );
 

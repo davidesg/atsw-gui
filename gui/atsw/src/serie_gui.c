@@ -1,5 +1,5 @@
 /*
- * serie_gui.c -- «Editar…» una serie: lo que es y de donde vino.
+ * serie_gui.c -- los formularios de texto: la serie y el proyecto.
  *
  * NADA DE ESTO TOCA UN NUMERO. Son los campos que el .inp no puede llevar --
  * el motor lee un nombre y ya-- y que sin embargo son la mitad de lo que hace
@@ -211,4 +211,102 @@ const char *atsw_fecha_texto( const AtFecha *F, char *out, size_t n )
         g_snprintf( out, n, "%d/%d",
             gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(F->per) ), y );
     return out;
+}
+
+
+/* ------------------------------------------------------------------------ */
+/* «Información del proyecto…»                                              */
+/*                                                                           */
+/* El manifiesto lleva id, titulo, analista y creado, y hasta ahora NO HABIA */
+/* FORMA DE PONERLOS salvo editando el fichero a mano: «Nuevo…» ponia el id  */
+/* del nombre del fichero y el titulo vacio. Es el hermano de «Editar la     */
+/* serie…», y por la misma razon -- son los campos que ningun .inp puede     */
+/* llevar y que hacen falta para volver a esto meses despues.                */
+/*                                                                           */
+/* LA RAIZ Y LA RUTA SE ENSEÑAN Y NO SE EDITAN. La raiz se resuelve CONTRA   */
+/* EL DIRECTORIO DEL MANIFIESTO, asi que cambiar cualquiera de las dos aqui  */
+/* dejaria el proyecto apuntando a un sitio sin series. Mover un proyecto es */
+/* mover el manifiesto Y las carpetas de las series: es una operacion, no un */
+/* campo de un formulario.                                                   */
+/* ------------------------------------------------------------------------ */
+
+void atsw_proyecto_edita( Atsw *a )
+{
+    PrError    e;
+    GtkWidget *d, *caja, *rej;
+    GtkWidget *e_id, *e_tit, *e_ana;
+    int        r;
+
+    if ( !a->hay ) { barra_pub( a, "Abre un proyecto antes." ); return; }
+
+    d = gtk_dialog_new_with_buttons( "Información del proyecto",
+            GTK_WINDOW(a->ventana), GTK_DIALOG_MODAL,
+            "Cancelar", GTK_RESPONSE_CANCEL, "Guardar", GTK_RESPONSE_OK, NULL );
+    gtk_dialog_set_default_response( GTK_DIALOG(d), GTK_RESPONSE_OK );
+
+    caja = gtk_dialog_get_content_area( GTK_DIALOG(d) );
+    gtk_container_set_border_width( GTK_CONTAINER(caja), 10 );
+    gtk_box_set_spacing( GTK_BOX(caja), 8 );
+
+    rej = gtk_grid_new();
+    gtk_grid_set_row_spacing( GTK_GRID(rej), 6 );
+    gtk_grid_set_column_spacing( GTK_GRID(rej), 8 );
+    gtk_box_pack_start( GTK_BOX(caja), rej, TRUE, TRUE, 0 );
+
+    e_id  = atsw_fila( rej, 0, "Identificador ", a->p->id,
+        "Corto, para nombrarlo: «SF_MEG», «emu». No nombra ningún "
+        "directorio, así que cambiarlo no mueve nada." );
+    e_tit = atsw_fila( rej, 1, "Título ", a->p->titulo,
+        "De qué va este proyecto, en una línea." );
+    e_ana = atsw_fila( rej, 2, "Analista ", a->p->analista,
+        "Quién lo lleva. Dentro de un año, saberlo no es trivial." );
+
+    /* LO QUE NO SE EDITA, pero sí se enseña: es la mitad de lo que hay que
+     * saber de un proyecto, y esconderlo no lo hace menos cierto.      */
+    {
+    GtkWidget *l = gtk_label_new( NULL );
+    gchar     *t = g_markup_printf_escaped(
+        "<small>Creado el %s.\n"
+        "Manifiesto: %s\n"
+        "Raíz de los datos: %s (relativa al manifiesto)\n\n"
+        "<b>El proyecto se guarda solo</b> en cada cambio: dar de alta una "
+        "serie,\nderivar, iterar, elegir, poner una razón. No hay que "
+        "guardarlo a mano.\n\n"
+        "Para llevarlo a otro sitio hay que mover el manifiesto <b>y las "
+        "carpetas\nde las series</b>: mover sólo este fichero lo dejaría "
+        "apuntando a un\ndirectorio sin datos.</small>",
+        a->p->creado[0] ? a->p->creado : "(no consta)",
+        a->p->path, a->p->raiz );
+
+    gtk_label_set_markup( GTK_LABEL(l), t );
+    gtk_label_set_xalign( GTK_LABEL(l), 0.0 );
+    gtk_box_pack_start( GTK_BOX(caja), l, FALSE, FALSE, 0 );
+    g_free( t );
+    }
+
+    gtk_widget_show_all( d );
+    r = gtk_dialog_run( GTK_DIALOG(d) );
+
+    if ( r == GTK_RESPONSE_OK )
+        {
+        char nuevo[PR_ID];
+
+        /* El identificador se limpia como los demás: lo que no cabe o no
+           vale no se guarda a medias.                                  */
+        a_id( gtk_entry_get_text( GTK_ENTRY(e_id) ), nuevo, sizeof nuevo );
+        if ( nuevo[0] ) snprintf( a->p->id, PR_ID, "%s", nuevo );
+
+        snprintf( a->p->titulo, PR_TEXTO, "%s",
+                  gtk_entry_get_text( GTK_ENTRY(e_tit) ) );
+        snprintf( a->p->analista, PR_TEXTO, "%s",
+                  gtk_entry_get_text( GTK_ENTRY(e_ana) ) );
+
+        if ( pr_escribir( a->p, a->p->path, &e ) != 0 )
+            { char why[512]; pr_error_es( &e, why, sizeof why );
+              barra_pub( a, why ); }
+        else
+            barra_pub( a, "Proyecto guardado." );
+        atsw_refresca( a );
+        }
+    gtk_widget_destroy( d );
 }

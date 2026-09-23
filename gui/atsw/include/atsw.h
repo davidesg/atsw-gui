@@ -145,6 +145,10 @@ void       atsw_editor( Atsw *a, const char *serie, const char *muestra,
    llevar y que hacen falta para volver al analisis meses despues.      */
 void       atsw_serie_edita( Atsw *a, const char *serie );
 
+/* «Información del proyecto…»: id, título, analista. La raíz y la ruta se
+   enseñan y no se editan -- moverlas es mover el proyecto entero.      */
+void       atsw_proyecto_edita( Atsw *a );
+
 /* Lo mismo, con una opcion antes del fichero: fue_gui con «--prever»
    arranca el ciclo de prevision al abrir.                              */
 void       atsw_lanza_con( Atsw *a, const char *programa, const char *opcion,

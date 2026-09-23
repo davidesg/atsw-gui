@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <time.h>
 
 #include "proyecto.h"
 
@@ -129,6 +130,16 @@ void pr_nuevo( Proyecto *p, const char *id, const char *titulo,
    snprintf( p->id, sizeof p->id, "%s", id ? id : "proyecto" );
    snprintf( p->titulo, sizeof p->titulo, "%s", titulo ? titulo : "" );
    snprintf( p->raiz, sizeof p->raiz, "%s", ( raiz && *raiz ) ? raiz : "." );
+
+   /* CUANDO SE EMPEZO. Nadie lo ponia, asi que el campo existia y salia
+      siempre vacio -- y esa es una fecha que no se puede reconstruir
+      despues mirando nada.                                            */
+   {
+   time_t     t = time( NULL );
+   struct tm *g = localtime( &t );
+
+   if ( g ) strftime( p->creado, sizeof p->creado, "%Y-%m-%d", g );
+   }
 }
 
 int pr_serie_idx( const Proyecto *p, const char *serie )

@@ -115,28 +115,11 @@ int of_parse( const char *texto, Forecast *f )
       }
       if ( ser && strstr( l, "FORECAST ORIGIN" ) ) {
          const char *dp = strchr( l, ':' );
-         const char *lt = strstr( l, "LEAD TIME" );
 
          if ( dp && sscanf( dp + 1, " %15s", nm ) == 1 )
             snprintf( ser->origen, sizeof ser->origen, "%.15s", nm );
-         /* drtran lo pone en ESTA linea; fuf en la suya, y la coge el
-            bloque de abajo.                                           */
-         if ( lt && ( dp = strchr( lt, ':' ) ) != NULL )
-            sscanf( dp + 1, " %d", &ser->lead );
-         continue;
-      }
-      /* EL HORIZONTE, QUE LOS DOS MOTORES DICEN DISTINTO.
-       *
-       *   drtran:  LEAD TIME: 24            (en la misma linea del origen)
-       *   fuf:     LEAD TIME FOR FORECASTING: 24   (en la suya)
-       *
-       * Se lee por los dos puntos y no por la frase entera: la etiqueta es
-       * del motor y no vamos a pedirle que la cambie -- lo que no puede es
-       * obligarnos a tener dos lectores.                                */
-      if ( ser && strstr( l, "LEAD TIME" ) ) {
-         const char *dp = strchr( l, ':' );
-
-         if ( dp ) sscanf( dp + 1, " %d", &ser->lead );
+         if ( strstr( l, "LEAD TIME" ) )
+            sscanf( strstr( l, "LEAD TIME" ), "LEAD TIME: %d", &ser->lead );
          continue;
       }
 

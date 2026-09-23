@@ -21,4 +21,5 @@ void load_output_to_console(FueContext *ctx);
 /* Lo que el motor escribio, a la consola: cuando no deja fichero de salida
  * es lo unico que explica por que.                                        */
 void show_engine_output(FueContext *ctx, const EngineResult *r);
+void on_forecast_button_clicked(GtkToolButton *btn, FueContext *ctx);
 #endif

@@ -415,44 +415,6 @@ static void on_fug( GtkButton *b, Atsw *a )
 static void on_drtran( GtkButton *b, Atsw *a )
      { (void)b; atsw_lanza( a, "drtran_gui", NULL ); }
 
-/* A PREVER.
- *
- * SE MANDA EL .inp Y NO EL .pre, y no es un descuido: el ciclo de la
- * prevision empieza con "fue <modelo> -f", y fue lee el .inp. Da el mismo
- * optimo --eso es lo que afirma el .pre-- y de ahi escribe el
- * forecast_<modelo>.inp con los parametros estimados.
- *
- * Pero se EXIGE que el .pre exista, porque es la prueba de que el modelo se
- * estimo alguna vez. Prever con un .inp cuyas semillas nadie ha ajustado
- * seria prever con un modelo inventado, y saldria sin avisar.          */
-static void on_fuf( GtkMenuItem *m, Atsw *a )
-{
-    char   inp[PR_RUTA], pre[PR_RUTA];
-    gchar *id = atsw_marcada( a->l_modelos, M_ID );
-
-    (void) m;
-    if ( !a->hay || !a->serie[0] || !id ) { g_free( id ); return; }
-
-    if ( pr_ruta( a->p, a->serie, atsw_muestra_actual( a ), id, ".pre",
-                  pre, sizeof pre ) != 0 ||
-         !g_file_test( pre, G_FILE_TEST_EXISTS ) )
-        {
-        gchar *s = g_strdup_printf( "Para prever hace falta un modelo "
-            "ESTIMADO, y «%s» no tiene .pre. Estímalo primero en fue.", id );
-
-        barra_pub( a, s );
-        g_free( s ); g_free( id );
-        return;
-        }
-
-    if ( pr_ruta( a->p, a->serie, atsw_muestra_actual( a ), id, ".inp",
-                  inp, sizeof inp ) != 0 )
-        { barra_pub( a, "No pude componer la ruta." ); g_free( id ); return; }
-
-    g_free( id );
-    atsw_lanza( a, "fuf_gui", inp );
-}
-
 /* Un texto en una linea. Devuelve TRUE si se acepto. */
 static gboolean pide_texto( Atsw *a, const char *titulo, const char *aviso,
                             const char *previo, char *out, size_t n )
@@ -859,14 +821,6 @@ static void menu_modelo( Atsw *a, GdkEventButton *ev )
             "puede expresar lo que tiene widgets; el .inp, todo lo que el "
             "motor lee." );
         g_signal_connect( mi, "activate", G_CALLBACK(on_editar), a );
-        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
-
-        mi = gtk_menu_item_new_with_label( "Prever con fuf…" );
-        gtk_widget_set_tooltip_text( mi,
-            "La previsión de este modelo. Se manda el .pre —parte de un "
-            "modelo ESTIMADO— y los ficheros se escriben AL LADO de él, que "
-            "es donde se buscan después." );
-        g_signal_connect( mi, "activate", G_CALLBACK(on_fuf), a );
         gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
 
         mi = gtk_menu_item_new_with_label( "Iterar: seguir desde su óptimo" );

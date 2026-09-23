@@ -181,10 +181,7 @@ if [ -x "$E/bin/drtran" ] && [ -f "$M6D/M6_EP.pre" ]; then
         -estwin 180 -f 6 -C "$W/evaluacion.csv" \
         -o "$W/eval.out" >/dev/null 2>&1 )
 
-    # Y el .out de FUF con el mismo lector: es el tercer argumento.
-    "$W/test_outfcst" "$W/fcst.out" "$W/eval.out" \
-        "$TOP/../../engines/fuf/tests/work/CPI_USA_model.fuf/CPI_USA_model.fuf.out" \
-        || exit 1
+    "$W/test_outfcst" "$W/fcst.out" "$W/eval.out" || exit 1
 
     # El CSV por origen: la evaluacion tiene que dejarlo, y con una fila por
     # (origen, horizonte). 31 origenes x 6 horizontes + cabecera.

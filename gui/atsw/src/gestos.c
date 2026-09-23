@@ -69,7 +69,6 @@ gchar *atsw_programa( const char *programa )
            los GUIs porque ninguno se llama igual, y ANTES del PATH por la
            misma razon que ellos: una instalacion vieja en /usr/local se
            cuela sin avisar -- ya paso con fue_gui de mayo.            */
-        "../fuf/%s",
         "../../engines/fue/bin/%s", "../../engines/fug/%s",
         "../../engines/fuf/bin/%s", NULL
     };

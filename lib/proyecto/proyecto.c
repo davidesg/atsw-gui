@@ -193,6 +193,103 @@ const char *pr_serie_titulo( const Proyecto *p, const char *id )
    return s->descripcion[0] ? s->descripcion : s->id;
 }
 
+/* --- las muestras ------------------------------------------------------- */
+
+int pr_muestra_idx( const Proyecto *p, const char *id )
+{
+   int i;
+
+   if ( p == NULL || id == NULL || !*id ) return -1;   /* "" es la completa */
+   for ( i = 0; i < p->nmu; i++ )
+       if ( strcmp( p->mu[i].id, id ) == 0 ) return i;
+   return -1;
+}
+
+const PrMuestra *pr_muestra_ver( const Proyecto *p, const char *id )
+{
+   int i = pr_muestra_idx( p, id );
+
+   return ( i < 0 ) ? NULL : &p->mu[i];
+}
+
+int pr_muestra_add( Proyecto *p, const char *id, const char *desde,
+                    const char *hasta, const char *razon, PrError *e )
+{
+   if ( p == NULL ) return 1;
+
+   /* LA COMPLETA NO SE DECLARA: es lo que entro. Dejar crearla daria dos
+      formas de decir lo mismo, y una de ellas mentiria en cuanto alguien
+      le pusiera un "hasta".                                           */
+   if ( id == NULL || !*id )
+       { falla( e, PR_EDUP, 0, "(la muestra completa)" ); return 1; }
+   if ( pr_muestra_idx( p, id ) >= 0 )
+       { falla( e, PR_EDUP, 0, id ); return 1; }
+   if ( p->nmu >= PR_MAX_MUESTRA )
+       { falla( e, PR_EMUCHAS, 0, id ); return 1; }
+   if ( strlen( id ) >= PR_ID )
+       { falla( e, PR_EMUCHAS, 0, id ); return 1; }
+
+   memset( &p->mu[p->nmu], 0, sizeof p->mu[0] );
+   snprintf( p->mu[p->nmu].id, PR_ID, "%s", id );
+   if ( desde ) snprintf( p->mu[p->nmu].desde, 16, "%s", desde );
+   if ( hasta ) snprintf( p->mu[p->nmu].hasta, 16, "%s", hasta );
+   if ( razon ) snprintf( p->mu[p->nmu].razon, PR_RAZON, "%s", razon );
+   p->nmu++;
+   return 0;
+}
+
+int pr_muestra_borra( Proyecto *p, const char *id, PrError *e )
+{
+   int i = pr_muestra_idx( p, id ), j;
+
+   if ( i < 0 ) { falla( e, PR_EMUESTRA, 0, id ? id : "" ); return 1; }
+
+   /* LOS MODELOS DE UNA MUESTRA NO SE VAN DE REBOTE. Son estimaciones con
+      su .out; que desaparezcan porque se borro una etiqueta seria perder
+      trabajo sin decirlo. Se dice CUAL vive ahi.                      */
+   for ( j = 0; j < p->nm; j++ )
+       if ( strcmp( p->m[j].muestra, id ) == 0 )
+           {
+           char b[PR_TEXTO];
+
+           snprintf( b, sizeof b, "%s/%s", p->m[j].serie, p->m[j].id );
+           falla( e, PR_EENMUESTRA, 0, b );
+           return 1;
+           }
+
+   for ( j = i; j + 1 < p->nmu; j++ ) p->mu[j] = p->mu[j + 1];
+   p->nmu--;
+   memset( &p->mu[p->nmu], 0, sizeof p->mu[0] );
+   return 0;
+}
+
+const char *pr_muestra_de( const Proyecto *p, const char *serie,
+                           const char *id )
+{
+   int i = pr_modelo_idx( p, serie, id );
+
+   return ( i < 0 ) ? "" : p->m[i].muestra;
+}
+
+int pr_pon_muestra( Proyecto *p, const char *serie, const char *id,
+                    const char *muestra, PrError *e )
+{
+   int i = pr_modelo_idx( p, serie, id );
+
+   if ( i < 0 ) { falla( e, PR_ENOMODELO, 0, id ? id : "" ); return 1; }
+
+   /* LOS DATOS SON LA MUESTRA TOTAL. Ponerlos en una ventana seria decir
+      que entraron recortados, y lo que entro es lo que entro.        */
+   if ( p->m[i].rol == PR_DATOS && muestra && *muestra )
+       { falla( e, PR_EDATOS, 0, id ); return 1; }
+
+   if ( muestra && *muestra && pr_muestra_idx( p, muestra ) < 0 )
+       { falla( e, PR_EMUESTRA, 0, muestra ); return 1; }
+
+   snprintf( p->m[i].muestra, PR_ID, "%s", muestra ? muestra : "" );
+   return 0;
+}
+
 const char *pr_elegido( const Proyecto *p, const char *serie )
 {
    int i = pr_serie_idx( p, serie );
@@ -354,6 +451,24 @@ int pr_deriva_rol( Proyecto *p, const char *serie, const char *padre,
    /* EL LINAJE, SIN PREGUNTAR. Es lo minimo que no se puede perder. */
    snprintf( p->m[p->nm].padre, PR_ID, "%s", ( padre && *padre ) ? padre : "" );
    p->m[p->nm].rol = rol;
+
+   /* LA MUESTRA SE HEREDA DEL PADRE. Iterar un modelo de "pre-covid" da otro
+      de "pre-covid": cambiar de ventana es una decision aparte y se pide
+      aparte, con pr_pon_muestra. Los DATOS son siempre la total.      */
+   if ( rol != PR_DATOS && padre && *padre )
+       {
+       int k = pr_modelo_idx( p, serie, padre );
+
+       /* Por un buffer aparte: el compilador no puede saber que el padre y
+          el hijo son ranuras distintas del mismo array.                */
+       if ( k >= 0 )
+           {
+           char mu[PR_ID];
+
+           memcpy( mu, p->m[k].muestra, PR_ID );
+           memcpy( p->m[p->nm].muestra, mu, PR_ID );
+           }
+       }
    /* La razon NO se pone: "sin razon" tiene que verse como sin razon. */
    p->nm++;
 
@@ -477,6 +592,23 @@ int pr_escribir( const Proyecto *p, const char *path, PrError *e )
        escribe_campo( f, "notas",       p->s[i].notas );
        }
 
+   /* LAS MUESTRAS, SOLO SI LAS HAY. La completa es "" y no se declara: un
+      proyecto que nunca trunque nada no escribe nada de esto.        */
+   if ( p->nmu > 0 )
+       {
+       fprintf( f, "\n# Ventanas declaradas sobre los datos. La COMPLETA es la\n"
+                   "# muestra total y no se declara: es lo que entro.\n"
+                   "muestras:\n" );
+       for ( i = 0; i < p->nmu; i++ )
+           {
+           fprintf( f, "  %s:\n", p->mu[i].id );
+           escribe_campo( f, "desde", p->mu[i].desde );
+           escribe_campo( f, "hasta", p->mu[i].hasta );
+           fprintf( f, "    razon: " ); escribe_valor( f, p->mu[i].razon );
+           fputc( '\n', f );
+           }
+       }
+
    fprintf( f, "\n# La cadena de iteracion. padre vacio = raiz.\n"
                "# razon vacia = NO CONSTA, y no consta nunca significa cuadra.\n"
                "modelos:\n" );
@@ -491,6 +623,9 @@ int pr_escribir( const Proyecto *p, const char *path, PrError *e )
        /* El rol SOLO cuando no es lo normal: un manifiesto lleno de
           "rol: modelo" no dice nada y se lee peor.                    */
        if ( p->m[i].rol == PR_DATOS ) fprintf( f, "    rol: datos\n" );
+       /* La muestra SOLO si no es la completa, por la misma razon que el
+          rol: un manifiesto lleno de "muestra: completa" no dice nada. */
+       escribe_campo( f, "muestra", p->m[i].muestra );
        if ( p->m[i].creado[0] )
            { fprintf( f, "    creado: " ); escribe_valor( f, p->m[i].creado );
              fputc( '\n', f ); }
@@ -541,7 +676,7 @@ int pr_leer( const char *path, Proyecto *p, PrError *e )
 {
    FILE *f;
    char  linea[2048], copia[2048];
-   int   nl = 0, seccion = 0;     /* 0 raiz, 1 series, 2 modelos           */
+   int   nl = 0, seccion = 0;     /* 0 raiz, 1 series, 2 modelos, 3 muestras */
    int   cur = -1;                /* la serie o el modelo en curso         */
 
    if ( p == NULL ) return 1;
@@ -575,8 +710,9 @@ int pr_leer( const char *path, Proyecto *p, PrError *e )
        if ( san == 0 )
            {
            cur = -1;
-           if ( strcmp( clave, "series" ) == 0 )  { seccion = 1; continue; }
-           if ( strcmp( clave, "modelos" ) == 0 ) { seccion = 2; continue; }
+           if ( strcmp( clave, "series" ) == 0 )   { seccion = 1; continue; }
+           if ( strcmp( clave, "modelos" ) == 0 )  { seccion = 2; continue; }
+           if ( strcmp( clave, "muestras" ) == 0 ) { seccion = 3; continue; }
            seccion = 0;
 
            if ( strcmp( clave, "schema_version" ) == 0 )
@@ -625,6 +761,12 @@ int pr_leer( const char *path, Proyecto *p, PrError *e )
                    { fclose( f ); return 1; }
                cur = p->nm++;
                }
+           else if ( seccion == 3 )
+               {
+               if ( pr_muestra_add( p, clave, NULL, NULL, NULL, e ) != 0 )
+                   { if ( e ) e->linea = nl; fclose( f ); return 1; }
+               cur = p->nmu - 1;
+               }
            else
                { falla( e, PR_ECLAVE, nl, clave ); fclose( f ); return 1; }
            continue;
@@ -655,6 +797,17 @@ int pr_leer( const char *path, Proyecto *p, PrError *e )
                else
                    { falla( e, PR_ECLAVE, nl, clave ); fclose( f ); return 1; }
                }
+           else if ( seccion == 3 )
+               {
+               if ( strcmp( clave, "desde" ) == 0 )
+                   snprintf( p->mu[cur].desde, 16, "%s", valor );
+               else if ( strcmp( clave, "hasta" ) == 0 )
+                   snprintf( p->mu[cur].hasta, 16, "%s", valor );
+               else if ( strcmp( clave, "razon" ) == 0 )
+                   snprintf( p->mu[cur].razon, PR_RAZON, "%s", valor );
+               else
+                   { falla( e, PR_ECLAVE, nl, clave ); fclose( f ); return 1; }
+               }
            else if ( seccion == 2 )
                {
                if ( strcmp( clave, "version" ) == 0 )
@@ -664,6 +817,8 @@ int pr_leer( const char *path, Proyecto *p, PrError *e )
                        { fclose( f ); return 1; } }
                else if ( strcmp( clave, "razon" ) == 0 )
                    snprintf( p->m[cur].razon, PR_RAZON, "%s", valor );
+               else if ( strcmp( clave, "muestra" ) == 0 )
+                   snprintf( p->m[cur].muestra, PR_ID, "%s", valor );
                else if ( strcmp( clave, "creado" ) == 0 )
                    snprintf( p->m[cur].creado, 16, "%s", valor );
                else if ( strcmp( clave, "rol" ) == 0 )
@@ -746,6 +901,13 @@ const char *pr_error_es( const PrError *e, char *out, size_t n )
        case PR_EHIJOS:
            snprintf( out, n, "De ese modelo cuelga «%s». Borra antes lo que "
                      "viene de él, o el linaje se rompe.", e->texto ); break;
+       case PR_EMUESTRA:
+           snprintf( out, n, "«%s» no es una muestra declarada de este "
+                     "proyecto.", e->texto ); break;
+       case PR_EENMUESTRA:
+           snprintf( out, n, "En esa muestra está «%s», que es una estimación "
+                     "con su registro. Bórralo antes, o quédate la muestra.",
+                     e->texto ); break;
        }
    return out;
 }
@@ -786,6 +948,10 @@ const char *pr_error_en( const PrError *e, char *out, size_t n )
            break;
        case PR_EHIJOS:
            snprintf( out, n, "%s hangs from it", e->texto ); break;
+       case PR_EMUESTRA:
+           snprintf( out, n, "unknown sample %s", e->texto ); break;
+       case PR_EENMUESTRA:
+           snprintf( out, n, "%s lives in it", e->texto ); break;
        }
    return out;
 }

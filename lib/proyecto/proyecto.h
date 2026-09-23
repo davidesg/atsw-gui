@@ -65,6 +65,7 @@
 #include <stddef.h>
 
 #define PR_MAX_SERIE   64
+#define PR_MAX_MUESTRA  32
 #define PR_MAX_MODELO  512
 #define PR_ID          48
 #define PR_TEXTO       256
@@ -86,7 +87,9 @@ typedef enum {
    PR_ENOMODELO,     /* ese modelo no esta                                */
    PR_EESCRIBIR,     /* no se pudo escribir                               */
    PR_EDATOS,        /* los datos no se tocan                             */
-   PR_EHIJOS         /* tiene modelos colgados: se romperia el linaje     */
+   PR_EHIJOS,        /* tiene modelos colgados: se romperia el linaje     */
+   PR_EMUESTRA,      /* esa muestra no esta declarada                     */
+   PR_EENMUESTRA     /* hay modelos en ella                               */
 } PrCodigo;
 
 typedef struct {
@@ -124,6 +127,11 @@ typedef struct {
    char  razon[PR_RAZON];         /* "" si no consta. NO se rellena.      */
    char  creado[16];              /* AAAA-MM-DD                           */
    PrRol rol;                     /* datos o modelo. Ver PrRol.           */
+   /* EN QUE MUESTRA NACIO. "" = la completa. DECLARADO, no deducido: se
+      podria mirar el nobs del .inp y restar, pero eso es volver a parsear
+      para saber algo que nadie escribio -- la regla que ya costo el
+      "rol: datos".                                                     */
+   char  muestra[PR_ID];
 } PrModelo;
 
 /* LA SERIE: una CLAVE corta y unos cuantos campos de texto.
@@ -138,6 +146,33 @@ typedef struct {
  * TODOS LOS CAMPOS SON OPCIONALES y salen vacios: "no consta" tiene que
  * verse como no consta, igual que la razon de una iteracion. Ninguno se
  * inventa ni se rellena con el id.                                      */
+/* UNA MUESTRA: una VENTANA DECLARADA sobre los datos.
+ *
+ * La muestra esta DENTRO del .inp --lleva el numero de observaciones y la
+ * fecha de comienzo-- asi que no es una vista de la serie: es parte de lo que
+ * se estimo. De ahi sale todo lo demas:
+ *
+ *   - truncar un modelo estimado es imposible sin mentir: su .out describe
+ *     una estimacion sobre otras observaciones;
+ *   - truncar es DERIVAR, no editar. Una muestra distinta es un modelo
+ *     distinto aunque la especificacion sea identica;
+ *   - y dos modelos con muestras distintas NO SE COMPARAN. La d.t. residual
+ *     de uno hasta 2019 y la de otro hasta 2026 no miden lo mismo.
+ *
+ * LA MUESTRA COMPLETA ES LA CADENA VACIA, y no se declara: es lo que entro, y
+ * un proyecto que nunca trunque nada no tiene que escribir nada. Las demas se
+ * declaran aqui, con su razon, porque son DECISIONES del analisis.
+ *
+ * Y SON DEL PROYECTO, no de cada serie: "hasta donde acaba el regimen
+ * anterior" vale para todas a la vez. Una serie mas corta que la ventana da
+ * lo que tiene, que es un hecho y no un error.                          */
+typedef struct {
+   char id[PR_ID];
+   char desde[16];                /* "" = desde el principio              */
+   char hasta[16];                /* "12/2019", "2019". "" = hasta el fin */
+   char razon[PR_RAZON];
+} PrMuestra;
+
 typedef struct {
    char id[PR_ID];
    char elegido[PR_ID];           /* "" si no se ha declarado             */
@@ -161,8 +196,10 @@ typedef struct {
    char analista[PR_TEXTO];
    char raiz[PR_RUTA];            /* todo lo demas es relativo a esto     */
 
-   PrSerie  s[PR_MAX_SERIE];
-   int      ns;
+   PrSerie   s[PR_MAX_SERIE];
+   int       ns;
+   PrMuestra mu[PR_MAX_MUESTRA];
+   int       nmu;
    PrModelo m[PR_MAX_MODELO];
    int      nm;
 
@@ -214,6 +251,31 @@ const PrSerie *pr_serie_ver( const Proyecto *p, const char *id );
 /* Lo que se enseña de una serie cuando hay que enseñarla en una linea: la
    descripcion si la hay, y si no el id. NUNCA una descripcion inventada. */
 const char *pr_serie_titulo( const Proyecto *p, const char *id );
+
+/* --- las muestras ------------------------------------------------------- */
+
+/* Declara una submuestra. La COMPLETA es "" y no se declara: darla de alta
+   se rechaza con PR_EDUP, igual que una repetida. desde/hasta pueden ser
+   NULL o "" (sin limite por ese lado); la razon se pide, no se exige.   */
+int pr_muestra_add( Proyecto *p, const char *id, const char *desde,
+                    const char *hasta, const char *razon, PrError *e );
+
+int pr_muestra_idx( const Proyecto *p, const char *id );
+const PrMuestra *pr_muestra_ver( const Proyecto *p, const char *id );
+
+/* La borra. Se niega si hay modelos en ella y DICE CUAL, que es lo que deja
+   saber por donde empezar -- los modelos de una muestra son estimaciones de
+   verdad con su .out, no se van de rebote.                             */
+int pr_muestra_borra( Proyecto *p, const char *id, PrError *e );
+
+/* En que muestra nacio un modelo. "" es la completa. */
+const char *pr_muestra_de( const Proyecto *p, const char *serie,
+                           const char *id );
+
+/* Declara en que muestra esta un modelo. Los DATOS no: son la muestra
+   total, y ponerlos en una ventana seria decir que entraron recortados. */
+int pr_pon_muestra( Proyecto *p, const char *serie, const char *id,
+                    const char *muestra, PrError *e );
 int  pr_elige( Proyecto *p, const char *serie, const char *id,
                const char *razon, PrError *e );
 

@@ -295,6 +295,10 @@ assert "rol" not in d["modelos"]["IPC_ES/m01"]
 assert d["series"]["IPC_ES"]["descripcion"].startswith("Índice de precios")
 assert d["series"]["IPC_ES"]["bajada"] == "2026-09-20"
 assert "descripcion" not in d["series"]["SUELTA"], d["series"]["SUELTA"]
+# Las muestras: la COMPLETA no se declara, y el modelo dice en cual nacio.
+assert d["muestras"]["pre-covid"]["hasta"] == "12/2019"
+assert d["modelos"]["IPC_ES/m01"]["muestra"] == "pre-covid"
+assert "muestra" not in d["modelos"]["IPC_ES/m02"], "la completa no se escribe"
 print("  ok    yaml.safe_load de Python lee el manifiesto entero")
 PY
 else

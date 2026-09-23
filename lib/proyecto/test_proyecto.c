@@ -146,6 +146,47 @@ int main( int argc, char **argv )
         "cada serie la suya: la de al lado sigue sin describir" );
     }
 
+    printf( "\nLAS MUESTRAS: VENTANAS DECLARADAS, Y LA COMPLETA NO SE DECLARA\n" );
+    ok( pr_muestra_add( p, "pre-covid", "", "12/2019",
+                        "2020-2022 es otro proceso", &e ) == 0,
+        "se declara una submuestra" );
+    ok( pr_muestra_add( p, "pre-covid", "", "12/2019", "", &e ) != 0 &&
+        e.cod == PR_EDUP, "y dos veces no" );
+    ok( pr_muestra_add( p, "", "", "12/2019", "", &e ) != 0,
+        "la COMPLETA no se declara: es lo que entro" );
+    es( pr_muestra_ver( p, "pre-covid" )->hasta, "12/2019", "y se recupera" );
+    ok( pr_muestra_ver( p, "no-existe" ) == NULL, "una que no esta, no" );
+    ok( pr_muestra_idx( p, "" ) < 0, "y «» no es una muestra declarada" );
+
+    printf( "\nCADA MODELO DECLARA EN CUAL NACIO\n" );
+    es( pr_muestra_de( p, "IPC_ES", "m01" ), "",
+        "por defecto, la completa -- y eso es «» y no una palabra" );
+    ok( pr_pon_muestra( p, "IPC_ES", "m01", "pre-covid", &e ) == 0,
+        "se declara la muestra de un modelo" );
+    es( pr_muestra_de( p, "IPC_ES", "m01" ), "pre-covid", "y se recupera" );
+    ok( pr_pon_muestra( p, "IPC_ES", "m01", "no-existe", &e ) != 0 &&
+        e.cod == PR_EMUESTRA, "una muestra sin declarar se rechaza" );
+    ok( pr_pon_muestra( p, "IPC_ES", "m00", "pre-covid", &e ) != 0 &&
+        e.cod == PR_EDATOS,
+        "y los DATOS no van en una ventana: son la muestra total" );
+
+    printf( "\nDERIVAR HEREDA LA MUESTRA DEL PADRE\n" );
+    {
+    char nid[PR_ID];
+
+    pr_deriva( p, "IPC_ES", "m01", nid, sizeof nid, NULL, 0, &e );
+    es( pr_muestra_de( p, "IPC_ES", nid ), "pre-covid",
+        "iterar un modelo de pre-covid da otro de pre-covid" );
+    ok( pr_borra( p, "IPC_ES", nid, &e ) == 0, "(y se recoge)" );
+    }
+
+    printf( "\nUNA MUESTRA CON MODELOS DENTRO NO SE BORRA DE REBOTE\n" );
+    ok( pr_muestra_borra( p, "pre-covid", &e ) != 0 && e.cod == PR_EENMUESTRA,
+        "se niega" );
+    es( e.texto, "IPC_ES/m01", "y DICE CUAL vive ahi" );
+    ok( pr_muestra_borra( p, "no-existe", &e ) != 0 && e.cod == PR_EMUESTRA,
+        "una que no esta, tampoco" );
+
     printf( "\nLO QUE PYTHON REINTERPRETARIA VA ENTRECOMILLADO\n" );
     {
     /* Nuestro lector devuelve siempre texto; yaml.safe_load no. Sin comillas
@@ -200,6 +241,14 @@ int main( int argc, char **argv )
     }
     ok( pr_sin_razon( q, sin, 16 ) == 2,
         "  y los que no la tienen SIGUEN sin tenerla" );
+    ok( q->nmu == 1, "  la muestra declarada" );
+    es( pr_muestra_ver( q, "pre-covid" )->hasta, "12/2019", "  con su hasta" );
+    es( pr_muestra_ver( q, "pre-covid" )->razon, "2020-2022 es otro proceso",
+        "  y con su razon" );
+    es( pr_muestra_de( q, "IPC_ES", "m01" ), "pre-covid",
+        "  y el modelo sigue sabiendo en cual nacio" );
+    es( pr_muestra_de( q, "IPC_ES", "m02" ), "",
+        "  mientras que el de al lado sigue en la completa" );
     {
     const PrSerie *x = pr_serie_ver( q, "IPC_ES" );
 

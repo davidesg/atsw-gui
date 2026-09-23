@@ -409,7 +409,7 @@ case-2 table is the right one (Osterwald-Lenum Table 1*; Johansen 1991 Thm 2.2).
 
 ## BUG-25 — `-lrtest` fits each rank from one cold start and reports what it lands on: on UKconsumption the two LRs have swapped places since 2026-08-17, and the register marks it ✔
 
-**Status: OPEN.** Found 2026-09-23 (external validation, `benchmark/drvec_runs_2026-09-23/`).
+**Status: FIXED on 2026-09-23** (`src/drvec.c`, `fit_search`, `run_lrtest`). Found 2026-09-23 (external validation, `benchmark/drvec_runs_2026-09-23/`).
 
 **What it is.** `run_lrtest` (~7239) calls `est` once per rank from `init_guess`.
 It ignores `-multistart` (the flag is accepted and the table is identical), and
@@ -436,6 +436,17 @@ it says.
 **Suggested fix.** Honour `-multistart` in `run_lrtest` and seed each rank from
 the neighbouring ranks' optima as well as cold; flag rows whose fits did not stop
 on the gradient; and check order, not presence, in the register.
+
+
+**Fixed.** Every rank is now the best of several starts (P12): the cold seed,
+Johansen's canonical one, the nested MA chain, and `-multistart`'s perturbations,
+which `-lrtest` now honours. A rank whose winning fit did not stop on the gradient
+is marked in the table (`[check: rank r stopped by criterion N]`). Re-measured:
+UKconsumption gives 70.1280 / 25.5141 again, and the r = 1 fit rises from 535.17
+to 557.47; with `-multistart 30` the r = 2 fit reaches 573.96. The Danish M = 5
+golden value rose from 828.84 to 832.36. Guarded by `run_tests.sh` 8p.2 and
+8p.6 (SLOW). What is not fixed: a multimodal rank (UKconsumption r = 2) still
+needs `-multistart` to reach its best point; the default search does not jitter.
 
 ---
 
@@ -626,7 +637,7 @@ around the `r = 0` `init_guess`.
 
 ## BUG-33 — `-fixb2 v` builds its starting point from the static-OLS `B2`, not from `v`
 
-**Status: OPEN.** Found 2026-09-23 (external validation).
+**Status: FIXED on 2026-09-23** (`src/drvec.c`, `init_guess`, `fit_search`). Found 2026-09-23 (external validation).
 
 **What it is.** `init_guess` seeds `E[W]`, `Lambda`, `F` and `Sigma` from the
 static-OLS `W` and only then overwrites `B2` with `v` (~3243-3256, ~3622-3629),
@@ -642,6 +653,14 @@ instead of about 64.
 
 **Repro.** `sh tests/repro/repro.sh 33`.
 **Suggested fix.** Seed the other blocks from `W = Y1 + v'Y2` when `B2` is fixed.
+
+
+**Fixed.** Under `-fixb2 v` (and `-seedb2 v`) the rest of the seed is built from
+W = Y1 + v'Y2. The old seed is kept as one more start of the search, because it
+is sometimes the better one (on mink-muskrat `-case 2 -fixb2 0` it still wins).
+Re-measured: the raw and the demeaned UK consumption-income data now both give
+491.5121303549; `-mafree -fixb2 0` on mink-muskrat rose from -8.48 to 3.01.
+Guarded by `run_tests.sh` 8p.3.
 
 ---
 
@@ -669,7 +688,7 @@ warning) or mark the affected coordinates as undefined.
 
 ## BUG-35 — `-artest` and the bootstraps' fits skip the admissible-start ladder that `-warma` needs
 
-**Status: OPEN.** Found 2026-09-23 (two reviewers).
+**Status: FIXED on 2026-09-23** (`src/drvec.c`, `make_admissible`, `fit_search`). Found 2026-09-23 (two reviewers).
 
 **What it is.** `main` (~8653) and `run_specs` shrink the `-warma` start through
 {1, .8, .5, .3, .1, 0} until it is admissible; `run_ma_ar_test` (~7115) and
@@ -686,6 +705,13 @@ bootstrap replications under `-warma` may fail for the same reason.
 
 **Repro.** `sh tests/repro/repro.sh 35`.
 **Suggested fix.** One helper with the ladder, called from all four places.
+
+
+**Fixed.** Every start of every fit goes through `make_admissible`, the ladder
+`-warma` had, now for all callers (under `-warma` it shrinks from the first
+block). Re-measured: `-artest 20` on mink-muskrat runs, restricted logL
+-13.7366493880 (the plain `-warma` fit), LR = 27.4986 on 2 df. Guarded by
+`run_tests.sh` 8p.4.
 
 ---
 
@@ -921,6 +947,13 @@ prints a rank sequence built on fits that never moved.
 internally (the `.pre` route already has `refactor`); flag fits that stop at
 iteration 1.
 
+
+**Partly fixed on 2026-09-23 (P12).** The fallback exists now: a start the engine
+refuses is shrunk until it is accepted, and the search tries several. `rao6` in
+case 3 now fits (LR(0) = 79.76), where every rank failed before. **Still open:**
+the scale. `rao7` in raw units gives LRs 38.57 / 29.96 / 6.14 against 80.09 /
+39.09 / 11.84 rescaled — better than 7.26 / 61.28 / 0.21, not right. That is the
+optimiser's scaling, not the starting point, and the search cannot fix it.
 ---
 
 ## BUG-44 — the `.inp` writer loses precision on small series and can write a zero rescaling factor
@@ -956,8 +989,10 @@ split any of them when it is fixed.
 - `-warma` ignores `-diagar`/`-diagma` while the header says "F diagonal".
 - `-specs` with `q = 0` marks every non-`warma` rung "NO" (the `granger_sv = -1`
   sentinel read as a failure) and prints `MAmin 0.000`.
-- With `-multistart` the convergence note is the last start's, not the best's
-  (`termcode_from_out` parses the text; code reading).
+- ~~With `-multistart` the convergence note is the last start's, not the best's
+  (`termcode_from_out` parses the text; code reading).~~ **Fixed 2026-09-23
+  (P12)**: the search writes only the winning start's optimizer report to the
+  `.out`, so the last criterion there is the winner's.
 - The roots table says "Inverse roots" and prints root moduli.
 - The `-warma` "same fit in VEC coordinates" block prints `Lambda` (Mauricio's
   sign) and `Pi` in the internal order, unlabelled, while the main report uses

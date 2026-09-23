@@ -470,6 +470,13 @@ echo
 
 # ================================================================== 4 GOLDEN ==
 echo "[4] golden logL values (regression baselines, NOT correct answers)"
+#  P12 (2026-09-23).  Six of these moved when every fit became the best of
+#  several starts, and all six moved UP -- none down, the other twelve not by a
+#  digit: they were local optima of the single cold start (BUG-25).  Before:
+#  -case 1 -10.7273981157, -diagma 0.8816637342, -case 3 -mafree 6.5140062493,
+#  -mafree -diagar -2.5419963582, -mafree -fixb2 0 -8.4835302747 (BUG-33; now
+#  3.0123641758 with the consistent seed as one more start),
+#  DK r=2 828.8447477597 (the fit that flipped the Danish rank from 2 to 0).
 golden() {
     local want=$1 src=$2; shift 2
     run "$src" "$@"
@@ -485,11 +492,11 @@ golden() {
 #  bajo -mafree, para que la parametrizacion anterior siga protegida: es la que
 #  sostiene todo el registro previo a esta fecha.
 #  -diagma no se movio: es una restriccion distinta, que el defecto no toca.
-golden -10.7273981157 "$MM" 2 1 1 -case 1
+golden  -4.0893040918 "$MM" 2 1 1 -case 1
 golden   2.3039690333 "$MM" 2 1 1 -case 2
 golden   2.3074789504 "$MM" 2 1 1 -case 3
 golden  -3.5511860134 "$MM" 2 1 1 -case 2 -diagar
-golden   0.8816637342 "$MM" 2 1 1 -case 2 -diagma
+golden   0.9355032708 "$MM" 2 1 1 -case 2 -diagma
 golden  -2.6646873358 "$MM" 2 1 1 -case 2 -diagcov
 golden   2.1765180953 "$MM" 2 1 1 -case 2 -fixb2
 golden   0.7822395343 "$MM" 2 1 1 -case 2 -fixb2 0
@@ -497,13 +504,13 @@ golden   0.7822395343 "$MM" 2 1 1 -case 2 -fixb2 0
 #  La clase libre, con los valores que eran el defecto hasta el 2026-08-20.
 golden   3.6856397544 "$MM" 2 1 1 -case 1        -mafree
 golden   6.4786201604 "$MM" 2 1 1 -case 2        -mafree
-golden   6.5140062493 "$MM" 2 1 1 -case 3        -mafree
-golden  -2.5419963582 "$MM" 2 1 1 -case 2 -mafree -diagar
+golden   6.9994563633 "$MM" 2 1 1 -case 3        -mafree
+golden   1.0712154882 "$MM" 2 1 1 -case 2 -mafree -diagar
 golden   0.5696296891 "$MM" 2 1 1 -case 2 -mafree -diagcov
 golden   5.4717136367 "$MM" 2 1 1 -case 2 -mafree -fixb2
-golden  -8.4835302747 "$MM" 2 1 1 -case 2 -mafree -fixb2 0
+golden   3.0123641758 "$MM" 2 1 1 -case 2 -mafree -fixb2 0
 golden 570.2297062756 "$UK" 2 0 2 -case 2
-golden 828.8447477597 "$DK" 2 0 2 -case 2   # s=3, r=2: guards the B2 read order
+golden 832.3550925844 "$DK" 2 0 2 -case 2   # s=3, r=2: guards the B2 read order
 golden -318.8131393592 data/AL.inp 2 0 1 -case 2 -differenced
 echo
 
@@ -2246,6 +2253,92 @@ else
         ok "every row of the decomposition adds to 100%"
     else
         bad "FEVD" "a row does not add to 100%"
+    fi
+fi
+echo
+
+# ============================================================= 8p THE SEARCH ==
+#  P12 (2026-09-23).  Every fit is the best of several starts: the caller's seed,
+#  the cold one, Johansen's, the NESTED CHAIN (q = 0, -marow, -matri, free, each
+#  from the optimum of the one below), and -multistart's perturbations.  These
+#  are the properties that make it worth having, each written so it can fail:
+#  all four held false on 2026-09-23 before the search existed (BUG-25, 33, 35).
+echo "[8p] the search (P12)"
+
+# 8p.1  Nested classes come out nested: logL(marow) <= logL(matri) <= logL(free).
+#       On PLL the single cold start gave -6.97, -8.85, -8.65: the richer class
+#       BELOW the poorer one it contains, which cannot happen at a maximum.
+for d in PLL VILL; do
+    lls=""
+    for c in -marow -matri -mafree; do
+        run "data/$d.inp" 2 1 1 -case 2 $c
+        lls="$lls $(logelf_of "$TMP/case")"
+    done
+    if printf '%s\n' $lls | awk 'NR==1{p=$1;next} {if($1<p-1e-8){exit 1} p=$1} END{exit (NR==3)?0:1}'; then
+        ok "$d: marow <= matri <= free ($lls )"
+    else
+        bad "$d: nested classes out of order" "marow matri free =$lls"
+    fi
+done
+
+# 8p.2  The UKconsumption rank sequence: 70.13 then 25.51.  From one cold start
+#       the r = 1 fit stopped 22 log-units short and the two LRs swapped rows
+#       (BUG-25) -- and the register marked the swapped pair as reproduced.
+run "$UK" 2 0 1 -case 2 -lrtest
+lr0=$(sed -n '/M-r        LR/,/^$/p' "$TMP/case.out" | awk '$1=="0"{print $3; exit}')
+lr1=$(sed -n '/M-r        LR/,/^$/p' "$TMP/case.out" | awk '$1=="1"{print $3; exit}')
+if [ -n "$lr0" ] && [ -n "$lr1" ] && \
+   awk -v a="$lr0" -v b="$lr1" 'BEGIN{exit !((a-70.1280)^2 < 1e-6 && (b-25.5141)^2 < 1e-6)}'; then
+    ok "UKconsumption -lrtest: LR(0) = $lr0, LR(1) = $lr1, in that order"
+else
+    bad "UKconsumption -lrtest" "LR(0) = $lr0, LR(1) = $lr1 (expected 70.1280, 25.5141)"
+fi
+
+# 8p.3  -fixb2 v does not depend on which column is demeaned: under case 2 the
+#       two data sets have the same likelihood function (BUG-33: -275.36 vs
+#       491.51 before the seed was built from W = Y1 + v'Y2).
+awk -F, 'NR>1{printf "%.10f %.10f\n",$2,$1}' datasets/urca_UKconinc.csv > "$TMP/ucbody"
+nuc=$(wc -l < "$TMP/ucbody"); muc=$(awk '{s+=$1}END{printf "%.12f", s/NR}' "$TMP/ucbody")
+printf "4\n2 %d 1 1955\nincl conl\n1.0 0 0\n" "$nuc" > "$TMP/uc.inp"; cat "$TMP/ucbody" >> "$TMP/uc.inp"
+printf "4\n2 %d 1 1955\nincl conl\n1.0 0 0\n" "$nuc" > "$TMP/ucd.inp"
+awk -v m="$muc" '{printf "%.10f %.10f\n",$1-m,$2}' "$TMP/ucbody" >> "$TMP/ucd.inp"
+run "$TMP/uc.inp"  2 0 1 -case 2 -fixb2 0; l_u=$(logelf_of "$TMP/case")
+run "$TMP/ucd.inp" 2 0 1 -case 2 -fixb2 0; l_d=$(logelf_of "$TMP/case")
+if [ -n "$l_u" ] && near "$l_u" "$l_d"; then
+    ok "-fixb2 0 is invariant to demeaning Y2 under case 2 ($l_u)"
+else
+    bad "-fixb2 0 depends on the start" "raw $l_u, demeaned $l_d"
+fi
+
+# 8p.4  -artest runs on the canonical case (BUG-35: its restricted -warma fit
+#       skipped the admissibility ladder and the test never ran).
+run "$MM" 2 1 1 -case 2 -artest 10
+if grep -aq "LR = 2\*\[L(H1) - L(H0)\]" "$TMP/case.out" && \
+   ! grep -aq "one of the two fits failed" "$TMP/case.out"; then
+    ok "-artest runs on mink-muskrat"
+else
+    bad "-artest" "the restricted or the unrestricted fit failed"
+fi
+
+# 8p.5  A start the engine refuses is recorded as failed, not as converged with
+#       logL 0 (the deallocating cast used to overwrite est()'s ifault).
+run "$UK" 2 0 2 -case 2
+if grep -aq "^  johansen *(failed)" "$TMP/case.out"; then
+    ok "an inadmissible start is reported as failed"
+elif grep -aq "^  johansen " "$TMP/case.out"; then
+    ok "the Johansen start was admissible here"
+else
+    bad "search table" "no Johansen row in the search table"
+fi
+
+# 8p.6  -lrtest honours -multistart.  OPT-IN (SLOW=1): it is 30 starts per rank.
+if [ "${SLOW:-0}" = "1" ]; then
+    run "$UK" 2 0 1 -case 2 -lrtest -multistart 30
+    l2=$(sed -n '/r    npar        logL/,/^$/p' "$TMP/case.out" | awk '$1=="2"{print $3}')
+    if [ -n "$l2" ] && awk -v a="$l2" 'BEGIN{exit !(a > 573.9)}'; then
+        ok "-lrtest -multistart 30 reaches the r = 2 optimum ($l2)"
+    else
+        bad "-lrtest ignores -multistart" "r = 2 logL $l2 (the 30-start optimum is 573.96)"
     fi
 fi
 echo

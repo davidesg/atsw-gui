@@ -5,6 +5,31 @@ Los informes completos están en [`docs/DEVELOPMENT_RECORD.md`](docs/DEVELOPMENT
 (las mediciones). Los defectos, en [`docs/BUGS.md`](docs/BUGS.md). Etiquetas de
 publicación: `v*`.
 
+## Sin publicar
+
+### La búsqueda (P12)
+
+Hasta ahora cada ajuste era **una** llamada al optimizador desde **un** punto de
+partida: el ajuste principal, cada rango de `-lrtest`, cada réplica de los
+bootstraps. Ahora es el mejor de varios arranques —la semilla pedida, la fría,
+la canónica de Johansen, y la **cadena anidada** (`q = 0` → `-marow` → `-matri`
+→ libre, cada uno desde el óptimo del anterior)— más las perturbaciones de
+`-multistart`, que `-lrtest` por fin respeta. La cadena hace que una clase más
+rica no pueda acabar por debajo de la que contiene. Un arranque que el motor
+rechaza se encoge hasta que lo acepta. El `.out` lleva una tabla con cada
+arranque, su logL y cómo paró; `-lrtest` marca las filas cuyo ajuste no paró por
+el gradiente. El motor no se toca: el motivo de parada se lee donde `report()` lo
+escribe.
+
+Lo que movió, y hacia dónde: seis valores dorados de la batería **subieron**
+—ninguno bajó; los otros doce no se movieron ni un dígito— y en UKconsumption la
+secuencia de rango vuelve a ser 70.13 / 25.51 (las dos LR estaban permutadas
+desde el 17-ago). Cierra BUG-25, BUG-33 y BUG-35; mejora BUG-43.
+
+También: el manejador de errores de GSL ya no aborta el programa (devuelve el
+error, y cada llamada lo comprueba); `-fixb2 v` y `-seedb2 v` siembran el resto
+del vector desde el `W` que se va a ajustar.
+
 ## 0.10 — 2026-08-24
 
 ### La entrada por `.pre`, que es la del conjunto (P9)

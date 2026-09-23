@@ -79,7 +79,7 @@
 /*    run_lrtest       -lrtest     the sequential rank test                  */
 /*    run_ma_ar_test   -matest/-artest   the two bootstrapped comparisons    */
 /*    run_eval         -eval       the likelihood at the starting point      */
-/*    run_multistart   -multistart not a mode: it leaves a fit behind        */
+/*    fit_search       the best of several starts; -multistart adds more    */
 /*                                                                           */
 /*  AND THE REPORT                                                           */
 /*    report_fit                    everything the .out says about a fit     */
@@ -98,8 +98,17 @@
 #include <gsl/gsl_cdf.h>      /* chi2 p-value of the LR of H1(r) against H(r) */
 #include <gsl/gsl_eigen.h>    /* symmetric generalised eigenvalue problem */
 #include <gsl/gsl_linalg.h>   /* QR and SVD for the Granger rank condition       */
+#include <gsl/gsl_errno.h>     /* P12: errors returned, not abort()ed        */
 #include <stdarg.h>           /* bad_cli: the usage message takes a format      */
 #include <errno.h>            /* strtol/strtod: ERANGE                         */
+#ifdef _WIN32                 /* P12: the search silences the optimiser's      */
+#include <io.h>               /* per-iteration console trace while it tries    */
+#define dup  _dup             /* its candidate starts                          */
+#define dup2 _dup2
+#define fileno _fileno
+#else
+#include <unistd.h>
+#endif
 
 /*  THE VERSION.  The number lives here; the reasoning behind it lives in
  *  docs/VERSIONS.md, which is also where the release policy and the rule for
@@ -470,7 +479,10 @@ static int     gate_seed_ok  = 0;
    the free one (Mauricio 2006, Table 5: B = [1,0]'; BVECM Table 1: beta = 1),
    and it is also the natural first leg of a fix-then-relax warm start.       */
 int  global_fixb2 = 0;
-int  global_fixb2_given = 0;        /* 1 = a value was supplied on the line */
+int  global_fixb2_given = 0;
+/*  P12: seed the rest of the vector from W = Y1 + v'Y2 under -fixb2 v
+ *  (BUG-33).  The search also tries the old seed (0), and keeps the best. */
+int  seed_fixb2_consistent = 1;        /* 1 = a value was supplied on the line */
 real global_fixb2_value = 0.0;      /* that value, applied to every entry   */
 static real **B2_fixed = NULL;      /* (s x r), owned here */
 static int   b2f_s = 0, b2f_r = 0;  /* dims of the current allocation */
@@ -513,6 +525,9 @@ static void init_guess(real *x, int npar);
 static void build_y2_levels(void);
 static void banner(const char *title);
 static int  inp2lam(int i);
+struct search_out;
+static int  fit_search(real *x, int npar, real *dev, real **cov, real *ll,
+                       real *s2, int njitter, int echo, struct search_out *so);
 
 /*****************************************************************************/
 /*  build_y2_levels — fill Y2_levels, once, before any estimation            */
@@ -1819,14 +1834,17 @@ static real fit_ll(int rr, int *ok)
     build_y2_levels();
     np = calc_nparametrs();
     xr = vector(1, np); devr = vector(1, np); covr = matrix(1, np, 1, np);
-    vr.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
+    /*  P12: a replication is fitted as the observed data are -- the best of
+     *  several starts -- or the simulated distribution would be that of a
+     *  worse estimator than the one it is compared with.                  */
+    (void) vr;
     init_guess(xr, np);
-    vec_shootx(xr, &vr, &ifr, 1, 0);
-    est(&vec_shootx, np, xr, devr, covr, 500, 200, 1e-5, 1e-7,
-        vr.xitol, vr.a, &vr.sigma2, &vr.logelf, &ifr);
+    {
+        real s2r;
+        ifr = fit_search(xr, np, devr, covr, &ll, &s2r, 1, 0, NULL);
+    }
     *ok = (ifr == 0);
-    if (*ok) ll = vr.logelf;
-    vec_shootx(xr, &vr, &ifr, 0, 1);
+    if (!*ok) ll = 0.0;
     free_matrix(covr, 1, np, 1, np); free_vector(devr, 1, np); free_vector(xr, 1, np);
     global_r = save_r;
     return ll;
@@ -3148,6 +3166,9 @@ static void init_guess(real *x, int npar)
 
         prelim_b2(B2w);
         if (global_seedjoh && r > 0) canonical_b2(B2w);
+        if (global_fixb2 && global_fixb2_given && r > 0 && seed_fixb2_consistent)
+            for (i = 1; i <= s; i++)
+                for (j = 1; j <= r; j++) B2w[i][j] = global_fixb2_value;
 
         Yb = matrix(1, nobs, 1, M);
         for (t2 = 1; t2 <= nobs; t2++) {
@@ -3306,6 +3327,23 @@ static void init_guess(real *x, int npar)
                 printf("  -seedjoh: the canonical solution could not be formed\n");
         }
     }
+
+    /*  -fixb2 v: the rest of the seed -- Lambda, F, Sigma, E[W] -- comes from
+     *  the W that is going to be FITTED, W = Y1 + v'Y2, and not from the static
+     *  OLS one.  Seeding them from the OLS W and then swapping B2 for v handed
+     *  the optimiser an inconsistent start: on UK consumption-income the fit
+     *  ended 766 log-units below the one reached from the same model with one
+     *  column demeaned (BUG-33).                                            */
+    if (global_fixb2 && global_fixb2_given && r > 0 && seed_fixb2_consistent)
+        for (i = 1; i <= s; i++)
+            for (j = 1; j <= r; j++) B2[i][j] = global_fixb2_value;
+    /*  -seedb2 v: the same, for the same reason -- a B2 started at v with the
+     *  rest of the seed built for another B2 is the inconsistency of BUG-33,
+     *  only with B2 free.  main() still writes v into the B2 slots after this,
+     *  which now changes nothing and keeps the slot-order check meaningful. */
+    else if (global_seedb2 && r > 0 && seed_fixb2_consistent)
+        for (i = 1; i <= s; i++)
+            for (j = 1; j <= r; j++) B2[i][j] = global_seedb2_value;
 
     /* --- 2. Build W_t = Y_{1t} + B₂'Y_{2t} and ∇Y_t = [∇Y_{1t};∇Y_{2t}] - */
     real **W  = matrix(1, nobs, 1, (r > 0 ? r : 1));
@@ -4111,6 +4149,468 @@ static void vec_shootx(real *x, struct Tvarma *armax,
         free_tensor(armax->phi, 0, armax->p, 1, armax->m, 1, armax->m);
         free_vector(armax->mu, 1, armax->m);
     }
+}
+
+/*****************************************************************************/
+/*  P12 — THE SEARCH                                                          */
+/*                                                                           */
+/*  WHY.  Until 2026-09-23 every fit in the program was ONE call to est()    */
+/*  from ONE starting point: the main fit, each rank of -lrtest, each        */
+/*  replication of the bootstraps.  The review of that date measured what    */
+/*  it cost (docs/BUGS.md BUG-25, 35, 43): on UKconsumption the r = 1 fit of  */
+/*  -lrtest stopped 22 log-units below the optimum a Johansen seed reaches,   */
+/*  and the two LRs of the table swapped rows without anybody noticing; on   */
+/*  the Danish M = 5 system the rank flipped from 2 to 0; on the wheat pairs */
+/*  the richer MA classes came out BELOW the poorer ones they contain, which */
+/*  is impossible at the maxima.  And -multistart, the documented remedy,    */
+/*  was ignored by -lrtest.                                                  */
+/*                                                                           */
+/*  WHAT IT DOES.  fit_search() keeps the best of several starts:            */
+/*                                                                           */
+/*    seed      the one the caller prepared (init_guess, -seedgate, ...)    */
+/*    cold      init_guess, when the seed was something else                  */
+/*    johansen  the canonical seed of -seedjoh, when r >= 1                  */
+/*    nested    THE CHAIN: the same model with q = 0, then -marow, -matri    */
+/*              and free, each started from the optimum of the one below     */
+/*              EMBEDDED with zeros where the richer class has more.  est()  */
+/*              only accepts points that lower the objective, so the richer  */
+/*              fit can never end below the poorer one it contains: the     */
+/*              nesting the theory promises becomes a property of the output.*/
+/*    jitter    with -multistart n, n - 1 perturbations of the seed, exactly */
+/*              as the old run_multistart made them (same generator).      */
+/*                                                                           */
+/*  Every start first goes through make_admissible(): if the engine rejects  */
+/*  it (a non-stationary AR, a non-invertible MA), F and Theta are shrunk    */
+/*  towards zero -- and Lambda halved if that is not enough -- until it      */
+/*  accepts it.  That is the ladder -warma already had, now for everybody    */
+/*  (BUG-35, BUG-43).  Lambda is never taken to zero: there the transformed  */
+/*  system has an AR root of modulus one (VEC_EMBEDDING_PLAN.md 3).          */
+/*                                                                           */
+/*  The engine is NOT touched (P3.1).  How est() stopped is known only from  */
+/*  the text report() writes to outputv, so est_run() points outputv at a    */
+/*  temporary file for the duration of the call and reads the criterion      */
+/*  there; the winner's text is then written to the real .out, which is what */
+/*  makes termcode_from_out() read the winner's code and not the last start's*/
+/*  (the -multistart defect of BUG-45).                                      */
+/*****************************************************************************/
+
+/*  The moving-average classes the chain walks, as zero patterns on Theta.   */
+enum { MA_Q0 = 0, MA_DIAG, MA_MAROW, MA_MATRI, MA_FREE, MA_OTHER };
+
+static int ma_class_now(void)
+{
+    if (global_q == 0) return MA_Q0;
+    if (global_warma || mawarma_on() || prof_hold) return MA_OTHER;
+    if (marow_on())       return MA_MAROW;
+    if (global_matri)     return MA_MATRI;
+    if (global_diag_ma)   return MA_DIAG;
+    return MA_FREE;
+}
+
+static void ma_class_set(int c)
+{
+    global_marow   = (c == MA_MAROW);
+    global_matri   = (c == MA_MATRI);
+    global_diag_ma = (c == MA_DIAG);
+}
+
+/*  Lengths of the blocks around Theta, for the CURRENT settings.  Head =     */
+/*  mean, Lambda (or psi) and F; tail = Sigma and B2.  Neither depends on the */
+/*  MA class, which is what makes the embedding a copy plus a remap.         */
+static void search_blocks(int *head, int *tail)
+{
+    int nmean, nlam, nmid, ntail, M = nser;
+    int nf = (global_p > 1) ? global_p - 1 : 0;
+    int nsig = (global_diag_cov ? M : M * (M + 1) / 2) - 1;
+    par_blocks(&nmean, &nlam, &nmid, &ntail);
+    *head = nmean + nlam + nf * (global_diag_ar ? M : M * M);
+    *tail = nsig + ntail;
+}
+
+static int theta_len(int c, int q)
+{
+    int M = nser, r = global_r, s = M - r;
+    switch (c) {
+        case MA_Q0:    return 0;
+        case MA_DIAG:  return q * M;
+        case MA_MAROW: return q * r * M;
+        case MA_MATRI: return q * (M * M - s * r);
+        case MA_FREE:  return q * M * M;
+    }
+    return -1;
+}
+
+/*  Theta (q x M x M, zeros where the class has none) <-> its slots in x.    */
+static void theta_unpack(const real *x, int off, int c, int q, real ***Th)
+{
+    int M = nser, r = global_r, i, j, k, idx = off + 1;
+    for (k = 1; k <= q; k++) {
+        for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) Th[k][i][j] = 0.0;
+        if (c == MA_DIAG) {
+            for (i = 1; i <= M; i++) Th[k][i][i] = x[idx++];
+        } else if (c == MA_MAROW) {
+            for (i = 1; i <= r; i++) for (j = 1; j <= M; j++) Th[k][i][j] = x[idx++];
+        } else if (c == MA_MATRI) {
+            for (i = 1; i <= r; i++) for (j = 1; j <= M; j++) Th[k][i][j] = x[idx++];
+            for (i = r + 1; i <= M; i++) for (j = r + 1; j <= M; j++) Th[k][i][j] = x[idx++];
+        } else if (c == MA_FREE) {
+            for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) Th[k][i][j] = x[idx++];
+        }
+    }
+}
+
+static void theta_pack(real ***Th, int c, int q, real *x, int off)
+{
+    int M = nser, r = global_r, i, j, k, idx = off + 1;
+    for (k = 1; k <= q; k++) {
+        if (c == MA_DIAG) {
+            for (i = 1; i <= M; i++) x[idx++] = Th[k][i][i];
+        } else if (c == MA_MAROW) {
+            for (i = 1; i <= r; i++) for (j = 1; j <= M; j++) x[idx++] = Th[k][i][j];
+        } else if (c == MA_MATRI) {
+            for (i = 1; i <= r; i++) for (j = 1; j <= M; j++) x[idx++] = Th[k][i][j];
+            for (i = r + 1; i <= M; i++) for (j = r + 1; j <= M; j++) x[idx++] = Th[k][i][j];
+        } else if (c == MA_FREE) {
+            for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) x[idx++] = Th[k][i][j];
+        }
+    }
+}
+
+/*  The optimum of class cs (q = qs) as a point of class cd (q = qd), where  */
+/*  cd contains cs: same head and tail, Theta completed with zeros.  It is   */
+/*  the SAME model, so its likelihood is the same number.                    */
+static void embed_ma(const real *xs, int cs, int qs, real *xd, int cd, int qd)
+{
+    int head, tail, i, M = nser;
+    int ls = theta_len(cs, qs), ld = theta_len(cd, qd);
+    int qm = (qd > 0 ? qd : 1);
+    real ***Th = tensor(1, qm, 1, M, 1, M);
+    search_blocks(&head, &tail);
+    for (i = 1; i <= head; i++) xd[i] = xs[i];
+    for (int k = 1; k <= qm; k++)
+        for (int a = 1; a <= M; a++) for (int b = 1; b <= M; b++) Th[k][a][b] = 0.0;
+    if (qs > 0) theta_unpack(xs, head, cs, (qs < qd ? qs : qd), Th);
+    if (qd > 0) theta_pack(Th, cd, qd, xd, head);
+    for (i = 1; i <= tail; i++) xd[head + ld + i] = xs[head + ls + i];
+    free_tensor(Th, 1, qm, 1, M, 1, M);
+}
+
+/*  Does the engine accept x as a starting point?  If not, walk the ladder.  */
+/*  Returns 0 when it accepts x as given, k > 0 when it needed step k of     */
+/*  the ladder, and -1 when nothing made it admissible (x left as given).   */
+static int make_admissible(real *x, int npar)
+{
+    static const real shr[6] = { 1.0, 0.8, 0.5, 0.3, 0.1, 0.0 };
+    int nmean, nlam, nmid, ntail, M = nser;
+    int nsig = (global_diag_cov ? M : M * (M + 1) / 2) - 1;
+    int lo, hi, i, pass, mi, res = -1;
+    real *x0 = vector(1, npar);
+    struct Tvarma vt;
+    int ift = 0;
+
+    par_blocks(&nmean, &nlam, &nmid, &ntail);
+    for (i = 1; i <= npar; i++) x0[i] = x[i];
+    /*  F and Theta (or, under -warma, the W-lag and MA blocks): everything  */
+    /*  between Lambda and Sigma.  Taken to zero they leave an admissible   */
+    /*  system as long as Lambda itself is.                                  */
+    /*  Under -warma the first block is not Lambda but the coefficients of
+     *  W_{t-1}: taken to zero with the rest they leave Ybar = A*, trivially
+     *  admissible -- the ladder main() always applied to -warma (BUG-35).  */
+    lo = global_warma ? nmean + 1 : nmean + nlam + 1;
+    hi = (prof_hold ? nmean + nlam : nmean + nlam + nmid - nsig);
+    vt.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
+    vec_shootx(x, &vt, &ift, 1, 0);
+    for (pass = 0; pass < 3 && res < 0; pass++) {
+        real lamf = (pass == 0) ? 1.0 : (pass == 1 ? 0.5 : 0.25);
+        for (mi = 0; mi < 6; mi++) {
+            real pi1, pi2, pi3;
+            int ifev = 0, ifc = 0;
+            for (i = 1; i <= npar; i++) x[i] = x0[i];
+            for (i = lo; i <= hi; i++) x[i] = shr[mi] * x0[i];
+            if (!global_warma)
+                for (i = nmean + 1; i <= nmean + nlam; i++) x[i] = lamf * x0[i];
+            vec_shootx(x, &vt, &ifc, 0, 0);
+            if (ifc != 0) continue;
+            elf(vt.m, vt.n, vt.p, vt.q, vt.mu, vt.phi, vt.theta, vt.qq, vt.w,
+                1.0, vt.xitol, TRUE, vt.a, &pi1, &pi2, &pi3, &ifev);
+            if (ifev == 0) { res = pass * 6 + mi; break; }
+        }
+    }
+    if (res < 0) for (i = 1; i <= npar; i++) x[i] = x0[i];
+    vec_shootx(x, &vt, &ift, 0, 1);
+    free_vector(x0, 1, npar);
+    return res;
+}
+
+/*  ONE optimisation from x, with the stop reason read where the engine      */
+/*  prints it.  Returns est()'s ifault; *tc is the termination code (1..5),  */
+/*  or 0 when it could not be read (quiet runs print nothing).  *text gets   */
+/*  the engine's report, for the caller to copy into the .out if it wants.   */
+static int est_run(real *x, int npar, real *dev, real **cov,
+                   real *ll, real *s2, int *tc, int *iters, char **text)
+{
+    struct Tvarma v;
+    int ifr = 0;
+    FILE *real_out = outputv, *tmp = NULL;
+    int saved_stdout = -1;
+
+    *tc = 0; *iters = -1; if (text) *text = NULL;
+    v.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
+    vec_shootx(x, &v, &ifr, 1, 0);
+    if (!quiet_mode && (tmp = tmpfile()) != NULL) {
+        outputv = tmp;
+        fflush(stdout);
+        saved_stdout = dup(fileno(stdout));
+        if (saved_stdout >= 0) {
+            FILE *nul = fopen(
+#ifdef _WIN32
+                "NUL",
+#else
+                "/dev/null",
+#endif
+                "w");
+            if (nul) { dup2(fileno(nul), fileno(stdout)); fclose(nul); }
+        }
+    }
+    est(&vec_shootx, npar, x, dev, cov, maxits, nrits, gradtol, sptol,
+        v.xitol, v.a, &v.sigma2, &v.logelf, &ifr);
+    if (tmp) {
+        long len;
+        fflush(stdout);
+        if (saved_stdout >= 0) { dup2(saved_stdout, fileno(stdout)); close(saved_stdout); }
+        outputv = real_out;
+        fflush(tmp);
+        len = ftell(tmp);
+        rewind(tmp);
+        if (len > 0) {
+            char *buf = (char *) malloc((size_t) len + 1);
+            size_t got = fread(buf, 1, (size_t) len, tmp);
+            char *p;
+            buf[got] = '\0';
+            if ((p = strstr(buf, "after ")) != NULL) sscanf(p, "after %d", iters);
+            if ((p = strstr(buf, "Convergence criterion:")) != NULL) {
+                if      (strstr(p, "gradtol"))         *tc = 1;
+                else if (strstr(p, "steptol"))         *tc = 2;
+                else if (strstr(p, "lower point"))     *tc = 3;
+                else if (strstr(p, "iteration limit")) *tc = 4;
+                else if (strstr(p, "maximum length"))  *tc = 5;
+            }
+            if (text) *text = buf; else free(buf);
+        }
+        fclose(tmp);
+    }
+    *ll = v.logelf; *s2 = v.sigma2;
+    {   /*  the deallocating call resets its own ifault argument: est()'s
+         *  verdict has to survive it, or a start the engine refused reads
+         *  as converged with logL 0.                                        */
+        int ifd = 0;
+        vec_shootx(x, &v, &ifd, 0, 1);
+    }
+    return ifr;
+}
+
+/*  What fit_search found, for the caller that has to print or test it.      */
+struct search_out {
+    int  ntried, nok;
+    int  tc, iters;            /* of the winning start                        */
+    char label[24];            /* which start won                             */
+    real worst;                /* lowest logL among the starts that converged */
+};
+
+#define SEARCH_MAXC 64
+
+/*  THE SEARCH.  x comes in as the caller's seed and leaves as the best point */
+/*  found; dev and cov are those of the winning run (they come from the      */
+/*  BFGS factor of THAT run: est() called again at the optimum does not      */
+/*  iterate and would leave them at their initialisation).  *ll and *s2 are the winner's.  Returns   */
+/*  est()'s ifault for the winner, or the seed's when no start converged.   */
+/*  With echo, a table of the starts and the winner's optimizer report are   */
+/*  written to the .out.                                                    */
+static int fit_search(real *x, int npar, real *dev, real **cov,
+                      real *ll, real *s2, int njitter, int echo,
+                      struct search_out *so)
+{
+    int cls = ma_class_now();
+    int nc = 0, best = -1, k, i;
+    int ifault_seed = 0;
+    real *xc, *xbest, *devc, **covc;
+    struct { char lab[24]; int ok, tc, it, adm; real ll; } C[SEARCH_MAXC];
+    char *best_text = NULL;
+    real best_s2 = 0.0;
+
+    xc = vector(1, npar); xbest = vector(1, npar);
+    devc = vector(1, npar); covc = matrix(1, npar, 1, npar);
+
+    /*  One candidate: made admissible, optimised, compared with the best.  */
+#define TRY(LABEL, XSTART) do {                                                \
+        int _tc, _it, _if, _adm; real _ll, _s2; char *_txt = NULL;             \
+        if (nc >= SEARCH_MAXC) break;                                          \
+        for (i = 1; i <= npar; i++) xc[i] = (XSTART)[i];                       \
+        _adm = make_admissible(xc, npar);                                      \
+        /*  A start nothing made admissible is not handed to est(): it would  \
+         *  refuse it anyway, and on that path it leaks (BUG-41).           */ \
+        if (_adm < 0) { _if = 6; _ll = 0.0; _s2 = 0.0; _tc = 0; _it = -1; }    \
+        else _if = est_run(xc, npar, devc, covc, &_ll, &_s2, &_tc, &_it, &_txt); \
+        snprintf(C[nc].lab, sizeof C[nc].lab, "%s", (LABEL));                  \
+        C[nc].ok = (_if == 0); C[nc].tc = _tc; C[nc].it = _it;                 \
+        C[nc].adm = _adm; C[nc].ll = _ll;                                      \
+        if (nc == 0) ifault_seed = _if;                                        \
+        if (_if == 0 && (best < 0 || _ll > C[best].ll)) {                      \
+            best = nc; best_s2 = _s2;                                          \
+            for (i = 1; i <= npar; i++) {                                      \
+                xbest[i] = xc[i]; dev[i] = devc[i];                            \
+                for (int _j = 1; _j <= npar; _j++) cov[i][_j] = covc[i][_j];   \
+            }                                                                  \
+            free(best_text); best_text = _txt; _txt = NULL;                    \
+        }                                                                      \
+        free(_txt);                                                            \
+        nc++;                                                                  \
+    } while (0)
+
+    /*  1. the caller's seed                                                */
+    real *seed = vector(1, npar);
+    for (i = 1; i <= npar; i++) seed[i] = x[i];
+    TRY("seed", seed);
+
+    /*  The other starts only make sense in the VEC parameterisation, and not */
+    /*  while -seedgate holds F, Theta and Sigma at the rung below.          */
+    int vec_layout = (!global_warma && !prof_hold);
+
+    /*  2. the cold start, when the seed was something else                 */
+    if (vec_layout) {
+        int differs = 0;
+        init_guess(xc, npar);
+        for (i = 1; i <= npar; i++) if (fabs(xc[i] - seed[i]) > 1e-12) { differs = 1; break; }
+        if (differs) { real *xg = vector(1, npar);
+                       for (i = 1; i <= npar; i++) xg[i] = xc[i];
+                       TRY("cold", xg); free_vector(xg, 1, npar); }
+    }
+
+    /*  2b. under -fixb2 v, the old seed too: Lambda, F and Sigma from the
+     *  static-OLS W.  It is inconsistent with v (BUG-33) and usually worse,
+     *  but not always -- and a search must never end below the single start
+     *  it replaced.                                                         */
+    if (vec_layout && global_fixb2 && global_fixb2_given && global_r > 0) {
+        real *xo = vector(1, npar);
+        seed_fixb2_consistent = 0; init_guess(xo, npar); seed_fixb2_consistent = 1;
+        TRY("ols-b2", xo);
+        free_vector(xo, 1, npar);
+    }
+
+    /*  3. Johansen's canonical seed                                        */
+    if (vec_layout && global_r > 0 && !global_seedjoh && !global_fixb2) {
+        real *xj = vector(1, npar);
+        /*  init_guess announces -seedjoh in the .out and on the console; here
+         *  it is one start among several, not the user's request.           */
+        FILE *o_save = outputv; int q_quiet = quiet_mode;
+        FILE *nul = tmpfile();
+        if (nul) outputv = nul;
+        quiet_mode = 1;
+        global_seedjoh = 1; init_guess(xj, npar); global_seedjoh = 0;
+        quiet_mode = q_quiet; outputv = o_save;
+        if (nul) fclose(nul);
+        TRY("johansen", xj);
+        free_vector(xj, 1, npar);
+    }
+
+    /*  4. the nested chain.  The class immediately below the target is fitted
+     *  by a SEARCH of its own -- which in turn starts from the class below it
+     *  -- and its optimum, embedded, is the start here.  So the chain carries
+     *  the best point found at every rung, not the first one: a single fit per
+     *  rung left -mafree below -matri on PLL.  The recursion is a chain, not a
+     *  tree: every level makes one recursive call, and it ends at q = 0.     */
+    if (vec_layout && global_q > 0 && cls != MA_OTHER && cls != MA_Q0) {
+        int q_save = global_q;
+        int f_marow = global_marow, f_matri = global_matri, f_diag = global_diag_ma;
+        int low;
+        if      (cls == MA_FREE)  low = (global_r > 0) ? MA_MATRI : MA_Q0;
+        else if (cls == MA_MATRI) low = (global_r > 0) ? MA_MAROW : MA_Q0;
+        else                      low = MA_Q0;          /* MAROW, DIAG */
+        global_q = (low == MA_Q0) ? 0 : q_save;
+        ma_class_set(low == MA_Q0 ? MA_FREE : low);
+        {
+            int npl = calc_nparametrs();
+            real *xl = vector(1, npl), *dl = vector(1, npl), **cl = matrix(1, npl, 1, npl);
+            real lll, s2l;
+            int ifl;
+            init_guess(xl, npl);
+            ifl = fit_search(xl, npl, dl, cl, &lll, &s2l, 1, 0, NULL);
+            global_q = q_save;
+            global_marow = f_marow; global_matri = f_matri; global_diag_ma = f_diag;
+            if (ifl == 0) {
+                real *xn = vector(1, npar);
+                embed_ma(xl, low, (low == MA_Q0 ? 0 : q_save), xn, cls, q_save);
+                TRY("nested", xn);
+                free_vector(xn, 1, npar);
+            }
+            free_matrix(cl, 1, npl, 1, npl); free_vector(dl, 1, npl); free_vector(xl, 1, npl);
+        }
+        global_q = q_save;
+        global_marow = f_marow; global_matri = f_matri; global_diag_ma = f_diag;
+    }
+
+    /*  5. -multistart: jitter around the caller's seed, as run_multistart did (P8) */
+    if (njitter > 1) {
+        unsigned long rng = 20260818UL;
+        real *xt = vector(1, npar);
+        for (k = 1; k < njitter; k++) {
+            real amp = 0.05 * (real) (1 + (k - 1) % 20);
+            for (i = 1; i <= npar; i++) {
+                real u;
+                rng = rng * 6364136223846793005UL + 1442695040888963407UL;
+                u = ((real) ((rng >> 33) & 0x7FFFFFFF)) / 2147483647.0;
+                u = 2.0 * u - 1.0;
+                xt[i] = seed[i] + amp * u * (fabs(seed[i]) > 1.0e-8 ? fabs(seed[i]) : 0.1);
+            }
+            char lab[24]; snprintf(lab, sizeof lab, "jitter %d", k);
+            TRY(lab, xt);
+        }
+        free_vector(xt, 1, npar);
+    }
+#undef TRY
+
+    /*  The winner                                                          */
+    int nok = 0; real worst = 0.0;
+    for (k = 0; k < nc; k++) if (C[k].ok) { if (nok == 0 || C[k].ll < worst) worst = C[k].ll; nok++; }
+    if (best >= 0) {
+        for (i = 1; i <= npar; i++) x[i] = xbest[i];
+        *ll = C[best].ll; *s2 = best_s2;
+    } else {
+        *ll = 0.0; *s2 = 0.0;
+    }
+    if (so) {
+        so->ntried = nc; so->nok = nok; so->worst = worst;
+        so->tc = (best >= 0) ? C[best].tc : 0;
+        so->iters = (best >= 0) ? C[best].it : -1;
+        snprintf(so->label, sizeof so->label, "%s", best >= 0 ? C[best].lab : "none");
+    }
+    if (echo && nc > 1) {
+        fprintf(outputv, "\nSearch: %d starting points, %d converged; logL from "
+                         "%.6f to %.6f.  The best is `%s'.\n",
+                nc, nok, worst, (best >= 0 ? C[best].ll : 0.0),
+                (best >= 0 ? C[best].lab : "none"));
+        fprintf(outputv, "  start        logL            stop  iters  admissible start\n");
+        for (k = 0; k < nc; k++) {
+            fprintf(outputv, "  %-10s ", C[k].lab);
+            if (C[k].ok) fprintf(outputv, "%15.6f   ", C[k].ll);
+            else         fprintf(outputv, "  (failed)        ");
+            fprintf(outputv, "  %4s  ",
+                    C[k].tc ? (C[k].tc == 1 ? "grad" : C[k].tc == 2 ? "step" :
+                               C[k].tc == 3 ? "tc3" : C[k].tc == 4 ? "iter" : "maxl") : "  - ");
+            if (C[k].it >= 0) fprintf(outputv, "%5d", C[k].it);
+            else              fprintf(outputv, "%5s", "-");
+            fprintf(outputv, "  %s\n",
+                    C[k].adm == 0 ? "as given" : C[k].adm > 0 ? "shrunk" : "not found");
+        }
+        fprintf(outputv, "  The SPREAD is the diagnostic: on a well-behaved surface "
+                         "every start lands in the same place.\n");
+    }
+    if (echo && best_text) fputs(best_text, outputv);
+    free(best_text);
+    free_vector(seed, 1, npar);
+    free_matrix(covc, 1, npar, 1, npar);
+    free_vector(devc, 1, npar); free_vector(xbest, 1, npar); free_vector(xc, 1, npar);
+    return (best >= 0) ? 0 : ifault_seed;
 }
 
 /*****************************************************************************/
@@ -7118,11 +7618,10 @@ static int run_ma_ar_test(void)
         x0 = vector(1, np0); dev0 = vector(1, np0); cov0 = matrix(1, np0, 1, np0);
         v0.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
         init_guess(x0, np0);
-        vec_shootx(x0, &v0, &ifr, 1, 0);
-        est(&vec_shootx, np0, x0, dev0, cov0, 500, 200, 1e-5, 1e-7,
-            v0.xitol, v0.a, &v0.sigma2, &v0.logelf, &ifr);
+        /*  P12: the search makes the start admissible first -- the ladder this
+         *  fit lacked (BUG-35) -- and keeps the best of its starts.          */
+        ifr = fit_search(x0, np0, dev0, cov0, &v0.logelf, &v0.sigma2, 1, 0, NULL);
         ok0 = (ifr == 0); l0 = v0.logelf;
-        vec_shootx(x0, &v0, &ifr, 0, 1);
 
         /* [2] the unrestricted one */
         set_spec(k1);
@@ -7246,6 +7745,7 @@ static int run_lrtest(void)
         real *ll  = vector(0, M - 1);
         int  *npr = ivector(0, M - 1);
         int  *good = ivector(0, M - 1);
+        int  *tcr = ivector(0, M - 1);   /* how each rank's winning fit stopped */
 
         fprintf(outputv, "\n=== Sequential LR test for the cointegration rank ===\n");
         printf("\nSequential LR test for the cointegration rank:\n");
@@ -7266,20 +7766,23 @@ static int run_lrtest(void)
             real *xr   = vector(1, np);
             real *devr = vector(1, np);
             real **covr = matrix(1, np, 1, np);
-            struct Tvarma vr;
-            vr.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
-            init_guess(xr, np);
+            real llr = 0.0, s2r = 0.0;
+            struct search_out so;
             int ifr;
-            vec_shootx(xr, &vr, &ifr, 1, 0);
-            est(&vec_shootx, np, xr, devr, covr, 500, 200, 1e-5, 1e-7,
-                vr.xitol, vr.a, &vr.sigma2, &vr.logelf, &ifr);
+            /*  P12: every rank is the best of several starts, and -multistart
+             *  is honoured here too (BUG-25).                               */
+            init_guess(xr, np);
+            fprintf(outputv, "\n--- rank r = %d ---\n", rr);
+            ifr = fit_search(xr, np, devr, covr, &llr, &s2r,
+                             (global_multistart > 1) ? global_multistart : 1,
+                             1, &so);
             ok = (ifr == 0);
             good[rr] = ok;
             npr[rr]  = np;
-            ll[rr]   = ok ? vr.logelf : 0.0;
-            printf("  r = %d : %s (ifault=%d)\n", rr,
-                   ok ? "ok" : "estimation failed", ifr);
-            vec_shootx(xr, &vr, &ifr, 0, 1);   /* deallocate */
+            ll[rr]   = ok ? llr : 0.0;
+            tcr[rr]  = ok ? so.tc : 0;
+            printf("  r = %d : %s (ifault=%d; %d starts, best `%s')\n", rr,
+                   ok ? "ok" : "estimation failed", ifr, so.ntried, so.label);
             if (global_boot > 0 && ok) {
                 xkeep[rr] = vector(1, np); npkeep[rr] = np;
                 for (int i2 = 1; i2 <= np; i2++) xkeep[rr][i2] = xr[i2];
@@ -7351,6 +7854,14 @@ static int run_lrtest(void)
             } else {
                 fprintf(outputv, "        -        -        -   (no values)");
             }
+            /*  A statistic built on a fit that did not stop on the gradient is
+             *  printed, but not without saying so (BUG-25).  tc 3 is often a
+             *  true optimum on a flat surface (CONVERGENCE.md): read the search
+             *  table of that rank before trusting the verdict.             */
+            if ((tcr[rr] > 2) || (tcr[rr+1] > 2))
+                fprintf(outputv, "   [check: rank %d stopped by criterion %d]",
+                        (tcr[rr] > 2) ? rr : rr + 1,
+                        (tcr[rr] > 2) ? tcr[rr] : tcr[rr+1]);
             fprintf(outputv, "\n");
         }
         fprintf(outputv,
@@ -7440,6 +7951,7 @@ static int run_lrtest(void)
         }
 
         free_ivector(good, 0, M - 1);
+        free_ivector(tcr, 0, M - 1);
         free_ivector(npr, 0, M - 1);
         free_vector(ll, 0, M - 1);
         printf("Done. Output written to %s\n", base_name);
@@ -7448,122 +7960,6 @@ static int run_lrtest(void)
         return 0;
 }
 
-/*****************************************************************************/
-/*  P8 — run_multistart: the -multistart block, out of main().  It is not a   */
-/*  mode -- it does not print and exit, it leaves a fit behind -- so unlike   */
-/*  the modes it returns whether it did: 1 means the best point is already in */
-/*  x and main() must not estimate again.                                     */
-/*****************************************************************************/
-static int run_multistart(real *x, real *dev, real **cov, int npar,
-                          struct Tvarma *vp, int *ifault)
-{
-    int ms_done = 0;
-        real *xbest = vector(1, npar), *xtry = vector(1, npar);
-        real *devb  = vector(1, npar), *devbest = vector(1, npar);
-        real **covb = matrix(1, npar, 1, npar);
-        real **covbest = matrix(1, npar, 1, npar);
-        real best = 0.0, worst = 0.0, best_s2 = 0.0;
-        int  k, i2, nok = 0, ifb, bestk = 0;
-        unsigned long rng = 20260818UL;      /* semilla fija, a proposito */
-
-        for (i2 = 1; i2 <= npar; i2++) xbest[i2] = x[i2];
-        for (k = 0; k < global_multistart; k++) {
-            struct Tvarma vk;
-            vk.xitol = vp->xitol;
-            /*  The multi-start shakes THE SEED BEING MEASURED, not another one:
-             *  with -seedgate that is the profiled point, which is already in
-             *  x, and calling init_guess again here would measure route (C)
-             *  under the wrong label.                                        */
-            /*  With -warma the same happens as with -seedgate: the good
-             *  starting point is the one already in x -- shrunk until
-             *  admissible -- and calling init_guess again here would return the
-             *  raw one, which the engine rejects.  Measured: on mink_muskrat
-             *  only 2 of 20 starts converged because of that.                */
-            if (gate_seed_ok || global_warma) {
-                for (i2 = 1; i2 <= npar; i2++) xtry[i2] = x[i2];
-            } else init_guess(xtry, npar);
-            if (k > 0) {
-                /* Multiplicative jitter on the seed, in a ladder of amplitude that
-                   depends ONLY on k and not on n.  That makes the procedure
-                   MONOTONE in n: the first n starts of a long run are exactly
-                   those of a short one, so asking for more starts can only
-                   improve things.  With the amplitude scaled by n -- as it was
-                   -- increasing n changed the set instead of extending it, and
-                   the nonsense was measured: n=24 gave |Sigma| 0.002349 and
-                   n=40 gave 0.002453.                                        */
-                real amp = 0.05 * (real) (1 + (k - 1) % 20);
-                for (i2 = 1; i2 <= npar; i2++) {
-                    real u;
-                    rng = rng * 6364136223846793005UL + 1442695040888963407UL;
-                    u = ((real) ((rng >> 33) & 0x7FFFFFFF)) / 2147483647.0;
-                    u = 2.0 * u - 1.0;                       /* U(-1, 1) */
-                    xtry[i2] += amp * u * (fabs(xtry[i2]) > 1.0e-8
-                                           ? fabs(xtry[i2]) : 0.1);
-                }
-            }
-            vec_shootx(xtry, &vk, &ifb, 1, 0);
-            est(&vec_shootx, npar, xtry, devb, covb, maxits, nrits, gradtol,
-                sptol, vk.xitol, vk.a, &vk.sigma2, &vk.logelf, &ifb);
-            if (ifb == 0) {
-                if (nok == 0 || vk.logelf > best) {
-                    best = vk.logelf; bestk = k; best_s2 = vk.sigma2;
-                    for (i2 = 1; i2 <= npar; i2++) {
-                        xbest[i2] = xtry[i2];
-                        /* The covariance has to be kept FROM THE START THAT PRODUCED
-                           IT.  cov comes from the factor raxopt accumulates
-                           while iterating, so calling est again from the
-                           optimum -- where it does not iterate -- leaves mtmp
-                           at its initialisation and returns standard errors
-                           that are ALL EQUAL.  Measured: 0.134231 for the three
-                           parameters of a case where the true ones are 0.062,
-                           0.123 and 0.106.  They would have been invented
-                           standard errors that looked computed.              */
-                        devbest[i2] = devb[i2];
-                        for (int j2 = 1; j2 <= npar; j2++)
-                            covbest[i2][j2] = covb[i2][j2];
-                    }
-                }
-                if (nok == 0 || vk.logelf < worst) worst = vk.logelf;
-                nok++;
-            }
-            vec_shootx(xtry, &vk, &ifb, 0, 1);
-            if (!quiet_mode)
-                printf("  arranque %2d/%d: %s\n", k + 1, global_multistart,
-                       (ifb == 0) ? "ok" : "fallo");
-        }
-        if (nok > 0) {
-            for (i2 = 1; i2 <= npar; i2++) {
-                x[i2]   = xbest[i2];
-                dev[i2] = devbest[i2];
-                for (int j2 = 1; j2 <= npar; j2++) cov[i2][j2] = covbest[i2][j2];
-            }
-            vp->logelf = best;
-            vp->sigma2 = best_s2;
-            *ifault = 0;
-            ms_done = 1;    /* no re-estimation: the best fit is already there */
-            fprintf(outputv, "\nMulti-start: %d of %d starting points converged; "
-                             "logL from %.6f to %.6f (best is start %d).\n",
-                    nok, global_multistart, worst, best, bestk + 1);
-            fprintf(outputv, "  The SPREAD is the diagnostic: on a well-behaved\n"
-                             "  surface every start lands in the same place.\n");
-            if (!quiet_mode)
-                printf("  Multi-start: %d/%d ok, logL from %.6f to %.6f\n",
-                       nok, global_multistart, worst, best);
-        } else {
-            fprintf(outputv, "\nMulti-start: no starting point converged.\n");
-        }
-        free_matrix(covbest, 1, npar, 1, npar);
-        free_matrix(covb, 1, npar, 1, npar);
-        free_vector(devbest, 1, npar);
-        free_vector(devb, 1, npar);
-        free_vector(xtry, 1, npar);
-        free_vector(xbest, 1, npar);
-        /* varma1 is NOT reallocated: its buffers are still alive from the call
-           above, and the loop used its own structure vk.  Calling again with
-           firstx = 1 orphaned the first allocation -- 1080 bytes that valgrind
-           marked as definitely lost.                                         */
-    return ms_done;
-}
 
 /*****************************************************************************/
 /*  P1 — the command line is validated BEFORE estimating                      */
@@ -8277,6 +8673,14 @@ static int run_eval(real *x, int npar, struct Tvarma *vp)
 
 int main(int argc, char *argv[])
 {
+    /*  P12.  GSL's default handler calls abort() on any error.  Every GSL call
+     *  in this program checks its return code -- canonical_b2's generalised
+     *  eigenproblem, granger_smin's SVD -- and falls back when it fails, but
+     *  the default handler never lets them return: on collinear data the
+     *  Johansen seed, which the search now always tries, killed the program
+     *  with signal 6 instead of letting it discard that start.              */
+    gsl_set_error_handler_off();
+
 
     {
         int rc = parse_cli(argc, argv);
@@ -8708,7 +9112,7 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    int ifault = 0;      /* est() or run_multistart() sets it */
+    int ifault = 0;      /* fit_search() sets it */
     vec_shootx(x, &varma1, &ifault, 1, 0);  /* allocate */
 
     /* -eval: the likelihood AT THE STARTING POINT, without optimising.
@@ -8771,13 +9175,18 @@ int main(int argc, char *argv[])
         }
     }
 
-    /*  1 = the multi-start already left the final fit in x.               */
-    int ms_done = (global_multistart > 1)
-                ? run_multistart(x, dev, cov, npar, &varma1, &ifault) : 0;
-
-    if (!ms_done)
-        est(&vec_shootx, npar, x, dev, cov, maxits, nrits, gradtol, sptol,
-            varma1.xitol, varma1.a, &varma1.sigma2, &varma1.logelf, &ifault);
+    /*  P12: the fit is the best of several starts (fit_search), and
+     *  -multistart adds its perturbations to them.  run_multistart was the
+     *  first version of this, for one flag and one caller.                 */
+    {
+        struct search_out so;
+        ifault = fit_search(x, npar, dev, cov, &varma1.logelf, &varma1.sigma2,
+                            (global_multistart > 1) ? global_multistart : 1,
+                            1, &so);
+        if (!quiet_mode && so.ntried > 1)
+            printf("  Search: %d starts, %d converged; best `%s' (logL %.6f)\n",
+                   so.ntried, so.nok, so.label, varma1.logelf);
+    }
 
     report_fit(x, dev, cov, npar, &varma1, ifault, outputf,
                lr_free, lr_free_ok);

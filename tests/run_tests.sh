@@ -2485,6 +2485,27 @@ if grep -aq "^Estimation .*Exact.*NOT truncated" "$TMP/case.out" &&
 else bad "-m 2 label" "$(grep -a '^Estimation' "$TMP/case.out")"; fi
 echo
 
+# 8t. OPTION COMBINATIONS THAT USED TO CRASH OR LIE (BUG-30, BUG-31).  Two are
+#     refused -- -warma does not impose alpha = A psi; -matest simulates levels,
+#     which -differenced does not carry -- and one is fixed: -lrtest -fixb2
+#     -bootstrap with M = 3 rebuilds the H0 rank's fixed B2 (it crashed, 139).
+echo "[8t] option combinations (BUG-30, BUG-31)"
+run "$MM" 2 1 1 -case 2 -warma -weakex 2
+printf '%s' "$STDERR" | grep -q "cannot be combined with -alpha or -weakex" \
+  && ok "-warma with -weakex is refused, not faked" \
+  || bad "-warma -weakex" "not refused: $STDERR"
+run tests/repro/fixtures/mmd.inp 2 1 1 -case 2 -differenced -matest 3
+printf '%s' "$STDERR" | grep -q "incompatible with -differenced" \
+  && ok "-differenced with -matest is refused" \
+  || bad "-differenced -matest" "not refused: $STDERR"
+cp datasets/synthetic/rank2.inp "$TMP/case.inp"
+timeout "$RUN_TIMEOUT" "$DRVEC" "$TMP/case" 1 0 1 -case 2 -lrtest -fixb2 -bootstrap 10 >/dev/null 2>&1
+rc=$?
+if [ $rc -eq 0 ] && grep -aq "p-value  reps" "$TMP/case.out"; then
+    ok "-lrtest -fixb2 -bootstrap with M = 3 runs (it crashed)"
+else bad "-lrtest -fixb2 -bootstrap M=3" "exit $rc"; fi
+echo
+
 # ================================================== 9 MEMORY (opt-in) ==
 # Off by default so `make test` is deterministic on any machine; run it with
 #     VALGRIND=1 make test

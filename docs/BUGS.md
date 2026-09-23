@@ -629,7 +629,10 @@ the standalone `-weakex 1` fit.
 
 ## BUG-30 — `-warma` with `-alpha`/`-weakex` reads past the end of the parameter vector and does not impose the restriction
 
-**Status: OPEN.** Found 2026-09-23.
+**Status: FIXED 2026-09-24** by refusal: `-warma` with `-alpha`/`-weakex` exits
+1 and points to `-mawarma`, which imposes `alpha = A psi` (checked clean under
+valgrind). Implementing the restriction in the `-warma` branch remains possible.
+Test 8t. Found 2026-09-23.
 
 **What it is.** `par_blocks` (~626) counts `alpha_sa·r` slots for `Lambda`; the
 `-warma` branch of `vec_shootx` (~3747) ignores `global_alpha` and reads `M·r`.
@@ -649,7 +652,12 @@ memory that is not its own.
 
 ## BUG-31 — three option combinations crash with SIGSEGV
 
-**Status: OPEN.** Found 2026-09-23.
+**Status: FIXED 2026-09-24.** (1) `-differenced` with `-matest`/`-artest` is
+refused. (2) `bootstrap_rank` rebuilds `B2_fixed` for rank `rr` on the observed
+data before reading it and after the loop (`refresh_b2_fixed`): the M = 3 run
+exits 0, valgrind clean, and rejects r = 0, 1 on `rank2.inp`. (3) `-warma
+-seedgate` no longer crashes since the ladder rewrite (b93980a); valgrind clean.
+Test 8t. Found 2026-09-23.
 
 **What it is.**
 1. `-differenced` with `-matest`/`-artest`: `simulate_h0` (~1795) writes row

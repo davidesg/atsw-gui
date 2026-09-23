@@ -1921,6 +1921,21 @@ static real fit_ll(int rr, int *ok)
     return ll;
 }
 
+/*  refresh_b2_fixed -- B2_fixed as init_guess builds it for rank rr on the data
+ *  now in rawmat (the -fixb2 value, or the static OLS one).  Leaves global_r
+ *  at rr.                                                                    */
+static void refresh_b2_fixed(int rr)
+{
+    int np;
+    real *xt;
+    global_r = rr;
+    build_y2_levels();
+    np = calc_nparametrs();
+    xt = vector(1, np);
+    init_guess(xt, np);
+    free_vector(xt, 1, np);
+}
+
 static int cmp_real(const void *a, const void *b)
 {
     real x = *(const real *)a, y = *(const real *)b;
@@ -1941,6 +1956,12 @@ static int bootstrap_rank(int rr, real *x, int npar, int N, real *cv, real *pval
     FILE *save_out = outputv;
     int save_quiet = quiet_mode, save_r = global_r, ge = 0;
 
+    /*  With -fixb2, B2 is not in x[] but in B2_fixed, which init_guess
+     *  reallocates for whatever rank ran last -- M-1 after -lrtest, and each
+     *  replication's own inside the loop below.  So it is rebuilt for rank rr
+     *  on the observed data before it is read, and again after them (BUG-31,
+     *  case 2: the H0 model was the previous replication's, then a crash).  */
+    if (global_fixb2) refresh_b2_fixed(rr);
     /* B2 of the fit: last s*rr entries of x[], column-major (or held). */
     if (rr > 0) {
         int idx = npar - s * rr + 1;
@@ -1983,6 +2004,7 @@ static int bootstrap_rank(int rr, real *x, int npar, int N, real *cv, real *pval
         for (j = 1; j <= M; j++) rawmat[i][j] = saved[i][j];
     if (outputv) fclose(outputv);
     outputv = save_out; quiet_mode = save_quiet;
+    if (global_fixb2) refresh_b2_fixed(rr);
     global_r = rr; build_y2_levels();
     vec_shootx(x, &vh, &ifr, 0, 1);
 
@@ -9014,6 +9036,29 @@ static int parse_cli(int argc, char *argv[])
             "ERROR: -differenced does not apply to the .pre route.  A .pre\n"
             "       carries the series in levels and says how it is differenced;\n"
             "       drvec forms nabla Y2 itself.\n");
+        exit(1);
+    }
+
+    /*  BUG-30.  -warma's branch of vec_shootx reads a full M x r Lambda, while
+     *  par_blocks counts only the free alpha_sa x r of Lambda = A psi: the
+     *  vector fell out of step, B2 was read past its end, and the fit claimed
+     *  a restriction it did not impose.  Refused until -warma implements it. */
+    if (global_warma && global_alpha) {
+        fprintf(stderr,
+            "ERROR: -warma cannot be combined with -alpha or -weakex: the WARMA\n"
+            "       parametrisation does not impose alpha = A psi.  Use -mawarma\n"
+            "       (the same MA structure, VEC coordinates) with the restriction.\n");
+        exit(1);
+    }
+    /*  BUG-31, case 1.  -matest and -artest simulate under H0 in LEVELS, into a
+     *  sample laid out for the levels route; with -differenced the columns
+     *  1..s arrive already differenced, so the simulation wrote a row past the
+     *  end and, before that, the wrong thing.  -lrtest refuses it already.  */
+    if (!global_levels && (global_matest > 0 || global_artest > 0)) {
+        fprintf(stderr,
+            "ERROR: -matest and -artest are incompatible with -differenced: the\n"
+            "       bootstrap simulates the series in levels.  Supply every\n"
+            "       series in levels (the default layout).\n");
         exit(1);
     }
 

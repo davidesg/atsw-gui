@@ -7,6 +7,12 @@ publicación: `v*`.
 
 ## Sin publicar
 
+### Combinaciones de opciones que caían o mentían (BUG-30, BUG-31)
+
+`-warma` con `-alpha`/`-weakex` y `-differenced` con `-matest`/`-artest` se
+rechazan con un mensaje que dice por qué. `-lrtest -fixb2 -bootstrap` con M ≥ 3
+ya no cae: el bootstrap rehace el `B₂` fijo del rango bajo H0.
+
 ### `-m 2` es la ML exacta sin truncar, y la puerta certifica sin truncamiento (BUG-47)
 
 `-m 2` se etiquetaba «Conditional (Approximate)» y sólo apaga el truncamiento de

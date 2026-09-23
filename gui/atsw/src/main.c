@@ -55,14 +55,43 @@ static GtkWidget *menu_muestras( Atsw *a, const char *padre,
                                  const char *desde );
 static gboolean que_mandar( Atsw *a, gboolean acepta_pre, char *out, size_t n );
 
-/* EL VISTAZO: el .inp de la serie marcada, nunca el .pre. Identificar es
- * antes de que haya modelo, y esto es identificar.                     */
+/* IDENTIFICAR ES SOBRE LOS DATOS, Y PUNTO.
+ *
+ * Esto lo usan fug y los atajos graficos, y los dos hacen lo mismo: enseñar
+ * la serie, su ACF y su PACF para decidir la transformacion. Eso se hace
+ * ANTES de que haya modelo, asi que el sujeto es el nodo de DATOS -- no el
+ * modelo que estuviera marcado.
+ *
+ * Mandar el .inp de un modelo no fallaba, y por eso no se notaba: fug dibuja
+ * los mismos datos y se trae de paso la lambda y las diferencias de ese
+ * modelo. Pero eso es empezar a mirar por donde ya se habia decidido, que es
+ * lo contrario de identificar -- y las mueve uno al pie del grafico, asi que
+ * el punto de partida no es una capacidad, es una comodidad que confunde.
+ *
+ * ES EL m00 DE LA HOJA EN QUE SE ESTE: en «pre-covid» se identifica sobre la
+ * serie recortada, que es para lo que esa hoja tiene su propio nodo.     */
+static gboolean que_identificar( Atsw *a, char *out, size_t n )
+{
+    const char *mu, *datos;
+
+    out[0] = '\0';
+    if ( !a->hay || !a->serie[0] ) return FALSE;
+
+    mu    = atsw_muestra_actual( a );
+    datos = pr_datos_de( a->p, a->serie, mu );
+    if ( !*datos ) return FALSE;
+
+    return pr_ruta( a->p, a->serie, mu, datos, ".inp", out, n ) == 0 &&
+           g_file_test( out, G_FILE_TEST_EXISTS );
+}
+
 static void vistazo( Atsw *a, int modo, double lam )
 {
     char f[PR_RUTA];
 
-    if ( !que_mandar( a, FALSE, f, sizeof f ) )
-        { barra_pub( a, "Esa serie no tiene todavía ningún fichero que mirar." );
+    if ( !que_identificar( a, f, sizeof f ) )
+        { barra_pub( a, "Esa serie no tiene datos en esta muestra: no hay "
+                        "nada que mirar todavía." );
           return; }
     atsw_vistazo( a, f, modo, lam );
 }
@@ -94,8 +123,8 @@ static void menu_serie( Atsw *a, GdkEventButton *ev )
 
     mi = gtk_menu_item_new_with_label( "Identificación con fug" );
     gtk_widget_set_tooltip_text( mi,
-        "Los gráficos de la serie, su ACF y su PACF. Se manda el .inp: se "
-        "identifica ANTES de que haya modelo." );
+        "Los gráficos de la serie, su ACF y su PACF. Va el nodo de datos de "
+        "esta muestra: se identifica ANTES de que haya modelo." );
     g_signal_connect( mi, "activate", G_CALLBACK(on_fug), a );
     gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
 
@@ -409,7 +438,40 @@ static void on_fue( GtkButton *b, Atsw *a )
 }
 /* A fug NO se le manda un .pre: se identifica antes de que haya modelo. */
 static void on_fug( GtkButton *b, Atsw *a )
-     { (void)b; manda( a, "gtk_fmg", "identificarla", FALSE ); }
+{
+    char f[PR_RUTA];
+
+    (void) b;
+    if ( !a->hay ) { barra_pub( a, "Abre un proyecto antes." ); return; }
+    if ( !que_identificar( a, f, sizeof f ) )
+        {
+        barra_pub( a, a->serie[0]
+            ? "Esa serie no tiene datos en esta muestra: fug identifica sobre "
+              "los datos."
+            : "Marca una serie para identificarla." );
+        return;
+        }
+
+    /* SE DICE QUE VA EL m00, aunque hubiera otro marcado: si no, el analista
+       cree que esta mirando el modelo que marco.                       */
+    {
+    gchar *id = atsw_marcada( a->l_modelos, M_ID );
+
+    if ( id && !pr_es_datos( a->p, a->serie, atsw_muestra_actual( a ), id ) )
+        {
+        gchar *t = g_strdup_printf( "fug identifica sobre los datos, así que "
+                                    "va %s y no %s.",
+                                    pr_datos_de( a->p, a->serie,
+                                                 atsw_muestra_actual( a ) ),
+                                    id );
+
+        barra_pub( a, t );
+        g_free( t );
+        }
+    g_free( id );
+    }
+    atsw_lanza( a, "gtk_fmg", f );
+}
 /* drtran es de la RED: trabaja con n series, no con una. Se abre con el
  * proyecto y alli se eligen.                                          */
 static void on_drtran( GtkButton *b, Atsw *a )
@@ -1154,8 +1216,9 @@ static void activate( GtkApplication *app, gpointer d )
      * MARCADO -- el mismo sujeto que Iterar, Elegir y Razón.           */
     a->b_fug = boton( b2, "→ fug",
         "Manda esta serie a fug para IDENTIFICARLA: sus gráficos, su ACF y "
-        "su PACF.\n\nSe manda el .inp, nunca el .pre: se identifica ANTES "
-        "de que haya modelo.", G_CALLBACK(on_fug), a );
+        "su PACF.\n\nVa SIEMPRE el nodo de datos de esta muestra, aunque "
+        "tengas otro modelo marcado: se identifica ANTES de que haya "
+        "modelo.", G_CALLBACK(on_fug), a );
     a->b_fue = boton( b2, "→ fue",
         "Manda esta serie a fue para ESTIMAR su modelo.\n\nSe manda el .pre "
         "si lo hay —es un óptimo reejecutable— y si no el .inp, que es la "

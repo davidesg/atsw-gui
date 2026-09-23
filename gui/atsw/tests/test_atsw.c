@@ -10,7 +10,20 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "proyecto.h"
+#include "atsw.h"
+
+/* Lo que la ventana pide de main.c. Aqui no hay ventana: lo que se prueba
+   --a que apuntan los botones-- es una regla del METODO y por eso vive
+   fuera del widget.                                                    */
+void      atsw_columna( GtkWidget *tv, const char *t, int c )
+                                              { (void) tv; (void) t; (void) c; }
+GtkWidget *atsw_en_scroll( GtkWidget *w )     { return w; }
+gchar     *atsw_marcada( GtkWidget *tv, int c ) { (void) tv; (void) c; return 0; }
+void       atsw_on_activado( GtkTreeView *tv, GtkTreePath *r,
+                             GtkTreeViewColumn *c, Atsw *a )
+                         { (void) tv; (void) r; (void) c; (void) a; }
+gboolean   atsw_on_click( GtkWidget *tv, GdkEventButton *e, Atsw *a )
+                         { (void) tv; (void) e; (void) a; return 0; }
 
 const char *atsw_modelo_por_defecto( const Proyecto *p, const char *serie );
 
@@ -70,6 +83,31 @@ int main( void )
 
     /* El ULTIMO es el de VERSION mas alta, que es un CAMPO. Si se dedujera
      * del nombre, un id fuera de orden lo rompería.                     */
+    printf( "\nCADA HOJA APUNTA A LO SUYO, NO A LO DE LA DE AL LADO\n" );
+    {
+    char nid[PR_ID];
+
+    pr_muestra_add( p, "pre-covid", "", "12/2019", "otro régimen", &e );
+
+    /* m00 datos, m01 y m02 en la completa; el elegido es m01. */
+    es( atsw_modelo_por_defecto_en( p, "EP", "" ), "m01",
+        "en la completa, el ELEGIDO" );
+    es( atsw_modelo_por_defecto_en( p, "EP", "pre-covid" ), "",
+        "y en una hoja vacía, NADA: el de al lado no es candidato" );
+
+    pr_deriva( p, "EP", "m00", nid, sizeof nid, NULL, 0, &e );
+    pr_pon_muestra( p, "EP", nid, "pre-covid", &e );
+    es( atsw_modelo_por_defecto_en( p, "EP", "pre-covid" ), nid,
+        "con uno dentro, a ese" );
+    es( atsw_modelo_por_defecto_en( p, "EP", "" ), "m01",
+        "y la completa sigue con el suyo" );
+
+    /* El ELEGIDO de otra hoja tampoco manda en esta. */
+    pr_elige( p, "EP", nid, "en pre-covid gana este", &e );
+    es( atsw_modelo_por_defecto_en( p, "EP", "" ), "m02",
+        "si el elegido está en otra muestra, aquí manda el ÚLTIMO" );
+    }
+
     printf( "\nEL ULTIMO SE DECIDE POR LA VERSION, NO POR EL NOMBRE\n" );
     {
     Proyecto *q = calloc( 1, sizeof *q );

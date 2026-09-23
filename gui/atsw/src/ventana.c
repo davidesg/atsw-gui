@@ -116,6 +116,41 @@ const AtRes *atsw_resultado( Atsw *a, const char *serie, const char *id )
 
 /* ------------------------------------------------------------------------ */
 
+/* LA HOJA QUE ESTA DELANTE. "" es la completa. */
+const char *atsw_muestra_actual( Atsw *a )
+{
+    int n;
+
+    if ( a == NULL || a->libro == NULL ) return "";
+    n = gtk_notebook_get_current_page( GTK_NOTEBOOK(a->libro) );
+    if ( n < 0 || n >= a->nhojas ) return "";
+    return a->hoja_mu[n];
+}
+
+const char *atsw_modelo_por_defecto_en( const Proyecto *p, const char *serie,
+                                        const char *muestra )
+{
+    const char *eleg;
+    const char *ultimo = "";
+    int         i, maxv = -1;
+
+    if ( p == NULL || serie == NULL || !*serie ) return "";
+    if ( muestra == NULL ) muestra = "";
+
+    /* El ELEGIDO manda, pero SOLO si esta en esta muestra: el de otra
+       ventana no es candidato aqui, porque no se compara con esto.   */
+    eleg = pr_elegido( p, serie );
+    if ( eleg && *eleg && !strcmp( pr_muestra_de( p, serie, eleg ), muestra ) )
+        return eleg;
+
+    for ( i = 0; i < p->nm; i++ )
+        if ( !strcmp( p->m[i].serie, serie ) &&
+             !strcmp( p->m[i].muestra, muestra ) && p->m[i].version > maxv )
+            { maxv = p->m[i].version; ultimo = p->m[i].id; }
+
+    return ultimo;
+}
+
 const char *atsw_modelo_por_defecto( const Proyecto *p, const char *serie )
 {
     const char *eleg;
@@ -229,19 +264,64 @@ static void pinta_series( Atsw *a )
     a->recolocando = FALSE;
 }
 
-static void pinta_modelos( Atsw *a )
+/* LO QUE LA HOJA ESCONDE, RECUPERADO EN EL GLOBO.
+ *
+ * Las pestañas impiden comparar los NUMEROS entre muestras, que es lo que
+ * habia que impedir. Pero comparar la ESTRUCTURA si vale --"¿sale el mismo
+ * (0,1,1)(0,1,1)12 antes y despues del salto?"-- y eso la pestaña lo tapa.
+ * Se recupera aqui: si la misma estructura esta estimada en otra muestra,
+ * se dice en cual y con que nombre.                                    */
+static const char *cruce( Atsw *a, const PrModelo *m )
+{
+    static char b[512];
+    const AtRes *mio = atsw_resultado( a, m->serie, m->id );
+    GString     *g;
+    int          i;
+
+    b[0] = '\0';
+    if ( mio == NULL || !mio->hay || !mio->estruct[0] ) return b;
+
+    g = g_string_new( NULL );
+    for ( i = 0; i < a->p->nm; i++ )
+        {
+        const PrModelo *o = &a->p->m[i];
+        const AtRes    *r;
+
+        if ( strcmp( o->serie, m->serie ) != 0 ) continue;
+        if ( strcmp( o->muestra, m->muestra ) == 0 ) continue;  /* otra hoja */
+        r = atsw_resultado( a, o->serie, o->id );
+        if ( r == NULL || !r->hay ) continue;
+        if ( strcmp( r->estruct, mio->estruct ) != 0 ) continue;
+
+        g_string_append_printf( g, "%s%s (%s)", g->len ? ", " : "",
+            o->id, o->muestra[0] ? o->muestra : "completa" );
+        }
+
+    if ( g->len )
+        snprintf( b, sizeof b, "\n\nLa misma estructura está en: %s", g->str );
+    g_string_free( g, TRUE );
+    return b;
+}
+
+/* UNA HOJA: los modelos de ESTA serie EN ESTA muestra. */
+static void pinta_hoja( Atsw *a, GtkWidget *vista, const char *muestra )
 {
     GtkListStore *st = GTK_LIST_STORE( gtk_tree_view_get_model(
-                                           GTK_TREE_VIEW(a->l_modelos) ) );
+                                           GTK_TREE_VIEW(vista) ) );
     GtkTreeIter   it;
     const char   *eleg, *porde;
+    gchar        *marca;
     int           i;
 
+    /* La marca se GUARDA y se repone: repintar no puede cambiar lo que el
+       analista tenia elegido.                                          */
+    marca = atsw_marcada( vista, M_ID );
+
     gtk_list_store_clear( st );
-    if ( !a->hay || a->serie[0] == '\0' ) return;
+    if ( !a->hay || a->serie[0] == '\0' ) { g_free( marca ); return; }
 
     eleg  = pr_elegido( a->p, a->serie );
-    porde = atsw_modelo_por_defecto( a->p, a->serie );
+    porde = atsw_modelo_por_defecto_en( a->p, a->serie, muestra );
 
     for ( i = 0; i < a->p->nm; i++ )
         {
@@ -251,6 +331,7 @@ static void pinta_modelos( Atsw *a )
         gchar          *globo;
 
         if ( strcmp( m->serie, a->serie ) != 0 ) continue;
+        if ( strcmp( m->muestra, muestra ) != 0 ) continue;
 
         r = atsw_resultado( a, m->serie, m->id );
 
@@ -269,10 +350,11 @@ static void pinta_modelos( Atsw *a )
                 "%s · %d parámetro%s\n\n"
                 "Ljung-Box Q(%d) = %.2f, p = %.4f\n"
                 "Jarque-Bera = %.1f, p = %.4f  (asimetría %.2f, curtosis %.2f)"
-                "\n\nDoble clic para abrirlo en fue.",
+                "%s\n\nDoble clic para abrirlo en fue.",
                 r->estruct[0] ? r->estruct : "sin estructura",
                 r->npar, r->npar == 1 ? "" : "s",
-                r->qdf, r->q, r->qp, r->jb, r->jbp, r->skew, r->kurt );
+                r->qdf, r->q, r->qp, r->jb, r->jbp, r->skew, r->kurt,
+                cruce( a, m ) );
             }
         else
             {
@@ -303,13 +385,23 @@ static void pinta_modelos( Atsw *a )
             -1 );
         g_free( globo );
 
-        /* SE MARCA EL DE POR DEFECTO, para que los botones tengan a que
-         * apuntar sin exigir un segundo click. El analista puede marcar
-         * otro, claro.                                                */
-        if ( !strcmp( porde, m->id ) )
+        /* Se repone la marca; y si no habia, se marca el de por defecto
+         * DE ESTA HOJA, para que los botones tengan a que apuntar.    */
+        if ( marca ? !strcmp( marca, m->id ) : !strcmp( porde, m->id ) )
             gtk_tree_selection_select_iter(
-                gtk_tree_view_get_selection( GTK_TREE_VIEW(a->l_modelos) ), &it );
+                gtk_tree_view_get_selection( GTK_TREE_VIEW(vista) ), &it );
         }
+    g_free( marca );
+}
+
+static void pinta_modelos( Atsw *a )
+{
+    int i;
+
+    a->recolocando = TRUE;
+    for ( i = 0; i < a->nhojas; i++ )
+        pinta_hoja( a, a->hoja[i], a->hoja_mu[i] );
+    a->recolocando = FALSE;
 }
 
 static void pinta_veredictos( Atsw *a )
@@ -401,4 +493,107 @@ void atsw_refresca( Atsw *a )
     gtk_widget_set_sensitive( a->b_drtran, a->hay );
     gtk_widget_set_sensitive( a->b_fue,    a->hay );
     gtk_widget_set_sensitive( a->b_fug,    a->hay );
+}
+
+/* ------------------------------------------------------------------------ */
+/* LAS HOJAS DEL CUADERNO                                                    */
+/*                                                                           */
+/* Una por muestra, y la primera es SIEMPRE la completa: no se crea, no se   */
+/* borra y no se renombra, porque es lo que entro. Un proyecto que nunca     */
+/* trunque nada vive entero en ella y no se entera de que hay mas.           */
+/*                                                                           */
+/* Cada hoja tiene su propia rejilla porque un widget no puede tener dos     */
+/* padres. a->l_modelos apunta a la de la hoja visible, asi que todo lo que  */
+/* actua sobre "el modelo marcado" sigue leyendo de un solo sitio.           */
+/* ------------------------------------------------------------------------ */
+
+static GtkWidget *hoja_nueva( Atsw *a )
+{
+    GtkListStore *st = gtk_list_store_new( M_N,
+        G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING,
+        G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING,
+        G_TYPE_STRING );
+    GtkWidget *v = gtk_tree_view_new_with_model( GTK_TREE_MODEL(st) );
+
+    g_object_unref( st );
+    gtk_tree_view_set_tooltip_column( GTK_TREE_VIEW(v), M_GLOBO );
+    atsw_columna( v, "",           M_ESTRELLA );
+    atsw_columna( v, "Modelo",     M_ID );
+    atsw_columna( v, "Viene de",   M_PADRE );
+    atsw_columna( v, "Estructura", M_ESTRUCT );
+    atsw_columna( v, "d.t. res.",  M_SD );
+    atsw_columna( v, "Q (g.l.)",   M_Q );
+    atsw_columna( v, "p",          M_P );
+    atsw_columna( v, "Por qué",    M_RAZON );
+    gtk_widget_set_tooltip_text( v,
+        "Los números salen del .out, no del manifiesto, y se releen cuando el "
+        "fichero cambia. Cachearlos podría mentir: si alguien reestima por "
+        "fuera, el número guardado seguiría diciendo lo de antes.\n\nEl "
+        "manifiesto guarda linaje y razón, que son DECISIONES." );
+    g_signal_connect( v, "row-activated", G_CALLBACK(atsw_on_activado), a );
+    g_signal_connect( v, "button-press-event", G_CALLBACK(atsw_on_click), a );
+    return v;
+}
+
+void atsw_hojas( Atsw *a )
+{
+    const char *antes = atsw_muestra_actual( a );
+    char        vuelve[PR_ID];
+    int         i, n;
+
+    if ( a->libro == NULL ) return;
+    snprintf( vuelve, sizeof vuelve, "%s", antes );
+
+    a->recolocando = TRUE;
+    while ( gtk_notebook_get_n_pages( GTK_NOTEBOOK(a->libro) ) > 0 )
+        gtk_notebook_remove_page( GTK_NOTEBOOK(a->libro), 0 );
+
+    a->nhojas = 0;
+    n = a->hay ? a->p->nmu : 0;
+    for ( i = 0; i <= n && a->nhojas <= PR_MAX_MUESTRA; i++ )
+        {
+        /* i == 0 es la COMPLETA, y por eso va primera y sin declarar. */
+        const char *mu = ( i == 0 ) ? "" : a->p->mu[i - 1].id;
+        GtkWidget  *v  = hoja_nueva( a );
+        GtkWidget  *et = gtk_label_new( ( i == 0 ) ? "Completa" : mu );
+
+        if ( i > 0 )
+            {
+            const PrMuestra *m = &a->p->mu[i - 1];
+            gchar *t = g_strdup_printf( "%s%s%s%s%s",
+                m->desde[0] ? "Desde " : "", m->desde,
+                m->hasta[0] ? ( m->desde[0] ? ", hasta " : "Hasta " ) : "",
+                m->hasta,
+                m->razon[0] ? "" : "" );
+
+            if ( m->razon[0] )
+                { gchar *u = g_strdup_printf( "%s\n\n%s", t, m->razon );
+                  g_free( t ); t = u; }
+            gtk_widget_set_tooltip_text( et, t );
+            g_free( t );
+            }
+        else
+            gtk_widget_set_tooltip_text( et,
+                "La muestra total: los datos tal como entraron. No se crea, "
+                "no se borra y no se recorta." );
+
+        gtk_widget_show_all( v );
+        gtk_widget_show( et );
+        gtk_notebook_append_page( GTK_NOTEBOOK(a->libro), atsw_en_scroll( v ),
+                                  et );
+        a->hoja[a->nhojas] = v;
+        snprintf( a->hoja_mu[a->nhojas], PR_ID, "%s", mu );
+        a->nhojas++;
+        }
+
+    gtk_widget_show_all( a->libro );
+
+    /* Se vuelve a la hoja que estaba, si sigue estando. */
+    for ( i = 0; i < a->nhojas; i++ )
+        if ( !strcmp( a->hoja_mu[i], vuelve ) )
+            { gtk_notebook_set_current_page( GTK_NOTEBOOK(a->libro), i ); break; }
+
+    a->l_modelos = a->hoja[ gtk_notebook_get_current_page(
+                                GTK_NOTEBOOK(a->libro) ) ];
+    a->recolocando = FALSE;
 }

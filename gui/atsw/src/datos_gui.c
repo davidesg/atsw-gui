@@ -48,7 +48,7 @@ typedef struct {
  * Se conservan los bytes >= 0x80 --las letras acentuadas son UTF-8 de varios
  * bytes-- y se cambian por '_' los blancos y los separadores de ruta, que si
  * darian guerra en un nombre de fichero.                                */
-static void a_id( const char *s, char *out, size_t n )
+void a_id( const char *s, char *out, size_t n )
 {
     const unsigned char *p = (const unsigned char *) s;
     size_t i = 0;

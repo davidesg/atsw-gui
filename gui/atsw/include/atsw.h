@@ -95,7 +95,17 @@ typedef struct {
    GtkWidget *ventana;
    GtkWidget *l_proy;             /* que proyecto esta abierto              */
    GtkWidget *l_series;           /* la lista de series                     */
-   GtkWidget *l_modelos;          /* la rejilla de modelos de la marcada    */
+   /* LA REJILLA QUE ESTA DELANTE.
+    *
+    * Hay una por MUESTRA -- un widget no puede tener dos padres, asi que
+    * las hojas del cuaderno no pueden compartir vista-- y este campo apunta
+    * a la de la hoja visible. Todo lo que actua sobre "el modelo marcado"
+    * sigue leyendo de aqui sin enterarse de que hay varias.            */
+   GtkWidget *libro;              /* el cuaderno, con las hojas abajo       */
+   GtkWidget *l_modelos;          /* la rejilla de la hoja VISIBLE          */
+   GtkWidget *hoja[PR_MAX_MUESTRA + 1];
+   char       hoja_mu[PR_MAX_MUESTRA + 1][PR_ID];
+   int        nhojas;
    GtkWidget *ver_cuenta;         /* veredicto: cuantas cosas hay           */
    GtkWidget *ver_ojo;            /* veredicto: LO QUE HAY QUE MIRAR        */
    GtkWidget *estado;             /* la barra de abajo                      */
@@ -170,5 +180,33 @@ const AtRes *atsw_resultado( Atsw *a, const char *serie, const char *id );
  * Es una REGLA, no un asunto de interfaz, asi que vive aqui y se prueba
  * aparte: la rejilla la usa para marcar y los envios para apuntar.    */
 const char *atsw_modelo_por_defecto( const Proyecto *p, const char *serie );
+
+/* Lo mismo, DENTRO de una muestra. Lo que la hoja de al lado tenga no es
+   candidato: no se compara con esto, asi que tampoco se manda por esto. */
+const char *atsw_modelo_por_defecto_en( const Proyecto *p, const char *serie,
+                                        const char *muestra );
+
+/* La muestra de la hoja que esta delante. "" es la completa.           */
+const char *atsw_muestra_actual( Atsw *a );
+
+/* Rehace las hojas del cuaderno segun las muestras del proyecto.        */
+void       atsw_hojas( Atsw *a );
+
+/* LLEVAR UNA SERIE A OTRA MUESTRA: deriva un modelo colgado de <padre> --o
+   de los datos-- y le GENERA el .inp con la ventana de <muestra>. No toca
+   nada de lo que habia: el .out del padre describe otra estimacion.    */
+gboolean   atsw_en_muestra( Atsw *a, const char *serie, const char *padre,
+                            const char *muestra, char *why, size_t n );
+
+/* --- piezas compartidas entre los ficheros de la ventana ---------------- */
+void       atsw_columna( GtkWidget *tv, const char *titulo, int col );
+GtkWidget *atsw_en_scroll( GtkWidget *w );
+GtkWidget *atsw_fila( GtkWidget *rejilla, int y, const char *et,
+                      const char *valor, const char *tip );
+void       atsw_on_activado( GtkTreeView *tv, GtkTreePath *ruta,
+                             GtkTreeViewColumn *col, Atsw *a );
+gboolean   atsw_on_click( GtkWidget *tv, GdkEventButton *ev, Atsw *a );
+void       a_id( const char *s, char *out, size_t n );
+gchar     *atsw_marcada( GtkWidget *tv, int columna );
 
 #endif /* ATSW_GUI_H */

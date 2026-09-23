@@ -356,6 +356,8 @@ $CC -O2 -Wall -Wextra -I"$TOP/../atsw/include" -I"$L/proyecto" -I"$L/inpcheck" \
 echo
 $CC -O2 -Wall -Wextra -I"$TOP/../atsw/include" -I"$L/proyecto" -I"$L/outdiag" \
     -I"$L/outfile" -I"$L/tabla" -I"$L/dates" $(pkg-config --cflags gtk+-3.0) \
+    -I"$L/rutas" -I"$L/preview" -I"$L/fugdraw" -I"$L/utils" -I"$L/datos" \
+    -I"$L/xlsx" -I"$L/engine" -I"$L/inpcheck" \
     "$TOP/../atsw/tests/test_atsw.c" "$TOP/../atsw/src/ventana.c" \
     "$L/proyecto/proyecto.c" "$L/outdiag/outdiag.c" "$L/outfile/outfile.c" \
     "$L/dates/dates.c" \

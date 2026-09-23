@@ -31,9 +31,8 @@ void barra_pub( Atsw *a, const char *s )
 
 /* ------------------------------------------------------------------------ */
 
-static gchar *marcada( GtkWidget *tv, int columna );
 
-static gchar *marcada( GtkWidget *tv, int columna )
+gchar *atsw_marcada( GtkWidget *tv, int columna )
 {
     GtkTreeSelection *sel = gtk_tree_view_get_selection( GTK_TREE_VIEW(tv) );
     GtkTreeModel     *mo;
@@ -50,6 +49,8 @@ static void on_fue( GtkButton *b, Atsw *a );
 static void on_fug( GtkButton *b, Atsw *a );
 static void on_nuevo_modelo( GtkButton *b, Atsw *a );
 static void on_iterar( GtkButton *b, Atsw *a );
+static GtkWidget *menu_muestras( Atsw *a, const char *padre,
+                                 const char *desde );
 static gboolean que_mandar( Atsw *a, gboolean acepta_pre, char *out, size_t n );
 
 /* EL VISTAZO: el .inp de la serie marcada, nunca el .pre. Identificar es
@@ -135,6 +136,24 @@ static void menu_serie( Atsw *a, GdkEventButton *ev )
 
     gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
 
+    {
+    GtkWidget *sub = menu_muestras( a, NULL, "\x01" );   /* ninguna excluida */
+
+    if ( sub && a->nhojas > 1 )
+        {
+        mi = gtk_menu_item_new_with_label( "Modelo nuevo, en otra muestra…" );
+        gtk_widget_set_tooltip_text( mi,
+            "Empieza un modelo sobre una ventana declarada. Cuelga de los "
+            "datos, y su .inp se genera del datos.csv recortado." );
+        gtk_menu_item_set_submenu( GTK_MENU_ITEM(mi), sub );
+        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+        }
+    else if ( sub )
+        gtk_widget_destroy( sub );
+    }
+
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
+
     mi = gtk_menu_item_new_with_label( "Editar la serie…" );
     gtk_widget_set_tooltip_text( mi,
         "Qué es, en qué unidades, de dónde se bajó y cuándo. Nada de esto "
@@ -201,7 +220,7 @@ static void on_serie( GtkTreeSelection *sel, gpointer d )
        analista. Leerla aqui borraba la marca que acababa de ponerse.  */
     if ( a->recolocando ) return;
 
-    s = marcada( a->l_series, 0 );
+    s = atsw_marcada( a->l_series, 0 );
     if ( s == NULL ) return;          /* deseleccion: se conserva la marca */
 
     snprintf( a->serie, sizeof a->serie, "%s", s );
@@ -295,7 +314,7 @@ static void on_datos( GtkButton *b, Atsw *a )  { (void)b; atsw_datos( a ); }
  * Si no hay modelo marcado se usa el elegido de la serie.              */
 static gboolean que_mandar( Atsw *a, gboolean acepta_pre, char *out, size_t n )
 {
-    gchar *id = marcada( a->l_modelos, 0 );
+    gchar *id = atsw_marcada( a->l_modelos, 0 );
     const char *m;
 
     if ( !a->hay || !a->serie[0] ) { out[0] = '\0'; return FALSE; }
@@ -360,7 +379,7 @@ static void manda( Atsw *a, const char *programa, const char *para,
  * justo el caso en que el fichero que tocaba era el de los datos.      */
 static void on_fue( GtkButton *b, Atsw *a )
 {
-    gchar      *marca = marcada( a->l_modelos, 0 );
+    gchar      *marca = atsw_marcada( a->l_modelos, 0 );
     const char *id    = marca;
 
     (void) b;
@@ -469,7 +488,7 @@ static void borra_ficheros( Atsw *a, const char *serie, const char *id )
 
 static void on_borrar( GtkMenuItem *m, Atsw *a )
 {
-    gchar     *id = marcada( a->l_modelos, M_ID );
+    gchar     *id = atsw_marcada( a->l_modelos, M_ID );
     GtkWidget *d;
     PrError    e;
     char       why[512], f[PR_RUTA];
@@ -519,11 +538,170 @@ static void on_borrar( GtkMenuItem *m, Atsw *a )
 
 static void on_editar( GtkMenuItem *m, Atsw *a )
 {
-    gchar *id = marcada( a->l_modelos, M_ID );
+    gchar *id = atsw_marcada( a->l_modelos, M_ID );
 
     (void) m;
     if ( a->hay && a->serie[0] && id ) atsw_editor( a, a->serie, id );
     g_free( id );
+}
+
+/* A QUE MUESTRA. Un submenu con las declaradas mas la completa, y la de la
+ * hoja donde ya esta el modelo NO sale: llevarlo a donde esta no es nada. */
+typedef struct { Atsw *a; char serie[PR_ID]; char padre[PR_ID];
+                 char muestra[PR_ID]; } AMuestra;
+
+static void on_a_muestra( GtkMenuItem *m, AMuestra *x )
+{
+    char why[512];
+
+    (void) m;
+    if ( atsw_en_muestra( x->a, x->serie, x->padre, x->muestra,
+                          why, sizeof why ) )
+        {
+        atsw_hojas( x->a );
+        atsw_refresca( x->a );
+        /* Se salta a la hoja donde acaba de nacer: es donde se iba. */
+        {
+        int i;
+
+        for ( i = 0; i < x->a->nhojas; i++ )
+            if ( !strcmp( x->a->hoja_mu[i], x->muestra ) )
+                { gtk_notebook_set_current_page(
+                      GTK_NOTEBOOK(x->a->libro), i ); break; }
+        }
+        }
+    barra_pub( x->a, why );
+}
+
+static void libera_am( gpointer d, GClosure *c ) { (void) c; g_free( d ); }
+
+/* El submenu. Devuelve NULL si no hay ninguna otra muestra a la que ir --y
+ * entonces la entrada no se pone, en vez de ponerla vacia.            */
+static GtkWidget *menu_muestras( Atsw *a, const char *padre,
+                                 const char *desde )
+{
+    GtkWidget *menu = NULL;
+    int        i, n = 0;
+
+    for ( i = 0; i < a->nhojas; i++ )
+        {
+        AMuestra  *x;
+        GtkWidget *mi;
+
+        if ( !strcmp( a->hoja_mu[i], desde ) ) continue;
+
+        if ( menu == NULL ) menu = gtk_menu_new();
+        mi = gtk_menu_item_new_with_label(
+                 a->hoja_mu[i][0] ? a->hoja_mu[i] : "Completa" );
+
+        x = g_new0( AMuestra, 1 );
+        x->a = a;
+        snprintf( x->serie, PR_ID, "%s", a->serie );
+        snprintf( x->padre, PR_ID, "%s", padre ? padre : "" );
+        snprintf( x->muestra, PR_ID, "%s", a->hoja_mu[i] );
+        g_signal_connect_data( mi, "activate", G_CALLBACK(on_a_muestra), x,
+                               libera_am, 0 );
+        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+        n++;
+        }
+    return n ? menu : NULL;
+}
+
+/* CAMBIAR DE HOJA. Lo unico que hace falta es que "el modelo marcado" pase a
+ * leerse de la rejilla nueva; el resto de la ventana no se entera de que hay
+ * varias, que es justo lo que hace barato tener muchas.               */
+static void on_hoja( GtkNotebook *nb, GtkWidget *pag, guint n, Atsw *a )
+{
+    (void) nb; (void) pag;
+    if ( (int) n < a->nhojas ) a->l_modelos = a->hoja[n];
+    if ( !a->recolocando ) barra_pub( a, "" );
+}
+
+/* DECLARAR UNA SUBMUESTRA: hasta donde, y por que.
+ *
+ * Las dos preguntas juntas y en el mismo sitio porque una ventana sin razon
+ * dentro de un mes es un numero que nadie sabe de donde salio. La razon se
+ * PIDE, no se exige -- igual que la de una iteracion.                  */
+static void on_muestra_nueva( GtkButton *b, Atsw *a )
+{
+    GtkWidget *d, *caja, *rej, *e_id, *e_desde, *e_hasta, *e_razon;
+    PrError    e;
+    int        r;
+
+    (void) b;
+    if ( !a->hay ) { barra_pub( a, "Abre un proyecto antes." ); return; }
+
+    d = gtk_dialog_new_with_buttons( "Nueva muestra", GTK_WINDOW(a->ventana),
+            GTK_DIALOG_MODAL, "Cancelar", GTK_RESPONSE_CANCEL,
+            "Declararla", GTK_RESPONSE_OK, NULL );
+    gtk_dialog_set_default_response( GTK_DIALOG(d), GTK_RESPONSE_OK );
+    caja = gtk_dialog_get_content_area( GTK_DIALOG(d) );
+    gtk_container_set_border_width( GTK_CONTAINER(caja), 10 );
+    gtk_box_set_spacing( GTK_BOX(caja), 8 );
+
+    {
+    GtkWidget *l = gtk_label_new( NULL );
+
+    gtk_label_set_markup( GTK_LABEL(l),
+        "<small>Una muestra es una <b>ventana declarada</b> sobre los datos.\n"
+        "Los modelos que estimes en ella viven en su hoja: dos modelos\n"
+        "estimados sobre ventanas distintas no se comparan.\n\n"
+        "Las fechas, como en los ficheros del motor: <tt>12/2019</tt>, o\n"
+        "<tt>2019</tt> si la serie es anual.</small>" );
+    gtk_label_set_xalign( GTK_LABEL(l), 0.0 );
+    gtk_box_pack_start( GTK_BOX(caja), l, FALSE, FALSE, 0 );
+    }
+
+    rej = gtk_grid_new();
+    gtk_grid_set_row_spacing( GTK_GRID(rej), 6 );
+    gtk_grid_set_column_spacing( GTK_GRID(rej), 8 );
+    gtk_box_pack_start( GTK_BOX(caja), rej, TRUE, TRUE, 0 );
+
+    e_id    = atsw_fila( rej, 0, "Nombre ", "",
+        "Corto, que es lo que va en la pestaña: «pre-covid», «hasta-2019»." );
+    e_desde = atsw_fila( rej, 1, "Desde ", "",
+        "Vacío: desde donde empiecen los datos." );
+    e_hasta = atsw_fila( rej, 2, "Hasta ", "",
+        "«12/2019». Vacío: hasta donde lleguen." );
+    e_razon = atsw_fila( rej, 3, "Por qué ", "",
+        "Dentro de un mes, esta ventana será un número que nadie sabe de "
+        "dónde salió. Se pide, no se exige." );
+
+    gtk_widget_show_all( d );
+    r = gtk_dialog_run( GTK_DIALOG(d) );
+
+    if ( r == GTK_RESPONSE_OK )
+        {
+        const char *id = gtk_entry_get_text( GTK_ENTRY(e_id) );
+        char        id2[PR_ID];
+
+        a_id( id, id2, sizeof id2 );
+        if ( !id2[0] )
+            barra_pub( a, "La muestra necesita un nombre: es lo que va en la "
+                          "pestaña." );
+        else if ( pr_muestra_add( a->p, id2,
+                      gtk_entry_get_text( GTK_ENTRY(e_desde) ),
+                      gtk_entry_get_text( GTK_ENTRY(e_hasta) ),
+                      gtk_entry_get_text( GTK_ENTRY(e_razon) ), &e ) != 0 )
+            { char why[512]; pr_error_es( &e, why, sizeof why );
+              barra_pub( a, why ); }
+        else
+            {
+            gchar *t;
+
+            pr_escribir( a->p, a->p->path, &e );
+            atsw_hojas( a );
+            /* Se salta a la hoja recien creada: es donde se iba. */
+            gtk_notebook_set_current_page( GTK_NOTEBOOK(a->libro),
+                                           a->nhojas - 1 );
+            atsw_refresca( a );
+            t = g_strdup_printf( "Muestra «%s» declarada. Los modelos que "
+                                 "estimes aquí viven en esta hoja.", id2 );
+            barra_pub( a, t );
+            g_free( t );
+            }
+        }
+    gtk_widget_destroy( d );
 }
 
 /* EL MENU DEL MODELO. Lo que se puede hacer con ESTE, no con la serie. */
@@ -531,7 +709,7 @@ static void menu_modelo( Atsw *a, GdkEventButton *ev )
 {
     GtkWidget *menu = gtk_menu_new();
     GtkWidget *mi;
-    gchar     *id = marcada( a->l_modelos, M_ID );
+    gchar     *id = atsw_marcada( a->l_modelos, M_ID );
     gboolean   datos = id && pr_es_datos( a->p, a->serie, id );
     gchar     *txt;
 
@@ -572,6 +750,24 @@ static void menu_modelo( Atsw *a, GdkEventButton *ev )
     g_signal_connect( mi, "activate", G_CALLBACK(on_nuevo_modelo), a );
     gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
 
+    /* LLEVARLO A OTRA VENTANA. Deriva y genera; lo de aqui no se toca. */
+    if ( !datos )
+        {
+        GtkWidget *sub = menu_muestras( a, id, atsw_muestra_actual( a ) );
+
+        if ( sub )
+            {
+            mi = gtk_menu_item_new_with_label( "En otra muestra…" );
+            gtk_widget_set_tooltip_text( mi,
+                "Deriva un modelo en otra ventana, colgado de éste. El .inp "
+                "se GENERA del datos.csv con la ventana nueva: no es una "
+                "copia con otro nobs.\n\nÉste no se toca: su .out describe "
+                "una estimación sobre estas observaciones." );
+            gtk_menu_item_set_submenu( GTK_MENU_ITEM(mi), sub );
+            gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+            }
+        }
+
     if ( !datos )
         {
         gtk_menu_shell_append( GTK_MENU_SHELL(menu),
@@ -589,7 +785,7 @@ static void menu_modelo( Atsw *a, GdkEventButton *ev )
     gtk_menu_popup_at_pointer( GTK_MENU(menu), (GdkEvent *) ev );
 }
 
-static gboolean on_modelo_click( GtkWidget *tv, GdkEventButton *ev, Atsw *a )
+gboolean atsw_on_click( GtkWidget *tv, GdkEventButton *ev, Atsw *a )
 {
     GtkTreePath *ruta = NULL;
 
@@ -604,6 +800,9 @@ static gboolean on_modelo_click( GtkWidget *tv, GdkEventButton *ev, Atsw *a )
     gtk_tree_view_set_cursor( GTK_TREE_VIEW(tv), ruta, NULL, FALSE );
     gtk_tree_path_free( ruta );
 
+    /* Se actua sobre la rejilla DONDE SE PULSO, no sobre la que la ventana
+       creyera que estaba delante. Con varias hojas no es lo mismo.    */
+    a->l_modelos = tv;
     menu_modelo( a, ev );
     return TRUE;
 }
@@ -614,7 +813,7 @@ static gboolean on_modelo_click( GtkWidget *tv, GdkEventButton *ev, Atsw *a )
  * delega en on_fue y no hay dos caminos que puedan decidir distinto. Si la
  * fila son los DATOS, on_fue deriva: el doble clic no es una excepcion a la
  * regla, es el mismo gesto con menos vueltas.                         */
-static void on_modelo_activado( GtkTreeView *tv, GtkTreePath *ruta,
+void atsw_on_activado( GtkTreeView *tv, GtkTreePath *ruta,
                                 GtkTreeViewColumn *col, Atsw *a )
 {
     (void) tv; (void) ruta; (void) col;
@@ -623,7 +822,7 @@ static void on_modelo_activado( GtkTreeView *tv, GtkTreePath *ruta,
 
 static void on_iterar( GtkButton *b, Atsw *a )
 {
-    gchar *padre = marcada( a->l_modelos, 0 );
+    gchar *padre = atsw_marcada( a->l_modelos, 0 );
     char   why[512];
 
     (void) b;
@@ -636,7 +835,7 @@ static void on_iterar( GtkButton *b, Atsw *a )
 
 static void on_elegir( GtkButton *b, Atsw *a )
 {
-    gchar  *id = marcada( a->l_modelos, 0 );
+    gchar  *id = atsw_marcada( a->l_modelos, 0 );
     char    razon[PR_RAZON] = "";
     PrError e;
 
@@ -661,7 +860,7 @@ static void on_elegir( GtkButton *b, Atsw *a )
 
 static void on_razon( GtkButton *b, Atsw *a )
 {
-    gchar  *id = marcada( a->l_modelos, 0 );
+    gchar  *id = atsw_marcada( a->l_modelos, 0 );
     char    razon[PR_RAZON] = "";
     PrError e;
     int     i;
@@ -691,7 +890,7 @@ static void on_razon( GtkButton *b, Atsw *a )
 
 /* ------------------------------------------------------------------------ */
 
-static void columna( GtkWidget *tv, const char *t, int c )
+void atsw_columna( GtkWidget *tv, const char *t, int c )
 {
     GtkCellRenderer   *r = gtk_cell_renderer_text_new();
     GtkTreeViewColumn *k = gtk_tree_view_column_new_with_attributes(
@@ -701,7 +900,7 @@ static void columna( GtkWidget *tv, const char *t, int c )
     gtk_tree_view_append_column( GTK_TREE_VIEW(tv), k );
 }
 
-static GtkWidget *en_scroll( GtkWidget *w )
+GtkWidget *atsw_en_scroll( GtkWidget *w )
 {
     GtkWidget *s = gtk_scrolled_window_new( NULL, NULL );
 
@@ -783,9 +982,9 @@ static void activate( GtkApplication *app, gpointer d )
     st = gtk_list_store_new( S_N, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_INT,
                              G_TYPE_STRING, G_TYPE_STRING );
     a->l_series = gtk_tree_view_new_with_model( GTK_TREE_MODEL(st) );
-    columna( a->l_series, "Serie",   S_ID );
-    columna( a->l_series, "Elegido", S_ELEGIDO );
-    columna( a->l_series, "Modelos", S_NMOD );
+    atsw_columna( a->l_series, "Serie",   S_ID );
+    atsw_columna( a->l_series, "Elegido", S_ELEGIDO );
+    atsw_columna( a->l_series, "Modelos", S_NMOD );
     gtk_tree_view_set_tooltip_column( GTK_TREE_VIEW(a->l_series), S_GLOBO );
     gtk_widget_set_tooltip_text( a->l_series,
         "El modelo ELEGIDO de cada serie. Hoy esa decisión vive en un "
@@ -795,7 +994,7 @@ static void activate( GtkApplication *app, gpointer d )
     /* El boton derecho despliega lo que se puede hacer con la serie. */
     g_signal_connect( a->l_series, "button-press-event",
                       G_CALLBACK(on_serie_click), a );
-    gtk_box_pack_start( GTK_BOX(izq), en_scroll( a->l_series ), TRUE, TRUE, 0 );
+    gtk_box_pack_start( GTK_BOX(izq), atsw_en_scroll( a->l_series ), TRUE, TRUE, 0 );
     gtk_paned_pack1( GTK_PANED(pan), izq, FALSE, FALSE );
 
     der = gtk_box_new( GTK_ORIENTATION_VERTICAL, 4 );
@@ -839,31 +1038,45 @@ static void activate( GtkApplication *app, gpointer d )
     gtk_box_pack_start( GTK_BOX(der), b2, FALSE, FALSE, 0 );
     }
 
-    st = gtk_list_store_new( M_N, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING,
-                             G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING,
-                             G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING );
-    a->l_modelos = gtk_tree_view_new_with_model( GTK_TREE_MODEL(st) );
-    gtk_tree_view_set_tooltip_column( GTK_TREE_VIEW(a->l_modelos), M_GLOBO );
-    columna( a->l_modelos, "",          M_ESTRELLA );
-    columna( a->l_modelos, "Modelo",    M_ID );
-    columna( a->l_modelos, "Viene de",  M_PADRE );
-    columna( a->l_modelos, "Estructura", M_ESTRUCT );
-    columna( a->l_modelos, "d.t. res.", M_SD );
-    columna( a->l_modelos, "Q (g.l.)",  M_Q );
-    columna( a->l_modelos, "p",         M_P );
-    columna( a->l_modelos, "Por qué",   M_RAZON );
-    gtk_widget_set_tooltip_text( a->l_modelos,
-        "Los números salen del .out, no del manifiesto, y se releen cuando el "
-        "fichero cambia. Cachearlos podría mentir: si alguien reestima por "
-        "fuera, el número guardado seguiría diciendo lo de antes.\n\nEl "
-        "manifiesto guarda linaje y razón, que son DECISIONES." );
-    /* Doble clic --o Intro-- sobre un modelo lo abre en fue; el boton
-       derecho despliega lo que se puede hacer con el.               */
-    g_signal_connect( a->l_modelos, "row-activated",
-                      G_CALLBACK(on_modelo_activado), a );
-    g_signal_connect( a->l_modelos, "button-press-event",
-                      G_CALLBACK(on_modelo_click), a );
-    gtk_box_pack_start( GTK_BOX(der), en_scroll( a->l_modelos ), TRUE, TRUE, 0 );
+    /* EL CUADERNO DE MUESTRAS, CON LAS HOJAS ABAJO.
+     *
+     * Como las hojas de un calculo, y por una razon de metodo: dos modelos
+     * con muestras distintas NO SE COMPARAN --la d.t. residual de uno hasta
+     * 2019 y la de otro hasta 2026 no miden lo mismo-- y una columna que lo
+     * AVISARA seguiria dejando ponerlos uno encima de otro. La hoja lo
+     * IMPIDE: no se pueden ver los dos a la vez.
+     *
+     * No es el "modo" que el diseño rechaza. Un modo es malo cuando es
+     * invisible y esta lejos de la accion; la pestaña esta pegada a lo que
+     * gobierna y es donde acabas de pulsar. Es una seleccion.
+     *
+     * Y lo de FUERA del cuaderno --los dos veredictos-- cuenta el proyecto
+     * ENTERO, no la hoja: si contara lo visible, las hojas mentirian por
+     * omision, y "lo que hay que mirar" es justo lo que no puede ir
+     * filtrado.                                                         */
+    a->libro = gtk_notebook_new();
+    gtk_notebook_set_tab_pos( GTK_NOTEBOOK(a->libro), GTK_POS_BOTTOM );
+    gtk_notebook_set_scrollable( GTK_NOTEBOOK(a->libro), TRUE );
+    g_signal_connect( a->libro, "switch-page", G_CALLBACK(on_hoja), a );
+
+    /* El "+" va al lado de las pestañas, que es donde esta en una hoja de
+     * calculo. Como widget de accion y no como pagina falsa: una pagina que
+     * al abrirse salta a otra es un truco que se nota.                  */
+    {
+    GtkWidget *mas = gtk_button_new_with_label( "+" );
+
+    gtk_button_set_relief( GTK_BUTTON(mas), GTK_RELIEF_NONE );
+    gtk_widget_set_tooltip_text( mas,
+        "Declarar una submuestra: hasta dónde y por qué.\n\nLos modelos de "
+        "cada muestra viven en su hoja, porque dos modelos estimados sobre "
+        "ventanas distintas no se comparan." );
+    g_signal_connect( mas, "clicked", G_CALLBACK(on_muestra_nueva), a );
+    gtk_widget_show( mas );
+    gtk_notebook_set_action_widget( GTK_NOTEBOOK(a->libro), mas, GTK_PACK_END );
+    }
+
+    gtk_box_pack_start( GTK_BOX(der), a->libro, TRUE, TRUE, 0 );
+    atsw_hojas( a );
     gtk_paned_pack2( GTK_PANED(pan), der, TRUE, FALSE );
     gtk_paned_set_position( GTK_PANED(pan), 300 );
 

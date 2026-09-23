@@ -324,3 +324,91 @@ gboolean atsw_modelo_nuevo( Atsw *a, const char *serie,
                          "intactos. Especifícalo en fue.", serie, id, datos );
     return TRUE;
 }
+
+
+/* ------------------------------------------------------------------------ */
+/* LLEVAR UN MODELO A OTRA MUESTRA                                           */
+/*                                                                           */
+/* LA MISMA ESPECIFICACION, OTRA VENTANA. Y es DERIVAR, no editar: el .out   */
+/* del modelo de partida describe una estimacion sobre otras observaciones,  */
+/* asi que cambiarle la muestra dejaria un informe que ya no corresponde.    */
+/*                                                                           */
+/* El .inp nuevo NO es una copia del viejo: se GENERA del .csv con la ventana */
+/* nueva --otros numeros y otro nobs-- y encima se le pone la especificacion  */
+/* del padre. Copiarlo y tocarle el nobs seria dejar dentro los datos de la   */
+/* ventana anterior.                                                         */
+/*                                                                           */
+/* De momento lo que viaja es la SERIE, no los operadores: sale un .inp con  */
+/* los datos de la ventana y sin modelo, y el analista especifica encima --  */
+/* que es lo mismo que hace "Modelo nuevo". Llevar tambien los operadores    */
+/* pide un editor del .inp que sepa de estructura, y eso es otra cosa.       */
+/* ------------------------------------------------------------------------ */
+
+gboolean atsw_en_muestra( Atsw *a, const char *serie, const char *padre,
+                          const char *muestra, char *why, size_t n )
+{
+    PrError          e;
+    const PrMuestra *mu;
+    const char      *datos;
+    char             id[PR_ID], destino[PR_RUTA], csv[PR_RUTA], *dir;
+
+    if ( why && n ) why[0] = '\0';
+    if ( !a->hay ) return FALSE;
+
+    if ( serie == NULL || !*serie )
+        { if ( why ) snprintf( why, n, "Marca una serie." ); return FALSE; }
+
+    if ( muestra && *muestra )
+        {
+        mu = pr_muestra_ver( a->p, muestra );
+        if ( mu == NULL )
+            { if ( why ) snprintf( why, n, "«%s» no es una muestra de este "
+                                   "proyecto.", muestra ); return FALSE; }
+        }
+    else
+        mu = NULL;                                  /* la completa */
+
+    /* EL DATO ES EL .csv. Sin el no se puede recortar nada: los numeros de
+       la ventana tienen que salir de algun sitio.                     */
+    if ( atsw_csv_de( a->p, serie, csv, sizeof csv ) != 0 ||
+         !g_file_test( csv, G_FILE_TEST_EXISTS ) )
+        {
+        if ( why ) snprintf( why, n, "«%s» no tiene datos.csv: se cargó antes "
+                             "de que los datos vivieran ahí. Vuelve a "
+                             "importarla.", serie );
+        return FALSE;
+        }
+
+    datos = pr_datos_de( a->p, serie );
+    if ( !*datos )
+        { if ( why ) snprintf( why, n, "«%s» no tiene datos en el proyecto.",
+                               serie ); return FALSE; }
+
+    /* Cuelga del PADRE si se dio uno --de ahi viene la idea-- y si no, de
+       los datos. El linaje dice de donde salio cada estimacion.      */
+    if ( pr_deriva( a->p, serie, ( padre && *padre ) ? padre : datos,
+                    id, sizeof id, destino, sizeof destino, &e ) != 0 )
+        { if ( why ) pr_error_es( &e, why, n ); return FALSE; }
+
+    if ( pr_pon_muestra( a->p, serie, id, muestra, &e ) != 0 )
+        { if ( why ) pr_error_es( &e, why, n );
+          pr_borra( a->p, serie, id, &e ); return FALSE; }
+
+    dir = g_path_get_dirname( destino );
+    g_mkdir_with_parents( dir, 0700 );
+    g_free( dir );
+
+    if ( atsw_genera_inp( csv, destino, serie,
+                          mu ? mu->hasta : "", why, n ) != 0 )
+        { pr_borra( a->p, serie, id, &e ); return FALSE; }
+
+    if ( pr_escribir( a->p, a->p->path, &e ) != 0 )
+        { if ( why ) snprintf( why, n, "El .inp está, pero no pude guardar el "
+                               "proyecto." ); return FALSE; }
+
+    if ( why )
+        snprintf( why, n, "%s: %s, en la muestra «%s». Especifícalo y "
+                  "estímalo; el de la otra hoja no se ha tocado.",
+                  serie, id, muestra && *muestra ? muestra : "completa" );
+    return TRUE;
+}

@@ -20,8 +20,8 @@
 void barra_pub( Atsw *a, const char *s );
 
 /* Una fila del formulario: etiqueta a la izquierda, entrada a la derecha. */
-static GtkWidget *fila( GtkWidget *rejilla, int y, const char *et,
-                        const char *valor, const char *tip )
+GtkWidget *atsw_fila( GtkWidget *rejilla, int y, const char *et,
+                      const char *valor, const char *tip )
 {
     GtkWidget *l = gtk_label_new( et );
     GtkWidget *e = gtk_entry_new();
@@ -83,19 +83,19 @@ void atsw_serie_edita( Atsw *a, const char *serie )
     gtk_grid_set_column_spacing( GTK_GRID(rej), 8 );
     gtk_box_pack_start( GTK_BOX(caja), rej, TRUE, TRUE, 0 );
 
-    desc = fila( rej, 0, "Descripción ", s->descripcion,
+    desc = atsw_fila( rej, 0, "Descripción ", s->descripcion,
         "De qué va la serie, para quien no reconozca el mnemotécnico.\n"
         "«Índice de precios de consumo armonizado, Alemania»." );
-    uni  = fila( rej, 1, "Unidades ", s->unidades,
+    uni  = atsw_fila( rej, 1, "Unidades ", s->unidades,
         "«índice 2015 = 100», «millones de euros», «tasa anual %»." );
-    fue  = fila( rej, 2, "Fuente ", s->fuente,
+    fue  = atsw_fila( rej, 2, "Fuente ", s->fuente,
         "Quién la publica y en qué tabla: «Eurostat, prc_hicp_midx»." );
-    url  = fila( rej, 3, "URL ", s->url,
+    url  = atsw_fila( rej, 3, "URL ", s->url,
         "De dónde se bajó. Es lo que no se puede reconstruir después." );
-    baj  = fila( rej, 4, "Bajada ", s->bajada,
+    baj  = atsw_fila( rej, 4, "Bajada ", s->bajada,
         "AAAA-MM-DD. La fecha de la descarga, no la del último dato: dice "
         "de qué revisión son estos números." );
-    not  = fila( rej, 5, "Notas ", s->notas,
+    not  = atsw_fila( rej, 5, "Notas ", s->notas,
         "Lo que haya que saber al mirarla: cambios de base, rupturas, "
         "cómo se enlazó." );
 

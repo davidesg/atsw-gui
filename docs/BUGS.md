@@ -498,9 +498,11 @@ table block carries a CAUTION that it is Johansen's conditional LR.  Measured on
 the same 200 samples, drvec's exact LR is Johansen's minus 4.02 (sd 2.28, corr
 0.86); case 2 is worse (−5.39, 0/100 rejections at 5 %).  On the fixture, taking
 out the first observation's stationary marginal at each rank's optimum turns
-−2.43 into +1.93 (Johansen: 2.16) — the mechanism, verified.  OPEN, a decision
-for the analyst: whether `-lrtest` should report a conditional LR (the exact
-fits minus the initial-state term) so that the tables apply.  Test 8r.
+−2.43 into +1.93 (Johansen: 2.16) — the mechanism, verified.  DECIDED 2026-09-24
+(the analyst): no conditional LR.  A conditional LR would only reproduce
+Johansen's statistic, which is already available; the point of drvec is the
+exact likelihood, and its LR is calibrated by `-bootstrap`.  The tables stay
+as Johansen's reference, with the CAUTION.  Test 8r.
 Found 2026-09-23.
 
 **What it is.** `run_lrtest` (~7331) prints *"NOT INTERPRETABLE: LR < 0, so at

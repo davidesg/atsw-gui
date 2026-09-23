@@ -125,12 +125,97 @@ modelos:
 pero eso es volver a parsear para saber algo que nadie escribió — la regla que
 ya nos costó el `rol: datos`.
 
-Y en la rejilla: **una columna «Muestra», y sólo cuando hay más de una.** Si
-todo el proyecto está en la completa, la columna no aparece y no estorba. En
-cuanto hay dos, aparece — y comparar dos filas de muestras distintas deja de
-ser un descuido invisible.
+### 2.3 Las muestras, en pestañas abajo — como las hojas de un cálculo
 
-### 2.3 El gesto
+> «¿Qué tal generar un notebook con los samples? Donde está la lista de los
+> modelos, un botón que pueda navegar entre muestras. Los tabs de las
+> subsamples irían abajo, como las *sheets* de una hoja de cálculo.»
+
+**Mejor que lo que yo había propuesto**, y conviene decir por qué, porque
+contradice el §5 de esta misma propuesta.
+
+Yo había dicho una columna «Muestra». Una columna **avisa**; la pestaña
+**impide**. Si los modelos de cada muestra viven en su hoja, la comparación
+inválida —la d.t. residual de uno hasta 2019 contra otro hasta 2026— deja de
+ser un descuido posible: no se pueden ver los dos a la vez. El invariante pasa
+de advertencia a estructura, que es siempre el cambio bueno.
+
+Y la columna desaparece: la rejilla se queda en las siete que acabamos de
+fijar, sin gastar ancho en algo que la pestaña ya dice.
+
+**¿No es esto el «modo» que yo rechazaba?** No, y la diferencia importa. Lo que
+rechazo en §5 es una muestra **activa del proyecto**, en un sitio lejano, que
+cambie en silencio lo que hacen todos los botones. Una hoja de cálculo no se
+siente como un modo porque **la pestaña está pegada a los datos que gobierna y
+es donde acabas de pulsar**. Es una selección, no un ajuste. Ahí es donde
+estaba mal mi objeción.
+
+#### Lo que la pestaña obliga a decidir, y está bien que obligue
+
+**El nodo de datos vive en la muestra total, y sólo aparece ahí.** Un modelo de
+`pre-covid` sigue colgando de `m00`: el linaje es «estos datos, esta ventana,
+esta especificación», y la ventana es un **campo del modelo**, no un dato
+distinto. Una muestra no tiene datos propios — si los tuviera habría tres
+copias de la serie y volveríamos a tener tres dueños.
+
+**Las muestras son del proyecto, y ahora hay una razón más.** Si fueran de cada
+serie, la fila de pestañas bailaría al cambiar de serie. Siendo del proyecto,
+la fila es estable: siempre las mismas hojas, y una vacía significa «aquí no
+has estimado nada todavía», que es una invitación y no un hueco.
+
+**La hoja «+».** Definir una submuestra es exactamente el botón de hoja nueva.
+Mejor sitio que cualquier menú, y con la misma pregunta al crearla: hasta
+dónde, y por qué.
+
+#### Las dos condiciones
+
+1. **Los veredictos de abajo cuentan el proyecto entero, no la hoja visible.**
+   Si contaran sólo lo que se ve, las pestañas mentirían por omisión — y «lo
+   que hay que mirar» es justo lo que no puede ir filtrado. Un proyecto con
+   tres muestras tiene el triple de modelos y dos tercios invisibles en cada
+   momento; el veredicto es lo que impide que se olviden.
+
+2. **Hay que poder cruzar cuando el cruce es legítimo.** Las pestañas impiden
+   comparar los *números*, que es lo que había que impedir. Pero comparar la
+   *estructura* sí vale —«¿sale el mismo (0,1,1)(0,1,1)₁₂ antes y después del
+   salto?»— y eso la pestaña lo esconde. Se recupera barato: en el globo de la
+   fila, «la misma especificación está en: completa (m02)», y una entrada de
+   menú «Ver este modelo en las otras muestras».
+
+#### Factibilidad: alta, con un punto de cuidado
+
+`gtk_notebook_set_tab_pos(GTK_POS_BOTTOM)` es una llamada. Lo demás es que
+**cada hoja tiene su propia rejilla**: un widget no puede tener dos padres, así
+que o hay N vistas o las pestañas son un selector de mentira con la vista
+debajo. Lo honesto es N vistas — la constructora de la rejilla ya existe y se
+llama una vez por hoja.
+
+A cambio, todo lo que hoy hace `marcada(a->l_modelos, …)` pasa por un
+`vista_actual(a)`. Es un accesor y unas treinta líneas repartidas.
+
+El punto de cuidado es **el repintado y la marca**: ya nos mordió una vez
+—`clear` dispara `changed` con nada marcado— y con N vistas hay N sitios donde
+puede volver a morder. El guardia `recolocando` que ya existe tiene que cubrir
+el cambio de hoja también.
+
+### 2.4 Lo que se ve
+
+```
+    ┌─ Modelo nuevo ─ Iterar ─ Elegir ─ Razón… ─│─ → fug ─ → fue ─┐
+    │  ★  Modelo  Viene de  Estructura   d.t.res.  Q (g.l.)   p   │
+    │     m01     m00       (0,1,0) log   0.3759   117.7(39) .000 │
+    │  ★  m02     m01       (1,1,0) log   0.3744   105.9(38) .000 │
+    │                                                             │
+    ├─────────────────────────────────────────────────────────────┤
+    │  Completa │ pre-covid │  +                                  │
+    └─────────────────────────────────────────────────────────────┘
+      5 series, 7 modelos, 6 estimados · 2 con el elegido declarado
+      2 iteraciones sin razón (IPC_DE/m04, …). El linaje está; el porqué, no.
+```
+
+Los dos veredictos de abajo del todo siguen contando **todo**, no la hoja.
+
+### 2.5 El gesto
 
 En el menú de la serie, junto a «Modelo nuevo»:
 
@@ -203,7 +288,7 @@ casi gratis una vez que esto esté, pero **no es parte de esta propuesta**.
 | 2 | `datos.csv` al importar, y `m00.inp` generado de él | Es el cambio de dueño. Todo lo demás lo necesita. |
 | 3 | `muestras` en el manifiesto y `muestra` en cada modelo | Registrar antes de usar. |
 | 4 | «Modelo nuevo en otra muestra» y «Reestimar en otra muestra» | El gesto, cuando ya hay dónde apuntarlo. |
-| 5 | Columna «Muestra» y el aviso de no comparar | Lo que evita el daño de verdad. |
+| 5 | Las pestañas abajo, una por muestra, con su hoja «+» | Lo que evita el daño de verdad: impedir en vez de avisar. |
 | 6 | Renombrar la clave | Lo menos urgente si 1 funciona. |
 
 ---
@@ -212,8 +297,13 @@ casi gratis una vez que esto esté, pero **no es parte de esta propuesta**.
 
 - **Una muestra «activa» del proyecto**, que cambie lo que se ve en todas
   partes. Es un MODO, y la fase 4 midió que los modos son peores que las
-  dependencias. Además haría que el mismo botón hiciera cosas distintas según
-  un estado que no se ve.
+  dependencias.
+
+  Cuidado con confundir esto con las pestañas del §2.3, que sí van: la
+  diferencia es que la pestaña **está pegada a lo que gobierna y es donde
+  acabas de pulsar**, y que lo de fuera de ella —los veredictos— sigue
+  contando el proyecto entero. Un modo es malo cuando es invisible y está
+  lejos de la acción; una hoja de cálculo no lo es.
 - **Truncar el `.csv`.** La muestra total es lo que entró. Si se recorta, se
   pierde la única copia de lo que había, y la submuestra deja de ser una
   ventana para pasar a ser una amputación.

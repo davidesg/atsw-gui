@@ -105,7 +105,7 @@ static void menu_serie( Atsw *a, GdkEventButton *ev )
      * obvio como hacerlo» era exactamente esto.                        */
     {
     const char *porde = atsw_modelo_por_defecto( a->p, a->serie );
-    gboolean    solo_datos = ( !*porde || pr_es_datos( a->p, a->serie, porde ) );
+    gboolean    solo_datos = ( !*porde || pr_es_datos( a->p, a->serie, atsw_muestra_actual( a ), porde ) );
     gchar      *txt;
 
     if ( solo_datos )
@@ -125,7 +125,7 @@ static void menu_serie( Atsw *a, GdkEventButton *ev )
     gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
 
     /* Y empezar OTRO desde los datos, que no es lo mismo que iterar. */
-    if ( !solo_datos && pr_datos_de( a->p, a->serie )[0] )
+    if ( !solo_datos && pr_datos_de( a->p, a->serie, atsw_muestra_actual( a ) )[0] )
         {
         mi = gtk_menu_item_new_with_label( "Otro modelo, desde los datos" );
         gtk_widget_set_tooltip_text( mi,
@@ -390,7 +390,7 @@ static void on_fue( GtkButton *b, Atsw *a )
         id = atsw_modelo_por_defecto( a->p, a->serie );
 
     if ( a->hay && a->serie[0] && id && *id &&
-         pr_es_datos( a->p, a->serie, id ) )
+         pr_es_datos( a->p, a->serie, atsw_muestra_actual( a ), id ) )
         {
         char ruta[PR_RUTA], why[512];
 
@@ -764,6 +764,14 @@ static void on_muestra_nueva( GtkButton *b, Atsw *a )
             {
             gchar *t2;
 
+            /* LA HOJA NACE USABLE: con el m00 de cada serie dentro se
+               puede mirar la ACF de la serie recortada --que es lo primero
+               que se hace al truncar-- y empezar un modelo.          */
+            {
+            char w[256];
+
+            atsw_puebla_muestra( a, id2, w, sizeof w );
+            }
             pr_escribir( a->p, a->p->path, &e );
             atsw_hojas( a );
             gtk_notebook_set_current_page( GTK_NOTEBOOK(a->libro),
@@ -785,7 +793,7 @@ static void menu_modelo( Atsw *a, GdkEventButton *ev )
     GtkWidget *menu = gtk_menu_new();
     GtkWidget *mi;
     gchar     *id = atsw_marcada( a->l_modelos, M_ID );
-    gboolean   datos = id && pr_es_datos( a->p, a->serie, id );
+    gboolean   datos = id && pr_es_datos( a->p, a->serie, atsw_muestra_actual( a ), id );
     gchar     *txt;
 
     txt = datos ? g_strdup( "Especificar un modelo con fue" )

@@ -394,24 +394,16 @@ int pr_ruta( const Proyecto *p, const char *serie, const char *muestra,
 /* La cadena                                                                 */
 /* ------------------------------------------------------------------------ */
 
-/* EL PADRE SE BUSCA EN LA MISMA MUESTRA, salvo el nodo de DATOS.
+/* EL LINAJE NO SALE DE SU VENTANA, y por eso cada hoja tiene su propio nodo
+ * de datos: la misma serie vista por esa ventana. Es una derivacion mas del
+ * .csv --que sigue siendo el unico dueño del dato-- exactamente igual que lo
+ * es el m00 de la completa.
  *
- * Los datos son de la muestra total --uno por serie, no uno por ventana--
- * asi que en una submuestra no hay ninguno y sus modelos cuelgan del de la
- * completa. El linaje cruza la ventana, y debe: dice "estos datos, esta
- * ventana, esta iteracion".                                            */
-static int padre_idx( const Proyecto *p, const char *serie,
-                      const char *muestra, const char *padre )
-{
-   int i = pr_modelo_idx( p, serie, muestra, padre );
-
-   if ( i >= 0 ) return i;
-   if ( muestra == NULL || !*muestra ) return -1;
-
-   /* No estaba en esta ventana: solo vale si es el nodo de datos. */
-   i = pr_modelo_idx( p, serie, "", padre );
-   return ( i >= 0 && p->m[i].rol == PR_DATOS ) ? i : -1;
-}
+ * Se intento al reves --un solo nodo de datos, en la total, y los modelos de
+ * una submuestra colgando de el-- y dejaba la hoja recien declarada VACIA:
+ * sin nada que marcar, no habia de donde empezar un modelo ni que mandar a
+ * fug. Y mirar la ACF de la serie recortada es lo PRIMERO que se hace al
+ * truncar.                                                             */
 
 int pr_camino( const Proyecto *p, const char *serie, const char *muestra,
                const char *id, char camino[][PR_ID], int max )
@@ -427,7 +419,7 @@ int pr_camino( const Proyecto *p, const char *serie, const char *muestra,
        /* Un linaje que se muerde la cola no puede dar mas pasos que modelos
           hay: si los da, es un ciclo.                                     */
        if ( ++vueltas > p->nm ) return -1;
-       i = padre_idx( p, serie, p->m[i].muestra, p->m[i].padre );
+       i = pr_modelo_idx( p, serie, p->m[i].muestra, p->m[i].padre );
        }
    return n;
 }
@@ -441,22 +433,24 @@ int pr_deriva( Proyecto *p, const char *serie, const char *muestra,
                          ruta_out, nruta, e );
 }
 
-const char *pr_datos_de( const Proyecto *p, const char *serie )
+const char *pr_datos_de( const Proyecto *p, const char *serie,
+                         const char *muestra )
 {
    int i;
 
    if ( p == NULL || serie == NULL ) return "";
+   if ( muestra == NULL ) muestra = "";
    for ( i = 0; i < p->nm; i++ )
-      if ( p->m[i].rol == PR_DATOS && strcmp( p->m[i].serie, serie ) == 0 )
+      if ( p->m[i].rol == PR_DATOS && strcmp( p->m[i].serie, serie ) == 0 &&
+           strcmp( p->m[i].muestra, muestra ) == 0 )
          return p->m[i].id;
    return "";
 }
 
-int pr_es_datos( const Proyecto *p, const char *serie, const char *id )
+int pr_es_datos( const Proyecto *p, const char *serie, const char *muestra,
+                 const char *id )
 {
-   /* Los datos solo existen en la muestra total: buscarlos en otra seria
-      buscar algo que por definicion no esta ahi.                      */
-   int i = pr_modelo_idx( p, serie, "", id );
+   int i = pr_modelo_idx( p, serie, muestra, id );
 
    return ( i >= 0 && p->m[i].rol == PR_DATOS );
 }
@@ -474,16 +468,11 @@ int pr_deriva_rol( Proyecto *p, const char *serie, const char *muestra,
    if ( pr_serie_idx( p, serie ) < 0 )
        { falla( e, PR_ENOSERIE, 0, serie ); return 1; }
 
-   /* LOS DATOS SON DE LA MUESTRA TOTAL. No hay un nodo de datos por
-      ventana: la ventana es un campo del modelo, no un dato distinto. */
-   if ( rol == PR_DATOS && *muestra )
-       { falla( e, PR_EDATOS, 0, serie ); return 1; }
-
    if ( *muestra && pr_muestra_idx( p, muestra ) < 0 )
        { falla( e, PR_EMUESTRA, 0, muestra ); return 1; }
 
    /* El padre, en esta ventana o --si es el nodo de datos-- en la total. */
-   if ( padre && *padre && padre_idx( p, serie, muestra, padre ) < 0 )
+   if ( padre && *padre && pr_modelo_idx( p, serie, muestra, padre ) < 0 )
        { falla( e, PR_EPADRE, 0, padre ); return 1; }
    if ( p->nm >= PR_MAX_MODELO )
        { falla( e, PR_EMUCHAS, 0, serie ); return 1; }
@@ -543,7 +532,7 @@ int pr_borra( Proyecto *p, const char *serie, const char *muestra,
    for ( j = 0; j < p->nm; j++ )
        if ( j != i && strcmp( p->m[j].serie, serie ) == 0 &&
             strcmp( p->m[j].padre, id ) == 0 &&
-            padre_idx( p, serie, p->m[j].muestra, id ) == i )
+            pr_modelo_idx( p, serie, muestra, id ) == i )
            { falla( e, PR_EHIJOS, 0, p->m[j].id ); return 1; }
 
    for ( j = i; j + 1 < p->nm; j++ ) p->m[j] = p->m[j + 1];
@@ -913,8 +902,8 @@ int pr_leer( const char *path, Proyecto *p, PrError *e )
        char camino[PR_MAX_MODELO][PR_ID];
 
        if ( p->m[i].padre[0] &&
-            padre_idx( p, p->m[i].serie, p->m[i].muestra,
-                       p->m[i].padre ) < 0 )
+            pr_modelo_idx( p, p->m[i].serie, p->m[i].muestra,
+                           p->m[i].padre ) < 0 )
            { falla( e, PR_EPADRE, 0, p->m[i].padre ); return 1; }
        if ( pr_camino( p, p->m[i].serie, p->m[i].muestra, p->m[i].id, camino,
                        PR_MAX_MODELO ) < 0 )

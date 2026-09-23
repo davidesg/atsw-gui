@@ -292,7 +292,9 @@ assert d["modelos"]["IPC_ES/m01"]["padre"] == "m00"
 assert d["modelos"]["IPC_ES/m01"]["version"] == 1
 sin = [k for k, v in d["modelos"].items() if not v.get("razon")]
 assert sin == ["IPC_ES/m00", "IPC_ES/m02", "SUELTA/m01",
-               "IPC_ES/pre-covid/m01"], sin
+               "IPC_ES/pre-covid/m00", "IPC_ES/pre-covid/m01"], sin
+# Cada ventana tiene SU nodo de datos: es la misma serie vista por ella.
+assert d["modelos"]["IPC_ES/pre-covid/m00"]["rol"] == "datos"
 # m00 son LOS DATOS, y lo dice el manifiesto: no se deduce del numero.
 assert d["modelos"]["IPC_ES/m00"]["rol"] == "datos"
 assert "rol" not in d["modelos"]["IPC_ES/m01"]

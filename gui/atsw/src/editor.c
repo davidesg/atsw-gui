@@ -595,7 +595,7 @@ void atsw_editor( Atsw *a, const char *serie, const char *muestra,
 
     /* LOS DATOS NO SE EDITAN. Es la misma regla que en todas partes, dicha
        aqui tambien porque aqui es donde mas a mano esta romperla.     */
-    if ( pr_es_datos( a->p, serie, id ) )
+    if ( pr_es_datos( a->p, serie, muestra, id ) )
         {
         barra_pub( a, "Los datos no se editan: son la raíz. Empieza un modelo "
                       "con «Modelo nuevo» y edita ése." );

@@ -318,13 +318,17 @@ int pr_deriva_rol( Proyecto *p, const char *serie, const char *muestra,
                    char *ruta_out, size_t nruta, PrError *e );
 
 /* El nodo de DATOS de una serie, si lo tiene. "" si no.                 */
-const char *pr_datos_de( const Proyecto *p, const char *serie );
+/* EL NODO DE DATOS DE ESA VENTANA. Hay uno POR HOJA, y es el mismo dato
+   visto por su ventana: el .csv sigue siendo el unico dueño y todos los
+   .inp se generan de el, el de la completa igual que el de pre-covid.
+   Sin el, una hoja recien declarada no tiene de donde empezar nada.   */
+const char *pr_datos_de( const Proyecto *p, const char *serie,
+                         const char *muestra );
 
 /* Si ese nodo son los datos. Los datos NO SE EDITAN: quien vaya a
  * especificar un modelo tiene que derivar uno nuevo.                    */
-/* Los datos son de la muestra TOTAL: no hay uno por ventana, porque la
-   ventana es un campo del modelo y no un dato distinto.               */
-int pr_es_datos( const Proyecto *p, const char *serie, const char *id );
+int pr_es_datos( const Proyecto *p, const char *serie, const char *muestra,
+                 const char *id );
 
 /* La razon, DESPUES. Se puede no llamar nunca.                           */
 int pr_razon( Proyecto *p, const char *serie, const char *muestra,

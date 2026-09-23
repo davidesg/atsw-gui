@@ -222,3 +222,61 @@ int atsw_tramo( const Proyecto *p, AtTramo *t )
         }
     return t->nseries ? 0 : 1;
 }
+
+/* ------------------------------------------------------------------------ */
+/* POBLAR UNA VENTANA: su nodo de datos en cada serie                        */
+/*                                                                           */
+/* Una hoja recien declarada tiene que ser USABLE: con su m00 dentro se puede */
+/* mandar a fug --mirar la ACF de la serie recortada es lo primero que se     */
+/* hace al truncar-- y se puede empezar un modelo. Sin el, la hoja esta viva  */
+/* pero vacia y no hay por donde entrar.                                     */
+/*                                                                           */
+/* No es una copia del dato: es una DERIVACION mas del .csv, igual que el m00 */
+/* de la completa. El dueño sigue siendo uno.                                */
+/* ------------------------------------------------------------------------ */
+
+int atsw_puebla_muestra( Atsw *a, const char *muestra, char *why, size_t n )
+{
+    const PrMuestra *mu;
+    PrError          e;
+    int              i, hechas = 0;
+
+    if ( why && n ) why[0] = '\0';
+    if ( !a->hay ) return 0;
+
+    mu = pr_muestra_ver( a->p, muestra );
+    if ( muestra && *muestra && mu == NULL ) return 0;
+
+    for ( i = 0; i < a->p->ns; i++ )
+        {
+        const char *serie = a->p->s[i].id;
+        char        csv[PR_RUTA], id[PR_ID], ruta[PR_RUTA], *dir;
+
+        /* Ya lo tiene, o no tiene datos de donde sacarlo. */
+        if ( pr_datos_de( a->p, serie, muestra )[0] ) continue;
+        if ( atsw_csv_de( a->p, serie, csv, sizeof csv ) != 0 ) continue;
+        if ( !g_file_test( csv, G_FILE_TEST_EXISTS ) ) continue;
+
+        if ( pr_deriva_rol( a->p, serie, muestra, NULL, PR_DATOS,
+                            id, sizeof id, ruta, sizeof ruta, &e ) != 0 )
+            continue;
+
+        dir = g_path_get_dirname( ruta );
+        g_mkdir_with_parents( dir, 0700 );
+        g_free( dir );
+
+        if ( atsw_genera_inp( csv, ruta, serie,
+                              mu ? mu->hasta : "", why, n ) != 0 )
+            {
+            /* SI LA VENTANA NO PILLA NADA DE ESTA SERIE, se deshace el nodo
+               y se sigue con las demas: una serie mas corta que la ventana
+               es un hecho, no un error del proyecto.                   */
+            pr_borra( a->p, serie, muestra, id, &e );
+            continue;
+            }
+        hechas++;
+        }
+
+    if ( why && n ) why[0] = '\0';
+    return hechas;
+}

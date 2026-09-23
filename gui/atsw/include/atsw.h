@@ -177,6 +177,12 @@ typedef struct {
 } AtTramo;
 
 int        atsw_tramo( const Proyecto *p, AtTramo *t );
+
+/* El nodo de datos de esa ventana en cada serie que tenga .csv. Devuelve
+   cuantos creo. Una hoja sin m00 esta viva pero vacia: no hay que mandar
+   a fug ni de donde empezar un modelo.                                 */
+int        atsw_puebla_muestra( Atsw *a, const char *muestra,
+                                char *why, size_t n );
 gchar     *atsw_programa( const char *programa );
 
 /* Guardar un .inp VALIDANDO ANTES, con el comprobador del motor. Si no vale,

@@ -193,7 +193,7 @@ gboolean atsw_itera( Atsw *a, const char *serie, const char *muestra,
         }
     /* De los DATOS no se itera: no tienen .pre porque no se estiman. Decir
        «ese modelo no se ha estimado» seria cierto y no ayudaria nada.   */
-    if ( pr_es_datos( a->p, serie, padre ) )
+    if ( pr_es_datos( a->p, serie, muestra, padre ) )
         {
         if ( why ) snprintf( why, n, "Los datos no se iteran. Mándalos a fue "
                              "y de ellos sale el primer modelo." );
@@ -278,7 +278,7 @@ gboolean atsw_modelo_nuevo( Atsw *a, const char *serie, const char *muestra,
     if ( serie == NULL || *serie == '\0' )
         { if ( why ) snprintf( why, n, "Marca una serie." ); return FALSE; }
 
-    datos = pr_datos_de( a->p, serie );
+    datos = pr_datos_de( a->p, serie, muestra );
     if ( !*datos )
         {
         /* SE DICE QUE FALTAN LOS DATOS. Derivar de la nada daria un .inp
@@ -382,7 +382,7 @@ gboolean atsw_en_muestra( Atsw *a, const char *serie, const char *padre,
         return FALSE;
         }
 
-    datos = pr_datos_de( a->p, serie );
+    datos = pr_datos_de( a->p, serie, muestra );
     if ( !*datos )
         { if ( why ) snprintf( why, n, "«%s» no tiene datos en el proyecto.",
                                serie ); return FALSE; }

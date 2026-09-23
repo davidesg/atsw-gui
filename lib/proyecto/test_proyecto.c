@@ -61,14 +61,14 @@ int main( int argc, char **argv )
     ok( pr_deriva_rol( p, "IPC_ES", "", NULL, PR_DATOS, id, sizeof id,
                        ruta, sizeof ruta, &e ) == 0, "los datos entran" );
     es( id, "m00", "y son m00" );
-    ok( pr_es_datos( p, "IPC_ES", "m00" ), "y se sabe que lo son" );
-    es( pr_datos_de( p, "IPC_ES" ), "m00", "y se encuentran por la serie" );
+    ok( pr_es_datos( p, "IPC_ES", "", "m00" ), "y se sabe que lo son" );
+    es( pr_datos_de( p, "IPC_ES", "" ), "m00", "y se encuentran por la serie" );
 
     /* .inp(-1) -> .pre(-1) -> .inp(0) ... */
     ok( pr_deriva( p, "IPC_ES", "", "m00", id, sizeof id, ruta, sizeof ruta, &e ) == 0,
         "el primer modelo cuelga de los datos" );
     es( id, "m01", "y se llama m01" );
-    ok( !pr_es_datos( p, "IPC_ES", "m01" ), "y NO es datos" );
+    ok( !pr_es_datos( p, "IPC_ES", "", "m01" ), "y NO es datos" );
     pr_deriva( p, "IPC_ES", "", "m01", id, sizeof id, ruta, sizeof ruta, &e );
     es( id, "m02", "y el segundo, m02" );
 
@@ -80,7 +80,7 @@ int main( int argc, char **argv )
     pr_serie_add( p, "SUELTA", &e );
     pr_deriva( p, "SUELTA", "", NULL, id, sizeof id, NULL, 0, &e );
     es( id, "m01", "una serie sin datos: su primer modelo TAMBIEN es m01" );
-    es( pr_datos_de( p, "SUELTA" ), "", "y no tiene datos que dar" );
+    es( pr_datos_de( p, "SUELTA", "" ), "", "y no tiene datos que dar" );
     }
     ok( pr_deriva( p, "NO_ESTA", "", NULL, id, sizeof id, NULL, 0, &e ) != 0 &&
         e.cod == PR_ENOSERIE, "y una serie que no esta, tambien" );
@@ -108,7 +108,7 @@ int main( int argc, char **argv )
     n = pr_sin_razon( p, sin, 16 );
     ok( n == 3, "los tres MODELOS nacen sin razon: no se inventa ninguna" );
     es( sin[0], "IPC_ES/m01", "y se dicen con nombre y apellido" );
-    ok( pr_es_datos( p, "IPC_ES", "m00" ),
+    ok( pr_es_datos( p, "IPC_ES", "", "m00" ),
         "los datos no estan entre ellos: no son una decision" );
 
     ok( pr_razon( p, "IPC_ES", "", "m01",
@@ -162,12 +162,25 @@ int main( int argc, char **argv )
     {
     char nid[PR_ID], r1[PR_RUTA], r2[PR_RUTA];
 
+    /* CADA VENTANA TIENE SU NODO DE DATOS: la misma serie vista por esa
+       ventana. Sin el, la hoja recien declarada esta viva pero vacia y no
+       hay de donde empezar nada -- ni que mandar a fug, que mirar la ACF
+       de la serie recortada es lo PRIMERO que se hace al truncar.     */
+    ok( pr_deriva_rol( p, "IPC_ES", "pre-covid", NULL, PR_DATOS,
+                       nid, sizeof nid, NULL, 0, &e ) == 0,
+        "cada ventana tiene SU nodo de datos" );
+    es( nid, "m00", "y tambien se llama m00" );
+    es( pr_datos_de( p, "IPC_ES", "pre-covid" ), "m00",
+        "se encuentra por su ventana" );
+    ok( pr_es_datos( p, "IPC_ES", "pre-covid", "m00" ), "y se sabe que lo es" );
+
     /* m01 EN LAS DOS HOJAS, Y SON DOS MODELOS. Cada ventana lleva su
        linaje, asi que no hace falta ensuciar el nombre con «m01_A».  */
     ok( pr_deriva( p, "IPC_ES", "pre-covid", "m00", nid, sizeof nid,
                    r2, sizeof r2, &e ) == 0,
-        "se deriva en una submuestra, colgando de los datos" );
+        "se deriva en una submuestra, colgando de SUS datos" );
     es( nid, "m01", "y se llama m01, como el de la completa" );
+    ok( !pr_es_datos( p, "IPC_ES", "pre-covid", "m01" ), "que no es datos" );
     ok( pr_modelo_idx( p, "IPC_ES", "", "m01" ) !=
         pr_modelo_idx( p, "IPC_ES", "pre-covid", "m01" ),
         "y son DOS modelos distintos: la clave es (serie, muestra, id)" );
@@ -182,19 +195,18 @@ int main( int argc, char **argv )
     ok( pr_deriva( p, "IPC_ES", "no-existe", "m00", nid, sizeof nid,
                    NULL, 0, &e ) != 0 && e.cod == PR_EMUESTRA,
         "una muestra sin declarar se rechaza al derivar" );
-    ok( pr_deriva_rol( p, "IPC_ES", "pre-covid", NULL, PR_DATOS,
-                       nid, sizeof nid, NULL, 0, &e ) != 0 &&
-        e.cod == PR_EDATOS,
-        "y no hay datos por ventana: son la muestra TOTAL" );
+    ok( pr_deriva( p, "IPC_ES", "", "m01", nid, sizeof nid, NULL, 0, &e ) == 0 &&
+        pr_borra( p, "IPC_ES", "", nid, &e ) == 0,
+        "(y derivar en la completa sigue funcionando igual)" );
     }
 
-    printf( "\nEL LINAJE CRUZA LA VENTANA, PORQUE LOS DATOS SON UNOS\n" );
+    printf( "\nEL LINAJE NO SALE DE SU VENTANA\n" );
     {
     char cam[16][PR_ID];
     int  k = pr_camino( p, "IPC_ES", "pre-covid", "m01", cam, 16 );
 
     ok( k == 2, "de m01 de pre-covid a la raiz hay dos pasos" );
-    es( cam[1], "m00", "y la raiz es el nodo de DATOS de la completa" );
+    es( cam[1], "m00", "y la raiz es el nodo de datos DE ESTA hoja" );
     }
 
     printf( "\nEL ELEGIDO ES DE (serie, muestra)\n" );
@@ -210,7 +222,7 @@ int main( int argc, char **argv )
     printf( "\nUNA MUESTRA CON MODELOS DENTRO NO SE BORRA DE REBOTE\n" );
     ok( pr_muestra_borra( p, "pre-covid", &e ) != 0 && e.cod == PR_EENMUESTRA,
         "se niega" );
-    es( e.texto, "IPC_ES/m01", "y DICE CUAL vive ahi" );
+    es( e.texto, "IPC_ES/m00", "y DICE CUAL vive ahi" );
     ok( pr_muestra_borra( p, "no-existe", &e ) != 0 && e.cod == PR_EMUESTRA,
         "una que no esta, tampoco" );
 
@@ -249,11 +261,11 @@ int main( int argc, char **argv )
     ok( pr_leer( path, q, &e ) == 0, "se lee" );
     es( q->id, "SF_MEG", "  el id" );
     es( q->titulo, "Inflación del área euro", "  el titulo, con sus acentos" );
-    ok( q->ns == 2 && q->nm == 5,
-        "  dos series, los datos y cuatro modelos" );
-    ok( pr_es_datos( q, "IPC_ES", "m00" ), "  y m00 sigue siendo los datos" );
-    es( pr_datos_de( q, "IPC_ES" ), "m00", "  que se encuentran por la serie" );
-    ok( !pr_es_datos( q, "IPC_ES", "m01" ), "  mientras que m01 no lo es" );
+    ok( q->ns == 2 && q->nm == 6,
+        "  dos series, dos nodos de datos y cuatro modelos" );
+    ok( pr_es_datos( q, "IPC_ES", "", "m00" ), "  y m00 sigue siendo los datos" );
+    es( pr_datos_de( q, "IPC_ES", "" ), "m00", "  que se encuentran por la serie" );
+    ok( !pr_es_datos( q, "IPC_ES", "", "m01" ), "  mientras que m01 no lo es" );
     es( pr_elegido( q, "IPC_ES", "" ), "m02", "  el elegido" );
     {
     int i = pr_modelo_idx( q, "IPC_ES", "", "m02" );
@@ -303,13 +315,13 @@ int main( int argc, char **argv )
 
     es( pr_elegido( p, "IPC_ES", "" ), "m02", "m02 era el elegido" );
     ok( pr_borra( p, "IPC_ES", "", "m02", &e ) == 0, "una hoja SI se borra" );
-    ok( p->nm == 4, "y el modelo se va del manifiesto" );
+    ok( p->nm == 5, "y el modelo se va del manifiesto" );
     es( pr_elegido( p, "IPC_ES", "" ), "",
         "la serie se queda SIN elegido: la decision se va con el modelo" );
     ok( pr_modelo_idx( p, "IPC_ES", "", "m02" ) < 0, "y ya no se encuentra" );
     ok( pr_borra( p, "IPC_ES", "", "m01", &e ) == 0,
         "ahora m01 es hoja y se puede borrar" );
-    ok( pr_es_datos( p, "IPC_ES", "m00" ), "y los datos siguen ahi" );
+    ok( pr_es_datos( p, "IPC_ES", "", "m00" ), "y los datos siguen ahi" );
 
     printf( "\nUN MANIFIESTO ROTO LO DICE, NO LO ADIVINA\n" );
     {

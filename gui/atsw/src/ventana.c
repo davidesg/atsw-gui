@@ -502,7 +502,7 @@ void atsw_refresca( Atsw *a )
     /* Sin datos no hay de donde empezar un modelo, y el boton lo dice
        apagandose en vez de dejar que se pulse y conteste que no.      */
     gtk_widget_set_sensitive( a->b_nuevo,
-        a->hay && a->serie[0] && pr_datos_de( a->p, a->serie )[0] );
+        a->hay && a->serie[0] && pr_datos_de( a->p, a->serie, atsw_muestra_actual( a ) )[0] );
     gtk_widget_set_sensitive( a->b_iterar, a->hay && a->serie[0] != '\0' );
     gtk_widget_set_sensitive( a->b_elegir, a->hay && a->serie[0] != '\0' );
     gtk_widget_set_sensitive( a->b_razon,  a->hay && a->serie[0] != '\0' );

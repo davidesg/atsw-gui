@@ -105,7 +105,7 @@ static int da_de_alta( Atsw *a, const DtDatos *d, int col, const char *serie,
        cambiaria el suelo bajo modelos ya estimados sin que nada lo dijera:
        el .out seguiria ahi, calculado sobre otros numeros. Asi que se para
        y lo decide el analista -- otro nombre, u otro proyecto.         */
-    if ( pr_datos_de( a->p, serie )[0] )
+    if ( pr_datos_de( a->p, serie, "" )[0] )
         { snprintf( why, n, "«%s» ya tiene datos en este proyecto. No los "
                             "piso: cárgala con otro nombre, o en otro "
                             "proyecto.", serie );
@@ -180,8 +180,19 @@ static int da_de_alta( Atsw *a, const DtDatos *d, int col, const char *serie,
     g_mkdir_with_parents( dir, 0700 );
     g_free( dir );
 
-    /* Sin ventana: el nodo de datos es la muestra TOTAL. */
-    return atsw_genera_inp( csv, ruta, serie, "", why, n );
+    if ( atsw_genera_inp( csv, ruta, serie, "", why, n ) != 0 ) return 1;
+
+    /* Y EN LAS VENTANAS QUE YA ESTUVIERAN DECLARADAS. Una serie que llega
+       tarde tiene que aparecer en todas las hojas, o su hoja se queda
+       vacia y nadie sabe por que.                                     */
+    {
+    char w[256];
+    int  k;
+
+    for ( k = 0; k < a->p->nmu; k++ )
+        atsw_puebla_muestra( a, a->p->mu[k].id, w, sizeof w );
+    }
+    return 0;
 }
 
 static void on_importar( GtkButton *b, Dialogo *D )

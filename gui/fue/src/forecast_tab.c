@@ -126,7 +126,14 @@ GtkWidget* create_forecast_tab(FueContext *ctx) {
  *
  * inp o out pueden ser NULL: se carga lo que haya.                      */
 void forecast_muestra(FueContext *ctx, const char *inp, const char *out) {
-    if (inp) load_file_to_view(ctx, ctx->forecast_editor, inp);
+    if (inp) {
+        load_file_to_view(ctx, ctx->forecast_editor, inp);
+        /* Y EL SELECTOR DICE CUAL ES. Ponía «(None)» con el fichero
+           cargado delante: el rótulo que nombra lo que hay tiene que
+           seguir a lo que hay, no a la última vez que alguien pulsó. */
+        gtk_file_chooser_set_filename(GTK_FILE_CHOOSER(ctx->forecast_file_chooser),
+                                      inp);
+    }
     if (out) load_file_to_view(ctx, ctx->forecast_out_view, out);
     gtk_notebook_set_current_page(GTK_NOTEBOOK(ctx->forecast_notebook),
                                   out ? 1 : 0);

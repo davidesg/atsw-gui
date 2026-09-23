@@ -111,7 +111,7 @@ void atsw_serie_edita( Atsw *a, const char *serie )
         pon( s->bajada,      16,       baj );
         pon( s->notas,       PR_TEXTO, not );
 
-        if ( pr_escribir( a->p, a->p->path, &e ) != 0 )
+        if ( atsw_guarda( a, &e ) != 0 )
             {
             char why[512];
 
@@ -301,7 +301,7 @@ void atsw_proyecto_edita( Atsw *a )
         snprintf( a->p->analista, PR_TEXTO, "%s",
                   gtk_entry_get_text( GTK_ENTRY(e_ana) ) );
 
-        if ( pr_escribir( a->p, a->p->path, &e ) != 0 )
+        if ( atsw_guarda( a, &e ) != 0 )
             { char why[512]; pr_error_es( &e, why, sizeof why );
               barra_pub( a, why ); }
         else

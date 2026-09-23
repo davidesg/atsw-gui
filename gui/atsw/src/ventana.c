@@ -184,6 +184,93 @@ const char *atsw_modelo_por_defecto( const Proyecto *p, const char *serie )
     return ultimo;
 }
 
+/* ------------------------------------------------------------------------ */
+/* RELEER EL MANIFIESTO                                                      */
+/*                                                                           */
+/* El proyecto vive en un fichero, y la ventana no es su unico dueño: puede  */
+/* haber otra madre abierta sobre el mismo, un editor, o --lo que viene-- un */
+/* agente trabajando al lado con un MCP sobre lib/proyecto. Los .out ya se   */
+/* releen por huella; el manifiesto no, asi que un cambio de fuera no se veia */
+/* hasta reabrir.                                                            */
+/*                                                                           */
+/* SE LEE A OTRO SITIO Y SOLO SE CAMBIA SI SALIO BIEN. Un manifiesto roto por */
+/* fuera --a medio escribir, con una clave que no entendemos-- no puede       */
+/* tirarse por delante del que tenemos en memoria, que funciona.             */
+/* ------------------------------------------------------------------------ */
+
+static void huella_manifiesto( Atsw *a )
+{
+    GStatBuf st;
+
+    if ( a->hay && g_stat( a->p->path, &st ) == 0 )
+        { a->p_tam = (long) st.st_size; a->p_mtime = (long) st.st_mtime; }
+    else
+        a->p_tam = a->p_mtime = 0;
+}
+
+/* GUARDAR ES ESCRIBIR Y APUNTAR LA HUELLA, LAS DOS COSAS.
+ *
+ * Si solo se escribe, la huella se queda con la del fichero de antes y el
+ * siguiente golpe de foco lo relee creyendo que lo cambio otro -- y lo dice.
+ * Un aviso falso de "esto ha cambiado fuera de aqui" es peor que no avisar:
+ * enseña a no creerse los avisos.                                       */
+int atsw_guarda( Atsw *a, PrError *e )
+{
+    int rc;
+
+    if ( !a->hay || a->p == NULL ) return 1;
+    rc = pr_escribir( a->p, a->p->path, e );
+    huella_manifiesto( a );
+    return rc;
+}
+
+gboolean atsw_relee( Atsw *a, char *why, size_t n )
+{
+    GStatBuf  st;
+    Proyecto *nuevo;
+    PrError   e;
+    char      path[PR_RUTA];
+
+    if ( why && n ) why[0] = '\0';
+    if ( !a->hay || a->p == NULL ) return FALSE;
+    if ( g_stat( a->p->path, &st ) != 0 ) return FALSE;
+
+    if ( (long) st.st_size == a->p_tam && (long) st.st_mtime == a->p_mtime )
+        return FALSE;                       /* no se ha movido */
+
+    snprintf( path, sizeof path, "%s", a->p->path );
+
+    nuevo = g_new0( Proyecto, 1 );
+    if ( pr_leer( path, nuevo, &e ) != 0 )
+        {
+        /* NO SE PISA LO QUE FUNCIONA. Y no se vuelve a avisar hasta que el
+           fichero cambie otra vez: si alguien lo dejo a medias, el aviso
+           saldria en cada golpe de foco.                               */
+        if ( why ) pr_error_es( &e, why, n );
+        a->p_tam   = (long) st.st_size;
+        a->p_mtime = (long) st.st_mtime;
+        g_free( nuevo );
+        return FALSE;
+        }
+
+    g_free( a->p );
+    a->p = nuevo;
+    snprintf( a->p->path, sizeof a->p->path, "%s", path );
+    a->p_tam   = (long) st.st_size;
+    a->p_mtime = (long) st.st_mtime;
+
+    /* La cache de resultados se vacia: sus huellas siguen valiendo, pero un
+       modelo que ya no esta no tiene por que seguir ocupando sitio.    */
+    a->nr = 0;
+
+    /* La serie marcada, si sigue estando. Y las hojas se rehacen, que las
+       muestras pueden haber cambiado -- atsw_hojas vuelve a la que estaba
+       si sigue existiendo.                                             */
+    if ( a->serie[0] && pr_serie_idx( a->p, a->serie ) < 0 ) a->serie[0] = '\0';
+    atsw_hojas( a );
+    return TRUE;
+}
+
 gboolean atsw_abre( Atsw *a, const char *path, char *why, size_t n )
 {
     PrError e;
@@ -201,6 +288,7 @@ gboolean atsw_abre( Atsw *a, const char *path, char *why, size_t n )
     a->hay = TRUE;
     a->nr  = 0;
     a->serie[0] = '\0';
+    huella_manifiesto( a );
     return TRUE;
 }
 

@@ -322,7 +322,7 @@ static void on_nuevo( GtkButton *b, Atsw *a )
         snprintf( a->p->path, sizeof a->p->path, "%s", p );
         a->hay = TRUE; a->nr = 0; a->serie[0] = '\0';
 
-        if ( pr_escribir( a->p, p, &e ) != 0 )
+        if ( atsw_guarda( a, &e ) != 0 )
             { char why[512]; pr_error_es( &e, why, sizeof why );
               barra_pub( a, why ); }
         else
@@ -594,7 +594,7 @@ static void on_borrar( GtkMenuItem *m, Atsw *a )
 
     borra_ficheros( a, a->serie, atsw_muestra_actual( a ), id );
     pr_borra( a->p, a->serie, atsw_muestra_actual( a ), id, &e );
-    if ( pr_escribir( a->p, a->p->path, &e ) != 0 )
+    if ( atsw_guarda( a, &e ) != 0 )
         barra_pub( a, "Los ficheros se fueron, pero no pude guardar el "
                       "proyecto." );
     else
@@ -874,7 +874,7 @@ static void on_muestra_nueva( GtkButton *b, Atsw *a )
 
             atsw_puebla_muestra( a, id2, w, sizeof w );
             }
-            pr_escribir( a->p, a->p->path, &e );
+            atsw_guarda( a, &e );
             atsw_hojas( a );
             gtk_notebook_set_current_page( GTK_NOTEBOOK(a->libro),
                                            a->nhojas - 1 );
@@ -1042,7 +1042,7 @@ static void on_elegir( GtkButton *b, Atsw *a )
             pr_elegido( a->p, a->serie, atsw_muestra_actual( a ) ), razon, sizeof razon ) )
         {
         if ( pr_elige( a->p, a->serie, atsw_muestra_actual( a ), id, razon, &e ) != 0 ||
-             pr_escribir( a->p, a->p->path, &e ) != 0 )
+             atsw_guarda( a, &e ) != 0 )
             { char why[512]; pr_error_es( &e, why, sizeof why );
               barra_pub( a, why ); }
         else
@@ -1071,7 +1071,7 @@ static void on_razon( GtkButton *b, Atsw *a )
             i >= 0 ? a->p->m[i].razon : "", razon, sizeof razon ) )
         {
         if ( pr_razon( a->p, a->serie, atsw_muestra_actual( a ), id, razon, &e ) != 0 ||
-             pr_escribir( a->p, a->p->path, &e ) != 0 )
+             atsw_guarda( a, &e ) != 0 )
             { char why[512]; pr_error_es( &e, why, sizeof why );
               barra_pub( a, why ); }
         else
@@ -1126,8 +1126,20 @@ static GtkWidget *boton( GtkWidget *caja, const char *txt, const char *tip,
  * barato: si el .out no se ha movido, no se vuelve a analizar.        */
 static gboolean on_foco( GtkWidget *w, GdkEventFocus *ev, Atsw *a )
 {
+    char why[512];
+
     (void) w; (void) ev;
-    if ( a->hay ) atsw_refresca( a );
+    if ( !a->hay ) return FALSE;
+
+    /* Y EL MANIFIESTO TAMBIEN, si ha cambiado por fuera. Antes solo se
+       releian los .out, asi que un modelo dado de alta desde otro sitio
+       --otra madre, un agente-- no aparecia hasta reabrir el proyecto. */
+    if ( atsw_relee( a, why, sizeof why ) )
+        barra_pub( a, "El proyecto ha cambiado fuera de aquí: releído." );
+    else if ( why[0] )
+        barra_pub( a, why );
+
+    atsw_refresca( a );
     return FALSE;
 }
 

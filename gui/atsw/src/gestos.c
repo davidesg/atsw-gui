@@ -254,7 +254,7 @@ gboolean atsw_itera( Atsw *a, const char *serie, const char *muestra,
         }
     g_free( contenido );
 
-    if ( pr_escribir( a->p, a->p->path, &e ) != 0 )
+    if ( atsw_guarda( a, &e ) != 0 )
         {
         if ( why ) snprintf( why, n, "El .inp está, pero no pude guardar el "
                              "proyecto." );
@@ -340,7 +340,7 @@ gboolean atsw_modelo_nuevo( Atsw *a, const char *serie, const char *muestra,
         }
     g_free( contenido );
 
-    if ( pr_escribir( a->p, a->p->path, &e ) != 0 )
+    if ( atsw_guarda( a, &e ) != 0 )
         {
         if ( why ) snprintf( why, n, "El .inp está, pero no pude guardar el "
                              "proyecto." );
@@ -432,7 +432,7 @@ gboolean atsw_en_muestra( Atsw *a, const char *serie, const char *padre,
                           mu ? mu->hasta : "", why, n ) != 0 )
         { pr_borra( a->p, serie, muestra, id, &e ); return FALSE; }
 
-    if ( pr_escribir( a->p, a->p->path, &e ) != 0 )
+    if ( atsw_guarda( a, &e ) != 0 )
         { if ( why ) snprintf( why, n, "El .inp está, pero no pude guardar el "
                                "proyecto." ); return FALSE; }
 

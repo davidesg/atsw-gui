@@ -338,7 +338,7 @@ static int guarda( Editor *E, char *id_out, size_t nid )
         {
         PrError e;
 
-        pr_escribir( E->a->p, E->a->p->path, &e );
+        atsw_guarda( E->a, &e );
         g_snprintf( E->id, sizeof E->id, "%s", id_out );
         titula( E );
         trae_out( E );      /* el nuevo no tiene .out: el panel se vacia */

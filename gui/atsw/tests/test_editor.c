@@ -26,6 +26,7 @@ typedef struct _PreviewApp PreviewApp;
 void  barra_pub( Atsw *a, const char *s )       { (void) a; (void) s; }
 void  atsw_refresca( Atsw *a )                  { (void) a; }
 char *atsw_programa( const char *p )            { (void) p; return 0; }
+int   atsw_guarda( Atsw *a, void *e )           { (void) a; (void) e; return 0; }
 
 /* Los dos ganchos que lib/preview pide al anfitrion. Aqui no hay anfitrion:
    el visor no entra en lo que se prueba.                               */

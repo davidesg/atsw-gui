@@ -439,6 +439,73 @@ ventana.** Es decir, la lógica en `lib/proyecto`, `lib/datos` y `lib/tabla`, y
 Que es exactamente la arquitectura de §2 — así que no hay que cambiar nada. Se
 anota para no perderla.
 
+#### Y cuando llegue: una consola de verdad NO, un panel de conversación SÍ
+
+Consultado el 2026-09-23: *«¿cuáles son las posibilidades reales de insertar
+una consola real en la madre, para operar con Claude y un MCP como art pero
+específico para atsw_gui? Algo como WezTerm. Hay que tomar en cuenta que el
+programa tiene que ser multiplataforma.»*
+
+**Con Windows en la ecuación, empotrar un emulador de terminal está
+descartado**, y no por dificultad puntual:
+
+| opción | Linux | macOS | Windows | coste |
+|---|---|---|---|---|
+| VTE (`libvte-2.91`) | sí | regular | **no existe** | bajo |
+| empotrar WezTerm/xterm (XEmbed) | sólo X11 | no | no | bajo |
+| terminal propia (pty + ConPTY + parser ANSI) | sí | sí | sí | **muy alto** |
+| panel de conversación (no es terminal) | sí | sí | sí | medio |
+| el agente fuera, los ficheros dentro | sí | sí | sí | **casi cero** |
+
+VTE depende de los ptys de Unix y no tiene puerto a Windows; XEmbed no
+sobrevive ni a Wayland. Y una terminal propia no es un widget, es un proyecto:
+WezTerm y Alacritty *son* eso. El parser de ANSI bien hecho —colores,
+direccionamiento del cursor, pantalla alterna, redimensionado— son semanas, y
+después hay que mantenerlo en tres sistemas.
+
+**Pero la terminal no es lo que hace falta.** «Operar con Claude y un MCP» son
+dos cosas y sólo una necesita terminal:
+
+- que el LLM **actúe** sobre el proyecto → eso es un servidor MCP, y no tiene
+  por qué vivir dentro de la ventana;
+- un sitio donde **escribirle** → eso es lo reemplazable.
+
+##### El panel de conversación, que es la opción que queda anotada
+
+Un `GtkTextView` con la conversación y una entrada abajo, hablando con el MCP
+del proyecto. Multiplataforma por construcción, sin emular nada, y con la
+ventaja de que **puede enseñar lo que no cabe en un terminal**: una fila de la
+rejilla como fila, un gráfico como gráfico, un `.out` en su pestaña.
+
+Lo que hay que tener claro antes de hacerlo:
+
+1. **No es un cliente de un LLM**, es un cliente del MCP. Meter aquí la
+   autenticación y el bucle agéntico sería reimplementar Claude Code dentro de
+   una ventana de GTK — y mantenerlo.
+2. **Roza P4.** Las dos encarnaciones tienen *gestión de proyectos distinta*;
+   el LLM dentro de la ventana empieza a borrar esa línea. La versión «el
+   agente fuera, los ficheros dentro» la respeta: cada uno gestiona a su
+   manera y se encuentran en el `proyecto.yaml`.
+3. **Va después del MCP, no antes.** Sin el servidor no hay con quién hablar,
+   y con el servidor puede que el panel ya no haga falta.
+
+##### Lo que sí se hizo ya, porque vale con agente y sin él
+
+La madre **relee el manifiesto por huella** al recuperar el foco, como ya hacía
+con los `.out`. Con eso, un proceso que trabaje al lado —otra madre, un editor,
+un agente con un MCP sobre `lib/proyecto`— aparece en la ventana solo, sin
+empotrar nada.
+
+Dos reglas que eso trajo, y las dos son del mismo tipo:
+
+- **Un manifiesto roto por fuera no se traga.** Se lee a otro sitio y sólo se
+  cambia si salió bien: lo que hay en memoria funciona, y un fichero a medio
+  escribir no puede tirarlo por delante.
+- **Guardar es escribir Y apuntar la huella.** Si sólo se escribe, el siguiente
+  foco relee nuestra propia escritura creyendo que la hizo otro — y lo dice. Un
+  aviso falso de «esto ha cambiado fuera de aquí» es peor que no avisar:
+  enseña a no creerse los avisos.
+
 ---
 
 **Estado: propuesto, con P4 resuelto.** A la espera de revisión del resto.

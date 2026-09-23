@@ -117,6 +117,11 @@ typedef struct {
    Proyecto  *p;
    gboolean   hay;
 
+   /* LA HUELLA DEL MANIFIESTO: tamaño y fecha, como la de los .out. Si el
+      fichero cambia por fuera --otra madre, un agente, un editor-- hay que
+      releerlo; si no, no se toca nada.                                 */
+   long       p_tam, p_mtime;
+
    AtRes      r[AT_MAX_RES];
    int        nr;
 
@@ -203,6 +208,16 @@ gchar     *atsw_programa( const char *programa );
 int        atsw_guarda_inp( const char *destino, const char *txt,
                             char *why, size_t n );
 gboolean   atsw_abre( Atsw *a, const char *path, char *why, size_t n );
+
+/* RELEE EL MANIFIESTO SI HA CAMBIADO POR FUERA. TRUE si lo releyó.
+   Un manifiesto roto NO se traga: se dice y se deja el que hay en memoria,
+   que es el bueno.                                                     */
+gboolean   atsw_relee( Atsw *a, char *why, size_t n );
+
+/* Escribe el manifiesto Y APUNTA SU HUELLA. Lo segundo no es un detalle: sin
+   ello, el proximo foco releeria nuestra propia escritura creyendo que la
+   hizo otro -- y lo diria.                                             */
+int        atsw_guarda( Atsw *a, PrError *e );
 
 /* El resultado de un modelo, releyendo el .out si la huella cambio. */
 const AtRes *atsw_resultado( Atsw *a, const char *serie, const char *muestra,

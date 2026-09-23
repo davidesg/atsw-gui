@@ -229,7 +229,7 @@ static void on_importar( GtkButton *b, Dialogo *D )
         g_free( nombre );
     } while ( gtk_tree_model_iter_next( mo, &it ) );
 
-    if ( n && pr_escribir( D->a->p, D->a->p->path, &e ) != 0 )
+    if ( n && atsw_guarda( D->a, &e ) != 0 )
         { pr_error_es( &e, why, sizeof why ); fallos++; }
 
     if ( fallos )

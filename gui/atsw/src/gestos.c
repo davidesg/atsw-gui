@@ -289,7 +289,11 @@ gboolean atsw_modelo_nuevo( Atsw *a, const char *serie, const char *muestra,
         return FALSE;
         }
 
-    if ( pr_ruta( a->p, serie, "", datos, ".inp", origen, sizeof origen ) != 0 ||
+    /* EL .inp DE LOS DATOS DE ESTA VENTANA, no el de la completa. Con "" a
+       pelo aqui, un modelo nuevo en una submuestra nacia con la serie
+       ENTERA dentro: la ventana se declaraba y no se aplicaba.        */
+    if ( pr_ruta( a->p, serie, muestra, datos, ".inp", origen,
+                  sizeof origen ) != 0 ||
          !g_file_get_contents( origen, &contenido, &largo, NULL ) )
         {
         if ( why ) snprintf( why, n, "No pude leer los datos de «%s».", serie );
@@ -387,10 +391,14 @@ gboolean atsw_en_muestra( Atsw *a, const char *serie, const char *padre,
         { if ( why ) snprintf( why, n, "«%s» no tiene datos en el proyecto.",
                                serie ); return FALSE; }
 
-    /* Cuelga del PADRE si se dio uno --de ahi viene la idea-- y si no, de
-       los datos. El linaje dice de donde salio cada estimacion.      */
-    if ( pr_deriva( a->p, serie, muestra,
-                    ( padre && *padre ) ? padre : datos,
+    /* CUELGA DE LOS DATOS DE ESTA VENTANA, y no del modelo de donde vino la
+       idea. El linaje no sale de su ventana: el padre de un modelo es de
+       que .pre salio, y el de la hoja de al lado se estimo sobre otras
+       observaciones. De donde vino la idea se dice en la barra y se ve en
+       el globo --"la misma estructura esta en..."-- que es informacion,
+       no linaje.                                                      */
+    (void) padre;
+    if ( pr_deriva( a->p, serie, muestra, datos,
                     id, sizeof id, destino, sizeof destino, &e ) != 0 )
         { if ( why ) pr_error_es( &e, why, n ); return FALSE; }
 
@@ -407,8 +415,10 @@ gboolean atsw_en_muestra( Atsw *a, const char *serie, const char *padre,
                                "proyecto." ); return FALSE; }
 
     if ( why )
-        snprintf( why, n, "%s: %s, en la muestra «%s». Especifícalo y "
+        snprintf( why, n, "%s: %s, en la muestra «%s»%s%s. Especifícalo y "
                   "estímalo; el de la otra hoja no se ha tocado.",
-                  serie, id, muestra && *muestra ? muestra : "completa" );
+                  serie, id, muestra && *muestra ? muestra : "completa",
+                  ( padre && *padre ) ? ", con la idea de " : "",
+                  ( padre && *padre ) ? padre : "" );
     return TRUE;
 }

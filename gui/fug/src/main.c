@@ -75,7 +75,7 @@ static int lee_opciones(int argc, char *argv[])
         free(p);
         return 2;
     }
-    pr_ruta(p, "", NULL, NULL, g_raiz, sizeof g_raiz);
+    pr_ruta(p, "", "", NULL, NULL, g_raiz, sizeof g_raiz);
     if (!g_raiz[0]) {
         char *d = g_path_get_dirname(proy);
 

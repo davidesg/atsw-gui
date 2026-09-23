@@ -477,6 +477,9 @@ echo "[4] golden logL values (regression baselines, NOT correct answers)"
 #  -mafree -diagar -2.5419963582, -mafree -fixb2 0 -8.4835302747 (BUG-33; now
 #  3.0123641758 with the consistent seed as one more start),
 #  DK r=2 828.8447477597 (the fit that flipped the Danish rank from 2 to 0).
+#  And with the LADDER as the start (P12, the same day): -marow -diagcov
+#  -2.6646873358 -> -2.6623400220, and DK r=2 832.3550925844 -> 858.3431076100
+#  -- both won by the ladder's start, none fell.
 golden() {
     local want=$1 src=$2; shift 2
     run "$src" "$@"
@@ -497,7 +500,7 @@ golden   2.3039690333 "$MM" 2 1 1 -case 2 -marow
 golden   2.3074789504 "$MM" 2 1 1 -case 3 -marow
 golden  -3.5511860134 "$MM" 2 1 1 -case 2 -marow -diagar
 golden   0.9355032708 "$MM" 2 1 1 -case 2 -diagma
-golden  -2.6646873358 "$MM" 2 1 1 -case 2 -marow -diagcov
+golden  -2.6623400220 "$MM" 2 1 1 -case 2 -marow -diagcov
 golden   2.1765180953 "$MM" 2 1 1 -case 2 -marow -fixb2
 golden   0.7822395343 "$MM" 2 1 1 -case 2 -marow -fixb2 0
 
@@ -514,7 +517,7 @@ golden   0.5696296891 "$MM" 2 1 1 -case 2 -mafree -diagcov
 golden   5.4717136367 "$MM" 2 1 1 -case 2 -mafree -fixb2
 golden   3.0123641758 "$MM" 2 1 1 -case 2 -mafree -fixb2 0
 golden 570.2297062756 "$UK" 2 0 2 -case 2
-golden 832.3550925844 "$DK" 2 0 2 -case 2   # s=3, r=2: guards the B2 read order
+golden 858.3431076100 "$DK" 2 0 2 -case 2   # s=3, r=2: guards the B2 read order
 golden -318.8131393592 data/AL.inp 2 0 1 -case 2 -differenced
 echo
 
@@ -695,11 +698,19 @@ awk -v g="$gap" 'BEGIN{if(g<0)g=-g; exit !(g < 1e-9)}' \
   && ok "gate: q=0 gap is below 1e-9, so the tolerance is not a rubber stamp" \
   || bad "gate: q=0 gap" "$gap is not exact; there is no truncation to blame"
 
-# and it must NOT claim the contract away from the diagonal rung
-run "$MM" 2 1 1 -case 2
+# and it must NOT claim the contract away from the diagonal rung.  Since P12
+# the ladder certifies ITS rung 0 inside an r = 1 run -- that is the diagonal
+# rung, legitimately -- so the claim is checked on the fit itself (-noladder),
+# and the ladder's certificate is checked to sit inside the ladder's block.
+run "$MM" 2 1 1 -case 2 -noladder
 if grep -aq "the factorisation contract" "$TMP/case.out"; then
     bad "gate contract" "claimed at r=1, where the likelihood does not factorise"
 else ok "gate: silent where the factorisation does not hold"; fi
+run "$MM" 2 1 1 -case 2
+if sed -n '/=== The ladder below the rank/,/rung 1 /p' "$TMP/case.out" \
+     | grep -aq "crossing identity .*VERIFIED"; then
+    ok "ladder: its rung 0 is the certified gate"
+else bad "ladder" "rung 0 of the ladder is not certified inside the ladder block"; fi
 
 # the certificate, both verdicts
 run "$MM" 2 1 0 -case 1 -diagar -diagma -diagcov -seedybar tests/fixtures/mmdiag
@@ -835,7 +846,7 @@ for spec in "2 1 1 -case 2 -mean:$MM:-0.5" \
     cp "$src" "$TMP/case.inp"
     a=$("$DRVEC" "$TMP/case" $sp -seedb2 "$val" -eval 2>/dev/null \
         | grep -a 'at the starting point' | sed 's/.*point = *//; s/ .*//')
-    b=$("$DRVEC" "$TMP/case" $sp -fixb2  "$val" -eval 2>/dev/null \
+    b=$("$DRVEC" "$TMP/case" $sp -fixb2  "$val" -noladder -eval 2>/dev/null \
         | grep -a 'at the starting point' | sed 's/.*point = *//; s/ .*//')
     if [ -z "$a" ] || [ -z "$b" ]; then
         bad "seedb2: start identity ($sp)" "missing eval (seedb2=$a fixb2=$b)"
@@ -869,7 +880,7 @@ if ! grep -aq "seedjoh: B2 seeded from the canonical" "$TMP/case.out"; then
     bad "seedjoh" "the canonical solution was not formed on Milan"
 else
     ok "seedjoh: the canonical solution is formed and reported"
-    "$DRVEC" "$TMP/case" 2 0 1 -case 2 -mean -eval >/dev/null 2>&1
+    "$DRVEC" "$TMP/case" 2 0 1 -case 2 -mean -noladder -eval >/dev/null 2>&1
     sc=$(awk '/^eval logelf/{print $4}' "$TMP/case.out")
     "$DRVEC" "$TMP/case" 2 0 1 -case 2 -mean -seedjoh -eval >/dev/null 2>&1
     sj=$(awk '/^eval logelf/{print $4}' "$TMP/case.out")
@@ -1574,9 +1585,11 @@ done
 if [ "$cases" -eq 0 ]; then
     ok "P4.3 skipped: no bank case available"
 else
-    [ "$bound_def" -eq 0 ] \
-        && ok "-marow reaches the boundary in 0 of $cases bank cases" \
-        || bad "P4.3" "-marow sat on the boundary in $bound_def of $cases"
+    #  NOT asserted any more.  With one start -marow stayed interior in 5 of
+    #  5; with the ladder (P12) it finds HIGHER optima on Vienna and Penn, and
+    #  those sit on the boundary too.  The claim was an artefact of the single
+    #  start, and it is reported, not tested (BUG-48, BUG-49).
+    ok "-marow reaches the boundary in $bound_def of $cases bank cases (reported)"
     [ "$bound_free" -gt 0 ] \
         && ok "and -mafree still does, in $bound_free of $cases -- the check bites" \
         || bad "P4.3" "-mafree reached the boundary in none: the check proves nothing"
@@ -2332,6 +2345,19 @@ elif grep -aq "^  johansen " "$TMP/case.out"; then
 else
     bad "search table" "no Johansen row in the search table"
 fi
+
+# 8p.7  BUG-49: an MA root on the invertibility boundary is diagnosed, not just
+#       starred -- the report says which combination of Ybar carries it, and
+#       -lrtest marks the LR that uses such a fit.  mink-muskrat's free fit sits
+#       there (modulus 0.99995).
+run "$MM" 2 1 1 -case 2
+if grep -aq "left$" "$TMP/case.out" || grep -aq "null vector u of Theta\*(1)" "$TMP/case.out"; then
+    ok "BUG-49: the boundary MA root is diagnosed with its direction"
+else bad "BUG-49" "the boundary MA root is starred but not diagnosed"; fi
+run "$MM" 2 1 0 -case 2 -lrtest
+if grep -aq "MA on the boundary at rank 1" "$TMP/case.out"; then
+    ok "BUG-49: -lrtest marks the LR built on a boundary fit"
+else bad "BUG-49" "-lrtest does not mark the boundary fit"; fi
 
 # 8p.6  -lrtest honours -multistart.  OPT-IN (SLOW=1): it is 30 starts per rank.
 if [ "${SLOW:-0}" = "1" ]; then

@@ -246,7 +246,7 @@ between 2026-08-20 and 2026-09-23 without a class flag belongs to `-marow`.
 | | |
 |---|---|
 | `-mafree` | the free `Θ`, asked for explicitly: the same fit as the default |
-| `-marow` | `Θ = [T₁₁  T₁₂ ; 0  0]`, the default from 2026-08-20 to 2026-09-23. On the bank it does not reach the invertibility boundary where the free class does (`run_tests.sh` 8c, measured, not guaranteed) |
+| `-marow` | `Θ = [T₁₁  T₁₂ ; 0  0]`, the default from 2026-08-20 to 2026-09-23. It was said not to reach the invertibility boundary; that was an artefact of the single start: with the ladder its best optimum on Vienna and Penn sits on the boundary too (`run_tests.sh` 8c reports it) |
 
 At `r = 0` the structured classes are undefined — there is no `W` block, and
 zeroing the lower `s = M` rows would zero `Θ` entirely — so the moving average
@@ -277,13 +277,44 @@ all eight, and brings `B̂₂` to within 0.001–0.052 of Johansen's canonical `
 where the free version is 0.1 to 0.4 away. The likelihood still prefers the free
 version, but that comparison is not a test: its optimum is on the boundary.
 
+### Where the fit starts: the ladder (since 2026-09-23)
+
+With `r ≥ 1` the fit starts, by default, where the suite's convention says it
+should: from the **gate** up.
+
+1. **The gate**: `r = 0` with `F`, `Θ` and `Σ` diagonal. The likelihood
+   factorises, so the joint fit must equal the sum of the univariate ones; the
+   `.out` prints that certificate (`crossing identity … VERIFIED`).
+2. **The rungs below the rank**, each from the optimum of the one below with the
+   new entries at zero: `Σ` free, then the structure asked for (`F`, `Θ` free
+   unless a `-diag*` flag says otherwise). These are ordinary nested steps.
+3. **Across the rank, route (B)**: the VEC cannot be carried up by adding zeros —
+   `Λ = 0` is on the boundary of the rung above, where the transformed system has
+   an AR root of modulus one and `B₂` is not identified — so `F`, `Θ` and `Σ` are
+   held at the `r = 0` optimum and `Λ` and `B₂` are estimated on them. Then
+   everything is released.
+
+The analogue in drtran is its subtracting cast (`-S`): here `W = Y₁ + B₂′Y₂` is
+formed by subtraction too, and exactly (the gain is static, so no pre-sample is
+needed). What has no analogue is the rank: drtran's `ω = 0` is an interior point
+of the rung above, and drvec's `Λ = 0` is not.
+
+The ladder's point is the main start, and the other starts of the search (cold,
+Johansen's, the nested MA chain) are still tried: the search table says which one
+won, so whether the ladder alone is enough is measured on every fit. On the bank
+it is the better start in most cases, not in all. `-noladder` turns it off (the
+cold conditional-regression start of before); an explicit seed — `-seedb2`,
+`-seedjoh`, `-seed`, `-seedybar` — also turns it off, because a seed you give is
+not replaced in silence; `-seedgate` forces it.
+
 ### Seeding the VEC block
 
 | | |
 |---|---|
 | `-seedjoh` | seed `B₂` with the canonical reduced-rank solution (Johansen's eigenvalue problem, closed form) instead of the static OLS regression |
 | `-seedb2 v` | start `B₂` at `v` and estimate it **free** (`-fixb2` pins it there instead) |
-| `-seedgate` | estimate the `r = 0` rung, hold `F`, `Θ`, `Σ` there, fit `Λ` and `B₂` on it, then release everything |
+| `-seedgate` | the ladder above, forced even when another seed is given (it is the default otherwise) |
+| `-noladder` | start from the cold conditional regression instead of the ladder |
 
 `-seedjoh` is measured in [HOMOLOGATION.md](HOMOLOGATION.md) §4e. **Without a
 moving average it is essentially the answer**: on the eight pairs it starts an

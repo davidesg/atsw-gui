@@ -614,7 +614,7 @@ next to `xkeep[rr]`; (3) refuse or rebuild the gate for `-warma`.
 
 ## BUG-32 — `-seedgate` holds the `r = 0` optimum in the wrong coordinates, and with `-fixb2 v` it replaces `v` by 0
 
-**Status: OPEN.** Found 2026-09-23.
+**Status: FIXED on 2026-09-23** (`src/drvec.c`, `gate_profile_seed`, `fit_r0_ladder`). Found 2026-09-23.
 
 **What it is.** `gate_profile_seed` (~4204) copies `hold_F`, `hold_Th`, `hold_S`
 from the `r = 0` fit without permuting them: at `r = 0` the internal order is the
@@ -639,6 +639,16 @@ start. And `-seedgate -fixb2 v` estimates a different model from the one asked.
 `Sigma` block by `hold_S[1][1]`); save and restore `B2_fixed` and `cond_resid`
 around the `r = 0` `init_guess`.
 
+
+**Fixed.** Route (B) now takes the `r = 0` optimum from the ladder
+(`fit_r0_ladder`: gate, `Σ` free, structure) and permutes `F`, `Θ` and `Σ` into
+the internal order before holding them, renormalising `Σ` so its `[1][1]` is 1;
+afterwards one `init_guess` at the rank restores `B2_fixed` and `cond_resid`.
+The ladder is now the default start for `r ≥ 1` (P12). Re-measured: on
+mink-muskrat the profiled crossing is -0.15 over an `r = 0` rung of -1.05; the
+Danish M = 5, r = 2 fit rose from 832.36 to 858.34. The claim that "route B is
+measured to be worse" (VEC_EMBEDDING_PLAN, run_tests ~787) rested on this defect
+and no longer stands; route (B) wins or ties in most bank cases, not all.
 ---
 
 ## BUG-33 — `-fixb2 v` builds its starting point from the static-OLS `B2`, not from `v`
@@ -1134,6 +1144,55 @@ as an option. Corollary 6.3 is marked false in `DEMOSTRACIONES.md`; the decision
 is `SPECIFICATION_PLAN.md` §11. Re-measured: the battery's flagless golden
 values now equal their `-mafree` counterparts to the digit; the `-marow` ones are
 kept with the flag. What is not done: the bootstrap test between classes.
+---
+
+## BUG-49 — on the bank the moving average ends on the invertibility boundary, and the report publishes that point as an interior optimum
+
+**Status: OPEN** (partly fixed: reported and diagnosed, see below). Found 2026-09-23, comparing the ladder with the cold start.
+
+**What it is.** With the free `Θ` the fitted MA has a root at the engine's
+invertibility gate (modulus 0.99995–1.00000, marked `*`) in **5 of 5** bank cases
+(`mink_muskrat`, `milan`, `vienna`, `penn`, `utrecht`, `2 1 1 -case 2 -mean`), and
+by either start: ladder or cold. With `-marow` the single start stayed interior,
+but the ladder finds **higher** optima on Vienna (23.84 against 23.01) and Penn
+(38.74 against 33.62), and those are on the boundary too. The likelihood keeps
+rising towards a non-invertible MA and the optimiser stops against the wall: the
+point is not an interior maximum. drvec prints *"A root sits on the unit circle"*,
+but then reports standard errors, t statistics and likelihood ratios as if it
+were, and the search picks the highest point on the wall as "the optimum".
+
+**How it was found.** Running each start alone (P12, 2026-09-23): the
+difference between routes was not "better or worse optimum" but where on the
+boundary each one stops.
+
+**What it cost.** Every MA fit on the bank: the standard errors are not defined
+along the binding direction (Theorem 10's hypothesis `Ω > 0` fails), LR tests
+against or between such fits have no known distribution, and the comparison of
+starts is a comparison of boundary points. And it is **information thrown
+away**: an MA unit root is the signature of over-differencing — the paper's own
+reading of mink (Mauricio 2006, §4.3) — so it says something about the
+specification (the integration order, the rank) that the report does not say.
+
+**Suggested fix.** Detect it on the fitted `Θ*`, say which block carries the root
+(the `nabla Y2` rows or the `W` block) and what that suggests, mark the MA
+standard errors and every LR that uses the fit as not having their distribution,
+and flag it in `-lrtest` and in the search table.
+
+
+**Partly fixed on 2026-09-23** (`src/drvec.c`, `operator_roots`, `run_lrtest`).
+The report now says it is a constrained point and not an interior maximum, and
+diagnoses it: the left null vector `u` of `Θ*(1)` is printed with its weights on
+`Ȳ = [∇Y₂ ; W]`, by name, and read by block — in the `∇Y₂` block, that
+combination of the common trends looks over-differenced (the rank may be higher,
+or the series not I(1)); in the `W` block with an AR root near one as well, an
+AR/MA near-cancellation (the rank may be lower); otherwise, mixed. `-lrtest`
+marks every LR built on such a fit (`[MA on the boundary at rank r: no known
+distribution]`). On the bank: Milan's direction is 70 % `∇London` — the series
+the legacy study found nearly over-differenced — and Vienna's is 100 % `W`.
+Guarded by `run_tests.sh` 8p.7. **Not done:** the standard errors of the MA are
+still printed in the parameter table (the text says they are not defined), and
+nothing is done about the boundary itself — which is information about the
+specification, not a defect of the program.
 ---
 
 ## Watched, and not defects

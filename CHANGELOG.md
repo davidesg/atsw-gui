@@ -7,6 +7,35 @@ publicación: `v*`.
 
 ## Sin publicar
 
+### La escalera, como punto de partida por defecto
+
+Con `r ≥ 1` el ajuste parte ahora de donde dice el convenio de la suite: la
+**puerta** (`r = 0`, todo diagonal, certificada contra la suma de los
+univariantes), los peldaños por debajo del rango cada uno desde el anterior, y el
+cruce del rango por la ruta (B) — `Λ` y `B₂` perfilados con el resto sujeto al
+óptimo de abajo —, que antes era la opción `-seedgate` y estaba descartada por una
+medida hecha con BUG-32 dentro (sujetaba el óptimo de abajo en las coordenadas
+equivocadas). `-noladder` vuelve al arranque frío; una semilla explícita también.
+Los demás arranques de la búsqueda se siguen probando y la tabla dice cuál gana.
+
+Medido: en Dinamarca M = 5, r = 2 el ajuste sube de 832.36 a 858.34; en el banco
+de trigo la escalera es mejor arranque que el frío en la mayoría de los casos, no
+en todos. Y destapó BUG-49: la media móvil acaba en la frontera de
+invertibilidad en casi todo el banco, con `-mafree` y también con los mejores
+óptimos de `-marow`. De paso, un `Σ` singular ya no se acepta como óptimo (dos
+series colineales daban logL 830 en una iteración).
+
+### La frontera de invertibilidad, diagnosticada (BUG-49)
+
+Cuando la media móvil acaba con una raíz en la frontera —en el banco, casi
+siempre—, el `.out` ya no se limita a marcarla con un asterisco: dice que es un
+punto restringido y no un máximo interior, que los errores típicos del MA y
+cualquier LR que use ese ajuste no tienen su distribución, y **en qué dirección**
+está la raíz (el vector nulo por la izquierda de `Θ*(1)`, con sus pesos sobre
+`[∇Y₂ ; W]` por nombre) y qué sugiere: sobrediferenciación de las tendencias
+comunes si cae en `∇Y₂`, cuasicancelación AR/MA si cae en `W` con una raíz AR
+cerca de uno. `-lrtest` marca cada LR construida sobre un ajuste así.
+
 ### La media móvil por defecto vuelve a ser libre
 
 Con `q ≥ 1` y sin clase pedida, `drvec` estima otra vez la `Θ` **libre**: el

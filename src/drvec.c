@@ -204,6 +204,11 @@ int global_rungs  = 0; /* if 1, report the ladder's rungs 0-2 and their LRs   */
  *  from hold_*, not from x.  Same pattern as -fixb2 and -alpha: the restriction
  *  lives in the cast and the optimiser never learns about it.                */
 int global_seedgate = 0;
+/*  P12: the ladder -- gate, rungs below the rank, route (B) -- is the default
+ *  start for r >= 1; -noladder turns it off (the cold conditional-regression
+ *  start of before), and -seedgate, which used to switch it on, is now the
+ *  default and is accepted as such.                                         */
+int global_noladder = 0;
 
 /*  -seedb2 v — start B2 at v and estimate it FREE.  This is not -fixb2, which
  *  holds it: here it moves.  It exists as a MEASURING INSTRUMENT, so that the
@@ -517,6 +522,7 @@ static void build_y2_levels(void);
 static void banner(const char *title);
 static int  inp2lam(int i);
 struct search_out;
+static void free_ladder_cache(void);
 static int  fit_search(real *x, int npar, real *dev, real **cov, real *ll,
                        real *s2, int njitter, int echo, struct search_out *so);
 
@@ -1146,6 +1152,7 @@ static void build_ybar(real **B2, real **Ybar)
  *  sixth cannot be seen.                                                     */
 static void free_case_data(void)
 {
+    free_ladder_cache();      /* P12: the r = 0 ladder's cached optimum */
     if (datamat)   { free_matrix(datamat,   1, alloc_nobs, 1, nser); datamat = NULL; }
     if (Y2_levels) { free_matrix(Y2_levels, 1, alloc_nobs, 1, alloc_s); Y2_levels = NULL; }
     if (alpha_A)   { free_matrix(alpha_A, 1, nser, 1, (alpha_sa > 0 ? alpha_sa : 1));
@@ -1671,23 +1678,87 @@ static void report_operator_roots(const char *label, real ***A, int m, int k,
 
 static void operator_roots(struct Tvarma *v)
 {
-    real minmod = 1.0e12;
-
+    real minmod = 1.0e12, min_ar = 1.0e12, min_ma = 1.0e12;
     if (v->p <= 0 && v->q <= 0) return;
     fprintf(outputv, "\nInverse roots of |phi(B)|=0 and |theta(B)|=0 "
                      "(moduli; > 1 is stationary/invertible):\n\n");
-    report_operator_roots("AR (Phi)",   v->phi,   v->m, v->p, &minmod, 0);
-    report_operator_roots("MA (Theta)", v->theta, v->m, v->q, &minmod, 0);
-    if (minmod < 1.0001)
+    report_operator_roots("AR (Phi)",   v->phi,   v->m, v->p, &min_ar, 0);
+    report_operator_roots("MA (Theta)", v->theta, v->m, v->q, &min_ma, 0);
+    minmod = (min_ar < min_ma) ? min_ar : min_ma;
+    (void) minmod;
+    if (min_ar < 1.0001)
         fprintf(outputv,
-            "\n  * A root sits on the unit circle.  The estimate lies against the\n"
-            "    boundary the likelihood enforces, so this is a CONSTRAINED optimum\n"
-            "    and the standard errors are not defined along that direction.  A\n"
-            "    unit MA root here is the signature of overdifferencing: nabla Y_2\n"
-            "    is differenced by construction, so it appears when the declared\n"
-            "    rank is lower than the true one.  Re-examine the rank before\n"
-            "    reading the estimates.\n");
-
+            "\n  * A root sits on the unit circle -- an AR root: the system is at\n"
+            "    the edge of stationarity, which is where Lambda -> 0 puts it (the\n"
+            "    rank-r model degenerating into the rank-(r-1) one).\n");
+    if (min_ma < 1.0001) {
+        /*  BUG-49.  WHICH direction carries the MA unit root.  Theta*(1) =
+         *  I - sum Theta*_k is singular there; its left null vector u says which
+         *  combination u'Ybar has the (1 - B) in its moving average, i.e. which
+         *  combination of Ybar = [nabla Y2 ; W] the model is differencing once
+         *  too often.  Its weights are printed by block, with names, and the
+         *  reading depends on where they fall.                              */
+        int M = v->m, r = global_r, s = M - r, i, k;
+        gsl_matrix *T = gsl_matrix_alloc(M, M), *V = gsl_matrix_alloc(M, M);
+        gsl_vector *sv = gsl_vector_alloc(M), *wk = gsl_vector_alloc(M);
+        real w2 = 0.0, ww = 0.0;
+        /*  u solves u'T = 0, i.e. T'u = 0: the right singular vector of T'
+         *  for its smallest singular value.  gsl's SVD of A = T' gives
+         *  A = U S V', and the last column of V is the null direction of A. */
+        for (i = 0; i < M; i++)
+            for (k = 0; k < M; k++) {
+                real acc = (i == k) ? 1.0 : 0.0;
+                for (int l = 1; l <= v->q; l++) acc -= v->theta[l][k + 1][i + 1];
+                gsl_matrix_set(T, i, k, acc);            /* T' */
+            }
+        fprintf(outputv,
+            "\n  * A root sits on the unit circle -- an MA root (modulus %.5f).  The\n"
+            "    likelihood rose towards a non-invertible MA and the optimiser stopped\n"
+            "    at the engine's invertibility gate: this is a CONSTRAINED point, not an\n"
+            "    interior maximum.  The standard errors of the MA are not defined along\n"
+            "    that direction, and no LR that uses this fit has its usual\n"
+            "    distribution (BUG-49).\n", min_ma);
+        if (gsl_linalg_SV_decomp(T, V, sv, wk) == 0) {
+            fprintf(outputv,
+                "    The combination the model differences once too often -- the left\n"
+                "    null vector u of Theta*(1), smallest singular value %.2e -- has\n"
+                "    weights (|u|, on Ybar = [nabla Y2 ; W]):\n",
+                gsl_vector_get(sv, M - 1));
+            for (i = 0; i < M; i++) {
+                real ui = gsl_matrix_get(V, i, M - 1);
+                if (i < s) w2 += ui * ui; else ww += ui * ui;
+                if (i < s)
+                    fprintf(outputv, "      nabla %-12s %8.4f\n",
+                            series_names ? series_names[i + 1] : "Y2", fabs(ui));
+                else
+                    fprintf(outputv, "      W%-17d %8.4f\n", i - s + 1, fabs(ui));
+            }
+            if (r == 0 || w2 >= 0.8)
+                fprintf(outputv,
+                    "    It lies in the nabla Y2 block (share %.2f): that combination of the\n"
+                    "    common-trend series looks OVER-DIFFERENCED -- stationary in levels.\n"
+                    "    Read it as evidence that the rank is higher than %d, or that the\n"
+                    "    series in that block are not I(1).\n", w2, r);
+            else if (ww >= 0.8)
+                fprintf(outputv,
+                    "    It lies in the W block (share %.2f).  %s\n", ww,
+                    (min_ar < 1.02)
+                    ? "An AR root is near one as well: an\n"
+                      "    AR/MA near-cancellation, i.e. a near common factor.  Read it as\n"
+                      "    evidence that the equilibrium error is barely mean-reverting --\n"
+                      "    that the rank may be LOWER than the one fitted."
+                    : "The equilibrium error's own moving\n"
+                      "    average is at the boundary: re-examine the MA order of W and the\n"
+                      "    deterministic case before reading the estimates.");
+            else
+                fprintf(outputv,
+                    "    It mixes both blocks (nabla Y2 share %.2f, W share %.2f): no single\n"
+                    "    reading; re-examine the rank and the orders before reading the\n"
+                    "    estimates.\n", w2, ww);
+        }
+        gsl_vector_free(wk); gsl_vector_free(sv);
+        gsl_matrix_free(V); gsl_matrix_free(T);
+    }
     /*  P4.4 — what those roots ARE in the structured class.  With the lower s
      *  rows of Theta zero, det Theta(x) = det(I_r - sum T11_k x^k): there are
      *  r*q finite roots and s*q at infinity, and the finite ones are the r x r
@@ -4390,6 +4461,38 @@ static int est_run(real *x, int npar, real *dev, real **cov,
         }
         fclose(tmp);
     }
+    /*  A SINGULAR Sigma is not an optimum: the likelihood is unbounded there.
+     *  With two exactly collinear series the ladder reaches such a point in a
+     *  step (Q = [[1, .5], [.5, .25]], logL 830 after one iteration), where
+     *  before every start was refused.  The engine accepts it because Q is
+     *  still positive definite in floating point, so the check is made here,
+     *  on the relative determinant det Q / prod Q_ii (1 for a diagonal Q, 0
+     *  for a singular one).  Refused as ifault 1, "Q not positive definite",
+     *  which is what it is.                                                 */
+    if (ifr == 0 && v.m > 1) {
+        int ifq = 0;
+        vec_shootx(x, &v, &ifq, 0, 0);    /* Q at the FINAL point, not the start */
+        if (ifq != 0) ifr = 1;
+    }
+    if (ifr == 0 && v.m > 1) {
+        int m = v.m, a, b, c;
+        real **L = matrix(1, m, 1, m), det = 1.0, pd = 1.0;
+        for (a = 1; a <= m; a++) for (b = 1; b <= m; b++) L[a][b] = v.qq[a][b];
+        for (a = 1; a <= m && ifr == 0; a++) {
+            real d = L[a][a];
+            for (c = 1; c < a; c++) d -= L[a][c] * L[a][c];
+            if (!(d > 0.0)) { ifr = 1; break; }
+            L[a][a] = sqrt(d);
+            for (b = a + 1; b <= m; b++) {
+                real e = L[b][a];
+                for (c = 1; c < a; c++) e -= L[b][c] * L[a][c];
+                L[b][a] = e / L[a][a];
+            }
+            det *= d; pd *= v.qq[a][a];
+        }
+        if (ifr == 0 && pd > 0.0 && det / pd < 1e-10) ifr = 1;
+        free_matrix(L, 1, m, 1, m);
+    }
     *ll = v.logelf; *s2 = v.sigma2;
     {   /*  the deallocating call resets its own ifault argument: est()'s
          *  verdict has to survive it, or a start the engine refused reads
@@ -4605,6 +4708,180 @@ static int fit_search(real *x, int npar, real *dev, real **cov,
 }
 
 /*****************************************************************************/
+/*  fit_r0_ladder -- THE RUNGS BELOW THE RANK, EACH FROM THE ONE BELOW IT.    */
+/*                                                                           */
+/*  The suite's convention (drtran, the ladder of SUITE_INTEGRATION.md): the */
+/*  univariate models are optima; the diagonal gate -- r = 0, diagonal F,    */
+/*  Theta and Sigma -- is where the joint likelihood factorises into theirs  */
+/*  (Theorem 9), so its optimum is theirs and its certificate says so; then  */
+/*  structure is added one rung at a time, each estimated from the optimum   */
+/*  of the rung below with the new entries at zero.  Below the rank those    */
+/*  are ORDINARY nested steps: the rung below is an interior point of the    */
+/*  one above.                                                               */
+/*                                                                           */
+/*    rung 0   F, Theta, Sigma diagonal     the gate, certified              */
+/*    rung 1   Sigma free                                                    */
+/*    rung 2   the structure asked for (F, Theta free unless -diag* flags)   */
+/*                                                                           */
+/*  Rung 2's optimum is what route (B) holds while it profiles Lambda and B2 */
+/*  (gate_profile_seed): the VEC cannot be carried up by adding zeros --     */
+/*  Lambda = 0 is on the boundary of the rung above (VEC_EMBEDDING_PLAN.md   */
+/*  3) -- which is why the crossing is a profile and not an embedding.       */
+/*                                                                           */
+/*  Returns 1 and leaves the r = 0 optimum in F0, Th0, S0 (full M x M, in    */
+/*  the .inp's order, which at r = 0 is also the engine's) and its logL in   */
+/*  *ll0; 0 if a rung failed.  The result is cached for the rest of the run  */
+/*  (-lrtest asks for it once per rank) and keyed on what determines it.    */
+/*****************************************************************************/
+/*  When the ladder is the start.  By default for r >= 1; not under -warma
+ *  (another parameterisation) or -noladder; and not when the user gave a seed
+ *  of their own (-seedb2, -seedjoh, -seed, -seedybar): an explicit seed is a
+ *  request, and replacing it in silence would be answering another one.
+ *  -seedgate asks for the ladder whatever else was given.                  */
+static int ladder_wanted(void)
+{
+    if (global_warma) return 0;
+    if (global_seedgate) return 1;
+    if (global_noladder) return 0;
+    if (global_seedb2 || global_seedjoh || global_seed) return 0;
+    return 1;
+}
+
+static real ***lad_F = NULL, ***lad_Th = NULL, **lad_S = NULL, lad_ll = 0.0;
+static int     lad_ok = 0, lad_nf = 0, lad_q = 0, lad_M = 0;
+static double  lad_key = 0.0;
+
+static double ladder_key(void)
+{
+    double k = global_p * 1e6 + global_q * 1e4 + global_case * 1e3
+             + global_diag_ar * 100 + global_diag_ma * 10 + global_diag_cov
+             + nobs_raw * 1e-3 + global_matri * 0.5;
+    int t, i;
+    for (t = 1; t <= nobs_raw; t++)
+        for (i = 1; i <= nser; i++) k += rawmat[t][i] * (1e-7 * (t % 97 + i));
+    return k;
+}
+
+/*  Pack an r = 0 point from full matrices, in the walk of the CURRENT flags. */
+static void pack_r0(real *x, real ***F, real ***Th, real **S, real *mu)
+{
+    int M = nser, nf = (global_p > 1) ? global_p - 1 : 0, q = global_q;
+    int i, j, k, idx = 1, head, tail;
+    real s11 = (S[1][1] > 1e-24) ? S[1][1] : 1.0;
+    if (global_case == 3) for (i = 1; i <= M; i++) x[idx++] = mu[i];
+    for (k = 1; k <= nf; k++) {
+        if (global_diag_ar) for (i = 1; i <= M; i++) x[idx++] = F[k][i][i];
+        else for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) x[idx++] = F[k][i][j];
+    }
+    search_blocks(&head, &tail);
+    if (q > 0) theta_pack(Th, ma_class_now(), q, x, idx - 1);
+    idx += theta_len(ma_class_now(), q);
+    for (i = 2; i <= M; i++) x[idx++] = S[i][i] / s11;
+    if (!global_diag_cov)
+        for (i = 2; i <= M; i++) for (j = 1; j < i; j++) x[idx++] = S[i][j] / s11;
+}
+
+static int fit_r0_ladder(real ***F0, real ***Th0, real **S0, real *ll0, int echo)
+{
+    int M = nser, nf = (global_p > 1) ? global_p - 1 : 0, q = global_q;
+    int r_save = global_r;
+    int t_dar = global_diag_ar, t_dma = global_diag_ma, t_dcov = global_diag_cov;
+    int rungs[3][3], nr = 0, st, i, j, k, ok = 1;
+    double key;
+    real ***F = tensor(1, (nf > 0 ? nf : 1), 1, M, 1, M);
+    real ***Th = tensor(1, (q > 0 ? q : 1), 1, M, 1, M);
+    real **S = matrix(1, M, 1, M), *mu = vector(1, M), ll = 0.0;
+
+    global_r = 0;
+    build_y2_levels();
+    key = ladder_key();
+    if (lad_ok && key == lad_key && lad_M == M && lad_nf == nf && lad_q == q) {
+        for (k = 1; k <= nf; k++) for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) F0[k][i][j] = lad_F[k][i][j];
+        for (k = 1; k <= q; k++)  for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) Th0[k][i][j] = lad_Th[k][i][j];
+        for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) S0[i][j] = lad_S[i][j];
+        *ll0 = lad_ll;
+        global_r = r_save; build_y2_levels();
+        free_tensor(F, 1, (nf > 0 ? nf : 1), 1, M, 1, M);
+        free_tensor(Th, 1, (q > 0 ? q : 1), 1, M, 1, M);
+        free_matrix(S, 1, M, 1, M); free_vector(mu, 1, M);
+        return 1;
+    }
+
+    rungs[nr][0] = 1; rungs[nr][1] = 1; rungs[nr][2] = 1; nr++;
+    if (!t_dcov) { rungs[nr][0] = 1; rungs[nr][1] = 1; rungs[nr][2] = 0; nr++; }
+    if (!t_dar || !t_dma) { rungs[nr][0] = t_dar; rungs[nr][1] = t_dma; rungs[nr][2] = t_dcov; nr++; }
+
+    if (echo)
+        fprintf(outputv, "\n=== The ladder below the rank: r = 0, from the gate up ===\n");
+    for (st = 0; st < nr && ok; st++) {
+        int np, ifr, ifs = 0;
+        real s2, *x, *dev, **cov;
+        struct Tvarma v;
+        global_diag_ar = rungs[st][0]; global_diag_ma = rungs[st][1];
+        global_diag_cov = rungs[st][2];
+        np = calc_nparametrs();
+        x = vector(1, np); dev = vector(1, np); cov = matrix(1, np, 1, np);
+        if (st == 0) init_guess(x, np);
+        else         pack_r0(x, F, Th, S, mu);
+        ifr = fit_search(x, np, dev, cov, &ll, &s2, 1, 0, NULL);
+        if (ifr != 0) {
+            ok = 0;
+            if (echo) fprintf(outputv, "  rung %d did not converge (ifault = %d)\n", st, ifr);
+        } else {
+            v.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
+            vec_shootx(x, &v, &ifs, 1, 0);
+            /*  At r = 0 Cbar = I and Hbar = 0, so Phi*_k = F_k, Theta*_k =
+             *  Theta_k and Sigma* = Sigma term by term (vec_shootx [4]).     */
+            for (k = 1; k <= nf; k++) for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) F[k][i][j] = v.phi[k][i][j];
+            for (k = 1; k <= q; k++)  for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) Th[k][i][j] = v.theta[k][i][j];
+            for (i = 1; i <= M; i++) { mu[i] = v.mu[i]; for (j = 1; j <= M; j++) S[i][j] = v.qq[i][j]; }
+            if (echo) {
+                fprintf(outputv, "  rung %d  (F %s, Theta %s, Sigma %s)   logL = %.10f\n", st,
+                        global_diag_ar ? "diag" : "free", global_diag_ma ? "diag" : "free",
+                        global_diag_cov ? "diag" : "free", ll);
+                if (st == 0) { v.logelf = ll; gate_contract(&v); }
+            }
+            vec_shootx(x, &v, &ifs, 0, 1);
+        }
+        free_matrix(cov, 1, np, 1, np); free_vector(dev, 1, np); free_vector(x, 1, np);
+    }
+    global_diag_ar = t_dar; global_diag_ma = t_dma; global_diag_cov = t_dcov;
+    if (ok) {
+        for (k = 1; k <= nf; k++) for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) F0[k][i][j] = F[k][i][j];
+        for (k = 1; k <= q; k++)  for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) Th0[k][i][j] = Th[k][i][j];
+        for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) S0[i][j] = S[i][j];
+        *ll0 = ll;
+        /* the cache */
+        if (lad_ok) {
+            free_tensor(lad_F, 1, (lad_nf > 0 ? lad_nf : 1), 1, lad_M, 1, lad_M);
+            free_tensor(lad_Th, 1, (lad_q > 0 ? lad_q : 1), 1, lad_M, 1, lad_M);
+            free_matrix(lad_S, 1, lad_M, 1, lad_M);
+        }
+        lad_F = tensor(1, (nf > 0 ? nf : 1), 1, M, 1, M);
+        lad_Th = tensor(1, (q > 0 ? q : 1), 1, M, 1, M);
+        lad_S = matrix(1, M, 1, M);
+        for (k = 1; k <= nf; k++) for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) lad_F[k][i][j] = F[k][i][j];
+        for (k = 1; k <= q; k++)  for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) lad_Th[k][i][j] = Th[k][i][j];
+        for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) lad_S[i][j] = S[i][j];
+        lad_ll = ll; lad_key = key; lad_ok = 1; lad_M = M; lad_nf = nf; lad_q = q;
+    }
+    global_r = r_save; build_y2_levels();
+    free_tensor(F, 1, (nf > 0 ? nf : 1), 1, M, 1, M);
+    free_tensor(Th, 1, (q > 0 ? q : 1), 1, M, 1, M);
+    free_matrix(S, 1, M, 1, M); free_vector(mu, 1, M);
+    return ok;
+}
+
+static void free_ladder_cache(void)
+{
+    if (!lad_ok) return;
+    free_tensor(lad_F, 1, (lad_nf > 0 ? lad_nf : 1), 1, lad_M, 1, lad_M);
+    free_tensor(lad_Th, 1, (lad_q > 0 ? lad_q : 1), 1, lad_M, 1, lad_M);
+    free_matrix(lad_S, 1, lad_M, 1, lad_M);
+    lad_ok = 0;
+}
+
+/*****************************************************************************/
 /*  gate_profile_seed — ROUTE (B) OF THE PLAN: the r = 0 optimum, and on top */
 /*  of it, Lambda and B2 by likelihood.                                       */
 /*                                                                           */
@@ -4642,9 +4919,9 @@ static int gate_profile_seed(real *x, int npar)
 {
     int M = nser, r0 = global_r, p = global_p, q = global_q;
     int nf = (p > 1) ? p - 1 : 0;
-    int nmean, nlam, nhead, nmid, ntail, np0, np2, i, j, k, idx, ifr = 0, ifc;
-    real *x0, *dev0, **cov0, *x2, *dev2, **cov2;
-    struct Tvarma v0, v2;
+    int nmean, nlam, nhead, nmid, ntail, np2, i, j, k, idx, ifr = 0, ifc;
+    real *x2, *dev2, **cov2;
+    struct Tvarma v2;
 
     if (r0 <= 0) return 0;                  /* with no VEC matrix there is nothing to cross */
     par_blocks(&nmean, &nlam, &nmid, &ntail);
@@ -4652,58 +4929,65 @@ static int gate_profile_seed(real *x, int npar)
     if (nhead + nmid + ntail != npar) return 0;      /* the vector is not the one */
                                                      /* this walk expects  */
 
-    /* ---- 1. the rung below, estimated to its optimum ---------------------- */
-    global_r = 0;
-    build_y2_levels();
-    np0  = calc_nparametrs();
-    x0   = vector(1, np0);
-    dev0 = vector(1, np0);
-    cov0 = matrix(1, np0, 1, np0);
-    v0.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
-    init_guess(x0, np0);
-    vec_shootx(x0, &v0, &ifr, 1, 0);
-    est(&vec_shootx, np0, x0, dev0, cov0, 500, 200, 1e-5, 1e-7,
-        v0.xitol, v0.a, &v0.sigma2, &v0.logelf, &ifr);
-
-    if (ifr != 0) {
-        fprintf(outputv, "\n-seedgate: the r = 0 rung did not converge "
-                         "(ifault = %d); falling back to the cold start.\n", ifr);
-        if (!quiet_mode)
-            printf("  -seedgate: the r = 0 rung did not converge; carrying on cold\n");
-        vec_shootx(x0, &v0, &ifr, 0, 1);
-        free_matrix(cov0, 1, np0, 1, np0);
-        free_vector(dev0, 1, np0);
-        free_vector(x0, 1, np0);
-        global_r = r0; build_y2_levels();
-        return 0;
+    /* ---- 1. the rung below: the ladder from the gate up (fit_r0_ladder) --- */
+    {
+        real ***F0 = tensor(1, (nf > 0 ? nf : 1), 1, M, 1, M);
+        real ***T0 = tensor(1, (q  > 0 ? q  : 1), 1, M, 1, M);
+        real **S0  = matrix(1, M, 1, M);
+        int s0 = M - r0, a, b;
+        real s11;
+        for (k = 1; k <= (nf > 0 ? nf : 1); k++) for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) F0[k][i][j] = 0.0;
+        for (k = 1; k <= (q  > 0 ? q  : 1); k++) for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) T0[k][i][j] = 0.0;
+        if (!fit_r0_ladder(F0, T0, S0, &gate_seed_ll0, 1)) {
+            fprintf(outputv, "\n-seedgate: the ladder below the rank did not converge; "
+                             "falling back to the cold start.\n");
+            if (!quiet_mode)
+                printf("  ladder: the r = 0 rungs did not converge; carrying on cold\n");
+            free_tensor(F0, 1, (nf > 0 ? nf : 1), 1, M, 1, M);
+            free_tensor(T0, 1, (q  > 0 ? q  : 1), 1, M, 1, M);
+            free_matrix(S0, 1, M, 1, M);
+            return 0;
+        }
+        /*  BUG-32.  The r = 0 optimum is in the .inp's order -- at r = 0 that
+         *  is the engine's too -- but at r0 > 0 the cast reads F, Theta and
+         *  Sigma in the INTERNAL order [Y1 ; Y2]: internal a is .inp s0 + a
+         *  for a <= r0, and a - r0 after.  Copying them straight, as this did,
+         *  held another model: on mink-muskrat the profiled start was -60.37
+         *  where the permuted one is -1.37, above the r = 0 rung itself.
+         *  Sigma is then renormalised so that its [1][1] -- now Y1's -- is 1,
+         *  which is the convention of the parameter vector (the scale is
+         *  concentrated, so the likelihood does not see it).                */
+        #define PERM(z) ((z) <= r0 ? s0 + (z) : (z) - r0)
+        hold_M = M; hold_nf = nf; hold_q = q;
+        hold_F  = tensor(1, (nf > 0 ? nf : 1), 1, M, 1, M);
+        hold_Th = tensor(1, (q  > 0 ? q  : 1), 1, M, 1, M);
+        hold_S  = matrix(1, M, 1, M);
+        for (k = 1; k <= (nf > 0 ? nf : 1); k++)
+            for (a = 1; a <= M; a++) for (b = 1; b <= M; b++)
+                hold_F[k][a][b] = (k <= nf) ? F0[k][PERM(a)][PERM(b)] : 0.0;
+        for (k = 1; k <= (q > 0 ? q : 1); k++)
+            for (a = 1; a <= M; a++) for (b = 1; b <= M; b++)
+                hold_Th[k][a][b] = (k <= q) ? T0[k][PERM(a)][PERM(b)] : 0.0;
+        s11 = S0[PERM(1)][PERM(1)];
+        if (s11 <= 1e-24) s11 = 1.0;
+        for (a = 1; a <= M; a++) for (b = 1; b <= M; b++)
+            hold_S[a][b] = S0[PERM(a)][PERM(b)] / s11;
+        #undef PERM
+        free_tensor(F0, 1, (nf > 0 ? nf : 1), 1, M, 1, M);
+        free_tensor(T0, 1, (q  > 0 ? q  : 1), 1, M, 1, M);
+        free_matrix(S0, 1, M, 1, M);
     }
-    gate_seed_ll0 = v0.logelf;
-
-    /*  Recover the fit into the structures: est() leaves the last evaluation,
-     *  which need not be the final point.                                    */
-    vec_shootx(x0, &v0, &ifr, 0, 0);
-
-    /*  WITH r = 0 THE COORDINATES ARE THE SAME, which is why this can be read
-     *  straight off the fit instead of taking x0 apart again: Cbar and Cinv
-     *  collapse to the identity and Hbar to zero (vec_shootx [4]), so that
-     *  Phi*_k = F_k, Theta*_k = Theta_k and Sigma* = Sigma, term by term.
-     *  It is the same property the gate lives off.                           */
-    hold_M = M; hold_nf = nf; hold_q = q;
-    hold_F  = tensor(1, (nf > 0 ? nf : 1), 1, M, 1, M);
-    hold_Th = tensor(1, (q  > 0 ? q  : 1), 1, M, 1, M);
-    hold_S  = matrix(1, M, 1, M);
-    for (k = 1; k <= (nf > 0 ? nf : 1); k++)
-        for (i = 1; i <= M; i++) for (j = 1; j <= M; j++)
-            hold_F[k][i][j] = (k <= nf) ? v0.phi[k][i][j] : 0.0;
-    for (k = 1; k <= (q > 0 ? q : 1); k++)
-        for (i = 1; i <= M; i++) for (j = 1; j <= M; j++)
-            hold_Th[k][i][j] = (k <= q) ? v0.theta[k][i][j] : 0.0;
-    for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) hold_S[i][j] = v0.qq[i][j];
-
-    vec_shootx(x0, &v0, &ifr, 0, 1);
-    free_matrix(cov0, 1, np0, 1, np0);
-    free_vector(dev0, 1, np0);
-    free_vector(x0, 1, np0);
+    /*  BUG-32 (b).  Nothing above may leave the rank-r0 state changed: the
+     *  ladder ran init_guess at r = 0, which reallocates B2_fixed (a fixed B2
+     *  came back as 0) and republishes cond_resid.  One init_guess at r0 into
+     *  a scratch vector restores both, from the same data and flags.        */
+    global_r = r0;
+    build_y2_levels();
+    {
+        real *xs = vector(1, npar);
+        init_guess(xs, npar);
+        free_vector(xs, 1, npar);
+    }
 
     /* ---- 2. the conditional step: only the mean, Lambda and B2 ------------ */
     global_r = r0;
@@ -7735,6 +8019,7 @@ static int run_lrtest(void)
         int  *npr = ivector(0, M - 1);
         int  *good = ivector(0, M - 1);
         int  *tcr = ivector(0, M - 1);   /* how each rank's winning fit stopped */
+        int  *bnd = ivector(0, M - 1);   /* 1 if its MA sits on the boundary (BUG-49) */
 
         fprintf(outputv, "\n=== Sequential LR test for the cointegration rank ===\n");
         printf("\nSequential LR test for the cointegration rank:\n");
@@ -7761,6 +8046,10 @@ static int run_lrtest(void)
             /*  P12: every rank is the best of several starts, and -multistart
              *  is honoured here too (BUG-25).                               */
             init_guess(xr, np);
+            /*  P12: the ladder as the start of every rank >= 1; the rungs
+             *  below the rank are computed once and cached.               */
+            if (rr > 0 && ladder_wanted())
+                gate_profile_seed(xr, np);
             fprintf(outputv, "\n--- rank r = %d ---\n", rr);
             ifr = fit_search(xr, np, devr, covr, &llr, &s2r,
                              (global_multistart > 1) ? global_multistart : 1,
@@ -7770,6 +8059,15 @@ static int run_lrtest(void)
             npr[rr]  = np;
             ll[rr]   = ok ? llr : 0.0;
             tcr[rr]  = ok ? so.tc : 0;
+            bnd[rr]  = 0;
+            if (ok && global_q > 0) {
+                struct Tvarma vb; int ifb = 0; real mm = 1.0e12;
+                vb.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
+                vec_shootx(xr, &vb, &ifb, 1, 0);
+                if (ifb == 0) report_operator_roots("", vb.theta, vb.m, vb.q, &mm, 1);
+                vec_shootx(xr, &vb, &ifb, 0, 1);
+                bnd[rr] = (mm < 1.0001);
+            }
             printf("  r = %d : %s (ifault=%d; %d starts, best `%s')\n", rr,
                    ok ? "ok" : "estimation failed", ifr, so.ntried, so.label);
             if (global_boot > 0 && ok) {
@@ -7847,6 +8145,9 @@ static int run_lrtest(void)
              *  printed, but not without saying so (BUG-25).  tc 3 is often a
              *  true optimum on a flat surface (CONVERGENCE.md): read the search
              *  table of that rank before trusting the verdict.             */
+            if (bnd[rr] || bnd[rr+1])
+                fprintf(outputv, "   [MA on the boundary at rank %d: no known distribution]",
+                        bnd[rr] ? rr : rr + 1);
             if ((tcr[rr] > 2) || (tcr[rr+1] > 2))
                 fprintf(outputv, "   [check: rank %d stopped by criterion %d]",
                         (tcr[rr] > 2) ? rr : rr + 1,
@@ -7941,6 +8242,7 @@ static int run_lrtest(void)
 
         free_ivector(good, 0, M - 1);
         free_ivector(tcr, 0, M - 1);
+        free_ivector(bnd, 0, M - 1);
         free_ivector(npr, 0, M - 1);
         free_vector(ll, 0, M - 1);
         printf("Done. Output written to %s\n", base_name);
@@ -8032,6 +8334,7 @@ static const struct opt_spec {
     { "-seed",        A_STR,      "pfx"  },
     { "-seedybar",    A_STR,      "pfx"  },
     { "-seedgate",    A_NONE,     NULL   },
+    { "-noladder",    A_NONE,     NULL   },
     { "-seedjoh",     A_NONE,     NULL   },
     { "-seedb2",      A_REAL,     "v"    },
     { "-interv",      A_STR,      "pfx"  },
@@ -8479,6 +8782,7 @@ static int parse_cli(int argc, char *argv[])
         else if (strcmp(argv[i], "-lrtest") == 0)  global_lrtest = 1;
         else if (strcmp(argv[i], "-rungs") == 0)   global_rungs = 1;
         else if (strcmp(argv[i], "-seedgate") == 0) global_seedgate = 1;
+        else if (strcmp(argv[i], "-noladder") == 0) global_noladder = 1;
         else if (strcmp(argv[i], "-seedjoh") == 0)  global_seedjoh = 1;
         else if (strcmp(argv[i], "-mawarma") == 0)  global_mawarma = 1;
         else if (strcmp(argv[i], "-matri") == 0)    global_matri = 1;
@@ -9086,7 +9390,10 @@ int main(int argc, char *argv[])
         if (ntail_ == 0)
             fprintf(stderr, "WARNING: -seedb2 does nothing with -fixb2 or r = 0\n");
     }
-    if (global_seedgate) gate_profile_seed(x, npar);
+    /*  P12: the ladder is the default start (the suite's convention: from
+     *  the certified gate, rung by rung, then route (B) across the rank).   */
+    if (ladder_wanted() && global_r > 0)
+        gate_profile_seed(x, npar);
 
     /* -writeres: the residuals of the conditional regression, which is what
        init_guess has just published.  It is a mode and ends here.             */

@@ -33,8 +33,6 @@ typedef struct Fuf {
     GtkWidget *horizonte;      /* cuantos periodos                        */
     GtkWidget *b_prever;
     GtkWidget *b_grafico;
-    GtkWidget *libro;          /* Previsión | Output                      */
-    GtkWidget *tabla;          /* la prevision, leida del .out            */
     GtkWidget *salida;         /* el .out ENTERO, que es el informe       */
     GtkWidget *consola;        /* la orden y lo que el motor va diciendo  */
     GtkWidget *estado;
@@ -46,9 +44,6 @@ typedef struct Fuf {
 
     EngineJob *job;
 } Fuf;
-
-/* Las columnas de la tabla. */
-enum { FC_FECHA, FC_NIVEL, FC_SD, FC_VAR, FC_ANUAL, FC_N };
 
 GtkWidget *fuf_ventana_nueva( GtkApplication *app, Fuf *f );
 void       fuf_di( Fuf *f, const char *fmt, ... ) G_GNUC_PRINTF( 2, 3 );

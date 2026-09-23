@@ -123,22 +123,26 @@ especificación que el fichero declara — la regla que ya costó la opción `-B
 fug. Así que `fuf_gui` **edita esa línea del fichero** y después corre el motor
 sin decirle nada más.
 
-### 4.3 La tabla y el informe son dos vistas de lo mismo
+### 4.3 Lo que se carga es el informe, y nada más
 
 > «El tab de previsión de fuf anterior mostraba el output de fuf. Eso estaba
-> bien y debería hacerlo. Además mostraba el informe de previsión completo, y
-> debería hacerlo igual.»
+> bien y debería hacerlo. Además mostraba el informe de previsión completo.»
 
-La tabla es el informe **destilado**: las filas previstas y cuatro números. Va
-bien para leer la previsión de un vistazo, y se deja por el camino todo lo
-demás que el motor dice — la cabecera, los parámetros con que previó, la
-columna de error, las observaciones con que empalma el gráfico. Eso también
-hay que poder leerlo: **eso es el informe.**
+> «No quiero que se cargue esa serie que has creado. Quiero que se cargue
+> solamente el `.output`.»
 
-Así que van los dos, en pestañas —«Previsión» y «Output»—, con la consola
-debajo. Es la misma forma que el editor del `.inp` y por la misma razón: dos
-vistas del mismo objeto se alternan; lo que pasa mientras tanto tiene que
-verse a la vez.
+Hubo aquí una tabla que destilaba la previsión en cinco columnas. La quité: el
+motor ya escribe el informe **entero y bien**, y resumirlo era ofrecer una
+segunda versión de lo mismo — con la pregunta, en cuanto no coincidan, de cuál
+de las dos manda.
+
+Se carga el `.out`, tal cual, en monoespaciado —su tabla está dibujada con
+espacios—. Es lo que hacía el módulo anterior al acabar de correr fuf, y ya
+estaba bien.
+
+De `lib/outfcst` se sigue usando **el origen**, que va a la barra de estado.
+Eso no es otra versión del informe: es saber desde dónde se previó sin tener
+que buscarlo con los ojos.
 
 ### 4.3bis El informe es el PDF, y eso ya estaba resuelto
 

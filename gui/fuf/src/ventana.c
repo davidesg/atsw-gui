@@ -113,8 +113,6 @@ static void acabo_fuf( const EngineResult *r, gpointer d )
         {
         fuf_trae_out( f );
         informe_hay( f );
-        /* La previsión es lo que se iba a mirar: se pone delante sola. */
-        gtk_notebook_set_current_page( GTK_NOTEBOOK(f->libro), 0 );
         }
     else fuf_di( f, "%s", r->message ? r->message : "fuf no terminó." );
 }
@@ -239,14 +237,6 @@ static void on_abrir( GtkButton *b, Fuf *f )
 /* La ventana                                                                */
 /* ------------------------------------------------------------------------ */
 
-static void columna( GtkWidget *tv, const char *t, int c )
-{
-    GtkCellRenderer *r = gtk_cell_renderer_text_new();
-
-    g_object_set( r, "family", "monospace", NULL );
-    gtk_tree_view_insert_column_with_attributes( GTK_TREE_VIEW(tv), -1, t, r,
-                                                 "text", c, NULL );
-}
 
 static GtkWidget *monoespaciado( void )
 {
@@ -276,8 +266,7 @@ static GtkWidget *en_scroll( GtkWidget *w )
 
 GtkWidget *fuf_ventana_nueva( GtkApplication *app, Fuf *f )
 {
-    GtkWidget    *raiz, *barra, *pan, *b;
-    GtkListStore *st;
+    GtkWidget *raiz, *barra, *pan, *b;
 
     f->ventana = gtk_application_window_new( app );
     gtk_window_set_title( GTK_WINDOW(f->ventana), "fuf — previsión" );
@@ -327,42 +316,21 @@ GtkWidget *fuf_ventana_nueva( GtkApplication *app, Fuf *f )
     pan = gtk_paned_new( GTK_ORIENTATION_VERTICAL );
     gtk_box_pack_start( GTK_BOX(raiz), pan, TRUE, TRUE, 0 );
 
-    /* ARRIBA LO QUE SE MIRA, ABAJO LO QUE PASA -- la misma forma que el
-     * editor del .inp, y por la misma razón: la tabla y el informe son dos
-     * vistas de LO MISMO, así que se alternan; la consola es otra cosa y
-     * tiene que verse a la vez que cualquiera de las dos.              */
-    f->libro = gtk_notebook_new();
-    gtk_paned_pack1( GTK_PANED(pan), f->libro, TRUE, FALSE );
-
-    st = gtk_list_store_new( FC_N, G_TYPE_STRING, G_TYPE_STRING,
-                             G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING );
-    f->tabla = gtk_tree_view_new_with_model( GTK_TREE_MODEL(st) );
-    g_object_unref( st );
-    columna( f->tabla, "Fecha",   FC_FECHA );
-    columna( f->tabla, "Nivel",   FC_NIVEL );
-    columna( f->tabla, "d.t.",    FC_SD );
-    columna( f->tabla, "Var.",    FC_VAR );
-    columna( f->tabla, "Anual",   FC_ANUAL );
-    gtk_widget_set_tooltip_text( f->tabla,
-        "SÓLO lo previsto, destilado. El motor imprime también las "
-        "observaciones anteriores al origen para que el gráfico empalme; "
-        "ponerlas aquí sería decir que se previeron.\n\nEl informe entero "
-        "está en la otra pestaña.\n\nLas bandas son TEÓRICAS: dicen lo que "
-        "el modelo implica si el modelo es cierto." );
-    gtk_notebook_append_page( GTK_NOTEBOOK(f->libro),
-                              en_scroll( f->tabla ),
-                              gtk_label_new( "Previsión" ) );
-
-    /* EL INFORME ENTERO, tal cual lo escribió el motor. La tabla resume, y
-     * resumir pierde: la cabecera, los parámetros con que previó, la
-     * columna de error y las observaciones con que empalma están aquí. */
+    /* EL INFORME, Y NADA MAS.
+     *
+     * Aqui hubo una tabla que destilaba la prevision en cinco columnas. La
+     * quite: era invencion mia sobre un informe que el motor ya escribe
+     * entero y bien. Resumir lo que otro ya dijo es ofrecer una segunda
+     * version de lo mismo, y entonces hay que mirar cual de las dos manda.
+     *
+     * Lo que se carga es el .out, tal cual. Es lo que hacia el modulo de
+     * antes al acabar de correr fuf.                                    */
     f->salida = monoespaciado();
     gtk_widget_set_tooltip_text( f->salida,
-        "El informe de fuf, sin resumir: lo que se lee aquí es lo que hay en "
-        "el .out." );
-    gtk_notebook_append_page( GTK_NOTEBOOK(f->libro),
-                              en_scroll( f->salida ),
-                              gtk_label_new( "Output" ) );
+        "El informe de fuf, tal cual: lo que se lee aquí es lo que hay en el "
+        ".out.\n\nLas bandas son TEÓRICAS: dicen lo que el modelo implica si "
+        "el modelo es cierto." );
+    gtk_paned_pack1( GTK_PANED(pan), en_scroll( f->salida ), TRUE, FALSE );
 
     f->consola = monoespaciado();
     gtk_widget_set_tooltip_text( f->consola,

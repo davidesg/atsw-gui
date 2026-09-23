@@ -123,31 +123,25 @@ int fuf_pon_horizonte( const char *inp, int h, char *why, size_t n )
 
 
 /* ------------------------------------------------------------------------ */
-/* La tabla, leida del .out                                                  */
+/* EL INFORME, TAL CUAL                                                      */
+/*                                                                           */
+/* Se carga el .out y ya. Hubo aqui una tabla que lo destilaba en cinco       */
+/* columnas, y la quite: el motor ya escribe el informe entero y bien, y      */
+/* resumirlo era ofrecer una segunda version de lo mismo -- con la pregunta   */
+/* de cual de las dos manda.                                                  */
+/*                                                                           */
+/* De lib/outfcst se sigue usando el origen, que va a la barra de estado: eso */
+/* no es una version del informe, es saber DESDE DONDE se previo sin tener    */
+/* que buscarlo con los ojos.                                                 */
 /* ------------------------------------------------------------------------ */
 
-/* EL .out ENTERO Y LA TABLA, QUE NO SON LO MISMO.
- *
- * La tabla es el informe DESTILADO: las filas previstas y cuatro numeros. Va
- * bien para leer la prevision de un vistazo, pero se deja por el camino todo
- * lo demas que el motor dice -- la cabecera, los parametros con que previo,
- * la columna de error, las observaciones con que empalma. Y eso tambien hay
- * que poder leerlo, que es el informe.
- *
- * Asi que van los dos, en pestañas: son dos vistas de LO MISMO. Es la forma
- * que ya tiene el editor del .inp, y por la misma razon.               */
 void fuf_trae_out( Fuf *f )
 {
-    GtkListStore *st = GTK_LIST_STORE( gtk_tree_view_get_model(
-                                           GTK_TREE_VIEW(f->tabla) ) );
     GtkTextBuffer *tb = gtk_text_view_get_buffer( GTK_TEXT_VIEW(f->salida) );
-    GtkTreeIter   it;
-    Forecast     *fc;
-    gchar        *txt = NULL, *out;
-    gsize         n = 0;
-    int           i, j;
-
-    gtk_list_store_clear( st );
+    Forecast      *fc;
+    gchar         *txt = NULL, *out;
+    gsize          n = 0;
+    int            i;
 
     out = g_strdup_printf( "%s/%s.out", f->dir, f->prev );
     if ( !g_file_get_contents( out, &txt, &n, NULL ) )
@@ -159,8 +153,6 @@ void fuf_trae_out( Fuf *f )
         }
     g_free( out );
 
-    /* EL INFORME, TAL CUAL LO ESCRIBIO EL MOTOR. Sin resumir: lo que se lee
-       aqui es lo que hay en el fichero.                                */
     gtk_text_buffer_set_text( tb, txt, (gint) n );
 
     fc = g_new0( Forecast, 1 );
@@ -168,34 +160,9 @@ void fuf_trae_out( Fuf *f )
     g_free( txt );
 
     for ( i = 0; i < fc->ns; i++ )
-        {
-        const OfSerie *s = &fc->s[i];
-
-        for ( j = 0; j < s->nf; j++ )
-            {
-            const OfFila *r = &s->f[j];
-            char nivel[32], sd[32], var[32], anual[32];
-
-            /* SOLO LO PREVISTO. Las filas de antes del origen son el pasado
-               --el motor las imprime para que el grafico empalme-- y
-               ponerlas en la tabla de previsiones seria decir que se
-               previeron.                                               */
-            if ( !r->tiene_sd ) continue;
-
-            g_snprintf( nivel, sizeof nivel, "%.4f", r->nivel );
-            g_snprintf( sd,    sizeof sd,    "%.4f", r->sd_nivel );
-            g_snprintf( var,   sizeof var,   "%.2f", r->var_per );
-            g_snprintf( anual, sizeof anual, "%.2f", r->var_anu );
-
-            gtk_list_store_append( st, &it );
-            gtk_list_store_set( st, &it,
-                FC_FECHA, r->fecha, FC_NIVEL, nivel, FC_SD, sd,
-                FC_VAR, var, FC_ANUAL, anual, -1 );
-            }
-
-        if ( s->origen[0] )
-            fuf_di( f, "%s: %d previsiones desde %s.",
-                    s->nombre, s->nprev, s->origen );
-        }
+        if ( fc->s[i].origen[0] )
+            fuf_di( f, "%s: %d previsiones desde %s, horizonte %d.",
+                    fc->s[i].nombre, fc->s[i].nprev, fc->s[i].origen,
+                    fc->s[i].lead );
     g_free( fc );
 }

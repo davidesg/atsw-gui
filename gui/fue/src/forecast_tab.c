@@ -2,6 +2,7 @@
 #include "engine.h"
 #include "utils.h"
 #include "preview.h"
+#include "inpcheck.h"
 #include <glib/gstdio.h>
 #include <string.h>
 #include <errno.h>
@@ -270,37 +271,79 @@ static void open_pdf_file(const char *pdf_path) {
 /* ------------------------------------------------------------------------- */
 static void on_forecast_load_clicked(GtkButton *btn, FueContext *ctx) {
     char *filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(ctx->forecast_file_chooser));
+    char  why[512];
+    char *dir = NULL, *base = NULL, *punto, *fuf_inp = NULL, *out = NULL;
+
+    (void) btn;
     if (!filename) {
         gtk_label_set_text(GTK_LABEL(ctx->forecast_status_label), "No file selected.");
         return;
     }
-    if (!inp_ok_to_load(ctx->main_window, filename, 1)) {
-        gtk_label_set_text(GTK_LABEL(ctx->forecast_status_label), "File not loaded.");
-        gtk_file_chooser_unselect_all(GTK_FILE_CHOOSER(ctx->forecast_file_chooser));
-        g_free(filename);
-        return;
-    }
-    /* LA ENTRADA, Y SU INFORME SI YA LO TIENE.
-     *
-     * Van en pareja: el .out de al lado es el de ESTA entrada, y traerlo
-     * ahorra volver a correr el motor para ver lo que ya se corrió. Si no
-     * existe, la hoja del informe se queda con lo que hubiera -- que es
-     * mejor que vaciarla, porque vaciarla no dice nada.               */
-    {
-    char *dir  = g_path_get_dirname(filename);
-    char *base = g_path_get_basename(filename);
-    char *punto = strrchr(base, '.');
-    char *out;
 
+    dir  = g_path_get_dirname(filename);
+    base = g_path_get_basename(filename);
+    punto = strrchr(base, '.');
     if (punto) *punto = '\0';
-    out = g_strdup_printf("%s/%s.out", dir, base);
 
-    forecast_muestra(ctx, filename,
+    /* DOS COSAS DISTINTAS SE PUEDEN ELEGIR AQUI, Y LAS DOS SON RAZONABLES.
+     *
+     *   - un .inp DE fuf, que es una entrada de prevision ya hecha;
+     *   - o un MODELO --el .inp o el .pre de fue-- que es lo que uno tiene
+     *     a mano y de lo que quiere prever.
+     *
+     * Antes lo segundo se rechazaba con un dialogo MODAL de error ("not a
+     * forecast input file"), que ademas bloquea la ventana entera hasta que
+     * alguien lo encuentra y lo cierra. Y rechazarlo era lo peor que se
+     * podia hacer: la entrada de prevision NO LA ESCRIBE NADIE A MANO, la
+     * genera "fue -f" del modelo. Asi que si lo que hay es un modelo, se
+     * genera y se carga LA SUYA, que es lo que se estaba pidiendo.      */
+    if (inp_check_fuf(filename, why, sizeof(why)) == 0) {
+        fuf_inp = g_strdup(filename);
+    } else if (inp_check_fue(filename, why, sizeof(why)) == 0
+               || g_str_has_suffix(filename, ".pre")) {
+        EngineResult r;
+
+        gtk_label_set_text(GTK_LABEL(ctx->forecast_status_label),
+                           "Generating the forecast input with fue -f...");
+        r = engine_run(dir, "fue", base, "-f", NULL);
+        if (!engine_wrote_results(&r)) {
+            gtk_label_set_text(GTK_LABEL(ctx->forecast_status_label), r.message);
+            engine_result_clear(&r);
+            goto fin;
+        }
+        engine_result_clear(&r);
+
+        fuf_inp = g_strdup_printf("%s/forecast_%s.inp", dir, base);
+        if (!g_file_test(fuf_inp, G_FILE_TEST_EXISTS)) {
+            gtk_label_set_text(GTK_LABEL(ctx->forecast_status_label),
+                               "fue -f did not write the forecast input.");
+            goto fin;
+        }
+    } else {
+        /* NI UNA COSA NI LA OTRA, y se dice EN LA BARRA. Un modal para
+           esto deja la ventana bloqueada por un aviso que cabe en una
+           linea.                                                       */
+        gchar *msg = g_strdup_printf("Not a model nor a forecast input: %s", why);
+
+        gtk_label_set_text(GTK_LABEL(ctx->forecast_status_label), msg);
+        g_free(msg);
+        goto fin;
+    }
+
+    /* La entrada y, si ya existe al lado, su informe: van en pareja. */
+    {
+    char *b2 = g_path_get_basename(fuf_inp);
+    char *p2 = strrchr(b2, '.');
+
+    if (p2) *p2 = '\0';
+    out = g_strdup_printf("%s/%s.out", dir, b2);
+    g_free(b2);
+    }
+    forecast_muestra(ctx, fuf_inp,
                      g_file_test(out, G_FILE_TEST_EXISTS) ? out : NULL);
 
-    g_free(out); g_free(base); g_free(dir);
-    }
-    g_free(filename);
+fin:
+    g_free(out); g_free(fuf_inp); g_free(base); g_free(dir); g_free(filename);
 }
 
 /* ------------------------------------------------------------------------- */

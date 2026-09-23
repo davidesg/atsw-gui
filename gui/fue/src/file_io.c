@@ -10,7 +10,6 @@
 #include <stdarg.h>
 #include <string.h>
 #include <errno.h>
-#include "forecast_tab.h"   // para acceder a los widgets de Forecast
 #include "engine.h"         // ejecutar fue/fuf sin shell, con sus codigos
 #include "preview.h"        // la ventana de graficos
 #include "outfile.h"        // lo que se lee del .out
@@ -1364,92 +1363,6 @@ void on_view_output(GtkWidget *widget, FueContext *ctx) {
 
 /* file_io.c – añadir al final, después de las funciones existentes */
 
-void on_forecast_button_clicked(GtkToolButton *btn, FueContext *ctx) {
-    const char *base_name = gtk_entry_get_text(GTK_ENTRY(ctx->input_name_entry));
-    if (!base_name || strlen(base_name) == 0) {
-        gtk_label_set_text(GTK_LABEL(ctx->status_label), "No model name provided.");
-        return;
-    }
-    char *workspace = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(ctx->workspace_file_chooser));
-    if (!workspace) {
-        gtk_label_set_text(GTK_LABEL(ctx->status_label), "No workspace folder selected.");
-        return;
-    }
-
-    // 1) Ejecutar fue -f para generar forecast_<base>.inp
-    gtk_label_set_text(GTK_LABEL(ctx->status_label), "Generating forecast input file...");
-    {
-    EngineResult r = engine_run(workspace, "fue", base_name, "-f", NULL);
-    if (!engine_wrote_results(&r)) {
-        gtk_label_set_text(GTK_LABEL(ctx->status_label), r.message);
-        show_engine_output(ctx, &r);
-        engine_result_clear(&r);
-        g_free(workspace);
-        return;
-    }
-    engine_result_clear(&r);
-    }
-
-    // 2) Construir el nombre base del archivo generado (sin extensión)
-    char *forecast_base = g_strdup_printf("forecast_%s", base_name);
-    // Ruta completa del archivo .inp generado
-    char *forecast_inp_filename = g_strdup_printf("%s.inp", forecast_base);
-    char *forecast_inp_path = g_build_filename(workspace, forecast_inp_filename, NULL);
-    g_free(forecast_inp_filename);
-    if (!g_file_test(forecast_inp_path, G_FILE_TEST_EXISTS)) {
-        gtk_label_set_text(GTK_LABEL(ctx->status_label), "forecast_*.inp not generated.");
-        g_free(forecast_base);
-        g_free(forecast_inp_path);
-        g_free(workspace);
-        return;
-    }
-
-    // 3) Ejecutar fuf sobre forecast_<base>
-    gtk_label_set_text(GTK_LABEL(ctx->status_label), "Running FUF forecast...");
-    {
-    EngineResult r = engine_run(workspace, "fuf", forecast_base, NULL);
-    if (!engine_wrote_results(&r)) {
-        gtk_label_set_text(GTK_LABEL(ctx->status_label), r.message);
-        show_engine_output(ctx, &r);
-        engine_result_clear(&r);
-        g_free(forecast_base);
-        g_free(forecast_inp_path);
-        g_free(workspace);
-        return;
-    }
-    engine_result_clear(&r);
-    }
-
-    // 4) Construir ruta del archivo .out generado
-    char *forecast_out_filename = g_strdup_printf("%s.out", forecast_base);
-    char *out_path = g_build_filename(workspace, forecast_out_filename, NULL);
-    g_free(forecast_out_filename);
-
-    if (g_file_test(out_path, G_FILE_TEST_EXISTS)) {
-        // Actualizar el estado interno de Forecast con la ruta completa del .inp generado
-        set_current_inp_from_path(ctx, forecast_inp_path);
-        // Cargar el contenido del .out en el editor de Forecast
-        load_file_to_editor(ctx, out_path);
-        gtk_label_set_text(GTK_LABEL(ctx->forecast_status_label), "Forecast completed. Output loaded.");
-        gtk_label_set_text(GTK_LABEL(ctx->status_label), "Forecast finished successfully.");
-    } else {
-        gtk_label_set_text(GTK_LABEL(ctx->status_label), "Forecast output file not found.");
-    }
-
-    // Cambiar a la pestaña Forecast (opcional, buscar por widget)
-    GtkWidget *notebook = gtk_widget_get_ancestor(ctx->forecast_editor, GTK_TYPE_NOTEBOOK);
-    if (notebook) {
-        int page_num = gtk_notebook_page_num(GTK_NOTEBOOK(notebook),
-                        gtk_widget_get_parent(ctx->forecast_editor));
-        if (page_num >= 0)
-            gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), page_num);
-    }
-
-    g_free(out_path);
-    g_free(forecast_inp_path);
-    g_free(forecast_base);
-    g_free(workspace);
-}
 
 /* ========================================================================= */
 /* La ventana de graficos (src/preview.c) pide esto al programa que la usa   */

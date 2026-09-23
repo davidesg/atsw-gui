@@ -60,17 +60,8 @@ typedef struct {
     GtkWidget *esp_op_dialog;
     GtkWidget *esp_fix_dialog;
 
-    /* Forecast tab widgets */
-    GtkWidget *forecast_file_chooser;
-    GtkWidget *forecast_load_button;
-    GtkWidget *forecast_save_inp_button;
-    GtkWidget *forecast_run_button;
-    GtkWidget *forecast_view_pdf_button;
-    GtkWidget *forecast_editor;
-    GtkWidget *forecast_status_label;
-    char *forecast_current_base;          /* nombre base sin extensión */
-    char *forecast_current_inp_path;      /* ruta completa del último .inp guardado */
-    char *forecast_loaded_path;           /* ruta del último archivo cargado (puede ser .pre) */
+    /* La pestaña «Forecast» se fue a gui/fuf: fuf es otro motor y el taller
+       tiene un GUI por motor. Con ella se van sus widgets.            */
     /* Console tab widgets */
     GtkWidget *console_text_view;
     /* Que se esta editando en la consola. Mientras esto no sea NULL, el

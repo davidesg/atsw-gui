@@ -143,15 +143,49 @@ static void evaluacion( const char *path )
    }
 }
 
+/* EL MISMO LECTOR PARA LOS DOS MOTORES.
+ *
+ * drtran y fuf emiten la misma tabla de prevision --es el formato de
+ * fuf/forsil-- pero el horizonte lo rotulan distinto:
+ *
+ *   drtran:  FORECAST ORIGIN : 12/2021   LEAD TIME: 24
+ *   fuf:     FORECAST ORIGIN : 12/2021
+ *            LEAD TIME FOR FORECASTING: 24
+ *
+ * Se lee por los dos puntos, no por la frase entera: la etiqueta es del motor
+ * y no vamos a pedirle que la cambie -- lo que no puede es obligarnos a tener
+ * dos lectores de lo mismo.                                              */
+static void prevision_de_fuf( const char *path )
+{
+   Forecast f;
+
+   printf( "\nLA PREVISION DE fuf, CON EL MISMO LECTOR\n" );
+   if ( of_parse_file( path, &f ) != 0 )
+       { printf( "  (sin %s: me la salto)\n", path ); return; }
+
+   ok( f.ns == 1, "una serie" );
+   if ( f.ns < 1 ) return;
+   ok( f.s[0].nombre[0] != '\0', "con su nombre" );
+   ok( strcmp( f.s[0].origen, "12/2021" ) == 0,
+       "el ORIGEN, que fuf pone en su linea" );
+   ok( f.s[0].lead == 24,
+       "y el HORIZONTE, que lo rotula distinto que drtran" );
+   ok( f.s[0].nprev == 24 || f.s[0].nprev > 0,
+       "las filas previstas se distinguen de las observadas" );
+   ok( f.s[0].nf > f.s[0].nprev,
+       "y el .out trae tambien el pasado, para que el grafico empalme" );
+}
+
 int main( int argc, char **argv )
 {
    if ( argc < 2 ) {
-      fprintf( stderr, "uso: test_outfcst <.out con -f> [<.out con -estwin -C>]\n" );
+      fprintf( stderr, "uso: test_outfcst <.out con -f> [<.out con -estwin -C>] [<.out de fuf>]\n" );
       return 2;
    }
 
    prevision( argv[1] );
    if ( argc >= 3 ) evaluacion( argv[2] );
+   if ( argc >= 4 ) prevision_de_fuf( argv[3] );
 
    printf( "\n%d fallos\n", fallos );
    return fallos ? 1 : 0;

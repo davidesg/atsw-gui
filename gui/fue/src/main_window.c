@@ -9,7 +9,6 @@ const char *fue_raiz_proyecto(void);
 #include "file_io.h"
 #include "deterministic_dialog.h"
 #include "operator_dialog.h"
-#include "forecast_tab.h"
 
 /* Forward declarations of helper functions for building tabs */
 static GtkWidget* create_data_input_tab(FueContext *ctx);
@@ -82,11 +81,6 @@ GtkWidget* create_main_window(GtkApplication *app, FueContext *ctx) {
     g_signal_connect(view_out_btn, "clicked", G_CALLBACK(on_view_output), ctx);
     gtk_toolbar_insert(GTK_TOOLBAR(toolbar), view_out_btn, -1);
 
-    GtkToolItem *forecast_btn = gtk_tool_button_new(NULL, "Forecast");
-    gtk_tool_button_set_icon_name(GTK_TOOL_BUTTON(forecast_btn), "go-jump");
-    gtk_widget_set_tooltip_text(GTK_WIDGET(forecast_btn), "Generate forecast input and run FUF");
-    g_signal_connect(forecast_btn, "clicked", G_CALLBACK(on_forecast_button_clicked), ctx);
-    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), forecast_btn, -1);
 
     GtkToolItem *sep2 = gtk_separator_tool_item_new();
     gtk_toolbar_insert(GTK_TOOLBAR(toolbar), sep2, -1);
@@ -121,8 +115,15 @@ GtkWidget* create_main_window(GtkApplication *app, FueContext *ctx) {
     gtk_notebook_append_page(GTK_NOTEBOOK(model_notebook), console_tab, gtk_label_new("Console"));
     ctx->notebook = model_notebook;
 
-    GtkWidget *forecast_tab = create_forecast_tab(ctx);
-    gtk_notebook_append_page(GTK_NOTEBOOK(model_notebook), forecast_tab, gtk_label_new("Forecast"));
+    /* AQUI ESTABA LA PESTAÑA «Forecast», y se ha ido a gui/fuf.
+     *
+     * fuf es OTRO MOTOR, y el taller tiene un GUI por motor: fue_gui estima,
+     * gtk_fmg identifica, fuf_gui prevé, y la madre orquesta. Dentro de aqui
+     * estaba estrecha --una prevision tiene origen, horizonte, bandas, tabla
+     * y grafico-- y ademas dejaba los ficheros «en el area de trabajo», que
+     * no es el sitio de nadie. Ahora caen al lado del modelo.
+     *
+     * Ver docs/DISENO-prevision.md.                                     */
 
     /* --- Paned vertical para separar notebook (arriba) y área de salida (abajo) --- */
     GtkWidget *paned = gtk_paned_new(GTK_ORIENTATION_VERTICAL);

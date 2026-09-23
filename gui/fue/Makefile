@@ -211,10 +211,9 @@ help:
 # Header dependencies (explicit)
 $(BUILD_DIR)/data_handling.o: include/data_handling.h include/fue_globals.h include/file_io.h include/model_spec.h $(LIB_DIR)/utils/utils.h
 $(BUILD_DIR)/deterministic_dialog.o: include/deterministic_dialog.h include/fue_globals.h $(LIB_DIR)/utils/utils.h
-$(BUILD_DIR)/file_io.o: include/file_io.h include/fue_globals.h include/model_spec.h $(LIB_DIR)/utils/utils.h include/forecast_tab.h
-$(BUILD_DIR)/forecast_tab.o: include/forecast_tab.h include/fue_globals.h
+$(BUILD_DIR)/file_io.o: include/file_io.h include/fue_globals.h include/model_spec.h $(LIB_DIR)/utils/utils.h
 $(BUILD_DIR)/main.o: include/main_window.h include/fue_globals.h include/data_handling.h include/model_spec.h include/deterministic_dialog.h include/operator_dialog.h include/file_io.h
-$(BUILD_DIR)/main_window.o: include/main_window.h include/fue_globals.h include/data_handling.h include/model_spec.h include/file_io.h include/deterministic_dialog.h include/operator_dialog.h include/forecast_tab.h
+$(BUILD_DIR)/main_window.o: include/main_window.h include/fue_globals.h include/data_handling.h include/model_spec.h include/file_io.h include/deterministic_dialog.h include/operator_dialog.h
 $(BUILD_DIR)/model_globals.o: include/fue_globals.h include/nlutils.h
 $(BUILD_DIR)/model_spec.o: include/model_spec.h include/fue_globals.h
 $(BUILD_DIR)/nlutils.o: include/nlutils.h

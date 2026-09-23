@@ -17,7 +17,7 @@
 #   make clean
 
 MOTORES = engines/fue engines/fuf engines/fug engines/drtran engines/drvarma
-GUIS    = gui/fue gui/fug gui/drtran gui/atsw
+GUIS    = gui/fue gui/fug gui/fuf gui/drtran gui/atsw
 
 # Las baterias, en el orden en que conviene leerlas: primero los motores
 # --si el motor no cumple, lo de arriba no significa nada-- y despues los

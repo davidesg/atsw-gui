@@ -324,6 +324,7 @@ $CC -O2 -Wall -Wextra -I"$TOP/../atsw/include" -I"$L/datos" -I"$L/xlsx" \
     $(pkg-config --cflags gtk+-3.0) \
     "$TOP/../atsw/tests/test_genera.c" "$TOP/../atsw/src/genera.c" \
     "$L/datos/datos.c" "$L/xlsx/xlsx.c" "$L/proyecto/proyecto.c" \
+    "$L/outdiag/outdiag.c" "$L/dates/dates.c" \
     "$TOP/../../engines/fug/src/inpfile.c" \
     -I"$TOP/../../engines/fug/src" \
     -o "$W/test_genera" $(pkg-config --libs gtk+-3.0) -lz -lm || exit 1

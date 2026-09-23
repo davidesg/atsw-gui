@@ -18,9 +18,13 @@
 #include <stdlib.h>
 #include <math.h>
 
-#include "datos.h"
+#include <glib.h>
+#include <glib/gstdio.h>
 
-int atsw_hasta_n( int freq, int anio, int per, int nobs, const char *hasta );
+#include "datos.h"
+#include "atsw.h"
+
+
 
 static int fallos = 0;
 
@@ -84,8 +88,21 @@ int main( int argc, char **argv )
     esn( atsw_hasta_n( 1, 1980, 0, 40, "1989" ), 10, "anual" );
     esn( atsw_hasta_n( 0, 0, 0, 367, "12/2019" ), 367,
          "sin fechas no se puede cortar: se dan todas" );
-    esn( atsw_hasta_n( 12, 1996, 1, 367, "esto no es una fecha" ), 367,
-         "y lo que no es una fecha tampoco corta" );
+    /* LO QUE NO SE ENTIENDE ES -1, NO «TODO».
+     *
+     * Antes devolvia nobs, asi que «2019-12» daba la muestra entera en
+     * silencio: se declaraba una ventana hasta 2019 y se estimaba sobre
+     * todo. Tres cosas distintas contestaban lo mismo.             */
+    esn( atsw_hasta_n( 12, 1996, 1, 367, "esto no es una fecha" ), -1,
+         "lo que no es una fecha se RECHAZA" );
+    esn( atsw_hasta_n( 12, 1996, 1, 367, "2019-12" ), -1,
+         "y el formato de al lado también: era el que engañaba" );
+    esn( atsw_hasta_n( 12, 1996, 1, 367, "12/2019xyz" ), -1,
+         "ni con basura detrás, que sscanf daba por buena" );
+    esn( atsw_hasta_n( 12, 1996, 1, 367, "13/2019" ), -1,
+         "13 no es un mes" );
+    esn( atsw_hasta_n( 4, 2000, 1, 40, "5/2005" ), -1,
+         "ni 5 un trimestre" );
 
     printf( "\nEL IDA Y VUELTA DEL .csv\n" );
     d = calloc( 1, sizeof *d );
@@ -130,6 +147,64 @@ int main( int argc, char **argv )
     esn( z->freq, 0, "la frecuencia sigue siendo 0: no consta" );
     esn( z->nobs, 40, "y los datos estan todos" );
     free( z );
+    }
+
+    printf( "\nEL TRAMO DEL PROYECTO ES LA UNION DE LAS SERIES\n" );
+    {
+    /* Las muestras son DEL proyecto y los datos de CADA serie, asi que el
+       tramo que se ofrece tiene que ser el de todas juntas.          */
+    Proyecto *p = calloc( 1, sizeof *p );
+    PrError   pe;
+    AtTramo   t;
+    DtDatos  *x = calloc( 1, sizeof *x );
+    char      csv[1024];
+    int       k;
+
+    pr_nuevo( p, "P", "", dir );
+    snprintf( p->path, sizeof p->path, "%s/proyecto.yaml", dir );
+
+    /* CORTA: 1/2000 .. 12/2004 ; LARGA: 7/1996 .. 6/2010 */
+    for ( k = 0; k < 2; k++ )
+        {
+        const char *nom = k ? "LARGA" : "CORTA";
+
+        pr_serie_add( p, nom, &pe );
+        memset( x, 0, sizeof *x );
+        x->ncol = 1;
+        x->freq = 12;
+        x->anio = k ? 1996 : 2000;
+        x->per  = k ? 7 : 1;
+        x->nobs = k ? 168 : 60;
+        snprintf( x->nombre[0], DT_NOMBRE, "%s", nom );
+        atsw_csv_de( p, nom, csv, sizeof csv );
+        { char *dd = g_path_get_dirname( csv );
+          g_mkdir_with_parents( dd, 0700 ); g_free( dd ); }
+        dt_escribir( csv, x, &e );
+        }
+
+    ok( atsw_tramo( p, &t ) == 0, "se lee el tramo" );
+    esn( t.nseries, 2, "  de las dos series" );
+    esn( t.freq, 12, "  la frecuencia, que es una sola" );
+    ok( !t.mezcla, "  y no hay mezcla" );
+    esn( t.anio, 1996, "el comienzo es el MAS TEMPRANO: el año" );
+    esn( t.per, 7, "  y su periodo" );
+    esn( t.fin_anio, 2010, "y el final el MAS TARDIO: el año" );
+    esn( t.fin_per, 6, "  y su periodo" );
+
+    printf( "\nY UNA FRECUENCIA DISTINTA SE DETECTA, NO SE PROMEDIA\n" );
+    pr_serie_add( p, "TRIM", &pe );
+    memset( x, 0, sizeof *x );
+    x->ncol = 1; x->freq = 4; x->anio = 2000; x->per = 1; x->nobs = 40;
+    snprintf( x->nombre[0], DT_NOMBRE, "TRIM" );
+    atsw_csv_de( p, "TRIM", csv, sizeof csv );
+    { char *dd = g_path_get_dirname( csv );
+      g_mkdir_with_parents( dd, 0700 ); g_free( dd ); }
+    dt_escribir( csv, x, &e );
+
+    atsw_tramo( p, &t );
+    ok( t.mezcla, "se dice que las frecuencias no coinciden" );
+
+    free( x ); free( p );
     }
 
     free( d ); free( r );

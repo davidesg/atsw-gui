@@ -181,7 +181,35 @@ muestra, porque entonces el gesto de crear la primera no tendría dónde vivir
 
 **La hoja «+».** Definir una submuestra es exactamente el botón de hoja nueva.
 Mejor sitio que cualquier menú, y con la misma pregunta al crearla: hasta
-dónde, y por qué. Borrar una hoja **no borra modelos**: pregunta qué hacer con
+dónde, y por qué.
+
+**Las fechas no se escriben: se mueven.** Una fecha de esta escuela son *dos*
+números —período y año—, así que son dos controles con sus flechas, no una
+casilla de texto. El de período va `1..freq`, se ajusta solo a la frecuencia,
+desaparece en anual y **da la vuelta**: subir de 12 pone 1 y suma un año. Los
+dos vienen rellenos con el principio y el final reales, así que declarar una
+muestra es *mover* algo que ya vale, no escribirlo desde cero.
+
+No es comodidad. Escribir `2019-12` en vez de `12/2019` hacía que la ventana
+**no se aplicara y se estimara sobre la muestra entera, en silencio**: tres
+cosas distintas —sin ventana, fecha ilegible, fecha fuera de rango— estaban
+contestando lo mismo. Ahora una fecha que no se entiende es un error con su
+mensaje, y los controles hacen que no pueda haberla.
+
+**El tramo es la UNIÓN de las series.** Las muestras son del proyecto y los
+datos son de cada serie, así que se ofrece la más temprana y la más tardía, y
+el diálogo dice de qué tramo habla: *«Los datos van de 1/1996 a 7/2026
+(mensual, 5 series)»*. El rango de los controles no puede ser magia.
+
+**Y un proyecto es de UNA frecuencia**, comprobado al importar:
+
+> «Un proyecto por frecuencia es lo correcto. Luego alimentar drtran o drvarma
+> generaría bugs a diestra y siniestra.»
+
+Exacto, y por eso se para en la carga, que es donde se puede decir por qué, y
+no dentro de un motor doscientas líneas después. Las dos herramientas cruzan
+series, y una mensual contra una trimestral no se cruza: se alinea mal sin
+decirlo. Borrar una hoja **no borra modelos**: pregunta qué hacer con
 los que viven en ella, porque son estimaciones de verdad con su `.out`.
 
 #### Las dos condiciones

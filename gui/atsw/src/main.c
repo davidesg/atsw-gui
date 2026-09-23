@@ -10,6 +10,8 @@
 
 #include <glib/gstdio.h>
 
+#include "datos.h"
+
 #include "atsw.h"
 
 void atsw_lanza( Atsw *a, const char *programa, const char *fichero );
@@ -624,12 +626,23 @@ static void on_hoja( GtkNotebook *nb, GtkWidget *pag, guint n, Atsw *a )
  * PIDE, no se exige -- igual que la de una iteracion.                  */
 static void on_muestra_nueva( GtkButton *b, Atsw *a )
 {
-    GtkWidget *d, *caja, *rej, *e_id, *e_desde, *e_hasta, *e_razon;
+    GtkWidget *d, *caja, *rej, *e_id, *e_razon, *cd, *ch;
+    AtFecha    f_desde, f_hasta;
+    AtTramo    t;
     PrError    e;
     int        r;
 
     (void) b;
     if ( !a->hay ) { barra_pub( a, "Abre un proyecto antes." ); return; }
+
+    if ( atsw_tramo( a->p, &t ) != 0 )
+        {
+        /* SIN DATOS NO HAY VENTANA QUE DECLARAR. Y se dice por que, que es
+           una cosa concreta y no un "no se puede".                    */
+        barra_pub( a, "Todavía no hay datos: una muestra es una ventana "
+                      "sobre ellos. Carga alguna serie con «Datos…»." );
+        return;
+        }
 
     d = gtk_dialog_new_with_buttons( "Nueva muestra", GTK_WINDOW(a->ventana),
             GTK_DIALOG_MODAL, "Cancelar", GTK_RESPONSE_CANCEL,
@@ -645,9 +658,7 @@ static void on_muestra_nueva( GtkButton *b, Atsw *a )
     gtk_label_set_markup( GTK_LABEL(l),
         "<small>Una muestra es una <b>ventana declarada</b> sobre los datos.\n"
         "Los modelos que estimes en ella viven en su hoja: dos modelos\n"
-        "estimados sobre ventanas distintas no se comparan.\n\n"
-        "Las fechas, como en los ficheros del motor: <tt>12/2019</tt>, o\n"
-        "<tt>2019</tt> si la serie es anual.</small>" );
+        "estimados sobre ventanas distintas no se comparan.</small>" );
     gtk_label_set_xalign( GTK_LABEL(l), 0.0 );
     gtk_box_pack_start( GTK_BOX(caja), l, FALSE, FALSE, 0 );
     }
@@ -657,15 +668,67 @@ static void on_muestra_nueva( GtkButton *b, Atsw *a )
     gtk_grid_set_column_spacing( GTK_GRID(rej), 8 );
     gtk_box_pack_start( GTK_BOX(caja), rej, TRUE, TRUE, 0 );
 
-    e_id    = atsw_fila( rej, 0, "Nombre ", "",
+    e_id = atsw_fila( rej, 0, "Nombre ", "",
         "Corto, que es lo que va en la pestaña: «pre-covid», «hasta-2019»." );
-    e_desde = atsw_fila( rej, 1, "Desde ", "",
-        "Vacío: desde donde empiecen los datos." );
-    e_hasta = atsw_fila( rej, 2, "Hasta ", "",
-        "«12/2019». Vacío: hasta donde lleguen." );
+
+    /* LOS EXTREMOS, RELLENOS CON EL TRAMO REAL. Declarar una muestra pasa a
+     * ser MOVER un control desde algo que ya vale, no escribir desde cero.
+     * Y si las frecuencias no coinciden no hay rango de periodos que valga,
+     * asi que se dice y se cae a texto: un proyecto de frecuencias
+     * mezcladas no se puede alimentar a drtran ni a drvarma.           */
+    if ( t.mezcla )
+        {
+        cd = ch = NULL;
+        atsw_fila( rej, 1, "Desde ", "", NULL );
+        atsw_fila( rej, 2, "Hasta ", "", NULL );
+        }
+    else
+        {
+        GtkWidget *ld = gtk_label_new( "Desde " );
+        GtkWidget *lh = gtk_label_new( "Hasta " );
+
+        gtk_label_set_xalign( GTK_LABEL(ld), 1.0 );
+        gtk_label_set_xalign( GTK_LABEL(lh), 1.0 );
+        cd = atsw_fecha_nueva( &f_desde, t.freq, t.anio, t.per,
+                               t.anio, t.fin_anio );
+        ch = atsw_fecha_nueva( &f_hasta, t.freq, t.fin_anio, t.fin_per,
+                               t.anio, t.fin_anio );
+        gtk_grid_attach( GTK_GRID(rej), ld, 0, 1, 1, 1 );
+        gtk_grid_attach( GTK_GRID(rej), cd, 1, 1, 1, 1 );
+        gtk_grid_attach( GTK_GRID(rej), lh, 0, 2, 1, 1 );
+        gtk_grid_attach( GTK_GRID(rej), ch, 1, 2, 1, 1 );
+        }
+
     e_razon = atsw_fila( rej, 3, "Por qué ", "",
         "Dentro de un mes, esta ventana será un número que nadie sabe de "
         "dónde salió. Se pide, no se exige." );
+
+    /* DE QUE TRAMO SE ESTA HABLANDO, dicho. El rango de los controles no
+     * puede ser magia: sale de los datos y se ve de donde.             */
+    {
+    GtkWidget *l = gtk_label_new( NULL );
+    char       b1[32], b2[32];
+    gchar     *txt;
+
+    dt_fecha( t.freq, t.anio, t.per, 0, b1, sizeof b1 );
+    dt_fecha( t.freq, t.fin_anio, t.fin_per, 0, b2, sizeof b2 );
+    txt = t.mezcla
+        ? g_strdup( "<small>⚠ Las series de este proyecto <b>no tienen la "
+                    "misma frecuencia</b>.\nEscribe las fechas a mano; y "
+                    "revisa el proyecto, porque\nasí no se puede alimentar "
+                    "drtran ni drvarma.</small>" )
+        : g_markup_printf_escaped(
+              "<small>Los datos van de %s a %s (%s, %d serie%s).</small>",
+              b1, b2,
+              t.freq == 12 ? "mensual" : t.freq == 4 ? "trimestral"
+                           : t.freq == 1 ? "anual" : "?",
+              t.nseries, t.nseries == 1 ? "" : "s" );
+
+    gtk_label_set_markup( GTK_LABEL(l), txt );
+    gtk_label_set_xalign( GTK_LABEL(l), 0.0 );
+    gtk_box_pack_start( GTK_BOX(caja), l, FALSE, FALSE, 0 );
+    g_free( txt );
+    }
 
     gtk_widget_show_all( d );
     r = gtk_dialog_run( GTK_DIALOG(d) );
@@ -673,32 +736,33 @@ static void on_muestra_nueva( GtkButton *b, Atsw *a )
     if ( r == GTK_RESPONSE_OK )
         {
         const char *id = gtk_entry_get_text( GTK_ENTRY(e_id) );
-        char        id2[PR_ID];
+        char        id2[PR_ID], b1[32] = "", b2[32] = "";
 
         a_id( id, id2, sizeof id2 );
+        if ( cd ) atsw_fecha_texto( &f_desde, b1, sizeof b1 );
+        if ( ch ) atsw_fecha_texto( &f_hasta, b2, sizeof b2 );
+
         if ( !id2[0] )
             barra_pub( a, "La muestra necesita un nombre: es lo que va en la "
                           "pestaña." );
-        else if ( pr_muestra_add( a->p, id2,
-                      gtk_entry_get_text( GTK_ENTRY(e_desde) ),
-                      gtk_entry_get_text( GTK_ENTRY(e_hasta) ),
+        else if ( pr_muestra_add( a->p, id2, b1, b2,
                       gtk_entry_get_text( GTK_ENTRY(e_razon) ), &e ) != 0 )
             { char why[512]; pr_error_es( &e, why, sizeof why );
               barra_pub( a, why ); }
         else
             {
-            gchar *t;
+            gchar *t2;
 
             pr_escribir( a->p, a->p->path, &e );
             atsw_hojas( a );
-            /* Se salta a la hoja recien creada: es donde se iba. */
             gtk_notebook_set_current_page( GTK_NOTEBOOK(a->libro),
                                            a->nhojas - 1 );
             atsw_refresca( a );
-            t = g_strdup_printf( "Muestra «%s» declarada. Los modelos que "
-                                 "estimes aquí viven en esta hoja.", id2 );
-            barra_pub( a, t );
-            g_free( t );
+            t2 = g_strdup_printf( "Muestra «%s» declarada%s%s. Los modelos "
+                                  "que estimes aquí viven en esta hoja.",
+                                  id2, b2[0] ? ", hasta " : "", b2 );
+            barra_pub( a, t2 );
+            g_free( t2 );
             }
         }
     gtk_widget_destroy( d );

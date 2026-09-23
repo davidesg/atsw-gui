@@ -111,6 +111,31 @@ static int da_de_alta( Atsw *a, const DtDatos *d, int col, const char *serie,
                             "proyecto.", serie );
           return 1; }
 
+    /* UN PROYECTO, UNA FRECUENCIA.
+     *
+     * No es una comodidad: un proyecto de frecuencias mezcladas no se puede
+     * alimentar a drtran ni a drvarma sin sembrar bugs -- las dos cruzan
+     * series y una mensual contra una trimestral no se cruza, se alinea
+     * mal en silencio. Asi que se para AQUI, que es donde se puede decir
+     * por que, y no dentro de un motor doscientas lineas despues.      */
+    {
+    AtTramo t;
+
+    if ( freq > 0 && atsw_tramo( a->p, &t ) == 0 && t.freq > 0 &&
+         t.freq != freq )
+        {
+        snprintf( why, n, "«%s» es %s y este proyecto es %s. Un proyecto es "
+                  "de UNA frecuencia: mezclarlas rompe drtran y drvarma, que "
+                  "cruzan series. Ábrela en otro proyecto.",
+                  serie,
+                  freq  == 12 ? "mensual" : freq  == 4 ? "trimestral"
+                              : freq == 1 ? "anual" : "de otra frecuencia",
+                  t.freq == 12 ? "mensual" : t.freq == 4 ? "trimestral"
+                              : t.freq == 1 ? "anual" : "de otra" );
+        return 1;
+        }
+    }
+
     /* --- 1. EL DATO ----------------------------------------------------- */
     if ( atsw_csv_de( a->p, serie, csv, sizeof csv ) != 0 )
         { snprintf( why, n, "No pude componer la ruta de «%s».", serie );

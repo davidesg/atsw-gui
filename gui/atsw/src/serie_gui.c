@@ -129,3 +129,86 @@ void atsw_serie_edita( Atsw *a, const char *serie )
         }
     gtk_widget_destroy( d );
 }
+
+/* ------------------------------------------------------------------------ */
+/* UN SELECTOR DE FECHA: PERIODO Y AÑO, ACOTADOS A LOS DATOS                 */
+/*                                                                           */
+/* Una fecha de esta escuela no es un numero, son DOS -- periodo y año -- y   */
+/* por eso son dos controles y no uno. Escribirla a mano era una trampa: con  */
+/* "2019-12" en vez de "12/2019" la ventana no se aplicaba y se estimaba      */
+/* sobre la muestra entera sin que nada lo dijera.                            */
+/*                                                                           */
+/* El de periodo va 1..freq, asi que se ajusta solo a la frecuencia, y        */
+/* DESAPARECE en anual, que alli la fecha es solo el año. Y DA LA VUELTA:     */
+/* subir de 12 pone 1 y suma un año, que es lo que uno espera de un boton     */
+/* que camina por el tiempo.                                                  */
+/* ------------------------------------------------------------------------ */
+
+static void fecha_gira( GtkSpinButton *sp, AtFecha *F )
+{
+    int p = gtk_spin_button_get_value_as_int( sp );
+
+    if ( F->freq <= 1 || F->girando ) return;
+
+    /* El rango del periodo es 0..freq+1 para poder VER el desbordamiento;
+       lo que se enseña nunca se queda fuera de 1..freq.               */
+    F->girando = TRUE;
+    if ( p > F->freq )
+        {
+        gtk_spin_button_set_value( GTK_SPIN_BUTTON(F->anio),
+            gtk_spin_button_get_value( GTK_SPIN_BUTTON(F->anio) ) + 1 );
+        gtk_spin_button_set_value( sp, 1 );
+        }
+    else if ( p < 1 )
+        {
+        gtk_spin_button_set_value( GTK_SPIN_BUTTON(F->anio),
+            gtk_spin_button_get_value( GTK_SPIN_BUTTON(F->anio) ) - 1 );
+        gtk_spin_button_set_value( sp, F->freq );
+        }
+    F->girando = FALSE;
+}
+
+GtkWidget *atsw_fecha_nueva( AtFecha *F, int freq, int anio, int per,
+                             int a1, int a2 )
+{
+    GtkWidget *caja = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 4 );
+
+    memset( F, 0, sizeof *F );
+    F->freq = freq > 0 ? freq : 1;
+
+    if ( F->freq > 1 )
+        {
+        F->per = gtk_spin_button_new_with_range( 0, F->freq + 1, 1 );
+        gtk_spin_button_set_value( GTK_SPIN_BUTTON(F->per),
+                                   per > 0 ? per : 1 );
+        gtk_widget_set_tooltip_text( F->per, F->freq == 12
+            ? "El mes. Al pasar de 12 salta al año siguiente."
+            : "El período dentro del año. Al pasar del último salta al "
+              "siguiente." );
+        g_signal_connect( F->per, "value-changed",
+                          G_CALLBACK(fecha_gira), F );
+        gtk_box_pack_start( GTK_BOX(caja), F->per, FALSE, FALSE, 0 );
+        gtk_box_pack_start( GTK_BOX(caja), gtk_label_new( "/" ),
+                            FALSE, FALSE, 0 );
+        }
+
+    /* ACOTADO AL TRAMO REAL: no se puede pedir una ventana que no existe. */
+    F->anio = gtk_spin_button_new_with_range( a1 > 0 ? a1 : 1,
+                                              a2 > 0 ? a2 : 9999, 1 );
+    gtk_spin_button_set_value( GTK_SPIN_BUTTON(F->anio), anio > 0 ? anio : a1 );
+    gtk_widget_set_tooltip_text( F->anio, "El año, entre los que hay datos." );
+    gtk_box_pack_start( GTK_BOX(caja), F->anio, FALSE, FALSE, 0 );
+    return caja;
+}
+
+const char *atsw_fecha_texto( const AtFecha *F, char *out, size_t n )
+{
+    int y = gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(F->anio) );
+
+    if ( out == NULL || n == 0 ) return out;
+    if ( F->freq <= 1 ) g_snprintf( out, n, "%d", y );
+    else
+        g_snprintf( out, n, "%d/%d",
+            gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(F->per) ), y );
+    return out;
+}

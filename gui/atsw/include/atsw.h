@@ -161,6 +161,21 @@ int        atsw_hasta_n( int freq, int anio, int per, int nobs,
    work/, que es donde se corre y lo que se limpia.                      */
 int        atsw_csv_de( const Proyecto *p, const char *serie,
                         char *out, size_t n );
+
+/* EL TRAMO DEL PROYECTO: la union de las series, porque las muestras son
+   del proyecto y los datos de cada serie. mezcla avisa de frecuencias
+   distintas, que es un proyecto que no se puede alimentar a drtran ni a
+   drvarma sin sembrar bugs.                                            */
+typedef struct {
+   int      freq;
+   int      anio, per;            /* el comienzo mas temprano             */
+   int      fin_anio, fin_per;    /* el final mas tardio                  */
+   int      nobs;                 /* la serie mas larga                   */
+   int      nseries;              /* cuantas tenian datos.csv             */
+   gboolean mezcla;               /* no todas con la misma frecuencia     */
+} AtTramo;
+
+int        atsw_tramo( const Proyecto *p, AtTramo *t );
 gchar     *atsw_programa( const char *programa );
 
 /* Guardar un .inp VALIDANDO ANTES, con el comprobador del motor. Si no vale,
@@ -203,6 +218,19 @@ void       atsw_columna( GtkWidget *tv, const char *titulo, int col );
 GtkWidget *atsw_en_scroll( GtkWidget *w );
 GtkWidget *atsw_fila( GtkWidget *rejilla, int y, const char *et,
                       const char *valor, const char *tip );
+
+/* UN SELECTOR DE FECHA: periodo y año, acotados a los datos. Una fecha de
+   esta escuela son DOS numeros, no uno, y escribirla a mano era la trampa
+   que hacia que una ventana no se aplicara sin que nada lo dijera.     */
+typedef struct {
+   GtkWidget *per, *anio;
+   int        freq;
+   gboolean   girando;
+} AtFecha;
+
+GtkWidget  *atsw_fecha_nueva( AtFecha *F, int freq, int anio, int per,
+                              int a1, int a2 );
+const char *atsw_fecha_texto( const AtFecha *F, char *out, size_t n );
 void       atsw_on_activado( GtkTreeView *tv, GtkTreePath *ruta,
                              GtkTreeViewColumn *col, Atsw *a );
 gboolean   atsw_on_click( GtkWidget *tv, GdkEventButton *ev, Atsw *a );

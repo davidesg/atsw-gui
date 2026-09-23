@@ -159,6 +159,32 @@ gboolean atsw_abre( Atsw *a, const char *path, char *why, size_t n )
 /* Pintar                                                                    */
 /* ------------------------------------------------------------------------ */
 
+/* LO QUE SE SABE DE LA SERIE, y SOLO lo que se sabe.
+ *
+ * Un campo vacio no sale: "Fuente: (sin declarar)" repetido seis veces es
+ * ruido, y ademas es mentira por insinuacion -- parece que falta algo que
+ * habria que poner, cuando la mayoria de las series no necesitan las seis.
+ * Si no hay nada, se dice que no hay nada y se dice donde ponerlo.    */
+static gchar *serie_globo( const PrSerie *s )
+{
+    GString *g = g_string_new( NULL );
+
+    if ( s->descripcion[0] ) g_string_append_printf( g, "%s\n", s->descripcion );
+    if ( s->unidades[0] )    g_string_append_printf( g, "Unidades: %s\n", s->unidades );
+    if ( s->fuente[0] )      g_string_append_printf( g, "Fuente: %s\n", s->fuente );
+    if ( s->url[0] )         g_string_append_printf( g, "%s\n", s->url );
+    if ( s->bajada[0] )      g_string_append_printf( g, "Bajada: %s\n", s->bajada );
+    if ( s->notas[0] )       g_string_append_printf( g, "\n%s\n", s->notas );
+
+    if ( g->len == 0 )
+        g_string_append( g, "De esta serie no consta nada más que su clave.\n"
+                            "Botón derecho → «Editar la serie…»." );
+    else
+        g_string_append( g, "\nBotón derecho → «Editar la serie…»." );
+
+    return g_string_free( g, FALSE );
+}
+
 static void pinta_series( Atsw *a )
 {
     GtkListStore *st = GTK_LIST_STORE( gtk_tree_view_get_model(
@@ -177,11 +203,13 @@ static void pinta_series( Atsw *a )
 
     for ( i = 0; i < a->p->ns; i++ )
         {
-        int nm = 0;
+        gchar *globo;
+        int    nm = 0;
 
         for ( j = 0; j < a->p->nm; j++ )
             if ( !strcmp( a->p->m[j].serie, a->p->s[i].id ) ) nm++;
 
+        globo = serie_globo( &a->p->s[i] );
         gtk_list_store_append( st, &it );
         gtk_list_store_set( st, &it,
             S_ID,      a->p->s[i].id,
@@ -190,7 +218,9 @@ static void pinta_series( Atsw *a )
             S_ELEGIDO, a->p->s[i].elegido[0] ? a->p->s[i].elegido : "—",
             S_NMOD,    nm,
             S_RAZON,   a->p->s[i].razon,
+            S_GLOBO,   globo,
             -1 );
+        g_free( globo );
 
         if ( marcada[0] && !strcmp( marcada, a->p->s[i].id ) )
             gtk_tree_selection_select_iter(

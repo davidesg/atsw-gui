@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "proyecto.h"
 
@@ -34,11 +35,62 @@ static void desentrecomilla( char *s )
 }
 
 /* Un valor que hay que entrecomillar: vacio, o con algo que confunda. */
+/* PARA QUE LOS DOS LECTORES VEAN LO MISMO.
+ *
+ * Nuestro lector devuelve SIEMPRE texto, pero el de Python no: sin comillas,
+ * yaml.safe_load convierte 2026-09-20 en un datetime.date, 12 en un int y
+ * "yes" en True. Entonces las dos encarnaciones del taller leen el mismo
+ * fichero y obtienen cosas distintas -- que es la version silenciosa del
+ * problema de los dos dueños, y se encontro asi: la prueba de lectura desde
+ * Python fallo comparando la fecha de bajada con una cadena.
+ *
+ * Asi que se entrecomilla todo lo que Python interpretaria: una fecha, un
+ * numero, un booleano o un nulo. Los identificadores y el texto normal siguen
+ * saliendo a pelo, que es lo que hace el manifiesto legible a ojo.        */
+static int parece_fecha( const char *s )
+{
+   int i;
+
+   if ( strlen( s ) != 10 ) return 0;
+   for ( i = 0; i < 10; i++ )
+       {
+       if ( i == 4 || i == 7 ) { if ( s[i] != '-' ) return 0; }
+       else if ( s[i] < '0' || s[i] > '9' ) return 0;
+       }
+   return 1;
+}
+
+static int parece_numero( const char *s )
+{
+   char *fin;
+
+   if ( *s == '\0' ) return 0;
+   strtod( s, &fin );
+   return ( *fin == '\0' );
+}
+
+static int parece_palabra_de_yaml( const char *s )
+{
+   static const char *p[] = { "true", "false", "yes", "no", "on", "off",
+                              "null", "~", NULL };
+   int i, j;
+
+   for ( i = 0; p[i]; i++ )
+       {
+       for ( j = 0; p[i][j] && s[j]; j++ )
+           if ( tolower( (unsigned char) s[j] ) != p[i][j] ) break;
+       if ( p[i][j] == '\0' && s[j] == '\0' ) return 1;
+       }
+   return 0;
+}
+
 static int hay_que_entrecomillar( const char *s )
 {
    if ( *s == '\0' ) return 1;
    if ( strpbrk( s, ":#\"'\n" ) != NULL ) return 1;
    if ( s[0] == ' ' || s[strlen( s ) - 1] == ' ' ) return 1;
+   if ( parece_fecha( s ) || parece_numero( s ) ||
+        parece_palabra_de_yaml( s ) ) return 1;
    return 0;
 }
 
@@ -113,6 +165,32 @@ int pr_serie_add( Proyecto *p, const char *serie, PrError *e )
    snprintf( p->s[p->ns].id, PR_ID, "%s", serie );
    p->ns++;
    return 0;
+}
+
+PrSerie *pr_serie( Proyecto *p, const char *id )
+{
+   int i = pr_serie_idx( p, id );
+
+   return ( i < 0 ) ? NULL : &p->s[i];
+}
+
+const PrSerie *pr_serie_ver( const Proyecto *p, const char *id )
+{
+   int i = pr_serie_idx( p, id );
+
+   return ( i < 0 ) ? NULL : &p->s[i];
+}
+
+/* LA DESCRIPCION SI LA HAY, Y SI NO EL ID. Nunca una descripcion inventada
+   a partir del id: "IPC_DE" no es "IPC DE" ni nada parecido, y fingir que
+   se sabe lo que significa un mnemotecnico es justo lo contrario de para
+   lo que existe este campo.                                            */
+const char *pr_serie_titulo( const Proyecto *p, const char *id )
+{
+   const PrSerie *s = pr_serie_ver( p, id );
+
+   if ( s == NULL ) return id ? id : "";
+   return s->descripcion[0] ? s->descripcion : s->id;
 }
 
 const char *pr_elegido( const Proyecto *p, const char *serie )
@@ -352,6 +430,15 @@ int pr_sin_razon( const Proyecto *p, char ids[][PR_ID], int max )
 /* la otra encarnacion pueda mirarlo.                                        */
 /* ------------------------------------------------------------------------ */
 
+/* Un campo opcional: si esta vacio, la linea no se escribe. */
+static void escribe_campo( FILE *f, const char *clave, const char *valor )
+{
+   if ( valor == NULL || valor[0] == '\0' ) return;
+   fprintf( f, "    %s: ", clave );
+   escribe_valor( f, valor );
+   fputc( '\n', f );
+}
+
 int pr_escribir( const Proyecto *p, const char *path, PrError *e )
 {
    FILE *f;
@@ -379,6 +466,15 @@ int pr_escribir( const Proyecto *p, const char *path, PrError *e )
        if ( p->s[i].razon[0] )
            { fprintf( f, "    razon: " ); escribe_valor( f, p->s[i].razon );
              fputc( '\n', f ); }
+       /* LOS METADATOS, SOLO SI LOS HAY. Una serie sin ellos no escribe
+          seis lineas vacias: el manifiesto se lee a ojo, y seis "" por
+          serie lo entierran.                                          */
+       escribe_campo( f, "descripcion", p->s[i].descripcion );
+       escribe_campo( f, "fuente",      p->s[i].fuente );
+       escribe_campo( f, "url",         p->s[i].url );
+       escribe_campo( f, "bajada",      p->s[i].bajada );
+       escribe_campo( f, "unidades",    p->s[i].unidades );
+       escribe_campo( f, "notas",       p->s[i].notas );
        }
 
    fprintf( f, "\n# La cadena de iteracion. padre vacio = raiz.\n"
@@ -544,6 +640,18 @@ int pr_leer( const char *path, Proyecto *p, PrError *e )
                        { fclose( f ); return 1; } }
                else if ( strcmp( clave, "razon" ) == 0 )
                    snprintf( p->s[cur].razon, PR_RAZON, "%s", valor );
+               else if ( strcmp( clave, "descripcion" ) == 0 )
+                   snprintf( p->s[cur].descripcion, PR_TEXTO, "%s", valor );
+               else if ( strcmp( clave, "fuente" ) == 0 )
+                   snprintf( p->s[cur].fuente, PR_TEXTO, "%s", valor );
+               else if ( strcmp( clave, "url" ) == 0 )
+                   snprintf( p->s[cur].url, PR_RUTA, "%s", valor );
+               else if ( strcmp( clave, "bajada" ) == 0 )
+                   snprintf( p->s[cur].bajada, 16, "%s", valor );
+               else if ( strcmp( clave, "unidades" ) == 0 )
+                   snprintf( p->s[cur].unidades, PR_TEXTO, "%s", valor );
+               else if ( strcmp( clave, "notas" ) == 0 )
+                   snprintf( p->s[cur].notas, PR_TEXTO, "%s", valor );
                else
                    { falla( e, PR_ECLAVE, nl, clave ); fclose( f ); return 1; }
                }

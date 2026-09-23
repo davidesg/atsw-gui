@@ -125,6 +125,54 @@ int main( int argc, char **argv )
     ok( pr_elige( p, "IPC_ES", "m99", NULL, &e ) != 0 && e.cod == PR_ENOMODELO,
         "uno que no existe se rechaza" );
 
+    printf( "\nLA SERIE: UNA CLAVE CORTA Y UNOS CAMPOS DE TEXTO\n" );
+    {
+    PrSerie *x = pr_serie( p, "IPC_ES" );
+
+    ok( x != NULL, "se llega a la serie por su clave" );
+    ok( pr_serie( p, "NO_ESTA" ) == NULL, "y a una que no esta, no" );
+    es( pr_serie_titulo( p, "IPC_ES" ), "IPC_ES",
+        "sin descripcion, el titulo es la CLAVE" );
+
+    snprintf( x->descripcion, PR_TEXTO, "%s",
+              "Índice de precios de consumo armonizado, España" );
+    snprintf( x->unidades, PR_TEXTO, "índice 2015 = 100" );
+    snprintf( x->fuente, PR_TEXTO, "Eurostat, tabla prc_hicp_midx" );
+    snprintf( x->bajada, 16, "2026-09-20" );
+    es( pr_serie_titulo( p, "IPC_ES" ),
+        "Índice de precios de consumo armonizado, España",
+        "y con ella, la descripcion" );
+    es( pr_serie_titulo( p, "SUELTA" ), "SUELTA",
+        "cada serie la suya: la de al lado sigue sin describir" );
+    }
+
+    printf( "\nLO QUE PYTHON REINTERPRETARIA VA ENTRECOMILLADO\n" );
+    {
+    /* Nuestro lector devuelve siempre texto; yaml.safe_load no. Sin comillas
+       las dos encarnaciones del taller leen cosas distintas del MISMO
+       fichero, que es la version silenciosa de los dos dueños.         */
+    const char *path;
+    PrSerie    *x = pr_serie( p, "SUELTA" );
+    Proyecto   *z = malloc( sizeof *z );
+
+    snprintf( x->unidades, PR_TEXTO, "12" );
+    snprintf( x->notas, PR_TEXTO, "no" );
+    snprintf( x->bajada, 16, "2026-09-20" );
+
+    path = pon( "comillas.yaml", "" );
+    pr_escribir( p, path, &e );
+    ok( pr_leer( path, z, &e ) == 0, "se escribe y se relee" );
+    es( pr_serie_ver( z, "SUELTA" )->unidades, "12",
+        "un numero vuelve como el TEXTO que era" );
+    es( pr_serie_ver( z, "SUELTA" )->notas, "no",
+        "«no» tambien, que en YAML seria false" );
+    es( pr_serie_ver( z, "SUELTA" )->bajada, "2026-09-20",
+        "y una fecha, que seria un datetime.date" );
+
+    x->unidades[0] = x->notas[0] = '\0';
+    free( z );
+    }
+
     printf( "\nIDA Y VUELTA POR EL MANIFIESTO\n" );
     {
     const char *path = pon( "proyecto.yaml", "" );
@@ -152,6 +200,17 @@ int main( int argc, char **argv )
     }
     ok( pr_sin_razon( q, sin, 16 ) == 2,
         "  y los que no la tienen SIGUEN sin tenerla" );
+    {
+    const PrSerie *x = pr_serie_ver( q, "IPC_ES" );
+
+    es( x->descripcion, "Índice de precios de consumo armonizado, España",
+        "  la descripcion, con sus acentos" );
+    es( x->unidades, "índice 2015 = 100",  "  las unidades" );
+    es( x->fuente,   "Eurostat, tabla prc_hicp_midx", "  la fuente" );
+    es( x->bajada,   "2026-09-20", "  y la fecha de la bajada" );
+    es( pr_serie_ver( q, "SUELTA" )->descripcion, "",
+        "  y lo que no se puso sigue VACIO: no se rellena con la clave" );
+    }
     }
 
     printf( "\nBORRAR: LO QUE ROMPERIA EL LINAJE NO SE BORRA\n" );

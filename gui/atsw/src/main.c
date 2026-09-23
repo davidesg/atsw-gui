@@ -67,6 +67,12 @@ static void vistazo( Atsw *a, int modo, double lam )
 static void on_mdt   ( GtkMenuItem *m, Atsw *a ) { (void)m; vistazo( a, 1, 1.0 ); }
 static void on_serie_acf( GtkMenuItem *m, Atsw *a ) { (void)m; vistazo( a, 0, 1.0 ); }
 
+static void on_editar_serie( GtkMenuItem *m, Atsw *a )
+{
+    (void) m;
+    if ( a->hay && a->serie[0] ) atsw_serie_edita( a, a->serie );
+}
+
 /* EL MENU DE LA SERIE.
  *
  * Marcar una serie con el boton izquierdo despliega lo que se puede HACER con
@@ -126,6 +132,16 @@ static void menu_serie( Atsw *a, GdkEventButton *ev )
         gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
         }
     }
+
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
+
+    mi = gtk_menu_item_new_with_label( "Editar la serie…" );
+    gtk_widget_set_tooltip_text( mi,
+        "Qué es, en qué unidades, de dónde se bajó y cuándo. Nada de esto "
+        "cabe en el .inp —el motor sólo lee un nombre— y es la mitad de lo "
+        "que hace falta para volver a este análisis dentro de seis meses." );
+    g_signal_connect( mi, "activate", G_CALLBACK(on_editar_serie), a );
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
 
     gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
 
@@ -765,15 +781,15 @@ static void activate( GtkApplication *app, gpointer d )
 
     izq = gtk_box_new( GTK_ORIENTATION_VERTICAL, 4 );
     st = gtk_list_store_new( S_N, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_INT,
-                             G_TYPE_STRING );
+                             G_TYPE_STRING, G_TYPE_STRING );
     a->l_series = gtk_tree_view_new_with_model( GTK_TREE_MODEL(st) );
     columna( a->l_series, "Serie",   S_ID );
     columna( a->l_series, "Elegido", S_ELEGIDO );
     columna( a->l_series, "Modelos", S_NMOD );
+    gtk_tree_view_set_tooltip_column( GTK_TREE_VIEW(a->l_series), S_GLOBO );
     gtk_widget_set_tooltip_text( a->l_series,
         "El modelo ELEGIDO de cada serie. Hoy esa decisión vive en un "
-        "diccionario a pelo repetido en tres guiones de cases/.\n\nBotón "
-        "derecho: lo que se puede hacer con esta serie." );
+        "diccionario a pelo repetido en tres guiones de cases/." );
     g_signal_connect( gtk_tree_view_get_selection( GTK_TREE_VIEW(a->l_series) ),
                       "changed", G_CALLBACK(on_serie), a );
     /* El boton derecho despliega lo que se puede hacer con la serie. */

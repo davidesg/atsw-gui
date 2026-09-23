@@ -126,10 +126,31 @@ typedef struct {
    PrRol rol;                     /* datos o modelo. Ver PrRol.           */
 } PrModelo;
 
+/* LA SERIE: una CLAVE corta y unos cuantos campos de texto.
+ *
+ * El id es corto porque TIENE QUE VALER como nombre de fichero y como nombre
+ * de serie para el motor, que la imprime en cada informe y la usa para
+ * componer el EPS. Eso lo hace criptico, y la respuesta no es alargarlo: es
+ * separar la clave del nombre que lee una persona. Es la misma regla que ya
+ * rige los modelos -- el nombre del fichero es cortesia, la identidad esta
+ * en el manifiesto.
+ *
+ * TODOS LOS CAMPOS SON OPCIONALES y salen vacios: "no consta" tiene que
+ * verse como no consta, igual que la razon de una iteracion. Ninguno se
+ * inventa ni se rellena con el id.                                      */
 typedef struct {
    char id[PR_ID];
    char elegido[PR_ID];           /* "" si no se ha declarado             */
    char razon[PR_RAZON];          /* por que ese y no otro                */
+
+   /* De que va la serie, para quien no reconozca el mnemotecnico. */
+   char descripcion[PR_TEXTO];
+   /* DE DONDE SALIO, que es lo que no se puede reconstruir despues. */
+   char fuente[PR_TEXTO];         /* "Eurostat, tabla prc_hicp_midx"      */
+   char url[PR_RUTA];
+   char bajada[16];               /* AAAA-MM-DD                           */
+   char unidades[PR_TEXTO];       /* "indice 2015 = 100"                  */
+   char notas[PR_TEXTO];
 } PrSerie;
 
 typedef struct {
@@ -181,6 +202,18 @@ int  pr_serie_idx( const Proyecto *p, const char *serie );
 /* El modelo ELEGIDO de una serie: hoy esa decision vive en un diccionario a
  * pelo repetido en tres guiones de cases/. Devuelve "" si no se declaro.  */
 const char *pr_elegido( const Proyecto *p, const char *serie );
+
+/* --- los metadatos de la serie ------------------------------------------ */
+
+/* La serie, para leerla o para escribirle los campos. NULL si no esta.
+   Se devuelve la estructura entera a proposito: son seis campos de texto
+   libre y una funcion por campo seria seis veces lo mismo.              */
+PrSerie       *pr_serie( Proyecto *p, const char *id );
+const PrSerie *pr_serie_ver( const Proyecto *p, const char *id );
+
+/* Lo que se enseña de una serie cuando hay que enseñarla en una linea: la
+   descripcion si la hay, y si no el id. NUNCA una descripcion inventada. */
+const char *pr_serie_titulo( const Proyecto *p, const char *id );
 int  pr_elige( Proyecto *p, const char *serie, const char *id,
                const char *razon, PrError *e );
 

@@ -291,6 +291,10 @@ assert sin == ["IPC_ES/m00", "IPC_ES/m02", "SUELTA/m01"], sin
 # m00 son LOS DATOS, y lo dice el manifiesto: no se deduce del numero.
 assert d["modelos"]["IPC_ES/m00"]["rol"] == "datos"
 assert "rol" not in d["modelos"]["IPC_ES/m01"]
+# Los metadatos de la serie: van solo si estan, y se leen con sus acentos.
+assert d["series"]["IPC_ES"]["descripcion"].startswith("Índice de precios")
+assert d["series"]["IPC_ES"]["bajada"] == "2026-09-20"
+assert "descripcion" not in d["series"]["SUELTA"], d["series"]["SUELTA"]
 print("  ok    yaml.safe_load de Python lee el manifiesto entero")
 PY
 else

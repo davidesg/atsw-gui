@@ -46,7 +46,10 @@
 #define AT_MAX_RES  PR_MAX_MODELO
 
 /* Las columnas de las dos listas. */
-enum { S_ID, S_ELEGIDO, S_NMOD, S_RAZON, S_N };
+/* La DESCRIPCION no es columna: crece con lo que el analista escriba y
+   arrollaria una lista que tiene que caber al lado de la rejilla. Va en el
+   globo de la fila, con el resto de la procedencia.                     */
+enum { S_ID, S_ELEGIDO, S_NMOD, S_RAZON, S_GLOBO, S_N };
 /* LAS COLUMNAS DE LA REJILLA.
  *
  * La rejilla contesta UNA pregunta: de estos modelos de la misma serie,
@@ -122,6 +125,11 @@ void       atsw_refresca( Atsw *a );
    iteracion: fue_gui especifica por formulario, y el formulario solo puede
    expresar lo que tiene widgets. Ver docs/DISENO-editor.md.             */
 void       atsw_editor( Atsw *a, const char *serie, const char *id );
+
+/* «Editar…» una serie: descripcion, unidades, fuente, url, bajada, notas.
+   Nada de esto toca un numero -- son los campos que el .inp no puede
+   llevar y que hacen falta para volver al analisis meses despues.      */
+void       atsw_serie_edita( Atsw *a, const char *serie );
 gchar     *atsw_programa( const char *programa );
 
 /* Guardar un .inp VALIDANDO ANTES, con el comprobador del motor. Si no vale,

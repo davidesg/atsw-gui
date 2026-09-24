@@ -1026,6 +1026,9 @@ with each other here.
 **Suggested fix.** In the canonical drvarma: drtran's `isfinite` guard,
 `*fkp1 = fk` in `lnsrch`'s give-up branch, the missing dealloc; then propagate.
 
+
+**Raised in drvarma 2026-09-24** (`drvarma_v.04.1/BUGS.md`, commit 7037adc): item 1 (the NaN hang), reproduced there with the same probe.  Per the analyst, the engine is not changed here; the fix is to be made in drvarma and propagated.
+
 ---
 
 ## BUG-42 — `diagnose.c`: a heap overflow in the histogram, `chisq` capped above 1000, and portmanteau/JB tests with the wrong reference distribution
@@ -1058,6 +1061,9 @@ over-rejection.
 **Suggested fix.** Fixed-width labels; remove the cap (Wilson-Hilferty holds
 there) or use `gsl_cdf_chisq_Q`; subtract the dynamic parameters from the df;
 Lütkepohl's multivariate JB.
+
+
+**Raised in drvarma 2026-09-24** (`drvarma_v.04.1/BUGS.md`, commit 7037adc): item 1 (the histogram overflow), reproduced there with the same probe.  Per the analyst, the engine is not changed here; the fix is to be made in drvarma and propagated.
 
 ---
 

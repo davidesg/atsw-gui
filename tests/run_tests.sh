@@ -2544,6 +2544,29 @@ grep -aq "98 observations: from 2001 to 2098" "$TMP/case.out" \
   || bad "diagnosis dates" "$(grep -a 'observations: from' "$TMP/case.out" | head -1)"
 echo
 
+# 8w. THE UNIVARIATE EVALUATION OF A SEED .pre (BUG-38).  A FIXED mean
+#     (`0.073615 0') was evaluated as 0, and an ANNUAL AR factor with no
+#     regular one vanished.  The references are statsmodels' exact likelihood
+#     at the same fixed parameters (mu in w = refactor*z units, fue's
+#     convention): -9.7536651 for the free/fixd pair and -22.5826359 for the
+#     annual-AR pair; drvec agrees to the xi truncation.
+echo "[8w] the seed .pre's univariate evaluation (BUG-38)"
+R=tests/repro/fixtures
+cp "$MM" "$TMP/m.inp"; cp "$R"/free.?.pre "$R"/fixd.?.pre "$R"/anna.?.pre "$TMP/"
+suma() { (cd "$TMP" && timeout "$RUN_TIMEOUT" "$ABSDRVEC" m 2 1 1 -case 2 -mafree -seed "$1" -eval 2>/dev/null) \
+         | awk '/suma univariante/{for(i=1;i<=NF;i++) if($i=="=") {print $(i+1); exit}}'; }
+sf=$(suma free); sx=$(suma fixd); sa=$(suma anna)
+awk -v a="$sf" -v b="$sx" 'BEGIN{exit !(a != "" && a == b)}' \
+  && ok "seed: a fixed mean is evaluated at its value ($sf = $sx)" \
+  || bad "seed: fixed mean" "free=$sf fixd=$sx"
+awk -v a="$sf" 'BEGIN{d=a+9.7536651; if(d<0)d=-d; exit !(d < 1e-4)}' \
+  && ok "seed: the free pair matches statsmodels ($sf vs -9.7536651)" \
+  || bad "seed: free pair" "$sf vs -9.7536651"
+awk -v a="$sa" 'BEGIN{d=a+22.5826359; if(d<0)d=-d; exit !(d < 1e-4)}' \
+  && ok "seed: an annual AR factor is evaluated ($sa vs -22.5826359)" \
+  || bad "seed: annual AR" "$sa vs -22.5826359"
+echo
+
 # ================================================== 9 MEMORY (opt-in) ==
 # Off by default so `make test` is deterministic on any machine; run it with
 #     VALGRIND=1 make test

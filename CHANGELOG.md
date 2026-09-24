@@ -7,6 +7,13 @@ publicación: `v*`.
 
 ## Sin publicar
 
+### La evaluación univariante de una semilla `.pre` (BUG-38)
+
+Una media fija se evaluaba como 0, los factores AR/MA anuales y de frecuencia
+fija se perdían o se truncaban, y los factores `ifadf` se ignoraban. Afectaba a
+la identidad de cruce, a la semilla de `Σ` y al certificado de optimalidad.
+Comprobado contra la verosimilitud exacta de statsmodels.
+
 ### Las fechas de la muestra y de los residuos (BUG-37)
 
 La cabecera y el diagnóstico de residuos fechaban la muestra desde la primera

@@ -3080,6 +3080,29 @@ static int write_resid_inps(const char *prefix)
  *  divided by refactor² for the ratios between components with different
  *  refactors to be comparable.  What we do not know how to handle is refused:
  *  a Box-Cox other than the identity, differencing, or deterministic terms.  */
+/*  pre_ar_order / pre_ma_order -- the expanded order of a .pre's AR / MA:
+ *  regular factors, ANNUAL ones (order p acts at lags sper .. p*sper) and the
+ *  fixed-frequency ones (order 2 each).  Ported from drtran (total_ar_order);
+ *  counting only the regular factors, as drvec did, made the annual and
+ *  fixed-frequency factors vanish when there was no regular one and
+ *  truncated them when there was (BUG-38).                                   */
+static int pre_ar_order(const struct Tusmodel *Tm)
+{
+    int ord = 0, i;
+    for (i = 1; i <= Tm->NumAr1;  i++) ord += Tm->p1[i];
+    for (i = 1; i <= Tm->NumAr2;  i++) ord += Tm->p2[i] * Tm->sper;
+    for (i = 1; i <= Tm->NumAr1f; i++) ord += 2;
+    return ord;
+}
+static int pre_ma_order(const struct Tusmodel *Tm)
+{
+    int ord = 0, i;
+    for (i = 1; i <= Tm->NumMa1;  i++) ord += Tm->q1[i];
+    for (i = 1; i <= Tm->NumMa2;  i++) ord += Tm->q2[i] * Tm->sper;
+    for (i = 1; i <= Tm->NumMa1f; i++) ord += 2;
+    return ord;
+}
+
 static int pre_univariate(struct Tusmodel *Tm, struct Tseries *Ts,
                           real *logl_out, real *sigma2_out)
 {
@@ -3088,14 +3111,16 @@ static int pre_univariate(struct Tusmodel *Tm, struct Tseries *Ts,
     real pi1, pi2, pi3, refac = (Ts->refactor != 0.0) ? Ts->refactor : 1.0;
     struct Tvarma uv;
 
+    /*  ornsop, not only nrdiff/nadiff: the ifadf factors are differences too,
+     *  and were ignored (BUG-38).                                            */
     if (Tm->NdetVar != 0 || Tm->nrdiff != 0 || Tm->nadiff != 0
-        || Tm->boxlam != 1.0) {
+        || Tm->ornsop != 0 || Tm->boxlam != 1.0) {
         fprintf(stderr, "WARNING: the .pre carries deterministic terms, differencing or a\n"
                         "         Box-Cox; its sigma2 is not evaluated\n");
         return 1;
     }
-    for (k = 1; k <= Tm->NumAr1; k++) p += Tm->p1[k];
-    for (k = 1; k <= Tm->NumMa1; k++) q += Tm->q1[k];
+    p = pre_ar_order(Tm);
+    q = pre_ma_order(Tm);
 
     uv.m = 1; uv.n = n; uv.p = p; uv.q = q;
     uv.xitol = 1.0e-3;
@@ -3106,7 +3131,11 @@ static int pre_univariate(struct Tusmodel *Tm, struct Tseries *Ts,
     uv.w     = matrix(1, n, 1, 1);
     uv.a     = matrix(1, n, 1, 1);
 
-    uv.mu[1]      = (Tm->Imu ? Tm->mu : 0.0);
+    /*  The value whatever the flag, as fue does (fue.c:2749): the flag says
+     *  whether mu is FREE, not whether it is in the model.  A fixed mean was
+     *  evaluated as 0 (BUG-38); fue's writer emits it as `<mu> 0' since fue
+     *  BUG-0021.                                                             */
+    uv.mu[1]      = Tm->mu;
     uv.qq[1][1]   = 1.0;
     uv.phi[0][1][1]   = 1.0;
     uv.theta[0][1][1] = 1.0;
@@ -3201,9 +3230,8 @@ static int load_seed_pre(const char *prefix)
             fprintf(stderr, "WARNING: %s brings %d observations and Ȳ has %d\n",
                     path, Ts.nobs, nobs);
 
-        /* MA order the file brings, summing the regular factors. */
-        qpre = 0;
-        for (k = 1; k <= Tm.NumMa1; k++) qpre += Tm.q1[k];
+        /* MA order the file brings, every factor expanded (BUG-38). */
+        qpre = pre_ma_order(&Tm);
         if (qpre > 0) {
             real *th = vector(1, qpre);
             for (k = 1; k <= qpre; k++) th[k] = 0.0;
@@ -3220,8 +3248,7 @@ static int load_seed_pre(const char *prefix)
            seeds F directly; with r >= 1 Cbar has to be undone, which is what
            init_guess does.                                                   */
         {
-            int ppre = 0;
-            for (k = 1; k <= Tm.NumAr1; k++) ppre += Tm.p1[k];
+            int ppre = pre_ar_order(&Tm);
             if (ppre > 0) {
                 real *ph = vector(1, ppre);
                 for (k = 1; k <= ppre; k++) ph[k] = 0.0;

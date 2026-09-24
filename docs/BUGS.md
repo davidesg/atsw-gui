@@ -857,7 +857,13 @@ to the header.
 
 ## BUG-38 — the univariate evaluation of a seed `.pre` drops a fixed mean, the seasonal and fixed-frequency factors, and the `ifadf` differences
 
-**Status: OPEN.** Found 2026-09-23.
+**Status: FIXED 2026-09-24.** `uv.mu[1] = Tm->mu`; `pre_ar_order` /
+`pre_ma_order` (ported from drtran) size the expansion in `pre_univariate` and in
+the seed loader; the guard includes `ornsop`.  Checked against statsmodels'
+exact likelihood at the same fixed parameters (mu in `w = refactor·z` units, as
+fue writes it): free/fixd pair −9.7536649 vs −9.7536651, annual-AR pair
+−22.5826455 vs −22.5826359 (it was evaluated as if the factor were absent).
+Test 8w.  Found 2026-09-23.
 
 **What it is.** In `pre_univariate`:
 1. `uv.mu[1] = (Tm->Imu ? Tm->mu : 0.0)` (drvec.c:2973): a **fixed** mean is

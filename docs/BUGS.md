@@ -538,7 +538,15 @@ do not present the asymptotic table as valid for the exact LR.
 
 ## BUG-27 — with `q >= 1`, the default `-lrtest` compares two MA classes that are not nested
 
-**Status: OPEN.** Found 2026-09-23.
+**Status: FIXED 2026-09-24.** With `q ≥ 1` and a restricted class (`-marow`,
+`-matri`, `-mawarma`, `-warma`) the LR is printed without critical values, "not
+nested; -bootstrap" (`lq.inp`: npar 10 → 11 under `-marow`, 10 → 10 under
+`-mawarma`).  The free default keeps the table.  The theoretical mismatch is
+said in the report: Yap–Reinsel's result is for the conditional likelihood, a
+trace test and a strictly invertible MA; drvec's exact λ-max is calibrated by
+`-bootstrap` (BUG-26).  `r = M−1` against `M` stays out of reach (a stationary
+process in levels is not expressible here; the report says so).  Test 8aa.
+Found 2026-09-23.
 
 **What it is.** At `r = 0` `Theta` is free (`ma_struct_on` returns 0); at `r >= 1`
 the default `marow` class zeroes `q·s·M` entries. The lambda-max tables assume the

@@ -8566,6 +8566,15 @@ static int run_lrtest(void)
                    than giving none.                                          */
                 fprintf(outputv, "        -        -        -   (restricted:"
                                  " tabulated values do not apply)");
+            } else if (global_q > 0 && (global_marow || global_mawarma
+                                        || global_matri || global_warma)) {
+                /*  BUG-27.  The restricted MA classes are written on the blocks
+                 *  [nabla Y2 ; W], which do not exist at r = 0, so rank 0 has a
+                 *  free Theta and rank r >= 1 the restricted one: the pair is
+                 *  not nested, and the table is for a nested pair.  The
+                 *  statistic is printed; -bootstrap calibrates it.          */
+                fprintf(outputv, "        -        -        -   (MA class restricted"
+                                 " at r >= 1 only: not nested; -bootstrap)");
             } else if (global_case != 3 && g >= 1 && g <= LR_MAXTRENDS) {
                 const real *cv = (global_case == 1) ? lr_cval_none[g-1]
                                                     : lr_cval_const[g-1];
@@ -8593,8 +8602,11 @@ static int run_lrtest(void)
             fprintf(outputv, "\n");
         }
         fprintf(outputv,
-            "\n  Distribution is the non-standard Johansen one; MA terms do not\n"
-            "  affect it (Yap and Reinsel 1995, Thm. 3; Mauricio 2006, Remark 5).\n"
+            "\n  Distribution is the non-standard Johansen one.  That MA terms do\n"
+            "  not affect it (Yap and Reinsel 1995, Thm. 3; Mauricio 2006, Remark 5)\n"
+            "  is proven for the CONDITIONAL likelihood, a trace test and a strictly\n"
+            "  invertible MA -- not for this exact lambda-max, nor at an MA root on\n"
+            "  the unit circle (BUG-27).\n"
             "  Values: case 1, MacKinnon-Haug-Michelis (1999) with no deterministic\n"
             "  term; case 2, urca 1.3.4 ca.jo(ecdet=\"const\"), Osterwald-Lenum (1992).\n"
             "  CAUTION: the tables are for Johansen's CONDITIONAL LR.  This one is\n"

@@ -2633,6 +2633,21 @@ nd=$(printf '%s' "$d1" | sed 's/e.*//; s/[^0-9]//g; s/^0*//' | wc -c)
                  || bad "-writeinp precision" "'$d1'"
 echo
 
+# 8aa. -lrtest WITH A RESTRICTED MA CLASS (BUG-27).  The classes are written on
+#      [nabla Y2 ; W], which do not exist at r = 0: rank 0 has a free Theta and
+#      rank >= 1 the restricted one, so the pair is not nested and the table does
+#      not apply.  The default (free) class keeps its critical values.
+echo "[8aa] -lrtest with a restricted MA class (BUG-27)"
+run tests/repro/fixtures/lq.inp 2 1 0 -lrtest -marow
+row=$(awk '/^  r    M-r/{t=1; next} t && /^ +0 +2 /{print; exit}' "$TMP/case.out")
+printf '%s' "$row" | grep -q "not nested" \
+  && ok "-lrtest -marow: no table for a non-nested pair" || bad "-lrtest -marow" "$row"
+run tests/repro/fixtures/lq.inp 2 1 0 -lrtest
+row=$(awk '/^  r    M-r/{t=1; next} t && /^ +0 +2 /{print; exit}' "$TMP/case.out")
+printf '%s' "$row" | grep -q "11.22" \
+  && ok "-lrtest (free MA): the table still applies" || bad "-lrtest free" "$row"
+echo
+
 # ================================================== 9 MEMORY (opt-in) ==
 # Off by default so `make test` is deterministic on any machine; run it with
 #     VALGRIND=1 make test

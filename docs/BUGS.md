@@ -1312,7 +1312,7 @@ kept with the flag. What is not done: the bootstrap test between classes.
 
 ## BUG-49 — on the bank the moving average ends on the invertibility boundary, and the report publishes that point as an interior optimum
 
-**Status: OPEN** (partly fixed: reported and diagnosed, see below). Found 2026-09-23, comparing the ladder with the cold start.
+**Status: FIXED 2026-09-24** in the report (the boundary itself is information about the specification, not a defect). Found 2026-09-23, comparing the ladder with the cold start.
 
 **What it is.** With the free `Θ` the fitted MA has a root at the engine's
 invertibility gate (modulus 0.99995–1.00000, marked `*`) in **5 of 5** bank cases
@@ -1357,6 +1357,12 @@ Guarded by `run_tests.sh` 8p.7. **Not done:** the standard errors of the MA are
 still printed in the parameter table (the text says they are not defined), and
 nothing is done about the boundary itself — which is information about the
 specification, not a defect of the program.
+
+**Completed on 2026-09-24.** When the fitted MA has a root with modulus below
+1.0001 the `Theta(k)` rows print the estimate with no s.e., t or p, under
+"[an MA root is ON the unit circle: s.e. not defined]" — mink-muskrat's default
+fit printed t = −8452.6, VILL's t = −3e5.  An interior MA (`-mawarma` on
+mink-muskrat, root 1.0036) keeps them.  Test 8ac.
 ---
 
 ## Watched, and not defects

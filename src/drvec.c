@@ -2559,6 +2559,8 @@ static const char *sname(int i)
     return b;
 }
 
+static int ma_on_boundary = 0;   /* the fitted MA has a unit root (BUG-49) */
+
 static void par_row(const char *label, real est, real se)
 {
     if (se > 0.0) {
@@ -7441,8 +7443,18 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
                         }
             }
             if (global_q > 0) {
+                /*  BUG-49: at an MA root on the unit circle the fit is a
+                 *  constrained point, not an interior maximum, and the MA's
+                 *  standard errors are not defined (Theorem 10's Omega > 0
+                 *  fails; VILL printed 0.000001 and t = -3e5).  They are not
+                 *  printed; the roots and the diagnosis below say why.      */
+                real mm_ma = 1.0e12;
+                report_operator_roots("", vp->theta, vp->m, vp->q, &mm_ma, 1);
+                ma_on_boundary = (mm_ma < 1.0001);
                 fprintf(outputv, "\nMoving average on the innovations, "
-                                 "Theta(k)\n");
+                                 "Theta(k)%s\n", ma_on_boundary
+                        ? "   [an MA root is ON the unit circle: s.e. not defined, "
+                          "see the roots below]" : "");
                 for (k2 = 1; k2 <= global_q; k2++)
                     for (a2 = 1; a2 <= nser; a2++)
                         for (b2i = 1; b2i <= nser; b2i++) {
@@ -7451,7 +7463,8 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
                                 snprintf(lb, sizeof lb, "  D.%s <- A.%s(-%d)",
                                          sname(a2), sname(b2i), k2);
                                 par_row(lb, Th_m[k2][A2][B2c],
-                                        dev[ix_Th[(k2-1)*nser + A2][B2c]]);
+                                        ma_on_boundary ? 0.0
+                                        : dev[ix_Th[(k2-1)*nser + A2][B2c]]);
                             }
                         }
             }

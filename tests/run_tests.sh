@@ -2665,6 +2665,19 @@ grep -aq "SCALE: the optimiser works on changes of order 1" "$TMP/case.out" \
   && ok "single fit: the bad scale is said, with the factor" || bad "SCALE" "no warning"
 echo
 
+# 8ac. MA STANDARD ERRORS ON THE BOUNDARY (BUG-49).  At an MA root on the unit
+#      circle the MA's s.e. are not defined; VILL printed 0.000001 and t = -3e5.
+echo "[8ac] MA standard errors on the boundary (BUG-49)"
+run data/VILL.inp 2 1 1 -case 2
+if grep -aq "an MA root is ON the unit circle: s.e. not defined" "$TMP/case.out" &&
+   grep -a "D.London <- A.Vienna(-1)" "$TMP/case.out" | grep -q " - *- *-$"; then
+    ok "boundary MA: no s.e., t or p printed, and the reason said"
+else bad "boundary MA s.e." "$(grep -a 'A.Vienna(-1)' "$TMP/case.out" | head -2)"; fi
+run "$MM" 2 1 1 -case 2 -mawarma
+grep -a "D.mink <- A.mink(-1)" "$TMP/case.out" | grep -q "\*\*\*" \
+  && ok "interior MA: its s.e. are still printed" || bad "interior MA s.e." "missing"
+echo
+
 # ================================================== 9 MEMORY (opt-in) ==
 # Off by default so `make test` is deterministic on any machine; run it with
 #     VALGRIND=1 make test

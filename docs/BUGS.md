@@ -885,7 +885,9 @@ reachable on 2026-09-23: fue's writer now emits a fixed non-zero mean as
 
 ## BUG-39 — the shared `.pre` reader accepts malformed files: stack overflow, uninitialised fields, a crash, and silent zeros
 
-**Status: FIXED in drvec 2026-09-24; drtran's copy still OPEN.** The root of
+**Status: FIXED 2026-09-24, in drvec and in drtran's copy** (drtran commit
+after 77791e8, battery 304/304; there `MAXSTR` is 200, so the line split needed
+a line over 200 characters). The root of
 item 1 was worse than the overflow: the reader's `#ifndef MAXSTR / 512` never
 took effect, because `main.h` defines `MAXSTR 80`, so any line over 80
 characters was split by `fgets` and shifted the file — that, not the stack, is

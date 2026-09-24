@@ -6667,7 +6667,18 @@ static void diagnose_ybar(struct Tvarma *vp)
             series_names[s + j] = strdup(lab);
         }
     }
-    diagnose(vp);
+    /*  BUG-37.  diagnose dates the residuals from trans_d + trans_D*freq, the
+     *  .inp's declared differencing -- which this route does NOT apply --,
+     *  while the sample drvec estimates starts nobs_raw - nobs observations
+     *  in (one, in the levels layout, for nabla Y2).  Every date of the
+     *  diagnosis was one period early.  The engine is not touched: the
+     *  offset it reads is set to the true one for the call.               */
+    {
+        int sd = trans_d, sD = trans_D;
+        trans_d = nobs_raw - nobs; trans_D = 0;
+        diagnose(vp);
+        trans_d = sd; trans_D = sD;
+    }
     if (save) {
         for (j = s + 1; j <= nser; j++) { free(series_names[j]); series_names[j] = save[j]; }
         free(save);
@@ -9321,9 +9332,14 @@ int main(int argc, char *argv[])
         fprintf(outputv, " %s", series_names ? series_names[j] : "y"); }
     fprintf(outputv, "   (%d in the nabla Y2 block, %d in Y1)\n",
             nser - global_r, global_r);
-    fprintf(outputv, "Sample           : %d observations from %d",
-            nobs, data_start_year);
-    if (data_freq > 1) fprintf(outputv, "/%d", data_start_sub);
+    {   /*  BUG-37: the first ESTIMATED observation, not the first raw one  */
+        int ey = data_start_year, et = data_start_sub;
+        ObsToDate(data_start_year, data_start_sub, nobs_raw - nobs + 1,
+                  data_freq, &ey, &et);
+        fprintf(outputv, "Sample           : %d observations from %d",
+                nobs, ey);
+        if (data_freq > 1) fprintf(outputv, "/%d", et);
+    }
     fprintf(outputv, ", %s (raw %d)\n",
             data_freq == 1 ? "annual" : data_freq == 4 ? "quarterly"
           : data_freq == 12 ? "monthly" : "irregular", nobs_raw);

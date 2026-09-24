@@ -831,7 +831,11 @@ units); refuse level output under `-differenced`.
 
 ## BUG-37 — the per-series residual diagnosis, and the header, date the sample one period early
 
-**Status: OPEN.** Found 2026-09-23.
+**Status: FIXED 2026-09-24.** The header dates the sample from its first
+estimated observation, and `diagnose_ybar` sets the engine's offset to
+`nobs_raw - nobs` for the call (`diagnose.c` untouched, P3.1).  synth.inp now
+reads 2001–2098; mink-muskrat 1851–1911.  Only dates move.  Test 8v.
+Found 2026-09-23.
 
 **What it is.** `diagnose.c` dates residuals from `trans_d + trans_D·freq`
 (~388); drvec never sets `trans_d` (drvec.c:170) although the default levels

@@ -7,6 +7,12 @@ publicación: `v*`.
 
 ## Sin publicar
 
+### Las fechas de la muestra y de los residuos (BUG-37)
+
+La cabecera y el diagnóstico de residuos fechaban la muestra desde la primera
+observación cruda, un periodo antes de la primera estimada: todas las fechas del
+diagnóstico (máximos, mínimos, atípicos) salían un periodo adelantadas.
+
 ### El lector `.pre` rechaza los ficheros mal formados (BUG-39)
 
 `MAXSTR` valía 80 dentro del lector (el de `main.h`), así que una línea larga

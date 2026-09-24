@@ -2530,6 +2530,20 @@ ll=$(awk '/^logelf/{print $3}' "$TMP/long100_mmdiag.2.out" 2>/dev/null)
                             || bad "reader: long name" "logL '$ll', expected 64.9983443540"
 echo
 
+# 8v. THE SAMPLE IS DATED FROM ITS FIRST ESTIMATED OBSERVATION (BUG-37).
+#     data/synth.inp: 99 annual observations, 2000-2098; nabla Y2 consumes the
+#     first, so the estimated sample is 2001-2098.  Header and diagnosis both
+#     said 2000, and every date of the diagnosis was one period early.
+echo "[8v] the sample's dates (BUG-37)"
+run data/synth.inp 2 0 1
+grep -aq "^Sample .*98 observations from 2001" "$TMP/case.out" \
+  && ok "header: the sample starts at its first estimated observation" \
+  || bad "header date" "$(grep -a '^Sample' "$TMP/case.out")"
+grep -aq "98 observations: from 2001 to 2098" "$TMP/case.out" \
+  && ok "diagnosis: residuals dated 2001-2098" \
+  || bad "diagnosis dates" "$(grep -a 'observations: from' "$TMP/case.out" | head -1)"
+echo
+
 # ================================================== 9 MEMORY (opt-in) ==
 # Off by default so `make test` is deterministic on any machine; run it with
 #     VALGRIND=1 make test

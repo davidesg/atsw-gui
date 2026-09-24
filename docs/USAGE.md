@@ -33,7 +33,7 @@ From each `.pre` this route takes:
 | | |
 |---|---|
 | the series | and its Box-Cox and rescaling: the system is built in `w = refactor·BoxCox(z)`, which is the format's contract and what `drtran` does |
-| the deterministic terms | **subtracted**, with the dates of *this* sample — a deterministic term is a function of time, so aligning by index instead of by date puts an intervention in the wrong year |
+| the deterministic terms | **subtracted**, with the dates of *this* sample — a deterministic term is a function of time, so aligning by index instead of by date puts an intervention in the wrong year Applied with the exact rational filter `ω(B)/δ(B)`; fue truncates `ν(B)` at 40 lags, so with `δ` near 1 and more than 40 periods after the intervention the two differ (fraction `δ⁴¹` of the long-run effect: 0.12 at `δ = 0.95`). A documented discrepancy, not a defect to fix (BUGS.md BUG-40) |
 | the calendar | the files are lined up **by date** and the common sample is used; mixed frequencies are refused |
 
 The column order is the `.inp`'s: the first `M − r` files are the `∇Y₂` block and

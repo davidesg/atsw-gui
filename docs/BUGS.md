@@ -966,8 +966,17 @@ or handles every one of these.
 
 ## BUG-40 — the deterministic component of a `.pre` uses the exact rational filter; fue truncates `nu(B)` at 40 lags
 
-**Status: OPEN.** Found 2026-09-23. **Shared** with drtran's copy of
-`build_det_component`.
+**Status: WON'T FIX 2026-09-24 (the analyst's decision): a documented discrepancy, not
+changed.**  Neither side is wrong: fue approximates `ν(B) = ω(B)/δ(B)` by a
+40-weight convolution, drvec and drtran apply the rational filter exactly.  They
+agree for the first 40 periods after an intervention; afterwards fue leaves out
+a fraction `δ⁴¹` of the long-run effect (0 at δ = 0.5, 1e-4 at 0.8, 0.013 at 0.9,
+0.12 at 0.95, 0.66 at 0.99).  Since a `.pre`'s ω and δ were estimated with fue's
+regressor, drvec subtracts a slightly different component than fue estimated
+when δ is near 1 and the sample runs more than 40 periods past the
+intervention.  fue is not to be changed lightly (its estimates would move), and
+drvec keeps the exact filter.  Said in USAGE.md.  Found 2026-09-23. **Shared**
+with drtran's copy of `build_det_component`.
 
 **What it is.** `build_det_component` (fue_pre_reader.c ~394-400) applies
 `omega(B)/delta(B)` exactly; fue (`fue.c` ~2763-2767, `NuLag = 40`, and

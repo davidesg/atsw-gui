@@ -2616,6 +2616,23 @@ grep -aq "^Standard errors  : finite-difference Hessian" "$TMP/case.out" \
   || bad "-fdhess interior" "$(grep -a '^Standard errors' "$TMP/case.out")"
 echo
 
+# 8z. THE .inp WRITER KEEPS SCALE AND PRECISION (BUG-44).  refactor went out
+#     as %.2f -- 0.001 became 0.00, which fue reads as 1 -- and the data as
+#     %.10f, 3-4 significant digits for a series around 1e-7.
+echo "[8z] the .inp writer, scale and precision (BUG-44)"
+R=tests/repro/fixtures
+run "$R/mm_e4.inp" 2 1 1 -case 2 -writeinp "$TMP/we"
+rf=$(awk '/reescaling factor/{getline; print $2; exit}' "$TMP/we.1.inp" 2>/dev/null)
+awk -v r="$rf" 'BEGIN{exit !(r != "" && r > 0.0005 && r < 0.002)}' \
+  && ok "-writeinp: a refactor of 0.001 is written as such ($rf)" \
+  || bad "-writeinp refactor" "'$rf'"
+run "$R/mm_e-7.inp" 2 1 1 -case 2 -writeinp "$TMP/wt"
+d1=$(awk '/Time series/{getline; print $1; exit}' "$TMP/wt.1.inp" 2>/dev/null)
+nd=$(printf '%s' "$d1" | sed 's/e.*//; s/[^0-9]//g; s/^0*//' | wc -c)
+[ "$nd" -ge 15 ] && ok "-writeinp: a series around 1e-8 keeps its digits ($d1)" \
+                 || bad "-writeinp precision" "'$d1'"
+echo
+
 # ================================================== 9 MEMORY (opt-in) ==
 # Off by default so `make test` is deterministic on any machine; run it with
 #     VALGRIND=1 make test

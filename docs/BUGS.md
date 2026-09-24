@@ -1082,7 +1082,9 @@ optimiser's scaling, not the starting point, and the search cannot fix it.
 
 ## BUG-44 — the `.inp` writer loses precision on small series and can write a zero rescaling factor
 
-**Status: OPEN.** Found 2026-09-23.
+**Status: FIXED 2026-09-24.** Data and μ written with `%.17g`, refactor and
+the AR seeds with `%.10g`: mink-muskrat ×1e4 writes refactor `0.001`, ×1e-7
+writes `1.0388798000000168e-08` (17 digits).  Test 8z.  Found 2026-09-23.
 
 **What it is.** `write_inp_series` writes the data with `%.10f` (~2811) and
 `refactor` with `%.2f` (~2805).

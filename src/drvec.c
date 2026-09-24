@@ -2990,7 +2990,7 @@ static int write_inp_series(const char *path, const char *name,
     fprintf(f, "** Number and orders of regular AR operators:\n");
     if (par > 0) {
         fprintf(f, "1 %d\n**\n", par);
-        for (k = 1; k <= par; k++) fprintf(f, "%.6f  1\n", phi[k] * 1.0);
+        for (k = 1; k <= par; k++) fprintf(f, "%.10g  1\n", phi[k] * 1.0);
     } else fprintf(f, "0\n");
     fprintf(f, "** Number and orders of annual AR operators:\n0\n");
     fprintf(f, "** Number and orders of regular MA operators:\n");
@@ -3013,7 +3013,7 @@ static int write_inp_series(const char *path, const char *name,
        distinguishes the two by the FLAG, not by the value: "value 1" means
        estimate, and a single "0" means the mean is not part of the model.    */
     fprintf(f, "** Mean parameter (mu):\n");
-    if (mu_free) fprintf(f, "%.6f  1\n", mean * refactor);
+    if (mu_free) fprintf(f, "%.17g  1\n", mean * refactor);
     else         fprintf(f, "0\n");
     /* Series already stationary, and already in logs if the original .inp was:
        identity and zero differences.                                        */
@@ -3030,13 +3030,17 @@ static int write_inp_series(const char *path, const char *name,
         fprintf(f, "\n");
     } else fprintf(f, " 0\n");
     fprintf(f, "** ACF/PACF bands (0 Automatic) and reescaling factor: \n");
-    fprintf(f, " 0.00 %.2f\n", refactor);
+    /*  BUG-44: %.2f wrote any refactor <= 0.005 as 0.00, which fue reads as
+     *  1 -- while mu above had been scaled by the true factor.  And %.10f
+     *  kept 3-4 significant digits of a series around 1e-7.  The writer-side
+     *  twin of fue BUG-0021 / art BUG-0188.                                */
+    fprintf(f, " 0.00 %.10g\n", refactor);
     fprintf(f, "** Time series (stochastic and non-standard deterministic"
                " variables): \n");
     /* The data go RAW: refactor is a directive and fue applies it itself
        (w = refactor * BoxCox(z), BRIDGE_DESIGN.md).  Pre-multiplying here would
        apply it twice.  mu does go scaled, because it is the mean of w.       */
-    for (t = 1; t <= n; t++) fprintf(f, "%.10f\n", col[t]);
+    for (t = 1; t <= n; t++) fprintf(f, "%.17g\n", col[t]);
     fclose(f);
 
     if (!quiet_mode)

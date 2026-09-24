@@ -1078,6 +1078,14 @@ in case 2 but every rank stops by criterion 3 and the sequence is not
 interpretable (LRs −464.7 and 628.8) — an optimisation problem of dimension, not
 of scale.  Test 8ab.  Found 2026-09-23 (external validation).
 
+**Tried and not kept (2026-09-24): restarting est() from the winner** while a
+stop by criterion 3 keeps improving.  On rao6, r = 4, ten restarts crept from
+−1079.47 to −1077.38 (+2.1, 75 s per rank), each stopping by criterion 3 again:
+a flat, ill-conditioned surface, not a stale Hessian.  The real symptom is the
+spread between starts (−1077 to −2143).  M = 8 with p = 2 on 123 observations is
+left as a known limit: the report flags every such rank with `[check: …
+criterion 3]` and the search table shows the spread.
+
 **What it is.**
 1. When the start is non-stationary (`ifault = 3`) the fit fails; there is no
    fallback to a shrunk or OLS start. `-seedjoh` aborts the same way (exit 2)

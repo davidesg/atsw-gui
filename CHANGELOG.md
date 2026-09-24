@@ -7,6 +7,21 @@ publicación: `v*`.
 
 ## Sin publicar
 
+### El ajuste con r = 0 parte de la escalera (BUG-50), y lo que eso cambia
+
+El ajuste directo con r = 0 se quedaba en un óptimo local: en mink-muskrat,
+logL −6,3311 desde todos los arranques, frente a −1,0494 subiendo desde la
+puerta. `-lrtest` usaba ese L(0): LR(0→1) caso 2 25,62 → 15,06. La afirmación
+de homologación «r = 1» para estos datos queda retirada; el bootstrap da
+p = 0,475. Las réplicas del bootstrap se ajustan ahora igual que los datos.
+
+### Opciones que se ignoraban y detalles del informe (BUG-45)
+
+Combinaciones sin sentido se rechazan con código 2; `-name` en la ruta `.inp`;
+prefijos separados; `-specs` con q = 0; etiquetas de raíces; bloque VEC de
+`-warma` en el orden del `.inp`; `-rungs` desde el peldaño inferior; deriva en
+la ecuación del caso 3.
+
 ### Previsiones en las unidades de cada serie (BUG-36)
 
 En la ruta `.pre` (y con `-interv`) la previsión y la evaluación móvil se

@@ -90,12 +90,20 @@ estimate moves: the change is to a verdict, not to a fit.
 
 | data | `drvec -lrtest` | reference | |
 |---|---|---|---|
-| `mink_muskrat` (M=2) | LR(0→1) = **25.62** vs 15.67 at 5 % → **r = 1** | r = 1, the published analysis of these data | ✔ |
+| `mink_muskrat` (M=2) | LR(0→1) = **25.62** vs 15.67 at 5 % → **r = 1** — *withdrawn 2026-09-24, see below* | r = 1, the published analysis of these data | ✘ |
 | `urca_UKconsumption` (M=3) | LR(0→1) = 25.52 (5 %), LR(1→2) = **70.12** (1 %) → **r = 2** | `ca.jo(type="eigen")` gives r = 2 | ✔ |
 
 ```sh
 bin/drvec datasets/mauricio/mink_muskrat 2 1 0 -case 2 -lrtest
 ```
+
+> **Correction, 2026-09-24 (BUG-50).** The 25.62 used an `r = 0` fit stuck at a
+> local optimum (logL −6.3311); climbing the ladder reaches −1.0494 for the same
+> model, and LR(0→1) = **15.06**: below 15.67, rejected only at 10 % against the
+> table.  That `r = 0` fit has an MA root on the unit circle, where the table
+> does not apply; the parametric bootstrap (199 replications) gives p = 0.475
+> (5 % critical value 24.84).  With `p = 2, q = 1, case 2` and n = 61, drvec does
+> **not** reproduce r = 1 for these data.  The UKconsumption row is unaffected.
 
 The critical values are the non-standard Johansen ones (λ-max form), from
 Osterwald-Lenum (1992), as implemented in the `urca` package (Pfaff, 2008). MA terms do not affect the asymptotic

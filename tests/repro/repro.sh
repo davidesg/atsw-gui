@@ -144,9 +144,9 @@ fi
 if want 38; then hdr 38 "the univariate evaluation of a .pre drops a FIXED mean"
   cp "$DS/mauricio/mink_muskrat.inp" m.inp; cp "$F"/free.?.pre "$F"/fixd.?.pre .
   for p in free fixd; do printf '  %s (mu flag %s): ' $p "$(sed -n '27p' $p.1.pre)"
-    "$B" m 2 1 1 -case 2 -mafree -seed $p -eval 2>/dev/null | grep -a 'suma'; done
+    "$B" m 2 1 1 -case 2 -mafree -seed $p -eval 2>/dev/null | grep -a 'sum univariate'; done
   cp "$F"/anna.?.pre .
-  printf '  annual AR(1) seed: '; "$B" m 2 1 1 -case 2 -mafree -seed anna -eval 2>&1 | grep -a -i 'suma\|order' | head -2 | tr '\n' ' '; echo
+  printf '  annual AR(1) seed: '; "$B" m 2 1 1 -case 2 -mafree -seed anna -eval 2>&1 | grep -a -i 'sum univariate\|order' | head -2 | tr '\n' ' '; echo
 fi
 
 if want 39; then hdr 39 "the shared .pre reader accepts malformed files"

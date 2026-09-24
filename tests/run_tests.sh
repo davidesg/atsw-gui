@@ -2383,7 +2383,7 @@ if grep -aq "left$" "$TMP/case.out" || grep -aq "null vector u of Theta\*(1)" "$
     ok "BUG-49: the boundary MA root is diagnosed with its direction"
 else bad "BUG-49" "the boundary MA root is starred but not diagnosed"; fi
 run "$MM" 2 1 0 -case 2 -lrtest
-if grep -aq "MA on the boundary at rank 1" "$TMP/case.out"; then
+if grep -aq "MA on the boundary at rank [01]" "$TMP/case.out"; then
     ok "BUG-49: -lrtest marks the LR built on a boundary fit"
 else bad "BUG-49" "-lrtest does not mark the boundary fit"; fi
 
@@ -2554,7 +2554,7 @@ echo "[8w] the seed .pre's univariate evaluation (BUG-38)"
 R=tests/repro/fixtures
 cp "$MM" "$TMP/m.inp"; cp "$R"/free.?.pre "$R"/fixd.?.pre "$R"/anna.?.pre "$TMP/"
 suma() { (cd "$TMP" && timeout "$RUN_TIMEOUT" "$ABSDRVEC" m 2 1 1 -case 2 -mafree -seed "$1" -eval 2>/dev/null) \
-         | awk '/suma univariante/{for(i=1;i<=NF;i++) if($i=="=") {print $(i+1); exit}}'; }
+         | awk '/sum univariate =/{for(i=1;i<=NF;i++) if($i=="=") {print $(i+1); exit}}'; }
 sf=$(suma free); sx=$(suma fixd); sa=$(suma anna)
 awk -v a="$sf" -v b="$sx" 'BEGIN{exit !(a != "" && a == b)}' \
   && ok "seed: a fixed mean is evaluated at its value ($sf = $sx)" \

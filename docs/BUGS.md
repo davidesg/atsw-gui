@@ -1103,8 +1103,18 @@ BUG-0021/art BUG-0188, fixed there on 2026-09-23.
 
 ## BUG-45 — options accepted and ignored, and smaller report inconsistencies
 
-**Status: OPEN.** Found 2026-09-23. Collected in one entry because each is small;
-split any of them when it is fixed.
+**Status: FIXED 2026-09-24**, every item.  Refused with exit 2 (recognised,
+not honoured): two modes at once, `-f`/`-estwin` with a mode, `-bootstrap`
+without `-lrtest`, `-writeinp` with `-writeres`, `-case 1 -mean`, `-warma` with
+`-diagar`/`-diagma`.  Fixed: `-name` on the `.inp` route; separate prefixes;
+`-specs` with `q = 0` reads `n/a` and `yes`, and a 0-df step says "the same
+model"; "Roots of" instead of "Inverse roots"; the `-warma` VEC block in the
+`.inp`'s order, named, with `alpha = -Lambda` and `Pi = alpha beta'`; `-rungs`
+starts each rung from the one below (which found BUG-50); the `-lrtest` header
+says `r = 0..M-1`; `-eval` in English; `usage()`; case 3 prints
+`Gamma(L)(nabla Y_t - delta) = …` and the drift `delta`.  The earlier refusals
+of BUG-30/31/36 moved from exit 1 to exit 2.  Found 2026-09-23. Collected in
+one entry because each is small.
 
 **What it is.** How it was found: each one run, in the 2026-09-23 review.
 - `-name NAME` is ignored on the `.inp` route (no `NAME.out`).
@@ -1334,3 +1344,33 @@ output:
   `-bootstrap` raises that to 78 %/20 %; it does not fix it.
 - **The choice of the `Y₁` block** is the user's and is not checked. The
   normalisation alarm fires when the relation barely involves it.
+
+---
+
+## BUG-50 — the plain `r = 0` fit stops at a local optimum, and `-lrtest` built LR(0→1) on it
+
+**Status: FIXED 2026-09-24.**
+
+**How it was found.** Making `-rungs` start each rung from the one below
+(BUG-45) broke the check "the top rung reproduces the plain r = 0 fit": the top
+rung came out 5.28 higher.  `-multistart 20` on the plain fit never left −6.3311.
+
+**What it is.** At `r = 0` the ladder was not used: the fit started from
+`init_guess`.  On mink-muskrat (`2 1 0`, cases 1 and 2) every start of the plain
+search — 21 with `-multistart 20` — stops at logL −6.3311, while climbing from
+the certified gate (rung 0 → 1 → 2, the same model at the top) reaches
+**−1.0494**, 5.28 higher.  `-lrtest` took its L(0) from the plain fit, and so did
+the bootstrap's replications.
+
+**What it cost.** LR(0→1) inflated by ~10.6 on the reference example:
+case 1 20.03 → 9.47, case 2 **25.62 → 15.06** — from "reject at 1 %" to "reject at
+10 %" against the table (15.67 at 5 %).  HOMOLOGATION §2.1's "r = 1 ✔" rested on
+it.  The new r = 0 optimum has an MA root on the unit circle (BUG-49), so the
+table does not apply there anyway; the bootstrap (199 reps, replications now
+fitted the same way) gives p = 0.475, 5 % critical value 24.84: **r = 0 is not
+rejected** at this sample size.
+
+**Fix.** `ladder_seed_r0`: at `r = 0` the ladder's top rung is the start (main
+fit, rank 0 of `-lrtest`, and `fit_ll` for the bootstrap, which now seeds every
+rank as the observed data are).  The 22 other golden cases do not move.
+

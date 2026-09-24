@@ -17,7 +17,7 @@
 /*    file   : data file name (without .inp extension)                        */
 /*    p      : AR order of the stationary VARMA on Ȳ_t                        */
 /*    q      : MA order                                                       */
-/*    r      : cointegration rank (0 < r < M, or 0 for -lrtest)               */
+/*    r      : cointegration rank (0 <= r < M; ignored with -lrtest)          */
 /*                                                                             */
 /*  Copyright (C) 1995-2026  J.A. Mauricio, A.B. Treadway & D.E. Guerrero.   */
 /*  GPL v2 or later.                                                           */
@@ -193,6 +193,7 @@ int met = 1;          /* both EXACT ML (AS 311): 1 truncates the xi sequence at
                          1e-3, 2 does not (xitol < 0).  BUG-47: this said
                          "2 = approximate", and the report followed it.      */
 int global_case = 1;  /* deterministic case (Mauricio Remark 6) */
+static int case_given = 0;   /* -case was on the command line (BUG-45) */
 int global_lrtest = 0; /* if 1, perform sequential LR test for rank */
 int global_rungs  = 0; /* if 1, report the ladder's rungs 0-2 and their LRs   */
 
@@ -1783,7 +1784,9 @@ static void operator_roots(struct Tvarma *v)
 {
     real minmod = 1.0e12, min_ar = 1.0e12, min_ma = 1.0e12;
     if (v->p <= 0 && v->q <= 0) return;
-    fprintf(outputv, "\nInverse roots of |phi(B)|=0 and |theta(B)|=0 "
+    /*  BUG-45: this said "Inverse roots" and prints the moduli of the ROOTS
+     *  (1/|companion eigenvalue|), which is what "> 1" refers to.          */
+    fprintf(outputv, "\nRoots of |phi(B)|=0 and |theta(B)|=0 "
                      "(moduli; > 1 is stationary/invertible):\n\n");
     report_operator_roots("AR (Phi)",   v->phi,   v->m, v->p, &min_ar, 0);
     report_operator_roots("MA (Theta)", v->theta, v->m, v->q, &min_ma, 0);
@@ -1988,6 +1991,11 @@ static int simulate_h0(struct Tvarma *v, real **B2, int r, real **out)
 }
 
 /*  fit_ll — re-estimates at rank rr and returns the logL, or 0 with ok = 0. */
+/*  Defined further down, with the ladder (P12).                             */
+static int  ladder_wanted(void);
+static int  gate_profile_seed(real *x, int np);
+static void ladder_seed_r0(real *x, int np);
+
 static real fit_ll(int rr, int *ok)
 {
     int np, ifr = 0;
@@ -2004,6 +2012,12 @@ static real fit_ll(int rr, int *ok)
      *  worse estimator than the one it is compared with.                  */
     (void) vr;
     init_guess(xr, np);
+    /*  ... and started as the observed data are: the ladder at every rank
+     *  (BUG-50).  A replication fitted from a worse start than the data
+     *  would put its L(0) in a local optimum, inflate LR* and push the
+     *  bootstrap's critical values up.                                     */
+    if (rr > 0 && ladder_wanted())       gate_profile_seed(xr, np);
+    else if (rr == 0 && ladder_wanted()) ladder_seed_r0(xr, np);
     {
         real s2r;
         ifr = fit_search(xr, np, devr, covr, &ll, &s2r, 1, 0, NULL);
@@ -2447,7 +2461,8 @@ static int build_weakex_A(int eq)
 
 static int   global_writeinp = 0;    /* -writeinp <prefix>  (components of Ȳ) */
 static int   global_writeres = 0;    /* -writeres <prefijo>  (residuos)         */
-static char *inp_prefix      = NULL;
+static char *inp_prefix      = NULL;   /* -writeinp's */
+static char *res_prefix      = NULL;   /* -writeres's: its own (BUG-45) */
 static int   global_eval     = 0;    /* -eval: evaluate and exit, without optimising */
 static int   global_fdhess   = 0;    /* -fdhess: standard errors from a
                                         finite-difference Hessian at the optimum */
@@ -5053,6 +5068,32 @@ static int fit_r0_ladder(real ***F0, real ***Th0, real **S0, real *ll0, int echo
     return ok;
 }
 
+/*  ladder_seed_r0 -- at r = 0 the ladder's top rung IS the model, so its
+ *  optimum is the start.  Found 2026-09-24 through -rungs: on mink-muskrat
+ *  (2 1 0 -case 1) the plain fit stops at logL -6.3311 from every one of 21
+ *  starts, and climbing from the certified gate reaches -1.0495 -- the same
+ *  model, 5.28 higher.  -lrtest took its L(0) from the plain fit, which
+ *  inflated LR(0 -> 1) by ~10.6.  The gate itself (all diagonal) is its own
+ *  rung and needs nothing.                                                   */
+static void ladder_seed_r0(real *x, int np)
+{
+    int M = nser, nf = (global_p > 1) ? global_p - 1 : 0, q = global_q, i;
+    real ***F, ***Th, **S, *mu, ll = 0.0;
+    (void) np;
+    if (global_r != 0) return;
+    if (global_diag_ar && global_diag_ma && global_diag_cov) return;
+    F  = tensor(1, (nf > 0 ? nf : 1), 1, M, 1, M);
+    Th = tensor(1, (q > 0 ? q : 1), 1, M, 1, M);
+    S  = matrix(1, M, 1, M);
+    mu = vector(1, M);
+    for (i = 1; i <= M; i++) mu[i] = (global_case == 3) ? x[i] : 0.0;
+    if (fit_r0_ladder(F, Th, S, &ll, 1)) pack_r0(x, F, Th, S, mu);
+    free_vector(mu, 1, M);
+    free_matrix(S, 1, M, 1, M);
+    free_tensor(Th, 1, (q > 0 ? q : 1), 1, M, 1, M);
+    free_tensor(F, 1, (nf > 0 ? nf : 1), 1, M, 1, M);
+}
+
 static void free_ladder_cache(void)
 {
     if (!lad_ok) return;
@@ -7008,49 +7049,65 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
                         for (int j2 = 1; j2 <= nser; j2++) Tw[k2][i2][j2] = 0.0;
                 resid = warma_inverse(vp, B2w, Lw, Fw, Tw, Sw);
 
+                /*  BUG-45: this block printed Lambda (Mauricio's sign) and Pi
+                 *  in the INTERNAL order, unlabelled, while the main report
+                 *  uses Johansen's alpha = -Lambda in the .inp's order.  Same
+                 *  conventions here: rows and columns in the .inp's order,
+                 *  named; alpha = -Lambda; Pi = alpha beta'.                 */
                 fprintf(outputv,
                   "\n--- the same fit in VEC coordinates ---\n"
-                  "  (I - F1 L - ...) nabla Y_t = -Lambda (B'Y_{t-1} - E[W]) "
-                  "+ (I - Theta1 L - ...) A_t\n"
+                  "  nabla Y_t = alpha (beta'Y_{t-1} - E[W]) + Gamma_1 nabla Y_{t-1}"
+                  " + ... + Theta(L) A_t\n"
                   "  recovered by inverting the transformation once, not "
-                  "estimated again.\n");
-                fprintf(outputv, "\nLambda (M x r) =\n");
+                  "estimated again.\n"
+                  "  Rows and columns in the .inp's order; alpha = -Lambda "
+                  "(negative = error-correcting).\n");
+#define WPRINT_HDR() do { fprintf(outputv, "  %-12s", ""); \
+        for (int j3 = 1; j3 <= nser; j3++) fprintf(outputv, "%12.12s", \
+            series_names ? series_names[j3] : "y"); fprintf(outputv, "\n"); } while (0)
+                fprintf(outputv, "\nalpha (M x r) =\n");
                 for (int i2 = 1; i2 <= nser; i2++) {
-                    fprintf(outputv, "  ");
+                    fprintf(outputv, "  %-12.12s", series_names ? series_names[i2] : "y");
                     for (int j2 = 1; j2 <= r; j2++)
-                        fprintf(outputv, "%12.6f", Lw[i2][j2]);
+                        fprintf(outputv, "%12.6f", -Lw[inp2lam(i2)][j2]);
                     fprintf(outputv, "\n");
                 }
                 for (int k2 = 1; k2 <= nfw; k2++) {
-                    fprintf(outputv, "F[%d] (M x M) =\n", k2);
+                    fprintf(outputv, "Gamma[%d] (M x M) =\n", k2);
+                    WPRINT_HDR();
                     for (int i2 = 1; i2 <= nser; i2++) {
-                        fprintf(outputv, "  ");
+                        fprintf(outputv, "  %-12.12s", series_names ? series_names[i2] : "y");
                         for (int j2 = 1; j2 <= nser; j2++)
-                            fprintf(outputv, "%12.6f", Fw[k2][i2][j2]);
+                            fprintf(outputv, "%12.6f", Fw[k2][inp2lam(i2)][inp2lam(j2)]);
                         fprintf(outputv, "\n");
                     }
                 }
                 for (int k2 = 1; k2 <= global_q; k2++) {
                     fprintf(outputv, "Theta[%d] (M x M) =\n", k2);
+                    WPRINT_HDR();
                     for (int i2 = 1; i2 <= nser; i2++) {
-                        fprintf(outputv, "  ");
+                        fprintf(outputv, "  %-12.12s", series_names ? series_names[i2] : "y");
                         for (int j2 = 1; j2 <= nser; j2++)
-                            fprintf(outputv, "%12.6f", Tw[k2][i2][j2]);
+                            fprintf(outputv, "%12.6f", Tw[k2][inp2lam(i2)][inp2lam(j2)]);
                         fprintf(outputv, "\n");
                     }
                 }
-                fprintf(outputv, "Pi = Lambda B' (M x M) =\n");
+                fprintf(outputv, "Pi = alpha beta' (M x M) =\n");
+                WPRINT_HDR();
                 for (int i2 = 1; i2 <= nser; i2++) {
-                    fprintf(outputv, "  ");
+                    int a2 = inp2lam(i2);
+                    fprintf(outputv, "  %-12.12s", series_names ? series_names[i2] : "y");
                     for (int j2 = 1; j2 <= nser; j2++) {
+                        int b2 = inp2lam(j2);
                         real acc = 0.0;
                         for (int k2 = 1; k2 <= r; k2++)
-                            acc += Lw[i2][k2] * ((j2 <= r) ? (j2 == k2 ? 1.0 : 0.0)
-                                                           : B2w[j2 - r][k2]);
+                            acc -= Lw[a2][k2] * ((b2 <= r) ? (b2 == k2 ? 1.0 : 0.0)
+                                                           : B2w[b2 - r][k2]);
                         fprintf(outputv, "%12.6f", acc);
                     }
                     fprintf(outputv, "\n");
                 }
+#undef WPRINT_HDR
                 gg = granger_smin(Lw, B2w, Tw, nser, r, global_q);
                 if (gg >= 0.0)
                     fprintf(outputv,
@@ -7283,9 +7340,13 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
          *  is error-correcting.  A reader who takes Lambda for alpha reads the
          *  adjustment backwards, which is the one misreading this table has to
          *  make impossible.                                                  */
+        fprintf(outputv, "%s",
+            global_case == 3
+              ? "\n  Gamma(L) (nabla Y_t - delta) = alpha (beta'Y_{t-1} - E[W])"
+                " + Theta(L) A_t,  delta = E[nabla Y]\n"
+              : "\n  nabla Y_t = alpha (beta'Y_{t-1} - E[W]) + Gamma_1 nabla Y_{t-1}"
+                " + ... + Theta(L) A_t\n");
         fprintf(outputv,
-            "\n  nabla Y_t = alpha (beta'Y_{t-1} - E[W]) + Gamma_1 nabla Y_{t-1}"
-            " + ... + Theta(L) A_t\n"
             "  with Pi = alpha beta' of rank r, and beta = [I_r ; beta_2] "
             "normalised on Y1.\n"
             "  Johansen's notation throughout: a NEGATIVE alpha is "
@@ -7438,15 +7499,37 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
          *  that speaks the algorithm's notation charges the reader for an
          *  internal decision.                                                */
         banner("Vector Error Correction Model");
-        fprintf(outputv, "\n  nabla Y_t = alpha (beta'Y_{t-1} - E[W])"
-                         " + Gamma_1 nabla Y_{t-1} + ... + Theta(L) A_t\n"
-                         "  Theta(L) = I - Theta1 L - ... - Theta_q L^q,"
-                         "   Pi = alpha beta'\n\n");
+        /*  BUG-45: in case 3 the equation omitted the drift.  The model is
+         *  mean-corrected in nabla Y: Gamma(L)(nabla Y_t - delta), with
+         *  delta = E[nabla Y] -- E[nabla Y2] on the Y2 block and, since W has
+         *  no drift, -B2' E[nabla Y2] on the Y1 block.  The estimation was
+         *  right; only the printed form was not.                            */
+        if (global_case == 3)
+            fprintf(outputv, "\n  Gamma(L) (nabla Y_t - delta) = alpha (beta'Y_{t-1} - E[W])"
+                             " + Theta(L) A_t\n"
+                             "  Gamma(L) = I - Gamma_1 L - ...,  Theta(L) = I - Theta1 L"
+                             " - ... - Theta_q L^q,   Pi = alpha beta'\n"
+                             "  delta = E[nabla Y], the drift: E[nabla Y2] on the Y2 block,"
+                             " -beta_2' E[nabla Y2] on Y1\n\n");
+        else
+            fprintf(outputv, "\n  nabla Y_t = alpha (beta'Y_{t-1} - E[W])"
+                             " + Gamma_1 nabla Y_{t-1} + ... + Theta(L) A_t\n"
+                             "  Theta(L) = I - Theta1 L - ... - Theta_q L^q,"
+                             "   Pi = alpha beta'\n\n");
         if (nmu > 0) {
             fprintf(outputv, "%s vector:\n",
                     global_case == 3 ? "E[nablaY2] and E[W]" : "E[W]");
             for (int a2 = 1; a2 <= nmu; a2++)
                 fprintf(outputv, "  %12.6f\n", mu_m[a2]);
+        }
+        if (global_case == 3 && nmu >= s) {
+            fprintf(outputv, "delta = E[nabla Y] (M), rows in the .inp's order:\n");
+            for (int a2 = 1; a2 <= nser; a2++) {
+                real d = 0.0;
+                if (a2 <= s) d = mu_m[a2];
+                else for (int i3 = 1; i3 <= s; i3++) d -= B2m[i3][a2 - s] * mu_m[i3];
+                fprintf(outputv, "  %12.6f\n", d);
+            }
         }
         fprintf(outputv, "alpha matrix (M x r), rows in the .inp's order:\n");
         for (int a2 = 1; a2 <= nser; a2++) {
@@ -7903,7 +7986,15 @@ static int run_rungs(void)
         real *ll  = vector(0, NR - 1);
         int  *npr = ivector(0, NR - 1);
         int  *good = ivector(0, NR - 1);
-        int k;
+        int k, M = nser, nf = (global_p > 1) ? global_p - 1 : 0, q = global_q;
+        /*  BUG-45: USAGE.md says each rung starts from the optimum of the one
+         *  below, and the code cold-started every rung.  It now carries F,
+         *  Theta, Sigma and mu up, as the ladder does (fit_r0_ladder), and
+         *  fits with the same search.                                        */
+        real ***Fc = tensor(1, (nf > 0 ? nf : 1), 1, M, 1, M);
+        real ***Tc = tensor(1, (q > 0 ? q : 1), 1, M, 1, M);
+        real **Sc = matrix(1, M, 1, M), *muc = vector(1, M);
+        int have_below = 0;
 
         macheps = cmacheps();
         global_r = 0;
@@ -7923,21 +8014,38 @@ static int run_rungs(void)
             xr = vector(1, np); devr = vector(1, np);
             covr = matrix(1, np, 1, np);
             vr.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
-            init_guess(xr, np);
-            vec_shootx(xr, &vr, &ifr, 1, 0);
-            est(&vec_shootx, np, xr, devr, covr, 500, 200, 1e-5, 1e-7,
-                vr.xitol, vr.a, &vr.sigma2, &vr.logelf, &ifr);
+            if (have_below) pack_r0(xr, Fc, Tc, Sc, muc);
+            else            init_guess(xr, np);
+            {
+                real llk = 0.0, s2k;
+                ifr = fit_search(xr, np, devr, covr, &llk, &s2k, 1, 0, NULL);
+                vr.logelf = llk;
+            }
             good[k] = (ifr == 0);
             npr[k]  = np;
             ll[k]   = good[k] ? vr.logelf : 0.0;
+            have_below = 0;
+            {   /*  reserved here, whatever happened, and released once below */
+                real llk = vr.logelf;
+                int ifs = 0;
+                vec_shootx(xr, &vr, &ifs, 1, 0);
+                vr.logelf = llk;
+            }
+            if (good[k]) {
+                int i2, j2, k2;
+                {
+                    /*  at r = 0 Phi* = F, Theta* = Theta, Sigma* = Sigma      */
+                    for (k2 = 1; k2 <= nf; k2++) for (i2 = 1; i2 <= M; i2++) for (j2 = 1; j2 <= M; j2++) Fc[k2][i2][j2] = vr.phi[k2][i2][j2];
+                    for (k2 = 1; k2 <= q; k2++)  for (i2 = 1; i2 <= M; i2++) for (j2 = 1; j2 <= M; j2++) Tc[k2][i2][j2] = vr.theta[k2][i2][j2];
+                    for (i2 = 1; i2 <= M; i2++) { muc[i2] = vr.mu[i2]; for (j2 = 1; j2 <= M; j2++) Sc[i2][j2] = vr.qq[i2][j2]; }
+                    have_below = 1;
+                }
+            }
             printf("  rung %s : %s (ifault=%d)\n", NAME[k],
                    good[k] ? "ok" : "estimation failed", ifr);
             /*  Rung 0 is the base: its contract is demanded right here, which is
              *  where it is being built upon.                                 */
-            if (k == 0 && good[k]) {
-                vec_shootx(xr, &vr, &ifr, 0, 0);       /* recover the fit */
-                gate_contract(&vr);
-            }
+            if (k == 0 && good[k]) gate_contract(&vr);
             vec_shootx(xr, &vr, &ifr, 0, 1);           /* liberar */
             free_matrix(covr, 1, np, 1, np);
             free_vector(devr, 1, np);
@@ -7991,6 +8099,9 @@ static int run_rungs(void)
         free_ivector(good, 0, NR - 1);
         free_ivector(npr, 0, NR - 1);
         free_vector(ll, 0, NR - 1);
+        free_tensor(Fc, 1, (nf > 0 ? nf : 1), 1, M, 1, M);
+        free_tensor(Tc, 1, (q > 0 ? q : 1), 1, M, 1, M);
+        free_matrix(Sc, 1, M, 1, M); free_vector(muc, 1, M);
         fclose(outputv);
         printf("Done. Output written to %s\n", outputf);
         cleanup_names(outputf, inputf, base_name);
@@ -8091,7 +8202,10 @@ static int run_specs(void)
                     free_matrix(B2w, 1, s2, 1, global_r);
                 } else gg[k] = granger_sv;
             }
-            adm[k] = (okv[k] && gg[k] >= global_rankadm_tol);
+            /*  gg = -1 is "does not apply" (q = 0: Theta(1) = I, the condition
+             *  holds trivially), not a failure: with q = 0 every non-warma
+             *  rung was marked NO (BUG-45).                                */
+            adm[k] = (okv[k] && (gg[k] < 0.0 || gg[k] >= global_rankadm_tol));
             printf("  %s : %s\n", NM[k], okv[k] ? "ok" : "fallo");
             vec_shootx(xs, &vs, &ifs, 0, 1);
             free_matrix(covs, 1, np, 1, np);
@@ -8110,10 +8224,12 @@ static int run_specs(void)
                 fprintf(outputv, "  %s  %4d   estimation failed\n", NM[k], npv[k]);
                 continue;
             }
-            fprintf(outputv, "  %s  %4d %13.4f  %-6s %8.3e %8.3f %8.4f  %s\n",
-                    NM[k], npv[k], ll[k], tn, gg[k],
-                    (mam[k] >= 0.0) ? mam[k] : 0.0, b2v[k],
-                    adm[k] ? "yes" : "NO");
+            fprintf(outputv, "  %s  %4d %13.4f  %-6s ", NM[k], npv[k], ll[k], tn);
+            if (gg[k] >= 0.0) fprintf(outputv, "%8.3e ", gg[k]);
+            else              fprintf(outputv, "%8s ", "n/a");
+            if (mam[k] >= 0.0) fprintf(outputv, "%8.3f ", mam[k]);
+            else               fprintf(outputv, "%8s ", "n/a");
+            fprintf(outputv, "%8.4f  %s\n", b2v[k], adm[k] ? "yes" : "NO");
         }
 
         fprintf(outputv,
@@ -8128,7 +8244,9 @@ static int run_specs(void)
             }
             lr = 2.0 * (ll[k+1] - ll[k]);
             fprintf(outputv, "  %s -> %s %8.3f %4d   ", NM[k], NM[k+1], lr, df);
-            if (lr < -1.0e-6)
+            if (df == 0 && fabs(lr) < 1.0e-6)
+                fprintf(outputv, "the same model (no MA left to restrict)\n");
+            else if (lr < -1.0e-6)
                 fprintf(outputv, "NEGATIVE: the wider fit is worse, so it did "
                                  "not converge\n");
             else if (!adm[k] || !adm[k+1])
@@ -8369,6 +8487,8 @@ static int run_lrtest(void)
              *  below the rank are computed once and cached.               */
             if (rr > 0 && ladder_wanted())
                 gate_profile_seed(xr, np);
+            else if (rr == 0 && ladder_wanted())
+                ladder_seed_r0(xr, np);
             fprintf(outputv, "\n--- rank r = %d ---\n", rr);
             ifr = fit_search(xr, np, devr, covr, &llr, &s2r,
                              (global_multistart > 1) ? global_multistart : 1,
@@ -8710,11 +8830,12 @@ static void usage(FILE *o)
     fprintf(o, "  file  : data file name (without .inp extension)\n");
     fprintf(o, "  p     : AR order of stationary VARMA on Ȳ_t\n");
     fprintf(o, "  q     : MA order\n");
-    fprintf(o, "  r     : cointegration rank (0 < r < M; ignored with -lrtest)\n\n");
+    fprintf(o, "  r     : cointegration rank (0 <= r < M; 0 is the diagonal rung;\n"
+               "          ignored with -lrtest)\n\n");
     fprintf(o, "Deterministic cases (Mauricio 2006, Remark 6):\n");
     fprintf(o, "  -case 1 : E[∇Y₂]=0, E[W]=0     (default)\n");
-    fprintf(o, "  -case 2 : E[∇Y₂]=0, E[W]≠0     (-mean needed)\n");
-    fprintf(o, "  -case 3 : E[∇Y₂]≠0, E[W]≠0     (-mean needed)\n\n");
+    fprintf(o, "  -case 2 : E[∇Y₂]=0, E[W]≠0     (-mean alone also selects it)\n");
+    fprintf(o, "  -case 3 : E[∇Y₂]≠0, E[W]≠0\n\n");
     fprintf(o, "Data layout (cols 1..s are the Y₂ block, cols s+1..M the Y₁ block):\n");
     fprintf(o, "  default        every series in LEVELS; ∇Y₂ is formed internally\n");
     fprintf(o, "                 (one observation is consumed)\n");
@@ -9052,13 +9173,17 @@ static int parse_cli(int argc, char *argv[])
      *  says at a glance what was fitted.  -name overrides it, and is read here
      *  rather than in the option loop because the name has to exist before the
      *  files are opened.                                                     */
-    if (pre_route) {
+    {   /*  BUG-45: -name was read on the .pre route only, and silently
+         *  ignored on the .inp route.                                        */
         int k;
         for (k = first_opt; k + 1 < argc; k++)
             if (strcmp(argv[k], "-name") == 0) { model_name = argv[k+1]; break; }
-        if (model_name)
-            snprintf(out_base, sizeof out_base, "%s", model_name);
-        else {
+    }
+    if (model_name)
+        snprintf(out_base, sizeof out_base, "%s", model_name);
+    else if (pre_route) {
+        int k;
+        {
             char stem[128];
             size_t used = 0;
             out_base[0] = '\0';
@@ -9100,8 +9225,9 @@ static int parse_cli(int argc, char *argv[])
     /* Parse options */
     for (int i = first_opt; i < argc; i++) {
         if      (strcmp(argv[i], "-mean") == 0)    global_include_mean = 1;
-        else if (strcmp(argv[i], "-case") == 0 && i+1 < argc)
-            global_case = atoi(argv[++i]);
+        else if (strcmp(argv[i], "-case") == 0 && i+1 < argc) {
+            global_case = atoi(argv[++i]); case_given = 1;
+        }
         else if (strcmp(argv[i], "-diagar") == 0)  global_diag_ar = 1;
         else if (strcmp(argv[i], "-diagma") == 0)  global_diag_ma = 1;
         else if (strcmp(argv[i], "-diagcov") == 0) global_diag_cov = 1;
@@ -9142,7 +9268,7 @@ static int parse_cli(int argc, char *argv[])
             global_writeinp = 1; inp_prefix = argv[++i];
         }
         else if (strcmp(argv[i], "-writeres") == 0 && i+1 < argc) {
-            global_writeres = 1; inp_prefix = argv[++i];
+            global_writeres = 1; res_prefix = argv[++i];
         }
         else if (strcmp(argv[i], "-eval") == 0) global_eval = 1;
         else if (strcmp(argv[i], "-fdhess") == 0) global_fdhess = 1;
@@ -9180,8 +9306,18 @@ static int parse_cli(int argc, char *argv[])
             }
         }
     }
-    /* -mean implies case 2 (E[W]≠0) unless a case was given explicitly */
-    if (global_include_mean && global_case == 1) global_case = 2;
+    /* -mean implies case 2 (E[W]≠0) unless a case was given explicitly.
+       BUG-45: an explicit -case 1 was overridden all the same.  Case 1 has no
+       mean, so the two contradict each other: refused, not resolved.      */
+    if (global_include_mean && global_case == 1) {
+        if (case_given) {
+            fprintf(stderr, "ERROR: -case 1 has no deterministic term and -mean "
+                            "asks for one.  Drop one of them\n"
+                            "       (-mean alone means case 2).\n");
+            exit(2);
+        }
+        global_case = 2;
+    }
 
     /*  THE MOVING-AVERAGE DEFAULT, decided again on 2026-09-23: Theta FREE,
      *  which is Mauricio (2006)'s model.
@@ -9234,7 +9370,7 @@ static int parse_cli(int argc, char *argv[])
             "ERROR: -warma cannot be combined with -alpha or -weakex: the WARMA\n"
             "       parametrisation does not impose alpha = A psi.  Use -mawarma\n"
             "       (the same MA structure, VEC coordinates) with the restriction.\n");
-        exit(1);
+        exit(2);
     }
     /*  BUG-36.  With -differenced the Y2 block arrives differenced and its
      *  levels are cumulated from an arbitrary zero, so a LEVEL forecast of
@@ -9245,7 +9381,44 @@ static int parse_cli(int argc, char *argv[])
             "ERROR: -f and -estwin are incompatible with -differenced: the Y2\n"
             "       levels would be cumulated from an arbitrary zero.  Supply\n"
             "       every series in levels (the default layout).\n");
-        exit(1);
+        exit(2);
+    }
+    /*  BUG-45.  The modes are dispatched in turn and the first one returns,
+     *  so a second mode, a forecast asked of a mode, or a bootstrap with
+     *  nothing to bootstrap was dropped without a word (`-lrtest -specs'
+     *  ran only -specs).  Refused: exit 2, recognised but not honoured.   */
+    {
+        int nmodes = (global_rungs > 0) + (global_specs > 0)
+                   + (global_matest > 0 || global_artest > 0)
+                   + (global_lrtest > 0) + (global_eval > 0);
+        if (nmodes > 1) {
+            fprintf(stderr, "ERROR: one mode per run: -lrtest, -specs, -rungs, "
+                            "-matest/-artest and -eval\n"
+                            "       cannot be combined.\n");
+            exit(2);
+        }
+        if (nmodes == 1 && (global_fcast > 0 || global_estwin > 0)) {
+            fprintf(stderr, "ERROR: -f and -estwin act on a single fit; the mode "
+                            "asked for does not\n       produce one.  Run them "
+                            "separately.\n");
+            exit(2);
+        }
+        if (global_warma && (global_diag_ar || global_diag_ma)) {
+            fprintf(stderr, "ERROR: -warma has its own AR and MA structure and does "
+                            "not impose\n       -diagar/-diagma (the header said "
+                            "\"F diagonal\" all the same).\n");
+            exit(2);
+        }
+        if (global_writeinp && global_writeres) {
+            fprintf(stderr, "ERROR: -writeinp and -writeres each write their files "
+                            "and stop;\n       run them separately.\n");
+            exit(2);
+        }
+        if (global_boot > 0 && !global_lrtest) {
+            fprintf(stderr, "ERROR: -bootstrap calibrates -lrtest and does "
+                            "nothing without it.\n");
+            exit(2);
+        }
     }
     /*  BUG-31, case 1.  -matest and -artest simulate under H0 in LEVELS, into a
      *  sample laid out for the levels route; with -differenced the columns
@@ -9256,7 +9429,7 @@ static int parse_cli(int argc, char *argv[])
             "ERROR: -matest and -artest are incompatible with -differenced: the\n"
             "       bootstrap simulates the series in levels.  Supply every\n"
             "       series in levels (the default layout).\n");
-        exit(1);
+        exit(2);
     }
 
     if (global_lrtest) {
@@ -9318,7 +9491,7 @@ static int run_eval(real *x, int npar, struct Tvarma *vp)
                    the sum of the univariate ones from the .pre files.  What is
                    left over is the transformation's gap, not the fit's.      */
                 fprintf(outputv, "sum univariate : %15.10f\n", seed_logl_sum);
-                printf("      suma univariante = %15.10f   diferencia = %.3e\n",
+                printf("      sum univariate = %15.10f   difference = %.3e\n",
                        seed_logl_sum, ll - seed_logl_sum);
             }
         }
@@ -9468,9 +9641,14 @@ int main(int argc, char *argv[])
     fprintf(outputv, "Program          : DRVEC %s\n", DRVEC_VERSION);
     fprintf(outputv, "Input Data File  : %s\n", inputf);
     fprintf(outputv, "Output File      : %s\n", outputf);
-    fprintf(outputv, "Model            : VARMA-VECM(%d,%d), M = %d series, "
-                     "cointegration rank r = %d\n",
-            global_p, global_q, nser, global_r);
+    if (global_lrtest)   /* BUG-45: r is varied, not the one on the line */
+        fprintf(outputv, "Model            : VARMA-VECM(%d,%d), M = %d series, "
+                         "cointegration rank r = 0..%d (sequential test)\n",
+                global_p, global_q, nser, nser - 1);
+    else
+        fprintf(outputv, "Model            : VARMA-VECM(%d,%d), M = %d series, "
+                         "cointegration rank r = %d\n",
+                global_p, global_q, nser, global_r);
     /*  THE ALGORITHM HAS A NAME, and it is not the author's surname: the
      *  exact likelihood of the transformed stationary system is evaluated by
      *  ALGORITHM AS 311 (Mauricio 1997), and the transformation that turns the
@@ -9762,14 +9940,16 @@ int main(int argc, char *argv[])
      *  the certified gate, rung by rung, then route (B) across the rank).   */
     if (ladder_wanted() && global_r > 0)
         gate_profile_seed(x, npar);
+    else if (ladder_wanted() && global_r == 0)
+        ladder_seed_r0(x, npar);
 
     /* -writeres: the residuals of the conditional regression, which is what
        init_guess has just published.  It is a mode and ends here.             */
     if (global_writeres) {
         printf("Writing one .inp per residual of the conditional regression:\n");
-        if (write_resid_inps(inp_prefix) != 0) exit(1);
+        if (write_resid_inps(res_prefix) != 0) exit(1);
         printf("Now: 'python -m fue %s.<i> eml' and then drvec ... -seed %s\n",
-               inp_prefix, inp_prefix);
+               res_prefix, res_prefix);
         fclose(outputv);
         cleanup_names(outputf, inputf, base_name);
         return 0;

@@ -1936,7 +1936,7 @@ echo
 #     esta igualdad se rompe inmediatamente.
 echo "[8i] the hypotheses about the relations (P6.8)"
 
-run "$MM" 2 1 1 -case 2 -fdhess
+run "$MM" 2 0 1 -case 2 -fdhess
 if ! grep -aq 'Joint Hypothesis Tests (Wald)' "$TMP/case.out"; then
     bad "hypothesis block" "not emitted"
 else
@@ -2597,6 +2597,23 @@ awk -v a="$ls" 'BEGIN{e=exp(13.557593+0.5); d=a-e; if(d<0)d=-d; exit !(a!="" && 
 run "$R/mmd.inp" 2 1 1 -case 2 -differenced -f 3
 printf '%s' "$STDERR" | grep -q "incompatible with -differenced" \
   && ok "-f with -differenced is refused" || bad "-differenced -f" "$STDERR"
+echo
+
+# 8y. -fdhess ON THE BOUNDARY (BUG-34).  A finite-difference step answered by
+#     the penalty is not curvature, whether or not the Cholesky succeeds; VILL
+#     published an MA s.e. of 0.000000 with t = 1.2e11 under the heading of the
+#     Hessian.  The Hessian is refused on ANY rejected step, and the .out says
+#     which s.e. it prints and why.
+echo "[8y] -fdhess on the boundary (BUG-34)"
+run data/VILL.inp 2 1 1 -case 2 -fdhess
+if grep -aq "^Standard errors  : BFGS-accumulated factor -- -fdhess was asked for and NOT used" "$TMP/case.out" &&
+   ! grep -aq "^Standard errors  : finite-difference Hessian" "$TMP/case.out"; then
+    ok "-fdhess: a boundary optimum keeps the BFGS s.e. and says so in the .out"
+else bad "-fdhess boundary" "$(grep -a '^Standard errors' "$TMP/case.out")"; fi
+run "$MM" 2 0 1 -case 2 -fdhess
+grep -aq "^Standard errors  : finite-difference Hessian" "$TMP/case.out" \
+  && ok "-fdhess: an interior optimum still uses the Hessian" \
+  || bad "-fdhess interior" "$(grep -a '^Standard errors' "$TMP/case.out")"
 echo
 
 # ================================================== 9 MEMORY (opt-in) ==

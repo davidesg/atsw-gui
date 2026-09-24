@@ -753,7 +753,13 @@ Guarded by `run_tests.sh` 8p.3.
 
 ## BUG-34 — `-fdhess` publishes standard errors built from the penalty whenever the Cholesky succeeds
 
-**Status: OPEN.** Found 2026-09-23.
+**Status: FIXED 2026-09-24.** Any rejected finite-difference step takes the
+boundary branch before the Cholesky: BFGS s.e. are kept, with the warning on the
+terminal AND a `Standard errors :` line in the `.out` saying `-fdhess` was not
+used and why (before, a failed `-fdhess` left the `.out` silent about the
+source).  VILL: 54 rejected steps, boundary branch.  What is left is BUG-49's:
+the BFGS s.e. of an MA on the unit circle are themselves degenerate (VILL
+0.000001).  Test 8y.  Found 2026-09-23.
 
 **What it is.** `exact_hessian_se` checks the count of rejected evaluations
 (`fdh_rej`) only when the Cholesky fails (~1554-1585); on the success path

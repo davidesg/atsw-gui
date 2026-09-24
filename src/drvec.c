@@ -1581,6 +1581,7 @@ extern void fdhess(real (*func)(real *), int n, real *x, real f, real eta,
 static struct Tvarma  fdh_varma;
 static int            hess_nneg = 0;
 static long           fdh_rej = 0;
+static int            se_from_fdhess = 0;   /* 1 if the reported s.e. are -fdhess' */
 static real           hess_ratio = 0.0;
 static real           fdh_norm1 = 1.0, fdh_norm2 = 1.0;
 
@@ -1656,7 +1657,16 @@ static int exact_hessian_se(int npar, real *x, real *dev, real **cov, int neff)
         free_vector(wi, 1, npar); free_vector(wr, 1, npar);
         free_matrix(Hc, 1, npar, 1, npar);
     }
-    choldcp(H, npar, &d1, &d2, &ifc);
+    /*  BUG-34.  A perturbation that left the admissible region was answered
+     *  with the 1e10 penalty, and that enters the second differences as an
+     *  enormous "curvature" -- whether or not the Cholesky then succeeds.
+     *  Checked only on its failure, it let VILL publish an MA coefficient of
+     *  1.000043 with s.e. 0.000000 and t = 1.2e11 under the heading of the
+     *  finite-difference Hessian.  So it is checked FIRST: any rejected
+     *  evaluation means the optimum is on the boundary, and the BFGS s.e.
+     *  are kept with the warning below.                                    */
+    if (fdh_rej > 0) ifc = 1;
+    else choldcp(H, npar, &d1, &d2, &ifc);
     if (ifc > 0) {
         /*  TWO distinct causes, and confusing them leads to saying something
          *  false.
@@ -6842,10 +6852,21 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
         /* Standard errors from the Hessian at the optimum, if asked for.  It goes
            before recovering the final structure because objcfunc fills varmax
            with whatever point it is handed.                                  */
+        se_from_fdhess = 0;
         if (global_fdhess) {
-            if (exact_hessian_se(npar, x, dev, cov, nobs) == 0)
+            if (exact_hessian_se(npar, x, dev, cov, nobs) == 0) {
+                se_from_fdhess = 1;
                 fprintf(outputv, "Standard errors  : finite-difference Hessian "
                                  "at the optimum (-fdhess)\n");
+            } else
+                /*  BUG-34: said in the .out too, not only on the terminal.  */
+                fprintf(outputv, "Standard errors  : BFGS-accumulated factor -- "
+                                 "-fdhess was asked for and NOT used:\n"
+                                 "                   %s\n",
+                        fdh_rej > 0
+                          ? "the optimum is on the boundary (finite-difference "
+                            "steps left the admissible region)"
+                          : "the Hessian at the optimum is not positive definite");
         }
         vec_shootx(x, vp, &ifault, 0, 0);  /* retrieve final */
 
@@ -7397,9 +7418,11 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
         fprintf(outputv, "%s\n", DASHBAR);
         fprintf(outputv, "Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 "
                          "'.' 0.1 ' ' 1\n");
-        if (!global_fdhess)
+        if (!se_from_fdhess)
             fprintf(outputv, "  ! standard errors from the BFGS-accumulated "
-                             "factor; -fdhess uses the Hessian at the optimum\n");
+                             "factor%s\n",
+                    global_fdhess ? " (-fdhess could not be used, see the header)"
+                                  : "; -fdhess uses the Hessian at the optimum");
 
 
         /* ================= THE MODEL, IN VECM FORM ======================= */

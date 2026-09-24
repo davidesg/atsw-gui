@@ -804,7 +804,15 @@ block). Re-measured: `-artest 20` on mink-muskrat runs, restricted logL
 
 ## BUG-36 — on the `.pre` route, forecasts and the rolling evaluation are in the engine's units, not the user's
 
-**Status: OPEN.** Found 2026-09-23.
+**Status: FIXED 2026-09-24.** Levels come back to each series' own units with
+drtran's convention: `z = BoxCox⁻¹((w + det)/refactor)` (the median under a
+log), the band transformed at its two ends, the s.e. by the delta method; det is
+kept over the sample AND the horizon (`bt_*`), on the `.pre` route and under
+`-interv`.  The rolling evaluation scores in the same units.  Verified: the `.pre`
+route with refactor 100 forecasts and scores exactly what the `.inp` route does
+on the same z (mink/muskrat: 13.557593, MAPE rows identical); λ = 0 with a step
+of 0.5 in 1900 forecasts exp(z + 0.5) to 7 digits.  `-f`/`-estwin` with
+`-differenced` are refused.  Test 8x.  Found 2026-09-23.
 
 **What it is.** `read_pre_inputs` builds `rawmat = refactor·BoxCox(z) − det`
 (~5476). `forecast_vec` and `rolling_eval` never divide by `refactor`, never

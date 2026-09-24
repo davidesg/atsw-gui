@@ -7,6 +7,15 @@ publicación: `v*`.
 
 ## Sin publicar
 
+### Previsiones en las unidades de cada serie (BUG-36)
+
+En la ruta `.pre` (y con `-interv`) la previsión y la evaluación móvil se
+quedaban en las unidades del sistema, `refactor·BoxCox(z) − det`, aunque el
+fichero decía «unidades del .inp». Ahora vuelven a z como en drtran: senda
+determinista sumada, refactor dividido y Box-Cox invertido, bandas transformadas
+por sus extremos y s.e. por el método delta. `-f`/`-estwin` con `-differenced`
+se rechazan.
+
 ### La evaluación univariante de una semilla `.pre` (BUG-38)
 
 Una media fija se evaluaba como 0, los factores AR/MA anuales y de frecuencia

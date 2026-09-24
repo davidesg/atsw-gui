@@ -2567,6 +2567,38 @@ awk -v a="$sa" 'BEGIN{d=a+22.5826359; if(d<0)d=-d; exit !(d < 1e-4)}' \
   || bad "seed: annual AR" "$sa vs -22.5826359"
 echo
 
+# 8x. FORECASTS IN THE SERIES' OWN UNITS (BUG-36).  The .pre route estimates
+#     on w = refactor*BoxCox(z) - det; the forecast and the rolling evaluation
+#     stayed in w (muskrat 1355.8 for a log level of ~13.6).  Three checks:
+#     scale equivariance -- the .pre route with refactor 100 must forecast and
+#     score exactly what the .inp route does on the same z (mm_z.inp) --; a
+#     lambda = 0 series with a step of 0.5 in 1900 must forecast
+#     exp(z forecast + 0.5), band transformed at its ends; and -differenced,
+#     where Y2's levels start from an arbitrary zero, is refused.
+echo "[8x] forecasts in the series' own units (BUG-36)"
+R=tests/repro/fixtures
+cp "$R"/musk100.pre "$R"/mink100.pre "$R"/muskst.pre "$R"/minkl0.pre "$R"/mm_z.inp "$TMP/"
+first_level() { awk '/^Series 1 /{f=1; next} f && /^  [0-9]/{print $2; exit}' "$1"; }
+(cd "$TMP" && timeout "$RUN_TIMEOUT" "$ABSDRVEC" musk100.pre mink100.pre 2 0 1 -f 2 -estwin 40 >/dev/null 2>&1)
+(cd "$TMP" && timeout "$RUN_TIMEOUT" "$ABSDRVEC" mm_z 2 0 1 -f 2 -estwin 40 >/dev/null 2>&1)
+lp=$(first_level "$TMP/musk100_mink100.forecast"); lz=$(first_level "$TMP/mm_z.forecast")
+[ -n "$lp" ] && [ "$lp" = "$lz" ] \
+  && ok "forecast: the .pre route with refactor 100 = the .inp route ($lp)" \
+  || bad "forecast units" ".pre $lp vs .inp $lz"
+ep=$(grep -a -A4 "MAE           RMSE" "$TMP/musk100_mink100.out"); ez=$(grep -a -A4 "MAE           RMSE" "$TMP/mm_z.out")
+[ -n "$ep" ] && [ "$ep" = "$ez" ] \
+  && ok "rolling evaluation: scored in the same units by both routes" \
+  || bad "rolling units" "they differ"
+(cd "$TMP" && timeout "$RUN_TIMEOUT" "$ABSDRVEC" muskst.pre minkl0.pre 2 0 1 -f 2 >/dev/null 2>&1)
+ls=$(first_level "$TMP/muskst_minkl0.forecast")
+awk -v a="$ls" 'BEGIN{e=exp(13.557593+0.5); d=a-e; if(d<0)d=-d; exit !(a!="" && d/e < 1e-5)}' \
+  && ok "forecast: lambda = 0 and a step come back (1912: $ls = exp(13.5576 + 0.5))" \
+  || bad "forecast back-transform" "$ls vs exp(14.057593)"
+run "$R/mmd.inp" 2 1 1 -case 2 -differenced -f 3
+printf '%s' "$STDERR" | grep -q "incompatible with -differenced" \
+  && ok "-f with -differenced is refused" || bad "-differenced -f" "$STDERR"
+echo
+
 # ================================================== 9 MEMORY (opt-in) ==
 # Off by default so `make test` is deterministic on any machine; run it with
 #     VALGRIND=1 make test

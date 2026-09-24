@@ -1082,6 +1082,7 @@ static int canonical_b2(real **B2)
 /*  with W_t = Y_{1t} + B₂'Y_{2t} built from a static OLS B₂, to initialise   */
 /*  Λ and F_i directly (this is the conditional estimator the paper mentions  */
 /*  as the natural starting point, Remark 1.1).                              */
+
 /*****************************************************************************/
 /*  prelim_b2 — initial B₂ by static OLS with a constant.
  *
@@ -1175,6 +1176,11 @@ static void free_case_data(void)
  *  single cleanup.                                                           */
 static real **cond_resid   = NULL;
 static int    cond_resid_T = 0, cond_resid_M = 0;
+/*  Forward declarations: -f H is declared with the other options below, and
+ *  the back-transform (BUG-36) is released by the cleanup here.            */
+static int  global_fcast;
+static void bt_free(void);
+
 
 /*  cleanup_names — what has to be released at the end, in ONE place.
  *
@@ -1211,9 +1217,81 @@ static void cleanup_names(char *outf, char *inf, char *basef)
         cond_resid = NULL;
     }
     free_case_data();
+    bt_free();
     if (outf)  FREE_STR(outf);
     if (inf)   FREE_STR(inf);
     if (basef) FREE_STR(basef);
+}
+
+
+
+/*  THE BACK-TRANSFORM (BUG-36).  The system is estimated on
+ *
+ *      w_t = refactor * BoxCox(z_t) - det_t
+ *
+ *  -- the .pre route builds rawmat that way, and -interv subtracts det on the
+ *  .inp route --, and the forecast and the rolling evaluation used to stay in
+ *  w while the .forecast file said "the units of the .inp": mink/muskrat with
+ *  refactor 100 forecast 1379.5 for a log level of ~13.8.  Levels are handed
+ *  back in z, the convention drtran uses (drtran.c, the level forecast):
+ *
+ *      z = BoxCox^-1( (w + det) / refactor )     -- the MEDIAN under a log,
+ *
+ *  the band transformed at its two ends (so it is asymmetric when lambda != 1)
+ *  and the s.e. by the delta method, dz/dw at the point.  det is kept for
+ *  the sample AND the forecast horizon, because a step or a trend goes on.
+ *  Indexed by the RAW observation, t = 1..bt_T.                              */
+static int    bt_on = 0;
+static int    bt_T = 0, bt_M = 0;
+static real  *bt_lam = NULL, *bt_refac = NULL;
+static real **bt_det = NULL;
+
+static void bt_alloc(int M, int T)
+{
+    int i, t;
+    bt_M = M; bt_T = T; bt_on = 1;
+    bt_lam   = vector(1, M);
+    bt_refac = vector(1, M);
+    bt_det   = matrix(1, M, 1, T);
+    for (i = 1; i <= M; i++) {
+        bt_lam[i] = 1.0; bt_refac[i] = 1.0;
+        for (t = 1; t <= T; t++) bt_det[i][t] = 0.0;
+    }
+}
+
+static void bt_free(void)
+{
+    if (!bt_on) return;
+    free_matrix(bt_det, 1, bt_M, 1, bt_T);
+    free_vector(bt_refac, 1, bt_M);
+    free_vector(bt_lam, 1, bt_M);
+    bt_det = NULL; bt_lam = bt_refac = NULL; bt_on = 0; bt_T = bt_M = 0;
+}
+
+/*  w (the system's units) -> z (the series' own units) at raw observation t. */
+static real bt_level(int i, int t, real w)
+{
+    real c, lam;
+    if (!bt_on) return w;
+    c   = (w + ((t >= 1 && t <= bt_T) ? bt_det[i][t] : 0.0)) / bt_refac[i];
+    lam = bt_lam[i];
+    if (fabs(lam) < 1.0e-8)         return exp(c);
+    if (fabs(lam - 1.0) < 1.0e-12)  return c;
+    if (lam * c + 1.0 <= 0.0)       return NAN;   /* outside the transform's range */
+    return pow(lam * c + 1.0, 1.0 / lam);
+}
+
+/*  dz/dw at that point: the delta-method factor for the s.e.               */
+static real bt_jac(int i, int t, real w)
+{
+    real c, lam;
+    if (!bt_on) return 1.0;
+    c   = (w + ((t >= 1 && t <= bt_T) ? bt_det[i][t] : 0.0)) / bt_refac[i];
+    lam = bt_lam[i];
+    if (fabs(lam) < 1.0e-8)         return exp(c) / bt_refac[i];
+    if (fabs(lam - 1.0) < 1.0e-12)  return 1.0 / bt_refac[i];
+    if (lam * c + 1.0 <= 0.0)       return NAN;
+    return pow(lam * c + 1.0, 1.0 / lam - 1.0) / bt_refac[i];
 }
 
 /*  subtract_interventions — removes from the data the deterministic component
@@ -1266,8 +1344,13 @@ static void subtract_interventions(const char *prefix)
             Tsx.begyear = data_start_year;
             Tsx.begtime = data_start_sub;
             Tsx.nobs    = nobs_raw;
-            det = vector(1, nobs_raw);
-            build_det_component(&Tm, &Tsx, nobs_raw, det);
+            {   /*  over the sample AND the horizon: the forecast needs det's
+                 *  future path back (BUG-36).                               */
+                int TT = nobs_raw + (global_fcast > 0 ? global_fcast : 0);
+                det = vector(1, TT);
+                build_det_component(&Tm, &Tsx, TT, det);
+                if (!bt_on) bt_alloc(M, TT);
+            }
             /*  THE REFACTOR, which until 2026-08-20 was not applied, and that
              *  is a defect.  The .pre's model is defined on
              *  w = refactor * BoxCox(z) (the format's FILE_CONTRACT, and
@@ -1287,7 +1370,7 @@ static void subtract_interventions(const char *prefix)
             {
                 real rf = (Ts.refactor != 0.0) ? Ts.refactor : 1.0;
                 if (rf != 1.0) {
-                    for (t = 1; t <= nobs_raw; t++) det[t] /= rf;
+                    for (t = 1; t <= bt_T; t++) det[t] /= rf;
                     if (!quiet_mode)
                         printf("  series %d: the .pre's refactor %.6g applied to the\n"
                                "             deterministic terms\n", i, rf);
@@ -1305,6 +1388,7 @@ static void subtract_interventions(const char *prefix)
                            "transformada\n", i, Tm.boxlam);
             }
             for (t = 1; t <= nobs_raw; t++) rawmat[t][i] -= det[t];
+            for (t = 1; t <= bt_T; t++) bt_det[i][t] = det[t];
             if (!quiet_mode) {
                 printf("  series %d: %d deterministic term(s) from the .pre subtracted (", i,
                        Tm.NdetVar);
@@ -1316,7 +1400,7 @@ static void subtract_interventions(const char *prefix)
             fprintf(outputv, "Series %d: %d deterministic term(s) from %s "
                              "subtracted before estimation.\n",
                     i, Tm.NdetVar, path);
-            free_vector(det, 1, nobs_raw);
+            free_vector(det, 1, bt_T);
             nsub++;
         }
         free_fue_pre(&Tm, &Ts, DataMat);
@@ -5557,7 +5641,15 @@ static int rolling_eval(real *x, int E, int H)
                 /*  The realised level: the Y2 block is in Y2_levels and the Y1 block
                  *  in datamat, which build_y2_levels left in LEVELS.         */
                 real act = (i <= s) ? Y2_levels[o + h][i] : datamat[o + h][i];
-                real e   = act - lev[h][i];
+                real e;
+                /*  Scored in the series' own units, like the forecast (BUG-36):
+                 *  the MAPE of a log level times refactor is no MAPE at all.   */
+                {
+                    int tr = o + h + (global_levels ? 1 : 0);
+                    act       = bt_level(i, tr, act);
+                    lev[h][i] = bt_level(i, tr, lev[h][i]);
+                }
+                e = act - lev[h][i];
                 sae[h][i] += fabs(e);
                 sse[h][i] += e * e;
                 if (fabs(act) > 1.0e-12) spe[h][i] += fabs(e / act);
@@ -5935,6 +6027,10 @@ static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
     int h, i, j, k, l;
     real ***Psi, **Csum, **G, **Sig, **Var, **Yb, **lev, **SE;
     real z;
+    /*  The RAW index of the origin: with the series in levels, row t of
+     *  datamat is row t+1 of the .inp (one observation is consumed by
+     *  differencing), and with -differenced it is the same row.          */
+    int raw_origin = global_levels ? n + 1 : n;
 
     if (H < 1 || r < 0 || s < 1) return 1;
     if (!Y2_levels) return 1;
@@ -5997,8 +6093,13 @@ static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
     z = (conf >= 0.99) ? 2.575829 : (conf >= 0.95) ? 1.959964 : 1.644854;
     fprintf(outputv, "\n%d step%s ahead, in levels.  Columns are the .inp's: "
                      "Y2 block (1..%d), then Y1.\n"
-                     "s.e. are THEORETICAL; a %.0f%% band is +/- %.4f s.e.\n\n",
+                     "s.e. are THEORETICAL; a %.0f%% band is +/- %.4f s.e.\n",
         H, (H == 1) ? "" : "s", s, 100.0 * conf, z);
+    if (bt_on)
+        fprintf(outputv, "Levels are in each series' OWN units: deterministic path added\n"
+                         "back, refactor divided out, Box-Cox inverted (the median under\n"
+                         "a log); s.e. by the delta method (BUG-36).\n");
+    fprintf(outputv, "\n");
     fprintf(outputv, "   h");
     for (i = 1; i <= M; i++)
         fprintf(outputv, "  %14s %10s", series_names ? series_names[i] : "y", "s.e.");
@@ -6025,7 +6126,9 @@ static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
         fprintf(outputv, "%4d", h);
         for (i = 1; i <= M; i++) {
             SE[h][i] = (Var[i][i] > 0.0) ? sqrt(Var[i][i]) : 0.0;
-            fprintf(outputv, "  %14.6f %10.6f", lev[h][i], SE[h][i]);
+            fprintf(outputv, "  %14.6f %10.6f",
+                    bt_level(i, raw_origin + h, lev[h][i]),
+                    bt_jac(i, raw_origin + h, lev[h][i]) * SE[h][i]);
         }
         fprintf(outputv, "\n");
     }
@@ -6043,22 +6146,21 @@ static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
         ff = fopen(fname, "w");
         if (!ff) fprintf(stderr, "WARNING: cannot write %s\n", fname);
         else {
-            /*  The RAW index of the origin: with the series in levels, row t of
-             *  datamat is row t+1 of the .inp (one observation is consumed by
-             *  differencing), and with -differenced it is the same row.      */
-            int raw_origin = global_levels ? n + 1 : n;
             int per, sub;
             fprintf(ff, "DRVEC %s -- forecasts from a VEC(%d) model\n",
                     DRVEC_VERSION, r);
             fprintf(ff, "input=%s.inp p=%d q=%d r=%d case=%d freq=%d "
                         "horizon=%d bands=%.0f%%\n",
                     out_base, p, q, r, global_case, data_freq, H, 100.0 * conf);
-            fprintf(ff, "Levels in the units of the .inp.  Columns 1..%d are the "
-                        "Y2 block, %d..%d the Y1 block.\n",
+            fprintf(ff, "Levels in each series' own units%s.  Columns 1..%d are "
+                        "the Y2 block, %d..%d the Y1 block.\n",
+                    bt_on ? " (deterministic path added back, refactor divided "
+                            "out, Box-Cox inverted: the median under a log)" : "",
                     s, s + 1, M);
-            fprintf(ff, "Low/High are +/- %.4f standard errors and are "
+            fprintf(ff, "Low/High are +/- %.4f standard errors%s and are "
                         "THEORETICAL: they assume the specification is right.\n\n",
-                    z);
+                    z, bt_on ? " in the model's units, transformed at both ends; "
+                               "s.e. by the delta method" : "");
             for (i = 1; i <= M; i++) {
                 fprintf(ff, "Series %d (%s):\n", i,
                         series_names ? series_names[i] : "y");
@@ -6071,9 +6173,14 @@ static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
                         fprintf(ff, "  %3d/%-5d", sub, per);
                     else
                         fprintf(ff, "  %-9d", per);
-                    fprintf(ff, " %14.6f %14.6f %14.6f %12.6f\n",
-                            lev[h][i], lev[h][i] - z * SE[h][i],
-                            lev[h][i] + z * SE[h][i], SE[h][i]);
+                    {
+                        int tr = raw_origin + h;
+                        fprintf(ff, " %14.6f %14.6f %14.6f %12.6f\n",
+                                bt_level(i, tr, lev[h][i]),
+                                bt_level(i, tr, lev[h][i] - z * SE[h][i]),
+                                bt_level(i, tr, lev[h][i] + z * SE[h][i]),
+                                bt_jac(i, tr, lev[h][i]) * SE[h][i]);
+                    }
                 }
                 fprintf(ff, "\n");
             }
@@ -6307,6 +6414,7 @@ static int read_pre_inputs(char **files, int nfiles)
 
         series_names = (char **) malloc(((size_t) nser + 1) * sizeof *series_names);
         rawmat = matrix(1, nobs_raw, 1, nser);
+        bt_alloc(nser, nobs_raw + (global_fcast > 0 ? global_fcast : 0));
 
         printf("\nSeries, in the .inp's column order (the first %d are the "
                "nabla Y2 block):\n", nser - global_r);
@@ -6328,6 +6436,19 @@ static int read_pre_inputs(char **files, int nfiles)
             for (t = 1; t <= Ts[i].nobs; t++) det[i][t] = 0.0;
             if (Tm[i].NdetVar > 0)
                 build_det_component(&Tm[i], &Ts[i], Ts[i].nobs, det[i]);
+
+            /*  What the forecast needs to come back to z (BUG-36): this
+             *  series' lambda and refactor, and det on the COMMON sample and
+             *  over the horizon -- a step or a trend goes on after the end.  */
+            bt_lam[i] = lam; bt_refac[i] = refac;
+            if (Tm[i].NdetVar > 0) {
+                int Lx = off + bt_T;
+                real *dx = vector(1, Lx);
+                for (t = 1; t <= Lx; t++) dx[t] = 0.0;
+                build_det_component(&Tm[i], &Ts[i], Lx, dx);
+                for (t = 1; t <= bt_T; t++) bt_det[i][t] = dx[off + t];
+                free_vector(dx, 1, Lx);
+            }
 
             for (t = 1; t <= nobs_raw; t++) {
                 real z = Ts[i].data[off + t];
@@ -9086,6 +9207,17 @@ static int parse_cli(int argc, char *argv[])
             "ERROR: -warma cannot be combined with -alpha or -weakex: the WARMA\n"
             "       parametrisation does not impose alpha = A psi.  Use -mawarma\n"
             "       (the same MA structure, VEC coordinates) with the restriction.\n");
+        exit(1);
+    }
+    /*  BUG-36.  With -differenced the Y2 block arrives differenced and its
+     *  levels are cumulated from an arbitrary zero, so a LEVEL forecast of
+     *  Y2 and a MAPE on it mean nothing (muskrat 1.41 for ~13.6, MAPE 107.9 %
+     *  for 2.98 %).  Refused rather than printed.                          */
+    if (!global_levels && (global_fcast > 0 || global_estwin > 0)) {
+        fprintf(stderr,
+            "ERROR: -f and -estwin are incompatible with -differenced: the Y2\n"
+            "       levels would be cumulated from an arbitrary zero.  Supply\n"
+            "       every series in levels (the default layout).\n");
         exit(1);
     }
     /*  BUG-31, case 1.  -matest and -artest simulate under H0 in LEVELS, into a

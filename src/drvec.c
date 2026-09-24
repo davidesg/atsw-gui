@@ -8461,6 +8461,54 @@ static int run_lrtest(void)
         fprintf(outputv, "\n=== Sequential LR test for the cointegration rank ===\n");
         printf("\nSequential LR test for the cointegration rank:\n");
 
+        /*  BUG-43: THE SCALE.  On rao7 in raw units (the s.d. of the first
+         *  differences spans 0.0074 .. 2702) the optimiser stopped where it
+         *  started and the rank sequence read 38.57 / 29.96 / 6.14; the same
+         *  data with each column rescaled gave 80.09 / 39.09 / 11.84.  The
+         *  model is equivariant to Y -> D Y with D diagonal, and the jacobian
+         *  n * sum log d_i is the same at every rank, so the LR does not move:
+         *  the fits are made on rescaled data (a power of ten per series, so
+         *  no digit is lost) and the logLs reported in the original units.
+         *  Not done when something on the command line is in the original
+         *  units and would have to be rescaled too (a given B2, an alpha file,
+         *  a seed).                                                          */
+        real *dsc = vector(1, M), jac_sc = 0.0;
+        int scaled = 0;
+        for (int i2 = 1; i2 <= M; i2++) dsc[i2] = 1.0;
+        if (!global_fixb2_given && !alpha_file && !global_seed && !global_seedb2
+            && nobs_raw > 2) {
+            for (int i2 = 1; i2 <= M; i2++) {
+                real m1 = 0.0, v = 0.0, sd;
+                int T = nobs_raw - 1;
+                for (int t = 2; t <= nobs_raw; t++) m1 += rawmat[t][i2] - rawmat[t-1][i2];
+                m1 /= T;
+                for (int t = 2; t <= nobs_raw; t++) {
+                    real d = rawmat[t][i2] - rawmat[t-1][i2] - m1; v += d * d;
+                }
+                sd = sqrt(v / (T > 1 ? T - 1 : 1));
+                /*  Only a GROSS mis-scaling, two orders or more: equivariance
+                 *  makes the optimum the same, but not the optimiser's path,
+                 *  and on UKconsumption (changes ~0.01) rescaling landed rank
+                 *  1 on an optimum 0.40 lower.  Same threshold as the SCALE
+                 *  warning of a single fit.                                 */
+                if (sd > 0.0 && fabs(log10(sd)) > 2.0) {
+                    dsc[i2] = pow(10.0, -floor(log10(sd) + 0.5));
+                    scaled = 1;
+                }
+            }
+            if (scaled) {
+                for (int t = 1; t <= nobs_raw; t++)
+                    for (int i2 = 1; i2 <= M; i2++) rawmat[t][i2] *= dsc[i2];
+                fprintf(outputv, "  Internal scaling (the LR does not depend on it; "
+                                 "logLs below are in the\n  original units, the "
+                                 "search tables in the scaled ones):");
+                for (int i2 = 1; i2 <= M; i2++)
+                    fprintf(outputv, " %s x %g", series_names ? series_names[i2] : "y",
+                            dsc[i2]);
+                fprintf(outputv, "\n");
+            }
+        }
+
         /* With -bootstrap one has to be able to SIMULATE from each rank's fit,
            so its parameter vector is kept instead of freed.                   */
         real **xkeep = NULL; int *npkeep = NULL;
@@ -8518,6 +8566,12 @@ static int run_lrtest(void)
             free_vector(xr, 1, np);
         }
 
+        /*  back to the original units: p_Y(y) = p_{DY}(Dy) |D|^n            */
+        if (scaled) {
+            for (int i2 = 1; i2 <= M; i2++) jac_sc += log(dsc[i2]);
+            jac_sc *= nobs;
+            for (int rr = 0; rr <= M - 1; rr++) if (good[rr]) ll[rr] += jac_sc;
+        }
         fprintf(outputv, "\n  r    npar        logL         AIC         BIC\n");
         fprintf(outputv, "  ---------------------------------------------------\n");
         for (int rr = 0; rr <= M - 1; rr++) {
@@ -8597,8 +8651,13 @@ static int run_lrtest(void)
                 fprintf(outputv, "   [check: rank %d stopped by criterion %d]",
                         (tcr[rr] > 2) ? rr : rr + 1,
                         (tcr[rr] > 2) ? tcr[rr] : tcr[rr+1]);
+            /*  Only when both fits stopped on the gradient is a negative LR the
+             *  exact likelihood's non-nesting (BUG-26); otherwise a fit simply
+             *  did not reach its optimum (rao6, M = 8: -464.7).             */
             if (lr < 0.0)
-                fprintf(outputv, "   [LR < 0: exact likelihood, not nested at Lambda = 0]");
+                fprintf(outputv, "%s", ((tcr[rr] > 2) || (tcr[rr+1] > 2))
+                    ? "   [LR < 0: a fit did not reach its optimum]"
+                    : "   [LR < 0: exact likelihood, not nested at Lambda = 0]");
             fprintf(outputv, "\n");
         }
         fprintf(outputv,
@@ -8698,6 +8757,10 @@ static int run_lrtest(void)
             if (npkeep) free_ivector(npkeep, 0, M - 1);
         }
 
+        if (scaled)
+            for (int t = 1; t <= nobs_raw; t++)
+                for (int i2 = 1; i2 <= M; i2++) rawmat[t][i2] /= dsc[i2];
+        free_vector(dsc, 1, M);
         free_ivector(good, 0, M - 1);
         free_ivector(tcr, 0, M - 1);
         free_ivector(bnd, 0, M - 1);
@@ -9722,6 +9785,35 @@ int main(int argc, char *argv[])
     if (!global_levels)
         fprintf(outputv, "  ! legacy layout: cols 1..s arrive already "
                          "differenced (-differenced)\n");
+    /*  BUG-43: a series whose changes are orders of magnitude from 1 leaves
+     *  the optimiser (finite-difference steps of ~6e-6) stopping where it
+     *  started.  -lrtest rescales internally; a single fit reports in the
+     *  data's units, so here it is said, with the factor to use.          */
+    if (!global_lrtest && nobs_raw > 2) {
+        int warned = 0;
+        for (int i2 = 1; i2 <= nser; i2++) {
+            real m1 = 0.0, v = 0.0, sd;
+            int T = nobs_raw - 1;
+            for (int t = 2; t <= nobs_raw; t++) m1 += rawmat[t][i2] - rawmat[t-1][i2];
+            m1 /= T;
+            for (int t = 2; t <= nobs_raw; t++) {
+                real d = rawmat[t][i2] - rawmat[t-1][i2] - m1; v += d * d;
+            }
+            sd = sqrt(v / (T > 1 ? T - 1 : 1));
+            if (sd > 0.0 && fabs(log10(sd)) > 2.0) {
+                if (!warned)
+                    fprintf(outputv, "  ! SCALE: the optimiser works on changes of "
+                                     "order 1, and these are not (BUG-43):\n");
+                fprintf(outputv, "      %-12s s.d. of its changes %.3g: multiply it "
+                                 "by %g\n", series_names ? series_names[i2] : "y",
+                        sd, pow(10.0, -floor(log10(sd) + 0.5)));
+                if (!warned && !quiet_mode)
+                    fprintf(stderr, "WARNING: series on very different scales; "
+                                    "see SCALE in the .out (BUG-43)\n");
+                warned = 1;
+            }
+        }
+    }
     /*  A Box-Cox or a differencing order declared in the .inp is NOT applied
      *  on this route -- drvec forms nabla Y2 itself and takes the series as
      *  they come.  Reading a directive and ignoring it in silence is the one

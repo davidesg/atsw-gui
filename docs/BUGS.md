@@ -1054,7 +1054,20 @@ Lütkepohl's multivariate JB.
 
 ## BUG-43 — no fallback from a non-stationary start, and data in raw units stop the optimiser at its first step
 
-**Status: OPEN.** Found 2026-09-23 (external validation).
+**Status: FIXED 2026-09-24** for the rank test; a single fit warns.
+`-lrtest` rescales every series whose changes are two or more orders of
+magnitude from 1 by a power of ten, fits, and reports logLs in the original units
+(`+ n·Σ log d_i`; checked: raw − rescaled = −1185.147 as predicted).  rao7 in raw
+units now gives 80.09 / 39.09 / 11.84, the rescaled values.  The threshold is two
+orders because equivariance fixes the optimum, not the path: at one order,
+UKconsumption's rank 1 landed 0.40 lower.  A single fit reports in the data's
+units, so it prints `SCALE` with the factor per series instead of rescaling —
+rescaling it would mean mapping every parameter and s.e. of the report back.
+A negative LR from a fit stopped by criterion ≥ 3 is now labelled "a fit did not
+reach its optimum", not BUG-26's non-nesting.  **Still open:** rao6 (M = 8) fits
+in case 2 but every rank stops by criterion 3 and the sequence is not
+interpretable (LRs −464.7 and 628.8) — an optimisation problem of dimension, not
+of scale.  Test 8ab.  Found 2026-09-23 (external validation).
 
 **What it is.**
 1. When the start is non-stationary (`ifault = 3`) the fit fails; there is no

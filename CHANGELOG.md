@@ -7,6 +7,13 @@ publicación: `v*`.
 
 ## Sin publicar
 
+### La escala de las series (BUG-43) y las clases MA restringidas en `-lrtest` (BUG-27)
+
+`-lrtest` reescala internamente las series mal escaladas (el LR no cambia; las
+logL se dan en unidades originales): rao7 en bruto da ya lo mismo que
+reescalado. Un ajuste único avisa (`SCALE`) con el factor. Con una clase MA
+restringida, `-lrtest` ya no compara con una tabla que no aplica.
+
 ### El ajuste con r = 0 parte de la escalera (BUG-50), y lo que eso cambia
 
 El ajuste directo con r = 0 se quedaba en un óptimo local: en mink-muskrat,

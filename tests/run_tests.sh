@@ -2648,6 +2648,23 @@ printf '%s' "$row" | grep -q "11.22" \
   && ok "-lrtest (free MA): the table still applies" || bad "-lrtest free" "$row"
 echo
 
+# 8ab. THE SCALE (BUG-43).  rao7 in raw units (changes of s.d. 0.0074 .. 2702)
+#      stopped the optimiser where it started: LRs 38.57 / 29.96 / 6.14 against
+#      80.09 / 39.09 / 11.84 on the same data rescaled.  -lrtest rescales
+#      internally (equivariance: the LR does not move) and reports logLs in the
+#      original units; a single fit says SCALE and gives the factor.
+echo "[8ab] the scale (BUG-43)"
+R=tests/repro/fixtures
+run "$R/rao7.inp" 2 0 1 -case 2 -lrtest
+lr0=$(awk '/^  r    M-r/{t=1; next} t && /^ +0 +4 /{print $3; exit}' "$TMP/case.out")
+awk -v a="$lr0" 'BEGIN{d=a-80.0922; if(d<0)d=-d; exit !(a!="" && d<0.05)}' \
+  && ok "-lrtest on raw units = on rescaled units (LR(0) $lr0 vs 80.0922)" \
+  || bad "-lrtest scale" "LR(0) '$lr0', rescaled data give 80.0922"
+run "$R/rao7.inp" 2 0 1 -case 2
+grep -aq "SCALE: the optimiser works on changes of order 1" "$TMP/case.out" \
+  && ok "single fit: the bad scale is said, with the factor" || bad "SCALE" "no warning"
+echo
+
 # ================================================== 9 MEMORY (opt-in) ==
 # Off by default so `make test` is deterministic on any machine; run it with
 #     VALGRIND=1 make test

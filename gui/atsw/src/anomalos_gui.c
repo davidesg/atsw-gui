@@ -11,12 +11,17 @@
  * el mismo lienzo, las mismas escalas, el mismo Q -- sobre los residuos que
  * trae el .out.
  *
- * EL INTERRUPTOR REDIBUJA, NO AÑADE. Lo que hay que ver es la MISMA figura
- * moviéndose: «¿corto el AR en el 2?» se responde mirando UN dibujo. Dos
- * barras por retardo, una al lado de otra, cambiarían la lectura de siempre;
- * y un degradé con «lo que aporta el anómalo» afirmaría una descomposición
- * que no existe, porque r_con y r_sin son dos cocientes con distinto
- * denominador.
+ * EL BOTON ES EL ESTADO. «Calibrar» se queda pulsado mientras se ve el
+ * gráfico sin los anómalos, y se suelta para volver al de siempre: un solo
+ * mando para una sola pregunta, y la posición del botón dice cuál de los dos
+ * dibujos estás mirando. Eran dos --un botón que calculaba y una casilla que
+ * enseñaba-- y esa separación sobraba: calcular sin enseñar no sirve de nada.
+ *
+ * REDIBUJA, NO AÑADE. Lo que hay que ver es la MISMA figura moviéndose:
+ * «¿corto el AR en el 2?» se responde mirando UN dibujo. Dos barras por
+ * retardo, una al lado de otra, cambiarían la lectura de siempre; y un
+ * degradé con «lo que aporta el anómalo» afirmaría una descomposición que no
+ * existe, porque r_con y r_sin son dos cocientes con distinto denominador.
  *
  * SIN ANÓMALOS ES LA MEDIA DE LOS RETENIDOS, y por eso la figura de fue vale
  * tal cual. El estimador declarado de lib/anomalos es la desviación a cero:
@@ -66,11 +71,12 @@ typedef struct {
        verdad no es «¿y si no hubiera anómalos?» sino «¿y si no estuviera
        ESTE?», que es lo que se acaba interviniendo.                    */
     gboolean   marcado[AN_MAX_EP];
-    gboolean   calibrado;          /* ya se pulsó «Calibrar»               */
-    gboolean   sin_anomalos;       /* el interruptor                       */
+    gboolean   calibrado;          /* ya se calibró alguna vez             */
+    gboolean   sin_anomalos;       /* el botón está pulsado                */
+    gboolean   armando;            /* no reentrar al mover el botón a mano */
 
     char       eps[PR_RUTA];
-    GtkWidget *b_ver, *l_q, *l_pie;
+    GtkWidget *b_cal, *l_q, *l_pie;
 } An;
 
 
@@ -262,8 +268,10 @@ static void pie( An *g )
         {
         gtk_label_set_markup( GTK_LABEL(g->l_pie),
             "<small>Marca los episodios que quieras probar y pulsa "
-            "<b>Calibrar</b>. Puedes probarlos de uno en uno o varios a la "
-            "vez: no es la misma pregunta.</small>" );
+            "<b>Calibrar</b>: el botón se queda hundido mientras ves el "
+            "gráfico sin ellos, y al soltarlo vuelve el de siempre. Puedes "
+            "probarlos de uno en uno o varios a la vez: no es la misma "
+            "pregunta.</small>" );
         return;
         }
 
@@ -317,9 +325,41 @@ static void calibra( An *g, gboolean con_omisiones )
                 g->lags, &g->c );
 }
 
-static void on_interruptor( GtkToggleButton *b, An *g )
+/* EL BOTON HUNDIDO ES «ESTOY VIENDO EL CALIBRADO».
+ *
+ * Al hundirlo se calibra con lo que esté marcado y se enseña; al soltarlo se
+ * vuelve al gráfico de siempre SIN perder la calibración: el veredicto por
+ * retardo sigue en el pie, que es justo lo que se quiere leer mientras se
+ * mira el original.
+ *
+ * Y si no hay nada marcado, el botón NO se queda hundido: quedarse hundido
+ * enseñando el dibujo de siempre sería decir que eso es el calibrado.   */
+static void on_calibrar( GtkToggleButton *b, An *g )
 {
-    g->sin_anomalos = gtk_toggle_button_get_active( b );
+    if ( g->armando ) return;
+
+    if ( !gtk_toggle_button_get_active( b ) )
+        {
+        g->sin_anomalos = FALSE;
+        pie( g );
+        dibuja( g );
+        return;
+        }
+
+    calibra( g, TRUE );
+    if ( g->nomit == 0 )
+        {
+        g->armando = TRUE;
+        gtk_toggle_button_set_active( b, FALSE );
+        g->armando = FALSE;
+        barra_pub( g->a, "Marca primero el episodio que quieras calibrar." );
+        return;
+        }
+
+    g->calibrado    = TRUE;
+    g->sin_anomalos = TRUE;
+    di_q( g );
+    pie( g );
     dibuja( g );
 }
 
@@ -328,9 +368,9 @@ static void on_interruptor( GtkToggleButton *b, An *g )
  * el efecto DE LOS TRES JUNTOS, que es una pregunta distinta de la de cada
  * uno por separado -- y es la que no se podía hacer.
  *
- * Lo que sí hace es DESHACER la calibración anterior: si cambian las marcas,
- * lo que se está viendo ya no es lo que está marcado, y dejarlo en pantalla
- * sería enseñar una cosa diciendo otra.                                  */
+ * Con el botón hundido, cambiar una marca RECALIBRA en el sitio: lo que se ve
+ * tiene que ser lo que está marcado, y soltar el botón para volver a hundirlo
+ * sería un paso de más. Con el botón suelto, sólo se mueve el círculo.   */
 static void on_marca( GtkToggleButton *b, An *g )
 {
     int i = GPOINTER_TO_INT( g_object_get_data( G_OBJECT(b), "ep" ) );
@@ -338,38 +378,22 @@ static void on_marca( GtkToggleButton *b, An *g )
     if ( i < 0 || i >= g->nep ) return;
     g->marcado[i] = gtk_toggle_button_get_active( b );
 
-    if ( g->calibrado )
+    if ( g->sin_anomalos )
         {
-        g->calibrado = FALSE;
-        gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(g->b_ver), FALSE );
-        gtk_widget_set_sensitive( g->b_ver, FALSE );
-        g->sin_anomalos = FALSE;
-        calibra( g, FALSE );
+        calibra( g, TRUE );
+        if ( g->nomit == 0 )          /* se quitó la última marca */
+            {
+            g->armando = TRUE;
+            gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(g->b_cal), FALSE );
+            g->armando = FALSE;
+            g->sin_anomalos = FALSE;
+            g->calibrado    = FALSE;
+            calibra( g, FALSE );
+            }
         di_q( g );
         }
     pie( g );
     dibuja( g );
-}
-
-static void on_calibrar( GtkButton *b, An *g )
-{
-    (void) b;
-    calibra( g, TRUE );
-    g->calibrado = TRUE;
-
-    /* Al calibrar se ENSEÑA el resultado: es lo que se acaba de pedir. El
-       interruptor queda para volver al original y comparar.          */
-    gtk_widget_set_sensitive( g->b_ver, TRUE );
-    g->sin_anomalos = TRUE;
-    gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(g->b_ver), TRUE );
-
-    di_q( g );
-    pie( g );
-    dibuja( g );
-
-    if ( g->nomit == 0 )
-        barra_pub( g->a, "Sin ningún episodio marcado, la calibración es el "
-                         "correlograma de siempre." );
 }
 
 static void on_cerrar( GtkWidget *w, An *g ) { (void) w; g_free( g ); }
@@ -505,22 +529,17 @@ void atsw_anomalos( Atsw *a, const char *serie, const char *muestra,
     fila = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 8 );
     gtk_box_pack_start( GTK_BOX(pie_caja), fila, FALSE, FALSE, 0 );
 
-    b = gtk_button_new_with_label( "Calibrar" );
+    b = gtk_toggle_button_new_with_label( "Calibrar" );
     gtk_widget_set_tooltip_text( b,
         "Redibuja la ACF y la PACF omitiendo los episodios marcados, y dice "
-        "qué retardos cambian de lado de la banda.\n\nMarcar varios y "
-        "calibrar de una vez NO es lo mismo que calibrarlos uno a uno: son "
+        "qué retardos cambian de lado de la banda.\n\nSe queda hundido "
+        "mientras ves el gráfico sin los anómalos; suéltalo para volver al de "
+        "siempre y comparar: es la MISMA figura moviéndose.\n\nMarcar varios "
+        "y calibrar de una vez NO es lo mismo que calibrarlos uno a uno: son "
         "dos preguntas distintas." );
-    g_signal_connect( b, "clicked", G_CALLBACK(on_calibrar), g );
+    g->b_cal = b;
+    g_signal_connect( b, "toggled", G_CALLBACK(on_calibrar), g );
     gtk_box_pack_start( GTK_BOX(fila), b, FALSE, FALSE, 0 );
-
-    g->b_ver = gtk_check_button_new_with_label( "ver calibrado" );
-    gtk_widget_set_tooltip_text( g->b_ver,
-        "Quítalo para volver al gráfico original y comparar: es la MISMA "
-        "figura moviéndose." );
-    gtk_widget_set_sensitive( g->b_ver, FALSE );
-    g_signal_connect( g->b_ver, "toggled", G_CALLBACK(on_interruptor), g );
-    gtk_box_pack_start( GTK_BOX(fila), g->b_ver, FALSE, FALSE, 0 );
 
     g->l_q = gtk_label_new( NULL );
     gtk_label_set_xalign( GTK_LABEL(g->l_q), 0.0 );

@@ -57,6 +57,34 @@ gboolean convergence_is_good(const Convergence *c);
 
 #define FO_MAX_PAR  64
 #define FO_MAX_LB   16
+#define FO_MAX_EXT  64      /* residuos extremos listados                 */
+#define FO_MAX_CAL  64      /* tramos de la calibracion del motor         */
+
+/* UN RESIDUO EXTREMO, tal como el motor lo lista:
+       |     48        1/2006         2.08        |                      */
+typedef struct {
+   int    obs;              /* 1..n                                       */
+   char   fecha[16];
+   double z;                /* tipificado                                 */
+} FoExtremo;
+
+/* UN TRAMO DE LA CALIBRACION DEL MOTOR.
+ *
+ * El .out de fue trae, por cada autocorrelacion de los residuos, los tramos
+ * de fechas que mas contribuyen y cuanto:
+ *
+ *     r(2) = -0.095       3/2018 -  5/2018       -0.026
+ *
+ * Es un reparto del NUMERADOR de r(k) por tramos, calculado por el motor.
+ * Ojo: fug NO lo trae -- solo fue, y solo sobre los residuos de un modelo ya
+ * estimado. Antes del modelo no hay nada que leer, y por eso existe
+ * lib/anomalos.                                                          */
+typedef struct {
+   int    lag;
+   double r;                /* la autocorrelacion entera                  */
+   char   desde[16], hasta[16];
+   double contrib;
+} FoCalibra;
 
 typedef struct {
     gboolean hay;              /* se reconocio como un .out de fue          */
@@ -102,6 +130,15 @@ typedef struct {
     double   fuera1, esp1, fuera2, esp2;
     gboolean tiene_jb;
     double   jb, jb_p;         /* Jarque-Bera, 2 g.l.                       */
+
+    /* LOS RESIDUOS EXTREMOS, con su fecha y su |z|. El umbral que decide
+       cuando son NOTICIA no esta aqui: es metodo, y vive en quien juzga. */
+    int       next;
+    FoExtremo ext[FO_MAX_EXT];
+
+    /* LA CALIBRACION DEL MOTOR: que tramos distorsionan cada r(k). */
+    int       ncal;
+    FoCalibra cal[FO_MAX_CAL];
 
     /* EL LJUNG-BOX, LA ESCALERA ENTERA.
      *

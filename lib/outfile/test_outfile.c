@@ -103,6 +103,25 @@ int main( int argc, char **argv )
     ok( o.npares >= 0, "y los pares que se pisan salen de la matriz de "
                        "correlaciones, no de adivinar el formato de la lista" );
 
+    printf( "\nLOS ANOMALOS, QUE EL MOTOR YA LISTA Y YA CALIBRA\n" );
+    ok( o.next >= 0, "los residuos extremos se leen" );
+    if ( o.next > 0 )
+        {
+        ok( o.ext[0].obs > 0 && o.ext[0].fecha[0] != '\0',
+            "  con su observacion y su fecha" );
+        ok( o.ext[0].z != 0.0, "  y su valor tipificado" );
+        }
+    ok( o.ncal >= 0, "y la calibracion del motor: que tramos distorsionan "
+                     "cada r(k)" );
+    if ( o.ncal > 0 )
+        {
+        ok( o.cal[0].lag > 0 && o.cal[0].desde[0] && o.cal[0].hasta[0],
+            "  con el retardo y el tramo de fechas" );
+        /* OJO: esto SOLO esta en el .out de fue y SOLO sobre los residuos.
+           fug no lo trae, asi que antes del modelo hay que calcularlo --
+           que es para lo que existe lib/anomalos.                      */
+        }
+
     printf( "\nUNO SIN PARTE ANUAL NO LA ENSEÑA\n" );
     snprintf( path, sizeof path, "%s/CPI_USA/CPI_USA.out", golden );
     if ( fueout_read( path, &o ) )

@@ -321,6 +321,17 @@ $CC -O2 -Wall -Wextra -I"$L/outfile" $(pkg-config --cflags glib-2.0) \
     -o "$W/test_outfile" $(pkg-config --libs glib-2.0) -lm || exit 1
 "$W/test_outfile" "$TOP/../../engines/fue/tests/golden" || exit 1
 
+# --- los anomalos: calibrar la distorsion -----------------------------------
+# Con series CONSTRUIDAS y un generador determinista: la prueba tiene que dar
+# lo mismo en cualquier maquina. Y con los DOS casos --fabricada y
+# enmascarada-- porque calibrar en un solo sentido deja media identificacion
+# a ciegas.
+echo
+$CC -O2 -Wall -Wextra -I"$L/anomalos" \
+    "$L/anomalos/test_anomalos.c" "$L/anomalos/anomalos.c" \
+    -o "$W/test_anomalos" -lm || exit 1
+"$W/test_anomalos" || exit 1
+
 # --- el dictamen: leer no es juzgar -----------------------------------------
 # Los umbrales se prueban SIN fichero, con numeros inventados: eso es lo que
 # se gana separando el lector del que juzga.

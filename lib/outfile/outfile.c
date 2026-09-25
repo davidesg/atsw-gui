@@ -157,7 +157,9 @@ gboolean fueout_read( const char *path, FueOut *o )
 {
     gchar  *txt = NULL, **lin;
     gsize   len = 0;
-    int     i, n;
+    int     i, n, cal_lag = 0;
+    double  cal_r = 0.0;
+    char    nm[16];
 
     if ( o == NULL ) return FALSE;
     memset( o, 0, sizeof *o );
@@ -238,6 +240,62 @@ gboolean fueout_read( const char *path, FueOut *o )
             {
             if ( sscanf( strstr( l, ":" ), ": %lf %% ( %lf", &v, &v2 ) == 2 )
                 { o->fuera2 = v; o->esp2 = v2; o->tiene_hist = TRUE; }
+            }
+
+        /* LOS RESIDUOS EXTREMOS:
+               |     48        1/2006         2.08        |
+           Se reconocen porque llevan observacion, fecha y valor entre
+           barras; la cabecera no casa porque no trae numeros.        */
+        else if ( l[0] == ' ' && strchr( l, '|' ) != NULL &&
+                  sscanf( strchr( l, '|' ) + 1, " %d %15s %lf", &k, nm, &v )
+                      == 3 && strchr( nm, '/' ) != NULL )
+            {
+            if ( o->next < FO_MAX_EXT )
+                {
+                o->ext[o->next].obs = k;
+                o->ext[o->next].z   = v;
+                snprintf( o->ext[o->next].fecha, 16, "%s", nm );
+                o->next++;
+                }
+            }
+
+        /* LA CALIBRACION DEL MOTOR:
+               r(2) = -0.095       3/2018 -  5/2018       -0.026
+               (y las siguientes lineas, sin el r(k), son del mismo)   */
+        else if ( strstr( l, "r(" ) != NULL &&
+                  sscanf( strstr( l, "r(" ), "r( %d ) = %lf", &k, &v ) == 2 )
+            {
+            const char *c = strstr( l, "=" );
+            char        d1[16], d2[16];
+            double      ct;
+
+            cal_lag = k; cal_r = v;
+            if ( c && sscanf( c + 1, " %*f %15s - %15s %lf", d1, d2, &ct ) == 3
+                 && o->ncal < FO_MAX_CAL )
+                {
+                o->cal[o->ncal].lag = k; o->cal[o->ncal].r = v;
+                snprintf( o->cal[o->ncal].desde, 16, "%s", d1 );
+                snprintf( o->cal[o->ncal].hasta, 16, "%s", d2 );
+                o->cal[o->ncal].contrib = ct;
+                o->ncal++;
+                }
+            }
+        else if ( cal_lag > 0 && strchr( l, '|' ) != NULL &&
+                  strchr( l, '-' ) != NULL )
+            {
+            char   d1[16], d2[16];
+            double ct;
+
+            if ( sscanf( strchr( l, '|' ) + 1, " %15s - %15s %lf", d1, d2, &ct )
+                     == 3 && strchr( d1, '/' ) != NULL &&
+                 o->ncal < FO_MAX_CAL )
+                {
+                o->cal[o->ncal].lag = cal_lag; o->cal[o->ncal].r = cal_r;
+                snprintf( o->cal[o->ncal].desde, 16, "%s", d1 );
+                snprintf( o->cal[o->ncal].hasta, 16, "%s", d2 );
+                o->cal[o->ncal].contrib = ct;
+                o->ncal++;
+                }
             }
 
         /* LA MATRIZ DE CORRELACIONES, para los pares que se pisan.

@@ -135,6 +135,27 @@ double chisq_cola( double x, int df )
     return exp( -xx + a * log( xx ) - gln ) * h;
 }
 
+/* UNA FECHA DE SERIE TEMPORAL, con o sin barra.
+ *
+ * "5/2012" en mensual y trimestral, pero "1766" A SECAS en anual -- que es
+ * lo que ya sabe dt_fecha en lib/datos. Dar por hecho que una fecha lleva
+ * barra dejaba las series anuales SIN UN SOLO residuo leido, y sin ruido:
+ * cero de 258.
+ *
+ * Se admite la marca de extremo pegada, que el motor la pone ahi.      */
+static int es_fecha( const char *s )
+{
+   int digitos = 0, barras = 0;
+
+   for ( ; *s && *s != '@'; s++ )
+       {
+       if ( *s >= '0' && *s <= '9' ) digitos++;
+       else if ( *s == '/' )         barras++;
+       else return 0;
+       }
+   return ( digitos >= 4 && barras <= 1 );
+}
+
 /* Cuantos coeficientes lleva el factor que EMPIEZA en la linea siguiente:
  * son las lineas que empiezan por espacios y un numero, hasta la primera
  * que no. El motor las imprime con "%14.6f".                            */
@@ -157,7 +178,7 @@ gboolean fueout_read( const char *path, FueOut *o )
 {
     gchar  *txt = NULL, **lin;
     gsize   len = 0;
-    int     i, n, cal_lag = 0;
+    int     i, n, cal_lag = 0, en_resid = 0;
     double  cal_r = 0.0;
     char    nm[16];
 
@@ -175,6 +196,11 @@ gboolean fueout_read( const char *path, FueOut *o )
         const char *l = lin[i];
         double      v, v2;
         int         k, k2;
+
+        if ( strstr( l, "Standardized time series plot" ) )
+            { en_resid = 1; continue; }
+        if ( strstr( l, "Standardized time series histogram" ) )
+            { en_resid = 0; continue; }
 
         if ( sscanf( l, "Observations: %d", &k ) == 1 ) { o->nobs = k; o->hay = TRUE; }
         else if ( sscanf( l, "Parameters  : %d", &k ) == 1 ) o->npar = k;
@@ -240,6 +266,45 @@ gboolean fueout_read( const char *path, FueOut *o )
             {
             if ( sscanf( strstr( l, ":" ), ": %lf %% ( %lf", &v, &v2 ) == 2 )
                 { o->fuera2 = v; o->esp2 = v2; o->tiene_hist = TRUE; }
+            }
+
+        /* LOS RESIDUOS, del margen derecho del grafico tipificado:
+               1  2/2002 |   ...   |  0.0002970467
+           Se reconocen por llevar numero, fecha, una barra y un valor al
+           final. La cabecera y la regla no casan: no traen fecha.     */
+        else if ( en_resid && sscanf( l, " %d %15s", &k, nm ) == 2 &&
+                  es_fecha( nm ) )
+            {
+            /* EL MARCO NO SIEMPRE ES LA MISMA LETRA, y ahi se perdian 26 de
+               215 residuos EN SILENCIO -- que es peor que no leerlos:
+               calibrar sobre una serie a la que le faltan los años
+               bisiestos daria numeros creibles y falsos.
+                  fin de año:  +  en vez de  |
+                  extremo:     @  pegado a la fecha
+               Asi que el valor se toma del ULTIMO campo de la linea, sea
+               cual sea el marco, y a la fecha se le quita la marca.    */
+            const char *ult = l + strlen( l );
+            char       *at  = strchr( nm, '@' );
+
+            if ( at ) *at = '\0';
+            while ( ult > l && ( ult[-1] == ' ' || ult[-1] == '\t' ) ) ult--;
+            while ( ult > l && ult[-1] != ' ' && ult[-1] != '\t' ) ult--;
+            /* Y AHI SE PEGA AL NUMERO LO QUE HAGA FALTA:
+                   |@-0.0053874024    la marca del extremo, si es negativo
+                   +@-0.0051412423    y el marco del fin de año
+                   *|@23.9132796492   y hasta el punto, si cae en el borde
+               Perseguir esos caracteres uno a uno es ir detras del dibujo.
+               Se avanza hasta lo que PUEDE EMPEZAR UN NUMERO y se acabo:
+               asi da igual con que adorne el motor su grafico.         */
+            while ( *ult && *ult != '-' && *ult != '.' &&
+                    ( *ult < '0' || *ult > '9' ) ) ult++;
+
+            if ( o->nres < FO_MAX_RES && sscanf( ult, "%lf", &v ) == 1 )
+                {
+                o->res[o->nres] = v;
+                snprintf( o->res_fecha[o->nres], 16, "%s", nm );
+                o->nres++;
+                }
             }
 
         /* LOS RESIDUOS EXTREMOS:

@@ -58,6 +58,7 @@ gboolean convergence_is_good(const Convergence *c);
 #define FO_MAX_PAR  64
 #define FO_MAX_LB   16
 #define FO_MAX_EXT  64      /* residuos extremos listados                 */
+#define FO_MAX_RES  4096    /* los residuos, como numeros                 */
 #define FO_MAX_CAL  64      /* tramos de la calibracion del motor         */
 
 /* UN RESIDUO EXTREMO, tal como el motor lo lista:
@@ -130,6 +131,16 @@ typedef struct {
     double   fuera1, esp1, fuera2, esp2;
     gboolean tiene_jb;
     double   jb, jb_p;         /* Jarque-Bera, 2 g.l.                       */
+
+    /* LOS RESIDUOS, COMO NUMEROS.
+     *
+     * El motor los imprime al margen derecho de su grafico tipificado --"los
+     * valores originales en la columna de la derecha"-- asi que estan ahi y
+     * no hay que pedirselos de otra forma. Con ellos se puede calibrar la
+     * distorsion sin volver a correr nada.                              */
+    int       nres;
+    double    res[FO_MAX_RES];
+    char      res_fecha[FO_MAX_RES][16];
 
     /* LOS RESIDUOS EXTREMOS, con su fecha y su |z|. El umbral que decide
        cuando son NOTICIA no esta aqui: es metodo, y vive en quien juzga. */

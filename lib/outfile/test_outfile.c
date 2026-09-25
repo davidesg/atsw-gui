@@ -103,6 +103,19 @@ int main( int argc, char **argv )
     ok( o.npares >= 0, "y los pares que se pisan salen de la matriz de "
                        "correlaciones, no de adivinar el formato de la lista" );
 
+    printf( "\nLOS RESIDUOS, ENTEROS O NO SIRVEN\n" );
+    /* Se comprueba contra lo que el propio informe DECLARA. Calibrar sobre
+       una serie a la que le faltan observaciones da numeros creibles y
+       falsos, que es la peor clase de error.                          */
+    {
+    char decl[64];
+
+    snprintf( decl, sizeof decl, "%d observations", o.nobs );
+    ok( o.nres > 0, "los residuos se leen como NUMEROS, del margen derecho "
+                    "del grafico tipificado" );
+    ok( o.res_fecha[0][0] != '\0', "  con su fecha" );
+    }
+
     printf( "\nLOS ANOMALOS, QUE EL MOTOR YA LISTA Y YA CALIBRA\n" );
     ok( o.next >= 0, "los residuos extremos se leen" );
     if ( o.next > 0 )
@@ -139,6 +152,32 @@ int main( int argc, char **argv )
     ok( !o.hay, "  y la estructura queda vacia" );
     fueout_estructura( &o, b, sizeof b );
     es( b, "", "  y no se compone una estructura de la nada" );
+
+    printf( "\nY TODOS LOS GOLDEN, QUE UNO SOLO DICE QUE SI SIEMPRE\n" );
+    /* Leer bien UN .out no prueba nada: los tres fallos que esto encontro
+       --el marco «+» de fin de año, la marca «@» pegada al numero, y la
+       fecha SIN BARRA de las series anuales-- cada uno aparecia en unos
+       ficheros y no en otros. Un barrido, no una muestra.            */
+    {
+    const char *dirs[] = { "CPI_USA", "DE.3", "GASTO_PIB_BO_m00", "IPC_JP",
+                           "en4_ar18", "IPC_FR_model", NULL };
+    int i, mal = 0, vistos = 0;
+
+    for ( i = 0; dirs[i]; i++ )
+        {
+        FueOut z;
+
+        snprintf( path, sizeof path, "%s/%s/%s.out", golden, dirs[i], dirs[i] );
+        if ( !fueout_read( path, &z ) ) continue;
+        vistos++;
+        if ( z.nres != z.nobs && z.nres + 1 != z.nobs )
+            { printf( "        %s: %d leidos, %d declarados\n",
+                      dirs[i], z.nres, z.nobs ); mal++; }
+        }
+    ok( vistos >= 4, "se miran varios .out, no uno" );
+    ok( mal == 0, "y en TODOS los residuos leidos cuadran con los "
+                  "declarados -- mensuales, trimestrales y ANUALES" );
+    }
 
     printf( "\n%d fallos\n", fallos );
     return fallos ? 1 : 0;

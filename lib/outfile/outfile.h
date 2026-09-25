@@ -55,6 +55,9 @@ gboolean convergence_is_good(const Convergence *c);
 /* es convertir dos numeros suyos, no rehacer su cuenta.                     */
 /* ------------------------------------------------------------------------ */
 
+#define FO_MAX_PAR  64
+#define FO_MAX_LB   16
+
 typedef struct {
     gboolean hay;              /* se reconocio como un .out de fue          */
 
@@ -72,14 +75,46 @@ typedef struct {
 
     int      nobs, npar;
 
+    /* LOS PARAMETROS, tal como el motor los tabula:
+           -0.001610  (0.000683) [ 1]
+       Los FIJOS salen sin error tipico, y entonces no hay t que calcular:
+       no es que valga cero, es que no se estimo.                        */
+    int      npar_leidos;
+    double   par[FO_MAX_PAR], par_et[FO_MAX_PAR];
+    gboolean par_estimado[FO_MAX_PAR];
+    gboolean tiene_mu;            /* el modelo estima la media            */
+
+    /* LOS PARES DE PARAMETROS CORRELACIONADOS. Salen de la matriz de
+       correlaciones que el motor imprime -- dos decimales, que para
+       decidir si dos parametros se pisan sobra.                         */
+    int      npares;
+    int      par_a[FO_MAX_PAR], par_b[FO_MAX_PAR];
+    double   par_r[FO_MAX_PAR];
+
     /* LOS RESIDUOS */
     gboolean tiene_res;
-    double   media, sd, skew, kurt;
+    double   media, media_et, sd, skew, kurt;
+
+    /* EL HISTOGRAMA, que el motor ya compara con lo esperado:
+           65 values outside (-1,+1): 30.23 % (31.74 % expected)
+       Es el contraste de normalidad mas barato que hay y esta impreso. */
+    gboolean tiene_hist;
+    double   fuera1, esp1, fuera2, esp2;
     gboolean tiene_jb;
     double   jb, jb_p;         /* Jarque-Bera, 2 g.l.                       */
 
-    /* EL LJUNG-BOX: el ULTIMO de la escalera que el motor pone al margen
-       derecho de la ACF. Es el que resume toda la ventana.                */
+    /* EL LJUNG-BOX, LA ESCALERA ENTERA.
+     *
+     * El motor lo da escalonado --12, 24, 36 y el ultimo retardo-- y quedarse
+     * solo con el ultimo pierde el diagnostico: Q(12) mal y Q(36) bien es un
+     * problema CERCA, casi siempre estacional o de forma; al reves es
+     * arrastre lejano. Son dos cosas distintas y asi salian iguales.     */
+    int      nlb;
+    double   lb_q_[FO_MAX_LB], lb_p_[FO_MAX_LB];
+    int      lb_df_[FO_MAX_LB];
+
+    /* El ultimo, que es el que resume la ventana entera. Se deja aparte
+       porque es lo que la rejilla enseña en una columna.               */
     gboolean tiene_lb;
     double   lb_q, lb_p;
     int      lb_df;

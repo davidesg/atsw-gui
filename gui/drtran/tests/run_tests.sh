@@ -321,6 +321,17 @@ $CC -O2 -Wall -Wextra -I"$L/outfile" $(pkg-config --cflags glib-2.0) \
     -o "$W/test_outfile" $(pkg-config --libs glib-2.0) -lm || exit 1
 "$W/test_outfile" "$TOP/../../engines/fue/tests/golden" || exit 1
 
+# --- el dictamen: leer no es juzgar -----------------------------------------
+# Los umbrales se prueban SIN fichero, con numeros inventados: eso es lo que
+# se gana separando el lector del que juzga.
+echo
+$CC -O2 -Wall -Wextra -I"$L/dictamen" -I"$L/outfile" \
+    $(pkg-config --cflags glib-2.0) \
+    "$L/dictamen/test_dictamen.c" "$L/dictamen/dictamen.c" \
+    "$L/outfile/outfile.c" \
+    -o "$W/test_dictamen" $(pkg-config --libs glib-2.0) -lm || exit 1
+"$W/test_dictamen" || exit 1
+
 # --- el dato y lo que se deriva de el ---------------------------------------
 # El .csv es el dato y los .inp se generan de el: si el ida y vuelta perdiera
 # algo, el .csv no seria el dato.

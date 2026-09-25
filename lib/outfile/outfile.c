@@ -171,8 +171,8 @@ gboolean fueout_read( const char *path, FueOut *o )
     for ( i = 0; i < n; i++ )
         {
         const char *l = lin[i];
-        double      v;
-        int         k;
+        double      v, v2;
+        int         k, k2;
 
         if ( sscanf( l, "Observations: %d", &k ) == 1 ) { o->nobs = k; o->hay = TRUE; }
         else if ( sscanf( l, "Parameters  : %d", &k ) == 1 ) o->npar = k;
@@ -182,6 +182,22 @@ gboolean fueout_read( const char *path, FueOut *o )
         else if ( sscanf( l, "Annual differences : %d", &k ) == 1 ) o->D = k;
         else if ( sscanf( l, "Number of deterministic variables: %d", &k ) == 1 )
             o->ndet = k;
+        else if ( g_str_has_prefix( l, "Mean parameter" ) ) o->tiene_mu = TRUE;
+
+        /* LA TABLA DE PARAMETROS: valor, error tipico y numero.
+               -0.001610  (0.000683) [ 1]
+           Uno FIJO sale sin el parentesis, y entonces no hay t: no es que
+           valga cero, es que nadie lo estimo.                          */
+        else if ( sscanf( l, " %lf ( %lf ) [ %d ]", &v, &v2, &k ) == 3 )
+            {
+            if ( k >= 1 && k <= FO_MAX_PAR )
+                {
+                o->par[k - 1]          = v;
+                o->par_et[k - 1]       = v2;
+                o->par_estimado[k - 1] = TRUE;
+                if ( k > o->npar_leidos ) o->npar_leidos = k;
+                }
+            }
 
         /* LOS ORDENES, SUMANDO FACTORES. El motor los imprime por separado
            porque la especificacion es factorizada; (p,d,q)(P,D,Q) es el
@@ -203,11 +219,56 @@ gboolean fueout_read( const char *path, FueOut *o )
         /* LOS RESIDUOS. El bloque de "Unconditional residuals". */
         else if ( sscanf( l, "                  Mean: %lf", &v ) == 1 )
             { o->media = v; o->tiene_res = TRUE; }
+        else if ( sscanf( l, "Standard error of mean: %lf", &v ) == 1 )
+            o->media_et = v;
         else if ( sscanf( l, "    Standard deviation: %lf", &v ) == 1 ) o->sd = v;
         else if ( sscanf( l, "              Skewness: %lf", &v ) == 1 ) o->skew = v;
         else if ( sscanf( l, "              Kurtosis: %lf", &v ) == 1 ) o->kurt = v;
         else if ( sscanf( l, "           Jarque-Bera: %lf", &v ) == 1 )
             { o->jb = v; o->tiene_jb = TRUE; o->jb_p = chisq_cola( v, 2 ); }
+
+        /* EL HISTOGRAMA, QUE EL MOTOR YA COMPARA CON LO ESPERADO:
+               65 values outside (-1,+1): 30.23 % (31.74 % expected)   */
+        else if ( strstr( l, "values outside (-1,+1)" ) != NULL )
+            {
+            if ( sscanf( strstr( l, ":" ), ": %lf %% ( %lf", &v, &v2 ) == 2 )
+                { o->fuera1 = v; o->esp1 = v2; o->tiene_hist = TRUE; }
+            }
+        else if ( strstr( l, "values outside (-2,+2)" ) != NULL )
+            {
+            if ( sscanf( strstr( l, ":" ), ": %lf %% ( %lf", &v, &v2 ) == 2 )
+                { o->fuera2 = v; o->esp2 = v2; o->tiene_hist = TRUE; }
+            }
+
+        /* LA MATRIZ DE CORRELACIONES, para los pares que se pisan.
+         *
+         * Se lee la MATRIZ y no la lista que el motor imprime debajo: esa
+         * lista sale vacia en todos los .out que tenemos, asi que su formato
+         * cuando NO lo esta es una suposicion -- y adivinar un formato es
+         * como se escriben los lectores que fallan el dia que hace falta.
+         * La matriz es triangular inferior y no deja dudas:
+         *     x[ 3] ->  0.00 -0.01  1.00                                */
+        else if ( sscanf( l, " x[ %d ] ->", &k ) == 1 && k >= 1 )
+            {
+            const char *c = strstr( l, "->" );
+
+            for ( k2 = 1; c && k2 < k && o->npares < FO_MAX_PAR; k2++ )
+                {
+                char *fin;
+
+                c += ( k2 == 1 ) ? 2 : 0;
+                v = strtod( c, &fin );
+                if ( fin == c ) break;
+                c = fin;
+                if ( v >= 0.7 || v <= -0.7 )
+                    {
+                    o->par_a[o->npares] = k2;
+                    o->par_b[o->npares] = k;
+                    o->par_r[o->npares] = v;
+                    o->npares++;
+                    }
+                }
+            }
 
         /* EL LJUNG-BOX: la escalera del margen derecho de la ACF. Se queda
            el ULTIMO, que es el que resume toda la ventana.              */
@@ -220,8 +281,18 @@ gboolean fueout_read( const char *path, FueOut *o )
             int         df;
 
             if ( fin && sscanf( fin + 1, "%lf %d", &qq, &df ) == 2 && df > 0 )
-                { o->lb_q = qq; o->lb_df = df; o->tiene_lb = TRUE;
-                  o->lb_p = chisq_cola( qq, df ); }
+                {
+                /* TODA la escalera, no solo el ultimo peldaño. */
+                if ( o->nlb < FO_MAX_LB )
+                    {
+                    o->lb_q_[o->nlb]  = qq;
+                    o->lb_df_[o->nlb] = df;
+                    o->lb_p_[o->nlb]  = chisq_cola( qq, df );
+                    o->nlb++;
+                    }
+                o->lb_q = qq; o->lb_df = df; o->tiene_lb = TRUE;
+                o->lb_p = chisq_cola( qq, df );
+                }
             }
         }
 

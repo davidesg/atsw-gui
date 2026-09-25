@@ -76,6 +76,33 @@ int main( int argc, char **argv )
     ok( o.tiene_jb && o.jb > 0.0, "y el Jarque-Bera" );
     cerca( o.jb_p, chisq_cola( o.jb, 2 ), 1e-12, "  con sus DOS grados" );
 
+    printf( "\nLOS HECHOS DE LA DIAGNOSIS, QUE EL .out YA TRAE\n" );
+    ok( o.media_et > 0.0, "la media viene con su ERROR TIPICO: sin el no hay "
+                          "contraste que hacer" );
+    ok( o.nlb >= 2, "y el Ljung-Box es una ESCALERA, no un numero" );
+    {
+    int i, ok_p = 1;
+
+    for ( i = 0; i < o.nlb; i++ )
+        if ( o.lb_p_[i] < 0.0 || o.lb_p_[i] > 1.0 ) ok_p = 0;
+    ok( ok_p, "  con un p por peldaño" );
+    ok( o.lb_df_[o.nlb - 1] == o.lb_df,
+        "  y el ultimo es el que la rejilla enseña" );
+    }
+    ok( o.tiene_hist && o.esp2 > 0.0,
+        "el histograma trae el % OBSERVADO y el ESPERADO: el motor ya los "
+        "compara" );
+    ok( o.npar_leidos > 0, "la tabla de parametros se lee" );
+    {
+    int i, con_et = 0;
+
+    for ( i = 0; i < o.npar_leidos; i++ )
+        if ( o.par_estimado[i] && o.par_et[i] > 0.0 ) con_et++;
+    ok( con_et > 0, "  con su error tipico, que es lo que da la t" );
+    }
+    ok( o.npares >= 0, "y los pares que se pisan salen de la matriz de "
+                       "correlaciones, no de adivinar el formato de la lista" );
+
     printf( "\nUNO SIN PARTE ANUAL NO LA ENSEÑA\n" );
     snprintf( path, sizeof path, "%s/CPI_USA/CPI_USA.out", golden );
     if ( fueout_read( path, &o ) )

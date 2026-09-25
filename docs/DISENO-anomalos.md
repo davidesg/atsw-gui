@@ -187,6 +187,34 @@ al pulsar, las barras se moverían por el dibujo y no por los datos.
 compara contra el que imprime el motor: ése sale de su propio estimador, y
 mezclarlos sería restar peras de manzanas.
 
+### Se calibra lo que se marca, y marcar no es calibrar
+
+> «Me gustaría utilizar el mismo gráfico de residuos + acf/pacf para calibrar
+> las distorsiones, con check marks para marcar los anómalos que se quiere
+> calibrar. Puede ser uno o dos o todos. Se puede calibrar 3 episodios a la
+> vez. Para calibrar se usa un push button.»
+
+El interruptor binario —«con todos» / «sin ninguno»— contestaba una pregunta
+que nadie hace. **La pregunta de verdad no es «¿y si no hubiera anómalos?»
+sino «¿y si no estuviera ÉSTE?»**, porque *éste* es el que se acaba
+interviniendo, con su parámetro y su forma.
+
+Así que:
+
+- **el gráfico de residuos de siempre**, arriba, con los extremos en rojo y
+  **los episodios marcados sombreados encima**: se ve sobre qué se va a
+  calibrar *antes* de calibrar, que es la mitad de la pregunta;
+- **una casilla por episodio**, con sus fechas, su extensión y su z máximo;
+- **un botón «Calibrar»**, y ahí está la separación que importa: **marcar dice
+  QUÉ se quiere probar; probarlo es pulsar.** Sin esa separación no se pueden
+  marcar tres y ver el efecto **de los tres juntos** — que no es lo mismo que
+  el de cada uno por separado, y es justamente la pregunta que no se podía
+  hacer.
+
+Al calibrar se enseña el resultado, que es lo que se acaba de pedir; y el
+interruptor queda para **volver al original y comparar**, que es la misma
+figura moviéndose.
+
 ---
 
 ## 6. Lo que **no** hace

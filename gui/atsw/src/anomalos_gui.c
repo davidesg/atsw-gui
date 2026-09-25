@@ -41,9 +41,97 @@ typedef struct {
     int        nomit;
     double     umbral;
 
+    /* QUE EPISODIOS SE CALIBRAN. Uno, dos, tres o todos -- la pregunta de
+       verdad no es «¿y si no hubiera anómalos?» sino «¿y si no estuviera
+       ESTE?», que es lo que se acaba interviniendo.                    */
+    gboolean   marcado[AN_MAX_EP];
+    int        z_extremo[FO_MAX_RES];   /* 1 si |z| >= umbral            */
+    double     z[FO_MAX_RES];           /* los residuos tipificados      */
+    gboolean   calibrado;               /* ya se pulso «Calibrar»        */
+
     gboolean   sin_anomalos;      /* el interruptor                       */
-    GtkWidget *dib_acf, *dib_pacf, *l_q, *l_res;
+    GtkWidget *dib_res, *dib_acf, *dib_pacf, *l_q, *l_pie, *b_ver, *lista;
 } An;
+
+enum { EP_MARCA, EP_DESDE, EP_HASTA, EP_N, EP_Z, EP_I, EP_COLS };
+
+
+/* ------------------------------------------------------------------------ */
+/* Los residuos, con sus anómalos                                            */
+/*                                                                           */
+/* ES EL MISMO GRAFICO DE SIEMPRE -- la serie tipificada con sus bandas --    */
+/* y encima, sombreados, los episodios MARCADOS. Así se ve sobre qué se va a  */
+/* calibrar antes de calibrar, que es la mitad de la pregunta.               */
+/* ------------------------------------------------------------------------ */
+
+static gboolean pinta_res( GtkWidget *w, cairo_t *cr, An *g )
+{
+    GtkAllocation al;
+    double        medio, alto, escala, dx;
+    int           i, n = g->o.nres;
+
+    gtk_widget_get_allocation( w, &al );
+    if ( n < 2 ) return FALSE;
+
+    medio = al.height / 2.0;
+    alto  = medio - 6.0;
+    dx    = (double) al.width / n;
+
+    escala = g->umbral;
+    for ( i = 0; i < n; i++ )
+        if ( fabs( g->z[i] ) > escala ) escala = fabs( g->z[i] );
+    escala = alto / ( escala * 1.05 );
+
+    /* Los episodios MARCADOS, sombreados por detrás. */
+    for ( i = 0; i < g->nep; i++ )
+        {
+        double x0, x1;
+
+        if ( !g->marcado[i] ) continue;
+        x0 = g->ep[i].desde * dx;
+        x1 = ( g->ep[i].hasta + 1 ) * dx;
+        if ( x1 - x0 < 3.0 ) x1 = x0 + 3.0;
+        cairo_set_source_rgba( cr, 0.85, 0.55, 0.10, 0.22 );
+        cairo_rectangle( cr, x0, 0, x1 - x0, al.height );
+        cairo_fill( cr );
+        }
+
+    /* El eje y las bandas del umbral. */
+    cairo_set_source_rgb( cr, 0.45, 0.45, 0.45 );
+    cairo_set_line_width( cr, 1.0 );
+    cairo_move_to( cr, 0, medio ); cairo_line_to( cr, al.width, medio );
+    cairo_stroke( cr );
+
+    {
+    static const double guion[] = { 2.0, 3.0 };
+
+    cairo_set_source_rgba( cr, 0.20, 0.40, 0.75, 0.6 );
+    cairo_set_dash( cr, guion, 2, 0 );
+    cairo_move_to( cr, 0, medio - g->umbral * escala );
+    cairo_line_to( cr, al.width, medio - g->umbral * escala );
+    cairo_move_to( cr, 0, medio + g->umbral * escala );
+    cairo_line_to( cr, al.width, medio + g->umbral * escala );
+    cairo_stroke( cr );
+    cairo_set_dash( cr, NULL, 0, 0 );
+    }
+
+    /* La serie. Los extremos, en rojo y más gruesos. */
+    for ( i = 0; i < n; i++ )
+        {
+        double x = ( i + 0.5 ) * dx;
+
+        if ( g->z_extremo[i] )
+            { cairo_set_source_rgb( cr, .71, .11, .09 );
+              cairo_set_line_width( cr, 2.5 ); }
+        else
+            { cairo_set_source_rgb( cr, .30, .30, .34 );
+              cairo_set_line_width( cr, 1.0 ); }
+        cairo_move_to( cr, x, medio );
+        cairo_line_to( cr, x, medio - g->z[i] * escala );
+        cairo_stroke( cr );
+        }
+    return FALSE;
+}
 
 
 /* ------------------------------------------------------------------------ */
@@ -181,6 +269,73 @@ static void on_interruptor( GtkToggleButton *b, An *g )
     gtk_widget_queue_draw( g->dib_pacf );
 }
 
+/* UNA MARCA. No recalcula: marcar es decir QUE se quiere probar, y probarlo
+ * es pulsar el botón. Separar las dos cosas deja marcar tres episodios y ver
+ * el efecto DE LOS TRES JUNTOS, que es una pregunta distinta de la de cada
+ * uno por separado -- y es la que no se podía hacer.                    */
+static void on_marca( GtkCellRendererToggle *r, gchar *ruta, An *g )
+{
+    GtkTreeModel *mo = gtk_tree_view_get_model( GTK_TREE_VIEW(g->lista) );
+    GtkTreeIter   it;
+    gboolean      v;
+    int           i;
+
+    (void) r;
+    if ( !gtk_tree_model_get_iter_from_string( mo, &it, ruta ) ) return;
+    gtk_tree_model_get( mo, &it, EP_MARCA, &v, EP_I, &i, -1 );
+    gtk_list_store_set( GTK_LIST_STORE(mo), &it, EP_MARCA, !v, -1 );
+    if ( i >= 0 && i < g->nep ) g->marcado[i] = !v;
+
+    gtk_widget_queue_draw( g->dib_res );
+}
+
+static void pie( An *g )
+{
+    gtk_label_set_markup( GTK_LABEL(g->l_pie),
+        !g->calibrado
+          ? "<small>Marca los episodios que quieras probar y pulsa "
+            "<b>Calibrar</b>. Puedes probarlos de uno en uno o varios a la "
+            "vez: no es la misma pregunta.</small>"
+        : g->c.cambia
+          ? "<small>Hay retardos que <b>cambian de lado</b> de la banda: "
+            "quitar esto cambiaría la identificación.</small>"
+          : "<small>Ningún retardo cambia de lado: intervenir esto <b>no "
+            "compra nada</b> para la identificación.</small>" );
+}
+
+static void on_calibrar( GtkButton *b, An *g )
+{
+    int i, t, lags;
+
+    (void) b;
+    g->nomit = 0;
+    for ( i = 0; i < g->nep; i++ )
+        {
+        if ( !g->marcado[i] ) continue;
+        for ( t = g->ep[i].desde; t <= g->ep[i].hasta; t++ )
+            if ( g->nomit < FO_MAX_RES ) g->omit[g->nomit++] = t;
+        }
+
+    lags = g->o.nres / 8;
+    if ( lags > 24 ) lags = 24;
+    an_calibra( g->o.res, g->o.nres, g->omit, g->nomit, lags, &g->c );
+    g->calibrado = TRUE;
+
+    /* Al calibrar se ENSEÑA el resultado: es lo que se acaba de pedir. El
+       interruptor queda para volver al original y comparar.          */
+    gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(g->b_ver), TRUE );
+    gtk_widget_set_sensitive( g->b_ver, TRUE );
+
+    di_q( g );
+    pie( g );
+    gtk_widget_queue_draw( g->dib_acf );
+    gtk_widget_queue_draw( g->dib_pacf );
+
+    if ( g->nomit == 0 )
+        barra_pub( g->a, "Sin ningún episodio marcado, la calibración es el "
+                         "correlograma de siempre." );
+}
+
 static void on_cerrar( GtkWidget *w, An *g ) { (void) w; g_free( g ); }
 
 
@@ -217,31 +372,32 @@ void atsw_anomalos( Atsw *a, const char *serie, const char *muestra,
        atípicos sueltos con su forma decidida por adyacencia.          */
     g->umbral = an_umbral( g->o.nres );
     {
-    double *z = g_new( double, g->o.nres );
-    double  sd = 0.0;
+    double sd = 0.0;
 
     for ( i = 0; i < g->o.nres; i++ ) sd += g->o.res[i] * g->o.res[i];
     sd = sqrt( sd / g->o.nres );
     for ( i = 0; i < g->o.nres; i++ )
-        z[i] = ( sd > 0.0 ) ? g->o.res[i] / sd : 0.0;
-
-    g->nep = an_episodios( z, g->o.nres, g->umbral, AN_VENTANA,
-                           g->ep, AN_MAX_EP );
-    for ( i = 0; i < g->nep; i++ )
         {
-        int t;
-
-        for ( t = g->ep[i].desde; t <= g->ep[i].hasta; t++ )
-            if ( g->nomit < FO_MAX_RES ) g->omit[g->nomit++] = t;
+        g->z[i] = ( sd > 0.0 ) ? g->o.res[i] / sd : 0.0;
+        g->z_extremo[i] = ( fabs( g->z[i] ) >= g->umbral );
         }
-    an_calibra( g->o.res, g->o.nres, g->omit, g->nomit,
-                g->o.nres / 8 > 24 ? 24 : g->o.nres / 8, &g->c );
-    g_free( z );
+
+    g->nep = an_episodios( g->z, g->o.nres, g->umbral, AN_VENTANA,
+                           g->ep, AN_MAX_EP );
+    }
+
+    /* SIN NADA MARCADO al abrir: el correlograma que se ve es el de siempre,
+       y calibrar es un acto, no un estado de partida.                 */
+    {
+    int lags = g->o.nres / 8;
+
+    if ( lags > 24 ) lags = 24;
+    an_calibra( g->o.res, g->o.nres, NULL, 0, lags, &g->c );
     }
 
     win = gtk_window_new( GTK_WINDOW_TOPLEVEL );
     gtk_window_set_transient_for( GTK_WINDOW(win), GTK_WINDOW(a->ventana) );
-    gtk_window_set_default_size( GTK_WINDOW(win), 720, 520 );
+    gtk_window_set_default_size( GTK_WINDOW(win), 760, 700 );
     {
     gchar *t = g_strdup_printf( "Anómalos — %s / %s", serie, id );
 
@@ -255,40 +411,98 @@ void atsw_anomalos( Atsw *a, const char *serie, const char *muestra,
 
     cab = gtk_label_new( NULL );
     {
-    GString *s = g_string_new( NULL );
+    gchar *t = g_markup_printf_escaped(
+        "<b>%s / %s</b>%s%s   ·   %d episodio%s con |z| ≥ %.2f, sobre %d "
+        "residuos", serie, id,
+        ( muestra && *muestra ) ? "   muestra " : "",
+        ( muestra && *muestra ) ? muestra : "",
+        g->nep, g->nep == 1 ? "" : "s", g->umbral, g->o.nres );
 
-    g_string_append_printf( s, "<b>%d episodio%s</b> con |z| ≥ %.2f "
-        "(%d observaciones de %d)", g->nep, g->nep == 1 ? "" : "s",
-        g->umbral, g->nomit, g->o.nres );
-    for ( i = 0; i < g->nep && i < 6; i++ )
-        {
-        const char *d = g->ep[i].desde < g->o.nres
-                      ? g->o.res_fecha[g->ep[i].desde] : "";
-        const char *h = g->ep[i].hasta < g->o.nres
-                      ? g->o.res_fecha[g->ep[i].hasta] : "";
-
-        g_string_append_printf( s, "\n<tt>  %-8s %s %-8s</tt>  %d período%s, "
-            "z máx %.2f", d, g->ep[i].n > 1 ? "–" : " ",
-            g->ep[i].n > 1 ? h : "", g->ep[i].n,
-            g->ep[i].n == 1 ? "" : "s", g->ep[i].z_max );
-        }
-    gtk_label_set_markup( GTK_LABEL(cab), s->str );
-    g_string_free( s, TRUE );
+    gtk_label_set_markup( GTK_LABEL(cab), t );
+    g_free( t );
     }
     gtk_label_set_xalign( GTK_LABEL(cab), 0.0 );
     gtk_box_pack_start( GTK_BOX(raiz), cab, FALSE, FALSE, 0 );
 
+    /* EL GRAFICO DE RESIDUOS, el de siempre, con los episodios marcados
+       sombreados encima: se ve sobre qué se va a calibrar.            */
+    g->dib_res = gtk_drawing_area_new();
+    gtk_widget_set_size_request( g->dib_res, -1, 110 );
+    gtk_widget_set_tooltip_text( g->dib_res,
+        "Los residuos tipificados con su umbral. En rojo los extremos; "
+        "sombreados, los episodios marcados abajo." );
+    g_signal_connect( g->dib_res, "draw", G_CALLBACK(pinta_res), g );
+    gtk_box_pack_start( GTK_BOX(raiz), g->dib_res, FALSE, FALSE, 0 );
+
+    /* LA LISTA DE EPISODIOS, CON SUS CASILLAS. Uno, dos o todos: marcar es
+       decir QUÉ se quiere probar; probarlo es pulsar el botón.        */
+    {
+    GtkListStore *st = gtk_list_store_new( EP_COLS, G_TYPE_BOOLEAN,
+        G_TYPE_STRING, G_TYPE_STRING, G_TYPE_INT, G_TYPE_STRING, G_TYPE_INT );
+    GtkCellRenderer *r;
+    GtkTreeIter      it;
+    GtkWidget       *sc;
+
+    g->lista = gtk_tree_view_new_with_model( GTK_TREE_MODEL(st) );
+    g_object_unref( st );
+
+    r = gtk_cell_renderer_toggle_new();
+    g_signal_connect( r, "toggled", G_CALLBACK(on_marca), g );
+    gtk_tree_view_insert_column_with_attributes( GTK_TREE_VIEW(g->lista), -1,
+        "", r, "active", EP_MARCA, NULL );
+
+    r = gtk_cell_renderer_text_new();
+    gtk_tree_view_insert_column_with_attributes( GTK_TREE_VIEW(g->lista), -1,
+        "Desde", r, "text", EP_DESDE, NULL );
+    gtk_tree_view_insert_column_with_attributes( GTK_TREE_VIEW(g->lista), -1,
+        "Hasta", r, "text", EP_HASTA, NULL );
+    gtk_tree_view_insert_column_with_attributes( GTK_TREE_VIEW(g->lista), -1,
+        "Períodos", r, "text", EP_N, NULL );
+    gtk_tree_view_insert_column_with_attributes( GTK_TREE_VIEW(g->lista), -1,
+        "z máx", r, "text", EP_Z, NULL );
+
+    for ( i = 0; i < g->nep; i++ )
+        {
+        char zb[16];
+
+        g_snprintf( zb, sizeof zb, "%+.2f", g->ep[i].z_max );
+        gtk_list_store_append( st, &it );
+        gtk_list_store_set( st, &it,
+            EP_MARCA, FALSE,
+            EP_DESDE, g->o.res_fecha[g->ep[i].desde],
+            EP_HASTA, g->ep[i].n > 1 ? g->o.res_fecha[g->ep[i].hasta] : "",
+            EP_N,     g->ep[i].n,
+            EP_Z,     zb,
+            EP_I,     i, -1 );
+        }
+
+    sc = gtk_scrolled_window_new( NULL, NULL );
+    gtk_scrolled_window_set_policy( GTK_SCROLLED_WINDOW(sc),
+                                    GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC );
+    gtk_widget_set_size_request( sc, -1, 96 );
+    gtk_container_add( GTK_CONTAINER(sc), g->lista );
+    gtk_box_pack_start( GTK_BOX(raiz), sc, FALSE, FALSE, 0 );
+    }
+
     barra = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 8 );
     gtk_box_pack_start( GTK_BOX(raiz), barra, FALSE, FALSE, 0 );
 
-    b = gtk_check_button_new_with_label( "sin los anómalos" );
+    b = gtk_button_new_with_label( "Calibrar" );
     gtk_widget_set_tooltip_text( b,
-        "Redibuja los dos correlogramas omitiendo los episodios. Lo que hay "
-        "que ver es la MISMA figura moviéndose: «¿corto el AR en el 2?» se "
-        "responde mirando un dibujo.\n\nEn rojo, lo que el anómalo FABRICA; "
-        "en verde, lo que ENMASCARA." );
-    g_signal_connect( b, "toggled", G_CALLBACK(on_interruptor), g );
+        "Recalcula la ACF y la PACF omitiendo los episodios marcados, y "
+        "dice qué retardos cambian de lado de la banda.\n\nMarcar varios y "
+        "calibrar de una vez NO es lo mismo que calibrarlos uno a uno: son "
+        "dos preguntas distintas." );
+    g_signal_connect( b, "clicked", G_CALLBACK(on_calibrar), g );
     gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
+
+    g->b_ver = gtk_check_button_new_with_label( "ver calibrado" );
+    gtk_widget_set_tooltip_text( g->b_ver,
+        "Quítalo para volver al correlograma original y comparar: es la "
+        "MISMA figura moviéndose." );
+    gtk_widget_set_sensitive( g->b_ver, FALSE );
+    g_signal_connect( g->b_ver, "toggled", G_CALLBACK(on_interruptor), g );
+    gtk_box_pack_start( GTK_BOX(barra), g->b_ver, FALSE, FALSE, 0 );
 
     g->l_q = gtk_label_new( NULL );
     gtk_label_set_xalign( GTK_LABEL(g->l_q), 0.0 );
@@ -314,19 +528,13 @@ void atsw_anomalos( Atsw *a, const char *serie, const char *muestra,
         gtk_box_pack_start( GTK_BOX(caja), d, TRUE, TRUE, 0 );
         }
 
-    {
-    GtkWidget *pie = gtk_label_new( NULL );
-
-    gtk_label_set_markup( GTK_LABEL(pie), g->c.cambia
-        ? "<small>Hay retardos que cambian de lado de la banda: quitar el "
-          "anómalo cambiaría la identificación.</small>"
-        : "<small>Ningún retardo cambia de lado: intervenir esto <b>no compra "
-          "nada</b> para la identificación.</small>" );
-    gtk_label_set_xalign( GTK_LABEL(pie), 0.0 );
-    gtk_box_pack_start( GTK_BOX(raiz), pie, FALSE, FALSE, 0 );
-    }
+    g->l_pie = gtk_label_new( NULL );
+    gtk_label_set_xalign( GTK_LABEL(g->l_pie), 0.0 );
+    gtk_label_set_line_wrap( GTK_LABEL(g->l_pie), TRUE );
+    gtk_box_pack_start( GTK_BOX(raiz), g->l_pie, FALSE, FALSE, 0 );
 
     di_q( g );
+    pie( g );
     g_signal_connect( win, "destroy", G_CALLBACK(on_cerrar), g );
     gtk_widget_show_all( win );
 }

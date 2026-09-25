@@ -217,6 +217,55 @@ figura moviéndose.
 
 ---
 
+### El gráfico es el de fue, y el círculo dice cuál
+
+La primera versión de la ventana dibujaba con cairo un gráfico de residuos y
+dos correlogramas *parecidos* a los de fue. Parecidos no sirve: el analista
+compararía dos lienzos distintos creyendo que compara dos calibraciones, y las
+diferencias de escala, de bandas y de margen se leerían como diferencias de
+los datos.
+
+Así que se dibuja **el de fue** — `fp_PlotSer_CorrSer`, la opción `-c` — sobre
+los residuos que trae el `.out`. Tres cosas lo hacen posible sin tocar el
+motor:
+
+1. **`fp_PlotSer_CorrSer_marks`**, nueva en `lib/fugplot`: el mismo `-c` con un
+   círculo alrededor de las observaciones marcadas. La de siempre pasa a ser
+   un envoltorio con `marks == NULL`, así que **el dibujo de fue no se mueve un
+   punto**. Marcar un episodio en una lista y verlo sombreado no dice *cuál*
+   es; el círculo va sobre el punto, donde está la fecha.
+
+2. **«Sin los anómalos» es la serie con la media de los retenidos en el
+   hueco.** El estimador declarado de `lib/anomalos` es la desviación a cero:
+   μ sobre las retenidas, z̃ = z − μ en ellas y 0 en las omitidas. Poner μ en
+   las omitidas da exactamente esa serie — su media *es* μ — de modo que la
+   `Acf` del motor devuelve nuestra r(k) sin tener que pasarle correlaciones
+   ya calculadas.
+
+3. **La escala se fija con el máximo de los dos estados** y se le pasa por
+   `cbands`, que es la opción con la que el motor admite una escala dada. Si
+   la eligiera sola en cada estado, al accionar el interruptor las barras se
+   moverían por el dibujo y no por los datos.
+
+Los mandos van **al pie del gráfico** (`preview_set_footer`), como λ, d y D en
+el vistazo: una casilla por episodio con su fecha, `Calibrar` y «ver
+calibrado». No hay una ventana de anómalos aparte mirando a otra: el analista
+trabaja al pie de la figura. Cambiar una marca **deshace** la calibración
+anterior — lo que se ve tiene que ser lo que está marcado.
+
+Lo que el dibujo de fue no dice, porque no es su dibujo, se dice en el pie con
+palabras: qué retardos cambian de lado y en qué sentido (`ACF 2 enmascarada ·
+PACF 2 fabricada`), los dos Q con su n y las dos bandas. Antes era color; así
+se puede copiar a un informe.
+
+El precio, dicho: la madre enlaza `lib/fugplot` con su propio `plothost.h` y un
+`plotstats.c` que **copia** las fórmulas de `diagnose.c` y `nlatools.c` del
+motor. Copiadas, no reescritas — el gráfico tiene que ser el de fue, y eso se
+consigue copiando el cálculo. Si el cálculo cambia en el motor, hay que
+cambiarlo aquí.
+
+---
+
 ## 6. Lo que **no** hace
 
 **No interviene.** Ni elige la forma, ni escribe la intervención en el `.inp`,
@@ -236,6 +285,7 @@ en `lib/dictamen`.
 | 1 | los extremos y la calibración del motor, en `lib/outfile` | horas |
 | 2 | `lib/anomalos`: episodios y calibración ACF/PACF, con su prueba | 1-2 días |
 | 3 | la ventana «Anómalos…»: episodios, los dos correlogramas y el Q | hecho |
+| 3b | el gráfico de fue (`-c`) con círculo en lo marcado, y los mandos al pie | hecho |
 | 4 | el mismo interruptor en el vistazo, sobre la serie sin modelo | pendiente |
 
 Nada toca los motores: lo de después está impreso, y lo de antes se calcula

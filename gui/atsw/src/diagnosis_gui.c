@@ -225,11 +225,25 @@ void atsw_diagnosis( Atsw *a, const char *serie, const char *muestra,
         static const char *tit[] = { "", "", "Los números", "Qué dice" };
         GtkCellRenderer   *r = gtk_cell_renderer_text_new();
 
+        /* EL SALTO DE LINEA VA EN EL PINTADO, NO EN EL DATO.
+         *
+         * La escalera del Ljung-Box son cuatro peldaños en una línea, y esa
+         * línea empujaba fuera de la ventana lo que el bloque DICE -- que es
+         * justo lo que hay que leer.
+         *
+         * Metiéndolo en el dato se arreglaría la ventana y se rompería el
+         * CSV: un salto de línea dentro de un campo obliga a entrecomillar y
+         * deja de ser una tabla que se lee en cualquier sitio. El ancho es
+         * cosa de quien pinta.                                          */
         if ( i == DG_DATO )
-            g_object_set( r, "family", "monospace", NULL );
+            g_object_set( r, "family", "monospace", "wrap-width", 250,
+                          "wrap-mode", PANGO_WRAP_WORD_CHAR,
+                          "yalign", 0.0, NULL );
         if ( i == DG_DICE )
             g_object_set( r, "wrap-width", 330, "wrap-mode", PANGO_WRAP_WORD,
-                          NULL );
+                          "yalign", 0.0, NULL );
+        if ( i == DG_ESTADO || i == DG_TITULO )
+            g_object_set( r, "yalign", 0.0, NULL );
         gtk_tree_view_insert_column_with_attributes(
             GTK_TREE_VIEW(lista), -1, tit[i], r, "text", i,
             "foreground", DG_COLOR, NULL );

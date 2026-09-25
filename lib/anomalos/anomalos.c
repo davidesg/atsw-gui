@@ -197,6 +197,28 @@ int an_calibra( const double *z, int n, const int *omitir, int nomitir,
    return 0;
 }
 
+void an_q( const AnCalibra *c, int m, double *q_con, double *q_sin )
+{
+   double qc = 0.0, qs = 0.0;
+   int    k;
+
+   if ( c == NULL ) return;
+   if ( m > c->nlags ) m = c->nlags;
+
+   for ( k = 1; k <= m; k++ )
+       {
+       const AnLag *l = &c->l[k - 1];
+
+       if ( c->n_con > k )
+           qc += l->acf_con * l->acf_con / ( c->n_con - k );
+       if ( c->n_sin > k )
+           qs += l->acf_sin * l->acf_sin / ( c->n_sin - k );
+       }
+
+   if ( q_con ) *q_con = (double) c->n_con * ( c->n_con + 2 ) * qc;
+   if ( q_sin ) *q_sin = (double) c->n_sin * ( c->n_sin + 2 ) * qs;
+}
+
 const char *an_veredicto_es( AnVeredicto v )
 {
    switch ( v )

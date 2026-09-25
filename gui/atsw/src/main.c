@@ -649,6 +649,16 @@ static void on_diagnosis( GtkMenuItem *m, Atsw *a )
     g_free( id );
 }
 
+static void on_anomalos( GtkMenuItem *m, Atsw *a )
+{
+    gchar *id = atsw_marcada( a->l_modelos, M_ID );
+
+    (void) m;
+    if ( a->hay && a->serie[0] && id )
+        atsw_anomalos( a, a->serie, atsw_muestra_actual( a ), id );
+    g_free( id );
+}
+
 static void on_editar( GtkMenuItem *m, Atsw *a )
 {
     gchar *id = atsw_marcada( a->l_modelos, M_ID );
@@ -937,6 +947,15 @@ static void menu_modelo( Atsw *a, GdkEventButton *ev )
             "normalidad y parámetros, cada uno con su veredicto.\n\nDice lo "
             "que los números dicen; qué hacer con ello es tuyo." );
         g_signal_connect( mi, "activate", G_CALLBACK(on_diagnosis), a );
+        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+
+        mi = gtk_menu_item_new_with_label( "Anómalos…" );
+        gtk_widget_set_tooltip_text( mi,
+            "Los episodios de residuos extremos, y los correlogramas CON y "
+            "SIN ellos.\n\nContesta lo que decide: ¿la estructura que veo "
+            "es del proceso o del anómalo? Y al revés —si no cambia nada, "
+            "intervenirlo no compra nada." );
+        g_signal_connect( mi, "activate", G_CALLBACK(on_anomalos), a );
         gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
 
         mi = gtk_menu_item_new_with_label( "Prever con fuf…" );

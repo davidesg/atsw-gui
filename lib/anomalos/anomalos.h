@@ -124,6 +124,19 @@ typedef struct {
 int an_calibra( const double *z, int n, const int *omitir, int nomitir,
                 int lags, AnCalibra *out );
 
+/* EL LJUNG-BOX, CON Y SIN.
+ *
+ * Q = n(n+2) suma_{k=1..m} r(k)^2 / (n-k)
+ *
+ * Los dos con LA MISMA formula y cada uno con SU n --el «sin» tiene menos
+ * observaciones-- que es la unica comparacion que significa algo. No se
+ * compara contra el Q que imprime el motor: ese sale de su propio estimador
+ * y mezclarlos seria restar peras de manzanas.
+ *
+ * El p NO se calcula aqui: hace falta una chi-cuadrado y este modulo es
+ * aritmetica elemental a proposito. Lo pone quien llame, que ya la tiene.  */
+void an_q( const AnCalibra *c, int m, double *q_con, double *q_sin );
+
 const char *an_veredicto_es( AnVeredicto v );
 
 #endif /* ATSW_ANOMALOS_H */

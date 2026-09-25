@@ -148,16 +148,44 @@ veredicto?** Si no, la respuesta es *«intervenir esto no compra nada»*.
 normales crece con n— así que va con nombre en un sitio, como los de
 `lib/dictamen`.
 
-### La ventana
+### La ventana: el interruptor **redibuja**
 
-El sitio natural **ya existe**: el vistazo de «Serie y ACF/PACF», que tiene λ,
-d y D al pie y se redibuja al tocarlas. Ahí, un interruptor **«sin los
-anómalos»** enseña los dos correlogramas — que es exactamente la comparación de
-§2, vista en vez de leída.
+> «No quiero barras una al lado de otra, quiero que las acf/pacf cambien
+> con/sin contribuciones. También cómo cambia el Q.»
 
-Y una ventana «Anómalos…» con la lista de episodios, su extensión, su forma
-general, y el veredicto por retardo. Desde la serie (identificación) y desde el
-modelo (residuos).
+Eso, y las dos alternativas que se descartaron merecen quedar escritas porque
+las dos parecían mejores:
+
+**Barras una al lado de otra: no.** Lo que hay que ver es **la misma figura
+moviéndose**. Lo que se compara no son dos números: son dos **lecturas** del
+correlograma — *«¿corto el AR en el 2?»* se responde mirando **un** dibujo, y
+con dos barras por retardo la lectura deja de ser la de siempre.
+
+**Un degradé con la parte que aporta el anómalo: tampoco.** `r(k)` con y sin
+son **dos cocientes distintos** —cambia el denominador y cambia *n*— así que
+
+```
+r_con  =  r_sin  +  aportación_del_anómalo      ← NO se cumple
+```
+
+Una barra apilada afirmaría una descomposición que **no existe**. Es la misma
+clase de mentira callada que el módulo existe para no contar.
+
+**Lo que sí se dibuja son las dos bandas** cuando difieren: la del estado
+visible entera, la del otro punteada. Quitar observaciones **ensancha** la
+banda, y comparar contra una sola haría parecer que algo sale de banda cuando
+lo que pasó fue que la banda se movió.
+
+**Y el color es del veredicto, no del estado**: rojo lo que el anómalo
+**fabrica**, verde lo que **enmascara**, gris lo que da igual. Así el dibujo
+dice, sin tocar el interruptor, *qué* retardos están en juego.
+
+**La escala la fija el mayor de los dos estados**, no el visible: si cambiara
+al pulsar, las barras se moverían por el dibujo y no por los datos.
+
+**Y el Q, con y sin**, con la misma fórmula y cada uno con **su** *n*. No se
+compara contra el que imprime el motor: ése sale de su propio estimador, y
+mezclarlos sería restar peras de manzanas.
 
 ---
 
@@ -179,8 +207,8 @@ en `lib/dictamen`.
 |---|---|---|
 | 1 | los extremos y la calibración del motor, en `lib/outfile` | horas |
 | 2 | `lib/anomalos`: episodios y calibración ACF/PACF, con su prueba | 1-2 días |
-| 3 | el interruptor «sin los anómalos» en el vistazo | 1 día |
-| 4 | la ventana «Anómalos…» con la lista y los veredictos | 1 día |
+| 3 | la ventana «Anómalos…»: episodios, los dos correlogramas y el Q | hecho |
+| 4 | el mismo interruptor en el vistazo, sobre la serie sin modelo | pendiente |
 
 Nada toca los motores: lo de después está impreso, y lo de antes se calcula
 sobre la serie que ya tenemos en `datos.csv`.

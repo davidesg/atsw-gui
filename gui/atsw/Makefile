@@ -15,11 +15,12 @@ PREFIX  ?= /usr/local
 LIB = ../../lib
 
 SRC = src/main.c src/ventana.c src/gestos.c src/datos_gui.c src/vistazo.c \
-      src/editor.c src/serie_gui.c src/genera.c src/diagnosis_gui.c \
+      src/editor.c src/serie_gui.c src/genera.c src/diagnosis_gui.c src/anomalos_gui.c \
       $(LIB)/proyecto/proyecto.c \
       $(LIB)/outdiag/outdiag.c \
       $(LIB)/outfile/outfile.c \
       $(LIB)/dictamen/dictamen.c \
+      $(LIB)/anomalos/anomalos.c \
       $(LIB)/engine/engine.c \
       $(LIB)/tabla/tabla.c \
       $(LIB)/rutas/rutas.c \
@@ -33,7 +34,7 @@ SRC = src/main.c src/ventana.c src/gestos.c src/datos_gui.c src/vistazo.c \
 
 HDR = include/atsw.h
 
-INC = -Iinclude -I$(LIB)/proyecto -I$(LIB)/outdiag -I$(LIB)/outfile -I$(LIB)/dictamen -I$(LIB)/engine -I$(LIB)/inpcheck -I$(LIB)/tabla \
+INC = -Iinclude -I$(LIB)/proyecto -I$(LIB)/outdiag -I$(LIB)/outfile -I$(LIB)/dictamen -I$(LIB)/anomalos -I$(LIB)/engine -I$(LIB)/inpcheck -I$(LIB)/tabla \
       -I$(LIB)/rutas -I$(LIB)/dates -I$(LIB)/datos -I$(LIB)/xlsx \
       -I../../engines/fug/src -I$(LIB)/preview -I$(LIB)/fugdraw -I$(LIB)/utils
 

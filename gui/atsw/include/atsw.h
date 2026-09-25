@@ -166,6 +166,11 @@ void       atsw_proyecto_edita( Atsw *a );
 void       atsw_diagnosis( Atsw *a, const char *serie, const char *muestra,
                            const char *id );
 
+/* LOS ANOMALOS: los episodios, y los correlogramas con y sin ellos. El
+   interruptor REDIBUJA la misma figura, que es como se lee un correlograma. */
+void       atsw_anomalos( Atsw *a, const char *serie, const char *muestra,
+                          const char *id );
+
 /* Lo mismo, con una opcion antes del fichero: fue_gui con «--prever»
    arranca el ciclo de prevision al abrir.                              */
 void       atsw_lanza_con( Atsw *a, const char *programa, const char *opcion,

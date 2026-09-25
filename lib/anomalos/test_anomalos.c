@@ -154,6 +154,23 @@ int main( void )
         "el retardo 1 no cambia de lado: quitarlo no compra identificación" );
     ok( c.cambia <= 2, "y casi ningún retardo se mueve de lado" );
 
+    printf( "\nY EL Q TAMBIEN CAMBIA\n" );
+    /* Con el par de picos que FABRICA la r(1), el Q tiene que bajar mucho
+       al quitarlos: es la misma noticia contada con un solo numero.   */
+    semilla = 20260925UL;
+    for ( i = 0; i < n; i++ ) z[i] = ruido();
+    z[150] += 9.0; z[151] -= 9.0;
+    omit[0] = 150; omit[1] = 151;
+    an_calibra( z, n, omit, 2, 12, &c );
+    {
+    double qc = 0.0, qs = 0.0;
+
+    an_q( &c, 12, &qc, &qs );
+    ok( qc > 0.0 && qs > 0.0, "se calcula con y sin" );
+    ok( qs < qc, "y quitando lo que fabricaba la r(1), el Q BAJA" );
+    printf( "        Q(12) con = %.1f, sin = %.1f\n", qc, qs );
+    }
+
     printf( "\nLA BANDA SE ENSANCHA AL QUITAR OBSERVACIONES\n" );
     ok( c.banda_sin > c.banda_con,
         "quitar una observación ensancha la banda, y por eso se comparan "

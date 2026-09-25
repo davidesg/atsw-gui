@@ -41,6 +41,7 @@
 
 #include "proyecto.h"
 #include "outdiag.h"
+#include "dictamen.h"
 #include "tabla.h"
 
 #define AT_MAX_RES  PR_MAX_MODELO
@@ -85,6 +86,12 @@ typedef struct {
    double   skew, kurt;
    int      npar;
    char     estruct[64];          /* "(0,1,1)(0,1,1)12  log"               */
+
+   /* EL DICTAMEN, resumido: el peor de los cinco bloques y una linea por
+      bloque para el globo. La rejilla ya enseña Q y p; esto dice QUE
+      SIGNIFICAN JUNTOS.                                                */
+   int      peor;                 /* DxEstado                              */
+   char     dx[256];
 
    /* LA HUELLA: tamaño y fecha. Si cambia, se relee. */
    long     tam;
@@ -153,6 +160,11 @@ void       atsw_serie_edita( Atsw *a, const char *serie );
 /* «Información del proyecto…»: id, título, analista. La raíz y la ruta se
    enseñan y no se editan -- moverlas es mover el proyecto entero.      */
 void       atsw_proyecto_edita( Atsw *a );
+
+/* LA DIAGNOSIS de un modelo, pintada. Todo lo que se juzga está en
+   lib/dictamen; esta ventana sólo le pone color y un botón de exportar. */
+void       atsw_diagnosis( Atsw *a, const char *serie, const char *muestra,
+                           const char *id );
 
 /* Lo mismo, con una opcion antes del fichero: fue_gui con «--prever»
    arranca el ciclo de prevision al abrir.                              */

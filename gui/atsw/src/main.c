@@ -639,6 +639,16 @@ static void on_prever( GtkMenuItem *m, Atsw *a )
     atsw_lanza_con( a, "fue_gui", "--prever", f );
 }
 
+static void on_diagnosis( GtkMenuItem *m, Atsw *a )
+{
+    gchar *id = atsw_marcada( a->l_modelos, M_ID );
+
+    (void) m;
+    if ( a->hay && a->serie[0] && id )
+        atsw_diagnosis( a, a->serie, atsw_muestra_actual( a ), id );
+    g_free( id );
+}
+
 static void on_editar( GtkMenuItem *m, Atsw *a )
 {
     gchar *id = atsw_marcada( a->l_modelos, M_ID );
@@ -919,6 +929,14 @@ static void menu_modelo( Atsw *a, GdkEventButton *ev )
             "puede expresar lo que tiene widgets; el .inp, todo lo que el "
             "motor lee." );
         g_signal_connect( mi, "activate", G_CALLBACK(on_editar), a );
+        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+
+        mi = gtk_menu_item_new_with_label( "Diagnosis…" );
+        gtk_widget_set_tooltip_text( mi,
+            "Los cinco bloques: estimación, media, autocorrelación, "
+            "normalidad y parámetros, cada uno con su veredicto.\n\nDice lo "
+            "que los números dicen; qué hacer con ello es tuyo." );
+        g_signal_connect( mi, "activate", G_CALLBACK(on_diagnosis), a );
         gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
 
         mi = gtk_menu_item_new_with_label( "Prever con fuf…" );

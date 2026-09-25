@@ -337,7 +337,7 @@ $CC -O2 -Wall -Wextra -I"$L/dictamen" -I"$L/outfile" \
 # algo, el .csv no seria el dato.
 echo
 $CC -O2 -Wall -Wextra -I"$TOP/../atsw/include" -I"$L/datos" -I"$L/xlsx" \
-    -I"$L/proyecto" -I"$L/outdiag" -I"$L/outfile" -I"$L/dates" \
+    -I"$L/proyecto" -I"$L/outdiag" -I"$L/outfile" -I"$L/dates" -I"$L/dictamen" \
     -I"$L/tabla" -I"$L/preview" -I"$L/fugdraw" -I"$L/engine" -I"$L/inpcheck" \
     $(pkg-config --cflags gtk+-3.0) \
     "$TOP/../atsw/tests/test_genera.c" "$TOP/../atsw/src/genera.c" \
@@ -358,7 +358,7 @@ $CC -O2 -Wall -Wextra -I"$TOP/../atsw/include" -I"$L/proyecto" -I"$L/inpcheck" \
     $(pkg-config --cflags glib-2.0) -o "$W/inpcheck_fue.o" || exit 1
 $CC -O2 -Wall -Wextra -I"$TOP/../atsw/include" -I"$L/proyecto" -I"$L/inpcheck" \
     -I"$L/engine" -I"$L/outfile" -I"$L/outdiag" -I"$L/tabla" -I"$L/dates" \
-    -I"$L/preview" -I"$L/rutas" -I"$L/fugdraw" -I"$L/utils" \
+    -I"$L/preview" -I"$L/rutas" -I"$L/fugdraw" -I"$L/utils" -I"$L/dictamen" \
     $(pkg-config --cflags gtk+-3.0) \
     "$TOP/../atsw/tests/test_editor.c" "$TOP/../atsw/src/editor.c" \
     "$L/proyecto/proyecto.c" "$L/outfile/outfile.c" "$L/engine/engine.c" \
@@ -376,9 +376,9 @@ echo
 $CC -O2 -Wall -Wextra -I"$TOP/../atsw/include" -I"$L/proyecto" -I"$L/outdiag" \
     -I"$L/outfile" -I"$L/tabla" -I"$L/dates" $(pkg-config --cflags gtk+-3.0) \
     -I"$L/rutas" -I"$L/preview" -I"$L/fugdraw" -I"$L/utils" -I"$L/datos" \
-    -I"$L/xlsx" -I"$L/engine" -I"$L/inpcheck" \
+    -I"$L/xlsx" -I"$L/engine" -I"$L/inpcheck" -I"$L/dictamen" \
     "$TOP/../atsw/tests/test_atsw.c" "$TOP/../atsw/src/ventana.c" \
     "$L/proyecto/proyecto.c" "$L/outdiag/outdiag.c" "$L/outfile/outfile.c" \
-    "$L/dates/dates.c" \
+    "$L/dictamen/dictamen.c" "$L/dates/dates.c" \
     -o "$W/test_atsw" $(pkg-config --libs gtk+-3.0) -lm || exit 1
 "$W/test_atsw" || exit 1

@@ -117,6 +117,31 @@ const AtRes *atsw_resultado( Atsw *a, const char *serie, const char *muestra,
         r->skew = o.skew;
         r->kurt = o.kurt;
         fueout_estructura( &o, r->estruct, sizeof r->estruct );
+
+        /* EL DICTAMEN, resumido en una línea. Se calcula aquí, con la
+           misma huella que lo demás: si el .out no se ha movido, no se
+           vuelve a juzgar.                                           */
+        {
+        Convergence c;
+        Dictamen    d;
+        int         i;
+        char       *p = r->dx;
+        size_t      n = sizeof r->dx;
+
+        if ( !convergence_of( path, &c ) ) memset( &c, 0, sizeof c );
+        dx_dictamen( &o, &c, &d );
+        convergence_clear( &c );
+
+        r->peor = d.peor;
+        for ( i = 0; i < d.n; i++ )
+            {
+            int esc = snprintf( p, n, "\n  %-16s %s", d.l[i].titulo,
+                                dx_estado_es( d.l[i].estado ) );
+
+            if ( esc < 0 || (size_t) esc >= n ) break;
+            p += esc; n -= (size_t) esc;
+            }
+        }
         }
     }
     return r;
@@ -456,13 +481,15 @@ static void pinta_hoja( Atsw *a, GtkWidget *vista, const char *muestra )
 
             /* EL GLOBO: lo que no decide entre modelos pero se pregunta
                del elegido. Asi la normalidad esta sin robar una columna. */
+            /* EL DICTAMEN EN EL GLOBO: la rejilla ya enseña Q y p; esto
+               dice QUE SIGNIFICAN JUNTOS, que es otra cosa.          */
             globo = g_strdup_printf(
-                "%s · %d parámetro%s\n\n"
+                "%s · %d parámetro%s\n%s\n"
                 "Ljung-Box Q(%d) = %.2f, p = %.4f\n"
                 "Jarque-Bera = %.1f, p = %.4f  (asimetría %.2f, curtosis %.2f)"
                 "%s\n\nDoble clic para abrirlo en fue.",
                 r->estruct[0] ? r->estruct : "sin estructura",
-                r->npar, r->npar == 1 ? "" : "s",
+                r->npar, r->npar == 1 ? "" : "s", r->dx,
                 r->qdf, r->q, r->qp, r->jb, r->jbp, r->skew, r->kurt,
                 cruce( a, m ) );
             }

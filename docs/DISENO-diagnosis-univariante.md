@@ -164,14 +164,46 @@ Las dos mitades, por separado, que es la ventaja de haberlas separado:
 
 ---
 
-## 8. Orden de trabajo
+## 8. Estado: **hecho**, los cuatro pasos
 
-| | qué | coste |
+| | qué | dónde |
 |---|---|---|
-| 1 | los hechos que faltan en `lib/outfile`, con su prueba contra golden | 1 día |
-| 2 | `lib/dictamen`: los cinco bloques y los cuatro estados, con su prueba | 1 día |
-| 3 | la ventana «Diagnosis…» en la madre | 1 día |
-| 4 | el resumen en la rejilla y el exportar con `lib/tabla` | medio día |
+| 1 | los hechos que faltaban | `lib/outfile`, probados contra golden |
+| 2 | los cinco bloques y los cuatro estados | `lib/dictamen`, probados sin fichero |
+| 3 | la ventana «Diagnosis…» | menú del modelo |
+| 4 | el resumen en la rejilla y el exportar | globo de la fila + `lib/tabla` |
+
+### Lo que la prueba cazó, y era lo que buscaba
+
+El resumen tomaba el **máximo del enum**, cuyo orden es de *gravedad*
+—`NO_CONSTA < CUADRA < MIRAR < NO`—, así que **«cuadra» se tragaba a «no
+consta»**: dos bloques que el informe no traía y tres que pasaban daban un
+resumen de «cuadra».
+
+Son **dos ejes distintos** —lo grave y lo que se sabe— y por eso la precedencia
+se escribe entera en vez de salir de una comparación:
+
+> `CUADRA` sale sólo si **todos** cuadran.
+
+### Cómo se ve
+
+```
+DIAGNOSIS — IPC_ES / m02        muestra serie        mirar
+(1,1,0)  log · 215 observaciones, 13 parámetros
+
+  Estimación       cuadra      converged (gradtol), 15 iteraciones
+  Media            no consta   -0.000001
+                               El modelo estima la media, así que ésta es
+                               cero por construcción: aquí no hay contraste.
+  Autocorrelación  cuadra      Q(11)=8.6 p=.655  Q(23)=14.9 p=.899
+                               Q(35)=18.3 p=.991  Q(38)=21.2 p=.987
+  Normalidad       cuadra      JB = 0.75 p = .686 · fuera de ±2: 4.2% (esp 4.6%)
+  Parámetros       mirar       13 estimados · 3 con |t| < 2 · 0 pares |r| ≥ 0.7
+                               3 no se ganan su sitio, empezando por el [8].
+
+  Esto dice lo que los números dicen. Qué hacer con ello es una decisión, y
+  es tuya.                                              [ Exportar… ]
+```
 
 Nada de esto toca los motores: los ocho hechos de §2 están ya escritos en el
 `.out`, y cinco de ellos los calcula el propio motor.

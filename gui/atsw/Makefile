@@ -15,7 +15,7 @@ PREFIX  ?= /usr/local
 LIB = ../../lib
 
 SRC = src/main.c src/ventana.c src/gestos.c src/datos_gui.c src/vistazo.c \
-      src/editor.c src/serie_gui.c src/genera.c src/diagnosis_gui.c src/anomalos_gui.c \
+      src/editor.c src/serie_gui.c src/genera.c src/diagnosis_gui.c src/anomalos_gui.c src/plotstats.c \
       $(LIB)/proyecto/proyecto.c \
       $(LIB)/outdiag/outdiag.c \
       $(LIB)/outfile/outfile.c \
@@ -27,6 +27,8 @@ SRC = src/main.c src/ventana.c src/gestos.c src/datos_gui.c src/vistazo.c \
       $(LIB)/preview/preview.c \
       $(LIB)/utils/ext.c \
       $(LIB)/fugdraw/fugdraw.c \
+      $(LIB)/fugplot/fugplot.c \
+      $(LIB)/fugplot/plotsupport.c \
       $(LIB)/datos/datos.c \
       $(LIB)/xlsx/xlsx.c \
       ../../engines/fug/src/inpfile.c \
@@ -36,7 +38,7 @@ HDR = include/atsw.h
 
 INC = -Iinclude -I$(LIB)/proyecto -I$(LIB)/outdiag -I$(LIB)/outfile -I$(LIB)/dictamen -I$(LIB)/anomalos -I$(LIB)/engine -I$(LIB)/inpcheck -I$(LIB)/tabla \
       -I$(LIB)/rutas -I$(LIB)/dates -I$(LIB)/datos -I$(LIB)/xlsx \
-      -I../../engines/fug/src -I$(LIB)/preview -I$(LIB)/fugdraw -I$(LIB)/utils
+      -I../../engines/fug/src -I$(LIB)/preview -I$(LIB)/fugdraw -I$(LIB)/fugplot -I$(LIB)/utils
 
 GTK_CFLAGS := $(shell pkg-config --cflags gtk+-3.0 2>/dev/null)
 GTK_LIBS   := $(shell pkg-config --libs   gtk+-3.0 2>/dev/null)

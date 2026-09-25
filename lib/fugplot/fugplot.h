@@ -32,6 +32,14 @@ FDFig *fp_PlotSer_CorrSer( struct Tseries *ser, int npar, int tsnobs, int tmorns
                            int tsby, double boxlam, int nrdiff, int nadiff, int lags,
                            double cbands, const char *x11out, const char *name );
 
+/* Like -c, but with an open circle around each marked observation (marks
+ * holds indices 1..nobs). For the GUI: it says which incident is being
+ * calibrated. With marks NULL the drawing is the one of -c, untouched.    */
+FDFig *fp_PlotSer_CorrSer_marks( struct Tseries *ser, int npar, int tsnobs, int tmornsop,
+                                 int tsby, double boxlam, int nrdiff, int nadiff, int lags,
+                                 double cbands, const char *x11out, const char *name,
+                                 const int *marks, int nmarks );
+
 /* -d: histogram and normal density                   -> hist_<x11out>.eps  */
 FDFig *fp_histogram( struct Tseries *ser, int nrdiff, int nadiff, double boxlam,
                      const char *x11out, const char *name );

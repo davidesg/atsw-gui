@@ -17,6 +17,7 @@
  *   -e       mean - standard deviation: 360 x 252                          */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include "plothost.h"
@@ -133,13 +134,46 @@ static double *standardize( struct Tseries *ser )
    return( a );
 }
 
+/* Open circles around the marked observations (marks[0..nmarks-1] are
+ * indices 1..n of the series).
+ *
+ * WHO ASKS FOR THIS: the GUI, to say WHICH incident is being calibrated.
+ * A point is a point; without a ring around it, a list of dates and a plot
+ * of residuals are two separate things the analyst has to join by hand.
+ * With marks == NULL nothing is drawn, so the graph of fue does not move.  */
+#define CIRCLE_SIDES 32
+#define TWO_PI       6.283185307179586
+
+static void circles( FDFig *f, const double *xs, const double *ys, int n, double r,
+                     const int *marks, int nmarks )
+{
+   double cx[CIRCLE_SIDES + 1], cy[CIRCLE_SIDES + 1], t;
+   int    k, j, m;
+
+   if ( !marks || nmarks <= 0 ) return;
+   fd_linewidth( f, LW_AXIS );
+   for ( k = 0; k < nmarks; k++ )
+       {
+       m = marks[k];
+       if ( m < 1 || m > n ) continue;
+       for ( j = 0; j <= CIRCLE_SIDES; j++ )
+           {
+           t     = TWO_PI * j / CIRCLE_SIDES;
+           cx[j] = xs[m - 1] + r * cos( t );
+           cy[j] = ys[m - 1] + r * sin( t );
+           }
+       fd_polyline( f, cx, cy, CIRCLE_SIDES + 1 );
+       }
+   fd_linewidth( f, LW_THIN );
+}
+
 /*****************************************************************************/
 /* Standardized series                                                       */
 /*****************************************************************************/
 
 static void series_panel( FDFig *f, const Layout *L, double x0, double x1, double y0, double y1,
                           const double *a, int n, int freq, int tsnobs, int tmornsop,
-                          int tsby, double AbsMax )
+                          int tsby, double AbsMax, const int *marks, int nmarks )
 {
    double xmin = -tmornsop, xmax = n - 1, px, py, *xs, *ys;
    int    i, step, count, v, label;
@@ -222,6 +256,7 @@ static void series_panel( FDFig *f, const Layout *L, double x0, double x1, doubl
    fd_linewidth( f, LW_THIN );
    fd_polyline( f, xs, ys, n );
    for ( i = 0; i < n; i++ ) fd_disc( f, xs[i], ys[i], L->point );
+   circles( f, xs, ys, n, 3.2 * L->point, marks, nmarks );
    fd_clip_end( f );
    free( xs );
    free( ys );
@@ -378,9 +413,10 @@ static void statistics( FDFig *f, const Layout *L, double xc, double y,
 /* Graph -c                                                                  */
 /*****************************************************************************/
 
-FDFig *fp_PlotSer_CorrSer( struct Tseries *ser, int npar, int tsnobs, int tmornsop,
-                           int tsby, double boxlam, int nrdiff, int nadiff, int lags,
-                           double cbands, const char *x11out, const char *name )
+static FDFig *plotser_corrser( struct Tseries *ser, int npar, int tsnobs, int tmornsop,
+                               int tsby, double boxlam, int nrdiff, int nadiff, int lags,
+                               double cbands, const char *x11out, const char *name,
+                               const int *marks, int nmarks )
 {
    const Layout *L;
    FDFig  *f;
@@ -419,7 +455,8 @@ FDFig *fp_PlotSer_CorrSer( struct Tseries *ser, int npar, int tsnobs, int tmorns
    cx0 = 0.738 * W;
    cx1 = W - 12.0;
 
-   series_panel( f, L, sx0, sx1, 0.26 * H, 0.77 * H, a, n, freq, tsnobs, tmornsop, tsby, AbsMax );
+   series_panel( f, L, sx0, sx1, 0.26 * H, 0.77 * H, a, n, freq, tsnobs, tmornsop, tsby,
+                 AbsMax, marks, nmarks );
    title( f, L->title, sx1, H - 16.0, FD_RIGHT, nrdiff, nadiff, freq, boxlam, name );
    statistics( f, L, (sx0 + sx1) / 2.0, (L == &layout_big) ? 16.0 : 14.0, ser->mean,
                Stdev( ser->data, n ), n );
@@ -434,6 +471,23 @@ FDFig *fp_PlotSer_CorrSer( struct Tseries *ser, int npar, int tsnobs, int tmorns
    free_vector( acf, 1, lags );
    free_vector( pacf, 1, lags );
    return( f );
+}
+
+FDFig *fp_PlotSer_CorrSer( struct Tseries *ser, int npar, int tsnobs, int tmornsop,
+                           int tsby, double boxlam, int nrdiff, int nadiff, int lags,
+                           double cbands, const char *x11out, const char *name )
+{
+   return( plotser_corrser( ser, npar, tsnobs, tmornsop, tsby, boxlam, nrdiff, nadiff,
+                            lags, cbands, x11out, name, NULL, 0 ) );
+}
+
+FDFig *fp_PlotSer_CorrSer_marks( struct Tseries *ser, int npar, int tsnobs, int tmornsop,
+                                 int tsby, double boxlam, int nrdiff, int nadiff, int lags,
+                                 double cbands, const char *x11out, const char *name,
+                                 const int *marks, int nmarks )
+{
+   return( plotser_corrser( ser, npar, tsnobs, tmornsop, tsby, boxlam, nrdiff, nadiff,
+                            lags, cbands, x11out, name, marks, nmarks ) );
 }
 
 /*****************************************************************************/
@@ -462,7 +516,8 @@ FDFig *fp_PlotSer( struct Tseries *ser, int tsnobs, int tmornsop, int tsby, doub
    snprintf( s, sizeof( s ), "%d", -(int)AbsMax );
    sx0 = 4.0 + fd_text_width( FD_HELV, L->tick, s ) + 1.5 + TIC_MAJOR;
    sx1 = L->W - 12.0;
-   series_panel( f, L, sx0, sx1, 53.0, L->H - 34.0, a, n, freq, tsnobs, tmornsop, tsby, AbsMax );
+   series_panel( f, L, sx0, sx1, 53.0, L->H - 34.0, a, n, freq, tsnobs, tmornsop, tsby,
+                 AbsMax, NULL, 0 );
    title( f, L->title, sx1, L->H - 16.0, FD_RIGHT, nrdiff, nadiff, freq, boxlam, name );
    statistics( f, L, (sx0 + sx1) / 2.0, 12.0, ser->mean, Stdev( ser->data, n ), n );
 

@@ -48,7 +48,7 @@ typedef struct {
 static Vistazo V;
 
 /* El directorio del vistazo, en la cache: es tierra de nadie a proposito. */
-static gchar *cache_dir( void )
+gchar *atsw_cache_dir( void )
 {
     gchar *d = g_build_filename( g_get_user_cache_dir(), "atsw_gui", NULL );
 
@@ -91,7 +91,7 @@ static int escribe_inp( const char *origen, const char *destino,
 /* Llama al motor y devuelve TRUE si el EPS esta. */
 static gboolean dibuja( Vistazo *v, char *why, size_t n )
 {
-    gchar  *dir = cache_dir();
+    gchar  *dir = atsw_cache_dir();
     gchar  *exe = NULL;
     gchar  *sal = NULL, *err = NULL;
     GError *e = NULL;
@@ -197,7 +197,7 @@ static void repinta( Vistazo *v )
     if ( v->armando ) return;
 
     {
-    gchar *dir = cache_dir();
+    gchar *dir = atsw_cache_dir();
     gchar *sal;
 
     limpia_eps( dir );
@@ -220,7 +220,7 @@ static void repinta( Vistazo *v )
      * recarga, asi que el pie no parpadea. Como el nombre lo pone la
      * transformacion, se copia al fijo.                                */
     {
-    gchar *d2 = cache_dir();
+    gchar *d2 = atsw_cache_dir();
     gchar *fijo = g_build_filename( d2, "vistazo.eps", NULL );
     gchar *c = NULL;
     gsize  ln = 0;
@@ -318,7 +318,7 @@ void atsw_vistazo( Atsw *a, const char *inp, int modo, double lam )
     V.modo = modo;
     snprintf( V.origen, sizeof V.origen, "%s", inp );
 
-    dir = cache_dir();
+    dir = atsw_cache_dir();
     {
     gchar *b = g_build_filename( dir, "vistazo", NULL );
 

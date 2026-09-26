@@ -74,9 +74,14 @@ El motor termina, imprime un informe completo, y los números son otros.
     (`drtran.c:4287-4291`); `begyear`, `begtime` y `freq` no se comparan nunca.
     El puerto lo rechaza y trae el caso medido: dos series desfasadas 66 años,
     «proponía b=18 en serio».
+    *Resolved 2026-09-26: the C rejects it too (`lib/fuepre`,
+    `fuepre_check_alignment`: same frequency and same last date).*
 16. **[C]** En drtran el bloque de datos **se rellena con ceros si es corto** y
     la lectura devuelve ÉXITO (`fue_pre_reader.c:613-648`). Y como lee con
     `fgets`+`sscanf("%lf")`, dos valores en una línea pierden el segundo.
+    *Resolved 2026-09-26 (the first half): a short data block is an error in
+    `lib/fuepre/fue_pre_reader.c`. The second half stands: that section also
+    carries the non-standard deterministic variables as extra columns.*
 17. **[?]** Los `ifadf` se componen **multiplicativamente** con `(d, D)`:
     declarar la misma raíz dos veces sobrediferencia en silencio.
 18. **[C]** En un `.pre` **anual** una intervención fechada lleva **un** campo
@@ -122,6 +127,7 @@ El motor termina, imprime un informe completo, y los números son otros.
 30. **[C]** La línea de `ifadf` debe traer **exactamente** `freq/2+1` enteros o
     el parser de drtran avanza el puntero un desplazamiento **sin
     inicializar** (`fue_pre_reader.c:599-600`, `off` sin asignar).
+    *Resolved 2026-09-26: fewer integers is an error with the count.*
 31. **[C]** El orden de δ debe ser **≤ 9**: `tran_shootx.c:52` declara
     `real wr[10]` y `chekma` escribe `1..m*q`, dentro de la función que se
     llama en cada evaluación de la verosimilitud.
@@ -150,6 +156,9 @@ El motor termina, imprime un informe completo, y los números son otros.
     documentación invita a escribir la matriz entera en una línea**. Nombres
     con `%s` sin anchura en varios sitios; la ruta del `.inp` de drvarma debe
     quedarse bajo 80 caracteres.
+    *Note 2026-09-26: drvarma's `MAXSTR` is 80 (`main.h`); its `.inp` reader
+    uses an 8192 buffer. The `.pre` reader (`lib/fuepre`) no longer uses the
+    host's `MAXSTR`: it has its own 512.*
 
 ## III. Pérdidas de precisión en el ida y vuelta
 
@@ -209,6 +218,8 @@ El motor termina, imprime un informe completo, y los números son otros.
     fichero que audita.**
 50. **[C]** drtran compara prefijos con `strncmp`: un determinista llamado
     `timeshift` se genera como **tendencia lineal**, en silencio.
+    *Resolved 2026-09-26: the keyword is the whole first word, compared with
+    `strcmp` as fue does; and only `trend`, since fue never accepted `time`.*
 51. **[C]** `s = -1` en el `.dag` es un centinela vivo en el C y un error en el
     puerto.
 52. **[C]** drvarma consume los nombres **posicionalmente**: un nombre que

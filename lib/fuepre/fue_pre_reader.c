@@ -21,9 +21,10 @@
 /*  Parsea el modelo completo: deterministas (Omega/Delta), factores ARMA,   */
 /*  media (valor + flag de estimación), Box-Cox, diferencias y la serie.     */
 /*                                                                           */
-/*  El anfitrion aporta main.h: `real`, struct Tseries (con numbering y      */
-/*  refactor), struct Tusmodel (incluyendo tusmodel.h), los asignadores de   */
-/*  nlatools, chekma, ObsToDate y Easter.                                    */
+/*  The host provides main.h: `real`, struct Tseries (with numbering and    */
+/*  refactor), struct Tusmodel (by including tusmodel.h), the nlatools       */
+/*  allocators and Easter; chekma only if it links fuepre_motor.c.           */
+/*  DateToObs and ObsToDate come from lib/dates.                             */
 /*****************************************************************************/
 
 #include "main.h"
@@ -163,8 +164,8 @@ static void CalcNonsOp( int sp, int d, int ds, int *ifds, int ord, real *op )
     free_vector( pol1, 0, pp1 );
 }
 
-/* Nota: DateToObs, ObsToDate y Easter las aporta el motor (diagnose.c /
-   nlatools.c) y estan declaradas en main.h: son las mismas rutinas que fue. */
+/* DateToObs and ObsToDate come from lib/dates; Easter from the host's
+   nlatools.c. The same routines as fue.                                    */
 
 
 /* ─── Genera una variable determinista a partir de su línea del .pre ─────
@@ -214,8 +215,15 @@ static int gen_detvar( const char *line, struct Tseries *Ts, real *v )
         }
     }
 
+    /* The keyword is the WHOLE first word, compared with strcmp as fue does
+       (fue.c, "easter"/"trend"/"alter"). A prefix comparison read a variable
+       called "timeshift" as a linear trend, silently (REGLAS-NO-ESCRITAS 50);
+       and "time" is not a word fue accepts at all: only "trend".          */
+    char word[32] = "";
+    sscanf(line, "%31s", word);
+
     /* --- Semana Santa (solo mensual) --- */
-    if (strncmp(line, "easter", 6) == 0 && Ts->freq == 12) {
+    if (strcmp(word, "easter") == 0 && Ts->freq == 12) {
         int year, month, eday, emonth;
         for (j = 1; j <= Ts->nobs; j++) {
             ObsToDate(Ts->begyear, Ts->begtime, j, Ts->freq, &year, &month);
@@ -242,11 +250,11 @@ static int gen_detvar( const char *line, struct Tseries *Ts, real *v )
             v[j] = sin(2.0 * PI * r1 / Ts->freq * j);
         return 1;
     }
-    if (strncmp(line, "alter", 5) == 0) {
+    if (strcmp(word, "alter") == 0) {
         for (j = 1; j <= Ts->nobs; j++) v[j] = pow(-1.0, (double)j);
         return 1;
     }
-    if (strncmp(line, "trend", 5) == 0 || strncmp(line, "time", 4) == 0) {
+    if (strcmp(word, "trend") == 0) {
         for (j = 1; j <= Ts->nobs; j++) v[j] = j;
         return 1;
     }
@@ -605,8 +613,18 @@ int read_fue_pre(const char *filename,
     fgets(line, FUEPRE_LINE, f); fgets(line, FUEPRE_LINE, f);
     if (Ts->freq > 1) {
         Tm->ifadf = ivector(0, Ts->freq / 2);
-        { char *p = line; for (i = 0; i <= Ts->freq / 2; i++)
-            { int off; sscanf(p, "%d%n", &Tm->ifadf[i], &off); p += off; } }
+        /* Exactly freq/2+1 integers, or the pointer advanced by an
+           UNINITIALISED offset (REGLAS-NO-ESCRITAS 30).                   */
+        { char *p = line; for (i = 0; i <= Ts->freq / 2; i++) {
+            int off = 0;
+            if (sscanf(p, "%d%n", &Tm->ifadf[i], &off) != 1) {
+                fprintf(stderr, "ERROR: %s: the annual-difference factors line "
+                                "needs %d integers (freq %d); found %d\n",
+                        filename, Ts->freq / 2 + 1, Ts->freq, i);
+                fclose(f);
+                return 1;
+            }
+            p += off; } }
     } else {
         Tm->ifadf = NULL;   /* antes quedaba sin inicializar */
     }
@@ -619,9 +637,16 @@ int read_fue_pre(const char *filename,
     /* ── Data section ── */
 /* lectura de la serie */
     fgets(line, FUEPRE_LINE, f);  /* "** Time series..." */
+    /* A short data block is an ERROR. It used to stop reading and return
+       success with the rest of the series left at zero (REGLAS-NO-ESCRITAS
+       16): a model estimated on data that are not in the file.            */
     for (i = 1; i <= Ts->nobs; i++) {
-        if (!fgets(line, FUEPRE_LINE, f)) break;
-        sscanf(line, "%lf", &Ts->data[i]);
+        if (!fgets(line, FUEPRE_LINE, f) || sscanf(line, "%lf", &Ts->data[i]) != 1) {
+            fprintf(stderr, "ERROR: %s: the data block ends at observation %d "
+                            "of the %d declared\n", filename, i - 1, Ts->nobs);
+            fclose(f);
+            return 1;
+        }
     }
 
     fclose(f);

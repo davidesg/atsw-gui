@@ -57,3 +57,18 @@ El lector tiene su **propio** tamaño de línea (`FUEPRE_LINE`, 512). Usaba el
 `MAXSTR` del anfitrión, que vale 200 en drtran y 80 en drvarma: con 80, una
 línea larga de un `.pre` se partía en dos lecturas y todo lo que venía detrás
 se desplazaba un renglón.
+
+## Reader fixes (2026-09-26)
+
+Three defects that the study recorded in `docs/REGLAS-NO-ESCRITAS.md`, which
+drvarma would otherwise have inherited:
+
+- **A short data block is an error** (rule 16). The reader stopped at the end
+  of the file and returned success, with the rest of the series left at zero.
+- **The annual-difference factors line** must carry exactly `freq/2+1`
+  integers (rule 30). With fewer, the pointer advanced by an uninitialised
+  offset.
+- **Deterministic keywords are whole words** compared with `strcmp`, as fue
+  does (rule 50). A variable called `timeshift` was generated as a linear
+  trend. `time` is no longer taken as `trend`: fue never accepted it, and no
+  `.pre` in the repository uses it.

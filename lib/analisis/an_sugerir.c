@@ -33,18 +33,17 @@
 #include "inpdet.h"
 #include "inpcheck.h"
 
-#include "atsw.h"
+#include "analisis.h"
 
-void barra_pub( Atsw *a, const char *s );
 
-#define SG_MAX  AT_MAX_SUC
+#define SG_MAX  AN_MAX_SUC
 
 typedef struct {
-    Atsw     *a;
+    AnHost    h;
     char      serie[PR_ID], muestra[PR_ID], id[PR_ID];
     int       d, D, freq;
 
-    AtSuceso  s[SG_MAX];
+    AnSuceso  s[SG_MAX];
     IvLectura l[SG_MAX];
     IvPlan    plan[SG_MAX];
     int       ns;
@@ -128,8 +127,8 @@ static void repinta_linea( Sg *g, int k )
  * combinación ya ajustada, sea un escalón solo o los L+1 del episodio.  */
 static int ajuste_de( Sg *g, int k, double *fit, IvAjuste *aj )
 {
-    const AtSuceso *x = &g->s[k];
-    double          H[16 * AT_VENTANA], coef[16];
+    const AnSuceso *x = &g->s[k];
+    double          H[16 * AN_VENTANA_Z], coef[16];
     int             nesc = nesc_de( g, k ), i, j;
 
     if ( x->nwin < 2 || nesc < 1 || nesc > 16 ) return 1;
@@ -159,9 +158,9 @@ static int ajuste_de( Sg *g, int k, double *fit, IvAjuste *aj )
 static gboolean pinta( GtkWidget *w, cairo_t *cr, Sg *g )
 {
     int              k = GPOINTER_TO_INT( g_object_get_data( G_OBJECT(w), "k" ) );
-    const AtSuceso  *x;
+    const AnSuceso  *x;
     GtkAllocation    al;
-    double           fit[AT_VENTANA], escala, medio, alto, dx, may = 0.0;
+    double           fit[AN_VENTANA_Z], escala, medio, alto, dx, may = 0.0;
     IvAjuste         aj;
     int              i;
 
@@ -250,7 +249,7 @@ static gboolean pinta( GtkWidget *w, cairo_t *cr, Sg *g )
 /* LOS TRES NUMEROS, que se leen sin mirar la figura. */
 static void di_numeros( Sg *g, int k )
 {
-    double   fit[AT_VENTANA];
+    double   fit[AN_VENTANA_Z];
     IvAjuste aj;
     GString *t;
 
@@ -299,10 +298,10 @@ static int origen_de( Sg *g, char *out, size_t n )
 {
     char pre[PR_RUTA];
 
-    if ( pr_ruta( g->a->p, g->serie, g->muestra, g->id, ".pre", pre, sizeof pre ) == 0 &&
+    if ( pr_ruta( g->h.p, g->serie, g->muestra, g->id, ".pre", pre, sizeof pre ) == 0 &&
          g_file_test( pre, G_FILE_TEST_EXISTS ) )
         { g_snprintf( out, n, "%s", pre ); return 1; }
-    if ( pr_ruta( g->a->p, g->serie, g->muestra, g->id, ".inp", out, n ) != 0 )
+    if ( pr_ruta( g->h.p, g->serie, g->muestra, g->id, ".inp", out, n ) != 0 )
         return 0;
     return g_file_test( out, G_FILE_TEST_EXISTS ) ? 2 : 0;
 }
@@ -332,7 +331,7 @@ static void di( Sg *g, const char *fmt, ... )
         gtk_label_set_markup( GTK_LABEL(g->l_estado), m );
         g_free( m );
         }
-    barra_pub( g->a, s );
+    if ( g->h.di ) g->h.di( g->h.dueno, s );
     g_message( "sugerir: %s", s );
     g_free( s );
 }
@@ -396,7 +395,7 @@ static void on_derivar( GtkButton *b, Sg *g )
             }
         }
 
-    if ( pr_deriva( g->a->p, g->serie, g->muestra, g->id, nuevo, sizeof nuevo,
+    if ( pr_deriva( g->h.p, g->serie, g->muestra, g->id, nuevo, sizeof nuevo,
                     destino, sizeof destino, &e ) != 0 )
         { pr_error_es( &e, msg, sizeof msg ); di( g, "%s", msg ); return; }
 
@@ -406,7 +405,7 @@ static void on_derivar( GtkButton *b, Sg *g )
 
     if ( id_anade( origen, destino, ptr, om, n, porque, sizeof porque ) != 0 )
         {
-        pr_borra( g->a->p, g->serie, g->muestra, nuevo, &e );
+        pr_borra( g->h.p, g->serie, g->muestra, nuevo, &e );
         di( g, "%s", porque );
         return;
         }
@@ -416,7 +415,7 @@ static void on_derivar( GtkButton *b, Sg *g )
     if ( inp_check_fue( destino, msg, sizeof msg ) != 0 )
         {
         g_unlink( destino );
-        pr_borra( g->a->p, g->serie, g->muestra, nuevo, &e );
+        pr_borra( g->h.p, g->serie, g->muestra, nuevo, &e );
         di( g, "Lo que salió no lo acepta fue: %s", msg );
         return;
         }
@@ -443,19 +442,19 @@ static void on_derivar( GtkButton *b, Sg *g )
         }
     g_string_append_printf( razon, ". Derivado de %s%s.", g->id,
                             ( cual == 1 ) ? " (de su .pre, el óptimo)" : "" );
-    pr_razon( g->a->p, g->serie, g->muestra, nuevo, razon->str, &e );
+    pr_razon( g->h.p, g->serie, g->muestra, nuevo, razon->str, &e );
     g_string_free( razon, TRUE );
 
-    if ( atsw_guarda( g->a, &e ) != 0 )
+    if ( g->h.guarda && g->h.guarda( g->h.dueno ) != 0 )
         { di( g, "El .inp está en %s, pero no pude guardar el proyecto.", nuevo ); }
 
-    atsw_refresca( g->a );
+    if ( g->h.refresca ) g->h.refresca( g->h.dueno );
 
     /* LO QUE HAGA FALTA DESPUES, A MANO ANTES: destruir la ventana libera g
        --lo hace su «destroy»-- y lo que sigue ya no puede mirarlo.     */
     {
-    Atsw *a = g->a;
-    char  serie[PR_ID], muestra[PR_ID], padre[PR_ID];
+    AnHost host = g->h;
+    char   serie[PR_ID], muestra[PR_ID], padre[PR_ID];
     gchar *aviso;
 
     g_snprintf( serie, sizeof serie, "%s", g->serie );
@@ -466,8 +465,8 @@ static void on_derivar( GtkButton *b, Sg *g )
                              n == 1 ? "" : "es" );
 
     gtk_widget_destroy( g->win );
-    atsw_editor( a, serie, muestra, nuevo );
-    barra_pub( a, aviso );
+    if ( host.abre ) host.abre( host.dueno, serie, muestra, nuevo );
+    an_di( &host, "%s", aviso );
     g_free( aviso );
     }
 }
@@ -477,19 +476,19 @@ static void on_cerrar( GtkWidget *w, Sg *g ) { (void) w; g_free( g ); }
 
 /* ------------------------------------------------------------------------ */
 
-void atsw_sugerir( Atsw *a, const char *serie, const char *muestra,
-                   const char *id, int d, int D, int freq,
-                   const AtSuceso *suc, int ns )
+void an_sugerir( const AnHost *h, const char *serie, const char *muestra,
+                 const char *id, int d, int D, int freq,
+                 const AnSuceso *suc, int ns )
 {
     Sg        *g;
     GtkWidget *raiz, *cab, *rej, *pie, *barra, *b;
     int        k;
 
-    if ( !a->hay || ns < 1 ) return;
+    if ( !h || !h->p || ns < 1 ) return;
     if ( ns > SG_MAX ) ns = SG_MAX;
 
     g = g_new0( Sg, 1 );
-    g->a = a;
+    g->h = *h;
     g->d = d;
     g->D = D;
     g->freq = freq;
@@ -500,11 +499,11 @@ void atsw_sugerir( Atsw *a, const char *serie, const char *muestra,
 
     for ( k = 0; k < ns; k++ )
         {
-        IvExtremo e[AT_MAX_EXT];
+        IvExtremo e[AN_MAX_EXT];
         int       j;
 
         g->s[k] = suc[k];
-        for ( j = 0; j < suc[k].next && j < AT_MAX_EXT; j++ )
+        for ( j = 0; j < suc[k].next && j < AN_MAX_EXT; j++ )
             { e[j].obs = suc[k].obs[j]; e[j].z = suc[k].z[j]; }
         iv_lectura( e, suc[k].next, d, &g->l[k] );
 
@@ -513,7 +512,7 @@ void atsw_sugerir( Atsw *a, const char *serie, const char *muestra,
            se ve sin estimar, con la superposición. Así que se calcula aquí
            y se le pasa al plan, que es quien decide el peldaño.      */
         {
-        double   h[AT_VENTANA];
+        double   h[AN_VENTANA_Z];
         IvAjuste aj;
         double   resto = 0.0;
 
@@ -528,7 +527,7 @@ void atsw_sugerir( Atsw *a, const char *serie, const char *muestra,
         }
 
     g->win = gtk_window_new( GTK_WINDOW_TOPLEVEL );
-    gtk_window_set_transient_for( GTK_WINDOW(g->win), GTK_WINDOW(a->ventana) );
+    if ( h->padre ) gtk_window_set_transient_for( GTK_WINDOW(g->win), h->padre );
     gtk_window_set_default_size( GTK_WINDOW(g->win), 720, 420 );
     gtk_window_set_title( GTK_WINDOW(g->win), "Sugerir intervención" );
 

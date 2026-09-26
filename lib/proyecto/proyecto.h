@@ -247,6 +247,25 @@ int pr_escribir( const Proyecto *p, const char *path, PrError *e );
 int pr_ruta( const Proyecto *p, const char *serie, const char *muestra,
              const char *id, const char *ext, char *out, size_t n );
 
+/* DE LA RUTA A LA CLAVE -- Y ES UNA BUSQUEDA, NO UN PARSEO.
+ *
+ * fue_gui recibe un FICHERO y del proyecto sólo la raíz: sabe qué tiene
+ * abierto, pero no de QUE MODELO es. Y el nombre del fichero es cortesía, así
+ * que la clave no se saca de él leyéndolo: se saca preguntándole al
+ * manifiesto cuál de sus modelos tiene esa ruta. Si hubiera que parsear el
+ * nombre para saberlo, ese algo no estaría registrado.
+ *
+ * Se comparan LAS COLAS que pr_ruta compone --serie[/muestra]/work/base.ext--
+ * y no las rutas enteras, para que una ruta absoluta y una relativa al mismo
+ * fichero den la misma clave. Se prueban las tres extensiones que un modelo
+ * tiene: .inp, .pre y .out.
+ *
+ * Devuelve 0 si lo encontró y llena lo que no sea NULL. Si el fichero no es
+ * de este proyecto devuelve 1, y eso NO es un error: es la respuesta.    */
+int pr_de_ruta( const Proyecto *p, const char *ruta,
+                char *serie, size_t ns, char *muestra, size_t nm,
+                char *id, size_t nid );
+
 /* --- las series --------------------------------------------------------- */
 
 int  pr_serie_add( Proyecto *p, const char *serie, PrError *e );

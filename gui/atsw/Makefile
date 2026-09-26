@@ -15,12 +15,17 @@ PREFIX  ?= /usr/local
 LIB = ../../lib
 
 SRC = src/main.c src/ventana.c src/gestos.c src/datos_gui.c src/vistazo.c \
-      src/editor.c src/serie_gui.c src/genera.c src/diagnosis_gui.c src/anomalos_gui.c src/sugerir_gui.c src/plotstats.c \
+      src/editor.c src/serie_gui.c src/genera.c src/anfitrion.c \
       $(LIB)/proyecto/proyecto.c \
       $(LIB)/outdiag/outdiag.c \
       $(LIB)/outfile/outfile.c \
       $(LIB)/dictamen/dictamen.c \
       $(LIB)/anomalos/anomalos.c \
+      $(LIB)/analisis/an_comun.c \
+      $(LIB)/analisis/an_anomalos.c \
+      $(LIB)/analisis/an_diagnosis.c \
+      $(LIB)/analisis/an_sugerir.c \
+      $(LIB)/analisis/plotstats.c \
       $(LIB)/intervencion/intervencion.c \
       $(LIB)/inpdet/inpdet.c \
       $(LIB)/engine/engine.c \
@@ -38,7 +43,7 @@ SRC = src/main.c src/ventana.c src/gestos.c src/datos_gui.c src/vistazo.c \
 
 HDR = include/atsw.h
 
-INC = -Iinclude -I$(LIB)/proyecto -I$(LIB)/outdiag -I$(LIB)/outfile -I$(LIB)/dictamen -I$(LIB)/anomalos -I$(LIB)/intervencion -I$(LIB)/inpdet -I$(LIB)/engine -I$(LIB)/inpcheck -I$(LIB)/tabla \
+INC = -Iinclude -I$(LIB)/proyecto -I$(LIB)/outdiag -I$(LIB)/outfile -I$(LIB)/analisis -I$(LIB)/dictamen -I$(LIB)/anomalos -I$(LIB)/intervencion -I$(LIB)/inpdet -I$(LIB)/engine -I$(LIB)/inpcheck -I$(LIB)/tabla \
       -I$(LIB)/rutas -I$(LIB)/dates -I$(LIB)/datos -I$(LIB)/xlsx \
       -I../../engines/fug/src -I$(LIB)/preview -I$(LIB)/fugdraw -I$(LIB)/fugplot -I$(LIB)/utils
 

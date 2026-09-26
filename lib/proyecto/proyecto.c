@@ -401,6 +401,64 @@ int pr_ruta( const Proyecto *p, const char *serie, const char *muestra,
    return ( esc < 0 || (size_t) esc >= n ) ? 1 : 0;
 }
 
+/* Los ultimos k componentes de ruta. Devuelve NULL si no llega a tener k. */
+static const char *cola( const char *ruta, int k )
+{
+   const char *p = ruta + strlen( ruta );
+   int         n = 0;
+
+   while ( p > ruta )
+       {
+       p--;
+       if ( *p == '/' || *p == '\\' )
+          {
+          if ( ++n == k ) return p + 1;
+          }
+       }
+   return ( n + 1 >= k ) ? ruta : NULL;
+}
+
+int pr_de_ruta( const Proyecto *p, const char *ruta,
+                char *serie, size_t ns, char *muestra, size_t nm,
+                char *id, size_t nid )
+{
+   static const char *EXT[] = { ".inp", ".pre", ".out" };
+   const char        *q;
+   char               cand[PR_RUTA];
+   int                i, e, k;
+
+   if ( serie  && ns  ) serie[0]   = '\0';
+   if ( muestra && nm ) muestra[0] = '\0';
+   if ( id     && nid ) id[0]      = '\0';
+   if ( p == NULL || ruta == NULL || *ruta == '\0' ) return 1;
+
+   for ( i = 0; i < p->nm; i++ )
+       {
+       /* CUANTOS COMPONENTES COMPONE pr_ruta: con submuestra son cuatro
+          --serie/muestra/work/base-- y sin ella tres. La completa no se
+          declara, asi que no tiene carpeta que contar.               */
+       k = ( p->m[i].muestra[0] ) ? 4 : 3;
+       q = cola( ruta, k );
+       if ( q == NULL ) continue;
+
+       for ( e = 0; e < 3; e++ )
+           {
+           const char *c;
+
+           if ( pr_ruta( p, p->m[i].serie, p->m[i].muestra, p->m[i].id,
+                         EXT[e], cand, sizeof cand ) != 0 ) continue;
+           c = cola( cand, k );
+           if ( c == NULL || strcmp( c, q ) != 0 ) continue;
+
+           if ( serie   && ns  ) snprintf( serie, ns, "%s", p->m[i].serie );
+           if ( muestra && nm  ) snprintf( muestra, nm, "%s", p->m[i].muestra );
+           if ( id      && nid ) snprintf( id, nid, "%s", p->m[i].id );
+           return 0;
+           }
+       }
+   return 1;
+}
+
 /* ------------------------------------------------------------------------ */
 /* La cadena                                                                 */
 /* ------------------------------------------------------------------------ */

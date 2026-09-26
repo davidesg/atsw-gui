@@ -370,6 +370,61 @@ int main( int argc, char **argv )
         "un identificador que no cabe se RECHAZA, no se recorta" );
     }
 
+    printf( "\nDE LA RUTA A LA CLAVE: UNA BUSQUEDA, NO UN PARSEO\n" );
+    /* fue_gui recibe un FICHERO y no sabe de que modelo es. Y el nombre es
+       cortesia: la clave se le pregunta al manifiesto.                */
+    {
+    Proyecto q;
+    PrError  e;
+    char     id[PR_ID], ruta[PR_RUTA];
+    char     se[PR_ID], mu[PR_ID], mo[PR_ID];
+
+    memset( &q, 0, sizeof q );
+    pr_nuevo( &q, "p", "", "." );
+    snprintf( q.path, sizeof q.path, "/tmp/pp/proy.yaml" );
+    pr_serie_add( &q, "IPC_ES", &e );
+    pr_deriva( &q, "IPC_ES", "", "", id, sizeof id, ruta, sizeof ruta, &e );
+
+    ok( pr_de_ruta( &q, ruta, se, sizeof se, mu, sizeof mu, mo, sizeof mo ) == 0,
+        "la ruta que compone pr_ruta vuelve a su clave" );
+    ok( !strcmp( se, "IPC_ES" ) && !strcmp( mu, "" ) && !strcmp( mo, id ),
+        "y es la misma clave, con la muestra completa vacia" );
+
+    /* las tres extensiones de un modelo */
+    pr_ruta( &q, "IPC_ES", "", id, ".pre", ruta, sizeof ruta );
+    ok( pr_de_ruta( &q, ruta, se, sizeof se, mu, sizeof mu, mo, sizeof mo ) == 0
+        && !strcmp( mo, id ), "tambien desde el .pre" );
+    pr_ruta( &q, "IPC_ES", "", id, ".out", ruta, sizeof ruta );
+    ok( pr_de_ruta( &q, ruta, se, sizeof se, mu, sizeof mu, mo, sizeof mo ) == 0
+        && !strcmp( mo, id ), "y desde el .out" );
+
+    /* UNA SUBMUESTRA TIENE CARPETA, y su m01 no es el m01 de la completa */
+    {
+    char id2[PR_ID], r2[PR_RUTA];
+
+    pr_muestra_add( &q, "precovid", "1/2002", "12/2019", "prueba", &e );
+    pr_deriva( &q, "IPC_ES", "precovid", "", id2, sizeof id2, r2, sizeof r2, &e );
+    ok( pr_de_ruta( &q, r2, se, sizeof se, mu, sizeof mu, mo, sizeof mo ) == 0
+        && !strcmp( mu, "precovid" ),
+        "el de la submuestra devuelve SU muestra, no la completa" );
+
+    pr_ruta( &q, "IPC_ES", "", id, ".inp", ruta, sizeof ruta );
+    pr_de_ruta( &q, ruta, se, sizeof se, mu, sizeof mu, mo, sizeof mo );
+    ok( !strcmp( mu, "" ), "y el de la completa sigue siendo el de la completa" );
+    }
+
+    /* LO QUE NO ES DE ESTE PROYECTO NO ES UN ERROR: ES LA RESPUESTA */
+    ok( pr_de_ruta( &q, "/otro/sitio/cosa.inp", se, sizeof se, mu, sizeof mu,
+                    mo, sizeof mo ) != 0, "un fichero de fuera no tiene clave" );
+    ok( se[0] == 0 && mo[0] == 0, "y no deja basura en la clave" );
+
+    /* un .tex del motor no identifica un modelo, y esta bien */
+    pr_ruta( &q, "IPC_ES", "", id, ".tex", ruta, sizeof ruta );
+    ok( pr_de_ruta( &q, ruta, se, sizeof se, mu, sizeof mu, mo, sizeof mo ) != 0,
+        "un .tex no es el fichero de un modelo" );
+
+    }
+
     printf( "\n%d fallos\n", fallos );
     free( p ); free( q );
     return fallos ? 1 : 0;

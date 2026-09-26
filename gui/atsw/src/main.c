@@ -13,6 +13,7 @@
 #include "datos.h"
 
 #include "atsw.h"
+#include "anfitrion.h"
 
 void atsw_lanza( Atsw *a, const char *programa, const char *fichero );
 gboolean atsw_modelo_nuevo( Atsw *a, const char *serie, const char *muestra,
@@ -645,7 +646,8 @@ static void on_diagnosis( GtkMenuItem *m, Atsw *a )
 
     (void) m;
     if ( a->hay && a->serie[0] && id )
-        atsw_diagnosis( a, a->serie, atsw_muestra_actual( a ), id );
+        { AnHost h = atsw_host( a );
+          an_diagnosis( &h, a->serie, atsw_muestra_actual( a ), id ); }
     g_free( id );
 }
 
@@ -655,7 +657,8 @@ static void on_anomalos( GtkMenuItem *m, Atsw *a )
 
     (void) m;
     if ( a->hay && a->serie[0] && id )
-        atsw_anomalos( a, a->serie, atsw_muestra_actual( a ), id );
+        { AnHost h = atsw_host( a );
+          an_anomalos( &h, a->serie, atsw_muestra_actual( a ), id ); }
     g_free( id );
 }
 

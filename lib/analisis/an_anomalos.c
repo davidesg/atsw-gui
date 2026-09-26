@@ -44,15 +44,13 @@
 #include "dictamen.h"
 #include "outfile.h"
 
-#include "atsw.h"
+#include "analisis.h"
 #include "preview.h"
 #include "fugplot.h"
 
-void barra_pub( Atsw *a, const char *s );
-gchar *atsw_cache_dir( void );
 
 typedef struct {
-    Atsw      *a;
+    AnHost     h;
     char       serie[PR_ID], muestra[PR_ID], id[PR_ID];
 
     FueOut     o;
@@ -207,7 +205,7 @@ static void dibuja( An *g )
     ser.data    = d;
 
     {
-    gchar *dir = atsw_cache_dir();
+    gchar *dir = an_cache_dir();
 
     base = g_build_filename( dir, "anomalos", NULL );
     g_free( dir );
@@ -228,8 +226,8 @@ static void dibuja( An *g )
     g_free( nombre );
     free_vector( d, 1, n );
 
-    if ( !preview_show( (PreviewApp *) g->a, g->eps ) )
-        barra_pub( g->a, "No pude mostrar el gráfico." );
+    if ( !preview_show( g->h.preview, g->eps ) )
+        an_di( &g->h, "No pude mostrar el gráfico." );
 }
 
 
@@ -351,20 +349,20 @@ static void hay_marcas( An *g )
  * firma que dejan, no cuántos períodos dura.                            */
 static void on_sugerir( GtkButton *b, An *g )
 {
-    AtSuceso s[AT_MAX_SUC];
+    AnSuceso s[AN_MAX_SUC];
     int      i, ns = 0;
 
     (void) b;
-    for ( i = 0; i < g->nep && ns < AT_MAX_SUC; i++ )
+    for ( i = 0; i < g->nep && ns < AN_MAX_SUC; i++ )
         {
-        AtSuceso *x = &s[ns];
+        AnSuceso *x = &s[ns];
         int       t, anno, per;
 
         if ( !g->marcado[i] ) continue;
         memset( x, 0, sizeof *x );
         x->desde = g->ep[i].desde;
         x->hasta = g->ep[i].hasta;
-        for ( t = g->ep[i].desde; t <= g->ep[i].hasta && x->next < AT_MAX_EXT; t++ )
+        for ( t = g->ep[i].desde; t <= g->ep[i].hasta && x->next < AN_MAX_EXT; t++ )
             if ( fabs( g->z[t] ) >= g->umbral )
                { x->obs[x->next] = t; x->z[x->next] = g->z[t]; x->next++; }
         if ( x->next == 0 ) continue;      /* no puede pasar, pero no se fía */
@@ -389,16 +387,16 @@ static void on_sugerir( GtkButton *b, An *g )
         fin = g->ep[i].hasta + cola;
         if ( fin > g->o.nres - 1 ) fin = g->o.nres - 1;
         x->nwin = fin - x->base + 1;
-        if ( x->nwin > AT_VENTANA ) x->nwin = AT_VENTANA;
+        if ( x->nwin > AN_VENTANA_Z ) x->nwin = AN_VENTANA_Z;
         for ( t = 0; t < x->nwin; t++ ) x->zwin[t] = g->z[x->base + t];
         x->umbral = g->umbral;
         }
         ns++;
         }
-    if ( ns == 0 ) { barra_pub( g->a, "Marca primero el suceso que quieras "
+    if ( ns == 0 ) { an_di( &g->h, "Marca primero el suceso que quieras "
                                       "intervenir." ); return; }
 
-    atsw_sugerir( g->a, g->serie, g->muestra, g->id, g->o.d, g->o.D,
+    an_sugerir( &g->h, g->serie, g->muestra, g->id, g->o.d, g->o.D,
                   g->freq, s, ns );
 }
 
@@ -429,7 +427,7 @@ static void on_calibrar( GtkToggleButton *b, An *g )
         g->armando = TRUE;
         gtk_toggle_button_set_active( b, FALSE );
         g->armando = FALSE;
-        barra_pub( g->a, "Marca primero el episodio que quieras calibrar." );
+        an_di( &g->h, "Marca primero el episodio que quieras calibrar." );
         return;
         }
 
@@ -479,20 +477,20 @@ static void on_cerrar( GtkWidget *w, An *g ) { (void) w; g_free( g ); }
 
 /* ------------------------------------------------------------------------ */
 
-void atsw_anomalos( Atsw *a, const char *serie, const char *muestra,
-                    const char *id )
+void an_anomalos( const AnHost *h, const char *serie, const char *muestra,
+                  const char *id )
 {
     An        *g;
     GtkWidget *pie_caja, *fila, *chips, *sc, *b, *cab;
     char       out[PR_RUTA];
     int        i;
 
-    if ( !a->hay || !serie || !*serie || !id || !*id ) return;
-    if ( pr_ruta( a->p, serie, muestra, id, ".out", out, sizeof out ) != 0 )
-        { barra_pub( a, "No pude componer la ruta." ); return; }
+    if ( !h || !h->p || !serie || !*serie || !id || !*id ) return;
+    if ( pr_ruta( h->p, serie, muestra, id, ".out", out, sizeof out ) != 0 )
+        { an_di( h, "No pude componer la ruta." ); return; }
 
     g = g_new0( An, 1 );
-    g->a = a;
+    g->h = *h;
     g_snprintf( g->serie, PR_ID, "%s", serie );
     g_snprintf( g->muestra, PR_ID, "%s", muestra ? muestra : "" );
     g_snprintf( g->id, PR_ID, "%s", id );
@@ -502,7 +500,7 @@ void atsw_anomalos( Atsw *a, const char *serie, const char *muestra,
         gchar *s = g_strdup_printf( "«%s» no está estimado, o su informe no "
                                     "trae los residuos.", id );
 
-        barra_pub( a, s ); g_free( s ); g_free( g );
+        an_di( h, "%s", s ); g_free( s ); g_free( g );
         return;
         }
 
@@ -646,7 +644,7 @@ void atsw_anomalos( Atsw *a, const char *serie, const char *muestra,
     if ( !preview_set_footer( g->eps, pie_caja ) )
         {
         gtk_widget_destroy( pie_caja );
-        barra_pub( a, "No pude abrir la ventana del gráfico." );
+        an_di( h, "No pude abrir la ventana del gráfico." );
         g_free( g );
         return;
         }

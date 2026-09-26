@@ -156,32 +156,10 @@ void       atsw_editor( Atsw *a, const char *serie, const char *muestra,
    forma. Lleva sus EXTREMOS --no su rango-- porque la forma la decide la
    firma que dejan, no cuantos periodos dura; y lleva la fecha ya leida del
    .out, que es la que el motor usa para fechar la intervencion.        */
-#define AT_MAX_EXT  16
-#define AT_MAX_SUC  64      /* los episodios que puede traer una ventana */
-#define AT_VENTANA  64      /* el entorno del suceso que se dibuja        */
-
-typedef struct {
-    int    desde, hasta;        /* indices en los residuos                 */
-    int    per, anno;           /* la fecha del PRIMER extremo             */
-    char   fecha[16];           /* tal como la escribe el motor            */
-    int    obs[AT_MAX_EXT];     /* los extremos, en indices de residuo     */
-    double z[AT_MAX_EXT];
-    int    next;
-
-    /* EL ENTORNO, PARA VER SI LA FORMA LO CAPTA. No basta con los extremos:
-       lo que dice si la forma sirve es lo que QUEDA alrededor al quitarla,
-       y eso hay que mirarlo fuera del episodio.                        */
-    int    base, nwin;          /* zwin[i] es el residuo base+i            */
-    double zwin[AT_VENTANA];
-    double umbral;              /* el de los anomalos, para juzgar el resto */
-} AtSuceso;
-
-/* «Sugerir intervencion…»: que FORMA pide cada suceso marcado, por que, y
-   --si el analista quiere-- un modelo derivado con esas intervenciones ya
-   escritas en su .inp. No estima: para eso esta el editor.             */
-void       atsw_sugerir( Atsw *a, const char *serie, const char *muestra,
-                         const char *id, int d, int D, int freq,
-                         const AtSuceso *suc, int ns );
+/* Las ventanas de analisis --anomalos, diagnosis, sugerir-- viven en
+   lib/analisis porque hacen falta tambien en fue_gui. El anfitrion que la
+   madre les da esta en include/anfitrion.h, aparte: analisis.h arrastra
+   preview.h, que arrastra previewhost.h, que arrastra ESTE fichero.  */
 
 /* «Editar…» una serie: descripcion, unidades, fuente, url, bajada, notas.
    Nada de esto toca un numero -- son los campos que el .inp no puede
@@ -194,13 +172,9 @@ void       atsw_proyecto_edita( Atsw *a );
 
 /* LA DIAGNOSIS de un modelo, pintada. Todo lo que se juzga está en
    lib/dictamen; esta ventana sólo le pone color y un botón de exportar. */
-void       atsw_diagnosis( Atsw *a, const char *serie, const char *muestra,
-                           const char *id );
 
 /* LOS ANOMALOS: los episodios, y los correlogramas con y sin ellos. El
    interruptor REDIBUJA la misma figura, que es como se lee un correlograma. */
-void       atsw_anomalos( Atsw *a, const char *serie, const char *muestra,
-                          const char *id );
 
 /* Lo mismo, con una opcion antes del fichero: fue_gui con «--prever»
    arranca el ciclo de prevision al abrir.                              */

@@ -14,14 +14,13 @@
 #include "dictamen.h"
 #include "tabla.h"
 
-#include "atsw.h"
+#include "analisis.h"
 
-void barra_pub( Atsw *a, const char *s );
 
 enum { DG_ESTADO, DG_TITULO, DG_DATO, DG_DICE, DG_COLOR, DG_N };
 
 typedef struct {
-    Atsw     *a;
+    AnHost    h;
     char      serie[PR_ID], muestra[PR_ID], id[PR_ID];
     Dictamen  d;
     FueOut    o;
@@ -109,7 +108,7 @@ static void on_exportar( GtkButton *b, Dg *g )
     }
 
     d = gtk_file_chooser_dialog_new( "Exportar la diagnosis",
-            GTK_WINDOW(g->a->ventana), GTK_FILE_CHOOSER_ACTION_SAVE,
+            g->h.padre, GTK_FILE_CHOOSER_ACTION_SAVE,
             "Cancelar", GTK_RESPONSE_CANCEL, "Guardar", GTK_RESPONSE_ACCEPT,
             NULL );
     gtk_file_chooser_set_do_overwrite_confirmation( GTK_FILE_CHOOSER(d), TRUE );
@@ -130,11 +129,11 @@ static void on_exportar( GtkButton *b, Dg *g )
             {
             gchar *s = g_strdup_printf( "Diagnosis en %s.", p );
 
-            barra_pub( g->a, s );
+            an_di( &g->h, "%s", s );
             g_free( s );
             }
         else
-            barra_pub( g->a, "No pude escribirla." );
+            an_di( &g->h, "No pude escribirla." );
         g_free( p );
         }
     gtk_widget_destroy( d );
@@ -146,7 +145,7 @@ static void on_cerrar( GtkWidget *w, Dg *g ) { (void) w; g_free( g ); }
 
 /* ------------------------------------------------------------------------ */
 
-void atsw_diagnosis( Atsw *a, const char *serie, const char *muestra,
+void an_diagnosis( const AnHost *h, const char *serie, const char *muestra,
                      const char *id )
 {
     Dg           *g;
@@ -156,13 +155,13 @@ void atsw_diagnosis( Atsw *a, const char *serie, const char *muestra,
     char          out[PR_RUTA];
     int           i;
 
-    if ( !a->hay || !serie || !*serie || !id || !*id ) return;
+    if ( !h || !h->p || !serie || !*serie || !id || !*id ) return;
 
-    if ( pr_ruta( a->p, serie, muestra, id, ".out", out, sizeof out ) != 0 )
-        { barra_pub( a, "No pude componer la ruta." ); return; }
+    if ( pr_ruta( h->p, serie, muestra, id, ".out", out, sizeof out ) != 0 )
+        { an_di( h, "No pude componer la ruta." ); return; }
 
     g = g_new0( Dg, 1 );
-    g->a = a;
+    g->h = *h;
     g_snprintf( g->serie, PR_ID, "%s", serie );
     g_snprintf( g->muestra, PR_ID, "%s", muestra ? muestra : "" );
     g_snprintf( g->id, PR_ID, "%s", id );
@@ -174,7 +173,7 @@ void atsw_diagnosis( Atsw *a, const char *serie, const char *muestra,
         gchar *s = g_strdup_printf( "«%s» no está estimado: no hay .out que "
                                     "diagnosticar.", id );
 
-        barra_pub( a, s );
+        an_di( h, "%s", s );
         g_free( s ); g_free( g );
         return;
         }
@@ -184,7 +183,7 @@ void atsw_diagnosis( Atsw *a, const char *serie, const char *muestra,
     convergence_clear( &c );
 
     win = gtk_window_new( GTK_WINDOW_TOPLEVEL );
-    gtk_window_set_transient_for( GTK_WINDOW(win), GTK_WINDOW(a->ventana) );
+    if ( h->padre ) gtk_window_set_transient_for( GTK_WINDOW(win), h->padre );
     gtk_window_set_default_size( GTK_WINDOW(win), 760, 340 );
     {
     gchar *t = g_strdup_printf( "Diagnosis — %s / %s", serie, id );

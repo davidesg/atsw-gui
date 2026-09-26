@@ -54,14 +54,28 @@ int id_intervenciones( const char *origen, char det[][ID_LINEA], int max,
                        char *porque, size_t n );
 
 /* Copia origen en destino añadiendo los deterministas de nuevo[0..nn-1] al
- * final del bloque. Cada uno entra con UN omega, semilla 0.0 y estimado, y
- * sin denominador -- que es el peldaño 1 de la escalera.
+ * final del bloque, con semilla 0.0, estimados y sin denominador.
+ *
+ * nomega[k] es LA CUENTA DEL FICHERO, no el número de coeficientes: el
+ * bloque lleva nomega[k]+1 valores. Así lo lee el motor, y así hay que
+ * decirlo para que no se confunda con el otro:
+ *
+ *     nomega = 0   UN coeficiente   la lectura escalar, el peldaño 1
+ *     nomega = L   L+1 coeficientes la forma general de un episodio de L
+ *                                   períodos, el peldaño 2
+ *
+ * El peldaño 2 es UNA intervención con L+1 omegas, NO L+1 intervenciones:
+ * es la familia anidada ω(B) aplicada a un escalón de nivel, y con ganancia
+ * ω(1)=0 equivale a L impulsos.
+ *
+ * nomega puede ser NULL: entonces todos a 0.
  *
  * Con nn == 0 copia el fichero tal cual, y eso es la prueba del módulo.
  *
  * Devuelve 0 si pudo; si no, 1 y el motivo en porque[n], y destino no se
  * toca.                                                                   */
 int id_anade( const char *origen, const char *destino,
-              const char *const *nuevo, int nn, char *porque, size_t n );
+              const char *const *nuevo, const int *nomega, int nn,
+              char *porque, size_t n );
 
 #endif /* ATSW_INPDET_H */

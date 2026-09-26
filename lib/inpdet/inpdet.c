@@ -330,8 +330,16 @@ int id_intervenciones( const char *origen, char det[][ID_LINEA], int max,
 }
 
 
+static int omegas_de( const int *nomega, int k )
+{
+   int v = nomega ? nomega[k] : 0;
+
+   return ( v < 0 ) ? 0 : ( ( v > 32 ) ? 32 : v );
+}
+
 int id_anade( const char *origen, const char *destino,
-              const char *const *nuevo, int nn, char *porque, size_t n )
+              const char *const *nuevo, const int *nomega, int nn,
+              char *porque, size_t n )
 {
    Fich   f;
    Bloque b;
@@ -410,7 +418,7 @@ int id_anade( const char *origen, const char *destino,
                        while ( p > s && ( p[-1] == '\n' || p[-1] == '\r' ) ) *--p = '\0';
                        fputs( s, o ); free( s ); }
             }
-         for ( k = 0; k < nn; k++ ) fputs( " 0", o );
+         for ( k = 0; k < nn; k++ ) fprintf( o, " %d", omegas_de( nomega, k ) );
          fputs( "\n", o );
          }
 
@@ -427,7 +435,13 @@ int id_anade( const char *origen, const char *destino,
           fputs( f.l[li++], o );                       /* su etiqueta */
           for ( j = 0; j <= b.nomega[k]; j++ ) fputs( f.l[li++], o );
           }
-      for ( k = 0; k < nn; k++ ) fputs( "**\n0.000000  1\n", o );
+      for ( k = 0; k < nn; k++ )
+          {
+          int j, cuantos = omegas_de( nomega, k ) + 1;
+
+          fputs( "**\n", o );
+          for ( j = 0; j < cuantos; j++ ) fputs( "0.000000  1\n", o );
+          }
 
       /* cuentas de deltas */
       if ( b.i_del > 0 )

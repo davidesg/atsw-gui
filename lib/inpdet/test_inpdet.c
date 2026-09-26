@@ -94,7 +94,7 @@ int main( int argc, char **argv )
         snprintf( ruta, sizeof ruta, "%s/%s", dir, e->d_name );
         if ( inp_check_fue( ruta, msg, sizeof msg ) != 0 ) continue;  /* no es de fue */
         vistos++;
-        if ( id_anade( ruta, tmp, NULL, 0, porque, sizeof porque ) != 0 )
+        if ( id_anade( ruta, tmp, NULL, NULL, 0, porque, sizeof porque ) != 0 )
            {
            /* Rechazar es legítimo; reescribir mal, no. Se cuenta y se dice. */
            printf( "  ---   %-34s rechazado: %s\n", e->d_name, porque );
@@ -122,7 +122,7 @@ int main( int argc, char **argv )
 
     snprintf( ruta, sizeof ruta, "%s/CPI_USA_model.inp", dir );
     det_antes = cuenta( ruta, "step " ) + cuenta( ruta, "impulse " );
-    ok( id_anade( ruta, tmp, nueva, 1, porque, sizeof porque ) == 0,
+    ok( id_anade( ruta, tmp, nueva, NULL, 1, porque, sizeof porque ) == 0,
         "se escribe" );
     ok( inp_check_fue( tmp, msg, sizeof msg ) == 0,
         "y el MOTOR lo acepta, que es el único juez que cuenta" );
@@ -140,7 +140,7 @@ int main( int argc, char **argv )
     snprintf( ruta, sizeof ruta, "%s/CPI_USA.inp", dir );
     if ( inp_check_fue( ruta, msg, sizeof msg ) == 0 )
        {
-       ok( id_anade( ruta, tmp, nueva, 2, porque, sizeof porque ) == 0, "se escriben las dos" );
+       ok( id_anade( ruta, tmp, nueva, NULL, 2, porque, sizeof porque ) == 0, "se escriben las dos" );
        ok( inp_check_fue( tmp, msg, sizeof msg ) == 0, "y el motor las acepta" );
        if ( inp_check_fue( tmp, msg, sizeof msg ) != 0 ) printf( "        %s\n", msg );
        }
@@ -167,13 +167,42 @@ int main( int argc, char **argv )
 
     snprintf( ruta, sizeof ruta, "%s/CPI_USA_model.inp", dir );
     remove( tmp );
-    ok( id_anade( ruta, tmp, mala, 1, porque, sizeof porque ) != 0,
+    ok( id_anade( ruta, tmp, mala, NULL, 1, porque, sizeof porque ) != 0,
         "un determinista con datos propios se rechaza" );
     printf( "        %s\n", porque );
     ok( fopen( tmp, "rb" ) == NULL, "y el destino NO se ha tocado" );
-    ok( id_anade( ruta, tmp, corta, 1, porque, sizeof porque ) != 0,
+    ok( id_anade( ruta, tmp, corta, NULL, 1, porque, sizeof porque ) != 0,
         "una intervención sin período en una serie mensual, también" );
     printf( "        %s\n", porque );
+    }
+
+    printf( "\nEL PELDAÑO 2 ES UNA «step» CON L+1 OMEGAS\n" );
+    {
+    char ruta[1024];
+    const char *nueva[1] = { "step 3 2022" };
+    int   om[1] = { 2 };            /* L = 2 -> TRES coeficientes */
+    int   ceros;
+
+    snprintf( ruta, sizeof ruta, "%s/CPI_USA_model.inp", dir );
+    ok( id_anade( ruta, tmp, nueva, om, 1, porque, sizeof porque ) == 0,
+        "se escribe con tres coeficientes" );
+    ok( inp_check_fue( tmp, msg, sizeof msg ) == 0,
+        "y el MOTOR lo acepta: tres omegas donde dice que hay tres" );
+    if ( inp_check_fue( tmp, msg, sizeof msg ) != 0 ) printf( "        %s\n", msg );
+
+    /* el fichero tenia 15 deterministas con un coeficiente cada uno;
+       ahora tiene 16, y el ultimo lleva TRES. */
+    ceros = cuenta( tmp, "0.000000  1" );
+    ok( ceros == 15 + 3, "quince de antes mas los tres nuevos" );
+
+    /* y una cuenta que el motor no admitiria se recorta en vez de colarse */
+    {
+    int malo[1] = { -5 };
+
+    ok( id_anade( ruta, tmp, nueva, malo, 1, porque, sizeof porque ) == 0 &&
+        inp_check_fue( tmp, msg, sizeof msg ) == 0,
+        "una cuenta negativa no escribe un fichero roto" );
+    }
     }
 
     printf( "\n%d fallos\n", fallos );

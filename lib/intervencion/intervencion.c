@@ -262,3 +262,160 @@ int iv_ajusta( const double *h, const double *z, int n, IvAjuste *out )
    out->r2 = ( zz > 0.0 ) ? 1.0 - ss / zz : 0.0;
    return 0;
 }
+
+
+/* --- el peldaño 2 -------------------------------------------------------- */
+
+#define IV_MAX_ESC  16
+
+int iv_duracion_nivel( const IvExtremo *ext, int next, int d )
+{
+   int i, lo, hi, L;
+
+   if ( !ext || next < 1 ) return 1;
+   lo = hi = ext[0].obs;
+   for ( i = 1; i < next; i++ )
+       { if ( ext[i].obs < lo ) lo = ext[i].obs;
+         if ( ext[i].obs > hi ) hi = ext[i].obs; }
+   L = ( hi - lo + 1 ) - ( d > 0 ? d : 0 );
+   return ( L < 1 ) ? 1 : L;
+}
+
+int iv_huella_esc( int t0, int nesc, int d, int D, int s, int base,
+                   double *H, int n )
+{
+   int j;
+
+   if ( !H || n < 1 || nesc < 1 || nesc > IV_MAX_ESC ) return 1;
+   for ( j = 0; j < nesc; j++ )
+       if ( iv_huella( IV_ESCALON, t0 + j, d, D, s, base, H + (size_t) j * n, n ) != 0 )
+          return 1;
+   return 0;
+}
+
+/* Mínimos cuadrados por ecuaciones normales con eliminación gaussiana y
+ * pivoteo parcial. Son como mucho 16 columnas y las huellas son ceros y
+ * unos: no hace falta más maquinaria, y la que no hace falta es la que
+ * luego nadie sabe si está bien.                                         */
+static int resuelve( double *A, double *b, int m )
+{
+   int i, j, k;
+
+   for ( k = 0; k < m; k++ )
+       {
+       int    piv = k;
+       double may = fabs( A[k*m + k] );
+
+       for ( i = k + 1; i < m; i++ )
+           if ( fabs( A[i*m + k] ) > may ) { may = fabs( A[i*m + k] ); piv = i; }
+       if ( may < 1e-12 ) return 1;             /* columnas dependientes */
+       if ( piv != k )
+          {
+          for ( j = 0; j < m; j++ )
+              { double t = A[k*m + j]; A[k*m + j] = A[piv*m + j]; A[piv*m + j] = t; }
+          { double t = b[k]; b[k] = b[piv]; b[piv] = t; }
+          }
+       for ( i = k + 1; i < m; i++ )
+           {
+           double f = A[i*m + k] / A[k*m + k];
+
+           for ( j = k; j < m; j++ ) A[i*m + j] -= f * A[k*m + j];
+           b[i] -= f * b[k];
+           }
+       }
+   for ( i = m - 1; i >= 0; i-- )
+       {
+       double v = b[i];
+
+       for ( j = i + 1; j < m; j++ ) v -= A[i*m + j] * b[j];
+       b[i] = v / A[i*m + i];
+       }
+   return 0;
+}
+
+int iv_ajusta_esc( const double *H, int nesc, const double *z, int n,
+                   IvAjuste *out, double *coef )
+{
+   double A[IV_MAX_ESC * IV_MAX_ESC], b[IV_MAX_ESC];
+   double zz = 0.0, ss = 0.0;
+   int    i, j, k;
+
+   if ( !out ) return 1;
+   memset( out, 0, sizeof *out );
+   if ( !H || !z || n < 1 || nesc < 1 || nesc > IV_MAX_ESC ) return 1;
+
+   for ( i = 0; i < nesc; i++ )
+       {
+       b[i] = 0.0;
+       for ( k = 0; k < n; k++ ) b[i] += H[(size_t) i * n + k] * z[k];
+       for ( j = 0; j < nesc; j++ )
+           {
+           double v = 0.0;
+
+           for ( k = 0; k < n; k++ )
+               v += H[(size_t) i * n + k] * H[(size_t) j * n + k];
+           A[i*nesc + j] = v;
+           }
+       }
+   if ( resuelve( A, b, nesc ) != 0 ) return 1;
+
+   for ( k = 0; k < n; k++ )
+       {
+       double r = z[k];
+
+       for ( i = 0; i < nesc; i++ ) r -= b[i] * H[(size_t) i * n + k];
+       zz += z[k] * z[k];
+       ss += r * r;
+       if ( fabs( r ) > fabs( out->resto ) ) { out->resto = r; out->i_resto = k; }
+       }
+   out->escala = b[0];
+   out->r2     = ( zz > 0.0 ) ? 1.0 - ss / zz : 0.0;
+   if ( coef ) for ( i = 0; i < nesc; i++ ) coef[i] = b[i];
+   return 0;
+}
+
+int iv_plan( const IvExtremo *ext, int next, int d,
+             double resto_escalar, double umbral, IvPlan *out )
+{
+   IvLectura l;
+   int       L;
+
+   if ( !out ) return 1;
+   memset( out, 0, sizeof *out );
+   if ( iv_lectura( ext, next, d, &l ) != 0 ) return 1;
+
+   L = iv_duracion_nivel( ext, next, d );
+   out->forma    = l.forma;
+   out->duracion = L;
+   out->nesc     = 1;
+   out->peldano  = 1;
+   snprintf( out->razon, sizeof out->razon, "%s", l.razon );
+
+   /* LA DURACION MANDA SOLA: una intervención escalar no puede representar
+      más de un período alterado, y eso no depende de ningún ajuste.   */
+   if ( L > 1 )
+      {
+      out->peldano = 2;
+      out->nesc    = L + 1;
+      snprintf( out->subir, sizeof out->subir,
+          "El episodio dura %d períodos EN EL NIVEL: una intervención escalar "
+          "no puede representar más de uno. La forma general son %d escalones.",
+          L, L + 1 );
+      return 0;
+      }
+
+   /* TREADWAY: la forma de abajo deja un vecino anómalo. La parte no
+      modelizada del suceso cae entera ahí -- es evidencia objetiva, y no
+      cuesta preguntar nada.                                          */
+   if ( umbral > 0.0 && fabs( resto_escalar ) >= umbral )
+      {
+      out->peldano = 2;
+      out->nesc    = L + 1;
+      snprintf( out->subir, sizeof out->subir,
+          "Treadway: al quitar la forma escalar sobrevive un extremo de "
+          "%+.2f, por encima del umbral %.2f. La parte del suceso que la "
+          "forma no modeliza cae entera ahí. La forma general son %d "
+          "escalones.", resto_escalar, umbral, L + 1 );
+      }
+   return 0;
+}

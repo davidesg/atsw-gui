@@ -46,6 +46,7 @@ typedef struct {
 
     AtSuceso  s[SG_MAX];
     IvLectura l[SG_MAX];
+    IvPlan    plan[SG_MAX];
     int       ns;
 
     GtkWidget *win;
@@ -54,30 +55,57 @@ typedef struct {
     GtkWidget *l_estado;
 } Sg;
 
+/* LAS CINCO OPCIONES. Las cuatro primeras son escalares --el peldaño 1, una
+ * intervención de un parámetro-- y la quinta es el peldaño 2: la forma
+ * general de un episodio de L períodos, que son L+1 escalones en el nivel.
+ *
+ * Y es UNA intervención con L+1 coeficientes ω, no L+1 intervenciones: la
+ * familia anidada ω(B) sobre un escalón, que con ganancia ω(1)=0 equivale a
+ * L impulsos. Ponerlas sueltas sería otra cosa y otro número de parámetros.
+ */
+#define SG_EPISODIO  4
+
 static const IvForma ORDEN[4] = { IV_ESCALON, IV_IMPULSO, IV_COMPIMP, IV_RAMPA };
 
-static IvForma forma_de( GtkComboBoxText *c )
+static int cual_de( Sg *g, int k )
 {
-    int i = gtk_combo_box_get_active( GTK_COMBO_BOX(c) );
+    int i = gtk_combo_box_get_active( GTK_COMBO_BOX(g->forma[k]) );
 
-    return ( i >= 0 && i < 4 ) ? ORDEN[i] : IV_ESCALON;
+    return ( i >= 0 && i <= SG_EPISODIO ) ? i : 0;
+}
+
+/* Los escalones de lo elegido: 1 en el peldaño 1, L+1 en el 2. */
+static int nesc_de( Sg *g, int k )
+{
+    return ( cual_de( g, k ) == SG_EPISODIO ) ? g->plan[k].nesc : 1;
+}
+
+static IvForma forma_k( Sg *g, int k )
+{
+    int i = cual_de( g, k );
+
+    return ( i == SG_EPISODIO ) ? IV_ESCALON : ORDEN[i];
 }
 
 /* La línea que va a ir al .inp, recalculada al cambiar la forma: lo que se
    ve es lo que se escribe, sin traducción por el medio.                 */
 static void repinta_linea( Sg *g, int k )
 {
-    char b[ID_LINEA];
+    char   b[ID_LINEA];
+    int    nesc = nesc_de( g, k );
+    gchar *m;
 
-    if ( iv_linea( forma_de( GTK_COMBO_BOX_TEXT(g->forma[k]) ), g->freq,
+    if ( iv_linea( forma_k( g, k ), g->freq,
                    g->s[k].per, g->s[k].anno, b, sizeof b ) != 0 )
         g_snprintf( b, sizeof b, "(esa fecha no cabe en esta frecuencia)" );
-    {
-    gchar *m = g_markup_printf_escaped( "<tt>%s</tt>", b );
 
+    /* SE DICE CUANTOS OMEGAS, porque es lo que distingue los dos peldaños en
+       el fichero: la línea es la misma y la cuenta no.                 */
+    m = ( nesc > 1 )
+      ? g_markup_printf_escaped( "<tt>%s</tt>  <small>con %d ω</small>", b, nesc )
+      : g_markup_printf_escaped( "<tt>%s</tt>", b );
     gtk_label_set_markup( GTK_LABEL(g->linea[k]), m );
     g_free( m );
-    }
 }
 
 /* ------------------------------------------------------------------------ */
@@ -96,14 +124,36 @@ static void repinta_linea( Sg *g, int k )
 /* para subir de peldaño, visto ANTES de gastar una estimación.              */
 /* ------------------------------------------------------------------------ */
 
-static int huella_de( Sg *g, int k, double *h, IvAjuste *aj )
+/* fit[0..nwin-1] es lo que la forma elegida QUITARIA de los residuos: la
+ * combinación ya ajustada, sea un escalón solo o los L+1 del episodio.  */
+static int ajuste_de( Sg *g, int k, double *fit, IvAjuste *aj )
 {
     const AtSuceso *x = &g->s[k];
+    double          H[16 * AT_VENTANA], coef[16];
+    int             nesc = nesc_de( g, k ), i, j;
 
-    if ( x->nwin < 2 ) return 1;
-    if ( iv_huella( forma_de( GTK_COMBO_BOX_TEXT(g->forma[k]) ), x->obs[0],
-                    g->d, g->D, g->freq, x->base, h, x->nwin ) != 0 ) return 1;
-    return iv_ajusta( h, x->zwin, x->nwin, aj );
+    if ( x->nwin < 2 || nesc < 1 || nesc > 16 ) return 1;
+
+    if ( nesc > 1 )
+        {
+        if ( iv_huella_esc( x->obs[0], nesc, g->d, g->D, g->freq, x->base,
+                            H, x->nwin ) != 0 ) return 1;
+        if ( iv_ajusta_esc( H, nesc, x->zwin, x->nwin, aj, coef ) != 0 ) return 1;
+        for ( i = 0; i < x->nwin; i++ )
+            {
+            double v = 0.0;
+
+            for ( j = 0; j < nesc; j++ ) v += coef[j] * H[j * x->nwin + i];
+            fit[i] = v;
+            }
+        return 0;
+        }
+
+    if ( iv_huella( forma_k( g, k ), x->obs[0], g->d, g->D, g->freq,
+                    x->base, H, x->nwin ) != 0 ) return 1;
+    if ( iv_ajusta( H, x->zwin, x->nwin, aj ) != 0 ) return 1;
+    for ( i = 0; i < x->nwin; i++ ) fit[i] = aj->escala * H[i];
+    return 0;
 }
 
 static gboolean pinta( GtkWidget *w, cairo_t *cr, Sg *g )
@@ -111,13 +161,13 @@ static gboolean pinta( GtkWidget *w, cairo_t *cr, Sg *g )
     int              k = GPOINTER_TO_INT( g_object_get_data( G_OBJECT(w), "k" ) );
     const AtSuceso  *x;
     GtkAllocation    al;
-    double           h[AT_VENTANA], escala, medio, alto, dx, may = 0.0;
+    double           fit[AT_VENTANA], escala, medio, alto, dx, may = 0.0;
     IvAjuste         aj;
     int              i;
 
     if ( k < 0 || k >= g->ns ) return FALSE;
     x = &g->s[k];
-    if ( huella_de( g, k, h, &aj ) != 0 ) return FALSE;
+    if ( ajuste_de( g, k, fit, &aj ) != 0 ) return FALSE;
 
     gtk_widget_get_allocation( w, &al );
     medio = al.height / 2.0;
@@ -165,7 +215,7 @@ static gboolean pinta( GtkWidget *w, cairo_t *cr, Sg *g )
     cairo_set_line_width( cr, 1.6 );
     for ( i = 0; i < x->nwin; i++ )
         {
-        double px = ( i + 0.5 ) * dx, py = medio - aj.escala * h[i] * escala;
+        double px = ( i + 0.5 ) * dx, py = medio - fit[i] * escala;
 
         if ( i ) cairo_line_to( cr, px, py ); else cairo_move_to( cr, px, py );
         }
@@ -174,7 +224,7 @@ static gboolean pinta( GtkWidget *w, cairo_t *cr, Sg *g )
     /* lo que QUEDA */
     for ( i = 0; i < x->nwin; i++ )
         {
-        double r = x->zwin[i] - aj.escala * h[i];
+        double r = x->zwin[i] - fit[i];
         double px = ( i + 0.5 ) * dx;
 
         if ( fabs( r ) >= x->umbral ) cairo_set_source_rgb( cr, 0.71, 0.11, 0.09 );
@@ -200,25 +250,33 @@ static gboolean pinta( GtkWidget *w, cairo_t *cr, Sg *g )
 /* LOS TRES NUMEROS, que se leen sin mirar la figura. */
 static void di_numeros( Sg *g, int k )
 {
-    double   h[AT_VENTANA];
+    double   fit[AT_VENTANA];
     IvAjuste aj;
-    gchar   *t;
+    GString *t;
 
-    if ( huella_de( g, k, h, &aj ) != 0 ) return;
+    if ( ajuste_de( g, k, fit, &aj ) != 0 ) return;
 
+    t = g_string_new( "<small>" );
+    g_string_append_printf( t, "escala <b>%.2f</b> · R² <b>%.2f</b> · mayor "
+                               "resto <b>%+.2f</b> — ", aj.escala, aj.r2, aj.resto );
     if ( fabs( aj.resto ) >= g->s[k].umbral )
-        t = g_markup_printf_escaped(
-            "<small>escala <b>%.2f</b> · R² <b>%.2f</b> · mayor resto "
-            "<b>%+.2f</b> — <span foreground=\"#b51c17\">queda un extremo: "
-            "esta forma no cubre el suceso</span></small>",
-            aj.escala, aj.r2, aj.resto );
+        g_string_append( t, "<span foreground=\"#b51c17\">queda un extremo: "
+                            "esta forma no cubre el suceso</span>" );
     else
-        t = g_markup_printf_escaped(
-            "<small>escala <b>%.2f</b> · R² <b>%.2f</b> · mayor resto "
-            "<b>%+.2f</b> — no sobrevive ningún extremo</small>",
-            aj.escala, aj.r2, aj.resto );
-    gtk_label_set_markup( GTK_LABEL(g->nums[k]), t );
-    g_free( t );
+        g_string_append( t, "no sobrevive ningún extremo" );
+
+    /* POR QUE SUBIR, dicho aunque estés mirando el peldaño de abajo: es la
+       razón la que manda, no la opción que tengas puesta.            */
+    if ( g->plan[k].subir[0] )
+        {
+        gchar *e = g_markup_escape_text( g->plan[k].subir, -1 );
+
+        g_string_append_printf( t, "\n<i>%s</i>", e );
+        g_free( e );
+        }
+    g_string_append( t, "</small>" );
+    gtk_label_set_markup( GTK_LABEL(g->nums[k]), t->str );
+    g_string_free( t, TRUE );
 }
 
 static void on_forma( GtkComboBox *c, Sg *g )
@@ -283,6 +341,7 @@ static void on_derivar( GtkButton *b, Sg *g )
 {
     char        lin[SG_MAX][ID_LINEA];
     const char *ptr[SG_MAX];
+    int         om[SG_MAX];
     char        ya[ID_MAX_DET][ID_LINEA];
     char        origen[PR_RUTA], destino[PR_RUTA], porque[512], msg[512];
     char        nuevo[PR_ID];
@@ -296,11 +355,14 @@ static void on_derivar( GtkButton *b, Sg *g )
     for ( k = 0; k < g->ns; k++ )
         {
         if ( !gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(g->usa[k]) ) ) continue;
-        if ( iv_linea( forma_de( GTK_COMBO_BOX_TEXT(g->forma[k]) ), g->freq,
+        if ( iv_linea( forma_k( g, k ), g->freq,
                        g->s[k].per, g->s[k].anno, lin[n], sizeof lin[n] ) != 0 )
             { di( g, "La fecha %s no cabe en una serie de frecuencia %d.",
                   g->s[k].fecha, g->freq ); return; }
         ptr[n] = lin[n];
+        /* LA CUENTA DEL FICHERO ES UNO MENOS QUE LOS COEFICIENTES: el bloque
+           lleva nomega+1 valores. Así lo lee el motor.               */
+        om[n] = nesc_de( g, k ) - 1;
         n++;
         }
     if ( n == 0 ) { di( g, "No has dejado ninguna intervención marcada." ); return; }
@@ -342,7 +404,7 @@ static void on_derivar( GtkButton *b, Sg *g )
     g_mkdir_with_parents( dir, 0700 );
     g_free( dir );
 
-    if ( id_anade( origen, destino, ptr, n, porque, sizeof porque ) != 0 )
+    if ( id_anade( origen, destino, ptr, om, n, porque, sizeof porque ) != 0 )
         {
         pr_borra( g->a->p, g->serie, g->muestra, nuevo, &e );
         di( g, "%s", porque );
@@ -366,9 +428,18 @@ static void on_derivar( GtkButton *b, Sg *g )
     for ( k = 0, n = 0; k < g->ns; k++ )
         {
         if ( !gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(g->usa[k]) ) ) continue;
-        g_string_append_printf( razon, "%s%s en %s: %s", n++ ? ". " : "",
-            iv_nombre_es( forma_de( GTK_COMBO_BOX_TEXT(g->forma[k]) ) ),
-            g->s[k].fecha, g->l[k].razon );
+        {
+        int nesc = nesc_de( g, k );
+
+        if ( nesc > 1 )
+            g_string_append_printf( razon,
+                "%sepisodio en %s: %d escalones en el nivel (%d ω sobre una "
+                "«step»). %s", n++ ? ". " : "", g->s[k].fecha, nesc, nesc,
+                g->plan[k].subir[0] ? g->plan[k].subir : g->l[k].razon );
+        else
+            g_string_append_printf( razon, "%s%s en %s: %s", n++ ? ". " : "",
+                iv_nombre_es( forma_k( g, k ) ), g->s[k].fecha, g->l[k].razon );
+        }
         }
     g_string_append_printf( razon, ". Derivado de %s%s.", g->id,
                             ( cual == 1 ) ? " (de su .pre, el óptimo)" : "" );
@@ -436,6 +507,24 @@ void atsw_sugerir( Atsw *a, const char *serie, const char *muestra,
         for ( j = 0; j < suc[k].next && j < AT_MAX_EXT; j++ )
             { e[j].obs = suc[k].obs[j]; e[j].z = suc[k].z[j]; }
         iv_lectura( e, suc[k].next, d, &g->l[k] );
+
+        /* EL RESTO DE LA FORMA ESCALAR, ANTES DE DECIDIR. La segunda razón
+           para subir --Treadway: la forma de abajo deja un vecino anómalo--
+           se ve sin estimar, con la superposición. Así que se calcula aquí
+           y se le pasa al plan, que es quien decide el peldaño.      */
+        {
+        double   h[AT_VENTANA];
+        IvAjuste aj;
+        double   resto = 0.0;
+
+        memset( &aj, 0, sizeof aj );
+        if ( suc[k].nwin >= 2 &&
+             iv_huella( g->l[k].forma, suc[k].obs[0], d, D, freq,
+                        suc[k].base, h, suc[k].nwin ) == 0 &&
+             iv_ajusta( h, suc[k].zwin, suc[k].nwin, &aj ) == 0 )
+            resto = aj.resto;
+        iv_plan( e, suc[k].next, d, resto, suc[k].umbral, &g->plan[k] );
+        }
         }
 
     g->win = gtk_window_new( GTK_WINDOW_TOPLEVEL );
@@ -488,12 +577,30 @@ void atsw_sugerir( Atsw *a, const char *serie, const char *muestra,
         for ( i = 0; i < 4; i++ )
             gtk_combo_box_text_append_text( GTK_COMBO_BOX_TEXT(g->forma[k]),
                                             iv_nombre_es( ORDEN[i] ) );
-        for ( i = 0; i < 4; i++ ) if ( ORDEN[i] == g->l[k].forma )
-            gtk_combo_box_set_active( GTK_COMBO_BOX(g->forma[k]), i );
+        {
+        gchar *et = g_strdup_printf( "episodio — %d escalones",
+                                     g->plan[k].nesc > 1 ? g->plan[k].nesc : 2 );
+
+        gtk_combo_box_text_append_text( GTK_COMBO_BOX_TEXT(g->forma[k]), et );
+        g_free( et );
+        }
+
+        /* LO QUE VIENE MARCADO ES LO QUE DECIDE LA ESCALERA, no siempre la
+           lectura escalar: si el episodio dura más de un período en el
+           nivel, o si la forma escalar deja un vecino anómalo, la marcada
+           es la general. Lo obvio primero, pero no lo insuficiente.  */
+        if ( g->plan[k].peldano == 2 )
+            gtk_combo_box_set_active( GTK_COMBO_BOX(g->forma[k]), SG_EPISODIO );
+        else
+            for ( i = 0; i < 4; i++ ) if ( ORDEN[i] == g->l[k].forma )
+                gtk_combo_box_set_active( GTK_COMBO_BOX(g->forma[k]), i );
+
         gtk_widget_set_tooltip_text( g->forma[k],
-            "La marcada es la que dice el dato. Cámbiala si SABES de un suceso "
-            "que explique otra forma: eso es lo único que esta ventana no "
-            "puede mirar." );
+            "La marcada es la que decide la escalera. Cámbiala si SABES de un "
+            "suceso que explique otra forma: eso es lo único que esta ventana "
+            "no puede mirar.\n\n«episodio» es UNA intervención con L+1 "
+            "coeficientes ω --la familia anidada sobre un escalón--, no L+1 "
+            "intervenciones sueltas." );
         g_object_set_data( G_OBJECT(g->forma[k]), "k", GINT_TO_POINTER(k) );
         g_signal_connect( g->forma[k], "changed", G_CALLBACK(on_forma), g );
         gtk_grid_attach( GTK_GRID(rej), g->forma[k], 1, fila, 1, 1 );

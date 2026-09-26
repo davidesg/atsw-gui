@@ -138,4 +138,68 @@ typedef struct {
 
 int iv_ajusta( const double *h, const double *z, int n, IvAjuste *out );
 
+/* --- el peldaño 2: el episodio entero ----------------------------------- */
+
+/* LA DURACION DEL SUCESO EN EL NIVEL, que no es la que se ve.
+ *
+ * Los residuos están diferenciados: L períodos alterados en el nivel se ven
+ * como L+d extremos. Restar la d es lo que devuelve el suceso a la escala en
+ * la que se ESPECIFICA la intervención y en la que el analista razona.
+ * Contar sobre los residuos pedía un escalón de más por cada orden de
+ * diferenciación.                                                        */
+int iv_duracion_nivel( const IvExtremo *ext, int next, int d );
+
+/* LAS COLUMNAS DEL PELDAÑO 2.
+ *
+ * La forma general de un episodio de L períodos son L+1 escalones en el
+ * nivel: en el .inp, UNA intervención «step» con L+1 coeficientes ω, no L+1
+ * intervenciones. Con ganancia ω(1)=0 equivalen a L impulsos de nivel.
+ *
+ * H es n x nesc por COLUMNAS: la columna j es la huella de un escalón en
+ * t0+j. Con nesc == 1 es iv_huella de un escalón, exactamente.           */
+int iv_huella_esc( int t0, int nesc, int d, int D, int s, int base,
+                   double *H, int n );
+
+/* El ajuste por mínimos cuadrados de esas columnas, y lo que queda.
+ *
+ * coef[0..nesc-1] recibe los coeficientes si no es NULL. En out->escala va
+ * el PRIMERO --que con nesc == 1 es la escala de siempre-- y en resto, el
+ * mayor |z| que sobrevive, que es lo que decide.                         */
+int iv_ajusta_esc( const double *H, int nesc, const double *z, int n,
+                   IvAjuste *out, double *coef );
+
+/* --- qué hacer, y por qué ----------------------------------------------- */
+
+/* EL AIC NO ARBITRA LA SUBIDA DE PELDAÑO. Compara DENTRO de un peldaño, o
+ * confirma una subida ya justificada por otra cosa. Una escalera que se
+ * quedara con el mejor AIC subiría siempre, porque el modelo más sofisticado
+ * casi siempre ajusta mejor: tiene más parámetros. Eso es lo contrario de la
+ * navaja.
+ *
+ * Lo que justifica subir, en orden, son cuatro cosas. Dos se ven SIN
+ * ESTIMAR, y son las que este módulo mira:
+ *
+ *   1. el episodio dura más de un período EN EL NIVEL -- una intervención
+ *      escalar no puede representar más de uno;
+ *   2. TREADWAY: la forma de abajo deja un vecino anómalo. La parte no
+ *      modelizada del suceso cae entera ahí.
+ *
+ * Las otras dos --que la forma de abajo no deje ruido blanco, y que la
+ * lectura simple sea implausible para esa clase de serie-- exigen estimar y
+ * saber el dominio, y no se deciden aquí.
+ *
+ * resto_escalar y umbral vienen de iv_ajusta sobre la forma escalar: si el
+ * que llama no los tiene, que pase 0 y sólo se mirará la duración.       */
+typedef struct {
+   IvForma forma;         /* la escalar, para el peldaño 1               */
+   int     nesc;          /* escalones: 1 es la lectura escalar          */
+   int     peldano;       /* 1 o 2                                       */
+   int     duracion;      /* L, en el nivel                              */
+   char    razon[512];    /* por qué esa forma escalar                   */
+   char    subir[512];    /* por qué subir; "" si no hay motivo          */
+} IvPlan;
+
+int iv_plan( const IvExtremo *ext, int next, int d,
+             double resto_escalar, double umbral, IvPlan *out );
+
 #endif /* ATSW_INTERVENCION_H */

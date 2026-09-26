@@ -21,7 +21,9 @@
 #include "analisis.h"
 
 Proyecto   *fue_proyecto( void );
+int         fue_proyecto_relee( void );
 const char *fue_raiz_proyecto( void );
+void        fue_abre_al_arrancar( FueContext *ctx, const char *path );
 
 /* La ruta del .inp que la ventana tiene delante. Se compone igual que en
  * file_io.c al guardar, porque es EL MISMO fichero.                     */
@@ -75,13 +77,51 @@ static void fg_di( void *d, const char *s )
     if ( ctx && ctx->status_label ) gtk_label_set_text( GTK_LABEL(ctx->status_label), s );
 }
 
-/* fue_gui NO GUARDA EL MANIFIESTO NI ABRE OTRO MODELO, y por eso los dos
- * punteros van a NULL: lib/analisis entonces no ofrece derivar. Es la
- * respuesta correcta y no una carencia -- derivar toca el manifiesto, y el
- * manifiesto lo lleva la madre. Desde aquí se MIRA; para iterar, la lista. */
+/* GUARDAR EL MANIFIESTO DESDE AQUI.
+ *
+ * La primera version dejaba esto a NULL --"derivar lo lleva la madre"-- y
+ * el resultado fue un fichero .inp en disco que el proyecto no conocia: un
+ * HUERFANO. El boton parecia no hacer nada y en realidad hacia daño.
+ *
+ * Y el bucle que se rompia era el bueno: estimar aqui, mirar los residuos
+ * aqui, y tener que volver a la madre para poner la intervencion es el
+ * camino largo, que es el que no se recorre.
+ *
+ * La copia en memoria se relee de disco ANTES de derivar --lo hace
+ * fue_host()-- porque la madre sigue viva al lado.                    */
+static int fg_guarda( void *d )
+{
+    Proyecto *p = fue_proyecto();
+    PrError   e;
+
+    (void) d;
+    if ( !p || !p->path[0] ) return 1;
+    return pr_escribir( p, p->path, &e );
+}
+
+/* ABRIR EL DERIVADO ES CARGARLO AQUI MISMO, en esta ventana. No se lanza
+ * otro proceso: el analista estaba trabajando en esta, y el hijo es la
+ * iteracion siguiente de lo mismo. Se carga por el mismo camino que el
+ * selector de ficheros, que es el unico que hay.                      */
+static void fg_abre( void *d, const char *serie, const char *muestra,
+                     const char *id, AnHerramienta con )
+{
+    FueContext *ctx = (FueContext *) d;
+    char        ruta[PR_RUTA];
+
+    (void) con;                     /* aqui solo hay una puerta: esta */
+    if ( pr_ruta( fue_proyecto(), serie, muestra, id, ".inp",
+                  ruta, sizeof ruta ) != 0 )
+        { fg_di( ctx, "No pude componer la ruta del modelo nuevo." ); return; }
+    fue_abre_al_arrancar( ctx, ruta );
+}
+
 static AnHost fue_host( FueContext *ctx )
 {
     AnHost h;
+
+    /* LA MADRE SIGUE VIVA AL LADO. Ver fue_proyecto_relee(). */
+    fue_proyecto_relee();
 
     memset( &h, 0, sizeof h );
     h.p       = fue_proyecto();
@@ -89,6 +129,9 @@ static AnHost fue_host( FueContext *ctx )
     h.preview = (PreviewApp *) ctx;
     h.dueno   = ctx;
     h.di      = fg_di;
+    h.guarda  = fg_guarda;
+    h.abre    = fg_abre;
+    h.puede   = AN_PUEDE_FUE;      /* el editor es de la madre */
     return h;
 }
 

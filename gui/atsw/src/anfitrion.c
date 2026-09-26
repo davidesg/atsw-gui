@@ -76,5 +76,6 @@ AnHost atsw_host( Atsw *a )
     h.refresca = md_refresca;
     h.abre     = md_abre;
     h.cierra   = md_cierra;
+    h.puede    = AN_PUEDE_FUE | AN_PUEDE_EDITOR;   /* las dos puertas */
     return h;
 }

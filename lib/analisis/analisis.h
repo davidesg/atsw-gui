@@ -54,6 +54,13 @@ typedef enum {
    AN_CON_EDITOR
 } AnHerramienta;
 
+/* QUE PUERTAS SABE ABRIR EL ANFITRION. La madre las dos; fue_gui sólo la
+ * suya, porque el editor es de la madre. Lo que no se sepa abrir NO SE
+ * OFRECE: un desplegable con una opción que no hace nada es peor que no
+ * tener desplegable.                                                    */
+#define AN_PUEDE_FUE     0x1u
+#define AN_PUEDE_EDITOR  0x2u
+
 /* LO QUE UNA VENTANA DE ANALISIS NECESITA DE QUIEN LA ABRE, y nada más.
  *
  * Los punteros a función pueden ser NULL: entonces ese gesto no se ofrece.
@@ -91,6 +98,10 @@ typedef struct {
       fichero que ya no es ése.                                         */
    void (*cierra)( void *dueno, const char *serie, const char *muestra,
                    const char *id );
+
+   /* Con qué sabe abrir: AN_PUEDE_FUE | AN_PUEDE_EDITOR. En 0 con `abre`
+      puesto se entiende que las dos, por compatibilidad.               */
+   unsigned puede;
 } AnHost;
 
 /* Los residuos con sus anómalos, sobre el gráfico de fue, y la calibración.

@@ -44,6 +44,26 @@ void fue_pon_proyecto(Proyecto *p)
     g_proyecto = p;
 }
 
+/* RELEER EL MANIFIESTO ANTES DE TOCARLO.
+ *
+ * Esta copia se leyo al arrancar y la madre sigue viva al lado: entre una
+ * cosa y otra puede haber dado de alta una serie o derivado un modelo.
+ * Escribir encima la copia de hace media hora seria perder eso, y no da
+ * error -- el fichero queda bien formado, sin lo que falta.
+ *
+ * Si la relectura falla NO SE TOCA la que hay: un manifiesto roto por fuera
+ * no puede tirarse por delante del que funciona. Devuelve 0 si pudo.  */
+int fue_proyecto_relee(void)
+{
+    Proyecto nuevo;
+    PrError  e;
+
+    if (!g_proyecto || !g_proyecto->path[0]) return 1;
+    if (pr_leer(g_proyecto->path, &nuevo, &e) != 0) return 1;
+    *g_proyecto = nuevo;
+    return 0;
+}
+
 const char *fue_raiz_proyecto(void)
 {
     return g_raiz_proyecto[0] ? g_raiz_proyecto : NULL;

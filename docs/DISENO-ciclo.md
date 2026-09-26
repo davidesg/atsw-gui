@@ -191,10 +191,23 @@ Lo que cambió respecto del esquema, y por qué:
 - **El EPS de anómalos lleva la clave en el nombre.** `lib/preview` reutiliza
   la ventana POR RUTA: con un nombre fijo, abrir dos modelos habría hecho que
   el segundo pisara el dibujo del primero en su propia ventana.
-- **`fue_gui` no ofrece derivar**: sus `guarda` y `abre` van a NULL, y
-  `lib/analisis` entonces no enseña el botón. Derivar toca el manifiesto, y
-  el manifiesto lo lleva la madre. Desde fue_gui se MIRA; para iterar, la
-  lista.
+- **`fue_gui` SÍ deriva**, y la primera versión no. Se dejaron sus `guarda` y
+  `abre` a NULL con el argumento «derivar lo lleva la madre» — pero el botón
+  se enseñaba igual, así que escribía el `.inp` en disco, lo registraba sólo
+  en la memoria de fue_gui y no abría nada: **un huérfano**, y un botón que
+  parecía no hacer nada mientras hacía daño.
+
+  Dos arreglos, y los dos hacían falta. El botón **existe sólo si el
+  anfitrión sabe guardar y abrir** — derivar son tres cosas y media derivación
+  no vale —; y fue_gui aprende a hacer las tres, porque el bucle que se rompía
+  era el bueno: estimar aquí, mirar los residuos aquí y tener que volver a la
+  madre para poner la intervención es el camino largo, que es el que no se
+  recorre.
+
+  Su manifiesto se **relee de disco** antes de derivar: la madre sigue viva al
+  lado, y escribir encima la copia de hace media hora no da error — deja un
+  fichero bien formado sin lo que falta. Y el desplegable enseña sólo lo que
+  el anfitrión sabe abrir (`AnHost.puede`): desde fue_gui no hay editor.
 
 ---
 

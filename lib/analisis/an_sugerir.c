@@ -52,6 +52,7 @@ typedef struct {
     GtkWidget *usa[SG_MAX], *forma[SG_MAX], *linea[SG_MAX];
     GtkWidget *dib[SG_MAX], *nums[SG_MAX];
     GtkWidget *l_estado, *con_que;
+    gboolean   solo_editor;   /* el anfitrion no sabe abrir fue */
 } Sg;
 
 /* LAS CINCO OPCIONES. Las cuatro primeras son escalares --el peldaño 1, una
@@ -293,6 +294,16 @@ static void on_forma( GtkComboBox *c, Sg *g )
 /* Derivar                                                                   */
 /* ------------------------------------------------------------------------ */
 
+/* Lo elegido en el desplegable, que NO siempre tiene las dos: si el
+ * anfitrion sólo sabe una, la lista trae una y el índice 0 es ésa.     */
+static AnHerramienta herramienta_de( Sg *g )
+{
+    int i = gtk_combo_box_get_active( GTK_COMBO_BOX(g->con_que) );
+
+    if ( g->solo_editor ) return AN_CON_EDITOR;
+    return ( i == 1 ) ? AN_CON_EDITOR : AN_CON_FUE;
+}
+
 /* DE DONDE SE PARTE: el .pre si lo hay. Ver la cabecera. */
 static int origen_de( Sg *g, char *out, size_t n )
 {
@@ -446,8 +457,7 @@ static void on_derivar( GtkButton *b, Sg *g )
     g_string_free( razon, TRUE );
 
     /* LA ELECCION SE RECUERDA, y por eso se escribe antes de guardar. */
-    pr_pon_herramienta( g->h.p,
-        gtk_combo_box_get_active( GTK_COMBO_BOX(g->con_que) ) == 1 );
+    pr_pon_herramienta( g->h.p, herramienta_de( g ) == AN_CON_EDITOR );
 
     if ( g->h.guarda && g->h.guarda( g->h.dueno ) != 0 )
         { di( g, "El .inp está en %s, pero no pude guardar el proyecto.", nuevo ); }
@@ -459,8 +469,7 @@ static void on_derivar( GtkButton *b, Sg *g )
     {
     AnHost host = g->h;
     char   serie[PR_ID], muestra[PR_ID], padre[PR_ID];
-    AnHerramienta con = ( gtk_combo_box_get_active( GTK_COMBO_BOX(g->con_que) ) == 1 )
-                      ? AN_CON_EDITOR : AN_CON_FUE;
+    AnHerramienta con = herramienta_de( g );
     gchar *aviso;
 
     g_snprintf( serie, sizeof serie, "%s", g->serie );
@@ -730,11 +739,19 @@ void an_sugerir( const AnHost *h, const char *serie, const char *muestra,
     /* CON QUE SE ABRE EL HIJO. Por defecto fue_gui, porque lo que un nodo
        recién derivado necesita es ESTIMARSE. La elección se recuerda en el
        proyecto, para que no haya que repetirla.                      */
+    {
+    unsigned puede = h->puede ? h->puede : ( AN_PUEDE_FUE | AN_PUEDE_EDITOR );
+
     g->con_que = gtk_combo_box_text_new();
-    gtk_combo_box_text_append_text( GTK_COMBO_BOX_TEXT(g->con_que), "en fue" );
-    gtk_combo_box_text_append_text( GTK_COMBO_BOX_TEXT(g->con_que), "en el editor" );
+    if ( puede & AN_PUEDE_FUE )
+        gtk_combo_box_text_append_text( GTK_COMBO_BOX_TEXT(g->con_que), "en fue" );
+    if ( puede & AN_PUEDE_EDITOR )
+        gtk_combo_box_text_append_text( GTK_COMBO_BOX_TEXT(g->con_que), "en el editor" );
+    g->solo_editor = !( puede & AN_PUEDE_FUE );
     gtk_combo_box_set_active( GTK_COMBO_BOX(g->con_que),
-        ( pr_herramienta( h->p ) == 1 ) ? 1 : 0 );
+        ( !g->solo_editor && ( puede & AN_PUEDE_EDITOR ) &&
+          pr_herramienta( h->p ) == 1 ) ? 1 : 0 );
+    }
     gtk_widget_set_tooltip_text( g->con_que,
         "Con qué se abre el modelo derivado.\n\nfue estima por formulario y "
         "enseña la diagnosis: es lo que un nodo recién derivado necesita a "
@@ -754,13 +771,36 @@ void an_sugerir( const AnHost *h, const char *serie, const char *muestra,
     g_signal_connect_swapped( b, "clicked", G_CALLBACK(gtk_widget_destroy), g->win );
     gtk_box_pack_end( GTK_BOX(barra), b, FALSE, FALSE, 0 );
 
-    b = gtk_button_new_with_label( "Derivar modelo con estas intervenciones" );
-    gtk_widget_set_tooltip_text( b,
-        "Crea un modelo NUEVO, hijo de éste, con las intervenciones escritas "
-        "en su .inp, y lo abre en el editor.\n\nEl padre no se toca: sigue "
-        "estimado y con su .out, que es la mitad «sin» de la comparación." );
-    g_signal_connect( b, "clicked", G_CALLBACK(on_derivar), g );
-    gtk_box_pack_end( GTK_BOX(barra), b, FALSE, FALSE, 0 );
+    /* DERIVAR SOLO SI EL ANFITRION PUEDE TERMINAR EL TRABAJO.
+     *
+     * Derivar son TRES cosas: escribir el .inp, registrarlo en el
+     * manifiesto y abrirlo. Un anfitrión que no sepa guardar deja un
+     * fichero en disco que el proyecto no conoce --un huérfano-- y no abre
+     * nada: el botón parece no hacer nada y en realidad hace daño. Pasó.
+     *
+     * Así que el botón existe cuando existen las tres, y si no, se dice
+     * por qué en vez de dejarlo ahí.                                   */
+    if ( h->abre && h->guarda )
+        {
+        b = gtk_button_new_with_label( "Derivar modelo con estas intervenciones" );
+        gtk_widget_set_tooltip_text( b,
+            "Crea un modelo NUEVO, hijo de éste, con las intervenciones "
+            "escritas en su .inp, y lo abre.\n\nEl padre no se toca: sigue "
+            "estimado y con su .out, que es la mitad «sin» de la comparación." );
+        g_signal_connect( b, "clicked", G_CALLBACK(on_derivar), g );
+        gtk_box_pack_end( GTK_BOX(barra), b, FALSE, FALSE, 0 );
+        }
+    else
+        {
+        GtkWidget *l = gtk_label_new( NULL );
+
+        gtk_label_set_markup( GTK_LABEL(l),
+            "<small>Desde aquí sólo se <b>mira</b>: quien lleva el "
+            "manifiesto es la madre, y derivar lo toca. Hazlo desde su lista "
+            "de modelos.</small>" );
+        gtk_label_set_line_wrap( GTK_LABEL(l), TRUE );
+        gtk_box_pack_end( GTK_BOX(barra), l, FALSE, FALSE, 0 );
+        }
 
     g_signal_connect( g->win, "destroy", G_CALLBACK(on_cerrar), g );
     gtk_widget_show_all( g->win );

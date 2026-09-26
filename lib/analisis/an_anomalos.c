@@ -396,14 +396,24 @@ static void on_sugerir( GtkButton *b, An *g )
         memset( x, 0, sizeof *x );
         x->desde = g->ep[i].desde;
         x->hasta = g->ep[i].hasta;
+        /* EL SUCESO ES EL TRAMO ENTERO, no los períodos que pasan el umbral
+           de declarar.
+        
+           Este filtro era de la regla vieja, cuando un episodio se construía
+           juntando puntos que cruzaban un listón. Con el escáner el tramo YA
+           es la unidad --se declara entero y es sólido por construcción--, y
+           volver a filtrarlo aquí deshacía justo lo que la detección acababa
+           de decidir: en el caso de m04 se marcaban los círculos sobre
+           1-3/2021 y la intervención se fechaba en 2/2021, porque 1/2021
+           (z = 3,01) no llegaba al umbral de DECLARAR. La ventana decía una
+           cosa y proponía otra.                                        */
         for ( t = g->ep[i].desde; t <= g->ep[i].hasta && x->next < AN_MAX_EXT; t++ )
-            if ( fabs( g->z[t] ) >= g->umbral )
-               { x->obs[x->next] = t; x->z[x->next] = g->z[t]; x->next++; }
+            { x->obs[x->next] = t; x->z[x->next] = g->z[t]; x->next++; }
         if ( x->next == 0 ) continue;      /* no puede pasar, pero no se fía */
 
-        /* LA FECHA ES LA DEL PRIMER EXTREMO, y se lee del .out: la fecha
-           contra la que el motor va a construir el regresor es la suya, no
-           una que compongamos nosotros.                                */
+        /* LA FECHA ES LA DEL PRIMER PERIODO DEL TRAMO, y se lee del .out: la
+           fecha contra la que el motor va a construir el regresor es la
+           suya, no una que compongamos nosotros.                       */
         g_snprintf( x->fecha, sizeof x->fecha, "%s", g->o.res_fecha[x->obs[0]] );
         parte_fecha( x->fecha, &anno, &per );
         x->anno = anno;

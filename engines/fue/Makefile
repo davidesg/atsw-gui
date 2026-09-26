@@ -32,7 +32,7 @@ else
 endif
 
 # Compiler flags
-CFLAGS  = -O2 -g -Wall -Iinclude -I../../lib/fugdraw -I../../lib/fugplot -I../../lib/equation -I../../lib/rutas
+CFLAGS  = -O2 -g -Wall -Iinclude -I../../lib/optim -I../../lib/fugdraw -I../../lib/fugplot -I../../lib/equation -I../../lib/rutas
 LDFLAGS +=
 LIBS    = -lm
 
@@ -46,6 +46,7 @@ BIN_DIR   = bin
 # programas -- byte a byte -- y por eso vive en lib/ y no aqui.
 LIB_DIR  = ../../lib
 LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c $(LIB_DIR)/fugplot/fugplot.c \
+           $(LIB_DIR)/dates/dates.c $(LIB_DIR)/optim/lnsrch.c \
            $(LIB_DIR)/rutas/rutas.c \
            $(LIB_DIR)/fugplot/plotsupport.c \
            $(LIB_DIR)/equation/eqlatex.c
@@ -97,6 +98,14 @@ $(BUILD_DIR)/lib_fugplot/%.o: $(LIB_DIR)/fugplot/%.c | $(BUILD_DIR)
 	$(CC) $(ALL_CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/lib_rutas/%.o: $(LIB_DIR)/rutas/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(ALL_CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/lib_dates/%.o: $(LIB_DIR)/dates/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(ALL_CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/lib_optim/%.o: $(LIB_DIR)/optim/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
 	$(CC) $(ALL_CFLAGS) -c $< -o $@
 

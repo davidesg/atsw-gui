@@ -11,52 +11,10 @@ extern FILE *outputv;         /* Output file (global: declared in FUG.C)     */
 
 /*****************************************************************************/
 
-void ObsToDate( int beg_per, int beg_sub, int obs_no, int freq,
-                int *per, int *sub )
-{
-   div_t cad;
-
-   if ( obs_no + beg_sub - 1 <= freq )
-      {
-      *per = beg_per;
-      *sub = beg_sub + obs_no - 1;
-      }
-   else
-      {
-      cad = div( obs_no - (freq - beg_sub + 1), freq );
-      if ( cad.rem > 0 )
-         {
-         *per = beg_per + cad.quot + 1;
-         *sub = cad.rem;
-         }
-      else
-         {
-         *per = beg_per + cad.quot;
-         *sub = freq;
-         }
-      }
-}
+/* ObsToDate and DateToObs live in lib/dates (the copy here was identical). */
 
 /*****************************************************************************/
 
-void DateToObs( int beg_per, int beg_sub, int per, int sub, int freq,
-                int *obs_no )
-{
-   int srest, pcad, sad;
-
-   srest = freq - beg_sub + 1;
-   if ( sub == freq )
-      {
-      pcad = per - beg_per;
-      *obs_no = srest + freq * pcad;
-      }
-   else
-      {
-      pcad = per - beg_per - 1;
-      sad  = sub;
-      *obs_no = srest + freq * pcad + sad;
-      }
-}
 
 /*****************************************************************************/
 
@@ -806,6 +764,14 @@ void File_HistSer( struct Tseries *ser )
                     strcpy( s2, " " );
                     strcat( s1, s2 );
                     }
+                 }
+/*            A count wider than its cell (100+ with nphor = 2, 10000+ with 4)
+              wrote past the row: heap overflow (drvarma BUGS.md, found in
+              drvec). The cell keeps its width and says the count did not fit. */
+              if ( (int) strlen( s1 ) > nphor )
+                 {
+                 memset( s1, '*', nphor );
+                 s1[nphor] = '\0';
                  }
               strcat( aux[j-2], s1 );
               chk[i] = 1;

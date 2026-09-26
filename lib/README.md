@@ -128,6 +128,21 @@ Y los tres bancos, idénticos: 109 corridas y 0 fallos en fue-1.14, 53
 comprobaciones y 0 fallos en el GUI, y 102 pasan y 0 fallan en el corpus de
 conformidad.
 
+## `fuepre/`, `optim/` and `dates/` — added 2026-09-26
+
+- **`fuepre/`**: the `.pre` reader, out of `engines/drtran`, now shared by
+  drtran, its GUI and drvarma 5.0 (the ladder). Its README explains the
+  packing contract and BUG-2.
+- **`optim/lnsrch.c`**: the line search of the quasi-Newton optimiser. It was
+  one function in four copies (drvarma, drtran, fue, fuf) that differed by
+  `a == 0` against `a == 0.0`. It carries the fix for a non-finite objective,
+  which hung the program; each engine supplies an `optimhost.h`. The rest of
+  `qnewtopt.c` stays in each engine, because those copies diverge in what
+  they print. The proof is the same as above: drvarma's `.inp` bench, the
+  golden files of fue and fuf, and 13 drtran outputs, all byte-identical.
+- **`dates/`**: `ObsToDate` and `DateToObs` are no longer copied. fue, fuf,
+  fug, drvarma and the fue GUI link this file; their copies were identical.
+
 ## Lo que falta traer aquí
 
 Por orden de facilidad:

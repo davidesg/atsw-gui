@@ -32,7 +32,7 @@ else
 endif
 
 # Compiler flags
-CFLAGS  = -O2 -g -Wall -Iinclude -I../../lib/fugdraw
+CFLAGS  = -O2 -g -Wall -Iinclude -I../../lib/optim -I../../lib/fugdraw
 LDFLAGS +=
 LIBS    = -lm
 
@@ -45,7 +45,7 @@ BIN_DIR   = bin
 # La biblioteca compartida. fugdraw.c es el mismo fichero en los cuatro
 # programas -- byte a byte -- y por eso vive en lib/ y no aqui.
 LIB_DIR  = ../../lib
-LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c
+LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c $(LIB_DIR)/dates/dates.c $(LIB_DIR)/optim/lnsrch.c
 
 SRCS = $(wildcard $(SRC_DIR)/*.c)
 OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS)) \
@@ -85,6 +85,14 @@ $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 
 # Compile
+$(BUILD_DIR)/lib_dates/%.o: $(LIB_DIR)/dates/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(ALL_CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/lib_optim/%.o: $(LIB_DIR)/optim/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(ALL_CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/lib_fugdraw/%.o: $(LIB_DIR)/fugdraw/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
 	$(CC) $(ALL_CFLAGS) -c $< -o $@

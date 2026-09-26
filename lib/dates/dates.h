@@ -10,9 +10,12 @@
  * de drtran pueda enlazar el lector del motor -- fue_pre_reader.c -- en vez de
  * escribir el septimo lector del formato.
  *
- * ObsToDate salio del diagnose.c de drtran por la misma razon. Sigue copiada
- * en los otros cuatro motores: traerlas es la siguiente mudanza, y hay que
- * comprobar antes que las cinco son la misma cuenta.
+ * ObsToDate salio del diagnose.c de drtran por la misma razon.
+ *
+ * Update 2026-09-26: the copies are gone. fue, fuf, fug, drvarma and the fue
+ * GUI carried ObsToDate and DateToObs in their own diagnose.c / nlutils.c;
+ * all of them were checked to be the same computation (identical bodies) and
+ * now link this file. The drtran GUI's hand-written inverse too.
  */
 
 #ifndef ATSW_DATES_H

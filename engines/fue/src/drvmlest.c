@@ -20,7 +20,8 @@
 /*****************************************************************************/
 
 #include "fue.h"            /* Header file (prototype declarations)          */
-#include "nlatools.h"            /* Header file (prototype declarations)     */
+#include "nlatools.h"
+#include <math.h>            /* Header file (prototype declarations)     */
 extern real macheps;          /* Machine epsilon (global: declared in DRV.C) */
 extern FILE *outputv;         /* Output file (global: declared in DRV.C)     */
 
@@ -172,8 +173,16 @@ real objcfunc( real *x )
 
    if ( ifault > 0 )                            /* ifault = 1-2-3-4-5.       */
       return( 1.0 );
-   else
-      return( pow( (pi1 / pi10x), varmax.m ) * (pi2 / pi20x) );
+
+/* A point whose objective is not finite is inadmissible, exactly like an     */
+/* elf ifault: return 1.0 (the article's strategy, sec. 3). Without this the  */
+/* line search received the NaN and never returned (drvarma BUGS.md). As in   */
+/* drtran and drvarma.                                                        */
+   {
+   real f = pow( (pi1 / pi10x), varmax.m ) * (pi2 / pi20x);
+   if ( !isfinite( f ) ) return( 1.0 );
+   return( f );
+   }
 }
 
 /*****************************************************************************/

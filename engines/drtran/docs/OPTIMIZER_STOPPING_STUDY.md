@@ -3,6 +3,12 @@
 **Dates:** 2026-08-04 / 2026-08-05.
 **Outcome: DIAGNOSED, NOT FIXED. The optimiser is unchanged and stays that way**
 until there is a proven better alternative.
+**Note 2026-09-26:** one change was made since, and it is not a change to the
+stopping tests. The line search (`lnsrch`) never returned when the objective
+was NaN or infinite. It now treats such a point as inadmissible, and it lives
+once in `lib/optim/lnsrch.c` for drvarma, drtran, fue and fuf. On every finite
+trajectory the arithmetic is the original's: the benches are byte-identical.
+
 **Scope:** `qnewtopt.c` (`raxopt`, `umstop`, `umstop0`, `cdgrad`, `fdhess`) and
 its faithful Python port `drvarma/_qnewt.py` — shared by `drtran`, `drvarma`
 (`sima`) and, through them, `mtram`.

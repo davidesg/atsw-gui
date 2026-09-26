@@ -10,7 +10,7 @@
 # Uses the drvarma exact-VARMA likelihood engine
 
 CC       = gcc
-CFLAGS   = -Wall -Wextra -O2 -fPIC -Iinclude -I../../lib/fuepre -I../../lib/dates -I../../lib/prewhiten -I../../lib/netfile -I../../lib/slots -I../../lib/rutas
+CFLAGS   = -Wall -Wextra -O2 -fPIC -Iinclude -I../../lib/fuepre -I../../lib/optim -I../../lib/dates -I../../lib/prewhiten -I../../lib/netfile -I../../lib/slots -I../../lib/rutas
 LDFLAGS  = -lgsl -lgslcblas -lm
 
 SRCDIR   = src
@@ -22,6 +22,7 @@ SRCS = $(SRCDIR)/drtran.c       \
        $(SRCDIR)/tran_shootx.c  \
        ../../lib/fuepre/fue_pre_reader.c \
        ../../lib/fuepre/fuepre_motor.c \
+       ../../lib/optim/lnsrch.c \
        $(SRCDIR)/elfvarma.c     \
        $(SRCDIR)/drvmlest.c     \
        $(SRCDIR)/qnewtopt.c     \

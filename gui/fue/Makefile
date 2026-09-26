@@ -57,6 +57,7 @@ BIN_DIR   = bin
 # programas -- byte a byte -- y por eso vive en lib/ y no aqui.
 LIB_DIR  = ../../lib
 LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c \
+           $(LIB_DIR)/dates/dates.c \
            $(LIB_DIR)/fugplot/fugplot.c \
            $(LIB_DIR)/fugplot/plotsupport.c \
            $(LIB_DIR)/analisis/plotstats.c \
@@ -185,6 +186,10 @@ $(BUILD_DIR)/lib_datos/%.o: $(LIB_DIR)/datos/%.c | $(BUILD_DIR)
 	$(CC) $(ALL_CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/lib_utils/%.o: $(LIB_DIR)/utils/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(GUI_CFLAGS) $(DEPFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/lib_dates/%.o: $(LIB_DIR)/dates/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
 	$(CC) $(GUI_CFLAGS) $(DEPFLAGS) -c $< -o $@
 

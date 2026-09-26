@@ -32,7 +32,8 @@ MXE_CC      = $(MXE)/usr/bin/$(MXE_TARGET)-gcc
 MXE_PKG     = $(MXE)/usr/bin/$(MXE_TARGET)-pkg-config
 
 SRC = src/fug.c src/diagnose.c src/delop.c src/nlutils.c src/port.c \
-      ../../lib/fugdraw/fugdraw.c ../../lib/fugplot/fugplot.c src/inpfile.c
+      ../../lib/fugdraw/fugdraw.c ../../lib/fugplot/fugplot.c src/inpfile.c \
+      ../../lib/dates/dates.c
 HDR = src/fug.h src/delop.h src/port.h ../../lib/fugdraw/fugdraw.h ../../lib/fugplot/fugplot.h ../../lib/fugdraw/fd_metrics.h src/inpfile.h src/plothost.h
 
 

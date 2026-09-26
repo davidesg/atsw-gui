@@ -332,6 +332,28 @@ $CC -O2 -Wall -Wextra -I"$L/anomalos" \
     -o "$W/test_anomalos" -lm || exit 1
 "$W/test_anomalos" || exit 1
 
+# --- la forma de la intervencion: el diccionario de la FLT ------------------
+# La MISMA firma se lee al reves segun la d, y eso es todo el contenido del
+# modulo: un par compensado es un impulso en el operador y un escalon en el
+# nivel. No hace falta fichero ninguno.
+echo
+$CC -O2 -Wall -Wextra -I"$L/intervencion" \
+    "$L/intervencion/test_intervencion.c" "$L/intervencion/intervencion.c" \
+    -o "$W/test_intervencion" -lm || exit 1
+"$W/test_intervencion" || exit 1
+
+# --- el bloque de deterministas del .inp ------------------------------------
+# Se barren los 114 ficheros del corpus del MOTOR, no tres hechos a mano:
+# añadir cero deterministas tiene que devolver cada uno byte a byte igual. Y
+# el juez de lo que se escribe es inp_check_fue, la puerta del propio motor.
+echo
+$CC -O2 -Wall -Wextra -I"$L/inpdet" -I"$L/inpcheck" \
+    -I"$TOP/../../engines/fue/include" -Dinp_check=inp_check_fue \
+    "$L/inpdet/test_inpdet.c" "$L/inpdet/inpdet.c" \
+    "$TOP/../../engines/fue/src/inpcheck.c" \
+    -o "$W/test_inpdet" -lm || exit 1
+"$W/test_inpdet" "$TOP/../../engines/fue/tests/corpus" || exit 1
+
 # --- el dictamen: leer no es juzgar -----------------------------------------
 # Los umbrales se prueban SIN fichero, con numeros inventados: eso es lo que
 # se gana separando el lector del que juzga.

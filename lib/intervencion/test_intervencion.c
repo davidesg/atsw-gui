@@ -296,6 +296,47 @@ int main( void )
     ok( pl.forma == IV_ESCALON, "la lectura escalar no se pierde al subir" );
     }
 
+    printf( "\nTREADWAY PREGUNTA POR EL VECINO, NO POR LA VENTANA\n" );
+    /* EL CASO REAL, IPC_ES m03, el escalon de 6/2022: explica su periodo
+       entero y sus vecinos quedan en 1.46 y 0.84. Pero en la ventana del
+       dibujo caia el +4.57 de 1/2023 --OTRO episodio, con su propia fila--
+       y con el se subia a dos omegas un suceso que es un escalon solo. */
+    {
+    /* la ventana real: 12/2021 .. 1/2023, el suceso en el indice 6 */
+    double v[14] = { 2.77, 1.14, 1.84, 0.00, 0.00, 1.46, 4.05,
+                     0.84, 0.09, -1.64, -2.66, -0.98, 0.34, 4.57 };
+    double h[14];
+    IvAjuste aj;
+    int    j, suceso = 6;
+    double ventana = 0.0, vecino = 0.0;
+
+    iv_huella( IV_ESCALON, suceso, 1, 0, 12, 0, h, 14 );
+    iv_ajusta( h, v, 14, &aj );
+    for ( j = 0; j < 14; j++ )
+        {
+        double r = v[j] - aj.escala * h[j];
+
+        if ( fabs( r ) > fabs( ventana ) ) ventana = r;
+        if ( j >= suceso - 1 && j <= suceso + 1 && fabs( r ) > fabs( vecino ) )
+            vecino = r;
+        }
+    ok( fabs( ventana ) > 4.0, "en la VENTANA sobrevive un +4.57..." );
+    ok( fabs( vecino ) < 2.0, "...pero al lado del suceso no queda nada" );
+    printf( "        ventana %+.2f   vecino %+.2f\n", ventana, vecino );
+
+    {
+    IvPlan pl;
+    IvExtremo e2[1];
+
+    e2[0].obs = suceso; e2[0].z = 4.05;
+    iv_plan( e2, 1, 1, ventana, 2.0, &pl );
+    ok( pl.peldano == 2, "con el resto de la ventana se subia de peldaño" );
+    iv_plan( e2, 1, 1, vecino, 2.0, &pl );
+    ok( pl.peldano == 1 && pl.nesc == 1,
+        "y con el del vecino se queda en UN escalon, que es lo que es" );
+    }
+    }
+
     printf( "\n%d fallos\n", fallos );
     return fallos ? 1 : 0;
 }

@@ -126,6 +126,40 @@ static void repinta_linea( Sg *g, int k )
 
 /* fit[0..nwin-1] es lo que la forma elegida QUITARIA de los residuos: la
  * combinación ya ajustada, sea un escalón solo o los L+1 del episodio.  */
+/* EL RESTO QUE DECIDE ES EL DEL SUCESO Y SUS VECINOS, no el de la ventana.
+ *
+ * La ventana del dibujo llega a +-6 periodos para que se vea el entorno, y
+ * ahi caben OTROS episodios. Sus residuos sobreviven al ajuste --claro, son
+ * otro suceso-- y Treadway concluia que la forma «deja un anomalo al lado»
+ * cuando no lo dejaba.
+ *
+ * Medido sobre IPC_ES m03, el escalon de 6/2022: explica su periodo entero
+ * --queda +0.00-- y sus vecinos quedan en 1.46 y 0.84. Pero en la ventana
+ * estaba el +4.57 de 1/2023, que es otro episodio con su propia fila, y con
+ * el se subia a dos omegas un suceso que es un escalon solo.
+ *
+ * Treadway pregunta por EL VECINO: art mira z_antes y z_despues, no un
+ * entorno. Aqui se mira el tramo del suceso y un periodo a cada lado.   */
+static double resto_vecino( Sg *g, int k, const double *fit )
+{
+    const AnSuceso *x = &g->s[k];
+    double          peor = 0.0;
+    int             i, a, b;
+
+    a = x->desde - x->base - 1;
+    b = x->hasta - x->base + 1;
+    if ( a < 0 ) a = 0;
+    if ( b > x->nwin - 1 ) b = x->nwin - 1;
+
+    for ( i = a; i <= b; i++ )
+        {
+        double r = x->zwin[i] - fit[i];
+
+        if ( fabs( r ) > fabs( peor ) ) peor = r;
+        }
+    return peor;
+}
+
 static int ajuste_de( Sg *g, int k, double *fit, IvAjuste *aj )
 {
     const AnSuceso *x = &g->s[k];
@@ -250,20 +284,30 @@ static gboolean pinta( GtkWidget *w, cairo_t *cr, Sg *g )
 /* LOS TRES NUMEROS, que se leen sin mirar la figura. */
 static void di_numeros( Sg *g, int k )
 {
-    double   fit[AN_VENTANA_Z];
+    double   fit[AN_VENTANA_Z], local;
     IvAjuste aj;
     GString *t;
 
     if ( ajuste_de( g, k, fit, &aj ) != 0 ) return;
 
+    local = resto_vecino( g, k, fit );
+
     t = g_string_new( "<small>" );
-    g_string_append_printf( t, "escala <b>%.2f</b> · R² <b>%.2f</b> · mayor "
-                               "resto <b>%+.2f</b> — ", aj.escala, aj.r2, aj.resto );
-    if ( fabs( aj.resto ) >= g->s[k].umbral )
-        g_string_append( t, "<span foreground=\"#b51c17\">queda un extremo: "
-                            "esta forma no cubre el suceso</span>" );
+    g_string_append_printf( t, "escala <b>%.2f</b> · R² <b>%.2f</b> · en el "
+                               "suceso y sus vecinos queda <b>%+.2f</b> — ",
+                            aj.escala, aj.r2, local );
+    if ( fabs( local ) >= g->s[k].umbral )
+        g_string_append( t, "<span foreground=\"#b51c17\">queda un extremo "
+                            "al lado: esta forma no cubre el suceso</span>" );
     else
-        g_string_append( t, "no sobrevive ningún extremo" );
+        g_string_append( t, "no sobrevive ningún extremo al lado" );
+
+    /* Lo que queda MAS ALLA del suceso no decide, pero se dice: casi
+       siempre es otro episodio, y verlo en rojo sin explicación confunde. */
+    if ( fabs( aj.resto ) >= g->s[k].umbral &&
+         fabs( aj.resto ) > fabs( local ) + 1e-9 )
+        g_string_append_printf( t, "  <i>(en el resto de la ventana hay un "
+                                   "%+.2f, de otro suceso)</i>", aj.resto );
 
     /* POR QUE SUBIR, dicho aunque estés mirando el peldaño de abajo: es la
        razón la que manda, no la opción que tengas puesta.            */
@@ -542,7 +586,22 @@ void an_sugerir( const AnHost *h, const char *serie, const char *muestra,
              iv_huella( g->l[k].forma, suc[k].obs[0], d, D, freq,
                         suc[k].base, h, suc[k].nwin ) == 0 &&
              iv_ajusta( h, suc[k].zwin, suc[k].nwin, &aj ) == 0 )
-            resto = aj.resto;
+            {
+            /* EL SUCESO Y UN PERIODO A CADA LADO, no la ventana entera: en
+               la ventana caben otros episodios, y sus residuos sobreviven
+               al ajuste porque son otra cosa. Ver resto_vecino().     */
+            int j, a = suc[k].desde - suc[k].base - 1;
+            int b = suc[k].hasta - suc[k].base + 1;
+
+            if ( a < 0 ) a = 0;
+            if ( b > suc[k].nwin - 1 ) b = suc[k].nwin - 1;
+            for ( j = a; j <= b; j++ )
+                {
+                double r = suc[k].zwin[j] - aj.escala * h[j];
+
+                if ( fabs( r ) > fabs( resto ) ) resto = r;
+                }
+            }
         iv_plan( e, suc[k].next, d, resto, suc[k].umbral, &g->plan[k] );
         }
         }
@@ -634,9 +693,14 @@ void an_sugerir( const AnHost *h, const char *serie, const char *muestra,
 
         raz = gtk_label_new( NULL );
         {
-        gchar *t = g->l[k].aviso[0]
+        /* LA RAZON DE LA FORMA MARCADA, no la de la lectura escalar a secas.
+           Con el peldaño 2 seleccionado y debajo un texto que dice «esto es
+           un escalón», la ventana se contradecia a si misma.          */
+        const char *extra = g->plan[k].subir[0] ? g->plan[k].subir
+                                                : g->l[k].aviso;
+        gchar *t = extra[0]
                  ? g_markup_printf_escaped( "<small>%s\n<i>%s</i></small>",
-                                            g->l[k].razon, g->l[k].aviso )
+                                            g->l[k].razon, extra )
                  : g_markup_printf_escaped( "<small>%s</small>", g->l[k].razon );
 
         gtk_label_set_markup( GTK_LABEL(raz), t );

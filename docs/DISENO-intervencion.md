@@ -132,6 +132,20 @@ informe):
 El tercero es el que decide, y es el **criterio de Treadway** para subir de
 peldaño — visto aquí antes de gastar una estimación.
 
+**Y se mide sobre el suceso y sus vecinos, no sobre la ventana.** La ventana
+del dibujo llega a ±6 períodos para que se vea el entorno, y ahí caben *otros*
+episodios: sus residuos sobreviven al ajuste —claro, son otro suceso— y
+Treadway concluía que la forma «deja un anómalo al lado» cuando no lo dejaba.
+
+El caso que lo destapó, IPC\_ES m03, el escalón de **6/2022**: explica su
+período entero —queda +0,00— y sus vecinos quedan en 1,46 y 0,84. Pero en la
+ventana caía el **+4,57 de 1/2023**, que es otro episodio con su propia fila,
+y con él se subía a dos ω un suceso que es un escalón solo.
+
+Treadway pregunta por **el vecino**: art mira `z_antes` y `z_despues`, no un
+entorno. Lo que queda más allá se sigue dibujando —es informativo— pero se
+dice que es de otro suceso y no decide.
+
 **Dónde no llega**, dicho en la propia ventana: la superposición **no**
 distingue una forma correcta de otra que deja una cola permanente pequeña. El
 R² apenas se mueve, porque la diferencia está en la ganancia a largo plazo, que

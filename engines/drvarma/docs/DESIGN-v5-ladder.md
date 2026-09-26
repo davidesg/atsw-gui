@@ -17,14 +17,15 @@ the `.inp` path must reproduce it byte for byte.
 
     drvarma A.pre B.pre [C.pre ...] p q [-diagcov] [-redet] [-fixarma]
                                         [-m method] [-o NAME]
+                                        [-forecast H [-estwin N]]
 
 If the first argument ends in `.pre`, the program runs in ladder mode (the
 code lives in `src/escalera.c`). Otherwise it is the usual 0.4.1 program
 (`drvarma file p q ...`).
 
-Options of the `.inp` path that the ladder does not take yet (`-forecast`,
-`-estwin`) are rejected with an explicit error rather than ignored. So are
-those that the `.pre` already settles (`-mean`, `-deseason`, `-scale`).
+Options of the `.inp` path that the `.pre` already settles (`-mean`,
+`-deseason`, `-scale`) are rejected with an explicit error rather than
+ignored. Forecasting is §8.
 
 ## 2. The model
 
@@ -166,16 +167,50 @@ by:
   - the line search returns on a NaN or infinite objective.
 - `engines/drtran/test_battery.sh` §16: BUG-2 in drtran.
 
-## 8. Not in phase 1
+## 8. Forecasting (phase 2)
 
-- **Forecasting in ladder mode** (`-forecast`, `-estwin`). Each row has to be
-  integrated with its own operator, the deterministic terms added back (they
-  are known functions of time, `build_det_component`) and each λᵢ inverted.
-  The reference is in the bench: the CSVs `cases/*/work/*_recursive_eval*.csv`
-  are fue's univariate fixed-parameter forecasts, and the diagonal system has
-  to reproduce them.
-- The block Wald tests of the `.inp` path.
-- Ladder mode in the GUI.
+    -forecast H            H periods from the end of the estimation sample
+    -forecast H -estwin N  estimate on the first N observations of the first
+                           series, then forecast from every origin to the end
+
+The system forecasts the stationary series w (`forecast_model`, with the
+exact residuals: `elf` with `atf = TRUE`). Each series goes back to its
+**level** with its own `.pre` model, through `lib/fuepre/fuepre_forecast.c`:
+
+- the deterministic terms, which are known functions of time
+  (`build_det_component`);
+- the integration with its operator `rnsop`;
+- the inverse Box-Cox, with its rescaling factor.
+
+That code was inside drtran and now serves both engines: drtran's forecasts
+are byte-identical after the move.
+
+The 95% band is computed on the transformed scale and mapped back through the
+inverse Box-Cox. It uses the psi weights of the VARMA integrated with
+1/`rnsop`ᵢ(B) and Σ = σ²Q. The same weights, differenced at lag 1 and at lag
+s, give the standard deviations of the period and annual variations.
+
+With `-estwin`, the parameters are estimated once and held **fixed**. At every
+origin the stationary series and the exact residuals are rebuilt on the data
+up to that origin, which is what fue does when it forecasts from a `.fuf`. The
+output is:
+
+- `NAME.forecast`: the forecast from the end of the estimation window, in the
+  format of the `.inp` path;
+- `NAME.recursive`: one line per origin, series and horizon;
+- the MAE, RMSE and MAPE by series and horizon in the `.out`.
+
+**The check.** The diagonal system (`p = q = 0`, `-diagcov`) on the three CPI
+series, with the data extended to 2023-11 (`tests/escalera/data`), reproduces
+fue's fixed-parameter forecasts. That covers 3 series × 48 origins × 24
+horizons = 3456 values, with a maximum relative difference of 2.3e-6, which
+comes from the re-estimated parameters moving ~3e-5 from the `.pre`. The
+reference is today's fue. The CSVs in `cases/*/work/*_recursive_eval*.csv`
+came from an older fue and do not agree with it: at origin 12/2019, h=1,
+IPC_ES gives 97.1389 there and 97.0785 in today's fue and in the ladder.
+
+Not yet: the block Wald tests of the `.inp` path; the ladder mode in the GUI;
+forecasts conditional on a scenario for one of the series.
 
 ## 9. Where drvarma enters: a cycle is where drtran ends
 

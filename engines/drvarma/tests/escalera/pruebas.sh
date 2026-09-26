@@ -98,11 +98,11 @@ else
 fi
 
 # 8. lo que la escalera todavia no hace es un error, no un silencio
-"$BIN" "$ES" "$FR" 1 0 -forecast 12 > "$TMP/fc.log" 2>&1
+"$BIN" "$ES" "$FR" 1 0 -deseason > "$TMP/ds.log" 2>&1
 rc=$?
-[ $rc -eq 1 ] && grep -q "not available in ladder mode" "$TMP/fc.log" \
-    && bien "-forecast en la escalera: error explicito" \
-    || falla "-forecast en la escalera: rc=$rc"
+[ $rc -eq 1 ] && grep -q "not available in ladder mode" "$TMP/ds.log" \
+    && bien "-deseason en la escalera: error explicito (la transformacion es del .pre)" \
+    || falla "-deseason en la escalera: rc=$rc"
 
 # 9. el pass-through WTI -> IPC_ES, como lo midio el banco por la via .inp
 "$BIN" "$WTI" "$ES" 1 0 -o "$TMP/pt" > "$TMP/pt.log" 2>&1
@@ -140,11 +140,47 @@ EOF
     fi
 fi
 
+# 10b. LA PREVISION (fase 2): el sistema diagonal con -estwin 216 tiene que
+#      dar las previsiones de fue con parametros fijos, en todos los origenes
+#      (12/2019..11/2023) y horizontes (1..24): 3456 valores. La referencia es
+#      fue de hoy (data/make_fue_reference.py); los CSV de cases/ son de un
+#      fue anterior y no coinciden con el actual.
+DX=tests/escalera/data
+"$BIN" $DX/IPC_ES_ext.pre $DX/IPC_FR_ext.pre $DX/IPC_DE_ext.pre 0 0 -diagcov \
+    -forecast 24 -estwin 216 -o "$TMP/fc" > "$TMP/fc.log" 2>&1
+rc=$?
+[ $rc -eq 0 ] && bien "prevision recursiva del diagonal: rc=0" || falla "prevision recursiva: rc=$rc"
+r=$(python3 - "$TMP/fc.recursive" $DX/fue_recursive_reference.csv <<'PY'
+import sys
+def load(p):
+    d = {}
+    for l in open(p).read().splitlines():
+        t = l.replace(',', ' ').split()
+        if len(t) == 4 and t[2].isdigit():
+            d[(t[0], t[1], int(t[2]))] = float(t[3])
+    return d
+our, ref = load(sys.argv[1]), load(sys.argv[2])
+miss = [k for k in ref if k not in our]
+worst = max(abs(our[k] - v) / abs(v) for k, v in ref.items() if k in our)
+print(len(ref), len(miss), "%.3g" % worst)
+PY
+)
+set -- $r
+if [ "$1" = 3456 ] && [ "$2" = 0 ] && python3 -c "import sys; sys.exit(0 if $3 < 1e-5 else 1)"; then
+    bien "las 3456 previsiones coinciden con fue (error relativo maximo $3)"
+else
+    falla "previsiones contra fue: $r (n, faltan, error relativo maximo)"
+fi
+"$BIN" "$ES" "$FR" 0 0 -estwin 100 > "$TMP/ew.log" 2>&1
+rc=$?
+[ $rc -eq 1 ] && grep -q "needs a horizon" "$TMP/ew.log" \
+    && bien "-estwin sin -forecast: error explicito" || falla "-estwin sin -forecast: rc=$rc"
+
 # 11. la regresion de la salida de la 5.0
 REF=$AQUI/ref
-filtro() { grep -av '^Program          : \|^Output File      : \|^  \[[0-9]*\] \|^Full results written to ' "$1"; }
-for caso in g1 pt corto; do
-    for ext in out log; do
+filtro() { grep -av '^Program          : \|^Output File      : \|^  \[[0-9]*\] \|^Full results written to \|^Forecasts written to \|^Recursive forecasts written to ' "$1"; }
+for caso in g1 pt corto fc; do
+    for ext in out log forecast; do
         f=$TMP/$caso.$ext
         [ -f "$f" ] || continue
         if [ "$MODO" = --generar ]; then

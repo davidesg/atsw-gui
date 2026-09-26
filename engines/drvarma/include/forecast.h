@@ -60,4 +60,9 @@ void forecast_level_variances(int m, int p, int q, real ***phi, real ***theta,
                               real **sigma, int L, int d, int D, int s,
                               real ***v_level, real ***v_mon, real ***v_ann);
 
+/* The psi weights of the VARMA, psi[0..L][1..m][1..m] (psi[0] = I). The
+   ladder integrates them with each series's own operator for its bands. */
+void compute_psi_weights(int m, int p, int q, real ***phi, real ***theta,
+                         int L, real ***psi);
+
 #endif

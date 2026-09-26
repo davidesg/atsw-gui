@@ -1,0 +1,33 @@
+Model            : VARMA with univariate diagonals; cross orders p=0 q=0
+Innovation cov.  : diagonal
+Deterministics   : fixed at the .pre
+Univariate ARMA  : re-estimated jointly
+Estimation method: 1
+Frequency        : 12
+Common window    : 2/2002 - 12/2019  (215 stationary observations)
+Estimation window: the first 216 observations of IPC_ES; parameters
+                   fixed, forecasts from every origin to 11/2023
+Forecast horizon : 24
+
+Univariate models (one .pre per series):
+  #   series           nobs     start       end  lambda operator      det AR               MA               mean
+  1   IPC_ES            216    1/2002   12/2019       0 D              11 (1)              -                estimated
+  2   IPC_FR            216    1/2002   12/2019       0 D              11 (1)_12           -                estimated
+  3   IPC_DE            216    1/2002   12/2019       0 D              11 (3)(1)_12        -                estimated
+
+=============================================================
+  THE DIAGONAL GATE
+  Each series alone (same window, same cast), then the diagonal
+  system evaluated at those optima: the two must agree exactly.
+=============================================================
+  series                     logL         sigma2      max|move|
+  IPC_ES                -7.402649      0.0626721       2.32e-05
+  IPC_FR                54.034641      0.0353445       3.52e-05
+  IPC_DE                11.205688      0.0526518       3.74e-05
+  SUM                   57.837681
+  joint diagonal        57.837681
+  difference             2.84e-13
+  GATE: PASSED
+
+Number of parameters: 11
+Exact log-likelihood: 57.837681

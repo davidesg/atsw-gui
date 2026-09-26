@@ -60,7 +60,8 @@ OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS))
 # the univariate transformations and the date helpers. One source each.
 LIB_DIR  = ../../lib
 LIB_OBJS = $(BUILD_DIR)/fue_pre_reader.o $(BUILD_DIR)/fuepre_motor.o \
-           $(BUILD_DIR)/prewhiten.o $(BUILD_DIR)/dates.o $(BUILD_DIR)/lnsrch.o
+           $(BUILD_DIR)/prewhiten.o $(BUILD_DIR)/dates.o $(BUILD_DIR)/lnsrch.o \
+           $(BUILD_DIR)/fuepre_forecast.o
 
 # GUI source and objects
 GUI_SRC        = $(GUI_DIR)/drvarma_gui.c

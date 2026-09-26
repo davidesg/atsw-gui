@@ -138,6 +138,8 @@ diagonal of the system; `p`/`q` add the dynamics between series. Options:
 | `-fixarma` | keep the univariate ARMA factors fixed |
 | `-m 1\|2` | exact / approximate likelihood |
 | `-o NAME` | results to `NAME.out` (default: the `.pre` names joined by `_`) |
+| `-forecast H` | forecast H periods, every series in its level → `NAME.forecast` |
+| `-estwin N` | estimate on the first N observations of the first series, then fixed-parameter forecasts from every origin to the end → `NAME.recursive`, with MAE/RMSE/MAPE by series and horizon in the `.out` (needs `-forecast`) |
 
 The `.out` starts with the **diagonal gate**: each series fitted alone, the
 sum of their log-likelihoods, and the diagonal system evaluated at those
@@ -149,9 +151,20 @@ Then the requested model, with an LR test of the cross dynamics against the
 diagonal system.
 
 Series must have the same frequency and end on the same date; different
-starting dates are aligned at the end. `-forecast`, `-estwin`, `-mean`,
-`-deseason` and `-scale` are rejected in this mode: the transformation comes
-from each `.pre`, and forecasting comes later.
+starting dates are aligned at the end. `-mean`, `-deseason` and `-scale` are
+rejected in this mode: the transformation comes from each `.pre`.
+
+To judge a VARMA, compare its recursive evaluation with the diagonal
+system's on the same data and window:
+
+```
+drvarma ES.pre FR.pre DE.pre 0 0 -diagcov -forecast 24 -estwin 216 -o diag
+drvarma ES.pre FR.pre DE.pre 1 0          -forecast 24 -estwin 216 -o var1
+```
+
+The diagonal system is the univariate models, and it reproduces fue's
+forecasts. A VARMA that does not improve on it out of sample has no reason to
+exist, however significant its cross terms are in sample.
 
 ## 7. Graphical interface
 

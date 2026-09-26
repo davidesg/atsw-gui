@@ -32,6 +32,12 @@ Hallazgos metodológicos:
 
 Previsión recursiva (params fijos, orígenes 12/2019→12/2021, h=1/12/24; n=25/25/24). MAPE:
 
+> **Note 2026-09-27.** These CSVs (`cases/*/work/*_recursive_eval*.csv`) were
+> produced by an older fue and do not agree with today's. At origin 12/2019,
+> h=1, IPC_ES gives 97.1389 in the CSV and 97.0785 in today's fue and in
+> drvarma 5.0's ladder mode; the table below may therefore be off. The
+> current reference is `tests/escalera/data/fue_recursive_reference.csv`.
+
 | h | IPC_FR | IPC_ES | IPC_DE |
 |---|-------:|-------:|-------:|
 | 1 | 0.24% | 0.37% | 0.31% |

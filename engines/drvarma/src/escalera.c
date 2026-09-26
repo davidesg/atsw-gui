@@ -36,6 +36,7 @@
 #include "prewhiten.h"
 #include "escalera.h"
 #include "version.h"
+#include "forecast.h"
 #include <string.h>
 #include <math.h>
 
@@ -570,6 +571,276 @@ static void print_sigma(FILE *f, Fit *F)
 }
 
 /* ------------------------------------------------------------------------- */
+/*  Forecasting (phase 2)                                                    */
+/*                                                                           */
+/*  The system forecasts the stationary series w. Each series goes back to   */
+/*  its LEVEL with its own .pre model, through lib/fuepre (the same code as  */
+/*  drtran): deterministic terms, integration with its operator, inverse     */
+/*  Box-Cox. The bands come from the psi weights of the VARMA integrated     */
+/*  with 1/rnsop(B) and Sigma = sigma2 Q, on the transformed scale, and are  */
+/*  mapped back through the inverse Box-Cox.                                 */
+/*                                                                           */
+/*  The forecast is made from the CURRENT end of each series (Ts[i].nobs):   */
+/*  the recursive evaluation moves that end and calls again, with the        */
+/*  parameters fixed. At every origin the stationary series and the exact    */
+/*  residuals are rebuilt on the data up to that origin, as fue does when it */
+/*  forecasts from a .fuf.                                                   */
+/* ------------------------------------------------------------------------- */
+static int nobs_full[ESC_MAX + 1];
+
+typedef struct {
+    int   nb;                  /* history used: obs 1..nb of the series    */
+    real *ystar;               /* 1..nb+L: transformed level, det included */
+    real *lvl, *lo, *hi;       /* 1..L: level and 95% band                 */
+    real *sd, *sdp, *sda;      /* 1..L: sd of the transformed level, of its */
+                               /* period and of its annual variation       */
+} Fc;
+
+static void fc_alloc(Fc *c, int nb, int L)
+{
+    c->nb = nb;
+    c->ystar = vector(1, nb + L);
+    c->lvl = vector(1, L); c->lo = vector(1, L); c->hi = vector(1, L);
+    c->sd = vector(1, L);  c->sdp = vector(1, L); c->sda = vector(1, L);
+}
+
+static void fc_free(Fc *c, int L)
+{
+    free_vector(c->sda, 1, L); free_vector(c->sdp, 1, L); free_vector(c->sd, 1, L);
+    free_vector(c->hi, 1, L);  free_vector(c->lo, 1, L);  free_vector(c->lvl, 1, L);
+    free_vector(c->ystar, 1, c->nb + L);
+}
+
+/* var at lead l of SUM_t V(t) a_{l-t}, V(t) = P(t) - P(t-d) (d = 0: P(t)) */
+static real lead_var(real **P, real **sigma, int m, int l, int d)
+{
+    real v = 0.0;
+    int  t, j, k;
+    for (t = 0; t < l; t++)
+        for (j = 1; j <= m; j++) {
+            real pj = P[j][t] - ((d > 0 && t >= d) ? P[j][t - d] : 0.0);
+            if (pj == 0.0) continue;
+            for (k = 1; k <= m; k++) {
+                real pk = P[k][t] - ((d > 0 && t >= d) ? P[k][t - d] : 0.0);
+                v += pj * sigma[j][k] * pk;
+            }
+        }
+    return v;
+}
+
+/* Forecast L steps from the current end of every active series, with the
+   parameters x (fixed) and the concentrated sigma2. fc[1..act_m]. 0 = ok. */
+static int esc_forecast(real *x, real sigma2, int L, Fc *fc)
+{
+    struct Tvarma vf;
+    int    ifault = 0, ifa = 0, m = act_m, a, b, j, k, l, t;
+    real   pi1, pi2, pi3, **sigma, **f1, ***v1, ***v2, ***v3, ***psi, **P, *uu;
+
+    if (build_stationary() != 0) return 1;
+    shootx_esc(x, &vf, &ifault, 1, 0);
+    if (ifault) { shootx_esc(x, &vf, &ifault, 0, 1); return 2; }
+
+    /* the EXACT residuals (atf = TRUE): the MA part forecasts with them */
+    elf(vf.m, vf.n, vf.p, vf.q, vf.mu, vf.phi, vf.theta, vf.qq, vf.w, 1.0,
+        xitol_met, TRUE, vf.a, &pi1, &pi2, &pi3, &ifa);
+    if (ifa) { shootx_esc(x, &vf, &ifault, 0, 1); return 3; }
+
+    sigma = matrix(1, m, 1, m);
+    for (a = 1; a <= m; a++)
+        for (b = 1; b <= m; b++) sigma[a][b] = sigma2 * vf.qq[a][b];
+
+    f1 = matrix(1, m, 1, L);
+    v1 = tensor(1, L, 1, m, 1, m);
+    v2 = tensor(1, L, 1, m, 1, m);
+    v3 = tensor(1, L, 1, m, 1, m);
+    forecast_model(m, n_stat, vf.p, vf.q, vf.mu, vf.phi, vf.theta, sigma,
+                   vf.w, vf.a, f1, v1, v2, v3, 0, L, data_freq, NULL);
+    psi = tensor(0, L, 1, m, 1, m);
+    compute_psi_weights(m, vf.p, vf.q, vf.phi, vf.theta, L, psi);
+
+    P  = matrix(1, m, 0, L);
+    uu = vector(0, L);
+    for (a = 1; a <= m; a++) {
+        int i = act[a];
+        Fc *c = &fc[a];
+
+        fuepre_level_forecast(&Tm[i], &Ts[i], Ts[i].nobs, f1[a], L,
+                              c->ystar, c->lvl, NULL);
+
+        /* psi of the transformed level of series i: 1/rnsop_i(B) psi_w(B) */
+        fuepre_integrator(&Tm[i], L, uu);
+        for (j = 1; j <= m; j++)
+            for (t = 0; t <= L; t++) {
+                real acc = 0.0;
+                for (k = 0; k <= t; k++) acc += uu[k] * psi[t - k][a][j];
+                P[j][t] = acc;
+            }
+        for (l = 1; l <= L; l++) {
+            real yc = c->ystar[Ts[i].nobs + l];
+            c->sd[l]  = sqrt(lead_var(P, sigma, m, l, 0));
+            c->sdp[l] = sqrt(lead_var(P, sigma, m, l, 1));
+            c->sda[l] = sqrt(lead_var(P, sigma, m, l, data_freq));
+            c->lo[l]  = fuepre_bc_inverse(&Tm[i], &Ts[i], yc - 1.96 * c->sd[l], NULL);
+            c->hi[l]  = fuepre_bc_inverse(&Tm[i], &Ts[i], yc + 1.96 * c->sd[l], NULL);
+        }
+    }
+
+    free_vector(uu, 0, L);
+    free_matrix(P, 1, m, 0, L);
+    free_tensor(psi, 0, L, 1, m, 1, m);
+    free_tensor(v3, 1, L, 1, m, 1, m);
+    free_tensor(v2, 1, L, 1, m, 1, m);
+    free_tensor(v1, 1, L, 1, m, 1, m);
+    free_matrix(f1, 1, m, 1, L);
+    free_matrix(sigma, 1, m, 1, m);
+    shootx_esc(x, &vf, &ifault, 0, 1);
+    return 0;
+}
+
+/* The sample of every series ends k periods before its full end. They all
+   end on the same date (fuepre_check_alignment), so this cuts them all at
+   the same date.                                                          */
+static void set_origin(int k)
+{
+    int i;
+    for (i = 1; i <= n_ser; i++) Ts[i].nobs = nobs_full[i] - k;
+}
+
+/* The forecast table of each series, and the same numbers to NAME.forecast
+   in the format of the .inp path (Level, Low95, High95 in original units;
+   period and annual variation on the transformed scale, x 100/refactor,
+   which for lambda = 0 is a percentage).                                  */
+static void write_forecast(FILE *out, FILE *ff, Fc *fc, int L)
+{
+    int a, l, per, sub, freq = data_freq;
+    if (ff) {
+        fprintf(ff, "Forecasts from the ladder VARMA (cross orders p=%d q=%d)\n", cx_p, cx_q);
+        fprintf(ff, "horizon=%d, freq=%d; each series with its own .pre transformation\n", L, freq);
+        fprintf(ff, "Level/Low95/High95 in original units. mon%%/ann%% = period/annual "
+                    "variation and std (100*delta/refactor; %% for lambda=0).\n\n");
+    }
+    for (a = 1; a <= act_m; a++) {
+        int i = act[a], nb = fc[a].nb;
+        real sc = 100.0 / Ts[i].refactor;
+        FILE *f;
+        int  pass;
+        ObsToDate(Ts[i].begyear, Ts[i].begtime, nb, freq, &per, &sub);
+        for (pass = 0; pass < 2; pass++) {
+            f = pass ? ff : out;
+            if (!f) continue;
+            if (pass == 0)
+                fprintf(f, "\n  Forecast of %s from %d/%d (lambda = %g):\n",
+                        Ts[i].name, sub, per, Tm[i].boxlam);
+            else
+                fprintf(f, "Series %d (%s):\n", a, Ts[i].name);
+            fprintf(f, "  date   %10s %10s %10s %8s %7s %8s %7s\n",
+                    "Level", "Low95", "High95", "mon%", "std", "ann%", "std");
+            for (l = 1; l <= L; l++) {
+                real *y = fc[a].ystar;
+                real g2 = y[nb + l] - y[nb + l - 1];
+                real g3 = (nb + l - freq >= 1) ? y[nb + l] - y[nb + l - freq] : 0.0;
+                int  p2, s2;
+                ObsToDate(Ts[i].begyear, Ts[i].begtime, nb + l, freq, &p2, &s2);
+                fprintf(f, "%3d/%4d %10.4f %10.4f %10.4f %8.4f %7.4f %8.4f %7.4f\n",
+                        s2, p2, fc[a].lvl[l], fc[a].lo[l], fc[a].hi[l],
+                        sc * g2, sc * fc[a].sdp[l], sc * g3, sc * fc[a].sda[l]);
+            }
+            if (pass) fprintf(f, "\n");
+        }
+    }
+}
+
+/* The point forecast from the end of the estimation sample, and, with
+   -estwin, the fixed-parameter forecasts from every later origin
+   (NAME.recursive, in the format of the .inp path) and their errors.     */
+static int esc_forecasts(real *x, real sigma2, int L, int estwin, const char *name)
+{
+    Fc   fc[ESC_MAX + 1];
+    char fname[600];
+    FILE *ff, *fr;
+    int  a, l, k, k0, rc;
+
+    for (a = 1; a <= act_m; a++) fc_alloc(&fc[a], Ts[act[a]].nobs, L);
+    rc = esc_forecast(x, sigma2, L, fc);
+    if (rc == 0) {
+        snprintf(fname, sizeof fname, "%s.forecast", name);
+        ff = fopen(fname, "w");
+        fprintf(outputv, "\n=============================================================\n");
+        fprintf(outputv, "  FORECASTS (each series back to its level with its .pre model)\n");
+        fprintf(outputv, "=============================================================\n");
+        write_forecast(outputv, ff, fc, L);
+        if (ff) { fclose(ff); printf("Forecasts written to %s\n", fname); }
+    }
+    for (a = 1; a <= act_m; a++) fc_free(&fc[a], L);
+    if (rc || estwin <= 0) return rc;
+
+    /* Recursive: origins from the end of the estimation window to the end
+       of the data, one period at a time, parameters FIXED.                 */
+    {
+        real *sae[ESC_MAX + 1], *sse[ESC_MAX + 1], *sape[ESC_MAX + 1];
+        int  *cnt[ESC_MAX + 1], no = 0;
+
+        snprintf(fname, sizeof fname, "%s.recursive", name);
+        fr = fopen(fname, "w");
+        if (fr) {
+            fprintf(fr, "Recursive fixed-parameter forecasts, ladder VARMA (p=%d q=%d)\n", cx_p, cx_q);
+            fprintf(fr, "estwin=%d obs of %s, horizon=%d\n", estwin, Ts[1].name, L);
+            fprintf(fr, "origin series horizon level\n");
+        }
+        for (a = 1; a <= act_m; a++) {
+            sae[a] = vector(1, L); sse[a] = vector(1, L); sape[a] = vector(1, L);
+            cnt[a] = ivector(1, L);
+            for (l = 1; l <= L; l++) { sae[a][l] = sse[a][l] = sape[a][l] = 0.0; cnt[a][l] = 0; }
+        }
+        k0 = nobs_full[1] - estwin;
+        for (k = k0; k >= 0; k--) {
+            int per, sub;
+            set_origin(k);
+            for (a = 1; a <= act_m; a++) fc_alloc(&fc[a], Ts[act[a]].nobs, L);
+            if (esc_forecast(x, sigma2, L, fc) == 0) {
+                no++;
+                ObsToDate(Ts[1].begyear, Ts[1].begtime, Ts[1].nobs, Ts[1].freq, &per, &sub);
+                for (a = 1; a <= act_m; a++) {
+                    int i = act[a], nb = Ts[i].nobs;
+                    for (l = 1; l <= L; l++) {
+                        if (fr) fprintf(fr, "%d/%d %s %d %.6f\n", sub, per, Ts[i].name, l, fc[a].lvl[l]);
+                        if (nb + l <= nobs_full[i]) {
+                            real act_v = Ts[i].data[nb + l], e = act_v - fc[a].lvl[l];
+                            sae[a][l] += fabs(e); sse[a][l] += e * e;
+                            sape[a][l] += (fabs(act_v) > 1e-12) ? fabs(e / act_v) : 0.0;
+                            cnt[a][l]++;
+                        }
+                    }
+                }
+            }
+            for (a = 1; a <= act_m; a++) fc_free(&fc[a], L);
+        }
+        set_origin(k0);
+        if (fr) { fclose(fr); printf("Recursive forecasts written to %s\n", fname); }
+
+        fprintf(outputv, "\n=============================================================\n");
+        fprintf(outputv, "  RECURSIVE FORECAST EVALUATION (out of sample)\n");
+        fprintf(outputv, "=============================================================\n");
+        fprintf(outputv, "  Parameters estimated ONCE on the estimation window and held\n"
+                         "  FIXED while the origin moves forward one period at a time;\n"
+                         "  %d origins. The univariate models are the yardstick: compare\n"
+                         "  with the diagonal system (p = q = 0, -diagcov).\n", no);
+        for (a = 1; a <= act_m; a++) {
+            fprintf(outputv, "\n  %s\n    h      n        MAE         RMSE        MAPE(%%)\n", Ts[act[a]].name);
+            for (l = 1; l <= L; l++) {
+                if (cnt[a][l] == 0) continue;
+                fprintf(outputv, "  %3d  %5d  %11.6f  %11.6f  %10.4f\n", l, cnt[a][l],
+                        sae[a][l] / cnt[a][l], sqrt(sse[a][l] / cnt[a][l]),
+                        100.0 * sape[a][l] / cnt[a][l]);
+            }
+            free_ivector(cnt[a], 1, L);
+            free_vector(sape[a], 1, L); free_vector(sse[a], 1, L); free_vector(sae[a], 1, L);
+        }
+    }
+    return 0;
+}
+
+/* ------------------------------------------------------------------------- */
 /*  La linea de ordenes                                                      */
 /* ------------------------------------------------------------------------- */
 static int ends_with_pre(const char *s)
@@ -586,7 +857,7 @@ int escalera_requested(int argc, char *argv[])
 void escalera_usage(const char *prog)
 {
     printf("       %s A.pre B.pre [C.pre ...] p q [-diagcov] [-redet] [-fixarma]\n", prog);
-    printf("                                  [-m method] [-o NAME]\n");
+    printf("                                  [-m method] [-o NAME] [-forecast H [-estwin N]]\n");
     printf("  THE LADDER: each series comes with its univariate model from fue (.pre):\n");
     printf("       Box-Cox, deterministic terms, differencing, mean and ARMA factors.\n");
     printf("       The VARMA keeps each model on its DIAGONAL; p and q are the orders of\n");
@@ -595,6 +866,10 @@ void escalera_usage(const char *prog)
     printf("  -redet   : re-estimate the deterministic terms (default: fixed at the .pre)\n");
     printf("  -fixarma : keep the univariate ARMA factors fixed at the .pre\n");
     printf("  -o NAME  : results to NAME.out (default: the .pre names joined by '_')\n");
+    printf("  -forecast H : forecast H periods -> NAME.forecast, each series in its level\n");
+    printf("  -estwin N   : estimate on the first N observations of the first series,\n");
+    printf("                then fixed-parameter forecasts from every origin to the end\n");
+    printf("                -> NAME.recursive and an out-of-sample evaluation\n");
 }
 
 static void base_of(const char *path, char *out, size_t n)
@@ -614,7 +889,7 @@ static void base_of(const char *path, char *out, size_t n)
 int escalera_main(int argc, char *argv[])
 {
     char  outname[512] = "", outfile[520], why[600];
-    int   i, a, argi, met_esc = 1, p, q, rc = 0;
+    int   i, a, argi, met_esc = 1, p, q, rc = 0, fc_h = 0, estwin = 0;
     real  logL_uni[ESC_MAX + 1], s2_uni[ESC_MAX + 1], move[ESC_MAX + 1];
     real  sum_uni = 0.0, logL_gate, logL_diag;
     Fit   F, D;
@@ -647,17 +922,25 @@ int escalera_main(int argc, char *argv[])
         else if (strcmp(argv[argi], "-m") == 0 && argi + 1 < argc) met_esc = atoi(argv[++argi]);
         else if (strcmp(argv[argi], "-o") == 0 && argi + 1 < argc)
             snprintf(outname, sizeof outname, "%s", argv[++argi]);
+        else if (strcmp(argv[argi], "-forecast") == 0 && argi + 1 < argc)
+            fc_h = atoi(argv[++argi]);
+        else if (strcmp(argv[argi], "-estwin") == 0 && argi + 1 < argc)
+            estwin = atoi(argv[++argi]);
         else {
             /* Lo que la via .inp admite y la escalera todavia no: mejor un
                error que una opcion ignorada en silencio.                   */
             printf("ERROR: option %s is not available in ladder mode (.pre input)\n",
                    argv[argi]);
-            printf("       -forecast/-estwin come in a later phase; -mean, -deseason,\n"
-                   "       -scale and the transformation come from each .pre.\n");
+            printf("       -mean, -deseason, -scale and the transformation come from\n"
+                   "       each .pre.\n");
             return 1;
         }
     }
     int want_diagcov = cx_diagcov;
+    if (fc_h < 0 || (estwin > 0 && fc_h <= 0)) {
+        printf("ERROR: -estwin needs a horizon: give -forecast H\n");
+        return 1;
+    }
     xitol_met = (met_esc == 2) ? -1.0e-3 : 1.0e-3;
 
     if (outname[0] == '\0') {
@@ -683,6 +966,23 @@ int escalera_main(int argc, char *argv[])
     if (fuepre_check_alignment(Ts, n_ser, why, sizeof why) != 0) {
         printf("ERROR: %s\n", why);
         return 4;
+    }
+    for (i = 1; i <= n_ser; i++) nobs_full[i] = Ts[i].nobs;
+
+    /* -estwin N: the parameters are estimated on the first N observations of
+       the FIRST series -- the others are cut at the same date -- and then
+       held fixed while the forecast origin moves to the end of the data.   */
+    if (estwin > 0) {
+        if (estwin > nobs_full[1] || estwin < 2) {
+            printf("ERROR: -estwin %d out of range (1..%d)\n", estwin, nobs_full[1]);
+            return 1;
+        }
+        for (i = 1; i <= n_ser; i++)
+            if (nobs_full[i] - (nobs_full[1] - estwin) < 2) {
+                printf("ERROR: -estwin %d leaves %s without data\n", estwin, Ts[i].name);
+                return 1;
+            }
+        set_origin(nobs_full[1] - estwin);
     }
     if (build_stationary() != 0) {
         printf("ERROR: could not build the stationary series\n");
@@ -722,8 +1022,17 @@ int escalera_main(int argc, char *argv[])
             fprintf(f, "Univariate ARMA  : %s\n", opt_fixarma ? "fixed at the .pre" : "re-estimated jointly");
             fprintf(f, "Estimation method: %d\n", met_esc);
             fprintf(f, "Frequency        : %d\n", data_freq);
-            fprintf(f, "Common window    : %d/%d - %d/%d  (%d stationary observations)\n\n",
+            fprintf(f, "Common window    : %d/%d - %d/%d  (%d stationary observations)\n",
                     bs, by, es, ey, n_stat);
+            if (estwin > 0) {
+                int fy, fs;
+                ObsToDate(Ts[1].begyear, Ts[1].begtime, nobs_full[1], Ts[1].freq, &fy, &fs);
+                fprintf(f, "Estimation window: the first %d observations of %s; parameters\n"
+                           "                   fixed, forecasts from every origin to %d/%d\n",
+                        estwin, Ts[1].name, fs, fy);
+            }
+            if (fc_h > 0) fprintf(f, "Forecast horizon : %d\n", fc_h);
+            fprintf(f, "\n");
             print_series_table(f);
             fprintf(f, "\n");
         }
@@ -875,10 +1184,25 @@ int escalera_main(int argc, char *argv[])
         multivariate_diagnostics(F.vm.a, F.vm.n, F.vm.m, outputv);
         diagnose(&F.vm);
     }
-    fit_free(&F);
+
+    /* [6] Forecasts. The estimated model is released first: the forecast
+       rebuilds the stationary series at other lengths, and the cast fills
+       buffers with the current one.                                      */
+    {
+        int   ok = (F.ifault == 0), np = F.npar > 0 ? F.npar : 1;
+        real *xf = vector(1, np), s2 = F.sigma2;
+        for (i = 1; i <= np; i++) xf[i] = F.x[i];
+        fit_free(&F);
+        if (ok && fc_h > 0) {
+            rc = esc_forecasts(xf, s2, fc_h, estwin, outname);
+            if (rc) printf("Forecasting failed (code %d)\n", rc);
+        }
+        free_vector(xf, 1, np);
+    }
 
     printf("Full results written to %s\n", outfile);
     fclose(outputv);
+    set_origin(0);
     for (i = 1; i <= n_ser; i++) {
         free_vector(w[i], 1, n_stat);  w[i] = NULL;
         free_fue_pre(&Tm[i], &Ts[i], DataMat[i]);

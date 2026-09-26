@@ -13,7 +13,7 @@
 #include "forecast.h"
 #include <math.h>
 
-static void compute_psi_weights(int m, int p, int q, real ***phi, real ***theta,
+void compute_psi_weights(int m, int p, int q, real ***phi, real ***theta,
                                 int L, real ***psi)
 {
     int l, i, j, k, i1, j1;

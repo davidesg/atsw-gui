@@ -91,8 +91,11 @@ its **diagonal**; `p` and `q` are the orders of the **cross** dynamics. Before
 anything cross is estimated, the diagonal gate checks that the joint cast
 reproduces the univariate models exactly, and stops the program if it does
 not. Deterministic terms stay at the `.pre` values unless `-redet`. The series
-must share their frequency and their last date (BUG-2). Forecasting in this
-mode comes in a later phase. See `docs/DESIGN-v5-ladder.md`.
+must share their frequency and their last date (BUG-2). `-forecast H` forecasts
+every series in its level, and `-estwin N` adds fixed-parameter forecasts from
+every origin, with an out-of-sample evaluation: the univariate models (the
+diagonal system) are the yardstick a VARMA has to beat. See
+`docs/DESIGN-v5-ladder.md`.
 
 ### Input file format (`.inp`)
 

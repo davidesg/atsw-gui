@@ -30,6 +30,13 @@ Design: `docs/DESIGN-v5-ladder.md`.
   binary was built from (`5.0.0 (git <hash>[-dirty])`). It is used by
   `-version`, the `Program` line of the `.out` (both paths) and the GUI
   title.
+- **Forecasting in ladder mode**: `-forecast H` and `-estwin N`. Each
+  series goes back to its level with its own `.pre` model (deterministic
+  terms, operator, Box-Cox), with 95% bands from the integrated psi weights.
+  With `-estwin`, fixed-parameter forecasts from every origin
+  (`NAME.recursive`) and an out-of-sample evaluation by series and horizon.
+  The diagonal system reproduces fue's fixed-parameter forecasts: 3456
+  values, relative difference ≤ 2.3e-6.
 - `tests/banco/`: byte regression of the `.inp` path against 0.4.1.
   `tests/escalera/`: the assertions of the ladder and its regression.
 

@@ -115,11 +115,44 @@ typedef struct {
  * uno. Improbabilidad de la ventana no es unicidad del suceso.
  *
  * Asi que el tramo tiene que ser SOLIDO: todos sus periodos con |z| >=
- * AN_ACTIVO. Por debajo de una desviacion tipica no hay nada que explicar, y
- * un periodo asi separa dos sucesos en vez de unirlos.
+ * AN_ACTIVO. Un periodo que no es anomalo no es parte de un suceso: lo
+ * separa de otro.
  *
- * Eso sustituye al parametro de hueco que habia, y es mejor: el hueco era un
- * numero de periodos --una convencion-- y esto es una condicion sobre el
+ * Y AN_ACTIVO ES 2.0, NO 1.0. Empezo en 1.0 --«por debajo de una desviacion
+ * tipica no hay nada que explicar»-- y sobre un caso real se vio que eso no
+ * basta: |z| > 1 pasa un tercio de las veces, asi que en un tramo revuelto
+ * encadena todo. En IPC_ES m02, la inflacion de 2022 salia como UN suceso de
+ * siete periodos:
+ *
+ *     12/2021 +2.54  1/2022 +1.05  2/2022 +1.69  3/2022 +5.68
+ *      4/2022 -2.63  5/2022 +1.34  6/2022 +3.72
+ *
+ * Son varios choques distintos, y leerlos juntos pediria OCHO escalones. Con
+ * 2.0 salen los dos que son: el par 3-4/2022 --un impulso de nivel-- y
+ * 6/2022 aparte.
+ *
+ * El 2.0 no es un numero nuevo: es con el que EL MOTOR marca los residuos
+ * con «@» en el .out, y el que art usa para «este vecino es anomalo».
+ *
+ * MEDIDO, las dos caras del intercambio (4 000 series bajo la nula, n = 261):
+ *
+ *     activo   falsos/serie   tramos falsos de L>=4   L maximo visto
+ *      1.0        0.192            0.018                   7
+ *      1.5        0.184            0.008                   5
+ *      2.0        0.171            0.001                   5
+ *
+ * y lo que cuesta en potencia sobre un incidente de verdad (3.0, -3.5, 2.4):
+ * detectado el 86.3 % en vez del 88.5 %, con el tramo exacto el 42.5 % en vez
+ * del 49.2 %. Dos puntos de deteccion a cambio de que los tramos largos
+ * falsos practicamente desaparezcan.
+ *
+ * Y LA ASIMETRIA DECIDE: tragarse un tramo largo sobreparametriza --ocho
+ * escalones, y una trayectoria determinista equivocada metida en la
+ * prevision para siempre-- y la sobreparametrizacion no se detiene sola.
+ * Cortar una cola floja deja un residuo de 1.7 sigma, que es ruido.
+ *
+ * Esto sustituye al parametro de hueco que habia, y es mejor: el hueco era
+ * un numero de periodos --una convencion-- y esto es una condicion sobre el
  * dato. Si el analista quiere tratar dos sucesos cercanos como uno, marca
  * las dos casillas: la ventana ya calibra varios episodios a la vez.
  *
@@ -133,7 +166,7 @@ typedef struct {
  * solaparse.                                                            */
 #define AN_K       1.5     /* calibrado: misma carga de falsas alarmas   */
 #define AN_LMAX    8       /* la longitud maxima que se escanea          */
-#define AN_ACTIVO  1.0     /* por debajo de 1 sigma no hay nada que explicar */
+#define AN_ACTIVO  2.0     /* un periodo que no es anomalo no es parte del suceso */
 
 /* EL UMBRAL DEL VECINO YA NO AGRUPA: agrupa el escaner. Se queda porque es
  * el de TREADWAY --«¿la forma de abajo deja un anomalo al lado?»--, que es

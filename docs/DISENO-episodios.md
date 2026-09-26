@@ -158,9 +158,46 @@ ventana de cuatro con p = 4·10⁻¹⁰, más improbable que cualquiera de los d
 solo. Y lo es — pero **lo es porque contiene dos sucesos**, no porque sea uno.
 *Improbabilidad de la ventana no es unicidad del suceso.*
 
-Así que el tramo tiene que ser **sólido**: todos sus períodos con |z| ≥ 1. Por
-debajo de una desviación típica no hay nada que explicar, y un período así
-separa dos sucesos en vez de unirlos.
+Así que el tramo tiene que ser **sólido**: todos sus períodos con |z| ≥
+`AN_ACTIVO`. Un período que no es anómalo no forma parte de un suceso: lo
+separa de otro.
+
+#### Y el suelo es 2σ, no 1σ
+
+Empezó en 1σ —«por debajo de una desviación típica no hay nada que
+explicar»— y sobre un caso real se vio que no basta: **|z| > 1 pasa un tercio
+de las veces**, así que en un tramo revuelto encadena todo. En IPC\_ES m02, la
+inflación de 2022 salía como **un** suceso de siete períodos:
+
+```
+   12/2021 +2,54   1/2022 +1,05   2/2022 +1,69   3/2022 +5,68
+    4/2022 −2,63   5/2022 +1,34   6/2022 +3,72
+```
+
+Son varios choques distintos, y leerlos juntos pediría **ocho escalones**. Con
+2σ salen los dos que son: el par **3–4/2022** —un impulso de nivel— y
+**6/2022** aparte.
+
+El 2,0 no es un número nuevo: es con el que **el motor** marca los residuos
+con `@`, y el que art usa para «este vecino es anómalo».
+
+**Las dos caras del intercambio, medidas** (4 000 series bajo la nula):
+
+| suelo | falsos/serie | tramos falsos de L≥4 | L máximo visto |
+|---|---|---|---|
+| 1,0 | 0,192 | 0,018 | **7** |
+| 1,5 | 0,184 | 0,008 | 5 |
+| **2,0** | **0,171** | **0,001** | 5 |
+
+Y lo que cuesta en potencia sobre un incidente de verdad `(3,0 · −3,5 · 2,4)`:
+detectado el **86,3 %** en vez del 88,5 %, con el tramo exacto el 42,5 % en vez
+del 49,2 %. Dos puntos de detección a cambio de que los tramos largos falsos
+prácticamente desaparezcan.
+
+**Y la asimetría decide:** tragarse un tramo largo sobreparametriza —ocho
+escalones, y una trayectoria determinista equivocada metida en la previsión
+para siempre— y la sobreparametrización **no se detiene sola**. Cortar una
+cola floja deja un residuo de 1,7σ, que es ruido.
 
 Eso sustituye al parámetro de hueco que había, y es mejor: el hueco era un
 número de períodos —una convención— y esto es una condición sobre el dato. El

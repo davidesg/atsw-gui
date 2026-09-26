@@ -286,6 +286,30 @@ int main( void )
     ok( ep2[0].desde == 40 && ep2[1].desde == 43, "y en su sitio, por posicion" );
     }
 
+    printf( "\nUN TRAMO REVUELTO NO ES UN SUCESO\n" );
+    /* EL CASO REAL, IPC_ES m02: la inflacion de 2022. Con el suelo en 1
+       sigma los siete periodos encadenaban y salia UN suceso --ocho
+       escalones--; son varios choques distintos.                    */
+    {
+    AnEpisodio ep2[16];
+    double     u = an_umbral( 262 );
+    int        i, ne;
+    static const double real[7] =
+        { +2.54, +1.05, +1.69, +5.68, -2.63, +1.34, +3.72 };
+
+    for ( i = 0; i < 100; i++ ) z[i] = 0.0;
+    for ( i = 0; i < 7; i++ ) z[40+i] = real[i];
+
+    ne = an_episodios( z, 100, u, ep2, 16 );
+    esn( ne, 2, "salen DOS sucesos, no uno de siete" );
+    esn( ep2[0].desde, 43, "el par empieza en 3/2022 (+5.68)" );
+    esn( ep2[0].n, 2, "  y dura dos: con el -2.63 que lo compensa" );
+    esn( ep2[1].desde, 46, "y 6/2022 va aparte" );
+    esn( ep2[1].n, 1, "  el solo" );
+    ok( fabs( z[41] ) < AN_ACTIVO && fabs( z[45] ) < AN_ACTIVO,
+        "los que los separan no son anomalos: 1.05 y 1.34" );
+    }
+
     printf( "\n%d fallos\n", fallos );
     return fallos ? 1 : 0;
 }

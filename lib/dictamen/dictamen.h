@@ -40,7 +40,19 @@ typedef enum {
    DX_NO_CONSTA = 0,
    DX_CUADRA,
    DX_MIRAR,
-   DX_NO
+   DX_NO,
+
+   /* «NO APLICA» NO ES «NO CONSTA», y meterlos en el mismo cajón seria
+    * justo el error que la regla de arriba previene al reves.
+    *
+    * NO CONSTA es informacion que FALTA: el .out no trajo ese bloque, no se
+    * sabe, y por eso no puede contar como aprobado.
+    *
+    * NO APLICA es un HECHO del modelo: no hay ninguna intervencion de varios
+    * omegas, asi que la pregunta sobre su ganancia no tiene sujeto. Nada
+    * falta. Un bloque asi NO arrastra el resumen -- si lo hiciera, ningun
+    * modelo sin intervenciones podria cuadrar nunca.                    */
+   DX_NO_APLICA
 } DxEstado;
 
 #define DX_TITULO  32

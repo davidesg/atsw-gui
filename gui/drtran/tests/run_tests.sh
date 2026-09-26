@@ -358,10 +358,10 @@ $CC -O2 -Wall -Wextra -I"$L/inpdet" -I"$L/inpcheck" \
 # Los umbrales se prueban SIN fichero, con numeros inventados: eso es lo que
 # se gana separando el lector del que juzga.
 echo
-$CC -O2 -Wall -Wextra -I"$L/dictamen" -I"$L/outfile" \
+$CC -O2 -Wall -Wextra -I"$L/dictamen" -I"$L/outfile" -I"$L/intervencion" \
     $(pkg-config --cflags glib-2.0) \
     "$L/dictamen/test_dictamen.c" "$L/dictamen/dictamen.c" \
-    "$L/outfile/outfile.c" \
+    "$L/outfile/outfile.c" "$L/intervencion/intervencion.c" \
     -o "$W/test_dictamen" $(pkg-config --libs glib-2.0) -lm || exit 1
 "$W/test_dictamen" || exit 1
 
@@ -409,9 +409,9 @@ echo
 $CC -O2 -Wall -Wextra -I"$TOP/../atsw/include" -I"$L/proyecto" -I"$L/outdiag" \
     -I"$L/outfile" -I"$L/tabla" -I"$L/dates" $(pkg-config --cflags gtk+-3.0) \
     -I"$L/rutas" -I"$L/preview" -I"$L/fugdraw" -I"$L/utils" -I"$L/datos" \
-    -I"$L/xlsx" -I"$L/engine" -I"$L/inpcheck" -I"$L/dictamen" \
+    -I"$L/xlsx" -I"$L/engine" -I"$L/inpcheck" -I"$L/dictamen" -I"$L/intervencion" \
     "$TOP/../atsw/tests/test_atsw.c" "$TOP/../atsw/src/ventana.c" \
     "$L/proyecto/proyecto.c" "$L/outdiag/outdiag.c" "$L/outfile/outfile.c" \
-    "$L/dictamen/dictamen.c" "$L/dates/dates.c" \
+    "$L/dictamen/dictamen.c" "$L/intervencion/intervencion.c" "$L/dates/dates.c" \
     -o "$W/test_atsw" $(pkg-config --libs gtk+-3.0) -lm || exit 1
 "$W/test_atsw" || exit 1

@@ -419,3 +419,58 @@ int iv_plan( const IvExtremo *ext, int next, int d,
       }
    return 0;
 }
+
+
+/* --- la ganancia a largo plazo ------------------------------------------ */
+
+int iv_ganancia( const double *om, const int *libre, int nom,
+                 const double *V, int ldv,
+                 const double *delta, int nd,
+                 double critico, IvGanancia *out )
+{
+   double a[IV_MAX_ESC], var = 0.0;
+   int    pos[IV_MAX_ESC];
+   int    i, j, k = 0;
+
+   if ( !out ) return 1;
+   memset( out, 0, sizeof *out );
+   if ( !om || nom < 1 || nom > IV_MAX_ESC ) return 1;
+
+   out->nomega  = nom;
+   out->delta_1 = 1.0;
+   for ( i = 0; i < nd; i++ ) out->delta_1 -= delta ? delta[i] : 0.0;
+
+   /* EL SIGNO SIGUE A LA POSICION. Ver la cabecera: tomarlo del orden entre
+      los libres corre todos los signos un hueco en cuanto hay uno fijo. */
+   for ( i = 0; i < nom; i++ )
+       {
+       double signo = ( i == 0 ) ? 1.0 : -1.0;
+
+       out->omega_1 += signo * om[i];
+       out->suma    += om[i];
+       if ( !libre || libre[i] )
+          { a[k] = signo; pos[k] = i; k++; }
+       }
+   out->nlibre = k;
+   (void) pos;
+
+   /* delta(1) = 0: la ganancia es infinita y el modelo inadmisible. No se
+      publica un numero, se dice que no lo hay.                        */
+   if ( fabs( out->delta_1 ) > 1e-10 )
+      { out->ganancia = out->omega_1 / out->delta_1; out->hay_ganancia = 1; }
+
+   /* CON UN SOLO OMEGA LIBRE no hay contraste nuevo: la ganancia es el
+      coeficiente y su t ya esta en la tabla.                          */
+   if ( k < 2 || !V ) return 0;
+
+   for ( i = 0; i < k; i++ )
+       for ( j = 0; j < k; j++ )
+           var += a[i] * a[j] * V[i * ldv + j];
+   if ( !( var > 0.0 ) ) return 0;
+
+   out->et          = sqrt( var );
+   out->wald        = out->omega_1 * out->omega_1 / var;
+   out->hay_wald    = 1;
+   out->transitorio = ( out->wald < critico );
+   return 0;
+}

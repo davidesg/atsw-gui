@@ -337,6 +337,61 @@ int main( void )
     }
     }
 
+    printf( "\nLA GANANCIA NO ES LA SUMA DE LOS OMEGAS\n" );
+    /* EL CASO REAL, IPC_ES m03: w = (0.024963, 0.011556) con la covarianza
+       que imprime el .out. La suma da 0.0365 y la ganancia 0.0134 -- casi
+       tres veces menos, y con el segundo cambiado de signo.          */
+    {
+    double om[2] = { 0.024963, 0.011556 };
+    double V[4]  = { 1.5521e-5, 0.0, 0.0, 1.5521e-5 };
+    IvGanancia g;
+
+    ok( iv_ganancia( om, NULL, 2, V, 2, NULL, 0, 3.841, &g ) == 0, "se calcula" );
+    ok( fabs( g.suma - 0.036519 ) < 1e-6, "la suma es 0.0365..." );
+    ok( fabs( g.omega_1 - 0.013407 ) < 1e-6, "...y la ganancia 0.0134: NO es la suma" );
+    ok( g.hay_wald, "con dos omegas libres hay contraste" );
+    ok( g.wald > 5.0 && g.wald < 6.5, "Wald ~ 5.8" );
+    ok( !g.transitorio, "se rechaza ganancia nula: el efecto es PERMANENTE" );
+    printf( "        omega(1) = %+.6f (et %.6f)  W = %.2f  suma = %+.6f\n",
+            g.omega_1, g.et, g.wald, g.suma );
+
+    printf( "\nGANANCIA NULA ES UN EPISODIO TRANSITORIO\n" );
+    /* L+1 escalones con ganancia cero son L impulsos de nivel. */
+    {
+    double om2[2] = { 0.02, 0.02 };
+    IvGanancia g2;
+
+    iv_ganancia( om2, NULL, 2, V, 2, NULL, 0, 3.841, &g2 );
+    ok( fabs( g2.omega_1 ) < 1e-12, "dos omegas iguales: omega(1) = 0" );
+    ok( g2.transitorio, "y el efecto es TRANSITORIO" );
+    }
+
+    printf( "\nEL SIGNO SIGUE A LA POSICION, NO AL ORDEN ENTRE LOS LIBRES\n" );
+    /* Si w0 se FIJA, el unico libre es w1 y su signo tiene que seguir
+       siendo -1. Tomarlo del rango entre los libres lo pondria a +1 y
+       daria un numero plausible y sistematicamente equivocado.       */
+    {
+    int    lib[2] = { 0, 1 };
+    IvGanancia g3;
+
+    iv_ganancia( om, lib, 2, V, 2, NULL, 0, 3.841, &g3 );
+    ok( fabs( g3.omega_1 - 0.013407 ) < 1e-6,
+        "con w0 fijo, omega(1) no cambia: el fijo sigue contando" );
+    ok( g3.nlibre == 1, "pero solo hay un libre..." );
+    ok( !g3.hay_wald, "...y con uno solo no hay contraste de Wald" );
+    }
+
+    printf( "\nCON delta(1) = 0 NO SE PUBLICA UNA GANANCIA\n" );
+    {
+    double d1[1] = { 1.0 };          /* delta(1) = 1 - 1 = 0 */
+    IvGanancia g4;
+
+    iv_ganancia( om, NULL, 2, V, 2, d1, 1, 3.841, &g4 );
+    ok( !g4.hay_ganancia, "el modelo es inadmisible y se dice, no se inventa" );
+    ok( fabs( g4.omega_1 - 0.013407 ) < 1e-6, "omega(1) si se puede dar" );
+    }
+    }
+
     printf( "\n%d fallos\n", fallos );
     return fallos ? 1 : 0;
 }

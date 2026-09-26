@@ -202,4 +202,83 @@ typedef struct {
 int iv_plan( const IvExtremo *ext, int next, int d,
              double resto_escalar, double umbral, IvPlan *out );
 
+/* --- la ganancia a largo plazo: transitorio o permanente ---------------- */
+
+/* LO QUE UNA INTERVENCION DEJA PARA SIEMPRE.
+ *
+ * Un escalon con VARIOS omegas no dice por si mismo si el efecto se queda o
+ * revierte: eso lo dice su GANANCIA, el valor de la respuesta en B = 1.
+ *
+ *     omega(1) = w0 - w1 - w2 - ... - wL
+ *     ganancia = omega(1) / delta(1),   delta(1) = 1 - d1 - ... - dr
+ *
+ * Y AHI ESTA LA TRAMPA, que es donde se cae: fue guarda el numerador con el
+ * convenio de Box-Jenkins, el mismo para todo operador --AR, MA, delta y
+ * omega--, y los coeficientes de retardo entran RESTANDO:
+ *
+ *     omega(B) = w0 - w1 B - w2 B^2 - ... - wL B^L
+ *
+ * Asi que la ganancia NO es la suma de los omegas. Sobre IPC_ES m03, con
+ * w = (0.024963, 0.011556), la suma da 0.0365 y omega(1) da 0.0134: quien
+ * sume se equivoca de signo en el segundo y de casi tres veces en el total.
+ *
+ * SI LA GANANCIA NO SE DISTINGUE DE CERO, el efecto es TRANSITORIO: L+1
+ * escalones con ganancia nula son exactamente L impulsos de nivel --el
+ * episodio--. Si se distingue, algo del suceso se queda para siempre, y eso
+ * gobierna la prevision de aqui en adelante.
+ *
+ * EL CONTRASTE es de Wald sobre una combinacion lineal:
+ *
+ *     Var(omega(1)) = a' V a   con a = (1, -1, -1, ..., -1)
+ *     W = omega(1)^2 / Var    ~   chi2(1)
+ *
+ * V es la submatriz de covarianzas de esos omegas, que el .out imprime con
+ * nueve decimales. Con la de CORRELACIONES --dos decimales-- no saldria: la
+ * varianza depende de (1 - rho) y ahi el redondeo manda.
+ *
+ * TRES COSAS QUE PARECEN DETALLES Y NO LO SON, las tres de art:
+ *
+ *   1. EL SIGNO SIGUE A LA POSICION, no al orden entre los libres. Si el
+ *      analista FIJA un omega, ese deja de estar en la covarianza pero
+ *      sigue contando en omega(1) con el signo de su sitio. Tomar el signo
+ *      del rango entre los libres corre todos los signos un hueco -- y da un
+ *      numero plausible y sistematicamente equivocado.
+ *   2. UN OMEGA FIJO no entra en la varianza: no se estimo, no tiene error.
+ *   3. CON delta(1) = 0 la ganancia es infinita y el modelo inadmisible. No
+ *      se publica un numero: se dice que no lo hay.
+ *
+ * Y una cuarta, del que llama: si el motor convergio en CERO iteraciones, la
+ * covarianza que imprime es la semilla del optimizador, no una covarianza.
+ * Los contrastes que salen de ahi son ficcion creible. Mirar o->iterations.
+ *
+ * SOLO TIENE SENTIDO CON MAS DE UN OMEGA LIBRE. Con uno solo la ganancia ES
+ * el coeficiente y el contraste es su t de siempre: no hay nada nuevo que
+ * decir, y decirlo dos veces con dos nombres confunde.                */
+typedef struct {
+   int    nomega;        /* omegas en total                             */
+   int    nlibre;        /* de ellos, estimados                         */
+   double omega_1;       /* w0 - w1 - ... - wL, fijos incluidos         */
+   double delta_1;       /* 1 - d1 - ... - dr                           */
+   double ganancia;      /* omega(1)/delta(1)                           */
+   int    hay_ganancia;  /* 0 si delta(1) ~ 0: no se publica            */
+   double et;            /* error tipico de omega(1)                    */
+   double wald;          /* (omega(1)/et)^2, con 1 g.l.                 */
+   int    hay_wald;      /* 0 si no hay dos libres o la varianza falla  */
+   double suma;          /* la suma de los omegas: NO es la ganancia    */
+   int    transitorio;   /* 1 si no se rechaza ganancia nula            */
+} IvGanancia;
+
+/* om[0..nom-1] los omegas EN SU ORDEN; libre[i] != 0 si se estimo (NULL:
+ * todos libres). V es la covarianza de los LIBRES entre si, en su orden,
+ * con paso ldv. delta puede ser NULL.
+ *
+ * critico es el valor de la chi2(1) al nivel que se quiera --3.841 al 5 %--:
+ * se pasa hecho porque este modulo es aritmetica elemental a proposito.
+ *
+ * Devuelve 0 si pudo calcular omega(1).                               */
+int iv_ganancia( const double *om, const int *libre, int nom,
+                 const double *V, int ldv,
+                 const double *delta, int nd,
+                 double critico, IvGanancia *out );
+
 #endif /* ATSW_INTERVENCION_H */

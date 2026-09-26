@@ -60,8 +60,8 @@ int main( void )
     base( &o );
     c.kind = CONV_GRADTOL; c.iterations = 12; c.brief = (gchar *) "converged";
     dx_dictamen( &o, &c, &d );
-    ok( d.n == 5, "cinco bloques: estimación, media, autocorrelación, "
-                  "normalidad y parámetros" );
+    ok( d.n == 6, "seis bloques: estimación, media, autocorrelación, "
+                  "normalidad, parámetros y ganancia" );
     ok( linea( &d, "Autocorrelación" )->estado == DX_CUADRA, "los residuos son blancos" );
     ok( linea( &d, "Normalidad" )->estado == DX_CUADRA, "y normales" );
     ok( d.peor == DX_CUADRA, "y el resumen lo dice" );
@@ -149,6 +149,58 @@ int main( void )
     ok( linea( &d, "Parámetros" )->estado == DX_MIRAR, "se avisa" );
     ok( strstr( linea( &d, "Parámetros" )->dice, "[2]" ) != NULL,
         "y se dice cuál" );
+
+    printf( "\nLA GANANCIA: TRANSITORIO O PERMANENTE\n" );
+    /* Solo se le puede preguntar a un escalon con VARIOS omegas. Con uno,
+       la ganancia es el coeficiente y su t ya esta arriba.           */
+    {
+    FueOut      o2;
+    Convergence cv;
+    Dictamen    dd;
+    const DxLinea *g;
+
+    memset( &cv, 0, sizeof cv ); cv.iterations = 16;
+
+    /* sin ninguna intervencion de varios omegas: NO CONSTA, que no es
+       un aprobado.                                                   */
+    memset( &o2, 0, sizeof o2 );
+    o2.hay = TRUE; o2.nobs = 262; o2.npar_leidos = 1;
+    o2.par[0] = 0.5; o2.par_et[0] = 0.1; o2.par_estimado[0] = TRUE;
+    o2.ndet_leidos = 1; o2.det_nom[0] = 1; o2.det_i0[0] = 1;
+    dx_dictamen( &o2, &cv, &dd );
+    g = linea( &dd, "Ganancia" );
+    ok( g && g->estado == DX_NO_APLICA,
+        "sin varios omegas NO APLICA, que no es lo mismo que no constar" );
+
+    /* EL CASO REAL de IPC_ES m03: w = (0.024963, 0.011556) */
+    memset( &o2, 0, sizeof o2 );
+    o2.hay = TRUE; o2.nobs = 262;
+    o2.npar_leidos = 2;
+    o2.par[0] = 0.024963; o2.par_et[0] = 0.003940; o2.par_estimado[0] = TRUE;
+    o2.par[1] = 0.011556; o2.par_et[1] = 0.003940; o2.par_estimado[1] = TRUE;
+    o2.ndet_leidos = 1; o2.det_nom[0] = 2; o2.det_i0[0] = 1;
+    o2.ncov = 2;
+    o2.cov[0][0] = 1.5521e-5; o2.cov[1][1] = 1.5521e-5; o2.cov[1][0] = 0.0;
+    dx_dictamen( &o2, &cv, &dd );
+    g = linea( &dd, "Ganancia" );
+    ok( g && g->estado == DX_CUADRA, "ganancia distinta de cero: PERMANENTE" );
+    if ( g ) printf( "        %s\n", g->dice );
+
+    /* ganancia nula: transitorio, y eso es un parametro de mas */
+    o2.par[1] = 0.024963;
+    dx_dictamen( &o2, &cv, &dd );
+    g = linea( &dd, "Ganancia" );
+    ok( g && g->estado == DX_MIRAR,
+        "ganancia nula: transitorio, y sobra un parametro" );
+    if ( g ) printf( "        %s\n", g->dice );
+
+    /* CERO ITERACIONES: la covarianza es la semilla, no se contrasta */
+    cv.iterations = 0;
+    dx_dictamen( &o2, &cv, &dd );
+    g = linea( &dd, "Ganancia" );
+    ok( g && g->estado == DX_NO_CONSTA,
+        "con cero iteraciones no hay covarianza que contrastar" );
+    }
 
     printf( "\n%d fallos\n", fallos );
     return fallos ? 1 : 0;

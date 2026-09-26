@@ -176,6 +176,8 @@ static int cuenta_coef( gchar **lin, int i, int n )
 
 gboolean fueout_read( const char *path, FueOut *o )
 {
+   int matriz = 0;      /* 1 covarianzas, 2 correlaciones */
+   int det_cur = 0;     /* de que determinista son los omegas de ahora */
     gchar  *txt = NULL, **lin;
     gsize   len = 0;
     int     i, n, cal_lag = 0, en_resid = 0;
@@ -204,13 +206,28 @@ gboolean fueout_read( const char *path, FueOut *o )
 
         if ( sscanf( l, "Observations: %d", &k ) == 1 ) { o->nobs = k; o->hay = TRUE; }
         else if ( sscanf( l, "Parameters  : %d", &k ) == 1 ) o->npar = k;
-        else if ( sscanf( l, "Box-Cox lambda     : %lf", &v ) == 1 ) o->lambda = v;
+        else if ( sscanf( l, "Box-Cox lambda     : %lf", &v ) == 1 )
+            { o->lambda = v; det_cur = 0; }   /* aqui acaban los omegas */
         else if ( sscanf( l, "Seasonal period    : %d", &k ) == 1 ) o->s = k;
         else if ( sscanf( l, "Regular differences: %d", &k ) == 1 ) o->d = k;
         else if ( sscanf( l, "Annual differences : %d", &k ) == 1 ) o->D = k;
         else if ( sscanf( l, "Number of deterministic variables: %d", &k ) == 1 )
             o->ndet = k;
-        else if ( g_str_has_prefix( l, "Mean parameter" ) ) o->tiene_mu = TRUE;
+        else if ( g_str_has_prefix( l, "Mean parameter" ) )
+            { o->tiene_mu = TRUE; det_cur = 0; }
+
+        /* QUE DETERMINISTA EMPIEZA AQUI. Las lineas que siguen, hasta la
+           proxima cabecera, son SUS omegas.                            */
+        else if ( sscanf( l, "Omegas for deterministic variable %d", &k ) == 1 )
+            {
+            det_cur = k;
+            if ( k >= 1 && k <= FO_MAX_PAR )
+                {
+                o->det_nom[k - 1] = 0;
+                o->det_i0[k - 1]  = 0;
+                if ( k > o->ndet_leidos ) o->ndet_leidos = k;
+                }
+            }
 
         /* LA TABLA DE PARAMETROS: valor, error tipico y numero.
                -0.001610  (0.000683) [ 1]
@@ -224,6 +241,13 @@ gboolean fueout_read( const char *path, FueOut *o )
                 o->par_et[k - 1]       = v2;
                 o->par_estimado[k - 1] = TRUE;
                 if ( k > o->npar_leidos ) o->npar_leidos = k;
+
+                if ( det_cur >= 1 && det_cur <= FO_MAX_PAR )
+                    {
+                    if ( o->det_nom[det_cur - 1] == 0 )
+                        o->det_i0[det_cur - 1] = k;
+                    o->det_nom[det_cur - 1]++;
+                    }
                 }
             }
 
@@ -363,27 +387,46 @@ gboolean fueout_read( const char *path, FueOut *o )
                 }
             }
 
-        /* LA MATRIZ DE CORRELACIONES, para los pares que se pisan.
+        /* LAS DOS MATRICES, Y SE DISTINGUEN.
          *
-         * Se lee la MATRIZ y no la lista que el motor imprime debajo: esa
+         * El motor imprime PRIMERO la de covarianzas y despues la de
+         * correlaciones, y las dos con el mismo prefijo «x[ k ] ->». La
+         * primera version no las distinguia: leia las dos como si fueran
+         * correlaciones y se salvaba de dar un par falso solo porque las
+         * covarianzas son diminutas. Un modelo con un parametro de varianza
+         * grande habria dado un «estos dos se pisan» inventado.
+         *
+         * Se lee LA MATRIZ y no la lista que el motor imprime debajo: esa
          * lista sale vacia en todos los .out que tenemos, asi que su formato
          * cuando NO lo esta es una suposicion -- y adivinar un formato es
          * como se escriben los lectores que fallan el dia que hace falta.
          * La matriz es triangular inferior y no deja dudas:
          *     x[ 3] ->  0.00 -0.01  1.00                                */
-        else if ( sscanf( l, " x[ %d ] ->", &k ) == 1 && k >= 1 )
+        else if ( strstr( l, "Estimated covariance matrix" ) )  matriz = 1;
+        else if ( strstr( l, "Estimated correlation matrix" ) ) matriz = 2;
+        else if ( matriz && sscanf( l, " x[ %d ] ->", &k ) == 1 && k >= 1 )
             {
             const char *c = strstr( l, "->" );
 
-            for ( k2 = 1; c && k2 < k && o->npares < FO_MAX_PAR; k2++ )
+            if ( c ) c += 2;
+            for ( k2 = 1; c && k2 <= k; k2++ )
                 {
                 char *fin;
 
-                c += ( k2 == 1 ) ? 2 : 0;
                 v = strtod( c, &fin );
                 if ( fin == c ) break;
                 c = fin;
-                if ( v >= 0.7 || v <= -0.7 )
+
+                if ( matriz == 1 )
+                    {
+                    if ( k <= FO_MAX_PAR && k2 <= FO_MAX_PAR )
+                        {
+                        o->cov[k - 1][k2 - 1] = v;
+                        if ( k > o->ncov ) o->ncov = k;
+                        }
+                    }
+                else if ( k2 < k && o->npares < FO_MAX_PAR &&
+                          ( v >= 0.7 || v <= -0.7 ) )
                     {
                     o->par_a[o->npares] = k2;
                     o->par_b[o->npares] = k;
@@ -476,4 +519,12 @@ int fo_fecha_parte( const char *fecha, int *per, int *anno )
    *per  = p;
    *anno = a;
    return 0;
+}
+
+
+/* Ver outfile.h: triangular inferior, leida simetrica. */
+double fo_cov( const FueOut *o, int i, int j )
+{
+   if ( !o || i < 1 || j < 1 || i > o->ncov || j > o->ncov ) return 0.0;
+   return ( i >= j ) ? o->cov[i-1][j-1] : o->cov[j-1][i-1];
 }

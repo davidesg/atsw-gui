@@ -207,3 +207,57 @@ DIAGNOSIS — IPC_ES / m02        muestra serie        mirar
 
 Nada de esto toca los motores: los ocho hechos de §2 están ya escritos en el
 `.out`, y cinco de ellos los calcula el propio motor.
+
+---
+
+## La ganancia: transitorio o permanente
+
+Un escalón con **varios ω** no dice por sí mismo si el efecto se queda o
+revierte. Eso lo dice su **ganancia**, el valor de la respuesta en B = 1:
+
+```
+    ω(1) = ω₀ − ω₁ − ⋯ − ω_L        ganancia = ω(1) / δ(1)
+```
+
+**Y ahí está la trampa.** `fue` guarda el numerador con el convenio de
+Box-Jenkins —el mismo para todo operador— y los coeficientes de retardo
+entran **restando**. Así que la ganancia **no es la suma de los ω**. Sobre
+IPC\_ES m03, con ω = (0,024963 · 0,011556), la suma da 0,0365 y ω(1) da
+**0,0134**: quien sume se equivoca de signo en el segundo y de casi tres
+veces en el total.
+
+Si la ganancia **no se distingue de cero**, el efecto es **transitorio** —y
+eso no es un aprobado: L+1 escalones con ganancia nula son exactamente L
+impulsos de nivel, o sea que **sobra un parámetro**. Es una
+sobreparametrización con nombre.
+
+El contraste es de Wald sobre una combinación lineal, `W = ω(1)²/Var ~ χ²(1)`,
+con la matriz de covarianzas que el `.out` imprime **con nueve decimales**.
+Con la de correlaciones —dos decimales— no saldría: la varianza depende de
+(1 − ρ) y ahí el redondeo manda.
+
+### Tres cosas que parecen detalles y no lo son
+
+Las tres vienen de art, y las tres se comprobaron leyendo su código en vez de
+reconstruirlo:
+
+1. **El signo sigue a la posición**, no al orden entre los ω libres. Si el
+   analista **fija** un ω, ése deja de estar en la covarianza pero sigue
+   contando en ω(1) con el signo de su sitio. Tomarlo del rango entre los
+   libres corre todos los signos un hueco — y da un número plausible y
+   sistemáticamente equivocado.
+2. **Un ω fijo no entra en la varianza**: no se estimó, no tiene error.
+3. **Con δ(1) = 0** la ganancia es infinita y el modelo inadmisible. No se
+   publica un número: se dice que no lo hay.
+
+Y una cuarta, del que llama: si el motor convergió en **cero iteraciones**, lo
+que imprime como covarianza es la semilla del optimizador. Los contrastes que
+salen de ahí son ficción, y creíble.
+
+### «No aplica» no es «no consta»
+
+Un modelo sin ninguna intervención de varios ω no tiene nada que contestar
+aquí. Eso **no es información que falte**, así que no puede arrastrar el
+resumen — si lo hiciera, ningún modelo sin intervenciones podría cuadrar
+nunca. El dictamen gana un estado, `DX_NO_APLICA`, distinto de
+`DX_NO_CONSTA`: uno dice *no hay sujeto*, el otro *no lo sé*.

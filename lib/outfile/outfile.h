@@ -116,6 +116,31 @@ typedef struct {
     /* LOS PARES DE PARAMETROS CORRELACIONADOS. Salen de la matriz de
        correlaciones que el motor imprime -- dos decimales, que para
        decidir si dos parametros se pisan sobra.                         */
+    /* LA MATRIZ DE COVARIANZAS, entera y con su precision.
+     *
+     * El motor la imprime ANTES de la de correlaciones y con nueve
+     * decimales, mientras que la de correlaciones va con dos. Para un
+     * contraste sobre una combinacion lineal de parametros --la ganancia de
+     * una intervencion, omega(1) = w0 - w1 - ... - wL-- dos decimales no
+     * bastan: la varianza depende de (1 - rho) y ahi el redondeo manda.
+     *
+     * Triangular inferior; cov(i,j) con i >= j esta en cov[i][j], y se lee
+     * simetrica con fo_cov().                                          */
+    int      ncov;
+    double   cov[FO_MAX_PAR][FO_MAX_PAR];
+
+    /* QUE PARAMETROS SON LOS OMEGA DE CADA DETERMINISTA.
+     *
+     *     Omegas for deterministic variable 12:
+     *           0.024963  (0.003940) [12]
+     *           0.011556  (0.003940) [13]
+     *
+     * Sin esto, la tabla de parametros es una lista plana y no se sabe
+     * cuales de sus numeros forman la respuesta de una intervencion.   */
+    int      det_nom[FO_MAX_PAR];      /* cuantos omegas tiene el det i   */
+    int      det_i0[FO_MAX_PAR];       /* el indice 1-based del primero   */
+    int      ndet_leidos;
+
     int      npares;
     int      par_a[FO_MAX_PAR], par_b[FO_MAX_PAR];
     double   par_r[FO_MAX_PAR];
@@ -189,5 +214,8 @@ double chisq_cola( double x, int df );
  * Devuelve 0 si pudo, y 1 si eso no es una fecha (y entonces no toca nada).
  */
 int fo_fecha_parte( const char *fecha, int *per, int *anno );
+
+/* cov(i, j) con i, j en 1..npar, leida simetrica. 0 si no esta. */
+double fo_cov( const FueOut *o, int i, int j );
 
 #endif

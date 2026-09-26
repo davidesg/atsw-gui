@@ -6,6 +6,7 @@
 #include <string.h>
 #include <math.h>
 
+#include "intervencion.h"
 #include "dictamen.h"
 
 static DxLinea *nueva( Dictamen *d, const char *titulo )
@@ -40,6 +41,10 @@ static void resume( Dictamen *d )
            case DX_NO:        hay_no = 1;    break;
            case DX_MIRAR:     hay_mirar = 1; break;
            case DX_NO_CONSTA: hay_sin = 1;   break;
+           /* DX_NO_APLICA NO CUENTA, y es lo que lo distingue de NO_CONSTA:
+              no hay nada que falte. Si arrastrara, ningun modelo sin
+              intervenciones podria cuadrar nunca.                      */
+           case DX_NO_APLICA: break;
            default: break;
            }
 
@@ -225,6 +230,100 @@ static void bloque_normalidad( const FueOut *o, Dictamen *d )
 /* 5. Los parámetros                                                         */
 /* ------------------------------------------------------------------------ */
 
+/* LA GANANCIA DE LAS INTERVENCIONES: transitorio o permanente.
+ *
+ * Solo se puede preguntar a un escalon con MAS DE UN omega: con uno solo la
+ * ganancia ES el coeficiente y su t ya esta arriba.
+ *
+ * Y si la ganancia no se distingue de cero, eso NO es un aprobado: L+1
+ * escalones con ganancia nula son exactamente L impulsos de nivel, o sea
+ * que sobra un parametro. Es una sobreparametrizacion con nombre.    */
+static void bloque_ganancia( const FueOut *o, const Convergence *conv,
+                             Dictamen *d )
+{
+   DxLinea *l = nueva( d, "Ganancia" );
+   int      i, k, mirados = 0, transitorios = 0, peor_det = 0;
+   double   peor_p = -1.0;
+
+   if ( l == NULL ) return;
+
+   /* SIN COVARIANZA NO HAY CONTRASTE. Con cero iteraciones lo que el motor
+      imprime es la semilla del optimizador, no una covarianza: los
+      contrastes que salen de ahi son ficcion, y creible.              */
+   if ( conv && conv->iterations == 0 )
+       {
+       snprintf( l->dato, DX_DATO, "el motor no iteró" );
+       snprintf( l->dice, DX_DICE, "Con cero iteraciones la covarianza que "
+                 "se imprime es la semilla, no una covarianza: no se "
+                 "contrasta sobre ella." );
+       return;
+       }
+
+   for ( i = 0; i < o->ndet_leidos; i++ )
+       {
+       double     om[16], V[16*16];
+       int        libre[16];
+       IvGanancia g;
+       int        n = o->det_nom[i], i0 = o->det_i0[i], a, b;
+
+       if ( n < 2 || n > 16 || i0 < 1 ) continue;
+
+       for ( k = 0; k < n; k++ )
+           {
+           om[k]    = o->par[i0 - 1 + k];
+           libre[k] = o->par_estimado[i0 - 1 + k];
+           }
+       /* La covarianza de los LIBRES entre si, en su orden. */
+       {
+       int idx[16], nl = 0;
+
+       for ( k = 0; k < n; k++ ) if ( libre[k] ) idx[nl++] = i0 + k;
+       for ( a = 0; a < nl; a++ )
+           for ( b = 0; b < nl; b++ )
+               V[a*16 + b] = fo_cov( o, idx[a], idx[b] );
+       }
+       if ( iv_ganancia( om, libre, n, V, 16, NULL, 0, 0.0, &g ) != 0 ) continue;
+       if ( !g.hay_wald ) continue;
+
+       {
+       double pv = chisq_cola( g.wald, 1 );
+
+       mirados++;
+       if ( pv > peor_p ) { peor_p = pv; peor_det = i + 1; }
+       if ( pv >= DX_ALFA ) transitorios++;
+       }
+       }
+
+   if ( mirados == 0 )
+       {
+       l->estado = DX_NO_APLICA;
+       snprintf( l->dato, DX_DATO, "ninguna intervención de más de un ω" );
+       snprintf( l->dice, DX_DICE, "La ganancia sólo se puede preguntar a un "
+                 "escalón con varios ω: con uno, la ganancia es el "
+                 "coeficiente y su t ya está arriba." );
+       return;
+       }
+
+   snprintf( l->dato, DX_DATO, "%d intervención%s con varios ω · %d con "
+             "ganancia nula", mirados, mirados == 1 ? "" : "es", transitorios );
+
+   if ( transitorios > 0 )
+       {
+       l->estado = DX_MIRAR;
+       snprintf( l->dice, DX_DICE, "La ganancia de la intervención %d no se "
+                 "distingue de cero (p = %.3f): el efecto es TRANSITORIO, y "
+                 "L+1 escalones con ganancia nula son L impulsos -- un "
+                 "parámetro menos.", peor_det, peor_p );
+       }
+   else
+       {
+       l->estado = DX_CUADRA;
+       snprintf( l->dice, DX_DICE, "Todas dejan una ganancia distinta de cero: "
+                 "el efecto es PERMANENTE y gobierna la previsión de aquí en "
+                 "adelante." );
+       }
+}
+
 static void bloque_parametros( const FueOut *o, Dictamen *d )
 {
    DxLinea *l = nueva( d, "Parámetros" );
@@ -281,6 +380,7 @@ void dx_dictamen( const FueOut *o, const Convergence *conv, Dictamen *d )
    bloque_autocorrelacion( o, d );
    bloque_normalidad( o, d );
    bloque_parametros( o, d );
+   bloque_ganancia( o, conv, d );
    resume( d );
 }
 
@@ -288,9 +388,10 @@ const char *dx_estado_es( DxEstado e )
 {
    switch ( e )
        {
-       case DX_CUADRA: return "cuadra";
-       case DX_MIRAR:  return "mirar";
-       case DX_NO:     return "NO";
-       default:        return "no consta";
+       case DX_CUADRA:    return "cuadra";
+       case DX_MIRAR:     return "mirar";
+       case DX_NO:        return "NO";
+       case DX_NO_APLICA: return "no aplica";
+       default:           return "no consta";
        }
 }

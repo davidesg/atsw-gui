@@ -374,6 +374,23 @@ static void on_sugerir( GtkButton *b, An *g )
         parte_fecha( x->fecha, &anno, &per );
         x->anno = anno;
         x->per  = ( g->freq > 1 ) ? per : 1;
+
+        /* LA VENTANA LLEGA MAS ALLA DE LA DIFERENCIACION: con D = 1 la huella
+           de la forma reaparece a s períodos, y si la ventana se cortara
+           antes, lo que la forma NO explica caería fuera del dibujo.   */
+        {
+        int cola = g->o.d + g->freq * g->o.D + 6;
+        int fin;
+
+        x->base = g->ep[i].desde - 6;
+        if ( x->base < 0 ) x->base = 0;
+        fin = g->ep[i].hasta + cola;
+        if ( fin > g->o.nres - 1 ) fin = g->o.nres - 1;
+        x->nwin = fin - x->base + 1;
+        if ( x->nwin > AT_VENTANA ) x->nwin = AT_VENTANA;
+        for ( t = 0; t < x->nwin; t++ ) x->zwin[t] = g->z[x->base + t];
+        x->umbral = g->umbral;
+        }
         ns++;
         }
     if ( ns == 0 ) { barra_pub( g->a, "Marca primero el suceso que quieras "

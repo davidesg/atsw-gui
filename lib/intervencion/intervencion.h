@@ -97,4 +97,45 @@ const char *iv_nombre_es( IvForma f );
  * lee el año solo para los anuales). Devuelve 0 si pudo.                  */
 int iv_linea( IvForma f, int freq, int per, int anno, char *out, size_t n );
 
+/* --- la superposición: cómo capta la forma el suceso -------------------- */
+
+/* LA HUELLA -- lo que la forma dejaría EN LOS RESIDUOS.
+ *
+ * La intervención se especifica SIEMPRE en el nivel, sea cual sea la d, y el
+ * motor diferencia después. Así que su huella en los residuos es
+ * (1−B)^d (1−B^s)^D aplicado al regresor de nivel. Por eso un escalón deja un
+ * pico y un impulso deja dos que suman cero: no es una regla aparte, es esta
+ * cuenta.
+ *
+ * h[0..n−1] son los índices de residuo base..base+n−1, y t0 es el índice
+ * donde arranca el suceso. Devuelve 0 si pudo.                           */
+int iv_huella( IvForma f, int t0, int d, int D, int s, int base,
+               double *h, int n );
+
+/* LOS TRES NUMEROS DE LA SUPERPOSICION, que separan tres preguntas y se leen
+ * SIN mirar la figura:
+ *
+ *   escala  cuánto hay que multiplicar la forma para que encaje;
+ *   r2      qué fracción de la ventana explica la forma YA escalada. Bajo con
+ *           una escala razonable ⇒ el problema no es la amplitud, es el
+ *           PERFIL: esa forma no es la del suceso;
+ *   resto   el mayor |z| que SOBREVIVE a quitarla. Si tras ajustar queda un
+ *           4, la hipótesis no cubre lo que hay -- y eso es exactamente el
+ *           criterio de Treadway para subir de peldaño.
+ *
+ * DONDE NO LLEGA, dicho aquí para que no se le pida lo que no da: esto NO
+ * distingue una forma correcta de otra que deja una cola permanente pequeña.
+ * El r2 apenas se mueve, porque la diferencia está en la GANANCIA A LARGO
+ * PLAZO, que es del comportamiento futuro y no del perfil local. Eso lo
+ * dirime el contraste ω(1)=0, que exige estimar. El dibujo descarta lo
+ * incompatible barato; el contraste ve lo que el dibujo no puede.        */
+typedef struct {
+   double escala;
+   double r2;
+   double resto;         /* el mayor |z| que queda, con su signo          */
+   int    i_resto;       /* dónde, en índices de la ventana               */
+} IvAjuste;
+
+int iv_ajusta( const double *h, const double *z, int n, IvAjuste *out );
+
 #endif /* ATSW_INTERVENCION_H */

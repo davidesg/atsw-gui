@@ -167,3 +167,98 @@ int iv_lectura( const IvExtremo *ext, int next, int d, IvLectura *out )
    }
    return 0;
 }
+
+
+/* --- la superposición ---------------------------------------------------- */
+
+/* Los coeficientes de (1−B)^d (1−B^s)^D en c[0..*grado]. */
+#define IV_MAX_OP  80
+
+static int operador( int d, int D, int s, double *c )
+{
+   double t[IV_MAX_OP + 1];
+   int    grado = 0, i, k;
+
+   for ( i = 0; i <= IV_MAX_OP; i++ ) c[i] = 0.0;
+   c[0] = 1.0;
+   if ( d < 0 ) d = 0;
+   if ( D < 0 ) D = 0;
+   if ( s < 1 ) s = 1;
+   if ( d + s * D > IV_MAX_OP ) return -1;
+
+   for ( k = 0; k < d; k++ )
+       {
+       for ( i = 0; i <= grado + 1; i++ ) t[i] = 0.0;
+       for ( i = 0; i <= grado; i++ ) { t[i] += c[i]; t[i+1] -= c[i]; }
+       grado++;
+       for ( i = 0; i <= grado; i++ ) c[i] = t[i];
+       }
+   for ( k = 0; k < D; k++ )
+       {
+       for ( i = 0; i <= grado + s; i++ ) t[i] = 0.0;
+       for ( i = 0; i <= grado; i++ ) { t[i] += c[i]; t[i+s] -= c[i]; }
+       grado += s;
+       for ( i = 0; i <= grado; i++ ) c[i] = t[i];
+       }
+   return grado;
+}
+
+/* El regresor EN EL NIVEL, en el índice u. */
+static double nivel( IvForma f, int t0, int u )
+{
+   switch ( f )
+       {
+       case IV_ESCALON: return ( u >= t0 ) ? 1.0 : 0.0;
+       case IV_IMPULSO: return ( u == t0 ) ? 1.0 : 0.0;
+       case IV_RAMPA:   return ( u >= t0 ) ? (double)( u - t0 + 1 ) : 0.0;
+       case IV_COMPIMP: return ( u == t0 ) ? 1.0 : ( ( u == t0 + 1 ) ? -1.0 : 0.0 );
+       }
+   return 0.0;
+}
+
+int iv_huella( IvForma f, int t0, int d, int D, int s, int base,
+               double *h, int n )
+{
+   double c[IV_MAX_OP + 1];
+   int    grado, i, k;
+
+   if ( !h || n < 1 ) return 1;
+   grado = operador( d, D, s, c );
+   if ( grado < 0 ) return 1;
+
+   for ( i = 0; i < n; i++ )
+       {
+       double v = 0.0;
+
+       for ( k = 0; k <= grado; k++ )
+           if ( c[k] != 0.0 ) v += c[k] * nivel( f, t0, base + i - k );
+       h[i] = v;
+       }
+   return 0;
+}
+
+int iv_ajusta( const double *h, const double *z, int n, IvAjuste *out )
+{
+   double hh = 0.0, hz = 0.0, zz = 0.0, ss = 0.0;
+   int    i;
+
+   if ( !out ) return 1;
+   memset( out, 0, sizeof *out );
+   if ( !h || !z || n < 1 ) return 1;
+
+   for ( i = 0; i < n; i++ ) { hh += h[i] * h[i]; hz += h[i] * z[i]; zz += z[i] * z[i]; }
+   out->escala = ( hh > 0.0 ) ? hz / hh : 0.0;
+
+   for ( i = 0; i < n; i++ )
+       {
+       double r = z[i] - out->escala * h[i];
+
+       ss += r * r;
+       if ( fabs( r ) > fabs( out->resto ) ) { out->resto = r; out->i_resto = i; }
+       }
+   /* EL R2 CONTRA CERO, no contra la media: lo que la forma tiene que
+      explicar es el residuo entero, y su media ya debería ser cero. Contra
+      la media, una ventana con media distinta de cero regalaria ajuste. */
+   out->r2 = ( zz > 0.0 ) ? 1.0 - ss / zz : 0.0;
+   return 0;
+}

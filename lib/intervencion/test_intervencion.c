@@ -145,6 +145,70 @@ int main( void )
         "un período fuera de la frecuencia se rechaza, no se escribe" );
     }
 
+    printf( "\nLA HUELLA ES EL DICCIONARIO, CALCULADO\n" );
+    /* NO ES UNA TABLA APARTE: la huella es (1-B)^d (1-B^s)^D aplicado al
+       regresor de nivel, y de ahi SALE el diccionario. Si esto cuadra, la
+       regla de arriba no es una convencion: es una cuenta.            */
+    {
+    double h[24];
+    int    i, base = 5, t0 = 10;
+
+    iv_huella( IV_ESCALON, t0, 1, 0, 12, base, h, 24 );
+    ok( h[t0-base] == 1.0, "escalon con d=1: UN pico de +1 en T" );
+    {
+    double suma = 0.0;
+
+    for ( i = 0; i < 24; i++ ) suma += h[i];
+    ok( suma == 1.0, "y la suma de la huella es 1 -- no revierte" );
+    }
+
+    iv_huella( IV_IMPULSO, t0, 1, 0, 12, base, h, 24 );
+    ok( h[t0-base] == 1.0 && h[t0-base+1] == -1.0,
+        "impulso con d=1: DOS picos, +1 y -1" );
+    {
+    double suma = 0.0;
+
+    for ( i = 0; i < 24; i++ ) suma += h[i];
+    ok( suma == 0.0, "y suman CERO -- revierte, que es la definicion" );
+    }
+
+    iv_huella( IV_ESCALON, t0, 0, 0, 12, base, h, 24 );
+    ok( h[t0-base] == 1.0 && h[t0-base+1] == 1.0,
+        "escalon con d=0: se queda arriba, no es un pico" );
+
+    iv_huella( IV_ESCALON, t0, 1, 1, 12, base, h, 24 );
+    ok( h[t0-base] == 1.0 && h[t0-base+12] == -1.0,
+        "escalon con d=1 y D=1: el pico se REPITE a los 12, cambiado de signo" );
+    ok( h[t0-base+1] == 0.0, "y entre medias no deja nada" );
+    }
+
+    printf( "\nLOS TRES NUMEROS SEPARAN TRES PREGUNTAS\n" );
+    {
+    double h[16], z[16];
+    IvAjuste aj;
+    int      i, base = 0, t0 = 6;
+
+    /* un escalon de nivel de tamaño 3, visto en ∇, y nada mas */
+    iv_huella( IV_ESCALON, t0, 1, 0, 12, base, h, 16 );
+    for ( i = 0; i < 16; i++ ) z[i] = 3.0 * h[i];
+    iv_ajusta( h, z, 16, &aj );
+    ok( aj.escala > 2.99 && aj.escala < 3.01, "la escala es el tamaño del suceso" );
+    ok( aj.r2 > 0.999, "y el R2 es 1: la forma lo explica entero" );
+    ok( aj.resto < 1e-9 && aj.resto > -1e-9, "no queda nada" );
+
+    /* la forma EQUIVOCADA: el dato es un impulso y se prueba un escalon */
+    iv_huella( IV_IMPULSO, t0, 1, 0, 12, base, h, 16 );
+    for ( i = 0; i < 16; i++ ) z[i] = 4.0 * h[i];
+    iv_huella( IV_ESCALON, t0, 1, 0, 12, base, h, 16 );
+    iv_ajusta( h, z, 16, &aj );
+    ok( aj.r2 < 0.6, "con el perfil equivocado el R2 se cae" );
+    ok( aj.resto <= -3.0,
+        "y SOBREVIVE el vecino que la forma no explica: el criterio de "
+        "Treadway, visto antes de estimar" );
+    printf( "        escala %.2f, R2 %.2f, mayor resto %+.2f en %d\n",
+            aj.escala, aj.r2, aj.resto, aj.i_resto );
+    }
+
     printf( "\n%d fallos\n", fallos );
     return fallos ? 1 : 0;
 }

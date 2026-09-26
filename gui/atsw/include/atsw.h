@@ -158,6 +158,7 @@ void       atsw_editor( Atsw *a, const char *serie, const char *muestra,
    .out, que es la que el motor usa para fechar la intervencion.        */
 #define AT_MAX_EXT  16
 #define AT_MAX_SUC  64      /* los episodios que puede traer una ventana */
+#define AT_VENTANA  64      /* el entorno del suceso que se dibuja        */
 
 typedef struct {
     int    desde, hasta;        /* indices en los residuos                 */
@@ -166,6 +167,13 @@ typedef struct {
     int    obs[AT_MAX_EXT];     /* los extremos, en indices de residuo     */
     double z[AT_MAX_EXT];
     int    next;
+
+    /* EL ENTORNO, PARA VER SI LA FORMA LO CAPTA. No basta con los extremos:
+       lo que dice si la forma sirve es lo que QUEDA alrededor al quitarla,
+       y eso hay que mirarlo fuera del episodio.                        */
+    int    base, nwin;          /* zwin[i] es el residuo base+i            */
+    double zwin[AT_VENTANA];
+    double umbral;              /* el de los anomalos, para juzgar el resto */
 } AtSuceso;
 
 /* «Sugerir intervencion…»: que FORMA pide cada suceso marcado, por que, y

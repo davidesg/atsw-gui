@@ -26,6 +26,7 @@
 
 #include <string.h>
 #include <stdarg.h>
+#include <math.h>
 #include <glib/gstdio.h>
 
 #include "intervencion.h"
@@ -49,6 +50,8 @@ typedef struct {
 
     GtkWidget *win;
     GtkWidget *usa[SG_MAX], *forma[SG_MAX], *linea[SG_MAX];
+    GtkWidget *dib[SG_MAX], *nums[SG_MAX];
+    GtkWidget *l_estado;
 } Sg;
 
 static const IvForma ORDEN[4] = { IV_ESCALON, IV_IMPULSO, IV_COMPIMP, IV_RAMPA };
@@ -77,11 +80,155 @@ static void repinta_linea( Sg *g, int k )
     }
 }
 
+/* ------------------------------------------------------------------------ */
+/* LA SUPERPOSICION: como capta la forma el suceso                           */
+/*                                                                           */
+/* Lo que se ve son tres cosas, y son tres preguntas distintas:              */
+/*                                                                           */
+/*   en gris    lo OBSERVADO en el entorno del suceso;                       */
+/*   en azul    la HUELLA que la forma elegida dejaría en los residuos, ya   */
+/*              escalada -- (1−B)^d (1−B^s)^D del regresor de nivel, que es  */
+/*              de donde SALE el diccionario, no una tabla aparte;           */
+/*   en oscuro  lo que QUEDA al quitarla, y en rojo si pasa del umbral.      */
+/*                                                                           */
+/* La tercera es la que decide: si tras ajustar la forma sigue habiendo un   */
+/* extremo, la hipótesis no cubre lo que hay. Es el criterio de Treadway     */
+/* para subir de peldaño, visto ANTES de gastar una estimación.              */
+/* ------------------------------------------------------------------------ */
+
+static int huella_de( Sg *g, int k, double *h, IvAjuste *aj )
+{
+    const AtSuceso *x = &g->s[k];
+
+    if ( x->nwin < 2 ) return 1;
+    if ( iv_huella( forma_de( GTK_COMBO_BOX_TEXT(g->forma[k]) ), x->obs[0],
+                    g->d, g->D, g->freq, x->base, h, x->nwin ) != 0 ) return 1;
+    return iv_ajusta( h, x->zwin, x->nwin, aj );
+}
+
+static gboolean pinta( GtkWidget *w, cairo_t *cr, Sg *g )
+{
+    int              k = GPOINTER_TO_INT( g_object_get_data( G_OBJECT(w), "k" ) );
+    const AtSuceso  *x;
+    GtkAllocation    al;
+    double           h[AT_VENTANA], escala, medio, alto, dx, may = 0.0;
+    IvAjuste         aj;
+    int              i;
+
+    if ( k < 0 || k >= g->ns ) return FALSE;
+    x = &g->s[k];
+    if ( huella_de( g, k, h, &aj ) != 0 ) return FALSE;
+
+    gtk_widget_get_allocation( w, &al );
+    medio = al.height / 2.0;
+    alto  = medio - 8.0;
+    dx    = (double) al.width / x->nwin;
+
+    /* LA ESCALA LA FIJA LO OBSERVADO Y EL UMBRAL, no la huella: si la
+       fijara la huella, una forma disparatada se dibujaría cómoda y lo
+       observado quedaría aplastado contra el eje.                     */
+    for ( i = 0; i < x->nwin; i++ ) if ( fabs( x->zwin[i] ) > may ) may = fabs( x->zwin[i] );
+    if ( x->umbral > may ) may = x->umbral;
+    if ( may <= 0.0 ) return FALSE;
+    escala = alto / ( may * 1.1 );
+
+    /* el eje y el umbral */
+    cairo_set_source_rgb( cr, 0.45, 0.45, 0.45 );
+    cairo_set_line_width( cr, 1.0 );
+    cairo_move_to( cr, 0, medio ); cairo_line_to( cr, al.width, medio );
+    cairo_stroke( cr );
+    {
+    static const double guion[] = { 2.0, 3.0 };
+
+    cairo_set_source_rgba( cr, 0.20, 0.40, 0.75, 0.5 );
+    cairo_set_dash( cr, guion, 2, 0 );
+    cairo_move_to( cr, 0, medio - x->umbral * escala );
+    cairo_line_to( cr, al.width, medio - x->umbral * escala );
+    cairo_move_to( cr, 0, medio + x->umbral * escala );
+    cairo_line_to( cr, al.width, medio + x->umbral * escala );
+    cairo_stroke( cr );
+    cairo_set_dash( cr, NULL, 0, 0 );
+    }
+
+    /* lo observado, de fondo */
+    cairo_set_source_rgba( cr, 0.55, 0.55, 0.58, 0.45 );
+    for ( i = 0; i < x->nwin; i++ )
+        {
+        double px = ( i + 0.5 ) * dx;
+
+        cairo_rectangle( cr, px - dx * 0.34, medio, dx * 0.68, -x->zwin[i] * escala );
+        }
+    cairo_fill( cr );
+
+    /* la huella escalada: una linea, que es una FORMA y no una cuenta */
+    cairo_set_source_rgb( cr, 0.15, 0.35, 0.72 );
+    cairo_set_line_width( cr, 1.6 );
+    for ( i = 0; i < x->nwin; i++ )
+        {
+        double px = ( i + 0.5 ) * dx, py = medio - aj.escala * h[i] * escala;
+
+        if ( i ) cairo_line_to( cr, px, py ); else cairo_move_to( cr, px, py );
+        }
+    cairo_stroke( cr );
+
+    /* lo que QUEDA */
+    for ( i = 0; i < x->nwin; i++ )
+        {
+        double r = x->zwin[i] - aj.escala * h[i];
+        double px = ( i + 0.5 ) * dx;
+
+        if ( fabs( r ) >= x->umbral ) cairo_set_source_rgb( cr, 0.71, 0.11, 0.09 );
+        else                          cairo_set_source_rgb( cr, 0.20, 0.20, 0.24 );
+        cairo_set_line_width( cr, 2.0 );
+        cairo_move_to( cr, px, medio );
+        cairo_line_to( cr, px, medio - r * escala );
+        cairo_stroke( cr );
+        }
+
+    /* donde arranca el suceso */
+    {
+    double px = ( x->obs[0] - x->base + 0.5 ) * dx;
+
+    cairo_set_source_rgba( cr, 0.85, 0.55, 0.10, 0.85 );
+    cairo_set_line_width( cr, 1.0 );
+    cairo_move_to( cr, px, 0 ); cairo_line_to( cr, px, al.height );
+    cairo_stroke( cr );
+    }
+    return FALSE;
+}
+
+/* LOS TRES NUMEROS, que se leen sin mirar la figura. */
+static void di_numeros( Sg *g, int k )
+{
+    double   h[AT_VENTANA];
+    IvAjuste aj;
+    gchar   *t;
+
+    if ( huella_de( g, k, h, &aj ) != 0 ) return;
+
+    if ( fabs( aj.resto ) >= g->s[k].umbral )
+        t = g_markup_printf_escaped(
+            "<small>escala <b>%.2f</b> · R² <b>%.2f</b> · mayor resto "
+            "<b>%+.2f</b> — <span foreground=\"#b51c17\">queda un extremo: "
+            "esta forma no cubre el suceso</span></small>",
+            aj.escala, aj.r2, aj.resto );
+    else
+        t = g_markup_printf_escaped(
+            "<small>escala <b>%.2f</b> · R² <b>%.2f</b> · mayor resto "
+            "<b>%+.2f</b> — no sobrevive ningún extremo</small>",
+            aj.escala, aj.r2, aj.resto );
+    gtk_label_set_markup( GTK_LABEL(g->nums[k]), t );
+    g_free( t );
+}
+
 static void on_forma( GtkComboBox *c, Sg *g )
 {
     int k = GPOINTER_TO_INT( g_object_get_data( G_OBJECT(c), "k" ) );
 
-    if ( k >= 0 && k < g->ns ) repinta_linea( g, k );
+    if ( k < 0 || k >= g->ns ) return;
+    repinta_linea( g, k );
+    di_numeros( g, k );
+    if ( g->dib[k] ) gtk_widget_queue_draw( g->dib[k] );
 }
 
 
@@ -102,6 +249,15 @@ static int origen_de( Sg *g, char *out, size_t n )
     return g_file_test( out, G_FILE_TEST_EXISTS ) ? 2 : 0;
 }
 
+/* LO QUE SE DICE, SE DICE DONDE SE MIRA.
+ *
+ * La primera version mandaba los avisos a la barra de la madre. Desde esta
+ * ventana eso es no decir nada: el analista pulsa «Derivar», la ventana se
+ * queda igual y el motivo aparece detras, en otra ventana que no esta
+ * mirando. Una negativa que no se ve es un boton que no hace nada.
+ *
+ * Asi que va a las dos, y ademas al log: si algun dia vuelve a «no pasar
+ * nada», el motivo estara escrito en algun sitio.                        */
 static void di( Sg *g, const char *fmt, ... )
 {
     va_list ap;
@@ -110,7 +266,16 @@ static void di( Sg *g, const char *fmt, ... )
     va_start( ap, fmt );
     s = g_strdup_vprintf( fmt, ap );
     va_end( ap );
+
+    if ( g->l_estado )
+        {
+        gchar *m = g_markup_printf_escaped( "<small>%s</small>", s );
+
+        gtk_label_set_markup( GTK_LABEL(g->l_estado), m );
+        g_free( m );
+        }
     barra_pub( g->a, s );
+    g_message( "sugerir: %s", s );
     g_free( s );
 }
 
@@ -313,7 +478,7 @@ void atsw_sugerir( Atsw *a, const char *serie, const char *muestra,
     for ( k = 0; k < ns; k++ )
         {
         GtkWidget *raz;
-        int        i, fila = 2 * k;
+        int        i, fila = 4 * k;
 
         g->usa[k] = gtk_check_button_new_with_label( g->s[k].fecha );
         gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(g->usa[k]), TRUE );
@@ -355,6 +520,30 @@ void atsw_sugerir( Atsw *a, const char *serie, const char *muestra,
         gtk_widget_set_margin_bottom( raz, 8 );
         gtk_widget_set_margin_start( raz, 24 );
         gtk_grid_attach( GTK_GRID(rej), raz, 0, fila + 1, 3, 1 );
+
+        /* EL DIBUJO, que es la otra mitad de la respuesta: la razon dice que
+           forma pide la firma, y esto dice si esa forma la CAPTA.      */
+        g->dib[k] = gtk_drawing_area_new();
+        gtk_widget_set_size_request( g->dib[k], -1, 96 );
+        gtk_widget_set_hexpand( g->dib[k], TRUE );
+        gtk_widget_set_tooltip_text( g->dib[k],
+            "En gris lo observado en el entorno del suceso; en azul la huella "
+            "que esta forma dejaría en los residuos, ya escalada; en oscuro lo "
+            "que QUEDA al quitarla, y en rojo si pasa del umbral.\n\nSi tras "
+            "ajustar la forma sigue habiendo un extremo, la hipótesis no cubre "
+            "lo que hay: eso es subir de peldaño, y se ve aquí antes de gastar "
+            "una estimación." );
+        g_object_set_data( G_OBJECT(g->dib[k]), "k", GINT_TO_POINTER(k) );
+        g_signal_connect( g->dib[k], "draw", G_CALLBACK(pinta), g );
+        gtk_grid_attach( GTK_GRID(rej), g->dib[k], 0, fila + 2, 3, 1 );
+
+        g->nums[k] = gtk_label_new( NULL );
+        gtk_label_set_xalign( GTK_LABEL(g->nums[k]), 0.0 );
+        gtk_label_set_line_wrap( GTK_LABEL(g->nums[k]), TRUE );
+        gtk_widget_set_margin_start( g->nums[k], 24 );
+        gtk_widget_set_margin_bottom( g->nums[k], 10 );
+        gtk_grid_attach( GTK_GRID(rej), g->nums[k], 0, fila + 3, 3, 1 );
+        di_numeros( g, k );
         }
 
     /* LO QUE ESTA REGLA NO MIRA, DICHO DONDE SE USA.
@@ -382,15 +571,39 @@ void atsw_sugerir( Atsw *a, const char *serie, const char *muestra,
         gtk_box_pack_start( GTK_BOX(raiz), av, FALSE, FALSE, 0 );
         }
 
+    if ( d >= 2 )
+        {
+        GtkWidget *av = gtk_label_new( NULL );
+
+        gtk_label_set_markup( GTK_LABEL(av),
+            "<small>⚠ Con <b>d = 2</b> el diccionario tiene otra fila: un "
+            "impulso en la serie transformada es una <b>rampa</b> en el nivel. "
+            "La lectura de arriba está pensada para d = 0 y d = 1; aquí, "
+            "míratela.</small>" );
+        gtk_label_set_xalign( GTK_LABEL(av), 0.0 );
+        gtk_label_set_line_wrap( GTK_LABEL(av), TRUE );
+        gtk_box_pack_start( GTK_BOX(raiz), av, FALSE, FALSE, 0 );
+        }
+
     pie = gtk_label_new( NULL );
     gtk_label_set_markup( GTK_LABEL(pie),
         "<small>Esto es el <b>peldaño 1</b> de la escalera: la lectura "
         "escalar, UNA intervención por suceso. Si al reestimar la forma deja "
         "un vecino anómalo o no deja ruido blanco, hay que subir de peldaño — "
-        "y eso se ve estimando, no aquí. <b>Lo obvio primero.</b></small>" );
+        "y eso se ve estimando, no aquí. <b>Lo obvio primero.</b>\n"
+        "El dibujo descarta lo incompatible barato, pero <b>no</b> distingue "
+        "una forma correcta de otra que deja una cola permanente pequeña: el "
+        "R² apenas se mueve, porque la diferencia está en la ganancia a largo "
+        "plazo. Eso lo dirime el contraste ω(1)=0, que exige "
+        "estimar.</small>" );
     gtk_label_set_xalign( GTK_LABEL(pie), 0.0 );
     gtk_label_set_line_wrap( GTK_LABEL(pie), TRUE );
     gtk_box_pack_start( GTK_BOX(raiz), pie, FALSE, FALSE, 0 );
+
+    g->l_estado = gtk_label_new( NULL );
+    gtk_label_set_xalign( GTK_LABEL(g->l_estado), 0.0 );
+    gtk_label_set_line_wrap( GTK_LABEL(g->l_estado), TRUE );
+    gtk_box_pack_start( GTK_BOX(raiz), g->l_estado, FALSE, FALSE, 0 );
 
     barra = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 8 );
     gtk_box_set_homogeneous( GTK_BOX(barra), FALSE );

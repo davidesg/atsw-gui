@@ -137,24 +137,8 @@ real ChiTest(real *corr, int lags, int nobs) {
     return chisqr;
 }
 
-/*---------------------------------------------------------------------------*/
-void ObsToDate(int beg_per, int beg_sub, int obs_no, int freq,
-                       int *per, int *sub) {
-    div_t cad;
-    if (obs_no + beg_sub - 1 <= freq) {
-        *per = beg_per;
-        *sub = beg_sub + obs_no - 1;
-    } else {
-        cad = div(obs_no - (freq - beg_sub + 1), freq);
-        if (cad.rem > 0) {
-            *per = beg_per + cad.quot + 1;
-            *sub = cad.rem;
-        } else {
-            *per = beg_per + cad.quot;
-            *sub = freq;
-        }
-    }
-}
+/* ObsToDate vive en lib/dates: era una copia identica, y el lector del .pre
+   (lib/fuepre) enlaza la de alli. */
 
 
 /*---------------------------------------------------------------------------*/
@@ -810,6 +794,13 @@ p1:FREE_STR( Tmpstr );
                     } else if (strlen(s1) == 3) {
                         strcat(s1, " ");
                     }
+                }
+                /* A count wider than its cell (100+ with nphor = 2, 10000+
+                   with 4) wrote past the row: heap overflow (BUGS.md). The
+                   cell keeps its width and says the count did not fit.     */
+                if ((int) strlen(s1) > nphor) {
+                    memset(s1, '*', nphor);
+                    s1[nphor] = '\0';
                 }
                 strcat(aux[j-2], s1);
                 chk[i] = 1;

@@ -79,6 +79,21 @@ the regular AR and MA orders. Results are written to `file.out` (and
 | `-estwin N` | estimate parameters on the first N raw observations, then write `file.recursive` with **fixed-parameter** forecasts from every origin to the end of the data (use with `-forecast`); enables out-of-sample comparison across origins without re-estimating |
 | `-volexp [α window]`, `-volmov [window]` | exponential / moving-window volatility |
 
+### The ladder: `.pre` input (5.0)
+
+```
+drvarma A.pre B.pre [C.pre ...] p q [-diagcov] [-redet] [-fixarma] [-m 1|2] [-o NAME]
+```
+
+Each series brings its univariate model from fue (Box-Cox, deterministic
+terms, differencing, mean and ARMA factors). The VARMA keeps each model on
+its **diagonal**; `p` and `q` are the orders of the **cross** dynamics. Before
+anything cross is estimated, the diagonal gate checks that the joint cast
+reproduces the univariate models exactly, and stops the program if it does
+not. Deterministic terms stay at the `.pre` values unless `-redet`. The series
+must share their frequency and their last date (BUG-2). Forecasting in this
+mode comes in a later phase. See `docs/DESIGN-v5-ladder.md`.
+
 ### Input file format (`.inp`)
 
 ```

@@ -41,7 +41,7 @@ endif
 
 
 # Compiler and basic flags
-CFLAGS   = -O2 -g -Wall -I./include
+CFLAGS   = -O2 -g -Wall -I./include -I$(LIB_DIR)/fuepre -I$(LIB_DIR)/prewhiten -I$(LIB_DIR)/dates
 LDFLAGS  +=
 LIBS     = -lm
 
@@ -55,6 +55,12 @@ BIN_DIR   = bin
 # Core drvarma sources (all .c files in src/)
 SRCS = $(wildcard $(SRC_DIR)/*.c)
 OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS))
+
+# Shared with drtran and its GUI (lib/ of the monorepo): the .pre reader,
+# the univariate transformations and the date helpers. One source each.
+LIB_DIR  = ../../lib
+LIB_OBJS = $(BUILD_DIR)/fue_pre_reader.o $(BUILD_DIR)/fuepre_motor.o \
+           $(BUILD_DIR)/prewhiten.o $(BUILD_DIR)/dates.o
 
 # GUI source and objects
 GUI_SRC        = $(GUI_DIR)/drvarma_gui.c
@@ -129,11 +135,18 @@ $(BIN_DIR):
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
 	$(CC) $(CLI_CFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/%.o: $(LIB_DIR)/fuepre/%.c | $(BUILD_DIR)
+	$(CC) $(CLI_CFLAGS) -c $< -o $@
+$(BUILD_DIR)/%.o: $(LIB_DIR)/prewhiten/%.c | $(BUILD_DIR)
+	$(CC) $(CLI_CFLAGS) -c $< -o $@
+$(BUILD_DIR)/%.o: $(LIB_DIR)/dates/%.c | $(BUILD_DIR)
+	$(CC) $(CLI_CFLAGS) -c $< -o $@
+
 # seasonal_detection.c (from gui/) compiled into the CLI engine
 $(SEASONAL_CLI_OBJ): $(SEASONAL_SRC) | $(BUILD_DIR)
 	$(CC) $(CLI_CFLAGS) -c $< -o $@
 
-$(DRV_EXEC): $(OBJS) $(SEASONAL_CLI_OBJ) | $(BIN_DIR)
+$(DRV_EXEC): $(OBJS) $(LIB_OBJS) $(SEASONAL_CLI_OBJ) | $(BIN_DIR)
 	$(CC) $(LDFLAGS) -o $@ $^ $(CLI_LIBS)
 
 # GUI drvarma

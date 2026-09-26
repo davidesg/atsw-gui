@@ -7,6 +7,47 @@ All notable changes to drvarma are documented here. The format is based on
 Versions up to 0.4 were maintained as directory snapshots (`drvarma_v.01` …
 `drvarma_v.04`); 0.4.1 is the first release tracked in git.
 
+## [5.0.0] — unreleased
+
+drvarma joins the ladder fue → drtran → drvarma: it reads fue's `.pre` files.
+Design: `docs/DESIGN-v5-ladder.md`.
+
+### Added
+- **`.pre` input (ladder mode).** `drvarma A.pre B.pre [...] p q [-diagcov]
+  [-redet] [-fixarma] [-m method] [-o NAME]`. Each series carries its
+  univariate model from fue on the **diagonal** of the VARMA: Box-Cox,
+  deterministic terms, non-stationary operator, mean, and ARMA factors
+  (seasonal and fixed-frequency ones included). `p` and `q` are the orders
+  of the **cross** dynamics. The deterministic terms stay at their `.pre`
+  values unless `-redet`.
+- **The diagonal gate, and it closes.** Before anything cross is estimated,
+  each series is fitted alone and the diagonal system is evaluated at those
+  optima. If it does not match the sum of the univariate log-likelihoods,
+  the program stops (exit code 5). The gate also reports how far each
+  `.pre` moves: a genuine `.pre` is a fixed point. An LR test compares the
+  cross dynamics against the diagonal system.
+- **Declared version** in `include/version.h`, used by `-version`, the
+  `Program` line of the `.out` (both paths) and the GUI title.
+- `tests/banco/`: byte regression of the `.inp` path against 0.4.1.
+  `tests/escalera/`: the assertions of the ladder and its regression.
+
+### Fixed
+- **BUG-2**: series are crossed by date, not by position. They must share
+  the frequency and the last date, or they are rejected (`lib/fuepre`,
+  shared with drtran).
+- The line search (`lnsrch`) never returned on a NaN or infinite objective;
+  `objcfunc` now returns 1.0 for a non-finite objective.
+- Heap overflow in the residual histogram (`File_HistSer`) with three-digit
+  counts.
+
+### Changed
+- The `.pre` reader, `struct Tusmodel`, the univariate transformations and
+  the date helpers come from `lib/` (`fuepre`, `prewhiten`, `dates`): the
+  same code that drtran and its GUI use. The copy of `ObsToDate` in
+  `diagnose.c`, which was identical, is gone.
+- The `.inp` path is unchanged: the only difference in its `.out` is the
+  `Program` line.
+
 ## [0.4.1] — 2026-06-24
 
 First GPL-ready, Numerical-Recipes-free release; prepared for public

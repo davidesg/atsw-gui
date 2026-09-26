@@ -622,14 +622,26 @@ static void on_destruir( GtkWidget *w, Editor *E )
     g_free( E );
 }
 
-/* Cerrar --guardando-- lo que haya abierto de ese nodo. Se llama al derivar.
- * Si no hay nada abierto no pasa nada, que es la respuesta correcta.   */
-void atsw_editor_cierra( const char *serie, const char *muestra,
-                         const char *id )
+/* Cerrar lo que haya abierto de ese nodo. Se llama al DERIVAR.
+ *
+ * Y NO GUARDA, que es lo que hacia y estaba mal. Al llamarse, el hijo ya
+ * existe: guardar el padre seria justo la escritura que este programa
+ * impide dos funciones mas abajo --un padre con hijos no se edita--, y
+ * hacerlo aqui por la puerta de atras es peor que hacerlo de frente.
+ *
+ * Con cambios sin guardar NO SE CIERRA. Tirar el trabajo del analista sin
+ * preguntar no es una opcion, y guardarlo tampoco: se deja la ventana
+ * abierta y se dice. La decision es suya, que para eso el .inp del padre
+ * sigue siendo suyo hasta que el hijo se estime.
+ *
+ * Devuelve 0 si cerro todo lo que habia, y 1 si dejo algo abierto.    */
+int atsw_editor_cierra( const char *serie, const char *muestra,
+                        const char *id )
 {
     GSList *l, *copia;
+    int     quedan = 0;
 
-    if ( !serie || !id ) return;
+    if ( !serie || !id ) return 0;
     copia = g_slist_copy( g_abiertos );      /* destruir modifica la lista */
     for ( l = copia; l; l = l->next )
         {
@@ -640,10 +652,17 @@ void atsw_editor_cierra( const char *serie, const char *muestra,
 
         if ( gtk_text_buffer_get_modified(
                  gtk_text_view_get_buffer( GTK_TEXT_VIEW(E->texto) ) ) )
-            { char nid[PR_ID]; guarda( E, nid, sizeof nid ); }
+            {
+            di( E, "Se ha derivado de aquí: este .inp queda congelado. "
+                   "Tienes cambios sin guardar; decide tú qué hacer con "
+                   "ellos." );
+            quedan = 1;
+            continue;
+            }
         gtk_widget_destroy( E->win );
         }
     g_slist_free( copia );
+    return quedan;
 }
 
 static GtkWidget *monoespaciado( void )

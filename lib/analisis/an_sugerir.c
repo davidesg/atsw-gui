@@ -740,7 +740,15 @@ void an_sugerir( const AnHost *h, const char *serie, const char *muestra,
         "enseña la diagnosis: es lo que un nodo recién derivado necesita a "
         "continuación. El editor es para cuando la especificación pide algo "
         "que el formulario no sabe decir." );
-    if ( h->abre ) gtk_box_pack_end( GTK_BOX(barra), g->con_que, FALSE, FALSE, 0 );
+    /* A LA IZQUIERDA, Y CON SU ETIQUETA. Estaba a la derecha de «Cancelar»,
+       que es donde nadie mira: un selector que decide adonde va el trabajo
+       no puede estar detras del boton de no hacer nada.              */
+    if ( h->abre )
+        {
+        gtk_box_pack_start( GTK_BOX(barra), gtk_label_new( "Abrir el nuevo:" ),
+                            FALSE, FALSE, 0 );
+        gtk_box_pack_start( GTK_BOX(barra), g->con_que, FALSE, FALSE, 0 );
+        }
 
     b = gtk_button_new_with_label( "Cancelar" );
     g_signal_connect_swapped( b, "clicked", G_CALLBACK(gtk_widget_destroy), g->win );

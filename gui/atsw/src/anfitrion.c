@@ -11,7 +11,7 @@
 #include "anfitrion.h"
 
 void barra_pub( Atsw *a, const char *s );
-void atsw_editor_cierra( const char *serie, const char *muestra,
+int  atsw_editor_cierra( const char *serie, const char *muestra,
                          const char *id );
 
 static void md_di( void *d, const char *s )
@@ -42,18 +42,24 @@ static void md_abre( void *d, const char *serie, const char *muestra,
     char  ruta[PR_RUTA];
 
     if ( con == AN_CON_EDITOR )
-        { atsw_editor( a, serie, muestra, id ); return; }
+        {
+        g_message( "abre: %s/%s/%s en el editor", serie, muestra, id );
+        atsw_editor( a, serie, muestra, id );
+        return;
+        }
 
     if ( pr_ruta( a->p, serie, muestra, id, ".inp", ruta, sizeof ruta ) != 0 )
         { barra_pub( a, "No pude componer la ruta del modelo nuevo." ); return; }
+    g_message( "abre: %s/%s/%s en fue -> %s", serie, muestra, id, ruta );
     atsw_lanza( a, "fue_gui", ruta );
 }
 
 static void md_cierra( void *d, const char *serie, const char *muestra,
                        const char *id )
 {
-    (void) d;
-    atsw_editor_cierra( serie, muestra, id );
+    if ( atsw_editor_cierra( serie, muestra, id ) != 0 )
+        barra_pub( (Atsw *) d, "El padre tenía cambios sin guardar: su "
+                               "ventana sigue abierta." );
 }
 
 AnHost atsw_host( Atsw *a )

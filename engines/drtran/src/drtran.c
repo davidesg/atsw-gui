@@ -2352,9 +2352,19 @@ static int topo_sort(void)
 
     if (net_topo(tmp, n_link, n_ser, topo)) return 1;
 
+    /* Un ciclo es el final del camino de drtran, no un error que corregir
+       aqui. Se vuelve a la escalera y se entra en drvarma con los MISMOS .pre:
+       no es la mejor parametrizacion de un VARMA, pero es una buena semilla
+       -- la autocorrelacion de cada serie ya viene modelizada -- y el
+       univariante es la vara de medir: un VARMA que no lo mejora no aporta. */
     fprintf(stderr, "Error: the transfer network has a CYCLE: the system is\n"
                     "       simultaneous and cannot be cast as a triangular\n"
-                    "       VARMA by subtracting transfers.\n");
+                    "       VARMA by subtracting transfers.\n"
+                    "       This is where drtran ends. Go back to the ladder:\n"
+                    "       drvarma takes the SAME .pre files as a general VARMA,\n"
+                    "         drvarma A.pre B.pre [...] p q\n"
+                    "       with each univariate model on its diagonal and p, q\n"
+                    "       the orders of the cross dynamics.\n");
     return 0;
 }
 

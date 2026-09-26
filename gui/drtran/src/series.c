@@ -71,23 +71,9 @@ gchar *serie_fecha(const Serie *s, int obs)
     if (s->ts.numbering || s->ts.freq <= 1)
         return g_strdup_printf("%d", s->ts.begyear + obs - 1);
 
-    /* La inversa de DateToObs. Se hace aqui y no se llama al motor porque el
-     * motor tiene ObsToDate copiada en el diagnose.c de los cinco programas:
-     * unificarla es la siguiente mudanza a lib/, y hasta entonces esta es la
-     * misma cuenta escrita una vez.                                        */
-    {
-    int resto = obs + s->ts.begtime - 1;
-
-    if (resto <= s->ts.freq) {
-        per = s->ts.begyear;
-        sub = resto;
-    } else {
-        int q = (obs - (s->ts.freq - s->ts.begtime + 1)) / s->ts.freq;
-        int r = (obs - (s->ts.freq - s->ts.begtime + 1)) % s->ts.freq;
-        if (r > 0) { per = s->ts.begyear + q + 1; sub = r; }
-        else       { per = s->ts.begyear + q;     sub = s->ts.freq; }
-    }
-    }
+    /* lib/dates, the same ObsToDate the engines use. It was written out by
+     * hand here while each engine carried its own copy; those are gone.  */
+    ObsToDate(s->ts.begyear, s->ts.begtime, obs, s->ts.freq, &per, &sub);
     return g_strdup_printf("%02d/%d", sub, per);
 }
 
@@ -173,6 +159,34 @@ gboolean conjunto_ventana_comun(const Conjunto *c, int *desde, int *hasta,
         desde[i] = (int)(ini - inicio_abs(c->s[i])) + 1;
         hasta[i] = (int)(fin - inicio_abs(c->s[i])) + 1;
     }
+    return TRUE;
+}
+
+/* The engine's rule, not a second one. drtran requires the same frequency
+ * and the same LAST date (lib/fuepre, BUG-2) and, on top of that, the same
+ * number of observations: any series the common window would trim is a set
+ * the engine rejects. The window above is still shown, because it says how
+ * to rebuild the .pre files in art.                                        */
+gboolean conjunto_alineado(const Conjunto *c, char *why, size_t size)
+{
+    struct Tseries ts[GUI_MAX_SER + 1];
+    int i;
+
+    if (c->n < 2) {
+        g_snprintf(why, size, "hacen falta al menos dos series");
+        return FALSE;
+    }
+    for (i = 0; i < c->n; i++) ts[i + 1] = c->s[i]->ts;
+    if (fuepre_check_alignment(ts, c->n, why, size) != 0) return FALSE;
+    for (i = 1; i < c->n; i++)
+        if (c->s[i]->ts.nobs != c->s[0]->ts.nobs) {
+            g_snprintf(why, size,
+                       "%s tiene %d observaciones y %s %d: drtran exige la "
+                       "misma ventana en todas",
+                       c->s[i]->ts.name, c->s[i]->ts.nobs,
+                       c->s[0]->ts.name, c->s[0]->ts.nobs);
+            return FALSE;
+        }
     return TRUE;
 }
 

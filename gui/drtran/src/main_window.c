@@ -150,16 +150,21 @@ static void refresca_ventana(Mtram *m)
     gchar *d = serie_fecha(m->c.s[0], desde[0]);
     gchar *h = serie_fecha(m->c.s[0], hasta[0]);
 
-    if (!recortan)
+    char motivo[600];
+
+    if (!recortan && conjunto_alineado(&m->c, motivo, sizeof motivo))
         mtram_verdicto(m->ver_ventana, MT_VERDE,
                      "%s – %s · %d obs · todas completas",
                      d, h, obs);
-    else
-        mtram_verdicto(m->ver_ventana, MT_AMBAR,
-                     "%s – %s · %d obs · %d serie%s "
-                     "recorta%s — el motor NO recorta por fecha",
-                     d, h, obs, recortan, recortan == 1 ? "" : "s",
-                     recortan == 1 ? "" : "n");
+    else {
+        if (recortan == 0) conjunto_alineado(&m->c, motivo, sizeof motivo);
+        else g_snprintf(motivo, sizeof motivo,
+                        "%d serie%s recorta%s", recortan,
+                        recortan == 1 ? "" : "s", recortan == 1 ? "" : "n");
+        mtram_verdicto(m->ver_ventana, MT_ROJO,
+                     "%s – %s · %d obs · el motor lo rechaza: %s",
+                     d, h, obs, motivo);
+    }
     g_free(d); g_free(h);
     }
 }
@@ -411,12 +416,11 @@ static void on_ventana(GtkButton *b, Mtram *m)
 
         if (recortan)
             g_string_append(t,
-                "\nOJO: el motor NO recorta por fecha, sólo compara cuántas\n"
-                "observaciones hay. Dos series de la misma longitud y distinta\n"
-                "fecha de inicio se estiman DESALINEADAS, en silencio — está\n"
-                "medido: catorce años de desfase mueven la verosimilitud 31\n"
-                "unidades y drtran sale con 0.\n\n"
-                "Hay que escribir los .pre ya recortados.");
+                "\nEl motor RECHAZA este conjunto: exige la misma fecha final\n"
+                "(BUG-2) y el mismo número de observaciones. Antes comparaba\n"
+                "sólo cuántas había, y dos series con catorce años de desfase\n"
+                "se estimaban desalineadas en silencio.\n\n"
+                "Hay que escribir los .pre en art sobre esta ventana.");
     }
 
     mtram_popover_mostrar(GTK_WIDGET(b), t->str);

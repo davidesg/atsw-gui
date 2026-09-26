@@ -48,6 +48,21 @@ static gchar *status_message(const char *program, int status, int signal_no,
     const char *what;
     gchar      *line, *msg;
 
+    /* The ladder engines give 4 and 5 their own meaning. drtran and drvarma
+       return 4 when the series cannot be crossed: different frequency, last
+       date or length (BUG-2, lib/fuepre). That is an input to rebuild in art,
+       not a run-time failure. drvarma returns 5 when the diagonal gate fails:
+       the joint cast does not reproduce the univariate models, and nothing
+       estimated on top of it can be trusted.                                */
+    gboolean ladder = program && (strstr(program, "drtran") || strstr(program, "drvarma"));
+
+    if (ladder && status == 4)
+        what = "the series do not share the same window (frequency, last date "
+               "or length); rebuild the .pre files in art over one window";
+    else if (ladder && status == 5 && strstr(program, "drvarma"))
+        what = "the diagonal gate failed: the joint model does not reproduce "
+               "the univariate ones";
+    else
     switch (status) {
     case 0:  what = "finished";                                            break;
     case 1:  what = "could not read the input file";                       break;

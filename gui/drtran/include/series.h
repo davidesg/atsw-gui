@@ -55,6 +55,10 @@ gchar *serie_operador(const Serie *s);
 gboolean conjunto_ventana_comun(const Conjunto *c, int *desde, int *hasta,
                                 char *why, size_t size);
 
+/* Lo que el MOTOR acepta: misma frecuencia, misma fecha final (lib/fuepre,
+ * BUG-2) y mismo nobs. FALSE con el motivo en why.                        */
+gboolean conjunto_alineado(const Conjunto *c, char *why, size_t size);
+
 /* --- la compatibilidad de operadores ------------------------------------- */
 
 typedef enum {

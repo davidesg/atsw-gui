@@ -15,11 +15,15 @@ equivocarse —permutar dos series mueve la verosimilitud en 35,6 y cambia de
 signo una covarianza, sin un solo aviso— así que aquí el orden se ve y se
 cambia a la vista.
 
-**La ventana muestral común.** El motor **no recorta por fecha**: compara
-`nobs` y nada más. Dos series de la misma longitud y distinta fecha de inicio
-se estiman desalineadas y en silencio — medido: catorce años de desfase cambian
-la verosimilitud en 31 unidades y drtran sale con 0. Aquí se ve la intersección
-de los calendarios y cuántas observaciones pierde cada serie.
+**The common sample window.** The engine **requires the same window**: the
+same frequency, the same last date (BUG-2, `lib/fuepre`) and the same number of
+observations. It used to compare `nobs` and nothing else, so two series of the
+same length and different start dates were estimated misaligned and in silence
+(fourteen years apart moved the likelihood by 31 units, and drtran exited with
+0). The GUI applies the same rule (`conjunto_alineado`) and turns the verdict
+red when the engine would reject the set. It still shows the calendar
+intersection and how many observations each series would lose, because that is
+the window to rebuild the `.pre` files on in art.
 
 **La compatibilidad de operadores.** Si algún par cruza operadores distintos,
 el motor pasa del cast empotrado al cast por resta — y esas dos verosimilitudes

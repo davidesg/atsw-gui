@@ -1,0 +1,85 @@
+
+Input Data File  : IPC.inp
+Output File      : IPC.out
+Model: VARMA(1,0)
+Include mean     : yes
+Diagonal AR      : no
+Diagonal MA      : no
+Diagonal Cov     : no
+Estimation method: 1
+Two-step init    : no
+Frequency        : 12
+Start            : 1 2002
+Box-Cox lambda   : 0
+Rescale factor   : 100
+Differences      : d=1, D=0 (seasonal lag=12)
+Deseasonalize    : no
+Series: 3, Observations: 215 (raw 216)
+Number of parameters: 18
+
+--- Initial x (before two-step) ---
+  x[1] = 0.154016
+  x[2] = 0.112743
+  x[3] = 0.112646
+  x[4] = 0.333983
+  x[5] = 0.198335
+  x[6] = -0.0717793
+  x[7] = -0.00782847
+  x[8] = 0.0249928
+  x[9] = 0.100446
+  x[10] = 0.244578
+
+  x[11] = 0.179513
+  x[12] = -0.269944
+  x[13] = 1
+  x[14] = 0.508109
+  x[15] = 1
+  x[16] = 0.490278
+  x[17] = 0.519171
+  x[18] = 1
+--- fin Initial x (before two-step) ---
+
+--- Final x (before estimation) ---
+  x[1] = 0.154016
+  x[2] = 0.112743
+  x[3] = 0.112646
+  x[4] = 0.333983
+  x[5] = 0.198335
+  x[6] = -0.0717793
+  x[7] = -0.00782847
+  x[8] = 0.0249928
+  x[9] = 0.100446
+  x[10] = 0.244578
+
+  x[11] = 0.179513
+  x[12] = -0.269944
+  x[13] = 1
+  x[14] = 0.508109
+  x[15] = 1
+  x[16] = 0.490278
+  x[17] = 0.519171
+  x[18] = 1
+--- fin Final x (before estimation) ---
+   0  F: 1.0000000000   step: 0.100000
+   1  F: 0.9648966415   step: 0.008561
+   2  F: 0.9396344223   step: 0.157005
+   3  F: 0.8829475633   step: 0.016972
+   4  F: 0.8599056295   step: 1.000000
+   5  F: 0.8588024589   step: 0.329174
+   6  F: 0.8537072597   step: 0.216993
+   7  F: 0.8515350535   step: 0.244244
+   8  F: 0.8507287192   step: 0.277461
+   9  F: 0.8504036385   step: 0.180869
+  10  F: 0.8503846955   step: 1.000000
+  11  F: 0.8503726654   step: 1.000000
+  12  F: 0.8503716146   step: 0.480223
+  13  F: 0.8503711177   step: 0.242309
+  14  F: 0.8503708756   step: 0.456470
+  15  F: 0.8503708015   step: 1.000000
+  16  F: 0.8503707969   step: 1.000000
+  17  F: 0.8503707967   step: 1.000000
+  18  F: 0.8503707966   step: 1.000000
+  19  F: 0.8503707966   step: 1.000000
+  20  F: 0.8503707966   step: 1.000000
+  21 F: 0.8503707966
+Exponential volatility series written to IPC.volexp

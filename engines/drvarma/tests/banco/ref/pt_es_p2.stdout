@@ -1,0 +1,163 @@
+
+Input Data File  : WTI_IPC_ES.inp
+Output File      : WTI_IPC_ES.out
+Model: VARMA(2,0)
+Include mean     : yes
+Diagonal AR      : no
+Diagonal MA      : no
+Diagonal Cov     : no
+Estimation method: 1
+Two-step init    : no
+Seasonal adjustment (harmonic, s=12, mode=auto (p<0.05), window=216 obs):
+Starting harmonic regression (differenced basis): n=215, s=12, d=1, harmonics=11, total_params=12
+Attempting HAC computation with 3 lags
+=== CÁLCULO HAC SIMPLIFICADO Y ESTABLE ===
+n=215, p=12, max_lags=3
+Norma de matriz S: 1.038488e+03
+Norma de matriz HAC: 5.550267e-02
+✅ CÁLCULO HAC COMPLETADO
+
+✅ Harmonic regression (differenced basis) completed: F=1.4409 (p=0.1568), R²=0.0724
+  Series 1: F=1.441, p=0.1568, R2=0.072 -> NOT SEASONAL (kept as is)
+Starting harmonic regression (differenced basis): n=215, s=12, d=1, harmonics=11, total_params=12
+Attempting HAC computation with 3 lags
+=== CÁLCULO HAC SIMPLIFICADO Y ESTABLE ===
+n=215, p=12, max_lags=3
+Norma de matriz S: 2.375201e+00
+Norma de matriz HAC: 1.101320e-04
+✅ CÁLCULO HAC COMPLETADO
+
+✅ Harmonic regression (differenced basis) completed: F=64.5799 (p=0.0000), R²=0.7777
+  Series 2: F=64.580, p=0.0000, R2=0.778 -> SEASONAL (adjusted)
+Frequency        : 12
+Start            : 1 2002
+Box-Cox lambda   : 0
+Rescale factor   : 100
+Differences      : d=1, D=0 (seasonal lag=12)
+Deseasonalize    : harmonic (auto)
+Series: 2, Observations: 215 (raw 216)
+Number of parameters: 13
+
+--- Initial x (before two-step) ---
+  x[1] = 0.51779
+  x[2] = 0.154016
+  x[3] = 0.322706
+  x[4] = -3.2222
+  x[5] = 0.010553
+  x[6] = 0.238137
+  x[7] = 0.115322
+  x[8] = -1.7299
+  x[9] = -0.00202935
+  x[10] = -0.00483122
+
+  x[11] = 1
+  x[12] = 0.523405
+  x[13] = 1
+--- fin Initial x (before two-step) ---
+
+--- Final x (before estimation) ---
+  x[1] = 0.51779
+  x[2] = 0.154016
+  x[3] = 0.322706
+  x[4] = -3.2222
+  x[5] = 0.010553
+  x[6] = 0.238137
+  x[7] = 0.115322
+  x[8] = -1.7299
+  x[9] = -0.00202935
+  x[10] = -0.00483122
+
+  x[11] = 1
+  x[12] = 0.523405
+  x[13] = 1
+--- fin Final x (before estimation) ---
+   0  F: 1.0000000000   step: 0.476346
+   1  F: 0.3211343269   step: 1.000000
+   2  F: 0.0761848864   step: 0.026787
+   3  F: 0.0481003088   step: 0.006458
+   4  F: 0.0327307991   step: 0.007234
+   5  F: 0.0129570224   step: 0.000531
+   6  F: 0.0118708555   step: 0.001830
+   7  F: 0.0108277730   step: 0.015595
+   8  F: 0.0041758800   step: 0.010000
+   9  F: 0.0039828964   step: 0.100000
+  10  F: 0.0032243895   step: 0.100000
+  11  F: 0.0028414613   step: 0.100000
+  12  F: 0.0025540458   step: 0.100000
+  13  F: 0.0023912190   step: 0.100000
+  14  F: 0.0022809432   step: 1.000000
+  15  F: 0.0020159229   step: 1.000000
+  16  F: 0.0019841493   step: 1.000000
+  17  F: 0.0019690612   step: 1.000000
+  18  F: 0.0019604182   step: 1.000000
+  19  F: 0.0019601316   step: 1.000000
+  20  F: 0.0019600581   step: 1.000000
+  21  F: 0.0019598278   step: 1.000000
+  22  F: 0.0019595948   step: 1.000000
+  23  F: 0.0019594800   step: 1.000000
+  24  F: 0.0019594602   step: 1.000000
+  25  F: 0.0019594571   step: 1.000000
+  26  F: 0.0019594530   step: 1.000000
+  27  F: 0.0019594418   step: 1.000000
+  28  F: 0.0019594177   step: 1.000000
+  29  F: 0.0019593743   step: 1.000000
+  30  F: 0.0019593261   step: 1.000000
+  31  F: 0.0019593011   step: 1.000000
+  32  F: 0.0019592963   step: 1.000000
+  33  F: 0.0019592960   step: 1.000000
+  34  F: 0.0019592959   step: 1.000000
+  35  F: 0.0019592955   step: 1.000000
+  36  F: 0.0019592947   step: 1.000000
+  37  F: 0.0019592929   step: 1.000000
+  38  F: 0.0019592900   step: 1.000000
+  39  F: 0.0019592873   step: 1.000000
+  40  F: 0.0019592863   step: 1.000000
+  41  F: 0.0019592861   step: 1.000000
+  42  F: 0.0019592861   step: 1.000000
+  43  F: 0.0019592861   step: 1.000000
+  44  F: 0.0019592861   step: 1.000000
+  45  F: 0.0019592861   step: 1.000000
+  46  F: 0.0019592860   step: 1.000000
+  47  F: 0.0019592859   step: 1.000000
+  48  F: 0.0019592856   step: 1.000000
+  49  F: 0.0019592851   step: 1.000000
+  50  F: 0.0019592845   step: 1.000000
+  51  F: 0.0019592841   step: 1.000000
+  52  F: 0.0019592841   step: 1.000000
+  53  F: 0.0019592840   step: 1.000000
+  54  F: 0.0019592840   step: 1.000000
+  55  F: 0.0019592838   step: 1.000000
+  56  F: 0.0019592834   step: 1.000000
+  57  F: 0.0019592824   step: 1.000000
+  58  F: 0.0019592803   step: 1.000000
+  59  F: 0.0019592762   step: 1.000000
+  60  F: 0.0019592713   step: 1.000000
+  61  F: 0.0019592685   step: 1.000000
+  62  F: 0.0019592679   step: 1.000000
+  63  F: 0.0019592678   step: 1.000000
+  64  F: 0.0019592677   step: 1.000000
+  65  F: 0.0019592675   step: 1.000000
+  66  F: 0.0019592671   step: 1.000000
+  67  F: 0.0019592661   step: 1.000000
+  68  F: 0.0019592643   step: 1.000000
+  69  F: 0.0019592622   step: 1.000000
+  70  F: 0.0019592610   step: 1.000000
+  71  F: 0.0019592608   step: 1.000000
+  72  F: 0.0019592608   step: 1.000000
+  73  F: 0.0019592608   step: 1.000000
+  74  F: 0.0019592608   step: 1.000000
+  75  F: 0.0019592608   step: 1.000000
+  76  F: 0.0019592608   step: 1.000000
+  77  F: 0.0019592608   step: 1.000000
+  78  F: 0.0019592608   step: 1.000000
+  79  F: 0.0019592608   step: 1.000000
+  80  F: 0.0019592607   step: 1.000000
+  81  F: 0.0019592607   step: 1.000000
+  82  F: 0.0019592606   step: 1.000000
+  83  F: 0.0019592603   step: 1.000000
+  84  F: 0.0019592597   step: 1.000000
+  85  F: 0.0019592588   step: 1.000000
+  86  F: 0.0019592579   step: 1.000000
+  87  F: 0.0019592576   step: 1.000000
+  88  F: 0.0019592576   step: 1.000000
+  89 F: 0.0019592576

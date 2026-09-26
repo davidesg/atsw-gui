@@ -1,0 +1,109 @@
+
+Input Data File  : IPC3_ext.inp
+Output File      : IPC3_ext.out
+Model: VARMA(3,0)
+Include mean     : yes
+Diagonal AR      : yes
+Diagonal MA      : no
+Diagonal Cov     : yes
+Estimation method: 1
+Two-step init    : no
+Seasonal adjustment (harmonic, s=12, mode=auto (p<0.05), window=216 obs):
+Starting harmonic regression (differenced basis): n=215, s=12, d=1, harmonics=11, total_params=12
+Attempting HAC computation with 3 lags
+=== CÁLCULO HAC SIMPLIFICADO Y ESTABLE ===
+n=215, p=12, max_lags=3
+Norma de matriz S: 2.375201e+00
+Norma de matriz HAC: 1.101320e-04
+✅ CÁLCULO HAC COMPLETADO
+
+✅ Harmonic regression (differenced basis) completed: F=64.5799 (p=0.0000), R²=0.7777
+  Series 1: F=64.580, p=0.0000, R2=0.778 -> SEASONAL (adjusted)
+Starting harmonic regression (differenced basis): n=215, s=12, d=1, harmonics=11, total_params=12
+Attempting HAC computation with 3 lags
+=== CÁLCULO HAC SIMPLIFICADO Y ESTABLE ===
+n=215, p=12, max_lags=3
+Norma de matriz S: 1.454227e+00
+Norma de matriz HAC: 4.945514e-05
+✅ CÁLCULO HAC COMPLETADO
+
+✅ Harmonic regression (differenced basis) completed: F=32.2434 (p=0.0000), R²=0.6360
+  Series 2: F=32.243, p=0.0000, R2=0.636 -> SEASONAL (adjusted)
+Starting harmonic regression (differenced basis): n=215, s=12, d=1, harmonics=11, total_params=12
+Attempting HAC computation with 3 lags
+=== CÁLCULO HAC SIMPLIFICADO Y ESTABLE ===
+n=215, p=12, max_lags=3
+Norma de matriz S: 1.835138e+00
+Norma de matriz HAC: 7.228476e-05
+✅ CÁLCULO HAC COMPLETADO
+
+✅ Harmonic regression (differenced basis) completed: F=21.9596 (p=0.0000), R²=0.5434
+  Series 3: F=21.960, p=0.0000, R2=0.543 -> SEASONAL (adjusted)
+Frequency        : 12
+Start            : 1 2002
+Box-Cox lambda   : 0
+Rescale factor   : 100
+Differences      : d=1, D=0 (seasonal lag=12)
+Deseasonalize    : harmonic (auto)
+Series: 3, Observations: 262 (raw 263)
+Estimation window: first 216 raw obs (215 effective) -> params fixed; recursive forecast from each origin to the data end.
+Number of parameters: 15
+
+--- Initial x (before two-step) ---
+  x[1] = 0.179118
+  x[2] = 0.137945
+  x[3] = 0.155855
+  x[4] = 0.298506
+  x[5] = -0.205084
+  x[6] = 0.0491714
+  x[7] = -0.171561
+  x[8] = -0.0251785
+  x[9] = 0.0890424
+  x[10] = -0.0571278
+
+  x[11] = 0.0588628
+  x[12] = -0.270329
+  x[13] = 1
+  x[14] = 1
+  x[15] = 1
+--- fin Initial x (before two-step) ---
+
+--- Final x (before estimation) ---
+  x[1] = 0.179118
+  x[2] = 0.137945
+  x[3] = 0.155855
+  x[4] = 0.298506
+  x[5] = -0.205084
+  x[6] = 0.0491714
+  x[7] = -0.171561
+  x[8] = -0.0251785
+  x[9] = 0.0890424
+  x[10] = -0.0571278
+
+  x[11] = 0.0588628
+  x[12] = -0.270329
+  x[13] = 1
+  x[14] = 1
+  x[15] = 1
+--- fin Final x (before estimation) ---
+   0  F: 1.0000000000   step: 0.050000
+   1  F: 0.9789905707   step: 0.491611
+   2  F: 0.9524482728   step: 0.120745
+   3  F: 0.9376068478   step: 1.000000
+   4  F: 0.9234911405   step: 0.100000
+   5  F: 0.8986436560   step: 0.469420
+   6  F: 0.7839636847   step: 1.000000
+   7  F: 0.7704809838   step: 1.000000
+   8  F: 0.7674962228   step: 1.000000
+   9  F: 0.7671809645   step: 1.000000
+  10  F: 0.7670665420   step: 1.000000
+  11  F: 0.7670523917   step: 1.000000
+  12  F: 0.7670497172   step: 1.000000
+  13  F: 0.7670493936   step: 1.000000
+  14  F: 0.7670493756   step: 1.000000
+  15  F: 0.7670493743   step: 1.000000
+  16  F: 0.7670493742   step: 1.000000
+  17  F: 0.7670493742   step: 1.000000
+  18 F: 0.7670493742
+Forecasts written to IPC3_ext.forecast
+Recursive forecasts written to IPC3_ext.recursive

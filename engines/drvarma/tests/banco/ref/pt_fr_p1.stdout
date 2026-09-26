@@ -1,0 +1,125 @@
+
+Input Data File  : WTI_IPC_FR.inp
+Output File      : WTI_IPC_FR.out
+Model: VARMA(1,0)
+Include mean     : yes
+Diagonal AR      : no
+Diagonal MA      : no
+Diagonal Cov     : no
+Estimation method: 1
+Two-step init    : no
+Seasonal adjustment (harmonic, s=12, mode=auto (p<0.05), window=216 obs):
+Starting harmonic regression (differenced basis): n=215, s=12, d=1, harmonics=11, total_params=12
+Attempting HAC computation with 3 lags
+=== CÁLCULO HAC SIMPLIFICADO Y ESTABLE ===
+n=215, p=12, max_lags=3
+Norma de matriz S: 1.038488e+03
+Norma de matriz HAC: 5.550267e-02
+✅ CÁLCULO HAC COMPLETADO
+
+✅ Harmonic regression (differenced basis) completed: F=1.4409 (p=0.1568), R²=0.0724
+  Series 1: F=1.441, p=0.1568, R2=0.072 -> NOT SEASONAL (kept as is)
+Starting harmonic regression (differenced basis): n=215, s=12, d=1, harmonics=11, total_params=12
+Attempting HAC computation with 3 lags
+=== CÁLCULO HAC SIMPLIFICADO Y ESTABLE ===
+n=215, p=12, max_lags=3
+Norma de matriz S: 1.454227e+00
+Norma de matriz HAC: 4.945514e-05
+✅ CÁLCULO HAC COMPLETADO
+
+✅ Harmonic regression (differenced basis) completed: F=32.2434 (p=0.0000), R²=0.6360
+  Series 2: F=32.243, p=0.0000, R2=0.636 -> SEASONAL (adjusted)
+Frequency        : 12
+Start            : 1 2002
+Box-Cox lambda   : 0
+Rescale factor   : 100
+Differences      : d=1, D=0 (seasonal lag=12)
+Deseasonalize    : harmonic (auto)
+Series: 2, Observations: 215 (raw 216)
+Number of parameters: 9
+
+--- Initial x (before two-step) ---
+  x[1] = 0.51779
+  x[2] = 0.112646
+  x[3] = 0.288292
+  x[4] = 1.02924
+  x[5] = 0.00977054
+  x[6] = -0.142636
+  x[7] = 1
+  x[8] = 0.339692
+  x[9] = 1
+--- fin Initial x (before two-step) ---
+
+--- Final x (before estimation) ---
+  x[1] = 0.51779
+  x[2] = 0.112646
+  x[3] = 0.288292
+  x[4] = 1.02924
+  x[5] = 0.00977054
+  x[6] = -0.142636
+  x[7] = 1
+  x[8] = 0.339692
+  x[9] = 1
+--- fin Final x (before estimation) ---
+   0  F: 1.0000000000   step: 1.000000
+   1  F: 0.1515046191   step: 0.485940
+   2  F: 0.1246126279   step: 1.000000
+   3  F: 0.0297591339   step: 0.012528
+   4  F: 0.0257292427   step: 0.011554
+   5  F: 0.0223762417   step: 0.011940
+   6  F: 0.0187634018   step: 0.010000
+   7  F: 0.0169067418   step: 0.010000
+   8  F: 0.0157579945   step: 0.045147
+   9  F: 0.0116847141   step: 0.100000
+  10  F: 0.0089865757   step: 1.000000
+  11  F: 0.0057336017   step: 0.100000
+  12  F: 0.0037737569   step: 0.100000
+  13  F: 0.0032785029   step: 0.100000
+  14  F: 0.0030579396   step: 1.000000
+  15  F: 0.0019970615   step: 1.000000
+  16  F: 0.0018994303   step: 1.000000
+  17  F: 0.0016553885   step: 1.000000
+  18  F: 0.0015742355   step: 1.000000
+  19  F: 0.0015565165   step: 1.000000
+  20  F: 0.0015413150   step: 1.000000
+  21  F: 0.0015376665   step: 1.000000
+  22  F: 0.0015363209   step: 1.000000
+  23  F: 0.0015362105   step: 1.000000
+  24  F: 0.0015362051   step: 1.000000
+  25  F: 0.0015362049   step: 1.000000
+  26  F: 0.0015362045   step: 1.000000
+  27  F: 0.0015362037   step: 1.000000
+  28  F: 0.0015362024   step: 1.000000
+  29  F: 0.0015362010   step: 1.000000
+  30  F: 0.0015361994   step: 1.000000
+  31  F: 0.0015361974   step: 1.000000
+  32  F: 0.0015361944   step: 1.000000
+  33  F: 0.0015361911   step: 1.000000
+  34  F: 0.0015361890   step: 1.000000
+  35  F: 0.0015361886   step: 1.000000
+  36  F: 0.0015361885   step: 1.000000
+  37  F: 0.0015361885   step: 1.000000
+  38  F: 0.0015361885   step: 1.000000
+  39  F: 0.0015361885   step: 1.000000
+  40  F: 0.0015361885   step: 1.000000
+  41  F: 0.0015361885   step: 1.000000
+  42  F: 0.0015361885   step: 1.000000
+  43  F: 0.0015361885   step: 1.000000
+  44  F: 0.0015361885   step: 1.000000
+  45  F: 0.0015361885   step: 1.000000
+  46  F: 0.0015361885   step: 1.000000
+  47  F: 0.0015361885   step: 1.000000
+  48  F: 0.0015361884   step: 1.000000
+  49  F: 0.0015361884   step: 1.000000
+  50  F: 0.0015361883   step: 1.000000
+  51  F: 0.0015361883   step: 1.000000
+  52  F: 0.0015361883   step: 1.000000
+  53  F: 0.0015361883   step: 1.000000
+  54  F: 0.0015361883   step: 1.000000
+  55  F: 0.0015361883   step: 1.000000
+  56  F: 0.0015361883   step: 1.000000
+  57  F: 0.0015361883   step: 1.000000
+  58  F: 0.0015361883   step: 1.000000
+  59  F: 0.0015361883   step: 1.000000
+  60 F: 0.0015361883
+Forecasts written to WTI_IPC_FR.forecast

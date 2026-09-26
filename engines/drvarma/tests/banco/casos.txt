@@ -1,0 +1,25 @@
+# casos.txt -- el banco de regresion de la via .inp de drvarma.
+#
+#   nombre | fichero de entrada (relativo a engines/drvarma) | argumentos
+#
+# La referencia (ref/<nombre>.*) se genero con drvarma 0.4.1 (con escala 100
+# compilada) antes de tocar src/: la v5 tiene que reproducirla BYTE A BYTE.
+#
+c1_ipc_ar1        | data/IPC.inp                              | 1 0 -mean
+c2_ipc_arma21     | data/IPC.inp                              | 2 1 -mean -diagcov
+c3_psw_arma11     | data/PSW.inp                              | 1 1
+c4_wti_es_estwin  | data/passthrough/WTI_IPC_ES_ext.inp       | 1 0 -mean -deseason auto -forecast 24 -estwin 216
+c5_eu_diag        | data/IPC_eu_levels.inp                    | 1 0 -mean -diagar -diagma
+c6_ipc_aprox      | data/IPC.inp                              | 1 0 -mean -m 2
+c7_ipc_twostep    | data/IPC.inp                              | 1 1 -mean -twostep
+c8_ipc_volexp     | data/IPC.inp                              | 1 0 -mean -volexp 0.05 20
+g1_ipc3_diag      | data/models_group1/IPC3.inp               | 3 0 -mean -diagar -diagcov -deseason auto -forecast 12
+g1_ipc3_full      | data/models_group1/IPC3.inp               | 3 0 -mean -deseason auto -forecast 12
+g1_ipc3_ext_diag  | data/models_group1/IPC3_ext.inp           | 3 0 -mean -diagar -diagcov -deseason auto -forecast 24 -estwin 216
+g1_ipc_es         | data/models_group1/IPC_ES.inp             | 3 0 -mean -deseason auto -forecast 12
+pt_es_p1          | data/passthrough/WTI_IPC_ES.inp           | 1 0 -mean -deseason auto -forecast 24
+pt_es_p2          | data/passthrough/WTI_IPC_ES.inp           | 2 0 -mean -deseason auto
+pt_es_p3          | data/passthrough/WTI_IPC_ES.inp           | 3 0 -mean -deseason auto
+pt_fr_p1          | data/passthrough/WTI_IPC_FR.inp           | 1 0 -mean -deseason auto -forecast 24
+pt_de_p1          | data/passthrough/WTI_IPC_DE.inp           | 1 0 -mean -deseason auto -forecast 24
+pt_de_ext_diag    | data/passthrough/WTI_IPC_DE_ext.inp       | 1 0 -mean -diagar -diagcov -deseason auto -forecast 24 -estwin 216

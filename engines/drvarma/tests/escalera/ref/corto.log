@@ -1,0 +1,34 @@
+Model            : VARMA with univariate diagonals; cross orders p=0 q=0
+Innovation cov.  : diagonal
+Deterministics   : fixed at the .pre
+Univariate ARMA  : re-estimated jointly
+Estimation method: 1
+Frequency        : 12
+Common window    : 2/2003 - 12/2019  (203 stationary observations)
+
+Univariate models (one .pre per series):
+  #   series           nobs     start       end  lambda operator      det AR               MA               mean
+  1   IPC_ES            204    1/2003   12/2019       0 D              11 (1)              -                estimated
+  2   IPC_FR            216    1/2002   12/2019       0 D              11 (1)_12           -                estimated
+
+=============================================================
+  THE DIAGONAL GATE
+  Each series alone (same window, same cast), then the diagonal
+  system evaluated at those optima: the two must agree exactly.
+=============================================================
+  series                     logL         sigma2      max|move|
+  IPC_ES                -8.820102      0.0638116        0.00836  <- not an optimum
+  IPC_FR                52.128376       0.034972         0.0209  <- trimmed sample
+  SUM                   43.308275
+  joint diagonal        43.308275
+  difference             1.14e-13
+  GATE: PASSED
+  Note: IPC_ES moved 0.00836 from its .pre on its own sample. A genuine
+        .pre is a fixed point (it moves ~1e-5, the rounding of its six
+        decimals): this one is a specification, not an optimum.
+  Note: IPC_FR moved 0.0209 from its .pre, but the common window
+        drops its first 12 stationary observations: it is
+        re-estimated on a different sample, and moving is legitimate.
+
+Number of parameters: 5
+Exact log-likelihood: 43.308275

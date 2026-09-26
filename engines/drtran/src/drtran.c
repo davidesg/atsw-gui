@@ -197,17 +197,8 @@ static void base_name(const char *path, char *out, size_t n)
 /* Resultado real del optimizador (definidos en qnewtopt.c) */
 extern int opt_iters, opt_termcode;
 
-/* Un factor de frecuencia fija exige c₂ < 0 (su módulo es r = sqrt(−c₂)).
-   fue devuelve ifault si no se cumple; drtran rechaza el punto igual.      */
-int invalid_fixfreq(struct Tusmodel *Tm)
-{
-    int i;
-    for (i = 1; i <= Tm->NumAr1f; i++)
-        if (Tm->Ar1f[i][2] >= 0.0) return 1;
-    for (i = 1; i <= Tm->NumMa1f; i++)
-        if (Tm->Ma1f[i][2] >= 0.0) return 1;
-    return 0;
-}
+/* invalid_fixfreq vive ahora en lib/fuepre, con el lector: drvarma la
+   necesita igual. */
 
 /* shootx externa (definida en tran_shootx.c) */
 extern void shootx(real *x, struct Tvarma *armax, int *ifaultx,
@@ -226,61 +217,11 @@ extern void shootx(real *x, struct Tvarma *armax, int *ifaultx,
    el MA): "0.0000  0" es un coeficiente FIJO, no un valor inicial. Igual que la
    media y los deterministas, drtran respeta esa especificación.             */
 
-/* Número de parámetros AR LIBRES (coeficientes de factores, no expandidos) */
-static int n_ar_free_params(struct Tusmodel *Tm)
-{
-    int n = 0, i, j;
-    for (i = 1; i <= Tm->NumAr1;  i++)
-        for (j = 1; j <= Tm->p1[i]; j++) if (Tm->Ia1[i][j] == 1) n++;
-    for (i = 1; i <= Tm->NumAr2;  i++)
-        for (j = 1; j <= Tm->p2[i]; j++) if (Tm->Ia2[i][j] == 1) n++;
-    for (i = 1; i <= Tm->NumAr1f; i++)   /* un solo coef libre por factor: c₂ */
-        if (Tm->Ia1f[i] == 1) n++;
-    return n;
-}
-
-/* Número de parámetros MA LIBRES */
-static int n_ma_free_params(struct Tusmodel *Tm)
-{
-    int n = 0, i, j;
-    for (i = 1; i <= Tm->NumMa1;  i++)
-        for (j = 1; j <= Tm->q1[i]; j++) if (Tm->Im1[i][j] == 1) n++;
-    for (i = 1; i <= Tm->NumMa2;  i++)
-        for (j = 1; j <= Tm->q2[i]; j++) if (Tm->Im2[i][j] == 1) n++;
-    for (i = 1; i <= Tm->NumMa1f; i++)
-        if (Tm->Im1f[i] == 1) n++;
-    return n;
-}
-
-/* Empaqueta en x[] los coeficientes AR LIBRES de Tm (índice base idx). */
-static int pack_ar_factors(struct Tusmodel *Tm, real *x, int idx)
-{
-    int i, j, base = idx;
-    for (i = 1; i <= Tm->NumAr1; i++)
-        for (j = 1; j <= Tm->p1[i]; j++)
-            if (Tm->Ia1[i][j] == 1) x[idx++] = Tm->Ar1[i][j];
-    for (i = 1; i <= Tm->NumAr2; i++)
-        for (j = 1; j <= Tm->p2[i]; j++)
-            if (Tm->Ia2[i][j] == 1) x[idx++] = Tm->Ar2[i][j];
-    for (i = 1; i <= Tm->NumAr1f; i++)
-        if (Tm->Ia1f[i] == 1) x[idx++] = Tm->Ar1f[i][2];
-    return idx - base;
-}
-
-/* Empaqueta en x[] los coeficientes MA LIBRES de Tm */
-static int pack_ma_factors(struct Tusmodel *Tm, real *x, int idx)
-{
-    int i, j, base = idx;
-    for (i = 1; i <= Tm->NumMa1; i++)
-        for (j = 1; j <= Tm->q1[i]; j++)
-            if (Tm->Im1[i][j] == 1) x[idx++] = Tm->Ma1[i][j];
-    for (i = 1; i <= Tm->NumMa2; i++)
-        for (j = 1; j <= Tm->q2[i]; j++)
-            if (Tm->Im2[i][j] == 1) x[idx++] = Tm->Ma2[i][j];
-    for (i = 1; i <= Tm->NumMa1f; i++)
-        if (Tm->Im1f[i] == 1) x[idx++] = Tm->Ma1f[i][2];
-    return idx - base;
-}
+/* El recuento y el (des)empaquetado de los coeficientes LIBRES del .pre
+   --factores ARMA y deterministas-- viven ahora en lib/fuepre, con el
+   lector: drvarma los necesita igual, y un segundo empaquetador que
+   recorriera los flags en otro orden no daria error, daria parametros
+   cruzados. */
 
 /* ── Impresión de los factores ARMA estimados ───────────────────────────
    x[] guarda los coeficientes de los FACTORES tal como los especifica fue (sin
@@ -623,71 +564,6 @@ void build_stationary_series(void)
             n_alt_head[j] = nal[j] - n_stat;
             trim_to_common(w_alt[j], nal[j], n_stat);
         }
-}
-
-static int n_det_free_params(struct Tusmodel *Tm)
-{
-    int n = 0, i, j;
-    for (i = 1; i <= Tm->NdetVar; i++) {
-        for (j = 0; j <= Tm->Nomega[i]; j++)
-            if (Tm->Imega[i][j] == 1) n++;
-        for (j = 1; j <= Tm->Ndelta[i]; j++)
-            if (Tm->Ielta[i][j] == 1) n++;
-    }
-    return n;
-}
-
-/* Empaqueta en x[] los coeficientes deterministas libres */
-static int pack_det_params(struct Tusmodel *Tm, real *x, int idx)
-{
-    int i, j, base = idx;
-    for (i = 1; i <= Tm->NdetVar; i++) {
-        for (j = 0; j <= Tm->Nomega[i]; j++)
-            if (Tm->Imega[i][j] == 1) x[idx++] = Tm->Omega[i][j];
-        for (j = 1; j <= Tm->Ndelta[i]; j++)
-            if (Tm->Ielta[i][j] == 1) x[idx++] = Tm->Delta[i][j];
-    }
-    return idx - base;
-}
-
-/* Desempaqueta desde x[] a Tm los coeficientes deterministas libres */
-void unpack_det_params(struct Tusmodel *Tm, real *x, int *idx)
-{
-    int i, j;
-    for (i = 1; i <= Tm->NdetVar; i++) {
-        for (j = 0; j <= Tm->Nomega[i]; j++)
-            if (Tm->Imega[i][j] == 1) Tm->Omega[i][j] = x[(*idx)++];
-        for (j = 1; j <= Tm->Ndelta[i]; j++)
-            if (Tm->Ielta[i][j] == 1) Tm->Delta[i][j] = x[(*idx)++];
-    }
-}
-
-/* Desempaqueta coeficientes AR desde x[] a Tm (usado en shootx) */
-void unpack_ar_factors(struct Tusmodel *Tm, real *x, int *idx)
-{
-    int i, j;
-    for (i = 1; i <= Tm->NumAr1; i++)
-        for (j = 1; j <= Tm->p1[i]; j++)
-            if (Tm->Ia1[i][j] == 1) Tm->Ar1[i][j] = x[(*idx)++];
-    for (i = 1; i <= Tm->NumAr2; i++)
-        for (j = 1; j <= Tm->p2[i]; j++)
-            if (Tm->Ia2[i][j] == 1) Tm->Ar2[i][j] = x[(*idx)++];
-    for (i = 1; i <= Tm->NumAr1f; i++)
-        if (Tm->Ia1f[i] == 1) Tm->Ar1f[i][2] = x[(*idx)++];
-}
-
-/* Desempaqueta coeficientes MA desde x[] a Tm */
-void unpack_ma_factors(struct Tusmodel *Tm, real *x, int *idx)
-{
-    int i, j;
-    for (i = 1; i <= Tm->NumMa1; i++)
-        for (j = 1; j <= Tm->q1[i]; j++)
-            if (Tm->Im1[i][j] == 1) Tm->Ma1[i][j] = x[(*idx)++];
-    for (i = 1; i <= Tm->NumMa2; i++)
-        for (j = 1; j <= Tm->q2[i]; j++)
-            if (Tm->Im2[i][j] == 1) Tm->Ma2[i][j] = x[(*idx)++];
-    for (i = 1; i <= Tm->NumMa1f; i++)
-        if (Tm->Im1f[i] == 1) Tm->Ma1f[i][2] = x[(*idx)++];
 }
 
 /* expand_ar_factors / expand_ma_factors viven ahora en lib/prewhiten, con
@@ -3860,6 +3736,16 @@ int main(int argc, char *argv[])
         if (Ts[i].nobs != Ts[1].nobs) {
             fprintf(stderr, "Error: series have different numbers of "
                             "observations (%d vs %d)\n", Ts[i].nobs, Ts[1].nobs);
+            return 4;
+        }
+    }
+
+    /* BUG-2: el mismo nobs no es la misma ventana. Sin mirar la fecha, dos
+       series con catorce anos de desfase se cruzaban sin avisar.          */
+    {
+        char why[600];
+        if (fuepre_check_alignment(Ts, n_ser, why, sizeof why) != 0) {
+            fprintf(stderr, "Error: %s\n", why);
             return 4;
         }
     }

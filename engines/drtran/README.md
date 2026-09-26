@@ -229,11 +229,13 @@ Sin dependencias externas: el motor de drvarma va incluido en `src/`.
 ```
 src/     drtran.c        driver, CLI, identificación, previsión
          tran_shootx.c   el cast transferencia -> VARMA bivariante
-         fue_pre_reader.c  lector del .pre de fue (puerto fiel de su parser)
          elfvarma.c drvmlest.c qnewtopt.c nlatools.c
                          motor de drvarma: verosimilitud exacta + optimizador
          diagnose.c forecast.c
                          diagnósticos y previsión de drvarma
+../../lib/fuepre/        el lector del .pre de fue (puerto fiel de su parser) y el
+                         empaquetado de sus coeficientes libres, compartidos con
+                         el GUI de drtran y con drvarma 5.0
 tests/   cases/          .pre reales (SF_MEG), con su referencia de fue
          data/           casos sintéticos con verdad conocida
          gen_synthetic.py

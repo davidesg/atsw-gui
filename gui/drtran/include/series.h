@@ -1,7 +1,7 @@
 /*
  * series.h -- las series cargadas, y sus papeles.
  *
- * El .pre se lee con EL LECTOR DEL MOTOR (engines/drtran/src/fue_pre_reader.c),
+ * El .pre se lee con EL LECTOR DEL MOTOR (lib/fuepre/fue_pre_reader.c),
  * enlazado tal cual. No hay un lector del GUI: el estudio del contrato conto
  * seis implementaciones del formato y cada divergencia que encontro salia de
  * que el mismo fichero viviera en dos sitios. Aqui no se abre esa puerta.

@@ -121,6 +121,38 @@ Provide the full data file (training + later observations) and use together with
 drvarma data/passthrough/WTI_IPC_ES_ext 1 0 -mean -deseason auto -forecast 24 -estwin 216
 ```
 
+## 6b. The ladder — `.pre` input (5.0)
+
+```
+drvarma IPC_ES_m10.pre IPC_FR_msar.pre IPC_DE_mar3sar.pre 1 0 -o ipc3
+```
+
+Give the univariate models that fue (or art) wrote as `.pre`, then the cross
+orders `p q`. Each series keeps its own transformation and ARMA on the
+diagonal of the system; `p`/`q` add the dynamics between series. Options:
+
+| Option | Meaning |
+|---|---|
+| `-diagcov` | diagonal innovation covariance (default full) |
+| `-redet` | re-estimate the deterministic terms (default: fixed at the `.pre`) |
+| `-fixarma` | keep the univariate ARMA factors fixed |
+| `-m 1\|2` | exact / approximate likelihood |
+| `-o NAME` | results to `NAME.out` (default: the `.pre` names joined by `_`) |
+
+The `.out` starts with the **diagonal gate**: each series fitted alone, the
+sum of their log-likelihoods, and the diagonal system evaluated at those
+optima. They must agree; if they do not, the program stops with code 5. The
+gate also shows how far each `.pre` moved when re-estimated: a genuine `.pre`
+moves ~1e-5 (the rounding of its six decimals); more than 1e-3 means a
+specification, not an optimum, unless the common window trimmed that series.
+Then the requested model, with an LR test of the cross dynamics against the
+diagonal system.
+
+Series must have the same frequency and end on the same date; different
+starting dates are aligned at the end. `-forecast`, `-estwin`, `-mean`,
+`-deseason` and `-scale` are rejected in this mode: the transformation comes
+from each `.pre`, and forecasting comes later.
+
 ## 7. Graphical interface
 
 ```sh

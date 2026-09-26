@@ -1,0 +1,166 @@
+
+Input Data File  : IPC3.inp
+Output File      : IPC3.out
+Model: VARMA(3,0)
+Include mean     : yes
+Diagonal AR      : no
+Diagonal MA      : no
+Diagonal Cov     : no
+Estimation method: 1
+Two-step init    : no
+Seasonal adjustment (harmonic, s=12, mode=auto (p<0.05), window=216 obs):
+Starting harmonic regression (differenced basis): n=215, s=12, d=1, harmonics=11, total_params=12
+Attempting HAC computation with 3 lags
+=== CÁLCULO HAC SIMPLIFICADO Y ESTABLE ===
+n=215, p=12, max_lags=3
+Norma de matriz S: 2.375201e+00
+Norma de matriz HAC: 1.101320e-04
+✅ CÁLCULO HAC COMPLETADO
+
+✅ Harmonic regression (differenced basis) completed: F=64.5799 (p=0.0000), R²=0.7777
+  Series 1: F=64.580, p=0.0000, R2=0.778 -> SEASONAL (adjusted)
+Starting harmonic regression (differenced basis): n=215, s=12, d=1, harmonics=11, total_params=12
+Attempting HAC computation with 3 lags
+=== CÁLCULO HAC SIMPLIFICADO Y ESTABLE ===
+n=215, p=12, max_lags=3
+Norma de matriz S: 1.454227e+00
+Norma de matriz HAC: 4.945514e-05
+✅ CÁLCULO HAC COMPLETADO
+
+✅ Harmonic regression (differenced basis) completed: F=32.2434 (p=0.0000), R²=0.6360
+  Series 2: F=32.243, p=0.0000, R2=0.636 -> SEASONAL (adjusted)
+Starting harmonic regression (differenced basis): n=215, s=12, d=1, harmonics=11, total_params=12
+Attempting HAC computation with 3 lags
+=== CÁLCULO HAC SIMPLIFICADO Y ESTABLE ===
+n=215, p=12, max_lags=3
+Norma de matriz S: 1.835138e+00
+Norma de matriz HAC: 7.228476e-05
+✅ CÁLCULO HAC COMPLETADO
+
+✅ Harmonic regression (differenced basis) completed: F=21.9596 (p=0.0000), R²=0.5434
+  Series 3: F=21.960, p=0.0000, R2=0.543 -> SEASONAL (adjusted)
+Frequency        : 12
+Start            : 1 2002
+Box-Cox lambda   : 0
+Rescale factor   : 100
+Differences      : d=1, D=0 (seasonal lag=12)
+Deseasonalize    : harmonic (auto)
+Series: 3, Observations: 215 (raw 216)
+Number of parameters: 36
+
+--- Initial x (before two-step) ---
+  x[1] = 0.154016
+  x[2] = 0.112646
+  x[3] = 0.114372
+  x[4] = 0.323966
+  x[5] = -0.0389571
+  x[6] = 0.234364
+  x[7] = 0.259964
+  x[8] = -0.27951
+  x[9] = 0.188
+  x[10] = -0.0200981
+
+  x[11] = 0.0809564
+  x[12] = 0.0603048
+  x[13] = -0.0849392
+  x[14] = 0.15438
+  x[15] = -0.036253
+  x[16] = 0.00801405
+  x[17] = 0.0427437
+  x[18] = -0.082892
+  x[19] = -0.0630695
+  x[20] = 0.183401
+
+  x[21] = 0.0306884
+  x[22] = 0.0620136
+  x[23] = 0.018799
+  x[24] = -0.100168
+  x[25] = 0.0556814
+  x[26] = 0.0472193
+  x[27] = -0.134433
+  x[28] = -0.061145
+  x[29] = 0.185764
+  x[30] = -0.192063
+
+  x[31] = 1
+  x[32] = 0.482425
+  x[33] = 1
+  x[34] = 0.51827
+  x[35] = 0.530434
+  x[36] = 1
+--- fin Initial x (before two-step) ---
+
+--- Final x (before estimation) ---
+  x[1] = 0.154016
+  x[2] = 0.112646
+  x[3] = 0.114372
+  x[4] = 0.323966
+  x[5] = -0.0389571
+  x[6] = 0.234364
+  x[7] = 0.259964
+  x[8] = -0.27951
+  x[9] = 0.188
+  x[10] = -0.0200981
+
+  x[11] = 0.0809564
+  x[12] = 0.0603048
+  x[13] = -0.0849392
+  x[14] = 0.15438
+  x[15] = -0.036253
+  x[16] = 0.00801405
+  x[17] = 0.0427437
+  x[18] = -0.082892
+  x[19] = -0.0630695
+  x[20] = 0.183401
+
+  x[21] = 0.0306884
+  x[22] = 0.0620136
+  x[23] = 0.018799
+  x[24] = -0.100168
+  x[25] = 0.0556814
+  x[26] = 0.0472193
+  x[27] = -0.134433
+  x[28] = -0.061145
+  x[29] = 0.185764
+  x[30] = -0.192063
+
+  x[31] = 1
+  x[32] = 0.482425
+  x[33] = 1
+  x[34] = 0.51827
+  x[35] = 0.530434
+  x[36] = 1
+--- fin Final x (before estimation) ---
+   0  F: 1.0000000000   step: 0.100000
+   1  F: 0.9652132826   step: 0.008615
+   2  F: 0.9430605217   step: 0.046218
+   3  F: 0.9272029099   step: 0.046212
+   4  F: 0.8924343674   step: 0.266630
+   5  F: 0.8783860481   step: 0.091035
+   6  F: 0.8646262210   step: 0.232044
+   7  F: 0.8592670116   step: 0.269825
+   8  F: 0.8577157168   step: 0.210465
+   9  F: 0.8574077563   step: 0.325979
+  10  F: 0.8570693529   step: 0.224735
+  11  F: 0.8570421204   step: 0.222198
+  12  F: 0.8570290409   step: 0.162510
+  13  F: 0.8570259736   step: 0.276800
+  14  F: 0.8570250929   step: 0.343258
+  15  F: 0.8570247623   step: 0.287017
+  16  F: 0.8570246164   step: 0.463002
+  17  F: 0.8570245861   step: 1.000000
+  18  F: 0.8570245753   step: 0.289011
+  19  F: 0.8570245699   step: 1.000000
+  20  F: 0.8570245694   step: 1.000000
+  21  F: 0.8570245652   step: 1.000000
+  22  F: 0.8570245649   step: 1.000000
+  23  F: 0.8570245645   step: 1.000000
+  24  F: 0.8570245644   step: 1.000000
+  25  F: 0.8570245644   step: 1.000000
+  26  F: 0.8570245644   step: 1.000000
+  27  F: 0.8570245644   step: 1.000000
+  28  F: 0.8570245644   step: 1.000000
+  29  F: 0.8570245644   step: 1.000000
+  30  F: 0.8570245644   step: 1.000000
+  31 F: 0.8570245644
+Forecasts written to IPC3.forecast

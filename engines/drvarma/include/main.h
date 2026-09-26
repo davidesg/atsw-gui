@@ -75,7 +75,12 @@ struct Tseries
     int  max;                    /* ?ndice del m?ximo */
     int  min;                    /* ?ndice del m?nimo */
     real *data;                  /* Vector de datos */
+    int  numbering;              /* 1 = numeracion simple, 0 = fechas (.pre) */
+    real refactor;               /* reescalado de fue, del .pre              */
     };
+
+/* El modelo univariante de un .pre (lib/fuepre): la escalera, desde 5.0. */
+#include "tusmodel.h"
 
 /*****************************************************************************/
 /*  Funciones de estimaci?n (de elfvarma.c y drvmlest.c)                     */

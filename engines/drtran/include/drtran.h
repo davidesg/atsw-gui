@@ -17,12 +17,13 @@
 /*  Cabecera específica del programa de estimación de funciones de           */
 /*  transferencia Box‑Jenkins (DRTRAN).                                      */
 /*  Contiene las definiciones y variables globales compartidas entre         */
-/*  drtran.c, tran_shootx.c, prewhiten.c y fue_pre_reader.c.                 */
+/*  drtran.c, tran_shootx.c y prewhiten.c.                                */
 /*****************************************************************************/
 #ifndef DRTRAN_H
 #define DRTRAN_H
 
 #include "main.h"
+#include "fue_pre_reader.h"   /* el modelo del .pre y sus coeficientes libres */
 
 /* -------------------------------------------------------------------------- */
 /* Órdenes máximos permitidos para la función de transferencia               */
@@ -136,18 +137,11 @@ extern int topo[MAX_SER + 1];
 /* Indicador de matriz de covarianza diagonal (1 = sí, 0 = completa) */
 extern int diag_cov;
 
-/* Deterministas: desempaqueta desde x[] los coeficientes ω/δ marcados como
-   estimables en el .pre (Imega/Ielta) */
-void unpack_det_params(struct Tusmodel *Tm, real *x, int *idx);
-
 /* Expande el vector de parámetros LIBRES a la estructura completa, aplicando
    los coeficientes fijos y los COMPARTIDOS. */
 real *expand_params(real *xfree);
 void compute_irf(real *omega, int s, real *delta, int r, int b,
                  real *nu, int length);
-
-/* Rechaza factores de frecuencia fija invalidos (c2 >= 0) */
-int invalid_fixfreq(struct Tusmodel *Tm);
 
 /* Construye las series estacionarias de TODAS las series y las recorta a la
    ventana común (cada modelo puede diferenciar distinto: ∇∇₁₂ pierde 13
@@ -157,7 +151,5 @@ void build_stationary_series(void);
 /* Unscramble: expandir factores AR/MA de FUE a polinomios VARMA */
 void expand_ar_factors(struct Tusmodel *Tm, real *phi_out, int p);
 void expand_ma_factors(struct Tusmodel *Tm, real *theta_out, int q);
-void unpack_ar_factors(struct Tusmodel *Tm, real *x, int *idx);
-void unpack_ma_factors(struct Tusmodel *Tm, real *x, int *idx);
 
 #endif /* DRTRAN_H */

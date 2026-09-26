@@ -42,6 +42,7 @@
 #include <errno.h>
 #include <locale.h>
 #include <gsl/gsl_matrix.h>
+#include "version.h"
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_linalg.h>
 #include <gsl/gsl_eigen.h>
@@ -1949,7 +1950,7 @@ show_log:
 /* ---------- Build the main UI with GtkNotebook ---------- */
 static void create_ui(GtkApplication *app, gpointer user_data) {
     main_window = gtk_application_window_new(app);
-    gtk_window_set_title(GTK_WINDOW(main_window), "DRVARMA - VARMA Estimation");
+    gtk_window_set_title(GTK_WINDOW(main_window), "DRVARMA " DRVARMA_VERSION " - VARMA Estimation");
     gtk_window_set_default_size(GTK_WINDOW(main_window), 1200, 800);
     g_signal_connect(main_window, "destroy", G_CALLBACK(on_quit), NULL);
 

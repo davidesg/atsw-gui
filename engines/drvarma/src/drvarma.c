@@ -31,6 +31,8 @@
 #include "forecast.h"
 #include "transform.h"
 #include "deseason.h"
+#include "escalera.h"
+#include "version.h"
 #include <getopt.h>  /* optional, can be replaced by manual parsing */
 
 
@@ -102,8 +104,8 @@ static void print_parameters(real *x, real *dev, real **cov, int npar, struct Tv
 
 //static real normal_cdf(real x);
 static void sig_code(real p, char *sig);
-static void print_matrices(struct Tvarma *varma);
-static void print_roots(struct Tvarma *varma);
+void print_matrices(struct Tvarma *varma);
+void print_roots(struct Tvarma *varma);
 
 static void debug_print_vector(const char *label, real *v, int n);
 
@@ -178,8 +180,18 @@ int main(int argc, char *argv[])
 
     struct Tvarma varma1;
 
+    /* [0] The ladder: .pre input (drvarma 5.0). Everything below is the
+       .inp path, unchanged since 0.4.1 (tests/banco).                     */
+    if (argc > 1 && strcmp(argv[1], "-version") == 0) {
+        printf("drvarma %s\n", DRVARMA_VERSION);
+        return 0;
+    }
+    if (escalera_requested(argc, argv))
+        return escalera_main(argc, argv);
+
     /* [1] Process command line arguments */
     if (argc < 4) {
+        printf("drvarma %s\n", DRVARMA_VERSION);
         printf("Usage: %s file p q [-mean] [-diagar] [-diagma] [-diagcov] [-m method] [-twostep]\n", argv[0]);
         printf("       [-volexp [alpha window]] [-volmov [window]]\n");
         printf("  method: 1 = exact, 2 = approximate (default=1)\n");
@@ -191,6 +203,8 @@ int main(int argc, char *argv[])
         printf("  -scale factor: rescale the series (multiply after Box-Cox); forecasts inverted (default 100)\n");
         printf("  -estwin N: estimate params on first N raw obs, then write <base>.recursive\n");
         printf("       with fixed-parameter forecasts from every origin (needs -forecast H)\n");
+        escalera_usage(argv[0]);
+        printf("  -version: print the version and exit\n");
             exit(1);
     }
 
@@ -413,6 +427,7 @@ int main(int argc, char *argv[])
         printf("ERROR: cannot create %s\n", outputf);
         exit(1);
     }
+    fprintf(outputv, "Program          : drvarma %s\n", DRVARMA_VERSION);
     fprintf(outputv, "Input Data File  : %s\n", inputf);
     fprintf(outputv, "Output File      : %s\n", outputf);
     fprintf(outputv, "Model: VARMA(%d,%d)\n", global_p, global_q);
@@ -1520,7 +1535,7 @@ static void print_parameters(real *x, real *dev, real **cov, int npar, struct Tv
 /*  print_matrices: prints the normalized model matrices                    */
 /*  (Unchanged, but comments in English)                                    */
 /*****************************************************************************/
-static void print_matrices(struct Tvarma *varma)
+void print_matrices(struct Tvarma *varma)
 {
     int i, j, k;
     int m = varma->m;
@@ -1564,7 +1579,7 @@ static void print_matrices(struct Tvarma *varma)
 /*  print_roots: prints the inverse roots of AR and MA polynomials          */
 /*  (Unchanged, but comments in English)                                    */
 /*****************************************************************************/
-static void print_roots(struct Tvarma *varma)
+void print_roots(struct Tvarma *varma)
 {
     int i;
     real *wr, *wi, *wmod;

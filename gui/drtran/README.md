@@ -29,7 +29,7 @@ lanzado; esto lo dice antes.
 ## Lo que no tiene lector propio
 
 **No hay un lector del `.pre` en este GUI.** Se enlaza el del motor,
-`engines/drtran/src/fue_pre_reader.c`, tal cual. Lo que ése acepte es lo que
+`lib/fuepre/fue_pre_reader.c` (el de drtran y drvarma), tal cual. Lo que ése acepte es lo que
 acepta drtran, **por construcción y no por parecido**.
 
 El estudio del contrato contó **seis** implementaciones del formato

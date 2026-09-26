@@ -228,3 +228,55 @@ const char *an_veredicto_es( AnVeredicto v )
        default:             return "igual";
        }
 }
+
+
+/* --- la normalidad ------------------------------------------------------- */
+
+/* Los momentos de lo que la mascara deja pasar. Ver anomalos.h: aqui NO se
+ * rellenan los huecos, se quitan.                                        */
+static void momentos( const double *z, int n, const char *fuera, AnNormal *r )
+{
+   double m2 = 0.0, m3 = 0.0, m4 = 0.0, s = 0.0;
+   int    i, k = 0;
+
+   memset( r, 0, sizeof *r );
+   for ( i = 0; i < n; i++ ) if ( !fuera || !fuera[i] ) { s += z[i]; k++; }
+   if ( k < 2 ) return;
+   r->n = k;
+   r->media = s / k;
+
+   for ( i = 0; i < n; i++ ) if ( !fuera || !fuera[i] )
+       {
+       double d = z[i] - r->media;
+
+       m2 += d * d;
+       m3 += d * d * d;
+       m4 += d * d * d * d;
+       }
+   m2 /= k; m3 /= k; m4 /= k;
+   if ( m2 <= 0.0 ) return;
+
+   r->sd   = sqrt( m2 );
+   r->skew = m3 / ( m2 * r->sd );
+   r->kurt = m4 / ( m2 * m2 ) - 3.0;
+   r->jb   = (double) k / 6.0 * ( r->skew * r->skew + r->kurt * r->kurt / 4.0 );
+}
+
+int an_normalidad( const double *z, int n, const int *omitir, int nomitir,
+                   AnNormal *con, AnNormal *sinellos )
+{
+   char *fuera;
+   int   i;
+
+   if ( !z || n < 2 || !con || !sinellos ) return 1;
+
+   momentos( z, n, NULL, con );
+
+   fuera = calloc( (size_t) n, 1 );
+   if ( !fuera ) { *sinellos = *con; return 1; }
+   for ( i = 0; i < nomitir; i++ )
+       if ( omitir && omitir[i] >= 0 && omitir[i] < n ) fuera[omitir[i]] = 1;
+   momentos( z, n, fuera, sinellos );
+   free( fuera );
+   return 0;
+}

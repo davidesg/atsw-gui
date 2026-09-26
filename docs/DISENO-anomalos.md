@@ -266,6 +266,41 @@ cambiarlo aquí.
 
 ---
 
+### Y la normalidad, que es la mitad que se olvida
+
+Al lado del Q va el **Jarque-Bera con y sin**, con la curtosis de los dos
+estados. Sin histograma: lo que se pregunta es cuánto del rechazo es del
+suceso, y eso es un número.
+
+Importa porque **un extremo mueve la normalidad mucho más que la
+autocorrelación**: la curtosis va a la cuarta potencia. Quien mira sólo la
+ACF no ve la mayor parte de lo que el suceso está haciendo.
+
+**Y con otro estimador, que no es un descuido.** Para la ACF se omite por
+*desviación a cero* —μ sobre las retenidas, 0 en los huecos— porque eso deja
+los denominadores de todos los retardos comparables. Para la normalidad no
+vale: rellenar los huecos es añadir observaciones que no se observaron, justo
+donde más pesan para la curtosis. Una pregunta sobre la **forma** de la
+distribución se contesta sobre las observaciones que **quedan**. El mismo
+conjunto omitido, dos estimadores, porque son dos preguntas.
+
+#### Un defecto del motor, encontrado al comprobar la fórmula
+
+`JarqueBera()` calculaba `nobs / 6` con **los dos enteros**: división entera.
+Con 262 observaciones el factor salía 43 en vez de 43,667 y el estadístico se
+publicaba un **1,5 % bajo** (412,17 donde la fórmula da 418,56). El truncado
+sesga **siempre a la baja**, así que el contraste rechazaba menos de lo que
+debía — el lado malo en el que equivocarse: un modelo no normal podía pasar.
+Con *n* pequeño duele más (con n = 32, un 6 %).
+
+`fug` ya lo tenía bien y el GUI de mtram también; los descolgados eran `fue` y
+`fuf`. Corregido con el visto bueno del analista —la diagnosis no es el núcleo
+duro—, y comprobado que es quirúrgico: con la misma entrada, el binario de
+antes y el de después difieren **en una sola línea**. Los 69 golden de fue y
+los 13 de fuf que cambian, cambian **sólo** en la línea del Jarque-Bera.
+
+---
+
 ## 6. Lo que **no** hace
 
 **No interviene.** Ni elige la forma, ni escribe la intervención en el `.inp`,

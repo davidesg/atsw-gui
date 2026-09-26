@@ -108,7 +108,8 @@ real Kurt( real *data, int nobs )
 
 real JarqueBera( real skew, real kurt, int nobs )
 {
-   return( nobs / 6 * ( skew * skew + kurt * kurt / 4 ) );
+   /* n/6.0, como el motor desde que se le corrigio la division entera. */
+   return( nobs / 6.0 * ( skew * skew + kurt * kurt / 4 ) );
 }
 
 void Acf( struct Tseries *ser, int lags, real *corr )

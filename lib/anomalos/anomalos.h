@@ -137,6 +137,37 @@ int an_calibra( const double *z, int n, const int *omitir, int nomitir,
  * aritmetica elemental a proposito. Lo pone quien llame, que ya la tiene.  */
 void an_q( const AnCalibra *c, int m, double *q_con, double *q_sin );
 
+/* --- la normalidad, con y sin ------------------------------------------- */
+
+/* EL MISMO CONJUNTO OMITIDO, OTRO ESTIMADOR, Y NO ES UN DESCUIDO.
+ *
+ * Para la ACF se omite por DESVIACION A CERO --mu sobre las retenidas, 0 en
+ * los huecos-- porque eso deja los denominadores de todos los retardos
+ * comparables entre si.
+ *
+ * Para la normalidad no vale: meter k valores en el centro de la
+ * distribucion añade observaciones que no se observaron, justo donde mas
+ * pesan para la curtosis. El efecto es pequeño con n grande --medido: 0,01
+ * de curtosis con n = 300 y un hueco-- pero es del lado malo, y sobre todo
+ * es responder otra pregunta. Una pregunta sobre la FORMA se contesta sobre
+ * las observaciones que QUEDAN, sin rellenar los huecos.
+ *
+ * Son dos preguntas distintas y por eso son dos estimadores distintos.
+ *
+ * El JB de aqui y el del .out SI son comparables desde que al motor se le
+ * corrigio la division entera de n/6 --imprimia un 1,5 % bajo con 262
+ * observaciones--. El Q sigue sin serlo, que ese sale de otro estimador. */
+typedef struct {
+   int    n;
+   double media, sd;
+   double skew, kurt;     /* la curtosis en EXCESO, como el motor          */
+   double jb;             /* n/6 (S^2 + K^2/4), con 2 g.l.                 */
+} AnNormal;
+
+/* Con y sin los indices de omitir[]. 0 si pudo. */
+int an_normalidad( const double *z, int n, const int *omitir, int nomitir,
+                   AnNormal *con, AnNormal *sinellos );
+
 const char *an_veredicto_es( AnVeredicto v );
 
 #endif /* ATSW_ANOMALOS_H */

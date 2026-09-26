@@ -319,7 +319,7 @@ Standard error of mean:           0.017028
     Standard deviation:           0.249675
               Skewness:          -0.118070
               Kurtosis:           0.056645
-           Jarque-Bera:           0.515996
+           Jarque-Bera:           0.528282
                Minimum:          -0.757725 at  1/2016 (observation 168)
                Maximum:           0.757975 at  9/2012 (observation 128)
 

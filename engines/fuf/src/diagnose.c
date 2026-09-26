@@ -194,7 +194,19 @@ real JarqueBera( real Skew, real Kurt, int nobs)
 
 {
 
-return ( nobs / 6 * ( Skew*Skew + Kurt*Kurt/4));
+/* n/6 EN COMA FLOTANTE, QUE ES LA FORMULA.
+ *
+ * Estaba `nobs / 6`, los dos int: division ENTERA. Con 262 observaciones el
+ * factor salia 43 en vez de 43,667 y el estadistico se publicaba un 1,5 %
+ * bajo (412,17 donde la formula da 418,56). El sesgo es SIEMPRE a la baja
+ * --se trunca-- asi que el contraste rechazaba menos de lo que debia, que
+ * es el lado malo en el que equivocarse: un modelo no normal podia pasar.
+ *
+ * Con n pequeño duele mas: con n = 32 el factor es 5 en vez de 5,33, un 6 %.
+ *
+ * fug ya lo tenia bien (diagnose.c: `nobs / 6.0`) y el GUI de mtram tambien.
+ * Los descolgados eran fue y fuf.                                       */
+return ( nobs / 6.0 * ( Skew*Skew + Kurt*Kurt/4));
 
 }
 /*****************************************************************************/

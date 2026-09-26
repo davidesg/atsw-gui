@@ -74,7 +74,7 @@ typedef struct {
     gboolean   armando;            /* no reentrar al mover el botón a mano */
 
     char       eps[PR_RUTA];
-    GtkWidget *b_cal, *b_sug, *l_q, *l_pie;
+    GtkWidget *b_cal, *b_sug, *l_q, *l_jb, *l_pie;
 } An;
 
 
@@ -234,6 +234,40 @@ static void dibuja( An *g )
 /* ------------------------------------------------------------------------ */
 /* El pie: lo que el dibujo no dice                                          */
 /* ------------------------------------------------------------------------ */
+
+/* LA NORMALIDAD, CON Y SIN, AL LADO DEL Q.
+ *
+ * Es la otra mitad de la diagnosis que un anómalo mueve, y la mueve MAS: la
+ * curtosis va a la cuarta potencia, así que un extremo la dispara mientras
+ * apenas toca el Q. Quien mira sólo la autocorrelación no ve la mayor parte
+ * de lo que el suceso está haciendo.
+ *
+ * Sin histograma: lo que se pregunta aquí es cuánto del rechazo es del
+ * suceso, y eso es un número.                                          */
+static void di_jb( An *g )
+{
+    AnNormal con, sinellos;
+    gchar   *t;
+
+    if ( an_normalidad( g->z, g->o.nres, g->nomit ? g->omit : NULL, g->nomit,
+                        &con, &sinellos ) != 0 )
+        return;
+
+    if ( g->nomit == 0 )
+        t = g_markup_printf_escaped(
+            "<tt>JB</tt>  <b>%.1f</b> (p = %.3f)   ·   asimetría %+.2f, "
+            "curtosis %+.2f", con.jb, chisq_cola( con.jb, 2 ), con.skew,
+            con.kurt );
+    else
+        t = g_markup_printf_escaped(
+            "<tt>JB</tt>  con <b>%.1f</b> (p = %.3f)   ·   sin <b>%.1f</b> "
+            "(p = %.3f)   ·   curtosis %+.2f → %+.2f, sobre %d observaciones",
+            con.jb, chisq_cola( con.jb, 2 ), sinellos.jb,
+            chisq_cola( sinellos.jb, 2 ), con.kurt, sinellos.kurt,
+            sinellos.n );
+    gtk_label_set_markup( GTK_LABEL(g->l_jb), t );
+    g_free( t );
+}
 
 static void di_q( An *g )
 {
@@ -434,6 +468,7 @@ static void on_calibrar( GtkToggleButton *b, An *g )
     g->calibrado    = TRUE;
     g->sin_anomalos = TRUE;
     di_q( g );
+    di_jb( g );
     pie( g );
     dibuja( g );
 }
@@ -467,6 +502,7 @@ static void on_marca( GtkToggleButton *b, An *g )
             calibra( g, FALSE );
             }
         di_q( g );
+        di_jb( g );
         }
     pie( g );
     dibuja( g );
@@ -631,12 +667,24 @@ void an_anomalos( const AnHost *h, const char *serie, const char *muestra,
     gtk_label_set_xalign( GTK_LABEL(g->l_q), 0.0 );
     gtk_box_pack_start( GTK_BOX(fila), g->l_q, TRUE, TRUE, 8 );
 
+    g->l_jb = gtk_label_new( NULL );
+    gtk_label_set_xalign( GTK_LABEL(g->l_jb), 0.0 );
+    gtk_widget_set_tooltip_text( g->l_jb,
+        "La normalidad de los residuos, con y sin lo marcado. Un extremo "
+        "dispara la curtosis --va a la cuarta potencia-- mucho más de lo que "
+        "mueve el Q: quien mira sólo la autocorrelación no ve la mayor parte "
+        "de lo que el suceso hace.\n\nSe calcula sobre las observaciones que "
+        "QUEDAN, sin rellenar los huecos: rellenarlos sería añadir "
+        "observaciones que no se observaron, justo donde más pesan." );
+    gtk_box_pack_start( GTK_BOX(pie_caja), g->l_jb, FALSE, FALSE, 0 );
+
     g->l_pie = gtk_label_new( NULL );
     gtk_label_set_xalign( GTK_LABEL(g->l_pie), 0.0 );
     gtk_label_set_line_wrap( GTK_LABEL(g->l_pie), TRUE );
     gtk_box_pack_start( GTK_BOX(pie_caja), g->l_pie, FALSE, FALSE, 0 );
 
     di_q( g );
+    di_jb( g );
     pie( g );
     gtk_widget_show_all( pie_caja );
 

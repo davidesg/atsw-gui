@@ -176,6 +176,52 @@ int main( void )
         "quitar una observación ensancha la banda, y por eso se comparan "
         "DOS bandas y no una" );
 
+    printf( "\nLA NORMALIDAD: OTRO ESTIMADOR, Y POR ESO\n" );
+    /* Un atipico dispara la curtosis. Quitarlo tiene que BAJARLA -- y si se
+       rellenara el hueco con un cero, la SUBIRIA, porque un cero exacto en
+       el centro es una punta que no estaba. Ahi esta el motivo de que la
+       ACF y la normalidad no compartan estimador.                   */
+    {
+    AnNormal con, sinellos;
+    int      i, omit2[2];
+
+    semilla = 20260926UL;
+    for ( i = 0; i < n; i++ ) z[i] = ruido();
+    z[100] += 12.0;                       /* un atipico grande y solo */
+    omit2[0] = 100;
+
+    ok( an_normalidad( z, n, omit2, 1, &con, &sinellos ) == 0, "se calcula" );
+    ok( sinellos.n == con.n - 1, "el «sin» tiene una observacion menos" );
+    ok( con.kurt > sinellos.kurt,
+        "quitar el atipico BAJA la curtosis, que es lo que tiene que pasar" );
+    ok( con.jb > sinellos.jb, "y con ella baja el Jarque-Bera" );
+    printf( "        con: JB %.1f (S %+.2f, K %+.2f, n %d)\n",
+            con.jb, con.skew, con.kurt, con.n );
+    printf( "        sin: JB %.1f (S %+.2f, K %+.2f, n %d)\n",
+            sinellos.jb, sinellos.skew, sinellos.kurt, sinellos.n );
+
+    /* Y LA PRUEBA DEL ESTIMADOR: rellenar con cero en vez de quitar daria
+       una curtosis MAYOR que la de verdad.                          */
+    {
+    double relleno[600];
+    AnNormal falso, basura;
+
+    for ( i = 0; i < n; i++ ) relleno[i] = z[i];
+    relleno[100] = sinellos.media;        /* la desviacion a cero */
+    an_normalidad( relleno, n, NULL, 0, &falso, &basura );
+    ok( falso.kurt > sinellos.kurt,
+        "rellenar el hueco deja MAS curtosis que quitarlo: por eso no se "
+        "rellena" );
+    printf( "        rellenando: K %+.2f  frente a %+.2f quitando\n",
+            falso.kurt, sinellos.kurt );
+    }
+
+    /* Sin nada omitido, los dos son el mismo */
+    an_normalidad( z, n, NULL, 0, &con, &sinellos );
+    ok( con.jb == sinellos.jb && con.n == sinellos.n,
+        "sin omitir nada, «con» y «sin» son el mismo numero" );
+    }
+
     printf( "\n%d fallos\n", fallos );
     return fallos ? 1 : 0;
 }

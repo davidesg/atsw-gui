@@ -67,7 +67,15 @@ TARGET = drtran_gui
 
 all: $(TARGET)
 
-$(TARGET): $(SRC) $(HDR)
+
+# LAS CABECERAS DE lib/ TAMBIEN SON DEPENDENCIAS, y faltaban. Compilar de
+# una sola llamada no es lo mismo que decidir bien CUANDO hay que compilar:
+# make lo decide mirando las dependencias, y cambiar un valor en una
+# cabecera de lib/ no reconstruia nada. Sin aviso y sin error. Ver la nota
+# larga en gui/atsw/Makefile.
+LIBHDR = $(wildcard $(LIB)/*/*.h)
+
+$(TARGET): $(SRC) $(HDR) $(LIBHDR)
 	@if [ -z "$(GTK_LIBS)" ]; then \
 	    echo "drtran_gui necesita los ficheros de desarrollo de GTK 3"; \
 	    echo "(Debian/Ubuntu: sudo apt install libgtk-3-dev)"; exit 1; fi

@@ -41,7 +41,22 @@ SRC = src/main.c src/ventana.c src/gestos.c src/datos_gui.c src/vistazo.c \
       ../../engines/fug/src/inpfile.c \
       $(LIB)/dates/dates.c
 
-HDR = include/atsw.h
+HDR = include/atsw.h include/anfitrion.h include/previewhost.h
+# LAS CABECERAS DE lib/ TAMBIEN SON DEPENDENCIAS, y faltaban.
+#
+# Este objetivo se reconstruye de una sola llamada, asi que parecia inmune a
+# los objetos rancios. No lo era: make decide si hay que reconstruir MIRANDO
+# LAS DEPENDENCIAS, y aqui solo estaban las cabeceras propias. Cambiar un
+# valor en lib/anomalos/anomalos.h no reconstruia nada, y el programa seguia
+# corriendo con el numero de antes -- sin un aviso, sin un error, y con la
+# bateria en verde porque las pruebas SI se recompilan.
+#
+# Costo dos vueltas: la primera con include/fue_context.h en gui/fue, donde
+# se arreglo con -MMD; y la segunda aqui, porque dije que este Makefile no
+# tenia el problema «porque compila de una sola llamada». Compilar de una
+# llamada no es lo mismo que decidir bien CUANDO hay que compilar.
+LIBHDR = $(wildcard $(LIB)/*/*.h)
+
 
 INC = -Iinclude -I$(LIB)/proyecto -I$(LIB)/outdiag -I$(LIB)/outfile -I$(LIB)/analisis -I$(LIB)/dictamen -I$(LIB)/anomalos -I$(LIB)/intervencion -I$(LIB)/inpdet -I$(LIB)/engine -I$(LIB)/inpcheck -I$(LIB)/tabla \
       -I$(LIB)/rutas -I$(LIB)/dates -I$(LIB)/datos -I$(LIB)/xlsx \
@@ -63,7 +78,7 @@ $(INPCHECK): ../../engines/fue/src/inpcheck.c $(LIB)/inpcheck/inpcheck.h
 	$(CC) $(CFLAGS) $(INC) -I../../engines/fue/include \
 	    -Dinp_check=inp_check_fue -c $< -o $@
 
-$(TARGET): $(SRC) $(HDR) $(INPCHECK)
+$(TARGET): $(SRC) $(HDR) $(LIBHDR) $(INPCHECK)
 	@if [ -z "$(GTK_LIBS)" ]; then \
 	    echo "atsw_gui necesita los ficheros de desarrollo de GTK 3"; \
 	    echo "(Debian/Ubuntu: sudo apt install libgtk-3-dev)"; exit 1; fi

@@ -1,0 +1,152 @@
+# Cuándo un tramo de residuos es un incidente
+
+**Análisis y propuesta. Nada de esto está implementado todavía.**
+
+Lo plantea el analista así: *no es lo mismo un anómalo aislado de 3σ, cuya
+probabilidad es muy pequeña, que uno de 2σ, que pasa el 5 % de las veces. Pero
+un 3σ **con** un 2σ antes y otro después es, en un gaussiano, prácticamente
+imposible. La probabilidad de un incidente no es la del punto aislado.*
+
+Es correcto, y tiene consecuencias sobre la regla.
+
+---
+
+## 1. Lo que hay hoy, y por qué se queda corto
+
+Un umbral para **declarar** —`u = √(2 ln n)`, con suelo 2,5— y otro fijo de
+**2,0** para **extender** a los vecinos. El segundo se puso con dos
+justificaciones buenas: es el umbral con el que el motor marca `@` en el
+`.out`, y art midió que subirlo a 3,0 cuesta la mitad de la potencia.
+
+Lo que está mal no es la idea de dos umbrales: es que **el segundo sea una
+constante**. Lo que hace improbable un tramo no es que cada punto pase un
+listón, es **cuántos lo pasan a la vez**.
+
+---
+
+## 2. Los números, bajo la nula
+
+Con residuos gaussianos iid tipificados, `p₁(c) = P(|z| > c)`:
+
+| c | p₁(c) | esperados en n = 261 |
+|---|---|---|
+| 2,0 | 0,0455 | **11,9** |
+| 2,5 | 0,0124 | 3,2 |
+| 3,0 | 0,0027 | 0,70 |
+| 3,34 = √(2 ln 261) | 0,00085 | **0,22** |
+
+Doce falsos a 2σ por serie: por eso 2σ suelto no es noticia. Pero el tramo
+`(3,01 · −3,50 · 2,36)` del caso real —m04 de IPC\_ES, 1–3/2021— tiene
+probabilidad conjunta, **por posición**, de ~10⁻⁸; en toda la serie, ~10⁻⁶.
+Es **136 veces más raro** que el extremo aislado que hoy sí se declara.
+
+La conclusión del analista se sostiene: **hay que puntuar el tramo, no los
+puntos.**
+
+---
+
+## 3. La regla propuesta
+
+Para un tramo de L períodos consecutivos con residuos tipificados z₁…z_L:
+
+```
+        S = Σ zᵢ²        y        bajo la nula   S ~ χ²(L)
+```
+
+**Es un episodio si el tramo es al menos tan improbable como un extremo
+aislado en el umbral de declarar:**
+
+```
+        P( χ²_L > S )  ≤  p₁(u) / K
+```
+
+Tres propiedades que la hacen la regla correcta y no una más:
+
+1. **Con L = 1 es exactamente la regla de siempre.** `P(χ²₁ > z²) ≤ p₁(u)` es
+   `|z| ≥ u`. No hay discontinuidad ni caso especial.
+2. **No introduce ninguna constante nueva.** `u` ya estaba declarado y depende
+   de n, que es lo que gobierna las comparaciones múltiples.
+3. **Usa las magnitudes, no sólo si cruzan un listón.** `(3,5 · 2,0)` y
+   `(2,0 · 2,0)` dejan de ser el mismo caso.
+
+### El escalón que implica
+
+Si todos los puntos del tramo valen lo mismo, el listón por punto sale de la
+fórmula — **derivado, no elegido**:
+
+| n | L=1 | L=2 | L=3 | L=4 | L=5 | L=6 |
+|---|---|---|---|---|---|---|
+| 80 | 2,96 | 2,41 | 2,15 | 2,00 | 1,89 | 1,81 |
+| 261 | 3,34 | 2,66 | 2,35 | 2,17 | 2,04 | 1,95 |
+| 600 | 3,58 | 2,82 | 2,48 | 2,28 | 2,14 | 2,04 |
+
+*(con K = 1; con K = 1,5 sube ~0,1 en toda la fila)*
+
+El 2,0 fijo de hoy era, sin saberlo, **el valor correcto para L ≈ 4–5 en una
+serie de 261**: demasiado laxo para pares y demasiado estricto para tramos
+largos.
+
+---
+
+## 4. La calibración, medida
+
+4 000 series gaussianas iid de n = 261, escaneando L = 1…8 y quedándose con
+los tramos no solapados más significativos:
+
+| regla | episodios falsos por serie |
+|---|---|
+| dos umbrales (la de hoy) | 0,212 |
+| tramo conjunto, K = 1 | 0,338 |
+| tramo conjunto, **K = 1,5** | **0,226** |
+| tramo conjunto, K = 2 | 0,168 |
+| *referencia: lo que hoy cuesta un extremo aislado* | *0,222* |
+
+Escanear ocho longitudes **sí** infla los falsos positivos: con K = 1 el
+analista vería un 50 % más de episodios falsos. Con **K = 1,5** la carga de
+falsas alarmas queda **exactamente donde está hoy**, y a cambio los tramos se
+detectan con muchísima más potencia.
+
+El precio de K = 1,5: un extremo aislado necesita 3,45 en vez de 3,34. Es
+poco —de 0,22 a 0,16 falsos aislados esperados— pero **es un cambio de
+comportamiento en el caso más común**, y por eso se dice.
+
+### Cómo queda el caso real y sus vecinos (n = 261, K = 1,5)
+
+| tramo | L | p conjunto | veredicto |
+|---|---|---|---|
+| **3,01 · −3,50 · 2,36** (el real) | 3 | 6,2·10⁻⁶ | **episodio** |
+| sólo el del medio (−3,50) | 1 | 4,7·10⁻⁴ | episodio |
+| 2,8 · 2,8 · 2,8 | 3 | 3,2·10⁻⁵ | episodio |
+| seis seguidos de 2,0 | 6 | 5,2·10⁻⁴ | episodio |
+| 3,0 con un 2,0 al lado | 2 | 1,5·10⁻³ | no |
+| tres seguidos de 2,0 | 3 | 7,4·10⁻³ | no |
+| uno de 2,0 | 1 | 4,6·10⁻² | no |
+
+---
+
+## 5. Lo que la regla NO arregla, y hay que decirlo
+
+**La desviación típica está inflada por los propios anómalos.** Los z se
+tipifican con la sd muestral, que los extremos que buscamos hacen mayor: el
+contraste es **conservador**, y tanto más cuanto peor es el caso. Una escala
+robusta —MAD × 1,4826— lo corregiría, pero cambia todos los z y por tanto
+todos los veredictos: es **otra decisión**, no un detalle de ésta.
+
+**Los residuos no son exactamente iid.** Vienen de un modelo ajustado: hay
+error de estimación y autocorrelación residual leve. La χ² es una
+aproximación y la simulación de arriba usa iid exacto.
+
+**El solapamiento se resuelve con avaricia**: gana el tramo más significativo
+y los demás no pueden pisarlo. Es una convención, no un teorema.
+
+---
+
+## 6. Las dos decisiones que quedan
+
+1. **K = 1,5** (misma carga de falsas alarmas que hoy, pero el extremo aislado
+   pasa a pedir 3,45) **o K = 1** (el aislado sigue en 3,34 y se aceptan un
+   50 % más de episodios falsos, todos ellos tramos que merece la pena mirar).
+   *Mi recomendación: K = 1,5 — que declarar un episodio cueste lo que hoy
+   cuesta declarar un extremo.*
+2. **Escala muestral o robusta (MAD).** Hoy muestral. La robusta da más
+   potencia justo donde importa, y es un cambio de mayor alcance.

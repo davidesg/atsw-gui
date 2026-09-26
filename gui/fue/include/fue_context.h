@@ -15,6 +15,7 @@ typedef struct {
      * gui/fue/src/analisis.c y lib/analisis.                            */
     GtkWidget *btn_diagnosis;
     GtkWidget *btn_anomalos;
+    GtkWidget *btn_ganancia;
 
     /* Data specification widgets */
     GtkWidget *series_name_entry;

@@ -59,7 +59,7 @@ int main( void )
     printf( "UN MODELO QUE CUADRA, CUADRA\n" );
     base( &o );
     c.kind = CONV_GRADTOL; c.iterations = 12; c.brief = (gchar *) "converged";
-    dx_dictamen( &o, &c, &d );
+    dx_dictamen( &o, &c, NULL, 0, &d );
     ok( d.n == 6, "seis bloques: estimación, media, autocorrelación, "
                   "normalidad, parámetros y ganancia" );
     ok( linea( &d, "Autocorrelación" )->estado == DX_CUADRA, "los residuos son blancos" );
@@ -70,18 +70,18 @@ int main( void )
     /* Un p de .04 y uno de .000 no son la misma noticia; y uno de .07
        tampoco es un aprobado limpio.                                  */
     base( &o ); o.lb_p_[1] = 0.04;
-    dx_dictamen( &o, &c, &d );
+    dx_dictamen( &o, &c, NULL, 0, &d );
     ok( linea( &d, "Autocorrelación" )->estado == DX_NO, "p = .04 rechaza" );
 
     base( &o ); o.lb_p_[1] = 0.07;
-    dx_dictamen( &o, &c, &d );
+    dx_dictamen( &o, &c, NULL, 0, &d );
     ok( linea( &d, "Autocorrelación" )->estado == DX_MIRAR,
         "p = .07 no rechaza, pero no es lo mismo que .60" );
 
     printf( "\nEL PEOR PELDAÑO ES EL DIAGNOSTICO, Y SE DICE CUAL\n" );
     base( &o );
     o.lb_p_[0] = 0.001;                 /* cerca: Q(12) */
-    dx_dictamen( &o, &c, &d );
+    dx_dictamen( &o, &c, NULL, 0, &d );
     ok( linea( &d, "Autocorrelación" )->estado == DX_NO, "manda el peor" );
     ok( strstr( linea( &d, "Autocorrelación" )->dice, "12" ) != NULL,
         "y se dice EN QUE retardo: cerca o lejos son dos problemas" );
@@ -91,7 +91,7 @@ int main( void )
     printf( "\nLO QUE NO CONSTA NO ES UN APROBADO\n" );
     base( &o );
     o.nlb = 0; o.tiene_jb = 0;
-    dx_dictamen( &o, &c, &d );
+    dx_dictamen( &o, &c, NULL, 0, &d );
     ok( linea( &d, "Autocorrelación" )->estado == DX_NO_CONSTA,
         "sin Ljung-Box en el informe, no consta" );
     ok( linea( &d, "Normalidad" )->estado == DX_NO_CONSTA,
@@ -103,7 +103,7 @@ int main( void )
     printf( "\nLA MEDIA CON mu ESTIMADA ES UNA TAUTOLOGIA, NO UN APROBADO\n" );
     base( &o );
     o.tiene_mu = 1; o.media = -0.000001; o.media_et = 0.000171;
-    dx_dictamen( &o, &c, &d );
+    dx_dictamen( &o, &c, NULL, 0, &d );
     ok( linea( &d, "Media" )->estado == DX_NO_CONSTA,
         "con mu, la media es cero POR CONSTRUCCION: no hay contraste" );
     ok( strstr( linea( &d, "Media" )->dice, "construcción" ) != NULL,
@@ -111,23 +111,23 @@ int main( void )
 
     base( &o );
     o.tiene_mu = 0; o.media = 0.005; o.media_et = 0.001;   /* t = 5 */
-    dx_dictamen( &o, &c, &d );
+    dx_dictamen( &o, &c, NULL, 0, &d );
     ok( linea( &d, "Media" )->estado == DX_NO,
         "sin mu, el contraste vale -- y aquí la media NO es cero" );
 
     printf( "\nPARARSE SIN MEJORA NO ES FRACASAR\n" );
     base( &o );
     c.kind = CONV_NO_LOWER; c.brief = (gchar *) "stopped";
-    dx_dictamen( &o, &c, &d );
+    dx_dictamen( &o, &c, NULL, 0, &d );
     ok( linea( &d, "Estimación" )->estado == DX_CUADRA,
         "es lo que sale cuando el .pre YA ERA el óptimo" );
 
     c.kind = CONV_MAXITS;
-    dx_dictamen( &o, &c, &d );
+    dx_dictamen( &o, &c, NULL, 0, &d );
     ok( linea( &d, "Estimación" )->estado == DX_NO,
         "pero quedarse sin iteraciones sí es no converger" );
 
-    dx_dictamen( &o, NULL, &d );
+    dx_dictamen( &o, NULL, NULL, 0, &d );
     ok( linea( &d, "Estimación" )->estado == DX_NO_CONSTA,
         "y sin saber cómo acabó, no consta" );
 
@@ -135,7 +135,7 @@ int main( void )
     base( &o );
     c.kind = CONV_GRADTOL;
     o.npares = 1; o.par_a[0] = 2; o.par_b[0] = 3; o.par_r[0] = 0.93;
-    dx_dictamen( &o, &c, &d );
+    dx_dictamen( &o, &c, NULL, 0, &d );
     ok( linea( &d, "Parámetros" )->estado == DX_MIRAR,
         "correlación alta: hay que mirarlo" );
     ok( strstr( linea( &d, "Parámetros" )->dice, "puede" ) != NULL,
@@ -145,7 +145,7 @@ int main( void )
     printf( "\nUN PARAMETRO QUE NO SE GANA SU SITIO\n" );
     base( &o );
     o.par[1] = 0.05; o.par_et[1] = 0.1;         /* t = 0.5 */
-    dx_dictamen( &o, &c, &d );
+    dx_dictamen( &o, &c, NULL, 0, &d );
     ok( linea( &d, "Parámetros" )->estado == DX_MIRAR, "se avisa" );
     ok( strstr( linea( &d, "Parámetros" )->dice, "[2]" ) != NULL,
         "y se dice cuál" );
@@ -167,7 +167,7 @@ int main( void )
     o2.hay = TRUE; o2.nobs = 262; o2.npar_leidos = 1;
     o2.par[0] = 0.5; o2.par_et[0] = 0.1; o2.par_estimado[0] = TRUE;
     o2.ndet_leidos = 1; o2.det_nom[0] = 1; o2.det_i0[0] = 1;
-    dx_dictamen( &o2, &cv, &dd );
+    dx_dictamen( &o2, &cv, NULL, 0, &dd );
     g = linea( &dd, "Ganancia" );
     ok( g && g->estado == DX_NO_APLICA,
         "sin varios omegas NO APLICA, que no es lo mismo que no constar" );
@@ -181,14 +181,14 @@ int main( void )
     o2.ndet_leidos = 1; o2.det_nom[0] = 2; o2.det_i0[0] = 1;
     o2.ncov = 2;
     o2.cov[0][0] = 1.5521e-5; o2.cov[1][1] = 1.5521e-5; o2.cov[1][0] = 0.0;
-    dx_dictamen( &o2, &cv, &dd );
+    dx_dictamen( &o2, &cv, NULL, 0, &dd );
     g = linea( &dd, "Ganancia" );
     ok( g && g->estado == DX_CUADRA, "ganancia distinta de cero: PERMANENTE" );
     if ( g ) printf( "        %s\n", g->dice );
 
     /* ganancia nula: transitorio, y eso es un parametro de mas */
     o2.par[1] = 0.024963;
-    dx_dictamen( &o2, &cv, &dd );
+    dx_dictamen( &o2, &cv, NULL, 0, &dd );
     g = linea( &dd, "Ganancia" );
     ok( g && g->estado == DX_MIRAR,
         "ganancia nula: transitorio, y sobra un parametro" );
@@ -196,7 +196,7 @@ int main( void )
 
     /* CERO ITERACIONES: la covarianza es la semilla, no se contrasta */
     cv.iterations = 0;
-    dx_dictamen( &o2, &cv, &dd );
+    dx_dictamen( &o2, &cv, NULL, 0, &dd );
     g = linea( &dd, "Ganancia" );
     ok( g && g->estado == DX_NO_CONSTA,
         "con cero iteraciones no hay covarianza que contrastar" );

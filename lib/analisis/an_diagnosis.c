@@ -179,7 +179,17 @@ void an_diagnosis( const AnHost *h, const char *serie, const char *muestra,
         }
     fueout_estructura( &g->o, g->estruct, sizeof g->estruct );
     if ( !convergence_of( out, &c ) ) memset( &c, 0, sizeof c );
-    dx_dictamen( &g->o, &c, &g->d );
+    {
+    /* LOS NOMBRES, del .inp: el .out no los trae y sin ellos el dictamen
+       habla de «la intervención 12», que obliga a contar líneas.    */
+    static char det[AN_MAX_DET][AN_LDET];
+    const char *ptr[AN_MAX_DET];
+    int         nd, i;
+
+    nd = an_deterministas( h->p, serie, muestra, id, det, AN_MAX_DET );
+    for ( i = 0; i < nd; i++ ) ptr[i] = det[i];
+    dx_dictamen( &g->o, &c, nd ? ptr : NULL, nd, &g->d );
+    }
     convergence_clear( &c );
 
     win = gtk_window_new( GTK_WINDOW_TOPLEVEL );

@@ -129,7 +129,7 @@ const AtRes *atsw_resultado( Atsw *a, const char *serie, const char *muestra,
         size_t      n = sizeof r->dx;
 
         if ( !convergence_of( path, &c ) ) memset( &c, 0, sizeof c );
-        dx_dictamen( &o, &c, &d );
+        dx_dictamen( &o, &c, NULL, 0, &d );   /* la rejilla sólo usa el peor */
         convergence_clear( &c );
 
         r->peor = d.peor;

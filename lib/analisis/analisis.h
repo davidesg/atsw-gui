@@ -113,6 +113,12 @@ void an_anomalos( const AnHost *h, const char *serie, const char *muestra,
 void an_diagnosis( const AnHost *h, const char *serie, const char *muestra,
                    const char *id );
 
+/* LA GANANCIA DE LAS INTERVENCIONES: ¿el suceso dejó algo para siempre o
+ * revirtió? No es diagnosis --la diagnosis juzga lo que hay-- sino una
+ * hipotesis sobre la naturaleza del incidente, contrastada.           */
+void an_ganancia( const AnHost *h, const char *serie, const char *muestra,
+                  const char *id );
+
 /* Qué forma pide cada suceso marcado. La abre an_anomalos, no el anfitrión.
  * Ver DISENO-intervencion.md.                                            */
 #define AN_MAX_EXT  16
@@ -159,6 +165,20 @@ typedef enum {
 /* porque[n] recibe la frase que va al globo del botón apagado. */
 AnEstado an_estado( const Proyecto *p, const char *serie, const char *muestra,
                     const char *id, char *porque, size_t n );
+
+/* LOS NOMBRES DE LOS DETERMINISTAS de ese modelo, leidos de su .inp.
+ *
+ * El .out no los trae --dice «Omegas for deterministic variable 12»-- y sin
+ * ellos todo lo que se diga de una intervencion la nombra por su numero, que
+ * obliga al analista a contar lineas en el fichero.
+ *
+ * Devuelve cuantos (0 si no se pudo), y el vector queda en det[][]. */
+#define AN_MAX_DET  64
+#define AN_LDET     128
+
+int an_deterministas( const Proyecto *p, const char *serie,
+                      const char *muestra, const char *id,
+                      char det[][AN_LDET], int max );
 
 /* Decirle algo a quien abrió la ventana. Sin anfitrión, al log: un aviso
  * que no se ve es un botón que no funciona.                             */

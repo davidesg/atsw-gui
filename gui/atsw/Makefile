@@ -24,6 +24,7 @@ SRC = src/main.c src/ventana.c src/gestos.c src/datos_gui.c src/vistazo.c \
       $(LIB)/analisis/an_comun.c \
       $(LIB)/analisis/an_anomalos.c \
       $(LIB)/analisis/an_diagnosis.c \
+      $(LIB)/analisis/an_ganancia.c \
       $(LIB)/analisis/an_sugerir.c \
       $(LIB)/analisis/plotstats.c \
       $(LIB)/intervencion/intervencion.c \

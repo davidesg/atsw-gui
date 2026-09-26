@@ -63,6 +63,7 @@ LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c \
            $(LIB_DIR)/analisis/an_comun.c \
            $(LIB_DIR)/analisis/an_anomalos.c \
            $(LIB_DIR)/analisis/an_diagnosis.c \
+           $(LIB_DIR)/analisis/an_ganancia.c \
            $(LIB_DIR)/analisis/an_sugerir.c \
            $(LIB_DIR)/anomalos/anomalos.c \
            $(LIB_DIR)/dictamen/dictamen.c \

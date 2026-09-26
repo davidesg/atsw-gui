@@ -83,7 +83,21 @@ typedef struct {
 
 /* El dictamen de un modelo. conv puede ser NULL: entonces la línea de la
    estimación sale como «no consta», que es la verdad.                  */
-void dx_dictamen( const FueOut *o, const Convergence *conv, Dictamen *d );
+/* EL .out NO NOMBRA LAS INTERVENCIONES: dice «Omegas for deterministic
+ * variable 12» y nada mas. Nombrarlas por su numero deja al analista
+ * contando lineas en el .inp para saber de cual se le habla -- que es
+ * exactamente lo que este programa no debe pedirle.
+ *
+ * det[0..ndet-1] son las lineas del .inp EN SU ORDEN (id_nombres de
+ * lib/inpdet). Puede ser NULL: entonces se cae al numero, que es lo que
+ * habia, y se dice asi en el texto.                                    */
+void dx_dictamen( const FueOut *o, const Convergence *conv,
+                  const char *const *det, int ndet, Dictamen *d );
+
+/* Como se llama el parametro k (1-based) para un humano: «ω1 de step 3
+ * 2022», «μ», o «[7]» si no se sabe mas. Devuelve buf.                */
+const char *dx_nombre_par( const FueOut *o, const char *const *det, int ndet,
+                           int k, char *buf, size_t n );
 
 /* El nombre de un estado, para quien tenga que pintarlo. */
 const char *dx_estado_es( DxEstado e );

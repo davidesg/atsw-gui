@@ -27,7 +27,7 @@ ENG="$TOP/../../engines"
 # lib/analisis y lib/fugplot entran porque src/analisis.c los usa: las
 # ventanas de diagnosis y anomalos son LAS MISMAS que las de la madre.
 # plotstats con -DPLOTSTATS_TIENE_NLA, que fue_gui ya trae los asignadores.
-LIB_SRCS="$LIB/preview/preview.c $LIB/engine/engine.c $LIB/outfile/outfile.c $LIB/utils/utils.c $LIB/utils/ext.c $LIB/fugdraw/fugdraw.c $LIB/datos/datos.c $LIB/xlsx/xlsx.c $LIB/proyecto/proyecto.c $LIB/fugplot/fugplot.c $LIB/fugplot/plotsupport.c $LIB/analisis/an_comun.c $LIB/analisis/an_anomalos.c $LIB/analisis/an_diagnosis.c $LIB/analisis/an_sugerir.c $LIB/anomalos/anomalos.c $LIB/dictamen/dictamen.c $LIB/intervencion/intervencion.c $LIB/inpdet/inpdet.c $LIB/tabla/tabla.c"
+LIB_SRCS="$LIB/preview/preview.c $LIB/engine/engine.c $LIB/outfile/outfile.c $LIB/utils/utils.c $LIB/utils/ext.c $LIB/fugdraw/fugdraw.c $LIB/datos/datos.c $LIB/xlsx/xlsx.c $LIB/proyecto/proyecto.c $LIB/fugplot/fugplot.c $LIB/fugplot/plotsupport.c $LIB/analisis/an_comun.c $LIB/analisis/an_anomalos.c $LIB/analisis/an_diagnosis.c $LIB/analisis/an_ganancia.c $LIB/analisis/an_sugerir.c $LIB/anomalos/anomalos.c $LIB/dictamen/dictamen.c $LIB/intervencion/intervencion.c $LIB/inpdet/inpdet.c $LIB/tabla/tabla.c"
 LIB_INC="-I$LIB/preview -I$LIB/engine -I$LIB/outfile -I$LIB/utils -I$LIB/fugdraw -I$LIB/inpcheck -I$LIB/datos -I$LIB/xlsx -I$LIB/proyecto -I$LIB/fugplot -I$LIB/analisis -I$LIB/anomalos -I$LIB/dictamen -I$LIB/intervencion -I$LIB/inpdet -I$LIB/tabla -I$LIB/rutas -I$ENG/fue/include"
 WORK_EARLY="${WORK:-$TOP/tests/work}"
 

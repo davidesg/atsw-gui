@@ -657,6 +657,17 @@ static void on_diagnosis( GtkMenuItem *m, Atsw *a )
     g_free( id );
 }
 
+static void on_ganancia( GtkMenuItem *m, Atsw *a )
+{
+    gchar *id = atsw_marcada( a->l_modelos, M_ID );
+
+    (void) m;
+    if ( a->hay && a->serie[0] && id )
+        { AnHost h = atsw_host( a );
+          an_ganancia( &h, a->serie, atsw_muestra_actual( a ), id ); }
+    g_free( id );
+}
+
 static void on_anomalos( GtkMenuItem *m, Atsw *a )
 {
     gchar *id = atsw_marcada( a->l_modelos, M_ID );
@@ -967,6 +978,16 @@ static void menu_modelo( Atsw *a, GdkEventButton *ev )
               "que los números dicen; qué hacer con ello es tuyo."
             : porque );
         g_signal_connect( mi, "activate", G_CALLBACK(on_diagnosis), a );
+        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+
+        mi = gtk_menu_item_new_with_label( "Ganancia…" );
+        gtk_widget_set_sensitive( mi, listo );
+        gtk_widget_set_tooltip_text( mi, listo
+            ? "¿El suceso dejó algo PARA SIEMPRE o revirtió?\n\nLa ganancia "
+              "de cada intervención con su contraste. No es diagnosis: es una "
+              "hipótesis sobre la naturaleza del incidente."
+            : porque );
+        g_signal_connect( mi, "activate", G_CALLBACK(on_ganancia), a );
         gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
 
         mi = gtk_menu_item_new_with_label( "Anómalos…" );

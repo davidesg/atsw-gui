@@ -153,6 +153,21 @@ void fue_on_diagnosis( GtkWidget *w, FueContext *ctx )
     }
 }
 
+void fue_on_ganancia( GtkWidget *w, FueContext *ctx )
+{
+    char serie[PR_ID], muestra[PR_ID], id[PR_ID];
+
+    (void) w;
+    if ( fue_modelo_actual( ctx, serie, sizeof serie, muestra, sizeof muestra,
+                            id, sizeof id ) != 0 )
+        { fg_di( ctx, "Este fichero no es un modelo de este proyecto." ); return; }
+    {
+    AnHost h = fue_host( ctx );
+
+    an_ganancia( &h, serie, muestra, id );
+    }
+}
+
 void fue_on_anomalos( GtkWidget *w, FueContext *ctx )
 {
     char serie[PR_ID], muestra[PR_ID], id[PR_ID];
@@ -176,7 +191,8 @@ void fue_analisis_refresca( FueContext *ctx )
     char     serie[PR_ID], muestra[PR_ID], id[PR_ID], porque[512];
     AnEstado e = AN_SIN_CLAVE;
 
-    if ( !ctx || !ctx->btn_diagnosis || !ctx->btn_anomalos ) return;
+    if ( !ctx || !ctx->btn_diagnosis || !ctx->btn_anomalos ||
+         !ctx->btn_ganancia ) return;
 
     if ( fue_modelo_actual( ctx, serie, sizeof serie, muestra, sizeof muestra,
                             id, sizeof id ) == 0 )
@@ -199,6 +215,11 @@ void fue_analisis_refresca( FueContext *ctx )
 
     gtk_widget_set_sensitive( ctx->btn_diagnosis, listo );
     gtk_widget_set_sensitive( ctx->btn_anomalos, listo );
+    gtk_widget_set_sensitive( ctx->btn_ganancia, listo );
+    gtk_widget_set_tooltip_text( ctx->btn_ganancia, listo
+        ? "¿El suceso dejó algo para siempre o revirtió? La ganancia de cada "
+          "intervención con su contraste."
+        : porque );
     gtk_widget_set_tooltip_text( ctx->btn_diagnosis, g1 );
     gtk_widget_set_tooltip_text( ctx->btn_anomalos, g2 );
     }

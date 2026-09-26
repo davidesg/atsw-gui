@@ -337,6 +337,31 @@ static int omegas_de( const int *nomega, int k )
    return ( v < 0 ) ? 0 : ( ( v > 32 ) ? 32 : v );
 }
 
+int id_nombres( const char *origen, char det[][ID_LINEA], int max,
+                char *porque, size_t n )
+{
+   Fich   f;
+   Bloque b;
+   int    k;
+
+   if ( fich_lee( origen, &f, porque, n ) ) return -1;
+   if ( mira( &f, &b, porque, n ) ) { fich_free( &f ); return -1; }
+
+   for ( k = 0; k < b.ndet && k < max; k++ )
+       {
+       char t[8][64];
+       int  nt = tokens( f.l[b.i_nom + k], t, 8 ), i, p = 0;
+
+       det[k][0] = '\0';
+       for ( i = 0; i < nt && p < ID_LINEA - 2; i++ )
+           p += snprintf( det[k] + p, (size_t)( ID_LINEA - p ),
+                          "%s%s", i ? " " : "", t[i] );
+       }
+   k = b.ndet;
+   fich_free( &f );
+   return k;
+}
+
 int id_anade( const char *origen, const char *destino,
               const char *const *nuevo, const int *nomega, int nn,
               char *porque, size_t n )

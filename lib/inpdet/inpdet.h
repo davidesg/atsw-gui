@@ -53,6 +53,18 @@
 int id_intervenciones( const char *origen, char det[][ID_LINEA], int max,
                        char *porque, size_t n );
 
+/* TODOS los deterministas, EN SU ORDEN, tal como el motor los lee:
+ * det[0] es la variable 1, det[1] la 2, y asi.
+ *
+ * Existe porque el .out NO los nombra: dice «Omegas for deterministic
+ * variable 12» y nada mas. Para poder decir «step 3 2022» en vez de «la
+ * intervencion 12» hay que casar por POSICION con el .inp -- que es una
+ * busqueda, no un parseo de nombre: el orden es parte del formato.
+ *
+ * Devuelve cuantos, o -1 con el motivo en porque[n].                   */
+int id_nombres( const char *origen, char det[][ID_LINEA], int max,
+                char *porque, size_t n );
+
 /* Copia origen en destino añadiendo los deterministas de nuevo[0..nn-1] al
  * final del bloque, con semilla 0.0, estimados y sin denominador.
  *

@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 
 #include "analisis.h"
+#include "inpdet.h"
 
 /* DECIR ALGO AL QUE LLAMO. Sin anfitrión no se pierde el mensaje: se va al
  * log. Una ventana que se niega en silencio es un botón que no funciona, y
@@ -99,4 +100,31 @@ AnEstado an_estado( const Proyecto *p, const char *serie, const char *muestra,
       return AN_OUT_VIEJO;
       }
    return AN_LISTO;
+}
+
+
+/* Ver analisis.h. Se prueba el .pre y luego el .inp: los dos tienen el mismo
+ * bloque de deterministas, y el .pre es el que hay cuando esta estimado. */
+int an_deterministas( const Proyecto *p, const char *serie,
+                      const char *muestra, const char *id,
+                      char det[][AN_LDET], int max )
+{
+   static const char *EXT[] = { ".pre", ".inp" };
+   char  ruta[PR_RUTA], porque[256];
+   char  tmp[AN_MAX_DET][ID_LINEA];
+   int   e, n, i;
+
+   if ( !p || !det || max < 1 ) return 0;
+   for ( e = 0; e < 2; e++ )
+       {
+       if ( pr_ruta( p, serie, muestra, id, EXT[e], ruta, sizeof ruta ) != 0 )
+          continue;
+       if ( !g_file_test( ruta, G_FILE_TEST_EXISTS ) ) continue;
+       n = id_nombres( ruta, tmp, AN_MAX_DET, porque, sizeof porque );
+       if ( n < 0 ) continue;
+       if ( n > max ) n = max;
+       for ( i = 0; i < n; i++ ) g_snprintf( det[i], AN_LDET, "%s", tmp[i] );
+       return n;
+       }
+   return 0;
 }

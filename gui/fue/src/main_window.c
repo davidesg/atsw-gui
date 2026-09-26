@@ -31,6 +31,7 @@ static void create_fixed_tree_view(GtkTreeView *treeview);
 /* gui/fue/src/analisis.c: la diagnosis y los anomalos de ESTE modelo. */
 void fue_on_diagnosis(GtkWidget *w, FueContext *ctx);
 void fue_on_anomalos(GtkWidget *w, FueContext *ctx);
+void fue_on_ganancia(GtkWidget *w, FueContext *ctx);
 void fue_analisis_refresca(FueContext *ctx);
 static void on_fixed_treeview_row_activated(GtkTreeView *treeview, GtkTreePath *path,
                                             GtkTreeViewColumn *col, FueContext *ctx);
@@ -112,6 +113,12 @@ GtkWidget* create_main_window(GtkApplication *app, FueContext *ctx) {
     g_signal_connect(anom_btn, "clicked", G_CALLBACK(fue_on_anomalos), ctx);
     gtk_toolbar_insert(GTK_TOOLBAR(toolbar), anom_btn, -1);
     ctx->btn_anomalos = GTK_WIDGET(anom_btn);
+
+    GtkToolItem *gan_btn = gtk_tool_button_new(NULL, "Ganancia");
+    gtk_tool_button_set_icon_name(GTK_TOOL_BUTTON(gan_btn), "view-refresh");
+    g_signal_connect(gan_btn, "clicked", G_CALLBACK(fue_on_ganancia), ctx);
+    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gan_btn, -1);
+    ctx->btn_ganancia = GTK_WIDGET(gan_btn);
 
     GtkToolItem *sep2 = gtk_separator_tool_item_new();
     gtk_toolbar_insert(GTK_TOOLBAR(toolbar), sep2, -1);

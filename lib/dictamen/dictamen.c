@@ -239,6 +239,7 @@ static void bloque_normalidad( const FueOut *o, Dictamen *d )
  * escalones con ganancia nula son exactamente L impulsos de nivel, o sea
  * que sobra un parametro. Es una sobreparametrizacion con nombre.    */
 static void bloque_ganancia( const FueOut *o, const Convergence *conv,
+                             const char *const *det, int ndet,
                              Dictamen *d )
 {
    DxLinea *l = nueva( d, "Ganancia" );
@@ -310,10 +311,21 @@ static void bloque_ganancia( const FueOut *o, const Convergence *conv,
    if ( transitorios > 0 )
        {
        l->estado = DX_MIRAR;
-       snprintf( l->dice, DX_DICE, "La ganancia de la intervención %d no se "
-                 "distingue de cero (p = %.3f): el efecto es TRANSITORIO, y "
-                 "L+1 escalones con ganancia nula son L impulsos -- un "
-                 "parámetro menos.", peor_det, peor_p );
+       {
+       /* LA INTERVENCION ENTERA, no uno de sus omegas: aqui se habla de
+          la ganancia del suceso.                                      */
+       char nd[40];
+
+       if ( det && peor_det >= 1 && peor_det <= ndet && det[peor_det - 1] &&
+            det[peor_det - 1][0] )
+          snprintf( nd, sizeof nd, "%s", det[peor_det - 1] );
+       else
+          snprintf( nd, sizeof nd, "la intervención %d", peor_det );
+
+       snprintf( l->dice, DX_DICE, "La ganancia de %.40s no se distingue de "
+                 "cero (p = %.3f): TRANSITORIO, y L+1 escalones con ganancia "
+                 "nula son L impulsos -- un parámetro menos.", nd, peor_p );
+       }
        }
    else
        {
@@ -324,7 +336,8 @@ static void bloque_ganancia( const FueOut *o, const Convergence *conv,
        }
 }
 
-static void bloque_parametros( const FueOut *o, Dictamen *d )
+static void bloque_parametros( const FueOut *o, const char *const *det,
+                               int ndet, Dictamen *d )
 {
    DxLinea *l = nueva( d, "Parámetros" );
    int      i, flojos = 0, prim = -1;
@@ -347,16 +360,27 @@ static void bloque_parametros( const FueOut *o, Dictamen *d )
    if ( o->npares > 0 )
        {
        l->estado = DX_MIRAR;
-       snprintf( l->dice, DX_DICE, "Los parámetros [%d] y [%d] van juntos "
-                 "(r = %.2f): puede sobrar uno, o puede ser la forma del "
-                 "modelo.", o->par_a[0], o->par_b[0], o->par_r[0] );
+       {
+       char na[48], nb[48];
+
+       snprintf( l->dice, DX_DICE, "%s y %s van juntos (r = %.2f): puede "
+                 "sobrar uno, o puede ser la forma del modelo.",
+                 dx_nombre_par( o, det, ndet, o->par_a[0], na, sizeof na ),
+                 dx_nombre_par( o, det, ndet, o->par_b[0], nb, sizeof nb ),
+                 o->par_r[0] );
+       }
        }
    else if ( flojos > 0 )
        {
        l->estado = DX_MIRAR;
+       {
+       char np[48];
+
        snprintf( l->dice, DX_DICE, "%d parámetro%s no se gana%s su sitio, "
-                 "empezando por el [%d].", flojos, flojos == 1 ? "" : "s",
-                 flojos == 1 ? "" : "n", prim );
+                 "empezando por %s.", flojos, flojos == 1 ? "" : "s",
+                 flojos == 1 ? "" : "n",
+                 dx_nombre_par( o, det, ndet, prim, np, sizeof np ) );
+       }
        }
    else
        {
@@ -369,7 +393,8 @@ static void bloque_parametros( const FueOut *o, Dictamen *d )
 
 /* ------------------------------------------------------------------------ */
 
-void dx_dictamen( const FueOut *o, const Convergence *conv, Dictamen *d )
+void dx_dictamen( const FueOut *o, const Convergence *conv,
+                  const char *const *det, int ndet, Dictamen *d )
 {
    if ( d == NULL ) return;
    memset( d, 0, sizeof *d );
@@ -379,9 +404,38 @@ void dx_dictamen( const FueOut *o, const Convergence *conv, Dictamen *d )
    bloque_media( o, d );
    bloque_autocorrelacion( o, d );
    bloque_normalidad( o, d );
-   bloque_parametros( o, d );
-   bloque_ganancia( o, conv, d );
+   bloque_parametros( o, det, ndet, d );
+   bloque_ganancia( o, conv, det, ndet, d );
    resume( d );
+}
+
+const char *dx_nombre_par( const FueOut *o, const char *const *det, int ndet,
+                           int k, char *buf, size_t n )
+{
+   int i;
+
+   if ( !buf || n < 4 ) return "";
+   if ( o )
+       for ( i = 0; i < o->ndet_leidos; i++ )
+           {
+           int i0 = o->det_i0[i], nom = o->det_nom[i];
+
+           if ( i0 < 1 || nom < 1 || k < i0 || k >= i0 + nom ) continue;
+           if ( det && i < ndet && det[i] && det[i][0] )
+              {
+              if ( nom == 1 ) snprintf( buf, n, "%s", det[i] );
+              else            snprintf( buf, n, "ω%d de %s", k - i0, det[i] );
+              }
+           else
+              snprintf( buf, n, "ω%d del determinista %d", k - i0, i + 1 );
+           return buf;
+           }
+
+   /* LA MEDIA es el ultimo cuando la hay, y el .out lo dice aparte. */
+   if ( o && o->tiene_mu && k == o->npar_leidos ) { snprintf( buf, n, "μ" ); return buf; }
+
+   snprintf( buf, n, "[%d]", k );
+   return buf;
 }
 
 const char *dx_estado_es( DxEstado e )

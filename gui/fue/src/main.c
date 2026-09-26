@@ -33,6 +33,7 @@ static void init_global_flags(FueContext *ctx) {
 
 /* Definidas mas abajo: activate() las usa. */
 const char *fue_abrir(void);
+int         fue_prever_al_arrancar(void);   /* faltaba: se usaba sin declarar */
 
 static void activate(GtkApplication *app, gpointer user_data) {
     /* UNA VENTANA POR PROCESO, y el guardia es del PROCESO, no del contexto:

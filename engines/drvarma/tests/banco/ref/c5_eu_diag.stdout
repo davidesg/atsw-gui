@@ -1,0 +1,67 @@
+
+Input Data File  : IPC_eu_levels.inp
+Output File      : IPC_eu_levels.out
+Model: VARMA(1,0)
+Include mean     : yes
+Diagonal AR      : yes
+Diagonal MA      : yes
+Diagonal Cov     : no
+Estimation method: 1
+Two-step init    : no
+Frequency        : 12
+Start            : 1 2002
+Box-Cox lambda   : 0
+Rescale factor   : 100
+Differences      : d=1, D=0 (seasonal lag=12)
+Deseasonalize    : no
+Series: 3, Observations: 215 (raw 216)
+Number of parameters: 12
+
+--- Initial x (before two-step) ---
+  x[1] = 0.154016
+  x[2] = 0.112646
+  x[3] = 0.114372
+  x[4] = 0.318817
+  x[5] = -0.270871
+  x[6] = 0.0714958
+  x[7] = 1
+  x[8] = 0.486495
+  x[9] = 1
+  x[10] = 0.518699
+
+  x[11] = 0.524299
+  x[12] = 1
+--- fin Initial x (before two-step) ---
+
+--- Final x (before estimation) ---
+  x[1] = 0.154016
+  x[2] = 0.112646
+  x[3] = 0.114372
+  x[4] = 0.318817
+  x[5] = -0.270871
+  x[6] = 0.0714958
+  x[7] = 1
+  x[8] = 0.486495
+  x[9] = 1
+  x[10] = 0.518699
+
+  x[11] = 0.524299
+  x[12] = 1
+--- fin Final x (before estimation) ---
+   0  F: 1.0000000000   step: 0.338721
+   1  F: 0.8678496747   step: 0.100000
+   2  F: 0.8596210489   step: 0.041383
+   3  F: 0.8423843181   step: 0.041840
+   4  F: 0.8377103273   step: 0.100000
+   5  F: 0.8288584039   step: 0.277381
+   6  F: 0.8250100277   step: 0.263875
+   7  F: 0.8205786195   step: 1.000000
+   8  F: 0.8205712358   step: 0.372499
+   9  F: 0.8201392232   step: 0.385292
+  10  F: 0.8197802560   step: 0.442674
+  11  F: 0.8197633167   step: 1.000000
+  12  F: 0.8197627755   step: 1.000000
+  13  F: 0.8197618418   step: 1.000000
+  14  F: 0.8197618412   step: 1.000000
+  15  F: 0.8197618412   step: 1.000000
+  16 F: 0.8197618412

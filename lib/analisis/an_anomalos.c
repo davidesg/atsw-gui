@@ -423,7 +423,12 @@ static void on_sugerir( GtkButton *b, An *g )
         x->nwin = fin - x->base + 1;
         if ( x->nwin > AN_VENTANA_Z ) x->nwin = AN_VENTANA_Z;
         for ( t = 0; t < x->nwin; t++ ) x->zwin[t] = g->z[x->base + t];
-        x->umbral = g->umbral;
+        /* EL RESTO SE JUZGA CON EL UMBRAL DEL VECINO, no con el de
+           declarar. La pregunta de Treadway --«¿queda un anómalo al lado
+           de la forma?»-- es condicional: ya sabemos que ahí hay un
+           suceso. Con el umbral alto se queda ciega justo en el tramo
+           (2, 3) sigma, que es donde mas sensible es (art, BUG-0087). */
+        x->umbral = AN_UMBRAL_VECINO;
         }
         ns++;
         }
@@ -551,8 +556,11 @@ void an_anomalos( const AnHost *h, const char *serie, const char *muestra,
     for ( i = 0; i < g->o.nres; i++ )
         g->z[i] = ( sd > 0.0 ) ? g->o.res[i] / sd : 0.0;
 
-    g->nep = an_episodios( g->z, g->o.nres, g->umbral, AN_VENTANA,
-                           g->ep, AN_MAX_EP );
+    /* EL SEGUNDO UMBRAL ES EL DEL MOTOR: 2.0, el mismo con el que el .out
+       marca los residuos con «@». Con uno solo, la ventana agrupaba menos
+       de lo que el informe que el analista tiene delante señala.     */
+    g->nep = an_episodios( g->z, g->o.nres, g->umbral, AN_UMBRAL_VECINO,
+                           AN_VENTANA, g->ep, AN_MAX_EP );
     }
 
     /* EL EJE DE TIEMPO. tmornsop son los períodos que van de enero (o del
@@ -593,11 +601,14 @@ void an_anomalos( const AnHost *h, const char *serie, const char *muestra,
     cab = gtk_label_new( NULL );
     {
     gchar *t = g_markup_printf_escaped(
-        "<b>%s / %s</b>%s%s   ·   %d episodio%s con |z| ≥ %.2f, sobre %d "
-        "residuos", serie, id,
+        "<b>%s / %s</b>%s%s   ·   %d episodio%s sobre %d residuos   ·   "
+        "se declaran con |z| ≥ %.2f y se extienden a los vecinos con "
+        "|z| ≥ %.1f, que es con lo que el motor marca «@»",
+        serie, id,
         ( muestra && *muestra ) ? "   muestra " : "",
         ( muestra && *muestra ) ? muestra : "",
-        g->nep, g->nep == 1 ? "" : "s", g->umbral, g->o.nres );
+        g->nep, g->nep == 1 ? "" : "s", g->o.nres, g->umbral,
+        AN_UMBRAL_VECINO );
 
     gtk_label_set_markup( GTK_LABEL(cab), t );
     g_free( t );

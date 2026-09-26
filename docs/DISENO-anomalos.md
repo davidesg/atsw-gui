@@ -109,6 +109,52 @@ estima es otra cosa, y es del analista.
 
 ---
 
+## 4 bis. Dos umbrales, porque son dos preguntas
+
+El módulo nació con **uno solo**, y eso se vio en un caso real —IPC\_ES m04—
+donde el analista tenía tres períodos contiguos delante y la ventana le
+ofrecía uno:
+
+```
+   1/2021   z = +3.01   @    el motor lo marca; el umbral alto, no
+   2/2021   z = −3.50   @    el único que pasaba
+   3/2021   z = +2.36   @    el motor lo marca; el umbral alto, no
+```
+
+Una firma `+, −, +` leída como un suceso de un período. Y la forma que se le
+propone a eso **no es la misma**.
+
+**Declarar** un suceso donde no se sabía que hubiera uno es mirar las *n*
+observaciones a la vez: un problema de comparaciones múltiples, y por eso el
+umbral crece con *n* (`an_umbral`). **Extenderlo a su vecino no lo es**: una
+vez declarado el suceso en T, preguntar por T+1 es **una** pregunta, no *n*.
+
+Pedirle al vecino el listón del extremo cuesta caro, y está medido: art lo
+tenía clavado a 3.0 y perdía **la mitad de la potencia** —36 % frente a 75 %
+(BUG-0087)—, justo en el tramo (2, 3)σ donde la regla de Treadway es más
+sensible.
+
+```
+   |z| > 2.0   →   p = 0.046,  uno de cada 22
+```
+
+Y el 2.0 no sale de un libro: **es el umbral con el que el propio motor marca
+los residuos con `@`** en el `.out` (`diagnose.c`). Dos fuentes independientes
+en el mismo número — y con él, la ventana agrupa lo mismo que señala el
+informe que el analista está leyendo.
+
+**La regla:** se encadenan los *activos* (|z| ≥ 2.0) con el hueco de
+`ventana`, y una cadena es un episodio **sólo si contiene un extremo**
+(|z| ≥ `an_umbral`). Así el número de episodios declarados lo sigue
+gobernando el umbral alto —si no, uno de cada 22 observaciones sería un
+suceso— y la extensión no deja fuera lo que es del mismo suceso.
+
+El mismo cambio corrige la superposición: el resto que sobrevive a la forma
+se juzga ahora con **2.0**, que es la pregunta condicional de Treadway, y no
+con el umbral de declarar.
+
+---
+
 ## 5. El diseño
 
 Tres módulos, y la misma separación de siempre: **leer no es calcular, y

@@ -29,21 +29,26 @@ double an_umbral( int n )
 /* Episodios                                                                 */
 /* ------------------------------------------------------------------------ */
 
-int an_episodios( const double *z, int n, double umbral, int ventana,
-                  AnEpisodio *out, int max )
+int an_episodios( const double *z, int n, double umbral, double umbral_vecino,
+                  int ventana, AnEpisodio *out, int max )
 {
    int i, ne = 0;
 
    if ( z == NULL || out == NULL || n < 1 || max < 1 ) return 0;
    if ( ventana < 0 ) ventana = 0;
 
+   /* El vecino nunca pide MAS que el extremo: si quien llama pasa un umbral
+      de vecino mas alto, se ignora en vez de invertir la regla.       */
+   if ( umbral_vecino <= 0.0 || umbral_vecino > umbral ) umbral_vecino = umbral;
+
+   /* PRIMERA PASADA: las cadenas de ACTIVOS, encadenadas por el hueco. */
    for ( i = 0; i < n; i++ )
        {
-       if ( fabs( z[i] ) < umbral ) continue;
+       if ( fabs( z[i] ) < umbral_vecino ) continue;
 
-       /* ¿Cuelga del episodio anterior? El hueco se mide entre el extremo
-          de antes y éste, no entre el principio del episodio y éste: un
-          suceso largo no debe tragarse lo que venga detrás.           */
+       /* ¿Cuelga de la cadena anterior? El hueco se mide entre el activo de
+          antes y este, no entre el principio de la cadena y este: un suceso
+          largo no debe tragarse lo que venga detras.                  */
        if ( ne > 0 && i - out[ne - 1].hasta <= ventana + 1 )
            {
            out[ne - 1].hasta = i;
@@ -59,6 +64,26 @@ int an_episodios( const double *z, int n, double umbral, int ventana,
        out[ne].z_max = z[i];
        ne++;
        }
+
+   /* SEGUNDA PASADA: se queda la cadena que tenga algun EXTREMO.
+    *
+    * Sin esto, bajar el umbral a 2.0 llenaria la lista de sucesos que no lo
+    * son -- uno de cada 22 observaciones bajo la nula. Quien gobierna
+    * cuantos episodios se declaran sigue siendo el umbral alto; el bajo solo
+    * decide hasta donde llega uno ya declarado.                        */
+   {
+   int j, k = 0;
+
+   for ( i = 0; i < ne; i++ )
+       {
+       int tiene = 0;
+
+       for ( j = out[i].desde; j <= out[i].hasta; j++ )
+           if ( fabs( z[j] ) >= umbral ) { tiene = 1; break; }
+       if ( tiene ) out[k++] = out[i];
+       }
+   ne = k;
+   }
    return ne;
 }
 

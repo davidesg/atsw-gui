@@ -65,17 +65,47 @@ typedef struct {
    int    i_max;            /* donde esta                                 */
 } AnEpisodio;
 
-/* Agrupa los |z| >= umbral en episodios: dos extremos separados por un hueco
- * <= ventana son el mismo suceso.
+/* DOS UMBRALES, PORQUE SON DOS PREGUNTAS.
+ *
+ * DECLARAR un suceso donde no se sabía que hubiera uno es mirar las n
+ * observaciones a la vez: es un problema de comparaciones múltiples, y por
+ * eso el umbral crece con n (an_umbral).
+ *
+ * EXTENDERLO a su vecino no lo es. Una vez declarado el suceso en T,
+ * preguntar por T+1 es UNA pregunta, no n. Pedirle ahí el mismo umbral alto
+ * es contestar una pregunta con el listón de otra, y cuesta caro: art lo
+ * midió --la mitad de la potencia, 36 % frente a 75 % (BUG-0087)--.
+ *
+ *     |z| > 2.0  ->  p = 0.046, uno de cada 22
+ *
+ * Y 2.0 no sale de un libro: es el umbral con el que EL PROPIO MOTOR marca
+ * los residuos con «@» en el .out (diagnose.c). Con un umbral más alto la
+ * ventana agrupaba menos de lo que el informe que el analista tiene delante
+ * señala -- se veían tres arroba seguidos y sólo uno se recogía.
+ *
+ * El caso que lo destapó, en IPC_ES m04:
+ *
+ *     1/2021  z = +3.01   @   el motor lo marca; el umbral alto, no
+ *     2/2021  z = -3.50   @   el unico que pasaba
+ *     3/2021  z = +2.36   @   el motor lo marca; el umbral alto, no
+ *
+ * Tres períodos contiguos con firma +,-,+ que se leían como un suceso de
+ * uno. La forma que se le propone a eso no es la misma.
+ *
+ * LA REGLA: se encadenan los ACTIVOS (|z| >= umbral_vecino) con el hueco de
+ * ventana, y una cadena es un episodio sólo si contiene algún EXTREMO
+ * (|z| >= umbral). Así el número de falsos episodios lo sigue gobernando el
+ * umbral alto, y la extensión no se deja fuera lo que es del mismo suceso.
  *
  * ventana es un PARÁMETRO DECLARADO, no un número mágico enterrado. Por
  * defecto 2, que admite un período tranquilo dentro del suceso.
  *
  * Devuelve cuántos episodios encontró.                                    */
-#define AN_VENTANA  2
+#define AN_VENTANA         2
+#define AN_UMBRAL_VECINO   2.0
 
-int an_episodios( const double *z, int n, double umbral, int ventana,
-                  AnEpisodio *out, int max );
+int an_episodios( const double *z, int n, double umbral, double umbral_vecino,
+                  int ventana, AnEpisodio *out, int max );
 
 /* EL UMBRAL DEPENDE DE n, y por eso no es una constante.
  *

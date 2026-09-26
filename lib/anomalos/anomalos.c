@@ -29,61 +29,109 @@ double an_umbral( int n )
 /* Episodios                                                                 */
 /* ------------------------------------------------------------------------ */
 
-int an_episodios( const double *z, int n, double umbral, double umbral_vecino,
-                  int ventana, AnEpisodio *out, int max )
+/* P( chi2_k > x ) para k entero, por la recurrencia exacta
+ *
+ *     sf(1) = erfc( sqrt(x/2) )
+ *     sf(2) = exp( -x/2 )
+ *     sf(k) = sf(k-2) + (x/2)^(k/2-1) e^(-x/2) / Gamma(k/2)
+ *
+ * Elemental y sin tablas, que es lo que este modulo puede permitirse. La
+ * cabecera decia que aqui no se calculaba ninguna probabilidad; ahora se
+ * calcula UNA, y es la que define lo que es un episodio.              */
+static double chi2_cola( double x, int k )
 {
-   int i, ne = 0;
+   double sf, t;
+   int    i;
+
+   if ( x <= 0.0 ) return 1.0;
+   if ( k < 1 ) return 0.0;
+
+   if ( k % 2 )                      /* impar: se arranca en 1 */
+      { sf = erfc( sqrt( x / 2.0 ) ); i = 1; }
+   else
+      { sf = exp( -x / 2.0 ); i = 2; }
+
+   for ( i += 2; i <= k; i += 2 )
+       {
+       t = pow( x / 2.0, (double) i / 2.0 - 1.0 ) * exp( -x / 2.0 )
+           / tgamma( (double) i / 2.0 );
+       sf += t;
+       }
+   return ( sf > 1.0 ) ? 1.0 : ( ( sf < 0.0 ) ? 0.0 : sf );
+}
+
+int an_episodios( const double *z, int n, double umbral,
+                  AnEpisodio *out, int max )
+{
+   double limite;
+   char  *usado;
+   int    ne = 0, lmax, i;
 
    if ( z == NULL || out == NULL || n < 1 || max < 1 ) return 0;
-   if ( ventana < 0 ) ventana = 0;
+   if ( umbral <= 0.0 ) return 0;
 
-   /* El vecino nunca pide MAS que el extremo: si quien llama pasa un umbral
-      de vecino mas alto, se ignora en vez de invertir la regla.       */
-   if ( umbral_vecino <= 0.0 || umbral_vecino > umbral ) umbral_vecino = umbral;
+   /* EL LISTON: lo que cuesta declarar un extremo aislado en el umbral,
+      dividido por K. Ver la cabecera.                                */
+   limite = erfc( umbral / sqrt( 2.0 ) ) / AN_K;
 
-   /* PRIMERA PASADA: las cadenas de ACTIVOS, encadenadas por el hueco. */
-   for ( i = 0; i < n; i++ )
+   lmax = ( n < AN_LMAX ) ? n : AN_LMAX;
+   usado = calloc( (size_t) n, 1 );
+   if ( !usado ) return 0;
+
+   /* AVARICIA: gana el tramo mas significativo, y lo que queda no puede
+      pisarlo. Es un convenio, no un teorema, y se dice.              */
+   while ( ne < max )
        {
-       if ( fabs( z[i] ) < umbral_vecino ) continue;
+       double mejor_p = limite;
+       int    mejor_i = -1, mejor_L = 0, L;
 
-       /* ¿Cuelga de la cadena anterior? El hueco se mide entre el activo de
-          antes y este, no entre el principio de la cadena y este: un suceso
-          largo no debe tragarse lo que venga detras.                  */
-       if ( ne > 0 && i - out[ne - 1].hasta <= ventana + 1 )
+       for ( i = 0; i < n; i++ )
            {
-           out[ne - 1].hasta = i;
-           out[ne - 1].n++;
-           if ( fabs( z[i] ) > fabs( out[ne - 1].z_max ) )
-               { out[ne - 1].z_max = z[i]; out[ne - 1].i_max = i; }
-           continue;
-           }
+           double S = 0.0;
 
-       if ( ne >= max ) break;
-       out[ne].desde = out[ne].hasta = out[ne].i_max = i;
-       out[ne].n     = 1;
-       out[ne].z_max = z[i];
+           if ( usado[i] ) continue;
+           for ( L = 1; L <= lmax && i + L <= n; L++ )
+               {
+               double p;
+
+               /* EL TRAMO ES SOLIDO: un periodo callado no se traga, lo
+                  parte. Ver la cabecera -- sin esto, dos picos separados
+                  por silencio salian como un suceso de cuatro.       */
+               if ( usado[i + L - 1] ) break;
+               if ( fabs( z[i + L - 1] ) < AN_ACTIVO ) break;
+               S += z[i + L - 1] * z[i + L - 1];
+               p = chi2_cola( S, L );
+               if ( p <= mejor_p )
+                  { mejor_p = p; mejor_i = i; mejor_L = L; }
+               }
+           }
+       if ( mejor_i < 0 ) break;
+
+       out[ne].desde = mejor_i;
+       out[ne].hasta = mejor_i + mejor_L - 1;
+       out[ne].n     = mejor_L;
+       out[ne].p     = mejor_p;
+       out[ne].z_max = z[mejor_i];
+       out[ne].i_max = mejor_i;
+       for ( i = mejor_i; i <= out[ne].hasta; i++ )
+           {
+           if ( fabs( z[i] ) > fabs( out[ne].z_max ) )
+               { out[ne].z_max = z[i]; out[ne].i_max = i; }
+           usado[i] = 1;
+           }
        ne++;
        }
+   free( usado );
 
-   /* SEGUNDA PASADA: se queda la cadena que tenga algun EXTREMO.
-    *
-    * Sin esto, bajar el umbral a 2.0 llenaria la lista de sucesos que no lo
-    * son -- uno de cada 22 observaciones bajo la nula. Quien gobierna
-    * cuantos episodios se declaran sigue siendo el umbral alto; el bajo solo
-    * decide hasta donde llega uno ya declarado.                        */
-   {
-   int j, k = 0;
-
-   for ( i = 0; i < ne; i++ )
+   /* Por posicion, que es como se leen en la ventana y en el .out. */
+   for ( i = 1; i < ne; i++ )
        {
-       int tiene = 0;
+       AnEpisodio t = out[i];
+       int        j = i - 1;
 
-       for ( j = out[i].desde; j <= out[i].hasta; j++ )
-           if ( fabs( z[j] ) >= umbral ) { tiene = 1; break; }
-       if ( tiene ) out[k++] = out[i];
+       while ( j >= 0 && out[j].desde > t.desde ) { out[j+1] = out[j]; j--; }
+       out[j+1] = t;
        }
-   ne = k;
-   }
    return ne;
 }
 

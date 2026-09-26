@@ -60,28 +60,31 @@ int main( void )
     ok( an_umbral( 10 ) >= 2.5,
         "con muy pocas no baja del suelo: si no, todo el mundo es noticia" );
 
-    printf( "\nUN SUCESO NO SON TRES ATIPICOS\n" );
+    printf( "\nUN PERIODO TRANQUILO SEPARA DOS SUCESOS\n" );
+    /* ESTA PRUEBA CAMBIO DE SIGNO A PROPOSITO.
+     *
+     * Antes habia un parametro de HUECO --dos extremos separados por hasta
+     * dos periodos callados eran el mismo suceso-- y esta misma entrada
+     * daba UN episodio de cuatro. Con el escaner no: un periodo por debajo
+     * de una desviacion tipica parte el tramo.
+     *
+     * Y es mejor, que es lo que importa: (4.0, -3.5) es un par compensado
+     * --un impulso de nivel-- y el 3.2 de tres periodos despues es otra
+     * cosa. Leerlos juntos pediria cuatro escalones donde hacen falta dos
+     * intervenciones distintas. El hueco era una convencion en periodos;
+     * esto es una condicion sobre el dato.                            */
     memset( z, 0, sizeof z );
-    z[10] = 4.0; z[11] = -3.5; z[13] = 3.2;      /* hueco de 1 */
-    z[50] = 5.0;                                  /* aparte     */
+    z[10] = 4.0; z[11] = -3.5; z[13] = 3.2;      /* el 12 esta callado */
+    z[50] = 5.0;                                  /* y este, aparte     */
     {
-    int ne = an_episodios( z, 100, 3.0, 3.0, AN_VENTANA, ep, 16 );
+    int ne = an_episodios( z, 100, 3.0, ep, 16 );
 
-    esn( ne, 2, "tres extremos con un hueco de 1 y uno lejos: DOS episodios" );
-    esn( ep[0].n, 3, "  el primero lleva los tres" );
-    esn( ep[0].desde, 10, "  desde el 10" );
-    esn( ep[0].hasta, 13, "  hasta el 13" );
-    esn( ep[0].i_max, 50 > 0 ? 50 - 40 : 0, "  (colocación)" );
-    ok( fabs( ep[0].z_max - 4.0 ) < 1e-9, "  y el mayor |z| es el 4.0" );
-    esn( ep[1].n, 1, "el de lejos va solo" );
-    }
-    {
-    /* CON VENTANA 0 SON TRES, y eso es lo que hacía la comprobación de
-       adyacencia: un suceso de tres períodos, tres atípicos sueltos. */
-    int ne = an_episodios( z, 100, 3.0, 3.0, 0, ep, 16 );
-
-    esn( ne, 3, "con ventana 0 el hueco los separa: la ventana es lo que "
-                "convierte tres extremos en un suceso" );
+    esn( ne, 3, "el par, el de despues y el de lejos: TRES sucesos" );
+    esn( ep[0].desde, 10, "el par empieza en el 10" );
+    esn( ep[0].n, 2, "  y dura dos: el hueco no se traga" );
+    ok( fabs( ep[0].z_max - 4.0 ) < 1e-9, "  con su mayor |z| bien puesto" );
+    esn( ep[1].desde, 13, "el de despues va solo" );
+    esn( ep[2].desde, 50, "y el de lejos, tambien" );
     }
 
     printf( "\nUNA SEÑAL FABRICADA POR EL ANOMALO\n" );
@@ -222,51 +225,65 @@ int main( void )
         "sin omitir nada, «con» y «sin» son el mismo numero" );
     }
 
-    printf( "\nDOS UMBRALES: DECLARAR NO ES EXTENDER\n" );
+    printf( "\nSE PUNTUA EL TRAMO, NO LOS PUNTOS\n" );
     /* EL CASO QUE LO DESTAPO, en IPC_ES m04: tres periodos contiguos con
-       firma +,-,+ que el MOTOR marca los tres con «@» --su umbral es 2.0--
-       y que con un solo umbral alto se leian como un suceso de uno.  */
+       firma +,-,+ que el motor marca los tres y que punto a punto se leian
+       como un suceso de uno.                                         */
     {
     AnEpisodio ep2[16];
     int        i, ne;
+    double     u = an_umbral( 261 );
 
     for ( i = 0; i < 100; i++ ) z[i] = 0.0;
-    z[50] = +3.01;      /* el motor lo marca; el umbral alto no lo coge */
-    z[51] = -3.50;      /* el unico que pasaba */
-    z[52] = +2.36;      /* el motor lo marca; el umbral alto no lo coge */
+    z[50] = +3.01;
+    z[51] = -3.50;
+    z[52] = +2.36;
 
-    ne = an_episodios( z, 100, 3.34, 3.34, AN_VENTANA, ep2, 16 );
-    esn( ne, 1, "con UN umbral solo se ve un episodio..." );
-    esn( ep2[0].n, 1, "...y de un solo periodo: se pierden los dos vecinos" );
-
-    ne = an_episodios( z, 100, 3.34, AN_UMBRAL_VECINO, AN_VENTANA, ep2, 16 );
-    esn( ne, 1, "con los dos umbrales sigue siendo UN episodio" );
-    esn( ep2[0].n, 3, "pero de TRES periodos, que es lo que el motor marca" );
+    ne = an_episodios( z, 100, u, ep2, 16 );
+    esn( ne, 1, "un episodio" );
+    esn( ep2[0].n, 3, "de TRES periodos, que es lo que hay" );
     esn( ep2[0].desde, 50, "empieza en el primero" );
     esn( ep2[0].hasta, 52, "y acaba en el tercero" );
     ok( ep2[0].z_max < -3.4, "el mayor sigue siendo el del medio, con su signo" );
+    ok( ep2[0].p < 1e-5, "y es mucho mas improbable que un extremo suelto" );
+    printf( "        p del tramo = %.2e\n", ep2[0].p );
 
-    printf( "\nY EL UMBRAL BAJO NO DECLARA EPISODIOS POR SU CUENTA\n" );
-    /* Si lo hiciera, con |z|>2 uno de cada 22 observaciones seria un
-       suceso. La cadena tiene que contener un EXTREMO.              */
+    printf( "\nCON L = 1 ES EXACTAMENTE LA REGLA DE SIEMPRE\n" );
+    /* Si esto falla, la regla nueva no contiene a la vieja y todo lo que
+       se decidio con ella deja de valer.                             */
+    {
+    double lim = 3.45;             /* el umbral efectivo con K = 1.5 */
+
     for ( i = 0; i < 100; i++ ) z[i] = 0.0;
-    z[20] = +2.4; z[21] = -2.2;          /* activos, ningun extremo */
-    ne = an_episodios( z, 100, 3.34, AN_UMBRAL_VECINO, AN_VENTANA, ep2, 16 );
-    esn( ne, 0, "dos activos sin ningun extremo no son un episodio" );
+    z[30] = lim + 0.05;
+    esn( an_episodios( z, 100, u, ep2, 16 ), 1, "justo por encima: episodio" );
+    z[30] = lim - 0.05;
+    esn( an_episodios( z, 100, u, ep2, 16 ), 0, "justo por debajo: no" );
+    }
 
-    z[60] = +4.0;                         /* ahora si hay uno */
-    ne = an_episodios( z, 100, 3.34, AN_UMBRAL_VECINO, AN_VENTANA, ep2, 16 );
-    esn( ne, 1, "y con un extremo lejos, ese si -- pero solo ese" );
-    esn( ep2[0].desde, 60, "el de los activos sueltos sigue sin contar" );
-
-    /* Un vecino de vecino: la cadena se encadena, pero no salta huecos
-       mayores que la ventana.                                       */
+    printf( "\nUN 2 SIGMA SUELTO NO ES NADA, Y VARIOS TAMPOCO\n" );
+    /* Doce falsos a 2 sigma se esperan en 261 observaciones: si el modulo
+       los declarara, la lista seria inservible.                      */
     for ( i = 0; i < 100; i++ ) z[i] = 0.0;
-    z[30] = +4.0; z[31] = +2.5; z[32] = +2.5;
-    z[40] = +2.5;                         /* lejos: no cuelga */
-    ne = an_episodios( z, 100, 3.34, AN_UMBRAL_VECINO, AN_VENTANA, ep2, 16 );
-    esn( ne, 1, "la cadena se encadena por vecinos..." );
-    esn( ep2[0].hasta, 32, "...hasta donde llega la ventana, y no mas" );
+    z[20] = 2.4;
+    esn( an_episodios( z, 100, u, ep2, 16 ), 0, "uno de 2.4, nada" );
+    z[21] = 2.2;
+    esn( an_episodios( z, 100, u, ep2, 16 ), 0, "dos seguidos, tampoco" );
+    z[22] = 2.3;
+    esn( an_episodios( z, 100, u, ep2, 16 ), 0, "tres seguidos, tampoco" );
+    z[23] = 2.5; z[24] = 2.4; z[25] = 2.6;
+    ok( an_episodios( z, 100, u, ep2, 16 ) == 1,
+        "pero seis seguidos SI: eso ya no es ruido" );
+
+    printf( "\nEL TRAMO SE AJUSTA A LO QUE HAY, NI MAS NI MENOS\n" );
+    for ( i = 0; i < 100; i++ ) z[i] = 0.0;
+    z[40] = 5.0;                   /* uno enorme y solo */
+    z[43] = 5.0;                   /* otro, a tres de distancia */
+    ne = an_episodios( z, 100, u, ep2, 16 );
+    esn( ne, 2, "dos extremos separados por silencio son DOS sucesos" );
+    esn( ep2[0].n, 1, "cada uno de un periodo..." );
+    esn( ep2[1].n, 1, "...y no un tramo que se traga el silencio" );
+    ok( ep2[0].desde == 40 && ep2[1].desde == 43, "y en su sitio, por posicion" );
     }
 
     printf( "\n%d fallos\n", fallos );

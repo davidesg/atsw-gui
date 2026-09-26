@@ -1,6 +1,7 @@
 # Cuándo un tramo de residuos es un incidente
 
-**Análisis y propuesta. Nada de esto está implementado todavía.**
+**Implementado** en `lib/anomalos` con K = 1,5 y escala muestral, decisión
+del analista. La medición de más abajo es la de la regla tal como quedó.
 
 Lo plantea el analista así: *no es lo mismo un anómalo aislado de 3σ, cuya
 probabilidad es muy pequeña, que uno de 2σ, que pasa el 5 % de las veces. Pero
@@ -141,12 +142,44 @@ y los demás no pueden pisarlo. Es una convención, no un teorema.
 
 ---
 
-## 6. Las dos decisiones que quedan
+## 6. Lo decidido, y lo que la batería encontró
 
-1. **K = 1,5** (misma carga de falsas alarmas que hoy, pero el extremo aislado
-   pasa a pedir 3,45) **o K = 1** (el aislado sigue en 3,34 y se aceptan un
-   50 % más de episodios falsos, todos ellos tramos que merece la pena mirar).
-   *Mi recomendación: K = 1,5 — que declarar un episodio cueste lo que hoy
-   cuesta declarar un extremo.*
-2. **Escala muestral o robusta (MAD).** Hoy muestral. La robusta da más
-   potencia justo donde importa, y es un cambio de mayor alcance.
+**K = 1,5 y escala muestral.** Con la regla completa, la medición final sobre
+4 000 series bajo la nula da **0,192 episodios falsos por serie**, algo por
+debajo de los 0,21 de la regla anterior: la nueva **no es más laxa**, que era
+la preocupación.
+
+### Un período tranquilo separa dos sucesos
+
+La primera versión confiaba en que el contraste rechazara solo las ventanas
+con huecos —un período callado cuesta un grado de libertad y no aporta suma—.
+**La batería enseñó que no**: dos picos de 5σ separados por dos ceros dan una
+ventana de cuatro con p = 4·10⁻¹⁰, más improbable que cualquiera de los dos
+solo. Y lo es — pero **lo es porque contiene dos sucesos**, no porque sea uno.
+*Improbabilidad de la ventana no es unicidad del suceso.*
+
+Así que el tramo tiene que ser **sólido**: todos sus períodos con |z| ≥ 1. Por
+debajo de una desviación típica no hay nada que explicar, y un período así
+separa dos sucesos en vez de unirlos.
+
+Eso sustituye al parámetro de hueco que había, y es mejor: el hueco era un
+número de períodos —una convención— y esto es una condición sobre el dato. El
+caso `4,0 · −3,5 · ⟨nada⟩ · 3,2` pasa de leerse como un suceso de cuatro
+—cuatro escalones— a leerse como lo que es: un par compensado y, tres períodos
+después, otra cosa.
+
+### Y quién decide cuántos parámetros
+
+**K no.** K decide dónde hay un suceso y cuántos períodos abarca. Cuántos ω se
+gastan lo decide la **escalera**, y el guardia contra sobreparametrizar es
+**Treadway**: si la forma de abajo deja un anómalo al lado, no cubre el suceso.
+Sobre el tramo real de m04:
+
+| forma | ω | R² | mayor resto |
+|---|---|---|---|
+| escalón | 1 | 0,32 | **−3,50** |
+| impulso | 1 | 0,75 | **+2,36** |
+| episodio, 3 escalones | 3 | 0,95 | −0,78 |
+
+Las dos formas escalares dejan un anómalo vivo. Eso es evidencia del dato, no
+del umbral.

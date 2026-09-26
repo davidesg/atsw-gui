@@ -556,11 +556,10 @@ void an_anomalos( const AnHost *h, const char *serie, const char *muestra,
     for ( i = 0; i < g->o.nres; i++ )
         g->z[i] = ( sd > 0.0 ) ? g->o.res[i] / sd : 0.0;
 
-    /* EL SEGUNDO UMBRAL ES EL DEL MOTOR: 2.0, el mismo con el que el .out
-       marca los residuos con «@». Con uno solo, la ventana agrupaba menos
-       de lo que el informe que el analista tiene delante señala.     */
-    g->nep = an_episodios( g->z, g->o.nres, g->umbral, AN_UMBRAL_VECINO,
-                           AN_VENTANA, g->ep, AN_MAX_EP );
+    /* SE PUNTUA EL TRAMO, NO LOS PUNTOS. Un 3 sigma con un 2 al lado es,
+       en un gaussiano, mucho más improbable que el 3 solo -- y una regla
+       punto a punto no sabe verlo. Ver lib/anomalos.             */
+    g->nep = an_episodios( g->z, g->o.nres, g->umbral, g->ep, AN_MAX_EP );
     }
 
     /* EL EJE DE TIEMPO. tmornsop son los períodos que van de enero (o del
@@ -602,13 +601,13 @@ void an_anomalos( const AnHost *h, const char *serie, const char *muestra,
     {
     gchar *t = g_markup_printf_escaped(
         "<b>%s / %s</b>%s%s   ·   %d episodio%s sobre %d residuos   ·   "
-        "se declaran con |z| ≥ %.2f y se extienden a los vecinos con "
-        "|z| ≥ %.1f, que es con lo que el motor marca «@»",
+        "un tramo es un suceso cuando es tan improbable como un extremo "
+        "aislado de |z| ≥ %.2f: por eso un 3σ con un 2σ al lado cuenta y un "
+        "2σ solo no",
         serie, id,
         ( muestra && *muestra ) ? "   muestra " : "",
         ( muestra && *muestra ) ? muestra : "",
-        g->nep, g->nep == 1 ? "" : "s", g->o.nres, g->umbral,
-        AN_UMBRAL_VECINO );
+        g->nep, g->nep == 1 ? "" : "s", g->o.nres, g->umbral );
 
     gtk_label_set_markup( GTK_LABEL(cab), t );
     g_free( t );

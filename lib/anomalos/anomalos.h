@@ -60,52 +60,90 @@
  * corridas encontraba la segunda intervención del episodio de 2008-09.     */
 typedef struct {
    int    desde, hasta;     /* indices 0..n-1, ambos inclusive            */
-   int    n;                /* cuantos extremos lleva dentro              */
+   int    n;                /* cuantos periodos abarca                    */
    double z_max;            /* el mayor |z| del episodio, con su signo    */
    int    i_max;            /* donde esta                                 */
+   double p;                /* P(chi2_L > suma z^2): lo improbable que es */
 } AnEpisodio;
 
-/* DOS UMBRALES, PORQUE SON DOS PREGUNTAS.
+/* SE PUNTUA EL TRAMO, NO LOS PUNTOS.
  *
- * DECLARAR un suceso donde no se sabía que hubiera uno es mirar las n
- * observaciones a la vez: es un problema de comparaciones múltiples, y por
- * eso el umbral crece con n (an_umbral).
+ * No es lo mismo un anomalo aislado de 3 sigma --raro-- que uno de 2, que
+ * pasa el 5 % de las veces. Pero un 3 CON un 2 antes y otro despues es, en
+ * un gaussiano, practicamente imposible. La probabilidad de un INCIDENTE no
+ * es la del punto aislado, y una regla que mire punto a punto no puede
+ * distinguir esas dos cosas por mucho que se le afine el umbral.
  *
- * EXTENDERLO a su vecino no lo es. Una vez declarado el suceso en T,
- * preguntar por T+1 es UNA pregunta, no n. Pedirle ahí el mismo umbral alto
- * es contestar una pregunta con el listón de otra, y cuesta caro: art lo
- * midió --la mitad de la potencia, 36 % frente a 75 % (BUG-0087)--.
+ * Asi que se puntua la ventana entera. Con L periodos contiguos y los
+ * residuos tipificados z_1..z_L:
  *
- *     |z| > 2.0  ->  p = 0.046, uno de cada 22
+ *     S = suma z_i^2      y bajo la nula      S ~ chi2(L)
  *
- * Y 2.0 no sale de un libro: es el umbral con el que EL PROPIO MOTOR marca
- * los residuos con «@» en el .out (diagnose.c). Con un umbral más alto la
- * ventana agrupaba menos de lo que el informe que el analista tiene delante
- * señala -- se veían tres arroba seguidos y sólo uno se recogía.
+ * ES UN EPISODIO si el tramo es AL MENOS TAN IMPROBABLE como un extremo
+ * aislado en el umbral de declarar:
  *
- * El caso que lo destapó, en IPC_ES m04:
+ *     P( chi2_L > S )  <=  p1(u) / K        con u = an_umbral(n)
  *
- *     1/2021  z = +3.01   @   el motor lo marca; el umbral alto, no
- *     2/2021  z = -3.50   @   el unico que pasaba
- *     3/2021  z = +2.36   @   el motor lo marca; el umbral alto, no
+ * Tres propiedades, y por eso es esta regla y no otra:
  *
- * Tres períodos contiguos con firma +,-,+ que se leían como un suceso de
- * uno. La forma que se le propone a eso no es la misma.
+ *   1. CON L = 1 ES LA REGLA DE SIEMPRE. P(chi2_1 > z^2) <= p1(u) es
+ *      |z| >= u. No hay caso especial ni discontinuidad.
+ *   2. NO TRAE NINGUNA CONSTANTE NUEVA salvo K. u ya estaba, y depende de n,
+ *      que es lo que gobierna las comparaciones multiples.
+ *   3. USA LAS MAGNITUDES. (3.5, 2.0) deja de ser el mismo caso que
+ *      (2.0, 2.0), que es lo que un doble umbral no sabe distinguir.
  *
- * LA REGLA: se encadenan los ACTIVOS (|z| >= umbral_vecino) con el hueco de
- * ventana, y una cadena es un episodio sólo si contiene algún EXTREMO
- * (|z| >= umbral). Así el número de falsos episodios lo sigue gobernando el
- * umbral alto, y la extensión no se deja fuera lo que es del mismo suceso.
+ * EL ESCALON POR PUNTO SALE DERIVADO, no elegido. Si todos valen lo mismo,
+ * con n = 261 hacen falta 3.34 / 2.66 / 2.35 / 2.17 / 2.04 para L = 1..5. El
+ * umbral fijo de 2.0 que hubo aqui era, sin saberlo, el valor correcto para
+ * L ~ 4-5: demasiado laxo para parejas y demasiado estricto para tramos
+ * largos.
  *
- * ventana es un PARÁMETRO DECLARADO, no un número mágico enterrado. Por
- * defecto 2, que admite un período tranquilo dentro del suceso.
+ * K, Y ESTA MEDIDO. Escanear varias longitudes infla los falsos positivos:
+ * 4 000 series gaussianas de n = 261 dan 0,34 episodios falsos por serie con
+ * K = 1 frente a los 0,21 de la regla anterior. Con K = 1,5 salen 0,226 --la
+ * misma carga de falsas alarmas que habia-- al precio de que un extremo
+ * aislado pase a pedir 3,45 en vez de 3,34. Decision del analista.
  *
- * Devuelve cuántos episodios encontró.                                    */
-#define AN_VENTANA         2
+ * UN PERIODO TRANQUILO ROMPE EL TRAMO, y esto hay que pedirlo aparte.
+ *
+ * La primera version confiaba en que el contraste lo rechazara solo --meter
+ * un periodo callado cuesta un grado de libertad y no aporta suma-- y la
+ * bateria enseño que no: dos picos de 5 sigma separados por dos ceros dan
+ * una ventana de cuatro con p = 4e-10, mas improbable que cualquiera de los
+ * dos solo. Y lo es, pero lo es PORQUE CONTIENE DOS SUCESOS, no porque sea
+ * uno. Improbabilidad de la ventana no es unicidad del suceso.
+ *
+ * Asi que el tramo tiene que ser SOLIDO: todos sus periodos con |z| >=
+ * AN_ACTIVO. Por debajo de una desviacion tipica no hay nada que explicar, y
+ * un periodo asi separa dos sucesos en vez de unirlos.
+ *
+ * Eso sustituye al parametro de hueco que habia, y es mejor: el hueco era un
+ * numero de periodos --una convencion-- y esto es una condicion sobre el
+ * dato. Si el analista quiere tratar dos sucesos cercanos como uno, marca
+ * las dos casillas: la ventana ya calibra varios episodios a la vez.
+ *
+ * LO QUE ESTA REGLA NO ARREGLA, dicho aqui: los z se tipifican con la
+ * desviacion tipica MUESTRAL, que los propios anomalos inflan. El contraste
+ * es por tanto CONSERVADOR, y tanto mas cuanto peor es el caso. Una escala
+ * robusta lo corregiria y cambiaria todos los veredictos: es otra decision,
+ * y el analista la dejo en muestral.
+ *
+ * Devuelve cuantos episodios encontro, los mas significativos primero y sin
+ * solaparse.                                                            */
+#define AN_K       1.5     /* calibrado: misma carga de falsas alarmas   */
+#define AN_LMAX    8       /* la longitud maxima que se escanea          */
+#define AN_ACTIVO  1.0     /* por debajo de 1 sigma no hay nada que explicar */
+
+/* EL UMBRAL DEL VECINO YA NO AGRUPA: agrupa el escaner. Se queda porque es
+ * el de TREADWAY --«¿la forma de abajo deja un anomalo al lado?»--, que es
+ * una pregunta condicional y distinta. Y es el mismo con el que el motor
+ * marca los residuos con «@» en el .out.                                */
 #define AN_UMBRAL_VECINO   2.0
 
-int an_episodios( const double *z, int n, double umbral, double umbral_vecino,
-                  int ventana, AnEpisodio *out, int max );
+int an_episodios( const double *z, int n, double umbral,
+                  AnEpisodio *out, int max );
+
 
 /* EL UMBRAL DEPENDE DE n, y por eso no es una constante.
  *

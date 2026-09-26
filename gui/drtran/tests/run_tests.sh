@@ -3,7 +3,12 @@
 # los mismos ficheros, no con lo que nos parezca.
 TOP=$(cd "$(dirname "$0")/.." && pwd)
 L="$TOP/../../lib"; E="$TOP/../../engines/drtran"
-W="$TOP/tests/work"; mkdir -p "$W"
+# EL DIRECTORIO DE TRABAJO, LIMPIO. No lo estaba, y una bateria que pasa o
+# falla segun si la corriste antes no es una bateria: la comprobacion del
+# .cns reescrito daba FALLA en la segunda pasada --el motor se encontraba su
+# propia salida de la vez anterior-- y ok desde limpio. La de gui/fue ya lo
+# hacia (rm -rf "$WORK"); esta no.
+W="$TOP/tests/work"; rm -rf "$W"; mkdir -p "$W"
 CC=${CC:-cc}
 GTK=$(pkg-config --cflags --libs gtk+-3.0 2>/dev/null) || { echo "hace falta GTK3"; exit 0; }
 

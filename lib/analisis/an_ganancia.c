@@ -145,8 +145,25 @@ static void flt_txt( const Fila *f, char *b, size_t n )
 
     b[0] = '\0';
 
-    /* La entrada es el suceso: su tipo y su fecha, que es lo que se lee. */
-    g_snprintf( fecha, sizeof fecha, "%s", f->linea );
+    /* LA VARIABLE, CON LA NOTACION DE fue Y SIN LA FECHA.
+     *
+     * fue escribe ξ_t^{S,3/2022} --la clase y la fecha en el superíndice--
+     * porque en el papel no hay nada al lado que lo diga. Aquí sí: la
+     * columna «Intervención» ya lleva «step 3 2022», así que repetirla
+     * dentro de la ecuación alarga la celda y no añade nada.
+     *
+     * La CLASE sí se queda, con las letras de fue (eqlatex.c): I impulso,
+     * CI impulso compensado, S escalón, R rampa. Sin ella la ecuación no
+     * diría de qué variable habla.                                     */
+    {
+    const char *clase = es( f->linea, "step" )    ? "S"
+                      : es( f->linea, "impulse" ) ? "I"
+                      : es( f->linea, "compimp" ) ? "CI"
+                      : es( f->linea, "ramp" )    ? "R" : "";
+
+    if ( *clase ) g_snprintf( fecha, sizeof fecha, "\xce\xbe_t^%s", clase );
+    else          g_snprintf( fecha, sizeof fecha, "\xce\xbe_t" );
+    }
 
     memset( &L, 0, sizeof L );
     L.entrada  = fecha;

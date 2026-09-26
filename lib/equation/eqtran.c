@@ -218,6 +218,58 @@ int eq_part_texto( char *out, size_t size, const Equation *eq, EqPart p )
    return pos;
 }
 
+/* Cuantas LETRAS lleva la cadena: los bytes de continuacion de UTF-8 no
+ * ocupan columna.                                                      */
+static int letras( const char *s, int n )
+{
+   int i, k = 0;
+
+   for ( i = 0; i < n && s[i]; i++ )
+       if ( ( (unsigned char) s[i] & 0xC0 ) != 0x80 ) k++;
+   return k;
+}
+
+int eq_items_texto_et( char *arriba, char *abajo, size_t size,
+                       const EqItem *item, int n )
+{
+   int pos = 0, p2 = 0, i;
+
+   if ( !arriba || !abajo || size < 2 ) return 0;
+   arriba[0] = abajo[0] = 0;
+
+   for ( i = 0; i < n; i++ )
+       {
+       const EqItem *it = &item[i];
+       int           antes = pos;
+
+       /* La linea de arriba, item a item: se reutiliza el mismo escritor
+          para que las dos formas no se separen nunca.                 */
+       items_a_texto( arriba, size, &pos, it, 1 );
+
+       if ( it->kind != EI_COEF || !it->has_se ) continue;
+
+       /* DEBAJO, alineado con donde empieza el NUMERO --no con el signo--,
+          que es como se lee.                                          */
+       {
+       char   b[64];
+       int    col, j, k;
+       const char *c = arriba + antes;
+
+       /* el numero empieza tras el " - " o " + " que el signo escribio */
+       while ( *c == ' ' || *c == '+' || *c == '-' ) c++;
+       col = letras( arriba, (int) ( c - arriba ) );
+
+       snprintf( b, sizeof b, "(%.*f)", decimales( it ), it->se );
+       for ( j = letras( abajo, p2 ); j < col && p2 < (int) size - 1; j++ )
+           abajo[p2++] = ' ';
+       for ( k = 0; b[k] && p2 < (int) size - 1; k++ ) abajo[p2++] = b[k];
+       abajo[p2] = 0;
+       }
+       }
+   arriba[pos < (int) size ? pos : (int) size - 1] = 0;
+   return pos;
+}
+
 int eqtran_texto( char *out, size_t size,
                   const char *salida, const EqLink *lnk, int nlinks,
                   const Equation *eq )

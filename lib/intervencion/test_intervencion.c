@@ -347,8 +347,14 @@ int main( void )
     IvGanancia g;
 
     ok( iv_ganancia( om, NULL, 2, V, 2, NULL, 0, 3.841, &g ) == 0, "se calcula" );
-    ok( fabs( g.suma - 0.036519 ) < 1e-6, "la suma es 0.0365..." );
-    ok( fabs( g.omega_1 - 0.013407 ) < 1e-6, "...y la ganancia 0.0134: NO es la suma" );
+    ok( fabs( g.omega_1 - 0.013407 ) < 1e-6, "la ganancia es 0.0134" );
+    /* LA SUMA CRUDA NO ES LA GANANCIA, y por eso no se enseña en ningun
+       sitio: es un artefacto de escribir los omegas SIN SU SIGNO. Escrito
+       el polinomio como se escribe --el primero suma, los retardos
+       restan-- la ganancia ES la suma de lo que se ve. Lo comprueba
+       test_eqtran sobre los mismos numeros.                          */
+    ok( fabs( g.suma - 0.036519 ) < 1e-6,
+        "la suma CRUDA es otra cosa (0.0365) y por eso no se publica" );
     ok( g.hay_wald, "con dos omegas libres hay contraste" );
     ok( g.wald > 5.0 && g.wald < 6.5, "Wald ~ 5.8" );
     ok( !g.transitorio, "se rechaza ganancia nula: el efecto es PERMANENTE" );

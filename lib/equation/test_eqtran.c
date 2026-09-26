@@ -94,5 +94,45 @@ int main( void )
    }
 
    printf( "%d fallos\n", fallos );
+    /* LA GANANCIA ES LA SUMA DE LO QUE SE VE.
+     *
+     * Escrito el polinomio con sus signos --el primero suma, los retardos
+     * restan-- sumar los coeficientes TAL COMO SE LEEN da omega(1). Con los
+     * valores crudos no: para el m6 daria -0.0099 en vez de 0.731347, que
+     * es el numero que imprime drtran.
+     *
+     * Se prueba aqui porque es una propiedad de COMO SE ESCRIBE, y por eso
+     * la ventana de ganancia ya no enseña una «suma» al lado: aquella
+     * diferencia no era un hecho del modelo, era el artefacto de escribir
+     * los omegas sin su signo.                                         */
+    {
+    double om[3] = { 0.360712, -0.529417, 0.158782 };
+    double se[3] = { 0.01, 0.02, 0.03 };
+    EqItem it[64];
+    EqLink L;
+    char   a[512], b[512];
+    int    n, k;
+    double visto = 0.0, crudo = 0.0;
+
+    memset( &L, 0, sizeof L );
+    L.entrada = "EC"; L.s = 2; L.omega = om; L.omega_se = se;
+    n = eqtran_items( it, 64, &L, 1 );
+    eq_items_texto_et( a, b, sizeof a, it, n );
+
+    for ( k = 0; k < n; k++ )
+        if ( it[k].kind == EI_COEF )
+            visto += ( it[k].sign == '-' ? -1.0 : 1.0 ) * it[k].value;
+    for ( k = 0; k < 3; k++ ) crudo += om[k];
+
+    check( fabs( visto - 0.731347 ) < 1e-6,
+           "la suma de los coeficientes ESCRITOS es la ganancia de drtran", a );
+    check( fabs( crudo + 0.009923 ) < 1e-6,
+           "y la suma de los crudos es otra cosa: -0.0099", a );
+    check( strstr( b, "(0.0100)" ) != NULL,
+           "la desviacion tipica va DEBAJO, alineada", b );
+    printf( "        %s\n        %s\n", a, b );
+    }
+
+
    return fallos ? 1 : 0;
 }

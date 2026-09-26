@@ -35,6 +35,7 @@
 #include "outfile.h"
 #include "dictamen.h"          /* chisq_cola */
 #include "intervencion.h"
+#include "eqtran.h"
 #include "tabla.h"
 
 #include "analisis.h"
@@ -122,25 +123,50 @@ static void arma( Ga *g )
 
 /* ------------------------------------------------------------------------ */
 
-enum { GC_QUE, GC_OMEGAS, GC_SUMA, GC_G1, GC_ET, GC_W, GC_P, GC_LEE, GC_COLOR, GC_N };
+enum { GC_QUE, GC_FLT, GC_G1, GC_ET, GC_W, GC_P, GC_LEE, GC_COLOR, GC_N };
 
-/* El texto de los omegas, con su error y su t: es lo que deja verificar el
- * ω(1) a mano, que es la diferencia entre creerse un número y comprobarlo. */
-static void omegas_txt( const Fila *f, char *b, size_t n )
+/* LA FLT COMO LA ESCRIBE fue: el signo delante, el numero positivo y la
+ * desviacion tipica DEBAJO, alineada. Es la misma forma del papel y del
+ * grafico, y se arma con el mismo vocabulario --EqItem-- para que no se
+ * separen nunca.
+ *
+ * Y NO ES SOLO ESTETICA. Escrita asi, LA GANANCIA ES LA SUMA DE LO QUE SE
+ * VE: el signo esta en la linea. Con los valores crudos del .out no lo es
+ * --los retardos restan-- y yo llegue a poner una columna «Σω» al lado de
+ * la ganancia enseñando esa diferencia como si fuera un hecho del modelo.
+ * No lo es: era un artefacto de escribirlos sin su signo. Lo corrigio el
+ * analista.                                                            */
+static void flt_txt( const Fila *f, char *b, size_t n )
 {
-    int    k, p = 0;
+    EqItem  it[64];
+    EqLink  L;
+    char    a1[256], a2[256], fecha[64];
+    int     k, ni;
 
     b[0] = '\0';
-    for ( k = 0; k < f->nom && p < (int) n - 2; k++ )
-        {
-        double t = ( f->et[k] > 0.0 ) ? f->om[k] / f->et[k] : 0.0;
 
-        p += g_snprintf( b + p, n - p, "%s%+.6f", k ? "  ·  " : "", f->om[k] );
-        if ( !f->libre[k] )
-            p += g_snprintf( b + p, n - p, " (fijo)" );
-        else if ( f->et[k] > 0.0 )
-            p += g_snprintf( b + p, n - p, " (%.6f, t %+.1f)", f->et[k], t );
-        }
+    /* La entrada es el suceso: su tipo y su fecha, que es lo que se lee. */
+    g_snprintf( fecha, sizeof fecha, "%s", f->linea );
+
+    memset( &L, 0, sizeof L );
+    L.entrada  = fecha;
+    L.s        = f->nom - 1;
+    L.r        = 0;
+    L.omega    = f->om;
+    L.omega_se = f->et;
+
+    /* Un omega FIJO no tiene error: se pasa a cero y el escritor no le
+       pone nada debajo, que es lo cierto.                             */
+    {
+    static double et2[16];
+
+    for ( k = 0; k < f->nom && k < 16; k++ ) et2[k] = f->libre[k] ? f->et[k] : 0.0;
+    L.omega_se = et2;
+    }
+
+    ni = eqtran_items( it, 64, &L, 1 );
+    eq_items_texto_et( a1, a2, sizeof a1, it, ni );
+    g_snprintf( b, n, "%s\n%s", a1, a2 );
 }
 
 static const char *lectura_de( const Fila *f, char *b, size_t n )
@@ -164,13 +190,12 @@ static void llena( Ga *g, GtkListStore *st )
     for ( i = 0; i < g->nf; i++ )
         {
         const Fila *f = &g->f[i];
-        char oms[512], lee[128], s1[32], s2[32], s3[32], s4[32], s5[32];
+        char flt[768], lee[128], s2[32], s3[32], s4[32], s5[32];
         const char *color = "#57606a";
 
-        omegas_txt( f, oms, sizeof oms );
+        flt_txt( f, flt, sizeof flt );
         lectura_de( f, lee, sizeof lee );
 
-        g_snprintf( s1, sizeof s1, "%+.6f", f->g.suma );
         g_snprintf( s2, sizeof s2, "%+.6f", f->g.omega_1 );
         if ( f->g.hay_wald )
             {
@@ -184,7 +209,7 @@ static void llena( Ga *g, GtkListStore *st )
 
         gtk_list_store_append( st, &it );
         gtk_list_store_set( st, &it,
-            GC_QUE, f->linea, GC_OMEGAS, oms, GC_SUMA, s1, GC_G1, s2,
+            GC_QUE, f->linea, GC_FLT, flt, GC_G1, s2,
             GC_ET, s3, GC_W, s4, GC_P, s5, GC_LEE, lee, GC_COLOR, color, -1 );
         }
 }
@@ -204,8 +229,10 @@ static void on_exportar( GtkButton *b, Ga *g )
     if ( t == NULL ) return;
 
     tb_col( t, "Intervención", NULL, TB_TXT, 0 );
-    tb_col( t, "ω estimados",  NULL, TB_TXT, 0 );
-    tb_col( t, "Σω",           NULL, TB_TXT, 0 );
+    /* EN DOS COLUMNAS y no en dos lineas: un salto de linea dentro de una
+       celda no sobrevive a un CSV. En la pantalla van una debajo de otra. */
+    tb_col( t, "ω(B) ξ_t",     NULL, TB_TXT, 0 );
+    tb_col( t, "sus et",       NULL, TB_TXT, 0 );
     tb_col( t, "ω(1)",         NULL, TB_TXT, 0 );
     tb_col( t, "et",           NULL, TB_TXT, 0 );
     tb_col( t, "W",            NULL, TB_TXT, 0 );
@@ -215,11 +242,13 @@ static void on_exportar( GtkButton *b, Ga *g )
     for ( i = 0; i < g->nf; i++ )
         {
         const Fila *f = &g->f[i];
-        char oms[512], lee[128], b1[32], b2[32], b3[32], b4[32], b5[32];
+        char flt[768], lee[128], b2[32], b3[32], b4[32], b5[32];
+        char *salto;
 
-        omegas_txt( f, oms, sizeof oms );
+        flt_txt( f, flt, sizeof flt );
+        salto = strchr( flt, '\n' );
+        if ( salto ) *salto++ = '\0'; else salto = flt + strlen( flt );
         lectura_de( f, lee, sizeof lee );
-        g_snprintf( b1, sizeof b1, "%+.6f", f->g.suma );
         g_snprintf( b2, sizeof b2, "%+.6f", f->g.omega_1 );
         if ( f->g.hay_wald )
             { g_snprintf( b3, sizeof b3, "%.6f", f->g.et );
@@ -229,8 +258,8 @@ static void on_exportar( GtkButton *b, Ga *g )
 
         tb_fila( t );
         tb_pon_txt( t, 0, f->linea );
-        tb_pon_txt( t, 1, oms );
-        tb_pon_txt( t, 2, b1 );
+        tb_pon_txt( t, 1, flt );
+        tb_pon_txt( t, 2, salto );
         tb_pon_txt( t, 3, b2 );
         tb_pon_txt( t, 4, b3 );
         tb_pon_txt( t, 5, b4 );
@@ -243,7 +272,8 @@ static void on_exportar( GtkButton *b, Ga *g )
     tb_procedencia( t, "Muestra", g->muestra[0] ? g->muestra : "completa" );
     if ( g->estruct[0] ) tb_procedencia( t, "Estructura", g->estruct );
     tb_procedencia( t, "Contraste",
-        "Wald sobre omega(1) = w0 - w1 - ... - wL, con 1 g.l." );
+        "Wald sobre omega(1), con 1 g.l. Escrito el polinomio con sus "
+        "signos, omega(1) es la SUMA de los coeficientes." );
 
     d = gtk_file_chooser_dialog_new( "Exportar la ganancia", g->h.padre,
             GTK_FILE_CHOOSER_ACTION_SAVE, "Cancelar", GTK_RESPONSE_CANCEL,
@@ -318,9 +348,10 @@ void an_ganancia( const AnHost *h, const char *serie, const char *muestra,
     gchar *t = g_markup_printf_escaped(
         "<b>%s / %s</b>%s%s   ·   %s   ·   %d intervención%s\n"
         "<small>¿El suceso dejó algo <b>para siempre</b> o revirtió? Lo dice "
-        "la ganancia: <tt>ω(1) = ω₀ − ω₁ − … − ω_L</tt>. Los retardos "
-        "<b>restan</b> —convenio de Box-Jenkins—, así que <b>no es la suma</b>: "
-        "las dos están al lado para que se vea.</small>",
+        "la <b>ganancia</b>, ω(1). El polinomio va escrito con sus signos "
+        "—convenio de Box-Jenkins, el primero suma y los retardos restan— y "
+        "así <b>ω(1) es la suma de lo que se ve</b>: se puede comprobar a "
+        "ojo.</small>",
         serie, id, ( muestra && *muestra ) ? "   muestra " : "",
         ( muestra && *muestra ) ? muestra : "", g->estruct, g->nf,
         g->nf == 1 ? "" : "es" );
@@ -334,19 +365,21 @@ void an_ganancia( const AnHost *h, const char *serie, const char *muestra,
 
     st = gtk_list_store_new( GC_N, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING,
                              G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING,
-                             G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING );
+                             G_TYPE_STRING, G_TYPE_STRING );
     llena( g, st );
     vista = gtk_tree_view_new_with_model( GTK_TREE_MODEL(st) );
     g_object_unref( st );
     {
-    static const char *cab2[] = { "Intervención", "ω estimados", "Σω", "ω(1)",
+    static const char *cab2[] = { "Intervención", "ω(B) ξ_t", "ω(1)",
                                   "et", "W", "p", "Lectura" };
     int i;
 
-    for ( i = 0; i < 8; i++ )
+    for ( i = 0; i < 7; i++ )
         {
         GtkCellRenderer *r = gtk_cell_renderer_text_new();
 
+        /* LA FLT EN MONOESPACIADO: la dt va debajo alineada por columnas,
+           y con una fuente proporcional la alineacion es mentira.    */
         if ( i == 1 ) g_object_set( r, "family", "monospace", NULL );
         gtk_tree_view_insert_column_with_attributes( GTK_TREE_VIEW(vista), -1,
             cab2[i], r, "text", i, "foreground", GC_COLOR, NULL );
@@ -371,7 +404,9 @@ void an_ganancia( const AnHost *h, const char *serie, const char *muestra,
           "Con ganancia distinta de cero, algo se quedó y <b>gobierna la "
           "previsión</b> de aquí en adelante.\n"
           "Con un solo ω no hay contraste nuevo: la ganancia es el "
-          "coeficiente y su t ya está en la tabla.</small>" );
+          "coeficiente y su t ya está en la tabla. Y ω(1) es la suma de los "
+          "coeficientes <b>tal como están escritos</b>: se comprueba a "
+          "ojo.</small>" );
     gtk_box_pack_start( GTK_BOX(raiz), pie, FALSE, FALSE, 0 );
 
     /* SIN COVARIANZA NO HAY CONTRASTE, y se dice arriba del todo. */

@@ -25,6 +25,7 @@ SRC = src/main.c src/ventana.c src/gestos.c src/datos_gui.c src/vistazo.c \
       $(LIB)/analisis/an_anomalos.c \
       $(LIB)/analisis/an_diagnosis.c \
       $(LIB)/analisis/an_ganancia.c \
+      $(LIB)/equation/eqtran.c \
       $(LIB)/analisis/an_sugerir.c \
       $(LIB)/analisis/plotstats.c \
       $(LIB)/intervencion/intervencion.c \
@@ -59,7 +60,7 @@ HDR = include/atsw.h include/anfitrion.h include/previewhost.h
 LIBHDR = $(wildcard $(LIB)/*/*.h)
 
 
-INC = -Iinclude -I$(LIB)/proyecto -I$(LIB)/outdiag -I$(LIB)/outfile -I$(LIB)/analisis -I$(LIB)/dictamen -I$(LIB)/anomalos -I$(LIB)/intervencion -I$(LIB)/inpdet -I$(LIB)/engine -I$(LIB)/inpcheck -I$(LIB)/tabla \
+INC = -Iinclude -I$(LIB)/proyecto -I$(LIB)/outdiag -I$(LIB)/outfile -I$(LIB)/analisis -I$(LIB)/equation -I$(LIB)/dictamen -I$(LIB)/anomalos -I$(LIB)/intervencion -I$(LIB)/inpdet -I$(LIB)/engine -I$(LIB)/inpcheck -I$(LIB)/tabla \
       -I$(LIB)/rutas -I$(LIB)/dates -I$(LIB)/datos -I$(LIB)/xlsx \
       -I../../engines/fug/src -I$(LIB)/preview -I$(LIB)/fugdraw -I$(LIB)/fugplot -I$(LIB)/utils
 

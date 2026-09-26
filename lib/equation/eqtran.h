@@ -54,6 +54,22 @@ int eqtran_texto( char *out, size_t size,
                   const char *salida, const EqLink *lnk, int nlinks,
                   const Equation *eq );
 
+/* LA ECUACION EN DOS LINEAS, con la desviacion tipica DEBAJO de cada
+ * coeficiente y alineada -- que es como se escribe en el papel y en el
+ * grafico, y como se lee.
+ *
+ * Y tiene una consecuencia que no es de estetica: escrito asi, el signo va
+ * DELANTE del numero, de modo que la ganancia es la SUMA DE LO QUE SE VE.
+ * Con los valores crudos del .out no lo es --el convenio de Box-Jenkins hace
+ * que los retardos resten-- y presentar esa diferencia como si fuera un
+ * hecho del modelo confunde: es un artefacto de escribirlos sin su signo.
+ *
+ * arriba y abajo tienen que tener sitio para size letras cada uno. La
+ * alineacion cuenta LETRAS y no bytes, que en UTF-8 no es lo mismo.
+ * Devuelve las letras que habria hecho falta (como snprintf).          */
+int eq_items_texto_et( char *arriba, char *abajo, size_t size,
+                       const EqItem *item, int n );
+
 /* Los items de una parte de la ecuacion de fue, en texto plano. Es lo que
  * usa eqtran_texto para el ruido, y sirve por separado.                  */
 int eq_part_texto( char *out, size_t size, const Equation *eq, EqPart p );

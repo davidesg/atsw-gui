@@ -38,7 +38,7 @@ else
 endif
 
 # Compiler and basic flags
-CFLAGS   = -O2 -g -Wall -Iinclude -I../../lib/fugdraw -I../../lib/preview -I../../lib/engine -I../../lib/outfile -I../../lib/utils -I../../lib/datos -I../../lib/xlsx -I../../lib/proyecto -I../../lib/inpcheck -I../../lib/fugplot -I../../lib/analisis -I../../lib/anomalos -I../../lib/dictamen -I../../lib/intervencion -I../../lib/inpdet -I../../lib/tabla -I../../lib/rutas -I$(ENG_DIR)/fue/include
+CFLAGS   = -O2 -g -Wall -Iinclude -I../../lib/fugdraw -I../../lib/preview -I../../lib/engine -I../../lib/outfile -I../../lib/utils -I../../lib/datos -I../../lib/xlsx -I../../lib/proyecto -I../../lib/inpcheck -I../../lib/fugplot -I../../lib/analisis -I../../lib/equation -I../../lib/anomalos -I../../lib/dictamen -I../../lib/intervencion -I../../lib/inpdet -I../../lib/tabla -I../../lib/rutas -I$(ENG_DIR)/fue/include
 LDFLAGS  +=
 LIBS     = -lz -lm
 
@@ -64,6 +64,7 @@ LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c \
            $(LIB_DIR)/analisis/an_anomalos.c \
            $(LIB_DIR)/analisis/an_diagnosis.c \
            $(LIB_DIR)/analisis/an_ganancia.c \
+           $(LIB_DIR)/equation/eqtran.c \
            $(LIB_DIR)/analisis/an_sugerir.c \
            $(LIB_DIR)/anomalos/anomalos.c \
            $(LIB_DIR)/dictamen/dictamen.c \
@@ -200,6 +201,10 @@ $(BUILD_DIR)/lib_fugplot/%.o: $(LIB_DIR)/fugplot/%.c | $(BUILD_DIR)
 
 # -DPLOTSTATS_TIENE_NLA: fue_gui ya trae vector/free_vector/iround en su
 # nlutils.c, asi que plotstats no los repite. Ver lib/analisis/plotstats.c.
+$(BUILD_DIR)/lib_equation/%.o: $(LIB_DIR)/equation/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(ALL_CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/lib_analisis/%.o: $(LIB_DIR)/analisis/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
 	$(CC) $(GUI_CFLAGS) $(DEPFLAGS) -DPLOTSTATS_TIENE_NLA -c $< -o $@

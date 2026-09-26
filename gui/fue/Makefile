@@ -124,7 +124,22 @@ GUI_LIBS   = $(GTK_LIBS) -lz -lm
 # se compilaban sin un solo -I. Funcionaba de casualidad, porque cada .c de
 # lib/ solo incluia su propia cabecera, que esta a su lado. En cuanto uno
 # incluyo otra --datos.c a xlsx.h-- salio a la luz.
-ALL_CFLAGS = $(GUI_CFLAGS)
+# -MMD -MP: LAS DEPENDENCIAS SE GENERAN SOLAS, Y NO POR COMODIDAD.
+#
+# Este Makefile llevaba una lista de dependencias A MANO --"data_handling.o:
+# include/data_handling.h ..."-- y en ella NO estaba include/fue_context.h,
+# que es la estructura que TODOS los ficheros incluyen. El dia que se le
+# añadieron dos campos EN MEDIO, los .o que no se recompilaron siguieron
+# usando los desplazamientos viejos: ctx->series_name_entry devolvia otro
+# widget, no NULL, y el programa cargaba el modelo y no rellenaba el
+# formulario. Ni un error de compilacion, ni un fallo al enlazar: 36
+# Gtk-CRITICAL en stderr que nadie mira, y un formulario vacio.
+#
+# Una lista de dependencias a mano miente en cuanto alguien añade un
+# #include, y mentir aqui no da error: da un binario con dos versiones de la
+# misma estructura dentro.
+DEPFLAGS   = -MMD -MP
+ALL_CFLAGS = $(GUI_CFLAGS) $(DEPFLAGS)
 
 # Default target: build GUI
 all: $(TARGET)
@@ -138,22 +153,22 @@ $(BIN_DIR):
 
 # Compile each source file
 $(BUILD_DIR)/inpcheck_fue.o: $(ENG_DIR)/fue/src/inpcheck.c $(LIB_DIR)/inpcheck/inpcheck.h | $(BUILD_DIR)
-	$(CC) $(GUI_CFLAGS) -Dinp_check=inp_check_fue -c $< -o $@
+	$(CC) $(GUI_CFLAGS) $(DEPFLAGS) -Dinp_check=inp_check_fue -c $< -o $@
 
 $(BUILD_DIR)/inpcheck_fuf.o: $(ENG_DIR)/fuf/src/inpcheck.c $(LIB_DIR)/inpcheck/inpcheck.h | $(BUILD_DIR)
-	$(CC) $(GUI_CFLAGS) -I$(ENG_DIR)/fuf/include -Dinp_check=inp_check_fuf -c $< -o $@
+	$(CC) $(GUI_CFLAGS) $(DEPFLAGS) -I$(ENG_DIR)/fuf/include -Dinp_check=inp_check_fuf -c $< -o $@
 
 $(BUILD_DIR)/lib_preview/%.o: $(LIB_DIR)/preview/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
-	$(CC) $(GUI_CFLAGS) -c $< -o $@
+	$(CC) $(GUI_CFLAGS) $(DEPFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/lib_engine/%.o: $(LIB_DIR)/engine/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
-	$(CC) $(GUI_CFLAGS) -c $< -o $@
+	$(CC) $(GUI_CFLAGS) $(DEPFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/lib_outfile/%.o: $(LIB_DIR)/outfile/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
-	$(CC) $(GUI_CFLAGS) -c $< -o $@
+	$(CC) $(GUI_CFLAGS) $(DEPFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/lib_proyecto/%.o: $(LIB_DIR)/proyecto/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
@@ -169,24 +184,24 @@ $(BUILD_DIR)/lib_datos/%.o: $(LIB_DIR)/datos/%.c | $(BUILD_DIR)
 
 $(BUILD_DIR)/lib_utils/%.o: $(LIB_DIR)/utils/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
-	$(CC) $(GUI_CFLAGS) -c $< -o $@
+	$(CC) $(GUI_CFLAGS) $(DEPFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/lib_fugdraw/%.o: $(LIB_DIR)/fugdraw/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
-	$(CC) $(GUI_CFLAGS) -c $< -o $@
+	$(CC) $(GUI_CFLAGS) $(DEPFLAGS) -c $< -o $@
 
 # fugplot y lib/analisis se compilan con el include path de ESTE programa:
 # fugplot.c pide su plothost.h y las ventanas de analisis piden preview.h,
 # que pide el previewhost.h del anfitrion. Es el mismo convenio de siempre.
 $(BUILD_DIR)/lib_fugplot/%.o: $(LIB_DIR)/fugplot/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
-	$(CC) $(GUI_CFLAGS) -c $< -o $@
+	$(CC) $(GUI_CFLAGS) $(DEPFLAGS) -c $< -o $@
 
 # -DPLOTSTATS_TIENE_NLA: fue_gui ya trae vector/free_vector/iround en su
 # nlutils.c, asi que plotstats no los repite. Ver lib/analisis/plotstats.c.
 $(BUILD_DIR)/lib_analisis/%.o: $(LIB_DIR)/analisis/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
-	$(CC) $(GUI_CFLAGS) -DPLOTSTATS_TIENE_NLA -c $< -o $@
+	$(CC) $(GUI_CFLAGS) $(DEPFLAGS) -DPLOTSTATS_TIENE_NLA -c $< -o $@
 
 $(BUILD_DIR)/lib_anomalos/%.o: $(LIB_DIR)/anomalos/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
@@ -209,7 +224,10 @@ $(BUILD_DIR)/lib_tabla/%.o: $(LIB_DIR)/tabla/%.c | $(BUILD_DIR)
 	$(CC) $(ALL_CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
-	$(CC) $(GUI_CFLAGS) -c $< -o $@
+	$(CC) $(GUI_CFLAGS) $(DEPFLAGS) -c $< -o $@
+
+# Lo que gcc apunto al compilar. El "-" es porque la primera vez no existen.
+-include $(OBJS:.o=.d)
 
 # Link
 $(TARGET): $(OBJS) | $(BIN_DIR)
@@ -224,7 +242,8 @@ check:
 
 # Clean
 clean:
-	rm -rf $(BUILD_DIR)/*.o $(TARGET) tests/work
+	rm -rf $(BUILD_DIR)/*.o $(BUILD_DIR)/*.d $(BUILD_DIR)/*/*.o \
+	       $(BUILD_DIR)/*/*.d $(TARGET) tests/work
 
 distclean: clean
 	rm -rf $(BUILD_DIR) $(BIN_DIR) tests/work

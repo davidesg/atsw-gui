@@ -450,3 +450,30 @@ char *fueout_estructura( const FueOut *o, char *out, size_t n )
         }
     return out;
 }
+
+
+/* Ver outfile.h: PERIODO/AÑO, y sin barra es un anual. */
+int fo_fecha_parte( const char *fecha, int *per, int *anno )
+{
+   const char *b;
+   int         p = 1, a;
+
+   if ( !fecha || !per || !anno ) return 1;
+   while ( *fecha == ' ' || *fecha == '\t' ) fecha++;
+   if ( !g_ascii_isdigit( (guchar) *fecha ) ) return 1;
+
+   b = strchr( fecha, '/' );
+   if ( b )
+      {
+      if ( !g_ascii_isdigit( (guchar) b[1] ) ) return 1;
+      p = atoi( fecha );
+      a = atoi( b + 1 );
+      }
+   else
+      a = atoi( fecha );
+
+   if ( p < 1 ) p = 1;
+   *per  = p;
+   *anno = a;
+   return 0;
+}

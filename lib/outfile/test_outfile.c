@@ -179,6 +179,24 @@ int main( int argc, char **argv )
                   "declarados -- mensuales, trimestrales y ANUALES" );
     }
 
+    printf( "\nLA FECHA DE UN .out ES PERIODO/AÑO\n" );
+    /* NO ES UN DETALLE DE FORMATO. Leerla al reves da un año 3 y un periodo
+       2022, no revienta nada, y se cuela hasta la fecha con la que se
+       escribe una intervencion en el .inp. Paso de verdad.           */
+    {
+    int per = 0, anno = 0;
+
+    ok( fo_fecha_parte( "3/2022", &per, &anno ) == 0 && per == 3 && anno == 2022,
+        "«3/2022» es marzo de 2022, no el año 3" );
+    ok( fo_fecha_parte( "11/2023", &per, &anno ) == 0 && per == 11 && anno == 2023,
+        "«11/2023», igual" );
+    ok( fo_fecha_parte( " 4/2023", &per, &anno ) == 0 && per == 4 && anno == 2023,
+        "con el espacio que deja el motor al alinear" );
+    ok( fo_fecha_parte( "1766", &per, &anno ) == 0 && per == 1 && anno == 1766,
+        "un anual no lleva barra: el año, y periodo 1" );
+    ok( fo_fecha_parte( "obs", &per, &anno ) != 0, "y lo que no es fecha se rechaza" );
+    }
+
     printf( "\n%d fallos\n", fallos );
     return fallos ? 1 : 0;
 }

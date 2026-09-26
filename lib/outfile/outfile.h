@@ -177,4 +177,17 @@ char *fueout_estructura( const FueOut *o, char *out, size_t n );
 /* La cola superior de una chi-cuadrado. Publica porque la prueba la mira. */
 double chisq_cola( double x, int df );
 
+/* LA FECHA DE UN .out ES PERIODO/AÑO, Y NO AL REVES.
+ *
+ * El motor escribe «from 2/2002 to 11/2023» y «Maximum: 2.384688 at 3/2022»:
+ * primero el PERIODO y despues el AÑO. Leerlo al reves no revienta --da un
+ * año 3 y un periodo 2022-- y se cuela hasta la fecha con la que se escribe
+ * una intervencion en el .inp, que es donde duele.
+ *
+ * Los anuales no llevan barra: «1766» es el año, y el periodo es 1.
+ *
+ * Devuelve 0 si pudo, y 1 si eso no es una fecha (y entonces no toca nada).
+ */
+int fo_fecha_parte( const char *fecha, int *per, int *anno );
+
 #endif

@@ -84,14 +84,15 @@ typedef struct {
 /* El eje de tiempo, de las fechas de los residuos                           */
 /* ------------------------------------------------------------------------ */
 
-/* "1982/03" -> 1982, 3.  "1766" -> 1766, 1 (los anuales no llevan barra). */
+/* EL PARTIDOR ES EL DE lib/outfile, y no uno de aquí.
+ *
+ * El primero que escribí leía «3/2022» como año 3, período 2022 --al revés
+ * de como el motor las escribe-- y no reventó: se coló hasta la fecha con la
+ * que se iba a escribir la intervención, y el botón «Derivar» se negaba sin
+ * decir por qué. Quien lee el .out es quien sabe leer sus fechas.      */
 static void parte_fecha( const char *f, int *anno, int *per )
 {
-    const char *b = strchr( f, '/' );
-
-    *anno = atoi( f );
-    *per  = b ? atoi( b + 1 ) : 1;
-    if ( *per < 1 ) *per = 1;
+    if ( fo_fecha_parte( f, per, anno ) != 0 ) { *per = 1; *anno = 0; }
 }
 
 /* LA FRECUENCIA, DE LAS FECHAS ANTES QUE DEL MODELO. El s del .out es el
@@ -108,6 +109,7 @@ static int frecuencia( const An *g )
         parte_fecha( g->o.res_fecha[i], &anno, &per );
         if ( per > maxp ) maxp = per;
         }
+    (void) anno;
     if ( g->o.s > 1 ) return g->o.s;
     if ( maxp > 4 ) return 12;
     if ( maxp > 1 ) return 4;

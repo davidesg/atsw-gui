@@ -1308,7 +1308,7 @@ static int forecast_levels(real *x, int L, real **LVL)
     struct Tvarma vf;
     int  ifault = 0, m = n_ser, i, j, k, l, t, u;
     int  K = n_stat + L + 1;
-    real **sigma, **f1, ***v1, ***v2, ***v3, **nu, **we, *det, *bc;
+    real **sigma, **f1, ***v1, ***v2, ***v3, **nu, **we, *bc;
     int  rc = 0;
 
     shootx(x, &vf, &ifault, 1, 0);
@@ -1367,35 +1367,12 @@ static int forecast_levels(real *x, int L, real **LVL)
         }
     }
 
-    /* integrar al nivel */
+    /* integrar al nivel: lib/fuepre, lo mismo que la prevision completa */
     for (i = 1; i <= m; i++) {
-        int nb = Ts[i].nobs, ord = Tm[i].ornsop;
-        det = vector(1, nb + L);
-        bc  = vector(1, nb + L);
-        build_det_component(&Tm[i], &Ts[i], nb + L, det);
-
-        for (t = 1; t <= nb; t++) {
-            real y  = Ts[i].data[t];
-            real b0 = (fabs(Tm[i].boxlam) < 1e-8)
-                    ? log(y) * Ts[i].refactor
-                    : ((pow(y, Tm[i].boxlam) - 1.0) / Tm[i].boxlam) * Ts[i].refactor;
-            bc[t] = b0 - det[t];
-        }
-        for (l = 1; l <= L; l++) {
-            real acc = we[i][n_stat + l];
-            int  tt  = nb + l;
-            for (k = 1; k <= ord; k++) acc -= (-Tm[i].rnsop[k]) * bc[tt - k];
-            bc[tt] = acc;
-
-            {
-                real c = bc[tt] + det[tt], lam = Tm[i].boxlam;
-                LVL[i][l] = (fabs(lam) < 1e-8)
-                          ? exp(c / Ts[i].refactor)
-                          : pow(lam * (c / Ts[i].refactor) + 1.0, 1.0 / lam);
-            }
-        }
+        int nb = Ts[i].nobs;
+        bc = vector(1, nb + L);
+        fuepre_level_forecast(&Tm[i], &Ts[i], nb, &we[i][n_stat], L, bc, LVL[i], NULL);
         free_vector(bc, 1, nb + L);
-        free_vector(det, 1, nb + L);
     }
 
     free_matrix(we, 1, m, 1, n_stat + L);
@@ -1528,7 +1505,7 @@ void forecast_graphic_BC(double *data, double **res, double **f1, double ***v1,
    pgfplots (autocontenido, sin gnuplot).  Compila con pdflatex si esta.
    Recibe los tensores ya calculados por transfer_forecast.                       */
 static void forecast_latex_doc(int m, int L, real ***LP, real **sigma,
-                               real **BC, real **DET, real **LVL,
+                               real **YS, real **LVL,
                                real **aresid, int *topo)
 {
     char fname[600];
@@ -1565,7 +1542,7 @@ static void forecast_latex_doc(int m, int L, real ***LP, real **sigma,
         vscale = (fabs(lam) < 1e-8) ? 100.0 / refc : 1.0 / refc;
 
         ystar = vector(1, nb + L);
-        for (t = 1; t <= nb + L; t++) ystar[t] = BC[i][t] + DET[i][t];
+        for (t = 1; t <= nb + L; t++) ystar[t] = YS[i][t];
 
         /* --- Grafico PRIMERO (modulo de fuf, forecast_graphic): asi sabemos si
            hay figura y maquetamos tabla|grafico lado a lado. Dibuja la variacion
@@ -1882,60 +1859,28 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
        combinacion lineal de cualquier subconjunto de ellas.                   */
     {
     real ***LP  = tensor(1, m, 1, m, 0, L);   /* LP[i][j][t]: psi del nivel de i */
-    real  **BC  = matrix(1, m, 1, nobsmax + L);
-    real  **DET = matrix(1, m, 1, nobsmax + L);
+    real  **YS  = matrix(1, m, 1, nobsmax + L);  /* nivel TRANSFORMADO y* */
     real  **LVL = matrix(1, m, 1, L);         /* nivel previsto */
     real  **JAC = matrix(1, m, 1, L);         /* dz/db en el punto previsto */
     real   *uu_i = vector(0, L);
 
     for (i = 1; i <= m; i++) {
-        int ordi = Tm[i].ornsop;
-        int nb   = Ts[i].nobs;
+        int nb = Ts[i].nobs;
 
-        build_det_component(&Tm[i], &Ts[i], nb + L, DET[i]);
-
-        for (t = 1; t <= nb; t++) {
-            real y  = Ts[i].data[t];
-            real b0 = (fabs(Tm[i].boxlam) < 1e-8)
-                    ? log(y) * Ts[i].refactor
-                    : ((pow(y, Tm[i].boxlam) - 1.0) / Tm[i].boxlam) * Ts[i].refactor;
-            BC[i][t] = b0 - DET[i][t];
-        }
-        for (l = 1; l <= L; l++) {
-            real acc = we[i][n_stat + l];
-            int  tt  = nb + l;
-            for (k = 1; k <= ordi; k++) acc -= (-Tm[i].rnsop[k]) * BC[i][tt - k];
-            BC[i][tt] = acc;
-        }
+        /* Del w previsto al NIVEL, con el modelo del propio .pre: deterministas,
+           integracion con rnsop e inversa de Box-Cox. Vive en lib/fuepre
+           (fuepre_forecast.c): drvarma en la escalera hace lo mismo.         */
+        fuepre_level_forecast(&Tm[i], &Ts[i], nb, &we[i][n_stat], L,
+                              YS[i], LVL[i], JAC[i]);
 
         /* 1/rnsop(B): el operador que integra al nivel */
-        uu_i[0] = 1.0;
-        for (t = 1; t <= L; t++) {
-            real sum = 0.0;
-            for (k = 1; k <= ordi && k <= t; k++)
-                sum += (-Tm[i].rnsop[k]) * uu_i[t - k];
-            uu_i[t] = -sum;
-        }
+        fuepre_integrator(&Tm[i], L, uu_i);
         for (j = 1; j <= m; j++)
             for (t = 0; t <= L; t++) {
                 real acc = 0.0;
                 for (k = 0; k <= t; k++) acc += uu_i[k] * pt[i][j][t - k];
                 LP[i][j][t] = acc;
             }
-
-        /* nivel y jacobiano dz/db (para la delta de los agregados) */
-        for (l = 1; l <= L; l++) {
-            real center = BC[i][Ts[i].nobs + l] + DET[i][Ts[i].nobs + l];
-            real lam    = Tm[i].boxlam;
-            if (fabs(lam) < 1e-8) {
-                LVL[i][l] = exp(center / Ts[i].refactor);
-                JAC[i][l] = LVL[i][l] / Ts[i].refactor;
-            } else {
-                real base = lam * (center / Ts[i].refactor) + 1.0;
-                LVL[i][l] = pow(base, 1.0 / lam);
-                JAC[i][l] = pow(base, 1.0 / lam - 1.0) / Ts[i].refactor;
-            }
-        }
     }
 
     /* --- Covarianza del error de prevision, en el espacio TRANSFORMADO -----
@@ -1955,7 +1900,7 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
     for (u = 1; u <= m; u++) {
         int    nb, ord, freq, per, yr, obs;
         real   refc, lam, vscale;
-        real  *ystar;                 /* nivel TRANSFORMADO y* = BC + DET */
+        real  *ystar;                 /* nivel TRANSFORMADO y* */
         i = topo[u];
         nb   = Ts[i].nobs;
         ord  = Tm[i].ornsop;
@@ -1965,7 +1910,7 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
         vscale = (fabs(lam) < 1e-8) ? 100.0 / refc : 1.0 / refc;
 
         ystar = vector(1, nb + L);
-        for (t = 1; t <= nb + L; t++) ystar[t] = BC[i][t] + DET[i][t];
+        for (t = 1; t <= nb + L; t++) ystar[t] = YS[i][t];
 
         obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, nb, &per, &yr);
         fprintf(out, "\n  FORECAST REPORT\n");
@@ -2044,7 +1989,7 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
             vl = VCOV(i, i, l);
             sd = sqrt(vl);
 
-            center = BC[i][Ts[i].nobs + l] + DET[i][Ts[i].nobs + l];
+            center = YS[i][Ts[i].nobs + l];
             lo = center - 1.96 * sd;
             hi = center + 1.96 * sd;
             lam = Tm[i].boxlam;
@@ -2174,13 +2119,12 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
 
     /* --- Informe LaTeX/PDF (-L), con los mismos tensores ------------------- */
     if (latex_forecast)
-        forecast_latex_doc(m, L, LP, sigma, BC, DET, LVL, vf.a, topo);
+        forecast_latex_doc(m, L, LP, sigma, YS, LVL, vf.a, topo);
 
     free_vector(uu_i, 0, L);
     free_matrix(JAC, 1, m, 1, L);
     free_matrix(LVL, 1, m, 1, L);
-    free_matrix(DET, 1, m, 1, nobsmax + L);
-    free_matrix(BC, 1, m, 1, nobsmax + L);
+    free_matrix(YS, 1, m, 1, nobsmax + L);
     free_tensor(LP, 1, m, 1, m, 0, L);
     }
 

@@ -66,4 +66,23 @@ int unstable_delta ( struct Tusmodel *Tm );
 int fuepre_check_alignment( const struct Tseries *Ts, int m,
                             char *why, size_t size );
 
+/* fuepre_forecast.c -- from a forecast of the stationary series w back to
+   the LEVEL, with the .pre's own model (see the comment there).
+     fuepre_bc          refactor * BoxCox(y)
+     fuepre_bc_inverse  the level of a transformed value, and dlevel/dy*
+     fuepre_level_forecast
+                        history Ts->data[1..nb] and wf[1..L] (the forecast of w,
+                        mean included) -> ystar[1..nb+L] (transformed level,
+                        deterministic part included), lvl[1..L] and, if not
+                        NULL, jac[1..L]
+     fuepre_integrator  uu[0..L], the weights of 1/rnsop(B): psi of the level
+                        = uu * psi of w                                      */
+real fuepre_bc( const struct Tusmodel *Tm, const struct Tseries *Ts, real y );
+real fuepre_bc_inverse( const struct Tusmodel *Tm, const struct Tseries *Ts,
+                        real ystar, real *jac );
+void fuepre_level_forecast( struct Tusmodel *Tm, struct Tseries *Ts, int nb,
+                            const real *wf, int L, real *ystar, real *lvl,
+                            real *jac );
+void fuepre_integrator( const struct Tusmodel *Tm, int L, real *uu );
+
 #endif

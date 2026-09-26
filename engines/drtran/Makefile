@@ -22,6 +22,7 @@ SRCS = $(SRCDIR)/drtran.c       \
        $(SRCDIR)/tran_shootx.c  \
        ../../lib/fuepre/fue_pre_reader.c \
        ../../lib/fuepre/fuepre_motor.c \
+       ../../lib/fuepre/fuepre_forecast.c \
        ../../lib/optim/lnsrch.c \
        $(SRCDIR)/elfvarma.c     \
        $(SRCDIR)/drvmlest.c     \

@@ -15,6 +15,7 @@ es que un fichero que hace falta en dos sitios no se copia.
 | | `fuepre_check_alignment`: BUG-2 | drtran, drvarma |
 | `fuepre_motor.c` | `unstable_delta`: el δ(B) determinista, con `chekma` | drtran, drvarma |
 | `tusmodel.h` | `struct Tusmodel`, lo que el lector llena | los mismos |
+| `fuepre_forecast.c` | from a forecast of w back to the level: `fuepre_level_forecast`, `fuepre_bc`, `fuepre_bc_inverse`, `fuepre_integrator` (1/rnsop for the psi weights) | drtran, drvarma |
 
 `unstable_delta` va aparte porque `chekma` vive en `elfvarma.c`, con la
 verosimilitud. El GUI de drtran y sus pruebas enlazan el lector sin el motor,

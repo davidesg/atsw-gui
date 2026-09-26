@@ -816,3 +816,18 @@ desvanece**. Y es exactamente lo que se observa: la celda δ=0.95, n=400 es la *
 en la que la ventaja sobrevive a una muestra grande (−60% en el RMSE de la ganancia).
 Ese es el indicio. Sería un proyecto de teoría econométrica en serio, no un apéndice.
 
+
+## To verify (2026-09-27): residuals used by the MA part of the forecast
+
+`forecast_levels` and `transfer_forecast` call `elf` with `atf = FALSE`,
+under a comment that says the call is there to get the residuals. With
+`atf = FALSE`, `elf` does not run `cres`: what is left in `a` are the
+conditional residuals **standardised** by the Cholesky inverse of Q
+(`elfvarma.c` ~304-317), not the residuals themselves. The first series has
+`Q11 = 1`, so its own MA would be unaffected. The residuals of every other
+series are scaled by their Q (and mixed, if a covariance is free), and the MA
+part of their forecast would use them at the wrong scale.
+
+Not reproduced yet. The test: a two-series case with an MA factor in the
+input, forecast with `atf = FALSE` against `atf = TRUE`. drvarma's ladder
+mode uses `atf = TRUE` (exact residuals), like its `.inp` path.

@@ -7,7 +7,7 @@
 # gui/fue construye fue_gui.
 #
 # Lo que hace distinto a este Makefile: NO tiene un lector del .pre. Enlaza el
-# del motor -- engines/drtran/src/fue_pre_reader.c -- tal cual, con nlatools
+# compartido -- lib/fuepre/fue_pre_reader.c -- tal cual, con nlatools
 # para sus asignadores y dates de lib/. Lo que ese lector acepte es lo que
 # acepta drtran, por construccion y no por parecido.
 #
@@ -25,7 +25,7 @@ ENG = ../../engines/drtran
 # diagnose.c entra por Ccf, Mean, Stdev y hosking_test: el estadistico de la
 # identificacion es el que ya calcula el motor, no uno parecido.
 SRC = src/main.c src/main_window.c src/series.c src/identifica.c src/red.c src/modelo.c src/estima.c src/diagnosis.c src/prevision.c src/plotshim.c src/proyecto_gui.c \
-      $(ENG)/src/fue_pre_reader.c \
+      $(LIB)/fuepre/fue_pre_reader.c \
       $(ENG)/src/nlatools.c \
       $(ENG)/src/diagnose.c \
       $(LIB)/prewhiten/prewhiten.c \
@@ -51,7 +51,7 @@ SRC = src/main.c src/main_window.c src/series.c src/identifica.c src/red.c src/m
 
 HDR = include/gui.h include/series.h include/previewhost.h include/plothost.h
 
-INC = -Iinclude -I$(ENG)/include \
+INC = -Iinclude -I$(ENG)/include -I$(LIB)/fuepre \
       -I$(LIB)/dates -I$(LIB)/prewhiten -I$(LIB)/netfile -I$(LIB)/nsop -I$(LIB)/slots -I$(LIB)/intervencion -I$(LIB)/verdict -I$(LIB)/outdiag -I$(LIB)/gof -I$(LIB)/tabla -I$(LIB)/rutas -I$(LIB)/proyecto -I$(LIB)/outfcst -I$(LIB)/engine -I$(LIB)/ccfplot -I$(LIB)/fugdraw -I$(LIB)/fugplot \
       -I$(LIB)/equation -I$(LIB)/preview -I$(LIB)/utils -I$(LIB)/inpcheck
 

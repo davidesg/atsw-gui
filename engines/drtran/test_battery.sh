@@ -2289,6 +2289,29 @@ if [ -f "$M6D/M6_EP.pre" ]; then
         || fail "-o dejo de funcionar"
 fi
 
+# ── BUG-2: EL MISMO NOBS NO ES LA MISMA VENTANA ───────────────────────────
+echo
+echo "── 16. Se cruzan fechas, no posiciones (BUG-2) ──"
+echo "   El C solo comparaba el numero de observaciones: la misma serie"
+echo "   declarada catorce anos despues se cruzaba sin una palabra, y la"
+echo "   salida era IDENTICA, porque la fecha no entraba en ninguna cuenta."
+echo "   Ahora se rechaza, como en drtran-python (cast.check_alignment)."
+echo
+sed '9s/ 2002 / 2016 /' "$WORK/WTI_ar1.pre" > "$TMPDIR/WTI_desplazado.pre"
+$DRTRAN "$WORK/ES_CPI_m10.pre" "$TMPDIR/WTI_desplazado.pre" -0 \
+    -o "$TMPDIR/bug2.out" > "$TMPDIR/bug2.log" 2>&1
+RC=$?
+[ "$RC" -eq 4 ] \
+    && pass "la entrada con catorce anos de desfase se rechaza (rc=4)" \
+    || fail "la entrada desplazada paso (rc=$RC)"
+grep -q "do NOT end on the same date" "$TMPDIR/bug2.log" \
+    && pass "y dice por que: las dos fechas finales" \
+    || fail "rechazada sin decir por que"
+$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -0 \
+    -o "$TMPDIR/bug2_ok.out" > /dev/null 2>&1 \
+    && pass "y la pareja bien alineada sigue pasando" \
+    || fail "la pareja alineada ya no pasa"
+
 echo "============================================"
 echo -e "  RESULTADO: ${GREEN}$PASS PASS${NC}, ${RED}$FAIL FAIL${NC}"
 echo "============================================"

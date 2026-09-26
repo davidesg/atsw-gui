@@ -40,35 +40,7 @@ void compute_irf(real *omega, int s, real *delta, int r, int b,
     }
 }
 
-/* -------------------------------------------------------------------------- */
-/* Estabilidad del denominador δ(B) de cada variable determinista.            */
-/* El filtro 1/δ(B) es recursivo: con raíces dentro del círculo unidad la      */
-/* contribución determinista explota. Se comprueba con chekma, que usa la      */
-/* misma convención de polinomio (1 - δ₁B - δ₂B² - …).                        */
-/* -------------------------------------------------------------------------- */
-static int unstable_delta(struct Tusmodel *Tmi)
-{
-    int i, k;
-    real wr[10], wi[10], wmod[10];
-
-    for (i = 1; i <= Tmi->NdetVar; i++) {
-        int nd = Tmi->Ndelta[i];
-        int ifault_chk = 0;
-        real ***t1;
-
-        if (nd <= 0) continue;
-
-        t1 = tensor(0, nd, 1, 1, 1, 1);
-        t1[0][1][1] = 1.0;
-        for (k = 1; k <= nd; k++) t1[k][1][1] = Tmi->Delta[i][k];
-
-        chekma(1, nd, t1, wr, wi, wmod, &ifault_chk);
-        free_tensor(t1, 0, nd, 1, 1, 1, 1);
-
-        if (ifault_chk != 0) return 1;
-    }
-    return 0;
-}
+/* unstable_delta vive ahora en lib/fuepre, con el lector. */
 
 
 /* -------------------------------------------------------------------------- */

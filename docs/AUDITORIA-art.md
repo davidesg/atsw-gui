@@ -135,6 +135,10 @@ Mi recomendación: **`ar_factorization` sí** (es leer el operador y sacarle las
 raíces: dice si hay un AR estacional escondido, y eso es de la escuela). El
 resto, **sólo si decides que el GUI también los enseña.**
 
+> **DECIDIDO, 2026-09-26.** El analista dice que sí: `formal_tests` y el MEG
+> entran. Es el siguiente paso, y está en `TODO.md` con lo que hará falta.
+> Se anota aquí para que la pregunta no siga pareciendo abierta.
+
 ---
 
 ## 5. Lo que no va al GUI — grupo D

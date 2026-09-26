@@ -24,12 +24,19 @@ ENG="$TOP/../../engines"
 # uno de los binarios auxiliares se caia por getExt.
 # Y la lista sigue al Makefile del GUI: lib/datos, lib/xlsx y lib/proyecto
 # entraron con la carga de datos y el proyecto, y aqui no se habian puesto.
-LIB_SRCS="$LIB/preview/preview.c $LIB/engine/engine.c $LIB/outfile/outfile.c $LIB/utils/utils.c $LIB/utils/ext.c $LIB/fugdraw/fugdraw.c $LIB/datos/datos.c $LIB/xlsx/xlsx.c $LIB/proyecto/proyecto.c"
-LIB_INC="-I$LIB/preview -I$LIB/engine -I$LIB/outfile -I$LIB/utils -I$LIB/fugdraw -I$LIB/inpcheck -I$LIB/datos -I$LIB/xlsx -I$LIB/proyecto -I$ENG/fue/include"
+# lib/analisis y lib/fugplot entran porque src/analisis.c los usa: las
+# ventanas de diagnosis y anomalos son LAS MISMAS que las de la madre.
+# plotstats con -DPLOTSTATS_TIENE_NLA, que fue_gui ya trae los asignadores.
+LIB_SRCS="$LIB/preview/preview.c $LIB/engine/engine.c $LIB/outfile/outfile.c $LIB/utils/utils.c $LIB/utils/ext.c $LIB/fugdraw/fugdraw.c $LIB/datos/datos.c $LIB/xlsx/xlsx.c $LIB/proyecto/proyecto.c $LIB/fugplot/fugplot.c $LIB/fugplot/plotsupport.c $LIB/analisis/an_comun.c $LIB/analisis/an_anomalos.c $LIB/analisis/an_diagnosis.c $LIB/analisis/an_sugerir.c $LIB/anomalos/anomalos.c $LIB/dictamen/dictamen.c $LIB/intervencion/intervencion.c $LIB/inpdet/inpdet.c $LIB/tabla/tabla.c"
+LIB_INC="-I$LIB/preview -I$LIB/engine -I$LIB/outfile -I$LIB/utils -I$LIB/fugdraw -I$LIB/inpcheck -I$LIB/datos -I$LIB/xlsx -I$LIB/proyecto -I$LIB/fugplot -I$LIB/analisis -I$LIB/anomalos -I$LIB/dictamen -I$LIB/intervencion -I$LIB/inpdet -I$LIB/tabla -I$LIB/rutas -I$ENG/fue/include"
 WORK_EARLY="${WORK:-$TOP/tests/work}"
 
 WORK="$TOP/tests/work"
 CC=${CC:-gcc}
+
+# plotstats.o va aparte porque necesita -DPLOTSTATS_TIENE_NLA, y se añade a
+# LIB_SRCS AQUI y no arriba: $WORK todavia no estaba definido alli.
+LIB_SRCS="$LIB_SRCS $WORK/plotstats.o"
 
 GTK_CFLAGS=$(pkg-config --cflags gtk+-3.0 2>/dev/null)
 GTK_LIBS=$(pkg-config --libs   gtk+-3.0 2>/dev/null)
@@ -44,6 +51,9 @@ $CC -O0 -g -w -I"$TOP/include" $LIB_INC $GTK_CFLAGS -Dinp_check=inp_check_fue \
 $CC -O0 -g -w -I"$TOP/include" -I"$ENG/fuf/include" $LIB_INC $GTK_CFLAGS \
     -Dinp_check=inp_check_fuf -c "$ENG/fuf/src/inpcheck.c" \
     -o "$WORK_EARLY/inpcheck_fuf.o" || exit 1
+
+$CC -O0 -g -w -I"$TOP/include" $LIB_INC $GTK_CFLAGS -DPLOTSTATS_TIENE_NLA \
+    -c "$LIB/analisis/plotstats.c" -o "$WORK/plotstats.o" || exit 1
 
 $CC -O0 -g -Wall -I"$TOP/include" $LIB_INC $GTK_CFLAGS \
     "$TOP/tests/test_units.c" $LIB/engine/engine.c $LIB/utils/utils.c $LIB/outfile/outfile.c $INPCHECK_O \

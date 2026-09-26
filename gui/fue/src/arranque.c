@@ -13,8 +13,18 @@
  */
 
 #include <stdio.h>
+#include "proyecto.h"
 
 static char g_raiz_proyecto[1024];
+
+/* EL MANIFIESTO, NO SOLO SU RAIZ.
+ *
+ * Antes se leia para sacar la raiz y se tiraba. Con eso fue_gui sabia DONDE
+ * estaba y no DE QUE MODELO era el fichero que tiene abierto --y el nombre
+ * del fichero es cortesia, asi que no se saca de el--. Sin la clave no hay
+ * linaje, y sin linaje no se puede ofrecer ni la diagnosis ni los anomalos
+ * de ESTE modelo. Se guarda, y se libera al salir el programa.        */
+static Proyecto *g_proyecto;
 static char g_abrir[1024];
 static int  g_prever;
 
@@ -24,6 +34,16 @@ static int  g_prever;
  * le falta: NO GUARDA NADA entre ejecuciones --ni sesion, ni preferencias,
  * ni recientes-- asi que cada arranque empezaba preguntando donde esta todo.
  * Con esto arranca sabiendo en que proyecto esta.                        */
+Proyecto *fue_proyecto(void)
+{
+    return g_proyecto;
+}
+
+void fue_pon_proyecto(Proyecto *p)
+{
+    g_proyecto = p;
+}
+
 const char *fue_raiz_proyecto(void)
 {
     return g_raiz_proyecto[0] ? g_raiz_proyecto : NULL;

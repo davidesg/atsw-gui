@@ -6,9 +6,13 @@
  * donde estaban: no eran de la madre, tenian su direccion.
  */
 
+#include <string.h>
+
 #include "anfitrion.h"
 
 void barra_pub( Atsw *a, const char *s );
+void atsw_editor_cierra( const char *serie, const char *muestra,
+                         const char *id );
 
 static void md_di( void *d, const char *s )
 {
@@ -27,10 +31,29 @@ static void md_refresca( void *d )
     atsw_refresca( (Atsw *) d );
 }
 
+/* ABRIR EL HIJO CON LO QUE SE HAYA PEDIDO. Son las dos puertas a la misma
+ * iteracion: fue especifica por FORMULARIO y el editor especifica el
+ * FICHERO. Por defecto fue, porque lo que un nodo recien derivado necesita
+ * a continuacion es estimarse.                                         */
 static void md_abre( void *d, const char *serie, const char *muestra,
-                     const char *id )
+                     const char *id, AnHerramienta con )
 {
-    atsw_editor( (Atsw *) d, serie, muestra, id );
+    Atsw *a = (Atsw *) d;
+    char  ruta[PR_RUTA];
+
+    if ( con == AN_CON_EDITOR )
+        { atsw_editor( a, serie, muestra, id ); return; }
+
+    if ( pr_ruta( a->p, serie, muestra, id, ".inp", ruta, sizeof ruta ) != 0 )
+        { barra_pub( a, "No pude componer la ruta del modelo nuevo." ); return; }
+    atsw_lanza( a, "fue_gui", ruta );
+}
+
+static void md_cierra( void *d, const char *serie, const char *muestra,
+                       const char *id )
+{
+    (void) d;
+    atsw_editor_cierra( serie, muestra, id );
 }
 
 AnHost atsw_host( Atsw *a )
@@ -46,5 +69,6 @@ AnHost atsw_host( Atsw *a )
     h.guarda   = md_guarda;
     h.refresca = md_refresca;
     h.abre     = md_abre;
+    h.cierra   = md_cierra;
     return h;
 }

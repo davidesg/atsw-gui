@@ -27,6 +27,11 @@ static void create_intervention_tree_view(GtkTreeView *treeview);
 static void create_operator_tree_view(GtkTreeView *treeview);
 static void create_fixed_tree_view(GtkTreeView *treeview);
 //static void update_model_label(FueContext *ctx);
+
+/* gui/fue/src/analisis.c: la diagnosis y los anomalos de ESTE modelo. */
+void fue_on_diagnosis(GtkWidget *w, FueContext *ctx);
+void fue_on_anomalos(GtkWidget *w, FueContext *ctx);
+void fue_analisis_refresca(FueContext *ctx);
 static void on_fixed_treeview_row_activated(GtkTreeView *treeview, GtkTreePath *path,
                                             GtkTreeViewColumn *col, FueContext *ctx);
 static void on_operator_treeview_row_activated(GtkTreeView *treeview, GtkTreePath *path,
@@ -87,6 +92,26 @@ GtkWidget* create_main_window(GtkApplication *app, FueContext *ctx) {
     gtk_widget_set_tooltip_text(GTK_WIDGET(forecast_btn), "Generate forecast input and run FUF");
     g_signal_connect(forecast_btn, "clicked", G_CALLBACK(on_forecast_button_clicked), ctx);
     gtk_toolbar_insert(GTK_TOOLBAR(toolbar), forecast_btn, -1);
+
+    /* DIAGNOSIS Y ANOMALOS, AQUI TAMBIEN.
+     *
+     * Con el modelo recien estimado delante, volver a la madre y buscarlo en
+     * la lista para mirarle los residuos es el camino largo, y el camino
+     * largo es el que no se recorre. Las ventanas son LAS MISMAS que las de
+     * la madre --lib/analisis--, no una copia.
+     *
+     * Y se encienden solas cuando hay un .out AL DIA: ver analisis.c.   */
+    GtkToolItem *diag_btn = gtk_tool_button_new(NULL, "Diagnosis");
+    gtk_tool_button_set_icon_name(GTK_TOOL_BUTTON(diag_btn), "dialog-information");
+    g_signal_connect(diag_btn, "clicked", G_CALLBACK(fue_on_diagnosis), ctx);
+    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), diag_btn, -1);
+    ctx->btn_diagnosis = GTK_WIDGET(diag_btn);
+
+    GtkToolItem *anom_btn = gtk_tool_button_new(NULL, "Anomalos");
+    gtk_tool_button_set_icon_name(GTK_TOOL_BUTTON(anom_btn), "edit-find");
+    g_signal_connect(anom_btn, "clicked", G_CALLBACK(fue_on_anomalos), ctx);
+    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), anom_btn, -1);
+    ctx->btn_anomalos = GTK_WIDGET(anom_btn);
 
     GtkToolItem *sep2 = gtk_separator_tool_item_new();
     gtk_toolbar_insert(GTK_TOOLBAR(toolbar), sep2, -1);
@@ -685,4 +710,7 @@ void update_model_label(FueContext *ctx) {
     } else {
         gtk_label_set_text(GTK_LABEL(ctx->model_label), "(none)");
     }
+    /* Cambio el fichero: los botones de analisis se vuelven a preguntar si
+       tienen su insumo. Ver gui/fue/src/analisis.c.                    */
+    fue_analisis_refresca(ctx);
 }

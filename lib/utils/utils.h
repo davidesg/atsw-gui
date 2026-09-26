@@ -7,7 +7,8 @@
 #include <gtk/gtk.h>
 
 const char *getExt(const char *fspec);
-int default_lags(int nobs, int freq);
+/* default_lags se quito: la de lib/fugplot/plotsupport.c es la del motor
+   y ademas acota. Ver utils.c.                                      */
 int default_nog(int freq);
 char *sanitize_to_utf8(const char *input);
 /* The name as a single token: fue and fuf read it with %s, so a space in it

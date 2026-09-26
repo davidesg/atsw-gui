@@ -335,6 +335,12 @@ static void on_nuevo( GtkButton *b, Atsw *a )
     gtk_widget_destroy( d );
 }
 
+static void on_linaje( GtkButton *b, Atsw *a )
+{
+    (void) b;
+    atsw_linaje( a );
+}
+
 static void on_datos( GtkButton *b, Atsw *a )  { (void)b; atsw_datos( a ); }
 
 /* EL FICHERO QUE SE MANDA, Y NO ES EL MISMO SEGUN A DONDE.
@@ -944,22 +950,36 @@ static void menu_modelo( Atsw *a, GdkEventButton *ev )
         g_signal_connect( mi, "activate", G_CALLBACK(on_editar), a );
         gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
 
+        /* LOS DOS QUE PIDEN UN .out AL DIA. La regla es la de lib/analisis,
+           la misma que usa fue_gui: dos copias de una regla son dos
+           reglas. Y apagado no es mudo -- el globo dice por que.     */
+        {
+        char     porque[512];
+        AnEstado est = an_estado( a->p, a->serie, atsw_muestra_actual( a ), id,
+                                  porque, sizeof porque );
+        gboolean listo = ( est == AN_LISTO );
+
         mi = gtk_menu_item_new_with_label( "Diagnosis…" );
-        gtk_widget_set_tooltip_text( mi,
-            "Los cinco bloques: estimación, media, autocorrelación, "
-            "normalidad y parámetros, cada uno con su veredicto.\n\nDice lo "
-            "que los números dicen; qué hacer con ello es tuyo." );
+        gtk_widget_set_sensitive( mi, listo );
+        gtk_widget_set_tooltip_text( mi, listo
+            ? "Los cinco bloques: estimación, media, autocorrelación, "
+              "normalidad y parámetros, cada uno con su veredicto.\n\nDice lo "
+              "que los números dicen; qué hacer con ello es tuyo."
+            : porque );
         g_signal_connect( mi, "activate", G_CALLBACK(on_diagnosis), a );
         gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
 
         mi = gtk_menu_item_new_with_label( "Anómalos…" );
-        gtk_widget_set_tooltip_text( mi,
-            "Los episodios de residuos extremos, y los correlogramas CON y "
-            "SIN ellos.\n\nContesta lo que decide: ¿la estructura que veo "
-            "es del proceso o del anómalo? Y al revés —si no cambia nada, "
-            "intervenirlo no compra nada." );
+        gtk_widget_set_sensitive( mi, listo );
+        gtk_widget_set_tooltip_text( mi, listo
+            ? "Los episodios de residuos extremos, y los correlogramas CON y "
+              "SIN ellos.\n\nContesta lo que decide: ¿la estructura que veo "
+              "es del proceso o del anómalo? Y al revés —si no cambia nada, "
+              "intervenirlo no compra nada."
+            : porque );
         g_signal_connect( mi, "activate", G_CALLBACK(on_anomalos), a );
         gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+        }
 
         mi = gtk_menu_item_new_with_label( "Prever con fuf…" );
         gtk_widget_set_tooltip_text( mi,
@@ -1210,6 +1230,11 @@ static void activate( GtkApplication *app, gpointer d )
         "Identificador, título y analista. Y lo que no se edita pero hay que "
         "saber: cuándo se creó, dónde está el manifiesto y dónde la raíz de "
         "los datos.", G_CALLBACK(on_proyecto), a );
+    boton( barra, "Linaje…",
+        "La cadena entera y lo que cada nodo DEBE: sin estimar, sin razón, "
+        "cadena sin elegido.\n\nLa rejilla contesta «¿cómo va este modelo?»; "
+        "esto contesta «¿cómo va el recorrido?», que es una forma de árbol y "
+        "no de tabla.", G_CALLBACK(on_linaje), a );
     boton( barra, "Datos…",
         "De un .xlsx, un .csv o un .txt a n SERIES del proyecto, cada una con "
         "su primer .inp.\n\nEs el eslabón que faltaba: el camino datos → "

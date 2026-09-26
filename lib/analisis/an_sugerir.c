@@ -51,7 +51,7 @@ typedef struct {
     GtkWidget *win;
     GtkWidget *usa[SG_MAX], *forma[SG_MAX], *linea[SG_MAX];
     GtkWidget *dib[SG_MAX], *nums[SG_MAX];
-    GtkWidget *l_estado;
+    GtkWidget *l_estado, *con_que;
 } Sg;
 
 /* LAS CINCO OPCIONES. Las cuatro primeras son escalares --el peldaño 1, una
@@ -445,6 +445,10 @@ static void on_derivar( GtkButton *b, Sg *g )
     pr_razon( g->h.p, g->serie, g->muestra, nuevo, razon->str, &e );
     g_string_free( razon, TRUE );
 
+    /* LA ELECCION SE RECUERDA, y por eso se escribe antes de guardar. */
+    pr_pon_herramienta( g->h.p,
+        gtk_combo_box_get_active( GTK_COMBO_BOX(g->con_que) ) == 1 );
+
     if ( g->h.guarda && g->h.guarda( g->h.dueno ) != 0 )
         { di( g, "El .inp está en %s, pero no pude guardar el proyecto.", nuevo ); }
 
@@ -455,6 +459,8 @@ static void on_derivar( GtkButton *b, Sg *g )
     {
     AnHost host = g->h;
     char   serie[PR_ID], muestra[PR_ID], padre[PR_ID];
+    AnHerramienta con = ( gtk_combo_box_get_active( GTK_COMBO_BOX(g->con_que) ) == 1 )
+                      ? AN_CON_EDITOR : AN_CON_FUE;
     gchar *aviso;
 
     g_snprintf( serie, sizeof serie, "%s", g->serie );
@@ -465,7 +471,13 @@ static void on_derivar( GtkButton *b, Sg *g )
                              n == 1 ? "" : "es" );
 
     gtk_widget_destroy( g->win );
-    if ( host.abre ) host.abre( host.dueno, serie, muestra, nuevo );
+
+    /* EL PADRE SE CIERRA, GUARDADO. Derivar es una transición: el hijo
+       salió del .inp del padre TAL COMO ESTABA, y dejarlo abierto y
+       editable invita a seguir tocándolo -- con lo que la procedencia del
+       hijo pasaría a ser mentira.                                    */
+    if ( host.cierra ) host.cierra( host.dueno, serie, muestra, padre );
+    if ( host.abre ) host.abre( host.dueno, serie, muestra, nuevo, con );
     an_di( &host, "%s", aviso );
     g_free( aviso );
     }
@@ -714,6 +726,21 @@ void an_sugerir( const AnHost *h, const char *serie, const char *muestra,
     barra = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 8 );
     gtk_box_set_homogeneous( GTK_BOX(barra), FALSE );
     gtk_box_pack_end( GTK_BOX(raiz), barra, FALSE, FALSE, 0 );
+
+    /* CON QUE SE ABRE EL HIJO. Por defecto fue_gui, porque lo que un nodo
+       recién derivado necesita es ESTIMARSE. La elección se recuerda en el
+       proyecto, para que no haya que repetirla.                      */
+    g->con_que = gtk_combo_box_text_new();
+    gtk_combo_box_text_append_text( GTK_COMBO_BOX_TEXT(g->con_que), "en fue" );
+    gtk_combo_box_text_append_text( GTK_COMBO_BOX_TEXT(g->con_que), "en el editor" );
+    gtk_combo_box_set_active( GTK_COMBO_BOX(g->con_que),
+        ( pr_herramienta( h->p ) == 1 ) ? 1 : 0 );
+    gtk_widget_set_tooltip_text( g->con_que,
+        "Con qué se abre el modelo derivado.\n\nfue estima por formulario y "
+        "enseña la diagnosis: es lo que un nodo recién derivado necesita a "
+        "continuación. El editor es para cuando la especificación pide algo "
+        "que el formulario no sabe decir." );
+    if ( h->abre ) gtk_box_pack_end( GTK_BOX(barra), g->con_que, FALSE, FALSE, 0 );
 
     b = gtk_button_new_with_label( "Cancelar" );
     g_signal_connect_swapped( b, "clicked", G_CALLBACK(gtk_widget_destroy), g->win );

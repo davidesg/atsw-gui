@@ -425,6 +425,52 @@ int main( int argc, char **argv )
 
     }
 
+    printf( "\nUN PADRE CON HIJOS SE SABE QUE LO ES\n" );
+    /* pr_borra ya se negaba a borrarlo; editarlo es igual de grave y nadie
+       lo miraba. El hijo salio del .inp del padre TAL COMO ESTABA.    */
+    {
+    Proyecto q;
+    PrError  e;
+    char     m1[PR_ID], m2[PR_ID], m3[PR_ID], ruta[PR_RUTA];
+    char     hijos[8][PR_ID];
+
+    memset( &q, 0, sizeof q );
+    pr_nuevo( &q, "p", "", "." );
+    snprintf( q.path, sizeof q.path, "/tmp/pp/proy.yaml" );
+    pr_serie_add( &q, "S", &e );
+    pr_deriva( &q, "S", "", "",   m1, sizeof m1, ruta, sizeof ruta, &e );
+    pr_deriva( &q, "S", "", m1,   m2, sizeof m2, ruta, sizeof ruta, &e );
+
+    ok( pr_hijos( &q, "S", "", m1, hijos, 8 ) == 1, "uno tiene un hijo" );
+    ok( !strcmp( hijos[0], m2 ), "y se dice CUAL cuelga, como hace pr_borra" );
+    ok( pr_hijos( &q, "S", "", m2, hijos, 8 ) == 0, "la hoja no tiene ninguno" );
+
+    pr_deriva( &q, "S", "", m1, m3, sizeof m3, ruta, sizeof ruta, &e );
+    ok( pr_hijos( &q, "S", "", m1, hijos, 8 ) == 2, "dos hermanos, dos hijos" );
+
+    /* EL LINAJE NO SALE DE SU VENTANA: un modelo de otra muestra con el
+       mismo padre no cuenta, porque no es el mismo padre.           */
+    {
+    char m4[PR_ID];
+
+    pr_muestra_add( &q, "corta", "", "12/2019", "prueba", &e );
+    pr_deriva( &q, "S", "corta", "", m4, sizeof m4, ruta, sizeof ruta, &e );
+    ok( pr_hijos( &q, "S", "", m1, hijos, 8 ) == 2,
+        "lo de la otra hoja no cuelga de este" );
+    }
+    }
+
+    printf( "\nCON QUE SE ABRE UN DERIVADO: SE RECUERDA\n" );
+    {
+    Proyecto q;
+
+    memset( &q, 0, sizeof q );
+    pr_nuevo( &q, "p", "", "." );
+    ok( pr_herramienta( &q ) == 0, "por defecto, fue: lo que hace falta es estimar" );
+    pr_pon_herramienta( &q, 1 );
+    ok( pr_herramienta( &q ) == 1, "y si se pide el editor, el editor" );
+    }
+
     printf( "\n%d fallos\n", fallos );
     free( p ); free( q );
     return fallos ? 1 : 0;

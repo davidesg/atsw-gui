@@ -161,6 +161,11 @@ void       atsw_editor( Atsw *a, const char *serie, const char *muestra,
    madre les da esta en include/anfitrion.h, aparte: analisis.h arrastra
    preview.h, que arrastra previewhost.h, que arrastra ESTE fichero.  */
 
+/* EL LINAJE: la cadena entera y lo que cada nodo DEBE. Enseña lo que falta
+   --sin estimar, sin razon, sin elegido-- porque eso es lo que dentro de
+   seis meses hace irreproducible un analisis.                          */
+void       atsw_linaje( Atsw *a );
+
 /* «Editar…» una serie: descripcion, unidades, fuente, url, bajada, notas.
    Nada de esto toca un numero -- son los campos que el .inp no puede
    llevar y que hacen falta para volver al analisis meses despues.      */
@@ -173,8 +178,9 @@ void       atsw_proyecto_edita( Atsw *a );
 /* LA DIAGNOSIS de un modelo, pintada. Todo lo que se juzga está en
    lib/dictamen; esta ventana sólo le pone color y un botón de exportar. */
 
-/* LOS ANOMALOS: los episodios, y los correlogramas con y sin ellos. El
-   interruptor REDIBUJA la misma figura, que es como se lee un correlograma. */
+/* LANZAR UNO DE LOS GUIs con este proyecto abierto. La madre no los
+   absorbe: les da el contexto que no tenian.                           */
+void       atsw_lanza( Atsw *a, const char *programa, const char *fichero );
 
 /* Lo mismo, con una opcion antes del fichero: fue_gui con «--prever»
    arranca el ciclo de prevision al abrir.                              */

@@ -68,6 +68,18 @@ typedef struct {
 } Editor;
 
 
+/* LOS EDITORES ABIERTOS.
+ *
+ * Existe para una cosa sola: al DERIVAR hay que cerrar el padre, guardado.
+ * Derivar es una transicion, no una bifurcacion de la atencion --el hijo
+ * salio del .inp del padre TAL COMO ESTABA--, y dejarlo abierto y editable
+ * invita a seguir tocandolo, con lo que la procedencia del hijo pasa a ser
+ * mentira: dice que salio de un fichero que ya no es ese.
+ *
+ * Una lista y no un mapa: son dos o tres ventanas.                     */
+static GSList *g_abiertos;
+
+
 /* ------------------------------------------------------------------------ */
 /* Cosas pequeñas                                                            */
 /* ------------------------------------------------------------------------ */
@@ -261,6 +273,26 @@ static int escribe( Editor *E, const char *id, char *why, size_t n )
     return rc;
 }
 
+/* UN NODO NUEVO COLGADO DE ESTE, con su directorio hecho. 0 si pudo.
+ * Lo usan las dos salidas de guarda(): la del nodo estimado y la del nodo
+ * con hijos. Estaba escrito dos veces y una de ellas iba a quedarse atras. */
+static int deriva_nodo( Editor *E, char *id_out, size_t nid )
+{
+    PrError e;
+    char    nuevo[PR_ID], ruta[PR_RUTA], *dir;
+
+    if ( pr_deriva( E->a->p, E->serie, E->muestra, E->id, nuevo, sizeof nuevo,
+                    ruta, sizeof ruta, &e ) != 0 )
+        { char w[512]; pr_error_es( &e, w, sizeof w ); di( E, "%s", w );
+          return 1; }
+
+    dir = g_path_get_dirname( ruta );
+    g_mkdir_with_parents( dir, 0700 );
+    g_free( dir );
+    g_snprintf( id_out, nid, "%s", nuevo );
+    return 0;
+}
+
 /* 0 si guardo; deja en id_out el nodo donde acabo (puede ser otro). */
 static int guarda( Editor *E, char *id_out, size_t nid )
 {
@@ -277,7 +309,50 @@ static int guarda( Editor *E, char *id_out, size_t nid )
     rancia   = terna_rancia( E );
     estimado = ( rancia != NULL );
 
-    if ( estimado )
+    /* DOS RAZONES PARA NO GUARDAR AQUI, Y NO SON LA MISMA.
+     *
+     * Estimado: el .out de al lado pasaria a describir otra cosa. Grave,
+     * pero es un registro que el analista puede decidir tirar -- asi que se
+     * ofrece derivar y se deja elegir.
+     *
+     * CON HIJOS: el hijo salio de este .inp TAL COMO ESTABA. Cambiarlo no
+     * borra nada: deja un linaje que dice una cosa y unos ficheros que
+     * dicen otra, y eso no se ve hasta que alguien intenta rehacer el
+     * camino meses despues. Ahi no hay eleccion que ofrecer. Es la unica
+     * puerta de este programa que se cierra del todo, y se cierra porque lo
+     * que impide no es una molestia: es escribir algo falso.
+     *
+     * pr_borra ya se negaba por lo mismo --dejaria hijos colgando-- y decia
+     * CUAL cuelga. Aqui igual.                                         */
+    {
+    char hijos[8][PR_ID];
+    int  nh = pr_hijos( E->a->p, E->serie, E->muestra, E->id, hijos, 8 );
+
+    if ( nh > 0 )
+        {
+        GtkWidget *d = gtk_message_dialog_new( GTK_WINDOW(E->win),
+                GTK_DIALOG_MODAL, GTK_MESSAGE_QUESTION, GTK_BUTTONS_NONE,
+                "De «%s» ya cuelga %s%s.", E->id, hijos[0],
+                ( nh > 1 ) ? " (y algún otro)" : "" );
+        int r;
+
+        gtk_message_dialog_format_secondary_text( GTK_MESSAGE_DIALOG(d),
+            "%s salió de este .inp TAL COMO ESTABA. Si lo cambias, su "
+            "procedencia deja de ser cierta: el linaje diría que viene de un "
+            "fichero que ya no existe.\n\nLo editado va a un modelo nuevo, "
+            "colgado de éste.", hijos[0] );
+        gtk_dialog_add_buttons( GTK_DIALOG(d),
+            "Derivar un modelo nuevo", 1,
+            "Cancelar",                GTK_RESPONSE_CANCEL, NULL );
+        gtk_dialog_set_default_response( GTK_DIALOG(d), 1 );
+        r = gtk_dialog_run( GTK_DIALOG(d) );
+        gtk_widget_destroy( d );
+        g_free( rancia );
+
+        if ( r != 1 ) { di( E, "Sin guardar." ); return 1; }
+        if ( deriva_nodo( E, id_out, nid ) != 0 ) return 1;
+        }
+    else if ( estimado )
         {
         GtkWidget *d = gtk_message_dialog_new( GTK_WINDOW(E->win),
                 GTK_DIALOG_MODAL, GTK_MESSAGE_QUESTION, GTK_BUTTONS_NONE,
@@ -300,25 +375,11 @@ static int guarda( Editor *E, char *id_out, size_t nid )
 
         if ( r == GTK_RESPONSE_CANCEL || r == GTK_RESPONSE_DELETE_EVENT )
             { di( E, "Sin guardar." ); return 1; }
-
-        if ( r == 1 )
-            {
-            PrError e;
-            char    nuevo[PR_ID], ruta[PR_RUTA], *dir;
-
-            if ( pr_deriva( E->a->p, E->serie, E->muestra, E->id, nuevo, sizeof nuevo,
-                            ruta, sizeof ruta, &e ) != 0 )
-                { char w[512]; pr_error_es( &e, w, sizeof w ); di( E, "%s", w );
-                  return 1; }
-
-            dir = g_path_get_dirname( ruta );
-            g_mkdir_with_parents( dir, 0700 );
-            g_free( dir );
-            g_snprintf( id_out, nid, "%s", nuevo );
-            }
+        if ( r == 1 && deriva_nodo( E, id_out, nid ) != 0 ) return 1;
         }
     else
         g_free( rancia );
+    }
 
     if ( escribe( E, id_out, why, sizeof why ) != 0 )
         {
@@ -557,7 +618,32 @@ static gboolean on_cerrar( GtkWidget *w, GdkEvent *ev, Editor *E )
 static void on_destruir( GtkWidget *w, Editor *E )
 {
     (void) w;
+    g_abiertos = g_slist_remove( g_abiertos, E );
     g_free( E );
+}
+
+/* Cerrar --guardando-- lo que haya abierto de ese nodo. Se llama al derivar.
+ * Si no hay nada abierto no pasa nada, que es la respuesta correcta.   */
+void atsw_editor_cierra( const char *serie, const char *muestra,
+                         const char *id )
+{
+    GSList *l, *copia;
+
+    if ( !serie || !id ) return;
+    copia = g_slist_copy( g_abiertos );      /* destruir modifica la lista */
+    for ( l = copia; l; l = l->next )
+        {
+        Editor *E = (Editor *) l->data;
+
+        if ( strcmp( E->serie, serie ) || strcmp( E->id, id ) ) continue;
+        if ( strcmp( E->muestra, muestra ? muestra : "" ) ) continue;
+
+        if ( gtk_text_buffer_get_modified(
+                 gtk_text_view_get_buffer( GTK_TEXT_VIEW(E->texto) ) ) )
+            { char nid[PR_ID]; guarda( E, nid, sizeof nid ); }
+        gtk_widget_destroy( E->win );
+        }
+    g_slist_free( copia );
 }
 
 static GtkWidget *monoespaciado( void )
@@ -688,6 +774,7 @@ void atsw_editor( Atsw *a, const char *serie, const char *muestra,
 
     g_signal_connect( E->win, "delete-event", G_CALLBACK(on_cerrar), E );
     g_signal_connect( E->win, "destroy", G_CALLBACK(on_destruir), E );
+    g_abiertos = g_slist_prepend( g_abiertos, E );
 
     if ( !trae_inp( E ) ) { gtk_widget_destroy( E->win ); return; }
     trae_out( E );

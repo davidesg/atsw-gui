@@ -165,16 +165,36 @@ formulario no sabe expresar. Pero es tu decisión.
 
 ---
 
-## 4. Orden propuesto
+## 4. Orden — hecho
 
-| | qué | por qué ahí |
+| | qué | dónde quedó |
 |---|---|---|
-| 1 | `pr_de_ruta` | pequeño, y desbloquea todo lo demás |
-| 2 | las ventanas a una biblioteca con `AnCtx` | mecánico, sin cambio visible |
-| 3 | los botones con su insumo, en los tres sitios | es lo que se pidió primero |
-| 4 | derivar cierra el padre; un padre con hijos no se edita | la regla, una vez el ciclo está cerrado |
-| 5 | el selector de destino | encima de 4 |
-| 6 | la vista de linaje | se apoya en todo lo anterior |
+| 1 | `pr_de_ruta` | `lib/proyecto`, con su prueba |
+| 2 | las ventanas a una biblioteca | `lib/analisis`, con `AnHost` |
+| 3 | los botones con su insumo | `an_estado()`, usada por la madre y por fue_gui |
+| 4 | derivar cierra el padre; un padre con hijos no se edita | `AnHost.cierra` + `pr_hijos` + el editor |
+| 5 | el selector de destino | en la ventana de derivar; se recuerda en el manifiesto |
+| 6 | la vista de linaje | `gui/atsw/src/linaje_gui.c`, botón «Linaje…» |
+
+Lo que cambió respecto del esquema, y por qué:
+
+- **`AnCtx` se llama `AnHost`** y lleva dos llamadas más de las previstas:
+  `cierra` --para la pieza 4-- y `abre` con la herramienta, para la 5.
+- **`plothost.h` se comparte** entre los dos GUIs en vez de haber uno por
+  programa. Los motores tienen el suyo porque tienen `diagnose.c`; los dos
+  GUIs comparten host porque comparten `plotstats.c`, y dos copias del mismo
+  fichero no son dos hosts: son un descuido esperando.
+- **`default_lags` estaba duplicado** en `lib/utils` y en
+  `lib/fugplot/plotsupport.c`, y la de `lib/utils` no la llamaba nadie **y
+  además no acotaba**. Se quitó: al enlazar fugplot en fue_gui el choque lo
+  destapó.
+- **El EPS de anómalos lleva la clave en el nombre.** `lib/preview` reutiliza
+  la ventana POR RUTA: con un nombre fijo, abrir dos modelos habría hecho que
+  el segundo pisara el dibujo del primero en su propia ventana.
+- **`fue_gui` no ofrece derivar**: sus `guarda` y `abre` van a NULL, y
+  `lib/analisis` entonces no enseña el botón. Derivar toca el manifiesto, y
+  el manifiesto lo lleva la madre. Desde fue_gui se MIRA; para iterar, la
+  lista.
 
 ---
 

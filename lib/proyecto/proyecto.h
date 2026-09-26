@@ -204,6 +204,7 @@ typedef struct {
    char creado[16];
    char analista[PR_TEXTO];
    char raiz[PR_RUTA];            /* todo lo demas es relativo a esto     */
+   int  herramienta;              /* 0 fue_gui (por defecto), 1 el editor */
 
    PrSerie   s[PR_MAX_SERIE];
    int       ns;
@@ -246,6 +247,17 @@ int pr_escribir( const Proyecto *p, const char *path, PrError *e );
  * de pre-covid pueden llamarse igual sin pisarse.                      */
 int pr_ruta( const Proyecto *p, const char *serie, const char *muestra,
              const char *id, const char *ext, char *out, size_t n );
+
+/* CON QUE SE ABRE UN MODELO DERIVADO: 0 fue_gui, 1 el editor.
+ *
+ * Es una PREFERENCIA DE TRABAJO, y vive en el manifiesto porque la madre no
+ * tiene almacen de preferencias y los tres GUIs son context-free a
+ * proposito. Inventar un almacen nuevo para un entero seria peor.
+ *
+ * Por defecto fue_gui: lo que un nodo recien derivado necesita a
+ * continuacion es ESTIMARSE.                                           */
+int  pr_herramienta( const Proyecto *p );
+void pr_pon_herramienta( Proyecto *p, int editor );
 
 /* DE LA RUTA A LA CLAVE -- Y ES UNA BUSQUEDA, NO UN PARSEO.
  *
@@ -363,6 +375,17 @@ int pr_sin_razon( const Proyecto *p, char ids[][PR_ID], int max );
 int pr_camino( const Proyecto *p, const char *serie, const char *muestra,
                const char *id,
                char camino[][PR_ID], int max );
+
+/* LOS HIJOS DE UN NODO: los modelos que lo declaran padre, en su misma
+ * ventana. Devuelve cuantos y llena hasta max.
+ *
+ * POR QUE HACE FALTA SABERLO. pr_borra ya se niega a borrar un nodo con
+ * hijos --los dejaria colgando-- pero EDITARLO es igual de grave y nadie lo
+ * miraba: el hijo salio del .inp del padre TAL COMO ESTABA, asi que tocarlo
+ * despues convierte su procedencia en mentira. No da error: da un linaje
+ * que dice una cosa y unos ficheros que dicen otra.                    */
+int pr_hijos( const Proyecto *p, const char *serie, const char *muestra,
+              const char *id, char hijos[][PR_ID], int max );
 
 /* LA CLAVE DE UN MODELO ES (serie, muestra, id). */
 int pr_modelo_idx( const Proyecto *p, const char *serie, const char *muestra,

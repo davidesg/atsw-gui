@@ -9,11 +9,13 @@
 
 /* getExt vive en ext.c: la usa lib/preview, y lo demas de aqui no. */
 
-int default_lags(int nobs, int freq) {
-    if (nobs < 3 * (freq + 1)) return nobs - freq / 2;
-    if (freq == 1) return (nobs > 200) ? 45 : 9;
-    return 3 * (freq + 1);
-}
+/* default_lags VIVIA AQUI Y NO LO LLAMABA NADIE.
+ *
+ * La regla es la misma que la de lib/fugplot/plotsupport.c --la del motor--
+ * pero ESTA no acotaba: podia devolver mas retardos que observaciones, o
+ * menos de uno. fug tiene su propia copia en data_load.c y fue_gui no la
+ * llamaba, asi que la unica consecuencia de tenerla aqui era un choque de
+ * simbolos al enlazar fugplot. Se quita: la buena es la del motor.     */
 
 int default_nog(int freq) {
     if (freq == 12) return 12;

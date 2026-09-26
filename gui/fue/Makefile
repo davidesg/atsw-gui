@@ -38,7 +38,7 @@ else
 endif
 
 # Compiler and basic flags
-CFLAGS   = -O2 -g -Wall -Iinclude -I../../lib/fugdraw -I../../lib/preview -I../../lib/engine -I../../lib/outfile -I../../lib/utils -I../../lib/datos -I../../lib/xlsx -I../../lib/proyecto -I../../lib/inpcheck -I$(ENG_DIR)/fue/include
+CFLAGS   = -O2 -g -Wall -Iinclude -I../../lib/fugdraw -I../../lib/preview -I../../lib/engine -I../../lib/outfile -I../../lib/utils -I../../lib/datos -I../../lib/xlsx -I../../lib/proyecto -I../../lib/inpcheck -I../../lib/fugplot -I../../lib/analisis -I../../lib/anomalos -I../../lib/dictamen -I../../lib/intervencion -I../../lib/inpdet -I../../lib/tabla -I../../lib/rutas -I$(ENG_DIR)/fue/include
 LDFLAGS  +=
 LIBS     = -lz -lm
 
@@ -57,6 +57,18 @@ BIN_DIR   = bin
 # programas -- byte a byte -- y por eso vive en lib/ y no aqui.
 LIB_DIR  = ../../lib
 LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c \
+           $(LIB_DIR)/fugplot/fugplot.c \
+           $(LIB_DIR)/fugplot/plotsupport.c \
+           $(LIB_DIR)/analisis/plotstats.c \
+           $(LIB_DIR)/analisis/an_comun.c \
+           $(LIB_DIR)/analisis/an_anomalos.c \
+           $(LIB_DIR)/analisis/an_diagnosis.c \
+           $(LIB_DIR)/analisis/an_sugerir.c \
+           $(LIB_DIR)/anomalos/anomalos.c \
+           $(LIB_DIR)/dictamen/dictamen.c \
+           $(LIB_DIR)/intervencion/intervencion.c \
+           $(LIB_DIR)/inpdet/inpdet.c \
+           $(LIB_DIR)/tabla/tabla.c \
            $(LIB_DIR)/preview/preview.c \
            $(LIB_DIR)/engine/engine.c \
            $(LIB_DIR)/outfile/outfile.c \
@@ -162,6 +174,39 @@ $(BUILD_DIR)/lib_utils/%.o: $(LIB_DIR)/utils/%.c | $(BUILD_DIR)
 $(BUILD_DIR)/lib_fugdraw/%.o: $(LIB_DIR)/fugdraw/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
 	$(CC) $(GUI_CFLAGS) -c $< -o $@
+
+# fugplot y lib/analisis se compilan con el include path de ESTE programa:
+# fugplot.c pide su plothost.h y las ventanas de analisis piden preview.h,
+# que pide el previewhost.h del anfitrion. Es el mismo convenio de siempre.
+$(BUILD_DIR)/lib_fugplot/%.o: $(LIB_DIR)/fugplot/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(GUI_CFLAGS) -c $< -o $@
+
+# -DPLOTSTATS_TIENE_NLA: fue_gui ya trae vector/free_vector/iround en su
+# nlutils.c, asi que plotstats no los repite. Ver lib/analisis/plotstats.c.
+$(BUILD_DIR)/lib_analisis/%.o: $(LIB_DIR)/analisis/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(GUI_CFLAGS) -DPLOTSTATS_TIENE_NLA -c $< -o $@
+
+$(BUILD_DIR)/lib_anomalos/%.o: $(LIB_DIR)/anomalos/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(ALL_CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/lib_dictamen/%.o: $(LIB_DIR)/dictamen/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(ALL_CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/lib_intervencion/%.o: $(LIB_DIR)/intervencion/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(ALL_CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/lib_inpdet/%.o: $(LIB_DIR)/inpdet/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(ALL_CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/lib_tabla/%.o: $(LIB_DIR)/tabla/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(ALL_CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
 	$(CC) $(GUI_CFLAGS) -c $< -o $@

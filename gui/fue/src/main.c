@@ -90,6 +90,7 @@ static void activate(GtkApplication *app, gpointer user_data) {
  * quedaba sin ello. Un dato que la interfaz consulta no puede vivir en el
  * unico fichero que las pruebas no pueden enlazar.                     */
 void fue_pon_raiz_proyecto(const char *s);
+void fue_pon_proyecto(Proyecto *p);
 void fue_pon_abrir(const char *s);
 void fue_pon_prever(int si);
 int  fue_prever_al_arrancar(void);
@@ -148,7 +149,9 @@ static int lee_opciones(int argc, char *argv[])
     }
     fue_pon_raiz_proyecto(raiz);
     }
-    free(p);
+    /* EL MANIFIESTO SE GUARDA, no se tira: sin el, fue_gui sabe donde esta
+       pero no de que modelo es lo que tiene abierto.                  */
+    fue_pon_proyecto(p);
     return 0;
 }
 

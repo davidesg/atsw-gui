@@ -401,6 +401,34 @@ int pr_ruta( const Proyecto *p, const char *serie, const char *muestra,
    return ( esc < 0 || (size_t) esc >= n ) ? 1 : 0;
 }
 
+int pr_hijos( const Proyecto *p, const char *serie, const char *muestra,
+              const char *id, char hijos[][PR_ID], int max )
+{
+   int i, n = 0;
+
+   if ( !p || !serie || !id || !*id ) return 0;
+   if ( !muestra ) muestra = "";
+   for ( i = 0; i < p->nm; i++ )
+       {
+       if ( strcmp( p->m[i].serie, serie ) ) continue;
+       if ( strcmp( p->m[i].muestra, muestra ) ) continue;
+       if ( strcmp( p->m[i].padre, id ) ) continue;
+       if ( hijos && n < max ) snprintf( hijos[n], PR_ID, "%s", p->m[i].id );
+       n++;
+       }
+   return n;
+}
+
+int pr_herramienta( const Proyecto *p )
+{
+   return ( p && p->herramienta == 1 ) ? 1 : 0;
+}
+
+void pr_pon_herramienta( Proyecto *p, int editor )
+{
+   if ( p ) p->herramienta = editor ? 1 : 0;
+}
+
 /* Los ultimos k componentes de ruta. Devuelve NULL si no llega a tener k. */
 static const char *cola( const char *ruta, int k )
 {
@@ -682,6 +710,11 @@ int pr_escribir( const Proyecto *p, const char *path, PrError *e )
    fprintf( f, "titulo: " );    escribe_valor( f, p->titulo );   fputc( '\n', f );
    fprintf( f, "creado: " );    escribe_valor( f, p->creado );   fputc( '\n', f );
    fprintf( f, "analista: " );  escribe_valor( f, p->analista ); fputc( '\n', f );
+   /* Con que se abre un modelo derivado. Una preferencia de trabajo, no un
+      hecho del analisis -- pero la madre no tiene donde guardarla si no.  */
+   fprintf( f, "herramienta: " );
+   escribe_valor( f, p->herramienta ? "editor" : "fue" );
+   fputc( '\n', f );
    fprintf( f, "raiz: " );      escribe_valor( f, p->raiz );     fputc( '\n', f );
 
    fprintf( f, "\nseries:\n" );
@@ -845,6 +878,8 @@ int pr_leer( const char *path, Proyecto *p, PrError *e )
                snprintf( p->analista, PR_TEXTO, "%s", valor );
            else if ( strcmp( clave, "raiz" ) == 0 )
                snprintf( p->raiz, PR_RUTA, "%s", valor );
+           else if ( strcmp( clave, "herramienta" ) == 0 )
+               p->herramienta = ( strcmp( valor, "editor" ) == 0 );
            else
                { falla( e, PR_ECLAVE, nl, clave ); fclose( f ); return 1; }
            continue;

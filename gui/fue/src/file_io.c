@@ -1,5 +1,8 @@
 /* file_io.c */
 #include "file_io.h"
+
+/* gui/fue/src/analisis.c */
+void fue_analisis_refresca(FueContext *ctx);
 #include "fue_globals.h"
 //#include "fue_core.h"
 #include "model_spec.h"
@@ -1092,6 +1095,10 @@ static void run_busy(FueContext *ctx, gboolean busy) {
         gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(ctx->progress), 1.0);
         gtk_progress_bar_set_text(GTK_PROGRESS_BAR(ctx->progress), text);
         g_free(text);
+        /* ACABA DE ESTIMAR: es el momento en que la diagnosis y los anomalos
+           pasan a tener insumo. Encenderlos aqui es lo que hace que el
+           camino siguiente sea el que esta a mano.                     */
+        fue_analisis_refresca(ctx);
     }
 }
 

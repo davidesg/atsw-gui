@@ -24,13 +24,21 @@
 
 #include "plothost.h"
 
-/* --- nlatools.c --------------------------------------------------------- */
+/* --- nlatools.c ---------------------------------------------------------
+ *
+ * SOLO SI EL ANFITRION NO LOS TRAE. fue_gui ya tiene vector, free_vector e
+ * iround en su propio nlutils.c --son los del motor, que arrastro al portar
+ * el formulario-- y enlazar dos definiciones no compila. La madre no los
+ * tiene, asi que los pone aqui. Quien los tenga compila con
+ * -DPLOTSTATS_TIENE_NLA y se queda con los suyos: son los mismos.      */
 
 static void fallo( const char *que )
 {
    fprintf( stderr, "plotstats: %s\n", que );
    exit( 1 );
 }
+
+#ifndef PLOTSTATS_TIENE_NLA
 
 double *vector( long nl, long nh )
 {
@@ -50,6 +58,8 @@ int iround( double num )
 {
    return( (int) ( ( num < 0.0 ) ? ceil( num - 0.5 ) : floor( num + 0.5 ) ) );
 }
+
+#endif /* PLOTSTATS_TIENE_NLA */
 
 /* --- diagnose.c --------------------------------------------------------- */
 

@@ -11,6 +11,10 @@ typedef struct {
     GtkWidget *btn_run;
     GtkWidget *btn_save;
     GtkWidget *btn_execute;
+    /* Diagnosis y anomalos: se encienden cuando hay un .out AL DIA. Ver
+     * gui/fue/src/analisis.c y lib/analisis.                            */
+    GtkWidget *btn_diagnosis;
+    GtkWidget *btn_anomalos;
 
     /* Data specification widgets */
     GtkWidget *series_name_entry;

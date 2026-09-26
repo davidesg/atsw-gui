@@ -39,6 +39,21 @@
 #include "proyecto.h"
 #include "preview.h"      /* trae el previewhost.h del programa que compila */
 
+/* CON QUE SE ABRE UN MODELO DERIVADO.
+ *
+ * Las dos son puertas a la misma iteración: fue_gui especifica por
+ * FORMULARIO --y un formulario sólo puede expresar lo que tiene widgets-- y
+ * el editor especifica el FICHERO, que es todo lo que el motor lee.
+ *
+ * Por defecto fue_gui: lo que un nodo recién derivado necesita a
+ * continuación es ESTIMARSE, y fue_gui estima y enseña la diagnosis. El
+ * editor es para cuando la especificación pide algo que el formulario no
+ * sabe decir.                                                          */
+typedef enum {
+   AN_CON_FUE = 0,
+   AN_CON_EDITOR
+} AnHerramienta;
+
 /* LO QUE UNA VENTANA DE ANALISIS NECESITA DE QUIEN LA ABRE, y nada más.
  *
  * Los punteros a función pueden ser NULL: entonces ese gesto no se ofrece.
@@ -61,9 +76,21 @@ typedef struct {
    /* Refrescar lo que el que llama enseñe del proyecto. Puede ser NULL.  */
    void (*refresca)( void *dueno );
 
-   /* Abrir ese modelo para trabajarlo. NULL: no se ofrece derivar.       */
+   /* Abrir ese modelo para trabajarlo, con la herramienta que se pida.
+      NULL: no se ofrece derivar.                                       */
    void (*abre)( void *dueno, const char *serie, const char *muestra,
-                 const char *id );
+                 const char *id, AnHerramienta con );
+
+   /* Cerrar --guardando-- lo que el anfitrión tenga abierto de ese modelo.
+      Puede ser NULL.
+
+      POR QUE EXISTE. Derivar es una TRANSICION, no una bifurcación de la
+      atención: el hijo salió del .inp del padre TAL COMO ESTABA. Dejar al
+      padre abierto y editable invita a seguir tocándolo, y entonces la
+      procedencia del hijo pasa a ser mentira -- dice que salió de un
+      fichero que ya no es ése.                                         */
+   void (*cierra)( void *dueno, const char *serie, const char *muestra,
+                   const char *id );
 } AnHost;
 
 /* Los residuos con sus anómalos, sobre el gráfico de fue, y la calibración.
@@ -97,6 +124,30 @@ typedef struct {
 void an_sugerir( const AnHost *h, const char *serie, const char *muestra,
                  const char *id, int d, int D, int freq,
                  const AnSuceso *suc, int ns );
+
+/* --- CUANDO SE PUEDE ANALIZAR, Y SI NO, POR QUE ------------------------- */
+
+/* UN BOTON SE ENCIENDE CUANDO EXISTE SU INSUMO, Y NO ANTES. No es una
+ * restricción: un botón encendido que no puede hacer nada útil enseña el
+ * camino equivocado.
+ *
+ * Y «AL DIA» NO ES «EXISTE». Un .out más antiguo que su .inp es la diagnosis
+ * de OTRA especificación -- el analista tocó el modelo y no lo volvió a
+ * estimar. Mirarlo es leer el informe de un modelo que ya no existe, y eso
+ * no da error: da una conclusión sobre otra cosa.
+ *
+ * La regla vive aquí y no en cada ventana para que sea LA MISMA en la madre
+ * y en fue_gui. Dos copias de una regla son dos reglas.                */
+typedef enum {
+   AN_LISTO = 0,      /* hay .out y es posterior al .inp                */
+   AN_SIN_CLAVE,      /* ese fichero no es un modelo de este proyecto   */
+   AN_SIN_OUT,        /* todavía no se ha estimado                      */
+   AN_OUT_VIEJO       /* el informe es de antes que la especificación   */
+} AnEstado;
+
+/* porque[n] recibe la frase que va al globo del botón apagado. */
+AnEstado an_estado( const Proyecto *p, const char *serie, const char *muestra,
+                    const char *id, char *porque, size_t n );
 
 /* Decirle algo a quien abrió la ventana. Sin anfitrión, al log: un aviso
  * que no se ve es un botón que no funciona.                             */

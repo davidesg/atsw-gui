@@ -3,6 +3,7 @@
  */
 
 #include <stdarg.h>
+#include <sys/stat.h>
 
 #include "analisis.h"
 
@@ -54,4 +55,48 @@ gchar *an_fichero( const char *que, const char *serie, const char *muestra,
    g_free( base );
    g_free( dir );
    return ruta;
+}
+
+
+/* Ver analisis.h: al día no es existe. */
+AnEstado an_estado( const Proyecto *p, const char *serie, const char *muestra,
+                    const char *id, char *porque, size_t n )
+{
+   char        inp[PR_RUTA], out[PR_RUTA];
+   struct stat si, so;
+   int         hay_inp;
+
+   if ( porque && n ) porque[0] = '\0';
+
+   if ( !p || !serie || !*serie || !id || !*id ||
+        pr_ruta( p, serie, muestra, id, ".out", out, sizeof out ) != 0 )
+      {
+      if ( porque ) g_snprintf( porque, n,
+          "Este fichero no es un modelo de este proyecto: sin clave no hay "
+          "linaje que mirar." );
+      return AN_SIN_CLAVE;
+      }
+
+   if ( stat( out, &so ) != 0 )
+      {
+      if ( porque ) g_snprintf( porque, n,
+          "«%s» todavía no está estimado. Estímalo y esto se enciende.", id );
+      return AN_SIN_OUT;
+      }
+
+   hay_inp = ( pr_ruta( p, serie, muestra, id, ".inp", inp, sizeof inp ) == 0 &&
+               stat( inp, &si ) == 0 );
+
+   /* EL SEGUNDO DE DIFERENCIA NO CUENTA. El motor escribe el .inp y el .out
+      en la misma corrida, y en un sistema de ficheros con resolución de un
+      segundo pueden salir con la misma marca o invertidos por redondeo.
+      Se pide que el informe sea MAS VIEJO DE VERDAD, no que no empate.  */
+   if ( hay_inp && si.st_mtime > so.st_mtime + 1 )
+      {
+      if ( porque ) g_snprintf( porque, n,
+          "El informe de «%s» es de antes que su especificación: lo que dijera "
+          "sería de otro modelo. Reestímalo.", id );
+      return AN_OUT_VIEJO;
+      }
+   return AN_LISTO;
 }

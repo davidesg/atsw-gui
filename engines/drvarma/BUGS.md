@@ -106,6 +106,14 @@ exactly the case that works. See
 
 ## BUG (HIGH) — the line search never returns when the objective is NaN
 
+**Status: FIXED in 5.0** (2026-09-26). `lnsrch` treats a non-finite trial
+value as an inadmissible point (λ ← 0.1λ without interpolating, and gives up
+below `minlam`; `haveprev` replaces `lambda == 1.0` as the first-backtrack
+test), and `objcfunc` returns 1.0 for a non-finite objective, as drtran does.
+The same fix as drvarma-python's `csrc` (its BUG-0006). Regression:
+`tests/escalera/pruebas.sh`, item 10 (the probe above, NaN and ±∞; before
+the fix both hang, `timeout` → 124).
+
 **Found:** 2026-09-23, in the review of drvec (whose engine files are
 byte-identical to these; there it is BUG-41, item 1). Confirmed on this tree
 2026-09-24.
@@ -166,6 +174,12 @@ likelihood.  Not observed in drvarma's own runs.
 ---
 
 ## BUG (HIGH) — heap overflow in the residual histogram (`File_HistSer`)
+
+**Status: FIXED in 5.0** (2026-09-26). A count wider than its cell is printed
+as `**` (or `****`), so every cell keeps exactly `nphor` characters. Checked
+with the probe above under AddressSanitizer: `700 6`, `2000 7` and `20000 7`
+are clean (before the fix, `2000 7` overflows). Still to propagate to drtran
+and drvec.
 
 **Found:** 2026-09-23, in the review of drvec (BUG-42, item 1; sibling of the
 one-byte overflow fixed in bb81180, "BUG-16").  Confirmed on this tree

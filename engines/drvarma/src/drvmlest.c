@@ -16,13 +16,15 @@
 /*  Copyright (C) Jos‚ Alberto Mauricio, 1995.                               */
 /*****************************************************************************/
 
-#include "main.h"              /* Header file (prototype declarations)        */
+#include "main.h"
+#include <math.h>              /* Header file (prototype declarations)        */
 extern real macheps;          /* Machine epsilon (global: declared in DRV.C) */
 extern FILE *outputv;         /* Output file (global: declared in DRV.C)     */
 
 /*****************************************************************************/
 
 real pi10x, pi20x, xitolx;
+int  est_fdhess = 0;          /* 1: standard errors from fdhess at the optimum */
 struct Tvarma varmax;
 void (*castx)( real *, struct Tvarma *,int *, int, int );
 
@@ -102,9 +104,19 @@ void est( void (*cast)( real *, struct Tvarma *, int *, int, int ),
    raxopt( objcfunc, &pi1, npar, par, mtmp, maxits, nrits, grtol, sptol );
 
 /* This is an alternative way of computing the second derivative matrix:     */
+/*                                                                           */
+/*   raxopt leaves in mtmp the Hessian ACCUMULATED by BFGS along the path:   */
+/*   good to steer the search, but not the curvature at the optimum -- it    */
+/*   depends on the path and degrades in the flattest directions, which are  */
+/*   those with the largest standard errors. With est_fdhess the Hessian is  */
+/*   recomputed by finite differences AT the optimum, as drtran does. The    */
+/*   ladder (.pre input) sets it; the .inp path keeps the 0.4.1 behaviour.   */
 
-/* fdhess( objcfunc, npar, par, pi1, macheps, mtmp );                        */
-/* choldcp( mtmp, npar, &pi2, &pi3, ifault );                                */
+   if ( est_fdhess )
+      {
+      fdhess( objcfunc, npar, par, pi1, macheps, mtmp );
+      choldcp( mtmp, npar, &pi2, &pi3, ifault );
+      }
 
 /* [3]: Sample estimation of the variance-covariance matrix:                 */
 
@@ -164,8 +176,15 @@ real objcfunc( real *x )
 
    if ( ifault > 0 )                            /* ifault = 1-2-3-4-5.       */
       return( 1.0 );
-   else
-      return( pow( (pi1 / pi10x), varmax.m ) * (pi2 / pi20x) );
+
+/* A point whose objective is not finite is inadmissible, exactly like an     */
+/* elf ifault: return 1.0 (the article's strategy, sec. 3). Without this the  */
+/* line search received the NaN and never returned (BUGS.md). As in drtran.   */
+   {
+   real f = pow( (pi1 / pi10x), varmax.m ) * (pi2 / pi20x);
+   if ( !isfinite( f ) ) return( 1.0 );
+   return( f );
+   }
 }
 
 /*****************************************************************************/

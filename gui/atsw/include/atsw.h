@@ -152,6 +152,29 @@ void       atsw_refresca( Atsw *a );
 void       atsw_editor( Atsw *a, const char *serie, const char *muestra,
                         const char *id );
 
+/* UN SUCESO MARCADO en la ventana de anomalos, listo para que se le lea la
+   forma. Lleva sus EXTREMOS --no su rango-- porque la forma la decide la
+   firma que dejan, no cuantos periodos dura; y lleva la fecha ya leida del
+   .out, que es la que el motor usa para fechar la intervencion.        */
+#define AT_MAX_EXT  16
+#define AT_MAX_SUC  64      /* los episodios que puede traer una ventana */
+
+typedef struct {
+    int    desde, hasta;        /* indices en los residuos                 */
+    int    per, anno;           /* la fecha del PRIMER extremo             */
+    char   fecha[16];           /* tal como la escribe el motor            */
+    int    obs[AT_MAX_EXT];     /* los extremos, en indices de residuo     */
+    double z[AT_MAX_EXT];
+    int    next;
+} AtSuceso;
+
+/* «Sugerir intervencion…»: que FORMA pide cada suceso marcado, por que, y
+   --si el analista quiere-- un modelo derivado con esas intervenciones ya
+   escritas en su .inp. No estima: para eso esta el editor.             */
+void       atsw_sugerir( Atsw *a, const char *serie, const char *muestra,
+                         const char *id, int d, int D, int freq,
+                         const AtSuceso *suc, int ns );
+
 /* «Editar…» una serie: descripcion, unidades, fuente, url, bajada, notas.
    Nada de esto toca un numero -- son los campos que el .inp no puede
    llevar y que hacen falta para volver al analisis meses despues.      */

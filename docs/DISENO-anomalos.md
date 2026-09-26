@@ -286,6 +286,7 @@ en `lib/dictamen`.
 | 2 | `lib/anomalos`: episodios y calibración ACF/PACF, con su prueba | 1-2 días |
 | 3 | la ventana «Anómalos…»: episodios, los dos correlogramas y el Q | hecho |
 | 3b | el gráfico de fue (`-c`) con círculo en lo marcado, y los mandos al pie | hecho |
+| 3c | «Sugerir intervención…» sobre los sucesos marcados — ver `DISENO-intervencion.md` | hecho |
 | 4 | el mismo interruptor en el vistazo, sobre la serie sin modelo | pendiente |
 
 Nada toca los motores: lo de después está impreso, y lo de antes se calcula

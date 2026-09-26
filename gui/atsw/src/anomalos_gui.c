@@ -76,7 +76,7 @@ typedef struct {
     gboolean   armando;            /* no reentrar al mover el botón a mano */
 
     char       eps[PR_RUTA];
-    GtkWidget *b_cal, *l_q, *l_pie;
+    GtkWidget *b_cal, *b_sug, *l_q, *l_pie;
 } An;
 
 
@@ -325,6 +325,64 @@ static void calibra( An *g, gboolean con_omisiones )
                 g->lags, &g->c );
 }
 
+static int marcados( const An *g )
+{
+    int i, n = 0;
+
+    for ( i = 0; i < g->nep; i++ ) if ( g->marcado[i] ) n++;
+    return n;
+}
+
+static void hay_marcas( An *g )
+{
+    if ( g->b_sug ) gtk_widget_set_sensitive( g->b_sug, marcados( g ) > 0 );
+}
+
+/* DE CALIBRAR A INTERVENIR, QUE ES EL PASO SIGUIENTE Y NO EL MISMO.
+ *
+ * Calibrar contesta «¿cambia la identificación si quito esto?». Si la
+ * respuesta es que sí, queda la otra pregunta: qué se le pone. Y se le pone
+ * AQUI porque aquí están los extremos con su signo, que es de donde sale la
+ * forma -- en cualquier otro sitio habría que volver a buscarlos.
+ *
+ * Se mandan los EXTREMOS, no el rango del episodio: la forma la decide la
+ * firma que dejan, no cuántos períodos dura.                            */
+static void on_sugerir( GtkButton *b, An *g )
+{
+    AtSuceso s[AT_MAX_SUC];
+    int      i, ns = 0;
+
+    (void) b;
+    for ( i = 0; i < g->nep && ns < AT_MAX_SUC; i++ )
+        {
+        AtSuceso *x = &s[ns];
+        int       t, anno, per;
+
+        if ( !g->marcado[i] ) continue;
+        memset( x, 0, sizeof *x );
+        x->desde = g->ep[i].desde;
+        x->hasta = g->ep[i].hasta;
+        for ( t = g->ep[i].desde; t <= g->ep[i].hasta && x->next < AT_MAX_EXT; t++ )
+            if ( fabs( g->z[t] ) >= g->umbral )
+               { x->obs[x->next] = t; x->z[x->next] = g->z[t]; x->next++; }
+        if ( x->next == 0 ) continue;      /* no puede pasar, pero no se fía */
+
+        /* LA FECHA ES LA DEL PRIMER EXTREMO, y se lee del .out: la fecha
+           contra la que el motor va a construir el regresor es la suya, no
+           una que compongamos nosotros.                                */
+        g_snprintf( x->fecha, sizeof x->fecha, "%s", g->o.res_fecha[x->obs[0]] );
+        parte_fecha( x->fecha, &anno, &per );
+        x->anno = anno;
+        x->per  = ( g->freq > 1 ) ? per : 1;
+        ns++;
+        }
+    if ( ns == 0 ) { barra_pub( g->a, "Marca primero el suceso que quieras "
+                                      "intervenir." ); return; }
+
+    atsw_sugerir( g->a, g->serie, g->muestra, g->id, g->o.d, g->o.D,
+                  g->freq, s, ns );
+}
+
 /* EL BOTON HUNDIDO ES «ESTOY VIENDO EL CALIBRADO».
  *
  * Al hundirlo se calibra con lo que esté marcado y se enseña; al soltarlo se
@@ -377,6 +435,7 @@ static void on_marca( GtkToggleButton *b, An *g )
 
     if ( i < 0 || i >= g->nep ) return;
     g->marcado[i] = gtk_toggle_button_get_active( b );
+    hay_marcas( g );
 
     if ( g->sin_anomalos )
         {
@@ -540,6 +599,16 @@ void atsw_anomalos( Atsw *a, const char *serie, const char *muestra,
     g->b_cal = b;
     g_signal_connect( b, "toggled", G_CALLBACK(on_calibrar), g );
     gtk_box_pack_start( GTK_BOX(fila), b, FALSE, FALSE, 0 );
+
+    g->b_sug = gtk_button_new_with_label( "Sugerir intervención…" );
+    gtk_widget_set_tooltip_text( g->b_sug,
+        "Dice qué FORMA pide cada suceso marcado --escalón, impulso-- y por "
+        "qué, y puede derivar un modelo con esas intervenciones ya escritas "
+        "en su .inp.\n\nCalibrar contesta «¿cambia la identificación si "
+        "quito esto?». Esto contesta la siguiente: qué se le pone." );
+    gtk_widget_set_sensitive( g->b_sug, FALSE );
+    g_signal_connect( g->b_sug, "clicked", G_CALLBACK(on_sugerir), g );
+    gtk_box_pack_start( GTK_BOX(fila), g->b_sug, FALSE, FALSE, 0 );
 
     g->l_q = gtk_label_new( NULL );
     gtk_label_set_xalign( GTK_LABEL(g->l_q), 0.0 );

@@ -6,7 +6,8 @@ the network has a cycle, when two series determine each other, a general
 VARMA is needed, and that is drvarma. Up to 0.4.1 drvarma did not read a
 `.pre`. It loaded the series in levels and started over, with a single λ, d
 and D for all of them, no deterministic terms and no seasonal factors. The
-hand-over from fue was prose (`DISENO-escalera.md` §6, in atws).
+hand-over from fue was prose (`docs/DISENO-escalera.md` §6, at the root of
+the monorepo).
 
 5.0 accepts the `.pre` files, as drtran does, **and still behaves exactly as
 before with an `.inp`**. The bench `tests/banco/` stores the 0.4.1 output, and
@@ -136,7 +137,13 @@ which is 200 in drtran and 80 in drvarma, and with 80 the long lines of a
 
 ## 6. Version
 
-It is declared in a single place, `include/version.h` (`5.0.0`), and used by:
+It is declared in a single place, `include/version.h` (`5.0.0`), together with
+the git commit the binary was built from. A version constant alone does not
+say which code wrote an output (`docs/DISENO-interfaz.md`, "la versión del
+motor no sirve"). The Makefile rewrites `build/git_hash.h` when the hash
+changes, so `-version` prints, for instance, `drvarma 5.0.0 (git e36e510421)`,
+with `-dirty` when the tree had uncommitted changes. The full string is used
+by:
 
 - the CLI usage and `-version`;
 - a `Program` line in the `.out` of both paths (the bench ignores it, and it
@@ -169,3 +176,27 @@ It is declared in a single place, `include/version.h` (`5.0.0`), and used by:
   to reproduce them.
 - The block Wald tests of the `.inp` path.
 - Ladder mode in the GUI.
+
+## 9. Where drvarma enters: a cycle is where drtran ends
+
+drtran casts a transfer network as a triangular VARMA, which needs a DAG. When
+the identification finds a cycle, two series that feed each other, the system
+is simultaneous and drtran has nothing more to do: a cycle is a **dead end**,
+not an error to patch inside drtran. drtran's error message now says where to
+go.
+
+The way on is back to the ladder: drvarma takes **the same `.pre` files**. That
+is not the best way to parametrise a VARMA, because free cross polynomials of
+orders p and q for every pair are not a structural model. But it is a good
+place to **seed** one:
+
+- each series arrives with its autocorrelation already modelled, if its
+  univariate model is adequate, so the diagonal starts at an optimum and only
+  the cross dynamics are new;
+- the univariate model is **the yardstick for forecasting**. If a VARMA cannot
+  improve on the univariate models, it has no reason to exist. The diagonal
+  gate certifies that the starting point *is* the univariate models, and the
+  LR test measures the cross dynamics against them in sample. The forecasting
+  comparison is phase 2: the `.inp` bench already showed, for the CPI trio
+  and the WTI pass-through, that significant cross effects in sample did not
+  improve out-of-sample forecasts (`MODELS_RESULTS.md` §3-§4).

@@ -1950,7 +1950,7 @@ show_log:
 /* ---------- Build the main UI with GtkNotebook ---------- */
 static void create_ui(GtkApplication *app, gpointer user_data) {
     main_window = gtk_application_window_new(app);
-    gtk_window_set_title(GTK_WINDOW(main_window), "DRVARMA " DRVARMA_VERSION " - VARMA Estimation");
+    gtk_window_set_title(GTK_WINDOW(main_window), "DRVARMA " DRVARMA_VERSION_FULL " - VARMA Estimation");
     gtk_window_set_default_size(GTK_WINDOW(main_window), 1200, 800);
     g_signal_connect(main_window, "destroy", G_CALLBACK(on_quit), NULL);
 

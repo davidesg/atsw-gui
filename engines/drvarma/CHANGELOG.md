@@ -26,8 +26,10 @@ Design: `docs/DESIGN-v5-ladder.md`.
   the program stops (exit code 5). The gate also reports how far each
   `.pre` moves: a genuine `.pre` is a fixed point. An LR test compares the
   cross dynamics against the diagonal system.
-- **Declared version** in `include/version.h`, used by `-version`, the
-  `Program` line of the `.out` (both paths) and the GUI title.
+- **Declared version** in `include/version.h`, with the git commit the
+  binary was built from (`5.0.0 (git <hash>[-dirty])`). It is used by
+  `-version`, the `Program` line of the `.out` (both paths) and the GUI
+  title.
 - `tests/banco/`: byte regression of the `.inp` path against 0.4.1.
   `tests/escalera/`: the assertions of the ladder and its regression.
 
@@ -36,7 +38,8 @@ Design: `docs/DESIGN-v5-ladder.md`.
   the frequency and the last date, or they are rejected (`lib/fuepre`,
   shared with drtran).
 - The line search (`lnsrch`) never returned on a NaN or infinite objective;
-  `objcfunc` now returns 1.0 for a non-finite objective.
+  `objcfunc` now returns 1.0 for a non-finite objective. `lnsrch` now lives
+  in `lib/optim/lnsrch.c`, one source for drvarma, drtran, fue and fuf.
 - Heap overflow in the residual histogram (`File_HistSer`) with three-digit
   counts.
 

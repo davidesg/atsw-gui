@@ -629,7 +629,7 @@ int escalera_main(int argc, char *argv[])
         pre_path[++n_ser] = argv[argi];
     }
     if (argi + 1 >= argc) {
-        printf("drvarma %s -- ladder mode\nUsage:\n", DRVARMA_VERSION);
+        printf("drvarma %s -- ladder mode\nUsage:\n", DRVARMA_VERSION_FULL);
         escalera_usage(argv[0]);
         return 1;
     }
@@ -714,7 +714,7 @@ int escalera_main(int argc, char *argv[])
         ObsToDate(Ts[1].begyear, Ts[1].begtime, Ts[1].nobs, Ts[1].freq, &ey, &es);
         for (i = 0; i < 2; i++) {
             FILE *f = i ? outputv : stdout;
-            fprintf(f, "Program          : drvarma %s (ladder mode: .pre input)\n", DRVARMA_VERSION);
+            fprintf(f, "Program          : drvarma %s (ladder mode: .pre input)\n", DRVARMA_VERSION_FULL);
             fprintf(f, "Output File      : %s\n", outfile);
             fprintf(f, "Model            : VARMA with univariate diagonals; cross orders p=%d q=%d\n", p, q);
             fprintf(f, "Innovation cov.  : %s\n", want_diagcov ? "diagonal" : "full");

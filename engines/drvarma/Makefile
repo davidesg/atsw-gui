@@ -41,7 +41,7 @@ endif
 
 
 # Compiler and basic flags
-CFLAGS   = -O2 -g -Wall -I./include -I$(LIB_DIR)/fuepre -I$(LIB_DIR)/prewhiten -I$(LIB_DIR)/dates
+CFLAGS   = -O2 -g -Wall -I./include -I$(BUILD_DIR) -I$(LIB_DIR)/fuepre -I$(LIB_DIR)/prewhiten -I$(LIB_DIR)/dates -I$(LIB_DIR)/optim
 LDFLAGS  +=
 LIBS     = -lm
 
@@ -60,7 +60,7 @@ OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS))
 # the univariate transformations and the date helpers. One source each.
 LIB_DIR  = ../../lib
 LIB_OBJS = $(BUILD_DIR)/fue_pre_reader.o $(BUILD_DIR)/fuepre_motor.o \
-           $(BUILD_DIR)/prewhiten.o $(BUILD_DIR)/dates.o
+           $(BUILD_DIR)/prewhiten.o $(BUILD_DIR)/dates.o $(BUILD_DIR)/lnsrch.o
 
 # GUI source and objects
 GUI_SRC        = $(GUI_DIR)/drvarma_gui.c
@@ -118,6 +118,19 @@ CLI_LIBS    = $(GSL_LIBS) $(GLIB_LIBS) $(LIBS)
 # seasonal_detection.c compiled for the CLI (separate object from the GUI's)
 SEASONAL_CLI_OBJ = $(BUILD_DIR)/seasonal_detection.o
 
+# The git commit the binary is built from, for the "Program" line of the .out,
+# -version and the GUI title (include/version.h). A version constant alone
+# says nothing about which code produced an output (docs/DISENO-interfaz.md,
+# "la version del motor no sirve"). The header is rewritten only when the
+# hash changes, so a new commit rebuilds exactly what prints it.
+GIT_HASH_H = $(BUILD_DIR)/git_hash.h
+$(GIT_HASH_H): FORCE | $(BUILD_DIR)
+	@h=$$(git describe --always --dirty --abbrev=10 2>/dev/null || echo unknown); \
+	 printf '#define DRVARMA_GIT "%s"\n' "$$h" > $@.tmp; \
+	 cmp -s $@.tmp $@ && rm -f $@.tmp || mv $@.tmp $@
+FORCE:
+$(BUILD_DIR)/drvarma.o $(BUILD_DIR)/escalera.o $(GUI_OBJ): $(GIT_HASH_H)
+
 # Default target: build both
 all: $(DRV_EXEC) $(GUI_EXEC)
 
@@ -140,6 +153,8 @@ $(BUILD_DIR)/%.o: $(LIB_DIR)/fuepre/%.c | $(BUILD_DIR)
 $(BUILD_DIR)/%.o: $(LIB_DIR)/prewhiten/%.c | $(BUILD_DIR)
 	$(CC) $(CLI_CFLAGS) -c $< -o $@
 $(BUILD_DIR)/%.o: $(LIB_DIR)/dates/%.c | $(BUILD_DIR)
+	$(CC) $(CLI_CFLAGS) -c $< -o $@
+$(BUILD_DIR)/%.o: $(LIB_DIR)/optim/%.c | $(BUILD_DIR)
 	$(CC) $(CLI_CFLAGS) -c $< -o $@
 
 # seasonal_detection.c (from gui/) compiled into the CLI engine
@@ -206,4 +221,4 @@ $(BUILD_DIR)/elfvarma.o: $(INCLUDE_DIR)/main.h
 $(BUILD_DIR)/drvmlest.o: $(INCLUDE_DIR)/main.h
 $(BUILD_DIR)/nlatools.o: $(INCLUDE_DIR)/main.h
 
-.PHONY: all drvarma gui clean distclean install uninstall help
+.PHONY: all drvarma gui clean distclean install uninstall help FORCE

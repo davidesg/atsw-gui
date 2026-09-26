@@ -51,6 +51,9 @@ Lo que cambió respecto al plan:
   extremo a extremo llevan en rojo desde agosto y no hay CI en ningún repo.
 - **El tercer peldaño no existe**: mtram → sima no tiene fichero, ni puerta, ni
   continuidad. La escalera son dos peldaños y una recomendación verbal.
+  *Update 2026-09-26: it exists in C. drvarma 5.0 reads the `.pre` files, with
+  a diagonal gate that stops the program
+  (`engines/drvarma/docs/DESIGN-v5-ladder.md`).*
 
 **Propuesta central:** el fichero de sesión `.trn` no hay que inventarlo — ya
 está escrito como prosa en la cabecera del `.out`. Hay que escribirlo como dato,
@@ -297,6 +300,11 @@ logL(univariantes)`, y de paso dice si lo que entró era un ÓPTIMO (`.pre`) o
 una ESPECIFICACIÓN (`.inp`). El test del ciclo está implementado en los dos
 lados (`network.py::find_cycle`, `drtran.c::topo_sort`) y **nombra** el
 ciclo. Lo que no hay es traspaso automático a sima: el código rechaza.
+
+*Update 2026-09-26.* A cycle is where drtran ends. The hand-over is the ladder
+itself: drvarma 5.0 takes the same `.pre` files, with each univariate model on
+the diagonal of the VARMA as the seed and the yardstick. drtran's cycle error
+now says so. See `engines/drvarma/docs/DESIGN-v5-ladder.md` §9.
 
 **drtran no tiene fichero de entrada propio.** Lee los `.pre`/`.inp` de fue,
 uno por serie, hasta 8. Lo suyo son `NAME.dag` (la red) y `NAME.cns`

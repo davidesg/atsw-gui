@@ -183,7 +183,7 @@ int main(int argc, char *argv[])
     /* [0] The ladder: .pre input (drvarma 5.0). Everything below is the
        .inp path, unchanged since 0.4.1 (tests/banco).                     */
     if (argc > 1 && strcmp(argv[1], "-version") == 0) {
-        printf("drvarma %s\n", DRVARMA_VERSION);
+        printf("drvarma %s\n", DRVARMA_VERSION_FULL);
         return 0;
     }
     if (escalera_requested(argc, argv))
@@ -191,7 +191,7 @@ int main(int argc, char *argv[])
 
     /* [1] Process command line arguments */
     if (argc < 4) {
-        printf("drvarma %s\n", DRVARMA_VERSION);
+        printf("drvarma %s\n", DRVARMA_VERSION_FULL);
         printf("Usage: %s file p q [-mean] [-diagar] [-diagma] [-diagcov] [-m method] [-twostep]\n", argv[0]);
         printf("       [-volexp [alpha window]] [-volmov [window]]\n");
         printf("  method: 1 = exact, 2 = approximate (default=1)\n");
@@ -427,7 +427,7 @@ int main(int argc, char *argv[])
         printf("ERROR: cannot create %s\n", outputf);
         exit(1);
     }
-    fprintf(outputv, "Program          : drvarma %s\n", DRVARMA_VERSION);
+    fprintf(outputv, "Program          : drvarma %s\n", DRVARMA_VERSION_FULL);
     fprintf(outputv, "Input Data File  : %s\n", inputf);
     fprintf(outputv, "Output File      : %s\n", outputf);
     fprintf(outputv, "Model: VARMA(%d,%d)\n", global_p, global_q);

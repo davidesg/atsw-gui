@@ -120,8 +120,21 @@ agnostic to the backend. When adding numerical routines, prefer GSL and keep the
 
 ## 9. Testing / regression
 
-There is no formal test harness yet. The practical regression check is to run the
-reference cases (`data/models_group1/`, `data/passthrough/`) and compare the
-`.out` objective, parameters and diagnostics against the committed outputs (they
-should match to full precision for the same inputs and options). The
-`cases/*.py` scripts compute recursive forecast-error metrics.
+`sh tests/run_tests.sh` runs both batteries; `make check` at the monorepo
+root runs it with every other engine and GUI.
+
+- `tests/banco/banco.sh`: 18 `.inp` cases over `data/` (the Group 1
+  trivariate, the WTI+CPI pass-through, IPC, PSW), covering the diagonal and
+  full models, `-m 2`, `-twostep`, `-volexp`, `-deseason`, `-forecast` and
+  `-estwin`. The reference `tests/banco/ref/` is the 0.4.1 output, and every
+  file must match byte for byte except the `Program` line.
+  `--generar` rewrites it, and should only be run when a change of output is
+  deliberate. The `.out` files kept in `data/` come from older binaries (scale
+  1) and are not a reference.
+- `tests/escalera/pruebas.sh`: the ladder. It makes explicit assertions (the
+  gate, σ² and coefficients against fue's `.out`, genuine `.pre` files as
+  fixed points, BUG-2, alignment at the end, rejected options, the
+  pass-through, the line search on NaN/∞) and a byte regression of the 5.0
+  output with the path and version lines filtered.
+
+The `cases/*.py` scripts compute recursive forecast-error metrics.

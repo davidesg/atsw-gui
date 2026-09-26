@@ -77,7 +77,7 @@ Están explicados uno a uno —con lo que falta al final— en
 | fue 1.14 | los δ salían pegados y el `.pre` no lo relee **ni el propio motor**; y más de 10 regresores externos **destruían el montón** |
 | art-python | BUG-0187/0188/0189 |
 | fue (Python) | BUG-0017 a BUG-0022 |
-| drtran | BUG-17, BUG-18, y reabierta la mitad en C de BUG-2 |
+| drtran | BUG-17, BUG-18, y reabierta la mitad en C de BUG-2 (closed 2026-09-26: `lib/fuepre`, `fuepre_check_alignment`) |
 
 Y tres formas que se repitieron en más de una fase, que están en
 `DISENO-proyecto.md` §0:

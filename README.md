@@ -10,7 +10,7 @@ otra mitad, en Python, con los tres asistentes MCP, vive aparte y se instala con
 ```
 lib/          lo que comparten todos           (pendiente de extraer)
 engines/      fue  fuf  fug  drtran  drvarma
-gui/          fue  fug  drvarma                (+ drtran, por escribir)
+gui/          fue  fug  drtran  atsw           (drvarma's GUI is still in engines/drvarma/gui)
 conformidad/  el banco de pruebas del formato
 docs/         el estudio del que salió esta forma
 ```

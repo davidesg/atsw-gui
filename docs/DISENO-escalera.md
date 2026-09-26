@@ -319,6 +319,12 @@ caso como omitido en vez de matar la batería entera (`battery.py:74-78` hace
 
 ## 6. El tercer peldaño no existe
 
+*Update 2026-09-26: it exists now. drvarma 5.0 reads and validates the `.pre`
+files, with a diagonal gate that stops the program when it fails
+(`engines/drvarma/docs/DESIGN-v5-ladder.md`). A cycle in drtran is the end of
+its road; the hand-over is the same list of `.pre` files given to drvarma.
+The GUI integration is still pending.*
+
 mtram → sima no tiene fichero, ni puerta, ni continuidad de parámetros.
 `drvarma` no lee un `.pre` en ningún punto: carga las series originales sin
 transformar y vuelve a empezar. El traspaso es prosa en las instrucciones del

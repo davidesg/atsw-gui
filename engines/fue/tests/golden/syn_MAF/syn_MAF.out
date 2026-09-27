@@ -12,7 +12,7 @@ Parameters  :  1.
 
 Coefficients for regular f-fixed MA factor 1 [f = 2.0]:
       0.126449
-     -0.015989  (0.016955) [ 1]
+     -0.015989  (0.016960) [ 1]
 Mean parameter (mu):
       0.000000
 
@@ -254,9 +254,11 @@ Selection Model Criterium:
 Hannan-Quinn = -11.58
 Schwarz   = -11.51
 
+Standard errors: fdhess
+
 Estimated covariance matrix:
 
-x[ 1] ->  0.000287462
+x[ 1] ->  0.000287627
 
 
 Estimated correlation matrix:

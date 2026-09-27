@@ -73,6 +73,31 @@ Cada commit que cambia un código de salida de `runs.tsv` lo explica aquí.
   de referencia salen idénticos byte a byte, que es lo que dice que la
   reorganización no cambió nada. Ningún `.out`, `.pre` ni EPS cambia.
 
+- **Standard errors from fdhess** (commit of fue BUG-0015, 2026-09-27; in
+  English from here on). By default `est()` takes the Hessian at the
+  optimum by finite differences. This is the `fdhess` call Mauricio left
+  commented out. Before, the covariance came from the Hessian that BFGS
+  accumulated along the search path. `-hessian bfgs` gives the old
+  behaviour.
+  - **Where the goldens differ from 1.13.1:** in the `.out` and `.tex`,
+    the standard errors (the numbers in parentheses), the covariance and
+    correlation matrices with their list of correlations ≥ 0.7, and a new
+    line `Standard errors: <method>` before the covariance matrix.
+  - **What is unchanged:** every estimate, every `.pre`, every EPS, and
+    every exit status in `runs.tsv`. That was checked line by line before
+    regenerating (145 files).
+  - **Methods in the 149 outputs:**
+    - fdhess: 79;
+    - no free parameters: 69;
+    - estimation failed (`bad_nonstationary`): 1, and it says so.
+  - **Fallbacks to BFGS,** each stated in the `.out`:
+    - `R.4_2`: the optimum is on the boundary;
+    - `syn_ARF`: the Hessian is not positive definite, because of an
+      f-fixed AR coefficient of −0.000006.
+  - **The check:** ES_CPI_m10 from its `.pre` now gives SE(μ) = 0.028502,
+    which is the exact GLS. With `-hessian bfgs` it gives 0.073304, the
+    "run A" of BUG-0015.
+
 ## La batería sintética
 
 `syn_*.inp` (serie IPCM de `fug/examples`): ruido blanco sin nada libre y con

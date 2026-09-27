@@ -167,6 +167,16 @@ struct Tusmodel          /* Seasonal US model with deterministic components: */
     };
 /*****************************************************************************/
 
+/* Which Hessian gave the standard errors (est_se_how, set by est):         */
+#define EST_SE_BFGS      0    /* the one BFGS accumulated (fdhess not asked)   */
+#define EST_SE_FDHESS    1    /* fdhess at the optimum                         */
+#define EST_SE_BOUNDARY  2    /* BFGS kept: the optimum is on the boundary     */
+#define EST_SE_NOTPD     3    /* BFGS kept: fdhess not positive definite       */
+#define EST_SE_NONE_BOUNDARY 4 /* neither: boundary, and BFGS never built       */
+#define EST_SE_NONE_NOTPD    5 /* neither: not PD, and BFGS never built         */
+extern int est_fdhess, est_se_how;
+const char *est_se_label( int how );
+
 void est( void (*cast)( real *, struct Tvarma *, int *, int, int ),
           int npar, real *par, real *dev, real **cov, int maxits, int nrits,
           real grtol, real sptol, real xitol, int chkma,

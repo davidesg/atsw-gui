@@ -11,17 +11,17 @@ Parameters  :  4.
 **** CONVERGENCE OBTAINED AFTER 7 ITERATIONS [GRADIENT NORM = 0.0000]
 
 Omegas for deterministic variable 1:
-     -0.076861  (0.014252) [ 1]
+     -0.076861  (0.013038) [ 1]
 Omegas for deterministic variable 2:
-      0.046894  (0.024093) [ 2]
+      0.046894  (0.013038) [ 2]
 Omegas for deterministic variable 3:
-     -0.054100  (0.006520) [ 3]
+     -0.054100  (0.006519) [ 3]
 Omegas for deterministic variable 4:
       1.350000
 Coefficients for regular AR factor 1:
       0.000000
 Mean parameter (mu):
-     -0.010122  (0.029197) [ 4]
+     -0.010122  (0.013038) [ 4]
 
 Box-Cox lambda     :  0.0
 Seasonal period    :  4
@@ -112,24 +112,25 @@ Selection Model Criterium:
 Hannan-Quinn =  -4.43
 Schwarz   =  -4.35
 
+Standard errors: fdhess
+
 Estimated covariance matrix:
 
-x[ 1] ->  0.000203112
-x[ 2] -> -0.000119189  0.000580464
-x[ 3] ->  0.000000605  0.000001185  0.000042515
-x[ 4] ->  0.000147720 -0.000526642 -0.000004511  0.000852458
+x[ 1] ->  0.000169991
+x[ 2] -> -0.000002615  0.000169991
+x[ 3] ->  0.000001308 -0.000001308  0.000042498
+x[ 4] -> -0.000002615  0.000002615 -0.000001308  0.000169991
 
 
 Estimated correlation matrix:
 
 x[ 1] ->  1.00
-x[ 2] -> -0.35  1.00
-x[ 3] ->  0.01  0.01  1.00
-x[ 4] ->  0.36 -0.75 -0.02  1.00
+x[ 2] -> -0.02  1.00
+x[ 3] ->  0.02 -0.02  1.00
+x[ 4] -> -0.02  0.02 -0.02  1.00
 
 Correlations greater than or equal to 0.7 in absolute value:
 
-corr[ 4][ 2] = -0.75
 
 Unconditional residuals (seasonal period: 4)
 67 observations: from 2/2003 to 4/2019

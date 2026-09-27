@@ -11,7 +11,7 @@ Parameters  :  1.
 **** CONVERGENCE OBTAINED AFTER 0 ITERATIONS [GRADIENT NORM = 0.0000]
 
 Omegas for deterministic variable 1:
-      0.000000  (0.099258) [ 1]
+      0.000000  (2.376826) [ 1]
 Mean parameter (mu):
       0.000000
 
@@ -251,9 +251,11 @@ Selection Model Criterium:
 Hannan-Quinn = -11.58
 Schwarz   = -11.54
 
+Standard errors: fdhess
+
 Estimated covariance matrix:
 
-x[ 1] ->  0.009852217
+x[ 1] ->  5.649301172
 
 
 Estimated correlation matrix:

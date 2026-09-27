@@ -13,7 +13,7 @@ Parameters  :  1.
 Coefficients for regular AR factor 1:
       0.941176
 Mean parameter (mu):
-      0.822118  (2.374375) [ 1]
+      0.822118  (2.373305) [ 1]
 
 Box-Cox lambda     :  0.0
 Seasonal period    :  4
@@ -104,9 +104,11 @@ Selection Model Criterium:
 Hannan-Quinn =   0.70
 Schwarz   =   0.78
 
+Standard errors: fdhess
+
 Estimated covariance matrix:
 
-x[ 1] ->  5.637658944
+x[ 1] ->  5.632575297
 
 
 Estimated correlation matrix:

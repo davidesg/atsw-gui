@@ -109,6 +109,8 @@ Selection Model Criterium:
 Hannan-Quinn =  -9.14
 Schwarz   =  -8.89
 
+Standard errors: bfgs (fdhess: the optimum is on the boundary of the admissible region)
+
 Estimated covariance matrix:
 
 x[ 1] ->  0.002429551

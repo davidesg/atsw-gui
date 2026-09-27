@@ -11,8 +11,8 @@ Parameters  :  2.
 **** CONVERGENCE OBTAINED AFTER 3 ITERATIONS [GRADIENT NORM = 0.0000]
 
 Coefficients for regular AR factor 1:
-      0.749059  (0.104471) [ 1]
-     -0.286904  (0.103753) [ 2]
+      0.749059  (0.104466) [ 1]
+     -0.286904  (0.103746) [ 2]
 Mean parameter (mu):
       0.000000
 
@@ -122,10 +122,12 @@ Selection Model Criterium:
 Hannan-Quinn =   4.36
 Schwarz   =   4.57
 
+Standard errors: fdhess
+
 Estimated covariance matrix:
 
-x[ 1] ->  0.010914194
-x[ 2] -> -0.006341469  0.010764669
+x[ 1] ->  0.010913226
+x[ 2] -> -0.006341682  0.010763214
 
 
 Estimated correlation matrix:

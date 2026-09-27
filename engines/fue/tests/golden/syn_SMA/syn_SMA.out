@@ -11,7 +11,7 @@ Parameters  :  1.
 **** CONVERGENCE OBTAINED AFTER 7 ITERATIONS [GRADIENT NORM = 0.0000]
 
 Coefficients for annual MA factor 1:
-      0.699852  (0.057574) [ 1]
+      0.699852  (0.057573) [ 1]
 Mean parameter (mu):
       0.000000
 
@@ -263,9 +263,11 @@ Selection Model Criterium:
 Hannan-Quinn = -11.99
 Schwarz   = -11.92
 
+Standard errors: fdhess
+
 Estimated covariance matrix:
 
-x[ 1] ->  0.003314777
+x[ 1] ->  0.003314611
 
 
 Estimated correlation matrix:

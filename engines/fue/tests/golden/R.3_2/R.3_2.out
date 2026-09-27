@@ -11,13 +11,13 @@ Parameters  :  4.
 **** CONVERGENCE OBTAINED AFTER 40 ITERATIONS [GRADIENT NORM = 0.0000]
 
 Omegas for deterministic variable 1:
-      0.756856  (0.131422) [ 1]
+      0.756856  (0.134896) [ 1]
 Omegas for deterministic variable 2:
-      0.090769  (0.052093) [ 2]
+      0.090769  (0.052585) [ 2]
 Coefficients for regular AR factor 1:
-      0.997516  (0.003553) [ 3]
+      0.997516  (0.003453) [ 3]
 Mean parameter (mu):
-      0.446047  (0.612122) [ 4]
+      0.446047  (0.627512) [ 4]
 
 Box-Cox lambda     :  1.0
 Seasonal period    :  4
@@ -107,20 +107,22 @@ Selection Model Criterium:
 Hannan-Quinn =  -9.54
 Schwarz   =  -9.38
 
+Standard errors: fdhess
+
 Estimated covariance matrix:
 
-x[ 1] ->  0.017271697
-x[ 2] -> -0.001100982  0.002713713
-x[ 3] -> -0.000136542 -0.000004895  0.000012623
-x[ 4] -> -0.079114655  0.004440292  0.000617984  0.374693361
+x[ 1] ->  0.018196881
+x[ 2] -> -0.001052685  0.002765165
+x[ 3] -> -0.000127121 -0.000001007  0.000011926
+x[ 4] -> -0.083300782  0.004133471  0.000573862  0.393771729
 
 
 Estimated correlation matrix:
 
 x[ 1] ->  1.00
-x[ 2] -> -0.16  1.00
-x[ 3] -> -0.29 -0.03  1.00
-x[ 4] -> -0.98  0.14  0.28  1.00
+x[ 2] -> -0.15  1.00
+x[ 3] -> -0.27 -0.01  1.00
+x[ 4] -> -0.98  0.13  0.26  1.00
 
 Correlations greater than or equal to 0.7 in absolute value:
 

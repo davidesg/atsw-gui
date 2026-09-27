@@ -201,6 +201,7 @@ void est( void (*cast)( real *, struct Tvarma *, int *, int, int ),
 /* [1]: First computation of the log-likelihood: initialize pi10x & pi20x:   */
 
    *ifault = 0;                               /* Initialize fault indicator. */
+   est_se_how = EST_SE_BFGS;                  /* until the Hessian is taken  */
 
    varmax.xitol = xitol;                      /* Estimation method.          */
 

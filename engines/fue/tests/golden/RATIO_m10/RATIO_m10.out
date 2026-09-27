@@ -11,13 +11,13 @@ Parameters  :  4.
 **** CONVERGENCE OBTAINED AFTER 19 ITERATIONS [GRADIENT NORM = 0.0000]
 
 Omegas for deterministic variable 1:
-      4.867142  (1.200119) [ 1]
+      4.867142  (1.312018) [ 1]
 Omegas for deterministic variable 2:
-     -9.310300  (1.284218) [ 2]
+     -9.310300  (1.312765) [ 2]
 Omegas for deterministic variable 3:
-      7.717989  (0.619680) [ 3]
+      7.717989  (0.656142) [ 3]
 Coefficients for annual AR factor 1:
-      0.545941  (0.091584) [ 4]
+      0.545941  (0.093559) [ 4]
 Mean parameter (mu):
       0.000000
 
@@ -129,20 +129,22 @@ Selection Model Criterium:
 Hannan-Quinn =   3.56
 Schwarz   =   3.71
 
+Standard errors: fdhess
+
 Estimated covariance matrix:
 
-x[ 1] ->  1.440285692
-x[ 2] ->  0.020751613  1.649216855
-x[ 3] ->  0.014125655  0.044539181  0.384003690
-x[ 4] ->  0.000147648  0.003028435  0.000658205  0.008387672
+x[ 1] ->  1.721389959
+x[ 2] -> -0.018165342  1.723352761
+x[ 3] ->  0.009216402 -0.009849815  0.430522314
+x[ 4] ->  0.001110016  0.003864216 -0.001028445  0.008753372
 
 
 Estimated correlation matrix:
 
 x[ 1] ->  1.00
-x[ 2] ->  0.01  1.00
-x[ 3] ->  0.02  0.06  1.00
-x[ 4] ->  0.00  0.03  0.01  1.00
+x[ 2] -> -0.01  1.00
+x[ 3] ->  0.01 -0.01  1.00
+x[ 4] ->  0.01  0.03 -0.02  1.00
 
 Correlations greater than or equal to 0.7 in absolute value:
 

@@ -148,6 +148,8 @@ int main( int argc, char *argv[] )
       printf( "[chk|nochk]: check | do not check for invertibility (default: chk)\n" );
       printf("[-f [horizon]] : generate input file for FUF (forecast)\n");
       printf( "[-latex]   : also compile the .tex file with pdflatex\n" );
+      printf( "[-hessian fd|bfgs]: standard errors from fdhess at the optimum (default)\n"
+              "             or from the BFGS Hessian of the search\n" );
       printf( "\nExit status: 0 results written; 1 command line or file error; 2 the input\n" );
       printf( "file is not valid (nothing written); 3 the model could not be estimated\n" );
       printf( "(results written with the initial values); 4 run-time error.\n" );
@@ -175,6 +177,15 @@ int main( int argc, char *argv[] )
              geom = 1;
          else if ( strcmp( argv[i], "-latex" ) == 0 )
              latex_flag = 1;
+         else if ( strcmp( argv[i], "-hessian" ) == 0 ) {
+               if ( i+1 <= argc-1 && ( strcmp( argv[i+1], "fd" ) == 0 ||
+                                       strcmp( argv[i+1], "bfgs" ) == 0 ) )
+                  est_fdhess = ( strcmp( argv[++i], "fd" ) == 0 );
+               else {
+                  fprintf( stderr, "Error: -hessian takes fd or bfgs\n" );
+                  exit( FUE_ERR_USAGE );
+                  }
+               }
          else if ( strcmp( argv[i], "-f" ) == 0 ) {
                forecast_flag = 1;
                   if ( i+1 <= argc-1 && argv[i+1][0] != '-' ) {
@@ -1508,6 +1519,9 @@ fprintf( outputv, "Transformed-Differenced-Stochastic series: \n" );
 		log( varma1.sigma2 ) + 2 * ( 1 + nparma) * log (Ts.nobs - Tm.ornsop) / (Ts.nobs - Tm.ornsop) );
 
    fprintf( outputv, "\n" );
+   fprintf( outputv, "Standard errors: %s\n\n",
+            est_fault  ? "none (the model could not be estimated)"
+          : npar > 0   ? est_se_label( est_se_how ) : "none (no free parameters)" );
    fprintf( outputv, "Estimated covariance matrix:\n\n" );
    for ( i = 1; i <= npar; i++ )
        {

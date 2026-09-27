@@ -11,7 +11,7 @@ Parameters  :  1.
 **** CONVERGENCE OBTAINED AFTER 3 ITERATIONS [GRADIENT NORM = 0.0000]
 
 Coefficients for regular MA factor 1:
-      0.111586  (0.065165) [ 1]
+      0.111586  (0.065164) [ 1]
 Mean parameter (mu):
       0.000000
 
@@ -252,9 +252,11 @@ Selection Model Criterium:
 Hannan-Quinn = -11.58
 Schwarz   = -11.51
 
+Standard errors: fdhess
+
 Estimated covariance matrix:
 
-x[ 1] ->  0.004246533
+x[ 1] ->  0.004246405
 
 
 Estimated correlation matrix:

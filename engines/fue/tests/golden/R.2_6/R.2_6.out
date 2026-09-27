@@ -15,7 +15,7 @@ Omegas for deterministic variable 1:
 Omegas for deterministic variable 2:
       0.684575
 Coefficients for regular AR factor 1:
-      0.863672  (0.057889) [ 1]
+      0.863672  (0.057883) [ 1]
 Mean parameter (mu):
      -2.380465  (0.011992) [ 2]
 
@@ -107,10 +107,12 @@ Selection Model Criterium:
 Hannan-Quinn =  -8.36
 Schwarz   =  -8.19
 
+Standard errors: fdhess
+
 Estimated covariance matrix:
 
-x[ 1] ->  0.003351128
-x[ 2] ->  0.000018828  0.000143810
+x[ 1] ->  0.003350434
+x[ 2] ->  0.000018508  0.000143807
 
 
 Estimated correlation matrix:

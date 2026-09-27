@@ -249,6 +249,8 @@ Selection Model Criterium:
 Hannan-Quinn = -11.58
 Schwarz   = -11.54
 
+Standard errors: fdhess
+
 Estimated covariance matrix:
 
 x[ 1] ->  0.000000045

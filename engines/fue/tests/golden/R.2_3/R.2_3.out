@@ -11,9 +11,9 @@ Parameters  :  2.
 **** CONVERGENCE OBTAINED AFTER 3 ITERATIONS [GRADIENT NORM = 0.0000]
 
 Coefficients for regular AR factor 1:
-      0.357977  (0.114837) [ 1]
+      0.357977  (0.114228) [ 1]
 Mean parameter (mu):
-      0.244760  (0.161230) [ 2]
+      0.244760  (0.161224) [ 2]
 
 Box-Cox lambda     :  0.0
 Seasonal period    :  4
@@ -104,10 +104,12 @@ Selection Model Criterium:
 Hannan-Quinn =  -0.23
 Schwarz   =  -0.06
 
+Standard errors: fdhess
+
 Estimated covariance matrix:
 
-x[ 1] ->  0.013187575
-x[ 2] ->  0.000264156  0.025995185
+x[ 1] ->  0.013048096
+x[ 2] ->  0.000270171  0.025993118
 
 
 Estimated correlation matrix:

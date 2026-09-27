@@ -11,10 +11,10 @@ Parameters  :  3.
 **** CONVERGENCE OBTAINED AFTER 8 ITERATIONS [GRADIENT NORM = 0.0000]
 
 Omegas for deterministic variable 1:
-    -19.476450  (6.291707) [ 1]
+    -19.476450  (6.310839) [ 1]
 Coefficients for regular AR factor 1:
-      0.764734  (0.105994) [ 2]
-     -0.263975  (0.107124) [ 3]
+      0.764734  (0.106299) [ 2]
+     -0.263975  (0.107286) [ 3]
 Mean parameter (mu):
       0.000000
 
@@ -124,18 +124,20 @@ Selection Model Criterium:
 Hannan-Quinn =   4.24
 Schwarz   =   4.46
 
+Standard errors: fdhess
+
 Estimated covariance matrix:
 
-x[ 1] -> 39.585580647
-x[ 2] ->  0.097479602  0.011234726
-x[ 3] -> -0.154278718 -0.007059242  0.011475594
+x[ 1] -> 39.826686657
+x[ 2] ->  0.095339311  0.011299555
+x[ 3] -> -0.151661592 -0.007062597  0.011510356
 
 
 Estimated correlation matrix:
 
 x[ 1] ->  1.00
-x[ 2] ->  0.15  1.00
-x[ 3] -> -0.23 -0.62  1.00
+x[ 2] ->  0.14  1.00
+x[ 3] -> -0.22 -0.62  1.00
 
 Correlations greater than or equal to 0.7 in absolute value:
 

@@ -1,5 +1,14 @@
 # fue — los errores estándar no son fiables
 
+> **Status (2026-09-27): fixed.** `est` now takes the covariance from
+> Mauricio's `fdhess` at the optimum, guarded: a boundary optimum, or a
+> Hessian that is not positive definite, falls back to BFGS and says so.
+> `-hessian bfgs` gives the old behaviour. On this document's case
+> (ES_CPI_m10) fue now gives SE(μ) = 0.028502, the exact GLS, from any
+> start. See fue BUG-0015 (fixed in 0.1.17), `tests/README.md` for the
+> changed goldens, and the family-wide study, drvarma-python
+> `docs/STUDY-standard-errors.md`. The text below is the original study.
+
 **Fecha:** 2026-07-12
 **Origen:** hallado al homologar `drtran` (puente fue → drvarma) contra fue.
 **Afecta a:** la inferencia (SE, t, p-valores). **No** a las estimaciones puntuales

@@ -408,10 +408,23 @@ int read_fue_pre(const char *filename,
     char  line[FUEPRE_LINE];
     int   i, j;
 
+    /*  Everything the reader hands back starts at zero, so that an error at
+     *  any point can release what was reserved without walking garbage.
+     *  BUG-39 (drvec's register): fixed on 2026-09-24 in drtran's own copy
+     *  (a56cc75, after the import into this repo) and brought here, where the
+     *  reader is shared by drtran, drvarma and the GUIs.                      */
+    memset(Tm, 0, sizeof *Tm);
+    memset(Ts, 0, sizeof *Ts);
+    *DataMat = NULL;
+    Ts->refactor = 1.0;
+
     if (NULL == (f = fopen(filename, "r"))) {
         fprintf(stderr, "Error opening %s\n", filename);
         return 1;
     }
+
+#define PRE_FAIL(code) do { fclose(f); free_fue_pre(Tm, Ts, *DataMat); \
+                            *DataMat = NULL; return (code); } while (0)
 
     /*  LA CABECERA ES LIBRE, y por eso aqui NO se cuentan lineas.  El parser
      *  autoritativo (fue/src/fue/inp.py [3.0], FILE_CONTRACT.md 2.0) descarta
@@ -433,8 +446,7 @@ int read_fue_pre(const char *filename,
         if (!seen) {
             fprintf(stderr, "ERROR: %s no trae el separador de frecuencia;"
                             " no es un fichero del formato fue\n", filename);
-            fclose(f);
-            return 1;
+            PRE_FAIL(1);
         }
     }
 
@@ -451,19 +463,30 @@ int read_fue_pre(const char *filename,
     fgets(line, FUEPRE_LINE, f);  /* comment */
     fgets(line, FUEPRE_LINE, f);
     {
-        char namef[80]; int outyear;
+        /*  BUG-39: an unbounded %s into char[80], and no count check, so the
+         *  DRVUS form `62 1850' left the start year and the name as stack
+         *  garbage.  The three numbers are required; the name is not.      */
+        char namef[FUEPRE_LINE]; int outyear = 0, nread;
+        namef[0] = '\0'; Tm->residuals[0] = '\0';
         Ts->nobs = 0;             /* si la linea no trae numero, se ve abajo */
         if (Ts->freq > 1)
-            sscanf(line, "%d %d %d %s %s",
-                   &Ts->nobs, &Ts->begtime, &Ts->begyear,
-                   namef, Tm->residuals);
+            nread = sscanf(line, "%d %d %d %511s %511s",
+                           &Ts->nobs, &Ts->begtime, &Ts->begyear,
+                           namef, Tm->residuals);
         else {
-            sscanf(line, "%d %d %d %s %s",
-                   &Ts->nobs, &outyear, &Ts->begyear,
-                   namef, Tm->residuals);
+            nread = sscanf(line, "%d %d %d %511s %511s",
+                           &Ts->nobs, &outyear, &Ts->begyear,
+                           namef, Tm->residuals);
             Ts->begtime = 1;
         }
         Ts->name = strdup(namef);
+        if (nread < 3) {
+            line[strcspn(line, "\r\n")] = '\0';
+            fprintf(stderr, "ERROR: %s: the sample line needs `nobs period "
+                            "year [name]', and has %d number(s): \"%.60s\"\n",
+                    filename, (nread < 0 ? 0 : nread), line);
+            PRE_FAIL(1);
+        }
     }
 
     /*  Un nobs disparatado es la firma de una lectura desalineada, y pedir el
@@ -472,9 +495,7 @@ int read_fue_pre(const char *filename,
     if (Ts->nobs <= 0) {
         fprintf(stderr, "ERROR: %s declara %d observaciones\n",
                 filename, Ts->nobs);
-        free(Tm->residuals);
-        fclose(f);
-        return 1;
+        PRE_FAIL(1);
     }
 
     Ts->data = vector(1, Ts->nobs);
@@ -493,7 +514,8 @@ int read_fue_pre(const char *filename,
            Aquí se lee la línea completa y se delega en gen_detvar.          */
         fgets(line, FUEPRE_LINE, f);             /* "**" */
 
-        Tm->detspec = (char **)malloc((size_t)Tm->NdetVar * sizeof(char *)) - 1;
+        /* calloc: an error half-way must leave NULLs, not garbage (BUG-39) */
+        Tm->detspec = (char **)calloc((size_t)Tm->NdetVar, sizeof(char *)) - 1;
 
         for (i = 1; i <= Tm->NdetVar; i++) {
             fgets(line, FUEPRE_LINE, f);
@@ -513,8 +535,7 @@ int read_fue_pre(const char *filename,
                         "  input X. Especifica esa relación como transferencia (ω/δ, b),\n"
                         "  que es precisamente lo que drtran estima.\n",
                         i, line);
-                fclose(f);
-                return 2;
+                PRE_FAIL(2);
             }
         }
 
@@ -621,8 +642,7 @@ int read_fue_pre(const char *filename,
                 fprintf(stderr, "ERROR: %s: the annual-difference factors line "
                                 "needs %d integers (freq %d); found %d\n",
                         filename, Ts->freq / 2 + 1, Ts->freq, i);
-                fclose(f);
-                return 1;
+                PRE_FAIL(1);
             }
             p += off; } }
     } else {
@@ -644,8 +664,7 @@ int read_fue_pre(const char *filename,
         if (!fgets(line, FUEPRE_LINE, f) || sscanf(line, "%lf", &Ts->data[i]) != 1) {
             fprintf(stderr, "ERROR: %s: the data block ends at observation %d "
                             "of the %d declared\n", filename, i - 1, Ts->nobs);
-            fclose(f);
-            return 1;
+            PRE_FAIL(1);
         }
     }
 

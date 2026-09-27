@@ -7,7 +7,11 @@ until there is a proven better alternative.
 stopping tests. The line search (`lnsrch`) never returned when the objective
 was NaN or infinite. It now treats such a point as inadmissible, and it lives
 once in `lib/optim/lnsrch.c` for drvarma, drtran, fue and fuf. On every finite
-trajectory the arithmetic is the original's: the benches are byte-identical.
+trajectory the arithmetic is the original's: the benches are byte-identical. The two
+distributed copies carry the same fix: drvarma-python's C and `_qnewt.py`
+(its BUG-0006, 2026-09-26) and the fue wheel's C and `qnewtopt.py` (fue
+BUG-0025, 2026-09-27, where 103 corpus fits are bit-identical before and
+after).
 
 **Scope:** `qnewtopt.c` (`raxopt`, `umstop`, `umstop0`, `cdgrad`, `fdhess`) and
 its faithful Python port `drvarma/_qnewt.py` — shared by `drtran`, `drvarma`

@@ -79,11 +79,17 @@ the regular AR and MA orders. Results are written to `file.out` (and
 | `-estwin N` | estimate parameters on the first N raw observations, then write `file.recursive` with **fixed-parameter** forecasts from every origin to the end of the data (use with `-forecast`); enables out-of-sample comparison across origins without re-estimating |
 | `-volexp [α window]`, `-volmov [window]` | exponential / moving-window volatility |
 
-### The ladder: `.pre` input (5.0)
+### The ladder: fue's files as input (5.0)
 
 ```
 drvarma A.pre B.pre [C.pre ...] p q [-diagcov] [-redet] [-fixarma] [-m 1|2] [-o NAME]
+                                    [-forecast H [-estwin N]]
+drvarma -split FILE[.inp] [-mean] [-harmonics] [-ar P] [-ma Q] [-scale F] [-dir DIR]
 ```
+
+The files are univariate models of fue, `.pre` or `.inp`, recognised by their
+content. **The multivariate `.inp` of the command line above is deprecated
+since 5.0**: `-split` converts it into one fue `.inp` per series.
 
 Each series brings its univariate model from fue (Box-Cox, deterministic
 terms, differencing, mean and ARMA factors). The VARMA keeps each model on

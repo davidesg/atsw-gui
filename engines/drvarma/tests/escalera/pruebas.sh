@@ -176,6 +176,41 @@ rc=$?
 [ $rc -eq 1 ] && grep -q "needs a horizon" "$TMP/ew.log" \
     && bien "-estwin sin -forecast: error explicito" || falla "-estwin sin -forecast: rc=$rc"
 
+# 10c. UN SOLO FORMATO. El .inp multivariante esta obsoleto desde la 5.0:
+#      -split lo convierte en un .inp univariante de fue por serie, y la
+#      escalera los toma por su CONTENIDO (el validador de fue), no por el
+#      nombre. La equivalencia: la escalera sobre los ficheros de -split
+#      -mean -ar 1, con p = 1, es el VAR(1) completo con -mean de la via .inp.
+mkdir -p "$TMP/split"
+"$BIN" -split data/models_group1/IPC3 -mean -ar 1 -dir "$TMP/split" > "$TMP/split.log" 2>&1
+rc=$?
+[ $rc -eq 0 ] && [ -f "$TMP/split/IPC_ES.inp" ] && [ -f "$TMP/split/IPC_DE.inp" ] \
+    && bien "-split: un .inp de fue por serie" || falla "-split: rc=$rc"
+"$BIN" -split data/models_group1/IPC3 -dir "$TMP/split" > "$TMP/split2.log" 2>&1
+rc=$?
+[ $rc -eq 2 ] && grep -q "is not overwritten" "$TMP/split2.log" \
+    && bien "-split no sobrescribe" || falla "-split sobrescribio (rc=$rc)"
+cp data/models_group1/IPC3.inp "$TMP/"
+( cd "$TMP" && "$BIN" IPC3 1 0 -mean > legacy.log 2>&1 )
+grep -q "^Note: the multivariate .inp is deprecated" "$TMP/legacy.log" \
+    && bien "la via .inp avisa de que su formato esta obsoleto" \
+    || falla "la via .inp no avisa de la obsolescencia"
+"$BIN" "$TMP/split/IPC_ES.inp" "$TMP/split/IPC_FR.inp" "$TMP/split/IPC_DE.inp" 1 0 \
+    -o "$TMP/lad" > "$TMP/lad.log" 2>&1
+sed -n '/^Normalized model:/,/^Q matrix:/p' "$TMP/IPC3.out" > "$TMP/leg.blk"
+sed -n '/^Normalized model:/,/^Q matrix:/p' "$TMP/lad.out" > "$TMP/lad.blk"
+if [ -s "$TMP/leg.blk" ] && cmp -s "$TMP/leg.blk" "$TMP/lad.blk"; then
+    bien "la escalera sobre los .inp de -split es el VAR(1) de la via .inp (mu y phi)"
+else
+    falla "la escalera y la via .inp no llegan al mismo VAR(1)"
+    diff "$TMP/leg.blk" "$TMP/lad.blk" | head -6
+fi
+"$BIN" data/models_group1/IPC3.inp 1 0 > "$TMP/mv.log" 2>&1
+rc=$?
+[ $rc -eq 2 ] && grep -q "drvarma -split" "$TMP/mv.log" \
+    && bien "un .inp multivariante en la escalera: error que dice como convertirlo" \
+    || falla "un .inp multivariante en la escalera: rc=$rc"
+
 # 11. la regresion de la salida de la 5.0
 REF=$AQUI/ref
 filtro() { grep -av '^Program          : \|^Output File      : \|^  \[[0-9]*\] \|^Full results written to \|^Forecasts written to \|^Recursive forecasts written to ' "$1"; }

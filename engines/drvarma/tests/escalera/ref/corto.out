@@ -26,6 +26,8 @@ Univariate models (one .pre per series):
   Note: IPC_ES moved 0.00836 from its .pre on its own sample. A genuine
         .pre is a fixed point (it moves ~1e-5, the rounding of its six
         decimals): this one is a specification, not an optimum.
+        Its deterministic terms stayed at their SEEDS: in a
+        specification they are starting values -- use -redet.
   Note: IPC_FR moved 0.0209 from its .pre, but the common window
         drops its first 12 stationary observations: it is
         re-estimated on a different sample, and moving is legitimate.

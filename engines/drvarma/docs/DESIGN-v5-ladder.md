@@ -19,9 +19,18 @@ the `.inp` path must reproduce it byte for byte.
                                         [-m method] [-o NAME]
                                         [-forecast H [-estwin N]]
 
-If the first argument ends in `.pre`, the program runs in ladder mode (the
-code lives in `src/escalera.c`). Otherwise it is the usual 0.4.1 program
-(`drvarma file p q ...`).
+The ladder takes **univariate model files of fue**: a `.pre` (an optimum) or
+an `.inp` (a specification). They are the same format, and the program tells
+them from anything else by their **content**, not by their name. A file is a
+model of fue if fue's own validator accepts it (`engines/fue/src/inpcheck.c`,
+compiled as `inp_check_fue`, as the fue GUI does). art used to refuse a file
+because it was *called* `.pre`, and a renamed one went through
+(`DISENO-escalera.md` §1.2). In a specification the values are seeds. When
+the gate sees one move, it says so, and if it carries deterministic terms
+kept at their seeds, it asks for `-redet`.
+
+Otherwise it is the usual 0.4.1 program (`drvarma file p q ...`), now
+deprecated (§10).
 
 Options of the `.inp` path that the `.pre` already settles (`-mean`,
 `-deseason`, `-scale`) are rejected with an explicit error rather than
@@ -235,3 +244,47 @@ place to **seed** one:
   comparison is phase 2: the `.inp` bench already showed, for the CPI trio
   and the WTI pass-through, that significant cross effects in sample did not
   improve out-of-sample forecasts (`MODELS_RESULTS.md` §3-§4).
+
+## 10. One format: the multivariate `.inp` is deprecated
+
+drvarma had its own `.inp`: one file, m columns, a single λ, d and D, the
+series names on a line of their own. It was a second dialect called `.inp`
+next to fue's univariate one, which is what the rest of the ecosystem reads
+and writes: the fue GUI, the mother GUI, `inpcheck`, the conformance battery,
+and fue's Python parser, which is the reference. Keeping both means two
+readers in C, two in the Python port and a guessing game in every GUI.
+
+Everything the multivariate file expresses can be written in fue's format,
+series by series:
+
+| multivariate `.inp` | one fue `.inp` per series |
+|---|---|
+| one λ, d, D for all | λᵢ, dᵢ, Dᵢ (more general) |
+| run option `-mean` | the mean, flagged estimable |
+| run option `-scale` (100) | the rescaling factor |
+| run option `-deseason` (harmonics computed outside the model) | `cos`/`sin`/`alter` deterministic terms, estimated |
+| a full VARMA(p,q) | a free regular ARMA(p,q) in every file (the diagonal) and cross orders p, q |
+
+So from 5.0:
+
+- `drvarma -split FILE[.inp] [-mean] [-harmonics] [-ar P] [-ma Q] [-scale F]
+  [-dir DIR]` writes one univariate `.inp` of fue per series. The reader of
+  the multivariate file moved out of `main()` into `src/inpread.c`, verbatim,
+  and is shared by the `.inp` path and `-split`. `-split` never overwrites a
+  file. What it writes is checked in `tests/escalera`:
+  - fue's validator accepts it;
+  - fue's Python parser reads the same data and transformation;
+  - the fue engine estimates it and writes its `.pre`;
+  - and the ladder on the files of `-split -mean -ar 1`, with p = 1, reaches
+    **the same VAR(1)** as the `.inp` path with `IPC3 1 0 -mean`, with μ and
+    the whole of φ(1) identical to six decimals.
+- The `.inp` path still reads the multivariate file, unchanged byte for byte
+  (tests/banco). It prints a one-line deprecation note on stderr, the only
+  other line the bench ignores. It stays until the GUI of drvarma, its only
+  producer, is migrated to fue's files. It is removed in 6.0.
+- A multivariate `.inp` given to the ladder (with its extension) is refused
+  with fue's validator's reason and the `-split` command to convert it.
+
+The Python port follows the same line: drvarma-python should read fue's files
+through `fue.load`, the reference parser, instead of its own `inp.py`.
+

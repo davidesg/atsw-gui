@@ -32,6 +32,7 @@
 #include "transform.h"
 #include "deseason.h"
 #include "escalera.h"
+#include "inpread.h"
 #include "version.h"
 #include <getopt.h>  /* optional, can be replaced by manual parsing */
 
@@ -110,67 +111,11 @@ void print_roots(struct Tvarma *varma);
 static void debug_print_vector(const char *label, real *v, int n);
 
 /*****************************************************************************/
-/*  Tokenizer for the fue-style .inp format.                                 */
-/*  Lines whose first non-blank character is '*' are comments/section        */
-/*  markers and are skipped.  All other lines provide whitespace-delimited   */
-/*  tokens consumed sequentially.                                            */
-/*****************************************************************************/
-typedef struct { FILE *fp; char line[8192]; char *pos; } InpReader;
-
-static int inp_token(InpReader *R, char *out, int n)
-{
-    for (;;) {
-        if (R->pos == NULL || *R->pos == '\0') {
-            if (!fgets(R->line, sizeof(R->line), R->fp)) return 0;  /* EOF */
-            char *p = R->line;
-            while (*p == ' ' || *p == '\t') p++;
-            if (*p == '*' || *p == '\0' || *p == '\n' || *p == '\r') {
-                R->pos = NULL;          /* comment / blank line: skip */
-                continue;
-            }
-            R->pos = R->line;
-        }
-        while (*R->pos == ' ' || *R->pos == '\t' ||
-               *R->pos == '\n' || *R->pos == '\r') R->pos++;
-        if (*R->pos == '\0') { R->pos = NULL; continue; }
-        int k = 0;
-        while (*R->pos && *R->pos != ' ' && *R->pos != '\t' &&
-               *R->pos != '\n' && *R->pos != '\r') {
-            if (k < n - 1) out[k++] = *R->pos;
-            R->pos++;
-        }
-        out[k] = '\0';
-        return 1;
-    }
-}
-
-/* Read one integer / real token, aborting with a message on failure. */
-static int inp_int(InpReader *R, const char *what, const char *fname)
-{
-    char tok[256];
-    if (!inp_token(R, tok, sizeof tok)) {
-        printf("ERROR: %s: unexpected end of file while reading %s\n", fname, what);
-        exit(1);
-    }
-    return atoi(tok);
-}
-static real inp_real(InpReader *R, const char *what, const char *fname)
-{
-    char tok[256];
-    if (!inp_token(R, tok, sizeof tok)) {
-        printf("ERROR: %s: unexpected end of file while reading %s\n", fname, what);
-        exit(1);
-    }
-    return atof(tok);
-}
-
-/*****************************************************************************/
 /*  Main function                                                            */
 /*****************************************************************************/
 int main(int argc, char *argv[])
 {
     STRING inputf, outputf, base_name;
-    FILE *inputv;
     real *x, *dev, **cov, gradtol, steptol;
     int npar, maxits, nrits, ifault, i, j, k;
     int do_forecast = 0;
@@ -186,6 +131,8 @@ int main(int argc, char *argv[])
         printf("drvarma %s\n", DRVARMA_VERSION_FULL);
         return 0;
     }
+    if (argc > 1 && strcmp(argv[1], "-split") == 0)
+        return split_main(argc, argv);
     if (escalera_requested(argc, argv))
         return escalera_main(argc, argv);
 
@@ -204,9 +151,16 @@ int main(int argc, char *argv[])
         printf("  -estwin N: estimate params on first N raw obs, then write <base>.recursive\n");
         printf("       with fixed-parameter forecasts from every origin (needs -forecast H)\n");
         escalera_usage(argv[0]);
+        printf("       %s -split FILE[.inp] [-mean] [-harmonics] [-ar P] [-ma Q] [-scale F] [-dir DIR]\n", argv[0]);
+        printf("  The multivariate .inp (the first form) is DEPRECATED since 5.0: -split\n");
+        printf("       converts it into one univariate .inp of fue per series, for the ladder.\n");
         printf("  -version: print the version and exit\n");
             exit(1);
     }
+
+    /* The multivariate .inp is deprecated since 5.0: one line, on stderr. */
+    fprintf(stderr, "Note: the multivariate .inp is deprecated since drvarma 5.0; "
+                    "convert it with: drvarma -split %s\n", argv[1]);
 
     inputf = NEW_STR(80);
     outputf = NEW_STR(80);
@@ -287,69 +241,16 @@ int main(int argc, char *argv[])
     printf("Estimation method: %d\n", met);
     printf("Two-step init    : %s\n", global_twostep ? "yes" : "no");
 
-    /* [2] Read data (fue-style header + raw level data) */
-    if (NULL == (inputv = fopen(inputf, "r"))) {
-        printf("ERROR: cannot open %s\n", inputf);
-        exit(1);
-    }
+    /* [2] Read data (fue-style header + raw level data).  The reader is in
+       inpread.c, shared with -split; this format is deprecated since 5.0. */
     {
-        InpReader R; R.fp = inputv; R.line[0] = '\0'; R.pos = NULL;
-
-        /* ** Frequency: */
-        data_freq = inp_int(&R, "frequency", inputf);
-        /* ** Series, observations, start (subperiod year): */
-        nser            = inp_int(&R, "number of series", inputf);
-        nobs_raw        = inp_int(&R, "number of observations", inputf);
-        data_start_sub  = inp_int(&R, "starting subperiod", inputf);
-        data_start_year = inp_int(&R, "starting year", inputf);
-
-        if (data_freq < 1 || nser < 1 || nobs_raw < 1) {
-            printf("ERROR: invalid header in %s (freq=%d, nser=%d, nobs=%d)\n",
-                   inputf, data_freq, nser, nobs_raw);
-            fclose(inputv);
-            exit(1);
-        }
-
-        /* ** Series names: */
-        series_names = (char **) malloc((nser + 1) * sizeof(char *));
-        for (j = 1; j <= nser; j++) {
-            char tok[256];
-            if (!inp_token(&R, tok, sizeof tok)) {
-                printf("ERROR: %s: missing series name %d of %d\n", inputf, j, nser);
-                fclose(inputv);
-                exit(1);
-            }
-            series_names[j] = strdup(tok);
-        }
-
-        /* ** Box-Cox lambda, regular differences, annual differences: */
-        trans_lambda = inp_real(&R, "Box-Cox lambda", inputf);
-        trans_d      = inp_int (&R, "regular differences", inputf);
-        trans_D      = inp_int (&R, "seasonal differences", inputf);
-        if (trans_d < 0 || trans_D < 0) {
-            printf("ERROR: %s: differences must be >= 0 (d=%d, D=%d)\n",
-                   inputf, trans_d, trans_D);
-            fclose(inputv);
-            exit(1);
-        }
-
-        /* ** Data: nobs_raw rows of nser raw level values */
-        real **raw = matrix(1, nobs_raw, 1, nser);
-        for (i = 1; i <= nobs_raw; i++) {
-            for (j = 1; j <= nser; j++) {
-                char tok[256];
-                if (!inp_token(&R, tok, sizeof tok)) {
-                    printf("ERROR: not enough data in %s (failed at obs %d, series %d; "
-                           "expected %d x %d values)\n",
-                           inputf, i, j, nobs_raw, nser);
-                    free_matrix(raw, 1, nobs_raw, 1, nser);
-                    fclose(inputv);
-                    exit(1);
-                }
-                raw[i][j] = atof(tok);
-            }
-        }
-        fclose(inputv);
+        MvInp in;
+        mvinp_read(inputf, &in);
+        data_freq = in.freq;  nser = in.nser;  nobs_raw = in.nobs;
+        data_start_sub = in.start_sub;  data_start_year = in.start_year;
+        series_names = in.names;
+        trans_lambda = in.lambda;  trans_d = in.d;  trans_D = in.D;
+        real **raw = in.raw;
 
         /* Optional harmonic seasonal adjustment on the RAW levels (-deseason).
            Same tested algorithm as the GUI; estimated on first differences,

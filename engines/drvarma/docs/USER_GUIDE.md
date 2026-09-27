@@ -121,7 +121,13 @@ Provide the full data file (training + later observations) and use together with
 drvarma data/passthrough/WTI_IPC_ES_ext 1 0 -mean -deseason auto -forecast 24 -estwin 216
 ```
 
-## 6b. The ladder — `.pre` input (5.0)
+## 6b. The ladder — fue's files as input (5.0)
+
+> **The multivariate `.inp` of §2 is deprecated since 5.0.** Convert it with
+> `drvarma -split FILE.inp [-mean] [-harmonics] [-ar P] [-ma Q] [-dir DIR]`:
+> one univariate `.inp` of fue per series. Refine them in fue or art, or
+> give them to the ladder as they are. With `-mean -ar P -ma Q` and cross
+> orders p = P, q = Q, the ladder is the old full VARMA(P,Q).
 
 ```
 drvarma IPC_ES_m10.pre IPC_FR_msar.pre IPC_DE_mar3sar.pre 1 0 -o ipc3

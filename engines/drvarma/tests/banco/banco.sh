@@ -6,8 +6,9 @@
 #
 # Cada caso corre en un directorio temporal con una copia de su .inp; se
 # comparan byte a byte la salida estandar y todos los ficheros que escribe.
-# Con UNA excepcion: la linea "Program" del .out, que lleva la version desde
-# la 5.0 y que por eso no puede estar en la referencia de la 0.4.1.
+# With TWO exceptions, both from 5.0 and so absent from the 0.4.1 reference:
+# the "Program" line of the .out, which carries the version, and the one-line
+# deprecation note of the multivariate .inp on stderr.
 set -u
 AQUI=$(cd "$(dirname "$0")" && pwd)
 RAIZ=$(cd "$AQUI/../.." && pwd)
@@ -31,8 +32,8 @@ while IFS='|' read -r nombre fich args; do
         ext=${f#$d/$base}
         [ "$f" = "$d/$nombre.stdout" ] && ext=.stdout
         if [ "$MODO" = --generar ]; then cp "$f" "$REF/$nombre$ext"; continue; fi
-        grep -av '^Program          : ' "$f" > "$TMP/nuevo"
-        grep -av '^Program          : ' "$REF/$nombre$ext" > "$TMP/viejo" 2>/dev/null
+        grep -av '^Program          : \|^Note: the multivariate .inp is deprecated' "$f" > "$TMP/nuevo"
+        grep -av '^Program          : \|^Note: the multivariate .inp is deprecated' "$REF/$nombre$ext" > "$TMP/viejo" 2>/dev/null
         if ! cmp -s "$TMP/nuevo" "$TMP/viejo"; then
             echo "FALLA $nombre$ext"; diff "$TMP/viejo" "$TMP/nuevo" | head -8
             echo x >> "$TMP/fallos"

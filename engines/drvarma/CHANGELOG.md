@@ -40,6 +40,19 @@ Design: `docs/DESIGN-v5-ladder.md`.
 - `tests/banco/`: byte regression of the `.inp` path against 0.4.1.
   `tests/escalera/`: the assertions of the ladder and its regression.
 
+- **`drvarma -split`** converts a multivariate `.inp` into one univariate
+  `.inp` of fue per series (`-mean`, `-harmonics`, `-ar P`, `-ma Q`,
+  `-scale`, `-dir`). The ladder on them reproduces the `.inp` path's full
+  VARMA: VAR(1) with mean, μ and φ(1) identical to six decimals.
+- The ladder takes fue's `.inp` specifications as well as `.pre` optima,
+  recognised by their content (fue's own validator, `inp_check_fue`), not
+  by their extension.
+
+### Deprecated
+- **The multivariate `.inp`.** It is still read, byte for byte as in
+  0.4.1, with a one-line note on stderr; it goes in 6.0, once the GUI is
+  migrated. One format for the whole ecosystem: fue's.
+
 ### Fixed
 - **BUG-2**: series are crossed by date, not by position. They must share
   the frequency and the last date, or they are rejected (`lib/fuepre`,

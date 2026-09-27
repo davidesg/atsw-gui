@@ -37,6 +37,7 @@
 #include "escalera.h"
 #include "version.h"
 #include "forecast.h"
+#include "inpcheck.h"
 #include <string.h>
 #include <math.h>
 
@@ -843,15 +844,41 @@ static int esc_forecasts(real *x, real sigma2, int L, int estwin, const char *na
 /* ------------------------------------------------------------------------- */
 /*  La linea de ordenes                                                      */
 /* ------------------------------------------------------------------------- */
-static int ends_with_pre(const char *s)
+/* WHAT a file is, is decided by its CONTENT, not by its name: a file is a
+   univariate model of fue -- an .inp specification or a .pre optimum, the
+   same format -- if fue's own validator accepts it (engines/fue/src/
+   inpcheck.c, compiled here as inp_check_fue, as the fue GUI does). art
+   used to refuse a file because it was CALLED .pre, and a renamed one went
+   through (DISENO-escalera.md 1.2).                                       */
+static int ends_with(const char *s, const char *ext)
 {
-    size_t n = strlen(s);
-    return n > 4 && strcmp(s + n - 4, ".pre") == 0;
+    size_t n = strlen(s), e = strlen(ext);
+    return n > e && strcmp(s + n - e, ext) == 0;
+}
+
+static int is_integer(const char *s)
+{
+    if (*s == '-' || *s == '+') s++;
+    if (!*s) return 0;
+    for (; *s; s++) if (*s < '0' || *s > '9') return 0;
+    return 1;
 }
 
 int escalera_requested(int argc, char *argv[])
 {
-    return argc > 1 && ends_with_pre(argv[1]);
+    char why[400];
+    FILE *f;
+    if (argc < 2 || is_integer(argv[1]) || argv[1][0] == '-') return 0;
+    if (inp_check_fue(argv[1], why, sizeof why) == 0) return 1;
+    /* A file that exists under its own name and is called .pre or .inp is
+       meant as a model: the ladder says what is wrong with it. The .inp
+       path takes a name WITHOUT extension and adds it.                   */
+    if ((ends_with(argv[1], ".pre") || ends_with(argv[1], ".inp")) &&
+        (f = fopen(argv[1], "r")) != NULL) {
+        fclose(f);
+        return 1;
+    }
+    return 0;
 }
 
 void escalera_usage(const char *prog)
@@ -878,7 +905,7 @@ static void base_of(const char *path, char *out, size_t n)
     size_t len;
     b = b ? b + 1 : path;
     len = strlen(b);
-    if (len > 4 && strcmp(b + len - 4, ".pre") == 0) len -= 4;
+    if (len > 4 && (strcmp(b + len - 4, ".pre") == 0 || strcmp(b + len - 4, ".inp") == 0)) len -= 4;
     if (len >= n) len = n - 1;
     memcpy(out, b, len); out[len] = '\0';
 }
@@ -896,10 +923,20 @@ int escalera_main(int argc, char *argv[])
 
     /* [1] Los .pre, y detras p y q */
     n_ser = 0;
-    for (argi = 1; argi < argc && ends_with_pre(argv[argi]); argi++) {
+    for (argi = 1; argi < argc && !is_integer(argv[argi]) && argv[argi][0] != '-'; argi++) {
+        char why[400];
         if (n_ser == ESC_MAX) {
             printf("ERROR: at most %d series\n", ESC_MAX);
             return 1;
+        }
+        if (inp_check_fue(argv[argi], why, sizeof why) != 0) {
+            printf("ERROR: %s is not a univariate model file of fue: %s\n",
+                   argv[argi], why);
+            if (ends_with(argv[argi], ".inp"))
+                printf("       If it is a multivariate drvarma .inp (deprecated since 5.0),\n"
+                       "       give its name without .inp, or convert it:\n"
+                       "         drvarma -split %s\n", argv[argi]);
+            return 2;
         }
         pre_path[++n_ser] = argv[argi];
     }
@@ -1106,10 +1143,15 @@ int escalera_main(int argc, char *argv[])
                                "        re-estimated on a different sample, and moving is legitimate.\n",
                             Ts[k].name, move[k], n_trim[k]);
                 else if (move[k] > PRE_MOVE)
+                {
                     fprintf(f, "  Note: %s moved %.3g from its .pre on its own sample. A genuine\n"
                                "        .pre is a fixed point (it moves ~1e-5, the rounding of its six\n"
                                "        decimals): this one is a specification, not an optimum.\n",
                             Ts[k].name, move[k]);
+                    if (!opt_redet && n_det_free_params(&Tm[k]) > 0)
+                        fprintf(f, "        Its deterministic terms stayed at their SEEDS: in a\n"
+                                   "        specification they are starting values -- use -redet.\n");
+                }
             fprintf(f, "\n");
         }
         if (!pass) {

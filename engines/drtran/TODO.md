@@ -817,12 +817,12 @@ en la que la ventaja sobrevive a una muestra grande (−60% en el RMSE de la gan
 Ese es el indicio. Sería un proyecto de teoría econométrica en serio, no un apéndice.
 
 
-## BUG-55 (confirmed 2026-09-27): the MA part of the forecast uses standardised residuals
+## BUG-55 (fixed 2026-09-27): the MA part of the forecast used standardised residuals
 
-`forecast_levels` and `transfer_forecast` call `elf` with `atf = FALSE`. That
-leaves L⁻¹a in `a`, not the residuals. It is confirmed and registered as
-BUG-55 in drtran-python/docs/BUGS.md, with the verified and inferred scope.
-Reproduction: `sh tests/repro/bug55_ma_residuals.sh`, which exits 1 while the
-defect is there. It gives 85.42 / 79.97 / 95.01 with the airline model behind
-WTI, against fue's 81.89 / 81.91 / 83.82. The fix, `atf = TRUE` in both calls,
-agrees with fue and is not applied yet. The Python port is not affected.
+`forecast_levels` and `transfer_forecast` called `elf` with `atf = FALSE`,
+which leaves L⁻¹a in `a`: the conditional residuals, standardised. Now they
+call it with `atf = TRUE`, which gives the exact residuals. The reproduction
+(`tests/repro/bug55_ma_residuals.sh`) and `test_battery.sh` §17 agree with
+fue in both positions. The ERR column of the forecast report was wrong for
+the same reason, for every series but the first. Registered in
+drtran-python/docs/BUGS.md.

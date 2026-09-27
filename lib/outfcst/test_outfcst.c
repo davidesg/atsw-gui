@@ -121,10 +121,14 @@ static void evaluacion( const char *path )
        "  31 origenes, de la 180 a la 210" );
    ok( f.ev.nh == 6 && f.ev.horizonte == 6, "  seis horizontes" );
 
-   okf( f.ev.h[0].mae,  0.182159, 1e-6, "  h=1: MAE" );
-   okf( f.ev.h[0].rmse, 0.255043, 1e-6, "  h=1: RMSE" );
-   okf( f.ev.h[0].mape, 0.2246,   1e-4, "  h=1: MAPE" );
-   okf( f.ev.h[5].rmse, 0.750253, 1e-6, "  h=6: RMSE" );
+   /* The numbers of drtran since BUG-55 (2026-09-27): its forecasts use the
+      exact residuals. This case is the airline model (MA x SMA, Theta = 0.81)
+      first, whose conditional residuals, used before, were slightly off.
+      Before: 0.182159 / 0.255043 / 0.2246 / 0.750253.                     */
+   okf( f.ev.h[0].mae,  0.182023, 1e-6, "  h=1: MAE" );
+   okf( f.ev.h[0].rmse, 0.255132, 1e-6, "  h=1: RMSE" );
+   okf( f.ev.h[0].mape, 0.2244,   1e-4, "  h=1: MAPE" );
+   okf( f.ev.h[5].rmse, 0.749936, 1e-6, "  h=6: RMSE" );
 
    /* El error crece con el horizonte, que es lo que tiene que pasar y lo que
     * confirma que las columnas se estan leyendo en su sitio.            */

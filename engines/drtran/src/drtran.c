@@ -1315,12 +1315,14 @@ static int forecast_levels(real *x, int L, real **LVL)
     if (ifault != 0) return 1;
     x = expand_params(x);
 
-    {   /* los residuos: sin ellos, la parte MA no preve nada */
+    {   /* los residuos: sin ellos, la parte MA no preve nada. atf = TRUE:
+           con FALSE elf deja en a los residuos ESTANDARIZADOS L^-1 a, no los
+           residuos (BUG-55; ver transfer_forecast).                      */
         real pi1, pi2, pi3;
         int  ifa = 0;
         vf.xitol = -1e-3;
         elf(vf.m, vf.n, vf.p, vf.q, vf.mu, vf.phi, vf.theta, vf.qq, vf.w,
-            1.0, vf.xitol, FALSE, vf.a, &pi1, &pi2, &pi3, &ifa);
+            1.0, vf.xitol, TRUE, vf.a, &pi1, &pi2, &pi3, &ifa);
         if (ifa != 0) { shootx(x, &vf, &ifault, 0, 1); return 2; }
     }
 
@@ -1721,13 +1723,20 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
        shootx solo ALOJA a[] -- a ceros --, no lo calcula: quien lo calcula es elf.
        Sin esta llamada, todo modelo con q > 0 se preveia con residuos NULOS. No
        se notaba porque un AR puro no entra en ese bucle... y ningun modelo con MA
-       se preveia en las pruebas. */
+       se preveia en las pruebas.
+
+       BUG-55: y elf tiene que devolverlos con atf = TRUE. Con FALSE no corre
+       cres, y lo que deja en a es L^-1 a -- los residuos condicionales
+       premultiplicados por la inversa de Cholesky de Q (elfvarma.c, [5.2]):
+       ESTANDARIZADOS. La fila 1 tiene Q11 = 1 y salia bien; las demas, escaladas
+       por 1/sqrt(Qii). Con el airline detras de WTI la parte MA salia ~30
+       veces mayor. drvarma y el puerto en Python ya pedian atf = TRUE. */
     {
         real pi1, pi2, pi3;
         int  ifa = 0;
         vf.xitol = -1e-3;                       /* verosimilitud EXACTA */
         elf(vf.m, vf.n, vf.p, vf.q, vf.mu, vf.phi, vf.theta, vf.qq, vf.w,
-            1.0, vf.xitol, FALSE, vf.a, &pi1, &pi2, &pi3, &ifa);
+            1.0, vf.xitol, TRUE, vf.a, &pi1, &pi2, &pi3, &ifa);
         if (ifa != 0) {
             fprintf(out, "\nCould not compute the residuals for forecasting "
                          "(elf ifault = %d).\n", ifa);

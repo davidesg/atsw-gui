@@ -171,7 +171,7 @@ int of_parse( const char *texto, Forecast *f )
          f->ev.horizonte = n1;
          continue;
       }
-      /* "    1     31     0.182159     0.255043      0.2246" */
+      /* "    1     31     0.182023     0.255132      0.2244" */
       if ( sscanf( l, " %d %d %lf %lf %lf", &n1, &n2, &v1, &v2, &v3 ) == 5 &&
            f->ev.nh < OF_MAX_HOR ) {
          OfHoriz *h = &f->ev.h[f->ev.nh++];

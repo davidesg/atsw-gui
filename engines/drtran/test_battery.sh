@@ -2312,6 +2312,26 @@ $DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -0 \
     && pass "y la pareja bien alineada sigue pasando" \
     || fail "la pareja alineada ya no pasa"
 
+# ── BUG-55: LA PARTE MA DE LA PREVISION, CON LOS RESIDUOS DE VERDAD ───────
+echo
+echo "── 17. La prevision usa los residuos, no los estandarizados (BUG-55) ──"
+echo "   elf con atf = FALSE deja en a los residuos ESTANDARIZADOS L^-1 a: la"
+echo "   fila 1 salia bien (Q11 = 1) y las demas, escaladas por 1/sqrt(Qii)."
+echo "   El diagonal (-0) tiene que prever cada serie como su univariante, y"
+echo "   el airline de ES (MA x SMA) tiene su prevision de fue: 81.89 en"
+echo "   1/2020 y 83.82 en 12/2020, este donde este en la lista."
+echo
+fc_es() {   # nivel previsto de ES_CPI en la fecha $2, del .out $1
+    awk -v d="$2" '/VARIABLE NAME  : ES_CPI/{f=1} f && $1==d {print $2; exit}' "$1"
+}
+$DRTRAN "$WORK/WTI_ar1.pre" "$WORK/ES_CPI_airline.pre" -0 -f 12 \
+    -o "$TMPDIR/b55_2.out" > /dev/null 2>&1
+$DRTRAN "$WORK/ES_CPI_airline.pre" "$WORK/WTI_ar1.pre" -0 -f 12 \
+    -o "$TMPDIR/b55_1.out" > /dev/null 2>&1
+check "airline SEGUNDO, 1/2020 (fue 81.89)"  81.89 "$(fc_es "$TMPDIR/b55_2.out" 1/2020)"  0.02
+check "airline SEGUNDO, 12/2020 (fue 83.82)" 83.82 "$(fc_es "$TMPDIR/b55_2.out" 12/2020)" 0.02
+check "airline PRIMERO, 12/2020 (fue 83.82)" 83.82 "$(fc_es "$TMPDIR/b55_1.out" 12/2020)" 0.02
+
 echo "============================================"
 echo -e "  RESULTADO: ${GREEN}$PASS PASS${NC}, ${RED}$FAIL FAIL${NC}"
 echo "============================================"

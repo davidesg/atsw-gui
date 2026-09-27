@@ -27,6 +27,9 @@ extern int quiet_mode;   /* added */
 /*****************************************************************************/
 /*****************************************************************************/
 
+int opt_iters = 0;            /* iterations of the last raxopt (est: 0 means the */
+                              /* BFGS factor was never updated from I)          */
+
 void raxopt( real (*func)(real *), real *fk, int n, real *xk, real **b,
              int maxits, int nrits, real gradtol, real steptol )
 
@@ -113,6 +116,7 @@ void raxopt( real (*func)(real *), real *fk, int n, real *xk, real **b,
       *fk = fkp1;
       }                                       /* Back for another iteration. */
 
+   opt_iters = k;
    report( n, k, xk, gk, *fk, termcode );     /* Report on convergence.      */
    if (!quiet_mode) printf( "%4d F: %0.10f\n", k, *fk );
 

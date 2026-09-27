@@ -98,6 +98,8 @@ struct Tseries
 #define EST_SE_FDHESS    1    /* fdhess at the optimum                         */
 #define EST_SE_BOUNDARY  2    /* BFGS kept: the optimum is on the boundary     */
 #define EST_SE_NOTPD     3    /* BFGS kept: fdhess not positive definite       */
+#define EST_SE_NONE_BOUNDARY 4 /* neither: boundary, and BFGS never built       */
+#define EST_SE_NONE_NOTPD    5 /* neither: not PD, and BFGS never built         */
 extern int est_fixed, est_se_how;
 const char *est_se_label( int how );
 

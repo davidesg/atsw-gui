@@ -548,7 +548,12 @@ static void print_param_table(FILE *f, Fit *F)
     esc_names(names);
     fprintf(f, "  %-34s %12s %12s %9s %8s\n", "Parameter", "Estimate", "Std.Error", "t-stat", "p-val");
     for (i = 1; i <= F->npar; i++) {
-        real se = F->dev[i], t = (se > 0.0) ? F->x[i] / se : 0.0;
+        real se = F->dev[i], t;
+        if (isnan(se)) {            /* no standard errors: est_se_label says why */
+            fprintf(f, "  %-34s %12.6f\n", names[i], F->x[i]);
+            continue;
+        }
+        t = (se > 0.0) ? F->x[i] / se : 0.0;
         real pv = (se > 0.0) ? 2.0 * (1.0 - normal_cdf(fabs(t))) : 1.0;
         fprintf(f, "  %-34s %12.6f %12.6f %9.3f %8.4f\n", names[i], F->x[i], se, t, pv);
     }

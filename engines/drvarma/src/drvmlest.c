@@ -27,6 +27,7 @@ real pi10x, pi20x, xitolx;
 int  est_fdhess = 0;          /* 1: standard errors from fdhess at the optimum */
 int  est_fixed  = 0;          /* >0: parameter held while fdhess runs (flat dir.) */
 int  est_se_how = EST_SE_BFGS;/* <- which Hessian gave the standard errors      */
+extern int   opt_iters;       /* qnewtopt.c: iterations of the last raxopt  */
 static int   objc_rejects;    /* points objcfunc refused (boundary sentinel)     */
 static real *fix_full;        /* full vector behind the reduced objective        */
 static int   fix_n;
@@ -47,6 +48,12 @@ const char *est_se_label( int how )
       case EST_SE_BOUNDARY: return "bfgs (fdhess: the optimum is on the boundary "
                                    "of the admissible region)";
       case EST_SE_NOTPD:    return "bfgs (fdhess: the Hessian is not positive definite)";
+      case EST_SE_NONE_BOUNDARY:
+         return "none (fdhess: the optimum is on the boundary of the admissible "
+                "region; the search did not move, so it built no BFGS Hessian)";
+      case EST_SE_NONE_NOTPD:
+         return "none (fdhess: the Hessian is not positive definite; the search "
+                "did not move, so it built no BFGS Hessian)";
       default:              return "bfgs";
       }
 }
@@ -127,6 +134,17 @@ static void fdhess_cov( int npar, real *par, real f, real **cov, real *dev )
              ii++;
              }
          }
+      }
+   /* raxopt starts b at the identity: with no iteration there is no BFGS    */
+   /* Hessian to fall back on (a .pre that already is the optimum), and the  */
+   /* identity would give sqrt(2F/n) for every parameter. Say so instead.    */
+   if ( ( est_se_how == EST_SE_BOUNDARY || est_se_how == EST_SE_NOTPD ) &&
+        opt_iters == 0 )
+      {
+      est_se_how = ( est_se_how == EST_SE_BOUNDARY ) ? EST_SE_NONE_BOUNDARY
+                                                     : EST_SE_NONE_NOTPD;
+      for ( i = 1; i <= npar; i++ )
+          { dev[i] = NAN; for ( j = 1; j <= npar; j++ ) cov[i][j] = NAN; }
       }
    free_vector( fix_full, 1, npar );
    free_matrix( H, 1, k, 1, k );  free_vector( v, 1, k );  free_vector( z, 1, k );
@@ -230,7 +248,8 @@ void est( void (*cast)( real *, struct Tvarma *, int *, int, int ),
 
 /* [3]: Sample estimation of the variance-covariance matrix:                 */
 
-   if ( est_se_how != EST_SE_FDHESS )
+   if ( est_se_how == EST_SE_BFGS || est_se_how == EST_SE_BOUNDARY ||
+        est_se_how == EST_SE_NOTPD )
    for ( i = 1; i <= npar; i++ )
        {
        for ( j = 1; j <= npar; j++ ) vtmp[j] = 0.0;

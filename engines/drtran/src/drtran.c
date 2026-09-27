@@ -280,6 +280,11 @@ static void print_arma_factors(struct Tusmodel *Tm, const char *tag, int is_ar,
                     continue;
                 }
 
+                if (isnan(cov[*pi][*pi])) {  /* no standard errors */
+                    fprintf(out, "%-20s %12.6f%s\n", label, x[*pi], note);
+                    (*pi)++;
+                    continue;
+                }
                 dev[*pi] = (cov[*pi][*pi] > 0) ? sqrt(cov[*pi][*pi]) : 0.0;
                 tstat = (dev[*pi] > 1e-15) ? x[*pi] / dev[*pi] : 0.0;
                 pval  = 2.0 * (1.0 - normal_cdf(fabs(tstat)));
@@ -2793,6 +2798,7 @@ static real delta_se(real *g, real **cov, int npar)
     real v = 0.0;
     for (i = 1; i <= npar; i++)
         for (j = 1; j <= npar; j++) v += g[i] * cov[i][j] * g[j];
+    if (isnan(v)) return v;             /* no covariance: no delta method */
     return (v > 0.0) ? sqrt(v) : 0.0;
 }
 
@@ -3239,6 +3245,10 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
                         slot_name[i], xf[i], expr);
             } else {
                 pi = free_of_slot[i];
+                if (isnan(cov[pi][pi])) {   /* no standard errors: est_se_label */
+                    fprintf(outputv, "%-20s %12.6f\n", slot_name[i], x[pi]);
+                    continue;
+                }
                 dev[pi] = (cov[pi][pi] > 0) ? sqrt(cov[pi][pi]) : 0.0;
                 tstat = (dev[pi] > 1e-15) ? x[pi] / dev[pi] : 0.0;
                 pval  = 2.0 * (1.0 - normal_cdf(fabs(tstat)));

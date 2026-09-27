@@ -68,6 +68,9 @@ Design: `docs/DESIGN-v5-ladder.md`.
   which `est` then overwrote. `fdhess` is now checked with a plain
   Cholesky and for neighbours on the boundary. If either check fails, the
   BFGS factor is used and the report says why.
+  The fallback applies only if raxopt iterated (`opt_iters`). It starts
+  at the identity, so a search that did not move has no BFGS Hessian: then
+  there are no standard errors and the table says `none (…)`.
 
 ### Changed
 - The `.pre` reader, `struct Tusmodel`, the univariate transformations and

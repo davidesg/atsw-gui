@@ -1375,6 +1375,11 @@ static void print_parameters(real *x, real *dev, real **cov, int npar, struct Tv
     /* Means */
     if (global_include_mean) {
         for (i = 1; i <= m; i++) {
+            if (isnan(dev[idx])) {      /* no standard errors (est_se_label) */
+                fprintf(outputv, "mu[%d]               %12.6f\n", i, x[idx]);
+                idx++;
+                continue;
+            }
             t_stat = x[idx] / dev[idx];
             p_val = 2.0 * (1.0 - normal_cdf(fabs(t_stat)));
             sig_code(p_val, sig);
@@ -1391,6 +1396,11 @@ static void print_parameters(real *x, real *dev, real **cov, int npar, struct Tv
                 if (global_diag_ar && i != j) {
                     fprintf(outputv, "phi[%d]_%d%d          (fixed 0.0)\n", k, i, j);
                 } else {
+                    if (isnan(dev[idx])) {  /* no standard errors */
+                        fprintf(outputv, "phi[%d]_%d%d          %12.6f\n", k, i, j, x[idx]);
+                        idx++;
+                        continue;
+                    }
                     t_stat = x[idx] / dev[idx];
                     p_val = 2.0 * (1.0 - normal_cdf(fabs(t_stat)));
                     sig_code(p_val, sig);
@@ -1409,6 +1419,11 @@ static void print_parameters(real *x, real *dev, real **cov, int npar, struct Tv
                 if (global_diag_ma && i != j) {
                     fprintf(outputv, "theta[%d]_%d%d        (fixed 0.0)\n", k, i, j);
                 } else {
+                    if (isnan(dev[idx])) {  /* no standard errors */
+                        fprintf(outputv, "theta[%d]_%d%d        %12.6f\n", k, i, j, x[idx]);
+                        idx++;
+                        continue;
+                    }
                     t_stat = x[idx] / dev[idx];
                     p_val = 2.0 * (1.0 - normal_cdf(fabs(t_stat)));
                     sig_code(p_val, sig);
@@ -1425,7 +1440,7 @@ static void print_parameters(real *x, real *dev, real **cov, int npar, struct Tv
         for (i = 1; i <= m; i++) {
             if (isnan(dev[idx])) {      /* held by fdhess: the flat direction */
                 fprintf(outputv, "cov[%d,%d]           %12.6f %12s\n", i, i, x[idx],
-                        "(normalised)");
+                        est_se_how == EST_SE_FDHESS ? "(normalised)" : "");
                 idx++;
                 continue;
             }
@@ -1441,7 +1456,7 @@ static void print_parameters(real *x, real *dev, real **cov, int npar, struct Tv
             for (j = 1; j <= i; j++) {
                 if (isnan(dev[idx])) {  /* held by fdhess: the flat direction */
                     fprintf(outputv, "cov[%d,%d]           %12.6f %12s\n", i, j, x[idx],
-                            "(normalised)");
+                            est_se_how == EST_SE_FDHESS ? "(normalised)" : "");
                     idx++;
                     continue;
                 }

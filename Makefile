@@ -16,7 +16,8 @@
 #   make check    pasa las baterias
 #   make clean
 
-MOTORES = engines/fue engines/fuf engines/fug engines/drtran engines/drvarma
+MOTORES = engines/fue engines/fuf engines/fug engines/drtran engines/drvarma \
+          engines/drvec
 GUIS    = gui/fue gui/fug gui/drtran gui/atsw
 
 # Las baterias, en el orden en que conviene leerlas: primero los motores
@@ -47,6 +48,10 @@ check: all
 	    printf '\n===== %s\n' "$$d"; \
 	    ( cd $$d && sh tests/run_tests.sh ) || exit 1; \
 	done
+	@# drvec (entered 2026-09-27): its battery is bash and needs two probes
+	@# that only its own `make test` builds, so it runs through that target.
+	@printf '\n===== %s\n' engines/drvec
+	@$(MAKE) -s -C engines/drvec test || exit 1
 	@echo
 	@echo "todas las baterias pasan"
 

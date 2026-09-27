@@ -16,7 +16,9 @@ ifeq ($(GSL_LIBS),)
     GSL_LIBS = -lgsl -lgslcblas
 endif
 
-CFLAGS   = -O2 -g3 -Wall -I./include $(GSL_CFLAGS)
+# lib/ of the atsw-gui monorepo (drvec entered it on 2026-09-27).
+LIB_DIR  = ../../lib
+CFLAGS   = -O2 -g3 -Wall -I./include -I$(LIB_DIR)/optim $(GSL_CFLAGS)
 LDFLAGS  =
 LIBS     = $(GSL_LIBS) -lm
 
@@ -37,7 +39,8 @@ SUITE_SRC  = $(SRC_DIR)/fue_pre_reader.c \
              $(SRC_DIR)/diagnose.c
 
 ALL_SRC = $(DRVEC_SRC) $(ENGINE_SRC) $(SUITE_SRC)
-OBJS    = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(ALL_SRC))
+OBJS    = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(ALL_SRC)) \
+          $(BUILD_DIR)/lnsrch.o          # lib/optim: the shared line search
 
 EXEC = $(BIN_DIR)/drvec
 
@@ -66,6 +69,9 @@ $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/%.o: $(LIB_DIR)/optim/%.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # El lector de .pre es una COPIA de drtran y se mantiene con el minimo delta

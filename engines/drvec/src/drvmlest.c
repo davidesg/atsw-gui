@@ -16,7 +16,8 @@
 /*  Copyright (C) Jos‚ Alberto Mauricio, 1995.                               */
 /*****************************************************************************/
 
-#include "main.h"              /* Header file (prototype declarations)        */
+#include "main.h"
+#include <math.h>              /* Header file (prototype declarations)        */
 extern real macheps;          /* Machine epsilon (global: declared in DRV.C) */
 extern FILE *outputv;         /* Output file (global: declared in DRV.C)     */
 
@@ -165,7 +166,13 @@ real objcfunc( real *x )
    if ( ifault > 0 )                            /* ifault = 1-2-3-4-5.       */
       return( 1.0 );
    else
-      return( pow( (pi1 / pi10x), varmax.m ) * (pi2 / pi20x) );
+      {
+      /* A non-finite objective is an inadmissible point, as in drtran,
+         drvarma and fue: return 1.0 (the article's strategy, sec. 3).      */
+      real f = pow( (pi1 / pi10x), varmax.m ) * (pi2 / pi20x);
+      if ( !isfinite( f ) ) return( 1.0 );
+      return( f );
+      }
 }
 
 /*****************************************************************************/

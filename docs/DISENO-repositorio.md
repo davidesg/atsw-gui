@@ -263,3 +263,54 @@ seguiría siendo sólo la mitad Python.
   TASTE no entra en `atsw-gui`, pero el oráculo lo invoca.
 - **Qué hacer con las ~100 versiones archivadas.** No entran, pero tampoco se
   borran por este documento.
+
+---
+
+## 9. After the move: atsw-gui is the source of the C engines (2026-09-27)
+
+*In English, like all documentation since 2026-09-26.*
+
+**Decided.** atsw-gui is where the C engines are developed, and it is on
+GitHub as a **private** repository (`davidesg/atsw-gui`). The standalone
+repositories (fue, fuf, drtran, drvarma, gtk_fue, drvec) stop being
+development sites. Each gets a last commit whose README points here, and is
+then archived with its history.
+
+Three reasons, all visible in the code:
+
+- **The engines no longer build on their own.** drvarma, drtran, fue and
+  fuf take the `.pre` reader, `lnsrch` and the date helpers from `lib/`, and
+  now drvec does too.
+- **Two places to write means drift.** After the import on 2026-09-17,
+  drtran and drvarma each got commits in their standalone repos. drvarma's
+  had to be copied here by hand (`d62b6e7`). drtran's BUG-39 half-fix never
+  arrived, and was brought into `lib/fuepre` on 2026-09-27 (`5274133`).
+- **The oracle needs a fixed version, not a repository.** The Python ports
+  compare against a C engine, and that engine must be identifiable. A
+  per-engine tag here does that: `fue-v1.14.x`, `drvarma-v5.0.0`, and so on.
+  drvarma already prints its git hash in `-version` and in the `.out`.
+
+### drvec, entered 2026-09-27
+
+- **The import.** `git subtree add` brought its 119 commits after they were
+  pushed to its own repository, which was up to date at that point.
+- **Tests.** `make check` runs its battery through its own `make test`: it
+  is bash and needs two probes. It passes 303/303.
+- **Already on `lib/`: the line search.** drvec's copy of `lnsrch` lacked
+  the fix for a non-finite objective, which the other four engines have
+  carried since 2026-09-26. So did its `objcfunc`. drvec now links
+  `lib/optim/lnsrch.c` and guards `objcfunc`, and its 303 tests are
+  unchanged.
+- **Still its own copies (TODO, measured 2026-09-27):**
+
+  | file | vs lib/ or the other engines |
+  |---|---|
+  | `fue_pre_reader.c` | a copy of drtran's; 591 lines differ from `lib/fuepre`, where the other engines read `.pre` files |
+  | `nlatools.c` | 43–46 lines from drvarma/drtran (the seven-copy question of §5) |
+  | `diagnose.c` | 27 lines from drvarma, 205 from drtran |
+  | `elfvarma.c` | identical to drvarma's; 5 lines from drtran's |
+  | `drvmlest.c` | its own `est` (no fdhess guards, see the SE study) |
+
+  The order is the one §5 asks for: the reader first, because it is not
+  numerics and the formats must agree across the ladder. The numerical core
+  comes last, with the batteries in front and measuring.

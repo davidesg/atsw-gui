@@ -1,0 +1,47 @@
+cff-version: 1.2.0
+title: "drvec: exact maximum likelihood estimation of partially nonstationary VARMA models in VEC form"
+message: "If you use this software, please cite both the software and the method paper it implements."
+type: software
+# The names and their order are the copyright line the sources carry
+# (src/drvec.c:22 and README.md), not a fresh attribution.
+authors:
+  - family-names: "Mauricio"
+    given-names: "J. A."
+  - family-names: "Treadway"
+    given-names: "A. B."
+  - family-names: "Guerrero"
+    given-names: "D. E."
+version: "0.10"
+date-released: "2026-08-24"
+license: GPL-2.0-or-later
+repository-code: "https://github.com/davidesg/drvec"
+abstract: >-
+  drvec estimates partially nonstationary vector ARMA models written in vector
+  error-correction (VEC) form by exact maximum likelihood, using the
+  transformation of Mauricio (2006): the VEC system is mapped onto a stationary
+  VARMA model on the transformed vector, whose exact likelihood is evaluated by
+  Algorithm AS 311.  It reports the cointegrating matrix and the adjustment
+  matrix with standard errors, Wald tests of weak exogeneity and of exclusion
+  from the long-run relations, a sequential likelihood-ratio test of the
+  cointegration rank with an optional parametric bootstrap, multivariate
+  residual diagnostics, and forecasts in levels with rolling-origin
+  out-of-sample evaluation.  It shares its likelihood engine with drvarma and
+  its parameter-file bridge with fue and drtran.
+keywords:
+  - cointegration
+  - vector error correction
+  - VARMA
+  - exact maximum likelihood
+  - time series
+references:
+  - type: article
+    title: "Exact maximum likelihood estimation of partially nonstationary vector ARMA models"
+    authors:
+      - family-names: "Mauricio"
+        given-names: "José Alberto"
+    journal: "Computational Statistics & Data Analysis"
+    volume: 50
+    start: 3644
+    end: 3662
+    year: 2006
+    doi: "10.1016/j.csda.2005.07.005"

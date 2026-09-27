@@ -1,0 +1,45 @@
+name: urca_ecb 
+source: European Central Bank (www.ecb.europa.eu), bundled in urca 
+description: Euro Zone macro data 
+n_obs: 26  n_vars: 4 
+vars: gdp.defl, gdp.nom, m3, rl 
+K(lag order): 2  ecdet: const  spec: longrun 
+
+TRACE TEST (H0 r=0 ... r<=m-1, from largest to smallest eigenvalue)
+[1]  9.901094 24.117999 39.264049 72.424875
+trace critical values (10pct, 5pct, 1pct)
+         10pct  5pct  1pct
+r <= 3 |  7.52  9.24 12.97
+r <= 2 | 17.85 19.96 24.60
+r <= 1 | 32.00 34.91 41.07
+r = 0  | 49.65 53.12 60.16
+
+EIGEN (max) TEST
+[1]  9.901094 14.216905 15.146050 33.160826
+eigen critical values
+         10pct  5pct  1pct
+r <= 3 |  7.52  9.24 12.97
+r <= 2 | 13.75 15.67 20.20
+r <= 1 | 19.77 22.00 26.81
+r = 0  | 25.56 28.14 33.24
+
+cointegration vectors (beta, columns), normalized:
+              gdp.defl.l2    gdp.nom.l2         m3.l2        rl.l2
+gdp.defl.l2   1.000000000   1.000000000   1.000000000  1.000000000
+gdp.nom.l2   -0.001818310  -0.009157515   0.005132393 -0.087614499
+m3.l2        -0.005217793  -0.003974693  -0.007157845  0.002925199
+rl.l2         0.685414229   0.660674746  -0.286609439  1.361327229
+constant    -73.875148558 -69.972116306 -72.519401953 26.834742066
+                 constant
+gdp.defl.l2   1.000000000
+gdp.nom.l2   -0.069006616
+m3.l2         0.009586979
+rl.l2        -0.241614760
+constant    -34.300817450
+
+loading matrix (alpha):
+           gdp.defl.l2  gdp.nom.l2      m3.l2        rl.l2      constant
+gdp.defl.d   0.2882352  -0.3243673 -0.3322685 -0.012471597 -3.404129e-13
+gdp.nom.d    6.5347667 -11.7114870  0.5386895  0.320052256 -3.677865e-12
+m3.d        63.4909921 -24.2885557 31.0440410 -3.643963930  5.456293e-11
+rl.d        -0.3925658  -0.6081114  0.2231378 -0.005780841 -6.675939e-13

@@ -1,0 +1,44 @@
+--- a/src/drvec.c
++++ b/src/drvec.c
+@@ -5093,6 +5093,17 @@
+      *      copy of the recursion, which is what this file already learned the
+      *      hard way with compute_psi_weights.                                */
+     forecast_core(v, B2, n, H, Yb, lev);
++    if (getenv("DRVEC_FDUMP")) {
++        FILE *fd = fopen(getenv("DRVEC_FDUMP"), "w"); int k2,i2,j2,t2;
++        fprintf(fd, "%d %d %d %d %d %.15g\n", M, n, p, q, r, v->sigma2);
++        for (i2=1;i2<=M;i2++) fprintf(fd, "%.15g ", v->mu[i2]); fprintf(fd,"\n");
++        for (i2=1;i2<=s;i2++){ for(j2=1;j2<=r;j2++) fprintf(fd,"%.15g ",B2[i2][j2]); fprintf(fd,"\n");}
++        for (k2=1;k2<=p;k2++) for (i2=1;i2<=M;i2++){ for(j2=1;j2<=M;j2++) fprintf(fd,"%.15g ",v->phi[k2][i2][j2]); fprintf(fd,"\n");}
++        for (k2=1;k2<=q;k2++) for (i2=1;i2<=M;i2++){ for(j2=1;j2<=M;j2++) fprintf(fd,"%.15g ",v->theta[k2][i2][j2]); fprintf(fd,"\n");}
++        for (i2=1;i2<=M;i2++){ for(j2=1;j2<=M;j2++) fprintf(fd,"%.15g ",v->qq[i2][j2]); fprintf(fd,"\n");}
++        for (t2=1;t2<=n;t2++){ for(j2=1;j2<=M;j2++) fprintf(fd,"%.15g ",v->w[t2][j2]); for(j2=1;j2<=M;j2++) fprintf(fd,"%.15g ",v->a[t2][j2]); fprintf(fd,"\n");}
++        fclose(fd);
++    }
+ 
+     banner("Forecast");
+ 
+@@ -8717,6 +8728,23 @@
+        worse (the surface).  Without this, comparing only the final logLs does
+        not distinguish a sign error from a path problem.
+        The formula is drvmlest.c:133's, with sigma2 = 1 and atf = TRUE.       */
++    if (global_eval && getenv("DRVEC_X")) {
++        FILE *fx = fopen(getenv("DRVEC_X"), "r"); int ii;
++        for (ii = 1; ii <= npar; ii++) if (fscanf(fx, "%lf", &x[ii]) != 1) { fprintf(stderr,"short X\n"); exit(2);} 
++        fclose(fx);
++        vec_shootx(x, &varma1, &ifault, 0, 0);
++        printf("inject: npar=%d ifault=%d\n", npar, ifault);
++        if (getenv("DRVEC_DUMP")) {
++            FILE *fd = fopen(getenv("DRVEC_DUMP"), "w"); int k,i2,j2,t2;
++            fprintf(fd, "%d %d %d %d\n", varma1.m, varma1.n, varma1.p, varma1.q);
++            for (i2=1;i2<=varma1.m;i2++) fprintf(fd, "%.15g ", varma1.mu[i2]); fprintf(fd,"\n");
++            for (k=1;k<=varma1.p;k++) for (i2=1;i2<=varma1.m;i2++){ for(j2=1;j2<=varma1.m;j2++) fprintf(fd,"%.15g ",varma1.phi[k][i2][j2]); fprintf(fd,"\n");}
++            for (k=1;k<=varma1.q;k++) for (i2=1;i2<=varma1.m;i2++){ for(j2=1;j2<=varma1.m;j2++) fprintf(fd,"%.15g ",varma1.theta[k][i2][j2]); fprintf(fd,"\n");}
++            for (i2=1;i2<=varma1.m;i2++){ for(j2=1;j2<=varma1.m;j2++) fprintf(fd,"%.15g ",varma1.qq[i2][j2]); fprintf(fd,"\n");}
++            for (t2=1;t2<=varma1.n;t2++){ for(j2=1;j2<=varma1.m;j2++) fprintf(fd,"%.15g ",varma1.w[t2][j2]); fprintf(fd,"\n");}
++            fclose(fd);
++        }
++    }
+     if (global_eval) return run_eval(x, npar, &varma1);
+ 
+ 

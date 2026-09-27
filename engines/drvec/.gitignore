@@ -1,0 +1,33 @@
+# drvec — build artifacts
+build/
+bin/
+*.o
+*.pyc
+__pycache__/
+
+#  LAS SALIDAS DEL PROGRAMA SE IGNORAN -- son derivadas y se regeneran --, pero
+#  con dos excepciones, y la razon es de reproducibilidad y no de gusto:
+#
+#   - benchmark/*.results.txt son la REFERENCIA EXTERNA (urca::ca.jo) que
+#     benchmark/README.md cita como el nivel "Reproduced" del banco.  Un
+#     documento que cita ficheros que no viajan con el repositorio no es
+#     reproducible por nadie mas que por quien tiene el disco.
+#   - data/*.out son las salidas de referencia de los casos de data/.
+#
+#  Ver docs/PLAN_PRODUCCION.md P2.
+*.out
+!benchmark/*.results.txt
+!data/*.out
+
+*.txt
+!benchmark/*.results.txt
+!datasets/**/*.txt
+#  The golden baseline is not a derived file: it IS the reference a refactor is
+#  checked against, and a check whose baseline does not travel with the
+#  repository is a check nobody else can run.  See tools/golden.sh.
+!tests/golden/hashes.txt
+
+#  Los otros dos productos del programa (P6.7): la prevision fechada y los
+#  errores origen a origen.  Derivados como el .out, y por la misma razon.
+*.forecast
+*.recursive

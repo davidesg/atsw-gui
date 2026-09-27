@@ -1,0 +1,35 @@
+DRVEC — VEC(1) EML Estimation (Mauricio 2006)
+==============================================
+
+Input  : data/wheat_early.inp
+M = 2, r = 1, s = M-r = 1
+Stationary VARMA(1,0) on Ȳ_t
+
+=============================================================
+  OPTIMIZER STOPPED after 69 iterations
+  Objective function = 0.000289782346
+  Convergence criterion: last global step failed to locate a lower point
+=============================================================
+
+
+ESTIMATION SUCCESSFUL (ifault=0)
+sigma2 :    0.9923520332
+logelf : -179.8293756424
+AIC    :   11.3835985238
+BIC    :   11.7463882357
+
+Estimated parameters (8):
+  x[ 1] =     -0.40816698  (sd =      0.15118185)
+  x[ 2] =     -0.03316998  (sd =      0.02944614)
+  x[ 3] =      0.02989345  (sd =      0.01670536)
+  x[ 4] =      1.00058150  (sd =      0.00069981)
+  x[ 5] =    137.82701228  (sd =      0.00968907)
+  x[ 6] =     -0.05884192  (sd =      0.00694175)
+  x[ 7] =      1.05472488  (sd =      0.34872681)
+  x[ 8] =     -0.01836296  (sd =      0.01583722)
+
+Cointegration matrix B = [I_r; B₂'] with B₂ (1 x 1):
+  col 1:    -0.018363
+
+VEC form: ∇Y_t = Π Y_{t-1} + Σ Γ_i ∇Y_{t-i} + MA + ε_t
+Π = Λ B' where Λ is the adjustment matrix.

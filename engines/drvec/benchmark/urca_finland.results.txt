@@ -1,0 +1,39 @@
+name: urca_finland 
+source: Johansen, S. and Juselius, K. (1990), OBES 52(2), 169-210 
+description: Finnish money demand, quarterly 1958:Q2-1984:Q3 
+n_obs: 106  n_vars: 4 
+vars: lrm1, lny, lnmr, difp 
+K(lag order): 2  ecdet: const  spec: longrun 
+
+TRACE TEST (H0 r=0 ... r<=m-1, from largest to smallest eigenvalue)
+[1]  7.755309 18.900446 51.668705 95.783126
+trace critical values (10pct, 5pct, 1pct)
+         10pct  5pct  1pct
+r <= 3 |  7.52  9.24 12.97
+r <= 2 | 17.85 19.96 24.60
+r <= 1 | 32.00 34.91 41.07
+r = 0  | 49.65 53.12 60.16
+
+EIGEN (max) TEST
+[1]  7.755309 11.145138 32.768259 44.114422
+eigen critical values
+         10pct  5pct  1pct
+r <= 3 |  7.52  9.24 12.97
+r <= 2 | 13.75 15.67 20.20
+r <= 1 | 19.77 22.00 26.81
+r = 0  | 25.56 28.14 33.24
+
+cointegration vectors (beta, columns), normalized:
+            lrm1.l2    lny.l2     lnmr.l2    difp.l2   constant
+lrm1.l2   1.0000000  1.000000   1.0000000  1.0000000  1.0000000
+lny.l2   -1.0664378 -1.337905   0.1782919 -0.9305999  1.1153742
+lnmr.l2  -5.8634160 -1.785705  -3.9588873  0.3766026  0.4974029
+difp.l2  -0.6838628 22.337092 -24.4079548 -1.7079404  1.0173830
+constant  2.3512360  2.383454  -3.6289334  0.8009933 -8.2188124
+
+loading matrix (alpha):
+           lrm1.l2        lny.l2      lnmr.l2     difp.l2      constant
+lrm1.d 0.064307170 -0.0328493014 -0.012463854 -0.13188011 -5.604097e-16
+lny.d  0.062934991  0.0003527333 -0.021094238  0.01465041 -1.231794e-17
+lnmr.d 0.066537304  0.0429945894  0.007641194 -0.01763576 -1.621778e-16
+difp.d 0.002318583 -0.0191388453  0.004366447  0.01473600 -1.023274e-16

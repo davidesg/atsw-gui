@@ -1,0 +1,39 @@
+name: vars_Canada 
+source: Lütkepohl (2005) Ch.7; Pfaff (2008), R package vars 
+description: Canada: prod, e, U, rw; quarterly 1980:Q1-2000:Q4 
+n_obs: 84  n_vars: 4 
+vars: e, prod, rw, U 
+K(lag order): 2  ecdet: const  spec: longrun 
+
+TRACE TEST (H0 r=0 ... r<=m-1, from largest to smallest eigenvalue)
+[1]   6.87957  17.39156  42.30610 105.84390
+trace critical values (10pct, 5pct, 1pct)
+         10pct  5pct  1pct
+r <= 3 |  7.52  9.24 12.97
+r <= 2 | 17.85 19.96 24.60
+r <= 1 | 32.00 34.91 41.07
+r = 0  | 49.65 53.12 60.16
+
+EIGEN (max) TEST
+[1]  6.87957 10.51199 24.91455 63.53780
+eigen critical values
+         10pct  5pct  1pct
+r <= 3 |  7.52  9.24 12.97
+r <= 2 | 13.75 15.67 20.20
+r <= 1 | 19.77 22.00 26.81
+r = 0  | 25.56 28.14 33.24
+
+cointegration vectors (beta, columns), normalized:
+                  e.l2      prod.l2        rw.l2         U.l2      constant
+e.l2        1.00000000    1.0000000    1.0000000     1.000000  1.000000e+00
+prod.l2     0.08536852    0.1562742   -0.3437156     6.602765 -6.333346e-03
+rw.l2      -0.14261822   -0.3710885   -0.3400819    -1.421147 -3.245414e-01
+U.l2        4.28476956    2.5747683    1.5615389     6.749140  1.554657e+00
+constant -967.81673997 -867.7073735 -669.1040066 -3074.812435 -8.128022e+02
+
+loading matrix (alpha):
+               e.l2     prod.l2       rw.l2         U.l2      constant
+e.d    -0.005972228  0.16850796 -0.02649704  0.004648136 -1.004362e-11
+prod.d  0.004658649  0.24424906 -0.02589597 -0.010518631 -9.819830e-12
+rw.d   -0.106070442  0.03698073  0.17173200 -0.003626215 -3.949599e-12
+U.d    -0.021905078 -0.10841723 -0.03757852 -0.003044769  1.013956e-11

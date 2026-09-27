@@ -1,0 +1,46 @@
+name: urca_nporg 
+source: Nelson, C.R. and Plosser, C.I. (1982), JME 10, 139-162 
+description: Nelson-Plosser original 14 macro series, annual 1860-1970 
+n_obs: 111  n_vars: 15 
+vars: year, gnp.r, gnp.n, gnp.pc, ip, emp, ur, gnp.p, cpi, wg.n, wg.r, M, vel, bnd, sp 
+K(lag order): 2  ecdet: const  spec: longrun 
+
+TRACE TEST (H0 r=0 ... r<=m-1, from largest to smallest eigenvalue)
+ [1] NA NA NA NA NA NA NA NA NA NA NA NA NA NA NA
+trace critical values (10pct, 5pct, 1pct)
+      [,1] [,2] [,3]
+ [1,]   NA   NA   NA
+ [2,]   NA   NA   NA
+ [3,]   NA   NA   NA
+ [4,]   NA   NA   NA
+ [5,]   NA   NA   NA
+ [6,]   NA   NA   NA
+ [7,]   NA   NA   NA
+ [8,]   NA   NA   NA
+ [9,]   NA   NA   NA
+[10,]   NA   NA   NA
+[11,]   NA   NA   NA
+[12,]   NA   NA   NA
+[13,]   NA   NA   NA
+[14,]   NA   NA   NA
+[15,]   NA   NA   NA
+
+EIGEN (max) TEST
+ [1] NA NA NA NA NA NA NA NA NA NA NA NA NA NA NA
+eigen critical values
+      [,1] [,2] [,3]
+ [1,]   NA   NA   NA
+ [2,]   NA   NA   NA
+ [3,]   NA   NA   NA
+ [4,]   NA   NA   NA
+ [5,]   NA   NA   NA
+ [6,]   NA   NA   NA
+ [7,]   NA   NA   NA
+ [8,]   NA   NA   NA
+ [9,]   NA   NA   NA
+[10,]   NA   NA   NA
+[11,]   NA   NA   NA
+[12,]   NA   NA   NA
+[13,]   NA   NA   NA
+[14,]   NA   NA   NA
+[15,]   NA   NA   NA

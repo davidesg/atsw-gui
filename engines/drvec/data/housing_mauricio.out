@@ -1,0 +1,9 @@
+DRVEC — VEC(1) EML Estimation (Mauricio 2006)
+==============================================
+
+Input  : data/housing_mauricio.inp
+M = 2, r = 1, s = M-r = 1
+Stationary VARMA(1,0) on Ȳ_t
+
+ESTIMATION FAILED: ifault = 3
+  AR operator non-stationary

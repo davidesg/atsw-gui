@@ -1,0 +1,445 @@
+<title>Estimar el vector, no imponerlo</title>
+<style>
+/* Paleta: la validada de la guia de dataviz (ΔE 24.7 protan / 33.6 normal en los
+   dos modos), con neutros de sesgo calido -- no un gris puro.                */
+:root{
+  --surface-1:#fcfcfb; --surface-2:#f5f4f1; --rule:#e3e1dc;
+  --ink-1:#0b0b0b; --ink-2:#52514e; --ink-3:#7a7871;
+  --s1:#2a78d6; --s2:#eb6834;
+  --serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+  --sans: ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --mono: ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --surface-1:#1a1a19; --surface-2:#232322; --rule:#3a3a38;
+  --ink-1:#ffffff; --ink-2:#c3c2b7; --ink-3:#95938a;
+  --s1:#3987e5; --s2:#d95926; } }
+:root[data-theme="dark"]{
+  --surface-1:#1a1a19; --surface-2:#232322; --rule:#3a3a38;
+  --ink-1:#ffffff; --ink-2:#c3c2b7; --ink-3:#95938a;
+  --s1:#3987e5; --s2:#d95926; }
+
+*{box-sizing:border-box}
+body{background:var(--surface-1);color:var(--ink-1);margin:0;
+  padding:clamp(24px,5vw,52px) clamp(18px,4vw,28px) 48px;font-family:var(--sans);
+  font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1000px;margin:0 auto;display:flex;flex-direction:column;gap:26px}
+.eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--ink-3);margin:0}
+h1{font-family:var(--serif);font-size:clamp(25px,3.4vw,33px);line-height:1.16;
+  font-weight:600;letter-spacing:-.012em;margin:6px 0 0;text-wrap:balance}
+.lede{font-family:var(--serif);font-size:17.5px;line-height:1.55;color:var(--ink-2);
+  margin:0;max-width:64ch}
+.hd{display:flex;flex-direction:column;gap:12px}
+.legend{display:flex;gap:22px;flex-wrap:wrap;align-items:center;
+  font-size:13px;color:var(--ink-2);border-top:1px solid var(--rule);
+  border-bottom:1px solid var(--rule);padding:11px 0}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.sw{width:11px;height:11px;border-radius:50%;flex:0 0 auto}
+.sw.hollow{background:none;border:2.5px solid var(--ink-3)}
+.panels{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:20px}
+.card{background:var(--surface-2);border:1px solid var(--rule);border-radius:6px;
+  padding:16px 14px 6px;display:flex;flex-direction:column;gap:8px}
+.card h2{font-family:var(--sans);font-size:13px;font-weight:600;margin:0;
+  letter-spacing:.02em;text-transform:uppercase;color:var(--ink-1)}
+.card p{font-size:13px;color:var(--ink-2);margin:0;min-height:3.4em;max-width:52ch}
+.pn{width:100%;height:auto;display:block;overflow:visible}
+.grid{stroke:var(--rule);stroke-width:1}
+.ref{stroke:var(--ink-3);stroke-width:1.5;stroke-dasharray:3 3}
+.reflab{fill:var(--ink-3);font-family:var(--sans);font-size:9.5px}
+.tick{fill:var(--ink-2);font-family:var(--sans);font-size:10.5px;
+  font-variant-numeric:tabular-nums}
+.axlab{fill:var(--ink-2);font-family:var(--sans);font-size:11px}
+.rowlab{fill:var(--ink-1);font-family:var(--sans);font-size:11.5px}
+.rtag{fill:var(--ink-3);font-family:var(--mono);font-size:9px}
+.mk .iv,.mk .cap{stroke-width:2}
+.mk .pt{stroke:var(--surface-2);stroke-width:2}
+.mk .pt.hollow{fill:var(--surface-2);stroke-width:2.5}
+.s1 .iv,.s1 .cap{stroke:var(--s1)} .s1 .pt{fill:var(--s1)} .s1 .pt.hollow{stroke:var(--s1)}
+.s2 .iv,.s2 .cap{stroke:var(--s2)} .s2 .pt{fill:var(--s2)} .s2 .pt.hollow{stroke:var(--s2)}
+.mk:hover .pt,.mk:focus-visible .pt{r:6.5}
+.mk:focus-visible{outline:none} .mk:focus-visible .iv{stroke-width:3.5}
+.tw{overflow-x:auto;border-top:1px solid var(--rule)}
+table{border-collapse:collapse;width:100%;min-width:600px;font-size:13px}
+caption{text-align:left;font-size:12.5px;color:var(--ink-3);padding:12px 0 9px;
+  font-family:var(--mono);letter-spacing:.03em}
+th,td{border-bottom:1px solid var(--rule);padding:6px 10px;text-align:right;
+  font-variant-numeric:tabular-nums}
+th[scope=row]{text-align:left;font-weight:500;white-space:nowrap}
+thead th{color:var(--ink-3);font-weight:500;font-size:11.5px;text-align:right;
+  font-family:var(--mono);letter-spacing:.04em;text-transform:uppercase}
+thead th:first-child{text-align:left}
+.notes{display:flex;flex-direction:column;gap:14px;max-width:66ch;
+  font-family:var(--serif);font-size:15.5px;line-height:1.6;color:var(--ink-2)}
+.notes p{margin:0}
+.notes b{color:var(--ink-1);font-weight:600}
+code{font-family:var(--mono);font-size:.9em;color:var(--ink-1)}
+</style>
+
+<div class="wrap">
+<header class="hd">
+  <p class="eyebrow">drvec · registro de desarrollo</p>
+  <h1>El vector de cointegración, estimado en vez de impuesto</h1>
+  <p class="lede">Precios del trigo, ocho mercados europeos frente a Londres,
+  1700–1813 (n = 90–113). Intervalos de ±2 errores estándar. La referencia es
+  B₂ = −1, la ley de un precio único, que es lo que un análisis de precios
+  relativos impone sin contrastarlo.</p>
+</header>
+
+<div class="legend">
+  <span><i class="sw" style="background:var(--s1)"></i> Johansen · regresión de rango reducido</span>
+  <span><i class="sw" style="background:var(--s2)"></i> drvec · ML exacta, VARMA en forma VEC</span>
+  <span><i class="sw hollow"></i> Johansen elige un rango ≠ 1: su B₂ no es entonces un vector de cointegración</span>
+</div>
+
+<div class="panels">
+ <div class="card">
+  <h2>La misma especificación</h2>
+  <p>Johansen con <code>k=1</code> y drvec con <code>q=0</code> ajustan el mismo
+  modelo, por dos rutas sin nada en común. Los intervalos se solapan en los ocho
+  pares.</p>
+  <svg viewBox="0 0 430 318" role="img" aria-labelledby="pat" class="pn">
+<title id="pat">Johansen k=1 frente a drvec q=0</title>
+<line class="grid" x1="129.5" y1="26" x2="129.5" y2="284"/>
+<text class="tick" x="129.5" y="299" text-anchor="middle">-1.4</text>
+<line class="grid" x1="176.2" y1="26" x2="176.2" y2="284"/>
+<text class="tick" x="176.2" y="299" text-anchor="middle">-1.2</text>
+<line class="grid" x1="223.0" y1="26" x2="223.0" y2="284"/>
+<text class="tick" x="223.0" y="299" text-anchor="middle">-1.0</text>
+<line class="grid" x1="269.7" y1="26" x2="269.7" y2="284"/>
+<text class="tick" x="269.7" y="299" text-anchor="middle">-0.8</text>
+<line class="grid" x1="316.4" y1="26" x2="316.4" y2="284"/>
+<text class="tick" x="316.4" y="299" text-anchor="middle">-0.6</text>
+<line class="grid" x1="363.1" y1="26" x2="363.1" y2="284"/>
+<text class="tick" x="363.1" y="299" text-anchor="middle">-0.4</text>
+<line class="ref" x1="223.0" y1="24" x2="223.0" y2="286"/>
+<text class="reflab" x="223.0" y="18" text-anchor="middle">B₂ = −1 · ley de un precio único</text>
+<text class="rowlab" x="86" y="46.1" text-anchor="end">Milan</text>
+<g class="mk s1" tabindex="0">
+<title>Milan · Johansen k=1: -0.556 ± 0.148 (2 sd), n=112 — Johansen elige r=2: su B₂ no es un vector de cointegración</title>
+<line class="iv" x1="292.1" y1="37.1" x2="361.4" y2="37.1"/>
+<line class="cap" x1="292.1" y1="33.6" x2="292.1" y2="40.6"/>
+<line class="cap" x1="361.4" y1="33.6" x2="361.4" y2="40.6"/>
+<circle class="pt hollow" cx="326.7" cy="37.1" r="4.5"/>
+<text class="rtag" x="366.4" y="40.6">r=2</text>
+</g>
+<g class="mk s2" tabindex="0">
+<title>Milan · drvec q=0: -0.527 ± 0.208 (2 sd), n=112</title>
+<line class="iv" x1="284.7" y1="47.1" x2="382.0" y2="47.1"/>
+<line class="cap" x1="284.7" y1="43.6" x2="284.7" y2="50.6"/>
+<line class="cap" x1="382.0" y1="43.6" x2="382.0" y2="50.6"/>
+<circle class="pt" cx="333.3" cy="47.1" r="4.5"/>
+</g>
+<text class="rowlab" x="86" y="78.4" text-anchor="end">Strasbourg</text>
+<g class="mk s1" tabindex="0">
+<title>Strasbourg · Johansen k=1: -0.653 ± 0.202 (2 sd), n=113</title>
+<line class="iv" x1="256.8" y1="69.4" x2="351.0" y2="69.4"/>
+<line class="cap" x1="256.8" y1="65.9" x2="256.8" y2="72.9"/>
+<line class="cap" x1="351.0" y1="65.9" x2="351.0" y2="72.9"/>
+<circle class="pt" cx="303.9" cy="69.4" r="4.5"/>
+</g>
+<g class="mk s2" tabindex="0">
+<title>Strasbourg · drvec q=0: -0.637 ± 0.249 (2 sd), n=113</title>
+<line class="iv" x1="249.6" y1="79.4" x2="366.0" y2="79.4"/>
+<line class="cap" x1="249.6" y1="75.9" x2="249.6" y2="82.9"/>
+<line class="cap" x1="366.0" y1="75.9" x2="366.0" y2="82.9"/>
+<circle class="pt" cx="307.8" cy="79.4" r="4.5"/>
+</g>
+<text class="rowlab" x="86" y="110.6" text-anchor="end">Utrecht</text>
+<g class="mk s1" tabindex="0">
+<title>Utrecht · Johansen k=1: -0.810 ± 0.130 (2 sd), n=113</title>
+<line class="iv" x1="236.8" y1="101.6" x2="297.7" y2="101.6"/>
+<line class="cap" x1="236.8" y1="98.1" x2="236.8" y2="105.1"/>
+<line class="cap" x1="297.7" y1="98.1" x2="297.7" y2="105.1"/>
+<circle class="pt" cx="267.3" cy="101.6" r="4.5"/>
+</g>
+<g class="mk s2" tabindex="0">
+<title>Utrecht · drvec q=0: -0.802 ± 0.141 (2 sd), n=113</title>
+<line class="iv" x1="236.1" y1="111.6" x2="302.0" y2="111.6"/>
+<line class="cap" x1="236.1" y1="108.1" x2="236.1" y2="115.1"/>
+<line class="cap" x1="302.0" y1="108.1" x2="302.0" y2="115.1"/>
+<circle class="pt" cx="269.1" cy="111.6" r="4.5"/>
+</g>
+<text class="rowlab" x="86" y="142.9" text-anchor="end">Vienna</text>
+<g class="mk s1" tabindex="0">
+<title>Vienna · Johansen k=1: -0.893 ± 0.239 (2 sd), n=113 — Johansen elige r=2: su B₂ no es un vector de cointegración</title>
+<line class="iv" x1="192.1" y1="133.9" x2="304.0" y2="133.9"/>
+<line class="cap" x1="192.1" y1="130.4" x2="192.1" y2="137.4"/>
+<line class="cap" x1="304.0" y1="130.4" x2="304.0" y2="137.4"/>
+<circle class="pt hollow" cx="248.0" cy="133.9" r="4.5"/>
+<text class="rtag" x="309.0" y="137.4">r=2</text>
+</g>
+<g class="mk s2" tabindex="0">
+<title>Vienna · drvec q=0: -0.869 ± 0.298 (2 sd), n=113</title>
+<line class="iv" x1="183.9" y1="143.9" x2="323.2" y2="143.9"/>
+<line class="cap" x1="183.9" y1="140.4" x2="183.9" y2="147.4"/>
+<line class="cap" x1="323.2" y1="140.4" x2="323.2" y2="147.4"/>
+<circle class="pt" cx="253.5" cy="143.9" r="4.5"/>
+</g>
+<text class="rowlab" x="86" y="175.1" text-anchor="end">Aix</text>
+<g class="mk s1" tabindex="0">
+<title>Aix · Johansen k=1: -1.083 ± 0.391 (2 sd), n=90 — Johansen elige r=2: su B₂ no es un vector de cointegración</title>
+<line class="iv" x1="112.3" y1="166.1" x2="294.9" y2="166.1"/>
+<line class="cap" x1="112.3" y1="162.6" x2="112.3" y2="169.6"/>
+<line class="cap" x1="294.9" y1="162.6" x2="294.9" y2="169.6"/>
+<circle class="pt hollow" cx="203.6" cy="166.1" r="4.5"/>
+<text class="rtag" x="299.9" y="169.6">r=2</text>
+</g>
+<g class="mk s2" tabindex="0">
+<title>Aix · drvec q=0: -1.031 ± 0.414 (2 sd), n=90</title>
+<line class="iv" x1="119.1" y1="176.1" x2="312.4" y2="176.1"/>
+<line class="cap" x1="119.1" y1="172.6" x2="119.1" y2="179.6"/>
+<line class="cap" x1="312.4" y1="172.6" x2="312.4" y2="179.6"/>
+<circle class="pt" cx="215.7" cy="176.1" r="4.5"/>
+</g>
+<text class="rowlab" x="86" y="207.4" text-anchor="end">Arévalo</text>
+<g class="mk s1" tabindex="0">
+<title>Arévalo · Johansen k=1: -0.994 ± 0.252 (2 sd), n=113</title>
+<line class="iv" x1="165.5" y1="198.4" x2="283.3" y2="198.4"/>
+<line class="cap" x1="165.5" y1="194.9" x2="165.5" y2="201.9"/>
+<line class="cap" x1="283.3" y1="194.9" x2="283.3" y2="201.9"/>
+<circle class="pt" cx="224.4" cy="198.4" r="4.5"/>
+</g>
+<g class="mk s2" tabindex="0">
+<title>Arévalo · drvec q=0: -0.995 ± 0.307 (2 sd), n=113</title>
+<line class="iv" x1="152.4" y1="208.4" x2="295.7" y2="208.4"/>
+<line class="cap" x1="152.4" y1="204.9" x2="152.4" y2="211.9"/>
+<line class="cap" x1="295.7" y1="204.9" x2="295.7" y2="211.9"/>
+<circle class="pt" cx="224.0" cy="208.4" r="4.5"/>
+</g>
+<text class="rowlab" x="86" y="239.6" text-anchor="end">Angers</text>
+<g class="mk s1" tabindex="0">
+<title>Angers · Johansen k=1: -1.038 ± 0.251 (2 sd), n=90 — Johansen elige r=2: su B₂ no es un vector de cointegración</title>
+<line class="iv" x1="155.6" y1="230.6" x2="272.7" y2="230.6"/>
+<line class="cap" x1="155.6" y1="227.1" x2="155.6" y2="234.1"/>
+<line class="cap" x1="272.7" y1="227.1" x2="272.7" y2="234.1"/>
+<circle class="pt hollow" cx="214.1" cy="230.6" r="4.5"/>
+<text class="rtag" x="277.7" y="234.1">r=2</text>
+</g>
+<g class="mk s2" tabindex="0">
+<title>Angers · drvec q=0: -1.014 ± 0.417 (2 sd), n=90</title>
+<line class="iv" x1="122.4" y1="240.6" x2="317.0" y2="240.6"/>
+<line class="cap" x1="122.4" y1="237.1" x2="122.4" y2="244.1"/>
+<line class="cap" x1="317.0" y1="237.1" x2="317.0" y2="244.1"/>
+<circle class="pt" cx="219.7" cy="240.6" r="4.5"/>
+</g>
+<text class="rowlab" x="86" y="271.9" text-anchor="end">Pennsylvania</text>
+<g class="mk s1" tabindex="0">
+<title>Pennsylvania · Johansen k=1: -1.080 ± 0.143 (2 sd), n=93</title>
+<line class="iv" x1="171.1" y1="262.9" x2="237.7" y2="262.9"/>
+<line class="cap" x1="171.1" y1="259.4" x2="171.1" y2="266.4"/>
+<line class="cap" x1="237.7" y1="259.4" x2="237.7" y2="266.4"/>
+<circle class="pt" cx="204.4" cy="262.9" r="4.5"/>
+</g>
+<g class="mk s2" tabindex="0">
+<title>Pennsylvania · drvec q=0: -1.079 ± 0.153 (2 sd), n=93</title>
+<line class="iv" x1="168.8" y1="272.9" x2="240.1" y2="272.9"/>
+<line class="cap" x1="168.8" y1="269.4" x2="168.8" y2="276.4"/>
+<line class="cap" x1="240.1" y1="269.4" x2="240.1" y2="276.4"/>
+<circle class="pt" cx="204.4" cy="272.9" r="4.5"/>
+</g>
+<text class="axlab" x="248.0" y="314" text-anchor="middle">coeficiente de cointegración B₂</text>
+</svg>
+ </div>
+ <div class="card">
+  <h2>Cada uno en su óptimo</h2>
+  <p>Johansen con el orden que elige su AIC; drvec con el componente MA, que
+  Johansen no puede representar. Aquí divergen, y en seis pares Johansen no llega
+  a un rango usable.</p>
+  <svg viewBox="0 0 430 318" role="img" aria-labelledby="pbt" class="pn">
+<title id="pbt">Johansen AIC frente a drvec q=1</title>
+<line class="grid" x1="129.5" y1="26" x2="129.5" y2="284"/>
+<text class="tick" x="129.5" y="299" text-anchor="middle">-1.4</text>
+<line class="grid" x1="176.2" y1="26" x2="176.2" y2="284"/>
+<text class="tick" x="176.2" y="299" text-anchor="middle">-1.2</text>
+<line class="grid" x1="223.0" y1="26" x2="223.0" y2="284"/>
+<text class="tick" x="223.0" y="299" text-anchor="middle">-1.0</text>
+<line class="grid" x1="269.7" y1="26" x2="269.7" y2="284"/>
+<text class="tick" x="269.7" y="299" text-anchor="middle">-0.8</text>
+<line class="grid" x1="316.4" y1="26" x2="316.4" y2="284"/>
+<text class="tick" x="316.4" y="299" text-anchor="middle">-0.6</text>
+<line class="grid" x1="363.1" y1="26" x2="363.1" y2="284"/>
+<text class="tick" x="363.1" y="299" text-anchor="middle">-0.4</text>
+<line class="ref" x1="223.0" y1="24" x2="223.0" y2="286"/>
+<text class="reflab" x="223.0" y="18" text-anchor="middle">B₂ = −1 · ley de un precio único</text>
+<text class="rowlab" x="86" y="46.1" text-anchor="end">Milan</text>
+<g class="mk s1" tabindex="0">
+<title>Milan · Johansen AIC: -0.535 ± 0.198 (2 sd), n=112 — Johansen elige r=0: su B₂ no es un vector de cointegración</title>
+<line class="iv" x1="285.3" y1="37.1" x2="377.9" y2="37.1"/>
+<line class="cap" x1="285.3" y1="33.6" x2="285.3" y2="40.6"/>
+<line class="cap" x1="377.9" y1="33.6" x2="377.9" y2="40.6"/>
+<circle class="pt hollow" cx="331.6" cy="37.1" r="4.5"/>
+<text class="rtag" x="382.9" y="40.6">r=0</text>
+</g>
+<g class="mk s2" tabindex="0">
+<title>Milan · drvec q=1: -0.447 ± 0.135 (2 sd), n=112</title>
+<line class="iv" x1="320.7" y1="47.1" x2="383.7" y2="47.1"/>
+<line class="cap" x1="320.7" y1="43.6" x2="320.7" y2="50.6"/>
+<line class="cap" x1="383.7" y1="43.6" x2="383.7" y2="50.6"/>
+<circle class="pt" cx="352.2" cy="47.1" r="4.5"/>
+</g>
+<text class="rowlab" x="86" y="78.4" text-anchor="end">Strasbourg</text>
+<g class="mk s1" tabindex="0">
+<title>Strasbourg · Johansen AIC: -0.648 ± 0.242 (2 sd), n=113 — Johansen elige r=0: su B₂ no es un vector de cointegración</title>
+<line class="iv" x1="248.7" y1="69.4" x2="361.6" y2="69.4"/>
+<line class="cap" x1="248.7" y1="65.9" x2="248.7" y2="72.9"/>
+<line class="cap" x1="361.6" y1="65.9" x2="361.6" y2="72.9"/>
+<circle class="pt hollow" cx="305.2" cy="69.4" r="4.5"/>
+<text class="rtag" x="366.6" y="72.9">r=0</text>
+</g>
+<g class="mk s2" tabindex="0">
+<title>Strasbourg · drvec q=1: -0.695 ± 0.283 (2 sd), n=113</title>
+<line class="iv" x1="227.9" y1="79.4" x2="360.2" y2="79.4"/>
+<line class="cap" x1="227.9" y1="75.9" x2="227.9" y2="82.9"/>
+<line class="cap" x1="360.2" y1="75.9" x2="360.2" y2="82.9"/>
+<circle class="pt" cx="294.1" cy="79.4" r="4.5"/>
+</g>
+<text class="rowlab" x="86" y="110.6" text-anchor="end">Utrecht</text>
+<g class="mk s1" tabindex="0">
+<title>Utrecht · Johansen AIC: -0.776 ± 0.153 (2 sd), n=113 — Johansen elige r=0: su B₂ no es un vector de cointegración</title>
+<line class="iv" x1="239.4" y1="101.6" x2="310.9" y2="101.6"/>
+<line class="cap" x1="239.4" y1="98.1" x2="239.4" y2="105.1"/>
+<line class="cap" x1="310.9" y1="98.1" x2="310.9" y2="105.1"/>
+<circle class="pt hollow" cx="275.2" cy="101.6" r="4.5"/>
+<text class="rtag" x="315.9" y="105.1">r=0</text>
+</g>
+<g class="mk s2" tabindex="0">
+<title>Utrecht · drvec q=1: -0.625 ± 0.130 (2 sd), n=113</title>
+<line class="iv" x1="280.3" y1="111.6" x2="340.9" y2="111.6"/>
+<line class="cap" x1="280.3" y1="108.1" x2="280.3" y2="115.1"/>
+<line class="cap" x1="340.9" y1="108.1" x2="340.9" y2="115.1"/>
+<circle class="pt" cx="310.6" cy="111.6" r="4.5"/>
+</g>
+<text class="rowlab" x="86" y="142.9" text-anchor="end">Vienna</text>
+<g class="mk s1" tabindex="0">
+<title>Vienna · Johansen AIC: -0.893 ± 0.239 (2 sd), n=113 — Johansen elige r=2: su B₂ no es un vector de cointegración</title>
+<line class="iv" x1="192.1" y1="133.9" x2="304.0" y2="133.9"/>
+<line class="cap" x1="192.1" y1="130.4" x2="192.1" y2="137.4"/>
+<line class="cap" x1="304.0" y1="130.4" x2="304.0" y2="137.4"/>
+<circle class="pt hollow" cx="248.0" cy="133.9" r="4.5"/>
+<text class="rtag" x="309.0" y="137.4">r=2</text>
+</g>
+<g class="mk s2" tabindex="0">
+<title>Vienna · drvec q=1: -0.570 ± 0.155 (2 sd), n=113</title>
+<line class="iv" x1="287.2" y1="143.9" x2="359.6" y2="143.9"/>
+<line class="cap" x1="287.2" y1="140.4" x2="287.2" y2="147.4"/>
+<line class="cap" x1="359.6" y1="140.4" x2="359.6" y2="147.4"/>
+<circle class="pt" cx="323.4" cy="143.9" r="4.5"/>
+</g>
+<text class="rowlab" x="86" y="175.1" text-anchor="end">Aix</text>
+<g class="mk s1" tabindex="0">
+<title>Aix · Johansen AIC: -1.083 ± 0.391 (2 sd), n=90 — Johansen elige r=2: su B₂ no es un vector de cointegración</title>
+<line class="iv" x1="112.3" y1="166.1" x2="294.9" y2="166.1"/>
+<line class="cap" x1="112.3" y1="162.6" x2="112.3" y2="169.6"/>
+<line class="cap" x1="294.9" y1="162.6" x2="294.9" y2="169.6"/>
+<circle class="pt hollow" cx="203.6" cy="166.1" r="4.5"/>
+<text class="rtag" x="299.9" y="169.6">r=2</text>
+</g>
+<g class="mk s2" tabindex="0">
+<title>Aix · drvec q=1: -0.759 ± 0.176 (2 sd), n=90</title>
+<line class="iv" x1="238.1" y1="176.1" x2="320.2" y2="176.1"/>
+<line class="cap" x1="238.1" y1="172.6" x2="238.1" y2="179.6"/>
+<line class="cap" x1="320.2" y1="172.6" x2="320.2" y2="179.6"/>
+<circle class="pt" cx="279.1" cy="176.1" r="4.5"/>
+</g>
+<text class="rowlab" x="86" y="207.4" text-anchor="end">Arévalo</text>
+<g class="mk s1" tabindex="0">
+<title>Arévalo · Johansen AIC: -0.855 ± 0.229 (2 sd), n=113</title>
+<line class="iv" x1="203.3" y1="198.4" x2="310.3" y2="198.4"/>
+<line class="cap" x1="203.3" y1="194.9" x2="203.3" y2="201.9"/>
+<line class="cap" x1="310.3" y1="194.9" x2="310.3" y2="201.9"/>
+<circle class="pt" cx="256.8" cy="198.4" r="4.5"/>
+</g>
+<g class="mk s2" tabindex="0">
+<title>Arévalo · drvec q=1: -0.617 ± 0.278 (2 sd), n=113</title>
+<line class="iv" x1="247.3" y1="208.4" x2="377.3" y2="208.4"/>
+<line class="cap" x1="247.3" y1="204.9" x2="247.3" y2="211.9"/>
+<line class="cap" x1="377.3" y1="204.9" x2="377.3" y2="211.9"/>
+<circle class="pt" cx="312.3" cy="208.4" r="4.5"/>
+</g>
+<text class="rowlab" x="86" y="239.6" text-anchor="end">Angers</text>
+<g class="mk s1" tabindex="0">
+<title>Angers · Johansen AIC: -1.038 ± 0.251 (2 sd), n=90 — Johansen elige r=2: su B₂ no es un vector de cointegración</title>
+<line class="iv" x1="155.6" y1="230.6" x2="272.7" y2="230.6"/>
+<line class="cap" x1="155.6" y1="227.1" x2="155.6" y2="234.1"/>
+<line class="cap" x1="272.7" y1="227.1" x2="272.7" y2="234.1"/>
+<circle class="pt hollow" cx="214.1" cy="230.6" r="4.5"/>
+<text class="rtag" x="277.7" y="234.1">r=2</text>
+</g>
+<g class="mk s2" tabindex="0">
+<title>Angers · drvec q=1: -0.635 ± 0.065 (2 sd), n=90</title>
+<line class="iv" x1="293.0" y1="240.6" x2="323.2" y2="240.6"/>
+<line class="cap" x1="293.0" y1="237.1" x2="293.0" y2="244.1"/>
+<line class="cap" x1="323.2" y1="237.1" x2="323.2" y2="244.1"/>
+<circle class="pt" cx="308.1" cy="240.6" r="4.5"/>
+</g>
+<text class="rowlab" x="86" y="271.9" text-anchor="end">Pennsylvania</text>
+<g class="mk s1" tabindex="0">
+<title>Pennsylvania · Johansen AIC: -1.086 ± 0.143 (2 sd), n=93</title>
+<line class="iv" x1="169.5" y1="262.9" x2="236.0" y2="262.9"/>
+<line class="cap" x1="169.5" y1="259.4" x2="169.5" y2="266.4"/>
+<line class="cap" x1="236.0" y1="259.4" x2="236.0" y2="266.4"/>
+<circle class="pt" cx="202.8" cy="262.9" r="4.5"/>
+</g>
+<g class="mk s2" tabindex="0">
+<title>Pennsylvania · drvec q=1: -1.101 ± 0.188 (2 sd), n=93</title>
+<line class="iv" x1="155.4" y1="272.9" x2="243.2" y2="272.9"/>
+<line class="cap" x1="155.4" y1="269.4" x2="155.4" y2="276.4"/>
+<line class="cap" x1="243.2" y1="269.4" x2="243.2" y2="276.4"/>
+<circle class="pt" cx="199.3" cy="272.9" r="4.5"/>
+</g>
+<text class="axlab" x="248.0" y="314" text-anchor="middle">coeficiente de cointegración B₂</text>
+</svg>
+ </div>
+</div>
+
+<div class="tw">
+<table>
+<caption>Los mismos números — error estándar entre paréntesis</caption>
+<thead><tr><th>par</th><th>n</th><th>Johansen k=1</th><th>drvec q=0</th>
+<th>Johansen AIC</th><th>drvec q=1</th><th>portm. q=1</th></tr></thead>
+<tbody>
+<tr><th scope="row">Milan</th><td>112</td><td>-0.556 (0.074)</td><td>-0.527 (0.104)</td><td>-0.535 (0.099) · r=0</td><td>-0.447 (0.068)</td><td>0.66</td></tr>
+<tr><th scope="row">Strasbourg</th><td>113</td><td>-0.653 (0.101)</td><td>-0.637 (0.125)</td><td>-0.648 (0.121) · r=0</td><td>-0.695 (0.142)</td><td>0.93</td></tr>
+<tr><th scope="row">Utrecht</th><td>113</td><td>-0.810 (0.065)</td><td>-0.802 (0.071)</td><td>-0.776 (0.077) · r=0</td><td>-0.625 (0.065)</td><td>0.95</td></tr>
+<tr><th scope="row">Vienna</th><td>113</td><td>-0.893 (0.120)</td><td>-0.869 (0.149)</td><td>-0.893 (0.120) · r=2</td><td>-0.570 (0.078)</td><td>0.97</td></tr>
+<tr><th scope="row">Aix</th><td>90</td><td>-1.083 (0.196)</td><td>-1.031 (0.207)</td><td>-1.083 (0.196) · r=2</td><td>-0.759 (0.088)</td><td>0.78</td></tr>
+<tr><th scope="row">Arévalo</th><td>113</td><td>-0.994 (0.126)</td><td>-0.995 (0.153)</td><td>-0.855 (0.115)</td><td>-0.617 (0.139)</td><td>0.88</td></tr>
+<tr><th scope="row">Angers</th><td>90</td><td>-1.038 (0.125)</td><td>-1.014 (0.208)</td><td>-1.038 (0.125) · r=2</td><td>-0.635 (0.032)</td><td>0.64</td></tr>
+<tr><th scope="row">Pennsylvania</th><td>93</td><td>-1.080 (0.071)</td><td>-1.079 (0.076)</td><td>-1.086 (0.071)</td><td>-1.101 (0.094)</td><td>0.76</td></tr>
+</tbody></table>
+</div>
+
+<div class="notes">
+<p><b>Con la misma especificación coinciden.</b> La diferencia media sobre 24
+comparaciones —ocho pares por los órdenes k = 1, 2, 3— es 0.019, y aquí los
+intervalos se solapan en todos. Dos implementaciones sin ancestro común dando la
+misma respuesta es la homologación externa más fuerte que tiene el programa, y es
+sobre la cantidad que existe para producir.</p>
+<p><b>En sus óptimos se separan hasta 0.40.</b> Como la diferencia atribuible al
+método está medida en 0.019, esa separación es del <b>modelo</b>. Y siete de los
+ocho mercados europeos quedan por encima de −1: la elasticidad de largo plazo
+respecto a Londres está entre −0.45 y −0.79. La excepción es Pensilvania, el
+mercado transatlántico, el único aproximadamente uno a uno.</p>
+<p><b>Por qué los intervalos de drvec son intervalos.</b> Un error estándar se
+puede calcular de cualquier cosa; que la inferencia sea válida es otra
+afirmación, porque B₂ es superconsistente y su distribución límite es mixta
+normal, no normal. El sistema que drvec estima es la <b>representación triangular
+de Phillips (1991)</b> —la ecuación (19) de Mauricio—, y de ahí el propio artículo
+concluye que «asymptotic optimal inference applies to full-system EML
+estimation» y que los contrastes sobre Λ y B «can be conducted using standard
+(e.g., Wald or likelihood ratio) asymptotic χ² tests».</p>
+<p><b>Y con Johansen sólo si el VECM está bien especificado.</b> Cappuccio (1996)
+demuestra que <b>no existe reparametrización</b> de un sistema ARMA cointegrado que
+dé un VECM con errores independientes: con componente MA la ML de Johansen está
+mal especificada, y «estimation and inference on the cointegrating vectors …
+will be somehow affected». La salida que él mismo señala —aproximar el MA con más
+retardos— es el panel de la derecha: los retardos se llevan el rango antes de que
+la aproximación converja.</p>
+<p><b>Comprobado en el código, no sólo afirmado.</b> Wald y LR son
+asintóticamente equivalentes bajo esa teoría, así que su acuerdo es una prueba de
+la implementación: sobre datos simulados con B₂ conocido coinciden en la cuarta
+cifra desde n = 200, y el error estándar cae más rápido que 1/√T — la
+superconsistencia que la teoría predice.</p>
+</div>
+</div>

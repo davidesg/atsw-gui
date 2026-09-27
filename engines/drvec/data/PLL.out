@@ -1,0 +1,35 @@
+DRVEC — VEC(1) EML Estimation (Mauricio 2006)
+==============================================
+
+Input  : data/PLL.inp
+M = 2, r = 1, s = M-r = 1
+Stationary VARMA(1,0) on Ȳ_t
+
+=============================================================
+  OPTIMIZER CONVERGED after 16 iterations
+  Objective function = 0.655215959972
+  Convergence criterion: norm of scaled gradient <= gradtol
+=============================================================
+
+
+ESTIMATION SUCCESSFUL (ifault=0)
+sigma2 :    0.7154691729
+logelf :   -1.9265636858
+AIC    :    0.2157948627
+BIC    :    0.4350808260
+
+Estimated parameters (8):
+  x[ 1] =      0.01986839  (sd =      0.11823210)
+  x[ 2] =      0.31399370  (sd =      0.11922460)
+  x[ 3] =      0.09121326  (sd =      0.11788525)
+  x[ 4] =      0.35316323  (sd =      0.11804685)
+  x[ 5] =      0.11348992  (sd =      0.02213721)
+  x[ 6] =     -0.07326155  (sd =      0.00947720)
+  x[ 7] =      0.10850586  (sd =      0.01975472)
+  x[ 8] =     -1.08496684  (sd =      0.07244575)
+
+Cointegration matrix B = [I_r; B₂'] with B₂ (1 x 1):
+  col 1:    -1.084967
+
+VEC form: ∇Y_t = Π Y_{t-1} + Σ Γ_i ∇Y_{t-i} + MA + ε_t
+Π = Λ B' where Λ is the adjustment matrix.

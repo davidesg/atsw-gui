@@ -1,0 +1,31 @@
+name: urca_UKconinc 
+source: Hylleberg, Engle, Granger, Yoo (HEGY), UK consumption-income 
+description: UK log consumption & income, quarterly (ends 1984:Q4) 
+n_obs: 120  n_vars: 2 
+vars: conl, incl 
+K(lag order): 2  ecdet: const  spec: longrun 
+
+TRACE TEST (H0 r=0 ... r<=m-1, from largest to smallest eigenvalue)
+[1] 16.05629 85.78962
+trace critical values (10pct, 5pct, 1pct)
+         10pct  5pct  1pct
+r <= 1 |  7.52  9.24 12.97
+r = 0  | 17.85 19.96 24.60
+
+EIGEN (max) TEST
+[1] 16.05629 69.73333
+eigen critical values
+         10pct  5pct  1pct
+r <= 1 |  7.52  9.24 12.97
+r = 0  | 13.75 15.67 20.20
+
+cointegration vectors (beta, columns), normalized:
+            conl.l2    incl.l2  constant
+conl.l2   1.0000000  1.0000000     1.000
+incl.l2  -0.8679975 -0.5638942 -1022.478
+constant -1.2576700 -4.6299061 10466.423
+
+loading matrix (alpha):
+          conl.l2     incl.l2     constant
+conl.d -1.4218762 -0.04327584 6.620099e-16
+incl.d -0.1850489 -0.04076969 9.804239e-17

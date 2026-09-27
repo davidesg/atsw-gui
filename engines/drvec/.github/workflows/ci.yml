@@ -1,0 +1,48 @@
+# Integracion continua de drvec (P6).
+#
+# Dos trabajos, y la separacion importa: el rapido tiene que fallar rapido, y el
+# de valgrind tarda varias veces mas porque instrumenta cada estimacion.  Los
+# dos corren la MISMA bateria; VALGRIND=1 solo anade el bloque 9.
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencias (GSL)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgsl-dev
+      - name: Compilar
+        run: make
+      - name: La version que dice el binario
+        run: bin/drvec --version
+      - name: Bateria (con la comprobacion de compilacion desde cero)
+        run: CLEANBUILD=1 make test
+      - name: Que install y uninstall no mientan
+        run: |
+          make install PREFIX="$PWD/_inst"
+          test -x "$PWD/_inst/bin/drvec"
+          test -f "$PWD/_inst/share/doc/drvec/LICENSE"
+          make uninstall PREFIX="$PWD/_inst"
+          test ! -e "$PWD/_inst/bin/drvec"
+
+  valgrind:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencias (GSL y valgrind)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgsl-dev valgrind
+      - name: Compilar
+        run: make
+      - name: Bateria con valgrind
+        run: VALGRIND=1 make test

@@ -1,0 +1,95 @@
+************************************************
+*        Input file for program DRVUS          *
+* Copyright (C) 1996 Jos? Alberto Mauricio     *
+************************************************
+
+** Frequency of time series: either 1(A), 4(Q) or 12(M):
+ 1
+** Number of observations and starting date of time series:
+ 59 1911 1853 emink
+** Number of deterministic variables (including seasonal components):
+ 0
+**Number and orders of regular AR operators:
+0
+** Number and orders of annual AR operators:
+1 1
+**
+0.500000 1
+** Number and orders of regular MA operators:
+1 1
+**
+0.0611 1
+** Number and orders of anual MA operators:
+0
+** Number and frequencies of regular AR(2) operators with fixed frequency:
+0
+** Number and frequencies of regular MA(2) operators with fixed frequency:
+0
+** Mean parameter (mu):
+0.191607 1
+** Box-Cox lambda, regular differences and complete annual differences:
+1.00 0 0
+** Individual factors of the annual difference (from freq 0.0): 
+ 0
+** ACF/PACF bands (0 Automatic) and reescaling factor: 
+ 0.00 10.00
+** Time series (stochastic and non-standard deterministic variables): 
+0.3351153434 
+-0.3046537422 
+-0.1271410929 
+-0.0262637562 
+0.4636984451 
+0.0901094059 
+0.0609439186 
+-0.2986437808 
+0.0797444456 
+0.1389714311 
+0.2251665032 
+0.2540752313 
+-0.0306707019 
+-0.1482303572 
+0.2727926079 
+0.4710533471 
+-0.2995774543 
+-0.2856914428 
+0.0918005024 
+0.2391109202 
+-0.0096679198 
+-0.1277110827 
+0.0208438785 
+0.4034906137 
+-0.1334614281 
+0.3390378569 
+0.1938630138 
+-0.1621484961 
+0.1175448585 
+-0.0451971725 
+0.0556035822 
+-0.0225975480 
+-0.2493137424 
+-0.1018599046 
+0.2735880574 
+-0.1360550690 
+-0.0735920677 
+0.0538770017 
+0.3144729681 
+-0.1010754417 
+0.1986639039 
+-0.1979901235 
+0.0651424355 
+0.1784779400 
+-0.1735116014 
+0.3233781552 
+0.2494494040 
+-0.3538216276 
+0.1799009083 
+0.5024821858 
+-0.1806543861 
+-0.3270241608 
+0.1565969469 
+-0.4452185064 
+-0.3225194388 
+-1.0113391205 
+0.2789880864 
+0.3621827016 
+-0.1553319136 

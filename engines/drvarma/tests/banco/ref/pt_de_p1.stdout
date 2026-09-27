@@ -1,3 +1,4 @@
+Note: the multivariate .inp is deprecated since drvarma 5.0; convert it with: drvarma -split WTI_IPC_DE
 
 Input Data File  : WTI_IPC_DE.inp
 Output File      : WTI_IPC_DE.out

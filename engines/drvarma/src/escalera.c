@@ -54,7 +54,7 @@ extern int  quiet_mode;
 extern int  nser;
 extern char **series_names;
 extern int  data_freq, data_start_year, data_start_sub, trans_d, trans_D;
-extern int  est_fdhess;
+/* est_fdhess: main.h */
 void print_matrices(struct Tvarma *varma);
 void print_roots(struct Tvarma *varma);
 
@@ -404,6 +404,7 @@ typedef struct {
     real  *x, *dev, **cov;
     real   logL, sigma2;
     int    ifault;
+    int    se_how;             /* EST_SE_*: which Hessian gave dev and cov */
     struct Tvarma vm;          /* vivo tras fit_run hasta fit_free */
 } Fit;
 
@@ -447,6 +448,7 @@ static void fit_run(Fit *F, int optimize)
         est(&shootx_esc, F->npar, F->x, F->dev, F->cov, 500, 10, 1.0e-7, 1.0e-7,
             xitol_met, F->vm.a, &F->sigma2, &F->logL, &ifault);
         F->ifault = ifault;
+        F->se_how = est_se_how;
         if (ifault) return;
     }
     /* El estado global quedo en el ultimo punto que probo el optimizador, que
@@ -550,6 +552,7 @@ static void print_param_table(FILE *f, Fit *F)
         real pv = (se > 0.0) ? 2.0 * (1.0 - normal_cdf(fabs(t))) : 1.0;
         fprintf(f, "  %-34s %12.6f %12.6f %9.3f %8.4f\n", names[i], F->x[i], se, t, pv);
     }
+    fprintf(f, "  Standard errors: %s\n", est_se_label(F->se_how));
     free(names);
 }
 
@@ -885,6 +888,7 @@ void escalera_usage(const char *prog)
 {
     printf("       %s A.pre B.pre [C.pre ...] p q [-diagcov] [-redet] [-fixarma]\n", prog);
     printf("                                  [-m method] [-o NAME] [-forecast H [-estwin N]]\n");
+    printf("                                  [-hessian fd|bfgs]\n");
     printf("  THE LADDER: each series comes with its univariate model from fue (.pre):\n");
     printf("       Box-Cox, deterministic terms, differencing, mean and ARMA factors.\n");
     printf("       The VARMA keeps each model on its DIAGONAL; p and q are the orders of\n");
@@ -892,6 +896,8 @@ void escalera_usage(const char *prog)
     printf("  -diagcov : diagonal innovation covariance (default: full)\n");
     printf("  -redet   : re-estimate the deterministic terms (default: fixed at the .pre)\n");
     printf("  -fixarma : keep the univariate ARMA factors fixed at the .pre\n");
+    printf("  -hessian : standard errors from fdhess at the optimum (fd, default) or\n"
+           "             from the BFGS Hessian of the search (bfgs)\n");
     printf("  -o NAME  : results to NAME.out (default: the .pre names joined by '_')\n");
     printf("  -forecast H : forecast H periods -> NAME.forecast, each series in its level\n");
     printf("  -estwin N   : estimate on the first N observations of the first series,\n");
@@ -952,6 +958,7 @@ int escalera_main(int argc, char *argv[])
         return 1;
     }
     cx_diagcov = 0; opt_redet = 0; opt_fixarma = 0;
+    est_fdhess = 1;          /* standard errors from the Hessian AT the optimum */
     for (argi += 2; argi < argc; argi++) {
         if      (strcmp(argv[argi], "-diagcov") == 0) cx_diagcov = 1;
         else if (strcmp(argv[argi], "-redet") == 0)   opt_redet = 1;
@@ -963,6 +970,9 @@ int escalera_main(int argc, char *argv[])
             fc_h = atoi(argv[++argi]);
         else if (strcmp(argv[argi], "-estwin") == 0 && argi + 1 < argc)
             estwin = atoi(argv[++argi]);
+        else if (strcmp(argv[argi], "-hessian") == 0 && argi + 1 < argc &&
+                 (strcmp(argv[argi + 1], "fd") == 0 || strcmp(argv[argi + 1], "bfgs") == 0))
+            est_fdhess = (strcmp(argv[++argi], "fd") == 0);
         else {
             /* Lo que la via .inp admite y la escalera todavia no: mejor un
                error que una opcion ignorada en silencio.                   */
@@ -1044,7 +1054,6 @@ int escalera_main(int argc, char *argv[])
         return 1;
     }
     macheps = cmacheps();
-    est_fdhess = 1;          /* errores estandar del hessiano EN el optimo */
 
     {
         int ey, es, by = data_start_year, bs = data_start_sub;

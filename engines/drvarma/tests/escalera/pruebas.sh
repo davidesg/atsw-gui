@@ -211,6 +211,30 @@ rc=$?
     && bien "un .inp multivariante en la escalera: error que dice como convertirlo" \
     || falla "un .inp multivariante en la escalera: rc=$rc"
 
+# 10b. standard errors: fdhess at the optimum by default, BFGS on request,
+#      and the method is always written (docs/DESIGN-v5-ladder.md; the study
+#      is drvarma-python docs/STUDY-standard-errors.md).
+"$BIN" "$ES" "$WTI" 0 0 -diagcov -o "$TMP/sefd" > /dev/null 2>&1
+"$BIN" "$ES" "$WTI" 0 0 -diagcov -hessian bfgs -o "$TMP/sebf" > /dev/null 2>&1
+grep -q "^  Standard errors: fdhess$" "$TMP/sefd.out" \
+    && grep -q "^  Standard errors: bfgs$" "$TMP/sebf.out" \
+    && bien "standard errors: fdhess by default, -hessian bfgs on request, both said" \
+    || falla "standard errors: the method is not the one asked for, or not said"
+"$BIN" "$ES" "$WTI" 0 0 -hessian exact > "$TMP/sebad.log" 2>&1
+[ $? -ne 0 ] && grep -q "not available" "$TMP/sebad.log" \
+    && bien "-hessian with an unknown value is an error" \
+    || falla "-hessian with an unknown value is accepted"
+T2=$(mktemp -d); cp data/IPC.inp "$T2/"
+( cd "$T2" && "$BIN" IPC 1 0 -mean > /dev/null 2>&1 )
+grep -q "^cov\[1,1\] .*(normalised)" "$T2/IPC.out" \
+    && grep -q "^Standard errors: fdhess$" "$T2/IPC.out" \
+    && bien ".inp path: fdhess holds qq[1,1] (the flat direction) and says so" \
+    || falla ".inp path: qq[1,1] not held, or the method not said"
+( cd "$T2" && "$BIN" IPC 1 0 -mean -hessian nope > bad.log 2>&1 )
+[ $? -ne 0 ] && bien ".inp path: -hessian with an unknown value is an error" \
+    || falla ".inp path: -hessian with an unknown value is accepted"
+rm -r "$T2"
+
 # 11. la regresion de la salida de la 5.0
 REF=$AQUI/ref
 filtro() { grep -av '^Program          : \|^Output File      : \|^  \[[0-9]*\] \|^Full results written to \|^Forecasts written to \|^Recursive forecasts written to ' "$1"; }

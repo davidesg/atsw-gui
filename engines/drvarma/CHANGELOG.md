@@ -62,14 +62,36 @@ Design: `docs/DESIGN-v5-ladder.md`.
   in `lib/optim/lnsrch.c`, one source for drvarma, drtran, fue and fuf.
 - Heap overflow in the residual histogram (`File_HistSer`) with three-digit
   counts.
+- **A Hessian that is not positive definite gave standard errors, and the
+  status that said so was lost** (BUGS.md; drtran BUG-56). `choldcp` is a
+  modified Cholesky that patches pivots, and its status went to `*ifault`,
+  which `est` then overwrote. `fdhess` is now checked with a plain
+  Cholesky and for neighbours on the boundary. If either check fails, the
+  BFGS factor is used and the report says why.
 
 ### Changed
 - The `.pre` reader, `struct Tusmodel`, the univariate transformations and
   the date helpers come from `lib/` (`fuepre`, `prewhiten`, `dates`): the
   same code that drtran and its GUI use. The copy of `ObsToDate` in
   `diagnose.c`, which was identical, is gone.
-- The `.inp` path is unchanged: the only difference in its `.out` is the
-  `Program` line.
+- **Standard errors come from fdhess by default, in both paths**
+  (`-hessian fd|bfgs`). This is Mauricio's finite-difference Hessian at the
+  optimum, from the published code. drvarma-python's study
+  (`docs/STUDY-standard-errors.md` there) chose it: it matches the exact GLS
+  within 0.35 % and OLS within 1 %, including series of very different
+  scales. The BFGS Hessian of the search was off by up to 1483 % and
+  depended on the start. Every parameter table now ends with
+  `Standard errors: <method>`.
+  - In the `.inp` path, `qq[1,1]` (the flat direction Q → cQ) is held
+    while the Hessian is taken, and it prints as `(normalised)`.
+  - Estimates do not move: the 18 cases of `tests/banco` differ only in
+    SE, t, p and the Wald statistics.
+  - One Wald conclusion changes: in `c1_ipc_ar1`, y1 not influenced by
+    the others, p goes from 0.0425 to 0.0676.
+  - Three cases whose MA has roots on the unit circle (modulus 1.00005)
+    keep BFGS, and the report says the optimum is on the boundary.
+- Apart from that, the `.inp` path is unchanged: its `.out` also differs in
+  the `Program` line.
 
 ## [0.4.1] — 2026-06-24
 

@@ -1311,9 +1311,16 @@ grep -q "near-collinearity" "$PAT" \
 python3 -c "import sys; sys.exit(0 if 2*($LLP - ($LL2)) < 3.84 else 1)" \
     && pass "y tiene razón: la verosimilitud NO mejora (LR = $(python3 -c "print('%.3f' % (2*($LLP-($LL2))))"))" \
     || fail "la covarianza sí mejora significativamente"
-python3 -c "import sys; sys.exit(0 if abs($RHO) > 0.9 and abs($TQ) > 100 else 1)" \
-    && pass "pero los parámetros huyen a una esquina: corr = $RHO, t = $TQ" \
+# The corner shows in the correlation. It used to show also as |t| > 100: that
+# was choldcp PATCHING a Hessian that is not positive definite into bogus
+# precision. The guard now keeps BFGS and says why (STUDY-standard-errors.md
+# in drvarma-python), so the pin is the statement, not a huge t.
+python3 -c "import sys; sys.exit(0 if abs($RHO) > 0.9 else 1)" \
+    && pass "pero los parámetros huyen a una esquina: corr = $RHO" \
     || fail "no se reproduce la patología (corr = $RHO, t = $TQ)"
+grep -q "^Standard errors: bfgs (fdhess: the Hessian is not positive definite)" "$PAT" \
+    && pass "and the report says the Hessian at that corner is not positive definite (t = $TQ, no longer > 100)" \
+    || fail "the non-PD Hessian at the corner is not reported"
 
 # (b) SYN: b=2 (no contemporánea) y phi_X=0.50 != phi_N=0.30. Sin patología.
 CLEAN="$TMPDIR/syn_q.txt"

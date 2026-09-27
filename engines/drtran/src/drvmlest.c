@@ -29,6 +29,111 @@ extern FILE *outputv;         /* Output file */
 real pi10x, pi20x, xitolx;
 struct Tvarma varmax;
 void (*castx)( real *, struct Tvarma *,int *, int, int );
+int  est_fixed  = 0;          /* >0: parameter held while fdhess runs (none here: */
+                              /* drtran fixes var[1] = 1, so Q -> cQ is not free) */
+int  est_se_how = EST_SE_BFGS;/* <- which Hessian gave the standard errors      */
+static int   objc_rejects;    /* points objcfunc refused (boundary sentinel)     */
+static real *fix_full;        /* full vector behind the reduced objective        */
+static int   fix_n;
+
+/*****************************************************************************/
+
+void fdhess( real (*func)(real *), int n, real *x, real f, real eta, real **H );
+real objcfunc( real *x );
+
+/* The Hessian behind the standard errors, as the reports write it.         */
+const char *est_se_label( int how )
+{
+   switch ( how )
+      {
+      case EST_SE_FDHESS:   return "fdhess";
+      case EST_SE_BOUNDARY: return "bfgs (fdhess: the optimum is on the boundary "
+                                   "of the admissible region)";
+      case EST_SE_NOTPD:    return "bfgs (fdhess: the Hessian is not positive definite)";
+      default:              return "bfgs";
+      }
+}
+
+/* The objective with parameter est_fixed held at fix_full[est_fixed].       */
+static real objcfix( real *z )
+{
+   int i, k = 1;
+   for ( i = 1; i <= fix_n; i++ )
+       if ( i != est_fixed ) fix_full[i] = z[k++];
+   return objcfunc( fix_full );
+}
+
+/* 1 if H (k x k, symmetric) is positive definite by a plain Cholesky.       */
+static int strict_pd( real **H, int k )
+{
+   int i, j, l, ok = 1;
+   real s, **L = matrix( 1, k, 1, k );
+   for ( j = 1; j <= k && ok; j++ )
+       {
+       s = H[j][j];
+       for ( l = 1; l < j; l++ ) s -= L[j][l] * L[j][l];
+       if ( !(s > 0.0) || !isfinite( s ) ) { ok = 0; break; }
+       L[j][j] = sqrt( s );
+       for ( i = j + 1; i <= k; i++ )
+           {
+           s = H[i][j];
+           for ( l = 1; l < j; l++ ) s -= L[i][l] * L[j][l];
+           L[i][j] = s / L[j][j];
+           }
+       }
+   free_matrix( L, 1, k, 1, k );
+   return ok;
+}
+
+/* Covariance 2 F H^-1 / n from fdhess at par. Sets est_se_how; fills cov    */
+/* and dev only when it is EST_SE_FDHESS (otherwise the caller uses BFGS).   */
+static void fdhess_cov( int npar, real *par, real f, real **cov, real *dev )
+{
+   int  i, j, ii, jj, k = npar - ( est_fixed > 0 ), pfault;
+   real d1, d2, *z, *v, **H;
+
+   z = vector( 1, k );  v = vector( 1, k );  H = matrix( 1, k, 1, k );
+   for ( i = 1, ii = 1; i <= npar; i++ ) if ( i != est_fixed ) z[ii++] = par[i];
+   fix_full = vector( 1, npar );  fix_n = npar;
+   for ( i = 1; i <= npar; i++ ) fix_full[i] = par[i];
+
+   objc_rejects = 0;
+   fdhess( est_fixed > 0 ? objcfix : objcfunc, k, z, f, macheps, H );
+
+   if ( objc_rejects > 0 )
+      est_se_how = EST_SE_BOUNDARY;
+   else if ( !strict_pd( H, k ) )
+      est_se_how = EST_SE_NOTPD;
+   else
+      {
+      pfault = 0;
+      choldcp( H, k, &d1, &d2, &pfault );
+      if ( pfault ) est_se_how = EST_SE_NOTPD;
+      else
+         {
+         est_se_how = EST_SE_FDHESS;
+         for ( i = 1; i <= npar; i++ )
+             { dev[i] = NAN; for ( j = 1; j <= npar; j++ ) cov[i][j] = NAN; }
+         for ( i = 1, ii = 1; i <= npar; i++ )
+             {
+             if ( i == est_fixed ) continue;
+             for ( j = 1; j <= k; j++ ) v[j] = 0.0;
+             v[ii] = 1.0;
+             cholsol( H, k, v );
+             for ( j = 1, jj = 1; j <= npar; j++ )
+                 {
+                 if ( j == est_fixed ) continue;
+                 cov[j][i] = ( 2.0 * f * v[jj] ) / varmax.n;
+                 jj++;
+                 }
+             dev[i] = sqrt( cov[i][i] );
+             ii++;
+             }
+         }
+      }
+   free_vector( fix_full, 1, npar );
+   free_matrix( H, 1, k, 1, k );  free_vector( v, 1, k );  free_vector( z, 1, k );
+}
 
 /*****************************************************************************/
 /*****************************************************************************/
@@ -75,8 +180,6 @@ void est( void (*cast)( real *, struct Tvarma *, int *, int, int ),
 
    void raxopt( real (*func)( real [] ), real *fk, int n, real *xk, real **b,
                 int maxits, int nrits, real gradtol, real steptol );
-   void fdhess( real (*func)(real *), int n, real *x, real f,
-                real eta, real **H );
    real objcfunc( real *x );
 
 
@@ -116,11 +219,17 @@ void est( void (*cast)( real *, struct Tvarma *, int *, int, int ),
 /*   Se recalcula el hessiano por diferencias finitas EN el óptimo. Es la     */
 /*   alternativa que el propio código dejaba apuntada.                        */
 
-   fdhess( objcfunc, npar, par, pi1, macheps, mtmp );
-   choldcp( mtmp, npar, &pi2, &pi3, ifault );
+/*   Guarded as in drvarma (drvarma-python docs/STUDY-standard-errors.md):    */
+/*   on the boundary, or if the Hessian is not positive definite by a plain  */
+/*   Cholesky, the BFGS factor raxopt left in mtmp is kept and est_se_how    */
+/*   says why. The choldcp status used to go to *ifault, which [4] then      */
+/*   overwrote: a failed factorisation was never seen.                       */
+
+   fdhess_cov( npar, par, pi1, cov, dev );
 
 /* [3]: Sample estimation of the variance-covariance matrix:                 */
 
+   if ( est_se_how != EST_SE_FDHESS )
    for ( i = 1; i <= npar; i++ )
        {
        for ( j = 1; j <= npar; j++ ) vtmp[j] = 0.0;
@@ -167,7 +276,7 @@ real objcfunc( real *x )
    ifault = 0;
    (*castx)( x, &varmax, &ifault, 0, 0 );
    if ( ifault > 0 )                            /* ifault = 6-7-8- ...       */
-      return( 1.0 );
+      { objc_rejects++; return( 1.0 ); }
 
 /* [2]: Compute objective function and return:                               */
 
@@ -176,7 +285,7 @@ real objcfunc( real *x )
         FALSE, varmax.a, &pi1, &pi2, &pi3, &ifault );
 
    if ( ifault > 0 )                            /* ifault = 1-2-3-4-5.       */
-      return( 1.0 );
+      { objc_rejects++; return( 1.0 ); }
 
 /* [3]: Un objetivo NO FINITO cuelga el programa. No es una exageracion:        */
 /*                                                                             */
@@ -193,7 +302,7 @@ real objcfunc( real *x )
 
    {
       real f = pow( (pi1 / pi10x), varmax.m ) * (pi2 / pi20x);
-      if ( !isfinite( f ) ) return( 1.0 );
+      if ( !isfinite( f ) ) { objc_rejects++; return( 1.0 ); }
       return( f );
    }
 }

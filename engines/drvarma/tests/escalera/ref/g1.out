@@ -42,6 +42,7 @@ Number of parameters: 11
   mu_IPC_DE                              0.114851     0.018261     6.289   0.0000
   log(Q[IPC_FR]/Q[IPC_ES])              -0.572776     0.136425    -4.198   0.0000
   log(Q[IPC_DE]/Q[IPC_ES])              -0.174216     0.136400    -1.277   0.2015
+  Standard errors: fdhess
 
 Exact log-likelihood: 57.837681
 

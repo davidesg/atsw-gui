@@ -104,6 +104,32 @@ exactly the case that works. See
 
 ---
 
+## BUG (MEDIUM) — a Hessian that is not positive definite gave standard errors, and its status was lost
+
+**Status: FIXED in 5.0** (2026-09-27). Found while making fdhess the default
+(drvarma-python `docs/STUDY-standard-errors.md`). The same code in drtran is
+its BUG-56 (drtran-python `docs/BUGS.md`), where it produced |t| > 100 at a
+ridge.
+
+`est` factored the fdhess Hessian with `choldcp`. That is the optimiser's
+modified Cholesky: it patches small or slightly negative pivots, so a Hessian
+that is not positive definite still yielded a covariance. When `choldcp` did
+fail, its status went to `*ifault`, and block [4] (`cast`/`elf` at the final
+point) then overwrote it. It affected only the ladder, the one path that
+called fdhess.
+
+**Fix.** `fdhess_cov` (drvmlest.c):
+
+- checks the Hessian with a plain Cholesky;
+- counts the neighbours `objcfunc` refuses. Any refusal means the optimum is
+  on the boundary, where no unrestricted Hessian exists;
+- keeps the BFGS factor in either case, and `est_se_how` records why. The
+  reports print it (`Standard errors: …`).
+
+`tests/escalera/pruebas.sh` §10b checks the method and its statement.
+
+---
+
 ## BUG (HIGH) — the line search never returns when the objective is NaN
 
 **Status: FIXED in 5.0** (2026-09-26). `lnsrch` treats a non-finite trial

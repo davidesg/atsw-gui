@@ -3295,7 +3295,8 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
     }
 
     fprintf(outputv, "--------------------------------------------------------------------\n");
-    fprintf(outputv, "Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1\n\n");
+    fprintf(outputv, "Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1\n");
+    fprintf(outputv, "Standard errors: %s\n\n", est_se_label(est_se_how));
 
     transfer_characteristics(x, cov, npar, outputv);
     impulse_response_report(x, cov, npar, outputv);

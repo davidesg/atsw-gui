@@ -1,3 +1,4 @@
+Program          : drvarma 5.0.0 (git 7cb1ff385a-dirty)
 Input Data File  : IPC.inp
 Output File      : IPC.out
 Model: VARMA(2,1)
@@ -67,6 +68,7 @@ cov[2,2]               1.141178     0.203487    5.608 0.0000 ***
 cov[3,3]               0.653281     0.379368    1.722 0.0851 .  
 --------------------------------------------------------------------
 Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+Standard errors: bfgs (fdhess: the optimum is on the boundary of the admissible region)
 
 
 

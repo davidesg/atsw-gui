@@ -79,8 +79,13 @@ univariate models. That is the gate (§3).
   is singular (Mauricio 1995, eq. 2.1; the same as drtran). The covariances
   are free unless `-diagcov`.
 - Standard errors come from a finite-difference Hessian at the optimum
-  (`est_fdhess`), not from the one accumulated by BFGS. This is drtran's fix;
-  the `.inp` path does not change.
+  (`est_fdhess`), not from the one accumulated by BFGS. This is drtran's fix,
+  and since the standard-error study (drvarma-python
+  `docs/STUDY-standard-errors.md`) it is the default of the `.inp` path too,
+  where `qq[1,1]` is held (`est_fixed`). `-hessian bfgs` asks for the old
+  behaviour. If the Hessian is not positive definite by a plain Cholesky, or
+  a neighbour of the optimum is inadmissible (the boundary), BFGS is kept and
+  the table says why (`Standard errors: …`).
 
 ## 3. The diagonal gate, and it closes
 

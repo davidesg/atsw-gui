@@ -1,3 +1,4 @@
+Program          : drvarma 5.0.0 (git 7cb1ff385a-dirty)
 Input Data File  : PSW.inp
 Output File      : PSW.out
 Model: VARMA(1,1)
@@ -45,6 +46,7 @@ cov[2,1]               0.041263     0.006195    6.660 0.0000 ***
 cov[2,2]               2.143993     0.009599  223.358 0.0000 ***
 --------------------------------------------------------------------
 Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+Standard errors: bfgs (fdhess: the optimum is on the boundary of the admissible region)
 
 
 

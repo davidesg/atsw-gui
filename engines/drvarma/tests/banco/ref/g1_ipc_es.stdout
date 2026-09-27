@@ -1,3 +1,4 @@
+Note: the multivariate .inp is deprecated since drvarma 5.0; convert it with: drvarma -split IPC_ES
 
 Input Data File  : IPC_ES.inp
 Output File      : IPC_ES.out

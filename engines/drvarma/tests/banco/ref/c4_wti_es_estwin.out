@@ -1,3 +1,4 @@
+Program          : drvarma 5.0.0 (git 7cb1ff385a-dirty)
 Input Data File  : WTI_IPC_ES_ext.inp
 Output File      : WTI_IPC_ES_ext.out
 Model: VARMA(1,0)
@@ -32,17 +33,18 @@ Number of parameters: 9
 
                         Parameter     Estimate    Std.Error   t-stat  p-val
 --------------------------------------------------------------------
-mu[1]                   0.534763     0.774481    0.690 0.4899    
-mu[2]                   0.154246     0.026333    5.857 0.0000 ***
-phi[1]_11              0.343909     0.073855    4.657 0.0000 ***
-phi[1]_12             -2.651817     2.342175   -1.132 0.2575    
-phi[1]_21              0.010421     0.002233    4.666 0.0000 ***
-phi[1]_22              0.209654     0.068348    3.067 0.0022 ** 
-cov[1,1]               2.599277     0.009566  271.716 0.0000 ***
-cov[2,1]               0.040050     0.004283    9.351 0.0000 ***
-cov[2,2]               0.002331     0.000273    8.538 0.0000 ***
+mu[1]                   0.534763     0.774942    0.690 0.4902    
+mu[2]                   0.154246     0.027333    5.643 0.0000 ***
+phi[1]_11              0.343909     0.077724    4.425 0.0000 ***
+phi[1]_12             -2.651817     2.405076   -1.103 0.2702    
+phi[1]_21              0.010421     0.002328    4.477 0.0000 ***
+phi[1]_22              0.209654     0.071951    2.914 0.0036 ** 
+cov[1,1]               2.599277 (normalised)
+cov[2,1]               0.040050     0.004551    8.801 0.0000 ***
+cov[2,2]               0.002331     0.000274    8.508 0.0000 ***
 --------------------------------------------------------------------
 Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+Standard errors: fdhess
 
 
 
@@ -51,38 +53,38 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 =============================================================
 
 Test of joint significance of last lag (AR(1) and MA(0)):
-  Wald chi2(4) = 76.0432, p-value = 0.0000
+  Wald chi2(4) = 71.9408, p-value = 0.0000
   Conclusion: REJECT H0 → last lag is statistically significant.
 
 Test of joint significance of last AR lag (AR(1)):
-  Wald chi2(4) = 76.0432, p-value = 0.0000
+  Wald chi2(4) = 71.9408, p-value = 0.0000
   Conclusion: REJECT H0 → last AR lag is significant.
 
 Test of joint significance of all cross effects:
   H0: all cross coefficients = 0
-  Wald chi2(2) = 21.7923, p-value = 0.0000
+  Wald chi2(2) = 20.0771, p-value = 0.0000
   Conclusion: REJECT H0 → cross effects are jointly significant.
 
 --- Directional cross-effects tests ---
 
 WTI: effects of other variables on it:
   H0: all coefficients in equation WTI from other vars = 0
-  Wald chi2(1) = 1.2819, p-value = 0.2575
+  Wald chi2(1) = 1.2157, p-value = 0.2702
   Conclusion: Cannot reject H0 → WTI is not influenced by others.
 
 WTI: effects of it on other variables:
   H0: all coefficients of WTI in other equations = 0
-  Wald chi2(1) = 21.7753, p-value = 0.0000
+  Wald chi2(1) = 20.0460, p-value = 0.0000
   Conclusion: REJECT H0 → WTI influences others.
 
 IPC_ES: effects of other variables on it:
   H0: all coefficients in equation IPC_ES from other vars = 0
-  Wald chi2(1) = 21.7753, p-value = 0.0000
+  Wald chi2(1) = 20.0460, p-value = 0.0000
   Conclusion: REJECT H0 → IPC_ES is influenced by others.
 
 IPC_ES: effects of it on other variables:
   H0: all coefficients of IPC_ES in other equations = 0
-  Wald chi2(1) = 1.2819, p-value = 0.2575
+  Wald chi2(1) = 1.2157, p-value = 0.2702
   Conclusion: Cannot reject H0 → IPC_ES does not influence others.
 
 

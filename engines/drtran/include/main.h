@@ -93,6 +93,14 @@ struct Tseries
 /*  Funciones de estimacion (de elfvarma.c y drvmlest.c)                     */
 /*****************************************************************************/
 
+/* Which Hessian gave the standard errors (est_se_how, set by est):         */
+#define EST_SE_BFGS      0    /* the one BFGS accumulated                      */
+#define EST_SE_FDHESS    1    /* fdhess at the optimum                         */
+#define EST_SE_BOUNDARY  2    /* BFGS kept: the optimum is on the boundary     */
+#define EST_SE_NOTPD     3    /* BFGS kept: fdhess not positive definite       */
+extern int est_fixed, est_se_how;
+const char *est_se_label( int how );
+
 void est( void (*cast)( real *, struct Tvarma *, int *, int, int ),
           int npar, real *par, real *dev, real **cov, int maxits, int nrits,
           real grtol, real sptol, real xitol, real **a, real *sigma2,

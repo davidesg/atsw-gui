@@ -1,3 +1,4 @@
+Program          : drvarma 5.0.0 (git 7cb1ff385a-dirty)
 Input Data File  : IPC.inp
 Output File      : IPC.out
 Model: VARMA(1,0)
@@ -32,26 +33,27 @@ Number of parameters: 18
 
                         Parameter     Estimate    Std.Error   t-stat  p-val
 --------------------------------------------------------------------
-mu[1]                   0.154322     0.027938    5.524 0.0000 ***
-mu[2]                   0.113181     0.017630    6.420 0.0000 ***
-mu[3]                   0.112552     0.015130    7.439 0.0000 ***
-phi[1]_11              0.332947     0.071659    4.646 0.0000 ***
-phi[1]_12              0.197687     0.079052    2.501 0.0124 *  
-phi[1]_13             -0.071896     0.113874   -0.631 0.5278    
-phi[1]_21             -0.010186     0.068924   -0.148 0.8825    
-phi[1]_22              0.024699     0.077047    0.321 0.7485    
-phi[1]_23              0.099411     0.109104    0.911 0.3622    
-phi[1]_31              0.242424     0.052598    4.609 0.0000 ***
-phi[1]_32              0.178760     0.059679    2.995 0.0027 ** 
-phi[1]_33             -0.269179     0.082643   -3.257 0.0011 ** 
-cov[1,1]               1.221510     0.085149   14.346 0.0000 ***
-cov[2,1]               0.591307     0.062224    9.503 0.0000 ***
-cov[2,2]               1.104672     0.087722   12.593 0.0000 ***
-cov[3,1]               0.430090     0.050551    8.508 0.0000 ***
-cov[3,2]               0.432722     0.049748    8.698 0.0000 ***
-cov[3,3]               0.627578     0.062204   10.089 0.0000 ***
+mu[1]                   0.154322     0.027920    5.527 0.0000 ***
+mu[2]                   0.113181     0.017940    6.309 0.0000 ***
+mu[3]                   0.112552     0.015179    7.415 0.0000 ***
+phi[1]_11              0.332947     0.078103    4.263 0.0000 ***
+phi[1]_12              0.197687     0.085168    2.321 0.0203 *  
+phi[1]_13             -0.071896     0.110714   -0.649 0.5161    
+phi[1]_21             -0.010186     0.074922   -0.136 0.8919    
+phi[1]_22              0.024699     0.081731    0.302 0.7625    
+phi[1]_23              0.099411     0.106257    0.936 0.3495    
+phi[1]_31              0.242424     0.056297    4.306 0.0000 ***
+phi[1]_32              0.178760     0.061369    2.913 0.0036 ** 
+phi[1]_33             -0.269179     0.079747   -3.375 0.0007 ***
+cov[1,1]               1.221510 (normalised)
+cov[2,1]               0.591307     0.068367    8.649 0.0000 ***
+cov[2,2]               1.104672     0.129687    8.518 0.0000 ***
+cov[3,1]               0.430090     0.052055    8.262 0.0000 ***
+cov[3,2]               0.432722     0.064559    6.703 0.0000 ***
+cov[3,3]               0.627578     0.074570    8.416 0.0000 ***
 --------------------------------------------------------------------
 Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+Standard errors: fdhess
 
 
 
@@ -60,48 +62,48 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 =============================================================
 
 Test of joint significance of last lag (AR(1) and MA(0)):
-  Wald chi2(9) = 88.9238, p-value = 0.0000
+  Wald chi2(9) = 86.5427, p-value = 0.0000
   Conclusion: REJECT H0 → last lag is statistically significant.
 
 Test of joint significance of last AR lag (AR(1)):
-  Wald chi2(9) = 88.9238, p-value = 0.0000
+  Wald chi2(9) = 86.5427, p-value = 0.0000
   Conclusion: REJECT H0 → last AR lag is significant.
 
 Test of joint significance of all cross effects:
   H0: all cross coefficients = 0
-  Wald chi2(6) = 51.8723, p-value = 0.0000
+  Wald chi2(6) = 51.3848, p-value = 0.0000
   Conclusion: REJECT H0 → cross effects are jointly significant.
 
 --- Directional cross-effects tests ---
 
 y1: effects of other variables on it:
   H0: all coefficients in equation y1 from other vars = 0
-  Wald chi2(2) = 6.3188, p-value = 0.0425
-  Conclusion: REJECT H0 → y1 is influenced by others.
+  Wald chi2(2) = 5.3891, p-value = 0.0676
+  Conclusion: Cannot reject H0 → y1 is not influenced by others.
 
 y1: effects of it on other variables:
   H0: all coefficients of y1 in other equations = 0
-  Wald chi2(2) = 27.4626, p-value = 0.0000
+  Wald chi2(2) = 26.4825, p-value = 0.0000
   Conclusion: REJECT H0 → y1 influences others.
 
 y2: effects of other variables on it:
   H0: all coefficients in equation y2 from other vars = 0
-  Wald chi2(2) = 0.9132, p-value = 0.6334
+  Wald chi2(2) = 0.9581, p-value = 0.6194
   Conclusion: Cannot reject H0 → y2 is not influenced by others.
 
 y2: effects of it on other variables:
   H0: all coefficients of y2 in other equations = 0
-  Wald chi2(2) = 10.7219, p-value = 0.0047
+  Wald chi2(2) = 9.5430, p-value = 0.0085
   Conclusion: REJECT H0 → y2 influences others.
 
 y3: effects of other variables on it:
   H0: all coefficients in equation y3 from other vars = 0
-  Wald chi2(2) = 38.6218, p-value = 0.0000
+  Wald chi2(2) = 37.6272, p-value = 0.0000
   Conclusion: REJECT H0 → y3 is influenced by others.
 
 y3: effects of it on other variables:
   H0: all coefficients of y3 in other equations = 0
-  Wald chi2(2) = 2.2806, p-value = 0.3197
+  Wald chi2(2) = 2.5575, p-value = 0.2784
   Conclusion: Cannot reject H0 → y3 does not influence others.
 
 

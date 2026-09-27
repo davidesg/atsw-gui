@@ -1,3 +1,4 @@
+Program          : drvarma 5.0.0 (git 7cb1ff385a-dirty)
 Input Data File  : WTI_IPC_ES.inp
 Output File      : WTI_IPC_ES.out
 Model: VARMA(2,0)
@@ -32,21 +33,22 @@ Number of parameters: 13
 
                         Parameter     Estimate    Std.Error   t-stat  p-val
 --------------------------------------------------------------------
-mu[1]                   0.560469     0.803082    0.698 0.4852    
-mu[2]                   0.154194     0.025399    6.071 0.0000 ***
-phi[1]_11              0.326624     0.069975    4.668 0.0000 ***
-phi[1]_12             -3.264910     2.112601   -1.545 0.1222    
-phi[1]_21              0.010557     0.002477    4.261 0.0000 ***
-phi[1]_22              0.236601     0.073040    3.239 0.0012 ** 
-phi[2]_11              0.116794     0.076584    1.525 0.1272    
-phi[2]_12             -1.754422     0.892695   -1.965 0.0494 *  
-phi[2]_21             -0.001991     0.002429   -0.820 0.4123    
-phi[2]_22             -0.005180     0.061873   -0.084 0.9333    
-cov[1,1]               1.911712     0.044946   42.534 0.0000 ***
-cov[2,1]               0.030025     0.003344    8.979 0.0000 ***
-cov[2,2]               0.001723     0.000204    8.432 0.0000 ***
+mu[1]                   0.560469     0.832495    0.673 0.5008    
+mu[2]                   0.154194     0.026632    5.790 0.0000 ***
+phi[1]_11              0.326624     0.079079    4.130 0.0000 ***
+phi[1]_12             -3.264910     2.647929   -1.233 0.2176    
+phi[1]_21              0.010557     0.002375    4.445 0.0000 ***
+phi[1]_22              0.236601     0.079396    2.980 0.0029 ** 
+phi[2]_11              0.116794     0.082608    1.414 0.1574    
+phi[2]_12             -1.754422     2.514245   -0.698 0.4853    
+phi[2]_21             -0.001991     0.002460   -0.809 0.4184    
+phi[2]_22             -0.005180     0.074667   -0.069 0.9447    
+cov[1,1]               1.911712 (normalised)
+cov[2,1]               0.030025     0.003334    9.006 0.0000 ***
+cov[2,2]               0.001723     0.000202    8.543 0.0000 ***
 --------------------------------------------------------------------
 Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+Standard errors: fdhess
 
 
 
@@ -55,39 +57,39 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 =============================================================
 
 Test of joint significance of last lag (AR(2) and MA(0)):
-  Wald chi2(4) = 7.7945, p-value = 0.0994
+  Wald chi2(4) = 5.6544, p-value = 0.2265
   Conclusion: Cannot reject H0 → last lag is not significant.
 
 Test of joint significance of last AR lag (AR(2)):
-  Wald chi2(4) = 7.7945, p-value = 0.0994
+  Wald chi2(4) = 5.6544, p-value = 0.2265
   Conclusion: Cannot reject H0 → last AR lag is not significant.
 
 Test of joint significance of all cross effects:
   H0: all cross coefficients = 0
-  Wald chi2(4) = 4139.0446, p-value = 0.0000
+  Wald chi2(4) = 21.4460, p-value = 0.0003
   Conclusion: REJECT H0 → cross effects are jointly significant.
 
 --- Directional cross-effects tests ---
 
 WTI: effects of other variables on it:
   H0: all coefficients in equation WTI from other vars = 0
-  Wald chi2(2) = 4082.5932, p-value = 0.0000
-  Conclusion: REJECT H0 → WTI is influenced by others.
+  Wald chi2(2) = 2.6380, p-value = 0.2674
+  Conclusion: Cannot reject H0 → WTI is not influenced by others.
 
 WTI: effects of it on other variables:
   H0: all coefficients of WTI in other equations = 0
-  Wald chi2(2) = 18.1581, p-value = 0.0001
+  Wald chi2(2) = 19.7672, p-value = 0.0001
   Conclusion: REJECT H0 → WTI influences others.
 
 IPC_ES: effects of other variables on it:
   H0: all coefficients in equation IPC_ES from other vars = 0
-  Wald chi2(2) = 18.1581, p-value = 0.0001
+  Wald chi2(2) = 19.7672, p-value = 0.0001
   Conclusion: REJECT H0 → IPC_ES is influenced by others.
 
 IPC_ES: effects of it on other variables:
   H0: all coefficients of IPC_ES in other equations = 0
-  Wald chi2(2) = 4082.5932, p-value = 0.0000
-  Conclusion: REJECT H0 → IPC_ES influences others.
+  Wald chi2(2) = 2.6380, p-value = 0.2674
+  Conclusion: Cannot reject H0 → IPC_ES does not influence others.
 
 
 =============================================================

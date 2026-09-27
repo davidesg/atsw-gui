@@ -1,3 +1,4 @@
+Program          : drvarma 5.0.0 (git 7cb1ff385a-dirty)
 Input Data File  : IPC3.inp
 Output File      : IPC3.out
 Model: VARMA(3,0)
@@ -32,44 +33,45 @@ Number of parameters: 36
 
                         Parameter     Estimate    Std.Error   t-stat  p-val
 --------------------------------------------------------------------
-mu[1]                   0.154645     0.028275    5.469 0.0000 ***
-mu[2]                   0.113279     0.015709    7.211 0.0000 ***
-mu[3]                   0.115822     0.016574    6.988 0.0000 ***
-phi[1]_11              0.330424     0.075038    4.403 0.0000 ***
-phi[1]_12             -0.054043     0.110966   -0.487 0.6262    
-phi[1]_13              0.232373     0.084802    2.740 0.0061 ** 
-phi[1]_21              0.256920     0.054690    4.698 0.0000 ***
-phi[1]_22             -0.273709     0.085286   -3.209 0.0013 ** 
-phi[1]_23              0.188988     0.064990    2.908 0.0036 ** 
-phi[1]_31             -0.027135     0.066935   -0.405 0.6852    
-phi[1]_32              0.092717     0.103434    0.896 0.3700    
-phi[1]_33              0.061563     0.080940    0.761 0.4469    
-phi[2]_11             -0.081940     0.082174   -0.997 0.3187    
-phi[2]_12              0.146489     0.107032    1.369 0.1711    
-phi[2]_13             -0.034498     0.081053   -0.426 0.6704    
-phi[2]_21              0.010883     0.063405    0.172 0.8637    
-phi[2]_22              0.037858     0.084161    0.450 0.6528    
-phi[2]_23             -0.086017     0.061771   -1.393 0.1638    
-phi[2]_31             -0.066257     0.077085   -0.860 0.3900    
-phi[2]_32              0.191036     0.103292    1.849 0.0644 .  
-phi[2]_33              0.028960     0.073103    0.396 0.6920    
-phi[3]_11              0.061348     0.075089    0.817 0.4139    
-phi[3]_12              0.017253     0.099431    0.174 0.8622    
-phi[3]_13             -0.097101     0.083342   -1.165 0.2440    
-phi[3]_21              0.055857     0.058040    0.962 0.3359    
-phi[3]_22              0.047699     0.081681    0.584 0.5592    
-phi[3]_23             -0.135408     0.064577   -2.097 0.0360 *  
-phi[3]_31             -0.060638     0.071879   -0.844 0.3989    
-phi[3]_32              0.184665     0.095969    1.924 0.0543 .  
-phi[3]_33             -0.191168     0.077958   -2.452 0.0142 *  
-cov[1,1]               1.237988     0.082033   15.091 0.0000 ***
-cov[2,1]               0.428796     0.054636    7.848 0.0000 ***
-cov[2,2]               0.634640     0.069832    9.088 0.0000 ***
-cov[3,1]               0.590448     0.060443    9.769 0.0000 ***
-cov[3,2]               0.432904     0.050557    8.563 0.0000 ***
-cov[3,3]               1.049894     0.086250   12.173 0.0000 ***
+mu[1]                   0.154645     0.028262    5.472 0.0000 ***
+mu[2]                   0.113279     0.015672    7.228 0.0000 ***
+mu[3]                   0.115822     0.016519    7.012 0.0000 ***
+phi[1]_11              0.330424     0.082952    3.983 0.0001 ***
+phi[1]_12             -0.054043     0.117704   -0.459 0.6461    
+phi[1]_13              0.232373     0.091856    2.530 0.0114 *  
+phi[1]_21              0.256920     0.059633    4.308 0.0000 ***
+phi[1]_22             -0.273709     0.084797   -3.228 0.0012 ** 
+phi[1]_23              0.188988     0.066190    2.855 0.0043 ** 
+phi[1]_31             -0.027135     0.076413   -0.355 0.7225    
+phi[1]_32              0.092717     0.108376    0.856 0.3923    
+phi[1]_33              0.061563     0.084578    0.728 0.4667    
+phi[2]_11             -0.081940     0.089898   -0.911 0.3620    
+phi[2]_12              0.146489     0.121787    1.203 0.2290    
+phi[2]_13             -0.034498     0.094352   -0.366 0.7146    
+phi[2]_21              0.010883     0.064965    0.168 0.8670    
+phi[2]_22              0.037858     0.088137    0.430 0.6675    
+phi[2]_23             -0.086017     0.068251   -1.260 0.2076    
+phi[2]_31             -0.066257     0.082816   -0.800 0.4237    
+phi[2]_32              0.191036     0.112190    1.703 0.0886 .  
+phi[2]_33              0.028960     0.086921    0.333 0.7390    
+phi[3]_11              0.061348     0.084713    0.724 0.4690    
+phi[3]_12              0.017253     0.115610    0.149 0.8814    
+phi[3]_13             -0.097101     0.092024   -1.055 0.2913    
+phi[3]_21              0.055857     0.061262    0.912 0.3619    
+phi[3]_22              0.047699     0.083573    0.571 0.5682    
+phi[3]_23             -0.135408     0.066472   -2.037 0.0416 *  
+phi[3]_31             -0.060638     0.078090   -0.777 0.4374    
+phi[3]_32              0.184665     0.106531    1.733 0.0830 .  
+phi[3]_33             -0.191168     0.084792   -2.255 0.0242 *  
+cov[1,1]               1.237988 (normalised)
+cov[2,1]               0.428796     0.052954    8.097 0.0000 ***
+cov[2,2]               0.634640     0.075815    8.371 0.0000 ***
+cov[3,1]               0.590448     0.066536    8.874 0.0000 ***
+cov[3,2]               0.432904     0.063839    6.781 0.0000 ***
+cov[3,3]               1.049894     0.122470    8.573 0.0000 ***
 --------------------------------------------------------------------
 Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+Standard errors: fdhess
 
 
 
@@ -78,48 +80,48 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 =============================================================
 
 Test of joint significance of last lag (AR(3) and MA(0)):
-  Wald chi2(9) = 12.8181, p-value = 0.1710
+  Wald chi2(9) = 10.8726, p-value = 0.2845
   Conclusion: Cannot reject H0 → last lag is not significant.
 
 Test of joint significance of last AR lag (AR(3)):
-  Wald chi2(9) = 12.8181, p-value = 0.1710
+  Wald chi2(9) = 10.8726, p-value = 0.2845
   Conclusion: Cannot reject H0 → last AR lag is not significant.
 
 Test of joint significance of all cross effects:
   H0: all cross coefficients = 0
-  Wald chi2(18) = 65.9565, p-value = 0.0000
+  Wald chi2(18) = 67.8876, p-value = 0.0000
   Conclusion: REJECT H0 → cross effects are jointly significant.
 
 --- Directional cross-effects tests ---
 
 IPC_ES: effects of other variables on it:
   H0: all coefficients in equation IPC_ES from other vars = 0
-  Wald chi2(6) = 11.9339, p-value = 0.0635
+  Wald chi2(6) = 9.7943, p-value = 0.1336
   Conclusion: Cannot reject H0 → IPC_ES is not influenced by others.
 
 IPC_ES: effects of it on other variables:
   H0: all coefficients of IPC_ES in other equations = 0
-  Wald chi2(6) = 36.4469, p-value = 0.0000
+  Wald chi2(6) = 36.4046, p-value = 0.0000
   Conclusion: REJECT H0 → IPC_ES influences others.
 
 IPC_FR: effects of other variables on it:
   H0: all coefficients in equation IPC_FR from other vars = 0
-  Wald chi2(6) = 42.9937, p-value = 0.0000
+  Wald chi2(6) = 43.7951, p-value = 0.0000
   Conclusion: REJECT H0 → IPC_FR is influenced by others.
 
 IPC_FR: effects of it on other variables:
   H0: all coefficients of IPC_FR in other equations = 0
-  Wald chi2(6) = 8.7099, p-value = 0.1906
+  Wald chi2(6) = 7.5592, p-value = 0.2722
   Conclusion: Cannot reject H0 → IPC_FR does not influence others.
 
 IPC_DE: effects of other variables on it:
   H0: all coefficients in equation IPC_DE from other vars = 0
-  Wald chi2(6) = 7.1261, p-value = 0.3093
+  Wald chi2(6) = 4.9610, p-value = 0.5488
   Conclusion: Cannot reject H0 → IPC_DE is not influenced by others.
 
 IPC_DE: effects of it on other variables:
   H0: all coefficients of IPC_DE in other equations = 0
-  Wald chi2(6) = 16.3138, p-value = 0.0122
+  Wald chi2(6) = 14.8656, p-value = 0.0213
   Conclusion: REJECT H0 → IPC_DE influences others.
 
 

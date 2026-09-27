@@ -43,6 +43,7 @@ Number of parameters: 7
   AR1[IPC_ES<-WTI]                       0.009932     0.002240     4.434   0.0000
   log(Q[IPC_ES]/Q[WTI])                 -7.079661     0.116956   -60.533   0.0000
   Q[IPC_ES,WTI]                          0.014922     0.001698     8.787   0.0000
+  Standard errors: fdhess
 
 Exact log-likelihood: -724.199406
 

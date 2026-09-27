@@ -1,3 +1,4 @@
+Program          : drvarma 5.0.0 (git 7cb1ff385a-dirty)
 Input Data File  : WTI_IPC_DE_ext.inp
 Output File      : WTI_IPC_DE_ext.out
 Model: VARMA(1,0)
@@ -32,16 +33,17 @@ Number of parameters: 6
 
                         Parameter     Estimate    Std.Error   t-stat  p-val
 --------------------------------------------------------------------
-mu[1]                   0.535733     0.783446    0.684 0.4941    
-mu[2]                   0.114330     0.018728    6.105 0.0000 ***
-phi[1]_11              0.296841     0.063705    4.660 0.0000 ***
+mu[1]                   0.535733     0.803538    0.667 0.5050    
+mu[2]                   0.114330     0.017878    6.395 0.0000 ***
+phi[1]_11              0.296841     0.065012    4.566 0.0000 ***
 phi[1]_12          (fixed 0.0)
 phi[1]_21          (fixed 0.0)
-phi[1]_22              0.093473     0.066200    1.412 0.1580    
-cov[1,1]               1.998602     0.010072  198.438 0.0000 ***
-cov[2,2]               0.001645     0.000224    7.350 0.0000 ***
+phi[1]_22              0.093473     0.067802    1.379 0.1680    
+cov[1,1]               1.998602 (normalised)
+cov[2,2]               0.001645     0.000226    7.291 0.0000 ***
 --------------------------------------------------------------------
 Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+Standard errors: fdhess
 
 
 
@@ -50,11 +52,11 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 =============================================================
 
 Test of joint significance of last lag (AR(1) and MA(0)):
-  Wald chi2(2) = 23.6630, p-value = 0.0000
+  Wald chi2(2) = 22.7485, p-value = 0.0000
   Conclusion: REJECT H0 → last lag is statistically significant.
 
 Test of joint significance of last AR lag (AR(1)):
-  Wald chi2(2) = 23.6630, p-value = 0.0000
+  Wald chi2(2) = 22.7485, p-value = 0.0000
   Conclusion: REJECT H0 → last AR lag is significant.
 
 No cross effects to test (model already diagonal).

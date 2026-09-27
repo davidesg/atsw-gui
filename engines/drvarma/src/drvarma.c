@@ -143,6 +143,8 @@ int main(int argc, char *argv[])
         printf("       [-volexp [alpha window]] [-volmov [window]]\n");
         printf("  method: 1 = exact, 2 = approximate (default=1)\n");
         printf("  -twostep: use two-step initialization (diagonal then full)\n");
+        printf("  -hessian fd|bfgs: standard errors from fdhess at the optimum (default)\n"
+               "       or from the BFGS Hessian of the search\n");
         printf("  -volexp [alpha window]: compute exponential volatility (alpha default 0.05, window default 20)\n");
         printf("  -volmov [window]: compute moving-window volatility (window default 20)\n");
         printf("  -deseason [auto|force]: harmonic seasonal adjustment of RAW series\n");
@@ -172,6 +174,7 @@ int main(int argc, char *argv[])
     global_q = atoi(argv[3]);
 
     /* Parse additional options */
+    est_fdhess = 1;     /* fdhess by default: drvarma-python docs/STUDY-standard-errors.md */
     for (i = 4; i < argc; i++) {
         if (strcmp(argv[i], "-mean") == 0)
         global_include_mean = 1;
@@ -185,6 +188,14 @@ int main(int argc, char *argv[])
         met = atoi(argv[++i]);
         else if (strcmp(argv[i], "-twostep") == 0)
         global_twostep = 1;
+        else if (strcmp(argv[i], "-hessian") == 0) {
+        if (i+1 < argc && (strcmp(argv[i+1], "fd") == 0 || strcmp(argv[i+1], "bfgs") == 0))
+            est_fdhess = (strcmp(argv[++i], "fd") == 0);
+        else {
+            printf("ERROR: -hessian takes fd or bfgs\n");
+            exit(1);
+            }
+        }
     /* Nuevas opciones de volatilidad */
         else if (strcmp(argv[i], "-volexp") == 0) {
         do_exp_vol = 1;
@@ -415,6 +426,10 @@ int main(int argc, char *argv[])
     /* [7] Estimate */
     shootx(x, &varma1, &ifault, 1, 0);   /* allocate memory (full nobs) */
     g_in_est = 1;                        /* restrict likelihood to estimation window */
+    /* Q is estimated unnormalised, and the likelihood concentrates sigma2, so
+       Q -> cQ is a flat direction: fdhess holds qq[1,1], the first element of
+       Q, which is the first of the last n_cov parameters.                    */
+    est_fixed = npar - (global_diag_cov ? nser : nser * (nser + 1) / 2) + 1;
     est(&shootx, npar, x, dev, cov, maxits, nrits, gradtol, steptol,
         varma1.xitol, varma1.a, &varma1.sigma2, &varma1.logelf, &ifault);
 
@@ -1408,6 +1423,12 @@ static void print_parameters(real *x, real *dev, real **cov, int npar, struct Tv
     /* Covariance */
     if (global_diag_cov) {
         for (i = 1; i <= m; i++) {
+            if (isnan(dev[idx])) {      /* held by fdhess: the flat direction */
+                fprintf(outputv, "cov[%d,%d]           %12.6f %12s\n", i, i, x[idx],
+                        "(normalised)");
+                idx++;
+                continue;
+            }
             t_stat = x[idx] / dev[idx];
             p_val = 2.0 * (1.0 - normal_cdf(fabs(t_stat)));
             sig_code(p_val, sig);
@@ -1418,6 +1439,12 @@ static void print_parameters(real *x, real *dev, real **cov, int npar, struct Tv
     } else {
         for (i = 1; i <= m; i++) {
             for (j = 1; j <= i; j++) {
+                if (isnan(dev[idx])) {  /* held by fdhess: the flat direction */
+                    fprintf(outputv, "cov[%d,%d]           %12.6f %12s\n", i, j, x[idx],
+                            "(normalised)");
+                    idx++;
+                    continue;
+                }
                 t_stat = x[idx] / dev[idx];
                 p_val = 2.0 * (1.0 - normal_cdf(fabs(t_stat)));
                 sig_code(p_val, sig);
@@ -1429,7 +1456,8 @@ static void print_parameters(real *x, real *dev, real **cov, int npar, struct Tv
     }
     fprintf(outputv, "%s\n",
             "--------------------------------------------------------------------");
-    fprintf(outputv, "Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1\n\n");
+    fprintf(outputv, "Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1\n");
+    fprintf(outputv, "Standard errors: %s\n\n", est_se_label(est_se_how));
 }
 
 /*****************************************************************************/

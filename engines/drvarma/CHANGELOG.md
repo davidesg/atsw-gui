@@ -78,6 +78,14 @@ Design: `docs/DESIGN-v5-ladder.md`.
   migrated. One format for the whole ecosystem: fue's.
 
 ### Fixed
+- **The diagonal gate is evaluated with the untruncated likelihood,** whatever
+  `-m` says. It is an identity, and elf's ξ truncation (`-m 1`) is not the
+  same for one series as for m.
+  - Pairs of m6 failed the gate by up to 0.0018, and the report blamed the
+    cast. They now close to 1e-13.
+  - fue's `.pre` files are estimated untruncated too, so each series'
+    "move" is now measured on the same likelihood.
+  - The estimation keeps the `-m` asked for.
 - **A stop on the MA invertibility wall was reported as "OPTIMIZER CONVERGED".**
   The optimiser's report is now written after `est()` checks the MA roots:
   `OPTIMIZER STOPPED at the MA invertibility boundary`, plus

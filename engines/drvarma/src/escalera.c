@@ -1102,6 +1102,15 @@ int escalera_main(int argc, char *argv[])
        es exacta: con Q diagonal y Q_ii/Q_11 = s2_i/s2_1 el sistema factoriza
        y logL = SUM logL_i. Se evalua, no se optimiza: lo que se certifica es
        la verosimilitud y el cast, no la convergencia de un optimizador.    */
+    /* The gate is an IDENTITY, so it is evaluated with the UNTRUNCATED
+       likelihood whatever -m says (2026-09-28). With -m 1 elf truncates the xi
+       sequence at 1e-3, and the truncation is not the same for one series as
+       for m: m6's pairs failed by up to 0.0018 and the report blamed the cast.
+       fue estimates its .pre untruncated too, so "move" is measured on the
+       same likelihood. The estimation below uses the method asked for.      */
+    {
+    real xitol_asked = xitol_met;
+    xitol_met = -1.0e-3;
     quiet_mode = 1;
     cx_p = cx_q = 0;  cx_diagcov = 1;
     for (i = 1; i <= n_ser; i++) {
@@ -1137,6 +1146,8 @@ int escalera_main(int argc, char *argv[])
     for (a = 1; a <= n_ser; a++) lvar[a] = log(s2_uni[a] / s2_uni[1]);
     fit_run(&D, 0);
     logL_gate = D.logL;
+    xitol_met = xitol_asked;
+    }
     {
         int pass = (D.ifault == 0) &&
                    fabs(logL_gate - sum_uni) <= GATE_TOL * (1.0 + fabs(sum_uni));

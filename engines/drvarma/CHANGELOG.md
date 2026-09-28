@@ -12,6 +12,14 @@ Versions up to 0.4 were maintained as directory snapshots (`drvarma_v.01` …
 drvarma joins the ladder fue → drtran → drvarma: it reads fue's `.pre` files.
 Design: `docs/DESIGN-v5-ladder.md`.
 
+### Changed
+- **The MA wall has one tolerance for both sides** (`MA_WALL_TOL`, 5e-5, in
+  lib/lik/lik.h; drtran too). chekma refuses a root at modulus >= 1 + 5e-5; a
+  stop with a root at modulus >= 1 - 5e-5 is now reported as on the wall
+  ("MA boundary: k of n inverse roots within 5e-5 of the unit circle").
+  Before, only >= 1 counted, so a fit that reached the wall from inside said
+  CONVERGED. Bench: only the wording of c2, c3 and c7 changes.
+
 ### Added
 - **Shea's exact likelihood, `-lik elf|shea|both`** (both paths).
   - **What it is.** drvarma's source had carried Shea's algorithm since

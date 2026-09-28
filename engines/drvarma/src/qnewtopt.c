@@ -168,8 +168,9 @@ void report( int n, int k, real *x, real *g, real f, int termcode )
 }
 
 /* The report est() writes once it knows where the MA roots ended (2026-09-28).
-   A stop with MA inverse roots at modulus >= 1 is on the edge of the
-   admissible region -- chekma refuses beyond 1.00005 -- so "CONVERGED" would
+   A stop with MA inverse roots within MA_WALL_TOL (5e-5, lik.h) of the unit
+   circle is on the edge of the admissible region -- chekma refuses beyond
+   1 + MA_WALL_TOL -- so "CONVERGED" would
    be false there, whatever the termcode. The facts only: no verdict on the
    model, which is the assistant's to study (sima; -lik shea for a second
    path). */
@@ -190,7 +191,7 @@ void report_stop( int nboundary, int nroots )
    fprintf( outputv, "  Objective function = %.12f\n", opt_fk );
    if ( crit ) fprintf( outputv, "  Convergence criterion: %s\n", crit );
    if ( nboundary > 0 )
-      fprintf( outputv, "  MA boundary: %d of %d inverse roots at modulus >= 1\n",
+      fprintf( outputv, "  MA boundary: %d of %d inverse roots within 5e-5 of the unit circle\n",
                nboundary, nroots );
    fprintf( outputv, "=============================================================\n\n" );
 }

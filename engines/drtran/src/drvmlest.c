@@ -29,7 +29,7 @@ extern FILE *outputv;         /* Output file */
 real pi10x, pi20x, xitolx;
 struct Tvarma varmax;
 void (*castx)( real *, struct Tvarma *,int *, int, int );
-int  est_ma_boundary = 0;     /* MA inverse roots at modulus >= 1 at the stop    */
+int  est_ma_boundary = 0;     /* MA inverse roots on the wall at the stop (lik.h) */
 int  est_ma_nroots   = 0;
 int  est_fixed  = 0;          /* >0: parameter held while fdhess runs (none here: */
                               /* drtran fixes var[1] = 1, so Q -> cQ is not free) */
@@ -230,8 +230,9 @@ void est( void (*cast)( real *, struct Tvarma *, int *, int, int ),
    raxopt( objcfunc, &pi1, npar, par, mtmp, maxits, nrits, grtol, sptol );
 
 /* Where the MA roots ended (2026-09-28, as drvarma): a stop with MA inverse */
-/* roots at modulus >= 1 is on the edge of the admissible region -- chekma    */
-/* refuses beyond 1.00005 --, and drtran.c says so instead of "CONVERGENCE".  */
+/* roots within MA_WALL_TOL of the unit circle is on the edge of the         */
+/* admissible region -- chekma refuses beyond 1 + MA_WALL_TOL --, and        */
+/* drtran.c says so instead of "CONVERGENCE".                                */
    est_ma_boundary = 0;
    est_ma_nroots = 0;
    {
@@ -243,7 +244,7 @@ void est( void (*cast)( real *, struct Tvarma *, int *, int, int ),
       real *wr = vector( 1, nr ), *wi = vector( 1, nr ), *wmod = vector( 1, nr );
       chekma( varmax.m, varmax.q, varmax.theta, wr, wi, wmod, &cf );
       est_ma_nroots = nr;
-      for ( ir = 1; ir <= nr; ir++ ) if ( wmod[ir] >= 1.0 ) est_ma_boundary++;
+      for ( ir = 1; ir <= nr; ir++ ) if ( wmod[ir] >= 1.0 - MA_WALL_TOL ) est_ma_boundary++;
       free_vector( wmod, 1, nr ); free_vector( wi, 1, nr ); free_vector( wr, 1, nr );
       }
    }

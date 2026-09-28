@@ -3208,7 +3208,7 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
                 verdict, opt_iters, maxits);
         fprintf(outputv, "**** %s\n", why);
         if (est_ma_boundary > 0)
-            fprintf(outputv, "**** MA boundary: %d of %d inverse roots at modulus >= 1\n",
+            fprintf(outputv, "**** MA boundary: %d of %d inverse roots within 5e-5 of the unit circle\n",
                     est_ma_boundary, est_ma_nroots);
         if (ifault != 0)
             fprintf(outputv, "**** ifault = %d (estimates not reliable)\n", ifault);

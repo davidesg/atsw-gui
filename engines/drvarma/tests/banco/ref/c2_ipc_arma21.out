@@ -24,7 +24,7 @@ Number of parameters: 33
   OPTIMIZER STOPPED at the MA invertibility boundary after 64 iterations
   Objective function = 0.765669088445
   Convergence criterion: scaled distance between last two steps <= steptol
-  MA boundary: 2 of 3 inverse roots at modulus >= 1
+  MA boundary: 2 of 3 inverse roots within 5e-5 of the unit circle
 =============================================================
 
 

@@ -24,7 +24,7 @@ Number of parameters: 11
   OPTIMIZER STOPPED at the MA invertibility boundary after 100 iterations
   Objective function = 0.009162634192
   Convergence criterion: last global step failed to locate a lower point
-  MA boundary: 2 of 2 inverse roots at modulus >= 1
+  MA boundary: 2 of 2 inverse roots within 5e-5 of the unit circle
 =============================================================
 
 

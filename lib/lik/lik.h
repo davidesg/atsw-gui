@@ -13,6 +13,14 @@
 #define LIK_ELF   0
 #define LIK_SHEA  1
 #define LIK_BOTH  2       /* elf is the objective; Shea checked at every point */
+
+/* The MA invertibility wall, one tolerance for both sides (2026-09-28).     */
+/* chekma refuses a point with an MA inverse root at modulus >= 1 + 5e-5;    */
+/* a stop with a root at modulus >= 1 - 5e-5 is reported as on the wall. A   */
+/* root at 1.000048 and one at 0.99999999 are the same fact: the unit circle */
+/* to chekma's own precision. Before, only >= 1 counted, so an optimizer     */
+/* that reached the wall from inside said "converged".                       */
+#define MA_WALL_TOL 5e-5
 extern int est_lik;
 const char *lik_label( void );
 void lik_check_report( FILE *f );

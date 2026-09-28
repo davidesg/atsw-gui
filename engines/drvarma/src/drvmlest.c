@@ -24,7 +24,7 @@ extern FILE *outputv;         /* Output file (global: declared in DRV.C)     */
 /*****************************************************************************/
 
 real pi10x, pi20x, xitolx;
-int  est_ma_boundary = 0;     /* MA inverse roots at modulus >= 1 at the stop    */
+int  est_ma_boundary = 0;     /* MA inverse roots on the wall at the stop (lik.h) */
 int  est_ma_nroots   = 0;
 int  est_fdhess = 0;          /* 1: standard errors from fdhess at the optimum */
 int  est_fixed  = 0;          /* >0: parameter held while fdhess runs (flat dir.) */
@@ -238,7 +238,7 @@ void est( void (*cast)( real *, struct Tvarma *, int *, int, int ),
       real *wr = vector( 1, nr ), *wi = vector( 1, nr ), *wmod = vector( 1, nr );
       chekma( varmax.m, varmax.q, varmax.theta, wr, wi, wmod, &cf );
       est_ma_nroots = nr;
-      for ( ir = 1; ir <= nr; ir++ ) if ( wmod[ir] >= 1.0 ) est_ma_boundary++;
+      for ( ir = 1; ir <= nr; ir++ ) if ( wmod[ir] >= 1.0 - MA_WALL_TOL ) est_ma_boundary++;
       free_vector( wmod, 1, nr ); free_vector( wi, 1, nr ); free_vector( wr, 1, nr );
       }
    }

@@ -104,6 +104,46 @@ exactly the case that works. See
 
 ---
 
+## BUG (HIGH, OPEN) — the estimate of a bench case stops 3.07 log-likelihood units below the optimum
+
+**Found:** 2026-09-28, by the second exact likelihood (`-lik shea`).
+
+`tests/banco` case `c2_ipc_arma21` is `IPC.inp 2 1 -mean -diagcov`. With
+`-m 2`:
+
+- elf stops at ℓ = 66.2068;
+- Shea's optimisation reaches ℓ = 69.2748.
+
+Evaluated at Shea's optimum, **elf itself** gives 69.2747625346. So this is
+not a disagreement between the likelihoods: the two agree to 1e-9 at every
+point either optimiser visits. It is the optimiser's path. From the
+Hannan-Rissanen start, drvarma's default route ends at a point 3.07 below
+one it would itself score higher.
+
+It is also the case where fdhess falls back to BFGS: the MA roots are at
+modulus 1.00005, on the boundary. PSW ARMA(1,1) shows the same, smaller:
+elf −871.0167 against Shea −870.9434.
+
+**Open:** why the path stops there (termcode, the boundary sentinel), and
+what to do about it. A second path (`-lik shea`) is the practical check
+available now. Multistart (drvec's P12) is the systematic one.
+
+---
+
+## BUG (LOW) — Shea's likelihood underflowed for a Q of small scale
+
+**Status: FIXED in 5.0** (2026-09-28), before `marma` was ever called.
+
+`marma` returned the determinant factor as
+`r2 = exp(log(exp(detp) · tsig^(n−j7)) / n)`. With a Q of small scale,
+`detp` is about −1500 for n = 216, and `exp(−1500)` is 0 as a double. The
+objective collapsed to 0, and every estimate was garbage: SEs of 0 and
+infinite t. It showed on the first run of the `pt_*` bench cases with
+`-lik shea` (WTI, variance 0.0017). It is now computed in logarithms,
+`r2 = exp((detp + (n−j7) log tsig) / n)`.
+
+---
+
 ## BUG (MEDIUM) — a Hessian that is not positive definite gave standard errors, and its status was lost
 
 **Status: FIXED in 5.0** (2026-09-27). Found while making fdhess the default

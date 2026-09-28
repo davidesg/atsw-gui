@@ -13,6 +13,26 @@ drvarma joins the ladder fue → drtran → drvarma: it reads fue's `.pre` files
 Design: `docs/DESIGN-v5-ladder.md`.
 
 ### Added
+- **Shea's exact likelihood, `-lik elf|shea|both`** (both paths).
+  - **What it is.** drvarma's source had carried Shea's algorithm since
+    1996: `marma`, AS 242 (1989), the other efficient exact method and the
+    benchmark in Mauricio's papers. It was compiled and never called.
+  - **`-lik shea`** makes it the objective. Shea is always run exact,
+    whatever `-m` says.
+  - **`-lik both`** optimises with elf and evaluates Shea at every point the
+    optimiser visits. The `.out` reports the largest |ΔlogL| along the path
+    and at the optimum.
+  - **Measured with `-m 2`:** 1e-9 to 1e-13 at every point, over thousands
+    of points per case (VAR, VARMA(1,1), VARMA(2,1), and the m6 ladder with
+    6 592 points). Two independent algorithms give the same likelihood.
+  - **Residuals** always come from elf. marma returns the one-step
+    innovations, not the exact residuals the forecasts need (drtran
+    BUG-55).
+  - **MA admissibility.** Shea uses elf's MA admissibility check (`chekma`).
+  - Code: `src/lik.c`.
+- **The `.inp` path prints the exact log-likelihood** (`Exact log-likelihood:`
+  in the `.out`, with a `Likelihood:` line saying which algorithm). It never
+  printed it before; the ladder did.
 - **`.pre` input (ladder mode).** `drvarma A.pre B.pre [...] p q [-diagcov]
   [-redet] [-fixarma] [-m method] [-o NAME]`. Each series carries its
   univariate model from fue on the **diagonal** of the VARMA: Box-Cox,
@@ -54,6 +74,13 @@ Design: `docs/DESIGN-v5-ladder.md`.
   migrated. One format for the whole ecosystem: fue's.
 
 ### Fixed
+- **`-m` labels were swapped.** `-m 1`, the default, is the exact likelihood
+  with the ξ sequence truncated at 1e-3 (`xitol > 0`). `-m 2` is the exact
+  likelihood without truncation, though the help called it "approximate".
+  Only the text changes, not the numbers. drvec had found the same (its
+  BUG-47).
+- **The m6 ladder gate's −0.000428 is explained:** it is that truncation.
+  With `-m 2` the gate closes to 0, and to 4.6e-13 with Shea.
 - **BUG-2**: series are crossed by date, not by position. They must share
   the frequency and the last date, or they are rejected (`lib/fuepre`,
   shared with drtran).

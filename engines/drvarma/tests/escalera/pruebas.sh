@@ -235,6 +235,35 @@ grep -q "^cov\[1,1\] .*(normalised)" "$T2/IPC.out" \
     || falla ".inp path: -hessian with an unknown value is accepted"
 rm -r "$T2"
 
+# 10c. Shea (AS 242) against elf (AS 311): two independent exact likelihoods.
+#      With -m 2 (no xi truncation) they must agree to rounding at every point
+#      the optimizer visits; measured 1e-9..1e-13 (lib.c, -lik both).
+shea_ok() {   # file: the "Shea check" line must show both maxima below 1e-8
+    python3 - "$1" <<'PY'
+import re, sys
+t = open(sys.argv[1], encoding="latin-1").read()
+m = re.search(r"Shea check.*?(\d+) points; max \|dlogL\| = ([0-9.e+-]+), at the optimum ([0-9.e+-]+)", t)
+sys.exit(0 if m and int(m.group(1)) > 0 and float(m.group(2)) < 1e-8 and float(m.group(3)) < 1e-8 else 1)
+PY
+}
+"$BIN" "$ES" "$FR" 1 0 -diagcov -m 2 -lik both -o "$TMP/shl" > /dev/null 2>&1
+shea_ok "$TMP/shl.out" \
+    && bien "ladder: elf and Shea give the same likelihood at every point (-m 2)" \
+    || falla "ladder: elf and Shea disagree (-lik both -m 2)"
+T3=$(mktemp -d); cp data/PSW.inp "$T3/"
+( cd "$T3" && "$BIN" PSW 1 1 -m 2 -lik both > /dev/null 2>&1 )
+shea_ok "$T3/PSW.out" \
+    && bien ".inp path, VARMA(1,1): elf and Shea agree at every point (-m 2)" \
+    || falla ".inp path, VARMA(1,1): elf and Shea disagree (-lik both -m 2)"
+( cd "$T3" && "$BIN" PSW 1 1 -lik nope > bad.log 2>&1 )
+[ $? -ne 0 ] && bien "-lik with an unknown value is an error" \
+    || falla "-lik with an unknown value is accepted"
+rm -r "$T3"
+"$BIN" "$ES" "$WTI" 0 0 -diagcov -lik shea -o "$TMP/shg" > /dev/null 2>&1
+[ $? -eq 0 ] && grep -q "GATE: PASSED" "$TMP/shg.out" \
+    && bien "the diagonal gate closes with Shea's likelihood too" \
+    || falla "the diagonal gate does not close with -lik shea"
+
 # 11. la regresion de la salida de la 5.0
 REF=$AQUI/ref
 filtro() { grep -av '^Program          : \|^Output File      : \|^  \[[0-9]*\] \|^Full results written to \|^Forecasts written to \|^Recursive forecasts written to ' "$1"; }

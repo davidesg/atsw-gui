@@ -1,4 +1,4 @@
-Program          : drvarma 5.0.0 (git 7cb1ff385a-dirty)
+Program          : drvarma 5.0.0 (git 77dbf84dda-dirty)
 Input Data File  : IPC_eu_levels.inp
 Output File      : IPC_eu_levels.out
 Model: VARMA(1,0)
@@ -7,6 +7,7 @@ Diagonal AR      : yes
 Diagonal MA      : yes
 Diagonal Cov     : no
 Estimation method: 1
+Likelihood       : exact, Mauricio (1997), AS 311
 Two-step init    : no
 Frequency        : 12
 Start            : 1 2002
@@ -366,6 +367,8 @@ Sigma = sigma2 * Q:
       0.068279
       0.026768      0.039688
       0.033581      0.024677      0.058254
+
+Exact log-likelihood: 106.98159683   (exact, Mauricio (1997), AS 311)
 
 Inverse roots of |phi(B)|=0:
      -0.080493      0.000000 i  (modulus     0.080493)

@@ -3,6 +3,7 @@ Innovation cov.  : diagonal
 Deterministics   : fixed at the .pre
 Univariate ARMA  : re-estimated jointly
 Estimation method: 1
+Likelihood       : exact, Mauricio (1997), AS 311
 Frequency        : 12
 Common window    : 2/2002 - 12/2019  (215 stationary observations)
 

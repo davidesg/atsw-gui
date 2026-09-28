@@ -1,4 +1,4 @@
-Program          : drvarma 5.0.0 (git 7cb1ff385a-dirty)
+Program          : drvarma 5.0.0 (git 77dbf84dda-dirty)
 Input Data File  : WTI_IPC_ES_ext.inp
 Output File      : WTI_IPC_ES_ext.out
 Model: VARMA(1,0)
@@ -7,6 +7,7 @@ Diagonal AR      : no
 Diagonal MA      : no
 Diagonal Cov     : no
 Estimation method: 1
+Likelihood       : exact, Mauricio (1997), AS 311
 Two-step init    : no
 Frequency        : 12
 Start            : 1 2002
@@ -297,6 +298,8 @@ Q matrix:
 Sigma = sigma2 * Q:
      68.269468
       1.051894      0.061233
+
+Exact log-likelihood: -731.00758835   (exact, Mauricio (1997), AS 311)
 
 Inverse roots of |phi(B)|=0:
       0.276781      0.152080 i  (modulus     0.315811)

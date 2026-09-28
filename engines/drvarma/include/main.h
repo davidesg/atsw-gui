@@ -101,10 +101,27 @@ void est( void (*cast)( real *, struct Tvarma *, int *, int, int ),
           real grtol, real sptol, real xitol, real **a, real *sigma2,
           real *logelf, int *ifault );
 
+/* Which exact likelihood (lik.c): Mauricio's elf (default) or Shea's marma. */
+#define LIK_ELF   0
+#define LIK_SHEA  1
+#define LIK_BOTH  2       /* elf is the objective; Shea checked at every point */
+extern int est_lik;
+const char *lik_label( void );
+void lik_check_report( FILE *f );
+void varma_lik( int m, int n, int p, int q, real *mu, real ***phi,
+                real ***theta, real **qq, real **w, real sigma2, real xitol,
+                int atf, real **a, real *f1, real *f2, real *logelf,
+                int *ifault );
+void marma( int k, int n, int p, int q, real *mu, real ***phi, real ***theta,
+            real **qq, real **w, real sigma2, real xtol, int chkma, int atf,
+            real **v, real *r1, real *r2, real *rlogl, int *ifault );
+
 void elf( int m, int n, int p, int q, real *mu, real ***phi, real ***theta,
           real **qq, real **w, real sigma2, real delta, int atf, real **a,
           real *f1, real *f2, real *logelf, int *ifault );
 
+/* nlatools.c; lib/fuepre calls it for the easter regressor (host-provided). */
+void Easter( int *day, int *month, int year );
 void chekma( int m, int q, real ***theta, real *wr, real *wi,
              real *wmod, int *ifault );
 

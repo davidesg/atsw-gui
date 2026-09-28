@@ -418,7 +418,7 @@ static void fit_eval(Fit *F)
     struct Tvarma *v = &F->vm;
     real pi1, pi2, pi3;
     int  ifault = 0;
-    elf(v->m, v->n, v->p, v->q, v->mu, v->phi, v->theta, v->qq, v->w, 1.0,
+    varma_lik(v->m, v->n, v->p, v->q, v->mu, v->phi, v->theta, v->qq, v->w, 1.0,
         xitol_met, TRUE, v->a, &pi1, &pi2, &pi3, &ifault);
     F->ifault = ifault;
     if (ifault) return;
@@ -893,7 +893,7 @@ void escalera_usage(const char *prog)
 {
     printf("       %s A.pre B.pre [C.pre ...] p q [-diagcov] [-redet] [-fixarma]\n", prog);
     printf("                                  [-m method] [-o NAME] [-forecast H [-estwin N]]\n");
-    printf("                                  [-hessian fd|bfgs]\n");
+    printf("                                  [-hessian fd|bfgs] [-lik elf|shea|both]\n");
     printf("  THE LADDER: each series comes with its univariate model from fue (.pre):\n");
     printf("       Box-Cox, deterministic terms, differencing, mean and ARMA factors.\n");
     printf("       The VARMA keeps each model on its DIAGONAL; p and q are the orders of\n");
@@ -975,6 +975,13 @@ int escalera_main(int argc, char *argv[])
             fc_h = atoi(argv[++argi]);
         else if (strcmp(argv[argi], "-estwin") == 0 && argi + 1 < argc)
             estwin = atoi(argv[++argi]);
+        else if (strcmp(argv[argi], "-lik") == 0 && argi + 1 < argc &&
+                 (strcmp(argv[argi + 1], "elf") == 0 || strcmp(argv[argi + 1], "shea") == 0
+                  || strcmp(argv[argi + 1], "both") == 0)) {
+            argi++;
+            est_lik = strcmp(argv[argi], "shea") == 0 ? LIK_SHEA
+                    : strcmp(argv[argi], "both") == 0 ? LIK_BOTH : LIK_ELF;
+            }
         else if (strcmp(argv[argi], "-hessian") == 0 && argi + 1 < argc &&
                  (strcmp(argv[argi + 1], "fd") == 0 || strcmp(argv[argi + 1], "bfgs") == 0))
             est_fdhess = (strcmp(argv[++argi], "fd") == 0);
@@ -1072,6 +1079,7 @@ int escalera_main(int argc, char *argv[])
             fprintf(f, "Deterministics   : %s\n", opt_redet ? "re-estimated" : "fixed at the .pre");
             fprintf(f, "Univariate ARMA  : %s\n", opt_fixarma ? "fixed at the .pre" : "re-estimated jointly");
             fprintf(f, "Estimation method: %d\n", met_esc);
+            fprintf(f, "Likelihood       : %s\n", lik_label());
             fprintf(f, "Frequency        : %d\n", data_freq);
             fprintf(f, "Common window    : %d/%d - %d/%d  (%d stationary observations)\n",
                     bs, by, es, ey, n_stat);
@@ -1220,6 +1228,7 @@ int escalera_main(int argc, char *argv[])
         fprintf(outputv, "Number of parameters: %d\n", F.npar);
         print_param_table(outputv, &F);
         fprintf(outputv, "\nExact log-likelihood: %.6f\n", F.logL);
+        lik_check_report(outputv);          /* -lik both: elf against Shea  */
         printf("Number of parameters: %d\nExact log-likelihood: %.6f\n", F.npar, F.logL);
         if (!is_diag) {
             real lr = 2.0 * (F.logL - logL_diag);

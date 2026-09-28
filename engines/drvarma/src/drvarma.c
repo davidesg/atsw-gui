@@ -23,7 +23,8 @@
 /*         -diagar     : diagonal AR matrices (default: full)               */
 /*         -diagma     : diagonal MA matrices (default: full)               */
 /*         -diagcov    : diagonal covariance matrix (default: full)         */
-/*         -m method   : 1 = exact, 2 = approximate (default: 1)            */
+/*         -m method   : 1 = exact, xi truncated at 1e-3 (default); 2 = exact, */
+/*                       no truncation (the labels were swapped until 5.0)    */
 /*         -twostep    : use two-step initialization (diagonal then full)   */
 /*****************************************************************************/
 
@@ -74,7 +75,7 @@ int global_include_mean = 0;
 int global_diag_ar = 0;
 int global_diag_ma = 0;
 int global_diag_cov = 0;
-int met = 1;   /* estimation method: 1 exact, 2 approximate */
+int met = 1;   /* 1: exact, xi truncated at 1e-3 (xitol > 0); 2: exact, untruncated */
 int global_twostep = 0;  /* two-step initialization */
 
 /* Fixed-parameter recursive forecasting: estimate once on the first g_estwin
@@ -141,8 +142,11 @@ int main(int argc, char *argv[])
         printf("drvarma %s\n", DRVARMA_VERSION_FULL);
         printf("Usage: %s file p q [-mean] [-diagar] [-diagma] [-diagcov] [-m method] [-twostep]\n", argv[0]);
         printf("       [-volexp [alpha window]] [-volmov [window]]\n");
-        printf("  method: 1 = exact, 2 = approximate (default=1)\n");
+        printf("  method: 1 = exact, xi truncated at 1e-3 (default); 2 = exact, no truncation\n");
         printf("  -twostep: use two-step initialization (diagonal then full)\n");
+        printf("  -lik elf|shea|both: exact likelihood by Mauricio's AS 311 (default), by\n"
+               "       Shea's AS 242 (the independent benchmark), or elf checked against\n"
+               "       Shea at every point the optimizer visits\n");
         printf("  -hessian fd|bfgs: standard errors from fdhess at the optimum (default)\n"
                "       or from the BFGS Hessian of the search\n");
         printf("  -volexp [alpha window]: compute exponential volatility (alpha default 0.05, window default 20)\n");
@@ -188,6 +192,18 @@ int main(int argc, char *argv[])
         met = atoi(argv[++i]);
         else if (strcmp(argv[i], "-twostep") == 0)
         global_twostep = 1;
+        else if (strcmp(argv[i], "-lik") == 0) {
+        if (i+1 < argc && (strcmp(argv[i+1], "elf") == 0 || strcmp(argv[i+1], "shea") == 0
+                           || strcmp(argv[i+1], "both") == 0)) {
+            i++;
+            est_lik = strcmp(argv[i], "shea") == 0 ? LIK_SHEA
+                    : strcmp(argv[i], "both") == 0 ? LIK_BOTH : LIK_ELF;
+            }
+        else {
+            printf("ERROR: -lik takes elf, shea or both\n");
+            exit(1);
+            }
+        }
         else if (strcmp(argv[i], "-hessian") == 0) {
         if (i+1 < argc && (strcmp(argv[i+1], "fd") == 0 || strcmp(argv[i+1], "bfgs") == 0))
             est_fdhess = (strcmp(argv[++i], "fd") == 0);
@@ -348,6 +364,7 @@ int main(int argc, char *argv[])
     fprintf(outputv, "Diagonal MA      : %s\n", global_diag_ma ? "yes" : "no");
     fprintf(outputv, "Diagonal Cov     : %s\n", global_diag_cov ? "yes" : "no");
     fprintf(outputv, "Estimation method: %d\n", met);
+    fprintf(outputv, "Likelihood       : %s\n", lik_label());
     fprintf(outputv, "Two-step init    : %s\n", global_twostep ? "yes" : "no");
     fprintf(outputv, "Frequency        : %d\n", data_freq);
     fprintf(outputv, "Start            : %d %d\n", data_start_sub, data_start_year);
@@ -471,6 +488,11 @@ int main(int argc, char *argv[])
 
     multivariate_diagnostics(varma1.a, varma1.n, varma1.m, outputv);
     print_matrices(&varma1);
+    /* The number every comparison between models needs, and the .inp path
+       never printed it (the ladder does). Added with -lik (2026-09-28).     */
+    fprintf(outputv, "Exact log-likelihood: %.8f   (%s)\n", varma1.logelf, lik_label());
+    lik_check_report(outputv);
+    fprintf(outputv, "\n");
     print_roots(&varma1);
     diagnose(&varma1);
     if (ifault == 0) {

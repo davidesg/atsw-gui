@@ -104,7 +104,7 @@ exactly the case that works. See
 
 ---
 
-## BUG (HIGH, OPEN) — the estimate of a bench case stops 3.07 log-likelihood units below the optimum
+## BUG (HIGH, OPEN) — a fit pinned to the MA invertibility wall is reported as an optimum (bench case c2)
 
 **Found:** 2026-09-28, by the second exact likelihood (`-lik shea`).
 
@@ -124,9 +124,59 @@ It is also the case where fdhess falls back to BFGS: the MA roots are at
 modulus 1.00005, on the boundary. PSW ARMA(1,1) shows the same, smaller:
 elf −871.0167 against Shea −870.9434.
 
-**Open:** why the path stops there (termcode, the boundary sentinel), and
-what to do about it. A second path (`-lik shea`) is the practical check
-available now. Multistart (drvec's P12) is the systematic one.
+### The study (2026-09-28): there is no interior maximum
+
+**1. Every fit ends on the invertibility wall.** In all four runs (elf and
+Shea, `-m 1` and `-m 2`), two MA inverse roots sit at modulus 1.000050.
+That is exactly `chekma`'s threshold, beyond which a point is inadmissible
+and the objective returns the sentinel. Only the stopping point differs:
+
+| run | ℓ | iterations | stop |
+|---|---|---|---|
+| elf `-m 1` | 66.896 | 64 | "CONVERGED", steptol |
+| elf `-m 2` | 66.207 | 58 | termcode 3, line search failed |
+| Shea | 69.275 | 63 | termcode 3, line search failed |
+
+**2. Why the wall.** The AR and MA polynomials nearly share two factors:
+
+- a complex pair at ≈ 0.37 rad (period ≈ 16.6 months), with AR modulus
+  0.977–0.987 and MA modulus 1.00005;
+- a real root near −1 (Nyquist), with AR at −0.92/−0.96 and MA at
+  −0.98/−0.99.
+
+A nearly redundant ARMA(2,1) has a likelihood ridge along the cancellation,
+and here the ridge rises towards the MA unit circle. This is the
+over-parameterisation of §2 of the published-suite review, not a numerical
+accident.
+
+**3. The ridge keeps rising along the wall.** The fit was reproduced in the
+Python port (same elf, ℓ = 66.206790, 58 iterations, termcode 3) and
+restarted from the stopping point with Θ₁ scaled by 0.97, which pulls the MA
+roots inside the circle. ℓ climbed in each round: 66.21 → 67.07 → 68.34 →
+69.68 → **71.22**, then fell. Shea's 69.27 is not the top either. Each round
+ends on the wall again.
+
+### Conclusion
+
+**This is not an optimiser defect that a better search would fix.** The
+likelihood has no maximum inside the invertible region: its supremum lies on
+the boundary, along a ridge. An unconstrained quasi-Newton method with a
+sentinel wall stops at its first contact with the wall, so the reported
+point, its ℓ and its estimates depend on the path. Every one of the numbers
+above is arbitrary. The defects are in **what is reported**:
+
+- `-m 1` says **"OPTIMIZER CONVERGED"** for a point pinned to the wall;
+- the only trace is the SE line ("the optimum is on the boundary"). Nothing
+  says that the estimates themselves are not a maximum, nor why: the
+  near-common factors.
+
+**Proposed fix (not yet applied):** a verdict in the `.out` when an MA root
+sits at the threshold. It would say that there is no interior maximum, that
+the values depend on the path, and which AR/MA roots nearly cancel (with
+their frequencies). The convergence line would change accordingly. The
+decision (reduce p or q, remove the common factor) belongs to the analyst.
+The same caveat is the one pending for the ladder and for sima (the review's
+"roots and near-common-factor caveats").
 
 ---
 

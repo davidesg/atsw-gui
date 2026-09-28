@@ -1,4 +1,4 @@
-Program          : drvarma 5.0.0 (git 77dbf84dda-dirty)
+Program          : drvarma 5.0.0 (git 6125c47f9e-dirty)
 Input Data File  : WTI_IPC_ES.inp
 Output File      : WTI_IPC_ES.out
 Model: VARMA(2,0)

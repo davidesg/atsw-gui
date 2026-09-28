@@ -104,7 +104,7 @@ exactly the case that works. See
 
 ---
 
-## BUG (HIGH, OPEN) — a fit pinned to the MA invertibility wall is reported as an optimum (bench case c2)
+## BUG (HIGH, FIXED in 5.0 as a report) — a fit pinned to the MA invertibility wall was reported as an optimum (bench case c2)
 
 **Found:** 2026-09-28, by the second exact likelihood (`-lik shea`).
 
@@ -170,13 +170,17 @@ above is arbitrary. The defects are in **what is reported**:
   says that the estimates themselves are not a maximum, nor why: the
   near-common factors.
 
-**Proposed fix (not yet applied):** a verdict in the `.out` when an MA root
-sits at the threshold. It would say that there is no interior maximum, that
-the values depend on the path, and which AR/MA roots nearly cancel (with
-their frequencies). The convergence line would change accordingly. The
-decision (reduce p or q, remove the common factor) belongs to the analyst.
-The same caveat is the one pending for the ladder and for sima (the review's
-"roots and near-common-factor caveats").
+**Resolved as a reporting defect (2026-09-28), deliberately minimal.**
+The engine now says what is true and adds nothing else:
+
+- the stop line reads `OPTIMIZER STOPPED at the MA invertibility boundary`;
+- `MA boundary: k of n inverse roots at modulus >= 1` is written as data.
+
+It gives no verdict, refuses nothing and changes no model. The estimation
+problem is ill-defined here, and studying it belongs to the assistant (sima)
+with the LLM: a second path (`-lik shea`), restarts along the wall, and the
+table of near-common AR/MA roots. The user decided against elaborate
+safeguards in the engine.
 
 ---
 

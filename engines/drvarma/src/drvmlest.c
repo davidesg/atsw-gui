@@ -24,6 +24,8 @@ extern FILE *outputv;         /* Output file (global: declared in DRV.C)     */
 /*****************************************************************************/
 
 real pi10x, pi20x, xitolx;
+int  est_ma_boundary = 0;     /* MA inverse roots at modulus >= 1 at the stop    */
+int  est_ma_nroots   = 0;
 int  est_fdhess = 0;          /* 1: standard errors from fdhess at the optimum */
 int  est_fixed  = 0;          /* >0: parameter held while fdhess runs (flat dir.) */
 int  est_se_how = EST_SE_BFGS;/* <- which Hessian gave the standard errors      */
@@ -222,7 +224,25 @@ void est( void (*cast)( real *, struct Tvarma *, int *, int, int ),
    vtmp  = vector( 1, npar );
    castx = cast;                              /* Assign casting routine.     */
 
+   opt_report_deferred = 1;             /* report_stop, below, once the MA   */
    raxopt( objcfunc, &pi1, npar, par, mtmp, maxits, nrits, grtol, sptol );
+   opt_report_deferred = 0;             /* roots at the stop are known       */
+   est_ma_boundary = 0;
+   est_ma_nroots = 0;
+   {
+   int  cf = 0, ir;
+   (*cast)( par, &varmax, &cf, 0, 0 );
+   if ( cf == 0 && varmax.q > 0 )
+      {
+      int  nr = varmax.m * varmax.q;
+      real *wr = vector( 1, nr ), *wi = vector( 1, nr ), *wmod = vector( 1, nr );
+      chekma( varmax.m, varmax.q, varmax.theta, wr, wi, wmod, &cf );
+      est_ma_nroots = nr;
+      for ( ir = 1; ir <= nr; ir++ ) if ( wmod[ir] >= 1.0 ) est_ma_boundary++;
+      free_vector( wmod, 1, nr ); free_vector( wi, 1, nr ); free_vector( wr, 1, nr );
+      }
+   }
+   report_stop( est_ma_boundary, est_ma_nroots );
 
 /* This is an alternative way of computing the second derivative matrix:     */
 /*                                                                           */

@@ -78,6 +78,14 @@ Design: `docs/DESIGN-v5-ladder.md`.
   migrated. One format for the whole ecosystem: fue's.
 
 ### Fixed
+- **A stop on the MA invertibility wall was reported as "OPTIMIZER CONVERGED".**
+  The optimiser's report is now written after `est()` checks the MA roots:
+  `OPTIMIZER STOPPED at the MA invertibility boundary`, plus
+  `MA boundary: k of n inverse roots at modulus >= 1`.
+  - The line states facts and gives no verdict: studying the situation is
+    the assistant's job (sima), with `-lik shea` as a second path.
+  - In the bench, only the three cases with roots at 1.00005 change: c2, c3
+    and c7.
 - **`-m` labels were swapped.** `-m 1`, the default, is the exact likelihood
   with the ξ sequence truncated at 1e-3 (`xitol > 0`). `-m 2` is the exact
   likelihood without truncation, though the help called it "approximate".

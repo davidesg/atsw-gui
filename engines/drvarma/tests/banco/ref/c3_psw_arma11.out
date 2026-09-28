@@ -1,4 +1,4 @@
-Program          : drvarma 5.0.0 (git 77dbf84dda-dirty)
+Program          : drvarma 5.0.0 (git 6125c47f9e-dirty)
 Input Data File  : PSW.inp
 Output File      : PSW.out
 Model: VARMA(1,1)
@@ -21,9 +21,10 @@ Observations     : 215 (raw 216)
 Number of parameters: 11
 
 =============================================================
-  OPTIMIZER STOPPED after 100 iterations
+  OPTIMIZER STOPPED at the MA invertibility boundary after 100 iterations
   Objective function = 0.009162634192
   Convergence criterion: last global step failed to locate a lower point
+  MA boundary: 2 of 2 inverse roots at modulus >= 1
 =============================================================
 
 

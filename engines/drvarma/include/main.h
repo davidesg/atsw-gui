@@ -101,6 +101,11 @@ void est( void (*cast)( real *, struct Tvarma *, int *, int, int ),
           real grtol, real sptol, real xitol, real **a, real *sigma2,
           real *logelf, int *ifault );
 
+/* The optimizer's stop (qnewtopt.c) and where the MA roots ended (drvmlest.c). */
+extern int  opt_termcode, opt_iters, opt_report_deferred;
+extern int  est_ma_boundary, est_ma_nroots;
+void report_stop( int nboundary, int nroots );
+
 #include "lik.h"            /* lib/lik: Shea (AS 242) beside elf, -lik */
 
 void elf( int m, int n, int p, int q, real *mu, real ***phi, real ***theta,

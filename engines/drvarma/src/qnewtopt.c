@@ -27,6 +27,9 @@ extern int quiet_mode;   /* added */
 /*****************************************************************************/
 /*****************************************************************************/
 
+int  opt_termcode = 0;        /* the last raxopt's verdict, and its objective: */
+real opt_fk = 0.0;            /* est() writes the report once it has checked    */
+int  opt_report_deferred = 0; /* the MA roots (report_stop)                     */
 int opt_iters = 0;            /* iterations of the last raxopt (est: 0 means the */
                               /* BFGS factor was never updated from I)          */
 
@@ -117,7 +120,10 @@ void raxopt( real (*func)(real *), real *fk, int n, real *xk, real **b,
       }                                       /* Back for another iteration. */
 
    opt_iters = k;
-   report( n, k, xk, gk, *fk, termcode );     /* Report on convergence.      */
+   opt_termcode = termcode;
+   opt_fk = *fk;
+   if ( !opt_report_deferred )
+      report( n, k, xk, gk, *fk, termcode );  /* Report on convergence.      */
    if (!quiet_mode) printf( "%4d F: %0.10f\n", k, *fk );
 
 /* Deallocate temporary storage and return:                                  */
@@ -130,31 +136,62 @@ void raxopt( real (*func)(real *), real *fk, int n, real *xk, real **b,
 
 /*****************************************************************************/
 
+static const char *criterion( int termcode )
+{
+   switch ( termcode )
+       {
+       case 1:  return "norm of scaled gradient <= gradtol";
+       case 2:  return "scaled distance between last two steps <= steptol";
+       case 3:  return "last global step failed to locate a lower point";
+       case 4:  return "iteration limit reached";
+       case 5:  return "five consecutive steps of maximum length taken";
+       default: return NULL;
+       }
+}
+
 void report( int n, int k, real *x, real *g, real f, int termcode )
 
 {
-   const char *crit;
+   const char *crit = criterion( termcode );
 
    (void) n; (void) x; (void) g;   /* per-parameter x/g dump removed:        */
                                     /* the estimates already appear in the    */
                                     /* "Estimated Parameters" table.          */
    if ( quiet_mode ) return;
 
-   switch ( termcode )
-       {
-       case 1:  crit = "norm of scaled gradient <= gradtol";                break;
-       case 2:  crit = "scaled distance between last two steps <= steptol"; break;
-       case 3:  crit = "last global step failed to locate a lower point";   break;
-       case 4:  crit = "iteration limit reached";                           break;
-       case 5:  crit = "five consecutive steps of maximum length taken";    break;
-       default: crit = NULL;                                                break;
-       }
-
    fprintf( outputv, "\n=============================================================\n" );
    fprintf( outputv, "  OPTIMIZER %s after %d iterations\n",
             ( termcode == 1 || termcode == 2 ) ? "CONVERGED" : "STOPPED", k );
    fprintf( outputv, "  Objective function = %.12f\n", f );
    if ( crit ) fprintf( outputv, "  Convergence criterion: %s\n", crit );
+   fprintf( outputv, "=============================================================\n\n" );
+}
+
+/* The report est() writes once it knows where the MA roots ended (2026-09-28).
+   A stop with MA inverse roots at modulus >= 1 is on the edge of the
+   admissible region -- chekma refuses beyond 1.00005 -- so "CONVERGED" would
+   be false there, whatever the termcode. The facts only: no verdict on the
+   model, which is the assistant's to study (sima; -lik shea for a second
+   path). */
+void report_stop( int nboundary, int nroots )
+{
+   const char *crit = criterion( opt_termcode );
+
+   if ( quiet_mode ) return;
+
+   fprintf( outputv, "\n=============================================================\n" );
+   if ( nboundary > 0 )
+      fprintf( outputv, "  OPTIMIZER STOPPED at the MA invertibility boundary after %d iterations\n",
+               opt_iters );
+   else
+      fprintf( outputv, "  OPTIMIZER %s after %d iterations\n",
+               ( opt_termcode == 1 || opt_termcode == 2 ) ? "CONVERGED" : "STOPPED",
+               opt_iters );
+   fprintf( outputv, "  Objective function = %.12f\n", opt_fk );
+   if ( crit ) fprintf( outputv, "  Convergence criterion: %s\n", crit );
+   if ( nboundary > 0 )
+      fprintf( outputv, "  MA boundary: %d of %d inverse roots at modulus >= 1\n",
+               nboundary, nroots );
    fprintf( outputv, "=============================================================\n\n" );
 }
 

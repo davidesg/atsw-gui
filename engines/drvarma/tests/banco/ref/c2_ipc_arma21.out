@@ -1,4 +1,4 @@
-Program          : drvarma 5.0.0 (git 77dbf84dda-dirty)
+Program          : drvarma 5.0.0 (git 6125c47f9e-dirty)
 Input Data File  : IPC.inp
 Output File      : IPC.out
 Model: VARMA(2,1)
@@ -21,9 +21,10 @@ Observations     : 215 (raw 216)
 Number of parameters: 33
 
 =============================================================
-  OPTIMIZER CONVERGED after 64 iterations
+  OPTIMIZER STOPPED at the MA invertibility boundary after 64 iterations
   Objective function = 0.765669088445
   Convergence criterion: scaled distance between last two steps <= steptol
+  MA boundary: 2 of 3 inverse roots at modulus >= 1
 =============================================================
 
 

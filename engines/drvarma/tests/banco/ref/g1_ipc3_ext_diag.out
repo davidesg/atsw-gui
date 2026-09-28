@@ -1,4 +1,4 @@
-Program          : drvarma 5.0.0 (git 77dbf84dda-dirty)
+Program          : drvarma 5.0.0 (git 6125c47f9e-dirty)
 Input Data File  : IPC3_ext.inp
 Output File      : IPC3_ext.out
 Model: VARMA(3,0)

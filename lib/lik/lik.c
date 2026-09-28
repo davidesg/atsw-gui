@@ -37,7 +37,7 @@
 /*    first, so both objectives refuse the same points.                      */
 /*****************************************************************************/
 
-#include "main.h"
+#include "likhost.h"      /* the engine: real, elf, chekma, allocators */
 
 int est_lik = LIK_ELF;
 

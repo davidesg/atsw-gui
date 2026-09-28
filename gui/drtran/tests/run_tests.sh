@@ -12,7 +12,7 @@ W="$TOP/tests/work"; rm -rf "$W"; mkdir -p "$W"
 CC=${CC:-cc}
 GTK=$(pkg-config --cflags --libs gtk+-3.0 2>/dev/null) || { echo "hace falta GTK3"; exit 0; }
 
-$CC -O0 -g -w -I"$TOP/include" -I"$E/include" -I"$L/fuepre" -I"$L/dates" \
+$CC -O0 -g -w -I"$TOP/include" -I"$E/include" -I"$L/lik" -I"$L/fuepre" -I"$L/dates" \
     $(pkg-config --cflags gtk+-3.0) \
     "$TOP/tests/test_series.c" "$TOP/src/series.c" \
     "$L/fuepre/fue_pre_reader.c" "$E/src/nlatools.c" "$L/dates/dates.c" \
@@ -29,7 +29,7 @@ fi
 # El oraculo es  drtran -p ES_CPI_airline.pre WTI_ar1.pre ; los numeros que se
 # exigen aqui estan copiados de su .out.
 echo
-$CC -O2 -w -I"$TOP/include" -I"$E/include" -I"$L/fuepre" -I"$L/prewhiten" -I"$L/dates" \
+$CC -O2 -w -I"$TOP/include" -I"$E/include" -I"$L/lik" -I"$L/fuepre" -I"$L/prewhiten" -I"$L/dates" \
     "$TOP/tests/test_prewhiten.c" "$L/fuepre/fue_pre_reader.c" \
     "$E/src/nlatools.c" "$E/src/diagnose.c" \
     "$L/prewhiten/prewhiten.c" "$L/dates/dates.c" \
@@ -80,7 +80,7 @@ fi
 # El oraculo es el recuento que imprime el motor:
 #   Structural parameters: 67   (free: 52, fixed/shared: 15)
 echo
-$CC -O2 -w -I"$L/slots" -I"$L/netfile" -I"$L/dates" -I"$E/include" -I"$L/fuepre" \
+$CC -O2 -w -I"$L/slots" -I"$L/netfile" -I"$L/dates" -I"$E/include" -I"$L/lik" -I"$L/fuepre" \
     "$L/slots/test_slots.c" "$L/slots/slots.c" "$L/netfile/netfile.c" \
     "$L/fuepre/fue_pre_reader.c" "$E/src/nlatools.c" "$L/dates/dates.c" \
     -o "$W/test_slots" -lgsl -lgslcblas -lm || exit 1
@@ -214,7 +214,7 @@ $CC -O2 -Wall -Wextra -I"$L/nsop" \
 # denominador que es propiedad de los DATOS. Que ese denominador no se mueva
 # entre las dos corridas es lo unico que hace comparables los dos R².
 echo
-$CC -O2 -w -I"$TOP/include" -I"$E/include" -I"$L/fuepre" -I"$L/outdiag" -I"$L/gof" -I"$L/dates" \
+$CC -O2 -w -I"$TOP/include" -I"$E/include" -I"$L/lik" -I"$L/fuepre" -I"$L/outdiag" -I"$L/gof" -I"$L/dates" \
     "$TOP/tests/test_gof.c" "$L/gof/gof.c" "$L/outdiag/outdiag.c" \
     "$L/fuepre/fue_pre_reader.c" "$E/src/nlatools.c" "$L/dates/dates.c" \
     -o "$W/test_gof" -lgsl -lgslcblas -lm || exit 1

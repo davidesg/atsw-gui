@@ -41,7 +41,7 @@ endif
 
 
 # Compiler and basic flags
-CFLAGS   = -O2 -g -Wall -I./include -I$(BUILD_DIR) -I$(LIB_DIR)/fuepre -I$(LIB_DIR)/prewhiten -I$(LIB_DIR)/dates -I$(LIB_DIR)/optim -I$(LIB_DIR)/inpcheck
+CFLAGS   = -O2 -g -Wall -I./include -I$(BUILD_DIR) -I$(LIB_DIR)/fuepre -I$(LIB_DIR)/prewhiten -I$(LIB_DIR)/dates -I$(LIB_DIR)/optim -I$(LIB_DIR)/inpcheck -I$(LIB_DIR)/lik
 LDFLAGS  +=
 LIBS     = -lm
 
@@ -61,6 +61,7 @@ OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS))
 LIB_DIR  = ../../lib
 LIB_OBJS = $(BUILD_DIR)/fue_pre_reader.o $(BUILD_DIR)/fuepre_motor.o \
            $(BUILD_DIR)/prewhiten.o $(BUILD_DIR)/dates.o $(BUILD_DIR)/lnsrch.o \
+           $(BUILD_DIR)/lik.o $(BUILD_DIR)/multshea.o \
            $(BUILD_DIR)/fuepre_forecast.o $(BUILD_DIR)/inpcheck_fue.o
 
 # GUI source and objects
@@ -159,6 +160,8 @@ $(BUILD_DIR)/%.o: $(LIB_DIR)/dates/%.c | $(BUILD_DIR)
 # the engine's file, renamed on the fly, as the fue GUI compiles it.
 $(BUILD_DIR)/inpcheck_fue.o: ../fue/src/inpcheck.c $(LIB_DIR)/inpcheck/inpcheck.h | $(BUILD_DIR)
 	$(CC) $(CLI_CFLAGS) -I$(LIB_DIR)/inpcheck -Dinp_check=inp_check_fue -c $< -o $@
+$(BUILD_DIR)/%.o: $(LIB_DIR)/lik/%.c | $(BUILD_DIR)
+	$(CC) $(CLI_CFLAGS) -c $< -o $@
 $(BUILD_DIR)/%.o: $(LIB_DIR)/optim/%.c | $(BUILD_DIR)
 	$(CC) $(CLI_CFLAGS) -c $< -o $@
 

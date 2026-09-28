@@ -2453,6 +2453,9 @@ static void usage(const char *prog)
 "THE CAST\n"
 "  -V       EMBED the transfer in the VARMA.  THIS IS THE DEFAULT.\n"
 "  -S       SUBTRACT the transfer instead (the old cast).\n"
+"  -l LIK   exact likelihood: elf (Mauricio, AS 311; the default), shea (Shea,\n"
+"           AS 242, the independent benchmark), or both (elf, checked against\n"
+"           Shea at every point the optimizer visits).\n"
 "\n"
 "           The subtracting cast builds the noise OUTSIDE the likelihood engine,\n"
 "           N_t = w_Y,t - SUM_k nu_k w_X,{t-k}, which at t=1 needs input values\n"
@@ -3203,6 +3206,11 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
         if (ifault != 0)
             fprintf(outputv, "**** ifault = %d (estimates not reliable)\n", ifault);
         fprintf(outputv, "\nLog-likelihood = %.6f\n\n", varma1.logelf);
+        if (est_lik != LIK_ELF) {        /* -l: the default output is unchanged */
+            fprintf(outputv, "Likelihood     : %s\n", lik_label());
+            lik_check_report(outputv);
+            fprintf(outputv, "\n");
+        }
     }
 
     fprintf(outputv, "=============================================================\n");
@@ -3588,7 +3596,7 @@ int main(int argc, char *argv[])
             if (strcmp(argv[ai], "-estwin") == 0) argv[ai] = (char *)"-R";
     }
 
-    while ((opt = getopt(argc, argv, "r:s:b:f:m:c:n:a:R:C:g:O:e:Lp0iXNDEMVSvho:")) != -1) {
+    while ((opt = getopt(argc, argv, "r:s:b:f:m:c:n:a:R:C:g:O:e:l:Lp0iXNDEMVSvho:")) != -1) {
         switch (opt) {
         case 'r': opt_r = optarg; auto_id = 0; break;
         case 's': opt_s = optarg; auto_id = 0; break;
@@ -3616,6 +3624,12 @@ int main(int argc, char *argv[])
         case 'S': embed_varma = 0;           break;
         case 'v': quiet_mode = 0;            break;
         case 'o': outfile = optarg;          break;
+        case 'l':                            /* lib/lik: which likelihood */
+            if      (strcmp(optarg, "elf")  == 0) est_lik = LIK_ELF;
+            else if (strcmp(optarg, "shea") == 0) est_lik = LIK_SHEA;
+            else if (strcmp(optarg, "both") == 0) est_lik = LIK_BOTH;
+            else { fprintf(stderr, "Error: -l takes elf, shea or both\n"); return 1; }
+            break;
         case 'h': usage(argv[0]); return 0;
         default:  usage(argv[0]); return 1;
         }

@@ -2339,6 +2339,30 @@ check "airline SEGUNDO, 1/2020 (fue 81.89)"  81.89 "$(fc_es "$TMPDIR/b55_2.out" 
 check "airline SEGUNDO, 12/2020 (fue 83.82)" 83.82 "$(fc_es "$TMPDIR/b55_2.out" 12/2020)" 0.02
 check "airline PRIMERO, 12/2020 (fue 83.82)" 83.82 "$(fc_es "$TMPDIR/b55_1.out" 12/2020)" 0.02
 
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
+echo "── 18. Shea's likelihood (AS 242) against elf (AS 311): -l shea|both ──"
+echo "   Two independent exact likelihoods (lib/lik). On 2026-09-28 the whole"
+echo "   battery was run with -l shea (326/326 PASS: fue's homologation, the"
+echo "   exact GLS, the synthetic truths) and with -l both (147 runs, 524 795"
+echo "   points; every optimum below 4e-12, except §3's Y = X, degenerate by"
+echo "   design). These checks keep that: the airline case (MA x SMA) and"
+echo "   fue's homologation."
+echo ""
+$DRTRAN "$WORK/ES_CPI_airline.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1 -l both \
+    -o "$TMPDIR/shea_both.out" > /dev/null 2>&1
+SH=$(grep -a "Shea check" "$TMPDIR/shea_both.out" | sed -E 's/.*max \|dlogL\| = ([0-9.e+-]+), at the optimum ([0-9.e+-]+).*/\1 \2/')
+python3 -c "import sys; a,b=map(float,'$SH'.split()); sys.exit(0 if a<1e-8 and b<1e-8 else 1)" 2>/dev/null \
+    && pass "-l both, airline <- WTI: elf and Shea agree at every point ($SH)" \
+    || fail "-l both, airline <- WTI: elf and Shea disagree ($SH)"
+$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -0 -l shea -o "$TMPDIR/shea_hom.txt" > /dev/null 2>&1
+check "-l shea: logL conjunta = suma de las univariantes de fue" -767.4243 \
+      "$(grep "Log-likelihood =" "$TMPDIR/shea_hom.txt" | awk '{print $3}')" 0.01
+check "-l shea: phi_N (ES_CPI), como fue" 0.402839 "$(val "$TMPDIR/shea_hom.txt" 'phi_1\[B\^1\]')" 0.0001
+$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -0 -l nope -o "$TMPDIR/shea_bad.txt" > /dev/null 2>&1
+[ $? -ne 0 ] && pass "-l with an unknown value is an error" \
+             || fail "-l with an unknown value is accepted"
+
 echo "============================================"
 echo -e "  RESULTADO: ${GREEN}$PASS PASS${NC}, ${RED}$FAIL FAIL${NC}"
 echo "============================================"

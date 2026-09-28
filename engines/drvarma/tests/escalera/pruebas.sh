@@ -125,7 +125,7 @@ int main(int argc, char **argv) { kind = (argc > 1 && argv[1][0] == 'i');
   raxopt(f, &fk, 1, x, b, 100, 1, 1e-6, 1e-8);
   printf("%.10g\n", x[1]); return 0; }
 EOF
-    if "$cc" -O0 -w -Iinclude -I../../lib/fuepre -o "$TMP/sonda" "$TMP/sonda.c" ../../lib/optim/lnsrch.c \
+    if "$cc" -O0 -w -Iinclude -I../../lib/fuepre -I../../lib/lik -o "$TMP/sonda" "$TMP/sonda.c" ../../lib/optim/lnsrch.c \
           src/qnewtopt.c src/nlatools.c -lgsl -lgslcblas -lm 2>/dev/null; then
         for k in nan inf; do
             x=$(timeout 20 "$TMP/sonda" $k); rc=$?

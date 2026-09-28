@@ -17,7 +17,7 @@
 /*  Copyright (C) Jos‚ Alberto Mauricio, 1996.                               */
 /*****************************************************************************/
 
-#include "main.h"              /* Header file (prototype declarations)        */
+#include "likhost.h"      /* the engine: real, elf, chekma, allocators */              /* Header file (prototype declarations)        */
 
 /*****************************************************************************/
 /*****************************************************************************/

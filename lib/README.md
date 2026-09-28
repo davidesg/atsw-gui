@@ -150,3 +150,26 @@ Por orden de facilidad:
 | pieza | dónde está | estado |
 |---|---|---|
 | `nlatools.c` | los siete programas | **NO por ahora.** Siete copias vivas separadas entre 13 y 80 líneas. Son primos cercanos —drtran y drvarma difieren en 13 líneas de 1106— pero es el núcleo numérico y tocarlo mueve números. La mudanza tiene que preservar el comportamiento; reconciliar numéricas no lo preserva |
+
+## `lik/` — Shea's exact likelihood beside elf, added 2026-09-28
+
+- **What it is.** `multshea.c` is `marma`, Shea's AS 242 (1989),
+  transcribed by Mauricio in 1996. It was compiled in drvarma and never
+  called. `lik.c` puts it beside elf (AS 311) with `varma_lik()`, and
+  `lik.h` declares both.
+- **Users.** drvarma (`-lik elf|shea|both`) and drtran (`-l elf|shea|both`).
+  Each supplies a `likhost.h` with `real`, `elf()`, `chekma()` and the
+  allocators, like `optimhost.h` for `optim/`.
+- **How it behaves.** Shea is always exact: its steady-state shortcut is a
+  different approximation from elf's ξ truncation. The residuals always come
+  from elf, because the forecasts need the exact residuals, not Shea's
+  innovations (drtran BUG-55). Shea uses elf's MA frontier (`chekma`).
+- **Validation.**
+  - drtran's whole battery passes with `-l shea`: 326/326, including the
+    homologation against fue, whose likelihood is Mélard's AS 197, the
+    exact GLS and the synthetic truths.
+  - With `-l both`, 147 runs and 524 795 points compare elf and Shea. Every
+    optimum agrees below 4e-12, except §3's Y = X, which is degenerate by
+    design.
+  - In drvarma with `-m 2`, the difference is 1e-9 to 1e-13 at every point
+    the optimiser visits.

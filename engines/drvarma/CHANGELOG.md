@@ -29,7 +29,11 @@ Design: `docs/DESIGN-v5-ladder.md`.
     innovations, not the exact residuals the forecasts need (drtran
     BUG-55).
   - **MA admissibility.** Shea uses elf's MA admissibility check (`chekma`).
-  - Code: `src/lik.c`.
+  - Code: `lib/lik/` (`lik.c`, `multshea.c`), shared with drtran (`-l`).
+  - **Validated outside AS 311:** drtran's whole battery passes with Shea as
+    the objective (326/326). That includes the homologation against fue,
+    whose likelihood is Mélard's AS 197, the exact GLS and the synthetic
+    truths.
 - **The `.inp` path prints the exact log-likelihood** (`Exact log-likelihood:`
   in the `.out`, with a `Likelihood:` line saying which algorithm). It never
   printed it before; the ladder did.

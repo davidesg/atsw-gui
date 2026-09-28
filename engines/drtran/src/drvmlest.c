@@ -212,7 +212,7 @@ void est( void (*cast)( real *, struct Tvarma *, int *, int, int ),
 
    if ( *ifault > 0 ) return;                 /* Bad initial estimates (1).  */
 
-   elf( varmax.m, varmax.n, varmax.p, varmax.q, varmax.mu, varmax.phi,
+   varma_lik( varmax.m, varmax.n, varmax.p, varmax.q, varmax.mu, varmax.phi,
         varmax.theta, varmax.qq, varmax.w, 1.0, varmax.xitol,
         TRUE, varmax.a, &pi10x, &pi20x, &pi3, ifault );
 
@@ -268,7 +268,7 @@ void est( void (*cast)( real *, struct Tvarma *, int *, int, int ),
 
    (*cast)( par, &varmax, ifault, 0, 0 );
 
-   elf( varmax.m, varmax.n, varmax.p, varmax.q, varmax.mu, varmax.phi,
+   varma_lik( varmax.m, varmax.n, varmax.p, varmax.q, varmax.mu, varmax.phi,
         varmax.theta, varmax.qq, varmax.w, 1.0, varmax.xitol,
         TRUE, a, &pi1, &pi2, &pi3, ifault );
 
@@ -300,7 +300,7 @@ real objcfunc( real *x )
 
 /* [2]: Compute objective function and return:                               */
 
-   elf( varmax.m, varmax.n, varmax.p, varmax.q, varmax.mu, varmax.phi,
+   varma_lik( varmax.m, varmax.n, varmax.p, varmax.q, varmax.mu, varmax.phi,
         varmax.theta, varmax.qq, varmax.w, 1.0, varmax.xitol,
         FALSE, varmax.a, &pi1, &pi2, &pi3, &ifault );
 

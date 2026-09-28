@@ -108,6 +108,7 @@ void est( void (*cast)( real *, struct Tvarma *, int *, int, int ),
           real grtol, real sptol, real xitol, real **a, real *sigma2,
           real *logelf, int *ifault );
 
+extern int  est_ma_boundary, est_ma_nroots;   /* drvmlest.c: MA roots at the stop */
 #include "lik.h"            /* lib/lik: Shea (AS 242) beside elf, -l */
 
 void elf( int m, int n, int p, int q, real *mu, real ***phi, real ***theta,

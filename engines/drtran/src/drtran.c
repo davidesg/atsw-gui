@@ -3197,12 +3197,19 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
         default: verdict = "*** NO CONVERGENCE ***";
                  why = "unknown";                                      break;
         }
+        /* A stop on the MA invertibility wall is not a convergence, whatever
+           the termcode: say so, as a fact (drvarma does the same).          */
+        if (est_ma_boundary > 0)
+            verdict = "STOPPED AT THE MA INVERTIBILITY BOUNDARY";
         sum_logl = varma1.logelf;  sum_npar = npar;
         sum_conv = verdict;        sum_why = why;   sum_fault = ifault;
 
         fprintf(outputv, "\n**** %s AFTER %d ITERATIONS (of %d)\n",
                 verdict, opt_iters, maxits);
         fprintf(outputv, "**** %s\n", why);
+        if (est_ma_boundary > 0)
+            fprintf(outputv, "**** MA boundary: %d of %d inverse roots at modulus >= 1\n",
+                    est_ma_boundary, est_ma_nroots);
         if (ifault != 0)
             fprintf(outputv, "**** ifault = %d (estimates not reliable)\n", ifault);
         fprintf(outputv, "\nLog-likelihood = %.6f\n\n", varma1.logelf);

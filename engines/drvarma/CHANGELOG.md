@@ -21,6 +21,15 @@ Design: `docs/DESIGN-v5-ladder.md`.
   CONVERGED. Bench: only the wording of c2, c3 and c7 changes.
 
 ### Added
+- **Restricted cross terms, `-links "A<-B,C<-A"`** (ladder mode). Only the
+  named pairs carry cross coefficients (B enters the equation of A: AR and MA,
+  every lag up to p and q); the others are zero. Names as in the .pre files;
+  the .out header lists the links and the LR's df counts only them. Without
+  `-links` nothing changes (bench: 18 cases, 0 differences). Every pair named
+  explicitly reproduces the unrestricted run byte for byte; on IPC_ES_m10 +
+  IPC_FR_msar, 1 1 -links "IPC_ES<-IPC_FR": 8 parameters, logL 81.114461, the
+  same as drvarma-python's Ladder(links=) and reached again from the full
+  model's optimum.
 - **Shea's exact likelihood, `-lik elf|shea|both`** (both paths).
   - **What it is.** drvarma's source had carried Shea's algorithm since
     1996: `marma`, AS 242 (1989), the other efficient exact method and the

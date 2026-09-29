@@ -82,6 +82,28 @@ static int act_m, act[ESC_MAX + 1];
 static int cx_p, cx_q, cx_diagcov;
 static int opt_redet, opt_fixarma;
 
+/* -links "A<-B,C<-A" (2026-09-29): the cross dynamics only on the pairs the
+   evidence points at. cx_link[i][j] = 1 lets series j enter the equation of
+   series i (AR and MA, every lag up to p and q); without -links every pair
+   is linked, as before. Indexed by SERIES, as cAR/cMA.                     */
+static int opt_links;
+static int cx_link[ESC_MAX + 1][ESC_MAX + 1];
+
+static int linked(int i, int j)
+{
+    return i != j && (!opt_links || cx_link[i][j]);
+}
+
+/* Linked ordered pairs among the active series. */
+static int n_links_active(void)
+{
+    int a, b, n = 0;
+    for (a = 1; a <= act_m; a++)
+        for (b = 1; b <= act_m; b++)
+            if (a != b && linked(act[a], act[b])) n++;
+    return n;
+}
+
 /* La parte cruzada y Q, indexadas por SERIE y no por posicion: asi el
    estado sobrevive al pasar de un subconjunto a otro, y el diagonal es la
    semilla del completo sin traducir nada.                                 */
@@ -145,7 +167,7 @@ static int esc_npar(void)
     if (opt_redet)
         for (a = 1; a <= act_m; a++) n += n_det_free_params(&Tm[act[a]]);
     for (a = 1; a <= act_m; a++) if (Tm[act[a]].Imu) n++;
-    n += (cx_p + cx_q) * act_m * (act_m - 1);
+    n += (cx_p + cx_q) * n_links_active();
     n += act_m - 1;
     if (!cx_diagcov) n += act_m * (act_m - 1) / 2;
     return n;
@@ -166,11 +188,11 @@ static void esc_pack(real *x)
     for (k = 1; k <= cx_p; k++)
         for (a = 1; a <= act_m; a++)
             for (b = 1; b <= act_m; b++)
-                if (a != b) x[idx++] = cAR[k][act[a]][act[b]];
+                if (a != b && linked(act[a], act[b])) x[idx++] = cAR[k][act[a]][act[b]];
     for (k = 1; k <= cx_q; k++)
         for (a = 1; a <= act_m; a++)
             for (b = 1; b <= act_m; b++)
-                if (a != b) x[idx++] = cMA[k][act[a]][act[b]];
+                if (a != b && linked(act[a], act[b])) x[idx++] = cMA[k][act[a]][act[b]];
     for (a = 2; a <= act_m; a++) x[idx++] = lvar[act[a]];
     if (!cx_diagcov)
         for (a = 2; a <= act_m; a++)
@@ -192,11 +214,11 @@ static void esc_unpack(real *x)
     for (k = 1; k <= cx_p; k++)
         for (a = 1; a <= act_m; a++)
             for (b = 1; b <= act_m; b++)
-                if (a != b) cAR[k][act[a]][act[b]] = x[idx++];
+                if (a != b && linked(act[a], act[b])) cAR[k][act[a]][act[b]] = x[idx++];
     for (k = 1; k <= cx_q; k++)
         for (a = 1; a <= act_m; a++)
             for (b = 1; b <= act_m; b++)
-                if (a != b) cMA[k][act[a]][act[b]] = x[idx++];
+                if (a != b && linked(act[a], act[b])) cMA[k][act[a]][act[b]] = x[idx++];
     for (a = 2; a <= act_m; a++) lvar[act[a]] = x[idx++];
     if (!cx_diagcov)
         for (a = 2; a <= act_m; a++)
@@ -261,14 +283,14 @@ static void esc_names(char (*names)[ESC_NAMELEN])
     for (k = 1; k <= cx_p; k++)
         for (a = 1; a <= act_m; a++)
             for (b = 1; b <= act_m; b++)
-                if (a != b) {
+                if (a != b && linked(act[a], act[b])) {
                     i = act[a]; j = act[b];
                     snprintf(names[idx++], ESC_NAMELEN, "AR%d[%s<-%s]", k, Ts[i].name, Ts[j].name);
                 }
     for (k = 1; k <= cx_q; k++)
         for (a = 1; a <= act_m; a++)
             for (b = 1; b <= act_m; b++)
-                if (a != b) {
+                if (a != b && linked(act[a], act[b])) {
                     i = act[a]; j = act[b];
                     snprintf(names[idx++], ESC_NAMELEN, "MA%d[%s<-%s]", k, Ts[i].name, Ts[j].name);
                 }
@@ -355,11 +377,11 @@ static void shootx_esc(real *x, struct Tvarma *armax, int *ifaultx, int firstx, 
     for (k = 1; k <= cx_p; k++)
         for (a = 1; a <= m; a++)
             for (b = 1; b <= m; b++)
-                if (a != b) armax->phi[k][a][b] = cAR[k][act[a]][act[b]];
+                if (a != b && linked(act[a], act[b])) armax->phi[k][a][b] = cAR[k][act[a]][act[b]];
     for (k = 1; k <= cx_q; k++)
         for (a = 1; a <= m; a++)
             for (b = 1; b <= m; b++)
-                if (a != b) armax->theta[k][a][b] = cMA[k][act[a]][act[b]];
+                if (a != b && linked(act[a], act[b])) armax->theta[k][a][b] = cMA[k][act[a]][act[b]];
 
     /* Q, normalizada con Q_11 = 1: est() concentra sigma2, y Q -> cQ es una
        direccion exactamente plana (Mauricio 1995, ec. 2.1).               */
@@ -894,6 +916,7 @@ void escalera_usage(const char *prog)
     printf("       %s A.pre B.pre [C.pre ...] p q [-diagcov] [-redet] [-fixarma]\n", prog);
     printf("                                  [-m method] [-o NAME] [-forecast H [-estwin N]]\n");
     printf("                                  [-hessian fd|bfgs] [-lik elf|shea|both]\n");
+    printf("                                  [-links \"A<-B,C<-A\"]\n");
     printf("  THE LADDER: each series comes with its univariate model from fue (.pre):\n");
     printf("       Box-Cox, deterministic terms, differencing, mean and ARMA factors.\n");
     printf("       The VARMA keeps each model on its DIAGONAL; p and q are the orders of\n");
@@ -901,6 +924,9 @@ void escalera_usage(const char *prog)
     printf("  -diagcov : diagonal innovation covariance (default: full)\n");
     printf("  -redet   : re-estimate the deterministic terms (default: fixed at the .pre)\n");
     printf("  -fixarma : keep the univariate ARMA factors fixed at the .pre\n");
+    printf("  -links   : cross dynamics only on these pairs, \"A<-B\" = B enters the\n"
+           "             equation of A (AR and MA, every lag up to p and q); names as\n"
+           "             in the .pre files. Default: every pair\n");
     printf("  -hessian : standard errors from fdhess at the optimum (fd, default) or\n"
            "             from the BFGS Hessian of the search (bfgs)\n");
     printf("  -o NAME  : results to NAME.out (default: the .pre names joined by '_')\n");
@@ -927,6 +953,7 @@ static void base_of(const char *path, char *out, size_t n)
 int escalera_main(int argc, char *argv[])
 {
     char  outname[512] = "", outfile[520], why[600];
+    const char *links_arg = NULL;
     int   i, a, argi, met_esc = 1, p, q, rc = 0, fc_h = 0, estwin = 0;
     real  logL_uni[ESC_MAX + 1], s2_uni[ESC_MAX + 1], move[ESC_MAX + 1];
     real  sum_uni = 0.0, logL_gate, logL_diag;
@@ -975,6 +1002,8 @@ int escalera_main(int argc, char *argv[])
             fc_h = atoi(argv[++argi]);
         else if (strcmp(argv[argi], "-estwin") == 0 && argi + 1 < argc)
             estwin = atoi(argv[++argi]);
+        else if (strcmp(argv[argi], "-links") == 0 && argi + 1 < argc)
+            links_arg = argv[++argi];
         else if (strcmp(argv[argi], "-lik") == 0 && argi + 1 < argc &&
                  (strcmp(argv[argi + 1], "elf") == 0 || strcmp(argv[argi + 1], "shea") == 0
                   || strcmp(argv[argi + 1], "both") == 0)) {
@@ -1028,6 +1057,42 @@ int escalera_main(int argc, char *argv[])
     }
     for (i = 1; i <= n_ser; i++) nobs_full[i] = Ts[i].nobs;
 
+    /* -links, resolved against the names of the .pre files */
+    opt_links = 0;
+    if (links_arg) {
+        char buf[1024], *tok, *save = NULL;
+        int  j;
+        if (p == 0 && q == 0) {
+            printf("ERROR: -links needs cross dynamics: give p or q > 0\n");
+            return 1;
+        }
+        memset(cx_link, 0, sizeof cx_link);
+        snprintf(buf, sizeof buf, "%s", links_arg);
+        for (tok = strtok_r(buf, ",", &save); tok; tok = strtok_r(NULL, ",", &save)) {
+            char *arrow = strstr(tok, "<-"), *lhs = tok, *rhs;
+            int   ti = 0, tj = 0;
+            if (!arrow) {
+                printf("ERROR: -links: '%s' is not of the form A<-B\n", tok);
+                return 1;
+            }
+            *arrow = '\0'; rhs = arrow + 2;
+            while (*lhs == ' ') lhs++;
+            while (*rhs == ' ') rhs++;
+            for (j = (int) strlen(lhs) - 1; j >= 0 && lhs[j] == ' '; j--) lhs[j] = '\0';
+            for (j = (int) strlen(rhs) - 1; j >= 0 && rhs[j] == ' '; j--) rhs[j] = '\0';
+            for (j = 1; j <= n_ser; j++) {
+                if (strcmp(Ts[j].name, lhs) == 0) ti = j;
+                if (strcmp(Ts[j].name, rhs) == 0) tj = j;
+            }
+            if (!ti || !tj || ti == tj) {
+                printf("ERROR: -links: '%s<-%s' does not name two different series\n", lhs, rhs);
+                return 1;
+            }
+            cx_link[ti][tj] = 1;
+        }
+        opt_links = 1;
+    }
+
     /* -estwin N: the parameters are estimated on the first N observations of
        the FIRST series -- the others are cut at the same date -- and then
        held fixed while the forecast origin moves to the end of the data.   */
@@ -1075,6 +1140,17 @@ int escalera_main(int argc, char *argv[])
             fprintf(f, "Program          : drvarma %s (ladder mode: .pre input)\n", DRVARMA_VERSION_FULL);
             fprintf(f, "Output File      : %s\n", outfile);
             fprintf(f, "Model            : VARMA with univariate diagonals; cross orders p=%d q=%d\n", p, q);
+            if (opt_links) {
+                int li, lj, first = 1;
+                fprintf(f, "Cross links      : ");
+                for (li = 1; li <= n_ser; li++)
+                    for (lj = 1; lj <= n_ser; lj++)
+                        if (li != lj && cx_link[li][lj]) {
+                            fprintf(f, "%s%s<-%s", first ? "" : ", ", Ts[li].name, Ts[lj].name);
+                            first = 0;
+                        }
+                fprintf(f, "\n");
+            }
             fprintf(f, "Innovation cov.  : %s\n", want_diagcov ? "diagonal" : "full");
             fprintf(f, "Deterministics   : %s\n", opt_redet ? "re-estimated" : "fixed at the .pre");
             fprintf(f, "Univariate ARMA  : %s\n", opt_fixarma ? "fixed at the .pre" : "re-estimated jointly");
@@ -1231,7 +1307,10 @@ int escalera_main(int argc, char *argv[])
         fprintf(outputv, "\n**** ESTIMATION FAILED: %s (code %d)\n", fault_msg(F.ifault), F.ifault);
         rc = 3;
     } else {
-        int ncross = (p + q) * n_ser * (n_ser - 1) + (want_diagcov ? 0 : n_ser * (n_ser - 1) / 2);
+        int nlinks = 0, li, lj;
+        for (li = 1; li <= n_ser; li++)
+            for (lj = 1; lj <= n_ser; lj++) if (linked(li, lj)) nlinks++;
+        int ncross = (p + q) * nlinks + (want_diagcov ? 0 : n_ser * (n_ser - 1) / 2);
         nser = n_ser;
         fprintf(outputv, "=============================================================\n");
         fprintf(outputv, "  ESTIMATED MODEL%s\n", is_diag ? " (the diagonal system)" : "");

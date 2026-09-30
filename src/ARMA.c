@@ -58,6 +58,14 @@ void calcular_coeficientes_psi(int p, double *phi, int q, double *theta,
             }
         }
 
+        // The multiplicative cross terms of (1 - theta B)(1 - Theta B^s):
+        // +theta_k * Theta_i at lag k + i*s. The pure-MA branch above had them
+        // and this one did not, so a mixed model's MA was 1 - theta B - Theta B^s
+        // (Box-Jenkins sign convention review, 2026-09-30).
+        for (int i = 1; i <= Q; i++)
+            for (int k = 1; k <= q; k++)
+                if (k + i * s == j) ma_part += theta[k - 1] * Theta[i - 1];
+
         psi[j] = ma_part;
 
         // Parte no estacional AR

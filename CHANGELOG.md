@@ -17,6 +17,42 @@ de órdenes** y **coeficientes distorsionados**. Plan detallado en
 `TODO_ART_18.2.md`. Hallazgos originados en la revisión crítica de
 `src/model_detection.c`.
 
+### Fixed — the MLP's training data, and the MA sign convention ✅
+
+- `[x]` **The training simulator did not generate AR processes.** `simulate_arma_fast`
+  applied the AR part with a vectorised `series[j+1:] += phi[j]*series[:n-j-1]`, which
+  reads the values BEFORE the update: an "AR(1)" with φ = 0.9 came out as
+  y_t = a_t + 0.9 a_{t−1}, an MA(1) (acf 0.49, −0.01 instead of 0.90, 0.81). The MLP
+  learnt "AR" from moving averages. Now the exact recursion (`lfilter`) with a burn-in.
+  The same defect in `train_v2.py`, `train_ranking.py`, `train_siamese_v3.py`, fixed.
+- `[x]` **Coefficients by roots.** The box plus Σ|φ| rescale gave complex AR(2) of median
+  period 4 (0.7 % with period ≥ 8, 8 % with modulus ≥ 0.8). Now every operator is a product
+  of factors inside the unit circle — a complex pair by modulus (0.3–0.97) and period
+  (2.5–40, log-uniform) —, covering the stationarity triangle; MA and seasonal AR likewise;
+  near common AR/MA factors rejected. Complex AR(2) of training: median period 9.9, 58 %
+  with period ≥ 8.
+- `[x]` The training ACF is cov/n, as the C since §1.1 (the features must match).
+- `[x]` The other trainers' theoretical ACF is exact (ψ weights, Box-Jenkins): their
+  ARMA(1,1) used (1 + θB), the ARMA(2,1)/(1,2) were approximations, AR(3+) gave zeros.
+- `[x]` **Box-Jenkins MA sign convention, reviewed.** `check_ma_roots` checked 1 + θx
+  (the same modulus for q = 1, the wrong polynomial for q ≥ 2): now 1 − θ₁x − … − θ_q x^q.
+  `calcular_coeficientes_psi`'s mixed branch dropped the multiplicative cross term
+  +θ_kΘ_i at lag k + i·s: now the full (1 − θB)(1 − ΘBˢ), checked against lfilter to 1e-6.
+  Correct already: the CLI simulator, the pure-MA ψ, Hannan-Rissanen, the AICc, Θ₁ by
+  inversion.
+- `[x]` **MLP retrained** (100 000 series, 150 epochs; `model_weights.h` exported).
+
+  *Measured (`--mlp-direct`, 300 reps, n = 200, seed 7; exact / in the shortlist):*
+
+  | | old weights | new weights |
+  |---|---|---|
+  | AR(2) complex (1.0, −0.5), period 8 | 86.7 / 87.0 % | **93.3 / 98.0 %** |
+  | AR(2) complex (0.8, −0.64), period 6 | 86.7 / 86.7 % | **97.7 / 98.3 %** |
+  | AR(2) (0.5, −0.3) | 56.3 / 88.3 % | 61.3 / 96.0 % |
+  | AR(2) real (0.5, 0.3) | 90.7 / 91.7 % | 92.0 / 96.0 % |
+  | AR(1) 0.6 | 90.7 / 94.3 % | 91.0 / 96.7 % |
+  | MA(1) 0.6 · MA(1) −0.5 · MA(2) | 85.0 · 83.3 · 81.0 % | 85.3 · 83.7 · 83.3 % |
+
 ### Fixed — the rest of the 18.2 statistical plan ✅
 
 - `[x]` §1.1 The sample ACF is the standard cov/n (positive semi-definite): no clamp to

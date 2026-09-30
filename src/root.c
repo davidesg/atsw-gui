@@ -187,7 +187,10 @@ bool check_ma_roots(double *theta, int q) {
 
     ComplexArrayMp1 a, roots;
 
-    // Construir polinomio MA: 1 + theta1*x + theta2*x^2 + ... + theta_q*x^q
+    // Box-Jenkins MA polynomial: 1 - theta1*x - theta2*x^2 - ... - theta_q*x^q,
+    // the convention of every theta in ART (simulator, psi weights, Hannan-
+    // Rissanen, AICc). It checked 1 + theta*x: the same modulus for q = 1, the
+    // wrong polynomial for q >= 2 (2026-09-30).
     for (int i = 0; i < MP1; i++) {
         a[i].r = 0.0;
         a[i].i = 0.0;
@@ -196,7 +199,7 @@ bool check_ma_roots(double *theta, int q) {
     a[0].r = 1.0;  // Coeficiente para x^0
 
     for (int i = 1; i <= q; i++) {
-        a[i].r = theta[i-1];  // Coeficientes positivos para MA
+        a[i].r = -theta[i-1];
     }
 
     // Calcular raíces

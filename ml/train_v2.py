@@ -14,6 +14,8 @@ Uso: python train_v2.py [--epochs 200] [--samples 200000] [--lr 0.001]
 """
 
 import numpy as np
+from train import (simulate_arma_fast as _simulate_exact, sample_ar, sample_ma,
+                   sample_sar, near_common_factor, theoretical_acf)  # 2026-09-30
 import argparse
 import time
 import json
@@ -24,18 +26,9 @@ from collections import defaultdict
 # =============================================================================
 
 def simulate_arma(phi, theta, n, rng):
-    """ARMA con innovaciones Gaussianas iid N(0,1)."""
-    p, q = len(phi), len(theta)
-    innov = rng.normal(0, 1, n)
-    series = innov.copy()
-    for j in range(q):
-        if j < n - 1:
-            series[j+1:] -= theta[j] * innov[:n-j-1]
-    for j in range(p):
-        if j < n - 1:
-            series[j+1:] += phi[j] * series[:n-j-1]
-    return series.astype(np.float32)
-
+    """The exact ARMA recursion of train.py (2026-09-30): the vectorised
+    version here was not recursive — an "AR(1)" came out as an MA(1)."""
+    return _simulate_exact(phi, theta, n, rng)
 
 def simulate_sarima_fast(phi, theta, Phi, Theta, s, d, D, n, rng):
     """SARIMA con innovaciones Gaussianas iid."""
@@ -84,7 +77,7 @@ def compute_acf(data, max_lags):
             acf[k] = 0.0
         else:
             cov = np.dot(data_c[:n-k], data_c[k:])
-            acf[k] = np.clip((cov / (n - k)) / variance, -1.0, 1.0)
+            acf[k] = (cov / n) / variance            # cov/n, as the C (§1.1)
     return acf
 
 
@@ -328,24 +321,14 @@ def generate_dataset(n_samples, rng):
                 break
 
             # Generate coefficients
-            # AR: random stable, with 20% near-unit-root
-            phi = np.array([], dtype=np.float64)
-            if p > 0:
-                if rng.random() < 0.2:
-                    # Near-unit-root: one coefficient close to 0.9
-                    phi = rng.uniform(-0.9, 0.9, p).astype(np.float64)
-                    phi[0] = rng.uniform(0.85, 0.98) * np.sign(rng.choice([-1, 1]))
-                else:
-                    phi = rng.uniform(-0.7, 0.7, p).astype(np.float64)
-                if np.sum(np.abs(phi)) >= 0.95:
-                    phi *= 0.8 / np.sum(np.abs(phi))
-
-            # MA: random invertible
-            theta = np.array([], dtype=np.float64)
-            if q > 0:
-                theta = rng.uniform(-0.7, 0.7, q).astype(np.float64)
-                if np.sum(np.abs(theta)) >= 0.95:
-                    theta *= 0.8 / np.sum(np.abs(theta))
+            # AR and MA by their roots, inside the unit circle, no rescaling
+            # (2026-09-30: the box plus sum|phi| rescale never produced the
+            # cycles of economic series); near common factors rejected
+            while True:
+                phi = sample_ar(p, rng)
+                theta = sample_ma(q, rng)
+                if not near_common_factor(phi, theta):
+                    break
 
             # Seasonal AR
             Phi = np.array([], dtype=np.float64)
@@ -406,7 +389,9 @@ def generate_dataset_parallel(n_samples, seed=42, n_jobs=None, cache_dir="data")
     if n_jobs is None:
         n_jobs = min(cpu_count(), 8)
 
-    cache_file = os.path.join(cache_dir, f"dataset_{n_samples}_{seed}.npz")
+    # "_exactsim": the datasets cached before 2026-09-30 were simulated with the
+    # non-recursive AR (an "AR" that was an MA); a cache must never bring them back
+    cache_file = os.path.join(cache_dir, f"dataset_{n_samples}_{seed}_exactsim.npz")
 
     if os.path.exists(cache_file):
         print(f"  Loading cached dataset: {cache_file}")

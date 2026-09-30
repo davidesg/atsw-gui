@@ -14,17 +14,20 @@ from collections import defaultdict
 # 1. SIMULACIÓN (vectorizada)
 # =============================================================================
 
-def simulate_arma_fast(phi, theta, n, rng):
-    p, q = len(phi), len(theta)
-    innov = rng.normal(0, 1, n).astype(np.float64)
-    series = innov.copy()
-    for j in range(q):
-        if j < n - 1:
-            series[j+1:] -= theta[j] * innov[:n-j-1]
-    for j in range(p):
-        if j < n - 1:
-            series[j+1:] += phi[j] * series[:n-j-1]
-    return series.astype(np.float32)
+def simulate_arma_fast(phi, theta, n, rng, burn=300):
+    """(1 - sum phi_i B^i) y = (1 - sum theta_j B^j) a, by the exact recursion
+    (scipy's lfilter), after a burn-in of `burn` draws.
+
+    The vectorised version it replaces (2026-09-30) was NOT recursive:
+    `series[j+1:] += phi[j] * series[:n-j-1]` reads the values BEFORE the
+    update, so an "AR(1)" with phi = 0.9 came out as y_t = a_t + 0.9 a_{t-1},
+    an MA(1): acf 0.49, -0.01, 0.00 instead of 0.90, 0.81, 0.73. The MLP was
+    trained on series labelled AR that were moving averages."""
+    from scipy.signal import lfilter
+    a = rng.normal(0, 1, n + burn)
+    ar = np.r_[1.0, -np.asarray(phi, float)]
+    ma = np.r_[1.0, -np.asarray(theta, float)]
+    return lfilter(ma, ar, a)[burn:].astype(np.float32)
 
 def simulate_sarima_fast(phi, theta, Phi, Theta, s, d, D, n, rng):
     p, q, P, Q = len(phi), len(theta), len(Phi), len(Theta)
@@ -63,7 +66,9 @@ def compute_acf(data, max_lags):
         if k >= n: acf[k] = 0.0
         else:
             cov = np.dot(data_c[:n-k], data_c[k:])
-            acf[k] = np.clip((cov / (n - k)) / variance, -1.0, 1.0)
+            # cov/n, as the C since TODO_ART_18.2 §1.1 (PSD, no clamp): the
+            # features must be computed exactly as the C computes them
+            acf[k] = (cov / n) / variance
     return acf
 
 def compute_pacf(acf, max_lags):
@@ -151,6 +156,77 @@ def extract_pattern_features(acf, pacf, lags, s):
 # 4. DATASET (100K)
 # =============================================================================
 
+# -----------------------------------------------------------------------------
+# Coefficients BY ROOTS (2026-09-30). The old sampling drew phi uniformly in a
+# box and rescaled sum|phi| >= 0.95 to 0.8: the complex AR(2) it produced had a
+# median period of 4 (0.7 % with a period of 8 or more, 8 % with modulus
+# >= 0.8), and the cycles of economic series — phi1 large, phi2 near -r^2 —
+# were never seen. Now every operator is a product of factors drawn inside the
+# unit circle, which covers the whole stationarity (invertibility) triangle:
+# a complex pair by its modulus r and period T (log-uniform), a real root
+# uniformly. No rescaling is needed and none is done.
+# -----------------------------------------------------------------------------
+
+def _real_root(rng, lo=0.1, hi=0.95):
+    return rng.uniform(lo, hi) * rng.choice([-1.0, 1.0])
+
+def _complex_pair(rng, rmin=0.3, rmax=0.97, tmin=2.5, tmax=40.0):
+    r = rng.uniform(rmin, rmax)
+    T = np.exp(rng.uniform(np.log(tmin), np.log(tmax)))
+    return np.array([2.0 * r * np.cos(2.0 * np.pi / T), -r * r])
+
+def _from_factors(k, rng, p_complex, rmax=0.97, real_hi=0.95):
+    """Coefficients c of 1 - sum c_i B^i of order k, as a product of factors:
+    pairs complex with probability p_complex, the rest real."""
+    poly = np.array([1.0])
+    left = k
+    while left > 0:
+        if left >= 2 and rng.random() < p_complex:
+            c = _complex_pair(rng, rmax=rmax)
+            poly = np.convolve(poly, [1.0, -c[0], -c[1]]); left -= 2
+        else:
+            poly = np.convolve(poly, [1.0, -_real_root(rng, hi=real_hi)]); left -= 1
+    return -poly[1:]
+
+def _inverse_roots(c):
+    c = np.asarray(c, float)
+    return np.roots(np.r_[1.0, -c]) if c.size else np.array([])
+
+def sample_ar(p, rng):
+    return _from_factors(p, rng, p_complex=0.6) if p else np.array([], dtype=np.float64)
+
+def sample_ma(q, rng):
+    # invertible by construction; complex MA pairs too (less often than AR)
+    return _from_factors(q, rng, p_complex=0.35, rmax=0.9, real_hi=0.9) if q else \
+        np.array([], dtype=np.float64)
+
+def sample_sar(P, rng):
+    # a seasonal AR by its (real) roots in B^s
+    return _from_factors(P, rng, p_complex=0.0, real_hi=0.85) if P else \
+        np.array([], dtype=np.float64)
+
+def theoretical_acf(phi, theta, lags=40, m=2000):
+    """Exact theoretical ACF (lags 0..lags) of the ARMA
+    (1 - sum phi B^i) w = (1 - sum theta B^j) a — Box-Jenkins' convention, the
+    simulator's — from the psi weights (scipy's lfilter, truncated at m).
+    Replaces the per-order formulas of the other trainers (2026-09-30): their
+    ARMA(1,1) used (1 + theta B), the ARMA(2,1)/(1,2) were approximations, and
+    an AR of order 3 or more returned zeros."""
+    from scipy.signal import lfilter
+    x = np.zeros(m + 1); x[0] = 1.0
+    psi = lfilter(np.r_[1.0, -np.asarray(theta, float)],
+                  np.r_[1.0, -np.asarray(phi, float)], x)
+    g = np.array([psi[:m + 1 - k] @ psi[k:] for k in range(lags + 1)])
+    return g / g[0]
+
+
+def near_common_factor(phi, theta, tol=0.12):
+    """An AR and an MA root almost equal cancel: the sample's order label would
+    be a coin toss. Such draws are rejected."""
+    a, m = _inverse_roots(phi), _inverse_roots(theta)
+    return any(abs(x - y) < tol for x in a for y in m)
+
+
 def generate_dataset(n, rng):
     X, yp, yq, yP, yQ = [], [], [], [], []
     pool = [
@@ -176,26 +252,18 @@ def generate_dataset(n, rng):
     for p,q,P,Q in pool:
         for _ in range(npo):
             if t >= n: break
-            if p==2 and rng.random()<0.6:
-                # Force complex roots: φ₁² + 4φ₂ < 0 (damped sine ACF)
-                phi1 = rng.uniform(-0.6,0.6)
-                phi2 = rng.uniform(-0.8, -0.15 - phi1*phi1/4.1)
-                phi = np.array([phi1, phi2], dtype=np.float64)
-            else:
-                phi = rng.uniform(-0.7,0.7,p).astype(np.float64) if p>0 else np.array([],dtype=np.float64)
-            if p>0 and np.sum(np.abs(phi))>=0.95: phi *= 0.8/np.sum(np.abs(phi))
-            theta = rng.uniform(-0.7,0.7,q).astype(np.float64) if q>0 else np.array([],dtype=np.float64)
-            if q>0 and np.sum(np.abs(theta))>=0.95: theta *= 0.8/np.sum(np.abs(theta))
-            Phi = np.array([],dtype=np.float64)
-            if P>0:
-                Phi = rng.uniform(-0.7,0.7,P).astype(np.float64)
-                if np.sum(np.abs(Phi))>=0.95: Phi *= 0.8/np.sum(np.abs(Phi))
+            while True:
+                phi = sample_ar(p, rng)
+                theta = sample_ma(q, rng)
+                if not near_common_factor(phi, theta):
+                    break
+            Phi = sample_sar(P, rng)
             Theta = rng.uniform(0.2,0.7,Q).astype(np.float64) if Q>0 else np.array([],dtype=np.float64)
             s = rng.choice([4,12]) if (P>0 or Q>0) else 1
             # s=12 necesita n grande para estimar bien la ACF hasta el lag 3s=36
             nobs = rng.randint(240,520) if s == 12 else rng.randint(150,400)
             if s==1:
-                ser = simulate_arma_fast(phi,theta,nobs,rng)
+                ser = simulate_arma_fast(phi,theta,nobs,rng)   # exact, with burn-in
             else:
                 ser = simulate_sarima_fast(phi,theta,Phi,Theta,s,0,0,nobs,rng)
             lags = min(40, max(10, nobs//4))

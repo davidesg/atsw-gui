@@ -22,9 +22,9 @@
 ## Fase 1 — Bugs de corrección estadística (prioridad ALTA)
 
 ### 1.1 ACF muestral insesgada (PSD) — `src/model_detection.c:396`
-- [ ] Cambiar `acf[k] = (cov/(n-k))/variance` por el estimador estándar
+- [x] Cambiar `acf[k] = (cov/(n-k))/variance` por el estimador estándar (2026-09-30)
       `acf[k] = cov_sum / sq_sum` (mismo denominador `n` en numerador y varianza)
-- [ ] Quitar el clamp manual a `[-1,1]` una vez la ACF es PSD (debería cumplirse solo)
+- [x] Quitar el clamp manual a `[-1,1]` una vez la ACF es PSD (debería cumplirse solo)
 - [ ] Verificar que Durbin-Levinson (PACF) ya no produce |pacf|>1 en las series de control
 - [ ] Re-benchmark: esperado ↓ sobre-identificación en lags altos
 
@@ -32,7 +32,7 @@
 - [ ] El bucle de p y de q debe quedarse con el **lag de corte** (último significativo
       antes de una racha sostenida de no-significancia), no con el último pico global
 - [ ] Añadir `break` tras detectar el corte (hoy solo rompe en el `else`)
-- [ ] Acotar `effective_p_max`/`effective_q_max` a un orden razonable (p.ej. ≤ 5)
+- [x] Acotar `effective_p_max`/`effective_q_max` a un orden razonable (p.ej. ≤ 5)
 - [ ] Verificar con AR(1)/MA(1): el orden efectivo debe ser 1, no 20+
 
 ### 1.3 No falsear estacionariedad por reescalado — `src/model_detection.c:2173-2177, 2287-2289`
@@ -45,16 +45,16 @@
 ## Fase 2 — Robustez de la estimación y el ranking (prioridad MEDIA)
 
 ### 2.1 Eliminar coeficientes "default" mágicos — `:936-937, 1076-1079, 2537-2538`
-- [ ] Si Hannan-Rissanen falla, **descartar** el candidato en vez de inyectar
+- [x] Si Hannan-Rissanen falla, **descartar** el candidato en vez de inyectar
       `phi=0.3/(i+1)` y puntuarlo por AICc sobre coeficientes ficticios
-- [ ] Marcar el candidato como no puntuable (`prob`/score = peor valor)
+- [x] Marcar el candidato como no puntuable (`prob`/score = peor valor)
 
 ### 2.2 Rama de orden alto (`p+q+P+Q>10`) — `:1074-1094`
-- [ ] No comparar similitud con coeficientes inventados; estimar o saltar el modelo
+- [x] No comparar similitud con coeficientes inventados; estimar o saltar el modelo (se salta, y se dice)
 - [ ] (Alternativa) documentar el límite y degradar con claridad
 
 ### 2.3 Off-by-one en diferenciación d≥2 — `src/model_detection.c:347`
-- [ ] Corregir `for (... i < params->n_points - diff ...)` → no descartar la última obs
+- [x] Corregir `for (... i < params->n_points - diff ...)` → no descartar la última obs (también en D)
 - [ ] Test: serie con `d=2` conserva `n-2` observaciones (hoy `n-3`)
 
 ## Fase 3 — Consistencia de la salida (prioridad MEDIA/BAJA)
@@ -67,7 +67,7 @@
       candidatos, no con statsmodels/pmdarima en valor absoluto)
 
 ### 3.2 Path de logaritmo en tests de raíz unitaria — `:1614-1617`
-- [ ] No mezclar escala log/nivel cuando hay valores ≤0; avisar explícitamente
+- [x] No mezclar escala log/nivel cuando hay valores ≤0; avisar explícitamente (`log_in_place`)
 
 ## Fase 4 — Validación final
 

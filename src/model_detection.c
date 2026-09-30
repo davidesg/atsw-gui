@@ -252,6 +252,11 @@ static void determine_effective_orders(double *acf_empirical, double *pacf_empir
         }
     }
 
+    // TODO_ART_18.2 §1.2: without three quiet lags in a row the loop ran to
+    // `lags` (20 and more); a persistent correlogram is not an MA(20).
+    if (*effective_p_max > 5) *effective_p_max = 5;
+    if (*effective_q_max > 5) *effective_q_max = 5;
+
     printf("Órdenes efectivos determinados: p=%d, q=%d, P=%d, Q=%d\n",
            *effective_p_max, *effective_q_max, *effective_P_max, *effective_Q_max);
 }
@@ -336,18 +341,28 @@ void liberar_model_candidate(ModelCandidate *candidate) {
 }
 
 // Función para aplicar transformaciones a los datos
-void transform_data(DataParameters *params) {
-    if (params->apply_log) {
-        for (int i = 0; i < params->n_points; i++) {
-            if (params->data[i] > 0) {
-                params->data[i] = log(params->data[i]);
-            }
+/* TODO_ART_18.2 §3.2: a log is taken of the WHOLE series or of none of it.
+ * With a value <= 0 the old loop logged the positive ones and left the rest in
+ * levels -- two scales in one series, silently. */
+static int log_in_place(double *x, int n) {
+    for (int i = 0; i < n; i++)
+        if (!(x[i] > 0)) {
+            fprintf(stderr, "WARNING: log requested but the series has values <= 0 "
+                            "(obs %d = %g): left in levels.\n", i + 1, x[i]);
+            return 0;
         }
-    }
+    for (int i = 0; i < n; i++) x[i] = log(x[i]);
+    return 1;
+}
+
+void transform_data(DataParameters *params) {
+    if (params->apply_log) log_in_place(params->data, params->n_points);
 
     // Aplicar diferencias regulares
+    // TODO_ART_18.2 §2.3: n_points already shrinks each pass; `- diff` dropped
+    // one more observation per extra difference and left the last one stale.
     for (int diff = 0; diff < params->d; diff++) {
-        for (int i = 1; i < params->n_points - diff; i++) {
+        for (int i = 1; i < params->n_points; i++) {
             params->data[i - 1] = params->data[i] - params->data[i - 1];
         }
         params->n_points--;
@@ -355,7 +370,7 @@ void transform_data(DataParameters *params) {
 
     // Aplicar diferencias estacionales
     for (int diff = 0; diff < params->D; diff++) {
-        for (int i = params->s; i < params->n_points - diff * params->s; i++) {
+        for (int i = params->s; i < params->n_points; i++) {
             params->data[i - params->s] = params->data[i] - params->data[i - params->s];
         }
         params->n_points -= params->s;
@@ -395,15 +410,10 @@ void calcular_ACF_muestral(double *data, int n, double *acf, int lags) {
             cov += (data[i] - mean) * (data[i + k] - mean);
         }
 
-        if (variance > 1e-10) {
-            acf[k] = (cov / (n - k)) / variance;
-        } else {
-            acf[k] = 0.0;
-        }
-
-        // Asegurar que esté en el rango [-1, 1]
-        if (acf[k] > 1.0) acf[k] = 1.0;
-        if (acf[k] < -1.0) acf[k] = -1.0;
+        // TODO_ART_18.2 §1.1: the standard estimator, cov/n over var: positive
+        // semi-definite, so |acf| <= 1 without a clamp and Durbin-Levinson keeps
+        // |pacf| <= 1. cov/(n-k) was not PSD, and inflated the high lags.
+        acf[k] = (variance > 1e-10) ? (cov / n) / variance : 0.0;
     }
 }
 
@@ -913,10 +923,10 @@ void adaptive_grid_search(double *empirical_data, int n_data, int s,
                               mlp_ok == 0 ? &mlp_pred : NULL);
         printf("MLP shortlist (%d):", best_candidate->n_candidates);
         for (int i = 0; i < best_candidate->n_candidates; i++)
-            printf(" (%d,%d)(%d,%d) p=%.3f",
+            printf(" (%d,%d)(%d,%d) sim=%.3f wAICc=%.3f",
                    best_candidate->candidates[i].p, best_candidate->candidates[i].q,
                    best_candidate->candidates[i].P, best_candidate->candidates[i].Q,
-                   best_candidate->candidates[i].prob);
+                   best_candidate->candidates[i].sim, best_candidate->candidates[i].prob);
         printf("\n");
     }
 
@@ -926,7 +936,9 @@ void adaptive_grid_search(double *empirical_data, int n_data, int s,
         OrderCandidate top = best_candidate->candidates[0];
         best_candidate->p = top.p; best_candidate->q = top.q;
         best_candidate->P = top.P; best_candidate->Q = top.Q;
-        best_candidate->similarity = top.prob;
+        // TODO_ART_18.2 §3.1: `similarity` is the pattern similarity; the
+        // Akaike weight stays in the candidates' `prob`, said as such.
+        best_candidate->similarity = top.sim;
 
         // Coeficientes ESTIMADOS del modelo top (misma estimación que el ranking):
         // YW para AR puro, Hannan-Rissanen para la parte ARMA, YW estacional para
@@ -937,8 +949,8 @@ void adaptive_grid_search(double *empirical_data, int n_data, int s,
             if (top.p > 0) estimate_ar_yule_walker(acf_empirical, top.p, phi_e);
         } else {
             if (!estimate_arma_hannan_rissanen(empirical_data, n_data, top.p, top.q, phi_e, theta_e)) {
-                for (int i = 0; i < top.p; i++) phi_e[i] = 0.3 / (i + 1);
-                for (int i = 0; i < top.q; i++) theta_e[i] = 0.3 / (i + 1);
+                // §2.1: no invented coefficients; zeros, and said so
+                printf("Hannan-Rissanen failed for the top model: coefficients not estimated.\n");
             }
         }
         if (top.p > 0) {
@@ -972,8 +984,8 @@ void adaptive_grid_search(double *empirical_data, int n_data, int s,
             memcpy(best_candidate->acf_empirical, acf_empirical, (lags + 1) * sizeof(double));
             memcpy(best_candidate->pacf_empirical, pacf_empirical, (lags + 1) * sizeof(double));
         }
-        printf("MLP-direct identification: (%d,%d)(%d,%d)s=%d prob=%.4f\n",
-               top.p, top.q, top.P, top.Q, s, top.prob);
+        printf("MLP-direct identification: (%d,%d)(%d,%d)s=%d sim=%.4f wAICc=%.4f\n",
+               top.p, top.q, top.P, top.Q, s, top.sim, top.prob);
         report_progress_internal(1, 1.0, "Identification completed (MLP-direct)", "Process finished");
         return;
     }
@@ -1074,8 +1086,15 @@ void adaptive_grid_search(double *empirical_data, int n_data, int s,
                              "Stage 1: %.1f%% completed", progress * 100);
                     report_progress_internal(1, progress, message, overall);
 
-                    // For high‑order models, use default coefficients to avoid combinatorial explosion
+                    // TODO_ART_18.2 §2.2: past p+q+P+Q = 10 the similarity was
+                    // computed with invented coefficients. Such an order is skipped
+                    // and said so; the branch below is kept unreachable for the record.
                     if (p + q + P + Q > 10) {
+                        printf("Skipping (%d,%d,%d,%d): order above 10, no coefficients to compare.\n",
+                               p, q, P, Q);
+                        continue;
+                    }
+                    if (0) {
                         double phi[10] = {0}, theta[10] = {0}, Phi[5] = {0}, Theta[5] = {0};
                         for (int i = 0; i < p; i++) phi[i] = 0.5 / (i + 1);
                         for (int i = 0; i < q; i++) theta[i] = 0.3 / (i + 1);
@@ -1615,11 +1634,7 @@ int ejecutar_deteccion_automatica(const char *filename, DataParameters *params,
         double *test_data;
         int test_n;
         if (load_data(filename, &test_data, &test_n)) {
-            if (params->apply_log) {
-                for (int i = 0; i < test_n; i++) {
-                    if (test_data[i] > 0) test_data[i] = log(test_data[i]);
-                }
-            }
+            if (params->apply_log) log_in_place(test_data, test_n);   /* §3.2 */
             int n_diff = test_n;
             double *differenced_data = malloc(test_n * sizeof(double));
             if (differenced_data) {
@@ -2586,14 +2601,13 @@ static void rank_shortlist_by_fit(ModelCandidate *cand, double *data, int n,
         int P = cand->candidates[c].P, Q = cand->candidates[c].Q;
         double phi[10] = {0}, theta[10] = {0}, Phi[5] = {0}, Theta[5] = {0};
 
+        int unscored = 0;
         if (q == 0) {
             if (p > 0) estimate_ar_yule_walker(acf_emp, p, phi);
         } else {
-            if (!estimate_arma_hannan_rissanen(data, n, p, q, phi, theta)) {
-                // Si H-R falla, defaults suaves para no descartar el candidato
-                for (int i = 0; i < p; i++) phi[i] = 0.3 / (i + 1);
-                for (int i = 0; i < q; i++) theta[i] = 0.3 / (i + 1);
-            }
+            // TODO_ART_18.2 §2.1: when Hannan-Rissanen fails the candidate is
+            // NOT scored with invented coefficients (0.3/(i+1)): it goes last.
+            if (!estimate_arma_hannan_rissanen(data, n, p, q, phi, theta)) unscored = 1;
         }
         if (P > 0) {
             double acf_seasonal[16]; acf_seasonal[0] = 1.0;
@@ -2613,7 +2627,7 @@ static void rank_shortlist_by_fit(ModelCandidate *cand, double *data, int n,
         // Ahora que la H-R está corregida (signo+iteración), el AICc ordena bien
         // tanto regular como estacional. El MCP decide el final con su MLE.
         double score = -1e30;
-        if (!(p == 0 && q == 0 && P == 0 && Q == 0)) {
+        if (!(p == 0 && q == 0 && P == 0 && Q == 0) && !unscored) {
             int stable = 1;
             if (p > 0 && !check_ar_roots(phi, p)) stable = 0;
             if (P > 0 && !check_ar_roots(Phi, P)) stable = 0;
@@ -2675,6 +2689,7 @@ static void rank_shortlist_by_fit(ModelCandidate *cand, double *data, int n,
         }
         for (int r = 0; r < nc; r++) {
             cand->candidates[r] = out[r];
+            cand->candidates[r].sim = sim_o[r];
             sim_v[r] = sim_o[r];
             aicc_v[r] = aicc_o[r];
         }

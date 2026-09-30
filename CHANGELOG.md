@@ -17,6 +17,26 @@ de órdenes** y **coeficientes distorsionados**. Plan detallado en
 `TODO_ART_18.2.md`. Hallazgos originados en la revisión crítica de
 `src/model_detection.c`.
 
+### Fixed — the rest of the 18.2 statistical plan ✅
+
+- `[x]` §1.1 The sample ACF is the standard cov/n (positive semi-definite): no clamp to
+  [−1, 1], and Durbin-Levinson keeps |PACF| ≤ 1.
+- `[x]` §1.2 The effective orders are capped at 5: a persistent correlogram without three
+  quiet lags in a row no longer gives an order of 20 and more.
+- `[x]` §2.1 A candidate whose Hannan-Rissanen fails is not scored with invented
+  coefficients (0.3/(i+1)): it goes last.
+- `[x]` §2.2 Past p+q+P+Q = 10 the order is skipped, and said so, instead of compared with
+  invented coefficients.
+- `[x]` §2.3 Differencing kept n − d observations only for d ≤ 1: the loop bound used
+  `n_points − diff` after `n_points` had already shrunk (also for D).
+- `[x]` §3.1 Each shortlist candidate carries its pattern similarity (`sim`, the order) and
+  its Akaike weight (`prob`, information); the output says which is which.
+- `[x]` §3.2 A log is taken of the whole series or of none of it, with a warning, not of the
+  positive values only.
+
+  *Bench after all of them (`--mlp-direct`, 100 reps, n = 200):* AR(2) complex 85 % and
+  88 %, AR(2) real 88 %, AR(1) 86 %, MA(1) 85 %, MA(2) 85 %.
+
 ### Fixed / Changed — option B and the stationarity guard (art-python BUG-0198) ✅
 
 - `[x]` **§1.3 No longer flattening stationary AR by rescaling.** `estimate_ar_yule_walker`

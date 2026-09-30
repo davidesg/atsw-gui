@@ -41,7 +41,8 @@ typedef struct {
 // Candidato tentativo (orden) con su probabilidad MLP. ART identifica, atsw-MCP estima/elige.
 typedef struct {
     int p, q, P, Q;
-    double prob;            // probabilidad conjunta aproximada del MLP
+    double prob;            // Akaike weight of its AICc (information, not the order)
+    double sim;             // pattern similarity: what orders the shortlist (option B)
 } OrderCandidate;
 
 typedef struct {

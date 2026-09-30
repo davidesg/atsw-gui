@@ -36,7 +36,7 @@
 - [ ] Verificar con AR(1)/MA(1): el orden efectivo debe ser 1, no 20+
 
 ### 1.3 No falsear estacionariedad por reescalado — `src/model_detection.c:2173-2177, 2287-2289`
-- [ ] Sustituir el reescalado `0.95/Σ|φ|` por verificación de raíces real
+- [x] Sustituir el reescalado `0.95/Σ|φ|` por verificación de raíces real (2026-09-30: `contract_poly`, conserva el periodo; ver CHANGELOG)
       (`check_ar_roots` / `check_ma_roots`, ya existen)
 - [ ] Si el modelo es inestable/no invertible → **rechazar** el candidato
       (no devolver coeficientes alterados)

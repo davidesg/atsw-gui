@@ -17,6 +17,26 @@ de órdenes** y **coeficientes distorsionados**. Plan detallado en
 `TODO_ART_18.2.md`. Hallazgos originados en la revisión crítica de
 `src/model_detection.c`.
 
+### Fixed / Changed — option B and the stationarity guard (art-python BUG-0198) ✅
+
+- `[x]` **§1.3 No longer flattening stationary AR by rescaling.** `estimate_ar_yule_walker`
+  rescaled any AR with Σ|φ| ≥ 0.99 to 0.95 (Hannan-Rissanen: 0.95 → 0.90). An AR(2)
+  with complex roots, φ = (1.0, −0.5) — inverse roots of modulus 0.71, period 8 — has
+  Σ|φ| = 1.5 and was flattened to (0.63, −0.32). Now `contract_poly`: only a polynomial
+  outside the unit circle is pulled in, by c_i·ρ^i, which keeps the roots' angle (the
+  period). Roots by GSL (`zroots` holds 12 coefficients; HR's long AR has more).
+- `[x]` **Option B in the shortlist ranking** (decided 2026-09-30, as art-python): the
+  ORDER is the pattern similarity of each candidate with its estimated coefficients;
+  within 0.04 of the best, fewer parameters first, a pure model (AR or MA at each level)
+  before a mixed one, then the lower AICc. The AICc no longer ranks: on the series
+  differenced once it rewards models that absorb what the formal tests must decide.
+  `prob` keeps its Akaike weight, as information. The MLP proposes candidates only.
+
+  *Measured (`--mlp-direct`, 100 reps, n = 200, exact):* AR(2) complex (1.0,−0.5) 1 % →
+  **84 %**, (0.8,−0.64) 20 % → **84 %**; AR(2) real 75 → 88 %; AR(1) 84 → 86 %; MA(1)
+  77 → 84 %, MA(1) θ<0 73 → 84 %; MA(2) 74 → 86 %; ARMA(1,1) 1 → 0 % (in the shortlist
+  97 %: the price of pure before mixed). Exact accuracy is now bounded by the shortlist.
+
 ### Mejorado (Improved) — desempate por parsimonia en el ranking AICc ✅
 
 - `[x]` **Desempate por parsimonia (Box-Jenkins) entre modelos AICc-indistinguibles**

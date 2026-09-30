@@ -12,6 +12,8 @@
 #include "seasonal_detection.h"
 #include "ml_classifier.h"
 #include <gsl/gsl_permutation.h>
+#include <gsl/gsl_poly.h>
+#include <gsl/gsl_errno.h>
 #include <gsl/gsl_linalg.h>
 #include <gsl/gsl_blas.h>
 
@@ -2118,6 +2120,49 @@ int detectar_y_ajustar_estacionalidad(const char *filename, DataParameters *para
 }
 
 
+/* A polynomial 1 - sum c_i B^i made stationary (invertible) WITHOUT moving its
+ * cycles: c_i * rho^i scales every inverse root by rho and keeps its angle, the
+ * period of a complex pair. Untouched when already inside `limit`.
+ *
+ * Replaces the old guard (sum |phi| >= 0.99 -> 0.95, Hannan-Rissanen 0.95 ->
+ * 0.90; TODO_ART_18.2 §1.3): an AR(2) with complex roots, phi = (1.0, -0.5),
+ * inverse roots of modulus 0.71 and a period of 8, has sum |phi| = 1.5 and was
+ * flattened to (0.63, -0.32) -- exact identification of that AR(2) was 1 %.
+ * Same fix as art-python BUG-0198 (`model_detection._contract`). */
+static double max_inverse_root(const double *c, int k) {
+    /* GSL's companion-matrix solver: zroots' arrays hold MP = 12 coefficients,
+     * and Hannan-Rissanen's long AR has p + sqrt(n) of them. */
+    if (k <= 0) return 0.0;
+    int deg = k;
+    while (deg > 0 && fabs(c[deg - 1]) < 1e-14) deg--;      /* trailing zeros */
+    if (deg == 0) return 0.0;
+    double *a = (double *)malloc((deg + 1) * sizeof(double));
+    double *z = (double *)malloc(2 * deg * sizeof(double));
+    if (!a || !z) { free(a); free(z); return 0.0; }
+    a[0] = 1.0;
+    for (int i = 1; i <= deg; i++) a[i] = -c[i - 1];
+    double mx = 0.0;
+    gsl_poly_complex_workspace *ws = gsl_poly_complex_workspace_alloc(deg + 1);
+    if (ws && gsl_poly_complex_solve(a, deg + 1, ws, z) == GSL_SUCCESS) {
+        for (int i = 0; i < deg; i++) {
+            double mod = hypot(z[2 * i], z[2 * i + 1]);
+            double inv = mod > 1e-12 ? 1.0 / mod : 1e12;
+            if (inv > mx) mx = inv;
+        }
+    }
+    if (ws) gsl_poly_complex_workspace_free(ws);
+    free(a); free(z);
+    return mx;
+}
+
+static void contract_poly(double *c, int k, double limit) {
+    for (int i = 0; i < k; i++) if (!isfinite(c[i])) return;
+    double mx = max_inverse_root(c, k);
+    if (mx < limit) return;
+    double rho = limit / mx, r = rho;
+    for (int i = 0; i < k; i++) { c[i] *= r; r *= rho; }
+}
+
 /* Yule-Walker: estimate AR(p) coefficients from empirical ACF.
  * Solves R·φ = r where R_ij = ρ[|i-j|] and r_i = ρ[i].
  * Returns 1 on success, 0 on failure (singular R). */
@@ -2169,14 +2214,8 @@ static int estimate_ar_yule_walker(double *acf, int p, double *phi) {
         phi[i] = sum / R[i * p + i];
     }
     free(R); free(r);
-    // Verify stationarity (simple check)
-    double sum_abs = 0.0;
-    for (int i = 0; i < p; i++) sum_abs += fabs(phi[i]);
-    if (sum_abs >= 0.99) {
-        // Rescale to ensure stationarity
-        double scale = 0.95 / sum_abs;
-        for (int i = 0; i < p; i++) phi[i] *= scale;
-    }
+    // Stationarity by the roots, keeping the cycles (TODO_ART_18.2 §1.3)
+    contract_poly(phi, p, 0.95);
     return 1;
 }
 
@@ -2285,10 +2324,9 @@ static int estimate_arma_hannan_rissanen(double *y, int n, int p, int q,
     if (ok) {
         for (int i = 0; i < p; i++) phi[i]   =  beta[i];
         for (int i = 0; i < q; i++) theta[i] = -beta[p + i];   // signo corregido
-        double sa = 0.0; for (int i = 0; i < p; i++) sa += fabs(phi[i]);
-        if (sa > 0.95) { double sc = 0.90 / sa; for (int i = 0; i < p; i++) phi[i] *= sc; }
-        sa = 0.0; for (int i = 0; i < q; i++) sa += fabs(theta[i]);
-        if (sa > 0.95) { double sc = 0.90 / sa; for (int i = 0; i < q; i++) theta[i] *= sc; }
+        // Only what is outside moves, and keeping its angle (§1.3)
+        contract_poly(phi, p, 0.90);
+        contract_poly(theta, q, 0.90);
     }
     if (ok && getenv("ART_DEBUG_HR")) {
         fprintf(stderr, "HR(%d,%d): phi=", p, q);
@@ -2542,6 +2580,7 @@ static void rank_shortlist_by_fit(ModelCandidate *cand, double *data, int n,
         int st = dar > dma ? dar : dma;
         if (st > common_start) common_start = st;
     }
+    double sim_v[MAX_ORDER_CANDIDATES] = {0}, aicc_v[MAX_ORDER_CANDIDATES];
     for (int c = 0; c < cand->n_candidates; c++) {
         int p = cand->candidates[c].p, q = cand->candidates[c].q;
         int P = cand->candidates[c].P, Q = cand->candidates[c].Q;
@@ -2589,64 +2628,67 @@ static void rank_shortlist_by_fit(ModelCandidate *cand, double *data, int n,
                             s<=lags?acf_emp[s]:0.0, aicc);
             }
         }
-        cand->candidates[c].prob = score;
-        (void)compute_arma_aicc; (void)emp_features; (void)pacf_emp;
-    }
-    // Orden descendente por puntuación (prob = -AICc)
-    for (int i = 0; i < cand->n_candidates; i++)
-        for (int j = i + 1; j < cand->n_candidates; j++)
-            if (cand->candidates[j].prob > cand->candidates[i].prob) {
-                OrderCandidate t = cand->candidates[i];
-                cand->candidates[i] = cand->candidates[j];
-                cand->candidates[j] = t;
-            }
-
-    // DESEMPATE por identificación dentro de modelos AICc-indistinguibles.
-    // El AICc manda (es la evidencia de ajuste); pero cuando varios candidatos caen
-    // dentro de ΔAICc < TAU del mejor, son estadísticamente equivalentes (regla
-    // habitual ΔAICc<2) y el AICc no debe decidir por ruido. En esa franja elegimos
-    // el de mayor PRIOR del MLP (evidencia de identificación que antes se tiraba).
-    // Esto arregla AR(2) raíces reales vs ARMA(1,1) (empate a k=2) SIN romper AR(1),
-    // donde (1,0) gana el AICc por margen amplio y no entra en la franja de empate.
-    // Los candidatos están ordenados desc por score=-AICc; candidates[0] = mejor AICc.
-    {
-        // ΔAICc de indistinguibilidad. TAU=1.0 es el mejor balance medido: gran mejora
-        // en AR(1)/MA(1) puros sin castigar de más a los mixtos (override por entorno).
-        double TAU = 1.0;
-        { const char *e = getenv("ART_TIE_TAU"); if (e) TAU = atof(e); }
-        double best_score = cand->candidates[0].prob; // = -AICc_min (el mayor)
-        // Criterio de desempate (regla de parsimonia de Box-Jenkins): dentro de la
-        // franja, MENOS parámetros gana; si empatan en k, el MAYOR prior del MLP
-        // (evidencia de identificación) desempata el subempate a igual k (p.ej.
-        // AR(2) vs ARMA(1,1), ambos k=2). El MLP NO se usa como prior global porque
-        // es anti-parsimonioso y hunde los AR/MA puros; aquí solo arbitra k iguales.
-        int win = 0, win_k = 1 << 30; double win_prior = -1.0;
-        for (int c = 0; c < cand->n_candidates; c++) {
-            if (best_score - cand->candidates[c].prob >= TAU) break;  // fuera de la franja
-            int k = cand->candidates[c].p + cand->candidates[c].q +
-                    cand->candidates[c].P + cand->candidates[c].Q;
-            double pr = mlp_order_prior(mlp, cand->candidates[c].p, cand->candidates[c].q,
-                                        cand->candidates[c].P, cand->candidates[c].Q);
-            if (k < win_k || (k == win_k && pr > win_prior)) {
-                win_k = k; win_prior = pr; win = c;
-            }
-        }
-        if (win != 0) {   // promover el ganador del desempate al puesto 1
-            OrderCandidate t = cand->candidates[win];
-            for (int c = win; c > 0; c--) cand->candidates[c] = cand->candidates[c - 1];
-            cand->candidates[0] = t;
-        }
+        aicc_v[c] = (score > -1e29) ? -score : 1e30;
+        // The PATTERN similarity of the candidate with its estimated
+        // coefficients (includes the parsimony penalty) -- option B.
+        sim_v[c] = (score > -1e29)
+            ? evaluate_model_similarity(p, phi, q, theta, P, Phi, Q, Theta, s,
+                                        emp_features, lags, n)
+            : 0.0;
+        (void)compute_arma_aicc; (void)pacf_emp;
     }
 
-    // Convertir -AICc en PESOS DE AKAIKE (confianza interpretable en [0,1] que suma 1).
+    /* OPTION B (art-python BUG-0198, decided 2026-09-30): the ORDER is the
+     * pattern's -- the school's reading of the correlogram. Ranking by AICc on
+     * the series differenced once rewards the models that absorb what the formal
+     * tests must decide (phi ~ 1 where a difference is missing, theta ~ 1 where
+     * one is too many, an AR and an MA nearly cancelling). Within TIE_SIM of the
+     * best similarity: fewer parameters first; at equal count a PURE model (AR or
+     * MA at each level) before a mixed one; then the lower AICc. The MLP only
+     * PROPOSES candidates; it no longer breaks ties. The AICc stays as
+     * information: `prob` carries its Akaike weight. */
     {
-        double best = -1e30;
-        for (int c = 0; c < cand->n_candidates; c++)
-            if (cand->candidates[c].prob > best) best = cand->candidates[c].prob;
+        const double TIE_SIM = 0.04;
+        int nc = cand->n_candidates, used[MAX_ORDER_CANDIDATES] = {0};
+        OrderCandidate out[MAX_ORDER_CANDIDATES];
+        double sim_o[MAX_ORDER_CANDIDATES], aicc_o[MAX_ORDER_CANDIDATES];
+        for (int r = 0; r < nc; r++) {
+            int top = -1;
+            for (int c = 0; c < nc; c++)
+                if (!used[c] && (top < 0 || sim_v[c] > sim_v[top])) top = c;
+            int pick = top;
+            for (int c = 0; c < nc; c++) {
+                if (used[c] || sim_v[top] - sim_v[c] >= TIE_SIM) continue;
+                OrderCandidate *a = &cand->candidates[c], *b = &cand->candidates[pick];
+                int ka = a->p + a->q + a->P + a->Q, kb = b->p + b->q + b->P + b->Q;
+                int ma = (a->p > 0 && a->q > 0) || (a->P > 0 && a->Q > 0);
+                int mb = (b->p > 0 && b->q > 0) || (b->P > 0 && b->Q > 0);
+                if (ka < kb || (ka == kb && (ma < mb || (ma == mb &&
+                    (aicc_v[c] < aicc_v[pick] ||
+                     (aicc_v[c] == aicc_v[pick] && sim_v[c] > sim_v[pick]))))))
+                    pick = c;
+            }
+            used[pick] = 1;
+            out[r] = cand->candidates[pick];
+            sim_o[r] = sim_v[pick];
+            aicc_o[r] = aicc_v[pick];
+        }
+        for (int r = 0; r < nc; r++) {
+            cand->candidates[r] = out[r];
+            sim_v[r] = sim_o[r];
+            aicc_v[r] = aicc_o[r];
+        }
+        (void)mlp_order_prior; (void)mlp;
+    }
+
+    // Akaike weights of the AICc, as INFORMATION (they no longer rank).
+    {
+        double best = 1e30;
+        for (int c = 0; c < cand->n_candidates; c++) if (aicc_v[c] < best) best = aicc_v[c];
         double sumw = 0.0;
         for (int c = 0; c < cand->n_candidates; c++) {
-            double d = cand->candidates[c].prob - best;   // <= 0
-            double w = (isfinite(d) && d > -700.0) ? exp(0.5 * d) : 0.0;
+            double d = best - aicc_v[c];
+            double w = (aicc_v[c] < 1e29 && d > -1400.0) ? exp(0.5 * d) : 0.0;
             cand->candidates[c].prob = w;
             sumw += w;
         }

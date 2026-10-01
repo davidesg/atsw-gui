@@ -1,5 +1,18 @@
 # TODO — ART_18 → ART_19
 
+> **Frozen (2026-10-01).** The neural prototype — the `neural` and `siamese` engines
+> (python/art19: coefficient regressor, ranking scorer, siamese encoder) — was trained
+> on a simulator whose AR part was not recursive (an "AR" was an MA; fixed in
+> `ml/train.py`, CHANGELOG 18.2) and on a box sampling that left out the cycles. Its
+> earlier results are not valid. Retrained on the exact simulator, the siamese ranks at
+> chance (its negatives, perturbed coefficients of the same order, are indistinguishable)
+> and the regressor's θ has an MAE of 0.5 — θ from the ACF is ill-posed (θ and 1/θ give
+> the same ρ₁). Not pursued: the identifier's templates take their coefficients from the
+> data (Yule-Walker, Hannan-Rissanen + CSS) and the model's from exact ML. If revived,
+> the regressor should predict ROOTS (modulus, angle; invertibility imposed) and the
+> siamese's negatives should be other ORDERS. The MLP of orders stays, as a source of
+> candidates only.
+
 ## Fase 0: Línea base y verificación de ART_18
 
 - [ ] Compilar `art_cli` y `art_gui` desde cero (`make clean && make cli`)

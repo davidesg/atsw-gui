@@ -17,6 +17,25 @@ de órdenes** y **coeficientes distorsionados**. Plan detallado en
 `TODO_ART_18.2.md`. Hallazgos originados en la revisión crítica de
 `src/model_detection.c`.
 
+### Added — `tests/benchmark_three_engines.py`: the C, art-python and pmdarima
+
+The same simulated series (12 models, 100 reps, n = 200) to the three identifiers;
+results in `tests/results_three_engines.txt` (2026-10-01).
+
+| | C | art-python | pmdarima |
+|---|---|---|---|
+| exact order (mean) | **67 %** | 66 % | 51 % |
+| true model in the first 3 | 83 % | 86 % | — |
+| true model in the list | 94 % (≤ 14) | 93 % (5) | — |
+| time per series | **4.5 ms** | 1.45 s | 0.61 s |
+
+The C and art-python share option B and agree within noise; the C is ~320× faster,
+art-python's list is shorter for the same recall. Both beat pmdarima (AIC on estimated
+models) by 16 points — AR(2) real 91 vs 61 %, MA(2) 89 vs 40 %, complex AR(2) 88–97 vs
+70–82 % — and the C is ~135× faster. pmdarima wins on mixed ARMA (7 and 21 % against
+0–3 %), the price of pure before mixed; the true mixed model stays in the C's list
+(100 %) and art-python's (90–97 %).
+
 ### Fixed — the MLP's training data, and the MA sign convention ✅
 
 - `[x]` **The training simulator did not generate AR processes.** `simulate_arma_fast`

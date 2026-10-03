@@ -98,6 +98,29 @@ Cada commit que cambia un código de salida de `runs.tsv` lo explica aquí.
     which is the exact GLS. With `-hessian bfgs` it gives 0.073304, the
     "run A" of BUG-0015.
 
+- **Quarterly year labels with two digits** (branch fugplot-two-digit-years,
+  2026-10-03). The residual graph `A<input>.eps` of a quarterly series labels
+  the years with their last two digits (`96`, `98`, `00`), as GraphMaker does
+  (`singletrim.cpp`: `FormatFloat("00", …)`). With the full year the labels
+  overlapped past about 25 years of quarterly data. Monthly series keep the
+  full year, as Treadway approved it, and switch to two digits only if the
+  full year would not fit. Annual series always keep the full year.
+  - **Where the goldens differ:** the 34 quarterly EPS. Only the label text
+    and its centring changed, checked line by line before regenerating.
+  - **What is unchanged:** every other EPS (monthly and annual), every
+    `.out`, `.pre` and `.tex`, and every exit status.
+
+- **The title where GraphMaker puts it** (same branch, 2026-10-03). In the
+  residual graph the title is left-aligned from 80 % of the width of the
+  series panel (GraphMaker's `singletrim.cpp`, `singlemonth.cpp`). If the
+  title would not fit, it moves left, never into the acf/pacf column. It used
+  to end flush at the panel's right edge, which looked too far right.
+  - **Where the goldens differ:** all 92 residual EPS. Only the title's x
+    moved (its y never) — checked on every file before regenerating —
+    together with the quarterly labels above.
+  - **What is unchanged:** every `.out`, `.pre` and `.tex`, and every exit
+    status.
+
 ## La batería sintética
 
 `syn_*.inp` (serie IPCM de `fug/examples`): ruido blanco sin nada libre y con

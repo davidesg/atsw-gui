@@ -181,19 +181,38 @@ static void series_panel( FDFig *f, const Layout *L, double x0, double x1, doubl
 
    /* vertical lines and year labels: every 2 years from the first year for
     * seasonal data; for annual data at the multiples of 5 years (as
-    * GraphMaker), or of 10, 20, 25... if the labels do not fit              */
+    * GraphMaker), or of 10, 20, 25... if the labels do not fit.
+    *
+    * The year label of seasonal data:
+    *  - quarterly: the year's last two digits, always -- GraphMaker's format
+    *    (singletrim.cpp: FormatFloat("00", ...)). With the full year the
+    *    labels overlapped past about 25 years of quarterly data;
+    *  - monthly (and any other seasonal frequency): the full year, as
+    *    Treadway approved it, and two digits only if the full year would
+    *    not fit between two lines.
+    * Annual data always keep the full year: two digits are ambiguous in long
+    * historical series.                                                     */
    fd_linewidth( f, LW_THIN );
    if ( freq > 1 )
       {
+      const char *yfmt = "%d";
+      int         ymod = 100000;
       step  = 2 * freq;
       count = (tsnobs - 1) / step;
+      if ( freq == 4 ||
+           fd_text_width( FD_HELV, L->year, "0000" ) + 0.5 * L->year >
+           (x1 - x0) * step / (xmax - xmin) )
+         {
+         yfmt = "%02d";
+         ymod = 100;
+         }
       for ( i = 0; i <= count; i++ )
           {
           double X = xmin + step * i;
           if ( X > xmax ) break;
           px = mapv( X, xmin, xmax, x0, x1 );
           if ( i > 0 ) fd_line( f, px, y0, px, y1 );
-          snprintf( s, sizeof( s ), "%d", tsby + 2 * i );
+          snprintf( s, sizeof( s ), yfmt, (tsby + 2 * i) % ymod );
           fd_text( f, px, y0 - TIC_X - 2.5 - 0.718 * L->year, FD_HELV, L->year, FD_CENTER, s );
           }
       }
@@ -346,9 +365,10 @@ static void corr_panel( FDFig *f, const Layout *L, double x0, double x1, double 
 /* Title and statistics                                                      */
 /*****************************************************************************/
 
-/* nabla^d nabla_s^D ln name(lambda) */
-static void title( FDFig *f, double sz, double x, double y, int align, int nrdiff,
-                   int nadiff, int freq, double boxlam, const char *name )
+/* nabla^d nabla_s^D ln name(lambda). With xmax > 0 the title, aligned at x,
+ * is moved left as much as needed to end at xmax at the latest.             */
+static void title( FDFig *f, double sz, double x, double xmax, double y, int align,
+                   int nrdiff, int nadiff, int freq, double boxlam, const char *name )
 {
    FDRun  r[8];
    char   t[8][64];
@@ -382,6 +402,8 @@ static void title( FDFig *f, double sz, double x, double y, int align, int nrdif
       snprintf( t[n], 64, "(%.2f)", boxlam );
       r[n] = (FDRun){ FD_HELV_BOLD, sz, 0.0, t[n], FD_ACC_NONE }; n++;
       }
+   if ( xmax > 0.0 && align == FD_LEFT && x + fd_runs_width( r, n ) > xmax )
+      x = xmax - fd_runs_width( r, n );
    fd_runs( f, x, y, align, r, n );
 }
 
@@ -457,7 +479,12 @@ static FDFig *plotser_corrser( struct Tseries *ser, int npar, int tsnobs, int tm
 
    series_panel( f, L, sx0, sx1, 0.26 * H, 0.77 * H, a, n, freq, tsnobs, tmornsop, tsby,
                  AbsMax, marks, nmarks );
-   title( f, L->title, sx1, H - 16.0, FD_RIGHT, nrdiff, nadiff, freq, boxlam, name );
+   /* the title as GraphMaker places it: left-aligned from 80 % of the width of
+    * the series panel (singletrim.cpp, singlemonth.cpp: 0.505, 0.59 and 0.52 of
+    * the canvas over panels of 0.628, 0.739 and 0.636), and never into the
+    * acf/pacf column. It used to end flush at the panel's right edge.       */
+   title( f, L->title, sx0 + 0.80 * (sx1 - sx0), cx0 - 6.0, H - 16.0, FD_LEFT,
+          nrdiff, nadiff, freq, boxlam, name );
    statistics( f, L, (sx0 + sx1) / 2.0, (L == &layout_big) ? 16.0 : 14.0, ser->mean,
                Stdev( ser->data, n ), n );
 
@@ -518,7 +545,7 @@ FDFig *fp_PlotSer( struct Tseries *ser, int tsnobs, int tmornsop, int tsby, doub
    sx1 = L->W - 12.0;
    series_panel( f, L, sx0, sx1, 53.0, L->H - 34.0, a, n, freq, tsnobs, tmornsop, tsby,
                  AbsMax, NULL, 0 );
-   title( f, L->title, sx1, L->H - 16.0, FD_RIGHT, nrdiff, nadiff, freq, boxlam, name );
+   title( f, L->title, sx1, 0.0, L->H - 16.0, FD_RIGHT, nrdiff, nadiff, freq, boxlam, name );
    statistics( f, L, (sx0 + sx1) / 2.0, 12.0, ser->mean, Stdev( ser->data, n ), n );
 
    save_eps( f, "", x11out );
@@ -708,7 +735,7 @@ FDFig *fp_histogram( struct Tseries *ser, int nrdiff, int nadiff, double boxlam,
    fd_text_up( f, x0 - 28.0, (y0 + y1) / 2.0, FD_HELV, 12.0, FD_CENTER, "%" );
    snprintf( s, sizeof( s ), "S = %2.1f       K = %2.1f        JB = %2.1f", skew, kurt, jb );
    fd_text( f, (x0 + x1) / 2.0, 4.0, FD_HELV, 10.0, FD_CENTER, s );
-   title( f, 11.0, (x0 + x1) / 2.0, H - 16.0, FD_CENTER, nrdiff, nadiff, ser->freq, boxlam, name );
+   title( f, 11.0, (x0 + x1) / 2.0, 0.0, H - 16.0, FD_CENTER, nrdiff, nadiff, ser->freq, boxlam, name );
 
    save_eps( f, "hist_", x11out );
    return( f );
@@ -782,7 +809,7 @@ FDFig *fp_graph_m_dt( double *y, int n, int nog, int freq, double boxlam,
        }
    fd_text( f, (x0 + x1) / 2.0, 6.0, FD_HELV, 10.0, FD_CENTER, "Mean" );
    fd_text_up( f, x0 - 34.0, (y0 + y1) / 2.0, FD_HELV, 10.0, FD_CENTER, "Standard-Deviation" );
-   title( f, 11.0, (x0 + x1) / 2.0, H - 14.0, FD_CENTER, 0, 0, freq, boxlam, name );
+   title( f, 11.0, (x0 + x1) / 2.0, 0.0, H - 14.0, FD_CENTER, 0, 0, freq, boxlam, name );
 
    save_eps( f, "m_dt_", x11out );
    free_vector( ms, 1, ng );

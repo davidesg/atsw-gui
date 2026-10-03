@@ -121,6 +121,15 @@ Cada commit que cambia un código de salida de `runs.tsv` lo explica aquí.
   - **What is unchanged:** every `.out`, `.pre` and `.tex`, and every exit
     status.
 
+- **`Q(39)`, not `Q( 39 )`** (same branch, 2026-10-03). The Ljung-Box label of
+  the residual graph and of `fug -b` loses the spaces inside the parentheses,
+  which were a slip carried over from GraphMaker's «Q ( 15 )». `Q(k)` is the
+  usual notation and the one art's text uses.
+  - **Where the goldens differ:** all 92 residual EPS, only in the Q line (its
+    text and its centring), checked on every file before regenerating.
+  - **What is unchanged:** every `.out`, `.pre` and `.tex`, and every exit
+    status.
+
 ## La batería sintética
 
 `syn_*.inp` (serie IPCM de `fug/examples`): ruido blanco sin nada libre y con

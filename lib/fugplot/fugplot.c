@@ -489,7 +489,7 @@ static FDFig *plotser_corrser( struct Tseries *ser, int npar, int tsnobs, int tm
                Stdev( ser->data, n ), n );
 
    corr_panel( f, L, cx0, cx1, 0.595 * H, 0.833 * H, acf, lags, freq, n, cmax, "acf" );
-   snprintf( s, sizeof( s ), "Q( %d ) = %.1f", lags - npar, ChiTest( acf, lags, n ) );
+   snprintf( s, sizeof( s ), "Q(%d) = %.1f", lags - npar, ChiTest( acf, lags, n ) );
    fd_text( f, (cx0 + cx1) / 2.0, 0.595 * H - 21.0, FD_HELV, L->q, FD_CENTER, s );
    corr_panel( f, L, cx0, cx1, 0.125 * H, 0.365 * H, pacf, lags, freq, n, cmax, "pacf" );
 
@@ -589,7 +589,7 @@ FDFig *fp_CorrSer( struct Tseries *ser, int npar, int lags, double cbands, const
 
    f = fd_fig_new( W, H );
    corr_panel( f, &Lb, x0, x1, 0.595 * H, 0.833 * H, acf, lags, freq, n, cmax, "acf" );
-   snprintf( s, sizeof( s ), "Q( %d ) = %.1f", lags - npar, ChiTest( acf, lags, n ) );
+   snprintf( s, sizeof( s ), "Q(%d) = %.1f", lags - npar, ChiTest( acf, lags, n ) );
    fd_text( f, (x0 + x1) / 2.0, 0.595 * H - 21.0, FD_HELV, Lb.q, FD_CENTER, s );
    corr_panel( f, &Lb, x0, x1, 0.125 * H, 0.365 * H, pacf, lags, freq, n, cmax, "pacf" );
 

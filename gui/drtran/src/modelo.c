@@ -1315,21 +1315,20 @@ static void avisa_orden( Mtram *m, const char *path )
     g_string_free( t, TRUE );
 }
 
-static void on_abrir( GtkButton *b, Mtram *m )
+/* LEER UN .cns DE UN FICHERO, SIN DIALOGO: el cuerpo de «Abrir», para que
+ * lo use tambien el caso al cargar la corrida de la que se parte. TRUE si
+ * se leyo; si no, la tabla queda como estaba (ver abajo).               */
+gboolean modelo_lee( Mtram *m, const char *p )
 {
     CnsError   e;
-    gchar     *p;
     int        nc;
     SlotTable *antes;
 
     if (!m->mod.vale) {
         preview_show_status( m, "Carga las series y define la red primero: el "
                                 ".cns nombra parámetros que salen de ahí." );
-        return;
+        return FALSE;
     }
-
-    p = elige( m, GTK_FILE_CHOOSER_ACTION_OPEN, "Abrir restricciones" );
-    if (!p) return;
 
     /* LA TABLA DE ANTES, para volver a ella si la lectura falla. Rehacerla
      * con construye() no servia: construye ARRASTRA las restricciones de la
@@ -1354,6 +1353,22 @@ static void on_abrir( GtkButton *b, Mtram *m )
     refresca_lista( m );
     refresca_cuenta( m );
     g_free( antes );
+    return nc >= 0;
+}
+
+static void on_abrir( GtkButton *b, Mtram *m )
+{
+    gchar *p;
+
+    if (!m->mod.vale) {
+        preview_show_status( m, "Carga las series y define la red primero: el "
+                                ".cns nombra parámetros que salen de ahí." );
+        return;
+    }
+
+    p = elige( m, GTK_FILE_CHOOSER_ACTION_OPEN, "Abrir restricciones" );
+    if (!p) return;
+    modelo_lee( m, p );
     g_free( p );
 }
 

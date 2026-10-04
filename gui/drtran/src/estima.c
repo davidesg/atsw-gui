@@ -470,8 +470,14 @@ static void on_done( const EngineResult *r, gpointer data )
 
     gtk_text_buffer_get_bounds( b, &a, &z );
     hay = gtk_text_buffer_get_text( b, &a, &z, FALSE );
-    if (r->output && strlen( r->output ) > strlen( hay ))
-        gtk_text_buffer_set_text( b, r->output, -1 );
+    if (r->output && strlen( r->output ) +
+                     (E->nota ? strlen( E->nota ) : 0) > strlen( hay )) {
+        /* La nota de arriba se queda: dice a donde fue la corrida. */
+        gchar *todo = g_strconcat( E->nota ? E->nota : "", r->output, NULL );
+
+        gtk_text_buffer_set_text( b, todo, -1 );
+        g_free( todo );
+    }
     g_free( hay );
     }
 
@@ -541,6 +547,12 @@ gboolean estima_lanzar( Mtram *m )
         preview_show_status( m, "%s", why );
         return FALSE;
     }
+    /* Sigue, pero hay algo que decir: la corrida va a la cache (alguna serie
+     * no es del proyecto) o a un caso derivado (el suyo estaba desfasado).
+     * Se escribe en la consola en cuanto se vacie, abajo: la barra la pisa
+     * el estado del motor.                                             */
+    g_free( E->nota );
+    E->nota = why[0] ? g_strdup_printf( "%s\n\n", why ) : NULL;
 
     if (!artefactos( m, &dag, &cns, why, sizeof why )) {
         preview_show_status( m, "%s", why );
@@ -564,6 +576,9 @@ gboolean estima_lanzar( Mtram *m )
     gtk_notebook_set_current_page( GTK_NOTEBOOK(E->libreta), 0 );
     gtk_text_buffer_set_text(
         gtk_text_view_get_buffer( GTK_TEXT_VIEW(E->salida) ), "", -1 );
+    if (E->nota)
+        gtk_text_buffer_set_text(
+            gtk_text_view_get_buffer( GTK_TEXT_VIEW(E->salida) ), E->nota, -1 );
 
     E->corriendo = TRUE;
     gtk_widget_set_sensitive( E->boton, FALSE );

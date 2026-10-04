@@ -1261,13 +1261,16 @@ int main(int argc, char **argv)
           "con una sola serie se piden dos", etiqueta(m->ver_ventana));
 
     /* ==================================================================== */
-    /* El proyecto: cada estimacion es una corrida con su nombre y su linaje */
+    /* El proyecto: cada estimacion es una CORRIDA de un CASO, con su linaje */
+    /* (docs/DISENO-casos.md)                                               */
     /* ==================================================================== */
     {
     Mtram *p2 = g_new0(Mtram, 1);
-    char   why[512] = "";
+    char   why[1024] = "";
     gchar *dir = g_build_filename(trab, "proy", NULL);
     gchar *yaml, *out1 = NULL, *out2 = NULL;
+    char   pre_y[PR_RUTA], pre_x[PR_RUTA], id[PR_ID];
+    PrError e;
     Serie *a, *b;
 
     g_mkdir_with_parents(dir, 0700);
@@ -1276,13 +1279,40 @@ int main(int argc, char **argv)
     yaml = g_build_filename("proy", "p.yaml", NULL);
     check(mtram_proyecto_abre(p2, yaml, why, sizeof why),
           "--proyecto con un fichero que no existe empieza uno", why);
+
+    /* LAS SERIES DEL PROYECTO, con su modelo m01 y su .pre donde pr_ruta
+     * dice: es lo que un caso cruza. Es lo que habria dejado fue.       */
+    {
+    const char *ser[2] = { "SYN_Y", "SYN_X" }, *fix[2] = { syn_y, syn_x };
+    char       *dst[2] = { pre_y, pre_x };
+    int         k;
+
+    for (k = 0; k < 2; k++) {
+        gchar *c = NULL, *d;
+        gsize  n = 0;
+
+        pr_serie_add(p2->proy, ser[k], &e);
+        pr_deriva_rol(p2->proy, ser[k], "", NULL, PR_DATOS, id, sizeof id, NULL, 0, &e);
+        pr_deriva(p2->proy, ser[k], "", id, id, sizeof id, NULL, 0, &e);
+        pr_ruta(p2->proy, ser[k], "", id, ".pre", dst[k], PR_RUTA);
+        d = g_path_get_dirname(dst[k]);
+        g_mkdir_with_parents(d, 0700);
+        g_free(d);
+        if (g_file_get_contents(fix[k], &c, &n, NULL))
+            g_file_set_contents(dst[k], c, n, NULL);
+        g_free(c);
+    }
+    mtram_proyecto_guarda(p2, why, sizeof why);
+    }
     mtram_window_new(app, p2);
     gtk_widget_show_all(gtk_bin_get_child(GTK_BIN(p2->ventana_p)));
 
-    a = serie_cargar(syn_y, why, sizeof why);
-    b = serie_cargar(syn_x, why, sizeof why);
-    check(a && b, "se cargan los .pre en la ventana del proyecto", why);
+    a = serie_cargar(pre_y, why, sizeof why);
+    b = serie_cargar(pre_x, why, sizeof why);
+    check(a && b, "se cargan los .pre de los modelos del proyecto", why);
     if (a && b) {
+        int nm0 = p2->proy->nm;
+
         p2->c.s[0] = a; p2->c.s[1] = b; p2->c.n = 2;
         mtram_refresca(p2);
         pulsa(boton(pagina(p2, PG_RED), "Estrella"));
@@ -1296,9 +1326,12 @@ int main(int argc, char **argv)
 
         check(estima_lanzar(p2), "la primera corrida arranca", etiqueta(p2->estado));
         check(espera_motor(p2, 90), "y acaba", NULL);
+        check(!strcmp(p2->caso, "C1"),
+              "las series son modelos del proyecto: el caso se da de alta solo",
+              p2->caso);
         out1 = g_strdup(p2->est.out_path);
-        check(contiene(out1, "SYN_Y_") && !contiene(out1, "modelo.out"),
-              "con proyecto, el .out lleva el nombre de la corrida", out1);
+        check(contiene(out1, "_casos") && contiene(out1, "C1_c00.out"),
+              "con proyecto, el .out es el de la corrida del caso", out1);
         check(out1 && g_file_test(out1, G_FILE_TEST_EXISTS),
               "y existe donde el GUI lo busca", out1);
         check(p2->dia.vale, "su diagnosis se lee", etiqueta(p2->dia.ver_global));
@@ -1313,16 +1346,118 @@ int main(int argc, char **argv)
               "la segunda NO pisa a la primera: caben dos modelos", out2);
         check(out1 && g_file_test(out1, G_FILE_TEST_EXISTS),
               "el .out de la primera sigue ahi", out1);
+        check(!strcmp(p2->caso, "C1") && p2->proy->nca == 1,
+              "y va al MISMO caso: no se duplica", p2->caso);
 
         s = lee_fichero(yaml);
-        check(contiene(s, p2->corrida) && contiene(s, p2->previa),
-              "el manifiesto registra la corrida", s);
-        check(p2->proy && p2->proy->nm >= 2, "con las dos corridas", s);
-        if (p2->proy && p2->proy->nm >= 2)
-            check(g_strcmp0(p2->proy->m[1].padre, p2->proy->m[0].id) == 0,
-                  "y la segunda cuelga de la primera (el linaje)", s);
+        check(contiene(s, "casos:") && contiene(s, "SYN_Y/m01@") &&
+              contiene(s, "SYN_X/m01@"),
+              "el manifiesto registra el caso, con sus entradas en orden y su sha", s);
+        check(p2->proy->nco == 2 && contiene(s, "C1/c01"),
+              "con las dos corridas", s);
+        check(g_strcmp0(pr_corrida_ver(p2->proy, "C1", "c01")->padre, "c00") == 0,
+              "y la segunda cuelga de la primera (el linaje)", s);
+        check(p2->proy->nm == nm0,
+              "y ninguna corrida se registra ya como modelo de la serie de salida",
+              s);
         printf("proyecto        : %s\n", out2 ? out2 : "(nada)");
         g_free(s);
+
+        check(pr_borra(p2->proy, "SYN_X", "", "m01", &e) != 0 &&
+              e.cod == PR_EENCASO,
+              "un modelo que es entrada de un caso no se borra", e.texto);
+    }
+
+    /* --- --caso: se carga lo que se cruzo, y se parte de una corrida ---- */
+    if (a && b) {
+        Mtram *p3 = g_new0(Mtram, 1);
+
+        check(mtram_proyecto_abre(p3, yaml, why, sizeof why),
+              "otra ventana abre el mismo proyecto", why);
+        snprintf(p3->caso, sizeof p3->caso, "C1");
+        snprintf(p3->corrida_ini, sizeof p3->corrida_ini, "c01");
+        mtram_window_new(app, p3);
+        gtk_widget_show_all(gtk_bin_get_child(GTK_BIN(p3->ventana_p)));
+        check(mtram_caso_carga(p3, why, sizeof why) && !why[0],
+              "--caso C1 --corrida c01 se carga sin avisos", why);
+        check(p3->c.n == 2 && !strcmp(p3->c.s[0]->path, pre_y) &&
+              !strcmp(p3->c.s[1]->path, pre_x),
+              "con sus dos entradas, EN SU ORDEN", p3->c.n ? p3->c.s[0]->path : "");
+        check(p3->red.n == 1, "y la red de la corrida c01", etiqueta(p3->estado));
+        check(!p3->caso_desfasado, "el caso no esta desfasado", NULL);
+        check(estima_lanzar(p3), "una corrida desde ahi arranca", NULL);
+        check(espera_motor(p3, 90), "y acaba", NULL);
+        check(!strcmp(p3->corrida, "c02") &&
+              !g_strcmp0(pr_corrida_ver(p3->proy, "C1", "c02")->padre, "c01"),
+              "es c02 y cuelga de c01, de la que se partio", p3->corrida);
+    }
+
+    /* --- el desfase: un .pre cambio despues del alta -------------------- */
+    if (a && b) {
+        Mtram *p4 = g_new0(Mtram, 1);
+        gchar *c = NULL;
+        gsize  n = 0;
+
+        /* Una linea de comentario al final: el mismo modelo para el motor,
+         * otro fichero para el hash. Basta para que el caso ya no diga la
+         * verdad sobre lo que se cruzo.                                  */
+        if (g_file_get_contents(pre_x, &c, &n, NULL)) {
+            gchar *c2 = g_strconcat(c, "\n", NULL);
+
+            g_file_set_contents(pre_x, c2, -1, NULL);
+            g_free(c2);
+        }
+        g_free(c);
+
+        check(mtram_proyecto_abre(p4, yaml, why, sizeof why), "se reabre", why);
+        snprintf(p4->caso, sizeof p4->caso, "C1");
+        mtram_window_new(app, p4);
+        gtk_widget_show_all(gtk_bin_get_child(GTK_BIN(p4->ventana_p)));
+        check(mtram_caso_carga(p4, why, sizeof why) && p4->caso_desfasado,
+              "con un .pre cambiado, el caso se carga DESFASADO", why);
+        check(contiene(why, "DESFASADO") && contiene(why, "SYN_X/m01"),
+              "y dice cual cambio", why);
+        pulsa(boton(pagina(p4, PG_RED), "Estrella"));
+        check(estima_lanzar(p4), "estimar sigue pudiendose", NULL);
+        check(espera_motor(p4, 90), "y acaba", NULL);
+        check(!strcmp(p4->caso, "C2") &&
+              !g_strcmp0(pr_caso_ver(p4->proy, "C2")->padre, "C1"),
+              "pero la corrida va a C2, derivado de C1: C1 no se toca",
+              p4->caso);
+        check(!strcmp(p4->corrida, "c00"), "y empieza su propia cadena",
+              p4->corrida);
+    }
+
+    /* --- unas series que no son del proyecto: a la cache, y se dice ----- */
+    {
+        Mtram *p5 = g_new0(Mtram, 1);
+        Serie *fa, *fb;
+
+        check(mtram_proyecto_abre(p5, yaml, why, sizeof why), "se reabre", why);
+        mtram_window_new(app, p5);
+        gtk_widget_show_all(gtk_bin_get_child(GTK_BIN(p5->ventana_p)));
+        fa = serie_cargar(syn_y, why, sizeof why);
+        fb = serie_cargar(syn_x, why, sizeof why);
+        if (fa && fb) {
+            p5->c.s[0] = fa; p5->c.s[1] = fb; p5->c.n = 2;
+            mtram_refresca(p5);
+            pulsa(boton(pagina(p5, PG_RED), "Estrella"));
+            check(estima_lanzar(p5), "con series de fuera tambien se estima", NULL);
+            check(espera_motor(p5, 90), "y acaba", NULL);
+            check(!p5->caso[0] && contiene(p5->est.out_path, "modelo.out"),
+                  "pero en la cache: no son modelos del proyecto",
+                  p5->est.out_path);
+            {
+            GtkTextBuffer *tb = gtk_text_view_get_buffer(GTK_TEXT_VIEW(p5->est.salida));
+            GtkTextIter    i0, i1;
+
+            gtk_text_buffer_get_bounds(tb, &i0, &i1);
+            s = gtk_text_buffer_get_text(tb, &i0, &i1, FALSE);
+            check(contiene(s, "no es un modelo de este proyecto"),
+                  "y la consola dice por que, tambien al acabar el motor", s);
+            g_free(s);
+            }
+        }
     }
     g_free(dir); g_free(yaml); g_free(out1); g_free(out2);
     }

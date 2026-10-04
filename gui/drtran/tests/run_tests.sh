@@ -363,6 +363,15 @@ $CC -O2 -Wall -Wextra -I"$L/inpdet" -I"$L/inpcheck" \
     -o "$W/test_inpdet" -lm || exit 1
 "$W/test_inpdet" "$TOP/../../engines/fue/tests/corpus" || exit 1
 
+# --- el resultado del identificador (engines/art) ---------------------------
+# El lector de DATA_art.cand contra las referencias del propio motor: lo que
+# la ventana de identificacion lee es lo que art escribe, por construccion.
+echo
+$CC -O2 -Wall -Wextra -I"$L/artcand" \
+    "$L/artcand/test_artcand.c" "$L/artcand/artcand.c" \
+    -o "$W/test_artcand" -lm || exit 1
+( cd "$W" && "$W/test_artcand" "$TOP/../../engines/art/tests/golden" ) || exit 1
+
 # --- el dictamen: leer no es juzgar -----------------------------------------
 # Los umbrales se prueban SIN fichero, con numeros inventados: eso es lo que
 # se gana separando el lector del que juzga.

@@ -305,12 +305,34 @@ button that does nothing. It is an analysis window like `an_diagnosis` and
      as `an_sugerir` does.
    - It opens in the editor. **It is not estimated**: AUDITORIA §5.
 
+### As built in phase 3 (2026-10-04)
+
+- `lib/analisis/an_identifica.c` has two entry points:
+  `an_identifica_serie` (E2) and `an_identifica_residuos` (E3).
+- `lib/artcand` reads the `.cand`.
+- `lib/inpdet` has two new functions: `id_pon_arma` writes the candidate's
+  orders and seeds, and `id_pon_transformacion` writes the λ, d, D line at
+  E2. Both are tested over the whole fue corpus with `inp_check_fue`.
+
+**E2 is hosted by the mother's vistazo, not by `gtk_fmg`.** `gtk_fmg` links
+neither `lib/analisis` nor the project. The vistazo shows the same graph
+(fug draws it), with λ, d and D at its foot, and it has the host and the
+editor.
+
+art identifies in logs or levels only. A λ other than 0 or 1 is refused,
+with the reason.
+
+Tests:
+- `gui/atsw/tests/test_gui.c` drives both points.
+- The `lib/` battery (inside `gui/drtran`'s) runs the reader and the
+  `.inp` writers.
+
 ### Where it is launched
 
 | point | from | data passed |
 |---|---|---|
 | E1 | the madre, on the data (`m00`) | the series |
-| E2 | `gtk_fmg`, from the graph being viewed, with its λ, d, D | the `.inp` + λ, d, D |
+| E2 | the mother's vistazo (built; `gtk_fmg` does not host lib/analisis), with its λ, d, D | the series + λ, d, D |
 | E3 | the madre or `fue_gui`, on an estimated base model | the `.pre`/`.out` |
 | E4 | the diagnosis window, when Q fails | the `.pre`/`.out` |
 

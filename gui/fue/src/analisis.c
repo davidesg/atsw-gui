@@ -183,6 +183,21 @@ void fue_on_anomalos( GtkWidget *w, FueContext *ctx )
     }
 }
 
+void fue_on_identifica( GtkWidget *w, FueContext *ctx )
+{
+    char serie[PR_ID], muestra[PR_ID], id[PR_ID];
+
+    (void) w;
+    if ( fue_modelo_actual( ctx, serie, sizeof serie, muestra, sizeof muestra,
+                            id, sizeof id ) != 0 )
+        { fg_di( ctx, "Este fichero no es un modelo de este proyecto." ); return; }
+    {
+    AnHost h = fue_host( ctx );
+
+    an_identifica_residuos( &h, serie, muestra, id );
+    }
+}
+
 /* LOS DOS BOTONES, CON SU INSUMO. La regla es la de lib/analisis, la misma
  * que usa la madre: dos copias de una regla son dos reglas. Y un botón
  * apagado SIEMPRE dice por qué en su globo.                            */
@@ -222,5 +237,13 @@ void fue_analisis_refresca( FueContext *ctx )
         : porque );
     gtk_widget_set_tooltip_text( ctx->btn_diagnosis, g1 );
     gtk_widget_set_tooltip_text( ctx->btn_anomalos, g2 );
+    if ( ctx->btn_identifica )
+        {
+        gtk_widget_set_sensitive( ctx->btn_identifica, listo );
+        gtk_widget_set_tooltip_text( ctx->btn_identifica, listo
+            ? "art propone qué ARMA ponerle a este modelo, leyendo el "
+              "correlograma de sus residuos. Propone; no estima."
+            : porque );
+        }
     }
 }

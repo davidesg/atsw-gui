@@ -71,7 +71,7 @@ gchar *atsw_programa( const char *programa )
            misma razon que ellos: una instalacion vieja en /usr/local se
            cuela sin avisar -- ya paso con fue_gui de mayo.            */
         "../../engines/fue/bin/%s", "../../engines/fug/%s",
-        "../../engines/fuf/bin/%s", NULL
+        "../../engines/fuf/bin/%s", "../../engines/art/bin/%s", NULL
     };
     return sitio_busca( programa, sitio );
 }

@@ -683,6 +683,17 @@ static void on_anomalos( GtkMenuItem *m, Atsw *a )
     g_free( id );
 }
 
+static void on_identifica_res( GtkMenuItem *m, Atsw *a )
+{
+    gchar *id = atsw_marcada( a->l_modelos, M_ID );
+
+    (void) m;
+    if ( a->hay && a->serie[0] && id )
+        { AnHost h = atsw_host( a );
+          an_identifica_residuos( &h, a->serie, atsw_muestra_actual( a ), id ); }
+    g_free( id );
+}
+
 static void on_editar( GtkMenuItem *m, Atsw *a )
 {
     gchar *id = atsw_marcada( a->l_modelos, M_ID );
@@ -1003,6 +1014,18 @@ static void menu_modelo( Atsw *a, GdkEventButton *ev )
               "intervenirlo no compra nada."
             : porque );
         g_signal_connect( mi, "activate", G_CALLBACK(on_anomalos), a );
+        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+
+        mi = gtk_menu_item_new_with_label( "Identificar los residuos…" );
+        gtk_widget_set_sensitive( mi, listo );
+        gtk_widget_set_tooltip_text( mi, listo
+            ? "art propone qué ARMA ponerle a este modelo, leyendo el "
+              "correlograma de sus residuos (E3): el modelo base con sus "
+              "armónicos, intervenciones y media, sin la parte ARMA.\n\n"
+              "Propone; no estima. Derivar crea un hijo con el candidato que "
+              "elijas, sobre su .pre."
+            : porque );
+        g_signal_connect( mi, "activate", G_CALLBACK(on_identifica_res), a );
         gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
         }
 

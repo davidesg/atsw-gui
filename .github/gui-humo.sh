@@ -19,8 +19,12 @@ export PATH="$R/engines/fue/bin:$R/engines/fuf/bin:$R/engines/fug:$R/engines/drt
 # apunta a la de MSYS2.
 case "$(uname -s)" in
     MINGW*|MSYS*)
-        export XDG_DATA_DIRS="$(cygpath -m "$MSYSTEM_PREFIX/share")"
-        export GSETTINGS_SCHEMA_DIR="$(cygpath -m "$MSYSTEM_PREFIX/share/glib-2.0/schemas")" ;;
+        pre=${MSYSTEM_PREFIX:-/ucrt64}
+        export XDG_DATA_DIRS="$(cygpath -m "$pre/share")"
+        export GSETTINGS_SCHEMA_DIR="$(cygpath -m "$pre/share/glib-2.0/schemas")"
+        echo "GSETTINGS_SCHEMA_DIR=$GSETTINGS_SCHEMA_DIR"
+        [ -f "$pre/share/glib-2.0/schemas/gschemas.compiled" ] ||
+            echo "::warning::no hay gschemas.compiled en $pre/share/glib-2.0/schemas" ;;
 esac
 
 case "$(uname -s)" in

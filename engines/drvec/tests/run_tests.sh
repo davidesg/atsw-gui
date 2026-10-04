@@ -2113,7 +2113,8 @@ fi
 
 #  And both checks have to be able to fail.
 cp CITATION.cff "$TMP/cff.bak"
-sed -i 's/^version: .*/version: "9.9"/' CITATION.cff
+# sin sed -i: el de macOS exige un sufijo y el de GNU no lo admite suelto
+sed 's/^version: .*/version: "9.9"/' "$TMP/cff.bak" > CITATION.cff
 if ./tools/check_version.sh >/dev/null 2>&1; then
     bad "version check" "it passed a CITATION.cff carrying another version"
 else

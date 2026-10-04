@@ -177,32 +177,32 @@ int main( int argc, char **argv )
 
    printf( "\n  lo que se rechaza, y lo que dice el motor:\n" );
    for ( t = 0; t < sizeof mal / sizeof *mal; t++ ) {
-      FILE *f = fopen( "/tmp/_test_netfile_bad.dag", "w" );
+      FILE *f = fopen( temporal( "_test_netfile_bad.dag" ), "w" );
       int   rc;
 
       fputs( mal[t].linea, f );
       fclose( f );
-      rc = net_read( "/tmp/_test_netfile_bad.dag", NOM, NSER, lnk,
+      rc = net_read( temporal( "_test_netfile_bad.dag" ), NOM, NSER, lnk,
                      NET_MAX_LINK, &e );
       printf( "     %-34s -> \"%s\"\n", mal[t].que,
               net_error_en( &e, why, sizeof why ) );
       ok( rc < 0 && e.err == mal[t].err, mal[t].que );
       ok( e.line == 1, "  y dice en que linea" );
    }
-   remove( "/tmp/_test_netfile_bad.dag" );
+   remove( temporal( "_test_netfile_bad.dag" ) );
 
    /* La bateria del motor comprueba esta frase al pie de la letra: la salida
     * del motor en ingles es una propiedad declarada del puerto.         */
    {
-   FILE *f = fopen( "/tmp/_test_netfile_bad.dag", "w" );
+   FILE *f = fopen( temporal( "_test_netfile_bad.dag" ), "w" );
 
    fputs( "NO_EXISTE <- EI  1 0 0\n", f );
    fclose( f );
-   net_read( "/tmp/_test_netfile_bad.dag", NOM, NSER, lnk, NET_MAX_LINK, &e );
+   net_read( temporal( "_test_netfile_bad.dag" ), NOM, NSER, lnk, NET_MAX_LINK, &e );
    net_error_en( &e, why, sizeof why );
    ok( strstr( why, "unknown series" ) != NULL,
        "la frase del motor sigue diciendo \"unknown series\"" );
-   remove( "/tmp/_test_netfile_bad.dag" );
+   remove( temporal( "_test_netfile_bad.dag" ) );
    }
    }
 

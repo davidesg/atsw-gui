@@ -71,7 +71,14 @@ static gchar *status_message(const char *program, int status, int signal_no,
                     "initial values";                                      break;
     case 4:  what = "stopped on a run-time error";                         break;
     case ENGINE_SIGNAL:
+#ifdef G_OS_WIN32
+        /* En Windows no hay senales: una caida es una excepcion, y su codigo
+         * (0xC0000005, acceso indebido) es lo que sirve para buscarla.   */
+        return g_strdup_printf("%s crashed (Windows exception 0x%08X, like a signal).",
+                               program, (unsigned) signal_no);
+#else
         return g_strdup_printf("%s died on signal %d.", program, signal_no);
+#endif
     default:
         return g_strdup_printf("%s ended with status %d.", program, status);
     }
@@ -85,6 +92,28 @@ static gchar *status_message(const char *program, int status, int signal_no,
     }
     g_free(line);
     return g_strdup_printf("%s %s.", program, what);
+}
+
+/* EL ESTADO DE SALIDA, en un solo sitio. En POSIX es un wait status; en
+ * Windows, GLib da el codigo de salida tal cual, y una caida llega como una
+ * excepcion NTSTATUS (0xC0000005...), que se trata como la senal de POSIX.
+ * Estaba repetido en el camino sincrono y en el asincrono, y en Windows
+ * ninguno reconocia una caida.                                          */
+static void decode_status(gint wait_status, int *status, int *signal_no) {
+#ifdef G_OS_WIN32
+    if ((guint) wait_status >= 0xC0000000u) {
+        *status    = ENGINE_SIGNAL;
+        *signal_no = wait_status;
+    } else
+        *status = wait_status;
+#else
+    if (WIFEXITED(wait_status))
+        *status = WEXITSTATUS(wait_status);
+    else if (WIFSIGNALED(wait_status)) {
+        *status    = ENGINE_SIGNAL;
+        *signal_no = WTERMSIG(wait_status);
+    }
+#endif
 }
 
 /* Se declara antes: la usan el camino sincrono y el asincrono */
@@ -107,42 +136,11 @@ EngineResult engine_run(const char *workdir, const char *program, ...) {
     va_end(ap);
     g_ptr_array_add(args, NULL);
 
-#ifdef G_OS_WIN32
-    {
-    /* On Windows the engines are console programs: CreateProcessW with
-     * CREATE_NO_WINDOW keeps a console from flashing over the GUI. The
-     * output is not captured here, only the exit status.                  */
-    GString             *cmd = g_string_new(NULL);
-    STARTUPINFOW         si  = { sizeof(si) };
-    PROCESS_INFORMATION  pi  = { 0 };
-    wchar_t             *wcmd, *wdir;
-    guint                i;
-
-    for (i = 0; i + 1 < args->len; i++) {
-        if (i) g_string_append_c(cmd, ' ');
-        g_string_append_printf(cmd, "\"%s\"", (const char *)args->pdata[i]);
-    }
-    wcmd = g_utf8_to_utf16(cmd->str, -1, NULL, NULL, NULL);
-    wdir = workdir ? g_utf8_to_utf16(workdir, -1, NULL, NULL, NULL) : NULL;
-    g_string_free(cmd, TRUE);
-
-    if (CreateProcessW(NULL, wcmd, NULL, NULL, FALSE, CREATE_NO_WINDOW,
-                       NULL, wdir, &si, &pi)) {
-        DWORD code = 0;
-        WaitForSingleObject(pi.hProcess, INFINITE);
-        GetExitCodeProcess(pi.hProcess, &code);
-        CloseHandle(pi.hProcess);
-        CloseHandle(pi.hThread);
-        r.status = (int)code;
-    }
-    g_free(wcmd);
-    g_free(wdir);
-    if (r.status == ENGINE_NORUN)
-        r.message = g_strdup_printf("%s could not be run.", program);
-    else
-        r.message = status_message(program, r.status, 0, NULL, NULL);
-    }
-#else
+    /* UN SOLO CAMINO EN LAS TRES PLATAFORMAS. Windows tenia uno propio,
+     * con CreateProcessW, que solo recogia el codigo de salida: el GUI
+     * decia "fue could not read the input file." sin la linea ni el motivo
+     * que el motor si escribe, y una caida pasaba por un estado cualquiera.
+     * El asincrono (engine_start) ya usaba g_spawn en Windows.          */
     {
     gchar  *out = NULL, *err = NULL;
     GError *error = NULL;
@@ -158,12 +156,7 @@ EngineResult engine_run(const char *workdir, const char *program, ...) {
         g_ptr_array_free(args, TRUE);
         return r;
     }
-    if (WIFEXITED(wait_status))
-        r.status = WEXITSTATUS(wait_status);
-    else if (WIFSIGNALED(wait_status)) {
-        r.status    = ENGINE_SIGNAL;
-        r.signal_no = WTERMSIG(wait_status);
-    }
+    decode_status(wait_status, &r.status, &r.signal_no);
     r.message = status_message(program, r.status, r.signal_no, err, out);
     /* stderr first: that is where the engines put what went wrong */
     r.output  = g_strconcat(err ? err : "", (err && *err && out && *out) ? "\n" : "",
@@ -172,7 +165,6 @@ EngineResult engine_run(const char *workdir, const char *program, ...) {
     g_free(out);
     g_free(err);
     }
-#endif
 
     g_ptr_array_free(args, TRUE);
     return r;
@@ -275,8 +267,9 @@ static gboolean on_pipe(GIOChannel *channel, GIOCondition cond, gpointer data) {
     GString *to   = pipe->is_err ? run->err : run->out;
     gchar    buffer[4096];
     gsize    n = 0;
+    GIOStatus st;
 
-    while (g_io_channel_read_chars(channel, buffer, sizeof(buffer), &n, NULL)
+    while ((st = g_io_channel_read_chars(channel, buffer, sizeof(buffer), &n, NULL))
            == G_IO_STATUS_NORMAL && n > 0) {
         g_string_append_len(to, buffer, (gssize) n);
         if (to == run->out) {
@@ -286,7 +279,14 @@ static gboolean on_pipe(GIOChannel *channel, GIOCondition cond, gpointer data) {
             if (run->salida) run->salida(buffer, n, run->data);
         }
     }
-    if ((cond & (G_IO_HUP | G_IO_ERR)) == 0)
+    /* EL FINAL DE LA TUBERIA ES EL EOF, no solo el HUP. En Linux, cuando el
+     * motor cierra su salida, poll() marca POLLHUP; en macOS (y los BSD) la
+     * tuberia cerrada se anuncia como LEGIBLE y la lectura da EOF, sin HUP.
+     * Se miraba solo cond: aqui se devolvia TRUE, el vigilante volvia a
+     * saltar sin fin y la corrida no acababa nunca -- fue_gui se quedaba
+     * colgado en Run. Lo vio la CI de macOS (test_engine_progress).     */
+    if ((cond & (G_IO_HUP | G_IO_ERR)) == 0
+        && st != G_IO_STATUS_EOF && st != G_IO_STATUS_ERROR)
         return TRUE;
 
     g_io_channel_shutdown(channel, FALSE, NULL);
@@ -299,16 +299,7 @@ static gboolean on_pipe(GIOChannel *channel, GIOCondition cond, gpointer data) {
 static void on_child(GPid pid, gint wait_status, gpointer data) {
     Run *run = data;
 
-#ifdef G_OS_WIN32
-    run->status = wait_status;
-#else
-    if (WIFEXITED(wait_status))
-        run->status = WEXITSTATUS(wait_status);
-    else if (WIFSIGNALED(wait_status)) {
-        run->status    = ENGINE_SIGNAL;
-        run->signal_no = WTERMSIG(wait_status);
-    }
-#endif
+    decode_status(wait_status, &run->status, &run->signal_no);
     g_spawn_close_pid(pid);
     run->vivo = FALSE;
     if (--run->pending == 0) run_finish(run);

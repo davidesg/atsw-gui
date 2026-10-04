@@ -29,7 +29,9 @@ int main( int argc, char **argv )
     if ( log == NULL || strlen( log ) + 8 > sizeof tmp ) return 1;
     snprintf( tmp, sizeof tmp, "%s.tmp", log );
 
-    f = fopen( tmp, "w" );
+    /* En binario: en modo texto, Windows escribe "FIN\r\n" y la prueba,
+       que busca "FIN\n", esperaba en balde.                             */
+    f = fopen( tmp, "wb" );
     if ( f == NULL ) return 1;
     for ( i = 1; i < argc; i++ ) fprintf( f, "%s\n", argv[i] );
     fprintf( f, "FIN\n" );

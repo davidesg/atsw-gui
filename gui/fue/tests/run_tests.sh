@@ -5,7 +5,7 @@
 #
 # What the GUI does without a window: the name it derives from what the user
 # types (src/utils.c) and the way it runs the engines (src/engine.c). The
-# engine is a stand-in, tests/fake/fue, so nothing here depends on fue or fuf
+# engine is a stand-in, tests/fake/falso.c, so nothing here depends on fue or fuf
 # being installed; what is tested is that the GUI reads the exit status, that
 # it passes on what the engine said, and that an argument with a space or a
 # semicolon reaches the engine whole -- it used to go through /bin/sh.
@@ -59,7 +59,14 @@ $CC -O0 -g -Wall -I"$TOP/include" $LIB_INC $GTK_CFLAGS \
     "$TOP/tests/test_units.c" $LIB/engine/engine.c $LIB/utils/utils.c $LIB/outfile/outfile.c $INPCHECK_O \
     -o "$WORK/test_units" $GTK_LIBS -lm || exit 1
 
-PATH="$TOP/tests/fake:$PATH" "$WORK/test_units" "$TOP/data"
+# El motor falso, compilado como fue y como fuf (ver tests/fake/falso.c: en
+# Windows un guion no se puede lanzar).
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) EXE=.exe ;; *) EXE= ;; esac
+mkdir -p "$WORK/fake"
+for e in fue fuf; do
+    $CC -O0 -g -o "$WORK/fake/$e$EXE" "$TOP/tests/fake/falso.c" || exit 1
+done
+PATH="$WORK/fake:$PATH" "$WORK/test_units" "$TOP/data"
 rc=$?
 
 # --------------------------------------------------------------------------

@@ -819,7 +819,7 @@ void on_series_name_entry_changed(GtkEntry *entry, gpointer user_data)
     g_free(name2);
 }
 
-void on_data_filechooserbutton_file_set(GtkButton *button, gpointer user_data)
+void on_data_filechooserbutton_file_set(GtkFileChooserButton *button, gpointer user_data)
 {
     AppWidgets *app = (AppWidgets*)user_data;
     gchar *inputf, *folder, *base;

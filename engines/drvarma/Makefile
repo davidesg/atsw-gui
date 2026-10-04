@@ -40,6 +40,10 @@ ifeq ($(OS),windows)
 endif
 
 
+# `make` a secas construye `all`: si no, el primer objetivo del fichero es
+# $(GIT_HASH_H) y en un arbol limpio no se construye ningun binario.
+.DEFAULT_GOAL := all
+
 # Compiler and basic flags
 CFLAGS   = -O2 -g -Wall -I./include -I$(BUILD_DIR) -I$(LIB_DIR)/fuepre -I$(LIB_DIR)/prewhiten -I$(LIB_DIR)/dates -I$(LIB_DIR)/optim -I$(LIB_DIR)/inpcheck -I$(LIB_DIR)/lik
 LDFLAGS  +=

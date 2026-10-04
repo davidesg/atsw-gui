@@ -63,7 +63,8 @@ windows: fug.exe
 	 else echo "Note: MXE not found in $(MXE): gtk_fmg.exe not built (make windows MXE=/path/to/mxe)."; fi
 
 fug.exe: $(SRC) $(HDR)
-	$(MINGW) -O2 -Wall -std=c99 -static -s -o $@ $(SRC) -lm
+	$(MINGW) -O2 -Wall -std=c99 -Isrc -I../../lib/fugdraw -I../../lib/fugplot \
+	    -static -s -o $@ $(SRC) -lm
 
 # GLib runs programs on Windows through gspawn-win32-helper*.exe, which must
 # be next to gtk_fmg.exe: copy the four .exe files together

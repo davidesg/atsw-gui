@@ -37,6 +37,6 @@ void on_default_iden_checkbutton_toggled(GtkToggleButton *togglebutton, gpointer
 void on_cancel_iden_dialog_button_clicked(GtkButton *button, gpointer user_data);
 void on_ok_iden_dialog_button_clicked(GtkButton *button, gpointer user_data);
 void on_with_mdt_iden_checkbutton_toggled(GtkToggleButton *togglebutton, gpointer user_data);
-void on_data_filechooserbutton_file_set(GtkButton *button, gpointer user_data);
+void on_data_filechooserbutton_file_set(GtkFileChooserButton *button, gpointer user_data);
 
 #endif

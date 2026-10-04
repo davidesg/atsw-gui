@@ -58,6 +58,7 @@ INC = -Iinclude -I$(ENG)/include -I$(LIB)/fuepre \
 GTK_CFLAGS := $(shell pkg-config --cflags gtk+-3.0 2>/dev/null)
 GTK_LIBS   := $(shell pkg-config --libs   gtk+-3.0 2>/dev/null)
 # nlatools usa GSL para los autovalores
+GSL_CFLAGS := $(shell pkg-config --cflags gsl 2>/dev/null)
 GSL_LIBS   := $(shell pkg-config --libs gsl 2>/dev/null)
 ifeq ($(GSL_LIBS),)
   GSL_LIBS = -lgsl -lgslcblas
@@ -79,7 +80,7 @@ $(TARGET): $(SRC) $(HDR) $(LIBHDR)
 	@if [ -z "$(GTK_LIBS)" ]; then \
 	    echo "drtran_gui necesita los ficheros de desarrollo de GTK 3"; \
 	    echo "(Debian/Ubuntu: sudo apt install libgtk-3-dev)"; exit 1; fi
-	$(CC) $(CFLAGS) $(GTK_CFLAGS) $(INC) -o $@ $(SRC) $(GTK_LIBS) $(GSL_LIBS) -lm
+	$(CC) $(CFLAGS) $(GTK_CFLAGS) $(GSL_CFLAGS) $(INC) -o $@ $(SRC) $(GTK_LIBS) $(GSL_LIBS) -lm
 
 install: $(TARGET)
 	install -d $(DESTDIR)$(PREFIX)/bin

@@ -856,8 +856,8 @@ void File_PlotSer( struct Tseries *ser )
           }
        if ( fabs( (ser->data[i] - rtmp3) / rtmp4 ) >= 2.0 )
           {
-          Tmpstr[0]  = '�';
-          Tmpstr[54] = '�';
+          Tmpstr[0]  = '@';
+          Tmpstr[54] = '@';
           }
        Pos = (ser->data[i] - rtmp3) / rtmp4 * HorInc;
        { int idx = 27 + iround( Pos );

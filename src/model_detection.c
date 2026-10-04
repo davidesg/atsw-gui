@@ -39,12 +39,10 @@
 
 
 
-// Variable global para el callback de progreso
-static ProgressCallback progress_callback = NULL;
-
-// Modo de identificación Box-Jenkins: 1 = salida = argmax/shortlist del MLP (sin parsimonia).
-static int g_mlp_direct = 0;
-void set_identification_mode(int mlp_direct) { g_mlp_direct = mlp_direct; }
+/* 18.2.1: no shared mutable state. The progress callback is per thread, so
+ * two identifications on two threads do not cross; the identification mode
+ * (mlp_direct) travels as an argument, it was a global. */
+static _Thread_local ProgressCallback progress_callback = NULL;
 
 // Función para configurar el callback de progreso
 void set_progress_callback(ProgressCallback callback) {
@@ -841,7 +839,9 @@ double evaluate_model_similarity(int p, double *phi, int q, double *theta,
  * This function performs a two‑stage search:
  * 1. Coarse grid (step 0.30) over effective orders (derived from empirical ACF/PACF).
  * 2. Fine refinement (step 0.10) around the best coarse parameters.
- * If `use_mahalanobis` is non‑zero, all evaluated models are stored and later
+ * (18.2.1: the last argument is the identification mode, mlp_direct; the
+ * Mahalanobis re-ranking it once switched was never called.) Formerly: if
+ * `use_mahalanobis` is non‑zero, all evaluated models are stored and later
  * re‑evaluated using a combination of the original similarity and a Mahalanobis
  * distance computed from the empirical feature vector.
  *
@@ -853,7 +853,7 @@ double evaluate_model_similarity(int p, double *phi, int q, double *theta,
  * @param P_max           Maximum seasonal AR order to consider.
  * @param Q_max           Maximum seasonal MA order to consider (capped to 1 internally).
  * @param best_candidate  Structure where the best model found will be stored.
- * @param use_mahalanobis If non‑zero, enable Mahalanobis re‑ranking at the end.
+ * @param mlp_direct If non‑zero, the output is the option-B shortlist (no grid).
  */
 
 /* Construye el shortlist Box-Jenkins a partir de la predicción del MLP:
@@ -924,7 +924,7 @@ static void build_mlp_shortlist(const MLPPrediction *pred, int ep, int eq,
 void adaptive_grid_search(double *empirical_data, int n_data, int s,
                          int p_max, int q_max, int P_max, int Q_max,
                          ModelCandidate *best_candidate,
-                         int use_mahalanobis) {
+                         int mlp_direct) {
     if (!empirical_data || n_data <= 0 || !best_candidate) return;
 
     double acf_empirical[MAX_LAGS + 1] = {0};
@@ -1013,7 +1013,7 @@ void adaptive_grid_search(double *empirical_data, int n_data, int s,
         printf("\n");
     }
 
-    if (g_mlp_direct && mlp_ok == 0 && best_candidate->n_candidates > 0) {
+    if (mlp_direct && mlp_ok == 0 && best_candidate->n_candidates > 0) {
         // Modo identificación pura: salida = argmax del MLP + shortlist; NO grid search,
         // NO penalización de parsimonia. Coeficientes provisionales (atsw-MCP re-estima).
         OrderCandidate top = best_candidate->candidates[0];
@@ -1534,8 +1534,6 @@ int ejecutar_deteccion_automatica(const char *filename, DataParameters *params,
                                  ModelCandidate *best_candidate) {
     if (!params || !best_candidate) return 0;
 
-    // Modo identificación Box-Jenkins (salida = shortlist del MLP sin parsimonia)
-    set_identification_mode(params->mlp_direct);
 
     // Determine if we are in simulation mode (no file to read)
     int is_simulation = (filename == NULL || filename[0] == '\0');
@@ -1692,7 +1690,7 @@ int ejecutar_deteccion_automatica(const char *filename, DataParameters *params,
 
     adaptive_grid_search(params->data, params->n_points, params->s,
                         p_max, q_max, P_max_ajustado, Q_max_ajustado,
-                        best_candidate, params->use_mahalanobis);
+                        best_candidate, params->mlp_direct);
 
     // =====================================================================
     // THEORETICAL ACF/PACF FOR THE BEST MODEL

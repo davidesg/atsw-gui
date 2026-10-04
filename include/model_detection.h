@@ -130,7 +130,6 @@ typedef void (*ProgressCallback)(int stage, double progress, const char *message
 
 // Declaraciones de funciones principales
 void set_progress_callback(ProgressCallback callback);
-void set_identification_mode(int mlp_direct);
 void liberar_model_candidate(ModelCandidate *candidate);
 int load_data(const char *filename, double **data, int *n_points);
 void transform_data(DataParameters *params);
@@ -148,7 +147,7 @@ double evaluate_model_similarity(int p, double *phi, int q, double *theta,
 void adaptive_grid_search(double *empirical_data, int n_data, int s,
                          int p_max, int q_max, int P_max, int Q_max,
                          ModelCandidate *best_candidate,
-                         int use_mahalanobis);
+                         int mlp_direct);
 int ejecutar_deteccion_automatica(const char *filename, DataParameters *params,
                                  int p_max, int q_max, int P_max, int Q_max,
                                  ModelCandidate *best_candidate);

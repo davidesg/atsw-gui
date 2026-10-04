@@ -174,6 +174,8 @@ void DateToObs( int beg_per, int beg_sub, int per, int sub, int freq,
                 int *obs_no );
 real Mean( real *data, int nobs );
 real Stdev( real *data, int nobs );
+void Ccf( real *data1, real *data2, int nobs, int lags, real *corr,
+          real mean1, real mean2, real sd1, real sd2 );
 int  MaxVal( real *data, int nobs );
 int  MinVal( real *data, int nobs );
 real Skew( real *data, int nobs );

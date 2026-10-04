@@ -64,6 +64,10 @@ SeasonalDetectionResult* detect_seasonality_harmonic_regression(const char *file
                                                                int apply_log,
                                                                int s);
 void free_seasonal_detection_result(SeasonalDetectionResult *result);
+
+/* La lectura del fichero que usa detect_seasonality_harmonic_regression().
+   En el motor es un stub (src/deseason.c). */
+int load_data(const char *filename, double **data, int *n);
 void print_seasonal_detection_result(SeasonalDetectionResult *result);
 
 // Funciones de transformación de matrices

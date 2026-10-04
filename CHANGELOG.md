@@ -8,6 +8,58 @@ Leyenda de estado de cada entrada de 18.2:
 
 ---
 
+## [18.2.1] — 2026-10-04 — The identifier as an engine
+
+A refactoring for atsw-gui's `engines/art` (docs/ESTUDIO-identificador.md
+there). **No result moves:** `tests/regression_identify.py` (114 runs through
+the CLI: three real series, the 12 non-seasonal models, the 8 seasonal cases,
+mlp-direct and classic) gives 0 differences after every step, and the
+seasonal battery still gives 80 %.
+
+### Added — `art_identify()` (`include/art.h`, `src/art_api.c`)
+
+The engine on an array, with a result instead of stdout:
+
+- **Call:** `art_identify(x, n, &options, &result)` and `art_free_result`.
+- **The result carries:**
+  - the seasonal HAC F test (F, p, dummies);
+  - ADF and KPSS with their critical values and lags;
+  - the empirical ACF/PACF and the band;
+  - every candidate with its coefficients, its conditional AICc and its
+    theoretical ACF/PACF (only the best one had them);
+  - the messages.
+- **Options:** log, d, D, s, the limits, mlp_direct, run_tests, harmonics
+  (auto/on/off: off for residuals whose harmonics are already modelled),
+  quiet, cancel and a progress callback.
+- **Reentrant.** The per-call context is thread-local, `g_mlp_direct` is an
+  argument now, and the progress callback is per thread. Two threads give
+  the serial answer.
+- **Return codes:** OK, bad arguments, data (log of a non-positive value, too
+  few observations), nothing scored, cancelled.
+- **Tested** by `tests/api_check.c`, which compares the result with the CLI's
+  shortlist on GY, PS and WTI, and checks the errors, s = 24, cancel and
+  threads.
+
+### Changed
+
+- **The data are read once.** The engine opened the file three times
+  (seasonal test, unit roots, main load), and the CLI a fourth. The seasonal
+  test takes an array (`detect_seasonality_from_array`); the CLI's file mode
+  goes through `art_identify` on the array it read.
+- **Any s ≥ 2.** The seasonal test stopped at 12; s = 24 now runs.
+- **The log of a non-positive value is an error.** It used to leave the
+  series silently in levels.
+- **printf goes through `art_log`,** so `quiet` silences the engine.
+
+### Removed
+
+- The `--deseasonalize` path, not taken since 18.2.
+- The Mahalanobis re-ranking, never called, and its `ModelRecord`.
+- `apply_weights_to_features`.
+- An undefined plot declaration.
+- `send_plot_data` does nothing without a listener; it allocated and lost
+  the plot.
+
 ## [18.2] — sin publicar — Corrección estadística del identificador
 
 Release de **mantenimiento** sobre ART_18 (18.0, esta carpeta). No incluye la

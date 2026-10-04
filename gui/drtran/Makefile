@@ -94,4 +94,9 @@ clean:
 check:
 	sh tests/run_tests.sh
 
-.PHONY: check
+# Solo la ventana conducida desde el codigo (run_tests.sh tambien la llama al
+# final). Necesita servidor grafico y drtran en el PATH o en engines/drtran/bin.
+check-gui:
+	sh tests/run_gui_tests.sh
+
+.PHONY: check check-gui

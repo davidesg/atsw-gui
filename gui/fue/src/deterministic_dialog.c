@@ -421,6 +421,15 @@ static void fill_intervention_from_dialog(int idx, FueContext *ctx) {
 /* Save a new intervention (appended at the end) */
 /* ========================================================================= */
 void save_new_int(FueContext *ctx) {
+    /* EL HUECO DE DETRAS NO ES DE NADIE, aunque tenga punteros dentro.
+     *
+     * Tras un Remove (up_ints copia hacia arriba) es una COPIA del ultimo,
+     * y tras cargar otro modelo con menos deterministas guarda vectores que
+     * free_model_globals ya libero. fill_intervention_from_dialog() libera
+     * lo que encuentra antes de rellenar, asi que aqui liberaba los del
+     * vecino o liberaba dos veces: el programa se caia al cargar el
+     * siguiente modelo. Lo prueba tests/test_operar.c.                 */
+    memset(&It[NdetVar], 0, sizeof It[NdetVar]);
     fill_intervention_from_dialog(NdetVar, ctx);
 
     /* Add to tree view */
@@ -477,15 +486,24 @@ void save_insert_int(FueContext *ctx) {
 
     int number;
     gtk_tree_model_get(model, &iter, COL_NUM, &number, -1);
-    gtk_list_store_insert(GTK_LIST_STORE(model), &iter, number);
+    /* DELANTE DEL ELEGIDO, en el arbol Y en It[], en la misma posicion.
+     *
+     * La fila se insertaba en la posicion `number` (detras del elegido) y
+     * el modelo se rellenaba en number-1 (encima del elegido) desplazando
+     * desde number: el elegido se perdia, el de detras quedaba DOS VECES
+     * --con los mismos vectores-- y el arbol decia otra cosa que el .inp.
+     * Al cargar el siguiente modelo, esos vectores se liberaban dos veces.
+     * Los operadores ya insertaban delante (insert_position = number-1). */
+    gtk_list_store_insert(GTK_LIST_STORE(model), &iter, number - 1);
     gtk_tree_selection_select_iter(sel, &iter);
     reload_number_int(model, iter);   /* renumber all rows */
 
     /* Shift existing interventions down */
-    down_ints(number, NdetVar);
+    down_ints(number - 1, NdetVar);
     NdetVar++;
 
-    /* Fill the new intervention at position number-1 */
+    /* El hueco es una copia del que bajo: sus vectores son de el. */
+    memset(&It[number - 1], 0, sizeof It[number - 1]);
     fill_intervention_from_dialog(number - 1, ctx);
 
     /* Update the tree view row */

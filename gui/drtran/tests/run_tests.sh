@@ -10,6 +10,10 @@ L="$TOP/../../lib"; E="$TOP/../../engines/drtran"
 # hacia (rm -rf "$WORK"); esta no.
 W="$TOP/tests/work"; rm -rf "$W"; mkdir -p "$W"
 CC=${CC:-cc}
+# GSL por pkg-config: con Homebrew (macOS) sus cabeceras y su biblioteca no
+# estan en las rutas por defecto del compilador. Van en CC porque todas las
+# compilaciones de abajo la necesitan.
+CC="$CC $(pkg-config --cflags gsl 2>/dev/null) $(pkg-config --libs-only-L gsl 2>/dev/null)"
 GTK=$(pkg-config --cflags --libs gtk+-3.0 2>/dev/null) || { echo "hace falta GTK3"; exit 0; }
 
 $CC -O0 -g -w -I"$TOP/include" -I"$E/include" -I"$L/lik" -I"$L/fuepre" -I"$L/dates" \
@@ -420,3 +424,9 @@ $CC -O2 -Wall -Wextra -I"$TOP/../atsw/include" -I"$L/proyecto" -I"$L/outdiag" \
     "$L/dictamen/dictamen.c" "$L/intervencion/intervencion.c" "$L/dates/dates.c" \
     -o "$W/test_atsw" $(pkg-config --libs gtk+-3.0) -lm || exit 1
 "$W/test_atsw" || exit 1
+
+# --- la ventana, conducida desde el codigo ----------------------------------
+# Las siete pestanas con sus botones de verdad y el drtran del PATH. Sin
+# servidor grafico se salta con una nota. Ver tests/run_gui_tests.sh.
+echo
+sh "$TOP/tests/run_gui_tests.sh" || exit 1

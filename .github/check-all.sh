@@ -13,7 +13,26 @@ LIMITE=${LIMITE:-900}
 # se saltan en silencio.
 R=$(pwd)
 export PATH="$R/engines/fue/bin:$R/engines/fuf/bin:$R/engines/fug:$R/engines/drtran/bin:$R/engines/drvarma/bin:$R/engines/drvec/bin:$PATH"
+
+# En Windows, GLib busca los esquemas de GSettings y los iconos junto al
+# ejecutable (../share). En el arbol de construccion no estan, y fue_gui se
+# caia al abrir el selector de ficheros ("No GSettings schemas are
+# installed"). Un paquete para Windows tiene que llevar esa carpeta; aqui se
+# apunta a la de MSYS2.
+case "$(uname -s)" in
+    MINGW*|MSYS*)
+        export XDG_DATA_DIRS="$(cygpath -m "$MSYSTEM_PREFIX/share")"
+        export GSETTINGS_SCHEMA_DIR="$(cygpath -m "$MSYSTEM_PREFIX/share/glib-2.0/schemas")" ;;
+esac
 fallan=()
+
+# Que se ve colgado: el arbol de procesos, antes de matarlo. Sin esto una
+# bateria parada no dice nada -- su salida va con bufer y se pierde.
+ensena_arbol() {
+    local p
+    ps -o pid=,etime=,args= -p "$1" 2>/dev/null | sed "s/^/    $2/"
+    for p in $(pgrep -P "$1" 2>/dev/null); do ensena_arbol "$p" "$2  "; done
+}
 
 mata_arbol() {
     local p
@@ -27,7 +46,7 @@ corre() {        # corre NOMBRE ORDEN...
     local t0=$SECONDS
     "$@" &
     local pid=$!
-    ( sleep "$LIMITE"; echo "::error::$nombre: mas de $LIMITE s, la paro"; mata_arbol "$pid" ) &
+    ( sleep "$LIMITE"; echo "::error::$nombre: mas de $LIMITE s, la paro"; ensena_arbol "$pid" ""; mata_arbol "$pid" ) &
     local vig=$!
     wait "$pid"; local rc=$?
     mata_arbol "$vig" 2>/dev/null; wait "$vig" 2>/dev/null
@@ -44,6 +63,11 @@ for d in engines/fue engines/fuf engines/fug engines/drtran engines/drvarma \
     corre "$d" sh -c "cd $d && sh tests/run_tests.sh"
 done
 corre engines/drvec make -s -C engines/drvec test
+
+# Los GUIs conducidos desde el codigo que no van dentro de una bateria de
+# arriba (los de gui/fue y gui/drtran si van).
+corre "gui/fug (ventana)"     sh -c "cd gui/fug && sh tests/run_gui_tests.sh"
+corre "drvarma_gui (ventana)" sh -c "cd engines/drvarma && sh tests/gui/run_gui_tests.sh"
 
 echo
 if [ ${#fallan[@]} -eq 0 ]; then echo "todas las baterias pasan"

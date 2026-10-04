@@ -6,6 +6,7 @@
 #
 #   make            gtk_fmg
 #   make clean
+#   make check      la prueba de la ventana (tests/run_gui_tests.sh)
 #   make install    en $(PREFIX)/bin   (por omision /usr/local)
 #
 # Lo compartido viene de lib/ -- preview.c es LITERALMENTE el mismo fichero que
@@ -62,7 +63,13 @@ install: $(TARGET)
 	install -d $(PREFIX)/bin
 	install -m 755 $(TARGET) $(PREFIX)/bin/
 
+# La ventana conducida desde el codigo, con fug de verdad: tests/test_gui.c.
+# Sin servidor grafico lo dice y no falla.
+check:
+	sh tests/run_gui_tests.sh
+
 clean:
 	rm -f $(TARGET)
+	rm -rf tests/work
 
-.PHONY: all install clean
+.PHONY: all install clean check

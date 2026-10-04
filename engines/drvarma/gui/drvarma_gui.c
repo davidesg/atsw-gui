@@ -123,7 +123,11 @@ Options opts = {
     #ifdef _WIN32
     .drv_path = "drvarma.exe",
     #else
-    .drv_path = "./drvarma",
+    /* Sin "./": con una barra g_find_program_in_path() no mira el PATH,
+       solo el directorio actual, y el GUI lanzado desde otro sitio no
+       encontraba el motor instalado. Sin ella se busca en el PATH y, si
+       no esta, run_drvarma() sigue probando el directorio actual. */
+    .drv_path = "drvarma",
     #endif
     .freq = 12,
     .start_year = 2000,
@@ -200,13 +204,11 @@ static gboolean load_data_file(const char *filename) {
     FILE *f = fopen(filename, "r");
     if (!f) return FALSE;
 
-    /* Free generic series names from a previous load (reload). */
-    if (data.series_names) {
-        for (int j = 0; j < data.n_var; j++) g_free(data.series_names[j]);
-        g_free(data.series_names);
-        data.series_names = NULL;
-    }
-
+    /* Se lee en una matriz propia y los datos anteriores solo se sustituyen
+       si el fichero nuevo es bueno. Antes se liberaban los nombres y se
+       ponia data.data a NULL a mitad de lectura: tras un fichero malo
+       quedaban n_obs/n_var de los datos viejos sin datos, y el siguiente
+       boton (Test Seasonality, Run...) se caia. */
     /* Forzar locale numérico a C (punto decimal) para consistencia entre plataformas */
     setlocale(LC_NUMERIC, "C");
     
@@ -234,17 +236,16 @@ static gboolean load_data_file(const char *filename) {
     if (n_rows < 2) { fclose(f); return FALSE; }
 
     /* Allocate data matrix */
-    data.data = g_new(double *, n_rows);
+    double **mat = g_new(double *, n_rows);
     for (int i = 0; i < n_rows; i++)
-        data.data[i] = g_new(double, n_cols);
+        mat[i] = g_new(double, n_cols);
 
     /* Second pass: read numbers using strtod (robusto, funciona en todas las plataformas) */
     rewind(f);
     for (int i = 0; i < n_rows; i++) {
         if (!fgets(line, sizeof(line), f)) {
-            for (int k = 0; k <= i; k++) g_free(data.data[k]);
-            g_free(data.data);
-            data.data = NULL;
+            for (int k = 0; k < n_rows; k++) g_free(mat[k]);
+            g_free(mat);
             fclose(f);
             return FALSE;
         }
@@ -264,26 +265,36 @@ static gboolean load_data_file(const char *filename) {
             char *endptr;
             double val = strtod(p, &endptr);
             if (p == endptr) {
-                for (int k = 0; k <= i; k++) g_free(data.data[k]);
-                g_free(data.data);
-                data.data = NULL;
+                for (int k = 0; k < n_rows; k++) g_free(mat[k]);
+                g_free(mat);
                 fclose(f);
                 return FALSE;
             }
-            data.data[i][j++] = val;
+            mat[i][j++] = val;
             p = endptr;
         }
         
         if (j != n_cols) {
-            for (int k = 0; k <= i; k++) g_free(data.data[k]);
-            g_free(data.data);
-            data.data = NULL;
+            for (int k = 0; k < n_rows; k++) g_free(mat[k]);
+            g_free(mat);
             fclose(f);
             return FALSE;
         }
     }
     fclose(f);
 
+    /* El fichero es bueno: ahora si se sueltan los datos anteriores. */
+    if (data.data) {
+        for (int i = 0; i < data.n_obs; i++) g_free(data.data[i]);
+        g_free(data.data);
+    }
+    if (data.series_names) {
+        for (int j = 0; j < data.n_var; j++) g_free(data.series_names[j]);
+        g_free(data.series_names);
+    }
+    g_free(data.input_filename);
+
+    data.data = mat;
     data.n_obs = n_rows;
     data.n_var = n_cols;
     data.input_filename = g_strdup(filename);
@@ -984,9 +995,18 @@ static void run_drvarma(const char *inp_base, const char *inp_dir) {
     g_print("DEBUG: Directorio de trabajo: %s\n", inp_dir);
 
     GError *error = NULL;
+    gint wait_status = 0;
     gboolean ok = g_spawn_sync(inp_dir, argv, NULL,
                                G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL,
-                               NULL, NULL, NULL, NULL, NULL, &error);
+                               NULL, NULL, NULL, NULL, &wait_status, &error);
+    /* Lanzarlo no es que acabe bien: un motor que sale con error o muere
+       no puede anunciarse como "finished successfully" (la rama de Windows
+       ya miraba el codigo de salida). */
+#if GLIB_CHECK_VERSION(2, 70, 0)
+    if (ok) ok = g_spawn_check_wait_status(wait_status, &error);
+#else
+    if (ok) ok = g_spawn_check_exit_status(wait_status, &error);
+#endif
 
     // Liberar argumentos (argv[0] se libera con full_path)
     for (int i = 1; argv[i] != NULL; i++) g_free(argv[i]);
@@ -1343,7 +1363,8 @@ static void on_select_var_order(GtkWidget *widget, gpointer user_data) {
     if (!usedata || nobs_eff < maxlag + 2) {
         if (usedata) free_processed_matrix(usedata, nobs_eff);
         gtk_label_set_text(GTK_LABEL(status_label), "Not enough observations after preprocessing.");
-        gtk_widget_destroy(dialog);
+        /* El dialogo ya se destruyo nada mas leerlo: destruirlo otra vez
+           era usar memoria liberada. */
         return;
         }
 
@@ -1624,7 +1645,10 @@ static void show_data_properties_dialog(GtkWidget *parent) {
             if (btn_run) {
         gtk_widget_set_sensitive(btn_run, TRUE);
     }
-        
+        /* Run & Forecast corre lo mismo que Run: se enciende con el. */
+        if (btn_run_forecast)
+            gtk_widget_set_sensitive(btn_run_forecast, TRUE);
+
         gtk_label_set_text(GTK_LABEL(status_label), "Data properties set. Ready.");
     }
 
@@ -1633,6 +1657,13 @@ static void show_data_properties_dialog(GtkWidget *parent) {
 }
 
 /* ---------- Callback to set drvarma executable path ---------- */
+/* Lo que se escribe en la entrada es el motor que se usa. Antes la entrada
+   se podia editar pero nadie la leia: solo "Browse..." cambiaba la ruta. */
+static void on_drv_path_changed(GtkEditable *editable, gpointer user_data) {
+    g_strlcpy(opts.drv_path, gtk_entry_get_text(GTK_ENTRY(editable)),
+              sizeof(opts.drv_path));
+}
+
 static void on_set_drv_path(GtkWidget *widget, gpointer user_data) {
     GtkWidget *dialog = gtk_file_chooser_dialog_new("Select drvarma executable",
                                                     GTK_WINDOW(main_window),
@@ -1975,6 +2006,7 @@ static void create_ui(GtkApplication *app, gpointer user_data) {
     gtk_box_pack_start(GTK_BOX(hbox_path), gtk_label_new("drvarma executable:"), FALSE, FALSE, 0);
     drv_path_entry = gtk_entry_new();
     gtk_entry_set_text(GTK_ENTRY(drv_path_entry), opts.drv_path);
+    g_signal_connect(drv_path_entry, "changed", G_CALLBACK(on_drv_path_changed), NULL);
     gtk_box_pack_start(GTK_BOX(hbox_path), drv_path_entry, TRUE, TRUE, 0);
     GtkWidget *btn_browse = gtk_button_new_with_label("Browse...");
     g_signal_connect(btn_browse, "clicked", G_CALLBACK(on_set_drv_path), NULL);
@@ -2222,7 +2254,10 @@ static void create_ui(GtkApplication *app, gpointer user_data) {
     gtk_grid_attach(GTK_GRID(grid_forecast), spin_fc_seasonal, 1, r_fc++, 1, 1);
 
         // Botón "Run & Forecast"
-    GtkWidget *btn_run_forecast = gtk_button_new_with_label("Run & Forecast");
+    /* El global, no una variable local que lo tape: si no, el global se
+       quedaba en NULL, nadie encendia el boton al poner las propiedades y
+       "Run & Forecast" no se podia pulsar nunca. */
+    btn_run_forecast = gtk_button_new_with_label("Run & Forecast");
     gtk_widget_set_sensitive(btn_run_forecast, opts.props_set);
     g_signal_connect(btn_run_forecast, "clicked", G_CALLBACK(on_run_and_forecast), NULL);
     gtk_grid_attach(GTK_GRID(grid_forecast), btn_run_forecast, 0, r_fc++, 2, 1);

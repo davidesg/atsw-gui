@@ -140,6 +140,35 @@ else
     echo "note: sin fue instalado no se puede probar la ventana con el motor"
 fi
 
+# --------------------------------------------------------------------------
+# EL MANEJO ENTERO (tests/test_operar.c): abrir, construir el modelo con sus
+# dialogos, guardar, estimar, prever, las ventanas de graficos y de
+# analisis, y lo que pasa cuando algo sale mal. Con fue y fuf de verdad: se
+# salta, diciendolo, si no estan los dos. Los dialogos modales los contesta
+# la propia prueba.
+# --------------------------------------------------------------------------
+$CC -O0 -g -Wall -I"$TOP/include" $LIB_INC $GTK_CFLAGS \
+    "$TOP/tests/test_operar.c" $GUI_SRCS \
+    -o "$WORK/test_operar" $GTK_LIBS -lm 2> "$WORK/operar_build.txt" ||
+    { cat "$WORK/operar_build.txt"; exit 1; }
+
+if command -v fue > /dev/null 2>&1 && command -v fuf > /dev/null 2>&1; then
+    mkdir -p "$WORK/operar"
+    "$WORK/test_operar" "$TOP/data" "$WORK/operar" 2> "$WORK/operar_err.txt" > "$WORK/operar.txt"
+    s=$?
+    if [ $s = 0 ]; then
+        grep -E '^no hay|comprobaciones' "$WORK/operar.txt" | sed 's/^/  manejo: /'
+    else
+        grep -E '^FAIL|^no hay' "$WORK/operar.txt"
+        # Si se cayo, que se vea donde: lo ultimo que dijo.
+        grep -q '^FAIL' "$WORK/operar.txt" ||
+            { echo "FAIL: test_operar termino con estado $s"; tail -n 5 "$WORK/operar.txt"; tail -n 5 "$WORK/operar_err.txt"; }
+        rc=1
+    fi
+else
+    echo "note: sin fue y fuf en el PATH no se prueba el manejo de la ventana"
+fi
+
 # The engines the GUI will really call: it must find them and they must
 # answer with a status it understands. Only a note when they are not there.
 for e in fue fuf; do

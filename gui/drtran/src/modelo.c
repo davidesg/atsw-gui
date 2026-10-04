@@ -1317,9 +1317,10 @@ static void avisa_orden( Mtram *m, const char *path )
 
 static void on_abrir( GtkButton *b, Mtram *m )
 {
-    CnsError e;
-    gchar   *p;
-    int      nc;
+    CnsError   e;
+    gchar     *p;
+    int        nc;
+    SlotTable *antes;
 
     if (!m->mod.vale) {
         preview_show_status( m, "Carga las series y define la red primero: el "
@@ -1330,11 +1331,19 @@ static void on_abrir( GtkButton *b, Mtram *m )
     p = elige( m, GTK_FILE_CHOOSER_ACTION_OPEN, "Abrir restricciones" );
     if (!p) return;
 
-    construye( m );                       /* partir de la tabla limpia */
+    /* LA TABLA DE ANTES, para volver a ella si la lectura falla. Rehacerla
+     * con construye() no servia: construye ARRASTRA las restricciones de la
+     * tabla vigente (slots_carry), y la vigente ya llevaba aplicadas las
+     * lineas buenas que cns_read leyo antes de la mala. Un .cns con
+     * «q[2,1] = 0.3» y luego una errata dejaba q[2,1] fija en 0.3, en
+     * silencio y con la barra diciendo que el fichero no valia.        */
+    antes = g_new( SlotTable, 1 );
+    memcpy( antes, &m->mod.st, sizeof *antes );
+    construye( m );
     nc = cns_read( p, &m->mod.st, &e );
     if (nc < 0) {
         por_que( m, &e, p );
-        construye( m );                   /* no dejar media aplicada   */
+        memcpy( &m->mod.st, antes, sizeof *antes );  /* no dejar media aplicada */
     } else {
         g_free( m->mod.path );
         m->mod.path = g_strdup( p );
@@ -1344,6 +1353,7 @@ static void on_abrir( GtkButton *b, Mtram *m )
     }
     refresca_lista( m );
     refresca_cuenta( m );
+    g_free( antes );
     g_free( p );
 }
 

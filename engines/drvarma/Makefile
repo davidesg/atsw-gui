@@ -210,6 +210,17 @@ install: $(DRV_EXEC)
 uninstall:
 	rm -f /usr/local/bin/drvarma$(EXE_EXT)
 
+# Pruebas conducidas del GUI (tests/gui): se levanta drvarma_gui de verdad y
+# se maneja desde el codigo. El guion compila la prueba con los MISMOS flags
+# que el GUI, que pide aqui (gui-flags) para no copiarlos y que se desfasen.
+check-gui: $(DRV_EXEC)
+	sh tests/gui/run_gui_tests.sh
+
+gui-flags:
+	@echo "CC=$(CC)"
+	@echo "CFLAGS=$(GUI_CFLAGS)"
+	@echo "LIBS=$(GUI_LIBS)"
+
 # Help
 help:
 	@echo "Available targets:"
@@ -233,4 +244,4 @@ $(BUILD_DIR)/elfvarma.o: $(INCLUDE_DIR)/main.h
 $(BUILD_DIR)/drvmlest.o: $(INCLUDE_DIR)/main.h
 $(BUILD_DIR)/nlatools.o: $(INCLUDE_DIR)/main.h
 
-.PHONY: all drvarma gui clean distclean install uninstall help FORCE
+.PHONY: all drvarma gui check-gui gui-flags clean distclean install uninstall help FORCE

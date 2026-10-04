@@ -12,6 +12,17 @@ R=$(pwd)
 mkdir -p capturas
 export PATH="$R/engines/fue/bin:$R/engines/fuf/bin:$R/engines/fug:$R/engines/drtran/bin:$R/engines/drvarma/bin:$PATH"
 
+# En Windows, GLib busca los esquemas de GSettings y los iconos junto al
+# ejecutable (../share). En el arbol de construccion no estan, y fue_gui se
+# caia al abrir el selector de ficheros ("No GSettings schemas are
+# installed"). Un paquete para Windows tiene que llevar esa carpeta; aqui se
+# apunta a la de MSYS2.
+case "$(uname -s)" in
+    MINGW*|MSYS*)
+        export XDG_DATA_DIRS="$(cygpath -m "$MSYSTEM_PREFIX/share")"
+        export GSETTINGS_SCHEMA_DIR="$(cygpath -m "$MSYSTEM_PREFIX/share/glib-2.0/schemas")" ;;
+esac
+
 case "$(uname -s)" in
     MINGW*|MSYS*) EXE=.exe ;;
     *)            EXE=   ;;

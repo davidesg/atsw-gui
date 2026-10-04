@@ -48,18 +48,32 @@ jobs:
         with:
           name: capturas-linux
           path: capturas/
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: pruebas-linux
+          path: |
+            engines/*/tests/work/
+            gui/*/tests/work/
+            engines/drvarma/tests/gui/work/
+          if-no-files-found: ignore
 
   macos:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - name: Dependencias
-        run: brew install pkg-config gtk+3 gsl adwaita-icon-theme
+        # coreutils: las baterias usan timeout(1), que macOS no trae.
+        run: |
+          brew install pkg-config gtk+3 gsl adwaita-icon-theme coreutils
+          echo "$(brew --prefix coreutils)/libexec/gnubin" >> "$GITHUB_PATH"
       - name: Compilar
         run: bash .github/build-all.sh
       - name: Baterias
         if: always()
         timeout-minutes: 150
+        env:
+          BANCO_DIFF: 60
         run: bash .github/check-all.sh
       - name: GUIs
         if: always()
@@ -69,6 +83,15 @@ jobs:
         with:
           name: capturas-macos
           path: capturas/
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: pruebas-macos
+          path: |
+            engines/*/tests/work/
+            gui/*/tests/work/
+            engines/drvarma/tests/gui/work/
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -103,6 +126,8 @@ jobs:
         if: always()
         timeout-minutes: 150
         run: bash .github/check-all.sh
+        env:
+          BANCO_DIFF: 60
       - name: GUIs
         if: always()
         run: bash .github/gui-humo.sh
@@ -111,6 +136,15 @@ jobs:
         with:
           name: capturas-windows
           path: capturas/
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: pruebas-windows
+          path: |
+            engines/*/tests/work/
+            gui/*/tests/work/
+            engines/drvarma/tests/gui/work/
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         if: always()
         with:

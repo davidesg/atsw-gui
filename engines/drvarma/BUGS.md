@@ -404,6 +404,12 @@ VAR(3) with mean, residual ACF(12) (band ±0.136): IPC_FR +0.147 in levels,
 Every number of a fit with `-deseason`: the estimates, the `.out`, the
 `.forecast`, the recursive forecasts.
 
+**And the "auto" decision.** `deseasonalize_raw` decides with the OLS F. The
+port decides with art's identification test, the HAC F (art BUG-0206: the
+mechanism art and drvarma share; `deseason.seasonal_f_hac`, Newey-West with
+art's 1-3 lags). The C should too, keeping the OLS F in its printout only if
+the parity tests still need it.
+
 ## BUG (HIGH) — Hosking's Q uses df = m²·s on a fitted model's residuals; it must subtract the estimated ARMA coefficients
 
 **Found:** 2026-10-04 (Python port, `drvarma-python` BUG-0015; fixed there in 0.2.0).

@@ -11,9 +11,12 @@
 
 name: build
 
+# push solo en main: en una rama con PR abierto, push y pull_request lanzaban
+# DOS vueltas identicas, y los minutos de macOS cuentan x10 en un repositorio
+# privado. Las ramas sin PR se lanzan a mano (workflow_dispatch).
 on:
   push:
-    branches: [ "**" ]
+    branches: [ main ]
   pull_request:
   workflow_dispatch:
 

@@ -31,7 +31,8 @@ jobs:
       - name: Compilar
         run: bash .github/build-all.sh
       - name: Baterias
-        run: make check
+        if: always()
+        run: bash .github/check-all.sh
 
   macos:
     runs-on: macos-latest
@@ -41,6 +42,9 @@ jobs:
         run: brew install pkg-config gtk+3 gsl
       - name: Compilar
         run: bash .github/build-all.sh
+      - name: Baterias
+        if: always()
+        run: bash .github/check-all.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -66,11 +70,14 @@ jobs:
           msystem: UCRT64
           update: true
           install: >-
-            make git
+            make git diffutils bc gawk sed grep coreutils
           pacboy: >-
-            gcc:p pkgconf:p gtk3:p gsl:p zlib:p
+            gcc:p pkgconf:p gtk3:p gsl:p zlib:p python:p
       - name: Compilar
         run: bash .github/build-all.sh
+      - name: Baterias
+        if: always()
+        run: bash .github/check-all.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:

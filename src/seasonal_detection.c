@@ -17,6 +17,9 @@
 
 #include "seasonal_detection.h"
 #include "model_detection.h"   // para load_data, MAX_DATA_POINTS, etc.
+#include "art.h"
+/* 18.2.1: stdout is silenced by ArtOptions.quiet. */
+#define printf art_log
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_matrix.h>
@@ -535,10 +538,24 @@ double f_distribution_critical_value(int df1, int df2, double alpha) {
 }
 
 /* ---------- Función principal de detección estacional (punto de entrada para ART) ---------- */
+/* The file entry point (the old GUI's): load, then the array one. */
 SeasonalDetectionResult* detect_seasonality_harmonic_regression(const char *filename,
                                                                int d,
                                                                int apply_log,
                                                                int s) {
+    double *data;
+    int n;
+    if (!load_data(filename, &data, &n)) return NULL;
+    printf("Cargados %d puntos\n", n);
+    SeasonalDetectionResult *r = detect_seasonality_from_array(data, n, d, apply_log, s);
+    free(data);
+    return r;
+}
+
+/* 18.2.1: the test works on an array, so the engine reads its data once.
+ * `data` is not modified (a copy is transformed). */
+SeasonalDetectionResult* detect_seasonality_from_array(const double *data, int n_original,
+                                                       int d, int apply_log, int s) {
     SeasonalDetectionResult *result = malloc(sizeof(SeasonalDetectionResult));
     if (!result) {
         printf("Error: Memory allocation failed for result structure\n");
@@ -549,23 +566,17 @@ SeasonalDetectionResult* detect_seasonality_harmonic_regression(const char *file
     result->num_harmonics = s - 1;
     result->seasonal_period = s;
 
-    if (s < 2 || s > 12) {
-        result->message = strdup("Error: Seasonal period must be between 2 and 12");
+    if (s < 2) {   /* 18.2.1: any s >= 2, as art-python (it stopped at 12) */
+        result->message = strdup("Error: Seasonal period must be at least 2");
         free(result);
         return NULL;
     }
 
     printf("Iniciando detección estacional (base diferenciada): s=%d, d=%d, log=%d\n", s, d, apply_log);
 
-    // Cargar datos
-    double *original_data;
-    int n_original;
-    if (!load_data(filename, &original_data, &n_original)) {
-        result->message = strdup("Error: Failed to load data file");
-        free(result);
-        return NULL;
-    }
-    printf("Cargados %d puntos\n", n_original);
+    double *original_data = malloc(n_original * sizeof(double));
+    if (!original_data) { free(result); return NULL; }
+    memcpy(original_data, data, n_original * sizeof(double));
 
     // Transformación logarítmica (reescalada a porcentaje)
     if (apply_log) {

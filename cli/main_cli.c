@@ -21,6 +21,7 @@
 #include "model_detection.h"
 #include "ARMA.h"
 #include "seasonal_detection.h"
+#include "art.h"
 
 static void convolve_polynomials(double *a, int deg_a, double *b, int deg_b, double *c, int *deg_c);
 
@@ -178,13 +179,35 @@ typedef struct {
 static int detect_series(double *data, int n, DataParameters *params,
                          int p_max, int q_max, int P_max, int Q_max,
                          ModelCandidate *candidate, const char *filename) {
+    /* 18.2.1: a file goes through art_identify, on the array this program
+     * has already read (the engine used to open the file again). The
+     * simulation mode keeps the old path: no tests, the caller's array. */
+    if (filename && filename[0]) {
+        ArtOptions o;
+        art_default_options(&o, params->s);
+        o.apply_log = params->apply_log;
+        o.d = params->d;
+        o.D = params->D;
+        o.p_max = p_max; o.q_max = q_max; o.P_max = P_max; o.Q_max = Q_max;
+        o.mlp_direct = params->mlp_direct;
+        o.on_progress = cli_progress_callback;
+        ArtResult r;
+        int rc = art_identify(data, n, &o, &r);
+        if (rc != ART_OK) {
+            for (int i = 0; i < r.n_messages; i++) fprintf(stderr, "%s\n", r.messages[i]);
+            art_free_result(&r);
+            return 0;
+        }
+        *candidate = r.model;          /* the caller frees it */
+        return 1;
+    }
     set_progress_callback(cli_progress_callback);
 
     params->data = data;
     params->n_points = n;
 
     int success = ejecutar_deteccion_automatica(
-        (filename && filename[0]) ? filename : "", params, p_max, q_max, P_max, Q_max, candidate);
+        "", params, p_max, q_max, P_max, Q_max, candidate);
     params->data = NULL;
     return success;
 }

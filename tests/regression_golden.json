@@ -1,0 +1,1003 @@
+{
+"real:GY|mlp": {
+"hac": "HAC F=21.5328 (p=0.0000)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0000)",
+"adf": "ADF: estadístico=-3.7459, retardos=3, crítico 5%=-2.9086, rechaza H0=SÍ, p=0.0035",
+"kpss": "KPSS: estadístico=0.2662, retardos=3, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=1, q=1, P=0, Q=0",
+"shortlist": "MLP shortlist (13): (1,0)(0,0) sim=0.944 wAICc=0.336 (0,1)(0,0) sim=0.910 wAICc=0.103 (1,1)(0,0) sim=0.933 wAICc=0.101 (2,1)(0,0) sim=0.915 wAICc=0.032 (1,0)(1,0) sim=0.872 wAICc=0.153 (1,0)(0,1) sim=0.872 wAICc=0.144 (1,2)(0,0) sim=0.904 wAICc=0.012 (0,0)(0,0) sim=0.858 wAICc=0.012 (0,1)(1,0) sim=0.844 wAICc=0.057 (2,2)(0,0) sim=0.820 wAICc=0.006 (0,0)(1,0) sim=0.755 wAICc=0.008 (0,0)(0,1) sim=0.755 wAICc=0.006 (1,1)(1,0) sim=0.760 wAICc=0.030",
+"ident": "MLP-direct identification: (1,0)(0,0)s=4 sim=0.9440 wAICc=0.3364",
+"det": "1,0,0,0,0.944037"
+},
+"real:GY|classic": {
+"hac": "HAC F=21.5328 (p=0.0000)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0000)",
+"adf": "ADF: estadístico=-3.7459, retardos=3, crítico 5%=-2.9086, rechaza H0=SÍ, p=0.0035",
+"kpss": "KPSS: estadístico=0.2662, retardos=3, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=1, q=1, P=0, Q=0",
+"shortlist": "MLP shortlist (13): (1,0)(0,0) sim=0.944 wAICc=0.336 (0,1)(0,0) sim=0.910 wAICc=0.103 (1,1)(0,0) sim=0.933 wAICc=0.101 (2,1)(0,0) sim=0.915 wAICc=0.032 (1,0)(1,0) sim=0.872 wAICc=0.153 (1,0)(0,1) sim=0.872 wAICc=0.144 (1,2)(0,0) sim=0.904 wAICc=0.012 (0,0)(0,0) sim=0.858 wAICc=0.012 (0,1)(1,0) sim=0.844 wAICc=0.057 (2,2)(0,0) sim=0.820 wAICc=0.006 (0,0)(1,0) sim=0.755 wAICc=0.008 (0,0)(0,1) sim=0.755 wAICc=0.006 (1,1)(1,0) sim=0.760 wAICc=0.030",
+"det": "1,1,0,0,0.952188"
+},
+"real:PS|mlp": {
+"hac": "HAC F=90.1037 (p=0.0000)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0000)",
+"adf": "ADF: estadístico=-2.8484, retardos=12, crítico 5%=-2.8760, rechaza H0=NO, p=0.0517",
+"kpss": "KPSS: estadístico=0.3885, retardos=62, crítico 5%=0.4630, rechaza H0=NO, p=0.0821",
+"eff": "Órdenes efectivos determinados: p=1, q=1, P=0, Q=0",
+"shortlist": "MLP shortlist (13): (0,1)(0,0) sim=0.936 wAICc=0.227 (1,0)(0,0) sim=0.947 wAICc=0.171 (1,1)(0,0) sim=0.955 wAICc=0.116 (1,2)(0,0) sim=0.956 wAICc=0.129 (2,1)(0,0) sim=0.926 wAICc=0.012 (1,0)(1,0) sim=0.853 wAICc=0.058 (1,0)(0,1) sim=0.853 wAICc=0.055 (1,1)(1,0) sim=0.861 wAICc=0.039 (2,2)(0,0) sim=0.892 wAICc=0.058 (0,1)(1,0) sim=0.842 wAICc=0.071 (0,1)(0,1) sim=0.842 wAICc=0.065 (0,0)(1,0) sim=0.747 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,1)(0,0)s=12 sim=0.9364 wAICc=0.2275",
+"det": "0,1,0,0,0.936386"
+},
+"real:PS|classic": {
+"hac": "HAC F=90.1037 (p=0.0000)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0000)",
+"adf": "ADF: estadístico=-2.8484, retardos=12, crítico 5%=-2.8760, rechaza H0=NO, p=0.0517",
+"kpss": "KPSS: estadístico=0.3885, retardos=62, crítico 5%=0.4630, rechaza H0=NO, p=0.0821",
+"eff": "Órdenes efectivos determinados: p=1, q=1, P=0, Q=0",
+"shortlist": "MLP shortlist (13): (0,1)(0,0) sim=0.936 wAICc=0.227 (1,0)(0,0) sim=0.947 wAICc=0.171 (1,1)(0,0) sim=0.955 wAICc=0.116 (1,2)(0,0) sim=0.956 wAICc=0.129 (2,1)(0,0) sim=0.926 wAICc=0.012 (1,0)(1,0) sim=0.853 wAICc=0.058 (1,0)(0,1) sim=0.853 wAICc=0.055 (1,1)(1,0) sim=0.861 wAICc=0.039 (2,2)(0,0) sim=0.892 wAICc=0.058 (0,1)(1,0) sim=0.842 wAICc=0.071 (0,1)(0,1) sim=0.842 wAICc=0.065 (0,0)(1,0) sim=0.747 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"det": "2,0,0,0,0.955864"
+},
+"real:wti|mlp": {
+"hac": "HAC F=1.2659 (p=0.2464)",
+"verdict": "Resultado detección estacional: NO DETECTADA (p=0.2464)",
+"adf": "ADF: estadístico=-8.2016, retardos=2, crítico 5%=-2.8753, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.2039, retardos=3, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=1, q=1, P=3, Q=0",
+"shortlist": "MLP shortlist (13): (1,0)(0,0) sim=0.952 wAICc=0.204 (0,1)(0,0) sim=0.939 wAICc=0.051 (1,0)(0,1) sim=0.944 wAICc=0.073 (0,1)(1,0) sim=0.931 wAICc=0.020 (1,1)(0,0) sim=0.938 wAICc=0.061 (1,2)(0,0) sim=0.909 wAICc=0.336 (1,0)(1,1) sim=0.809 wAICc=0.020 (2,2)(0,0) sim=0.848 wAICc=0.168 (3,1)(0,0) sim=0.845 wAICc=0.057 (0,1)(1,1) sim=0.796 wAICc=0.005 (0,0)(1,1) sim=0.707 wAICc=0.000 (1,1)(1,1) sim=0.746 wAICc=0.005 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (1,0)(0,0)s=12 sim=0.9521 wAICc=0.2039",
+"det": "1,0,0,0,0.952065"
+},
+"real:wti|classic": {
+"hac": "HAC F=1.2659 (p=0.2464)",
+"verdict": "Resultado detección estacional: NO DETECTADA (p=0.2464)",
+"adf": "ADF: estadístico=-8.2016, retardos=2, crítico 5%=-2.8753, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.2039, retardos=3, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=1, q=1, P=3, Q=0",
+"shortlist": "MLP shortlist (13): (1,0)(0,0) sim=0.952 wAICc=0.204 (0,1)(0,0) sim=0.939 wAICc=0.051 (1,0)(0,1) sim=0.944 wAICc=0.073 (0,1)(1,0) sim=0.931 wAICc=0.020 (1,1)(0,0) sim=0.938 wAICc=0.061 (1,2)(0,0) sim=0.909 wAICc=0.336 (1,0)(1,1) sim=0.809 wAICc=0.020 (2,2)(0,0) sim=0.848 wAICc=0.168 (3,1)(0,0) sim=0.845 wAICc=0.057 (0,1)(1,1) sim=0.796 wAICc=0.005 (0,0)(1,1) sim=0.707 wAICc=0.000 (1,1)(1,1) sim=0.746 wAICc=0.005 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"det": "1,0,0,0,0.952065"
+},
+"ns0.0|mlp": {
+"adf": "ADF: estadístico=-7.4727, retardos=0, crítico 5%=-2.8762, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0654, retardos=6, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=1, q=5, P=0, Q=0",
+"shortlist": "MLP shortlist (12): (1,0)(0,0) sim=0.917 wAICc=0.216 (2,0)(0,0) sim=0.908 wAICc=0.079 (1,1)(0,0) sim=0.901 wAICc=0.068 (3,0)(0,0) sim=0.902 wAICc=0.131 (1,2)(0,0) sim=0.886 wAICc=0.049 (3,1)(0,0) sim=0.826 wAICc=0.282 (2,2)(0,0) sim=0.824 wAICc=0.147 (2,1)(0,0) sim=0.694 wAICc=0.000 (3,2)(0,0) sim=0.733 wAICc=0.000 (0,5)(0,0) sim=0.675 wAICc=0.011 (1,5)(0,0) sim=0.701 wAICc=0.018 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (1,0)(0,0)s=1 sim=0.9167 wAICc=0.2159",
+"det": "1,0,0,0,0.916653"
+},
+"ns0.0|classic": {
+"adf": "ADF: estadístico=-7.4727, retardos=0, crítico 5%=-2.8762, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0654, retardos=6, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=1, q=5, P=0, Q=0",
+"shortlist": "MLP shortlist (12): (1,0)(0,0) sim=0.917 wAICc=0.216 (2,0)(0,0) sim=0.908 wAICc=0.079 (1,1)(0,0) sim=0.901 wAICc=0.068 (3,0)(0,0) sim=0.902 wAICc=0.131 (1,2)(0,0) sim=0.886 wAICc=0.049 (3,1)(0,0) sim=0.826 wAICc=0.282 (2,2)(0,0) sim=0.824 wAICc=0.147 (2,1)(0,0) sim=0.694 wAICc=0.000 (3,2)(0,0) sim=0.733 wAICc=0.000 (0,5)(0,0) sim=0.675 wAICc=0.011 (1,5)(0,0) sim=0.701 wAICc=0.018 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"det": "1,0,0,0,0.916653"
+},
+"ns0.1|mlp": {
+"adf": "ADF: estadístico=-7.9040, retardos=0, crítico 5%=-2.8762, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.2238, retardos=7, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=1, q=4, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (1,0)(0,0) sim=0.944 wAICc=0.186 (2,0)(0,0) sim=0.968 wAICc=0.205 (1,1)(0,0) sim=0.963 wAICc=0.279 (1,2)(0,0) sim=0.945 wAICc=0.106 (2,1)(0,0) sim=0.931 wAICc=0.078 (0,4)(0,0) sim=0.858 wAICc=0.057 (3,1)(0,0) sim=0.884 wAICc=0.045 (2,2)(0,0) sim=0.786 wAICc=0.000 (1,4)(0,0) sim=0.767 wAICc=0.023 (3,2)(0,0) sim=0.794 wAICc=0.021 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (1,0)(0,0)s=1 sim=0.9436 wAICc=0.1857",
+"det": "1,0,0,0,0.943568"
+},
+"ns0.2|mlp": {
+"adf": "ADF: estadístico=-7.2843, retardos=1, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0774, retardos=6, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=1, q=2, P=0, Q=0",
+"shortlist": "MLP shortlist (10): (1,0)(0,0) sim=0.940 wAICc=0.158 (2,0)(0,0) sim=0.977 wAICc=0.306 (1,1)(0,0) sim=0.968 wAICc=0.243 (2,1)(0,0) sim=0.956 wAICc=0.105 (1,2)(0,0) sim=0.953 wAICc=0.082 (0,2)(0,0) sim=0.911 wAICc=0.036 (2,2)(0,0) sim=0.889 wAICc=0.036 (3,1)(0,0) sim=0.888 wAICc=0.034 (0,0)(0,0) sim=0.000 wAICc=0.000 (3,2)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (1,0)(0,0)s=1 sim=0.9402 wAICc=0.1576",
+"det": "1,0,0,0,0.940150"
+},
+"ns0.3|mlp": {
+"adf": "ADF: estadístico=-6.6972, retardos=0, crítico 5%=-2.8762, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.2421, retardos=7, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=1, q=4, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (1,0)(0,0) sim=0.988 wAICc=0.496 (2,0)(0,0) sim=0.973 wAICc=0.179 (1,1)(0,0) sim=0.970 wAICc=0.175 (1,2)(0,0) sim=0.943 wAICc=0.079 (0,4)(0,0) sim=0.870 wAICc=0.033 (3,1)(0,0) sim=0.892 wAICc=0.019 (2,1)(0,0) sim=0.764 wAICc=0.000 (2,2)(0,0) sim=0.797 wAICc=0.000 (1,4)(0,0) sim=0.797 wAICc=0.018 (3,2)(0,0) sim=0.758 wAICc=0.001 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (1,0)(0,0)s=1 sim=0.9880 wAICc=0.4958",
+"det": "1,0,0,0,0.988012"
+},
+"ns0.4|mlp": {
+"adf": "ADF: estadístico=-7.0433, retardos=3, crítico 5%=-2.8764, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0856, retardos=6, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=4, q=2, P=0, Q=0",
+"shortlist": "MLP shortlist (12): (1,0)(0,0) sim=0.849 wAICc=0.179 (2,0)(0,0) sim=0.878 wAICc=0.145 (0,2)(0,0) sim=0.859 wAICc=0.002 (1,1)(0,0) sim=0.872 wAICc=0.134 (2,1)(0,0) sim=0.859 wAICc=0.051 (1,2)(0,0) sim=0.862 wAICc=0.042 (4,0)(0,0) sim=0.837 wAICc=0.445 (3,1)(0,0) sim=0.680 wAICc=0.000 (2,2)(0,0) sim=0.663 wAICc=0.000 (4,2)(0,0) sim=0.679 wAICc=0.001 (0,0)(0,0) sim=0.000 wAICc=0.000 (3,2)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (1,0)(0,0)s=1 sim=0.8492 wAICc=0.1788",
+"det": "1,0,0,0,0.849248"
+},
+"ns1.0|mlp": {
+"adf": "ADF: estadístico=-6.0597, retardos=1, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.2902, retardos=7, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=1, q=3, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (1,0)(0,0) sim=0.973 wAICc=0.261 (2,0)(0,0) sim=0.956 wAICc=0.220 (1,1)(0,0) sim=0.939 wAICc=0.293 (1,2)(0,0) sim=0.911 wAICc=0.086 (0,3)(0,0) sim=0.869 wAICc=0.004 (2,1)(0,0) sim=0.873 wAICc=0.011 (1,3)(0,0) sim=0.875 wAICc=0.056 (3,1)(0,0) sim=0.859 wAICc=0.036 (2,2)(0,0) sim=0.855 wAICc=0.033 (3,2)(0,0) sim=0.637 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (1,0)(0,0)s=1 sim=0.9725 wAICc=0.2607",
+"det": "1,0,0,0,0.972536"
+},
+"ns1.1|mlp": {
+"adf": "ADF: estadístico=-3.6130, retardos=1, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0055",
+"kpss": "KPSS: estadístico=0.5026, retardos=9, crítico 5%=0.4630, rechaza H0=SÍ, p=0.0411",
+"eff": "Órdenes efectivos determinados: p=2, q=5, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (2,0)(0,0) sim=0.934 wAICc=0.433 (1,1)(0,0) sim=0.917 wAICc=0.188 (2,1)(0,0) sim=0.940 wAICc=0.209 (1,2)(0,0) sim=0.940 wAICc=0.083 (2,2)(0,0) sim=0.887 wAICc=0.077 (1,0)(0,0) sim=0.805 wAICc=0.000 (3,2)(0,0) sim=0.751 wAICc=0.010 (3,1)(0,0) sim=0.619 wAICc=0.000 (0,5)(0,0) sim=0.610 wAICc=0.000 (2,5)(0,0) sim=0.305 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (2,0)(0,0)s=1 sim=0.9340 wAICc=0.4331",
+"det": "2,0,0,0,0.933972"
+},
+"ns1.2|mlp": {
+"adf": "ADF: estadístico=-3.0102, retardos=1, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0340",
+"kpss": "KPSS: estadístico=0.8800, retardos=9, crítico 5%=0.4630, rechaza H0=SÍ, p=0.0100",
+"eff": "Órdenes efectivos determinados: p=2, q=5, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (2,0)(0,0) sim=0.945 wAICc=0.497 (3,0)(0,0) sim=0.946 wAICc=0.205 (1,1)(0,0) sim=0.898 wAICc=0.008 (2,1)(0,0) sim=0.919 wAICc=0.122 (1,2)(0,0) sim=0.931 wAICc=0.121 (2,2)(0,0) sim=0.878 wAICc=0.039 (3,2)(0,0) sim=0.787 wAICc=0.008 (0,5)(0,0) sim=0.656 wAICc=0.000 (3,1)(0,0) sim=0.430 wAICc=0.000 (2,5)(0,0) sim=0.389 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (2,0)(0,0)s=1 sim=0.9449 wAICc=0.4968",
+"det": "2,0,0,0,0.944874"
+},
+"ns1.3|mlp": {
+"adf": "ADF: estadístico=-5.3729, retardos=3, crítico 5%=-2.8764, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0709, retardos=8, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=4, q=4, P=0, Q=0",
+"shortlist": "MLP shortlist (12): (1,0)(0,0) sim=0.874 wAICc=0.001 (3,0)(0,0) sim=0.872 wAICc=0.020 (1,2)(0,0) sim=0.867 wAICc=0.101 (4,0)(0,0) sim=0.898 wAICc=0.646 (1,1)(0,0) sim=0.847 wAICc=0.007 (2,1)(0,0) sim=0.853 wAICc=0.016 (0,4)(0,0) sim=0.847 wAICc=0.002 (3,2)(0,0) sim=0.766 wAICc=0.188 (2,2)(0,0) sim=0.650 wAICc=0.000 (4,4)(0,0) sim=0.617 wAICc=0.019 (3,1)(0,0) sim=0.531 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (1,0)(0,0)s=1 sim=0.8737 wAICc=0.0008",
+"det": "1,0,0,0,0.873699"
+},
+"ns1.4|mlp": {
+"adf": "ADF: estadístico=-3.7859, retardos=1, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0031",
+"kpss": "KPSS: estadístico=0.2678, retardos=8, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=2, q=5, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (2,0)(0,0) sim=0.960 wAICc=0.447 (1,1)(0,0) sim=0.916 wAICc=0.026 (3,0)(0,0) sim=0.954 wAICc=0.174 (2,1)(0,0) sim=0.947 wAICc=0.179 (1,2)(0,0) sim=0.937 wAICc=0.114 (2,2)(0,0) sim=0.882 wAICc=0.061 (0,5)(0,0) sim=0.677 wAICc=0.000 (3,1)(0,0) sim=0.595 wAICc=0.000 (3,2)(0,0) sim=0.413 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000 (2,5)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (2,0)(0,0)s=1 sim=0.9596 wAICc=0.4468",
+"det": "2,0,0,0,0.959631"
+},
+"ns2.0|mlp": {
+"adf": "ADF: estadístico=-5.5092, retardos=6, crítico 5%=-2.8766, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0957, retardos=3, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=2, q=4, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (2,0)(0,0) sim=0.947 wAICc=0.157 (3,0)(0,0) sim=0.960 wAICc=0.309 (2,1)(0,0) sim=0.955 wAICc=0.321 (1,1)(0,0) sim=0.876 wAICc=0.000 (2,2)(0,0) sim=0.889 wAICc=0.107 (3,1)(0,0) sim=0.888 wAICc=0.103 (1,2)(0,0) sim=0.843 wAICc=0.000 (3,2)(0,0) sim=0.790 wAICc=0.000 (0,4)(0,0) sim=0.711 wAICc=0.000 (2,4)(0,0) sim=0.741 wAICc=0.003 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (2,0)(0,0)s=1 sim=0.9471 wAICc=0.1571",
+"det": "2,0,0,0,0.947087"
+},
+"ns2.1|mlp": {
+"adf": "ADF: estadístico=-6.3040, retardos=3, crítico 5%=-2.8764, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.2227, retardos=5, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=4, q=5, P=0, Q=0",
+"shortlist": "MLP shortlist (12): (2,0)(0,0) sim=0.876 wAICc=0.027 (3,0)(0,0) sim=0.849 wAICc=0.011 (2,1)(0,0) sim=0.844 wAICc=0.013 (4,0)(0,0) sim=0.864 wAICc=0.051 (2,2)(0,0) sim=0.840 wAICc=0.646 (1,1)(0,0) sim=0.787 wAICc=0.000 (1,2)(0,0) sim=0.747 wAICc=0.000 (0,5)(0,0) sim=0.715 wAICc=0.004 (3,2)(0,0) sim=0.746 wAICc=0.247 (3,1)(0,0) sim=0.585 wAICc=0.000 (4,5)(0,0) sim=0.165 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (2,0)(0,0)s=1 sim=0.8765 wAICc=0.0272",
+"det": "2,0,0,0,0.876458"
+},
+"ns2.2|mlp": {
+"adf": "ADF: estadístico=-8.1093, retardos=3, crítico 5%=-2.8764, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0476, retardos=4, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=4, q=5, P=0, Q=0",
+"shortlist": "MLP shortlist (12): (2,0)(0,0) sim=0.837 wAICc=0.073 (0,2)(0,0) sim=0.811 wAICc=0.042 (1,1)(0,0) sim=0.808 wAICc=0.038 (3,0)(0,0) sim=0.832 wAICc=0.025 (2,1)(0,0) sim=0.817 wAICc=0.017 (4,0)(0,0) sim=0.842 wAICc=0.781 (1,2)(0,0) sim=0.796 wAICc=0.016 (2,2)(0,0) sim=0.751 wAICc=0.008 (0,5)(0,0) sim=0.707 wAICc=0.000 (3,2)(0,0) sim=0.611 wAICc=0.000 (3,1)(0,0) sim=0.555 wAICc=0.000 (4,5)(0,0) sim=0.206 wAICc=0.000",
+"ident": "MLP-direct identification: (2,0)(0,0)s=1 sim=0.8371 wAICc=0.0731",
+"det": "2,0,0,0,0.837096"
+},
+"ns2.3|mlp": {
+"adf": "ADF: estadístico=-9.3224, retardos=1, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.1242, retardos=4, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=2, q=4, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (2,0)(0,0) sim=0.972 wAICc=0.522 (3,0)(0,0) sim=0.959 wAICc=0.189 (2,1)(0,0) sim=0.954 wAICc=0.182 (1,1)(0,0) sim=0.869 wAICc=0.002 (1,2)(0,0) sim=0.887 wAICc=0.006 (2,2)(0,0) sim=0.871 wAICc=0.056 (0,4)(0,0) sim=0.781 wAICc=0.000 (3,2)(0,0) sim=0.792 wAICc=0.022 (2,4)(0,0) sim=0.788 wAICc=0.022 (3,1)(0,0) sim=0.653 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (2,0)(0,0)s=1 sim=0.9718 wAICc=0.5222",
+"det": "2,0,0,0,0.971753"
+},
+"ns2.4|mlp": {
+"adf": "ADF: estadístico=-11.4477, retardos=1, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.1453, retardos=1, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=2, q=5, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (2,0)(0,0) sim=0.941 wAICc=0.334 (3,0)(0,0) sim=0.931 wAICc=0.215 (2,1)(0,0) sim=0.923 wAICc=0.235 (3,1)(0,0) sim=0.863 wAICc=0.092 (2,2)(0,0) sim=0.863 wAICc=0.086 (1,1)(0,0) sim=0.791 wAICc=0.000 (1,2)(0,0) sim=0.812 wAICc=0.000 (3,2)(0,0) sim=0.766 wAICc=0.031 (0,5)(0,0) sim=0.721 wAICc=0.000 (2,5)(0,0) sim=0.655 wAICc=0.007 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (2,0)(0,0)s=1 sim=0.9412 wAICc=0.3337",
+"det": "2,0,0,0,0.941157"
+},
+"ns3.0|mlp": {
+"adf": "ADF: estadístico=-10.0098, retardos=2, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.1857, retardos=24, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=2, q=5, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (2,0)(0,0) sim=0.980 wAICc=0.517 (3,0)(0,0) sim=0.962 wAICc=0.250 (2,1)(0,0) sim=0.951 wAICc=0.142 (2,2)(0,0) sim=0.888 wAICc=0.045 (3,1)(0,0) sim=0.887 wAICc=0.028 (3,2)(0,0) sim=0.779 wAICc=0.017 (1,1)(0,0) sim=0.692 wAICc=0.000 (1,2)(0,0) sim=0.680 wAICc=0.000 (2,5)(0,0) sim=0.642 wAICc=0.001 (0,5)(0,0) sim=0.577 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (2,0)(0,0)s=1 sim=0.9796 wAICc=0.5170",
+"det": "2,0,0,0,0.979611"
+},
+"ns3.0|classic": {
+"adf": "ADF: estadístico=-10.0098, retardos=2, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.1857, retardos=24, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=2, q=5, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (2,0)(0,0) sim=0.980 wAICc=0.517 (3,0)(0,0) sim=0.962 wAICc=0.250 (2,1)(0,0) sim=0.951 wAICc=0.142 (2,2)(0,0) sim=0.888 wAICc=0.045 (3,1)(0,0) sim=0.887 wAICc=0.028 (3,2)(0,0) sim=0.779 wAICc=0.017 (1,1)(0,0) sim=0.692 wAICc=0.000 (1,2)(0,0) sim=0.680 wAICc=0.000 (2,5)(0,0) sim=0.642 wAICc=0.001 (0,5)(0,0) sim=0.577 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"det": "2,0,0,0,0.979611"
+},
+"ns3.1|mlp": {
+"adf": "ADF: estadístico=-14.9081, retardos=1, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0956, retardos=18, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=2, q=5, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (2,0)(0,0) sim=0.972 wAICc=0.518 (3,0)(0,0) sim=0.960 wAICc=0.184 (2,1)(0,0) sim=0.935 wAICc=0.137 (2,2)(0,0) sim=0.877 wAICc=0.065 (3,1)(0,0) sim=0.873 wAICc=0.064 (3,2)(0,0) sim=0.785 wAICc=0.014 (1,1)(0,0) sim=0.723 wAICc=0.000 (0,5)(0,0) sim=0.741 wAICc=0.015 (2,5)(0,0) sim=0.631 wAICc=0.003 (0,0)(0,0) sim=0.000 wAICc=0.000 (1,2)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (2,0)(0,0)s=1 sim=0.9723 wAICc=0.5177",
+"det": "2,0,0,0,0.972340"
+},
+"ns3.2|mlp": {
+"adf": "ADF: estadístico=-14.2415, retardos=1, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.1206, retardos=18, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=2, q=4, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (2,0)(0,0) sim=0.941 wAICc=0.404 (3,0)(0,0) sim=0.930 wAICc=0.170 (2,1)(0,0) sim=0.912 wAICc=0.246 (0,4)(0,0) sim=0.808 wAICc=0.002 (2,2)(0,0) sim=0.846 wAICc=0.083 (3,1)(0,0) sim=0.847 wAICc=0.027 (1,1)(0,0) sim=0.743 wAICc=0.000 (1,2)(0,0) sim=0.727 wAICc=0.000 (2,4)(0,0) sim=0.753 wAICc=0.068 (0,0)(0,0) sim=0.000 wAICc=0.000 (3,2)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (2,0)(0,0)s=1 sim=0.9411 wAICc=0.4038",
+"det": "2,0,0,0,0.941067"
+},
+"ns3.3|mlp": {
+"adf": "ADF: estadístico=-14.3702, retardos=1, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0846, retardos=21, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=2, q=5, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (2,0)(0,0) sim=0.968 wAICc=0.473 (3,0)(0,0) sim=0.959 wAICc=0.198 (2,1)(0,0) sim=0.958 wAICc=0.208 (2,2)(0,0) sim=0.889 wAICc=0.085 (3,1)(0,0) sim=0.899 wAICc=0.009 (3,2)(0,0) sim=0.805 wAICc=0.019 (1,1)(0,0) sim=0.733 wAICc=0.000 (1,2)(0,0) sim=0.735 wAICc=0.000 (0,5)(0,0) sim=0.755 wAICc=0.002 (2,5)(0,0) sim=0.655 wAICc=0.007 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (2,0)(0,0)s=1 sim=0.9682 wAICc=0.4730",
+"det": "2,0,0,0,0.968246"
+},
+"ns3.4|mlp": {
+"adf": "ADF: estadístico=-13.9566, retardos=1, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.1780, retardos=17, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=2, q=4, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (2,0)(0,0) sim=0.942 wAICc=0.506 (3,0)(0,0) sim=0.931 wAICc=0.196 (2,1)(0,0) sim=0.922 wAICc=0.177 (0,4)(0,0) sim=0.873 wAICc=0.015 (2,2)(0,0) sim=0.857 wAICc=0.062 (3,1)(0,0) sim=0.857 wAICc=0.034 (0,2)(0,0) sim=0.760 wAICc=0.000 (1,1)(0,0) sim=0.762 wAICc=0.000 (1,2)(0,0) sim=0.765 wAICc=0.000 (3,2)(0,0) sim=0.761 wAICc=0.001 (2,4)(0,0) sim=0.750 wAICc=0.009",
+"ident": "MLP-direct identification: (2,0)(0,0)s=1 sim=0.9416 wAICc=0.5061",
+"det": "2,0,0,0,0.941636"
+},
+"ns4.0|mlp": {
+"adf": "ADF: estadístico=-5.6027, retardos=2, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0855, retardos=6, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=3, q=5, P=0, Q=0",
+"shortlist": "MLP shortlist (10): (3,0)(0,0) sim=0.946 wAICc=0.493 (0,1)(0,0) sim=0.853 wAICc=0.045 (3,1)(0,0) sim=0.887 wAICc=0.304 (1,1)(0,0) sim=0.838 wAICc=0.016 (0,5)(0,0) sim=0.784 wAICc=0.036 (3,2)(0,0) sim=0.793 wAICc=0.106 (2,1)(0,0) sim=0.748 wAICc=0.000 (3,5)(0,0) sim=0.621 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000 (1,2)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (3,0)(0,0)s=1 sim=0.9464 wAICc=0.4931",
+"det": "3,0,0,0,0.946367"
+},
+"ns4.1|mlp": {
+"adf": "ADF: estadístico=-5.9152, retardos=2, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0611, retardos=5, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=3, q=1, P=0, Q=0",
+"shortlist": "MLP shortlist (10): (0,1)(0,0) sim=0.940 wAICc=0.281 (0,2)(0,0) sim=0.924 wAICc=0.108 (1,1)(0,0) sim=0.943 wAICc=0.126 (3,0)(0,0) sim=0.880 wAICc=0.333 (1,2)(0,0) sim=0.920 wAICc=0.002 (3,1)(0,0) sim=0.881 wAICc=0.119 (2,1)(0,0) sim=0.835 wAICc=0.000 (2,2)(0,0) sim=0.863 wAICc=0.003 (3,2)(0,0) sim=0.782 wAICc=0.027 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,1)(0,0)s=1 sim=0.9401 wAICc=0.2813",
+"det": "0,1,0,0,0.940105"
+},
+"ns4.2|mlp": {
+"adf": "ADF: estadístico=-5.4788, retardos=2, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.1254, retardos=6, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=3, q=5, P=0, Q=0",
+"shortlist": "MLP shortlist (12): (3,0)(0,0) sim=0.948 wAICc=0.382 (1,0)(0,0) sim=0.844 wAICc=0.003 (3,1)(0,0) sim=0.878 wAICc=0.155 (0,1)(0,0) sim=0.835 wAICc=0.109 (0,2)(0,0) sim=0.829 wAICc=0.018 (1,1)(0,0) sim=0.815 wAICc=0.010 (1,2)(0,0) sim=0.766 wAICc=0.000 (0,5)(0,0) sim=0.783 wAICc=0.054 (3,2)(0,0) sim=0.805 wAICc=0.166 (2,2)(0,0) sim=0.764 wAICc=0.102 (2,1)(0,0) sim=0.684 wAICc=0.000 (3,5)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (3,0)(0,0)s=1 sim=0.9483 wAICc=0.3816",
+"det": "3,0,0,0,0.948337"
+},
+"ns4.3|mlp": {
+"adf": "ADF: estadístico=-6.4431, retardos=2, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.3636, retardos=4, crítico 5%=0.4630, rechaza H0=NO, p=0.0928",
+"eff": "Órdenes efectivos determinados: p=3, q=4, P=0, Q=0",
+"shortlist": "MLP shortlist (10): (0,1)(0,0) sim=0.879 wAICc=0.353 (1,1)(0,0) sim=0.870 wAICc=0.110 (3,0)(0,0) sim=0.896 wAICc=0.268 (2,1)(0,0) sim=0.874 wAICc=0.009 (3,1)(0,0) sim=0.898 wAICc=0.112 (1,2)(0,0) sim=0.847 wAICc=0.075 (0,4)(0,0) sim=0.809 wAICc=0.024 (3,2)(0,0) sim=0.803 wAICc=0.039 (3,4)(0,0) sim=0.575 wAICc=0.010 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,1)(0,0)s=1 sim=0.8794 wAICc=0.3526",
+"det": "0,1,0,0,0.879432"
+},
+"ns4.4|mlp": {
+"adf": "ADF: estadístico=-3.4047, retardos=12, crítico 5%=-2.8771, rechaza H0=SÍ, p=0.0108",
+"kpss": "KPSS: estadístico=0.0511, retardos=4, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=3, q=1, P=0, Q=0",
+"shortlist": "MLP shortlist (10): (0,1)(0,0) sim=0.947 wAICc=0.004 (0,2)(0,0) sim=0.937 wAICc=0.002 (1,1)(0,0) sim=0.959 wAICc=0.001 (3,0)(0,0) sim=0.951 wAICc=0.935 (1,2)(0,0) sim=0.916 wAICc=0.007 (2,1)(0,0) sim=0.921 wAICc=0.002 (3,1)(0,0) sim=0.889 wAICc=0.048 (2,2)(0,0) sim=0.881 wAICc=0.000 (3,2)(0,0) sim=0.794 wAICc=0.001 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,1)(0,0)s=1 sim=0.9466 wAICc=0.0045",
+"det": "0,1,0,0,0.946583"
+},
+"ns5.0|mlp": {
+"adf": "ADF: estadístico=-12.3764, retardos=2, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.1486, retardos=34, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=3, q=1, P=0, Q=0",
+"shortlist": "MLP shortlist (10): (0,1)(0,0) sim=0.954 wAICc=0.354 (0,2)(0,0) sim=0.960 wAICc=0.185 (1,1)(0,0) sim=0.964 wAICc=0.211 (3,0)(0,0) sim=0.955 wAICc=0.046 (2,1)(0,0) sim=0.952 wAICc=0.084 (1,2)(0,0) sim=0.946 wAICc=0.076 (3,1)(0,0) sim=0.884 wAICc=0.027 (2,2)(0,0) sim=0.887 wAICc=0.009 (3,2)(0,0) sim=0.787 wAICc=0.009 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,1)(0,0)s=1 sim=0.9542 wAICc=0.3539",
+"det": "0,1,0,0,0.954232"
+},
+"ns5.1|mlp": {
+"adf": "ADF: estadístico=-5.2203, retardos=8, crítico 5%=-2.8768, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.1426, retardos=45, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=3, q=4, P=0, Q=0",
+"shortlist": "MLP shortlist (12): (3,0)(0,0) sim=0.955 wAICc=0.422 (0,1)(0,0) sim=0.861 wAICc=0.131 (0,2)(0,0) sim=0.844 wAICc=0.043 (1,1)(0,0) sim=0.846 wAICc=0.045 (0,4)(0,0) sim=0.883 wAICc=0.179 (3,1)(0,0) sim=0.879 wAICc=0.142 (2,2)(0,0) sim=0.834 wAICc=0.000 (2,1)(0,0) sim=0.750 wAICc=0.000 (3,2)(0,0) sim=0.786 wAICc=0.037 (3,4)(0,0) sim=0.510 wAICc=0.001 (0,0)(0,0) sim=0.000 wAICc=0.000 (1,2)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (3,0)(0,0)s=1 sim=0.9550 wAICc=0.4220",
+"det": "3,0,0,0,0.954955"
+},
+"ns5.2|mlp": {
+"adf": "ADF: estadístico=-8.1693, retardos=6, crítico 5%=-2.8766, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0993, retardos=25, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=5, q=2, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (0,2)(0,0) sim=0.898 wAICc=0.070 (2,1)(0,0) sim=0.890 wAICc=0.230 (1,2)(0,0) sim=0.910 wAICc=0.214 (0,4)(0,0) sim=0.843 wAICc=0.099 (2,2)(0,0) sim=0.846 wAICc=0.184 (3,1)(0,0) sim=0.830 wAICc=0.077 (5,0)(0,0) sim=0.771 wAICc=0.082 (3,2)(0,0) sim=0.741 wAICc=0.045 (1,4)(0,0) sim=0.600 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000 (5,2)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,2)(0,0)s=1 sim=0.8984 wAICc=0.0699",
+"det": "0,2,0,0,0.898397"
+},
+"ns5.3|mlp": {
+"adf": "ADF: estadístico=-15.0857, retardos=1, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0890, retardos=14, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=2, q=1, P=0, Q=0",
+"shortlist": "MLP shortlist (10): (0,1)(0,0) sim=0.972 wAICc=0.395 (0,2)(0,0) sim=0.963 wAICc=0.201 (2,0)(0,0) sim=0.964 wAICc=0.059 (1,1)(0,0) sim=0.962 wAICc=0.192 (2,1)(0,0) sim=0.955 wAICc=0.080 (1,2)(0,0) sim=0.954 wAICc=0.004 (3,1)(0,0) sim=0.890 wAICc=0.032 (2,2)(0,0) sim=0.891 wAICc=0.031 (3,2)(0,0) sim=0.791 wAICc=0.006 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,1)(0,0)s=1 sim=0.9716 wAICc=0.3947",
+"det": "0,1,0,0,0.971615"
+},
+"ns5.4|mlp": {
+"adf": "ADF: estadístico=-9.0486, retardos=5, crítico 5%=-2.8766, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.3149, retardos=50, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=4, q=1, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (0,1)(0,0) sim=0.953 wAICc=0.535 (0,2)(0,0) sim=0.939 wAICc=0.207 (1,1)(0,0) sim=0.939 wAICc=0.220 (2,1)(0,0) sim=0.851 wAICc=0.000 (4,0)(0,0) sim=0.891 wAICc=0.015 (2,2)(0,0) sim=0.867 wAICc=0.023 (3,1)(0,0) sim=0.882 wAICc=0.000 (1,2)(0,0) sim=0.832 wAICc=0.000 (4,1)(0,0) sim=0.799 wAICc=0.000 (3,2)(0,0) sim=0.680 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,1)(0,0)s=1 sim=0.9531 wAICc=0.5353",
+"det": "0,1,0,0,0.953072"
+},
+"ns6.0|mlp": {
+"adf": "ADF: estadístico=-11.4331, retardos=1, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.2462, retardos=10, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=2, q=3, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (2,0)(0,0) sim=0.967 wAICc=0.385 (3,0)(0,0) sim=0.959 wAICc=0.208 (0,3)(0,0) sim=0.942 wAICc=0.010 (2,1)(0,0) sim=0.951 wAICc=0.200 (2,2)(0,0) sim=0.887 wAICc=0.079 (3,1)(0,0) sim=0.887 wAICc=0.069 (1,1)(0,0) sim=0.836 wAICc=0.000 (2,3)(0,0) sim=0.791 wAICc=0.029 (3,2)(0,0) sim=0.791 wAICc=0.019 (1,2)(0,0) sim=0.715 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (2,0)(0,0)s=1 sim=0.9673 wAICc=0.3854",
+"det": "2,0,0,0,0.967322"
+},
+"ns6.0|classic": {
+"adf": "ADF: estadístico=-11.4331, retardos=1, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.2462, retardos=10, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=2, q=3, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (2,0)(0,0) sim=0.967 wAICc=0.385 (3,0)(0,0) sim=0.959 wAICc=0.208 (0,3)(0,0) sim=0.942 wAICc=0.010 (2,1)(0,0) sim=0.951 wAICc=0.200 (2,2)(0,0) sim=0.887 wAICc=0.079 (3,1)(0,0) sim=0.887 wAICc=0.069 (1,1)(0,0) sim=0.836 wAICc=0.000 (2,3)(0,0) sim=0.791 wAICc=0.029 (3,2)(0,0) sim=0.791 wAICc=0.019 (1,2)(0,0) sim=0.715 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"det": "2,0,0,0,0.967322"
+},
+"ns6.1|mlp": {
+"adf": "ADF: estadístico=-8.4957, retardos=1, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0963, retardos=3, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=1, q=1, P=0, Q=0",
+"shortlist": "MLP shortlist (9): (0,1)(0,0) sim=0.935 wAICc=0.246 (1,0)(0,0) sim=0.925 wAICc=0.119 (2,0)(0,0) sim=0.961 wAICc=0.178 (1,1)(0,0) sim=0.952 wAICc=0.163 (2,1)(0,0) sim=0.953 wAICc=0.232 (1,2)(0,0) sim=0.939 wAICc=0.060 (3,1)(0,0) sim=0.846 wAICc=0.001 (2,2)(0,0) sim=0.830 wAICc=0.000 (3,2)(0,0) sim=0.614 wAICc=0.000",
+"ident": "MLP-direct identification: (0,1)(0,0)s=1 sim=0.9352 wAICc=0.2465",
+"det": "0,1,0,0,0.935158"
+},
+"ns6.2|mlp": {
+"adf": "ADF: estadístico=-10.5560, retardos=1, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.5504, retardos=2, crítico 5%=0.4630, rechaza H0=SÍ, p=0.0303",
+"eff": "Órdenes efectivos determinados: p=2, q=1, P=0, Q=0",
+"shortlist": "MLP shortlist (8): (0,1)(0,0) sim=0.955 wAICc=0.330 (1,1)(0,0) sim=0.947 wAICc=0.097 (2,1)(0,0) sim=0.955 wAICc=0.194 (2,0)(0,0) sim=0.908 wAICc=0.188 (1,2)(0,0) sim=0.941 wAICc=0.054 (2,2)(0,0) sim=0.888 wAICc=0.070 (3,1)(0,0) sim=0.891 wAICc=0.066 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,1)(0,0)s=1 sim=0.9555 wAICc=0.3297",
+"det": "0,1,0,0,0.955470"
+},
+"ns6.3|mlp": {
+"adf": "ADF: estadístico=-5.4007, retardos=4, crítico 5%=-2.8765, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.3412, retardos=4, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=5, q=1, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (0,1)(0,0) sim=0.941 wAICc=0.247 (0,2)(0,0) sim=0.924 wAICc=0.231 (1,1)(0,0) sim=0.932 wAICc=0.258 (2,1)(0,0) sim=0.909 wAICc=0.084 (1,2)(0,0) sim=0.905 wAICc=0.084 (2,2)(0,0) sim=0.818 wAICc=0.002 (3,1)(0,0) sim=0.813 wAICc=0.000 (5,0)(0,0) sim=0.807 wAICc=0.081 (3,2)(0,0) sim=0.724 wAICc=0.000 (5,1)(0,0) sim=0.745 wAICc=0.012 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,1)(0,0)s=1 sim=0.9411 wAICc=0.2474",
+"det": "0,1,0,0,0.941125"
+},
+"ns6.4|mlp": {
+"adf": "ADF: estadístico=-9.9315, retardos=1, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.3127, retardos=3, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=2, q=3, P=0, Q=0",
+"shortlist": "MLP shortlist (10): (2,0)(0,0) sim=0.904 wAICc=0.582 (2,1)(0,0) sim=0.941 wAICc=0.222 (0,1)(0,0) sim=0.893 wAICc=0.066 (1,1)(0,0) sim=0.877 wAICc=0.027 (0,3)(0,0) sim=0.874 wAICc=0.009 (1,2)(0,0) sim=0.868 wAICc=0.001 (3,1)(0,0) sim=0.876 wAICc=0.067 (2,2)(0,0) sim=0.872 wAICc=0.024 (2,3)(0,0) sim=0.675 wAICc=0.001 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (2,0)(0,0)s=1 sim=0.9041 wAICc=0.5818",
+"det": "2,0,0,0,0.904084"
+},
+"ns7.0|mlp": {
+"adf": "ADF: estadístico=-12.2137, retardos=3, crítico 5%=-2.8764, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0680, retardos=25, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=4, q=3, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (0,3)(0,0) sim=0.913 wAICc=0.098 (1,2)(0,0) sim=0.919 wAICc=0.358 (2,1)(0,0) sim=0.902 wAICc=0.010 (0,4)(0,0) sim=0.884 wAICc=0.170 (4,0)(0,0) sim=0.899 wAICc=0.019 (2,2)(0,0) sim=0.854 wAICc=0.124 (1,3)(0,0) sim=0.855 wAICc=0.122 (1,4)(0,0) sim=0.788 wAICc=0.052 (3,2)(0,0) sim=0.787 wAICc=0.041 (4,3)(0,0) sim=0.623 wAICc=0.007 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,3)(0,0)s=1 sim=0.9127 wAICc=0.0978",
+"det": "0,3,0,0,0.912672"
+},
+"ns7.1|mlp": {
+"adf": "ADF: estadístico=-11.3244, retardos=3, crítico 5%=-2.8764, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.1758, retardos=74, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=4, q=2, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (0,2)(0,0) sim=0.963 wAICc=0.053 (0,3)(0,0) sim=0.947 wAICc=0.019 (1,2)(0,0) sim=0.948 wAICc=0.090 (2,1)(0,0) sim=0.954 wAICc=0.044 (1,1)(0,0) sim=0.883 wAICc=0.000 (4,0)(0,0) sim=0.898 wAICc=0.556 (3,1)(0,0) sim=0.893 wAICc=0.165 (3,2)(0,0) sim=0.798 wAICc=0.073 (1,3)(0,0) sim=0.630 wAICc=0.000 (4,2)(0,0) sim=0.668 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,2)(0,0)s=1 sim=0.9632 wAICc=0.0532",
+"det": "0,2,0,0,0.963176"
+},
+"ns7.2|mlp": {
+"adf": "ADF: estadístico=-8.0279, retardos=6, crítico 5%=-2.8766, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.2183, retardos=47, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=5, q=3, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (0,3)(0,0) sim=0.915 wAICc=0.999 (3,0)(0,0) sim=0.908 wAICc=0.000 (1,2)(0,0) sim=0.845 wAICc=0.000 (2,1)(0,0) sim=0.866 wAICc=0.000 (3,1)(0,0) sim=0.869 wAICc=0.001 (0,1)(0,0) sim=0.801 wAICc=0.000 (2,2)(0,0) sim=0.780 wAICc=0.000 (5,0)(0,0) sim=0.805 wAICc=0.000 (1,1)(0,0) sim=0.709 wAICc=0.000 (5,3)(0,0) sim=0.632 wAICc=0.000 (3,2)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,3)(0,0)s=1 sim=0.9148 wAICc=0.9990",
+"det": "0,3,0,0,0.914794"
+},
+"ns7.3|mlp": {
+"adf": "ADF: estadístico=-9.0754, retardos=6, crítico 5%=-2.8766, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.1257, retardos=29, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=5, q=1, P=0, Q=0",
+"shortlist": "MLP shortlist (10): (0,1)(0,0) sim=0.906 wAICc=0.000 (1,1)(0,0) sim=0.915 wAICc=0.024 (3,0)(0,0) sim=0.899 wAICc=0.000 (2,1)(0,0) sim=0.817 wAICc=0.000 (1,2)(0,0) sim=0.831 wAICc=0.000 (3,1)(0,0) sim=0.806 wAICc=0.000 (5,0)(0,0) sim=0.788 wAICc=0.056 (3,2)(0,0) sim=0.739 wAICc=0.000 (5,1)(0,0) sim=0.716 wAICc=0.920 (2,2)(0,0) sim=0.667 wAICc=0.000",
+"ident": "MLP-direct identification: (0,1)(0,0)s=1 sim=0.9062 wAICc=0.0004",
+"det": "0,1,0,0,0.906179"
+},
+"ns7.4|mlp": {
+"adf": "ADF: estadístico=-5.3268, retardos=11, crítico 5%=-2.8770, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.1294, retardos=51, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=5, q=2, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (0,2)(0,0) sim=0.913 wAICc=0.722 (1,2)(0,0) sim=0.905 wAICc=0.014 (2,1)(0,0) sim=0.876 wAICc=0.000 (3,1)(0,0) sim=0.831 wAICc=0.015 (2,2)(0,0) sim=0.838 wAICc=0.000 (0,3)(0,0) sim=0.763 wAICc=0.000 (5,0)(0,0) sim=0.750 wAICc=0.000 (3,2)(0,0) sim=0.753 wAICc=0.152 (2,3)(0,0) sim=0.752 wAICc=0.096 (5,2)(0,0) sim=0.446 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,2)(0,0)s=1 sim=0.9134 wAICc=0.7221",
+"det": "0,2,0,0,0.913411"
+},
+"ns8.0|mlp": {
+"adf": "ADF: estadístico=-12.2482, retardos=0, crítico 5%=-2.8762, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.1192, retardos=3, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=1, q=1, P=0, Q=0",
+"shortlist": "MLP shortlist (8): (1,0)(0,0) sim=0.985 wAICc=0.345 (0,0)(0,0) sim=0.901 wAICc=0.139 (0,1)(0,0) sim=0.880 wAICc=0.254 (1,1)(0,0) sim=0.874 wAICc=0.187 (1,2)(0,0) sim=0.858 wAICc=0.053 (2,1)(0,0) sim=0.852 wAICc=0.004 (2,2)(0,0) sim=0.793 wAICc=0.016 (3,1)(0,0) sim=0.793 wAICc=0.001",
+"ident": "MLP-direct identification: (1,0)(0,0)s=1 sim=0.9847 wAICc=0.3452",
+"det": "1,0,0,0,0.984686"
+},
+"ns8.1|mlp": {
+"adf": "ADF: estadístico=-14.3140, retardos=0, crítico 5%=-2.8762, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.2576, retardos=3, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=0, q=0, P=0, Q=0",
+"shortlist": "MLP shortlist (8): (0,0)(0,0) sim=1.000 wAICc=0.564 (1,0)(0,0) sim=0.965 wAICc=0.210 (0,1)(0,0) sim=0.962 wAICc=0.206 (2,1)(0,0) sim=0.931 wAICc=0.005 (1,2)(0,0) sim=0.928 wAICc=0.001 (2,2)(0,0) sim=0.861 wAICc=0.014 (3,1)(0,0) sim=0.865 wAICc=0.000 (1,1)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,0)(0,0)s=1 sim=1.0000 wAICc=0.5644",
+"det": "0,0,0,0,1.000000"
+},
+"ns8.2|mlp": {
+"adf": "ADF: estadístico=-8.1991, retardos=1, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.1184, retardos=4, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=0, q=2, P=0, Q=0",
+"shortlist": "MLP shortlist (10): (0,0)(0,0) sim=0.933 wAICc=0.098 (2,0)(0,0) sim=0.965 wAICc=0.241 (1,0)(0,0) sim=0.909 wAICc=0.122 (2,1)(0,0) sim=0.948 wAICc=0.095 (0,2)(0,0) sim=0.883 wAICc=0.315 (1,2)(0,0) sim=0.869 wAICc=0.115 (2,2)(0,0) sim=0.838 wAICc=0.013 (3,1)(0,0) sim=0.791 wAICc=0.000 (3,2)(0,0) sim=0.746 wAICc=0.000 (1,1)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,0)(0,0)s=1 sim=0.9329 wAICc=0.0984",
+"det": "0,0,0,0,0.932930"
+},
+"ns8.3|mlp": {
+"adf": "ADF: estadístico=-12.7162, retardos=0, crítico 5%=-2.8762, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0437, retardos=1, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=0, q=0, P=0, Q=0",
+"shortlist": "MLP shortlist (8): (0,0)(0,0) sim=1.000 wAICc=0.268 (1,0)(0,0) sim=0.981 wAICc=0.326 (0,1)(0,0) sim=0.977 wAICc=0.295 (1,1)(0,0) sim=0.962 wAICc=0.108 (3,2)(0,0) sim=0.795 wAICc=0.003 (1,2)(0,0) sim=0.000 wAICc=0.000 (2,1)(0,0) sim=0.000 wAICc=0.000 (2,2)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,0)(0,0)s=1 sim=1.0000 wAICc=0.2677",
+"det": "0,0,0,0,1.000000"
+},
+"ns8.4|mlp": {
+"adf": "ADF: estadístico=-6.1771, retardos=4, crítico 5%=-2.8765, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.1829, retardos=5, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=1, q=1, P=0, Q=0",
+"shortlist": "MLP shortlist (8): (1,0)(0,0) sim=0.954 wAICc=0.427 (0,1)(0,0) sim=0.843 wAICc=0.294 (1,1)(0,0) sim=0.837 wAICc=0.182 (2,1)(0,0) sim=0.826 wAICc=0.080 (1,2)(0,0) sim=0.797 wAICc=0.000 (2,2)(0,0) sim=0.734 wAICc=0.002 (3,2)(0,0) sim=0.663 wAICc=0.015 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (1,0)(0,0)s=1 sim=0.9540 wAICc=0.4268",
+"det": "1,0,0,0,0.953976"
+},
+"ns9.0|mlp": {
+"adf": "ADF: estadístico=-9.9172, retardos=3, crítico 5%=-2.8764, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.3035, retardos=27, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=4, q=2, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (0,2)(0,0) sim=0.958 wAICc=0.384 (0,3)(0,0) sim=0.957 wAICc=0.198 (1,2)(0,0) sim=0.959 wAICc=0.214 (2,1)(0,0) sim=0.892 wAICc=0.017 (4,0)(0,0) sim=0.901 wAICc=0.076 (2,2)(0,0) sim=0.895 wAICc=0.041 (1,3)(0,0) sim=0.892 wAICc=0.005 (3,2)(0,0) sim=0.804 wAICc=0.048 (4,2)(0,0) sim=0.790 wAICc=0.017 (1,1)(0,0) sim=0.748 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,2)(0,0)s=1 sim=0.9583 wAICc=0.3842",
+"det": "0,2,0,0,0.958320"
+},
+"ns9.0|classic": {
+"adf": "ADF: estadístico=-9.9172, retardos=3, crítico 5%=-2.8764, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.3035, retardos=27, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=4, q=2, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (0,2)(0,0) sim=0.958 wAICc=0.384 (0,3)(0,0) sim=0.957 wAICc=0.198 (1,2)(0,0) sim=0.959 wAICc=0.214 (2,1)(0,0) sim=0.892 wAICc=0.017 (4,0)(0,0) sim=0.901 wAICc=0.076 (2,2)(0,0) sim=0.895 wAICc=0.041 (1,3)(0,0) sim=0.892 wAICc=0.005 (3,2)(0,0) sim=0.804 wAICc=0.048 (4,2)(0,0) sim=0.790 wAICc=0.017 (1,1)(0,0) sim=0.748 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"det": "1,2,0,0,0.952117"
+},
+"ns9.1|mlp": {
+"adf": "ADF: estadístico=-11.1152, retardos=2, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0882, retardos=31, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=3, q=2, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (0,2)(0,0) sim=0.932 wAICc=0.189 (2,0)(0,0) sim=0.944 wAICc=0.093 (3,0)(0,0) sim=0.965 wAICc=0.284 (2,1)(0,0) sim=0.933 wAICc=0.193 (1,2)(0,0) sim=0.923 wAICc=0.074 (3,1)(0,0) sim=0.890 wAICc=0.080 (2,2)(0,0) sim=0.890 wAICc=0.059 (0,1)(0,0) sim=0.785 wAICc=0.000 (1,1)(0,0) sim=0.776 wAICc=0.000 (3,2)(0,0) sim=0.774 wAICc=0.028 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,2)(0,0)s=1 sim=0.9317 wAICc=0.1890",
+"det": "0,2,0,0,0.931741"
+},
+"ns9.2|mlp": {
+"adf": "ADF: estadístico=-10.9393, retardos=2, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0997, retardos=28, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=3, q=3, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (3,0)(0,0) sim=0.958 wAICc=0.246 (0,3)(0,0) sim=0.927 wAICc=0.202 (2,1)(0,0) sim=0.961 wAICc=0.228 (2,0)(0,0) sim=0.904 wAICc=0.041 (1,2)(0,0) sim=0.891 wAICc=0.035 (3,1)(0,0) sim=0.897 wAICc=0.123 (2,2)(0,0) sim=0.898 wAICc=0.113 (1,1)(0,0) sim=0.759 wAICc=0.000 (3,2)(0,0) sim=0.760 wAICc=0.012 (3,3)(0,0) sim=0.591 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (3,0)(0,0)s=1 sim=0.9581 wAICc=0.2456",
+"det": "3,0,0,0,0.958113"
+},
+"ns9.3|mlp": {
+"adf": "ADF: estadístico=-12.2398, retardos=1, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.3766, retardos=16, crítico 5%=0.4630, rechaza H0=NO, p=0.0873",
+"eff": "Órdenes efectivos determinados: p=2, q=2, P=0, Q=0",
+"shortlist": "MLP shortlist (10): (2,0)(0,0) sim=0.970 wAICc=0.243 (0,2)(0,0) sim=0.958 wAICc=0.081 (3,0)(0,0) sim=0.969 wAICc=0.213 (2,1)(0,0) sim=0.968 wAICc=0.237 (1,2)(0,0) sim=0.953 wAICc=0.076 (3,1)(0,0) sim=0.898 wAICc=0.075 (2,2)(0,0) sim=0.899 wAICc=0.074 (1,1)(0,0) sim=0.782 wAICc=0.000 (3,2)(0,0) sim=0.613 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (2,0)(0,0)s=1 sim=0.9697 wAICc=0.2434",
+"det": "2,0,0,0,0.969694"
+},
+"ns9.4|mlp": {
+"adf": "ADF: estadístico=-9.1624, retardos=3, crítico 5%=-2.8764, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0783, retardos=13, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=4, q=2, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (0,2)(0,0) sim=0.916 wAICc=0.296 (0,3)(0,0) sim=0.916 wAICc=0.141 (1,2)(0,0) sim=0.919 wAICc=0.146 (2,1)(0,0) sim=0.899 wAICc=0.114 (4,0)(0,0) sim=0.900 wAICc=0.251 (2,2)(0,0) sim=0.854 wAICc=0.051 (1,1)(0,0) sim=0.763 wAICc=0.000 (3,1)(0,0) sim=0.705 wAICc=0.000 (1,3)(0,0) sim=0.687 wAICc=0.000 (4,2)(0,0) sim=0.604 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,2)(0,0)s=1 sim=0.9162 wAICc=0.2960",
+"det": "0,2,0,0,0.916212"
+},
+"ns10.0|mlp": {
+"adf": "ADF: estadístico=-3.8440, retardos=10, crítico 5%=-2.8770, rechaza H0=SÍ, p=0.0025",
+"kpss": "KPSS: estadístico=0.4926, retardos=9, crítico 5%=0.4630, rechaza H0=SÍ, p=0.0433",
+"eff": "Órdenes efectivos determinados: p=1, q=5, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (1,0)(0,0) sim=0.925 wAICc=0.346 (2,0)(0,0) sim=0.924 wAICc=0.186 (1,1)(0,0) sim=0.912 wAICc=0.174 (1,2)(0,0) sim=0.902 wAICc=0.062 (2,1)(0,0) sim=0.941 wAICc=0.057 (2,2)(0,0) sim=0.837 wAICc=0.045 (3,2)(0,0) sim=0.753 wAICc=0.032 (1,5)(0,0) sim=0.744 wAICc=0.099 (3,1)(0,0) sim=0.599 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000 (0,5)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (1,0)(0,0)s=1 sim=0.9250 wAICc=0.3457",
+"det": "1,0,0,0,0.924987"
+},
+"ns10.1|mlp": {
+"adf": "ADF: estadístico=-0.9999, retardos=0, crítico 5%=-2.8762, rechaza H0=NO, p=0.7533",
+"kpss": "KPSS: estadístico=1.7902, retardos=9, crítico 5%=0.4630, rechaza H0=SÍ, p=0.0100",
+"eff": "Órdenes efectivos determinados: p=1, q=5, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (1,0)(0,0) sim=0.987 wAICc=0.805 (3,0)(0,0) sim=0.969 wAICc=0.195 (0,5)(0,0) sim=0.358 wAICc=0.000 (3,3)(0,0) sim=0.261 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000 (1,1)(0,0) sim=0.000 wAICc=0.000 (1,2)(0,0) sim=0.000 wAICc=0.000 (2,1)(0,0) sim=0.000 wAICc=0.000 (1,3)(0,0) sim=0.000 wAICc=0.000 (3,1)(0,0) sim=0.000 wAICc=0.000 (1,5)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (1,0)(0,0)s=1 sim=0.9872 wAICc=0.8046",
+"det": "1,0,0,0,0.987184"
+},
+"ns10.2|mlp": {
+"adf": "ADF: estadístico=-3.0273, retardos=0, crítico 5%=-2.8762, rechaza H0=SÍ, p=0.0324",
+"kpss": "KPSS: estadístico=0.2962, retardos=9, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=1, q=5, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (1,0)(0,0) sim=0.962 wAICc=0.382 (2,0)(0,0) sim=0.950 wAICc=0.140 (1,1)(0,0) sim=0.928 wAICc=0.151 (1,2)(0,0) sim=0.910 wAICc=0.059 (2,2)(0,0) sim=0.845 wAICc=0.029 (3,1)(0,0) sim=0.845 wAICc=0.019 (1,5)(0,0) sim=0.744 wAICc=0.220 (2,1)(0,0) sim=0.691 wAICc=0.000 (3,2)(0,0) sim=0.482 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000 (0,5)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (1,0)(0,0)s=1 sim=0.9623 wAICc=0.3819",
+"det": "1,0,0,0,0.962332"
+},
+"ns10.3|mlp": {
+"adf": "ADF: estadístico=-3.1922, retardos=1, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0204",
+"kpss": "KPSS: estadístico=0.3026, retardos=9, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=1, q=5, P=0, Q=0",
+"shortlist": "MLP shortlist (10): (1,0)(0,0) sim=0.966 wAICc=0.261 (2,0)(0,0) sim=0.944 wAICc=0.205 (1,1)(0,0) sim=0.941 wAICc=0.249 (2,1)(0,0) sim=0.937 wAICc=0.122 (1,2)(0,0) sim=0.942 wAICc=0.099 (2,2)(0,0) sim=0.888 wAICc=0.028 (3,1)(0,0) sim=0.890 wAICc=0.028 (1,5)(0,0) sim=0.773 wAICc=0.008 (0,5)(0,0) sim=0.278 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (1,0)(0,0)s=1 sim=0.9662 wAICc=0.2610",
+"det": "1,0,0,0,0.966188"
+},
+"ns10.4|mlp": {
+"adf": "ADF: estadístico=-4.1288, retardos=0, crítico 5%=-2.8762, rechaza H0=SÍ, p=0.0009",
+"kpss": "KPSS: estadístico=0.3894, retardos=8, crítico 5%=0.4630, rechaza H0=NO, p=0.0817",
+"eff": "Órdenes efectivos determinados: p=1, q=5, P=0, Q=0",
+"shortlist": "MLP shortlist (11): (1,0)(0,0) sim=0.958 wAICc=0.168 (1,1)(0,0) sim=0.951 wAICc=0.070 (3,0)(0,0) sim=0.966 wAICc=0.334 (1,2)(0,0) sim=0.942 wAICc=0.157 (3,1)(0,0) sim=0.882 wAICc=0.119 (2,2)(0,0) sim=0.881 wAICc=0.063 (3,2)(0,0) sim=0.788 wAICc=0.055 (1,5)(0,0) sim=0.702 wAICc=0.033 (2,1)(0,0) sim=0.600 wAICc=0.000 (0,5)(0,0) sim=0.628 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (1,0)(0,0)s=1 sim=0.9581 wAICc=0.1681",
+"det": "1,0,0,0,0.958127"
+},
+"ns11.0|mlp": {
+"adf": "ADF: estadístico=-13.7460, retardos=0, crítico 5%=-2.8762, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.1256, retardos=1, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=0, q=0, P=0, Q=0",
+"shortlist": "MLP shortlist (9): (0,0)(0,0) sim=1.000 wAICc=0.469 (1,0)(0,0) sim=0.980 wAICc=0.177 (2,0)(0,0) sim=0.978 wAICc=0.157 (1,1)(0,0) sim=0.957 wAICc=0.042 (1,2)(0,0) sim=0.967 wAICc=0.080 (2,1)(0,0) sim=0.965 wAICc=0.061 (3,1)(0,0) sim=0.885 wAICc=0.004 (2,2)(0,0) sim=0.882 wAICc=0.002 (3,2)(0,0) sim=0.806 wAICc=0.009",
+"ident": "MLP-direct identification: (0,0)(0,0)s=1 sim=1.0000 wAICc=0.4685",
+"det": "0,0,0,0,1.000000"
+},
+"ns11.1|mlp": {
+"adf": "ADF: estadístico=-9.9765, retardos=2, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.2053, retardos=9, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=3, q=3, P=0, Q=0",
+"shortlist": "MLP shortlist (10): (3,0)(0,0) sim=0.959 wAICc=0.401 (0,3)(0,0) sim=0.951 wAICc=0.334 (3,1)(0,0) sim=0.889 wAICc=0.147 (0,1)(0,0) sim=0.813 wAICc=0.034 (1,1)(0,0) sim=0.782 wAICc=0.000 (1,2)(0,0) sim=0.778 wAICc=0.003 (3,2)(0,0) sim=0.793 wAICc=0.059 (3,3)(0,0) sim=0.784 wAICc=0.021 (2,2)(0,0) sim=0.711 wAICc=0.000 (2,1)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (3,0)(0,0)s=1 sim=0.9590 wAICc=0.4014",
+"det": "3,0,0,0,0.958951"
+},
+"ns11.2|mlp": {
+"adf": "ADF: estadístico=-12.2029, retardos=1, crítico 5%=-2.8763, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.1389, retardos=9, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=2, q=2, P=0, Q=0",
+"shortlist": "MLP shortlist (10): (2,0)(0,0) sim=0.969 wAICc=0.314 (0,2)(0,0) sim=0.962 wAICc=0.151 (2,1)(0,0) sim=0.947 wAICc=0.101 (1,2)(0,0) sim=0.947 wAICc=0.055 (0,0)(0,0) sim=0.860 wAICc=0.061 (2,2)(0,0) sim=0.896 wAICc=0.185 (3,1)(0,0) sim=0.886 wAICc=0.043 (0,1)(0,0) sim=0.813 wAICc=0.026 (1,1)(0,0) sim=0.800 wAICc=0.013 (3,2)(0,0) sim=0.801 wAICc=0.050",
+"ident": "MLP-direct identification: (2,0)(0,0)s=1 sim=0.9689 wAICc=0.3136",
+"det": "2,0,0,0,0.968850"
+},
+"ns11.3|mlp": {
+"adf": "ADF: estadístico=-15.0532, retardos=0, crítico 5%=-2.8762, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.1565, retardos=1, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=0, q=0, P=0, Q=0",
+"shortlist": "MLP shortlist (8): (0,0)(0,0) sim=1.000 wAICc=0.344 (1,0)(0,0) sim=0.981 wAICc=0.209 (0,1)(0,0) sim=0.980 wAICc=0.185 (1,1)(0,0) sim=0.969 wAICc=0.159 (1,2)(0,0) sim=0.951 wAICc=0.050 (2,1)(0,0) sim=0.954 wAICc=0.047 (2,2)(0,0) sim=0.877 wAICc=0.004 (3,1)(0,0) sim=0.873 wAICc=0.002",
+"ident": "MLP-direct identification: (0,0)(0,0)s=1 sim=1.0000 wAICc=0.3439",
+"det": "0,0,0,0,1.000000"
+},
+"ns11.4|mlp": {
+"adf": "ADF: estadístico=-12.9485, retardos=0, crítico 5%=-2.8762, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0524, retardos=1, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=0, q=0, P=0, Q=0",
+"shortlist": "MLP shortlist (8): (0,0)(0,0) sim=1.000 wAICc=0.366 (1,0)(0,0) sim=0.985 wAICc=0.254 (0,1)(0,0) sim=0.978 wAICc=0.224 (1,1)(0,0) sim=0.963 wAICc=0.063 (2,1)(0,0) sim=0.948 wAICc=0.048 (1,2)(0,0) sim=0.939 wAICc=0.028 (3,1)(0,0) sim=0.892 wAICc=0.015 (2,2)(0,0) sim=0.886 wAICc=0.002",
+"ident": "MLP-direct identification: (0,0)(0,0)s=1 sim=1.0000 wAICc=0.3657",
+"det": "0,0,0,0,1.000000"
+},
+"se0.0|mlp": {
+"hac": "HAC F=29.7348 (p=0.0000)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0000)",
+"adf": "ADF: estadístico=-2.6278, retardos=12, crítico 5%=-2.8760, rechaza H0=NO, p=0.0874",
+"kpss": "KPSS: estadístico=0.0601, retardos=3, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=0, q=0, P=0, Q=0",
+"shortlist": "MLP shortlist (13): (0,0)(0,0) sim=1.000 wAICc=0.265 (0,1)(0,0) sim=0.965 wAICc=0.110 (1,0)(0,0) sim=0.970 wAICc=0.100 (0,0)(1,0) sim=0.969 wAICc=0.097 (0,0)(0,1) sim=0.969 wAICc=0.095 (0,1)(1,0) sim=0.950 wAICc=0.040 (1,0)(1,0) sim=0.955 wAICc=0.036 (1,0)(0,1) sim=0.955 wAICc=0.036 (1,1)(0,0) sim=0.954 wAICc=0.122 (1,1)(1,0) sim=0.939 wAICc=0.043 (3,1)(0,0) sim=0.888 wAICc=0.032 (2,2)(0,0) sim=0.877 wAICc=0.007 (3,2)(0,0) sim=0.793 wAICc=0.015",
+"ident": "MLP-direct identification: (0,0)(0,0)s=12 sim=1.0000 wAICc=0.2653",
+"det": "0,0,0,0,1.000000"
+},
+"se0.0|classic": {
+"hac": "HAC F=29.7348 (p=0.0000)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0000)",
+"adf": "ADF: estadístico=-2.6278, retardos=12, crítico 5%=-2.8760, rechaza H0=NO, p=0.0874",
+"kpss": "KPSS: estadístico=0.0601, retardos=3, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=0, q=0, P=0, Q=0",
+"shortlist": "MLP shortlist (13): (0,0)(0,0) sim=1.000 wAICc=0.265 (0,1)(0,0) sim=0.965 wAICc=0.110 (1,0)(0,0) sim=0.970 wAICc=0.100 (0,0)(1,0) sim=0.969 wAICc=0.097 (0,0)(0,1) sim=0.969 wAICc=0.095 (0,1)(1,0) sim=0.950 wAICc=0.040 (1,0)(1,0) sim=0.955 wAICc=0.036 (1,0)(0,1) sim=0.955 wAICc=0.036 (1,1)(0,0) sim=0.954 wAICc=0.122 (1,1)(1,0) sim=0.939 wAICc=0.043 (3,1)(0,0) sim=0.888 wAICc=0.032 (2,2)(0,0) sim=0.877 wAICc=0.007 (3,2)(0,0) sim=0.793 wAICc=0.015",
+"det": "0,0,0,0,1.000000"
+},
+"se0.1|mlp": {
+"hac": "HAC F=26.2550 (p=0.0000)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0000)",
+"adf": "ADF: estadístico=-3.6850, retardos=15, crítico 5%=-2.8762, rechaza H0=SÍ, p=0.0043",
+"kpss": "KPSS: estadístico=0.0676, retardos=1, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=0, q=0, P=0, Q=0",
+"shortlist": "MLP shortlist (13): (0,0)(0,0) sim=0.998 wAICc=0.164 (0,1)(0,0) sim=0.959 wAICc=0.234 (1,0)(0,0) sim=0.966 wAICc=0.189 (1,1)(0,0) sim=0.944 wAICc=0.080 (2,1)(0,0) sim=0.928 wAICc=0.000 (1,2)(0,0) sim=0.925 wAICc=0.000 (0,0)(0,1) sim=0.880 wAICc=0.102 (1,0)(0,1) sim=0.878 wAICc=0.111 (2,2)(0,0) sim=0.862 wAICc=0.000 (0,0)(1,1) sim=0.742 wAICc=0.034 (0,1)(1,1) sim=0.732 wAICc=0.039 (1,0)(1,1) sim=0.739 wAICc=0.034 (1,1)(1,1) sim=0.668 wAICc=0.013",
+"ident": "MLP-direct identification: (0,0)(0,0)s=12 sim=0.9982 wAICc=0.1637",
+"det": "0,0,0,0,0.998210"
+},
+"se0.2|mlp": {
+"hac": "HAC F=29.9007 (p=0.0000)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0000)",
+"adf": "ADF: estadístico=-3.1547, retardos=11, crítico 5%=-2.8759, rechaza H0=SÍ, p=0.0228",
+"kpss": "KPSS: estadístico=0.1239, retardos=2, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=1, q=1, P=0, Q=0",
+"shortlist": "MLP shortlist (13): (1,0)(0,0) sim=0.980 wAICc=0.231 (0,0)(0,0) sim=0.929 wAICc=0.067 (1,1)(0,0) sim=0.967 wAICc=0.091 (1,2)(0,0) sim=0.953 wAICc=0.030 (2,1)(0,0) sim=0.951 wAICc=0.023 (0,1)(0,0) sim=0.903 wAICc=0.184 (1,0)(0,1) sim=0.890 wAICc=0.099 (1,0)(1,0) sim=0.890 wAICc=0.096 (1,1)(1,0) sim=0.876 wAICc=0.037 (2,2)(0,0) sim=0.889 wAICc=0.011 (0,0)(0,1) sim=0.808 wAICc=0.028 (0,0)(1,0) sim=0.808 wAICc=0.028 (0,1)(1,0) sim=0.812 wAICc=0.077",
+"ident": "MLP-direct identification: (1,0)(0,0)s=12 sim=0.9804 wAICc=0.2306",
+"det": "1,0,0,0,0.980391"
+},
+"se0.3|mlp": {
+"hac": "HAC F=22.6885 (p=0.0000)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0000)",
+"adf": "ADF: estadístico=-3.9350, retardos=14, crítico 5%=-2.8761, rechaza H0=SÍ, p=0.0018",
+"kpss": "KPSS: estadístico=0.0298, retardos=6, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=0, q=0, P=0, Q=0",
+"shortlist": "MLP shortlist (14): (0,0)(0,0) sim=0.993 wAICc=0.232 (0,1)(0,0) sim=0.951 wAICc=0.114 (1,0)(0,0) sim=0.954 wAICc=0.104 (1,1)(0,0) sim=0.933 wAICc=0.001 (2,1)(0,0) sim=0.937 wAICc=0.106 (1,2)(0,0) sim=0.936 wAICc=0.013 (0,0)(0,1) sim=0.879 wAICc=0.143 (0,0)(1,0) sim=0.879 wAICc=0.135 (3,1)(0,0) sim=0.874 wAICc=0.072 (2,2)(0,0) sim=0.865 wAICc=0.004 (0,0)(1,1) sim=0.732 wAICc=0.036 (0,1)(1,1) sim=0.720 wAICc=0.021 (1,0)(1,1) sim=0.723 wAICc=0.018 (1,1)(1,1) sim=0.652 wAICc=0.000",
+"ident": "MLP-direct identification: (0,0)(0,0)s=12 sim=0.9931 wAICc=0.2318",
+"det": "0,0,0,0,0.993135"
+},
+"se0.4|mlp": {
+"hac": "HAC F=22.5924 (p=0.0000)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0000)",
+"adf": "ADF: estadístico=-3.5805, retardos=11, crítico 5%=-2.8759, rechaza H0=SÍ, p=0.0061",
+"kpss": "KPSS: estadístico=0.0235, retardos=5, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=2, q=2, P=0, Q=0",
+"shortlist": "MLP shortlist (14): (0,0)(0,0) sim=0.935 wAICc=0.029 (0,0)(0,1) sim=0.909 wAICc=0.070 (2,0)(0,1) sim=0.946 wAICc=0.222 (1,0)(0,0) sim=0.900 wAICc=0.014 (0,1)(0,0) sim=0.897 wAICc=0.013 (1,0)(0,1) sim=0.905 wAICc=0.037 (0,1)(0,1) sim=0.901 wAICc=0.034 (1,1)(0,0) sim=0.875 wAICc=0.000 (0,2)(0,1) sim=0.879 wAICc=0.402 (1,2)(0,0) sim=0.860 wAICc=0.059 (2,1)(0,0) sim=0.861 wAICc=0.035 (1,1)(0,1) sim=0.879 wAICc=0.000 (2,2)(0,0) sim=0.801 wAICc=0.029 (2,2)(0,1) sim=0.722 wAICc=0.056",
+"ident": "MLP-direct identification: (0,0)(0,0)s=12 sim=0.9350 wAICc=0.0286",
+"det": "0,0,0,0,0.935048"
+},
+"se1.0|mlp": {
+"hac": "HAC F=19.3414 (p=0.0000)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0000)",
+"adf": "ADF: estadístico=-3.8868, retardos=13, crítico 5%=-2.8760, rechaza H0=SÍ, p=0.0021",
+"kpss": "KPSS: estadístico=0.2912, retardos=4, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=1, q=4, P=0, Q=2",
+"shortlist": "MLP shortlist (14): (1,0)(0,0) sim=0.956 wAICc=0.313 (2,0)(0,0) sim=0.960 wAICc=0.132 (1,1)(0,0) sim=0.957 wAICc=0.134 (1,2)(0,0) sim=0.931 wAICc=0.063 (1,0)(1,0) sim=0.861 wAICc=0.111 (1,0)(0,1) sim=0.861 wAICc=0.110 (2,0)(1,0) sim=0.865 wAICc=0.046 (2,0)(0,1) sim=0.865 wAICc=0.046 (1,1)(1,0) sim=0.862 wAICc=0.047 (2,1)(0,0) sim=0.873 wAICc=0.000 (3,1)(0,0) sim=0.813 wAICc=0.000 (2,1)(1,0) sim=0.729 wAICc=0.000 (0,0)(1,0) sim=0.670 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (1,0)(0,0)s=12 sim=0.9560 wAICc=0.3127",
+"det": "1,0,0,0,0.956006"
+},
+"se1.1|mlp": {
+"hac": "HAC F=16.4798 (p=0.0000)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0000)",
+"adf": "ADF: estadístico=-3.8241, retardos=15, crítico 5%=-2.8762, rechaza H0=SÍ, p=0.0027",
+"kpss": "KPSS: estadístico=0.0746, retardos=4, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=1, q=4, P=0, Q=1",
+"shortlist": "MLP shortlist (14): (1,0)(0,0) sim=0.959 wAICc=0.099 (1,0)(0,1) sim=0.955 wAICc=0.700 (2,0)(0,0) sim=0.937 wAICc=0.038 (1,1)(0,0) sim=0.936 wAICc=0.051 (1,2)(0,0) sim=0.920 wAICc=0.062 (2,1)(0,0) sim=0.850 wAICc=0.000 (1,0)(1,1) sim=0.797 wAICc=0.021 (3,1)(0,0) sim=0.826 wAICc=0.001 (1,1)(1,1) sim=0.724 wAICc=0.014 (2,0)(1,1) sim=0.724 wAICc=0.014 (3,2)(0,0) sim=0.699 wAICc=0.000 (0,0)(1,1) sim=0.580 wAICc=0.000 (2,1)(1,1) sim=0.549 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (1,0)(0,0)s=12 sim=0.9588 wAICc=0.0989",
+"det": "1,0,0,0,0.958800"
+},
+"se1.2|mlp": {
+"hac": "HAC F=16.6508 (p=0.0000)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0000)",
+"adf": "ADF: estadístico=-4.3394, retardos=13, crítico 5%=-2.8760, rechaza H0=SÍ, p=0.0004",
+"kpss": "KPSS: estadístico=0.1397, retardos=4, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=1, q=3, P=0, Q=1",
+"shortlist": "MLP shortlist (14): (1,0)(0,0) sim=0.948 wAICc=0.151 (1,0)(0,1) sim=0.954 wAICc=0.438 (2,0)(0,0) sim=0.939 wAICc=0.063 (1,1)(0,0) sim=0.938 wAICc=0.062 (2,0)(0,1) sim=0.945 wAICc=0.202 (1,2)(0,0) sim=0.937 wAICc=0.027 (2,1)(0,0) sim=0.926 wAICc=0.027 (2,2)(0,0) sim=0.873 wAICc=0.011 (1,0)(1,1) sim=0.799 wAICc=0.009 (1,1)(1,1) sim=0.738 wAICc=0.005 (2,0)(1,1) sim=0.738 wAICc=0.005 (2,1)(1,1) sim=0.641 wAICc=0.001 (0,0)(1,1) sim=0.598 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (1,0)(0,0)s=12 sim=0.9475 wAICc=0.1511",
+"det": "1,0,0,0,0.947509"
+},
+"se1.3|mlp": {
+"hac": "HAC F=17.6282 (p=0.0000)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0000)",
+"adf": "ADF: estadístico=-3.3824, retardos=14, crítico 5%=-2.8761, rechaza H0=SÍ, p=0.0116",
+"kpss": "KPSS: estadístico=0.0915, retardos=4, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=1, q=2, P=0, Q=0",
+"shortlist": "MLP shortlist (14): (1,0)(0,0) sim=0.983 wAICc=0.309 (2,0)(0,0) sim=0.971 wAICc=0.126 (1,1)(0,0) sim=0.965 wAICc=0.150 (2,1)(0,0) sim=0.952 wAICc=0.055 (1,2)(0,0) sim=0.950 wAICc=0.052 (1,0)(1,0) sim=0.889 wAICc=0.129 (2,0)(1,0) sim=0.877 wAICc=0.052 (0,2)(1,0) sim=0.858 wAICc=0.007 (1,1)(1,0) sim=0.871 wAICc=0.060 (2,2)(0,0) sim=0.885 wAICc=0.018 (2,1)(1,0) sim=0.808 wAICc=0.022 (1,2)(1,0) sim=0.806 wAICc=0.021 (0,0)(1,0) sim=0.725 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (1,0)(0,0)s=12 sim=0.9833 wAICc=0.3090",
+"det": "1,0,0,0,0.983330"
+},
+"se1.4|mlp": {
+"hac": "HAC F=12.3268 (p=0.0000)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0000)",
+"adf": "ADF: estadístico=-4.6978, retardos=13, crítico 5%=-2.8760, rechaza H0=SÍ, p=0.0001",
+"kpss": "KPSS: estadístico=0.0984, retardos=5, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=3, q=5, P=0, Q=0",
+"shortlist": "MLP shortlist (14): (2,0)(0,0) sim=0.860 wAICc=0.001 (3,0)(0,0) sim=0.890 wAICc=0.096 (1,0)(0,0) sim=0.845 wAICc=0.000 (1,0)(1,0) sim=0.844 wAICc=0.000 (1,2)(0,0) sim=0.875 wAICc=0.053 (2,0)(1,0) sim=0.833 wAICc=0.001 (3,0)(1,0) sim=0.837 wAICc=0.267 (3,1)(0,0) sim=0.870 wAICc=0.556 (1,1)(0,0) sim=0.827 wAICc=0.000 (1,1)(1,0) sim=0.829 wAICc=0.000 (2,2)(0,0) sim=0.815 wAICc=0.025 (2,1)(0,0) sim=0.741 wAICc=0.000 (0,0)(1,0) sim=0.700 wAICc=0.000 (2,1)(1,0) sim=0.692 wAICc=0.000",
+"ident": "MLP-direct identification: (2,0)(0,0)s=12 sim=0.8598 wAICc=0.0007",
+"det": "2,0,0,0,0.859820"
+},
+"se2.0|mlp": {
+"hac": "HAC F=36.8563 (p=0.0000)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0000)",
+"adf": "ADF: estadístico=-2.2428, retardos=14, crítico 5%=-2.8761, rechaza H0=NO, p=0.1911",
+"kpss": "KPSS: estadístico=0.1430, retardos=8, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=2, q=1, P=0, Q=0",
+"shortlist": "MLP shortlist (14): (0,1)(0,0) sim=0.937 wAICc=0.223 (1,0)(0,0) sim=0.926 wAICc=0.006 (2,0)(0,0) sim=0.950 wAICc=0.177 (1,1)(0,0) sim=0.954 wAICc=0.076 (2,1)(0,0) sim=0.938 wAICc=0.077 (1,2)(0,0) sim=0.941 wAICc=0.056 (0,1)(1,0) sim=0.853 wAICc=0.153 (1,0)(1,0) sim=0.842 wAICc=0.006 (2,0)(1,0) sim=0.867 wAICc=0.120 (1,1)(1,0) sim=0.871 wAICc=0.036 (2,2)(0,0) sim=0.874 wAICc=0.027 (2,1)(1,0) sim=0.804 wAICc=0.042 (0,0)(1,0) sim=0.755 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,1)(0,0)s=12 sim=0.9367 wAICc=0.2234",
+"det": "0,1,0,0,0.936670"
+},
+"se2.0|classic": {
+"hac": "HAC F=36.8563 (p=0.0000)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0000)",
+"adf": "ADF: estadístico=-2.2428, retardos=14, crítico 5%=-2.8761, rechaza H0=NO, p=0.1911",
+"kpss": "KPSS: estadístico=0.1430, retardos=8, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=2, q=1, P=0, Q=0",
+"shortlist": "MLP shortlist (14): (0,1)(0,0) sim=0.937 wAICc=0.223 (1,0)(0,0) sim=0.926 wAICc=0.006 (2,0)(0,0) sim=0.950 wAICc=0.177 (1,1)(0,0) sim=0.954 wAICc=0.076 (2,1)(0,0) sim=0.938 wAICc=0.077 (1,2)(0,0) sim=0.941 wAICc=0.056 (0,1)(1,0) sim=0.853 wAICc=0.153 (1,0)(1,0) sim=0.842 wAICc=0.006 (2,0)(1,0) sim=0.867 wAICc=0.120 (1,1)(1,0) sim=0.871 wAICc=0.036 (2,2)(0,0) sim=0.874 wAICc=0.027 (2,1)(1,0) sim=0.804 wAICc=0.042 (0,0)(1,0) sim=0.755 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"det": "0,1,0,0,0.953111"
+},
+"se2.1|mlp": {
+"hac": "HAC F=39.4739 (p=0.0000)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0000)",
+"adf": "ADF: estadístico=-3.5458, retardos=15, crítico 5%=-2.8762, rechaza H0=SÍ, p=0.0069",
+"kpss": "KPSS: estadístico=0.0522, retardos=9, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=5, q=1, P=0, Q=2",
+"shortlist": "MLP shortlist (14): (0,1)(0,0) sim=0.961 wAICc=0.347 (1,1)(0,0) sim=0.948 wAICc=0.166 (2,1)(0,0) sim=0.936 wAICc=0.095 (1,2)(0,0) sim=0.933 wAICc=0.044 (1,0)(0,0) sim=0.890 wAICc=0.001 (2,2)(0,0) sim=0.871 wAICc=0.030 (0,1)(1,1) sim=0.809 wAICc=0.141 (1,0)(1,1) sim=0.737 wAICc=0.000 (1,1)(1,1) sim=0.745 wAICc=0.063 (5,1)(0,0) sim=0.770 wAICc=0.049 (0,0)(1,1) sim=0.657 wAICc=0.000 (5,0)(1,1) sim=0.520 wAICc=0.049 (5,1)(1,1) sim=0.500 wAICc=0.016 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,1)(0,0)s=12 sim=0.9612 wAICc=0.3468",
+"det": "0,1,0,0,0.961245"
+},
+"se2.2|mlp": {
+"hac": "HAC F=61.9925 (p=0.0000)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0000)",
+"adf": "ADF: estadístico=-3.2732, retardos=15, crítico 5%=-2.8762, rechaza H0=SÍ, p=0.0161",
+"kpss": "KPSS: estadístico=0.0298, retardos=7, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=2, q=1, P=0, Q=0",
+"shortlist": "MLP shortlist (14): (0,1)(0,0) sim=0.944 wAICc=0.103 (2,0)(0,0) sim=0.919 wAICc=0.136 (1,1)(0,0) sim=0.930 wAICc=0.025 (2,1)(0,0) sim=0.945 wAICc=0.087 (1,0)(0,0) sim=0.894 wAICc=0.000 (0,1)(1,0) sim=0.856 wAICc=0.249 (1,1)(1,0) sim=0.842 wAICc=0.059 (3,1)(0,0) sim=0.880 wAICc=0.035 (2,2)(0,0) sim=0.880 wAICc=0.030 (1,0)(1,0) sim=0.804 wAICc=0.000 (2,0)(1,0) sim=0.830 wAICc=0.179 (2,1)(1,0) sim=0.807 wAICc=0.097 (0,0)(1,0) sim=0.725 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,1)(0,0)s=12 sim=0.9444 wAICc=0.1027",
+"det": "0,1,0,0,0.944413"
+},
+"se2.3|mlp": {
+"hac": "HAC F=46.7471 (p=0.0000)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0000)",
+"adf": "ADF: estadístico=-3.5166, retardos=12, crítico 5%=-2.8760, rechaza H0=SÍ, p=0.0076",
+"kpss": "KPSS: estadístico=0.0540, retardos=7, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=2, q=5, P=0, Q=3",
+"shortlist": "MLP shortlist (14): (2,0)(0,0) sim=0.904 wAICc=0.277 (2,0)(0,1) sim=0.921 wAICc=0.043 (2,1)(0,0) sim=0.942 wAICc=0.434 (1,0)(0,0) sim=0.870 wAICc=0.001 (1,0)(1,0) sim=0.856 wAICc=0.000 (1,0)(0,1) sim=0.886 wAICc=0.000 (1,1)(0,0) sim=0.884 wAICc=0.018 (2,0)(1,0) sim=0.891 wAICc=0.047 (1,2)(0,0) sim=0.875 wAICc=0.019 (1,1)(1,0) sim=0.871 wAICc=0.004 (2,2)(0,0) sim=0.874 wAICc=0.093 (2,1)(1,0) sim=0.880 wAICc=0.064 (0,0)(1,0) sim=0.765 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (2,0)(0,0)s=12 sim=0.9040 wAICc=0.2773",
+"det": "2,0,0,0,0.904004"
+},
+"se2.4|mlp": {
+"hac": "HAC F=48.1776 (p=0.0000)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0000)",
+"adf": "ADF: estadístico=-4.8774, retardos=12, crítico 5%=-2.8760, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0193, retardos=7, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=4, q=1, P=0, Q=0",
+"shortlist": "MLP shortlist (14): (0,1)(0,0) sim=0.924 wAICc=0.061 (1,0)(0,0) sim=0.901 wAICc=0.000 (0,2)(0,0) sim=0.937 wAICc=0.364 (1,1)(0,0) sim=0.935 wAICc=0.392 (2,1)(0,0) sim=0.906 wAICc=0.010 (1,2)(0,0) sim=0.883 wAICc=0.004 (2,2)(0,0) sim=0.768 wAICc=0.000 (0,1)(1,1) sim=0.691 wAICc=0.011 (1,0)(1,1) sim=0.666 wAICc=0.000 (1,1)(1,1) sim=0.651 wAICc=0.083 (0,2)(1,1) sim=0.654 wAICc=0.072 (1,2)(1,1) sim=0.548 wAICc=0.000 (4,0)(1,1) sim=0.577 wAICc=0.001 (4,1)(1,1) sim=0.424 wAICc=0.002",
+"ident": "MLP-direct identification: (0,1)(0,0)s=12 sim=0.9241 wAICc=0.0605",
+"det": "0,1,0,0,0.924082"
+},
+"se3.0|mlp": {
+"hac": "HAC F=1.8011 (p=0.0556)",
+"verdict": "Resultado detección estacional: NO DETECTADA (p=0.0556)",
+"adf": "ADF: estadístico=-7.6958, retardos=0, crítico 5%=-2.8751, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0484, retardos=7, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=1, q=3, P=0, Q=2",
+"shortlist": "MLP shortlist (13): (1,0)(0,0) sim=0.953 wAICc=0.100 (1,0)(0,1) sim=0.985 wAICc=0.597 (1,0)(1,0) sim=0.951 wAICc=0.051 (1,1)(0,0) sim=0.933 wAICc=0.038 (1,1)(0,1) sim=0.965 wAICc=0.180 (1,1)(1,0) sim=0.932 wAICc=0.016 (1,2)(0,0) sim=0.920 wAICc=0.014 (0,1)(0,0) sim=0.836 wAICc=0.000 (0,1)(0,1) sim=0.867 wAICc=0.000 (2,2)(0,0) sim=0.852 wAICc=0.005 (0,0)(0,1) sim=0.797 wAICc=0.000 (3,2)(0,0) sim=0.662 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (1,0)(0,0)s=12 sim=0.9527 wAICc=0.1001",
+"det": "1,0,0,0,0.952737"
+},
+"se3.1|mlp": {
+"hac": "HAC F=1.2847 (p=0.2351)",
+"verdict": "Resultado detección estacional: NO DETECTADA (p=0.2351)",
+"adf": "ADF: estadístico=-7.2194, retardos=0, crítico 5%=-2.8751, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.2984, retardos=7, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=1, q=3, P=0, Q=1",
+"shortlist": "MLP shortlist (14): (1,0)(0,0) sim=0.962 wAICc=0.034 (1,0)(0,1) sim=0.964 wAICc=0.310 (1,0)(1,0) sim=0.963 wAICc=0.091 (2,0)(0,0) sim=0.936 wAICc=0.017 (1,1)(0,0) sim=0.932 wAICc=0.015 (2,0)(0,1) sim=0.938 wAICc=0.225 (1,1)(0,1) sim=0.935 wAICc=0.215 (1,1)(1,0) sim=0.934 wAICc=0.061 (1,2)(0,0) sim=0.937 wAICc=0.009 (2,1)(0,0) sim=0.918 wAICc=0.002 (2,1)(0,1) sim=0.872 wAICc=0.018 (2,2)(0,0) sim=0.873 wAICc=0.003 (0,0)(0,1) sim=0.763 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (1,0)(0,0)s=12 sim=0.9617 wAICc=0.0344",
+"det": "1,0,0,0,0.961736"
+},
+"se3.2|mlp": {
+"hac": "HAC F=0.9368 (p=0.5060)",
+"verdict": "Resultado detección estacional: NO DETECTADA (p=0.5060)",
+"adf": "ADF: estadístico=-7.0292, retardos=1, crítico 5%=-2.8752, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.2489, retardos=7, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=5, q=3, P=1, Q=0",
+"shortlist": "MLP shortlist (14): (1,0)(0,0) sim=0.863 wAICc=0.015 (1,0)(1,0) sim=0.861 wAICc=0.071 (2,0)(0,0) sim=0.898 wAICc=0.065 (1,1)(0,0) sim=0.896 wAICc=0.060 (2,0)(1,0) sim=0.896 wAICc=0.254 (1,1)(1,0) sim=0.893 wAICc=0.245 (2,1)(0,0) sim=0.897 wAICc=0.025 (1,2)(0,0) sim=0.882 wAICc=0.019 (0,1)(0,0) sim=0.841 wAICc=0.000 (0,1)(1,0) sim=0.838 wAICc=0.000 (2,1)(1,0) sim=0.845 wAICc=0.089 (2,2)(0,0) sim=0.771 wAICc=0.000 (5,0)(0,0) sim=0.782 wAICc=0.033 (5,0)(1,0) sim=0.778 wAICc=0.123",
+"ident": "MLP-direct identification: (1,0)(0,0)s=12 sim=0.8627 wAICc=0.0145",
+"det": "1,0,0,0,0.862656"
+},
+"se3.3|mlp": {
+"hac": "HAC F=1.4337 (p=0.1599)",
+"verdict": "Resultado detección estacional: NO DETECTADA (p=0.1599)",
+"adf": "ADF: estadístico=-7.7665, retardos=0, crítico 5%=-2.8751, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0790, retardos=7, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=1, q=4, P=3, Q=0",
+"shortlist": "MLP shortlist (14): (1,0)(0,0) sim=0.954 wAICc=0.164 (1,0)(1,0) sim=0.950 wAICc=0.245 (1,0)(0,1) sim=0.950 wAICc=0.228 (2,0)(0,0) sim=0.939 wAICc=0.059 (1,1)(0,0) sim=0.939 wAICc=0.060 (2,0)(0,1) sim=0.935 wAICc=0.081 (1,1)(0,1) sim=0.935 wAICc=0.082 (1,2)(0,0) sim=0.927 wAICc=0.050 (3,1)(0,0) sim=0.840 wAICc=0.014 (0,0)(0,1) sim=0.768 wAICc=0.000 (2,1)(0,0) sim=0.743 wAICc=0.000 (3,2)(0,0) sim=0.770 wAICc=0.016 (2,1)(0,1) sim=0.691 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (1,0)(0,0)s=12 sim=0.9545 wAICc=0.1643",
+"det": "1,0,0,0,0.954451"
+},
+"se3.4|mlp": {
+"hac": "HAC F=1.0686 (p=0.3883)",
+"verdict": "Resultado detección estacional: NO DETECTADA (p=0.3883)",
+"adf": "ADF: estadístico=-7.2093, retardos=0, crítico 5%=-2.8751, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.1333, retardos=7, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=1, q=5, P=0, Q=3",
+"shortlist": "MLP shortlist (14): (1,0)(0,0) sim=0.956 wAICc=0.194 (1,0)(0,1) sim=0.948 wAICc=0.208 (1,0)(1,0) sim=0.948 wAICc=0.204 (2,0)(0,0) sim=0.932 wAICc=0.084 (1,1)(0,0) sim=0.931 wAICc=0.087 (2,0)(1,0) sim=0.923 wAICc=0.087 (1,1)(1,0) sim=0.922 wAICc=0.090 (1,2)(0,0) sim=0.931 wAICc=0.035 (2,1)(0,0) sim=0.864 wAICc=0.000 (3,1)(0,0) sim=0.865 wAICc=0.012 (2,1)(1,0) sim=0.807 wAICc=0.000 (0,0)(1,0) sim=0.749 wAICc=0.000 (2,2)(0,0) sim=0.788 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (1,0)(0,0)s=12 sim=0.9563 wAICc=0.1939",
+"det": "1,0,0,0,0.956260"
+},
+"se4.0|mlp": {
+"hac": "HAC F=0.7166 (p=0.7220)",
+"verdict": "Resultado detección estacional: NO DETECTADA (p=0.7220)",
+"adf": "ADF: estadístico=-16.8970, retardos=1, crítico 5%=-2.8752, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0204, retardos=0, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=2, q=4, P=1, Q=1",
+"shortlist": "MLP shortlist (14): (0,1)(1,0) sim=0.880 wAICc=0.065 (2,0)(0,0) sim=0.885 wAICc=0.028 (2,0)(0,1) sim=0.899 wAICc=0.664 (2,1)(0,0) sim=0.920 wAICc=0.013 (0,1)(0,0) sim=0.866 wAICc=0.006 (1,0)(0,0) sim=0.843 wAICc=0.000 (0,1)(0,1) sim=0.880 wAICc=0.054 (1,0)(0,1) sim=0.860 wAICc=0.003 (1,1)(0,0) sim=0.864 wAICc=0.008 (1,1)(0,1) sim=0.878 wAICc=0.147 (2,2)(0,0) sim=0.861 wAICc=0.010 (0,0)(0,1) sim=0.769 wAICc=0.000 (3,2)(0,0) sim=0.758 wAICc=0.002 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,1)(1,0)s=12 sim=0.8803 wAICc=0.0654",
+"det": "0,1,1,0,0.880266"
+},
+"se4.0|classic": {
+"hac": "HAC F=0.7166 (p=0.7220)",
+"verdict": "Resultado detección estacional: NO DETECTADA (p=0.7220)",
+"adf": "ADF: estadístico=-16.8970, retardos=1, crítico 5%=-2.8752, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0204, retardos=0, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=2, q=4, P=1, Q=1",
+"shortlist": "MLP shortlist (14): (0,1)(1,0) sim=0.880 wAICc=0.065 (2,0)(0,0) sim=0.885 wAICc=0.028 (2,0)(0,1) sim=0.899 wAICc=0.664 (2,1)(0,0) sim=0.920 wAICc=0.013 (0,1)(0,0) sim=0.866 wAICc=0.006 (1,0)(0,0) sim=0.843 wAICc=0.000 (0,1)(0,1) sim=0.880 wAICc=0.054 (1,0)(0,1) sim=0.860 wAICc=0.003 (1,1)(0,0) sim=0.864 wAICc=0.008 (1,1)(0,1) sim=0.878 wAICc=0.147 (2,2)(0,0) sim=0.861 wAICc=0.010 (0,0)(0,1) sim=0.769 wAICc=0.000 (3,2)(0,0) sim=0.758 wAICc=0.002 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"det": "3,0,0,0,0.909147"
+},
+"se4.1|mlp": {
+"hac": "HAC F=1.0284 (p=0.4226)",
+"verdict": "Resultado detección estacional: NO DETECTADA (p=0.4226)",
+"adf": "ADF: estadístico=-11.9713, retardos=2, crítico 5%=-2.8753, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.3772, retardos=33, crítico 5%=0.4630, rechaza H0=NO, p=0.0870",
+"eff": "Órdenes efectivos determinados: p=3, q=2, P=0, Q=0",
+"shortlist": "MLP shortlist (12): (0,2)(0,0) sim=0.956 wAICc=0.327 (3,0)(0,0) sim=0.956 wAICc=0.087 (2,1)(0,0) sim=0.956 wAICc=0.181 (0,1)(0,0) sim=0.900 wAICc=0.003 (1,2)(0,0) sim=0.940 wAICc=0.119 (0,0)(0,0) sim=0.864 wAICc=0.000 (1,1)(0,0) sim=0.877 wAICc=0.000 (0,2)(1,0) sim=0.866 wAICc=0.155 (3,1)(0,0) sim=0.883 wAICc=0.061 (2,2)(0,0) sim=0.884 wAICc=0.039 (0,1)(1,0) sim=0.810 wAICc=0.001 (3,2)(0,0) sim=0.789 wAICc=0.026",
+"ident": "MLP-direct identification: (0,2)(0,0)s=12 sim=0.9561 wAICc=0.3269",
+"det": "0,2,0,0,0.956064"
+},
+"se4.2|mlp": {
+"hac": "HAC F=1.3953 (p=0.1771)",
+"verdict": "Resultado detección estacional: NO DETECTADA (p=0.1771)",
+"adf": "ADF: estadístico=-12.0023, retardos=2, crítico 5%=-2.8753, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0993, retardos=31, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=5, q=1, P=0, Q=1",
+"shortlist": "MLP shortlist (14): (0,1)(0,1) sim=0.947 wAICc=0.399 (0,1)(0,0) sim=0.905 wAICc=0.222 (1,0)(0,1) sim=0.902 wAICc=0.047 (1,1)(0,1) sim=0.935 wAICc=0.140 (1,0)(0,0) sim=0.863 wAICc=0.002 (1,1)(0,0) sim=0.893 wAICc=0.061 (2,1)(0,0) sim=0.885 wAICc=0.038 (0,0)(0,1) sim=0.815 wAICc=0.000 (2,2)(0,0) sim=0.819 wAICc=0.024 (3,1)(0,0) sim=0.829 wAICc=0.013 (5,0)(0,1) sim=0.776 wAICc=0.029 (5,1)(0,0) sim=0.720 wAICc=0.004 (5,1)(0,1) sim=0.643 wAICc=0.021 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,1)(0,1)s=12 sim=0.9473 wAICc=0.3989",
+"det": "0,1,0,1,0.947342"
+},
+"se4.3|mlp": {
+"hac": "HAC F=0.9044 (p=0.5371)",
+"verdict": "Resultado detección estacional: NO DETECTADA (p=0.5371)",
+"adf": "ADF: estadístico=-10.1348, retardos=3, crítico 5%=-2.8753, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0637, retardos=10, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=2, q=1, P=0, Q=0",
+"shortlist": "MLP shortlist (14): (0,1)(0,0) sim=0.972 wAICc=0.440 (2,0)(0,0) sim=0.962 wAICc=0.055 (1,1)(0,0) sim=0.943 wAICc=0.187 (1,2)(0,0) sim=0.924 wAICc=0.061 (2,1)(0,0) sim=0.946 wAICc=0.029 (1,0)(0,0) sim=0.900 wAICc=0.000 (0,1)(1,0) sim=0.879 wAICc=0.141 (2,0)(1,0) sim=0.870 wAICc=0.018 (1,1)(1,0) sim=0.851 wAICc=0.059 (2,2)(0,0) sim=0.866 wAICc=0.001 (1,0)(1,0) sim=0.808 wAICc=0.000 (2,1)(1,0) sim=0.804 wAICc=0.009 (0,0)(1,0) sim=0.733 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,1)(0,0)s=12 sim=0.9717 wAICc=0.4396",
+"det": "0,1,0,0,0.971715"
+},
+"se4.4|mlp": {
+"hac": "HAC F=1.5761 (p=0.1079)",
+"verdict": "Resultado detección estacional: NO DETECTADA (p=0.1079)",
+"adf": "ADF: estadístico=-15.2909, retardos=1, crítico 5%=-2.8752, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.1422, retardos=11, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=2, q=1, P=0, Q=0",
+"shortlist": "MLP shortlist (14): (0,1)(0,0) sim=0.961 wAICc=0.085 (2,0)(0,0) sim=0.960 wAICc=0.228 (1,1)(0,0) sim=0.953 wAICc=0.169 (1,0)(0,0) sim=0.909 wAICc=0.008 (2,1)(0,0) sim=0.943 wAICc=0.088 (1,2)(0,0) sim=0.943 wAICc=0.033 (0,1)(1,0) sim=0.873 wAICc=0.047 (2,0)(1,0) sim=0.871 wAICc=0.107 (1,1)(0,1) sim=0.864 wAICc=0.094 (1,1)(1,0) sim=0.864 wAICc=0.073 (2,2)(0,0) sim=0.881 wAICc=0.023 (1,0)(0,1) sim=0.820 wAICc=0.004 (1,0)(1,0) sim=0.819 wAICc=0.002 (2,1)(1,0) sim=0.804 wAICc=0.039",
+"ident": "MLP-direct identification: (0,1)(0,0)s=12 sim=0.9615 wAICc=0.0850",
+"det": "0,1,0,0,0.961474"
+},
+"se5.0|mlp": {
+"hac": "HAC F=2.3954 (p=0.0082)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0082)",
+"adf": "ADF: estadístico=-1.4215, retardos=11, crítico 5%=-2.8759, rechaza H0=NO, p=0.5719",
+"kpss": "KPSS: estadístico=1.3241, retardos=1, crítico 5%=0.4630, rechaza H0=SÍ, p=0.0100",
+"eff": "Órdenes efectivos determinados: p=0, q=0, P=1, Q=3",
+"shortlist": "MLP shortlist (13): (0,0)(1,0) sim=0.936 wAICc=0.490 (0,0)(0,1) sim=0.940 wAICc=0.000 (1,0)(1,0) sim=0.924 wAICc=0.224 (0,1)(1,0) sim=0.923 wAICc=0.210 (1,0)(0,1) sim=0.928 wAICc=0.000 (1,1)(1,0) sim=0.908 wAICc=0.076 (1,0)(0,0) sim=0.853 wAICc=0.000 (0,1)(0,0) sim=0.852 wAICc=0.000 (1,1)(0,0) sim=0.837 wAICc=0.000 (2,1)(0,0) sim=0.821 wAICc=0.000 (2,2)(0,0) sim=0.755 wAICc=0.000 (3,1)(0,0) sim=0.755 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,0)(1,0)s=12 sim=0.9355 wAICc=0.4900",
+"det": "0,0,1,0,0.935529"
+},
+"se5.1|mlp": {
+"hac": "HAC F=9.0855 (p=0.0000)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0000)",
+"adf": "ADF: estadístico=-2.4236, retardos=11, crítico 5%=-2.8759, rechaza H0=NO, p=0.1352",
+"kpss": "KPSS: estadístico=0.4277, retardos=5, crítico 5%=0.4630, rechaza H0=NO, p=0.0652",
+"eff": "Órdenes efectivos determinados: p=0, q=0, P=1, Q=1",
+"shortlist": "MLP shortlist (13): (0,0)(1,0) sim=0.962 wAICc=0.456 (0,0)(0,1) sim=0.962 wAICc=0.065 (0,1)(0,0) sim=0.916 wAICc=0.000 (1,0)(0,0) sim=0.916 wAICc=0.000 (0,1)(1,0) sim=0.954 wAICc=0.195 (1,0)(1,0) sim=0.954 wAICc=0.182 (1,0)(0,1) sim=0.955 wAICc=0.021 (1,1)(0,0) sim=0.902 wAICc=0.000 (1,1)(1,0) sim=0.940 wAICc=0.080 (2,1)(0,0) sim=0.880 wAICc=0.000 (1,2)(0,0) sim=0.845 wAICc=0.000 (3,1)(0,0) sim=0.825 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,0)(1,0)s=12 sim=0.9616 wAICc=0.4560",
+"det": "0,0,1,0,0.961645"
+},
+"se5.2|mlp": {
+"hac": "HAC F=3.1972 (p=0.0005)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0005)",
+"adf": "ADF: estadístico=-0.8328, retardos=11, crítico 5%=-2.8759, rechaza H0=NO, p=0.8093",
+"kpss": "KPSS: estadístico=0.3841, retardos=1, crítico 5%=0.4630, rechaza H0=NO, p=0.0840",
+"eff": "Órdenes efectivos determinados: p=0, q=0, P=1, Q=2",
+"shortlist": "MLP shortlist (13): (0,0)(1,0) sim=0.998 wAICc=0.544 (0,0)(0,1) sim=0.988 wAICc=0.000 (1,0)(1,0) sim=0.984 wAICc=0.196 (0,1)(1,0) sim=0.982 wAICc=0.192 (1,0)(0,1) sim=0.973 wAICc=0.000 (1,1)(1,0) sim=0.967 wAICc=0.068 (0,1)(0,0) sim=0.887 wAICc=0.000 (1,0)(0,0) sim=0.888 wAICc=0.000 (1,1)(0,0) sim=0.872 wAICc=0.000 (1,2)(0,0) sim=0.857 wAICc=0.000 (2,1)(0,0) sim=0.859 wAICc=0.000 (2,2)(0,0) sim=0.790 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,0)(1,0)s=12 sim=0.9984 wAICc=0.5444",
+"det": "0,0,1,0,0.998449"
+},
+"se5.3|mlp": {
+"hac": "HAC F=6.7087 (p=0.0000)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0000)",
+"adf": "ADF: estadístico=-2.6986, retardos=11, crítico 5%=-2.8759, rechaza H0=NO, p=0.0743",
+"kpss": "KPSS: estadístico=0.1237, retardos=7, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=0, q=0, P=2, Q=1",
+"shortlist": "MLP shortlist (13): (0,0)(0,1) sim=0.996 wAICc=0.358 (0,0)(1,0) sim=0.985 wAICc=0.346 (0,1)(1,0) sim=0.971 wAICc=0.107 (1,0)(1,0) sim=0.973 wAICc=0.097 (1,0)(0,1) sim=0.983 wAICc=0.092 (1,1)(1,0) sim=0.955 wAICc=0.001 (1,0)(0,0) sim=0.895 wAICc=0.000 (0,1)(0,0) sim=0.893 wAICc=0.000 (1,1)(0,0) sim=0.877 wAICc=0.000 (2,1)(0,0) sim=0.856 wAICc=0.000 (3,1)(0,0) sim=0.818 wAICc=0.000 (3,2)(0,0) sim=0.727 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,0)(0,1)s=12 sim=0.9955 wAICc=0.3575",
+"det": "0,0,0,1,0.995542"
+},
+"se5.4|mlp": {
+"hac": "HAC F=5.3001 (p=0.0000)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0000)",
+"adf": "ADF: estadístico=-3.0923, retardos=11, crítico 5%=-2.8759, rechaza H0=SÍ, p=0.0271",
+"kpss": "KPSS: estadístico=0.2355, retardos=15, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=4, q=4, P=1, Q=3",
+"shortlist": "MLP shortlist (14): (0,0)(1,0) sim=0.853 wAICc=0.332 (0,0)(0,1) sim=0.863 wAICc=0.186 (0,1)(1,0) sim=0.840 wAICc=0.137 (1,0)(1,0) sim=0.841 wAICc=0.134 (1,1)(1,0) sim=0.824 wAICc=0.063 (4,0)(0,0) sim=0.838 wAICc=0.000 (4,0)(1,0) sim=0.820 wAICc=0.147 (0,1)(0,0) sim=0.777 wAICc=0.000 (1,0)(0,0) sim=0.778 wAICc=0.000 (1,1)(0,0) sim=0.762 wAICc=0.000 (1,2)(0,0) sim=0.748 wAICc=0.000 (2,1)(0,0) sim=0.746 wAICc=0.000 (2,2)(0,0) sim=0.683 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,0)(1,0)s=12 sim=0.8530 wAICc=0.3323",
+"det": "0,0,1,0,0.852980"
+},
+"se6.0|mlp": {
+"hac": "HAC F=2.7076 (p=0.0028)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0028)",
+"adf": "ADF: estadístico=-3.2404, retardos=12, crítico 5%=-2.8760, rechaza H0=SÍ, p=0.0178",
+"kpss": "KPSS: estadístico=0.1155, retardos=4, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=1, q=1, P=1, Q=1",
+"shortlist": "MLP shortlist (14): (1,0)(0,0) sim=0.922 wAICc=0.001 (1,0)(1,0) sim=0.940 wAICc=0.505 (0,1)(1,0) sim=0.927 wAICc=0.025 (2,0)(0,0) sim=0.935 wAICc=0.000 (2,0)(1,0) sim=0.954 wAICc=0.235 (0,1)(0,0) sim=0.909 wAICc=0.000 (1,1)(0,0) sim=0.908 wAICc=0.000 (1,1)(1,0) sim=0.926 wAICc=0.226 (1,2)(0,0) sim=0.898 wAICc=0.000 (2,1)(0,0) sim=0.894 wAICc=0.000 (0,0)(1,0) sim=0.844 wAICc=0.000 (2,1)(1,0) sim=0.864 wAICc=0.008 (2,2)(0,0) sim=0.834 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (1,0)(0,0)s=12 sim=0.9215 wAICc=0.0005",
+"det": "1,0,0,0,0.921535"
+},
+"se6.0|classic": {
+"hac": "HAC F=2.7076 (p=0.0028)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0028)",
+"adf": "ADF: estadístico=-3.2404, retardos=12, crítico 5%=-2.8760, rechaza H0=SÍ, p=0.0178",
+"kpss": "KPSS: estadístico=0.1155, retardos=4, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=1, q=1, P=1, Q=1",
+"shortlist": "MLP shortlist (14): (1,0)(0,0) sim=0.922 wAICc=0.001 (1,0)(1,0) sim=0.940 wAICc=0.505 (0,1)(1,0) sim=0.927 wAICc=0.025 (2,0)(0,0) sim=0.935 wAICc=0.000 (2,0)(1,0) sim=0.954 wAICc=0.235 (0,1)(0,0) sim=0.909 wAICc=0.000 (1,1)(0,0) sim=0.908 wAICc=0.000 (1,1)(1,0) sim=0.926 wAICc=0.226 (1,2)(0,0) sim=0.898 wAICc=0.000 (2,1)(0,0) sim=0.894 wAICc=0.000 (0,0)(1,0) sim=0.844 wAICc=0.000 (2,1)(1,0) sim=0.864 wAICc=0.008 (2,2)(0,0) sim=0.834 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"det": "2,0,1,0,0.953895"
+},
+"se6.1|mlp": {
+"hac": "HAC F=2.7822 (p=0.0022)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0022)",
+"adf": "ADF: estadístico=-2.3510, retardos=12, crítico 5%=-2.8760, rechaza H0=NO, p=0.1560",
+"kpss": "KPSS: estadístico=0.3244, retardos=7, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=1, q=5, P=1, Q=1",
+"shortlist": "MLP shortlist (14): (1,0)(1,0) sim=0.943 wAICc=0.566 (1,0)(0,1) sim=0.950 wAICc=0.002 (2,0)(1,0) sim=0.929 wAICc=0.176 (2,0)(0,1) sim=0.937 wAICc=0.001 (1,1)(1,0) sim=0.929 wAICc=0.190 (1,0)(0,0) sim=0.874 wAICc=0.000 (2,0)(0,0) sim=0.861 wAICc=0.000 (1,1)(0,0) sim=0.860 wAICc=0.000 (1,2)(0,0) sim=0.845 wAICc=0.000 (2,1)(0,0) sim=0.845 wAICc=0.000 (2,1)(1,0) sim=0.864 wAICc=0.066 (0,0)(1,0) sim=0.771 wAICc=0.000 (2,2)(0,0) sim=0.783 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (1,0)(1,0)s=12 sim=0.9427 wAICc=0.5661",
+"det": "1,0,1,0,0.942694"
+},
+"se6.2|mlp": {
+"hac": "HAC F=4.6912 (p=0.0000)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0000)",
+"adf": "ADF: estadístico=-2.2820, retardos=12, crítico 5%=-2.8760, rechaza H0=NO, p=0.1778",
+"kpss": "KPSS: estadístico=0.2383, retardos=6, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=1, q=3, P=1, Q=1",
+"shortlist": "MLP shortlist (14): (1,0)(0,0) sim=0.921 wAICc=0.000 (1,0)(1,0) sim=0.947 wAICc=0.291 (1,0)(0,1) sim=0.949 wAICc=0.219 (2,0)(0,0) sim=0.914 wAICc=0.000 (1,1)(0,0) sim=0.923 wAICc=0.000 (2,0)(1,0) sim=0.940 wAICc=0.157 (2,0)(0,1) sim=0.942 wAICc=0.149 (1,1)(1,0) sim=0.947 wAICc=0.135 (1,2)(0,0) sim=0.906 wAICc=0.000 (2,1)(0,0) sim=0.907 wAICc=0.000 (2,1)(1,0) sim=0.882 wAICc=0.050 (0,0)(1,0) sim=0.806 wAICc=0.000 (2,2)(0,0) sim=0.823 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (1,0)(0,0)s=12 sim=0.9213 wAICc=0.0001",
+"det": "1,0,0,0,0.921328"
+},
+"se6.3|mlp": {
+"hac": "HAC F=2.4678 (p=0.0064)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0064)",
+"adf": "ADF: estadístico=-2.9985, retardos=12, crítico 5%=-2.8760, rechaza H0=SÍ, p=0.0350",
+"kpss": "KPSS: estadístico=0.2859, retardos=3, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=1, q=1, P=1, Q=1",
+"shortlist": "MLP shortlist (13): (1,0)(1,0) sim=0.951 wAICc=0.457 (0,1)(1,0) sim=0.952 wAICc=0.066 (1,0)(0,1) sim=0.952 wAICc=0.000 (1,1)(1,0) sim=0.949 wAICc=0.477 (1,1)(0,1) sim=0.950 wAICc=0.000 (0,1)(0,0) sim=0.877 wAICc=0.000 (1,0)(0,0) sim=0.877 wAICc=0.000 (0,0)(1,0) sim=0.846 wAICc=0.000 (1,1)(0,0) sim=0.873 wAICc=0.000 (2,1)(0,0) sim=0.861 wAICc=0.000 (1,2)(0,0) sim=0.859 wAICc=0.000 (2,2)(0,0) sim=0.795 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (1,0)(1,0)s=12 sim=0.9514 wAICc=0.4565",
+"det": "1,0,1,0,0.951419"
+},
+"se6.4|mlp": {
+"hac": "HAC F=7.3050 (p=0.0000)",
+"verdict": "Resultado detección estacional: DETECTADA (p=0.0000)",
+"adf": "ADF: estadístico=-2.2845, retardos=12, crítico 5%=-2.8760, rechaza H0=NO, p=0.1770",
+"kpss": "KPSS: estadístico=0.6728, retardos=6, crítico 5%=0.4630, rechaza H0=SÍ, p=0.0160",
+"eff": "Órdenes efectivos determinados: p=3, q=5, P=1, Q=2",
+"shortlist": "MLP shortlist (14): (1,0)(0,0) sim=0.821 wAICc=0.000 (1,0)(1,0) sim=0.855 wAICc=0.099 (0,1)(1,0) sim=0.844 wAICc=0.051 (2,0)(1,0) sim=0.837 wAICc=0.219 (1,1)(1,0) sim=0.834 wAICc=0.535 (3,0)(1,0) sim=0.850 wAICc=0.096 (0,1)(0,0) sim=0.809 wAICc=0.000 (2,0)(0,0) sim=0.804 wAICc=0.000 (1,1)(0,0) sim=0.800 wAICc=0.000 (3,1)(0,0) sim=0.797 wAICc=0.000 (2,1)(0,0) sim=0.733 wAICc=0.000 (2,1)(1,0) sim=0.710 wAICc=0.000 (2,2)(0,0) sim=0.720 wAICc=0.000 (3,2)(0,0) sim=0.704 wAICc=0.000",
+"ident": "MLP-direct identification: (1,0)(0,0)s=12 sim=0.8208 wAICc=0.0000",
+"det": "1,0,0,0,0.820769"
+},
+"se7.0|mlp": {
+"hac": "HAC F=0.2482 (p=0.9934)",
+"verdict": "Resultado detección estacional: NO DETECTADA (p=0.9934)",
+"adf": "ADF: estadístico=-4.3867, retardos=12, crítico 5%=-2.8760, rechaza H0=SÍ, p=0.0003",
+"kpss": "KPSS: estadístico=0.0354, retardos=8, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=2, q=1, P=1, Q=1",
+"shortlist": "MLP shortlist (14): (0,1)(0,1) sim=0.935 wAICc=0.622 (1,0)(0,1) sim=0.922 wAICc=0.033 (2,0)(0,0) sim=0.919 wAICc=0.000 (2,0)(0,1) sim=0.950 wAICc=0.110 (0,1)(0,0) sim=0.904 wAICc=0.000 (1,0)(0,0) sim=0.893 wAICc=0.000 (1,1)(0,0) sim=0.896 wAICc=0.000 (1,1)(0,1) sim=0.927 wAICc=0.199 (1,2)(0,0) sim=0.881 wAICc=0.000 (2,1)(0,0) sim=0.883 wAICc=0.000 (0,0)(0,1) sim=0.828 wAICc=0.000 (2,1)(0,1) sim=0.864 wAICc=0.036 (2,2)(0,0) sim=0.792 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,1)(0,1)s=12 sim=0.9348 wAICc=0.6221",
+"det": "0,1,0,1,0.934794"
+},
+"se7.1|mlp": {
+"hac": "HAC F=0.1289 (p=0.9997)",
+"verdict": "Resultado detección estacional: NO DETECTADA (p=0.9997)",
+"adf": "ADF: estadístico=-5.0214, retardos=14, crítico 5%=-2.8761, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0826, retardos=10, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=2, q=1, P=2, Q=1",
+"shortlist": "MLP shortlist (14): (0,1)(0,1) sim=0.982 wAICc=0.426 (2,0)(0,1) sim=0.942 wAICc=0.304 (1,1)(0,1) sim=0.970 wAICc=0.143 (0,1)(0,0) sim=0.905 wAICc=0.000 (1,0)(0,1) sim=0.917 wAICc=0.000 (1,1)(0,0) sim=0.893 wAICc=0.000 (2,1)(0,0) sim=0.886 wAICc=0.000 (1,2)(0,0) sim=0.877 wAICc=0.000 (2,1)(0,1) sim=0.915 wAICc=0.128 (0,0)(0,1) sim=0.838 wAICc=0.000 (1,0)(0,0) sim=0.841 wAICc=0.000 (2,0)(0,0) sim=0.862 wAICc=0.000 (2,2)(0,0) sim=0.821 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,1)(0,1)s=12 sim=0.9824 wAICc=0.4258",
+"det": "0,1,0,1,0.982436"
+},
+"se7.2|mlp": {
+"hac": "HAC F=0.4033 (p=0.9535)",
+"verdict": "Resultado detección estacional: NO DETECTADA (p=0.9535)",
+"adf": "ADF: estadístico=-4.1175, retardos=15, crítico 5%=-2.8762, rechaza H0=SÍ, p=0.0009",
+"kpss": "KPSS: estadístico=0.0335, retardos=6, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=2, q=1, P=1, Q=1",
+"shortlist": "MLP shortlist (14): (0,1)(0,1) sim=0.980 wAICc=0.428 (2,0)(0,1) sim=0.980 wAICc=0.251 (1,1)(0,1) sim=0.964 wAICc=0.198 (0,1)(0,0) sim=0.900 wAICc=0.000 (1,0)(0,1) sim=0.918 wAICc=0.022 (2,0)(0,0) sim=0.898 wAICc=0.000 (1,1)(0,0) sim=0.884 wAICc=0.000 (2,1)(0,0) sim=0.881 wAICc=0.000 (2,1)(0,1) sim=0.912 wAICc=0.101 (0,0)(0,1) sim=0.837 wAICc=0.000 (1,0)(0,0) sim=0.836 wAICc=0.000 (2,2)(0,0) sim=0.818 wAICc=0.000 (3,1)(0,0) sim=0.817 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,1)(0,1)s=12 sim=0.9799 wAICc=0.4278",
+"det": "0,1,0,1,0.979891"
+},
+"se7.3|mlp": {
+"hac": "HAC F=0.3250 (p=0.9797)",
+"verdict": "Resultado detección estacional: NO DETECTADA (p=0.9797)",
+"adf": "ADF: estadístico=-5.0853, retardos=12, crítico 5%=-2.8760, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0357, retardos=13, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=4, q=1, P=1, Q=1",
+"shortlist": "MLP shortlist (14): (0,1)(0,1) sim=0.959 wAICc=0.645 (1,0)(0,1) sim=0.921 wAICc=0.032 (1,1)(0,1) sim=0.945 wAICc=0.247 (0,1)(0,0) sim=0.902 wAICc=0.000 (1,0)(0,0) sim=0.867 wAICc=0.000 (1,1)(0,0) sim=0.887 wAICc=0.000 (0,0)(0,1) sim=0.833 wAICc=0.000 (2,1)(0,0) sim=0.872 wAICc=0.000 (1,2)(0,0) sim=0.872 wAICc=0.000 (4,0)(0,1) sim=0.821 wAICc=0.053 (4,1)(0,1) sim=0.806 wAICc=0.023 (3,1)(0,0) sim=0.762 wAICc=0.000 (4,1)(0,0) sim=0.747 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,1)(0,1)s=12 sim=0.9592 wAICc=0.6455",
+"det": "0,1,0,1,0.959236"
+},
+"se7.4|mlp": {
+"hac": "HAC F=0.2938 (p=0.9865)",
+"verdict": "Resultado detección estacional: NO DETECTADA (p=0.9865)",
+"adf": "ADF: estadístico=-5.7932, retardos=13, crítico 5%=-2.8760, rechaza H0=SÍ, p=0.0000",
+"kpss": "KPSS: estadístico=0.0245, retardos=5, crítico 5%=0.4630, rechaza H0=NO, p=0.1000",
+"eff": "Órdenes efectivos determinados: p=2, q=1, P=1, Q=1",
+"shortlist": "MLP shortlist (14): (0,1)(0,1) sim=0.987 wAICc=0.060 (2,0)(0,1) sim=0.987 wAICc=0.622 (1,1)(0,1) sim=0.973 wAICc=0.059 (0,1)(0,0) sim=0.915 wAICc=0.000 (1,0)(0,1) sim=0.926 wAICc=0.002 (2,0)(0,0) sim=0.916 wAICc=0.000 (1,1)(0,0) sim=0.901 wAICc=0.000 (2,1)(0,0) sim=0.898 wAICc=0.000 (1,2)(0,0) sim=0.888 wAICc=0.000 (2,1)(0,1) sim=0.919 wAICc=0.258 (0,0)(0,1) sim=0.843 wAICc=0.000 (1,0)(0,0) sim=0.857 wAICc=0.000 (2,2)(0,0) sim=0.795 wAICc=0.000 (0,0)(0,0) sim=0.000 wAICc=0.000",
+"ident": "MLP-direct identification: (0,1)(0,1)s=12 sim=0.9872 wAICc=0.0597",
+"det": "0,1,0,1,0.987204"
+}
+}

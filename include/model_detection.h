@@ -39,10 +39,20 @@ typedef struct {
 } DataParameters;
 
 // Candidato tentativo (orden) con su probabilidad MLP. ART identifica, atsw-MCP estima/elige.
+#define ART_MAX_P 10      /* regular AR/MA orders a candidate can carry */
+#define ART_MAX_SP 5      /* seasonal AR/MA orders */
+
 typedef struct {
     int p, q, P, Q;
     double prob;            // Akaike weight of its AICc (information, not the order)
     double sim;             // pattern similarity: what orders the shortlist (option B)
+    /* 18.2.1: what a GUI needs to show the candidate, not only the best one.
+     * Filled by the ranking (mlp_direct path); `scored` = 0 when the candidate
+     * could not be estimated or is unstable (then aicc = 1e30, sim = 0). */
+    int scored;
+    double aicc;            // conditional (CSS) AICc on the common sample
+    double phi[ART_MAX_P], theta[ART_MAX_P], Phi[ART_MAX_SP], Theta[ART_MAX_SP];
+    double acf_theoretical[MAX_LAGS + 1], pacf_theoretical[MAX_LAGS + 1];
 } OrderCandidate;
 
 typedef struct {
@@ -63,12 +73,7 @@ typedef struct {
     int lags_used;
 } ModelCandidate;
 
-typedef struct {
-    int p, q, P, Q;
-    double similarity_original;
-    double *best_phi, *best_theta, *best_Phi, *best_Theta; // copia de coeficientes
-    gsl_vector *feature_vector;
-} ModelRecord;
+
 
 /**
  * @brief Estructura que almacena características de patrones ACF/PACF
@@ -130,7 +135,6 @@ typedef void (*ProgressCallback)(int stage, double progress, const char *message
 
 // Declaraciones de funciones principales
 void set_progress_callback(ProgressCallback callback);
-void set_identification_mode(int mlp_direct);
 void liberar_model_candidate(ModelCandidate *candidate);
 int load_data(const char *filename, double **data, int *n_points);
 void transform_data(DataParameters *params);
@@ -148,7 +152,7 @@ double evaluate_model_similarity(int p, double *phi, int q, double *theta,
 void adaptive_grid_search(double *empirical_data, int n_data, int s,
                          int p_max, int q_max, int P_max, int Q_max,
                          ModelCandidate *best_candidate,
-                         int use_mahalanobis);
+                         int mlp_direct);
 int ejecutar_deteccion_automatica(const char *filename, DataParameters *params,
                                  int p_max, int q_max, int P_max, int Q_max,
                                  ModelCandidate *best_candidate);
@@ -165,11 +169,8 @@ void plot_comparison_acf_pacf(double *acf_theoretical, double *pacf_theoretical,
                              int lags, ModelCandidate *candidate, DataParameters *data_params);
 
 // Integración con detección estacional
-int detectar_y_ajustar_estacionalidad(const char *filename, DataParameters *params,
+int detectar_y_ajustar_estacionalidad(const double *raw, int n_raw, DataParameters *params,
                                      int *P_max, int *Q_max, char **mensaje_advertencia);
 void extract_feature_vector(PatternFeatures *features, double *vector, int dim, int s, int lags);
-void reorder_with_mahalanobis(gsl_vector **vectors, int n,
-                              gsl_vector *emp_vector,
-                              ModelRecord *records, int n_records,
-                              double alpha, ModelCandidate *best);
+
 #endif

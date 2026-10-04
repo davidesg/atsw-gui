@@ -201,31 +201,32 @@ The ART_18 audit found that the engine **is not a clean engine yet**:
 
 ### The CLI and its output
 
-It follows the contract (`CONTRATO.md`, `lib/engine`):
+It follows the contract (`CONTRATO.md`, `lib/engine`): no shell, exit codes
+0–4 with `engine.h`'s meanings, and output next to the input.
 
-- no shell, and exit codes 0–4 with `engine.h`'s meanings;
-- output next to the input;
-- **fug's precedent:** it reads fue's `.inp` (series, λ/d/D line, frequency),
-  ignores the model, and writes suffixed files so as not to overwrite fue's.
+**As built in phase 2 (2026-10-04), with two changes from the first draft.**
+The specification is `engines/art/README.md`.
+
+- **The input is a data file read by `lib/datos`**, the house's single data
+  door, plus λ, d and D on the command line. It is not fue's `.inp`.
+  - At E2, the identification window already knows the series and the λ, d
+    and D it is showing.
+  - Reading the `.inp` directly would mean moving fug's reader
+    (`engines/fug/src/inpfile.c`) to `lib/`, which touches another engine.
+    That is left for later.
+- **E3/E4: the window passes the residuals; the engine does not read the
+  `.out`.** `lib/outfile` depends on glib, and no engine links glib. The
+  window has `lib/outfile` and writes the residuals to a file. It then runs
+  `art RES -s S --harmonics off`.
 
 What it writes:
 
-- **`X_art.out`**: human-readable, in the school's format. The tests (λ,
-  ADF/KPSS, seasonal F), the shortlist with similarity, AICc and weight, the
-  proposed candidate, and the messages.
-- **`X_art.cand`**: a machine-readable listing for the window. One line per
-  candidate with its orders, scores, coefficients and theoretical ACF/PACF,
-  plus the empirical ACF/PACF and the band. The repository's C has no JSON
-  library. A line format like `.cns`/`.dag`, read by a small reader in
-  `lib/`, follows the house style. (Decision 9.4.)
-
-Arguments:
-
-- for E1/E2: the `.inp`, plus λ, d, D;
-- for E3/E4: a **`.pre`/`.out`**. The engine reads the residuals through
-  `lib/outfile` (`lee_out` already returns them), with d = D = 0 and no
-  harmonic removal. The number of ARMA parameters already in the model is
-  passed too, so that Ljung-Box gets its degrees of freedom.
+- **`DATA_art.out`**: human-readable. The tests (seasonal F, ADF/KPSS), the
+  ranked candidates with similarity, Akaike weight and AICc, the proposed
+  one, and the messages.
+- **`DATA_art.cand`**: the window's line format (decision 9.4). It carries
+  the empirical ACF/PACF and the band, and every candidate with its
+  coefficients and theoretical ACF/PACF.
 
 ### The MLP
 
@@ -238,7 +239,22 @@ reads the same result.
 
 ### Duplicates with `lib/`
 
-Under the §9 rule, these are measured and listed when the engine enters:
+Measured on entry (2026-10-04, `DISENO-repositorio.md` §9):
+
+- **drvarma carries its own copy of ART's seasonal test,**
+  `engines/drvarma/gui/seasonal_detection.c`, and its deseasonalization
+  uses it. It predates 18.2, so it probably has the two HAC defects 18.2
+  fixed: the meat divided by n, and the lag term counted twice. Unifying it
+  means moving `engines/art/src/seasonal_detection.c` to `lib/` and having
+  drvarma link it. That is drvarma's decision (its BUG-0003, the log-first
+  order, is in the same file).
+- **`load_data`** in `model_detection.c` is used only by `bin/art_cli`, the
+  development CLI. `bin/art` reads through `lib/datos`.
+- **The sample ACF/PACF** (`calcular_ACF_muestral`/`calcular_PACF_muestral`)
+  duplicate `lib/anomalos` and `lib/analisis/plotstats.c`. They stay
+  until 18.3, because they are the network's inputs.
+
+The original list of things to measure:
 
 - `load_data` against `lib/datos`;
 - the ACF/PACF against `lib/fugplot`'s, together with the number of lags,

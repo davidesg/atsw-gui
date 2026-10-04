@@ -12,7 +12,7 @@ LIMITE=${LIMITE:-900}
 # ventana de fue_gui conducida desde el codigo) los buscan ahi, y sin ellos
 # se saltan en silencio.
 R=$(pwd)
-export PATH="$R/engines/fue/bin:$R/engines/fuf/bin:$R/engines/fug:$R/engines/drtran/bin:$R/engines/drvarma/bin:$R/engines/drvec/bin:$PATH"
+export PATH="$R/engines/fue/bin:$R/engines/fuf/bin:$R/engines/fug:$R/engines/drtran/bin:$R/engines/drvarma/bin:$R/engines/drvec/bin:$R/engines/art/bin:$PATH"
 
 # En Windows, GLib busca los esquemas de GSettings y los iconos junto al
 # ejecutable (../share). En el arbol de construccion no estan, y fue_gui se
@@ -97,7 +97,7 @@ corre() {        # corre NOMBRE ORDEN...
 }
 
 for d in engines/fue engines/fuf engines/fug engines/drtran engines/drvarma \
-         gui/fue gui/drtran; do
+         engines/art gui/fue gui/drtran; do
     corre "$d" sh -c "cd $d && sh tests/run_tests.sh"
 done
 corre engines/drvec make -s -C engines/drvec test

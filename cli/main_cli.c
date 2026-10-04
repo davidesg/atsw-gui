@@ -335,9 +335,11 @@ int main(int argc, char *argv[]) {
     gsl_rng_set(rng, seed);
 
     // Configurar parámetros de búsqueda (máximos)
-    int p_max = (true_p > 0) ? true_p : 5;
-    int q_max = (true_q > 0) ? true_q : 5;
-    int P_max = (true_P > 0) ? true_P : 2;
+    /* art-python's limits (suggest_orders): p <= max(3, s/2), q <= 2, P <= 1,
+     * Q <= 1. --pmax/--qmax still override (the benchmarks pass 5). */
+    int p_max = (true_p > 0) ? true_p : (s / 2 > 3 ? s / 2 : 3);
+    int q_max = (true_q > 0) ? true_q : 2;
+    int P_max = (true_P > 0) ? true_P : 1;
     int Q_max = (true_Q > 0) ? true_Q : 1;
     // Overrides explícitos (evitan el oráculo p_max=true_p en los tests Monte Carlo)
     if (pmax_override >= 0) p_max = pmax_override;

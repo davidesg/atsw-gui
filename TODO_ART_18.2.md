@@ -11,13 +11,13 @@
 
 ## Fase 0 — Línea base (antes de tocar nada)
 
-- [ ] `make clean && make cli` compila sin warnings nuevos
-- [ ] Guardar línea base de `benchmark.py` (acierto exacto, ±1, ms/modelo) en
+- [x] `make clean && make cli` compila sin warnings nuevos en `src/` (2026-10-04; los de `cli/main_cli.c` y `src/root.c` (`dxold`) son anteriores)
+- [x] ~~Guardar línea base de `benchmark.py`~~ — la de la 18.0 no se guardó; la línea base es la del 2026-10-01 (`tests/results_three_engines.txt`) (acierto exacto, ±1, ms/modelo) en
       `benchmark_results_18.0.json`
-- [ ] Series de control reproducibles para diff manual:
-  - [ ] AR(1) φ=0.7, AR(2) φ=(0.6,0.35), MA(1) θ=0.5, ARMA(1,1), ARMA(2,1)
-  - [ ] `wti.txt` (216 obs) y `GY.txt` (68 obs)
-- [ ] Anotar para cada una el orden identificado actual (para comparar tras los fixes)
+- [x] ~~Series de control para diff manual~~ — sustituidas por las baterías reproducibles con semilla (`benchmark_c.py`, `benchmark_seasonal.py`):
+  - [x] AR(1) φ=0.7, AR(2) φ=(0.6,0.35), MA(1) θ=0.5, ARMA(1,1), ARMA(2,1)
+  - [x] `wti.txt` (216 obs) y `GY.txt` (68 obs)
+- [x] ~~Anotar para cada una el orden identificado actual~~ (las baterías lo registran) (para comparar tras los fixes)
 
 ## Fase 1 — Bugs de corrección estadística (prioridad ALTA)
 
@@ -25,22 +25,22 @@
 - [x] Cambiar `acf[k] = (cov/(n-k))/variance` por el estimador estándar (2026-09-30)
       `acf[k] = cov_sum / sq_sum` (mismo denominador `n` en numerador y varianza)
 - [x] Quitar el clamp manual a `[-1,1]` una vez la ACF es PSD (debería cumplirse solo)
-- [ ] Verificar que Durbin-Levinson (PACF) ya no produce |pacf|>1 en las series de control
-- [ ] Re-benchmark: esperado ↓ sobre-identificación en lags altos
+- [x] Verificar que Durbin-Levinson (PACF) ya no produce |pacf|>1 (2026-10-04: 1800 series con AR casi unitario, paseos aleatorios y MA casi no invertibles, n=30-200, 40 retardos: máx |pacf| = 0,992; igual a statsmodels `ldb` a 4e-13)
+- [x] Re-benchmark: sobreidentificación media 7 % (`benchmark_c.py`)
 
 ### 1.2 Corte real en `determine_effective_orders` — `src/model_detection.c:204-231`
-- [ ] El bucle de p y de q debe quedarse con el **lag de corte** (último significativo
+- [x] El bucle de p y de q debe quedarse con el **lag de corte** (último significativo
       antes de una racha sostenida de no-significancia), no con el último pico global
-- [ ] Añadir `break` tras detectar el corte (hoy solo rompe en el `else`)
+- [x] Añadir `break` tras detectar el corte (el `break` del `else` ya es el corte: la primera racha de tres retardos tranquilos; comprobado 2026-10-04)
 - [x] Acotar `effective_p_max`/`effective_q_max` a un orden razonable (p.ej. ≤ 5)
-- [ ] Verificar con AR(1)/MA(1): el orden efectivo debe ser 1, no 20+
+- [x] Verificar con AR(1)/MA(1): el orden efectivo debe ser 1, no 20+ (2026-10-04: 1 en el 82-91 % de los AR(1) y el 76-78 % de los MA(1), 0 en el 85 % del ruido blanco; el resto, retardos significativos por azar)
 
 ### 1.3 No falsear estacionariedad por reescalado — `src/model_detection.c:2173-2177, 2287-2289`
 - [x] Sustituir el reescalado `0.95/Σ|φ|` por verificación de raíces real (2026-09-30: `contract_poly`, conserva el periodo; ver CHANGELOG)
       (`check_ar_roots` / `check_ma_roots`, ya existen)
-- [ ] Si el modelo es inestable/no invertible → **rechazar** el candidato
+- [x] ~~Rechazar~~ Contraer SOLO lo que está fuera del círculo unidad, conservando el periodo, como art-python `_contract` (BUG-0198, la referencia). El C contraía también raíces estacionarias por encima de 0,90/0,95 (2026-10-04: ARMA(1,1) 0,95/0,5, acierto exacto 20 → 35 %)
       (no devolver coeficientes alterados)
-- [ ] Confirmar que AR(2) φ=(0.6,0.35) (estacionario, Σ=0.95) ya **no** se reescala
+- [x] Confirmar que AR(2) φ=(0.6,0.35) (estacionario, Σ=0.95) ya **no** se reescala (raíces dentro: `contract_poly` no lo toca)
 
 ## Fase 2 — Robustez de la estimación y el ranking (prioridad MEDIA)
 
@@ -51,31 +51,65 @@
 
 ### 2.2 Rama de orden alto (`p+q+P+Q>10`) — `:1074-1094`
 - [x] No comparar similitud con coeficientes inventados; estimar o saltar el modelo (se salta, y se dice)
-- [ ] (Alternativa) documentar el límite y degradar con claridad
+- [x] (Alternativa, no necesaria: se salta y se dice)
 
 ### 2.3 Off-by-one en diferenciación d≥2 — `src/model_detection.c:347`
 - [x] Corregir `for (... i < params->n_points - diff ...)` → no descartar la última obs (también en D)
-- [ ] Test: serie con `d=2` conserva `n-2` observaciones (hoy `n-3`)
+- [x] Test: serie con `d=2` conserva `n-2` observaciones (cada pasada resta una; `transform_data`)
 
 ## Fase 3 — Consistencia de la salida (prioridad MEDIA/BAJA)
 
 ### 3.1 Separar "similitud de patrón" de "peso de Akaike"
-- [ ] En modo `mlp_direct`, `similarity` lleva un peso de Akaike; en grid, una similitud
+- [x] En modo `mlp_direct`, `similarity` lleva un peso de Akaike; en grid, una similitud
       ACF/PACF ∈ [0,1]. Etiquetar cada uno distinto en los mensajes finales
       (`:1547-1557`, `:1744-1755`) para no confundir al usuario
-- [ ] Documentar en la salida que el AICc es **CSS condicional** (comparable entre
+- [x] Documentar en la salida que el AICc es **CSS condicional** (comparable entre
       candidatos, no con statsmodels/pmdarima en valor absoluto)
 
 ### 3.2 Path de logaritmo en tests de raíz unitaria — `:1614-1617`
 - [x] No mezclar escala log/nivel cuando hay valores ≤0; avisar explícitamente (`log_in_place`)
 
+## Fase 3b — Estacionalidad coherente con art-python (2026-10-04)
+
+Comparación del camino estacional del C con art-python (la referencia). Lo
+acotado entra en la 18.2; lo demás, a la 18.3.
+
+- [x] La F de detección es la F HAC de art (BUG-0206: identificación con HAC).
+      Corregido el estimador: la carne se dividía por n y el retardo se contaba
+      dos veces. Coincide con art a la precisión impresa (n = 60-400).
+- [x] El contraste, siempre sobre d=1 y 100·log, como `describe` de art,
+      sea cual sea la d o el log del usuario.
+- [x] Sin estacionalidad detectada, P y Q siguen buscándose (el modo clásico
+      los ponía a 0; art nunca los restringe).
+- [x] Con D=0 y s>1, los armónicos se retiran de w antes de la ACF/PACF
+      (`remove_harmonics`, la `_remove_harmonics` de art).
+- [x] `--deseasonalize` pasa a ser un alias: su ruta restaba dummies de
+      100·log a niveles sin `--log`, forzaba Q=0, no miraba la detección y
+      fallaba con s=1.
+- [x] Cada base regular de la lista corta entra también con (P,Q)=(0,0): un
+      AR(1) puro no entraba si la red proponía P o Q.
+- [x] El ruido blanco es candidato si Ljung-Box no rechaza (art BUG-0044/0048),
+      con los retardos de fug.
+- [x] Límites por defecto de la CLI: p ≤ máx(3, s/2), q ≤ 2, P ≤ 1, Q ≤ 1.
+- [x] Batería estacional por ficheros: `tests/benchmark_seasonal.py`.
+
+**A la 18.3:**
+- [ ] Candidatos enumerados por las puertas (no por la red) y opción B por
+      defecto; la ruta D=1 reidentificando los órdenes (B2).
+- [ ] Retardos de fug y umbral 1,96/√n en los rasgos de patrón: lo usa la red
+      como entrada y se entrenó con los actuales, así que va con el cambio de
+      candidatos.
+- [ ] La regla P≥1 y Q≥1 → Q=0 de art es una restricción del motor de fue,
+      no del identificador (`suggest_orders` sí ordena (1,1)): va donde se
+      estime con fue.
+
 ## Fase 4 — Validación final
 
-- [ ] `benchmark.py`: acierto exacto y ±1 ≥ línea base 18.0 en todos los tipos
-- [ ] `benchmark_pmdarima.py`: comparativa frente a pmdarima tras los fixes
-- [ ] Monte Carlo 200 réplicas AR(1)/AR(2)/MA(1)/ARMA(1,1): tasa de sobre-identificación ↓
-- [ ] Tests en `tests/` pasan (`make test` si existe)
-- [ ] Actualizar `CHANGELOG.md` con resultados (antes/después) por cada fix
+- [x] Acierto exacto ≥ línea base en todos los tipos (`benchmark_c.py` y `benchmark_three_engines.py`, frente a la línea base del 2026-10-01: la de la 18.0 no se conservó)
+- [x] Comparativa frente a pmdarima y art-python: `tests/results_three_engines_18.2.txt` (C 66 %, art 66 %, pmdarima 51 %)
+- [x] Monte Carlo 200 réplicas AR(1)/AR(2)/MA(1)/ARMA(1,1): sobreidentificación 10 %, 2 %, 12 %, 8 % (`tests/benchmark_c.py 200 200 77`, igual que `main`)
+- [x] Tests en `tests/`: no hay `make test`; las baterías corren limpias
+- [x] Actualizar `CHANGELOG.md` con resultados (antes/después) por cada fix
 - [ ] Etiquetar commit: `ART_18.2`
 
 ---

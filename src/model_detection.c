@@ -16,6 +16,8 @@
 #include <gsl/gsl_errno.h>
 #include <gsl/gsl_linalg.h>
 #include <gsl/gsl_blas.h>
+#include <gsl/gsl_cdf.h>
+#include <gsl/gsl_multifit.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -353,6 +355,83 @@ static int log_in_place(double *x, int n) {
         }
     for (int i = 0; i < n; i++) x[i] = log(x[i]);
     return 1;
+}
+
+/* fug C's default number of acf/pacf lags (fue.diagnostics.default_lags), the
+ * rule art-python uses for its white-noise gate. Not used for the MLP's
+ * features, which were trained on this file's own `lags`. */
+static int default_lags_fug(int nobs, int freq) {
+    if (freq < 1) freq = 1;
+    int lags;
+    if (nobs < 3 * (freq + 1)) lags = nobs - freq / 2;
+    else if (freq == 1 && nobs > 200) lags = 45;
+    else if (freq == 1) lags = 9;
+    else lags = 3 * (freq + 1);
+    if (lags > nobs - 2) lags = nobs - 2;
+    return lags < 1 ? 1 : lags;
+}
+
+/* Is "no model" admissible? art-python's gate for the (0,0)(0,0) candidate
+ * (BUG-0044/0048): the Ljung-Box Q over fug's default lags, no d.f.
+ * correction (nothing estimated yet), must not reject at 5%. */
+static int white_noise_admissible(const double *w, int n, int s) {
+    int L = default_lags_fug(n, s);
+    if (L < 1 || n < 4) return 0;
+    double mean = 0.0, var = 0.0, Q = 0.0;
+    for (int i = 0; i < n; i++) mean += w[i];
+    mean /= n;
+    for (int i = 0; i < n; i++) var += (w[i] - mean) * (w[i] - mean);
+    if (var <= 0.0) return 0;
+    for (int k = 1; k <= L && k < n; k++) {
+        double c = 0.0;
+        for (int i = 0; i < n - k; i++) c += (w[i] - mean) * (w[i + k] - mean);
+        double r = c / var;
+        Q += r * r / (n - k);
+    }
+    Q *= n * (n + 2.0);
+    return gsl_cdf_chisq_Q(Q, L) > 0.05;
+}
+
+/* art-python's `_remove_harmonics`: with D = 0 and s > 1, the deterministic
+ * seasonal pattern is taken out of w BEFORE the ACF/PACF, so their seasonal
+ * lags show the ARMA, not the harmonics. OLS of w on an intercept and
+ * cos/sin(2 pi f t / s), f = 1..s/2 (cosine only at Nyquist), t = 0..n-1; w is
+ * replaced by the residual. Done whether or not the F test detected a pattern,
+ * as art does. */
+static void remove_harmonics(double *w, int n, int s) {
+    if (s < 2 || !w) return;
+    int k = 1;
+    for (int f = 1; f <= s / 2; f++) k += (2 * f < s) ? 2 : 1;
+    if (n <= k + 2) return;
+    gsl_matrix *X = gsl_matrix_alloc(n, k);
+    gsl_vector *y = gsl_vector_alloc(n), *c = gsl_vector_alloc(k);
+    gsl_matrix *cov = gsl_matrix_alloc(k, k);
+    gsl_multifit_linear_workspace *ws = gsl_multifit_linear_alloc(n, k);
+    for (int t = 0; t < n; t++) {
+        int col = 0;
+        gsl_matrix_set(X, t, col++, 1.0);
+        for (int f = 1; f <= s / 2; f++) {
+            double om = 2.0 * M_PI * f / s;
+            gsl_matrix_set(X, t, col++, cos(om * t));
+            if (2 * f < s) gsl_matrix_set(X, t, col++, sin(om * t));
+        }
+        gsl_vector_set(y, t, w[t]);
+    }
+    double chisq;
+    gsl_error_handler_t *oh = gsl_set_error_handler_off();
+    int st = gsl_multifit_linear(X, y, c, cov, &chisq, ws);
+    gsl_set_error_handler(oh);
+    if (st == GSL_SUCCESS) {
+        for (int t = 0; t < n; t++) {
+            double fit = 0.0;
+            for (int j = 0; j < k; j++) fit += gsl_matrix_get(X, t, j) * gsl_vector_get(c, j);
+            w[t] -= fit;
+        }
+        printf("Harmonics removed from w (D=0, s=%d, %d terms), as art-python\n", s, k - 1);
+    }
+    gsl_multifit_linear_free(ws);
+    gsl_matrix_free(X); gsl_matrix_free(cov);
+    gsl_vector_free(y); gsl_vector_free(c);
 }
 
 void transform_data(DataParameters *params) {
@@ -921,6 +1000,10 @@ void adaptive_grid_search(double *empirical_data, int n_data, int s,
         rank_shortlist_by_fit(best_candidate, empirical_data, n_data,
                               acf_empirical, pacf_empirical, &empirical_features, lags, s,
                               mlp_ok == 0 ? &mlp_pred : NULL);
+        /* TODO_ART_18.2 §3.1: two different numbers, said apart. */
+        printf("(sim = ACF/PACF pattern similarity in [0,1], the option-B rank; "
+               "wAICc = Akaike weight of the CONDITIONAL (CSS) AICc: comparable between "
+               "these candidates, not with exact-likelihood AICs such as statsmodels')\n");
         printf("MLP shortlist (%d):", best_candidate->n_candidates);
         for (int i = 0; i < best_candidate->n_candidates; i++)
             printf(" (%d,%d)(%d,%d) sim=%.3f wAICc=%.3f",
@@ -1074,7 +1157,8 @@ void adaptive_grid_search(double *empirical_data, int n_data, int s,
             }
             for (int P = P_start; P <= P_end; P++) {
                 for (int Q = Q_start; Q <= Q_end; Q++) {
-                    if (p == 0 && q == 0 && P == 0 && Q == 0) continue;
+                    if (p == 0 && q == 0 && P == 0 && Q == 0 &&
+                        !white_noise_admissible(empirical_data, n_data, s)) continue;
 
                     current_model++;
                     double progress = (double)current_model / total_models;
@@ -1459,6 +1543,14 @@ int ejecutar_deteccion_automatica(const char *filename, DataParameters *params,
     // =====================================================================
     // OPTIONAL DESEASONALIZATION (only if enabled and NOT in simulation mode)
     // =====================================================================
+    if (params->deseasonalize) {
+        /* TODO_ART_18.2: the harmonics now come out of w by default (D = 0,
+         * s > 1), as art-python. This path subtracted 100*log dummies from
+         * LEVELS when --log was off, forced Q = 0, ignored the detection and
+         * failed with s = 1; it is no longer taken. */
+        printf("--deseasonalize: the harmonics are removed by default with D=0; nothing else to do.\n");
+        params->deseasonalize = 0;
+    }
     if (params->deseasonalize && !is_simulation) {
         printf("=== DESESTACIONALIZACIÓN ACTIVADA ===\n");
         printf("Se eliminará la componente estacional mediante regresión armónica.\n");
@@ -1702,6 +1794,8 @@ int ejecutar_deteccion_automatica(const char *filename, DataParameters *params,
 
     // Apply transformations (log, regular differences, seasonal differences)
     transform_data(params);
+    if (params->D == 0 && params->s > 1 && params->n_points > 0)
+        remove_harmonics(params->data, params->n_points, params->s);
 
     if (params->n_points <= 0) {
         free(params->data);
@@ -1763,13 +1857,13 @@ int ejecutar_deteccion_automatica(const char *filename, DataParameters *params,
         char mensaje_final[256];
         if (best_candidate->P > 0 || best_candidate->Q > 0) {
             snprintf(mensaje_final, sizeof(mensaje_final),
-                    "BEST MODEL: SARIMA(%d,%d,%d)(%d,%d,%d)%d - Similarity: %.3f",
+                    "BEST MODEL: SARIMA(%d,%d,%d)(%d,%d,%d)%d - pattern similarity: %.3f",
                     best_candidate->p, params->d, best_candidate->q,
                     best_candidate->P, params->D, best_candidate->Q, params->s,
                     best_candidate->similarity);
         } else {
             snprintf(mensaje_final, sizeof(mensaje_final),
-                    "BEST MODEL: ARMA(%d,%d) - Similarity: %.3f",
+                    "BEST MODEL: ARMA(%d,%d) - pattern similarity: %.3f",
                     best_candidate->p, best_candidate->q, best_candidate->similarity);
         }
         report_progress_internal(3, 1.0, mensaje_final, "Detection completed");
@@ -2079,7 +2173,9 @@ int detectar_y_ajustar_estacionalidad(const char *filename, DataParameters *para
 
     // Ejecutar detección de estacionalidad solo si no hay diferencias estacionales
     SeasonalDetectionResult *resultado_estacional =
-        detect_seasonality_harmonic_regression(filename, params->d, params->apply_log, params->s);
+        /* As art-python's describe: the test always on d = 1 and 100*log,
+         * whatever d and log the user asked for. */
+        detect_seasonality_harmonic_regression(filename, 1, 1, params->s);
 
     if (!resultado_estacional) {
         printf("Error en detección de estacionalidad\n");
@@ -2111,9 +2207,9 @@ int detectar_y_ajustar_estacionalidad(const char *filename, DataParameters *para
     } else if (!params->mlp_direct) {
         // MODO CLÁSICO: no se detectó estacionalidad -> restringir el grid a P=Q=0
         // (la puerta es un filtro de EFICIENCIA para la búsqueda en grid).
-        printf("🔒 Restringiendo búsqueda a modelos NO estacionales (P=0, Q=0)\n");
-        *P_max = 0;
-        *Q_max = 0;
+        /* art-python never restricts P and Q on this verdict: a stochastic
+         * seasonal AR/MA leaves no deterministic pattern for the F to find. */
+        printf("No deterministic seasonality: P and Q stay searchable (as art-python)\n");
         *mensaje_advertencia = strdup(
             "INFORMACIÓN: No se detectó estacionalidad significativa. "
             "Se restringió la búsqueda a modelos no estacionales."
@@ -2170,10 +2266,15 @@ static double max_inverse_root(const double *c, int k) {
     return mx;
 }
 
+/* Made stationary (invertible) without moving its cycles: c_i rho^i scales
+ * every inverse root by rho and keeps its angle. Only what is OUTSIDE the unit
+ * circle moves, to `limit`, as art-python's `_contract` (BUG-0198): a root
+ * inside, even near 1, is left alone -- the old `mx < limit` test shrank a
+ * true AR(1) of 0.95 to 0.90 in Hannan-Rissanen (TODO_ART_18.2 §1.3). */
 static void contract_poly(double *c, int k, double limit) {
     for (int i = 0; i < k; i++) if (!isfinite(c[i])) return;
     double mx = max_inverse_root(c, k);
-    if (mx < limit) return;
+    if (mx < 1.0) return;
     double rho = limit / mx, r = rho;
     for (int i = 0; i < k; i++) { c[i] *= r; r *= rho; }
 }
@@ -2387,8 +2488,7 @@ static double compute_arma_aicc(double *y, int n, int p, double *phi, int q, dou
 static double compute_sarima_aicc(double *y, int n, int p, double *phi, int q, double *theta,
                                   int P, double *Phi, int Q, double *Theta, int s,
                                   int min_start) {
-    int k = p + q + P + Q;
-    if (k == 0) return 1e30;
+    int k = p + q + P + Q;   /* k = 0: white noise, admitted by its own gate */
     int dar = p + P * s, dma = q + Q * s;
     if (dar >= n / 2 || dma >= n / 2) return 1e30;
 
@@ -2517,6 +2617,32 @@ static void add_seasonal_grid_candidates(ModelCandidate *cand, double *data, int
                                          double *acf_emp, int lags, int s,
                                          int P_max, int Q_max) {
     if (s <= 1) return;
+    /* Every regular base also WITHOUT a seasonal part. The shortlist gives all
+     * its (p,q) the MLP's single (P0,Q0); when that is not (0,0), a plain
+     * AR(1) never entered it (seasonal benchmark, 2026-10-04). art enumerates
+     * P = Q = 0 for every base. And white noise, when Ljung-Box admits it. */
+    {
+        int nc0 = cand->n_candidates;
+        for (int c = 0; c < nc0; c++) {
+            int p = cand->candidates[c].p, q = cand->candidates[c].q, dup = 0;
+            if (cand->candidates[c].P == 0 && cand->candidates[c].Q == 0) continue;
+            for (int k2 = 0; k2 < cand->n_candidates; k2++)
+                if (cand->candidates[k2].p == p && cand->candidates[k2].q == q &&
+                    cand->candidates[k2].P == 0 && cand->candidates[k2].Q == 0) dup = 1;
+            if (dup || cand->n_candidates >= MAX_ORDER_CANDIDATES) continue;
+            OrderCandidate *o = &cand->candidates[cand->n_candidates++];
+            o->p = p; o->q = q; o->P = 0; o->Q = 0; o->prob = 0.0;
+        }
+        int has_wn = 0;
+        for (int k2 = 0; k2 < cand->n_candidates; k2++)
+            if (!cand->candidates[k2].p && !cand->candidates[k2].q &&
+                !cand->candidates[k2].P && !cand->candidates[k2].Q) has_wn = 1;
+        if (!has_wn && white_noise_admissible(data, n, s)) {
+            if (cand->n_candidates >= MAX_ORDER_CANDIDATES) cand->n_candidates--;
+            OrderCandidate *o = &cand->candidates[cand->n_candidates++];
+            o->p = o->q = o->P = o->Q = 0; o->prob = 0.0;
+        }
+    }
     int Pg = MIN(2, P_max), Qg = MIN(1, Q_max);
     if (Pg == 0 && Qg == 0) return;
 
@@ -2596,6 +2722,7 @@ static void rank_shortlist_by_fit(ModelCandidate *cand, double *data, int n,
         if (st > common_start) common_start = st;
     }
     double sim_v[MAX_ORDER_CANDIDATES] = {0}, aicc_v[MAX_ORDER_CANDIDATES];
+    int wn_ok = white_noise_admissible(data, n, s);
     for (int c = 0; c < cand->n_candidates; c++) {
         int p = cand->candidates[c].p, q = cand->candidates[c].q;
         int P = cand->candidates[c].P, Q = cand->candidates[c].Q;
@@ -2627,7 +2754,8 @@ static void rank_shortlist_by_fit(ModelCandidate *cand, double *data, int n,
         // Ahora que la H-R está corregida (signo+iteración), el AICc ordena bien
         // tanto regular como estacional. El MCP decide el final con su MLE.
         double score = -1e30;
-        if (!(p == 0 && q == 0 && P == 0 && Q == 0) && !unscored) {
+        /* White noise is scored only when Ljung-Box admits it (art BUG-0048). */
+        if ((!(p == 0 && q == 0 && P == 0 && Q == 0) || wn_ok) && !unscored) {
             int stable = 1;
             if (p > 0 && !check_ar_roots(phi, p)) stable = 0;
             if (P > 0 && !check_ar_roots(Phi, P)) stable = 0;

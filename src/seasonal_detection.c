@@ -113,6 +113,11 @@ gsl_matrix* compute_hac_covariance(gsl_matrix *X, gsl_vector *residuals, int max
     double *u = (double*)malloc(n * sizeof(double));
     double **x_outer = (double**)malloc(n * sizeof(double*));
 
+    /* Newey-West meat as a SUM over t, as art-python (BUG-0206): dividing it
+       by n made the covariance n times too small. And the lag term is
+       w_l (Gamma_l + Gamma_l'), each product once: the old loop added
+       x_t,j x_{t-l},k to both S[j][k] and S[k][j], counting Gamma_l twice and
+       Gamma_l' never. */
     for (int i = 0; i < n; i++) {
         u[i] = gsl_vector_get(residuals, i);
         x_outer[i] = (double*)malloc(p * p * sizeof(double));
@@ -120,7 +125,7 @@ gsl_matrix* compute_hac_covariance(gsl_matrix *X, gsl_vector *residuals, int max
             for (int k = 0; k < p; k++) {
                 double x_ij = gsl_matrix_get(X, i, j);
                 double x_ik = gsl_matrix_get(X, i, k);
-                x_outer[i][j * p + k] = (x_ij * x_ik * u[i] * u[i]) / n;
+                x_outer[i][j * p + k] = x_ij * x_ik * u[i] * u[i];
             }
         }
     }
@@ -135,22 +140,19 @@ gsl_matrix* compute_hac_covariance(gsl_matrix *X, gsl_vector *residuals, int max
         }
     }
 
-    // lags con kernel de Bartlett
+    // lags, Bartlett kernel: S += w (Gamma_l + Gamma_l')
     for (int lag = 1; lag <= max_lags; lag++) {
         double weight = 1.0 - (double)lag / (max_lags + 1.0);
         for (int i = lag; i < n; i++) {
-            double cross_product = (u[i] * u[i - lag]) / n * weight;
+            double g = u[i] * u[i - lag] * weight;
             for (int j = 0; j < p; j++) {
+                double x_t_j = gsl_matrix_get(X, i, j);
+                double x_l_j = gsl_matrix_get(X, i - lag, j);
                 for (int k = 0; k < p; k++) {
-                    double x_t_j = gsl_matrix_get(X, i, j);
-                    double x_t_lag_k = gsl_matrix_get(X, i - lag, k);
-                    double x_t_lag_j = gsl_matrix_get(X, i - lag, j);
                     double x_t_k = gsl_matrix_get(X, i, k);
-
-                    double current1 = gsl_matrix_get(S, j, k);
-                    double current2 = gsl_matrix_get(S, k, j);
-                    gsl_matrix_set(S, j, k, current1 + cross_product * x_t_j * x_t_lag_k);
-                    gsl_matrix_set(S, k, j, current2 + cross_product * x_t_lag_j * x_t_k);
+                    double x_l_k = gsl_matrix_get(X, i - lag, k);
+                    double cur = gsl_matrix_get(S, j, k);
+                    gsl_matrix_set(S, j, k, cur + g * (x_t_j * x_l_k + x_l_j * x_t_k));
                 }
             }
         }
@@ -359,7 +361,7 @@ int harmonic_regression_differenced_basis(double *y, int n, int d,
 
     // HAC opcional
     gsl_matrix *hac_cov = NULL;
-    if (valid_residuals > total_params * 3 && sse / (valid_residuals - total_params) > 1e-12) {
+    if (valid_residuals > total_params && sse / (valid_residuals - total_params) > 1e-12) {
         int max_lags = (n <= 100) ? 1 : (n <= 200) ? 2 : 3;
         printf("Intentando HAC con %d lags\n", max_lags);
         hac_cov = compute_hac_covariance(X, residuals, max_lags);
@@ -377,6 +379,43 @@ int harmonic_regression_differenced_basis(double *y, int n, int d,
                 hac_cov = NULL;
             }
         }
+    }
+
+    /* The decision F is the HAC Wald F of the harmonics, as art-python's
+       identification test (BUG-0206: more power; art's study in
+       research/seasonal_test): gamma' V_hac^-1 gamma / q against
+       F(q, n - k). The OLS F above stays only as the fallback when the HAC
+       covariance cannot be used. */
+    if (hac_cov && num_harmonics > 0) {
+        int q = num_harmonics;
+        gsl_matrix *V = gsl_matrix_alloc(q, q);
+        gsl_matrix *Vi = gsl_matrix_alloc(q, q);
+        gsl_permutation *pq = gsl_permutation_alloc(q);
+        int sg, ok = 1;
+        for (int a1 = 0; a1 < q; a1++)
+            for (int b1 = 0; b1 < q; b1++)
+                gsl_matrix_set(V, a1, b1, gsl_matrix_get(hac_cov, a1 + 1, b1 + 1));
+        gsl_error_handler_t *oh = gsl_set_error_handler_off();
+        if (gsl_linalg_LU_decomp(V, pq, &sg) != GSL_SUCCESS ||
+            gsl_linalg_LU_invert(V, pq, Vi) != GSL_SUCCESS)
+            ok = 0;
+        gsl_set_error_handler(oh);
+        if (ok) {
+            double w = 0.0;
+            for (int a1 = 0; a1 < q; a1++)
+                for (int b1 = 0; b1 < q; b1++)
+                    w += coefficients[a1] * gsl_matrix_get(Vi, a1, b1) * coefficients[b1];
+            int df2 = valid_residuals - total_params;
+            if (df2 < 1) df2 = 1;
+            *f_stat = w / q;
+            *p_value = gsl_cdf_fdist_Q(*f_stat, q, df2);
+            printf("HAC F=%.4f (p=%.4f)\n", *f_stat, *p_value);
+        } else {
+            printf("HAC covariance not invertible: the OLS F decides\n");
+        }
+        gsl_matrix_free(V); gsl_matrix_free(Vi); gsl_permutation_free(pq);
+    } else {
+        printf("No HAC covariance: the OLS F decides\n");
     }
 
     *hac_cov_matrix_ptr = hac_cov;

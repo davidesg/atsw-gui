@@ -42,6 +42,14 @@ conformidad cruza los programas.** Compara el escritor del GUI contra el lector
 del motor contra el de Python. Esa prueba no tiene sitio en un repositorio por
 programa.
 
+## Las pruebas
+
+    make check         todas las baterias y los GUIs conducidos
+
+Qué se prueba, en qué plataformas y con qué tolerancia, y la ronda a mano
+que falta antes de la primera versión: **`docs/PRUEBAS.md`**. Lo pendiente,
+junto: **`docs/TODO.md`**.
+
 ## El banco
 
     cd conformidad

@@ -352,7 +352,6 @@ known; the window depends on decisions 9.2 and 9.3.
    hand-written parser)?
 5. **The MLP in the taller:** accepted as compiled data until 18.3 makes it
    optional, or should 18.3 come before the integration?
-6. **Where the refactoring is done:** in `art-identifier-c` before the subtree
-   (recommended: the batteries live there), or in `engines/art` after it?
-7. **The name:** `engines/art` and the binary `art`, or something that does
-   not collide with art-python's MCP server (`art-mcp`)?
+6. **Where the refactoring is done.** **DECIDED, 2026-10-04:** in
+   `art-identifier-c`, as 18.2.1, before the subtree; the batteries live there.
+7. **The name.** **DECIDED, 2026-10-04:** `engines/art`, binary `art`.

@@ -40,6 +40,9 @@
 #include <string.h>
 #include <gsl/gsl_multifit.h>
 #include <gsl/gsl_errno.h>
+#include "art.h"
+/* 18.2.1: stdout is silenced by ArtOptions.quiet. */
+#define printf art_log
 
 /* MacKinnon (1994), constante, N = 1: potencias crecientes, ya escaladas.   */
 static const double TAU_STAR = -1.61, TAU_MIN = -18.83, TAU_MAX = 2.74;

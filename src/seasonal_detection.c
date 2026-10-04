@@ -17,6 +17,9 @@
 
 #include "seasonal_detection.h"
 #include "model_detection.h"   // para load_data, MAX_DATA_POINTS, etc.
+#include "art.h"
+/* 18.2.1: stdout is silenced by ArtOptions.quiet. */
+#define printf art_log
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_matrix.h>
@@ -563,8 +566,8 @@ SeasonalDetectionResult* detect_seasonality_from_array(const double *data, int n
     result->num_harmonics = s - 1;
     result->seasonal_period = s;
 
-    if (s < 2 || s > 12) {
-        result->message = strdup("Error: Seasonal period must be between 2 and 12");
+    if (s < 2) {   /* 18.2.1: any s >= 2, as art-python (it stopped at 12) */
+        result->message = strdup("Error: Seasonal period must be at least 2");
         free(result);
         return NULL;
     }

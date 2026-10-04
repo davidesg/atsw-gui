@@ -11,6 +11,9 @@
 #include "weighting_utils.h"
 #include "seasonal_detection.h"
 #include "ml_classifier.h"
+#include "art.h"
+/* 18.2.1: stdout is silenced by ArtOptions.quiet. */
+#define printf art_log
 #include <gsl/gsl_permutation.h>
 #include <gsl/gsl_poly.h>
 #include <gsl/gsl_errno.h>
@@ -72,6 +75,9 @@ static void report_progress_internal(int stage, double progress, const char *mes
 static void send_plot_data(double *acf_theoretical, double *pacf_theoretical,
                           double *acf_empirical, double *pacf_empirical,
                           int lags, double cmax, const char *title) {
+    /* 18.2.1: only the old GUI consumes these (classic mode). Without a
+     * listener the plot was allocated and lost. */
+    if (!progress_callback) return;
 
     // Validar parámetros de entrada
     if (!acf_theoretical || !pacf_theoretical || !acf_empirical || !pacf_empirical) {
@@ -425,7 +431,7 @@ static void remove_harmonics(double *w, int n, int s) {
             for (int j = 0; j < k; j++) fit += gsl_matrix_get(X, t, j) * gsl_vector_get(c, j);
             w[t] -= fit;
         }
-        printf("Harmonics removed from w (D=0, s=%d, %d terms), as art-python\n", s, k - 1);
+        art_msg("Harmonics removed from w (D=0, s=%d, %d terms), as art-python", s, k - 1);
     }
     gsl_multifit_linear_free(ws);
     gsl_matrix_free(X); gsl_matrix_free(cov);
@@ -1160,6 +1166,7 @@ void adaptive_grid_search(double *empirical_data, int n_data, int s,
                     if (p == 0 && q == 0 && P == 0 && Q == 0 &&
                         !white_noise_admissible(empirical_data, n_data, s)) continue;
 
+                    if (art_cancelled()) break;
                     current_model++;
                     double progress = (double)current_model / total_models;
                     char message[100], overall[100];
@@ -1535,8 +1542,11 @@ int ejecutar_deteccion_automatica(const char *filename, DataParameters *params,
     if (!params || !best_candidate) return 0;
 
 
-    // Determine if we are in simulation mode (no file to read)
-    int is_simulation = (filename == NULL || filename[0] == '\0');
+    // Determine if we are in simulation mode (no file to read). art_identify
+    // passes the series through the per-call context instead of a file.
+    int have_ctx_input = art_tl_ctx && art_tl_ctx->x;
+    int is_simulation = (filename == NULL || filename[0] == '\0') && !have_ctx_input;
+    int run_tests = !is_simulation && (!art_tl_ctx || art_tl_ctx->run_tests);
 
     // =====================================================================
     // OPTIONAL DESEASONALIZATION (only if enabled and NOT in simulation mode)
@@ -1555,7 +1565,12 @@ int ejecutar_deteccion_automatica(const char *filename, DataParameters *params,
      * three times. In simulation mode the array is the caller's. */
     double *raw = NULL;
     int n_raw = 0;
-    if (!is_simulation) {
+    if (have_ctx_input) {
+        n_raw = art_tl_ctx->n;
+        raw = malloc(n_raw * sizeof(double));
+        if (!raw) return 0;
+        memcpy(raw, art_tl_ctx->x, n_raw * sizeof(double));
+    } else if (!is_simulation) {
         if (!load_data(filename, &raw, &n_raw)) return 0;
     } else {
         raw = params->data;
@@ -1571,7 +1586,7 @@ int ejecutar_deteccion_automatica(const char *filename, DataParameters *params,
     char *mensaje_estacionalidad = NULL;
     int estacionalidad_detectada = 0;
 
-    if (!is_simulation) {
+    if (run_tests) {
         estacionalidad_detectada = detectar_y_ajustar_estacionalidad(
             raw, n_raw, params, &P_max_ajustado, &Q_max_ajustado, &mensaje_advertencia);
 
@@ -1601,7 +1616,7 @@ int ejecutar_deteccion_automatica(const char *filename, DataParameters *params,
     // =========================================================================
     // UNIT ROOT TESTS (only if d<=1, D=0 and NOT in simulation mode)
     // =========================================================================
-    if (!is_simulation && params->d <= 1 && params->D == 0) {
+    if (run_tests && params->d <= 1 && params->D == 0) {
         printf("\n=== UNIT ROOT TESTS (d=%d, D=%d) ===\n", params->d, params->D);
         int test_n = n_raw;
         double *test_data = malloc(n_raw * sizeof(double));
@@ -1621,8 +1636,25 @@ int ejecutar_deteccion_automatica(const char *filename, DataParameters *params,
                 UnitRootTestResult *unit_root_result = perform_unit_root_tests(
                     differenced_data, n_diff, estacionalidad_detectada, NULL);
                 if (unit_root_result) {
+                    if (art_tl_ctx && art_tl_ctx->res) {
+                        ArtResult *ar = art_tl_ctx->res;
+                        ar->unit_root_tested = 1;
+                        ar->adf_stat = unit_root_result->adf_test_statistic;
+                        ar->adf_p = unit_root_result->adf_p_value;
+                        ar->adf_crit = unit_root_result->adf_critical_value;
+                        ar->adf_lags = unit_root_result->adf_lags;
+                        ar->kpss_stat = unit_root_result->kpss_test_statistic;
+                        ar->kpss_p = unit_root_result->kpss_p_value;
+                        ar->kpss_crit = unit_root_result->kpss_critical_value;
+                        ar->kpss_lags = unit_root_result->kpss_lags;
+                        ar->unit_root_suspected = unit_root_result->unit_root_suspected;
+                    }
                     if (unit_root_result->unit_root_suspected) {
                         printf("❌ %s\n", unit_root_result->warning_message);
+                        if (art_tl_ctx && art_tl_ctx->res)
+                            art_msg("Possible unit root: ADF p=%.4f, KPSS rejects stationarity; "
+                                    "consider one more regular difference",
+                                    unit_root_result->adf_p_value);
                         char warning_msg[512];
                         snprintf(warning_msg, sizeof(warning_msg),
                                 "WARNING: Possible unit root detected.\n"
@@ -1653,7 +1685,7 @@ int ejecutar_deteccion_automatica(const char *filename, DataParameters *params,
 
     datos_originales = raw;
     n_puntos_original = n_raw;
-    allocated = !is_simulation;
+    allocated = !is_simulation;   /* a context copy or a loaded file */
 
     // Create a copy for transformations
     params->data = malloc(n_puntos_original * sizeof(double));
@@ -1667,8 +1699,13 @@ int ejecutar_deteccion_automatica(const char *filename, DataParameters *params,
 
     // Apply transformations (log, regular differences, seasonal differences)
     transform_data(params);
-    if (params->D == 0 && params->s > 1 && params->n_points > 0)
-        remove_harmonics(params->data, params->n_points, params->s);
+    {
+        int hm = art_tl_ctx ? art_tl_ctx->harmonics : ART_HARM_AUTO;
+        int want = (hm == ART_HARM_ON) ||
+                   (hm == ART_HARM_AUTO && params->D == 0 && params->s > 1);
+        if (want && params->s > 1 && params->n_points > 0)
+            remove_harmonics(params->data, params->n_points, params->s);
+    }
 
     if (params->n_points <= 0) {
         free(params->data);
@@ -1995,12 +2032,6 @@ double euclidean_similarity(double *array1, double *array2, int start_lag, int e
 }
 
 // Función para aplicar ponderación a las características
-void apply_weights_to_features(PatternFeatures *features, int lags, int s,
-                              double decay_factor, double seasonal_strength) {
-    // Esta función modifica las características según los pesos
-    // En una implementación real, esto afectaría cómo se calcula la similitud
-}
-
 // model_detection.c - Modificar la función detectar_y_ajustar_estacionalidad
 
 int detectar_y_ajustar_estacionalidad(const double *raw, int n_raw, DataParameters *params,
@@ -2059,8 +2090,19 @@ int detectar_y_ajustar_estacionalidad(const double *raw, int n_raw, DataParamete
     int estacionalidad_detectada = resultado_estacional->seasonal_detected;
     double p_valor = resultado_estacional->p_value;
 
-    printf("Resultado detección estacional: %s (p=%.4f)\n",
-           estacionalidad_detectada ? "DETECTADA" : "NO DETECTADA", p_valor);
+    art_msg("Resultado detección estacional: %s (p=%.4f)",
+            estacionalidad_detectada ? "DETECTADA" : "NO DETECTADA", p_valor);
+    if (art_tl_ctx && art_tl_ctx->res) {
+        ArtResult *ar = art_tl_ctx->res;
+        ar->seasonal_tested = 1;
+        ar->seasonal_detected = estacionalidad_detectada;
+        ar->seasonal_F = resultado_estacional->f_statistic;
+        ar->seasonal_p = p_valor;
+        ar->seasonal_s = params->s;
+        for (int i = 0; i < params->s && i < ART_MAX_S; i++)
+            ar->seasonal_dummies[i] = resultado_estacional->seasonal_dummies
+                                      ? resultado_estacional->seasonal_dummies[i] : 0.0;
+    }
 
     if (estacionalidad_detectada) {
         // Estacionalidad detectada - mantener parámetros estacionales originales
@@ -2597,9 +2639,11 @@ static void rank_shortlist_by_fit(ModelCandidate *cand, double *data, int n,
     double sim_v[MAX_ORDER_CANDIDATES] = {0}, aicc_v[MAX_ORDER_CANDIDATES];
     int wn_ok = white_noise_admissible(data, n, s);
     for (int c = 0; c < cand->n_candidates; c++) {
+        if (art_cancelled()) return;
         int p = cand->candidates[c].p, q = cand->candidates[c].q;
         int P = cand->candidates[c].P, Q = cand->candidates[c].Q;
-        double phi[10] = {0}, theta[10] = {0}, Phi[5] = {0}, Theta[5] = {0};
+        double phi[ART_MAX_P] = {0}, theta[ART_MAX_P] = {0};
+        double Phi[ART_MAX_SP] = {0}, Theta[ART_MAX_SP] = {0};
 
         int unscored = 0;
         if (q == 0) {
@@ -2651,6 +2695,20 @@ static void rank_shortlist_by_fit(ModelCandidate *cand, double *data, int n,
                                         emp_features, lags, n)
             : 0.0;
         (void)compute_arma_aicc; (void)pacf_emp;
+
+        /* 18.2.1: keep what was computed, for the caller. */
+        OrderCandidate *oc = &cand->candidates[c];
+        oc->scored = score > -1e29;
+        oc->aicc = aicc_v[c];
+        memcpy(oc->phi, phi, sizeof phi);
+        memcpy(oc->theta, theta, sizeof theta);
+        memcpy(oc->Phi, Phi, sizeof Phi);
+        memcpy(oc->Theta, Theta, sizeof Theta);
+        memset(oc->acf_theoretical, 0, sizeof oc->acf_theoretical);
+        memset(oc->pacf_theoretical, 0, sizeof oc->pacf_theoretical);
+        if (oc->scored && lags <= MAX_LAGS)
+            calcular_ACF_PACF_SARIMA(p, phi, q, theta, P, Phi, Q, Theta, s,
+                                     oc->acf_theoretical, oc->pacf_theoretical, lags);
     }
 
     /* OPTION B (art-python BUG-0198, decided 2026-09-30): the ORDER is the
@@ -2762,166 +2820,3 @@ void extract_feature_vector(PatternFeatures *features, double *vector, int dim, 
     while (idx < dim) vector[idx++] = 0.0;
 }
 
-/**
- * @brief Re-evalúa los modelos candidatos utilizando la distancia de Mahalanobis
- *        y combina el resultado con la similitud original.
- *
- * @param vectors      Array de vectores de características teóricas (cada uno es un gsl_vector*)
- * @param n            Número de vectores (modelos)
- * @param emp_vector   Vector de características empíricas (extraído de los datos)
- * @param records      Array de estructuras ModelRecord que contienen los parámetros y la similitud original
- * @param n_records    Número de registros (debe coincidir con n)
- * @param alpha        Peso para la similitud original (0..1). La similitud final = alpha*sim_original + (1-alpha)*sim_mahalanobis
- * @param best         Puntero a ModelCandidate donde se almacenará el mejor modelo según la nueva métrica
- *
- * @note   Los vectores no se modifican (se restaura su valor original después de restar el empírico).
- *         La matriz de covarianza se regulariza añadiendo lambda = 1e-6 a la diagonal.
- *         El factor de escala tau se establece en 1.0 (puede ajustarse según los datos).
- */
-void reorder_with_mahalanobis(gsl_vector **vectors, int n,
-                              gsl_vector *emp_vector,
-                              ModelRecord *records, int n_records,
-                              double alpha, ModelCandidate *best) {
-    if (n <= 0 || n_records != n || !vectors || !emp_vector || !records || !best) return;
-
-    int K = vectors[0]->size;  // dimensión del vector de características
-
-    // ---------- 1. Construir matriz de datos X (n x K) ----------
-    gsl_matrix *X = gsl_matrix_alloc(n, K);
-    for (int i = 0; i < n; i++) {
-        for (int j = 0; j < K; j++) {
-            double val = gsl_vector_get(vectors[i], j);
-            gsl_matrix_set(X, i, j, val);
-        }
-    }
-
-    // ---------- 2. Calcular matriz de covarianza muestral ----------
-    // Calcular medias
-    gsl_vector *mean = gsl_vector_alloc(K);
-    for (int j = 0; j < K; j++) {
-        double sum = 0.0;
-        for (int i = 0; i < n; i++) sum += gsl_matrix_get(X, i, j);
-        gsl_vector_set(mean, j, sum / n);
-    }
-
-    // Matriz de covarianza (simétrica)
-    gsl_matrix *cov = gsl_matrix_alloc(K, K);
-    gsl_matrix_set_zero(cov);
-    for (int i = 0; i < n; i++) {
-        for (int j = 0; j < K; j++) {
-            double diff_j = gsl_matrix_get(X, i, j) - gsl_vector_get(mean, j);
-            for (int k = 0; k <= j; k++) {
-                double diff_k = gsl_matrix_get(X, i, k) - gsl_vector_get(mean, k);
-                double inc = diff_j * diff_k;
-                double current = gsl_matrix_get(cov, j, k);
-                gsl_matrix_set(cov, j, k, current + inc);
-                if (j != k) {
-                    current = gsl_matrix_get(cov, k, j);
-                    gsl_matrix_set(cov, k, j, current + inc);
-                }
-            }
-        }
-    }
-    for (int j = 0; j < K; j++) {
-        for (int k = 0; k < K; k++) {
-            double val = gsl_matrix_get(cov, j, k);
-            gsl_matrix_set(cov, j, k, val / (n - 1));
-        }
-    }
-
-    // ---------- 3. Regularización y cálculo de la inversa ----------
-    double lambda = 1e-6;  // constante de regularización
-    for (int i = 0; i < K; i++) {
-        double val = gsl_matrix_get(cov, i, i);
-        gsl_matrix_set(cov, i, i, val + lambda);
-    }
-
-    gsl_matrix *inv_cov = gsl_matrix_alloc(K, K);
-    gsl_permutation *perm = gsl_permutation_alloc(K);
-    int signum;
-    int status = gsl_linalg_LU_decomp(cov, perm, &signum);
-    if (status != GSL_SUCCESS) {
-        fprintf(stderr, "Error: no se pudo descomponer la matriz de covarianza (LU).\n");
-        gsl_matrix_free(X);
-        gsl_vector_free(mean);
-        gsl_matrix_free(cov);
-        gsl_permutation_free(perm);
-        gsl_matrix_free(inv_cov);
-        return;
-    }
-    status = gsl_linalg_LU_invert(cov, perm, inv_cov);
-    if (status != GSL_SUCCESS) {
-        fprintf(stderr, "Error: no se pudo invertir la matriz de covarianza.\n");
-        gsl_matrix_free(X);
-        gsl_vector_free(mean);
-        gsl_matrix_free(cov);
-        gsl_permutation_free(perm);
-        gsl_matrix_free(inv_cov);
-        return;
-    }
-
-    // ---------- 4. Calcular distancia de Mahalanobis para cada modelo ----------
-    gsl_vector *diff = gsl_vector_alloc(K);
-    gsl_vector *temp = gsl_vector_alloc(K);
-    double tau = 1.0;  // factor de escala (puede ajustarse)
-
-    for (int i = 0; i < n_records; i++) {
-        // diff = vector_i - emp_vector
-        gsl_vector_memcpy(diff, vectors[i]);
-        gsl_vector_sub(diff, emp_vector);
-
-        // temp = inv_cov * diff
-        gsl_blas_dgemv(CblasNoTrans, 1.0, inv_cov, diff, 0.0, temp);
-
-        // D^2 = diff^T * temp
-        double D2;
-        gsl_blas_ddot(diff, temp, &D2);
-        double D = sqrt(D2);
-        double sim_mah = exp(-D / tau);
-
-        // Combinar con la similitud original
-        double sim_final = alpha * records[i].similarity_original + (1.0 - alpha) * sim_mah;
-
-        // Actualizar mejor candidato si es necesario
-        if (sim_final > best->similarity) {
-            best->similarity = sim_final;
-            best->p = records[i].p;
-            best->q = records[i].q;
-            best->P = records[i].P;
-            best->Q = records[i].Q;
-
-            // Liberar arrays antiguos
-            if (best->best_phi) free(best->best_phi);
-            if (best->best_theta) free(best->best_theta);
-            if (best->best_Phi) free(best->best_Phi);
-            if (best->best_Theta) free(best->best_Theta);
-
-            // Copiar nuevos coeficientes
-            if (records[i].p > 0) {
-                best->best_phi = malloc(records[i].p * sizeof(double));
-                memcpy(best->best_phi, records[i].best_phi, records[i].p * sizeof(double));
-            } else best->best_phi = NULL;
-            if (records[i].q > 0) {
-                best->best_theta = malloc(records[i].q * sizeof(double));
-                memcpy(best->best_theta, records[i].best_theta, records[i].q * sizeof(double));
-            } else best->best_theta = NULL;
-            if (records[i].P > 0) {
-                best->best_Phi = malloc(records[i].P * sizeof(double));
-                memcpy(best->best_Phi, records[i].best_Phi, records[i].P * sizeof(double));
-            } else best->best_Phi = NULL;
-            if (records[i].Q > 0) {
-                best->best_Theta = malloc(records[i].Q * sizeof(double));
-                memcpy(best->best_Theta, records[i].best_Theta, records[i].Q * sizeof(double));
-            } else best->best_Theta = NULL;
-        }
-    }
-
-    // ---------- 5. Liberar memoria ----------
-    gsl_vector_free(diff);
-    gsl_vector_free(temp);
-    gsl_matrix_free(X);
-    gsl_vector_free(mean);
-    gsl_matrix_free(cov);
-    gsl_permutation_free(perm);
-    gsl_matrix_free(inv_cov);
-}

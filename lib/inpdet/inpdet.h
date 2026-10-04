@@ -90,4 +90,40 @@ int id_anade( const char *origen, const char *destino,
               const char *const *nuevo, const int *nomega, int nn,
               char *porque, size_t n );
 
+/* ---------------------------------------------------------------------- */
+/* THE ARMA PART (2026-10-04, for the identifier's window, an_identifica)  */
+/*                                                                         */
+/* The four sections that follow the deterministics -- regular AR, annual  */
+/* AR, regular MA, annual MA -- each "count orders..." then, per factor, a */
+/* "**" line and one "seed flag" line per coefficient (flag 1: estimated, */
+/* fue.c [3.3.2]). The signs are Box-Jenkins: phi(B) = 1 - sum phi_j B^j,  */
+/* theta(B) = 1 - sum theta_j B^j, as fue stores them (Ma1[i][0] = -1).    */
+/* ---------------------------------------------------------------------- */
+
+/* The ARMA orders the file declares, summed over its factors: *p, *q
+ * (regular AR, MA) and *P, *Q (annual AR, MA). 0 if it could; else 1 and
+ * the reason. */
+int id_arma_ordenes( const char *origen, int *p, int *q, int *P, int *Q,
+                     char *porque, size_t n );
+
+/* Copy origen into destino with its four ARMA sections REPLACED by one
+ * factor of each nonzero order, seeds from phi[0..p-1], theta[0..q-1],
+ * Phi[0..P-1], Theta[0..Q-1] (NULL: 0.0), all estimated. Everything else is
+ * copied byte for byte, the section labels included. The caller must pass
+ * the result through inp_check_fue, as with id_anade. Returns 0, or 1 with
+ * the reason (destino is not touched). */
+int id_pon_arma( const char *origen, const char *destino,
+                 int p, const double *phi, int q, const double *theta,
+                 int P, const double *Phi, int Q, const double *Theta,
+                 char *porque, size_t n );
+
+/* Copy origen into destino with its transformation line -- the one after
+ * "** Box-Cox lambda, regular differences and complete annual differences"
+ * (fue.c [3.5]) -- set to lambda, d, D. Everything else byte for byte; the
+ * individual factors of the annual difference are not touched. For the
+ * identifier at E2: the child of the data node carries the transformation
+ * that was identified on. 0, or 1 with the reason. */
+int id_pon_transformacion( const char *origen, const char *destino,
+                           double lam, int d, int D, char *porque, size_t n );
+
 #endif /* ATSW_INPDET_H */

@@ -226,6 +226,88 @@ int main( int argc, char **argv )
     }
     }
 
+    /* ------------------------------------------------------------------ */
+    /* THE ARMA PART (id_pon_arma, for the identifier's window)            */
+    /* ------------------------------------------------------------------ */
+    printf( "\nLA PARTE ARMA: poner unos órdenes y que el motor los lea\n" );
+    {
+    const double phi[2] = { 0.5, -0.2 }, th[1] = { 0.4 }, Ph[1] = { 0.3 };
+    int vistos2 = 0, buenos = 0, ceros_iguales = 0, sin_arma = 0;
+
+    d = opendir( dir );
+    while ( d && ( e = readdir( d ) ) != NULL )
+        {
+        char ruta[1024];
+        int  n = (int) strlen( e->d_name ), p0, q0, P0, Q0, p1, q1, P1, Q1;
+
+        if ( n < 5 || strcmp( e->d_name + n - 4, ".inp" ) ) continue;
+        snprintf( ruta, sizeof ruta, "%s/%s", dir, e->d_name );
+        if ( inp_check_fue( ruta, msg, sizeof msg ) != 0 ) continue;
+        if ( id_arma_ordenes( ruta, &p0, &q0, &P0, &Q0, porque, sizeof porque ) != 0 )
+           { printf( "  FALLO %s: %s\n", e->d_name, porque ); fallos++; continue; }
+        vistos2++;
+        /* (2,1)(1,0): written, read back, accepted by the engine */
+        if ( id_pon_arma( ruta, tmp, 2, phi, 1, th, 1, Ph, 0, NULL, porque, sizeof porque ) == 0 &&
+             id_arma_ordenes( tmp, &p1, &q1, &P1, &Q1, porque, sizeof porque ) == 0 &&
+             p1 == 2 && q1 == 1 && P1 == 1 && Q1 == 0 &&
+             inp_check_fue( tmp, msg, sizeof msg ) == 0 )
+           buenos++;
+        else
+           { printf( "  FALLO %s: (2,1)(1,0) no queda bien escrito: %s\n", e->d_name,
+                     porque ); fallos++; }
+        /* a file with no ARMA comes back identical when given none */
+        if ( p0 == 0 && q0 == 0 && P0 == 0 && Q0 == 0 )
+           {
+           sin_arma++;
+           if ( id_pon_arma( ruta, tmp, 0, NULL, 0, NULL, 0, NULL, 0, NULL,
+                             porque, sizeof porque ) == 0 && iguales( ruta, tmp ) )
+              ceros_iguales++;
+           else
+              { printf( "  FALLO %s: sin ARMA no sale idéntico\n", e->d_name ); fallos++; }
+           }
+        }
+    if ( d ) closedir( d );
+    printf( "        %d ficheros: %d con (2,1)(1,0) aceptados; %d sin ARMA, %d idénticos\n",
+            vistos2, buenos, sin_arma, ceros_iguales );
+    ok( vistos2 > 20 && buenos == vistos2, "los órdenes se escriben, se releen y el motor los acepta" );
+    ok( sin_arma > 0 && ceros_iguales == sin_arma, "sin ARMA, poner ninguno deja el fichero idéntico" );
+
+    /* the seeds go where fue reads them: Box-Jenkins signs, flag 1 */
+    {
+    char ruta[1024];
+    snprintf( ruta, sizeof ruta, "%s/CPI_USA_model.inp", dir );
+    ok( id_pon_arma( ruta, tmp, 2, phi, 1, th, 1, Ph, 0, NULL, porque, sizeof porque ) == 0 &&
+        cuenta( tmp, "0.500000  1" ) == 1 && cuenta( tmp, "-0.200000  1" ) == 1 &&
+        cuenta( tmp, "0.400000  1" ) == 1 && cuenta( tmp, "0.300000  1" ) == 1,
+        "las semillas se escriben con su signo y estimadas" );
+    }
+    }
+
+    /* the transformation line, for the identifier at E2 */
+    {
+    char ruta[1024];
+    int  vistos3 = 0, buenos3 = 0;
+
+    d = opendir( dir );
+    while ( d && ( e = readdir( d ) ) != NULL )
+        {
+        int nn = (int) strlen( e->d_name );
+
+        if ( nn < 5 || strcmp( e->d_name + nn - 4, ".inp" ) ) continue;
+        snprintf( ruta, sizeof ruta, "%s/%s", dir, e->d_name );
+        if ( inp_check_fue( ruta, msg, sizeof msg ) != 0 ) continue;
+        vistos3++;
+        if ( id_pon_transformacion( ruta, tmp, 0.0, 1, 0, porque, sizeof porque ) == 0 &&
+             inp_check_fue( tmp, msg, sizeof msg ) == 0 && cuenta( tmp, "0.00 1 0" ) == 1 )
+           buenos3++;
+        else { printf( "  FALLO %s: la transformación no queda bien: %s\n", e->d_name, porque );
+               fallos++; }
+        }
+    if ( d ) closedir( d );
+    ok( vistos3 > 20 && buenos3 == vistos3,
+        "la línea de Box-Cox se cambia y el motor lo acepta, en todo el corpus" );
+    }
+
     printf( "\n%d fallos\n", fallos );
     return fallos ? 1 : 0;
 }

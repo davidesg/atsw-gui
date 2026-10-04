@@ -501,3 +501,126 @@ int id_anade( const char *origen, const char *destino,
       { snprintf( porque, n, "no pude cerrar «%s»", destino ); return 1; }
    return 0;
 }
+
+
+/* ---------------------------------------------------------------------- */
+/* The ARMA part: see inpdet.h.                                            */
+/* ---------------------------------------------------------------------- */
+
+/* The four ARMA section labels, in the order fue reads them. "anual" is
+ * how the corpus spells the last one, "annual" the second. */
+static const char *const ARMA_ETIQ[4] = {
+   "regular AR operators", "nual AR operators", "regular MA operators", "nual MA operators"
+};
+
+/* Where the four sections are: lab[k] is the label line of section k,
+ * fin the first line after the fourth; ord[k] the summed order. */
+static int arma_mira( const Fich *f, int lab[4], int *fin, int ord[4],
+                      char *porque, size_t np )
+{
+   int i = 0, k;
+
+   for ( k = 0; k < 4; k++ )
+       {
+       char t[64][64];
+       int  nt, nf, j, o = 0;
+
+       while ( i < f->n && !( es_etiqueta( f->l[i] ) && strstr( f->l[i], ARMA_ETIQ[k] ) ) ) i++;
+       if ( i >= f->n )
+          { snprintf( porque, np, "no está la sección «%s»", ARMA_ETIQ[k] ); return 1; }
+       lab[k] = i++;
+       if ( i >= f->n ) { snprintf( porque, np, "falta la cuenta de «%s»", ARMA_ETIQ[k] ); return 1; }
+       nt = tokens( f->l[i], t, 64 );
+       nf = nt > 0 ? atoi( t[0] ) : -1;
+       if ( nf < 0 || nt < nf + 1 )
+          { snprintf( porque, np, "cuenta ilegible en «%s»", ARMA_ETIQ[k] ); return 1; }
+       i++;
+       for ( j = 0; j < nf; j++ )
+           {
+           int oj = atoi( t[j + 1] );
+           o += oj;
+           i += 1 + oj;                 /* the "**" line and the coefficients */
+           }
+       if ( i > f->n ) { snprintf( porque, np, "el fichero se acaba en «%s»", ARMA_ETIQ[k] ); return 1; }
+       ord[k] = o;
+       }
+   *fin = i;
+   return 0;
+}
+
+int id_arma_ordenes( const char *origen, int *p, int *q, int *P, int *Q,
+                     char *porque, size_t n )
+{
+   Fich f;
+   int  lab[4], fin, ord[4];
+
+   if ( fich_lee( origen, &f, porque, n ) ) return 1;
+   if ( arma_mira( &f, lab, &fin, ord, porque, n ) ) { fich_free( &f ); return 1; }
+   *p = ord[0]; *P = ord[1]; *q = ord[2]; *Q = ord[3];
+   fich_free( &f );
+   return 0;
+}
+
+/* One section: its label as the file has it; then the count line -- the
+ * file's own, byte for byte, when an empty section stays empty -- and the
+ * coefficients. */
+static void arma_seccion( FILE *o, const char *etiqueta, const char *cuenta_vieja,
+                          int vacia, int ord, const double *v )
+{
+   int j;
+
+   fputs( etiqueta, o );
+   if ( ord <= 0 ) { fputs( vacia ? cuenta_vieja : "0\n", o ); return; }
+   fprintf( o, "1 %d\n**\n", ord );
+   for ( j = 0; j < ord; j++ ) fprintf( o, "%.6f  1\n", v ? v[j] : 0.0 );
+}
+
+int id_pon_arma( const char *origen, const char *destino,
+                 int p, const double *phi, int q, const double *theta,
+                 int P, const double *Phi, int Q, const double *Theta,
+                 char *porque, size_t n )
+{
+   Fich  f;
+   int   lab[4], fin, ord[4], i;
+   FILE *o;
+
+   if ( p < 0 || q < 0 || P < 0 || Q < 0 )
+      { snprintf( porque, n, "órdenes negativos" ); return 1; }
+   if ( fich_lee( origen, &f, porque, n ) ) return 1;
+   if ( arma_mira( &f, lab, &fin, ord, porque, n ) ) { fich_free( &f ); return 1; }
+
+   o = fopen( destino, "wb" );
+   if ( !o ) { snprintf( porque, n, "no pude escribir «%s»", destino ); fich_free( &f ); return 1; }
+   for ( i = 0; i < lab[0]; i++ ) fputs( f.l[i], o );
+   arma_seccion( o, f.l[lab[0]], f.l[lab[0] + 1], ord[0] == 0, p, phi );
+   arma_seccion( o, f.l[lab[1]], f.l[lab[1] + 1], ord[1] == 0, P, Phi );
+   arma_seccion( o, f.l[lab[2]], f.l[lab[2] + 1], ord[2] == 0, q, theta );
+   arma_seccion( o, f.l[lab[3]], f.l[lab[3] + 1], ord[3] == 0, Q, Theta );
+   for ( i = fin; i < f.n; i++ ) fputs( f.l[i], o );
+   fclose( o );
+   fich_free( &f );
+   return 0;
+}
+
+int id_pon_transformacion( const char *origen, const char *destino,
+                           double lam, int d, int D, char *porque, size_t n )
+{
+   Fich  f;
+   FILE *o;
+   int   i, lab = -1;
+
+   if ( d < 0 || D < 0 ) { snprintf( porque, n, "diferencias negativas" ); return 1; }
+   if ( fich_lee( origen, &f, porque, n ) ) return 1;
+   for ( i = 0; i < f.n; i++ )
+       if ( es_etiqueta( f.l[i] ) && strstr( f.l[i], "Box-Cox lambda" ) ) { lab = i; break; }
+   if ( lab < 0 || lab + 1 >= f.n )
+      { snprintf( porque, n, "no está la línea de Box-Cox" ); fich_free( &f ); return 1; }
+   o = fopen( destino, "wb" );
+   if ( !o ) { snprintf( porque, n, "no pude escribir «%s»", destino ); fich_free( &f ); return 1; }
+   for ( i = 0; i < f.n; i++ )
+       if ( i == lab + 1 ) fprintf( o, "%.2f %d %d\n", lam, d, D );
+       else fputs( f.l[i], o );
+   fclose( o );
+   fich_free( &f );
+   return 0;
+}

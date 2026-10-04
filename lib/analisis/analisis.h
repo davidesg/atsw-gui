@@ -142,6 +142,28 @@ void an_sugerir( const AnHost *h, const char *serie, const char *muestra,
                  const char *id, int d, int D, int freq,
                  const AnSuceso *suc, int ns );
 
+/* EL IDENTIFICADOR: art propone, el analista elige (an_identifica.c,
+ * docs/ESTUDIO-identificador.md). Dos puntos del proceso:
+ *
+ *   an_identifica_serie     E2, los gráficos de identificación: una serie con
+ *                           su lambda (0 log, 1 niveles), d y D. `id` es el
+ *                           nodo del que se deriva (el de datos).
+ *   an_identifica_residuos  E3, los residuos de un modelo base, leídos de su
+ *                           .out; se deriva sobre su .pre.                 */
+typedef struct {
+   const double *x;     /* la serie en NIVEL, x[0..n-1]                  */
+   int           n;
+   int           freq, per, anio;   /* frecuencia y fecha de x[0]       */
+   double        lam;
+   int           d, D;
+   const char   *que;   /* para el título; puede ser NULL               */
+} AnSerie;
+
+void an_identifica_serie( const AnHost *h, const char *serie, const char *muestra,
+                          const char *id, const AnSerie *s );
+void an_identifica_residuos( const AnHost *h, const char *serie, const char *muestra,
+                             const char *id );
+
 /* --- CUANDO SE PUEDE ANALIZAR, Y SI NO, POR QUE ------------------------- */
 
 /* UN BOTON SE ENCIENDE CUANDO EXISTE SU INSUMO, Y NO ANTES. No es una

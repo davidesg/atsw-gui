@@ -1232,3 +1232,369 @@ void atsw_pinta_casos( Atsw *a )
         }
     gtk_widget_set_sensitive( a->b_nuevo_caso, a->hay );
 }
+
+/* ------------------------------------------------------------------------ */
+/* LAS CORRIDAS DE ANTES, CONVERTIDAS EN CASOS (DISENO-casos.md §5)          */
+/*                                                                           */
+/* Antes de los casos, drtran_gui --proyecto registraba cada estimacion con  */
+/* pr_deriva sobre la serie de salida: «un modelo mas de EP», encadenado a la */
+/* estimacion anterior, sin .inp y con los ficheros de drtran a su nombre.    */
+/* No quedaba escrito con que se cruzo cada serie -- pero el .out lo imprime  */
+/* en su cabecera, y de ahi se saca.                                         */
+/*                                                                           */
+/* NADA SE CONVIERTE SIN PREGUNTAR, y lo que no se puede convertir se deja   */
+/* COMO ESTABA: un fichero a medio mover es peor que uno sin convertir.      */
+/* ------------------------------------------------------------------------ */
+
+static const char *const ext_legado[] =
+    { ".out", ".dag", ".cns", "_res.txt", "_eval.csv", NULL };
+
+typedef struct {
+    char      serie[PR_ID], muestra[PR_ID], id[PR_ID], padre[PR_ID];
+    char      creado[16], razon[PR_RAZON], razon_el[PR_RAZON];
+    int       elegido;
+    PrEntrada en[PR_MAX_ENTRADA];
+    int       nen;
+    char      mu[PR_ID];             /* la muestra de sus entradas          */
+    gboolean  vale;                  /* se puede convertir                  */
+    gboolean  visto, hecho, borrado;
+    char      porque[600];
+    char      caso[PR_ID], corrida[PR_ID];
+} Legado;
+
+/* LA CABECERA DEL .out: «Output (Y) : ruta» y una «Input (Xj) : ruta» por
+   entrada, en el orden en que drtran las recibio (drtran.c, cabecera del
+   .out). Devuelve cuantas rutas, o -1 si no se lee.                    */
+static int lee_cabecera( const char *out, char rutas[][PR_RUTA], int max )
+{
+    gchar  *c = NULL, **l;
+    int     i, n = 0;
+
+    if ( !g_file_get_contents( out, &c, NULL, NULL ) ) return -1;
+    l = g_strsplit( c, "\n", -1 );
+    g_free( c );
+    /* La cabecera acaba en «Frequency»: lo de despues es el informe, y
+       ahi no se busca nada.                                           */
+    for ( i = 0; l[i] && !g_str_has_prefix( l[i], "Frequency" ); i++ )
+        {
+        const char *dos;
+
+        if ( !g_str_has_prefix( l[i], "Output (Y)" ) &&
+             !g_str_has_prefix( l[i], "Input  (X" ) ) continue;
+        if ( ( dos = strchr( l[i], ':' ) ) == NULL ) continue;
+        if ( n >= max ) { n = max + 1; break; }
+        snprintf( rutas[n], PR_RUTA, "%s", dos + 1 );
+        g_strstrip( rutas[n] );                 /* espacios y el \r de Windows */
+        n++;
+        }
+    g_strfreev( l );
+    return n;
+}
+
+/* De la cabecera a las entradas de un caso. FALSE con el motivo si no. */
+static gboolean entradas_de( const Proyecto *p, Legado *L )
+{
+    char   out[PR_RUTA], rutas[PR_MAX_ENTRADA + 1][PR_RUTA];
+    int    i, n;
+
+    pr_ruta( p, L->serie, L->muestra, L->id, ".out", out, sizeof out );
+    n = lee_cabecera( out, rutas, PR_MAX_ENTRADA );
+    if ( n < 0 )
+        { snprintf( L->porque, sizeof L->porque, "no pude leer su .out" );
+          return FALSE; }
+    if ( n > PR_MAX_ENTRADA )
+        { snprintf( L->porque, sizeof L->porque, "cruza más de %d series, y no "
+                    "caben en un caso", PR_MAX_ENTRADA ); return FALSE; }
+    if ( n < 2 )
+        { snprintf( L->porque, sizeof L->porque, "su .out no dice qué .pre "
+                    "entraron (le faltan las líneas Output/Input)" );
+          return FALSE; }
+
+    for ( i = 0; i < n; i++ )
+        {
+        char   se[PR_ID], mu[PR_ID], id[PR_ID], pre[PR_RUTA];
+        gchar *h;
+
+        /* UNA BUSQUEDA CONTRA EL MANIFIESTO, no un parseo del nombre. */
+        if ( pr_de_ruta( p, rutas[i], se, sizeof se, mu, sizeof mu,
+                         id, sizeof id ) != 0 )
+            { snprintf( L->porque, sizeof L->porque, "%.400s no es un modelo de "
+                        "este proyecto", rutas[i] ); return FALSE; }
+        if ( i == 0 ) snprintf( L->mu, sizeof L->mu, "%s", mu );
+        else if ( strcmp( mu, L->mu ) )
+            { snprintf( L->porque, sizeof L->porque, "sus entradas son de "
+                        "muestras distintas: un caso cruza series de UNA "
+                        "ventana" ); return FALSE; }
+        memset( &L->en[i], 0, sizeof L->en[i] );
+        snprintf( L->en[i].serie,  PR_ID, "%s", se );
+        snprintf( L->en[i].modelo, PR_ID, "%s", id );
+
+        /* EL HASH ES EL DE HOY. El del dia en que se estimo no se puede
+           saber --nadie lo guardo, que es justo lo que los casos vienen a
+           arreglar--, asi que el caso nace afirmando lo unico que se
+           puede comprobar: con que .pre se le ve hoy.               */
+        pr_ruta( p, se, mu, id, ".pre", pre, sizeof pre );
+        h = atsw_sha_de( pre );
+        snprintf( L->en[i].sha, PR_SHA, "%s", h ? h : "" );
+        g_free( h );
+        }
+    L->nen = n;
+    return TRUE;
+}
+
+static Legado *legado_de( Legado *L, int n, const char *serie,
+                          const char *muestra, const char *id )
+{
+    int i;
+
+    for ( i = 0; i < n; i++ )
+        if ( !strcmp( L[i].serie, serie ) && !strcmp( L[i].muestra, muestra ) &&
+             !strcmp( L[i].id, id ) ) return &L[i];
+    return NULL;
+}
+
+/* MOVER SUS FICHEROS a los de la corrida. Si uno no se mueve, se devuelven
+   los que ya se movieron: o todos o ninguno.                           */
+static gboolean mueve( const Proyecto *p, const Legado *L, char *why, size_t n )
+{
+    char     de[8][PR_RUTA], a[8][PR_RUTA];
+    gboolean movido[8] = { FALSE };
+    int      k, j;
+
+    for ( k = 0; ext_legado[k]; k++ )
+        {
+        gchar *dir;
+
+        pr_ruta( p, L->serie, L->muestra, L->id, ext_legado[k], de[k], PR_RUTA );
+        pr_corrida_ruta( p, L->caso, L->corrida, ext_legado[k], a[k], PR_RUTA );
+        if ( !g_file_test( de[k], G_FILE_TEST_EXISTS ) ) continue;
+        dir = g_path_get_dirname( a[k] );
+        g_mkdir_with_parents( dir, 0700 );
+        g_free( dir );
+        if ( g_rename( de[k], a[k] ) != 0 )
+            {
+            snprintf( why, n, "no pude mover %s", de[k] );
+            for ( j = 0; j < k; j++ )
+                if ( movido[j] ) g_rename( a[j], de[j] );
+            return FALSE;
+            }
+        movido[k] = TRUE;
+        }
+    return TRUE;
+}
+
+static gboolean convierte_una( Atsw *a, Legado *L, Legado *todos, int nt )
+{
+    Proyecto   *p = a->p;
+    PrError     e;
+    const char *ya, *padre = "";
+    gboolean    creado = FALSE;
+    Legado     *lp;
+    int         k;
+
+    ya = pr_caso_de_entradas( p, L->en, L->nen, L->mu );
+    if ( ya[0] )
+        snprintf( L->caso, sizeof L->caso, "%s", ya );
+    else
+        {
+        /* SIN TITULO Y SIN RAZON: no se inventan. Se ponen despues. */
+        if ( pr_caso_add( p, L->en, L->nen, L->mu, "drtran", "", "",
+                          L->caso, sizeof L->caso, &e ) != 0 )
+            { pr_error_es( &e, L->porque, sizeof L->porque ); return FALSE; }
+        creado = TRUE;
+        }
+
+    /* EL LINAJE SE CONSERVA dentro del caso: cuelga de lo que fue su padre,
+       si ese padre fue a parar al mismo caso. Si no, es una raiz.      */
+    lp = legado_de( todos, nt, L->serie, L->muestra, L->padre );
+    if ( lp && lp->hecho && !strcmp( lp->caso, L->caso ) ) padre = lp->corrida;
+
+    if ( pr_corrida_nueva( p, L->caso, padre, L->corrida, sizeof L->corrida,
+                           NULL, 0, &e ) != 0 )
+        {
+        pr_error_es( &e, L->porque, sizeof L->porque );
+        if ( creado ) pr_caso_borra( p, L->caso, &e );
+        return FALSE;
+        }
+    if ( !mueve( p, L, L->porque, sizeof L->porque ) )
+        {
+        pr_corrida_borra( p, L->caso, L->corrida, &e );
+        if ( creado ) pr_caso_borra( p, L->caso, &e );
+        return FALSE;
+        }
+
+    pr_corrida_razon( p, L->caso, L->corrida, L->razon, &e );
+    if ( L->elegido )
+        pr_corrida_elige( p, L->caso, L->corrida, L->razon_el, &e );
+    /* La fecha es la de la estimacion, no la de hoy. */
+    if ( ( k = pr_corrida_idx( p, L->caso, L->corrida ) ) >= 0 && L->creado[0] )
+        snprintf( p->co[k].creado, sizeof p->co[k].creado, "%s", L->creado );
+    return TRUE;
+}
+
+int atsw_convierte_legados( Atsw *a, char *informe, size_t n )
+{
+    Proyecto *p = a->p;
+    Legado   *L;
+    int      *idx, nl, i, j, hechos = 0, cambio;
+    GString  *si = g_string_new( NULL ), *no = g_string_new( NULL );
+    PrError   e;
+
+    if ( informe && n ) informe[0] = '\0';
+    if ( !a->hay ) return 0;
+
+    /* En el monton: 512 de estos no caben en una pila de Windows. */
+    idx = g_new0( int, PR_MAX_MODELO );
+    nl  = atsw_legados( p, idx, PR_MAX_MODELO );
+    L   = g_new0( Legado, nl ? nl : 1 );
+    for ( i = 0; i < nl; i++ )
+        {
+        const PrModelo *m = &p->m[idx[i]];
+
+        snprintf( L[i].serie,   PR_ID, "%s", m->serie );
+        snprintf( L[i].muestra, PR_ID, "%s", m->muestra );
+        snprintf( L[i].id,      PR_ID, "%s", m->id );
+        snprintf( L[i].padre,   PR_ID, "%s", m->padre );
+        snprintf( L[i].creado,  sizeof L[i].creado, "%s", m->creado );
+        snprintf( L[i].razon,   PR_RAZON, "%s", m->razon );
+        snprintf( L[i].razon_el, PR_RAZON, "%s", m->razon_elegido );
+        L[i].elegido = m->elegido;
+        L[i].vale    = entradas_de( p, &L[i] );
+        }
+    g_free( idx );
+
+    /* LO QUE NO SE PODRA BORRAR NO SE CONVIERTE. Si de una corrida vieja
+       cuelga algo que se queda --un modelo de fue de verdad, u otra que no
+       se pudo convertir--, pr_borra se negaria despues de haber movido sus
+       ficheros. Se mira antes, hasta que no cambie nada.               */
+    do {
+        cambio = 0;
+        for ( i = 0; i < nl; i++ )
+            {
+            if ( !L[i].vale ) continue;
+            for ( j = 0; j < p->nm; j++ )
+                {
+                const PrModelo *h = &p->m[j];
+                Legado         *lh;
+
+                if ( strcmp( h->serie, L[i].serie ) ||
+                     strcmp( h->muestra, L[i].muestra ) ||
+                     strcmp( h->padre, L[i].id ) ) continue;
+                lh = legado_de( L, nl, h->serie, h->muestra, h->id );
+                if ( lh && lh->vale ) continue;
+                snprintf( L[i].porque, sizeof L[i].porque, "de ella cuelga %s, "
+                          "que se queda: borrarla rompería el linaje", h->id );
+                L[i].vale = FALSE;
+                cambio = 1;
+                break;
+                }
+            }
+    } while ( cambio );
+
+    /* LOS PADRES ANTES QUE LOS HIJOS: la corrida de un hijo cuelga de la
+       que se hizo de su padre, y esa tiene que existir ya.             */
+    do {
+        cambio = 0;
+        for ( i = 0; i < nl; i++ )
+            {
+            Legado *lp;
+
+            if ( !L[i].vale || L[i].visto ) continue;
+            lp = legado_de( L, nl, L[i].serie, L[i].muestra, L[i].padre );
+            if ( lp && lp->vale && !lp->visto ) continue;
+            L[i].visto = TRUE;
+            cambio = 1;
+            if ( convierte_una( a, &L[i], L, nl ) ) { L[i].hecho = TRUE; hechos++; }
+            else L[i].vale = FALSE;
+            }
+    } while ( cambio );
+
+    /* Y AHORA SE QUITAN LOS MODELOS, las hojas primero: pr_borra se niega
+       con hijos, asi que basta con repetir mientras alguno se vaya.    */
+    do {
+        cambio = 0;
+        for ( i = 0; i < nl; i++ )
+            if ( L[i].hecho && !L[i].borrado &&
+                 pr_borra( p, L[i].serie, L[i].muestra, L[i].id, &e ) == 0 )
+                { L[i].borrado = TRUE; cambio = 1; }
+    } while ( cambio );
+
+    for ( i = 0; i < nl; i++ )
+        {
+        if ( L[i].hecho )
+            g_string_append_printf( si, "%s%s/%s → %s/%s%s", si->len ? ", " : "",
+                                    L[i].serie, L[i].id, L[i].caso, L[i].corrida,
+                                    L[i].borrado ? "" : " (el modelo viejo sigue "
+                                                        "en el manifiesto)" );
+        else
+            g_string_append_printf( no, "%s%s/%s: %s", no->len ? "; " : "",
+                                    L[i].serie, L[i].id, L[i].porque );
+        }
+
+    if ( hechos && atsw_guarda( a, &e ) != 0 )
+        {
+        char w[512];
+
+        pr_error_es( &e, w, sizeof w );
+        g_string_append_printf( no, "%sNO SE PUDO GUARDAR el proyecto: %s",
+                                no->len ? "; " : "", w );
+        }
+    if ( informe && n )
+        snprintf( informe, n, "%d corrida%s convertida%s%s%s.%s%s%s",
+                  hechos, hechos == 1 ? "" : "s", hechos == 1 ? "" : "s",
+                  si->len ? ": " : "", si->str,
+                  no->len ? " Sin tocar — " : "", no->str, no->len ? "." : "" );
+    g_string_free( si, TRUE );
+    g_string_free( no, TRUE );
+    g_free( L );
+    return hechos;
+}
+
+static void on_convertir( GtkButton *b, Atsw *a )
+{
+    char   informe[4096];
+    int    n;
+    gchar *q;
+
+    (void) b;
+    if ( !a->hay ) return;
+    n = atsw_legados( a->p, NULL, 0 );
+    if ( n == 0 ) { barra_pub( a, "No hay corridas viejas que convertir." ); return; }
+
+    q = g_strdup_printf( "¿Convierto en casos %s %d corrida%s de drtran?",
+                         n == 1 ? "la" : "las", n, n == 1 ? "" : "s" );
+    if ( !confirma( a, q,
+            "Cada una pasa a ser una CORRIDA del caso de sus entradas --las "
+            "series y los .pre que su .out dice que entraron, en su orden--, "
+            "con su linaje, su razón y, si era la elegida, como elegida del "
+            "caso. El caso se crea si no existe, sin título ni razón.\n\n"
+            "Sus ficheros (.out, .dag, .cns, residuos, evaluación) se MUEVEN "
+            "a _casos/, y el modelo viejo sale del manifiesto. El hash de "
+            "cada entrada es el de su .pre HOY: el de entonces no se guardó.\n\n"
+            "La que no se pueda convertir se deja como está, y se dice por "
+            "qué." ) )
+        { g_free( q ); return; }
+    g_free( q );
+
+    atsw_convierte_legados( a, informe, sizeof informe );
+    barra_pub( a, informe );
+    atsw_refresca( a );
+}
+
+GtkWidget *atsw_legado_caja( Atsw *a )
+{
+    a->caja_legado = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 8 );
+    a->ver_legado  = gtk_label_new( "" );
+    gtk_label_set_ellipsize( GTK_LABEL(a->ver_legado), PANGO_ELLIPSIZE_END );
+    gtk_box_pack_start( GTK_BOX(a->caja_legado), a->ver_legado, FALSE, FALSE, 0 );
+    a->b_convertir = gtk_button_new_with_label( "Convertir en casos…" );
+    gtk_widget_set_tooltip_text( a->b_convertir,
+        "Antes de los casos, drtran_gui registraba cada estimación como un "
+        "modelo más de la serie de salida. Esto las pasa a corridas de su "
+        "caso. Se pregunta antes." );
+    g_signal_connect( a->b_convertir, "clicked", G_CALLBACK(on_convertir), a );
+    gtk_box_pack_start( GTK_BOX(a->caja_legado), a->b_convertir, FALSE, FALSE, 0 );
+    gtk_widget_show_all( a->caja_legado );
+    gtk_widget_set_no_show_all( a->caja_legado, TRUE );
+    return a->caja_legado;
+}

@@ -33,6 +33,7 @@ SRC = src/main.c src/ventana.c src/gestos.c src/datos_gui.c src/vistazo.c \
       $(LIB)/engine/engine.c \
       $(LIB)/tabla/tabla.c \
       $(LIB)/rutas/rutas.c \
+      $(LIB)/sitio/sitio.c \
       $(LIB)/preview/preview.c \
       $(LIB)/utils/ext.c \
       $(LIB)/fugdraw/fugdraw.c \
@@ -61,7 +62,7 @@ LIBHDR = $(wildcard $(LIB)/*/*.h)
 
 
 INC = -Iinclude -I$(LIB)/proyecto -I$(LIB)/outdiag -I$(LIB)/outfile -I$(LIB)/analisis -I$(LIB)/equation -I$(LIB)/dictamen -I$(LIB)/anomalos -I$(LIB)/intervencion -I$(LIB)/inpdet -I$(LIB)/engine -I$(LIB)/inpcheck -I$(LIB)/tabla \
-      -I$(LIB)/rutas -I$(LIB)/dates -I$(LIB)/datos -I$(LIB)/xlsx \
+      -I$(LIB)/rutas -I$(LIB)/sitio -I$(LIB)/dates -I$(LIB)/datos -I$(LIB)/xlsx \
       -I../../engines/fug/src -I$(LIB)/preview -I$(LIB)/fugdraw -I$(LIB)/fugplot -I$(LIB)/utils
 
 GTK_CFLAGS := $(shell pkg-config --cflags gtk+-3.0 2>/dev/null)

@@ -1,8 +1,13 @@
-# Construye el taller entero en las tres plataformas.
+# El taller entero en las tres plataformas: compilar, pasar las baterias y
+# arrancar los GUIs.
 #
-# Cada directorio se compila por separado y se sigue adelante si uno falla:
-# lo que interesa es ver TODOS los que no compilan en una plataforma, no
-# solo el primero. El resumen del final dice cuales.
+#   build-all.sh   cada directorio por separado; dice TODOS los que fallan
+#   check-all.sh   las baterias de `make check`, con limite de tiempo cada una
+#   gui-humo.sh    cada GUI se lanza, tiene que seguir vivo, y se fotografia
+#
+# En Linux todo va dentro de Xvfb, para que las pruebas de los GUIs que
+# necesitan servidor grafico no se salten. macOS y Windows ya tienen
+# escritorio en los runners de GitHub.
 
 name: build
 
@@ -27,24 +32,43 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential pkg-config libgsl-dev libglib2.0-dev \
-            libgtk-3-dev zlib1g-dev
+            libgtk-3-dev zlib1g-dev xvfb xauth imagemagick \
+            adwaita-icon-theme-full
       - name: Compilar
         run: bash .github/build-all.sh
       - name: Baterias
         if: always()
-        run: bash .github/check-all.sh
+        timeout-minutes: 150
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" bash .github/check-all.sh
+      - name: GUIs
+        if: always()
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" bash .github/gui-humo.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: capturas-linux
+          path: capturas/
 
   macos:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - name: Dependencias
-        run: brew install pkg-config gtk+3 gsl
+        run: brew install pkg-config gtk+3 gsl adwaita-icon-theme
       - name: Compilar
         run: bash .github/build-all.sh
       - name: Baterias
         if: always()
+        timeout-minutes: 150
         run: bash .github/check-all.sh
+      - name: GUIs
+        if: always()
+        run: bash .github/gui-humo.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: capturas-macos
+          path: capturas/
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -70,14 +94,23 @@ jobs:
           msystem: UCRT64
           update: true
           install: >-
-            make git diffutils bc gawk sed grep coreutils
+            make git diffutils bc gawk sed grep coreutils procps-ng
           pacboy: >-
-            gcc:p pkgconf:p gtk3:p gsl:p zlib:p python:p
+            gcc:p pkgconf:p gtk3:p gsl:p zlib:p python:p adwaita-icon-theme:p
       - name: Compilar
         run: bash .github/build-all.sh
       - name: Baterias
         if: always()
+        timeout-minutes: 150
         run: bash .github/check-all.sh
+      - name: GUIs
+        if: always()
+        run: bash .github/gui-humo.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: capturas-windows
+          path: capturas/
       - uses: actions/upload-artifact@v4
         if: always()
         with:

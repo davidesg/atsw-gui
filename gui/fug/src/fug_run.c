@@ -15,6 +15,7 @@
 #include <string.h>
 #include <gtk/gtk.h>
 #include "fug_run.h"
+#include "sitio.h"
 #include "data_load.h"
 #include "preview.h"
 
@@ -23,14 +24,13 @@
 
 static gchar *gui_dir = NULL;
 
-/* Folder of the GUI executable, from argv[0] (or /proc/self/exe) */
+/* Folder of the GUI executable (lib/sitio), or else from argv[0] */
 void fug_run_init(const char *argv0)
 {
-    gchar *self = g_file_read_link("/proc/self/exe", NULL), *found;
+    gchar *found;
 
-    if (self != NULL) {
-        gui_dir = g_path_get_dirname(self);
-        g_free(self);
+    if ((gui_dir = sitio_mi_dir()) != NULL) {
+        ;
     } else if (argv0 != NULL && (strchr(argv0, '/') != NULL || strchr(argv0, '\\') != NULL)) {
         gui_dir = g_path_get_dirname(argv0);
     } else if (argv0 != NULL && (found = g_find_program_in_path(argv0)) != NULL) {

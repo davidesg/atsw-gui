@@ -131,7 +131,7 @@ if command -v fue > /dev/null 2>&1; then
     cp "$TOP/data/D1.inp" "$WORK/gui/"
     ( cd "$WORK/gui" && "$WORK/test_gui" "$PWD" D1 ) 2>/dev/null > "$WORK/gui.txt"
     if [ $? = 0 ]; then
-        sed -n 's/^\(barra\|globo\|pestana\)/  &/p' "$WORK/gui.txt"
+        sed -n -E 's/^(barra|globo|pestana)/  &/p' "$WORK/gui.txt"
     else
         grep -E '^FAIL|^no hay' "$WORK/gui.txt"
         grep -q '^no hay' "$WORK/gui.txt" || rc=1

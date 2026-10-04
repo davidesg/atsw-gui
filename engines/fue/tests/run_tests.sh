@@ -23,6 +23,11 @@ case "$FUE" in /*) ;; *) FUE="$(pwd)/$FUE" ;; esac
 TOP=$(cd "$(dirname "$0")/.." && pwd)
 TESTS="$TOP/tests"
 WORK="$TESTS/work"
+# Byte a byte en Linux; fuera, cifras con tolerancia y los casos fragiles
+# apuntados (ver conformidad/referencia.sh).
+REFERENCIA_SH="$TOP/../../conformidad/referencia.sh"
+. "$REFERENCIA_SH"
+FRAGILES="$TESTS/fragiles.txt"
 TIMEOUT=${TIMEOUT:-120}
 
 [ -x "$FUE" ] || { echo "fue not found: $FUE (run make first)"; exit 1; }
@@ -73,10 +78,13 @@ grep -v '^#' "$TESTS/runs.tsv" | while IFS='	' read -r id input args format stat
     if [ $rc = 0 ] && [ "$format" = fue ]; then
         for f in $(results "$input"); do
             if [ -f "$TESTS/golden/$id/$f" ]; then
-                if ! cmp -s "$TESTS/golden/$id/$f" "$dir/$f"; then
-                    echo "FAIL: $id: $f differs from tests/golden/$id/$f"
-                    echo "x" >> "$WORK/failed"
-                fi
+                referencia "$TESTS/golden/$id/$f" "$dir/$f" "$id" "$FRAGILES"
+                case $? in
+                    0) ;;
+                    2) echo "FRAGIL: $id: $f differs from tests/golden/$id/$f (see tests/fragiles.txt)" ;;
+                    *) echo "FAIL: $id: $f differs from tests/golden/$id/$f"
+                       echo "x" >> "$WORK/failed" ;;
+                esac
             elif [ -f "$dir/$f" ]; then
                 echo "FAIL: $id: $f is new (not in tests/golden/$id)"
                 echo "x" >> "$WORK/failed"

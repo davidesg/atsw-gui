@@ -1,0 +1,12 @@
+# CASOS FRAGILES: modelos mal definidos en los que otra plataforma (otra libm)
+# puede dar otro punto u otros errores estandar sin que fue este mal. En
+# Linux se siguen exigiendo byte a byte; fuera, una diferencia aqui se
+# informa como FRAGIL y no falla. Ver conformidad/referencia.sh.
+#
+# Cada uno entra con su razon, medida en la CI de macOS y Windows (2026-10).
+#
+# caso               razon
+CPI_USA_model        hessiano mal condicionado (sigma2 ~ 3500): los errores estandar cambian ~5 %, una covarianza -0.85 / 0.04
+CPI_USA_model_AR     el mismo modelo con AR: errores estandar ~5 %, covarianzas sin cifras estables
+IPC_FR_model         hessiano mal condicionado: un error estandar 4.08 / 3.66 (10 %)
+RIPC.1               verosimilitud plana (muchos parametros ~0 con error 0.16): las estimaciones cambian en la 3a cifra, dentro de su error

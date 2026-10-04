@@ -384,17 +384,23 @@ if ( freq > 1 ){
 	     fprintf( outputv,"   - ");
 	     fprintf( outputv,"%8.4f \n", 100*a[1][i-ornsop]/refactor );
 	   }
+/* LOS ERRORES TIPICOS, EN double Y CON %f. Se imprimian con sqrtl() y %Lf
+   (long double): con MinGW, el printf de la biblioteca de Microsoft lee un
+   long double como un double de 64 bits y gcc se lo pasa de 80, asi que en
+   Windows todas las desviaciones salian 0.0000 -- las bandas de prevision
+   desaparecian sin aviso. Lo vio la CI de Windows. v1, v2 y v3 son double:
+   long double no anadia precision que imprimir.                          */
        for ( i = 1; i <= L; i++ )              /* Print forecasts and sds:   */
            {
 	     ObsToDate( begyear, begtime, nobs+i, freq, &Aper1, &Asub1 );
 	     fprintf( outputv," %2d/%4d", Asub1, Aper1);
 	     if (boxlam==0)fprintf( outputv,"%9.4f", exp(f1[1][i]/refactor) );
              else fprintf( outputv,"%9.4f",  f1[1][i]/refactor );
-	     fprintf( outputv,"%7.4Lf", 100*sqrtl( v1[i][1][1] )/refactor );
+	     fprintf( outputv,"%7.4f", 100*sqrt( v1[i][1][1] )/refactor );
 	     fprintf( outputv,"%8.4f", 100*f2[1][i]/refactor );
-	     fprintf( outputv,"%8.4Lf", 100*sqrtl( v2[i][1][1] )/refactor );
+	     fprintf( outputv,"%8.4f", 100*sqrt( v2[i][1][1] )/refactor );
 	     fprintf( outputv,"%9.4f", 100*f3[1][i]/refactor );
-	     fprintf( outputv,"%7.4Lf \n", 100*sqrtl( v3[i][1][1] )/refactor );
+	     fprintf( outputv,"%7.4f \n", 100*sqrt( v3[i][1][1] )/refactor );
 	   }
 
 }
@@ -432,9 +438,9 @@ if ( boxlam < 0.0 ){
 	     fprintf( outputv,"%9.4f", pow (((f1[1][i]/refactor) *boxlam + 1), (1/boxlam)));	    
 	     fprintf( outputv,"%7.4f", pow ((((f1[1][i]+ 2*sqrt ( v1[i][1][1] ))/refactor )*boxlam + 1)  , (1/boxlam)));	     
 	     fprintf( outputv,"%8.4f",  100*f1[1][i]/refactor );
-	     fprintf( outputv,"%8.4Lf", 100*sqrtl( v1[i][1][1] )/refactor );
+	     fprintf( outputv,"%8.4f", 100*sqrt( v1[i][1][1] )/refactor );
 	     fprintf( outputv,"%9.4f", 100*f3[1][i]/refactor );
-	     fprintf( outputv,"%7.4Lf \n", 100*sqrtl( v3[i][1][1] )/refactor );
+	     fprintf( outputv,"%7.4f \n", 100*sqrt( v3[i][1][1] )/refactor );
 	   }
 	  
 	  
@@ -498,11 +504,11 @@ const char *unit = ( boxlam == 0 ) ? "($\\%$)" : " ";
 	fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{ %8d/%4d}$} &", Asub1, Aper1);
 	if (boxlam==0) fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}c}{$\\mathsf{%9.2f}$} &", exp(f1[1][i]/refactor) );
 	else fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}c}{$\\mathsf{%9.2f}$} &", f1[1][i]/refactor );
-	fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}c}{$\\mathsf{%7.2Lf}$} &", pct*sqrtl( v1[i][1][1] )/refactor );
+	fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}c}{$\\mathsf{%7.2f}$} &", pct*sqrt( v1[i][1][1] )/refactor );
 	fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%7.2f}$} &", pct*f2[1][i]/refactor );
-	fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%7.2Lf}$} &", pct*sqrtl( v2[i][1][1] )/refactor );
+	fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%7.2f}$} &", pct*sqrt( v2[i][1][1] )/refactor );
 	fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%8.2f}$} &", pct*f3[1][i]/refactor );
-	fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%7.2Lf}$} & \\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}c}{  - }\\vspace{-.005in} \\\\ \n ", pct*sqrtl( v3[i][1][1] )/refactor );
+	fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%7.2f}$} & \\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}c}{  - }\\vspace{-.005in} \\\\ \n ", pct*sqrt( v3[i][1][1] )/refactor );
 	}
    fprintf( prevputv," \\\\ \n ");
    for ( i = L/2 + 1; i <= L; i++ )
@@ -513,11 +519,11 @@ const char *unit = ( boxlam == 0 ) ? "($\\%$)" : " ";
 	       fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}c}{$\\mathsf{ %8d/%4d}$} &", Asub1, Aper1);
 	       if (boxlam==0) fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}c}{$\\mathsf{%9.2f}$} &", exp(f1[1][i]/refactor) );
 	       else fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}c}{$\\mathsf{%9.2f}$} &", f1[1][i]/refactor );
-	       fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%7.2Lf}$} &", pct*sqrtl( v1[i][1][1] )/refactor );
+	       fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%7.2f}$} &", pct*sqrt( v1[i][1][1] )/refactor );
 	       fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%7.2f }$}&", pct*f2[1][i]/refactor );
-	       fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%7.2Lf}$} &", pct*sqrtl( v2[i][1][1] )/refactor );
+	       fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%7.2f}$} &", pct*sqrt( v2[i][1][1] )/refactor );
 	       fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%8.2f}$} &", pct*f3[1][i]/refactor );
-	       fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%7.2Lf}$} & \\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}c}{  - }\\vspace{-.005in} \\\\  \n ", pct*sqrtl( v3[i][1][1] )/refactor );
+	       fprintf( prevputv,"\\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}r}{$\\mathsf{%7.2f}$} & \\multicolumn{1}{>{\\columncolor [rgb]{0.95, 0.95, 0.95}}c}{  - }\\vspace{-.005in} \\\\  \n ", pct*sqrt( v3[i][1][1] )/refactor );
 	     }
 	 }
     fprintf( prevputv,"\\end{tabular} \n\n\n\n\n");
@@ -563,9 +569,9 @@ int i, Aper1, Asub1;
 	fprintf( prevputv,"$\\mathsf{%9.2f}$ &", pow (((f1[1][i]/refactor) *boxlam + 1), (1/boxlam)) );
 	fprintf( prevputv,"$\\mathsf{%7.2f}$ &", pow ((((f1[1][i]+ 2*sqrt ( v1[i][1][1] ))/refactor )*boxlam + 1), (1/boxlam)) );
 	fprintf( prevputv,"$\\mathsf{%7.2f}$ &", 100*f1[1][i]/refactor );
-	fprintf( prevputv,"$\\mathsf{%7.2Lf}$ &", 100*sqrtl( v1[i][1][1] )/refactor );
+	fprintf( prevputv,"$\\mathsf{%7.2f}$ &", 100*sqrt( v1[i][1][1] )/refactor );
 	fprintf( prevputv,"$\\mathsf{%8.2f}$ &", 100*f2[1][i]/refactor );
-	fprintf( prevputv,"$\\mathsf{%7.2Lf}$ &   -  \\vspace{-.005in} \\\\ \n ", 100*sqrtl( v2[i][1][1] )/refactor );
+	fprintf( prevputv,"$\\mathsf{%7.2f}$ &   -  \\vspace{-.005in} \\\\ \n ", 100*sqrt( v2[i][1][1] )/refactor );
 	}
    fprintf( prevputv," \\\\ \n ");
    fprintf( prevputv,"\\end{tabular} \n\n\n\n\n");

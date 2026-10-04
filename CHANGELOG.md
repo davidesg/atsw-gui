@@ -17,6 +17,106 @@ de órdenes** y **coeficientes distorsionados**. Plan detallado en
 `TODO_ART_18.2.md`. Hallazgos originados en la revisión crítica de
 `src/model_detection.c`.
 
+### Changed — the seasonal path follows art-python (2026-10-04)
+
+The C's seasonal path was compared with art-python's, the reference. The
+bounded part is in 18.2; candidate generation goes to 18.3.
+
+- **The seasonality test is art's HAC F** (art BUG-0206: the HAC F to
+  identify). The C decided with the OLS F, and its HAC estimator was wrong
+  twice: the meat was divided by n (the defect art fixed: F n times too
+  large), and the lag term added Γ_l twice and Γ_l′ never. Now
+  `harmonic_regression_differenced_basis` decides with γ′V_HAC⁻¹γ/q against
+  F(q, n−k), falling back to the OLS F only if the HAC cannot be used. It
+  matches art's F at the printed precision, n = 60–400.
+- **The test always runs on d = 1 and 100·log**, as art's `describe`,
+  whatever d and log the user asked for.
+- **A not-detected verdict no longer zeroes P and Q.** The classic mode
+  restricted them; art never does, because a stochastic seasonal AR/MA leaves
+  no deterministic pattern for the F to find.
+- **With D = 0 and s > 1 the harmonics come out of w before the ACF/PACF**
+  (`remove_harmonics`, art's `_remove_harmonics`), detected or not.
+- **`--deseasonalize` is now an alias.** Its own path had four defects:
+  - it subtracted 100·log dummies from levels when `--log` was off;
+  - it forced Q = 0;
+  - it ignored the detection;
+  - it failed with s = 1.
+- **Every regular base of the shortlist also enters with (P,Q) = (0,0).** The
+  shortlist gave all its (p,q) the MLP's single (P0,Q0), so a plain AR(1)
+  never entered it when the network proposed a seasonal part.
+- **White noise is a candidate when Ljung-Box admits it** (art
+  BUG-0044/0048), over fug's default lags.
+- **CLI defaults are art's limits:** p ≤ max(3, s/2), q ≤ 2, P ≤ 1, Q ≤ 1.
+  `--pmax`/`--qmax` still override.
+
+Measured with `tests/benchmark_seasonal.py` (new: monthly files through `-i`,
+the path a user takes; 100 reps, `--mlp-direct`), exact (p,q)(P,Q):
+
+| case | before | after |
+|---|---|---|
+| WN + deterministic pattern | 0 % | 79 % |
+| AR(1) .6 + pattern | 0 % | 94 % |
+| MA(1) .5 + pattern | 0 % | 95 % |
+| AR(1) .6 | 3 % | 90 % |
+| MA(1) .5 | 3 % | 88 % |
+| WN + SAR(1) .6 | 62 % | 64 % |
+| AR(1) .5 × SAR(1) .5 | 82 % | 52 % |
+| MA(1) .5 × SMA(1) .5 | 72 % | 76 % |
+| mean | 28 % | **80 %** |
+
+- **The AR × SAR drop is art's too.** Removing the harmonics also removes
+  part of a stochastic seasonal correlation. Against art-python on the same
+  series (`tests/compare_seasonal_with_art.py`, 20 reps):
+  - the C and art agree on the top model 86 % of the time;
+  - exact: C 78 %, art 74 %;
+  - AR × SAR: C 55 %, art 40 %.
+
+  The D = 1 route that catches stochastic seasonality is 18.3.
+- **The non-seasonal battery** (`tests/benchmark_c.py`, 200 reps) is unchanged
+  in exact order (66 %) and over-identification (7 %). One change: on the
+  nearly white ARMA(1,1) .5/.4 (ψ₁ = 0.1) white noise now comes first. Its
+  top-3 falls from 64 % to 20 %, and art makes the same first choice in 39 of
+  40 series.
+
+**Three engines, final validation** (`tests/results_three_engines_18.2.txt`,
+100 reps). Exact order:
+
+| | C | art-python | pmdarima |
+|---|---|---|---|
+| exact | **66 %** | 66 % | 51 % |
+| true model in the shortlist | 94 % | — | — |
+| top-3 | 78 % | — | — |
+
+The shortlist is as on 2026-10-01; the top-3 was 83 %. The top-3 falls only
+on the two nearly white ARMA:
+- ARMA(1,1): 72 → 17 %, while art keeps 72 %;
+- ARMA(2,1): 31 %, against art's 71 %.
+
+There white noise now ranks first, as in art. art keeps the ARMA among its
+first three and the C does not: that is the candidate ordering of 18.3.
+
+### Fixed — candidates near the unit circle are left alone (§1.3)
+
+`contract_poly` shrank every root above 0.90 (Hannan-Rissanen) or 0.95
+(Yule-Walker), stationary ones included: a true AR(1) of 0.95 came out as
+0.90. Now only what is outside the unit circle moves, as art-python's
+`_contract`. ARMA(1,1) 0.95/0.5: exact 20 → 35 %. The rest is unchanged.
+
+### Checked — §1.1 and §1.2
+
+- **PACF** (§1.1). On 1800 series (near-unit-root AR, random walks, nearly
+  non-invertible MA; n = 30–200, 40 lags), max |pacf| = 0.992, and the PACF
+  equals statsmodels' `ldb` to 4e-13.
+- **Effective order** (§1.2). It comes out 1 in 82–91 % of AR(1) and
+  76–78 % of MA(1), and 0 in 85 % of white noise; no more orders of 20+.
+
+### Changed — output (§3.1)
+
+The shortlist states what its two numbers are: the pattern similarity (the
+option-B rank) and the Akaike weight of a conditional (CSS) AICc, comparable
+between candidates but not with exact-likelihood AICs. The grid mode says
+"pattern similarity".
+
 ### Added — `tests/benchmark_three_engines.py`: the C, art-python and pmdarima
 
 The same simulated series (12 models, 100 reps, n = 200) to the three identifiers;

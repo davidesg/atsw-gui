@@ -133,6 +133,9 @@ typedef struct {
    GtkWidget *pila;
    GtkWidget *l_casos;
    GtkWidget *ver_desfase, *ver_nota;   /* las dos lineas del veredicto   */
+   /* LAS CORRIDAS DE ANTES (DISENO-casos §5): su linea y su boton, en una
+      caja que solo se ve si las hay.                                   */
+   GtkWidget *caja_legado, *ver_legado, *b_convertir;
    GtkWidget *c_cabeza, *c_entradas, *c_corridas;
    GtkWidget *b_nuevo_caso, *b_c_drtran, *b_c_elegir, *b_c_razon,
              *b_c_razon_caso, *b_c_derivar, *b_c_borrar, *b_c_borrar_caso;
@@ -233,6 +236,22 @@ AtPre      atsw_entrada_pre( const Proyecto *p, const PrCaso *c, int i );
                deliberado --art aconseja otro modelo para lo multivariante.*/
 int        atsw_caso_desfases( const Proyecto *p, const PrCaso *c,
                                char *cuales, size_t n );
+/* LAS CORRIDAS DE drtran REGISTRADAS COMO MODELOS (DISENO-casos §5).
+   Antes de los casos, drtran_gui daba de alta cada estimacion con
+   pr_deriva sobre la serie de salida: un «modelo» que tiene .out y .dag y
+   no tiene .inp. Devuelve cuantos y deja sus indices en p->m en idx.  */
+int        atsw_legados( const Proyecto *p, int idx[], int max );
+
+/* CONVERTIRLAS EN CASOS: cada una pasa a ser una corrida del caso de sus
+   entradas, con su linaje, su razon y su elegida; sus ficheros se mueven a
+   _casos/ y el modelo se quita. La que no se puede se deja como estaba y
+   se dice por que. Guarda el manifiesto. Devuelve cuantas convirtio; lo
+   que paso, en informe.                                                */
+int        atsw_convierte_legados( Atsw *a, char *informe, size_t n );
+
+/* La linea del veredicto con su boton «Convertir en casos…». */
+GtkWidget *atsw_legado_caja( Atsw *a );
+
 int        atsw_caso_notas( const Proyecto *p, const PrCaso *c,
                             char *cuales, size_t n );
 

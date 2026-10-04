@@ -698,6 +698,70 @@ static void pinta_veredicto_casos( Atsw *a )
     g_string_free( nts, TRUE );
 }
 
+/* ------------------------------------------------------------------------ */
+/* LO QUE HAY EN DISCO DE ANTES (DISENO-casos.md §5)                         */
+/*                                                                           */
+/* Antes de los casos, drtran_gui --proyecto registraba cada estimacion con  */
+/* pr_deriva sobre la serie de SALIDA: un modelo univariante mas de EP,       */
+/* revuelto con los de fue. Se reconocen por los ficheros, que es lo unico    */
+/* que los distingue: drtran escribe .out y .dag, y nunca un .inp -- un       */
+/* modelo de fue siempre lo tiene, porque es lo que se estima.               */
+/* ------------------------------------------------------------------------ */
+
+int atsw_legados( const Proyecto *p, int idx[], int max )
+{
+    int i, n = 0;
+
+    if ( p == NULL ) return 0;
+    for ( i = 0; i < p->nm; i++ )
+        {
+        const PrModelo *m = &p->m[i];
+        char            f[PR_RUTA];
+
+        if ( m->rol != PR_MODELO ) continue;
+        if ( pr_ruta( p, m->serie, m->muestra, m->id, ".inp", f, sizeof f ) != 0 ||
+             g_file_test( f, G_FILE_TEST_EXISTS ) ) continue;
+        if ( pr_ruta( p, m->serie, m->muestra, m->id, ".out", f, sizeof f ) != 0 ||
+             !g_file_test( f, G_FILE_TEST_EXISTS ) ) continue;
+        if ( pr_ruta( p, m->serie, m->muestra, m->id, ".dag", f, sizeof f ) != 0 ||
+             !g_file_test( f, G_FILE_TEST_EXISTS ) ) continue;
+        if ( idx && n < max ) idx[n] = i;
+        n++;
+        }
+    return n;
+}
+
+/* La linea, SOLO SI LAS HAY: un proyecto nuevo no tiene por que enterarse
+   de que hubo otra forma de guardar.                                   */
+static void pinta_veredicto_legados( Atsw *a )
+{
+    int     *idx, n, i, j;
+    GString *g;
+
+    if ( a->caja_legado == NULL ) return;
+    idx = g_new0( int, PR_MAX_MODELO );
+    n   = atsw_legados( a->p, idx, PR_MAX_MODELO );
+    if ( n == 0 ) { gtk_widget_hide( a->caja_legado ); g_free( idx ); return; }
+
+    /* Las series, sin repetir y en el orden en que salen. */
+    g = g_string_new( NULL );
+    for ( i = 0; i < n; i++ )
+        {
+        gboolean ya = FALSE;
+
+        for ( j = 0; j < i; j++ )
+            if ( !strcmp( a->p->m[idx[j]].serie, a->p->m[idx[i]].serie ) ) ya = TRUE;
+        if ( !ya ) g_string_append_printf( g, "%s%s", g->len ? ", " : "",
+                                           a->p->m[idx[i]].serie );
+        }
+    verdicto( a->ver_legado, AT_AMBAR,
+              "%d corrida%s de drtran registrada%s como modelos de %s.",
+              n, n == 1 ? "" : "s", n == 1 ? "" : "s", g->str );
+    gtk_widget_show( a->caja_legado );
+    g_string_free( g, TRUE );
+    g_free( idx );
+}
+
 static void pinta_veredictos( Atsw *a )
 {
     char sin[32][PR_ID];
@@ -710,10 +774,12 @@ static void pinta_veredictos( Atsw *a )
         gtk_label_set_text( GTK_LABEL(a->ver_ojo), "" );
         if ( a->ver_desfase ) gtk_widget_hide( a->ver_desfase );
         if ( a->ver_nota )    gtk_widget_hide( a->ver_nota );
+        if ( a->caja_legado ) gtk_widget_hide( a->caja_legado );
         return;
         }
 
     pinta_veredicto_casos( a );
+    pinta_veredicto_legados( a );
 
     /* Los DATOS no son un modelo sin estimar: no se estiman. Contarlos
      * entre los pendientes daria un aviso que nunca se puede apagar.  */

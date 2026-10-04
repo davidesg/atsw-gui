@@ -2364,6 +2364,150 @@ static void casos( void )
            "borrar la entrada de un caso se niega, nombrando el caso", barra() );
 }
 
+/* ======================================================================== */
+/* LAS CORRIDAS DE ANTES (docs/DISENO-casos.md §5)                           */
+/*                                                                           */
+/* Se fabrica lo que dejaba drtran_gui antes de los casos: modelos de la     */
+/* serie de salida, encadenados, sin .inp, con un .out cuya cabecera dice    */
+/* que .pre entraron, y su .dag.                                            */
+/* ======================================================================== */
+
+static void legado( const char *padre, const char *y, const char *x,
+                    const char *fin, gboolean cns, const char *razon,
+                    char *id, size_t nid )
+{
+    PrError e;
+    gchar  *out, *f;
+
+    pr_deriva( A.p, "ipc", "", padre, id, nid, NULL, 0, &e );
+    pr_razon( A.p, "ipc", "", id, razon, &e );
+    out = g_strdup_printf( "DRTRAN 1.0: Box-Jenkins transfer function models "
+                           "by exact ML%s%sModel            : ipc_wti%s"
+                           "Series           : 2 (1 output + 1 input(s))%s"
+                           "Output (Y)       : %s%s"
+                           "Input  (X1)      : %s%s"
+                           "Frequency        : 12%s%s"
+                           "Log-likelihood = -700.500000%s",
+                           fin, fin, fin, fin, y, fin, x, fin, fin, fin, fin );
+    f = ruta_de( "ipc", "", id, ".out" );
+    g_file_set_contents( f, out, -1, NULL );
+    g_free( f );
+    f = ruta_de( "ipc", "", id, ".dag" );
+    g_file_set_contents( f, "1 2 0 0 0\n", -1, NULL );
+    g_free( f );
+    if ( cns )
+        { f = ruta_de( "ipc", "", id, ".cns" );
+          g_file_set_contents( f, "\n", -1, NULL ); g_free( f ); }
+    g_free( out );
+}
+
+static void legados( void )
+{
+    char     l1[PR_ID], l2[PR_ID], l3[PR_ID], ruta[PR_RUTA];
+    gchar   *y = ruta_de( "ipc", "", "m01", ".pre" );
+    gchar   *x = ruta_de( "wti", "", "m01", ".pre" );
+    gchar   *fuera = g_build_filename( T, "fuera", "work", "OTRA_m01.pre", NULL );
+    PrError  e;
+    const PrCaso *c;
+    gchar   *s;
+
+    atsw_refresca( &A );
+    check( !gtk_widget_get_visible( A.caja_legado ),
+           "sin corridas viejas, no hay linea de veredicto", NULL );
+
+    legado( NULL, y, x, "\n",   TRUE,  "la diagonal",    l1, sizeof l1 );
+    legado( l1,   y, x, "\r\n", FALSE, "fuera omega_1",  l2, sizeof l2 );
+    legado( NULL, y, fuera, "\n", FALSE, "con otra serie", l3, sizeof l3 );
+    pr_elige( A.p, "ipc", "", l2, "la buena", &e );
+    atsw_guarda( &A, &e );
+    atsw_refresca( &A );
+
+    check( atsw_legados( A.p, NULL, 0 ) == 3,
+           "las tres corridas viejas se reconocen (.out y .dag, sin .inp)", NULL );
+    check( gtk_widget_get_visible( A.caja_legado ) &&
+           strstr( gtk_label_get_text( GTK_LABEL(A.ver_legado) ),
+                   "3 corridas de drtran registradas como modelos de ipc" ),
+           "y el veredicto lo dice",
+           gtk_label_get_text( GTK_LABEL(A.ver_legado) ) );
+
+    /* Sin confirmar no se toca nada. */
+    responde( "¿Convierto en casos", contesta, GINT_TO_POINTER(GTK_RESPONSE_CANCEL) );
+    gtk_button_clicked( GTK_BUTTON(A.b_convertir) );
+    todo_atendido( "«Convertir en casos…» tenia que preguntar" );
+    check( atsw_legados( A.p, NULL, 0 ) == 3 && A.p->nca == 1,
+           "si no se confirma, no se convierte nada", barra() );
+
+    olvida();
+    responde( "¿Convierto en casos", contesta, GINT_TO_POINTER(GTK_RESPONSE_OK) );
+    gtk_button_clicked( GTK_BUTTON(A.b_convertir) );
+    todo_atendido( "«Convertir en casos…» tenia que preguntar" );
+    nota( "barra (conversion): %s", barra() );
+    check( strstr( barra(), "2 corridas convertidas" ) &&
+           strstr( barra(), "no es un modelo de este proyecto" ),
+           "la barra dice que se convirtio y que no, y por que", barra() );
+
+    c = pr_caso_ver( A.p, "C2" );
+    check( c && c->nen == 2 && !strcmp( c->en[0].serie, "ipc" ) &&
+           !strcmp( c->en[0].modelo, "m01" ) && !strcmp( c->en[1].serie, "wti" ) &&
+           !strcmp( c->en[1].modelo, "m01" ) && c->en[0].sha[0] &&
+           !c->razon[0] && !strcmp( c->motor, "drtran" ),
+           "un caso nuevo con las entradas del .out, en su orden y sin razon "
+           "inventada", NULL );
+    {
+    const PrCorrida *c0 = pr_corrida_ver( A.p, "C2", "c00" );
+    const PrCorrida *c1 = pr_corrida_ver( A.p, "C2", "c01" );
+
+    check( c0 && c1 && !c0->padre[0] && !strcmp( c1->padre, "c00" ),
+           "las corridas conservan el linaje: c01 cuelga de c00", NULL );
+    check( c0 && c1 && !strcmp( c0->razon, "la diagonal" ) &&
+           !strcmp( c1->razon, "fuera omega_1" ),
+           "y la razon de cada modelo viejo", NULL );
+    check( !strcmp( pr_corrida_elegida( A.p, "C2" ), "c01" ) && c1 &&
+           !strcmp( c1->razon_elegido, "la buena" ),
+           "el que era el elegido es la elegida del caso, con su porque", NULL );
+    }
+    {
+    static const struct { const char *co, *ext; } f[] = {
+        { "c00", ".out" }, { "c00", ".dag" }, { "c00", ".cns" },
+        { "c01", ".out" }, { "c01", ".dag" } };
+    int i;
+
+    for ( i = 0; i < (int) G_N_ELEMENTS(f); i++ )
+        {
+        pr_corrida_ruta( A.p, "C2", f[i].co, f[i].ext, ruta, sizeof ruta );
+        check( g_file_test( ruta, G_FILE_TEST_EXISTS ),
+               "los ficheros se mueven a _casos/C2/work", ruta );
+        }
+    }
+    check( pr_modelo_idx( A.p, "ipc", "", l1 ) < 0 &&
+           pr_modelo_idx( A.p, "ipc", "", l2 ) < 0 &&
+           !existe( "ipc", "", l1, ".out" ) && !existe( "ipc", "", l2, ".dag" ),
+           "los modelos viejos se van del manifiesto, y sus ficheros de alli",
+           NULL );
+    {
+    int k = pr_modelo_idx( A.p, "ipc", "", l3 );
+
+    check( k >= 0 && !strcmp( A.p->m[k].razon, "con otra serie" ) &&
+           existe( "ipc", "", l3, ".out" ),
+           "el que nombra un .pre de fuera se queda como estaba", NULL );
+    }
+    check( strstr( gtk_label_get_text( GTK_LABEL(A.ver_legado) ),
+                   "1 corrida de drtran registrada como modelos de ipc" ) != NULL,
+           "y el veredicto cuenta el que queda",
+           gtk_label_get_text( GTK_LABEL(A.ver_legado) ) );
+    {
+    Proyecto *q = relee_manifiesto();
+
+    check( q && pr_caso_idx( q, "C2" ) >= 0 && pr_corrida_idx( q, "C2", "c01" ) >= 0,
+           "el manifiesto convertido se vuelve a leer", NULL );
+    g_free( q );
+    }
+    s = filas( A.l_casos, CA_ID );
+    check( !strcmp( s, "C1|C2" ), "y el caso sale en CASOS", s );
+    g_free( s );
+    g_free( y ); g_free( x ); g_free( fuera );
+}
+
 int main( int argc, char **argv )
 {
     GtkApplication *app;
@@ -2427,6 +2571,7 @@ int main( int argc, char **argv )
             fase( "borrar" ); borrar();
             fase( "abrir" ); abrir( manifiesto );
             fase( "casos" ); casos();
+            fase( "legados" ); legados();
             }
         }
 

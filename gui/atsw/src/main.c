@@ -1430,6 +1430,7 @@ static void activate( GtkApplication *app, gpointer d )
     gtk_widget_set_no_show_all( a->ver_nota,    TRUE );
     gtk_box_pack_start( GTK_BOX(vb), a->ver_desfase, FALSE, FALSE, 0 );
     gtk_box_pack_start( GTK_BOX(vb), a->ver_nota,    FALSE, FALSE, 0 );
+    gtk_box_pack_start( GTK_BOX(vb), atsw_legado_caja( a ), FALSE, FALSE, 0 );
     gtk_box_pack_start( GTK_BOX(raiz), vb, FALSE, FALSE, 0 );
 
     a->estado = gtk_label_new( "" );

@@ -123,7 +123,7 @@ jobs:
             make git diffutils bc gawk sed grep coreutils procps-ng
           pacboy: >-
             gcc:p pkgconf:p gtk3:p gsl:p zlib:p python:p adwaita-icon-theme:p
-            gsettings-desktop-schemas:p hicolor-icon-theme:p
+            gsettings-desktop-schemas:p hicolor-icon-theme:p gdb:p
       - name: Esquemas de GSettings
         # Sin gschemas.compiled, el selector de ficheros de GTK aborta
         # ("No GSettings schemas are installed"). Un paquete para Windows

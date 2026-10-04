@@ -94,6 +94,14 @@ if [ $rc != 0 ]; then
     # Un cuelgue o un fallo sin FAIL: que se vea por que.
     grep -q '^FAIL' "$WORK/gui.txt" || tail -n 20 "$WORK/gui.err"
     echo "(lo ultimo que dijo la prueba:)"; tail -n 5 "$WORK/gui.txt"
+    # Una caida sin mensaje (en Windows sale como estado 127): la pila, si
+    # hay gdb, para saber donde.
+    if command -v gdb > /dev/null 2>&1; then
+        echo "(la pila, con gdb:)"
+        ( cd "$WORK/data" && gdb -batch -ex run -ex bt --args "$WORK/test_gui$EXE" \
+              "$WORK/data" "$WORK/data/ART.inp" "$WORK/data/FULL.inp" "$XLSX" ) 2>&1 |
+            grep -E '^#|signal|exception|SIG' | head -25
+    fi
     echo "FAIL: gtk_fmg conducido: estado $rc"
     exit 1
 fi

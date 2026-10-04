@@ -158,7 +158,14 @@ fi
 if [ $UPDATE = 0 ]; then
     mkdir -p "$WORK/nopath"
     cp "$TESTS/corpus/DE.2.inp" "$WORK/nopath/"
-    ( cd "$WORK/nopath" && env PATH=/nonexistent "$FUE" DE.2 > console.txt 2>&1
+    # En Windows, sin PATH tampoco se encuentran las DLL con que se enlazo fue
+    # (GSL, de MSYS2): se deja solo esa carpeta. Lo que se prueba es que no
+    # hace falta OTRO PROGRAMA, no que no hagan falta las DLL (ver fuf).
+    NOPATH=/nonexistent
+    case "$(uname -s)" in
+        MINGW*|MSYS*) NOPATH=$(dirname "$(command -v gcc 2>/dev/null || echo /ucrt64/bin/gcc)") ;;
+    esac
+    ( cd "$WORK/nopath" && env PATH="$NOPATH" "$FUE" DE.2 > console.txt 2>&1
       echo $? > status ) 2>/dev/null
     if [ "$(cat "$WORK/nopath/status")" = 0 ] && [ -s "$WORK/nopath/DE.2.pdf" ] &&
        head -c 8 "$WORK/nopath/DE.2.pdf" | grep -q "PDF-1.4"; then

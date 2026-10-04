@@ -74,6 +74,16 @@ corre() {        # corre NOMBRE ORDEN...
     wait "$vig" 2>/dev/null
     echo "::endgroup::"
     echo "$nombre: rc=$rc en $((SECONDS - t0)) s"
+    # FUERA DE LINUX, UNA BATERIA CORTA QUE FALLA SE REPITE CON TRAZA: hay
+    # guiones que salen con "|| exit 1" tras un paso que no dice nada, y sin
+    # la traza no se sabe cual fue. Solo las de un guion sh y de menos de
+    # 200 s, para no doblar las largas.
+    if [ $rc -ne 0 ] && [ "$(uname -s)" != Linux ] && [ $((SECONDS - t0)) -lt 200 ] &&
+       [ "$1" = sh ] && [ "$2" = -c ]; then
+        echo "::group::traza de $nombre (sh -x, ultimas lineas)"
+        sh -c "$(printf '%s' "$3" | sed 's/sh tests\//sh -x tests\//')" 2>&1 | tail -n 40
+        echo "::endgroup::"
+    fi
     if [ $rc -ne 0 ]; then
         case " $NO_BLOQUEAN " in
             *" $nombre "*)

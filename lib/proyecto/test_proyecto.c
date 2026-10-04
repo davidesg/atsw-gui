@@ -398,6 +398,18 @@ int main( int argc, char **argv )
     ok( pr_de_ruta( &q, ruta, se, sizeof se, mu, sizeof mu, mo, sizeof mo ) == 0
         && !strcmp( mo, id ), "y desde el .out" );
 
+    /* LA MISMA RUTA, CON '\\'. Es como llega en Windows desde el selector
+       de ficheros de GTK; con strcmp no casaba y ningun fichero era del
+       proyecto (lo vio la CI de Windows).                             */
+    {
+    char win[PR_RUTA + 4], *c;
+
+    snprintf( win, sizeof win, "C:%s", ruta );
+    for ( c = win; *c; c++ ) if ( *c == '/' ) *c = '\\';
+    ok( pr_de_ruta( &q, win, se, sizeof se, mu, sizeof mu, mo, sizeof mo ) == 0
+        && !strcmp( mo, id ), "y con la ruta escrita a la manera de Windows" );
+    }
+
     /* UNA SUBMUESTRA TIENE CARPETA, y su m01 no es el m01 de la completa */
     {
     char id2[PR_ID], r2[PR_RUTA];

@@ -88,9 +88,23 @@ static gboolean log_has(GPtrArray *log, guint from, const char *what)
 {
     guint i;
 
-    for (i = from; i < log->len; i++)
-        if (strstr(g_ptr_array_index(log, i), what) != NULL)
+    for (i = from; i < log->len; i++) {
+        const char *l = g_ptr_array_index(log, i);
+#ifdef G_OS_WIN32
+        /* En Windows el motor es fug.exe y la barra lo dice asi; lo que se
+         * comprueba son sus argumentos, no la extension.               */
+        gchar   **partes = g_strsplit(l, "fug.exe", -1);
+        gchar    *sin    = g_strjoinv("fug", partes);
+        gboolean  hay    = strstr(sin, what) != NULL;
+
+        g_strfreev(partes);
+        g_free(sin);
+        if (hay) return TRUE;
+#else
+        if (strstr(l, what) != NULL)
             return TRUE;
+#endif
+    }
     return FALSE;
 }
 

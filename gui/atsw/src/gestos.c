@@ -87,19 +87,19 @@ void atsw_lanza( Atsw *a, const char *programa, const char *fichero )
     atsw_lanza_con( a, programa, NULL, fichero );
 }
 
-/* LANZAR CON UNA OPCION DE MAS.
+/* EL LANZAMIENTO, CON LO QUE VAYA DETRAS DE «--proyecto P».
  *
- * Los tres GUIs reciben "--proyecto P [fichero]". Alguno necesita ademas que
- * se le diga QUE HACER al abrir --fue_gui con "--prever" arranca el ciclo de
- * prevision en su pestaña-- y eso es una opcion, no un fichero. Va antes del
- * fichero porque el fichero es el argumento posicional.               */
-void atsw_lanza_con( Atsw *a, const char *programa, const char *opcion,
-                     const char *fichero )
+ * extra es una lista terminada en NULL; con dice lo que la barra cuenta
+ * despues del binario («con IPC_m01.inp», «con el caso C1»), y NULL es «con
+ * este proyecto». Es el unico sitio que llama a g_spawn: los dos de abajo
+ * solo componen la lista.                                              */
+static void lanza_v( Atsw *a, const char *programa, const char *const *extra,
+                     const char *con )
 {
-    gchar  *argv[6];
+    gchar  *argv[12];
     GError *e = NULL;
     gchar  *exe;
-    int     n = 0;
+    int     n = 0, i;
 
     if ( !a->hay ) return;
 
@@ -118,8 +118,8 @@ void atsw_lanza_con( Atsw *a, const char *programa, const char *opcion,
     argv[n++] = exe;
     argv[n++] = (gchar *) "--proyecto";
     argv[n++] = a->p->path;
-    if ( opcion && *opcion )   argv[n++] = (gchar *) opcion;
-    if ( fichero && *fichero ) argv[n++] = (gchar *) fichero;
+    for ( i = 0; extra && extra[i] && n < (int) G_N_ELEMENTS(argv) - 1; i++ )
+        argv[n++] = (gchar *) extra[i];
     argv[n] = NULL;
 
     /* EL stderr DE LOS HIJOS NO SE TIRA.
@@ -147,16 +147,61 @@ void atsw_lanza_con( Atsw *a, const char *programa, const char *opcion,
         {
         /* SE DICE QUE BINARIO, con su ruta: asi una instalacion vieja que se
            cuele por el PATH se ve a la primera.                        */
-        gchar *s = ( fichero && *fichero )
-                 ? g_strdup_printf( "%s, con %s.", exe,
-                                    strrchr( fichero, '/' )
-                                    ? strrchr( fichero, '/' ) + 1 : fichero )
+        gchar *s = ( con && *con )
+                 ? g_strdup_printf( "%s, con %s.", exe, con )
                  : g_strdup_printf( "%s, con este proyecto.", exe );
 
         barra_pub( a, s );
         g_free( s );
         }
     g_free( exe );
+}
+
+/* LANZAR CON UNA OPCION DE MAS.
+ *
+ * Los tres GUIs reciben "--proyecto P [fichero]". Alguno necesita ademas que
+ * se le diga QUE HACER al abrir --fue_gui con "--prever" arranca el ciclo de
+ * prevision en su pestaña-- y eso es una opcion, no un fichero. Va antes del
+ * fichero porque el fichero es el argumento posicional.               */
+void atsw_lanza_con( Atsw *a, const char *programa, const char *opcion,
+                     const char *fichero )
+{
+    const char *extra[3];
+    int         n = 0;
+
+    if ( opcion && *opcion )   extra[n++] = opcion;
+    if ( fichero && *fichero ) extra[n++] = fichero;
+    extra[n] = NULL;
+
+    lanza_v( a, programa, extra,
+             ( fichero && *fichero )
+                 ? ( strrchr( fichero, '/' ) ? strrchr( fichero, '/' ) + 1
+                                             : fichero )
+                 : NULL );
+}
+
+/* drtran_gui CON UN CASO. Antes la madre solo sabia lanzarlo con el
+ * proyecto, y alli habia que volver a cargar a mano las series --y en el
+ * orden bueno, que es parte de la identidad del caso--. Ahora el caso dice
+ * que se cruza, y drtran lo carga y comprueba los hashes el mismo.     */
+void atsw_lanza_caso( Atsw *a, const char *programa, const char *caso,
+                      const char *corrida )
+{
+    const char *extra[5];
+    gchar      *con;
+    int         n = 0;
+
+    extra[n++] = "--caso";
+    extra[n++] = caso;
+    if ( corrida && *corrida )
+        { extra[n++] = "--corrida"; extra[n++] = corrida; }
+    extra[n] = NULL;
+
+    con = ( corrida && *corrida )
+        ? g_strdup_printf( "el caso %s, desde la corrida %s", caso, corrida )
+        : g_strdup_printf( "el caso %s", caso );
+    lanza_v( a, programa, extra, con );
+    g_free( con );
 }
 
 /* ------------------------------------------------------------------------ */

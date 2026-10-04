@@ -331,6 +331,94 @@ gboolean atsw_abre( Atsw *a, const char *path, char *why, size_t n )
 }
 
 /* ------------------------------------------------------------------------ */
+/* LOS DOS DESFASES DE UN CASO (DISENO-casos.md §2.4)                         */
+/*                                                                           */
+/* El caso guarda el sha256 de cada .pre en el momento del alta: la identidad */
+/* va por CONTENIDO, no por nombre. Si el de hoy es otro, lo que se estimo    */
+/* en el caso ya no corresponde a sus datos -- eso es un desfase de verdad.   */
+/* Que la serie tenga HOY otro elegido es otra cosa, y no es una alarma: art  */
+/* aconseja estacionalidad determinista para lo multivariante y estocastica  */
+/* para prever, asi que a menudo es deliberado.                             */
+/*                                                                           */
+/* Se recalcula en cada repintado, sin cache: son unos pocos .pre de unos     */
+/* KB, y una cache con huella seria otra cosa que puede mentir.              */
+/* ------------------------------------------------------------------------ */
+
+gchar *atsw_sha_de( const char *path )
+{
+    gchar *c = NULL, *h;
+    gsize  n = 0;
+
+    if ( !g_file_get_contents( path, &c, &n, NULL ) ) return NULL;
+    h = g_compute_checksum_for_data( G_CHECKSUM_SHA256, (const guchar *) c, n );
+    g_free( c );
+    return h;
+}
+
+AtPre atsw_entrada_pre( const Proyecto *p, const PrCaso *c, int i )
+{
+    char   ruta[PR_RUTA];
+    gchar *h;
+    AtPre  r;
+
+    if ( pr_ruta( p, c->en[i].serie, c->muestra, c->en[i].modelo, ".pre",
+                  ruta, sizeof ruta ) != 0 ||
+         !g_file_test( ruta, G_FILE_TEST_EXISTS ) )
+        return AT_PRE_FALTA;
+    /* SIN HASH NO SE INVENTA UN VEREDICTO. El alta pudo no tenerlo; decir
+       «igual» seria afirmar lo que no se sabe.                        */
+    if ( !c->en[i].sha[0] ) return AT_PRE_SIN_HASH;
+
+    h = atsw_sha_de( ruta );
+    r = ( h && !strcmp( h, c->en[i].sha ) ) ? AT_PRE_IGUAL : AT_PRE_CAMBIO;
+    g_free( h );
+    return r;
+}
+
+int atsw_caso_desfases( const Proyecto *p, const PrCaso *c, char *cuales,
+                        size_t n )
+{
+    GString *g = g_string_new( NULL );
+    int      i, k = 0;
+
+    for ( i = 0; i < c->nen; i++ )
+        {
+        AtPre e = atsw_entrada_pre( p, c, i );
+
+        if ( e != AT_PRE_CAMBIO && e != AT_PRE_FALTA ) continue;
+        g_string_append_printf( g, "%s%s/%s (%s)", k ? ", " : "",
+                                c->en[i].serie, c->en[i].modelo,
+                                e == AT_PRE_CAMBIO ? "cambió" : "no está" );
+        k++;
+        }
+    if ( cuales && n ) snprintf( cuales, n, "%s", g->str );
+    g_string_free( g, TRUE );
+    return k;
+}
+
+int atsw_caso_notas( const Proyecto *p, const PrCaso *c, char *cuales,
+                     size_t n )
+{
+    GString *g = g_string_new( NULL );
+    int      i, k = 0;
+
+    for ( i = 0; i < c->nen; i++ )
+        {
+        const char *hoy = pr_elegido( p, c->en[i].serie, c->muestra );
+
+        /* Sin elegido no hay nota: no hay otro modelo con que comparar. */
+        if ( !hoy[0] || !strcmp( hoy, c->en[i].modelo ) ) continue;
+        g_string_append_printf( g, "%s%s entra con %s y hoy su elegido es %s",
+                                k ? ", " : "", c->en[i].serie,
+                                c->en[i].modelo, hoy );
+        k++;
+        }
+    if ( cuales && n ) snprintf( cuales, n, "%s", g->str );
+    g_string_free( g, TRUE );
+    return k;
+}
+
+/* ------------------------------------------------------------------------ */
 /* Pintar                                                                    */
 /* ------------------------------------------------------------------------ */
 
@@ -405,7 +493,10 @@ static void pinta_series( Atsw *a )
             -1 );
         g_free( globo );
 
-        if ( marcada[0] && !strcmp( marcada, a->p->s[i].id ) )
+        /* VIENDO UN CASO, LA SERIE NO SE REMARCA: la derecha enseña el
+           caso, y una fila marcada aqui diria otra cosa. Y asi un clic
+           en esa misma serie vuelve a ser un cambio de seleccion.     */
+        if ( marcada[0] && !a->viendo_caso && !strcmp( marcada, a->p->s[i].id ) )
             gtk_tree_selection_select_iter(
                 gtk_tree_view_get_selection( GTK_TREE_VIEW(a->l_series) ), &it );
         }
@@ -560,6 +651,53 @@ static void pinta_modelos( Atsw *a )
     a->recolocando = FALSE;
 }
 
+/* LAS DOS LINEAS DE LOS CASOS, aparte de las otras dos y en su orden: el
+ * desfase de verdad en rojo, la nota en gris. No compiten con «lo que hay
+ * que mirar» de los modelos --son de otro piso-- y si no hay nada que decir
+ * no ocupan sitio.                                                      */
+static void pinta_veredicto_casos( Atsw *a )
+{
+    GString *des = g_string_new( NULL ), *nts = g_string_new( NULL );
+    int      i, nd = 0, nn = 0;
+
+    if ( a->ver_desfase == NULL || a->ver_nota == NULL ) return;
+    for ( i = 0; i < a->p->nca; i++ )
+        {
+        char w[1024];
+
+        if ( atsw_caso_desfases( a->p, &a->p->ca[i], w, sizeof w ) > 0 )
+            { g_string_append_printf( des, "%s%s: %s", nd ? "; " : "",
+                                      a->p->ca[i].id, w ); nd++; }
+        if ( atsw_caso_notas( a->p, &a->p->ca[i], w, sizeof w ) > 0 )
+            { g_string_append_printf( nts, "%s%s: %s", nn ? "; " : "",
+                                      a->p->ca[i].id, w ); nn++; }
+        }
+
+    if ( nd )
+        {
+        verdicto( a->ver_desfase, AT_ROJO,
+                  "%s desfasado%s — el .pre de una entrada cambió después del "
+                  "alta: %s. «Derivar caso…» con los de hoy.",
+                  nd == 1 ? "Un caso" : "Casos", nd == 1 ? "" : "s", des->str );
+        gtk_widget_show( a->ver_desfase );
+        }
+    else
+        gtk_widget_hide( a->ver_desfase );
+
+    if ( nn )
+        {
+        verdicto( a->ver_nota, "#666666",
+                  "Nota: %s. No es un error: el modelo que se cruza no tiene "
+                  "por qué ser el de prever.", nts->str );
+        gtk_widget_show( a->ver_nota );
+        }
+    else
+        gtk_widget_hide( a->ver_nota );
+
+    g_string_free( des, TRUE );
+    g_string_free( nts, TRUE );
+}
+
 static void pinta_veredictos( Atsw *a )
 {
     char sin[32][PR_ID];
@@ -570,8 +708,12 @@ static void pinta_veredictos( Atsw *a )
         verdicto( a->ver_cuenta, AT_AMBAR,
                   "No hay proyecto abierto. «Abrir…» o «Nuevo…»." );
         gtk_label_set_text( GTK_LABEL(a->ver_ojo), "" );
+        if ( a->ver_desfase ) gtk_widget_hide( a->ver_desfase );
+        if ( a->ver_nota )    gtk_widget_hide( a->ver_nota );
         return;
         }
+
+    pinta_veredicto_casos( a );
 
     /* Los DATOS no son un modelo sin estimar: no se estiman. Contarlos
      * entre los pendientes daria un aviso que nunca se puede apagar.  */
@@ -638,6 +780,7 @@ void atsw_refresca( Atsw *a )
 
     pinta_series( a );
     pinta_modelos( a );
+    atsw_pinta_casos( a );
     pinta_veredictos( a );
 
     /* Sin datos no hay de donde empezar un modelo, y el boton lo dice

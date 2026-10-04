@@ -230,6 +230,10 @@ univariantes, no ficheros de la corrida.
   conjunta, y si los ficheros eran óptimos o especificaciones), la ventana
   común y el *cast* usado. Sale del `.out` con `lib/outdiag`, que ya lo lee
   para la Diagnosis de drtran_gui.
+  **Pendiente (2026-10-04):** la logL sale; la puerta diagonal se enseña como
+  «—». El `.out` de drtran sólo imprime la logL conjunta, y la suma de las
+  univariantes está en los `.out` de fue de cada entrada, que `lib/outfile`
+  todavía no lee. Hace falta ese lector, no un segundo parser del de drtran.
 - **«Derivar caso…»**: el mismo caso con las entradas cambiadas. La salida
   natural del desfase.
 - **Un ciclo** (drtran sale con 7, o la red de la corrida no es un DAG):

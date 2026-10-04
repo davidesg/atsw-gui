@@ -283,6 +283,41 @@ int main( int argc, char **argv )
     }
     }
 
+    /* ADDING a factor (E3/E4): the old factors stay, the orders add up */
+    {
+    const double a1[1] = { 0.25 }, m1[1] = { -0.35 }, A1[1] = { 0.15 };
+    char ruta[1024];
+    int  vistos4 = 0, buenos4 = 0, cero4 = 0, cero_ok = 0;
+
+    d = opendir( dir );
+    while ( d && ( e = readdir( d ) ) != NULL )
+        {
+        int nn = (int) strlen( e->d_name ), p0, q0, P0, Q0, p1, q1, P1, Q1;
+
+        if ( nn < 5 || strcmp( e->d_name + nn - 4, ".inp" ) ) continue;
+        snprintf( ruta, sizeof ruta, "%s/%s", dir, e->d_name );
+        if ( inp_check_fue( ruta, msg, sizeof msg ) != 0 ) continue;
+        if ( id_arma_ordenes( ruta, &p0, &q0, &P0, &Q0, porque, sizeof porque ) != 0 ) continue;
+        vistos4++;
+        if ( id_anade_arma( ruta, tmp, 1, a1, 1, m1, 1, A1, 0, NULL, porque, sizeof porque ) == 0 &&
+             id_arma_ordenes( tmp, &p1, &q1, &P1, &Q1, porque, sizeof porque ) == 0 &&
+             p1 == p0 + 1 && q1 == q0 + 1 && P1 == P0 + 1 && Q1 == Q0 &&
+             inp_check_fue( tmp, msg, sizeof msg ) == 0 )
+           buenos4++;
+        else { printf( "  FALLO %s: añadir (1,1)(1,0) no queda bien: %s\n", e->d_name, msg );
+               fallos++; }
+        /* adding nothing gives the file back */
+        cero4++;
+        if ( id_anade_arma( ruta, tmp, 0, NULL, 0, NULL, 0, NULL, 0, NULL, porque, sizeof porque ) == 0 &&
+             iguales( ruta, tmp ) ) cero_ok++;
+        else { printf( "  FALLO %s: añadir nada no lo deja igual\n", e->d_name ); fallos++; }
+        }
+    if ( d ) closedir( d );
+    printf( "        %d ficheros: %d con un factor más en cada operador\n", vistos4, buenos4 );
+    ok( vistos4 > 20 && buenos4 == vistos4, "añadir un factor suma los órdenes y el motor lo acepta" );
+    ok( cero_ok == cero4, "y añadir nada devuelve el fichero idéntico" );
+    }
+
     /* the transformation line, for the identifier at E2 */
     {
     char ruta[1024];

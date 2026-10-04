@@ -1245,6 +1245,50 @@ static void vistazo_prueba( void )
         }
     }
 
+    /* E1: IDENTIFICAR DESDE LOS DATOS, con la transformacion en la ventana. */
+    {
+    GtkMenu   *m1 = clic_derecho( A.l_series, 0 );
+    GtkWidget *e1 = m1 ? entrada_de( m1, "Identificar desde los datos" ) : NULL;
+    GtkWindow *w1;
+
+    check( e1 != NULL, "el menú de la serie ofrece «Identificar desde los datos…»",
+           m1 ? entradas( m1 ) : NULL );
+    olvida();
+    if ( e1 ) gtk_menu_item_activate( GTK_MENU_ITEM(e1) );
+    cierra_menu( m1 );
+    pump( 1500 );
+    w1 = ventana_titulada( "Identificación — ipc / m00" );
+    check( w1 != NULL, "abre la identificación desde los datos", todo_lo_dicho() );
+    if ( w1 )
+        {
+        GPtrArray *sp = junta( GTK_WIDGET(w1), GTK_TYPE_SPIN_BUTTON, FALSE );
+        GtkWidget *bv = boton_que_dice( GTK_WIDGET(w1), "Volver a identificar" );
+        gchar     *txt = textos_de( GTK_WIDGET(w1) );
+
+        check( sp->len >= 2 && bv != NULL, "con d, D y «Volver a identificar»", NULL );
+        check( strstr( txt, "Estacionalidad" ) != NULL || strstr( txt, "Raíz unitaria" ) != NULL,
+               "y los contrastes a la vista", txt );
+        g_free( txt );
+        if ( sp->len >= 2 && bv )
+            {
+            GtkWidget *sd = g_ptr_array_index( sp, 0 );
+            int        nd = gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(sd) ) == 1 ? 0 : 1;
+            gchar     *want = g_strdup_printf( "d = %d", nd );
+
+            gtk_spin_button_set_value( GTK_SPIN_BUTTON(sd), nd );
+            gtk_button_clicked( GTK_BUTTON(bv) );
+            pump( 1500 );
+            txt = textos_de( GTK_WIDGET(w1) );
+            check( strstr( txt, want ) != NULL, "volver a identificar usa la d nueva", txt );
+            nota( "identificar desde los datos: rehecho con %s", want );
+            g_free( txt ); g_free( want );
+            }
+        g_ptr_array_free( sp, TRUE );
+        gtk_widget_destroy( GTK_WIDGET(w1) );
+        pump( 100 );
+        }
+    }
+
     /* Lo que no se puede mirar se dice, no revienta. */
     {
     gchar *no = g_build_filename( T, "no_existe.inp", NULL );
@@ -1795,10 +1839,20 @@ static void menu_modelo_prueba( void )
                 nota( "identificar los residuos de m01: %d candidatos; derivado %s con %s",
                       nc, nuevo, orden );
                 check( inp_check_fue( f, msg, sizeof msg ) == 0, "y fue lo acepta", msg );
+                {
+                /* derivar AÑADE: los órdenes del hijo son los del padre más
+                   los del candidato (un factor más en cada operador) */
+                gchar *fp = existe( "ipc", "", "m01", ".pre" ) ? ruta_de( "ipc", "", "m01", ".pre" )
+                                                               : ruta_de( "ipc", "", "m01", ".inp" );
+                int pp = 0, pq = 0, pP = 0, pQ = 0;
+
+                id_arma_ordenes( fp, &pp, &pq, &pP, &pQ, porque, sizeof porque );
                 check( id_arma_ordenes( f, &p, &q, &P, &Q, porque, sizeof porque ) == 0 &&
                        sscanf( orden, "(%d,%d)(%d,%d)", &ep, &eq, &eP, &eQ ) == 4 &&
-                       p == ep && q == eq && P == eP && Q == eQ,
-                       "con los órdenes del candidato elegido", orden );
+                       p == pp + ep && q == pq + eq && P == pP + eP && Q == pQ + eQ,
+                       "con lo que tenía m01 más el candidato elegido", orden );
+                g_free( fp );
+                }
                 g_free( padre ); g_free( f );
 
                 /* y se deja el proyecto como estaba: las fases siguientes
@@ -1823,6 +1877,44 @@ static void menu_modelo_prueba( void )
         g_free( orden );
         }
     g_free( antes );
+    }
+
+    /* E4: LA DIAGNOSIS, cuando el Q falla, abre el identificador sobre los
+       mismos residuos; si cuadra, el boton esta apagado y lo dice. */
+    {
+    GtkWindow *dw = ventana_titulada( "Diagnosis — ipc / m01" );
+    GtkWidget *bi;
+
+    if ( !dw )
+        {
+        GtkMenu *m;
+        marca( A.l_modelos, M_ID, "m01" );
+        m = clic_derecho( A.l_modelos, 1 );
+        if ( m && entrada_de( m, "Diagnosis" ) )
+            gtk_menu_item_activate( GTK_MENU_ITEM(entrada_de( m, "Diagnosis" )) );
+        cierra_menu( m );
+        pump( 300 );
+        dw = ventana_titulada( "Diagnosis — ipc / m01" );
+        }
+    bi = dw ? boton_que_dice( GTK_WIDGET(dw), "Identificar los residuos…" ) : NULL;
+    check( bi != NULL, "la diagnosis ofrece «Identificar los residuos…»", NULL );
+    if ( bi && gtk_widget_get_sensitive( bi ) )
+        {
+        GtkWindow *wi;
+        olvida();
+        gtk_button_clicked( GTK_BUTTON(bi) );
+        pump( 1500 );
+        wi = ventana_titulada( "Identificación — ipc / m01" );
+        check( wi != NULL, "y, con el Q fallando, abre el identificador", todo_lo_dicho() );
+        nota( "diagnosis de m01: el Q falla, «Identificar los residuos…» abre su ventana" );
+        if ( wi ) { gtk_widget_destroy( GTK_WIDGET(wi) ); pump( 100 ); }
+        }
+    else if ( bi )
+        {
+        const char *t = gtk_widget_get_tooltip_text( bi );
+        check( t && strstr( t, "cuadra" ), "apagado, dice por qué", t );
+        nota( "diagnosis de m01: el Q cuadra, el botón está apagado" );
+        }
     }
 
     /* Prever: fue_gui --prever con el .inp. */

@@ -140,6 +140,12 @@ static void on_exportar( GtkButton *b, Dg *g )
     tb_free( t );
 }
 
+static void on_identificar( GtkButton *b, Dg *g )
+{
+    (void) b;
+    an_identifica_residuos( &g->h, g->serie, g->muestra, g->id );
+}
+
 static void on_cerrar( GtkWidget *w, Dg *g ) { (void) w; g_free( g ); }
 
 
@@ -277,6 +283,24 @@ void an_diagnosis( const AnHost *h, const char *serie, const char *muestra,
         "quitar, qué intervenir— es una decisión, y es tuya.</small>" );
     gtk_label_set_xalign( GTK_LABEL(b), 0.0 );
     gtk_box_pack_start( GTK_BOX(barra), b, TRUE, TRUE, 0 );
+
+    /* E4: CUANDO EL Q FALLA, el identificador sobre los mismos residuos.
+     * La diagnosis sigue sin recomendar: el botón abre otra ventana, que
+     * enseña su evidencia, y lo que se haga lo decide el analista. */
+    {
+    int i, falla = 0;
+    for ( i = 0; i < g->d.n; i++ )
+        if ( !strcmp( g->d.l[i].titulo, "Autocorrelación" ) &&
+             ( g->d.l[i].estado == DX_NO || g->d.l[i].estado == DX_MIRAR ) ) falla = 1;
+    b = gtk_button_new_with_label( "Identificar los residuos…" );
+    gtk_widget_set_sensitive( b, falla );
+    gtk_widget_set_tooltip_text( b, falla
+        ? "Los residuos aún tienen autocorrelación. art lee su correlograma y "
+          "propone qué le falta al modelo; derivar lo añade como un factor más."
+        : "La autocorrelación de los residuos cuadra: no hay nada que identificar." );
+    g_signal_connect( b, "clicked", G_CALLBACK(on_identificar), g );
+    gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
+    }
 
     b = gtk_button_new_with_label( "Exportar…" );
     gtk_widget_set_tooltip_text( b,

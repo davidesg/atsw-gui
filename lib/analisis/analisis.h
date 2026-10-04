@@ -148,8 +148,9 @@ void an_sugerir( const AnHost *h, const char *serie, const char *muestra,
  *   an_identifica_serie     E2, los gráficos de identificación: una serie con
  *                           su lambda (0 log, 1 niveles), d y D. `id` es el
  *                           nodo del que se deriva (el de datos).
- *   an_identifica_residuos  E3, los residuos de un modelo base, leídos de su
- *                           .out; se deriva sobre su .pre.                 */
+ *   an_identifica_residuos  E3/E4, los residuos de un modelo, leídos de su
+ *                           .out; derivar AÑADE el candidato como un factor
+ *                           más, sobre su .pre.                            */
 typedef struct {
    const double *x;     /* la serie en NIVEL, x[0..n-1]                  */
    int           n;
@@ -163,6 +164,12 @@ void an_identifica_serie( const AnHost *h, const char *serie, const char *muestr
                           const char *id, const AnSerie *s );
 void an_identifica_residuos( const AnHost *h, const char *serie, const char *muestra,
                              const char *id );
+
+/* E1, los datos: la misma ventana con la transformación EDITABLE (log o
+ * niveles, d, D) y los contrastes --la F estacional, ADF y KPSS-- dichos
+ * con lo que dicen. `s` trae la serie y la transformación de partida. */
+void an_identifica_datos( const AnHost *h, const char *serie, const char *muestra,
+                          const char *id, const AnSerie *s );
 
 /* --- CUANDO SE PUEDE ANALIZAR, Y SI NO, POR QUE ------------------------- */
 

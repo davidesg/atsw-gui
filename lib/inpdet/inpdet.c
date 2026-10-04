@@ -624,3 +624,50 @@ int id_pon_transformacion( const char *origen, const char *destino,
    fich_free( &f );
    return 0;
 }
+
+/* One section with a factor appended: the count line rewritten (one more
+ * factor, its order at the end), the old factors copied, the new one after
+ * them. lab is the section's label line, fin the first line after it. */
+static void arma_anade( FILE *o, const Fich *f, int lab, int fin, int ord, const double *v )
+{
+   char t[64][64];
+   int  nt, nf, j, i;
+
+   fputs( f->l[lab], o );
+   if ( ord <= 0 ) { for ( i = lab + 1; i < fin; i++ ) fputs( f->l[i], o ); return; }
+   nt = tokens( f->l[lab + 1], t, 64 );
+   nf = nt > 0 ? atoi( t[0] ) : 0;
+   fprintf( o, "%d", nf + 1 );
+   for ( j = 0; j < nf; j++ ) fprintf( o, " %s", t[j + 1] );
+   fprintf( o, " %d\n", ord );
+   for ( i = lab + 2; i < fin; i++ ) fputs( f->l[i], o );
+   fputs( "**\n", o );
+   for ( j = 0; j < ord; j++ ) fprintf( o, "%.6f  1\n", v ? v[j] : 0.0 );
+}
+
+int id_anade_arma( const char *origen, const char *destino,
+                   int p, const double *phi, int q, const double *theta,
+                   int P, const double *Phi, int Q, const double *Theta,
+                   char *porque, size_t n )
+{
+   Fich  f;
+   int   lab[4], fin, ord[4], i, k, hasta[4];
+   FILE *o;
+   const int     nuevo[4] = { p, P, q, Q };
+   const double *val[4]   = { phi, Phi, theta, Theta };
+
+   if ( p < 0 || q < 0 || P < 0 || Q < 0 )
+      { snprintf( porque, n, "órdenes negativos" ); return 1; }
+   if ( fich_lee( origen, &f, porque, n ) ) return 1;
+   if ( arma_mira( &f, lab, &fin, ord, porque, n ) ) { fich_free( &f ); return 1; }
+   for ( k = 0; k < 4; k++ ) hasta[k] = ( k < 3 ) ? lab[k + 1] : fin;
+
+   o = fopen( destino, "wb" );
+   if ( !o ) { snprintf( porque, n, "no pude escribir «%s»", destino ); fich_free( &f ); return 1; }
+   for ( i = 0; i < lab[0]; i++ ) fputs( f.l[i], o );
+   for ( k = 0; k < 4; k++ ) arma_anade( o, &f, lab[k], hasta[k], nuevo[k], val[k] );
+   for ( i = fin; i < f.n; i++ ) fputs( f.l[i], o );
+   fclose( o );
+   fich_free( &f );
+   return 0;
+}

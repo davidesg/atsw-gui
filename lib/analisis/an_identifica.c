@@ -14,11 +14,16 @@
  * at E3 -- through pr_deriva, judged by inp_check_fue, and opened. fue
  * estimates it when the analyst says so.
  *
- * Two points of the process (the study's E2 and E3):
- *   an_identifica_serie     the identification graphs: a series with lambda,
- *                           d, D (the mother's vistazo).
- *   an_identifica_residuos  a base model's residuals, read from its .out
+ * Four points of the process (the study's E1-E4):
+ *   an_identifica_datos     E1, the data: the series with its transformation
+ *                           editable in the window, and the tests (seasonal F,
+ *                           ADF/KPSS) shown with what they say.
+ *   an_identifica_serie     E2, the identification graphs: a series with the
+ *                           lambda, d, D being viewed (the mother's vistazo).
+ *   an_identifica_residuos  E3/E4, a model's residuals, read from its .out
  *                           (harmonics already modelled: not removed again).
+ *                           What art proposes there is what is MISSING, and
+ *                           deriving ADDS it as one more factor (id_anade_arma).
  *
  * The engine is a subprocess (lib/engine), found next to the program
  * (lib/sitio). Its result is the line file DATA_art.cand (lib/artcand).
@@ -50,8 +55,12 @@ typedef struct {
     int        sel;                 /* index into c->cand, -1 none          */
     int        solo_editor;
 
-    GtkWidget *win, *area, *vista, *filtro, *l_estado, *con_que;
+    GtkWidget *win, *area, *vista, *filtro, *l_estado, *con_que, *l_cab;
+    GtkWidget *c_lam, *s_d, *s_D;   /* E1: the transformation, editable     */
     GtkListStore *store;
+    char       que[128];
+    double    *x;                   /* E1: the series, to identify again    */
+    int        n, per, anio;
 } Id;
 
 /* ---- the engine ------------------------------------------------------ */
@@ -365,7 +374,7 @@ static void on_derivar( GtkButton *b, Id *g )
     g_free( dir );
 
     /* E2: the child carries the transformation it was identified on. */
-    if ( g->punto == 2 )
+    if ( g->punto <= 2 )
         {
         tmp = g_strdup_printf( "%s.trans", destino );
         rc = id_pon_transformacion( origen, tmp, g->lam, g->d, g->D, porque, sizeof porque );
@@ -375,9 +384,9 @@ static void on_derivar( GtkButton *b, Id *g )
         g_unlink( tmp );
         g_free( tmp );
         }
-    else
-        rc = id_pon_arma( origen, destino, k->p, k->phi, k->q, k->theta,
-                          k->P, k->Phi, k->Q, k->Theta, porque, sizeof porque );
+    else       /* E3/E4: what is missing is ADDED to what the model has */
+        rc = id_anade_arma( origen, destino, k->p, k->phi, k->q, k->theta,
+                            k->P, k->Phi, k->Q, k->Theta, porque, sizeof porque );
     if ( rc != 0 )
         {
         pr_borra( g->h.p, g->serie, g->muestra, nuevo, &e );
@@ -398,10 +407,12 @@ static void on_derivar( GtkButton *b, Id *g )
     razon = g_strdup_printf(
         "Identificado con art en %s: (%d,%d)(%d,%d) %s, similitud %.3f, peso %.3f; %s. "
         "%s%s.",
-        g->punto == 2 ? "los gráficos de identificación" : "los residuos del modelo base",
+        g->punto == 1 ? "los datos" :
+        g->punto == 2 ? "los gráficos de identificación" : "los residuos del modelo",
         k->p, k->q, k->P, k->Q, tipo, k->sim, k->weight,
         k->proposed ? "el propuesto" : "elegido frente al propuesto",
-        g->punto == 2 ? "Con la transformación identificada. Derivado de " : "Derivado de ",
+        g->punto <= 2 ? "Con la transformación identificada. Derivado de "
+                      : "Añadido como un factor más a lo que ya tenía. Derivado de ",
         g->id );
     pr_razon( g->h.p, g->serie, g->muestra, nuevo, razon, &e );
     g_free( razon );
@@ -436,6 +447,7 @@ static void on_cerrar( GtkWidget *w, Id *g )
 {
     (void) w;
     g_free( g->c );
+    g_free( g->x );
     g_free( g );
 }
 
@@ -449,10 +461,96 @@ static void columna( GtkWidget *vista, const char *titulo, int col, float x )
     gtk_tree_view_append_column( GTK_TREE_VIEW(vista), c );
 }
 
+/* What the tests say, said: the data's state at this transformation, not
+ * what to do (the analyst decides). */
+static void cabecera( Id *g )
+{
+    GString *cab = g_string_new( "" );
+    const ArtCand *c = g->c;
+
+    g_string_append_printf( cab, "<b>%s</b>  —  ", g->que );
+    if ( g->punto <= 2 )
+        g_string_append_printf( cab, "%s, d = %d, D = %d, s = %d",
+                                g->lam == 0.0 ? "logaritmos" : "niveles", g->d, g->D, g->freq );
+    else
+        g_string_append_printf( cab, "residuos del modelo, sin volver a quitar armónicos. "
+                                "Lo que se propone es lo que FALTA: derivar lo AÑADE como "
+                                "un factor más a lo que el modelo ya tiene" );
+    g_string_append_printf( cab, ".  %d observaciones, %d retardos, banda ±%.3f.",
+                            c->n_used, c->lags, c->band );
+    if ( c->has_seasonal )
+        {
+        g_string_append_printf( cab, "\n<b>Estacionalidad</b> (F HAC): F = %.2f, p = %.4f. ",
+                                c->seasonal_F, c->seasonal_p );
+        g_string_append( cab, c->seasonal_detected
+            ? "Hay un patrón estacional determinista: con D = 0 se retiran los armónicos "
+              "antes de identificar (la ruta determinista); con D = 1 la estacionalidad "
+              "se trata como estocástica."
+            : "Sin patrón estacional determinista." );
+        }
+    if ( c->has_unit_root )
+        {
+        g_string_append_printf( cab, "\n<b>Raíz unitaria</b> con d = %d: ADF %.3f (p = %.4f), "
+                                "KPSS %.3f (p = %.4f). ", g->d, c->adf_stat, c->adf_p,
+                                c->kpss_stat, c->kpss_p );
+        if ( c->adf_p < 0.05 && c->kpss_p > 0.05 )
+            g_string_append( cab, "ADF rechaza la raíz unitaria y KPSS no rechaza la "
+                                  "estacionariedad: así la serie parece estacionaria." );
+        else if ( c->adf_p >= 0.05 && c->kpss_p <= 0.05 )
+            g_string_append_printf( cab, "ADF no rechaza la raíz unitaria y KPSS rechaza la "
+                                         "estacionariedad: queda una raíz unitaria; mira "
+                                         "d = %d.", g->d + 1 );
+        else
+            g_string_append( cab, "Los dos contrastes no dicen lo mismo: decide con el "
+                                  "correlograma." );
+        }
+    else if ( g->punto == 1 )
+        g_string_append( cab, "\nLos contrastes de raíz unitaria se hacen con d ≤ 1 y D = 0." );
+    gtk_label_set_markup( GTK_LABEL(g->l_cab), cab->str );
+    g_string_free( cab, TRUE );
+}
+
+static gboolean corre_art( Id *g, const char *datos, gboolean residuos, char *why, size_t n );
+static int escribe_datos( const char *ruta, const double *x, int n, int freq, int per, int anio );
+
+/* E1: art again, with the transformation in the controls. */
+static void on_reidentificar( GtkButton *b, Id *g )
+{
+    gchar *base, *datos;
+    char   why[512];
+
+    (void) b;
+    g->lam = gtk_combo_box_get_active( GTK_COMBO_BOX(g->c_lam) ) == 0 ? 0.0 : 1.0;
+    g->d = gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(g->s_d) );
+    g->D = gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(g->s_D) );
+    if ( g->lam == 0.0 )
+        {
+        int i;
+        for ( i = 0; i < g->n; i++ )
+            if ( !( g->x[i] > 0.0 ) )
+                { di( g, "La serie tiene valores no positivos: en logaritmos no." ); return; }
+        }
+    base = an_fichero( "identifica", g->serie, g->muestra, g->id );
+    datos = g_strdup_printf( "%s.txt", base );
+    g_free( base );
+    if ( escribe_datos( datos, g->x, g->n, g->freq, g->per, g->anio ) != 0 ||
+         !corre_art( g, datos, FALSE, why, sizeof why ) )
+        { di( g, "%s", why ); g_free( datos ); return; }
+    g_free( datos );
+    g->sel = -1;
+    cabecera( g );
+    llena( g );
+    gtk_widget_queue_draw( g->area );
+    di( g, "Identificado de nuevo: %s, d = %d, D = %d.", g->lam == 0.0 ? "logaritmos" : "niveles",
+        g->d, g->D );
+}
+
 static void ventana( Id *g, const char *que )
 {
     GtkWidget *caja, *l, *sw, *barra, *b;
     GString   *cab = g_string_new( "" );
+
+    g_snprintf( g->que, sizeof g->que, "%s", que );
     gchar     *t;
     unsigned   puede = g->h.puede ? g->h.puede : ( AN_PUEDE_FUE | AN_PUEDE_EDITOR );
     int        i;
@@ -468,28 +566,41 @@ static void ventana( Id *g, const char *que )
     gtk_container_set_border_width( GTK_CONTAINER(caja), 8 );
     gtk_container_add( GTK_CONTAINER(g->win), caja );
 
-    /* where we are, and what is fixed */
-    g_string_append_printf( cab, "<b>%s</b>  —  ", que );
-    if ( g->punto == 2 )
-        g_string_append_printf( cab, "%s, d = %d, D = %d, s = %d",
-                                g->lam == 0.0 ? "logaritmos" : "niveles", g->d, g->D, g->freq );
-    else
-        g_string_append_printf( cab, "residuos del modelo base, sin volver a quitar armónicos" );
-    g_string_append_printf( cab, ".  %d observaciones, %d retardos, banda ±%.3f.",
-                            g->c->n_used, g->c->lags, g->c->band );
-    if ( g->c->has_seasonal )
-        g_string_append_printf( cab, "\nEstacionalidad (F HAC): F = %.2f, p = %.4f — %s.",
-                                g->c->seasonal_F, g->c->seasonal_p,
-                                g->c->seasonal_detected ? "patrón determinista detectado"
-                                                        : "sin patrón determinista" );
-    if ( g->c->has_unit_root )
-        g_string_append_printf( cab, "\nADF %.3f (p = %.4f), KPSS %.3f (p = %.4f).",
-                                g->c->adf_stat, g->c->adf_p, g->c->kpss_stat, g->c->kpss_p );
-    l = gtk_label_new( NULL );
-    gtk_label_set_markup( GTK_LABEL(l), cab->str );
-    gtk_label_set_xalign( GTK_LABEL(l), 0.0 );
-    gtk_label_set_line_wrap( GTK_LABEL(l), TRUE );
-    gtk_box_pack_start( GTK_BOX(caja), l, FALSE, FALSE, 0 );
+    /* E1: the transformation, editable, and identify again */
+    if ( g->punto == 1 )
+        {
+        GtkWidget *fila = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 6 ), *bi;
+
+        gtk_box_pack_start( GTK_BOX(fila), gtk_label_new( "Transformación:" ), FALSE, FALSE, 0 );
+        g->c_lam = gtk_combo_box_text_new();
+        gtk_combo_box_text_append_text( GTK_COMBO_BOX_TEXT(g->c_lam), "logaritmos (λ = 0)" );
+        gtk_combo_box_text_append_text( GTK_COMBO_BOX_TEXT(g->c_lam), "niveles (λ = 1)" );
+        gtk_combo_box_set_active( GTK_COMBO_BOX(g->c_lam), g->lam == 0.0 ? 0 : 1 );
+        gtk_box_pack_start( GTK_BOX(fila), g->c_lam, FALSE, FALSE, 0 );
+        gtk_box_pack_start( GTK_BOX(fila), gtk_label_new( "  d" ), FALSE, FALSE, 0 );
+        g->s_d = gtk_spin_button_new_with_range( 0, 2, 1 );
+        gtk_spin_button_set_value( GTK_SPIN_BUTTON(g->s_d), g->d );
+        gtk_box_pack_start( GTK_BOX(fila), g->s_d, FALSE, FALSE, 0 );
+        gtk_box_pack_start( GTK_BOX(fila), gtk_label_new( "  D" ), FALSE, FALSE, 0 );
+        g->s_D = gtk_spin_button_new_with_range( 0, 1, 1 );
+        gtk_spin_button_set_value( GTK_SPIN_BUTTON(g->s_D), g->D );
+        gtk_widget_set_sensitive( g->s_D, g->freq > 1 );
+        gtk_box_pack_start( GTK_BOX(fila), g->s_D, FALSE, FALSE, 0 );
+        bi = gtk_button_new_with_label( "Volver a identificar" );
+        gtk_widget_set_tooltip_text( bi,
+            "art otra vez con esta transformación: los contrastes, el "
+            "correlograma y los candidatos se rehacen aquí mismo." );
+        g_signal_connect( bi, "clicked", G_CALLBACK(on_reidentificar), g );
+        gtk_box_pack_start( GTK_BOX(fila), bi, FALSE, FALSE, 0 );
+        gtk_box_pack_start( GTK_BOX(caja), fila, FALSE, FALSE, 0 );
+        }
+
+    /* where we are, what is fixed, and what the tests say */
+    g->l_cab = gtk_label_new( NULL );
+    gtk_label_set_xalign( GTK_LABEL(g->l_cab), 0.0 );
+    gtk_label_set_line_wrap( GTK_LABEL(g->l_cab), TRUE );
+    gtk_box_pack_start( GTK_BOX(caja), g->l_cab, FALSE, FALSE, 0 );
+    cabecera( g );
     g_string_free( cab, TRUE );
 
     /* the correlograms */
@@ -613,6 +724,7 @@ static Id *nuevo_id( const AnHost *h, const char *serie, const char *muestra, co
     g_snprintf( g->muestra, sizeof g->muestra, "%s", muestra ? muestra : "" );
     g_snprintf( g->id, sizeof g->id, "%s", id );
     g->c = g_new0( ArtCand, 1 );
+    g->x = NULL;
     g->sel = -1;
     return g;
 }
@@ -692,5 +804,40 @@ void an_identifica_residuos( const AnHost *h, const char *serie, const char *mue
     if ( !corre_art( g, datos, TRUE, why, sizeof why ) )
         { an_di( h, "%s", why ); g_free( datos ); on_cerrar( NULL, g ); return; }
     g_free( datos );
-    ventana( g, "Residuos del modelo base" );
+    ventana( g, "Residuos del modelo" );
+}
+
+/* ---- E1: the data ------------------------------------------------------ */
+
+void an_identifica_datos( const AnHost *h, const char *serie, const char *muestra,
+                          const char *id, const AnSerie *s )
+{
+    Id    *g;
+    gchar *base, *datos;
+    char   why[512];
+    int    i, positiva = 1;
+
+    if ( !h || !h->p || !serie || !id || !s || !s->x || s->n < 10 ) return;
+    for ( i = 0; i < s->n; i++ ) if ( !( s->x[i] > 0.0 ) ) positiva = 0;
+
+    g = nuevo_id( h, serie, muestra, id );
+    g->punto = 1;
+    /* where to start: the transformation the data node says, made one art
+       can take -- log if the file says log and the series allows it */
+    g->lam = ( s->lam == 0.0 && positiva ) ? 0.0 : 1.0;
+    g->d = s->d < 0 ? 0 : ( s->d > 2 ? 2 : s->d );
+    g->D = ( s->freq > 1 && s->D > 0 ) ? 1 : 0;
+    g->freq = s->freq;
+    g->n = s->n; g->per = s->per; g->anio = s->anio;
+    g->x = g_malloc( (gsize) s->n * sizeof *s->x );
+    memcpy( g->x, s->x, (size_t) s->n * sizeof *s->x );
+
+    base = an_fichero( "identifica", serie, muestra, id );
+    datos = g_strdup_printf( "%s.txt", base );
+    g_free( base );
+    if ( escribe_datos( datos, g->x, g->n, g->freq, g->per, g->anio ) != 0 ||
+         !corre_art( g, datos, FALSE, why, sizeof why ) )
+        { an_di( h, "%s", why ); g_free( datos ); on_cerrar( NULL, g ); return; }
+    g_free( datos );
+    ventana( g, s->que && s->que[0] ? s->que : "Identificación desde los datos" );
 }

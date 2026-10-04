@@ -327,6 +327,32 @@ Tests:
 - The `lib/` battery (inside `gui/drtran`'s) runs the reader and the
   `.inp` writers.
 
+### E1 and E4, as built (2026-10-05)
+
+- **E1**, `an_identifica_datos`, opens from «Identificar desde los datos…»
+  in the mother's series menu.
+  - The window gets the transformation as controls: log or levels, d, D,
+    and «Volver a identificar».
+  - It starts from what the data node says.
+  - The tests come with what they say, not with what to do. For example:
+    «ADF rechaza la raíz unitaria y KPSS no rechaza la estacionariedad: así
+    la serie parece estacionaria», or «queda una raíz unitaria; mira
+    d = 2». A seasonal pattern gets a sentence on the deterministic route
+    (D = 0) and the stochastic one (D = 1).
+- **E4** opens from the diagnosis window. «Identificar los residuos…» is
+  lit when the autocorrelation block says NO or MIRAR, and off otherwise,
+  with the reason. The diagnosis still does not recommend: the button
+  opens another window, which shows its evidence.
+- **At E3/E4, deriving ADDS the candidate as one more factor**
+  (`lib/inpdet` `id_anade_arma`), it does not replace. What the residuals
+  say is what is MISSING. The model's factors stay with their `.pre`
+  seeds, and the new one multiplies them. On a base model without ARMA
+  (E3) adding is the same as setting. Tested over the fue corpus, and fue
+  estimates a model with an added AR factor.
+- **Tests:** `gui/atsw/tests/test_gui.c` drives E1 (re-identifying with
+  another d) and E4 (from m01's diagnosis, where Q fails). The E3 check is
+  now "the parent's orders plus the candidate's".
+
 ### Where it is launched
 
 | point | from | data passed |
@@ -392,7 +418,7 @@ known; the window depends on decisions 9.2 and 9.3.
 1. **The way in.** **DECIDED, 2026-10-04: option 4**, the engine plus the
    analysis window (`art_gui` as is was the alternative).
 2. **The points for the first version.** **DECIDED, 2026-10-04:** E2 and E3
-   first; E1 and E4 after.
+   first; E1 and E4 after. **All four built, 2026-10-05.**
 3. **The tests at E1.** **DECIDED, 2026-10-04:** yes, the window shows
    ADF/KPSS and the seasonal F at E1 (the 2026-09-26 line). They come with the
    engine.

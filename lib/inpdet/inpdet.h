@@ -126,4 +126,15 @@ int id_pon_arma( const char *origen, const char *destino,
 int id_pon_transformacion( const char *origen, const char *destino,
                            double lam, int d, int D, char *porque, size_t n );
 
+/* Copy origen into destino ADDING one factor of each nonzero order to its
+ * ARMA operators: what the residuals say is missing (the identifier at E3
+ * and E4). The factors already there stay as they are -- with their seeds,
+ * which from a .pre are the optimum -- and the new one multiplies them:
+ * (1 - phi_1 B)(1 - phi_2 B). On a model without ARMA it is id_pon_arma.
+ * 0, or 1 with the reason. */
+int id_anade_arma( const char *origen, const char *destino,
+                   int p, const double *phi, int q, const double *theta,
+                   int P, const double *Phi, int Q, const double *Theta,
+                   char *porque, size_t n );
+
 #endif /* ATSW_INPDET_H */

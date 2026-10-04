@@ -1551,135 +1551,17 @@ int ejecutar_deteccion_automatica(const char *filename, DataParameters *params,
         printf("--deseasonalize: the harmonics are removed by default with D=0; nothing else to do.\n");
         params->deseasonalize = 0;
     }
-    if (params->deseasonalize && !is_simulation) {
-        printf("=== DESESTACIONALIZACIÓN ACTIVADA ===\n");
-        printf("Se eliminará la componente estacional mediante regresión armónica.\n");
-        printf("Diferencias estacionales (D) y MA estacional (Q) se forzarán a 0.\n");
 
-        // Load original data from file
-        double *datos_originales;
-        int n_original;
-        if (!load_data(filename, &datos_originales, &n_original)) {
-            printf("Error: No se pudieron cargar los datos para desestacionalizar.\n");
-            return 0;
-        }
-
-        // Apply natural logarithm if requested
-        double *log_series = malloc(n_original * sizeof(double));
-        if (params->apply_log) {
-            for (int i = 0; i < n_original; i++) {
-                if (datos_originales[i] <= 0) {
-                    printf("Error: Non-positive value, cannot apply logarithm.\n");
-                    free(datos_originales);
-                    free(log_series);
-                    return 0;
-                }
-                log_series[i] = log(datos_originales[i]);
-            }
-        } else {
-            memcpy(log_series, datos_originales, n_original * sizeof(double));
-        }
-
-        // Obtain seasonal dummies (in percentage) via harmonic regression
-        SeasonalDetectionResult *seasonal_res = detect_seasonality_harmonic_regression(
-            filename, params->d, 1, params->s);
-        if (!seasonal_res || !seasonal_res->seasonal_dummies) {
-            printf("Error: Could not estimate seasonal dummies.\n");
-            free(datos_originales);
-            free(log_series);
-            if (seasonal_res) free_seasonal_detection_result(seasonal_res);
-            return 0;
-        }
-
-        // Subtract seasonal component (convert from percentage to natural log scale)
-        for (int i = 0; i < n_original; i++) {
-            int period = i % params->s;
-            double dummy = seasonal_res->seasonal_dummies[period];
-            log_series[i] -= dummy / 100.0;
-        }
-
-        free_seasonal_detection_result(seasonal_res);
-
-        // Apply regular differences to the deseasonalized series
-        int n_diff = n_original;
-        double *diff_series = malloc(n_original * sizeof(double));
-        memcpy(diff_series, log_series, n_original * sizeof(double));
-        free(log_series);
-        free(datos_originales);
-
-        for (int diff = 0; diff < params->d; diff++) {
-            for (int i = 1; i < n_diff; i++) {
-                diff_series[i-1] = diff_series[i] - diff_series[i-1];
-            }
-            n_diff--;
-        }
-
-        if (n_diff <= 0) {
-            printf("Error: Insufficient observations after regular differencing.\n");
-            free(diff_series);
-            return 0;
-        }
-
-        // Assign transformed series to params->data
-        params->data = diff_series;
-        params->n_points = n_diff;
-        params->D = 0;   // Force seasonal differences to 0
-
-        // Adjust maximum orders: Q must be 0, P remains as specified
-        int P_max_ajustado = P_max;
-        int Q_max_ajustado = 0;
-
-        printf("Search on deseasonalized and differenced series (d=%d).\n", params->d);
-        printf("Effective orders: p_max=%d, q_max=%d, P_max=%d, Q_max=%d\n",
-               p_max, q_max, P_max_ajustado, Q_max_ajustado);
-
-        memset(best_candidate, 0, sizeof(ModelCandidate));
-        best_candidate->similarity = 0.0;
-
-        adaptive_grid_search(params->data, params->n_points, params->s,
-                            p_max, q_max, P_max_ajustado, Q_max_ajustado,
-                            best_candidate, params->use_mahalanobis);
-
-        if (best_candidate->similarity > 0) {
-            int lags = best_candidate->lags_used;
-            if (lags <= 0) lags = MIN(MAX_LAGS, params->n_points / 4);
-            best_candidate->acf_theoretical = malloc((lags + 1) * sizeof(double));
-            best_candidate->pacf_theoretical = malloc((lags + 1) * sizeof(double));
-            if (best_candidate->acf_theoretical && best_candidate->pacf_theoretical) {
-                calcular_ACF_PACF_SARIMA(best_candidate->p, best_candidate->best_phi,
-                                        best_candidate->q, best_candidate->best_theta,
-                                        best_candidate->P, best_candidate->best_Phi,
-                                        best_candidate->Q, best_candidate->best_Theta,
-                                        params->s,
-                                        best_candidate->acf_theoretical,
-                                        best_candidate->pacf_theoretical,
-                                        lags);
-            }
-        }
-
-        if (best_candidate->similarity > 0) {
-            char mensaje_final[256];
-            if (best_candidate->P > 0 || best_candidate->Q > 0) {
-                snprintf(mensaje_final, sizeof(mensaje_final),
-                        "MEJOR MODELO (desestacionalizado): SARIMA(%d,%d,%d)(%d,%d,%d)%d - Similitud: %.3f",
-                        best_candidate->p, params->d, best_candidate->q,
-                        best_candidate->P, params->D, best_candidate->Q, params->s,
-                        best_candidate->similarity);
-            } else {
-                snprintf(mensaje_final, sizeof(mensaje_final),
-                        "MEJOR MODELO (desestacionalizado): ARMA(%d,%d) - Similitud: %.3f",
-                        best_candidate->p, best_candidate->q, best_candidate->similarity);
-            }
-            report_progress_internal(3, 1.0, mensaje_final, "Detección completada");
-        } else {
-            report_progress_internal(3, 1.0, "No suitable models found", "Detección completada");
-        }
-
-        // Note: params->data is freed later by the caller (since it's a local allocation)
-        return 1;
-    } else if (params->deseasonalize && is_simulation) {
-        fprintf(stderr, "Warning: --deseasonalize is not supported in simulation mode. Ignoring.\n");
-        params->deseasonalize = 0;
+    /* 18.2.1: the data are read ONCE. The seasonal test, the unit-root tests
+     * and the search all work on this array; the file used to be opened
+     * three times. In simulation mode the array is the caller's. */
+    double *raw = NULL;
+    int n_raw = 0;
+    if (!is_simulation) {
+        if (!load_data(filename, &raw, &n_raw)) return 0;
+    } else {
+        raw = params->data;
+        n_raw = params->n_points;
     }
 
     // =====================================================================
@@ -1693,7 +1575,7 @@ int ejecutar_deteccion_automatica(const char *filename, DataParameters *params,
 
     if (!is_simulation) {
         estacionalidad_detectada = detectar_y_ajustar_estacionalidad(
-            filename, params, &P_max_ajustado, &Q_max_ajustado, &mensaje_advertencia);
+            raw, n_raw, params, &P_max_ajustado, &Q_max_ajustado, &mensaje_advertencia);
 
         // Prepare informative message
         if (params->s > 1) {
@@ -1723,9 +1605,10 @@ int ejecutar_deteccion_automatica(const char *filename, DataParameters *params,
     // =========================================================================
     if (!is_simulation && params->d <= 1 && params->D == 0) {
         printf("\n=== UNIT ROOT TESTS (d=%d, D=%d) ===\n", params->d, params->D);
-        double *test_data;
-        int test_n;
-        if (load_data(filename, &test_data, &test_n)) {
+        int test_n = n_raw;
+        double *test_data = malloc(n_raw * sizeof(double));
+        if (test_data) {
+            memcpy(test_data, raw, n_raw * sizeof(double));
             if (params->apply_log) log_in_place(test_data, test_n);   /* §3.2 */
             int n_diff = test_n;
             double *differenced_data = malloc(test_n * sizeof(double));
@@ -1770,17 +1653,9 @@ int ejecutar_deteccion_automatica(const char *filename, DataParameters *params,
     int n_puntos_original = 0;
     int allocated = 0;
 
-    if (!is_simulation) {
-        if (!load_data(filename, &datos_originales, &n_puntos_original)) {
-            if (mensaje_advertencia) free(mensaje_advertencia);
-            return 0;
-        }
-        allocated = 1;
-    } else {
-        // Use data already present in params->data (simulation mode)
-        datos_originales = params->data;
-        n_puntos_original = params->n_points;
-    }
+    datos_originales = raw;
+    n_puntos_original = n_raw;
+    allocated = !is_simulation;
 
     // Create a copy for transformations
     params->data = malloc(n_puntos_original * sizeof(double));
@@ -2130,7 +2005,7 @@ void apply_weights_to_features(PatternFeatures *features, int lags, int s,
 
 // model_detection.c - Modificar la función detectar_y_ajustar_estacionalidad
 
-int detectar_y_ajustar_estacionalidad(const char *filename, DataParameters *params,
+int detectar_y_ajustar_estacionalidad(const double *raw, int n_raw, DataParameters *params,
                                             int *P_max, int *Q_max, char **mensaje_advertencia) {
     // Si se han especificado diferencias estacionales (D > 0), omitir detección
     if (params->D > 0) {
@@ -2175,7 +2050,7 @@ int detectar_y_ajustar_estacionalidad(const char *filename, DataParameters *para
     SeasonalDetectionResult *resultado_estacional =
         /* As art-python's describe: the test always on d = 1 and 100*log,
          * whatever d and log the user asked for. */
-        detect_seasonality_harmonic_regression(filename, 1, 1, params->s);
+        detect_seasonality_from_array(raw, n_raw, 1, 1, params->s);
 
     if (!resultado_estacional) {
         printf("Error en detección de estacionalidad\n");

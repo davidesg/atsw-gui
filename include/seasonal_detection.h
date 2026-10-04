@@ -53,6 +53,8 @@ typedef struct {
 extern int load_data(const char *filename, double **data, int *n_points);
 
 // Funciones principales de detección
+SeasonalDetectionResult* detect_seasonality_from_array(const double *data, int n,
+                                                       int d, int apply_log, int s);
 SeasonalDetectionResult* detect_seasonality_harmonic_regression(const char *filename,
                                                                int d,
                                                                int apply_log,

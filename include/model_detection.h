@@ -165,7 +165,7 @@ void plot_comparison_acf_pacf(double *acf_theoretical, double *pacf_theoretical,
                              int lags, ModelCandidate *candidate, DataParameters *data_params);
 
 // Integración con detección estacional
-int detectar_y_ajustar_estacionalidad(const char *filename, DataParameters *params,
+int detectar_y_ajustar_estacionalidad(const double *raw, int n_raw, DataParameters *params,
                                      int *P_max, int *Q_max, char **mensaje_advertencia);
 void extract_feature_vector(PatternFeatures *features, double *vector, int dim, int s, int lags);
 void reorder_with_mahalanobis(gsl_vector **vectors, int n,

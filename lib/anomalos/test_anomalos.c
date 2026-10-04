@@ -221,7 +221,10 @@ int main( void )
 
     /* Sin nada omitido, los dos son el mismo */
     an_normalidad( z, n, NULL, 0, &con, &sinellos );
-    ok( con.jb == sinellos.jb && con.n == sinellos.n,
+    /* El mismo numero, no los mismos bits: salen por dos caminos, y en
+     * macOS (ARM64) clang fusiona multiplicaciones y sumas (FMA) de otra
+     * forma. Con == fallaba alli por la ultima cifra.                 */
+    ok( fabs( con.jb - sinellos.jb ) <= 1e-12 * fabs( con.jb ) && con.n == sinellos.n,
         "sin omitir nada, «con» y «sin» son el mismo numero" );
     }
 

@@ -13,6 +13,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include "proyecto.h"
 
 static char g_raiz_proyecto[1024];
@@ -55,13 +56,21 @@ void fue_pon_proyecto(Proyecto *p)
  * no puede tirarse por delante del que funciona. Devuelve 0 si pudo.  */
 int fue_proyecto_relee(void)
 {
-    Proyecto nuevo;
-    PrError  e;
+    Proyecto *nuevo;
+    PrError   e;
+    int       rc = 1;
 
     if (!g_proyecto || !g_proyecto->path[0]) return 1;
-    if (pr_leer(g_proyecto->path, &nuevo, &e) != 0) return 1;
-    *g_proyecto = nuevo;
-    return 0;
+    /* En el monton: Proyecto ocupa ~800 KB, y la pila del hilo principal
+     * de Windows es de 1 MB (ver DtDatos en gui/fug/src/callbacks.c). */
+    nuevo = calloc(1, sizeof *nuevo);
+    if (nuevo == NULL) return 1;
+    if (pr_leer(g_proyecto->path, nuevo, &e) == 0) {
+        *g_proyecto = *nuevo;
+        rc = 0;
+    }
+    free(nuevo);
+    return rc;
 }
 
 const char *fue_raiz_proyecto(void)

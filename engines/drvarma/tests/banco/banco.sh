@@ -35,7 +35,7 @@ while IFS='|' read -r nombre fich args; do
         grep -av '^Program          : \|^Note: the multivariate .inp is deprecated' "$f" > "$TMP/nuevo"
         grep -av '^Program          : \|^Note: the multivariate .inp is deprecated' "$REF/$nombre$ext" > "$TMP/viejo" 2>/dev/null
         if ! cmp -s "$TMP/nuevo" "$TMP/viejo"; then
-            echo "FALLA $nombre$ext"; diff "$TMP/viejo" "$TMP/nuevo" | head -8
+            echo "FALLA $nombre$ext"; diff "$TMP/viejo" "$TMP/nuevo" | head -${BANCO_DIFF:-8}
             echo x >> "$TMP/fallos"
         fi
     done

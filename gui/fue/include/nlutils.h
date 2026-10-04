@@ -21,7 +21,6 @@
 #ifndef NLUTILS_H
 #define NLUTILS_H
 
-#include <malloc.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>

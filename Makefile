@@ -52,6 +52,15 @@ check: all
 	@# that only its own `make test` builds, so it runs through that target.
 	@printf '\n===== %s\n' engines/drvec
 	@$(MAKE) -s -C engines/drvec test || exit 1
+	@# Los GUIs conducidos desde el codigo que no van en una bateria de arriba
+	@# (gui/fue y gui/drtran llevan los suyos dentro). Sin servidor grafico
+	@# se saltan con una nota.
+	@printf '\n===== %s\n' "gui/fug (ventana)"
+	@( cd gui/fug && sh tests/run_gui_tests.sh ) || exit 1
+	@printf '\n===== %s\n' "gui/atsw (ventana)"
+	@( cd gui/atsw && sh tests/run_gui_tests.sh ) || exit 1
+	@printf '\n===== %s\n' "drvarma_gui (ventana)"
+	@( cd engines/drvarma && sh tests/gui/run_gui_tests.sh ) || exit 1
 	@echo
 	@echo "todas las baterias pasan"
 

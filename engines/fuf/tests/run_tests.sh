@@ -22,6 +22,11 @@ case "$FUF" in /*) ;; *) FUF="$(pwd)/$FUF" ;; esac
 TOP=$(cd "$(dirname "$0")/.." && pwd)
 TESTS="$TOP/tests"
 WORK="$TESTS/work"
+# Byte a byte en Linux; fuera, cifras con tolerancia y los casos fragiles
+# apuntados (ver conformidad/referencia.sh).
+REFERENCIA_SH="$TOP/../../conformidad/referencia.sh"
+. "$REFERENCIA_SH"
+FRAGILES="$TESTS/fragiles.txt"
 TIMEOUT=${TIMEOUT:-120}
 
 [ -x "$FUF" ] || { echo "fuf not found: $FUF (run make first)"; exit 1; }
@@ -73,9 +78,14 @@ grep -v '^#' "$TESTS/runs.tsv" | while IFS='	' read -r id input args status; do
             if [ ! -f "$TESTS/golden/$id/$f" ]; then
                 echo "FAIL: $id: $f is new (not in tests/golden/$id)"
                 echo "x" >> "$WORK/failed"
-            elif ! cmp -s "$TESTS/golden/$id/$f" "$dir/$f"; then
-                echo "FAIL: $id: $f differs from tests/golden/$id/$f"
-                echo "x" >> "$WORK/failed"
+            else
+                referencia "$TESTS/golden/$id/$f" "$dir/$f" "$id" "$FRAGILES"
+                case $? in
+                    0) ;;
+                    2) echo "FRAGIL: $id: $f differs from tests/golden/$id/$f (see tests/fragiles.txt)" ;;
+                    *) echo "FAIL: $id: $f differs from tests/golden/$id/$f"
+                       echo "x" >> "$WORK/failed" ;;
+                esac
             fi
         done
         for f in $( cd "$TESTS/golden/$id" && ls ); do
@@ -92,7 +102,15 @@ done
 if [ $UPDATE = 0 ]; then
     mkdir -p "$WORK/nopath"
     cp "$TESTS/corpus/forecast_D1.inp" "$WORK/nopath/"
-    ( cd "$WORK/nopath" && env PATH=/nonexistent "$FUF" forecast_D1 > console.txt 2>&1
+    # En Windows, sin PATH tampoco se encuentran las DLL con que se enlazo
+    # fuf (GSL, de MSYS2): se deja solo esa carpeta. Lo que se prueba es que
+    # no hace falta OTRO PROGRAMA (pdflatex), no que no hagan falta las DLL
+    # -- un paquete para Windows las lleva al lado o enlaza en estatico.
+    NOPATH=/nonexistent
+    case "$(uname -s)" in
+        MINGW*|MSYS*) NOPATH=$(dirname "$(command -v gcc 2>/dev/null || echo /ucrt64/bin/gcc)") ;;
+    esac
+    ( cd "$WORK/nopath" && env PATH="$NOPATH" "$FUF" forecast_D1 > console.txt 2>&1
       echo $? > status ) 2>/dev/null
     if [ "$(cat "$WORK/nopath/status")" = 0 ] && [ -s "$WORK/nopath/forecast_D1.out" ] &&
        [ -s "$WORK/nopath/prevforecast_D1.12020.eps" ] &&

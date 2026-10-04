@@ -299,15 +299,19 @@ static void test_convergence(const char *dir) {
 }
 
 int main(int argc, char **argv) {
-    test_token_name();
-    test_engine_status();
-    test_engine_signal();
-    test_engine_mensaje_utf8();
-    test_engine_not_found();
-    test_engine_argv();
-    test_engine_progress();
-    if (argc > 1) test_inp_check(argv[1]);
-    test_convergence(g_get_tmp_dir());
+    /* Sin bufer: si una prueba se cuelga y la batería la mata, lo ya
+     * escrito tiene que verse para saber en cual se quedo.           */
+    setvbuf(stdout, NULL, _IONBF, 0);
+#define PASO(llamada) do { printf("  . %s\n", #llamada); llamada; } while (0)
+    PASO(test_token_name());
+    PASO(test_engine_status());
+    PASO(test_engine_signal());
+    PASO(test_engine_mensaje_utf8());
+    PASO(test_engine_not_found());
+    PASO(test_engine_argv());
+    PASO(test_engine_progress());
+    if (argc > 1) PASO(test_inp_check(argv[1]));
+    PASO(test_convergence(g_get_tmp_dir()));
 
     printf("\n%d checks, %d failures\n", checks, fails);
     return fails == 0 ? 0 : 1;

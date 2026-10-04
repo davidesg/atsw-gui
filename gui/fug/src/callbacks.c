@@ -87,7 +87,12 @@ gboolean get_main(AppWidgets *app)
     GError *error = NULL;
     double *data;
     int nvalues, nobs, freq_idx;
-    DtDatos dd;                  /* lo que el FICHERO dijo                */
+    /* lo que el FICHERO dijo. STATIC Y NO EN LA PILA: DtDatos ocupa 2,2 MB
+     * y la pila del hilo principal de Windows es de 1 MB. En la pila,
+     * gtk_fmg se caia en Windows al primer boton (Save, cualquier grafico)
+     * sin decir nada -- en Linux y macOS (8 MB) cabia. Se pone a cero
+     * abajo, y los callbacks de GTK no se solapan. Lo vio la CI.     */
+    static DtDatos dd;
     char aviso[256];             /* lo que hay que contar aunque vaya bien */
     gboolean del_fichero = FALSE;
 
@@ -819,7 +824,7 @@ void on_series_name_entry_changed(GtkEntry *entry, gpointer user_data)
     g_free(name2);
 }
 
-void on_data_filechooserbutton_file_set(GtkButton *button, gpointer user_data)
+void on_data_filechooserbutton_file_set(GtkFileChooserButton *button, gpointer user_data)
 {
     AppWidgets *app = (AppWidgets*)user_data;
     gchar *inputf, *folder, *base;

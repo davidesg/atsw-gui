@@ -5,7 +5,7 @@
 #
 # What the GUI does without a window: the name it derives from what the user
 # types (src/utils.c) and the way it runs the engines (src/engine.c). The
-# engine is a stand-in, tests/fake/fue, so nothing here depends on fue or fuf
+# engine is a stand-in, tests/fake/falso.c, so nothing here depends on fue or fuf
 # being installed; what is tested is that the GUI reads the exit status, that
 # it passes on what the engine said, and that an argument with a space or a
 # semicolon reaches the engine whole -- it used to go through /bin/sh.
@@ -59,7 +59,14 @@ $CC -O0 -g -Wall -I"$TOP/include" $LIB_INC $GTK_CFLAGS \
     "$TOP/tests/test_units.c" $LIB/engine/engine.c $LIB/utils/utils.c $LIB/outfile/outfile.c $INPCHECK_O \
     -o "$WORK/test_units" $GTK_LIBS -lm || exit 1
 
-PATH="$TOP/tests/fake:$PATH" "$WORK/test_units" "$TOP/data"
+# El motor falso, compilado como fue y como fuf (ver tests/fake/falso.c: en
+# Windows un guion no se puede lanzar).
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) EXE=.exe ;; *) EXE= ;; esac
+mkdir -p "$WORK/fake"
+for e in fue fuf; do
+    $CC -O0 -g -o "$WORK/fake/$e$EXE" "$TOP/tests/fake/falso.c" || exit 1
+done
+PATH="$WORK/fake:$PATH" "$WORK/test_units" "$TOP/data"
 rc=$?
 
 # --------------------------------------------------------------------------
@@ -112,10 +119,13 @@ ok=$(echo "$ink" | awk -v c=$half '{ cx=($1+$2)/2; cy=($3+$4)/2;
 # Comprueba lo que el usuario acaba viendo. Hace falta un servidor grafico;
 # si no lo hay, se salta.
 # --------------------------------------------------------------------------
+# -lz al enlazar, como en el Makefile del GUI: lib/xlsx usa zlib. En Linux
+# llegaba de rebote por las bibliotecas de GTK; el enlazador de macOS no
+# resuelve de rebote y test_gui no enlazaba.
 GUI_SRCS="$(ls "$TOP"/src/*.c | grep -v '/main\.c$') $LIB_SRCS $INPCHECK_O"
 $CC -O0 -g -Wall -I"$TOP/include" $LIB_INC $GTK_CFLAGS \
     "$TOP/tests/test_gui.c" $GUI_SRCS \
-    -o "$WORK/test_gui" $GTK_LIBS -lm 2> "$WORK/gui_build.txt" ||
+    -o "$WORK/test_gui" $GTK_LIBS -lz -lm 2> "$WORK/gui_build.txt" ||
     { cat "$WORK/gui_build.txt"; exit 1; }
 
 # El EDITOR DEL .inp ya no esta aqui: se mudo a la madre, sobre un nodo del
@@ -131,13 +141,42 @@ if command -v fue > /dev/null 2>&1; then
     cp "$TOP/data/D1.inp" "$WORK/gui/"
     ( cd "$WORK/gui" && "$WORK/test_gui" "$PWD" D1 ) 2>/dev/null > "$WORK/gui.txt"
     if [ $? = 0 ]; then
-        sed -n 's/^\(barra\|globo\|pestana\)/  &/p' "$WORK/gui.txt"
+        sed -n -E 's/^(barra|globo|pestana)/  &/p' "$WORK/gui.txt"
     else
         grep -E '^FAIL|^no hay' "$WORK/gui.txt"
         grep -q '^no hay' "$WORK/gui.txt" || rc=1
     fi
 else
     echo "note: sin fue instalado no se puede probar la ventana con el motor"
+fi
+
+# --------------------------------------------------------------------------
+# EL MANEJO ENTERO (tests/test_operar.c): abrir, construir el modelo con sus
+# dialogos, guardar, estimar, prever, las ventanas de graficos y de
+# analisis, y lo que pasa cuando algo sale mal. Con fue y fuf de verdad: se
+# salta, diciendolo, si no estan los dos. Los dialogos modales los contesta
+# la propia prueba.
+# --------------------------------------------------------------------------
+$CC -O0 -g -Wall -I"$TOP/include" $LIB_INC $GTK_CFLAGS \
+    "$TOP/tests/test_operar.c" $GUI_SRCS \
+    -o "$WORK/test_operar" $GTK_LIBS -lz -lm 2> "$WORK/operar_build.txt" ||
+    { cat "$WORK/operar_build.txt"; exit 1; }
+
+if command -v fue > /dev/null 2>&1 && command -v fuf > /dev/null 2>&1; then
+    mkdir -p "$WORK/operar"
+    "$WORK/test_operar" "$TOP/data" "$WORK/operar" 2> "$WORK/operar_err.txt" > "$WORK/operar.txt"
+    s=$?
+    if [ $s = 0 ]; then
+        grep -E '^no hay|comprobaciones' "$WORK/operar.txt" | sed 's/^/  manejo: /'
+    else
+        grep -E '^FAIL|^no hay' "$WORK/operar.txt"
+        # Si se cayo, que se vea donde: lo ultimo que dijo.
+        grep -q '^FAIL' "$WORK/operar.txt" ||
+            { echo "FAIL: test_operar termino con estado $s"; tail -n 5 "$WORK/operar.txt"; tail -n 5 "$WORK/operar_err.txt"; }
+        rc=1
+    fi
+else
+    echo "note: sin fue y fuf en el PATH no se prueba el manejo de la ventana"
 fi
 
 # The engines the GUI will really call: it must find them and they must

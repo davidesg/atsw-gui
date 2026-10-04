@@ -538,8 +538,11 @@ void diagnosis_desde( Mtram *m, const char *path )
         D->hay_par = od_params_file( path, &D->par ) == 0;
     }
 
-    /* Los residuos, del fichero que escribe "drtran -e". */
-    res = g_build_filename( g_get_user_cache_dir(), GUI_CACHE, "residuos.txt", NULL );
+    /* Los residuos, del fichero que escribe "drtran -e" -- el MISMO que la
+     * orden le pidio (estima.c, arma_argv). Aqui ponia el nombre fijo de la
+     * cache, y con proyecto el motor los escribe en la corrida: la diagnosis
+     * se quedaba sin residuos o, peor, con los de otro modelo.          */
+    res = mtram_artefacto( m, "_res.txt" );
     D->hay_res = od_residuos( res, &D->res ) == 0;
     g_free( res );
 

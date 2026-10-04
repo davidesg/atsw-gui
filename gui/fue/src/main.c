@@ -181,9 +181,18 @@ int main(int argc, char *argv[]) {
     char *pixbuf_cache = g_build_filename(exe_dir, "lib", "gdk-pixbuf-2.0", "2.10.0", "loaders.cache", NULL);
     char *schema_dir = g_build_filename(exe_dir, "share", "glib-2.0", "schemas", NULL);
 
-    g_setenv("XDG_DATA_DIRS", data_dir, TRUE);
-    g_setenv("GDK_PIXBUF_MODULE_FILE", pixbuf_cache, TRUE);
-    g_setenv("GSETTINGS_SCHEMA_DIR", schema_dir, TRUE);
+    /* SOLO SI EL PAQUETE TRAE SUS RECURSOS AL LADO. Esto es para el
+       paquete de Windows, que lleva share/ junto al .exe; se hacia
+       siempre, y en el arbol de construccion o con MSYS2 (recursos en
+       ../share, donde GLib ya los encuentra solo) se quedaba sin esquemas
+       de GSettings y abortaba al abrir el selector de ficheros: "No
+       GSettings schemas are installed". Lo vio la CI de Windows.       */
+    if (g_file_test(schema_dir, G_FILE_TEST_IS_DIR)) {
+        g_setenv("XDG_DATA_DIRS", data_dir, TRUE);
+        g_setenv("GSETTINGS_SCHEMA_DIR", schema_dir, TRUE);
+        if (g_file_test(pixbuf_cache, G_FILE_TEST_EXISTS))
+            g_setenv("GDK_PIXBUF_MODULE_FILE", pixbuf_cache, TRUE);
+    }
     g_setenv("GTK_THEME", "Windows", TRUE);
 
     g_free(data_dir);

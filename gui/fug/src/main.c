@@ -75,7 +75,20 @@ static int lee_opciones(int argc, char *argv[])
         free(p);
         return 2;
     }
-    pr_ruta(p, "", "", NULL, NULL, g_raiz, sizeof g_raiz);
+    /* LA RAIZ, RESUELTA CONTRA EL DIRECTORIO DEL MANIFIESTO. Aqui se pedia
+     * con pr_ruta(p, "", ...), pero pr_ruta con serie vacia devuelve 1 y una
+     * ruta vacia: se caia SIEMPRE al directorio del manifiesto, y un
+     * "raiz: datos" se ignoraba sin decir nada. Lo vio tests/test_gui.c. */
+    if (p->raiz[0] && g_path_is_absolute(p->raiz))
+        snprintf(g_raiz, sizeof g_raiz, "%s", p->raiz);
+    else if (p->raiz[0]) {
+        char *d = g_path_get_dirname(proy);
+        char *r = g_build_filename(d, p->raiz, NULL);
+
+        snprintf(g_raiz, sizeof g_raiz, "%s", r);
+        g_free(r);
+        g_free(d);
+    }
     if (!g_raiz[0]) {
         char *d = g_path_get_dirname(proy);
 

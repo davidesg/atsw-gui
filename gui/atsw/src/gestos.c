@@ -8,6 +8,7 @@
 
 #include "atsw.h"
 #include "previewhost.h"
+#include "sitio.h"
 
 void       barra_pub( Atsw *a, const char *s );
 GtkWidget *atsw_dialogo_texto( GtkWidget *padre, const char *titulo,
@@ -63,7 +64,7 @@ void preview_show_status( PreviewApp *app, const gchar *format, ... )
  * Devuelve una ruta nueva (g_free) o NULL.                              */
 gchar *atsw_programa( const char *programa )
 {
-    static const char *sitio[] = {         /* relativos a gui/atsw/        */
+    static const char *const sitio[] = {   /* relativos a gui/atsw/  */
         "../fue/bin/%s", "../fug/%s", "../drtran/%s", "./%s",
         /* Y LOS MOTORES, que el editor corre directamente. Van DESPUES de
            los GUIs porque ninguno se llama igual, y ANTES del PATH por la
@@ -72,25 +73,7 @@ gchar *atsw_programa( const char *programa )
         "../../engines/fue/bin/%s", "../../engines/fug/%s",
         "../../engines/fuf/bin/%s", NULL
     };
-    gchar *mio = g_file_read_link( "/proc/self/exe", NULL );
-    gchar *dir = mio ? g_path_get_dirname( mio ) : NULL;
-    int    i;
-
-    g_free( mio );
-
-    for ( i = 0; dir && sitio[i]; i++ )
-        {
-        gchar *rel = g_strdup_printf( sitio[i], programa );
-        gchar *p   = g_build_filename( dir, rel, NULL );
-
-        g_free( rel );
-        if ( g_file_test( p, G_FILE_TEST_IS_EXECUTABLE ) )
-            { g_free( dir ); return p; }
-        g_free( p );
-        }
-    g_free( dir );
-
-    return g_find_program_in_path( programa );
+    return sitio_busca( programa, sitio );
 }
 
 /* fichero puede ser NULL: entonces solo se abre el programa.

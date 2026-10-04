@@ -16,3 +16,6 @@ __pycache__/
 # Editor / OS
 *.swp
 .DS_Store
+
+# Carpeta de trabajo de las pruebas del GUI (tests/gui/run_gui_tests.sh)
+tests/gui/work/

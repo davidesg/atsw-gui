@@ -1,0 +1,166 @@
+# El taller entero en las tres plataformas: compilar, pasar las baterias y
+# arrancar los GUIs.
+#
+#   build-all.sh   cada directorio por separado; dice TODOS los que fallan
+#   check-all.sh   las baterias de `make check`, con limite de tiempo cada una
+#   gui-humo.sh    cada GUI se lanza, tiene que seguir vivo, y se fotografia
+#
+# En Linux todo va dentro de Xvfb, para que las pruebas de los GUIs que
+# necesitan servidor grafico no se salten. macOS y Windows ya tienen
+# escritorio en los runners de GitHub.
+
+name: build
+
+# push solo en main: en una rama con PR abierto, push y pull_request lanzaban
+# DOS vueltas identicas, y los minutos de macOS cuentan x10 en un repositorio
+# privado. Las ramas sin PR se lanzan a mano (workflow_dispatch).
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  DIRS: >-
+    engines/fue engines/fuf engines/fug engines/drtran engines/drvarma
+    engines/drvec gui/fue gui/fug gui/drtran gui/atsw
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencias
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config libgsl-dev libglib2.0-dev \
+            libgtk-3-dev zlib1g-dev xvfb xauth imagemagick \
+            adwaita-icon-theme-full
+      - name: Compilar
+        run: bash .github/build-all.sh
+      - name: Baterias
+        if: always()
+        timeout-minutes: 150
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" bash .github/check-all.sh
+      - name: GUIs
+        if: always()
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" bash .github/gui-humo.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: capturas-linux
+          path: capturas/
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: pruebas-linux
+          path: |
+            engines/*/tests/work/
+            gui/*/tests/work/
+            engines/drvarma/tests/gui/work/
+          if-no-files-found: ignore
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencias
+        # coreutils: las baterias usan timeout(1), que macOS no trae.
+        run: |
+          brew install pkg-config gtk+3 gsl adwaita-icon-theme coreutils
+          echo "$(brew --prefix coreutils)/libexec/gnubin" >> "$GITHUB_PATH"
+      - name: Compilar
+        run: bash .github/build-all.sh
+      - name: Baterias
+        if: always()
+        timeout-minutes: 150
+        env:
+          BANCO_DIFF: 60
+        run: bash .github/check-all.sh
+      - name: GUIs
+        if: always()
+        run: bash .github/gui-humo.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: capturas-macos
+          path: capturas/
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: pruebas-macos
+          path: |
+            engines/*/tests/work/
+            gui/*/tests/work/
+            engines/drvarma/tests/gui/work/
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: atsw-macos
+          path: |
+            engines/*/bin/
+            engines/fug/fug
+            gui/*/bin/
+            gui/fug/gtk_fmg
+            gui/drtran/drtran_gui
+            gui/atsw/atsw_gui
+          if-no-files-found: warn
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            make git diffutils bc gawk sed grep coreutils procps-ng
+          pacboy: >-
+            gcc:p pkgconf:p gtk3:p gsl:p zlib:p python:p adwaita-icon-theme:p
+            gsettings-desktop-schemas:p hicolor-icon-theme:p gdb:p
+      - name: Esquemas de GSettings
+        # Sin gschemas.compiled, el selector de ficheros de GTK aborta
+        # ("No GSettings schemas are installed"). Un paquete para Windows
+        # tiene que llevarlo en share/glib-2.0/schemas junto a los .exe.
+        run: |
+          glib-compile-schemas "$MSYSTEM_PREFIX/share/glib-2.0/schemas"
+          ls -la "$MSYSTEM_PREFIX/share/glib-2.0/schemas" | head
+      - name: Compilar
+        run: bash .github/build-all.sh
+      - name: Baterias
+        if: always()
+        timeout-minutes: 150
+        run: bash .github/check-all.sh
+        env:
+          BANCO_DIFF: 60
+      - name: GUIs
+        if: always()
+        run: bash .github/gui-humo.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: capturas-windows
+          path: capturas/
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: pruebas-windows
+          path: |
+            engines/*/tests/work/
+            gui/*/tests/work/
+            engines/drvarma/tests/gui/work/
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: atsw-windows
+          path: |
+            engines/**/*.exe
+            gui/**/*.exe
+          if-no-files-found: warn

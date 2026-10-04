@@ -22,6 +22,27 @@
 #include "fue_pre_reader.h"
 #include "slots.h"
 
+/* UN FICHERO TEMPORAL, en la carpeta temporal del sistema y no en "/tmp" a
+ * fuego: en Windows nativo "/tmp" es D:\tmp, que no existe, y la prueba
+ * fallaba por no poder escribir. Lo vio la CI de Windows.               */
+static const char *temporal( const char *nombre )
+{
+    static char buf[4][1024];
+    static int  k;
+    const char *d = getenv( "TMPDIR" );
+
+    if ( !d || !*d ) d = getenv( "TEMP" );
+    if ( !d || !*d ) d = getenv( "TMP" );
+#ifdef _WIN32
+    if ( !d || !*d ) d = ".";
+#else
+    if ( !d || !*d ) d = "/tmp";
+#endif
+    k = ( k + 1 ) % 4;
+    snprintf( buf[k], sizeof buf[k], "%s/%s", d, nombre );
+    return buf[k];
+}
+
 real macheps = 2.220446049250313e-16;
 FILE *outputv;
 
@@ -202,18 +223,18 @@ int main( int argc, char **argv )
    SlotTable otra;
    int       m, k, igual = 1;
 
-   m = cns_write( "/tmp/_test_slots.cns", &st, "escrito por la prueba" );
+   m = cns_write( temporal( "_test_slots.cns" ), &st, "escrito por la prueba" );
    okn( m, 6, "lineas que escribe cns_write" );
 
    slots_build( &otra, Tm, NSER, lnk, n, NULL );
-   cns_read( "/tmp/_test_slots.cns", &otra, &ce );
+   cns_read( temporal( "_test_slots.cns" ), &otra, &ce );
 
    for ( k = 1; k <= st.n; k++ )
       if ( st.kind[k] != otra.kind[k] || st.alias[k] != otra.alias[k] ||
            st.pa[k] != otra.pa[k] || st.pb[k] != otra.pb[k] ||
            st.nlc[k] != otra.nlc[k] ) igual = 0;
    ok( igual, "y la tabla que sale es la misma" );
-   remove( "/tmp/_test_slots.cns" );
+   remove( temporal( "_test_slots.cns" ) );
    }
 
    /* --- lo que se rechaza ----------------------------------------------- */
@@ -230,18 +251,18 @@ int main( int argc, char **argv )
    printf( "\n  lo que se rechaza, y lo que dice el motor:\n" );
    for ( t = 0; t < sizeof mal / sizeof *mal; t++ ) {
       SlotTable prueba;
-      FILE     *f = fopen( "/tmp/_test_slots_bad.cns", "w" );
+      FILE     *f = fopen( temporal( "_test_slots_bad.cns" ), "w" );
       int       rc;
 
       fputs( mal[t].linea, f );
       fclose( f );
       slots_build( &prueba, Tm, NSER, lnk, n, NULL );
-      rc = cns_read( "/tmp/_test_slots_bad.cns", &prueba, &ce );
+      rc = cns_read( temporal( "_test_slots_bad.cns" ), &prueba, &ce );
       printf( "     %-38s -> \"%s\"\n", mal[t].que,
               cns_error_en( &ce, why, sizeof why ) );
       ok( rc < 0 && ce.err == mal[t].err, mal[t].que );
    }
-   remove( "/tmp/_test_slots_bad.cns" );
+   remove( temporal( "_test_slots_bad.cns" ) );
    }
 
    /* --- el ORDEN que el .cns declara en sus comentarios ------------------ */

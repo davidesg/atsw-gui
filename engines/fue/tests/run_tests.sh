@@ -23,6 +23,11 @@ case "$FUE" in /*) ;; *) FUE="$(pwd)/$FUE" ;; esac
 TOP=$(cd "$(dirname "$0")/.." && pwd)
 TESTS="$TOP/tests"
 WORK="$TESTS/work"
+# Byte a byte en Linux; fuera, cifras con tolerancia y los casos fragiles
+# apuntados (ver conformidad/referencia.sh).
+REFERENCIA_SH="$TOP/../../conformidad/referencia.sh"
+. "$REFERENCIA_SH"
+FRAGILES="$TESTS/fragiles.txt"
 TIMEOUT=${TIMEOUT:-120}
 
 [ -x "$FUE" ] || { echo "fue not found: $FUE (run make first)"; exit 1; }
@@ -73,10 +78,13 @@ grep -v '^#' "$TESTS/runs.tsv" | while IFS='	' read -r id input args format stat
     if [ $rc = 0 ] && [ "$format" = fue ]; then
         for f in $(results "$input"); do
             if [ -f "$TESTS/golden/$id/$f" ]; then
-                if ! cmp -s "$TESTS/golden/$id/$f" "$dir/$f"; then
-                    echo "FAIL: $id: $f differs from tests/golden/$id/$f"
-                    echo "x" >> "$WORK/failed"
-                fi
+                referencia "$TESTS/golden/$id/$f" "$dir/$f" "$id" "$FRAGILES"
+                case $? in
+                    0) ;;
+                    2) echo "FRAGIL: $id: $f differs from tests/golden/$id/$f (see tests/fragiles.txt)" ;;
+                    *) echo "FAIL: $id: $f differs from tests/golden/$id/$f"
+                       echo "x" >> "$WORK/failed" ;;
+                esac
             elif [ -f "$dir/$f" ]; then
                 echo "FAIL: $id: $f is new (not in tests/golden/$id)"
                 echo "x" >> "$WORK/failed"
@@ -92,14 +100,18 @@ done
 # of that factor) and the same LaTeX files.
 
 # exit status 0 if the .inp declares its six sections of operators, all empty
+# (el sub del \r: un corpus escrito en Windows trae \r\n, y para awk una
+#  linea con solo un \r no esta en blanco)
 no_arma() {
-    awk 'want && NF { if ($1 != 0) bad = 1; want = 0; next }
+    awk '{ sub(/\r$/, "") }
+         want && NF { if ($1 != 0) bad = 1; want = 0; next }
          /^\*\*/ && tolower($0) ~ /operators/ { n++; want = 1 }
          END { exit (bad || n != 6) }' "$1"
 }
 # the .inp with one regular AR(1) factor fixed at 0
 ar0_variant() {
-    awk 'rep && NF { print "1 1"; print "**"; print "0.000000  0"; rep = 0; next }
+    awk '{ sub(/\r$/, "") }
+         rep && NF { print "1 1"; print "**"; print "0.000000  0"; rep = 0; next }
          { print }
          /^\*\*/ && tolower($0) ~ /regular ar operators/ { rep = 1 }' "$1" > "$2"
 }
@@ -146,7 +158,14 @@ fi
 if [ $UPDATE = 0 ]; then
     mkdir -p "$WORK/nopath"
     cp "$TESTS/corpus/DE.2.inp" "$WORK/nopath/"
-    ( cd "$WORK/nopath" && env PATH=/nonexistent "$FUE" DE.2 > console.txt 2>&1
+    # En Windows, sin PATH tampoco se encuentran las DLL con que se enlazo fue
+    # (GSL, de MSYS2): se deja solo esa carpeta. Lo que se prueba es que no
+    # hace falta OTRO PROGRAMA, no que no hagan falta las DLL (ver fuf).
+    NOPATH=/nonexistent
+    case "$(uname -s)" in
+        MINGW*|MSYS*) NOPATH=$(dirname "$(command -v gcc 2>/dev/null || echo /ucrt64/bin/gcc)") ;;
+    esac
+    ( cd "$WORK/nopath" && env PATH="$NOPATH" "$FUE" DE.2 > console.txt 2>&1
       echo $? > status ) 2>/dev/null
     if [ "$(cat "$WORK/nopath/status")" = 0 ] && [ -s "$WORK/nopath/DE.2.pdf" ] &&
        head -c 8 "$WORK/nopath/DE.2.pdf" | grep -q "PDF-1.4"; then

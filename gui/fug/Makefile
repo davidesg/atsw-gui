@@ -6,6 +6,7 @@
 #
 #   make            gtk_fmg
 #   make clean
+#   make check      la prueba de la ventana (tests/run_gui_tests.sh)
 #   make install    en $(PREFIX)/bin   (por omision /usr/local)
 #
 # Lo compartido viene de lib/ -- preview.c es LITERALMENTE el mismo fichero que
@@ -21,7 +22,7 @@ ENG = ../../engines/fug
 
 SRC = src/main.c src/callbacks.c src/data_load.c src/nlutils.c src/fug_run.c \
       $(LIB)/preview/preview.c $(LIB)/fugdraw/fugdraw.c $(LIB)/datos/datos.c \
-      $(LIB)/proyecto/proyecto.c $(LIB)/xlsx/xlsx.c \
+      $(LIB)/proyecto/proyecto.c $(LIB)/xlsx/xlsx.c $(LIB)/sitio/sitio.c \
       $(ENG)/src/inpfile.c
 
 HDR = include/callbacks.h include/data_load.h include/fug_run.h include/gui.h \
@@ -29,7 +30,7 @@ HDR = include/callbacks.h include/data_load.h include/fug_run.h include/gui.h \
       $(LIB)/preview/preview.h $(LIB)/fugdraw/fugdraw.h \
       $(LIB)/fugdraw/fd_metrics.h $(ENG)/src/inpfile.h
 
-INC = -Iinclude -I$(LIB)/preview -I$(LIB)/fugdraw -I$(LIB)/datos -I$(LIB)/xlsx -I$(LIB)/proyecto -I$(ENG)/src
+INC = -Iinclude -I$(LIB)/sitio -I$(LIB)/preview -I$(LIB)/fugdraw -I$(LIB)/datos -I$(LIB)/xlsx -I$(LIB)/proyecto -I$(ENG)/src
 
 GTK_CFLAGS := $(shell pkg-config --cflags gtk+-3.0 2>/dev/null)
 GTK_LIBS   := $(shell pkg-config --libs   gtk+-3.0 2>/dev/null)
@@ -62,7 +63,13 @@ install: $(TARGET)
 	install -d $(PREFIX)/bin
 	install -m 755 $(TARGET) $(PREFIX)/bin/
 
+# La ventana conducida desde el codigo, con fug de verdad: tests/test_gui.c.
+# Sin servidor grafico lo dice y no falla.
+check:
+	sh tests/run_gui_tests.sh
+
 clean:
 	rm -f $(TARGET)
+	rm -rf tests/work
 
-.PHONY: all install clean
+.PHONY: all install clean check

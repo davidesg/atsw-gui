@@ -32,6 +32,7 @@
 #include "atsw.h"
 #include "preview.h"
 #include "inpfile.h"
+#include "sitio.h"
 
 void barra_pub( Atsw *a, const char *s );
 
@@ -115,18 +116,9 @@ static gboolean dibuja( Vistazo *v, char *why, size_t n )
     exe = g_build_filename( dir, "..", NULL );
     g_free( exe );
     {
-    gchar *mio = g_file_read_link( "/proc/self/exe", NULL );
-    gchar *md  = mio ? g_path_get_dirname( mio ) : NULL;
+    static const char *const sitio[] = { "../../engines/fug/%s", NULL };
 
-    g_free( mio );
-    if ( md ) {
-        gchar *p = g_build_filename( md, "../../engines/fug/fug", NULL );
-
-        if ( g_file_test( p, G_FILE_TEST_IS_EXECUTABLE ) ) exe = p;
-        else { g_free( p ); exe = g_find_program_in_path( "fug" ); }
-        g_free( md );
-    } else
-        exe = g_find_program_in_path( "fug" );
+    exe = sitio_busca( "fug", sitio );
     }
     if ( exe == NULL )
         { snprintf( why, n, "No encuentro el motor fug." ); g_free( dir );

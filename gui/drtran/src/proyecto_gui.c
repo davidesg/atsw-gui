@@ -32,12 +32,28 @@ static const char *salida( Mtram *m )
     return m->c.s[0]->ts.name;
 }
 
-gboolean mtram_proyecto_abre( Mtram *m, const char *path, char *why, size_t n )
+gboolean mtram_proyecto_abre( Mtram *m, const char *path_dado, char *why,
+                              size_t n )
 {
     PrError e;
+    gchar  *path;
 
     if (why && n) why[0] = '\0';
     if (!m->proy) m->proy = g_new0( Proyecto, 1 );
+
+    /* LA RUTA, ABSOLUTA. Las de las corridas se resuelven contra el directorio
+     * del manifiesto, y el motor se lanza con OTRO directorio de trabajo --la
+     * cache--: con «--proyecto p.yaml» el GUI esperaba el .out en ./SYN_Y/work
+     * y drtran intentaba escribirlo en la cache/SYN_Y/work, que no existe.
+     * Salia con 1 y no habia corrida.
+     *
+     * Y con '/' tambien en Windows: lib/proyecto busca el directorio con
+     * strrchr(.., '/'), asi que con barras invertidas la raiz caia a "." y
+     * pasaba lo mismo. Windows acepta '/' en todas partes.              */
+    path = g_canonicalize_filename( path_dado, NULL );
+#ifdef G_OS_WIN32
+    g_strdelimit( path, "\\", '/' );
+#endif
 
     if (pr_leer( path, m->proy, &e ) != 0) {
         /* Si no existe, se empieza uno. Cualquier otro motivo es un fichero
@@ -46,11 +62,13 @@ gboolean mtram_proyecto_abre( Mtram *m, const char *path, char *why, size_t n )
             if (why) pr_error_es( &e, why, n );
             g_free( m->proy );
             m->proy = NULL;
+            g_free( path );
             return FALSE;
         }
         pr_nuevo( m->proy, "proyecto", "", "." );
         snprintf( m->proy->path, sizeof m->proy->path, "%s", path );
     }
+    g_free( path );
     m->hay_proy = TRUE;
     m->corrida[0] = m->previa[0] = '\0';
     return TRUE;

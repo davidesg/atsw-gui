@@ -384,7 +384,16 @@ int inp_check( const char *path, char *msg, size_t size )
    k.msg = msg;
    k.size = size;
    if ( size > 0 ) msg[0] = '\0';
-   if ( (k.f = fopen( path, "r" )) == NULL )     /* as fue opens it */
+   /* EN BINARIO, aunque fue abra en modo texto. Este validador mira
+    * adelante y vuelve (ftell/fseek: peek_token, line_now, la linea de
+    * despues de la fecha), y en modo texto la biblioteca de Microsoft
+    * calcula mal esas posiciones si el fichero NO trae \r\n: en Windows
+    * se rechazaban los ficheros con finales LF -- los de la suite en
+    * Python, los bajados de GitHub -- con mensajes sin sentido ("the
+    * forecast horizon ... (it is 6721390)"). En binario las posiciones son
+    * exactas, y el \r de un fichero con \r\n no estorba: fscanf lo salta
+    * como espacio. Lo vio la CI de Windows.                             */
+   if ( (k.f = fopen( path, "rb" )) == NULL )
       {
       snprintf( msg, size, "can not open the file" );
       return( 1 );

@@ -298,18 +298,31 @@ gboolean atsw_relee( Atsw *a, char *why, size_t n )
 
 gboolean atsw_abre( Atsw *a, const char *path, char *why, size_t n )
 {
-    PrError e;
+    PrError   e;
+    Proyecto *nuevo;
 
     if ( why && n ) why[0] = '\0';
-    if ( !a->p ) a->p = g_new0( Proyecto, 1 );
 
-    if ( pr_leer( path, a->p, &e ) != 0 )
+    /* SE LEE A OTRO SITIO, como en atsw_relee. pr_leer escribe sobre el
+       proyecto que se le da a medida que lee, asi que un manifiesto roto
+       leido encima de a->p dejaba el abierto vaciado y apuntando al roto:
+       la barra decia «no se abre», la ventana se quedaba sin series, y el
+       gesto siguiente guardaba un proyecto vacio encima del fichero roto.
+       Lo encontro la prueba de la ventana (tests/test_gui.c).          */
+    nuevo = g_new0( Proyecto, 1 );
+    if ( pr_leer( path, nuevo, &e ) != 0 )
         {
         if ( e.cod != PR_ENOFILE )
-            { if ( why ) pr_error_es( &e, why, n ); return FALSE; }
-        pr_nuevo( a->p, "proyecto", "", "." );
-        snprintf( a->p->path, sizeof a->p->path, "%s", path );
+            { if ( why ) pr_error_es( &e, why, n ); g_free( nuevo );
+              return FALSE; }
+        pr_nuevo( nuevo, "proyecto", "", "." );
+        snprintf( nuevo->path, sizeof nuevo->path, "%s", path );
         }
+    /* Se copia DENTRO del que habia, no se cambia el puntero: las ventanas
+       de analisis abiertas guardan a->p en su anfitrion. Proyecto no lleva
+       punteros, asi que la copia es entera.                            */
+    if ( a->p ) { *a->p = *nuevo; g_free( nuevo ); }
+    else        a->p = nuevo;
     a->hay = TRUE;
     a->nr  = 0;
     a->serie[0] = '\0';

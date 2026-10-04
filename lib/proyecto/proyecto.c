@@ -353,7 +353,12 @@ static int raiz_real( const Proyecto *p, char *out, size_t n )
    char dir[PR_RUTA], *s;
    int  esc;
 
-   if ( p->raiz[0] == '/' )
+   /* Absoluta tambien a la manera de Windows: "C:\\..." o "C:/...", y
+      "\\\\servidor\\...". Con solo '/' una raiz absoluta de Windows se
+      pegaba detras del directorio del manifiesto.                     */
+   if ( p->raiz[0] == '/' || p->raiz[0] == '\\' ||
+        ( p->raiz[0] && p->raiz[1] == ':' &&
+          ( p->raiz[2] == '/' || p->raiz[2] == '\\' ) ) )
        {
        esc = snprintf( out, n, "%s", p->raiz );
        return ( esc < 0 || (size_t) esc >= n );
@@ -361,6 +366,10 @@ static int raiz_real( const Proyecto *p, char *out, size_t n )
 
    snprintf( dir, sizeof dir, "%s", p->path );
    s = strrchr( dir, '/' );
+   {
+   char *t = strrchr( dir, '\\' );              /* el manifiesto en Windows */
+   if ( t && ( !s || t > s ) ) s = t;
+   }
    if ( s ) *s = '\0'; else snprintf( dir, sizeof dir, "." );
 
    if ( strcmp( p->raiz, "." ) == 0 ) esc = snprintf( out, n, "%s", dir );
@@ -446,6 +455,22 @@ static const char *cola( const char *ruta, int k )
    return ( n + 1 >= k ) ? ruta : NULL;
 }
 
+/* Dos colas de ruta iguales, con '/' y '\\' por el mismo separador. La
+   ruta que llega de un GUI en Windows viene con '\\' (el selector de
+   ficheros de GTK) y la que compone pr_ruta con '/': comparadas con strcmp
+   no casaban nunca, y en Windows ningun fichero era "de este proyecto" --
+   ni Diagnosis, ni Ganancia, ni el linaje. Lo vio la CI de Windows.     */
+static int misma_cola( const char *a, const char *b )
+{
+   for ( ; *a && *b; a++, b++ )
+       {
+       int sa = ( *a == '/' || *a == '\\' ), sb = ( *b == '/' || *b == '\\' );
+
+       if ( sa != sb || ( !sa && *a != *b ) ) return 0;
+       }
+   return *a == *b;
+}
+
 int pr_de_ruta( const Proyecto *p, const char *ruta,
                 char *serie, size_t ns, char *muestra, size_t nm,
                 char *id, size_t nid )
@@ -476,7 +501,7 @@ int pr_de_ruta( const Proyecto *p, const char *ruta,
            if ( pr_ruta( p, p->m[i].serie, p->m[i].muestra, p->m[i].id,
                          EXT[e], cand, sizeof cand ) != 0 ) continue;
            c = cola( cand, k );
-           if ( c == NULL || strcmp( c, q ) != 0 ) continue;
+           if ( c == NULL || !misma_cola( c, q ) ) continue;
 
            if ( serie   && ns  ) snprintf( serie, ns, "%s", p->m[i].serie );
            if ( muestra && nm  ) snprintf( muestra, nm, "%s", p->m[i].muestra );

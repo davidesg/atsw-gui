@@ -11,7 +11,15 @@
 
 CC       = gcc
 CFLAGS   = -Wall -Wextra -O2 -fPIC -Iinclude -I../../lib/fuepre -I../../lib/optim -I../../lib/lik -I../../lib/dates -I../../lib/prewhiten -I../../lib/netfile -I../../lib/slots -I../../lib/rutas
-LDFLAGS  = -lgsl -lgslcblas -lm
+# GSL por pkg-config: en macOS (Homebrew) sus cabeceras no estan en las rutas
+# por defecto del compilador.
+GSL_CFLAGS := $(shell pkg-config --cflags gsl 2>/dev/null)
+GSL_LIBS   := $(shell pkg-config --libs gsl 2>/dev/null)
+ifeq ($(GSL_LIBS),)
+  GSL_LIBS = -lgsl -lgslcblas
+endif
+CFLAGS  += $(GSL_CFLAGS)
+LDFLAGS  = $(GSL_LIBS) -lm
 
 SRCDIR   = src
 INCDIR   = include

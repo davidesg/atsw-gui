@@ -579,9 +579,13 @@ static void on_borrar( GtkMenuItem *m, Atsw *a )
     /* Se pregunta A LA LIBRERIA ANTES de preguntar al analista: si no se
        puede borrar, la pregunta sobraba y lo que hace falta es el porque. */
     {
-    Proyecto tmp = *a->p;
+    /* En el monton: Proyecto ocupa ~800 KB y la pila de Windows es de
+       1 MB. */
+    Proyecto *tmp = g_memdup2( a->p, sizeof *a->p );
+    int       no  = pr_borra( tmp, a->serie, atsw_muestra_actual( a ), id, &e );
 
-    if ( pr_borra( &tmp, a->serie, atsw_muestra_actual( a ), id, &e ) != 0 )
+    g_free( tmp );
+    if ( no != 0 )
         { pr_error_es( &e, why, sizeof why ); barra_pub( a, why );
           g_free( id ); return; }
     }

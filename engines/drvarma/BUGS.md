@@ -346,3 +346,86 @@ actually printed.  Then propagate to drvec and drtran.
 
 Any run whose residuals have one large outlier on a sample of ~700 or more:
 undefined behaviour in the diagnosis, which may corrupt the report or crash.
+
+## BUG (MEDIUM) — the seasonal adjustment is done on the levels, before the log; it must be log -> d=1 -> deseasonalization, as art
+
+**Found:** 2026-10-04 (Python port, `drvarma-python` BUG-0003; fixed there in 0.2.0).
+**Files:** `src/drvarma.c:286-304` (the call and the held-out tail),
+`src/drvarma.c:560-572` (forecast re-seasonalization and bands),
+`src/drvarma.c:~673` (recursive forecasts), `src/deseason.c`
+(`deseasonalize_raw`).
+
+### Symptom
+
+`deseasonalize_raw` runs on the RAW levels: it estimates the harmonic pattern on
+the first difference of the levels, subtracts the level dummies from the
+levels, and only then `transform_series` applies Box-Cox and the differences.
+The order is d=1 -> deseasonalization -> log.
+
+The analyst's order, and art's, is **log -> d=1 -> deseasonalization**.
+`art.seasonal_detection.detect_seasonality` does 100·log, then d=1, then the
+harmonic regression. A multiplicative pattern is additive in logs, and on a log
+forecast the dummy of a month cancels exactly against the same month a year
+before. So the annual rate (TLVA) that the reports print is free of the
+pattern in logs, and is not when the dummies are in levels.
+
+The forecasts re-seasonalize the same way, in levels (`level_fc + dseas`,
+and `boxcox_inv(...) + dseas` for the bands).
+
+### Measured (the Python port, IPC3 = IPC_ES, IPC_FR, IPC_DE, 2002-2019)
+
+VAR(3) with mean, residual ACF(12) (band ±0.136): IPC_FR +0.147 in levels,
++0.106 in logs; IPC_ES +0.021 / -0.025; IPC_DE +0.122 / +0.119. Log-likelihood
+141.5 in levels, 151.6 in logs, both on the 100·log scale.
+
+### Fix (as done in the port)
+
+1. Box-Cox the raw series (WITHOUT `trans_scale`), run `deseasonalize_raw` on
+   it, and bring the adjusted series back with `boxcox_inv`. The rest of the
+   pipeline is unchanged, and `seasonal_dummies` are then on the Box-Cox scale.
+   Same for the held-out tail of `-estwin`.
+2. Re-seasonalize on that scale:
+   `level = boxcox_inv(boxcox_fwd(level_fc, λ) + dseas, λ)` and, for the bands,
+   `boxcox_inv((cf ∓ 1.96·sd)/scale + dseas, λ)`. Same in the recursive
+   forecasts.
+3. The `deseasonalize_raw` post-check (ACF(s) before/after) then runs on the
+   log differences, as the port's MCP check does.
+
+### Validation
+
+- The dummies must equal art's `detect_seasonality` on 100·log (the port:
+  1e-14 on IPC3).
+- The port's tests `tests/test_bug_0003_log_primero.py`.
+- The 13 binary-parity tests with `-deseason`, now a declared strict xfail in
+  the port (`tests/_bug0003.py`), must pass again. Then remove that mark.
+
+### Impact
+
+Every number of a fit with `-deseason`: the estimates, the `.out`, the
+`.forecast`, the recursive forecasts.
+
+## BUG (HIGH) — Hosking's Q uses df = m²·s on a fitted model's residuals; it must subtract the estimated ARMA coefficients
+
+**Found:** 2026-10-04 (Python port, `drvarma-python` BUG-0015; fixed there in 0.2.0).
+**File:** `src/diagnose.c:929-931` (`hosking_test`: `int df = m * m * s;`),
+called from `src/diagnose.c:1009` on the model's residuals.
+
+### Symptom
+
+Hosking (1980) gives df = m²·(s − p − q) for a fitted VARMA(p, q), and in
+general m²·s − k, with k the estimated ARMA coefficients. With m²·s the test
+rejects 0.3-1.5% of the time at a nominal 5%. Simulated in the port
+(`tools/hosking_size.py`, 400 replications, true model fitted): VAR(1) and
+VARMA(1,1), n = 150 and 300.
+
+On IPC3's VAR(3) (m=3, 27 AR coefficients) the verdict flips. The binary prints
+`Q(126) = 151.2169, p-value = 0.0624  Cannot reject H0`; with df = 99,
+p = 0.0006 and it rejects.
+
+### Fix
+
+`hosking_test(..., int k, ...)` with `df = m*m*s - k`, and the caller passes
+k = p·(m or m²) + q·(m or m²) according to the diagonal restrictions. With
+df < 1 there is no p-value (raise s). Note: the port's `.out` already prints
+`Q(m²(s−p−q))`; its byte-exact tests declare the difference in
+`tests/_bug0015.py`. Remove that when this is fixed.

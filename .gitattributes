@@ -1,0 +1,9 @@
+# LOS BYTES, TAL CUAL, EN TODAS LAS PLATAFORMAS.
+#
+# Git para Windows convierte por defecto los finales de linea a \r\n al sacar
+# los ficheros. En este repositorio eso no es inocuo: las referencias de las
+# baterias se comparan byte a byte, los corpus se procesan con awk (un \r
+# suelto hace que una linea en blanco deje de serlo) y hay fixtures que
+# llevan \r\n A PROPOSITO para probar que los motores los leen. Lo vio la
+# CI de Windows: la variante AR(1)=0 de fue salia rota.
+* -text

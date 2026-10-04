@@ -102,7 +102,15 @@ done
 if [ $UPDATE = 0 ]; then
     mkdir -p "$WORK/nopath"
     cp "$TESTS/corpus/forecast_D1.inp" "$WORK/nopath/"
-    ( cd "$WORK/nopath" && env PATH=/nonexistent "$FUF" forecast_D1 > console.txt 2>&1
+    # En Windows, sin PATH tampoco se encuentran las DLL con que se enlazo
+    # fuf (GSL, de MSYS2): se deja solo esa carpeta. Lo que se prueba es que
+    # no hace falta OTRO PROGRAMA (pdflatex), no que no hagan falta las DLL
+    # -- un paquete para Windows las lleva al lado o enlaza en estatico.
+    NOPATH=/nonexistent
+    case "$(uname -s)" in
+        MINGW*|MSYS*) NOPATH=$(dirname "$(command -v gcc 2>/dev/null || echo /ucrt64/bin/gcc)") ;;
+    esac
+    ( cd "$WORK/nopath" && env PATH="$NOPATH" "$FUF" forecast_D1 > console.txt 2>&1
       echo $? > status ) 2>/dev/null
     if [ "$(cat "$WORK/nopath/status")" = 0 ] && [ -s "$WORK/nopath/forecast_D1.out" ] &&
        [ -s "$WORK/nopath/prevforecast_D1.12020.eps" ] &&

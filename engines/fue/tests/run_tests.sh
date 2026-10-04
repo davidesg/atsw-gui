@@ -100,14 +100,18 @@ done
 # of that factor) and the same LaTeX files.
 
 # exit status 0 if the .inp declares its six sections of operators, all empty
+# (el sub del \r: un corpus escrito en Windows trae \r\n, y para awk una
+#  linea con solo un \r no esta en blanco)
 no_arma() {
-    awk 'want && NF { if ($1 != 0) bad = 1; want = 0; next }
+    awk '{ sub(/\r$/, "") }
+         want && NF { if ($1 != 0) bad = 1; want = 0; next }
          /^\*\*/ && tolower($0) ~ /operators/ { n++; want = 1 }
          END { exit (bad || n != 6) }' "$1"
 }
 # the .inp with one regular AR(1) factor fixed at 0
 ar0_variant() {
-    awk 'rep && NF { print "1 1"; print "**"; print "0.000000  0"; rep = 0; next }
+    awk '{ sub(/\r$/, "") }
+         rep && NF { print "1 1"; print "**"; print "0.000000  0"; rep = 0; next }
          { print }
          /^\*\*/ && tolower($0) ~ /regular ar operators/ { rep = 1 }' "$1" > "$2"
 }

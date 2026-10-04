@@ -157,8 +157,19 @@ decision. AR factorization stays in the plan of the formal tests: it reads an
 
 ### Entry
 
+**Decided, 2026-10-04: a filtered history.** The engine's 34 commits enter,
+rewritten to hold only the engine. Left out of atsw-gui's history (public):
+- the training datasets `data/*.npz` (54 MB), from June's simulator, which did
+  not generate AR processes; obsolete, and nothing reads them now: `ml/train.py`
+  simulates with a seed on each run;
+- ART_19's regressors `coeff_regressor*.json` (13 MB), used only by the frozen
+  `python/art19`;
+- the GTK GUI and `old/`.
+
+Nothing is lost: the full history stays in the private `art-identifier-c`.
+
 - `git subtree add --prefix=engines/art`, from `art-identifier-c`, tag
-  `ART_18.2`. It is built outside Dropbox, as drvec was (§4).
+  `ART_18.2.1`, filtered. It is built outside Dropbox, as drvec was (§4).
 - Only the engine enters:
   - **sources:** `src/model_detection.c`, `seasonal_detection.c`,
     `unit_root_tests.c`, `ARMA.c`, `root.c`, `ml_classifier.c`;
@@ -342,14 +353,13 @@ known; the window depends on decisions 9.2 and 9.3.
 
 1. **The way in.** **DECIDED, 2026-10-04: option 4**, the engine plus the
    analysis window (`art_gui` as is was the alternative).
-2. **The points for the first version:** E2 and E3 alone (the cheapest, with
-   no tests), or all four from the start?
-3. **The tests at E1:** does the window show ADF/KPSS and the seasonal F? This
-   is the 2026-09-26 line ("the GUI teaches them as well"). If yes, they come
-   with the engine.
-4. **The machine format of the result:** a line file in the house style
-   (`X_art.cand`, recommended) or JSON (which would need a library or a
-   hand-written parser)?
+2. **The points for the first version.** **DECIDED, 2026-10-04:** E2 and E3
+   first; E1 and E4 after.
+3. **The tests at E1.** **DECIDED, 2026-10-04:** yes, the window shows
+   ADF/KPSS and the seasonal F at E1 (the 2026-09-26 line). They come with the
+   engine.
+4. **The machine format of the result.** **DECIDED, 2026-10-04:** a line file
+   in the house style (`X_art.cand`).
 5. **The MLP in the taller:** accepted as compiled data until 18.3 makes it
    optional, or should 18.3 come before the integration?
 6. **Where the refactoring is done.** **DECIDED, 2026-10-04:** in

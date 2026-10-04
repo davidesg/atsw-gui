@@ -3573,6 +3573,47 @@ static void parse_orders(const char *str, int *arr, int n)
     if (j == 2) for (; j <= n; j++) arr[j] = arr[1];
 }
 
+/* LAS OPCIONES DELANTE, LOS FICHEROS DETRAS, antes de llamar a getopt.
+ *
+ * drtran se llama con los ficheros primero: "drtran Y.pre X.pre -0 -o out".
+ * El getopt de GNU (y el de MinGW) reordena argv para encontrar las opciones
+ * que van detras de los ficheros; el de macOS y los BSD NO: se para en el
+ * primer argumento que no es opcion, como manda POSIX. En macOS todas las
+ * opciones se ignoraban en silencio -- -o incluida, asi que la salida ni
+ * siquiera caia donde se pedia. Lo cazo la bateria en la CI de macOS.
+ *
+ * Particion estable: cada opcion conserva su argumento (si optstr dice que
+ * lleva uno y no va pegado) y "--" corta, como en getopt.               */
+#define OPCIONES "r:s:b:f:m:c:n:a:R:C:g:O:e:l:Lp0iXNDEMVSvho:"
+
+static void opciones_delante( int argc, char *argv[], const char *optstr )
+{
+    char **opc = malloc( argc * sizeof *opc );
+    char **pos = malloc( argc * sizeof *pos );
+    int    no = 0, np = 0, i;
+
+    if ( !opc || !pos ) { free( opc ); free( pos ); return; }
+    for ( i = 1; i < argc; i++ ) {
+        const char *a = argv[i];
+
+        if ( strcmp( a, "--" ) == 0 ) {          /* lo demas, ficheros */
+            for ( ; i < argc; i++ ) pos[np++] = argv[i];
+            break;
+        }
+        if ( a[0] != '-' || a[1] == '\0' ) { pos[np++] = argv[i]; continue; }
+        opc[no++] = argv[i];
+        {
+            const char *q = strchr( optstr, a[1] );
+            if ( q && q[1] == ':' && a[2] == '\0' && i + 1 < argc )
+                opc[no++] = argv[++i];
+        }
+    }
+    for ( i = 0; i < no; i++ ) argv[1 + i]      = opc[i];
+    for ( i = 0; i < np; i++ ) argv[1 + no + i] = pos[i];
+    free( opc );
+    free( pos );
+}
+
 int main(int argc, char *argv[])
 {
     int opt, i, j, l;
@@ -3603,7 +3644,8 @@ int main(int argc, char *argv[])
             if (strcmp(argv[ai], "-estwin") == 0) argv[ai] = (char *)"-R";
     }
 
-    while ((opt = getopt(argc, argv, "r:s:b:f:m:c:n:a:R:C:g:O:e:l:Lp0iXNDEMVSvho:")) != -1) {
+    opciones_delante(argc, argv, OPCIONES);
+    while ((opt = getopt(argc, argv, OPCIONES)) != -1) {
         switch (opt) {
         case 'r': opt_r = optarg; auto_id = 0; break;
         case 's': opt_s = optarg; auto_id = 0; break;

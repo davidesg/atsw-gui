@@ -11,8 +11,30 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include "netfile.h"
+
+/* UN FICHERO TEMPORAL, en la carpeta temporal del sistema y no en "/tmp" a
+ * fuego: en Windows nativo "/tmp" es D:\tmp, que no existe, y la prueba
+ * fallaba por no poder escribir. Lo vio la CI de Windows.               */
+static const char *temporal( const char *nombre )
+{
+    static char buf[4][1024];
+    static int  k;
+    const char *d = getenv( "TMPDIR" );
+
+    if ( !d || !*d ) d = getenv( "TEMP" );
+    if ( !d || !*d ) d = getenv( "TMP" );
+#ifdef _WIN32
+    if ( !d || !*d ) d = ".";
+#else
+    if ( !d || !*d ) d = "/tmp";
+#endif
+    k = ( k + 1 ) % 4;
+    snprintf( buf[k], sizeof buf[k], "%s/%s", d, nombre );
+    return buf[k];
+}
 
 static int fallos = 0;
 
@@ -133,13 +155,13 @@ int main( int argc, char **argv )
    NetLink otra[NET_MAX_LINK];
    int     m, igual = 1;
 
-   ok( net_write( "/tmp/_test_netfile.dag", NOM, lnk, n, "prueba" ) == 0,
+   ok( net_write( temporal( "_test_netfile.dag" ), NOM, lnk, n, "prueba" ) == 0,
        "se puede escribir" );
-   m = net_read( "/tmp/_test_netfile.dag", NOM, NSER, otra, NET_MAX_LINK, &e );
+   m = net_read( temporal( "_test_netfile.dag" ), NOM, NSER, otra, NET_MAX_LINK, &e );
    for ( k = 0; k < n && k < m; k++ )
       if ( memcmp( &lnk[k], &otra[k], sizeof( NetLink ) ) != 0 ) igual = 0;
    ok( m == n && igual, "y lo que se relee es identico" );
-   remove( "/tmp/_test_netfile.dag" );
+   remove( temporal( "_test_netfile.dag" ) );
    }
 
    /* --- los hechos que se rechazan, y COMO se cuentan -------------------- */

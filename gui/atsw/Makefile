@@ -95,4 +95,19 @@ install: $(TARGET)
 clean:
 	rm -f $(TARGET) $(INPCHECK)
 
-.PHONY: all install clean
+# LA VENTANA, CONDUCIDA DESDE EL CODIGO: tests/run_gui_tests.sh.
+#
+# La bateria compila los mismos fuentes que el programa, y la lista vive
+# AQUI y en ningun otro sitio: se la pide a make con «fuentes» y «cabeceras»
+# en vez de copiarla. lib/sitio entro en esta lista la semana en que se
+# escribio la bateria; una copia en el guion se habria quedado sin el.
+fuentes:
+	@echo $(SRC)
+
+cabeceras:
+	@echo $(INC)
+
+check: $(INPCHECK)
+	sh tests/run_gui_tests.sh
+
+.PHONY: all install clean fuentes cabeceras check

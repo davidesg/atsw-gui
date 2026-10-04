@@ -25,6 +25,27 @@
 #include "inpdet.h"
 #include "inpcheck.h"
 
+/* UN FICHERO TEMPORAL, en la carpeta temporal del sistema y no en "/tmp" a
+ * fuego: en Windows nativo "/tmp" es D:\tmp, que no existe, y la prueba
+ * fallaba por no poder escribir. Lo vio la CI de Windows.               */
+static const char *temporal( const char *nombre )
+{
+    static char buf[4][1024];
+    static int  k;
+    const char *d = getenv( "TMPDIR" );
+
+    if ( !d || !*d ) d = getenv( "TEMP" );
+    if ( !d || !*d ) d = getenv( "TMP" );
+#ifdef _WIN32
+    if ( !d || !*d ) d = ".";
+#else
+    if ( !d || !*d ) d = "/tmp";
+#endif
+    k = ( k + 1 ) % 4;
+    snprintf( buf[k], sizeof buf[k], "%s/%s", d, nombre );
+    return buf[k];
+}
+
 static int fallos = 0;
 
 static void ok( int c, const char *que )
@@ -76,7 +97,7 @@ static int cuenta( const char *ruta, const char *palabra )
 int main( int argc, char **argv )
 {
     const char *dir = ( argc > 1 ) ? argv[1] : "../../engines/fue/tests/corpus";
-    const char *tmp = "/tmp/test_inpdet_salida.inp";
+    const char *tmp = temporal( "test_inpdet_salida.inp" );
     char        porque[512], msg[512];
     DIR        *d;
     struct dirent *e;

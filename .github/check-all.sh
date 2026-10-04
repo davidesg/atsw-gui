@@ -67,6 +67,7 @@ corre engines/drvec make -s -C engines/drvec test
 # Los GUIs conducidos desde el codigo que no van dentro de una bateria de
 # arriba (los de gui/fue y gui/drtran si van).
 corre "gui/fug (ventana)"     sh -c "cd gui/fug && sh tests/run_gui_tests.sh"
+corre "gui/atsw (ventana)"   sh -c "cd gui/atsw && sh tests/run_gui_tests.sh"
 corre "drvarma_gui (ventana)" sh -c "cd engines/drvarma && sh tests/gui/run_gui_tests.sh"
 
 echo

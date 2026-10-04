@@ -389,6 +389,13 @@ static gchar *lee(const char *name)
     gchar *p = en_work(name), *c = NULL;
     if (!g_file_get_contents(p, &c, NULL, NULL)) c = NULL;
     g_free(p);
+    /* En Windows los ficheros de texto llevan \r\n; lo que se compara es
+     * el contenido, no el fin de linea de la plataforma.              */
+    if (c) {
+        gchar *r = c, *w = c;
+        for (; *r; r++) if (*r != '\r') *w++ = *r;
+        *w = '\0';
+    }
     return c;
 }
 
@@ -845,6 +852,12 @@ int main(int argc, char **argv)
     /* Se trabaja desde la carpeta temporal: asi el motor no puede salir del
      * directorio actual por casualidad, solo del PATH o de lo que se elija. */
     if (g_chdir(work) != 0) { printf("FAIL: no se pudo entrar en %s\n", work); return 1; }
+    /* LA RUTA FISICA, la que da getcwd. En macOS la carpeta temporal
+     * (/var/folders/...) es un enlace a /private/var/...: con la ruta sin
+     * resolver, gtk_file_chooser_set_filename no seleccionaba nada y el
+     * dialogo devolvia el primer fichero de la carpeta. Lo vio la CI.   */
+    g_free(work);
+    work = g_get_current_dir();
 
     app = gtk_application_new("org.atsw.drvarma.test", G_APPLICATION_NON_UNIQUE);
     g_application_register(G_APPLICATION(app), NULL, NULL);

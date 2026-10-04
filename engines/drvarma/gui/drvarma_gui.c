@@ -921,6 +921,10 @@ static gboolean run_drvarma_win32(const char *inp_base, const char *inp_dir) {
         return FALSE;
     }
 
+    /* Lo mismo que dice run_drvarma(). Aqui no se decia nada, y en Windows
+       la barra se quedaba en "Created ...IPC.inp": el motor habia corrido y
+       el usuario no tenia forma de saberlo. Lo vio la CI de Windows. */
+    gtk_label_set_text(GTK_LABEL(status_label), "DRVARMA finished successfully.");
     return TRUE;
 }
 #endif

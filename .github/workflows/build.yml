@@ -120,6 +120,14 @@ jobs:
             make git diffutils bc gawk sed grep coreutils procps-ng
           pacboy: >-
             gcc:p pkgconf:p gtk3:p gsl:p zlib:p python:p adwaita-icon-theme:p
+            gsettings-desktop-schemas:p hicolor-icon-theme:p
+      - name: Esquemas de GSettings
+        # Sin gschemas.compiled, el selector de ficheros de GTK aborta
+        # ("No GSettings schemas are installed"). Un paquete para Windows
+        # tiene que llevarlo en share/glib-2.0/schemas junto a los .exe.
+        run: |
+          glib-compile-schemas "$MSYSTEM_PREFIX/share/glib-2.0/schemas"
+          ls -la "$MSYSTEM_PREFIX/share/glib-2.0/schemas" | head
       - name: Compilar
         run: bash .github/build-all.sh
       - name: Baterias

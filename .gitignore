@@ -70,3 +70,6 @@ engines/fug/tests/gui/work/
 # el binario de la madre
 gui/atsw/atsw_gui
 capturas/
+gui/atsw/test_gui_atsw
+gui/atsw/atsw_hijo_falso
+gui/atsw/tests/work/

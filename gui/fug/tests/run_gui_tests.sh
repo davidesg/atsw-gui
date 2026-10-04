@@ -44,10 +44,9 @@ INC="-I$TOP/include -I$LIB/sitio -I$LIB/preview -I$LIB/fugdraw -I$LIB/datos -I$L
 
 # LO QUE NO TIENE QUE PASAR EN UNA PRUEBA: que un dialogo espere una mano o
 # que se abra un visor. Estas funciones de GTK se llaman, DENTRO DEL GUI,
-# como las de test_gui.c; el codigo del GUI no se toca.
-HOOKS="-Dgtk_dialog_run=test_dialog_run -Dgtk_widget_show_all=test_show_all \
- -Dgtk_window_present=test_window_present -Dgtk_show_uri=test_show_uri \
- -Dg_spawn_async=test_spawn_async"
+# como las de test_gui.c; el codigo del GUI no se toca. Van en ganchos.h,
+# forzada con -include, y no con -D: ver por que en la propia cabecera.
+HOOKS="-include $TOP/tests/ganchos.h"
 
 # La lista del Makefile, con main.c por main_wrap.c.
 SRCS="$TOP/tests/main_wrap.c $TOP/src/callbacks.c $TOP/src/data_load.c $TOP/src/nlutils.c \

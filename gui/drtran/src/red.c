@@ -534,13 +534,45 @@ static void por_que( Mtram *m, const NetError *e, const char *path )
     g_free( base );
 }
 
-static void on_abrir( GtkButton *b, Mtram *m )
+/* LEER UNA RED DE UN FICHERO, SIN DIALOGO. Es el cuerpo de «Abrir», sacado
+ * para que lo use tambien quien ya sabe que fichero es: el caso, al cargar
+ * la corrida de la que se parte (proyecto_gui.c). Dice lo que paso en la
+ * barra, igual que el boton. TRUE si se leyo.                           */
+gboolean red_lee( Mtram *m, const char *p )
 {
     const char *nom[NET_MAX_SER + 1];
     NetLink     tmp[NET_MAX_LINK];
     NetError    e;
-    gchar      *p;
+    gchar      *base;
     int         n;
+
+    if (m->c.n < 1) {
+        preview_show_status( m, "Carga primero las series: el .dag las nombra, "
+                                "así que sin ellas no se puede leer." );
+        return FALSE;
+    }
+
+    nombres( m, nom );
+    n = net_read( p, nom, m->c.n, tmp, NET_MAX_LINK, &e );
+    if (n < 0) {
+        por_que( m, &e, p );
+        return FALSE;
+    }
+    memcpy( m->red.lnk, tmp, n * sizeof(NetLink) );
+    m->red.n = n;
+    g_free( m->red.path );
+    m->red.path = g_strdup( p );
+    base = g_path_get_basename( p );
+    preview_show_status( m, "%d enlace%s leído%s de %s.",
+                         n, n == 1 ? "" : "s", n == 1 ? "" : "s", base );
+    g_free( base );
+    mtram_refresca( m );
+    return TRUE;
+}
+
+static void on_abrir( GtkButton *b, Mtram *m )
+{
+    gchar *p;
 
     if (m->c.n < 1) {
         preview_show_status( m, "Carga primero las series: el .dag las nombra, "
@@ -550,21 +582,7 @@ static void on_abrir( GtkButton *b, Mtram *m )
 
     p = elige( m, GTK_FILE_CHOOSER_ACTION_OPEN, "Abrir una red" );
     if (!p) return;
-
-    nombres( m, nom );
-    n = net_read( p, nom, m->c.n, tmp, NET_MAX_LINK, &e );
-    if (n < 0) {
-        por_que( m, &e, p );
-    } else {
-        memcpy( m->red.lnk, tmp, n * sizeof(NetLink) );
-        m->red.n = n;
-        g_free( m->red.path );
-        m->red.path = g_strdup( p );
-        preview_show_status( m, "%d enlace%s leído%s de %s.",
-                             n, n == 1 ? "" : "s", n == 1 ? "" : "s",
-                             g_path_get_basename( p ) );
-        mtram_refresca( m );
-    }
+    red_lee( m, p );
     g_free( p );
 }
 

@@ -92,25 +92,30 @@ y la ventana cuadre.
 ```yaml
 casos:
   C1:
+    motor: drtran
     titulo: "inflacion y petroleo"
     razon: "el WTI adelanta al IPC: la CCF preblanqueada lo dice en k=1"
     creado: "2026-10-05"
-    motor: "drtran"
-    muestra: ""
+    entradas: ES_CPI/m10@3f2a9c… WTI/m03@81bd04…   # EN ORDEN: serie/modelo@sha256
+
+corridas:
+  C1/c00:
+    version: 0
     padre: ""
-    entradas:
-      - "ES_CPI m10 3f2a9c…"       # serie, modelo, sha256 del .pre
-      - "WTI m03 81bd04…"
-    corridas:
-      c00:
-        padre: ""
-        creado: "2026-10-05"
-      c01:
-        padre: "c00"
-        razon: "omega_1 no es significativo: fuera"
-        elegido: 1
-        razon_elegido: "el mas simple con los residuos limpios"
+    razon: ""
+  C1/c01:
+    version: 1
+    padre: c00
+    razon: "omega_1 no es significativo: fuera"
+    elegido: si
+    razon_elegido: "el mas simple con los residuos limpios"
 ```
+
+**El formato se ajusta al lector que ya hay**, que admite «clave: valor» con
+sangría de 0, 2 o 4 espacios y no sabe de listas: las entradas van **en una
+línea y en orden**, y las corridas en su propia sección con la clave
+`CASO/id`, como los modelos llevan `SERIE/id`. `muestra` y `padre` sólo se
+escriben si no están vacíos. `yaml.safe_load` lo lee entero.
 
 **Los ficheros de una corrida**, con nombre de cortesía:
 

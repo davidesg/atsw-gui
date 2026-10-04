@@ -71,6 +71,10 @@
 #define PR_TEXTO       256
 #define PR_RAZON       512
 #define PR_RUTA        1024
+#define PR_MAX_CASO      32
+#define PR_MAX_ENTRADA   16
+#define PR_MAX_CORRIDA  256
+#define PR_SHA           65       /* sha256 en hexadecimal, y el '\0'     */
 
 /* Que paso. La biblioteca da el HECHO; cada front end lo redacta -- la
  * leccion que costo una prueba de la bateria en lib/netfile.            */
@@ -89,7 +93,13 @@ typedef enum {
    PR_EDATOS,        /* los datos no se tocan                             */
    PR_EHIJOS,        /* tiene modelos colgados: se romperia el linaje     */
    PR_EMUESTRA,      /* esa muestra no esta declarada                     */
-   PR_EENMUESTRA     /* hay modelos en ella                               */
+   PR_EENMUESTRA,    /* hay modelos en ella                               */
+   PR_ENOCASO,       /* ese caso no esta                                  */
+   PR_ENOCORRIDA,    /* esa corrida no esta                               */
+   PR_EENCASO,       /* el modelo es la entrada de un caso                */
+   PR_ECONCORRIDAS,  /* el caso tiene corridas                            */
+   PR_EHIJAS,        /* de la corrida cuelgan otras                       */
+   PR_EENTRADA       /* esa entrada no puede entrar en un caso            */
 } PrCodigo;
 
 typedef struct {
@@ -197,6 +207,59 @@ typedef struct {
    char notas[PR_TEXTO];
 } PrSerie;
 
+/* EL CASO: la escalera escrita. Ver docs/DISENO-casos.md.
+ *
+ * Un conjunto FIJO y ORDENADO de series, cada una con el modelo univariante
+ * con que entra y el sha256 de su .pre en el momento del alta. Es el "name"
+ * de mtram y la sesion .trn de DISENO-escalera.md §5.3, escrita aqui.
+ *
+ * LA RED NO ES ESTO. La red son los enlaces (el .dag), y cambia de una
+ * corrida a otra; el caso es lo que se cruza, y no cambia nunca: cambiar la
+ * entrada de una serie es OTRO caso, derivado de este (pr_caso_deriva).
+ *
+ * EL ORDEN ES PARTE DE LA IDENTIDAD. No es "la primera es la de salida"
+ * --eso solo vale para una estrella--: es el orden con que el .cns del motor
+ * C indexa las posiciones y el de Cholesky de drvarma. No se reordena.
+ *
+ * EL HASH LO PONE QUIEN LLAMA. La biblioteca no lee ficheros: guarda la
+ * cadena y la compara. Una entrada sin hash ("") se acepta --el que llama
+ * puede no tenerlo todavia-- pero no podra decir si el .pre cambio.
+ *
+ * LA VENTANA COMUN (BUG-2) LA COMPRUEBA QUIEN LLAMA, con fuepre_check_
+ * alignment: hace falta leer los .pre, y esta biblioteca no tiene
+ * dependencias.                                                          */
+typedef struct {
+   char serie[PR_ID];
+   char modelo[PR_ID];            /* el id del modelo, en la muestra del caso */
+   char sha[PR_SHA];              /* del .pre al dar el alta; "" si no consta */
+} PrEntrada;
+
+typedef struct {
+   char      id[PR_ID];           /* "C1". La clave; no se parsea.        */
+   char      titulo[PR_TEXTO];
+   char      razon[PR_RAZON];     /* "" si no consta. NO se rellena.      */
+   char      creado[16];
+   char      motor[16];           /* "drtran"; mañana "drvarma"           */
+   char      muestra[PR_ID];      /* la de TODAS sus entradas. "" completa */
+   char      padre[PR_ID];        /* el caso del que se derivo, o ""      */
+   PrEntrada en[PR_MAX_ENTRADA];
+   int       nen;
+} PrCaso;
+
+/* UNA CORRIDA: una estimacion de un caso, con su red y sus restricciones.
+ * Es la cadena de los modelos un piso mas arriba: id como clave, version
+ * como campo, padre, razon que se pide y no se exige, y una elegida.     */
+typedef struct {
+   char id[PR_ID];                /* "c01"                                */
+   char caso[PR_ID];
+   int  version;
+   char padre[PR_ID];             /* otra corrida del MISMO caso, o ""    */
+   char razon[PR_RAZON];
+   char creado[16];
+   int  elegido;
+   char razon_elegido[PR_RAZON];
+} PrCorrida;
+
 typedef struct {
    int  schema_version;
    char id[PR_ID];
@@ -212,9 +275,17 @@ typedef struct {
    int       nmu;
    PrModelo m[PR_MAX_MODELO];
    int      nm;
+   PrCaso    ca[PR_MAX_CASO];
+   int       nca;
+   PrCorrida co[PR_MAX_CORRIDA];
+   int       nco;
 
    char path[PR_RUTA];            /* de donde se leyo                     */
 } Proyecto;
+
+/* ~1,2 MB. NUNCA EN LA PILA: la del hilo principal de Windows es de 1 MB y
+   un Proyecto local la desborda sin mensaje (docs/PRUEBAS.md §4). Con
+   g_new0, calloc o static.                                               */
 
 /* --- el manifiesto ------------------------------------------------------ */
 
@@ -401,6 +472,82 @@ int pr_modelo_idx( const Proyecto *p, const char *serie, const char *muestra,
    desaparece con el modelo, no se hereda a otro a la fuerza.            */
 int pr_borra( Proyecto *p, const char *serie, const char *muestra,
               const char *id, PrError *e );
+
+/* --- los casos ---------------------------------------------------------- */
+
+/* EL ALTA. Las entradas, en su orden; cada modelo tiene que ser de su serie
+ * y estar en la muestra dada, y no ser los DATOS. Una serie no entra dos
+ * veces. El id sale solo (C1, C2...). La razon se pide, no se exige.
+ * motor NULL o "" es "drtran".                                           */
+int pr_caso_add( Proyecto *p, const PrEntrada *en, int nen,
+                 const char *muestra, const char *motor,
+                 const char *titulo, const char *razon,
+                 char *id_out, size_t nid, PrError *e );
+
+/* OTRO CASO a partir de uno, con las entradas dadas: queda el padre, el
+ * titulo, la muestra y el motor del original. Es la salida del desfase.  */
+int pr_caso_deriva( Proyecto *p, const char *caso,
+                    const PrEntrada *en, int nen,
+                    char *id_out, size_t nid, PrError *e );
+
+int           pr_caso_idx( const Proyecto *p, const char *caso );
+const PrCaso *pr_caso_ver( const Proyecto *p, const char *caso );
+int           pr_caso_razon( Proyecto *p, const char *caso, const char *razon,
+                             PrError *e );
+
+/* Lo borra. Se niega si tiene corridas y dice CUAL: son estimaciones con su
+   .out, no se van de rebote (como pr_muestra_borra).                    */
+int pr_caso_borra( Proyecto *p, const char *caso, PrError *e );
+
+/* EL CASO QUE YA TIENE ESAS ENTRADAS --mismo orden, mismas series, mismos
+ * modelos, mismos hashes-- en esa muestra. "" si no hay ninguno. Es lo que
+ * necesita el alta automatica de drtran_gui para no duplicar.            */
+const char *pr_caso_de_entradas( const Proyecto *p, const PrEntrada *en,
+                                 int nen, const char *muestra );
+
+/* Los casos de los que ese modelo es entrada. Devuelve cuantos y llena
+   hasta max. pr_borra lo usa para negarse.                              */
+int pr_casos_de_modelo( const Proyecto *p, const char *serie,
+                        const char *muestra, const char *id,
+                        char casos[][PR_ID], int max );
+
+/* --- las corridas ------------------------------------------------------- */
+
+/* UNA CORRIDA NUEVA del caso, hija de padre (NULL/"" para la primera). El id
+ * sale solo --c00, c01...-- y el linaje se escribe sin preguntar. En
+ * ruta_out, el .out que tiene que escribir el motor.                     */
+int pr_corrida_nueva( Proyecto *p, const char *caso, const char *padre,
+                      char *id_out, size_t nid, char *ruta_out, size_t nruta,
+                      PrError *e );
+
+/* <raiz>/_casos/<caso>/work/<caso>_<corrida><ext>. Con corrida NULL o "",
+ * el directorio del caso. "_casos" con guion bajo para que no choque con
+ * una serie que se llame asi.                                           */
+int pr_corrida_ruta( const Proyecto *p, const char *caso, const char *corrida,
+                     const char *ext, char *out, size_t n );
+
+int pr_corrida_idx( const Proyecto *p, const char *caso, const char *corrida );
+const PrCorrida *pr_corrida_ver( const Proyecto *p, const char *caso,
+                                 const char *corrida );
+int pr_corrida_razon( Proyecto *p, const char *caso, const char *corrida,
+                      const char *razon, PrError *e );
+
+/* UNA ELEGIDA POR CASO. corrida NULL/"" quita la marca. */
+int         pr_corrida_elige( Proyecto *p, const char *caso,
+                              const char *corrida, const char *razon,
+                              PrError *e );
+const char *pr_corrida_elegida( const Proyecto *p, const char *caso );
+
+/* La borra del manifiesto (los ficheros son del que llama). Se niega si de
+   ella cuelgan otras, y dice cual.                                      */
+int pr_corrida_borra( Proyecto *p, const char *caso, const char *corrida,
+                      PrError *e );
+
+/* DE UN FICHERO A SU (caso, corrida), como pr_de_ruta: una busqueda contra
+ * el manifiesto, no un parseo del nombre. 0 si lo encontro; 1 si no es de
+ * ningun caso, y eso no es un error.                                     */
+int pr_caso_de_ruta( const Proyecto *p, const char *ruta,
+                     char *caso, size_t nc, char *corrida, size_t nco );
 
 /* --- los errores, en los dos idiomas ------------------------------------ */
 

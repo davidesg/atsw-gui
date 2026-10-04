@@ -334,11 +334,24 @@ static gboolean existe( const char *serie, const char *muestra,
     return r;
 }
 
+/* Sin \r: en Windows la madre escribe los ficheros de texto con \r\n, y lo
+   que se compara es el contenido, no el fin de linea de la plataforma (el
+   motor lee los dos). Igual en texto_editor(), para comparar lo mismo.  */
+static void sin_cr( gchar *c )
+{
+    gchar *w = c;
+
+    if ( c == NULL ) return;
+    for ( ; *c; c++ ) if ( *c != '\r' ) *w++ = *c;
+    *w = '\0';
+}
+
 static gchar *lee( const char *f )
 {
     gchar *c = NULL;
 
     if ( !g_file_get_contents( f, &c, NULL, NULL ) ) return g_strdup( "" );
+    sin_cr( c );
     return c;
 }
 
@@ -1364,7 +1377,10 @@ static Editor *editor_de( const char *id )
 
 static gchar *texto_editor( Editor *E )
 {
-    return texto_de( E->texto );
+    gchar *t = texto_de( E->texto );
+
+    sin_cr( t );
+    return t;
 }
 
 static const char *estado_editor( Editor *E )

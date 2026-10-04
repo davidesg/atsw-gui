@@ -304,7 +304,16 @@ static gchar *lee(const char *path) {
  * algun byte latin-1 (el 0xBD de fuf) y GTK no los admite tal cual.    */
 static gboolean vista_es_fichero(GtkWidget *vista, const char *path) {
     gchar *f = lee(path), *v = texto(vista), *fv = f ? g_utf8_make_valid(f, -1) : NULL;
-    gboolean r = fv && v && *v && strcmp(fv, v) == 0;
+    gboolean r;
+
+    /* El contenido, no el fin de linea: en Windows lo que guarda el GUI
+     * lleva \r\n y la vista no.                                       */
+    for (gchar **q = (gchar *[]){ fv, v, NULL }; *q; q++) {
+        gchar *c = *q, *w = *q;
+        for (; *c; c++) if (*c != '\r') *w++ = *c;
+        *w = '\0';
+    }
+    r = fv && v && *v && strcmp(fv, v) == 0;
 
     g_free(f); g_free(v); g_free(fv);
     return r;

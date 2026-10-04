@@ -44,7 +44,7 @@ static const char *pon( const char *nombre, const char *contenido )
 
 int main( int argc, char **argv )
 {
-    DtDatos d;
+    static DtDatos d;            /* 2,2 MB: en la pila de Windows (1 MB) no cabe */
     DtError e;
     char    b[256];
 

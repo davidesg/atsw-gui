@@ -2343,10 +2343,16 @@ int main(int argc, char *argv[]) {
     char *pixbuf_cache = g_build_filename(exe_dir, "lib", "gdk-pixbuf-2.0", "2.10.0", "loaders.cache", NULL);
     char *schema_dir = g_build_filename(exe_dir, "share", "glib-2.0", "schemas", NULL);
 
-    // Establecer variables de entorno
-    g_setenv("XDG_DATA_DIRS", data_dir, TRUE);
-    g_setenv("GDK_PIXBUF_MODULE_FILE", pixbuf_cache, TRUE);
-    g_setenv("GSETTINGS_SCHEMA_DIR", schema_dir, TRUE);
+    /* Solo si el paquete trae share/ al lado del .exe: si no (arbol de
+       construccion, MSYS2), GLib encuentra sus recursos en ../share y
+       pisarlos dejaba el selector de ficheros sin esquemas de GSettings,
+       que aborta. Igual que gui/fue/src/main.c. */
+    if (g_file_test(schema_dir, G_FILE_TEST_IS_DIR)) {
+        g_setenv("XDG_DATA_DIRS", data_dir, TRUE);
+        g_setenv("GSETTINGS_SCHEMA_DIR", schema_dir, TRUE);
+        if (g_file_test(pixbuf_cache, G_FILE_TEST_EXISTS))
+            g_setenv("GDK_PIXBUF_MODULE_FILE", pixbuf_cache, TRUE);
+    }
     // Opcional: usar backend memory si los esquemas no son críticos
     // g_setenv("GSETTINGS_BACKEND", "memory", TRUE);
     g_setenv("GTK_THEME", "Windows", TRUE);  // Tema básico

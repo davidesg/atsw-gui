@@ -65,7 +65,13 @@ corre() {        # corre NOMBRE ORDEN...
     ( sleep "$LIMITE"; echo "::error::$nombre: mas de $LIMITE s, la paro"; ensena_arbol "$pid" ""; mata_arbol "$pid" ) &
     local vig=$!
     wait "$pid"; local rc=$?
-    mata_arbol "$vig" 2>/dev/null; wait "$vig" 2>/dev/null
+    # EL VIGILANTE PRIMERO, su sleep despues. Al reves, al morir el sleep el
+    # vigilante llegaba a escribir "mas de LIMITE s" antes de que lo mataran:
+    # una falsa alarma sobre una bateria que habia pasado.
+    local hijos h; hijos=$(pgrep -P "$vig" 2>/dev/null)
+    kill -9 "$vig" 2>/dev/null
+    for h in $hijos; do mata_arbol "$h"; done
+    wait "$vig" 2>/dev/null
     echo "::endgroup::"
     echo "$nombre: rc=$rc en $((SECONDS - t0)) s"
     if [ $rc -ne 0 ]; then

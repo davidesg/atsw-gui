@@ -119,10 +119,13 @@ ok=$(echo "$ink" | awk -v c=$half '{ cx=($1+$2)/2; cy=($3+$4)/2;
 # Comprueba lo que el usuario acaba viendo. Hace falta un servidor grafico;
 # si no lo hay, se salta.
 # --------------------------------------------------------------------------
+# -lz al enlazar, como en el Makefile del GUI: lib/xlsx usa zlib. En Linux
+# llegaba de rebote por las bibliotecas de GTK; el enlazador de macOS no
+# resuelve de rebote y test_gui no enlazaba.
 GUI_SRCS="$(ls "$TOP"/src/*.c | grep -v '/main\.c$') $LIB_SRCS $INPCHECK_O"
 $CC -O0 -g -Wall -I"$TOP/include" $LIB_INC $GTK_CFLAGS \
     "$TOP/tests/test_gui.c" $GUI_SRCS \
-    -o "$WORK/test_gui" $GTK_LIBS -lm 2> "$WORK/gui_build.txt" ||
+    -o "$WORK/test_gui" $GTK_LIBS -lz -lm 2> "$WORK/gui_build.txt" ||
     { cat "$WORK/gui_build.txt"; exit 1; }
 
 # El EDITOR DEL .inp ya no esta aqui: se mudo a la madre, sobre un nodo del
@@ -156,7 +159,7 @@ fi
 # --------------------------------------------------------------------------
 $CC -O0 -g -Wall -I"$TOP/include" $LIB_INC $GTK_CFLAGS \
     "$TOP/tests/test_operar.c" $GUI_SRCS \
-    -o "$WORK/test_operar" $GTK_LIBS -lm 2> "$WORK/operar_build.txt" ||
+    -o "$WORK/test_operar" $GTK_LIBS -lz -lm 2> "$WORK/operar_build.txt" ||
     { cat "$WORK/operar_build.txt"; exit 1; }
 
 if command -v fue > /dev/null 2>&1 && command -v fuf > /dev/null 2>&1; then

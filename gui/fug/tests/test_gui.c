@@ -980,6 +980,10 @@ int main(int argc, char **argv)
         fprintf(stderr, "fallo simulado del motor\n");
         return 3;
     }
+    /* Sin bufer: si el programa se cae (en Windows una caida no vacia los
+     * buferes), lo ya escrito tiene que verse para saber donde fue.   */
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
     if (argc < 5) {
         fprintf(stderr, "uso: test_gui <dir> <ART.inp> <FULL.inp> <libro.xlsx|->\n");
         return 2;

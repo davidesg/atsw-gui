@@ -15,11 +15,21 @@
 #include <signal.h>
 #ifdef _WIN32
 #include <windows.h>
+#include <io.h>
+#include <fcntl.h>
 #endif
 
 int main(int argc, char **argv)
 {
     const char *caso = argc > 1 ? argv[1] : "";
+
+#ifdef _WIN32
+    /* En binario, como escriben los motores de verdad en Linux: en modo
+     * texto Windows anade \r a cada linea y la prueba leia "2\r" donde
+     * el motor habia dicho "2".                                         */
+    _setmode(_fileno(stdout), _O_BINARY);
+    _setmode(_fileno(stderr), _O_BINARY);
+#endif
 
     if (!strcmp(caso, "ok")) {
         printf("FUE: banner\nCreated ok.pdf\n");

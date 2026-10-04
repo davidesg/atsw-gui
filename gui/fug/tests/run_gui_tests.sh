@@ -93,6 +93,7 @@ tail -n 1 "$WORK/gui.txt"
 if [ $rc != 0 ]; then
     # Un cuelgue o un fallo sin FAIL: que se vea por que.
     grep -q '^FAIL' "$WORK/gui.txt" || tail -n 20 "$WORK/gui.err"
+    echo "(lo ultimo que dijo la prueba:)"; tail -n 5 "$WORK/gui.txt"
     echo "FAIL: gtk_fmg conducido: estado $rc"
     exit 1
 fi

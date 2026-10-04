@@ -2090,8 +2090,11 @@ int detectar_y_ajustar_estacionalidad(const double *raw, int n_raw, DataParamete
     int estacionalidad_detectada = resultado_estacional->seasonal_detected;
     double p_valor = resultado_estacional->p_value;
 
-    art_msg("Resultado detección estacional: %s (p=%.4f)",
-            estacionalidad_detectada ? "DETECTADA" : "NO DETECTADA", p_valor);
+    printf("Resultado detección estacional: %s (p=%.4f)\n",
+           estacionalidad_detectada ? "DETECTADA" : "NO DETECTADA", p_valor);
+    art_note("Seasonality: %s (HAC F p = %.4f)",
+             estacionalidad_detectada ? "a deterministic pattern is detected"
+                                      : "no deterministic pattern detected", p_valor);
     if (art_tl_ctx && art_tl_ctx->res) {
         ArtResult *ar = art_tl_ctx->res;
         ar->seasonal_tested = 1;

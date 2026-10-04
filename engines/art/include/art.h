@@ -98,6 +98,7 @@ typedef struct {
 extern _Thread_local ArtContext *art_tl_ctx;
 int  art_cancelled(void);
 void art_msg(const char *fmt, ...);
+void art_note(const char *fmt, ...);
 int  art_log(const char *fmt, ...);
 
 #endif /* ART_H */

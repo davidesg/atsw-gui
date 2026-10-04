@@ -36,6 +36,17 @@ void art_msg(const char *fmt, ...)
         fprintf(stdout, "%s\n", buf);
 }
 
+/* A message for the caller only (nothing on stdout). */
+void art_note(const char *fmt, ...)
+{
+    if (!(art_tl_ctx && art_tl_ctx->res && art_tl_ctx->res->n_messages < ART_MAX_MSG)) return;
+    ArtResult *r = art_tl_ctx->res;
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(r->messages[r->n_messages++], ART_MSG_LEN, fmt, ap);
+    va_end(ap);
+}
+
 /* printf, silenced by `quiet`: the engine's sources route printf here. */
 int art_log(const char *fmt, ...)
 {

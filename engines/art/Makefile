@@ -1,152 +1,109 @@
-# Makefile for ART (Automatic ARMA/SARIMA Detection)
-# Soporta Linux, macOS, Windows (MSYS2/MinGW) y cross‑compilación con MXE
-# Compila:
-#   - GUI: bin/art_gui (requiere GTK+3 y GSL)
-#   - CLI: bin/art_cli (solo requiere GSL)
+# Makefile for art 18.2.1 -- the ARMA/SARIMA identifier (console engine)
+# Works on Linux, macOS, and Windows (MSYS2/MinGW-w64)
+# Also supports cross-compilation to Windows from Linux using MXE
+#   Example: make CROSS=x86_64-w64-mingw32.static-
+#
+#   bin/art      the engine: a data file in, DATA_art.out and DATA_art.cand out
+#   bin/art_cli  ART_18's development CLI (simulation, benchmarks, regression)
+#
+# The engine sources are in src/, the headers in include/. ART_18's GTK GUI
+# did not come with the engine (docs/ESTUDIO-identificador.md): the window is
+# lib/analisis's.
 
 ifdef CROSS
-    OS = windows
-    EXE_EXT = .exe
-    CC = $(CROSS)gcc
+    OS         = windows
+    EXE_EXT    = .exe
+    CC         = $(CROSS)gcc
     PKG_CONFIG = $(CROSS)pkg-config
-    LDFLAGS += -static
+    LDFLAGS   += -static
 else
     UNAME_S := $(shell uname -s)
     ifeq ($(UNAME_S),Linux)
-        OS = linux
+        OS      = linux
         EXE_EXT =
     endif
     ifeq ($(UNAME_S),Darwin)
-        OS = macos
+        OS      = macos
         EXE_EXT =
     endif
     ifeq ($(OS),)
-        OS = windows
+        OS      = windows
         EXE_EXT = .exe
     endif
-    CC = gcc
+    CC         = gcc
     PKG_CONFIG = pkg-config
 endif
 
-CFLAGS   = -O2 -g -Wall -Iinclude -MMD -MP
-LDFLAGS  +=
-LIBS     = -lm
+LIB_DIR = ../../lib
+CFLAGS  = -O2 -g -Wall -Iinclude -I$(LIB_DIR)/datos -I$(LIB_DIR)/xlsx -I$(LIB_DIR)/rutas
+LDFLAGS +=
+LIBS    = -lz -lm
 
 SRC_DIR   = src
-GUI_DIR   = gui
-CLI_DIR   = cli
-INCLUDE_DIR = include
-BUILD_DIR = build
+BUILD_DIR = obj
 BIN_DIR   = bin
 
-# ---------- Fuentes y objetos del núcleo (sin GUI) ----------
 SRCS = $(wildcard $(SRC_DIR)/*.c)
 OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS))
 
-# ---------- Fuentes y objetos de la GUI ----------
-GUI_SRCS = $(wildcard $(GUI_DIR)/*.c)
-GUI_OBJS = $(patsubst $(GUI_DIR)/%.c,$(BUILD_DIR)/gui/%.o,$(GUI_SRCS))
+# lib/: the data door (lib/datos, which reads .xlsx through lib/xlsx) and the
+# file names that keep their directory (lib/rutas).
+LIB_OBJS = $(BUILD_DIR)/lib_datos.o $(BUILD_DIR)/lib_xlsx.o $(BUILD_DIR)/lib_rutas.o
 
-# ---------- Fuente y objeto de la CLI ----------
-CLI_SRC = $(CLI_DIR)/main_cli.c
-CLI_OBJ = $(BUILD_DIR)/main_cli.o
+TARGET     = $(BIN_DIR)/art$(EXE_EXT)
+TARGET_DEV = $(BIN_DIR)/art_cli$(EXE_EXT)
 
-# ---------- Ejecutables finales ----------
-TARGET_GUI = $(BIN_DIR)/art_gui$(EXE_EXT)
-TARGET_CLI = $(BIN_DIR)/art_cli$(EXE_EXT)
-
-# ---------- Flags para GTK+3 y GSL ----------
-GTK_CFLAGS := $(shell $(PKG_CONFIG) --cflags gtk+-3.0 2>/dev/null)
-GTK_LIBS   := $(shell $(PKG_CONFIG) --libs   gtk+-3.0 2>/dev/null)
 GSL_CFLAGS := $(shell $(PKG_CONFIG) --cflags gsl 2>/dev/null)
 GSL_LIBS   := $(shell $(PKG_CONFIG) --libs   gsl 2>/dev/null)
-
-# Fallbacks por si pkg-config falla
-ifeq ($(GTK_CFLAGS),)
-    GTK_CFLAGS = $(shell pkg-config --cflags gtk+-3.0 2>/dev/null || echo "")
-    GTK_LIBS   = $(shell pkg-config --libs   gtk+-3.0 2>/dev/null || echo "-lgtk-3 -lgdk-3 -lgobject-2.0 -lglib-2.0")
+ifeq ($(GSL_LIBS),)
+    GSL_CFLAGS =
+    GSL_LIBS   = -lgsl -lgslcblas
 endif
-ifeq ($(GSL_CFLAGS),)
-    GSL_CFLAGS = $(shell pkg-config --cflags gsl 2>/dev/null || echo "")
-    GSL_LIBS   = $(shell pkg-config --libs   gsl 2>/dev/null || echo "-lgsl -lgslcblas")
-endif
-
 ifeq ($(OS),macos)
     PKG_CONFIG_PATH ?= /usr/local/lib/pkgconfig:/opt/homebrew/lib/pkgconfig
     export PKG_CONFIG_PATH
 endif
 
-# Flags específicos para la GUI (con GTK)
-GUI_CFLAGS = $(CFLAGS) $(GTK_CFLAGS) $(GSL_CFLAGS)
-GUI_LIBS   = $(GTK_LIBS) $(GSL_LIBS) -lm
+ALL_CFLAGS = $(CFLAGS) $(GSL_CFLAGS)
+ALL_LIBS   = $(GSL_LIBS) $(LIBS)
 
-# ---------- Reglas por defecto ----------
-all: $(TARGET_GUI)   # Solo GUI por defecto (opcional: añadir $(TARGET_CLI))
+.PHONY: all dev check clean
 
-# Compilar solo la CLI
-cli: $(TARGET_CLI)
+all: $(TARGET)
 
-# ---------- Crear directorios ----------
-$(BUILD_DIR):
-	mkdir -p $(BUILD_DIR)
+dev: $(TARGET_DEV)
 
-$(BUILD_DIR)/gui:
-	mkdir -p $(BUILD_DIR)/gui
+$(TARGET): $(OBJS) $(BUILD_DIR)/art_main.o $(LIB_OBJS) | $(BIN_DIR)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ALL_LIBS)
 
-$(BIN_DIR):
-	mkdir -p $(BIN_DIR)
+$(TARGET_DEV): $(OBJS) $(BUILD_DIR)/main_cli.o | $(BIN_DIR)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ALL_LIBS)
 
-# ---------- Compilar objetos del núcleo (sin GTK) ----------
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(ALL_CFLAGS) -MMD -MP -c $< -o $@
 
-# ---------- Compilar objetos de la GUI (con GTK) ----------
-$(BUILD_DIR)/gui/%.o: $(GUI_DIR)/%.c | $(BUILD_DIR)/gui
-	$(CC) $(GUI_CFLAGS) -c $< -o $@
+$(BUILD_DIR)/art_main.o: cli/art.c | $(BUILD_DIR)
+	$(CC) $(ALL_CFLAGS) -MMD -MP -c $< -o $@
 
-# ---------- Compilar objeto de la CLI (sin GTK) ----------
-$(CLI_OBJ): $(CLI_SRC) | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@
+$(BUILD_DIR)/main_cli.o: cli/main_cli.c | $(BUILD_DIR)
+	$(CC) $(ALL_CFLAGS) -MMD -MP -c $< -o $@
 
-# ---------- Enlazar ejecutable GUI ----------
-$(TARGET_GUI): $(OBJS) $(GUI_OBJS) | $(BIN_DIR)
-	$(CC) $(LDFLAGS) -o $@ $^ $(GUI_LIBS)
+$(BUILD_DIR)/lib_datos.o: $(LIB_DIR)/datos/datos.c | $(BUILD_DIR)
+	$(CC) $(ALL_CFLAGS) -MMD -MP -c $< -o $@
 
-# ---------- Enlazar ejecutable CLI ----------
-$(TARGET_CLI): $(OBJS) $(CLI_OBJ) | $(BIN_DIR)
-	$(CC) $(LDFLAGS) -o $@ $^ $(GSL_LIBS) -lm -lpthread
+$(BUILD_DIR)/lib_xlsx.o: $(LIB_DIR)/xlsx/xlsx.c | $(BUILD_DIR)
+	$(CC) $(ALL_CFLAGS) -MMD -MP -c $< -o $@
 
-# ---------- Limpieza ----------
+$(BUILD_DIR)/lib_rutas.o: $(LIB_DIR)/rutas/rutas.c | $(BUILD_DIR)
+	$(CC) $(ALL_CFLAGS) -MMD -MP -c $< -o $@
+
+$(BUILD_DIR) $(BIN_DIR):
+	mkdir -p $@
+
+check: $(TARGET)
+	sh tests/run_tests.sh $(TARGET)
+
 clean:
-	rm -rf $(BUILD_DIR)/*.o $(BUILD_DIR)/gui/*.o $(TARGET_GUI) $(TARGET_CLI)
-
-distclean: clean
 	rm -rf $(BUILD_DIR) $(BIN_DIR)
 
-# ---------- Instalación (solo GUI, opcional) ----------
-install: $(TARGET_GUI)
-	cp $(TARGET_GUI) /usr/local/bin/
-
-uninstall:
-	rm -f /usr/local/bin/art_gui$(EXE_EXT)
-
-# ---------- Ayuda ----------
-help:
-	@echo "Targets disponibles:"
-	@echo "  all       - compilar la GUI (por defecto)"
-	@echo "  cli       - compilar la versión CLI (art_cli)"
-	@echo "  clean     - eliminar objetos y ejecutables"
-	@echo "  distclean - eliminar build/ y bin/"
-	@echo "  install   - instalar art_gui en /usr/local/bin"
-	@echo "  uninstall - desinstalar"
-	@echo "  help      - mostrar este mensaje"
-	@echo ""
-	@echo "Compilación cruzada a Windows (estática) desde Linux con MXE:"
-	@echo "  make CROSS=i686-w64-mingw32.static-      # 32 bits"
-	@echo "  make CROSS=x86_64-w64-mingw32.static-    # 64 bits"
-	@echo "  (Asegurar que MXE está en PATH y PKG_CONFIG_PATH apunta a sus librerías)"
-
-# ---------- Dependencias automáticas de headers (-MMD) ----------
--include $(OBJS:.o=.d) $(GUI_OBJS:.o=.d) $(CLI_OBJ:.o=.d)
-
-.PHONY: all cli clean distclean install uninstall help
+-include $(wildcard $(BUILD_DIR)/*.d)

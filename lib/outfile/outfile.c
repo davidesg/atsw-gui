@@ -206,6 +206,8 @@ gboolean fueout_read( const char *path, FueOut *o )
 
         if ( sscanf( l, "Observations: %d", &k ) == 1 ) { o->nobs = k; o->hay = TRUE; }
         else if ( sscanf( l, "Parameters  : %d", &k ) == 1 ) o->npar = k;
+        else if ( sscanf( l, "logelf: %lf", &v ) == 1 )
+            { o->logelf = v; o->tiene_logelf = TRUE; }
         else if ( sscanf( l, "Box-Cox lambda     : %lf", &v ) == 1 )
             { o->lambda = v; det_cur = 0; }   /* aqui acaban los omegas */
         else if ( sscanf( l, "Seasonal period    : %d", &k ) == 1 ) o->s = k;

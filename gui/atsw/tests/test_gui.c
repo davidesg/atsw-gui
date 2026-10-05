@@ -2190,6 +2190,79 @@ static void casos( void )
     check( s && !strcmp( s, "(sin razón)" ), "y sin razon se ve como sin razon", s );
     g_free( s );
 
+    /* --- LA PUERTA DIAGONAL: la conjunta contra la suma de las univariantes */
+    {
+    const PrCaso *c = pr_caso_ver( A.p, "C1" );
+    double        suma = 0.0;
+    char          r2[PR_RUTA], r3[PR_RUTA], esperado[64];
+    int           k;
+
+    /* La logL de cada entrada, del .out de fue de su modelo. Si alguna no
+       lo tiene todavia, se le escribe uno con su logelf: lo que se prueba
+       es la suma, no fue.                                              */
+    for ( k = 0; c && k < c->nen; k++ )
+        {
+        char    o[PR_RUTA];
+        FueOut *fo = g_new0( FueOut, 1 );
+
+        pr_ruta( A.p, c->en[k].serie, c->muestra, c->en[k].modelo, ".out", o,
+                 sizeof o );
+        if ( !fueout_read( o, fo ) || !fo->tiene_logelf )
+            {
+            gchar *t = g_strdup_printf( "logelf: %.10f\n", -100.0 * ( k + 1 ) );
+
+            g_file_set_contents( o, t, -1, NULL );
+            g_free( t );
+            memset( fo, 0, sizeof *fo );
+            fueout_read( o, fo );
+            }
+        suma += fo->logelf;
+        g_free( fo );
+        }
+
+    /* c02: diagonal, y la reproduce. c03: diagonal, y no. */
+    pr_corrida_nueva( A.p, "C1", "c01", id, sizeof id, r2, sizeof r2, &e );
+    pr_corrida_nueva( A.p, "C1", "c01", id, sizeof id, r3, sizeof r3, &e );
+    {
+    gchar *t2 = g_strdup_printf( "DRTRAN 1.0\n\nTransfer function orders:\n"
+                                 "  input 1: b = 0, r = 0, s = -1\n\n"
+                                 "Log-likelihood = %.6f\n", suma );
+    gchar *t3 = g_strdup_printf( "DRTRAN 1.0\n\nTransfer function orders:\n"
+                                 "  input 1: b = 0, r = 0, s = -1\n\n"
+                                 "Log-likelihood = %.6f\n", suma + 0.5 );
+
+    g_file_set_contents( r2, t2, -1, NULL );
+    g_file_set_contents( r3, t3, -1, NULL );
+    g_free( t2 ); g_free( t3 );
+    }
+    atsw_guarda( &A, &e );
+    atsw_refresca( &A );
+
+    s = celda_arbol( A.c_corridas, CO_ID, "c02", CO_PUERTA );
+    check( s && !strcmp( s, "cuadra" ),
+           "una corrida diagonal que reproduce la suma de las univariantes: cuadra", s );
+    g_free( s );
+    s = celda_arbol( A.c_corridas, CO_ID, "c03", CO_PUERTA );
+    check( s && !strcmp( s, "NO cuadra (+0.5000)" ),
+           "una diagonal que no la reproduce: NO cuadra, y por cuanto", s );
+    g_free( s );
+    snprintf( esperado, sizeof esperado, "%+.2f", -767.42 - suma );
+    s = celda_arbol( A.c_corridas, CO_ID, "c00", CO_PUERTA );
+    check( s && !strcmp( s, esperado ),
+           "con transferencia: lo que gana sobre los univariantes", s );
+    g_free( s );
+    s = celda_arbol( A.c_corridas, CO_ID, "c01", CO_PUERTA );
+    check( s && !strcmp( s, "—" ), "sin .out, la puerta no se inventa", s );
+    g_free( s );
+
+    /* Se quitan: lo que viene despues cuenta las corridas que habia. */
+    pr_corrida_borra( A.p, "C1", "c03", &e );
+    pr_corrida_borra( A.p, "C1", "c02", &e );
+    g_remove( r2 ); g_remove( r3 );
+    atsw_guarda( &A, &e );
+    atsw_refresca( &A );
+    }
+
     check( marca_arbol( A.c_corridas, CO_ID, "c01" ), "se puede marcar c01", NULL );
     atsw_caso_lanza( &A, "atsw_hijo_falso" );
     v = lo_que_recibio();
@@ -2403,7 +2476,7 @@ static void legado( const char *padre, const char *y, const char *x,
 
 static void legados( void )
 {
-    char     l1[PR_ID], l2[PR_ID], l3[PR_ID], ruta[PR_RUTA];
+    char     l1[PR_ID], l2[PR_ID], l3[PR_ID], l4[PR_ID], m5[PR_ID], ruta[PR_RUTA];
     gchar   *y = ruta_de( "ipc", "", "m01", ".pre" );
     gchar   *x = ruta_de( "wti", "", "m01", ".pre" );
     gchar   *fuera = g_build_filename( T, "fuera", "work", "OTRA_m01.pre", NULL );
@@ -2418,15 +2491,26 @@ static void legados( void )
     legado( NULL, y, x, "\n",   TRUE,  "la diagonal",    l1, sizeof l1 );
     legado( l1,   y, x, "\r\n", FALSE, "fuera omega_1",  l2, sizeof l2 );
     legado( NULL, y, fuera, "\n", FALSE, "con otra serie", l3, sizeof l3 );
+    /* Una que se podria convertir, pero de ella cuelga un modelo DE VERDAD
+       de fue (con su .inp): moverla dejaria a ese modelo sin padre. */
+    legado( NULL, y, x, "\n", FALSE, "sostiene a otro", l4, sizeof l4 );
+    pr_deriva( A.p, "ipc", "", l4, m5, sizeof m5, NULL, 0, &e );
+    {
+    gchar *f5 = ruta_de( "ipc", "", m5, ".inp" );
+
+    g_file_set_contents( f5, "un .inp de fue\n", -1, NULL );
+    g_free( f5 );
+    }
     pr_elige( A.p, "ipc", "", l2, "la buena", &e );
     atsw_guarda( &A, &e );
     atsw_refresca( &A );
 
-    check( atsw_legados( A.p, NULL, 0 ) == 3,
-           "las tres corridas viejas se reconocen (.out y .dag, sin .inp)", NULL );
+    check( atsw_legados( A.p, NULL, 0 ) == 4,
+           "las cuatro corridas viejas se reconocen (.out y .dag, sin .inp), "
+           "y el modelo de fue con .inp no", NULL );
     check( gtk_widget_get_visible( A.caja_legado ) &&
            strstr( gtk_label_get_text( GTK_LABEL(A.ver_legado) ),
-                   "3 corridas de drtran registradas como modelos de ipc" ),
+                   "4 corridas de drtran registradas como modelos de ipc" ),
            "y el veredicto lo dice",
            gtk_label_get_text( GTK_LABEL(A.ver_legado) ) );
 
@@ -2434,7 +2518,7 @@ static void legados( void )
     responde( "¿Convierto en casos", contesta, GINT_TO_POINTER(GTK_RESPONSE_CANCEL) );
     gtk_button_clicked( GTK_BUTTON(A.b_convertir) );
     todo_atendido( "«Convertir en casos…» tenia que preguntar" );
-    check( atsw_legados( A.p, NULL, 0 ) == 3 && A.p->nca == 1,
+    check( atsw_legados( A.p, NULL, 0 ) == 4 && A.p->nca == 1,
            "si no se confirma, no se convierte nada", barra() );
 
     olvida();
@@ -2490,9 +2574,16 @@ static void legados( void )
     check( k >= 0 && !strcmp( A.p->m[k].razon, "con otra serie" ) &&
            existe( "ipc", "", l3, ".out" ),
            "el que nombra un .pre de fuera se queda como estaba", NULL );
+    k = pr_modelo_idx( A.p, "ipc", "", l4 );
+    check( k >= 0 && existe( "ipc", "", l4, ".out" ) &&
+           existe( "ipc", "", l4, ".dag" ) &&
+           pr_modelo_idx( A.p, "ipc", "", m5 ) >= 0,
+           "el que sostiene a un modelo de fue tambien, y el modelo con el", NULL );
+    check( strstr( barra(), "de ella cuelga" ) != NULL,
+           "y la barra dice por que", barra() );
     }
     check( strstr( gtk_label_get_text( GTK_LABEL(A.ver_legado) ),
-                   "1 corrida de drtran registrada como modelos de ipc" ) != NULL,
+                   "2 corridas de drtran registradas como modelos de ipc" ) != NULL,
            "y el veredicto cuenta el que queda",
            gtk_label_get_text( GTK_LABEL(A.ver_legado) ) );
     {

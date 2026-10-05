@@ -191,6 +191,13 @@ typedef struct {
     gboolean tiene_lb;
     double   lb_q, lb_p;
     int      lb_df;
+
+    /* LA LOG-VEROSIMILITUD EXACTA ("logelf:"). Es la MISMA formula que
+     * drtran imprime como "Log-likelihood =" (fue.c eval_model), asi que la
+     * suma de las de las entradas de un caso es lo que la corrida diagonal
+     * tiene que reproducir: la puerta de la escalera (DISENO-casos.md).  */
+    gboolean tiene_logelf;
+    double   logelf;
 } FueOut;
 
 /* Lee el .out. TRUE si reconocio algo. No reserva nada: no hay que liberar. */

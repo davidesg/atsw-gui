@@ -27,6 +27,7 @@
 #include "atsw.h"
 #include "inpfile.h"
 #include "dates.h"
+#include "outfile.h"
 
 void barra_pub( Atsw *a, const char *s );
 
@@ -1004,6 +1005,96 @@ GtkWidget *atsw_caso_vista( Atsw *a )
     return v;
 }
 
+/* LA SUMA DE LAS logL UNIVARIANTES de las entradas, de los .out de fue de
+ * sus modelos ("logelf:"). Es la MISMA formula que drtran imprime como
+ * "Log-likelihood", asi que una corrida diagonal la tiene que reproducir:
+ * es la puerta de la escalera. TRUE si estaban todas; si no, en falta dice
+ * cual no.                                                              */
+static gboolean suma_univariantes( Atsw *a, const PrCaso *c, double *suma,
+                                   char *falta, size_t nf )
+{
+    int i;
+
+    *suma = 0.0;
+    for ( i = 0; i < c->nen; i++ )
+        {
+        char    out[PR_RUTA];
+        FueOut *o = g_new0( FueOut, 1 );
+        gboolean ok;
+
+        /* Lo que hace falta es el logelf; fueout_read solo da TRUE cuando
+           ve la cabecera entera, y para esto no hace falta.            */
+        ok = pr_ruta( a->p, c->en[i].serie, c->muestra, c->en[i].modelo,
+                      ".out", out, sizeof out ) == 0;
+        if ( ok ) { fueout_read( out, o ); ok = o->tiene_logelf; }
+        if ( ok ) *suma += o->logelf;
+        g_free( o );
+        if ( !ok )
+            {
+            snprintf( falta, nf, "%s/%s", c->en[i].serie, c->en[i].modelo );
+            return FALSE;
+            }
+        }
+    return TRUE;
+}
+
+/* LA PUERTA, EN UNA CELDA Y SU GLOBO.
+ *
+ * Diagonal: la conjunta TIENE que ser la suma de las univariantes (drtran
+ * imprime seis decimales; se admite 1e-3). Si no cuadra, los .pre no eran
+ * optimos de sus modelos --eran especificaciones-- o no son los datos que
+ * se creian, y nada de lo que se cruce encima es de fiar.
+ *
+ * Con transferencia no tiene que cuadrar: la diferencia es lo que GANA el
+ * modelo conjunto sobre los univariantes, y se enseña como tal.         */
+#define PUERTA_TOL 1e-3
+
+static void puerta_de( Atsw *a, const PrCaso *c, const Diagnosis *d,
+                       char *celda, size_t nc, char *globo, size_t ng )
+{
+    char   falta[PR_TEXTO];
+    double suma;
+
+    snprintf( celda, nc, "—" );
+    globo[0] = '\0';
+    if ( d == NULL || !d->tiene_logl )
+        { snprintf( globo, ng, "Sin logL conjunta en el .out." ); return; }
+    if ( !suma_univariantes( a, c, &suma, falta, sizeof falta ) )
+        {
+        snprintf( globo, ng, "Falta la logL univariante de %s: su .out de fue "
+                  "no está o no trae «logelf».", falta );
+        return;
+        }
+    if ( d->diagonal )
+        {
+        double dif = d->logl - suma;
+
+        if ( dif <= PUERTA_TOL && dif >= -PUERTA_TOL )
+            {
+            snprintf( celda, nc, "cuadra" );
+            snprintf( globo, ng, "Diagonal: la conjunta (%.4f) reproduce la suma "
+                      "de las univariantes (%.4f). Los .pre son óptimos de sus "
+                      "modelos y la escalera se sostiene.", d->logl, suma );
+            }
+        else
+            {
+            snprintf( celda, nc, "NO cuadra (%+.4f)", dif );
+            snprintf( globo, ng, "Diagonal: la conjunta (%.4f) NO es la suma de "
+                      "las univariantes (%.4f). Algún .pre no es el óptimo de su "
+                      "modelo, o no son los datos que se creía: lo que se cruce "
+                      "encima no es de fiar.", d->logl, suma );
+            }
+        }
+    else
+        {
+        snprintf( celda, nc, "%+.2f", d->logl - suma );
+        snprintf( globo, ng, "Con transferencia: la conjunta (%.4f) gana %.4f "
+                  "sobre la suma de las univariantes (%.4f). La puerta se "
+                  "contrasta en la corrida diagonal (drtran -0).", d->logl,
+                  d->logl - suma, suma );
+        }
+}
+
 /* UNA CORRIDA Y LAS QUE CUELGAN DE ELLA. Recursiva, como el linaje de los
    modelos: la cadena puede ser larga pero no es ancha.                */
 static void cuelga_corridas( Atsw *a, const PrCaso *c, GtkTreeStore *st,
@@ -1019,6 +1110,7 @@ static void cuelga_corridas( Atsw *a, const PrCaso *c, GtkTreeStore *st,
         const PrCorrida *r = &a->p->co[i];
         GtkTreeIter      it;
         char             out[PR_RUTA], logl[48] = "—";
+        char             puerta[64] = "—", gpuerta[512] = "";
         gboolean         hay_out;
         gchar           *globo;
 
@@ -1035,20 +1127,19 @@ static void cuelga_corridas( Atsw *a, const PrCaso *c, GtkTreeStore *st,
 
             if ( od_parse_file( out, d ) != -1 && d->tiene_logl )
                 g_ascii_formatd( logl, sizeof logl, "%.2f", d->logl );
+            puerta_de( a, c, d, puerta, sizeof puerta, gpuerta, sizeof gpuerta );
             g_free( d );
             }
 
         globo = g_strdup_printf(
-            "%s · versión %d%s%s · creada %s\n%s%s%s\n\n"
-            "Puerta diagonal: la suma de las logL univariantes contra la "
-            "conjunta del diagonal. drtran no la escribe en el .out; la "
-            "contrasta la Diagnosis de drtran_gui con su baseline.",
+            "%s · versión %d%s%s · creada %s\n%s%s%s\n\n%s",
             r->id, r->version, r->padre[0] ? " · cuelga de " : "", r->padre,
             r->creado[0] ? r->creado : "—",
             hay_out ? out : "Sin .out: no se ha estimado, o se borró.",
             r->elegido ? "\n\nLa elegida: " : "",
             r->elegido ? ( r->razon_elegido[0] ? r->razon_elegido
-                                               : "(sin razón)" ) : "" );
+                                               : "(sin razón)" ) : "",
+            gpuerta[0] ? gpuerta : "Puerta: sin .out, no hay nada que contrastar." );
 
         gtk_tree_store_append( st, &it, padre );
         gtk_tree_store_set( st, &it,
@@ -1056,7 +1147,7 @@ static void cuelga_corridas( Atsw *a, const PrCaso *c, GtkTreeStore *st,
             CO_ESTRELLA, ( eleg[0] && !strcmp( eleg, r->id ) ) ? "★" : "",
             CO_RAZON,    r->razon[0] ? r->razon : "(sin razón)",
             CO_LOGL,     logl,
-            CO_PUERTA,   "—",
+            CO_PUERTA,   puerta,
             CO_ESTADO,   desfasado ? "⚠ desfasada"
                                   : ( hay_out ? "" : "sin .out" ),
             CO_GLOBO,    globo,

@@ -90,6 +90,11 @@ typedef struct {
 
    double   logl;
    int      tiene_logl;
+
+   /* UNA CORRIDA DIAGONAL (drtran -0): todas las entradas con s = -1 en
+    * "Transfer function orders" y sin "Transfer network". Es la que tiene
+    * que reproducir la suma de los univariantes; las demas, no.          */
+   int      diagonal;
 } Diagnosis;
 
 /* Lee el .out. Devuelve 0 si encontro algo de diagnosis, 1 si no.

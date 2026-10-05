@@ -685,10 +685,15 @@ void an_anomalos( const AnHost *h, const char *serie, const char *muestra,
 
     g->l_q = gtk_label_new( NULL );
     gtk_label_set_xalign( GTK_LABEL(g->l_q), 0.0 );
+    /* Con ajuste de linea: sin el, una etiqueta exige de ancho minimo su
+       texto entero, y el Q con y sin, mas sus botones, imponia a la ventana
+       un minimo que en una pantalla pequeña no cabe.                   */
+    gtk_label_set_line_wrap( GTK_LABEL(g->l_q), TRUE );
     gtk_box_pack_start( GTK_BOX(fila), g->l_q, TRUE, TRUE, 8 );
 
     g->l_jb = gtk_label_new( NULL );
     gtk_label_set_xalign( GTK_LABEL(g->l_jb), 0.0 );
+    gtk_label_set_line_wrap( GTK_LABEL(g->l_jb), TRUE );
     gtk_widget_set_tooltip_text( g->l_jb,
         "La normalidad de los residuos, con y sin lo marcado. Un extremo "
         "dispara la curtosis --va a la cuarta potencia-- mucho más de lo que "

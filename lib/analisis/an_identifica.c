@@ -547,7 +547,7 @@ static void on_reidentificar( GtkButton *b, Id *g )
 
 static void ventana( Id *g, const char *que )
 {
-    GtkWidget *caja, *l, *sw, *barra, *b;
+    GtkWidget *caja, *l, *sw, *barra, *b, *caja_grafico, *abajo_ident;
     GString   *cab = g_string_new( "" );
 
     g_snprintf( g->que, sizeof g->que, "%s", que );
@@ -560,7 +560,24 @@ static void ventana( Id *g, const char *que )
     gtk_window_set_title( GTK_WINDOW(g->win), t );
     g_free( t );
     if ( g->h.padre ) gtk_window_set_transient_for( GTK_WINDOW(g->win), g->h.padre );
-    gtk_window_set_default_size( GTK_WINDOW(g->win), 820, 760 );
+    /* EL TAMAÑO, EL QUE QUEPA. Se abria a 820x760 con un minimo aun mayor
+       (el grafico pedia 760x380 y la lista 200 mas, y encima la cabecera,
+       los mensajes y los botones): en una pantalla de 1366x768 la ventana
+       se salia por abajo y no se podia maximizar. Ahora el 90 % del area
+       de trabajo como mucho, y el grafico y la lista se reparten el alto
+       con un divisor.                                                  */
+    {
+        GdkDisplay  *dpy = gdk_display_get_default();
+        GdkMonitor  *mon = dpy ? gdk_display_get_primary_monitor( dpy ) : NULL;
+        GdkRectangle wa = { 0, 0, 820, 760 };
+
+        if ( mon == NULL && dpy && gdk_display_get_n_monitors( dpy ) > 0 )
+            mon = gdk_display_get_monitor( dpy, 0 );
+        if ( mon ) gdk_monitor_get_workarea( mon, &wa );
+        gtk_window_set_default_size( GTK_WINDOW(g->win),
+                                     MIN( 820, (int) ( 0.9 * wa.width ) ),
+                                     MIN( 760, (int) ( 0.9 * wa.height ) ) );
+    }
 
     caja = gtk_box_new( GTK_ORIENTATION_VERTICAL, 6 );
     gtk_container_set_border_width( GTK_CONTAINER(caja), 8 );
@@ -603,17 +620,29 @@ static void ventana( Id *g, const char *que )
     cabecera( g );
     g_string_free( cab, TRUE );
 
-    /* the correlograms */
+    /* the correlograms, and below them the candidates, sharing the height
+       through a divider: on a small screen the analyst decides what to see */
+    {
+    GtkWidget *panel = gtk_paned_new( GTK_ORIENTATION_VERTICAL );
+    GtkWidget *arriba = gtk_box_new( GTK_ORIENTATION_VERTICAL, 4 );
+    abajo_ident = gtk_box_new( GTK_ORIENTATION_VERTICAL, 4 );
+
+    gtk_paned_pack1( GTK_PANED(panel), arriba, TRUE, FALSE );
+    gtk_paned_pack2( GTK_PANED(panel), abajo_ident, TRUE, FALSE );
+    gtk_box_pack_start( GTK_BOX(caja), panel, TRUE, TRUE, 0 );
+
     g->area = gtk_drawing_area_new();
-    gtk_widget_set_size_request( g->area, 760, 380 );
+    gtk_widget_set_size_request( g->area, 360, 160 );
     g_signal_connect( g->area, "draw", G_CALLBACK(pinta), g );
-    gtk_box_pack_start( GTK_BOX(caja), g->area, TRUE, TRUE, 0 );
+    gtk_box_pack_start( GTK_BOX(arriba), g->area, TRUE, TRUE, 0 );
+    caja_grafico = arriba;
+    }
     l = gtk_label_new( NULL );
     gtk_label_set_markup( GTK_LABEL(l),
         "<small>Barras: la ACF y la PACF de la serie identificada. En rojo, la "
         "teórica del candidato elegido en la lista. Discontinua: la banda.</small>" );
     gtk_label_set_xalign( GTK_LABEL(l), 0.0 );
-    gtk_box_pack_start( GTK_BOX(caja), l, FALSE, FALSE, 0 );
+    gtk_box_pack_start( GTK_BOX(caja_grafico), l, FALSE, FALSE, 0 );
 
     /* the partial filter */
     barra = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 6 );
@@ -630,7 +659,7 @@ static void ventana( Id *g, const char *que )
         "candidatos que la comparten. Filtra la evidencia; no la inventa." );
     g_signal_connect( g->filtro, "changed", G_CALLBACK(on_filtro), g );
     gtk_box_pack_start( GTK_BOX(barra), g->filtro, FALSE, FALSE, 0 );
-    gtk_box_pack_start( GTK_BOX(caja), barra, FALSE, FALSE, 0 );
+    gtk_box_pack_start( GTK_BOX(abajo_ident), barra, FALSE, FALSE, 0 );
 
     /* the candidates */
     g->store = gtk_list_store_new( C_N, G_TYPE_INT, G_TYPE_STRING, G_TYPE_STRING,
@@ -651,9 +680,9 @@ static void ventana( Id *g, const char *que )
     g_signal_connect( gtk_tree_view_get_selection( GTK_TREE_VIEW(g->vista) ), "changed",
                       G_CALLBACK(on_sel), g );
     sw = gtk_scrolled_window_new( NULL, NULL );
-    gtk_widget_set_size_request( sw, -1, 200 );
+    gtk_widget_set_size_request( sw, -1, 110 );
     gtk_container_add( GTK_CONTAINER(sw), g->vista );
-    gtk_box_pack_start( GTK_BOX(caja), sw, TRUE, TRUE, 0 );
+    gtk_box_pack_start( GTK_BOX(abajo_ident), sw, TRUE, TRUE, 0 );
     llena( g );
 
     /* what the engine said */
@@ -667,10 +696,20 @@ static void ventana( Id *g, const char *que )
             g_free( e );
             }
         g_string_append( m, "</small>" );
+        GtkWidget *sm = gtk_scrolled_window_new( NULL, NULL );
+
+        /* Los mensajes pueden ser muchos: en su zona con barra, y no
+           empujando la ventana por debajo de la pantalla.            */
         l = gtk_label_new( NULL );
         gtk_label_set_markup( GTK_LABEL(l), m->str );
         gtk_label_set_xalign( GTK_LABEL(l), 0.0 );
-        gtk_box_pack_start( GTK_BOX(caja), l, FALSE, FALSE, 0 );
+        gtk_label_set_line_wrap( GTK_LABEL(l), TRUE );
+        gtk_scrolled_window_set_policy( GTK_SCROLLED_WINDOW(sm),
+                                        GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC );
+        gtk_scrolled_window_set_max_content_height( GTK_SCROLLED_WINDOW(sm), 70 );
+        gtk_scrolled_window_set_propagate_natural_height( GTK_SCROLLED_WINDOW(sm), TRUE );
+        gtk_container_add( GTK_CONTAINER(sm), l );
+        gtk_box_pack_start( GTK_BOX(abajo_ident), sm, FALSE, FALSE, 0 );
         g_string_free( m, TRUE );
         }
 

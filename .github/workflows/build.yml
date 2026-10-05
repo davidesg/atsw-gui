@@ -23,7 +23,7 @@ on:
 env:
   DIRS: >-
     engines/fue engines/fuf engines/fug engines/drtran engines/drvarma
-    engines/drvec gui/fue gui/fug gui/drtran gui/atsw
+    engines/drvec engines/art gui/fue gui/fug gui/drtran gui/atsw
 
 jobs:
   linux:

@@ -28,6 +28,8 @@ SRC = src/main.c src/ventana.c src/gestos.c src/datos_gui.c src/vistazo.c \
       $(LIB)/analisis/an_ganancia.c \
       $(LIB)/equation/eqtran.c \
       $(LIB)/analisis/an_sugerir.c \
+      $(LIB)/analisis/an_identifica.c \
+      $(LIB)/artcand/artcand.c \
       $(LIB)/analisis/plotstats.c \
       $(LIB)/intervencion/intervencion.c \
       $(LIB)/inpdet/inpdet.c \
@@ -64,7 +66,7 @@ LIBHDR = $(wildcard $(LIB)/*/*.h)
 
 INC = -Iinclude -I$(LIB)/proyecto -I$(LIB)/outdiag -I$(LIB)/outfile -I$(LIB)/analisis -I$(LIB)/equation -I$(LIB)/dictamen -I$(LIB)/anomalos -I$(LIB)/intervencion -I$(LIB)/inpdet -I$(LIB)/engine -I$(LIB)/inpcheck -I$(LIB)/tabla \
       -I$(LIB)/rutas -I$(LIB)/sitio -I$(LIB)/dates -I$(LIB)/datos -I$(LIB)/xlsx \
-      -I../../engines/fug/src -I$(LIB)/preview -I$(LIB)/fugdraw -I$(LIB)/fugplot -I$(LIB)/utils
+      -I../../engines/fug/src -I$(LIB)/preview -I$(LIB)/fugdraw -I$(LIB)/fugplot -I$(LIB)/utils -I$(LIB)/artcand
 
 GTK_CFLAGS := $(shell pkg-config --cflags gtk+-3.0 2>/dev/null)
 GTK_LIBS   := $(shell pkg-config --libs   gtk+-3.0 2>/dev/null)

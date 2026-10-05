@@ -314,3 +314,16 @@ Three reasons, all visible in the code:
   The order is the one §5 asks for: the reader first, because it is not
   numerics and the formats must agree across the ladder. The numerical core
   comes last, with the batteries in front and measuring.
+
+### engines/art (2026-10-04)
+
+ART_18.2.1's identifier entered by `git subtree`, from `art-identifier-c`,
+with its history filtered to the engine: 32 commits. The training datasets,
+ART_19's regressors and the GTK GUI stayed in the private repo. Its
+duplicates, measured on entry:
+
+| what | where else | decision |
+|---|---|---|
+| the seasonal HAC F test (`seasonal_detection.c`) | `engines/drvarma/gui/seasonal_detection.c`, an older copy (before 18.2's two HAC fixes) used by drvarma's deseasonalization | move art's to `lib/` and link it from drvarma: drvarma's call |
+| the sample ACF/PACF (Durbin-Levinson) | `lib/anomalos`, `lib/analisis/plotstats.c` | stays until art 18.3: they are the network's inputs |
+| `load_data` | `lib/datos` | only `bin/art_cli` (development) uses it; `bin/art` reads through `lib/datos` |

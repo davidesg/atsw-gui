@@ -34,6 +34,7 @@
 !/PRUEBAS.md
 !/DISENO-muestras.md
 !/REVIEW_2026-08-11.md
+!/ESTUDIO-identificador.md
 
 # --- el banco de conformidad ----------------------------------------------
 # (conformidad/.gitignore se encarga de los binarios y de los rt.*)

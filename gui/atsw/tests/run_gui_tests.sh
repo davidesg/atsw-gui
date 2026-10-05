@@ -72,7 +72,7 @@ $CC -O0 -o "$HIJO" tests/hijo_falso.c 2>> "$WORK/build.txt" ||
 # Lo que la prueba necesita del arbol. Sin los motores o sin los hermanos la
 # prueba fallaria por lo que no es suyo; se dice y no se corre.
 falta=
-for p in engines/fue/bin/fue engines/fug/fug gui/fue/bin/fue_gui \
+for p in engines/fue/bin/fue engines/fug/fug engines/art/bin/art gui/fue/bin/fue_gui \
          gui/fug/gtk_fmg gui/drtran/drtran_gui; do
     [ -x "$R/$p$EXE" ] || falta="$falta $p$EXE"
 done

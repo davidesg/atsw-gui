@@ -1,0 +1,39 @@
+# Build artifacts
+build/
+cli/build/
+*.o
+*.obj
+
+# Binaries
+bin/
+obj/
+bin/art_gui
+bin/*.exe
+bin/share/
+bin/lib/
+
+# Test outputs
+bin/*.csv
+/tmp/*.csv
+
+# Python
+ml/venv/
+**/__pycache__/
+*.pyc
+
+# Editor / OS
+*.swp
+.DS_Store
+
+# Root virtualenv
+.venv/
+
+# Dependency files
+*.d
+tests/work/
+
+# LAS REFERENCIAS SI ENTRAN. El .gitignore de la raiz ignora todos los *.out
+# (lo que producen los motores), y las de la bateria se quedaban fuera: en una
+# copia limpia --la de la CI-- la bateria fallaba por no tenerlas. Una
+# referencia no es un fichero derivado: es contra lo que se compara.
+!tests/golden/*.out

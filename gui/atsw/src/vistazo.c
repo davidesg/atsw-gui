@@ -33,6 +33,8 @@
 #include "preview.h"
 #include "inpfile.h"
 #include "sitio.h"
+#include "analisis.h"
+#include "anfitrion.h"
 
 void barra_pub( Atsw *a, const char *s );
 
@@ -240,6 +242,8 @@ static void on_cambio( GtkWidget *w, Vistazo *v ) { (void) w; repinta( v ); }
  *
  * Lo que los dos comparten es lo que importa: la transformacion se toca AL
  * PIE DEL DIBUJO y el dibujo se rehace ahi mismo.                       */
+static void on_identificar( GtkButton *b, Vistazo *v );
+
 static GtkWidget *pie_nuevo( Vistazo *v, double lam, int d, int D )
 {
     GtkWidget *caja = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 6 );
@@ -282,12 +286,58 @@ static GtkWidget *pie_nuevo( Vistazo *v, double lam, int d, int D )
     gtk_box_pack_start( GTK_BOX(caja), l, TRUE, TRUE, 0 );
     }
 
+    if ( v->modo == 0 )
+        {
+        GtkWidget *b = gtk_button_new_with_label( "Identificar…" );
+
+        gtk_widget_set_tooltip_text( b,
+            "art propone órdenes ARMA para la serie con esta λ, d y D, con su "
+            "evidencia: el correlograma teórico de cada candidato sobre éste.\n\n"
+            "Propone; no estima. El modelo lo eliges tú." );
+        g_signal_connect( b, "clicked", G_CALLBACK(on_identificar), v );
+        gtk_box_pack_end( GTK_BOX(caja), b, FALSE, FALSE, 0 );
+        }
+
     g_signal_connect( v->s_lam, "value-changed", G_CALLBACK(on_cambio), v );
     if ( v->s_d ) g_signal_connect( v->s_d, "value-changed", G_CALLBACK(on_cambio), v );
     if ( v->s_D ) g_signal_connect( v->s_D, "value-changed", G_CALLBACK(on_cambio), v );
 
     v->armando = FALSE;
     return caja;
+}
+
+/* IDENTIFICAR, desde el mismo gráfico (E2, docs/ESTUDIO-identificador.md):
+ * art propone órdenes para la serie CON LA TRANSFORMACION QUE SE ESTA
+ * MIRANDO, y la ventana deja derivar el modelo del nodo de datos. El
+ * vistazo sigue sin dejar rastro: lo que se deriva lo decide el analista. */
+static void on_identificar( GtkButton *b, Vistazo *v )
+{
+    InpFile     inp;
+    char        msg[256];
+    const char *mu = atsw_muestra_actual( v->a );
+    const char *datos = pr_datos_de( v->a->p, v->a->serie, mu );
+    AnHost      h = atsw_host( v->a );
+    AnSerie     s;
+    gchar      *que;
+
+    (void) b;
+    if ( !*datos ) { barra_pub( v->a, "Esa serie no tiene nodo de datos." ); return; }
+    if ( inp_read( v->origen, &inp, msg, sizeof msg ) != 0 )
+        { barra_pub( v->a, msg ); return; }
+    memset( &s, 0, sizeof s );
+    s.x    = inp.data;
+    s.n    = inp.nobs;
+    s.freq = inp.freq;
+    s.per  = inp.begtime;
+    s.anio = inp.begyear;
+    s.lam  = gtk_spin_button_get_value( GTK_SPIN_BUTTON(v->s_lam) );
+    s.d    = v->s_d ? gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(v->s_d) ) : 0;
+    s.D    = v->s_D ? gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(v->s_D) ) : 0;
+    que = g_strdup_printf( "Gráficos de identificación de %s", v->a->serie );
+    s.que  = que;
+    an_identifica_serie( &h, v->a->serie, mu, datos, &s );
+    g_free( que );
+    inp_free( &inp );
 }
 
 /* ------------------------------------------------------------------------ */

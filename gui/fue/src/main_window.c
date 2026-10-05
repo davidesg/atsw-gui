@@ -32,6 +32,7 @@ static void create_fixed_tree_view(GtkTreeView *treeview);
 void fue_on_diagnosis(GtkWidget *w, FueContext *ctx);
 void fue_on_anomalos(GtkWidget *w, FueContext *ctx);
 void fue_on_ganancia(GtkWidget *w, FueContext *ctx);
+void fue_on_identifica(GtkWidget *w, FueContext *ctx);
 void fue_analisis_refresca(FueContext *ctx);
 static void on_fixed_treeview_row_activated(GtkTreeView *treeview, GtkTreePath *path,
                                             GtkTreeViewColumn *col, FueContext *ctx);
@@ -119,6 +120,14 @@ GtkWidget* create_main_window(GtkApplication *app, FueContext *ctx) {
     g_signal_connect(gan_btn, "clicked", G_CALLBACK(fue_on_ganancia), ctx);
     gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gan_btn, -1);
     ctx->btn_ganancia = GTK_WIDGET(gan_btn);
+
+    /* EL IDENTIFICADOR sobre los residuos de este modelo (E3): art propone
+     * qué ARMA ponerle. Misma regla de encendido: un .out al dia. */
+    GtkToolItem *ident_btn = gtk_tool_button_new(NULL, "Identificar");
+    gtk_tool_button_set_icon_name(GTK_TOOL_BUTTON(ident_btn), "edit-find-replace");
+    g_signal_connect(ident_btn, "clicked", G_CALLBACK(fue_on_identifica), ctx);
+    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), ident_btn, -1);
+    ctx->btn_identifica = GTK_WIDGET(ident_btn);
 
     GtkToolItem *sep2 = gtk_separator_tool_item_new();
     gtk_toolbar_insert(GTK_TOOLBAR(toolbar), sep2, -1);

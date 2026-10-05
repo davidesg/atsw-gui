@@ -14,6 +14,7 @@
 
 #include "atsw.h"
 #include "anfitrion.h"
+#include "inpfile.h"
 
 void atsw_lanza( Atsw *a, const char *programa, const char *fichero );
 gboolean atsw_modelo_nuevo( Atsw *a, const char *serie, const char *muestra,
@@ -98,6 +99,36 @@ static void vistazo( Atsw *a, int modo, double lam )
 }
 
 static void on_mdt   ( GtkMenuItem *m, Atsw *a ) { (void)m; vistazo( a, 1, 1.0 ); }
+
+/* IDENTIFICAR DESDE LOS DATOS (E1, docs/ESTUDIO-identificador.md): la
+ * ventana del identificador con la transformacion editable y los
+ * contrastes a la vista. Parte de lo que diga el nodo de datos.        */
+static void on_identifica_datos( GtkMenuItem *m, Atsw *a )
+{
+    char        f[PR_RUTA], msg[256];
+    InpFile     inp;
+    AnSerie     s;
+    AnHost      h;
+    const char *mu = atsw_muestra_actual( a );
+    gchar      *que;
+
+    (void) m;
+    if ( !que_identificar( a, f, sizeof f ) )
+        { barra_pub( a, "Esa serie no tiene datos en esta muestra: no hay "
+                        "nada que identificar todavía." );
+          return; }
+    if ( inp_read( f, &inp, msg, sizeof msg ) != 0 ) { barra_pub( a, msg ); return; }
+    memset( &s, 0, sizeof s );
+    s.x = inp.data; s.n = inp.nobs; s.freq = inp.freq;
+    s.per = inp.begtime; s.anio = inp.begyear;
+    s.lam = inp.boxlam; s.d = inp.nrdiff; s.D = inp.nadiff;
+    que = g_strdup_printf( "Identificación de %s desde los datos", a->serie );
+    s.que = que;
+    h = atsw_host( a );
+    an_identifica_datos( &h, a->serie, mu, pr_datos_de( a->p, a->serie, mu ), &s );
+    g_free( que );
+    inp_free( &inp );
+}
 static void on_serie_acf( GtkMenuItem *m, Atsw *a ) { (void)m; vistazo( a, 0, 1.0 ); }
 
 static void on_editar_serie( GtkMenuItem *m, Atsw *a )
@@ -212,6 +243,15 @@ static void menu_serie( Atsw *a, GdkEventButton *ev )
         "mismo. Es la pregunta abierta —cuántas diferencias— y se contesta "
         "probando." );
     g_signal_connect( mi, "activate", G_CALLBACK(on_serie_acf), a );
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+
+    mi = gtk_menu_item_new_with_label( "Identificar desde los datos…" );
+    gtk_widget_set_tooltip_text( mi,
+        "art sobre la serie: los contrastes (la F estacional, ADF y KPSS) "
+        "dichos con lo que dicen, el correlograma y los candidatos. La "
+        "transformación se cambia en la propia ventana.\n\nPropone; no "
+        "estima. El modelo lo eliges tú." );
+    g_signal_connect( mi, "activate", G_CALLBACK(on_identifica_datos), a );
     gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
 
     gtk_widget_show_all( menu );
@@ -693,6 +733,17 @@ static void on_anomalos( GtkMenuItem *m, Atsw *a )
     g_free( id );
 }
 
+static void on_identifica_res( GtkMenuItem *m, Atsw *a )
+{
+    gchar *id = atsw_marcada( a->l_modelos, M_ID );
+
+    (void) m;
+    if ( a->hay && a->serie[0] && id )
+        { AnHost h = atsw_host( a );
+          an_identifica_residuos( &h, a->serie, atsw_muestra_actual( a ), id ); }
+    g_free( id );
+}
+
 static void on_editar( GtkMenuItem *m, Atsw *a )
 {
     gchar *id = atsw_marcada( a->l_modelos, M_ID );
@@ -1013,6 +1064,18 @@ static void menu_modelo( Atsw *a, GdkEventButton *ev )
               "intervenirlo no compra nada."
             : porque );
         g_signal_connect( mi, "activate", G_CALLBACK(on_anomalos), a );
+        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+
+        mi = gtk_menu_item_new_with_label( "Identificar los residuos…" );
+        gtk_widget_set_sensitive( mi, listo );
+        gtk_widget_set_tooltip_text( mi, listo
+            ? "art propone qué ARMA ponerle a este modelo, leyendo el "
+              "correlograma de sus residuos (E3): el modelo base con sus "
+              "armónicos, intervenciones y media, sin la parte ARMA.\n\n"
+              "Propone; no estima. Derivar crea un hijo con el candidato que "
+              "elijas, sobre su .pre."
+            : porque );
+        g_signal_connect( mi, "activate", G_CALLBACK(on_identifica_res), a );
         gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
         }
 

@@ -173,3 +173,22 @@ Por orden de facilidad:
     design.
   - In drvarma with `-m 2`, the difference is 1e-9 to 1e-13 at every point
     the optimiser visits.
+
+## `artcand/` — the identifier's result
+
+The one reader of `DATA_art.cand`, the line file that `engines/art` writes
+(its format is in `engines/art/README.md`). It is pure C, so it is tested on
+its own against the engine's goldens. The identification window
+(`lib/analisis/an_identifica.c`) uses it.
+
+## `inpdet/` — also the ARMA part and the transformation
+
+There are two new functions next to the deterministics:
+- **`id_pon_arma`** writes a candidate's ARMA orders and seeds: one factor
+  each, estimated, with Box-Jenkins signs as fue stores them. A file without
+  ARMA comes back identical when given none.
+- **`id_pon_transformacion`** writes the λ, d, D line.
+
+The rule is the module's: everything else is copied byte for byte, and the
+judge is `inp_check_fue`. Both are tested over the fue corpus.
+

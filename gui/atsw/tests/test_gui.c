@@ -42,6 +42,8 @@
 #include <stdlib.h>
 
 #include "sitio.h"
+#include "inpdet.h"
+#include "inpcheck.h"
 
 static int    fallos = 0;
 static char   T[PR_RUTA];          /* el directorio de la prueba          */
@@ -1196,6 +1198,97 @@ static void vistazo_prueba( void )
     dibuja_de_verdad( tinta_de( grafico( "vistazo.eps" ) ),
                       "y el grafico rehecho tambien dibuja" );
 
+    /* IDENTIFICAR desde el mismo grafico (E2): art sobre la serie con la
+       transformacion que se esta mirando, y su ventana con candidatos. */
+    {
+    GtkWindow *vg = grafico( "vistazo.eps" );
+    GtkWidget *bi = vg ? boton_que_dice( GTK_WIDGET(vg), "Identificar…" ) : NULL;
+    GtkWindow *wi;
+
+    check( bi != NULL, "el pie del vistazo ofrece «Identificar…»", NULL );
+    if ( bi )
+        {
+        gtk_spin_button_set_value( GTK_SPIN_BUTTON(V.s_lam), 1.0 );
+        pump( 300 );
+        olvida();
+        gtk_button_clicked( GTK_BUTTON(bi) );
+        pump( 1500 );
+        wi = ventana_titulada( "Identificación — ipc / m00" );
+        check( wi != NULL, "«Identificar…» abre la identificación de los datos",
+               todo_lo_dicho() );
+        if ( wi )
+            {
+            GPtrArray *tv = junta( GTK_WIDGET(wi), GTK_TYPE_TREE_VIEW, FALSE );
+            int nc = tv->len ? gtk_tree_model_iter_n_children(
+                         gtk_tree_view_get_model( g_ptr_array_index( tv, 0 ) ), NULL ) : 0;
+            gchar *txt = textos_de( GTK_WIDGET(wi) );
+
+            check( nc > 0, "con candidatos de art", NULL );
+            check( strstr( txt, "d = 1" ) != NULL, "sobre la transformación del pie (d = 1)", txt );
+            nota( "identificar desde el vistazo: %d candidatos", nc );
+            g_free( txt );
+            g_ptr_array_free( tv, TRUE );
+            gtk_widget_destroy( GTK_WIDGET(wi) );
+            pump( 100 );
+            }
+
+        /* art identifica en logaritmos o en niveles: otra lambda se dice */
+        gtk_spin_button_set_value( GTK_SPIN_BUTTON(V.s_lam), 0.5 );
+        pump( 300 );
+        olvida();
+        gtk_button_clicked( GTK_BUTTON(bi) );
+        pump( 300 );
+        check( dijo( "λ = 0.50" ) != NULL, "con λ = 0,5 se niega y dice por qué",
+               todo_lo_dicho() );
+        gtk_spin_button_set_value( GTK_SPIN_BUTTON(V.s_lam), 1.0 );
+        pump( 300 );
+        }
+    }
+
+    /* E1: IDENTIFICAR DESDE LOS DATOS, con la transformacion en la ventana. */
+    {
+    GtkMenu   *m1 = clic_derecho( A.l_series, 0 );
+    GtkWidget *e1 = m1 ? entrada_de( m1, "Identificar desde los datos" ) : NULL;
+    GtkWindow *w1;
+
+    check( e1 != NULL, "el menú de la serie ofrece «Identificar desde los datos…»",
+           m1 ? entradas( m1 ) : NULL );
+    olvida();
+    if ( e1 ) gtk_menu_item_activate( GTK_MENU_ITEM(e1) );
+    cierra_menu( m1 );
+    pump( 1500 );
+    w1 = ventana_titulada( "Identificación — ipc / m00" );
+    check( w1 != NULL, "abre la identificación desde los datos", todo_lo_dicho() );
+    if ( w1 )
+        {
+        GPtrArray *sp = junta( GTK_WIDGET(w1), GTK_TYPE_SPIN_BUTTON, FALSE );
+        GtkWidget *bv = boton_que_dice( GTK_WIDGET(w1), "Volver a identificar" );
+        gchar     *txt = textos_de( GTK_WIDGET(w1) );
+
+        check( sp->len >= 2 && bv != NULL, "con d, D y «Volver a identificar»", NULL );
+        check( strstr( txt, "Estacionalidad" ) != NULL || strstr( txt, "Raíz unitaria" ) != NULL,
+               "y los contrastes a la vista", txt );
+        g_free( txt );
+        if ( sp->len >= 2 && bv )
+            {
+            GtkWidget *sd = g_ptr_array_index( sp, 0 );
+            int        nd = gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(sd) ) == 1 ? 0 : 1;
+            gchar     *want = g_strdup_printf( "d = %d", nd );
+
+            gtk_spin_button_set_value( GTK_SPIN_BUTTON(sd), nd );
+            gtk_button_clicked( GTK_BUTTON(bv) );
+            pump( 1500 );
+            txt = textos_de( GTK_WIDGET(w1) );
+            check( strstr( txt, want ) != NULL, "volver a identificar usa la d nueva", txt );
+            nota( "identificar desde los datos: rehecho con %s", want );
+            g_free( txt ); g_free( want );
+            }
+        g_ptr_array_free( sp, TRUE );
+        gtk_widget_destroy( GTK_WIDGET(w1) );
+        pump( 100 );
+        }
+    }
+
     /* Lo que no se puede mirar se dice, no revienta. */
     {
     gchar *no = g_build_filename( T, "no_existe.inp", NULL );
@@ -1669,6 +1762,160 @@ static void menu_modelo_prueba( void )
         }
     check( ventana_titulada( "Diagnosis — ipc / m01" ) != NULL,
            "la diagnosis de m01 es una ventana con su titulo", NULL );
+
+    /* EL IDENTIFICADOR SOBRE LOS RESIDUOS (E3, docs/ESTUDIO-identificador.md):
+       se enciende con el .out al dia, abre su ventana con los candidatos de
+       art, y derivar crea un hijo de m01 con los ordenes del elegido -- que
+       fue acepta. No se estima nada. */
+    {
+    GtkMenu   *m;
+    GtkWidget *mi;
+    GtkWindow *w;
+    gchar     *antes = filas( A.l_modelos, M_ID );
+
+    marca( A.l_modelos, M_ID, "m01" );
+    m = clic_derecho( A.l_modelos, 1 );
+    mi = m ? entrada_de( m, "Identificar los residuos" ) : NULL;
+    check( mi && gtk_widget_get_sensitive( mi ),
+           "estimado m01, «Identificar los residuos…» se enciende", m ? entradas( m ) : NULL );
+    olvida();
+    if ( mi ) gtk_menu_item_activate( GTK_MENU_ITEM(mi) );
+    cierra_menu( m );
+    pump( 1500 );
+    w = ventana_titulada( "Identificación — ipc / m01" );
+    check( w != NULL, "la identificación de los residuos de m01 abre su ventana",
+           todo_lo_dicho() );
+    if ( w )
+        {
+        GPtrArray    *tv = junta( GTK_WIDGET(w), GTK_TYPE_TREE_VIEW, FALSE );
+        GtkWidget    *vista = tv->len ? g_ptr_array_index( tv, 0 ) : NULL;
+        GtkTreeModel *mo = vista ? gtk_tree_view_get_model( GTK_TREE_VIEW(vista) ) : NULL;
+        int           nc = mo ? gtk_tree_model_iter_n_children( mo, NULL ) : 0;
+        gchar        *orden = NULL;
+        GtkWidget    *b;
+
+        g_ptr_array_free( tv, TRUE );
+        check( nc > 0, "art propone candidatos para los residuos de m01", NULL );
+        if ( nc > 0 )
+            {
+            GtkTreePath *pa = gtk_tree_path_new_first();
+            GtkTreeIter  it;
+
+            gtk_tree_selection_select_path(
+                gtk_tree_view_get_selection( GTK_TREE_VIEW(vista) ), pa );
+            gtk_tree_model_get_iter( mo, &it, pa );
+            gtk_tree_model_get( mo, &it, 1, &orden, -1 );
+            gtk_tree_path_free( pa );
+            }
+        b = boton_que_dice( GTK_WIDGET(w), "Derivar modelo con el candidato elegido" );
+        check( b != NULL, "la ventana ofrece derivar", NULL );
+        if ( b && orden )
+            {
+            gchar *despues, **va, **vd;
+            char   nuevo[PR_ID] = "", porque[256], msg[256];
+            int    i, j, p, q, P, Q, ep, eq, eP, eQ;
+
+            olvida();
+            hijos_sin_pantalla( TRUE );
+            gtk_button_clicked( GTK_BUTTON(b) );
+            pump( 800 );
+            hijos_sin_pantalla( FALSE );
+            despues = filas( A.l_modelos, M_ID );
+            va = g_strsplit( antes, "|", -1 );
+            vd = g_strsplit( despues, "|", -1 );
+            for ( i = 0; vd[i] && !nuevo[0]; i++ )
+                {
+                gboolean ya = FALSE;
+                for ( j = 0; va[j]; j++ ) if ( !strcmp( va[j], vd[i] ) ) ya = TRUE;
+                if ( !ya ) g_snprintf( nuevo, sizeof nuevo, "%s", vd[i] );
+                }
+            check( nuevo[0] != '\0', "derivar crea un modelo nuevo", todo_lo_dicho() );
+            if ( nuevo[0] )
+                {
+                gchar *padre = celda( A.l_modelos, M_ID, nuevo, M_PADRE );
+                gchar *f = ruta_de( "ipc", "", nuevo, ".inp" );
+
+                check( padre && !strcmp( padre, "m01" ), "el hijo es de m01", padre );
+                nota( "identificar los residuos de m01: %d candidatos; derivado %s con %s",
+                      nc, nuevo, orden );
+                check( inp_check_fue( f, msg, sizeof msg ) == 0, "y fue lo acepta", msg );
+                {
+                /* derivar AÑADE: los órdenes del hijo son los del padre más
+                   los del candidato (un factor más en cada operador) */
+                gchar *fp = existe( "ipc", "", "m01", ".pre" ) ? ruta_de( "ipc", "", "m01", ".pre" )
+                                                               : ruta_de( "ipc", "", "m01", ".inp" );
+                int pp = 0, pq = 0, pP = 0, pQ = 0;
+
+                id_arma_ordenes( fp, &pp, &pq, &pP, &pQ, porque, sizeof porque );
+                check( id_arma_ordenes( f, &p, &q, &P, &Q, porque, sizeof porque ) == 0 &&
+                       sscanf( orden, "(%d,%d)(%d,%d)", &ep, &eq, &eP, &eQ ) == 4 &&
+                       p == pp + ep && q == pq + eq && P == pP + eP && Q == pQ + eQ,
+                       "con lo que tenía m01 más el candidato elegido", orden );
+                g_free( fp );
+                }
+                g_free( padre ); g_free( f );
+
+                /* y se deja el proyecto como estaba: las fases siguientes
+                   cuentan los modelos que hay. */
+                {
+                PrError e;
+                gchar  *fi = ruta_de( "ipc", "", nuevo, ".inp" ), *ids;
+
+                pr_borra( A.p, "ipc", "", nuevo, &e );
+                g_unlink( fi );
+                g_free( fi );
+                atsw_guarda( &A, &e );
+                atsw_refresca( &A );
+                pump( 200 );
+                ids = filas( A.l_modelos, M_ID );
+                check( !strstr( ids, nuevo ), "la prueba deja el proyecto como estaba", ids );
+                g_free( ids );
+                }
+                }
+            g_strfreev( va ); g_strfreev( vd ); g_free( despues );
+            }
+        g_free( orden );
+        }
+    g_free( antes );
+    }
+
+    /* E4: LA DIAGNOSIS, cuando el Q falla, abre el identificador sobre los
+       mismos residuos; si cuadra, el boton esta apagado y lo dice. */
+    {
+    GtkWindow *dw = ventana_titulada( "Diagnosis — ipc / m01" );
+    GtkWidget *bi;
+
+    if ( !dw )
+        {
+        GtkMenu *m;
+        marca( A.l_modelos, M_ID, "m01" );
+        m = clic_derecho( A.l_modelos, 1 );
+        if ( m && entrada_de( m, "Diagnosis" ) )
+            gtk_menu_item_activate( GTK_MENU_ITEM(entrada_de( m, "Diagnosis" )) );
+        cierra_menu( m );
+        pump( 300 );
+        dw = ventana_titulada( "Diagnosis — ipc / m01" );
+        }
+    bi = dw ? boton_que_dice( GTK_WIDGET(dw), "Identificar los residuos…" ) : NULL;
+    check( bi != NULL, "la diagnosis ofrece «Identificar los residuos…»", NULL );
+    if ( bi && gtk_widget_get_sensitive( bi ) )
+        {
+        GtkWindow *wi;
+        olvida();
+        gtk_button_clicked( GTK_BUTTON(bi) );
+        pump( 1500 );
+        wi = ventana_titulada( "Identificación — ipc / m01" );
+        check( wi != NULL, "y, con el Q fallando, abre el identificador", todo_lo_dicho() );
+        nota( "diagnosis de m01: el Q falla, «Identificar los residuos…» abre su ventana" );
+        if ( wi ) { gtk_widget_destroy( GTK_WIDGET(wi) ); pump( 100 ); }
+        }
+    else if ( bi )
+        {
+        const char *t = gtk_widget_get_tooltip_text( bi );
+        check( t && strstr( t, "cuadra" ), "apagado, dice por qué", t );
+        nota( "diagnosis de m01: el Q cuadra, el botón está apagado" );
+        }
+    }
 
     /* Prever: fue_gui --prever con el .inp. */
     {

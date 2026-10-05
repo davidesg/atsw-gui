@@ -968,6 +968,36 @@ static void proyecto_nuevo( char *manifiesto, size_t n )
 {
     gchar *f = g_build_filename( T, "prueba.yaml", NULL );
 
+    /* LO QUE NO SE PISA. Paso de verdad: «Nuevo…» sobre ipc_wti.csv dejo el
+       manifiesto vacio encima de las series.                           */
+    {
+    const char *datos = "date,ipc,wti\n2002-01-01,69.53,19.67\n";
+    gchar *csv  = g_build_filename( T, "datos.csv", NULL );
+    gchar *yml  = g_build_filename( T, "otro.yaml", NULL );
+    gchar *c    = NULL;
+
+    g_file_set_contents( csv, datos, -1, NULL );
+    responde( "Proyecto nuevo", guarda_como, csv );
+    on_nuevo( NULL, &A );
+    todo_atendido( "«Nuevo…» tenia que preguntar donde" );
+    g_file_get_contents( csv, &c, NULL, NULL );
+    check( !A.hay && c && !strcmp( c, datos ),
+           "«Nuevo…» sobre un CSV no crea nada y los datos siguen intactos", c );
+    check( strstr( barra(), "no es un fichero .yaml" ) != NULL,
+           "y dice por que", barra() );
+    g_free( c ); c = NULL;
+
+    g_file_set_contents( yml, "esto: [no es un manifiesto\n", -1, NULL );
+    responde( "Proyecto nuevo", guarda_como, yml );
+    on_nuevo( NULL, &A );
+    todo_atendido( "«Nuevo…» tenia que preguntar donde" );
+    g_file_get_contents( yml, &c, NULL, NULL );
+    check( !A.hay && c && strstr( c, "no es un manifiesto" ),
+           "un .yaml que no es un proyecto tampoco se pisa", c );
+    check( strstr( barra(), "NO es un proyecto" ) != NULL, "y lo dice", barra() );
+    g_free( c ); g_free( csv ); g_free( yml );
+    }
+
     g_snprintf( manifiesto, n, "%s", f );
     responde( "Proyecto nuevo", guarda_como, f );
     on_nuevo( NULL, &A );
@@ -983,6 +1013,21 @@ static void proyecto_nuevo( char *manifiesto, size_t n )
            gtk_label_get_text( GTK_LABEL(A.l_proy) ) );
     check( gtk_widget_get_sensitive( A.b_drtran ),
            "con proyecto, «drtran» se enciende", NULL );
+
+    /* Sobre un proyecto que ya existe, se pregunta; cancelar no toca nada. */
+    {
+    gchar *antes = NULL, *despues = NULL;
+
+    g_file_get_contents( f, &antes, NULL, NULL );
+    responde( "Proyecto nuevo", guarda_como, f );
+    responde( "¿Reemplazo el proyecto", contesta, GINT_TO_POINTER(GTK_RESPONSE_CANCEL) );
+    on_nuevo( NULL, &A );
+    todo_atendido( "reemplazar un proyecto tenia que preguntar" );
+    g_file_get_contents( f, &despues, NULL, NULL );
+    check( antes && despues && !strcmp( antes, despues ),
+           "si no se confirma, el proyecto que habia sigue igual", NULL );
+    g_free( antes ); g_free( despues );
+    }
     g_free( f );
 }
 

@@ -349,7 +349,13 @@ static void on_nuevo( GtkButton *b, Atsw *a )
             GTK_WINDOW(a->ventana), GTK_FILE_CHOOSER_ACTION_SAVE,
             "_Cancelar", GTK_RESPONSE_CANCEL, "_Crear", GTK_RESPONSE_ACCEPT,
             NULL );
-    gtk_file_chooser_set_do_overwrite_confirmation( GTK_FILE_CHOOSER(d), TRUE );
+    /* LA CONFIRMACION DE SOBRESCRIBIR LA HACE LA MADRE, NO GTK. La de GTK
+       («ya existe, ¿lo reemplazo?») no dice QUE se pierde, y se aceptaba
+       sobre el CSV de los datos: el manifiesto vacio quedaba encima de las
+       series y «Datos…» ya no tenia de donde leer. Paso de verdad con
+       ipc_wti.csv. Abajo: un proyecto es un .yaml, y un fichero que no es
+       un proyecto no se pisa nunca.                                   */
+    gtk_file_chooser_set_do_overwrite_confirmation( GTK_FILE_CHOOSER(d), FALSE );
     gtk_file_chooser_set_current_name( GTK_FILE_CHOOSER(d), "proyecto.yaml" );
 
     if ( gtk_dialog_run( GTK_DIALOG(d) ) == GTK_RESPONSE_ACCEPT )
@@ -358,6 +364,50 @@ static void on_nuevo( GtkButton *b, Atsw *a )
         gchar  *base = g_path_get_basename( p );
         PrError e;
         char   *dot;
+
+        if ( !g_str_has_suffix( p, ".yaml" ) && !g_str_has_suffix( p, ".yml" ) )
+            {
+            gchar *m = g_strdup_printf( "No creo el proyecto: «%s» no es un "
+                "fichero .yaml, y un proyecto lo es. ¿Eran los datos? Ponle "
+                "otro nombre, como proyecto.yaml.", base );
+            barra_pub( a, m );
+            g_free( m ); g_free( base ); g_free( p );
+            gtk_widget_destroy( d );
+            return;
+            }
+        if ( g_file_test( p, G_FILE_TEST_EXISTS ) )
+            {
+            Proyecto *viejo = g_new0( Proyecto, 1 );
+            PrError   ev;
+            int       es = pr_leer( p, viejo, &ev ) == 0;
+            gint      r = GTK_RESPONSE_CANCEL;
+
+            if ( es )
+                {
+                GtkWidget *q = gtk_message_dialog_new( GTK_WINDOW(a->ventana),
+                    GTK_DIALOG_MODAL, GTK_MESSAGE_WARNING, GTK_BUTTONS_OK_CANCEL,
+                    "¿Reemplazo el proyecto «%s»?", viejo->id );
+                gtk_message_dialog_format_secondary_text( GTK_MESSAGE_DIALOG(q),
+                    "%s ya es un proyecto con %d serie%s y %d modelo%s. El "
+                    "manifiesto nuevo lo sustituye; sus ficheros se quedan "
+                    "donde están, pero dejan de estar registrados.", p,
+                    viejo->ns, viejo->ns == 1 ? "" : "s",
+                    viejo->nm, viejo->nm == 1 ? "" : "s" );
+                r = gtk_dialog_run( GTK_DIALOG(q) );
+                gtk_widget_destroy( q );
+                }
+            else
+                {
+                gchar *m = g_strdup_printf( "No creo el proyecto: «%s» ya existe "
+                    "y NO es un proyecto (¿los datos?). No lo piso: elige otro "
+                    "nombre.", base );
+                barra_pub( a, m );
+                g_free( m );
+                }
+            g_free( viejo );
+            if ( r != GTK_RESPONSE_OK )
+                { g_free( base ); g_free( p ); gtk_widget_destroy( d ); return; }
+            }
 
         if ( !a->p ) a->p = g_new0( Proyecto, 1 );
         dot = strrchr( base, '.' ); if ( dot ) *dot = '\0';

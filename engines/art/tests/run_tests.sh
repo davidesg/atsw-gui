@@ -12,6 +12,12 @@ UPDATE=0
 TOP=$(cd "$(dirname "$0")/.." && pwd)
 WORK="$TOP/tests/work"
 GOLD="$TOP/tests/golden"
+# Byte a byte en Linux; fuera, las cifras con tolerancia y sin \r (ver
+# conformidad/referencia.sh): en macOS las PACF teoricas que son cero salen
+# como ruido de maquina distinto (4e-17 / -6e-18), y en Windows el .cand se
+# escribe con \r\n.
+REFERENCIA_SH="$TOP/../../conformidad/referencia.sh"
+. "$REFERENCIA_SH"
 PASS=0
 FAIL=0
 
@@ -41,7 +47,7 @@ same() {
     cp "${base}_art.cand" "$name.cand"
     for ext in out cand; do
         if [ $UPDATE = 1 ]; then cp "$name.$ext" "$GOLD/$name.$ext"; ok
-        elif cmp -s "$name.$ext" "$GOLD/$name.$ext"; then ok
+        elif referencia "$GOLD/$name.$ext" "$name.$ext" "$name" "$TOP/tests/fragiles.txt"; then ok
         else bad "$name.$ext differs from the golden"; diff "$GOLD/$name.$ext" "$name.$ext" | head -8 | sed 's/^/    /'
         fi
     done

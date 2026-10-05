@@ -27,6 +27,7 @@
  * Spanish messages for the GUIs).
  */
 #include <stdio.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -68,10 +69,21 @@ static const char *kind(const OrderCandidate *c, char *b, size_t n)
     return b;
 }
 
+/* UN NUMERO, Y NaN SIEMPRE IGUAL. printf escribe NaN a la manera de cada
+ * biblioteca --"-nan" en glibc, "nan" en macOS, "-nan(ind)" en Windows--, y
+ * un candidato sin puntuar lleva sus coeficientes en NaN: el .cand de la
+ * misma serie salia distinto en cada sistema. Lo vio la CI.            */
+static void num(FILE *f, double x)
+{
+    if (isnan(x))      fprintf(f, " nan");
+    else if (isinf(x)) fprintf(f, x > 0 ? " inf" : " -inf");
+    else               fprintf(f, " %.10g", x);
+}
+
 static void vec(FILE *f, const char *key, const double *v, int from, int to)
 {
     fprintf(f, "%s", key);
-    for (int i = from; i <= to; i++) fprintf(f, " %.10g", v[i]);
+    for (int i = from; i <= to; i++) num(f, v[i]);
     fprintf(f, "\n");
 }
 

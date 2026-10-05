@@ -1,0 +1,33 @@
+ART 18.2.1 -- identification of ARMA/SARIMA orders
+
+Series: residuals (residuals.txt)
+Transformation: levels, d = 0, D = 0, s = 12
+Observations identified on: 216   lags: 40   band: +/-0.1334
+
+Seasonality (HAC F on d=1, 100*log): F = 1.1102, p = 0.3547 -- not detected
+ADF:  statistic -13.4277, p = 0.0000 (5% critical -2.8751, 0 lags)
+KPSS: statistic 0.2330, p = 0.1000 (5% critical 0.4630, 2 lags)
+
+Candidates, ranked by pattern similarity (option B):
+  #   (p,q)(P,Q)       kind                          sim   weight   AICc (CSS)
+  1   (0,0)(0,0)       white noise                1.0000   0.1869      -10.522   <- proposed
+  2   (0,1)(0,0)       MA(1)                      0.9654   0.1905      -10.559
+  3   (1,0)(0,0)       AR(1)                      0.9689   0.1739      -10.378
+  4   (1,1)(0,0)       AR(1)+MA(1)                0.9491   0.0701       -8.560
+  5   (1,2)(0,0)       AR(1)+MA(2)                0.9345   0.0174       -5.775
+  6   (0,0)(1,0)       SAR(1)                     0.8768   0.0680       -8.499
+  7   (0,0)(0,1)       SMA(1)                     0.8768   0.0676       -8.489
+  8   (0,1)(1,0)       MA(1) x SAR(1)             0.8714   0.0704       -8.569
+  9   (1,0)(1,0)       AR(1) x SAR(1)             0.8748   0.0641       -8.383
+  10  (1,0)(0,1)       AR(1) x SMA(1)             0.8748   0.0638       -8.372
+  11  (1,1)(1,0)       AR(1)+MA(1) x SAR(1)       0.8550   0.0256       -6.549
+  12  (3,2)(0,0)       AR(3)+MA(2)                0.7881   0.0016       -1.061
+  13  (2,1)(0,0)       AR(2)+MA(1)                     -        -   not scored
+
+sim: similarity of the empirical ACF/PACF to the candidate's theoretical
+one. weight: Akaike weight of a CONDITIONAL (CSS) AICc, comparable between
+these candidates only. The proposal is evidence, not a verdict: the model
+is chosen by the analyst and estimated by fue.
+
+Messages:
+  Seasonality: no deterministic pattern detected (HAC F p = 0.3547)

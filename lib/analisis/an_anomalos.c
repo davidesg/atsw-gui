@@ -623,6 +623,7 @@ void an_anomalos( const AnHost *h, const char *serie, const char *muestra,
     g_free( t );
     }
     gtk_label_set_xalign( GTK_LABEL(cab), 0.0 );
+    gtk_label_set_line_wrap( GTK_LABEL(cab), TRUE );   /* o no cabe en 1366 */
     gtk_box_pack_start( GTK_BOX(pie_caja), cab, FALSE, FALSE, 0 );
 
     /* LAS CASILLAS, UNA POR EPISODIO, CON SU FECHA. La fecha es la misma que

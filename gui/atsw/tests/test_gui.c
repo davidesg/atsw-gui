@@ -1268,8 +1268,13 @@ static void vistazo_prueba( void )
                          gtk_tree_view_get_model( g_ptr_array_index( tv, 0 ) ), NULL ) : 0;
             gchar *txt = textos_de( GTK_WIDGET(wi) );
 
+            g_object_add_weak_pointer( G_OBJECT(wi), (gpointer *) &wi );
             check( nc > 0, "con candidatos de art", NULL );
             check( strstr( txt, "d = 1" ) != NULL, "sobre la transformación del pie (d = 1)", txt );
+            /* CON D = 0 ART QUITA LOS ARMONICOS: se avisa, y el hijo los
+               lleva. Paso con IPC_ES: derivaba el AR(1) sin ellos.      */
+            check( strstr( txt, "art ha quitado la estacionalidad con armónicos" ) != NULL,
+                   "con D = 0, la ventana avisa de que art quito los armonicos", txt );
             /* CABE EN UNA PANTALLA PEQUEÑA. Paso en una de 1366x768: el
                minimo pedia mas alto que la pantalla, la ventana se cortaba
                y no se podia maximizar.                                 */
@@ -1282,10 +1287,69 @@ static void vistazo_prueba( void )
             check( hmin <= 700 && wmin <= 1300,
                    "la ventana de identificacion cabe en 1366x768", NULL );
             }
+            {
+            GPtrArray *tvs = junta( GTK_WIDGET(wi), GTK_TYPE_TREE_VIEW, FALSE );
+            GtkWidget *bd = boton_que_dice( GTK_WIDGET(wi),
+                                            "Derivar modelo con el candidato elegido" );
+            gchar     *antes_m = filas( A.l_modelos, M_ID );
+
+            if ( tvs->len && bd )
+                {
+                GtkTreePath *pa = gtk_tree_path_new_first();
+                gchar       *despues_m, *nuevo_m = NULL, *inp_m = NULL, *c = NULL;
+                gchar      **va, **vd;
+                int          ii, jj;
+
+                gtk_tree_selection_select_path( gtk_tree_view_get_selection(
+                    GTK_TREE_VIEW(g_ptr_array_index( tvs, 0 )) ), pa );
+                gtk_tree_path_free( pa );
+                olvida();
+                hijos_sin_pantalla( TRUE );
+                gtk_button_clicked( GTK_BUTTON(bd) );
+                pump( 800 );
+                hijos_sin_pantalla( FALSE );
+                despues_m = filas( A.l_modelos, M_ID );
+                va = g_strsplit( antes_m, "|", -1 );
+                vd = g_strsplit( despues_m, "|", -1 );
+                for ( ii = 0; vd[ii] && !nuevo_m; ii++ )
+                    {
+                    gboolean ya = FALSE;
+                    for ( jj = 0; va[jj]; jj++ ) if ( !strcmp( va[jj], vd[ii] ) ) ya = TRUE;
+                    if ( !ya ) nuevo_m = g_strdup( vd[ii] );
+                    }
+                if ( nuevo_m ) inp_m = ruta_de( "ipc", "", nuevo_m, ".inp" );
+                if ( inp_m ) g_file_get_contents( inp_m, &c, NULL, NULL );
+                check( c && strstr( c, "\ncos 1" ) && strstr( c, "\nsin 5" ) &&
+                       strstr( c, "\nalter" ),
+                       "el modelo derivado lleva los armonicos que art quito", c );
+                if ( inp_m )
+                    {
+                    char m2[256];
+                    check( inp_check_fue( inp_m, m2, sizeof m2 ) == 0,
+                           "y fue acepta el .inp con los armonicos", m2 );
+                    }
+                /* y se deja el proyecto como estaba: las fases siguientes
+                   cuentan los modelos que hay. */
+                if ( nuevo_m )
+                    {
+                    PrError e;
+
+                    pr_borra( A.p, "ipc", "", nuevo_m, &e );
+                    if ( inp_m ) g_unlink( inp_m );
+                    atsw_guarda( &A, &e );
+                    atsw_refresca( &A );
+                    pump( 200 );
+                    }
+                g_free( c ); g_free( inp_m ); g_free( nuevo_m ); g_free( despues_m );
+                g_strfreev( va ); g_strfreev( vd );
+                }
+            g_free( antes_m );
+            g_ptr_array_free( tvs, TRUE );
+            }
             nota( "identificar desde el vistazo: %d candidatos", nc );
             g_free( txt );
             g_ptr_array_free( tv, TRUE );
-            gtk_widget_destroy( GTK_WIDGET(wi) );
+            if ( wi ) gtk_widget_destroy( GTK_WIDGET(wi) );   /* derivar ya la cierra */
             pump( 100 );
             }
 
@@ -1790,6 +1854,37 @@ static void iterar_elegir( void )
     g_free( s );
 }
 
+/* TODAS LAS VENTANAS ABIERTAS CABEN EN UNA PANTALLA DE 1366x768.
+ *
+ * Paso en un portatil asi: la de anomalos pedia de ANCHO minimo mas que la
+ * pantalla, no se podia maximizar, el gestor la recolocaba y el segundo clic
+ * caia en «cerrar». Una ventana que pide mas que la pantalla no se arregla
+ * en el escritorio: se arregla aqui. 1300x700 deja sitio a las barras.  */
+static void caben_todas( const char *donde )
+{
+    GList *l = gtk_window_list_toplevels(), *i;
+
+    for ( i = l; i; i = i->next )
+        {
+        GtkWidget  *w = i->data;
+        const char *ti;
+        int         wmin = 0, wnat = 0, hmin = 0, hnat = 0;
+        gchar      *q;
+
+        if ( !GTK_IS_WINDOW(w) || !gtk_widget_get_visible( w ) ) continue;
+        if ( gtk_window_get_window_type( GTK_WINDOW(w) ) != GTK_WINDOW_TOPLEVEL ) continue;
+        ti = gtk_window_get_title( GTK_WINDOW(w) );
+        gtk_widget_get_preferred_width( w, &wmin, &wnat );
+        gtk_widget_get_preferred_height_for_width( w, wmin, &hmin, &hnat );
+        nota( "%s: «%s» minimo %dx%d", donde, ti ? ti : "", wmin, hmin );
+        q = g_strdup_printf( "«%s» cabe en 1366x768 (minimo %dx%d)", ti ? ti : "",
+                             wmin, hmin );
+        check( wmin <= 1300 && hmin <= 700, q, NULL );
+        g_free( q );
+        }
+    g_list_free( l );
+}
+
 /* EL MENU DEL MODELO ESTIMADO: diagnosis, ganancia, anomalos, prever. */
 static void menu_modelo_prueba( void )
 {
@@ -1819,6 +1914,7 @@ static void menu_modelo_prueba( void )
         }
     check( ventana_titulada( "Diagnosis — ipc / m01" ) != NULL,
            "la diagnosis de m01 es una ventana con su titulo", NULL );
+    caben_todas( "diagnosis, ganancia y anomalos" );
 
     /* EL IDENTIFICADOR SOBRE LOS RESIDUOS (E3, docs/ESTUDIO-identificador.md):
        se enciende con el .out al dia, abre su ventana con los candidatos de

@@ -57,6 +57,7 @@ typedef struct {
 
     GtkWidget *win, *area, *vista, *filtro, *l_estado, *con_que, *l_cab;
     GtkWidget *c_lam, *s_d, *s_D;   /* E1: the transformation, editable     */
+    GtkWidget *aviso, *l_aviso, *b_d1;  /* art quito los armonicos (D = 0)  */
     GtkListStore *store;
     char       que[128];
     double    *x;                   /* E1: the series, to identify again    */
@@ -350,6 +351,64 @@ static int origen_de( Id *g, char *out, size_t n )
     return g_file_test( out, G_FILE_TEST_EXISTS ) ? 2 : 0;
 }
 
+/* ART QUITA LOS ARMONICOS cuando se identifica sobre los datos con D = 0 y
+ * s > 1 (model_detection.c, harmonics auto): lo hace SIEMPRE, detecte o no
+ * estacionalidad el contraste F. Asi que lo que se identifico es la serie
+ * SIN ellos, y el modelo que se derive tiene que llevarlos: si no, se estima
+ * otra cosa que la que se miro. En los residuos (E3/E4) no se quitan.     */
+static gboolean quita_armonicos( const Id *g )
+{
+    return g->punto <= 2 && g->D == 0 && g->freq > 1;
+}
+
+/* Los armonicos de fue para la frecuencia s, con los nombres del .inp: cos k
+ * y sin k para k < s/2, y alter en s/2. Es el conjunto que retira art y el
+ * que pone «Add Seasonals» en fue_gui: 11 terminos en mensual, 3 en
+ * trimestral. Devuelve cuantos.                                          */
+static int armonicos_de( int s, char det[][ID_LINEA], int max )
+{
+    int k, n = 0;
+
+    for ( k = 1; 2 * k < s && n + 2 <= max; k++ )
+        {
+        g_snprintf( det[n++], ID_LINEA, "cos %d", k );
+        g_snprintf( det[n++], ID_LINEA, "sin %d", k );
+        }
+    if ( s % 2 == 0 && n < max ) g_snprintf( det[n++], ID_LINEA, "alter" );
+    return n;
+}
+
+/* Al .inp ya escrito le pone los armonicos que no tenga. 0, o 1 con el
+   motivo. Devuelve en *puestos cuantos añadio.                         */
+static int pon_armonicos( const char *inp, int s, int *puestos,
+                          char *porque, size_t n )
+{
+    char        arm[ID_MAX_DET][ID_LINEA], ya[ID_MAX_DET][ID_LINEA];
+    const char *nuevo[ID_MAX_DET];
+    int         na = armonicos_de( s, arm, ID_MAX_DET ), nya, nn = 0, i, j, rc;
+    gchar      *tmp;
+
+    *puestos = 0;
+    nya = id_nombres( inp, ya, ID_MAX_DET, porque, n );
+    if ( nya < 0 ) return 1;
+    for ( i = 0; i < na; i++ )
+        {
+        gboolean esta = FALSE;
+
+        for ( j = 0; j < nya; j++ ) if ( !g_ascii_strcasecmp( ya[j], arm[i] ) ) esta = TRUE;
+        if ( !esta ) nuevo[nn++] = arm[i];
+        }
+    if ( nn == 0 ) return 0;
+    tmp = g_strdup_printf( "%s.arm", inp );
+    rc = id_anade( inp, tmp, nuevo, NULL, nn, porque, n );
+    if ( rc == 0 && g_rename( tmp, inp ) != 0 )
+        { g_snprintf( porque, n, "no pude escribir %s", inp ); rc = 1; }
+    g_unlink( tmp );
+    g_free( tmp );
+    if ( rc == 0 ) *puestos = nn;
+    return rc;
+}
+
 static void on_derivar( GtkButton *b, Id *g )
 {
     char     origen[PR_RUTA], destino[PR_RUTA], porque[512], msg[512], nuevo[PR_ID];
@@ -357,7 +416,7 @@ static void on_derivar( GtkButton *b, Id *g )
     PrError  e;
     gchar   *dir, *razon, *tmp = NULL;
     const AcCand *k;
-    int      cual, rc;
+    int      cual, rc, armonicos = 0;
 
     (void) b;
     if ( g->sel < 0 ) { di( g, "Elige antes un candidato de la lista." ); return; }
@@ -383,6 +442,11 @@ static void on_derivar( GtkButton *b, Id *g )
                               k->P, k->Phi, k->Q, k->Theta, porque, sizeof porque );
         g_unlink( tmp );
         g_free( tmp );
+        /* Y LO QUE ART QUITO ANTES DE IDENTIFICAR: los armonicos. Sin
+           ellos el hijo llevaba el AR(1) pero no la estacionalidad que se
+           habia retirado para encontrarlo. Paso con IPC_ES.         */
+        if ( rc == 0 && quita_armonicos( g ) )
+            rc = pon_armonicos( destino, g->freq, &armonicos, porque, sizeof porque );
         }
     else       /* E3/E4: what is missing is ADDED to what the model has */
         rc = id_anade_arma( origen, destino, k->p, k->phi, k->q, k->theta,
@@ -406,14 +470,16 @@ static void on_derivar( GtkButton *b, Id *g )
     ac_kind( k, tipo, sizeof tipo );
     razon = g_strdup_printf(
         "Identificado con art en %s: (%d,%d)(%d,%d) %s, similitud %.3f, peso %.3f; %s. "
-        "%s%s.",
+        "%s%s.%s",
         g->punto == 1 ? "los datos" :
         g->punto == 2 ? "los gráficos de identificación" : "los residuos del modelo",
         k->p, k->q, k->P, k->Q, tipo, k->sim, k->weight,
         k->proposed ? "el propuesto" : "elegido frente al propuesto",
         g->punto <= 2 ? "Con la transformación identificada. Derivado de "
                       : "Añadido como un factor más a lo que ya tenía. Derivado de ",
-        g->id );
+        g->id,
+        armonicos > 0 ? " Con los armónicos deterministas que art retiró antes de "
+                        "identificar (D = 0)." : "" );
     pr_razon( g->h.p, g->serie, g->muestra, nuevo, razon, &e );
     g_free( razon );
     pr_pon_herramienta( g->h.p, herramienta_de( g ) == AN_CON_EDITOR );
@@ -514,6 +580,41 @@ static gboolean corre_art( Id *g, const char *datos, gboolean residuos, char *wh
 static int escribe_datos( const char *ruta, const double *x, int n, int freq, int per, int anio );
 
 /* E1: art again, with the transformation in the controls. */
+/* EL AVISO: con D = 0 art ha quitado la estacionalidad con armonicos
+ * deterministas. El analista tiene que saberlo antes de derivar --el hijo
+ * los llevara-- y poder elegir la otra ruta, la estocastica (D = 1).     */
+static void refresca_aviso( Id *g )
+{
+    gchar *t;
+
+    if ( g->aviso == NULL ) return;
+    if ( !quita_armonicos( g ) ) { gtk_widget_hide( g->aviso ); return; }
+    t = g_strdup_printf(
+        "<b>Con D = 0, art ha quitado la estacionalidad con armónicos "
+        "deterministas</b> antes de identificar%s. Lo que propone es para la serie "
+        "<b>sin</b> ellos, y el modelo que derives los llevará (%d términos cos, sin "
+        "y alter). Si prefieres tratar la estacionalidad como estocástica, identifica "
+        "con <b>D = 1</b>%s.",
+        g->c && g->c->has_seasonal && g->c->seasonal_detected
+            ? " (el contraste F detecta un patrón estacional)"
+            : " (aunque el contraste F no detecta un patrón estacional)",
+        g->freq / 2 * 2 - 1 + ( g->freq % 2 ),
+        g->b_d1 ? "" : ": cámbialo en el pie del vistazo" );
+    gtk_label_set_markup( GTK_LABEL(g->l_aviso), t );
+    g_free( t );
+    gtk_widget_show_all( g->aviso );
+}
+
+static void on_reidentificar( GtkButton *b, Id *g );
+
+static void on_d1( GtkButton *b, Id *g )
+{
+    (void) b;
+    if ( g->s_D == NULL ) return;
+    gtk_spin_button_set_value( GTK_SPIN_BUTTON(g->s_D), 1 );
+    on_reidentificar( NULL, g );
+}
+
 static void on_reidentificar( GtkButton *b, Id *g )
 {
     gchar *base, *datos;
@@ -539,6 +640,7 @@ static void on_reidentificar( GtkButton *b, Id *g )
     g_free( datos );
     g->sel = -1;
     cabecera( g );
+    refresca_aviso( g );
     llena( g );
     gtk_widget_queue_draw( g->area );
     di( g, "Identificado de nuevo: %s, d = %d, D = %d.", g->lam == 0.0 ? "logaritmos" : "niveles",
@@ -611,6 +713,25 @@ static void ventana( Id *g, const char *que )
         gtk_box_pack_start( GTK_BOX(fila), bi, FALSE, FALSE, 0 );
         gtk_box_pack_start( GTK_BOX(caja), fila, FALSE, FALSE, 0 );
         }
+
+    /* the warning: art removed the harmonics (D = 0) */
+    {
+    GtkWidget *ib = gtk_info_bar_new();
+
+    gtk_info_bar_set_message_type( GTK_INFO_BAR(ib), GTK_MESSAGE_WARNING );
+    g->l_aviso = gtk_label_new( NULL );
+    gtk_label_set_line_wrap( GTK_LABEL(g->l_aviso), TRUE );
+    gtk_label_set_xalign( GTK_LABEL(g->l_aviso), 0.0 );
+    gtk_box_pack_start( GTK_BOX(gtk_info_bar_get_content_area( GTK_INFO_BAR(ib) )),
+                        g->l_aviso, TRUE, TRUE, 0 );
+    if ( g->punto == 1 && g->freq > 1 )
+        {
+        g->b_d1 = gtk_info_bar_add_button( GTK_INFO_BAR(ib), "Cambiar a D = 1", 1 );
+        g_signal_connect( g->b_d1, "clicked", G_CALLBACK(on_d1), g );
+        }
+    gtk_box_pack_start( GTK_BOX(caja), ib, FALSE, FALSE, 0 );
+    g->aviso = ib;
+    }
 
     /* where we are, what is fixed, and what the tests say */
     g->l_cab = gtk_label_new( NULL );
@@ -752,6 +873,7 @@ static void ventana( Id *g, const char *que )
 
     g_signal_connect( g->win, "destroy", G_CALLBACK(on_cerrar), g );
     gtk_widget_show_all( g->win );
+    refresca_aviso( g );
 }
 
 static Id *nuevo_id( const AnHost *h, const char *serie, const char *muestra, const char *id )

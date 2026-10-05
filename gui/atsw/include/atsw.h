@@ -70,6 +70,12 @@ enum { S_ID, S_ELEGIDO, S_NMOD, S_RAZON, S_GLOBO, S_N };
 enum { M_ID, M_PADRE, M_ESTRUCT, M_SD, M_Q, M_P, M_RAZON, M_ESTRELLA,
        M_GLOBO, M_N };
 
+/* LOS CASOS (docs/DISENO-casos.md §4): la lista de la izquierda, las
+   entradas y el arbol de corridas de la derecha.                       */
+enum { CA_ID, CA_TITULO, CA_ELEGIDA, CA_MARCA, CA_GLOBO, CA_N };
+enum { EN_POS, EN_SERIE, EN_MODELO, EN_PRE, EN_HOY, EN_NOTA, EN_N };
+enum { CO_ID, CO_ESTRELLA, CO_RAZON, CO_LOGL, CO_PUERTA, CO_ESTADO, CO_GLOBO, CO_N };
+
 /* Lo que se leyo de un .out, con la huella del fichero del que salio. */
 typedef struct {
    char     serie[PR_ID], muestra[PR_ID], id[PR_ID];
@@ -120,6 +126,21 @@ typedef struct {
    GtkWidget *ver_ojo;            /* veredicto: LO QUE HAY QUE MIRAR        */
    GtkWidget *estado;             /* la barra de abajo                      */
    GtkWidget *b_fue, *b_fug, *b_drtran, *b_nuevo, *b_iterar, *b_elegir, *b_razon;
+
+   /* LOS CASOS. La derecha es una PILA: la rejilla de modelos de la serie
+      marcada, o la vista del caso marcado. Las dos a la vez no caben, y
+      marcar una cosa u otra en la izquierda es ya decir cual se mira.  */
+   GtkWidget *pila;
+   GtkWidget *l_casos;
+   GtkWidget *ver_desfase, *ver_nota;   /* las dos lineas del veredicto   */
+   /* LAS CORRIDAS DE ANTES (DISENO-casos §5): su linea y su boton, en una
+      caja que solo se ve si las hay.                                   */
+   GtkWidget *caja_legado, *ver_legado, *b_convertir;
+   GtkWidget *c_cabeza, *c_entradas, *c_corridas;
+   GtkWidget *b_nuevo_caso, *b_c_drtran, *b_c_elegir, *b_c_razon,
+             *b_c_razon_caso, *b_c_derivar, *b_c_borrar, *b_c_borrar_caso;
+   char       caso[PR_ID];        /* el caso marcado                        */
+   gboolean   viendo_caso;        /* la derecha enseña el caso, no la serie */
 
    Proyecto  *p;
    gboolean   hay;
@@ -186,6 +207,77 @@ void       atsw_lanza( Atsw *a, const char *programa, const char *fichero );
    arranca el ciclo de prevision al abrir.                              */
 void       atsw_lanza_con( Atsw *a, const char *programa, const char *opcion,
                            const char *fichero );
+
+/* drtran_gui con un CASO: «--proyecto P --caso C [--corrida c]». corrida
+   puede ser NULL o "": entonces drtran parte de la elegida, o de nada. */
+void       atsw_lanza_caso( Atsw *a, const char *programa, const char *caso,
+                            const char *corrida );
+
+/* --- los casos (docs/DISENO-casos.md) ----------------------------------- */
+
+/* EL SHA256 DE UN FICHERO, en hexadecimal (g_free), o NULL si no se lee. El
+   mismo calculo que drtran_gui: el fichero entero, tal cual.           */
+gchar     *atsw_sha_de( const char *path );
+
+/* COMO ESTA EL .pre DE UNA ENTRADA respecto del alta.                  */
+typedef enum {
+   AT_PRE_IGUAL = 0,              /* el mismo sha256                        */
+   AT_PRE_CAMBIO,                 /* otro: lo estimado ya no corresponde    */
+   AT_PRE_FALTA,                  /* el fichero no esta                     */
+   AT_PRE_SIN_HASH                /* el alta no lo guardo: no se sabe       */
+} AtPre;
+
+AtPre      atsw_entrada_pre( const Proyecto *p, const PrCaso *c, int i );
+
+/* LOS DOS DESFASES (DISENO-casos §2.4), con las entradas que lo causan en
+   cuales ("ipc/m01 (cambió), wti/m03 (no está)"). Devuelven cuantas.
+     desfases  el .pre cambio o no esta: lo estimado YA NO CORRESPONDE;
+     notas     la serie tiene hoy otro elegido: INFORMATIVO, a menudo
+               deliberado --art aconseja otro modelo para lo multivariante.*/
+int        atsw_caso_desfases( const Proyecto *p, const PrCaso *c,
+                               char *cuales, size_t n );
+/* LAS CORRIDAS DE drtran REGISTRADAS COMO MODELOS (DISENO-casos §5).
+   Antes de los casos, drtran_gui daba de alta cada estimacion con
+   pr_deriva sobre la serie de salida: un «modelo» que tiene .out y .dag y
+   no tiene .inp. Devuelve cuantos y deja sus indices en p->m en idx.  */
+int        atsw_legados( const Proyecto *p, int idx[], int max );
+
+/* CONVERTIRLAS EN CASOS: cada una pasa a ser una corrida del caso de sus
+   entradas, con su linaje, su razon y su elegida; sus ficheros se mueven a
+   _casos/ y el modelo se quita. La que no se puede se deja como estaba y
+   se dice por que. Guarda el manifiesto. Devuelve cuantas convirtio; lo
+   que paso, en informe.                                                */
+int        atsw_convierte_legados( Atsw *a, char *informe, size_t n );
+
+/* La linea del veredicto con su boton «Convertir en casos…». */
+GtkWidget *atsw_legado_caja( Atsw *a );
+
+int        atsw_caso_notas( const Proyecto *p, const PrCaso *c,
+                            char *cuales, size_t n );
+
+/* LA VENTANA COMUN (BUG-2): la regla de fuepre_check_alignment --misma
+   frecuencia, mismo calendario, misma fecha final-- y la de drtran, que
+   pide ademas el mismo numero de observaciones. pre[0..n-1] son los .pre;
+   0 si se pueden cruzar, si no != 0 con el motivo en why.             */
+int        atsw_ventana_comun( const char *const pre[], int n,
+                               char *why, size_t nw );
+
+/* La seccion CASOS de la izquierda, la vista del caso para la derecha, y
+   su repintado. Ver casos_gui.c.                                       */
+void       atsw_casos_panel( Atsw *a, GtkWidget *izq );
+GtkWidget *atsw_caso_vista( Atsw *a );
+void       atsw_pinta_casos( Atsw *a );
+
+/* «Nuevo caso…», o «Derivar caso…» si deriva_de no es NULL.            */
+void       atsw_caso_nuevo( Atsw *a, const char *deriva_de );
+
+/* «Abrir en drtran» con el programa dado: el caso marcado y, si hay una
+   corrida marcada, esa.                                                */
+void       atsw_caso_lanza( Atsw *a, const char *programa );
+
+/* Un texto en una linea, en un dialogo modal. TRUE si se acepto.       */
+gboolean   atsw_pide_texto( Atsw *a, const char *titulo, const char *aviso,
+                            const char *previo, char *out, size_t n );
 
 /* --- el dato y lo que se deriva de el ----------------------------------- */
 

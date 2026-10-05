@@ -24,6 +24,8 @@ void       atsw_on_activado( GtkTreeView *tv, GtkTreePath *r,
                          { (void) tv; (void) r; (void) c; (void) a; }
 gboolean   atsw_on_click( GtkWidget *tv, GdkEventButton *e, Atsw *a )
                          { (void) tv; (void) e; (void) a; return 0; }
+/* La seccion de los casos es de casos_gui.c, que aqui no se enlaza. */
+void       atsw_pinta_casos( Atsw *a ) { (void) a; }
 
 const char *atsw_modelo_por_defecto( const Proyecto *p, const char *serie );
 

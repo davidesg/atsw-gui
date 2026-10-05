@@ -2163,6 +2163,689 @@ static void abrir( const char *manifiesto )
     g_free( roto );
 }
 
+/* ======================================================================== */
+/* LOS CASOS (docs/DISENO-casos.md §4)                                       */
+/* ======================================================================== */
+
+/* El descendiente de raiz con ese nombre de widget (gtk_widget_set_name). */
+static GtkWidget *llamado( GtkWidget *raiz, const char *nombre )
+{
+    GPtrArray *t = junta( raiz, GTK_TYPE_WIDGET, FALSE );
+    GtkWidget *r = NULL;
+    guint      i;
+
+    for ( i = 0; i < t->len && !r; i++ )
+        if ( !strcmp( gtk_widget_get_name( g_ptr_array_index( t, i ) ), nombre ) )
+            r = g_ptr_array_index( t, i );
+    g_ptr_array_free( t, TRUE );
+    return r;
+}
+
+/* En un arbol (el de las corridas): buscar a cualquier profundidad. */
+static gboolean busca_r( GtkTreeModel *mo, GtkTreeIter *padre, int c,
+                         const char *v, GtkTreeIter *out )
+{
+    GtkTreeIter it;
+
+    if ( !gtk_tree_model_iter_children( mo, &it, padre ) ) return FALSE;
+    do {
+        gchar *s = NULL;
+
+        gtk_tree_model_get( mo, &it, c, &s, -1 );
+        if ( s && !strcmp( s, v ) ) { g_free( s ); *out = it; return TRUE; }
+        g_free( s );
+        if ( busca_r( mo, &it, c, v, out ) ) return TRUE;
+    } while ( gtk_tree_model_iter_next( mo, &it ) );
+    return FALSE;
+}
+
+static gboolean marca_arbol( GtkWidget *tv, int c, const char *v )
+{
+    GtkTreeModel *mo = gtk_tree_view_get_model( GTK_TREE_VIEW(tv) );
+    GtkTreeIter   it;
+    GtkTreePath  *p;
+
+    if ( !busca_r( mo, NULL, c, v, &it ) ) return FALSE;
+    p = gtk_tree_model_get_path( mo, &it );
+    gtk_tree_view_expand_to_path( GTK_TREE_VIEW(tv), p );
+    gtk_tree_view_set_cursor( GTK_TREE_VIEW(tv), p, NULL, FALSE );
+    gtk_tree_path_free( p );
+    pump( 20 );
+    return TRUE;
+}
+
+static gchar *celda_arbol( GtkWidget *tv, int clave, const char *v, int c )
+{
+    GtkTreeModel *mo = gtk_tree_view_get_model( GTK_TREE_VIEW(tv) );
+    GtkTreeIter   it;
+    gchar        *r = NULL;
+
+    if ( busca_r( mo, NULL, clave, v, &it ) ) gtk_tree_model_get( mo, &it, c, &r, -1 );
+    return r;
+}
+
+/* Un modelo «estimado» a mano: su .inp y un .pre con el contenido dado. La
+   madre no juzga si el .pre es un optimo --eso es de fue--: del .pre lee la
+   ventana y le calcula el hash, que es lo que aqui se prueba.          */
+static void modelo_a_mano( const char *serie, const char *pre_de, char *id,
+                           size_t nid )
+{
+    PrError e;
+    char    ruta[PR_RUTA];
+    gchar  *datos = ruta_de( serie, "", pr_datos_de( A.p, serie, "" ), ".inp" );
+    gchar  *c = NULL, *pre;
+    gsize   n = 0;
+
+    pr_deriva( A.p, serie, "", pr_datos_de( A.p, serie, "" ), id, nid,
+               ruta, sizeof ruta, &e );
+    g_file_get_contents( datos, &c, &n, NULL );
+    g_file_set_contents( ruta, c ? c : "", (gssize) n, NULL );
+    g_free( c ); c = NULL;
+    g_file_get_contents( pre_de, &c, &n, NULL );
+    pre = ruta_de( serie, "", id, ".pre" );
+    g_file_set_contents( pre, c ? c : "", (gssize) n, NULL );
+    g_free( c ); g_free( pre ); g_free( datos );
+}
+
+typedef struct { char def_ipc[PR_ID], def_wti[PR_ID]; gboolean puesto; } NuevoCaso;
+
+/* El primer intento: ipc y wti marcadas, con lo que venga por defecto. Para
+   wti eso es m02, cuyo .pre acaba en 12/2010: la ventana no cuadra.    */
+static gboolean caso_malo( GtkWindow *w, gpointer d )
+{
+    NuevoCaso  *x = d;
+    GtkWidget  *ci = llamado( GTK_WIDGET(w), "incluye-ipc" );
+    GtkWidget  *cw = llamado( GTK_WIDGET(w), "incluye-wti" );
+    GtkWidget  *mi = llamado( GTK_WIDGET(w), "modelo-ipc" );
+    GtkWidget  *mw = llamado( GTK_WIDGET(w), "modelo-wti" );
+    const char *s;
+
+    if ( mi && ( s = gtk_combo_box_get_active_id( GTK_COMBO_BOX(mi) ) ) )
+        g_snprintf( x->def_ipc, sizeof x->def_ipc, "%s", s );
+    if ( mw && ( s = gtk_combo_box_get_active_id( GTK_COMBO_BOX(mw) ) ) )
+        g_snprintf( x->def_wti, sizeof x->def_wti, "%s", s );
+    x->puesto = ci && cw;
+    if ( ci ) gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(ci), TRUE );
+    if ( cw ) gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(cw), TRUE );
+    gtk_dialog_response( GTK_DIALOG(w), GTK_RESPONSE_OK );
+    return TRUE;
+}
+
+/* El segundo: wti con m01 --la misma ventana que ipc--, wti PRIMERO, y un
+   titulo. La razon se deja en blanco: tiene que verse «sin razón».     */
+static gboolean caso_bueno( GtkWindow *w, gpointer d )
+{
+    GtkWidget *mw = llamado( GTK_WIDGET(w), "modelo-wti" );
+    GtkWidget *up = llamado( GTK_WIDGET(w), "sube-wti" );
+    GtkWidget *ti = llamado( GTK_WIDGET(w), "titulo" );
+
+    (void) d;
+    if ( mw ) gtk_combo_box_set_active_id( GTK_COMBO_BOX(mw), "m01" );
+    if ( up ) gtk_button_clicked( GTK_BUTTON(up) );
+    if ( ti ) gtk_entry_set_text( GTK_ENTRY(ti), "inflación y petróleo" );
+    gtk_dialog_response( GTK_DIALOG(w), GTK_RESPONSE_OK );
+    return TRUE;
+}
+
+/* Derivar: lo que propone el dialogo, y aceptarlo tal cual. */
+static gboolean deriva_tal_cual( GtkWindow *w, gpointer d )
+{
+    NuevoCaso  *x = d;
+    GtkWidget  *mi = llamado( GTK_WIDGET(w), "modelo-ipc" );
+    GtkWidget  *ci = llamado( GTK_WIDGET(w), "incluye-ipc" );
+    GtkWidget  *cw = llamado( GTK_WIDGET(w), "incluye-wti" );
+    const char *s;
+
+    x->puesto = ci && cw && gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(ci) ) &&
+                gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(cw) );
+    if ( mi && ( s = gtk_combo_box_get_active_id( GTK_COMBO_BOX(mi) ) ) )
+        g_snprintf( x->def_ipc, sizeof x->def_ipc, "%s", s );
+    gtk_dialog_response( GTK_DIALOG(w), GTK_RESPONSE_OK );
+    return TRUE;
+}
+
+static Proyecto *relee_manifiesto( void )
+{
+    Proyecto *q = g_new0( Proyecto, 1 );
+    PrError   e;
+
+    if ( pr_leer( A.p->path, q, &e ) != 0 ) { g_free( q ); return NULL; }
+    return q;
+}
+
+static void casos( void )
+{
+    NuevoCaso x = { "", "", FALSE };
+    char      w1[PR_ID], w2[PR_ID], id[PR_ID], ruta[PR_RUTA];
+    PrError   e;
+    gchar    *s, **v;
+
+    /* --- el terreno: wti con dos modelos «estimados» ------------------- */
+    {
+    gchar *pre_w = ruta_de( "wti", "", "m00", ".inp" );
+    gchar *corto = ruta_de( "ipc", "hasta-2010", "m00", ".inp" );
+
+    modelo_a_mano( "wti", pre_w, w1, sizeof w1 );     /* la ventana buena */
+    modelo_a_mano( "wti", corto, w2, sizeof w2 );     /* acaba en 12/2010 */
+    g_free( pre_w ); g_free( corto );
+    }
+    check( !strcmp( w1, "m01" ) && !strcmp( w2, "m02" ),
+           "(la prueba prepara wti/m01 y wti/m02)", w2 );
+    atsw_guarda( &A, &e );
+    atsw_refresca( &A );
+
+    /* --- «Nuevo caso…»: la ventana que no cuadra se rechaza ------------ */
+    olvida();
+    responde( "Nuevo caso", caso_malo, &x );
+    responde( "Nuevo caso", caso_bueno, NULL );
+    gtk_button_clicked( GTK_BUTTON(A.b_nuevo_caso) );
+    todo_atendido( "«Nuevo caso…» tenia que abrir su dialogo dos veces" );
+
+    check( x.puesto, "el dialogo ofrece ipc y wti, que tienen .pre", NULL );
+    check( !strcmp( x.def_ipc, "m01" ),
+           "por defecto, el ELEGIDO de la serie (ipc/m01)", x.def_ipc );
+    check( !strcmp( x.def_wti, "m02" ),
+           "sin elegido, el ultimo estimado (wti/m02)", x.def_wti );
+    check( dijo( "No es un caso" ) && dijo( "misma fecha" ),
+           "la ventana que no cuadra se rechaza, y se dice por que",
+           todo_lo_dicho() );
+    check( strstr( ultimo.visto, "misma fecha" ) != NULL,
+           "y el dialogo sigue abierto con el motivo a la vista", ultimo.visto );
+    check( A.p->nca == 1 && pr_caso_idx( A.p, "C1" ) == 0,
+           "el segundo intento, con wti/m01, da de alta C1", barra() );
+    check( strstr( barra(), "Caso C1 dado de alta: wti/m01, ipc/m01" ) != NULL,
+           "y la barra dice que entra, EN SU ORDEN", barra() );
+
+    s = filas( A.l_casos, CA_ID );
+    check( !strcmp( s, "C1" ), "C1 sale en la seccion CASOS", s );
+    g_free( s );
+    check( A.viendo_caso && !strcmp( gtk_stack_get_visible_child_name(
+                                         GTK_STACK(A.pila) ), "caso" ),
+           "y la derecha enseña el caso", NULL );
+    s = filas( A.c_entradas, EN_SERIE );
+    check( !strcmp( s, "wti|ipc" ), "las entradas, en el orden que se dio", s );
+    g_free( s );
+    s = filas( A.c_entradas, EN_MODELO );
+    check( !strcmp( s, "m01|m01" ), "cada una con su modelo", s );
+    g_free( s );
+    s = filas( A.c_entradas, EN_PRE );
+    check( !strcmp( s, "igual|igual" ), "y los .pre como en el alta", s );
+    g_free( s );
+    s = filas( A.c_entradas, EN_HOY );
+    check( !strcmp( s, "—|m01" ), "el elegido de hoy, o «—» si no hay", s );
+    g_free( s );
+    check( strstr( gtk_label_get_text( GTK_LABEL(A.c_cabeza) ), "sin razón" ) &&
+           strstr( gtk_label_get_text( GTK_LABEL(A.c_cabeza) ),
+                   "inflación y petróleo" ),
+           "la cabecera: el titulo, y «sin razón» a la vista",
+           gtk_label_get_text( GTK_LABEL(A.c_cabeza) ) );
+    s = lee( A.p->path );
+    check( strstr( s, "entradas: wti/m01@" ) && strstr( s, " ipc/m01@" ),
+           "el manifiesto guarda las entradas en orden y con su hash", s );
+    g_free( s );
+
+    /* --- «Abrir en drtran» --------------------------------------------- */
+    atsw_caso_lanza( &A, "atsw_hijo_falso" );
+    v = lo_que_recibio();
+    check( v && g_strv_length( v ) >= 5 && !strcmp( v[0], "--proyecto" ) &&
+           !strcmp( v[1], A.p->path ) && !strcmp( v[2], "--caso" ) &&
+           !strcmp( v[3], "C1" ) && !strcmp( v[4], "FIN" ),
+           "sin corrida marcada, al hijo le llega «--proyecto P --caso C1»",
+           v ? g_strjoinv( " ", v ) : barra() );
+    g_strfreev( v );
+    {
+    gchar *p = atsw_programa( "drtran_gui" );
+    gchar *q = g_strdup_printf( "%s, con el caso C1.", p ? p : "drtran_gui" );
+
+    olvida();
+    hijos_sin_pantalla( TRUE );
+    gtk_button_clicked( GTK_BUTTON(A.b_c_drtran) );
+    hijos_sin_pantalla( FALSE );
+    check( p && dijo( q ), "«Abrir en drtran» lanza el drtran_gui del arbol",
+           todo_lo_dicho() );
+    g_free( p ); g_free( q );
+    }
+
+    /* --- las corridas, como las dejaria drtran_gui --------------------- */
+    pr_corrida_nueva( A.p, "C1", NULL, id, sizeof id, ruta, sizeof ruta, &e );
+    {
+    gchar *dir = g_path_get_dirname( ruta );
+
+    g_mkdir_with_parents( dir, 0700 );
+    g_free( dir );
+    }
+    g_file_set_contents( ruta, "DRTRAN 1.0\n\nLog-likelihood = -767.420000\n\n",
+                         -1, NULL );
+    pr_corrida_nueva( A.p, "C1", "c00", id, sizeof id, NULL, 0, &e );
+    atsw_guarda( &A, &e );
+    atsw_refresca( &A );
+    {
+    GString      *g = g_string_new( NULL );
+
+    arbol_r( gtk_tree_view_get_model( GTK_TREE_VIEW(A.c_corridas) ), NULL, 0, g );
+    check( !strcmp( g->str, "c00 []\n  c01 []\n" ),
+           "las corridas, como arbol: c01 cuelga de c00", g->str );
+    g_string_free( g, TRUE );
+    }
+    s = celda_arbol( A.c_corridas, CO_ID, "c00", CO_LOGL );
+    check( s && !strcmp( s, "-767.42" ), "la logL de c00 sale de su .out", s );
+    g_free( s );
+    s = celda_arbol( A.c_corridas, CO_ID, "c01", CO_LOGL );
+    check( s && !strcmp( s, "—" ), "sin .out, «—»", s );
+    g_free( s );
+    s = celda_arbol( A.c_corridas, CO_ID, "c01", CO_RAZON );
+    check( s && !strcmp( s, "(sin razón)" ), "y sin razon se ve como sin razon", s );
+    g_free( s );
+
+    /* --- LA PUERTA DIAGONAL: la conjunta contra la suma de las univariantes */
+    {
+    const PrCaso *c = pr_caso_ver( A.p, "C1" );
+    double        suma = 0.0;
+    char          r2[PR_RUTA], r3[PR_RUTA], esperado[64];
+    int           k;
+
+    /* La logL de cada entrada, del .out de fue de su modelo. Si alguna no
+       lo tiene todavia, se le escribe uno con su logelf: lo que se prueba
+       es la suma, no fue.                                              */
+    for ( k = 0; c && k < c->nen; k++ )
+        {
+        char    o[PR_RUTA];
+        FueOut *fo = g_new0( FueOut, 1 );
+
+        pr_ruta( A.p, c->en[k].serie, c->muestra, c->en[k].modelo, ".out", o,
+                 sizeof o );
+        if ( !fueout_read( o, fo ) || !fo->tiene_logelf )
+            {
+            gchar *t = g_strdup_printf( "logelf: %.10f\n", -100.0 * ( k + 1 ) );
+
+            g_file_set_contents( o, t, -1, NULL );
+            g_free( t );
+            memset( fo, 0, sizeof *fo );
+            fueout_read( o, fo );
+            }
+        suma += fo->logelf;
+        g_free( fo );
+        }
+
+    /* c02: diagonal, y la reproduce. c03: diagonal, y no. */
+    pr_corrida_nueva( A.p, "C1", "c01", id, sizeof id, r2, sizeof r2, &e );
+    pr_corrida_nueva( A.p, "C1", "c01", id, sizeof id, r3, sizeof r3, &e );
+    {
+    gchar *t2 = g_strdup_printf( "DRTRAN 1.0\n\nTransfer function orders:\n"
+                                 "  input 1: b = 0, r = 0, s = -1\n\n"
+                                 "Log-likelihood = %.6f\n", suma );
+    gchar *t3 = g_strdup_printf( "DRTRAN 1.0\n\nTransfer function orders:\n"
+                                 "  input 1: b = 0, r = 0, s = -1\n\n"
+                                 "Log-likelihood = %.6f\n", suma + 0.5 );
+
+    g_file_set_contents( r2, t2, -1, NULL );
+    g_file_set_contents( r3, t3, -1, NULL );
+    g_free( t2 ); g_free( t3 );
+    }
+    atsw_guarda( &A, &e );
+    atsw_refresca( &A );
+
+    s = celda_arbol( A.c_corridas, CO_ID, "c02", CO_PUERTA );
+    check( s && !strcmp( s, "cuadra" ),
+           "una corrida diagonal que reproduce la suma de las univariantes: cuadra", s );
+    g_free( s );
+    s = celda_arbol( A.c_corridas, CO_ID, "c03", CO_PUERTA );
+    check( s && !strcmp( s, "NO cuadra (+0.5000)" ),
+           "una diagonal que no la reproduce: NO cuadra, y por cuanto", s );
+    g_free( s );
+    snprintf( esperado, sizeof esperado, "%+.2f", -767.42 - suma );
+    s = celda_arbol( A.c_corridas, CO_ID, "c00", CO_PUERTA );
+    check( s && !strcmp( s, esperado ),
+           "con transferencia: lo que gana sobre los univariantes", s );
+    g_free( s );
+    s = celda_arbol( A.c_corridas, CO_ID, "c01", CO_PUERTA );
+    check( s && !strcmp( s, "—" ), "sin .out, la puerta no se inventa", s );
+    g_free( s );
+
+    /* Se quitan: lo que viene despues cuenta las corridas que habia. */
+    pr_corrida_borra( A.p, "C1", "c03", &e );
+    pr_corrida_borra( A.p, "C1", "c02", &e );
+    g_remove( r2 ); g_remove( r3 );
+    atsw_guarda( &A, &e );
+    atsw_refresca( &A );
+    }
+
+    check( marca_arbol( A.c_corridas, CO_ID, "c01" ), "se puede marcar c01", NULL );
+    atsw_caso_lanza( &A, "atsw_hijo_falso" );
+    v = lo_que_recibio();
+    check( v && g_strv_length( v ) >= 7 && !strcmp( v[2], "--caso" ) &&
+           !strcmp( v[3], "C1" ) && !strcmp( v[4], "--corrida" ) &&
+           !strcmp( v[5], "c01" ) && !strcmp( v[6], "FIN" ),
+           "con c01 marcada: «--proyecto P --caso C1 --corrida c01»",
+           v ? g_strjoinv( " ", v ) : barra() );
+    g_strfreev( v );
+
+    /* --- Elegir y Razón, guardados ------------------------------------- */
+    responde( "La corrida elegida", escribe_texto, "el más simple" );
+    gtk_button_clicked( GTK_BUTTON(A.b_c_elegir) );
+    todo_atendido( "«Elegir» tenia que pedir la razon" );
+    check( !strcmp( barra(), "Corrida elegida y guardada." ),
+           "«Elegir» una corrida lo dice", barra() );
+    s = celda( A.l_casos, CA_ID, "C1", CA_ELEGIDA );
+    check( s && !strcmp( s, "c01 ★" ), "CASOS enseña la elegida con su ★", s );
+    g_free( s );
+    s = celda_arbol( A.c_corridas, CO_ID, "c01", CO_ESTRELLA );
+    check( s && !strcmp( s, "★" ), "y el arbol tambien", s );
+    g_free( s );
+
+    marca_arbol( A.c_corridas, CO_ID, "c00" );
+    responde( "El porqué de esta corrida", escribe_texto, "la diagonal" );
+    gtk_button_clicked( GTK_BUTTON(A.b_c_razon) );
+    todo_atendido( "«Razón…» de la corrida tenia que pedirla" );
+    responde( "El porqué de este caso", escribe_texto, "el WTI adelanta al IPC" );
+    gtk_button_clicked( GTK_BUTTON(A.b_c_razon_caso) );
+    todo_atendido( "«Razón del caso…» tenia que pedirla" );
+    {
+    Proyecto *q = relee_manifiesto();
+    const PrCorrida *c0 = q ? pr_corrida_ver( q, "C1", "c00" ) : NULL;
+    const PrCorrida *c1 = q ? pr_corrida_ver( q, "C1", "c01" ) : NULL;
+    const PrCaso    *ca = q ? pr_caso_ver( q, "C1" ) : NULL;
+
+    check( q && !strcmp( pr_corrida_elegida( q, "C1" ), "c01" ) && c1 &&
+           !strcmp( c1->razon_elegido, "el más simple" ),
+           "la elegida y su razon quedan en el manifiesto", NULL );
+    check( c0 && !strcmp( c0->razon, "la diagonal" ),
+           "la razon de la corrida queda en el manifiesto", c0 ? c0->razon : NULL );
+    check( ca && !strcmp( ca->razon, "el WTI adelanta al IPC" ),
+           "y la del caso tambien", ca ? ca->razon : NULL );
+    g_free( q );
+    }
+    check( strstr( gtk_label_get_text( GTK_LABEL(A.c_cabeza) ),
+                   "el WTI adelanta al IPC" ) != NULL,
+           "la cabecera enseña la razon del caso",
+           gtk_label_get_text( GTK_LABEL(A.c_cabeza) ) );
+
+    /* --- Borrar: lo que no se puede, dicho ----------------------------- */
+    marca_arbol( A.c_corridas, CO_ID, "c00" );
+    gtk_button_clicked( GTK_BUTTON(A.b_c_borrar) );
+    todo_atendido( "(borrar c00)" );
+    check( strstr( barra(), "De esa corrida cuelga «C1/c01»" ) != NULL,
+           "una corrida con hijas no se borra, y se dice cual cuelga", barra() );
+    gtk_button_clicked( GTK_BUTTON(A.b_c_borrar_caso) );
+    todo_atendido( "(borrar C1)" );
+    check( strstr( barra(), "En ese caso está la corrida" ) != NULL,
+           "un caso con corridas no se borra, y se dice por que", barra() );
+
+    /* Una hoja del arbol si: pregunta, y se va con sus ficheros. */
+    pr_corrida_nueva( A.p, "C1", "c01", id, sizeof id, ruta, sizeof ruta, &e );
+    g_file_set_contents( ruta, "Log-likelihood = -760.0\n", -1, NULL );
+    {
+    char dag[PR_RUTA];
+
+    pr_corrida_ruta( A.p, "C1", "c02", ".dag", dag, sizeof dag );
+    g_file_set_contents( dag, "red\n", -1, NULL );
+    atsw_guarda( &A, &e );
+    atsw_refresca( &A );
+    marca_arbol( A.c_corridas, CO_ID, "c02" );
+    responde( "¿Borro la corrida c02", contesta, GINT_TO_POINTER(GTK_RESPONSE_OK) );
+    gtk_button_clicked( GTK_BUTTON(A.b_c_borrar) );
+    todo_atendido( "«Borrar corrida…» tenia que preguntar" );
+    check( strstr( barra(), "corrida c02 borrada, con sus ficheros" ) != NULL,
+           "borrar una corrida lo dice", barra() );
+    check( !g_file_test( ruta, G_FILE_TEST_EXISTS ) &&
+           !g_file_test( dag, G_FILE_TEST_EXISTS ),
+           "y su .out y su .dag ya no estan", ruta );
+    check( pr_corrida_idx( A.p, "C1", "c02" ) < 0, "ni en el manifiesto", NULL );
+    }
+
+    /* --- los dos desfases ---------------------------------------------- */
+    {
+    gchar *pre = ruta_de( "ipc", "", "m01", ".pre" );
+    FILE  *f = g_fopen( pre, "ab" );
+
+    if ( f ) { fputc( '\n', f ); fclose( f ); }
+    g_free( pre );
+    }
+    atsw_refresca( &A );
+    s = celda( A.l_casos, CA_ID, "C1", CA_MARCA );
+    check( s && !strcmp( s, "⚠" ), "un .pre de entrada cambiado: ⚠ en CASOS", s );
+    g_free( s );
+    s = filas( A.c_entradas, EN_PRE );
+    check( !strcmp( s, "igual|cambió" ), "y la entrada dice cual cambio", s );
+    g_free( s );
+    check( gtk_widget_get_visible( A.ver_desfase ) &&
+           strstr( gtk_label_get_text( GTK_LABEL(A.ver_desfase) ),
+                   "C1: ipc/m01 (cambió)" ),
+           "el veredicto de abajo dice que caso y que entrada",
+           gtk_label_get_text( GTK_LABEL(A.ver_desfase) ) );
+
+    /* Otro elegido hoy para ipc, con el boton de siempre: una nota. */
+    marca( A.l_series, S_ID, "ipc" );
+    check( !A.viendo_caso, "marcar una serie vuelve a sus modelos", NULL );
+    marca( A.l_modelos, M_ID, "m03" );
+    responde( "El modelo elegido", escribe_texto, "otro para prever" );
+    gtk_button_clicked( GTK_BUTTON(A.b_elegir) );
+    todo_atendido( "«Elegir» tenia que pedir la razon" );
+    check( marca( A.l_casos, CA_ID, "C1" ) && A.viendo_caso,
+           "y marcar C1 vuelve al caso", NULL );
+    s = filas( A.c_entradas, EN_HOY );
+    check( !strcmp( s, "—|m03" ), "el elegido de hoy de ipc es m03", s );
+    g_free( s );
+    s = celda( A.c_entradas, EN_SERIE, "ipc", EN_NOTA );
+    check( s && !strcmp( s, "otro elegido hoy (nota)" ),
+           "y es una nota, no una alarma", s );
+    g_free( s );
+    s = celda( A.c_entradas, EN_SERIE, "wti", EN_NOTA );
+    check( s && !*s, "wti no tiene elegido: sin nota", s );
+    g_free( s );
+    check( gtk_widget_get_visible( A.ver_nota ) &&
+           strstr( gtk_label_get_text( GTK_LABEL(A.ver_nota) ),
+                   "ipc entra con m01 y hoy su elegido es m03" ),
+           "el veredicto de abajo lleva la nota",
+           gtk_label_get_text( GTK_LABEL(A.ver_nota) ) );
+
+    /* --- Derivar: C2, colgado de C1, con los .pre de hoy --------------- */
+    x.puesto = FALSE; x.def_ipc[0] = '\0';
+    responde( "Derivar caso de C1", deriva_tal_cual, &x );
+    gtk_button_clicked( GTK_BUTTON(A.b_c_derivar) );
+    todo_atendido( "«Derivar caso…» tenia que abrir su dialogo" );
+    check( x.puesto, "derivar trae marcadas las series del caso", NULL );
+    check( !strcmp( x.def_ipc, "m01" ),
+           "el elegido de hoy (m03) no tiene .pre: se queda el del caso",
+           x.def_ipc );
+    {
+    const PrCaso *c1 = pr_caso_ver( A.p, "C1" ), *c2 = pr_caso_ver( A.p, "C2" );
+
+    check( c2 && !strcmp( c2->padre, "C1" ), "derivar crea C2, con padre C1",
+           barra() );
+    check( c1 && c2 && c2->nen == 2 && !strcmp( c2->en[0].serie, "wti" ) &&
+           !strcmp( c2->en[1].serie, "ipc" ) &&
+           strcmp( c2->en[1].sha, c1->en[1].sha ) != 0,
+           "en el mismo orden, y con el hash del .pre de hoy", NULL );
+    }
+    check( strstr( barra(), "Caso C2, derivado de C1" ) != NULL,
+           "y la barra lo dice", barra() );
+    s = celda( A.l_casos, CA_ID, "C2", CA_MARCA );
+    check( s && !strcmp( s, "" ), "C2 no esta desfasado: la nota no es ⚠", s );
+    g_free( s );
+    check( strstr( gtk_label_get_text( GTK_LABEL(A.c_cabeza) ), "derivado de C1" )
+           != NULL, "su cabecera dice de donde se derivo",
+           gtk_label_get_text( GTK_LABEL(A.c_cabeza) ) );
+
+    /* Un caso sin corridas si se borra. */
+    responde( "¿Borro el caso C2", contesta, GINT_TO_POINTER(GTK_RESPONSE_OK) );
+    gtk_button_clicked( GTK_BUTTON(A.b_c_borrar_caso) );
+    todo_atendido( "«Borrar caso…» tenia que preguntar" );
+    check( pr_caso_idx( A.p, "C2" ) < 0 && strstr( barra(), "Caso C2 borrado" ),
+           "un caso sin corridas se borra y lo dice", barra() );
+
+    /* --- un modelo que es entrada no se borra -------------------------- */
+    marca( A.l_series, S_ID, "wti" );
+    marca( A.l_modelos, M_ID, "m01" );
+    on_borrar( NULL, &A );
+    todo_atendido( "(borrar wti/m01)" );
+    check( strstr( barra(), "entrada del caso «C1»" ) != NULL &&
+           existe( "wti", "", "m01", ".pre" ),
+           "borrar la entrada de un caso se niega, nombrando el caso", barra() );
+}
+
+/* ======================================================================== */
+/* LAS CORRIDAS DE ANTES (docs/DISENO-casos.md §5)                           */
+/*                                                                           */
+/* Se fabrica lo que dejaba drtran_gui antes de los casos: modelos de la     */
+/* serie de salida, encadenados, sin .inp, con un .out cuya cabecera dice    */
+/* que .pre entraron, y su .dag.                                            */
+/* ======================================================================== */
+
+static void legado( const char *padre, const char *y, const char *x,
+                    const char *fin, gboolean cns, const char *razon,
+                    char *id, size_t nid )
+{
+    PrError e;
+    gchar  *out, *f;
+
+    pr_deriva( A.p, "ipc", "", padre, id, nid, NULL, 0, &e );
+    pr_razon( A.p, "ipc", "", id, razon, &e );
+    out = g_strdup_printf( "DRTRAN 1.0: Box-Jenkins transfer function models "
+                           "by exact ML%s%sModel            : ipc_wti%s"
+                           "Series           : 2 (1 output + 1 input(s))%s"
+                           "Output (Y)       : %s%s"
+                           "Input  (X1)      : %s%s"
+                           "Frequency        : 12%s%s"
+                           "Log-likelihood = -700.500000%s",
+                           fin, fin, fin, fin, y, fin, x, fin, fin, fin, fin );
+    f = ruta_de( "ipc", "", id, ".out" );
+    g_file_set_contents( f, out, -1, NULL );
+    g_free( f );
+    f = ruta_de( "ipc", "", id, ".dag" );
+    g_file_set_contents( f, "1 2 0 0 0\n", -1, NULL );
+    g_free( f );
+    if ( cns )
+        { f = ruta_de( "ipc", "", id, ".cns" );
+          g_file_set_contents( f, "\n", -1, NULL ); g_free( f ); }
+    g_free( out );
+}
+
+static void legados( void )
+{
+    char     l1[PR_ID], l2[PR_ID], l3[PR_ID], l4[PR_ID], m5[PR_ID], ruta[PR_RUTA];
+    gchar   *y = ruta_de( "ipc", "", "m01", ".pre" );
+    gchar   *x = ruta_de( "wti", "", "m01", ".pre" );
+    gchar   *fuera = g_build_filename( T, "fuera", "work", "OTRA_m01.pre", NULL );
+    PrError  e;
+    const PrCaso *c;
+    gchar   *s;
+
+    atsw_refresca( &A );
+    check( !gtk_widget_get_visible( A.caja_legado ),
+           "sin corridas viejas, no hay linea de veredicto", NULL );
+
+    legado( NULL, y, x, "\n",   TRUE,  "la diagonal",    l1, sizeof l1 );
+    legado( l1,   y, x, "\r\n", FALSE, "fuera omega_1",  l2, sizeof l2 );
+    legado( NULL, y, fuera, "\n", FALSE, "con otra serie", l3, sizeof l3 );
+    /* Una que se podria convertir, pero de ella cuelga un modelo DE VERDAD
+       de fue (con su .inp): moverla dejaria a ese modelo sin padre. */
+    legado( NULL, y, x, "\n", FALSE, "sostiene a otro", l4, sizeof l4 );
+    pr_deriva( A.p, "ipc", "", l4, m5, sizeof m5, NULL, 0, &e );
+    {
+    gchar *f5 = ruta_de( "ipc", "", m5, ".inp" );
+
+    g_file_set_contents( f5, "un .inp de fue\n", -1, NULL );
+    g_free( f5 );
+    }
+    pr_elige( A.p, "ipc", "", l2, "la buena", &e );
+    atsw_guarda( &A, &e );
+    atsw_refresca( &A );
+
+    check( atsw_legados( A.p, NULL, 0 ) == 4,
+           "las cuatro corridas viejas se reconocen (.out y .dag, sin .inp), "
+           "y el modelo de fue con .inp no", NULL );
+    check( gtk_widget_get_visible( A.caja_legado ) &&
+           strstr( gtk_label_get_text( GTK_LABEL(A.ver_legado) ),
+                   "4 corridas de drtran registradas como modelos de ipc" ),
+           "y el veredicto lo dice",
+           gtk_label_get_text( GTK_LABEL(A.ver_legado) ) );
+
+    /* Sin confirmar no se toca nada. */
+    responde( "¿Convierto en casos", contesta, GINT_TO_POINTER(GTK_RESPONSE_CANCEL) );
+    gtk_button_clicked( GTK_BUTTON(A.b_convertir) );
+    todo_atendido( "«Convertir en casos…» tenia que preguntar" );
+    check( atsw_legados( A.p, NULL, 0 ) == 4 && A.p->nca == 1,
+           "si no se confirma, no se convierte nada", barra() );
+
+    olvida();
+    responde( "¿Convierto en casos", contesta, GINT_TO_POINTER(GTK_RESPONSE_OK) );
+    gtk_button_clicked( GTK_BUTTON(A.b_convertir) );
+    todo_atendido( "«Convertir en casos…» tenia que preguntar" );
+    nota( "barra (conversion): %s", barra() );
+    check( strstr( barra(), "2 corridas convertidas" ) &&
+           strstr( barra(), "no es un modelo de este proyecto" ),
+           "la barra dice que se convirtio y que no, y por que", barra() );
+
+    c = pr_caso_ver( A.p, "C2" );
+    check( c && c->nen == 2 && !strcmp( c->en[0].serie, "ipc" ) &&
+           !strcmp( c->en[0].modelo, "m01" ) && !strcmp( c->en[1].serie, "wti" ) &&
+           !strcmp( c->en[1].modelo, "m01" ) && c->en[0].sha[0] &&
+           !c->razon[0] && !strcmp( c->motor, "drtran" ),
+           "un caso nuevo con las entradas del .out, en su orden y sin razon "
+           "inventada", NULL );
+    {
+    const PrCorrida *c0 = pr_corrida_ver( A.p, "C2", "c00" );
+    const PrCorrida *c1 = pr_corrida_ver( A.p, "C2", "c01" );
+
+    check( c0 && c1 && !c0->padre[0] && !strcmp( c1->padre, "c00" ),
+           "las corridas conservan el linaje: c01 cuelga de c00", NULL );
+    check( c0 && c1 && !strcmp( c0->razon, "la diagonal" ) &&
+           !strcmp( c1->razon, "fuera omega_1" ),
+           "y la razon de cada modelo viejo", NULL );
+    check( !strcmp( pr_corrida_elegida( A.p, "C2" ), "c01" ) && c1 &&
+           !strcmp( c1->razon_elegido, "la buena" ),
+           "el que era el elegido es la elegida del caso, con su porque", NULL );
+    }
+    {
+    static const struct { const char *co, *ext; } f[] = {
+        { "c00", ".out" }, { "c00", ".dag" }, { "c00", ".cns" },
+        { "c01", ".out" }, { "c01", ".dag" } };
+    int i;
+
+    for ( i = 0; i < (int) G_N_ELEMENTS(f); i++ )
+        {
+        pr_corrida_ruta( A.p, "C2", f[i].co, f[i].ext, ruta, sizeof ruta );
+        check( g_file_test( ruta, G_FILE_TEST_EXISTS ),
+               "los ficheros se mueven a _casos/C2/work", ruta );
+        }
+    }
+    check( pr_modelo_idx( A.p, "ipc", "", l1 ) < 0 &&
+           pr_modelo_idx( A.p, "ipc", "", l2 ) < 0 &&
+           !existe( "ipc", "", l1, ".out" ) && !existe( "ipc", "", l2, ".dag" ),
+           "los modelos viejos se van del manifiesto, y sus ficheros de alli",
+           NULL );
+    {
+    int k = pr_modelo_idx( A.p, "ipc", "", l3 );
+
+    check( k >= 0 && !strcmp( A.p->m[k].razon, "con otra serie" ) &&
+           existe( "ipc", "", l3, ".out" ),
+           "el que nombra un .pre de fuera se queda como estaba", NULL );
+    k = pr_modelo_idx( A.p, "ipc", "", l4 );
+    check( k >= 0 && existe( "ipc", "", l4, ".out" ) &&
+           existe( "ipc", "", l4, ".dag" ) &&
+           pr_modelo_idx( A.p, "ipc", "", m5 ) >= 0,
+           "el que sostiene a un modelo de fue tambien, y el modelo con el", NULL );
+    check( strstr( barra(), "de ella cuelga" ) != NULL,
+           "y la barra dice por que", barra() );
+    }
+    check( strstr( gtk_label_get_text( GTK_LABEL(A.ver_legado) ),
+                   "2 corridas de drtran registradas como modelos de ipc" ) != NULL,
+           "y el veredicto cuenta el que queda",
+           gtk_label_get_text( GTK_LABEL(A.ver_legado) ) );
+    {
+    Proyecto *q = relee_manifiesto();
+
+    check( q && pr_caso_idx( q, "C2" ) >= 0 && pr_corrida_idx( q, "C2", "c01" ) >= 0,
+           "el manifiesto convertido se vuelve a leer", NULL );
+    g_free( q );
+    }
+    s = filas( A.l_casos, CA_ID );
+    check( !strcmp( s, "C1|C2" ), "y el caso sale en CASOS", s );
+    g_free( s );
+    g_free( y ); g_free( x ); g_free( fuera );
+}
+
 int main( int argc, char **argv )
 {
     GtkApplication *app;
@@ -2225,6 +2908,8 @@ int main( int argc, char **argv )
             fase( "linaje" ); linaje();
             fase( "borrar" ); borrar();
             fase( "abrir" ); abrir( manifiesto );
+            fase( "casos" ); casos();
+            fase( "legados" ); legados();
             }
         }
 

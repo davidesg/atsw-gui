@@ -297,6 +297,8 @@ static void on_serie( GtkTreeSelection *sel, gpointer d )
 
     snprintf( a->serie, sizeof a->serie, "%s", s );
     g_free( s );
+    /* Marcar una serie es pedir sus modelos: la derecha deja el caso. */
+    a->viendo_caso = FALSE;
     atsw_refresca( a );
 }
 
@@ -560,6 +562,14 @@ static gboolean pide_texto( Atsw *a, const char *titulo, const char *aviso,
         { snprintf( out, n, "%s", gtk_entry_get_text( GTK_ENTRY(e) ) ); si = TRUE; }
     gtk_widget_destroy( d );
     return si;
+}
+
+/* La misma pregunta, para los casos (casos_gui.c): una sola forma de pedir
+   una razon en toda la madre.                                         */
+gboolean atsw_pide_texto( Atsw *a, const char *titulo, const char *aviso,
+                          const char *previo, char *out, size_t n )
+{
+    return pide_texto( a, titulo, aviso, previo, out, n );
 }
 
 /* El gesto EXPLICITO. Antes especificar el primer modelo no tenia boton: se
@@ -1187,7 +1197,10 @@ static void on_elegir( GtkButton *b, Atsw *a )
     if ( pide_texto( a, "El modelo elegido",
             "Por qué éste y no otro. Se puede dejar en blanco: sin razón "
             "se verá como sin razón, que es mejor que una inventada.",
-            pr_elegido( a->p, a->serie, atsw_muestra_actual( a ) ), razon, sizeof razon ) )
+            /* La razón que ya hubiera, no el id del elegido: venía relleno
+               con «m10», y aceptar sin mirar guardaba una razón falsa.   */
+            pr_razon_elegido( a->p, a->serie, atsw_muestra_actual( a ) ),
+            razon, sizeof razon ) )
         {
         if ( pr_elige( a->p, a->serie, atsw_muestra_actual( a ), id, razon, &e ) != 0 ||
              atsw_guarda( a, &e ) != 0 )
@@ -1365,6 +1378,8 @@ static void activate( GtkApplication *app, gpointer d )
     g_signal_connect( a->l_series, "button-press-event",
                       G_CALLBACK(on_serie_click), a );
     gtk_box_pack_start( GTK_BOX(izq), atsw_en_scroll( a->l_series ), TRUE, TRUE, 0 );
+    /* Y DEBAJO, LOS CASOS: lo que se cruza de varias series a la vez. */
+    atsw_casos_panel( a, izq );
     gtk_paned_pack1( GTK_PANED(pan), izq, FALSE, FALSE );
 
     der = gtk_box_new( GTK_ORIENTATION_VERTICAL, 4 );
@@ -1448,7 +1463,13 @@ static void activate( GtkApplication *app, gpointer d )
 
     gtk_box_pack_start( GTK_BOX(der), a->libro, TRUE, TRUE, 0 );
     atsw_hojas( a );
-    gtk_paned_pack2( GTK_PANED(pan), der, TRUE, FALSE );
+
+    /* LA DERECHA ES UNA PILA: los modelos de la serie marcada o el caso
+       marcado. Lo que se marca a la izquierda decide cual se ve.       */
+    a->pila = gtk_stack_new();
+    gtk_stack_add_named( GTK_STACK(a->pila), der, "modelos" );
+    gtk_stack_add_named( GTK_STACK(a->pila), atsw_caso_vista( a ), "caso" );
+    gtk_paned_pack2( GTK_PANED(pan), a->pila, TRUE, FALSE );
     gtk_paned_set_position( GTK_PANED(pan), 300 );
 
     /* --- los dos veredictos, y la barra --- */
@@ -1461,6 +1482,18 @@ static void activate( GtkApplication *app, gpointer d )
     gtk_label_set_ellipsize( GTK_LABEL(a->ver_ojo),    PANGO_ELLIPSIZE_END );
     gtk_box_pack_start( GTK_BOX(vb), a->ver_cuenta, FALSE, FALSE, 0 );
     gtk_box_pack_start( GTK_BOX(vb), a->ver_ojo,    FALSE, FALSE, 0 );
+    /* LAS DOS DE LOS CASOS, que solo salen si hay algo que decir. */
+    a->ver_desfase = gtk_label_new( "" );
+    a->ver_nota    = gtk_label_new( "" );
+    gtk_widget_set_halign( a->ver_desfase, GTK_ALIGN_START );
+    gtk_widget_set_halign( a->ver_nota,    GTK_ALIGN_START );
+    gtk_label_set_ellipsize( GTK_LABEL(a->ver_desfase), PANGO_ELLIPSIZE_END );
+    gtk_label_set_ellipsize( GTK_LABEL(a->ver_nota),    PANGO_ELLIPSIZE_END );
+    gtk_widget_set_no_show_all( a->ver_desfase, TRUE );
+    gtk_widget_set_no_show_all( a->ver_nota,    TRUE );
+    gtk_box_pack_start( GTK_BOX(vb), a->ver_desfase, FALSE, FALSE, 0 );
+    gtk_box_pack_start( GTK_BOX(vb), a->ver_nota,    FALSE, FALSE, 0 );
+    gtk_box_pack_start( GTK_BOX(vb), atsw_legado_caja( a ), FALSE, FALSE, 0 );
     gtk_box_pack_start( GTK_BOX(raiz), vb, FALSE, FALSE, 0 );
 
     a->estado = gtk_label_new( "" );

@@ -657,6 +657,15 @@ int pr_borra( Proyecto *p, const char *serie, const char *muestra,
             pr_modelo_idx( p, serie, muestra, id ) == i )
            { falla( e, PR_EHIJOS, 0, p->m[j].id ); return 1; }
 
+   /* NI LA ENTRADA DE UN CASO. Borrarla dejaria al caso sin escalera: no se
+      sabria con que se cruzo esa serie. Se dice de CUAL.              */
+   {
+   char casos[1][PR_ID];
+
+   if ( pr_casos_de_modelo( p, serie, muestra, id, casos, 1 ) > 0 )
+       { falla( e, PR_EENCASO, 0, casos[0] ); return 1; }
+   }
+
    for ( j = i; j + 1 < p->nm; j++ ) p->m[j] = p->m[j + 1];
    p->nm--;
    memset( &p->m[p->nm], 0, sizeof p->m[0] );
@@ -700,6 +709,392 @@ int pr_sin_razon( const Proyecto *p, char ids[][PR_ID], int max )
 }
 
 /* ------------------------------------------------------------------------ */
+/* Los casos                                                                 */
+/* ------------------------------------------------------------------------ */
+
+static void hoy( char *out, size_t n )
+{
+   time_t     t = time( NULL );
+   struct tm *g = localtime( &t );
+
+   out[0] = '\0';
+   if ( g ) strftime( out, n, "%Y-%m-%d", g );
+}
+
+int pr_caso_idx( const Proyecto *p, const char *caso )
+{
+   int i;
+
+   if ( p == NULL || caso == NULL ) return -1;
+   for ( i = 0; i < p->nca; i++ )
+       if ( strcmp( p->ca[i].id, caso ) == 0 ) return i;
+   return -1;
+}
+
+const PrCaso *pr_caso_ver( const Proyecto *p, const char *caso )
+{
+   int i = pr_caso_idx( p, caso );
+
+   return ( i < 0 ) ? NULL : &p->ca[i];
+}
+
+/* LAS ENTRADAS, VALIDAS. Cada una tiene que ser un modelo de su serie en esa
+   muestra, y no los datos: lo que se cruza es una DECISION del analista,
+   estimada --los datos no tienen .pre que cruzar--. Y una serie no entra dos
+   veces: dos posiciones con la misma serie no son un caso, son un error.  */
+static int entradas_validas( const Proyecto *p, const PrEntrada *en, int nen,
+                             const char *muestra, PrError *e )
+{
+   int i, j;
+
+   if ( en == NULL || nen < 1 )
+       { falla( e, PR_EENTRADA, 0, "(ninguna)" ); return 1; }
+   if ( nen > PR_MAX_ENTRADA )
+       { falla( e, PR_EMUCHAS, 0, en[0].serie ); return 1; }
+   for ( i = 0; i < nen; i++ )
+       {
+       char b[PR_TEXTO];
+
+       if ( pr_serie_idx( p, en[i].serie ) < 0 )
+           { falla( e, PR_ENOSERIE, 0, en[i].serie ); return 1; }
+       snprintf( b, sizeof b, "%s/%s", en[i].serie, en[i].modelo );
+       if ( pr_modelo_idx( p, en[i].serie, muestra, en[i].modelo ) < 0 )
+           { falla( e, PR_ENOMODELO, 0, b ); return 1; }
+       if ( pr_es_datos( p, en[i].serie, muestra, en[i].modelo ) )
+           { falla( e, PR_EENTRADA, 0, b ); return 1; }
+       if ( strlen( en[i].sha ) >= PR_SHA )
+           { falla( e, PR_ESINTAXIS, 0, en[i].sha ); return 1; }
+       for ( j = 0; j < i; j++ )
+           if ( strcmp( en[j].serie, en[i].serie ) == 0 )
+               { falla( e, PR_EDUP, 0, en[i].serie ); return 1; }
+       }
+   return 0;
+}
+
+/* El hueco siguiente: C1, C2... El numero no es la identidad --la clave es
+   el id entero, que no se parsea--; es solo para que salga uno libre.     */
+static void caso_id_libre( const Proyecto *p, char *id, size_t n )
+{
+   int k = 1;
+
+   do snprintf( id, n, "C%d", k++ );
+   while ( pr_caso_idx( p, id ) >= 0 );
+}
+
+static int caso_pon( Proyecto *p, const PrEntrada *en, int nen,
+                     const char *muestra, const char *motor,
+                     const char *titulo, const char *razon, const char *padre,
+                     char *id_out, size_t nid, PrError *e )
+{
+   PrCaso *c;
+   int     i;
+
+   if ( p == NULL ) return 1;
+   if ( muestra == NULL ) muestra = "";
+   if ( *muestra && pr_muestra_idx( p, muestra ) < 0 )
+       { falla( e, PR_EMUESTRA, 0, muestra ); return 1; }
+   if ( entradas_validas( p, en, nen, muestra, e ) ) return 1;
+   if ( p->nca >= PR_MAX_CASO )
+       { falla( e, PR_EMUCHAS, 0, "casos" ); return 1; }
+
+   c = &p->ca[p->nca];
+   memset( c, 0, sizeof *c );
+   caso_id_libre( p, c->id, sizeof c->id );
+   snprintf( c->motor, sizeof c->motor, "%s",
+             ( motor && *motor ) ? motor : "drtran" );
+   snprintf( c->muestra, sizeof c->muestra, "%s", muestra );
+   if ( titulo ) snprintf( c->titulo, sizeof c->titulo, "%s", titulo );
+   if ( razon )  snprintf( c->razon, sizeof c->razon, "%s", razon );
+   if ( padre )  snprintf( c->padre, sizeof c->padre, "%s", padre );
+   hoy( c->creado, sizeof c->creado );
+   for ( i = 0; i < nen; i++ ) c->en[i] = en[i];
+   c->nen = nen;
+   p->nca++;
+
+   if ( id_out && nid ) snprintf( id_out, nid, "%s", c->id );
+   return 0;
+}
+
+int pr_caso_add( Proyecto *p, const PrEntrada *en, int nen,
+                 const char *muestra, const char *motor,
+                 const char *titulo, const char *razon,
+                 char *id_out, size_t nid, PrError *e )
+{
+   return caso_pon( p, en, nen, muestra, motor, titulo, razon, NULL,
+                    id_out, nid, e );
+}
+
+int pr_caso_deriva( Proyecto *p, const char *caso,
+                    const PrEntrada *en, int nen,
+                    char *id_out, size_t nid, PrError *e )
+{
+   int    i = pr_caso_idx( p, caso );
+   PrCaso o;
+
+   if ( i < 0 ) { falla( e, PR_ENOCASO, 0, caso ? caso : "" ); return 1; }
+   o = p->ca[i];          /* una copia: sus campos van como argumentos a
+                             caso_pon, que escribe en el mismo array     */
+   return caso_pon( p, en, nen, o.muestra, o.motor, o.titulo, NULL, o.id,
+                    id_out, nid, e );
+}
+
+int pr_caso_razon( Proyecto *p, const char *caso, const char *razon,
+                   PrError *e )
+{
+   int i = pr_caso_idx( p, caso );
+
+   if ( i < 0 ) { falla( e, PR_ENOCASO, 0, caso ? caso : "" ); return 1; }
+   snprintf( p->ca[i].razon, PR_RAZON, "%s", razon ? razon : "" );
+   return 0;
+}
+
+int pr_caso_borra( Proyecto *p, const char *caso, PrError *e )
+{
+   int i = pr_caso_idx( p, caso ), j;
+
+   if ( i < 0 ) { falla( e, PR_ENOCASO, 0, caso ? caso : "" ); return 1; }
+
+   /* LAS CORRIDAS NO SE VAN DE REBOTE: son estimaciones con su .out. Se
+      dice CUAL hay, que es lo que deja saber por donde empezar.      */
+   for ( j = 0; j < p->nco; j++ )
+       if ( strcmp( p->co[j].caso, caso ) == 0 )
+           {
+           char b[PR_TEXTO];
+
+           snprintf( b, sizeof b, "%s/%s", caso, p->co[j].id );
+           falla( e, PR_ECONCORRIDAS, 0, b );
+           return 1;
+           }
+
+   for ( j = i; j + 1 < p->nca; j++ ) p->ca[j] = p->ca[j + 1];
+   p->nca--;
+   memset( &p->ca[p->nca], 0, sizeof p->ca[0] );
+   return 0;
+}
+
+const char *pr_caso_de_entradas( const Proyecto *p, const PrEntrada *en,
+                                 int nen, const char *muestra )
+{
+   int i, k;
+
+   if ( p == NULL || en == NULL ) return "";
+   if ( muestra == NULL ) muestra = "";
+   for ( i = 0; i < p->nca; i++ )
+       {
+       const PrCaso *c = &p->ca[i];
+
+       if ( c->nen != nen || strcmp( c->muestra, muestra ) != 0 ) continue;
+       for ( k = 0; k < nen; k++ )
+           if ( strcmp( c->en[k].serie,  en[k].serie )  ||
+                strcmp( c->en[k].modelo, en[k].modelo ) ||
+                strcmp( c->en[k].sha,    en[k].sha ) ) break;
+       if ( k == nen ) return c->id;
+       }
+   return "";
+}
+
+int pr_casos_de_modelo( const Proyecto *p, const char *serie,
+                        const char *muestra, const char *id,
+                        char casos[][PR_ID], int max )
+{
+   int i, k, n = 0;
+
+   if ( p == NULL || serie == NULL || id == NULL ) return 0;
+   if ( muestra == NULL ) muestra = "";
+   for ( i = 0; i < p->nca; i++ )
+       {
+       if ( strcmp( p->ca[i].muestra, muestra ) != 0 ) continue;
+       for ( k = 0; k < p->ca[i].nen; k++ )
+           if ( !strcmp( p->ca[i].en[k].serie, serie ) &&
+                !strcmp( p->ca[i].en[k].modelo, id ) )
+               {
+               if ( casos && n < max )
+                   snprintf( casos[n], PR_ID, "%s", p->ca[i].id );
+               n++;
+               break;
+               }
+       }
+   return n;
+}
+
+/* --- las corridas ------------------------------------------------------- */
+
+int pr_corrida_idx( const Proyecto *p, const char *caso, const char *corrida )
+{
+   int i;
+
+   if ( p == NULL || caso == NULL || corrida == NULL ) return -1;
+   for ( i = 0; i < p->nco; i++ )
+       if ( !strcmp( p->co[i].caso, caso ) && !strcmp( p->co[i].id, corrida ) )
+           return i;
+   return -1;
+}
+
+const PrCorrida *pr_corrida_ver( const Proyecto *p, const char *caso,
+                                 const char *corrida )
+{
+   int i = pr_corrida_idx( p, caso, corrida );
+
+   return ( i < 0 ) ? NULL : &p->co[i];
+}
+
+int pr_corrida_ruta( const Proyecto *p, const char *caso, const char *corrida,
+                     const char *ext, char *out, size_t n )
+{
+   char raiz[PR_RUTA];
+   int  esc;
+
+   if ( p == NULL || out == NULL || n == 0 ) return 1;
+   out[0] = '\0';
+   if ( caso == NULL || *caso == '\0' ) return 1;
+   if ( raiz_real( p, raiz, sizeof raiz ) ) return 1;
+
+   if ( corrida == NULL || *corrida == '\0' )
+       esc = snprintf( out, n, "%s/_casos/%s", raiz, caso );
+   else
+       esc = snprintf( out, n, "%s/_casos/%s/work/%s_%s%s", raiz, caso, caso,
+                       corrida, ext ? ext : "" );
+   return ( esc < 0 || (size_t) esc >= n );
+}
+
+int pr_corrida_nueva( Proyecto *p, const char *caso, const char *padre,
+                      char *id_out, size_t nid, char *ruta_out, size_t nruta,
+                      PrError *e )
+{
+   PrCorrida *c;
+   char       id[PR_ID];
+   int        i, v = 0;
+
+   if ( p == NULL ) return 1;
+   if ( pr_caso_idx( p, caso ) < 0 )
+       { falla( e, PR_ENOCASO, 0, caso ? caso : "" ); return 1; }
+   if ( padre && *padre && pr_corrida_idx( p, caso, padre ) < 0 )
+       { falla( e, PR_EPADRE, 0, padre ); return 1; }
+   if ( p->nco >= PR_MAX_CORRIDA )
+       { falla( e, PR_EMUCHAS, 0, caso ); return 1; }
+
+   /* La version es DEL CASO: cada caso lleva su propio linaje. */
+   for ( i = 0; i < p->nco; i++ )
+       if ( !strcmp( p->co[i].caso, caso ) && p->co[i].version >= v )
+           v = p->co[i].version + 1;
+   snprintf( id, sizeof id, "c%02d", v );
+   while ( pr_corrida_idx( p, caso, id ) >= 0 )
+       snprintf( id, sizeof id, "c%02d", ++v );
+
+   c = &p->co[p->nco];
+   memset( c, 0, sizeof *c );
+   snprintf( c->id, sizeof c->id, "%s", id );
+   snprintf( c->caso, sizeof c->caso, "%s", caso );
+   c->version = v;
+   /* EL LINAJE, SIN PREGUNTAR. La razon NO se pone. */
+   snprintf( c->padre, sizeof c->padre, "%s", ( padre && *padre ) ? padre : "" );
+   hoy( c->creado, sizeof c->creado );
+   p->nco++;
+
+   if ( id_out && nid ) snprintf( id_out, nid, "%s", id );
+   if ( ruta_out && nruta )
+       pr_corrida_ruta( p, caso, id, ".out", ruta_out, nruta );
+   return 0;
+}
+
+int pr_corrida_razon( Proyecto *p, const char *caso, const char *corrida,
+                      const char *razon, PrError *e )
+{
+   int i = pr_corrida_idx( p, caso, corrida );
+
+   if ( i < 0 ) { falla( e, PR_ENOCORRIDA, 0, corrida ? corrida : "" ); return 1; }
+   snprintf( p->co[i].razon, PR_RAZON, "%s", razon ? razon : "" );
+   return 0;
+}
+
+int pr_corrida_elige( Proyecto *p, const char *caso, const char *corrida,
+                      const char *razon, PrError *e )
+{
+   int i, k;
+
+   if ( pr_caso_idx( p, caso ) < 0 )
+       { falla( e, PR_ENOCASO, 0, caso ? caso : "" ); return 1; }
+   k = ( corrida && *corrida ) ? pr_corrida_idx( p, caso, corrida ) : -1;
+   if ( corrida && *corrida && k < 0 )
+       { falla( e, PR_ENOCORRIDA, 0, corrida ); return 1; }
+
+   /* EN UN CASO SOLO HAY UNA ELEGIDA. */
+   for ( i = 0; i < p->nco; i++ )
+       if ( !strcmp( p->co[i].caso, caso ) )
+           { p->co[i].elegido = 0; p->co[i].razon_elegido[0] = '\0'; }
+   if ( k >= 0 )
+       {
+       p->co[k].elegido = 1;
+       if ( razon ) snprintf( p->co[k].razon_elegido, PR_RAZON, "%s", razon );
+       }
+   return 0;
+}
+
+const char *pr_corrida_elegida( const Proyecto *p, const char *caso )
+{
+   int i;
+
+   if ( p == NULL || caso == NULL ) return "";
+   for ( i = 0; i < p->nco; i++ )
+       if ( p->co[i].elegido && !strcmp( p->co[i].caso, caso ) )
+           return p->co[i].id;
+   return "";
+}
+
+int pr_corrida_borra( Proyecto *p, const char *caso, const char *corrida,
+                      PrError *e )
+{
+   int i = pr_corrida_idx( p, caso, corrida ), j;
+
+   if ( i < 0 ) { falla( e, PR_ENOCORRIDA, 0, corrida ? corrida : "" ); return 1; }
+   for ( j = 0; j < p->nco; j++ )
+       if ( j != i && !strcmp( p->co[j].caso, caso ) &&
+            !strcmp( p->co[j].padre, corrida ) )
+           {
+           char b[PR_TEXTO];
+
+           snprintf( b, sizeof b, "%s/%s", caso, p->co[j].id );
+           falla( e, PR_EHIJAS, 0, b );
+           return 1;
+           }
+   for ( j = i; j + 1 < p->nco; j++ ) p->co[j] = p->co[j + 1];
+   p->nco--;
+   memset( &p->co[p->nco], 0, sizeof p->co[0] );
+   return 0;
+}
+
+int pr_caso_de_ruta( const Proyecto *p, const char *ruta,
+                     char *caso, size_t nc, char *corrida, size_t nco )
+{
+   /* Las colas de cuatro componentes: _casos/C1/work/C1_c01.out. */
+   static const char *EXT[] = { ".out", ".dag", ".cns", "_res.txt",
+                                "_eval.csv", NULL };
+   char        cand[PR_RUTA];
+   const char *q;
+   int         i, k;
+
+   if ( caso    && nc  ) caso[0] = '\0';
+   if ( corrida && nco ) corrida[0] = '\0';
+   if ( p == NULL || ruta == NULL || *ruta == '\0' ) return 1;
+   if ( ( q = cola( ruta, 4 ) ) == NULL ) return 1;
+
+   for ( i = 0; i < p->nco; i++ )
+       for ( k = 0; EXT[k]; k++ )
+           {
+           const char *c;
+
+           if ( pr_corrida_ruta( p, p->co[i].caso, p->co[i].id, EXT[k], cand,
+                                 sizeof cand ) != 0 ) continue;
+           c = cola( cand, 4 );
+           if ( c == NULL || !misma_cola( c, q ) ) continue;
+           if ( caso    && nc  ) snprintf( caso, nc, "%s", p->co[i].caso );
+           if ( corrida && nco ) snprintf( corrida, nco, "%s", p->co[i].id );
+           return 0;
+           }
+   return 1;
+}
+
+/* ------------------------------------------------------------------------ */
 /* El manifiesto                                                             */
 /*                                                                           */
 /* EL SUBCONJUNTO DE YAML ESTA DECLARADO Y ES PEQUEÑO: "clave: valor" con     */
@@ -728,9 +1123,13 @@ int pr_escribir( const Proyecto *p, const char *path, PrError *e )
    f = fopen( path, "w" );
    if ( f == NULL ) { falla( e, PR_EESCRIBIR, 0, path ); return 1; }
 
+   /* LA VERSION 2 SOLO CUANDO HAY CASOS. Un proyecto que no los usa sigue
+      escribiendo la 1, y lo lee igual quien sepa solo de la 1.        */
    fprintf( f, "# Proyecto de ATSW GUI. El nombre de cada fichero es CORTESIA:\n"
                "# la identidad esta aqui, y ningun programa parsea un nombre.\n"
-               "schema_version: %d\n", p->schema_version );
+               "schema_version: %d\n",
+            ( p->nca > 0 || p->nco > 0 ) && p->schema_version < 2
+                ? 2 : p->schema_version );
    fprintf( f, "id: " );        escribe_valor( f, p->id );       fputc( '\n', f );
    fprintf( f, "titulo: " );    escribe_valor( f, p->titulo );   fputc( '\n', f );
    fprintf( f, "creado: " );    escribe_valor( f, p->creado );   fputc( '\n', f );
@@ -807,6 +1206,68 @@ int pr_escribir( const Proyecto *p, const char *path, PrError *e )
              fputc( '\n', f ); }
        }
 
+   /* LOS CASOS, SOLO SI LOS HAY. Las entradas en UNA linea y EN ORDEN:
+      "SERIE/modelo@sha256", separadas por un espacio. Una lista de YAML
+      seria mas bonita, pero este lector no las sabe leer y un campo de
+      texto ordenado dice lo mismo sin inventarle una sintaxis.          */
+   if ( p->nca > 0 )
+       {
+       fprintf( f, "\n# Lo que se cruza: series EN ORDEN, cada una con el modelo\n"
+                   "# con que entra y el sha256 de su .pre. Ver DISENO-casos.md.\n"
+                   "casos:\n" );
+       for ( i = 0; i < p->nca; i++ )
+           {
+           char ent[PR_MAX_ENTRADA * ( 2 * PR_ID + PR_SHA + 3 )];
+           size_t usado = 0;
+           int    k;
+
+           ent[0] = '\0';
+           for ( k = 0; k < p->ca[i].nen; k++ )
+               {
+               const PrEntrada *x = &p->ca[i].en[k];
+               int esc = snprintf( ent + usado, sizeof ent - usado, "%s%s/%s%s%s",
+                                   k ? " " : "", x->serie, x->modelo,
+                                   x->sha[0] ? "@" : "", x->sha );
+
+               if ( esc > 0 ) usado += (size_t) esc;
+               if ( usado >= sizeof ent ) break;
+               }
+           fprintf( f, "  %s:\n", p->ca[i].id );
+           fprintf( f, "    motor: " );    escribe_valor( f, p->ca[i].motor );
+           fputc( '\n', f );
+           escribe_campo( f, "titulo",  p->ca[i].titulo );
+           fprintf( f, "    razon: " );    escribe_valor( f, p->ca[i].razon );
+           fputc( '\n', f );
+           escribe_campo( f, "muestra", p->ca[i].muestra );
+           escribe_campo( f, "padre",   p->ca[i].padre );
+           escribe_campo( f, "creado",  p->ca[i].creado );
+           fprintf( f, "    entradas: " ); escribe_valor( f, ent );
+           fputc( '\n', f );
+           }
+       }
+
+   /* LAS CORRIDAS, con la clave CASO/id como los modelos llevan SERIE/id. */
+   if ( p->nco > 0 )
+       {
+       fprintf( f, "\n# Las estimaciones de cada caso, con su linaje.\n"
+                   "corridas:\n" );
+       for ( i = 0; i < p->nco; i++ )
+           {
+           fprintf( f, "  %s/%s:\n", p->co[i].caso, p->co[i].id );
+           fprintf( f, "    version: %d\n", p->co[i].version );
+           fprintf( f, "    padre: " );  escribe_valor( f, p->co[i].padre );
+           fputc( '\n', f );
+           fprintf( f, "    razon: " );  escribe_valor( f, p->co[i].razon );
+           fputc( '\n', f );
+           if ( p->co[i].elegido )
+               {
+               fprintf( f, "    elegido: si\n" );
+               escribe_campo( f, "razon_elegido", p->co[i].razon_elegido );
+               }
+           escribe_campo( f, "creado", p->co[i].creado );
+           }
+       }
+
    if ( fclose( f ) != 0 ) { falla( e, PR_EESCRIBIR, 0, path ); return 1; }
    return 0;
 }
@@ -852,7 +1313,8 @@ int pr_leer( const char *path, Proyecto *p, PrError *e )
 {
    FILE *f;
    char  linea[2048], copia[2048];
-   int   nl = 0, seccion = 0;     /* 0 raiz, 1 series, 2 modelos, 3 muestras */
+   int   nl = 0, seccion = 0;     /* 0 raiz, 1 series, 2 modelos, 3 muestras,
+                                     4 casos, 5 corridas                  */
    int   cur = -1;                /* la serie o el modelo en curso         */
 
    if ( p == NULL ) return 1;
@@ -889,6 +1351,8 @@ int pr_leer( const char *path, Proyecto *p, PrError *e )
            if ( strcmp( clave, "series" ) == 0 )   { seccion = 1; continue; }
            if ( strcmp( clave, "modelos" ) == 0 )  { seccion = 2; continue; }
            if ( strcmp( clave, "muestras" ) == 0 ) { seccion = 3; continue; }
+           if ( strcmp( clave, "casos" ) == 0 )    { seccion = 4; continue; }
+           if ( strcmp( clave, "corridas" ) == 0 ) { seccion = 5; continue; }
            seccion = 0;
 
            if ( strcmp( clave, "schema_version" ) == 0 )
@@ -953,6 +1417,36 @@ int pr_leer( const char *path, Proyecto *p, PrError *e )
                    { if ( e ) e->linea = nl; fclose( f ); return 1; }
                cur = p->nmu - 1;
                }
+           else if ( seccion == 4 )
+               {
+               if ( p->nca >= PR_MAX_CASO )
+                   { falla( e, PR_EMUCHAS, nl, clave ); fclose( f ); return 1; }
+               if ( pr_caso_idx( p, clave ) >= 0 )
+                   { falla( e, PR_EDUP, nl, clave ); fclose( f ); return 1; }
+               memset( &p->ca[p->nca], 0, sizeof p->ca[0] );
+               if ( pon_id( p->ca[p->nca].id, clave, e, nl ) )
+                   { fclose( f ); return 1; }
+               snprintf( p->ca[p->nca].motor, 16, "drtran" );
+               cur = p->nca++;
+               }
+           else if ( seccion == 5 )
+               {
+               /* CASO/id, como SERIE/id en los modelos. */
+               char *b = strchr( clave, '/' );
+
+               if ( b == NULL || strchr( b + 1, '/' ) )
+                   { falla( e, PR_ESINTAXIS, nl, clave ); fclose( f ); return 1; }
+               *b = '\0';
+               if ( p->nco >= PR_MAX_CORRIDA )
+                   { falla( e, PR_EMUCHAS, nl, clave ); fclose( f ); return 1; }
+               if ( pr_corrida_idx( p, clave, b + 1 ) >= 0 )
+                   { falla( e, PR_EDUP, nl, b + 1 ); fclose( f ); return 1; }
+               memset( &p->co[p->nco], 0, sizeof p->co[0] );
+               if ( pon_id( p->co[p->nco].caso, clave, e, nl ) ||
+                    pon_id( p->co[p->nco].id, b + 1, e, nl ) )
+                   { fclose( f ); return 1; }
+               cur = p->nco++;
+               }
            else
                { falla( e, PR_ECLAVE, nl, clave ); fclose( f ); return 1; }
            continue;
@@ -1011,6 +1505,69 @@ int pr_leer( const char *path, Proyecto *p, PrError *e )
                else
                    { falla( e, PR_ECLAVE, nl, clave ); fclose( f ); return 1; }
                }
+           else if ( seccion == 4 )
+               {
+               PrCaso *c = &p->ca[cur];
+
+               if ( strcmp( clave, "motor" ) == 0 )
+                   snprintf( c->motor, sizeof c->motor, "%s", valor );
+               else if ( strcmp( clave, "titulo" ) == 0 )
+                   snprintf( c->titulo, PR_TEXTO, "%s", valor );
+               else if ( strcmp( clave, "razon" ) == 0 )
+                   snprintf( c->razon, PR_RAZON, "%s", valor );
+               else if ( strcmp( clave, "creado" ) == 0 )
+                   snprintf( c->creado, 16, "%s", valor );
+               else if ( strcmp( clave, "muestra" ) == 0 )
+                   { if ( pon_id( c->muestra, valor, e, nl ) ) { fclose( f ); return 1; } }
+               else if ( strcmp( clave, "padre" ) == 0 )
+                   { if ( pon_id( c->padre, valor, e, nl ) ) { fclose( f ); return 1; } }
+               else if ( strcmp( clave, "entradas" ) == 0 )
+                   {
+                   /* "SERIE/modelo@sha SERIE/modelo@sha ...", EN ORDEN. */
+                   char *tok = strtok( valor, " " );
+
+                   c->nen = 0;
+                   for ( ; tok; tok = strtok( NULL, " " ) )
+                       {
+                       char *b = strchr( tok, '/' ), *a;
+
+                       if ( b == NULL || c->nen >= PR_MAX_ENTRADA )
+                           { falla( e, PR_ESINTAXIS, nl, tok ); fclose( f ); return 1; }
+                       *b = '\0';
+                       a = strchr( b + 1, '@' );
+                       if ( a ) *a = '\0';
+                       if ( pon_id( c->en[c->nen].serie, tok, e, nl ) ||
+                            pon_id( c->en[c->nen].modelo, b + 1, e, nl ) )
+                           { fclose( f ); return 1; }
+                       if ( a && strlen( a + 1 ) >= PR_SHA )
+                           { falla( e, PR_ESINTAXIS, nl, a + 1 ); fclose( f ); return 1; }
+                       snprintf( c->en[c->nen].sha, PR_SHA, "%s", a ? a + 1 : "" );
+                       c->nen++;
+                       }
+                   }
+               else
+                   { falla( e, PR_ECLAVE, nl, clave ); fclose( f ); return 1; }
+               }
+           else if ( seccion == 5 )
+               {
+               PrCorrida *c = &p->co[cur];
+
+               if ( strcmp( clave, "version" ) == 0 )
+                   c->version = atoi( valor );
+               else if ( strcmp( clave, "padre" ) == 0 )
+                   { if ( pon_id( c->padre, valor, e, nl ) ) { fclose( f ); return 1; } }
+               else if ( strcmp( clave, "razon" ) == 0 )
+                   snprintf( c->razon, PR_RAZON, "%s", valor );
+               else if ( strcmp( clave, "elegido" ) == 0 )
+                   c->elegido = ( strcmp( valor, "si" ) == 0 ||
+                                  strcmp( valor, "sí" ) == 0 );
+               else if ( strcmp( clave, "razon_elegido" ) == 0 )
+                   snprintf( c->razon_elegido, PR_RAZON, "%s", valor );
+               else if ( strcmp( clave, "creado" ) == 0 )
+                   snprintf( c->creado, 16, "%s", valor );
+               else
+                   { falla( e, PR_ECLAVE, nl, clave ); fclose( f ); return 1; }
+               }
            continue;
            }
 
@@ -1037,6 +1594,35 @@ int pr_leer( const char *path, Proyecto *p, PrError *e )
        if ( pr_camino( p, p->m[i].serie, p->m[i].muestra, p->m[i].id, camino,
                        PR_MAX_MODELO ) < 0 )
            { falla( e, PR_ECICLO, 0, p->m[i].id ); return 1; }
+       }
+   }
+
+   /* Y LA ESCALERA: cada entrada de un caso es un modelo que esta, cada
+      corrida es de un caso que esta, su padre tambien, y sin ciclos. Un
+      caso cuyas entradas no existen es un fichero roto, igual que un
+      modelo con un padre que no esta.                                 */
+   {
+   int i;
+
+   for ( i = 0; i < p->nca; i++ )
+       if ( entradas_validas( p, p->ca[i].en, p->ca[i].nen, p->ca[i].muestra,
+                              e ) )
+           return 1;
+   for ( i = 0; i < p->nco; i++ )
+       {
+       int j = i, vueltas = 0;
+
+       if ( pr_caso_idx( p, p->co[i].caso ) < 0 )
+           { falla( e, PR_ENOCASO, 0, p->co[i].caso ); return 1; }
+       if ( p->co[i].padre[0] &&
+            pr_corrida_idx( p, p->co[i].caso, p->co[i].padre ) < 0 )
+           { falla( e, PR_EPADRE, 0, p->co[i].padre ); return 1; }
+       while ( j >= 0 && p->co[j].padre[0] )
+           {
+           if ( ++vueltas > p->nco )
+               { falla( e, PR_ECICLO, 0, p->co[i].id ); return 1; }
+           j = pr_corrida_idx( p, p->co[i].caso, p->co[j].padre );
+           }
        }
    }
    return 0;
@@ -1093,6 +1679,26 @@ const char *pr_error_es( const PrError *e, char *out, size_t n )
            snprintf( out, n, "En esa muestra está «%s», que es una estimación "
                      "con su registro. Bórralo antes, o quédate la muestra.",
                      e->texto ); break;
+       case PR_ENOCASO:
+           snprintf( out, n, "«%s» no es un caso del proyecto.", e->texto );
+           break;
+       case PR_ENOCORRIDA:
+           snprintf( out, n, "«%s» no es una corrida de ese caso.", e->texto );
+           break;
+       case PR_EENCASO:
+           snprintf( out, n, "Ese modelo es la entrada del caso «%s»: si se "
+                     "borra, el caso se queda sin saber con qué se cruzó esa "
+                     "serie. Borra antes el caso.", e->texto ); break;
+       case PR_ECONCORRIDAS:
+           snprintf( out, n, "En ese caso está la corrida «%s», que es una "
+                     "estimación con su registro. Bórrala antes.", e->texto );
+           break;
+       case PR_EHIJAS:
+           snprintf( out, n, "De esa corrida cuelga «%s». Borra antes lo que "
+                     "viene de ella, o el linaje se rompe.", e->texto ); break;
+       case PR_EENTRADA:
+           snprintf( out, n, "«%s» no puede entrar en un caso: lo que se cruza "
+                     "es un modelo estimado, no los datos.", e->texto ); break;
        }
    return out;
 }
@@ -1137,6 +1743,19 @@ const char *pr_error_en( const PrError *e, char *out, size_t n )
            snprintf( out, n, "unknown sample %s", e->texto ); break;
        case PR_EENMUESTRA:
            snprintf( out, n, "%s lives in it", e->texto ); break;
+       case PR_ENOCASO:
+           snprintf( out, n, "unknown case %s", e->texto ); break;
+       case PR_ENOCORRIDA:
+           snprintf( out, n, "unknown run %s", e->texto ); break;
+       case PR_EENCASO:
+           snprintf( out, n, "it is an input of case %s", e->texto ); break;
+       case PR_ECONCORRIDAS:
+           snprintf( out, n, "run %s lives in it", e->texto ); break;
+       case PR_EHIJAS:
+           snprintf( out, n, "%s hangs from it", e->texto ); break;
+       case PR_EENTRADA:
+           snprintf( out, n, "%s can not enter a case: it is the data", e->texto );
+           break;
        }
    return out;
 }

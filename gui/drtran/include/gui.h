@@ -108,6 +108,8 @@ typedef struct {
     guint      pulso;         /* el temporizador de la barra                */
     gboolean   corriendo;
     gboolean   diagonal;      /* -0 : sin transferencia (homologacion)      */
+    gchar     *nota;          /* lo que decir encima de la salida del motor:
+                                 a donde va la corrida (el caso, la cache) */
     gboolean   cast_resta;    /* -S : el cast antiguo                       */
     gboolean   traza;         /* -v                                         */
 
@@ -240,6 +242,13 @@ typedef struct {
     gboolean   hay_proy;
     char       corrida[PR_ID];   /* el id de la corrida en curso           */
     char       previa[PR_ID];    /* la anterior: el PADRE de la siguiente   */
+
+    /* EL CASO (docs/DISENO-casos.md): lo que se cruza, con el sha256 del .pre
+     * de cada entrada. Las corridas cuelgan de el, no de una serie. Vacio
+     * hasta que se abre con --caso o el alta automatica lo crea.        */
+    char       caso[PR_ID];
+    char       corrida_ini[PR_ID];  /* la de --corrida: de donde se parte  */
+    gboolean   caso_desfasado;   /* algun .pre ya no es el del alta         */
 } Mtram;
 
 /* --- el proyecto (proyecto_gui.c) --------------------------------------- */
@@ -250,14 +259,28 @@ gboolean mtram_proyecto_abre(Mtram *m, const char *path, char *why, size_t n);
 /* La ruta de un artefacto de la corrida en curso. sufijo lleva su punto o su
  * guion: ".out", ".dag", "_res.txt".
  *
- * SIN PROYECTO devuelve el nombre FIJO de siempre en la cache, que es lo que
- * hace que no quepan dos modelos. CON proyecto, el nombre de cortesia de la
- * corrida: <raiz>/<salida>/work/<salida>_<id><sufijo>. Nueva; g_free.   */
+ * SIN CASO devuelve el nombre FIJO de siempre en la cache, que es lo que
+ * hace que no quepan dos modelos. CON caso, el nombre de cortesia de la
+ * corrida: <raiz>/_casos/<caso>/work/<caso>_<id><sufijo>. Nueva; g_free. */
 gchar *mtram_artefacto(Mtram *m, const char *sufijo);
 
-/* Abre una corrida nueva: deriva del ultimo modelo de la serie de salida y
- * registra el LINAJE sin preguntar. Sin proyecto no hace nada y devuelve
- * TRUE. FALSE con el motivo en why.                                     */
+/* Carga el caso de --caso: sus entradas EN SU ORDEN, cada una del .pre de su
+ * modelo, comprobando los sha256; y la red y las restricciones de la corrida
+ * de --corrida, o de la elegida. FALSE con el motivo en why. Si un .pre
+ * cambio, carga igual y lo dice en why (y caso_desfasado queda puesto). */
+gboolean mtram_caso_carga(Mtram *m, char *why, size_t n);
+
+/* Abre una corrida nueva DEL CASO y registra el LINAJE sin preguntar.
+ *
+ * Sin caso, con proyecto (drtran_gui lanzado a mano): si TODAS las series
+ * cargadas son modelos del proyecto, en la misma muestra y con la ventana
+ * comun, se busca el caso con esas entradas o se da de alta (decision del
+ * analista: alta automatica). Si el caso esta desfasado, la corrida va a un
+ * caso NUEVO derivado con los .pre de hoy: nunca se reescribe nada.
+ *
+ * Sin proyecto, o si alguna serie no es del proyecto, no hace nada --la
+ * cache de siempre-- y devuelve TRUE; en el segundo caso why dice por que.
+ * FALSE con el motivo en why si no se pudo registrar.                   */
 gboolean mtram_corrida_nueva(Mtram *m, char *why, size_t n);
 
 /* Guarda el manifiesto. Sin proyecto, no hace nada.                     */
@@ -306,10 +329,14 @@ void       red_refresca(Mtram *m);
 /* El dialogo de un enlace, para poder tocar (b,r,s) desde la pagina Modelo:
  * la estructura de la transferencia se decide alli tanto como aqui.     */
 gboolean   red_edita_enlace(Mtram *m, int k);
+/* Lee un .dag sin dialogo (el cuerpo de «Abrir»). TRUE si se leyo. */
+gboolean   red_lee(Mtram *m, const char *path);
 
 /* modelo.c */
 GtkWidget *modelo_pagina_new(Mtram *m);
 void       modelo_refresca(Mtram *m);
+/* Lee un .cns sin dialogo. Si no vale, la tabla queda como estaba. */
+gboolean   modelo_lee(Mtram *m, const char *path);
 
 /* estima.c */
 GtkWidget *estima_pagina_new(Mtram *m);

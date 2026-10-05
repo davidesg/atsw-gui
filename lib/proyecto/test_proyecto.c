@@ -374,7 +374,7 @@ int main( int argc, char **argv )
     /* fue_gui recibe un FICHERO y no sabe de que modelo es. Y el nombre es
        cortesia: la clave se le pregunta al manifiesto.                */
     {
-    Proyecto q;
+    static Proyecto q;           /* ~1,2 MB: en la pila de Windows no cabe */
     PrError  e;
     char     id[PR_ID], ruta[PR_RUTA];
     char     se[PR_ID], mu[PR_ID], mo[PR_ID];
@@ -441,7 +441,7 @@ int main( int argc, char **argv )
     /* pr_borra ya se negaba a borrarlo; editarlo es igual de grave y nadie
        lo miraba. El hijo salio del .inp del padre TAL COMO ESTABA.    */
     {
-    Proyecto q;
+    static Proyecto q;           /* ~1,2 MB: en la pila de Windows no cabe */
     PrError  e;
     char     m1[PR_ID], m2[PR_ID], m3[PR_ID], ruta[PR_RUTA];
     char     hijos[8][PR_ID];
@@ -474,13 +474,185 @@ int main( int argc, char **argv )
 
     printf( "\nCON QUE SE ABRE UN DERIVADO: SE RECUERDA\n" );
     {
-    Proyecto q;
+    static Proyecto q;           /* ~1,2 MB: en la pila de Windows no cabe */
 
     memset( &q, 0, sizeof q );
     pr_nuevo( &q, "p", "", "." );
     ok( pr_herramienta( &q ) == 0, "por defecto, fue: lo que hace falta es estimar" );
     pr_pon_herramienta( &q, 1 );
     ok( pr_herramienta( &q ) == 1, "y si se pide el editor, el editor" );
+    }
+
+    printf( "\nLOS CASOS: LA ESCALERA ESCRITA (DISENO-casos.md)\n" );
+    {
+    static Proyecto c, r;
+    PrEntrada  en[3];
+    char       a1[PR_ID], b1[PR_ID], b2[PR_ID], z0[PR_ID], cid[PR_ID];
+    char       c0[PR_ID], c1[PR_ID], c2[PR_ID], cs[4][PR_ID];
+    char       uno[PR_ID], otro[PR_ID];
+    const char *yaml;
+
+    pr_nuevo( &c, "casos", "", "." );
+    snprintf( c.path, sizeof c.path, "%s/casos.yaml", DIR );
+    pr_serie_add( &c, "EP", &e );
+    pr_serie_add( &c, "EI", &e );
+    pr_deriva_rol( &c, "EP", "", NULL, PR_DATOS, z0, sizeof z0, NULL, 0, &e );
+    pr_deriva( &c, "EP", "", z0, a1, sizeof a1, NULL, 0, &e );
+    pr_deriva_rol( &c, "EI", "", NULL, PR_DATOS, z0, sizeof z0, NULL, 0, &e );
+    pr_deriva( &c, "EI", "", z0, b1, sizeof b1, NULL, 0, &e );
+    pr_deriva( &c, "EI", "", b1, b2, sizeof b2, NULL, 0, &e );
+
+    memset( en, 0, sizeof en );
+    snprintf( en[0].serie, PR_ID, "EP" ); snprintf( en[0].modelo, PR_ID, "%s", a1 );
+    snprintf( en[0].sha, PR_SHA, "aa11" );
+    snprintf( en[1].serie, PR_ID, "EI" ); snprintf( en[1].modelo, PR_ID, "%s", b1 );
+    snprintf( en[1].sha, PR_SHA, "bb22" );
+
+    ok( pr_caso_add( &c, en, 2, "", NULL, "precios", NULL, cid, sizeof cid,
+                     &e ) == 0, "se da de alta un caso con dos entradas" );
+    es( cid, "C1", "su clave sale sola: C1" );
+    ok( pr_caso_ver( &c, "C1" )->nen == 2 &&
+        !strcmp( pr_caso_ver( &c, "C1" )->motor, "drtran" ),
+        "con sus dos entradas, y el motor por defecto es drtran" );
+    es( pr_caso_ver( &c, "C1" )->razon, "", "la razon no se rellena" );
+
+    /* LAS ENTRADAS QUE NO PUEDEN SER */
+    en[2] = en[0];
+    ok( pr_caso_add( &c, en, 3, "", NULL, NULL, NULL, NULL, 0, &e ) != 0 &&
+        e.cod == PR_EDUP, "una serie no entra dos veces" );
+    snprintf( en[2].serie, PR_ID, "EI" ); snprintf( en[2].modelo, PR_ID, "m00" );
+    ok( pr_caso_add( &c, en + 2, 1, "", NULL, NULL, NULL, NULL, 0, &e ) != 0 &&
+        e.cod == PR_EENTRADA, "los DATOS no entran: no tienen .pre que cruzar" );
+    snprintf( en[2].modelo, PR_ID, "m99" );
+    ok( pr_caso_add( &c, en + 2, 1, "", NULL, NULL, NULL, NULL, 0, &e ) != 0 &&
+        e.cod == PR_ENOMODELO, "ni un modelo que no esta" );
+    ok( pr_caso_add( &c, en, 2, "no_declarada", NULL, NULL, NULL, NULL, 0,
+                     &e ) != 0 && e.cod == PR_EMUESTRA,
+        "ni en una muestra que no esta declarada" );
+    pr_error_es( &e, b, sizeof b );
+    ok( strstr( b, "no_declarada" ) != NULL, "y lo dice con su nombre" );
+
+    /* EL ALTA AUTOMATICA NO DUPLICA: busca por orden y por contenido */
+    es( pr_caso_de_entradas( &c, en, 2, "" ), "C1",
+        "las mismas entradas encuentran el caso que ya hay" );
+    {
+    PrEntrada al_reves[2] = { en[1], en[0] };
+    es( pr_caso_de_entradas( &c, al_reves, 2, "" ), "",
+        "en otro orden es OTRO caso: el orden es parte de la identidad" );
+    }
+    snprintf( en[1].sha, PR_SHA, "cc33" );
+    es( pr_caso_de_entradas( &c, en, 2, "" ), "",
+        "con un .pre que cambio, tambien: la identidad va por contenido" );
+    snprintf( en[1].sha, PR_SHA, "bb22" );
+
+    /* LAS CORRIDAS Y SU LINAJE */
+    ok( pr_corrida_nueva( &c, "C1", NULL, c0, sizeof c0, ruta, sizeof ruta,
+                          &e ) == 0, "una corrida nueva" );
+    es( c0, "c00", "la primera es c00" );
+    ok( strstr( ruta, "_casos/C1/work/C1_c00.out" ) != NULL,
+        "y su .out va en _casos/C1/work, con nombre de cortesia" );
+    pr_corrida_nueva( &c, "C1", c0, c1, sizeof c1, NULL, 0, &e );
+    es( c1, "c01", "la siguiente, c01" );
+    es( pr_corrida_ver( &c, "C1", c1 )->padre, "c00",
+        "y cuelga de la anterior sin preguntar" );
+    ok( pr_corrida_nueva( &c, "C1", "c77", c2, sizeof c2, NULL, 0, &e ) != 0 &&
+        e.cod == PR_EPADRE, "no cuelga de una corrida que no esta" );
+    ok( pr_corrida_nueva( &c, "C9", NULL, c2, sizeof c2, NULL, 0, &e ) != 0 &&
+        e.cod == PR_ENOCASO, "ni de un caso que no esta" );
+
+    pr_corrida_elige( &c, "C1", c0, NULL, &e );
+    pr_corrida_elige( &c, "C1", c1, "residuos limpios", &e );
+    es( pr_corrida_elegida( &c, "C1" ), "c01", "una elegida por caso" );
+    ok( !pr_corrida_ver( &c, "C1", c0 )->elegido,
+        "y elegir otra le quita la marca a la anterior" );
+
+    /* LO QUE NO SE BORRA */
+    ok( pr_corrida_borra( &c, "C1", c0, &e ) != 0 && e.cod == PR_EHIJAS,
+        "una corrida de la que cuelgan otras no se borra" );
+    ok( pr_caso_borra( &c, "C1", &e ) != 0 && e.cod == PR_ECONCORRIDAS,
+        "un caso con corridas no se borra" );
+    /* EP m01 no tiene hijos: lo unico que lo sujeta es ser entrada. */
+    ok( pr_borra( &c, "EP", "", a1, &e ) != 0 && e.cod == PR_EENCASO,
+        "un modelo que es entrada de un caso no se borra" );
+    es( e.texto, "C1", "y se dice de cual" );
+    ok( pr_casos_de_modelo( &c, "EI", "", b1, cs, 4 ) == 1 &&
+        pr_casos_de_modelo( &c, "EI", "", b2, cs, 4 ) == 0,
+        "pr_casos_de_modelo sabe de que casos es entrada cada modelo" );
+    ok( pr_borra( &c, "EI", "", b2, &e ) == 0,
+        "uno que no es entrada de nada se borra como siempre" );
+    pr_deriva( &c, "EI", "", b1, b2, sizeof b2, NULL, 0, &e );
+
+    /* DE UN FICHERO A SU CORRIDA */
+    pr_corrida_ruta( &c, "C1", c1, ".dag", ruta, sizeof ruta );
+    ok( pr_caso_de_ruta( &c, ruta, uno, sizeof uno, otro, sizeof otro ) == 0 &&
+        !strcmp( uno, "C1" ) && !strcmp( otro, "c01" ),
+        "el .dag de una corrida vuelve a su (caso, corrida)" );
+    {
+    char win[PR_RUTA + 4], *k;
+
+    snprintf( win, sizeof win, "C:%s", ruta );
+    for ( k = win; *k; k++ ) if ( *k == '/' ) *k = '\\';
+    ok( pr_caso_de_ruta( &c, win, uno, sizeof uno, otro, sizeof otro ) == 0 &&
+        !strcmp( otro, "c01" ), "tambien con la ruta a la manera de Windows" );
+    }
+    pr_ruta( &c, "EP", "", a1, ".pre", ruta, sizeof ruta );
+    ok( pr_caso_de_ruta( &c, ruta, uno, sizeof uno, otro, sizeof otro ) == 1,
+        "el .pre de una serie no es de ningun caso" );
+
+    /* DERIVAR: otro caso, con su padre */
+    snprintf( en[1].modelo, PR_ID, "%s", b2 );
+    ok( pr_caso_deriva( &c, "C1", en, 2, cid, sizeof cid, &e ) == 0,
+        "se deriva un caso con otra entrada" );
+    es( pr_caso_ver( &c, cid )->padre, "C1", "y cuelga del original" );
+    es( pr_caso_ver( &c, cid )->titulo, "precios", "con su titulo" );
+
+    /* IDA Y VUELTA */
+    pr_caso_razon( &c, "C1", "el WTI adelanta: k=1", &e );
+    ok( pr_escribir( &c, c.path, &e ) == 0, "se escribe el manifiesto con casos" );
+    ok( pr_leer( c.path, &r, &e ) == 0, "y se vuelve a leer" );
+    pr_error_es( &e, b, sizeof b );
+    if ( e.cod != PR_OK ) printf( "        %s\n", b );
+    ok( r.schema_version == 2, "con schema_version 2" );
+    ok( r.nca == 2 && r.nco == 2, "con sus casos y sus corridas" );
+    es( r.ca[0].en[1].modelo, b1, "las entradas, en su orden" );
+    es( r.ca[0].en[1].sha, "bb22", "con su sha256" );
+    es( r.ca[0].razon, "el WTI adelanta: k=1", "la razon del caso" );
+    es( pr_corrida_elegida( &r, "C1" ), "c01", "la elegida" );
+    es( pr_corrida_ver( &r, "C1", "c01" )->razon_elegido, "residuos limpios",
+        "y por que" );
+    es( pr_corrida_ver( &r, "C1", "c01" )->padre, "c00", "y el linaje" );
+
+    /* LA VERSION 1 SIGUE VALIENDO */
+    yaml = pon( "v1.yaml", "schema_version: 1\nid: viejo\nseries:\n  S:\n"
+                           "modelos:\n  S/m00:\n    version: 0\n"
+                           "    padre: \"\"\n    razon: \"\"\n    rol: datos\n" );
+    ok( pr_leer( yaml, &r, &e ) == 0 && r.nca == 0 && r.nco == 0,
+        "un manifiesto de la version 1 se lee igual: sin casos" );
+    snprintf( r.path, sizeof r.path, "%s/v1b.yaml", DIR );
+    pr_escribir( &r, r.path, &e );
+    {
+    FILE *f = fopen( r.path, "r" );
+    char  l[256] = "";
+
+    while ( f && fgets( l, sizeof l, f ) )
+        if ( !strncmp( l, "schema_version", 14 ) ) break;
+    if ( f ) fclose( f );
+    ok( strstr( l, "1" ) != NULL,
+        "y sin casos se sigue escribiendo como version 1" );
+    }
+
+    /* LO ROTO SE DICE */
+    yaml = pon( "roto1.yaml", "schema_version: 2\nid: x\nseries:\n  S:\n"
+                              "casos:\n  C1:\n    entradas: S/m05@ab\n" );
+    ok( pr_leer( yaml, &r, &e ) != 0 && e.cod == PR_ENOMODELO,
+        "un caso cuya entrada no existe es un fichero roto" );
+    yaml = pon( "roto2.yaml", "schema_version: 2\nid: x\nseries:\n  S:\n"
+                              "modelos:\n  S/m00:\n    rol: datos\n"
+                              "  S/m01:\n    padre: m00\n"
+                              "casos:\n  C1:\n    entradas: S/m01\n"
+                              "corridas:\n  C1/c01:\n    padre: c00\n" );
+    ok( pr_leer( yaml, &r, &e ) != 0 && e.cod == PR_EPADRE,
+        "una corrida que cuelga de otra que no esta, tambien" );
     }
 
     printf( "\n%d fallos\n", fallos );

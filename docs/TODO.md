@@ -20,36 +20,39 @@ en Linux, macOS y Windows (`docs/PRUEBAS.md`). Falta:
 | | **el paquete de Windows** | DLL de GTK/GSL/zlib y `share/` (esquemas compilados, iconos) junto a los `.exe`, o estático. fue_gui y drvarma_gui ya usan `share/` si está al lado |
 | | **el paquete de macOS** | `.app` o Homebrew; firma, o Gatekeeper no lo abre |
 | | la consola en Windows | `lib/engine` lanza con `g_spawn`: comprobar que no asoma una consola al estimar |
-| | **el gestor de proyectos multivariantes** | ver abajo. Sin él, drtran entra en la versión con su GUI pero fuera del proyecto de la madre |
+| hecho | el gestor de proyectos multivariantes | los **casos**: ver abajo |
 
-### El gestor de proyectos multivariantes en la madre
+### Los casos: la madre multivariante — HECHO (2026-10-04/05)
 
-**El hueco.** La madre lleva bien los proyectos univariantes —fue, fug, fuf:
-series, muestras, modelos con su linaje, el editor, el vistazo— pero para
-drtran sólo tiene un botón que lanza `drtran_gui --proyecto P` **sin nada
-más** (`gui/atsw/src/main.c:490`): ni qué series, ni qué red. El manifiesto
-(`lib/proyecto`) es **por serie**: `series`, `modelos` (cada uno de UNA
-serie), `muestras`. No hay entidad para lo que trabaja con n series.
+Diseño en **`DISENO-casos.md`**, en cuatro pasos, todos en `main` y con la
+CI en verde en las tres plataformas (PR #3 a #6):
 
-**Lo que ya hay.** `drtran_gui --proyecto` nombra sus corridas y las
-encadena (`gui/drtran/src/proyecto_gui.c`): cada estimación es una corrida
-con nombre y padre. Falta que la madre las **vea** y las **gestione**.
+1. `lib/proyecto`: el **caso** —series en orden, cada una con el modelo con
+   que entra y el sha256 de su `.pre`— y sus **corridas**, con linaje, razón
+   y una elegida. `pr_borra` no borra un modelo que es entrada de un caso.
+2. `drtran_gui --caso C [--corrida c]`, el **alta automática** al estimar
+   con series del proyecto, y un caso desfasado deriva uno nuevo en vez de
+   tocarse.
+3. La madre: la sección **CASOS**, con las entradas y el estado de su
+   `.pre`, el árbol de corridas, «Nuevo caso…» con la ventana común, «Abrir
+   en drtran», elegir, razón, derivar, borrar y los dos desfases.
+4. La conversión de las corridas que drtran_gui registraba como modelos de
+   la serie de salida.
 
-**Lo que haría falta** (a diseñar en `DISENO-madre.md` antes de tocar
-código):
+Y después (PR siguiente): **la puerta diagonal por corrida** —la conjunta
+contra la suma de los `logelf` de los `.out` de fue de las entradas: una
+corrida diagonal tiene que cuadrar; con transferencia, se enseña lo que
+gana—.
 
-- **Una entidad «red» en el manifiesto**: qué series (cada una con el `.pre`
-  de su modelo elegido —la escalera: se sube desde los univariantes—), el
-  `.dag`, el `.cns`, la ventana común, y las corridas de drtran con su
-  linaje, igual que los modelos de una serie.
-- **En la madre**: dar de alta una red eligiendo series del proyecto (sólo
-  las que tienen modelo elegido, y con la compatibilidad de ventana y
-  frecuencia que ya comprueba `lib/fuepre` —el BUG-2—); su árbol de
-  corridas; «Abrir en drtran» con la red, no sólo con el proyecto.
-- **Qué pasa cuando cambia el univariante** de una serie que está en una
-  red: la red queda desfasada. Decidir si se avisa, se marca o se impide.
-- El `schema_version` del manifiesto sube: un manifiesto viejo se lee igual
-  (sin redes).
+**Lo que queda, fuera de la primera versión:**
+
+- **«Pasar a drvarma»** desde un caso con ciclo: el campo `motor` y la
+  acción están diseñados (`DISENO-casos.md` §4), no hechos.
+- **Si los `.pre` eran óptimos o especificaciones**, por entrada, como el
+  certificado de mtram: hoy la puerta lo delata en la corrida diagonal,
+  pero no dice cuál.
+- **El recorrido** de drtran —qué enlaces se probaron y por qué se podaron—
+  sigue sin guion (`DISENO-escalera.md` §5.4).
 
 ### ART entra en el GUI
 

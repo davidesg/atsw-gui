@@ -221,6 +221,28 @@ int od_parse( const char *texto, Diagnosis *d )
       (void) n2;
    }
 
+   /* ¿DIAGONAL? Todas las entradas con s = -1 y ninguna red: es como drtran
+    * escribe el modo -0 (sin transferencia).                             */
+   {
+   const char *q = strstr( texto, "Transfer function orders:" );
+   int         inputs = 0, sin = 0;
+
+   if ( q && !strstr( texto, "Transfer network (" ) ) {
+      const char *l = strchr( q, '\n' );
+
+      while ( l && *++l ) {
+         int j, b, r, s;
+
+         if ( sscanf( l, " input %d: b = %d, r = %d, s = %d", &j, &b, &r, &s ) != 4 )
+            break;
+         inputs++;
+         if ( s == -1 ) sin++;
+         l = strchr( l, '\n' );
+      }
+      d->diagonal = inputs > 0 && sin == inputs;
+   }
+   }
+
    /* La verosimilitud, si esta */
    {
    const char *q = strstr( texto, "Log-likelihood" );

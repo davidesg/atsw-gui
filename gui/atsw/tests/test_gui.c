@@ -1225,6 +1225,18 @@ static void vistazo_prueba( void )
 
             check( nc > 0, "con candidatos de art", NULL );
             check( strstr( txt, "d = 1" ) != NULL, "sobre la transformación del pie (d = 1)", txt );
+            /* CABE EN UNA PANTALLA PEQUEÑA. Paso en una de 1366x768: el
+               minimo pedia mas alto que la pantalla, la ventana se cortaba
+               y no se podia maximizar.                                 */
+            {
+            int hmin = 0, hnat = 0, wmin = 0, wnat = 0;
+
+            gtk_widget_get_preferred_height( GTK_WIDGET(wi), &hmin, &hnat );
+            gtk_widget_get_preferred_width( GTK_WIDGET(wi), &wmin, &wnat );
+            nota( "identificacion: minimo %dx%d", wmin, hmin );
+            check( hmin <= 700 && wmin <= 1300,
+                   "la ventana de identificacion cabe en 1366x768", NULL );
+            }
             nota( "identificar desde el vistazo: %d candidatos", nc );
             g_free( txt );
             g_ptr_array_free( tv, TRUE );

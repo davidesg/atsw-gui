@@ -772,6 +772,8 @@ guint preview_n_pages(const gchar *path)
     return pv ? pv->pages->len : 0;
 }
 
+static void preview_screen_size(GtkWidget *window, int *w, int *h);
+
 gboolean preview_set_footer(const gchar *path, GtkWidget *footer)
 {
     Preview *pv = previews ? g_hash_table_lookup(previews, path) : NULL;
@@ -787,6 +789,22 @@ gboolean preview_set_footer(const gchar *path, GtkWidget *footer)
         gtk_box_pack_end(GTK_BOX(pv->vbox), footer, FALSE, FALSE, 0);
         gtk_widget_show_all(footer);
         pv->footer = footer;
+
+        /* EL PIE CUENTA. El tamaño de la ventana se calculo para el
+         * grafico solo (80 % de la pantalla); con el pie debajo, en una
+         * pantalla de 768 se salia por abajo y maximizarla se volvia
+         * raro. Si ya no cabe en el 90 % del area de trabajo, se encoge:
+         * el grafico se ajusta solo.                                  */
+        {
+            int sw = 0, sh = 0, ww = 0, wh = 0, fmin = 0, fnat = 0;
+
+            preview_screen_size(pv->window, &sw, &sh);
+            gtk_window_get_size(GTK_WINDOW(pv->window), &ww, &wh);
+            gtk_widget_get_preferred_height(footer, &fmin, &fnat);
+            if (sh > 0 && wh + fnat > 0.9 * sh)
+                gtk_window_resize(GTK_WINDOW(pv->window), ww,
+                                  MAX(240 + fnat, (int) (0.9 * sh)));
+        }
     }
     return TRUE;
 }
@@ -1214,7 +1232,12 @@ static void on_area_resize(GtkWidget *w, GdkRectangle *alloc, Preview *pv)
     if (pv->zoom == 0.0 && pv->zoom_label != NULL) {
         gchar *text = g_strdup_printf(" %d%% ", (int) (page_scale(pv) * 100.0 + 0.5));
 
-        gtk_label_set_text(GTK_LABEL(pv->zoom_label), text);
+        /* SOLO SI CAMBIA. Esto corre en cada size-allocate, y poner el texto
+         * de una etiqueta pide otra vuelta de disposicion a toda la
+         * ventana: al maximizar llegan varios cambios seguidos y cada uno
+         * relanzaba otro.                                             */
+        if (g_strcmp0(gtk_label_get_text(GTK_LABEL(pv->zoom_label)), text) != 0)
+            gtk_label_set_text(GTK_LABEL(pv->zoom_label), text);
         g_free(text);
     }
 }
@@ -1385,7 +1408,10 @@ static void preview_screen_size(GtkWidget *window, int *w, int *h)
     if (monitor == NULL && gdk_display_get_n_monitors(display) > 0)
         monitor = gdk_display_get_monitor(display, 0);
     if (monitor != NULL) {
-        gdk_monitor_get_geometry(monitor, &geometry);
+        /* EL AREA DE TRABAJO, no el monitor entero: en una pantalla de 768
+         * de alto las barras del escritorio se comen lo que la ventana
+         * creia tener, y se abria mas alta que lo que se ve.         */
+        gdk_monitor_get_workarea(monitor, &geometry);
         *w = geometry.width;
         *h = geometry.height;
     }

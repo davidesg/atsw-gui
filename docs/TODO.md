@@ -126,6 +126,14 @@ la división entera del Jarque-Bera.
 
 ---
 
+## Pedidos del analista, probando el caso IPC_ES → WTI
+
+- **El gráfico de fue desde la lista de modelos** (2026-10-07). El gráfico
+  de residuos con su ACF/PACF y el modelo escrito debajo —el `A<id>.eps`
+  que fue deja junto al `.out`, el del `.pdf`— tiene que abrirse desde la
+  fila del modelo en la madre (menú del botón derecho, y quizá doble clic),
+  sin pasar por fue_gui. Hoy sólo se ve abriendo el modelo en fue.
+
 ## Lo demás, por documento
 
 ### `DISENO-anomalos.md`

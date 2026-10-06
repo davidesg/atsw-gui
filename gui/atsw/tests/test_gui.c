@@ -2261,6 +2261,8 @@ static void linaje( void )
 }
 
 /* BORRAR: pregunta, y se lleva el nodo y sus ficheros. */
+static gchar *epsA;
+
 static void borrar( void )
 {
     GtkMenu *m;
@@ -2273,7 +2275,18 @@ static void borrar( void )
     check( existe( "ipc", "", "m01", ".inp" ) && barra()[0],
            "un modelo con hijos no se borra, y se dice por que", barra() );
 
-    /* m02 es una hoja del arbol: se pregunta y se va. */
+    /* m02 es una hoja del arbol: se pregunta y se va. Con su grafico,
+       que fue nombra con una «A» delante y se quedaba huerfano.     */
+    {
+    gchar *e = ruta_de( "ipc", "", "m02", ".eps" );
+    gchar *d = g_path_get_dirname( e ), *b = g_path_get_basename( e );
+    gchar *ab = g_strdup_printf( "A%s", b );
+
+    g_free( epsA );
+    epsA = g_build_filename( d, ab, NULL );
+    g_file_set_contents( epsA, "%!PS\n", -1, NULL );
+    g_free( e ); g_free( d ); g_free( b ); g_free( ab );
+    }
     marca( A.l_modelos, M_ID, "m02" );
     m = clic_derecho( A.l_modelos, 2 );
     responde( "¿Borro m02", contesta, GINT_TO_POINTER(GTK_RESPONSE_OK) );
@@ -2284,6 +2297,7 @@ static void borrar( void )
     check( strstr( barra(), "m02 borrado, con sus ficheros" ) != NULL,
            "borrar lo dice", barra() );
     check( !existe( "ipc", "", "m02", ".inp" ), "y el .inp de m02 ya no esta", NULL );
+    check( !g_file_test( epsA, G_FILE_TEST_EXISTS ), "ni su grafico de fue (A…eps)", epsA );
     s = filas( A.l_modelos, M_ID );
     check( !strcmp( s, "m00|m01|m03" ), "y la rejilla ya no lo tiene", s );
     g_free( s );

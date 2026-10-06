@@ -664,6 +664,22 @@ static void borra_ficheros( Atsw *a, const char *serie, const char *muestra,
         if ( pr_ruta( a->p, serie, muestra, id, ext[i], f, sizeof f ) == 0 )
             g_unlink( f );
         }
+
+    /* EL GRAFICO DE FUE lleva una «A» delante (Aipc_m02.eps): con sólo
+       la lista de arriba se quedaba huérfano al borrar.             */
+    {
+    char f[PR_RUTA];
+
+    if ( pr_ruta( a->p, serie, muestra, id, ".eps", f, sizeof f ) == 0 )
+        {
+        gchar *dir = g_path_get_dirname( f ), *base = g_path_get_basename( f );
+        gchar *conA = g_strdup_printf( "A%s", base );
+        gchar *g = g_build_filename( dir, conA, NULL );
+
+        g_unlink( g );
+        g_free( g ); g_free( conA ); g_free( base ); g_free( dir );
+        }
+    }
 }
 
 static void on_borrar( GtkMenuItem *m, Atsw *a )

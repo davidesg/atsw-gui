@@ -2186,6 +2186,27 @@ static void muestra( void )
            "el modelo nuevo de esa hoja tiene su .inp", NULL );
     gtk_notebook_set_current_page( GTK_NOTEBOOK(A.libro), 0 );
     pump( 50 );
+
+    /* «ABRIR…» CON LA VENTANA YA HECHA TRAE SUS HOJAS. Paso: se abria y
+       solo salia «Completa». Se vacian las hojas como las dejaria otro
+       proyecto sin muestras, y se abre este.                          */
+    {
+    char path[PR_RUTA], why[512];
+
+    snprintf( path, sizeof path, "%s", A.p->path );
+    A.hay = FALSE;
+    atsw_hojas( &A );
+    check( A.nhojas == 1, "sin proyecto, sólo la hoja «Completa»", NULL );
+    check( atsw_abre( &A, path, why, sizeof why ), "se vuelve a abrir el proyecto", why );
+    atsw_refresca( &A );
+    pump( 100 );
+    check( A.nhojas == 2 &&
+           gtk_notebook_get_n_pages( GTK_NOTEBOOK(A.libro) ) == 2,
+           "y «Abrir…» trae la hoja de la submuestra", NULL );
+    gtk_notebook_set_current_page( GTK_NOTEBOOK(A.libro), 0 );
+    marca( A.l_series, S_ID, "ipc" );      /* abrir desmarca la serie */
+    pump( 50 );
+    }
 }
 
 /* EL LINAJE: la cadena entera, con lo que debe. */

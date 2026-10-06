@@ -18,6 +18,7 @@ void fue_analisis_refresca(FueContext *ctx);
 #include "preview.h"        // la ventana de graficos
 #include "outfile.h"        // lo que se lee del .out
 #include "main_window.h"    // update_model_label: estaba implicita
+#include "proyecto.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -1160,7 +1161,76 @@ static void on_fue_done(const EngineResult *r, gpointer data) {
     go_to_console(ctx);       /* todo lo que escribio, a la vista */
 }
 
+/* UN MODELO ESTIMADO NO SE PISA.
+ *
+ * «Run fue» guarda el formulario en <nombre>.inp y estima. Fuera de un
+ * proyecto eso es lo de siempre. Dentro, si lo que hay delante ya tiene su
+ * .out --o es el nodo de datos--, guardar encima borraba la estimacion y
+ * el linaje mentia: m01 pasaba a ser otro modelo con el mismo nombre. Paso
+ * con IPC_ES: se abrio el .pre de m01, se añadio la media y m01 desaparecio.
+ * Tocar un optimo es una especificacion nueva: se deriva un hijo, se dice,
+ * y se estima el hijo. Devuelve FALSE si no hay que estimar.            */
+Proyecto   *fue_proyecto(void);
+int         fue_proyecto_relee(void);
+int         fue_modelo_actual(FueContext *ctx, char *serie, size_t ns,
+                              char *muestra, size_t nm, char *id, size_t nid);
+
+static gboolean deriva_si_estimado(FueContext *ctx) {
+    Proyecto *p;
+    PrError   e;
+    char      serie[PR_ID], mu[PR_ID] = "", id[PR_ID], nuevo[PR_ID];
+    char      ruta[PR_RUTA], out[PR_RUTA], razon[256];
+    gchar    *dir, *base;
+
+    fue_proyecto_relee();             /* la madre sigue viva al lado */
+    p = fue_proyecto();
+    if (!p || fue_modelo_actual(ctx, serie, sizeof serie, mu, sizeof mu,
+                                id, sizeof id) != 0)
+        return TRUE;                  /* fuera del proyecto: lo de siempre */
+    if (!pr_es_datos(p, serie, mu, id) &&
+        (pr_ruta(p, serie, mu, id, ".out", out, sizeof out) != 0 ||
+         !g_file_test(out, G_FILE_TEST_EXISTS)))
+        return TRUE;                  /* sin estimar: se estima ahi mismo */
+
+    if (pr_deriva(p, serie, mu, id, nuevo, sizeof nuevo, ruta, sizeof ruta, &e) != 0) {
+        gtk_label_set_text(GTK_LABEL(ctx->status_label),
+            "No estimo: el modelo ya está estimado y no pude derivar uno nuevo.");
+        return FALSE;
+    }
+    snprintf(razon, sizeof razon, "Editado en fue_gui a partir de %s.", id);
+    pr_razon(p, serie, mu, nuevo, razon, &e);
+    if (pr_escribir(p, p->path, &e) != 0) {
+        gtk_label_set_text(GTK_LABEL(ctx->status_label),
+            "No estimo: no pude guardar el proyecto con el modelo nuevo.");
+        return FALSE;
+    }
+    dir = g_path_get_dirname(ruta);
+    g_mkdir_with_parents(dir, 0700);
+    {
+    gchar *ws = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(ctx->workspace_file_chooser));
+
+    /* El hijo vive junto al padre (misma serie, misma muestra): casi
+       siempre es la misma carpeta y no hay que tocar el selector.   */
+    if (g_strcmp0(ws, dir) != 0)
+        gtk_file_chooser_set_filename(GTK_FILE_CHOOSER(ctx->workspace_file_chooser), dir);
+    g_free(ws);
+    }
+    base = g_path_get_basename(ruta);
+    if (g_str_has_suffix(base, ".inp")) base[strlen(base) - 4] = '\0';
+    gtk_entry_set_text(GTK_ENTRY(ctx->input_name_entry), base);
+    g_free(base);
+    g_free(dir);
+    {
+    gchar *m = g_strdup_printf("%s ya estaba estimado: lo editado va a %s, hijo suyo.",
+                               id, nuevo);
+    gtk_label_set_text(GTK_LABEL(ctx->status_label), m);
+    g_free(m);
+    }
+    return TRUE;
+}
+
 void on_run_fue(GtkWidget *widget, FueContext *ctx) {
+    if (!deriva_si_estimado(ctx)) return;
     on_save_inp(NULL, ctx);   /* guarda el .inp actual */
     const char *input_name = gtk_entry_get_text(GTK_ENTRY(ctx->input_name_entry));
     char *workspace = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(ctx->workspace_file_chooser));

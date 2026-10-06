@@ -45,6 +45,9 @@ const char *fue_raiz_proyecto(void);
 void        fue_pon_raiz_proyecto(const char *s);
 void        fue_pon_proyecto(Proyecto *p);
 Proyecto   *fue_proyecto(void);
+int         fue_proyecto_relee(void);
+int         fue_modelo_actual(FueContext *ctx, char *serie, size_t ns,
+                              char *muestra, size_t nm, char *id, size_t nid);
 void        fue_on_diagnosis(GtkWidget *w, FueContext *ctx);
 
 static int fails = 0;
@@ -1101,6 +1104,33 @@ static void prueba_analisis(FueContext *ctx) {
     check(gtk_widget_get_sensitive(ctx->btn_diagnosis) && gtk_widget_get_sensitive(ctx->btn_anomalos)
           && gtk_widget_get_sensitive(ctx->btn_ganancia),
           "con el .out al dia, los tres se encienden", NULL);
+
+    /* UN MODELO ESTIMADO NO SE PISA. Paso con IPC_ES: se abrio m01, se
+       añadio la media, se estimo y m01 dejo de ser m01. Volver a estimar
+       deriva un hijo y estima el hijo; el .out del padre no se toca.  */
+    {
+    gchar *out0 = g_strdup(ruta), *c0 = NULL, *c1 = NULL, *ent;
+    char   s1[PR_ID] = "", m1[PR_ID] = "", i1[PR_ID] = "";
+
+    strcpy(out0 + strlen(out0) - 4, ".out");
+    g_file_get_contents(out0, &c0, NULL, NULL);
+    corre_fue(ctx);
+    ent = g_strdup(gtk_entry_get_text(GTK_ENTRY(ctx->input_name_entry)));
+    check(fue_modelo_actual(ctx, s1, sizeof s1, m1, sizeof m1, i1, sizeof i1) == 0 &&
+          strcmp(i1, id) != 0, "estimar otra vez un modelo estimado deriva otro", ent);
+    {
+    int k;
+
+    fue_proyecto_relee();
+    k = pr_modelo_idx(fue_proyecto(), "D", "", i1);
+    check(k >= 0 && !strcmp(fue_proyecto()->m[k].padre, id),
+          "y el manifiesto lo tiene, hijo del estimado", i1);
+    }
+    g_file_get_contents(out0, &c1, NULL, NULL);
+    check(c0 && c1 && !strcmp(c0, c1), "el .out del padre sigue intacto", out0);
+    check(contiene(estado(ctx), "fue finished"), "y el hijo se estima", estado(ctx));
+    g_free(out0); g_free(c0); g_free(c1); g_free(ent);
+    }
 
     barra(ctx, "Diagnosis");
     pump(200);

@@ -128,11 +128,17 @@ la división entera del Jarque-Bera.
 
 ## Pedidos del analista, probando el caso IPC_ES → WTI
 
-- **El gráfico de fue desde la lista de modelos** (2026-10-07). El gráfico
-  de residuos con su ACF/PACF y el modelo escrito debajo —el `A<id>.eps`
-  que fue deja junto al `.out`, el del `.pdf`— tiene que abrirse desde la
-  fila del modelo en la madre (menú del botón derecho, y quizá doble clic),
-  sin pasar por fue_gui. Hoy sólo se ve abriendo el modelo en fue.
+- **La lista de modelos de la madre, como la quiere el analista**
+  (2026-10-07):
+  - **Doble clic lanza fue_gui** con el modelo (ya lo hace: `atsw_on_activado`
+    → `on_fue`, con el `.pre` si está estimado). Lo que falta: **si el modelo
+    ya está estimado, fue_gui tiene que abrir directamente en la consola con
+    los resultados** (el `.out`), no en la pestaña de especificación.
+  - **Botón derecho sobre el modelo marcado: «Ver el gráfico…»** — los
+    residuos con su ACF/PACF y el modelo escrito debajo, el `A<id>.eps` que
+    fue deja junto al `.out` (el mismo del `.pdf`), en la ventana de
+    gráficos (`lib/preview`), sin pasar por fue_gui. Apagado, con globo que
+    diga por qué, si el modelo no está estimado.
 
 ## Lo demás, por documento
 

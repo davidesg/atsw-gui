@@ -327,6 +327,10 @@ gboolean atsw_abre( Atsw *a, const char *path, char *why, size_t n )
     a->nr  = 0;
     a->serie[0] = '\0';
     huella_manifiesto( a );
+    /* LAS HOJAS SON DEL PROYECTO, no de la ventana. Sin esto, «Abrir…»
+       con la ventana ya hecha dejaba sólo «Completa»: las hojas se
+       construían una vez, al crearla (paso con ~/atsw-casos).        */
+    atsw_hojas( a );
     return TRUE;
 }
 

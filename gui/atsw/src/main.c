@@ -414,6 +414,7 @@ static void on_nuevo( GtkButton *b, Atsw *a )
         pr_nuevo( a->p, base, "", "." );
         snprintf( a->p->path, sizeof a->p->path, "%s", p );
         a->hay = TRUE; a->nr = 0; a->serie[0] = '\0';
+        atsw_hojas( a );      /* las del proyecto anterior ya no son */
 
         if ( atsw_guarda( a, &e ) != 0 )
             { char why[512]; pr_error_es( &e, why, sizeof why );

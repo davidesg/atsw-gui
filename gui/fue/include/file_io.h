@@ -17,6 +17,8 @@ void on_view_inp(GtkWidget *widget, FueContext *ctx);
 void on_quit(GtkWidget *widget, FueContext *ctx);
 
 void load_output_to_console(FueContext *ctx);
+/* Abierto un modelo con su .out al dia, la consola con los resultados. */
+void fue_consola_si_estimado(FueContext *ctx, const char *path);
 
 /* Lo que el motor escribio, a la consola: cuando no deja fichero de salida
  * es lo unico que explica por que.                                        */

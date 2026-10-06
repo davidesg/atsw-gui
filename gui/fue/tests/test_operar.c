@@ -1105,6 +1105,34 @@ static void prueba_analisis(FueContext *ctx) {
           && gtk_widget_get_sensitive(ctx->btn_ganancia),
           "con el .out al dia, los tres se encienden", NULL);
 
+    /* ABIERTO DESDE LA MADRE CON SU .out AL DIA, A LA CONSOLA. Es lo que
+       hace el doble clic sobre un modelo estimado. Sin .out al dia, se
+       queda donde estaba.                                             */
+    {
+    gchar *otro = g_build_filename(TRABAJO, "sin_out.inp", NULL);
+
+    gtk_notebook_set_current_page(GTK_NOTEBOOK(ctx->notebook), 0);
+    copia(ruta, otro);
+    fue_consola_si_estimado(ctx, otro);
+    check(gtk_notebook_get_current_page(GTK_NOTEBOOK(ctx->notebook)) == 0,
+          "un modelo sin .out se abre en el formulario", NULL);
+    fue_consola_si_estimado(ctx, ruta);
+    check(gtk_notebook_get_current_page(GTK_NOTEBOOK(ctx->notebook)) == ctx->console_page,
+          "un modelo estimado se abre en la consola", NULL);
+    {
+    GtkTextBuffer *b = gtk_text_view_get_buffer(GTK_TEXT_VIEW(ctx->console_text_view));
+    GtkTextIter i0, i1;
+    gchar *t;
+
+    gtk_text_buffer_get_bounds(b, &i0, &i1);
+    t = gtk_text_buffer_get_text(b, &i0, &i1, FALSE);
+    check(contiene(t, "Output file"), "con su .out en ella", NULL);
+    g_free(t);
+    }
+    g_unlink(otro);
+    g_free(otro);
+    }
+
     /* UN MODELO ESTIMADO NO SE PISA. Paso con IPC_ES: se abrio m01, se
        añadio la media, se estimo y m01 dejo de ser m01. Volver a estimar
        deriva un hijo y estima el hijo; el .out del padre no se toca.  */

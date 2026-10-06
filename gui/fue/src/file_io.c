@@ -1387,6 +1387,33 @@ void load_output_to_console(FueContext *ctx) {
 }
 */
 
+/* ABIERTO DESDE LA MADRE, UN MODELO ESTIMADO SE ENSEÑA POR SUS RESULTADOS.
+ *
+ * El doble clic en la lista de modelos lanza fue_gui con el modelo; si ya
+ * esta estimado, lo que el analista quiere ver es el .out, no el
+ * formulario. La ruta del .out sale del fichero abierto y no del selector
+ * de la carpeta, que se pone al dia mas tarde. Un .out mas viejo que el
+ * fichero es de otra especificacion: entonces se queda en el formulario. */
+void fue_consola_si_estimado(FueContext *ctx, const char *path) {
+    gchar   *dir, *base, *out;
+    GStatBuf so, sf;
+    char    *dot;
+
+    if (!ctx || !path || !*path) return;
+    dir  = g_path_get_dirname(path);
+    base = g_path_get_basename(path);
+    dot  = strrchr(base, '.');
+    if (dot) *dot = '\0';
+    out = g_strdup_printf("%s%c%s.out", dir, G_DIR_SEPARATOR, base);
+    if (g_stat(out, &so) == 0 && g_stat(path, &sf) == 0 && so.st_mtime >= sf.st_mtime) {
+        load_file_to_console(ctx, out, FALSE);
+        go_to_console(ctx);
+        gtk_label_set_text(GTK_LABEL(ctx->status_label),
+                           "Modelo estimado: sus resultados, en la consola.");
+    }
+    g_free(out); g_free(base); g_free(dir);
+}
+
 /* ========================================================================= */
 /* Abre el archivo PDF generado por FUE con el visor predeterminado         */
 /* ========================================================================= */

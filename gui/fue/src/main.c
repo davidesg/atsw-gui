@@ -70,6 +70,8 @@ static void activate(GtkApplication *app, gpointer user_data) {
          * necesita saber de qué.                                       */
         if (fue_prever_al_arrancar())
             on_forecast_button_clicked(NULL, ctx);
+        else
+            fue_consola_si_estimado(ctx, fue_abrir());
     }
 
     /* Set up status label and text view (already done in create_main_window) */

@@ -128,7 +128,7 @@ la división entera del Jarque-Bera.
 
 ## Pedidos del analista, probando el caso IPC_ES → WTI
 
-- **La lista de modelos de la madre, como la quiere el analista**
+- **HECHO — La lista de modelos de la madre, como la quiere el analista**
   (2026-10-07):
   - **Doble clic lanza fue_gui** con el modelo (ya lo hace: `atsw_on_activado`
     → `on_fue`, con el `.pre` si está estimado). Lo que falta: **si el modelo

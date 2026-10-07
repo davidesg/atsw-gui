@@ -15,6 +15,8 @@
 #include "atsw.h"
 #include "anfitrion.h"
 #include "inpfile.h"
+#include "preview.h"
+#include "rutas.h"
 
 void atsw_lanza( Atsw *a, const char *programa, const char *fichero );
 gboolean atsw_modelo_nuevo( Atsw *a, const char *serie, const char *muestra,
@@ -641,6 +643,20 @@ static void on_nuevo_modelo( GtkButton *b, Atsw *a )
     barra_pub( a, why );
 }
 
+/* EL GRAFICO QUE FUE DEJA AL ESTIMAR: residuos, ACF/PACF y el modelo
+ * escrito debajo. Se llama como el modelo con una «A» delante, junto al
+ * .out (Aipc_m01.eps). El editor lo compone igual (editor.c, eps_de).  */
+static int atsw_grafico_de( Atsw *a, const char *serie, const char *muestra,
+                            const char *id, char *out, size_t n )
+{
+    char base[PR_RUTA];
+
+    out[0] = '\0';
+    if ( pr_ruta( a->p, serie, muestra, id, ".eps", base, sizeof base ) != 0 )
+        return 1;
+    return ruta_componer( base, "A", NULL, out, n );
+}
+
 /* BORRAR UN MODELO, Y SUS FICHEROS CON EL.
  *
  * Dejar el .out en el disco despues de quitar el nodo seria una mentira con
@@ -670,15 +686,8 @@ static void borra_ficheros( Atsw *a, const char *serie, const char *muestra,
     {
     char f[PR_RUTA];
 
-    if ( pr_ruta( a->p, serie, muestra, id, ".eps", f, sizeof f ) == 0 )
-        {
-        gchar *dir = g_path_get_dirname( f ), *base = g_path_get_basename( f );
-        gchar *conA = g_strdup_printf( "A%s", base );
-        gchar *g = g_build_filename( dir, conA, NULL );
-
-        g_unlink( g );
-        g_free( g ); g_free( conA ); g_free( base ); g_free( dir );
-        }
+    if ( atsw_grafico_de( a, serie, muestra, id, f, sizeof f ) == 0 )
+        g_unlink( f );
     }
 }
 
@@ -765,6 +774,31 @@ static void on_prever( GtkMenuItem *m, Atsw *a )
         }
     g_free( id );
     atsw_lanza_con( a, "fue_gui", "--prever", f );
+}
+
+/* «VER EL GRAFICO…»: el de fue, en la ventana de graficos, sin abrir
+   fue_gui. Solo se ofrece encendido con el modelo estimado.          */
+static void on_grafico( GtkMenuItem *m, Atsw *a )
+{
+    gchar *id = atsw_marcada( a->l_modelos, M_ID );
+    char   f[PR_RUTA];
+
+    (void) m;
+    if ( !a->hay || !a->serie[0] || !id ) { g_free( id ); return; }
+    if ( atsw_grafico_de( a, a->serie, atsw_muestra_actual( a ), id, f, sizeof f ) != 0 ||
+         !g_file_test( f, G_FILE_TEST_EXISTS ) )
+        {
+        gchar *t = g_strdup_printf( "Todavía no hay gráfico de %s: sale al estimar.", id );
+        barra_pub( a, t );
+        g_free( t );
+        }
+    else if ( !preview_show( (PreviewApp *) a, f ) )
+        {
+        gchar *t = g_strdup_printf( "No pude abrir %s.", f );
+        barra_pub( a, t );
+        g_free( t );
+        }
+    g_free( id );
 }
 
 static void on_diagnosis( GtkMenuItem *m, Atsw *a )
@@ -1101,6 +1135,23 @@ static void menu_modelo( Atsw *a, GdkEventButton *ev )
         AnEstado est = an_estado( a->p, a->serie, atsw_muestra_actual( a ), id,
                                   porque, sizeof porque );
         gboolean listo = ( est == AN_LISTO );
+
+        {
+        char     f[PR_RUTA];
+        gboolean hay = listo &&
+            atsw_grafico_de( a, a->serie, atsw_muestra_actual( a ), id, f, sizeof f ) == 0 &&
+            g_file_test( f, G_FILE_TEST_EXISTS );
+
+        mi = gtk_menu_item_new_with_label( "Ver el gráfico…" );
+        gtk_widget_set_sensitive( mi, hay );
+        gtk_widget_set_tooltip_text( mi, hay
+            ? "Los residuos con su ACF y su PACF, y el modelo escrito debajo: "
+              "el gráfico que fue dejó al estimar, sin abrir fue_gui."
+            : listo ? "fue no dejó el gráfico de este modelo: vuelve a estimarlo."
+                    : porque );
+        g_signal_connect( mi, "activate", G_CALLBACK(on_grafico), a );
+        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+        }
 
         mi = gtk_menu_item_new_with_label( "Diagnosis…" );
         gtk_widget_set_sensitive( mi, listo );

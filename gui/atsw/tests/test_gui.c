@@ -1661,6 +1661,12 @@ static void editor( void )
                "el menu del modelo ofrece lo que se puede hacer con el", e );
         check( dx && !gtk_widget_get_sensitive( dx ),
                "sin estimar, «Diagnosis…» esta apagada", e );
+        {
+        GtkWidget *gx = entrada_de( m, "Ver el gráfico" );
+
+        check( gx && !gtk_widget_get_sensitive( gx ),
+               "sin estimar, «Ver el gráfico…» esta apagado", e );
+        }
         if ( dx )
             {
             gchar *tip = gtk_widget_get_tooltip_text( dx );
@@ -1888,16 +1894,24 @@ static void caben_todas( const char *donde )
 /* EL MENU DEL MODELO ESTIMADO: diagnosis, ganancia, anomalos, prever. */
 static void menu_modelo_prueba( void )
 {
-    static const char *ent[] = { "Diagnosis", "Ganancia", "Anómalos" };
+    static const char *ent[] = { "Ver el gráfico", "Diagnosis", "Ganancia", "Anómalos" };
     int i;
 
-    for ( i = 0; i < 3; i++ )
+    for ( i = 0; i < 4; i++ )
         {
         GtkMenu   *m;
         GtkWidget *mi;
         int        antes = cuenta_visibles();
         gchar     *q;
 
+        /* El grafico va a la ventana de graficos, que se reutiliza: se
+           cierra antes para ver que este gesto la abre.               */
+        if ( i == 0 && ventana_titulada( "Aipc_m01.eps" ) )
+            {
+            gtk_widget_destroy( GTK_WIDGET(ventana_titulada( "Aipc_m01.eps" )) );
+            pump( 100 );
+            antes = cuenta_visibles();
+            }
         marca( A.l_modelos, M_ID, "m01" );
         m = clic_derecho( A.l_modelos, 1 );
         mi = m ? entrada_de( m, ent[i] ) : NULL;
@@ -1911,6 +1925,9 @@ static void menu_modelo_prueba( void )
         q = g_strdup_printf( "«%s…» abre su ventana o dice por que no", ent[i] );
         check( cuenta_visibles() > antes || historial->len > 0, q, todo_lo_dicho() );
         g_free( q );
+        if ( i == 0 )
+            check( ventana_titulada( "Aipc_m01.eps" ) != NULL,
+                   "«Ver el gráfico…» enseña el Aipc_m01.eps de fue", NULL );
         }
     check( ventana_titulada( "Diagnosis — ipc / m01" ) != NULL,
            "la diagnosis de m01 es una ventana con su titulo", NULL );
@@ -2595,15 +2612,21 @@ static void casos( void )
     }
 
     /* --- las corridas, como las dejaria drtran_gui --------------------- */
-    pr_corrida_nueva( A.p, "C1", NULL, id, sizeof id, ruta, sizeof ruta, &e );
+    /* SI NO HAY CORRIDA NO SE ESCRIBE: con el caso sin crear, la ruta era
+       basura y el .out acababa en el directorio de trabajo con un nombre
+       que macOS no sabe crear (y entro en el repositorio).            */
+    if ( pr_corrida_nueva( A.p, "C1", NULL, id, sizeof id, ruta, sizeof ruta, &e ) == 0 &&
+         ruta[0] )
     {
     gchar *dir = g_path_get_dirname( ruta );
 
     g_mkdir_with_parents( dir, 0700 );
     g_free( dir );
-    }
     g_file_set_contents( ruta, "DRTRAN 1.0\n\nLog-likelihood = -767.420000\n\n",
                          -1, NULL );
+    }
+    else
+        check( FALSE, "la primera corrida de C1 se da de alta", NULL );
     pr_corrida_nueva( A.p, "C1", "c00", id, sizeof id, NULL, 0, &e );
     atsw_guarda( &A, &e );
     atsw_refresca( &A );

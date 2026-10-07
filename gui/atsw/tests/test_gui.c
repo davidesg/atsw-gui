@@ -2612,15 +2612,21 @@ static void casos( void )
     }
 
     /* --- las corridas, como las dejaria drtran_gui --------------------- */
-    pr_corrida_nueva( A.p, "C1", NULL, id, sizeof id, ruta, sizeof ruta, &e );
+    /* SI NO HAY CORRIDA NO SE ESCRIBE: con el caso sin crear, la ruta era
+       basura y el .out acababa en el directorio de trabajo con un nombre
+       que macOS no sabe crear (y entro en el repositorio).            */
+    if ( pr_corrida_nueva( A.p, "C1", NULL, id, sizeof id, ruta, sizeof ruta, &e ) == 0 &&
+         ruta[0] )
     {
     gchar *dir = g_path_get_dirname( ruta );
 
     g_mkdir_with_parents( dir, 0700 );
     g_free( dir );
-    }
     g_file_set_contents( ruta, "DRTRAN 1.0\n\nLog-likelihood = -767.420000\n\n",
                          -1, NULL );
+    }
+    else
+        check( FALSE, "la primera corrida de C1 se da de alta", NULL );
     pr_corrida_nueva( A.p, "C1", "c00", id, sizeof id, NULL, 0, &e );
     atsw_guarda( &A, &e );
     atsw_refresca( &A );

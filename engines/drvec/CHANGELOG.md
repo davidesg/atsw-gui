@@ -7,6 +7,20 @@ publicación: `v*`.
 
 ## Sin publicar
 
+### `-case pre`, `-nodrift i`, `-trend`: deterministas serie a serie y caso 4 (MEJORA-3)
+
+`-nodrift i` fija a 0 la deriva de una serie dentro del caso 3; `-case pre` la
+lee de los `.pre` (libre si y sólo si el univariante estima su media), de modo
+que el escalón inferior del ladder reproduce exactamente los univariantes
+también con derivas mixtas. `-trend` añade el caso 4: tendencia lineal en W
+(restringida al espacio de cointegración), restada en el cast. Todos los
+recorridos de la media pasan por `y2mu_free()`. Comprobado: fijar todas las
+derivas reproduce el caso 2 (r = 0 y r = 1); el contrato del gate se cumple con
+derivas mixtas; `-trend` anida el ajuste sin tendencia. En el trivariante de
+Ecuador la PPA pasa de rechazarse (LR 6.21, p 0.013) a no rechazarse con caso 4
+(LR 0.15, p 0.70). `-trend` aún no admite `-lrtest` ni `-f`. 11 comprobaciones
+nuevas (357, todas pasan; los 24 informes de referencia, idénticos).
+
 ### `-xsys i`: entrada exógena empotrada en el sistema (MEJORA-2, fase 2)
 
 El cast empotrado de drtran en el VEC, para entradas con el mismo operador que

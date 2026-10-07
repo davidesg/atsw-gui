@@ -92,6 +92,9 @@ in case 1, where nothing does. `drvec` warns.
 | | |
 |---|---|
 | `-case 1\|2\|3` | the deterministic specification (Mauricio's Remark 6). Case 1: `E[∇Y₂] = E[W] = 0`. Case 2: `E[W] ≠ 0`. Case 3: both free. Default is 1 |
+| `-case pre` | case 3 with **each series' drift as its `.pre` says**: `E[∇Y₂ᵢ]` free iff the univariate model frees its mean (`Imu = 1`), held at 0 otherwise; `E[W]` free. The ladder's bottom rung is then exactly the univariate models (§`-case pre` below). `.pre` route only |
+| `-nodrift i` | hold `E[∇Y₂ᵢ] = 0` inside case 3 (series `i` by its position in the input); repeatable. Holding every drift of the `∇Y₂` block is case 2 |
+| `-trend` | **case 4**: a linear trend in `W`, restricted to the cointegrating space, on top of case 3 or `-case pre` (`r` slopes, `t` centred at mid-sample). A single fit: refused with `-lrtest` and the modes, `-f`, `-estwin`, `-writeinp`, `-writeres`, `-warma` |
 | `-mean` | include a mean; implies case 2 unless a case was given |
 | `-diagar` `-diagma` `-diagcov` | restrict `Fᵢ`, `Θⱼ` or `Σ` to be diagonal |
 | `-m 1\|2` | both **exact** maximum likelihood: 1 (default) truncates the `ξ` sequence at 1e-3, 2 does not. Not a conditional ML (BUG-47) |
@@ -958,4 +961,37 @@ Example (the study that motivated it): `IT.pre GY.pre GAP.pre 4 0 1 -case 2
 Strong exogeneity of IT: LR 3.17, 7 df, p = 0.87. IT in `β`: −0.028 (s.e.
 0.056); G/Y −0.372, as without IT. The subtracting cast on the same data
 (`GAP <- IT 0 0 0`, `-xlink`) agrees: ω₀ = −0.0021 (0.0024), LR 0.73, p = 0.39.
+
+### `-case pre`, `-nodrift`, `-trend`: the deterministics series by series
+
+Cases 1–3 treat the `∇Y₂` block as a block. A system of prices with drift and a
+ratio without one (ln G/Y, ln CPI_USA, ln CPI_EC) is neither case 2 nor case 3,
+and in case 3 the ladder's bottom rung cannot reproduce the ratio's univariate
+model (G/Y's M1, without a mean, gives −222.91 there instead of its −223.42).
+
+- `-nodrift i` holds the drift of series `i` at zero inside case 3.
+- `-case pre` reads that from the `.pre` files: the drift is free if and only if
+  the univariate model frees its mean. A mean held at a non-zero value cannot be
+  carried and goes free, with a warning. The gate's factorisation contract then
+  holds exactly with mixed drifts (checked by the suite). With `r ≥ 1` the drift
+  of the Y1 block is `−β₂′E[∇Y₂]`, since W has none; its own `.pre` mean does not
+  enter.
+- `-trend` adds case 4 (Johansen 1995, ch. 6): `E[W_t] = E[W] + d·(t − t_c)`.
+  The equilibrium may drift (convergence, Balassa–Samuelson), and the Y1 block's
+  drift becomes `d − β₂′E[∇Y₂]`. In the cast it is a deterministic term of W,
+  subtracted from the data. The rank test with a trend (case 4 tables or a
+  bootstrap carrying it) is pending.
+
+Measured on the case that motivated it (Ecuador; ln G/Y, ln CPI_USA, ln CPI_EC;
+p = 2, r = 1). The test of PPA (`-fixb2row 2 -1`, LR, 1 df):
+
+| deterministics | logL free | PPA LR, p | θ under PPA |
+|---|---|---|---|
+| case 3 | −279.8178 | 6.21, p 0.013 | 0.19 |
+| `-case pre` (G/Y without drift; LR against case 3: 1.74, p 0.19) | −280.6899 | 5.09, p 0.024 | 0.19 |
+| `-case pre -trend` | −280.6890 | **0.15, p 0.70** | **0.45** |
+
+Without the trend, PPA ties CPI_EC's drift to CPI_USA's. With it, the
+differential has somewhere to go: the trend takes −0.25 (p 0.09) and PPA is no
+longer rejected.
 

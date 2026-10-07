@@ -760,6 +760,50 @@ static void build_y2_levels(void)
 /*    5. Σ lower triangle                            (M(M+1)/2 params)       */
 /*    6. B₂ (s×r) cointegration matrix                 (s·r params)          */
 /*****************************************************************************/
+/*  -nodrift i / -case pre -- A DRIFT PER SERIES (MEJORA-3).
+ *
+ *  Cases 1-3 treat the nabla Y2 block as a block: no drift (case 2) or a
+ *  drift in every series (case 3).  A system of prices with drift and a
+ *  ratio without (ln G/Y, ln CPI_USA, ln CPI_EC) is neither, and in case 3
+ *  the diagonal rung cannot reproduce the univariate model of the ratio
+ *  (G/Y's M1, with no mean, gives -222.91 there for its -223.42).
+ *  -nodrift i holds E[nabla Y2_i] = 0 inside case 3; -case pre reads it from
+ *  the .pre files -- the drift is free iff the univariate model frees its
+ *  mean (Imu = 1) -- so the ladder's bottom rung IS the univariates.  E[W] is
+ *  free, and the drift of the Y1 block stays -beta_2' E[nabla Y2] (W has
+ *  none).  The series is named by its position in the input; at r = 0 every
+ *  series is in the nabla Y2 block and the mask reads the same.  Every walk
+ *  of the mean goes through y2mu_free().                                 */
+#define ND_MAX 64
+static int case_pre = 0;                  /* -case pre                      */
+/*  -trend -- CASE 4 (Johansen 1995, ch. 6): a linear trend RESTRICTED to the
+ *  cointegrating space, E[W_t] = E[W] + d (t - tc), on top of case 3 (or
+ *  -case pre).  The equilibrium may drift (convergence, Balassa-Samuelson)
+ *  while nabla Y2 keeps its drifts; the Y1 block's drift becomes
+ *  d - beta_2' E[nabla Y2], free of the Y2 block's.  In the cast it is a
+ *  deterministic term of W, subtracted from the data exactly as -xlink's
+ *  transfer is: W_t - d (t - tc), with tc the middle of the sample so that
+ *  E[W] stays the level at the centre and does not trade off with d.  The r
+ *  slopes go after E[W] in the mean block, so every walk that moves the
+ *  head carries them.  At r = 0 there is no W and no trend.               */
+static int global_trend = 0;
+static int nodrift_on = 0;
+static int nodrift[ND_MAX + 1];           /* 1 = E[nabla Y2_i] held at 0    */
+
+/*  The drift of the i-th series of the nabla Y2 block is a parameter.     */
+static int y2mu_free(int i)
+{
+    if (global_case != 3) return 0;
+    return !(nodrift_on && i >= 1 && i <= ND_MAX && nodrift[i]);
+}
+
+static int y2mu_count(int s)
+{
+    int i, n = 0;
+    for (i = 1; i <= s; i++) n += y2mu_free(i);
+    return n;
+}
+
 /*  -xsys i -- AN EXOGENOUS INPUT EMBEDDED IN THE SYSTEM (MEJORA-2, phase 2).
  *
  *  drtran's dispatch (links_need_subtracting, BUG-8 there): when input and
@@ -840,7 +884,8 @@ static void par_blocks(int *nmean, int *nlam, int *nmid, int *ntail)
     int nf = (p > 1) ? p - 1 : 0;
 
     /* 1. Mean E[Ȳ_t] */
-    *nmean = (global_case == 2 ? r : (global_case == 3 ? M : 0));
+    *nmean = (global_case == 2 ? r : (global_case == 3 ? y2mu_count(s) + r : 0))
+           + (global_trend ? r : 0);
 
     /* 2. Lambda (M x r), or psi (sa x r) with alpha = A*psi */
     *nlam  = (global_alpha ? alpha_sa : M) * r;
@@ -3301,8 +3346,7 @@ static int write_component_inps(const char *prefix)
            Case 2: E[W] != 0 but E[nabla Y2] = 0.
            Case 3: both free.  (Mauricio 2006, Remark 6.)                     */
         {
-            int mu_free = (global_case == 3) ||
-                          (global_case == 2 && i > s);
+            int mu_free = (i <= s) ? y2mu_free(i) : (global_case >= 2);
             nbad += write_inp_series(path, name, col, nobs, year, sub,
                                      par, q, mu_free, what);
         }
@@ -3825,6 +3869,22 @@ static void init_guess(real *x, int npar)
             dY[t][r + i] = datamat[t][i];
     }
 
+    /*  -trend: the slope of each W by OLS on the centred time, and W
+     *  detrended with it, so that the regression below sees what the cast
+     *  will build.                                                       */
+    real *ET = vector(1, (r > 0 ? r : 1));
+    for (j = 1; j <= r; j++) ET[j] = 0.0;
+    if (global_trend) {
+        real tc = 0.5 * (nobs + 1), stt = 0.0, swt = 0.0;
+        for (t = 1; t <= nobs; t++) stt += (t - tc) * (t - tc);
+        for (j = 1; j <= r; j++) {
+            swt = 0.0;
+            for (t = 1; t <= nobs; t++) swt += W[t][j] * (t - tc);
+            ET[j] = (stt > 0.0) ? swt / stt : 0.0;
+            for (t = 1; t <= nobs; t++) W[t][j] -= ET[j] * (t - tc);
+        }
+    }
+
     /* --- 3. Mean E[Ȳ_t] (Remark 6) --------------------------------------- */
     real *EW   = vector(1, (r > 0 ? r : 1));   /* sample mean of W */
     real *EdY2 = vector(1, s);   /* sample mean of ∇Y₂ */
@@ -3988,9 +4048,10 @@ static void init_guess(real *x, int npar)
     /* --- 5. Write x[] in the canonical VEC order ------------------------- */
     if (global_case == 2) { for (j = 1; j <= r; j++) x[idx++] = EW[j]; }
     else if (global_case == 3) {
-        for (i = 1; i <= s; i++) x[idx++] = EdY2[i];
+        for (i = 1; i <= s; i++) if (y2mu_free(i)) x[idx++] = EdY2[i];
         for (j = 1; j <= r; j++) x[idx++] = EW[j];
     }
+    if (global_trend) for (j = 1; j <= r; j++) x[idx++] = ET[j];
     if (global_alpha) {
         /* psi = (A'A)^-1 A' Lambda_ols: the projection of the free seed onto the
            subspace the restriction allows.  It is the best seed available and
@@ -4154,6 +4215,7 @@ static void init_guess(real *x, int npar)
     free_matrix(Ydep, 1, T, 1, M);
     free_vector(EdY2, 1, s);
     free_vector(EW, 1, (r > 0 ? r : 1));
+    free_vector(ET, 1, (r > 0 ? r : 1));
     free_matrix(dY, 1, nobs, 1, M);
     free_matrix(W, 1, nobs, 1, (r > 0 ? r : 1));
     free_matrix(B2, 1, s, 1, (r > 0 ? r : 1));
@@ -4314,9 +4376,11 @@ static void vec_shootx(real *x, struct Tvarma *armax,
     if (global_case == 2) {
         for (j = 1; j <= r; j++) mu[s + j] = x[idx++];
     } else if (global_case == 3) {
-        for (i = 1; i <= s; i++) mu[i] = x[idx++];
+        for (i = 1; i <= s; i++) mu[i] = y2mu_free(i) ? x[idx++] : 0.0;
         for (j = 1; j <= r; j++) mu[s + j] = x[idx++];
     }
+    real *dtr = vector(1, (r > 0 ? r : 1));       /* -trend: slopes of W */
+    for (j = 1; j <= r; j++) dtr[j] = global_trend ? x[idx++] : 0.0;
 
     /*   2. Adjustment matrix Lambda (M x r).  With r = 0 there is no
            error-correction term at all: Lambda and B2 are empty, Cbar and
@@ -4607,7 +4671,7 @@ static void vec_shootx(real *x, struct Tvarma *armax,
             real w = datamat[tt][s + j];   /* Y_{1t,j} in levels */
             for (i = 1; i <= s; i++)
                 w += B2[i][j] * Y2_level[tt][i];
-            armax->w[tt][s + j] = w;
+            armax->w[tt][s + j] = w - dtr[j] * (tt - 0.5 * (nobs + 1));
         }
         /*  -xlink: the same Ybar built from N = Y - nu(B)X.  The levels layout
          *  is guaranteed (-differenced is refused), so datamat row tt is
@@ -4625,6 +4689,7 @@ static void vec_shootx(real *x, struct Tvarma *armax,
 
     /* Y2_level aliases the global Y2_levels; it is not owned here. */
     free_matrix(B2, 1, s, 1, (r > 0 ? r : 1));
+    free_vector(dtr, 1, (r > 0 ? r : 1));
 
     /* [7] Deallocate on last call ------------------------------------------ */
     if (lastx == 1) {
@@ -5181,6 +5246,8 @@ static double ladder_key(void)
              + global_diag_ar * 100 + global_diag_ma * 10 + global_diag_cov
              + nobs_raw * 1e-3 + global_matri * 0.5;
     int t, i;
+    for (i = 1; i <= nser && i <= ND_MAX; i++)       /* the drift mask */
+        if (global_case == 3 && !y2mu_free(i)) k += 1e12 * (double) (1 << (i - 1));
     for (i = 1; i <= nser && i <= XS_MAX; i++)       /* the -xsys mask */
         if (xs_on && xs_inp[i]) k += 1e9 * (double) (1 << (i - 1));
     for (t = 1; t <= nobs_raw; t++)
@@ -5194,7 +5261,8 @@ static void pack_r0(real *x, real ***F, real ***Th, real **S, real *mu)
     int M = nser, nf = (global_p > 1) ? global_p - 1 : 0, q = global_q;
     int i, j, k, idx = 1, head, tail;
     real s11 = (S[1][1] > 1e-24) ? S[1][1] : 1.0;
-    if (global_case == 3) for (i = 1; i <= M; i++) x[idx++] = mu[i];
+    if (global_case == 3)
+        for (i = 1; i <= M; i++) if (y2mu_free(i)) x[idx++] = mu[i];
     for (k = 1; k <= nf; k++) {
         for (i = 1; i <= M; i++)
             for (j = 1; j <= M; j++) if (f_free(i, j)) x[idx++] = F[k][i][j];
@@ -5316,7 +5384,10 @@ static void ladder_seed_r0(real *x, int np)
     Th = tensor(1, (q > 0 ? q : 1), 1, M, 1, M);
     S  = matrix(1, M, 1, M);
     mu = vector(1, M);
-    for (i = 1; i <= M; i++) mu[i] = (global_case == 3) ? x[i] : 0.0;
+    {
+        int im = 1;
+        for (i = 1; i <= M; i++) mu[i] = y2mu_free(i) ? x[im++] : 0.0;
+    }
     if (fit_r0_ladder(F, Th, S, &ll, 1)) pack_r0(x, F, Th, S, mu);
     free_vector(mu, 1, M);
     free_matrix(S, 1, M, 1, M);
@@ -6765,6 +6836,25 @@ static int read_pre_inputs(char **files, int nfiles)
              *  its series is stationary; putting it in a VEC says the opposite.
              *  It is a warning and not an error because the rank test exists
              *  precisely to settle the question.                            */
+            /*  -case pre: the drift is free iff the univariate model frees
+             *  its mean.  A mean HELD at a non-zero value cannot be carried
+             *  (the drift block holds at 0 or frees), so it goes free and
+             *  the reader is told.                                         */
+            if (case_pre && i <= ND_MAX) {
+                nodrift[i] = (Tm[i].Imu == 0);
+                if (nodrift[i]) nodrift_on = 1;
+                if (Tm[i].Imu == 0 && fabs(Tm[i].mu) > 1.0e-12) {
+                    nodrift[i] = 0;
+                    fprintf(stderr,
+                        "WARNING: %s holds its mean at %g (not 0); -case pre\n"
+                        "         can hold a drift only at 0, so it goes free.\n",
+                        files[i], Tm[i].mu);
+                }
+                printf("      drift (-case pre): %s\n",
+                       nodrift[i] ? "none, held at 0 (the .pre has no mean)"
+                                  : "free (the .pre estimates its mean)");
+            }
+
             if (Tm[i].nrdiff == 0 && Tm[i].nadiff == 0)
                 fprintf(stderr,
                     "WARNING: %s carries no differencing, so its own univariate\n"
@@ -7734,11 +7824,19 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
             }
         } else if (global_case == 3) {
             for (int i = 1; i <= s; i++) {
-                mu_m[++nmu] = x[ii]; ix_mu[nmu] = ii; ii++;
+                if (y2mu_free(i)) { mu_m[++nmu] = x[ii]; ix_mu[nmu] = ii; ii++; }
+                else              { mu_m[++nmu] = 0.0;   ix_mu[nmu] = 0; }
             }
             for (int j = 1; j <= r; j++) {
                 mu_m[++nmu] = x[ii]; ix_mu[nmu] = ii; ii++;
             }
+        }
+        /*  -trend: the r slopes of W, after the means (par_blocks).       */
+        real tr_m[64]; int ix_tr[64];
+        for (int j = 1; j <= r && j < 64; j++) {
+            tr_m[j] = global_trend ? x[ii] : 0.0;
+            ix_tr[j] = global_trend ? ii : 0;
+            if (global_trend) ii++;
         }
 
         if (global_alpha) {
@@ -7916,7 +8014,17 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
                     else
                         snprintf(lb, sizeof lb, "  E[ec%d]",
                                  (global_case == 3) ? a2 - s : a2);
-                    par_row(lb, mu_m[a2], dev[ix_mu[a2]]);
+                    if (ix_mu[a2] > 0) par_row(lb, mu_m[a2], dev[ix_mu[a2]]);
+                    else fprintf(outputv, "%-28s %13.6f   held: no drift (%s)\n",
+                                 lb, 0.0, case_pre ? "-case pre" : "-nodrift");
+                }
+                if (global_trend) {
+                    fprintf(outputv, "Trend of the equilibrium error (case 4), per "
+                                     "period, t centred at mid-sample\n");
+                    for (a2 = 1; a2 <= r; a2++) {
+                        snprintf(lb, sizeof lb, "  trend[ec%d]", a2);
+                        par_row(lb, tr_m[a2], dev[ix_tr[a2]]);
+                    }
                 }
             }
             if (r > 0) {
@@ -8142,7 +8250,10 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
             for (int a2 = 1; a2 <= nser; a2++) {
                 real d = 0.0;
                 if (a2 <= s) d = mu_m[a2];
-                else for (int i3 = 1; i3 <= s; i3++) d -= B2m[i3][a2 - s] * mu_m[i3];
+                else {
+                    for (int i3 = 1; i3 <= s; i3++) d -= B2m[i3][a2 - s] * mu_m[i3];
+                    if (global_trend) d += tr_m[a2 - s];
+                }
                 fprintf(outputv, "  %12.6f\n", d);
             }
         }
@@ -9444,9 +9555,11 @@ static const struct opt_spec {
     const char   *val;     /* what the value is called in the listing         */
 } OPT_TABLE[] = {
     { "-mean",        A_NONE,     NULL   },
-    { "-case",        A_CASE,     "1|2|3"},
+    { "-case",        A_CASE,     "1|2|3|pre"},
+    { "-nodrift",     A_INT_POS,  "i"    },
     { "-m",           A_METHOD,   "1|2"  },
     { "-diagar",      A_NONE,     NULL   },
+    { "-trend",       A_NONE,     NULL   },
     { "-diagma",      A_NONE,     NULL   },
     { "-diagcov",     A_NONE,     NULL   },
     { "-levels",      A_NONE,     NULL   },
@@ -9532,7 +9645,13 @@ static void usage(FILE *o)
     fprintf(o, "Deterministic cases (Mauricio 2006, Remark 6):\n");
     fprintf(o, "  -case 1 : E[∇Y₂]=0, E[W]=0     (default)\n");
     fprintf(o, "  -case 2 : E[∇Y₂]=0, E[W]≠0     (-mean alone also selects it)\n");
-    fprintf(o, "  -case 3 : E[∇Y₂]≠0, E[W]≠0\n\n");
+    fprintf(o, "  -case 3 : E[∇Y₂]≠0, E[W]≠0\n");
+    fprintf(o, "  -case pre : case 3 with each drift as its .pre says (free iff the\n");
+    fprintf(o, "              univariate frees its mean): the ladder's bottom rung\n");
+    fprintf(o, "              is then exactly the univariates\n");
+    fprintf(o, "  -nodrift i : hold E[∇Y₂ᵢ] = 0 inside case 3 (repeatable)\n");
+    fprintf(o, "  -trend  : case 4, a linear trend in W (restricted to beta) on top\n");
+    fprintf(o, "            of case 3 / -case pre; a single fit (no -lrtest, -f)\n\n");
     fprintf(o, "Data layout (cols 1..s are the Y₂ block, cols s+1..M the Y₁ block):\n");
     fprintf(o, "  default        every series in LEVELS; ∇Y₂ is formed internally\n");
     fprintf(o, "                 (one observation is consumed)\n");
@@ -9763,8 +9882,9 @@ static void validate_cli(int argc, char *argv[], int first)
             break;
         case A_CASE:
             if (i + 1 >= argc) bad_cli("%s needs %s", o->name, o->val);
-            if (!arg_int(argv[i+1], &iv) || iv < 1 || iv > 3)
-                bad_cli("%s must be 1, 2 or 3 (Mauricio 2006, Remark 6), got `%s'",
+            if (strcmp(argv[i+1], "pre") != 0
+                && (!arg_int(argv[i+1], &iv) || iv < 1 || iv > 3))
+                bad_cli("%s must be 1, 2, 3 (Mauricio 2006, Remark 6) or pre (case 4 is -trend), got `%s'",
                         o->name, argv[i+1]);
             i++;
             break;
@@ -9958,9 +10078,12 @@ static int parse_cli(int argc, char *argv[])
     for (int i = first_opt; i < argc; i++) {
         if      (strcmp(argv[i], "-mean") == 0)    global_include_mean = 1;
         else if (strcmp(argv[i], "-case") == 0 && i+1 < argc) {
-            global_case = atoi(argv[++i]); case_given = 1;
+            if (strcmp(argv[i+1], "pre") == 0) { global_case = 3; case_pre = 1; i++; }
+            else global_case = atoi(argv[++i]);
+            case_given = 1;
         }
         else if (strcmp(argv[i], "-diagar") == 0)  global_diag_ar = 1;
+        else if (strcmp(argv[i], "-trend") == 0)   global_trend = 1;
         else if (strcmp(argv[i], "-diagma") == 0)  global_diag_ma = 1;
         else if (strcmp(argv[i], "-diagcov") == 0) global_diag_cov = 1;
         else if (strcmp(argv[i], "-m") == 0 && i+1 < argc)
@@ -10033,6 +10156,15 @@ static int parse_cli(int argc, char *argv[])
         else if (strcmp(argv[i], "-xlink") == 0 && i + 1 < argc) {
             xl_netfile = argv[++i];
             xl_on = 1;
+        }
+        else if (strcmp(argv[i], "-nodrift") == 0 && i + 1 < argc) {
+            int ix = atoi(argv[++i]);
+            if (ix < 1 || ix > ND_MAX) {
+                fprintf(stderr, "ERROR: -nodrift %d: the series is named by its "
+                                "position in the input, 1..%d\n", ix, ND_MAX);
+                exit(2);
+            }
+            nodrift[ix] = 1; nodrift_on = 1;
         }
         else if (strcmp(argv[i], "-xsys") == 0 && i + 1 < argc) {
             int ix = atoi(argv[++i]);
@@ -10161,6 +10293,46 @@ static int parse_cli(int argc, char *argv[])
                 "       keeps its mean, and nu(1) times it goes to E[W].\n");
             exit(2);
         }
+    }
+    /*  -trend (case 4) builds on case 3's drifts.  The rank test would need
+     *  case 4's tables (or a bootstrap that carries the trend); the forecast
+     *  and the rolling evaluation would have to extend it; -writeinp writes
+     *  Ybar without it; -warma walks its own mean block.                   */
+    if (global_trend && (global_case != 3 || global_warma || global_lrtest
+                         || global_specs || global_rungs || global_matest
+                         || global_artest || global_eval || global_fcast > 0
+                         || global_estwin > 0 || global_writeinp
+                         || global_writeres)) {
+        fprintf(stderr,
+            "ERROR: -trend (case 4) goes on case 3's drifts (-case 3 or -case pre)\n"
+            "       for a single fit: it cannot be combined with -warma, -f,\n"
+            "       -estwin, -writeinp, -writeres or the modes -lrtest, -specs,\n"
+            "       -rungs, -matest, -artest and -eval (not yet).\n");
+        exit(2);
+    }
+    /*  -nodrift / -case pre: a mask on case 3's drifts.  -warma walks its
+     *  own mean block and does not carry it; -nodrift outside case 3 holds
+     *  what is already held.                                              */
+    if ((nodrift_on || case_pre) && global_warma) {
+        fprintf(stderr, "ERROR: -nodrift and -case pre cannot be combined with "
+                        "-warma.\n");
+        exit(2);
+    }
+    if ((nodrift_on || case_pre) && global_lrtest)
+        fprintf(stderr,
+            "WARNING: with some drifts held (-nodrift / -case pre) the rank test's\n"
+            "         asymptotic tables are case 3's, which do not apply to the\n"
+            "         mixed case: read the bootstrap (-bootstrap N), not the table.\n");
+    if (nodrift_on && global_case != 3) {
+        fprintf(stderr,
+            "ERROR: -nodrift holds a drift of case 3 (-case 3 or -case pre); in\n"
+            "       cases 1 and 2 no series has one.\n");
+        exit(2);
+    }
+    if (case_pre && !pre_route) {
+        fprintf(stderr, "ERROR: -case pre reads each series' mean from its .pre: "
+                        "it needs the .pre route.\n");
+        exit(2);
     }
     /*  -xsys: one fit with the mask, against the free VEC.  The rank test
      *  would need Harbo et al.'s tables (or a bootstrap conditional on X);
@@ -10395,6 +10567,15 @@ int main(int argc, char *argv[])
 
     /* -alpha / -weakex: load the A of the alpha = A*psi restriction.  Done
        here because it needs nser, and before npar is computed.               */
+    if (nodrift_on) {
+        int i_;
+        for (i_ = nser + 1; i_ <= ND_MAX; i_++)
+            if (nodrift[i_]) {
+                fprintf(stderr, "ERROR: -nodrift %d: the system has %d series\n",
+                        i_, nser);
+                exit(2);
+            }
+    }
     if (xs_on) {
         int i_, c_;
         if (xs_nx >= nser) {
@@ -10527,10 +10708,14 @@ int main(int argc, char *argv[])
               "(Mauricio 1997), xi sequence truncated at 1e-3");
     fprintf(outputv, "Transformation   : VECM to stationary VARMA "
                      "(Mauricio 2006)\n");
-    fprintf(outputv, "Deterministic    : case %d -- %s\n", global_case,
+    fprintf(outputv, "Deterministic    : case %d -- %s%s%s\n",
+            global_trend ? 4 : global_case,
             global_case == 1 ? "E[nabla Y2] = 0, E[W] = 0"
           : global_case == 2 ? "E[nabla Y2] = 0, E[W] free"
-                             : "E[nabla Y2] free, E[W] free");
+                             : "E[nabla Y2] free, E[W] free",
+            nodrift_on ? (case_pre ? " (drifts as in the .pre files)"
+                                   : " (some drifts held by -nodrift)") : "",
+            global_trend ? ", and a trend in W (restricted to beta)" : "");
     /* The deterministic terms come off the LEVELS, before nabla Y2 and W are
        formed -- which is where fue's cast removes them too, its block [6] comes
        before [7] -- and that is why the levels have to be rebuilt afterwards.

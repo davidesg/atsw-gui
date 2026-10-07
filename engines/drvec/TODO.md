@@ -112,7 +112,12 @@ corto plazo).
 
 ## MEJORA-3 — Deriva por serie en el bloque ∇Y₂ y tendencia restringida (Caso 4)
 
-**Estado:** abierta (2026-10-07), nota del analista.
+**Estado:** HECHA el 2026-10-07 (rama `feature/xlink`): `-case pre`, `-nodrift i`,
+`-trend`. Trivariante de Ecuador, PPA: caso 3 LR 6.21 (p 0.013) → `-case pre`
+5.09 (p 0.024) → `-case pre -trend` 0.15 (p 0.70), θ bajo PPA 0.45. Pendiente:
+el contraste de rango con `-trend` (tablas del caso 4 o bootstrap que lleve la
+tendencia), la previsión con tendencia, y `-lrtest` con `-case pre` (las tablas
+del caso mixto no existen: hoy se usan las del caso 3; bootstrap).
 
 **Qué falta.** Los casos 1–3 tratan el bloque ∇Y₂ en bloque: o ninguna serie
 tiene deriva (caso 2) o todas (caso 3). En el caso de motivación (trivariante

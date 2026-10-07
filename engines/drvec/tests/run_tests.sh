@@ -1664,6 +1664,55 @@ cli "-xsys with -lrtest is refused"        2 "$XMUS" "$XMNK" 3 0 0 -case 2 -xsys
 cli "-xsys with q > 0 is refused (not yet)" 2 "$XMUS" "$XMNK" 3 1 1 -case 2 -xsys 1
 echo
 
+echo "[6e] -nodrift, -case pre and -trend (case 4): the deterministics per series (MEJORA-3)"
+#  -nodrift i holds E[nabla Y2_i] = 0 inside case 3, so holding every drift
+#  of the nabla Y2 block IS case 2, at any rank; -case pre reads the mask from
+#  the .pre files, and with a drift free in one file and held in the other
+#  the gate's factorisation contract must hold exactly; -trend nests the fit
+#  without it.
+awk '/Mean and estimation flag/ {print; getline; print "0.0 1"; next} {print}' \
+    "$XMNK" > "$TMP/minkmu.pre"
+xsrun nd2 2 0 1 -case 2
+xsrun nd3 2 0 1 -case 3 -nodrift 1
+l2=$(logelf_of "$TMP/nd2"); l3=$(logelf_of "$TMP/nd3")
+if [ -n "$l2" ] && [ -n "$l3" ] && near "$l2" "$l3"; then
+    ok "-case 3 -nodrift 1 is case 2 at r = 1 ($l2)"
+else bad "-nodrift r=1" "case2=$l2 nodrift=$l3"; fi
+xsrun nd20 2 0 0 -case 2
+xsrun nd30 2 0 0 -case 3 -nodrift 1 -nodrift 2
+l2=$(logelf_of "$TMP/nd20"); l3=$(logelf_of "$TMP/nd30")
+if [ -n "$l2" ] && [ -n "$l3" ] && near "$l2" "$l3"; then
+    ok "-case 3 with every drift held is case 2 at r = 0 ($l2)"
+else bad "-nodrift r=0" "case2=$l2 nodrift=$l3"; fi
+rm -f "$TMP/cpg.out"
+(cd "$TMP" && timeout "$RUN_TIMEOUT" "$XDRV" "$XROOT/$XMUS" minkmu.pre 2 0 0 \
+    -case pre -name cpg >/dev/null 2>&1)
+cs=$(grep -a '  sum  =' "$TMP/cpg.out" | awk '{print $NF}')
+cj=$(grep -a '  joint=' "$TMP/cpg.out" | awk '{print $NF}')
+if [ -n "$cs" ] && [ "$cs" = "$cj" ] \
+   && grep -aq 'E\[D.muskrat\] .*held: no drift (-case pre)' "$TMP/cpg.out"; then
+    ok "-case pre: mixed drifts, the gate reproduces the univariates ($cs)"
+else bad "-case pre gate" "sum=$cs joint=$cj"; fi
+rm -f "$TMP/tr0.out" "$TMP/tr1.out"
+TRERR=$(cd "$TMP" && timeout "$RUN_TIMEOUT" "$XDRV" "$XROOT/$XMUS" minkmu.pre 2 0 1 \
+    -case pre -name tr0 2>&1 >/dev/null; timeout "$RUN_TIMEOUT" "$XDRV" "$XROOT/$XMUS" \
+    minkmu.pre 2 0 1 -case pre -trend -name tr1 2>&1 >/dev/null)
+t0=$(logelf_of "$TMP/tr0"); t1=$(logelf_of "$TMP/tr1")
+if printf '%s' "$TRERR" | grep -qiE 'ERROR (output|init_guess)'; then
+    bad "-trend walk" "$(printf '%s' "$TRERR" | grep -iE 'ERROR' | head -1)"
+elif [ -n "$t0" ] && [ -n "$t1" ] && awk -v a="$t1" -v b="$t0" 'BEGIN{exit !(a >= b - 1e-6)}' \
+     && grep -aq 'trend\[ec1\]' "$TMP/tr1.out"; then
+    ok "-trend nests the fit without it ($t1 >= $t0) and reports the slope"
+else bad "-trend" "with=$t1 without=$t0"; fi
+cli "-nodrift in case 2 is refused"       2 "$XMUS" "$XMNK" 2 0 1 -case 2 -nodrift 1
+cli "-nodrift outside the system is refused" 2 "$XMUS" "$XMNK" 2 0 1 -case 3 -nodrift 3
+cli "-case pre on the .inp route is refused" 2 "$CLI" 2 1 1 -case pre
+cli "-trend in case 2 is refused"         2 "$XMUS" "$XMNK" 2 0 1 -case 2 -trend
+cli "-trend with -lrtest is refused"      2 "$XMUS" "$XMNK" 2 0 0 -case 3 -trend -lrtest
+cli "-trend with -f is refused"           2 "$XMUS" "$XMNK" 2 0 1 -case 3 -trend -f 4
+cli "-case 4 is refused (it is -trend)"   1 "$XMUS" "$XMNK" 2 0 1 -case 4
+echo
+
 echo "[7] the rank test on data whose rank is known by construction"
 # Every other check of -lrtest compares against another program's answer.  These
 # two compare against the TRUTH, because the data was generated to have it:

@@ -92,6 +92,9 @@ in case 1, where nothing does. `drvec` warns.
 | | |
 |---|---|
 | `-case 1\|2\|3` | the deterministic specification (Mauricio's Remark 6). Case 1: `E[∇Y₂] = E[W] = 0`. Case 2: `E[W] ≠ 0`. Case 3: both free. Default is 1 |
+| `-case pre` | case 3 with **each series' drift as its `.pre` says**: `E[∇Y₂ᵢ]` free iff the univariate model frees its mean (`Imu = 1`), held at 0 otherwise; `E[W]` free. The ladder's bottom rung is then exactly the univariate models (§`-case pre` below). `.pre` route only |
+| `-nodrift i` | hold `E[∇Y₂ᵢ] = 0` inside case 3 (series `i` by its position in the input); repeatable. Holding every drift of the `∇Y₂` block is case 2 |
+| `-trend` | **case 4**: a linear trend in `W`, restricted to the cointegrating space, on top of case 3 or `-case pre` (`r` slopes, `t` centred at mid-sample). A single fit: refused with `-lrtest` and the modes, `-f`, `-estwin`, `-writeinp`, `-writeres`, `-warma` |
 | `-mean` | include a mean; implies case 2 unless a case was given |
 | `-diagar` `-diagma` `-diagcov` | restrict `Fᵢ`, `Θⱼ` or `Σ` to be diagonal |
 | `-m 1\|2` | both **exact** maximum likelihood: 1 (default) truncates the `ξ` sequence at 1e-3, 2 does not. Not a conditional ML (BUG-47) |
@@ -102,6 +105,9 @@ in case 1, where nothing does. `drvec` warns.
 | | |
 |---|---|
 | `-fixb2 [v]` | hold `B₂` fixed instead of estimating it. Without a value it is held at the static-OLS estimate; with one, every entry is set to `v`. A value chosen a priori is what makes an LR test against the free model valid |
+| `-fixb2row i v` | hold **row** `i` of `B₂` (variable `i` of the `∇Y₂` block, in the `.inp`'s order) at `v` in every relation, and estimate the other rows; repeatable. The free model is fitted with the same search and the LR against it is reported, χ² with (rows held)·`r` df; with `-alpha`/`-weakex` the restricted model carries both restrictions and the df add up. The LR is **invariant to the normalisation** — the Wald on a normalised coefficient is not (§`-fixb2row` below). Refused with `-fixb2`, `-warma` and the modes |
+| `-xpre FILE` `-xlink FILE` | exogenous **transfer inputs** on the VEC (MEJORA-2). `-xpre` (repeatable) gives an input series as a fue `.pre`; `-xlink` the links, `OUT <- IN b r s` per line (drtran's syntax, `r ≤ 2`). The VEC process is `Y_out − ω(B)/δ(B)·Bᵇ X_in`, on the **levels** (drtran's cast by subtraction; X frozen, minus its deterministics; presample backcast with its ARMA; I(0) or I(1)). The VEC without inputs is fitted first; `ω = 0` must reproduce it and the LR against it is reported (§`-xlink` below). `.pre` route, levels layout, case 2 or 3, a single fit |
+| `-xsys i` | series `i` (position in the input; it must be in the `∇Y₂` block) is an exogenous input **embedded in the system** — drtran's embedded cast, for an input that shares the outputs' operator (an I(1) input): `α_i = 0` and no other series in its row of `Γ(k)`; repeatable. The free VEC is fitted too and the LR of **strong exogeneity** is reported (df = `r`·inputs + (p−1)·entries held). Refused with `-alpha`/`-weakex`, `-xlink`, `-warma`, `q > 0` (not yet) and the modes (§`-xsys` below) |
 | `-alpha file` | impose `α = Aψ` with `A` read from `file`, and report the LR against the free model |
 | `-weakex i` | shorthand for the `A` that declares equation `i` weakly exogenous |
 
@@ -847,3 +853,145 @@ run did not produce an estimate; `WARNING` messages mean it did, but something
 about the specification deserves attention. The suite treats
 `ERROR output` and `ERROR init_guess` as failures, since both mean the parameter
 vector was walked inconsistently.
+
+### `-fixb2row`: a hypothesis on one coefficient of beta
+
+`-fixb2` holds all of `B₂`; most hypotheses on `β` hold **one** coefficient and
+leave the rest free — purchasing-power parity in a price system (`β_USA = −1`),
+an exclusion, a unit elasticity. `-fixb2row i v` holds row `i` at `v` and the LR
+against the free model is the test. Use it rather than the Wald printed in the
+exclusion block when the hypothesis is not "this row is zero" in the
+normalisation you happen to have: the Wald depends on the normalisation, the LR
+does not.
+
+Measured on the case that motivated it (Ecuador, trivariate ln G/Y, ln CPI_USA,
+ln CPI_EC; case 3, p = 2, r = 1). The same hypothesis written in two
+normalisations — `β_USA = −1` with `β` normalised on CPI_EC, and row USA `= 0`
+once CPI_EC is replaced by the gap CPI_EC − CPI_USA:
+
+| | Wald (exclusion block, `-fdhess`) | `-fixb2row` LR |
+|---|---|---|
+| normalised on CPI_EC, `-fixb2row 2 -1` | 4.17, p = 0.041 | **6.2131573620**, p = 0.0127 |
+| normalised on the gap, `-fixb2row 2 0` | 2.02, p = 0.155 | **6.2131573621**, p = 0.0127 |
+
+The joint test with weak exogeneity of CPI_USA (`-fixb2row ... -weakex 2`, 2 df)
+gives 6.2695198728 and 6.2695198729. With `s = 1`, `-fixb2row 1 v` and `-fixb2 v`
+are the same model and reach the same optimum (−269.7263742490 on the bivariate
+of the same study); the suite checks it on mink–muskrat.
+
+### `-xlink`: exogenous transfer inputs, embedded in the VEC
+
+A hybrid of drtran and drvec: a transfer function `ν(B) = ω(B)/δ(B)·Bᵇ` from an
+exogenous series `X` to the **level** of a series of the system, with the VEC as
+the noise:
+
+    N_t = Y_t − Σ_k ν_k(B) X_{k,t},     N is the VEC process
+
+(drtran's cast "by subtraction"; `ω(B) = ω₀ − ω₁B − …`, `δ(B) = 1 − δ₁B − …`). The
+transfer relates levels and the differencing belongs to the noise: by linearity
+`∇Y₂` receives `ν(B)∇X` and `W` receives `(ν₁ + B₂′ν₂)(B) X`.
+
+- **X is frozen at its `.pre`** and built as drtran builds it
+  (`apply_univariate_model`): `refactor·BoxCox(z)` **minus its own
+  deterministics** (an intervention of X is not transmitted); it keeps its mean,
+  so `ν(1)·E[X]` goes to the free mean of `W` — hence case 2 or 3 (case 1 is
+  refused). X must be observed to the end of the system's sample.
+- **Why by subtraction, and so why a backcast.** drtran's dispatch
+  (`links_need_subtracting`, BUG-8 there): the embedded cast — the transfer as
+  off-diagonal coefficients, the exact likelihood integrating the presample out,
+  no backcast — needs input and output to share their differencing operator and
+  the input to be a series of the system with its own row. An I(0) input of an
+  I(1) output crosses operators, and a frozen X is outside the system, so the
+  cast is by subtraction and the presample of X is built as drtran's
+  `build_pre_sample` does: real observations of X before the system's sample
+  first, then a **backcast with X's ARMA** (on `∇X` when `d = 1`, cumulated back
+  to levels). With `b = r = s = 0` no presample is needed and both casts
+  coincide (drtran-note, Proposition *Exactness* iii).
+- **I(1) inputs** (`d = 1`) are allowed: in levels, the gain `ν(1)` enters `W`,
+  i.e. X enters the cointegrating relation. Their embedded alternative — X as a
+  weakly exogenous series of the VEC with its own row — is pending (TODO.md
+  MEJORA-2), and so is the rank test with I(1) inputs (Harbo et al. 1998).
+- **The rung below.** The VEC without inputs is fitted first (with the ladder
+  seed, as a plain run); the inputs' fit starts there with `ω = 0, δ = 0`, and
+  the logL at that point must equal the VEC's (reported as the bridge
+  difference, `0.00e+00`). The LR against the VEC is χ² with Σ(s+1+r) df, with
+  the rank held and X fixed; the rank test is NOT recalibrated for the inputs.
+- The report gives `ω`, `δ`, the gain `ν(1) = ω(1)/δ(1)` with its delta-method
+  s.e., and a Wald per link.
+
+Example (the study that motivated it): `GY.pre GAP.pre 4 0 1 -case 2 -xpre
+BXE.pre -xlink net.txt` with `GAP <- BXE 0 0 0`: bridge exact, `ω₀ = −0.0173`
+(s.e. 0.0077), LR 5.14, p = 0.023; `β` does not move (−0.372).
+
+### `-xsys`: an input embedded in the system (drtran's embedded cast)
+
+drtran dispatches on the differencing operators: when input and output share
+theirs, the transfer goes **inside** the model, the input is a series of the
+system with its own row, and the exact likelihood integrates its presample out —
+no backcast, nothing subtracted. In a VEC that is the case of an **I(1) input**
+(net transfers, a foreign price), and inside means: X is one more series of the
+VEC whose equation is its own model, i.e. X is **strongly exogenous**,
+
+    α_X = 0                  (weak exogeneity: X does not adjust, Johansen 1992)
+    Γ_k[X][j] = 0, j ≠ X     (no feedback: nothing else in X's short run)
+
+while the rows of the outputs keep everything that makes up the transfer: X's
+entry in `β` (the long-run gain), `Γ_k[Y][X]` (the lags) and `Q[Y][X]` (ω₀, the
+SVAR identity of drtran-note Prop. 3). It is the conditional VEC of Johansen
+(1992) / Harbo et al. (1998) with X's marginal model written out, so the
+likelihood is the joint one; the diagonal rung of the ladder is X's own `.pre`,
+as for any series.
+
+- X must sit in the `∇Y₂` block (the first `M − r` series): an input does not
+  adjust, so no relation can be solved for it.
+- The free VEC is fitted with the same search and the LR of the mask is
+  reported: **strong exogeneity**. Not rejecting it is what licenses reading the
+  outputs' rows as a transfer from X. With `-fixb2row` the inputs stay embedded in
+  both models and the LR is about `β` inside the conditional VEC (e.g. the gain
+  of X = 0).
+- The rank test is not available (Harbo et al.'s tables, or a bootstrap
+  conditional on X: TODO.md MEJORA-2); `q = 0` only for now (the masks have not
+  been taken through the MA classes). Forecasts work: X is forecast by its own
+  row.
+- With `-diagar` the `Γ` mask is empty and `-xsys i` is exactly `-weakex i`
+  (checked by the suite).
+
+Example (the study that motivated it): `IT.pre GY.pre GAP.pre 4 0 1 -case 2
+-xsys 1`, IT = (income + transfers received)/(income + transfers paid), I(1).
+Strong exogeneity of IT: LR 3.17, 7 df, p = 0.87. IT in `β`: −0.028 (s.e.
+0.056); G/Y −0.372, as without IT. The subtracting cast on the same data
+(`GAP <- IT 0 0 0`, `-xlink`) agrees: ω₀ = −0.0021 (0.0024), LR 0.73, p = 0.39.
+
+### `-case pre`, `-nodrift`, `-trend`: the deterministics series by series
+
+Cases 1–3 treat the `∇Y₂` block as a block. A system of prices with drift and a
+ratio without one (ln G/Y, ln CPI_USA, ln CPI_EC) is neither case 2 nor case 3,
+and in case 3 the ladder's bottom rung cannot reproduce the ratio's univariate
+model (G/Y's M1, without a mean, gives −222.91 there instead of its −223.42).
+
+- `-nodrift i` holds the drift of series `i` at zero inside case 3.
+- `-case pre` reads that from the `.pre` files: the drift is free if and only if
+  the univariate model frees its mean. A mean held at a non-zero value cannot be
+  carried and goes free, with a warning. The gate's factorisation contract then
+  holds exactly with mixed drifts (checked by the suite). With `r ≥ 1` the drift
+  of the Y1 block is `−β₂′E[∇Y₂]`, since W has none; its own `.pre` mean does not
+  enter.
+- `-trend` adds case 4 (Johansen 1995, ch. 6): `E[W_t] = E[W] + d·(t − t_c)`.
+  The equilibrium may drift (convergence, Balassa–Samuelson), and the Y1 block's
+  drift becomes `d − β₂′E[∇Y₂]`. In the cast it is a deterministic term of W,
+  subtracted from the data. The rank test with a trend (case 4 tables or a
+  bootstrap carrying it) is pending.
+
+Measured on the case that motivated it (Ecuador; ln G/Y, ln CPI_USA, ln CPI_EC;
+p = 2, r = 1). The test of PPA (`-fixb2row 2 -1`, LR, 1 df):
+
+| deterministics | logL free | PPA LR, p | θ under PPA |
+|---|---|---|---|
+| case 3 | −279.8178 | 6.21, p 0.013 | 0.19 |
+| `-case pre` (G/Y without drift; LR against case 3: 1.74, p 0.19) | −280.6899 | 5.09, p 0.024 | 0.19 |
+| `-case pre -trend` | −280.6890 | **0.15, p 0.70** | **0.45** |
+
+Without the trend, PPA ties CPI_EC's drift to CPI_USA's. With it, the
+differential has somewhere to go: the trend takes −0.25 (p 0.09) and PPA is no
+longer rejected.
+

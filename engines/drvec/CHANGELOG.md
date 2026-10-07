@@ -7,6 +7,62 @@ publicación: `v*`.
 
 ## Sin publicar
 
+### `-case pre`, `-nodrift i`, `-trend`: deterministas serie a serie y caso 4 (MEJORA-3)
+
+`-nodrift i` fija a 0 la deriva de una serie dentro del caso 3; `-case pre` la
+lee de los `.pre` (libre si y sólo si el univariante estima su media), de modo
+que el escalón inferior del ladder reproduce exactamente los univariantes
+también con derivas mixtas. `-trend` añade el caso 4: tendencia lineal en W
+(restringida al espacio de cointegración), restada en el cast. Todos los
+recorridos de la media pasan por `y2mu_free()`. Comprobado: fijar todas las
+derivas reproduce el caso 2 (r = 0 y r = 1); el contrato del gate se cumple con
+derivas mixtas; `-trend` anida el ajuste sin tendencia. En el trivariante de
+Ecuador la PPA pasa de rechazarse (LR 6.21, p 0.013) a no rechazarse con caso 4
+(LR 0.15, p 0.70). `-trend` aún no admite `-lrtest` ni `-f`. 11 comprobaciones
+nuevas (357, todas pasan; los 24 informes de referencia, idénticos).
+
+### `-xsys i`: entrada exógena empotrada en el sistema (MEJORA-2, fase 2)
+
+El cast empotrado de drtran en el VEC, para entradas con el mismo operador que
+las salidas (I(1)): la serie `i` es una más del sistema con su propio modelo,
+fuertemente exógena — `α_i = 0` y ninguna otra serie en su fila de `Γ(k)` —, y
+las filas de las salidas conservan la transferencia (su entrada en `β`, los
+retardos en `Γ`, ω₀ en `Q`). Sin retro-pronóstico: la verosimilitud exacta
+integra la pre-muestra. Se ajusta también el VEC libre y se informa el LR de
+exogeneidad fuerte. La máscara de `Γ` pasa por un único predicado (`f_free`) que
+usan todos los recorridos del vector. Con `-diagar` equivale exactamente a
+`-weakex i`. Por ahora `q = 0`; se rechaza con `-alpha`/`-weakex`, `-xlink`,
+`-warma` y los modos. 11 comprobaciones nuevas (346, todas pasan; los 24 informes
+de referencia, idénticos byte a byte).
+
+### `-xpre`/`-xlink`: entradas exógenas de transferencia en el VEC (MEJORA-2, fase 1)
+
+Híbrido drtran–drvec: funciones de transferencia `ω(B)/δ(B)·Bᵇ` desde series
+exógenas al **nivel** de las series del sistema, con el VEC como ruido (sintaxis
+de red de drtran `OUT <- IN b r s`, `r ≤ 2`). Sigue el despacho de drtran: con
+X congelada fuera del sistema y operadores distintos (BXE I(0) → GAP I(1)) el
+cast es **por resta**, X se construye como en drtran (Box-Cox menos sus
+deterministas) y la pre-muestra son las observaciones reales y después el
+retro-pronóstico con el ARMA de X (`build_pre_sample`). Admite entradas I(1)
+(su ganancia entra en la relación de cointegración); su cast empotrado (X como
+serie débilmente exógena del VEC) queda en la MEJORA-2. Se ajusta primero el VEC
+sin entradas; `ω = 0` lo reproduce al bit y el LR frente a él es el contraste.
+Se rechaza con la ruta `.inp`, `-differenced`, `-warma`, caso 1, los modos,
+`-f`, `-estwin`, `-writeinp`/`-writeres`. 14 comprobaciones nuevas (335 en
+total, todas pasan; los informes de referencia no se mueven).
+
+### `-fixb2row i v`: contrastes LR sobre una fila de β (MEJORA-1)
+
+`-fixb2` fijaba todo `B₂` o nada. `-fixb2row i v` fija la fila `i` en `v` y
+estima las demás; ajusta también el modelo libre (con la misma búsqueda) y da el
+LR, χ² con (filas fijadas)·`r` g.l.; con `-alpha`/`-weakex`, el contraste
+conjunto. El LR es invariante a la normalización y el Wald no: en el caso que lo
+motivó (PPA en un trivariante de precios de Ecuador) el Wald da p = 0,041 o
+0,155 según sobre qué serie se normalice, y el LR 6,2131573620 / 6,2131573621 en
+las dos. Con `s = 1` coincide al dígito con `-fixb2 v`. Se rechaza con `-fixb2`,
+`-warma` y los modos. 18 comprobaciones nuevas (321 en total, todas pasan; los
+informes de referencia no se mueven).
+
 ### La escala de las series (BUG-43) y las clases MA restringidas en `-lrtest` (BUG-27)
 
 `-lrtest` reescala internamente las series mal escaladas (el LR no cambia; las

@@ -262,6 +262,16 @@ cli "-alpha with no file is refused" 1 "$CLI" 2 1 1 -case 2 -alpha
 cli "-fixb2 with no value still runs"   0 "$CLI" 2 1 1 -case 2 -fixb2
 cli "-fixb2 -0.5 still runs"            0 "$CLI" 2 1 1 -case 2 -fixb2 -0.5
 cli "-fixb2 followed by an option runs" 0 "$CLI" 2 1 1 -case 2 -fixb2 -diagma
+#  -fixb2row i v: two mandatory values, the row >= 1, and a row that exists.
+cli "-fixb2row with no values is refused"   1 "$CLI" 2 1 1 -case 2 -fixb2row
+cli "-fixb2row with one value is refused"   1 "$CLI" 2 1 1 -case 2 -fixb2row 1
+cli "-fixb2row 0 v is refused"              1 "$CLI" 2 1 1 -case 2 -fixb2row 0 1
+cli "-fixb2row i with no number is refused" 1 "$CLI" 2 1 1 -case 2 -fixb2row 1 x
+cli "-fixb2row -0.5 (negative value) runs"  0 "$CLI" 2 1 1 -case 2 -fixb2row 1 -0.5
+cli "-fixb2row beyond s is refused"         2 "$CLI" 2 1 1 -case 2 -fixb2row 2 0
+cli "-fixb2row with -fixb2 is refused"      2 "$CLI" 2 1 1 -case 2 -fixb2row 1 0 -fixb2
+cli "-fixb2row with -lrtest is refused"     2 "$CLI" 2 1 0 -case 2 -fixb2row 1 0 -lrtest
+cli "-fixb2row with -warma is refused"      2 "$CLI" 2 1 1 -case 2 -fixb2row 1 0 -warma
 cli "-rankadm with no tolerance runs"   0 "$CLI" 2 1 1 -case 2 -rankadm
 cli "an ordinary fit still exits 0"     0 "$CLI" 2 1 1 -case 2
 
@@ -344,6 +354,11 @@ struct_case "M=2 lrtest p=1 (nreg=0 path)"     "$MM" 1 0 0 -case 2 -lrtest
 struct_case "M=3 r=2"                          "$UK" 2 0 2 -case 2
 struct_case "M=3 lrtest"                       "$UK" 2 0 0 -case 2 -lrtest
 struct_case "M=3 lrtest + fixb2"               "$UK" 2 0 0 -case 2 -lrtest -fixb2
+#  -fixb2row: some rows of B2 in x[], others held -- the one shape where the
+#  free-entry walk can disagree between the four walks (s = 2, one row held).
+struct_case "M=3 r=1 fixb2row 1"               "$UK" 2 0 1 -case 2 -fixb2row 1 0
+struct_case "M=3 r=1 fixb2row 2 + weakex"      "$UK" 2 0 1 -case 2 -fixb2row 2 0.5 -weakex 1
+struct_case "M=3 r=1 fixb2row 2, q=1"          "$UK" 2 1 1 -case 3 -fixb2row 2 0
 struct_case "M=5 r=2 (s=3, r=2: B2 is 3x2)"    "$DK" 2 0 2 -case 2
 # -mawarma with r > 1 and s > 1: the inherited block is r x r and the block it
 # determines is r x s, so this is the only shape where getting either dimension
@@ -1481,6 +1496,222 @@ if [ -z "$lr_free" ] || [ -z "$lr_adm" ]; then
 elif awk -v a="$lr_free" -v b="$lr_adm" 'BEGIN{exit !(b <= a + 1e-6)}'; then
     ok "rank test: constraining the alternative cannot raise the LR ($lr_adm <= $lr_free)"
 else bad "rank test: LR rose under the constraint" "free=$lr_free adm=$lr_adm"; fi
+
+echo "[6b] -fixb2row: one row of beta held, the LR against the free model"
+#  TODO.md MEJORA-1.  -fixb2 holds every row; -fixb2row holds the rows it is
+#  given and estimates the rest.  With s = 1 holding the only row IS -fixb2 at
+#  the same value, so the two must reach the same optimum -- an invariant that
+#  needs no reference.  And the restricted fit cannot beat the free one.
+run "$MM" 2 1 1 -case 2 -fixb2 0;        ll_all=$(logelf_of "$TMP/case")
+run "$MM" 2 1 1 -case 2 -fixb2row 1 0;   ll_row=$(logelf_of "$TMP/case")
+lr_row=$(lr_of "$TMP/case")
+if [ -z "$ll_all" ] || [ -z "$ll_row" ]; then
+    bad "-fixb2row == -fixb2 (s = 1)" "missing logL (all=$ll_all row=$ll_row)"
+elif near "$ll_all" "$ll_row"; then
+    ok "-fixb2row 1 0 reaches the -fixb2 0 optimum when s = 1 ($ll_row)"
+else bad "-fixb2row == -fixb2 (s = 1)" "all=$ll_all row=$ll_row"; fi
+if [ -z "$lr_row" ]; then
+    bad "-fixb2row LR" "the LR block is missing"
+elif awk -v l="$lr_row" 'BEGIN{exit !(l >= -1e-6)}'; then
+    ok "-fixb2row: the restricted fit does not beat the free one (LR = $lr_row)"
+else bad "-fixb2row LR" "negative LR $lr_row"; fi
+if grep -aq 'degrees of freedom     : 1   (rows held)\*r' "$TMP/case.out"; then
+    ok "-fixb2row: df = (rows held)*r = 1"
+else bad "-fixb2row df" "$(grep -a 'degrees of freedom' "$TMP/case.out")"; fi
+#  M = 3, s = 2: one row held, the other estimated; the held row is declared
+#  and not given a standard error, the free one is.
+run "$UK" 2 0 1 -case 2 -fixb2row 1 0
+if grep -aq 'row 1 of B2 .* held at 0 in every relation' "$TMP/case.out" \
+   && grep -aq 'held at 0 by -fixb2row (imposed, not estimated)' "$TMP/case.out"; then
+    ok "-fixb2row on M = 3: the held row is declared, in the LR block and the table"
+else bad "-fixb2row on M = 3" "the held row is not declared"; fi
+lr3=$(lr_of "$TMP/case")
+if [ -n "$lr3" ] && awk -v l="$lr3" 'BEGIN{exit !(l >= -1e-6)}'; then
+    ok "-fixb2row on M = 3: LR >= 0 ($lr3)"
+else bad "-fixb2row on M = 3" "LR '$lr3'"; fi
+#  Joint with alpha: df add up.
+run "$UK" 2 0 1 -case 2 -fixb2row 1 0 -weakex 2
+if grep -aq 'degrees of freedom     : 2   (rows held)\*r + (M - sa)\*r' "$TMP/case.out"; then
+    ok "-fixb2row + -weakex: df = 1 + 1"
+else bad "-fixb2row + -weakex df" "$(grep -a 'degrees of freedom' "$TMP/case.out")"; fi
+echo
+
+echo "[6c] -xpre/-xlink: transfer-function inputs on the VEC (MEJORA-2)"
+#  The hybrid of the suite's two embeddings.  What can be checked without an
+#  external reference: omega = 0 reproduces the VEC rung EXACTLY (the bridge's
+#  crossing identity, reported); the VEC rung the program fits first is the
+#  same fit a plain run gives; the walk consumes npar; the LR is not negative;
+#  and what the option cannot honour is refused.
+XMUS=tests/fixtures/mmpre.muskrat.pre
+XMNK=tests/fixtures/mmpre.mink.pre
+XDRV=$(cd "$(dirname "$DRVEC")" && pwd)/$(basename "$DRVEC")
+XTMP=$(cd "$TMP" && pwd)
+XROOT=$(pwd)
+#  An input: the mink series REVERSED in time (unrelated to the system by
+#  construction) and starting one year EARLIER, so that one presample value
+#  is observed and the rest backcast with X's ARMA (drtran's subtracting cast).
+awk 'f { d[++n] = $0; next }
+     /^\*\* Series:/ { print; f = 1; next }
+     / 62 1 1850 mink/ { print " 63 1 1849 xrev"; next }
+     { print }
+     END { for (i = n; i >= 1; i--) print d[i]; print d[1] }' "$XMNK" > "$TMP/xrev.pre"
+printf 'mink <- xrev 0 0 0\n' > "$TMP/net0.txt"
+printf 'mink <- xrev 1 0 1   # b = 1, s = 1: two presample values\n' > "$TMP/net1.txt"
+printf 'mink <- xrev 0 1 0\n' > "$TMP/netr.txt"
+printf 'nosuch <- xrev 0 0 0\n' > "$TMP/netbad.txt"
+printf 'mink <- xrev 0 3 0\n' > "$TMP/netr3.txt"
+
+xrun() {   # xrun <name> <args...> : .pre route with the inputs, sets XSTDERR
+    local nm=$1; shift
+    rm -f "$TMP/$nm.out"
+    XSTDERR=$(cd "$TMP" && timeout "$RUN_TIMEOUT" "$XDRV" "$XROOT/$XMUS" \
+              "$XROOT/$XMNK" "$@" -name "$nm" 2>&1 >/dev/null)
+}
+xrun xplain 2 0 1 -case 2
+xrun xl0 2 0 1 -case 2 -xpre "$XTMP/xrev.pre" -xlink "$XTMP/net0.txt"
+base=$(grep -a 'logL VEC without inputs' "$TMP/xl0.out" | awk '{print $NF}')
+plain=$(logelf_of "$TMP/xplain")
+bdiff=$(grep -a 'logL at the bridge' "$TMP/xl0.out" | sed 's/.*difference \([^:]*\):.*/\1/')
+if [ -z "$base" ] || [ -z "$plain" ]; then
+    bad "-xlink base" "missing logL (base=$base plain=$plain)"
+elif near "$base" "$plain"; then
+    ok "-xlink: the VEC rung below is the plain fit ($base)"
+else bad "-xlink base" "base=$base plain=$plain"; fi
+if [ -n "$bdiff" ] && awk -v d="$bdiff" 'BEGIN{d=(d<0)?-d:d; exit !(d < 1e-9)}'; then
+    ok "-xlink: omega = 0 reproduces the VEC rung exactly (bridge difference $bdiff)"
+else bad "-xlink bridge" "difference '$bdiff'"; fi
+if printf '%s' "$XSTDERR" | grep -qiE 'ERROR (output|init_guess)'; then
+    bad "-xlink walk" "$(printf '%s' "$XSTDERR" | grep -iE 'ERROR (output|init_guess)' | head -1)"
+else ok "-xlink: the parameter walk consumes exactly npar"; fi
+lrx=$(grep -a 'LR = 2(inputs - VEC)' "$TMP/xl0.out" | awk '{print $NF}')
+if [ -n "$lrx" ] && awk -v l="$lrx" 'BEGIN{exit !(l >= -1e-6)}'; then
+    ok "-xlink: the LR against the VEC is not negative ($lrx)"
+else bad "-xlink LR" "'$lrx'"; fi
+xrun xl1 2 0 1 -case 2 -xpre "$XTMP/xrev.pre" -xlink "$XTMP/net1.txt"
+if printf '%s' "$XSTDERR" | grep -q 'ERROR' ; then
+    bad "-xlink b=1 s=1" "$(printf '%s' "$XSTDERR" | head -1)"
+elif grep -aq 'w1' "$TMP/xl1.out" && grep -aq 'gain nu(1)' "$TMP/xl1.out"; then
+    ok "-xlink: a lagged link with s = 1 runs and reports its gain"
+else bad "-xlink b=1 s=1" "no w1 / gain in the report"; fi
+pres=$(cd "$TMP" && timeout "$RUN_TIMEOUT" "$XDRV" "$XROOT/$XMUS" "$XROOT/$XMNK" \
+       2 0 1 -case 2 -xpre "$XTMP/xrev.pre" -xlink "$XTMP/net1.txt" -name xl1b 2>/dev/null \
+       | grep 'presample')
+if printf '%s' "$pres" | grep -q 'presample 2: 1 observed, 1 backcast'; then
+    ok "-xlink: an I(1) input, presample observed first, then backcast"
+else bad "-xlink presample" "'$pres'"; fi
+xrun xlr 2 0 1 -case 2 -xpre "$XTMP/xrev.pre" -xlink "$XTMP/netr.txt"
+bdr=$(grep -a 'logL at the bridge' "$TMP/xlr.out" | sed 's/.*difference \([^:]*\):.*/\1/')
+if [ -n "$bdr" ] && awk -v d="$bdr" 'BEGIN{d=(d<0)?-d:d; exit !(d < 1e-9)}' \
+   && grep -aq 'xrev  d1' "$TMP/xlr.out"; then
+    ok "-xlink: a rational link (r = 1) bridges exactly and reports delta"
+else bad "-xlink r=1" "bridge '$bdr' or no d1"; fi
+#  What is refused.
+cli "-xlink without -xpre is refused"     2 "$XMUS" "$XMNK" 2 0 1 -case 2 -xlink "$XTMP/net0.txt"
+cli "-xpre without -xlink is refused"     2 "$XMUS" "$XMNK" 2 0 1 -case 2 -xpre "$XTMP/xrev.pre"
+cli "-xlink on the .inp route is refused" 2 "$CLI" 2 1 1 -case 2 -xpre "$XTMP/xrev.pre" -xlink "$XTMP/net0.txt"
+cli "-xlink in case 1 is refused"         2 "$XMUS" "$XMNK" 2 0 1 -case 1 -xpre "$XTMP/xrev.pre" -xlink "$XTMP/net0.txt"
+cli "-xlink with -lrtest is refused"      2 "$XMUS" "$XMNK" 2 0 0 -case 2 -lrtest -xpre "$XTMP/xrev.pre" -xlink "$XTMP/net0.txt"
+cli "-xlink to an unknown series is refused" 1 "$XMUS" "$XMNK" 2 0 1 -case 2 -xpre "$XTMP/xrev.pre" -xlink "$XTMP/netbad.txt"
+cli "-xlink with r > 2 is refused"        1 "$XMUS" "$XMNK" 2 0 1 -case 2 -xpre "$XTMP/xrev.pre" -xlink "$XTMP/netr3.txt"
+echo
+
+echo "[6d] -xsys: an input embedded in the system (MEJORA-2, phase 2)"
+#  drtran's embedded cast in a VEC: the input is a series of the system with
+#  alpha = 0 and no other series in its short run.  What can be checked: with
+#  -diagar the Gamma mask is empty and -xsys 1 IS -weakex 1 (same model, same
+#  optimum); the free model of the LR is the plain fit; the walk consumes
+#  npar; the report carries no Gamma entry in the input's row; the df; and
+#  what the option cannot honour is refused.
+xsrun() {   # xsrun <name> <args...> : .pre route, sets XSTDERR
+    local nm=$1; shift
+    rm -f "$TMP/$nm.out"
+    XSTDERR=$(cd "$TMP" && timeout "$RUN_TIMEOUT" "$XDRV" "$XROOT/$XMUS" \
+              "$XROOT/$XMNK" "$@" -name "$nm" 2>&1 >/dev/null)
+}
+xsrun xsa 3 0 1 -case 2 -diagar -xsys 1
+xsrun xsb 3 0 1 -case 2 -diagar -weakex 1
+la=$(logelf_of "$TMP/xsa"); lb=$(logelf_of "$TMP/xsb")
+if [ -n "$la" ] && [ -n "$lb" ] && near "$la" "$lb"; then
+    ok "-xsys with -diagar is -weakex: the same optimum ($la)"
+else bad "-xsys = -weakex under -diagar" "xsys=$la weakex=$lb"; fi
+xsrun xsp 3 0 1 -case 2
+xsrun xsc 3 0 1 -case 2 -xsys 1
+lp=$(logelf_of "$TMP/xsp")
+lf=$(grep -a 'logL VEC free' "$TMP/xsc.out" | awk '{print $NF}')
+if [ -n "$lf" ] && near "$lf" "$lp"; then
+    ok "-xsys: the free model of the LR is the plain fit ($lp)"
+else bad "-xsys free model" "free=$lf plain=$lp"; fi
+if printf '%s' "$XSTDERR" | grep -qiE 'ERROR (output|init_guess)'; then
+    bad "-xsys walk" "$(printf '%s' "$XSTDERR" | grep -iE 'ERROR (output|init_guess)' | head -1)"
+else ok "-xsys: the parameter walk consumes exactly npar"; fi
+if grep -aq 'D\.muskrat <- D\.mink' "$TMP/xsc.out"; then
+    bad "-xsys mask" "the input's row of Gamma carries another series"
+elif grep -aq 'D\.mink <- D\.muskrat(-1)' "$TMP/xsc.out"; then
+    ok "-xsys: the input's row of Gamma is its own; the output's keeps the input"
+else bad "-xsys mask" "no Gamma table"; fi
+#  p = 3, r = 1, M = 2: alpha (1) + 2 lags x 1 entry = 3 df; at r = 0, 2.
+if grep -aq 'degrees of freedom     : 3 ' "$TMP/xsc.out"; then
+    ok "-xsys: df = r*(inputs) + (p-1)*(Gamma entries held) = 3"
+else bad "-xsys df" "$(grep -a 'degrees of freedom     :' "$TMP/xsc.out")"; fi
+xsrun xs0 3 0 0 -case 2 -xsys 1
+if grep -aq 'degrees of freedom     : 2 ' "$TMP/xs0.out"; then
+    ok "-xsys at r = 0: only the Gamma mask, 2 df"
+else bad "-xsys r=0" "$(grep -a 'degrees of freedom     :' "$TMP/xs0.out")"; fi
+cli "-xsys on the Y1 block is refused"     2 "$XMUS" "$XMNK" 3 0 1 -case 2 -xsys 2
+cli "-xsys outside the system is refused"  2 "$XMUS" "$XMNK" 3 0 1 -case 2 -xsys 3
+cli "-xsys with -weakex is refused"        2 "$XMUS" "$XMNK" 3 0 1 -case 2 -xsys 1 -weakex 2
+cli "-xsys with -lrtest is refused"        2 "$XMUS" "$XMNK" 3 0 0 -case 2 -xsys 1 -lrtest
+cli "-xsys with q > 0 is refused (not yet)" 2 "$XMUS" "$XMNK" 3 1 1 -case 2 -xsys 1
+echo
+
+echo "[6e] -nodrift, -case pre and -trend (case 4): the deterministics per series (MEJORA-3)"
+#  -nodrift i holds E[nabla Y2_i] = 0 inside case 3, so holding every drift
+#  of the nabla Y2 block IS case 2, at any rank; -case pre reads the mask from
+#  the .pre files, and with a drift free in one file and held in the other
+#  the gate's factorisation contract must hold exactly; -trend nests the fit
+#  without it.
+awk '/Mean and estimation flag/ {print; getline; print "0.0 1"; next} {print}' \
+    "$XMNK" > "$TMP/minkmu.pre"
+xsrun nd2 2 0 1 -case 2
+xsrun nd3 2 0 1 -case 3 -nodrift 1
+l2=$(logelf_of "$TMP/nd2"); l3=$(logelf_of "$TMP/nd3")
+if [ -n "$l2" ] && [ -n "$l3" ] && near "$l2" "$l3"; then
+    ok "-case 3 -nodrift 1 is case 2 at r = 1 ($l2)"
+else bad "-nodrift r=1" "case2=$l2 nodrift=$l3"; fi
+xsrun nd20 2 0 0 -case 2
+xsrun nd30 2 0 0 -case 3 -nodrift 1 -nodrift 2
+l2=$(logelf_of "$TMP/nd20"); l3=$(logelf_of "$TMP/nd30")
+if [ -n "$l2" ] && [ -n "$l3" ] && near "$l2" "$l3"; then
+    ok "-case 3 with every drift held is case 2 at r = 0 ($l2)"
+else bad "-nodrift r=0" "case2=$l2 nodrift=$l3"; fi
+rm -f "$TMP/cpg.out"
+(cd "$TMP" && timeout "$RUN_TIMEOUT" "$XDRV" "$XROOT/$XMUS" minkmu.pre 2 0 0 \
+    -case pre -name cpg >/dev/null 2>&1)
+cs=$(grep -a '  sum  =' "$TMP/cpg.out" | awk '{print $NF}')
+cj=$(grep -a '  joint=' "$TMP/cpg.out" | awk '{print $NF}')
+if [ -n "$cs" ] && [ "$cs" = "$cj" ] \
+   && grep -aq 'E\[D.muskrat\] .*held: no drift (-case pre)' "$TMP/cpg.out"; then
+    ok "-case pre: mixed drifts, the gate reproduces the univariates ($cs)"
+else bad "-case pre gate" "sum=$cs joint=$cj"; fi
+rm -f "$TMP/tr0.out" "$TMP/tr1.out"
+TRERR=$(cd "$TMP" && timeout "$RUN_TIMEOUT" "$XDRV" "$XROOT/$XMUS" minkmu.pre 2 0 1 \
+    -case pre -name tr0 2>&1 >/dev/null; timeout "$RUN_TIMEOUT" "$XDRV" "$XROOT/$XMUS" \
+    minkmu.pre 2 0 1 -case pre -trend -name tr1 2>&1 >/dev/null)
+t0=$(logelf_of "$TMP/tr0"); t1=$(logelf_of "$TMP/tr1")
+if printf '%s' "$TRERR" | grep -qiE 'ERROR (output|init_guess)'; then
+    bad "-trend walk" "$(printf '%s' "$TRERR" | grep -iE 'ERROR' | head -1)"
+elif [ -n "$t0" ] && [ -n "$t1" ] && awk -v a="$t1" -v b="$t0" 'BEGIN{exit !(a >= b - 1e-6)}' \
+     && grep -aq 'trend\[ec1\]' "$TMP/tr1.out"; then
+    ok "-trend nests the fit without it ($t1 >= $t0) and reports the slope"
+else bad "-trend" "with=$t1 without=$t0"; fi
+cli "-nodrift in case 2 is refused"       2 "$XMUS" "$XMNK" 2 0 1 -case 2 -nodrift 1
+cli "-nodrift outside the system is refused" 2 "$XMUS" "$XMNK" 2 0 1 -case 3 -nodrift 3
+cli "-case pre on the .inp route is refused" 2 "$CLI" 2 1 1 -case pre
+cli "-trend in case 2 is refused"         2 "$XMUS" "$XMNK" 2 0 1 -case 2 -trend
+cli "-trend with -lrtest is refused"      2 "$XMUS" "$XMNK" 2 0 0 -case 3 -trend -lrtest
+cli "-trend with -f is refused"           2 "$XMUS" "$XMNK" 2 0 1 -case 3 -trend -f 4
+cli "-case 4 is refused (it is -trend)"   1 "$XMUS" "$XMNK" 2 0 1 -case 4
+echo
 
 echo "[7] the rank test on data whose rank is known by construction"
 # Every other check of -lrtest compares against another program's answer.  These

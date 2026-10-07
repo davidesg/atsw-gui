@@ -527,24 +527,33 @@ static int b2_held(int i)
  *      N_t = Y_t - sum_k nu_k(B) X_{k,t},   nu_k(B) = omega_k(B)/delta_k(B) B^b
  *
  *  with Y in w = refactor*BoxCox(z) units minus its deterministics (as every
- *  .pre series here) and X in the LEVEL of the series, refactor*BoxCox(z)
- *  with nothing subtracted (its interventions are part of what it
- *  transmits), and N is the VEC process: Ybar is built from N exactly
+ *  .pre series here) and X in the same units built the same way (drtran's
+ *  apply_univariate_model: Box-Cox, ITS deterministics subtracted, so an
+ *  intervention of X is not transmitted), and N is the VEC process: Ybar is built from N exactly
  *  as from Y.  By linearity nabla Y2 receives nu(B) nabla X and W receives
  *  (nu_1 + B2'nu_2)(B) X in levels.  The cast is drtran's "by subtraction";
- *  X is FROZEN: its data, nothing of its model (only lambda and refactor
- *  are read from the .pre).  omega = 0 reproduces the VEC rung bit for bit, and
+ *  X's own model is FROZEN at its .pre (TASTE, Munoz 2.6): it is used only
+ *  for the presample.  omega = 0 reproduces the VEC rung bit for bit, and
  *  unlike Lambda = 0 it is an interior point (VEC_EMBEDDING_PLAN.md 3), so
  *  the ladder's usual bridge works: the VEC optimum with omega = 0 is the
  *  start, and the LR against the VEC is the test.
  *
- *  The presample of X: EMBEDDED, there is no backcast (drtran's
- *  build_pre_sample is not needed).  Real observations of X before the
- *  system's sample are used; before X's first observation X is held at
- *  that first value.  X is stored as X - X_anchor (the first value), so the
- *  held stretch is exactly zero, the filter needs no truncation, and the
- *  constant nu(1)*X_anchor that this drops goes to the free mean of W (and
- *  differences out of nabla Y2).  omega(B) follows Box-Jenkins: omega_0 - omega_1 B
+ *  WHY BY SUBTRACTION, AND SO WHY A BACKCAST.  drtran's dispatch
+ *  (links_need_subtracting, BUG-8): the embedded cast, which needs no
+ *  backcast because the exact likelihood integrates the presample out,
+ *  holds only when input and output share their differencing operator AND
+ *  the input is a series of the system with its own row.  Here X is
+ *  frozen and outside the system, and an I(0) input of an I(1) output
+ *  crosses operators, so the cast is by subtraction and the presample of X
+ *  must be built: real observations of X before the system's sample first
+ *  (drtran's w_head); what is still missing is backcast with X's ARMA (on
+ *  nabla X when d = 1, cumulated back to levels), as drtran's
+ *  build_pre_sample does.  A zero would put a spurious step nu(1)*level at
+ *  t = 1.  With b = r = s = 0 nothing is needed and both casts coincide
+ *  (drtran-note, Proposition Exactness iii).  An I(1) input is allowed:
+ *  in levels its gain enters W, i.e. the cointegrating relation.  Its
+ *  embedded alternative (X as a weakly exogenous series of the VEC) is
+ *  TODO.md MEJORA-2.  omega(B) follows Box-Jenkins: omega_0 - omega_1 B
  *  - ...; delta(B) = 1 - delta_1 B - ... (drtran compute_irf).  The block
  *  goes LAST in x[], after B2, inside par_blocks' tail, so every routine that
  *  moves the tail as a block (the ladder, the MA classes, the profiling)
@@ -558,7 +567,7 @@ static char *xl_infile[XL_MAXIN + 1];
 static char *xl_inname[XL_MAXIN + 1];
 static int   xl_d[XL_MAXIN + 1];          /* X's regular differences (0 or 1) */
 static int   xl_nreal[XL_MAXIN + 1];      /* presample values that are data   */
-static int   xl_nbc[XL_MAXIN + 1];        /* presample values held at X_1     */
+static int   xl_nbc[XL_MAXIN + 1];        /* presample values backcast        */
 struct xl_link { int out, in, b, r, s; };
 static struct xl_link xl_lnk[XL_MAXLNK + 1];
 static int   xl_npre = 0, xl_len = 0;     /* presample length; total length   */
@@ -6738,21 +6747,57 @@ static int read_pre_inputs(char **files, int nfiles)
 }
 
 
+/*  xl_backcast -- drtran's backcast_arma (drtran.c:447), ported: the ARMA in
+ *  elf's sign convention is symmetric under time reversal, so backcasting is
+ *  forecasting the reversed series with the same phi and theta (TASTE's
+ *  BackForeCast).  out[k] is the value k periods before w[1].              */
+static void xl_backcast(const real *w, int n, const real *ph, int p,
+                        const real *th, int q, real mu, int L, real *out)
+{
+    real *u, *e;
+    int t, i, j, k;
+    if (L <= 0 || n <= 0) return;
+    u = vector(1, n);
+    e = vector(1, n);
+    for (t = 1; t <= n; t++) u[t] = w[n - t + 1] - mu;
+    for (t = 1; t <= n; t++) {
+        real acc = u[t];
+        for (i = 1; i <= p && i < t; i++) acc -= ph[i] * u[t - i];
+        for (j = 1; j <= q && j < t; j++) acc += th[j] * e[t - j];
+        e[t] = acc;
+    }
+    for (k = 1; k <= L; k++) {
+        real acc = 0.0;
+        for (i = 1; i <= p; i++) {
+            int ix = k - i;
+            acc += ph[i] * (ix >= 1 ? out[ix] - mu : u[n + ix]);
+        }
+        for (j = 1; j <= q; j++) {
+            int ix = n + k - j;
+            if (ix <= n) acc -= th[j] * e[ix];
+        }
+        out[k] = acc + mu;
+    }
+    free_vector(u, 1, n);
+    free_vector(e, 1, n);
+}
+
 /*  xl_load -- the exogenous inputs and the network of links.  Called after
  *  read_pre_inputs, so the system's calendar and names exist.  Returns 0.  */
 static int xl_load(void)
 {
     struct Tusmodel Tm; struct Tseries Ts; real **DM;
-    real *wv[XL_MAXIN + 1];
-    int   nv[XL_MAXIN + 1];
+    real *wv[XL_MAXIN + 1], *phv[XL_MAXIN + 1], *thv[XL_MAXIN + 1];
+    int   nv[XL_MAXIN + 1], pv[XL_MAXIN + 1], qv[XL_MAXIN + 1];
     long  stv[XL_MAXIN + 1];
+    real  muv[XL_MAXIN + 1];
     long  first = abs_period(data_start_year, data_start_sub, data_freq);
     int i, t, k, maxbs = 0, anyr = 0;
     FILE *f;
     char line[512];
 
     for (i = 1; i <= xl_nin; i++) {
-        real refac, lam;
+        real refac, lam, *det;
         if (read_fue_pre(xl_infile[i], &Tm, &Ts, &DM) != 0) {
             fprintf(stderr, "ERROR: cannot read the input %s\n", xl_infile[i]);
             return 1;
@@ -6776,6 +6821,9 @@ static int xl_load(void)
         lam = Tm.boxlam;
         nv[i] = Ts.nobs;
         stv[i] = abs_period(Ts.begyear, Ts.begtime, Ts.freq);
+        det = vector(1, Ts.nobs);
+        for (t = 1; t <= Ts.nobs; t++) det[t] = 0.0;
+        if (Tm.NdetVar > 0) build_det_component(&Tm, &Ts, Ts.nobs, det);
         wv[i] = vector(1, Ts.nobs);
         for (t = 1; t <= Ts.nobs; t++) {
             real z = Ts.data[t];
@@ -6784,8 +6832,18 @@ static int xl_load(void)
                         xl_infile[i], lam, z);
                 return 1;
             }
-            wv[i][t] = boxcox_w(z, lam, refac);      /* the level, as is */
+            wv[i][t] = boxcox_w(z, lam, refac) - det[t];
         }
+        free_vector(det, 1, Ts.nobs);
+        pv[i] = pre_ar_order(&Tm);
+        qv[i] = pre_ma_order(&Tm);
+        phv[i] = vector(1, pv[i] > 0 ? pv[i] : 1);
+        thv[i] = vector(1, qv[i] > 0 ? qv[i] : 1);
+        for (k = 1; k <= pv[i]; k++) phv[i][k] = 0.0;
+        for (k = 1; k <= qv[i]; k++) thv[i][k] = 0.0;
+        if (pv[i] > 0) expand_ar_factors(&Tm, phv[i], pv[i]);
+        if (qv[i] > 0) expand_ma_factors(&Tm, thv[i], qv[i]);
+        muv[i] = Tm.mu;           /* the value, whatever the flag (BUG-38) */
         if (stv[i] + nv[i] - 1 < first + nobs_raw - 1) {
             fprintf(stderr,
                 "ERROR: the input %s ends before the system's sample does.  An\n"
@@ -6861,20 +6919,34 @@ static int xl_load(void)
                 if (!k0) k0 = k;
             } else xl_X[i][k] = 0.0;
         }
-        L = k0 - 1;                     /* before X's first observation */
+        L = k0 - 1;                               /* still missing        */
         xl_nreal[i] = xl_npre - L;
         xl_nbc[i] = L;
-        {
-            real anchor = xl_X[i][k0];
-            for (k = 1; k <= xl_len; k++)
-                xl_X[i][k] = (k < k0) ? 0.0 : xl_X[i][k] - anchor;
+        if (L > 0) {
+            real *out = vector(1, L);
+            if (xl_d[i] == 0) {
+                xl_backcast(wv[i], nv[i], phv[i], pv[i], thv[i], qv[i],
+                            muv[i], L, out);
+                for (k = 1; k <= L; k++) xl_X[i][k0 - k] = out[k];
+            } else {
+                real *u = vector(1, nv[i] - 1);
+                for (t = 1; t < nv[i]; t++) u[t] = wv[i][t + 1] - wv[i][t];
+                xl_backcast(u, nv[i] - 1, phv[i], pv[i], thv[i], qv[i],
+                            muv[i], L, out);
+                for (k = 1; k <= L; k++)
+                    xl_X[i][k0 - k] = xl_X[i][k0 - k + 1] - out[k];
+                free_vector(u, 1, nv[i] - 1);
+            }
+            free_vector(out, 1, L);
         }
         free_vector(wv[i], 1, nv[i]);
+        free_vector(phv[i], 1, pv[i] > 0 ? pv[i] : 1);
+        free_vector(thv[i], 1, qv[i] > 0 ? qv[i] : 1);
     }
 
     printf("Exogenous transfer inputs (-xlink %s):\n", xl_netfile);
     for (i = 1; i <= xl_nin; i++)
-        printf("  %-12s %s, d = %d; presample %d: %d observed, %d held at the first\n",
+        printf("  %-12s %s, d = %d; presample %d: %d observed, %d backcast\n",
                xl_inname[i], xl_infile[i], xl_d[i], xl_npre, xl_nreal[i],
                xl_nbc[i]);
     for (k = 1; k <= xl_nlnk; k++)
@@ -9403,9 +9475,9 @@ static void usage(FILE *o)
     fprintf(o, "                 coefficient, the LR does not depend on which series\n");
     fprintf(o, "                 beta is normalised on\n\n");
     fprintf(o, "  -xpre FILE     an exogenous input (a fue .pre; repeatable), used\n");
-    fprintf(o, "                 with -xlink.  X enters FROZEN, in the level of the\n");
-    fprintf(o, "                 series (refactor*BoxCox, nothing subtracted); its\n");
-    fprintf(o, "                 model is not used and nothing is backcast\n");
+    fprintf(o, "                 with -xlink.  X is FROZEN at its .pre: BoxCox minus\n");
+    fprintf(o, "                 its deterministics (as drtran); its ARMA backcasts\n");
+    fprintf(o, "                 the presample not covered by real data.  I(0) or I(1)\n");
     fprintf(o, "  -xlink FILE    the links, one per line `OUT <- IN b r s' (drtran):\n");
     fprintf(o, "                 Y_out - omega(B)/delta(B) B^b X_in is the VEC process\n");
     fprintf(o, "                 (\"by subtraction\", on the LEVELS; r <= 2).  The\n");
@@ -9980,13 +10052,12 @@ static int parse_cli(int argc, char *argv[])
             exit(2);
         }
         if (global_case == 1) {
-            /*  X enters as X - X_anchor (xl_load): the constant
-             *  nu(1)*X_anchor goes to the mean of W, which case 1 does not
-             *  have.  Without it the anchor would be a restriction.       */
+            /*  X keeps its mean (only its deterministics are subtracted,
+             *  as in drtran), so nu(1)*E[X] lands in the mean of W, which
+             *  case 1 holds at zero: the inputs would be a restriction.   */
             fprintf(stderr,
                 "ERROR: -xlink needs a free mean of W (-case 2 or 3): the input\n"
-                "       is held at its first value before its data and anchored\n"
-                "       there, and the constant that drops goes to E[W].\n");
+                "       keeps its mean, and nu(1) times it goes to E[W].\n");
             exit(2);
         }
     }

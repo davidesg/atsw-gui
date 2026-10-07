@@ -1549,7 +1549,7 @@ XTMP=$(cd "$TMP" && pwd)
 XROOT=$(pwd)
 #  An input: the mink series REVERSED in time (unrelated to the system by
 #  construction) and starting one year EARLIER, so that one presample value
-#  is observed and the rest held at X's first value (embedded: no backcast).
+#  is observed and the rest backcast with X's ARMA (drtran's subtracting cast).
 awk 'f { d[++n] = $0; next }
      /^\*\* Series:/ { print; f = 1; next }
      / 62 1 1850 mink/ { print " 63 1 1849 xrev"; next }
@@ -1596,8 +1596,8 @@ else bad "-xlink b=1 s=1" "no w1 / gain in the report"; fi
 pres=$(cd "$TMP" && timeout "$RUN_TIMEOUT" "$XDRV" "$XROOT/$XMUS" "$XROOT/$XMNK" \
        2 0 1 -case 2 -xpre "$XTMP/xrev.pre" -xlink "$XTMP/net1.txt" -name xl1b 2>/dev/null \
        | grep 'presample')
-if printf '%s' "$pres" | grep -q 'presample 2: 1 observed, 1 held at the first'; then
-    ok "-xlink: the presample uses the observed value, then holds X at its first"
+if printf '%s' "$pres" | grep -q 'presample 2: 1 observed, 1 backcast'; then
+    ok "-xlink: an I(1) input, presample observed first, then backcast"
 else bad "-xlink presample" "'$pres'"; fi
 xrun xlr 2 0 1 -case 2 -xpre "$XTMP/xrev.pre" -xlink "$XTMP/netr.txt"
 bdr=$(grep -a 'logL at the bridge' "$TMP/xlr.out" | sed 's/.*difference \([^:]*\):.*/\1/')

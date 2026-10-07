@@ -51,14 +51,25 @@ el LR del libro.
 ## MEJORA-2 — Regresores exógenos estacionarios (I(0)) en el VECM
 
 **Estado:** fase 1 HECHA el 2026-10-07 (rama `feature/xlink`): `-xpre`/`-xlink`,
-funciones de transferencia racionales al nivel de las series del sistema, forma
-«por resta», X congelada y en nivel, empotrado sin retro-pronóstico, LR frente
-al VEC con identidad de puente exacta. Caso de motivación: `GAP <- BXE 0 0 0`
-sobre (G/Y, GAP), p = 4, caso 2: ω₀ = −0.0112 (0.0064), LR 3.18, p = 0.075, β
-sin cambio. Pendiente: bootstrap con X fija; contraste de rango con entradas
-(Harbo et al. 1998 si X es I(1)); entrada restringida al espacio de
-cointegración; previsión (necesita el futuro de X); VARMAX (X con su propio
-modelo, I(1) condicional).
+funciones de transferencia racionales al nivel de las series del sistema, cast
+**por resta** de drtran (X congelada, Box-Cox menos sus deterministas,
+pre-muestra = observaciones reales + retro-pronóstico con su ARMA), LR frente al
+VEC con identidad de puente exacta; entradas I(0) e I(1). Caso de motivación:
+`GAP <- BXE 0 0 0` sobre (G/Y, GAP), p = 4, caso 2: ω₀ = −0.0173 (0.0077), LR
+5.14, p = 0.023, β sin cambio.
+
+**Fase 2 — entradas I(1), el cast empotrado.** No es un caso singular (p. ej.
+las transferencias netas IT, I(1)). Por el despacho de drtran, entrada y salida
+con el mismo operador piden el cast empotrado: X como serie DEL sistema, con su
+fila propia (su `.pre` en el escalón diagonal del ladder), α_X = 0 (`-weakex`,
+ya existe) y sin realimentación de Y en el corto plazo de X (Γ_XY = 0, falta);
+la verosimilitud exacta integra la pre-muestra y no hace falta retro-pronóstico.
+Es el VEC condicional de Johansen (1992) / Harbo et al. (1998); el contraste de
+rango cambia de distribución (tablas de Harbo o bootstrap condicionado en X).
+Comparar con el cast por resta de la fase 1 en un caso I(1).
+
+Pendiente además: bootstrap con X fija; entrada restringida al espacio de
+cointegración; previsión (necesita el futuro de X).
 
 **Qué falta.** drvec no admite variables exógenas: toda serie de entrada entra
 en el sistema como endógena y en `Y` (I(1)). Un regresor estacionario que sólo

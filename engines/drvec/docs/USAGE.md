@@ -103,7 +103,7 @@ in case 1, where nothing does. `drvec` warns.
 |---|---|
 | `-fixb2 [v]` | hold `B₂` fixed instead of estimating it. Without a value it is held at the static-OLS estimate; with one, every entry is set to `v`. A value chosen a priori is what makes an LR test against the free model valid |
 | `-fixb2row i v` | hold **row** `i` of `B₂` (variable `i` of the `∇Y₂` block, in the `.inp`'s order) at `v` in every relation, and estimate the other rows; repeatable. The free model is fitted with the same search and the LR against it is reported, χ² with (rows held)·`r` df; with `-alpha`/`-weakex` the restricted model carries both restrictions and the df add up. The LR is **invariant to the normalisation** — the Wald on a normalised coefficient is not (§`-fixb2row` below). Refused with `-fixb2`, `-warma` and the modes |
-| `-xpre FILE` `-xlink FILE` | exogenous **transfer inputs** on the VEC (MEJORA-2). `-xpre` (repeatable) gives an input series as a fue `.pre`; `-xlink` the links, `OUT <- IN b r s` per line (drtran's syntax, `r ≤ 2`). The VEC process is `Y_out − ω(B)/δ(B)·Bᵇ X_in`, on the **levels**. The VEC without inputs is fitted first; `ω = 0` must reproduce it and the LR against it is reported (§`-xlink` below). `.pre` route, levels layout, case 2 or 3, a single fit |
+| `-xpre FILE` `-xlink FILE` | exogenous **transfer inputs** on the VEC (MEJORA-2). `-xpre` (repeatable) gives an input series as a fue `.pre`; `-xlink` the links, `OUT <- IN b r s` per line (drtran's syntax, `r ≤ 2`). The VEC process is `Y_out − ω(B)/δ(B)·Bᵇ X_in`, on the **levels** (drtran's cast by subtraction; X frozen, minus its deterministics; presample backcast with its ARMA; I(0) or I(1)). The VEC without inputs is fitted first; `ω = 0` must reproduce it and the LR against it is reported (§`-xlink` below). `.pre` route, levels layout, case 2 or 3, a single fit |
 | `-alpha file` | impose `α = Aψ` with `A` read from `file`, and report the LR against the free model |
 | `-weakex i` | shorthand for the `A` that declares equation `i` weakly exogenous |
 
@@ -887,15 +887,26 @@ the noise:
 transfer relates levels and the differencing belongs to the noise: by linearity
 `∇Y₂` receives `ν(B)∇X` and `W` receives `(ν₁ + B₂′ν₂)(B) X`.
 
-- **X is frozen and enters in the level of the series**: `refactor·BoxCox(z)`
-  with **nothing subtracted** (an intervention of X is part of what it
-  transmits). Only λ and the refactor are read from its `.pre`; its ARMA is not
-  used.
-- **Embedded, there is no backcast.** Real observations of X before the system's
-  sample are used; before X's first observation X is held at that value. X is
-  anchored at it (`X − X₁`), so the constant `ν(1)·X₁` goes to the free mean of
-  `W` — hence case 2 or 3 (case 1 is refused). X must be observed to the end of
-  the system's sample.
+- **X is frozen at its `.pre`** and built as drtran builds it
+  (`apply_univariate_model`): `refactor·BoxCox(z)` **minus its own
+  deterministics** (an intervention of X is not transmitted); it keeps its mean,
+  so `ν(1)·E[X]` goes to the free mean of `W` — hence case 2 or 3 (case 1 is
+  refused). X must be observed to the end of the system's sample.
+- **Why by subtraction, and so why a backcast.** drtran's dispatch
+  (`links_need_subtracting`, BUG-8 there): the embedded cast — the transfer as
+  off-diagonal coefficients, the exact likelihood integrating the presample out,
+  no backcast — needs input and output to share their differencing operator and
+  the input to be a series of the system with its own row. An I(0) input of an
+  I(1) output crosses operators, and a frozen X is outside the system, so the
+  cast is by subtraction and the presample of X is built as drtran's
+  `build_pre_sample` does: real observations of X before the system's sample
+  first, then a **backcast with X's ARMA** (on `∇X` when `d = 1`, cumulated back
+  to levels). With `b = r = s = 0` no presample is needed and both casts
+  coincide (drtran-note, Proposition *Exactness* iii).
+- **I(1) inputs** (`d = 1`) are allowed: in levels, the gain `ν(1)` enters `W`,
+  i.e. X enters the cointegrating relation. Their embedded alternative — X as a
+  weakly exogenous series of the VEC with its own row — is pending (TODO.md
+  MEJORA-2), and so is the rank test with I(1) inputs (Harbo et al. 1998).
 - **The rung below.** The VEC without inputs is fitted first (with the ladder
   seed, as a plain run); the inputs' fit starts there with `ω = 0, δ = 0`, and
   the logL at that point must equal the VEC's (reported as the bridge
@@ -905,5 +916,5 @@ transfer relates levels and the differencing belongs to the noise: by linearity
   s.e., and a Wald per link.
 
 Example (the study that motivated it): `GY.pre GAP.pre 4 0 1 -case 2 -xpre
-BXE.pre -xlink net.txt` with `GAP <- BXE 0 0 0`: bridge exact, `ω₀ = −0.0112`
-(s.e. 0.0064), LR 3.18, p = 0.075; `β` does not move (−0.372).
+BXE.pre -xlink net.txt` with `GAP <- BXE 0 0 0`: bridge exact, `ω₀ = −0.0173`
+(s.e. 0.0077), LR 5.14, p = 0.023; `β` does not move (−0.372).

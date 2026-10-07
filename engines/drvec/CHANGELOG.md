@@ -10,16 +10,18 @@ publicación: `v*`.
 ### `-xpre`/`-xlink`: entradas exógenas de transferencia en el VEC (MEJORA-2, fase 1)
 
 Híbrido drtran–drvec: funciones de transferencia `ω(B)/δ(B)·Bᵇ` desde series
-exógenas al **nivel** de las series del sistema, con el VEC como ruido (forma
-«por resta», sintaxis de red de drtran `OUT <- IN b r s`, `r ≤ 2`). X congelada
-y en el nivel de la serie (`refactor·BoxCox`, sin restar deterministas); al ir
-empotrado no hay retro-pronóstico: se usan las observaciones reales y antes de
-la primera X se mantiene en ese valor (anclada, la constante va a `E[W]`; por
-eso caso 2 o 3). Se ajusta primero el VEC sin entradas; `ω = 0` lo reproduce al
-bit (identidad de cruce, informada) y el LR frente a él es el contraste. Se
-rechaza con la ruta `.inp`, `-differenced`, `-warma`, caso 1, los modos, `-f`,
-`-estwin`, `-writeinp`/`-writeres`. 14 comprobaciones nuevas (335 en total,
-todas pasan; los informes de referencia no se mueven).
+exógenas al **nivel** de las series del sistema, con el VEC como ruido (sintaxis
+de red de drtran `OUT <- IN b r s`, `r ≤ 2`). Sigue el despacho de drtran: con
+X congelada fuera del sistema y operadores distintos (BXE I(0) → GAP I(1)) el
+cast es **por resta**, X se construye como en drtran (Box-Cox menos sus
+deterministas) y la pre-muestra son las observaciones reales y después el
+retro-pronóstico con el ARMA de X (`build_pre_sample`). Admite entradas I(1)
+(su ganancia entra en la relación de cointegración); su cast empotrado (X como
+serie débilmente exógena del VEC) queda en la MEJORA-2. Se ajusta primero el VEC
+sin entradas; `ω = 0` lo reproduce al bit y el LR frente a él es el contraste.
+Se rechaza con la ruta `.inp`, `-differenced`, `-warma`, caso 1, los modos,
+`-f`, `-estwin`, `-writeinp`/`-writeres`. 14 comprobaciones nuevas (335 en
+total, todas pasan; los informes de referencia no se mueven).
 
 ### `-fixb2row i v`: contrastes LR sobre una fila de β (MEJORA-1)
 

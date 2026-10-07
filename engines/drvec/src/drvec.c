@@ -760,6 +760,66 @@ static void build_y2_levels(void)
 /*    5. Σ lower triangle                            (M(M+1)/2 params)       */
 /*    6. B₂ (s×r) cointegration matrix                 (s·r params)          */
 /*****************************************************************************/
+/*  -xsys i -- AN EXOGENOUS INPUT EMBEDDED IN THE SYSTEM (MEJORA-2, phase 2).
+ *
+ *  drtran's dispatch (links_need_subtracting, BUG-8 there): when input and
+ *  output share their differencing operator the transfer goes INSIDE the
+ *  model, the input is a series of the system with its own row, and the
+ *  exact likelihood integrates its presample out -- no backcast, nothing
+ *  subtracted.  In a VEC that is the case of an I(1) input of I(1) outputs,
+ *  and "inside" means: X is one more series of the VEC whose equation is its
+ *  own model, i.e. it is STRONGLY exogenous --
+ *
+ *      alpha_X = 0            weak exogeneity: X does not adjust to the
+ *                             equilibrium error (Johansen 1992), and
+ *      Gamma_k[X][j] = 0      no feedback: no other series enters the
+ *        (j != X)             short run of X (Granger non-causality),
+ *
+ *  while the rows of Y keep everything: the entry of X in beta (the gain,
+ *  X in the long run), Gamma_k[Y][X] (the lags of the transfer) and
+ *  Sigma[Y][X] (omega_0: the SVAR identity, drtran-note Prop. 3).  The
+ *  diagonal rung of the ladder is X's univariate .pre, as for any series.
+ *  This is the conditional VEC of Johansen (1992) / Harbo et al. (1998)
+ *  with the marginal model of X written out, so the likelihood is the JOINT
+ *  one and the LR against the free VEC is the test of strong exogeneity.
+ *
+ *  The F (Gamma) mask is walked through f_free(), which every walk of the
+ *  vector uses (par_blocks, init_guess, vec_shootx, search_blocks, pack_r0,
+ *  the profiling and the printer): one predicate, so they cannot disagree.
+ *  F is in the INTERNAL order [Y1 ; Y2] (see inp2lam), so the mask is read
+ *  through lam2inp with the r of the moment -- the ladder fits at r = 0.
+ *  q = 0 only for now: Theta's walks carry the MA classes, and the mask has
+ *  not been taken through them (TODO.md MEJORA-2).                        */
+#define XS_MAX 16
+static int xs_on = 0;                     /* any series declared by -xsys   */
+static int xs_inp[XS_MAX + 1];            /* 1 = series i (.inp order)      */
+static int xs_nx = 0;
+static int xs_df = 0;                     /* parameters the mask removes    */
+static int lam2inp(int a);
+
+static int xs_is_int(int a)               /* internal row a is an input     */
+{
+    int i;
+    if (!xs_on) return 0;
+    i = lam2inp(a);
+    return i >= 1 && i <= XS_MAX && xs_inp[i];
+}
+
+/*  Entry (i, j) of each F_k (internal order) is a parameter.              */
+static int f_free(int i, int j)
+{
+    if (global_diag_ar) return i == j;
+    return i == j || !xs_is_int(i);
+}
+
+static int f_nfree(void)
+{
+    int i, j, n = 0;
+    for (i = 1; i <= nser; i++)
+        for (j = 1; j <= nser; j++) n += f_free(i, j);
+    return n;
+}
+
 /*  par_blocks — the parameter vector, split into the three stretches the
  *  profiling needs to separate, in ONE place only.
  *
@@ -803,7 +863,7 @@ static void par_blocks(int *nmean, int *nlam, int *nmid, int *ntail)
           line search fail and the Hessian singular.  Sigma[1][1] is held at 1
           and the scale is reported through sigma2 (so that Sigma[1][1] =
           sigma2 exactly).                                                    */
-    *nmid  = nf * (global_diag_ar ? M : M * M)
+    *nmid  = nf * f_nfree()
            + q  * (mawarma_on() ? r * r
                   : (marow_on() ? r * M
                   : (global_matri  ? M * M - s * r
@@ -3967,8 +4027,8 @@ static void init_guess(real *x, int npar)
     }
     for (k = 1; k <= nf; k++) {
         real **Fk = (Fseed ? Fseed[k] : F[k]);
-        if (global_diag_ar) { for (i = 1; i <= M; i++) x[idx++] = Fk[i][i]; }
-        else { for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) x[idx++] = Fk[i][j]; }
+        for (i = 1; i <= M; i++)
+            for (j = 1; j <= M; j++) if (f_free(i, j)) x[idx++] = Fk[i][j];
     }
     /* MA block.  Without -seed it starts at EXACT ZERO, which is the only real
        gap of the cold start (everything else comes from data: B₂ by OLS, Λ and
@@ -4292,12 +4352,10 @@ static void vec_shootx(real *x, struct Tvarma *armax,
         if (prof_hold) {          /* held at the r = 0 optimum; see -seedgate */
             for (i = 1; i <= M; i++)
                 for (j = 1; j <= M; j++) F[k][i][j] = hold_F[k][i][j];
-        } else if (global_diag_ar) {
-            for (i = 1; i <= M; i++) F[k][i][i] = x[idx++];
         } else {
             for (i = 1; i <= M; i++)
                 for (j = 1; j <= M; j++)
-                    F[k][i][j] = x[idx++];
+                    if (f_free(i, j)) F[k][i][j] = x[idx++];
         }
     }
 
@@ -4651,7 +4709,7 @@ static void search_blocks(int *head, int *tail)
     int nf = (global_p > 1) ? global_p - 1 : 0;
     int nsig = (global_diag_cov ? M : M * (M + 1) / 2) - 1;
     par_blocks(&nmean, &nlam, &nmid, &ntail);
-    *head = nmean + nlam + nf * (global_diag_ar ? M : M * M);
+    *head = nmean + nlam + nf * f_nfree();
     *tail = nsig + ntail;
 }
 
@@ -5123,6 +5181,8 @@ static double ladder_key(void)
              + global_diag_ar * 100 + global_diag_ma * 10 + global_diag_cov
              + nobs_raw * 1e-3 + global_matri * 0.5;
     int t, i;
+    for (i = 1; i <= nser && i <= XS_MAX; i++)       /* the -xsys mask */
+        if (xs_on && xs_inp[i]) k += 1e9 * (double) (1 << (i - 1));
     for (t = 1; t <= nobs_raw; t++)
         for (i = 1; i <= nser; i++) k += rawmat[t][i] * (1e-7 * (t % 97 + i));
     return k;
@@ -5136,8 +5196,8 @@ static void pack_r0(real *x, real ***F, real ***Th, real **S, real *mu)
     real s11 = (S[1][1] > 1e-24) ? S[1][1] : 1.0;
     if (global_case == 3) for (i = 1; i <= M; i++) x[idx++] = mu[i];
     for (k = 1; k <= nf; k++) {
-        if (global_diag_ar) for (i = 1; i <= M; i++) x[idx++] = F[k][i][i];
-        else for (i = 1; i <= M; i++) for (j = 1; j <= M; j++) x[idx++] = F[k][i][j];
+        for (i = 1; i <= M; i++)
+            for (j = 1; j <= M; j++) if (f_free(i, j)) x[idx++] = F[k][i][j];
     }
     search_blocks(&head, &tail);
     if (q > 0) theta_pack(Th, ma_class_now(), q, x, idx - 1);
@@ -5492,9 +5552,8 @@ static int gate_profile_seed(real *x, int npar)
     for (i = 1; i <= ntail; i++) x[nhead + nmid + i] = x2[nhead + i];
     idx = nhead + 1;
     for (k = 1; k <= nf; k++) {
-        if (global_diag_ar) { for (i = 1; i <= M; i++) x[idx++] = hold_F[k][i][i]; }
-        else for (i = 1; i <= M; i++)
-                 for (j = 1; j <= M; j++) x[idx++] = hold_F[k][i][j];
+        for (i = 1; i <= M; i++)
+            for (j = 1; j <= M; j++) if (f_free(i, j)) x[idx++] = hold_F[k][i][j];
     }
     /*  The rung below is estimated at r = 0, where the moving average is FREE
      *  (the structured classes collapse there; see ma_struct_on()).  The rung
@@ -7386,12 +7445,13 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
         }
         if (b2row_on && lr_free_ok) {
             int nh = b2_nheld(nser - global_r), df, i_;
-            int dfa = global_alpha ? (nser - alpha_sa) * global_r : 0;
+            int dfa = (global_alpha && !xs_on) ? (nser - alpha_sa) * global_r : 0;
             real lr = 2.0 * (lr_free - vp->logelf), pv;
             df = nh * global_r + dfa;
             pv = (df > 0 && lr > 0.0) ? gsl_cdf_chisq_Q(lr, df) : 1.0;
             fprintf(outputv, "\n--- beta restricted by -fixb2row%s, against "
-                             "H(r) ---\n", global_alpha ? " and alpha = A*psi" : "");
+                             "H(r) ---\n", xs_on ? " (inputs embedded by -xsys in both)"
+                             : (global_alpha ? " and alpha = A*psi" : ""));
             for (i_ = 1; i_ <= nser - global_r; i_++)
                 if (b2_held(i_))
                     fprintf(outputv, "row %d of B2 (%s) held at %g in every "
@@ -7400,10 +7460,35 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
             fprintf(outputv, "logL restricted        : %15.10f\n", vp->logelf);
             fprintf(outputv, "LR = 2(free - restr.)  : %15.10f\n", lr);
             fprintf(outputv, "degrees of freedom     : %d   (rows held)*r%s\n", df,
-                    global_alpha ? " + (M - sa)*r" : "");
+                    (global_alpha && !xs_on) ? " + (M - sa)*r" : "");
             fprintf(outputv, "p-value (chi2)         : %15.10f\n", pv);
             printf("  restricted         : logL = %15.10f\n", vp->logelf);
             printf("  LR = %.6f, %d df, p = %.6f%s\n", lr, df, pv,
+                   (lr < -1.0e-6) ? "   <- NEGATIVE: the restricted beats the free one,"
+                                    " so one of the two did not converge" : "");
+        }
+        else if (xs_on && lr_free_ok) {
+            int df = xs_df, i_;
+            real lr = 2.0 * (lr_free - vp->logelf);
+            real pv = (df > 0 && lr > 0.0) ? gsl_cdf_chisq_Q(lr, df) : 1.0;
+            fprintf(outputv, "\n--- the inputs embedded by -xsys: strong exogeneity, "
+                             "against the free VEC ---\n");
+            for (i_ = 1; i_ <= nser; i_++)
+                if (xs_inp[i_])
+                    fprintf(outputv, "%s: alpha = 0 and no other series in its "
+                            "short run (Gamma(k) row)\n", sname(i_));
+            fprintf(outputv, "logL VEC free          : %15.10f\n", lr_free);
+            fprintf(outputv, "logL inputs embedded   : %15.10f\n", vp->logelf);
+            fprintf(outputv, "LR = 2(free - restr.)  : %15.10f\n", lr);
+            fprintf(outputv, "degrees of freedom     : %d   r*(inputs) + "
+                             "(p-1)*(Gamma entries held)\n", df);
+            fprintf(outputv, "p-value (chi2)         : %15.10f\n", pv);
+            fprintf(outputv, "  Not rejecting is what licenses reading the rows of "
+                             "the outputs as a\n  transfer from the inputs: their "
+                             "entry in beta (the gain), their lags\n  in Gamma and "
+                             "the covariance Q (omega_0, the SVAR identity).\n");
+            printf("  inputs embedded    : logL = %15.10f\n", vp->logelf);
+            printf("  LR (strong exogeneity) = %.6f, %d df, p = %.6f%s\n", lr, df, pv,
                    (lr < -1.0e-6) ? "   <- NEGATIVE: the restricted beats the free one,"
                                     " so one of the two did not converge" : "");
         }
@@ -7694,13 +7779,9 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
         int nf = (global_p > 1) ? global_p - 1 : 0;
         for (int k = 1; k <= nf; k++)
             for (int i = 1; i <= nser; i++)
-                for (int j = 1; j <= nser; j++) {
-                    if (global_diag_ar) {
-                        if (i == j) { ix_F[(k-1)*nser + i][j] = ii;
-                                      F_m[k][i][j] = x[ii++]; }
-                    } else { ix_F[(k-1)*nser + i][j] = ii;
-                             F_m[k][i][j] = x[ii++]; }
-                }
+                for (int j = 1; j <= nser; j++)
+                    if (f_free(i, j)) { ix_F[(k-1)*nser + i][j] = ii;
+                                        F_m[k][i][j] = x[ii++]; }
         /*  With -mawarma the free block is only the r*r entries at the top
          *  left; the upper-right block is determined by B2 (which this walk has
          *  not read yet) and the lower s rows are zero.  They are stored here
@@ -9374,6 +9455,7 @@ static const struct opt_spec {
     { "-fixb2row",    A_INT_REAL, "i v"  },
     { "-xpre",        A_STR,      "FILE" },
     { "-xlink",       A_STR,      "FILE" },
+    { "-xsys",        A_INT_POS,  "i"    },
     { "-lrtest",      A_NONE,     NULL   },
     { "-bootstrap",   A_INT_POS,  "N"    },
     { "-rungs",       A_NONE,     NULL   },
@@ -9485,6 +9567,14 @@ static void usage(FILE *o)
     fprintf(o, "                 reproduce it (reported), and the LR against it is\n");
     fprintf(o, "                 the test.  .pre route, levels layout, case 2 or 3,\n");
     fprintf(o, "                 a single fit\n\n");
+    fprintf(o, "  -xsys i        series i (position in the input, in the nabla Y2\n");
+    fprintf(o, "                 block) is an input EMBEDDED in the system (drtran's\n");
+    fprintf(o, "                 embedded cast, for an input with the outputs'\n");
+    fprintf(o, "                 operator, e.g. I(1)): alpha_i = 0 and no other\n");
+    fprintf(o, "                 series in its short run; repeatable.  The free VEC\n");
+    fprintf(o, "                 is fitted too and the LR of strong exogeneity is\n");
+    fprintf(o, "                 reported.  The transfer is read in the outputs'\n");
+    fprintf(o, "                 rows: beta (gain), Gamma (lags), Q (omega_0).  q = 0\n\n");
     fprintf(o, "  -lrtest        sequential LR test for the cointegration rank:\n");
     fprintf(o, "                 estimates r = 0..M-1 and reports 2*[L(r+1) - L(r)];\n");
     fprintf(o, "                 incompatible with -differenced\n\n");
@@ -9944,6 +10034,17 @@ static int parse_cli(int argc, char *argv[])
             xl_netfile = argv[++i];
             xl_on = 1;
         }
+        else if (strcmp(argv[i], "-xsys") == 0 && i + 1 < argc) {
+            int ix = atoi(argv[++i]);
+            if (ix < 1 || ix > XS_MAX) {
+                fprintf(stderr, "ERROR: -xsys %d: the series is named by its "
+                                "position in the input, 1..%d\n", ix, XS_MAX);
+                exit(2);
+            }
+            if (!xs_inp[ix]) xs_nx++;
+            xs_inp[ix] = 1;
+            xs_on = 1;
+        }
         else if (strcmp(argv[i], "-fixb2row") == 0 && i + 2 < argc) {
             int ir = atoi(argv[i+1]);
             b2row_fix[ir] = 1;                   /* range checked by validate_cli */
@@ -10060,6 +10161,22 @@ static int parse_cli(int argc, char *argv[])
                 "       keeps its mean, and nu(1) times it goes to E[W].\n");
             exit(2);
         }
+    }
+    /*  -xsys: one fit with the mask, against the free VEC.  The rank test
+     *  would need Harbo et al.'s tables (or a bootstrap conditional on X);
+     *  the modes refit in other settings and do not carry the mask; -warma
+     *  has no F to mask; the MA walks do not carry it yet (q = 0); and alpha
+     *  is set by the mask itself, so -alpha/-weakex would be a second A.    */
+    if (xs_on && (global_warma || global_lrtest || global_specs || global_rungs
+                  || global_matest || global_artest || global_eval
+                  || global_alpha || xl_on || global_q > 0)) {
+        fprintf(stderr,
+            "ERROR: -xsys embeds an input in the system for a single fit with\n"
+            "       q = 0.  It cannot be combined with -alpha/-weakex (it sets\n"
+            "       alpha itself), -xlink, -warma, a moving average (q > 0, not\n"
+            "       yet), or the modes -lrtest, -specs, -rungs, -matest, -artest\n"
+            "       and -eval.\n");
+        exit(2);
     }
     if (b2row_on && (global_fixb2 || global_warma || global_lrtest
                      || global_specs || global_rungs || global_matest
@@ -10278,7 +10395,49 @@ int main(int argc, char *argv[])
 
     /* -alpha / -weakex: load the A of the alpha = A*psi restriction.  Done
        here because it needs nser, and before npar is computed.               */
-    if (global_alpha) {
+    if (xs_on) {
+        int i_, c_;
+        if (xs_nx >= nser) {
+            fprintf(stderr, "ERROR: -xsys declares every series an input: "
+                            "there is nothing left to explain.\n");
+            exit(2);
+        }
+        for (i_ = nser + 1; i_ <= XS_MAX; i_++)
+            if (xs_inp[i_]) {
+                fprintf(stderr, "ERROR: -xsys %d: the system has %d series\n",
+                        i_, nser);
+                exit(2);
+            }
+        for (i_ = nser - global_r + 1; i_ <= nser; i_++)
+            if (xs_inp[i_]) {
+                fprintf(stderr,
+                    "ERROR: -xsys %d: series %d is in the Y1 block (the last %d of\n"
+                    "       the input), on which beta is normalised.  An input does\n"
+                    "       not adjust to the equilibrium, so it cannot be the\n"
+                    "       series a relation is solved for: put it in the nabla Y2\n"
+                    "       block (among the first %d).\n",
+                    i_, i_, global_r, nser - global_r);
+                exit(2);
+            }
+        /*  alpha_X = 0 for every input: A is the identity without their
+         *  columns, kept in the .inp's order like -weakex's (BUG-28/29).
+         *  At r = 0 there is no alpha and the mask is only on F.          */
+        if (global_r >= 1) {
+            alpha_sa = nser - xs_nx;
+            alpha_A  = matrix(1, nser, 1, alpha_sa);
+            for (i_ = 1; i_ <= nser; i_++)
+                for (c_ = 1; c_ <= alpha_sa; c_++) alpha_A[i_][c_] = 0.0;
+            for (i_ = 1, c_ = 0; i_ <= nser; i_++)
+                if (!xs_inp[i_]) alpha_A[i_][++c_] = 1.0;
+            global_alpha = 1;
+        }
+        printf("Inputs embedded in the system (-xsys), strongly exogenous:\n");
+        for (i_ = 1; i_ <= nser; i_++)
+            if (xs_inp[i_])
+                printf("  %-12s alpha = 0%s, no other series in its short run\n",
+                       series_names[i_], global_r >= 1 ? "" : " (r = 0: none)");
+    }
+    else if (global_alpha) {
         int bad = alpha_weakex ? build_weakex_A(alpha_weakex)
                                : load_alpha_A(alpha_file);
         if (bad) exit(1);
@@ -10630,7 +10789,9 @@ int main(int argc, char *argv[])
                         i_, s_, (s_ == 1) ? "" : "s", s_);
                 exit(2);
             }
-        global_alpha = 0; b2row_on = 0;
+        /*  With -xsys the inputs stay embedded in the free model too: the LR
+         *  is then about beta inside the conditional VEC.                  */
+        global_alpha = xs_on ? sa_ : 0; b2row_on = 0;
         {
             int npf = calc_nparametrs(), iff;
             real *xf = vector(1, npf), *devf = vector(1, npf);
@@ -10653,6 +10814,38 @@ int main(int argc, char *argv[])
             free_vector(xf, 1, npf);
         }
         global_alpha = sa_; b2row_on = bo_;
+    }
+    else if (xs_on) {
+        /*  -xsys: the FREE VEC -- no mask on F, no alpha = 0 -- with the same
+         *  search, so that the LR of strong exogeneity compares two optima. */
+        int sa_ = global_alpha, npr = calc_nparametrs();
+        xs_on = 0; global_alpha = 0;
+        {
+            int npf = calc_nparametrs(), iff;
+            real *xf = vector(1, npf), *devf = vector(1, npf);
+            real **covf = matrix(1, npf, 1, npf);
+            real llf = 0.0, s2f = 0.0;
+            FILE *o_save = outputv, *nul = tmpfile();
+            int q_save = quiet_mode;
+            xs_df = npf - npr;
+            if (nul) outputv = nul;
+            quiet_mode = 1;
+            init_guess(xf, npf);
+            if (ladder_wanted() && global_r > 0) gate_profile_seed(xf, npf);
+            else if (ladder_wanted() && global_r == 0) ladder_seed_r0(xf, npf);
+            iff = fit_search(xf, npf, devf, covf, &llf, &s2f, 1, 0, NULL);
+            outputv = o_save; quiet_mode = q_save;
+            if (nul) fclose(nul);
+            lr_free_ok = (iff == 0);
+            lr_free    = llf;
+            gate_seed_ok = 0;            /* that profile was the free model's */
+            printf("  VEC free (no -xsys): logL = %15.10f%s\n", lr_free,
+                   lr_free_ok ? "" : "  (the estimation failed)");
+            free_matrix(covf, 1, npf, 1, npf);
+            free_vector(devf, 1, npf);
+            free_vector(xf, 1, npf);
+        }
+        xs_on = 1; global_alpha = sa_;
     }
     else if (global_alpha) {
         int save = global_alpha;

@@ -7,6 +7,20 @@ publicación: `v*`.
 
 ## Sin publicar
 
+### `-xsys i`: entrada exógena empotrada en el sistema (MEJORA-2, fase 2)
+
+El cast empotrado de drtran en el VEC, para entradas con el mismo operador que
+las salidas (I(1)): la serie `i` es una más del sistema con su propio modelo,
+fuertemente exógena — `α_i = 0` y ninguna otra serie en su fila de `Γ(k)` —, y
+las filas de las salidas conservan la transferencia (su entrada en `β`, los
+retardos en `Γ`, ω₀ en `Q`). Sin retro-pronóstico: la verosimilitud exacta
+integra la pre-muestra. Se ajusta también el VEC libre y se informa el LR de
+exogeneidad fuerte. La máscara de `Γ` pasa por un único predicado (`f_free`) que
+usan todos los recorridos del vector. Con `-diagar` equivale exactamente a
+`-weakex i`. Por ahora `q = 0`; se rechaza con `-alpha`/`-weakex`, `-xlink`,
+`-warma` y los modos. 11 comprobaciones nuevas (346, todas pasan; los 24 informes
+de referencia, idénticos byte a byte).
+
 ### `-xpre`/`-xlink`: entradas exógenas de transferencia en el VEC (MEJORA-2, fase 1)
 
 Híbrido drtran–drvec: funciones de transferencia `ω(B)/δ(B)·Bᵇ` desde series

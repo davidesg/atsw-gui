@@ -1615,6 +1615,55 @@ cli "-xlink to an unknown series is refused" 1 "$XMUS" "$XMNK" 2 0 1 -case 2 -xp
 cli "-xlink with r > 2 is refused"        1 "$XMUS" "$XMNK" 2 0 1 -case 2 -xpre "$XTMP/xrev.pre" -xlink "$XTMP/netr3.txt"
 echo
 
+echo "[6d] -xsys: an input embedded in the system (MEJORA-2, phase 2)"
+#  drtran's embedded cast in a VEC: the input is a series of the system with
+#  alpha = 0 and no other series in its short run.  What can be checked: with
+#  -diagar the Gamma mask is empty and -xsys 1 IS -weakex 1 (same model, same
+#  optimum); the free model of the LR is the plain fit; the walk consumes
+#  npar; the report carries no Gamma entry in the input's row; the df; and
+#  what the option cannot honour is refused.
+xsrun() {   # xsrun <name> <args...> : .pre route, sets XSTDERR
+    local nm=$1; shift
+    rm -f "$TMP/$nm.out"
+    XSTDERR=$(cd "$TMP" && timeout "$RUN_TIMEOUT" "$XDRV" "$XROOT/$XMUS" \
+              "$XROOT/$XMNK" "$@" -name "$nm" 2>&1 >/dev/null)
+}
+xsrun xsa 3 0 1 -case 2 -diagar -xsys 1
+xsrun xsb 3 0 1 -case 2 -diagar -weakex 1
+la=$(logelf_of "$TMP/xsa"); lb=$(logelf_of "$TMP/xsb")
+if [ -n "$la" ] && [ -n "$lb" ] && near "$la" "$lb"; then
+    ok "-xsys with -diagar is -weakex: the same optimum ($la)"
+else bad "-xsys = -weakex under -diagar" "xsys=$la weakex=$lb"; fi
+xsrun xsp 3 0 1 -case 2
+xsrun xsc 3 0 1 -case 2 -xsys 1
+lp=$(logelf_of "$TMP/xsp")
+lf=$(grep -a 'logL VEC free' "$TMP/xsc.out" | awk '{print $NF}')
+if [ -n "$lf" ] && near "$lf" "$lp"; then
+    ok "-xsys: the free model of the LR is the plain fit ($lp)"
+else bad "-xsys free model" "free=$lf plain=$lp"; fi
+if printf '%s' "$XSTDERR" | grep -qiE 'ERROR (output|init_guess)'; then
+    bad "-xsys walk" "$(printf '%s' "$XSTDERR" | grep -iE 'ERROR (output|init_guess)' | head -1)"
+else ok "-xsys: the parameter walk consumes exactly npar"; fi
+if grep -aq 'D\.muskrat <- D\.mink' "$TMP/xsc.out"; then
+    bad "-xsys mask" "the input's row of Gamma carries another series"
+elif grep -aq 'D\.mink <- D\.muskrat(-1)' "$TMP/xsc.out"; then
+    ok "-xsys: the input's row of Gamma is its own; the output's keeps the input"
+else bad "-xsys mask" "no Gamma table"; fi
+#  p = 3, r = 1, M = 2: alpha (1) + 2 lags x 1 entry = 3 df; at r = 0, 2.
+if grep -aq 'degrees of freedom     : 3 ' "$TMP/xsc.out"; then
+    ok "-xsys: df = r*(inputs) + (p-1)*(Gamma entries held) = 3"
+else bad "-xsys df" "$(grep -a 'degrees of freedom     :' "$TMP/xsc.out")"; fi
+xsrun xs0 3 0 0 -case 2 -xsys 1
+if grep -aq 'degrees of freedom     : 2 ' "$TMP/xs0.out"; then
+    ok "-xsys at r = 0: only the Gamma mask, 2 df"
+else bad "-xsys r=0" "$(grep -a 'degrees of freedom     :' "$TMP/xs0.out")"; fi
+cli "-xsys on the Y1 block is refused"     2 "$XMUS" "$XMNK" 3 0 1 -case 2 -xsys 2
+cli "-xsys outside the system is refused"  2 "$XMUS" "$XMNK" 3 0 1 -case 2 -xsys 3
+cli "-xsys with -weakex is refused"        2 "$XMUS" "$XMNK" 3 0 1 -case 2 -xsys 1 -weakex 2
+cli "-xsys with -lrtest is refused"        2 "$XMUS" "$XMNK" 3 0 0 -case 2 -xsys 1 -lrtest
+cli "-xsys with q > 0 is refused (not yet)" 2 "$XMUS" "$XMNK" 3 1 1 -case 2 -xsys 1
+echo
+
 echo "[7] the rank test on data whose rank is known by construction"
 # Every other check of -lrtest compares against another program's answer.  These
 # two compare against the TRUTH, because the data was generated to have it:

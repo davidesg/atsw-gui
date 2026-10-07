@@ -104,6 +104,7 @@ in case 1, where nothing does. `drvec` warns.
 | `-fixb2 [v]` | hold `B₂` fixed instead of estimating it. Without a value it is held at the static-OLS estimate; with one, every entry is set to `v`. A value chosen a priori is what makes an LR test against the free model valid |
 | `-fixb2row i v` | hold **row** `i` of `B₂` (variable `i` of the `∇Y₂` block, in the `.inp`'s order) at `v` in every relation, and estimate the other rows; repeatable. The free model is fitted with the same search and the LR against it is reported, χ² with (rows held)·`r` df; with `-alpha`/`-weakex` the restricted model carries both restrictions and the df add up. The LR is **invariant to the normalisation** — the Wald on a normalised coefficient is not (§`-fixb2row` below). Refused with `-fixb2`, `-warma` and the modes |
 | `-xpre FILE` `-xlink FILE` | exogenous **transfer inputs** on the VEC (MEJORA-2). `-xpre` (repeatable) gives an input series as a fue `.pre`; `-xlink` the links, `OUT <- IN b r s` per line (drtran's syntax, `r ≤ 2`). The VEC process is `Y_out − ω(B)/δ(B)·Bᵇ X_in`, on the **levels** (drtran's cast by subtraction; X frozen, minus its deterministics; presample backcast with its ARMA; I(0) or I(1)). The VEC without inputs is fitted first; `ω = 0` must reproduce it and the LR against it is reported (§`-xlink` below). `.pre` route, levels layout, case 2 or 3, a single fit |
+| `-xsys i` | series `i` (position in the input; it must be in the `∇Y₂` block) is an exogenous input **embedded in the system** — drtran's embedded cast, for an input that shares the outputs' operator (an I(1) input): `α_i = 0` and no other series in its row of `Γ(k)`; repeatable. The free VEC is fitted too and the LR of **strong exogeneity** is reported (df = `r`·inputs + (p−1)·entries held). Refused with `-alpha`/`-weakex`, `-xlink`, `-warma`, `q > 0` (not yet) and the modes (§`-xsys` below) |
 | `-alpha file` | impose `α = Aψ` with `A` read from `file`, and report the LR against the free model |
 | `-weakex i` | shorthand for the `A` that declares equation `i` weakly exogenous |
 
@@ -918,3 +919,43 @@ transfer relates levels and the differencing belongs to the noise: by linearity
 Example (the study that motivated it): `GY.pre GAP.pre 4 0 1 -case 2 -xpre
 BXE.pre -xlink net.txt` with `GAP <- BXE 0 0 0`: bridge exact, `ω₀ = −0.0173`
 (s.e. 0.0077), LR 5.14, p = 0.023; `β` does not move (−0.372).
+
+### `-xsys`: an input embedded in the system (drtran's embedded cast)
+
+drtran dispatches on the differencing operators: when input and output share
+theirs, the transfer goes **inside** the model, the input is a series of the
+system with its own row, and the exact likelihood integrates its presample out —
+no backcast, nothing subtracted. In a VEC that is the case of an **I(1) input**
+(net transfers, a foreign price), and inside means: X is one more series of the
+VEC whose equation is its own model, i.e. X is **strongly exogenous**,
+
+    α_X = 0                  (weak exogeneity: X does not adjust, Johansen 1992)
+    Γ_k[X][j] = 0, j ≠ X     (no feedback: nothing else in X's short run)
+
+while the rows of the outputs keep everything that makes up the transfer: X's
+entry in `β` (the long-run gain), `Γ_k[Y][X]` (the lags) and `Q[Y][X]` (ω₀, the
+SVAR identity of drtran-note Prop. 3). It is the conditional VEC of Johansen
+(1992) / Harbo et al. (1998) with X's marginal model written out, so the
+likelihood is the joint one; the diagonal rung of the ladder is X's own `.pre`,
+as for any series.
+
+- X must sit in the `∇Y₂` block (the first `M − r` series): an input does not
+  adjust, so no relation can be solved for it.
+- The free VEC is fitted with the same search and the LR of the mask is
+  reported: **strong exogeneity**. Not rejecting it is what licenses reading the
+  outputs' rows as a transfer from X. With `-fixb2row` the inputs stay embedded in
+  both models and the LR is about `β` inside the conditional VEC (e.g. the gain
+  of X = 0).
+- The rank test is not available (Harbo et al.'s tables, or a bootstrap
+  conditional on X: TODO.md MEJORA-2); `q = 0` only for now (the masks have not
+  been taken through the MA classes). Forecasts work: X is forecast by its own
+  row.
+- With `-diagar` the `Γ` mask is empty and `-xsys i` is exactly `-weakex i`
+  (checked by the suite).
+
+Example (the study that motivated it): `IT.pre GY.pre GAP.pre 4 0 1 -case 2
+-xsys 1`, IT = (income + transfers received)/(income + transfers paid), I(1).
+Strong exogeneity of IT: LR 3.17, 7 df, p = 0.87. IT in `β`: −0.028 (s.e.
+0.056); G/Y −0.372, as without IT. The subtracting cast on the same data
+(`GAP <- IT 0 0 0`, `-xlink`) agrees: ω₀ = −0.0021 (0.0024), LR 0.73, p = 0.39.
+

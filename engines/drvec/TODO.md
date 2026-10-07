@@ -58,7 +58,7 @@ VEC con identidad de puente exacta; entradas I(0) e I(1). Caso de motivación:
 `GAP <- BXE 0 0 0` sobre (G/Y, GAP), p = 4, caso 2: ω₀ = −0.0173 (0.0077), LR
 5.14, p = 0.023, β sin cambio.
 
-**Fase 2 — entradas I(1), el cast empotrado.** No es un caso singular (p. ej.
+**Fase 2 — entradas I(1), el cast empotrado.** HECHA el 2026-10-07 (`-xsys i`, q = 0): IT empotrada en (G/Y, GAP), exogeneidad fuerte LR 3.17, 7 g.l., p = 0.87; IT en β −0.028 (n.s.). Pendiente: la máscara por las clases MA (q > 0), el contraste de rango (Harbo et al. 1998 / bootstrap condicionado), `-xsys` con `-xlink`. Diseño original: No es un caso singular (p. ej.
 las transferencias netas IT, I(1)). Por el despacho de drtran, entrada y salida
 con el mismo operador piden el cast empotrado: X como serie DEL sistema, con su
 fila propia (su `.pre` en el escalón diagonal del ladder), α_X = 0 (`-weakex`,

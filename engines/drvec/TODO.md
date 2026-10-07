@@ -50,7 +50,15 @@ el LR del libro.
 
 ## MEJORA-2 — Regresores exógenos estacionarios (I(0)) en el VECM
 
-**Estado:** abierta (2026-10-07).
+**Estado:** fase 1 HECHA el 2026-10-07 (rama `feature/xlink`): `-xpre`/`-xlink`,
+funciones de transferencia racionales al nivel de las series del sistema, forma
+«por resta», X congelada y en nivel, empotrado sin retro-pronóstico, LR frente
+al VEC con identidad de puente exacta. Caso de motivación: `GAP <- BXE 0 0 0`
+sobre (G/Y, GAP), p = 4, caso 2: ω₀ = −0.0112 (0.0064), LR 3.18, p = 0.075, β
+sin cambio. Pendiente: bootstrap con X fija; contraste de rango con entradas
+(Harbo et al. 1998 si X es I(1)); entrada restringida al espacio de
+cointegración; previsión (necesita el futuro de X); VARMAX (X con su propio
+modelo, I(1) condicional).
 
 **Qué falta.** drvec no admite variables exógenas: toda serie de entrada entra
 en el sistema como endógena y en `Y` (I(1)). Un regresor estacionario que sólo
@@ -90,3 +98,36 @@ interacción con `-weakex`/`-alpha`.
 coeficientes nulos simulada, LR de exclusión ~ χ²; reproducir un ejemplo
 publicado de VECM con exógenas (p. ej. `urca::ca.jo(dumvar=)` para la parte de
 corto plazo).
+
+## MEJORA-3 — Deriva por serie en el bloque ∇Y₂ y tendencia restringida (Caso 4)
+
+**Estado:** abierta (2026-10-07), nota del analista.
+
+**Qué falta.** Los casos 1–3 tratan el bloque ∇Y₂ en bloque: o ninguna serie
+tiene deriva (caso 2) o todas (caso 3). En el caso de motivación (trivariante
+ln G/Y, ln IPC_USA, ln IPC_EC) los precios tienen deriva y G/Y no: hace falta
+imponer `E[∇Y₂,i] = 0` para algunas series y dejar libre el resto (p. ej.
+`-nodrift i`, repetible, con su LR frente al caso 3). Y, cuando la relación de
+equilibrio puede llevar tendencia (convergencia, Balassa–Samuelson), el
+**caso 4**: tendencia lineal restringida al espacio de cointegración, constante
+libre (Johansen 1995, cap. 6; tablas propias o bootstrap).
+
+**Por qué importa.** Con `μ_G/Y = 0`, una relación sin tendencia exige
+`μ_EC + β_USA μ_USA = 0`; bajo PPA (`β_USA = −1`) las derivas de los dos IPC
+deberían coincidir (0.67 frente a 0.54 %/trim. en el caso). El rechazo de la PPA
+en caso 3 (LR 6.21, p 0.013) puede deberse a una tendencia omitida en la
+relación y no a una violación de PPA: sin caso 4 no se puede distinguir.
+
+**Diseño propuesto (analista, 2026-10-07): heredar la media del `.pre`.** En la
+ruta `.pre` cada serie trae su μ y su indicador (`Imu`, ya leído por
+`fue_pre_reader.c`; BUG-38). `-case pre`: `E[∇Y₂,i]` libre si `Imu = 1`, nula si
+`Imu = 0`; `E[W]` libre; la deriva del bloque Y₁ queda determinada por
+`−β₂′E[∇Y₂]`. Así el escalón 0 del ladder reproduce EXACTAMENTE los
+univariantes definitivos (hoy, en caso 3, G/Y M1 sale −222.91 en vez de su
+−223.42 sin deriva). No por defecto (no mover los informes de referencia); LR
+frente al caso 3. En el bivariante (G/Y sin deriva) equivale al caso 2; en el
+trivariante es el caso mixto.
+
+**A estudiar:** cómo entran media y tendencia en `Ȳ = (∇Y₂, W)` (Mauricio 2006,
+Remark 6: E[W], E[∇Y₂]); identificación con r ≥ 2; distribución del contraste de
+rango en el caso mixto y en el caso 4; relación con MEJORA-2 (exógenas).

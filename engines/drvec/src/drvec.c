@@ -517,6 +517,103 @@ static int b2_held(int i)
     return b2row_on && i >= 1 && i <= B2ROW_MAX && b2row_fix[i];
 }
 
+/*  -xpre X.pre / -xlink FILE -- EXOGENOUS TRANSFER-FUNCTION INPUTS (MEJORA-2).
+ *
+ *  The hybrid of the suite's two embeddings: drtran adds a filter, drvec the
+ *  error-correction matrix; here the VEC system receives drtran's filters.
+ *  The school's doctrine (drtran-python/docs/LEVEL_TRANSFER_PLAN.md): the
+ *  transfer relates LEVELS, the differencing belongs to the noise.  So
+ *
+ *      N_t = Y_t - sum_k nu_k(B) X_{k,t},   nu_k(B) = omega_k(B)/delta_k(B) B^b
+ *
+ *  with Y in w = refactor*BoxCox(z) units minus its deterministics (as every
+ *  .pre series here) and X in the LEVEL of the series, refactor*BoxCox(z)
+ *  with nothing subtracted (its interventions are part of what it
+ *  transmits), and N is the VEC process: Ybar is built from N exactly
+ *  as from Y.  By linearity nabla Y2 receives nu(B) nabla X and W receives
+ *  (nu_1 + B2'nu_2)(B) X in levels.  The cast is drtran's "by subtraction";
+ *  X is FROZEN: its data, nothing of its model (only lambda and refactor
+ *  are read from the .pre).  omega = 0 reproduces the VEC rung bit for bit, and
+ *  unlike Lambda = 0 it is an interior point (VEC_EMBEDDING_PLAN.md 3), so
+ *  the ladder's usual bridge works: the VEC optimum with omega = 0 is the
+ *  start, and the LR against the VEC is the test.
+ *
+ *  The presample of X: EMBEDDED, there is no backcast (drtran's
+ *  build_pre_sample is not needed).  Real observations of X before the
+ *  system's sample are used; before X's first observation X is held at
+ *  that first value.  X is stored as X - X_anchor (the first value), so the
+ *  held stretch is exactly zero, the filter needs no truncation, and the
+ *  constant nu(1)*X_anchor that this drops goes to the free mean of W (and
+ *  differences out of nabla Y2).  omega(B) follows Box-Jenkins: omega_0 - omega_1 B
+ *  - ...; delta(B) = 1 - delta_1 B - ... (drtran compute_irf).  The block
+ *  goes LAST in x[], after B2, inside par_blocks' tail, so every routine that
+ *  moves the tail as a block (the ladder, the MA classes, the profiling)
+ *  carries it unchanged.                                                    */
+#define XL_MAXIN  8
+#define XL_MAXLNK 16
+#define XL_MAXORD 12
+static int   xl_on = 0, xl_nin = 0, xl_nlnk = 0;
+static char *xl_netfile = NULL;
+static char *xl_infile[XL_MAXIN + 1];
+static char *xl_inname[XL_MAXIN + 1];
+static int   xl_d[XL_MAXIN + 1];          /* X's regular differences (0 or 1) */
+static int   xl_nreal[XL_MAXIN + 1];      /* presample values that are data   */
+static int   xl_nbc[XL_MAXIN + 1];        /* presample values held at X_1     */
+struct xl_link { int out, in, b, r, s; };
+static struct xl_link xl_lnk[XL_MAXLNK + 1];
+static int   xl_npre = 0, xl_len = 0;     /* presample length; total length   */
+static real **xl_X = NULL;                /* [in][1..xl_len]; row t = xl_npre+t */
+static real **xl_T = NULL;                /* [row 1..nobs_raw][col]: sum nu X  */
+static real  xl_base_ll = 0.0, xl_bridge_ll = 0.0;
+static int   xl_base_ok = 0, xl_bridge_ok = 0;
+
+/*  Number of transfer parameters: (s + 1) omegas and r deltas per link.   */
+static int xl_npar(void)
+{
+    int k, n = 0;
+    if (!xl_on) return 0;
+    for (k = 1; k <= xl_nlnk; k++) n += xl_lnk[k].s + 1 + xl_lnk[k].r;
+    return n;
+}
+
+/*  xl_compute -- xl_T = sum over links of nu(B) X, in levels, on the rows of
+ *  rawmat, from the parameters xp[1..xl_npar()].  Returns 1 if a denominator
+ *  is not stable (the filter would explode), 0 otherwise.                  */
+static int xl_compute(const real *xp)
+{
+    int k, j, t, m, c = 1, row, col;
+    real *nu = vector(1, xl_len);
+    for (row = 1; row <= nobs_raw; row++)
+        for (col = 1; col <= nser; col++) xl_T[row][col] = 0.0;
+    for (k = 1; k <= xl_nlnk; k++) {
+        struct xl_link *L = &xl_lnk[k];
+        real om[XL_MAXORD + 1], de[XL_MAXORD + 1];
+        for (j = 0; j <= L->s; j++) om[j] = xp[c++];
+        for (j = 1; j <= L->r; j++) de[j] = xp[c++];
+        if ((L->r == 1 && fabs(de[1]) >= 1.0)
+            || (L->r == 2 && !(de[1] + de[2] < 1.0 && de[2] - de[1] < 1.0
+                               && fabs(de[2]) < 1.0))) {
+            free_vector(nu, 1, xl_len);
+            return 1;
+        }
+        for (t = 1; t <= xl_len; t++) {          /* nu[t] weighs lag t-1 */
+            real sum = 0.0;
+            int lag = t - 1 - L->b;
+            if (lag >= 0 && lag <= L->s) sum = (lag == 0) ? om[0] : -om[lag];
+            for (j = 1; j <= L->r; j++) if (t > j) sum += de[j] * nu[t - j];
+            nu[t] = sum;
+        }
+        for (row = 1; row <= nobs_raw; row++) {
+            int kk = xl_npre + row;
+            real acc = 0.0;
+            for (m = 1; m <= kk; m++) acc += nu[m] * xl_X[L->in][kk - m + 1];
+            xl_T[row][L->out] += acc;
+        }
+    }
+    free_vector(nu, 1, xl_len);
+    return 0;
+}
+
 /*  Number of B2 rows held among the s of the current rank.                */
 static int b2_nheld(int s)
 {
@@ -705,7 +802,7 @@ static void par_blocks(int *nmean, int *nlam, int *nmid, int *ntail)
            + (global_diag_cov ? M : M * (M + 1) / 2) - 1;
 
     /* 6. B_2 (s x r): the entries -fixb2 / -fixb2row do not hold */
-    *ntail = (s - b2_nheld(s)) * r;
+    *ntail = (s - b2_nheld(s)) * r + xl_npar();
 }
 
 static int calc_nparametrs(void)
@@ -3968,6 +4065,9 @@ static void init_guess(real *x, int npar)
     }
     for (j = 1; j <= r; j++) for (i = 1; i <= s; i++)
         if (!b2_held(i)) x[idx++] = B2[i][j];
+    /*  -xlink: the transfer starts at omega = delta = 0 (drtran's seeding):
+     *  with omega = 0 delta is not identified, so it starts at 0 too.     */
+    for (i = 1; i <= xl_npar(); i++) x[idx++] = 0.0;
 
     if (idx != npar + 1)
         fprintf(stderr, "ERROR init_guess: idx=%d, npar=%d\n", idx-1, npar);
@@ -4284,6 +4384,12 @@ static void vec_shootx(real *x, struct Tvarma *armax,
         for (i = 1; i <= s; i++)
             B2[i][j] = b2_held(i) ? B2_fixed[i][j] : x[idx++];
 
+    /*  -xlink: the transfer block, last in x[] */
+    if (xl_on) {
+        if (xl_compute(x + idx - 1) != 0) *ifaultx = 1;
+        idx += xl_npar();
+    }
+
     /*  -mawarma: the upper-right block of Theta, which is NOT free.  It is
      *  completed here and not above because it needs B2, which has just been
      *  read: Theta[k][i][r+jj] = sum_ii Theta11[k][i][ii] * B2'[ii][jj].     */
@@ -4435,6 +4541,18 @@ static void vec_shootx(real *x, struct Tvarma *armax,
             for (i = 1; i <= s; i++)
                 w += B2[i][j] * Y2_level[tt][i];
             armax->w[tt][s + j] = w;
+        }
+        /*  -xlink: the same Ybar built from N = Y - nu(B)X.  The levels layout
+         *  is guaranteed (-differenced is refused), so datamat row tt is
+         *  rawmat row tt+1 and nabla N_2 = nabla Y_2 - (T_{tt+1} - T_tt).    */
+        if (xl_on) {
+            for (i = 1; i <= s; i++)
+                armax->w[tt][i] -= xl_T[tt + 1][i] - xl_T[tt][i];
+            for (j = 1; j <= r; j++) {
+                real dw = xl_T[tt + 1][s + j];
+                for (i = 1; i <= s; i++) dw += B2[i][j] * xl_T[tt + 1][i];
+                armax->w[tt][s + j] -= dw;
+            }
         }
     }
 
@@ -6619,6 +6737,178 @@ static int read_pre_inputs(char **files, int nfiles)
     return ok ? 0 : 1;
 }
 
+
+/*  xl_load -- the exogenous inputs and the network of links.  Called after
+ *  read_pre_inputs, so the system's calendar and names exist.  Returns 0.  */
+static int xl_load(void)
+{
+    struct Tusmodel Tm; struct Tseries Ts; real **DM;
+    real *wv[XL_MAXIN + 1];
+    int   nv[XL_MAXIN + 1];
+    long  stv[XL_MAXIN + 1];
+    long  first = abs_period(data_start_year, data_start_sub, data_freq);
+    int i, t, k, maxbs = 0, anyr = 0;
+    FILE *f;
+    char line[512];
+
+    for (i = 1; i <= xl_nin; i++) {
+        real refac, lam;
+        if (read_fue_pre(xl_infile[i], &Tm, &Ts, &DM) != 0) {
+            fprintf(stderr, "ERROR: cannot read the input %s\n", xl_infile[i]);
+            return 1;
+        }
+        if (Ts.freq != data_freq) {
+            fprintf(stderr, "ERROR: the input %s has frequency %d and the system %d\n",
+                    xl_infile[i], Ts.freq, data_freq);
+            return 1;
+        }
+        if (Tm.nadiff != 0 || Tm.nrdiff > 1 || Tm.ornsop != Tm.nrdiff) {
+            fprintf(stderr,
+                "ERROR: the input %s is not at most I(1) at frequency zero with no\n"
+                "       seasonal unit roots (d=%d, D=%d).  Its level would not be\n"
+                "       a transfer input W could stay stationary with.\n",
+                xl_infile[i], Tm.nrdiff, Tm.nadiff);
+            return 1;
+        }
+        xl_inname[i] = strdup(Ts.name ? Ts.name : xl_infile[i]);
+        xl_d[i] = Tm.nrdiff;
+        refac = (Ts.refactor != 0.0) ? Ts.refactor : 1.0;
+        lam = Tm.boxlam;
+        nv[i] = Ts.nobs;
+        stv[i] = abs_period(Ts.begyear, Ts.begtime, Ts.freq);
+        wv[i] = vector(1, Ts.nobs);
+        for (t = 1; t <= Ts.nobs; t++) {
+            real z = Ts.data[t];
+            if (fabs(lam - 1.0) > 1.0e-12 && z <= 0.0) {
+                fprintf(stderr, "ERROR: %s: Box-Cox with lambda %g at a value %g\n",
+                        xl_infile[i], lam, z);
+                return 1;
+            }
+            wv[i][t] = boxcox_w(z, lam, refac);      /* the level, as is */
+        }
+        if (stv[i] + nv[i] - 1 < first + nobs_raw - 1) {
+            fprintf(stderr,
+                "ERROR: the input %s ends before the system's sample does.  An\n"
+                "       exogenous input must be observed over the whole sample.\n",
+                xl_infile[i]);
+            return 1;
+        }
+        free_fue_pre(&Tm, &Ts, DM);
+    }
+
+    /*  The network: lines `OUTPUT <- INPUT b r s', drtran's syntax; `#'
+     *  starts a comment.  OUTPUT is a series of the system, INPUT an -xpre. */
+    f = fopen(xl_netfile, "r");
+    if (!f) { fprintf(stderr, "ERROR: cannot open %s\n", xl_netfile); return 1; }
+    while (fgets(line, sizeof line, f)) {
+        char o[128], arrow[8], in[128];
+        int b, rr, ss, n2, a;
+        char *hash = strchr(line, '#');
+        if (hash) *hash = '\0';
+        n2 = sscanf(line, "%127s %7s %127s %d %d %d", o, arrow, in, &b, &rr, &ss);
+        if (n2 <= 0) continue;
+        if (n2 != 6 || strcmp(arrow, "<-") != 0) {
+            fprintf(stderr, "ERROR: %s: a link is `OUTPUT <- INPUT b r s', got: %s",
+                    xl_netfile, line);
+            fclose(f); return 1;
+        }
+        if (xl_nlnk >= XL_MAXLNK) {
+            fprintf(stderr, "ERROR: more than %d links\n", XL_MAXLNK);
+            fclose(f); return 1;
+        }
+        if (b < 0 || rr < 0 || ss < 0 || rr > 2 || ss > XL_MAXORD) {
+            fprintf(stderr, "ERROR: %s: b, r, s must be >= 0, r <= 2 and s <= %d\n",
+                    xl_netfile, XL_MAXORD);
+            fclose(f); return 1;
+        }
+        xl_nlnk++;
+        xl_lnk[xl_nlnk].out = xl_lnk[xl_nlnk].in = 0;
+        for (a = 1; a <= nser; a++)
+            if (strcmp(series_names[a], o) == 0) xl_lnk[xl_nlnk].out = a;
+        for (a = 1; a <= xl_nin; a++)
+            if (strcmp(xl_inname[a], in) == 0) xl_lnk[xl_nlnk].in = a;
+        if (!xl_lnk[xl_nlnk].out || !xl_lnk[xl_nlnk].in) {
+            fprintf(stderr,
+                "ERROR: %s: `%s <- %s': the output must be a series of the system\n"
+                "       and the input the name of an -xpre file.\n",
+                xl_netfile, o, in);
+            fclose(f); return 1;
+        }
+        xl_lnk[xl_nlnk].b = b; xl_lnk[xl_nlnk].r = rr; xl_lnk[xl_nlnk].s = ss;
+        if (b + ss > maxbs) maxbs = b + ss;
+        if (rr > 0) anyr = 1;
+    }
+    fclose(f);
+    if (xl_nlnk == 0) {
+        fprintf(stderr, "ERROR: %s declares no link\n", xl_netfile);
+        return 1;
+    }
+
+    /*  As many presample values as nu can reach: b + s with r = 0, the whole
+     *  sample with a rational (infinite-tail) filter, which is never
+     *  truncated (drtran's rule, not fue's 40 lags).                       */
+    xl_npre = anyr ? nobs_raw + maxbs : maxbs;
+    xl_len  = xl_npre + nobs_raw;
+    xl_X = matrix(1, xl_nin, 1, xl_len);
+    xl_T = matrix(1, nobs_raw, 1, nser);
+    for (i = 1; i <= xl_nin; i++) {
+        int k0 = 0, L;
+        for (k = 1; k <= xl_len; k++) {
+            long per = first + (k - xl_npre - 1);
+            long ix = per - stv[i] + 1;
+            if (ix >= 1 && ix <= nv[i]) {
+                xl_X[i][k] = wv[i][ix];
+                if (!k0) k0 = k;
+            } else xl_X[i][k] = 0.0;
+        }
+        L = k0 - 1;                     /* before X's first observation */
+        xl_nreal[i] = xl_npre - L;
+        xl_nbc[i] = L;
+        {
+            real anchor = xl_X[i][k0];
+            for (k = 1; k <= xl_len; k++)
+                xl_X[i][k] = (k < k0) ? 0.0 : xl_X[i][k] - anchor;
+        }
+        free_vector(wv[i], 1, nv[i]);
+    }
+
+    printf("Exogenous transfer inputs (-xlink %s):\n", xl_netfile);
+    for (i = 1; i <= xl_nin; i++)
+        printf("  %-12s %s, d = %d; presample %d: %d observed, %d held at the first\n",
+               xl_inname[i], xl_infile[i], xl_d[i], xl_npre, xl_nreal[i],
+               xl_nbc[i]);
+    for (k = 1; k <= xl_nlnk; k++)
+        printf("  link %d: %s <- %s  (b, r, s) = (%d, %d, %d)\n", k,
+               series_names[xl_lnk[k].out], xl_inname[xl_lnk[k].in],
+               xl_lnk[k].b, xl_lnk[k].r, xl_lnk[k].s);
+    return 0;
+}
+
+/*  xl_eval_ll -- the exact logL at x, evaluated (not optimised): the bridge
+ *  check, logL(VEC optimum, omega = 0) == logL(VEC), which is the ladder's
+ *  crossing identity for this rung.                                        */
+static real xl_eval_ll(real *x, real xitol, int *ok)
+{
+    const real LOG2PI = 1.837877066;
+    struct Tvarma v;
+    int ifs = 0;
+    real pi1, pi2, pi3, ll = 0.0;
+    *ok = 0;
+    v.xitol = xitol;
+    vec_shootx(x, &v, &ifs, 1, 0);
+    if (ifs == 0) {
+        elf(v.m, v.n, v.p, v.q, v.mu, v.phi, v.theta, v.qq, v.w, 1.0, v.xitol,
+            FALSE, v.a, &pi1, &pi2, &pi3, &ifs);
+        if (ifs == 0) {
+            ll = -0.5 * v.m * v.n * (LOG2PI - log((real) v.m) - log((real) v.n) + 1.0)
+                 - 0.5 * v.n * (v.m * log(pi1) + log(pi2));
+            *ok = 1;
+        }
+    }
+    vec_shootx(x, &v, &ifs, 0, 1);
+    return ll;
+}
+
 /*****************************************************************************/
 /*  P11 — LDL' OF THE INNOVATION COVARIANCE, IN ONE PLACE.                    */
 /*                                                                           */
@@ -7002,6 +7292,26 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
         /* The LR of H1(r) against H(r).  Johansen and Swensen (2024): the degrees
            of freedom are (M - sa)*r, which is how many free entries of alpha the
            restriction removes.                                               */
+        if (xl_on && xl_base_ok) {
+            int df = xl_npar();
+            real lr = 2.0 * (vp->logelf - xl_base_ll);
+            real pv = (df > 0 && lr > 0.0) ? gsl_cdf_chisq_Q(lr, df) : 1.0;
+            fprintf(outputv, "\n--- the transfer inputs (-xlink), against the VEC "
+                             "without them ---\n");
+            fprintf(outputv, "logL VEC without inputs      : %15.10f\n", xl_base_ll);
+            if (xl_bridge_ok)
+                fprintf(outputv, "logL at the bridge (omega=0) : %15.10f   "
+                        "(difference %.2e: the crossing identity of this rung)\n",
+                        xl_bridge_ll, xl_bridge_ll - xl_base_ll);
+            fprintf(outputv, "logL with the inputs         : %15.10f\n", vp->logelf);
+            fprintf(outputv, "LR = 2(inputs - VEC)         : %15.10f\n", lr);
+            fprintf(outputv, "degrees of freedom           : %d   sum of (s+1+r)\n", df);
+            fprintf(outputv, "p-value (chi2)               : %15.10f\n", pv);
+            fprintf(outputv, "  The chi2 needs the rank to be the same under both "
+                             "models and X fixed;\n  the rank test itself is NOT "
+                             "recalibrated for exogenous inputs (TODO.md MEJORA-2).\n");
+            printf("  LR (inputs vs VEC) = %.6f, %d df, p = %.6f\n", lr, df, pv);
+        }
         if (b2row_on && lr_free_ok) {
             int nh = b2_nheld(nser - global_r), df, i_;
             int dfa = global_alpha ? (nser - alpha_sa) * global_r : 0;
@@ -7382,6 +7692,9 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
                 if (!b2_held(i)) ix_B2[i][j] = ii;
                 B2m[i][j] = b2_held(i) ? B2_fixed[i][j] : x[ii++];
             }
+        /*  -xlink: the transfer block, last in x[] */
+        int ix_xl0 = ii;
+        ii += xl_npar();
 
 
         /*  -mawarma: now that B2 has been read, Theta is completed with the
@@ -7503,6 +7816,62 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
                                      sname(a2), b2i);
                             par_row(lb, B2m[a2][b2i], dev[ix_B2[a2][b2i]]);
                         }
+            }
+            if (xl_on) {
+                /*  -xlink: omega and delta per link, its gain nu(1) with a
+                 *  delta-method s.e., and the Wald of the whole link.  The
+                 *  transfer relates the LEVELS: nu(1) is the long-run effect
+                 *  of a unit of X (w units) on the level of the output.     */
+                int c0 = ix_xl0, kk, jj;
+                fprintf(outputv, "\nTransfer-function inputs, on the LEVELS of "
+                                 "the output:\n  nu(B) = omega(B)/delta(B) B^b,  "
+                                 "omega(B) = w0 - w1 B - ...,  delta(B) = 1 - "
+                                 "d1 B - ...\n");
+                for (kk = 1; kk <= xl_nlnk; kk++) {
+                    struct xl_link *L = &xl_lnk[kk];
+                    int np_k = L->s + 1 + L->r, *ixw = ivector(1, np_k);
+                    real om1 = 0.0, de1 = 1.0, g, gse = 0.0, *gr = vector(1, np_k);
+                    for (jj = 0; jj <= L->s; jj++) {
+                        snprintf(lb, sizeof lb, "  %s <- %s  w%d",
+                                 sname(L->out), xl_inname[L->in], jj);
+                        par_row(lb, x[c0 + jj], dev[c0 + jj]);
+                        om1 += (jj == 0) ? x[c0] : -x[c0 + jj];
+                        ixw[jj + 1] = c0 + jj;
+                    }
+                    for (jj = 1; jj <= L->r; jj++) {
+                        snprintf(lb, sizeof lb, "  %s <- %s  d%d",
+                                 sname(L->out), xl_inname[L->in], jj);
+                        par_row(lb, x[c0 + L->s + jj], dev[c0 + L->s + jj]);
+                        de1 -= x[c0 + L->s + jj];
+                        ixw[L->s + 1 + jj] = c0 + L->s + jj;
+                    }
+                    g = om1 / de1;
+                    for (jj = 0; jj <= L->s; jj++) gr[jj + 1] = ((jj == 0) ? 1.0 : -1.0) / de1;
+                    for (jj = 1; jj <= L->r; jj++) gr[L->s + 1 + jj] = om1 / (de1 * de1);
+                    if (cov) {
+                        int a, b;
+                        for (a = 1; a <= np_k; a++)
+                            for (b = 1; b <= np_k; b++)
+                                gse += gr[a] * cov[ixw[a]][ixw[b]] * gr[b];
+                        gse = (gse > 0.0) ? sqrt(gse) : 0.0;
+                    }
+                    fprintf(outputv, "  gain nu(1) of %s <- %s: %12.6f  (s.e. %.6f, "
+                            "delta method)  (b, r, s) = (%d, %d, %d)\n",
+                            sname(L->out), xl_inname[L->in], g, gse,
+                            L->b, L->r, L->s);
+                    {
+                        char title[160];
+                        snprintf(title, sizeof title, "Link %s <- %s, whole:",
+                                 sname(L->out), xl_inname[L->in]);
+                        emit_wald(x, cov, ixw, np_k, title,
+                                  "H0: every omega and delta of the link = 0",
+                                  "REJECT H0 -> the input enters the output.",
+                                  "Cannot reject H0 -> the link can be dropped.");
+                    }
+                    free_vector(gr, 1, np_k);
+                    free_ivector(ixw, 1, np_k);
+                    c0 += np_k;
+                }
             }
             if (nf > 0) {
                 fprintf(outputv, "\nShort-run dynamics, Gamma(k) on "
@@ -8931,6 +9300,8 @@ static const struct opt_spec {
     { "-differenced", A_NONE,     NULL   },
     { "-fixb2",       A_REAL_OPT, "[v]"  },
     { "-fixb2row",    A_INT_REAL, "i v"  },
+    { "-xpre",        A_STR,      "FILE" },
+    { "-xlink",       A_STR,      "FILE" },
     { "-lrtest",      A_NONE,     NULL   },
     { "-bootstrap",   A_INT_POS,  "N"    },
     { "-rungs",       A_NONE,     NULL   },
@@ -9031,6 +9402,17 @@ static void usage(FILE *o)
     fprintf(o, "                 the joint test.  Unlike the Wald on a normalised\n");
     fprintf(o, "                 coefficient, the LR does not depend on which series\n");
     fprintf(o, "                 beta is normalised on\n\n");
+    fprintf(o, "  -xpre FILE     an exogenous input (a fue .pre; repeatable), used\n");
+    fprintf(o, "                 with -xlink.  X enters FROZEN, in the level of the\n");
+    fprintf(o, "                 series (refactor*BoxCox, nothing subtracted); its\n");
+    fprintf(o, "                 model is not used and nothing is backcast\n");
+    fprintf(o, "  -xlink FILE    the links, one per line `OUT <- IN b r s' (drtran):\n");
+    fprintf(o, "                 Y_out - omega(B)/delta(B) B^b X_in is the VEC process\n");
+    fprintf(o, "                 (\"by subtraction\", on the LEVELS; r <= 2).  The\n");
+    fprintf(o, "                 VEC without inputs is fitted first, omega = 0 must\n");
+    fprintf(o, "                 reproduce it (reported), and the LR against it is\n");
+    fprintf(o, "                 the test.  .pre route, levels layout, case 2 or 3,\n");
+    fprintf(o, "                 a single fit\n\n");
     fprintf(o, "  -lrtest        sequential LR test for the cointegration rank:\n");
     fprintf(o, "                 estimates r = 0..M-1 and reports 2*[L(r+1) - L(r)];\n");
     fprintf(o, "                 incompatible with -differenced\n\n");
@@ -9479,6 +9861,17 @@ static int parse_cli(int argc, char *argv[])
         else if (strcmp(argv[i], "-seedybar") == 0 && i+1 < argc) {
             global_seed = 1; seed_route = SEED_YBAR;  pre_prefix = argv[++i];
         }
+        else if (strcmp(argv[i], "-xpre") == 0 && i + 1 < argc) {
+            if (xl_nin >= XL_MAXIN) {
+                fprintf(stderr, "ERROR: at most %d -xpre inputs\n", XL_MAXIN);
+                exit(1);
+            }
+            xl_infile[++xl_nin] = argv[++i];
+        }
+        else if (strcmp(argv[i], "-xlink") == 0 && i + 1 < argc) {
+            xl_netfile = argv[++i];
+            xl_on = 1;
+        }
         else if (strcmp(argv[i], "-fixb2row") == 0 && i + 2 < argc) {
             int ir = atoi(argv[i+1]);
             b2row_fix[ir] = 1;                   /* range checked by validate_cli */
@@ -9564,6 +9957,39 @@ static int parse_cli(int argc, char *argv[])
      *  -fixb2 already holds every row; the modes re-fit at other ranks or in
      *  other coordinates (-warma estimates the transformed system, where B2
      *  is not a parameter), and none of them carries the row restriction.  */
+    /*  -xlink: the transfer is subtracted from a single fit on the .pre
+     *  route, in the levels layout.  The modes re-fit at other ranks or
+     *  in other coordinates and do not carry it; the forecast and the
+     *  rolling evaluation would need the future of X; -writeinp/-writeres
+     *  write the data without it.                                         */
+    if (xl_on || xl_nin > 0) {
+        if (!xl_on || xl_nin == 0) {
+            fprintf(stderr, "ERROR: -xpre and -xlink go together: the inputs and the\n"
+                            "       network of links that says where they enter.\n");
+            exit(2);
+        }
+        if (!pre_route || !global_levels || global_warma || global_lrtest
+            || global_specs || global_rungs || global_matest || global_artest
+            || global_eval || global_fcast > 0 || global_estwin > 0
+            || global_writeinp || global_writeres) {
+            fprintf(stderr,
+                "ERROR: -xlink needs the .pre route in the levels layout, and a\n"
+                "       single fit: it cannot be combined with -differenced, -warma,\n"
+                "       -lrtest, -specs, -rungs, -matest, -artest, -eval, -f, -estwin,\n"
+                "       -writeinp or -writeres.\n");
+            exit(2);
+        }
+        if (global_case == 1) {
+            /*  X enters as X - X_anchor (xl_load): the constant
+             *  nu(1)*X_anchor goes to the mean of W, which case 1 does not
+             *  have.  Without it the anchor would be a restriction.       */
+            fprintf(stderr,
+                "ERROR: -xlink needs a free mean of W (-case 2 or 3): the input\n"
+                "       is held at its first value before its data and anchored\n"
+                "       there, and the constant that drops goes to E[W].\n");
+            exit(2);
+        }
+    }
     if (b2row_on && (global_fixb2 || global_warma || global_lrtest
                      || global_specs || global_rungs || global_matest
                      || global_artest || global_eval)) {
@@ -9753,6 +10179,7 @@ int main(int argc, char *argv[])
          *  .inp reader below sets, this sets too, so nothing downstream can
          *  tell the two routes apart.                                        */
         if (read_pre_inputs(pre_files, n_pre) != 0) exit(1);
+        if (xl_on && xl_load() != 0) exit(1);
         if (global_r >= nser) {
             fprintf(stderr, "ERROR: r=%d must be < M=%d\n", global_r, nser);
             exit(1);
@@ -10084,6 +10511,36 @@ int main(int argc, char *argv[])
     /* With alpha = A*psi the FREE model is needed for the LR, so H(r) is
        estimated first and H1(r) afterwards.  The degrees of freedom are
        (M - sa)*r, explicit in Johansen and Swensen (2024).                    */
+    /*  -xlink: the VEC rung below -- the same model without the transfer --
+     *  fitted first, with its own ladder.  Its optimum with omega = 0 is the
+     *  BRIDGE (the start of the hybrid) and its logL the base of the LR.   */
+    real *xl_xbase = NULL; int xl_npb = 0;
+    if (xl_on) {
+        int iff; real s2b = 0.0, llb = 0.0;
+        real *devb, **covb;
+        fprintf(outputv, "\n=== -xlink: the VEC rung below, without the transfer "
+                         "inputs ===\n");
+        printf("  -xlink: fitting the VEC without the inputs (the rung below)\n");
+        xl_on = 0;
+        xl_npb = calc_nparametrs();
+        xl_xbase = vector(1, xl_npb);
+        devb = vector(1, xl_npb);
+        covb = matrix(1, xl_npb, 1, xl_npb);
+        init_guess(xl_xbase, xl_npb);
+        if (ladder_wanted() && global_r > 0) gate_profile_seed(xl_xbase, xl_npb);
+        else if (ladder_wanted() && global_r == 0) ladder_seed_r0(xl_xbase, xl_npb);
+        iff = fit_search(xl_xbase, xl_npb, devb, covb, &llb, &s2b, 1, 0, NULL);
+        xl_on = 1;
+        xl_base_ok = (iff == 0);
+        xl_base_ll = llb;
+        gate_seed_ok = 0;            /* that profile was the rung below's */
+        printf("  VEC without inputs : logL = %15.10f%s\n", llb,
+               xl_base_ok ? "" : "  (the estimation failed)");
+        fprintf(outputv, "logL of the VEC without the inputs: %18.10f\n", llb);
+        free_matrix(covb, 1, xl_npb, 1, xl_npb);
+        free_vector(devb, 1, xl_npb);
+    }
+
     real lr_free = 0.0; int lr_free_ok = 0;
     if (b2row_on) {
         /*  -fixb2row (alone or with -alpha/-weakex): the row must exist, and
@@ -10216,10 +10673,22 @@ int main(int argc, char *argv[])
     }
     /*  P12: the ladder is the default start (the suite's convention: from
      *  the certified gate, rung by rung, then route (B) across the rank).   */
-    if (ladder_wanted() && global_r > 0)
+    if (!xl_on && ladder_wanted() && global_r > 0)
         gate_profile_seed(x, npar);
-    else if (ladder_wanted() && global_r == 0)
+    else if (!xl_on && ladder_wanted() && global_r == 0)
         ladder_seed_r0(x, npar);
+    /*  -xlink: the bridge.  The rung below's optimum, the transfer at zero:
+     *  the block is last in x[], so the first xl_npb entries line up.      */
+    if (xl_on && xl_xbase) {
+        int ib;
+        for (ib = 1; ib <= xl_npb; ib++) x[ib] = xl_xbase[ib];
+        for (ib = xl_npb + 1; ib <= npar; ib++) x[ib] = 0.0;
+        xl_bridge_ll = xl_eval_ll(x, varma1.xitol, &xl_bridge_ok);
+        printf("  bridge (VEC optimum, omega = 0): logL = %15.10f%s\n",
+               xl_bridge_ll, xl_bridge_ok ? "" : "  (could not be evaluated)");
+        free_vector(xl_xbase, 1, xl_npb);
+        xl_xbase = NULL;
+    }
 
     /* -writeres: the residuals of the conditional regression, which is what
        init_guess has just published.  It is a mode and ends here.             */

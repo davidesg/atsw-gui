@@ -1536,6 +1536,85 @@ if grep -aq 'degrees of freedom     : 2   (rows held)\*r + (M - sa)\*r' "$TMP/ca
 else bad "-fixb2row + -weakex df" "$(grep -a 'degrees of freedom' "$TMP/case.out")"; fi
 echo
 
+echo "[6c] -xpre/-xlink: transfer-function inputs on the VEC (MEJORA-2)"
+#  The hybrid of the suite's two embeddings.  What can be checked without an
+#  external reference: omega = 0 reproduces the VEC rung EXACTLY (the bridge's
+#  crossing identity, reported); the VEC rung the program fits first is the
+#  same fit a plain run gives; the walk consumes npar; the LR is not negative;
+#  and what the option cannot honour is refused.
+XMUS=tests/fixtures/mmpre.muskrat.pre
+XMNK=tests/fixtures/mmpre.mink.pre
+XDRV=$(cd "$(dirname "$DRVEC")" && pwd)/$(basename "$DRVEC")
+XTMP=$(cd "$TMP" && pwd)
+XROOT=$(pwd)
+#  An input: the mink series REVERSED in time (unrelated to the system by
+#  construction) and starting one year EARLIER, so that one presample value
+#  is observed and the rest held at X's first value (embedded: no backcast).
+awk 'f { d[++n] = $0; next }
+     /^\*\* Series:/ { print; f = 1; next }
+     / 62 1 1850 mink/ { print " 63 1 1849 xrev"; next }
+     { print }
+     END { for (i = n; i >= 1; i--) print d[i]; print d[1] }' "$XMNK" > "$TMP/xrev.pre"
+printf 'mink <- xrev 0 0 0\n' > "$TMP/net0.txt"
+printf 'mink <- xrev 1 0 1   # b = 1, s = 1: two presample values\n' > "$TMP/net1.txt"
+printf 'mink <- xrev 0 1 0\n' > "$TMP/netr.txt"
+printf 'nosuch <- xrev 0 0 0\n' > "$TMP/netbad.txt"
+printf 'mink <- xrev 0 3 0\n' > "$TMP/netr3.txt"
+
+xrun() {   # xrun <name> <args...> : .pre route with the inputs, sets XSTDERR
+    local nm=$1; shift
+    rm -f "$TMP/$nm.out"
+    XSTDERR=$(cd "$TMP" && timeout "$RUN_TIMEOUT" "$XDRV" "$XROOT/$XMUS" \
+              "$XROOT/$XMNK" "$@" -name "$nm" 2>&1 >/dev/null)
+}
+xrun xplain 2 0 1 -case 2
+xrun xl0 2 0 1 -case 2 -xpre "$XTMP/xrev.pre" -xlink "$XTMP/net0.txt"
+base=$(grep -a 'logL VEC without inputs' "$TMP/xl0.out" | awk '{print $NF}')
+plain=$(logelf_of "$TMP/xplain")
+bdiff=$(grep -a 'logL at the bridge' "$TMP/xl0.out" | sed 's/.*difference \([^:]*\):.*/\1/')
+if [ -z "$base" ] || [ -z "$plain" ]; then
+    bad "-xlink base" "missing logL (base=$base plain=$plain)"
+elif near "$base" "$plain"; then
+    ok "-xlink: the VEC rung below is the plain fit ($base)"
+else bad "-xlink base" "base=$base plain=$plain"; fi
+if [ -n "$bdiff" ] && awk -v d="$bdiff" 'BEGIN{d=(d<0)?-d:d; exit !(d < 1e-9)}'; then
+    ok "-xlink: omega = 0 reproduces the VEC rung exactly (bridge difference $bdiff)"
+else bad "-xlink bridge" "difference '$bdiff'"; fi
+if printf '%s' "$XSTDERR" | grep -qiE 'ERROR (output|init_guess)'; then
+    bad "-xlink walk" "$(printf '%s' "$XSTDERR" | grep -iE 'ERROR (output|init_guess)' | head -1)"
+else ok "-xlink: the parameter walk consumes exactly npar"; fi
+lrx=$(grep -a 'LR = 2(inputs - VEC)' "$TMP/xl0.out" | awk '{print $NF}')
+if [ -n "$lrx" ] && awk -v l="$lrx" 'BEGIN{exit !(l >= -1e-6)}'; then
+    ok "-xlink: the LR against the VEC is not negative ($lrx)"
+else bad "-xlink LR" "'$lrx'"; fi
+xrun xl1 2 0 1 -case 2 -xpre "$XTMP/xrev.pre" -xlink "$XTMP/net1.txt"
+if printf '%s' "$XSTDERR" | grep -q 'ERROR' ; then
+    bad "-xlink b=1 s=1" "$(printf '%s' "$XSTDERR" | head -1)"
+elif grep -aq 'w1' "$TMP/xl1.out" && grep -aq 'gain nu(1)' "$TMP/xl1.out"; then
+    ok "-xlink: a lagged link with s = 1 runs and reports its gain"
+else bad "-xlink b=1 s=1" "no w1 / gain in the report"; fi
+pres=$(cd "$TMP" && timeout "$RUN_TIMEOUT" "$XDRV" "$XROOT/$XMUS" "$XROOT/$XMNK" \
+       2 0 1 -case 2 -xpre "$XTMP/xrev.pre" -xlink "$XTMP/net1.txt" -name xl1b 2>/dev/null \
+       | grep 'presample')
+if printf '%s' "$pres" | grep -q 'presample 2: 1 observed, 1 held at the first'; then
+    ok "-xlink: the presample uses the observed value, then holds X at its first"
+else bad "-xlink presample" "'$pres'"; fi
+xrun xlr 2 0 1 -case 2 -xpre "$XTMP/xrev.pre" -xlink "$XTMP/netr.txt"
+bdr=$(grep -a 'logL at the bridge' "$TMP/xlr.out" | sed 's/.*difference \([^:]*\):.*/\1/')
+if [ -n "$bdr" ] && awk -v d="$bdr" 'BEGIN{d=(d<0)?-d:d; exit !(d < 1e-9)}' \
+   && grep -aq 'xrev  d1' "$TMP/xlr.out"; then
+    ok "-xlink: a rational link (r = 1) bridges exactly and reports delta"
+else bad "-xlink r=1" "bridge '$bdr' or no d1"; fi
+#  What is refused.
+cli "-xlink without -xpre is refused"     2 "$XMUS" "$XMNK" 2 0 1 -case 2 -xlink "$XTMP/net0.txt"
+cli "-xpre without -xlink is refused"     2 "$XMUS" "$XMNK" 2 0 1 -case 2 -xpre "$XTMP/xrev.pre"
+cli "-xlink on the .inp route is refused" 2 "$CLI" 2 1 1 -case 2 -xpre "$XTMP/xrev.pre" -xlink "$XTMP/net0.txt"
+cli "-xlink in case 1 is refused"         2 "$XMUS" "$XMNK" 2 0 1 -case 1 -xpre "$XTMP/xrev.pre" -xlink "$XTMP/net0.txt"
+cli "-xlink with -lrtest is refused"      2 "$XMUS" "$XMNK" 2 0 0 -case 2 -lrtest -xpre "$XTMP/xrev.pre" -xlink "$XTMP/net0.txt"
+cli "-xlink to an unknown series is refused" 1 "$XMUS" "$XMNK" 2 0 1 -case 2 -xpre "$XTMP/xrev.pre" -xlink "$XTMP/netbad.txt"
+cli "-xlink with r > 2 is refused"        1 "$XMUS" "$XMNK" 2 0 1 -case 2 -xpre "$XTMP/xrev.pre" -xlink "$XTMP/netr3.txt"
+echo
+
 echo "[7] the rank test on data whose rank is known by construction"
 # Every other check of -lrtest compares against another program's answer.  These
 # two compare against the TRUTH, because the data was generated to have it:

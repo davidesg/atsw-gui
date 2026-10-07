@@ -102,6 +102,7 @@ in case 1, where nothing does. `drvec` warns.
 | | |
 |---|---|
 | `-fixb2 [v]` | hold `B₂` fixed instead of estimating it. Without a value it is held at the static-OLS estimate; with one, every entry is set to `v`. A value chosen a priori is what makes an LR test against the free model valid |
+| `-fixb2row i v` | hold **row** `i` of `B₂` (variable `i` of the `∇Y₂` block, in the `.inp`'s order) at `v` in every relation, and estimate the other rows; repeatable. The free model is fitted with the same search and the LR against it is reported, χ² with (rows held)·`r` df; with `-alpha`/`-weakex` the restricted model carries both restrictions and the df add up. The LR is **invariant to the normalisation** — the Wald on a normalised coefficient is not (§`-fixb2row` below). Refused with `-fixb2`, `-warma` and the modes |
 | `-alpha file` | impose `α = Aψ` with `A` read from `file`, and report the LR against the free model |
 | `-weakex i` | shorthand for the `A` that declares equation `i` weakly exogenous |
 
@@ -847,3 +848,28 @@ run did not produce an estimate; `WARNING` messages mean it did, but something
 about the specification deserves attention. The suite treats
 `ERROR output` and `ERROR init_guess` as failures, since both mean the parameter
 vector was walked inconsistently.
+
+### `-fixb2row`: a hypothesis on one coefficient of beta
+
+`-fixb2` holds all of `B₂`; most hypotheses on `β` hold **one** coefficient and
+leave the rest free — purchasing-power parity in a price system (`β_USA = −1`),
+an exclusion, a unit elasticity. `-fixb2row i v` holds row `i` at `v` and the LR
+against the free model is the test. Use it rather than the Wald printed in the
+exclusion block when the hypothesis is not "this row is zero" in the
+normalisation you happen to have: the Wald depends on the normalisation, the LR
+does not.
+
+Measured on the case that motivated it (Ecuador, trivariate ln G/Y, ln CPI_USA,
+ln CPI_EC; case 3, p = 2, r = 1). The same hypothesis written in two
+normalisations — `β_USA = −1` with `β` normalised on CPI_EC, and row USA `= 0`
+once CPI_EC is replaced by the gap CPI_EC − CPI_USA:
+
+| | Wald (exclusion block, `-fdhess`) | `-fixb2row` LR |
+|---|---|---|
+| normalised on CPI_EC, `-fixb2row 2 -1` | 4.17, p = 0.041 | **6.2131573620**, p = 0.0127 |
+| normalised on the gap, `-fixb2row 2 0` | 2.02, p = 0.155 | **6.2131573621**, p = 0.0127 |
+
+The joint test with weak exogeneity of CPI_USA (`-fixb2row ... -weakex 2`, 2 df)
+gives 6.2695198728 and 6.2695198729. With `s = 1`, `-fixb2row 1 v` and `-fixb2 v`
+are the same model and reach the same optimum (−269.7263742490 on the bivariate
+of the same study); the suite checks it on mink–muskrat.

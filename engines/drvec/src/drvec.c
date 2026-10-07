@@ -493,6 +493,38 @@ real global_fixb2_value = 0.0;      /* that value, applied to every entry   */
 static real **B2_fixed = NULL;      /* (s x r), owned here */
 static int   b2f_s = 0, b2f_r = 0;  /* dims of the current allocation */
 
+/*  -fixb2row i v -- hold ONE row of B2 (variable i of the nabla Y2 block, in
+ *  the .inp's order) at v in every relation, and estimate the other rows.
+ *  -fixb2 is all-or-nothing; a hypothesis on one coefficient of beta (e.g.
+ *  beta_USA = -1 in a price system, i.e. row USA = 0 once the system is
+ *  written in the gap) needs the rest of beta free, and the LR against the
+ *  free model is then a valid chi2 with (rows held)*r degrees of freedom
+ *  (beta is superconsistent; Johansen 1995, Ch. 7).  Unlike the Wald on a
+ *  normalised coefficient, the LR does not depend on the normalisation
+ *  (TODO.md, MEJORA-1).  Held entries live in B2_fixed, the rest in x[],
+ *  column-major over the FREE entries only: that is the one convention all
+ *  four walks of the vector share (par_blocks, init_guess, vec_shootx and
+ *  the printer).                                                           */
+#define B2ROW_MAX 64
+static int  b2row_on = 0;                 /* any row held by -fixb2row     */
+static int  b2row_fix[B2ROW_MAX + 1];     /* 1 = row i held                */
+static real b2row_val[B2ROW_MAX + 1];     /* its value                     */
+
+/*  Row i of B2 is held (by -fixb2, all rows, or by -fixb2row).            */
+static int b2_held(int i)
+{
+    if (global_fixb2) return 1;
+    return b2row_on && i >= 1 && i <= B2ROW_MAX && b2row_fix[i];
+}
+
+/*  Number of B2 rows held among the s of the current rank.                */
+static int b2_nheld(int s)
+{
+    int i, n = 0;
+    for (i = 1; i <= s; i++) n += b2_held(i);
+    return n;
+}
+
 /*  F3 — linear restrictions on the adjustment coefficients.
  *
  *  Johansen and Swensen (2024, JTSA 45:248-268) define H1(r): alpha = A*psi with
@@ -672,8 +704,8 @@ static void par_blocks(int *nmean, int *nlam, int *nmid, int *ntail)
                                    : (global_diag_ma ? M : M * M))))
            + (global_diag_cov ? M : M * (M + 1) / 2) - 1;
 
-    /* 6. B_2 (s x r), unless -fixb2 holds it */
-    *ntail = global_fixb2 ? 0 : s * r;
+    /* 6. B_2 (s x r): the entries -fixb2 / -fixb2row do not hold */
+    *ntail = (s - b2_nheld(s)) * r;
 }
 
 static int calc_nparametrs(void)
@@ -3604,6 +3636,13 @@ static void init_guess(real *x, int npar)
     else if (global_seedb2 && r > 0 && seed_fixb2_consistent)
         for (i = 1; i <= s; i++)
             for (j = 1; j <= r; j++) B2[i][j] = global_seedb2_value;
+    /*  -fixb2row: the held rows at their value BEFORE W is built, so that the
+     *  rest of the seed is consistent with the model that will be fitted
+     *  (the lesson of BUG-33).                                              */
+    if (b2row_on && !global_fixb2 && r > 0)
+        for (i = 1; i <= s; i++)
+            if (b2_held(i))
+                for (j = 1; j <= r; j++) B2[i][j] = b2row_val[i];
 
     /* --- 2. Build W_t = Y_{1t} + B₂'Y_{2t} and ∇Y_t = [∇Y_{1t};∇Y_{2t}] - */
     real **W  = matrix(1, nobs, 1, (r > 0 ? r : 1));
@@ -3917,16 +3956,18 @@ static void init_guess(real *x, int npar)
         for (i = 2; i <= M; i++)
             for (j = 1; j < i; j++) x[idx++] = Sig[i][j];
     }
-    if (global_fixb2) {
-        /* Hand B2 to vec_shootx through B2_fixed; it is not in x[]. */
+    if (global_fixb2 || b2row_on) {
+        /* Hand the held entries to vec_shootx through B2_fixed; they are not
+           in x[].  Under -fixb2row the held rows already carry their value. */
         if (B2_fixed) free_matrix(B2_fixed, 1, b2f_s, 1, (b2f_r > 0 ? b2f_r : 1));
         B2_fixed = matrix(1, s, 1, (r > 0 ? r : 1));
         b2f_s = s; b2f_r = r;
         for (j = 1; j <= r; j++) for (i = 1; i <= s; i++)
-            B2_fixed[i][j] = global_fixb2_given ? global_fixb2_value : B2[i][j];
-    } else {
-        for (j = 1; j <= r; j++) for (i = 1; i <= s; i++) x[idx++] = B2[i][j];
+            B2_fixed[i][j] = (global_fixb2 && global_fixb2_given)
+                           ? global_fixb2_value : B2[i][j];
     }
+    for (j = 1; j <= r; j++) for (i = 1; i <= s; i++)
+        if (!b2_held(i)) x[idx++] = B2[i][j];
 
     if (idx != npar + 1)
         fprintf(stderr, "ERROR init_guess: idx=%d, npar=%d\n", idx-1, npar);
@@ -4241,7 +4282,7 @@ static void vec_shootx(real *x, struct Tvarma *armax,
     real **B2 = matrix(1, s, 1, (r > 0 ? r : 1));
     for (j = 1; j <= r; j++)
         for (i = 1; i <= s; i++)
-            B2[i][j] = global_fixb2 ? B2_fixed[i][j] : x[idx++];
+            B2[i][j] = b2_held(i) ? B2_fixed[i][j] : x[idx++];
 
     /*  -mawarma: the upper-right block of Theta, which is NOT free.  It is
      *  completed here and not above because it needs B2, which has just been
@@ -5417,12 +5458,22 @@ static int gate_profile_seed(real *x, int npar)
         if (global_fixb2)
             fprintf(outputv, "    B2 (%d x %d): held fixed by -fixb2\n", s0, r0);
         else {
-            fprintf(outputv, "    B2 (%d x %d):\n", s0, r0);
+            int nfr = s0 - b2_nheld(s0), cc;
+            fprintf(outputv, "    B2 (%d x %d)%s:\n", s0, r0,
+                    b2row_on ? ", rows held by -fixb2row marked *" : "");
             c = nhead + nmid;                   /* where B2 starts in x     */
             for (i = 1; i <= s0; i++) {
                 fprintf(outputv, "     ");
-                for (j = 1; j <= r0; j++)
-                    fprintf(outputv, " %12.6f", x[c + (j - 1) * s0 + i]);
+                for (j = 1; j <= r0; j++) {
+                    if (b2_held(i)) {
+                        fprintf(outputv, " %11.6f*", B2_fixed[i][j]);
+                        continue;
+                    }
+                    /* position of (i, j) among the free entries */
+                    cc = 0;
+                    for (int ii = 1; ii < i; ii++) cc += !b2_held(ii);
+                    fprintf(outputv, " %12.6f", x[c + (j - 1) * nfr + cc + 1]);
+                }
                 fprintf(outputv, "\n");
             }
         }
@@ -5653,7 +5704,7 @@ static int rolling_eval(real *x, int E, int H)
         idx = nmean + nlam + nmid + 1;
         for (int j = 1; j <= r; j++)
             for (i = 1; i <= s; i++)
-                B2r[i][j] = global_fixb2 ? B2_fixed[i][j] : x[idx++];
+                B2r[i][j] = b2_held(i) ? B2_fixed[i][j] : x[idx++];
     }
 
     Yb  = matrix(1, H, 1, M);   lev = matrix(1, H, 1, M);
@@ -6951,7 +7002,30 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
         /* The LR of H1(r) against H(r).  Johansen and Swensen (2024): the degrees
            of freedom are (M - sa)*r, which is how many free entries of alpha the
            restriction removes.                                               */
-        if (global_alpha && lr_free_ok) {
+        if (b2row_on && lr_free_ok) {
+            int nh = b2_nheld(nser - global_r), df, i_;
+            int dfa = global_alpha ? (nser - alpha_sa) * global_r : 0;
+            real lr = 2.0 * (lr_free - vp->logelf), pv;
+            df = nh * global_r + dfa;
+            pv = (df > 0 && lr > 0.0) ? gsl_cdf_chisq_Q(lr, df) : 1.0;
+            fprintf(outputv, "\n--- beta restricted by -fixb2row%s, against "
+                             "H(r) ---\n", global_alpha ? " and alpha = A*psi" : "");
+            for (i_ = 1; i_ <= nser - global_r; i_++)
+                if (b2_held(i_))
+                    fprintf(outputv, "row %d of B2 (%s) held at %g in every "
+                            "relation\n", i_, sname(i_), b2row_val[i_]);
+            fprintf(outputv, "logL H(r)  free        : %15.10f\n", lr_free);
+            fprintf(outputv, "logL restricted        : %15.10f\n", vp->logelf);
+            fprintf(outputv, "LR = 2(free - restr.)  : %15.10f\n", lr);
+            fprintf(outputv, "degrees of freedom     : %d   (rows held)*r%s\n", df,
+                    global_alpha ? " + (M - sa)*r" : "");
+            fprintf(outputv, "p-value (chi2)         : %15.10f\n", pv);
+            printf("  restricted         : logL = %15.10f\n", vp->logelf);
+            printf("  LR = %.6f, %d df, p = %.6f%s\n", lr, df, pv,
+                   (lr < -1.0e-6) ? "   <- NEGATIVE: the restricted beats the free one,"
+                                    " so one of the two did not converge" : "");
+        }
+        else if (global_alpha && lr_free_ok) {
             int df = (nser - alpha_sa) * global_r;
             real lr = 2.0 * (lr_free - vp->logelf);
             real pv = (df > 0 && lr > 0.0) ? gsl_cdf_chisq_Q(lr, df) : 1.0;
@@ -7305,8 +7379,8 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
         real **B2m = matrix(1, s, 1, (r > 0 ? r : 1));
         for (int j = 1; j <= r; j++)
             for (int i = 1; i <= s; i++) {
-                if (!global_fixb2) ix_B2[i][j] = ii;
-                B2m[i][j] = global_fixb2 ? B2_fixed[i][j] : x[ii++];
+                if (!b2_held(i)) ix_B2[i][j] = ii;
+                B2m[i][j] = b2_held(i) ? B2_fixed[i][j] : x[ii++];
             }
 
 
@@ -7416,6 +7490,12 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
                 if (global_fixb2)
                     fprintf(outputv, "  beta_2 held fixed: imposed, not "
                                      "estimated\n");
+                else if (b2row_on)
+                    for (a2 = 1; a2 <= s; a2++)
+                        if (b2_held(a2))
+                            fprintf(outputv, "  %s in ec*: held at %g by "
+                                    "-fixb2row (imposed, not estimated)\n",
+                                    sname(a2), b2row_val[a2]);
                 for (b2i = 1; b2i <= r; b2i++)
                     for (a2 = 1; a2 <= s; a2++)
                         if (ix_B2[a2][b2i]) {
@@ -7577,6 +7657,7 @@ static void report_fit(real *x, real *dev, real **cov, int npar,
         }
         free_tensor(Th_m, 1, (global_q > 0 ? global_q : 1), 1, nser, 1, nser);
         fprintf(outputv, "beta_2 matrix (s x r)%s:\n",
+                b2row_on ? "  [rows held by -fixb2row at the values given]" :
                 global_fixb2 ? (global_fixb2_given
                     ? "  [FIXED at the value given]"
                     : "  [FIXED at its static-OLS estimate: data-chosen, so an"
@@ -8488,7 +8569,8 @@ static int run_lrtest(void)
         real *dsc = vector(1, M), jac_sc = 0.0;
         int scaled = 0;
         for (int i2 = 1; i2 <= M; i2++) dsc[i2] = 1.0;
-        if (!global_fixb2_given && !alpha_file && !global_seed && !global_seedb2
+        if (!global_fixb2_given && !b2row_on && !alpha_file && !global_seed
+            && !global_seedb2
             && nobs_raw > 2) {
             for (int i2 = 1; i2 <= M; i2++) {
                 real m1 = 0.0, v = 0.0, sd;
@@ -8830,6 +8912,7 @@ enum opt_arg {
     A_METHOD,    /* 1 o 2                                                    */
     A_REAL,      /* real, obligatorio                                        */
     A_REAL_OPT,  /* OPTIONAL real: consumed if it parses whole (-fixb2)      */
+    A_INT_REAL,  /* an integer >= 1 and a real, both mandatory (-fixb2row)   */
     A_TOL_OPT    /* OPTIONAL real > 0, if it does not start with '-' (-rankadm) */
 };
 
@@ -8847,6 +8930,7 @@ static const struct opt_spec {
     { "-levels",      A_NONE,     NULL   },
     { "-differenced", A_NONE,     NULL   },
     { "-fixb2",       A_REAL_OPT, "[v]"  },
+    { "-fixb2row",    A_INT_REAL, "i v"  },
     { "-lrtest",      A_NONE,     NULL   },
     { "-bootstrap",   A_INT_POS,  "N"    },
     { "-rungs",       A_NONE,     NULL   },
@@ -8939,6 +9023,14 @@ static void usage(FILE *o)
     fprintf(o, "                 useful as a warm start or a conditioning check, but\n");
     fprintf(o, "                 the restriction is then data-chosen, so the LR\n");
     fprintf(o, "                 statistic is NOT a valid test.\n\n");
+    fprintf(o, "  -fixb2row i v  hold ROW i of B2 (variable i of the nabla Y2 block,\n");
+    fprintf(o, "                 in the input's order) at v in every relation and\n");
+    fprintf(o, "                 estimate the other rows; repeatable.  The free model\n");
+    fprintf(o, "                 is fitted too and the LR against it is reported,\n");
+    fprintf(o, "                 chi2 with (rows held)*r df -- with -alpha/-weakex\n");
+    fprintf(o, "                 the joint test.  Unlike the Wald on a normalised\n");
+    fprintf(o, "                 coefficient, the LR does not depend on which series\n");
+    fprintf(o, "                 beta is normalised on\n\n");
     fprintf(o, "  -lrtest        sequential LR test for the cointegration rank:\n");
     fprintf(o, "                 estimates r = 0..M-1 and reports 2*[L(r+1) - L(r)];\n");
     fprintf(o, "                 incompatible with -differenced\n\n");
@@ -9144,6 +9236,14 @@ static void validate_cli(int argc, char *argv[], int first)
             if (!arg_real(argv[i+1], &rv))
                 bad_cli("%s needs a number, got `%s'", o->name, argv[i+1]);
             i++;
+            break;
+        case A_INT_REAL:
+            if (i + 2 >= argc) bad_cli("%s needs %s", o->name, o->val);
+            if (!arg_int(argv[i+1], &iv) || iv < 1 || iv > B2ROW_MAX)
+                bad_cli("%s needs a row number >= 1, got `%s'", o->name, argv[i+1]);
+            if (!arg_real(argv[i+2], &rv))
+                bad_cli("%s needs a value for the row, got `%s'", o->name, argv[i+2]);
+            i += 2;
             break;
         case A_REAL_OPT:
             /*  -fixb2: the value is optional and is recognised by parsing whole,
@@ -9379,6 +9479,13 @@ static int parse_cli(int argc, char *argv[])
         else if (strcmp(argv[i], "-seedybar") == 0 && i+1 < argc) {
             global_seed = 1; seed_route = SEED_YBAR;  pre_prefix = argv[++i];
         }
+        else if (strcmp(argv[i], "-fixb2row") == 0 && i + 2 < argc) {
+            int ir = atoi(argv[i+1]);
+            b2row_fix[ir] = 1;                   /* range checked by validate_cli */
+            b2row_val[ir] = atof(argv[i+2]);
+            b2row_on = 1;
+            i += 2;
+        }
         else if (strcmp(argv[i], "-fixb2") == 0) {
             global_fixb2 = 1;
             /* An optional numeric argument pins B2 at a value chosen a priori,
@@ -9453,6 +9560,19 @@ static int parse_cli(int argc, char *argv[])
      *  par_blocks counts only the free alpha_sa x r of Lambda = A psi: the
      *  vector fell out of step, B2 was read past its end, and the fit claimed
      *  a restriction it did not impose.  Refused until -warma implements it. */
+    /*  -fixb2row: what it can be combined with is what has been checked.
+     *  -fixb2 already holds every row; the modes re-fit at other ranks or in
+     *  other coordinates (-warma estimates the transformed system, where B2
+     *  is not a parameter), and none of them carries the row restriction.  */
+    if (b2row_on && (global_fixb2 || global_warma || global_lrtest
+                     || global_specs || global_rungs || global_matest
+                     || global_artest || global_eval)) {
+        fprintf(stderr,
+            "ERROR: -fixb2row holds rows of B2 at a single fit.  It cannot be\n"
+            "       combined with -fixb2 (which holds every row), -warma, or the\n"
+            "       modes -lrtest, -specs, -rungs, -matest, -artest and -eval.\n");
+        exit(2);
+    }
     if (global_warma && global_alpha) {
         fprintf(stderr,
             "ERROR: -warma cannot be combined with -alpha or -weakex: the WARMA\n"
@@ -9965,7 +10085,48 @@ int main(int argc, char *argv[])
        estimated first and H1(r) afterwards.  The degrees of freedom are
        (M - sa)*r, explicit in Johansen and Swensen (2024).                    */
     real lr_free = 0.0; int lr_free_ok = 0;
-    if (global_alpha) {
+    if (b2row_on) {
+        /*  -fixb2row (alone or with -alpha/-weakex): the row must exist, and
+         *  the FREE model -- every restriction off -- is fitted with the same
+         *  search as the main fit, so that the LR compares two optima.        */
+        int s_ = nser - global_r, i_, sa_ = global_alpha, bo_ = b2row_on;
+        if (global_r < 1) {
+            fprintf(stderr, "ERROR: -fixb2row needs r >= 1: at r = 0 there is no "
+                            "beta to restrict.\n");
+            exit(2);
+        }
+        for (i_ = s_ + 1; i_ <= B2ROW_MAX; i_++)
+            if (b2row_fix[i_]) {
+                fprintf(stderr, "ERROR: -fixb2row %d: B2 has %d row%s (the nabla Y2 "
+                        "block, the first %d series in the input's order).\n",
+                        i_, s_, (s_ == 1) ? "" : "s", s_);
+                exit(2);
+            }
+        global_alpha = 0; b2row_on = 0;
+        {
+            int npf = calc_nparametrs(), iff;
+            real *xf = vector(1, npf), *devf = vector(1, npf);
+            real **covf = matrix(1, npf, 1, npf);
+            real llf = 0.0, s2f = 0.0;
+            FILE *o_save = outputv, *nul = tmpfile();
+            int q_save = quiet_mode;
+            if (nul) outputv = nul;
+            quiet_mode = 1;
+            init_guess(xf, npf);
+            iff = fit_search(xf, npf, devf, covf, &llf, &s2f, 1, 0, NULL);
+            outputv = o_save; quiet_mode = q_save;
+            if (nul) fclose(nul);
+            lr_free_ok = (iff == 0);
+            lr_free    = llf;
+            printf("  H(r)  free         : logL = %15.10f%s\n", lr_free,
+                   lr_free_ok ? "" : "  (the estimation failed)");
+            free_matrix(covf, 1, npf, 1, npf);
+            free_vector(devf, 1, npf);
+            free_vector(xf, 1, npf);
+        }
+        global_alpha = sa_; b2row_on = bo_;
+    }
+    else if (global_alpha) {
         int save = global_alpha;
         global_alpha = 0;
         {

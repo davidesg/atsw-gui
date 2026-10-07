@@ -262,6 +262,16 @@ cli "-alpha with no file is refused" 1 "$CLI" 2 1 1 -case 2 -alpha
 cli "-fixb2 with no value still runs"   0 "$CLI" 2 1 1 -case 2 -fixb2
 cli "-fixb2 -0.5 still runs"            0 "$CLI" 2 1 1 -case 2 -fixb2 -0.5
 cli "-fixb2 followed by an option runs" 0 "$CLI" 2 1 1 -case 2 -fixb2 -diagma
+#  -fixb2row i v: two mandatory values, the row >= 1, and a row that exists.
+cli "-fixb2row with no values is refused"   1 "$CLI" 2 1 1 -case 2 -fixb2row
+cli "-fixb2row with one value is refused"   1 "$CLI" 2 1 1 -case 2 -fixb2row 1
+cli "-fixb2row 0 v is refused"              1 "$CLI" 2 1 1 -case 2 -fixb2row 0 1
+cli "-fixb2row i with no number is refused" 1 "$CLI" 2 1 1 -case 2 -fixb2row 1 x
+cli "-fixb2row -0.5 (negative value) runs"  0 "$CLI" 2 1 1 -case 2 -fixb2row 1 -0.5
+cli "-fixb2row beyond s is refused"         2 "$CLI" 2 1 1 -case 2 -fixb2row 2 0
+cli "-fixb2row with -fixb2 is refused"      2 "$CLI" 2 1 1 -case 2 -fixb2row 1 0 -fixb2
+cli "-fixb2row with -lrtest is refused"     2 "$CLI" 2 1 0 -case 2 -fixb2row 1 0 -lrtest
+cli "-fixb2row with -warma is refused"      2 "$CLI" 2 1 1 -case 2 -fixb2row 1 0 -warma
 cli "-rankadm with no tolerance runs"   0 "$CLI" 2 1 1 -case 2 -rankadm
 cli "an ordinary fit still exits 0"     0 "$CLI" 2 1 1 -case 2
 
@@ -344,6 +354,11 @@ struct_case "M=2 lrtest p=1 (nreg=0 path)"     "$MM" 1 0 0 -case 2 -lrtest
 struct_case "M=3 r=2"                          "$UK" 2 0 2 -case 2
 struct_case "M=3 lrtest"                       "$UK" 2 0 0 -case 2 -lrtest
 struct_case "M=3 lrtest + fixb2"               "$UK" 2 0 0 -case 2 -lrtest -fixb2
+#  -fixb2row: some rows of B2 in x[], others held -- the one shape where the
+#  free-entry walk can disagree between the four walks (s = 2, one row held).
+struct_case "M=3 r=1 fixb2row 1"               "$UK" 2 0 1 -case 2 -fixb2row 1 0
+struct_case "M=3 r=1 fixb2row 2 + weakex"      "$UK" 2 0 1 -case 2 -fixb2row 2 0.5 -weakex 1
+struct_case "M=3 r=1 fixb2row 2, q=1"          "$UK" 2 1 1 -case 3 -fixb2row 2 0
 struct_case "M=5 r=2 (s=3, r=2: B2 is 3x2)"    "$DK" 2 0 2 -case 2
 # -mawarma with r > 1 and s > 1: the inherited block is r x r and the block it
 # determines is r x s, so this is the only shape where getting either dimension
@@ -1481,6 +1496,45 @@ if [ -z "$lr_free" ] || [ -z "$lr_adm" ]; then
 elif awk -v a="$lr_free" -v b="$lr_adm" 'BEGIN{exit !(b <= a + 1e-6)}'; then
     ok "rank test: constraining the alternative cannot raise the LR ($lr_adm <= $lr_free)"
 else bad "rank test: LR rose under the constraint" "free=$lr_free adm=$lr_adm"; fi
+
+echo "[6b] -fixb2row: one row of beta held, the LR against the free model"
+#  TODO.md MEJORA-1.  -fixb2 holds every row; -fixb2row holds the rows it is
+#  given and estimates the rest.  With s = 1 holding the only row IS -fixb2 at
+#  the same value, so the two must reach the same optimum -- an invariant that
+#  needs no reference.  And the restricted fit cannot beat the free one.
+run "$MM" 2 1 1 -case 2 -fixb2 0;        ll_all=$(logelf_of "$TMP/case")
+run "$MM" 2 1 1 -case 2 -fixb2row 1 0;   ll_row=$(logelf_of "$TMP/case")
+lr_row=$(lr_of "$TMP/case")
+if [ -z "$ll_all" ] || [ -z "$ll_row" ]; then
+    bad "-fixb2row == -fixb2 (s = 1)" "missing logL (all=$ll_all row=$ll_row)"
+elif near "$ll_all" "$ll_row"; then
+    ok "-fixb2row 1 0 reaches the -fixb2 0 optimum when s = 1 ($ll_row)"
+else bad "-fixb2row == -fixb2 (s = 1)" "all=$ll_all row=$ll_row"; fi
+if [ -z "$lr_row" ]; then
+    bad "-fixb2row LR" "the LR block is missing"
+elif awk -v l="$lr_row" 'BEGIN{exit !(l >= -1e-6)}'; then
+    ok "-fixb2row: the restricted fit does not beat the free one (LR = $lr_row)"
+else bad "-fixb2row LR" "negative LR $lr_row"; fi
+if grep -aq 'degrees of freedom     : 1   (rows held)\*r' "$TMP/case.out"; then
+    ok "-fixb2row: df = (rows held)*r = 1"
+else bad "-fixb2row df" "$(grep -a 'degrees of freedom' "$TMP/case.out")"; fi
+#  M = 3, s = 2: one row held, the other estimated; the held row is declared
+#  and not given a standard error, the free one is.
+run "$UK" 2 0 1 -case 2 -fixb2row 1 0
+if grep -aq 'row 1 of B2 .* held at 0 in every relation' "$TMP/case.out" \
+   && grep -aq 'held at 0 by -fixb2row (imposed, not estimated)' "$TMP/case.out"; then
+    ok "-fixb2row on M = 3: the held row is declared, in the LR block and the table"
+else bad "-fixb2row on M = 3" "the held row is not declared"; fi
+lr3=$(lr_of "$TMP/case")
+if [ -n "$lr3" ] && awk -v l="$lr3" 'BEGIN{exit !(l >= -1e-6)}'; then
+    ok "-fixb2row on M = 3: LR >= 0 ($lr3)"
+else bad "-fixb2row on M = 3" "LR '$lr3'"; fi
+#  Joint with alpha: df add up.
+run "$UK" 2 0 1 -case 2 -fixb2row 1 0 -weakex 2
+if grep -aq 'degrees of freedom     : 2   (rows held)\*r + (M - sa)\*r' "$TMP/case.out"; then
+    ok "-fixb2row + -weakex: df = 1 + 1"
+else bad "-fixb2row + -weakex df" "$(grep -a 'degrees of freedom' "$TMP/case.out")"; fi
+echo
 
 echo "[7] the rank test on data whose rank is known by construction"
 # Every other check of -lrtest compares against another program's answer.  These

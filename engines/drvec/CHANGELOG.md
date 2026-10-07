@@ -7,6 +7,18 @@ publicación: `v*`.
 
 ## Sin publicar
 
+### `-fixb2row i v`: contrastes LR sobre una fila de β (MEJORA-1)
+
+`-fixb2` fijaba todo `B₂` o nada. `-fixb2row i v` fija la fila `i` en `v` y
+estima las demás; ajusta también el modelo libre (con la misma búsqueda) y da el
+LR, χ² con (filas fijadas)·`r` g.l.; con `-alpha`/`-weakex`, el contraste
+conjunto. El LR es invariante a la normalización y el Wald no: en el caso que lo
+motivó (PPA en un trivariante de precios de Ecuador) el Wald da p = 0,041 o
+0,155 según sobre qué serie se normalice, y el LR 6,2131573620 / 6,2131573621 en
+las dos. Con `s = 1` coincide al dígito con `-fixb2 v`. Se rechaza con `-fixb2`,
+`-warma` y los modos. 18 comprobaciones nuevas (321 en total, todas pasan; los
+informes de referencia no se mueven).
+
 ### La escala de las series (BUG-43) y las clases MA restringidas en `-lrtest` (BUG-27)
 
 `-lrtest` reescala internamente las series mal escaladas (el LR no cambia; las

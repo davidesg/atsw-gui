@@ -1410,6 +1410,94 @@ static void vistazo_prueba( void )
         }
     }
 
+    /* SIN ESTACIONALIDAD, SIN ARMONICOS. Paso con WTI: el F de art no
+       detectaba estacionalidad, pero con D = 0 art quitaba los armonicos
+       igual y el hijo los heredaba. Ahora se identifica sin quitarlos, no
+       hay aviso y el derivado no los lleva.                           */
+    {
+    GtkMenu   *m2 = clic_derecho( A.l_series, 1 );
+    GtkWidget *e2 = m2 ? entrada_de( m2, "Identificar desde los datos" ) : NULL;
+    GtkWindow *w2;
+
+    olvida();
+    if ( e2 ) gtk_menu_item_activate( GTK_MENU_ITEM(e2) );
+    cierra_menu( m2 );
+    pump( 1500 );
+    w2 = ventana_titulada( "Identificación — wti / m00" );
+    check( w2 != NULL, "abre la identificación de wti", todo_lo_dicho() );
+    if ( w2 )
+        {
+        GPtrArray *sp = junta( GTK_WIDGET(w2), GTK_TYPE_SPIN_BUTTON, FALSE );
+        GtkWidget *bv = boton_que_dice( GTK_WIDGET(w2), "Volver a identificar" );
+        gchar     *txt;
+
+        g_object_add_weak_pointer( G_OBJECT(w2), (gpointer *) &w2 );
+        if ( sp->len >= 2 && bv )
+            {
+            gtk_spin_button_set_value( GTK_SPIN_BUTTON(g_ptr_array_index( sp, 0 )), 1 );
+            gtk_spin_button_set_value( GTK_SPIN_BUTTON(g_ptr_array_index( sp, 1 )), 0 );
+            gtk_button_clicked( GTK_BUTTON(bv) );
+            pump( 2000 );
+            }
+        g_ptr_array_free( sp, TRUE );
+        txt = textos_de( GTK_WIDGET(w2) );
+        check( strstr( txt, "se identifica la serie tal cual" ) != NULL,
+               "wti con D = 0: sin patrón estacional, se identifica sin quitar armónicos", txt );
+        {
+        GPtrArray *ib = junta( GTK_WIDGET(w2), GTK_TYPE_INFO_BAR, FALSE );
+        gboolean   visto = ib->len && gtk_widget_get_visible( g_ptr_array_index( ib, 0 ) );
+
+        check( !visto, "y no avisa de armónicos", txt );
+        g_ptr_array_free( ib, TRUE );
+        }
+        g_free( txt );
+        {
+        GPtrArray *tvs = junta( GTK_WIDGET(w2), GTK_TYPE_TREE_VIEW, FALSE );
+        GtkWidget *bd = boton_que_dice( GTK_WIDGET(w2), "Derivar modelo con el candidato elegido" );
+
+        if ( tvs->len && bd )
+            {
+            GtkTreePath *pa = gtk_tree_path_new_first();
+            int          k, n0 = A.p->nm;
+
+            gtk_tree_selection_select_path( gtk_tree_view_get_selection(
+                GTK_TREE_VIEW(g_ptr_array_index( tvs, 0 )) ), pa );
+            gtk_tree_path_free( pa );
+            olvida();
+            hijos_sin_pantalla( TRUE );
+            gtk_button_clicked( GTK_BUTTON(bd) );
+            pump( 800 );
+            hijos_sin_pantalla( FALSE );
+            check( A.p->nm == n0 + 1, "derivar da de alta el hijo de wti", todo_lo_dicho() );
+            for ( k = n0; k < A.p->nm; k++ )
+                {
+                gchar *inp = ruta_de( "wti", A.p->m[k].muestra, A.p->m[k].id, ".inp" );
+                gchar *c   = lee( inp );
+                PrError e;
+                char    idk[PR_ID];
+
+                check( c && !strstr( c, "\ncos 1" ) && !strstr( c, "\nalter" ),
+                       "y el hijo de wti no lleva armónicos", c );
+                /* se deja el proyecto como estaba */
+                snprintf( idk, sizeof idk, "%s", A.p->m[k].id );
+                pr_borra( A.p, "wti", "", idk, &e );
+                g_unlink( inp );
+                g_free( inp ); g_free( c );
+                atsw_guarda( &A, &e );
+                atsw_refresca( &A );
+                pump( 200 );
+                break;
+                }
+            }
+        g_ptr_array_free( tvs, TRUE );
+        }
+        if ( w2 ) gtk_widget_destroy( GTK_WIDGET(w2) );
+        pump( 100 );
+        }
+    marca( A.l_series, S_ID, "ipc" );     /* lo que sigue es de ipc */
+    pump( 100 );
+    }
+
     /* Lo que no se puede mirar se dice, no revienta. */
     {
     gchar *no = g_build_filename( T, "no_existe.inp", NULL );

@@ -58,6 +58,7 @@ typedef struct {
     GtkWidget *win, *area, *vista, *filtro, *l_estado, *con_que, *l_cab;
     GtkWidget *c_lam, *s_d, *s_D;   /* E1: the transformation, editable     */
     GtkWidget *aviso, *l_aviso, *b_d1;  /* art quito los armonicos (D = 0)  */
+    gboolean   sin_armonicos;       /* se identifico con --harmonics off    */
     GtkListStore *store;
     char       que[128];
     double    *x;                   /* E1: the series, to identify again    */
@@ -91,9 +92,10 @@ static int escribe_datos( const char *ruta, const double *x, int n,
     return 0;
 }
 
-/* Runs art on `datos`; on success fills g->c and returns TRUE. */
-static gboolean corre_art( Id *g, const char *datos, gboolean residuos,
-                           char *why, size_t n )
+/* Runs art on `datos` once; on success fills g->c and returns TRUE.
+   `off` asks art not to remove the harmonics (--harmonics off).        */
+static gboolean corre_art_una( Id *g, const char *datos, gboolean residuos,
+                               gboolean off, char *why, size_t n )
 {
     gchar       *exe = programa_art();
     gchar       *dir = g_path_get_dirname( datos );
@@ -112,9 +114,13 @@ static gboolean corre_art( Id *g, const char *datos, gboolean residuos,
         r = engine_run( dir, exe, datos, "-s", s, "--harmonics", "off",
                         "--no-tests", NULL );
     else if ( g->lam == 0.0 )
-        r = engine_run( dir, exe, datos, "-s", s, "-l", "-d", d, "-D", D, NULL );
+        r = off ? engine_run( dir, exe, datos, "-s", s, "-l", "-d", d, "-D", D,
+                              "--harmonics", "off", NULL )
+                : engine_run( dir, exe, datos, "-s", s, "-l", "-d", d, "-D", D, NULL );
     else
-        r = engine_run( dir, exe, datos, "-s", s, "-d", d, "-D", D, NULL );
+        r = off ? engine_run( dir, exe, datos, "-s", s, "-d", d, "-D", D,
+                              "--harmonics", "off", NULL )
+                : engine_run( dir, exe, datos, "-s", s, "-d", d, "-D", D, NULL );
     g_free( exe );
     g_free( dir );
 
@@ -142,6 +148,26 @@ static gboolean corre_art( Id *g, const char *datos, gboolean residuos,
         }
     if ( g->c->ncand == 0 )
         { g_snprintf( why, n, "art no propuso ningún candidato." ); return FALSE; }
+    return TRUE;
+}
+
+/* SIN ESTACIONALIDAD, SIN ARMONICOS. Con D = 0 y s > 1, art retira los
+ * armonicos SIEMPRE (model_detection.c, harmonics auto), aunque su propio
+ * contraste F diga que no hay patron estacional. Entonces el ARMA sale de
+ * una serie que no es la que hay, y el hijo heredaba once armonicos que
+ * nadie pidio. Paso con WTI. Si el F no detecta estacionalidad, se vuelve
+ * a identificar con --harmonics off: lo identificado es la serie tal cual,
+ * el hijo no lleva armonicos y no hay aviso. El motor no se toca.      */
+static gboolean corre_art( Id *g, const char *datos, gboolean residuos,
+                           char *why, size_t n )
+{
+    g->sin_armonicos = FALSE;
+    if ( !corre_art_una( g, datos, residuos, FALSE, why, n ) ) return FALSE;
+    if ( residuos || g->D != 0 || g->freq <= 1 ||
+         !g->c->has_seasonal || g->c->seasonal_detected )
+        return TRUE;
+    if ( !corre_art_una( g, datos, residuos, TRUE, why, n ) ) return FALSE;
+    g->sin_armonicos = TRUE;
     return TRUE;
 }
 
@@ -358,7 +384,7 @@ static int origen_de( Id *g, char *out, size_t n )
  * otra cosa que la que se miro. En los residuos (E3/E4) no se quitan.     */
 static gboolean quita_armonicos( const Id *g )
 {
-    return g->punto <= 2 && g->D == 0 && g->freq > 1;
+    return g->punto <= 2 && g->D == 0 && g->freq > 1 && !g->sin_armonicos;
 }
 
 /* Los armonicos de fue para la frecuencia s, con los nombres del .inp: cos k
@@ -552,7 +578,10 @@ static void cabecera( Id *g )
             ? "Hay un patrón estacional determinista: con D = 0 se retiran los armónicos "
               "antes de identificar (la ruta determinista); con D = 1 la estacionalidad "
               "se trata como estocástica."
-            : "Sin patrón estacional determinista." );
+            : g->sin_armonicos
+              ? "Sin patrón estacional determinista: se identifica la serie tal cual, "
+                "sin retirar armónicos, y el modelo derivado no los lleva."
+              : "Sin patrón estacional determinista." );
         }
     if ( c->has_unit_root )
         {

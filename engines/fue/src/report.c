@@ -18,11 +18,13 @@
 #include <math.h>
 #include "report.h"
 
-/* The fonts of the equation, chosen to look like the LaTeX one:
- * numbers and names in sans serif (\mathsf), the letters of the variables
- * in italic, and the Greek letters in Symbol.                              */
+/* The fonts of the equation: numbers, names and the letters of the
+ * variables (B, t, N) in sans serif, as \mathsf in the LaTeX one, and the
+ * Greek letters in Symbol. The letters were in Times-Italic; the analyst
+ * asked for them upright, as the original FUE wrote its models, which reads
+ * better next to the sans serif numbers.                                   */
 #define F_NUM   FD_HELV
-#define F_VAR   FD_TIMES_ITALIC
+#define F_VAR   FD_HELV
 #define F_ROMAN FD_TIMES
 #define F_GREEK FD_SYMBOL
 

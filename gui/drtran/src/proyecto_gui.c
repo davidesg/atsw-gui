@@ -172,7 +172,7 @@ gboolean mtram_caso_carga( Mtram *m, char *why, size_t n )
         char dag[PR_RUTA], cns[PR_RUTA];
 
         if (pr_corrida_idx( m->proy, m->caso, de ) < 0) {
-            if (why) snprintf( why, n, "«%s» no es una corrida del caso %s.",
+            if (why) snprintf( why, n, "«%s» no es un modelo del caso %s.",
                                de, m->caso );
             g_string_free( cambian, TRUE );
             return FALSE;
@@ -208,7 +208,7 @@ static int entradas_cargadas( Mtram *m, PrEntrada *en, char *muestra,
         if (pr_de_ruta( m->proy, m->c.s[i]->path, se, sizeof se, mu, sizeof mu,
                         id, sizeof id ) != 0) {
             base = g_path_get_basename( m->c.s[i]->path );
-            snprintf( why, n, "%s no es un modelo de este proyecto: la corrida "
+            snprintf( why, n, "%s no es un modelo de este proyecto: la estimación "
                       "va a la caché, fuera del proyecto.", base );
             g_free( base );
             return 1;
@@ -216,7 +216,7 @@ static int entradas_cargadas( Mtram *m, PrEntrada *en, char *muestra,
         if (i == 0) snprintf( muestra, nmu, "%s", mu );
         else if (strcmp( mu, muestra ) != 0) {
             snprintf( why, n, "%s/%s es de otra muestra que %s: un caso cruza "
-                      "series de UNA ventana. La corrida va a la caché.", se, id,
+                      "series de UNA ventana. La estimación va a la caché.", se, id,
                       en[0].serie );
             return 1;
         }
@@ -262,7 +262,7 @@ gboolean mtram_corrida_nueva( Mtram *m, char *why, size_t n )
             if (why) pr_error_es( &e, why, n );
             return FALSE;
         }
-        if (why) snprintf( why, n, "El caso %s estaba desfasado: esta corrida "
+        if (why) snprintf( why, n, "El caso %s estaba desfasado: este modelo "
                            "va a %s, con los .pre de hoy.", m->caso, nuevo );
         snprintf( m->caso, sizeof m->caso, "%s", nuevo );
         m->caso_desfasado = FALSE;
@@ -282,7 +282,7 @@ gboolean mtram_corrida_nueva( Mtram *m, char *why, size_t n )
 
         if (m->c.n > PR_MAX_ENTRADA) {
             if (why) snprintf( why, n, "Más de %d series: no caben en un caso. "
-                               "La corrida va a la caché.", PR_MAX_ENTRADA );
+                               "La estimación va a la caché.", PR_MAX_ENTRADA );
             return TRUE;
         }
         if (entradas_cargadas( m, en, mu, sizeof mu, w, sizeof w ) != 0) {

@@ -759,8 +759,8 @@ static void pinta_veredicto_legados( Atsw *a )
                                            a->p->m[idx[i]].serie );
         }
     verdicto( a->ver_legado, AT_AMBAR,
-              "%d corrida%s de drtran registrada%s como modelos de %s.",
-              n, n == 1 ? "" : "s", n == 1 ? "" : "s", g->str );
+              "%d estimaci%s de drtran registrada%s como modelos de %s.",
+              n, n == 1 ? "ón" : "ones", n == 1 ? "" : "s", g->str );
     gtk_widget_show( a->caja_legado );
     g_string_free( g, TRUE );
     g_free( idx );

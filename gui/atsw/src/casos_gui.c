@@ -649,11 +649,15 @@ void atsw_caso_lanza( Atsw *a, const char *programa )
 static void on_c_drtran( GtkButton *b, Atsw *a )
      { (void) b; atsw_caso_lanza( a, "drtran_gui" ); }
 
+static void on_c_activado( GtkTreeView *tv, GtkTreePath *ruta,
+                           GtkTreeViewColumn *col, Atsw *a )
+     { (void) tv; (void) ruta; (void) col; atsw_caso_lanza( a, "drtran_gui" ); }
+
 static gchar *corrida_marcada( Atsw *a )
 {
     gchar *c = caso_marcado( a ) ? atsw_marcada( a->c_corridas, CO_ID ) : NULL;
 
-    if ( c == NULL ) barra_pub( a, "Marca una corrida del caso." );
+    if ( c == NULL ) barra_pub( a, "Marca un modelo del caso." );
     return c;
 }
 
@@ -669,7 +673,7 @@ static void on_c_elegir( GtkButton *b, Atsw *a )
     (void) b;
     if ( co == NULL ) return;
     r = pr_corrida_ver( a->p, a->caso, co );
-    if ( atsw_pide_texto( a, "La corrida elegida",
+    if ( atsw_pide_texto( a, "El modelo elegido",
             "Por qué ésta y no otra. Se puede dejar en blanco: sin razón se "
             "verá como sin razón, que es mejor que una inventada.",
             r ? r->razon_elegido : "", razon, sizeof razon ) )
@@ -679,7 +683,7 @@ static void on_c_elegir( GtkButton *b, Atsw *a )
             { char why[512]; pr_error_es( &e, why, sizeof why );
               barra_pub( a, why ); }
         else
-            barra_pub( a, "Corrida elegida y guardada." );
+            barra_pub( a, "Modelo elegido y guardado." );
         atsw_refresca( a );
         }
     g_free( co );
@@ -695,8 +699,8 @@ static void on_c_razon( GtkButton *b, Atsw *a )
     (void) b;
     if ( co == NULL ) return;
     r = pr_corrida_ver( a->p, a->caso, co );
-    if ( atsw_pide_texto( a, "El porqué de esta corrida",
-            "Qué cambió respecto de la corrida de la que cuelga: un enlace "
+    if ( atsw_pide_texto( a, "El porqué de este modelo",
+            "Qué cambió respecto del modelo del que cuelga: un enlace "
             "fuera, otra (b, r, s), una restricción. Se puede poner después, "
             "mirando el .out.", r ? r->razon : "", razon, sizeof razon ) )
         {
@@ -779,7 +783,7 @@ static void on_c_borrar( GtkButton *b, Atsw *a )
     }
 
     pr_corrida_ruta( a->p, a->caso, co, ".out", out, sizeof out );
-    q   = g_strdup_printf( "¿Borro la corrida %s de %s?", co, a->caso );
+    q   = g_strdup_printf( "¿Borro el modelo %s de %s?", co, a->caso );
     det = g_strdup_printf( "Se van su nodo del manifiesto Y sus ficheros (%s y "
                            "los que lleven su nombre: .dag, .cns, residuos, "
                            "evaluación). No se puede deshacer.\n\nLos .pre de "
@@ -801,7 +805,7 @@ static void on_c_borrar( GtkButton *b, Atsw *a )
                       "proyecto." );
     else
         {
-        gchar *t = g_strdup_printf( "%s: corrida %s borrada, con sus ficheros.",
+        gchar *t = g_strdup_printf( "%s: modelo %s borrado, con sus ficheros.",
                                     a->caso, co );
 
         barra_pub( a, t );
@@ -832,7 +836,7 @@ static void on_c_borrar_caso( GtkButton *b, Atsw *a )
 
     q = g_strdup_printf( "¿Borro el caso %s?", id );
     if ( !confirma( a, q, "Se va del manifiesto: qué series se cruzaban, en "
-                          "qué orden y con qué .pre. No tiene corridas.\n\nLos "
+                          "qué orden y con qué .pre. No tiene modelos.\n\nLos "
                           ".pre de las entradas son de las series y no se "
                           "tocan." ) )
         { g_free( q ); return; }
@@ -877,7 +881,7 @@ void atsw_casos_panel( Atsw *a, GtkWidget *izq )
     gtk_widget_set_tooltip_text( l,
         "Lo que se cruza de varias series a la vez: cada una con el .pre con "
         "que entra, en un orden que es parte del caso. drtran estima sus "
-        "corridas." );
+        "modelos de transferencia." );
     gtk_box_pack_start( GTK_BOX(h), l, FALSE, FALSE, 4 );
     a->b_nuevo_caso = gtk_button_new_with_label( "Nuevo caso…" );
     gtk_widget_set_tooltip_text( a->b_nuevo_caso,
@@ -932,19 +936,19 @@ GtkWidget *atsw_caso_vista( Atsw *a )
 
     a->b_c_drtran = boton_caso( b2, "Abrir en drtran",
         "drtran_gui con este caso: sus series en su orden, comprobando los "
-        "hashes. Si hay una corrida marcada, parte de ella; si no, de la "
-        "elegida.", G_CALLBACK(on_c_drtran), a );
+        "hashes. Si hay un modelo marcado, parte de él; si no, del "
+        "elegido. También con doble clic sobre el modelo.", G_CALLBACK(on_c_drtran), a );
     gtk_box_pack_start( GTK_BOX(b2), gtk_separator_new(
                             GTK_ORIENTATION_VERTICAL ), FALSE, FALSE, 4 );
     a->b_c_elegir = boton_caso( b2, "Elegir",
-        "Declara que la corrida marcada es LA del caso.",
+        "Declara que el modelo marcado es EL del caso.",
         G_CALLBACK(on_c_elegir), a );
     a->b_c_razon = boton_caso( b2, "Razón…",
-        "El porqué de la corrida marcada. Se puede poner después, mirando el "
+        "El porqué del modelo marcado. Se puede poner después, mirando el "
         ".out, o no ponerse.", G_CALLBACK(on_c_razon), a );
-    a->b_c_borrar = boton_caso( b2, "Borrar corrida…",
-        "La corrida marcada y sus ficheros. Se pregunta antes. Una de la que "
-        "cuelgue otra no se borra.", G_CALLBACK(on_c_borrar), a );
+    a->b_c_borrar = boton_caso( b2, "Borrar modelo…",
+        "El modelo marcado y sus ficheros. Se pregunta antes. Uno del que "
+        "cuelgue otro no se borra.", G_CALLBACK(on_c_borrar), a );
     gtk_box_pack_start( GTK_BOX(b2), gtk_separator_new(
                             GTK_ORIENTATION_VERTICAL ), FALSE, FALSE, 4 );
     a->b_c_derivar = boton_caso( b2, "Derivar caso…",
@@ -955,7 +959,7 @@ GtkWidget *atsw_caso_vista( Atsw *a )
         "Qué se quiere ver cruzando estas series.",
         G_CALLBACK(on_c_razon_caso), a );
     a->b_c_borrar_caso = boton_caso( b2, "Borrar caso…",
-        "Sólo si no tiene corridas: son estimaciones con su .out.",
+        "Sólo si no tiene modelos: son estimaciones con su .out.",
         G_CALLBACK(on_c_borrar_caso), a );
     gtk_box_pack_start( GTK_BOX(v), b2, FALSE, FALSE, 0 );
 
@@ -987,20 +991,23 @@ GtkWidget *atsw_caso_vista( Atsw *a )
     gtk_box_pack_start( GTK_BOX(v), s, FALSE, FALSE, 0 );
 
     gtk_box_pack_start( GTK_BOX(v), titulo_seccion(
-        "<b>Corridas</b>  <small>el linaje: cada una cuelga de la que se "
+        "<b>Modelos</b>  <small>el linaje: cada uno cuelga del que se "
         "cargó</small>" ), FALSE, FALSE, 0 );
     lr = gtk_tree_store_new( CO_N, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING,
                              G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING,
                              G_TYPE_STRING );
     a->c_corridas = gtk_tree_view_new_with_model( GTK_TREE_MODEL(lr) );
     g_object_unref( lr );
-    atsw_columna( a->c_corridas, "Corrida",      CO_ID );
+    atsw_columna( a->c_corridas, "Modelo",       CO_ID );
     atsw_columna( a->c_corridas, "",             CO_ESTRELLA );
     atsw_columna( a->c_corridas, "logL",         CO_LOGL );
     atsw_columna( a->c_corridas, "Puerta diag.", CO_PUERTA );
     atsw_columna( a->c_corridas, "Estado",       CO_ESTADO );
     atsw_columna( a->c_corridas, "Por qué",      CO_RAZON );
     gtk_tree_view_set_tooltip_column( GTK_TREE_VIEW(a->c_corridas), CO_GLOBO );
+    /* DOBLE CLIC: ese modelo, en drtran_gui. Como el doble clic de la lista
+       de modelos de una serie lanza fue_gui con el suyo.              */
+    g_signal_connect( a->c_corridas, "row-activated", G_CALLBACK(on_c_activado), a );
     gtk_box_pack_start( GTK_BOX(v), atsw_en_scroll( a->c_corridas ), TRUE, TRUE, 0 );
     return v;
 }
@@ -1090,7 +1097,7 @@ static void puerta_de( Atsw *a, const PrCaso *c, const Diagnosis *d,
         snprintf( celda, nc, "%+.2f", d->logl - suma );
         snprintf( globo, ng, "Con transferencia: la conjunta (%.4f) gana %.4f "
                   "sobre la suma de las univariantes (%.4f). La puerta se "
-                  "contrasta en la corrida diagonal (drtran -0).", d->logl,
+                  "contrasta en el modelo diagonal (drtran -0).", d->logl,
                   d->logl - suma, suma );
         }
 }
@@ -1631,7 +1638,7 @@ int atsw_convierte_legados( Atsw *a, char *informe, size_t n )
                                 no->len ? "; " : "", w );
         }
     if ( informe && n )
-        snprintf( informe, n, "%d corrida%s convertida%s%s%s.%s%s%s",
+        snprintf( informe, n, "%d modelo%s convertido%s%s%s.%s%s%s",
                   hechos, hechos == 1 ? "" : "s", hechos == 1 ? "" : "s",
                   si->len ? ": " : "", si->str,
                   no->len ? " Sin tocar — " : "", no->str, no->len ? "." : "" );
@@ -1650,19 +1657,19 @@ static void on_convertir( GtkButton *b, Atsw *a )
     (void) b;
     if ( !a->hay ) return;
     n = atsw_legados( a->p, NULL, 0 );
-    if ( n == 0 ) { barra_pub( a, "No hay corridas viejas que convertir." ); return; }
+    if ( n == 0 ) { barra_pub( a, "No hay modelos de drtran viejos que convertir." ); return; }
 
-    q = g_strdup_printf( "¿Convierto en casos %s %d corrida%s de drtran?",
-                         n == 1 ? "la" : "las", n, n == 1 ? "" : "s" );
+    q = g_strdup_printf( "¿Convierto en casos %s %d modelo%s de drtran?",
+                         n == 1 ? "el" : "los", n, n == 1 ? "" : "s" );
     if ( !confirma( a, q,
-            "Cada una pasa a ser una CORRIDA del caso de sus entradas --las "
+            "Cada uno pasa a ser un MODELO del caso de sus entradas --las "
             "series y los .pre que su .out dice que entraron, en su orden--, "
-            "con su linaje, su razón y, si era la elegida, como elegida del "
+            "con su linaje, su razón y, si era el elegido, como elegido del "
             "caso. El caso se crea si no existe, sin título ni razón.\n\n"
             "Sus ficheros (.out, .dag, .cns, residuos, evaluación) se MUEVEN "
             "a _casos/, y el modelo viejo sale del manifiesto. El hash de "
             "cada entrada es el de su .pre HOY: el de entonces no se guardó.\n\n"
-            "La que no se pueda convertir se deja como está, y se dice por "
+            "El que no se pueda convertir se deja como está, y se dice por "
             "qué." ) )
         { g_free( q ); return; }
     g_free( q );
@@ -1681,7 +1688,7 @@ GtkWidget *atsw_legado_caja( Atsw *a )
     a->b_convertir = gtk_button_new_with_label( "Convertir en casos…" );
     gtk_widget_set_tooltip_text( a->b_convertir,
         "Antes de los casos, drtran_gui registraba cada estimación como un "
-        "modelo más de la serie de salida. Esto las pasa a corridas de su "
+        "modelo más de la serie de salida. Esto los pasa a modelos de su "
         "caso. Se pregunta antes." );
     g_signal_connect( a->b_convertir, "clicked", G_CALLBACK(on_convertir), a );
     gtk_box_pack_start( GTK_BOX(a->caja_legado), a->b_convertir, FALSE, FALSE, 0 );

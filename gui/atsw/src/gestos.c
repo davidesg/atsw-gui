@@ -194,11 +194,11 @@ void atsw_lanza_caso( Atsw *a, const char *programa, const char *caso,
     extra[n++] = "--caso";
     extra[n++] = caso;
     if ( corrida && *corrida )
-        { extra[n++] = "--corrida"; extra[n++] = corrida; }
+        { extra[n++] = "--modelo"; extra[n++] = corrida; }
     extra[n] = NULL;
 
     con = ( corrida && *corrida )
-        ? g_strdup_printf( "el caso %s, desde la corrida %s", caso, corrida )
+        ? g_strdup_printf( "el caso %s, desde el modelo %s", caso, corrida )
         : g_strdup_printf( "el caso %s", caso );
     lanza_v( a, programa, extra, con );
     g_free( con );

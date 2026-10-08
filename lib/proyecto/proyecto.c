@@ -1683,19 +1683,19 @@ const char *pr_error_es( const PrError *e, char *out, size_t n )
            snprintf( out, n, "«%s» no es un caso del proyecto.", e->texto );
            break;
        case PR_ENOCORRIDA:
-           snprintf( out, n, "«%s» no es una corrida de ese caso.", e->texto );
+           snprintf( out, n, "«%s» no es un modelo de ese caso.", e->texto );
            break;
        case PR_EENCASO:
            snprintf( out, n, "Ese modelo es la entrada del caso «%s»: si se "
                      "borra, el caso se queda sin saber con qué se cruzó esa "
                      "serie. Borra antes el caso.", e->texto ); break;
        case PR_ECONCORRIDAS:
-           snprintf( out, n, "En ese caso está la corrida «%s», que es una "
-                     "estimación con su registro. Bórrala antes.", e->texto );
+           snprintf( out, n, "En ese caso está el modelo «%s», que es una "
+                     "estimación con su registro. Bórralo antes.", e->texto );
            break;
        case PR_EHIJAS:
-           snprintf( out, n, "De esa corrida cuelga «%s». Borra antes lo que "
-                     "viene de ella, o el linaje se rompe.", e->texto ); break;
+           snprintf( out, n, "De ese modelo cuelga «%s». Borra antes lo que "
+                     "viene de él, o el linaje se rompe.", e->texto ); break;
        case PR_EENTRADA:
            snprintf( out, n, "«%s» no puede entrar en un caso: lo que se cruza "
                      "es un modelo estimado, no los datos.", e->texto ); break;

@@ -502,7 +502,7 @@ static void on_done( const EngineResult *r, gpointer data )
 
         snprintf( m->previa, sizeof m->previa, "%s", m->corrida );
         if (!mtram_proyecto_guarda( m, why2, sizeof why2 ))
-            preview_show_status( m, "La corrida esta, pero no pude guardar el "
+            preview_show_status( m, "El modelo está, pero no pude guardar el "
                                     "proyecto: %s", why2 );
     }
 
@@ -843,7 +843,7 @@ GtkWidget *estima_pagina_new( Mtram *m )
 
     E->b_parar = gtk_button_new_with_label( "Detener" );
     gtk_widget_set_tooltip_text( E->b_parar,
-        "Para la corrida. Hace falta de verdad con la evaluación fuera de "
+        "Para la ejecución. Hace falta de verdad con la evaluación fuera de "
         "muestra, que son muchas estimaciones seguidas." );
     gtk_widget_set_sensitive( E->b_parar, FALSE );
     g_signal_connect( E->b_parar, "clicked", G_CALLBACK(on_parar), m );

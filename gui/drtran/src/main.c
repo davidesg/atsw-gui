@@ -43,16 +43,17 @@ static void activate(GtkApplication *app, gpointer data)
  * RESIDUOS de TASTE reaparecida por la puerta de atras.            */
 static void uso(const char *me)
 {
-    printf("uso: %s [--proyecto FICHERO [--caso C [--corrida c]]]\n\n"
+    printf("uso: %s [--proyecto FICHERO [--caso C [--modelo c]]]\n\n"
            "  --proyecto F  abre (o empieza) el proyecto F. Cada estimacion\n"
-           "                sera una corrida con su nombre y su linaje, en\n"
+           "                sera un modelo con su nombre y su linaje, en\n"
            "                un CASO: lo que se cruza. Si las series cargadas\n"
            "                son modelos del proyecto, el caso se da de alta\n"
            "                solo. Sin esto se escribe siempre en los mismos\n"
            "                ficheros de la cache, y NO CABEN DOS MODELOS.\n"
            "  --caso C      carga el caso C: sus series en su orden, y la red\n"
-           "                y las restricciones de su corrida elegida.\n"
-           "  --corrida c   parte de la corrida c del caso, no de la elegida.\n",
+           "                y las restricciones de su modelo elegido.\n"
+           "  --modelo c    parte del modelo c del caso, no del elegido\n"
+           "                (--corrida c, el nombre de antes, vale igual).\n",
            me);
 }
 
@@ -67,7 +68,8 @@ int main(int argc, char **argv)
         if (!strcmp(argv[i], "--proyecto") && i + 1 < argc) proy = argv[++i];
         else if (!strncmp(argv[i], "--proyecto=", 11)) proy = argv[i] + 11;
         else if (!strcmp(argv[i], "--caso") && i + 1 < argc) caso = argv[++i];
-        else if (!strcmp(argv[i], "--corrida") && i + 1 < argc) corrida = argv[++i];
+        else if ((!strcmp(argv[i], "--modelo") || !strcmp(argv[i], "--corrida")) &&
+                 i + 1 < argc) corrida = argv[++i];
         else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help"))
             { uso(argv[0]); return 0; }
         else { fprintf(stderr, "%s: no entiendo «%s»\n", argv[0], argv[i]);
@@ -75,12 +77,12 @@ int main(int argc, char **argv)
     }
 
     if ((caso || corrida) && !proy) {
-        fprintf(stderr, "%s: --caso y --corrida son de un proyecto: hace falta "
+        fprintf(stderr, "%s: --caso y --modelo son de un proyecto: hace falta "
                         "--proyecto\n", argv[0]);
         return 2;
     }
     if (corrida && !caso) {
-        fprintf(stderr, "%s: --corrida es de un caso: hace falta --caso\n",
+        fprintf(stderr, "%s: --modelo es de un caso: hace falta --caso\n",
                 argv[0]);
         return 2;
     }

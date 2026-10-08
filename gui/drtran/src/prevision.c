@@ -86,7 +86,7 @@ static void refresca_texto( Mtram *m )
 
     if (!P->vale) {
         gtk_label_set_text( GTK_LABEL(P->texto),
-            "Pulsa «Calcular»: la previsión sale de la misma corrida del\n"
+            "Pulsa «Calcular»: la previsión sale de la misma ejecución del\n"
             "motor que la estimación, y el botón la pide él solo." );
         g_string_free( t, TRUE );
         return;
@@ -300,7 +300,7 @@ GtkWidget *prevision_pagina_new( Mtram *m )
      * de la barra son sus ajustes.                                      */
     P->b_calc = gtk_button_new_with_label( "Calcular" );
     gtk_widget_set_tooltip_text( P->b_calc,
-        "Lanza drtran pidiéndole la previsión. Sale de la MISMA corrida que "
+        "Lanza drtran pidiéndole la previsión. Sale de la MISMA ejecución que "
         "la estimación —el motor la hace en la misma pasada—, así que no hay "
         "que ir a la página de Estimación a pulsar nada." );
     g_signal_connect( P->b_calc, "clicked", G_CALLBACK(on_calcular), m );

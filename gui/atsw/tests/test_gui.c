@@ -2813,17 +2813,36 @@ static void casos( void )
     atsw_caso_lanza( &A, "atsw_hijo_falso" );
     v = lo_que_recibio();
     check( v && g_strv_length( v ) >= 7 && !strcmp( v[2], "--caso" ) &&
-           !strcmp( v[3], "C1" ) && !strcmp( v[4], "--corrida" ) &&
+           !strcmp( v[3], "C1" ) && !strcmp( v[4], "--modelo" ) &&
            !strcmp( v[5], "c01" ) && !strcmp( v[6], "FIN" ),
-           "con c01 marcada: «--proyecto P --caso C1 --corrida c01»",
+           "con c01 marcado: «--proyecto P --caso C1 --modelo c01»",
            v ? g_strjoinv( " ", v ) : barra() );
     g_strfreev( v );
 
+    /* DOBLE CLIC SOBRE EL MODELO DEL CASO: drtran_gui con ese modelo. */
+    {
+    GtkTreeModel *mo = gtk_tree_view_get_model( GTK_TREE_VIEW(A.c_corridas) );
+    GtkTreeIter   it;
+    GtkTreePath  *pa;
+
+    gtk_tree_selection_get_selected( gtk_tree_view_get_selection(
+        GTK_TREE_VIEW(A.c_corridas) ), &mo, &it );
+    pa = gtk_tree_model_get_path( mo, &it );
+    olvida();
+    hijos_sin_pantalla( TRUE );
+    gtk_tree_view_row_activated( GTK_TREE_VIEW(A.c_corridas), pa,
+                                 gtk_tree_view_get_column( GTK_TREE_VIEW(A.c_corridas), 0 ) );
+    hijos_sin_pantalla( FALSE );
+    gtk_tree_path_free( pa );
+    check( dijo( "drtran_gui" ) && dijo( "desde el modelo c01" ),
+           "doble clic sobre c01 lo abre en drtran_gui", todo_lo_dicho() );
+    }
+
     /* --- Elegir y Razón, guardados ------------------------------------- */
-    responde( "La corrida elegida", escribe_texto, "el más simple" );
+    responde( "El modelo elegido", escribe_texto, "el más simple" );
     gtk_button_clicked( GTK_BUTTON(A.b_c_elegir) );
     todo_atendido( "«Elegir» tenia que pedir la razon" );
-    check( !strcmp( barra(), "Corrida elegida y guardada." ),
+    check( !strcmp( barra(), "Modelo elegido y guardado." ),
            "«Elegir» una corrida lo dice", barra() );
     s = celda( A.l_casos, CA_ID, "C1", CA_ELEGIDA );
     check( s && !strcmp( s, "c01 ★" ), "CASOS enseña la elegida con su ★", s );
@@ -2833,7 +2852,7 @@ static void casos( void )
     g_free( s );
 
     marca_arbol( A.c_corridas, CO_ID, "c00" );
-    responde( "El porqué de esta corrida", escribe_texto, "la diagonal" );
+    responde( "El porqué de este modelo", escribe_texto, "la diagonal" );
     gtk_button_clicked( GTK_BUTTON(A.b_c_razon) );
     todo_atendido( "«Razón…» de la corrida tenia que pedirla" );
     responde( "El porqué de este caso", escribe_texto, "el WTI adelanta al IPC" );
@@ -2863,11 +2882,11 @@ static void casos( void )
     marca_arbol( A.c_corridas, CO_ID, "c00" );
     gtk_button_clicked( GTK_BUTTON(A.b_c_borrar) );
     todo_atendido( "(borrar c00)" );
-    check( strstr( barra(), "De esa corrida cuelga «C1/c01»" ) != NULL,
+    check( strstr( barra(), "De ese modelo cuelga «C1/c01»" ) != NULL,
            "una corrida con hijas no se borra, y se dice cual cuelga", barra() );
     gtk_button_clicked( GTK_BUTTON(A.b_c_borrar_caso) );
     todo_atendido( "(borrar C1)" );
-    check( strstr( barra(), "En ese caso está la corrida" ) != NULL,
+    check( strstr( barra(), "En ese caso está el modelo" ) != NULL,
            "un caso con corridas no se borra, y se dice por que", barra() );
 
     /* Una hoja del arbol si: pregunta, y se va con sus ficheros. */
@@ -2881,10 +2900,10 @@ static void casos( void )
     atsw_guarda( &A, &e );
     atsw_refresca( &A );
     marca_arbol( A.c_corridas, CO_ID, "c02" );
-    responde( "¿Borro la corrida c02", contesta, GINT_TO_POINTER(GTK_RESPONSE_OK) );
+    responde( "¿Borro el modelo c02", contesta, GINT_TO_POINTER(GTK_RESPONSE_OK) );
     gtk_button_clicked( GTK_BUTTON(A.b_c_borrar) );
-    todo_atendido( "«Borrar corrida…» tenia que preguntar" );
-    check( strstr( barra(), "corrida c02 borrada, con sus ficheros" ) != NULL,
+    todo_atendido( "«Borrar modelo…» tenia que preguntar" );
+    check( strstr( barra(), "modelo c02 borrado, con sus ficheros" ) != NULL,
            "borrar una corrida lo dice", barra() );
     check( !g_file_test( ruta, G_FILE_TEST_EXISTS ) &&
            !g_file_test( dag, G_FILE_TEST_EXISTS ),
@@ -3056,7 +3075,7 @@ static void legados( void )
            "y el modelo de fue con .inp no", NULL );
     check( gtk_widget_get_visible( A.caja_legado ) &&
            strstr( gtk_label_get_text( GTK_LABEL(A.ver_legado) ),
-                   "4 corridas de drtran registradas como modelos de ipc" ),
+                   "4 estimaciones de drtran registradas como modelos de ipc" ),
            "y el veredicto lo dice",
            gtk_label_get_text( GTK_LABEL(A.ver_legado) ) );
 
@@ -3072,7 +3091,7 @@ static void legados( void )
     gtk_button_clicked( GTK_BUTTON(A.b_convertir) );
     todo_atendido( "«Convertir en casos…» tenia que preguntar" );
     nota( "barra (conversion): %s", barra() );
-    check( strstr( barra(), "2 corridas convertidas" ) &&
+    check( strstr( barra(), "2 modelos convertidos" ) &&
            strstr( barra(), "no es un modelo de este proyecto" ),
            "la barra dice que se convirtio y que no, y por que", barra() );
 
@@ -3129,7 +3148,7 @@ static void legados( void )
            "y la barra dice por que", barra() );
     }
     check( strstr( gtk_label_get_text( GTK_LABEL(A.ver_legado) ),
-                   "2 corridas de drtran registradas como modelos de ipc" ) != NULL,
+                   "2 estimaciones de drtran registradas como modelos de ipc" ) != NULL,
            "y el veredicto cuenta el que queda",
            gtk_label_get_text( GTK_LABEL(A.ver_legado) ) );
     {

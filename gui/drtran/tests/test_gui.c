@@ -1103,8 +1103,10 @@ int main(int argc, char **argv)
     GList     *tl = gtk_window_list_toplevels(), *l;
     GtkWidget *menu = NULL;
     const char *que[] = { "Histograma", "Serie y ACF / PACF",
-                          "CCF de los residuos con SYN_X", NULL };
-    const char *tit[] = { "hist_res.eps", "res.eps", "ccf_res.eps" };
+                          "CCF de los residuos con SYN_X",
+                          "Serie y ACF / PACF, con el modelo", NULL };
+    const char *tit[] = { "hist_res.eps", "res.eps", "ccf_res.eps",
+                          "modelo_SYN_Y.pdf" };
     int         i;
 
     for (l = tl; l; l = l->next) {
@@ -1134,6 +1136,33 @@ int main(int argc, char **argv)
         if (ok) check_tinta(tit[i], que[i]);
     }
     if (menu) gtk_menu_popdown(GTK_MENU(menu));
+    }
+
+    /* LA PAGINA DEL MODELO: el grafico y, debajo, las ecuaciones estimadas,
+     * con la transferencia escrita en nivel y sus valores sacados del .out.
+     * Se mira el texto del PDF: ahi tiene que estar la serie de entrada y
+     * el omega0 de la tabla, en las unidades de la ecuacion.             */
+    {
+    gchar *pdf = mtram_artefacto(m, "_SYN_Y.pdf"), *txt = NULL;
+    gchar *argv[] = { "pdftotext", pdf, "-", NULL };
+    int    i;
+
+    check(g_file_test(pdf, G_FILE_TEST_EXISTS), "la pagina del modelo se escribe", pdf);
+    for (i = 0; i < m->dia.par.n; i++)
+        if (!strcmp(m->dia.par.p[i].nombre, "omega1[0]")) break;
+    if (g_spawn_sync(NULL, argv, NULL, G_SPAWN_SEARCH_PATH | G_SPAWN_STDERR_TO_DEV_NULL,
+                     NULL, NULL, &txt, NULL, NULL, NULL) && txt && *txt) {
+        char w0[32];
+        double esc = m->c.s[1]->ts.refactor / m->c.s[0]->ts.refactor;
+
+        snprintf(w0, sizeof w0, "%.2f", fabs(m->dia.par.p[i].valor * esc));
+        check(i < m->dia.par.n && contiene(txt, w0),
+              "la pagina lleva el omega0 del .out", w0);
+        check(contiene(txt, "SYN_X"), "la pagina escribe la transferencia", txt);
+    } else
+        printf("diagnosis       : sin pdftotext, no se lee el texto de la pagina\n");
+    g_free(txt);
+    g_free(pdf);
     }
 
     /* Exportar la tabla de parametros, y la pestana que no es tabla. */

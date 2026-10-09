@@ -350,7 +350,15 @@ gchar *mtram_artefacto( Mtram *m, const char *sufijo )
                 g_free( d );
                 return r;
             }
-        r = g_build_filename( d, sufijo, NULL );
+        /* Lo demas, con el nombre de siempre delante: "_IPC.pdf" sería
+         * un fichero que empieza por un guion bajo y no dice de quien es. */
+        {
+        gchar *nom = sufijo[0] == '_' ? g_strconcat( "modelo", sufijo, NULL )
+                                      : g_strdup( sufijo );
+
+        r = g_build_filename( d, nom, NULL );
+        g_free( nom );
+        }
         g_free( d );
         return r;
     }

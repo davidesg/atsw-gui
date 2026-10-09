@@ -139,6 +139,24 @@ la división entera del Jarque-Bera.
     fue deja junto al `.out` (el mismo del `.pdf`), en la ventana de
     gráficos (`lib/preview`), sin pasar por fue_gui. Apagado, con globo que
     diga por qué, si el modelo no está estimado.
+- **HECHO — En los casos, «corrida» pasa a «modelo»** y el doble clic sobre un
+  modelo del caso lo abre en drtran_gui (2026-10-08, PR #18).
+- **HECHO — La página de fue, sin cursiva** (2026-10-08, PR #19).
+- **HECHO — La página del modelo en drtran_gui** (2026-10-09): Diagnosis →
+  «Gráficos…» → «Serie y ACF / PACF, con el modelo». El gráfico de los
+  residuos y debajo TRES ecuaciones: la transferencia en nivel
+  (`ln Y = ω(B)/δ(B) B^b ln X + D_t + N_t`), el ruido con sus diferencias y
+  la media, y `D_t`, con los armónicos en un sumatorio. Cada d.t. bajo su
+  coeficiente; en una fracción la raya llega al más ancho. Va junto al `.out`
+  del modelo (`gui/drtran/src/pagina.c`).
+  - **Queda**: abrirla también desde la madre, con el botón derecho sobre el
+    modelo del caso, como «Ver el gráfico…» de los univariantes.
+  - **Queda**: abrir un modelo ya estimado del caso (`--modelo`) no carga su
+    `.out` en Estimación ni en Diagnosis; hay que volver a estimar para ver
+    la página.
+  - **Para decidir**: el gráfico de residuos pone `σ_w` en las unidades del
+    motor (×refactor: 20 % en el IPC, cuando la ecuación dice 0.20 %). Pasa
+    igual en la página de fue (`fugplot`, desde `fue.c`).
 
 ## Lo demás, por documento
 

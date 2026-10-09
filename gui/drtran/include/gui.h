@@ -14,6 +14,7 @@
 #include "outdiag.h"
 #include "outfcst.h"
 #include "proyecto.h"
+#include "fugdraw.h"
 
 /* El directorio de trabajo, bajo la cache del usuario: los .dag, .cns, .out,
  * los residuos y los EPS que se ensenan. Se llama COMO EL PROGRAMA, y el
@@ -358,6 +359,12 @@ void       prevision_desde(Mtram *m, const char *path);
 GtkWidget *diagnosis_pagina_new(Mtram *m);
 void       diagnosis_refresca(Mtram *m);
 void       diagnosis_desde(Mtram *m, const char *path);
+
+/* pagina.c -- la pagina del modelo: grafico (puede ser NULL) arriba y las
+ * ecuaciones estimadas de la serie i debajo, en el PDF pdf. 0 si pudo; si
+ * no, el motivo en why.                                                  */
+int        pagina_modelo(Mtram *m, int i, FDFig *grafico, const char *pdf,
+                         char *why, size_t n);
 
 /* identifica.c */
 GtkWidget *identifica_pagina_new(Mtram *m);

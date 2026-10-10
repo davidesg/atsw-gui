@@ -7,6 +7,19 @@ publicación: `v*`.
 
 ## Sin publicar
 
+## 0.11 — 2026-10-10
+
+### `-irfboot N`: bandas de la IRF y la FEVD en niveles por bootstrap paramétrico
+
+Se simulan N muestras del modelo ajustado (el generador del bootstrap del
+rango) y cada una se **reestima como los datos**: mismo rango, mismas
+restricciones y mismo arranque por ladder. Las respuestas y la descomposición
+de cada réplica se calculan con la misma función que el informe
+(`level_irf_R`, extraída de `level_irf_fevd` sin mover un byte del informe).
+Bandas percentiles al 90 % y 95 %, resumen en el `.out` y la tabla completa en
+`<base>.irfboot`. Generador determinista. 9 comprobaciones nuevas (366, todas
+pasan; los 24 informes de referencia, idénticos).
+
 ### `-case pre`, `-nodrift i`, `-trend`: deterministas serie a serie y caso 4 (MEJORA-3)
 
 `-nodrift i` fija a 0 la deriva de una serie dentro del caso 3; `-case pre` la

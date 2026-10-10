@@ -1713,6 +1713,43 @@ cli "-trend with -f is refused"           2 "$XMUS" "$XMNK" 2 0 1 -case 3 -trend
 cli "-case 4 is refused (it is -trend)"   1 "$XMUS" "$XMNK" 2 0 1 -case 4
 echo
 
+echo "[6f] -irfboot: bands for the level responses by parametric bootstrap"
+#  What can be checked without a reference: the report before the bands is
+#  the plain run's, byte for byte (the bootstrap reads the fit and changes
+#  nothing); the generator is deterministic, so two runs write the same
+#  file; the file's points ARE the report's responses; every replication of
+#  a well-behaved model refits; and what it cannot simulate is refused.
+rm -f "$TMP/ibp.out" "$TMP/ib1.out" "$TMP/ib2.out" "$TMP/ib1.irfboot" "$TMP/ib2.irfboot"
+(cd "$TMP" && timeout "$RUN_TIMEOUT" "$XDRV" "$XROOT/$XMUS" "$XROOT/$XMNK" 2 0 1 -case 2 -name ibp >/dev/null 2>&1
+ timeout "$RUN_TIMEOUT" "$XDRV" "$XROOT/$XMUS" "$XROOT/$XMNK" 2 0 1 -case 2 -irfboot 40 -name ib1 > ib1.log 2>&1
+ timeout "$RUN_TIMEOUT" "$XDRV" "$XROOT/$XMUS" "$XROOT/$XMNK" 2 0 1 -case 2 -irfboot 40 -name ib2 >/dev/null 2>&1)
+nb=$(wc -l < "$TMP/ibp.out" 2>/dev/null)
+if [ -n "$nb" ] && grep -aq 'Bands for the Level Responses' "$TMP/ib1.out" \
+   && cmp -s <(grep -av '^Output File' "$TMP/ibp.out") \
+       <(head -n "$nb" "$TMP/ib1.out" | grep -av '^Output File'); then
+    ok "-irfboot: the report before the bands is the plain run's, byte for byte"
+else bad "-irfboot report" "the report changed (bands at line '$nb')"; fi
+if [ -s "$TMP/ib1.irfboot" ] && cmp -s "$TMP/ib1.irfboot" "$TMP/ib2.irfboot"; then
+    ok "-irfboot: deterministic generator, two runs write the same bands"
+else bad "-irfboot reproducible" "the two .irfboot differ or are missing"; fi
+nrow=$(grep -c '^irf,\|^fevd,' "$TMP/ib1.irfboot" 2>/dev/null)
+if [ "$nrow" = "168" ]; then
+    ok "-irfboot: every response and decomposition, M*M*(K+1)*2 = 168 rows"
+else bad "-irfboot rows" "$nrow rows"; fi
+pt=$(awk -F, '$1=="irf" && $2=="muskrat" && $3=="mink" && $4==8 {printf "%.6f", $5}' "$TMP/ib1.irfboot")
+rp=$(awk '/^Shock to muskrat:/{f=1;next} f && $1==8 {printf "%.6f", $3; exit}' "$TMP/ibp.out")
+if [ -n "$pt" ] && [ "$pt" = "$rp" ]; then
+    ok "-irfboot: the points are the report's responses ($pt)"
+else bad "-irfboot points" "file $pt, report $rp"; fi
+if grep -q '40 replications refitted, 0 failed' "$TMP/ib1.log"; then
+    ok "-irfboot: every replication refits"
+else bad "-irfboot refits" "$(grep -a 'replications refitted' "$TMP/ib1.log")"; fi
+cli "-irfboot with -xlink is refused"   2 "$XMUS" "$XMNK" 2 0 1 -case 2 -irfboot 10 -xpre "$XTMP/xrev.pre" -xlink "$XTMP/net0.txt"
+cli "-irfboot with -trend is refused"   2 "$XMUS" "$XMNK" 2 0 1 -case 3 -trend -irfboot 10
+cli "-irfboot with -lrtest is refused"  2 "$XMUS" "$XMNK" 2 0 0 -case 2 -lrtest -irfboot 10
+cli "-irfboot with -differenced is refused" 2 "$CLI" 2 1 1 -case 2 -differenced -irfboot 10
+echo
+
 echo "[7] the rank test on data whose rank is known by construction"
 # Every other check of -lrtest compares against another program's answer.  These
 # two compare against the TRUTH, because the data was generated to have it:

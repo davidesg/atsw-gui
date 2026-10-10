@@ -998,7 +998,7 @@ compute the same regressor.
 
 ## BUG-41 — engine: the line search never returns on a NaN objective, termcode 3 reports the objective at the rejected point, and `est` leaks on a bad start
 
-**Status: OPEN.** Found 2026-09-23. **Shared** with canonical drvarma
+**Status: OPEN** for items 2–3; **item 1 FIXED** in atsw-gui (c0cc265: `lib/optim`'s `lnsrch` gives up on a non-finite objective). Found 2026-09-23. **Shared** with canonical drvarma
 (`drvarma_v.04.1`), whose code drvec's engine is identical to.
 
 **What it is.**
@@ -1033,7 +1033,7 @@ with each other here.
 
 ## BUG-42 — `diagnose.c`: a heap overflow in the histogram, `chisq` capped above 1000, and portmanteau/JB tests with the wrong reference distribution
 
-**Status: OPEN.** Found 2026-09-23. **Shared** with drvarma (byte-identical file).
+**Status: OPEN** for items 2–4; **item 1 FIXED 2026-10-10** with drvarma 5.0's patch (a count wider than its cell prints as `**`). Found 2026-09-23. **Shared** with drvarma.
 
 **What it is.**
 1. `File_HistSer` (~797-814): with a residual beyond 4σ the label width is 2 but

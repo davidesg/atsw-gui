@@ -7,6 +7,8 @@ publicación: `v*`.
 
 ## Sin publicar
 
+## 0.11 — 2026-10-10
+
 ### `-irfboot N`: bandas de la IRF y la FEVD en niveles por bootstrap paramétrico
 
 Se simulan N muestras del modelo ajustado (el generador del bootstrap del

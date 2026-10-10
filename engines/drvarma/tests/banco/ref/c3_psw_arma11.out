@@ -22,7 +22,7 @@ Number of parameters: 11
 
 =============================================================
   OPTIMIZER STOPPED at the MA invertibility boundary after 100 iterations
-  Objective function = 0.009162634192
+  Objective function = 0.009162634198
   Convergence criterion: last global step failed to locate a lower point
   MA boundary: 2 of 2 inverse roots within 5e-5 of the unit circle
 =============================================================
@@ -57,15 +57,15 @@ Standard errors: bfgs (fdhess: the optimum is on the boundary of the admissible 
 =============================================================
 
 Test of joint significance of last lag (AR(1) and MA(1)):
-  Wald chi2(7) = 60331222462112.5391, p-value = 0.0000
+  Wald chi2(7) = 60335767615600.2422, p-value = 0.0000
   Conclusion: REJECT H0 → last lag is statistically significant.
 
 Test of joint significance of last AR lag (AR(1)):
-  Wald chi2(4) = 2174450.8284, p-value = 0.0000
+  Wald chi2(4) = 2174450.8270, p-value = 0.0000
   Conclusion: REJECT H0 → last AR lag is significant.
 
 Test of joint significance of last MA lag (MA(1)):
-  Wald chi2(3) = 60331777705137.0469, p-value = 0.0000
+  Wald chi2(3) = 60333924289912.9922, p-value = 0.0000
   Conclusion: REJECT H0 → last MA lag is significant.
 
 Test of joint significance of all cross effects:
@@ -82,12 +82,12 @@ PSW_a: effects of other variables on it:
 
 PSW_a: effects of it on other variables:
   H0: all coefficients of PSW_a in other equations = 0
-  Wald chi2(2) = 25670.3617, p-value = 0.0000
+  Wald chi2(2) = 25670.3616, p-value = 0.0000
   Conclusion: REJECT H0 → PSW_a influences others.
 
 PSW_b: effects of other variables on it:
   H0: all coefficients in equation PSW_b from other vars = 0
-  Wald chi2(2) = 25670.3617, p-value = 0.0000
+  Wald chi2(2) = 25670.3616, p-value = 0.0000
   Conclusion: REJECT H0 → PSW_b is influenced by others.
 
 PSW_b: effects of it on other variables:

@@ -836,7 +836,10 @@ static real gammap(real a, real x) {
 real chisq(real x, int df) {
     if (df <= 0) return 0.0;
     if (x <= 0.0) return 0.0;
-    if (x > 1000.0) return 1.0;  /* L�mite superior */
+    /*  BUG-42(2): here was `if (x > 1000.0) return 1.0;`, which put every
+     *  p-value at 0 once Hosking's df = m^2*s neared 1000 (M = 5 from
+     *  n = 1681). No cap is needed: Wilson-Hilferty below holds at any x
+     *  for df >= 30, and gammap() handles df < 30.                         */
 
     /* Para df peque�os, c�lculo exacto */
     if (df < 30) {

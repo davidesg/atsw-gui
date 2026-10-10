@@ -291,6 +291,17 @@ is not finite.  Then propagate to drvec.
 A hang instead of an error, on data that push a trial step to a non-finite
 likelihood.  Not observed in drvarma's own runs.
 
+### A sibling, fixed 2026-10-11 in `lib/optim/lnsrch.c` (drvec BUG-41, item 2)
+
+When the search gives up on x-convergence it put the point back to `xk` but
+left `*fkp1` at the rejected trial's value, and `raxopt` returned that as the
+objective at the optimum.  Now `*fkp1 = fk` too.  Moved in the bench, with
+the reference re-written: `c3_psw_arma11` and `c7_ipc_twostep` ("Objective
+function" in the 9th-10th significant digit, and the Wald statistics, whose
+covariance carries that scale).  **The Python port reproduces the old value**
+(`_qnewt.py`): its byte-identical `.out` test against this binary will show
+these lines until the port does the same.
+
 ---
 
 ## BUG (HIGH) — heap overflow in the residual histogram (`File_HistSer`)

@@ -811,6 +811,14 @@ p1:FREE_STR( Tmpstr );
                         strcat(s1, " ");
                     }
                 }
+                /* A count wider than its cell (100+ with nphor = 2, 10000+
+                   with 4) wrote past the row: heap overflow (BUG-42, item 1).
+                   The cell keeps its width and says the count did not fit.
+                   Same fix as drvarma 5.0.                                  */
+                if ((int) strlen(s1) > nphor) {
+                    memset(s1, '*', nphor);
+                    s1[nphor] = '\0';
+                }
                 strcat(aux[j-2], s1);
                 chk[i] = 1;
             } else {

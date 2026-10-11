@@ -192,3 +192,23 @@ There are two new functions next to the deterministics:
 The rule is the module's: everything else is copied byte for byte, and the
 judge is `inp_check_fue`. Both are tested over the fue corpus.
 
+
+## `diagmv/` — the multivariate residual diagnosis, added 2026-10-11
+
+- **What it is.** Hosking's portmanteau and the multivariate Jarque-Bera,
+  with the block of the `.out` that prints them. They were three copies in
+  the `diagnose.c` of drvarma, drtran and drvec, and all three had the same
+  defects (drvec BUG-42, items 3 and 4).
+- **What changed.** Hosking's Q is referred to χ²(m²s − k), with k the
+  dynamic coefficients the engine estimated. Each engine passes its own
+  count: drvarma Φ + Θ, drtran the transfer weights and the noise ARMA,
+  drvec Λ + F + Θ. β is not counted (Brüggemann, Lütkepohl and Saikkonen
+  2006). The lags are freq + 2, or 10 for non-seasonal data, the rule of
+  drvarma's Python port. The Jarque-Bera is Lütkepohl's, on residuals
+  standardised by the symmetric square root of their covariance, so it does
+  not depend on the order of the series.
+- **Users.** drvarma, drtran and drvec. Each supplies a `diagmvhost.h`, like
+  `optimhost.h` for `optim/`.
+- **Validation.** Against numpy and scipy on simulated residuals: Q and JB
+  agree to every printed digit. The p-values differ by up to 1e-4, which is
+  the Wilson-Hilferty approximation in each engine's `chisq`.

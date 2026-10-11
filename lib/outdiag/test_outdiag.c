@@ -84,8 +84,9 @@ int main( int argc, char **argv )
    okf( d.s[0].fuera2,  4.69, 1e-2, "  a[1]: % fuera de (-2,+2)" );
    okf( d.s[0].esp2,    4.56, 1e-2, "         lo esperado" );
 
-   /* El ULTIMO Ljung-Box de la ACF, el que resume. */
-   ok( d.s[0].lb.hay && d.s[0].lb.df == 18, "  a[1]: el L-B de la ACF, con 18 gl" );
+   /* El ULTIMO Ljung-Box de la ACF, el que resume.  Sus gl restan el
+    * coeficiente propio de la serie (drvec BUG-42, 2026-10-11): 18 - 1.   */
+   ok( d.s[0].lb.hay && d.s[0].lb.df == 17, "  a[1]: el L-B de la ACF, con 17 gl" );
    okf( d.s[0].lb.q, 22.51, 1e-2,           "  a[1]: y su Q" );
 
    /* --- lo multivariante ------------------------------------------------ */
@@ -97,13 +98,16 @@ int main( int argc, char **argv )
            d.jb_normal ? "normal" : "NO normal" );
 
    ok( d.hosking.hay, "el portmanteau multivariante de Hosking se lee" );
-   okf( d.hosking.q, 275.9164, 1e-3, "  Q" );
-   ok( d.hosking.df == 288 && d.hosking_lag == 8, "  288 gl al retardo 8" );
-   okf( d.hosking.p, 0.6854, 1e-4,   "  p" );
+   /* lib/diagmv (drvec BUG-42): retardo freq + 2 = 6 y gl = m^2 s - k =
+    * 216 - 16, con k los 8 omega y los 8 theta libres del m6.            */
+   okf( d.hosking.q, 212.3992, 1e-3, "  Q" );
+   ok( d.hosking.df == 200 && d.hosking_lag == 6, "  200 gl al retardo 6" );
+   okf( d.hosking.p, 0.2608, 1e-4,   "  p" );
    ok( d.hosking_blanco, "  y el motor NO rechaza: los residuos son blancos" );
 
    ok( d.jb.hay && d.jb.df == 12, "el Jarque-Bera multivariante, con 12 gl" );
-   okf( d.jb.p, 0.0128, 1e-4,     "  p" );
+   okf( d.jb.q, 41.0717, 1e-3,    "  JB, el de Lutkepohl" );
+   ok( d.jb.p < 1e-3,             "  p < 0.001" );
    ok( !d.jb_normal,
        "  y SI rechaza la normalidad -- los dos veredictos van al reves" );
 

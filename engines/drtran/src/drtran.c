@@ -30,6 +30,7 @@
 #include "drtran.h"
 #include "fue_pre_reader.h"
 #include "forecast.h"
+#include "diagmv.h"   /* Hosking and Jarque-Bera, shared (lib/diagmv) */
 #include <unistd.h>   /* getopt */
 #include <strings.h>  /* strcasecmp */
 #include <string.h>   /* strcmp */
@@ -2718,6 +2719,57 @@ static void write_residuals(const char *path, real **a, int n, int m)
     fclose(f);
 }
 
+/*  diag_k, diag_npar_ser -- WHAT THE RESIDUALS COST, for the degrees of
+ *  freedom of their tests (drvec BUG-42, item 3).
+ *
+ *  Hosking's Q is chi2(m^2 s - k) with k the DYNAMIC coefficients estimated:
+ *  the transfer weights omega and delta of every link and the AR and MA
+ *  coefficients of every noise model (regular, seasonal and at a frequency,
+ *  the factors as estimated, not their product).  Not the means, not Sigma
+ *  (log(var), q), not the deterministic terms (omega_d, delta_d).
+ *
+ *  The count walks the SLOTS, the same table the optimiser's vector and the
+ *  parameter table are built from, and counts only the FREE ones: a slot
+ *  fixed, shared with another (it is counted once, in its representative) or
+ *  tied by the .cns is not a degree of freedom, and an ARMA the .pre fixes
+ *  (-F) has no slot at all.
+ *
+ *  The Ljung-Box of each residual subtracts the free coefficients of that
+ *  series' own noise, phi_i and theta_i: the univariate reading, as art and
+ *  fue subtract p + q.                                                    */
+static int slot_is(int i, const char *pre, int *ser)
+{
+    size_t n = strlen(pre);
+    if (strncmp(slot_name[i], pre, n) != 0) return 0;
+    if (ser) *ser = atoi(slot_name[i] + n);
+    return 1;
+}
+
+static int diag_k(void)
+{
+    int i, k = 0;
+    for (i = 1; i <= n_slot; i++) {
+        if (slot_kind[i] != SLOT_FREE) continue;
+        if (slot_is(i, "omega_d", NULL) || slot_is(i, "delta_d", NULL)) continue;
+        if (slot_is(i, "omega", NULL) || slot_is(i, "delta", NULL) ||
+            slot_is(i, "phi_", NULL)  || slot_is(i, "theta_", NULL)) k++;
+    }
+    return k;
+}
+
+static int *diag_npar_ser(void)
+{
+    int *n = (int *) calloc((size_t) n_ser + 1, sizeof(int));
+    int  i, s;
+    for (i = 1; i <= n_slot; i++) {
+        if (slot_kind[i] != SLOT_FREE) continue;
+        if ((slot_is(i, "phi_", &s) || slot_is(i, "theta_", &s)) &&
+            s >= 1 && s <= n_ser)
+            n[s]++;
+    }
+    return n;
+}
+
 static void warn_contemp_collinear(FILE *out)
 {
     int k, s1, s2;
@@ -3434,7 +3486,11 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
                 for (i = 1; i <= n_ser; i++) vdiag.a[t][i] = a_est[t][i];
 
             fprintf(outputv, "\n");
-            diagnose(&vdiag, Ts[1].freq);
+            {
+                int *np = diag_npar_ser();
+                diagnose(&vdiag, Ts[1].freq, np);
+                free(np);
+            }
             fprintf(outputv, "\n--- Multivariate diagnostics (Hosking + JB) ---\n");
             /* Los residuos, a un fichero, si se pidieron.
              *
@@ -3446,7 +3502,8 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
              * observacion, con la fecha delante.                       */
             if (resid_file) write_residuals(resid_file, a_est, n_stat, n_ser);
 
-            multivariate_diagnostics(a_est, n_stat, n_ser, outputv);
+            multivariate_diagnostics(a_est, n_stat, n_ser, Ts[1].freq,
+                                     diag_k(), outputv);
 
             /* -i : identificar la RED a partir de las ccf residuales del diagonal.
                Tiene sentido sobre el modelo DIAGONAL (sin transferencias todavia). */

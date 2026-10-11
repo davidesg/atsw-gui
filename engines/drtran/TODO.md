@@ -826,3 +826,30 @@ call it with `atf = TRUE`, which gives the exact residuals. The reproduction
 fue in both positions. The ERR column of the forecast report was wrong for
 the same reason, for every series but the first. Registered in
 drtran-python/docs/BUGS.md.
+
+## drvec BUG-42, items 2-4 (fixed 2026-10-11): the degrees of freedom of the residual diagnosis
+
+The multivariate block (Hosking + Jarque-Bera) is no longer in `src/diagnose.c`:
+it lives once in `lib/diagmv/`, shared with drvarma and drvec. What changes in
+the `.out`:
+
+- **Hosking**: s = freq + 2 lags (10 for non-seasonal data; it was
+  floor(sqrt(n))) and df = m² s − k, with k the dynamic coefficients
+  estimated: free omega/delta of the links and free phi/theta of every noise
+  (seasonal and frequency factors included). Not mu, log(var), q, nor the
+  deterministic omega_d/delta_d. The count walks the slots, FREE only
+  (`diag_k` in `src/drtran.c`), so a shared, fixed or `.cns`-tied slot and an
+  ARMA fixed by the `.pre` do not count. The line under Q prints m² s − k.
+- **Per-series Ljung-Box**: its df column subtracts the free coefficients of
+  that series' own noise (`diag_npar_ser`, rule L1, as art and fue subtract
+  p + q); it subtracted nothing.
+- **Jarque-Bera**: Lütkepohl's, on residuals standardised by the SYMMETRIC
+  square root of their covariance; it was a sum of univariate JBs, chi²(2m)
+  only with uncorrelated residuals.
+- **chisq()**: the cap `x > 1000 → 1` is gone (Wilson-Hilferty needs none).
+
+`hosking_test` stays in `diagnose.c` as `diagmv_hosking` with k = 0, for the
+identification (the GUI's prewhitened CCF), whose numbers do not change.
+**drtran-python must follow**: its `npar_for_series` also subtracts the
+weights of the links that feed the series and uses `cast_us` p + q (expanded
+orders), which is not rule L1, and it has no Hosking k.

@@ -246,7 +246,10 @@ programa:
   bootstrap (`BASE.boot`); goldens propios de cada opción de esa superficie;
   y las lagunas (`-xsys` con q > 0, rango con exógenas o con `-trend`,
   `-xlink` con `-f`), portadas como rechazo. Después, la etiqueta
-  `drvec-v0.12` es el oráculo.
+  `drvec-v0.12` es el oráculo. Los procesos que el porte y su MCP tienen
+  que reproducir (rango, bootstrap, irfboot, restricciones, exógenas), las
+  trampas y el criterio de homologación contra `BASE.boot`, en
+  `PROCESOS-drvec.md`.
 - **Las lagunas, prioridad de la versión siguiente** de drvec y de su porte:
   primero en el C, luego portadas. La lista ordenada, en
   `engines/drvec/TODO.md` («PRIORIDAD»): el rango con exógenas, `-xsys` con

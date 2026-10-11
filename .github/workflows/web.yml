@@ -1,0 +1,65 @@
+# LA PAGINA WEB del proyecto, en GitHub Pages: https://davidesg.github.io/atsw-gui/
+#
+# Es web/ y, al lado, lo que se genera: las capturas y los datos del manual,
+# y el manual en PDF y en HTML (docs/manual/construir.py). Las descargas no
+# estan aqui: la pagina las busca en la ultima release (web/descargas.js).
+#
+# Se publica al llegar a main un cambio en web/ o en el manual, y a mano
+# (Actions -> web -> Run workflow). En los PR solo se construye.
+
+name: web
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'web/**'
+      - 'docs/manual/**'
+      - '.github/workflows/web.yml'
+  pull_request:
+    paths:
+      - 'web/**'
+      - '.github/workflows/web.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  construir:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: El manual
+        run: |
+          pip install markdown
+          python3 docs/manual/construir.py
+      - name: El sitio
+        run: |
+          mkdir -p _site/manual _site/datos
+          cp -R web/. _site/
+          cp -R docs/manual/img _site/img
+          cp docs/manual/datos/ipc_wti.csv _site/datos/
+          cp docs/manual/MANUAL.pdf docs/manual/MANUAL.html _site/manual/
+          du -sh _site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  publicar:
+    if: github.event_name != 'pull_request'
+    needs: construir
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.p.outputs.page_url }}
+    steps:
+      - id: p
+        uses: actions/deploy-pages@v4

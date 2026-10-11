@@ -66,6 +66,12 @@ endif
 
 TARGET = drtran_gui
 
+# En Windows, sin -mwindows cada GUI abre ademas una consola negra. gui/fug y
+# gui/fue ya lo llevaban; faltaba en estos dos, y se veia al empaquetar.
+ifeq ($(OS),Windows_NT)
+  LDFLAGS += -mwindows
+endif
+
 all: $(TARGET)
 
 
@@ -80,7 +86,7 @@ $(TARGET): $(SRC) $(HDR) $(LIBHDR)
 	@if [ -z "$(GTK_LIBS)" ]; then \
 	    echo "drtran_gui necesita los ficheros de desarrollo de GTK 3"; \
 	    echo "(Debian/Ubuntu: sudo apt install libgtk-3-dev)"; exit 1; fi
-	$(CC) $(CFLAGS) $(GTK_CFLAGS) $(GSL_CFLAGS) $(INC) -o $@ $(SRC) $(GTK_LIBS) $(GSL_LIBS) -lm
+	$(CC) $(CFLAGS) $(GTK_CFLAGS) $(GSL_CFLAGS) $(INC) $(LDFLAGS) -o $@ $(SRC) $(GTK_LIBS) $(GSL_LIBS) -lm
 
 install: $(TARGET)
 	install -d $(DESTDIR)$(PREFIX)/bin

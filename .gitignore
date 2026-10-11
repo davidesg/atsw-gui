@@ -73,3 +73,4 @@ capturas/
 gui/atsw/test_gui_atsw
 gui/atsw/atsw_hijo_falso
 gui/atsw/tests/work/
+/dist/

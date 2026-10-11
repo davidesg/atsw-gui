@@ -1,0 +1,116 @@
+#!/bin/bash
+# EL PAQUETE DE macOS: ATSW.app y un .dmg para instalarla, con el arbol ya
+# construido contra Homebrew (gtk+3 gsl librsvg adwaita-icon-theme) y con
+# dylibbundler instalado:
+#
+#   bash packaging/macos/bundle.sh [version]
+#
+# Deja dist/ATSW.app y dist/ATSW-<version>-macos-<arq>.dmg.
+#
+#   Contents/MacOS/ATSW      el lanzador (lanzador.c): pone el entorno de
+#                            GTK y el PATH, y arranca la madre
+#   Contents/Resources/bin   los motores y los GUIs, todos juntos
+#   Contents/Resources/lib   las bibliotecas de Homebrew, reescritas a
+#                            @executable_path/../lib, y los cargadores de
+#                            gdk-pixbuf
+#   Contents/Resources/share esquemas de GSettings compilados e iconos
+#
+# Se firma AD HOC (sin cuenta de desarrollador de Apple). En Apple Silicon un
+# binario sin firma no arranca, y reescribir las rutas de las bibliotecas
+# rompe la firma que traian. Ad hoc basta para arrancar; Gatekeeper sigue
+# avisando la primera vez (ver LEEME.txt).
+set -euo pipefail
+
+R=$(cd "$(dirname "$0")/../.." && pwd)
+V=${1:-0.0}
+B=$(brew --prefix)
+ARQ=$(uname -m)
+APP=$R/dist/ATSW.app
+C=$APP/Contents
+RES=$C/Resources
+
+. "$R/packaging/programas.sh"
+
+rm -rf "$R/dist"
+mkdir -p "$C/MacOS" "$RES/bin" "$RES/lib" "$RES/share/glib-2.0/schemas" "$RES/share/icons"
+
+for p in $PROGRAMAS; do
+    [ -f "$R/$p" ] || { echo "falta $p: ¿esta construido?" >&2; exit 1; }
+    cp "$R/$p" "$RES/bin/"
+done
+
+cc -O2 -Wall -o "$C/MacOS/ATSW" "$R/packaging/macos/lanzador.c"
+
+# Los cargadores de gdk-pixbuf: png y jpeg suelen venir dentro, pero los
+# iconos de Adwaita son SVG y ese cargador es de librsvg.
+PB=lib/gdk-pixbuf-2.0/2.10.0
+mkdir -p "$RES/$PB/loaders"
+cp "$B/$PB"/loaders/*.so "$RES/$PB/loaders/"
+# La cache, como plantilla: la ruta de cada cargador pasa a @PREFIJO@, y el
+# lanzador escribe la de verdad al arrancar (lanzador.c).
+sed -E 's|^"[^"]*/loaders/|"@PREFIJO@/'"$PB"'/loaders/|' "$B/$PB/loaders.cache" \
+    > "$RES/$PB/loaders.cache.in"
+grep '^"' "$RES/$PB/loaders.cache.in"
+
+# Las bibliotecas: dylibbundler copia a lib/ todas las que piden los
+# ejecutables y los cargadores (y las que piden esas), y les reescribe las
+# rutas. -s para las que se piden por @rpath.
+xs=()
+for f in "$RES"/bin/* "$RES/$PB"/loaders/*.so; do xs+=(-x "$f"); done
+dylibbundler -of -b -cd "${xs[@]}" -d "$RES/lib" -p @executable_path/../lib \
+    -s "$B/lib" </dev/null
+
+# Que no quede NADA apuntando a Homebrew: en la maquina de construccion eso
+# funciona y en la del usuario no.
+if find "$RES" -type f \( -perm -u+x -o -name '*.dylib' -o -name '*.so' \) \
+       -exec otool -L {} \; 2>/dev/null | grep -E "^\s+($B|/usr/local/(opt|Cellar)|/opt/homebrew)"; then
+    echo "quedan bibliotecas de Homebrew sin meter en la .app" >&2; exit 1
+fi
+
+cp "$B"/share/glib-2.0/schemas/org.gtk.*.gschema.xml "$RES/share/glib-2.0/schemas/"
+glib-compile-schemas "$RES/share/glib-2.0/schemas"
+cp -R "$B/share/icons/Adwaita" "$B/share/icons/hicolor" "$RES/share/icons/"
+
+# La version minima de macOS: la que piden las bibliotecas de Homebrew, que
+# es la del runner donde se construyo. Por debajo de esa no arranca.
+MINOS=$(otool -l "$RES"/lib/libgtk-3*.dylib | awk '/LC_BUILD_VERSION/ { f = 1 } f && $1 == "minos" { print $2; exit }')
+echo "macOS minimo: ${MINOS:=11.0}"
+
+cat > "$C/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key>               <string>ATSW</string>
+  <key>CFBundleDisplayName</key>        <string>ATSW</string>
+  <key>CFBundleIdentifier</key>         <string>io.github.davidesg.atsw</string>
+  <key>CFBundleExecutable</key>         <string>ATSW</string>
+  <key>CFBundlePackageType</key>        <string>APPL</string>
+  <key>CFBundleVersion</key>            <string>$V</string>
+  <key>CFBundleShortVersionString</key> <string>$V</string>
+  <key>CFBundleDevelopmentRegion</key>  <string>es</string>
+  <key>LSMinimumSystemVersion</key>     <string>$MINOS</string>
+  <key>NSHighResolutionCapable</key>    <true/>
+</dict>
+</plist>
+PLIST
+
+# La firma: de dentro afuera, cada binario y despues la .app entera.
+find "$RES" -type f \( -name '*.dylib' -o -name '*.so' \) -exec codesign --force --sign - {} \;
+codesign --force --sign - "$RES"/bin/*
+codesign --force --sign - "$APP"
+codesign --verify --strict --verbose=2 "$APP"
+
+cp "$R/packaging/LEEME.txt" "$R/dist/LEEME.txt"
+
+# El .dmg: la .app, un enlace a /Applications para arrastrarla, y el LEEME.
+DMG=$R/dist/dmg
+mkdir -p "$DMG"
+cp -R "$APP" "$DMG/"
+ln -s /Applications "$DMG/Applications"
+cp "$R/packaging/LEEME.txt" "$DMG/"
+hdiutil create -volname ATSW -srcfolder "$DMG" -ov -format UDZO \
+    "$R/dist/ATSW-$V-macos-$ARQ.dmg"
+rm -rf "$DMG"
+
+echo "hecho: $(du -sh "$APP" | cut -f1) la .app, $(du -sh "$R"/dist/*.dmg | cut -f1) el .dmg"

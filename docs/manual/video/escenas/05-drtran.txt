@@ -1,0 +1,68 @@
+#! drtran_gui --proyecto @PROYECTO@/proyecto.yaml --caso C1
+ventana drtran
+tamano 1100 760
+espera 1875
+rotulo drtran: la función de transferencia. El caso llega cargado; ipc es la salida.
+espera 3000
+pestana 2 · Identificación
+espera 1500
+rotulo Para ver cómo responde el IPC se preblanquea y se mira la correlación cruzada.
+boton CCF…
+ventana ccf
+tamano 1000 760
+espera 2250
+rotulo Dos barras, en k = 0 y k = 1. A la izquierda nada: el petróleo es exógeno.
+espera 3750
+rotulo La segunda barra es una fracción de la primera: una respuesta que se apaga, r = 1.
+espera 3750
+cierra
+ventana drtran —
+boton Añadir a la red
+pestana 3 · Red
+espera 1125
+fila 2 wti
+boton Editar…
+ventana El enlace
+campo denominador  r | 1
+campo numerador  s | 0
+rotulo b = 0, r = 1, s = 0. La CCF no enseña r: la otra lectura también se estima.
+espera 3000
+boton Aceptar
+ventana drtran —
+espera 1125
+pestana 5 · Estimación
+rotulo Todo a la vez, por máxima verosimilitud exacta.
+boton Estimar
+espera 8000
+pestana 6 · Diagnosis
+rotulo Primero la relación. Exogeneidad: el petróleo no depende del IPC.
+espera 3000
+pestana 2 · Adecuación
+rotulo Adecuación: la forma b r s es correcta.
+espera 2625
+rotulo ¿Merece la pena? Se compara con el modelo sin transferencia.
+pestana 3 · Ajuste
+boton Calcular baseline
+espera 8000
+pestana 5 · Estimación
+boton Estimar
+espera 8000
+pestana 6 · Diagnosis
+pestana 3 · Ajuste
+espera 1125
+rotulo LR = 81.6 con dos parámetros: la transferencia se gana su sitio. La varianza del IPC baja un 33 %.
+espera 3600
+pestana 5 · Modelo estimado
+rotulo ω₀ = 0.019 y δ = 0.58: a largo plazo, un 10 % más de petróleo es un 0.45 % más de IPC.
+espera 3900
+pestana 7 · Previsión
+casilla Prever (-f) | 1
+rotulo Y prever. Prever la salida exige prever también las entradas.
+boton Calcular
+espera 8000
+rotulo Enero de 2020: el modelo prevé 97.03 ± 0.26. Fue 97.14.
+espera 3750
+rotulo -
+portada Todo esto, paso a paso | docs/manual/MANUAL.md | 5000
+espera 3900
+salir

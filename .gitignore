@@ -74,3 +74,6 @@ gui/atsw/test_gui_atsw
 gui/atsw/atsw_hijo_falso
 gui/atsw/tests/work/
 /dist/
+/docs/manual/MANUAL.html
+/docs/manual/MANUAL.pdf
+/docs/manual/video/*.mp4

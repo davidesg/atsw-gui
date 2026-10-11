@@ -127,6 +127,7 @@ mkdir -p "$DMG"
 cp -R "$APP" "$DMG/"
 ln -s /Applications "$DMG/Applications"
 cp "$R/packaging/LEEME.txt" "$DMG/"
+[ -f "$R/docs/manual/MANUAL.pdf" ] && cp "$R/docs/manual/MANUAL.pdf" "$DMG/Manual de ATSW.pdf"
 hdiutil create -volname ATSW -srcfolder "$DMG" -ov -format UDZO \
     "$R/dist/ATSW-$V-macos-$ARQ.dmg"
 rm -rf "$DMG"

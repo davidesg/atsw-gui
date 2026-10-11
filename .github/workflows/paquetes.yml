@@ -18,16 +18,35 @@ on:
     paths:
       - 'packaging/**'
       - '.github/workflows/paquetes.yml'
+      - 'docs/manual/**'
   push:
     tags: [ 'v*' ]
 
 env:
+  # Lo que va en el paquete (packaging/programas.sh): sin drvarma ni drvec.
   DIRS: >-
-    engines/fue engines/fuf engines/fug engines/drtran engines/drvarma
-    engines/drvec engines/art gui/fue gui/fug gui/drtran gui/atsw
+    engines/fue engines/fuf engines/fug engines/drtran engines/art
+    gui/fue gui/fug gui/drtran gui/atsw
 
 jobs:
+  # El manual del alumno en PDF (docs/manual/construir.py): va dentro de los
+  # paquetes y, ademas, suelto.
+  manual:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construir
+        run: |
+          pip install markdown
+          python3 docs/manual/construir.py
+          test -s docs/manual/MANUAL.pdf
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ATSW-manual
+          path: docs/manual/MANUAL.pdf
+
   windows:
+    needs: manual
     runs-on: windows-latest
     defaults:
       run:
@@ -43,6 +62,10 @@ jobs:
           pacboy: >-
             gcc:p pkgconf:p gtk3:p gsl:p zlib:p librsvg:p adwaita-icon-theme:p
             gsettings-desktop-schemas:p hicolor-icon-theme:p
+      - uses: actions/download-artifact@v4
+        with:
+          name: ATSW-manual
+          path: docs/manual
       - name: Version
         id: v
         run: |
@@ -67,7 +90,7 @@ jobs:
           # 0xC0000135: falta una DLL. 0xC000007B: una DLL de otra arquitectura.
           # 0xC0000139: una DLL sin la funcion que se le pide.
           $codigos = @(-1073741515, -1073741701, -1073741511)
-          foreach ($m in 'fue','fuf','fug','art','drtran','drvarma','drvec') {
+          foreach ($m in 'fue','fuf','fug','art','drtran') {
             $p = Start-Process "$bin\$m.exe" -PassThru -NoNewWindow `
                    -RedirectStandardInput vacio.txt `
                    -RedirectStandardOutput "capturas\$m.out" -RedirectStandardError "capturas\$m.err"
@@ -76,7 +99,7 @@ jobs:
             else { Write-Host "$m arranca (sale con $($p.ExitCode))" }
           }
           Add-Type -AssemblyName System.Windows.Forms,System.Drawing
-          foreach ($g in 'atsw_gui','fue_gui','drtran_gui','drvarma_gui','gtk_fmg') {
+          foreach ($g in 'atsw_gui','fue_gui','drtran_gui','gtk_fmg') {
             $p = Start-Process "$bin\$g.exe" -PassThru -WorkingDirectory $env:USERPROFILE
             Start-Sleep 10
             if ($p.HasExited) { Write-Host "::error::$g se cierra al arrancar (codigo $($p.ExitCode))"; $mal += $g; continue }
@@ -114,6 +137,7 @@ jobs:
           if-no-files-found: ignore
 
   macos:
+    needs: manual
     strategy:
       fail-fast: false
       matrix:
@@ -129,6 +153,10 @@ jobs:
         run: |
           brew install pkg-config gtk+3 gsl librsvg adwaita-icon-theme dylibbundler coreutils
           echo "$(brew --prefix coreutils)/libexec/gnubin" >> "$GITHUB_PATH"
+      - uses: actions/download-artifact@v4
+        with:
+          name: ATSW-manual
+          path: docs/manual
       - name: Version
         id: v
         run: |
@@ -147,7 +175,7 @@ jobs:
           mkdir -p capturas
           mal=()
           # Sin Homebrew en el PATH. Las .dylib que falten las dice dyld.
-          for m in fue fuf fug art drtran drvarma drvec; do
+          for m in fue fuf fug art drtran; do
               out=$(env PATH=/usr/bin:/bin timeout 30 "$RES/bin/$m" </dev/null 2>&1) || true
               if grep -q "Library not loaded\|dyld" <<<"$out"; then
                   echo "::error::$m no arranca"; echo "$out" | head; mal+=("$m")
@@ -170,7 +198,7 @@ jobs:
           R=$(cd "$RES" && pwd)
           PB=lib/gdk-pixbuf-2.0/2.10.0
           sed "s|@PREFIJO@|$R|g" "$R/$PB/loaders.cache.in" > "$RUNNER_TEMP/loaders.cache"
-          for g in fue_gui drtran_gui drvarma_gui gtk_fmg; do
+          for g in fue_gui drtran_gui gtk_fmg; do
               env PATH="$R/bin:/usr/bin:/bin" XDG_DATA_DIRS="$R/share" \
                   GSETTINGS_SCHEMA_DIR="$R/share/glib-2.0/schemas" \
                   GDK_PIXBUF_MODULE_FILE="$RUNNER_TEMP/loaders.cache" \
@@ -199,7 +227,7 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [ windows, macos ]
+    needs: [ manual, windows, macos ]
     runs-on: ubuntu-latest
     permissions:
       contents: write

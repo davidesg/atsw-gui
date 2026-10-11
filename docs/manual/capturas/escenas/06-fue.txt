@@ -1,0 +1,8 @@
+#! fue_gui --proyecto @PROYECTO@/proyecto.yaml @PROYECTO@/ipc/Pre-Covid/work/ipc_m01.pre
+ventana FUE
+tamano 1100 760
+espera 3000
+foto fue-gui
+pestana Stochastic Component
+espera 800
+salir

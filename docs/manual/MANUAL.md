@@ -1,0 +1,824 @@
+# ATSW — manual para el alumno
+
+**Un caso de principio a fin: ¿cuánto pasa del precio del petróleo al IPC?**
+
+Este manual te lleva de la mano por un análisis completo con ATSW. Partes de un
+fichero con dos series mensuales y llegas a un modelo de función de
+transferencia estimado, diagnosticado y usado para prever. Por el camino verás
+**qué decide el programa, qué decides tú y con qué criterio**.
+
+Todas las pantallas que aparecen aquí son del programa de verdad, haciendo
+exactamente lo que dice el texto. Si sigues los pasos con el mismo fichero de
+datos, tienes que ver lo mismo.
+
+---
+
+## Índice
+
+1. [Antes de empezar](#1-antes-de-empezar)
+2. [El caso](#2-el-caso)
+3. [Un proyecto nuevo y los datos](#3-un-proyecto-nuevo-y-los-datos)
+4. [La muestra](#4-la-muestra)
+5. [Mirar la serie antes de decidir](#5-mirar-la-serie-antes-de-decidir)
+6. [Identificar el modelo del IPC](#6-identificar-el-modelo-del-ipc)
+7. [Estimar](#7-estimar)
+8. [La diagnosis](#8-la-diagnosis)
+9. [El petróleo: anómalos e intervenciones](#9-el-petróleo-anómalos-e-intervenciones)
+10. [Declarar el modelo elegido](#10-declarar-el-modelo-elegido)
+11. [El caso: las dos series juntas](#11-el-caso-las-dos-series-juntas)
+12. [La función de transferencia en drtran](#12-la-función-de-transferencia-en-drtran)
+13. [La previsión](#13-la-previsión)
+14. [Lo que queda por hacer](#14-lo-que-queda-por-hacer)
+15. [Las reglas de oro](#15-las-reglas-de-oro)
+16. [Glosario](#16-glosario)
+
+---
+
+## 1. Antes de empezar
+
+### Instalar
+
+- **Windows**: ejecuta `ATSW-…-windows-x64-setup.exe`. No pide permisos de
+  administrador. La primera vez Windows avisa de que no conoce el programa:
+  pulsa «Más información» y «Ejecutar de todas formas». Queda en el menú
+  Inicio como **ATSW**.
+- **macOS** (14 o posterior): abre el `.dmg` y arrastra ATSW a Aplicaciones. La
+  primera vez macOS no la deja abrir; ve a *Ajustes del Sistema → Privacidad y
+  seguridad* y pulsa «Abrir igualmente».
+
+El `LEEME.txt` que acompaña al instalador lo explica con más detalle.
+
+### Las piezas
+
+ATSW no es un programa sino un **taller**: una ventana principal desde la que
+se abren las herramientas de cada escalón.
+
+| Programa | Para qué |
+|---|---|
+| **ATSW — el taller** (`atsw_gui`) | La ventana principal: proyectos, series, muestras, modelos y casos. Todo empieza aquí. |
+| **fue_gui** | Editor y estimador de modelos univariantes (en inglés). |
+| **drtran_gui** | Funciones de transferencia y redes de transferencias. |
+| **gtk_fmg** | Gráficos. |
+
+Debajo trabajan los **motores** de cálculo: `art` identifica, `fue` estima
+modelos univariantes por máxima verosimilitud exacta, `fuf` prevé, `fug`
+dibuja y `drtran` estima transferencias. No hace falta
+llamarlos a mano: las ventanas lo hacen por ti.
+
+### La escalera
+
+El método sube por escalones, y **cada escalón parte del anterior**:
+
+1. **Univariante**: cada serie, por separado, con su propio modelo ARIMA.
+2. **Transferencia**: una serie (la *salida*) responde a otras (las
+   *entradas*). Se parte de los modelos univariantes del paso 1.
+3. **VARMA**: varias series que se afectan entre sí (drvarma; no viene en
+   esta primera versión).
+
+En este manual subes los dos primeros escalones.
+
+### Tres clases de fichero
+
+Te los vas a encontrar continuamente:
+
+| Fichero | Qué es |
+|---|---|
+| `.inp` | Una **especificación**: qué modelo quieres estimar. Sus números son *semillas*, un punto de partida. |
+| `.out` | El **registro** de una estimación: parámetros, errores típicos, verosimilitud y la diagnosis. |
+| `.pre` | El mismo `.inp` con las estimaciones dentro: un **óptimo**. Si lo vuelves a estimar, los números no se mueven. |
+
+Dos reglas que conviene aprender pronto:
+
+- **Un `.pre` no se escribe a mano.** Solo el programa que estimó puede afirmar
+  que unos números son el óptimo.
+- **Un `.pre` que se toca vuelve a ser un `.inp`**: si cambias algo, ya es otro
+  modelo, y hay que estimarlo.
+
+### El método en una frase
+
+> Decidir, estimar, mirar los residuos, revisar.
+
+Es un **bucle**. Volver atrás no es un fracaso: es el método funcionando. Y en
+cada vuelta **el juicio va primero y los contrastes formales después**: lo que
+se decide antes de estimar se apoya en el gráfico, el correlograma y lo que
+sabes de la serie. Un contraste sobre un modelo que todavía no es adecuado no es
+un contraste débil: no es un contraste.
+
+**El programa te enseña la evidencia, pero decides tú.** Verás muchas veces la
+palabra *propuesto*: es una propuesta, no un veredicto.
+
+---
+
+## 2. El caso
+
+Dos series mensuales, de enero de 2002 a diciembre de 2025:
+
+- **ipc**: el índice de precios de consumo de España.
+- **wti**: el precio del barril de petróleo West Texas Intermediate, en dólares.
+
+**La pregunta**: cuando sube el petróleo, ¿cuánto sube el IPC y con qué
+retardo? En economía se le llama *pass-through*, la transmisión del precio del
+crudo a los precios de consumo.
+
+El fichero está en [`datos/ipc_wti.csv`](datos/ipc_wti.csv): una columna de
+fechas y una por serie.
+
+---
+
+## 3. Un proyecto nuevo y los datos
+
+Abre **ATSW**. La ventana principal está vacía:
+
+![La ventana principal, sin proyecto](img/inicio.png)
+
+**Un proyecto es una carpeta** con un fichero `proyecto.yaml` que lo recuerda
+todo: qué series hay, qué modelos has estimado, de cuál viene cada uno y **por
+qué** lo hiciste. No hay botón de guardar: cada cambio se escribe solo.
+
+1. Pulsa **Nuevo…**, crea una carpeta para el proyecto (por ejemplo
+   `ipc-wti`) y acepta el nombre `proyecto.yaml`. Pulsa **Crear**.
+2. Pulsa **Datos…** y elige `ipc_wti.csv`. ATSW lee el fichero y te enseña lo
+   que ha encontrado:
+
+![Qué series cargar](img/datos-series.png)
+
+Fíjate en la primera línea: *frecuencia 12, desde 1/2002*. ATSW lo ha deducido
+de las fechas. Si tu fichero no tuviera fechas, te avisaría de que lo carga como
+anual desde el año 1, y eso no es lo que quieres.
+
+3. Deja marcadas las dos series y pulsa **Cargar las marcadas**. Después,
+   **Cerrar**.
+
+![Las series cargadas](img/datos-cargados.png)
+
+A la izquierda están las series; a la derecha, los modelos de la serie marcada.
+De momento cada una tiene solo **m00**, que son los datos tal como entraron:
+m00 no se edita nunca.
+
+---
+
+## 4. La muestra
+
+Los datos llegan a 2025, pero **no queremos que el modelo tenga que explicar
+2020**: la pandemia fue un suceso único que, metido en la estimación, deformaría
+la relación normal entre petróleo e inflación. Estimaremos con los datos
+anteriores a la pandemia.
+
+Para eso se **declara una muestra**. Pulsa el **+** que hay junto a la pestaña
+«Completa», abajo a la derecha:
+
+![Nueva muestra](img/muestra-nueva.png)
+
+- **Nombre**: `Pre-Covid`. Es lo que aparecerá en la pestaña.
+- **Desde** 1/2002, **Hasta** 12/2019.
+- **Por qué**: escríbelo. Dentro de un mes, una ventana sin razón es un número
+  que nadie sabe de dónde salió.
+
+Pulsa **Declararla**. Aparece una pestaña nueva, **Pre-Covid**:
+
+![La muestra declarada](img/muestra-declarada.png)
+
+**Cada muestra es una hoja aparte.** Los modelos que estimes en Pre-Covid viven
+en su hoja: dos modelos estimados sobre ventanas distintas no se comparan.
+A partir de aquí trabajamos siempre en la pestaña **Pre-Covid**.
+
+---
+
+## 5. Mirar la serie antes de decidir
+
+Marca **ipc** y pulsa el botón derecho del ratón. Este es el menú de una
+serie:
+
+![El menú de una serie](img/taller-menu-serie.png)
+
+Antes de identificar nada, **mira la serie**.
+
+### El dominio: qué clase de serie es
+
+La primera decisión no la toma ningún contraste. Es tuya, y va **antes** de
+mirar qué modelo ajusta mejor: **¿qué clase de serie es?**
+
+El IPC es un **índice de precios**. Eso ya dice mucho:
+
+- Un índice no tiene un cero natural, y lo que importa de él son las
+  variaciones *relativas* (la inflación es un porcentaje). Por eso **un índice
+  de precios va siempre en logaritmos** (λ = 0).
+- La teoría espera **inercia**: la inflación de este mes se parece a la del mes
+  pasado.
+
+Escribe esto antes de seguir. Una explicación elegida *después* de ver qué
+modelo ajusta no es un criterio.
+
+### La transformación: el gráfico media – desviación típica
+
+**Media – desviación típica** dibuja, para cada año, la media frente a la
+desviación típica:
+
+![Media frente a desviación típica del IPC](img/ipc-media-dt.png)
+
+Si la nube sube hacia la derecha (los años de nivel alto varían más), la serie
+pide logaritmos. Si es horizontal, niveles. Aquí la nube no es concluyente, y
+**cuando el gráfico no decide, manda el dominio**: logaritmos.
+
+### Serie y correlogramas
+
+**Serie y ACF / PACF…** enseña la serie con su función de autocorrelación
+(ACF) y su autocorrelación parcial (PACF):
+
+![El IPC con su ACF y PACF](img/ipc-serie-acf.png)
+
+Una ACF que **decae muy despacio** es la marca de una serie que no es
+estacionaria: hay que diferenciarla.
+
+---
+
+## 6. Identificar el modelo del IPC
+
+En el menú de la serie, elige **Identificar desde los datos…**. Se abre la
+ventana de identificación, que llama a **art**:
+
+![Identificación, en niveles](img/ipc-identificacion-niveles.png)
+
+art ha empezado por lo más simple: niveles (λ = 1) y sin diferencias (d = 0).
+Lee de arriba abajo:
+
+- **El recuadro de color** avisa de que hay **estacionalidad** y de que art la
+  ha quitado con **armónicos deterministas** (ondas de seno y coseno de periodo
+  12, 6, 4…) antes de identificar. Volveremos a esto enseguida.
+- **Raíz unitaria**: con d = 0, el contraste ADF no rechaza la raíz unitaria y
+  el KPSS rechaza la estacionariedad. Los dos dicen lo mismo: **mira d = 1**.
+- **La ACF** decae despacísimo. El gráfico dice lo mismo que los contrastes.
+
+### Las tres decisiones de arriba
+
+Cambia la fila de arriba a lo que has decidido:
+
+1. **Transformación: logaritmos (λ = 0)**, porque es un índice.
+2. **d = 1**, porque la ACF y los contrastes lo piden.
+3. **D = 0**: la estacionalidad, determinista (ahora explicamos por qué).
+
+Pulsa **Volver a identificar**:
+
+![Identificación en logaritmos con d = 1](img/ipc-identificacion.png)
+
+**d se sube de uno en uno**, nunca de 0 a 2: diferenciar de más no es un error
+venial, mete una raíz en el modelo que luego no se puede quitar. Con d = 1 los
+contrastes ya no coinciden (ADF casi rechaza, KPSS no): **decide el
+correlograma**, que ya no decae despacio.
+
+### ¿Estacionalidad determinista o estocástica?
+
+Hay dos maneras de tratar la estacionalidad:
+
+- **Determinista** (D = 0, con armónicos): el patrón del año se repite igual,
+  como un calendario fijo.
+- **Estocástica** (D = 1, diferencia estacional): el patrón cambia poco a poco
+  de un año a otro.
+
+La regla de la escuela es **empezar por la determinista como hipótesis de
+trabajo**, por dos razones:
+
+1. Desde la determinista se puede pasar a la estocástica frecuencia a
+   frecuencia si los contrastes lo piden al final; al revés no se puede.
+2. Una diferencia estacional que sobra mete una raíz falsa *antes* de
+   identificar el resto del modelo.
+
+Además, **este modelo va a ir a una función de transferencia**, y para los
+modelos multivariantes la especificación de elección es la determinista. Así
+que D = 0. El botón **Cambiar a D = 1** está ahí para cuando la quieras
+estocástica; aquí no lo usamos.
+
+### Elegir el candidato
+
+Abajo está la lista de candidatos que propone art:
+
+![El candidato AR(1) elegido](img/ipc-identificacion-ar1.png)
+
+| Columna | Qué dice |
+|---|---|
+| **(p,q)(P,Q)** | Los órdenes AR y MA, regulares y estacionales. |
+| **similitud** | Cuánto se parece la ACF/PACF teórica del candidato a la de los datos. |
+| **peso Akaike** | La probabilidad relativa del candidato según el AIC. |
+
+art **propone MA(1)** (el de más peso Akaike), pero **AR(1)** tiene más
+similitud (0.947 frente a 0.936). Los dos están muy cerca: es un **empate**.
+
+Al marcar un candidato, su ACF y PACF teóricas se dibujan en rojo sobre las de
+los datos. Con AR(1) la PACF corta después del primer retardo y la ACF decae:
+la firma de un AR(1).
+
+**Cómo se rompe el empate**: con el dominio. Para un índice de precios en
+logaritmos con d = 1, la inercia de la inflación pide un **AR(1)**. Un MA(1)
+diría que un choque de inflación desaparece al mes siguiente, y además daría
+pesos de previsión que cambian de signo. Elegimos **AR(1)**.
+
+> **La propuesta es evidencia, no un veredicto.** El programa lo dice al pie de
+> la ventana. Mira el correlograma teórico sobre el empírico y decide.
+
+Si dudas de verdad entre dos candidatos, **estima los dos**: los empates se
+resuelven estimando, no eligiendo.
+
+Marca **AR(1)**, elige **abrir en el editor** en el desplegable de abajo a la
+derecha y pulsa **Derivar modelo con el candidato elegido**. Nace el modelo
+**m01**, con la razón ya escrita (de qué candidato viene y por qué).
+
+---
+
+## 7. Estimar
+
+Se abre el editor con el `.inp` de m01:
+
+![El editor de m01](img/editor-m01.png)
+
+Es el **modelo especificado**: logaritmos, d = 1, un AR(1) y los armónicos
+deterministas. Los valores son semillas. Pulsa **Guardar y estimar**: el motor
+**fue** lo estima por máxima verosimilitud exacta. En la pestaña **Output**
+está la salida:
+
+![La salida de la estimación](img/editor-m01-output.png)
+
+Lo primero que hay que leer es que **convergió**
+(*CONVERGENCE OBTAINED*). Luego vienen los parámetros con su error típico
+entre paréntesis.
+
+Cierra el editor. En la ventana principal, m01 ya tiene sus números:
+
+![m01 estimado](img/taller-m01.png)
+
+| Columna | Qué dice |
+|---|---|
+| **Viene de** | El modelo del que nace: m01 viene de m00, los datos. |
+| **Estructura** | (p,d,q) y la transformación. |
+| **d.t. res.** | La desviación típica de los residuos. |
+| **Q (g.l.)**, **p** | El contraste de Ljung-Box sobre los residuos y su valor p. |
+| **Por qué** | La razón del modelo. |
+
+> Si prefieres trabajar en **fue_gui** (el estimador clásico, en inglés), el
+> botón derecho sobre un modelo tiene **Abrir m01 en fue**. Hace lo mismo con
+> más detalle: una pestaña por cada parte del modelo.
+>
+> ![fue_gui](img/fue-gui.png)
+
+---
+
+## 8. La diagnosis
+
+Botón derecho sobre m01. Este es el menú de un modelo:
+
+![El menú de un modelo](img/taller-menu-modelo.png)
+
+Elige **Diagnosis…**:
+
+![La diagnosis de m01](img/ipc-m01-diagnosis.png)
+
+Cada fila es una pregunta, con **los números** y **qué dicen**:
+
+| Fila | La pregunta | Aquí |
+|---|---|---|
+| **Estimación** | ¿Convergió? | Sí. |
+| **Media** | ¿Los residuos tienen media cero? | El modelo estima la media, así que es cero por construcción. |
+| **Autocorrelación** | ¿Los residuos son ruido blanco? | Sí: ninguna Q de Ljung-Box rechaza. |
+| **Normalidad** | ¿Son normales? | Sí (Jarque-Bera, p = 0.82). |
+| **Parámetros** | ¿Se ganan su sitio? | **4 no** (\|t\| < 2), empezando por un armónico. |
+| **Ganancia** | ¿El efecto de los deterministas es permanente? | Sí. |
+
+**Q de Ljung-Box**: se calcula en los retardos 12, 24, 36 y 3·12 + 2 (en
+general s, 2s, 3s y 3s + 3). El veredicto lo da el último, el más exigente. Si
+una Q rechaza, no dice *qué* retardo falla: eso lo dicen las barras de la ACF
+residual que se salen de la banda ±2/√n.
+
+**Ver el gráfico…** dibuja los residuos con su ACF y PACF:
+
+![Residuos de m01](img/ipc-m01-grafico.png)
+
+### Los parámetros que no se ganan su sitio
+
+Cuatro armónicos tienen \|t\| < 2. La tentación es quitarlos. **No todavía**:
+
+- Un armónico con t baja puede ser un indicio de que esa frecuencia estacional
+  es **estocástica**, no determinista. El contraste que lo decide (el **MEG**)
+  va **antes** de podar armónicos.
+- Este modelo va a una transferencia, y ahí la estacionalidad se mantiene
+  determinista.
+
+Así que m01 se queda como está. **Un modelo adecuado** quiere decir: centrado,
+con residuos ruido blanco y normales. m01 lo es.
+
+> Fíjate en la línea de abajo de la ventana: *«Esto dice lo que los números
+> dicen. Qué hacer con ello —qué quitar, qué intervenir— es una decisión, y es
+> tuya.»*
+
+---
+
+## 9. El petróleo: anómalos e intervenciones
+
+Ahora **wti**, por el mismo camino: logaritmos (un precio), d = 1, D = 0.
+
+![Identificación de wti](img/wti-identificacion.png)
+
+Elige **AR(1)**, deriva m01, estímalo y abre su diagnosis:
+
+![Diagnosis de wti m01](img/wti-m01-diagnosis.png)
+
+Todo cuadra **salvo la normalidad**: Jarque-Bera rechaza (p = 0.035). El propio
+programa sugiere la causa: con curtosis 0.4, *suele ser cosa de unos pocos
+atípicos, no de toda la muestra*.
+
+### Los anómalos
+
+Botón derecho sobre m01 → **Anómalos…**:
+
+![Los anómalos de wti m01](img/wti-anomalos.png)
+
+Los residuos, con un círculo en lo que se sale. Abajo, cada **episodio** con su
+z: aquí uno, **10/2008–12/2008** (z = −3.3). Es el desplome del petróleo tras
+la quiebra de Lehman Brothers.
+
+> **Los anómalos se calibran, no se eliminan.** Y antes de intervenir hay que
+> preguntarse si de verdad molestan.
+
+**La pregunta que decide**: ¿cambia la identificación si se omite este
+episodio? Si no cambia, intervenir es **sobreintervenir**. Marca la casilla del
+episodio y pulsa **Calibrar**:
+
+![Calibrar: la ACF sin el episodio](img/wti-anomalos-calibrar.png)
+
+La línea de abajo responde: sin el episodio, varios retardos de la ACF y la
+PACF cambian de lado de la banda (*enmascarada*, *fabricada*), y el programa
+concluye: *quitar esto cambiaría la identificación*. Y la normalidad se
+arregla: JB pasa de 6.7 (p = 0.035) a 0.7 (p = 0.705). **Hay que intervenir.**
+
+### Qué forma tiene la intervención
+
+Suelta **Calibrar** y pulsa **Sugerir intervención…**:
+
+![Sugerir intervención](img/wti-sugerir.png)
+
+La **forma** la dice la firma que el suceso deja en los residuos, no el ajuste.
+Aquí el episodio dura varios meses en el nivel, y una intervención escalar solo
+puede representar uno: la forma propuesta son **3 escalones** desde 10/2008.
+
+Reglas de la escuela para intervenir:
+
+- **Una intervención cada vez**, y lo obvio primero.
+- **No uses rampas**: un cambio en la tasa media de crecimiento es una cuestión
+  del orden de integración, no de una intervención.
+- Cada intervención reduce la desviación típica de los residuos, así que eso no
+  sirve para saber cuándo parar. Se para cuando calibrar **deja de cambiar la
+  identificación**.
+
+Deja **en el editor** y pulsa **Derivar modelo con estas intervenciones**. Nace
+**m02**: el mismo AR(1) más los tres escalones. Estímalo y abre su diagnosis:
+
+![Diagnosis de wti m02](img/wti-m02-diagnosis.png)
+
+Ahora todo cuadra, también la normalidad, y los cuatro parámetros se ganan su
+sitio.
+
+---
+
+## 10. Declarar el modelo elegido
+
+Cada serie tiene ya varios modelos. **Cuál es el bueno es una decisión, y hay
+que declararla**: si no, no está en ninguna parte.
+
+Marca m01 del IPC y pulsa **Elegir**. ATSW pide la razón:
+
+![La razón del elegido](img/elegir-razon.png)
+
+Escribe por qué este y no otro. Se puede dejar en blanco, pero *sin razón se
+verá como sin razón, que es mejor que una inventada*. Haz lo mismo con m02 de
+wti.
+
+![Los modelos de wti, con el elegido](img/taller-wti.png)
+
+El pie de la ventana lleva la cuenta: cuántos modelos hay estimados y cuántas
+series tienen ya su elegido declarado.
+
+---
+
+## 11. El caso: las dos series juntas
+
+Un **caso** es un conjunto **fijo y ordenado** de series, cada una con el
+`.pre` con el que entra. Es el punto de partida del escalón de transferencia.
+
+En el panel **Casos**, abajo a la izquierda, pulsa **Nuevo caso…**:
+
+![Nuevo caso](img/caso-nuevo.png)
+
+- **Muestra**: Pre-Covid. Todas las series tienen que venir de la misma.
+- Marca **ipc** y **wti**. Por defecto entra el **elegido** de cada una.
+- **El orden importa: la primera serie es la salida.** Aquí ipc, porque es lo
+  que queremos explicar. Ningún dato puede decidir cuál es la salida: lo decides
+  tú, y cargarlas al revés da en silencio un modelo de otra cosa.
+- **Título** y **Por qué**: la pregunta del caso.
+
+Pulsa **Darlo de alta** y marca **C1**:
+
+![El caso C1](img/caso-vista.png)
+
+La tabla de **Entradas** dice con qué modelo entra cada serie y si su `.pre`
+sigue siendo el mismo con que se dio de alta (*igual*). Si mañana cambias el
+modelo elegido de una serie, el caso no cambia: sigue con el que tenía. Para
+usar el nuevo, **Derivar caso…**.
+
+**¿Por qué se parte de los `.pre` y no de los datos?** Porque el modelo
+univariante de cada serie ya está resuelto, y la transferencia **no vuelve a
+identificarlo**: el modelo de la entrada queda como está, y el de la salida es
+la semilla del modelo del ruido.
+
+Pulsa **Abrir en drtran**.
+
+---
+
+## 12. La función de transferencia en drtran
+
+drtran trabaja en siete pestañas, de izquierda a derecha.
+
+### 1 · Series
+
+![drtran: las series](img/drtran-series.png)
+
+El caso llega cargado: ipc es la salida (la primera) y wti la entrada. drtran
+comprueba que las dos tienen la misma frecuencia, la misma última fecha y el
+mismo número de observaciones.
+
+### 2 · Identificación: el preblanqueo y la CCF
+
+![drtran: identificación](img/drtran-identificacion.png)
+
+Para ver cómo responde el IPC al petróleo hay que mirar la **correlación
+cruzada** (CCF) entre las dos. Pero calculada sobre las series tal cual, la CCF
+engaña: la propia dinámica de cada serie la contamina. Por eso se **preblanquea**:
+
+1. Se filtra la entrada (wti) con su propio modelo ARMA hasta dejarla en ruido
+   blanco.
+2. **Se aplica el mismo filtro a la salida** (ipc). Es el paso que suele
+   olvidarse.
+3. Se calcula la CCF entre las dos series filtradas.
+
+Pulsa **CCF…**:
+
+![La CCF preblanqueada](img/drtran-ccf.png)
+
+- **A la derecha (k ≥ 0, «transferencia»)**: el IPC responde al petróleo con k
+  meses de retardo. Hay dos barras claras: **k = 0 y k = 1**.
+- **A la izquierda (k < 0, «exogeneidad»)**: el IPC adelantándose al petróleo.
+  No debería haber nada, y no lo hay: el petróleo es **exógeno**.
+
+La forma de la respuesta se escribe con tres números, **b r s**:
+
+| | Qué es |
+|---|---|
+| **b** | El **retardo puro**: cuántos meses tarda en empezar la respuesta. |
+| **s** | El orden del **numerador** ω(B): s + 1 coeficientes libres. |
+| **r** | El orden del **denominador** δ(B): una respuesta que se va apagando. |
+
+drtran lee la CCF así: **b** es el primer retardo significativo (aquí 0) y se
+toma el **bloque contiguo** de barras significativas desde ahí (k = 0 y 1). Con
+todos los pesos libres, eso es **b = 0, r = 0, s = 1** (dos coeficientes). Es lo
+que propone la tabla.
+
+Pero hay otra lectura. Las dos barras son 0.46 y 0.31: **la segunda es una
+fracción de la primera**, como en una respuesta que se apaga geométricamente.
+Eso es **b = 0, r = 1, s = 0**: un coeficiente y un denominador. También tiene
+dos parámetros, y dice algo distinto: que el efecto se va repartiendo en el
+tiempo.
+
+> **La CCF no puede enseñar r.** Una respuesta que decae y unos pocos pesos
+> libres dejan casi la misma CCF. Las dos lecturas se **estiman** y se
+> comparan.
+
+En este manual seguimos con **r = 1**, que es la lectura económica habitual del
+*pass-through*: el efecto del petróleo llega sobre todo el mismo mes y se va
+acumulando después. Al final te proponemos estimar también la otra.
+
+Pulsa **Añadir a la red**.
+
+### 3 · Red
+
+![La red propuesta](img/drtran-red-propuesta.png)
+
+La red tiene un enlace, **ipc ← wti**, con lo que propuso la identificación
+(b = 0, r = 0, s = 1). Márcalo y pulsa **Editar…**:
+
+![El enlace](img/drtran-enlace.png)
+
+Pon **denominador r = 1** y **numerador s = 0**, y acepta:
+
+![La red](img/drtran-red.png)
+
+Abajo, drtran comprueba que la red es **acíclica**: ninguna serie es a la vez
+salida y entrada de otra que la afecta. Un ciclo sería un sistema simultáneo, y
+eso es un modelo VARMA, no una transferencia.
+
+### 4 · Modelo
+
+Aquí se pueden fijar o compartir parámetros (un fichero `.cns`). Para este caso
+no hace falta tocar nada.
+
+### 5 · Estimación
+
+Pulsa **Estimar**:
+
+![La estimación](img/drtran-estimacion.png)
+
+drtran estima **todo a la vez** por máxima verosimilitud exacta: la
+transferencia, el modelo del ruido del IPC y el modelo del petróleo. Lo primero
+es comprobar que **converge**. La línea de abajo da la verosimilitud (logL).
+
+### 6 · Diagnosis
+
+La diagnosis tiene sus propias pestañas, y el orden importa: **primero la
+relación, después el ruido**. Una relación mal especificada ensucia la CCF y la
+ACF de los residuos; un ruido mal especificado solo ensucia la ACF.
+
+**1 · Exogeneidad**: la Q de la CCF entre los residuos del IPC y el petróleo
+preblanqueado, en los retardos **negativos**.
+
+![Exogeneidad](img/drtran-diagnosis.png)
+
+Si fallara, el sistema sería simultáneo y habría que ir a VARMA. Aquí
+p = 0.87: **wti es exógena**.
+
+**2 · Adecuación**: la misma Q en los retardos **k ≥ 0**. Si falla, la *forma*
+(b, r, s) está mal.
+
+![Adecuación](img/drtran-adecuacion.png)
+
+p = 0.22: **la forma es adecuada**. Abajo, el contraste de Hosking dice que los
+residuos de las dos ecuaciones son ruido blanco conjuntamente.
+
+**3 · Ajuste**: ¿merece la pena la transferencia? Converger y merecer la pena
+son afirmaciones distintas. Hay que compararla con el **modelo diagonal**, las
+dos series sin relación entre ellas:
+
+1. Pulsa **Calcular baseline**: drtran estima el modelo diagonal.
+2. Vuelve a **5 · Estimación** y pulsa **Estimar**.
+3. Vuelve a **3 · Ajuste**:
+
+![Ajuste frente al diagonal](img/drtran-ajuste.png)
+
+- **LR = 81.59** con 2 parámetros de transferencia, frente a un valor crítico de
+  5.3 al 5 %: **la transferencia se gana su sitio**.
+- La varianza de los residuos del IPC baja un **32.7 %**: una parte importante
+  de su variabilidad se explica con el petróleo.
+- En wti no cambia nada (−0.8 %), como debe ser: wti es la entrada, no
+  responde a nadie.
+
+**4 · Residuos**: la ACF de los residuos de cada ecuación, con la Q de
+Ljung-Box. **Gráficos…** tiene la serie de residuos con su ACF y PACF, el
+histograma y la CCF de los residuos con cada entrada:
+
+![El menú Gráficos…](img/drtran-graficos-menu.png)
+
+![Residuos del IPC en el modelo de transferencia](img/drtran-residuos-grafico.png)
+
+**5 · Modelo estimado**: la tabla de parámetros.
+
+![El modelo estimado](img/drtran-modelo.png)
+
+| Parámetro | Qué es | Valor |
+|---|---|---|
+| `omega1[0]` | ω₀, el efecto del mismo mes | 0.019 (d.t. 0.002) |
+| `delta1[1]` | δ₁, cuánto se arrastra cada mes | 0.577 (d.t. 0.077) |
+| `phi_1[B^1]` | el AR(1) del ruido del IPC | 0.469 |
+| `phi_2[B^1]` | el AR(1) del petróleo | 0.215 |
+| `omega_d1[…]` | los armónicos del IPC | |
+| `omega_d2[…]` | los tres escalones de 2008 del petróleo | |
+
+### Leer el resultado
+
+El modelo, en dos ecuaciones:
+
+```
+ln IPC_t = ω₀ / (1 − δ₁ B) · ln WTI_t  +  D_t  +  N_t
+(1 − φ B) ∇ N_t = a_t
+```
+
+La primera es la **transferencia en niveles**, con los deterministas (D_t, los
+armónicos) y el **ruido** N_t. La segunda es el modelo del ruido: un AR(1) en
+diferencias.
+
+Como las dos series están en logaritmos, los coeficientes son **elasticidades**:
+
+- **Efecto del mismo mes**: ω₀ = 0.019. Si el petróleo sube un 10 %, el IPC
+  sube un 0.19 % ese mismo mes.
+- **Ganancia** (el efecto a largo plazo, cuando la subida del petróleo es
+  permanente): ω₀ / (1 − δ₁) = 0.019 / (1 − 0.577) ≈ **0.045**. Una subida
+  permanente del 10 % en el petróleo acaba subiendo el IPC un **0.45 %**.
+- **Retardo medio**: δ₁ / (1 − δ₁) ≈ **1.4 meses**. La mayor parte del efecto
+  llega en el primer trimestre.
+
+> Una advertencia de la escuela: si δ₁ se acercara a 1 (más de 0.95), la
+> ganancia y el retardo medio no serían fiables. Aquí δ₁ = 0.58, lejos de eso.
+
+---
+
+## 13. La previsión
+
+Pestaña **7 · Previsión**. Marca **Prever (-f)**, deja 8 periodos y pulsa
+**Calcular**:
+
+![La previsión](img/drtran-prevision.png)
+
+Desde 12/2019, el nivel del IPC y su variación anual, cada uno con su
+desviación típica. El IPC de enero de 2020 fue 97.14; el modelo prevé
+97.03 ± 0.26.
+
+Dos cosas que hay que tener claras:
+
+- **Prever la salida exige prever las entradas**. El error de la previsión del
+  IPC suma su propia innovación y la del petróleo, propagada por la
+  transferencia.
+- **Las bandas son teóricas**: suponen que el modelo es el verdadero. Lo único
+  empírico es **Evaluar fuera de muestra (-C)**: estima una vez, fija los
+  parámetros y va moviendo el origen, comparando cada previsión con lo que de
+  verdad pasó. Es lo que decide entre dos modelos.
+
+Y como el modelo está en logaritmos, las bandas del nivel son **asimétricas**:
+nunca calcules «nivel ± 1.96 × d.t.» a mano.
+
+---
+
+## 14. Lo que queda por hacer
+
+Un modelo **adecuado** dice que los datos no lo contradicen, no que no haya uno
+mejor. Antes de darlo por bueno:
+
+1. **Estima la otra lectura** de la CCF: b = 0, **r = 0, s = 1**. Compara la
+   verosimilitud de las dos. Tienen el mismo número de parámetros, así que gana
+   la de mayor logL; si la diferencia es pequeña, mira qué dice cada una de la
+   ganancia.
+2. **Sobreajusta**: prueba s + 1 y r + 1, uno cada vez, y contrasta con la razón
+   de verosimilitudes (1 grado de libertad). Un sobreajuste con correlaciones
+   altas entre parámetros es un experimento **fallido**, no una mejora.
+3. **Si falla la adecuación, calibra antes de re-especificar**: puede ser la
+   forma o puede ser una observación. Si es una observación, es una
+   intervención, y se trata en el modelo univariante.
+4. **Reformula el ruido** si su ACF lo pide, *después* de la relación.
+5. En el taller, la tabla de **Modelos** del caso guarda cada estimación con su
+   logL y su razón. **Elige** el modelo del caso y escribe por qué, como hiciste
+   con las series.
+
+Y si la identificación de una red con más series encontrara un **ciclo**
+(dos series que se afectan mutuamente), ahí termina la transferencia: el
+siguiente escalón es **drvarma** (modelos VARMA), con los mismos `.pre`. No
+viene en esta primera versión.
+
+---
+
+## 15. Las reglas de oro
+
+1. **Mira antes de contrastar.** El gráfico y el correlograma deciden; los
+   contrastes ayudan.
+2. **El dominio va primero**: un índice de precios va en logaritmos, siempre.
+3. **d de uno en uno.** Diferenciar de más mete una raíz que luego estorba.
+4. **La estacionalidad, determinista como hipótesis de trabajo.** El MEG va
+   antes de podar armónicos.
+5. **Los empates se resuelven estimando**, no eligiendo.
+6. **La propuesta del programa es evidencia, no un veredicto.**
+7. **Los anómalos se calibran, no se eliminan.** Una intervención cada vez. Sin
+   rampas.
+8. **No añadas un parámetro no significativo para que cuadre un criterio.**
+9. **Cada modelo, con su razón.** Lo valioso de una iteración fallida no es el
+   modelo que se tira: es el motivo.
+10. **Un `.pre` no se escribe a mano, y uno tocado vuelve a ser un `.inp`.**
+11. **En la transferencia, la primera serie es la salida**, y se parte de los
+    `.pre`, no de los datos.
+12. **Primero la relación, después el ruido.** Calibra antes de re-especificar.
+13. **La CCF no enseña r**: las dos lecturas se estiman.
+14. **Converger no es merecer la pena**: compara con el diagonal.
+
+---
+
+## 16. Glosario
+
+| Término | Qué quiere decir |
+|---|---|
+| **ACF / PACF** (FAS / FAP) | Funciones de autocorrelación simple y parcial. La banda ±2/√n separa lo significativo. |
+| **Anómalo** | Una observación cuyo residuo es improbable. Se calibra, no se elimina. |
+| **Armónicos** | Ondas de seno y coseno que representan una estacionalidad determinista. |
+| **Caso** | Un conjunto fijo y ordenado de series, cada una con su `.pre`. La primera es la salida. |
+| **CCF** | Función de correlación cruzada entre dos series. |
+| **Diagnosis** | La comprobación de que los residuos de un modelo son ruido blanco, normales y centrados. |
+| **Diagonal** | El modelo de varias series sin relación entre ellas. La vara de medir de la transferencia. |
+| **Dominio** | Qué clase de serie es y qué espera la teoría de ella. Se declara antes de estimar. |
+| **Elegido** | El modelo que declaras como el bueno de una serie, con su razón. |
+| **Exógena** | Una entrada a la que la salida no afecta. Se contrasta en los retardos negativos de la CCF. |
+| **Ganancia** | El efecto a largo plazo de un cambio permanente en la entrada: ω(1)/δ(1). |
+| **Intervención** | Un término determinista (impulso, escalón) que representa un suceso conocido. |
+| **Ljung-Box (Q)** | Contraste conjunto de que las autocorrelaciones de los residuos son cero. |
+| **Muestra** | Una ventana declarada sobre los datos. Cada una es una hoja con sus modelos. |
+| **Preblanqueo** | Filtrar la entrada con su modelo hasta dejarla en ruido blanco, y la salida con el mismo filtro. |
+| **Red** | Los enlaces salida ← entrada de un modelo de transferencia, con sus b r s. |
+| **Ruido (N_t)** | Lo que la transferencia no explica de la salida. Tiene su propio modelo ARIMA. |
+| **Salida / entrada** | La serie que se explica y las que la explican. |
+| **Sobreintervenir** | Intervenir un anómalo que no cambia la identificación. |
+
+---
+
+*Las capturas de este manual se generan con el programa:
+`bash docs/manual/capturas/capturas.sh` rehace el caso desde los datos y vuelve
+a fotografiar cada pantalla. Si un botón cambia de nombre, el guion falla
+diciendo cuál.*

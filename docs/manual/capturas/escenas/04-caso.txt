@@ -1,0 +1,38 @@
+#! atsw_gui --proyecto @PROYECTO@/proyecto.yaml
+# Declarar el elegido de cada serie, y dar de alta el caso C1.
+ventana ATSW
+pestana Pre-Covid
+fila ipc
+fila m01
+boton Elegir
+ventana El modelo elegido
+entrada 1 | AR(1) en logaritmos con d = 1: residuos blancos y normales. Armónicos deterministas, que el modelo va a una transferencia.
+espera 300
+foto elegir-razon
+boton Aceptar
+ventana ATSW
+espera 800
+fila wti
+fila m02
+boton Elegir
+ventana El modelo elegido
+entrada 1 | AR(1) con el episodio de 10/2008 (3 escalones): sin él, la ACF residual cambia.
+boton Aceptar
+ventana ATSW
+espera 800
+boton Nuevo caso…
+ventana Nuevo caso
+espera 500
+casilla ipc | 1
+casilla wti | 1
+campo Título | Inflación y petróleo
+campo Por qué | ¿Cuánto pasa del precio del crudo al IPC, y con qué retardo?
+espera 300
+foto caso-nuevo
+boton Darlo de alta
+ventana ATSW
+espera 1500
+fila C1
+espera 800
+foto caso-vista
+salir

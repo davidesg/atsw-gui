@@ -17,8 +17,10 @@ en Linux, macOS y Windows (`docs/PRUEBAS.md`). Falta:
 | | qué | notas |
 |---|---|---|
 | | **la ronda en máquinas reales** | un Windows y un Mac de usuario, sin entorno de desarrollo: `PRUEBAS.md` §5 |
-| | **el paquete de Windows** | DLL de GTK/GSL/zlib y `share/` (esquemas compilados, iconos) junto a los `.exe`, o estático. fue_gui y drvarma_gui ya usan `share/` si está al lado |
-| | **el paquete de macOS** | `.app` o Homebrew; firma, o Gatekeeper no lo abre |
+| hecho | **el paquete de Windows** | instalador (Inno Setup, por usuario) y zip: `packaging/windows/`. Sin firmar: SmartScreen avisa |
+| hecho | **el paquete de macOS** | `ATSW.app` en `.dmg`, arm64 e Intel, macOS 14+: `packaging/macos/`. Firma ad hoc: Gatekeeper avisa |
+| | firmar los paquetes | Apple Developer ID + notarización; certificado de firma de código en Windows |
+| hecho | **el manual del alumno** | `docs/manual/`: el caso IPC ← WTI, con capturas y vídeo generados desde el programa |
 | | la consola en Windows | `lib/engine` lanza con `g_spawn`: comprobar que no asoma una consola al estimar |
 | hecho | el gestor de proyectos multivariantes | los **casos**: ver abajo |
 

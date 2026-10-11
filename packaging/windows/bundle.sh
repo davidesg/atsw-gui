@@ -79,5 +79,7 @@ gtk-font-name=Segoe UI 9
 INI
 
 cp "$R/packaging/LEEME.txt" "$D/LEEME.txt"
+# El manual del alumno, si esta construido (docs/manual/construir.py).
+[ -f "$R/docs/manual/MANUAL.pdf" ] && cp "$R/docs/manual/MANUAL.pdf" "$D/Manual de ATSW.pdf"
 
 echo "paquete en $D: $(ls "$D/bin" | wc -l) ficheros en bin/, $(du -sh "$D" | cut -f1)"

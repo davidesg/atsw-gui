@@ -47,11 +47,18 @@ Source: "{#Fuente}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs cre
 Name: "{group}\ATSW"; Filename: "{app}\bin\atsw_gui.exe"; WorkingDir: "{userdocs}"
 Name: "{group}\Editor de modelos (fue)"; Filename: "{app}\bin\fue_gui.exe"; WorkingDir: "{userdocs}"
 Name: "{group}\Redes de transferencia (drtran)"; Filename: "{app}\bin\drtran_gui.exe"; WorkingDir: "{userdocs}"
-Name: "{group}\VARMA (drvarma)"; Filename: "{app}\bin\drvarma_gui.exe"; WorkingDir: "{userdocs}"
 Name: "{group}\Gráficos (fug)"; Filename: "{app}\bin\gtk_fmg.exe"; WorkingDir: "{userdocs}"
 Name: "{group}\Léeme"; Filename: "{app}\LEEME.txt"
+Name: "{group}\Manual de ATSW"; Filename: "{app}\Manual de ATSW.pdf"; Check: HayManual
+
 Name: "{group}\{cm:UninstallProgram,ATSW}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\ATSW"; Filename: "{app}\bin\atsw_gui.exe"; WorkingDir: "{userdocs}"; Tasks: escritorio
 
 [Run]
 Filename: "{app}\bin\atsw_gui.exe"; Description: "{cm:LaunchProgram,ATSW}"; WorkingDir: "{userdocs}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+function HayManual: Boolean;
+begin
+  Result := FileExists(ExpandConstant('{app}\Manual de ATSW.pdf'));
+end;

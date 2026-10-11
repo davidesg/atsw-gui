@@ -1,0 +1,65 @@
+#! atsw_gui --proyecto @PROYECTO@/proyecto.yaml
+# wti: identificar, estimar, y el episodio de 2008 (anomalos e intervencion).
+ventana ATSW
+pestana Pre-Covid
+fila wti
+derecho wti
+menu Identificar desde los datos…
+ventana Identificación
+tamano 760 900
+elige logaritmos (λ = 0)
+numero 1 | 1
+boton Volver a identificar
+espera 6000
+foto wti-identificacion
+fila AR(1)
+elige abrir en el editor
+boton Derivar modelo con el candidato elegido
+ventana editor de ATSW
+boton Guardar y estimar
+espera 15000
+cierra
+ventana ATSW
+espera 1500
+fila m01
+derecho m01
+menu Diagnosis…
+ventana Diagnosis
+tamano 1000 800
+espera 2500
+foto wti-m01-diagnosis
+cierra
+ventana ATSW
+derecho m01
+menu Anómalos…
+ventana anomalos
+tamano 1000 820
+espera 2500
+foto wti-anomalos
+casilla 10/2008 | 1
+boton Calibrar
+espera 3000
+foto wti-anomalos-calibrar
+boton Calibrar
+boton Sugerir intervención…
+ventana Sugerir intervención
+espera 3000
+foto wti-sugerir
+boton Derivar modelo con estas intervenciones
+ventana wti / m02.inp
+tamano 1000 760
+espera 1000
+boton Guardar y estimar
+espera 15000
+cierra
+ventana ATSW
+espera 1500
+fila m02
+foto taller-wti
+derecho m02
+menu Diagnosis…
+ventana Diagnosis
+tamano 1000 800
+espera 2500
+foto wti-m02-diagnosis
+salir

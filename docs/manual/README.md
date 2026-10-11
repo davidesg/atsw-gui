@@ -25,6 +25,11 @@ dibujan fuera de la pantalla y no se ve nada mientras tanto. Para el PDF,
 el módulo `markdown` de Python y Chromium o Chrome; para el vídeo, `ffmpeg`
 con libass y libx264.
 
+Con `IDIOMA=es_ES.UTF-8` las escenas corren en español (con coma decimal),
+que es como arranca el programa en un ordenador en español: así se probó que
+los números se leen y se escriben con punto también ahí. Si ese idioma no
+está instalado, `localedef -i es_ES -f UTF-8 DIR/es_ES.UTF-8` y `LOCPATH=DIR`.
+
 `capturas.sh` corre los guiones de `capturas/escenas/` y `video.sh` los de
 `video/escenas/`. Cada guion lanza un GUI con el módulo `capturas/escenas.c`
 cargado, que pulsa botones por su rótulo, elige filas, abre menús y

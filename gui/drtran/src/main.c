@@ -11,6 +11,7 @@
  * escalera certifica. El modelo de cada serie se hace con fue; aqui se cruzan.
  */
 
+#include <locale.h>
 #include <string.h>
 
 #include "gui.h"
@@ -55,6 +56,17 @@ static void uso(const char *me)
            "  --modelo c    parte del modelo c del caso, no del elegido\n"
            "                (--corrida c, el nombre de antes, vale igual).\n",
            me);
+}
+
+/* LOS NUMEROS, CON PUNTO. GTK, al arrancar (en el "startup" de la
+   aplicacion), pone el idioma del sistema, y con el espanol LC_NUMERIC lee y
+   escribe "0,5": strtod deja de entender los ficheros (.inp, .pre, .csv) y
+   fprintf escribe los que leen los motores con coma. Este manejador va
+   despues del de GTK y deja los numeros en C; el resto del idioma, intacto. */
+static void numeros_con_punto( GApplication *app, gpointer data )
+{
+    (void)app; (void)data;
+    setlocale( LC_NUMERIC, "C" );
 }
 
 int main(int argc, char **argv)
@@ -109,6 +121,7 @@ int main(int argc, char **argv)
     /* Las opciones ya estan leidas: al GTK solo le llega el nombre. */
     argc = 1;
     app = gtk_application_new("org.drtran.gui", G_APPLICATION_NON_UNIQUE);
+    g_signal_connect( app, "startup", G_CALLBACK(numeros_con_punto), NULL );
     g_signal_connect(app, "activate", G_CALLBACK(activate), &m);
     rc = g_application_run(G_APPLICATION(app), argc, argv);
     g_object_unref(app);

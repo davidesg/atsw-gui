@@ -47,7 +47,7 @@ mkdir -p "$T/ATSW/bin"
 for p in $PROGRAMAS; do cp "$R/$p" "$T/ATSW/bin/"; done
 export PATH="$T/ATSW/bin:$PATH"
 export GDK_BACKEND=broadway BROADWAY_DISPLAY=":$PANTALLA" GTK_THEME=Adwaita
-export XDG_CACHE_HOME=$T/cache XDG_CONFIG_HOME=$T/config XDG_DATA_HOME=$T/data NO_AT_BRIDGE=1 FOTOS=${FOTOS:-$M/img} LC_ALL=C.UTF-8
+export XDG_CACHE_HOME=$T/cache XDG_CONFIG_HOME=$T/config XDG_DATA_HOME=$T/data NO_AT_BRIDGE=1 FOTOS=${FOTOS:-$M/img} LC_ALL=${IDIOMA:-C.UTF-8}
 
 # ESCENAS: de donde salen los guiones (el video tiene los suyos). VIDEO_DIR:
 # ademas de fotografiar, graba cada escena en VIDEO_DIR/<escena>.mp4 con sus

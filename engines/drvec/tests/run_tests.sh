@@ -2185,7 +2185,7 @@ else
     #  2. y en todo el rango, dentro del error de Wilson-Hilferty.
     worst=$("$CHIP" | awk '{if($5>m) m=$5} END{printf "%.3e", m}')
     if awk -v w="$worst" 'BEGIN{exit !(w < 5e-4)}'; then
-        ok "chisq agrees with GSL to $worst over the nine cases"
+        ok "chisq agrees with GSL to $worst over the twelve cases, x > 1000 included (BUG-42)"
     else bad "chisq vs GSL" "worst difference $worst"; fi
 
     #  3. y las dos ramas: con df < 30 es exacta (gammap), no aproximada.

@@ -173,11 +173,13 @@ Horizon   IPC_ES
 =============================================================
 
 Hosking's Multivariate Portmanteau Test (lag 14):
-  Q(14) = 5.4667, p-value = 0.9782
+  Q(11) = 5.4667, p-value = 0.9065
+  df = m^2 s - k = 14 - 3, k = dynamic coefficients estimated
   Cannot reject H0: residuals appear white noise.
 
-Multivariate Jarque-Bera Test (normality):
+Multivariate Jarque-Bera Test (normality; Lutkepohl, symmetric square root of Sigma):
   JB(2) = 0.2434, p-value = 0.8854
+  skewness 0.1057, kurtosis 0.1376, each chi2(1)
   Cannot reject H0: residuals appear normal.
 =============================================================
 
@@ -504,7 +506,7 @@ Autocorrelation function (acf bands =  0.136):
    9   0.020 |                      :  |  :                      | 
   10   0.013 |                      :  |  :                      | 
   11   0.028 |                      :  |* :                      | 
-  12   0.073 +                      :  |++:                      +   5.43  12
+  12   0.073 +                      :  |++:                      +   5.43   9
   13   0.021 |                      :  |* :                      | 
   14  -0.027 |                      : *|  :                      | 
   15   0.005 |                      :  |  :                      | 
@@ -516,7 +518,7 @@ Autocorrelation function (acf bands =  0.136):
   21   0.021 |                      :  |* :                      | 
   22   0.020 |                      :  |  :                      | 
   23  -0.050 |                      : *|  :                      | 
-  24   0.050 +                      :  |+ :                      +  11.39  24
+  24   0.050 +                      :  |+ :                      +  11.39  21
   25  -0.041 |                      : *|  :                      | 
   26   0.057 |                      :  |* :                      | 
   27  -0.002 |                      :  |  :                      | 
@@ -528,13 +530,13 @@ Autocorrelation function (acf bands =  0.136):
   33  -0.018 |                      :  |  :                      | 
   34   0.020 |                      :  |  :                      | 
   35   0.007 |                      :  |  :                      | 
-  36   0.058 +                      :  |+ :                      +  16.33  36
+  36   0.058 +                      :  |+ :                      +  16.33  33
   37  -0.057 |                      : *|  :                      | 
   38   0.036 |                      :  |* :                      | 
   39   0.043 |                      :  |* :                      | 
   40  -0.027 |                      : *|  :                      | 
   41   0.014 |                      :  |  :                      | 
-  42  -0.026 |                      : *|  :                      |  18.42  42
+  42  -0.026 |                      : *|  :                      |  18.42  39
 -------------+-------------------------+-------------------------+--------------
             -1                         0                         1  L-B Q  DF
 

@@ -95,6 +95,7 @@
 #include "main.h"
 #include "fue_pre_reader.h"   /* .pre reader, copied from drtran (see F2.1) */
 #include "fue_bridge.h"       /* expansion of the .pre's factors                */
+#include "diagmv.h"           /* Hosking and Jarque-Bera, shared (lib/diagmv)   */
 #include <gsl/gsl_cdf.h>      /* chi2 p-value of the LR of H1(r) against H(r) */
 #include <gsl/gsl_eigen.h>    /* symmetric generalised eigenvalue problem */
 #include <gsl/gsl_linalg.h>   /* QR and SVD for the Granger rank condition       */
@@ -1669,9 +1670,11 @@ static void subtract_interventions(const char *prefix)
  *  WHAT IT PRINTS, IN TWO PARTS
  *
  *   1. THE SUITE'S DIAGNOSIS, as it comes: multivariate_diagnostics from
- *      drtran -- Hosking's portmanteau and multivariate Jarque-Bera -- copied
- *      unchanged into src/diagnose_mv.c.  That is deliberate: the same residual
- *      has to read the same in drvarma, in drtran and here.  The first version
+ *      drtran -- Hosking's portmanteau and multivariate Jarque-Bera -- now
+ *      ONE file, lib/diagmv, for the three engines (BUG-42, items 3-4); this
+ *      program passes it its count of coefficients (diag_k).  That is
+ *      deliberate: the same residual has to read the same in drvarma, in
+ *      drtran and here.  The first version
  *      of this was a portmanteau written by hand in this file, and it was badly
  *      framed even though it was correct: it forced a comparison of apples with
  *      oranges.
@@ -1689,6 +1692,49 @@ static void subtract_interventions(const char *prefix)
  *  with k >= 1 says that equation i responds to the PAST innovation of j: it is
  *  a lagged cross effect of order k.  The upper and lower triangles are NOT the
  *  same thing, and that is where the direction is.                           */
+/*  diag_k, diag_npar_ser -- WHAT THE RESIDUALS COST, for the degrees of
+ *  freedom of their tests (BUG-42, item 3).
+ *
+ *  Hosking's Q is chi2(m^2 s - k) with k the DYNAMIC coefficients estimated:
+ *  Lambda, F and Theta as the restrictions leave them, and the transfer
+ *  weights of -xlink.  Not the mean, not Sigma, not B2: Bruggemann,
+ *  Lutkepohl and Saikkonen (2006) give m^2 (s - p + 1) - m r for a VECM,
+ *  which subtracts Gamma and alpha and leaves beta, superconsistent, out.
+ *  The count is par_blocks', so it cannot disagree with the vector.
+ *
+ *  The Ljung-Box of each residual subtracts the coefficients of its equation
+ *  on its own lags: the diagonal of each F_k and Theta_j that is free.  The
+ *  residuals are Ybar's, [nabla Y2 ; W], and the coefficients are in the
+ *  internal order [Y1 ; Y2]: nabla Y2_i is row r + i, W_j is row j.  It is
+ *  the univariate reading, and an approximation in a system: the .out of
+ *  art and fue subtracts p + q the same way.                              */
+static int diag_k(void)
+{
+    int nmean, nlam, nmid, ntail, M = nser;
+    par_blocks(&nmean, &nlam, &nmid, &ntail);
+    return nlam + nmid - ((global_diag_cov ? M : M * (M + 1) / 2) - 1)
+         + xl_npar();
+}
+
+static int *diag_npar_ser(void)
+{
+    int M = nser, r = global_r, s = M - r, i, k;
+    int nf = (global_p > 1) ? global_p - 1 : 0, q = global_q;
+    int *n = (int *) calloc((size_t) M + 1, sizeof(int));
+    for (i = 1; i <= M; i++) {
+        int row = (i <= s) ? r + i : i - s;
+        int w_row = row <= r;               /* an equation of the Y1 block */
+        if (global_warma) {
+            n[i] = w_row ? nf + q : 0;
+            continue;
+        }
+        for (k = 1; k <= nf; k++) n[i] += f_free(row, row);
+        if ((mawarma_on() || marow_on()) && !w_row) continue;
+        n[i] += q;
+    }
+    return n;
+}
+
 static void residual_diagnostics(struct Tvarma *v)
 {
     int M = v->m, n = v->n, K, i, j, k, t;
@@ -1719,7 +1765,7 @@ static void residual_diagnostics(struct Tvarma *v)
     /*  The suite's STANDARD diagnosis, untouched (src/diagnose.c, vendored
      *  from drvarma), and it brings its own banner: this section is titled by
      *  the shared code, not by a second title of ours.                       */
-    multivariate_diagnostics(v->a, n, M, outputv);
+    multivariate_diagnostics(v->a, n, M, data_freq, diag_k(), outputv);
     fprintf(outputv, "\n");
     fprintf(outputv, "  residual sd:");
     for (i = 1; i <= M; i++) fprintf(outputv, " %10.6f", sqrt(C[0][i][i]));
@@ -7715,7 +7761,9 @@ static void diagnose_ybar(struct Tvarma *vp)
     {
         int sd = trans_d, sD = trans_D;
         trans_d = nobs_raw - nobs; trans_D = 0;
-        diagnose(vp);
+        int *np = diag_npar_ser();
+        diagnose(vp, np);
+        free(np);
         trans_d = sd; trans_D = sD;
     }
     if (save) {

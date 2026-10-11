@@ -29,6 +29,26 @@ static const char *linea( const char *p, char *b, size_t size )
    return fin ? fin + 1 : p + strlen( p );
 }
 
+/* El veredicto de Hosking o del Jarque-Bera: la primera de las dos lineas
+ * siguientes que diga REJECT o Cannot reject.  lib/diagmv mete entre la
+ * cifra y el veredicto una linea de grados de libertad o de asimetria y
+ * curtosis (drvec BUG-42); los .out anteriores no la tienen.  Una linea que
+ * no es ninguna de las dos no se consume: con gl < 1 no hay veredicto, y la
+ * siguiente ya es la cabecera del Jarque-Bera.  Sin veredicto, b queda
+ * vacia.                                                                 */
+static const char *veredicto( const char *p, char *b, size_t size )
+{
+   int k;
+   for ( k = 0; k < 2 && p; k++ ) {
+      const char *q = linea( p, b, size );
+      if ( strstr( b, "REJECT" ) || strstr( b, "Cannot reject" ) ) return q;
+      if ( !strstr( b, "df = " ) && !strstr( b, "skewness" ) ) break;
+      p = q;
+   }
+   b[0] = '\0';
+   return p;
+}
+
 /* El numero que sigue a una etiqueta dentro de la linea. */
 static int tras( const char *l, const char *etiqueta, double *v )
 {
@@ -144,7 +164,7 @@ int od_parse( const char *texto, Diagnosis *d )
             d->hosking.hay = 1;  d->hosking.df = n1;
             d->hosking.q = v1;   d->hosking.p = v2;  d->hosking.tiene_p = 1;
          }
-         p = linea( p, l, sizeof l );
+         p = veredicto( p, l, sizeof l );
          d->hosking_blanco = strstr( l, "Cannot reject" ) != NULL;
          continue;
       }
@@ -156,7 +176,7 @@ int od_parse( const char *texto, Diagnosis *d )
             d->jb.hay = 1;  d->jb.df = n1;
             d->jb.q = v1;   d->jb.p = v2;  d->jb.tiene_p = 1;
          }
-         p = linea( p, l, sizeof l );
+         p = veredicto( p, l, sizeof l );
          d->jb_normal = strstr( l, "REJECT" ) == NULL;
          continue;
       }

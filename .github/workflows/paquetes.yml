@@ -165,11 +165,16 @@ jobs:
           else
               echo "::error::ATSW se cierra al arrancar"; cat capturas/ATSW.log; mal+=(ATSW)
           fi
-          # Los demas GUIs, con el entorno que pone el lanzador.
+          # Los demas GUIs, con el entorno que pone el lanzador (lanzador.c),
+          # que es el que heredan cuando los abre la madre.
           R=$(cd "$RES" && pwd)
+          PB=lib/gdk-pixbuf-2.0/2.10.0
+          sed "s|@PREFIJO@|$R|g" "$R/$PB/loaders.cache.in" > "$RUNNER_TEMP/loaders.cache"
           for g in fue_gui drtran_gui drvarma_gui gtk_fmg; do
               env PATH="$R/bin:/usr/bin:/bin" XDG_DATA_DIRS="$R/share" \
                   GSETTINGS_SCHEMA_DIR="$R/share/glib-2.0/schemas" \
+                  GDK_PIXBUF_MODULE_FILE="$RUNNER_TEMP/loaders.cache" \
+                  GTK_DATA_PREFIX="$R" GTK_EXE_PREFIX="$R" \
                   "$R/bin/$g" > "capturas/$g.log" 2>&1 &
               pid=$!
               sleep 8

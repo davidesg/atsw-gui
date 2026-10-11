@@ -192,6 +192,7 @@ jobs:
               echo "SUFIJO=-macos11"
           } >> "$GITHUB_ENV"
           pkg-config --modversion gtk+-3.0 gsl
+          pkg-config --cflags --libs gtk+-3.0 gsl
       - uses: actions/download-artifact@v4
         with:
           name: ATSW-manual

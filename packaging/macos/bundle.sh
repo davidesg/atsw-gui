@@ -80,6 +80,15 @@ cp "$B"/share/glib-2.0/schemas/org.gtk.*.gschema.xml "$RES/share/glib-2.0/schema
 glib-compile-schemas "$RES/share/glib-2.0/schemas"
 cp -R "$B/share/icons/Adwaita" "$B/share/icons/hicolor" "$RES/share/icons/"
 
+# Ningun enlace simbolico dentro de la .app: los de Homebrew apuntan fuera
+# (o a nada), y con uno roto la firma no se verifica («No such file or
+# directory»). Cada enlace pasa a ser una copia de lo que apunta, o fuera.
+find "$APP" -type l | while read -r l; do
+    t=$(readlink -f "$l" || true)
+    rm "$l"
+    if [ -n "$t" ] && [ -f "$t" ]; then cp "$t" "$l"; fi
+done
+
 # La version minima de macOS: la que piden las bibliotecas de Homebrew, que
 # es la del runner donde se construyo. Por debajo de esa no arranca.
 MINOS=$(otool -l "$RES"/lib/libgtk-3*.dylib | awk '/LC_BUILD_VERSION/ { f = 1 } f && $1 == "minos" { print $2; exit }')
@@ -108,7 +117,7 @@ PLIST
 find "$RES" -type f \( -name '*.dylib' -o -name '*.so' \) -exec codesign --force --sign - {} \;
 codesign --force --sign - "$RES"/bin/*
 codesign --force --sign - "$APP"
-codesign --verify --strict --verbose=2 "$APP"
+codesign --verify --strict --verbose=4 "$APP"
 
 cp "$R/packaging/LEEME.txt" "$R/dist/LEEME.txt"
 

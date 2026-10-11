@@ -40,5 +40,11 @@
 # (conformidad/.gitignore se encarga de los binarios y de los rt.*)
 !/conformidad/
 
+# --- el manual del alumno --------------------------------------------------
+# (el HTML, el PDF y el video se generan: los ignora el .gitignore de arriba)
+!/manual/
+# capturas/ lo ignora el .gitignore de arriba (las de la CI); estas son fuentes
+!/manual/capturas/
+
 !/.gitignore
 !/README.md

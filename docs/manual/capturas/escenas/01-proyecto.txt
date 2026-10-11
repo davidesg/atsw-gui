@@ -1,0 +1,39 @@
+#! atsw_gui
+# Un proyecto nuevo, desde el fichero de datos (en un directorio aparte).
+ventana ATSW
+espera 500
+foto inicio
+boton Nuevo…
+ventana Proyecto nuevo
+fichero @PROYECTO@/proyecto.yaml
+espera 300
+boton Crear
+ventana ATSW
+boton Datos…
+ventana Cargar datos
+fichero @DATOS@/ipc_wti.csv
+espera 500
+boton Abrir
+ventana Qué series cargar
+espera 300
+foto datos-series
+boton Cargar las marcadas
+ventana ATSW
+espera 800
+fila ipc
+espera 300
+foto datos-cargados
+boton +
+ventana Nueva muestra
+campo Nombre | Pre-Covid
+campo Hasta | 12 | 2019
+campo Por qué | Antes de la pandemia: el modelo no tiene que explicar 2020.
+espera 300
+foto muestra-nueva
+boton Declararla
+ventana ATSW
+espera 800
+fila ipc
+espera 300
+foto muestra-declarada
+salir

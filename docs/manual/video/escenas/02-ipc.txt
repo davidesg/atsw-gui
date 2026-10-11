@@ -1,0 +1,67 @@
+#! atsw_gui --proyecto @PROYECTO@/proyecto.yaml
+ventana ATSW
+tamano 1100 700
+pestana Pre-Covid
+fila ipc
+rotulo Primero, cada serie por separado. Empezamos por el IPC.
+espera 2250
+derecho ipc
+espera 1125
+menu Identificar desde los datos…
+ventana Identificación
+tamano 760 900
+espera 1875
+rotulo art propone por dónde empezar. Arriba se deciden la transformación y las diferencias.
+espera 3000
+rotulo Es un índice de precios: va en logaritmos.
+elige logaritmos (λ = 0)
+espera 1125
+rotulo La ACF decae muy despacio: una diferencia regular, d = 1.
+numero 1 | 1
+espera 1125
+boton Volver a identificar
+espera 3000
+rotulo La estacionalidad, determinista (D = 0): el modelo va a ir a una transferencia.
+espera 3375
+rotulo art propone MA(1), pero AR(1) se parece más a los datos. La inflación tiene inercia: AR(1).
+fila AR(1)
+espera 3750
+rotulo La propuesta es evidencia, no un veredicto. Derivamos el modelo m01.
+elige abrir en el editor
+espera 800
+boton Derivar modelo con el candidato elegido
+ventana editor de ATSW
+tamano 1000 760
+espera 1875
+rotulo «Guardar y estimar»: máxima verosimilitud exacta.
+boton Guardar y estimar
+espera 8000
+pestana Output
+espera 1500
+cierra
+ventana ATSW
+espera 1125
+fila m01
+rotulo ¿Es adecuado? La diagnosis.
+derecho m01
+espera 1125
+menu Diagnosis…
+ventana Diagnosis
+tamano 1000 800
+espera 2250
+rotulo Residuos blancos y normales: m01 es adecuado.
+espera 3000
+rotulo Qué quitar o qué intervenir es una decisión, y es tuya.
+espera 2625
+cierra
+ventana ATSW
+rotulo Se declara el modelo elegido, con su razón.
+boton Elegir
+ventana El modelo elegido
+entrada 1 | AR(1) en logaritmos con d = 1: residuos blancos y normales.
+espera 1875
+boton Aceptar
+ventana ATSW
+espera 1875
+rotulo -
+salir

@@ -1,0 +1,72 @@
+#! atsw_gui --proyecto @PROYECTO@/proyecto.yaml
+# Mirar la serie antes de decidir nada: media-desviacion tipica y correlogramas.
+ventana ATSW
+pestana Pre-Covid
+fila ipc
+derecho ipc
+fotomenu taller-menu-serie
+menu Media – desviación típica
+ventana vistazo
+tamano 900 700
+espera 2500
+foto ipc-media-dt
+cierra
+ventana ATSW
+derecho ipc
+menu Serie y ACF / PACF…
+ventana vistazo
+tamano 900 700
+espera 2500
+foto ipc-serie-acf
+cierra
+ventana ATSW
+derecho ipc
+menu Identificar desde los datos…
+espera 6000
+ventanas
+ventana Identificación
+tamano 760 900
+espera 800
+foto ipc-identificacion-niveles
+# Un índice de precios va SIEMPRE en logaritmos; y la ACF pide d = 1.
+elige logaritmos (λ = 0)
+numero 1 | 1
+boton Volver a identificar
+espera 6000
+foto ipc-identificacion
+fila AR(1)
+espera 800
+foto ipc-identificacion-ar1
+elige abrir en el editor
+boton Derivar modelo con el candidato elegido
+ventana editor de ATSW
+tamano 1000 760
+espera 1500
+foto editor-m01
+boton Guardar y estimar
+espera 15000
+ventanas
+pestana Output
+espera 800
+foto editor-m01-output
+cierra
+ventana ATSW
+espera 1500
+fila m01
+foto taller-m01
+derecho m01
+fotomenu taller-menu-modelo
+menu Diagnosis…
+ventana Diagnosis
+tamano 1000 800
+espera 2500
+foto ipc-m01-diagnosis
+cierra
+ventana ATSW
+derecho m01
+menu Ver el gráfico…
+ventana Aipc_m01
+tamano 1000 800
+espera 2500
+foto ipc-m01-grafico
+salir

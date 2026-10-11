@@ -1,0 +1,73 @@
+#! drtran_gui --proyecto @PROYECTO@/proyecto.yaml --caso C1
+ventana drtran
+tamano 1100 760
+espera 2500
+foto drtran-series
+pestana 2 · Identificación
+espera 4000
+foto drtran-identificacion
+boton CCF…
+ventana ccf
+tamano 1000 760
+espera 2500
+foto drtran-ccf
+cierra
+ventana drtran —
+boton Añadir a la red
+pestana 3 · Red
+espera 800
+foto drtran-red-propuesta
+fila 2 wti
+boton Editar…
+ventana El enlace
+campo denominador  r | 1
+campo numerador  s | 0
+espera 300
+foto drtran-enlace
+boton Aceptar
+ventana drtran —
+espera 800
+foto drtran-red
+pestana 5 · Estimación
+boton Estimar
+espera 30000
+foto drtran-estimacion
+pestana 6 · Diagnosis
+espera 2000
+foto drtran-diagnosis
+pestana 2 · Adecuación
+espera 800
+foto drtran-adecuacion
+pestana 3 · Ajuste
+espera 800
+# El baseline: el modelo diagonal (sin transferencia) con el que se compara.
+boton Calcular baseline
+espera 30000
+pestana 5 · Estimación
+boton Estimar
+espera 30000
+pestana 6 · Diagnosis
+pestana 3 · Ajuste
+espera 800
+foto drtran-ajuste
+pestana 4 · Residuos
+espera 800
+pestana 5 · Modelo estimado
+espera 800
+foto drtran-modelo
+boton Gráficos…
+espera 800
+fotomenu drtran-graficos-menu
+menu Serie y ACF / PACF
+ventana res.eps
+tamano 1000 760
+espera 2500
+foto drtran-residuos-grafico
+cierra
+ventana drtran —
+pestana 7 · Previsión
+casilla Prever (-f) | 1
+boton Calcular
+espera 30000
+foto drtran-prevision
+salir

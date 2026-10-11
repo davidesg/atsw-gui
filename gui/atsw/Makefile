@@ -73,6 +73,12 @@ GTK_LIBS   := $(shell pkg-config --libs   gtk+-3.0 2>/dev/null)
 
 TARGET = atsw_gui
 
+# En Windows, sin -mwindows cada GUI abre ademas una consola negra. gui/fug y
+# gui/fue ya lo llevaban; faltaba en estos dos, y se veia al empaquetar.
+ifeq ($(OS),Windows_NT)
+  LDFLAGS += -mwindows
+endif
+
 # inpcheck NO se copia: se compila el fichero DEL MOTOR, renombrando la
 # funcion. Lo que el motor acepta es lo que el editor acepta, por
 # construccion y no por parecido. Es el mismo convenio que gui/fue.
@@ -88,7 +94,7 @@ $(TARGET): $(SRC) $(HDR) $(LIBHDR) $(INPCHECK)
 	@if [ -z "$(GTK_LIBS)" ]; then \
 	    echo "atsw_gui necesita los ficheros de desarrollo de GTK 3"; \
 	    echo "(Debian/Ubuntu: sudo apt install libgtk-3-dev)"; exit 1; fi
-	$(CC) $(CFLAGS) $(GTK_CFLAGS) $(INC) -o $@ $(SRC) $(INPCHECK) \
+	$(CC) $(CFLAGS) $(GTK_CFLAGS) $(INC) $(LDFLAGS) -o $@ $(SRC) $(INPCHECK) \
 	    $(GTK_LIBS) -lz -lm
 
 install: $(TARGET)

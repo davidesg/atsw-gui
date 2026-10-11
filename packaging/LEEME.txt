@@ -1,0 +1,59 @@
+ATSW -- análisis de series temporales
+=====================================
+
+Esta es una versión de PRUEBA. No está firmada por Apple ni por Microsoft,
+y por eso el sistema avisa la primera vez que se abre.
+
+
+WINDOWS
+-------
+
+Instalador (ATSW-...-windows-x64-setup.exe)
+
+  1. Doble clic. Si Windows dice «Windows protegió su PC», pulsa
+     «Más información» y después «Ejecutar de todas formas».
+  2. No pide permisos de administrador: se instala para tu usuario, en
+     %LOCALAPPDATA%\Programs\ATSW.
+  3. Queda en el menú Inicio, en «ATSW». Se desinstala desde
+     Configuración -> Aplicaciones.
+
+Zip portátil (ATSW-...-windows-x64.zip)
+
+  Descomprímelo donde quieras y abre bin\atsw_gui.exe. No instala nada.
+  Hay que descomprimirlo entero: abrir el .exe desde dentro del zip no
+  funciona.
+
+
+macOS
+-----
+
+  1. Abre el .dmg y arrastra ATSW a la carpeta Aplicaciones.
+  2. La primera vez, macOS dice que no puede comprobar la aplicación.
+     Pulsa «Aceptar» (no «Trasladar a la papelera»), ve a
+     Ajustes del Sistema -> Privacidad y seguridad, baja hasta
+     «Se ha bloqueado ATSW» y pulsa «Abrir igualmente».
+     En macOS 14 o anterior basta con clic derecho sobre ATSW -> Abrir.
+  3. Si aun así dice que la aplicación «está dañada», en el Terminal:
+
+         xattr -dr com.apple.quarantine /Applications/ATSW.app
+
+  Hay tres .dmg; en «Acerca de este Mac» pone qué Mac es y qué macOS:
+    «arm64»            Mac con Apple Silicon (M1, M2...), macOS 14 o posterior
+    «x86_64»           Mac con Intel, macOS 13 o posterior
+    «x86_64-macos11»   Mac con Intel, macOS 11 (Big Sur) o posterior
+  En macOS 11 el paso 2 es: clic derecho (o Ctrl+clic) sobre ATSW -> Abrir,
+  y en el aviso, «Abrir».
+
+
+QUÉ HAY DENTRO
+--------------
+
+  atsw_gui      la ventana principal: proyectos, series, casos y modelos.
+                Desde ella se abren los demás.
+  fue_gui       el editor y estimador de modelos univariantes
+  drtran_gui    redes de funciones de transferencia
+  gtk_fmg       gráficos
+  fue, fuf, fug, art, drtran   los motores de cálculo
+
+Si algo falla, anota qué estabas haciendo y, si puedes, haz una captura de
+pantalla.

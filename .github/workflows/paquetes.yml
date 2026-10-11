@@ -144,15 +144,54 @@ jobs:
         include:
           - runner: macos-14
             arq: arm64
+            nombre: arm64
           - runner: macos-15-intel
             arq: x86_64
+            nombre: x86_64
+          # Para Intel con macOS 11 (Big Sur) o posterior: las bibliotecas de
+          # Homebrew piden el macOS del runner (13 o mas), las de conda-forge
+          # estan hechas para macOS viejos. Lo nuestro se compila para 11.0,
+          # y bundle.sh se para si algun binario pide mas.
+          - runner: macos-15-intel
+            arq: x86_64
+            nombre: x86_64-macos11
+            conda: true
     runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        # Login, para que micromamba active su entorno en cada paso.
+        shell: bash -el {0}
     steps:
       - uses: actions/checkout@v4
       - name: Dependencias
+        if: ${{ !matrix.conda }}
         run: |
           brew install pkg-config gtk+3 gsl librsvg adwaita-icon-theme dylibbundler coreutils
           echo "$(brew --prefix coreutils)/libexec/gnubin" >> "$GITHUB_PATH"
+      - name: Dependencias (conda-forge)
+        if: ${{ matrix.conda }}
+        uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-name: atsw
+          create-args: >-
+            pkg-config gtk3 gsl librsvg adwaita-icon-theme glib
+          init-shell: bash
+      - name: Entorno (conda-forge)
+        if: ${{ matrix.conda }}
+        run: |
+          # dylibbundler y coreutils son herramientas de la construccion: no
+          # entran en la .app, asi que pueden venir de Homebrew.
+          brew install dylibbundler coreutils
+          echo "$(brew --prefix coreutils)/libexec/gnubin" >> "$GITHUB_PATH"
+          {
+              echo "MACOSX_DEPLOYMENT_TARGET=11.0"
+              echo "PKG_CONFIG_PATH=$CONDA_PREFIX/lib/pkgconfig:$CONDA_PREFIX/share/pkgconfig"
+              echo "PKG_CONFIG_LIBDIR=$CONDA_PREFIX/lib/pkgconfig:$CONDA_PREFIX/share/pkgconfig"
+              echo "BIBLIOTECAS=$CONDA_PREFIX"
+              echo "MACOS_MAXIMO=11.0"
+              echo "SUFIJO=-macos11"
+          } >> "$GITHUB_ENV"
+          pkg-config --modversion gtk+-3.0 gsl
       - uses: actions/download-artifact@v4
         with:
           name: ATSW-manual
@@ -216,12 +255,12 @@ jobs:
           [ ${#mal[@]} -eq 0 ] || { echo "fallan: ${mal[*]}"; exit 1; }
       - uses: actions/upload-artifact@v4
         with:
-          name: ATSW-macos-${{ matrix.arq }}
+          name: ATSW-macos-${{ matrix.nombre }}
           path: dist/*.dmg
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: capturas-paquete-macos-${{ matrix.arq }}
+          name: capturas-paquete-macos-${{ matrix.nombre }}
           path: capturas/
           if-no-files-found: ignore
 

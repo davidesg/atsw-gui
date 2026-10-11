@@ -5,7 +5,11 @@
 #
 #   bash packaging/macos/bundle.sh [version]
 #
-# Deja dist/ATSW.app y dist/ATSW-<version>-macos-<arq>.dmg.
+# Deja dist/ATSW.app y dist/ATSW-<version>-macos-<arq><SUFIJO>.dmg.
+#
+# BIBLIOTECAS=<prefijo> toma las bibliotecas de ahi en vez de Homebrew: es
+# como se hace el paquete para macOS 11 con las de conda-forge, que se
+# compilan para macOS viejos (las de Homebrew piden el macOS del runner).
 #
 #   Contents/MacOS/ATSW      el lanzador (lanzador.c): pone el entorno de
 #                            GTK y el PATH, y arranca la madre
@@ -23,7 +27,7 @@ set -euo pipefail
 
 R=$(cd "$(dirname "$0")/../.." && pwd)
 V=${1:-0.0}
-B=$(brew --prefix)
+B=${BIBLIOTECAS:-$(brew --prefix)}
 ARQ=$(uname -m)
 APP=$R/dist/ATSW.app
 C=$APP/Contents
@@ -72,8 +76,8 @@ dylibbundler -of -b -cd "${xs[@]}" -d "$RES/lib" -p @executable_path/../lib \
 # Que no quede NADA apuntando a Homebrew: en la maquina de construccion eso
 # funciona y en la del usuario no.
 if find "$RES" -type f \( -perm -u+x -o -name '*.dylib' -o -name '*.so' \) \
-       -exec otool -L {} \; 2>/dev/null | grep -E "^\s+($B|/usr/local/(opt|Cellar)|/opt/homebrew)"; then
-    echo "quedan bibliotecas de Homebrew sin meter en la .app" >&2; exit 1
+       -exec otool -L {} \; 2>/dev/null | grep -E "^\s+($B|/usr/local/|/opt/homebrew)"; then
+    echo "quedan bibliotecas de $B o de Homebrew sin meter en la .app" >&2; exit 1
 fi
 
 cp "$B"/share/glib-2.0/schemas/org.gtk.*.gschema.xml "$RES/share/glib-2.0/schemas/"
@@ -89,10 +93,25 @@ find "$APP" -type l | while read -r l; do
     if [ -n "$t" ] && [ -f "$t" ]; then cp "$t" "$l"; fi
 done
 
-# La version minima de macOS: la que piden las bibliotecas de Homebrew, que
-# es la del runner donde se construyo. Por debajo de esa no arranca.
-MINOS=$(otool -l "$RES"/lib/libgtk-3*.dylib | awk '/LC_BUILD_VERSION/ { f = 1 } f && $1 == "minos" { print $2; exit }')
+# La version minima de macOS: la mas alta que pida un binario de la .app.
+# Las bibliotecas de Homebrew piden la del runner donde se construyo; las de
+# conda-forge, una vieja. Por debajo de esa no arranca. Los binarios viejos
+# lo dicen en LC_VERSION_MIN_MACOSX («version») y no en LC_BUILD_VERSION.
+minos() {
+    otool -l "$1" 2>/dev/null | awk '
+        /LC_BUILD_VERSION|LC_VERSION_MIN_MACOSX/ { f = 1 }
+        f && ($1 == "minos" || $1 == "version") { print $2; exit }'
+}
+MINOS=$(find "$APP" -type f \( -perm -u+x -o -name '*.dylib' -o -name '*.so' \) |
+        while read -r f; do minos "$f"; done | sort -V | tail -1)
 echo "macOS minimo: ${MINOS:=11.0}"
+if [ -n "${MACOS_MAXIMO:-}" ] &&
+   [ "$(printf '%s\n' "$MINOS" "$MACOS_MAXIMO" | sort -V | tail -1)" != "$MACOS_MAXIMO" ]; then
+    echo "piden macOS $MINOS y tiene que valer en $MACOS_MAXIMO:" >&2
+    find "$APP" -type f \( -perm -u+x -o -name '*.dylib' -o -name '*.so' \) |
+        while read -r f; do echo "$(minos "$f") $f"; done | sort -V | tail -5 >&2
+    exit 1
+fi
 
 cat > "$C/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -129,7 +148,7 @@ ln -s /Applications "$DMG/Applications"
 cp "$R/packaging/LEEME.txt" "$DMG/"
 [ -f "$R/docs/manual/MANUAL.pdf" ] && cp "$R/docs/manual/MANUAL.pdf" "$DMG/Manual de ATSW.pdf"
 hdiutil create -volname ATSW -srcfolder "$DMG" -ov -format UDZO \
-    "$R/dist/ATSW-$V-macos-$ARQ.dmg"
+    "$R/dist/ATSW-$V-macos-$ARQ${SUFIJO:-}.dmg"
 rm -rf "$DMG"
 
 echo "hecho: $(du -sh "$APP" | cut -f1) la .app, $(du -sh "$R"/dist/*.dmg | cut -f1) el .dmg"

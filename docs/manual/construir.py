@@ -65,7 +65,7 @@ def incrusta(html):
 
 
 def chromium():
-    for p in ("chromium", "chromium-browser", "google-chrome", "google-chrome-stable"):
+    for p in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser"):
         if shutil.which(p):
             return p
     return None
@@ -93,8 +93,11 @@ def main():
         print("sin Chromium ni Chrome: no hay PDF")
         return 0
     pdf = os.path.join(AQUI, "MANUAL.pdf")
-    subprocess.run([c, "--headless", "--disable-gpu", "--no-pdf-header-footer",
-                    "--print-to-pdf=" + pdf, "file://" + salida],
+    orden = [c, "--headless", "--disable-gpu", "--no-pdf-header-footer"]
+    # En la CI (GitHub Actions) el sandbox de Chrome no arranca.
+    if os.environ.get("CI"):
+        orden.append("--no-sandbox")
+    subprocess.run(orden + ["--print-to-pdf=" + pdf, "file://" + salida],
                    check=True, stderr=subprocess.DEVNULL)
     print("escrito", pdf)
     return 0

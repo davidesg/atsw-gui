@@ -2339,6 +2339,18 @@ static int cmp_real(const void *a, const void *b)
     return (x < y) ? -1 : ((x > y) ? 1 : 0);
 }
 
+/*  boot_dump -- <base>.boot, EVERY REPLICATION OF THE RANK BOOTSTRAP.
+ *
+ *  The .out gives three percentiles, a p-value and a count.  Homologating a
+ *  port against that only says "the same within Monte Carlo error", and when
+ *  one replication converges on one side and not on the other nothing points
+ *  at which.  So each replication is written as it ends, in the order the
+ *  generator produced it: the H0 rank, the replication number, what became of
+ *  it (ok; simfail, Sigma* without a Cholesky factor, before any draw is
+ *  consumed; fitfail, one of the two refits failed) and its LR* to 17
+ *  digits.  It is what a replication-by-replication comparison needs.      */
+static FILE *boot_dump = NULL;
+
 /*  bootstrap_rank — critical values of LR(rr -> rr+1) under H0: rank = rr.
  *  x is the fit at rank rr.  Returns the number of usable replications.      */
 static int bootstrap_rank(int rr, real *x, int npar, int N, real *cv, real *pval,
@@ -2386,11 +2398,20 @@ static int bootstrap_rank(int rr, real *x, int npar, int N, real *cv, real *pval
     for (b = 1; b <= N; b++) {
         int ok0 = 0, ok1 = 0;
         real l0, l1;
-        if (simulate_h0(&vh, B2, rr, sim) != 0) continue;
+        if (simulate_h0(&vh, B2, rr, sim) != 0) {
+            if (boot_dump) fprintf(boot_dump, "%d,%d,simfail,\n", rr, b);
+            continue;
+        }
         for (i = 1; i <= nobs_raw; i++)
             for (j = 1; j <= M; j++) rawmat[i][j] = sim[i][j];
         l0 = fit_ll(rr,   &ok0);
         l1 = fit_ll(rr+1, &ok1);
+        if (boot_dump) {
+            if (ok0 && ok1)
+                fprintf(boot_dump, "%d,%d,ok,%.17g\n", rr, b, 2.0 * (l1 - l0));
+            else
+                fprintf(boot_dump, "%d,%d,fitfail,\n", rr, b);
+        }
         /* Every converged draw counts, negative ones included: the exact LR
            is not nested at Lambda = 0 and goes below zero under H0 in about
            40 % of samples.  Dropping them censored the null from below and
@@ -9752,6 +9773,15 @@ static int run_lrtest(void)
                              "-----------------\n");
             printf("\nBootstrap under H0 (%d replications per comparison):\n",
                    global_boot);
+            {
+                char fname[600];
+                snprintf(fname, sizeof fname, "%s.boot", out_base);
+                boot_dump = fopen(fname, "w");
+                if (boot_dump)
+                    fprintf(boot_dump, "# drvec %s -bootstrap %d: the rank test, one "
+                            "line per replication\nh0,rep,status,lr\n",
+                            DRVEC_VERSION, global_boot);
+            }
             for (int rr = 0; rr <= M - 2; rr++) {
                 real cv[3] = {0.0, 0.0, 0.0}, pv = -1.0, lr;
                 int reps;
@@ -9782,6 +9812,12 @@ static int run_lrtest(void)
                 else if (lr > cv[0]) fprintf(outputv, "   reject H0 at 10%%\n");
                 else                 fprintf(outputv, "   H0 not rejected\n");
                 printf(" p = %.4f (%d replicas)\n", pv, reps);
+            }
+            if (boot_dump) {
+                fclose(boot_dump);
+                boot_dump = NULL;
+                fprintf(outputv, "\n  Every replication, with its LR*, is in %s.boot.\n",
+                        out_base);
             }
             /* The Monte Carlo error, stated instead of hidden: the plan's
                contingency asked for it to be reported if N had to be small.   */

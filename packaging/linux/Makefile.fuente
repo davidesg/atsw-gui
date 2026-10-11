@@ -1,0 +1,30 @@
+# ATSW DESDE LAS FUENTES, en Linux. Ver INSTALAR.txt.
+#
+#   make                         construye los motores y los GUIs
+#   sudo make install            en /usr/local (PREFIX=... para otro sitio)
+#   sudo make uninstall
+#
+# Necesita: build-essential pkg-config libgtk-3-dev libgsl-dev zlib1g-dev
+PREFIX ?= /usr/local
+DIRS = engines/fue engines/fuf engines/fug engines/drtran engines/art \
+       gui/fue gui/fug gui/drtran gui/atsw
+
+all:
+	@for d in $(DIRS); do \
+	    printf '== %s\n' "$$d"; \
+	    $(MAKE) -s -C $$d || exit 1; \
+	done
+
+install: all
+	sh packaging/linux/instalar.sh "$(DESTDIR)" "$(PREFIX)"
+
+uninstall:
+	rm -rf $(DESTDIR)$(PREFIX)/lib/atsw $(DESTDIR)$(PREFIX)/share/doc/atsw
+	rm -f $(DESTDIR)$(PREFIX)/bin/atsw \
+	      $(DESTDIR)$(PREFIX)/share/applications/atsw*.desktop \
+	      $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/atsw.svg
+
+clean:
+	@for d in $(DIRS); do $(MAKE) -s -C $$d clean; done
+
+.PHONY: all install uninstall clean

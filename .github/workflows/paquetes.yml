@@ -174,7 +174,7 @@ jobs:
         with:
           environment-name: atsw
           create-args: >-
-            pkg-config gtk3 gsl librsvg adwaita-icon-theme glib
+            pkg-config gtk3 gsl librsvg adwaita-icon-theme glib zlib
           init-shell: bash
       - name: Entorno (conda-forge)
         if: ${{ matrix.conda }}

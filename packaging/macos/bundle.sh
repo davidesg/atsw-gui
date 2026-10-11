@@ -45,7 +45,16 @@ cc -O2 -Wall -o "$C/MacOS/ATSW" "$R/packaging/macos/lanzador.c"
 # iconos de Adwaita son SVG y ese cargador es de librsvg.
 PB=lib/gdk-pixbuf-2.0/2.10.0
 mkdir -p "$RES/$PB/loaders"
-cp "$B/$PB"/loaders/*.so "$RES/$PB/loaders/"
+# Los que dice la cache de Homebrew, esten donde esten: el de SVG lo pone
+# librsvg en SU directorio (y como .dylib), no en el de gdk-pixbuf.
+for l in $(sed -nE 's/^"([^"]*\.(so|dylib))"$/\1/p' "$B/$PB/loaders.cache"); do
+    cp -L "$l" "$RES/$PB/loaders/"
+    # Su propio nombre (LC_ID_DYLIB) apunta a Homebrew, y dylibbundler solo
+    # arregla las dependencias, no el nombre.
+    chmod u+w "$RES/$PB/loaders/$(basename "$l")"
+    install_name_tool -id "@executable_path/../$PB/loaders/$(basename "$l")" \
+        "$RES/$PB/loaders/$(basename "$l")"
+done
 # La cache, como plantilla: la ruta de cada cargador pasa a @PREFIJO@, y el
 # lanzador escribe la de verdad al arrancar (lanzador.c).
 sed -E 's|^"[^"]*/loaders/|"@PREFIJO@/'"$PB"'/loaders/|' "$B/$PB/loaders.cache" \
@@ -56,7 +65,7 @@ grep '^"' "$RES/$PB/loaders.cache.in"
 # ejecutables y los cargadores (y las que piden esas), y les reescribe las
 # rutas. -s para las que se piden por @rpath.
 xs=()
-for f in "$RES"/bin/* "$RES/$PB"/loaders/*.so; do xs+=(-x "$f"); done
+for f in "$RES"/bin/* "$RES/$PB"/loaders/*; do xs+=(-x "$f"); done
 dylibbundler -of -b -cd "${xs[@]}" -d "$RES/lib" -p @executable_path/../lib \
     -s "$B/lib" </dev/null
 

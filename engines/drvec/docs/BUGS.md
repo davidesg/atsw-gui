@@ -998,7 +998,7 @@ compute the same regressor.
 
 ## BUG-41 — engine: the line search never returns on a NaN objective, termcode 3 reports the objective at the rejected point, and `est` leaks on a bad start
 
-**Status: OPEN** for items 2–3; **item 1 FIXED** in atsw-gui (c0cc265: `lib/optim`'s `lnsrch` gives up on a non-finite objective). Found 2026-09-23. **Shared** with canonical drvarma
+**Status: FIXED 2026-10-11.** Item 1 in c0cc265 (`lib/optim`'s `lnsrch` gives up on a non-finite objective); item 2 in `lib/optim/lnsrch.c`: the give-up branch sets `*fkp1 = fk` with `xkp1 = xk`, so the "Objective function" line is the returned point's (moved 4 of drvec's 24 goldens and 2 of drvarma's 18 bench cases in the 9th–10th significant digit, and the Wald statistics built on that scale); item 3 in `drvmlest.c`: `est` deallocates before returning on a bad initial point. Found 2026-09-23. **Shared** with canonical drvarma
 (`drvarma_v.04.1`), whose code drvec's engine is identical to.
 
 **What it is.**
@@ -1033,7 +1033,7 @@ with each other here.
 
 ## BUG-42 — `diagnose.c`: a heap overflow in the histogram, `chisq` capped above 1000, and portmanteau/JB tests with the wrong reference distribution
 
-**Status: OPEN** for items 2–4; **item 1 FIXED 2026-10-10** with drvarma 5.0's patch (a count wider than its cell prints as `**`). Found 2026-09-23. **Shared** with drvarma.
+**Status: FIXED 2026-10-11.** Item 1 on 2026-10-10 with drvarma 5.0's patch (a count wider than its cell prints as `**`). Item 2: the cap is gone from `chisq` in drvec, drvarma and drtran; `tests/chisq_probe.c` checks x = 1001–1200 against GSL (agreement 2e-6). Items 3 and 4: Hosking and the Jarque-Bera move to `lib/diagmv`, shared by the three engines. Hosking's df is m²s − k, with k the dynamic coefficients estimated (here Λ + F + Θ after restrictions, plus `-xlink`'s transfer weights; not β, the mean or Σ), and s = freq + 2. Each residual's Ljung-Box subtracts its equation's free own-lag coefficients. The Jarque-Bera is Lütkepohl's with the symmetric square root of Σ̂. Checked against numpy and scipy, and by hand on `base2`, `-marow` and `r = 0`. Found 2026-09-23. **Shared** with drvarma.
 
 **What it is.**
 1. `File_HistSer` (~797-814): with a residual beyond 4σ the label width is 2 but

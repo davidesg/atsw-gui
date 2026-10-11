@@ -33,9 +33,9 @@ fi
 # El oraculo es  drtran -p ES_CPI_airline.pre WTI_ar1.pre ; los numeros que se
 # exigen aqui estan copiados de su .out.
 echo
-$CC -O2 -w -I"$TOP/include" -I"$E/include" -I"$L/lik" -I"$L/fuepre" -I"$L/prewhiten" -I"$L/dates" \
+$CC -O2 -w -I"$TOP/include" -I"$E/include" -I"$L/lik" -I"$L/fuepre" -I"$L/prewhiten" -I"$L/dates" -I"$L/diagmv" \
     "$TOP/tests/test_prewhiten.c" "$L/fuepre/fue_pre_reader.c" \
-    "$E/src/nlatools.c" "$E/src/diagnose.c" \
+    "$E/src/nlatools.c" "$E/src/diagnose.c" "$L/diagmv/diagmv.c" \
     "$L/prewhiten/prewhiten.c" "$L/dates/dates.c" \
     -o "$W/test_prewhiten" -lgsl -lgslcblas -lm || exit 1
 

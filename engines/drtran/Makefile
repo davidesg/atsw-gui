@@ -10,7 +10,7 @@
 # Uses the drvarma exact-VARMA likelihood engine
 
 CC       = gcc
-CFLAGS   = -Wall -Wextra -O2 -fPIC -Iinclude -I../../lib/fuepre -I../../lib/optim -I../../lib/lik -I../../lib/dates -I../../lib/prewhiten -I../../lib/netfile -I../../lib/slots -I../../lib/rutas
+CFLAGS   = -Wall -Wextra -O2 -fPIC -Iinclude -I../../lib/fuepre -I../../lib/optim -I../../lib/lik -I../../lib/dates -I../../lib/prewhiten -I../../lib/netfile -I../../lib/slots -I../../lib/rutas -I../../lib/diagmv
 # GSL por pkg-config: en macOS (Homebrew) sus cabeceras no estan en las rutas
 # por defecto del compilador.
 GSL_CFLAGS := $(shell pkg-config --cflags gsl 2>/dev/null)
@@ -32,6 +32,7 @@ SRCS = $(SRCDIR)/drtran.c       \
        ../../lib/fuepre/fuepre_motor.c \
        ../../lib/fuepre/fuepre_forecast.c \
        ../../lib/optim/lnsrch.c \
+       ../../lib/diagmv/diagmv.c \
        ../../lib/lik/lik.c \
        ../../lib/lik/multshea.c \
        $(SRCDIR)/elfvarma.c     \
@@ -106,5 +107,5 @@ clean:
 # Los objetos dependen de TODAS las cabeceras: sin esto, cambiar un struct en
 # include/ deja objetos con layouts distintos y el binario falla de formas
 # desconcertantes (pasó al añadir un campo a Tusmodel).
-HDRS = $(wildcard include/*.h)
+HDRS = $(wildcard include/*.h) ../../lib/diagmv/diagmv.h
 $(OBJS): $(HDRS)

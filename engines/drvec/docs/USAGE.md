@@ -426,7 +426,7 @@ the rank selected without it.**
 
 | | |
 |---|---|
-| `-bootstrap N` | with `-lrtest`: N parametric-bootstrap replications under H₀ for each rank comparison |
+| `-bootstrap N` | with `-lrtest`: N parametric-bootstrap replications under H₀ for each rank comparison; every replication (H₀ rank, number, `ok`/`simfail`/`fitfail`, LR* to 17 digits) in `<base>.boot` (CSV) |
 
 The asymptotic tables are known to be optimistic at these sample sizes — measured
 here, the sequential test over-rejects at about **six times** its nominal level

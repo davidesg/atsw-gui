@@ -824,7 +824,9 @@ static real gammap(real a, real x) {
 real chisq(real x, int df) {
     if (df <= 0) return 0.0;
     if (x <= 0.0) return 0.0;
-    if (x > 1000.0) return 1.0;  /* L�mite superior */
+    /*  No cap at x > 1000 (drvec BUG-42, item 2): it returned 1 for any
+     *  statistic past 1000 whatever its df, so a Q(2000) = 1500 was p = 0.
+     *  Wilson-Hilferty needs none.                                         */
 
     /* Para df peque�os, c�lculo exacto */
     if (df < 30) {

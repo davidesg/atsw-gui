@@ -95,6 +95,7 @@
 #include "main.h"
 #include "fue_pre_reader.h"   /* .pre reader, copied from drtran (see F2.1) */
 #include "fue_bridge.h"       /* expansion of the .pre's factors                */
+#include "diagmv.h"           /* Hosking and Jarque-Bera, shared (lib/diagmv)   */
 #include <gsl/gsl_cdf.h>      /* chi2 p-value of the LR of H1(r) against H(r) */
 #include <gsl/gsl_eigen.h>    /* symmetric generalised eigenvalue problem */
 #include <gsl/gsl_linalg.h>   /* QR and SVD for the Granger rank condition       */
@@ -116,7 +117,7 @@
  *  argument that a reader needs before running the program, and the right
  *  place for the single definition the binary is built from.                 */
 #ifndef DRVEC_VERSION
-#define DRVEC_VERSION "0.11"
+#define DRVEC_VERSION "0.12"
 #endif
 
 real macheps;
@@ -1669,9 +1670,11 @@ static void subtract_interventions(const char *prefix)
  *  WHAT IT PRINTS, IN TWO PARTS
  *
  *   1. THE SUITE'S DIAGNOSIS, as it comes: multivariate_diagnostics from
- *      drtran -- Hosking's portmanteau and multivariate Jarque-Bera -- copied
- *      unchanged into src/diagnose_mv.c.  That is deliberate: the same residual
- *      has to read the same in drvarma, in drtran and here.  The first version
+ *      drtran -- Hosking's portmanteau and multivariate Jarque-Bera -- now
+ *      ONE file, lib/diagmv, for the three engines (BUG-42, items 3-4); this
+ *      program passes it its count of coefficients (diag_k).  That is
+ *      deliberate: the same residual has to read the same in drvarma, in
+ *      drtran and here.  The first version
  *      of this was a portmanteau written by hand in this file, and it was badly
  *      framed even though it was correct: it forced a comparison of apples with
  *      oranges.
@@ -1689,6 +1692,49 @@ static void subtract_interventions(const char *prefix)
  *  with k >= 1 says that equation i responds to the PAST innovation of j: it is
  *  a lagged cross effect of order k.  The upper and lower triangles are NOT the
  *  same thing, and that is where the direction is.                           */
+/*  diag_k, diag_npar_ser -- WHAT THE RESIDUALS COST, for the degrees of
+ *  freedom of their tests (BUG-42, item 3).
+ *
+ *  Hosking's Q is chi2(m^2 s - k) with k the DYNAMIC coefficients estimated:
+ *  Lambda, F and Theta as the restrictions leave them, and the transfer
+ *  weights of -xlink.  Not the mean, not Sigma, not B2: Bruggemann,
+ *  Lutkepohl and Saikkonen (2006) give m^2 (s - p + 1) - m r for a VECM,
+ *  which subtracts Gamma and alpha and leaves beta, superconsistent, out.
+ *  The count is par_blocks', so it cannot disagree with the vector.
+ *
+ *  The Ljung-Box of each residual subtracts the coefficients of its equation
+ *  on its own lags: the diagonal of each F_k and Theta_j that is free.  The
+ *  residuals are Ybar's, [nabla Y2 ; W], and the coefficients are in the
+ *  internal order [Y1 ; Y2]: nabla Y2_i is row r + i, W_j is row j.  It is
+ *  the univariate reading, and an approximation in a system: the .out of
+ *  art and fue subtracts p + q the same way.                              */
+static int diag_k(void)
+{
+    int nmean, nlam, nmid, ntail, M = nser;
+    par_blocks(&nmean, &nlam, &nmid, &ntail);
+    return nlam + nmid - ((global_diag_cov ? M : M * (M + 1) / 2) - 1)
+         + xl_npar();
+}
+
+static int *diag_npar_ser(void)
+{
+    int M = nser, r = global_r, s = M - r, i, k;
+    int nf = (global_p > 1) ? global_p - 1 : 0, q = global_q;
+    int *n = (int *) calloc((size_t) M + 1, sizeof(int));
+    for (i = 1; i <= M; i++) {
+        int row = (i <= s) ? r + i : i - s;
+        int w_row = row <= r;               /* an equation of the Y1 block */
+        if (global_warma) {
+            n[i] = w_row ? nf + q : 0;
+            continue;
+        }
+        for (k = 1; k <= nf; k++) n[i] += f_free(row, row);
+        if ((mawarma_on() || marow_on()) && !w_row) continue;
+        n[i] += q;
+    }
+    return n;
+}
+
 static void residual_diagnostics(struct Tvarma *v)
 {
     int M = v->m, n = v->n, K, i, j, k, t;
@@ -1719,7 +1765,7 @@ static void residual_diagnostics(struct Tvarma *v)
     /*  The suite's STANDARD diagnosis, untouched (src/diagnose.c, vendored
      *  from drvarma), and it brings its own banner: this section is titled by
      *  the shared code, not by a second title of ours.                       */
-    multivariate_diagnostics(v->a, n, M, outputv);
+    multivariate_diagnostics(v->a, n, M, data_freq, diag_k(), outputv);
     fprintf(outputv, "\n");
     fprintf(outputv, "  residual sd:");
     for (i = 1; i <= M; i++) fprintf(outputv, " %10.6f", sqrt(C[0][i][i]));
@@ -2293,6 +2339,18 @@ static int cmp_real(const void *a, const void *b)
     return (x < y) ? -1 : ((x > y) ? 1 : 0);
 }
 
+/*  boot_dump -- <base>.boot, EVERY REPLICATION OF THE RANK BOOTSTRAP.
+ *
+ *  The .out gives three percentiles, a p-value and a count.  Homologating a
+ *  port against that only says "the same within Monte Carlo error", and when
+ *  one replication converges on one side and not on the other nothing points
+ *  at which.  So each replication is written as it ends, in the order the
+ *  generator produced it: the H0 rank, the replication number, what became of
+ *  it (ok; simfail, Sigma* without a Cholesky factor, before any draw is
+ *  consumed; fitfail, one of the two refits failed) and its LR* to 17
+ *  digits.  It is what a replication-by-replication comparison needs.      */
+static FILE *boot_dump = NULL;
+
 /*  bootstrap_rank — critical values of LR(rr -> rr+1) under H0: rank = rr.
  *  x is the fit at rank rr.  Returns the number of usable replications.      */
 static int bootstrap_rank(int rr, real *x, int npar, int N, real *cv, real *pval,
@@ -2340,11 +2398,20 @@ static int bootstrap_rank(int rr, real *x, int npar, int N, real *cv, real *pval
     for (b = 1; b <= N; b++) {
         int ok0 = 0, ok1 = 0;
         real l0, l1;
-        if (simulate_h0(&vh, B2, rr, sim) != 0) continue;
+        if (simulate_h0(&vh, B2, rr, sim) != 0) {
+            if (boot_dump) fprintf(boot_dump, "%d,%d,simfail,\n", rr, b);
+            continue;
+        }
         for (i = 1; i <= nobs_raw; i++)
             for (j = 1; j <= M; j++) rawmat[i][j] = sim[i][j];
         l0 = fit_ll(rr,   &ok0);
         l1 = fit_ll(rr+1, &ok1);
+        if (boot_dump) {
+            if (ok0 && ok1)
+                fprintf(boot_dump, "%d,%d,ok,%.17g\n", rr, b, 2.0 * (l1 - l0));
+            else
+                fprintf(boot_dump, "%d,%d,fitfail,\n", rr, b);
+        }
         /* Every converged draw counts, negative ones included: the exact LR
            is not nested at Lambda = 0 and goes below zero under H0 in about
            40 % of samples.  Dropping them censored the null from below and
@@ -7715,7 +7782,9 @@ static void diagnose_ybar(struct Tvarma *vp)
     {
         int sd = trans_d, sD = trans_D;
         trans_d = nobs_raw - nobs; trans_D = 0;
-        diagnose(vp);
+        int *np = diag_npar_ser();
+        diagnose(vp, np);
+        free(np);
         trans_d = sd; trans_D = sD;
     }
     if (save) {
@@ -9704,6 +9773,15 @@ static int run_lrtest(void)
                              "-----------------\n");
             printf("\nBootstrap under H0 (%d replications per comparison):\n",
                    global_boot);
+            {
+                char fname[600];
+                snprintf(fname, sizeof fname, "%s.boot", out_base);
+                boot_dump = fopen(fname, "w");
+                if (boot_dump)
+                    fprintf(boot_dump, "# drvec %s -bootstrap %d: the rank test, one "
+                            "line per replication\nh0,rep,status,lr\n",
+                            DRVEC_VERSION, global_boot);
+            }
             for (int rr = 0; rr <= M - 2; rr++) {
                 real cv[3] = {0.0, 0.0, 0.0}, pv = -1.0, lr;
                 int reps;
@@ -9734,6 +9812,12 @@ static int run_lrtest(void)
                 else if (lr > cv[0]) fprintf(outputv, "   reject H0 at 10%%\n");
                 else                 fprintf(outputv, "   H0 not rejected\n");
                 printf(" p = %.4f (%d replicas)\n", pv, reps);
+            }
+            if (boot_dump) {
+                fclose(boot_dump);
+                boot_dump = NULL;
+                fprintf(outputv, "\n  Every replication, with its LR*, is in %s.boot.\n",
+                        out_base);
             }
             /* The Monte Carlo error, stated instead of hidden: the plan's
                contingency asked for it to be reported if N had to be small.   */

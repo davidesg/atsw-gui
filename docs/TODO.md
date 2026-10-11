@@ -222,7 +222,38 @@ programa:
 - `pr_leer` acepta `schema_version: 99`, una lista sin cerrar y un fichero
   vacío sin protestar.
 
+**art / ventana de identificación** (los del motor, en `engines/art/BUGS.md`)
+
+- La ventana enseña el AICc (CSS) y el peso de Akaike de **todos** los
+  candidatos (`lib/analisis/an_identifica.c`, columnas `C_PESO` y `C_AICC`,
+  ~322-338 y ~825). Desde el 2026-10-09, art-python no ordena por el AICc
+  y sólo lo enseña como «[empate: ΔAICc=…]» en los candidatos empatados en
+  similitud por el primer puesto, que es el único sitio donde decide
+  (art-python BUG-0239). Fuera de ahí la columna invita a leer un ranking
+  que la lista no sigue.
+- Cuando el F no detecta estacionalidad, la ventana vuelve a identificar
+  con `--harmonics off` (#17), pero deja `P` y `Q` en 1. El motor sigue
+  proponiendo candidatos estacionales: (1,0)(1,0), (0,0)(1,0) y
+  (1,1)(1,1) sobre un AR(1), un ARMA(1,1) y un AR(4) mensuales simulados
+  (F p = 0,98, 0,64 y 0,42). En art-python, decidido «sin estacionalidad»,
+  el paso 4 no propone candidatos estacionales (BUG-0209). Arreglo: pasar
+  `-P 0 -Q 0` en esa segunda identificación.
+
 **drvec** (no va en la primera versión)
+
+- **El porte a Python.** Decidido el 2026-10-11: la primera versión del porte
+  **incluye** `-fixb2row`, `-xpre`/`-xlink`, `-xsys`, `-case pre`/`-trend` e
+  `-irfboot` (`engines/drvec/docs/VERSIONS.md` §3, 0.11). Antes de fijar el
+  oráculo: BUG-41/42 y `lib/diagmv`; el volcado de la LR* de cada réplica del
+  bootstrap (`BASE.boot`); goldens propios de cada opción de esa superficie;
+  y las lagunas (`-xsys` con q > 0, rango con exógenas o con `-trend`,
+  `-xlink` con `-f`), portadas como rechazo. Después, la etiqueta
+  `drvec-v0.12` es el oráculo.
+- **Las lagunas, prioridad de la versión siguiente** de drvec y de su porte:
+  primero en el C, luego portadas. La lista ordenada, en
+  `engines/drvec/TODO.md` («PRIORIDAD»): el rango con exógenas, `-xsys` con
+  MA, el rango con `-trend`/`-case pre`, la previsión y las bandas con
+  exógenas y tendencia, `-beta file`.
 
 - `copias.sh` señala una copia de `lib/fuepre/fue_pre_reader.c` en
   `engines/drvec/src/`.

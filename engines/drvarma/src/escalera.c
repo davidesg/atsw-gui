@@ -38,6 +38,7 @@
 #include "version.h"
 #include "forecast.h"
 #include "inpcheck.h"
+#include "diagmv.h"           /* Hosking and Jarque-Bera, shared (lib/diagmv) */
 #include <string.h>
 #include <math.h>
 
@@ -157,13 +158,17 @@ static int build_stationary(void)
 /*  log(Q_aa/Q_11) para a >= 2 y, salvo -diagcov, las covarianzas.           */
 /*  esc_pack, esc_unpack y esc_names recorren EXACTAMENTE ese orden.         */
 /* ------------------------------------------------------------------------- */
+/* The free ARMA coefficients of series i's own model, as its .pre has them. */
+static int esc_n_arma(int i)
+{
+    return n_ar_free_params(&Tm[i]) + n_ma_free_params(&Tm[i]);
+}
+
 static int esc_npar(void)
 {
-    int a, i, n = 0;
-    for (a = 1; a <= act_m; a++) {
-        i = act[a];
-        if (!opt_fixarma) n += n_ar_free_params(&Tm[i]) + n_ma_free_params(&Tm[i]);
-    }
+    int a, n = 0;
+    if (!opt_fixarma)
+        for (a = 1; a <= act_m; a++) n += esc_n_arma(act[a]);
     if (opt_redet)
         for (a = 1; a <= act_m; a++) n += n_det_free_params(&Tm[act[a]]);
     for (a = 1; a <= act_m; a++) if (Tm[act[a]].Imu) n++;
@@ -223,6 +228,28 @@ static void esc_unpack(real *x)
     if (!cx_diagcov)
         for (a = 2; a <= act_m; a++)
             for (b = 1; b < a; b++) qcov[act[a]][act[b]] = x[idx++];
+}
+
+/*  esc_ndyn, esc_npar_ser -- WHAT THE RESIDUALS COST, for the degrees of
+ *  freedom of their tests (BUG-42, item 3).  Hosking's Q is chi2(m^2 s - k)
+ *  with k the DYNAMIC coefficients behind the residuals: each active
+ *  series' own ARMA (estimated by its .pre, even when -fixarma holds it
+ *  fixed here, as the Python port counts it) plus the free cross AR and MA
+ *  of esc_npar.  Not the means, the deterministic terms or Q.  The Ljung-Box
+ *  of residual a subtracts only its own ARMA: the cross coefficients are
+ *  off the diagonal.  npar_ser[1..act_m]; free() it.                      */
+static int esc_ndyn(void)
+{
+    int a, n = 0;
+    for (a = 1; a <= act_m; a++) n += esc_n_arma(act[a]);
+    return n + (cx_p + cx_q) * n_links_active();
+}
+
+static int *esc_npar_ser(void)
+{
+    int a, *n = (int *) calloc((size_t) act_m + 1, sizeof(int));
+    for (a = 1; a <= act_m; a++) n[a] = esc_n_arma(act[a]);
+    return n;
 }
 
 /* Los nombres, en el mismo orden. names[1..npar][ESC_NAMELEN]. */
@@ -1336,8 +1363,12 @@ int escalera_main(int argc, char *argv[])
             impulse_response(&F.vm, h, outputv);
             variance_decomposition(&F.vm, h, outputv);
         }
-        multivariate_diagnostics(F.vm.a, F.vm.n, F.vm.m, outputv);
-        diagnose(&F.vm);
+        multivariate_diagnostics(F.vm.a, F.vm.n, F.vm.m, data_freq, esc_ndyn(), outputv);
+        {
+            int *np = esc_npar_ser();
+            diagnose(&F.vm, np);
+            free(np);
+        }
     }
 
     /* [6] Forecasts. The estimated model is released first: the forecast

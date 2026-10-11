@@ -58,7 +58,7 @@ One definition, in `src/drvec.c`:
 
 ```c
 #ifndef DRVEC_VERSION
-#define DRVEC_VERSION "0.11"
+#define DRVEC_VERSION "0.12"
 #endif
 ```
 
@@ -82,6 +82,44 @@ a release nobody can cite correctly.
 
 ## 3. The record
 
+### 0.12 — 2026-10-11
+
+**Why a release at all, and why now.** It is the oracle of the Python port.
+0.11 was tagged as that oracle, and the same day two decisions moved it. The
+first was to close the defects the port would otherwise have to reproduce or
+correct one by one. The second was to carry into the port the surface 0.11 had
+left out. 0.12 is 0.11 with both done, so that the port has one program to be
+homologated against and that program has nothing in it that is known to be
+wrong.
+
+**Why 0.12 and not 0.11.1.** Recorded figures moved. Every `.out` changes in
+its residual diagnosis. Hosking's Q is referred to chi2(m^2 s - k), with s =
+freq + 2, where before it was chi2(m^2 s) with s = floor(sqrt(n)). The
+Jarque-Bera is Lutkepohl's, and each Ljung-Box subtracts its own coefficients.
+The "Objective function" line moves in the ninth or tenth digit (BUG-41, item
+2). That is `y`.
+
+**Why not 1.0.** The conditions of §1 are where 0.11 left them.
+
+**What it contains.**
+
+| | |
+|---|---|
+| `BUG-41` | closed: the line search returns the value of the point it keeps (item 2), and `est` frees its structure on a bad start (item 3) |
+| `BUG-42` | closed: no chi2 cap (item 2); Hosking's degrees of freedom and the Jarque-Bera (items 3 and 4), in `lib/diagmv`, which drvarma and drtran share |
+| `<base>.boot` | every replication of the rank bootstrap, for a homologation replication by replication; it consumes no draws |
+| goldens | 34 cases, ten of them the port's surface: `-fixb2row`, `-xpre`/`-xlink`, `-xsys`, `-nodrift`, `-case pre`, `-trend`, `-irfboot` with its `.irfboot`, and the rank bootstrap with its `.boot` |
+
+**The port's scope.** The amended 0.11 entry stands: the port's first version
+includes the surface above. Its declared gaps are ported as refusals, and they
+are the first priority of the next version, C first and then the port
+(`TODO.md`, "PRIORIDAD"). `-xsys` is AR-only for now.
+
+**Re-measured for this release.** The suite passes 366 checks; the 34 goldens
+are re-captured, and only the diagnosis and the objective line moved in the
+24 that existed before; `make check` passes for every engine that shares
+`lib/diagmv`.
+
 ### 0.11 — 2026-10-10
 
 **Why a release at all, and why now.** Because the Python port is about to
@@ -102,9 +140,15 @@ route are in each series' units (`BUG-36`). And capability was added
 same nine-case bank, and the newest surface — `-fixb2row`, `-xpre`/`-xlink`,
 `-xsys`, `-case pre`/`-trend`, `-irfboot` — is three days old, with gaps
 declared in `TODO.md` (`-xsys` with `q > 0`, the rank test with exogenous
-inputs or with `-trend`, `-xlink` with `-f`). That surface is **outside** the
-first version of the port; the model it ports is cases 1–3, the `.pre` route,
-the rank test, the impulse responses and variance decomposition, and `-f`.
+inputs or with `-trend`, `-xlink` with `-f`).
+
+**The scope of the port.** As first written, this entry left that surface out of
+the port's first version. Amended on 2026-10-11, by the analyst's decision:
+the article uses it, so the first version **includes** it. It ports cases 1–4,
+the `.pre` route with `-case pre`/`-nodrift`, the rank test, the impulse
+responses and variance decomposition with `-irfboot`, `-f`, `-fixb2row`,
+`-xpre`/`-xlink` and `-xsys`. The declared gaps are ported as gaps: refused
+where the C refuses them, not filled in by the port.
 
 **Defects fixed** since 0.10: `BUG-18` to `BUG-20`, `BUG-23` to `BUG-39`,
 `BUG-43` to `BUG-50` (`BUG-40` closed as won't fix); `BUG-41` item 1 (via `lib/optim`'s `lnsrch`) and

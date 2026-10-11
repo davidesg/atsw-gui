@@ -67,6 +67,7 @@ hash_of() {
     #  moving, so it is dropped before hashing -- otherwise every release
     #  invalidates the whole baseline and the net stops meaning anything.
     sed -e '/^DRVEC .* EML Estimation/d' -e '/^Program  *: DRVEC/d' \
+        -e '/^# drvec .* -bootstrap /d' \
         -e 's#/tmp/[^ ]*##g' "$1" \
         | cksum | awk '{print $1"-"$2}'
 }
@@ -98,6 +99,39 @@ if [ -f "$TMP/proute.out" ]; then
 else
     printf '%-12s %s\n' "preroute" "NO-OUTPUT" >> "$new"
 fi
+
+#  The surface the Python port's first version carries (VERSIONS.md 0.11,
+#  amended): one case per option, so that the oracle is exact there too and
+#  not only the battery's tolerances.  The inputs are the battery's, fixed as
+#  files: xrev.pre is the mink series reversed and one year earlier, and
+#  minkmu.pre the mink model with its mean freed.  The bootstraps are short:
+#  what is pinned is the generator's stream and every replication of it
+#  (<base>.boot, <base>.irfboot), not a distribution.
+FX=tests/fixtures
+PRE_CASES=(
+  "fixb2row|$PRE1 $PRE2|2 1 1 -case 2 -fixb2row 1 0"
+  "xlink|$PRE1 $PRE2|2 0 1 -case 2 -xpre $FX/xrev.pre -xlink $FX/xnet1.txt"
+  "xsys|$PRE1 $PRE2|3 0 1 -case 2 -xsys 1"
+  "nodrift|$PRE1 $PRE2|2 0 1 -case 3 -nodrift 1"
+  "casepre|$PRE1 $FX/minkmu.pre|2 0 1 -case pre"
+  "trend|$PRE1 $FX/minkmu.pre|2 0 1 -case pre -trend"
+  "irfboot|$PRE1 $PRE2|2 0 1 -case 2 -irfboot 40"
+  "rankboot|$PRE1 $PRE2|2 0 1 -case 2 -lrtest -bootstrap 20"
+)
+for c in "${PRE_CASES[@]}"; do
+    label=${c%%|*}; rest=${c#*|}; files=${rest%%|*}; args=${rest#*|}
+    rm -f "$TMP/$label".*
+    # shellcheck disable=SC2086
+    timeout 600 "$DRVEC" $files $args -name "$TMP/$label" >/dev/null 2>&1
+    for ext in out boot irfboot; do
+        [ "$ext" = out ] || [ -f "$TMP/$label.$ext" ] || continue
+        if [ -f "$TMP/$label.$ext" ]; then
+            printf '%-12s %s\n' "$label.$ext" "$(hash_of "$TMP/$label.$ext")" >> "$new"
+        else
+            printf '%-12s %s\n' "$label.$ext" "NO-OUTPUT" >> "$new"
+        fi
+    done
+done
 
 if [ "$MODE" = "capture" ]; then
     cp "$new" "$out"

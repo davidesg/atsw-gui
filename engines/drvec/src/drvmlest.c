@@ -91,8 +91,13 @@ void est( void (*cast)( real *, struct Tvarma *, int *, int, int ),
         varmax.theta, varmax.qq, varmax.w, 1.0, varmax.xitol,
         TRUE, varmax.a, &pi10x, &pi20x, &pi3, ifault );
 
-   if ( *ifault > 0 ) return;                 /* Bad initial estimates (2):  */
-                                              /* ifault = 1-2-3-4-5.         */
+   if ( *ifault > 0 )                         /* Bad initial estimates (2):  */
+      {                                       /* ifault = 1-2-3-4-5.         */
+      int keep = *ifault;                     /* BUG-41(3): the structure    */
+      (*cast)( par, &varmax, ifault, 0, 1 );  /* allocated above leaked on   */
+      *ifault = keep;                         /* this return.                */
+      return;
+      }
 
 /* [2]: Maximization of the specified objective function:                    */
 

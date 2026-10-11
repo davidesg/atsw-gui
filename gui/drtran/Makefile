@@ -28,6 +28,7 @@ SRC = src/main.c src/main_window.c src/series.c src/identifica.c src/red.c src/m
       $(LIB)/fuepre/fue_pre_reader.c \
       $(ENG)/src/nlatools.c \
       $(ENG)/src/diagnose.c \
+      $(LIB)/diagmv/diagmv.c \
       $(LIB)/prewhiten/prewhiten.c \
       $(LIB)/netfile/netfile.c \
       $(LIB)/nsop/nsop.c \
@@ -53,7 +54,7 @@ HDR = include/gui.h include/series.h include/previewhost.h include/plothost.h
 
 INC = -Iinclude -I$(ENG)/include -I$(LIB)/fuepre \
       -I$(LIB)/dates -I$(LIB)/prewhiten -I$(LIB)/netfile -I$(LIB)/nsop -I$(LIB)/slots -I$(LIB)/intervencion -I$(LIB)/verdict -I$(LIB)/outdiag -I$(LIB)/gof -I$(LIB)/tabla -I$(LIB)/rutas -I$(LIB)/proyecto -I$(LIB)/outfcst -I$(LIB)/engine -I$(LIB)/ccfplot -I$(LIB)/fugdraw -I$(LIB)/fugplot \
-      -I$(LIB)/equation -I$(LIB)/preview -I$(LIB)/utils -I$(LIB)/inpcheck -I$(LIB)/lik
+      -I$(LIB)/equation -I$(LIB)/preview -I$(LIB)/utils -I$(LIB)/inpcheck -I$(LIB)/lik -I$(LIB)/diagmv
 
 GTK_CFLAGS := $(shell pkg-config --cflags gtk+-3.0 2>/dev/null)
 GTK_LIBS   := $(shell pkg-config --libs   gtk+-3.0 2>/dev/null)

@@ -157,6 +157,8 @@ jobs:
             nombre: x86_64-macos11
             conda: true
     runs-on: ${{ matrix.runner }}
+    # El de macOS 11 todavia es una prueba: si falla, la release sale sin el.
+    continue-on-error: ${{ matrix.conda == true }}
     defaults:
       run:
         # Login, para que micromamba active su entorno en cada paso.
@@ -174,7 +176,7 @@ jobs:
         with:
           environment-name: atsw
           create-args: >-
-            pkg-config gtk3 gsl librsvg adwaita-icon-theme glib
+            pkg-config gtk3 gsl librsvg adwaita-icon-theme glib zlib expat
           init-shell: bash
       - name: Entorno (conda-forge)
         if: ${{ matrix.conda }}
@@ -191,7 +193,25 @@ jobs:
               echo "MACOS_MAXIMO=11.0"
               echo "SUFIJO=-macos11"
           } >> "$GITHUB_ENV"
-          pkg-config --modversion gtk+-3.0 gsl
+          # conda-forge separa algunos .pc en paquetes «de desarrollo» (zlib,
+          # expat...): que diga todos los que falten de una vez.
+          falta=() visto=" "
+          cola=(gtk+-3.0 gsl)
+          while [ ${#cola[@]} -gt 0 ]; do
+              p=${cola[0]}; cola=("${cola[@]:1}")
+              case "$visto" in *" $p "*) continue ;; esac
+              visto="$visto$p "
+              if pkg-config --exists "$p" 2>/dev/null ||
+                 [ -f "$CONDA_PREFIX/lib/pkgconfig/$p.pc" ] || [ -f "$CONDA_PREFIX/share/pkgconfig/$p.pc" ]; then
+                  f=$(ls "$CONDA_PREFIX"/{lib,share}/pkgconfig/"$p".pc 2>/dev/null | head -1)
+                  cola+=($(sed -nE 's/^Requires(\.private)?:(.*)/\2/p' "$f" |
+                           tr ',' ' ' | tr ' ' '\n' | grep -E '^[A-Za-z]' || true))
+              else
+                  falta+=("$p")
+              fi
+          done
+          [ ${#falta[@]} -eq 0 ] || { echo "::error::faltan .pc: ${falta[*]}"; exit 1; }
+          pkg-config --cflags --libs gtk+-3.0 gsl
       - uses: actions/download-artifact@v4
         with:
           name: ATSW-manual

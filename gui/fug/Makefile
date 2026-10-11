@@ -44,6 +44,10 @@ TARGET = gtk_fmg$(EXE)
 
 all: $(TARGET)
 
+# Las rutas en UTF-8 en Windows (lib/windows/utf8.mk). Despues de «all»: si
+# no, su regla seria el objetivo por omision.
+include ../../lib/windows/utf8.mk
+
 
 # LAS CABECERAS DE lib/ TAMBIEN SON DEPENDENCIAS, y faltaban. Compilar de
 # una sola llamada no es lo mismo que decidir bien CUANDO hay que compilar:
@@ -52,12 +56,12 @@ all: $(TARGET)
 # larga en gui/atsw/Makefile.
 LIBHDR = $(wildcard $(LIB)/*/*.h)
 
-$(TARGET): $(SRC) $(HDR) $(LIBHDR)
+$(TARGET): $(SRC) $(HDR) $(LIBHDR) $(UTF8_RES)
 	@if [ -z "$(GTK_LIBS)" ]; then \
 	    echo "El GUI necesita los ficheros de desarrollo de GTK 3"; \
 	    echo "(Debian/Ubuntu: sudo apt install libgtk-3-dev)"; \
 	    exit 1; fi
-	$(CC) $(CFLAGS) $(GTK_CFLAGS) $(INC) $(LDFLAGS) -o $@ $(SRC) $(GTK_LIBS) -lz -lm
+	$(CC) $(CFLAGS) $(GTK_CFLAGS) $(INC) $(LDFLAGS) -o $@ $(SRC) $(UTF8_RES) $(GTK_LIBS) -lz -lm
 
 install: $(TARGET)
 	install -d $(PREFIX)/bin

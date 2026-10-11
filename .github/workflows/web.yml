@@ -43,7 +43,7 @@ jobs:
           mkdir -p _site/manual _site/datos
           cp -R web/. _site/
           cp -R docs/manual/img _site/img
-          cp docs/manual/datos/ipc_wti.csv _site/datos/
+          cp docs/manual/datos/ipc_wti.csv docs/manual/datos/ipc_wti.xlsx _site/datos/
           cp docs/manual/MANUAL.pdf docs/manual/MANUAL.html _site/manual/
           du -sh _site
       - uses: actions/upload-pages-artifact@v3

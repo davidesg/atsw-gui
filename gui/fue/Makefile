@@ -150,6 +150,10 @@ ALL_CFLAGS = $(GUI_CFLAGS) $(DEPFLAGS)
 # Default target: build GUI
 all: $(TARGET)
 
+# Las rutas en UTF-8 en Windows (lib/windows/utf8.mk). Despues de «all»: si
+# no, su regla seria el objetivo por omision.
+include ../../lib/windows/utf8.mk
+
 # Create directories if they don't exist
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
@@ -252,7 +256,7 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
 -include $(OBJS:.o=.d)
 
 # Link
-$(TARGET): $(OBJS) | $(BIN_DIR)
+$(TARGET): $(OBJS) $(UTF8_RES) | $(BIN_DIR)
 	$(CC) $(LDFLAGS) -o $@ $^ $(GUI_LIBS)
 
 # Convenience target

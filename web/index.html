@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ATSW — taller de series temporales</title>
-<meta name="description" content="ATSW: modelos ARIMA, intervención y funciones de transferencia con la metodología Box-Jenkins-Treadway. Descargas para Windows y macOS, manual y vídeo.">
+<meta name="description" content="ATSW: modelos ARIMA, intervención y funciones de transferencia con la metodología Box-Jenkins-Treadway. Descargas para Windows, macOS y Linux, manual y vídeo.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f5fa8'/%3E%3Cpolyline points='4,22 10,14 15,18 21,8 28,12' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="estilo.css">
 </head>
@@ -41,7 +41,7 @@
         <a class="boton principal" id="boton-principal" href="#descargas">Descargar</a>
         <a class="boton" href="manual/MANUAL.pdf">Manual (PDF)</a>
       </div>
-      <p class="nota" id="version-nota">Versión de prueba para Windows y macOS.</p>
+      <p class="nota" id="version-nota">Versión de prueba para Windows, macOS y Linux.</p>
     </div>
     <figure class="captura-portada">
       <img src="img/taller-m01.png" alt="La ventana principal de ATSW: series del proyecto, modelos y el porqué de cada uno" width="1036" height="657">
@@ -78,7 +78,7 @@
     <h2>Descargas</h2>
     <p class="estado" id="estado">Buscando la última versión…</p>
 
-    <div class="rejilla-2">
+    <div class="rejilla-3 descargas-rejilla">
       <article class="tarjeta" data-so="windows">
         <h3><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5.5l7.5-1v7H3zM11.5 4.4L21 3v8.5h-9.5zM3 12.5h7.5v7L3 18.5zM11.5 12.5H21V21l-9.5-1.4z"/></svg>Windows</h3>
         <p class="requisito">Windows 10 u 11, 64 bits</p>
@@ -102,11 +102,20 @@
             <span>Big Sur y Monterey</span></li>
         </ul>
       </article>
+
+      <article class="tarjeta" data-so="linux">
+        <h3><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c-2.2 0-3.6 1.9-3.6 4.6 0 1.3.3 2.2-.4 3.4-.9 1.5-2.6 3.6-2.6 6 0 .9.2 1.6.5 2.2-.8.4-1.9.6-1.9 1.6 0 1.1 1.6 1.2 3 1.6 1.2.3 2 .6 2.8.6.7 0 1.2-.4 1.6-.9h1.2c.4.5.9.9 1.6.9.8 0 1.6-.3 2.8-.6 1.4-.4 3-.5 3-1.6 0-1-1.1-1.2-1.9-1.6.3-.6.5-1.3.5-2.2 0-2.4-1.7-4.5-2.6-6-.7-1.2-.4-2.1-.4-3.4C15.6 3.9 14.2 2 12 2zm-1.5 4.2c.5 0 .8.5.8 1.1 0 .3-.1.5-.2.7l-.5-.2c.1-.1.1-.3.1-.5 0-.3-.1-.5-.3-.5s-.3.3-.3.5v.2l-.5-.1c0-.2-.1-.3-.1-.5 0-.4.4-.7 1-.7zm3 0c.6 0 1 .3 1 .7 0 .2 0 .3-.1.5l-.5.1v-.2c0-.2-.1-.5-.3-.5s-.3.2-.3.5c0 .2 0 .4.1.5l-.5.2c-.1-.2-.2-.4-.2-.7 0-.6.3-1.1.8-1.1zM12 9c.9 0 2 .6 2 1s-1.1 1.1-2 1.1-2-.7-2-1.1 1.1-1 2-1z"/></svg>Linux</h3>
+        <p class="requisito">Ubuntu 22.04 o posterior, Debian 12</p>
+        <ul class="ficheros">
+          <li><a data-patron="_amd64\.deb$" class="pendiente">Paquete .deb</a>
+            <span>para Ubuntu y Debian, 64 bits</span></li>
+          <li><a data-patron="-fuente\.tar\.gz$" class="pendiente">Fuentes</a>
+            <span>para compilar en cualquier Linux</span></li>
+        </ul>
+      </article>
     </div>
 
     <p class="pie-descargas">
-      ¿Linux? Se compila desde el <a href="https://github.com/davidesg/atsw-gui">código</a>
-      con <code>make</code> (hacen falta GTK 3 y GSL).
       Todas las versiones: <a href="https://github.com/davidesg/atsw-gui/releases">releases en GitHub</a>.
     </p>
   </div>
@@ -147,7 +156,7 @@
     <h2>Instalar</h2>
     <p>Es una versión de prueba y no está firmada por Microsoft ni por Apple:
       la primera vez el sistema avisa. Es normal.</p>
-    <div class="rejilla-2">
+    <div class="rejilla-3">
       <article>
         <h3>Windows</h3>
         <ol>
@@ -167,6 +176,19 @@
             Sistema → Privacidad y seguridad → <b>Abrir igualmente</b>.</li>
           <li>Si dice que la aplicación «está dañada», en el Terminal:
             <pre><code>xattr -dr com.apple.quarantine /Applications/ATSW.app</code></pre></li>
+        </ol>
+      </article>
+      <article>
+        <h3>Linux</h3>
+        <ol>
+          <li>En el terminal, en la carpeta de la descarga:
+            <pre><code>sudo apt install ./atsw_*_amd64.deb</code></pre></li>
+          <li>Queda en el menú de aplicaciones como «ATSW» y en el terminal como
+            <code>atsw</code>. El manual y sus datos, en
+            <code>/usr/share/doc/atsw</code>.</li>
+          <li>Se desinstala con <code>sudo apt remove atsw</code>. Con las
+            fuentes: <code>make</code> y <code>sudo make install</code>, como
+            dice su <code>INSTALAR.txt</code>.</li>
         </ol>
       </article>
     </div>

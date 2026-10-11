@@ -14,8 +14,10 @@
   function sistema() {
     var p = (navigator.userAgentData && navigator.userAgentData.platform) ||
             navigator.platform || navigator.userAgent || "";
+    if (/android/i.test(navigator.userAgent || "")) return null;
     if (/win/i.test(p)) return "windows";
     if (/mac/i.test(p)) return "mac";
+    if (/linux/i.test(p)) return "linux";
     return null;
   }
 
@@ -59,7 +61,7 @@
         ' · <a href="' + rel.html_url + '">notas</a>';
       document.getElementById("version-nota").textContent =
         "Versión " + rel.tag_name.replace(/^v/, "") +
-        (rel.prerelease ? ", de prueba," : "") + " para Windows y macOS.";
+        (rel.prerelease ? ", de prueba," : "") + " para Windows, macOS y Linux.";
 
       document.querySelectorAll("a[data-patron]").forEach(function (a) {
         var re = new RegExp(a.getAttribute("data-patron"));

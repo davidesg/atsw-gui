@@ -45,6 +45,25 @@ macOS
   y en el aviso, «Abrir».
 
 
+LINUX
+-----
+
+Paquete .deb (atsw_..._amd64.deb): Ubuntu 22.04 o posterior, Debian 12
+
+  En el terminal, en la carpeta donde se descargó:
+
+      sudo apt install ./atsw_*_amd64.deb
+
+  Queda en el menú de aplicaciones como «ATSW», y en el terminal como
+  «atsw». El manual y sus datos, en /usr/share/doc/atsw.
+  Se desinstala con:  sudo apt remove atsw
+
+Fuentes (atsw-...-fuente.tar.gz): para compilar en cualquier Linux
+
+  Descomprímelo y sigue INSTALAR.txt: hacen falta GTK 3, GSL y zlib, y
+  después  make  y  sudo make install.
+
+
 QUÉ HAY DENTRO
 --------------
 

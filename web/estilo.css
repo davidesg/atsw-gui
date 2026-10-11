@@ -96,6 +96,11 @@ h1 { font-size: clamp(1.8rem, 3.6vw, 2.6rem); margin: 0 0 1rem; }
 /* rejillas */
 .rejilla-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; }
 .rejilla-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; }
+.instalar .rejilla-3, .descargas-rejilla { gap: 1.5rem; }
+.rejilla-3 > *, .rejilla-2 > * { min-width: 0; }
+@media (max-width: 1000px) and (min-width: 821px) {
+  .descargas-rejilla, .instalar .rejilla-3 { grid-template-columns: repeat(2, 1fr); }
+}
 .piezas p { color: var(--suave); margin: 0; }
 
 /* descargas */
@@ -132,6 +137,7 @@ h1 { font-size: clamp(1.8rem, 3.6vw, 2.6rem); margin: 0 0 1rem; }
 /* instalar */
 .instalar ol { padding-left: 1.2rem; margin: 0; }
 .instalar li { margin-bottom: .5rem; }
+.instalar pre { white-space: pre-wrap; word-break: break-all; }
 
 .pie { border-top: 1px solid var(--raya); padding: 2rem 0; color: var(--suave); font-size: .92rem; }
 .pie p { margin: .3rem 0; }

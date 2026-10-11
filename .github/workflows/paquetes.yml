@@ -1,5 +1,6 @@
 # LOS PAQUETES PARA PROBAR EN MAQUINAS DE USUARIO: el instalador y el zip de
-# Windows, y la .app (en un .dmg) de macOS, para Apple Silicon y para Intel.
+# Windows, la .app (en un .dmg) de macOS, para Apple Silicon y para Intel, y
+# en Linux el .deb y las fuentes para compilar.
 #
 # No pasa las baterias -- eso es build.yml --: compila, empaqueta, y prueba
 # el PAQUETE, que es lo que build.yml no ve. Cada ejecutable se arranca desde
@@ -292,9 +293,116 @@ jobs:
           path: capturas/
           if-no-files-found: ignore
 
+  # Linux: el .deb (Ubuntu 22.04+, Debian 12+) y las fuentes para compilar.
+  # Se construye en el 22.04, el mas viejo que se cubre.
+  linux:
+    needs: manual
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencias
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libgtk-3-dev libgsl-dev zlib1g-dev
+      - uses: actions/download-artifact@v4
+        with:
+          name: ATSW-manual
+          path: docs/manual
+      - name: Version
+        id: v
+        run: |
+          case "$GITHUB_REF" in
+              refs/tags/v*) v=${GITHUB_REF#refs/tags/v} ;;
+              *)            v=$(date +%Y.%m.%d) ;;
+          esac
+          echo "v=$v" >> "$GITHUB_OUTPUT"
+      - name: El .deb
+        run: bash packaging/linux/deb.sh "${{ steps.v.outputs.v }}"
+      - name: Las fuentes
+        run: bash packaging/linux/fuente.sh "${{ steps.v.outputs.v }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ATSW-linux-deb
+          path: dist/*.deb
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ATSW-linux-fuente
+          path: dist/*-fuente.tar.gz
+
+  # El .deb instalado en sistemas limpios, como lo instalaria un alumno: que
+  # apt resuelva las dependencias, que los motores arranquen y que los GUIs
+  # se queden abiertos.
+  linux-prueba:
+    needs: linux
+    strategy:
+      fail-fast: false
+      matrix:
+        sistema: [ 'ubuntu:22.04', 'ubuntu:24.04', 'debian:12' ]
+    runs-on: ubuntu-latest
+    container: ${{ matrix.sistema }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ATSW-linux-deb
+      - name: Instalar
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y ./atsw_*.deb xvfb xauth
+      - name: Probar
+        shell: bash
+        run: |
+          mal=()
+          for m in fue fuf fug art drtran; do
+              out=$(timeout 30 /usr/lib/atsw/bin/$m </dev/null 2>&1) || true
+              if grep -q "error while loading shared libraries" <<<"$out"; then
+                  echo "::error::$m no arranca"; echo "$out" | head; mal+=("$m")
+              else
+                  echo "$m arranca"
+              fi
+          done
+          for g in atsw fue_gui drtran_gui gtk_fmg; do
+              case $g in atsw) x=/usr/bin/atsw ;; *) x=/usr/lib/atsw/bin/$g ;; esac
+              xvfb-run -a "$x" > "/tmp/$g.log" 2>&1 &
+              pid=$!
+              sleep 8
+              # xvfb-run sigue vivo mientras viva el GUI.
+              if kill -0 $pid 2>/dev/null; then
+                  kill $pid; echo "$g arranca y sigue abierto"
+              else
+                  echo "::error::$g se cierra al arrancar"; cat "/tmp/$g.log"; mal+=("$g")
+              fi
+              wait $pid 2>/dev/null || true
+          done
+          ls /usr/share/doc/atsw "/usr/share/doc/atsw/Datos del manual"
+          [ ${#mal[@]} -eq 0 ] || { echo "fallan: ${mal[*]}"; exit 1; }
+
+  # Las fuentes, compiladas e instaladas en un sistema limpio siguiendo
+  # INSTALAR.txt al pie de la letra.
+  linux-fuente:
+    needs: linux
+    runs-on: ubuntu-latest
+    container: ubuntu:24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ATSW-linux-fuente
+      - name: Compilar e instalar
+        shell: bash
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential pkg-config libgtk-3-dev libgsl-dev zlib1g-dev
+          tar xzf atsw-*-fuente.tar.gz
+          cd atsw-*/
+          make
+          make install
+          /usr/local/lib/atsw/bin/fue </dev/null | head -2
+          ls -l /usr/local/bin/atsw /usr/local/share/applications/
+          make uninstall
+          [ ! -e /usr/local/bin/atsw ] && echo "desinstalado"
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [ manual, windows, macos ]
+    needs: [ manual, windows, macos, linux, linux-prueba, linux-fuente ]
     runs-on: ubuntu-latest
     permissions:
       contents: write

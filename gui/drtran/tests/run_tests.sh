@@ -281,14 +281,19 @@ fi
 # con fabrica.py y guardados en el repositorio, asi que esto corre en las
 # tres plataformas sin openpyxl). Uno, ademas, dentro de una carpeta con
 # acentos y con la ruta en UTF-8, como la da GTK: en Windows es donde un
-# fopen() a secas se pierde.
+# fopen() a secas se pierde. Por eso la prueba lleva, como los GUIs, el
+# manifiesto de lib/windows (utf8.mk): sin el, en Windows esa falla.
+RES= U="$W/Econometría/ipc_wti.xlsx"
+case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*)
+        ( cd "$L/windows" && windres utf8.rc -O coff -o "$W/utf8.o" ) || exit 1
+        RES="$W/utf8.o" U=$(cygpath -m "$U") ;;
+esac
 $CC -O2 -Wall -Wextra -I"$L/datos" -I"$L/xlsx" \
-    "$L/datos/test_xlsx.c" "$L/datos/datos.c" "$L/xlsx/xlsx.c" \
+    "$L/datos/test_xlsx.c" "$L/datos/datos.c" "$L/xlsx/xlsx.c" $RES \
     -o "$W/test_xlsx" -lz || exit 1
 mkdir -p "$W/Econometría"
 cp "$L/datos/pruebas/libreoffice.xlsx" "$W/Econometría/ipc_wti.xlsx"
-U="$W/Econometría/ipc_wti.xlsx"
-case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) U=$(cygpath -m "$U") ;; esac
 printf '%s\n' "$U" > "$W/ruta_utf8.txt"
 "$W/test_xlsx" "$TOP/../../docs/manual/datos/ipc_wti.csv" \
     "$L"/datos/pruebas/*.xlsx "@$W/ruta_utf8.txt" || exit 1

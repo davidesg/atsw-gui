@@ -7,6 +7,8 @@ publicación: `v*`.
 
 ## Sin publicar
 
+## 0.12 — 2026-10-11
+
 ### BUG-41 y BUG-42, cerrados, y la diagnosis multivariante compartida
 
 - La búsqueda de línea devuelve el objetivo del punto que conserva, no el del

@@ -166,7 +166,7 @@ cp "$R/packaging/LEEME.txt" "$DMG/"
 [ -f "$R/docs/manual/MANUAL.pdf" ] && cp "$R/docs/manual/MANUAL.pdf" "$DMG/Manual de ATSW.pdf"
 # Y sus datos, para seguir el caso con el programa abierto.
 mkdir -p "$DMG/Datos del manual"
-cp "$R/docs/manual/datos/ipc_wti.csv" "$DMG/Datos del manual/"
+cp "$R"/docs/manual/datos/ipc_wti.{csv,xlsx} "$DMG/Datos del manual/"
 hdiutil create -volname ATSW -srcfolder "$DMG" -ov -format UDZO \
     "$R/dist/ATSW-$V-macos-$ARQ${SUFIJO:-}.dmg"
 rm -rf "$DMG"

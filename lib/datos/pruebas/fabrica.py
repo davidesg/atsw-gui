@@ -15,6 +15,9 @@ corre igual en Linux, macOS y Windows.
   openpyxl-texto.xlsx    la fecha como TEXTO, "2002-01" (texto compartido)
   libreoffice.xlsx       el CSV abierto y guardado por LibreOffice: otro
                          escritor, otros estilos y otro XML
+
+Y docs/manual/datos/ipc_wti.xlsx, que es openpyxl-fecha.xlsx: los datos del
+manual para quien trabaja con Excel.
 """
 import csv, datetime, os, shutil, subprocess, sys, tempfile
 
@@ -47,6 +50,9 @@ def libro(nombre, fecha, formato=None):
 
 def main():
     libro("openpyxl-fecha.xlsx", lambda d: d, "mmm-yy")
+    # El mismo, para el alumno que trabaja con Excel: va con el manual.
+    shutil.copy(os.path.join(AQUI, "openpyxl-fecha.xlsx"),
+                os.path.join(os.path.dirname(CSV), "ipc_wti.xlsx"))
     libro("openpyxl-es.xlsx", lambda d: d, "[$-C0A]mmm\\-yy;@")
     libro("openpyxl-texto.xlsx", lambda d: "%d-%02d" % (d.year, d.month))
     soffice = shutil.which("soffice") or shutil.which("libreoffice")

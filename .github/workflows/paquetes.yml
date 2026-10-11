@@ -157,6 +157,8 @@ jobs:
             nombre: x86_64-macos11
             conda: true
     runs-on: ${{ matrix.runner }}
+    # El de macOS 11 todavia es una prueba: si falla, la release sale sin el.
+    continue-on-error: ${{ matrix.conda == true }}
     defaults:
       run:
         # Login, para que micromamba active su entorno en cada paso.

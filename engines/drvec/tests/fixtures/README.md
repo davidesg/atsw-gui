@@ -34,3 +34,16 @@ sólo si estos ficheros son óptimos univariantes—.
 La tolerancia de esas comprobaciones es 1e-4 y no menor por una razón del
 formato: **un `.pre` guarda sus coeficientes con `%.6f`**, y ese redondeo es lo
 que acota lo afilado que puede ser el certificado.
+
+## `xrev.pre`, `minkmu.pre`, `xnet1.txt` — los goldens de la superficie del porte
+
+Los ficheros que la batería escribe sobre la marcha en los bloques 6c y 6e,
+fijados aquí para que `tools/golden.sh` los use sin repetir el código que los
+genera:
+
+- `xrev.pre`: la serie de mink **invertida en el tiempo** y adelantada un año.
+  No tiene relación con el sistema y deja un valor de pre-muestra observado,
+  como la entrada de `-xpre`.
+- `minkmu.pre`: el modelo de mink con la media libre (`0.0 1`), para que
+  `-case pre` tenga una deriva libre y otra fija.
+- `xnet1.txt`: el enlace `mink <- xrev 1 0 1` de `-xlink`.

@@ -44,6 +44,12 @@ jobs:
         with:
           name: ATSW-manual
           path: docs/manual/MANUAL.pdf
+      # Los datos del caso del manual, para seguirlo: van sueltos en la
+      # release y dentro de los paquetes (bundle.sh).
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ATSW-datos
+          path: docs/manual/datos/ipc_wti.csv
 
   windows:
     needs: manual

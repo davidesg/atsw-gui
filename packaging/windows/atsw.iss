@@ -50,6 +50,7 @@ Name: "{group}\Redes de transferencia (drtran)"; Filename: "{app}\bin\drtran_gui
 Name: "{group}\Gráficos (fug)"; Filename: "{app}\bin\gtk_fmg.exe"; WorkingDir: "{userdocs}"
 Name: "{group}\Léeme"; Filename: "{app}\LEEME.txt"
 Name: "{group}\Manual de ATSW"; Filename: "{app}\Manual de ATSW.pdf"; Check: HayManual
+Name: "{group}\Datos del manual"; Filename: "{app}\Datos del manual"
 
 Name: "{group}\{cm:UninstallProgram,ATSW}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\ATSW"; Filename: "{app}\bin\atsw_gui.exe"; WorkingDir: "{userdocs}"; Tasks: escritorio

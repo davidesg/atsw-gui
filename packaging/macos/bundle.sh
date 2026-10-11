@@ -51,7 +51,9 @@ PB=lib/gdk-pixbuf-2.0/2.10.0
 mkdir -p "$RES/$PB/loaders"
 # Los que dice la cache de Homebrew, esten donde esten: el de SVG lo pone
 # librsvg en SU directorio (y como .dylib), no en el de gdk-pixbuf.
+# (Las rutas de conda-forge son relativas a su prefijo.)
 for l in $(sed -nE 's/^"([^"]*\.(so|dylib))"$/\1/p' "$B/$PB/loaders.cache"); do
+    case "$l" in /*) ;; *) l=$B/$l ;; esac
     cp -L "$l" "$RES/$PB/loaders/"
     # Su propio nombre (LC_ID_DYLIB) apunta a Homebrew, y dylibbundler solo
     # arregla las dependencias, no el nombre.

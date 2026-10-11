@@ -70,10 +70,25 @@ grep '^"' "$RES/$PB/loaders.cache.in"
 # Las bibliotecas: dylibbundler copia a lib/ todas las que piden los
 # ejecutables y los cargadores (y las que piden esas), y les reescribe las
 # rutas. -s para las que se piden por @rpath.
+#
+# Las de conda-forge ya se piden por @rpath/: se quedan asi, y cada
+# ejecutable lleva un rpath a ../lib. Reescribirlas a @executable_path/...
+# alarga los nombres, y en sus cabeceras no cabe («larger updated load
+# commands do not fit»).
+if [ -n "${BIBLIOTECAS:-}" ]; then PREF=@rpath/; else PREF=@executable_path/../lib/; fi
 xs=()
 for f in "$RES"/bin/* "$RES/$PB"/loaders/*; do xs+=(-x "$f"); done
-dylibbundler -of -b -cd "${xs[@]}" -d "$RES/lib" -p @executable_path/../lib \
+dylibbundler -of -b -cd "${xs[@]}" -d "$RES/lib" -p "$PREF" \
     -s "$B/lib" </dev/null
+if [ "$PREF" = @rpath/ ]; then
+    for f in "$RES"/bin/*; do
+        # Fuera los rpath que traiga (los de la construccion), y el nuestro.
+        for rp in $(otool -l "$f" | awk '/LC_RPATH/ { f = 1 } f && $1 == "path" { print $2; f = 0 }'); do
+            install_name_tool -delete_rpath "$rp" "$f"
+        done
+        install_name_tool -add_rpath @executable_path/../lib "$f"
+    done
+fi
 
 # Que no quede NADA apuntando a Homebrew: en la maquina de construccion eso
 # funciona y en la del usuario no.

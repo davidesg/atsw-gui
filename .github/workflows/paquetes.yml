@@ -395,7 +395,9 @@ jobs:
           cd atsw-*/
           make
           make install
-          /usr/local/lib/atsw/bin/fue </dev/null | head -2
+          # Sin argumentos fue sale con error: lo que se mira es que arranque.
+          out=$(/usr/local/lib/atsw/bin/fue </dev/null 2>&1 || true)
+          grep -q "FUE" <<<"$out" && echo "fue arranca"
           ls -l /usr/local/bin/atsw /usr/local/share/applications/
           make uninstall
           [ ! -e /usr/local/bin/atsw ] && echo "desinstalado"

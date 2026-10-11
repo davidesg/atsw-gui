@@ -55,5 +55,16 @@ QUÉ HAY DENTRO
   gtk_fmg       gráficos
   fue, fuf, fug, art, drtran   los motores de cálculo
 
+PARA APRENDER
+-------------
+
+  «Manual de ATSW.pdf» sigue un caso de principio a fin: el IPC de España
+  frente al precio del petróleo. Sus datos están en «Datos del manual»
+  (ipc_wti.csv): con ellos se puede repetir cada paso del manual.
+  En Windows, los dos están en el menú Inicio, en «ATSW»; en macOS, en el
+  .dmg, junto a la aplicación.
+  Hay también un vídeo del mismo caso: https://davidesg.github.io/atsw-gui/
+
+
 Si algo falla, anota qué estabas haciendo y, si puedes, haz una captura de
 pantalla.

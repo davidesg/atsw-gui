@@ -245,8 +245,13 @@ programa:
   oráculo: BUG-41/42 y `lib/diagmv`; el volcado de la LR* de cada réplica del
   bootstrap (`BASE.boot`); goldens propios de cada opción de esa superficie;
   y las lagunas (`-xsys` con q > 0, rango con exógenas o con `-trend`,
-  `-xlink` con `-f`), cerradas en el C o portadas como negativas. Después,
-  la etiqueta `drvec-v0.12` es el oráculo.
+  `-xlink` con `-f`), portadas como rechazo. Después, la etiqueta
+  `drvec-v0.12` es el oráculo.
+- **Las lagunas, prioridad de la versión siguiente** de drvec y de su porte:
+  primero en el C, luego portadas. La lista ordenada, en
+  `engines/drvec/TODO.md` («PRIORIDAD»): el rango con exógenas, `-xsys` con
+  MA, el rango con `-trend`/`-case pre`, la previsión y las bandas con
+  exógenas y tendencia, `-beta file`.
 
 - `copias.sh` señala una copia de `lib/fuepre/fue_pre_reader.c` en
   `engines/drvec/src/`.

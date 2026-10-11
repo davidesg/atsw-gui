@@ -1,5 +1,37 @@
 # drvec — TODO (mejoras pendientes)
 
+## PRIORIDAD — la versión siguiente, en el C y en el porte
+
+Decidido el 2026-10-11. La primera versión del porte a Python (oráculo
+`drvec-v0.12`) lleva estas lagunas **como rechazo**, con el mismo mensaje que el
+C. Son importantes, y son lo primero de la versión siguiente. **Cada una se hace
+primero en el C**, con su golden y su comprobación en la batería, y **después se
+porta**, homologada contra el C como el resto.
+
+En orden:
+
+1. **El contraste de rango con exógenas** (`-lrtest` con `-xsys` o con
+   `-xlink`): el VEC condicional cambia la distribución; tablas de Harbo et al.
+   (1998) o bootstrap condicionado en X. Es la que más pesa en el uso: hoy el
+   rango de un sistema con entrada empotrada se decide sin la entrada.
+2. **`-xsys` con media móvil (q > 0)**: la máscara Θ_j[X][k] = 0 para k ≠ X a
+   través de las clases MA. Antes del código, el estudio de identificación;
+   `-marow`/`-mawarma` anulan la fila entera de X, diagonal incluida (MEJORA-2).
+3. **El rango con los deterministas nuevos**: con `-trend` (caso 4) y las
+   tablas del caso mixto de `-case pre` (hoy se imprimen las del caso 3; vale el
+   bootstrap), con un bootstrap que lleve la tendencia (MEJORA-3).
+4. **La previsión**: con exógenas (`-xlink` con `-f`/`-estwin`, necesita el
+   futuro de X) y con `-trend` (prolongar la tendencia restringida).
+5. **`-irfboot` con exógenas y con `-trend`**: bandas con X fija (bootstrap
+   condicionado) y bootstrap que lleve la tendencia.
+6. **Las restricciones sobre β**: `-beta file` (β = Hφ) y `-fixb2row` con
+   `-lrtest` (MEJORA-1).
+7. **`-xsys` junto con `-xlink`**, y la entrada restringida al espacio de
+   cointegración (MEJORA-2).
+8. **Los modos que reajustan** (`-specs`, `-rungs`, `-matest`, `-artest`,
+   `-eval`) con la máscara y los deterministas de `-fixb2row`, `-xlink`,
+   `-xsys`, `-trend` e `-irfboot`.
+
 ## MEJORA-1 — Restricciones lineales sobre `B₂` (contrastes LR sobre una fila de β)
 
 **Estado:** HECHA el 2026-10-07 (rama `feature/fixb2row`): `-fixb2row i v`, repetible,

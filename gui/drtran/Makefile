@@ -24,7 +24,7 @@ ENG = ../../engines/drtran
 
 # diagnose.c entra por Ccf, Mean, Stdev y hosking_test: el estadistico de la
 # identificacion es el que ya calcula el motor, no uno parecido.
-SRC = src/main.c src/main_window.c src/series.c src/identifica.c src/red.c src/modelo.c src/estima.c src/diagnosis.c src/prevision.c src/plotshim.c src/proyecto_gui.c \
+SRC = src/main.c src/main_window.c src/series.c src/identifica.c src/red.c src/modelo.c src/estima.c src/diagnosis.c src/prevision.c src/pagina.c src/plotshim.c src/proyecto_gui.c \
       $(LIB)/fuepre/fue_pre_reader.c \
       $(ENG)/src/nlatools.c \
       $(ENG)/src/diagnose.c \

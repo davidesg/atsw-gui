@@ -994,6 +994,25 @@ static gchar *dibuja( Mtram *m, int que, int entrada )
                                 0, 0.0, base, ts.name );
         eps = g_strdup_printf( "%s.eps", base );
         break;
+    /* LA PAGINA DEL MODELO: la misma figura, con las ecuaciones estimadas
+     * debajo, como la pagina de fue. Va junto al .out del modelo.        */
+    case 4:
+        f = fp_PlotSer_CorrSer( &ts, 0, ts.nobs, 0, ts.begyear, 1.0, 0, 0,
+                                0, 0.0, base, ts.name );
+        if (f) {
+            gchar *suf = g_strdup_printf( "_%s.pdf", ts.name );
+            gchar *pdf = mtram_artefacto( m, suf );
+            char   why[256];
+
+            if (pagina_modelo( m, D->actual, f, pdf, why, sizeof why ) == 0)
+                eps = pdf;
+            else {
+                preview_show_status( m, "No pude escribir la página: %s.", why );
+                g_free( pdf );
+            }
+            g_free( suf );
+        }
+        break;
     case 1:   /* histograma */
         f = fp_histogram( &ts, 0, 0, 1.0, base, ts.name );
         eps = g_build_filename( dir, "hist_res.eps", NULL );
@@ -1093,6 +1112,11 @@ static void on_graficos( GtkButton *b, Mtram *m )
      * que tomar logaritmos. Un residuo no tiene nivel con el que crecer --su
      * media es cero por construccion-- asi que el grafico no puede decir
      * nada. fue tampoco lo dibuja sobre sus residuos.                    */
+    ITEM( "Serie y ACF / PACF, con el modelo", 4, 0 )
+    gtk_widget_set_sensitive( mi, D->hay_par );
+    if (!D->hay_par)
+        gtk_widget_set_tooltip_text( mi, "El .out no trae la tabla de "
+                                         "parámetros: no hay modelo que escribir." );
     ITEM( "Serie y ACF / PACF", 0, 0 )
     ITEM( "Histograma", 1, 0 )
 

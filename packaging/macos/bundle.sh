@@ -167,8 +167,14 @@ cp "$R/packaging/LEEME.txt" "$DMG/"
 # Y sus datos, para seguir el caso con el programa abierto.
 mkdir -p "$DMG/Datos del manual"
 cp "$R"/docs/manual/datos/ipc_wti.{csv,xlsx} "$DMG/Datos del manual/"
-hdiutil create -volname ATSW -srcfolder "$DMG" -ov -format UDZO \
-    "$R/dist/ATSW-$V-macos-$ARQ${SUFIJO:-}.dmg"
+# hdiutil falla a veces en los Mac de GitHub con «Resource busy», sin que
+# pase nada: se reintenta.
+for i in 1 2 3 4 5; do
+    hdiutil create -volname ATSW -srcfolder "$DMG" -ov -format UDZO \
+        "$R/dist/ATSW-$V-macos-$ARQ${SUFIJO:-}.dmg" && break
+    [ $i -lt 5 ] || exit 1
+    echo "hdiutil fallo; otra vez dentro de $((i * 5)) s" >&2; sleep $((i * 5))
+done
 rm -rf "$DMG"
 
 echo "hecho: $(du -sh "$APP" | cut -f1) la .app, $(du -sh "$R"/dist/*.dmg | cut -f1) el .dmg"

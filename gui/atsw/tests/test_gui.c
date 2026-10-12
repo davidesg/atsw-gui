@@ -1750,10 +1750,10 @@ static void editor( void )
         check( dx && !gtk_widget_get_sensitive( dx ),
                "sin estimar, «Diagnosis…» esta apagada", e );
         {
-        GtkWidget *gx = entrada_de( m, "Ver el gráfico" );
+        GtkWidget *gx = entrada_de( m, "Ver modelo" );
 
         check( gx && !gtk_widget_get_sensitive( gx ),
-               "sin estimar, «Ver el gráfico…» esta apagado", e );
+               "sin estimar, «Ver modelo…» esta apagado", e );
         }
         if ( dx )
             {
@@ -1982,7 +1982,7 @@ static void caben_todas( const char *donde )
 /* EL MENU DEL MODELO ESTIMADO: diagnosis, ganancia, anomalos, prever. */
 static void menu_modelo_prueba( void )
 {
-    static const char *ent[] = { "Ver el gráfico", "Diagnosis", "Ganancia", "Anómalos" };
+    static const char *ent[] = { "Ver modelo", "Diagnosis", "Ganancia", "Anómalos" };
     int i;
 
     for ( i = 0; i < 4; i++ )
@@ -1992,11 +1992,11 @@ static void menu_modelo_prueba( void )
         int        antes = cuenta_visibles();
         gchar     *q;
 
-        /* El grafico va a la ventana de graficos, que se reutiliza: se
+        /* El resumen va a la ventana de graficos, que se reutiliza: se
            cierra antes para ver que este gesto la abre.               */
-        if ( i == 0 && ventana_titulada( "Aipc_m01.eps" ) )
+        if ( i == 0 && ventana_titulada( "ipc_m01.pdf" ) )
             {
-            gtk_widget_destroy( GTK_WIDGET(ventana_titulada( "Aipc_m01.eps" )) );
+            gtk_widget_destroy( GTK_WIDGET(ventana_titulada( "ipc_m01.pdf" )) );
             pump( 100 );
             antes = cuenta_visibles();
             }
@@ -2014,8 +2014,9 @@ static void menu_modelo_prueba( void )
         check( cuenta_visibles() > antes || historial->len > 0, q, todo_lo_dicho() );
         g_free( q );
         if ( i == 0 )
-            check( ventana_titulada( "Aipc_m01.eps" ) != NULL,
-                   "«Ver el gráfico…» enseña el Aipc_m01.eps de fue", NULL );
+            check( ventana_titulada( "ipc_m01.pdf" ) != NULL,
+                   "«Ver modelo…» enseña el resumen de fue, ipc_m01.pdf: "
+                   "el grafico de residuos con el modelo escrito", NULL );
         }
     check( ventana_titulada( "Diagnosis — ipc / m01" ) != NULL,
            "la diagnosis de m01 es una ventana con su titulo", NULL );

@@ -658,6 +658,26 @@ static int atsw_grafico_de( Atsw *a, const char *serie, const char *muestra,
     return ruta_componer( base, "A", NULL, out, n );
 }
 
+/* EL RESUMEN DEL MODELO ESTIMADO, para «Ver modelo…»: el
+ * PDF que fue escribe al estimar (ipc_m01.pdf, report.c) con el gráfico de
+ * residuos y su ACF/PACF, el modelo estimado escrito debajo con cada d.t., y
+ * la tabla de residuos grandes. El .eps de arriba es sólo el gráfico: era lo
+ * que se abría, y el modelo no se veía sin entrar en fue_gui. Si no hay PDF
+ * (un modelo estimado con un fue anterior), el .eps, que algo es.      */
+static int atsw_resumen_de( Atsw *a, const char *serie, const char *muestra,
+                            const char *id, char *out, size_t n )
+{
+    out[0] = '\0';
+    if ( pr_ruta( a->p, serie, muestra, id, ".pdf", out, n ) == 0 &&
+         g_file_test( out, G_FILE_TEST_EXISTS ) )
+        return 0;
+    if ( atsw_grafico_de( a, serie, muestra, id, out, n ) == 0 &&
+         g_file_test( out, G_FILE_TEST_EXISTS ) )
+        return 0;
+    out[0] = '\0';
+    return 1;
+}
+
 /* BORRAR UN MODELO, Y SUS FICHEROS CON EL.
  *
  * Dejar el .out en el disco despues de quitar el nodo seria una mentira con
@@ -777,8 +797,9 @@ static void on_prever( GtkMenuItem *m, Atsw *a )
     atsw_lanza_con( a, "fue_gui", "--prever", f );
 }
 
-/* «VER EL GRAFICO…»: el de fue, en la ventana de graficos, sin abrir
-   fue_gui. Solo se ofrece encendido con el modelo estimado.          */
+/* «VER MODELO…»: el resumen que fue deja al estimar
+   (atsw_resumen_de), en la ventana de graficos, sin abrir fue_gui. Solo
+   se ofrece encendido con el modelo estimado.                        */
 static void on_grafico( GtkMenuItem *m, Atsw *a )
 {
     gchar *id = atsw_marcada( a->l_modelos, M_ID );
@@ -786,8 +807,7 @@ static void on_grafico( GtkMenuItem *m, Atsw *a )
 
     (void) m;
     if ( !a->hay || !a->serie[0] || !id ) { g_free( id ); return; }
-    if ( atsw_grafico_de( a, a->serie, atsw_muestra_actual( a ), id, f, sizeof f ) != 0 ||
-         !g_file_test( f, G_FILE_TEST_EXISTS ) )
+    if ( atsw_resumen_de( a, a->serie, atsw_muestra_actual( a ), id, f, sizeof f ) != 0 )
         {
         gchar *t = g_strdup_printf( "Todavía no hay gráfico de %s: sale al estimar.", id );
         barra_pub( a, t );
@@ -1140,14 +1160,14 @@ static void menu_modelo( Atsw *a, GdkEventButton *ev )
         {
         char     f[PR_RUTA];
         gboolean hay = listo &&
-            atsw_grafico_de( a, a->serie, atsw_muestra_actual( a ), id, f, sizeof f ) == 0 &&
-            g_file_test( f, G_FILE_TEST_EXISTS );
+            atsw_resumen_de( a, a->serie, atsw_muestra_actual( a ), id, f, sizeof f ) == 0;
 
-        mi = gtk_menu_item_new_with_label( "Ver el gráfico…" );
+        mi = gtk_menu_item_new_with_label( "Ver modelo…" );
         gtk_widget_set_sensitive( mi, hay );
         gtk_widget_set_tooltip_text( mi, hay
-            ? "Los residuos con su ACF y su PACF, y el modelo escrito debajo: "
-              "el gráfico que fue dejó al estimar, sin abrir fue_gui."
+            ? "Los residuos con su ACF y su PACF, el modelo estimado escrito "
+              "debajo con sus desviaciones típicas, y los residuos grandes: el "
+              "resumen que fue dejó al estimar, sin abrir fue_gui."
             : listo ? "fue no dejó el gráfico de este modelo: vuelve a estimarlo."
                     : porque );
         g_signal_connect( mi, "activate", G_CALLBACK(on_grafico), a );

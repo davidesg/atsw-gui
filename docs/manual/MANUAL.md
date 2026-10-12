@@ -387,9 +387,12 @@ general s, 2s, 3s y 3s + 3). El veredicto lo da el último, el más exigente. Si
 una Q rechaza, no dice *qué* retardo falla: eso lo dicen las barras de la ACF
 residual que se salen de la banda ±2/√n.
 
-**Ver el gráfico…** dibuja los residuos con su ACF y PACF:
+**Ver modelo…** enseña el resumen del modelo estimado, sin abrir fue: los
+residuos con su ACF y PACF, el modelo escrito debajo con la desviación típica
+de cada coeficiente, y los residuos grandes. Sólo se enciende cuando el modelo
+está estimado.
 
-![Residuos de m01](img/ipc-m01-grafico.png)
+![Residuos y modelo de m01](img/ipc-m01-grafico.png)
 
 ### Los parámetros que no se ganan su sitio
 

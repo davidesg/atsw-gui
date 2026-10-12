@@ -1,0 +1,27 @@
+ATSW -- compilar e instalar en Linux
+====================================
+
+1. Lo que hace falta (Ubuntu y Debian; en otras distribuciones, los
+   paquetes equivalentes de GTK 3, GSL y zlib):
+
+       sudo apt install build-essential pkg-config libgtk-3-dev libgsl-dev zlib1g-dev
+
+2. Compilar, dentro de esta carpeta:
+
+       make
+
+3. Instalar (en /usr/local; para otro sitio, PREFIX=/donde/sea):
+
+       sudo make install
+
+   Queda en el menu de aplicaciones como «ATSW», y en el terminal como
+   «atsw». El manual y sus datos, en /usr/local/share/doc/atsw.
+
+   Sin instalar tambien funciona: ./gui/atsw/atsw_gui
+
+4. Desinstalar:
+
+       sudo make uninstall
+
+En Ubuntu 22.04 o posterior es mas facil el paquete .deb de la pagina:
+https://davidesg.github.io/atsw-gui/

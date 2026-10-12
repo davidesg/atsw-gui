@@ -4,25 +4,47 @@ tamano 1100 700
 pestana Pre-Covid
 fila ipc
 rotulo Primero, cada serie por separado. Empezamos por el IPC.
-espera 2250
+espera 2000
+rotulo ¿Logaritmos o niveles? Con el botón derecho sobre la serie: «Media – desviación típica».
 derecho ipc
 espera 1125
-menu Identificar desde los datos…
+menu Media – desviación típica
+ventana vistazo.eps
+tamano 1000 760
+espera 1500
+rotulo Cada punto es un año: su media frente a su desviación típica. Con λ = 1, la serie tal cual.
+espera 1500
+rotulo Si la dispersión creciera con el nivel, pediría logaritmos. Probamos λ = 0.
+numero 1 | 0
+espera 2000
+rotulo La nube no decide. Cuando el gráfico no decide, manda el dominio: un índice de precios va en logaritmos.
+espera 1000
+cierra
+ventana ATSW
+rotulo Ahora las diferencias, con la serie y su ACF y PACF.
+derecho ipc
+espera 1125
+menu Serie y ACF / PACF…
+ventana vistazo.eps
+tamano 1000 760
+numero 1 | 0
+espera 1500
+rotulo En logaritmos, la ACF decae muy despacio: la serie no es estacionaria. Una diferencia regular, d = 1.
+numero 2 | 1
+espera 2000
+rotulo Ahora la ACF repite picos en 12, 24 y 36 que apenas decaen: es la estacionalidad.
+espera 1500
+rotulo La lectura canónica de Box y Jenkins: una diferencia estacional, D = 1. Con ella, la ACF se apaga.
+numero 3 | 1
+espera 2000
+rotulo Pero este modelo va a ir a una transferencia: la escuela empieza por la estacionalidad determinista, D = 0, con armónicos.
+numero 3 | 0
+espera 1500
+rotulo Con λ = 0, d = 1 y D = 0, art propone los órdenes.
+boton Identificar…
 ventana Identificación
 tamano 760 900
-espera 1875
-rotulo art propone por dónde empezar. Arriba se deciden la transformación y las diferencias.
 espera 3000
-rotulo Es un índice de precios: va en logaritmos.
-elige logaritmos (λ = 0)
-espera 1125
-rotulo La ACF decae muy despacio: una diferencia regular, d = 1.
-numero 1 | 1
-espera 1125
-boton Volver a identificar
-espera 3000
-rotulo La estacionalidad, determinista (D = 0): el modelo va a ir a una transferencia.
-espera 3375
 rotulo art propone MA(1), pero AR(1) se parece más a los datos. La inflación tiene inercia: AR(1).
 fila AR(1)
 espera 3750

@@ -511,6 +511,14 @@ static GtkWidget *menu_visible( void )
  * fichero.ass, con el tiempo contado en cuadros: si el programa se queda
  * ocupado (estimando) no salen cuadros, el video se salta la espera y los
  * subtitulos siguen en su sitio.
+ *
+ * LA VOZ. Con VOZ_DIR, cada rotulo tiene su frase ya sintetizada
+ * (video/voz.py): VOZ_DIR/<sha1 del rotulo>.wav, y su duracion en .ms. El
+ * rotulo siguiente --y «cierra» y «salir»-- espera a que la frase acabe, contando en
+ * cuadros como los subtitulos: la voz no se pisa ni se corta. Cuando y que
+ * frase suena se apunta en fichero.mp4.voz, y video.sh las mezcla.
+ *
+ *   rotulo TEXTO || LO QUE SE DICE    si la voz tiene que decir otra cosa
  */
 
 #define VW 1920
@@ -531,6 +539,10 @@ static int     rot_desde = -1;
 static gchar  *rot_txt;
 static gchar  *portada_a, *portada_b;
 static int     portada_hasta = -1;
+static const char *voz_dir;     /* VOZ_DIR, o NULL: sin voz               */
+static int     voz_hasta = -1;  /* cuadro en que acaba la frase que suena */
+static GString *voz_lista;      /* «segundo fichero.wav», para video.sh   */
+static gchar  *video_voz;
 
 static GtkWidget *ventana_por_titulo( const char *t )
 {
@@ -770,6 +782,30 @@ static void video_fin( void )
     video = NULL;
     if ( video_ass )
         g_file_set_contents( video_ass, ass->str, -1, NULL );
+    if ( video_voz && voz_lista )
+        g_file_set_contents( video_voz, voz_lista->str, -1, NULL );
+}
+
+/* La frase de un rotulo: si esta sintetizada, se apunta que empieza ahora
+   y hasta que cuadro dura (mas una pausa corta antes de la siguiente). */
+static void voz_dice( const char *arg )
+{
+    gchar *sha, *ms_f, *wav, *ms_txt = NULL;
+
+    if ( voz_dir == NULL || video == NULL ) return;
+    sha = g_compute_checksum_for_string( G_CHECKSUM_SHA1, arg, -1 );
+    ms_f = g_strdup_printf( "%s/%s.ms", voz_dir, sha );
+    wav = g_strdup_printf( "%s/%s.wav", voz_dir, sha );
+    if ( g_file_get_contents( ms_f, &ms_txt, NULL, NULL ) )
+        {
+        int ms = atoi( ms_txt );
+
+        voz_hasta = ncuadro + (ms + 450) * fps / 1000;
+        g_string_append_printf( voz_lista, "%.3f %s\n", (double) ncuadro / fps, wav );
+        }
+    else
+        g_printerr( "escenas: sin voz para «%s»\n", arg );
+    g_free( ms_txt ); g_free( wav ); g_free( ms_f ); g_free( sha );
 }
 
 /* Lleva el puntero al centro del rectangulo r (en coordenadas de la ventana
@@ -824,6 +860,12 @@ static void video_empieza( const char *f )
     g_free( cmd );
     if ( video == NULL ) { g_printerr( "escenas: no puedo lanzar ffmpeg\n" ); return; }
     video_ass = g_strconcat( f, ".ass", NULL );
+    voz_dir = g_getenv( "VOZ_DIR" );
+    if ( voz_dir )
+        {
+        video_voz = g_strconcat( f, ".voz", NULL );
+        voz_lista = g_string_new( NULL );
+        }
     ass = g_string_new(
         "[Script Info]\nScriptType: v4.00+\nPlayResX: 1920\nPlayResY: 1080\n"
         "WrapStyle: 0\n\n[V4+ Styles]\n"
@@ -853,10 +895,28 @@ static gboolean orden( const char *cmd, const char *arg )
         }
     if ( strcmp( cmd, "espera" ) == 0 )
         return g_get_monotonic_time() - desde >= atoi( arg ) * 1000LL;
+    /* Lo que manda el reloj de la voz: ni el rotulo siguiente, ni cerrar
+       la ventana de la que se esta hablando, ni el final, hasta que acabe
+       la frase que esta sonando. */
+    if ( (strcmp( cmd, "salir" ) == 0 || strcmp( cmd, "rotulo" ) == 0 ||
+          strcmp( cmd, "cierra" ) == 0)
+         && video && ncuadro < voz_hasta )
+        return FALSE;
     if ( strcmp( cmd, "salir" ) == 0 )
         { video_fin(); exit( 0 ); }
     if ( strcmp( cmd, "rotulo" ) == 0 )
-        { if ( video ) subtitulo( arg ); return TRUE; }
+        {
+        if ( video )
+            {
+            const char *dos = strstr( arg, " || " );
+            gchar *se_ve = dos ? g_strndup( arg, dos - arg ) : g_strdup( arg );
+
+            subtitulo( se_ve );
+            if ( strcmp( se_ve, "-" ) != 0 ) voz_dice( arg );
+            g_free( se_ve );
+            }
+        return TRUE;
+        }
     if ( strcmp( cmd, "portada" ) == 0 )
         {
         gchar **q = g_strsplit( arg, " | ", 3 );
@@ -1120,7 +1180,10 @@ static gboolean tic( gpointer d )
             g_timeout_add( paso_ms, tic, NULL );
             return G_SOURCE_REMOVE;
             }
+        /* espera, y lo que espera a la voz, no son «no encuentro». */
         if ( strcmp( l, "espera" ) != 0
+             && !( (strcmp( l, "rotulo" ) == 0 || strcmp( l, "salir" ) == 0 ||
+                    strcmp( l, "cierra" ) == 0) && video )
              && g_get_monotonic_time() - desde > tiempo * 1000000LL )
             fallo( "no encuentro", lineas[il] );
         g_free( l );

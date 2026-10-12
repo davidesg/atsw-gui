@@ -219,10 +219,8 @@ void PlotCor( real *corr, int lags, int isacf, struct Tseries *ser, int npar );
 void PlotCCF( real *corr, int lags, struct Tseries *ser );
 void ccf( struct Tseries *ser1, struct Tseries *ser2, int lags, real *corr );
 real ChiTestC( real *corr, int lags, int nobs );
-void hosking_test(real **res, int nobs, int m, int s, real *Q, real *pval);
-void jarque_bera_multivariate(real **res, int nobs, int m, real *JB, real *pval);
-void multivariate_diagnostics(real **res, int nobs, int m, FILE *outputv);
-void diagnose(struct Tvarma *varma);
+/* Hosking and the multivariate Jarque-Bera: lib/diagmv/diagmv.h */
+void diagnose(struct Tvarma *varma, const int *npar_ser);
 /* Funciones de diagn?stico adicionales (declaradas en diagnose.c) */
 void test_last_lag_significance(real *x, real **cov, int npar,
                                 int m, int p, int q,

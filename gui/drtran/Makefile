@@ -28,6 +28,7 @@ SRC = src/main.c src/main_window.c src/series.c src/identifica.c src/red.c src/m
       $(LIB)/fuepre/fue_pre_reader.c \
       $(ENG)/src/nlatools.c \
       $(ENG)/src/diagnose.c \
+      $(LIB)/diagmv/diagmv.c \
       $(LIB)/prewhiten/prewhiten.c \
       $(LIB)/netfile/netfile.c \
       $(LIB)/nsop/nsop.c \
@@ -53,7 +54,7 @@ HDR = include/gui.h include/series.h include/previewhost.h include/plothost.h
 
 INC = -Iinclude -I$(ENG)/include -I$(LIB)/fuepre \
       -I$(LIB)/dates -I$(LIB)/prewhiten -I$(LIB)/netfile -I$(LIB)/nsop -I$(LIB)/slots -I$(LIB)/intervencion -I$(LIB)/verdict -I$(LIB)/outdiag -I$(LIB)/gof -I$(LIB)/tabla -I$(LIB)/rutas -I$(LIB)/proyecto -I$(LIB)/outfcst -I$(LIB)/engine -I$(LIB)/ccfplot -I$(LIB)/fugdraw -I$(LIB)/fugplot \
-      -I$(LIB)/equation -I$(LIB)/preview -I$(LIB)/utils -I$(LIB)/inpcheck -I$(LIB)/lik
+      -I$(LIB)/equation -I$(LIB)/preview -I$(LIB)/utils -I$(LIB)/inpcheck -I$(LIB)/lik -I$(LIB)/diagmv
 
 GTK_CFLAGS := $(shell pkg-config --cflags gtk+-3.0 2>/dev/null)
 GTK_LIBS   := $(shell pkg-config --libs   gtk+-3.0 2>/dev/null)
@@ -66,7 +67,17 @@ endif
 
 TARGET = drtran_gui
 
+# En Windows, sin -mwindows cada GUI abre ademas una consola negra. gui/fug y
+# gui/fue ya lo llevaban; faltaba en estos dos, y se veia al empaquetar.
+ifeq ($(OS),Windows_NT)
+  LDFLAGS += -mwindows
+endif
+
 all: $(TARGET)
+
+# Las rutas en UTF-8 en Windows (lib/windows/utf8.mk). Despues de «all»: si
+# no, su regla seria el objetivo por omision.
+include ../../lib/windows/utf8.mk
 
 
 # LAS CABECERAS DE lib/ TAMBIEN SON DEPENDENCIAS, y faltaban. Compilar de
@@ -76,11 +87,11 @@ all: $(TARGET)
 # larga en gui/atsw/Makefile.
 LIBHDR = $(wildcard $(LIB)/*/*.h)
 
-$(TARGET): $(SRC) $(HDR) $(LIBHDR)
+$(TARGET): $(SRC) $(HDR) $(LIBHDR) $(UTF8_RES)
 	@if [ -z "$(GTK_LIBS)" ]; then \
 	    echo "drtran_gui necesita los ficheros de desarrollo de GTK 3"; \
 	    echo "(Debian/Ubuntu: sudo apt install libgtk-3-dev)"; exit 1; fi
-	$(CC) $(CFLAGS) $(GTK_CFLAGS) $(GSL_CFLAGS) $(INC) -o $@ $(SRC) $(GTK_LIBS) $(GSL_LIBS) -lm
+	$(CC) $(CFLAGS) $(GTK_CFLAGS) $(GSL_CFLAGS) $(INC) $(LDFLAGS) -o $@ $(SRC) $(UTF8_RES) $(GTK_LIBS) $(GSL_LIBS) -lm
 
 install: $(TARGET)
 	install -d $(DESTDIR)$(PREFIX)/bin

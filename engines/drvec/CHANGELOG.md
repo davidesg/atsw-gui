@@ -7,6 +7,48 @@ publicación: `v*`.
 
 ## Sin publicar
 
+## 0.12 — 2026-10-11
+
+### BUG-41 y BUG-42, cerrados, y la diagnosis multivariante compartida
+
+- La búsqueda de línea devuelve el objetivo del punto que conserva, no el del
+  intento rechazado (BUG-41, punto 2). Mueve la línea «Objective function» en la
+  9.ª–10.ª cifra. `est` ya no pierde la estructura con un arranque inválido
+  (punto 3).
+- `chisq` sin tope en x > 1000 (BUG-42, punto 2). Hosking con gl = m²s − k
+  (k = Λ + F + Θ libres, más los pesos de `-xlink`) y s = freq + 2; el
+  Ljung-Box de cada residuo resta sus coeficientes propios; el Jarque-Bera de
+  Lütkepohl con la raíz simétrica de Σ̂ (puntos 3 y 4). Todo en `lib/diagmv`,
+  la misma para drvarma y drtran.
+
+### `<base>.boot`: cada réplica del bootstrap de rango
+
+Con `-lrtest -bootstrap N`, el `.out` da los percentiles y el p-valor, y
+`<base>.boot` da cada réplica en el orden en que el generador la produjo: el
+rango bajo H₀, el número, el estado (`ok`, `simfail` o `fitfail`) y la LR* con
+17 cifras. Es lo que necesita una homologación réplica a réplica del porte. No
+consume números del generador: el bootstrap da las mismas cifras que antes.
+
+### Goldens de la superficie que lleva el porte
+
+`tools/golden.sh` añade un caso por opción: `-fixb2row`, `-xpre`/`-xlink`,
+`-xsys`, `-nodrift`, `-case pre`, `-trend`, `-irfboot` (y su `.irfboot`) y el
+bootstrap de rango (y su `.boot`). Usan los ficheros de la batería, fijados en
+`tests/fixtures` (`xrev.pre`, `minkmu.pre`, `xnet1.txt`).
+
+## 0.11 — 2026-10-10
+
+### `-irfboot N`: bandas de la IRF y la FEVD en niveles por bootstrap paramétrico
+
+Se simulan N muestras del modelo ajustado (el generador del bootstrap del
+rango) y cada una se **reestima como los datos**: mismo rango, mismas
+restricciones y mismo arranque por ladder. Las respuestas y la descomposición
+de cada réplica se calculan con la misma función que el informe
+(`level_irf_R`, extraída de `level_irf_fevd` sin mover un byte del informe).
+Bandas percentiles al 90 % y 95 %, resumen en el `.out` y la tabla completa en
+`<base>.irfboot`. Generador determinista. 9 comprobaciones nuevas (366, todas
+pasan; los 24 informes de referencia, idénticos).
+
 ### `-case pre`, `-nodrift i`, `-trend`: deterministas serie a serie y caso 4 (MEJORA-3)
 
 `-nodrift i` fija a 0 la deriva de una serie dentro del caso 3; `-case pre` la

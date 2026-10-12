@@ -158,6 +158,17 @@ static int lee_opciones(int argc, char *argv[])
     return 0;
 }
 
+/* LOS NUMEROS, CON PUNTO. GTK, al arrancar (en el "startup" de la
+   aplicacion), pone el idioma del sistema, y con el espanol LC_NUMERIC lee y
+   escribe "0,5": strtod deja de entender los ficheros (.inp, .pre, .csv) y
+   fprintf escribe los que leen los motores con coma. Este manejador va
+   despues del de GTK y deja los numeros en C; el resto del idioma, intacto. */
+static void numeros_con_punto( GApplication *app, gpointer data )
+{
+    (void)app; (void)data;
+    setlocale( LC_NUMERIC, "C" );
+}
+
 int main(int argc, char *argv[]) {
     int opt;
 
@@ -220,6 +231,7 @@ int main(int argc, char *argv[]) {
      * Es ademas lo que ya hacia gui/drtran; fue_gui era el raro.        */
     GtkApplication *app = gtk_application_new("org.fue.gui",
                                               G_APPLICATION_NON_UNIQUE);
+    g_signal_connect( app, "startup", G_CALLBACK(numeros_con_punto), NULL );
     g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
     int status = g_application_run(G_APPLICATION(app), argc, argv);
     g_object_unref(app);

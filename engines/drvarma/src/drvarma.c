@@ -35,6 +35,7 @@
 #include "escalera.h"
 #include "inpread.h"
 #include "version.h"
+#include "diagmv.h"           /* Hosking and Jarque-Bera, shared (lib/diagmv) */
 #include <getopt.h>  /* optional, can be replaced by manual parsing */
 
 
@@ -98,6 +99,7 @@ int mov_window = 20;           // ventana móvil (default)
 /*****************************************************************************/
 static void shootx(real *x, struct Tvarma *armax, int *ifaultx, int firstx, int lastx);
 static int calc_nparametrs(void);
+static int  calc_ndyn(void);
 static void init_varma(real *x, int npar);
 static void init_diag_varma(real *x, int npar);
 static void hannan_rissanen_diag(real *x, int npar);  /* new: HR diagonal init */
@@ -486,7 +488,7 @@ int main(int argc, char *argv[])
     impulse_response(&varma1, irf_horizon, outputv);
     variance_decomposition(&varma1, irf_horizon, outputv);
 
-    multivariate_diagnostics(varma1.a, varma1.n, varma1.m, outputv);
+    multivariate_diagnostics(varma1.a, varma1.n, varma1.m, data_freq, calc_ndyn(), outputv);
     print_matrices(&varma1);
     /* The number every comparison between models needs, and the .inp path
        never printed it (the ladder does). Added with -lik (2026-09-28).     */
@@ -494,7 +496,15 @@ int main(int argc, char *argv[])
     lik_check_report(outputv);
     fprintf(outputv, "\n");
     print_roots(&varma1);
-    diagnose(&varma1);
+    {
+        /* The Ljung-Box of each residual subtracts its equation's coefficients
+           on its own lags: the diagonal of every Phi_k and Theta_j, free with
+           or without -diagar/-diagma (BUG-42, item 3).                     */
+        int *np = (int *) calloc((size_t) nser + 1, sizeof(int));
+        for (i = 1; i <= nser; i++) np[i] = global_p + global_q;
+        diagnose(&varma1, np);
+        free(np);
+    }
     if (ifault == 0) {
      if (do_exp_vol) {
         compute_exponential_volatility(&varma1, exp_alpha, exp_window, base_name);
@@ -969,6 +979,17 @@ static void shootx(real *x, struct Tvarma *armax, int *ifaultx, int firstx, int 
 /*  calc_nparametrs: calculates the number of parameters according to flags */
 /*  (Unchanged)                                                              */
 /*****************************************************************************/
+/*  calc_ndyn: the DYNAMIC coefficients, AR and MA, as the flags leave them.
+ *  Hosking's Q subtracts them from m^2 s (BUG-42, item 3); the mean and the
+ *  covariance are the rest of calc_nparametrs and do not count.            */
+static int calc_ndyn(void)
+{
+    int m = nser;
+    int n_ar = global_diag_ar ? m : m * m;
+    int n_ma = global_diag_ma ? m : m * m;
+    return n_ar * global_p + n_ma * global_q;
+}
+
 static int calc_nparametrs(void)
 {
     int npar = 0;
@@ -977,11 +998,7 @@ static int calc_nparametrs(void)
     if (global_include_mean)
         npar += m;
 
-    int n_ar = global_diag_ar ? m : m * m;
-    npar += n_ar * global_p;
-
-    int n_ma = global_diag_ma ? m : m * m;
-    npar += n_ma * global_q;
+    npar += calc_ndyn();
 
     int n_cov = global_diag_cov ? m : m * (m + 1) / 2;
     npar += n_cov;

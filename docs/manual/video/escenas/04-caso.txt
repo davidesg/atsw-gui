@@ -1,0 +1,26 @@
+#! atsw_gui --proyecto @PROYECTO@/proyecto.yaml
+ventana ATSW
+tamano 1100 700
+pestana Pre-Covid
+rotulo Ahora las dos juntas. Un caso: series fijas, en orden, cada una con su modelo.
+espera 2250
+boton Nuevo caso…
+ventana Nuevo caso
+espera 1125
+casilla ipc | 1
+casilla wti | 1
+rotulo La primera serie es la salida: el IPC, lo que queremos explicar.
+espera 2625
+campo Título | Inflación y petróleo
+campo Por qué | ¿Cuánto pasa del precio del crudo al IPC, y con qué retardo?
+espera 1875
+boton Darlo de alta
+ventana ATSW
+espera 1125
+fila C1
+rotulo Cada serie entra con su .pre: el modelo univariante ya está resuelto.
+espera 3375
+rotulo «Abrir en drtran» lo lleva al escalón siguiente.
+espera 2250
+rotulo -
+salir

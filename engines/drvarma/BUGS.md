@@ -291,6 +291,17 @@ is not finite.  Then propagate to drvec.
 A hang instead of an error, on data that push a trial step to a non-finite
 likelihood.  Not observed in drvarma's own runs.
 
+### A sibling, fixed 2026-10-11 in `lib/optim/lnsrch.c` (drvec BUG-41, item 2)
+
+When the search gives up on x-convergence it put the point back to `xk` but
+left `*fkp1` at the rejected trial's value, and `raxopt` returned that as the
+objective at the optimum.  Now `*fkp1 = fk` too.  Moved in the bench, with
+the reference re-written: `c3_psw_arma11` and `c7_ipc_twostep` ("Objective
+function" in the 9th-10th significant digit, and the Wald statistics, whose
+covariance carries that scale).  **The Python port reproduces the old value**
+(`_qnewt.py`): its byte-identical `.out` test against this binary will show
+these lines until the port does the same.
+
 ---
 
 ## BUG (HIGH) — heap overflow in the residual histogram (`File_HistSer`)
@@ -346,3 +357,40 @@ actually printed.  Then propagate to drvec and drtran.
 
 Any run whose residuals have one large outlier on a sample of ~700 or more:
 undefined behaviour in the diagnosis, which may corrupt the report or crash.
+
+---
+
+## BUG (MEDIUM) — the residual tests did not subtract the estimated coefficients
+
+**Status: FIXED** (2026-10-11), through the shared `lib/diagmv` (drvec BUG-42,
+items 2-4; the same code now serves drvarma, drtran and drvec).
+**Files:** `src/diagnose.c` (its own `hosking_test`, `jarque_bera_multivariate`
+and `multivariate_diagnostics` are gone), `src/drvarma.c` (`calc_ndyn`),
+`src/escalera.c` (`esc_ndyn`, `esc_npar_ser`), `src/nlatools.c` (`chisq`).
+
+### What changed
+
+- **Hosking's Q** is chi2(m^2 s - k), with s = freq + 2 (10 when freq <= 1)
+  and k the DYNAMIC coefficients estimated: AR and MA as the flags leave them
+  (.inp path), or each series' own ARMA plus the free cross AR/MA of the
+  links (ladder).  Never the means, the deterministic terms or Sigma.  It was
+  chi2(m^2 s) with s = sqrt(n).  The .out now says `df = m^2 s - k`.
+- **Per-series Ljung-Box** subtracts the coefficients of each equation on its
+  own lags (the diagonal of every Phi_k and Theta_j: p + q on the .inp path,
+  the .pre's free ARMA in the ladder).  It subtracted 0.
+- **Multivariate Jarque-Bera** is Lutkepohl's (2005, 4.5): residuals
+  standardised by the symmetric square root of Sigma, skewness and kurtosis
+  parts printed.  It was a sum of univariate JBs, which ignores the
+  correlation between the residuals.
+- **`chisq()`** lost its `if (x > 1000.0) return 1.0;` cap: Wilson-Hilferty
+  needs none, and the cap put every p-value at 0 once df neared 1000.
+
+All 18 bench cases and the four ladder outputs (`g1`, `pt`, `corto`, `fc`)
+moved in exactly those lines; references re-written.
+
+### The Python port
+
+Its Hosking already uses k (`model.py`, `n_arma()`; the ladder counts the
+.pre's ARMA even under `-fixarma`, as this code now does) and s = freq + 2.
+It must follow for the per-series Ljung-Box npar and for the Lutkepohl JB,
+or its byte-identical `.out` test against this binary will show these lines.

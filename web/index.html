@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ATSW — taller de series temporales</title>
+<meta name="description" content="ATSW: modelos ARIMA, intervención y funciones de transferencia con la metodología Box-Jenkins-Treadway. Descargas para Windows, macOS y Linux, manual y vídeo.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f5fa8'/%3E%3Cpolyline points='4,22 10,14 15,18 21,8 28,12' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+
+<header class="cabecera">
+  <div class="ancho">
+    <a class="marca" href="#">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7"/><polyline points="4,22 10,14 15,18 21,8 28,12"/></svg>
+      ATSW
+    </a>
+    <nav>
+      <a href="#descargas">Descargas</a>
+      <a href="#aprender">Aprender</a>
+      <a href="#instalar">Instalar</a>
+      <a href="https://github.com/davidesg/atsw-gui">Código</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+<section class="portada">
+  <div class="ancho portada-rejilla">
+    <div>
+      <p class="antetitulo">A Time Series Workshop</p>
+      <h1>El taller de series temporales de la escuela Box-Jenkins-Treadway</h1>
+      <p class="entrada">
+        Modelos ARIMA univariantes, anómalos e intervención, y funciones de
+        transferencia, con estimación por máxima verosimilitud exacta. Cada
+        modelo guarda de dónde viene y por qué se eligió.
+      </p>
+      <div class="acciones">
+        <a class="boton principal" id="boton-principal" href="#descargas">Descargar</a>
+        <a class="boton" href="manual/MANUAL.pdf">Manual (PDF)</a>
+      </div>
+      <p class="nota" id="version-nota">Versión de prueba para Windows, macOS y Linux.</p>
+    </div>
+    <figure class="captura-portada">
+      <img src="img/taller-m01.png" alt="La ventana principal de ATSW: series del proyecto, modelos y el porqué de cada uno" width="1036" height="657">
+    </figure>
+  </div>
+</section>
+
+<section class="ancho piezas">
+  <h2>Qué trae</h2>
+  <div class="rejilla-3">
+    <article>
+      <h3>El taller</h3>
+      <p>La ventana principal. Proyectos, datos y muestras; las series, sus
+        modelos y el elegido de cada una; los casos de transferencia. Desde
+        ella se abre todo lo demás.</p>
+    </article>
+    <article>
+      <h3>fue y art</h3>
+      <p>El editor y estimador de modelos univariantes, y el identificador
+        automático: transformación, diferencias, estacionalidad, órdenes ARMA,
+        anómalos e intervención.</p>
+    </article>
+    <article>
+      <h3>drtran</h3>
+      <p>Funciones de transferencia y redes de transferencias: correlaciones
+        cruzadas, la forma de cada enlace, estimación, diagnosis y
+        previsión.</p>
+    </article>
+  </div>
+</section>
+
+<section class="descargas" id="descargas">
+  <div class="ancho">
+    <h2>Descargas</h2>
+    <p class="estado" id="estado">Buscando la última versión…</p>
+
+    <div class="rejilla-3 descargas-rejilla">
+      <article class="tarjeta" data-so="windows">
+        <h3><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5.5l7.5-1v7H3zM11.5 4.4L21 3v8.5h-9.5zM3 12.5h7.5v7L3 18.5zM11.5 12.5H21V21l-9.5-1.4z"/></svg>Windows</h3>
+        <p class="requisito">Windows 10 u 11, 64 bits</p>
+        <ul class="ficheros">
+          <li><a data-patron="windows-x64-setup\.exe$" class="pendiente">Instalador</a>
+            <span>se instala para tu usuario, sin permisos de administrador</span></li>
+          <li><a data-patron="windows-x64\.zip$" class="pendiente">Zip portátil</a>
+            <span>se descomprime y se usa, no instala nada</span></li>
+        </ul>
+      </article>
+
+      <article class="tarjeta" data-so="mac">
+        <h3><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.4 12.6c0-2.4 2-3.6 2.1-3.7-1.2-1.7-3-1.9-3.6-2-1.5-.2-3 .9-3.8.9s-2-.9-3.3-.9C6.1 7 4.5 8 3.6 9.5c-1.8 3.1-.5 7.7 1.3 10.2.9 1.2 1.9 2.6 3.2 2.6 1.3-.1 1.8-.8 3.3-.8s2 .8 3.3.8c1.4 0 2.3-1.3 3.1-2.5 1-1.4 1.4-2.8 1.4-2.9-.1 0-2.8-1.1-2.8-4.3zM14 5.3c.7-.8 1.2-2 1-3.2-1 0-2.3.7-3 1.5-.7.7-1.3 1.9-1.1 3.1 1.2.1 2.3-.6 3.1-1.4z"/></svg>macOS</h3>
+        <p class="requisito">En «Acerca de este Mac» dice qué chip y qué versión tienes</p>
+        <ul class="ficheros">
+          <li><a data-patron="macos-arm64\.dmg$" class="pendiente">Apple Silicon</a>
+            <span>M1, M2, M3… con macOS 14 o posterior</span></li>
+          <li><a data-patron="macos-x86_64\.dmg$" class="pendiente">Intel</a>
+            <span>con macOS 13 o posterior</span></li>
+          <li><a data-patron="macos-x86_64-macos11\.dmg$" class="pendiente">Intel, macOS 11 y 12</a>
+            <span>Big Sur y Monterey</span></li>
+        </ul>
+      </article>
+
+      <article class="tarjeta" data-so="linux">
+        <h3><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c-2.2 0-3.6 1.9-3.6 4.6 0 1.3.3 2.2-.4 3.4-.9 1.5-2.6 3.6-2.6 6 0 .9.2 1.6.5 2.2-.8.4-1.9.6-1.9 1.6 0 1.1 1.6 1.2 3 1.6 1.2.3 2 .6 2.8.6.7 0 1.2-.4 1.6-.9h1.2c.4.5.9.9 1.6.9.8 0 1.6-.3 2.8-.6 1.4-.4 3-.5 3-1.6 0-1-1.1-1.2-1.9-1.6.3-.6.5-1.3.5-2.2 0-2.4-1.7-4.5-2.6-6-.7-1.2-.4-2.1-.4-3.4C15.6 3.9 14.2 2 12 2zm-1.5 4.2c.5 0 .8.5.8 1.1 0 .3-.1.5-.2.7l-.5-.2c.1-.1.1-.3.1-.5 0-.3-.1-.5-.3-.5s-.3.3-.3.5v.2l-.5-.1c0-.2-.1-.3-.1-.5 0-.4.4-.7 1-.7zm3 0c.6 0 1 .3 1 .7 0 .2 0 .3-.1.5l-.5.1v-.2c0-.2-.1-.5-.3-.5s-.3.2-.3.5c0 .2 0 .4.1.5l-.5.2c-.1-.2-.2-.4-.2-.7 0-.6.3-1.1.8-1.1zM12 9c.9 0 2 .6 2 1s-1.1 1.1-2 1.1-2-.7-2-1.1 1.1-1 2-1z"/></svg>Linux</h3>
+        <p class="requisito">Ubuntu 22.04 o posterior, Debian 12</p>
+        <ul class="ficheros">
+          <li><a data-patron="_amd64\.deb$" class="pendiente">Paquete .deb</a>
+            <span>para Ubuntu y Debian, 64 bits</span></li>
+          <li><a data-patron="-fuente\.tar\.gz$" class="pendiente">Fuentes</a>
+            <span>para compilar en cualquier Linux</span></li>
+        </ul>
+      </article>
+    </div>
+
+    <p class="pie-descargas">
+      Todas las versiones: <a href="https://github.com/davidesg/atsw-gui/releases">releases en GitHub</a>.
+    </p>
+  </div>
+</section>
+
+<section class="ancho" id="aprender">
+  <h2>Aprender</h2>
+  <div class="rejilla-2 aprender">
+    <a class="tarjeta enlace" href="manual/MANUAL.pdf">
+      <h3>El manual del alumno</h3>
+      <p>Un caso de principio a fin: el IPC de España frente al precio del
+        petróleo. Proyecto y muestra, el modelo del IPC con art y fue, el
+        episodio de 2008 en el petróleo, la función de transferencia con drtran
+        y la previsión. Cada decisión, con su porqué.</p>
+      <span class="mas">PDF · también <span class="sub" data-href="manual/MANUAL.html">en una página web</span></span>
+    </a>
+    <a class="tarjeta enlace" id="video" href="https://github.com/davidesg/atsw-gui/releases">
+      <h3>El vídeo</h3>
+      <p>El mismo caso en seis minutos, con subtítulos: dónde se pulsa y qué
+        hay que mirar en cada ventana.</p>
+      <span class="mas" id="video-nota">MP4, en la página de la versión</span>
+    </a>
+  </div>
+  <p>Los datos del caso, para seguirlo con el programa abierto:
+    <a href="datos/ipc_wti.csv" download>ipc_wti.csv</a> o, para Excel,
+    <a href="datos/ipc_wti.xlsx" download>ipc_wti.xlsx</a>.</p>
+
+  <div class="galeria">
+    <figure><img loading="lazy" src="img/ipc-m01-grafico.png" alt="Residuos del modelo del IPC con sus autocorrelaciones" width="1000" height="837"><figcaption>La diagnosis: los residuos y sus autocorrelaciones</figcaption></figure>
+    <figure><img loading="lazy" src="img/wti-anomalos.png" alt="Los anómalos del petróleo en 2008"><figcaption>Los anómalos de 2008 en el petróleo</figcaption></figure>
+    <figure><img loading="lazy" src="img/drtran-ccf.png" alt="Correlaciones cruzadas entre los residuos" width="1000" height="797"><figcaption>drtran: las correlaciones cruzadas</figcaption></figure>
+    <figure><img loading="lazy" src="img/drtran-prevision.png" alt="La previsión del IPC con su desviación típica" width="1100" height="797"><figcaption>La previsión, con su incertidumbre</figcaption></figure>
+  </div>
+</section>
+
+<section class="instalar" id="instalar">
+  <div class="ancho">
+    <h2>Instalar</h2>
+    <p>Es una versión de prueba y no está firmada por Microsoft ni por Apple:
+      la primera vez el sistema avisa. Es normal.</p>
+    <div class="rejilla-3">
+      <article>
+        <h3>Windows</h3>
+        <ol>
+          <li>Abre el instalador. Si sale «Windows protegió su PC», pulsa
+            <b>Más información</b> y después <b>Ejecutar de todas formas</b>.</li>
+          <li>Se instala en tu usuario, sin pedir permisos de administrador, y
+            queda en el menú Inicio, en «ATSW».</li>
+          <li>Se desinstala desde Configuración → Aplicaciones.</li>
+        </ol>
+      </article>
+      <article>
+        <h3>macOS</h3>
+        <ol>
+          <li>Abre el <code>.dmg</code> y arrastra ATSW a Aplicaciones.</li>
+          <li>La primera vez: clic derecho (o Ctrl+clic) sobre ATSW →
+            <b>Abrir</b>. En macOS 15 o posterior, en cambio: Ajustes del
+            Sistema → Privacidad y seguridad → <b>Abrir igualmente</b>.</li>
+          <li>Si dice que la aplicación «está dañada», en el Terminal:
+            <pre><code>xattr -dr com.apple.quarantine /Applications/ATSW.app</code></pre></li>
+        </ol>
+      </article>
+      <article>
+        <h3>Linux</h3>
+        <ol>
+          <li>En el terminal, en la carpeta de la descarga:
+            <pre><code>sudo apt install ./atsw_*_amd64.deb</code></pre></li>
+          <li>Queda en el menú de aplicaciones como «ATSW» y en el terminal como
+            <code>atsw</code>. El manual y sus datos, en
+            <code>/usr/share/doc/atsw</code>.</li>
+          <li>Se desinstala con <code>sudo apt remove atsw</code>. Con las
+            fuentes: <code>make</code> y <code>sudo make install</code>, como
+            dice su <code>INSTALAR.txt</code>.</li>
+        </ol>
+      </article>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="pie">
+  <div class="ancho">
+    <p>ATSW — <a href="https://github.com/davidesg/atsw-gui">github.com/davidesg/atsw-gui</a>.
+      Los asistentes en Python se instalan aparte: <code>pip install atsw</code>.</p>
+    <p>Si algo falla, <a href="https://github.com/davidesg/atsw-gui/issues">cuéntalo aquí</a>
+      con qué estabas haciendo y, si puedes, una captura de pantalla.</p>
+  </div>
+</footer>
+
+<script src="descargas.js"></script>
+</body>
+</html>

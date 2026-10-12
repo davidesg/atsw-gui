@@ -1,0 +1,420 @@
+# LOS PAQUETES PARA PROBAR EN MAQUINAS DE USUARIO: el instalador y el zip de
+# Windows, la .app (en un .dmg) de macOS, para Apple Silicon y para Intel, y
+# en Linux el .deb y las fuentes para compilar.
+#
+# No pasa las baterias -- eso es build.yml --: compila, empaqueta, y prueba
+# el PAQUETE, que es lo que build.yml no ve. Cada ejecutable se arranca desde
+# el paquete con el entorno limpio (sin MSYS2 ni Homebrew en el PATH), para
+# cazar la DLL o la .dylib que falta, y la madre se tiene que quedar abierta.
+#
+# Se lanza a mano (Actions -> paquetes -> Run workflow), en los PR que tocan
+# packaging/, y con una etiqueta v*: entonces ademas se cuelgan los paquetes
+# de una «release» de GitHub.
+
+name: paquetes
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'packaging/**'
+      - '.github/workflows/paquetes.yml'
+      - 'docs/manual/**'
+  push:
+    tags: [ 'v*' ]
+
+env:
+  # Lo que va en el paquete (packaging/programas.sh): sin drvarma ni drvec.
+  DIRS: >-
+    engines/fue engines/fuf engines/fug engines/drtran engines/art
+    gui/fue gui/fug gui/drtran gui/atsw
+
+jobs:
+  # El manual del alumno en PDF (docs/manual/construir.py): va dentro de los
+  # paquetes y, ademas, suelto.
+  manual:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construir
+        run: |
+          pip install markdown
+          python3 docs/manual/construir.py
+          test -s docs/manual/MANUAL.pdf
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ATSW-manual
+          path: docs/manual/MANUAL.pdf
+      # Los datos del caso del manual, para seguirlo: van sueltos en la
+      # release y dentro de los paquetes (bundle.sh).
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ATSW-datos
+          path: |
+            docs/manual/datos/ipc_wti.csv
+            docs/manual/datos/ipc_wti.xlsx
+
+  windows:
+    needs: manual
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            make git diffutils bc gawk sed grep coreutils
+          pacboy: >-
+            gcc:p pkgconf:p gtk3:p gsl:p zlib:p librsvg:p adwaita-icon-theme:p
+            gsettings-desktop-schemas:p hicolor-icon-theme:p
+      - uses: actions/download-artifact@v4
+        with:
+          name: ATSW-manual
+          path: docs/manual
+      - name: Version
+        id: v
+        run: |
+          case "$GITHUB_REF" in
+              refs/tags/v*) v=${GITHUB_REF#refs/tags/v} ;;
+              *)            v=$(date +%Y.%m.%d) ;;
+          esac
+          echo "v=$v" >> "$GITHUB_OUTPUT"
+      - name: Compilar
+        run: bash .github/build-all.sh
+      - name: Empaquetar
+        run: bash packaging/windows/bundle.sh dist/ATSW
+      - name: Probar el paquete
+        shell: pwsh
+        run: |
+          # Sin MSYS2 en el PATH: lo que el paquete no lleve, falla aqui.
+          $env:PATH = "C:\Windows\System32;C:\Windows"
+          $bin = "dist\ATSW\bin"
+          New-Item -ItemType File vacio.txt -Force | Out-Null
+          New-Item -ItemType Directory capturas -Force | Out-Null
+          $mal = @()
+          # 0xC0000135: falta una DLL. 0xC000007B: una DLL de otra arquitectura.
+          # 0xC0000139: una DLL sin la funcion que se le pide.
+          $codigos = @(-1073741515, -1073741701, -1073741511)
+          foreach ($m in 'fue','fuf','fug','art','drtran') {
+            $p = Start-Process "$bin\$m.exe" -PassThru -NoNewWindow `
+                   -RedirectStandardInput vacio.txt `
+                   -RedirectStandardOutput "capturas\$m.out" -RedirectStandardError "capturas\$m.err"
+            if (-not $p.WaitForExit(30000)) { $p.Kill(); Write-Host "$m sigue vivo (esperaba datos): vale" }
+            elseif ($codigos -contains $p.ExitCode) { Write-Host "::error::$m no arranca (codigo $($p.ExitCode))"; $mal += $m }
+            else { Write-Host "$m arranca (sale con $($p.ExitCode))" }
+          }
+          Add-Type -AssemblyName System.Windows.Forms,System.Drawing
+          foreach ($g in 'atsw_gui','fue_gui','drtran_gui','gtk_fmg') {
+            $p = Start-Process "$bin\$g.exe" -PassThru -WorkingDirectory $env:USERPROFILE
+            Start-Sleep 10
+            if ($p.HasExited) { Write-Host "::error::$g se cierra al arrancar (codigo $($p.ExitCode))"; $mal += $g; continue }
+            $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $i = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+            [System.Drawing.Graphics]::FromImage($i).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+            $i.Save("$pwd\capturas\$g.png")
+            Stop-Process -Id $p.Id -Force
+            Write-Host "$g arranca y sigue abierto"
+          }
+          if ($mal.Count) { Write-Host "fallan: $mal"; exit 1 }
+      - name: Zip
+        shell: pwsh
+        run: Compress-Archive -Path dist\ATSW -DestinationPath "dist\ATSW-${{ steps.v.outputs.v }}-windows-x64.zip"
+      - name: Instalador
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          & $iscc /Qp "/DVersion=${{ steps.v.outputs.v }}" "/DFuente=$pwd\dist\ATSW" "/O$pwd\dist" packaging\windows\atsw.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ATSW-windows-instalador
+          path: dist/*-setup.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ATSW-windows-zip
+          path: dist/*.zip
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: capturas-paquete-windows
+          path: capturas/
+          if-no-files-found: ignore
+
+  macos:
+    needs: manual
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            arq: arm64
+            nombre: arm64
+          - runner: macos-15-intel
+            arq: x86_64
+            nombre: x86_64
+          # Para Intel con macOS 11 (Big Sur) o posterior: las bibliotecas de
+          # Homebrew piden el macOS del runner (13 o mas), las de conda-forge
+          # estan hechas para macOS viejos. Lo nuestro se compila para 11.0,
+          # y bundle.sh se para si algun binario pide mas.
+          - runner: macos-15-intel
+            arq: x86_64
+            nombre: x86_64-macos11
+            conda: true
+    runs-on: ${{ matrix.runner }}
+    # El de macOS 11 todavia es una prueba: si falla, la release sale sin el.
+    continue-on-error: ${{ matrix.conda == true }}
+    defaults:
+      run:
+        # Login, para que micromamba active su entorno en cada paso.
+        shell: bash -el {0}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencias
+        if: ${{ !matrix.conda }}
+        run: |
+          brew install pkg-config gtk+3 gsl librsvg adwaita-icon-theme dylibbundler coreutils
+          echo "$(brew --prefix coreutils)/libexec/gnubin" >> "$GITHUB_PATH"
+      - name: Dependencias (conda-forge)
+        if: ${{ matrix.conda }}
+        uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-name: atsw
+          create-args: >-
+            pkg-config gtk3 gsl librsvg adwaita-icon-theme glib zlib expat
+          init-shell: bash
+      - name: Entorno (conda-forge)
+        if: ${{ matrix.conda }}
+        run: |
+          # dylibbundler y coreutils son herramientas de la construccion: no
+          # entran en la .app, asi que pueden venir de Homebrew.
+          brew install dylibbundler coreutils
+          echo "$(brew --prefix coreutils)/libexec/gnubin" >> "$GITHUB_PATH"
+          {
+              echo "MACOSX_DEPLOYMENT_TARGET=11.0"
+              echo "PKG_CONFIG_PATH=$CONDA_PREFIX/lib/pkgconfig:$CONDA_PREFIX/share/pkgconfig"
+              echo "PKG_CONFIG_LIBDIR=$CONDA_PREFIX/lib/pkgconfig:$CONDA_PREFIX/share/pkgconfig"
+              echo "BIBLIOTECAS=$CONDA_PREFIX"
+              echo "MACOS_MAXIMO=11.0"
+              echo "SUFIJO=-macos11"
+          } >> "$GITHUB_ENV"
+          # conda-forge separa algunos .pc en paquetes «de desarrollo» (zlib,
+          # expat...): que diga todos los que falten de una vez.
+          falta=() visto=" "
+          cola=(gtk+-3.0 gsl)
+          while [ ${#cola[@]} -gt 0 ]; do
+              p=${cola[0]}; cola=("${cola[@]:1}")
+              case "$visto" in *" $p "*) continue ;; esac
+              visto="$visto$p "
+              if pkg-config --exists "$p" 2>/dev/null ||
+                 [ -f "$CONDA_PREFIX/lib/pkgconfig/$p.pc" ] || [ -f "$CONDA_PREFIX/share/pkgconfig/$p.pc" ]; then
+                  f=$(ls "$CONDA_PREFIX"/{lib,share}/pkgconfig/"$p".pc 2>/dev/null | head -1)
+                  cola+=($(sed -nE 's/^Requires(\.private)?:(.*)/\2/p' "$f" |
+                           tr ',' ' ' | tr ' ' '\n' | grep -E '^[A-Za-z]' || true))
+              else
+                  falta+=("$p")
+              fi
+          done
+          [ ${#falta[@]} -eq 0 ] || { echo "::error::faltan .pc: ${falta[*]}"; exit 1; }
+          pkg-config --cflags --libs gtk+-3.0 gsl
+      - uses: actions/download-artifact@v4
+        with:
+          name: ATSW-manual
+          path: docs/manual
+      - name: Version
+        id: v
+        run: |
+          case "$GITHUB_REF" in
+              refs/tags/v*) v=${GITHUB_REF#refs/tags/v} ;;
+              *)            v=$(date +%Y.%m.%d) ;;
+          esac
+          echo "v=$v" >> "$GITHUB_OUTPUT"
+      - name: Compilar
+        run: bash .github/build-all.sh
+      - name: Empaquetar
+        run: bash packaging/macos/bundle.sh "${{ steps.v.outputs.v }}"
+      - name: Probar el paquete
+        run: |
+          RES=dist/ATSW.app/Contents/Resources
+          mkdir -p capturas
+          mal=()
+          # Sin Homebrew en el PATH. Las .dylib que falten las dice dyld.
+          for m in fue fuf fug art drtran; do
+              out=$(env PATH=/usr/bin:/bin timeout 30 "$RES/bin/$m" </dev/null 2>&1) || true
+              if grep -q "Library not loaded\|dyld" <<<"$out"; then
+                  echo "::error::$m no arranca"; echo "$out" | head; mal+=("$m")
+              else
+                  echo "$m arranca"
+              fi
+          done
+          # La madre, por el lanzador de la .app, como la abriria el Finder.
+          env PATH=/usr/bin:/bin dist/ATSW.app/Contents/MacOS/ATSW > capturas/ATSW.log 2>&1 &
+          pid=$!
+          sleep 10
+          if kill -0 $pid 2>/dev/null; then
+              screencapture -x capturas/ATSW.png || true
+              kill $pid; echo "ATSW arranca y sigue abierta"
+          else
+              echo "::error::ATSW se cierra al arrancar"; cat capturas/ATSW.log; mal+=(ATSW)
+          fi
+          # Los demas GUIs, con el entorno que pone el lanzador (lanzador.c),
+          # que es el que heredan cuando los abre la madre.
+          R=$(cd "$RES" && pwd)
+          PB=lib/gdk-pixbuf-2.0/2.10.0
+          sed "s|@PREFIJO@|$R|g" "$R/$PB/loaders.cache.in" > "$RUNNER_TEMP/loaders.cache"
+          for g in fue_gui drtran_gui gtk_fmg; do
+              env PATH="$R/bin:/usr/bin:/bin" XDG_DATA_DIRS="$R/share" \
+                  GSETTINGS_SCHEMA_DIR="$R/share/glib-2.0/schemas" \
+                  GDK_PIXBUF_MODULE_FILE="$RUNNER_TEMP/loaders.cache" \
+                  GTK_DATA_PREFIX="$R" GTK_EXE_PREFIX="$R" \
+                  "$R/bin/$g" > "capturas/$g.log" 2>&1 &
+              pid=$!
+              sleep 8
+              if kill -0 $pid 2>/dev/null; then
+                  screencapture -x "capturas/$g.png" || true
+                  kill $pid; echo "$g arranca y sigue abierto"
+              else
+                  echo "::error::$g se cierra al arrancar"; cat "capturas/$g.log"; mal+=("$g")
+              fi
+          done
+          [ ${#mal[@]} -eq 0 ] || { echo "fallan: ${mal[*]}"; exit 1; }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ATSW-macos-${{ matrix.nombre }}
+          path: dist/*.dmg
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: capturas-paquete-macos-${{ matrix.nombre }}
+          path: capturas/
+          if-no-files-found: ignore
+
+  # Linux: el .deb (Ubuntu 22.04+, Debian 12+) y las fuentes para compilar.
+  # Se construye en el 22.04, el mas viejo que se cubre.
+  linux:
+    needs: manual
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencias
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libgtk-3-dev libgsl-dev zlib1g-dev
+      - uses: actions/download-artifact@v4
+        with:
+          name: ATSW-manual
+          path: docs/manual
+      - name: Version
+        id: v
+        run: |
+          case "$GITHUB_REF" in
+              refs/tags/v*) v=${GITHUB_REF#refs/tags/v} ;;
+              *)            v=$(date +%Y.%m.%d) ;;
+          esac
+          echo "v=$v" >> "$GITHUB_OUTPUT"
+      - name: El .deb
+        run: bash packaging/linux/deb.sh "${{ steps.v.outputs.v }}"
+      - name: Las fuentes
+        run: bash packaging/linux/fuente.sh "${{ steps.v.outputs.v }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ATSW-linux-deb
+          path: dist/*.deb
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ATSW-linux-fuente
+          path: dist/*-fuente.tar.gz
+
+  # El .deb instalado en sistemas limpios, como lo instalaria un alumno: que
+  # apt resuelva las dependencias, que los motores arranquen y que los GUIs
+  # se queden abiertos.
+  linux-prueba:
+    needs: linux
+    strategy:
+      fail-fast: false
+      matrix:
+        sistema: [ 'ubuntu:22.04', 'ubuntu:24.04', 'debian:12' ]
+    runs-on: ubuntu-latest
+    container: ${{ matrix.sistema }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ATSW-linux-deb
+      - name: Instalar
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y ./atsw_*.deb xvfb xauth
+      - name: Probar
+        shell: bash
+        run: |
+          mal=()
+          for m in fue fuf fug art drtran; do
+              out=$(timeout 30 /usr/lib/atsw/bin/$m </dev/null 2>&1) || true
+              if grep -q "error while loading shared libraries" <<<"$out"; then
+                  echo "::error::$m no arranca"; echo "$out" | head; mal+=("$m")
+              else
+                  echo "$m arranca"
+              fi
+          done
+          for g in atsw fue_gui drtran_gui gtk_fmg; do
+              case $g in atsw) x=/usr/bin/atsw ;; *) x=/usr/lib/atsw/bin/$g ;; esac
+              xvfb-run -a "$x" > "/tmp/$g.log" 2>&1 &
+              pid=$!
+              sleep 8
+              # xvfb-run sigue vivo mientras viva el GUI.
+              if kill -0 $pid 2>/dev/null; then
+                  kill $pid; echo "$g arranca y sigue abierto"
+              else
+                  echo "::error::$g se cierra al arrancar"; cat "/tmp/$g.log"; mal+=("$g")
+              fi
+              wait $pid 2>/dev/null || true
+          done
+          ls /usr/share/doc/atsw "/usr/share/doc/atsw/Datos del manual"
+          [ ${#mal[@]} -eq 0 ] || { echo "fallan: ${mal[*]}"; exit 1; }
+
+  # Las fuentes, compiladas e instaladas en un sistema limpio siguiendo
+  # INSTALAR.txt al pie de la letra.
+  linux-fuente:
+    needs: linux
+    runs-on: ubuntu-latest
+    container: ubuntu:24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ATSW-linux-fuente
+      - name: Compilar e instalar
+        shell: bash
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential pkg-config libgtk-3-dev libgsl-dev zlib1g-dev
+          tar xzf atsw-*-fuente.tar.gz
+          cd atsw-*/
+          make
+          make install
+          # Sin argumentos fue sale con error: lo que se mira es que arranque.
+          out=$(/usr/local/lib/atsw/bin/fue </dev/null 2>&1 || true)
+          grep -q "FUE" <<<"$out" && echo "fue arranca"
+          ls -l /usr/local/bin/atsw /usr/local/share/applications/
+          make uninstall
+          [ ! -e /usr/local/bin/atsw ] && echo "desinstalado"
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [ manual, windows, macos, linux, linux-prueba, linux-fuente ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ATSW-*
+          path: paquetes
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: paquetes/*
+          prerelease: true

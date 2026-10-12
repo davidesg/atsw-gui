@@ -95,6 +95,7 @@
 #include "main.h"
 #include "fue_pre_reader.h"   /* .pre reader, copied from drtran (see F2.1) */
 #include "fue_bridge.h"       /* expansion of the .pre's factors                */
+#include "diagmv.h"           /* Hosking and Jarque-Bera, shared (lib/diagmv)   */
 #include <gsl/gsl_cdf.h>      /* chi2 p-value of the LR of H1(r) against H(r) */
 #include <gsl/gsl_eigen.h>    /* symmetric generalised eigenvalue problem */
 #include <gsl/gsl_linalg.h>   /* QR and SVD for the Granger rank condition       */
@@ -116,7 +117,7 @@
  *  argument that a reader needs before running the program, and the right
  *  place for the single definition the binary is built from.                 */
 #ifndef DRVEC_VERSION
-#define DRVEC_VERSION "0.10"
+#define DRVEC_VERSION "0.12"
 #endif
 
 real macheps;
@@ -1669,9 +1670,11 @@ static void subtract_interventions(const char *prefix)
  *  WHAT IT PRINTS, IN TWO PARTS
  *
  *   1. THE SUITE'S DIAGNOSIS, as it comes: multivariate_diagnostics from
- *      drtran -- Hosking's portmanteau and multivariate Jarque-Bera -- copied
- *      unchanged into src/diagnose_mv.c.  That is deliberate: the same residual
- *      has to read the same in drvarma, in drtran and here.  The first version
+ *      drtran -- Hosking's portmanteau and multivariate Jarque-Bera -- now
+ *      ONE file, lib/diagmv, for the three engines (BUG-42, items 3-4); this
+ *      program passes it its count of coefficients (diag_k).  That is
+ *      deliberate: the same residual has to read the same in drvarma, in
+ *      drtran and here.  The first version
  *      of this was a portmanteau written by hand in this file, and it was badly
  *      framed even though it was correct: it forced a comparison of apples with
  *      oranges.
@@ -1689,6 +1692,49 @@ static void subtract_interventions(const char *prefix)
  *  with k >= 1 says that equation i responds to the PAST innovation of j: it is
  *  a lagged cross effect of order k.  The upper and lower triangles are NOT the
  *  same thing, and that is where the direction is.                           */
+/*  diag_k, diag_npar_ser -- WHAT THE RESIDUALS COST, for the degrees of
+ *  freedom of their tests (BUG-42, item 3).
+ *
+ *  Hosking's Q is chi2(m^2 s - k) with k the DYNAMIC coefficients estimated:
+ *  Lambda, F and Theta as the restrictions leave them, and the transfer
+ *  weights of -xlink.  Not the mean, not Sigma, not B2: Bruggemann,
+ *  Lutkepohl and Saikkonen (2006) give m^2 (s - p + 1) - m r for a VECM,
+ *  which subtracts Gamma and alpha and leaves beta, superconsistent, out.
+ *  The count is par_blocks', so it cannot disagree with the vector.
+ *
+ *  The Ljung-Box of each residual subtracts the coefficients of its equation
+ *  on its own lags: the diagonal of each F_k and Theta_j that is free.  The
+ *  residuals are Ybar's, [nabla Y2 ; W], and the coefficients are in the
+ *  internal order [Y1 ; Y2]: nabla Y2_i is row r + i, W_j is row j.  It is
+ *  the univariate reading, and an approximation in a system: the .out of
+ *  art and fue subtracts p + q the same way.                              */
+static int diag_k(void)
+{
+    int nmean, nlam, nmid, ntail, M = nser;
+    par_blocks(&nmean, &nlam, &nmid, &ntail);
+    return nlam + nmid - ((global_diag_cov ? M : M * (M + 1) / 2) - 1)
+         + xl_npar();
+}
+
+static int *diag_npar_ser(void)
+{
+    int M = nser, r = global_r, s = M - r, i, k;
+    int nf = (global_p > 1) ? global_p - 1 : 0, q = global_q;
+    int *n = (int *) calloc((size_t) M + 1, sizeof(int));
+    for (i = 1; i <= M; i++) {
+        int row = (i <= s) ? r + i : i - s;
+        int w_row = row <= r;               /* an equation of the Y1 block */
+        if (global_warma) {
+            n[i] = w_row ? nf + q : 0;
+            continue;
+        }
+        for (k = 1; k <= nf; k++) n[i] += f_free(row, row);
+        if ((mawarma_on() || marow_on()) && !w_row) continue;
+        n[i] += q;
+    }
+    return n;
+}
+
 static void residual_diagnostics(struct Tvarma *v)
 {
     int M = v->m, n = v->n, K, i, j, k, t;
@@ -1719,7 +1765,7 @@ static void residual_diagnostics(struct Tvarma *v)
     /*  The suite's STANDARD diagnosis, untouched (src/diagnose.c, vendored
      *  from drvarma), and it brings its own banner: this section is titled by
      *  the shared code, not by a second title of ours.                       */
-    multivariate_diagnostics(v->a, n, M, outputv);
+    multivariate_diagnostics(v->a, n, M, data_freq, diag_k(), outputv);
     fprintf(outputv, "\n");
     fprintf(outputv, "  residual sd:");
     for (i = 1; i <= M; i++) fprintf(outputv, " %10.6f", sqrt(C[0][i][i]));
@@ -2293,6 +2339,18 @@ static int cmp_real(const void *a, const void *b)
     return (x < y) ? -1 : ((x > y) ? 1 : 0);
 }
 
+/*  boot_dump -- <base>.boot, EVERY REPLICATION OF THE RANK BOOTSTRAP.
+ *
+ *  The .out gives three percentiles, a p-value and a count.  Homologating a
+ *  port against that only says "the same within Monte Carlo error", and when
+ *  one replication converges on one side and not on the other nothing points
+ *  at which.  So each replication is written as it ends, in the order the
+ *  generator produced it: the H0 rank, the replication number, what became of
+ *  it (ok; simfail, Sigma* without a Cholesky factor, before any draw is
+ *  consumed; fitfail, one of the two refits failed) and its LR* to 17
+ *  digits.  It is what a replication-by-replication comparison needs.      */
+static FILE *boot_dump = NULL;
+
 /*  bootstrap_rank — critical values of LR(rr -> rr+1) under H0: rank = rr.
  *  x is the fit at rank rr.  Returns the number of usable replications.      */
 static int bootstrap_rank(int rr, real *x, int npar, int N, real *cv, real *pval,
@@ -2340,11 +2398,20 @@ static int bootstrap_rank(int rr, real *x, int npar, int N, real *cv, real *pval
     for (b = 1; b <= N; b++) {
         int ok0 = 0, ok1 = 0;
         real l0, l1;
-        if (simulate_h0(&vh, B2, rr, sim) != 0) continue;
+        if (simulate_h0(&vh, B2, rr, sim) != 0) {
+            if (boot_dump) fprintf(boot_dump, "%d,%d,simfail,\n", rr, b);
+            continue;
+        }
         for (i = 1; i <= nobs_raw; i++)
             for (j = 1; j <= M; j++) rawmat[i][j] = sim[i][j];
         l0 = fit_ll(rr,   &ok0);
         l1 = fit_ll(rr+1, &ok1);
+        if (boot_dump) {
+            if (ok0 && ok1)
+                fprintf(boot_dump, "%d,%d,ok,%.17g\n", rr, b, 2.0 * (l1 - l0));
+            else
+                fprintf(boot_dump, "%d,%d,fitfail,\n", rr, b);
+        }
         /* Every converged draw counts, negative ones included: the exact LR
            is not nested at Lambda = 0 and goes below zero under H0 in about
            40 % of samples.  Dropping them censored the null from below and
@@ -7196,24 +7263,18 @@ static int ldl_sigma(struct Tvarma *v, real **P, real *D)
 /*  responses.  The suite verifies exactly that identity against the forecast */
 /*  table, which is what says the two blocks describe one model.             */
 /*****************************************************************************/
-static void level_irf_fevd(struct Tvarma *v, real **B2, int K)
+/*  level_irf_R -- the orthogonalised level responses R_k = G_k P D^(1/2),
+ *  k = 0..K, into R (0..K x M x M), and P, D if asked.  The one computation
+ *  both the report and the -irfboot replications use.  Returns 0 if Sigma is
+ *  not positive definite.                                                   */
+static int level_irf_R(struct Tvarma *v, real **B2, int K, real ***R,
+                       real **P, real *D)
 {
-    int M = v->m, r = global_r, s = M - r, i, j, k, l;
-    real ***Psi, ***R, **Csum, **G, **P, *D;
+    int M = v->m, r = global_r, i, j, k, l;
+    real ***Psi, **Csum, **G;
 
-    if (K < 1 || s < 1) return;
-
-    P = matrix(1, M, 1, M);
-    D = vector(1, M);
-    if (!ldl_sigma(v, P, D)) {
-        free_vector(D, 1, M); free_matrix(P, 1, M, 1, M);
-        fprintf(outputv, "\n(impulse responses not computed: Sigma is not "
-                         "positive definite)\n");
-        return;
-    }
-
+    if (!ldl_sigma(v, P, D)) return 0;
     Psi  = tensor(0, K, 1, M, 1, M);
-    R    = tensor(0, K, 1, M, 1, M);
     Csum = matrix(1, M, 1, M);
     G    = matrix(1, M, 1, M);
     compute_psi_weights(M, v->p, v->q, v->phi, v->theta, K, Psi);
@@ -7230,6 +7291,29 @@ static void level_irf_fevd(struct Tvarma *v, real **B2, int K)
                 for (l = j; l <= M; l++) acc += G[i][l] * P[l][j];
                 R[k][i][j] = acc * sqrt(D[j]);
             }
+    }
+    free_matrix(G, 1, M, 1, M);
+    free_matrix(Csum, 1, M, 1, M);
+    free_tensor(Psi, 0, K, 1, M, 1, M);
+    return 1;
+}
+
+static void level_irf_fevd(struct Tvarma *v, real **B2, int K)
+{
+    int M = v->m, r = global_r, s = M - r, i, j, k, l;
+    real ***R, **P, *D;
+
+    if (K < 1 || s < 1) return;
+
+    P = matrix(1, M, 1, M);
+    D = vector(1, M);
+    R = tensor(0, K, 1, M, 1, M);
+    if (!level_irf_R(v, B2, K, R, P, D)) {
+        free_tensor(R, 0, K, 1, M, 1, M);
+        free_vector(D, 1, M); free_matrix(P, 1, M, 1, M);
+        fprintf(outputv, "\n(impulse responses not computed: Sigma is not "
+                         "positive definite)\n");
+        return;
     }
 
     banner("Impulse Response of the Levels");
@@ -7394,12 +7478,267 @@ static void level_irf_fevd(struct Tvarma *v, real **B2, int K)
         free_vector(acc, 1, M);
     }
 
-    free_matrix(G, 1, M, 1, M);
-    free_matrix(Csum, 1, M, 1, M);
     free_tensor(R, 0, K, 1, M, 1, M);
-    free_tensor(Psi, 0, K, 1, M, 1, M);
     free_vector(D, 1, M);
     free_matrix(P, 1, M, 1, M);
+}
+
+/*****************************************************************************/
+/*  -irfboot N -- BANDS FOR THE LEVEL RESPONSES AND THE DECOMPOSITION, BY     */
+/*  PARAMETRIC BOOTSTRAP.                                                    */
+/*                                                                           */
+/*  WHY NOT THE DELTA METHOD.  The responses are a long nonlinear chain of    */
+/*  the parameters -- Psi weights, the level map through B2, the LDL' of      */
+/*  Sigma -- and in a cointegrated system they converge to the permanent      */
+/*  effect, whose distribution near the boundary is nothing like a normal.    */
+/*  With n = 67 a linearisation is exactly what should not be trusted.        */
+/*                                                                           */
+/*  WHAT IS DONE.  The fitted model is simulated N times with the generator   */
+/*  of the rank bootstrap (simulate_h0: the stationary VARMA on Ybar, Gaussian*/
+/*  innovations with the fitted Sigma*, the transformation inverted to        */
+/*  levels from the real origin).  Each replication is REFITTED exactly as    */
+/*  the data were -- same rank, same restrictions (-weakex/-alpha, -fixb2row, */
+/*  -xsys, the drift mask), the same ladder start -- and its responses and    */
+/*  decomposition are computed with the report's own level_irf_R.  The bands */
+/*  are the percentile intervals of those replications (Efron), 90 % and     */
+/*  95 %, printed for every response and written whole to <base>.irfboot.    */
+/*                                                                           */
+/*  The rank is held: the bands are conditional on r, as the responses are.  */
+/*  The generator is deterministic (boot_rng), so the bands are reproducible. */
+/*****************************************************************************/
+static int global_irfboot = 0;            /* -irfboot N: replications        */
+
+/*  B2 as the walk of x[] has it: first in the tail, column-major over the
+ *  rows -fixb2/-fixb2row do not hold.                                        */
+static void x_b2(const real *x, real **B2)
+{
+    int nmean, nlam, nmid, ntail, s = nser - global_r, r = global_r, i, j;
+    int idx;
+    par_blocks(&nmean, &nlam, &nmid, &ntail);
+    idx = nmean + nlam + nmid + 1;
+    for (j = 1; j <= r; j++)
+        for (i = 1; i <= s; i++)
+            B2[i][j] = b2_held(i) ? B2_fixed[i][j] : x[idx++];
+}
+
+/*  The model at x, with sigma2 filled (vec_shootx does not set it).  The
+ *  caller deallocates with vec_shootx(x, v, &ifs, 0, 1).                     */
+static int model_at(real *x, struct Tvarma *v)
+{
+    int ifs = 0, ife = 0;
+    real pi1, pi2, pi3;
+    v->xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
+    vec_shootx(x, v, &ifs, 1, 0);
+    if (ifs != 0) return 0;
+    elf(v->m, v->n, v->p, v->q, v->mu, v->phi, v->theta, v->qq, v->w, 1.0,
+        v->xitol, TRUE, v->a, &pi1, &pi2, &pi3, &ife);
+    if (ife != 0) return 0;
+    v->sigma2 = pi1 / (v->n * v->m);
+    return 1;
+}
+
+static void irf_bootstrap(real *x, int npar, int K, int N)
+{
+    int M = nser, r = global_r, s = M - r, b, i, j, k, nok = 0, nfail = 0;
+    long cells = (long) (K + 1) * M * M;
+    real **B2 = matrix(1, (s > 0 ? s : 1), 1, (r > 0 ? r : 1));
+    real **sim = matrix(1, nobs_raw, 1, M), **saved = matrix(1, nobs_raw, 1, M);
+    real ***R0 = tensor(0, K, 1, M, 1, M), **P = matrix(1, M, 1, M), *D = vector(1, M);
+    real *irf = (real *) malloc(sizeof(real) * (size_t) cells * (size_t) N);
+    real *fev = (real *) malloc(sizeof(real) * (size_t) cells * (size_t) N);
+    real *col = vector(1, N);
+    struct Tvarma vh;
+    FILE *save_out = outputv;
+    int save_quiet = quiet_mode;
+    (void) npar;
+
+    if (!irf || !fev) { fprintf(stderr, "ERROR: -irfboot: out of memory\n"); return; }
+    x_b2(x, B2);
+    if (!model_at(x, &vh) || !level_irf_R(&vh, B2, K, R0, P, D)) {
+        fprintf(stderr, "ERROR: -irfboot: the fitted model cannot be simulated\n");
+        free(irf); free(fev); return;
+    }
+    for (i = 1; i <= nobs_raw; i++)
+        for (j = 1; j <= M; j++) saved[i][j] = rawmat[i][j];
+
+    printf("IRF bootstrap (-irfboot %d): ", N); fflush(stdout);
+    outputv = fopen("/dev/null", "w"); quiet_mode = 1;
+    for (b = 1; b <= N; b++) {
+        int np, ifr;
+        real *xr, *dev, **cov, ll = 0.0, s2 = 0.0;
+        real **B2r = matrix(1, (s > 0 ? s : 1), 1, (r > 0 ? r : 1));
+        real ***Rb = tensor(0, K, 1, M, 1, M), **Pb = matrix(1, M, 1, M), *Db = vector(1, M);
+        struct Tvarma vr;
+        int good = 0;
+
+        if (simulate_h0(&vh, B2, r, sim) == 0) {
+            for (i = 1; i <= nobs_raw; i++)
+                for (j = 1; j <= M; j++) rawmat[i][j] = sim[i][j];
+            build_y2_levels();
+            np = calc_nparametrs();
+            xr = vector(1, np); dev = vector(1, np); cov = matrix(1, np, 1, np);
+            init_guess(xr, np);
+            if (r > 0 && ladder_wanted())       gate_profile_seed(xr, np);
+            else if (r == 0 && ladder_wanted()) ladder_seed_r0(xr, np);
+            ifr = fit_search(xr, np, dev, cov, &ll, &s2, 1, 0, NULL);
+            if (ifr == 0) {
+                x_b2(xr, B2r);
+                if (model_at(xr, &vr)) {
+                    if (level_irf_R(&vr, B2r, K, Rb, Pb, Db)) good = 1;
+                    { int ifs = 0; vec_shootx(xr, &vr, &ifs, 0, 1); }
+                }
+            }
+            free_matrix(cov, 1, np, 1, np); free_vector(dev, 1, np); free_vector(xr, 1, np);
+        }
+        if (good) {
+            long base = (long) nok * cells;
+            for (i = 1; i <= M; i++) {
+                real *acc = vector(1, M);
+                for (j = 1; j <= M; j++) acc[j] = 0.0;
+                for (k = 0; k <= K; k++) {
+                    real tot = 0.0;
+                    for (j = 1; j <= M; j++) {
+                        acc[j] += Rb[k][i][j] * Rb[k][i][j];
+                        tot += acc[j];
+                    }
+                    for (j = 1; j <= M; j++) {
+                        long c = base + ((long) k * M + (i - 1)) * M + (j - 1);
+                        irf[c] = Rb[k][i][j];
+                        fev[c] = (tot > 0.0) ? 100.0 * acc[j] / tot : 0.0;
+                    }
+                }
+                free_vector(acc, 1, M);
+            }
+            nok++;
+        } else nfail++;
+        free_vector(Db, 1, M); free_matrix(Pb, 1, M, 1, M);
+        free_tensor(Rb, 0, K, 1, M, 1, M);
+        free_matrix(B2r, 1, (s > 0 ? s : 1), 1, (r > 0 ? r : 1));
+        if (b % 50 == 0) { printf("%d ", b); fflush(stdout); }
+    }
+    if (outputv) fclose(outputv);
+    outputv = save_out; quiet_mode = save_quiet;
+    for (i = 1; i <= nobs_raw; i++)
+        for (j = 1; j <= M; j++) rawmat[i][j] = saved[i][j];
+    build_y2_levels();
+    printf("\n  %d replications refitted, %d failed\n", nok, nfail);
+
+    banner("Bands for the Level Responses, Parametric Bootstrap");
+    fprintf(outputv,
+        "\n  %d replications simulated from the fitted model and REFITTED as the\n"
+        "  data were (same rank, restrictions and ladder start); %d failed and\n"
+        "  are left out.  Percentile intervals (Efron), conditional on r = %d.\n"
+        "  Same orthogonalisation as the responses above.  The whole table, every\n"
+        "  k, is in %s.irfboot.\n", nok, nfail, r, out_base);
+    if (nok < 20) {
+        fprintf(outputv, "\n  Too few replications for bands (%d).\n", nok);
+    } else {
+        char fname[600];
+        FILE *fb;
+        int pick[] = { 0, 1, 2, 4, 8, 12, 16, 20, 30, 40 };
+        snprintf(fname, sizeof fname, "%s.irfboot", out_base);
+        fb = fopen(fname, "w");
+        if (fb) fprintf(fb, "# drvec -irfboot %d: %d replications, percentile bands\n"
+                            "what,shock,response,k,point,p2.5,p5,p50,p95,p97.5\n", N, nok);
+        for (j = 1; j <= M; j++)
+            for (i = 1; i <= M; i++) {
+                fprintf(outputv, "\nResponse of %s to a shock to %s:\n"
+                        "    k        point       5%%      95%%     2.5%%    97.5%%\n",
+                        series_names ? series_names[i] : "y",
+                        series_names ? series_names[j] : "y");
+                for (k = 0; k <= K; k++) {
+                    real q[5];
+                    int t, w, pr = 0;
+                    for (w = 0; w < 2; w++) {
+                        real *src = w ? fev : irf;
+                        for (t = 0; t < nok; t++)
+                            col[t + 1] = src[(long) t * cells
+                                             + ((long) k * M + (i - 1)) * M + (j - 1)];
+                        qsort(&col[1], (size_t) nok, sizeof(real), cmp_real);
+                        {
+                            const real pp[5] = { 0.025, 0.05, 0.50, 0.95, 0.975 };
+                            int m;
+                            for (m = 0; m < 5; m++) {
+                                int ix = (int) ceil(pp[m] * nok);
+                                if (ix < 1) ix = 1;
+                                if (ix > nok) ix = nok;
+                                q[m] = col[ix];
+                            }
+                        }
+                        if (fb) {
+                            real pt;
+                            if (!w) pt = R0[k][i][j];
+                            else {
+                                real a = 0.0, tot = 0.0; int kk, jj;
+                                for (kk = 0; kk <= k; kk++)
+                                    for (jj = 1; jj <= M; jj++) {
+                                        tot += R0[kk][i][jj] * R0[kk][i][jj];
+                                        if (jj == j) a += R0[kk][i][jj] * R0[kk][i][jj];
+                                    }
+                                pt = (tot > 0.0) ? 100.0 * a / tot : 0.0;
+                            }
+                            fprintf(fb, "%s,%s,%s,%d,%.8g,%.8g,%.8g,%.8g,%.8g,%.8g\n",
+                                    w ? "fevd" : "irf",
+                                    series_names ? series_names[j] : "y",
+                                    series_names ? series_names[i] : "y",
+                                    w ? k + 1 : k, pt, q[0], q[1], q[2], q[3], q[4]);
+                        }
+                        if (!w) {
+                            int m;
+                            for (m = 0; m < (int) (sizeof pick / sizeof pick[0]); m++)
+                                if (pick[m] == k) pr = 1;
+                            if (k == K) pr = 1;
+                            if (pr)
+                                fprintf(outputv, "%5d %12.6f %8.4f %8.4f %8.4f %8.4f\n",
+                                        k, R0[k][i][j], q[1], q[3], q[0], q[4]);
+                        }
+                    }
+                }
+            }
+        /*  The decomposition's bands, for each series at a few horizons.   */
+        for (i = 1; i <= M; i++) {
+            fprintf(outputv, "\nFEVD of %s, %% due to each shock: point [5%%, 95%%]\n    h",
+                    series_names ? series_names[i] : "y");
+            for (j = 1; j <= M; j++)
+                fprintf(outputv, " %26s", series_names ? series_names[j] : "y");
+            fprintf(outputv, "\n");
+            for (k = 0; k <= K; k++) {
+                int hh = k + 1, m, show = 0;
+                for (m = 0; m < (int) (sizeof pick / sizeof pick[0]); m++)
+                    if (pick[m] == hh) show = 1;
+                if (hh == K + 1) show = 1;
+                if (!show) continue;
+                fprintf(outputv, "%5d", hh);
+                for (j = 1; j <= M; j++) {
+                    real a = 0.0, tot = 0.0, lo, hi; int kk, jj, t;
+                    for (kk = 0; kk <= k; kk++)
+                        for (jj = 1; jj <= M; jj++) {
+                            tot += R0[kk][i][jj] * R0[kk][i][jj];
+                            if (jj == j) a += R0[kk][i][jj] * R0[kk][i][jj];
+                        }
+                    for (t = 0; t < nok; t++)
+                        col[t + 1] = fev[(long) t * cells + ((long) k * M + (i - 1)) * M + (j - 1)];
+                    qsort(&col[1], (size_t) nok, sizeof(real), cmp_real);
+                    { int i5 = (int) ceil(0.05 * nok), i95 = (int) ceil(0.95 * nok);
+                      if (i5 < 1) i5 = 1;
+                      if (i95 > nok) i95 = nok;
+                      lo = col[i5]; hi = col[i95]; }
+                    fprintf(outputv, "   %6.1f%% [%5.1f%%, %5.1f%%]",
+                            (tot > 0.0) ? 100.0 * a / tot : 0.0, lo, hi);
+                }
+                fprintf(outputv, "\n");
+            }
+        }
+        if (fb) fclose(fb);
+        printf("  bands written to the .out and to %s.irfboot\n", out_base);
+    }
+    { int ifs = 0; vec_shootx(x, &vh, &ifs, 0, 1); }
+    free_vector(col, 1, N);
+    free(irf); free(fev);
+    free_vector(D, 1, M); free_matrix(P, 1, M, 1, M);
+    free_tensor(R0, 0, K, 1, M, 1, M);
+    free_matrix(saved, 1, nobs_raw, 1, M); free_matrix(sim, 1, nobs_raw, 1, M);
+    free_matrix(B2, 1, (s > 0 ? s : 1), 1, (r > 0 ? r : 1));
 }
 
 /*****************************************************************************/
@@ -7443,7 +7782,9 @@ static void diagnose_ybar(struct Tvarma *vp)
     {
         int sd = trans_d, sD = trans_D;
         trans_d = nobs_raw - nobs; trans_D = 0;
-        diagnose(vp);
+        int *np = diag_npar_ser();
+        diagnose(vp, np);
+        free(np);
         trans_d = sd; trans_D = sD;
     }
     if (save) {
@@ -9432,6 +9773,15 @@ static int run_lrtest(void)
                              "-----------------\n");
             printf("\nBootstrap under H0 (%d replications per comparison):\n",
                    global_boot);
+            {
+                char fname[600];
+                snprintf(fname, sizeof fname, "%s.boot", out_base);
+                boot_dump = fopen(fname, "w");
+                if (boot_dump)
+                    fprintf(boot_dump, "# drvec %s -bootstrap %d: the rank test, one "
+                            "line per replication\nh0,rep,status,lr\n",
+                            DRVEC_VERSION, global_boot);
+            }
             for (int rr = 0; rr <= M - 2; rr++) {
                 real cv[3] = {0.0, 0.0, 0.0}, pv = -1.0, lr;
                 int reps;
@@ -9462,6 +9812,12 @@ static int run_lrtest(void)
                 else if (lr > cv[0]) fprintf(outputv, "   reject H0 at 10%%\n");
                 else                 fprintf(outputv, "   H0 not rejected\n");
                 printf(" p = %.4f (%d replicas)\n", pv, reps);
+            }
+            if (boot_dump) {
+                fclose(boot_dump);
+                boot_dump = NULL;
+                fprintf(outputv, "\n  Every replication, with its LR*, is in %s.boot.\n",
+                        out_base);
             }
             /* The Monte Carlo error, stated instead of hidden: the plan's
                contingency asked for it to be reported if N had to be small.   */
@@ -9571,6 +9927,7 @@ static const struct opt_spec {
     { "-xsys",        A_INT_POS,  "i"    },
     { "-lrtest",      A_NONE,     NULL   },
     { "-bootstrap",   A_INT_POS,  "N"    },
+    { "-irfboot",     A_INT_POS,  "N"    },
     { "-rungs",       A_NONE,     NULL   },
     { "-specs",       A_NONE,     NULL   },
     { "-warma",       A_NONE,     NULL   },
@@ -9694,6 +10051,11 @@ static void usage(FILE *o)
     fprintf(o, "                 is fitted too and the LR of strong exogeneity is\n");
     fprintf(o, "                 reported.  The transfer is read in the outputs'\n");
     fprintf(o, "                 rows: beta (gain), Gamma (lags), Q (omega_0).  q = 0\n\n");
+    fprintf(o, "  -irfboot N     bands for the level responses and the FEVD by\n");
+    fprintf(o, "                 parametric bootstrap: N samples simulated from the\n");
+    fprintf(o, "                 fit and REFITTED as the data were (same rank and\n");
+    fprintf(o, "                 restrictions); percentile bands 90 %% and 95 %%, in\n");
+    fprintf(o, "                 the .out and whole in <base>.irfboot.  Deterministic\n\n");
     fprintf(o, "  -lrtest        sequential LR test for the cointegration rank:\n");
     fprintf(o, "                 estimates r = 0..M-1 and reports 2*[L(r+1) - L(r)];\n");
     fprintf(o, "                 incompatible with -differenced\n\n");
@@ -10129,6 +10491,8 @@ static int parse_cli(int argc, char *argv[])
         else if (strcmp(argv[i], "-fdhess") == 0) global_fdhess = 1;
         else if (strcmp(argv[i], "-bootstrap") == 0 && i+1 < argc)
             global_boot = atoi(argv[++i]);
+        else if (strcmp(argv[i], "-irfboot") == 0 && i+1 < argc)
+            global_irfboot = atoi(argv[++i]);
         else if (strcmp(argv[i], "-interv") == 0 && i+1 < argc) {
             global_interv = 1; interv_prefix = argv[++i];
         }
@@ -10293,6 +10657,22 @@ static int parse_cli(int argc, char *argv[])
                 "       keeps its mean, and nu(1) times it goes to E[W].\n");
             exit(2);
         }
+    }
+    /*  -irfboot: one fit, in the levels layout (simulate_h0 builds levels),
+     *  and a model it can simulate: -xlink would need the future of X and a
+     *  model for it, -trend a trend the generator does not carry, -warma its
+     *  own walk of B2.                                                     */
+    if (global_irfboot > 0 && (!global_levels || xl_on || global_trend
+                               || global_warma || global_lrtest || global_specs
+                               || global_rungs || global_matest || global_artest
+                               || global_eval || global_estwin > 0
+                               || global_writeinp || global_writeres)) {
+        fprintf(stderr,
+            "ERROR: -irfboot bootstraps the responses of a single fit in the levels\n"
+            "       layout: it cannot be combined with -differenced, -xlink, -trend,\n"
+            "       -warma, -estwin, -writeinp, -writeres or the modes -lrtest,\n"
+            "       -specs, -rungs, -matest, -artest and -eval (not yet).\n");
+        exit(2);
     }
     /*  -trend (case 4) builds on case 3's drifts.  The rank test would need
      *  case 4's tables (or a bootstrap that carries the trend); the forecast
@@ -11229,6 +11609,10 @@ int main(int argc, char *argv[])
 
     report_fit(x, dev, cov, npar, &varma1, ifault, outputf,
                lr_free, lr_free_ok);
+    /*  -irfboot: after the report, which it appends to; the main fit is
+     *  read from x and nothing of it is changed.                          */
+    if (global_irfboot > 0 && !estimation_failed)
+        irf_bootstrap(x, npar, (nobs < 40) ? 10 : 20, global_irfboot);
 
     /* [4] Cleanup ---------------------------------------------------------- */
     vec_shootx(x, &varma1, &ifault, 0, 1);  /* deallocate */

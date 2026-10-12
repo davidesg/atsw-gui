@@ -6,6 +6,7 @@
  * una cosa sola, y esa regla ya costo un renombrado.
  */
 
+#include <locale.h>
 #include <string.h>
 
 #include <glib/gstdio.h>
@@ -1623,6 +1624,17 @@ static void activate( GtkApplication *app, gpointer d )
     gtk_widget_show_all( w );
 }
 
+/* LOS NUMEROS, CON PUNTO. GTK, al arrancar (en el "startup" de la
+   aplicacion), pone el idioma del sistema, y con el espanol LC_NUMERIC lee y
+   escribe "0,5": strtod deja de entender los ficheros (.inp, .pre, .csv) y
+   fprintf escribe los que leen los motores con coma. Este manejador va
+   despues del de GTK y deja los numeros en C; el resto del idioma, intacto. */
+static void numeros_con_punto( GApplication *app, gpointer data )
+{
+    (void)app; (void)data;
+    setlocale( LC_NUMERIC, "C" );
+}
+
 int main( int argc, char **argv )
 {
     GtkApplication *app;
@@ -1655,6 +1667,7 @@ int main( int argc, char **argv )
 
     argc = 1;
     app = gtk_application_new( "org.atsw.gui", G_APPLICATION_NON_UNIQUE );
+    g_signal_connect( app, "startup", G_CALLBACK(numeros_con_punto), NULL );
     g_signal_connect( app, "activate", G_CALLBACK(activate), &A );
     rc = g_application_run( G_APPLICATION(app), argc, argv );
     g_object_unref( app );

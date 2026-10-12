@@ -1,0 +1,41 @@
+#! atsw_gui
+portada ATSW | El IPC y el petróleo: un caso de principio a fin | 4500
+ventana ATSW
+tamano 1100 700
+espera 3450
+rotulo ATSW es un taller: desde esta ventana se abre todo lo demás.
+espera 2625
+rotulo Un proyecto es una carpeta. «Nuevo…» la crea.
+boton Nuevo…
+ventana Proyecto nuevo
+fichero @PROYECTO@/proyecto.yaml
+espera 1125
+boton Crear
+ventana ATSW
+rotulo «Datos…» carga las series: el IPC de España y el precio del petróleo WTI, mensuales.
+boton Datos…
+ventana Cargar datos
+fichero @DATOS@/ipc_wti.csv
+espera 900
+boton Abrir
+ventana Qué series cargar
+espera 1125
+rotulo ATSW lee la frecuencia y la fecha de inicio del propio fichero.
+espera 2250
+boton Cargar las marcadas
+espera 800
+boton Cerrar
+ventana ATSW
+espera 1125
+rotulo No queremos que el modelo explique 2020: declaramos una muestra hasta 2019.
+boton +
+ventana Nueva muestra
+campo Nombre | Pre-Covid
+campo Hasta | 12 | 2019
+campo Por qué | Antes de la pandemia: el modelo no tiene que explicar 2020.
+espera 1875
+boton Declararla
+ventana ATSW
+espera 2250
+rotulo -
+salir

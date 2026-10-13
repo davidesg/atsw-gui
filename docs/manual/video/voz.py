@@ -14,7 +14,7 @@ decir otra cosa, el guion lo pone detras de « || ».
 
 Necesita Piper (pip install piper-tts) y una voz en espanol:
     PIPER=/ruta/a/piper   (si no esta en el PATH)
-    VOZ_MODELO=/ruta/a/es_ES-davefx-medium.onnx
+    VOZ_MODELO=/ruta/a/es_ES-sharvard-medium.onnx  (la del video)
 """
 
 import hashlib

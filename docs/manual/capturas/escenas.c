@@ -539,6 +539,7 @@ static int     rot_desde = -1;
 static gchar  *rot_txt;
 static gchar  *portada_a, *portada_b;
 static int     portada_hasta = -1;
+static gboolean portada_habla;          /* hay rotulos dichos sobre ella */
 static const char *voz_dir;     /* VOZ_DIR, o NULL: sin voz               */
 static int     voz_hasta = -1;  /* cuadro en que acaba la frase que suena */
 static GString *voz_lista;      /* «segundo fichero.wav», para video.sh   */
@@ -676,7 +677,7 @@ static gboolean cuadro( gpointer d )
     s  = cairo_image_surface_create( CAIRO_FORMAT_RGB24, VW, VH );
     cr = cairo_create( s );
 
-    if ( portada_hasta > ncuadro )
+    if ( portada_hasta > ncuadro || portada_habla )
         pon_portada( cr );
     else
         {
@@ -897,9 +898,9 @@ static gboolean orden( const char *cmd, const char *arg )
         return g_get_monotonic_time() - desde >= atoi( arg ) * 1000LL;
     /* Lo que manda el reloj de la voz: ni el rotulo siguiente, ni cerrar
        la ventana de la que se esta hablando, ni el final, hasta que acabe
-       la frase que esta sonando. */
+       la frase que esta sonando. Tampoco la portada siguiente. */
     if ( (strcmp( cmd, "salir" ) == 0 || strcmp( cmd, "rotulo" ) == 0 ||
-          strcmp( cmd, "cierra" ) == 0)
+          strcmp( cmd, "cierra" ) == 0 || strcmp( cmd, "portada" ) == 0)
          && video && ncuadro < voz_hasta )
         return FALSE;
     if ( strcmp( cmd, "salir" ) == 0 )
@@ -913,6 +914,12 @@ static gboolean orden( const char *cmd, const char *arg )
 
             subtitulo( se_ve );
             if ( strcmp( se_ve, "-" ) != 0 ) voz_dice( arg );
+            /* Los rotulos dichos sobre una portada la mantienen, hasta el
+               «rotulo -» o la portada siguiente. */
+            if ( strcmp( se_ve, "-" ) == 0 )
+                portada_habla = FALSE;
+            else if ( portada_hasta > ncuadro )
+                portada_habla = TRUE;
             g_free( se_ve );
             }
         return TRUE;
@@ -927,6 +934,7 @@ static gboolean orden( const char *cmd, const char *arg )
             portada_a = g_strdup( q[0] );
             portada_b = q[1] ? g_strdup( q[1] ) : NULL;
             portada_hasta = ncuadro + (q[1] && q[2] ? atoi( q[2] ) : 3000) * fps / 1000;
+            portada_habla = FALSE;
             }
         g_strfreev( q );
         return TRUE;

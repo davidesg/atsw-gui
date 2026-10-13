@@ -10,7 +10,7 @@
 #
 # CON VOZ si hay una voz de Piper (ver voz.py):
 #
-#   VOZ_MODELO=/ruta/es_ES-davefx-medium.onnx [PIPER=/ruta/piper] bash video.sh
+#   VOZ_MODELO=/ruta/es_ES-sharvard-medium.onnx [PIPER=/ruta/piper] bash video.sh
 #
 # Cada rotulo se sintetiza antes de grabar; al grabar, el rotulo siguiente
 # espera a que acabe su frase (escenas.c), y aqui se mezclan las frases en
@@ -30,8 +30,10 @@ trap 'rm -rf "$D"' EXIT
 FOTOS_VIDEO=$D/fotos
 mkdir -p "$FOTOS_VIDEO"
 if [ -n "${VOZ_MODELO:-}" ]; then
-    python3 "$V/voz.py" "$V/voz" "$V"/escenas/*.txt
-    export VOZ_DIR=$V/voz
+    # Una carpeta por voz: cambiar de voz no reutiliza las frases de la otra.
+    VOZ_DIR=$V/voz/$(basename "$VOZ_MODELO" .onnx)
+    python3 "$V/voz.py" "$VOZ_DIR" "$V"/escenas/*.txt
+    export VOZ_DIR
 fi
 ESCENAS=$V/escenas VIDEO_DIR=$D/trozos PASO_MS=${PASO_MS:-450} FOTOS=$FOTOS_VIDEO \
     LIMITE=${LIMITE:-900} bash "$R/docs/manual/capturas/capturas.sh"

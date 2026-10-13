@@ -36,9 +36,9 @@ con subtítulos:
 
 ```sh
 python3 -m venv ~/piper && ~/piper/bin/pip install piper-tts
-curl -LO https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/davefx/medium/es_ES-davefx-medium.onnx
-curl -LO https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/davefx/medium/es_ES-davefx-medium.onnx.json
-VOZ_MODELO=$PWD/es_ES-davefx-medium.onnx PIPER=~/piper/bin/piper bash docs/manual/video/video.sh
+curl -LO https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx
+curl -LO https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx.json
+VOZ_MODELO=$PWD/es_ES-sharvard-medium.onnx PIPER=~/piper/bin/piper bash docs/manual/video/video.sh
 ```
 
 Cada rótulo se dice tal cual, leído para el oído (`video/voz.py`: «AR(1)» es

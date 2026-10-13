@@ -77,3 +77,5 @@ gui/atsw/tests/work/
 /docs/manual/MANUAL.html
 /docs/manual/MANUAL.pdf
 /docs/manual/video/*.mp4
+/docs/manual/video/voz/
+__pycache__/

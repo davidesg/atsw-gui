@@ -30,6 +30,22 @@ que es como arranca el programa en un ordenador en español: así se probó que
 los números se leen y se escriben con punto también ahí. Si ese idioma no
 está instalado, `localedef -i es_ES -f UTF-8 DIR/es_ES.UTF-8` y `LOCPATH=DIR`.
 
+**La voz del vídeo** la pone [Piper](https://github.com/rhasspy/piper), una
+voz sintética libre que funciona sin conexión. Sin ella el vídeo sale mudo,
+con subtítulos:
+
+```sh
+python3 -m venv ~/piper && ~/piper/bin/pip install piper-tts
+curl -LO https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx
+curl -LO https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx.json
+VOZ_MODELO=$PWD/es_ES-sharvard-medium.onnx PIPER=~/piper/bin/piper bash docs/manual/video/video.sh
+```
+
+Cada rótulo se dice tal cual, leído para el oído (`video/voz.py`: «AR(1)» es
+«a erre uno», «d = 1» es «de igual a uno»). Si un rótulo tiene que decir otra
+cosa, el guion lo pone detrás: `rotulo TEXTO || LO QUE SE DICE`. Al grabar,
+el rótulo siguiente espera a que acabe la frase: voz y subtítulo no se pisan.
+
 `capturas.sh` corre los guiones de `capturas/escenas/` y `video.sh` los de
 `video/escenas/`. Cada guion lanza un GUI con el módulo `capturas/escenas.c`
 cargado, que pulsa botones por su rótulo, elige filas, abre menús y

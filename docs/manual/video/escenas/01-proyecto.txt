@@ -3,6 +3,19 @@ portada ATSW | El IPC y el petróleo: un caso de principio a fin | 4500
 ventana ATSW
 tamano 1100 700
 espera 3450
+portada La pregunta | ¿Cuánto pasa del petróleo al IPC, y en cuánto tiempo? | 1000
+rotulo Cuando sube el petróleo, ¿cuánto sube el IPC de España, y con qué retardo?
+rotulo Para responder vamos a construir tres modelos, en dos escalones.
+portada 1 · Los modelos univariantes | Un ARIMA para el IPC y otro para el petróleo | 1000
+rotulo Primero, un modelo univariante, un ARIMA, para el IPC y otro para el petróleo.
+rotulo Cada uno dice cómo se mueve su serie sola: logaritmos, diferencias, estacionalidad, atípicos.
+rotulo Sin eso no se puede relacionar nada: dos series con tendencia parecen relacionadas aunque no lo estén.
+portada 2 · La transferencia | El IPC explicado por el petróleo y por su propio ruido | 1000
+rotulo Después, la función de transferencia: el IPC como respuesta al petróleo, más su propio ruido.
+rotulo El modelo del petróleo filtra la entrada para ver la respuesta; el del IPC es la semilla del ruido.
+rotulo Y es la vara de medir: la transferencia tiene que explicar el IPC mejor que su univariante.
+rotulo -
+espera 600
 rotulo ATSW es un taller: desde esta ventana se abre todo lo demás.
 espera 2625
 rotulo Un proyecto es una carpeta. «Nuevo…» la crea.

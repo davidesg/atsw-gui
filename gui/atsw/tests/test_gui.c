@@ -2208,6 +2208,71 @@ static void menu_modelo_prueba( void )
         }
     }
 
+    /* LOS CONTRASTES FORMALES: la diagnosis los abre; cada uno reestima con
+       fue, sin bloquear, y la ventana dice «Hecho» al acabar. */
+    {
+    GtkWindow *dw = ventana_titulada( "Diagnosis — ipc / m01" );
+    GtkWidget *bf = dw ? boton_que_dice( GTK_WIDGET(dw), "Contrastes formales…" ) : NULL;
+
+    check( bf != NULL, "la diagnosis ofrece «Contrastes formales…»", NULL );
+    if ( bf )
+        {
+        GtkWindow *wf;
+        gchar     *txt = NULL;
+        int        i;
+
+        olvida();
+        gtk_button_clicked( GTK_BUTTON(bf) );
+        pump( 300 );
+        wf = ventana_titulada( "Contrastes formales — ipc / m01" );
+        check( wf != NULL, "y abre su ventana", todo_lo_dicho() );
+        for ( i = 0; wf && i < 120; i++ )
+            {
+            g_free( txt );
+            txt = textos_de( GTK_WIDGET(wf) );
+            if ( strstr( txt, "Hecho." ) ) break;
+            pump( 250 );
+            }
+        check( txt && strstr( txt, "Hecho." ), "los contrastes acaban", txt );
+        check( txt && !strstr( txt, "No calculable" ) &&
+               ( strstr( txt, "Rechaza H" ) || strstr( txt, "No rechaza H" ) ||
+                 strstr( txt, "no admite ninguno" ) ),
+               "y cada uno dice lo suyo", txt );
+        nota( "contrastes formales de m01: %s", txt && strstr( txt, "Shin-Fuller" )
+              ? "con Shin-Fuller" : "sin Shin-Fuller" );
+        /* el par en f = 0 sale con Shin-Fuller y la sobrediferenciacion */
+        check( txt && ( !strstr( txt, "Shin-Fuller   H" ) || !strstr( txt, "Sobrediferenciación" )
+                        || strstr( txt, "Par confirmatorio en f = 0" ) ),
+               "con Shin-Fuller y la sobrediferenciación, el par en f = 0", txt );
+        g_free( txt ); txt = NULL;
+        /* EL LADO d - 1 SE PIDE: el boton lo añade y se calcula */
+        {
+        GtkWidget *bs = wf ? boton_que_dice( GTK_WIDGET(wf), "Contrastar también d − 1…" ) : NULL;
+
+        check( bs != NULL, "y ofrece pedir el lado d − 1", NULL );
+        if ( bs && gtk_widget_get_sensitive( bs ) )
+            {
+            gtk_button_clicked( GTK_BUTTON(bs) );
+            for ( i = 0; i < 120; i++ )
+                {
+                pump( 250 );
+                g_free( txt );
+                txt = textos_de( GTK_WIDGET(wf) );
+                if ( strstr( txt, "Subdiferenciación" ) && strstr( txt, "Hecho." ) &&
+                     !strstr( txt, "estimando" ) ) break;
+                }
+            check( txt && strstr( txt, "Subdiferenciación (pedida)" ) &&
+                   ( strstr( txt, "confirmado por abajo" ) || strstr( txt, "bastaba" ) ||
+                     strstr( txt, "no concluyente" ) || strstr( txt, "No calculable" ) ),
+                   "pedido, el lado d − 1 se calcula y dice lo suyo", txt );
+            nota( "contrastes formales de m01: d − 1 pedido" );
+            }
+        }
+        g_free( txt );
+        if ( wf ) { gtk_widget_destroy( GTK_WIDGET(wf) ); pump( 100 ); }
+        }
+    }
+
     /* Prever: fue_gui --prever con el .inp. */
     {
     GtkMenu *m;

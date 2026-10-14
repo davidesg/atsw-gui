@@ -17,6 +17,8 @@ build/
 # --- lo que producen los motores ------------------------------------------
 *.out
 *.pre
+# el airline de los contrastes formales: un .pre que es fixture, no salida
+!lib/formales/pruebas/*.pre
 *.aux
 *.log
 *.dvi

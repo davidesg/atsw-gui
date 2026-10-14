@@ -146,6 +146,12 @@ static void on_identificar( GtkButton *b, Dg *g )
     an_identifica_residuos( &g->h, g->serie, g->muestra, g->id );
 }
 
+static void on_formales( GtkButton *b, Dg *g )
+{
+    (void) b;
+    an_formales( &g->h, g->serie, g->muestra, g->id );
+}
+
 static void on_factores( GtkButton *b, Dg *g )
 {
     (void) b;
@@ -288,6 +294,9 @@ void an_diagnosis( const AnHost *h, const char *serie, const char *muestra,
         "<small>Esto dice lo que los números dicen. Qué hacer con ello —qué "
         "quitar, qué intervenir— es una decisión, y es tuya.</small>" );
     gtk_label_set_xalign( GTK_LABEL(b), 0.0 );
+    /* que se parta: con cuatro botones al lado, entera no cabia en 1366 */
+    gtk_label_set_line_wrap( GTK_LABEL(b), TRUE );
+    gtk_label_set_max_width_chars( GTK_LABEL(b), 40 );
     gtk_box_pack_start( GTK_BOX(barra), b, TRUE, TRUE, 0 );
 
     /* E4: CUANDO EL Q FALLA, el identificador sobre los mismos residuos.
@@ -319,6 +328,17 @@ void an_diagnosis( const AnHost *h, const char *serie, const char *muestra,
         "una frecuencia estacional y cerca de la unidad es un AR estacional "
         "escondido." );
     g_signal_connect( b, "clicked", G_CALLBACK(on_factores), g );
+    gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
+
+    /* LOS CONTRASTES FORMALES: preguntas sobre la estructura que se
+       contestan reestimando (¿sobra una diferencia?, ¿sobran los
+       armónicos?). Suponen la diagnosis limpia; la ventana lo dice.    */
+    b = gtk_button_new_with_label( "Contrastes formales…" );
+    gtk_widget_set_tooltip_text( b,
+        "Shin-Fuller, el DCD regular y el estacional, y la simplificación "
+        "estacional: cada uno reestima el modelo con un parámetro fijo y "
+        "compara las verosimilitudes. Suponen un modelo adecuado." );
+    g_signal_connect( b, "clicked", G_CALLBACK(on_formales), g );
     gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
 
     b = gtk_button_new_with_label( "Exportar…" );

@@ -32,6 +32,8 @@ SRC = src/main.c src/ventana.c src/gestos.c src/datos_gui.c src/vistazo.c \
       $(LIB)/analisis/an_factores.c \
       $(LIB)/raices/raiz.c \
       $(LIB)/raices/factor.c \
+      $(LIB)/analisis/an_formales.c \
+      $(LIB)/formales/formales.c \
       ../../engines/art/src/unit_root_tests.c \
       $(LIB)/artcand/artcand.c \
       $(LIB)/analisis/plotstats.c \
@@ -71,7 +73,7 @@ LIBHDR = $(wildcard $(LIB)/*/*.h)
 INC = -Iinclude -I$(LIB)/proyecto -I$(LIB)/outdiag -I$(LIB)/outfile -I$(LIB)/analisis -I$(LIB)/equation -I$(LIB)/dictamen -I$(LIB)/anomalos -I$(LIB)/intervencion -I$(LIB)/inpdet -I$(LIB)/engine -I$(LIB)/inpcheck -I$(LIB)/tabla \
       -I$(LIB)/rutas -I$(LIB)/sitio -I$(LIB)/dates -I$(LIB)/datos -I$(LIB)/xlsx \
       -I../../engines/fug/src -I$(LIB)/preview -I$(LIB)/fugdraw -I$(LIB)/fugplot -I$(LIB)/utils -I$(LIB)/artcand \
-      -I$(LIB)/raices -I../../engines/art/include
+      -I$(LIB)/raices -I$(LIB)/formales -I../../engines/art/include
 
 GTK_CFLAGS := $(shell pkg-config --cflags gtk+-3.0 2>/dev/null)
 GTK_LIBS   := $(shell pkg-config --libs   gtk+-3.0 2>/dev/null)

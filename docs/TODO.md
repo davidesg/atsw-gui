@@ -127,14 +127,24 @@ art-python número a número (`test_raices`, en la batería de `gui/drtran`):
 | hecho | **La factorización del AR** (`ar_factorization`): raíces, amortiguamiento, frecuencia y periodo, ± por el método delta en un AR(2) entero, el aviso de los módulos parecidos (BUG-0103) | Diagnosis → «Factorización del AR…» |
 
 **Los contrastes formales**, lo decidido el 2026-09-26, de más barato a más
-caro. Todos reestiman con fue, e irán en su propia ventana:
+caro. Todos reestiman con fue, en su propia ventana: Diagnosis →
+«Contrastes formales…» (`lib/formales`, `an_formales`). Se corren de uno en
+uno sin bloquear, y cada uno se coteja con art-python número a número
+(`test_formales`, en la batería de `gui/drtran`, con fue de verdad):
 
 | | qué | coste |
 |---|---|---|
-| | la simplificación estacional (RV de los armónicos) | una corrida |
-| | Shin-Fuller y el DCD regular y estacional | una corrida por contraste |
-| | la sobrediferenciación d+1 con testigo | dos corridas |
+| hecho | la simplificación estacional (RV de los armónicos) | una corrida |
+| hecho | Shin-Fuller (la raíz real positiva dominante; un AR(p) se parte, BUG-0065) y el DCD regular y estacional | una corrida por contraste |
+| hecho | la sobrediferenciación d+1 con testigo y el **par confirmatorio en f = 0** con Shin-Fuller (las reservas del BUG-0011: ley desnuda con deterministas, banda de cuasi-cancelación); la subdiferenciación d−1, **que se pide y no se ofrece** (BUG-0167), con el AR acotado en ρ (BUG-0224) y el reintento del libre (BUG-0236) | dos o tres corridas |
 | | el MEG, DCD_f y su reformulación; experimental en art | ~3 corridas por frecuencia |
+
+Quedan fuera, de lo hecho: el DCD de un MA(q) con q > 1 (art tampoco lo
+hace); el reintento del BUG-0236 en el DCD regular y el estacional (sí está en
+la sobre y la subdiferenciación, como en art); el Shin-Fuller por sobreajuste
+cuando el AR no tiene raíz real positiva, y el par de la frontera d−1/d que
+cruza dos modelos (BUG-0235). Y de art sigue abierto el fondo del BUG-0011: el
+crítico corregido en f = 0 con deterministas.
 
 **No se porta el veredicto encadenado** de art (`describe_formal_tests`, ~950
 líneas): es donde viven BUG-0215 y BUG-0232. Cada contraste dirá su número, su

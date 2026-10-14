@@ -38,7 +38,7 @@ typedef struct {
     gboolean   corriendo, cerrada;
     gchar     *exe, *dir;
     char       aviso[512];
-    GtkWidget *win, *l_texto, *l_estado;
+    GtkWidget *win, *l_texto, *l_estado, *b_sub;
 } Fm;
 
 static gchar *programa_fue( void )
@@ -57,10 +57,243 @@ static void criticos( GString *t, const FmPrueba *x, const char *de )
                             de ? " de " : "", de ? de : "", x->c10, x->c5, x->c1 );
 }
 
+/* EL DCD DE SOBREDIFERENCIACION, como lo escribe art (describe.py): el
+ * titular lleva dentro sus reservas, que un titular invita a leer solo el
+ * titular (art BUG-0055). Y las reservas son las del BUG-0011: el critico es
+ * el de la ley DESNUDA, y con deterministas en el candidato el de verdad es
+ * otro. */
+#define CRIT_ARMONICOS_F0 2.15
+
+static const FmPrueba *de_tipo( const Fm *g, FmTipo tipo )
+{
+    int i;
+
+    for ( i = 0; i < g->pl.n; i++ )
+        if ( g->pl.t[i].tipo == tipo ) return &g->pl.t[i];
+    return NULL;
+}
+
+static void sobre( GString *t, const Fm *g, const FmPrueba *x )
+{
+    const FmPrueba *sf = de_tipo( g, FM_SF );
+    int             otros = g->pl.n_det - g->pl.n_armon;
+    gboolean        sin_par = !sf;
+
+    g_string_append_printf( t, "    θ̂ = %.4f (%s).  L = %.4f con el testigo,  L<sub>0</sub> = %.4f.  "
+                            "LR = 2(L − L<sub>0</sub>) = <b>%.3f</b>\n    ", x->coef, x->testigo,
+                            x->l_libre, x->l_restr, x->est );
+    criticos( t, x, "Davis-Dunsmuir (ley desnuda, s = 1)" );
+    g_string_append( t, "\n    → " );
+    if ( x->est < x->c5 )
+        {
+        if ( x->coef < 0.0 )
+            g_string_append( t, "el testigo se fue al eje de π (θ̂ &lt; 0): <b>no mide f = 0</b>, "
+                                "así que este lado no da veredicto sobre d." );
+        else if ( 1.0 - x->coef <= FM_BANDA )
+            g_string_append_printf( t, "testigo en la frontera (θ̂ → +1): la diferencia extra "
+                                       "sobra → <b>con d = %d basta</b>.", g->pl.d );
+        else
+            g_string_append_printf( t, "no se rechaza θ = 1, pero el testigo no se apila en +1 "
+                "(está a %.4f): la diferencia extra no se demuestra necesaria → d basta por "
+                "este lado, sin confirmación fuerte.", 1.0 - x->coef );
+        }
+    else if ( g->pl.n_det || sin_par )
+        {
+        g_string_append( t, "testigo invertible → <b>este lado, POR SÍ SOLO, apuntaría a d + 1, "
+                            "pero NO es concluyente</b>: " );
+        if ( otros )
+            g_string_append( t, "el crítico impreso puede estar subestimado (deterministas de "
+                                "baja frecuencia, resonantes en f = 0)" );
+        else if ( g->pl.n_armon )
+            g_string_append_printf( t, "el crítico impreso es algo bajo (≈ %.2f con armónicos, "
+                                       "n = 216)", CRIT_ARMONICOS_F0 );
+        if ( sin_par ) g_string_append_printf( t, "%sfalta el lado AR del par",
+                                               g->pl.n_det ? " y " : "" );
+        g_string_append( t, ". Lee las reservas de abajo ANTES de mover d." );
+        }
+    else
+        g_string_append( t, "testigo invertible → raíz unitaria regular genuina → este lado "
+                            "apunta a d + 1 (un solo lado: confírmalo con el par en f = 0)." );
+    g_string_append_printf( t, "\n    <small>Candidato: %s. θ̂ mide la persistencia de ∇<sup>%d</sup> y "
+                            "que %s.</small>", x->candidato, g->pl.d,
+                            g->pl.p_ar ? "ese AR no explica: depende del modelo base, y sobre otro "
+                                         "AR sale otro θ̂" : "nada más explica" );
+    if ( g->pl.n_det )
+        {
+        g_string_append_printf( t, "\n    <small>ⓘ El crítico usado (%.2f) es el de la ley "
+            "desnuda s = 1, y el candidato no lleva media (la diferencia extra la elimina).",
+            x->c5 );
+        if ( g->pl.n_armon )
+            g_string_append_printf( t, " Lleva %d armónicos, que no resuenan en f = 0: medido "
+                "con el motor exacto del estudio (n = 216), el crítico al 5 %% sube a ≈ %.2f. Un "
+                "LR por encima de eso no se explica por el crítico.", g->pl.n_armon,
+                CRIT_ARMONICOS_F0 );
+        if ( otros )
+            g_string_append_printf( t, " Lleva %d determinista(s) de baja frecuencia (escalón, "
+                "rampa, impulso…), que sí pueden resonar en f = 0 como la media; su efecto sobre "
+                "el crítico no está medido. Un LR apenas por encima del impreso NO es evidencia "
+                "de d + 1.", otros );
+        g_string_append( t, "</small>" );
+        }
+    if ( fabs( fabs( x->coef ) - 1.0 ) > 1e-6 )
+        g_string_append_printf( t, "\n    <small>ⓘ θ̂ se queda dentro, cerca de la frontera: "
+            "∇<sup>%d</sup> y es persistente, no un error de cálculo (la verosimilitud de fue en "
+            "θ = 1 coincide con la exacta del estudio, validada sobre candidatos sin AR).%s"
+            "</small>", g->pl.d, g->pl.p_ar ? " Este candidato lleva el AR del modelo, y con AR "
+            "esa validación no está hecha." : "" );
+    if ( sin_par )
+        {
+        gchar *m = g_markup_escape_text( g->pl.no_aplica[1], -1 );
+
+        g_string_append_printf( t, "\n    ⚠ <b>Sin par confirmatorio</b> (%s): este veredicto es "
+            "un solo lado, y los contrastes de frontera se leen en pareja. Antes de mover d, "
+            "estima el candidato d + 1 y compáralo por diagnosis y criterios de información.", m );
+        g_free( m );
+        }
+    g_string_append( t, "\n\n" );
+}
+
+/* EL DCD DE SUBDIFERENCIACION (_estado_subdif y _texto_subdif de art) */
+static void sub( GString *t, const Fm *g, const FmPrueba *x )
+{
+    gboolean genuina = x->est >= x->c5;
+    gboolean cancelada = !genuina && !x->raices_complejas && !x->acotado &&
+                         1.0 - x->coef <= FM_BANDA;
+
+    if ( x->raices_complejas )
+        g_string_append_printf( t, "    El MA del modelo solo tiene raíces complejas (módulo "
+            "%.4f): ninguna puede ser la (1 − B) que cancelaría la diferencia.  ", x->coef );
+    else
+        g_string_append_printf( t, "    θ̂ = %.4f (%s).  ", x->coef, x->testigo );
+    g_string_append_printf( t, "L = %.4f,  L<sub>0</sub> = %.4f.  LR = <b>%.3f</b>\n    ",
+                            x->l_libre, x->l_restr, x->est );
+    criticos( t, x, "Davis-Dunsmuir" );
+    g_string_append( t, "\n    → " );
+    if ( genuina )
+        g_string_append_printf( t, "testigo invertible → la diferencia es genuina → <b>d = %d "
+                                   "confirmado por abajo</b>.", g->pl.d );
+    else if ( x->raices_complejas )
+        g_string_append( t, "no se rechaza, pero sin raíz real que se apile en +1: <b>no "
+                            "concluyente</b>." );
+    else if ( cancelada )
+        g_string_append_printf( t, "testigo en la frontera (θ̂ → +1) → la diferencia está "
+                                   "CANCELADA → <b>con d = %d bastaba</b>.", g->pl.d - 1 );
+    else if ( x->acotado )
+        g_string_append_printf( t, "no se rechaza θ = 1, pero <b>no concluyente</b>: con θ = 1 "
+            "el AR del modelo en d − 1 se va a φ̂ = %.4f (≥ ρ = %.4f) y reconstruye la diferencia "
+            "cancelada; por el lado AR la diferencia hace falta.", x->phi_r, x->rho_m );
+    else
+        g_string_append_printf( t, "no se rechaza θ = 1, pero θ̂ está a %.4f de la frontera: "
+            "el LR es bajo porque la verosimilitud es plana, <b>no concluyente</b>.",
+            1.0 - x->coef );
+    if ( isfinite( x->phi_r ) )
+        g_string_append_printf( t, x->acotado
+            ? "\n    <small>ⓘ Con θ = 1 —el modelo en d − 1— el AR libre se iba a φ̂ = %.4f, en "
+              "ρ = %.4f o por encima: (1 − φB) con φ → 1 es otra vez (1 − B), y reconstruía la "
+              "diferencia que el MA acaba de cancelar. Se acota en ρ, el umbral de Shin-Fuller, "
+              "y el LR es contra «d − 1 con un AR estacionario».</small>"
+            : "\n    <small>ⓘ El AR del restringido (el modelo en d − 1) tiene su raíz real "
+              "dominante en φ̂ = %.4f, por debajo de ρ = %.4f: no reconstruye la diferencia."
+              "</small>", x->phi_r, x->rho_m );
+    g_string_append( t, "\n\n" );
+}
+
+/* EL PAR CONFIRMATORIO EN f = 0: Shin-Fuller y el DCD de sobrediferenciacion
+ * tienen nulas opuestas sobre el mismo orden de integracion. Su desacuerdo
+ * no se resuelve eligiendo uno: dentro de la banda, ES el diagnostico de la
+ * cuasi-cancelacion (art, describe_formal_tests). */
+static void par( GString *t, const Fm *g )
+{
+    const FmPrueba *sf = de_tipo( g, FM_SF ), *od = de_tipo( g, FM_SOBRE ), *ud = de_tipo( g, FM_SUB );
+    gboolean        basta, mas, fuera;
+    double          dist;
+
+    if ( !sf || !od || !sf->hecho || !od->hecho || !sf->calculable || !od->calculable ) return;
+    basta = sf->rechaza;
+    mas   = od->est >= od->c5;
+    fuera = od->coef < 0.0;
+    dist  = 1.0 - od->coef;
+    g_string_append_printf( t, "<b>Par confirmatorio en f = 0</b> — dos contrastes con nulas "
+        "opuestas sobre el mismo orden de integración\n"
+        "    lado AR (Shin-Fuller, H<sub>0</sub>: ρ = 1): %s\n"
+        "    lado MA (DCD de sobrediferenciación, H<sub>0</sub>: θ = 1): %s\n",
+        basta ? "d basta" : "raíz unitaria → d + 1",
+        mas ? "raíz genuina → d + 1" : "la diferencia extra sobra → d basta" );
+
+    if ( fuera )
+        g_string_append_printf( t, "    ⚠ <b>El testigo se salió del eje f = 0.</b> θ̂ = %.4f es "
+            "negativo: su raíz apunta a B = −1, así que mide la frecuencia de Nyquist, no la "
+            "cero. <b>El lado MA no es interpretable como veredicto sobre d</b> en esta corrida%s\n",
+            od->coef, basta == !mas ? "; que coincidan no confirma nada: queda el lado AR solo."
+                                    : "." );
+    else if ( basta != !mas )
+        {
+        if ( !basta )
+            {
+            g_string_append_printf( t, "    ⚠ <b>DISCREPAN: ninguno rechaza su nula.</b> Shin-Fuller "
+                "no rechaza la raíz unitaria (φ̂ = %.4f) y apunta a d + 1; el DCD no rechaza θ = 1 "
+                "(θ̂ = %.4f, LR = %.3f &lt; %.2f): la diferencia extra se cancela y d basta.\n",
+                sf->coef, od->coef, od->est, od->c5 );
+            g_string_append_printf( t, dist <= FM_BANDA
+                ? "    Con el testigo a %.4f de la frontera es la <b>banda de cuasi-cancelación</b> "
+                  "vista desde el lado sin potencia: las dos representaciones son <b>equivalentes "
+                  "en previsión</b>, y un no-rechazo de Shin-Fuller no demuestra la raíz unitaria. "
+                  "<b>No subas d con esta evidencia</b>: decide por parsimonia o comparando "
+                  "previsiones fuera de muestra.\n"
+                : "    Con el testigo a %.4f de la frontera NO es la banda de cuasi-cancelación. "
+                  "Un no-rechazo de Shin-Fuller no demuestra la raíz unitaria: antes de mover d, "
+                  "estima el candidato d + 1 y compáralo por diagnosis y criterios de "
+                  "información.\n", dist );
+            }
+        else if ( dist <= FM_BANDA )
+            g_string_append_printf( t, "    ⚠ <b>DISCREPAN, y eso es el diagnóstico.</b> Con θ̂ = %.4f "
+                "el testigo está a %.4f de la frontera: es la <b>banda de cuasi-cancelación</b> "
+                "(r ≈ 0.90–0.95 en el artículo), donde el lado MA detecta que r &lt; 1 y el lado AR "
+                "ve un proceso casi estacionario. Los dos tienen razón. En esa banda las "
+                "representaciones son <b>equivalentes en previsión</b>: la decisión se toma por "
+                "parsimonia, o comparando previsiones fuera de muestra. <b>No leas «d + 1» como "
+                "una conclusión.</b>\n", od->coef, dist );
+        else
+            g_string_append_printf( t, "    ⚠ <b>DISCREPAN, y NO es la banda de cuasi-cancelación.</b> "
+                "Con θ̂ = %.4f el testigo está a %.4f de la frontera, y la banda exige %.2f o "
+                "menos. Sin la banda tampoco vale la equivalencia en previsión: antes de mover d, "
+                "estima el candidato rival y compáralo por diagnosis y criterios de información. "
+                "Descarta antes un modelo todavía inadecuado y deterministas de baja frecuencia "
+                "(escalones), que pueden subir el crítico real del lado MA.\n",
+                od->coef, dist, FM_BANDA );
+        }
+    else
+        {
+        g_string_append( t, "    ✓ Los dos coinciden: el orden de integración no está en la "
+                            "banda ambigua.\n" );
+        if ( ud && ud->hecho )
+            {
+            gboolean genuina = ud->calculable && ud->est >= ud->c5;
+            gboolean cancelada = ud->calculable && !genuina && !ud->raices_complejas &&
+                                 !ud->acotado && 1.0 - ud->coef <= FM_BANDA;
+
+            g_string_append( t, genuina
+                ? "    ✓ Y acotado por abajo: la última diferencia es genuina, así que d − 1 no "
+                  "habría bastado. Las dos direcciones cierran sobre la misma d.\n"
+                : cancelada
+                ? "    ⚠ <b>Pero por abajo no cierra:</b> el testigo de subdiferenciación se apila "
+                  "en θ = +1, así que la última diferencia está cancelada y con d − 1 bastaba. "
+                  "Estima el candidato d − 1 y compáralo por diagnosis y criterios de "
+                  "información.\n"
+                : "    ⚠ Por abajo no hay veredicto: la subdiferenciación no es concluyente o no "
+                  "es calculable. El orden queda acotado solo por arriba.\n" );
+            }
+        else
+            g_string_append( t, "    ⓘ Solo por arriba: el lado d − 1 no se ha pedido.\n" );
+        }
+    g_string_append( t, "\n" );
+}
+
 static void un_contraste( GString *t, const Fm *g, const FmPrueba *x, int i )
 {
     static const char *const nom[] = { "Simplificación estacional", "Shin-Fuller",
-                                       "DCD", "DCD estacional" };
+                                       "DCD", "DCD estacional", "Sobrediferenciación",
+                                       "Subdiferenciación (pedida)" };
     gchar *h = g_markup_escape_text( x->hipotesis, -1 );
 
     g_string_append_printf( t, "<b>%s</b>   H<sub>0</sub>: %s\n", nom[x->tipo], h );
@@ -87,6 +320,8 @@ static void un_contraste( GString *t, const Fm *g, const FmPrueba *x, int i )
         return;
         }
 
+    if ( x->tipo == FM_SOBRE ) { sobre( t, g, x ); return; }
+    if ( x->tipo == FM_SUB )   { sub( t, g, x );   return; }
     g_string_append_printf( t, "    L = %.4f,  L<sub>0</sub> = %.4f.   ", x->l_libre, x->l_restr );
     switch ( x->tipo )
         {
@@ -146,6 +381,8 @@ static void un_contraste( GString *t, const Fm *g, const FmPrueba *x, int i )
                 : "\n    → <b>No rechaza H<sub>0</sub></b>: Θ está en la frontera: la diferencia "
                   "estacional sobra y la estacionalidad sería determinista.\n\n" );
             break;
+        default:
+            break;
         }
 }
 
@@ -157,9 +394,10 @@ static void pinta( Fm *g )
     if ( g->aviso[0] )
         g_string_append_printf( t, "<span foreground=\"#9a6700\"><b>%s</b></span>\n\n", g->aviso );
     for ( i = 0; i < g->pl.n; i++ ) un_contraste( t, g, &g->pl.t[i], i );
+    par( t, g );
     if ( g->pl.n == 0 )
         g_string_append( t, "Este modelo no admite ninguno de los contrastes formales que hay.\n\n" );
-    for ( k = 0; k < 4; k++ )
+    for ( k = 0; k < 6; k++ )
         if ( g->pl.no_aplica[k][0] )
             {
             gchar *m = g_markup_escape_text( g->pl.no_aplica[k], -1 );
@@ -190,9 +428,9 @@ static void acabo( const EngineResult *r, gpointer data )
     if ( g->cerrada )
         { g_free( g->exe ); g_free( g->dir ); g_free( g ); return; }
     /* SOLO EL 0: con un 3 fue no pudo estimar y deja los valores
-       iniciales, y su logelf no es el maximo de nada.                  */
-    fm_resultado( &g->pl.t[g->cur], g->l_libre, g->pl.nobs, g->pl.s, r->status == 0 );
-    g->cur++;
+       iniciales, y su logelf no es el maximo de nada. Si al contraste le
+       falta otra estimacion, fm_avanza la deja escrita y se corre esa. */
+    if ( !fm_avanza( &g->pl, &g->pl.t[g->cur], g->l_libre, r->status == 0 ) ) g->cur++;
     siguiente( g );
 }
 
@@ -207,15 +445,15 @@ static void siguiente( Fm *g )
         strcpy( viejo + strlen( viejo ) - 4, ".out" );
         g_unlink( viejo );
         g_free( viejo );
-        e = g_strdup_printf( "Contraste %d de %d: estimando el modelo restringido…",
-                                         g->cur + 1, g->pl.n );
+        e = g_strdup_printf( "Contraste %d de %d: estimando %s…", g->cur + 1, g->pl.n,
+                             g->pl.t[g->cur].base );
 
         gtk_label_set_text( GTK_LABEL(g->l_estado), e );
         g_free( e );
         g->corriendo = engine_run_async( g->dir, g->exe, argv, NULL, acabo, g );
         if ( !g->corriendo )
             {
-            fm_resultado( &g->pl.t[g->cur], g->l_libre, g->pl.nobs, g->pl.s, FALSE );
+            while ( fm_avanza( &g->pl, &g->pl.t[g->cur], g->l_libre, FALSE ) ) ;
             g_snprintf( g->pl.t[g->cur].motivo, sizeof g->pl.t[g->cur].motivo,
                         "no pude lanzar %s", g->exe );
             g->cur++;
@@ -228,6 +466,19 @@ static void siguiente( Fm *g )
             ? "Hecho. Cada contraste dice lo suyo; qué hacer con ello lo decides tú."
             : "No encuentro «fue»: ni al lado de esta ventana ni en el PATH." );
     pinta( g );
+}
+
+/* EL LADO d - 1 SE PIDE, NO SE OFRECE (art BUG-0167): correrlo siempre
+ * seria pre-testing. Lo pide el analista cuando hay motivo. */
+static void on_sub( GtkButton *b, Fm *g )
+{
+    char why[256];
+
+    if ( fm_plan_sub( &g->pl, why, sizeof why ) != 0 )
+        { gtk_label_set_text( GTK_LABEL(g->l_estado), why ); return; }
+    gtk_widget_set_sensitive( GTK_WIDGET(b), FALSE );
+    if ( !g->corriendo ) siguiente( g );
+    else pinta( g );
 }
 
 static void on_cerrar( GtkWidget *w, Fm *g )
@@ -327,9 +578,24 @@ void an_formales( const AnHost *h, const char *serie, const char *muestra, const
     gtk_container_add( GTK_CONTAINER(sw), g->l_texto );
     gtk_box_pack_start( GTK_BOX(raiz), sw, TRUE, TRUE, 0 );
 
+    {
+    GtkWidget *barra = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 8 );
+
     g->l_estado = gtk_label_new( NULL );
     gtk_label_set_xalign( GTK_LABEL(g->l_estado), 0.0 );
-    gtk_box_pack_start( GTK_BOX(raiz), g->l_estado, FALSE, FALSE, 0 );
+    gtk_label_set_line_wrap( GTK_LABEL(g->l_estado), TRUE );
+    gtk_box_pack_start( GTK_BOX(barra), g->l_estado, TRUE, TRUE, 0 );
+    g->b_sub = gtk_button_new_with_label( "Contrastar también d − 1…" );
+    gtk_widget_set_sensitive( g->b_sub, g->pl.d >= 1 );
+    gtk_widget_set_tooltip_text( g->b_sub, g->pl.d >= 1
+        ? "¿Sobraba la última diferencia? Se pide, no se ofrece: correrlo siempre sería "
+          "pre-testing. Tiene sentido cuando la serie parece estacionaria en nivel, es un "
+          "precio relativo o se está en un estudio de cointegración."
+        : "Con d = 0 no hay diferencia que cuestionar." );
+    g_signal_connect( g->b_sub, "clicked", G_CALLBACK(on_sub), g );
+    gtk_box_pack_end( GTK_BOX(barra), g->b_sub, FALSE, FALSE, 0 );
+    gtk_box_pack_start( GTK_BOX(raiz), barra, FALSE, FALSE, 0 );
+    }
 
     g_signal_connect( g->win, "destroy", G_CALLBACK(on_cerrar), g );
     gtk_widget_show_all( g->win );

@@ -186,4 +186,20 @@ int id_det_lee( const char *origen, char det[][ID_LINEA], int libre[], int max,
 int id_fija_det( const char *origen, const char *destino, const char *const *nom,
                  int nn, int *fijados, char *porque, size_t n );
 
+/* Copy origen into destino with its four ARMA sections REWRITTEN from a:
+ * the factors, their seeds (exact) and their flags. The section labels and
+ * everything outside them, byte for byte. With a read by id_arma_lee and not
+ * touched, the operators are the same. 0, or 1 with the reason.         */
+int id_escribe_arma( const char *origen, const char *destino, const IdArma *a,
+                     char *porque, size_t n );
+
+/* Copy origen into destino with the mean line (after "** Mean parameter")
+ * set to valor and flag (0 fixed, 1 estimated). 0, or 1 with the reason. */
+int id_fija_media( const char *origen, const char *destino, double valor, int flag,
+                   char *porque, size_t n );
+
+/* The individual factors of the annual difference, ifadf[0..6] as the file
+ * has them (f = 0, 1, ..., s/2). 0, or 1 with the reason.               */
+int id_ifadf( const char *origen, int ifadf[7], char *porque, size_t n );
+
 #endif /* ATSW_INPDET_H */

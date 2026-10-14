@@ -410,13 +410,31 @@ bloquear la ventana:
   con 11 grados de libertad, muy por encima del crítico (19.7): no sobran.
 - **Shin-Fuller**: ¿le falta una diferencia al AR, es decir, tiene una raíz en
   1 − 4/n? Φ = 26.9 frente a un crítico de 1.76: no; con d = 1 basta.
+- **Sobrediferenciación**: se impone una diferencia más (d = 2) con un testigo
+  MA(1), y se pregunta si el testigo se apila en θ = 1, o sea, si la diferencia
+  extra sobra. Aquí θ̂ = 0.971 y LR = 4.22 frente a 1.94: por sí solo apuntaría
+  a d = 2, y la ventana avisa de que **no es concluyente**. El crítico 1.94 es
+  el de la ley sin deterministas (con los 11 armónicos sería ≈ 2.15), pero 4.22
+  queda por encima de los dos: lo que lo explica es el par, justo debajo.
 - El **DCD** (¿sobra una diferencia regular?) y el **DCD estacional** (¿sobra
   la diferencia estacional?) miran un MA en su frontera, y m01 no tiene MA: la
   ventana dice que no aplican.
 
-Cada contraste dice su número, sus críticos y lo que dice; no se encadenan en
-un veredicto. Y suponen un modelo **adecuado**: se pasan con la diagnosis
-limpia, y si no lo está, la ventana lo avisa arriba.
+Shin-Fuller y la sobrediferenciación forman el **par confirmatorio en f = 0**:
+miran el mismo orden de integración con nulas opuestas. En m01 discrepan, y la
+ventana lo explica: con θ̂ = 0.971 el testigo está a 0.03 de la frontera, en la
+**banda de cuasi-cancelación**. Ahí las dos representaciones (d = 1 con un AR
+casi unitario, o d = 2 con un MA casi unitario) son equivalentes en previsión,
+y la decisión no la toman estos estadísticos sino la parsimonia: **d = 1**.
+
+**Contrastar también d − 1…** pregunta lo contrario: ¿sobraba la última
+diferencia? No se corre solo, porque correrlo siempre sería contrastar sin
+motivo. Se pide cuando la serie parece estacionaria en nivel, es un precio
+relativo o se está en un estudio de cointegración.
+
+Cada contraste dice su número, sus críticos y lo que dice. Y suponen un modelo
+**adecuado**: se pasan con la diagnosis limpia, y si no lo está, la ventana lo
+avisa arriba.
 
 **Q de Ljung-Box**: se calcula en los retardos 12, 24, 36 y 3·12 + 2 (en
 general s, 2s, 3s y 3s + 3). El veredicto lo da el último, el más exigente. Si

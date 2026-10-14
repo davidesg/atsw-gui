@@ -2240,6 +2240,34 @@ static void menu_modelo_prueba( void )
                "y cada uno dice lo suyo", txt );
         nota( "contrastes formales de m01: %s", txt && strstr( txt, "Shin-Fuller" )
               ? "con Shin-Fuller" : "sin Shin-Fuller" );
+        /* el par en f = 0 sale con Shin-Fuller y la sobrediferenciacion */
+        check( txt && ( !strstr( txt, "Shin-Fuller   H" ) || !strstr( txt, "Sobrediferenciación" )
+                        || strstr( txt, "Par confirmatorio en f = 0" ) ),
+               "con Shin-Fuller y la sobrediferenciación, el par en f = 0", txt );
+        g_free( txt ); txt = NULL;
+        /* EL LADO d - 1 SE PIDE: el boton lo añade y se calcula */
+        {
+        GtkWidget *bs = wf ? boton_que_dice( GTK_WIDGET(wf), "Contrastar también d − 1…" ) : NULL;
+
+        check( bs != NULL, "y ofrece pedir el lado d − 1", NULL );
+        if ( bs && gtk_widget_get_sensitive( bs ) )
+            {
+            gtk_button_clicked( GTK_BUTTON(bs) );
+            for ( i = 0; i < 120; i++ )
+                {
+                pump( 250 );
+                g_free( txt );
+                txt = textos_de( GTK_WIDGET(wf) );
+                if ( strstr( txt, "Subdiferenciación" ) && strstr( txt, "Hecho." ) &&
+                     !strstr( txt, "estimando" ) ) break;
+                }
+            check( txt && strstr( txt, "Subdiferenciación (pedida)" ) &&
+                   ( strstr( txt, "confirmado por abajo" ) || strstr( txt, "bastaba" ) ||
+                     strstr( txt, "no concluyente" ) || strstr( txt, "No calculable" ) ),
+                   "pedido, el lado d − 1 se calcula y dice lo suyo", txt );
+            nota( "contrastes formales de m01: d − 1 pedido" );
+            }
+        }
         g_free( txt );
         if ( wf ) { gtk_widget_destroy( GTK_WIDGET(wf) ); pump( 100 ); }
         }

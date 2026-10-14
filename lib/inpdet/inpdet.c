@@ -881,3 +881,79 @@ int id_fija_det( const char *origen, const char *destino, const char *const *nom
    if ( fijados ) *fijados = cuantos;
    return 0;
 }
+
+int id_escribe_arma( const char *origen, const char *destino, const IdArma *a,
+                     char *porque, size_t n )
+{
+   Fich  f;
+   int   lab[4], fin, ord[4], k, m;
+   FILE *o;
+
+   if ( fich_lee( origen, &f, porque, n ) ) return 1;
+   if ( arma_mira( &f, lab, &fin, ord, porque, n ) ) { fich_free( &f ); return 1; }
+   o = fopen( destino, "wb" );
+   if ( !o ) { snprintf( porque, n, "no pude escribir «%s»", destino ); fich_free( &f ); return 1; }
+   for ( m = 0; m < lab[0]; m++ ) fputs( f.l[m], o );
+   for ( k = 0; k < 4; k++ )
+       {
+       int i, j;
+
+       fputs( f.l[lab[k]], o );
+       fprintf( o, "%d", a->nf[k] );
+       for ( i = 0; i < a->nf[k]; i++ ) fprintf( o, " %d", a->ord[k][i] );
+       fputs( "\n", o );
+       for ( i = 0; i < a->nf[k]; i++ )
+           {
+           fputs( "**\n", o );
+           for ( j = 0; j < a->ord[k][i]; j++ ) coef_linea( o, a->v[k][i][j], a->fl[k][i][j] );
+           }
+       }
+   for ( m = fin; m < f.n; m++ ) fputs( f.l[m], o );
+   fclose( o );
+   fich_free( &f );
+   return 0;
+}
+
+int id_fija_media( const char *origen, const char *destino, double valor, int flag,
+                   char *porque, size_t n )
+{
+   Fich  f;
+   FILE *o;
+   int   i, lab = -1;
+
+   if ( fich_lee( origen, &f, porque, n ) ) return 1;
+   for ( i = 0; i < f.n; i++ )
+       if ( es_etiqueta( f.l[i] ) && strstr( f.l[i], "Mean parameter" ) ) { lab = i; break; }
+   if ( lab < 0 || lab + 1 >= f.n )
+      { snprintf( porque, n, "no está la línea de la media" ); fich_free( &f ); return 1; }
+   o = fopen( destino, "wb" );
+   if ( !o ) { snprintf( porque, n, "no pude escribir «%s»", destino ); fich_free( &f ); return 1; }
+   for ( i = 0; i < f.n; i++ )
+       if ( i == lab + 1 ) coef_linea( o, valor, flag );
+       else fputs( f.l[i], o );
+   fclose( o );
+   fich_free( &f );
+   return 0;
+}
+
+int id_ifadf( const char *origen, int ifadf[7], char *porque, size_t n )
+{
+   Fich f;
+   int  i, k;
+
+   for ( k = 0; k < 7; k++ ) ifadf[k] = 0;
+   if ( fich_lee( origen, &f, porque, n ) ) return 1;
+   for ( i = 0; i + 1 < f.n; i++ )
+       if ( es_etiqueta( f.l[i] ) && strstr( f.l[i], "Individual factors" ) )
+          {
+          char t[16][64];
+          int  nt = tokens( f.l[i + 1], t, 16 );
+
+          for ( k = 0; k < 7 && k < nt; k++ ) ifadf[k] = atoi( t[k] );
+          fich_free( &f );
+          return 0;
+          }
+   fich_free( &f );
+   snprintf( porque, n, "no está la línea de los factores de la diferencia anual" );
+   return 1;
+}

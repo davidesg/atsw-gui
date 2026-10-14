@@ -136,12 +136,15 @@ uno sin bloquear, y cada uno se coteja con art-python número a número
 |---|---|---|
 | hecho | la simplificación estacional (RV de los armónicos) | una corrida |
 | hecho | Shin-Fuller (la raíz real positiva dominante; un AR(p) se parte, BUG-0065) y el DCD regular y estacional | una corrida por contraste |
-| | la sobrediferenciación d+1 con testigo, y la subdiferenciación d−1 | dos corridas |
+| hecho | la sobrediferenciación d+1 con testigo y el **par confirmatorio en f = 0** con Shin-Fuller (las reservas del BUG-0011: ley desnuda con deterministas, banda de cuasi-cancelación); la subdiferenciación d−1, **que se pide y no se ofrece** (BUG-0167), con el AR acotado en ρ (BUG-0224) y el reintento del libre (BUG-0236) | dos o tres corridas |
 | | el MEG, DCD_f y su reformulación; experimental en art | ~3 corridas por frecuencia |
 
 Quedan fuera, de lo hecho: el DCD de un MA(q) con q > 1 (art tampoco lo
-hace) y el reintento del libre desde el restringido de `_frontera_theta_uno`
-(BUG-0236): aquí un LR negativo sale como «no calculable», sin reintentar.
+hace); el reintento del BUG-0236 en el DCD regular y el estacional (sí está en
+la sobre y la subdiferenciación, como en art); el Shin-Fuller por sobreajuste
+cuando el AR no tiene raíz real positiva, y el par de la frontera d−1/d que
+cruza dos modelos (BUG-0235). Y de art sigue abierto el fondo del BUG-0011: el
+crítico corregido en f = 0 con deterministas.
 
 **No se porta el veredicto encadenado** de art (`describe_formal_tests`, ~950
 líneas): es donde viven BUG-0215 y BUG-0232. Cada contraste dirá su número, su

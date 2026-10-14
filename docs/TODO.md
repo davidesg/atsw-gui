@@ -116,23 +116,29 @@ Queda dicho aquí para que dentro de seis meses no parezca que se coló.
 
 ### Dónde estamos (2026-10-14)
 
-El orden acordado, de más barato a más caro:
+**Antes, dos herramientas de identificación que NO son `formal_tests`** —en
+art tampoco lo son, y por buenas razones: no contrastan el modelo, ayudan a
+elegirlo—. Hechas en `lib/raices`, sin correr el motor, cotejadas con
+art-python número a número (`test_raices`, en la batería de `gui/drtran`):
 
-| | qué | dónde |
+| | qué (en art) | dónde |
 |---|---|---|
-| hecho | **ADF y KPSS para d = 0, 1, 2**, con la regla de art «ADF manda» como punto de partida | Identificación, plegado bajo la cabecera |
-| hecho | **La factorización del AR**: raíces, amortiguamiento, frecuencia y periodo, con ± por el método delta en un AR(2) entero; el aviso de los módulos parecidos (art BUG-0103) | Diagnosis → «Contrastes formales…» |
-| | la simplificación estacional (RV de los armónicos): una corrida más | la misma ventana |
-| | Shin-Fuller y el DCD regular y estacional: una corrida por contraste | la misma ventana |
-| | la sobrediferenciación d+1 con testigo: dos corridas | la misma ventana |
-| | el MEG, DCD_f y su reformulación: ~3 corridas por frecuencia; experimental en art | la misma ventana |
+| hecho | **ADF y KPSS para d = 0, 1, 2** (`unit_root_analysis`): la d de partida, «ADF manda». Los contrastes son los de `engines/art/src/unit_root_tests.c`, compilados tal cual | Identificación, plegado bajo la cabecera |
+| hecho | **La factorización del AR** (`ar_factorization`): raíces, amortiguamiento, frecuencia y periodo, ± por el método delta en un AR(2) entero, el aviso de los módulos parecidos (BUG-0103) | Diagnosis → «Factorización del AR…» |
 
-Las dos primeras no corren el motor: `lib/contrastes`, cotejada con art-python
-número a número (`test_contrastes`, en la batería de `gui/drtran`). ADF y KPSS
-son los de `engines/art/src/unit_root_tests.c`, compilados tal cual. **No se
-porta el veredicto encadenado** de art (`describe_formal_tests`, ~950 líneas):
-es donde viven BUG-0215 y BUG-0232; cada contraste dirá su número, su crítico y
-lo que dice, y un LR no finito saldrá como «no calculable».
+**Los contrastes formales**, lo decidido el 2026-09-26, de más barato a más
+caro. Todos reestiman con fue, e irán en su propia ventana:
+
+| | qué | coste |
+|---|---|---|
+| | la simplificación estacional (RV de los armónicos) | una corrida |
+| | Shin-Fuller y el DCD regular y estacional | una corrida por contraste |
+| | la sobrediferenciación d+1 con testigo | dos corridas |
+| | el MEG, DCD_f y su reformulación; experimental en art | ~3 corridas por frecuencia |
+
+**No se porta el veredicto encadenado** de art (`describe_formal_tests`, ~950
+líneas): es donde viven BUG-0215 y BUG-0232. Cada contraste dirá su número, su
+crítico y lo que dice, y un LR no finito saldrá como «no calculable».
 
 ### Lo que hará falta
 

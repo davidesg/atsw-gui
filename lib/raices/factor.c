@@ -35,7 +35,7 @@
 #include <glib.h>
 #include <gsl/gsl_poly.h>
 
-#include "contrastes.h"
+#include "raices.h"
 #include "outfile.h"
 
 #define TOL_IMAG     1e-6
@@ -62,13 +62,13 @@ static void et_delta( double a1, double a2, const double cov[2][2],
     *per_et = vp > 0.0 ? sqrt( vp ) : NAN;
 }
 
-int ct_factoriza( const double *c, int p, int s, const double cov2[2][2], CtAr *a )
+int rz_factoriza( const double *c, int p, int s, const double cov2[2][2], RzAr *a )
 {
-    double coef[CT_MAX_ORDEN + 1], z[2 * CT_MAX_ORDEN];
-    int    orden[CT_MAX_ORDEN], usado[CT_MAX_ORDEN];
+    double coef[RZ_MAX_ORDEN + 1], z[2 * RZ_MAX_ORDEN];
+    int    orden[RZ_MAX_ORDEN], usado[RZ_MAX_ORDEN];
     int    i, j, k, n, ncomp = 0, p0 = p;
 
-    if ( p < 0 || p > CT_MAX_ORDEN ) return 1;
+    if ( p < 0 || p > RZ_MAX_ORDEN ) return 1;
     a->orden = p0;
     for ( i = 0; i < p; i++ ) a->c[i] = c[i];
     a->nf = 0;
@@ -115,7 +115,7 @@ int ct_factoriza( const double *c, int p, int s, const double cov2[2][2], CtAr *
     n = 0;
     for ( i = 0; i < p; i++ )
         {
-        CtFactor *f = &a->f[n];
+        RzFactor *f = &a->f[n];
         double    re = a->zre[i], im = a->zim[i];
 
         if ( usado[i] ) continue;
@@ -179,7 +179,7 @@ static int coeficiente( const char *l, double *v, int *idx )
     return 0;
 }
 
-int ct_factores_ar( const char *out, int s, int sin_et, CtFactores *f,
+int rz_factores_ar( const char *out, int s, int sin_et, RzFactores *f,
                     char *why, size_t nwhy )
 {
     FueOut *o;
@@ -203,15 +203,15 @@ int ct_factores_ar( const char *out, int s, int sin_et, CtFactores *f,
         g_strchomp( lin[i] );
         if ( sscanf( lin[i], "Coefficients for regular AR factor %d", &k ) == 1 )
             {
-            cur = f->nar < CT_MAX_AR ? f->nar++ : -1;
+            cur = f->nar < RZ_MAX_AR ? f->nar++ : -1;
             if ( cur >= 0 ) f->ar[cur].orden = 0;
             continue;
             }
         if ( cur >= 0 && coeficiente( lin[i], &v, &idx ) )
             {
-            CtAr *a = &f->ar[cur];
+            RzAr *a = &f->ar[cur];
 
-            if ( a->orden < CT_MAX_ORDEN )
+            if ( a->orden < RZ_MAX_ORDEN )
                 { a->c[a->orden] = v; a->idx[a->orden] = idx; a->orden++; }
             continue;
             }
@@ -225,9 +225,9 @@ int ct_factores_ar( const char *out, int s, int sin_et, CtFactores *f,
 
     for ( k = 0; k < f->nar; k++ )
         {
-        CtAr   *a = &f->ar[k];
-        double  c[CT_MAX_ORDEN], cov[2][2];
-        int     p = a->orden, idx[CT_MAX_ORDEN], con = 0;
+        RzAr   *a = &f->ar[k];
+        double  c[RZ_MAX_ORDEN], cov[2][2];
+        int     p = a->orden, idx[RZ_MAX_ORDEN], con = 0;
 
         memcpy( c, a->c, sizeof c );
         memcpy( idx, a->idx, sizeof idx );
@@ -238,7 +238,7 @@ int ct_factores_ar( const char *out, int s, int sin_et, CtFactores *f,
             cov[0][1] = cov[1][0] = fo_cov( o, idx[0], idx[1] );
             con = cov[0][0] > 0.0 && cov[1][1] > 0.0;
             }
-        if ( ct_factoriza( c, p, s, con ? (const double (*)[2]) cov : NULL, a ) != 0 )
+        if ( rz_factoriza( c, p, s, con ? (const double (*)[2]) cov : NULL, a ) != 0 )
             {
             g_snprintf( why, nwhy, "No pude sacar las raíces del factor AR %d.", k + 1 );
             g_free( o );

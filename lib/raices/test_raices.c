@@ -1,7 +1,8 @@
 /*
- * test_contrastes.c -- LOS CONTRASTES FORMALES, contra art-python.
+ * test_raices.c -- LAS RAICES PARA IDENTIFICAR (ADF/KPSS para d = 0, 1, 2
+ * y la factorizacion del AR), contra art-python.
  *
- *   test_contrastes ipc_wti.csv DIR_GOLDEN_FUE
+ *   test_raices ipc_wti.csv DIR_GOLDEN_FUE
  *
  * Los numeros de referencia los dio art-python (art._raiz_unitaria.adf/kpss
  * y art.roots.factor_ar) el 2026-10-14, sobre los MISMOS ficheros: los datos
@@ -13,7 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "contrastes.h"
+#include "raices.h"
 
 static int fallos;
 
@@ -52,9 +53,9 @@ typedef struct { int n; double adf, adf_p; int adf_lags; double crit, kpss, kpss
 
 static void raiz( const char *nom, const double *x, int n, const Ref *ref, int d_ini )
 {
-    CtRaiz r[CT_MAX_D + 1];
+    RzRaiz r[RZ_MAX_D + 1];
     char   m[256];
-    int    nr = ct_raiz_unitaria( x, n, 0.0, 2, r ), d;
+    int    nr = rz_raiz_unitaria( x, n, 0.0, 2, r ), d;
 
     snprintf( m, sizeof m, "%s: tres filas, d = 0, 1, 2", nom );
     ok( nr == 3, m );
@@ -70,7 +71,7 @@ static void raiz( const char *nom, const double *x, int n, const Ref *ref, int d
             && r[d].kpss_lags == ref[d].kpss_lags, m );
         }
     snprintf( m, sizeof m, "%s: el punto de partida de art es d = %d", nom, d_ini );
-    ok( ct_d_inicial( r, nr ) == d_ini, m );
+    ok( rz_d_inicial( r, nr ) == d_ini, m );
 }
 
 static char *ruta( const char *dir, const char *f )
@@ -92,13 +93,13 @@ int main( int argc, char **argv )
         { 288, -3.684303519,  0.004339435298, 1, -2.871699419, 0.4391883359, 0.06026364831, 10 },
         { 287, -11.61417205,  2.471781251e-21, 1, -2.87173526, 0.1426306945, 0.1, 3 },
         { 286, -8.02606245,   2.015916873e-12, 14, -2.872264977, 0.1733119792, 0.1, 107 } };
-    CtAr       a;
-    CtFactores f;
+    RzAr       a;
+    RzFactores f;
     char       why[256];
     int        n;
 
     if ( argc < 3 )
-        { fprintf( stderr, "uso: test_contrastes ipc_wti.csv DIR_GOLDEN_FUE\n" ); return 2; }
+        { fprintf( stderr, "uso: test_raices ipc_wti.csv DIR_GOLDEN_FUE\n" ); return 2; }
 
     printf( "\nADF Y KPSS PARA d = 0, 1, 2, CONTRA art-python\n" );
     n = lee_csv( argv[1], ipc, wti, 1000 );
@@ -109,14 +110,14 @@ int main( int argc, char **argv )
     raiz( "wti", wti, n, r_wti, 0 );
     {
     double x[5] = { 1, 2, 3, 4, 5 };
-    CtRaiz r[3];
+    RzRaiz r[3];
 
-    ok( ct_raiz_unitaria( x, 5, 0.0, 2, r ) == 0, "una serie de 5 datos no se contrasta" );
+    ok( rz_raiz_unitaria( x, 5, 0.0, 2, r ) == 0, "una serie de 5 datos no se contrasta" );
     static double y[1000];
 
     memcpy( y, wti, sizeof y );
     y[5] = -1.0;
-    ok( ct_raiz_unitaria( y, n, 0.0, 2, r ) == 0 && ct_raiz_unitaria( y, n, 1.0, 2, r ) == 3,
+    ok( rz_raiz_unitaria( y, n, 0.0, 2, r ) == 0 && rz_raiz_unitaria( y, n, 1.0, 2, r ) == 3,
         "con logaritmos, un dato no positivo no se contrasta; en niveles, sí" );
     }
 
@@ -125,7 +126,7 @@ int main( int argc, char **argv )
     /* (1 - 0.5B)(1 + 0.81B^2): el autotest de roots.py */
     double c[3] = { 0.5, -0.81, 0.405 };
 
-    ok( ct_factoriza( c, 3, 12, NULL, &a ) == 0 && a.nf == 2, "AR(3): dos factores" );
+    ok( rz_factoriza( c, 3, 12, NULL, &a ) == 0 && a.nf == 2, "AR(3): dos factores" );
     /* por módulo: el par (raíz 1/0.9) antes que el real (raíz 2) */
     ok( a.f[0].complejo && cerca( a.f[0].r, 0.9, 1e-9 ) && cerca( a.f[0].armonico, 3.0, 1e-9 )
         && cerca( a.f[0].periodo, 4.0, 1e-9 ) && a.f[0].estacional,
@@ -136,7 +137,7 @@ int main( int argc, char **argv )
     {
     double c[2] = { 1.2, -0.6 }, cov[2][2] = { { 0.004, -0.003 }, { -0.003, 0.0035 } };
 
-    ok( ct_factoriza( c, 2, 12, (const double (*)[2]) cov, &a ) == 0 && a.nf == 1
+    ok( rz_factoriza( c, 2, 12, (const double (*)[2]) cov, &a ) == 0 && a.nf == 1
         && a.f[0].con_et && cerca( a.f[0].r, 0.7745966692414834, 1e-9 )
         && cerca( a.f[0].periodo, 9.17629486602647, 1e-9 )
         && cerca( a.f[0].r_et, 0.038188130791298666, 1e-9 )
@@ -146,13 +147,13 @@ int main( int argc, char **argv )
     }
 
     /* Los .out golden del motor */
-    ok( ct_factores_ar( ruta( argv[2], "RIPC.2/RIPC.2.out" ), 12, 0, &f, why, sizeof why ) == 0
+    ok( rz_factores_ar( ruta( argv[2], "RIPC.2/RIPC.2.out" ), 12, 0, &f, why, sizeof why ) == 0
         && f.nar == 1 && f.ar[0].orden == 2 && f.ar[0].nf == 2
         && !f.ar[0].f[0].complejo && cerca( f.ar[0].f[0].modulo, 1.375448102629401, 1e-6 )
         && cerca( f.ar[0].f[1].modulo, 1.6829259514947221, 1e-6 ) && !f.modulos_parecidos,
         "RIPC.2: un AR(2) con dos raíces reales, 1.375 y 1.683" );
 
-    ok( ct_factores_ar( ruta( argv[2], "en4_fac9x2/en4_fac9x2.out" ), 1, 0, &f, why, sizeof why ) == 0
+    ok( rz_factores_ar( ruta( argv[2], "en4_fac9x2/en4_fac9x2.out" ), 1, 0, &f, why, sizeof why ) == 0
         && f.nar == 9, "en4_fac9x2: nueve factores AR(2)" );
     ok( f.ar[0].nf == 1 && f.ar[0].f[0].con_et
         && cerca( f.ar[0].f[0].r, 0.9272459220724565, 1e-6 )
@@ -165,10 +166,10 @@ int main( int argc, char **argv )
         "en4_fac9x2, factor 8: d = 0.951, casi unitario" );
     ok( f.nmod == 18 && cerca( f.mod_disp, 0.11713729793514732, 1e-6 ) && f.modulos_parecidos,
         "en4_fac9x2: 18 módulos con dispersión 11.7 %: el aviso de art BUG-0103" );
-    ok( ct_factores_ar( ruta( argv[2], "en4_fac9x2/en4_fac9x2.out" ), 1, 1, &f, why, sizeof why ) == 0
+    ok( rz_factores_ar( ruta( argv[2], "en4_fac9x2/en4_fac9x2.out" ), 1, 1, &f, why, sizeof why ) == 0
         && !f.ar[0].f[0].con_et, "con la covarianza de semilla, sin ±" );
 
-    ok( ct_factores_ar( ruta( argv[2], "en4_ar18/en4_ar18.out" ), 1, 0, &f, why, sizeof why ) == 0
+    ok( rz_factores_ar( ruta( argv[2], "en4_ar18/en4_ar18.out" ), 1, 0, &f, why, sizeof why ) == 0
         && f.nar == 1 && f.ar[0].orden == 18 && f.ar[0].nf == 9, "en4_ar18: un AR(18), nueve pares" );
     ok( f.ar[0].f[0].complejo && !f.ar[0].f[0].con_et
         && cerca( f.ar[0].f[0].r, 0.947855023151267, 1e-6 )

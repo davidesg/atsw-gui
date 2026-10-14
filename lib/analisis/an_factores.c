@@ -1,29 +1,32 @@
 /*
- * an_contrastes.c -- la ventana de los contrastes formales del modelo
- * estimado. La abre la diagnosis («Contrastes formales…»).
+ * an_factores.c -- la ventana de la factorizacion del AR del modelo
+ * estimado. La abre la diagnosis («Factorización del AR…»).
  *
  * AQUI NO SE DECIDE NADA, como en la diagnosis: los numeros salen de
- * lib/contrastes y esto los escribe con lo que dicen. Que hacer con ello es
+ * lib/raices y esto los escribe con lo que dicen. Que hacer con ello es
  * del analista.
  *
- * Hoy enseña lo que no necesita volver a estimar: LA FACTORIZACION DEL AR
- * (el ar_factorization de art). Las raices de cada factor AR regular, y de
- * cada par complejo su amortiguamiento, su frecuencia y su periodo: un par
+ * Es el ar_factorization de art: las raices de cada factor AR regular, y de
+ * cada par complejo su amortiguamiento, su frecuencia y su periodo. Un par
  * con el periodo en s/k y el amortiguamiento cerca de 1 es un AR estacional
- * escondido en un AR(p) libre. Lo que necesita reestimar --Shin-Fuller, el
- * DCD, el MEG-- vendra a esta misma ventana (docs/TODO.md).
+ * escondido en un AR(p) libre.
+ *
+ * NO ES UN CONTRASTE FORMAL, y en art tampoco esta en formal_tests: describe
+ * el operador estimado para IDENTIFICAR. Si el par escondido lo es de verdad
+ * se contrasta despues (el MEG, con los contrastes formales de verdad, que
+ * tendran su propia ventana: docs/TODO.md).
  */
 
 #include <math.h>
 #include <string.h>
 
-#include "contrastes.h"
+#include "raices.h"
 #include "outfile.h"
 
 #include "analisis.h"
 
 /* «1 − 1.321 B + 0.432 B²», con el signo del fichero: P(B) = 1 − Σ c_j B^j */
-static void polinomio( GString *t, const CtAr *a )
+static void polinomio( GString *t, const RzAr *a )
 {
     int j;
 
@@ -38,7 +41,7 @@ static void polinomio( GString *t, const CtAr *a )
         }
 }
 
-static void un_factor( GString *t, const CtAr *a, int k, int s )
+static void un_factor( GString *t, const RzAr *a, int k, int s )
 {
     int i, fijos = 0;
 
@@ -59,7 +62,7 @@ static void un_factor( GString *t, const CtAr *a, int k, int s )
 
     for ( i = 0; i < a->nf; i++ )
         {
-        const CtFactor *f = &a->f[i];
+        const RzFactor *f = &a->f[i];
 
         if ( !f->complejo )
             {
@@ -88,12 +91,12 @@ static void un_factor( GString *t, const CtAr *a, int k, int s )
     g_string_append( t, "\n" );
 }
 
-void an_contrastes( const AnHost *h, const char *serie, const char *muestra,
+void an_factores_ar( const AnHost *h, const char *serie, const char *muestra,
                     const char *id )
 {
     FueOut      *o;
     Convergence  c;
-    CtFactores  *f;
+    RzFactores  *f;
     GtkWidget   *win, *raiz, *cab, *sw, *l;
     GString     *t;
     char         out[PR_RUTA], why[256];
@@ -115,8 +118,8 @@ void an_contrastes( const AnHost *h, const char *serie, const char *muestra,
     sin_et = convergence_of( out, &c ) && c.iterations == 0;
     convergence_clear( &c );
 
-    f = g_new0( CtFactores, 1 );
-    if ( ct_factores_ar( out, s, sin_et, f, why, sizeof why ) != 0 )
+    f = g_new0( RzFactores, 1 );
+    if ( rz_factores_ar( out, s, sin_et, f, why, sizeof why ) != 0 )
         { an_di( h, "%s", why ); g_free( f ); return; }
 
     t = g_string_new( "" );
@@ -148,7 +151,7 @@ void an_contrastes( const AnHost *h, const char *serie, const char *muestra,
         g_string_append( t, "<small>Un par complejo con el periodo en s/k (un armónico "
             "entero) y d cerca de 1 es un <b>AR estacional escondido</b> dentro de un AR(p) "
             "libre: candidato a un factor de frecuencia fija. Parecerlo no es serlo: se "
-            "contrasta. Los ± salen por el método delta y solo para un AR(2) estimado entero; "
+            "contrasta, y eso no lo hace esta ventana. Los ± salen por el método delta y solo para un AR(2) estimado entero; "
             "en un orden mayor los pares salen de las raíces y no tienen covarianza "
             "propia.</small>" );
         }
@@ -158,7 +161,7 @@ void an_contrastes( const AnHost *h, const char *serie, const char *muestra,
     if ( h->padre ) gtk_window_set_transient_for( GTK_WINDOW(win), h->padre );
     gtk_window_set_default_size( GTK_WINDOW(win), 820, 520 );
     {
-    gchar *ti = g_strdup_printf( "Contrastes formales — %s / %s", serie, id );
+    gchar *ti = g_strdup_printf( "Factorización del AR — %s / %s", serie, id );
 
     gtk_window_set_title( GTK_WINDOW(win), ti );
     g_free( ti );

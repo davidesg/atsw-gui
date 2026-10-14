@@ -249,7 +249,8 @@ Lee de arriba abajo:
   con los contrastes **ADF** (H₀: raíz unitaria) y **KPSS** (H₀: estacionaria)
   para las tres d a la vez. Con d = 0, ADF no rechaza la raíz unitaria y KPSS
   rechaza la estacionariedad: los dos dicen lo mismo, **mira d = 1**. La línea
-  plegada ya lo resume: ADF rechaza por primera vez con d = 1.
+  plegada ya lo resume: ADF rechaza por primera vez con d = 1. Es una ayuda
+  para elegir d, no un contraste formal.
 - **La ACF** decae despacísimo. El gráfico dice lo mismo que los contrastes.
 
 ### Las tres decisiones de arriba
@@ -389,13 +390,13 @@ Cada fila es una pregunta, con **los números** y **qué dicen**:
 | **Parámetros** | ¿Se ganan su sitio? | **4 no** (\|t\| < 2), empezando por un armónico. |
 | **Ganancia** | ¿El efecto de los deterministas es permanente? | Sí. |
 
-**Contrastes formales…** abre la **factorización del AR**: las raíces de cada
-factor autorregresivo y, de cada par complejo, su amortiguamiento, su
-frecuencia y su periodo. Un par con el periodo en una frecuencia estacional
-(12, 6, 4… meses) y el amortiguamiento cerca de 1 sería un AR estacional
-escondido dentro del AR. En m01, un AR(1), sale una sola raíz real, 1.83: no
-hay nada escondido. Los contrastes que necesitan reestimar el modelo
-(Shin-Fuller, DCD, MEG) llegarán a esta misma ventana.
+**Factorización del AR…** enseña las raíces de cada factor autorregresivo y,
+de cada par complejo, su amortiguamiento, su frecuencia y su periodo. Un par
+con el periodo en una frecuencia estacional (12, 6, 4… meses) y el
+amortiguamiento cerca de 1 sería un AR estacional escondido dentro del AR. En
+m01, un AR(1), sale una sola raíz real, 1.83: no hay nada escondido. Es una
+herramienta de identificación, no un contraste: si un par lo parece, se
+contrasta aparte.
 
 **Q de Ljung-Box**: se calcula en los retardos 12, 24, 36 y 3·12 + 2 (en
 general s, 2s, 3s y 3s + 3). El veredicto lo da el último, el más exigente. Si

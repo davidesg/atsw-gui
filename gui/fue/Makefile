@@ -38,7 +38,7 @@ else
 endif
 
 # Compiler and basic flags
-CFLAGS   = -O2 -g -Wall -Iinclude -I../../lib/fugdraw -I../../lib/preview -I../../lib/engine -I../../lib/outfile -I../../lib/utils -I../../lib/datos -I../../lib/xlsx -I../../lib/proyecto -I../../lib/inpcheck -I../../lib/fugplot -I../../lib/analisis -I../../lib/equation -I../../lib/anomalos -I../../lib/dictamen -I../../lib/intervencion -I../../lib/inpdet -I../../lib/tabla -I../../lib/rutas -I../../lib/artcand -I../../lib/sitio -I../../lib/contrastes -I$(ENG_DIR)/fue/include
+CFLAGS   = -O2 -g -Wall -Iinclude -I../../lib/fugdraw -I../../lib/preview -I../../lib/engine -I../../lib/outfile -I../../lib/utils -I../../lib/datos -I../../lib/xlsx -I../../lib/proyecto -I../../lib/inpcheck -I../../lib/fugplot -I../../lib/analisis -I../../lib/equation -I../../lib/anomalos -I../../lib/dictamen -I../../lib/intervencion -I../../lib/inpdet -I../../lib/tabla -I../../lib/rutas -I../../lib/artcand -I../../lib/sitio -I../../lib/raices -I$(ENG_DIR)/fue/include
 LDFLAGS  +=
 LIBS     = -lz -lm
 
@@ -68,9 +68,9 @@ LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c \
            $(LIB_DIR)/equation/eqtran.c \
            $(LIB_DIR)/analisis/an_sugerir.c \
            $(LIB_DIR)/analisis/an_identifica.c \
-           $(LIB_DIR)/analisis/an_contrastes.c \
-           $(LIB_DIR)/contrastes/raiz.c \
-           $(LIB_DIR)/contrastes/factor.c \
+           $(LIB_DIR)/analisis/an_factores.c \
+           $(LIB_DIR)/raices/raiz.c \
+           $(LIB_DIR)/raices/factor.c \
            $(LIB_DIR)/artcand/artcand.c \
            $(LIB_DIR)/sitio/sitio.c \
            $(LIB_DIR)/anomalos/anomalos.c \
@@ -127,7 +127,7 @@ ifeq ($(GTK_CFLAGS),)
 endif
 
 # GSL: la piden ADF/KPSS (los del motor art) y las raices del AR, en
-# lib/contrastes. GSL_LIBS se puede pisar desde fuera: el .deb la mete
+# lib/raices. GSL_LIBS se puede pisar desde fuera: el .deb la mete
 # estatica (packaging/linux/deb.sh).
 GSL_CFLAGS := $(shell $(PKG_CONFIG) --cflags gsl 2>/dev/null)
 GSL_LIBS   ?= $(shell $(PKG_CONFIG) --libs gsl 2>/dev/null)
@@ -182,11 +182,11 @@ $(BUILD_DIR)/inpcheck_fuf.o: $(ENG_DIR)/fuf/src/inpcheck.c $(LIB_DIR)/inpcheck/i
 	$(CC) $(GUI_CFLAGS) $(DEPFLAGS) -I$(ENG_DIR)/fuf/include -Dinp_check=inp_check_fuf -c $< -o $@
 
 # ADF y KPSS NO se copian: se compila el fichero del motor art, como
-# inpcheck. lib/contrastes/raiz.c le pone el art_log callado que pide.
+# inpcheck. lib/raices/raiz.c le pone el art_log callado que pide.
 $(BUILD_DIR)/art_unit_root_tests.o: $(ENG_DIR)/art/src/unit_root_tests.c | $(BUILD_DIR)
 	$(CC) $(GUI_CFLAGS) $(DEPFLAGS) -I$(ENG_DIR)/art/include -c $< -o $@
 
-$(BUILD_DIR)/lib_contrastes/%.o: $(LIB_DIR)/contrastes/%.c | $(BUILD_DIR)
+$(BUILD_DIR)/lib_raices/%.o: $(LIB_DIR)/raices/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
 	$(CC) $(ALL_CFLAGS) -I$(ENG_DIR)/art/include -c $< -o $@
 

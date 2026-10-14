@@ -19,7 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "contrastes.h"
+#include "raices.h"
 #include "unit_root_tests.h"
 
 /* unit_root_tests.c habla por art_log (su printf). En el GUI, callado. */
@@ -29,13 +29,13 @@ int art_log( const char *fmt, ... )
     return 0;
 }
 
-int ct_raiz_unitaria( const double *x, int n, double lam, int max_d, CtRaiz *r )
+int rz_raiz_unitaria( const double *x, int n, double lam, int max_d, RzRaiz *r )
 {
     double *z;
     int     i, d, m, nr = 0;
 
     if ( !x || n < 10 || !r ) return 0;
-    if ( max_d > CT_MAX_D ) max_d = CT_MAX_D;
+    if ( max_d > RZ_MAX_D ) max_d = RZ_MAX_D;
     z = malloc( (size_t) n * sizeof *z );
     if ( !z ) return 0;
 
@@ -50,7 +50,7 @@ int ct_raiz_unitaria( const double *x, int n, double lam, int max_d, CtRaiz *r )
     m = n;
     for ( d = 0; d <= max_d; d++ )
         {
-        CtRaiz *q = &r[nr];
+        RzRaiz *q = &r[nr];
         double  crit[3] = { 0.0, 0.0, 0.0 };
         int     nobs = 0;
 
@@ -78,7 +78,7 @@ int ct_raiz_unitaria( const double *x, int n, double lam, int max_d, CtRaiz *r )
     return nr;
 }
 
-int ct_d_inicial( const CtRaiz *r, int nr )
+int rz_d_inicial( const RzRaiz *r, int nr )
 {
     int i;
 

@@ -36,7 +36,7 @@
 
 #include "analisis.h"
 #include "artcand.h"
-#include "contrastes.h"
+#include "raices.h"
 #include "engine.h"
 #include "inpcheck.h"
 #include "inpdet.h"
@@ -64,8 +64,8 @@ typedef struct {
     char       que[128];
     double    *x;                   /* E1: the series, to identify again    */
     int        n, per, anio;
-    /* ADF y KPSS para d = 0, 1, 2 (lib/contrastes): de la serie, no de art */
-    CtRaiz     raiz[CT_MAX_D + 1];
+    /* ADF y KPSS para d = 0, 1, 2 (lib/raices): de la serie, no de art */
+    RzRaiz     raiz[RZ_MAX_D + 1];
     int        nraiz;
     GtkWidget *exp_raiz, *l_raiz;
 } Id;
@@ -615,13 +615,13 @@ static void cabecera( Id *g )
  * art (el motor) contrasta solo la d en que se identifica, y solo con d <= 1
  * y D = 0. La pregunta del analista es otra: ¿CUANTAS diferencias? Y eso se
  * contesta mirando las tres a la vez. Se calcula aqui, sobre la serie, con
- * los contrastes del propio motor (lib/contrastes).                    */
+ * los contrastes del propio motor (lib/raices).                    */
 static void calcula_raiz( Id *g, const double *x, int n )
 {
-    g->nraiz = ( g->punto <= 2 && x ) ? ct_raiz_unitaria( x, n, g->lam, CT_MAX_D, g->raiz ) : 0;
+    g->nraiz = ( g->punto <= 2 && x ) ? rz_raiz_unitaria( x, n, g->lam, RZ_MAX_D, g->raiz ) : 0;
 }
 
-static const char *dicen( const CtRaiz *r )
+static const char *dicen( const RzRaiz *r )
 {
     if ( !r->ok ) return "la regresión ADF falló";
     if ( r->adf_rechaza && !r->kpss_rechaza ) return "estacionaria";
@@ -656,7 +656,7 @@ static void tabla_raiz( Id *g )
     if ( !g->exp_raiz ) return;
     if ( g->nraiz == 0 ) { gtk_widget_hide( g->exp_raiz ); return; }
 
-    d0 = ct_d_inicial( g->raiz, g->nraiz );
+    d0 = rz_d_inicial( g->raiz, g->nraiz );
     tit = g_strdup_printf( "<b>Raíz unitaria para d = 0, 1, 2</b> (ADF y KPSS): ADF rechaza "
                            "la raíz unitaria por primera vez con <b>d = %d</b>", d0 );
     for ( i = 0; i < g->nraiz && !g->raiz[i].adf_rechaza; i++ ) ;
@@ -671,7 +671,7 @@ static void tabla_raiz( Id *g )
     t = g_string_new( "<tt> d     n      ADF        p      KPSS        p   lo que dicen\n" );
     for ( i = 0; i < g->nraiz; i++ )
         {
-        const CtRaiz *r = &g->raiz[i];
+        const RzRaiz *r = &g->raiz[i];
         char pa[24], pk[24];
         gchar *fila;
 
@@ -690,8 +690,9 @@ static void tabla_raiz( Id *g )
         "basta. <b>KPSS</b>: H₀ estacionaria; si rechaza, falta una diferencia (su p "
         "sale de una tabla: más allá de 0.01 y 0.10 solo se sabe que es menor o mayor).\n"
         "La menor d en que ADF rechaza es el <b>punto de partida</b> que da art: ADF manda "
-        "sobre KPSS, que con una serie acotada pero persistente pide diferencias de más. No "
-        "es un contraste del modelo: el formal, sobre el modelo estimado, es Shin-Fuller.",
+        "sobre KPSS, que con una serie acotada pero persistente pide diferencias de más. Es "
+        "una ayuda para identificar, no un contraste formal: el formal de d, sobre el "
+        "modelo estimado, es Shin-Fuller.",
         g->lam == 0.0 ? "en logaritmos" : "en niveles" );
     if ( g->c && g->c->has_seasonal && g->c->seasonal_detected )
         g_string_append( t, "\n<b>Hay estacionalidad</b>: ADF no la modela y queda en su "

@@ -36,6 +36,7 @@
 
 #include "analisis.h"
 #include "artcand.h"
+#include "contrastes.h"
 #include "engine.h"
 #include "inpcheck.h"
 #include "inpdet.h"
@@ -63,6 +64,10 @@ typedef struct {
     char       que[128];
     double    *x;                   /* E1: the series, to identify again    */
     int        n, per, anio;
+    /* ADF y KPSS para d = 0, 1, 2 (lib/contrastes): de la serie, no de art */
+    CtRaiz     raiz[CT_MAX_D + 1];
+    int        nraiz;
+    GtkWidget *exp_raiz, *l_raiz;
 } Id;
 
 /* ---- the engine ------------------------------------------------------ */
@@ -583,7 +588,9 @@ static void cabecera( Id *g )
                 "sin retirar armónicos, y el modelo derivado no los lleva."
               : "Sin patrón estacional determinista." );
         }
-    if ( c->has_unit_root )
+    /* La linea de art, con la d de ahora, solo si no hay tabla: la tabla
+       (tabla_raiz) trae esa fila y las otras dos.                      */
+    if ( c->has_unit_root && g->nraiz == 0 )
         {
         g_string_append_printf( cab, "\n<b>Raíz unitaria</b> con d = %d: ADF %.3f (p = %.4f), "
                                 "KPSS %.3f (p = %.4f). ", g->d, c->adf_stat, c->adf_p,
@@ -599,10 +606,101 @@ static void cabecera( Id *g )
             g_string_append( cab, "Los dos contrastes no dicen lo mismo: decide con el "
                                   "correlograma." );
         }
-    else if ( g->punto == 1 )
-        g_string_append( cab, "\nLos contrastes de raíz unitaria se hacen con d ≤ 1 y D = 0." );
     gtk_label_set_markup( GTK_LABEL(g->l_cab), cab->str );
     g_string_free( cab, TRUE );
+}
+
+/* LA RAIZ UNITARIA PARA d = 0, 1, 2: el unit_root_analysis de art.
+ *
+ * art (el motor) contrasta solo la d en que se identifica, y solo con d <= 1
+ * y D = 0. La pregunta del analista es otra: ¿CUANTAS diferencias? Y eso se
+ * contesta mirando las tres a la vez. Se calcula aqui, sobre la serie, con
+ * los contrastes del propio motor (lib/contrastes).                    */
+static void calcula_raiz( Id *g, const double *x, int n )
+{
+    g->nraiz = ( g->punto <= 2 && x ) ? ct_raiz_unitaria( x, n, g->lam, CT_MAX_D, g->raiz ) : 0;
+}
+
+static const char *dicen( const CtRaiz *r )
+{
+    if ( !r->ok ) return "la regresión ADF falló";
+    if ( r->adf_rechaza && !r->kpss_rechaza ) return "estacionaria";
+    if ( !r->adf_rechaza && r->kpss_rechaza ) return "raíz unitaria";
+    return "no coinciden";
+}
+
+static void p_texto( char *b, size_t n, double p, double lo, double hi )
+{
+    /* va a un marcado de Pango: el < y el > escapados */
+    if ( p <= lo )      g_snprintf( b, n, "&lt;%g", lo );
+    else if ( p >= hi ) g_snprintf( b, n, "&gt;%g", hi );
+    else if ( p < 0.001 ) g_snprintf( b, n, "%.1e", p );
+    else                g_snprintf( b, n, "%.4f", p );
+}
+
+/* El ancho de campo de un texto con entidades: «&lt;0.01» se ve con 5. */
+static int ancho( const char *s, int w )
+{
+    int extra = 0;
+
+    for ( ; *s; s++ ) if ( *s == '&' ) extra += 3;
+    return w + extra;
+}
+
+static void tabla_raiz( Id *g )
+{
+    GString *t;
+    gchar   *tit;
+    int      i, d0;
+
+    if ( !g->exp_raiz ) return;
+    if ( g->nraiz == 0 ) { gtk_widget_hide( g->exp_raiz ); return; }
+
+    d0 = ct_d_inicial( g->raiz, g->nraiz );
+    tit = g_strdup_printf( "<b>Raíz unitaria para d = 0, 1, 2</b> (ADF y KPSS): ADF rechaza "
+                           "la raíz unitaria por primera vez con <b>d = %d</b>", d0 );
+    for ( i = 0; i < g->nraiz && !g->raiz[i].adf_rechaza; i++ ) ;
+    if ( i == g->nraiz )
+        { g_free( tit );
+          tit = g_strdup( "<b>Raíz unitaria para d = 0, 1, 2</b> (ADF y KPSS): ADF no "
+                          "rechaza la raíz unitaria con ninguna" ); }
+    gtk_label_set_markup( GTK_LABEL(gtk_expander_get_label_widget(
+                                    GTK_EXPANDER(g->exp_raiz) )), tit );
+    g_free( tit );
+
+    t = g_string_new( "<tt> d     n      ADF        p      KPSS        p   lo que dicen\n" );
+    for ( i = 0; i < g->nraiz; i++ )
+        {
+        const CtRaiz *r = &g->raiz[i];
+        char pa[24], pk[24];
+        gchar *fila;
+
+        p_texto( pa, sizeof pa, r->adf_p, 0.0, 1.0 );
+        p_texto( pk, sizeof pk, r->kpss_p, 0.01, 0.10 );
+        fila = r->ok
+             ? g_strdup_printf( "%2d  %4d  %7.3f  %*s   %7.3f  %*s   %s",
+                                r->d, r->n, r->adf, ancho( pa, 7 ), pa, r->kpss,
+                                ancho( pk, 7 ), pk, dicen( r ) )
+             : g_strdup_printf( "%2d  %4d  %s", r->d, r->n, dicen( r ) );
+        g_string_append_printf( t, r->d == g->d ? "<b>%s</b>  ← la de ahora\n" : "%s\n", fila );
+        g_free( fila );
+        }
+    g_string_append_printf( t, "</tt><small>Serie %s con d diferencias regulares, sin la "
+        "estacional. <b>ADF</b>: H₀ raíz unitaria; si rechaza (p &lt; 0.05), con esa d "
+        "basta. <b>KPSS</b>: H₀ estacionaria; si rechaza, falta una diferencia (su p "
+        "sale de una tabla: más allá de 0.01 y 0.10 solo se sabe que es menor o mayor).\n"
+        "La menor d en que ADF rechaza es el <b>punto de partida</b> que da art: ADF manda "
+        "sobre KPSS, que con una serie acotada pero persistente pide diferencias de más. No "
+        "es un contraste del modelo: el formal, sobre el modelo estimado, es Shin-Fuller.",
+        g->lam == 0.0 ? "en logaritmos" : "en niveles" );
+    if ( g->c && g->c->has_seasonal && g->c->seasonal_detected )
+        g_string_append( t, "\n<b>Hay estacionalidad</b>: ADF no la modela y queda en su "
+                            "residuo, lo que lo empuja a pedir una diferencia de más. Decide "
+                            "con el correlograma." );
+    g_string_append( t, "</small>" );
+    gtk_label_set_markup( GTK_LABEL(g->l_raiz), t->str );
+    g_string_free( t, TRUE );
+    gtk_widget_show_all( g->exp_raiz );
 }
 
 static gboolean corre_art( Id *g, const char *datos, gboolean residuos, char *why, size_t n );
@@ -668,7 +766,9 @@ static void on_reidentificar( GtkButton *b, Id *g )
         { di( g, "%s", why ); g_free( datos ); return; }
     g_free( datos );
     g->sel = -1;
+    calcula_raiz( g, g->x, g->n );
     cabecera( g );
+    tabla_raiz( g );
     refresca_aviso( g );
     llena( g );
     gtk_widget_queue_draw( g->area );
@@ -769,6 +869,22 @@ static void ventana( Id *g, const char *que )
     gtk_box_pack_start( GTK_BOX(caja), g->l_cab, FALSE, FALSE, 0 );
     cabecera( g );
     g_string_free( cab, TRUE );
+
+    /* ADF y KPSS para las tres d, plegado: una linea hasta que se pide */
+    if ( g->punto <= 2 )
+        {
+        GtkWidget *tl = gtk_label_new( NULL );
+
+        g->exp_raiz = gtk_expander_new( NULL );
+        gtk_expander_set_label_widget( GTK_EXPANDER(g->exp_raiz), tl );
+        g->l_raiz = gtk_label_new( NULL );
+        gtk_label_set_xalign( GTK_LABEL(g->l_raiz), 0.0 );
+        gtk_label_set_line_wrap( GTK_LABEL(g->l_raiz), TRUE );
+        gtk_label_set_selectable( GTK_LABEL(g->l_raiz), TRUE );
+        gtk_widget_set_can_focus( g->l_raiz, FALSE );   /* si no, sale todo seleccionado */
+        gtk_container_add( GTK_CONTAINER(g->exp_raiz), g->l_raiz );
+        gtk_box_pack_start( GTK_BOX(caja), g->exp_raiz, FALSE, FALSE, 0 );
+        }
 
     /* the correlograms, and below them the candidates, sharing the height
        through a divider: on a small screen the analyst decides what to see */
@@ -902,6 +1018,7 @@ static void ventana( Id *g, const char *que )
 
     g_signal_connect( g->win, "destroy", G_CALLBACK(on_cerrar), g );
     gtk_widget_show_all( g->win );
+    tabla_raiz( g );
     refresca_aviso( g );
 }
 
@@ -947,6 +1064,7 @@ void an_identifica_serie( const AnHost *h, const char *serie, const char *muestr
     if ( !corre_art( g, datos, FALSE, why, sizeof why ) )
         { an_di( h, "%s", why ); g_free( datos ); on_cerrar( NULL, g ); return; }
     g_free( datos );
+    calcula_raiz( g, s->x, s->n );
     ventana( g, s->que && s->que[0] ? s->que : "Gráficos de identificación" );
 }
 
@@ -1029,5 +1147,6 @@ void an_identifica_datos( const AnHost *h, const char *serie, const char *muestr
          !corre_art( g, datos, FALSE, why, sizeof why ) )
         { an_di( h, "%s", why ); g_free( datos ); on_cerrar( NULL, g ); return; }
     g_free( datos );
+    calcula_raiz( g, g->x, g->n );
     ventana( g, s->que && s->que[0] ? s->que : "Identificación desde los datos" );
 }

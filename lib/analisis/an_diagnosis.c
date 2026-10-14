@@ -146,6 +146,12 @@ static void on_identificar( GtkButton *b, Dg *g )
     an_identifica_residuos( &g->h, g->serie, g->muestra, g->id );
 }
 
+static void on_contrastes( GtkButton *b, Dg *g )
+{
+    (void) b;
+    an_contrastes( &g->h, g->serie, g->muestra, g->id );
+}
+
 static void on_cerrar( GtkWidget *w, Dg *g ) { (void) w; g_free( g ); }
 
 
@@ -301,6 +307,18 @@ void an_diagnosis( const AnHost *h, const char *serie, const char *muestra,
     g_signal_connect( b, "clicked", G_CALLBACK(on_identificar), g );
     gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
     }
+
+    /* LOS CONTRASTES FORMALES, en su ventana: no son diagnosis --la
+       diagnosis juzga lo que hay-- sino preguntas sobre la estructura
+       (¿hay un AR estacional escondido?, ¿sobra una diferencia?).      */
+    b = gtk_button_new_with_label( "Contrastes formales…" );
+    gtk_widget_set_tooltip_text( b,
+        "La factorización del AR: las raíces de cada factor y, de cada par "
+        "complejo, su amortiguamiento, su frecuencia y su periodo. Un par en "
+        "una frecuencia estacional y cerca de la unidad es un AR estacional "
+        "escondido." );
+    g_signal_connect( b, "clicked", G_CALLBACK(on_contrastes), g );
+    gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
 
     b = gtk_button_new_with_label( "Exportar…" );
     gtk_widget_set_tooltip_text( b,

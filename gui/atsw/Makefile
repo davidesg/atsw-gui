@@ -29,6 +29,10 @@ SRC = src/main.c src/ventana.c src/gestos.c src/datos_gui.c src/vistazo.c \
       $(LIB)/equation/eqtran.c \
       $(LIB)/analisis/an_sugerir.c \
       $(LIB)/analisis/an_identifica.c \
+      $(LIB)/analisis/an_contrastes.c \
+      $(LIB)/contrastes/raiz.c \
+      $(LIB)/contrastes/factor.c \
+      ../../engines/art/src/unit_root_tests.c \
       $(LIB)/artcand/artcand.c \
       $(LIB)/analisis/plotstats.c \
       $(LIB)/intervencion/intervencion.c \
@@ -66,10 +70,20 @@ LIBHDR = $(wildcard $(LIB)/*/*.h)
 
 INC = -Iinclude -I$(LIB)/proyecto -I$(LIB)/outdiag -I$(LIB)/outfile -I$(LIB)/analisis -I$(LIB)/equation -I$(LIB)/dictamen -I$(LIB)/anomalos -I$(LIB)/intervencion -I$(LIB)/inpdet -I$(LIB)/engine -I$(LIB)/inpcheck -I$(LIB)/tabla \
       -I$(LIB)/rutas -I$(LIB)/sitio -I$(LIB)/dates -I$(LIB)/datos -I$(LIB)/xlsx \
-      -I../../engines/fug/src -I$(LIB)/preview -I$(LIB)/fugdraw -I$(LIB)/fugplot -I$(LIB)/utils -I$(LIB)/artcand
+      -I../../engines/fug/src -I$(LIB)/preview -I$(LIB)/fugdraw -I$(LIB)/fugplot -I$(LIB)/utils -I$(LIB)/artcand \
+      -I$(LIB)/contrastes -I../../engines/art/include
 
 GTK_CFLAGS := $(shell pkg-config --cflags gtk+-3.0 2>/dev/null)
 GTK_LIBS   := $(shell pkg-config --libs   gtk+-3.0 2>/dev/null)
+
+# GSL: la piden ADF/KPSS (los del motor art, compilados tal cual) y las
+# raices del AR, en lib/contrastes. GSL_LIBS se puede pisar desde fuera: el
+# .deb la mete estatica (packaging/linux/deb.sh).
+GSL_CFLAGS := $(shell pkg-config --cflags gsl 2>/dev/null)
+GSL_LIBS   ?= $(shell pkg-config --libs gsl 2>/dev/null)
+ifeq ($(strip $(GSL_LIBS)),)
+  GSL_LIBS = -lgsl -lgslcblas
+endif
 
 TARGET = atsw_gui
 
@@ -98,8 +112,8 @@ $(TARGET): $(SRC) $(HDR) $(LIBHDR) $(INPCHECK) $(UTF8_RES)
 	@if [ -z "$(GTK_LIBS)" ]; then \
 	    echo "atsw_gui necesita los ficheros de desarrollo de GTK 3"; \
 	    echo "(Debian/Ubuntu: sudo apt install libgtk-3-dev)"; exit 1; fi
-	$(CC) $(CFLAGS) $(GTK_CFLAGS) $(INC) $(LDFLAGS) -o $@ $(SRC) $(INPCHECK) $(UTF8_RES) \
-	    $(GTK_LIBS) -lz -lm
+	$(CC) $(CFLAGS) $(GTK_CFLAGS) $(GSL_CFLAGS) $(INC) $(LDFLAGS) -o $@ $(SRC) $(INPCHECK) $(UTF8_RES) \
+	    $(GTK_LIBS) $(GSL_LIBS) -lz -lm
 
 install: $(TARGET)
 	install -d $(DESTDIR)$(PREFIX)/bin

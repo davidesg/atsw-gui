@@ -31,6 +31,9 @@ esac
 GTK_CFLAGS=$(pkg-config --cflags gtk+-3.0 2>/dev/null)
 GTK_LIBS=$(pkg-config --libs gtk+-3.0 2>/dev/null)
 [ -n "$GTK_LIBS" ] || { echo "GTK+3 no esta (pkg-config gtk+-3.0)"; exit 1; }
+# GSL, para lib/contrastes (ADF/KPSS del motor art y las raices del AR)
+GTK_CFLAGS="$GTK_CFLAGS $(pkg-config --cflags gsl 2>/dev/null)"
+GTK_LIBS="$GTK_LIBS $(pkg-config --libs gsl 2>/dev/null || echo -lgsl -lgslcblas)"
 
 WORK=$(mktemp -d 2>/dev/null || mktemp -d -t atswgui) || exit 1
 

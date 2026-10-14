@@ -38,7 +38,7 @@ else
 endif
 
 # Compiler and basic flags
-CFLAGS   = -O2 -g -Wall -Iinclude -I../../lib/fugdraw -I../../lib/preview -I../../lib/engine -I../../lib/outfile -I../../lib/utils -I../../lib/datos -I../../lib/xlsx -I../../lib/proyecto -I../../lib/inpcheck -I../../lib/fugplot -I../../lib/analisis -I../../lib/equation -I../../lib/anomalos -I../../lib/dictamen -I../../lib/intervencion -I../../lib/inpdet -I../../lib/tabla -I../../lib/rutas -I../../lib/artcand -I../../lib/sitio -I$(ENG_DIR)/fue/include
+CFLAGS   = -O2 -g -Wall -Iinclude -I../../lib/fugdraw -I../../lib/preview -I../../lib/engine -I../../lib/outfile -I../../lib/utils -I../../lib/datos -I../../lib/xlsx -I../../lib/proyecto -I../../lib/inpcheck -I../../lib/fugplot -I../../lib/analisis -I../../lib/equation -I../../lib/anomalos -I../../lib/dictamen -I../../lib/intervencion -I../../lib/inpdet -I../../lib/tabla -I../../lib/rutas -I../../lib/artcand -I../../lib/sitio -I../../lib/contrastes -I$(ENG_DIR)/fue/include
 LDFLAGS  +=
 LIBS     = -lz -lm
 
@@ -68,6 +68,9 @@ LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c \
            $(LIB_DIR)/equation/eqtran.c \
            $(LIB_DIR)/analisis/an_sugerir.c \
            $(LIB_DIR)/analisis/an_identifica.c \
+           $(LIB_DIR)/analisis/an_contrastes.c \
+           $(LIB_DIR)/contrastes/raiz.c \
+           $(LIB_DIR)/contrastes/factor.c \
            $(LIB_DIR)/artcand/artcand.c \
            $(LIB_DIR)/sitio/sitio.c \
            $(LIB_DIR)/anomalos/anomalos.c \
@@ -92,6 +95,7 @@ ENG_DIR  = ../../engines
 SRCS = $(wildcard $(SRC_DIR)/*.c)
 OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS)) \
        $(BUILD_DIR)/inpcheck_fue.o $(BUILD_DIR)/inpcheck_fuf.o \
+       $(BUILD_DIR)/art_unit_root_tests.o \
        $(patsubst $(LIB_DIR)/%.c,$(BUILD_DIR)/lib_%.o,$(LIB_SRCS))
 
 # Executable name
@@ -122,9 +126,18 @@ ifeq ($(GTK_CFLAGS),)
   endif
 endif
 
+# GSL: la piden ADF/KPSS (los del motor art) y las raices del AR, en
+# lib/contrastes. GSL_LIBS se puede pisar desde fuera: el .deb la mete
+# estatica (packaging/linux/deb.sh).
+GSL_CFLAGS := $(shell $(PKG_CONFIG) --cflags gsl 2>/dev/null)
+GSL_LIBS   ?= $(shell $(PKG_CONFIG) --libs gsl 2>/dev/null)
+ifeq ($(strip $(GSL_LIBS)),)
+  GSL_LIBS = -lgsl -lgslcblas
+endif
+
 # Combine flags
-GUI_CFLAGS = $(CFLAGS) $(GTK_CFLAGS)
-GUI_LIBS   = $(GTK_LIBS) -lz -lm
+GUI_CFLAGS = $(CFLAGS) $(GTK_CFLAGS) $(GSL_CFLAGS)
+GUI_LIBS   = $(GTK_LIBS) $(GSL_LIBS) -lz -lm
 
 # ALL_CFLAGS se usaba en las reglas de lib/ y NO ESTABA DEFINIDA: esos ficheros
 # se compilaban sin un solo -I. Funcionaba de casualidad, porque cada .c de
@@ -167,6 +180,15 @@ $(BUILD_DIR)/inpcheck_fue.o: $(ENG_DIR)/fue/src/inpcheck.c $(LIB_DIR)/inpcheck/i
 
 $(BUILD_DIR)/inpcheck_fuf.o: $(ENG_DIR)/fuf/src/inpcheck.c $(LIB_DIR)/inpcheck/inpcheck.h | $(BUILD_DIR)
 	$(CC) $(GUI_CFLAGS) $(DEPFLAGS) -I$(ENG_DIR)/fuf/include -Dinp_check=inp_check_fuf -c $< -o $@
+
+# ADF y KPSS NO se copian: se compila el fichero del motor art, como
+# inpcheck. lib/contrastes/raiz.c le pone el art_log callado que pide.
+$(BUILD_DIR)/art_unit_root_tests.o: $(ENG_DIR)/art/src/unit_root_tests.c | $(BUILD_DIR)
+	$(CC) $(GUI_CFLAGS) $(DEPFLAGS) -I$(ENG_DIR)/art/include -c $< -o $@
+
+$(BUILD_DIR)/lib_contrastes/%.o: $(LIB_DIR)/contrastes/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(ALL_CFLAGS) -I$(ENG_DIR)/art/include -c $< -o $@
 
 $(BUILD_DIR)/lib_preview/%.o: $(LIB_DIR)/preview/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)

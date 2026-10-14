@@ -245,8 +245,11 @@ Lee de arriba abajo:
 - **El recuadro de color** avisa de que hay **estacionalidad** y de que art la
   ha quitado con **armónicos deterministas** (ondas de seno y coseno de periodo
   12, 6, 4…) antes de identificar. Volveremos a esto enseguida.
-- **Raíz unitaria**: con d = 0, el contraste ADF no rechaza la raíz unitaria y
-  el KPSS rechaza la estacionariedad. Los dos dicen lo mismo: **mira d = 1**.
+- **Raíz unitaria para d = 0, 1, 2**: pulsa la línea y se despliega una tabla
+  con los contrastes **ADF** (H₀: raíz unitaria) y **KPSS** (H₀: estacionaria)
+  para las tres d a la vez. Con d = 0, ADF no rechaza la raíz unitaria y KPSS
+  rechaza la estacionariedad: los dos dicen lo mismo, **mira d = 1**. La línea
+  plegada ya lo resume: ADF rechaza por primera vez con d = 1.
 - **La ACF** decae despacísimo. El gráfico dice lo mismo que los contrastes.
 
 ### Las tres decisiones de arriba
@@ -262,9 +265,13 @@ Pulsa **Volver a identificar**:
 ![Identificación en logaritmos con d = 1](img/ipc-identificacion.png)
 
 **d se sube de uno en uno**, nunca de 0 a 2: diferenciar de más no es un error
-venial, mete una raíz en el modelo que luego no se puede quitar. Con d = 1 los
-contrastes ya no coinciden (ADF casi rechaza, KPSS no): **decide el
-correlograma**, que ya no decae despacio.
+venial, mete una raíz en el modelo que luego no se puede quitar. En logaritmos y
+con d = 1 los contrastes ya no coinciden: ADF *casi* rechaza (p = 0.052) y KPSS
+no. Por eso la línea plegada dice ahora que ADF rechaza por primera vez con
+d = 2. Pero la tabla avisa de que la serie es estacional, y ADF, que no modela
+la estacionalidad, tiende entonces a pedir una diferencia de más: **decide el
+correlograma**, que ya no decae despacio. La tabla da el punto de partida, no
+la respuesta.
 
 ### ¿Estacionalidad determinista o estocástica?
 
@@ -381,6 +388,14 @@ Cada fila es una pregunta, con **los números** y **qué dicen**:
 | **Normalidad** | ¿Son normales? | Sí (Jarque-Bera, p = 0.82). |
 | **Parámetros** | ¿Se ganan su sitio? | **4 no** (\|t\| < 2), empezando por un armónico. |
 | **Ganancia** | ¿El efecto de los deterministas es permanente? | Sí. |
+
+**Contrastes formales…** abre la **factorización del AR**: las raíces de cada
+factor autorregresivo y, de cada par complejo, su amortiguamiento, su
+frecuencia y su periodo. Un par con el periodo en una frecuencia estacional
+(12, 6, 4… meses) y el amortiguamiento cerca de 1 sería un AR estacional
+escondido dentro del AR. En m01, un AR(1), sale una sola raíz real, 1.83: no
+hay nada escondido. Los contrastes que necesitan reestimar el modelo
+(Shin-Fuller, DCD, MEG) llegarán a esta misma ventana.
 
 **Q de Ljung-Box**: se calcula en los retardos 12, 24, 36 y 3·12 + 2 (en
 general s, 2s, 3s y 3s + 3). El veredicto lo da el último, el más exigente. Si

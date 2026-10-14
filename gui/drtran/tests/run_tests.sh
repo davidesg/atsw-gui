@@ -394,6 +394,18 @@ $CC -O2 -Wall -Wextra -I"$L/artcand" \
     -o "$W/test_artcand" -lm || exit 1
 ( cd "$W" && "$W/test_artcand" "$TOP/../../engines/art/tests/golden" ) || exit 1
 
+# --- los contrastes formales: ADF/KPSS y la factorizacion del AR -------------
+# Contra art-python, sobre los datos del manual y los .out golden de fue.
+# ADF y KPSS son los del motor art (unit_root_tests.c), compilados tal cual.
+echo
+$CC -O2 -Wall -Wextra -I"$L/contrastes" -I"$L/outfile" \
+    -I"$TOP/../../engines/art/include" $(pkg-config --cflags glib-2.0) \
+    "$L/contrastes/test_contrastes.c" "$L/contrastes/raiz.c" "$L/contrastes/factor.c" \
+    "$L/outfile/outfile.c" "$TOP/../../engines/art/src/unit_root_tests.c" \
+    -o "$W/test_contrastes" $(pkg-config --libs glib-2.0) -lgsl -lgslcblas -lm || exit 1
+"$W/test_contrastes" "$TOP/../../docs/manual/datos/ipc_wti.csv" \
+    "$TOP/../../engines/fue/tests/golden" || exit 1
+
 # --- el dictamen: leer no es juzgar -----------------------------------------
 # Los umbrales se prueban SIN fichero, con numeros inventados: eso es lo que
 # se gana separando el lector del que juzga.

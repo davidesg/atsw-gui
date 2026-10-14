@@ -113,6 +113,12 @@ void an_anomalos( const AnHost *h, const char *serie, const char *muestra,
 void an_diagnosis( const AnHost *h, const char *serie, const char *muestra,
                    const char *id );
 
+/* LOS CONTRASTES FORMALES del modelo estimado (lib/contrastes). Hoy, la
+ * factorizacion del AR; despues, los que necesitan reestimar (Shin-Fuller,
+ * DCD, el MEG). La abre la diagnosis. Ver docs/TODO.md.                 */
+void an_contrastes( const AnHost *h, const char *serie, const char *muestra,
+                    const char *id );
+
 /* LA GANANCIA DE LAS INTERVENCIONES: ¿el suceso dejó algo para siempre o
  * revirtió? No es diagnosis --la diagnosis juzga lo que hay-- sino una
  * hipotesis sobre la naturaleza del incidente, contrastada.           */

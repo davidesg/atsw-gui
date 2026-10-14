@@ -2226,7 +2226,8 @@ static void menu_modelo_prueba( void )
         pump( 300 );
         wf = ventana_titulada( "Contrastes formales — ipc / m01" );
         check( wf != NULL, "y abre su ventana", todo_lo_dicho() );
-        for ( i = 0; wf && i < 120; i++ )
+        /* con el MEG son dos estimaciones por frecuencia: en CI, tiempo */
+        for ( i = 0; wf && i < 480; i++ )
             {
             g_free( txt );
             txt = textos_de( GTK_WIDGET(wf) );
@@ -2244,6 +2245,27 @@ static void menu_modelo_prueba( void )
         check( txt && ( !strstr( txt, "Shin-Fuller   H" ) || !strstr( txt, "Sobrediferenciación" )
                         || strstr( txt, "Par confirmatorio en f = 0" ) ),
                "con Shin-Fuller y la sobrediferenciación, el par en f = 0", txt );
+        /* EL MEG: con D = 0 y armónicos se contrasta frecuencia a frecuencia
+           y lo resume, y si alguna sale estocástica se ofrece reformularla;
+           sin armónicos dice por qué no, y no hay nada que reformular */
+        {
+        GtkWidget *br = wf ? boton_que_dice( GTK_WIDGET(wf), "Reformular como estocástica…" ) : NULL;
+        gboolean   aplica = txt && strstr( txt, "MEG — estacionalidad estocástica o determinista" );
+        gboolean   hay_est = txt && strstr( txt, "Estocástica(s)" ) != NULL;
+
+        if ( aplica )
+            {
+            check( strstr( txt, "f = 6" ) && ( hay_est || strstr( txt, "Ninguna estocástica" ) ),
+                   "el MEG contrasta cada frecuencia y lo resume", txt );
+            check( br != NULL && gtk_widget_get_sensitive( br ) == hay_est,
+                   "y ofrece reformular si, y solo si, hay una estocástica", NULL );
+            }
+        else
+            check( txt && strstr( txt, "MEG: " ) && br == NULL,
+                   "sin MEG, dice por qué y no ofrece reformular", txt );
+        nota( "contrastes formales de m01: MEG %s", !aplica ? "no aplica"
+              : hay_est ? "con estocástica(s)" : "sin estocásticas" );
+        }
         g_free( txt ); txt = NULL;
         /* EL LADO d - 1 SE PIDE: el boton lo añade y se calcula */
         {
@@ -2253,7 +2275,7 @@ static void menu_modelo_prueba( void )
         if ( bs && gtk_widget_get_sensitive( bs ) )
             {
             gtk_button_clicked( GTK_BUTTON(bs) );
-            for ( i = 0; i < 120; i++ )
+            for ( i = 0; i < 240; i++ )
                 {
                 pump( 250 );
                 g_free( txt );

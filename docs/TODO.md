@@ -137,10 +137,21 @@ uno sin bloquear, y cada uno se coteja con art-python número a número
 | hecho | la simplificación estacional (RV de los armónicos) | una corrida |
 | hecho | Shin-Fuller (la raíz real positiva dominante; un AR(p) se parte, BUG-0065) y el DCD regular y estacional | una corrida por contraste |
 | hecho | la sobrediferenciación d+1 con testigo y el **par confirmatorio en f = 0** con Shin-Fuller (las reservas del BUG-0011: ley desnuda con deterministas, banda de cuasi-cancelación); la subdiferenciación d−1, **que se pide y no se ofrece** (BUG-0167), con el AR acotado en ρ (BUG-0224) y el reintento del libre (BUG-0236) | dos o tres corridas |
-| | el MEG, DCD_f y su reformulación; experimental en art | ~3 corridas por frecuencia |
+| hecho | **el MEG** (Abraham y Box, 1978): por frecuencia, el modelo S —sin el armónico, con ifadf[f] = 1 y un testigo de sobrediferenciación libre (MA(2) de frecuencia fija, o MA(1) en Nyquist)— y H₀: el testigo en −1. Críticos del par complejo por n (s = 2) y de raíz real en Nyquist (s = 1), de la simulación de SF_MEG. **La reformulación**: «Reformular como estocástica…» deriva S como hijo del modelo (`meg_reformulate`), una frecuencia cada vez. **El DCD_f** del testigo en el reformulado, y el del testigo de Nyquist en θ = −1 (art lo contrasta en +1, como un MA más) | dos corridas por frecuencia |
+
+Las estimaciones de los contrastes se **reinician** como en fue-python
+(BUG-0005 de fue): si fue para sin anular el gradiente, otra vez desde donde
+paró, hasta tres veces mientras la verosimilitud mejore; y lo que no converge
+aun así se marca «dudoso». Los `.inp` que salen de un `.pre` llevan los
+coeficientes del `.out` (seis decimales): con los cuatro del `.pre`, un AR(2)
+en 1.375800/−0.375801 suma 1 y fue no arranca (RIPC.2 en el MEG).
 
 Quedan fuera, de lo hecho: el DCD de un MA(q) con q > 1 (art tampoco lo
-hace); el reintento del BUG-0236 en el DCD regular y el estacional (sí está en
+hace); el MEG con la verosimilitud exacta en la frontera, perfilada en una
+rejilla, que art recomienda y no usa (el optimizador libre de fue se sesga en
+la frontera de orden 2, acumulación 0.82 frente a 0.62), y los críticos del
+MEG con media y armónicos en muestra finita (n = 120: 1.63/2.87/5.81), que la
+ventana avisa y no aplica; el reintento del BUG-0236 en el DCD regular y el estacional (sí está en
 la sobre y la subdiferenciación, como en art); el Shin-Fuller por sobreajuste
 cuando el AR no tiene raíz real positiva, y el par de la frontera d−1/d que
 cruza dos modelos (BUG-0235). Y de art sigue abierto el fondo del BUG-0011: el

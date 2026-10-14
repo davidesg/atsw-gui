@@ -29,6 +29,25 @@
  *                              restringido y, si el LR sale negativo o el
  *                              testigo se va al eje negativo, el libre otra
  *                              vez desde el restringido (art BUG-0236).
+ *   MEG (Abraham y Box, 1978)  ¿la estacionalidad es estocastica o
+ *                              determinista? Frecuencia a frecuencia, sobre
+ *                              un modelo con D = 0 y armonicos: el modelo
+ *                              estocastico S quita el cos/sin de f (o el
+ *                              alter en Nyquist), pone la raiz unitaria
+ *                              (ifadf[f] = 1) y un TESTIGO de
+ *                              sobrediferenciacion libre del mismo orden --un
+ *                              MA(2) de frecuencia fija, o un MA(1) regular
+ *                              en Nyquist--, y contrasta H0: el testigo en la
+ *                              frontera (-1), que cancela la raiz. Invertible
+ *                              -> estocastica; en la frontera -> determinista.
+ *                              Criticos: la ley s = 2 del par complejo, por
+ *                              n, en las interiores; la s = 1 en Nyquist.
+ *                              Salen de simulacion (Monte Carlo del estudio
+ *                              SF_MEG, sin publicar). Dos estimaciones por
+ *                              frecuencia: S libre y S restringido.
+ *   DCD_f                      el mismo contraste sobre los MA(2) de
+ *                              frecuencia fija que el modelo YA tiene: el
+ *                              testigo de un modelo reformulado tras el MEG.
  *   subdiferenciacion          ¿sobraba la ultima diferencia? H0: theta = 1
  *                              en el MA del modelo (o en un testigo añadido
  *                              si no tiene). El AR del restringido se acota en
@@ -52,10 +71,14 @@
 
 #include <stddef.h>
 
-#define FM_MAX      16
+#define FM_MAX      32
 #define FM_RUTA     1024
 
-typedef enum { FM_ESTACIONAL, FM_SF, FM_DCD, FM_DCD_S, FM_SOBRE, FM_SUB } FmTipo;
+typedef enum { FM_ESTACIONAL, FM_SF, FM_DCD, FM_DCD_S, FM_SOBRE, FM_SUB, FM_MEG,
+               FM_DCD_F } FmTipo;
+
+/* las lineas de no_aplica, una por familia */
+#define FM_NA 8
 
 /* El testigo «en la frontera»: a esta distancia de +1 o menos. La banda de
  * cuasi-cancelacion del articulo, r = 0.90-0.95, por el lado generoso. */
@@ -91,6 +114,22 @@ typedef struct {
     int    raices_complejas;  /* SUB: el MA del modelo no tiene raiz real   */
     char   testigo[160];      /* de donde sale el testigo                   */
     char   candidato[320];    /* SOBRE: que lleva el candidato              */
+
+    /* MEG, DCD_f y el DCD del testigo de Nyquist */
+    int    freq;              /* la frecuencia estacional; 0 si no va de eso */
+    int    n_crit;            /* la n con que se leen los criticos del par   */
+    int    omitida;           /* MEG: la frecuencia no se pudo contrastar;
+                                 motivo dice por que (hecho y no calculable) */
+
+    /* EL REINICIO de fue-python (su BUG-0005): una estimacion que para sin
+       anular el gradiente se vuelve a correr desde donde paro, hasta tres
+       veces, mientras la verosimilitud mejore. El binario no lo hace. */
+    int    reinicios, en_reinicio;
+    int    dudoso;            /* alguna de sus estimaciones acabo sin anular
+                                 el gradiente, aun reiniciando: el LR hereda
+                                 esa duda (art lo avisa, y sigue)           */
+    double l_mejor;
+    char   base_real[64];
 } FmPrueba;
 
 typedef struct {
@@ -101,8 +140,9 @@ typedef struct {
     char     dir[FM_RUTA], pre[FM_RUTA], out[FM_RUTA];
     int      n_det, n_armon;  /* deterministas, y de ellos armonicos       */
     int      p_ar;            /* coeficientes AR regulares libres          */
+    int      ifadf[7];        /* los factores de la diferencia anual       */
     /* lo que no se pudo plantear, y por que: una linea por contraste */
-    char     no_aplica[6][256];
+    char     no_aplica[FM_NA][256];
 } FmPlan;
 
 /* Plantea los contrastes que el modelo admite y escribe sus .inp
@@ -132,5 +172,16 @@ void fm_resultado( FmPrueba *t, double l_libre, int nobs, int s, int corrio );
 /* Los criticos, por si alguien los quiere enseñar sin contrastar */
 void fm_criticos_sf( int n, double *c10, double *c5, double *c1 );
 void fm_criticos_dcd_s( int s, double *c10, double *c5, double *c1 );
+void fm_criticos_dcd_f( int n, double *c10, double *c5, double *c1 );
+
+/* LA REFORMULACION DESPUES DEL MEG (meg_reformulate de art): el modelo
+ * estocastico S en la frecuencia f, escrito desde el .pre del modelo en
+ * destino, con los coeficientes de su .out (out; puede ser NULL). Es el MISMO que el MEG estima: sin los armonicos de f, con
+ * ifadf[f] = 1 y con el testigo libre desde -0.9 --sin el, el AR_f solo
+ * sobrediferencia la estacionalidad--. Una frecuencia cada vez: la mas
+ * fuerte primero, y vuelta a contrastar sobre lo que salga. 0, o 1 con el
+ * motivo. *testigo, si no es NULL, el indice del testigo en su seccion. */
+int fm_reformula( const char *pre, const char *out, const char *destino, int s, int f,
+                  int *testigo, char *why, size_t nwhy );
 
 #endif /* ATSW_FORMALES_H */

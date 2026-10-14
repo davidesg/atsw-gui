@@ -398,6 +398,26 @@ m01, un AR(1), sale una sola raíz real, 1.83: no hay nada escondido. Es una
 herramienta de identificación, no un contraste: si un par lo parece, se
 contrasta aparte.
 
+**Contrastes formales…** contrasta hipótesis sobre el modelo estimado, como el
+`formal_tests` de art. Cada contraste es una estimación más: fue reestima el
+modelo con un parámetro fijo en su valor nulo, partiendo del óptimo, y se
+comparan las dos log-verosimilitudes. Se calculan uno detrás de otro sin
+bloquear la ventana:
+
+![Los contrastes formales de m01](img/ipc-m01-formales.png)
+
+- **Simplificación estacional**: ¿sobran los 11 armónicos a la vez? LR = 346
+  con 11 grados de libertad, muy por encima del crítico (19.7): no sobran.
+- **Shin-Fuller**: ¿le falta una diferencia al AR, es decir, tiene una raíz en
+  1 − 4/n? Φ = 26.9 frente a un crítico de 1.76: no; con d = 1 basta.
+- El **DCD** (¿sobra una diferencia regular?) y el **DCD estacional** (¿sobra
+  la diferencia estacional?) miran un MA en su frontera, y m01 no tiene MA: la
+  ventana dice que no aplican.
+
+Cada contraste dice su número, sus críticos y lo que dice; no se encadenan en
+un veredicto. Y suponen un modelo **adecuado**: se pasan con la diagnosis
+limpia, y si no lo está, la ventana lo avisa arriba.
+
 **Q de Ljung-Box**: se calcula en los retardos 12, 24, 36 y 3·12 + 2 (en
 general s, 2s, 3s y 3s + 3). El veredicto lo da el último, el más exigente. Si
 una Q rechaza, no dice *qué* retardo falla: eso lo dicen las barras de la ACF

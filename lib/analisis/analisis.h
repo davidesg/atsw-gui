@@ -119,6 +119,13 @@ void an_diagnosis( const AnHost *h, const char *serie, const char *muestra,
 void an_factores_ar( const AnHost *h, const char *serie, const char *muestra,
                     const char *id );
 
+/* LOS CONTRASTES FORMALES del modelo estimado (lib/formales): el
+ * formal_tests de art --la simplificacion estacional, Shin-Fuller, el DCD
+ * regular y el estacional--. Cada uno reestima con fue, sin bloquear la
+ * ventana. La abre la diagnosis.                                        */
+void an_formales( const AnHost *h, const char *serie, const char *muestra,
+                  const char *id );
+
 /* LA GANANCIA DE LAS INTERVENCIONES: ¿el suceso dejó algo para siempre o
  * revirtió? No es diagnosis --la diagnosis juzga lo que hay-- sino una
  * hipotesis sobre la naturaleza del incidente, contrastada.           */

@@ -127,14 +127,21 @@ art-python número a número (`test_raices`, en la batería de `gui/drtran`):
 | hecho | **La factorización del AR** (`ar_factorization`): raíces, amortiguamiento, frecuencia y periodo, ± por el método delta en un AR(2) entero, el aviso de los módulos parecidos (BUG-0103) | Diagnosis → «Factorización del AR…» |
 
 **Los contrastes formales**, lo decidido el 2026-09-26, de más barato a más
-caro. Todos reestiman con fue, e irán en su propia ventana:
+caro. Todos reestiman con fue, en su propia ventana: Diagnosis →
+«Contrastes formales…» (`lib/formales`, `an_formales`). Se corren de uno en
+uno sin bloquear, y cada uno se coteja con art-python número a número
+(`test_formales`, en la batería de `gui/drtran`, con fue de verdad):
 
 | | qué | coste |
 |---|---|---|
-| | la simplificación estacional (RV de los armónicos) | una corrida |
-| | Shin-Fuller y el DCD regular y estacional | una corrida por contraste |
-| | la sobrediferenciación d+1 con testigo | dos corridas |
+| hecho | la simplificación estacional (RV de los armónicos) | una corrida |
+| hecho | Shin-Fuller (la raíz real positiva dominante; un AR(p) se parte, BUG-0065) y el DCD regular y estacional | una corrida por contraste |
+| | la sobrediferenciación d+1 con testigo, y la subdiferenciación d−1 | dos corridas |
 | | el MEG, DCD_f y su reformulación; experimental en art | ~3 corridas por frecuencia |
+
+Quedan fuera, de lo hecho: el DCD de un MA(q) con q > 1 (art tampoco lo
+hace) y el reintento del libre desde el restringido de `_frontera_theta_uno`
+(BUG-0236): aquí un LR negativo sale como «no calculable», sin reintentar.
 
 **No se porta el veredicto encadenado** de art (`describe_formal_tests`, ~950
 líneas): es donde viven BUG-0215 y BUG-0232. Cada contraste dirá su número, su

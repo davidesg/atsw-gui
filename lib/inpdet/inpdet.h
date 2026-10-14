@@ -137,4 +137,53 @@ int id_anade_arma( const char *origen, const char *destino,
                    int P, const double *Phi, int Q, const double *Theta,
                    char *porque, size_t n );
 
+/* ---------------------------------------------------------------------- */
+/* FIXING A PARAMETER (2026-10-14, for the formal tests, lib/formales)     */
+/*                                                                         */
+/* A restricted model is the estimated one with one parameter FIXED at its */
+/* null value: the .pre with that seed changed and its flag set to 0, and  */
+/* every other line byte for byte. fue then re-estimates the rest from the */
+/* optimum, which is what art does with copy.deepcopy(model) and .fit().   */
+/* ---------------------------------------------------------------------- */
+
+#define ID_MAX_FAC  16
+#define ID_MAX_ORD  24
+
+/* The four ARMA sections as the file has them: section k (0 regular AR,
+ * 1 annual AR, 2 regular MA, 3 annual MA) has nf[k] factors; factor i has
+ * order ord[k][i], seeds v[k][i][0..] and flags fl[k][i][0..] (1 estimated,
+ * 0 fixed). Box-Jenkins signs, as fue stores them.                        */
+typedef struct {
+   int    nf[4];
+   int    ord[4][ID_MAX_FAC];
+   double v[4][ID_MAX_FAC][ID_MAX_ORD];
+   int    fl[4][ID_MAX_FAC][ID_MAX_ORD];
+} IdArma;
+
+int id_arma_lee( const char *origen, IdArma *a, char *porque, size_t n );
+
+/* Copy origen into destino with coefficient j of factor i of ARMA section
+ * k set to valor and FIXED. 0, or 1 with the reason.                     */
+int id_fija_coef( const char *origen, const char *destino, int k, int i, int j,
+                  double valor, char *porque, size_t n );
+
+/* Copy origen into destino with regular AR factor i replaced by (1 - rho B)
+ * FIXED and, when nresto > 0, a free factor of order nresto seeded with
+ * resto[]: one root isolated and the rest of the operator left free (the
+ * Shin-Fuller null, art BUG-0065). 0, or 1 with the reason.              */
+int id_parte_ar( const char *origen, const char *destino, int i, double rho,
+                 const double *resto, int nresto, char *porque, size_t n );
+
+/* The deterministics' names, as id_nombres, and whether their FIRST omega
+ * is estimated (libre[k] = 1) or fixed. Returns how many, or -1.        */
+int id_det_lee( const char *origen, char det[][ID_LINEA], int libre[], int max,
+                char *porque, size_t n );
+
+/* Copy origen into destino with every omega of the deterministics whose
+ * line is one of nom[0..nn-1] ("cos 2", "sin 2", "alter") set to 0.0 and
+ * FIXED. *fijados, if not NULL, says how many deterministics were fixed.
+ * 0, or 1 with the reason.                                               */
+int id_fija_det( const char *origen, const char *destino, const char *const *nom,
+                 int nn, int *fijados, char *porque, size_t n );
+
 #endif /* ATSW_INPDET_H */

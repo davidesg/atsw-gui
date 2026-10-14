@@ -407,6 +407,19 @@ $CC -O2 -Wall -Wextra -I"$L/raices" -I"$L/outfile" \
 "$W/test_raices" "$TOP/../../docs/manual/datos/ipc_wti.csv" \
     "$TOP/../../engines/fue/tests/golden" || exit 1
 
+# --- los contrastes formales (el formal_tests de art) ------------------------
+# Cada uno reestima con fue un modelo restringido: hace falta el motor. Contra
+# art-python, sobre .pre golden de fue y el airline de lib/formales/pruebas.
+echo
+$CC -O2 -Wall -Wextra -I"$L/formales" -I"$L/inpdet" -I"$L/outfile" -I"$L/raices" \
+    $(pkg-config --cflags glib-2.0) \
+    "$L/formales/test_formales.c" "$L/formales/formales.c" "$L/inpdet/inpdet.c" \
+    "$L/outfile/outfile.c" "$L/raices/factor.c" \
+    -o "$W/test_formales" $(pkg-config --libs glib-2.0) -lgsl -lgslcblas -lm || exit 1
+mkdir -p "$W/formales"
+"$W/test_formales" "$TOP/../../engines/fue/bin/fue" "$TOP/../../engines/fue/tests/golden" \
+    "$L/formales/pruebas" "$W/formales" || exit 1
+
 # --- el dictamen: leer no es juzgar -----------------------------------------
 # Los umbrales se prueban SIN fichero, con numeros inventados: eso es lo que
 # se gana separando el lector del que juzga.

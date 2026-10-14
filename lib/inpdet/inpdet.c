@@ -671,3 +671,213 @@ int id_anade_arma( const char *origen, const char *destino,
    fich_free( &f );
    return 0;
 }
+
+
+/* ---------------------------------------------------------------------- */
+/* Fixing a parameter: see inpdet.h.                                       */
+/* ---------------------------------------------------------------------- */
+
+/* "value flag" with the value exact: a fixed null (1.0, 1 - 4/n) has to be
+ * the number the test says, not its six-decimal rounding.               */
+static void coef_linea( FILE *o, double v, int flag )
+{
+   fprintf( o, "%.17g  %d\n", v, flag );
+}
+
+int id_arma_lee( const char *origen, IdArma *a, char *porque, size_t n )
+{
+   Fich f;
+   int  lab[4], fin, ord[4], k;
+
+   memset( a, 0, sizeof *a );
+   if ( fich_lee( origen, &f, porque, n ) ) return 1;
+   if ( arma_mira( &f, lab, &fin, ord, porque, n ) ) { fich_free( &f ); return 1; }
+   for ( k = 0; k < 4; k++ )
+       {
+       char t[64][64];
+       int  nt = tokens( f.l[lab[k] + 1], t, 64 ), nf = nt > 0 ? atoi( t[0] ) : 0;
+       int  i, j, li = lab[k] + 2;
+
+       if ( nf > ID_MAX_FAC )
+          { snprintf( porque, n, "%d factores en «%s»: aquí caben %d", nf, ARMA_ETIQ[k],
+                      ID_MAX_FAC ); fich_free( &f ); return 1; }
+       a->nf[k] = nf;
+       for ( i = 0; i < nf; i++ )
+           {
+           int o = atoi( t[i + 1] );
+
+           if ( o < 0 || o > ID_MAX_ORD )
+              { snprintf( porque, n, "un factor de orden %d en «%s»", o, ARMA_ETIQ[k] );
+                fich_free( &f ); return 1; }
+           a->ord[k][i] = o;
+           li++;                                         /* its "**" line */
+           for ( j = 0; j < o; j++, li++ )
+               {
+               char c[4][64];
+               int  nc = tokens( f.l[li], c, 4 );
+
+               if ( nc < 1 || !es_numero( c[0] ) )
+                  { snprintf( porque, n, "coeficiente ilegible en «%s»", ARMA_ETIQ[k] );
+                    fich_free( &f ); return 1; }
+               a->v[k][i][j]  = strtod( c[0], NULL );
+               a->fl[k][i][j] = nc > 1 ? atoi( c[1] ) : 1;
+               }
+           }
+       }
+   fich_free( &f );
+   return 0;
+}
+
+int id_fija_coef( const char *origen, const char *destino, int k, int i, int j,
+                  double valor, char *porque, size_t n )
+{
+   Fich  f;
+   int   lab[4], fin, ord[4], li, m;
+   FILE *o;
+   char  t[64][64];
+
+   if ( k < 0 || k > 3 ) { snprintf( porque, n, "sección %d", k ); return 1; }
+   if ( fich_lee( origen, &f, porque, n ) ) return 1;
+   if ( arma_mira( &f, lab, &fin, ord, porque, n ) ) { fich_free( &f ); return 1; }
+   {
+   int nt = tokens( f.l[lab[k] + 1], t, 64 ), nf = nt > 0 ? atoi( t[0] ) : 0;
+
+   if ( i < 0 || i >= nf || j < 0 || j >= atoi( t[i + 1] ) )
+      { snprintf( porque, n, "no hay coeficiente %d en el factor %d de «%s»", j + 1, i + 1,
+                  ARMA_ETIQ[k] ); fich_free( &f ); return 1; }
+   li = lab[k] + 2;
+   for ( m = 0; m < i; m++ ) li += 1 + atoi( t[m + 1] );
+   li += 1 + j;
+   }
+   o = fopen( destino, "wb" );
+   if ( !o ) { snprintf( porque, n, "no pude escribir «%s»", destino ); fich_free( &f ); return 1; }
+   for ( m = 0; m < f.n; m++ )
+       if ( m == li ) coef_linea( o, valor, 0 );
+       else fputs( f.l[m], o );
+   fclose( o );
+   fich_free( &f );
+   return 0;
+}
+
+int id_parte_ar( const char *origen, const char *destino, int i, double rho,
+                 const double *resto, int nresto, char *porque, size_t n )
+{
+   Fich  f;
+   int   lab[4], fin, ord[4], m, li, nt, nf;
+   FILE *o;
+   char  t[64][64];
+
+   if ( fich_lee( origen, &f, porque, n ) ) return 1;
+   if ( arma_mira( &f, lab, &fin, ord, porque, n ) ) { fich_free( &f ); return 1; }
+   nt = tokens( f.l[lab[0] + 1], t, 64 );
+   nf = nt > 0 ? atoi( t[0] ) : 0;
+   if ( i < 0 || i >= nf || nresto < 0 )
+      { snprintf( porque, n, "no hay factor AR regular %d", i + 1 ); fich_free( &f ); return 1; }
+
+   o = fopen( destino, "wb" );
+   if ( !o ) { snprintf( porque, n, "no pude escribir «%s»", destino ); fich_free( &f ); return 1; }
+   for ( m = 0; m <= lab[0]; m++ ) fputs( f.l[m], o );
+   /* the count: one factor more if the rest stays */
+   fprintf( o, "%d", nf + ( nresto > 0 ) );
+   for ( m = 0; m < nf; m++ )
+       if ( m == i ) { fputs( " 1", o ); if ( nresto > 0 ) fprintf( o, " %d", nresto ); }
+       else fprintf( o, " %s", t[m + 1] );
+   fputs( "\n", o );
+   li = lab[0] + 2;
+   for ( m = 0; m < nf; m++ )
+       {
+       int oj = atoi( t[m + 1] ), j;
+
+       if ( m != i ) { for ( j = 0; j <= oj; j++ ) fputs( f.l[li + j], o ); }
+       else
+          {
+          fputs( "**\n", o );
+          coef_linea( o, rho, 0 );
+          if ( nresto > 0 )
+             {
+             fputs( "**\n", o );
+             for ( j = 0; j < nresto; j++ ) coef_linea( o, resto[j], 1 );
+             }
+          }
+       li += 1 + oj;
+       }
+   for ( m = li; m < f.n; m++ ) fputs( f.l[m], o );
+   fclose( o );
+   fich_free( &f );
+   return 0;
+}
+
+int id_det_lee( const char *origen, char det[][ID_LINEA], int libre[], int max,
+                char *porque, size_t n )
+{
+   Fich   f;
+   Bloque b;
+   char   t[8][64];
+   int    k, li;
+
+   if ( fich_lee( origen, &f, porque, n ) ) return -1;
+   if ( mira( &f, &b, porque, n ) ) { fich_free( &f ); return -1; }
+   li = b.i_om + 1;
+   for ( k = 0; k < b.ndet; k++ )
+       {
+       if ( k < max )
+          {
+          const char *l = f.l[b.i_nom + k];
+          int         nt = tokens( l, t, 8 ), i, p = 0;
+
+          det[k][0] = '\0';
+          for ( i = 0; i < nt && p < ID_LINEA - 2; i++ )
+              p += snprintf( det[k] + p, (size_t)( ID_LINEA - p ), "%s%s", i ? " " : "", t[i] );
+          nt = tokens( f.l[li + 1], t, 8 );
+          libre[k] = nt > 1 ? atoi( t[1] ) != 0 : 1;
+          }
+       li += 2 + b.nomega[k];
+       }
+   fich_free( &f );
+   return b.ndet < max ? b.ndet : max;
+}
+
+int id_fija_det( const char *origen, const char *destino, const char *const *nom,
+                 int nn, int *fijados, char *porque, size_t n )
+{
+   Fich   f;
+   Bloque b;
+   char   t[8][64], nombre[ID_LINEA];
+   int    k, m, li, cuantos = 0;
+   char  *fija;
+   FILE  *o;
+
+   if ( fich_lee( origen, &f, porque, n ) ) return 1;
+   if ( mira( &f, &b, porque, n ) ) { fich_free( &f ); return 1; }
+   fija = calloc( (size_t) f.n, 1 );
+   if ( !fija ) { fich_free( &f ); snprintf( porque, n, "sin memoria" ); return 1; }
+   li = b.i_om + 1;
+   for ( k = 0; k < b.ndet; k++ )
+       {
+       int nt = tokens( f.l[b.i_nom + k], t, 8 ), i, p = 0, esta = 0;
+
+       nombre[0] = '\0';
+       for ( i = 0; i < nt && p < ID_LINEA - 2; i++ )
+           p += snprintf( nombre + p, (size_t)( ID_LINEA - p ), "%s%s", i ? " " : "", t[i] );
+       for ( i = 0; i < nn && !esta; i++ ) esta = !strcmp( nombre, nom[i] );
+       if ( esta )
+          {
+          int j;
+
+          for ( j = 0; j <= b.nomega[k]; j++ ) fija[li + 1 + j] = 1;
+          cuantos++;
+          }
+       li += 2 + b.nomega[k];
+       }
+   o = fopen( destino, "wb" );
+   if ( !o ) { snprintf( porque, n, "no pude escribir «%s»", destino ); free( fija );
+               fich_free( &f ); return 1; }
+   for ( m = 0; m < f.n; m++ )
+       if ( fija[m] ) coef_linea( o, 0.0, 0 );
+       else fputs( f.l[m], o );
+   fclose( o );
+   free( fija );
+   fich_free( &f );
+   if ( fijados ) *fijados = cuantos;
+   return 0;
+}

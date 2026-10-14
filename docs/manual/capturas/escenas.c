@@ -35,6 +35,7 @@
  *                           en una rejilla: una entrada recibe V; un grupo
  *                           de campos numericos (una fecha) recibe V1 | V2
  *   casilla ROTULO | 0/1    marca o desmarca la casilla cuyo rotulo empieza asi
+ *   despliega ROTULO        abre el desplegable cuyo rotulo empieza asi
  *   fichero RUTA            en un selector de ficheros: elige RUTA
  *   foto NOMBRE             fotografia la ventana actual en FOTOS/NOMBRE.png
  *   fotomenu NOMBRE         la ventana actual con el menu abierto encima
@@ -197,6 +198,17 @@ static gboolean es_casilla( GtkWidget *w, const char *arg )
 {
     return GTK_IS_CHECK_BUTTON(w) && rotulo( w )
            && strncmp( rotulo( w ), arg, strlen( arg ) ) == 0;
+}
+
+/* Un desplegable por el principio de su rotulo (sin el marcado). */
+static gboolean es_desplegable( GtkWidget *w, const char *arg )
+{
+    GtkWidget *l;
+
+    if ( !GTK_IS_EXPANDER(w) || !gtk_widget_is_drawable( w ) ) return FALSE;
+    l = gtk_expander_get_label_widget( GTK_EXPANDER(w) );
+    return GTK_IS_LABEL(l) && strncmp( gtk_label_get_text( GTK_LABEL(l) ), arg,
+                                       strlen( arg ) ) == 0;
 }
 
 static gboolean es_cuaderno( GtkWidget *w, const char *arg )
@@ -1121,6 +1133,12 @@ static gboolean orden( const char *cmd, const char *arg )
         if ( (w = busca( v, es_casilla, p[0] )) == NULL ) ok = FALSE;
         else if ( !apunta_w( v, w ) ) ok = FALSE;
         else gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(w), atoi( p[1] ) );
+        }
+    else if ( strcmp( cmd, "despliega" ) == 0 )
+        {
+        if ( (w = busca( v, es_desplegable, arg )) == NULL ) ok = FALSE;
+        else if ( !apunta_w( v, w ) ) ok = FALSE;
+        else gtk_expander_set_expanded( GTK_EXPANDER(w), TRUE );
         }
     else if ( strcmp( cmd, "fichero" ) == 0 )
         {

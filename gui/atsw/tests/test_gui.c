@@ -1389,6 +1389,10 @@ static void vistazo_prueba( void )
         check( sp->len >= 2 && bv != NULL, "con d, D y «Volver a identificar»", NULL );
         check( strstr( txt, "Estacionalidad" ) != NULL || strstr( txt, "Raíz unitaria" ) != NULL,
                "y los contrastes a la vista", txt );
+        /* ADF y KPSS para las tres d (lib/raices), con la fila de ahora */
+        check( strstr( txt, "Raíz unitaria para d = 0, 1, 2" ) && strstr( txt, "la de ahora" )
+               && strstr( txt, "punto de partida" ),
+               "y la tabla de ADF y KPSS para d = 0, 1, 2", txt );
         g_free( txt );
         if ( sp->len >= 2 && bv )
             {
@@ -2173,6 +2177,34 @@ static void menu_modelo_prueba( void )
         const char *t = gtk_widget_get_tooltip_text( bi );
         check( t && strstr( t, "cuadra" ), "apagado, dice por qué", t );
         nota( "diagnosis de m01: el Q cuadra, el botón está apagado" );
+        }
+    }
+
+    /* LA FACTORIZACION DEL AR: la abre la diagnosis. */
+    {
+    GtkWindow *dw = ventana_titulada( "Diagnosis — ipc / m01" );
+    GtkWidget *bc = dw ? boton_que_dice( GTK_WIDGET(dw), "Factorización del AR…" ) : NULL;
+
+    check( bc != NULL && gtk_widget_get_sensitive( bc ),
+           "la diagnosis ofrece «Factorización del AR…»", NULL );
+    if ( bc )
+        {
+        GtkWindow *wc;
+        gchar     *txt;
+
+        olvida();
+        gtk_button_clicked( GTK_BUTTON(bc) );
+        pump( 500 );
+        wc = ventana_titulada( "Factorización del AR — ipc / m01" );
+        check( wc != NULL, "y abre su ventana", todo_lo_dicho() );
+        txt = wc ? textos_de( GTK_WIDGET(wc) ) : g_strdup( "" );
+        check( strstr( txt, "La factorización del AR" ) &&
+               ( strstr( txt, "Factor AR 1" ) || strstr( txt, "no tiene AR regular" ) ),
+               "con la factorización del AR de m01", txt );
+        nota( "factorización del AR de m01: %s",
+              strstr( txt, "Factor AR 1" ) ? "factoriza su AR" : "sin AR regular" );
+        g_free( txt );
+        if ( wc ) { gtk_widget_destroy( GTK_WIDGET(wc) ); pump( 100 ); }
         }
     }
 

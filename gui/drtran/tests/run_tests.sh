@@ -394,6 +394,19 @@ $CC -O2 -Wall -Wextra -I"$L/artcand" \
     -o "$W/test_artcand" -lm || exit 1
 ( cd "$W" && "$W/test_artcand" "$TOP/../../engines/art/tests/golden" ) || exit 1
 
+# --- las raices para identificar: ADF/KPSS y la factorizacion del AR -------
+# No son el formal_tests de art: son su unit_root_analysis y su
+# ar_factorization. Contra art-python, sobre los datos del manual y los .out golden de fue.
+# ADF y KPSS son los del motor art (unit_root_tests.c), compilados tal cual.
+echo
+$CC -O2 -Wall -Wextra -I"$L/raices" -I"$L/outfile" \
+    -I"$TOP/../../engines/art/include" $(pkg-config --cflags glib-2.0) \
+    "$L/raices/test_raices.c" "$L/raices/raiz.c" "$L/raices/factor.c" \
+    "$L/outfile/outfile.c" "$TOP/../../engines/art/src/unit_root_tests.c" \
+    -o "$W/test_raices" $(pkg-config --libs glib-2.0) -lgsl -lgslcblas -lm || exit 1
+"$W/test_raices" "$TOP/../../docs/manual/datos/ipc_wti.csv" \
+    "$TOP/../../engines/fue/tests/golden" || exit 1
+
 # --- el dictamen: leer no es juzgar -----------------------------------------
 # Los umbrales se prueban SIN fichero, con numeros inventados: eso es lo que
 # se gana separando el lector del que juzga.

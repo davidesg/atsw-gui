@@ -292,18 +292,19 @@ void an_diagnosis( const AnHost *h, const char *serie, const char *muestra,
     gtk_box_pack_start( GTK_BOX(raiz), s, TRUE, TRUE, 0 );
     }
 
-    barra = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 6 );
-    gtk_box_pack_start( GTK_BOX(raiz), barra, FALSE, FALSE, 0 );
-
+    /* LA NOTA VA ENCIMA DE LOS BOTONES, en su renglón. Al lado, con cinco
+       botones, se partía en cuatro líneas y los botones se estiraban a su
+       altura: desproporcionados (lo vio el analista).                   */
     b = gtk_label_new( NULL );
     gtk_label_set_markup( GTK_LABEL(b),
         "<small>Esto dice lo que los números dicen. Qué hacer con ello —qué "
         "quitar, qué intervenir— es una decisión, y es tuya.</small>" );
     gtk_label_set_xalign( GTK_LABEL(b), 0.0 );
-    /* que se parta: con cuatro botones al lado, entera no cabia en 1366 */
     gtk_label_set_line_wrap( GTK_LABEL(b), TRUE );
-    gtk_label_set_max_width_chars( GTK_LABEL(b), 40 );
-    gtk_box_pack_start( GTK_BOX(barra), b, TRUE, TRUE, 0 );
+    gtk_box_pack_start( GTK_BOX(raiz), b, FALSE, FALSE, 0 );
+
+    barra = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 6 );
+    gtk_box_pack_start( GTK_BOX(raiz), barra, FALSE, FALSE, 0 );
 
     /* E4: CUANDO EL Q FALLA, el identificador sobre los mismos residuos.
      * La diagnosis sigue sin recomendar: el botón abre otra ventana, que
@@ -360,7 +361,7 @@ void an_diagnosis( const AnHost *h, const char *serie, const char *muestra,
         "pongas. Con la procedencia dentro: una diagnosis suelta en un papel, "
         "sin decir de qué modelo es, no vale nada dentro de un mes." );
     g_signal_connect( b, "clicked", G_CALLBACK(on_exportar), g );
-    gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
+    gtk_box_pack_end( GTK_BOX(barra), b, FALSE, FALSE, 0 );
 
     g_signal_connect( win, "destroy", G_CALLBACK(on_cerrar), g );
     gtk_widget_show_all( win );

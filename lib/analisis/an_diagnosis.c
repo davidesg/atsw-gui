@@ -65,14 +65,13 @@ static void pinta( Dg *g, GtkWidget *lista )
 /* Exportar: la misma tabla, tres renderizados                               */
 /* ------------------------------------------------------------------------ */
 
-static void on_exportar( GtkButton *b, Dg *g )
+static void exporta( Dg *g )
 {
     GtkWidget *d;
     Tabla     *t;
     char       titulo[256];
     int        i;
 
-    (void) b;
     g_snprintf( titulo, sizeof titulo, "Diagnosis de %s / %s%s%s",
                 g->serie, g->id,
                 g->muestra[0] ? ", muestra " : "", g->muestra );
@@ -164,25 +163,23 @@ static void on_factores( GtkButton *b, Dg *g )
     an_factores_ar( &g->h, g->serie, g->muestra, g->id );
 }
 
+static void on_exportar( GtkButton *b, Dg *g ) { (void) b; exporta( g ); }
+
 static void on_cerrar( GtkWidget *w, Dg *g ) { (void) w; g_free( g ); }
 
-
-/* ------------------------------------------------------------------------ */
-
-void an_diagnosis( const AnHost *h, const char *serie, const char *muestra,
-                     const char *id )
+/* EL DICTAMEN DEL MODELO, sin ventana: lo que leen la ventana y la
+ * exportacion directa (el menu de fue_gui). NULL, dicho, si no se puede. */
+static Dg *carga( const AnHost *h, const char *serie, const char *muestra,
+                  const char *id )
 {
-    Dg           *g;
-    Convergence   c;
-    GtkWidget    *win, *raiz, *cab, *lista, *barra, *b;
-    GtkListStore *st;
-    char          out[PR_RUTA];
-    int           i;
+    Dg          *g;
+    Convergence  c;
+    char         out[PR_RUTA];
 
-    if ( !h || !h->p || !serie || !*serie || !id || !*id ) return;
+    if ( !h || !h->p || !serie || !*serie || !id || !*id ) return NULL;
 
     if ( pr_ruta( h->p, serie, muestra, id, ".out", out, sizeof out ) != 0 )
-        { an_di( h, "No pude componer la ruta." ); return; }
+        { an_di( h, "No pude componer la ruta." ); return NULL; }
 
     g = g_new0( Dg, 1 );
     g->h = *h;
@@ -199,7 +196,7 @@ void an_diagnosis( const AnHost *h, const char *serie, const char *muestra,
 
         an_di( h, "%s", s );
         g_free( s ); g_free( g );
-        return;
+        return NULL;
         }
     fueout_estructura( &g->o, g->estruct, sizeof g->estruct );
     if ( !convergence_of( out, &c ) ) memset( &c, 0, sizeof c );
@@ -215,6 +212,29 @@ void an_diagnosis( const AnHost *h, const char *serie, const char *muestra,
     dx_dictamen( &g->o, &c, nd ? ptr : NULL, nd, &g->d );
     }
     convergence_clear( &c );
+    return g;
+}
+
+void an_diagnosis_exporta( const AnHost *h, const char *serie, const char *muestra,
+                           const char *id )
+{
+    Dg *g = carga( h, serie, muestra, id );
+
+    if ( g ) { exporta( g ); g_free( g ); }
+}
+
+
+/* ------------------------------------------------------------------------ */
+
+void an_diagnosis( const AnHost *h, const char *serie, const char *muestra,
+                     const char *id )
+{
+    Dg           *g;
+    GtkWidget    *win, *raiz, *cab, *lista, *barra, *b;
+    GtkListStore *st;
+    int           i;
+
+    if ( ( g = carga( h, serie, muestra, id ) ) == NULL ) return;
 
     win = gtk_window_new( GTK_WINDOW_TOPLEVEL );
     if ( h->padre ) gtk_window_set_transient_for( GTK_WINDOW(win), h->padre );

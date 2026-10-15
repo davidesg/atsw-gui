@@ -10,6 +10,7 @@ const char *fue_raiz_proyecto(void);
 #include "deterministic_dialog.h"
 #include "operator_dialog.h"
 #include "forecast_tab.h"
+#include "iconos.h"
 
 /* Forward declarations of helper functions for building tabs */
 static GtkWidget* create_data_input_tab(FueContext *ctx);
@@ -35,12 +36,90 @@ void fue_on_ganancia(GtkWidget *w, FueContext *ctx);
 void fue_on_identifica(GtkWidget *w, FueContext *ctx);
 void fue_on_integracion(GtkWidget *w, FueContext *ctx);
 void fue_on_estacionalidad(GtkWidget *w, FueContext *ctx);
+void fue_on_factores(GtkWidget *w, FueContext *ctx);
+void fue_on_exportar(GtkWidget *w, FueContext *ctx);
 void fue_analisis_refresca(FueContext *ctx);
 static void on_fixed_treeview_row_activated(GtkTreeView *treeview, GtkTreePath *path,
                                             GtkTreeViewColumn *col, FueContext *ctx);
 static void on_operator_treeview_row_activated(GtkTreeView *treeview, GtkTreePath *path,
                                                GtkTreeViewColumn *col, FueContext *ctx) ;
 
+
+/* LOS BOTONES DE LA BARRA Y SUS MENUS. --------------------------------- */
+
+static GtkToolItem *boton(GtkWidget *toolbar, const char *rotulo, const char *icono,
+                          const char *respaldo, const char *globo, GCallback cb,
+                          FueContext *ctx) {
+    GtkToolItem *b = gtk_tool_button_new(fue_icono(icono, 24, toolbar, respaldo), rotulo);
+
+    gtk_widget_set_tooltip_text(GTK_WIDGET(b), globo);
+    g_signal_connect(b, "clicked", cb, ctx);
+    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), b, -1);
+    return b;
+}
+
+/* El boton partido: el clic hace cb, la flecha abre menu. */
+static GtkToolItem *partido(GtkWidget *toolbar, const char *rotulo, const char *icono,
+                            const char *respaldo, GtkWidget *menu, GCallback cb,
+                            FueContext *ctx) {
+    GtkToolItem *b = gtk_menu_tool_button_new(fue_icono(icono, 24, toolbar, respaldo),
+                                              rotulo);
+    gchar *mas = g_strdup_printf("Más: el resto de %s", rotulo);
+
+    gtk_menu_tool_button_set_menu(GTK_MENU_TOOL_BUTTON(b), menu);
+    gtk_menu_tool_button_set_arrow_tooltip_text(GTK_MENU_TOOL_BUTTON(b), mas);
+    g_free(mas);
+    g_signal_connect(b, "clicked", cb, ctx);
+    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), b, -1);
+    return b;
+}
+
+static GtkWidget *entrada(GtkWidget *menu, const char *texto, const char *icono,
+                          const char *respaldo, GtkWidget *ref, GCallback cb,
+                          FueContext *ctx) {
+    GtkWidget *mi = fue_menu_item(texto, icono, ref, respaldo);
+
+    g_signal_connect(mi, "activate", cb, ctx);
+    gtk_menu_shell_append(GTK_MENU_SHELL(menu), mi);
+    return mi;
+}
+
+/* Ctrl+tecla pulsa el boton, si esta encendido. */
+static gboolean pulsa(GtkAccelGroup *g, GObject *o, guint k, GdkModifierType m,
+                      gpointer b) {
+    (void) g; (void) o; (void) k; (void) m;
+    if (gtk_widget_is_sensitive(GTK_WIDGET(b))) g_signal_emit_by_name(b, "clicked");
+    return TRUE;
+}
+
+static void atajo(GtkAccelGroup *g, guint tecla, GtkToolItem *b) {
+    gtk_accel_group_connect(g, tecla, GDK_CONTROL_MASK, 0,
+                            g_cclosure_new(G_CALLBACK(pulsa), b, NULL));
+}
+
+static gboolean sal(GtkAccelGroup *g, GObject *o, guint k, GdkModifierType m,
+                    gpointer ctx) {
+    (void) g; (void) o; (void) k; (void) m;
+    on_quit(NULL, ctx);
+    return TRUE;
+}
+
+/* PREVER: lo que hacian los botones de la pestaña, desde el menu. La
+ * pestaña sigue siendo donde se ajustan el horizonte y el origen.     */
+static void prever_pdf(GtkWidget *w, FueContext *ctx) {
+    (void) w;
+    gtk_button_clicked(GTK_BUTTON(ctx->forecast_view_pdf_button));
+}
+
+static void prever_abrir(GtkWidget *w, FueContext *ctx) {
+    (void) w;
+    gtk_button_clicked(GTK_BUTTON(ctx->forecast_load_button));
+}
+
+static void prever_pestana(GtkWidget *w, FueContext *ctx) {
+    (void) w;
+    gtk_notebook_set_current_page(GTK_NOTEBOOK(ctx->notebook), ctx->forecast_page);
+}
 
 GtkWidget* create_main_window(GtkApplication *app, FueContext *ctx) {
     GtkWidget *window = gtk_application_window_new(app);
@@ -54,108 +133,112 @@ GtkWidget* create_main_window(GtkApplication *app, FueContext *ctx) {
     gtk_container_set_border_width(GTK_CONTAINER(vbox), 10);
     gtk_container_add(GTK_CONTAINER(window), vbox);
 
-    /* --- Toolbar (sin expandir) --- */
+    /* --- La barra (sin expandir) ---
+     *
+     * EL CICLO DE TRABAJO, CON TEXTO E ICONOS PROPIOS (gui/fue/src/iconos.c).
+     * Antes eran catorce iconos del tema sin texto: tres lupas (el PDF, los
+     * anomalos, el identificador), la «i» de informacion para la diagnosis
+     * y la flecha de recargar para la ganancia. Ahora nueve botones, cada
+     * uno con su nombre, y lo que no cabe va en el menu de tres de ellos:
+     * Diagnosis, Contrastes y Prever son botones partidos --el clic hace lo
+     * habitual y la flecha abre el resto--. Los nombres son los del menu del
+     * boton derecho de la madre: una accion, un nombre en todo ATSW.     */
     GtkWidget *toolbar = gtk_toolbar_new();
-    GtkToolItem *new_btn = gtk_tool_button_new(NULL, "New");
-    gtk_tool_button_set_icon_name(GTK_TOOL_BUTTON(new_btn), "document-new");
-    gtk_widget_set_tooltip_text(GTK_WIDGET(new_btn), "Create a new model");
-    g_signal_connect(new_btn, "clicked", G_CALLBACK(on_new_file), ctx);
-    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), new_btn, -1);
+    gtk_toolbar_set_style(GTK_TOOLBAR(toolbar), GTK_TOOLBAR_BOTH);
+    /* EN LA VENTANA ANTES DE LOS BOTONES: los iconos toman el color del
+       texto de la barra, y suelta, sin ventana, el tema no le da el suyo
+       (salian casi blancos).                                          */
+    gtk_box_pack_start(GTK_BOX(vbox), toolbar, FALSE, FALSE, 0);
+    GtkAccelGroup *atajos = gtk_accel_group_new();
+    gtk_window_add_accel_group(GTK_WINDOW(window), atajos);
 
-    GtkToolItem *open_btn = gtk_tool_button_new(NULL, "Open");
-    gtk_tool_button_set_icon_name(GTK_TOOL_BUTTON(open_btn), "document-open");
-    gtk_widget_set_tooltip_text(GTK_WIDGET(open_btn), "Load a data file or existing model (.inp/.pre)");
-    g_signal_connect(open_btn, "clicked", G_CALLBACK(on_load_series), ctx);
-    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), open_btn, -1);
-
-    GtkToolItem *save_btn = gtk_tool_button_new(NULL, "Save");
-    gtk_tool_button_set_icon_name(GTK_TOOL_BUTTON(save_btn), "document-save");
-    gtk_widget_set_tooltip_text(GTK_WIDGET(save_btn), "Save current model as .inp file");
-    g_signal_connect(save_btn, "clicked", G_CALLBACK(on_save_inp), ctx);
-    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), save_btn, -1);
+    GtkToolItem *new_btn = boton(toolbar, "Nuevo", "nuevo", "document-new",
+        "Un modelo nuevo (Ctrl+N)", G_CALLBACK(on_new_file), ctx);
+    atajo(atajos, GDK_KEY_n, new_btn);
+    GtkToolItem *open_btn = boton(toolbar, "Abrir", "abrir", "document-open",
+        "Abrir unos datos o un modelo, .inp o .pre (Ctrl+O)", G_CALLBACK(on_load_series), ctx);
+    atajo(atajos, GDK_KEY_o, open_btn);
+    GtkToolItem *save_btn = boton(toolbar, "Guardar", "guardar", "document-save",
+        "Guardar el modelo como .inp (Ctrl+S)", G_CALLBACK(on_save_inp), ctx);
+    atajo(atajos, GDK_KEY_s, save_btn);
     ctx->btn_save = GTK_WIDGET(save_btn);
 
-    GtkToolItem *sep1 = gtk_separator_tool_item_new();
-    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), sep1, -1);
+    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_separator_tool_item_new(), -1);
 
-    GtkToolItem *run_btn = gtk_tool_button_new(NULL, "Run");
-    gtk_tool_button_set_icon_name(GTK_TOOL_BUTTON(run_btn), "system-run");
-    gtk_widget_set_tooltip_text(GTK_WIDGET(run_btn), "Estimate model (run FUE)");
-    g_signal_connect(run_btn, "clicked", G_CALLBACK(on_run_fue), ctx);
-    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), run_btn, -1);
+    GtkToolItem *run_btn = boton(toolbar, "Estimar", "estimar", "media-playback-start",
+        "Estimar el modelo con fue (Ctrl+E)", G_CALLBACK(on_run_fue), ctx);
+    atajo(atajos, GDK_KEY_e, run_btn);
     ctx->btn_execute = GTK_WIDGET(run_btn);
+    GtkToolItem *ver_btn = boton(toolbar, "Ver modelo", "ver-modelo", "x-office-document",
+        "La página de fue: los residuos con su ACF y su PACF y el modelo escrito "
+        "debajo, con sus desviaciones típicas", G_CALLBACK(on_view_output), ctx);
+    (void) ver_btn;
 
-    GtkToolItem *view_out_btn = gtk_tool_button_new(NULL, "View Output");
-    gtk_tool_button_set_icon_name(GTK_TOOL_BUTTON(view_out_btn), "system-search");
-    gtk_widget_set_tooltip_text(GTK_WIDGET(view_out_btn), "Open PDF with estimation results");
-    g_signal_connect(view_out_btn, "clicked", G_CALLBACK(on_view_output), ctx);
-    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), view_out_btn, -1);
+    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_separator_tool_item_new(), -1);
 
-    GtkToolItem *forecast_btn = gtk_tool_button_new(NULL, "Forecast");
-    gtk_tool_button_set_icon_name(GTK_TOOL_BUTTON(forecast_btn), "go-jump");
-    gtk_widget_set_tooltip_text(GTK_WIDGET(forecast_btn), "Generate forecast input and run FUF");
-    g_signal_connect(forecast_btn, "clicked", G_CALLBACK(on_forecast_button_clicked), ctx);
-    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), forecast_btn, -1);
+    /* DIAGNOSIS, CONTRASTES Y PREVER, con su menu. Las ventanas son LAS
+     * MISMAS que las de la madre --lib/analisis--, no una copia, y se
+     * encienden solas cuando hay un .out AL DIA: ver analisis.c.       */
+    {
+    GtkWidget *m = gtk_menu_new();
 
-    /* DIAGNOSIS Y ANOMALOS, AQUI TAMBIEN.
-     *
-     * Con el modelo recien estimado delante, volver a la madre y buscarlo en
-     * la lista para mirarle los residuos es el camino largo, y el camino
-     * largo es el que no se recorre. Las ventanas son LAS MISMAS que las de
-     * la madre --lib/analisis--, no una copia.
-     *
-     * Y se encienden solas cuando hay un .out AL DIA: ver analisis.c.   */
-    GtkToolItem *diag_btn = gtk_tool_button_new(NULL, "Diagnosis");
-    gtk_tool_button_set_icon_name(GTK_TOOL_BUTTON(diag_btn), "dialog-information");
-    g_signal_connect(diag_btn, "clicked", G_CALLBACK(fue_on_diagnosis), ctx);
-    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), diag_btn, -1);
-    ctx->btn_diagnosis = GTK_WIDGET(diag_btn);
+    ctx->btn_diagnosis = GTK_WIDGET(partido(toolbar, "Diagnosis", "diagnosis",
+        "dialog-information", m, G_CALLBACK(fue_on_diagnosis), ctx));
+    atajo(atajos, GDK_KEY_d, GTK_TOOL_ITEM(ctx->btn_diagnosis));
+    ctx->mi_diagnosis = entrada(m, "Diagnosis…", "diagnosis", "dialog-information",
+                                toolbar, G_CALLBACK(fue_on_diagnosis), ctx);
+    ctx->btn_anomalos = entrada(m, "Anómalos…", "anomalos", "edit-find",
+                                toolbar, G_CALLBACK(fue_on_anomalos), ctx);
+    ctx->btn_ganancia = entrada(m, "Ganancia de las intervenciones…", "ganancia",
+                                "view-refresh", toolbar, G_CALLBACK(fue_on_ganancia), ctx);
+    ctx->btn_identifica = entrada(m, "Identificar los residuos…", "identificar",
+                                  "edit-find-replace", toolbar,
+                                  G_CALLBACK(fue_on_identifica), ctx);
+    ctx->btn_factores = entrada(m, "Factorización del AR…", "factores", NULL,
+                                toolbar, G_CALLBACK(fue_on_factores), ctx);
+    gtk_menu_shell_append(GTK_MENU_SHELL(m), gtk_separator_menu_item_new());
+    ctx->btn_exportar = entrada(m, "Exportar la diagnosis…", "exportar", "document-save-as",
+                                toolbar, G_CALLBACK(fue_on_exportar), ctx);
+    gtk_widget_show_all(m);
+    }
+    {
+    GtkWidget *m = gtk_menu_new();
 
-    GtkToolItem *anom_btn = gtk_tool_button_new(NULL, "Anomalos");
-    gtk_tool_button_set_icon_name(GTK_TOOL_BUTTON(anom_btn), "edit-find");
-    g_signal_connect(anom_btn, "clicked", G_CALLBACK(fue_on_anomalos), ctx);
-    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), anom_btn, -1);
-    ctx->btn_anomalos = GTK_WIDGET(anom_btn);
+    ctx->btn_contrastes = GTK_WIDGET(partido(toolbar, "Contrastes", "integracion",
+        "view-list", m, G_CALLBACK(fue_on_integracion), ctx));
+    ctx->btn_integracion = entrada(m, "Orden de integración…", "integracion", "view-list",
+                                   toolbar, G_CALLBACK(fue_on_integracion), ctx);
+    ctx->btn_estacional = entrada(m, "Estacionalidad (MEG)…", "estacionalidad",
+                                  "x-office-calendar", toolbar,
+                                  G_CALLBACK(fue_on_estacionalidad), ctx);
+    gtk_widget_show_all(m);
+    }
+    {
+    GtkWidget *m = gtk_menu_new();
+    GtkToolItem *p = partido(toolbar, "Prever", "prever", "go-jump", m,
+                             G_CALLBACK(on_forecast_button_clicked), ctx);
 
-    GtkToolItem *gan_btn = gtk_tool_button_new(NULL, "Ganancia");
-    gtk_tool_button_set_icon_name(GTK_TOOL_BUTTON(gan_btn), "view-refresh");
-    g_signal_connect(gan_btn, "clicked", G_CALLBACK(fue_on_ganancia), ctx);
-    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gan_btn, -1);
-    ctx->btn_ganancia = GTK_WIDGET(gan_btn);
+    gtk_widget_set_tooltip_text(GTK_WIDGET(p), "Prever con fuf desde el modelo "
+        "estimado: fue -f escribe la entrada de la previsión y fuf la calcula");
+    entrada(m, "Prever con fuf…", "prever", "go-jump", toolbar,
+            G_CALLBACK(on_forecast_button_clicked), ctx);
+    entrada(m, "Ver la última previsión (PDF)", NULL, NULL, toolbar,
+            G_CALLBACK(prever_pdf), ctx);
+    entrada(m, "Abrir una previsión guardada…", NULL, NULL, toolbar,
+            G_CALLBACK(prever_abrir), ctx);
+    gtk_menu_shell_append(GTK_MENU_SHELL(m), gtk_separator_menu_item_new());
+    entrada(m, "Ir a la pestaña de la previsión", NULL, NULL, toolbar,
+            G_CALLBACK(prever_pestana), ctx);
+    gtk_widget_show_all(m);
+    }
 
-    /* EL IDENTIFICADOR sobre los residuos de este modelo (E3): art propone
-     * qué ARMA ponerle. Misma regla de encendido: un .out al dia. */
-    GtkToolItem *ident_btn = gtk_tool_button_new(NULL, "Identificar");
-    gtk_tool_button_set_icon_name(GTK_TOOL_BUTTON(ident_btn), "edit-find-replace");
-    g_signal_connect(ident_btn, "clicked", G_CALLBACK(fue_on_identifica), ctx);
-    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), ident_btn, -1);
-    ctx->btn_identifica = GTK_WIDGET(ident_btn);
+    /* SALIR, sin boton: la equis de la ventana y Ctrl+Q. Una equis roja
+     * en mitad de la barra, junto a las herramientas, era un riesgo.   */
+    {
+    GClosure *c = g_cclosure_new(G_CALLBACK(sal), ctx, NULL);
 
-    /* LOS CONTRASTES FORMALES, EN DOS: el orden de integracion y la
-     * estacionalidad (el MEG). Las mismas ventanas que los botones de la
-     * diagnosis y que el menu de la madre. Misma regla de encendido, y la
-     * estacionalidad ademas pide s > 1. */
-    GtkToolItem *integ_btn = gtk_tool_button_new(NULL, "Integración");
-    gtk_tool_button_set_icon_name(GTK_TOOL_BUTTON(integ_btn), "view-list");
-    g_signal_connect(integ_btn, "clicked", G_CALLBACK(fue_on_integracion), ctx);
-    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), integ_btn, -1);
-    ctx->btn_integracion = GTK_WIDGET(integ_btn);
-
-    GtkToolItem *estac_btn = gtk_tool_button_new(NULL, "Estacionalidad");
-    gtk_tool_button_set_icon_name(GTK_TOOL_BUTTON(estac_btn), "x-office-calendar");
-    g_signal_connect(estac_btn, "clicked", G_CALLBACK(fue_on_estacionalidad), ctx);
-    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), estac_btn, -1);
-    ctx->btn_estacional = GTK_WIDGET(estac_btn);
-
-    GtkToolItem *sep2 = gtk_separator_tool_item_new();
-    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), sep2, -1);
-
-    GtkToolItem *quit_btn = gtk_tool_button_new(NULL, "Quit");
-    gtk_tool_button_set_icon_name(GTK_TOOL_BUTTON(quit_btn), "application-exit");
-    g_signal_connect(quit_btn, "clicked", G_CALLBACK(on_quit), ctx);
-    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), quit_btn, -1);
-
-    gtk_box_pack_start(GTK_BOX(vbox), toolbar, FALSE, FALSE, 0);
+    gtk_accel_group_connect(atajos, GDK_KEY_q, GDK_CONTROL_MASK, 0, c);
+    }
 
     /* --- Model specification notebook --- */
     GtkWidget *model_notebook = gtk_notebook_new();
@@ -181,6 +264,7 @@ GtkWidget* create_main_window(GtkApplication *app, FueContext *ctx) {
     ctx->notebook = model_notebook;
 
     GtkWidget *forecast_tab = create_forecast_tab(ctx);
+    ctx->forecast_page =
     gtk_notebook_append_page(GTK_NOTEBOOK(model_notebook), forecast_tab, gtk_label_new("Forecast"));
 
     /* --- Paned vertical para separar notebook (arriba) y área de salida (abajo) --- */

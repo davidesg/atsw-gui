@@ -212,6 +212,36 @@ static void formales( FueContext *ctx, AnFmFamilia fam )
     }
 }
 
+void fue_on_factores( GtkWidget *w, FueContext *ctx )
+{
+    char serie[PR_ID], muestra[PR_ID], id[PR_ID];
+
+    (void) w;
+    if ( fue_modelo_actual( ctx, serie, sizeof serie, muestra, sizeof muestra,
+                            id, sizeof id ) != 0 )
+        { fg_di( ctx, "Este fichero no es un modelo de este proyecto." ); return; }
+    {
+    AnHost h = fue_host( ctx );
+
+    an_factores_ar( &h, serie, muestra, id );
+    }
+}
+
+void fue_on_exportar( GtkWidget *w, FueContext *ctx )
+{
+    char serie[PR_ID], muestra[PR_ID], id[PR_ID];
+
+    (void) w;
+    if ( fue_modelo_actual( ctx, serie, sizeof serie, muestra, sizeof muestra,
+                            id, sizeof id ) != 0 )
+        { fg_di( ctx, "Este fichero no es un modelo de este proyecto." ); return; }
+    {
+    AnHost h = fue_host( ctx );
+
+    an_diagnosis_exporta( &h, serie, muestra, id );
+    }
+}
+
 void fue_on_integracion( GtkWidget *w, FueContext *ctx )
 { (void) w; formales( ctx, AN_FM_INTEGRACION ); }
 
@@ -248,15 +278,35 @@ void fue_analisis_refresca( FueContext *ctx )
           "cambia en la ACF/PACF al calibrarlos."
         : porque;
 
+    /* EL BOTON PARTIDO Y SU MENU: el boton entero se apaga sin .out al
+       dia, y cada entrada dice por que en su globo.                  */
     gtk_widget_set_sensitive( ctx->btn_diagnosis, listo );
-    gtk_widget_set_sensitive( ctx->btn_anomalos, listo );
-    gtk_widget_set_sensitive( ctx->btn_ganancia, listo );
-    gtk_widget_set_tooltip_text( ctx->btn_ganancia, listo
-        ? "¿El suceso dejó algo para siempre o revirtió? La ganancia de cada "
-          "intervención con su contraste."
-        : porque );
     gtk_widget_set_tooltip_text( ctx->btn_diagnosis, g1 );
-    gtk_widget_set_tooltip_text( ctx->btn_anomalos, g2 );
+    {
+    GtkWidget *en[] = { ctx->mi_diagnosis, ctx->btn_anomalos, ctx->btn_ganancia,
+                        ctx->btn_factores, ctx->btn_exportar };
+    const char *gl[] = { g1, g2,
+        "¿El suceso dejó algo para siempre o revirtió? La ganancia de cada "
+        "intervención con su contraste.",
+        "Las raíces de cada factor del AR y, de cada par complejo, su "
+        "amortiguamiento, su frecuencia y su periodo.",
+        "La tabla de la diagnosis a un fichero: TXT, CSV o TeX, por la extensión." };
+    size_t k;
+
+    for ( k = 0; k < G_N_ELEMENTS(en); k++ )
+        if ( en[k] )
+            {
+            gtk_widget_set_sensitive( en[k], listo );
+            gtk_widget_set_tooltip_text( en[k], listo ? gl[k] : porque );
+            }
+    }
+    if ( ctx->btn_contrastes )
+        {
+        gtk_widget_set_sensitive( ctx->btn_contrastes, listo );
+        gtk_widget_set_tooltip_text( ctx->btn_contrastes, listo
+            ? "El orden de integración; la flecha, también la estacionalidad (MEG)."
+            : porque );
+        }
     if ( ctx->btn_identifica )
         {
         gtk_widget_set_sensitive( ctx->btn_identifica, listo );

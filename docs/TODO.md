@@ -91,6 +91,17 @@ los tiene corregidos en C.
 
 ---
 
+## La interfaz en inglés y en otros idiomas
+
+**Decisión del analista, 2026-10-15.** De momento todo en español: la barra y
+los menús de fue_gui pasaron al español con sus iconos propios (la barra:
+Nuevo, Abrir, Guardar, Estimar, Ver modelo, y Diagnosis ▾, Contrastes ▾ y
+Prever ▾ con su menú). **Más adelante**, una interfaz en inglés y en otros
+idiomas para todo ATSW. Quedan en inglés, hasta entonces, las pestañas y los
+campos de fue_gui («Data Input», «Stochastic Component»…), que vienen del
+motor. Cuando se haga, gettext (GLib ya lo trae) y un catálogo por idioma;
+los textos de hoy están escritos en el código, sin marcar.
+
 ## EL SIGUIENTE PASO: los contrastes formales y el MEG
 
 **Decisión del analista, 2026-09-26.** Traer al GUI `formal_tests` y el MEG:

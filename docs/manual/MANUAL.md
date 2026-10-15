@@ -361,9 +361,14 @@ Cierra el editor. En la ventana principal, m01 ya tiene sus números:
 | **Q (g.l.)**, **p** | El contraste de Ljung-Box sobre los residuos y su valor p. |
 | **Por qué** | La razón del modelo. |
 
-> Si prefieres trabajar en **fue_gui** (el estimador clásico, en inglés), el
-> botón derecho sobre un modelo tiene **Abrir m01 en fue**. Hace lo mismo con
-> más detalle: una pestaña por cada parte del modelo.
+> Si prefieres trabajar en **fue_gui** (el estimador clásico), el botón derecho
+> sobre un modelo tiene **Abrir m01 en fue**. Hace lo mismo con más detalle:
+> una pestaña por cada parte del modelo. Su barra sigue el ciclo de trabajo:
+> **Nuevo**, **Abrir**, **Guardar**, **Estimar** y **Ver modelo**. Después vienen
+> tres botones con menú: **Diagnosis** (la diagnosis, los anómalos, la
+> ganancia, identificar los residuos, la factorización del AR y exportar),
+> **Contrastes** (el orden de integración y la estacionalidad) y **Prever**. Un
+> clic en el botón hace lo habitual; la flecha de al lado abre el resto.
 >
 > ![fue_gui](img/fue-gui.png)
 
@@ -406,7 +411,7 @@ bloquear la ventana. Son de dos tipos y van en dos ventanas: **Orden de
 integración…** (la diferencia regular) y **Estacionalidad (MEG)…**, que sólo se
 enciende si la serie es estacional (s > 1). Se abren desde los dos botones de
 la diagnosis, desde el menú del botón derecho de la lista de modelos y desde la
-barra de fue_gui («Integración» y «Estacionalidad»).
+barra de fue_gui (el menú del botón **Contrastes**).
 
 ![El orden de integración de m01](img/ipc-m01-integracion.png)
 

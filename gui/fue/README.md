@@ -46,7 +46,7 @@ It is cross-platform: Linux, macOS, and Windows.
 
 - `fue` — FUE estimation engine (must be on `PATH`)
 - `fuf` — FUF forecasting engine (must be on `PATH`)
-- A PDF viewer (used by View Output and Forecast)
+- A PDF viewer (used by Ver modelo and Prever)
 
 On Debian/Ubuntu:
 
@@ -88,15 +88,23 @@ The main window has a toolbar and a tabbed notebook.
 
 ### Toolbar
 
+The toolbar labels are in Spanish for now, like the rest of ATSW's
+analysis windows; an English interface is planned. Each button shows its
+icon with its name below. Diagnosis, Contrastes and Prever are split buttons:
+a click does the usual action and the arrow opens a menu with the rest.
+
 | Button | Action |
 |--------|--------|
-| New | Clear all fields and start a new model |
-| Open | Load an existing `.inp` or `.pre` file |
-| Save | Write the current model specification to a `.inp` file |
-| Run | Save the `.inp` file and run FUE |
-| View Output | Open the estimation PDF report |
-| Forecast | Run `fue -f` then `fuf` and open the forecast PDF |
-| Quit | Exit the application |
+| Nuevo (Ctrl+N) | Clear all fields and start a new model |
+| Abrir (Ctrl+O) | Load data or an existing `.inp` or `.pre` file |
+| Guardar (Ctrl+S) | Write the current model specification to a `.inp` file |
+| Estimar (Ctrl+E) | Save the `.inp` file and run FUE |
+| Ver modelo | Open FUE's page: the residuals and the written model |
+| Diagnosis ▾ (Ctrl+D) | The diagnosis; the menu adds outliers, intervention gains, identifying the residuals, the AR factorization and exporting the diagnosis |
+| Contrastes ▾ | The order of integration; the menu adds seasonality (MEG), only with s > 1 |
+| Prever ▾ | Run `fue -f` then `fuf`; the menu adds viewing the last forecast, opening a saved one and going to the *Forecast* tab |
+
+To quit: the window's close button or Ctrl+Q.
 
 ### Tabs
 
@@ -111,19 +119,19 @@ The main window has a toolbar and a tabbed notebook.
 
 ## Workflow
 
-1. **New model**: Click *New*, fill in *Data Input* (series name, frequency,
+1. **New model**: Click *Nuevo*, fill in *Data Input* (series name, frequency,
    data file, workspace, observation range).
 
 2. **Specify the model**: Set transformations in *Box-Cox & Differences*, add
    intervention variables in *Deterministic Component*, and add AR/MA operators
    in *Stochastic Component*.
 
-3. **Estimate**: Click *Save* to write the `.inp` file, then click *Run* to
+3. **Estimate**: Click *Guardar* to write the `.inp` file, then click *Estimar* to
    invoke FUE. The *Console* tab shows the model specification as FUE reads it.
 
-4. **View results**: Click *View Output* to open the estimation PDF report.
+4. **View results**: Click *Ver modelo* to open the estimation PDF report.
 
-5. **Forecast**: Click *Forecast* to run `fue -f` (which generates
+5. **Forecast**: Click *Prever* to run `fue -f` (which generates
    `forecast_{model}.inp`) and then `fuf` automatically. The forecast PDF opens
    when FUF finishes. Alternatively, use the *Forecast* tab to load any forecast
    input file manually and set a custom horizon.

@@ -225,7 +225,7 @@ static gboolean es_de_barra(GtkWidget *w, gpointer d) {
     return l && strcmp(l, (const char *) d) == 0;
 }
 
-/* Los de la barra de arriba: New, Open, Save, Run, Forecast...           */
+/* Los de la barra de arriba: Nuevo, Abrir, Guardar, Estimar, Prever...  */
 static void barra(FueContext *ctx, const char *rotulo) {
     GtkWidget *b = busca(ctx->main_window, es_de_barra, (gpointer) rotulo);
     gchar *s = g_strdup_printf("el boton «%s» de la barra existe", rotulo);
@@ -233,6 +233,38 @@ static void barra(FueContext *ctx, const char *rotulo) {
     check(b != NULL, s, NULL);
     g_free(s);
     if (b) g_signal_emit_by_name(b, "clicked");
+    pump(30);
+}
+
+/* UNA ENTRADA DEL MENU de un boton partido de la barra (Diagnosis,
+ * Contrastes, Prever): la entrada lleva una caja con icono y rotulo.     */
+static gboolean es_rotulo(GtkWidget *w, gpointer d) {
+    return GTK_IS_LABEL(w) && !strcmp(gtk_label_get_text(GTK_LABEL(w)), (const char *) d);
+}
+
+static GtkWidget *del_menu(FueContext *ctx, const char *boton, const char *texto) {
+    GtkWidget *b = busca(ctx->main_window, es_de_barra, (gpointer) boton);
+    GtkWidget *m = (b && GTK_IS_MENU_TOOL_BUTTON(b))
+                   ? gtk_menu_tool_button_get_menu(GTK_MENU_TOOL_BUTTON(b)) : NULL;
+    GList     *l, *hijos;
+    GtkWidget *r = NULL;
+
+    if (!m) return NULL;
+    hijos = gtk_container_get_children(GTK_CONTAINER(m));
+    for (l = hijos; l && !r; l = l->next)
+        if (GTK_IS_CONTAINER(l->data) && busca(l->data, es_rotulo, (gpointer) texto))
+            r = l->data;
+    g_list_free(hijos);
+    return r;
+}
+
+static void menu(FueContext *ctx, const char *boton, const char *texto) {
+    GtkWidget *mi = del_menu(ctx, boton, texto);
+    gchar *s = g_strdup_printf("«%s» esta en el menu de «%s» y se enciende", texto, boton);
+
+    check(mi && gtk_widget_get_sensitive(mi), s, NULL);
+    g_free(s);
+    if (mi) gtk_menu_item_activate(GTK_MENU_ITEM(mi));
     pump(30);
 }
 
@@ -457,7 +489,7 @@ static gchar *prepara(const char *sub, const char *const *ficheros) {
 static void corre_fue(FueContext *ctx) {
     gint64 hasta;
 
-    barra(ctx, "Run");
+    barra(ctx, "Estimar");
     hasta = g_get_monotonic_time() + 30 * G_USEC_PER_SEC;
     while (ctx->running && g_get_monotonic_time() < hasta) pump(20);
     pump(50);
@@ -630,7 +662,7 @@ static void prueba_construir(FueContext *ctx) {
 
     /* «Open» de la barra, con el selector de ficheros de verdad. */
     elegir = g_strdup(txt);
-    barra(ctx, "Open");
+    barra(ctx, "Abrir");
     pump(50);
     check(g_strcmp0(estado(ctx), "Data loaded successfully.") == 0, "Open con D.txt carga los datos",
           estado(ctx));
@@ -795,7 +827,7 @@ static void prueba_construir(FueContext *ctx) {
 
     /* Guardar: el .inp sale al lado de los datos, lo acepta el comprobador
        del motor y se vuelve a leer igual.                              */
-    barra(ctx, "Save");
+    barra(ctx, "Guardar");
     check(g_strcmp0(estado(ctx), "INP file saved.") == 0, "Save lo dice", estado(ctx));
     check(g_file_test(inp, G_FILE_TEST_EXISTS), "y D.inp esta al lado de los datos", inp);
     {
@@ -818,9 +850,9 @@ static void prueba_construir(FueContext *ctx) {
           "y se salta a la consola", NULL);
 
     /* Ver la salida: la ventana de graficos con el PDF que hizo fue. */
-    barra(ctx, "View Output");
+    barra(ctx, "Ver modelo");
     check(g_strcmp0(estado(ctx), "Graph window.") == 0, "View Output abre la ventana de graficos", estado(ctx));
-    grafico_pintado("D.pdf", "View Output");
+    grafico_pintado("D.pdf", "Ver modelo");
 
     /* Guardar el grafico como imagen, como el boton Save As de la ventana. */
     {
@@ -868,7 +900,7 @@ static void prueba_fallos_motor(FueContext *ctx) {
     check(gtk_widget_get_visible(ctx->progress), "y la barra de avance no se queda a medias", NULL);
 
     /* New: todo vacio. */
-    barra(ctx, "New");
+    barra(ctx, "Nuevo");
     check(g_strcmp0(estado(ctx), "New model created.") == 0, "New lo dice", estado(ctx));
     check(filas(ctx->int_treeview) == 0 && filas(ctx->mar_treeview) == 0 && filas(ctx->maa_treeview) == 0
           && NdetVar == 0 && NopMar == 0, "y vacia el modelo y los arboles", NULL);
@@ -880,7 +912,7 @@ static void prueba_fallos_motor(FueContext *ctx) {
        anual (lo dice).                                                 */
     pulsa(ctx, "Add Seasonals", 0);
     check(filas(ctx->int_treeview) == 11 && NdetVar == 11, "Add Seasonals pone 11 en una mensual", NULL);
-    barra(ctx, "New");
+    barra(ctx, "Nuevo");
     gtk_combo_box_set_active(GTK_COMBO_BOX(ctx->freq_combo), 0);
     pulsa(ctx, "Add Seasonals", 0);
     check(filas(ctx->int_treeview) == 0 && contiene(estado(ctx), "only available"),
@@ -895,7 +927,7 @@ static void prueba_fallos_motor(FueContext *ctx) {
 
     /* Guardar sin nombre no escribe nada y lo dice. */
     gtk_entry_set_text(GTK_ENTRY(ctx->input_name_entry), "");
-    barra(ctx, "Save");
+    barra(ctx, "Guardar");
     check(g_strcmp0(estado(ctx), "Please enter an input name.") == 0, "Save sin nombre lo pide", estado(ctx));
 
     /* Un modelo sin datos: fue lo rechaza y la barra lo dice, con lo que
@@ -920,15 +952,15 @@ static void prueba_fallos_motor(FueContext *ctx) {
     }
 
     /* Ver la salida sin PDF. */
-    barra(ctx, "View Output");
+    barra(ctx, "Ver modelo");
     check(contiene(estado(ctx), "PDF file not found"), "View Output sin PDF lo dice", estado(ctx));
 
     /* Forecast desde la barra sin modelo estimado: fue -f falla y se dice. */
-    barra(ctx, "Forecast");
+    barra(ctx, "Prever");
     check(!contiene(estado(ctx), "successfully"), "Forecast sin modelo valido no dice que acabo bien",
           estado(ctx));
     gtk_entry_set_text(GTK_ENTRY(ctx->input_name_entry), "");
-    barra(ctx, "Forecast");
+    barra(ctx, "Prever");
     check(g_strcmp0(estado(ctx), "No model name provided.") == 0, "Forecast sin nombre lo pide", estado(ctx));
 
     g_free(path); g_free(vacio); g_free(dir);
@@ -962,7 +994,7 @@ static void prueba_prevision(FueContext *ctx) {
     fue_abre_al_arrancar(ctx, inp);
     corre_fue(ctx);
     check(contiene(estado(ctx), "fue finished"), "D1 se estima", estado(ctx));
-    barra(ctx, "Forecast");
+    barra(ctx, "Prever");
     check(g_strcmp0(estado(ctx), "Forecast finished successfully.") == 0, "Forecast hace el ciclo entero",
           estado(ctx));
     check(g_file_test(finp, G_FILE_TEST_EXISTS) && g_file_test(fout, G_FILE_TEST_EXISTS),
@@ -1177,7 +1209,7 @@ static void prueba_analisis(FueContext *ctx) {
         gtk_widget_destroy(v);
     }
     }
-    barra(ctx, "Ganancia");
+    menu(ctx, "Diagnosis", "Ganancia de las intervenciones…");
     pump(200);
     {
     GtkWidget *v = ventana_de("Ganancia");
@@ -1185,8 +1217,26 @@ static void prueba_analisis(FueContext *ctx) {
     check(v != NULL, "Ganancia abre su ventana", estado(ctx));
     if (v) gtk_widget_destroy(v);
     }
-    barra(ctx, "Anomalos");
+    menu(ctx, "Diagnosis", "Anómalos…");
     grafico_pintado("anomalos", "Anomalos");
+    menu(ctx, "Diagnosis", "Factorización del AR…");
+    pump(200);
+    {
+    GtkWidget *v = ventana_de("Factorización");
+
+    check(v != NULL, "la factorización del AR abre su ventana desde el menú", estado(ctx));
+    if (v) gtk_widget_destroy(v);
+    }
+    /* Exportar abre un selector de fichero modal: solo se mira que este. */
+    check(del_menu(ctx, "Diagnosis", "Exportar la diagnosis…") &&
+          gtk_widget_get_sensitive(del_menu(ctx, "Diagnosis", "Exportar la diagnosis…")),
+          "«Exportar la diagnosis…» esta en el menú y se enciende", NULL);
+    check(del_menu(ctx, "Contrastes", "Orden de integración…") &&
+          del_menu(ctx, "Contrastes", "Estacionalidad (MEG)…"),
+          "el menú de Contrastes tiene las dos ventanas", NULL);
+    menu(ctx, "Prever", "Ir a la pestaña de la previsión");
+    check(gtk_notebook_get_current_page(GTK_NOTEBOOK(ctx->notebook)) == ctx->forecast_page,
+          "«Ir a la pestaña de la previsión» la enseña", NULL);
 
     fue_pon_proyecto(NULL);
     update_model_label(ctx);
@@ -1194,6 +1244,54 @@ static void prueba_analisis(FueContext *ctx) {
           && !gtk_widget_get_sensitive(ctx->btn_estacional),
           "sin proyecto, se vuelven a apagar", NULL);
     g_free(raiz); g_free(yaml);
+}
+
+/* LA BARRA: nueve botones, en español y con su nombre debajo; Diagnosis,
+ * Contrastes y Prever con su menú. Con cargador de SVG, los iconos son
+ * los propios (gui/fue/src/iconos.c), no los del tema.                  */
+static gboolean es_imagen_propia(GtkWidget *w, gpointer d) {
+    (void) d;
+    return GTK_IS_IMAGE(w) && !strcmp(gtk_widget_get_name(w), "diagnosis");
+}
+
+static void prueba_barra(FueContext *ctx) {
+    static const char *const rot[] = { "Nuevo", "Abrir", "Guardar", "Estimar", "Ver modelo",
+                                       "Diagnosis", "Contrastes", "Prever", NULL };
+    static const char *const viejos[] = { "New", "Open", "Run", "View Output", "Forecast",
+                                          "Anomalos", "Ganancia", "Quit", NULL };
+    GtkWidget *tb = busca(ctx->main_window, es_de_barra, (gpointer) "Estimar");
+    GSList    *f, *formatos = gdk_pixbuf_get_formats();
+    gboolean   svg = FALSE;
+    int        i, faltan = 0, sobran = 0;
+
+    for (i = 0; rot[i]; i++) faltan += busca(ctx->main_window, es_de_barra, (gpointer) rot[i]) == NULL;
+    for (i = 0; viejos[i]; i++) sobran += busca(ctx->main_window, es_de_barra, (gpointer) viejos[i]) != NULL;
+    check(faltan == 0, "la barra tiene sus botones en español", NULL);
+    check(sobran == 0, "y ninguno de los de antes (New, Run, View Output, Anomalos...)", NULL);
+    tb = tb ? gtk_widget_get_parent(tb) : NULL;
+    check(tb && GTK_IS_TOOLBAR(tb) && gtk_toolbar_get_style(GTK_TOOLBAR(tb)) == GTK_TOOLBAR_BOTH,
+          "con el nombre debajo del icono", NULL);
+    for (i = 0; i < 3; i++) {
+        static const char *const p[] = { "Diagnosis", "Contrastes", "Prever" };
+        GtkWidget *b = busca(ctx->main_window, es_de_barra, (gpointer) p[i]);
+        gchar *q = g_strdup_printf("«%s» es un botón partido, con su menú", p[i]);
+
+        check(b && GTK_IS_MENU_TOOL_BUTTON(b) &&
+              gtk_menu_tool_button_get_menu(GTK_MENU_TOOL_BUTTON(b)), q, NULL);
+        g_free(q);
+    }
+    for (f = formatos; f; f = f->next) {
+        gchar *n = gdk_pixbuf_format_get_name(f->data);
+
+        svg |= !strcmp(n, "svg");
+        g_free(n);
+    }
+    g_slist_free(formatos);
+    if (svg)
+        check(busca(ctx->main_window, es_imagen_propia, NULL) != NULL,
+              "con cargador de SVG, los iconos son los propios", NULL);
+    else
+        printf("note: sin cargador de SVG, los iconos son los del tema\n");
 }
 
 /* 7. CAMBIAR DE MODELO Y SEGUIR TRABAJANDO. Abrir uno con deterministas,
@@ -1208,7 +1306,7 @@ static void prueba_cambiar_de_modelo(FueContext *ctx) {
     fue_abre_al_arrancar(ctx, d1);              /* 11 deterministas     */
     fue_abre_al_arrancar(ctx, dat);             /* datos: ninguno       */
     gtk_entry_set_text(GTK_ENTRY(ctx->input_name_entry), "sin");
-    barra(ctx, "Save");
+    barra(ctx, "Guardar");
     fue_abre_al_arrancar(ctx, sin);             /* un .inp sin ninguno  */
     check(NdetVar == 0 && filas(ctx->int_treeview) == 0, "el segundo modelo no trae deterministas", NULL);
     pulsa(ctx, "Add", 0);
@@ -1272,6 +1370,7 @@ int main(int argc, char **argv) {
        graficos, que se abren solos y se cierran aqui mismo.           */
     gtk_widget_show_all(gtk_bin_get_child(GTK_BIN(ctx->main_window)));
 
+    prueba_barra(ctx);              printf("barra              : hecho\n");
     prueba_arranque(ctx);           printf("arranque           : hecho\n");
     prueba_ficheros_malos(ctx);     printf("ficheros malos     : hecho\n");
     prueba_construir(ctx);          printf("construir y estimar: hecho\n");

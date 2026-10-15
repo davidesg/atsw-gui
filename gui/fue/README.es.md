@@ -106,7 +106,7 @@ todo desde una única ventana. Es multiplataforma: Linux, macOS y Windows.
 
 - `fue` — motor de estimación FUE (debe estar en el `PATH`)
 - `fuf` — motor de predicción FUF (debe estar en el `PATH`)
-- Un visor de PDF (usado por View Output y Forecast)
+- Un visor de PDF (usado por Ver modelo y Prever)
 
 En Debian/Ubuntu:
 
@@ -148,15 +148,22 @@ La ventana principal tiene una barra de herramientas y un cuaderno con pestañas
 
 ### Barra de herramientas
 
+Cada botón lleva su icono y su nombre debajo. Diagnosis, Contrastes y Prever
+son botones partidos: el clic hace la acción habitual y la flecha abre un menú
+con el resto.
+
 | Botón | Acción |
 |-------|--------|
-| New | Limpiar todos los campos e iniciar un nuevo modelo |
-| Open | Cargar un fichero `.inp` o `.pre` existente |
-| Save | Escribir la especificación actual del modelo en un fichero `.inp` |
-| Run | Guardar el fichero `.inp` y ejecutar FUE |
-| View Output | Abrir el informe PDF de estimación |
-| Forecast | Ejecutar `fue -f` y luego `fuf`, y abrir el PDF de predicción |
-| Quit | Salir de la aplicación |
+| Nuevo (Ctrl+N) | Limpiar todos los campos e iniciar un nuevo modelo |
+| Abrir (Ctrl+O) | Cargar unos datos o un fichero `.inp` o `.pre` existente |
+| Guardar (Ctrl+S) | Escribir la especificación actual del modelo en un fichero `.inp` |
+| Estimar (Ctrl+E) | Guardar el fichero `.inp` y ejecutar FUE |
+| Ver modelo | Abrir la página de FUE: los residuos y el modelo escrito |
+| Diagnosis ▾ (Ctrl+D) | La diagnosis; en el menú, también los anómalos, la ganancia de las intervenciones, identificar los residuos, la factorización del AR y exportar la diagnosis |
+| Contrastes ▾ | El orden de integración; en el menú, también la estacionalidad (MEG), solo con s > 1 |
+| Prever ▾ | Ejecutar `fue -f` y luego `fuf`; en el menú, ver la última previsión, abrir una guardada o ir a la pestaña *Forecast* |
+
+Para salir: la equis de la ventana o Ctrl+Q.
 
 ### Pestañas
 
@@ -171,21 +178,21 @@ La ventana principal tiene una barra de herramientas y un cuaderno con pestañas
 
 ## Flujo de trabajo
 
-1. **Nuevo modelo**: Pulsar *New*, rellenar *Data Input* (nombre de la serie,
+1. **Nuevo modelo**: Pulsar *Nuevo*, rellenar *Data Input* (nombre de la serie,
    frecuencia, fichero de datos, directorio de trabajo, rango de observaciones).
 
 2. **Especificar el modelo**: Fijar las transformaciones en *Box-Cox &
    Differences*, añadir variables de intervención en *Deterministic Component*
    y añadir operadores AR/MA en *Stochastic Component*.
 
-3. **Estimar**: Pulsar *Save* para escribir el fichero `.inp` y luego *Run*
+3. **Estimar**: Pulsar *Guardar* para escribir el fichero `.inp` y luego *Estimar*
    para invocar FUE. La pestaña *Console* muestra la especificación del modelo
    tal como la lee FUE.
 
-4. **Ver resultados**: Pulsar *View Output* para abrir el informe PDF de
-   estimación.
+4. **Ver resultados**: Pulsar *Ver modelo* para abrir el informe PDF de
+   estimación, y *Diagnosis* para la diagnosis de los residuos.
 
-5. **Predecir**: Pulsar *Forecast* para ejecutar automáticamente `fue -f`
+5. **Predecir**: Pulsar *Prever* para ejecutar automáticamente `fue -f`
    (que genera `forecast_{modelo}.inp`) y luego `fuf`. El PDF de predicción
    se abre al terminar FUF. Alternativamente, utilice la pestaña *Forecast*
    para cargar cualquier fichero de entrada de predicción manualmente y fijar

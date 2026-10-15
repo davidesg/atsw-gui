@@ -113,6 +113,11 @@ void an_anomalos( const AnHost *h, const char *serie, const char *muestra,
 void an_diagnosis( const AnHost *h, const char *serie, const char *muestra,
                    const char *id );
 
+/* La misma tabla de la diagnosis, a un fichero (TXT, CSV o TeX, por la
+ * extension), sin abrir su ventana: el menu Diagnosis de fue_gui.        */
+void an_diagnosis_exporta( const AnHost *h, const char *serie, const char *muestra,
+                           const char *id );
+
 /* LA FACTORIZACION DEL AR del modelo estimado (lib/raices): el
  * ar_factorization de art. Identifica, no contrasta: no es formal_tests.
  * La abre la diagnosis.                                                 */

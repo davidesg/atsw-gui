@@ -121,8 +121,10 @@ void an_factores_ar( const AnHost *h, const char *serie, const char *muestra,
 
 /* LOS CONTRASTES FORMALES del modelo estimado (lib/formales): el
  * formal_tests de art --la simplificacion estacional, Shin-Fuller, el DCD
- * regular y el estacional--. Cada uno reestima con fue, sin bloquear la
- * ventana. La abre la diagnosis.                                        */
+ * regular y el estacional, la sobre y la subdiferenciacion, el MEG y el
+ * DCD_f--. Cada uno reestima con fue, sin bloquear la ventana. Tras el MEG,
+ * deriva el modelo reformulado (necesita guarda y abre). La abre la
+ * diagnosis.                                                            */
 void an_formales( const AnHost *h, const char *serie, const char *muestra,
                   const char *id );
 

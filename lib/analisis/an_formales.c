@@ -14,9 +14,18 @@
  *
  * Suponen un modelo ADECUADO (art BUG-0025): con la diagnosis sin limpiar,
  * la ventana lo dice arriba, y los numeros se leen con esa reserva.
+ *
+ * EL MEG SI TIENE UN GESTO: reformular. Si una frecuencia sale estocastica,
+ * el boton deriva el modelo S de esa frecuencia --el mismo que contrasto el
+ * MEG, con su testigo-- como un hijo del modelo, para estimarlo y volver a
+ * contrastar (meg_reformulate de art). Una frecuencia cada vez, la mas
+ * fuerte primero: el MEG sobre el modelo todo determinista contamina unas
+ * frecuencias con otras, y lo que diga la siguiente se lee sobre el
+ * reformulado.
  */
 
 #include <math.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <glib/gstdio.h>
@@ -24,6 +33,7 @@
 #include "dictamen.h"
 #include "engine.h"
 #include "formales.h"
+#include "inpcheck.h"
 #include "outfile.h"
 #include "sitio.h"
 
@@ -38,7 +48,7 @@ typedef struct {
     gboolean   corriendo, cerrada;
     gchar     *exe, *dir;
     char       aviso[512];
-    GtkWidget *win, *l_texto, *l_estado, *b_sub;
+    GtkWidget *win, *l_texto, *l_estado, *b_sub, *c_freq, *b_ref;
 } Fm;
 
 static gchar *programa_fue( void )
@@ -63,6 +73,12 @@ static void criticos( GString *t, const FmPrueba *x, const char *de )
  * el de la ley DESNUDA, y con deterministas en el candidato el de verdad es
  * otro. */
 #define CRIT_ARMONICOS_F0 2.15
+
+/* Y EL DEL MEG, por lo mismo (art, formal_tests.py): con media y armonicos
+ * en el modelo, el critico del par complejo en muestra finita es mayor
+ * --n = 120: 1.63, 2.87, 5.81-- y el efecto se desvanece al crecer n. art
+ * lo documenta y no lo aplica; aqui se dice cuando importa. */
+#define CRIT_MEG_N120_5 2.87
 
 static const FmPrueba *de_tipo( const Fm *g, FmTipo tipo )
 {
@@ -293,10 +309,11 @@ static void un_contraste( GString *t, const Fm *g, const FmPrueba *x, int i )
 {
     static const char *const nom[] = { "Simplificación estacional", "Shin-Fuller",
                                        "DCD", "DCD estacional", "Sobrediferenciación",
-                                       "Subdiferenciación (pedida)" };
+                                       "Subdiferenciación (pedida)", "MEG", "DCD_f" };
     gchar *h = g_markup_escape_text( x->hipotesis, -1 );
 
-    g_string_append_printf( t, "<b>%s</b>   H<sub>0</sub>: %s\n", nom[x->tipo], h );
+    g_string_append_printf( t, "<b>%s%s</b>   H<sub>0</sub>: %s\n", nom[x->tipo],
+                            x->tipo == FM_DCD && x->freq > 0 ? " en Nyquist" : "", h );
     g_free( h );
     if ( x->tipo == FM_SF )
         g_string_append_printf( t, "    raíz real positiva dominante del AR: φ̂ = %.4f\n", x->coef );
@@ -304,6 +321,9 @@ static void un_contraste( GString *t, const Fm *g, const FmPrueba *x, int i )
         g_string_append_printf( t, "    θ̂ = %.4f\n", x->coef );
     else if ( x->tipo == FM_DCD_S )
         g_string_append_printf( t, "    Θ̂ = %.4f\n", x->coef );
+    else if ( x->tipo == FM_DCD_F )
+        g_string_append_printf( t, "    θ̂₂ = %.4f  (λ̂ = %.4f; la frontera es θ₂ = −1)\n", x->coef,
+                                x->coef < 0.0 ? sqrt( -x->coef ) : 0.0 );
 
     if ( !x->hecho )
         {
@@ -362,6 +382,16 @@ static void un_contraste( GString *t, const Fm *g, const FmPrueba *x, int i )
         case FM_DCD:
             g_string_append_printf( t, "LR = 2(L − L<sub>0</sub>) = <b>%.3f</b>\n    ", x->est );
             criticos( t, x, "Davis-Dunsmuir" );
+            if ( x->freq > 0 )
+                {
+                g_string_append_printf( t, x->rechaza
+                    ? "\n    → <b>Rechaza H<sub>0</sub></b>: el testigo es invertible, la raíz en "
+                      "Nyquist es genuina: <b>la estacionalidad en f = %d es estocástica</b>.\n\n"
+                    : "\n    → <b>No rechaza H<sub>0</sub></b>: el testigo se apila en −1 y cancela "
+                      "el (1 + B): la estacionalidad en f = %d es <b>determinista</b>; vuelve al "
+                      "término alter.\n\n", x->freq );
+                break;
+                }
             g_string_append( t, x->rechaza
                 ? "\n    → <b>Rechaza H<sub>0</sub></b>: el MA es invertible; la diferencia regular no sobra.\n\n"
                 : "\n    → <b>No rechaza H<sub>0</sub></b>: θ está en la frontera de la "
@@ -381,9 +411,120 @@ static void un_contraste( GString *t, const Fm *g, const FmPrueba *x, int i )
                 : "\n    → <b>No rechaza H<sub>0</sub></b>: Θ está en la frontera: la diferencia "
                   "estacional sobra y la estacionalidad sería determinista.\n\n" );
             break;
+        case FM_DCD_F:
+            g_string_append_printf( t, "LR = 2(L − L<sub>0</sub>) = <b>%.3f</b>\n    ", x->est );
+            {
+            gchar *de = g_strdup_printf( "la ley del par complejo (s = 2) para n = %d", x->n_crit );
+
+            criticos( t, x, de );
+            g_free( de );
+            }
+            g_string_append_printf( t, x->rechaza
+                ? "\n    → <b>Rechaza H<sub>0</sub></b>: el testigo es invertible, la raíz unitaria "
+                  "en f = %d es genuina: <b>la estacionalidad ahí es estocástica</b>.\n\n"
+                : "\n    → <b>No rechaza H<sub>0</sub></b>: el testigo se apila en la frontera y "
+                  "cancela la raíz: la estacionalidad en f = %d es <b>determinista</b> (o una "
+                  "cuasi-cancelación); vuelve a sus armónicos cos/sin.\n\n", x->freq );
+            break;
         default:
             break;
         }
+}
+
+/* EL MEG, frecuencia a frecuencia, en un bloque: cada frecuencia es un
+ * contraste, pero se leen juntas. */
+static void meg( GString *t, const Fm *g )
+{
+    int i, hay = 0, todas = 1, est[16], ne = 0, sin = 0, k;
+    int n_int = 0;
+
+    for ( i = 0; i < g->pl.n; i++ )
+        if ( g->pl.t[i].tipo == FM_MEG )
+            {
+            hay++;
+            if ( !g->pl.t[i].hecho ) todas = 0;
+            if ( 2 * g->pl.t[i].freq != g->pl.s ) n_int = g->pl.t[i].n_crit;
+            }
+    if ( !hay ) return;
+    g_string_append( t, "<b>MEG — estacionalidad estocástica o determinista</b>, frecuencia a "
+        "frecuencia (Abraham y Box, 1978)\n    <small>En cada f, el modelo estocástico S quita el "
+        "armónico determinista, pone la raíz unitaria (ifadf[f] = 1) y un testigo de "
+        "sobrediferenciación libre del mismo orden. H<sub>0</sub>: el testigo en la frontera, donde "
+        "cancela la raíz. Testigo invertible → estocástica; en la frontera → determinista.</small>\n" );
+    for ( i = 0; i < g->pl.n; i++ )
+        {
+        const FmPrueba *x = &g->pl.t[i];
+        int             nyq = 2 * x->freq == g->pl.s;
+        gchar          *per = nyq ? g_strdup( "Nyquist" )
+                                  : g_strdup_printf( "ciclo de %g períodos", (double) g->pl.s / x->freq );
+
+        if ( x->tipo != FM_MEG ) { g_free( per ); continue; }
+        g_string_append_printf( t, "    f = %d <small>(%s)</small>: ", x->freq, per );
+        g_free( per );
+        if ( !x->hecho )
+            g_string_append( t, i == g->cur && g->corriendo ? "<i>estimando…</i>\n" : "<i>en cola</i>\n" );
+        else if ( !x->calculable )
+            {
+            gchar *m = g_markup_escape_text( x->motivo, -1 );
+
+            g_string_append_printf( t, "%s%s.\n", x->omitida ? "" : "<b>no calculable</b>: ", m );
+            g_free( m );
+            sin++;
+            }
+        else
+            {
+            g_string_append_printf( t, "testigo %s = %.4f;  L<sub>S</sub> = %.4f,  L<sub>0</sub> = "
+                "%.4f;  LR = <b>%.3f</b> frente a %.2f → <b>%s</b>\n", nyq ? "θ̂" : "θ̂₂", x->coef,
+                x->l_libre, x->l_restr, x->est, x->c5, x->rechaza ? "estocástica" : "determinista" );
+            if ( x->rechaza && ne < 16 ) est[ne++] = i;
+            }
+        if ( x->hecho && x->dudoso )
+            g_string_append( t, "        <small>⚠ alguna de sus estimaciones paró sin anular el "
+                                "gradiente, también reiniciando: el LR hereda esa duda.</small>\n" );
+        }
+    if ( n_int > 0 )
+        {
+        double c10, c5, c1;
+
+        fm_criticos_dcd_f( n_int, &c10, &c5, &c1 );
+        g_string_append_printf( t, "    <small>Críticos: en las interiores, los del par complejo "
+            "(ley s = 2) para n = %d: %.2f (10 %%), %.2f (5 %%), %.2f (1 %%); en Nyquist, los de una "
+            "raíz real (s = 1): 1.00, 1.94, 4.41. Salen de simulación (el Monte Carlo del estudio "
+            "SF_MEG, sin publicar); el contraste es el de Abraham y Box.</small>\n", n_int, c10, c5, c1 );
+        }
+    if ( todas )
+        {
+        /* las estocasticas, de la mas fuerte a la mas debil */
+        for ( i = 0; i < ne; i++ )
+            for ( k = i + 1; k < ne; k++ )
+                if ( g->pl.t[est[k]].est > g->pl.t[est[i]].est ) { int a = est[i]; est[i] = est[k]; est[k] = a; }
+        if ( ne )
+            {
+            g_string_append( t, "    → <b>Estocástica(s)</b>:" );
+            for ( i = 0; i < ne; i++ )
+                g_string_append_printf( t, "%s f = %d (LR %.2f)", i ? "," : "", g->pl.t[est[i]].freq,
+                                        g->pl.t[est[i]].est );
+            g_string_append_printf( t, ". Reformula <b>una cada vez, la más fuerte primero</b> (f = %d), "
+                "estima el reformulado y vuelve a contrastar: el MEG sobre el modelo todo "
+                "determinista contamina unas frecuencias con otras. En el reformulado, el DCD del "
+                "testigo dice si la raíz es genuina o una cuasi-cancelación.\n",
+                g->pl.t[est[0]].freq );
+            }
+        else if ( sin < hay )
+            g_string_append( t, "    → Ninguna estocástica: los armónicos deterministas son la "
+                                "especificación que sostienen los datos.\n" );
+        for ( i = 0, k = 0; i < ne; i++ )
+            k |= 2 * g->pl.t[est[i]].freq != g->pl.s && g->pl.t[est[i]].est < CRIT_MEG_N120_5;
+        if ( k )
+            g_string_append_printf( t, "    <small>ⓘ El crítico impreso es el de la ley desnuda. Con "
+                "media y armónicos en el modelo, en muestra finita el de verdad es mayor (n = 120: "
+                "%.2f al 5 %%), y el efecto se desvanece al crecer n: un LR apenas por encima del "
+                "impreso no es concluyente por sí solo.</small>\n", CRIT_MEG_N120_5 );
+        if ( sin )
+            g_string_append( t, "    <small>Una frecuencia sin veredicto no es determinista: no se "
+                                "pudo mirar.</small>\n" );
+        }
+    g_string_append( t, "\n" );
 }
 
 static void pinta( Fm *g )
@@ -393,11 +534,19 @@ static void pinta( Fm *g )
 
     if ( g->aviso[0] )
         g_string_append_printf( t, "<span foreground=\"#9a6700\"><b>%s</b></span>\n\n", g->aviso );
-    for ( i = 0; i < g->pl.n; i++ ) un_contraste( t, g, &g->pl.t[i], i );
+    for ( i = 0; i < g->pl.n; i++ )
+        if ( g->pl.t[i].tipo != FM_MEG )
+            {
+            un_contraste( t, g, &g->pl.t[i], i );
+            if ( g->pl.t[i].hecho && g->pl.t[i].dudoso )
+                g_string_append( t, "    <small>⚠ Alguna de sus estimaciones paró sin anular el "
+                    "gradiente, también reiniciando: el LR hereda esa duda.</small>\n\n" );
+            }
     par( t, g );
+    meg( t, g );
     if ( g->pl.n == 0 )
         g_string_append( t, "Este modelo no admite ninguno de los contrastes formales que hay.\n\n" );
-    for ( k = 0; k < 6; k++ )
+    for ( k = 0; k < FM_NA; k++ )
         if ( g->pl.no_aplica[k][0] )
             {
             gchar *m = g_markup_escape_text( g->pl.no_aplica[k], -1 );
@@ -411,7 +560,9 @@ static void pinta( Fm *g )
     g_string_append_printf( t, "\n<small>Cada contraste es una estimación más: el modelo con el "
         "parámetro fijo en su valor nulo, que fue reestima partiendo del óptimo. Los .inp y los "
         ".out de los restringidos quedan en %s. Shin-Fuller usa Φ = L − L<sub>0</sub> y no el "
-        "doble; el DCD, 2(L − L<sub>0</sub>) con su propia ley, que no es la χ².</small>", d );
+        "doble; el DCD, 2(L − L<sub>0</sub>) con su propia ley, que no es la χ². Una estimación "
+        "que para sin anular el gradiente se reinicia desde donde paró, hasta tres veces, como "
+        "hace fue-python.</small>", d );
     g_free( d );
     }
     gtk_label_set_markup( GTK_LABEL(g->l_texto), t->str );
@@ -434,8 +585,36 @@ static void acabo( const EngineResult *r, gpointer data )
     siguiente( g );
 }
 
+/* LAS ESTOCASTICAS DEL MEG, para reformular: de la mas fuerte a la mas
+ * debil, la primera elegida. */
+static void ofrece_reformular( Fm *g )
+{
+    int i, k, est[16], ne = 0;
+
+    if ( !g->c_freq ) return;
+    gtk_combo_box_text_remove_all( GTK_COMBO_BOX_TEXT(g->c_freq) );
+    for ( i = 0; i < g->pl.n; i++ )
+        if ( g->pl.t[i].tipo == FM_MEG && g->pl.t[i].hecho && g->pl.t[i].calculable &&
+             g->pl.t[i].rechaza && ne < 16 ) est[ne++] = i;
+    for ( i = 0; i < ne; i++ )
+        for ( k = i + 1; k < ne; k++ )
+            if ( g->pl.t[est[k]].est > g->pl.t[est[i]].est ) { int a = est[i]; est[i] = est[k]; est[k] = a; }
+    for ( i = 0; i < ne; i++ )
+        {
+        gchar *id = g_strdup_printf( "%d", g->pl.t[est[i]].freq );
+        gchar *tx = g_strdup_printf( "f = %d  (LR %.2f)", g->pl.t[est[i]].freq, g->pl.t[est[i]].est );
+
+        gtk_combo_box_text_append( GTK_COMBO_BOX_TEXT(g->c_freq), id, tx );
+        g_free( id ); g_free( tx );
+        }
+    if ( ne ) gtk_combo_box_set_active( GTK_COMBO_BOX(g->c_freq), 0 );
+    gtk_widget_set_sensitive( g->c_freq, ne > 0 );
+    gtk_widget_set_sensitive( g->b_ref, ne > 0 );
+}
+
 static void siguiente( Fm *g )
 {
+    while ( g->cur < g->pl.n && g->pl.t[g->cur].hecho ) g->cur++;   /* las omitidas */
     if ( g->cur < g->pl.n && g->exe )
         {
         const char *argv[2] = { g->pl.t[g->cur].base, NULL };
@@ -462,9 +641,12 @@ static void siguiente( Fm *g )
             }
         }
     else
+        {
         gtk_label_set_text( GTK_LABEL(g->l_estado), g->exe
             ? "Hecho. Cada contraste dice lo suyo; qué hacer con ello lo decides tú."
             : "No encuentro «fue»: ni al lado de esta ventana ni en el PATH." );
+        ofrece_reformular( g );
+        }
     pinta( g );
 }
 
@@ -479,6 +661,79 @@ static void on_sub( GtkButton *b, Fm *g )
     gtk_widget_set_sensitive( GTK_WIDGET(b), FALSE );
     if ( !g->corriendo ) siguiente( g );
     else pinta( g );
+}
+
+/* LA REFORMULACION DESPUES DEL MEG: el modelo S de la frecuencia elegida,
+ * como hijo del modelo (pr_deriva), juzgado por fue y abierto para
+ * estimarlo. Es lo que hace el identificador al derivar. */
+static void on_reformular( GtkButton *b, Fm *g )
+{
+    const char     *fid = gtk_combo_box_get_active_id( GTK_COMBO_BOX(g->c_freq) );
+    const FmPrueba *x = NULL;
+    char            destino[PR_RUTA], nuevo[PR_ID], msg[512], why[256];
+    PrError         e;
+    gchar          *dir, *razon, *aviso;
+    int             f, i;
+    AnHerramienta   con;
+
+    (void) b;
+    if ( !fid ) return;
+    f = atoi( fid );
+    for ( i = 0; i < g->pl.n; i++ )
+        if ( g->pl.t[i].tipo == FM_MEG && g->pl.t[i].freq == f ) x = &g->pl.t[i];
+    if ( !x ) return;
+    if ( pr_deriva( g->h.p, g->serie, g->muestra, g->id, nuevo, sizeof nuevo,
+                    destino, sizeof destino, &e ) != 0 )
+        { pr_error_es( &e, msg, sizeof msg ); gtk_label_set_text( GTK_LABEL(g->l_estado), msg ); return; }
+    dir = g_path_get_dirname( destino );
+    g_mkdir_with_parents( dir, 0700 );
+    g_free( dir );
+    if ( fm_reformula( g->pl.pre, g->pl.out[0] ? g->pl.out : NULL, destino, g->pl.s, f, NULL,
+                       why, sizeof why ) != 0 )
+        {
+        pr_borra( g->h.p, g->serie, g->muestra, nuevo, &e );
+        gtk_label_set_text( GTK_LABEL(g->l_estado), why );
+        return;
+        }
+    /* EL JUEZ ES EL MOTOR: un .inp que fue no acepta se deshace */
+    if ( inp_check_fue( destino, msg, sizeof msg ) != 0 )
+        {
+        gchar *m = g_strdup_printf( "Lo que salió no lo acepta fue: %s", msg );
+
+        g_unlink( destino );
+        pr_borra( g->h.p, g->serie, g->muestra, nuevo, &e );
+        gtk_label_set_text( GTK_LABEL(g->l_estado), m );
+        g_free( m );
+        return;
+        }
+    razon = g_strdup_printf( "Reformulación MEG en f = %d: estacionalidad estocástica (LR = %.3f "
+        "frente a %.2f al 5 %%). %s, la raíz unitaria con ifadf[%d] = 1 y un testigo libre %s, "
+        "desde −0.9: el modelo S que contrastó el MEG. Derivado de %s.", f, x->est, x->c5,
+        2 * f == g->pl.s ? "Sin el término alter" : "Sin los armónicos cos/sin de esa frecuencia",
+        f, 2 * f == g->pl.s ? "(1 + θB)" : "de frecuencia fija", g->id );
+    pr_razon( g->h.p, g->serie, g->muestra, nuevo, razon, &e );
+    g_free( razon );
+    con = ( g->h.puede && !( g->h.puede & AN_PUEDE_FUE ) ) ? AN_CON_EDITOR : AN_CON_FUE;
+    pr_pon_herramienta( g->h.p, con == AN_CON_EDITOR );
+    if ( g->h.guarda && g->h.guarda( g->h.dueno ) != 0 )
+        an_di( &g->h, "El .inp está en %s, pero no pude guardar el proyecto.", nuevo );
+    if ( g->h.refresca ) g->h.refresca( g->h.dueno );
+    {
+    AnHost host = g->h;
+    char   serie[PR_ID], muestra[PR_ID], padre[PR_ID];
+
+    g_snprintf( serie, sizeof serie, "%s", g->serie );
+    g_snprintf( muestra, sizeof muestra, "%s", g->muestra );
+    g_snprintf( padre, sizeof padre, "%s", g->id );
+    aviso = g_strdup_printf( "%s nace de %s con la estacionalidad en f = %d estocástica. Estímalo "
+                             "y vuelve a pasar los contrastes: el DCD de su testigo dice si la raíz "
+                             "es genuina, y el MEG mira las demás frecuencias sobre él.", nuevo, padre, f );
+    gtk_widget_destroy( g->win );
+    if ( host.cierra ) host.cierra( host.dueno, serie, muestra, padre );
+    if ( host.abre ) host.abre( host.dueno, serie, muestra, nuevo, con );
+    an_di( &host, "%s", aviso );
+    g_free( aviso );
+    }
 }
 
 static void on_cerrar( GtkWidget *w, Fm *g )
@@ -594,6 +849,26 @@ void an_formales( const AnHost *h, const char *serie, const char *muestra, const
         : "Con d = 0 no hay diferencia que cuestionar." );
     g_signal_connect( g->b_sub, "clicked", G_CALLBACK(on_sub), g );
     gtk_box_pack_end( GTK_BOX(barra), g->b_sub, FALSE, FALSE, 0 );
+    /* reformular tras el MEG: solo si hay MEG y el anfitrion sabe derivar */
+    {
+    gboolean hay_meg = FALSE;
+    int      i;
+
+    for ( i = 0; i < g->pl.n; i++ ) hay_meg |= g->pl.t[i].tipo == FM_MEG;
+    if ( hay_meg && h->abre && h->guarda )
+        {
+        g->b_ref = gtk_button_new_with_label( "Reformular como estocástica…" );
+        gtk_widget_set_tooltip_text( g->b_ref, "Deriva el modelo S de esa frecuencia --sin sus "
+            "armónicos, con la raíz unitaria y su testigo-- como un hijo de este, para estimarlo "
+            "y volver a contrastar. Una frecuencia cada vez, la más fuerte primero." );
+        g->c_freq = gtk_combo_box_text_new();
+        gtk_widget_set_sensitive( g->b_ref, FALSE );
+        gtk_widget_set_sensitive( g->c_freq, FALSE );
+        g_signal_connect( g->b_ref, "clicked", G_CALLBACK(on_reformular), g );
+        gtk_box_pack_end( GTK_BOX(barra), g->b_ref, FALSE, FALSE, 0 );
+        gtk_box_pack_end( GTK_BOX(barra), g->c_freq, FALSE, FALSE, 0 );
+        }
+    }
     gtk_box_pack_start( GTK_BOX(raiz), barra, FALSE, FALSE, 0 );
     }
 

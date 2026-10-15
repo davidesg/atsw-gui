@@ -94,6 +94,28 @@ static int cuenta( const char *ruta, const char *palabra )
     return n;
 }
 
+/* how many flags the line of individual factors has */
+static int cuenta_ifadf( const char *ruta )
+{
+   FILE *f = fopen( ruta, "r" );
+   char  l[1024];
+   int   n = 0, sig = 0;
+
+   while ( f && fgets( l, sizeof l, f ) )
+       {
+       if ( sig )
+          {
+          char *p = strtok( l, " \t\r\n" );
+
+          for ( ; p; p = strtok( NULL, " \t\r\n" ) ) n++;
+          break;
+          }
+       sig = strstr( l, "Individual factors" ) != NULL;
+       }
+   if ( f ) fclose( f );
+   return n;
+}
+
 int main( int argc, char **argv )
 {
     const char *dir = ( argc > 1 ) ? argv[1] : "../../engines/fue/tests/corpus";
@@ -341,6 +363,77 @@ int main( int argc, char **argv )
     if ( d ) closedir( d );
     ok( vistos3 > 20 && buenos3 == vistos3,
         "la línea de Box-Cox se cambia y el motor lo acepta, en todo el corpus" );
+    }
+
+    /* the MEG's three edits: removing a deterministic (removing none gives
+       the file back), the individual factors, and a MA(2) of fixed
+       frequency -- each one judged by the engine */
+    {
+    char        ruta[1024], tmp2[1024];
+    int         vistos5 = 0, quita_ok = 0, cero5 = 0, cero5_ok = 0, ifa_ok = 0, ifa = 0;
+    int         maf_ok = 0;
+    static char det[ID_MAX_DET][ID_LINEA];
+
+    snprintf( tmp2, sizeof tmp2, "%s.2", tmp );
+    d = opendir( dir );
+    while ( d && ( e = readdir( d ) ) != NULL )
+        {
+        int         nn = (int) strlen( e->d_name ), nd, quitados = -1, k, ifadf[7];
+        const char *nom[1];
+        IdMaf       m;
+
+        if ( nn < 5 || strcmp( e->d_name + nn - 4, ".inp" ) ) continue;
+        snprintf( ruta, sizeof ruta, "%s/%s", dir, e->d_name );
+        if ( inp_check_fue( ruta, msg, sizeof msg ) != 0 ) continue;
+        nd = id_nombres( ruta, det, ID_MAX_DET, porque, sizeof porque );
+        if ( nd < 0 ) continue;
+
+        cero5++;
+        if ( id_quita_det( ruta, tmp, NULL, 0, &quitados, porque, sizeof porque ) == 0 &&
+             quitados == 0 && iguales( ruta, tmp ) ) cero5_ok++;
+        else { printf( "  FALLO %s: quitar nada no lo deja igual\n", e->d_name ); fallos++; }
+
+        if ( nd > 0 )
+           {
+           vistos5++;
+           nom[0] = det[nd / 2];                       /* one from the middle */
+           if ( id_quita_det( ruta, tmp, nom, 1, &quitados, porque, sizeof porque ) == 0 &&
+                quitados >= 1 && id_nombres( tmp, det, ID_MAX_DET, porque, sizeof porque ) == nd - quitados &&
+                inp_check_fue( tmp, msg, sizeof msg ) == 0 )
+              quita_ok++;
+           else { printf( "  FALLO %s: quitar «%s» no queda bien: %s\n", e->d_name, nom[0], msg );
+                  fallos++; }
+           }
+
+        /* the line has s/2 + 1 flags: an annual series has no f = 1 */
+        if ( id_ifadf( ruta, ifadf, porque, sizeof porque ) == 0 &&
+             id_maf_lee( ruta, &m, porque, sizeof porque ) == 0 && cuenta_ifadf( ruta ) >= 2 )
+           {
+           ifa++;
+           for ( k = 0; k < 7; k++ ) ifadf[k] = 0;
+           ifadf[1] = 1;
+           if ( id_pon_ifadf( ruta, tmp, ifadf, porque, sizeof porque ) == 0 &&
+                id_ifadf( tmp, ifadf, porque, sizeof porque ) == 0 && ifadf[1] == 1 &&
+                inp_check_fue( tmp, msg, sizeof msg ) == 0 ) ifa_ok++;
+           else { printf( "  FALLO %s: ifadf no queda bien: %s\n", e->d_name, msg ); fallos++; }
+           if ( m.n < ID_MAX_FAC )
+              {
+              m.freq[m.n] = 1; m.v[m.n] = -0.9; m.fl[m.n] = 1; m.n++;
+              if ( id_escribe_maf( ruta, tmp2, &m, porque, sizeof porque ) == 0 &&
+                   id_maf_lee( tmp2, &m, porque, sizeof porque ) == 0 && m.v[m.n - 1] == -0.9 &&
+                   inp_check_fue( tmp2, msg, sizeof msg ) == 0 ) maf_ok++;
+              else { printf( "  FALLO %s: el MA(2) de frecuencia fija no queda bien: %s\n",
+                             e->d_name, msg ); fallos++; }
+              }
+           }
+        }
+    if ( d ) closedir( d );
+    remove( tmp2 );
+    printf( "        %d ficheros con deterministas, %d con la línea de factores\n", vistos5, ifa );
+    ok( cero5_ok == cero5, "quitar ningún determinista devuelve el fichero idéntico" );
+    ok( vistos5 > 10 && quita_ok == vistos5, "quitar uno deja uno menos y el motor lo acepta" );
+    ok( ifa > 20 && ifa_ok == ifa, "los factores de la diferencia anual se cambian y el motor lo acepta" );
+    ok( maf_ok == ifa, "un MA(2) de frecuencia fija se añade y el motor lo acepta" );
     }
 
     printf( "\n%d fallos\n", fallos );

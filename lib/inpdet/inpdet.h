@@ -202,4 +202,41 @@ int id_fija_media( const char *origen, const char *destino, double valor, int fl
  * has them (f = 0, 1, ..., s/2). 0, or 1 with the reason.               */
 int id_ifadf( const char *origen, int ifadf[7], char *porque, size_t n );
 
+/* ---------------------------------------------------------------------- */
+/* STOCHASTIC SEASONALITY (2026-10-15, for the MEG, lib/formales)          */
+/*                                                                         */
+/* The MEG turns one deterministic harmonic into its stochastic form: the  */
+/* cos/sin pair (or alter) goes, the individual factor of the annual       */
+/* difference at that frequency comes in, and with it a free MA witness.  */
+/* ---------------------------------------------------------------------- */
+
+/* Copy origen into destino with ifadf[0..] as its individual factors of the
+ * annual difference (as many as the line has: s/2 + 1). 0, or 1.        */
+int id_pon_ifadf( const char *origen, const char *destino, const int ifadf[7],
+                  char *porque, size_t n );
+
+/* Copy origen into destino WITHOUT the deterministics whose line is one of
+ * nom[0..nn-1]: their name, their omega and delta counts and their blocks,
+ * the five places. *quitados, if not NULL, says how many went. 0, or 1.  */
+int id_quita_det( const char *origen, const char *destino, const char *const *nom,
+                  int nn, int *quitados, char *porque, size_t n );
+
+/* The regular MA(2) operators with fixed frequency (fue.c [3.3.13-14]):
+ * factor i is (1 - theta1 B - v B^2) at harmonic freq[i] (omega =
+ * 2 pi freq / s), with theta1 = 2 cos(omega) sqrt(-v) worked out by fue.
+ * Only v is a parameter: -lambda^2, never positive, and -1 is the unit
+ * circle. fl[i] 1 estimated, 0 fixed.                                    */
+typedef struct {
+   int    n;
+   double freq[ID_MAX_FAC];
+   double v[ID_MAX_FAC];
+   int    fl[ID_MAX_FAC];
+} IdMaf;
+
+int id_maf_lee( const char *origen, IdMaf *m, char *porque, size_t n );
+
+/* Copy origen into destino with that section REWRITTEN from m. 0, or 1. */
+int id_escribe_maf( const char *origen, const char *destino, const IdMaf *m,
+                    char *porque, size_t n );
+
 #endif /* ATSW_INPDET_H */

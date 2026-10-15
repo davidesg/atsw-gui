@@ -957,3 +957,183 @@ int id_ifadf( const char *origen, int ifadf[7], char *porque, size_t n )
    snprintf( porque, n, "no está la línea de los factores de la diferencia anual" );
    return 1;
 }
+
+
+/* ---------------------------------------------------------------------- */
+/* Stochastic seasonality: see inpdet.h.                                   */
+/* ---------------------------------------------------------------------- */
+
+int id_pon_ifadf( const char *origen, const char *destino, const int ifadf[7],
+                  char *porque, size_t n )
+{
+   Fich  f;
+   FILE *o;
+   int   i, k, lab = -1, nt;
+   char  t[16][64];
+
+   if ( fich_lee( origen, &f, porque, n ) ) return 1;
+   for ( i = 0; i + 1 < f.n; i++ )
+       if ( es_etiqueta( f.l[i] ) && strstr( f.l[i], "Individual factors" ) ) { lab = i; break; }
+   if ( lab < 0 )
+      { snprintf( porque, n, "no está la línea de los factores de la diferencia anual" );
+        fich_free( &f ); return 1; }
+   nt = tokens( f.l[lab + 1], t, 16 );
+   if ( nt < 1 || nt > 7 )
+      { snprintf( porque, n, "la línea de los factores de la diferencia anual trae %d", nt );
+        fich_free( &f ); return 1; }
+   o = fopen( destino, "wb" );
+   if ( !o ) { snprintf( porque, n, "no pude escribir «%s»", destino ); fich_free( &f ); return 1; }
+   for ( i = 0; i < f.n; i++ )
+       if ( i != lab + 1 ) fputs( f.l[i], o );
+       else
+          {
+          for ( k = 0; k < nt; k++ ) fprintf( o, " %d", ifadf[k] ? 1 : 0 );
+          fputs( "\n", o );
+          }
+   fclose( o );
+   fich_free( &f );
+   return 0;
+}
+
+int id_quita_det( const char *origen, const char *destino, const char *const *nom,
+                  int nn, int *quitados, char *porque, size_t n )
+{
+   Fich   f;
+   Bloque b;
+   FILE  *o;
+   char   t[8][64], nombre[ID_LINEA];
+   int    k, i, li, va[ID_MAX_DET], om[ID_MAX_DET], de[ID_MAX_DET], quedan = 0, primero;
+
+   if ( fich_lee( origen, &f, porque, n ) ) return 1;
+   if ( mira( &f, &b, porque, n ) ) { fich_free( &f ); return 1; }
+
+   /* which go, and where each one's blocks start */
+   li = b.i_om + 1;
+   for ( k = 0; k < b.ndet; k++ )
+       {
+       int nt = tokens( f.l[b.i_nom + k], t, 8 ), p = 0, j;
+
+       nombre[0] = '\0';
+       for ( j = 0; j < nt && p < ID_LINEA - 2; j++ )
+           p += snprintf( nombre + p, (size_t)( ID_LINEA - p ), "%s%s", j ? " " : "", t[j] );
+       va[k] = 0;
+       for ( j = 0; j < nn && !va[k]; j++ ) va[k] = !strcmp( nombre, nom[j] );
+       quedan += !va[k];
+       om[k] = li;
+       li += 2 + b.nomega[k];
+       }
+   if ( b.ndet > 0 )
+      {
+      li = b.i_del + 1;
+      for ( k = 0; k < b.ndet; k++ )
+          {
+          de[k] = li;
+          if ( b.ndelta[k] > 0 ) li += 1 + b.ndelta[k];
+          }
+      }
+
+   o = fopen( destino, "wb" );
+   if ( !o ) { snprintf( porque, n, "no pude escribir «%s»", destino ); fich_free( &f ); return 1; }
+   if ( quedan == b.ndet )
+      for ( i = 0; i < f.n; i++ ) fputs( f.l[i], o );
+   else
+      {
+      for ( i = 0; i < b.i_ndet; i++ ) fputs( f.l[i], o );
+      fprintf( o, "%d\n", quedan );
+      if ( quedan > 0 )
+         {
+         fputs( f.l[b.i_nom - 1], o );
+         for ( k = 0; k < b.ndet; k++ ) if ( !va[k] ) fputs( f.l[b.i_nom + k], o );
+         fputs( f.l[b.i_om - 1], o );
+         for ( k = 0, primero = 1; k < b.ndet; k++ )
+             if ( !va[k] ) { fprintf( o, primero ? "%d" : " %d", b.nomega[k] ); primero = 0; }
+         fputs( "\n", o );
+         for ( k = 0; k < b.ndet; k++ )
+             if ( !va[k] ) for ( i = 0; i < 2 + b.nomega[k]; i++ ) fputs( f.l[om[k] + i], o );
+         fputs( f.l[b.i_del - 1], o );
+         for ( k = 0, primero = 1; k < b.ndet; k++ )
+             if ( !va[k] ) { fprintf( o, primero ? "%d" : " %d", b.ndelta[k] ); primero = 0; }
+         fputs( "\n", o );
+         for ( k = 0; k < b.ndet; k++ )
+             if ( !va[k] && b.ndelta[k] > 0 )
+                for ( i = 0; i < 1 + b.ndelta[k]; i++ ) fputs( f.l[de[k] + i], o );
+         }
+      for ( i = b.i_fin; i < f.n; i++ ) fputs( f.l[i], o );
+      }
+   fclose( o );
+   fich_free( &f );
+   if ( quitados ) *quitados = b.ndet - quedan;
+   return 0;
+}
+
+/* Where the regular MA(2) section with fixed frequency is: its label, and
+ * the first line after it. */
+static int maf_mira( const Fich *f, int *lab, int *fin, int *nf, char t[][64],
+                     char *porque, size_t np )
+{
+   int i, nt;
+
+   for ( i = 0; i < f->n; i++ )
+       if ( es_etiqueta( f->l[i] ) && strstr( f->l[i], "regular MA(2) operators with fixed" ) ) break;
+   if ( i + 1 >= f->n )
+      { snprintf( porque, np, "no está la sección de los MA(2) de frecuencia fija" ); return 1; }
+   *lab = i;
+   nt = tokens( f->l[i + 1], t, ID_MAX_FAC + 1 );
+   *nf = nt > 0 ? atoi( t[0] ) : -1;
+   if ( *nf < 0 || *nf > ID_MAX_FAC || nt < *nf + 1 )
+      { snprintf( porque, np, "cuenta ilegible en los MA(2) de frecuencia fija" ); return 1; }
+   *fin = i + 2 + 2 * *nf;              /* per factor, a "**" line and "value flag" */
+   if ( *fin > f->n )
+      { snprintf( porque, np, "el fichero se acaba en los MA(2) de frecuencia fija" ); return 1; }
+   return 0;
+}
+
+int id_maf_lee( const char *origen, IdMaf *m, char *porque, size_t n )
+{
+   Fich f;
+   char t[ID_MAX_FAC + 1][64];
+   int  lab, fin, nf, i;
+
+   memset( m, 0, sizeof *m );
+   if ( fich_lee( origen, &f, porque, n ) ) return 1;
+   if ( maf_mira( &f, &lab, &fin, &nf, t, porque, n ) ) { fich_free( &f ); return 1; }
+   m->n = nf;
+   for ( i = 0; i < nf; i++ )
+       {
+       char c[4][64];
+       int  nc = tokens( f.l[lab + 3 + 2 * i], c, 4 );
+
+       if ( nc < 1 || !es_numero( c[0] ) )
+          { snprintf( porque, n, "coeficiente ilegible en los MA(2) de frecuencia fija" );
+            fich_free( &f ); return 1; }
+       m->freq[i] = strtod( t[i + 1], NULL );
+       m->v[i]    = strtod( c[0], NULL );
+       m->fl[i]   = nc > 1 ? atoi( c[1] ) : 1;
+       }
+   fich_free( &f );
+   return 0;
+}
+
+int id_escribe_maf( const char *origen, const char *destino, const IdMaf *m,
+                    char *porque, size_t n )
+{
+   Fich  f;
+   FILE *o;
+   char  t[ID_MAX_FAC + 1][64];
+   int   lab, fin, nf, i;
+
+   if ( m->n < 0 || m->n > ID_MAX_FAC ) { snprintf( porque, n, "%d factores", m->n ); return 1; }
+   if ( fich_lee( origen, &f, porque, n ) ) return 1;
+   if ( maf_mira( &f, &lab, &fin, &nf, t, porque, n ) ) { fich_free( &f ); return 1; }
+   o = fopen( destino, "wb" );
+   if ( !o ) { snprintf( porque, n, "no pude escribir «%s»", destino ); fich_free( &f ); return 1; }
+   for ( i = 0; i <= lab; i++ ) fputs( f.l[i], o );
+   fprintf( o, "%d", m->n );
+   for ( i = 0; i < m->n; i++ ) fprintf( o, " %.17g", m->freq[i] );
+   fputs( "\n", o );
+   for ( i = 0; i < m->n; i++ ) { fputs( "**\n", o ); coef_linea( o, m->v[i], m->fl[i] ); }
+   for ( i = fin; i < f.n; i++ ) fputs( f.l[i], o );
+   fclose( o );
+   fich_free( &f );
+   return 0;
+}

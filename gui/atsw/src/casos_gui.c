@@ -28,6 +28,7 @@
 #include "inpfile.h"
 #include "dates.h"
 #include "outfile.h"
+#include "preview.h"
 
 void barra_pub( Atsw *a, const char *s );
 
@@ -653,6 +654,121 @@ static void on_c_activado( GtkTreeView *tv, GtkTreePath *ruta,
                            GtkTreeViewColumn *col, Atsw *a )
      { (void) tv; (void) ruta; (void) col; atsw_caso_lanza( a, "drtran_gui" ); }
 
+/* LA PAGINA DE UNA ECUACION del modelo co del caso: la que drtran_gui deja
+ * junto al .out al estimar (o al abrir un modelo ya estimado), con el
+ * nombre de la serie de la entrada k --el del .pre, el mismo que pone
+ * drtran--. 0 si existe; nom recibe el nombre en cualquier caso.      */
+static int pagina_de( Atsw *a, const PrCaso *c, const char *co, int k,
+                      char *f, size_t n, char *nom, size_t nn )
+{
+    char    pre[PR_RUTA], err[256];
+    InpFile in;
+    gchar  *suf;
+    int     rc;
+
+    nom[0] = '\0';
+    if ( k < 0 || k >= c->nen ) return 1;
+    if ( pr_ruta( a->p, c->en[k].serie, c->muestra, c->en[k].modelo, ".pre",
+                  pre, sizeof pre ) != 0 ) return 1;
+    memset( &in, 0, sizeof in );
+    if ( inp_read( pre, &in, err, sizeof err ) != 0 ) return 1;
+    snprintf( nom, nn, "%s", in.name[0] ? in.name : c->en[k].serie );
+    suf = g_strdup_printf( "_%s.pdf", in.name );
+    free( in.data );
+    rc = pr_corrida_ruta( a->p, a->caso, co, suf, f, n );
+    g_free( suf );
+    return rc != 0 || !g_file_test( f, G_FILE_TEST_EXISTS );
+}
+
+static void on_c_pagina( GtkMenuItem *mi, Atsw *a )
+{
+    const char *f = g_object_get_data( G_OBJECT(mi), "pdf" );
+
+    if ( f && !preview_show( (PreviewApp *) a, f ) )
+        {
+        gchar *t = g_strdup_printf( "No pude abrir %s.", f );
+
+        barra_pub( a, t );
+        g_free( t );
+        }
+}
+
+static void on_c_drtran_mi( GtkMenuItem *mi, Atsw *a )
+     { (void) mi; atsw_caso_lanza( a, "drtran_gui" ); }
+
+/* EL MENU DEL MODELO DEL CASO, con el boton derecho: lo que el de un modelo
+ * univariante tiene para mirarlo sin abrir nada. «Ver modelo…» es la pagina
+ * de la SALIDA --la serie que el caso explica--; si la red tiene mas
+ * ecuaciones con pagina, cada una tiene la suya debajo.              */
+static void menu_corrida( Atsw *a, GdkEventButton *ev )
+{
+    const PrCaso *c = caso_marcado( a );
+    gchar        *co = c ? atsw_marcada( a->c_corridas, CO_ID ) : NULL;
+    GtkWidget    *menu, *mi;
+    int           k;
+
+    if ( co == NULL ) return;
+    menu = gtk_menu_new();
+    for ( k = 0; k < c->nen; k++ )
+        {
+        char     f[PR_RUTA], nom[PR_ID + 64];
+        gboolean hay = pagina_de( a, c, co, k, f, sizeof f, nom, sizeof nom ) == 0;
+        gchar   *txt;
+
+        if ( k > 0 && !hay ) continue;
+        txt = k == 0 ? g_strdup( "Ver modelo…" )
+                     : g_strdup_printf( "Ver la ecuación de %s…", nom );
+        mi = gtk_menu_item_new_with_label( txt );
+        g_free( txt );
+        gtk_widget_set_sensitive( mi, hay );
+        if ( hay )
+            {
+            gchar *g = g_strdup_printf( "La página de %s: los residuos con su ACF y su "
+                "PACF y, debajo, la transferencia, el ruido y los deterministas "
+                "estimados, con sus desviaciones típicas. La que drtran dejó al "
+                "estimar, sin abrir drtran.", nom );
+
+            gtk_widget_set_tooltip_text( mi, g );
+            g_free( g );
+            g_object_set_data_full( G_OBJECT(mi), "pdf", g_strdup( f ), g_free );
+            g_signal_connect( mi, "activate", G_CALLBACK(on_c_pagina), a );
+            }
+        else
+            gtk_widget_set_tooltip_text( mi, "Todavía no hay página: drtran la escribe "
+                "al estimar el modelo, y al abrirlo si ya estaba estimado." );
+        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+        }
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
+    {
+    gchar *t = g_strdup_printf( "Abrir %s en drtran", co );
+
+    mi = gtk_menu_item_new_with_label( t );
+    g_free( t );
+    }
+    gtk_widget_set_tooltip_text( mi, "Lo mismo que el doble clic." );
+    g_signal_connect( mi, "activate", G_CALLBACK(on_c_drtran_mi), a );
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+    gtk_widget_show_all( menu );
+    gtk_menu_popup_at_pointer( GTK_MENU(menu), (GdkEvent *) ev );
+    g_free( co );
+}
+
+static gboolean on_c_click( GtkWidget *tv, GdkEventButton *ev, Atsw *a )
+{
+    GtkTreePath *ruta = NULL;
+
+    if ( ev->type != GDK_BUTTON_PRESS || ev->button != 3 ) return FALSE;
+    if ( caso_marcado( a ) == NULL ) return FALSE;
+    if ( !gtk_tree_view_get_path_at_pos( GTK_TREE_VIEW(tv), (gint) ev->x,
+                                         (gint) ev->y, &ruta, NULL, NULL, NULL ) )
+        return FALSE;
+    /* Se marca PRIMERO: el menu actua sobre la fila donde se pulso. */
+    gtk_tree_view_set_cursor( GTK_TREE_VIEW(tv), ruta, NULL, FALSE );
+    gtk_tree_path_free( ruta );
+    menu_corrida( a, ev );
+    return TRUE;
+}
+
 static gchar *corrida_marcada( Atsw *a )
 {
     gchar *c = caso_marcado( a ) ? atsw_marcada( a->c_corridas, CO_ID ) : NULL;
@@ -799,6 +915,18 @@ static void on_c_borrar( GtkButton *b, Atsw *a )
         if ( pr_corrida_ruta( a->p, a->caso, co, ext_corrida[i], f, sizeof f ) == 0 )
             g_unlink( f );
         }
+    /* Y LAS PAGINAS, una por ecuacion, con el nombre de su serie. */
+    {
+    const PrCaso *c = caso_marcado( a );
+    int           k;
+
+    for ( k = 0; c && k < c->nen; k++ )
+        {
+        char f[PR_RUTA], nom[PR_ID + 64];
+
+        if ( pagina_de( a, c, co, k, f, sizeof f, nom, sizeof nom ) == 0 ) g_unlink( f );
+        }
+    }
     pr_corrida_borra( a->p, a->caso, co, &e );
     if ( atsw_guarda( a, &e ) != 0 )
         barra_pub( a, "Los ficheros se fueron, pero no pude guardar el "
@@ -1008,6 +1136,8 @@ GtkWidget *atsw_caso_vista( Atsw *a )
     /* DOBLE CLIC: ese modelo, en drtran_gui. Como el doble clic de la lista
        de modelos de una serie lanza fue_gui con el suyo.              */
     g_signal_connect( a->c_corridas, "row-activated", G_CALLBACK(on_c_activado), a );
+    /* EL BOTON DERECHO: «Ver modelo…», la pagina que drtran deja al estimar. */
+    g_signal_connect( a->c_corridas, "button-press-event", G_CALLBACK(on_c_click), a );
     gtk_box_pack_start( GTK_BOX(v), atsw_en_scroll( a->c_corridas ), TRUE, TRUE, 0 );
     return v;
 }

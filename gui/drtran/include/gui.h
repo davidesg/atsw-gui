@@ -350,6 +350,10 @@ void       estima_refresca(Mtram *m);
  * Devuelve TRUE si arranco.                                            */
 gboolean   estima_lanzar(Mtram *m);
 
+/* Un modelo YA ESTIMADO, sin estimar: su .out en Estimacion, Diagnosis y
+ * Prevision, y sus paginas si faltan. Lo usa la carga de un caso.     */
+void       estima_desde(Mtram *m, const char *out);
+
 /* prevision.c */
 GtkWidget *prevision_pagina_new(Mtram *m);
 void       prevision_refresca(Mtram *m);
@@ -359,6 +363,9 @@ void       prevision_desde(Mtram *m, const char *path);
 GtkWidget *diagnosis_pagina_new(Mtram *m);
 void       diagnosis_refresca(Mtram *m);
 void       diagnosis_desde(Mtram *m, const char *path);
+/* La pagina del modelo de cada ecuacion, junto al .out (mtram_artefacto
+ * "_<serie>.pdf"); con solo_faltan, solo las que no estan. Cuantas.   */
+int        diagnosis_escribe_paginas(Mtram *m, gboolean solo_faltan);
 
 /* pagina.c -- la pagina del modelo: grafico (puede ser NULL) arriba y las
  * ecuaciones estimadas de la serie i debajo, en el PDF pdf. 0 si pudo; si

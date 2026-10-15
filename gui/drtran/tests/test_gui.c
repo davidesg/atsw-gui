@@ -1367,6 +1367,17 @@ int main(int argc, char **argv)
         check(p2->dia.hay_res, "y sus residuos, los de ESTA corrida", NULL);
         check(contiene(etiqueta(p2->est.ver_fin), "logL"),
               "el desenlace se cuenta igual", etiqueta(p2->est.ver_fin));
+        /* LAS PAGINAS, solas: una por ecuacion, junto al .out, sin abrir el
+         * menu de los graficos. Es lo que la madre enseña con «Ver modelo…». */
+        {
+        gchar *py = mtram_artefacto(p2, "_SYN_Y.pdf"), *px = mtram_artefacto(p2, "_SYN_X.pdf");
+
+        check(contiene(py, "C1_c00_SYN_Y.pdf") && g_file_test(py, G_FILE_TEST_EXISTS),
+              "al estimar, la pagina de la salida queda junto al .out", py);
+        check(g_file_test(px, G_FILE_TEST_EXISTS),
+              "y la de la entrada, con la suya", px);
+        g_free(py); g_free(px);
+        }
 
         check(estima_lanzar(p2), "la segunda corrida arranca", NULL);
         check(espera_motor(p2, 90), "y acaba", NULL);
@@ -1413,6 +1424,25 @@ int main(int argc, char **argv)
               !strcmp(p3->c.s[1]->path, pre_x),
               "con sus dos entradas, EN SU ORDEN", p3->c.n ? p3->c.s[0]->path : "");
         check(p3->red.n == 1, "y la red de la corrida c01", etiqueta(p3->estado));
+        /* YA ESTIMADO, SE VE: su .out en Estimacion y Diagnosis sin volver
+         * a estimar, y su pagina si faltaba.                            */
+        check(p3->est.out_path && contiene(p3->est.out_path, "C1_c01.out"),
+              "c01 ya estaba estimado: se carga su .out", p3->est.out_path);
+        check(p3->dia.vale && p3->dia.hay_par && p3->dia.hay_res,
+              "con su diagnosis, sus parametros y sus residuos", NULL);
+        {
+        GtkTextBuffer *bf = gtk_text_view_get_buffer(GTK_TEXT_VIEW(p3->est.informe));
+
+        check(gtk_text_buffer_get_char_count(bf) > 0, "y el informe en su pestaña", NULL);
+        }
+        {
+        gchar *py = mtram_artefacto(p3, "_SYN_Y.pdf");
+
+        g_remove(py);
+        check(diagnosis_escribe_paginas(p3, TRUE) >= 1 && g_file_test(py, G_FILE_TEST_EXISTS),
+              "una pagina que falta se rehace sin estimar", py);
+        g_free(py);
+        }
         check(!p3->caso_desfasado, "el caso no esta desfasado", NULL);
         check(estima_lanzar(p3), "una corrida desde ahi arranca", NULL);
         check(espera_motor(p3, 90), "y acaba", NULL);

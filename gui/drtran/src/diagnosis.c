@@ -1071,6 +1071,32 @@ static gchar *dibuja( Mtram *m, int que, int entrada )
     return eps;
 }
 
+/* LAS PAGINAS DE TODAS LAS ECUACIONES, junto al .out, sin que nadie las
+ * pida: como fue deja la suya al estimar. Es lo que la madre enseña con
+ * «Ver modelo…» sobre el modelo del caso. Con solo_faltan, las que ya
+ * estan no se rehacen (un modelo que se abre, no que se estima).
+ * Devuelve cuantas escribio.                                           */
+int diagnosis_escribe_paginas( Mtram *m, gboolean solo_faltan )
+{
+    Diag *D = &m->dia;
+    int   i, antes = D->actual, n = 0;
+
+    if (!D->hay_res || !D->hay_par) return 0;
+    for (i = 1; i <= m->c.n && i <= D->res.m; i++) {
+        gchar *suf = g_strdup_printf( "_%s.pdf", nom_ser( m, i ) );
+        gchar *pdf = mtram_artefacto( m, suf );
+        gchar *hecho;
+
+        g_free( suf );
+        if (solo_faltan && g_file_test( pdf, G_FILE_TEST_EXISTS )) { g_free( pdf ); continue; }
+        g_free( pdf );
+        D->actual = i;
+        if ((hecho = dibuja( m, 4, 0 )) != NULL) { n++; g_free( hecho ); }
+    }
+    D->actual = antes;
+    return n;
+}
+
 static void on_grafico( GtkMenuItem *mi, Mtram *m )
 {
     int    que = GPOINTER_TO_INT( g_object_get_data( G_OBJECT(mi), "que" ) );

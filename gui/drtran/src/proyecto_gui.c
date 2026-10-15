@@ -182,6 +182,21 @@ gboolean mtram_caso_carga( Mtram *m, char *why, size_t n )
         pr_corrida_ruta( m->proy, m->caso, de, ".cns", cns, sizeof cns );
         if (g_file_test( dag, G_FILE_TEST_EXISTS )) red_lee( m, dag );
         if (g_file_test( cns, G_FILE_TEST_EXISTS )) modelo_lee( m, cns );
+
+        /* SI YA ESTA ESTIMADO, SE VE. Antes habia que volver a estimar para
+         * ver su informe, su diagnosis y su pagina. La corrida es la suya
+         * mientras no se estime otra (mtram_corrida_nueva la limpia), y
+         * asi sus artefactos --los residuos, la pagina-- son los de su
+         * directorio y no los de la cache.                             */
+        {
+        char out[PR_RUTA];
+
+        if (pr_corrida_ruta( m->proy, m->caso, de, ".out", out, sizeof out ) == 0 &&
+            g_file_test( out, G_FILE_TEST_EXISTS )) {
+            snprintf( m->corrida, sizeof m->corrida, "%s", de );
+            estima_desde( m, out );
+        }
+        }
     }
 
     if (m->caso_desfasado && why)

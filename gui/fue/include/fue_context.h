@@ -17,6 +17,8 @@ typedef struct {
     GtkWidget *btn_anomalos;
     GtkWidget *btn_ganancia;
     GtkWidget *btn_identifica;   /* art sobre los residuos (E3) */
+    GtkWidget *btn_integracion;  /* SF, DCD, sobre y subdiferenciacion */
+    GtkWidget *btn_estacional;   /* SS, DCD estacional, MEG (s > 1)    */
 
     /* Data specification widgets */
     GtkWidget *series_name_entry;

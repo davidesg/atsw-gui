@@ -32,7 +32,8 @@ typedef struct {
 #define ENGINE_SIGNAL (-2)   /* it died on a signal                         */
 
 /* Run <program> in workdir with the arguments that follow (a NULL-terminated
- * list) and wait for it. The program is looked up in the PATH.             */
+ * list) and wait for it. The program is looked up in the PATH, or with the
+ * finder given to engine_set_finder.                                       */
 EngineResult engine_run(const char *workdir, const char *program, ...) G_GNUC_NULL_TERMINATED;
 
 /* TRUE when the run left its files behind: it finished (0), or it could not
@@ -87,5 +88,14 @@ EngineJob *engine_start(const char *workdir, const char *program,
 /* Pide al proceso que se pare. El final llega por done() como cualquier otro,
  * con status ENGINE_SIGNAL: no hay un camino aparte para la cancelacion.  */
 void engine_stop(EngineJob *job);
+
+/* WHERE THE PROGRAM IS. By default, the PATH. A GUI run from the build tree
+ * must run the engines of ITS tree, not an old install in /usr/local: there
+ * was a fue of September there, from before the equation lost its italics,
+ * and fue_gui ran it. finder gets the bare name ("fue") and returns a new
+ * path (g_free) or NULL; NULL as finder goes back to the PATH. The messages
+ * still name the program, not the path.                                    */
+typedef gchar *(*EngineFinder)(const char *program);
+void engine_set_finder(EngineFinder finder);
 
 #endif /* ENGINE_H */

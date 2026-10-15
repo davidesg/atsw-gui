@@ -116,6 +116,14 @@ static void decode_status(gint wait_status, int *status, int *signal_no) {
 #endif
 }
 
+static EngineFinder finder = NULL;
+
+void engine_set_finder(EngineFinder f) { finder = f; }
+
+static gchar *find_program(const char *program) {
+    return finder ? finder(program) : g_find_program_in_path(program);
+}
+
 /* Se declara antes: la usan el camino sincrono y el asincrono */
 static gchar *status_message(const char *program, int status, int signal_no,
                              const char *err, const char *out);
@@ -127,7 +135,7 @@ EngineResult engine_run(const char *workdir, const char *program, ...) {
     const char  *a;
     gchar       *path;
 
-    path = g_find_program_in_path(program);
+    path = find_program(program);
     args = g_ptr_array_new_with_free_func(g_free);
     g_ptr_array_add(args, path ? path : g_strdup(program));
     va_start(ap, program);
@@ -356,7 +364,7 @@ EngineJob *engine_start(const char *workdir, const char *program,
                         EngineProgress progress, EngineSalida salida,
                         EngineDone done, gpointer data) {
     GPtrArray  *args = g_ptr_array_new_with_free_func(g_free);
-    gchar      *path = g_find_program_in_path(program);
+    gchar      *path = find_program(program);
     GError     *error = NULL;
     GPid        pid;
     gint        out_fd = -1, err_fd = -1;

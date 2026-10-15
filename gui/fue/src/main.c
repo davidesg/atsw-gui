@@ -14,6 +14,8 @@
 #include "deterministic_dialog.h"
 #include "operator_dialog.h"
 #include "file_io.h"
+#include "engine.h"
+#include "sitio.h"
 
 
 #ifdef _WIN32
@@ -169,10 +171,28 @@ static void numeros_con_punto( GApplication *app, gpointer data )
     setlocale( LC_NUMERIC, "C" );
 }
 
+/* LOS MOTORES DE SU ARBOL. fue_gui corria fue y fuf por el PATH, y en esta
+   maquina el PATH daba un fue de septiembre en /usr/local/bin, de antes de
+   que la ecuacion de la pagina perdiera la cursiva: desde la madre se lanzaba
+   el fue_gui bueno y este estimaba con el viejo. Como en la madre
+   (gui/atsw/src/gestos.c): primero al lado, en el arbol de compilacion o en
+   el paquete; despues el PATH. Las baterias enlazan file_io.c sin este main
+   y siguen con el PATH, que es lo que prueban (el fue falso, el PATH vacio). */
+static gchar *hermano( const char *programa )
+{
+    static const char *const sitio[] = {     /* relativos a gui/fue/bin/    */
+        "../../../engines/fue/bin/%s",       /* el arbol de compilacion      */
+        "../../../engines/fuf/bin/%s",
+        "./%s", NULL                         /* el paquete: todo junto       */
+    };
+    return sitio_busca( programa, sitio );
+}
+
 int main(int argc, char *argv[]) {
     int opt;
 
     setlocale(LC_ALL, "C");
+    engine_set_finder(hermano);
 
     opt = lee_opciones(argc, argv);
     if (opt == 1) return 0;

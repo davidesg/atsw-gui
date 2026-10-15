@@ -1,6 +1,12 @@
 /*
- * an_formales.c -- la ventana de los contrastes formales del modelo
- * estimado: el formal_tests de art (lib/formales). La abre la diagnosis.
+ * an_formales.c -- las ventanas de los contrastes formales del modelo
+ * estimado: el formal_tests de art (lib/formales), partido en dos (ver
+ * analisis.h): el orden de integracion regular y la estacionalidad. Las
+ * abren la diagnosis, el menu de la lista y la barra de fue_gui.
+ *
+ * fm_plan los plantea todos y aqui se queda cada ventana con los suyos:
+ * la frontera entre las dos es de la ventana, no de la biblioteca. Cada
+ * una escribe en su propio directorio, y se pueden tener las dos abiertas.
  *
  * Cada contraste es una estimacion mas: el modelo con un parametro fijo en
  * su valor nulo, que fue estima partiendo del optimo. Se corren de uno en
@@ -43,6 +49,7 @@ typedef struct {
     AnHost     h;
     char       serie[PR_ID], muestra[PR_ID], id[PR_ID];
     FmPlan     pl;
+    AnFmFamilia fam;
     double     l_libre;
     int        cur;               /* el que esta corriendo; pl.n al acabar */
     gboolean   corriendo, cerrada;
@@ -59,6 +66,46 @@ static gchar *programa_fue( void )
         "../fue/bin/%s", "./%s", NULL
     };
     return sitio_busca( "fue", sitio );
+}
+
+/* DE QUE VENTANA ES CADA CONTRASTE. El DCD regular con freq es el testigo
+ * de Nyquist de un modelo reformulado tras el MEG: va con la estacionalidad. */
+static gboolean de_familia( const FmPrueba *x, AnFmFamilia fam )
+{
+    gboolean integ = x->tipo == FM_SF || x->tipo == FM_SOBRE || x->tipo == FM_SUB ||
+                     ( x->tipo == FM_DCD && x->freq == 0 );
+
+    return fam == AN_FM_INTEGRACION ? integ : !integ;
+}
+
+/* Las lineas de no_aplica, por contraste (lib/formales/formales.c): 0 la
+ * simplificacion estacional, 1 Shin-Fuller, 2 el DCD, 3 el estacional,
+ * 4 la sobrediferenciacion, 6 el MEG, 7 el DCD_f.                       */
+static void quedate_con( FmPlan *pl, AnFmFamilia fam )
+{
+    static const int integ[FM_NA] = { 0, 1, 1, 0, 1, 1, 0, 0 };
+    int i, n = 0;
+
+    for ( i = 0; i < pl->n; i++ )
+        if ( de_familia( &pl->t[i], fam ) )
+            { if ( n != i ) pl->t[n] = pl->t[i]; n++; }
+    pl->n = n;
+    for ( i = 0; i < FM_NA; i++ )
+        if ( integ[i] != ( fam == AN_FM_INTEGRACION ) ) pl->no_aplica[i][0] = '\0';
+}
+
+int an_formales_s( const Proyecto *p, const char *serie, const char *muestra,
+                   const char *id )
+{
+    char    out[PR_RUTA];
+    FueOut *o;
+    int     s = 0;
+
+    if ( !p || pr_ruta( p, serie, muestra, id, ".out", out, sizeof out ) != 0 ) return 0;
+    o = g_new0( FueOut, 1 );
+    if ( fueout_read( out, o ) ) s = o->s;
+    g_free( o );
+    return s;
 }
 
 static void criticos( GString *t, const FmPrueba *x, const char *de )
@@ -545,7 +592,9 @@ static void pinta( Fm *g )
     par( t, g );
     meg( t, g );
     if ( g->pl.n == 0 )
-        g_string_append( t, "Este modelo no admite ninguno de los contrastes formales que hay.\n\n" );
+        g_string_append( t, g->fam == AN_FM_INTEGRACION
+            ? "Este modelo no admite ninguno de los contrastes del orden de integración.\n\n"
+            : "Este modelo no admite ninguno de los contrastes de la estacionalidad.\n\n" );
     for ( k = 0; k < FM_NA; k++ )
         if ( g->pl.no_aplica[k][0] )
             {
@@ -559,10 +608,13 @@ static void pinta( Fm *g )
 
     g_string_append_printf( t, "\n<small>Cada contraste es una estimación más: el modelo con el "
         "parámetro fijo en su valor nulo, que fue reestima partiendo del óptimo. Los .inp y los "
-        ".out de los restringidos quedan en %s. Shin-Fuller usa Φ = L − L<sub>0</sub> y no el "
-        "doble; el DCD, 2(L − L<sub>0</sub>) con su propia ley, que no es la χ². Una estimación "
-        "que para sin anular el gradiente se reinicia desde donde paró, hasta tres veces, como "
-        "hace fue-python.</small>", d );
+        ".out de los restringidos quedan en %s. %s Una estimación que para sin anular el "
+        "gradiente se reinicia desde donde paró, hasta tres veces, como hace fue-python."
+        "</small>", d, g->fam == AN_FM_INTEGRACION
+        ? "Shin-Fuller usa Φ = L − L<sub>0</sub> y no el doble; el DCD, 2(L − L<sub>0</sub>) "
+          "con su propia ley, que no es la χ²."
+        : "El MEG y los DCD, 2(L − L<sub>0</sub>) con su propia ley, que no es la χ²; la "
+          "simplificación estacional, con la χ²." );
     g_free( d );
     }
     gtk_label_set_markup( GTK_LABEL(g->l_texto), t->str );
@@ -744,7 +796,8 @@ static void on_cerrar( GtkWidget *w, Fm *g )
     g_free( g->exe ); g_free( g->dir ); g_free( g );
 }
 
-void an_formales( const AnHost *h, const char *serie, const char *muestra, const char *id )
+void an_formales( const AnHost *h, const char *serie, const char *muestra, const char *id,
+                  AnFmFamilia fam )
 {
     Fm         *g;
     FueOut     *o;
@@ -764,8 +817,14 @@ void an_formales( const AnHost *h, const char *serie, const char *muestra, const
         { an_di( h, "El .out de «%s» no trae su log-verosimilitud (logelf).", id );
           g_free( o ); return; }
 
+    if ( fam == AN_FM_ESTACIONAL && o->s <= 1 )
+        { an_di( h, "«%s» no es estacional (s = %d): no hay estacionalidad que contrastar.",
+                 id, o->s );
+          g_free( o ); return; }
+
     g = g_new0( Fm, 1 );
     g->h = *h;
+    g->fam = fam;
     g_snprintf( g->serie, PR_ID, "%s", serie );
     g_snprintf( g->muestra, PR_ID, "%s", muestra ? muestra : "" );
     g_snprintf( g->id, PR_ID, "%s", id );
@@ -779,26 +838,29 @@ void an_formales( const AnHost *h, const char *serie, const char *muestra, const
 
     dx_dictamen( o, &c, NULL, 0, d );
     if ( d->peor == DX_NO )
-        g_snprintf( g->aviso, sizeof g->aviso, "La diagnosis no está limpia. Los contrastes "
-                    "formales suponen un modelo adecuado: léelos con esa reserva, o arregla "
-                    "antes el modelo." );
+        g_snprintf( g->aviso, sizeof g->aviso, "La diagnosis no está limpia. Estos contrastes "
+                    "suponen un modelo adecuado: léelos con esa reserva, o arregla antes el "
+                    "modelo." );
     g_free( d );
     }
     convergence_clear( &c );
 
-    g->dir = an_fichero( "formales", serie, muestra, id );
+    g->dir = an_fichero( fam == AN_FM_INTEGRACION ? "integracion" : "estacionalidad",
+                         serie, muestra, id );
     g_mkdir_with_parents( g->dir, 0700 );
     if ( fm_plan( pre, out, g->dir, o->nobs, o->s > 0 ? o->s : 1, o->d, &g->pl,
                   why, sizeof why ) != 0 )
         { an_di( h, "%s", why ); g_free( o ); g_free( g->dir ); g_free( g ); return; }
     g_free( o );
+    quedate_con( &g->pl, fam );
     g->exe = programa_fue();
 
     g->win = gtk_window_new( GTK_WINDOW_TOPLEVEL );
     if ( h->padre ) gtk_window_set_transient_for( GTK_WINDOW(g->win), h->padre );
     gtk_window_set_default_size( GTK_WINDOW(g->win), 860, 600 );
     {
-    gchar *ti = g_strdup_printf( "Contrastes formales — %s / %s", serie, id );
+    gchar *ti = g_strdup_printf( "%s — %s / %s", fam == AN_FM_INTEGRACION
+                                 ? "Orden de integración" : "Estacionalidad", serie, id );
 
     gtk_window_set_title( GTK_WINDOW(g->win), ti );
     g_free( ti );
@@ -840,6 +902,8 @@ void an_formales( const AnHost *h, const char *serie, const char *muestra, const
     gtk_label_set_xalign( GTK_LABEL(g->l_estado), 0.0 );
     gtk_label_set_line_wrap( GTK_LABEL(g->l_estado), TRUE );
     gtk_box_pack_start( GTK_BOX(barra), g->l_estado, TRUE, TRUE, 0 );
+    if ( fam == AN_FM_INTEGRACION )
+    {
     g->b_sub = gtk_button_new_with_label( "Contrastar también d − 1…" );
     gtk_widget_set_sensitive( g->b_sub, g->pl.d >= 1 );
     gtk_widget_set_tooltip_text( g->b_sub, g->pl.d >= 1
@@ -849,6 +913,7 @@ void an_formales( const AnHost *h, const char *serie, const char *muestra, const
         : "Con d = 0 no hay diferencia que cuestionar." );
     g_signal_connect( g->b_sub, "clicked", G_CALLBACK(on_sub), g );
     gtk_box_pack_end( GTK_BOX(barra), g->b_sub, FALSE, FALSE, 0 );
+    }
     /* reformular tras el MEG: solo si hay MEG y el anfitrion sabe derivar */
     {
     gboolean hay_meg = FALSE;

@@ -33,6 +33,8 @@ void fue_on_diagnosis(GtkWidget *w, FueContext *ctx);
 void fue_on_anomalos(GtkWidget *w, FueContext *ctx);
 void fue_on_ganancia(GtkWidget *w, FueContext *ctx);
 void fue_on_identifica(GtkWidget *w, FueContext *ctx);
+void fue_on_integracion(GtkWidget *w, FueContext *ctx);
+void fue_on_estacionalidad(GtkWidget *w, FueContext *ctx);
 void fue_analisis_refresca(FueContext *ctx);
 static void on_fixed_treeview_row_activated(GtkTreeView *treeview, GtkTreePath *path,
                                             GtkTreeViewColumn *col, FueContext *ctx);
@@ -128,6 +130,22 @@ GtkWidget* create_main_window(GtkApplication *app, FueContext *ctx) {
     g_signal_connect(ident_btn, "clicked", G_CALLBACK(fue_on_identifica), ctx);
     gtk_toolbar_insert(GTK_TOOLBAR(toolbar), ident_btn, -1);
     ctx->btn_identifica = GTK_WIDGET(ident_btn);
+
+    /* LOS CONTRASTES FORMALES, EN DOS: el orden de integracion y la
+     * estacionalidad (el MEG). Las mismas ventanas que los botones de la
+     * diagnosis y que el menu de la madre. Misma regla de encendido, y la
+     * estacionalidad ademas pide s > 1. */
+    GtkToolItem *integ_btn = gtk_tool_button_new(NULL, "Integración");
+    gtk_tool_button_set_icon_name(GTK_TOOL_BUTTON(integ_btn), "view-list");
+    g_signal_connect(integ_btn, "clicked", G_CALLBACK(fue_on_integracion), ctx);
+    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), integ_btn, -1);
+    ctx->btn_integracion = GTK_WIDGET(integ_btn);
+
+    GtkToolItem *estac_btn = gtk_tool_button_new(NULL, "Estacionalidad");
+    gtk_tool_button_set_icon_name(GTK_TOOL_BUTTON(estac_btn), "x-office-calendar");
+    g_signal_connect(estac_btn, "clicked", G_CALLBACK(fue_on_estacionalidad), ctx);
+    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), estac_btn, -1);
+    ctx->btn_estacional = GTK_WIDGET(estac_btn);
 
     GtkToolItem *sep2 = gtk_separator_tool_item_new();
     gtk_toolbar_insert(GTK_TOOLBAR(toolbar), sep2, -1);

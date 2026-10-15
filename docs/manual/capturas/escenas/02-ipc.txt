@@ -61,11 +61,18 @@ ventana Diagnosis
 tamano 1000 800
 espera 2500
 foto ipc-m01-diagnosis
-boton Contrastes formales…
-ventana Contrastes formales
-tamano 1000 1100
-espera 45000
-foto ipc-m01-formales
+boton Orden de integración…
+ventana Orden de integración
+tamano 1000 720
+espera 20000
+foto ipc-m01-integracion
+cierra
+ventana Diagnosis
+boton Estacionalidad (MEG)…
+ventana Estacionalidad
+tamano 1000 720
+espera 40000
+foto ipc-m01-estacionalidad
 cierra
 ventana Diagnosis
 cierra

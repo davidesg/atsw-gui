@@ -1104,6 +1104,10 @@ static void prueba_analisis(FueContext *ctx) {
     check(gtk_widget_get_sensitive(ctx->btn_diagnosis) && gtk_widget_get_sensitive(ctx->btn_anomalos)
           && gtk_widget_get_sensitive(ctx->btn_ganancia),
           "con el .out al dia, los tres se encienden", NULL);
+    check(ctx->btn_integracion && gtk_widget_get_sensitive(ctx->btn_integracion),
+          "y «Integración» tambien: los formales sin pasar por la diagnosis", NULL);
+    check(ctx->btn_estacional && gtk_widget_get_sensitive(ctx->btn_estacional),
+          "y «Estacionalidad», que es mensual", NULL);
 
     /* ABIERTO DESDE LA MADRE CON SU .out AL DIA, A LA CONSOLA. Es lo que
        hace el doble clic sobre un modelo estimado. Sin .out al dia, se
@@ -1186,7 +1190,9 @@ static void prueba_analisis(FueContext *ctx) {
 
     fue_pon_proyecto(NULL);
     update_model_label(ctx);
-    check(!gtk_widget_get_sensitive(ctx->btn_diagnosis), "sin proyecto, se vuelven a apagar", NULL);
+    check(!gtk_widget_get_sensitive(ctx->btn_diagnosis) && !gtk_widget_get_sensitive(ctx->btn_integracion)
+          && !gtk_widget_get_sensitive(ctx->btn_estacional),
+          "sin proyecto, se vuelven a apagar", NULL);
     g_free(raiz); g_free(yaml);
 }
 

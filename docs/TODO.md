@@ -308,7 +308,7 @@ programa:
 
 - **Su MCP es sima**, no un cuarto asistente (decidido el 2026-10-13). sima
   0.1.0 se cierra sin el VEC, con las tres formas de identificación y sus
-  ejemplos. El VEC entra en sima 0.2.0, con el porte. Falta la regla de paso
+  ejemplos (publicada el 2026-10-15, en atsw 2.0.0). El VEC entra en sima 0.2.0, con el porte. Falta la regla de paso
   «≥ 2 series I(1) con realimentación → contrastar el rango», en sima y en
   mtram.
 - **El porte a Python.** Decidido el 2026-10-11: la primera versión del porte

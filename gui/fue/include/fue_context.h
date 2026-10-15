@@ -19,6 +19,13 @@ typedef struct {
     GtkWidget *btn_identifica;   /* art sobre los residuos (E3) */
     GtkWidget *btn_integracion;  /* SF, DCD, sobre y subdiferenciacion */
     GtkWidget *btn_estacional;   /* SS, DCD estacional, MEG (s > 1)    */
+    /* La barra: Diagnosis y Contrastes son botones partidos, y el resto
+     * de sus acciones (los btn_ de arriba salvo btn_diagnosis) son las
+     * entradas de su menu. Ver main_window.c.                          */
+    GtkWidget *mi_diagnosis;     /* la entrada «Diagnosis…» del menu   */
+    GtkWidget *btn_factores;     /* la factorizacion del AR             */
+    GtkWidget *btn_exportar;     /* exportar la diagnosis               */
+    GtkWidget *btn_contrastes;   /* el boton partido de los contrastes  */
 
     /* Data specification widgets */
     GtkWidget *series_name_entry;
@@ -92,6 +99,7 @@ typedef struct {
     int        iterations;        /* las que conto en la ultima corrida   */
     GtkWidget *notebook;          /* las pestanas, para saltar a la consola */
     int        console_page;
+    int        forecast_page;   /* la pestaña de la previsión         */
 
 } FueContext;
 

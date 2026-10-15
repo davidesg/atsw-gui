@@ -398,16 +398,18 @@ m01, un AR(1), sale una sola raíz real, 1.83: no hay nada escondido. Es una
 herramienta de identificación, no un contraste: si un par lo parece, se
 contrasta aparte.
 
-**Contrastes formales…** contrasta hipótesis sobre el modelo estimado, como el
-`formal_tests` de art. Cada contraste es una estimación más: fue reestima el
+Los **contrastes formales** contrastan hipótesis sobre el modelo estimado, como
+el `formal_tests` de art. Cada contraste es una estimación más: fue reestima el
 modelo con un parámetro fijo en su valor nulo, partiendo del óptimo, y se
 comparan las dos log-verosimilitudes. Se calculan uno detrás de otro sin
-bloquear la ventana:
+bloquear la ventana. Son de dos tipos y van en dos ventanas: **Orden de
+integración…** (la diferencia regular) y **Estacionalidad (MEG)…**, que sólo se
+enciende si la serie es estacional (s > 1). Se abren desde los dos botones de
+la diagnosis, desde el menú del botón derecho de la lista de modelos y desde la
+barra de fue_gui («Integración» y «Estacionalidad»).
 
-![Los contrastes formales de m01](img/ipc-m01-formales.png)
+![El orden de integración de m01](img/ipc-m01-integracion.png)
 
-- **Simplificación estacional**: ¿sobran los 11 armónicos a la vez? LR = 346
-  con 11 grados de libertad, muy por encima del crítico (19.7): no sobran.
 - **Shin-Fuller**: ¿le falta una diferencia al AR, es decir, tiene una raíz en
   1 − 4/n? Φ = 26.9 frente a un crítico de 1.76: no; con d = 1 basta.
 - **Sobrediferenciación**: se impone una diferencia más (d = 2) con un testigo
@@ -416,9 +418,8 @@ bloquear la ventana:
   a d = 2, y la ventana avisa de que **no es concluyente**. El crítico 1.94 es
   el de la ley sin deterministas (con los 11 armónicos sería ≈ 2.15), pero 4.22
   queda por encima de los dos: lo que lo explica es el par, justo debajo.
-- El **DCD** (¿sobra una diferencia regular?) y el **DCD estacional** (¿sobra
-  la diferencia estacional?) miran un MA en su frontera, y m01 no tiene MA: la
-  ventana dice que no aplican.
+- El **DCD** (¿sobra una diferencia regular?) mira un MA(1) en su frontera, y
+  m01 no tiene MA: la ventana dice que no aplica.
 
 Shin-Fuller y la sobrediferenciación forman el **par confirmatorio en f = 0**:
 miran el mismo orden de integración con nulas opuestas. En m01 discrepan, y la
@@ -426,6 +427,20 @@ ventana lo explica: con θ̂ = 0.971 el testigo está a 0.03 de la frontera, en 
 **banda de cuasi-cancelación**. Ahí las dos representaciones (d = 1 con un AR
 casi unitario, o d = 2 con un MA casi unitario) son equivalentes en previsión,
 y la decisión no la toman estos estadísticos sino la parsimonia: **d = 1**.
+
+**Contrastar también d − 1…** pregunta lo contrario: ¿sobraba la última
+diferencia? No se corre solo, porque correrlo siempre sería contrastar sin
+motivo. Se pide cuando la serie parece estacionaria en nivel, es un precio
+relativo o se está en un estudio de cointegración.
+
+La ventana de la **estacionalidad** lleva el resto:
+
+![La estacionalidad de m01](img/ipc-m01-estacionalidad.png)
+
+- **Simplificación estacional**: ¿sobran los 11 armónicos a la vez? LR = 346
+  con 11 grados de libertad, muy por encima del crítico (19.7): no sobran.
+- El **DCD estacional** (¿sobra la diferencia estacional?) mira un MA anual en
+  su frontera; m01 no lo tiene, y la ventana dice que no aplica.
 
 El **MEG** (Abraham y Box, 1978) pregunta, frecuencia a frecuencia, si la
 estacionalidad es **estocástica o determinista**. Se aplica a modelos como m01,
@@ -450,14 +465,9 @@ sistema la estacionalidad se trata como determinista (art hace lo mismo): si
 las series no llevan el mismo tratamiento, sus órdenes de integración no son
 comparables.
 
-**Contrastar también d − 1…** pregunta lo contrario: ¿sobraba la última
-diferencia? No se corre solo, porque correrlo siempre sería contrastar sin
-motivo. Se pide cuando la serie parece estacionaria en nivel, es un precio
-relativo o se está en un estudio de cointegración.
-
 Cada contraste dice su número, sus críticos y lo que dice. Y suponen un modelo
-**adecuado**: se pasan con la diagnosis limpia, y si no lo está, la ventana lo
-avisa arriba.
+**adecuado**: se pasan con la diagnosis limpia. Si no lo está, no se impide
+abrirlas, pero las dos ventanas lo avisan arriba.
 
 **Q de Ljung-Box**: se calcula en los retardos 12, 24, 36 y 3·12 + 2 (en
 general s, 2s, 3s y 3s + 3). El veredicto lo da el último, el más exigente. Si

@@ -2024,6 +2024,27 @@ static void menu_modelo_prueba( void )
         }
     check( ventana_titulada( "Diagnosis — ipc / m01" ) != NULL,
            "la diagnosis de m01 es una ventana con su titulo", NULL );
+
+    /* LOS FORMALES, TAMBIEN DESDE LA LISTA. Solo se mira que se enciendan:
+       las ventanas se prueban mas abajo, desde los botones de la diagnosis,
+       y abrirlas aqui pondria a estimar dos tandas a la vez.              */
+    {
+    GtkMenu   *m;
+    GtkWidget *mi;
+
+    marca( A.l_modelos, M_ID, "m01" );
+    m = clic_derecho( A.l_modelos, 1 );
+    mi = m ? entrada_de( m, "Orden de integración" ) : NULL;
+    check( mi && gtk_widget_get_sensitive( mi ),
+           "estimado m01, «Orden de integración…» se enciende en la lista",
+           m ? entradas( m ) : NULL );
+    mi = m ? entrada_de( m, "Estacionalidad (MEG)" ) : NULL;
+    check( mi && gtk_widget_get_sensitive( mi ),
+           "y «Estacionalidad (MEG)…» también: ipc es mensual",
+           m ? entradas( m ) : NULL );
+    cierra_menu( m );
+    pump( 100 );
+    }
     caben_todas( "diagnosis, ganancia y anomalos" );
 
     /* EL IDENTIFICADOR SOBRE LOS RESIDUOS (E3, docs/ESTUDIO-identificador.md):
@@ -2208,25 +2229,29 @@ static void menu_modelo_prueba( void )
         }
     }
 
-    /* LOS CONTRASTES FORMALES: la diagnosis los abre; cada uno reestima con
-       fue, sin bloquear, y la ventana dice «Hecho» al acabar. */
+    /* LOS CONTRASTES FORMALES, EN DOS VENTANAS: el orden de integracion y
+       la estacionalidad. La diagnosis abre las dos; cada contraste reestima
+       con fue, sin bloquear, y la ventana dice «Hecho» al acabar. */
     {
     GtkWindow *dw = ventana_titulada( "Diagnosis — ipc / m01" );
-    GtkWidget *bf = dw ? boton_que_dice( GTK_WIDGET(dw), "Contrastes formales…" ) : NULL;
+    GtkWidget *bi = dw ? boton_que_dice( GTK_WIDGET(dw), "Orden de integración…" ) : NULL;
+    GtkWidget *be = dw ? boton_que_dice( GTK_WIDGET(dw), "Estacionalidad (MEG)…" ) : NULL;
 
-    check( bf != NULL, "la diagnosis ofrece «Contrastes formales…»", NULL );
-    if ( bf )
+    check( bi != NULL && be != NULL,
+           "la diagnosis ofrece «Orden de integración…» y «Estacionalidad (MEG)…»", NULL );
+    check( be == NULL || gtk_widget_get_sensitive( be ),
+           "y la estacionalidad se enciende: ipc es mensual", NULL );
+    if ( bi )
         {
         GtkWindow *wf;
         gchar     *txt = NULL;
         int        i;
 
         olvida();
-        gtk_button_clicked( GTK_BUTTON(bf) );
+        gtk_button_clicked( GTK_BUTTON(bi) );
         pump( 300 );
-        wf = ventana_titulada( "Contrastes formales — ipc / m01" );
-        check( wf != NULL, "y abre su ventana", todo_lo_dicho() );
-        /* con el MEG son dos estimaciones por frecuencia: en CI, tiempo */
+        wf = ventana_titulada( "Orden de integración — ipc / m01" );
+        check( wf != NULL, "el orden de integración abre su ventana", todo_lo_dicho() );
         for ( i = 0; wf && i < 480; i++ )
             {
             g_free( txt );
@@ -2234,38 +2259,19 @@ static void menu_modelo_prueba( void )
             if ( strstr( txt, "Hecho." ) ) break;
             pump( 250 );
             }
-        check( txt && strstr( txt, "Hecho." ), "los contrastes acaban", txt );
+        check( txt && strstr( txt, "Hecho." ), "sus contrastes acaban", txt );
         check( txt && !strstr( txt, "No calculable" ) &&
                ( strstr( txt, "Rechaza H" ) || strstr( txt, "No rechaza H" ) ||
                  strstr( txt, "no admite ninguno" ) ),
                "y cada uno dice lo suyo", txt );
+        check( txt && !strstr( txt, "MEG" ) && !strstr( txt, "Simplificación estacional" ),
+               "y la estacionalidad no está: es la otra ventana", txt );
         nota( "contrastes formales de m01: %s", txt && strstr( txt, "Shin-Fuller" )
               ? "con Shin-Fuller" : "sin Shin-Fuller" );
         /* el par en f = 0 sale con Shin-Fuller y la sobrediferenciacion */
         check( txt && ( !strstr( txt, "Shin-Fuller   H" ) || !strstr( txt, "Sobrediferenciación" )
                         || strstr( txt, "Par confirmatorio en f = 0" ) ),
                "con Shin-Fuller y la sobrediferenciación, el par en f = 0", txt );
-        /* EL MEG: con D = 0 y armónicos se contrasta frecuencia a frecuencia
-           y lo resume, y si alguna sale estocástica se ofrece reformularla;
-           sin armónicos dice por qué no, y no hay nada que reformular */
-        {
-        GtkWidget *br = wf ? boton_que_dice( GTK_WIDGET(wf), "Reformular como estocástica…" ) : NULL;
-        gboolean   aplica = txt && strstr( txt, "MEG — estacionalidad estocástica o determinista" );
-        gboolean   hay_est = txt && strstr( txt, "Estocástica(s)" ) != NULL;
-
-        if ( aplica )
-            {
-            check( strstr( txt, "f = 6" ) && ( hay_est || strstr( txt, "Ninguna estocástica" ) ),
-                   "el MEG contrasta cada frecuencia y lo resume", txt );
-            check( br != NULL && gtk_widget_get_sensitive( br ) == hay_est,
-                   "y ofrece reformular si, y solo si, hay una estocástica", NULL );
-            }
-        else
-            check( txt && strstr( txt, "MEG: " ) && br == NULL,
-                   "sin MEG, dice por qué y no ofrece reformular", txt );
-        nota( "contrastes formales de m01: MEG %s", !aplica ? "no aplica"
-              : hay_est ? "con estocástica(s)" : "sin estocásticas" );
-        }
         g_free( txt ); txt = NULL;
         /* EL LADO d - 1 SE PIDE: el boton lo añade y se calcula */
         {
@@ -2289,6 +2295,54 @@ static void menu_modelo_prueba( void )
                    "pedido, el lado d − 1 se calcula y dice lo suyo", txt );
             nota( "contrastes formales de m01: d − 1 pedido" );
             }
+        }
+        g_free( txt );
+        if ( wf ) { gtk_widget_destroy( GTK_WIDGET(wf) ); pump( 100 ); }
+        }
+    if ( be && gtk_widget_get_sensitive( be ) )
+        {
+        GtkWindow *wf;
+        gchar     *txt = NULL;
+        int        i;
+
+        olvida();
+        gtk_button_clicked( GTK_BUTTON(be) );
+        pump( 300 );
+        wf = ventana_titulada( "Estacionalidad — ipc / m01" );
+        check( wf != NULL, "la estacionalidad abre su ventana", todo_lo_dicho() );
+        /* con el MEG son dos estimaciones por frecuencia: en CI, tiempo */
+        for ( i = 0; wf && i < 480; i++ )
+            {
+            g_free( txt );
+            txt = textos_de( GTK_WIDGET(wf) );
+            if ( strstr( txt, "Hecho." ) ) break;
+            pump( 250 );
+            }
+        check( txt && strstr( txt, "Hecho." ), "sus contrastes acaban", txt );
+        check( txt && !strstr( txt, "Shin-Fuller   H" ) && !strstr( txt, "Sobrediferenciación" ),
+               "y el orden de integración no está: es la otra ventana", txt );
+        check( wf == NULL || boton_que_dice( GTK_WIDGET(wf), "Contrastar también d − 1…" ) == NULL,
+               "ni su «d − 1»", NULL );
+        /* EL MEG: con D = 0 y armónicos se contrasta frecuencia a frecuencia
+           y lo resume, y si alguna sale estocástica se ofrece reformularla;
+           sin armónicos dice por qué no, y no hay nada que reformular */
+        {
+        GtkWidget *br = wf ? boton_que_dice( GTK_WIDGET(wf), "Reformular como estocástica…" ) : NULL;
+        gboolean   aplica = txt && strstr( txt, "MEG — estacionalidad estocástica o determinista" );
+        gboolean   hay_est = txt && strstr( txt, "Estocástica(s)" ) != NULL;
+
+        if ( aplica )
+            {
+            check( strstr( txt, "f = 6" ) && ( hay_est || strstr( txt, "Ninguna estocástica" ) ),
+                   "el MEG contrasta cada frecuencia y lo resume", txt );
+            check( br != NULL && gtk_widget_get_sensitive( br ) == hay_est,
+                   "y ofrece reformular si, y solo si, hay una estocástica", NULL );
+            }
+        else
+            check( txt && strstr( txt, "MEG: " ) && br == NULL,
+                   "sin MEG, dice por qué y no ofrece reformular", txt );
+        nota( "contrastes formales de m01: MEG %s", !aplica ? "no aplica"
+              : hay_est ? "con estocástica(s)" : "sin estocásticas" );
         }
         g_free( txt );
         if ( wf ) { gtk_widget_destroy( GTK_WIDGET(wf) ); pump( 100 ); }

@@ -146,10 +146,16 @@ static void on_identificar( GtkButton *b, Dg *g )
     an_identifica_residuos( &g->h, g->serie, g->muestra, g->id );
 }
 
-static void on_formales( GtkButton *b, Dg *g )
+static void on_integracion( GtkButton *b, Dg *g )
 {
     (void) b;
-    an_formales( &g->h, g->serie, g->muestra, g->id );
+    an_formales( &g->h, g->serie, g->muestra, g->id, AN_FM_INTEGRACION );
+}
+
+static void on_estacionalidad( GtkButton *b, Dg *g )
+{
+    (void) b;
+    an_formales( &g->h, g->serie, g->muestra, g->id, AN_FM_ESTACIONAL );
 }
 
 static void on_factores( GtkButton *b, Dg *g )
@@ -333,13 +339,20 @@ void an_diagnosis( const AnHost *h, const char *serie, const char *muestra,
     /* LOS CONTRASTES FORMALES: preguntas sobre la estructura que se
        contestan reestimando (¿sobra una diferencia?, ¿sobran los
        armónicos?). Suponen la diagnosis limpia; la ventana lo dice.    */
-    b = gtk_button_new_with_label( "Contrastes formales…" );
-    gtk_widget_set_tooltip_text( b,
-        "Shin-Fuller, el DCD regular y el estacional, y la simplificación "
-        "estacional: cada uno reestima el modelo con un parámetro fijo y "
-        "compara las verosimilitudes. Suponen un modelo adecuado." );
-    g_signal_connect( b, "clicked", G_CALLBACK(on_formales), g );
+    b = gtk_button_new_with_label( "Orden de integración…" );
+    gtk_widget_set_tooltip_text( b, AN_FM_GLOBO_INTEGRACION );
+    g_signal_connect( b, "clicked", G_CALLBACK(on_integracion), g );
     gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
+
+    {
+    int s = an_formales_s( g->h.p, g->serie, g->muestra, g->id );
+
+    b = gtk_button_new_with_label( "Estacionalidad (MEG)…" );
+    gtk_widget_set_sensitive( b, s > 1 );
+    gtk_widget_set_tooltip_text( b, s > 1 ? AN_FM_GLOBO_ESTACIONAL : AN_FM_GLOBO_ANUAL );
+    g_signal_connect( b, "clicked", G_CALLBACK(on_estacionalidad), g );
+    gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
+    }
 
     b = gtk_button_new_with_label( "Exportar…" );
     gtk_widget_set_tooltip_text( b,

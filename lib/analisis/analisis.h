@@ -120,13 +120,43 @@ void an_factores_ar( const AnHost *h, const char *serie, const char *muestra,
                     const char *id );
 
 /* LOS CONTRASTES FORMALES del modelo estimado (lib/formales): el
- * formal_tests de art --la simplificacion estacional, Shin-Fuller, el DCD
- * regular y el estacional, la sobre y la subdiferenciacion, el MEG y el
- * DCD_f--. Cada uno reestima con fue, sin bloquear la ventana. Tras el MEG,
- * deriva el modelo reformulado (necesita guarda y abre). La abre la
- * diagnosis.                                                            */
+ * formal_tests de art, EN DOS VENTANAS, porque preguntan cosas distintas
+ * (lo pidio el analista):
+ *
+ *   AN_FM_INTEGRACION  el orden de integracion regular: Shin-Fuller, el DCD
+ *                      regular, la sobre y la subdiferenciacion.
+ *   AN_FM_ESTACIONAL   la estacionalidad: la simplificacion estacional, el
+ *                      DCD estacional, el MEG de Abraham y Box, el DCD_f y
+ *                      el testigo de Nyquist. Solo con s > 1.
+ *
+ * Cada uno reestima con fue, sin bloquear la ventana. Con la diagnosis sin
+ * limpiar se avisa y no se impide. Tras el MEG, deriva el modelo
+ * reformulado (necesita guarda y abre). Las abren la diagnosis, el menu de
+ * la lista y la barra de fue_gui.                                       */
+typedef enum { AN_FM_INTEGRACION, AN_FM_ESTACIONAL } AnFmFamilia;
+
+/* Los globos de las dos puertas, los mismos en la diagnosis, en la lista y
+ * en fue_gui: dos copias de un texto acaban siendo dos textos.         */
+#define AN_FM_GLOBO_INTEGRACION \
+    "¿Sobra o falta una diferencia regular? Shin-Fuller, el DCD regular y la " \
+    "sobrediferenciación; la subdiferenciación se pide. Cada uno reestima el " \
+    "modelo con un parámetro fijo y compara las verosimilitudes. Suponen un " \
+    "modelo adecuado: si la diagnosis no está limpia, la ventana lo avisa."
+#define AN_FM_GLOBO_ESTACIONAL \
+    "¿La estacionalidad es determinista o estocástica? El MEG de Abraham y " \
+    "Box frecuencia a frecuencia, con su reformulación, la simplificación " \
+    "estacional y el DCD estacional. Suponen un modelo adecuado: si la " \
+    "diagnosis no está limpia, la ventana lo avisa."
+#define AN_FM_GLOBO_ANUAL \
+    "La serie no es estacional (s = 1): no hay estacionalidad que contrastar."
+
 void an_formales( const AnHost *h, const char *serie, const char *muestra,
-                  const char *id );
+                  const char *id, AnFmFamilia fam );
+
+/* La s del modelo, leida de su .out; 0 si no hay .out que leer. Es lo que
+ * enciende o apaga la ventana de la estacionalidad.                    */
+int an_formales_s( const Proyecto *p, const char *serie, const char *muestra,
+                   const char *id );
 
 /* LA GANANCIA DE LAS INTERVENCIONES: ¿el suceso dejó algo para siempre o
  * revirtió? No es diagnosis --la diagnosis juzga lo que hay-- sino una

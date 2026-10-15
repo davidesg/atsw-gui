@@ -833,6 +833,22 @@ static void on_diagnosis( GtkMenuItem *m, Atsw *a )
     g_free( id );
 }
 
+static void formales( Atsw *a, AnFmFamilia fam )
+{
+    gchar *id = atsw_marcada( a->l_modelos, M_ID );
+
+    if ( a->hay && a->serie[0] && id )
+        { AnHost h = atsw_host( a );
+          an_formales( &h, a->serie, atsw_muestra_actual( a ), id, fam ); }
+    g_free( id );
+}
+
+static void on_integracion( GtkMenuItem *m, Atsw *a )
+{ (void) m; formales( a, AN_FM_INTEGRACION ); }
+
+static void on_estacionalidad( GtkMenuItem *m, Atsw *a )
+{ (void) m; formales( a, AN_FM_ESTACIONAL ); }
+
 static void on_ganancia( GtkMenuItem *m, Atsw *a )
 {
     gchar *id = atsw_marcada( a->l_modelos, M_ID );
@@ -1183,6 +1199,28 @@ static void menu_modelo( Atsw *a, GdkEventButton *ev )
             : porque );
         g_signal_connect( mi, "activate", G_CALLBACK(on_diagnosis), a );
         gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+
+        /* LOS CONTRASTES FORMALES, SIN PASAR POR LA DIAGNOSIS, y en dos:
+           el orden de integracion regular y la estacionalidad, que
+           preguntan cosas distintas. La diagnosis tiene los mismos dos
+           botones; estas son las puertas directas, las que pidio el
+           analista. La estacionalidad, solo con s > 1.                  */
+        mi = gtk_menu_item_new_with_label( "Orden de integración…" );
+        gtk_widget_set_sensitive( mi, listo );
+        gtk_widget_set_tooltip_text( mi, listo ? AN_FM_GLOBO_INTEGRACION : porque );
+        g_signal_connect( mi, "activate", G_CALLBACK(on_integracion), a );
+        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+
+        {
+        int s = listo ? an_formales_s( a->p, a->serie, atsw_muestra_actual( a ), id ) : 0;
+
+        mi = gtk_menu_item_new_with_label( "Estacionalidad (MEG)…" );
+        gtk_widget_set_sensitive( mi, listo && s > 1 );
+        gtk_widget_set_tooltip_text( mi, !listo ? porque
+                                     : s > 1 ? AN_FM_GLOBO_ESTACIONAL : AN_FM_GLOBO_ANUAL );
+        g_signal_connect( mi, "activate", G_CALLBACK(on_estacionalidad), a );
+        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+        }
 
         mi = gtk_menu_item_new_with_label( "Ganancia…" );
         gtk_widget_set_sensitive( mi, listo );

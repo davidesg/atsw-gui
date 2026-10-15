@@ -127,8 +127,11 @@ art-python número a número (`test_raices`, en la batería de `gui/drtran`):
 | hecho | **La factorización del AR** (`ar_factorization`): raíces, amortiguamiento, frecuencia y periodo, ± por el método delta en un AR(2) entero, el aviso de los módulos parecidos (BUG-0103) | Diagnosis → «Factorización del AR…» |
 
 **Los contrastes formales**, lo decidido el 2026-09-26, de más barato a más
-caro. Todos reestiman con fue, en su propia ventana: Diagnosis →
-«Contrastes formales…» (`lib/formales`, `an_formales`). Se corren de uno en
+caro. Todos reestiman con fue, en DOS ventanas (2026-10-15, lo pidió el
+analista): «Orden de integración…» (Shin-Fuller, DCD regular, sobre y
+subdiferenciación) y «Estacionalidad (MEG)…» (simplificación estacional, DCD
+estacional, MEG, DCD_f; sólo con s > 1). Se abren desde la diagnosis, desde el
+menú de la lista y desde la barra de fue_gui (`lib/formales`, `an_formales`). Se corren de uno en
 uno sin bloquear, y cada uno se coteja con art-python número a número
 (`test_formales`, en la batería de `gui/drtran`, con fue de verdad):
 

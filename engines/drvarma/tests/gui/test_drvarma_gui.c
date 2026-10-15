@@ -281,13 +281,32 @@ static gboolean contestador(gpointer u)
 
 static gchar *fichero_a_elegir = NULL;
 
-/* Se pone el fichero y se espera a que el selector lo tenga de verdad
- * (carga la carpeta en segundo plano) antes de pulsar "Open".          */
+/* El que tiene el selector es el que se pidio. Por GFile, no por texto:
+ * en Windows y macOS la ruta puede volver con otra forma.              */
+static gboolean es_el_pedido(const gchar *got)
+{
+    GFile *a, *b;
+    gboolean igual;
+
+    if (!got) return FALSE;
+    a = g_file_new_for_path(got);
+    b = g_file_new_for_path(fichero_a_elegir);
+    igual = g_file_equal(a, b);
+    g_object_unref(a); g_object_unref(b);
+    return igual;
+}
+
+/* Se pone el fichero y se espera a que el selector tenga ESE fichero antes
+ * de pulsar "Open". Carga la carpeta en segundo plano, y mientras tanto
+ * puede devolver otro --el de la carga anterior--: salir en cuanto
+ * devolvia uno cualquiera hacia que a veces se cargase el equivocado (en
+ * la CI, «un fichero de una fila» salia como «Loaded 3 series» y con
+ * Data Properties). Mientras no coincida, se vuelve a poner.           */
 static void elige_fichero(GtkWidget *d)
 {
     GtkFileChooser *fc = GTK_FILE_CHOOSER(d);
     gchar *got = NULL;
-    gint64 hasta = g_get_monotonic_time() + 5 * G_USEC_PER_SEC;
+    gint64 hasta = g_get_monotonic_time() + 10 * G_USEC_PER_SEC;
 
     check(GTK_IS_FILE_CHOOSER(d), "el dialogo es un selector de ficheros", ultimo_titulo);
     if (!GTK_IS_FILE_CHOOSER(d)) { gtk_dialog_response(GTK_DIALOG(d), GTK_RESPONSE_CANCEL); return; }
@@ -295,11 +314,12 @@ static void elige_fichero(GtkWidget *d)
     while (g_get_monotonic_time() < hasta) {
         g_free(got);
         got = gtk_file_chooser_get_filename(fc);
-        if (got) break;
+        if (es_el_pedido(got)) break;
         while (gtk_events_pending()) gtk_main_iteration_do(FALSE);
         g_usleep(5000);
+        gtk_file_chooser_set_filename(fc, fichero_a_elegir);
     }
-    check(got != NULL, "el selector de ficheros tomo el fichero", fichero_a_elegir);
+    check(es_el_pedido(got), "el selector de ficheros tomo el fichero", got ? got : "(ninguno)");
     g_free(got);
     gtk_dialog_response(GTK_DIALOG(d), GTK_RESPONSE_ACCEPT);
 }

@@ -42,6 +42,7 @@
 #include <stdlib.h>
 
 #include "sitio.h"
+#include "fugdraw.h"
 #include "inpdet.h"
 #include "inpcheck.h"
 
@@ -3011,6 +3012,63 @@ static void casos( void )
     check( dijo( "drtran_gui" ) && dijo( "desde el modelo c01" ),
            "doble clic sobre c01 lo abre en drtran_gui", todo_lo_dicho() );
     }
+
+    /* EL BOTON DERECHO SOBRE EL MODELO DEL CASO: «Ver modelo…» enseña la
+       pagina que drtran deja junto al .out, y se apaga si no la hay. Se
+       finge la de c00 --un PDF de verdad, de cairo-- con el nombre de la
+       serie de salida, el del .pre, que es el que pone drtran.          */
+    {
+    const PrCaso *c = pr_caso_ver( A.p, "C1" );
+    char          pre[PR_RUTA], err[256], pdf[PR_RUTA];
+    InpFile       in;
+    GtkMenu      *m;
+    GtkWidget    *mi;
+
+    memset( &in, 0, sizeof in );
+    if ( c && pr_ruta( A.p, c->en[0].serie, c->muestra, c->en[0].modelo, ".pre",
+                       pre, sizeof pre ) == 0 && inp_read( pre, &in, err, sizeof err ) == 0 )
+        {
+        gchar *suf = g_strdup_printf( "_%s.pdf", in.name ), *tit;
+
+        free( in.data );
+        pr_corrida_ruta( A.p, "C1", "c00", suf, pdf, sizeof pdf );
+        g_free( suf );
+        {
+        /* con fugdraw, como drtran: la ventana de graficos lee los suyos */
+        FDFig  *fg = fd_fig_new( 200, 100 );
+        FDPdf  *pd = fd_pdf_open( pdf );
+        double  cero = 0.0, uno = 1.0;
+
+        fd_line( fg, 20, 20, 180, 80 );
+        if ( pd ) { fd_pdf_page( pd, 200, 100, &fg, &cero, &cero, &uno, 1 ); fd_pdf_close( pd ); }
+        fd_fig_free( fg );
+        }
+        m = clic_derecho( A.c_corridas, 0 );
+        mi = m ? entrada_de( m, "Ver modelo" ) : NULL;
+        check( mi && gtk_widget_get_sensitive( mi ),
+               "botón derecho sobre c00: «Ver modelo…», encendido con su página",
+               m ? entradas( m ) : NULL );
+        check( m && entrada_de( m, "Abrir c00 en drtran" ),
+               "y «Abrir c00 en drtran»", m ? entradas( m ) : NULL );
+        if ( mi ) gtk_menu_item_activate( GTK_MENU_ITEM(mi) );
+        cierra_menu( m );
+        pump( 300 );
+        tit = g_path_get_basename( pdf );
+        {
+        gchar *q = g_strdup_printf( "%s | barra: %s", tit, barra() );
+
+        check( ventana_titulada( tit ) != NULL, "«Ver modelo…» enseña la página del modelo "
+               "del caso", q );
+        g_free( q );
+        }
+        if ( ventana_titulada( tit ) ) gtk_widget_destroy( GTK_WIDGET(ventana_titulada( tit )) );
+        g_free( tit );
+        pump( 100 );
+        }
+    else
+        check( FALSE, "se lee el .pre de la salida de C1", err );
+    }
+    marca_arbol( A.c_corridas, CO_ID, "c01" );   /* lo que sigue va sobre c01 */
 
     /* --- Elegir y Razón, guardados ------------------------------------- */
     responde( "El modelo elegido", escribe_texto, "el más simple" );

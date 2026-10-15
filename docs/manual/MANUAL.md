@@ -854,7 +854,11 @@ mejor. Antes de darlo por bueno:
 4. **Reformula el ruido** si su ACF lo pide, *después* de la relación.
 5. En el taller, la tabla de **Modelos** del caso guarda cada estimación con su
    logL y su razón. **Elige** el modelo del caso y escribe por qué, como hiciste
-   con las series.
+   con las series. El botón derecho sobre un modelo del caso tiene **Ver
+   modelo…**: la página que drtran deja junto al `.out` al estimar, con los
+   residuos y las ecuaciones estimadas, sin abrir drtran. Si la red tiene más
+   ecuaciones, cada una tiene su página debajo. Y abrir en drtran un modelo ya
+   estimado enseña su informe y su diagnosis sin volver a estimarlo.
 
 Y si la identificación de una red con más series encontrara un **ciclo**
 (dos series que se afectan mutuamente), ahí termina la transferencia: el

@@ -495,6 +495,11 @@ static void on_done( const EngineResult *r, gpointer data )
     diagnosis_desde( m, E->out_path );
     prevision_desde( m, E->out_path );
 
+    /* LA PAGINA DEL MODELO de cada ecuacion, junto al .out, como la que fue
+     * deja en su PDF: la madre la enseña con «Ver modelo…» sin abrir nada. */
+    if (verdict_ok( &E->v ))
+        diagnosis_escribe_paginas( m, FALSE );
+
     /* La corrida ya existe en el disco: el manifiesto tiene que decirlo. Y la
      * siguiente colgara de esta -- ahi esta la cadena.               */
     if (m->hay_proy) {
@@ -639,6 +644,20 @@ static void carga_informe( Mtram *m )
     }
     gtk_text_buffer_set_text( b, txt, -1 );
     g_free( txt );
+}
+
+void estima_desde( Mtram *m, const char *out )
+{
+    Estima *E = &m->est;
+
+    g_free( E->out_path );
+    E->out_path = g_strdup( out );
+    carga_informe( m );
+    gtk_notebook_set_current_page( GTK_NOTEBOOK(E->libreta), 1 );
+    gtk_label_set_text( GTK_LABEL(E->titulo), "drtran — el modelo, tal como se estimó" );
+    diagnosis_desde( m, out );
+    prevision_desde( m, out );
+    diagnosis_escribe_paginas( m, TRUE );
 }
 
 static void on_parar( GtkButton *b, Mtram *m )

@@ -212,11 +212,14 @@ la división entera del Jarque-Bera.
   la media, y `D_t`, con los armónicos en un sumatorio. Cada d.t. bajo su
   coeficiente; en una fracción la raya llega al más ancho. Va junto al `.out`
   del modelo (`gui/drtran/src/pagina.c`).
-  - **Queda**: abrirla también desde la madre, con el botón derecho sobre el
-    modelo del caso, como «Ver el gráfico…» de los univariantes.
-  - **Queda**: abrir un modelo ya estimado del caso (`--modelo`) no carga su
-    `.out` en Estimación ni en Diagnosis; hay que volver a estimar para ver
-    la página.
+  - **HECHO** (2026-10-15): drtran_gui escribe la página de cada ecuación al
+    estimar, junto al `.out` (`diagnosis_escribe_paginas`), y la madre la
+    enseña con el botón derecho sobre el modelo del caso: «Ver modelo…» (la
+    salida) y «Ver la ecuación de X…» (las demás). Borrar el modelo se lleva
+    sus páginas.
+  - **HECHO** (2026-10-15): abrir un modelo ya estimado del caso carga su
+    `.out` en Estimación, Diagnosis y Previsión sin volver a estimar
+    (`estima_desde`), y escribe su página si falta.
   - **Para decidir**: el gráfico de residuos pone `σ_w` en las unidades del
     motor (×refactor: 20 % en el IPC, cuando la ecuación dice 0.20 %). Pasa
     igual en la página de fue (`fugplot`, desde `fue.c`).

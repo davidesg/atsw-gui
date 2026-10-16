@@ -32,6 +32,7 @@
 #include <math.h>
 
 #include "gui.h"
+#include "barra.h"
 #include "previewhost.h"
 #include "outfcst.h"
 
@@ -247,6 +248,50 @@ static void on_calcular( GtkButton *b, Mtram *m )
             "acabar; la consola está en Estimación.",
             P->evaluar ? "previsión y evaluación" : "previsión" );
     }
+}
+
+/* ------------------------------------------------------------------------ */
+/* Para la barra (docs/DISENO-barra-drtran.md)                               */
+/* ------------------------------------------------------------------------ */
+
+void prevision_calcular( Mtram *m )
+{
+    gtk_notebook_set_current_page( GTK_NOTEBOOK(m->libro), PG_PREV );
+    on_calcular( NULL, m );
+}
+
+static void on_calcular_mi( GtkMenuItem *mi, Mtram *m ) { prevision_calcular( m ); }
+static void on_guardar_mi ( GtkMenuItem *mi, Mtram *m ) { on_guardar_ref( NULL, m ); }
+static void on_olvidar_mi ( GtkMenuItem *mi, Mtram *m ) { on_olvidar_ref( NULL, m ); }
+static void on_pestana_mi ( GtkMenuItem *mi, Mtram *m )
+{
+    gtk_notebook_set_current_page( GTK_NOTEBOOK(m->libro), PG_PREV );
+}
+
+void prevision_menu( Mtram *m, GtkWidget *menu, GtkWidget *ref )
+{
+    Prev      *P = &m->prev;
+    GtkWidget *mi;
+
+    at_entrada( menu, "Calcular la previsión", "prever", "go-jump", ref,
+                G_CALLBACK(on_calcular_mi), m );
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
+    mi = at_entrada( menu, "Guardar esta evaluación", NULL, NULL, ref,
+                     G_CALLBACK(on_guardar_mi), m );
+    if (!P->vale || !P->f.tiene_ev) {
+        gtk_widget_set_sensitive( mi, FALSE );
+        gtk_widget_set_tooltip_text( mi, "No hay evaluación: marca «Evaluar» "
+                                         "en «7 · Previsión» y calcula." );
+    }
+    mi = at_entrada( menu, "Olvidarla", NULL, NULL, ref,
+                     G_CALLBACK(on_olvidar_mi), m );
+    if (!P->tiene_ref) {
+        gtk_widget_set_sensitive( mi, FALSE );
+        gtk_widget_set_tooltip_text( mi, "No hay ninguna evaluación guardada." );
+    }
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
+    at_entrada( menu, "Ir a la pestaña de la previsión", NULL, NULL, ref,
+                G_CALLBACK(on_pestana_mi), m );
 }
 
 static void on_cambio( GtkWidget *w, Mtram *m )

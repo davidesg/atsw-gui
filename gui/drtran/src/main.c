@@ -16,6 +16,7 @@
 
 #include "gui.h"
 #include "previewhost.h"
+#include "engine.h"
 
 
 static void activate(GtkApplication *app, gpointer data)
@@ -117,6 +118,9 @@ int main(int argc, char **argv)
         if (caso)    snprintf(m.caso, sizeof m.caso, "%s", caso);
         if (corrida) snprintf(m.corrida_ini, sizeof m.corrida_ini, "%s", corrida);
     }
+
+    /* drtran, el de su arbol antes que el del PATH (estima.c). */
+    engine_set_finder(mtram_hermano);
 
     /* Las opciones ya estan leidas: al GTK solo le llega el nombre. */
     argc = 1;

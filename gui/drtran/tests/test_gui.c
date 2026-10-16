@@ -597,6 +597,19 @@ int main(int argc, char **argv)
     check(!contiene(etiqueta(m->est.motor), "NO est"),
           "Estimacion dice que drtran esta en el PATH", etiqueta(m->est.motor));
 
+    /* LA BARRA (lib/barra, la de fue_gui): sin series no se estima, y sin
+     * modelo estimado no hay nada que ver, diagnosticar ni prever. Apagado,
+     * el globo dice que falta y quien lo fabrica.                       */
+    check(!gtk_widget_is_sensitive(GTK_WIDGET(m->tb_estimar)) &&
+          contiene(gtk_widget_get_tooltip_text(GTK_WIDGET(m->tb_estimar)), "dos .pre"),
+          "barra: sin series, Estimar apagado y el globo pide los .pre", NULL);
+    check(!gtk_widget_is_sensitive(GTK_WIDGET(m->tb_ver)) &&
+          !gtk_widget_is_sensitive(GTK_WIDGET(m->tb_diag)) &&
+          !gtk_widget_is_sensitive(GTK_WIDGET(m->tb_prev)),
+          "barra: sin modelo, Ver modelo, Diagnosis y Prever apagados", NULL);
+    check(contiene(gtk_widget_get_tooltip_text(GTK_WIDGET(m->tb_diag)), "Ctrl+E"),
+          "y su globo dice que Estimar lo hace", NULL);
+
     /* ==================================================================== */
     /* 1 · Series                                                            */
     /* ==================================================================== */
@@ -1057,6 +1070,36 @@ int main(int argc, char **argv)
     check(contiene(s, "drtran ") && contiene(s, "SYN_Y.pre"),
           "la orden ejecutada queda a la vista, copiable", s);
     g_free(s);
+
+    /* LA BARRA, con el modelo estimado: todo encendido; Ver modelo ofrece una
+     * entrada por ecuacion, la salida primero; Diagnosis, sus pestañas, los
+     * graficos, el baseline y exportar.                                */
+    check(gtk_widget_is_sensitive(GTK_WIDGET(m->tb_estimar)) &&
+          gtk_widget_is_sensitive(GTK_WIDGET(m->tb_ver)) &&
+          gtk_widget_is_sensitive(GTK_WIDGET(m->tb_diag)) &&
+          gtk_widget_is_sensitive(GTK_WIDGET(m->tb_prev)),
+          "barra: estimado, se encienden los cuatro", NULL);
+    check(contiene(etiqueta(m->l_modelo), "Modelo: "),
+          "la barra de estado nombra el modelo", etiqueta(m->l_modelo));
+    {
+    GtkWidget *mn = gtk_menu_new();
+    gchar     *t;
+
+    diagnosis_menu_modelos(m, mn, NULL);
+    t = texto_de(mn);
+    check(contiene(t, "la salida") && contiene(t, "La ecuación de"),
+          "Ver modelo ▾: la salida y las demas ecuaciones", t);
+    g_free(t);
+    gtk_widget_destroy(mn);
+    mn = gtk_menu_new();
+    diagnosis_menu(m, mn, NULL);
+    t = texto_de(mn);
+    check(contiene(t, "Exogeneidad") && contiene(t, "CCF de los residuos") &&
+          contiene(t, "Calcular el baseline") && contiene(t, "Exportar"),
+          "Diagnosis ▾: pestañas, graficos, baseline y exportar", t);
+    g_free(t);
+    gtk_widget_destroy(mn);
+    }
     {
     const char *f[] = { "modelo.out", "residuos.txt", "red.dag", "modelo.cns", NULL };
     int         i;
@@ -1435,6 +1478,15 @@ int main(int argc, char **argv)
 
         check(gtk_text_buffer_get_char_count(bf) > 0, "y el informe en su pestaña", NULL);
         }
+        /* ABRIR LO ESTIMADO ES VER SUS RESULTADOS: la diagnosis, como fue_gui
+         * salta a la consola, y la barra de estado nombra el modelo.     */
+        check(gtk_notebook_get_current_page(GTK_NOTEBOOK(p3->libro)) == PG_DIAG,
+              "un modelo estimado se abre en «6 · Diagnosis»", NULL);
+        check(contiene(etiqueta(p3->estado), "Modelo estimado") &&
+              contiene(etiqueta(p3->l_modelo), "c01"),
+              "y la barra de estado lo dice, con su nombre", etiqueta(p3->l_modelo));
+        check(gtk_widget_is_sensitive(GTK_WIDGET(p3->tb_ver)),
+              "con Ver modelo encendido sin estimar", NULL);
         {
         gchar *py = mtram_artefacto(p3, "_SYN_Y.pdf");
 

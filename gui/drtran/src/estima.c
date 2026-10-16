@@ -43,6 +43,7 @@
 #include <glib/gstdio.h>
 
 #include "gui.h"
+#include "sitio.h"
 #include "previewhost.h"
 #include "preview.h"
 #include "engine.h"
@@ -229,22 +230,37 @@ static gchar *orden_texto( Mtram *m )
 /* ------------------------------------------------------------------------ */
 /* QUE drtran se va a lanzar                                                 */
 /*                                                                           */
-/* No es un detalle. El motor se lanza por el PATH, y un binario instalado    */
+/* No es un detalle. El motor se busca al lado y luego en el PATH, y un binario */
 /* hace meses se ejecuta igual de callado que el recien compilado: los        */
 /* resultados serian de OTRO programa y nada lo diria. Asi que se enseña cual */
 /* es y de cuando, y que el analista juzgue.                                  */
 /* ------------------------------------------------------------------------ */
 
+/* EL MOTOR DE SU ARBOL, como fue_gui (#37) y la madre: primero al lado --en
+ * el arbol de compilacion, o en el paquete, donde todo va junto--, despues el
+ * PATH. Un drtran instalado hace meses se ejecuta igual de callado que el
+ * recien compilado. main.c se lo da a lib/engine con engine_set_finder.  */
+gchar *mtram_hermano( const char *programa )
+{
+    static const char *const sitio[] = {     /* relativos a gui/drtran/     */
+        "../../engines/drtran/bin/%s",       /* el arbol de compilacion      */
+        "./%s", NULL                         /* el paquete: todo junto       */
+    };
+    return sitio_busca( programa, sitio );
+}
+
+gchar *mtram_motor( void ) { return mtram_hermano( "drtran" ); }
+
 static gchar *quien_es_drtran( void )
 {
-    gchar     *ruta = g_find_program_in_path( "drtran" );
+    gchar     *ruta = mtram_motor();
     GStatBuf   st;
     GDateTime *t;
     gchar     *cuando, *s;
 
     if (!ruta)
-        return g_strdup( "drtran NO está en el PATH. «make install» en "
-                         "engines/drtran, o añade su bin/ al PATH." );
+        return g_strdup( "drtran NO está ni al lado de drtran_gui ni en el "
+                         "PATH: «make» en engines/drtran." );
 
     if (g_stat( ruta, &st ) != 0) {
         s = g_strdup_printf( "%s", ruta );
@@ -423,6 +439,7 @@ static gboolean late( gpointer d )
     Mtram *m = d;
 
     gtk_progress_bar_pulse( GTK_PROGRESS_BAR(m->est.barra) );
+    if (m->avance) gtk_progress_bar_pulse( GTK_PROGRESS_BAR(m->avance) );
     return G_SOURCE_CONTINUE;
 }
 
@@ -430,6 +447,7 @@ static void para_pulso( Mtram *m )
 {
     if (m->est.pulso) { g_source_remove( m->est.pulso ); m->est.pulso = 0; }
     gtk_widget_hide( m->est.barra );
+    if (m->avance) gtk_widget_hide( m->avance );
 }
 
 /* La salida, SEGUN LLEGA. */
@@ -511,9 +529,11 @@ static void on_done( const EngineResult *r, gpointer data )
                                     "proyecto: %s", why2 );
     }
 
+    mtram_barra_refresca( m );
+
     if (r->status == ENGINE_NORUN)
-        preview_show_status( m, "No pude lanzar drtran. ¿Está en el PATH? "
-                                "(make install en engines/drtran)" );
+        preview_show_status( m, "No pude lanzar drtran: ni al lado de "
+                                "drtran_gui ni en el PATH (make en engines/drtran)" );
     else
         preview_show_status( m, "%s", r->message ? r->message : "" );
 }
@@ -590,7 +610,9 @@ gboolean estima_lanzar( Mtram *m )
     gtk_widget_set_sensitive( E->b_parar, TRUE );
     gtk_widget_show( E->barra );
     gtk_progress_bar_pulse( GTK_PROGRESS_BAR(E->barra) );
+    if (m->avance) gtk_widget_show( m->avance );
     E->pulso = g_timeout_add( 120, late, m );
+    mtram_barra_refresca( m );
 
     d = trabajo();
     E->trabajo = engine_start( d, "drtran", (const char * const *) argv,
@@ -603,8 +625,9 @@ gboolean estima_lanzar( Mtram *m )
         gtk_label_set_text( GTK_LABEL(E->titulo),
                             "drtran — no se pudo lanzar" );
         mtram_verdicto( E->ver_fin, MT_ROJO,
-            "No pude lanzar drtran: tiene que estar en el PATH "
-            "(«make install» en engines/drtran)" );
+            "No pude lanzar drtran: ni al lado de drtran_gui ni en el PATH "
+            "(«make» en engines/drtran)" );
+        mtram_barra_refresca( m );
     }
     g_free( d );
 
@@ -658,6 +681,14 @@ void estima_desde( Mtram *m, const char *out )
     diagnosis_desde( m, out );
     prevision_desde( m, out );
     diagnosis_escribe_paginas( m, TRUE );
+
+    /* ABRIR LO ESTIMADO ES VER SUS RESULTADOS, como fue_gui salta a la
+     * consola: aqui, a la diagnosis, que dice si el modelo vale.       */
+    if (m->dia.vale) {
+        gtk_notebook_set_current_page( GTK_NOTEBOOK(m->libro), PG_DIAG );
+        preview_show_status( m, "Modelo estimado: su diagnosis." );
+    }
+    mtram_barra_refresca( m );
 }
 
 static void on_parar( GtkButton *b, Mtram *m )

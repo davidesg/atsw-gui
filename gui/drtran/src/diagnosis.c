@@ -206,9 +206,8 @@ static void pinta_ajuste( Mtram *m )
     else if (!D->hay_base)
         g_string_append( t,
             "Sin baseline sólo hay una columna: faltan las dos que la escuela "
-            "lee «pasando de».\nPara tenerlas: marca «Diagonal (-0)» en "
-            "Estimación, estima, pulsa «Fijar baseline», desmarca y vuelve a "
-            "estimar." );
+            "lee «pasando de».\nPara tenerlas: Diagnosis ▾ → «Calcular el "
+            "baseline», y vuelve a estimar." );
     else {
         int    k  = n_par_transfer( m );
         double lr = 2.0 * ( D->d.logl - D->logl_base );
@@ -1161,24 +1160,6 @@ static void llena_graficos( Mtram *m, GtkWidget *menu )
 #undef ITEM
 }
 
-static void on_graficos( GtkButton *b, Mtram *m )
-{
-    GtkWidget *menu;
-
-    if (!m->dia.hay_res) {
-        preview_show_status( m, "No hay residuos: estima con la casilla de "
-                                "residuos puesta (mtram la pone sola)." );
-        return;
-    }
-
-    menu = gtk_menu_new();
-    llena_graficos( m, menu );
-    gtk_widget_show_all( menu );
-    gtk_menu_popup_at_widget( GTK_MENU(menu), GTK_WIDGET(b),
-                              GDK_GRAVITY_SOUTH_WEST, GDK_GRAVITY_NORTH_WEST,
-                              NULL );
-}
-
 /* ------------------------------------------------------------------------ */
 /* Para la barra (docs/DISENO-barra-drtran.md)                               */
 /* ------------------------------------------------------------------------ */
@@ -1375,37 +1356,9 @@ GtkWidget *diagnosis_pagina_new( Mtram *m )
     g_signal_connect( b, "clicked", G_CALLBACK(on_sig), m );
     gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
 
-    /* Graficos VA CON LAS FLECHAS: opera sobre la ecuacion que ellas eligen,
-     * asi que pertenece a ese grupo. Exportar es de la PESTAÑA, no de la
-     * ecuacion, y por eso va despues y tras el separador.              */
-    b = gtk_button_new_with_label( "Gráficos…" );
-    gtk_widget_set_tooltip_text( b,
-        "De la ecuación marcada: la batería de fue sobre sus residuos, y las "
-        "CCF con cada una de sus entradas." );
-    g_signal_connect( b, "clicked", G_CALLBACK(on_graficos), m );
-    gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
-
-    gtk_box_pack_start( GTK_BOX(barra), gtk_separator_new(
-                            GTK_ORIENTATION_VERTICAL ), FALSE, FALSE, 6 );
-
-    b = gtk_button_new_with_label( "Exportar…" );
-    gtk_widget_set_tooltip_text( b,
-        "La tabla de la PESTAÑA en la que estés —no de la ecuación—, a CSV, "
-        "texto de ancho fijo o LaTeX. La extensión elige el formato.\n\nVa "
-        "con la PROCEDENCIA dentro —series, modelo, muestra, logL y fichero—: "
-        "una tabla que sale sin decir de dónde viene no se puede reproducir." );
-    g_signal_connect( b, "clicked", G_CALLBACK(on_exportar), m );
-    gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
-
-    /* A la derecha: el baseline del LR. */
-    b = gtk_button_new_with_label( "Calcular baseline" );
-    gtk_widget_set_tooltip_text( b,
-        "Estima el modelo DIAGONAL y lo guarda como referencia: es el que "
-        "está anidado —el completo con todos los ω = 0— y da las tres cifras "
-        "de la izquierda de la pestaña Ajuste.\n\nNo hay que ir a Estimación "
-        "a marcar nada: el botón pone el modo, lanza, y lo deja como estaba." );
-    g_signal_connect( b, "clicked", G_CALLBACK(on_baseline), m );
-    gtk_box_pack_end( GTK_BOX(barra), b, FALSE, FALSE, 0 );
+    /* GRAFICOS, EXPORTAR Y EL BASELINE ESTAN EN LA BARRA, en el menu de
+     * Diagnosis ▾ (docs/DISENO-barra-drtran.md §2): aqui quedan solo lo que
+     * actua sobre lo que la pagina enseña -- releer y el recorrido.     */
 
     D->b_volver = gtk_button_new_with_label( "Ir a…" );
     gtk_widget_set_no_show_all( D->b_volver, TRUE );
@@ -1532,8 +1485,13 @@ GtkWidget *diagnosis_pagina_new( Mtram *m )
     D->ver_ojo    = gtk_label_new( "" );
     gtk_widget_set_halign( D->ver_global, GTK_ALIGN_START );
     gtk_widget_set_halign( D->ver_ojo,    GTK_ALIGN_START );
-    gtk_label_set_ellipsize( GTK_LABEL(D->ver_global), PANGO_ELLIPSIZE_END );
-    gtk_label_set_ellipsize( GTK_LABEL(D->ver_ojo),    PANGO_ELLIPSIZE_END );
+    /* PARTIDOS, NO RECORTADOS: el veredicto es lo que se lee primero, y con
+     * «…» se perdia justo la cola, que dice que mirar (como la nota de fue,
+     * #39, en su renglon).                                              */
+    gtk_label_set_xalign( GTK_LABEL(D->ver_global), 0.0 );
+    gtk_label_set_xalign( GTK_LABEL(D->ver_ojo),    0.0 );
+    gtk_label_set_line_wrap( GTK_LABEL(D->ver_global), TRUE );
+    gtk_label_set_line_wrap( GTK_LABEL(D->ver_ojo),    TRUE );
 
     gtk_box_pack_start( GTK_BOX(vb), D->ver_global, FALSE, FALSE, 0 );
     gtk_box_pack_start( GTK_BOX(vb), D->ver_ojo,    FALSE, FALSE, 0 );

@@ -225,6 +225,7 @@ typedef struct {
     GtkWidget *ver_ventana;   /* veredicto: la ventana comun, UNA linea     */
     GtkWidget *ver_oper;      /* veredicto: los operadores, UNA linea       */
     GtkWidget *estado;        /* la barra de abajo                          */
+    guint      avisos;        /* cuantos mensajes ha dicho: on_done no pisa  */
     GtkWidget *libro;         /* el cuaderno: la diagnosis lo usa para volver */
     Conjunto   c;             /* las series cargadas                        */
     gboolean   recolocando;   /* repintando la lista: no leer su orden      */
@@ -379,6 +380,7 @@ void       prevision_refresca(Mtram *m);
 void       prevision_desde(Mtram *m, const char *path);
 /* Para la barra: ir a la pagina y calcular; y el menu de Prever.      */
 void       prevision_calcular(Mtram *m);
+gchar     *prevision_grafico(Mtram *m, int k);
 void       prevision_menu(Mtram *m, GtkWidget *menu, GtkWidget *ref);
 
 /* diagnosis.c */

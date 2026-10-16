@@ -49,6 +49,21 @@ FDFig *fp_histogram( struct Tseries *ser, int nrdiff, int nadiff, double boxlam,
 FDFig *fp_graph_m_dt( double *y, int n, int nog, int freq, double boxlam,
                       const char *x11out, const char *name );
 
+/* The forecast: one panel per quantity (the level, the annual change...),
+ * stacked. Each panel has the last observations, then the forecasts with
+ * their bands of +-2 sd -- the THEORETICAL bands, what the model implies.
+ * y[0..n-1] and sd[0..n-1] (sd only read for the last nprev), dates[i] the
+ * label of observation i. Titles and note are Latin-1 (the encoding of the
+ * standard fonts); the note goes under the panels (NULL: none).
+ *                                                    -> prev_<x11out>.eps  */
+typedef struct {
+   const char   *title;
+   const double *y, *sd;
+} FPPanel;
+
+FDFig *fp_forecast( const FPPanel *p, int npanels, int n, int nprev,
+                    const char *const *dates, const char *note, const char *x11out );
+
 /* Write figs[0..n-1] as a PDF document: A4 (landscape if landscape != 0),
  * figure i scaled by scale[i] and centered, as many per page as fit.
  * Returns 0 on success.                                                    */

@@ -615,6 +615,163 @@ static void dotted_grid_line( FDFig *f, double x1, double y1, double x2, double 
    fd_gray( f, 0.0 );
 }
 
+/*****************************************************************************/
+/* The forecast                                                              */
+/*****************************************************************************/
+
+/* 1, 2 or 5 times a power of ten, the first that gives at most ~5 steps */
+static double nice_step( double range )
+{
+   double p = pow( 10.0, floor( log10( range / 5.0 ) ) );
+
+   if ( range / p <= 5.0 ) return( p );
+   if ( range / (2 * p) <= 5.0 ) return( 2 * p );
+   if ( range / (5 * p) <= 5.0 ) return( 5 * p );
+   return( 10 * p );
+}
+
+static void forecast_panel( FDFig *f, const Layout *L, double x0, double x1, double y0,
+                            double y1, const FPPanel *P, int n, int nprev,
+                            const char *const *dates )
+{
+   int     i, k, no = n - nprev, stride;
+   double  lo = HUGE_VAL, hi = -HUGE_VAL, step, v, px, py, dx, wl;
+   double *xs = (double *)malloc( n * sizeof( double ) );
+   double *ys = (double *)malloc( n * sizeof( double ) );
+   char    s[32];
+
+   /* the range: the data and the bands */
+   for ( i = 0; i < n; i++ )
+       {
+       double b = ( i >= no ) ? 2.0 * P->sd[i] : 0.0;
+       if ( P->y[i] - b < lo ) lo = P->y[i] - b;
+       if ( P->y[i] + b > hi ) hi = P->y[i] + b;
+       }
+   if ( hi - lo < 1e-12 ) { hi += 1.0; lo -= 1.0; }
+   step = nice_step( hi - lo );
+   lo = step * floor( lo / step );
+   hi = step * ceil( hi / step );
+
+   /* x: observation i at the middle of its slot */
+   dx = (x1 - x0) / n;
+   for ( i = 0; i < n; i++ )
+       {
+       xs[i] = x0 + dx * (i + 0.5);
+       ys[i] = mapv( P->y[i], lo, hi, y0, y1 );
+       }
+
+   /* horizontal grid and y labels */
+   fd_linewidth( f, LW_THIN );
+   for ( v = lo; v <= hi + 0.5 * step; v += step )
+       {
+       py = mapv( v, lo, hi, y0, y1 );
+       if ( v > lo + 0.5 * step ) dotted_grid_line( f, x0, py, x1, py );
+       fd_linewidth( f, LW_AXIS );
+       fd_line( f, x0, py, x0 - TIC_MAJOR, py );
+       number( s, sizeof( s ), fabs( v ) < 1e-9 * step ? 0.0 : v );
+       fd_text( f, x0 - TIC_MAJOR - 1.5, mid( py, L->tick ), FD_HELV, L->tick, FD_RIGHT, s );
+       }
+
+   /* the origin: the last observation, dotted */
+   if ( no > 0 && nprev > 0 )
+      {
+      px = 0.5 * (xs[no - 1] + xs[no]);
+      fd_linewidth( f, LW_THIN );
+      fd_dash( f, 0.6, 1.4 );
+      fd_line( f, px, y0, px, y1 );
+      fd_dash( f, 0, 0 );
+      }
+
+   /* axes, and a date every stride observations, the origin's among them */
+   fd_linewidth( f, LW_AXIS );
+   fd_line( f, x0, y0, x0, y1 );
+   fd_line( f, x0, y0, x1, y0 );
+   wl = 0.0;
+   for ( i = 0; i < n; i++ )
+       if ( dates && dates[i] && fd_text_width( FD_HELV, L->tick, dates[i] ) > wl )
+          wl = fd_text_width( FD_HELV, L->tick, dates[i] );
+   stride = (int)ceil( (wl + 6.0) / dx );
+   if ( stride < 1 ) stride = 1;
+   for ( i = 0; i < n; i++ )
+       {
+       fd_line( f, xs[i], y0, xs[i], y0 - TIC_X );
+       k = ( no > 0 ) ? no - 1 : 0;
+       if ( dates && dates[i] && ((i - k) % stride + stride) % stride == 0 )
+          fd_text( f, xs[i], y0 - TIC_X - 2.5 - 0.718 * L->tick, FD_HELV, L->tick,
+                   FD_CENTER, dates[i] );
+       }
+
+   fd_clip_begin( f, x0, y0, x1 - x0, y1 - y0 );
+
+   /* the bands: from the origin (no uncertainty there) to the horizon */
+   if ( nprev > 0 )
+      {
+      int     m = nprev + (no > 0);
+      double *bx = (double *)malloc( m * sizeof( double ) );
+      double *by = (double *)malloc( m * sizeof( double ) );
+      int     sg;
+
+      fd_linewidth( f, LW_BAND );
+      fd_dash( f, 2.5, 2.5 );
+      for ( sg = -1; sg <= 1; sg += 2 )
+          {
+          k = 0;
+          if ( no > 0 ) { bx[k] = xs[no - 1]; by[k] = ys[no - 1]; k++; }
+          for ( i = no; i < n; i++, k++ )
+              {
+              bx[k] = xs[i];
+              by[k] = mapv( P->y[i] + sg * 2.0 * P->sd[i], lo, hi, y0, y1 );
+              }
+          fd_polyline( f, bx, by, m );
+          }
+      fd_dash( f, 0, 0 );
+      free( bx ); free( by );
+      }
+
+   /* the data, and the forecasts continuing them: these in gray */
+   fd_linewidth( f, LW_THIN );
+   if ( no > 0 ) fd_polyline( f, xs, ys, no );
+   for ( i = 0; i < no; i++ ) fd_disc( f, xs[i], ys[i], L->point );
+   if ( nprev > 0 )
+      {
+      int s0 = ( no > 0 ) ? no - 1 : 0;
+      fd_gray( f, 0.45 );
+      fd_polyline( f, xs + s0, ys + s0, n - s0 );
+      for ( i = no; i < n; i++ ) fd_disc( f, xs[i], ys[i], L->point );
+      fd_gray( f, 0.0 );
+      }
+   fd_clip_end( f );
+
+   if ( P->title )
+      fd_text( f, x0, y1 + 5.0, FD_HELV_BOLD, L->title, FD_LEFT, P->title );
+   free( xs ); free( ys );
+}
+
+FDFig *fp_forecast( const FPPanel *p, int npanels, int n, int nprev,
+                    const char *const *dates, const char *note, const char *x11out )
+{
+   const Layout *L = &layout_small;
+   const double  ph = 150.0, top = 20.0, bottom = 24.0, left = 56.0, right = 16.0;
+   double        H, y1;
+   FDFig        *f;
+   int           k;
+
+   if ( npanels < 1 || n < 1 || nprev < 0 || nprev > n ) return( NULL );
+   H = npanels * (ph + top + bottom) + ( note ? 16.0 : 0.0 );
+   f = fd_fig_new( L->W, H );
+   y1 = H - top;
+   for ( k = 0; k < npanels; k++ )
+       {
+       forecast_panel( f, L, left, L->W - right, y1 - ph, y1, &p[k], n, nprev, dates );
+       y1 -= ph + top + bottom;
+       }
+   if ( note )
+      fd_text( f, left, 6.0, FD_HELV, L->tick, FD_LEFT, note );
+   save_eps( f, "prev_", x11out );
+   return( f );
+}
+
+
 FDFig *fp_histogram( struct Tseries *ser, int nrdiff, int nadiff, double boxlam,
                      const char *x11out, const char *name )
 {

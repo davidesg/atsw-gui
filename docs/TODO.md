@@ -270,11 +270,6 @@ programa:
   el GUI enseña en un mensaje de error puede llevar el `\r` (`lib/engine`,
   `first_line`).
 
-**drtran / drtran_gui**
-
-- «Baseline listo» se pisa enseguida con «drtran finished.»: el usuario no
-  lo ve (`gui/drtran/src/estima.c`, `on_done`, ~489-507).
-
 **drvarma / drvarma_gui**
 
 - El motor **sale con 0** cuando la estimación falla («ESTIMATION FAILED: AR

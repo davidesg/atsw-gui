@@ -38,7 +38,7 @@ Una acción va a la barra si **no depende de la página en que se está**.
 | **Estimar** (Ctrl+E) | lo de la página 5, desde cualquier página | — |
 | **Ver modelo** | la página de la ecuación que se está mirando en ◀ serie ▶ (al abrir, la de la salida) | una entrada por ecuación con página, en el orden del recorrido: la salida primero y aguas arriba |
 | **Diagnosis** (Ctrl+D) | va a la página 6 | Exogeneidad · Adecuación · Ajuste · Residuos · ─ · Serie y ACF/PACF con el modelo · Histograma · CCF de los residuos con X… (una por entrada) · ─ · Calcular el baseline · Exportar la diagnosis… |
-| **Prever** | va a la página 7 y calcula | Ver el gráfico de la previsión · Guardar esta evaluación · Olvidarla |
+| **Prever** | va a la página 7 y calcula | Calcular · ─ · Ver el gráfico de la previsión (la salida primero, y uno por cada otra serie) · ─ · Guardar esta evaluación · Olvidarla · ─ · Ir a la pestaña |
 
 - **Ver modelo, con una red.** `diagnosis_escribe_paginas` escribe una página
   por ecuación (`_<serie>.pdf`), y la madre ya ofrece «Ver modelo…» (la
@@ -98,7 +98,7 @@ enseguida «drtran finished.» (`estima.c`, `on_done`).
 | H1 | Al abrir un modelo estimado del caso, se queda en «1 · Series» | Va a «6 · Diagnosis», como fue_gui va a la consola, y la barra de estado lo dice: «Modelo estimado: su diagnosis.» |
 | H2 | No hay *Ver modelo* en drtran_gui; sólo en la madre | El botón de la barra (§2) |
 | H3 | drtran se busca sólo en el PATH (`estima.c` ~238) | `engine_set_finder` y `lib/sitio`, como fue_gui (#37): primero el árbol propio, el PATH de respaldo. `run_gui_tests.sh` deja de necesitar meter el motor en el PATH |
-| H4 | La Previsión no tiene gráfico | *Ver el gráfico de la previsión*, con `fugdraw` y `lib/preview` (regla 7 de mtram: lo que se ve es lo que va al papel) |
+| H4 | La Previsión no tiene gráfico | *Ver el gráfico de la previsión*: `fp_forecast` en `lib/fugplot` (fugdraw, sin gnuplot), con dos paneles —el nivel y la variación anual— y las bandas de ±2 d.t.; la nota de que son TEÓRICAS va en el propio dibujo. Regla 7 de mtram: lo que se ve es lo que va al papel |
 
 ---
 

@@ -74,6 +74,7 @@ void preview_show_status(PreviewApp *app, const gchar *format, ...)
     va_end(ap);
     gtk_label_set_text(GTK_LABEL(app->estado), s);
     g_free(s);
+    app->avisos++;
 }
 
 /* ------------------------------------------------------------------------ */

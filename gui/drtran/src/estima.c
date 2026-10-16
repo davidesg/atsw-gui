@@ -470,6 +470,7 @@ static void on_done( const EngineResult *r, gpointer data )
 {
     Mtram  *m = data;
     Estima *E = &m->est;
+    guint   antes = m->avisos;
 
     E->corriendo = FALSE;
     E->trabajo   = NULL;
@@ -534,7 +535,10 @@ static void on_done( const EngineResult *r, gpointer data )
     if (r->status == ENGINE_NORUN)
         preview_show_status( m, "No pude lanzar drtran: ni al lado de "
                                 "drtran_gui ni en el PATH (make en engines/drtran)" );
-    else
+    /* «drtran finished.» NO PISA LO QUE YA SE DIJO: si la diagnosis o el
+     * proyecto acaban de hablar --«Baseline listo», «no pude guardar»--,
+     * eso es lo que el analista tiene que leer. Era el defecto de TODO.md. */
+    else if (m->avisos == antes)
         preview_show_status( m, "%s", r->message ? r->message : "" );
 }
 

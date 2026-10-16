@@ -1,5 +1,5 @@
 /*
- * iconos.c -- los iconos propios de la barra de fue_gui (ver iconos.h).
+ * iconos.c -- los iconos propios de las barras de los GUIs (ver iconos.h).
  *
  * El estudio que los propuso: la barra tenia tres lupas (View Output,
  * Anomalos, Identificar), la «i» de informacion para la diagnosis, la
@@ -129,7 +129,7 @@ static gchar *rellena( const char *cuerpo, GtkWidget *ref )
     return g_string_free( s, FALSE );
 }
 
-GtkWidget *fue_icono( const char *nombre, int px, GtkWidget *ref,
+GtkWidget *at_icono( const char *nombre, int px, GtkWidget *ref,
                       const char *respaldo )
 {
     const Icono     *ic = busca( nombre );
@@ -171,7 +171,7 @@ tema:
                                                   : GTK_ICON_SIZE_LARGE_TOOLBAR );
 }
 
-GtkWidget *fue_menu_item( const char *texto, const char *icono, GtkWidget *ref,
+GtkWidget *at_menu_item( const char *texto, const char *icono, GtkWidget *ref,
                           const char *respaldo )
 {
     GtkWidget *mi = gtk_menu_item_new();
@@ -179,7 +179,7 @@ GtkWidget *fue_menu_item( const char *texto, const char *icono, GtkWidget *ref,
     GtkWidget *et = gtk_label_new( texto );
 
     if ( icono )
-        gtk_box_pack_start( GTK_BOX(caja), fue_icono( icono, 16, ref, respaldo ),
+        gtk_box_pack_start( GTK_BOX(caja), at_icono( icono, 16, ref, respaldo ),
                             FALSE, FALSE, 0 );
     else
         gtk_widget_set_margin_start( et, 24 );

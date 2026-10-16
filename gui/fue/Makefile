@@ -38,7 +38,7 @@ else
 endif
 
 # Compiler and basic flags
-CFLAGS   = -O2 -g -Wall -Iinclude -I../../lib/fugdraw -I../../lib/preview -I../../lib/engine -I../../lib/outfile -I../../lib/utils -I../../lib/datos -I../../lib/xlsx -I../../lib/proyecto -I../../lib/inpcheck -I../../lib/fugplot -I../../lib/analisis -I../../lib/equation -I../../lib/anomalos -I../../lib/dictamen -I../../lib/intervencion -I../../lib/inpdet -I../../lib/tabla -I../../lib/rutas -I../../lib/artcand -I../../lib/sitio -I../../lib/raices -I../../lib/formales -I$(ENG_DIR)/fue/include
+CFLAGS   = -O2 -g -Wall -Iinclude -I../../lib/fugdraw -I../../lib/preview -I../../lib/engine -I../../lib/outfile -I../../lib/utils -I../../lib/datos -I../../lib/xlsx -I../../lib/proyecto -I../../lib/inpcheck -I../../lib/fugplot -I../../lib/analisis -I../../lib/equation -I../../lib/anomalos -I../../lib/dictamen -I../../lib/intervencion -I../../lib/inpdet -I../../lib/tabla -I../../lib/rutas -I../../lib/artcand -I../../lib/sitio -I../../lib/raices -I../../lib/formales -I../../lib/barra -I$(ENG_DIR)/fue/include
 LDFLAGS  +=
 LIBS     = -lz -lm
 
@@ -75,6 +75,7 @@ LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c \
            $(LIB_DIR)/formales/formales.c \
            $(LIB_DIR)/artcand/artcand.c \
            $(LIB_DIR)/sitio/sitio.c \
+           $(LIB_DIR)/barra/iconos.c $(LIB_DIR)/barra/barra.c \
            $(LIB_DIR)/anomalos/anomalos.c \
            $(LIB_DIR)/dictamen/dictamen.c \
            $(LIB_DIR)/intervencion/intervencion.c \
@@ -266,6 +267,10 @@ $(BUILD_DIR)/lib_artcand/%.o: $(LIB_DIR)/artcand/%.c | $(BUILD_DIR)
 	$(CC) $(ALL_CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/lib_sitio/%.o: $(LIB_DIR)/sitio/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(ALL_CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/lib_barra/%.o: $(LIB_DIR)/barra/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
 	$(CC) $(ALL_CFLAGS) -c $< -o $@
 

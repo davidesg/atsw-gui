@@ -10,7 +10,7 @@ const char *fue_raiz_proyecto(void);
 #include "deterministic_dialog.h"
 #include "operator_dialog.h"
 #include "forecast_tab.h"
-#include "iconos.h"
+#include "barra.h"
 
 /* Forward declarations of helper functions for building tabs */
 static GtkWidget* create_data_input_tab(FueContext *ctx);
@@ -45,57 +45,7 @@ static void on_operator_treeview_row_activated(GtkTreeView *treeview, GtkTreePat
                                                GtkTreeViewColumn *col, FueContext *ctx) ;
 
 
-/* LOS BOTONES DE LA BARRA Y SUS MENUS. --------------------------------- */
-
-static GtkToolItem *boton(GtkWidget *toolbar, const char *rotulo, const char *icono,
-                          const char *respaldo, const char *globo, GCallback cb,
-                          FueContext *ctx) {
-    GtkToolItem *b = gtk_tool_button_new(fue_icono(icono, 24, toolbar, respaldo), rotulo);
-
-    gtk_widget_set_tooltip_text(GTK_WIDGET(b), globo);
-    g_signal_connect(b, "clicked", cb, ctx);
-    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), b, -1);
-    return b;
-}
-
-/* El boton partido: el clic hace cb, la flecha abre menu. */
-static GtkToolItem *partido(GtkWidget *toolbar, const char *rotulo, const char *icono,
-                            const char *respaldo, GtkWidget *menu, GCallback cb,
-                            FueContext *ctx) {
-    GtkToolItem *b = gtk_menu_tool_button_new(fue_icono(icono, 24, toolbar, respaldo),
-                                              rotulo);
-    gchar *mas = g_strdup_printf("Más: el resto de %s", rotulo);
-
-    gtk_menu_tool_button_set_menu(GTK_MENU_TOOL_BUTTON(b), menu);
-    gtk_menu_tool_button_set_arrow_tooltip_text(GTK_MENU_TOOL_BUTTON(b), mas);
-    g_free(mas);
-    g_signal_connect(b, "clicked", cb, ctx);
-    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), b, -1);
-    return b;
-}
-
-static GtkWidget *entrada(GtkWidget *menu, const char *texto, const char *icono,
-                          const char *respaldo, GtkWidget *ref, GCallback cb,
-                          FueContext *ctx) {
-    GtkWidget *mi = fue_menu_item(texto, icono, ref, respaldo);
-
-    g_signal_connect(mi, "activate", cb, ctx);
-    gtk_menu_shell_append(GTK_MENU_SHELL(menu), mi);
-    return mi;
-}
-
-/* Ctrl+tecla pulsa el boton, si esta encendido. */
-static gboolean pulsa(GtkAccelGroup *g, GObject *o, guint k, GdkModifierType m,
-                      gpointer b) {
-    (void) g; (void) o; (void) k; (void) m;
-    if (gtk_widget_is_sensitive(GTK_WIDGET(b))) g_signal_emit_by_name(b, "clicked");
-    return TRUE;
-}
-
-static void atajo(GtkAccelGroup *g, guint tecla, GtkToolItem *b) {
-    gtk_accel_group_connect(g, tecla, GDK_CONTROL_MASK, 0,
-                            g_cclosure_new(G_CALLBACK(pulsa), b, NULL));
-}
+/* LA BARRA: lib/barra (la misma que drtran_gui). ---------------------- */
 
 static gboolean sal(GtkAccelGroup *g, GObject *o, guint k, GdkModifierType m,
                     gpointer ctx) {
@@ -152,24 +102,24 @@ GtkWidget* create_main_window(GtkApplication *app, FueContext *ctx) {
     GtkAccelGroup *atajos = gtk_accel_group_new();
     gtk_window_add_accel_group(GTK_WINDOW(window), atajos);
 
-    GtkToolItem *new_btn = boton(toolbar, "Nuevo", "nuevo", "document-new",
+    GtkToolItem *new_btn = at_boton(toolbar, "Nuevo", "nuevo", "document-new",
         "Un modelo nuevo (Ctrl+N)", G_CALLBACK(on_new_file), ctx);
-    atajo(atajos, GDK_KEY_n, new_btn);
-    GtkToolItem *open_btn = boton(toolbar, "Abrir", "abrir", "document-open",
+    at_atajo(atajos, GDK_KEY_n, new_btn);
+    GtkToolItem *open_btn = at_boton(toolbar, "Abrir", "abrir", "document-open",
         "Abrir unos datos o un modelo, .inp o .pre (Ctrl+O)", G_CALLBACK(on_load_series), ctx);
-    atajo(atajos, GDK_KEY_o, open_btn);
-    GtkToolItem *save_btn = boton(toolbar, "Guardar", "guardar", "document-save",
+    at_atajo(atajos, GDK_KEY_o, open_btn);
+    GtkToolItem *save_btn = at_boton(toolbar, "Guardar", "guardar", "document-save",
         "Guardar el modelo como .inp (Ctrl+S)", G_CALLBACK(on_save_inp), ctx);
-    atajo(atajos, GDK_KEY_s, save_btn);
+    at_atajo(atajos, GDK_KEY_s, save_btn);
     ctx->btn_save = GTK_WIDGET(save_btn);
 
     gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_separator_tool_item_new(), -1);
 
-    GtkToolItem *run_btn = boton(toolbar, "Estimar", "estimar", "media-playback-start",
+    GtkToolItem *run_btn = at_boton(toolbar, "Estimar", "estimar", "media-playback-start",
         "Estimar el modelo con fue (Ctrl+E)", G_CALLBACK(on_run_fue), ctx);
-    atajo(atajos, GDK_KEY_e, run_btn);
+    at_atajo(atajos, GDK_KEY_e, run_btn);
     ctx->btn_execute = GTK_WIDGET(run_btn);
-    GtkToolItem *ver_btn = boton(toolbar, "Ver modelo", "ver-modelo", "x-office-document",
+    GtkToolItem *ver_btn = at_boton(toolbar, "Ver modelo", "ver-modelo", "x-office-document",
         "La página de fue: los residuos con su ACF y su PACF y el modelo escrito "
         "debajo, con sus desviaciones típicas", G_CALLBACK(on_view_output), ctx);
     (void) ver_btn;
@@ -182,52 +132,52 @@ GtkWidget* create_main_window(GtkApplication *app, FueContext *ctx) {
     {
     GtkWidget *m = gtk_menu_new();
 
-    ctx->btn_diagnosis = GTK_WIDGET(partido(toolbar, "Diagnosis", "diagnosis",
+    ctx->btn_diagnosis = GTK_WIDGET(at_partido(toolbar, "Diagnosis", "diagnosis",
         "dialog-information", m, G_CALLBACK(fue_on_diagnosis), ctx));
-    atajo(atajos, GDK_KEY_d, GTK_TOOL_ITEM(ctx->btn_diagnosis));
-    ctx->mi_diagnosis = entrada(m, "Diagnosis…", "diagnosis", "dialog-information",
+    at_atajo(atajos, GDK_KEY_d, GTK_TOOL_ITEM(ctx->btn_diagnosis));
+    ctx->mi_diagnosis = at_entrada(m, "Diagnosis…", "diagnosis", "dialog-information",
                                 toolbar, G_CALLBACK(fue_on_diagnosis), ctx);
-    ctx->btn_anomalos = entrada(m, "Anómalos…", "anomalos", "edit-find",
+    ctx->btn_anomalos = at_entrada(m, "Anómalos…", "anomalos", "edit-find",
                                 toolbar, G_CALLBACK(fue_on_anomalos), ctx);
-    ctx->btn_ganancia = entrada(m, "Ganancia de las intervenciones…", "ganancia",
+    ctx->btn_ganancia = at_entrada(m, "Ganancia de las intervenciones…", "ganancia",
                                 "view-refresh", toolbar, G_CALLBACK(fue_on_ganancia), ctx);
-    ctx->btn_identifica = entrada(m, "Identificar los residuos…", "identificar",
+    ctx->btn_identifica = at_entrada(m, "Identificar los residuos…", "identificar",
                                   "edit-find-replace", toolbar,
                                   G_CALLBACK(fue_on_identifica), ctx);
-    ctx->btn_factores = entrada(m, "Factorización del AR…", "factores", NULL,
+    ctx->btn_factores = at_entrada(m, "Factorización del AR…", "factores", NULL,
                                 toolbar, G_CALLBACK(fue_on_factores), ctx);
     gtk_menu_shell_append(GTK_MENU_SHELL(m), gtk_separator_menu_item_new());
-    ctx->btn_exportar = entrada(m, "Exportar la diagnosis…", "exportar", "document-save-as",
+    ctx->btn_exportar = at_entrada(m, "Exportar la diagnosis…", "exportar", "document-save-as",
                                 toolbar, G_CALLBACK(fue_on_exportar), ctx);
     gtk_widget_show_all(m);
     }
     {
     GtkWidget *m = gtk_menu_new();
 
-    ctx->btn_contrastes = GTK_WIDGET(partido(toolbar, "Contrastes", "integracion",
+    ctx->btn_contrastes = GTK_WIDGET(at_partido(toolbar, "Contrastes", "integracion",
         "view-list", m, G_CALLBACK(fue_on_integracion), ctx));
-    ctx->btn_integracion = entrada(m, "Orden de integración…", "integracion", "view-list",
+    ctx->btn_integracion = at_entrada(m, "Orden de integración…", "integracion", "view-list",
                                    toolbar, G_CALLBACK(fue_on_integracion), ctx);
-    ctx->btn_estacional = entrada(m, "Estacionalidad (MEG)…", "estacionalidad",
+    ctx->btn_estacional = at_entrada(m, "Estacionalidad (MEG)…", "estacionalidad",
                                   "x-office-calendar", toolbar,
                                   G_CALLBACK(fue_on_estacionalidad), ctx);
     gtk_widget_show_all(m);
     }
     {
     GtkWidget *m = gtk_menu_new();
-    GtkToolItem *p = partido(toolbar, "Prever", "prever", "go-jump", m,
+    GtkToolItem *p = at_partido(toolbar, "Prever", "prever", "go-jump", m,
                              G_CALLBACK(on_forecast_button_clicked), ctx);
 
     gtk_widget_set_tooltip_text(GTK_WIDGET(p), "Prever con fuf desde el modelo "
         "estimado: fue -f escribe la entrada de la previsión y fuf la calcula");
-    entrada(m, "Prever con fuf…", "prever", "go-jump", toolbar,
+    at_entrada(m, "Prever con fuf…", "prever", "go-jump", toolbar,
             G_CALLBACK(on_forecast_button_clicked), ctx);
-    entrada(m, "Ver la última previsión (PDF)", NULL, NULL, toolbar,
+    at_entrada(m, "Ver la última previsión (PDF)", NULL, NULL, toolbar,
             G_CALLBACK(prever_pdf), ctx);
-    entrada(m, "Abrir una previsión guardada…", NULL, NULL, toolbar,
+    at_entrada(m, "Abrir una previsión guardada…", NULL, NULL, toolbar,
             G_CALLBACK(prever_abrir), ctx);
     gtk_menu_shell_append(GTK_MENU_SHELL(m), gtk_separator_menu_item_new());
-    entrada(m, "Ir a la pestaña de la previsión", NULL, NULL, toolbar,
+    at_entrada(m, "Ir a la pestaña de la previsión", NULL, NULL, toolbar,
             G_CALLBACK(prever_pestana), ctx);
     gtk_widget_show_all(m);
     }

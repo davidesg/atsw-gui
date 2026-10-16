@@ -32,8 +32,11 @@
 #include <math.h>
 
 #include "gui.h"
+#include "barra.h"
 #include "previewhost.h"
+#include "preview.h"
 #include "outfcst.h"
+#include "fugplot.h"
 
 enum { P_H, P_N, P_MAE, P_RMSE, P_MAPE, P_COMP, P_N_COLS };
 
@@ -247,6 +250,165 @@ static void on_calcular( GtkButton *b, Mtram *m )
             "acabar; la consola está en Estimación.",
             P->evaluar ? "previsión y evaluación" : "previsión" );
     }
+}
+
+/* ------------------------------------------------------------------------ */
+/* Para la barra (docs/DISENO-barra-drtran.md)                               */
+/* ------------------------------------------------------------------------ */
+
+void prevision_calcular( Mtram *m )
+{
+    gtk_notebook_set_current_page( GTK_NOTEBOOK(m->libro), PG_PREV );
+    on_calcular( NULL, m );
+}
+
+/* EL GRAFICO DE LA PREVISION (H4 de docs/DISENO-barra-drtran.md), con
+ * fugdraw: lo que se ve es lo que va al papel (regla 7 de mtram). Dos
+ * paneles, el nivel y la variacion anual, como los da la tabla, con las
+ * bandas de +-2 d.t. -- y la nota de que son TEORICAS, en el propio dibujo:
+ * un grafico se recorta y se pega sin la pantalla que lo explicaba.     */
+static gchar *latin1( const char *s )
+{
+    gchar *r = g_convert_with_fallback( s, -1, "ISO-8859-1", "UTF-8", "?",
+                                        NULL, NULL, NULL );
+
+    return r ? r : g_strdup( s );
+}
+
+gchar *prevision_grafico( Mtram *m, int k )
+{
+    Prev          *P = &m->prev;
+    const OfSerie *S;
+    FPPanel        pn[2];
+    double        *y[2], *sd[2];
+    const char   **fe;
+    gchar         *t[2], *nota, *dir, *base, *eps = NULL, *u;
+    FDFig         *fig;
+    int            i, freq;
+
+    if (!P->vale || k < 0 || k >= P->f.ns || P->f.s[k].nprev < 1) return NULL;
+    S    = &P->f.s[k];
+    freq = (m->c.n > 0) ? m->c.s[0]->ts.freq : 1;
+
+    fe = g_new0( const char *, S->nf );
+    for (i = 0; i < 2; i++) {
+        y[i]  = g_new0( double, S->nf );
+        sd[i] = g_new0( double, S->nf );
+    }
+    for (i = 0; i < S->nf; i++) {
+        fe[i]    = S->f[i].fecha;
+        y[0][i]  = S->f[i].nivel;    sd[0][i] = S->f[i].sd_nivel;
+        y[1][i]  = S->f[i].var_anu;  sd[1][i] = S->f[i].sd_anu;
+    }
+    u = g_strdup_printf( "%s: el nivel, desde %s", S->nombre, S->origen );
+    t[0] = latin1( u ); g_free( u );
+    t[1] = latin1( freq > 1 ? "La variación anual" : "La variación" );
+    nota = latin1( "Bandas de ±2 d.t., TEÓRICAS: lo que el modelo implica, no lo "
+                   "que pasa fuera de muestra." );
+    for (i = 0; i < 2; i++) {
+        pn[i].title = t[i];
+        pn[i].y     = y[i];
+        pn[i].sd    = sd[i];
+    }
+
+    dir = g_build_filename( g_get_user_cache_dir(), GUI_CACHE, NULL );
+    g_mkdir_with_parents( dir, 0700 );
+    base = g_build_filename( dir, S->nombre, NULL );
+    fig  = fp_forecast( pn, 2, S->nf, S->nprev, fe, nota, base );
+    if (fig) {
+        gchar *nom = g_strdup_printf( "prev_%s.eps", S->nombre );
+
+        eps = g_build_filename( dir, nom, NULL );
+        g_free( nom );
+        fd_fig_free( fig );
+        if (!g_file_test( eps, G_FILE_TEST_EXISTS )) { g_free( eps ); eps = NULL; }
+    }
+
+    for (i = 0; i < 2; i++) { g_free( y[i] ); g_free( sd[i] ); g_free( t[i] ); }
+    g_free( fe ); g_free( nota ); g_free( base ); g_free( dir );
+    return eps;
+}
+
+static void on_grafico_mi( GtkMenuItem *mi, Mtram *m )
+{
+    int    k   = GPOINTER_TO_INT( g_object_get_data( G_OBJECT(mi), "serie" ) );
+    gchar *eps = prevision_grafico( m, k );
+
+    if (!eps) {
+        preview_show_status( m, "No pude dibujar la previsión." );
+        return;
+    }
+    if (!preview_show( m, eps ))
+        preview_show_status( m, "No pude enseñar %s", eps );
+    g_free( eps );
+}
+
+/* La salida primero, como en Ver modelo: es la serie del modelo. */
+static int salida_en( const Mtram *m, const Forecast *f )
+{
+    int k;
+
+    if (m->c.n > 0 && m->c.s[0]->ts.name)
+        for (k = 0; k < f->ns; k++)
+            if (!strcmp( f->s[k].nombre, m->c.s[0]->ts.name )) return k;
+    return 0;
+}
+
+static void on_calcular_mi( GtkMenuItem *mi, Mtram *m ) { prevision_calcular( m ); }
+static void on_guardar_mi ( GtkMenuItem *mi, Mtram *m ) { on_guardar_ref( NULL, m ); }
+static void on_olvidar_mi ( GtkMenuItem *mi, Mtram *m ) { on_olvidar_ref( NULL, m ); }
+static void on_pestana_mi ( GtkMenuItem *mi, Mtram *m )
+{
+    gtk_notebook_set_current_page( GTK_NOTEBOOK(m->libro), PG_PREV );
+}
+
+void prevision_menu( Mtram *m, GtkWidget *menu, GtkWidget *ref )
+{
+    Prev      *P = &m->prev;
+    GtkWidget *mi;
+
+    at_entrada( menu, "Calcular la previsión", "prever", "go-jump", ref,
+                G_CALLBACK(on_calcular_mi), m );
+    if (P->vale && P->f.ns > 0) {
+        int k0 = salida_en( m, &P->f ), j;
+
+        for (j = -1; j < P->f.ns; j++) {
+            int    k = (j < 0) ? k0 : j;
+            gchar *r;
+
+            if (j >= 0 && j == k0) continue;
+            r = (j < 0) ? g_strdup_printf( "Ver el gráfico de la previsión: %s, "
+                                           "la salida", P->f.s[k].nombre )
+                        : g_strdup_printf( "El gráfico de %s", P->f.s[k].nombre );
+            mi = at_entrada( menu, r, NULL, NULL, ref,
+                             G_CALLBACK(on_grafico_mi), m );
+            g_object_set_data( G_OBJECT(mi), "serie", GINT_TO_POINTER(k) );
+            g_free( r );
+        }
+    } else {
+        mi = gtk_menu_item_new_with_label( "Ver el gráfico de la previsión" );
+        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+        gtk_widget_set_sensitive( mi, FALSE );
+        gtk_widget_set_tooltip_text( mi, "Todavía no hay previsión: «Calcular "
+                                         "la previsión» la hace." );
+    }
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
+    mi = at_entrada( menu, "Guardar esta evaluación", NULL, NULL, ref,
+                     G_CALLBACK(on_guardar_mi), m );
+    if (!P->vale || !P->f.tiene_ev) {
+        gtk_widget_set_sensitive( mi, FALSE );
+        gtk_widget_set_tooltip_text( mi, "No hay evaluación: marca «Evaluar» "
+                                         "en «7 · Previsión» y calcula." );
+    }
+    mi = at_entrada( menu, "Olvidarla", NULL, NULL, ref,
+                     G_CALLBACK(on_olvidar_mi), m );
+    if (!P->tiene_ref) {
+        gtk_widget_set_sensitive( mi, FALSE );
+        gtk_widget_set_tooltip_text( mi, "No hay ninguna evaluación guardada." );
+    }
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
+    at_entrada( menu, "Ir a la pestaña de la previsión", NULL, NULL, ref,
+                G_CALLBACK(on_pestana_mi), m );
 }
 
 static void on_cambio( GtkWidget *w, Mtram *m )

@@ -25,8 +25,10 @@ CC=${CC:-cc}
 
 pkg-config --exists gtk+-3.0 2>/dev/null || { echo "note: sin GTK3 no se prueba la ventana"; exit 0; }
 
-# drtran se busca SOLO por el PATH (estima.c). El del arbol, primero: el
-# instalado puede ser de hace meses y la prueba seria de otro programa.
+# drtran_gui busca drtran a su lado y luego en el PATH (estima.c,
+# mtram_hermano); la prueba enlaza main.c con otro nombre y no pasa por el
+# buscador, asi que va por el PATH. El del arbol, primero: el instalado puede
+# ser de hace meses y la prueba seria de otro programa.
 if [ -d "$E/bin" ]; then PATH="$E/bin:$PATH"; export PATH; fi
 if ! command -v drtran > /dev/null 2>&1; then
     echo "note: drtran no esta en el PATH ni en $E/bin: no se prueba la ventana con el motor"
@@ -36,7 +38,7 @@ fi
 INC="-I$TOP/include -I$E/include"
 for d in fuepre dates prewhiten netfile nsop slots intervencion verdict outdiag \
          gof tabla rutas proyecto outfcst engine ccfplot fugdraw fugplot \
-         equation preview utils inpcheck lik diagmv; do
+         equation preview utils inpcheck lik diagmv sitio barra; do
     INC="$INC -I$L/$d"
 done
 

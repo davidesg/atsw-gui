@@ -95,7 +95,8 @@ static GPtrArray *todos(GtkWidget *raiz, GType tipo)
 
 static void pulsa(GtkWidget *b)
 {
-    if (b) gtk_button_clicked(GTK_BUTTON(b));
+    if (b && GTK_IS_MENU_ITEM(b)) gtk_menu_item_activate(GTK_MENU_ITEM(b));
+    else if (b) gtk_button_clicked(GTK_BUTTON(b));
     pump(30);
 }
 
@@ -112,6 +113,32 @@ static gchar *texto_de(GtkWidget *raiz)
     }
     g_ptr_array_free(ls, TRUE);
     return g_string_free(t, FALSE);
+}
+
+/* UNA ENTRADA DEL MENU Diagnosis ▾ de la barra, por su texto. El menu se
+ * arma como al abrirlo, y se guarda: la entrada tiene que vivir hasta que
+ * se active.                                                          */
+static GtkWidget *menu_diag = NULL;
+
+static GtkWidget *entrada_diag(Mtram *m, const char *txt)
+{
+    GList     *l, *hs;
+    GtkWidget *hallada = NULL;
+
+    if (menu_diag) gtk_widget_destroy(menu_diag);
+    menu_diag = gtk_menu_new();
+    diagnosis_menu(m, menu_diag, NULL);
+    hs = gtk_container_get_children(GTK_CONTAINER(menu_diag));
+    for (l = hs; l && !hallada; l = l->next) {
+        const char *lb = gtk_menu_item_get_label(GTK_MENU_ITEM(l->data));
+        gchar      *t  = texto_de(l->data);
+
+        if (g_strcmp0(lb, txt) == 0 || (t && strstr(t, txt))) hallada = l->data;
+        g_free(t);
+    }
+    g_list_free(hs);
+    if (!hallada) check(0, "no encuentro la entrada de Diagnosis ▾", txt);
+    return hallada;
 }
 
 static const char *etiqueta(GtkWidget *l)
@@ -597,6 +624,19 @@ int main(int argc, char **argv)
     check(!contiene(etiqueta(m->est.motor), "NO est"),
           "Estimacion dice que drtran esta en el PATH", etiqueta(m->est.motor));
 
+    /* LA BARRA (lib/barra, la de fue_gui): sin series no se estima, y sin
+     * modelo estimado no hay nada que ver, diagnosticar ni prever. Apagado,
+     * el globo dice que falta y quien lo fabrica.                       */
+    check(!gtk_widget_is_sensitive(GTK_WIDGET(m->tb_estimar)) &&
+          contiene(gtk_widget_get_tooltip_text(GTK_WIDGET(m->tb_estimar)), "dos .pre"),
+          "barra: sin series, Estimar apagado y el globo pide los .pre", NULL);
+    check(!gtk_widget_is_sensitive(GTK_WIDGET(m->tb_ver)) &&
+          !gtk_widget_is_sensitive(GTK_WIDGET(m->tb_diag)) &&
+          !gtk_widget_is_sensitive(GTK_WIDGET(m->tb_prev)),
+          "barra: sin modelo, Ver modelo, Diagnosis y Prever apagados", NULL);
+    check(contiene(gtk_widget_get_tooltip_text(GTK_WIDGET(m->tb_diag)), "Ctrl+E"),
+          "y su globo dice que Estimar lo hace", NULL);
+
     /* ==================================================================== */
     /* 1 · Series                                                            */
     /* ==================================================================== */
@@ -1057,6 +1097,36 @@ int main(int argc, char **argv)
     check(contiene(s, "drtran ") && contiene(s, "SYN_Y.pre"),
           "la orden ejecutada queda a la vista, copiable", s);
     g_free(s);
+
+    /* LA BARRA, con el modelo estimado: todo encendido; Ver modelo ofrece una
+     * entrada por ecuacion, la salida primero; Diagnosis, sus pestañas, los
+     * graficos, el baseline y exportar.                                */
+    check(gtk_widget_is_sensitive(GTK_WIDGET(m->tb_estimar)) &&
+          gtk_widget_is_sensitive(GTK_WIDGET(m->tb_ver)) &&
+          gtk_widget_is_sensitive(GTK_WIDGET(m->tb_diag)) &&
+          gtk_widget_is_sensitive(GTK_WIDGET(m->tb_prev)),
+          "barra: estimado, se encienden los cuatro", NULL);
+    check(contiene(etiqueta(m->l_modelo), "Modelo: "),
+          "la barra de estado nombra el modelo", etiqueta(m->l_modelo));
+    {
+    GtkWidget *mn = gtk_menu_new();
+    gchar     *t;
+
+    diagnosis_menu_modelos(m, mn, NULL);
+    t = texto_de(mn);
+    check(contiene(t, "la salida") && contiene(t, "La ecuación de"),
+          "Ver modelo ▾: la salida y las demas ecuaciones", t);
+    g_free(t);
+    gtk_widget_destroy(mn);
+    mn = gtk_menu_new();
+    diagnosis_menu(m, mn, NULL);
+    t = texto_de(mn);
+    check(contiene(t, "Exogeneidad") && contiene(t, "CCF de los residuos") &&
+          contiene(t, "Calcular el baseline") && contiene(t, "Exportar"),
+          "Diagnosis ▾: pestañas, graficos, baseline y exportar", t);
+    g_free(t);
+    gtk_widget_destroy(mn);
+    }
     {
     const char *f[] = { "modelo.out", "residuos.txt", "red.dag", "modelo.cns", NULL };
     int         i;
@@ -1097,11 +1167,10 @@ int main(int argc, char **argv)
     pulsa(boton(pg, "◀"));
     check(contiene(etiqueta(m->dia.l_ecu), "SYN_Y"), "◀ vuelve", etiqueta(m->dia.l_ecu));
 
-    /* Los graficos de los residuos: el menu, y cada entrada dibuja. */
-    pulsa(boton(pg, "Gráficos…"));
+    /* Los graficos de los residuos: Diagnosis ▾ de la barra, y cada entrada
+     * dibuja.                                                          */
     {
-    GList     *tl = gtk_window_list_toplevels(), *l;
-    GtkWidget *menu = NULL;
+    GtkWidget *menu = gtk_menu_new();
     const char *que[] = { "Histograma", "Serie y ACF / PACF",
                           "CCF de los residuos con SYN_X",
                           "Serie y ACF / PACF, con el modelo", NULL };
@@ -1109,15 +1178,7 @@ int main(int argc, char **argv)
                           "modelo_SYN_Y.pdf" };
     int         i;
 
-    for (l = tl; l; l = l->next) {
-        GtkWidget *h = GTK_IS_WINDOW(l->data) ? gtk_bin_get_child(GTK_BIN(l->data)) : NULL;
-        /* Sin exigir que este a la vista: con la ventana sin mapear, GTK
-         * puede no llegar a desplegarlo, y lo que se prueba son sus
-         * entradas.                                                    */
-        if (h && GTK_IS_MENU(h)) menu = h;
-    }
-    g_list_free(tl);
-    check(menu != NULL, "«Gráficos…» abre su menu", NULL);
+    diagnosis_menu(m, menu, NULL);
     for (i = 0; menu && que[i]; i++) {
         GPtrArray *its = todos(menu, GTK_TYPE_MENU_ITEM);
         guint      j;
@@ -1135,7 +1196,7 @@ int main(int argc, char **argv)
         pump(50);
         if (ok) check_tinta(tit[i], que[i]);
     }
-    if (menu) gtk_menu_popdown(GTK_MENU(menu));
+    gtk_widget_destroy(menu);
     }
 
     /* LA PAGINA DEL MODELO: el grafico y, debajo, las ecuaciones estimadas,
@@ -1172,30 +1233,30 @@ int main(int argc, char **argv)
 
     gtk_notebook_set_current_page(GTK_NOTEBOOK(m->dia.libreta), 4);
     p.carpeta = trab; p.nombre = "parametros.csv";
-    pulsa_dialogo(boton(pg, "Exportar…"), &p);
+    pulsa_dialogo(entrada_diag(m, "Exportar la diagnosis…"), &p);
     s = lee_fichero(csv);
     check(contiene(s, "omega") || contiene(s, "phi"),
-          "«Exportar…» escribe la tabla de parametros", s);
+          "«Exportar la diagnosis…» escribe la tabla de parametros", s);
     check(contiene(s, "modelo.out") || contiene(s, "SYN_Y"),
           "con la procedencia dentro", s);
     g_free(s); g_free(csv);
 
     gtk_notebook_set_current_page(GTK_NOTEBOOK(m->dia.libreta), 5);
-    pulsa(boton(pg, "Exportar…"));
+    pulsa(entrada_diag(m, "Exportar la diagnosis…"));
     check(contiene(etiqueta(m->estado), "ya ES un fichero"),
           "la pestana Salida no se exporta: se dice donde esta", etiqueta(m->estado));
     }
 
     /* EL BASELINE, desde aqui: pone el modo diagonal, lanza, fija y lo deja. */
-    pulsa(boton(pg, "Calcular baseline"));
+    pulsa(entrada_diag(m, "Calcular el baseline"));
     check(espera_motor(m, 90), "el baseline acaba", NULL);
     check(m->dia.hay_base, "el baseline queda fijado", etiqueta(m->estado));
     check(!m->est.diagonal &&
           !gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(m->est.c_diag)),
           "y el modo diagonal queda como estaba", NULL);
-    /* La barra NO se comprueba: diagnosis_desde escribe «Baseline listo» y
-     * on_done lo pisa enseguida con el mensaje del motor (estima.c, on_done:
-     * el preview_show_status del final). Ver el informe.               */
+    /* Y LA BARRA LO DICE: «drtran finished.» ya no pisa el aviso. */
+    check(contiene(etiqueta(m->estado), "Baseline listo"),
+          "la barra de estado dice «Baseline listo»", etiqueta(m->estado));
 
     /* Y la estimacion con transferencia, otra vez: el LR contra el diagonal. */
     check(estima_lanzar(m), "se puede volver a estimar", NULL);
@@ -1222,6 +1283,32 @@ int main(int argc, char **argv)
           "y se ensena con su origen", etiqueta(m->prev.texto));
     check(m->prev.f.ns > 0 && m->prev.f.s[0].nprev == 6,
           "con los 6 periodos pedidos", etiqueta(m->prev.texto));
+
+    /* H4: EL GRAFICO DE LA PREVISION, desde Prever ▾: la salida primero, y
+     * dibuja de verdad (tinta en la ventana, no una pagina en blanco).  */
+    {
+    GtkWidget *mn = gtk_menu_new();
+    GList     *hs, *l;
+    GtkWidget *mi = NULL;
+
+    prevision_menu(m, mn, NULL);
+    hs = gtk_container_get_children(GTK_CONTAINER(mn));
+    for (l = hs; l && !mi; l = l->next) {
+        gchar *t = texto_de(l->data);
+        if (t && strstr(t, "Ver el gráfico de la previsión: SYN_Y, la salida"))
+            mi = l->data;
+        g_free(t);
+    }
+    g_list_free(hs);
+    check(mi != NULL && gtk_widget_is_sensitive(mi),
+          "Prever ▾: el grafico de la previsión de la salida", NULL);
+    if (mi) {
+        pulsa(mi);
+        pump(50);
+        check_tinta("prev_SYN_Y.eps", "el grafico de la previsión");
+    }
+    gtk_widget_destroy(mn);
+    }
 
     /* Evaluar sin ventana: se dice, no se lanza. */
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(m->prev.c_eval), TRUE);
@@ -1435,6 +1522,15 @@ int main(int argc, char **argv)
 
         check(gtk_text_buffer_get_char_count(bf) > 0, "y el informe en su pestaña", NULL);
         }
+        /* ABRIR LO ESTIMADO ES VER SUS RESULTADOS: la diagnosis, como fue_gui
+         * salta a la consola, y la barra de estado nombra el modelo.     */
+        check(gtk_notebook_get_current_page(GTK_NOTEBOOK(p3->libro)) == PG_DIAG,
+              "un modelo estimado se abre en «6 · Diagnosis»", NULL);
+        check(contiene(etiqueta(p3->estado), "Modelo estimado") &&
+              contiene(etiqueta(p3->l_modelo), "c01"),
+              "y la barra de estado lo dice, con su nombre", etiqueta(p3->l_modelo));
+        check(gtk_widget_is_sensitive(GTK_WIDGET(p3->tb_ver)),
+              "con Ver modelo encendido sin estimar", NULL);
         {
         gchar *py = mtram_artefacto(p3, "_SYN_Y.pdf");
 

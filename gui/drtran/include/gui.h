@@ -225,6 +225,7 @@ typedef struct {
     GtkWidget *ver_ventana;   /* veredicto: la ventana comun, UNA linea     */
     GtkWidget *ver_oper;      /* veredicto: los operadores, UNA linea       */
     GtkWidget *estado;        /* la barra de abajo                          */
+    guint      avisos;        /* cuantos mensajes ha dicho: on_done no pisa  */
     GtkWidget *libro;         /* el cuaderno: la diagnosis lo usa para volver */
     Conjunto   c;             /* las series cargadas                        */
     gboolean   recolocando;   /* repintando la lista: no leer su orden      */
@@ -250,6 +251,12 @@ typedef struct {
     char       caso[PR_ID];
     char       corrida_ini[PR_ID];  /* la de --corrida: de donde se parte  */
     gboolean   caso_desfasado;   /* algun .pre ya no es el del alta         */
+
+    /* LA BARRA, la de fue_gui (lib/barra; docs/DISENO-barra-drtran.md), y lo
+     * que la barra de estado lleva ademas del mensaje.                  */
+    GtkToolItem *tb_estimar, *tb_ver, *tb_diag, *tb_prev;
+    GtkWidget  *avance;           /* la barra de avance, mientras se estima */
+    GtkWidget  *l_modelo;         /* «Modelo: c3», a la derecha             */
 } Mtram;
 
 /* --- el proyecto (proyecto_gui.c) --------------------------------------- */
@@ -294,6 +301,14 @@ GtkWidget *mtram_window_new(GtkApplication *app, Mtram *m);
  * depende de ello: añadir un enlace cambia lo que Estimacion va a lanzar y
  * lo que Modelo enseña.                                                 */
 void mtram_refresca(Mtram *m);
+
+/* barra_gui.c -- la barra y la barra de estado. La barra va arriba de raiz y
+ * la de estado abajo; mtram_window_new pone las paginas entre las dos.
+ * mtram_barra_refresca enciende cada boton segun haya modelo estimado, y el
+ * globo de uno apagado dice que falta y quien lo fabrica.            */
+void mtram_barra_new(Mtram *m, GtkWidget *ventana, GtkWidget *raiz);
+void mtram_estado_new(Mtram *m, GtkWidget *raiz);
+void mtram_barra_refresca(Mtram *m);
 
 /* ------------------------------------------------------------------------ */
 /* Presentacion, compartida por las paginas                                  */
@@ -350,6 +365,11 @@ void       estima_refresca(Mtram *m);
  * Devuelve TRUE si arranco.                                            */
 gboolean   estima_lanzar(Mtram *m);
 
+/* drtran, o el programa que sea, buscado AL LADO de drtran_gui (el arbol de
+ * compilacion, el paquete) antes que en el PATH. Rutas nuevas; g_free. */
+gchar     *mtram_hermano(const char *programa);
+gchar     *mtram_motor(void);
+
 /* Un modelo YA ESTIMADO, sin estimar: su .out en Estimacion, Diagnosis y
  * Prevision, y sus paginas si faltan. Lo usa la carga de un caso.     */
 void       estima_desde(Mtram *m, const char *out);
@@ -358,6 +378,10 @@ void       estima_desde(Mtram *m, const char *out);
 GtkWidget *prevision_pagina_new(Mtram *m);
 void       prevision_refresca(Mtram *m);
 void       prevision_desde(Mtram *m, const char *path);
+/* Para la barra: ir a la pagina y calcular; y el menu de Prever.      */
+void       prevision_calcular(Mtram *m);
+gchar     *prevision_grafico(Mtram *m, int k);
+void       prevision_menu(Mtram *m, GtkWidget *menu, GtkWidget *ref);
 
 /* diagnosis.c */
 GtkWidget *diagnosis_pagina_new(Mtram *m);
@@ -366,6 +390,12 @@ void       diagnosis_desde(Mtram *m, const char *path);
 /* La pagina del modelo de cada ecuacion, junto al .out (mtram_artefacto
  * "_<serie>.pdf"); con solo_faltan, solo las que no estan. Cuantas.   */
 int        diagnosis_escribe_paginas(Mtram *m, gboolean solo_faltan);
+/* Para la barra: el menu de Diagnosis; el de Ver modelo, una entrada por
+ * ecuacion en el orden del recorrido; y la pagina de la ecuacion ecu (0: la
+ * que se esta mirando en la pagina 6), que pasa a ser la actual.      */
+void       diagnosis_menu(Mtram *m, GtkWidget *menu, GtkWidget *ref);
+void       diagnosis_menu_modelos(Mtram *m, GtkWidget *menu, GtkWidget *ref);
+void       diagnosis_ver_modelo(Mtram *m, int ecu);
 
 /* pagina.c -- la pagina del modelo: grafico (puede ser NULL) arriba y las
  * ecuaciones estimadas de la serie i debajo, en el PDF pdf. 0 si pudo; si

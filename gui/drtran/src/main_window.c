@@ -222,6 +222,7 @@ static void refresca(Mtram *m)
      * Calcular de Prevision, de si el motor esta corriendo.            */
     diagnosis_refresca(m);
     prevision_refresca(m);
+    mtram_barra_refresca(m);
 }
 
 void mtram_refresca(Mtram *m) { refresca(m); }
@@ -759,6 +760,9 @@ GtkWidget *mtram_window_new(GtkApplication *app, Mtram *m)
     raiz = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     gtk_container_add(GTK_CONTAINER(w), raiz);
 
+    /* La barra de fue_gui, arriba (barra_gui.c). */
+    mtram_barra_new(m, w, raiz);
+
     libro = gtk_notebook_new();
     m->libro = libro;
     gtk_box_pack_start(GTK_BOX(raiz), libro, TRUE, TRUE, 0);
@@ -872,13 +876,9 @@ GtkWidget *mtram_window_new(GtkApplication *app, Mtram *m)
     gtk_box_pack_start(GTK_BOX(caja), vv, FALSE, FALSE, 0);
     }
 
-    /* --- la barra de estado: de la ventana, no de una pagina --- */
-    m->estado = gtk_label_new("Añade los .pre. El primero es la salida.");
-    gtk_widget_set_halign(m->estado, GTK_ALIGN_START);
-    gtk_label_set_ellipsize(GTK_LABEL(m->estado), PANGO_ELLIPSIZE_END);
-    gtk_widget_set_margin_start(m->estado, 8);
-    gtk_widget_set_margin_bottom(m->estado, 4);
-    gtk_box_pack_start(GTK_BOX(raiz), m->estado, FALSE, FALSE, 0);
+    /* --- la barra de estado: de la ventana, no de una pagina; la de fue
+     * (barra_gui.c), con la barra de avance y el modelo a la derecha --- */
+    mtram_estado_new(m, raiz);
 
     /* EL ORDEN DE LAS PESTAÑAS ES EL DEL METODO, y por eso Identificacion va
      * ANTES que Red: la red SE PUEBLA con la identificacion. Estaba al reves.
@@ -903,5 +903,7 @@ GtkWidget *mtram_window_new(GtkApplication *app, Mtram *m)
     gtk_notebook_append_page(GTK_NOTEBOOK(libro), prevision_pagina_new(m),
                              gtk_label_new("7 · Previsión"));
 
+    /* La barra, apagada hasta que haya que hacer: con su globo. */
+    mtram_barra_refresca(m);
     return w;
 }

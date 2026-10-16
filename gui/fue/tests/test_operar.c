@@ -1248,7 +1248,7 @@ static void prueba_analisis(FueContext *ctx) {
 
 /* LA BARRA: nueve botones, en español y con su nombre debajo; Diagnosis,
  * Contrastes y Prever con su menú. Con cargador de SVG, los iconos son
- * los propios (gui/fue/src/iconos.c), no los del tema.                  */
+ * los propios (lib/barra/iconos.c), no los del tema.                  */
 static gboolean es_imagen_propia(GtkWidget *w, gpointer d) {
     (void) d;
     return GTK_IS_IMAGE(w) && !strcmp(gtk_widget_get_name(w), "diagnosis");

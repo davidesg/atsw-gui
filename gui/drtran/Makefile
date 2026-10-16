@@ -24,7 +24,7 @@ ENG = ../../engines/drtran
 
 # diagnose.c entra por Ccf, Mean, Stdev y hosking_test: el estadistico de la
 # identificacion es el que ya calcula el motor, no uno parecido.
-SRC = src/main.c src/main_window.c src/series.c src/identifica.c src/red.c src/modelo.c src/estima.c src/diagnosis.c src/prevision.c src/pagina.c src/plotshim.c src/proyecto_gui.c \
+SRC = src/main.c src/main_window.c src/barra_gui.c src/series.c src/identifica.c src/red.c src/modelo.c src/estima.c src/diagnosis.c src/prevision.c src/pagina.c src/plotshim.c src/proyecto_gui.c \
       $(LIB)/fuepre/fue_pre_reader.c \
       $(ENG)/src/nlatools.c \
       $(ENG)/src/diagnose.c \
@@ -48,13 +48,16 @@ SRC = src/main.c src/main_window.c src/series.c src/identifica.c src/red.c src/m
       $(LIB)/equation/eqtran.c \
       $(LIB)/preview/preview.c \
       $(LIB)/utils/ext.c \
-      $(LIB)/dates/dates.c
+      $(LIB)/dates/dates.c \
+      $(LIB)/sitio/sitio.c \
+      $(LIB)/barra/iconos.c \
+      $(LIB)/barra/barra.c
 
 HDR = include/gui.h include/series.h include/previewhost.h include/plothost.h
 
 INC = -Iinclude -I$(ENG)/include -I$(LIB)/fuepre \
       -I$(LIB)/dates -I$(LIB)/prewhiten -I$(LIB)/netfile -I$(LIB)/nsop -I$(LIB)/slots -I$(LIB)/intervencion -I$(LIB)/verdict -I$(LIB)/outdiag -I$(LIB)/gof -I$(LIB)/tabla -I$(LIB)/rutas -I$(LIB)/proyecto -I$(LIB)/outfcst -I$(LIB)/engine -I$(LIB)/ccfplot -I$(LIB)/fugdraw -I$(LIB)/fugplot \
-      -I$(LIB)/equation -I$(LIB)/preview -I$(LIB)/utils -I$(LIB)/inpcheck -I$(LIB)/lik -I$(LIB)/diagmv
+      -I$(LIB)/equation -I$(LIB)/preview -I$(LIB)/utils -I$(LIB)/inpcheck -I$(LIB)/lik -I$(LIB)/diagmv -I$(LIB)/sitio -I$(LIB)/barra
 
 GTK_CFLAGS := $(shell pkg-config --cflags gtk+-3.0 2>/dev/null)
 GTK_LIBS   := $(shell pkg-config --libs   gtk+-3.0 2>/dev/null)

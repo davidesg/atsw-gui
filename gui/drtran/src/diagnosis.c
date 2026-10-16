@@ -36,6 +36,7 @@
 #include <math.h>
 
 #include "gui.h"
+#include "barra.h"
 #include "previewhost.h"
 #include "preview.h"
 #include "outdiag.h"
@@ -205,9 +206,8 @@ static void pinta_ajuste( Mtram *m )
     else if (!D->hay_base)
         g_string_append( t,
             "Sin baseline sólo hay una columna: faltan las dos que la escuela "
-            "lee «pasando de».\nPara tenerlas: marca «Diagonal (-0)» en "
-            "Estimación, estima, pulsa «Fijar baseline», desmarca y vuelve a "
-            "estimar." );
+            "lee «pasando de».\nPara tenerlas: Diagnosis ▾ → «Calcular el "
+            "baseline», y vuelve a estimar." );
     else {
         int    k  = n_par_transfer( m );
         double lr = 2.0 * ( D->d.logl - D->logl_base );
@@ -1112,19 +1112,13 @@ static void on_grafico( GtkMenuItem *mi, Mtram *m )
     g_free( eps );
 }
 
-static void on_graficos( GtkButton *b, Mtram *m )
+/* Los graficos de la ecuacion actual, en menu. Los usan el boton de la
+ * pagina y el menu Diagnosis de la barra.                               */
+static void llena_graficos( Mtram *m, GtkWidget *menu )
 {
     Diag      *D = &m->dia;
-    GtkWidget *menu, *mi;
+    GtkWidget *mi;
     int        k;
-
-    if (!D->hay_res) {
-        preview_show_status( m, "No hay residuos: estima con la casilla de "
-                                "residuos puesta (mtram la pone sola)." );
-        return;
-    }
-
-    menu = gtk_menu_new();
 
 #define ITEM(txt, q, e) \
     mi = gtk_menu_item_new_with_label( txt ); \
@@ -1164,11 +1158,125 @@ static void on_graficos( GtkButton *b, Mtram *m )
     }
     }
 #undef ITEM
+}
 
-    gtk_widget_show_all( menu );
-    gtk_menu_popup_at_widget( GTK_MENU(menu), GTK_WIDGET(b),
-                              GDK_GRAVITY_SOUTH_WEST, GDK_GRAVITY_NORTH_WEST,
-                              NULL );
+/* ------------------------------------------------------------------------ */
+/* Para la barra (docs/DISENO-barra-drtran.md)                               */
+/* ------------------------------------------------------------------------ */
+
+static void on_sub( GtkMenuItem *mi, Mtram *m )
+{
+    int k = GPOINTER_TO_INT( g_object_get_data( G_OBJECT(mi), "sub" ) );
+
+    gtk_notebook_set_current_page( GTK_NOTEBOOK(m->libro), PG_DIAG );
+    gtk_notebook_set_current_page( GTK_NOTEBOOK(m->dia.libreta), k );
+}
+
+/* Exportar exporta la tabla de la pestaña en que se esta: desde la barra,
+ * primero se va a la pagina, para que se vea cual.                      */
+static void on_exportar_mi( GtkMenuItem *mi, Mtram *m )
+{
+    gtk_notebook_set_current_page( GTK_NOTEBOOK(m->libro), PG_DIAG );
+    on_exportar( NULL, m );
+}
+
+static void on_baseline_mi( GtkMenuItem *mi, Mtram *m ) { on_baseline( NULL, m ); }
+
+void diagnosis_menu( Mtram *m, GtkWidget *menu, GtkWidget *ref )
+{
+    static const char *const sub[] = { "Exogeneidad", "Adecuación", "Ajuste",
+                                       "Residuos" };
+    GtkWidget *mi;
+    int        k;
+
+    for (k = 0; k < 4; k++) {
+        mi = at_entrada( menu, sub[k], k == 0 ? "diagnosis" : NULL,
+                         "dialog-information", ref, G_CALLBACK(on_sub), m );
+        g_object_set_data( G_OBJECT(mi), "sub", GINT_TO_POINTER(k) );
+    }
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
+    if (m->dia.hay_res)
+        llena_graficos( m, menu );
+    else {
+        mi = gtk_menu_item_new_with_label( "Gráficos" );
+        gtk_widget_set_sensitive( mi, FALSE );
+        gtk_widget_set_tooltip_text( mi, "No hay residuos: estima con la "
+                                         "casilla de residuos puesta." );
+        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+    }
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
+    mi = at_entrada( menu, "Calcular el baseline", NULL, NULL, ref,
+                     G_CALLBACK(on_baseline_mi), m );
+    gtk_widget_set_tooltip_text( mi, "El modelo diagonal, sin transferencias: "
+        "contra él se mide en Ajuste lo que aportan." );
+    at_entrada( menu, "Exportar la diagnosis…", "exportar", "document-save-as",
+                ref, G_CALLBACK(on_exportar_mi), m );
+}
+
+/* LA PAGINA DEL MODELO de la ecuacion ecu (0: la que se esta mirando). Se
+ * pone como la actual: el boton y la diagnosis hablan de la misma.      */
+void diagnosis_ver_modelo( Mtram *m, int ecu )
+{
+    Diag  *D = &m->dia;
+    gchar *suf, *pdf, *hecho = NULL;
+
+    if (!D->hay_res || !D->hay_par) {
+        preview_show_status( m, "Todavía no hay modelo estimado: Estimar "
+                                "(Ctrl+E) lo hace." );
+        return;
+    }
+    if (ecu > 0 && ecu != D->actual) {
+        D->actual = ecu;
+        diagnosis_refresca( m );
+    }
+    suf = g_strdup_printf( "_%s.pdf", nom_ser( m, D->actual ) );
+    pdf = mtram_artefacto( m, suf );
+    g_free( suf );
+    if (!g_file_test( pdf, G_FILE_TEST_EXISTS )) {
+        hecho = dibuja( m, 4, 0 );
+        if (!hecho) {
+            preview_show_status( m, "No pude escribir la página de %s.",
+                                 nom_ser( m, D->actual ) );
+            g_free( pdf );
+            return;
+        }
+        g_free( pdf );
+        pdf = hecho;
+    }
+    if (!preview_show( m, pdf ))
+        preview_show_status( m, "No pude enseñar %s", pdf );
+    g_free( pdf );
+}
+
+static void on_ver_mi( GtkMenuItem *mi, Mtram *m )
+{
+    diagnosis_ver_modelo( m, GPOINTER_TO_INT( g_object_get_data( G_OBJECT(mi),
+                                                                 "ecu" ) ) );
+}
+
+/* Una entrada por ecuacion, en el orden del recorrido: la salida primero y
+ * aguas arriba. La madre ofrece lo mismo (casos_gui.c, menu_corrida).   */
+void diagnosis_menu_modelos( Mtram *m, GtkWidget *menu, GtkWidget *ref )
+{
+    Diag      *D = &m->dia;
+    GtkWidget *mi;
+    int        orden[NET_MAX_SER + 1], n = camino( m, orden ), i;
+
+    for (i = 0; i < n; i++) {
+        int    e   = orden[i];
+        gchar *txt = i == 0
+            ? g_strdup_printf( "%s, la salida", nom_ser( m, e ) )
+            : g_strdup_printf( "La ecuación de %s", nom_ser( m, e ) );
+
+        mi = at_entrada( menu, txt, NULL, NULL, ref, G_CALLBACK(on_ver_mi), m );
+        g_free( txt );
+        g_object_set_data( G_OBJECT(mi), "ecu", GINT_TO_POINTER(e) );
+        if (!D->hay_res || !D->hay_par || e > D->res.m) {
+            gtk_widget_set_sensitive( mi, FALSE );
+            gtk_widget_set_tooltip_text( mi, "Sin página: drtran la escribe al "
+                                             "estimar el modelo." );
+        }
+    }
 }
 
 /* ------------------------------------------------------------------------ */
@@ -1248,37 +1356,9 @@ GtkWidget *diagnosis_pagina_new( Mtram *m )
     g_signal_connect( b, "clicked", G_CALLBACK(on_sig), m );
     gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
 
-    /* Graficos VA CON LAS FLECHAS: opera sobre la ecuacion que ellas eligen,
-     * asi que pertenece a ese grupo. Exportar es de la PESTAÑA, no de la
-     * ecuacion, y por eso va despues y tras el separador.              */
-    b = gtk_button_new_with_label( "Gráficos…" );
-    gtk_widget_set_tooltip_text( b,
-        "De la ecuación marcada: la batería de fue sobre sus residuos, y las "
-        "CCF con cada una de sus entradas." );
-    g_signal_connect( b, "clicked", G_CALLBACK(on_graficos), m );
-    gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
-
-    gtk_box_pack_start( GTK_BOX(barra), gtk_separator_new(
-                            GTK_ORIENTATION_VERTICAL ), FALSE, FALSE, 6 );
-
-    b = gtk_button_new_with_label( "Exportar…" );
-    gtk_widget_set_tooltip_text( b,
-        "La tabla de la PESTAÑA en la que estés —no de la ecuación—, a CSV, "
-        "texto de ancho fijo o LaTeX. La extensión elige el formato.\n\nVa "
-        "con la PROCEDENCIA dentro —series, modelo, muestra, logL y fichero—: "
-        "una tabla que sale sin decir de dónde viene no se puede reproducir." );
-    g_signal_connect( b, "clicked", G_CALLBACK(on_exportar), m );
-    gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
-
-    /* A la derecha: el baseline del LR. */
-    b = gtk_button_new_with_label( "Calcular baseline" );
-    gtk_widget_set_tooltip_text( b,
-        "Estima el modelo DIAGONAL y lo guarda como referencia: es el que "
-        "está anidado —el completo con todos los ω = 0— y da las tres cifras "
-        "de la izquierda de la pestaña Ajuste.\n\nNo hay que ir a Estimación "
-        "a marcar nada: el botón pone el modo, lanza, y lo deja como estaba." );
-    g_signal_connect( b, "clicked", G_CALLBACK(on_baseline), m );
-    gtk_box_pack_end( GTK_BOX(barra), b, FALSE, FALSE, 0 );
+    /* GRAFICOS, EXPORTAR Y EL BASELINE ESTAN EN LA BARRA, en el menu de
+     * Diagnosis ▾ (docs/DISENO-barra-drtran.md §2): aqui quedan solo lo que
+     * actua sobre lo que la pagina enseña -- releer y el recorrido.     */
 
     D->b_volver = gtk_button_new_with_label( "Ir a…" );
     gtk_widget_set_no_show_all( D->b_volver, TRUE );
@@ -1405,8 +1485,13 @@ GtkWidget *diagnosis_pagina_new( Mtram *m )
     D->ver_ojo    = gtk_label_new( "" );
     gtk_widget_set_halign( D->ver_global, GTK_ALIGN_START );
     gtk_widget_set_halign( D->ver_ojo,    GTK_ALIGN_START );
-    gtk_label_set_ellipsize( GTK_LABEL(D->ver_global), PANGO_ELLIPSIZE_END );
-    gtk_label_set_ellipsize( GTK_LABEL(D->ver_ojo),    PANGO_ELLIPSIZE_END );
+    /* PARTIDOS, NO RECORTADOS: el veredicto es lo que se lee primero, y con
+     * «…» se perdia justo la cola, que dice que mirar (como la nota de fue,
+     * #39, en su renglon).                                              */
+    gtk_label_set_xalign( GTK_LABEL(D->ver_global), 0.0 );
+    gtk_label_set_xalign( GTK_LABEL(D->ver_ojo),    0.0 );
+    gtk_label_set_line_wrap( GTK_LABEL(D->ver_global), TRUE );
+    gtk_label_set_line_wrap( GTK_LABEL(D->ver_ojo),    TRUE );
 
     gtk_box_pack_start( GTK_BOX(vb), D->ver_global, FALSE, FALSE, 0 );
     gtk_box_pack_start( GTK_BOX(vb), D->ver_ojo,    FALSE, FALSE, 0 );

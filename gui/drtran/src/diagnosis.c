@@ -939,7 +939,7 @@ static Tabla *tabla_actual( Mtram *m, int pagina )
         tb_col( t, "Q",         NULL, TB_NUM, 4 );
         tb_col( t, "g.l.",      NULL, TB_ENT, 0 );
         tb_col( t, "p",         NULL, TB_NUM, 4 );
-        tb_col( t, "signif.",   NULL, TB_ENT, 0 );
+        tb_col( t, "k < 0 fuera de banda", NULL, TB_ENT, 0 );
         tb_col( t, "Exógena",   NULL, TB_TXT, 0 );
         for (i = 0; i < D->d.ne; i++) {
             const OdEnlace *e = &D->d.e[i];
@@ -1317,29 +1317,26 @@ static void on_grafico( GtkMenuItem *mi, Mtram *m )
 
 /* Los graficos de la ecuacion actual, en menu. Los usan el boton de la
  * pagina y el menu Diagnosis de la barra.                               */
-static void llena_graficos( Mtram *m, GtkWidget *menu )
+static void llena_graficos( Mtram *m, GtkWidget *menu, GtkWidget *ref )
 {
     Diag      *D = &m->dia;
     GtkWidget *mi;
     int        k;
 
+    /* Con at_entrada, como las demas: el texto en la misma columna. */
 #define ITEM(txt, q, e) \
-    mi = gtk_menu_item_new_with_label( txt ); \
+    mi = at_entrada( menu, txt, NULL, NULL, ref, G_CALLBACK(on_grafico), m ); \
     g_object_set_data( G_OBJECT(mi), "que", GINT_TO_POINTER(q) ); \
-    g_object_set_data( G_OBJECT(mi), "ent", GINT_TO_POINTER(e) ); \
-    g_signal_connect( mi, "activate", G_CALLBACK(on_grafico), m ); \
-    gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+    g_object_set_data( G_OBJECT(mi), "ent", GINT_TO_POINTER(e) );
 
     /* NO va el grafico media - desviacion tipica. Ese existe para decidir la
      * TRANSFORMACION de una serie: si la dispersion crece con el nivel, hay
      * que tomar logaritmos. Un residuo no tiene nivel con el que crecer --su
      * media es cero por construccion-- asi que el grafico no puede decir
      * nada. fue tampoco lo dibuja sobre sus residuos.                    */
-    ITEM( "Serie y ACF / PACF, con el modelo", 4, 0 )
-    gtk_widget_set_sensitive( mi, D->hay_par );
-    if (!D->hay_par)
-        gtk_widget_set_tooltip_text( mi, "El .out no trae la tabla de "
-                                         "parámetros: no hay modelo que escribir." );
+    /* La serie con el modelo debajo es la PAGINA de la ecuacion: esta en
+     * Ver modelo y no se repite aqui.                                  */
+    (void) D;
     ITEM( "Serie y ACF / PACF", 0, 0 )
     ITEM( "Histograma", 1, 0 )
 
@@ -1399,9 +1396,9 @@ void diagnosis_menu( Mtram *m, GtkWidget *menu, GtkWidget *ref )
     }
     gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
     if (m->dia.hay_res)
-        llena_graficos( m, menu );
+        llena_graficos( m, menu, ref );
     else {
-        mi = gtk_menu_item_new_with_label( "Gráficos" );
+        mi = at_menu_item( "Gráficos", NULL, ref, NULL );
         gtk_widget_set_sensitive( mi, FALSE );
         gtk_widget_set_tooltip_text( mi, "No hay residuos: estima con la "
                                          "casilla de residuos puesta." );
@@ -1597,7 +1594,10 @@ GtkWidget *diagnosis_pagina_new( Mtram *m )
     columna( D->l_exo, "Entrada",   X_ENL );
     columna( D->l_exo, "Q (k < 0)", X_Q );
     columna( D->l_exo, "p",         X_P );
-    columna( D->l_exo, "signif.",   X_SIG );
+    /* «[n significant]» del .out: los retardos negativos de la CCF de los
+     * residuos que salen de la banda -- lo que Identificacion llama
+     * «fuera de la banda».                                          */
+    columna( D->l_exo, "k < 0 fuera de banda", X_SIG );
     columna( D->l_exo, "Veredicto", X_VER );
     gtk_widget_set_tooltip_text( D->l_exo,
         "¿Transferencia o VARMA?\n\nRed dice si el .dag ADMITE orden de "

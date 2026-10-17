@@ -141,6 +141,30 @@ static GtkWidget *entrada_diag(Mtram *m, const char *txt)
     return hallada;
 }
 
+/* Lo mismo en Prever ▾. */
+static GtkWidget *menu_prev;
+
+static GtkWidget *entrada_prev(Mtram *m, const char *txt)
+{
+    GList     *l, *hs;
+    GtkWidget *hallada = NULL;
+
+    if (menu_prev) gtk_widget_destroy(menu_prev);
+    menu_prev = gtk_menu_new();
+    prevision_menu(m, menu_prev, NULL);
+    hs = gtk_container_get_children(GTK_CONTAINER(menu_prev));
+    for (l = hs; l && !hallada; l = l->next) {
+        const char *lb = gtk_menu_item_get_label(GTK_MENU_ITEM(l->data));
+        gchar      *t  = texto_de(l->data);
+
+        if (g_strcmp0(lb, txt) == 0 || (t && strstr(t, txt))) hallada = l->data;
+        g_free(t);
+    }
+    g_list_free(hs);
+    if (!hallada) check(0, "no encuentro la entrada de Prever ▾", txt);
+    return hallada;
+}
+
 static const char *etiqueta(GtkWidget *l)
 {
     const char *s = gtk_label_get_text(GTK_LABEL(l));
@@ -1192,10 +1216,8 @@ int main(int argc, char **argv)
     {
     GtkWidget *menu = gtk_menu_new();
     const char *que[] = { "Histograma", "Serie y ACF / PACF",
-                          "CCF de los residuos con SYN_X",
-                          "Serie y ACF / PACF, con el modelo", NULL };
-    const char *tit[] = { "hist_res.eps", "res.eps", "ccf_res.eps",
-                          "modelo_SYN_Y.pdf" };
+                          "CCF de los residuos con SYN_X", NULL };
+    const char *tit[] = { "hist_res.eps", "res.eps", "ccf_res.eps" };
     int         i;
 
     diagnosis_menu(m, menu, NULL);
@@ -1206,7 +1228,11 @@ int main(int argc, char **argv)
 
         for (j = 0; j < its->len; j++) {
             GtkWidget *mi = g_ptr_array_index(its, j);
-            if (g_strcmp0(gtk_menu_item_get_label(GTK_MENU_ITEM(mi)), que[i]) == 0) {
+            gchar     *t  = texto_de(mi);
+            gboolean   es = t && strstr(t, que[i]) != NULL;
+
+            g_free(t);
+            if (es && !ok) {
                 gtk_menu_item_activate(GTK_MENU_ITEM(mi));
                 ok = TRUE;
             }
@@ -1353,14 +1379,14 @@ int main(int argc, char **argv)
     check(g_file_test(s, G_FILE_TEST_EXISTS), "y el CSV de la evaluacion en la cache", s);
     g_free(s);
 
-    pulsa(boton(pg, "Guardar esta evaluación"));
+    pulsa(entrada_prev(m, "Guardar esta evaluación"));
     check(m->prev.tiene_ref, "«Guardar esta evaluación» la guarda", etiqueta(m->estado));
     pulsa(m->prev.b_calc);
     check(espera_motor(m, 120), "la segunda evaluacion acaba", NULL);
     s = celda(m->prev.lista, 0, 5);
     check(contiene(s, "igual"), "el mismo modelo, comparado con lo guardado, da igual", s);
     g_free(s);
-    pulsa(boton(pg, "Olvidarla"));
+    pulsa(entrada_prev(m, "Olvidarla"));
     check(!m->prev.tiene_ref, "«Olvidarla» la olvida", NULL);
 
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(m->prev.c_eval), FALSE);

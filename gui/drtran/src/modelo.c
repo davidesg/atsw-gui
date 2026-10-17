@@ -569,18 +569,20 @@ static void refresca_lista( Mtram *m )
                 /* Las del empotrado no son especificacion: van a su panel. */
                 if (es_empotrado( &M->st, kk )) continue;
 
+                /* Como las filas de Sigma: el parametro, que es, y lo que
+                 * dice si dice algo. «libre» ya lo pone la columna Es.  */
                 if (!enunciado( m, kk, dice, sizeof dice, &ruido )) {
                     if (M->solo) continue;
-                    snprintf( dice, sizeof dice, "libre" );
+                    dice[0] = 0;
                 }
                 nombre_modelo( m, M->st.name[kk], nom, sizeof nom );
-                nmr = g_strdup_printf( "      %s", dice );
+                nmr = g_strdup_printf( "      %s", nom );
 
                 gtk_tree_store_append( st, &fila, &enl );
                 gtk_tree_store_set( st, &fila,
                     M_NOMBRE, nmr,
                     M_QUE,    que_es( M->st.kind[kk] ),
-                    M_DICE,   nom,
+                    M_DICE,   dice,
                     M_IDX,    kk, -1 );
                 g_free( nmr );
                 }

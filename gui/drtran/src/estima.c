@@ -547,6 +547,13 @@ static void on_done( const EngineResult *r, gpointer data )
     if (verdict_ok( &E->v ))
         diagnosis_escribe_paginas( m, FALSE );
 
+    /* ESTIMAR ES IR A VER SI EL MODELO VALE: a la diagnosis, como al abrir
+     * uno ya estimado (H1). Desde Prevision no: alli se viene a prever y
+     * la tabla se llena donde se esta.                                 */
+    if (verdict_ok( &E->v ) && m->dia.vale && !E->diagonal &&
+        gtk_notebook_get_current_page( GTK_NOTEBOOK(m->libro) ) != PG_PREV)
+        gtk_notebook_set_current_page( GTK_NOTEBOOK(m->libro), PG_DIAG );
+
     /* La corrida ya existe en el disco: el manifiesto tiene que decirlo. Y la
      * siguiente colgara de esta -- ahi esta la cadena.               */
     if (m->hay_proy) {

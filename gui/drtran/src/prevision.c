@@ -398,6 +398,9 @@ void prevision_menu( Mtram *m, GtkWidget *menu, GtkWidget *ref )
     gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
     mi = at_entrada( menu, "Guardar esta evaluación", NULL, NULL, ref,
                      G_CALLBACK(on_guardar_mi), m );
+    gtk_widget_set_tooltip_text( mi, "Para comparar con la siguiente: la "
+        "columna «vs la guardada» de «7 · Previsión». TASTE no podía: tenía "
+        "una sola ranura de residuos y estimar otra vez borraba la anterior." );
     if (!P->vale || !P->f.tiene_ev) {
         gtk_widget_set_sensitive( mi, FALSE );
         gtk_widget_set_tooltip_text( mi, "No hay evaluación: marca «Evaluar» "
@@ -445,7 +448,7 @@ static void columna( GtkWidget *tv, const char *titulo, int col )
 GtkWidget *prevision_pagina_new( Mtram *m )
 {
     Prev         *P = &m->prev;
-    GtkWidget    *caja, *barra, *b, *sc, *marco, *vb;
+    GtkWidget    *caja, *barra, *sc, *marco, *vb;
     GtkListStore *st;
 
     P->b_calc = NULL;
@@ -474,15 +477,15 @@ GtkWidget *prevision_pagina_new( Mtram *m )
     gtk_box_pack_start( GTK_BOX(barra), gtk_separator_new(
                             GTK_ORIENTATION_VERTICAL ), FALSE, FALSE, 6 );
 
-    P->c_prever = gtk_check_button_new_with_label( "Prever (-f)" );
+    P->c_prever = gtk_check_button_new_with_label( "Prever" );
     gtk_widget_set_tooltip_text( P->c_prever,
-        "Prever una salida exige prever sus entradas: el error de la salida "
+        "drtran -f. Prever una salida exige prever sus entradas: el error de la salida "
         "suma su propia innovación y todas las de aguas arriba, cada una "
         "propagada por la ν(B) que atraviesa." );
     g_signal_connect( P->c_prever, "toggled", G_CALLBACK(on_cambio), m );
     gtk_box_pack_start( GTK_BOX(barra), P->c_prever, FALSE, FALSE, 0 );
 
-    gtk_box_pack_start( GTK_BOX(barra), gtk_label_new( "periodos" ),
+    gtk_box_pack_start( GTK_BOX(barra), gtk_label_new( "períodos" ),
                         FALSE, FALSE, 0 );
     P->s_hor = gtk_spin_button_new_with_range( 1, 60, 1 );
     gtk_spin_button_set_value( GTK_SPIN_BUTTON(P->s_hor), 8 );
@@ -492,9 +495,9 @@ GtkWidget *prevision_pagina_new( Mtram *m )
     gtk_box_pack_start( GTK_BOX(barra), gtk_separator_new(
                             GTK_ORIENTATION_VERTICAL ), FALSE, FALSE, 6 );
 
-    P->c_eval = gtk_check_button_new_with_label( "Evaluar fuera de muestra (-C)" );
+    P->c_eval = gtk_check_button_new_with_label( "Evaluar fuera de muestra" );
     gtk_widget_set_tooltip_text( P->c_eval,
-        "Estima UNA vez sobre la ventana, clava los parámetros y rueda el "
+        "drtran -C. Estima UNA vez sobre la ventana, clava los parámetros y rueda el "
         "origen comparando cada previsión con lo que de verdad pasó. Es lo "
         "único que decide empíricamente entre dos modelos." );
     g_signal_connect( P->c_eval, "toggled", G_CALLBACK(on_cambio), m );
@@ -513,20 +516,8 @@ GtkWidget *prevision_pagina_new( Mtram *m )
     gtk_widget_set_sensitive( P->s_hor, FALSE );
     gtk_widget_set_sensitive( P->s_win, FALSE );
 
-    /* --- la comparacion --- */
-    barra = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 6 );
-    gtk_box_pack_start( GTK_BOX(caja), barra, FALSE, FALSE, 0 );
-
-    b = gtk_button_new_with_label( "Guardar esta evaluación" );
-    gtk_widget_set_tooltip_text( b,
-        "Para comparar con la siguiente. TASTE no podía: tenía una sola "
-        "ranura de residuos y estimar otra vez borraba la anterior." );
-    g_signal_connect( b, "clicked", G_CALLBACK(on_guardar_ref), m );
-    gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
-
-    b = gtk_button_new_with_label( "Olvidarla" );
-    g_signal_connect( b, "clicked", G_CALLBACK(on_olvidar_ref), m );
-    gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
+    /* Guardar la evaluacion y olvidarla estan en Prever ▾, como en la
+     * pagina 6 lo que no es leer: aqui, calcular y lo que se calcula.   */
 
     /* --- la tabla de la evaluacion --- */
     st = gtk_list_store_new( P_N_COLS, G_TYPE_STRING, G_TYPE_INT,

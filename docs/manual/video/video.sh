@@ -8,9 +8,10 @@
 # se queman los subtitulos en cada trozo y se juntan en
 # docs/manual/video/ATSW-ipc-wti.mp4. Necesita ffmpeg con libass y libx264.
 #
-# CON VOZ si hay una voz de Piper (ver voz.py):
+# CON VOZ, de Piper o de Azure (ver voz.py):
 #
 #   VOZ_MODELO=/ruta/es_ES-sharvard-medium.onnx [PIPER=/ruta/piper] bash video.sh
+#   VOZ_AZURE=es-ES-ElviraNeural bash video.sh     (clave y region: voz.py)
 #
 # Cada rotulo se sintetiza antes de grabar; al grabar, el rotulo siguiente
 # espera a que acabe su frase (escenas.c), y aqui se mezclan las frases en
@@ -29,9 +30,13 @@ trap 'rm -rf "$D"' EXIT
 # Las fotos de las escenas de video no se quieren: a un directorio aparte.
 FOTOS_VIDEO=$D/fotos
 mkdir -p "$FOTOS_VIDEO"
-if [ -n "${VOZ_MODELO:-}" ]; then
+if [ -n "${VOZ_AZURE:-}" ] || [ -n "${VOZ_MODELO:-}" ]; then
     # Una carpeta por voz: cambiar de voz no reutiliza las frases de la otra.
-    VOZ_DIR=$V/voz/$(basename "$VOZ_MODELO" .onnx)
+    if [ -n "${VOZ_AZURE:-}" ]; then
+        VOZ_DIR=$V/voz/azure-$VOZ_AZURE${VOZ_VELOCIDAD:+-$VOZ_VELOCIDAD}
+    else
+        VOZ_DIR=$V/voz/$(basename "$VOZ_MODELO" .onnx)
+    fi
     python3 "$V/voz.py" "$VOZ_DIR" "$V"/escenas/*.txt
     export VOZ_DIR
 fi

@@ -278,8 +278,12 @@ gboolean atsw_relee( Atsw *a, char *why, size_t n )
         return FALSE;
         }
 
-    g_free( a->p );
-    a->p = nuevo;
+    /* DENTRO DEL QUE HABIA, como en atsw_abre: las ventanas de Ganancia y
+       Sugerir guardan a->p en su anfitrion, y cambiar el puntero las dejaba
+       leyendo memoria liberada si el manifiesto cambiaba por fuera con
+       ellas abiertas.                                                  */
+    *a->p = *nuevo;
+    g_free( nuevo );
     snprintf( a->p->path, sizeof a->p->path, "%s", path );
     a->p_tam   = (long) st.st_size;
     a->p_mtime = (long) st.st_mtime;

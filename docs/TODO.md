@@ -291,14 +291,6 @@ programa:
   columnas sobrantes no aparecen hasta el primer Save o gráfico, y la serie
   toma el nombre del fichero, no el de la cabecera (`callbacks.c` ~850).
 
-**la madre / lib/proyecto**
-
-- `atsw_relee` libera `a->p` mientras las ventanas de Ganancia y Sugerir
-  guardan un puntero a él (`an_ganancia.c:80`, `an_sugerir.c:356…`): uso
-  tras liberar posible si el manifiesto cambia por fuera con ellas abiertas.
-- `pr_leer` acepta `schema_version: 99`, una lista sin cerrar y un fichero
-  vacío sin protestar.
-
 **art / ventana de identificación** (los del motor, en `engines/art/BUGS.md`)
 
 - La ventana enseña el AICc (CSS) y el peso de Akaike de **todos** los

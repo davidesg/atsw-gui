@@ -75,6 +75,7 @@
 #define PR_MAX_ENTRADA   16
 #define PR_MAX_CORRIDA  256
 #define PR_SHA           65       /* sha256 en hexadecimal, y el '\0'     */
+#define PR_SCHEMA_MAX     2        /* la version mas nueva que se lee      */
 
 /* Que paso. La biblioteca da el HECHO; cada front end lo redacta -- la
  * leccion que costo una prueba de la bateria en lib/netfile.            */
@@ -99,7 +100,9 @@ typedef enum {
    PR_EENCASO,       /* el modelo es la entrada de un caso                */
    PR_ECONCORRIDAS,  /* el caso tiene corridas                            */
    PR_EHIJAS,        /* de la corrida cuelgan otras                       */
-   PR_EENTRADA       /* esa entrada no puede entrar en un caso            */
+   PR_EENTRADA,      /* esa entrada no puede entrar en un caso            */
+   PR_EVERSION,      /* el manifiesto es de una version que no se conoce  */
+   PR_EVACIO         /* el fichero no tiene nada                          */
 } PrCodigo;
 
 typedef struct {

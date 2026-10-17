@@ -26,13 +26,28 @@ static void recorta( char *s )
    *b = '\0';
 }
 
-/* Las comillas del valor, si las lleva. */
-static void desentrecomilla( char *s )
+/* Las comillas del valor, si las lleva, y lo que escribe_valor escapo
+ * dentro (\" y \\). Sin deshacer el escape, una razon con comillas ganaba
+ * una barra en cada guardado. 0 si el valor esta bien formado: unas
+ * comillas sin cerrar, o una lista o un mapa de YAML sin cerrar ("[a, b"),
+ * son un fichero roto, no texto.                                      */
+static int desentrecomilla( char *s )
 {
    size_t n = strlen( s );
+   char  *r, *w;
 
-   if ( n >= 2 && s[0] == '"' && s[n - 1] == '"' )
-       { memmove( s, s + 1, n - 2 ); s[n - 2] = '\0'; }
+   /* Solo la que NO SE CIERRA: «[borrador] cambio» lo escribia a pelo el
+      escritor de antes, y un manifiesto suyo tiene que seguir abriendose. */
+   if ( n > 0 && s[0] == '[' && strchr( s, ']' ) == NULL ) return 0;
+   if ( n > 0 && s[0] == '{' && strchr( s, '}' ) == NULL ) return 0;
+   if ( n == 0 || s[0] != '"' ) return 1;
+   for ( r = s + 1, w = s; *r; r++ )
+       {
+       if ( *r == '\\' && ( r[1] == '"' || r[1] == '\\' ) ) { *w++ = *++r; continue; }
+       if ( *r == '"' ) { if ( r[1] != '\0' ) return 0; *w = '\0'; return 1; }
+       *w++ = *r;
+       }
+   return 0;                              /* no se cerraron */
 }
 
 /* Un valor que hay que entrecomillar: vacio, o con algo que confunda. */
@@ -90,6 +105,10 @@ static int hay_que_entrecomillar( const char *s )
    if ( *s == '\0' ) return 1;
    if ( strpbrk( s, ":#\"'\n" ) != NULL ) return 1;
    if ( s[0] == ' ' || s[strlen( s ) - 1] == ' ' ) return 1;
+   /* Lo que YAML lee como otra cosa al principio: una lista, un mapa, un
+      ancla, un alias, una etiqueta, un bloque, un elemento de lista...
+      «[borrador] cambio» a pelo es un error para el lector de Python.  */
+   if ( strchr( "[]{}&*!|>%@`,?-", s[0] ) != NULL ) return 1;
    if ( parece_fecha( s ) || parece_numero( s ) ||
         parece_palabra_de_yaml( s ) ) return 1;
    return 0;
@@ -1283,8 +1302,7 @@ static int clave_valor( char *s, char **clave, char **valor )
    *valor = c + 1;
    recorta( *clave );
    recorta( *valor );
-   desentrecomilla( *valor );
-   return 1;
+   return desentrecomilla( *valor );
 }
 
 /* UN IDENTIFICADOR NO SE RECORTA: SE RECHAZA.
@@ -1316,6 +1334,7 @@ int pr_leer( const char *path, Proyecto *p, PrError *e )
    int   nl = 0, seccion = 0;     /* 0 raiz, 1 series, 2 modelos, 3 muestras,
                                      4 casos, 5 corridas                  */
    int   cur = -1;                /* la serie o el modelo en curso         */
+   int   hay = 0;                 /* alguna linea con algo                 */
 
    if ( p == NULL ) return 1;
    pr_nuevo( p, "", "", "." );
@@ -1341,6 +1360,7 @@ int pr_leer( const char *path, Proyecto *p, PrError *e )
          if ( t[0] == '\0' ) continue;
          if ( t[0] == '#' ) continue; }
 
+       hay = 1;
        if ( !clave_valor( copia, &clave, &valor ) )
            { falla( e, PR_ESINTAXIS, nl, copia ); fclose( f ); return 1; }
 
@@ -1356,7 +1376,18 @@ int pr_leer( const char *path, Proyecto *p, PrError *e )
            seccion = 0;
 
            if ( strcmp( clave, "schema_version" ) == 0 )
-               p->schema_version = atoi( valor );
+               {
+               /* UNA VERSION QUE NO SE CONOCE NO SE LEE: lo que no se
+                  entendiera se perderia al guardar, sin decirlo.        */
+               char *fin;
+               long  v = strtol( valor, &fin, 10 );
+
+               if ( *valor == '\0' || *fin != '\0' || v < 1 )
+                   { falla( e, PR_ESINTAXIS, nl, valor ); fclose( f ); return 1; }
+               if ( v > PR_SCHEMA_MAX )
+                   { falla( e, PR_EVERSION, nl, valor ); fclose( f ); return 1; }
+               p->schema_version = (int) v;
+               }
            else if ( strcmp( clave, "id" ) == 0 )
                { if ( pon_id( p->id, valor, e, nl ) ) { fclose( f ); return 1; } }
            else if ( strcmp( clave, "titulo" ) == 0 )
@@ -1578,6 +1609,11 @@ int pr_leer( const char *path, Proyecto *p, PrError *e )
 
    fclose( f );
 
+   /* UN FICHERO VACIO NO ES UN PROYECTO SIN SERIES: es un manifiesto que se
+      perdio (un guardado a medias, un disco lleno). Abrirlo y guardar
+      encima borraria lo que quede de el en otro sitio.                 */
+   if ( !hay ) { falla( e, PR_EVACIO, 0, path ); return 1; }
+
    /* EL LINAJE SE COMPRUEBA AL LEER, no cuando alguien lo recorra: un padre
       que no esta, o un ciclo, es un fichero roto y hay que decirlo ya.   */
    {
@@ -1699,6 +1735,14 @@ const char *pr_error_es( const PrError *e, char *out, size_t n )
        case PR_EENTRADA:
            snprintf( out, n, "«%s» no puede entrar en un caso: lo que se cruza "
                      "es un modelo estimado, no los datos.", e->texto ); break;
+       case PR_EVERSION:
+           snprintf( out, n, "El manifiesto es de la versión %s del formato, y "
+                     "este programa lee hasta la %d: es de un ATSW más nuevo. "
+                     "No se abre, para no perder lo que no entiende.",
+                     e->texto, PR_SCHEMA_MAX ); break;
+       case PR_EVACIO:
+           snprintf( out, n, "%s está vacío: no es un proyecto. No se abre, "
+                     "para no guardar uno vacío encima.", e->texto ); break;
        }
    return out;
 }
@@ -1755,6 +1799,13 @@ const char *pr_error_en( const PrError *e, char *out, size_t n )
            snprintf( out, n, "%s hangs from it", e->texto ); break;
        case PR_EENTRADA:
            snprintf( out, n, "%s can not enter a case: it is the data", e->texto );
+           break;
+       case PR_EVERSION:
+           snprintf( out, n, "schema_version %s is newer than this program "
+                     "reads (%d)", e->texto, PR_SCHEMA_MAX );
+           break;
+       case PR_EVACIO:
+           snprintf( out, n, "%s is empty", e->texto );
            break;
        }
    return out;

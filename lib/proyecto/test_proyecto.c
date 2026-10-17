@@ -655,6 +655,56 @@ int main( int argc, char **argv )
         "una corrida que cuelga de otra que no esta, tambien" );
     }
 
+    /* LO QUE pr_leer ACEPTABA SIN PROTESTAR (TODO.md) */
+    {
+    static Proyecto r;           /* ~1,2 MB: en la pila de Windows no cabe */
+    PrError         e;
+    const char     *yaml;
+
+    yaml = pon( "v99.yaml", "schema_version: 99\nid: x\n" );
+    ok( pr_leer( yaml, &r, &e ) != 0 && e.cod == PR_EVERSION,
+        "una version que no se conoce no se lee" );
+    yaml = pon( "vx.yaml", "schema_version: dos\nid: x\n" );
+    ok( pr_leer( yaml, &r, &e ) != 0 && e.cod == PR_ESINTAXIS,
+        "ni una version que no es un numero" );
+    yaml = pon( "vacio.yaml", "" );
+    ok( pr_leer( yaml, &r, &e ) != 0 && e.cod == PR_EVACIO,
+        "un fichero vacio no es un proyecto" );
+    yaml = pon( "comentarios.yaml", "# nada\n\n   \n" );
+    ok( pr_leer( yaml, &r, &e ) != 0 && e.cod == PR_EVACIO,
+        "ni uno con solo comentarios" );
+    yaml = pon( "lista.yaml", "schema_version: 1\nid: x\ntitulo: [a, b\n" );
+    ok( pr_leer( yaml, &r, &e ) != 0 && e.cod == PR_ESINTAXIS,
+        "una lista sin cerrar es un fichero roto" );
+    yaml = pon( "comilla.yaml", "schema_version: 1\nid: x\ntitulo: \"abc\n" );
+    ok( pr_leer( yaml, &r, &e ) != 0 && e.cod == PR_ESINTAXIS,
+        "y unas comillas sin cerrar" );
+    yaml = pon( "viejo.yaml", "schema_version: 1\nid: x\ntitulo: [borrador] IPC\n" );
+    ok( pr_leer( yaml, &r, &e ) == 0 && !strcmp( r.titulo, "[borrador] IPC" ),
+        "pero lo que el escritor de antes dejaba a pelo se sigue leyendo" );
+
+    /* LAS COMILLAS Y LOS CORCHETES, IDA Y VUELTA, dos veces: antes cada
+       guardado le añadia una barra a la razon con comillas.            */
+    {
+    const char *raro[] = { "dijo \"basta\" y C:\\tmp", "[borrador] cambio",
+                           "- no es una lista", "*no es un alias", "{ni un mapa}" };
+    char ruta[PR_RUTA];
+    int  k, vuelta;
+
+    snprintf( ruta, sizeof ruta, "%s/raro.yaml", DIR );
+    for ( k = 0; k < 5; k++ )
+        {
+        pr_nuevo( &r, "x", raro[k], "." );
+        for ( vuelta = 0; vuelta < 2; vuelta++ )
+            {
+            pr_escribir( &r, ruta, &e );
+            if ( pr_leer( ruta, &r, &e ) != 0 ) break;
+            }
+        ok( vuelta == 2 && !strcmp( r.titulo, raro[k] ), raro[k] );
+        }
+    }
+    }
+
     printf( "\n%d fallos\n", fallos );
     free( p ); free( q );
     return fallos ? 1 : 0;

@@ -45,7 +45,7 @@ endif
 .DEFAULT_GOAL := all
 
 # Compiler and basic flags
-CFLAGS   = -O2 -g -Wall -I./include -I$(BUILD_DIR) -I$(LIB_DIR)/fuepre -I$(LIB_DIR)/prewhiten -I$(LIB_DIR)/dates -I$(LIB_DIR)/optim -I$(LIB_DIR)/diagmv -I$(LIB_DIR)/inpcheck -I$(LIB_DIR)/lik
+CFLAGS   = -O2 -g -Wall -I./include -I$(BUILD_DIR) -I$(LIB_DIR)/fuepre -I$(LIB_DIR)/prewhiten -I$(LIB_DIR)/dates -I$(LIB_DIR)/optim -I$(LIB_DIR)/diagmv -I$(LIB_DIR)/inpcheck -I$(LIB_DIR)/lik -I$(LIB_DIR)/fuedet
 LDFLAGS  +=
 LIBS     = -lm
 
@@ -67,7 +67,7 @@ LIB_OBJS = $(BUILD_DIR)/fue_pre_reader.o $(BUILD_DIR)/fuepre_motor.o \
            $(BUILD_DIR)/prewhiten.o $(BUILD_DIR)/dates.o $(BUILD_DIR)/lnsrch.o \
            $(BUILD_DIR)/lik.o $(BUILD_DIR)/multshea.o \
            $(BUILD_DIR)/fuepre_forecast.o $(BUILD_DIR)/inpcheck_fue.o \
-           $(BUILD_DIR)/diagmv.o
+           $(BUILD_DIR)/diagmv.o $(BUILD_DIR)/fuedet.o
 
 # GUI source and objects
 GUI_SRC        = $(GUI_DIR)/drvarma_gui.c
@@ -158,6 +158,9 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
 $(BUILD_DIR)/%.o: $(LIB_DIR)/fuepre/%.c | $(BUILD_DIR)
 	$(CC) $(CLI_CFLAGS) -c $< -o $@
 $(BUILD_DIR)/%.o: $(LIB_DIR)/prewhiten/%.c | $(BUILD_DIR)
+	$(CC) $(CLI_CFLAGS) -c $< -o $@
+# The deterministic filter of fue (lib/fuedet), used by fuepre and prewhiten.
+$(BUILD_DIR)/%.o: $(LIB_DIR)/fuedet/%.c | $(BUILD_DIR)
 	$(CC) $(CLI_CFLAGS) -c $< -o $@
 $(BUILD_DIR)/%.o: $(LIB_DIR)/dates/%.c | $(BUILD_DIR)
 	$(CC) $(CLI_CFLAGS) -c $< -o $@

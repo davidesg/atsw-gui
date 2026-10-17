@@ -1,10 +1,11 @@
 /*
  * prewhiten.c -- ver prewhiten.h.
  *
- * apply_univariate_model viene de engines/drtran/src/drtran.c TAL CUAL: no se
- * ha tocado una linea. prewhiten_ccf son los pasos 1-4 de
- * prewhiten_and_identify, que estaban atados a los globales del motor (lnk, w,
- * phi, theta, p_ord, q_ord, n_stat, Ts) y aqui reciben sus argumentos.
+ * apply_univariate_model viene de engines/drtran/src/drtran.c; desde
+ * 2026-10-16 resta las deterministas con lib/fuedet, la regla de fue.
+ * prewhiten_ccf son los pasos 1-4 de prewhiten_and_identify, que estaban
+ * atados a los globales del motor (lnk, w, phi, theta, p_ord, q_ord, n_stat,
+ * Ts) y aqui reciben sus argumentos.
  */
 
 #include <stdio.h>
@@ -12,6 +13,7 @@
 #include <math.h>
 
 #include "prewhiten.h"
+#include "fuedet.h"
 
 /* Venia de drtran.c, donde lo usaban los factores AR/MA de frecuencia fija: un
  * factor de frecuencia f es 1 - 2cos(2*pi/f) B + B^2.                     */
@@ -177,10 +179,8 @@ void apply_univariate_model(struct Tusmodel *Tm, struct Tseries *Ts,
 {
     int nobs = Ts->nobs;
     real lam = Tm->boxlam;
-    int i, t, j;
+    int t, j;
     real *detrended;
-    real *filt_num;   /* resultado intermedio del filtro numerador */
-    real *filt_out;   /* resultado del filtro completo Ω(B)/Δ(B)  */
 
     /* 1. Box-Cox: DataMat[0][t] = refactor * (data[t]^λ - 1)/λ  (o log si λ≈0).
        El factor de reescalado de FUE MULTIPLICA la serie transformada: deja las
@@ -201,66 +201,25 @@ void apply_univariate_model(struct Tusmodel *Tm, struct Tseries *Ts,
             DataMat[0][t] = ((pow(y, lam) - 1.0) / lam) * Ts->refactor;
     }
 
-    /* 2. Sustraer componentes deterministas */
+    /* 2. Sustraer componentes deterministas. DataMat[1..NdetVar] lo rellena
+       read_fue_pre a partir de la especificación del .pre
+       (impulse/compimp/step/ramp/easter/trend/cos/sin/alter).
+
+       El filtro es el de fue, de lib/fuedet (fue.c, cast_us [5]): nu(B) =
+       Ω(B)/Δ(B) con los signos de Box-Jenkins, truncada en Nomega retardos o
+       en 40 si hay Δ, y las variables SUMADAS y restadas una vez. Hasta
+       2026-10-16 era la recursión exacta, restada variable a variable: el
+       .pre que fue escribió como óptimo dejaba de serlo aquí con un δ
+       próximo a uno (BUG-40 de drvec), y el orden de la resta movía el
+       último bit.                                                         */
     detrended = vector(1, nobs);
-    for (t = 1; t <= nobs; t++) detrended[t] = DataMat[0][t];
-
-    if (Tm->NdetVar > 0) {
-        /* DataMat lo rellena read_fue_pre a partir de la especificación del
-           .pre (impulse/compimp/step/ramp/easter/trend/cos/sin/alter).      */
-        filt_num = vector(1, nobs);
-        filt_out = vector(1, nobs);
-
-        for (i = 1; i <= Tm->NdetVar; i++) {
-            int nw = Tm->Nomega[i];
-            int nd = Tm->Ndelta[i];
-
-            /* Inicializar a cero */
-            for (t = 1; t <= nobs; t++) {
-                filt_num[t] = 0.0;
-                filt_out[t] = 0.0;
-            }
-
-            /* --- Aplicar numerador Ω(B) = ω₀ - ω₁B - ω₂B² - ... (convencion
-               Box-Jenkins, como fue: calcnu en fue.c:4505 hace nu[j] = ... - ω[j]).
-               El termino lider (j=0) suma; los demas RESTAN.  Antes se sumaban
-               todos (+), lo que invertia el signo de los ω no lideres: latente
-               porque la homologacion solo tiene Nomega=0; lo destapo m6 con las
-               intervenciones compuestas. --- */
-            for (t = 1; t <= nobs; t++) {
-                real sum = 0.0;
-                for (j = 0; j <= nw; j++) {
-                    if (t - j >= 1)
-                        sum += (j == 0 ? Tm->Omega[i][j] : -Tm->Omega[i][j])
-                               * DataMat[i][t - j];
-                }
-                filt_num[t] = sum;
-            }
-
-            /* --- Aplicar denominador 1/Δ(B) = 1/(1-δ₁B-δ₂B²-...) --- */
-            /* El filtro recursivo: out[t] = num[t] + Σ δⱼ·out[t-j]   */
-            if (nd > 0) {
-                for (t = 1; t <= nobs; t++) {
-                    real sum = filt_num[t];
-                    for (j = 1; j <= nd; j++) {
-                        if (t - j >= 1)
-                            sum += Tm->Delta[i][j] * filt_out[t - j];
-                    }
-                    filt_out[t] = sum;
-                }
-            } else {
-                /* Sin denominador: out = num directamente */
-                for (t = 1; t <= nobs; t++)
-                    filt_out[t] = filt_num[t];
-            }
-
-            /* Restar la contribución filtrada */
-            for (t = 1; t <= nobs; t++)
-                detrended[t] -= filt_out[t];
-        }
-
-        free_vector(filt_out, 1, nobs);
-        free_vector(filt_num, 1, nobs);
+    if (fuedet_noise(Tm->NdetVar, Tm->Omega, Tm->Nomega, Tm->Delta, Tm->Ndelta,
+                     DataMat, DataMat[0], nobs, detrended) != 0) {
+        fprintf(stderr, "Error: sin memoria para fuedet_noise\n");
+        free_vector(detrended, 1, nobs);
+        *w_out = NULL;
+        *nstat_out = 0;
+        return;
     }
 
     /* 3. Aplicar operador no estacionario (diferenciación) */

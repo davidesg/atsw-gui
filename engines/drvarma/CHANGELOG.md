@@ -13,6 +13,20 @@ drvarma joins the ladder fue → drtran → drvarma: it reads fue's `.pre` files
 Design: `docs/DESIGN-v5-ladder.md`.
 
 ### Changed
+- **The deterministic terms of a `.pre` are filtered with fue's rule**
+  (`lib/fuedet`, 2026-10-16; drvec BUG-40): ν(B) = ω(B)/δ(B) truncated at
+  40 lags when there is a δ, the variables summed and subtracted once, the
+  code of fue.c. Before, `apply_univariate_model` used the exact recursion
+  and subtracted variable by variable, and `build_det_component` the exact
+  recursion. No case of the battery has a δ; the change of order moves the
+  last bits of w, and through the optimiser path the ladder regression
+  (`tests/escalera/ref`, g1, pt, corto, fc, `.out` and `.log`): the gate's
+  difference stays below 4e-13, the estimates agree to the printed digits,
+  and the fdhess standard errors move by up to 0.6 % (pt: SE of
+  AR1[WTI<-IPC_ES] 2.450373 → 2.465813). In g1 and fc six inverse roots of
+  modulus 0.003 appear in |φ(B)| (a hexagon around 0): a defective zero
+  eigenvalue of the companion matrix, perturbed by the last bit, splits by
+  eps^(1/6) and crosses the printing threshold 5e-5.
 - **The MA wall has one tolerance for both sides** (`MA_WALL_TOL`, 5e-5, in
   lib/lik/lik.h; drtran too). chekma refuses a root at modulus >= 1 + 5e-5; a
   stop with a root at modulus >= 1 - 5e-5 is now reported as on the wall

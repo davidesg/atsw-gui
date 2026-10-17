@@ -22,7 +22,7 @@ Univariate models (one .pre per series):
   IPC_FR                52.128376       0.034972         0.0209  <- trimmed sample
   SUM                   43.308275
   joint diagonal        43.308275
-  difference             1.14e-13
+  difference            -2.27e-13
   GATE: PASSED
   Note: IPC_ES moved 0.00836 from its .pre on its own sample. A genuine
         .pre is a fixed point (it moves ~1e-5, the rounding of its six

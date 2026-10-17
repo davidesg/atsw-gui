@@ -13,6 +13,7 @@ es que un fichero que hace falta en dos sitios no se copia.
 | | recuento y (des)empaquetado de los coeficientes **libres**: `n_*_free_params`, `pack_*`, `unpack_*` | drtran, drvarma |
 | | `invalid_fixfreq`: un factor de frecuencia fija con c₂ ≥ 0 | drtran, drvarma |
 | | `fuepre_check_alignment`: BUG-2 | drtran, drvarma |
+| | `build_det_component` filtra con `lib/fuedet`, la regla de fue (ν truncada en 40 si hay δ, las variables sumadas); desde 2026-10-16, antes la recursión exacta (BUG-40 de drvec) | |
 | `fuepre_motor.c` | `unstable_delta`: el δ(B) determinista, con `chekma` | drtran, drvarma |
 | `tusmodel.h` | `struct Tusmodel`, lo que el lector llena | los mismos |
 | `fuepre_forecast.c` | from a forecast of w back to the level: `fuepre_level_forecast`, `fuepre_bc`, `fuepre_bc_inverse`, `fuepre_integrator` (1/rnsop for the psi weights) | drtran, drvarma |
@@ -20,6 +21,9 @@ es que un fichero que hace falta en dos sitios no se copia.
 `unstable_delta` va aparte porque `chekma` vive en `elfvarma.c`, con la
 verosimilitud. El GUI de drtran y sus pruebas enlazan el lector sin el motor,
 y no tienen por qué arrastrarlo.
+
+Quien enlace `fue_pre_reader.c` enlaza también `lib/fuedet/fuedet.c` (y
+`-I lib/fuedet`).
 
 ## El empaquetado es un contrato
 

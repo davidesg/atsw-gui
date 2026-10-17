@@ -192,7 +192,8 @@ exact residuals: `elf` with `atf = TRUE`). Each series goes back to its
 **level** with its own `.pre` model, through `lib/fuepre/fuepre_forecast.c`:
 
 - the deterministic terms, which are known functions of time
-  (`build_det_component`);
+  (`build_det_component`, filtered with fue's rule from `lib/fuedet`:
+  ν(B) truncated at 40 lags when there is a δ);
 - the integration with its operator `rnsop`;
 - the inverse Box-Cox, with its rescaling factor.
 

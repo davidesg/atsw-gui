@@ -24,7 +24,7 @@ Univariate models (one .pre per series):
   IPC_DE                11.205688      0.0526518       3.74e-05
   SUM                   57.837681
   joint diagonal        57.837681
-  difference             2.84e-13
+  difference            -1.14e-13
   GATE: PASSED
 
 Number of parameters: 11

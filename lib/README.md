@@ -212,3 +212,30 @@ judge is `inp_check_fue`. Both are tested over the fue corpus.
 - **Validation.** Against numpy and scipy on simulated residuals: Q and JB
   agree to every printed digit. The p-values differ by up to 1e-4, which is
   the Wilson-Hilferty approximation in each engine's `chisq`.
+
+
+## `vuelta/` — what drtran gives back to the univariate model, added 2026-10-17
+
+- **What it is.** drtran re-estimates each series' univariate block (its
+  ARMA, deterministics and mean) beside the transfer, and the block moves.
+  `vu_escribe` writes it back as a fue `.inp`: the series' `.pre` with the
+  new seeds and every flag as it was. `vu_caso` does it for every entry of a
+  case's model and registers each as a derived model of its series, child of
+  the one that entered, with the reason (DISENO-casos §3).
+- **`.inp`, not `.pre`.** The blocks are optimal *with* the transfer, not on
+  their own, and fue moves them. The extension is the only mark the file
+  carries, so it has to say so. The transfer does not go in.
+- **By order, not by name.** The `.out` names two regular AR factors'
+  first coefficients the same (`phi_1[B^1]`). What matches is the slot order
+  of `lib/slots` against the `.pre`'s flags; if the counts differ, nothing is
+  written. `inpdet` gained the deterministics' coefficients in that order
+  (`id_det_coefs`, `id_escribe_det_coefs`), the mean (`id_media_lee`) and the
+  count of fixed-frequency AR(2) operators, which this does not write yet.
+- **Users.** drtran_gui (Ver modelo ▾) and the mother (the case model's menu),
+  the same `vu_caso`; each only asks and saves.
+- **Validation.** On the IPC ← WTI case of the manual, a diagonal run gives
+  back the `.pre` to the six decimals of the `.out`, and fue estimates the
+  written files to the same optimum (logelf −7.4026486474). `test_vuelta`
+  runs drtran on the m6 and checks that what is written reads back as the
+  `.out` says, with the `.pre`'s flags, and that a `.pre` from another series
+  is rejected without leaving a file.

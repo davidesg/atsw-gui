@@ -385,6 +385,26 @@ $CC -O2 -Wall -Wextra -I"$L/inpdet" -I"$L/inpcheck" \
     -o "$W/test_inpdet" -lm || exit 1
 "$W/test_inpdet" "$TOP/../../engines/fue/tests/corpus" || exit 1
 
+# --- la vuelta de drtran al univariante (lib/vuelta, DISENO-casos §3) -------
+# Una corrida de verdad sobre el m6: lo escrito se relee y es lo del .out, en
+# el orden de lib/slots, con las banderas del .pre; y un .pre que no es el de
+# esa serie no casa y no deja fichero.
+echo
+if [ -x "$E/bin/drtran" ] && [ -f "$E/tests/data/m6/M6_EP.pre" ]; then
+    M6V="$E/tests/data/m6"
+    SV="$M6V/M6_EP.pre $M6V/M6_EI.pre $M6V/M6_EU.pre $M6V/M6_EC.pre $M6V/M6_EA.pre $M6V/M6_P.pre"
+    ( cd "$W" && "$E/bin/drtran" $SV -0 -o "$W/vuelta.out" >/dev/null 2>&1 )
+    $CC -O2 -Wall -Wextra -I"$L/vuelta" -I"$L/inpdet" -I"$L/inpcheck" -I"$L/outdiag" \
+        -I"$L/proyecto" -I"$TOP/../../engines/fue/include" -Dinp_check=inp_check_fue \
+        "$L/vuelta/test_vuelta.c" "$L/vuelta/vuelta.c" "$L/inpdet/inpdet.c" \
+        "$TOP/../../engines/fue/src/inpcheck.c" "$L/outdiag/outdiag.c" \
+        "$L/proyecto/proyecto.c" \
+        -o "$W/test_vuelta" -lm || exit 1
+    "$W/test_vuelta" "$W" "$W/vuelta.out" $SV || exit 1
+else
+    echo "  (sin bin/drtran o sin los .pre del m6: no compruebo la vuelta)"
+fi
+
 # --- el resultado del identificador (engines/art) ---------------------------
 # El lector de DATA_art.cand contra las referencias del propio motor: lo que
 # la ventana de identificacion lee es lo que art escribe, por construccion.

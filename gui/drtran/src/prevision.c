@@ -244,6 +244,9 @@ static void on_calcular( GtkButton *b, Mtram *m )
         return;
     }
 
+    /* Con un modelo estimado y la misma especificacion, la prevision es la
+     * de ESE modelo: estima_lanzar no da de alta otro.                */
+    m->est.pide_prever = TRUE;
     if (estima_lanzar( m )) {
         prevision_refresca( m );        /* apaga el boton mientras corre */
         preview_show_status( m, "Estimando con %s… la tabla se llena al "

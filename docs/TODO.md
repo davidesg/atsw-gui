@@ -253,6 +253,14 @@ la división entera del Jarque-Bera.
 
 - El **acta** de previsión y la evaluación ex-post sobre una submuestra. Se
   revirtió con aquel intento fallido y sólo está en la conversación.
+- **Actualizar el origen de la previsión con el mismo modelo** (el analista,
+  2026-10-17). En drtran_gui, «Calcular la previsión» ya da la del MISMO
+  modelo sin dar de alta otro (`<modelo>_prev.*`). Lo que falta es seguir
+  prevéyendo con ese modelo a medida que llegan datos nuevos: mover el
+  origen, guardar cada previsión y acumularlas para compararlas con lo que
+  luego se observa. Pide un **fuf multivariante** (prever sin reestimar,
+  como fuf con un `.pre` de fue) y un **GUI que gestione las previsiones**
+  según van llegando los datos. Antes, estudiar cómo lo hacía el oráculo.
 
 ---
 

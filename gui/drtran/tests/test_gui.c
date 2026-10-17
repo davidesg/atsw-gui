@@ -1511,6 +1511,29 @@ int main(int argc, char **argv)
         printf("proyecto        : %s\n", out2 ? out2 : "(nada)");
         g_free(s);
 
+        /* LA PREVISION DEL MISMO MODELO no da de alta otro: va a
+         * C1_c01_prev.out y el caso sigue con sus dos corridas.        */
+        {
+            gchar *prev;
+
+            gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p2->prev.c_prever), TRUE);
+            pump(20);
+            pulsa(p2->prev.b_calc);
+            check(espera_motor(p2, 90), "la prevision del modelo acaba", NULL);
+            prev = mtram_artefacto(p2, "_prev.out");
+            check(p2->proy->nco == 2 && !strcmp(p2->corrida, "c01"),
+                  "prever el mismo modelo no da de alta otro", p2->corrida);
+            check(contiene(prev, "C1_c01_prev.out") && g_file_test(prev, G_FILE_TEST_EXISTS),
+                  "su prevision va aparte, con el nombre del modelo", prev);
+            check(p2->prev.vale, "y se lee", etiqueta(p2->prev.texto));
+            check(contiene(etiqueta(p2->estado), "el mismo modelo"),
+                  "y la barra lo dice", etiqueta(p2->estado));
+            g_free(prev);
+
+            gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p2->prev.c_prever), FALSE);
+            pump(20);
+        }
+
         check(pr_borra(p2->proy, "SYN_X", "", "m01", &e) != 0 &&
               e.cod == PR_EENCASO,
               "un modelo que es entrada de un caso no se borra", e.texto);

@@ -38,7 +38,7 @@ fi
 INC="-I$TOP/include -I$E/include"
 for d in fuepre dates prewhiten netfile nsop slots intervencion verdict outdiag \
          gof tabla rutas proyecto outfcst engine ccfplot fugdraw fugplot \
-         equation preview utils inpcheck lik diagmv sitio barra; do
+         equation preview utils inpcheck lik diagmv sitio barra vuelta inpdet; do
     INC="$INC -I$L/$d"
 done
 
@@ -60,11 +60,16 @@ GSL_CFLAGS=$(pkg-config --cflags gsl 2>/dev/null)
 GSL_LIBS=$(pkg-config --libs gsl 2>/dev/null)
 [ -n "$GSL_LIBS" ] || GSL_LIBS="-lgsl -lgslcblas"
 
+# La puerta de fue, aparte y con su nombre, como en el Makefile.
+$CC -O0 -g -w -I"$L/inpcheck" -I"$TOP/../../engines/fue/include" \
+    -Dinp_check=inp_check_fue -c "$TOP/../../engines/fue/src/inpcheck.c" \
+    -o "$W/inpcheck_fue.o" || exit 1
+
 # main.c entra con otro nombre: asi se prueban sus opciones (--help,
 # --proyecto con un manifiesto roto) sin arrancar la aplicacion.
 $CC -O0 -g -w $INC $GTK_CFLAGS -Dmain=drtran_main -c "$TOP/src/main.c" \
     -o "$W/main_gui.o" || exit 1
-$CC -O0 -g -w $INC $GTK_CFLAGS $GSL_CFLAGS "$TOP/tests/test_gui.c" "$W/main_gui.o" \
+$CC -O0 -g -w $INC $GTK_CFLAGS $GSL_CFLAGS "$TOP/tests/test_gui.c" "$W/main_gui.o" "$W/inpcheck_fue.o" \
     $FUENTES -o "$W/test_gui" $GTK_LIBS $GSL_LIBS -lm 2> "$W/build.txt" ||
     { cat "$W/build.txt"; exit 1; }
 

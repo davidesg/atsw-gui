@@ -3050,6 +3050,20 @@ static void casos( void )
                m ? entradas( m ) : NULL );
         check( m && entrada_de( m, "Abrir c00 en drtran" ),
                "y «Abrir c00 en drtran»", m ? entradas( m ) : NULL );
+        /* LA VUELTA AL UNIVARIANTE: esta, y con un .out sin tabla de
+         * parametros (este es fingido) se apaga diciendo por que. El camino
+         * entero, con un .out de verdad, lo prueba drtran_gui: es el mismo
+         * vu_caso de lib/vuelta.                                         */
+        {
+        GtkWidget *dv = m ? entrada_de( m, "Devolver los univariantes" ) : NULL;
+        gchar     *g = dv ? gtk_widget_get_tooltip_text( dv ) : NULL;
+
+        check( dv && !gtk_widget_get_sensitive( dv ) && g &&
+               strstr( g, "tabla de parámetros" ),
+               "y «Devolver los univariantes…», apagado: el .out no trae parámetros",
+               g ? g : ( m ? entradas( m ) : NULL ) );
+        g_free( g );
+        }
         if ( mi ) gtk_menu_item_activate( GTK_MENU_ITEM(mi) );
         cierra_menu( m );
         pump( 300 );

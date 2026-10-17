@@ -1545,6 +1545,58 @@ int main(int argc, char **argv)
         check(!strcmp(p3->corrida, "c02") &&
               !g_strcmp0(pr_corrida_ver(p3->proy, "C1", "c02")->padre, "c01"),
               "es c02 y cuelga de c01, de la que se partio", p3->corrida);
+
+        /* LA VUELTA AL UNIVARIANTE (DISENO-casos §3): cada serie gana un
+         * modelo derivado, hijo del que entro, con su .inp -- NO .pre -- y
+         * la razon de donde viene. Y el manifiesto del disco lo dice.    */
+        {
+        GtkWidget *mn = gtk_menu_new(), *mi = NULL;
+        GList     *hs, *l;
+        Plan       pl = plan_vacio(GTK_RESPONSE_OK);
+        int        nm0 = p3->proy->nm, k, i;
+        const char *ser[2] = { "SYN_Y", "SYN_X" };
+        Proyecto  *disco = g_new0(Proyecto, 1);
+
+        diagnosis_menu_modelos(p3, mn, NULL);
+        hs = gtk_container_get_children(GTK_CONTAINER(mn));
+        for (l = hs; l && !mi; l = l->next) {
+            gchar *t = texto_de(l->data);
+            if (t && strstr(t, "Devolver los univariantes")) mi = l->data;
+            g_free(t);
+        }
+        g_list_free(hs);
+        check(mi && gtk_widget_is_sensitive(mi),
+              "Ver modelo ▾: «Devolver los univariantes…», encendido", NULL);
+        check(mi && pulsa_dialogo(mi, &pl), "pregunta antes de escribir",
+              dlg_txt->str);
+        check(contiene(dlg_txt->str, ".inp, NO .pre"),
+              "y dice que son .inp, no .pre", dlg_txt->str);
+        check(p3->proy->nm == nm0 + 2, "un modelo nuevo por serie",
+              etiqueta(p3->estado));
+        check(pr_leer(yaml, disco, &e) == 0 && disco->nm == nm0 + 2,
+              "y el manifiesto del disco lo registra", etiqueta(p3->estado));
+        for (k = 0; k < 2; k++) {
+            const PrModelo *h = NULL;
+            char            r[PR_RUTA];
+
+            for (i = 0; i < disco->nm; i++)
+                if (!strcmp(disco->m[i].serie, ser[k]) &&
+                    !strcmp(disco->m[i].padre, "m01") &&
+                    contiene(disco->m[i].razon, "drtran"))
+                    h = &disco->m[i];
+            check(h != NULL, "hijo de m01, con la razon de donde viene", ser[k]);
+            if (!h) continue;
+            pr_ruta(disco, ser[k], "", h->id, ".inp", r, sizeof r);
+            check(g_file_test(r, G_FILE_TEST_EXISTS), "con su .inp", r);
+            pr_ruta(disco, ser[k], "", h->id, ".pre", r, sizeof r);
+            check(!g_file_test(r, G_FILE_TEST_EXISTS),
+                  "y sin .pre: es una especificacion, no un optimo", r);
+        }
+        check(contiene(etiqueta(p3->estado), "Devueltos"),
+              "la barra de estado lo dice", etiqueta(p3->estado));
+        g_free(disco);
+        gtk_widget_destroy(mn);
+        }
     }
 
     /* --- el desfase: un .pre cambio despues del alta -------------------- */

@@ -185,7 +185,9 @@ con esas entradas (`pr_caso_de_entradas`) y, si no existe, **se da de alta**;
 la corrida va a él. Si alguna serie no es del proyecto, se estima como sin
 proyecto, en la caché, y se dice por qué.
 
-**Lo que devuelve drtran al univariante.** mtram reescribe los bloques
+**Lo que devuelve drtran al univariante** (HECHO, 2026-10-17: `lib/vuelta`;
+«Devolver los univariantes…» en Ver modelo ▾ de drtran_gui y en el menú del
+modelo del caso en la madre). mtram reescribe los bloques
 univariantes reestimados en conjunto como `.inp` nuevos (`write_inp`,
 `ES_CPI_m10.1.inp`). Si drtran_gui ofrece lo mismo, esos `.inp` entran como
 **modelos derivados de cada serie**, con el modelo de entrada como padre: son

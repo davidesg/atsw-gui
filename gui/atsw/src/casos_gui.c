@@ -29,6 +29,7 @@
 #include "dates.h"
 #include "outfile.h"
 #include "preview.h"
+#include "vuelta.h"
 
 void barra_pub( Atsw *a, const char *s );
 
@@ -696,6 +697,50 @@ static void on_c_pagina( GtkMenuItem *mi, Atsw *a )
 static void on_c_drtran_mi( GtkMenuItem *mi, Atsw *a )
      { (void) mi; atsw_caso_lanza( a, "drtran_gui" ); }
 
+static gboolean confirma( Atsw *a, const char *pregunta, const char *detalle );
+
+/* LA VUELTA AL UNIVARIANTE (DISENO-casos §3): cada entrada del caso gana
+ * un modelo derivado, hijo del que entro, con su bloque reestimado junto a
+ * la transferencia. El trabajo es de lib/vuelta, el mismo que hace
+ * drtran_gui; aqui solo se pregunta y se guarda.                      */
+static void on_c_vuelta( GtkMenuItem *mi, Atsw *a )
+{
+    const char   *co = g_object_get_data( G_OBJECT(mi), "corrida" );
+    const PrCaso *c  = caso_marcado( a );
+    GString      *t;
+    char          hechos[1024], why[512], msg[1700];
+    PrError       e;
+    int           k, rc;
+
+    if ( !c || !co ) return;
+    t = g_string_new( NULL );
+    g_string_printf( t, "Cada serie del caso %s gana un modelo derivado con su "
+                     "bloque univariante reestimado junto a la transferencia "
+                     "(modelo %s):\n", c->id, co );
+    for ( k = 0; k < c->nen; k++ )
+        g_string_append_printf( t, "\n   %s: un modelo nuevo, hijo de %s",
+                                c->en[k].serie, c->en[k].modelo );
+    g_string_append( t, "\n\nSon .inp, NO .pre: estos bloques son óptimos CON "
+                     "la transferencia, no solos, y en fue los números se moverán. "
+                     "Son un punto de partida: estímalos con fue." );
+    if ( !confirma( a, "Devolver los univariantes", t->str ) )
+        { g_string_free( t, TRUE ); return; }
+    g_string_free( t, TRUE );
+
+    rc = vu_caso( a->p, c->id, co, hechos, sizeof hechos, why, sizeof why );
+    if ( atsw_guarda( a, &e ) != 0 )
+        snprintf( msg, sizeof msg, "Los .inp están, pero no pude guardar el proyecto." );
+    else if ( rc )
+        snprintf( msg, sizeof msg, "Devueltos: %s. Con problemas: %s",
+                  hechos[0] ? hechos : "ninguno", why );
+    else
+        snprintf( msg, sizeof msg, "Devueltos: %s. Son .inp: estímalos con fue.", hechos );
+    atsw_refresca( a );
+    barra_pub( a, msg );
+}
+
+static OdParams vuelta_par;        /* ~70 KB: fuera de la pila (Windows) */
+
 /* EL MENU DEL MODELO DEL CASO, con el boton derecho: lo que el de un modelo
  * univariante tiene para mirarlo sin abrir nada. «Ver modelo…» es la pagina
  * de la SALIDA --la serie que el caso explica--; si la red tiene mas
@@ -748,6 +793,37 @@ static void menu_corrida( Atsw *a, GdkEventButton *ev )
     gtk_widget_set_tooltip_text( mi, "Lo mismo que el doble clic." );
     g_signal_connect( mi, "activate", G_CALLBACK(on_c_drtran_mi), a );
     gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+    {
+    char     out[PR_RUTA];
+    gboolean hay = pr_corrida_ruta( a->p, c->id, co, ".out", out, sizeof out ) == 0 &&
+                   g_file_test( out, G_FILE_TEST_EXISTS );
+    gboolean ok  = hay && od_params_file( out, &vuelta_par ) == 0;
+
+    mi = gtk_menu_item_new_with_label( "Devolver los univariantes…" );
+    if ( !ok )
+        {
+        gtk_widget_set_sensitive( mi, FALSE );
+        gtk_widget_set_tooltip_text( mi, hay ? "Su .out no trae la tabla de "
+                                               "parámetros: no hay qué devolver."
+                                             : "El modelo no está estimado: no tiene .out." );
+        }
+    else if ( !vu_con_transferencia( &vuelta_par ) )
+        {
+        gtk_widget_set_sensitive( mi, FALSE );
+        gtk_widget_set_tooltip_text( mi, "Es el modelo diagonal: sin transferencia, "
+                                         "los bloques son los de fue y no hay nada "
+                                         "que devolver." );
+        }
+    else
+        {
+        gtk_widget_set_tooltip_text( mi, "Cada serie gana un modelo derivado, hijo "
+            "del que entró en el caso, con su bloque univariante reestimado junto a "
+            "la transferencia: un .inp para estimar en fue." );
+        g_object_set_data_full( G_OBJECT(mi), "corrida", g_strdup( co ), g_free );
+        g_signal_connect( mi, "activate", G_CALLBACK(on_c_vuelta), a );
+        }
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+    }
     gtk_widget_show_all( menu );
     gtk_menu_popup_at_pointer( GTK_MENU(menu), (GdkEvent *) ev );
     g_free( co );

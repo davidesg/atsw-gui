@@ -679,9 +679,16 @@ int id_anade_arma( const char *origen, const char *destino,
 
 /* "value flag" with the value exact: a fixed null (1.0, 1 - 4/n) has to be
  * the number the test says, not its six-decimal rounding.               */
+/* EL MAS CORTO QUE VUELVE EXACTO: %.17g siempre vuelve, pero escribe
+ * 0.402723 como 0.40272299999999999, y el .inp es para leerlo a ojo. Con
+ * %.15g casi siempre basta; si no vuelve al mismo double, %.17g.        */
 static void coef_linea( FILE *o, double v, int flag )
 {
-   fprintf( o, "%.17g  %d\n", v, flag );
+   char b[40];
+
+   snprintf( b, sizeof b, "%.15g", v );
+   if ( strtod( b, NULL ) != v ) snprintf( b, sizeof b, "%.17g", v );
+   fprintf( o, "%s  %d\n", b, flag );
 }
 
 int id_arma_lee( const char *origen, IdArma *a, char *porque, size_t n )
@@ -1136,4 +1143,149 @@ int id_escribe_maf( const char *origen, const char *destino, const IdMaf *m,
    fclose( o );
    fich_free( &f );
    return 0;
+}
+
+/* ------------------------------------------------------------------------ */
+/* La vuelta desde drtran                                                     */
+/* ------------------------------------------------------------------------ */
+
+/* Las lineas de los coeficientes de los deterministas, EN EL ORDEN DE
+ * drtran: por variable, sus omegas y luego sus deltas. Cuantas, o -1.    */
+static int det_lineas( const Fich *f, const Bloque *b, int idx[], int max )
+{
+   int om[ID_MAX_DET], de[ID_MAX_DET], k, j, li, nc = 0;
+
+   if ( b->ndet == 0 ) return 0;
+   li = b->i_om + 1;
+   for ( k = 0; k < b->ndet; k++ ) { om[k] = li + 1; li += 2 + b->nomega[k]; }
+   li = b->i_del + 1;
+   for ( k = 0; k < b->ndet; k++ )
+       {
+       de[k] = li + 1;
+       if ( b->ndelta[k] > 0 ) li += 1 + b->ndelta[k];
+       }
+   for ( k = 0; k < b->ndet; k++ )
+       {
+       for ( j = 0; j <= b->nomega[k]; j++ )
+           { if ( nc >= max || om[k] + j >= f->n ) return -1; idx[nc++] = om[k] + j; }
+       for ( j = 0; j < b->ndelta[k]; j++ )
+           { if ( nc >= max || de[k] + j >= f->n ) return -1; idx[nc++] = de[k] + j; }
+       }
+   return nc;
+}
+
+#define ID_MAX_COEF  (ID_MAX_DET * 130)
+
+int id_det_coefs( const char *origen, double v[], int fl[], int max,
+                  char *porque, size_t n )
+{
+   Fich   f;
+   Bloque b;
+   int   *idx, nc, i;
+
+   if ( fich_lee( origen, &f, porque, n ) ) return -1;
+   if ( mira( &f, &b, porque, n ) ) { fich_free( &f ); return -1; }
+   idx = malloc( ID_MAX_COEF * sizeof *idx );
+   nc  = idx ? det_lineas( &f, &b, idx, ID_MAX_COEF ) : -1;
+   if ( nc > max ) nc = -1;
+   for ( i = 0; i < nc; i++ )
+       {
+       char t[4][64];
+       int  nt = tokens( f.l[idx[i]], t, 4 );
+
+       if ( nt < 1 || !es_numero( t[0] ) ) { nc = -1; break; }
+       v[i]  = strtod( t[0], NULL );
+       fl[i] = nt > 1 ? atoi( t[1] ) : 1;
+       }
+   if ( nc < 0 ) snprintf( porque, n, "los coeficientes de los deterministas no se leen" );
+   free( idx );
+   fich_free( &f );
+   return nc;
+}
+
+int id_escribe_det_coefs( const char *origen, const char *destino,
+                          const double v[], int nc, char *porque, size_t n )
+{
+   Fich   f;
+   Bloque b;
+   int   *idx, *que, m, i, cuantas;
+   FILE  *o;
+
+   if ( fich_lee( origen, &f, porque, n ) ) return 1;
+   if ( mira( &f, &b, porque, n ) ) { fich_free( &f ); return 1; }
+   idx = malloc( ID_MAX_COEF * sizeof *idx );
+   que = malloc( (size_t) f.n * sizeof *que );
+   cuantas = ( idx && que ) ? det_lineas( &f, &b, idx, ID_MAX_COEF ) : -1;
+   if ( cuantas != nc )
+      {
+      snprintf( porque, n, "el fichero tiene %d coeficientes de deterministas y "
+                           "llegan %d", cuantas, nc );
+      free( idx ); free( que ); fich_free( &f ); return 1;
+      }
+   for ( m = 0; m < f.n; m++ ) que[m] = -1;
+   for ( i = 0; i < nc; i++ ) que[idx[i]] = i;
+   o = fopen( destino, "wb" );
+   if ( !o ) { snprintf( porque, n, "no pude escribir «%s»", destino );
+               free( idx ); free( que ); fich_free( &f ); return 1; }
+   for ( m = 0; m < f.n; m++ )
+       if ( que[m] >= 0 )
+          {
+          char t[4][64];
+          int  nt = tokens( f.l[m], t, 4 );
+
+          /* EL QUE NO SE MOVIO, BYTE A BYTE: la regla del modulo. */
+          if ( nt >= 1 && es_numero( t[0] ) && strtod( t[0], NULL ) == v[que[m]] )
+             fputs( f.l[m], o );
+          else
+             coef_linea( o, v[que[m]], nt > 1 ? atoi( t[1] ) : 1 );
+          }
+       else fputs( f.l[m], o );
+   fclose( o );
+   free( idx ); free( que );
+   fich_free( &f );
+   return 0;
+}
+
+int id_media_lee( const char *origen, double *valor, int *flag,
+                  char *porque, size_t n )
+{
+   Fich f;
+   int  i;
+
+   if ( fich_lee( origen, &f, porque, n ) ) return 1;
+   for ( i = 0; i + 1 < f.n; i++ )
+       if ( es_etiqueta( f.l[i] ) && strstr( f.l[i], "Mean parameter" ) )
+          {
+          char t[4][64];
+          int  nt = tokens( f.l[i + 1], t, 4 );
+
+          if ( nt < 1 || !es_numero( t[0] ) ) break;
+          *valor = strtod( t[0], NULL );
+          *flag  = nt > 1 ? atoi( t[1] ) : 1;
+          fich_free( &f );
+          return 0;
+          }
+   snprintf( porque, n, "no está la línea de la media" );
+   fich_free( &f );
+   return 1;
+}
+
+int id_arf_cuenta( const char *origen, int *nf, char *porque, size_t n )
+{
+   Fich f;
+   int  i;
+
+   if ( fich_lee( origen, &f, porque, n ) ) return 1;
+   for ( i = 0; i + 1 < f.n; i++ )
+       if ( es_etiqueta( f.l[i] ) && strstr( f.l[i], "regular AR(2)" ) )
+          {
+          char t[4][64];
+
+          *nf = tokens( f.l[i + 1], t, 4 ) > 0 ? atoi( t[0] ) : 0;
+          fich_free( &f );
+          return 0;
+          }
+   snprintf( porque, n, "no está la sección de los AR(2) de frecuencia fija" );
+   fich_free( &f );
+   return 1;
 }

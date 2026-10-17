@@ -1256,6 +1256,8 @@ static void on_ver_mi( GtkMenuItem *mi, Mtram *m )
 
 /* Una entrada por ecuacion, en el orden del recorrido: la salida primero y
  * aguas arriba. La madre ofrece lo mismo (casos_gui.c, menu_corrida).   */
+static void on_vuelta_mi( GtkMenuItem *mi, Mtram *m ) { vuelta_devuelve( m ); }
+
 void diagnosis_menu_modelos( Mtram *m, GtkWidget *menu, GtkWidget *ref )
 {
     Diag      *D = &m->dia;
@@ -1277,6 +1279,22 @@ void diagnosis_menu_modelos( Mtram *m, GtkWidget *menu, GtkWidget *ref )
                                              "estimar el modelo." );
         }
     }
+
+    /* LA VUELTA AL UNIVARIANTE (DISENO-casos §3): es del modelo entero, no
+     * de una ecuacion, y por eso va aparte.                             */
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
+    mi = at_entrada( menu, "Devolver los univariantes…", NULL, NULL, ref,
+                     G_CALLBACK(on_vuelta_mi), m );
+    if (vuelta_falta( m )) {
+        gtk_widget_set_sensitive( mi, FALSE );
+        gtk_widget_set_tooltip_text( mi, vuelta_falta( m ) );
+    } else
+        gtk_widget_set_tooltip_text( mi, m->hay_proy && m->caso[0]
+            ? "Cada serie gana un modelo derivado, hijo del que entró, con su "
+              "bloque univariante reestimado junto a la transferencia: un .inp "
+              "para estimar en fue."
+            : "Un .inp por serie, con su bloque univariante reestimado junto a "
+              "la transferencia, en la carpeta que elijas." );
 }
 
 /* ------------------------------------------------------------------------ */

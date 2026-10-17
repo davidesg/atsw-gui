@@ -239,4 +239,33 @@ int id_maf_lee( const char *origen, IdMaf *m, char *porque, size_t n );
 int id_escribe_maf( const char *origen, const char *destino, const IdMaf *m,
                     char *porque, size_t n );
 
+/* ---------------------------------------------------------------------- */
+/* THE WAY BACK FROM drtran (2026-10-17, DISENO-casos §3)                  */
+/*                                                                         */
+/* drtran re-estimates each series' univariate block beside the transfer, */
+/* and those values go back to fue as an .inp: the same file with the new  */
+/* seeds and every flag as it was. drtran numbers the deterministics'      */
+/* coefficients by VARIABLE -- its nomega+1 omegas, then its ndelta deltas */
+/* (lib/slots) -- while the file keeps all the omega blocks and then all   */
+/* the delta blocks. These two functions speak drtran's order.             */
+/* ---------------------------------------------------------------------- */
+
+/* The deterministics' coefficients in drtran's order: v[i] the seed, fl[i]
+ * the flag (1 estimated). Returns how many, or -1 with the reason.      */
+int id_det_coefs( const char *origen, double v[], int fl[], int max,
+                  char *porque, size_t n );
+
+/* Copy origen into destino with those nc coefficients set to v[0..nc-1],
+ * flags untouched. nc must be what id_det_coefs counts. 0, or 1.        */
+int id_escribe_det_coefs( const char *origen, const char *destino,
+                          const double v[], int nc, char *porque, size_t n );
+
+/* The mean line: its seed and flag. 0, or 1 with the reason.            */
+int id_media_lee( const char *origen, double *valor, int *flag,
+                  char *porque, size_t n );
+
+/* How many regular AR(2) operators with fixed frequency the file has
+ * (fue.c [3.3.11-12]). 0, or 1 with the reason.                         */
+int id_arf_cuenta( const char *origen, int *nf, char *porque, size_t n );
+
 #endif /* ATSW_INPDET_H */

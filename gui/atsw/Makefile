@@ -39,6 +39,7 @@ SRC = src/main.c src/ventana.c src/gestos.c src/datos_gui.c src/vistazo.c \
       $(LIB)/analisis/plotstats.c \
       $(LIB)/intervencion/intervencion.c \
       $(LIB)/inpdet/inpdet.c \
+      $(LIB)/vuelta/vuelta.c \
       $(LIB)/engine/engine.c \
       $(LIB)/tabla/tabla.c \
       $(LIB)/rutas/rutas.c \
@@ -70,7 +71,7 @@ HDR = include/atsw.h include/anfitrion.h include/previewhost.h
 LIBHDR = $(wildcard $(LIB)/*/*.h)
 
 
-INC = -Iinclude -I$(LIB)/proyecto -I$(LIB)/outdiag -I$(LIB)/outfile -I$(LIB)/analisis -I$(LIB)/equation -I$(LIB)/dictamen -I$(LIB)/anomalos -I$(LIB)/intervencion -I$(LIB)/inpdet -I$(LIB)/engine -I$(LIB)/inpcheck -I$(LIB)/tabla \
+INC = -Iinclude -I$(LIB)/proyecto -I$(LIB)/outdiag -I$(LIB)/outfile -I$(LIB)/analisis -I$(LIB)/equation -I$(LIB)/dictamen -I$(LIB)/anomalos -I$(LIB)/intervencion -I$(LIB)/inpdet -I$(LIB)/vuelta -I$(LIB)/engine -I$(LIB)/inpcheck -I$(LIB)/tabla \
       -I$(LIB)/rutas -I$(LIB)/sitio -I$(LIB)/dates -I$(LIB)/datos -I$(LIB)/xlsx \
       -I../../engines/fug/src -I$(LIB)/preview -I$(LIB)/fugdraw -I$(LIB)/fugplot -I$(LIB)/utils -I$(LIB)/artcand \
       -I$(LIB)/raices -I$(LIB)/formales -I../../engines/art/include

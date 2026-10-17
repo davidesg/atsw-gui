@@ -381,6 +381,9 @@ void       prevision_desde(Mtram *m, const char *path);
 /* Para la barra: ir a la pagina y calcular; y el menu de Prever.      */
 void       prevision_calcular(Mtram *m);
 gchar     *prevision_grafico(Mtram *m, int k);
+/* Devolver los univariantes a fue (vuelta_gui.c, lib/vuelta). */
+const char *vuelta_falta(Mtram *m);
+void       vuelta_devuelve(Mtram *m);
 void       prevision_menu(Mtram *m, GtkWidget *menu, GtkWidget *ref);
 
 /* diagnosis.c */

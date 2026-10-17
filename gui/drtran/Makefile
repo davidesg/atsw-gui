@@ -24,7 +24,7 @@ ENG = ../../engines/drtran
 
 # diagnose.c entra por Ccf, Mean, Stdev y hosking_test: el estadistico de la
 # identificacion es el que ya calcula el motor, no uno parecido.
-SRC = src/main.c src/main_window.c src/barra_gui.c src/series.c src/identifica.c src/red.c src/modelo.c src/estima.c src/diagnosis.c src/prevision.c src/pagina.c src/plotshim.c src/proyecto_gui.c \
+SRC = src/main.c src/main_window.c src/barra_gui.c src/series.c src/identifica.c src/red.c src/modelo.c src/estima.c src/diagnosis.c src/prevision.c src/pagina.c src/plotshim.c src/proyecto_gui.c src/vuelta_gui.c \
       $(LIB)/fuepre/fue_pre_reader.c \
       $(ENG)/src/nlatools.c \
       $(ENG)/src/diagnose.c \
@@ -51,13 +51,15 @@ SRC = src/main.c src/main_window.c src/barra_gui.c src/series.c src/identifica.c
       $(LIB)/dates/dates.c \
       $(LIB)/sitio/sitio.c \
       $(LIB)/barra/iconos.c \
-      $(LIB)/barra/barra.c
+      $(LIB)/barra/barra.c \
+      $(LIB)/vuelta/vuelta.c \
+      $(LIB)/inpdet/inpdet.c
 
 HDR = include/gui.h include/series.h include/previewhost.h include/plothost.h
 
 INC = -Iinclude -I$(ENG)/include -I$(LIB)/fuepre \
       -I$(LIB)/dates -I$(LIB)/prewhiten -I$(LIB)/netfile -I$(LIB)/nsop -I$(LIB)/slots -I$(LIB)/intervencion -I$(LIB)/verdict -I$(LIB)/outdiag -I$(LIB)/gof -I$(LIB)/tabla -I$(LIB)/rutas -I$(LIB)/proyecto -I$(LIB)/outfcst -I$(LIB)/engine -I$(LIB)/ccfplot -I$(LIB)/fugdraw -I$(LIB)/fugplot \
-      -I$(LIB)/equation -I$(LIB)/preview -I$(LIB)/utils -I$(LIB)/inpcheck -I$(LIB)/lik -I$(LIB)/diagmv -I$(LIB)/sitio -I$(LIB)/barra
+      -I$(LIB)/equation -I$(LIB)/preview -I$(LIB)/utils -I$(LIB)/inpcheck -I$(LIB)/lik -I$(LIB)/diagmv -I$(LIB)/sitio -I$(LIB)/barra -I$(LIB)/vuelta -I$(LIB)/inpdet
 
 GTK_CFLAGS := $(shell pkg-config --cflags gtk+-3.0 2>/dev/null)
 GTK_LIBS   := $(shell pkg-config --libs   gtk+-3.0 2>/dev/null)
@@ -90,18 +92,26 @@ include ../../lib/windows/utf8.mk
 # larga en gui/atsw/Makefile.
 LIBHDR = $(wildcard $(LIB)/*/*.h)
 
-$(TARGET): $(SRC) $(HDR) $(LIBHDR) $(UTF8_RES)
+# LA PUERTA DE fue NO SE COPIA: se compila el fichero del motor, aparte,
+# porque el -D que le pone nombre solo puede tocar a ese fichero (como en
+# gui/fue). lib/vuelta pasa por ella todo lo que escribe.
+INPCHECK = inpcheck_fue.o
+
+$(INPCHECK): ../../engines/fue/src/inpcheck.c $(LIB)/inpcheck/inpcheck.h
+	$(CC) $(CFLAGS) -I$(LIB)/inpcheck -I../../engines/fue/include -Dinp_check=inp_check_fue -c $< -o $@
+
+$(TARGET): $(SRC) $(HDR) $(LIBHDR) $(UTF8_RES) $(INPCHECK)
 	@if [ -z "$(GTK_LIBS)" ]; then \
 	    echo "drtran_gui necesita los ficheros de desarrollo de GTK 3"; \
 	    echo "(Debian/Ubuntu: sudo apt install libgtk-3-dev)"; exit 1; fi
-	$(CC) $(CFLAGS) $(GTK_CFLAGS) $(GSL_CFLAGS) $(INC) $(LDFLAGS) -o $@ $(SRC) $(UTF8_RES) $(GTK_LIBS) $(GSL_LIBS) -lm
+	$(CC) $(CFLAGS) $(GTK_CFLAGS) $(GSL_CFLAGS) $(INC) $(LDFLAGS) -o $@ $(SRC) $(INPCHECK) $(UTF8_RES) $(GTK_LIBS) $(GSL_LIBS) -lm
 
 install: $(TARGET)
 	install -d $(DESTDIR)$(PREFIX)/bin
 	install -m 755 $(TARGET) $(DESTDIR)$(PREFIX)/bin/
 
 clean:
-	rm -f $(TARGET)
+	rm -f $(TARGET) $(INPCHECK)
 
 .PHONY: all install clean
 

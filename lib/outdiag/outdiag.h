@@ -151,4 +151,36 @@ typedef struct {
 int od_params( const char *texto, OdParams *o );
 int od_params_file( const char *path, OdParams *o );
 
+/* ------------------------------------------------------------------------ */
+/* Las transferencias, caracterizadas                                        */
+/*                                                                           */
+/* Dos bloques del .out de drtran, uno por enlace y EN EL ORDEN DE LA RED:   */
+/* «The transfer functions, characterized» --la ganancia g = omega(1)/       */
+/* delta(1) y el retardo medio, con sus errores tipicos por el metodo delta--*/
+/* y «IMPULSE RESPONSE», los nu_k y su acumulada. Las cifras van en las      */
+/* unidades del MOTOR: quien las enseña las pasa a las de la ecuacion.       */
+/* ------------------------------------------------------------------------ */
+
+#define OD_MAX_IRF  64
+
+typedef struct {
+   char   etiqueta[OD_NOMBRE];   /* «IPC <- WTI», o «input 1» en una estrella */
+   int    hay_g;                 /* 0: delta(1) u omega(1) casi cero        */
+   double g, g_dt, m, m_dt;
+   int    b;
+   int    nk;                    /* k = 0..nk-1                             */
+   double nu[OD_MAX_IRF], nu_dt[OD_MAX_IRF];
+   double cum[OD_MAX_IRF], cum_dt[OD_MAX_IRF];
+} OdTransf;
+
+typedef struct {
+   OdTransf t[OD_MAX_LINK];
+   int      n;                   /* los de la caracterizacion               */
+   int      n_irf;               /* los de la respuesta al impulso          */
+} OdTransfs;
+
+/* 0 si encontro la caracterizacion; 1 si el .out no la trae. */
+int od_transferencias( const char *texto, OdTransfs *o );
+int od_transferencias_file( const char *path, OdTransfs *o );
+
 #endif /* ATSW_OUTDIAG_H */

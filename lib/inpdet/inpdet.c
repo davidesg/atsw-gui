@@ -1097,27 +1097,32 @@ int id_quita_det( const char *origen, const char *destino, const char *const *no
 
 /* Where the regular MA(2) section with fixed frequency is: its label, and
  * the first line after it. */
-static int maf_mira( const Fich *f, int *lab, int *fin, int *nf, char t[][64],
-                     char *porque, size_t np )
+/* The two sections of fixed-frequency factors have the same shape: the
+ * count and the frequencies, then per factor a "**" line and "value flag".
+ * que is "AR" or "MA". */
+static int f2_mira( const Fich *f, const char *que, int *lab, int *fin, int *nf,
+                    char t[][64], char *porque, size_t np )
 {
-   int i, nt;
+   char et[64];
+   int  i, nt;
 
+   snprintf( et, sizeof et, "regular %s(2) operators with fixed", que );
    for ( i = 0; i < f->n; i++ )
-       if ( es_etiqueta( f->l[i] ) && strstr( f->l[i], "regular MA(2) operators with fixed" ) ) break;
+       if ( es_etiqueta( f->l[i] ) && strstr( f->l[i], et ) ) break;
    if ( i + 1 >= f->n )
-      { snprintf( porque, np, "no está la sección de los MA(2) de frecuencia fija" ); return 1; }
+      { snprintf( porque, np, "no está la sección de los %s(2) de frecuencia fija", que ); return 1; }
    *lab = i;
    nt = tokens( f->l[i + 1], t, ID_MAX_FAC + 1 );
    *nf = nt > 0 ? atoi( t[0] ) : -1;
    if ( *nf < 0 || *nf > ID_MAX_FAC || nt < *nf + 1 )
-      { snprintf( porque, np, "cuenta ilegible en los MA(2) de frecuencia fija" ); return 1; }
+      { snprintf( porque, np, "cuenta ilegible en los %s(2) de frecuencia fija", que ); return 1; }
    *fin = i + 2 + 2 * *nf;              /* per factor, a "**" line and "value flag" */
    if ( *fin > f->n )
-      { snprintf( porque, np, "el fichero se acaba en los MA(2) de frecuencia fija" ); return 1; }
+      { snprintf( porque, np, "el fichero se acaba en los %s(2) de frecuencia fija", que ); return 1; }
    return 0;
 }
 
-int id_maf_lee( const char *origen, IdMaf *m, char *porque, size_t n )
+static int f2_lee( const char *origen, const char *que, IdMaf *m, char *porque, size_t n )
 {
    Fich f;
    char t[ID_MAX_FAC + 1][64];
@@ -1125,7 +1130,7 @@ int id_maf_lee( const char *origen, IdMaf *m, char *porque, size_t n )
 
    memset( m, 0, sizeof *m );
    if ( fich_lee( origen, &f, porque, n ) ) return 1;
-   if ( maf_mira( &f, &lab, &fin, &nf, t, porque, n ) ) { fich_free( &f ); return 1; }
+   if ( f2_mira( &f, que, &lab, &fin, &nf, t, porque, n ) ) { fich_free( &f ); return 1; }
    m->n = nf;
    for ( i = 0; i < nf; i++ )
        {
@@ -1133,7 +1138,7 @@ int id_maf_lee( const char *origen, IdMaf *m, char *porque, size_t n )
        int  nc = tokens( f.l[lab + 3 + 2 * i], c, 4 );
 
        if ( nc < 1 || !es_numero( c[0] ) )
-          { snprintf( porque, n, "coeficiente ilegible en los MA(2) de frecuencia fija" );
+          { snprintf( porque, n, "coeficiente ilegible en los %s(2) de frecuencia fija", que );
             fich_free( &f ); return 1; }
        m->freq[i] = strtod( t[i + 1], NULL );
        m->v[i]    = strtod( c[0], NULL );
@@ -1143,8 +1148,8 @@ int id_maf_lee( const char *origen, IdMaf *m, char *porque, size_t n )
    return 0;
 }
 
-int id_escribe_maf( const char *origen, const char *destino, const IdMaf *m,
-                    char *porque, size_t n )
+static int f2_escribe( const char *origen, const char *que, const char *destino,
+                       const IdMaf *m, char *porque, size_t n )
 {
    Fich  f;
    FILE *o;
@@ -1153,7 +1158,7 @@ int id_escribe_maf( const char *origen, const char *destino, const IdMaf *m,
 
    if ( m->n < 0 || m->n > ID_MAX_FAC ) { snprintf( porque, n, "%d factores", m->n ); return 1; }
    if ( fich_lee( origen, &f, porque, n ) ) return 1;
-   if ( maf_mira( &f, &lab, &fin, &nf, t, porque, n ) ) { fich_free( &f ); return 1; }
+   if ( f2_mira( &f, que, &lab, &fin, &nf, t, porque, n ) ) { fich_free( &f ); return 1; }
    o = fopen( destino, "wb" );
    if ( !o ) { snprintf( porque, n, "no pude escribir «%s»", destino ); fich_free( &f ); return 1; }
    for ( i = 0; i <= lab; i++ ) fputs( f.l[i], o );
@@ -1165,6 +1170,28 @@ int id_escribe_maf( const char *origen, const char *destino, const IdMaf *m,
    fclose( o );
    fich_free( &f );
    return 0;
+}
+
+int id_maf_lee( const char *origen, IdMaf *m, char *porque, size_t n )
+{
+   return f2_lee( origen, "MA", m, porque, n );
+}
+
+int id_escribe_maf( const char *origen, const char *destino, const IdMaf *m,
+                    char *porque, size_t n )
+{
+   return f2_escribe( origen, "MA", destino, m, porque, n );
+}
+
+int id_arf_lee( const char *origen, IdMaf *m, char *porque, size_t n )
+{
+   return f2_lee( origen, "AR", m, porque, n );
+}
+
+int id_escribe_arf( const char *origen, const char *destino, const IdMaf *m,
+                    char *porque, size_t n )
+{
+   return f2_escribe( origen, "AR", destino, m, porque, n );
 }
 
 /* ------------------------------------------------------------------------ */

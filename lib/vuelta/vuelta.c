@@ -43,10 +43,10 @@ int vu_escribe( const char *pre, const OdParams *par, int k,
                 const char *destino, int *movidos, char *porque, size_t n )
 {
    IdArma  a;
-   IdMaf   mf;
+   IdMaf   mf, af;
    double *v = NULL, *dv = NULL, mu = 0.0;
    int    *dfl = NULL;
-   int     nd, nlib, i, s, f, j, c, narf = 0, fmu = 0, hay_mu;
+   int     nd, nlib, i, s, f, j, c, fmu = 0, hay_mu;
    int     mov = 0, rc = 1;
    char    tmp[4096], tmp2[4096], msg[512];
 
@@ -64,9 +64,10 @@ int vu_escribe( const char *pre, const OdParams *par, int k,
 
    if ( id_arma_lee( pre, &a, porque, n ) ) goto fin;
    if ( id_maf_lee( pre, &mf, porque, n ) ) goto fin;
-   if ( id_arf_cuenta( pre, &narf, porque, n ) ) goto fin;
+   if ( id_arf_lee( pre, &af, porque, n ) ) goto fin;
 
-   /* --- el ARMA: AR (regular, anual), luego MA (regular, anual, maf) --- */
+   /* --- el ARMA: AR (regular, anual, arf), luego MA (regular, anual, maf),
+          el orden de lib/slots: los de frecuencia fija, al final --- */
    for ( s = 0; s < 2; s++ )
        {
        const int sec[2][2] = { { 0, 1 }, { 2, 3 } };
@@ -77,10 +78,11 @@ int vu_escribe( const char *pre, const OdParams *par, int k,
            for ( f = 0; f < a.nf[sec[s][c]]; f++ )
                for ( j = 0; j < a.ord[sec[s][c]][f]; j++ )
                    nlib += a.fl[sec[s][c]][f][j] == 1;
-       if ( s == 1 ) for ( f = 0; f < mf.n; f++ ) nlib += mf.fl[f] == 1;
-       if ( s == 0 && narf > 0 && m > 0 )
-          { snprintf( porque, n, "la serie %d tiene AR(2) de frecuencia fija: esta "
-                                 "vuelta todavía no sabe escribirlos", k ); goto fin; }
+       {
+       const IdMaf *ff = s ? &mf : &af;
+
+       for ( f = 0; f < ff->n; f++ ) nlib += ff->fl[f] == 1;
+       }
        if ( m < 0 || ( m > 0 && m != nlib ) )
           {
           snprintf( porque, n, "la serie %d: el .out trae %d coeficientes %s y el "
@@ -100,16 +102,24 @@ int vu_escribe( const char *pre, const OdParams *par, int k,
                       mov += fabs( *w - v[i] ) > 1e-12;
                       *w = v[i++];
                       }
-       if ( s == 1 )
-          for ( f = 0; f < mf.n; f++ )
-              if ( mf.fl[f] == 1 )
-                 { mov += fabs( mf.v[f] - v[i] ) > 1e-12; mf.v[f] = v[i++]; }
+       {
+       IdMaf *ff = s ? &mf : &af;
+
+       for ( f = 0; f < ff->n; f++ )
+           if ( ff->fl[f] == 1 )
+              { mov += fabs( ff->v[f] - v[i] ) > 1e-12; ff->v[f] = v[i++]; }
+       }
        }
    if ( id_escribe_arma( pre, tmp, &a, porque, n ) ) goto fin;
    if ( mf.n > 0 )
       {
       if ( id_escribe_maf( tmp, tmp2, &mf, porque, n ) || paso( tmp2, tmp ) )
          { if ( !porque[0] ) snprintf( porque, n, "no pude escribir el MA(2)" ); goto fin; }
+      }
+   if ( af.n > 0 )
+      {
+      if ( id_escribe_arf( tmp, tmp2, &af, porque, n ) || paso( tmp2, tmp ) )
+         { if ( !porque[0] ) snprintf( porque, n, "no pude escribir el AR(2)" ); goto fin; }
       }
 
    /* --- los deterministas, por variable: omegas y deltas --- */

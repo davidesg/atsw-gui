@@ -172,6 +172,13 @@ typedef struct {
     OdResiduos res;           /* los residuos, como NUMEROS                 */
     OdParams   par;           /* la tabla con las desviaciones tipicas      */
     gboolean   vale, hay_res, hay_par;
+
+    /* LAS TRANSFERENCIAS, CARACTERIZADAS: la ganancia, el retardo medio y la
+     * respuesta al impulso de cada enlace, que el motor ya escribe en el
+     * .out y aqui se leen (lib/outdiag).                               */
+    GtkWidget *l_tg, *l_irf, *t_irf;
+    OdTransfs  tr;
+    gboolean   hay_tr;
     gchar     *path;          /* el .out del que salio                      */
 
     /* EL BASELINE: el modelo DIAGONAL. Contesta "¿aportan algo las

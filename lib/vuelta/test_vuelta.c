@@ -36,14 +36,15 @@ static void ok( int c, const char *que, const char *mas )
 static int libres( const char *f, double *v, int *fl, int *nfl )
 {
     IdArma a;
-    IdMaf  m;
+    IdMaf  m, af;
     double d[8000], mu;
     int    dfl[8000], nd, fmu, n = 0, k, i, j, s;
     char   w[256];
     const int sec[2][2] = { { 0, 1 }, { 2, 3 } };
 
     *nfl = 0;
-    if ( id_arma_lee( f, &a, w, sizeof w ) || id_maf_lee( f, &m, w, sizeof w ) ) return -1;
+    if ( id_arma_lee( f, &a, w, sizeof w ) || id_maf_lee( f, &m, w, sizeof w ) ||
+         id_arf_lee( f, &af, w, sizeof w ) ) return -1;
     for ( s = 0; s < 2; s++ )
         {
         for ( k = 0; k < 2; k++ )
@@ -53,9 +54,12 @@ static int libres( const char *f, double *v, int *fl, int *nfl )
                     fl[(*nfl)++] = a.fl[sec[s][k]][i][j];
                     if ( a.fl[sec[s][k]][i][j] == 1 ) v[n++] = a.v[sec[s][k]][i][j];
                     }
-        if ( s == 1 )
-            for ( i = 0; i < m.n; i++ )
-                { fl[(*nfl)++] = m.fl[i]; if ( m.fl[i] == 1 ) v[n++] = m.v[i]; }
+        {
+        const IdMaf *ff = s ? &m : &af;   /* los de frecuencia fija, al final */
+
+        for ( i = 0; i < ff->n; i++ )
+            { fl[(*nfl)++] = ff->fl[i]; if ( ff->fl[i] == 1 ) v[n++] = ff->v[i]; }
+        }
         }
     if ( ( nd = id_det_coefs( f, d, dfl, 8000, w, sizeof w ) ) < 0 ) return -1;
     for ( i = 0; i < nd; i++ )

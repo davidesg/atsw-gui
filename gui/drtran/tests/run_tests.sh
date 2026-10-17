@@ -401,6 +401,16 @@ if [ -x "$E/bin/drtran" ] && [ -f "$E/tests/data/m6/M6_EP.pre" ]; then
         "$L/proyecto/proyecto.c" \
         -o "$W/test_vuelta" -lm || exit 1
     "$W/test_vuelta" "$W" "$W/vuelta.out" $SV || exit 1
+    # Y con un AR(2) de frecuencia fija (syn_ARF, frente al ruido blanco de la
+    # misma serie): va en los phi_k[f=..], despues de los regulares y anuales.
+    CF="$TOP/../../engines/fue/tests/corpus"
+    ( cd "$W" && "$E/bin/drtran" "$CF/syn_ARF.inp" "$CF/syn_WNMU.inp" -0 \
+          -o "$W/vuelta_arf.out" >/dev/null 2>&1 )
+    if grep -q "phi_1\[f=" "$W/vuelta_arf.out" 2>/dev/null; then
+        "$W/test_vuelta" "$W" "$W/vuelta_arf.out" "$CF/syn_ARF.inp" "$CF/syn_WNMU.inp" || exit 1
+    else
+        echo "  FALLO drtran no estimo el AR(2) de frecuencia fija de syn_ARF"; exit 1
+    fi
 else
     echo "  (sin bin/drtran o sin los .pre del m6: no compruebo la vuelta)"
 fi

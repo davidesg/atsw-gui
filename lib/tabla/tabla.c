@@ -423,6 +423,114 @@ int tb_write_tex( const Tabla *t, const char *path )
 }
 
 /* ------------------------------------------------------------------------ */
+/* Markdown                                                                  */
+/* ------------------------------------------------------------------------ */
+
+/* Un texto que crece. Sin open_memstream, que no esta en Windows. */
+typedef struct { char *s; size_t n, cap; int roto; } Buf;
+
+static void bput( Buf *b, const char *s )
+{
+   size_t l = strlen( s );
+
+   if ( b->roto ) return;
+   if ( b->n + l + 1 > b->cap )
+       {
+       size_t cap = ( b->cap ? b->cap * 2 : 1024 );
+       char  *n;
+
+       while ( cap < b->n + l + 1 ) cap *= 2;
+       n = (char *) realloc( b->s, cap );
+       if ( n == NULL ) { b->roto = 1; return; }
+       b->s = n; b->cap = cap;
+       }
+   memcpy( b->s + b->n, s, l + 1 );
+   b->n += l;
+}
+
+/* Una celda no puede llevar '|' ni saltos: el primero parte la columna y el
+   segundo la fila.                                                         */
+static void bcelda( Buf *b, const char *s )
+{
+   char        u[2] = { 0, 0 };
+   const char *p;
+
+   for ( p = s; *p; p++ )
+       {
+       if ( *p == '|' ) bput( b, "\\|" );
+       else if ( *p == '\n' || *p == '\r' ) bput( b, " " );
+       else { u[0] = *p; bput( b, u ); }
+       }
+}
+
+char *tb_md( const Tabla *t )
+{
+   Buf  b = { NULL, 0, 0, 0 };
+   char x[TB_TEXTO_MAX + 64];
+   int  i, j;
+
+   if ( t == NULL ) return NULL;
+   bput( &b, "" );
+
+   if ( t->titulo[0] ) { bput( &b, "**" ); bcelda( &b, t->titulo ); bput( &b, "**\n\n" ); }
+
+   if ( t->ncol > 0 )
+       {
+       bput( &b, "|" );
+       for ( j = 0; j < t->ncol; j++ )
+           {
+           texto_cabecera( &t->col[j], x, sizeof x );
+           bput( &b, " " ); bcelda( &b, x ); bput( &b, " |" );
+           }
+       bput( &b, "\n|" );
+       /* El texto a la izquierda, las cifras a la derecha: como en el TXT. */
+       for ( j = 0; j < t->ncol; j++ )
+           bput( &b, t->col[j].tipo == TB_TXT ? " :--- |" : " ---: |" );
+       bput( &b, "\n" );
+
+       for ( i = 0; i < t->nfila; i++ )
+           {
+           bput( &b, "|" );
+           for ( j = 0; j < t->ncol; j++ )
+               {
+               texto_celda( t, i, j, x, sizeof x );
+               bput( &b, " " ); bcelda( &b, x ); bput( &b, " |" );
+               }
+           bput( &b, "\n" );
+           }
+       }
+
+   if ( t->nproc )
+       {
+       bput( &b, "\n*" );
+       for ( i = 0; i < t->nproc; i++ )
+           {
+           if ( i ) bput( &b, " · " );
+           bcelda( &b, t->pclave[i] ); bput( &b, ": " ); bcelda( &b, t->pvalor[i] );
+           }
+       bput( &b, "*\n" );
+       }
+
+   if ( b.roto ) { free( b.s ); return NULL; }
+   return b.s;
+}
+
+int tb_write_md( const Tabla *t, const char *path )
+{
+   FILE *f;
+   char *s;
+   int   r;
+
+   if ( t == NULL || path == NULL ) return 1;
+   if ( ( s = tb_md( t ) ) == NULL ) return 1;
+   f = fopen( path, "w" );
+   if ( f == NULL ) { free( s ); return 1; }
+   r = fputs( s, f ) < 0;
+   free( s );
+   return ( fclose( f ) || r ) ? 1 : 0;
+}
+
+/* ------------------------------------------------------------------------ */
 
 int tb_write( const Tabla *t, const char *path )
 {
@@ -434,6 +542,7 @@ int tb_write( const Tabla *t, const char *path )
    if ( p != NULL )
        {
        if ( strcmp( p, ".tex" ) == 0 ) return tb_write_tex( t, path );
+       if ( strcmp( p, ".md" ) == 0 )  return tb_write_md( t, path );
        if ( strcmp( p, ".txt" ) == 0 ||
             strcmp( p, ".dat" ) == 0 ) return tb_write_txt( t, path );
        }

@@ -38,7 +38,7 @@ else
 endif
 
 # Compiler and basic flags
-CFLAGS   = -O2 -g -Wall -Iinclude -I../../lib/fugdraw -I../../lib/preview -I../../lib/engine -I../../lib/outfile -I../../lib/utils -I../../lib/datos -I../../lib/xlsx -I../../lib/proyecto -I../../lib/inpcheck -I../../lib/fugplot -I../../lib/analisis -I../../lib/equation -I../../lib/anomalos -I../../lib/dictamen -I../../lib/intervencion -I../../lib/inpdet -I../../lib/tabla -I../../lib/rutas -I../../lib/artcand -I../../lib/sitio -I../../lib/raices -I../../lib/formales -I../../lib/barra -I$(ENG_DIR)/fue/include
+CFLAGS   = -O2 -g -Wall -Iinclude -I../../lib/fugdraw -I../../lib/preview -I../../lib/engine -I../../lib/outfile -I../../lib/utils -I../../lib/datos -I../../lib/xlsx -I../../lib/proyecto -I../../lib/inpcheck -I../../lib/fugplot -I../../lib/analisis -I../../lib/equation -I../../lib/anomalos -I../../lib/dictamen -I../../lib/intervencion -I../../lib/inpdet -I../../lib/tabla -I../../lib/cuaderno -I../../lib/rutas -I../../lib/artcand -I../../lib/sitio -I../../lib/raices -I../../lib/formales -I../../lib/barra -I$(ENG_DIR)/fue/include
 LDFLAGS  +=
 LIBS     = -lz -lm
 
@@ -81,6 +81,7 @@ LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c \
            $(LIB_DIR)/intervencion/intervencion.c \
            $(LIB_DIR)/inpdet/inpdet.c \
            $(LIB_DIR)/tabla/tabla.c \
+           $(LIB_DIR)/cuaderno/cuaderno.c \
            $(LIB_DIR)/preview/preview.c \
            $(LIB_DIR)/engine/engine.c \
            $(LIB_DIR)/outfile/outfile.c \
@@ -279,6 +280,10 @@ $(BUILD_DIR)/lib_inpdet/%.o: $(LIB_DIR)/inpdet/%.c | $(BUILD_DIR)
 	$(CC) $(ALL_CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/lib_tabla/%.o: $(LIB_DIR)/tabla/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(ALL_CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/lib_cuaderno/%.o: $(LIB_DIR)/cuaderno/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
 	$(CC) $(ALL_CFLAGS) -c $< -o $@
 

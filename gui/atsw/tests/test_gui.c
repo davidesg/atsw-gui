@@ -45,6 +45,7 @@
 #include "fugdraw.h"
 #include "inpdet.h"
 #include "inpcheck.h"
+#include "cuaderno.h"
 
 static int    fallos = 0;
 static char   T[PR_RUTA];          /* el directorio de la prueba          */
@@ -3410,6 +3411,299 @@ static void legados( void )
     g_free( y ); g_free( x ); g_free( fuera );
 }
 
+
+/* ------------------------------------------------------------------------ */
+/* LO QUE SALIO DE TASTE (ESTUDIO-taste-interfaz §5): corregir sin cerrar,  */
+/* el teclado y el cuaderno.                                                 */
+/* ------------------------------------------------------------------------ */
+
+/* UN FORMULARIO QUE NO VALE: se pone <malo> en la fila <fila> y se acepta.
+   Si el dialogo SIGUE ahi --que es lo que se prueba-- se lee el aviso de
+   dentro y se cancela. Si se cerro, el turno no se atiende y vigila() lo
+   da por FAIL.                                                          */
+typedef struct { int fila; const char *malo; int paso; char aviso[512]; } Corrige;
+
+static gboolean corrige( GtkWindow *w, gpointer d )
+{
+    Corrige *c = d;
+
+    if ( c->paso == 0 )
+        {
+        GPtrArray *g = junta( GTK_WIDGET(w), GTK_TYPE_GRID, FALSE );
+        GtkWidget *e = g->len ? gtk_grid_get_child_at( g_ptr_array_index( g, 0 ), 1, c->fila )
+                              : NULL;
+
+        g_ptr_array_free( g, TRUE );
+        if ( e && GTK_IS_ENTRY(e) ) gtk_entry_set_text( GTK_ENTRY(e), c->malo );
+        c->paso = 1;
+        gtk_dialog_response( GTK_DIALOG(w), GTK_RESPONSE_OK );
+        return FALSE;
+        }
+    {
+    GtkWidget *l = llamado( GTK_WIDGET(w), "aviso" );
+
+    g_snprintf( c->aviso, sizeof c->aviso, "%s",
+                l ? gtk_label_get_text( GTK_LABEL(l) ) : "(sin aviso)" );
+    }
+    c->paso = 2;
+    gtk_dialog_response( GTK_DIALOG(w), GTK_RESPONSE_CANCEL );
+    return TRUE;
+}
+
+static void corregir( void )
+{
+    Corrige c;
+    char    id[PR_ID];
+    int     hojas = A.nhojas;
+
+    /* «Proyecto…» con el identificador vacío. */
+    snprintf( id, sizeof id, "%s", A.p->id );
+    memset( &c, 0, sizeof c ); c.fila = 0; c.malo = "";
+    responde( "Información del proyecto", corrige, &c );
+    on_proyecto( NULL, &A );
+    todo_atendido( "«Proyecto…» con el identificador vacío tenía que seguir abierto" );
+    check( c.paso == 2 && strstr( c.aviso, "no puede quedar vacío" ) != NULL,
+           "un identificador vacío se dice DENTRO del diálogo, que sigue abierto",
+           c.aviso );
+    check( !strcmp( A.p->id, id ), "y cancelar deja el identificador como estaba",
+           A.p->id );
+
+    /* «Editar la serie…» con una bajada que no es fecha. */
+    memset( &c, 0, sizeof c ); c.fila = 4; c.malo = "17/10/2026";
+    responde( "Editar la serie", corrige, &c );
+    atsw_serie_edita( &A, "ipc" );
+    todo_atendido( "«Editar la serie…» con una bajada mala tenía que seguir abierto" );
+    check( c.paso == 2 && strstr( c.aviso, "AAAA-MM-DD" ) != NULL,
+           "una bajada que no es AAAA-MM-DD se dice dentro, sin cerrar", c.aviso );
+
+    /* «+» con un nombre que ya existe. */
+    memset( &c, 0, sizeof c ); c.fila = 0; c.malo = "hasta-2010";
+    responde( "Nueva muestra", corrige, &c );
+    on_muestra_nueva( NULL, &A );
+    todo_atendido( "«+» con un nombre repetido tenía que seguir abierto" );
+    check( c.paso == 2 && c.aviso[0] && strcmp( c.aviso, "(sin aviso)" ),
+           "una muestra repetida se dice dentro, y lo tecleado se queda", c.aviso );
+    check( A.nhojas == hojas, "y no sale ninguna hoja", NULL );
+    nota( "corregir sin cerrar: «%s»", c.aviso );
+}
+
+static void tecla( GtkWidget *w, guint k )
+{
+    GdkEvent *ev = gdk_event_new( GDK_KEY_PRESS );
+    gboolean  r = FALSE;
+
+    ev->key.window = g_object_ref( gtk_widget_get_window( w ) );
+    ev->key.keyval = k;
+    ev->key.time   = GDK_CURRENT_TIME;
+    g_signal_emit_by_name( w, "key-press-event", ev, &r );
+    gdk_event_free( ev );
+    pump( 100 );
+}
+
+static void teclado( void )
+{
+    GSList        *gs = gtk_accel_groups_from_object( G_OBJECT(A.ventana) );
+    GtkAccelGroup *g  = gs ? gs->data : NULL;
+    static const guint  k[] = { GDK_KEY_o, GDK_KEY_n, GDK_KEY_e, GDK_KEY_r, GDK_KEY_q };
+    static const char  *n[] = { "Ctrl+O", "Ctrl+N", "Ctrl+E", "Ctrl+R", "Ctrl+Q" };
+    int            i;
+
+    for ( i = 0; i < 5; i++ )
+        {
+        guint  nq = 0;
+        gchar *q  = g_strdup_printf( "la madre tiene %s, como las hijas", n[i] );
+
+        if ( g ) gtk_accel_group_query( g, k[i], GDK_CONTROL_MASK, &nq );
+        check( nq > 0, q, NULL );
+        g_free( q );
+        }
+    olvida();
+    gtk_accel_groups_activate( G_OBJECT(A.ventana), GDK_KEY_r, GDK_CONTROL_MASK );
+    pump( 100 );
+    check( dijo( "Releído" ) || dijo( "releído" ), "Ctrl+R relee y lo dice", todo_lo_dicho() );
+
+    /* LA TECLA DE MENU sobre la rejilla: el mismo menú que el botón derecho. */
+    {
+    gboolean r = FALSE;
+    GtkMenu *m;
+
+    marca( A.l_modelos, M_ID, "m01" );
+    g_signal_emit_by_name( A.l_modelos, "popup-menu", &r );
+    pump( 100 );
+    m = menu_abierto();
+    check( r && m && entrada_de( m, "Diagnosis" ),
+           "la tecla de menú saca el menú de m01", m ? entradas( m ) : NULL );
+    cierra_menu( m );
+
+    marca( A.l_series, S_ID, "ipc" );
+    r = FALSE;
+    g_signal_emit_by_name( A.l_series, "popup-menu", &r );
+    pump( 100 );
+    m = menu_abierto();
+    check( r && m && entrada_de( m, "Editar la serie" ),
+           "y sobre la lista de series, el de la serie", m ? entradas( m ) : NULL );
+    cierra_menu( m );
+    }
+
+    /* SUPR: la misma pregunta que «Borrar…»; y los datos no se borran. */
+    marca( A.l_modelos, M_ID, "m03" );
+    responde( "¿Borro", contesta, GINT_TO_POINTER(GTK_RESPONSE_CANCEL) );
+    tecla( A.l_modelos, GDK_KEY_Delete );
+    todo_atendido( "Supr sobre m03 tenía que preguntar antes de borrar" );
+    {
+    gchar *f = filas( A.l_modelos, M_ID );
+
+    check( strstr( f, "m03" ) != NULL, "y cancelar no borra nada", f );
+    g_free( f );
+    }
+    marca( A.l_modelos, M_ID, "m00" );
+    olvida();
+    tecla( A.l_modelos, GDK_KEY_Delete );
+    check( dijo( "no se borran" ) != NULL, "Supr sobre los datos se niega y lo dice",
+           todo_lo_dicho() );
+}
+
+static gchar *cuaderno_md( void )
+{
+    char md[PR_RUTA];
+
+    if ( cu_ruta( A.p->path, md, sizeof md ) != 0 ) return g_strdup( "" );
+    {
+    gchar *c = lee( md );
+
+    return c ? c : g_strdup( "" );
+    }
+}
+
+static void cuaderno( void )
+{
+    GtkWindow *dw = ventana_titulada( "Diagnosis — ipc / m01" );
+    GtkWidget *b;
+    gchar     *c;
+
+    if ( !dw )
+        {
+        GtkMenu *m;
+
+        marca( A.l_modelos, M_ID, "m01" );
+        m = clic_derecho( A.l_modelos, 1 );
+        if ( m && entrada_de( m, "Diagnosis" ) )
+            gtk_menu_item_activate( GTK_MENU_ITEM(entrada_de( m, "Diagnosis" )) );
+        cierra_menu( m );
+        pump( 300 );
+        dw = ventana_titulada( "Diagnosis — ipc / m01" );
+        }
+    b = dw ? boton_que_dice( GTK_WIDGET(dw), "Al cuaderno" ) : NULL;
+    check( b != NULL, "la diagnosis tiene «Al cuaderno»", NULL );
+    if ( b )
+        {
+        olvida();
+        gtk_button_clicked( GTK_BUTTON(b) );
+        pump( 100 );
+        check( dijo( "Al cuaderno: cuaderno/cuaderno.md" ) != NULL,
+               "mandarla lo dice, con la ruta relativa", todo_lo_dicho() );
+        c = cuaderno_md();
+        check( strstr( c, "# Cuaderno del proyecto" ) == c,
+               "el cuaderno nace con su cabecera", c );
+        check( strstr( c, " · Diagnosis — ipc / m01\n" ) != NULL &&
+               strstr( c, "- **Modelo:** m01\n" ) != NULL &&
+               strstr( c, "- **Informe:** " ) != NULL,
+               "la entrada dice de qué modelo y de qué .out sale", c );
+        check( strstr( c, "| Autocorrelación |" ) != NULL,
+               "y lleva la tabla de la diagnosis en Markdown", c );
+        g_free( c );
+        }
+
+    /* LOS ANOMALOS, con su gráfico: el PNG se escribe y se enlaza. */
+    {
+    GList     *l, *todas = gtk_window_list_toplevels();
+    GtkWidget *ba = NULL;
+
+    for ( l = todas; l && !ba; l = l->next )
+        {
+        const char *ti = gtk_window_get_title( l->data );
+
+        if ( gtk_widget_get_visible( l->data ) && ti && strstr( ti, "anomalos" ) )
+            ba = boton_que_dice( l->data, "Al cuaderno" );
+        }
+    g_list_free( todas );
+    check( ba != NULL, "la ventana de anómalos tiene «Al cuaderno»", NULL );
+    if ( ba )
+        {
+        gchar *img;
+        GDir  *dir;
+        int    npng = 0;
+
+        gtk_button_clicked( GTK_BUTTON(ba) );
+        pump( 300 );
+        c = cuaderno_md();
+        check( strstr( c, " · Anómalos — ipc / m01\n" ) != NULL &&
+               strstr( c, "![Residuos de m01](img/" ) != NULL,
+               "los anómalos van con el enlace a su gráfico", c );
+        g_free( c );
+        {
+        gchar *base = g_path_get_dirname( A.p->path );
+
+        img = g_build_filename( base, "cuaderno", "img", NULL );
+        g_free( base );
+        }
+        if ( ( dir = g_dir_open( img, 0, NULL ) ) != NULL )
+            {
+            const char *f;
+
+            while ( ( f = g_dir_read_name( dir ) ) != NULL )
+                if ( g_str_has_suffix( f, ".png" ) ) npng++;
+            g_dir_close( dir );
+            }
+        check( npng >= 1, "y el PNG está en cuaderno/img", img );
+        g_free( img );
+        }
+    }
+
+    /* «Cuaderno…»: se lee, y se añade una nota. */
+    on_cuaderno( NULL, &A );
+    pump( 200 );
+    {
+    GtkWindow *w = ventana_titulada( "Cuaderno — " );
+    GPtrArray *tv = w ? junta( GTK_WIDGET(w), GTK_TYPE_TEXT_VIEW, FALSE ) : NULL;
+
+    check( w != NULL && tv && tv->len == 2, "«Cuaderno…» abre su ventana, con la nota abajo",
+           NULL );
+    if ( w && tv && tv->len == 2 )
+        {
+        GtkTextBuffer *bv = gtk_text_view_get_buffer( g_ptr_array_index( tv, 0 ) );
+        GtkTextBuffer *bn = gtk_text_view_get_buffer( g_ptr_array_index( tv, 1 ) );
+        GtkTextIter    i0, i1;
+        gchar         *t;
+        GtkWidget     *bt = boton_que_dice( GTK_WIDGET(w), "Añadir la nota" );
+
+        gtk_text_buffer_get_bounds( bv, &i0, &i1 );
+        t = gtk_text_buffer_get_text( bv, &i0, &i1, FALSE );
+        check( strstr( t, "Diagnosis — ipc / m01" ) != NULL,
+               "y enseña lo que se mandó", t );
+        g_free( t );
+
+        olvida();
+        if ( bt ) gtk_button_clicked( GTK_BUTTON(bt) );
+        check( dijo( "La nota está vacía" ) != NULL, "una nota vacía se dice",
+               todo_lo_dicho() );
+        gtk_text_buffer_set_text( bn, "m01 me convence: lo dice la prueba.", -1 );
+        if ( bt ) gtk_button_clicked( GTK_BUTTON(bt) );
+        pump( 100 );
+        c = cuaderno_md();
+        check( strstr( c, " · Nota\n\nm01 me convence: lo dice la prueba.\n" ) != NULL,
+               "y una nota se añade, con su fecha", c );
+        g_free( c );
+        gtk_text_buffer_get_bounds( bn, &i0, &i1 );
+        t = gtk_text_buffer_get_text( bn, &i0, &i1, FALSE );
+        check( !*t, "la nota escrita se va de la caja", t );
+        g_free( t );
+        }
+    if ( tv ) g_ptr_array_free( tv, TRUE );
+    if ( w ) { gtk_widget_destroy( GTK_WIDGET(w) ); pump( 100 ); }
+    }
+}
+
 int main( int argc, char **argv )
 {
     GtkApplication *app;
@@ -3468,7 +3762,10 @@ int main( int argc, char **argv )
             fase( "editor" ); editor();
             fase( "iterar_elegir" ); iterar_elegir();
             fase( "menu_modelo" ); menu_modelo_prueba();
+            fase( "cuaderno" ); cuaderno();
             fase( "muestra" ); muestra();
+            fase( "corregir" ); corregir();
+            fase( "teclado" ); teclado();
             fase( "linaje" ); linaje();
             fase( "borrar" ); borrar();
             fase( "abrir" ); abrir( manifiesto );

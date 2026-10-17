@@ -60,7 +60,18 @@ marzo, con qué dato de febrero, si el dato se revisó después.
 
 Cada vez que entran datos nuevos de una serie, eso es una **añada**: la serie
 tal como se conocía en una fecha. Lleva la fecha de bajada, la fuente, el
-hash de los números y la última observación. Las añadas **se acumulan**.
+hash de los números y la última observación.
+
+**Si se acumulan o no lo decide el analista** (decisión del analista,
+17-oct-2026), porque depende del uso:
+- **Modo SPS**: el proyecto es un sistema de previsión en marcha. Se guarda
+  el registro de las previsiones calculadas y de sus añadas, y se puede ir
+  **adelante y atrás** por los orígenes.
+- **Modo evaluación**: el analista prueba modelos de forma secuencial y no
+  quiere el histórico. Se queda la última añada y se sobrescribe.
+
+Es una propiedad del ejercicio (o del proyecto, por defecto), no una
+constante del programa.
 
 - **Por qué no basta con sobrescribir:** los datos **se revisan**. El IPC
   apenas; el PIB o el empleo, mucho. Una previsión hecha en marzo hay que
@@ -119,9 +130,18 @@ de un modelo.
 
 ### 3.5 La tabla previsión-realización
 
-Cuando una añada trae un dato que alguna acta previó, se rellena su fila: el
-error, el error relativo, si cae dentro de la banda y si es el primer dato o
-uno revisado. De ahí salen, **por horizonte y por modelo vigente**:
+**Los errores los calculan los motores, no el gestor** (decisión del
+analista, 17-oct-2026):
+- fuf, en la columna ERR de su informe: los errores a un paso de las
+  observaciones;
+- drtran, con `-C`: los errores por origen y por horizonte, en CSV;
+- drvarma, en su `.recursive`.
+
+El gestor **los lee y los junta**; no los vuelve a calcular. Así hay una sola
+cuenta y es la del motor, como la diagnosis se lee del `.out`.
+
+Cuando una añada trae un dato que alguna acta previó, su fila se completa con
+lo que dice el motor. De ahí salen, **por horizonte y por modelo vigente**:
 - el ECM, el EAM y el sesgo;
 - la cobertura de las bandas: ¿el 95 % cubre el 95 %?;
 - los errores a un paso (las innovaciones nuevas) como serie, con su ACF.
@@ -226,10 +246,10 @@ Cada paso, su PR y la CI en verde en las tres plataformas.
 
 ## 8. Lo que el analista tiene que decidir
 
-1. **Las añadas**: ¿se guardan todas, por las revisiones, o basta con la
-   última, y los datos se sobrescriben?
-2. **Contra qué dato se mide el error**: ¿el primero que se publicó, el
-   último revisado, o los dos?
+1. ~~Las añadas~~ — **decidido**: lo elige el analista, en modo SPS
+   (registro, adelante y atrás) o en modo evaluación (sin histórico) (§3.1).
+2. ~~Contra qué dato se mide el error~~ — **decidido**: los errores los
+   calculan los motores; el gestor los lee (§3.5).
 3. **La política de reestimación** por defecto, y si «reestimar» es sólo
    alargar la ventana con la misma especificación o abrir la identificación.
 4. **El primer alcance**: ¿sólo univariantes (pasos 1-4) y los casos

@@ -1,7 +1,8 @@
 #!/bin/sh
 # tests/repro/repro.sh -- minimal reproductions of the defects registered on
 # 2026-09-23 (docs/BUGS.md, BUG-23 .. BUG-45), from the review recorded in
-# docs/REVIEW_2026-09-23.md.
+# docs/REVIEW_2026-09-23.md, and BUG-58 .. BUG-60 (2026-10-17, found by the
+# Python port).
 #
 #   sh tests/repro/repro.sh            all of them
 #   sh tests/repro/repro.sh 23 31      only those
@@ -193,5 +194,23 @@ if want 45; then hdr 45 "command-line options accepted and ignored"
   cp "$DS/mauricio/mink_muskrat.inp" c.inp
   "$B" c 1 0 1 -name zzz >/dev/null 2>&1; echo "  -name zzz on the .inp route: zzz.out exists? $( [ -f zzz.out ] && echo yes || echo no)"
   "$B" c 1 0 1 -case 1 -mean >/dev/null 2>&1; echo "  -case 1 -mean -> $(grep -a -m1 -i 'case' c.out)"
+fi
+if want 58; then hdr 58 "-alpha accepts an A of deficient rank (nan fit, SIGSEGV)"
+  cp "$F/e1invest.pre" "$F/e1income.pre" "$F/e1cons.pre" "$F/alpha_sing.txt" .
+  echo "  A = [1 1; 1 1; 0 0], rank 1; expected: a refusal, exit 1"
+  "$B" e1invest.pre e1income.pre e1cons.pre 2 0 1 -case 2 -alpha alpha_sing.txt -name sing >/dev/null 2>&1
+  echo "  exit $?"; grep -a -m1 'logelf' sing.out
+fi
+
+if want 59; then hdr 59 "Input Data File truncated on the .pre route"
+  cp "$F/e1cons.pre" c.pre; cp "$F/e1income.pre" .
+  "$B" c.pre e1income.pre 1 0 0 -case 2 -lrtest >/dev/null 2>&1
+  grep -a 'Input Data File' c_e1income.out
+fi
+
+if want 60; then hdr 60 "ladder_key loses the data when a drift is held"
+  gcc -O0 -o pk "$HERE/probes/probe_ladder_key.c" 2>/dev/null \
+    && ./pk "$DS/mauricio/mink_muskrat.inp" \
+    || echo "  (exit $?: 1 = the key ignores the change)"
 fi
 echo

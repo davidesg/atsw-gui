@@ -456,6 +456,7 @@ int ifadf_order ( int freq, int *ifadf )
 void DiffGraph ( struct Tseries *ser, int nparma, double boxlam, double boxm, int nrdiff, int nadiff, int *ifadf, int lags, double cbands, int nog, char *outx11 )
 {
 int i, j,  ornsop, timeout, tsby;
+FPUnits units;
 double tmp1, *rnsop, *DataMat;
 STRING file_output;
 struct Tseries res;
@@ -525,19 +526,23 @@ struct Tseries res;
 
    file_output = file_plot ( nrdiff, nadiff,  boxlam, ser->freq, outx11 );
    tsby = (ser->freq > 1) ? ser->begyear : ser->begyear - ser->outyear;
+   /* fug does not rescale (refactor 1); a log reads in %, unless the
+      geometric mean has put it back in the units of the series.     */
+   units.refactor = 1.0;
+   units.pct = ( fabs( boxlam ) < 1.0e-10 && Tm.boxgeom != 1 );
 
    /* -a and -c write the same file: the PDF gets the one of -c */
    if ( case_a == 1 )
       {
       FDFig *fig = fp_PlotSer( &res, ser->nobs, timeout, tsby, boxlam, nrdiff, nadiff,
-                               file_output, ser->name );
+                               file_output, ser->name, units );
       if ( case_c == 1 ) fd_fig_free( fig ); else keep_figure( fig, 0.90 );
       }
    if ( case_b == 1 )
       fd_fig_free( fp_CorrSer( &res, nparma, lags, cbands, file_output, ser->name ) );
    if ( case_c == 1 )
       keep_figure( fp_PlotSer_CorrSer( &res, nparma, ser->nobs, timeout, tsby, boxlam,
-                                       nrdiff, nadiff, lags, cbands, file_output, ser->name ), 0.90 );
+                                       nrdiff, nadiff, lags, cbands, file_output, ser->name, units ), 0.90 );
    if ( case_d == 1 )
       fd_fig_free( fp_histogram( &res, nrdiff, nadiff, boxlam, file_output, ser->name ) );
 

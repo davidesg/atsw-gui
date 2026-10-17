@@ -965,6 +965,28 @@ int id_ifadf( const char *origen, int ifadf[7], char *porque, size_t n )
    return 1;
 }
 
+int id_refactor_lee( const char *origen, double *refactor, char *porque, size_t n )
+{
+   Fich f;
+   int  i;
+
+   *refactor = 1.0;
+   if ( fich_lee( origen, &f, porque, n ) ) return 1;
+   for ( i = 0; i + 1 < f.n; i++ )
+       if ( es_etiqueta( f.l[i] ) && strstr( f.l[i], "escaling factor" ) )
+          {
+          char t[4][64];
+
+          if ( tokens( f.l[i + 1], t, 4 ) >= 2 && atof( t[1] ) != 0.0 )
+             *refactor = atof( t[1] );
+          fich_free( &f );
+          return 0;
+          }
+   fich_free( &f );
+   snprintf( porque, n, "no está la línea del factor de escala" );
+   return 1;
+}
+
 
 /* ---------------------------------------------------------------------- */
 /* Stochastic seasonality: see inpdet.h.                                   */

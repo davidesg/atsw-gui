@@ -71,7 +71,8 @@ typedef struct {
    char    residuals[96];          /* name of the residuals (A<input>)       */
    int     is_log;                 /* Box-Cox lambda = 0                     */
    int     freq, nobs;
-   double  sigma;                  /* 100 * sqrt(sigma2) / refactor          */
+   double  sigma;                  /* sqrt(sigma2) / refactor, x 100 if pct  */
+   int     sigma_pct;              /* sigma in %: logs, no geometric mean    */
 } Equation;
 
 /* Build the equation of the model that has just been estimated. inputv is

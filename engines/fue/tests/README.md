@@ -130,6 +130,22 @@ Cada commit que cambia un código de salida de `runs.tsv` lo explica aquí.
   - **What is unchanged:** every `.out`, `.pre` and `.tex`, and every exit
     status.
 
+- **sigma in the units of the equation** (branch sigma-unidades, 2026-10-17).
+  The engine works with refactor * BoxCox(y). The statistics line of the
+  residual graph (w-bar, its standard error and sigma-hat_w) lost the
+  division by refactor when the graph moved from gnuplot to fugdraw (fue
+  1.14, d0618ae): with refactor 100 it said 25.03 % where the equation said
+  0.25 %. It is divided again, as 1.13.1 did. And both the line and the
+  sigma of the equation (`.tex` and the PDF report) say % only for a log
+  without the geometric mean; any other lambda is in the units of the
+  series. 1.13.1 put % on every model.
+  - **Where the goldens differ:** 76 residual EPS, only in the statistics
+    line (its numbers and its centring), checked on every file; and the 25
+    `.tex` of the models with lambda 1, only in the sigma line, which loses
+    the %.
+  - **What is unchanged:** every `.out` and `.pre`, the `.tex` of the log
+    models, and every exit status.
+
 ## La batería sintética
 
 `syn_*.inp` (serie IPCM de `fug/examples`): ruido blanco sin nada libre y con

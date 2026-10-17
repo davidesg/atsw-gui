@@ -220,9 +220,13 @@ la división entera del Jarque-Bera.
   - **HECHO** (2026-10-15): abrir un modelo ya estimado del caso carga su
     `.out` en Estimación, Diagnosis y Previsión sin volver a estimar
     (`estima_desde`), y escribe su página si falta.
-  - **Para decidir**: el gráfico de residuos pone `σ_w` en las unidades del
-    motor (×refactor: 20 % en el IPC, cuando la ecuación dice 0.20 %). Pasa
-    igual en la página de fue (`fugplot`, desde `fue.c`).
+  - **HECHO** (2026-10-17, era un fallo y no una decisión): el gráfico de
+    residuos ponía `σ_w` en las unidades del motor (×refactor: 25 % en el
+    IPC, cuando la ecuación dice 0,25 %). La división por el refactor se
+    perdió al pasar el gráfico de gnuplot a fugdraw (fue 1.14). Ahora
+    `lib/fugplot` recibe las unidades (`FPUnits`) en fue, fug, drtran_gui y
+    Anómalos, y dice % sólo en logaritmos. Lo mismo la σ de la ecuación de
+    fue con λ ≠ 0 y la tabla de Ajuste de drtran.
 
 ## Lo demás, por documento
 

@@ -47,6 +47,7 @@
 #include "analisis.h"
 #include "preview.h"
 #include "fugplot.h"
+#include "inpdet.h"
 
 
 typedef struct {
@@ -64,6 +65,7 @@ typedef struct {
 
     int        freq, tmornsop, tsby;   /* el eje de tiempo de la figura    */
     int        nparma, lags;
+    FPUnits    unid;               /* las de la línea de w y sigma, como fue */
 
     /* QUE EPISODIOS SE CALIBRAN. Uno, dos, tres o todos -- la pregunta de
        verdad no es «¿y si no hubiera anómalos?» sino «¿y si no estuviera
@@ -217,7 +219,7 @@ static void dibuja( An *g )
        que es como los pasa fue.                                       */
     f = fp_PlotSer_CorrSer_marks( &ser, g->nparma, n + g->tmornsop, g->tmornsop,
                                   g->tsby, 1.0, 0, 0, g->lags, escala_fija( g ),
-                                  base, nombre, marks, nmarks );
+                                  base, nombre, g->unid, marks, nmarks );
     if ( f ) fd_fig_free( f );
     }
 
@@ -554,6 +556,24 @@ void an_anomalos( const AnHost *h, const char *serie, const char *muestra,
         an_di( h, "%s", s ); g_free( s ); g_free( g );
         return;
         }
+
+    /* LAS UNIDADES. Los residuos del .out son los del motor: refactor por
+       los de la ecuación. El refactor no está en el .out sino en el .inp
+       que se estimó (y en su .pre). Sin él, 1: el dibujo es el mismo y
+       sólo la línea de w y sigma saldría en las unidades del motor.   */
+    {
+    char   inp[PR_RUTA], porque[256];
+    double rf = 1.0;
+
+    if ( ( pr_ruta( h->p, serie, muestra, id, ".inp", inp, sizeof inp ) == 0 &&
+           id_refactor_lee( inp, &rf, porque, sizeof porque ) == 0 ) ||
+         ( pr_ruta( h->p, serie, muestra, id, ".pre", inp, sizeof inp ) == 0 &&
+           id_refactor_lee( inp, &rf, porque, sizeof porque ) == 0 ) )
+        g->unid.refactor = rf;
+    else
+        g->unid.refactor = 1.0;
+    g->unid.pct = g->o.lambda == 0.0;
+    }
 
     /* LOS EXTREMOS, EN EPISODIOS. Un suceso de tres períodos no son tres
        atípicos sueltos con su forma decidida por adyacencia.          */

@@ -62,6 +62,31 @@ static const char *nom_ser( Mtram *m, int i )
     return m->c.s[i - 1]->ts.name ? m->c.s[i - 1]->ts.name : "?";
 }
 
+/* Una d.t. residual de la serie i (1..n), de las unidades del MOTOR
+ * --refactor por BoxCox(y)-- a las de su ecuacion: en % si va en
+ * logaritmos (*pct a 1), en las de la serie si no. La sigma de pagina.c. */
+static double en_ecuacion( Mtram *m, int i, double dt, int *pct )
+{
+    const Serie *Y;
+    double       r;
+
+    *pct = 0;
+    if (i < 1 || i > m->c.n) return dt;
+    Y    = m->c.s[i - 1];
+    r    = Y->ts.refactor > 0 ? Y->ts.refactor : 1.0;
+    *pct = fabs( Y->tm.boxlam ) < 1e-8;
+    return dt / r * (*pct ? 100.0 : 1.0);
+}
+
+/* La misma, escrita: con su % si va en logaritmos. */
+static void dt_ecuacion( Mtram *m, int i, double dt, char *t, size_t n )
+{
+    int    pct;
+    double v = en_ecuacion( m, i, dt, &pct );
+
+    snprintf( t, n, pct ? "%.2f %%" : "%.4g", v );
+}
+
 /* El recorrido: desde la SALIDA y aguas arriba, que es el orden topologico al
  * reves -- el mismo en que el motor construye, leido desde el final. No es
  * alfabetico: es el orden en que el modelo existe.                       */
@@ -252,10 +277,10 @@ static void pinta_ajuste( Mtram *m )
                 gof_r2_brajin( D->res_base.v[i], D->res_base.n, sw,
                                &r2u, &dtu ) == 0;
 
-        snprintf( cdtt, sizeof cdtt, "%.4f", dtt );
+        dt_ecuacion( m, i + 1, dtt, cdtt, sizeof cdtt );
         snprintf( cr2t, sizeof cr2t, r2t > -90.0 ? "%.4f" : "—", r2t );
         if (hay_u) {
-            snprintf( cdtu, sizeof cdtu, "%.4f", dtu );
+            dt_ecuacion( m, i + 1, dtu, cdtu, sizeof cdtu );
             snprintf( cr2u, sizeof cr2u, "%.4f", r2u );
             /* La reduccion de varianza residual: la cifra con la que la
              * escuela cierra cada caso, en las unidades del analista.   */
@@ -302,8 +327,9 @@ static void pinta_res( Mtram *m )
     for (i = 0; i < D->d.ns; i++) {
         const OdSerie *s = &D->d.s[i];
 
-        snprintf( med, sizeof med, "%.4f", s->media );
-        snprintf( dt,  sizeof dt,  "%.4f", s->sd );
+        /* En las unidades de la ecuacion, como la sigma de su pagina. */
+        dt_ecuacion( m, i + 1, s->media, med, sizeof med );
+        dt_ecuacion( m, i + 1, s->sd,    dt,  sizeof dt );
         snprintf( asi, sizeof asi, "%+.3f", s->skew );
         snprintf( cur, sizeof cur, "%+.3f", s->kurt );
 
@@ -740,9 +766,16 @@ static Tabla *tabla_actual( Mtram *m, int pagina )
 {
     Diag  *D = &m->dia;
     Tabla *t = NULL;
-    int    i;
+    int    i, pct_todas;
 
     if (!D->vale) return NULL;
+
+    /* Las medias y las d.t. de los residuos, en las unidades de cada
+     * ecuacion: la columna dice % si TODAS van en logaritmos; si no, cada
+     * una va en las de su serie, sin unidad.                          */
+    pct_todas = m->c.n > 0;
+    for (i = 0; i < m->c.n; i++)
+        if (fabs( m->c.s[i]->tm.boxlam ) >= 1e-8) pct_todas = 0;
 
     switch (pagina) {
     case 0:                                        /* exogeneidad */
@@ -789,14 +822,14 @@ static Tabla *tabla_actual( Mtram *m, int pagina )
         if (!D->hay_res) return NULL;
         t = tb_new( "Ajuste: la desviación típica residual y el R² de Brajín (A.28)" );
         tb_col( t, "Ecuación",        NULL, TB_TXT, 0 );
-        tb_col( t, "d.t. diagonal",   NULL, TB_NUM, 4 );
-        tb_col( t, "d.t. transfer.",  NULL, TB_NUM, 4 );
+        tb_col( t, "d.t. diagonal",   pct_todas ? "%" : NULL, TB_NUM, pct_todas ? 2 : 4 );
+        tb_col( t, "d.t. transfer.",  pct_todas ? "%" : NULL, TB_NUM, pct_todas ? 2 : 4 );
         tb_col( t, "R² diagonal",     NULL, TB_NUM, 4 );
         tb_col( t, "R² transfer.",    NULL, TB_NUM, 4 );
         tb_col( t, "Varianza",        "%",  TB_NUM, 1 );
         for (i = 0; i < D->res.m && i < m->c.n; i++) {
             double  sw, r2u = 0, dtu = 0, r2t = 0, dtt = 0, *w;
-            int     nw;
+            int     nw, pct;
             gboolean hay_u;
 
             w  = gof_estacionaria( &m->c.s[i]->ts, &m->c.s[i]->tm, &nw );
@@ -807,14 +840,14 @@ static Tabla *tabla_actual( Mtram *m, int pagina )
             tb_pon_txt( t, 0, nom_ser( m, i + 1 ) );
 
             if (gof_r2_brajin( D->res.v[i], D->res.n, sw, &r2t, &dtt ) == 0) {
-                tb_pon_num( t, 2, dtt );
+                tb_pon_num( t, 2, en_ecuacion( m, i + 1, dtt, &pct ) );
                 tb_pon_num( t, 4, r2t );
             }
             hay_u = D->hay_res_base && i < D->res_base.m &&
                     gof_r2_brajin( D->res_base.v[i], D->res_base.n, sw,
                                    &r2u, &dtu ) == 0;
             if (hay_u) {
-                tb_pon_num( t, 1, dtu );
+                tb_pon_num( t, 1, en_ecuacion( m, i + 1, dtu, &pct ) );
                 tb_pon_num( t, 3, r2u );
                 tb_pon_num( t, 5, 100.0 * gof_reduccion( dtu, dtt ) );
             }
@@ -825,8 +858,8 @@ static Tabla *tabla_actual( Mtram *m, int pagina )
         t = tb_new( "Residuos: ¿son ruido blanco?" );
         tb_col( t, "Ecuación",   NULL, TB_TXT, 0 );
         tb_col( t, "n",          NULL, TB_ENT, 0 );
-        tb_col( t, "media",      NULL, TB_NUM, 4 );
-        tb_col( t, "d.t.",       NULL, TB_NUM, 4 );
+        tb_col( t, "media",      pct_todas ? "%" : NULL, TB_NUM, pct_todas ? 2 : 4 );
+        tb_col( t, "d.t.",       pct_todas ? "%" : NULL, TB_NUM, pct_todas ? 2 : 4 );
         tb_col( t, "asimetría",  NULL, TB_NUM, 3 );
         tb_col( t, "curtosis",   NULL, TB_NUM, 3 );
         tb_col( t, "Jarque-Bera", NULL, TB_NUM, 2 );
@@ -839,8 +872,10 @@ static Tabla *tabla_actual( Mtram *m, int pagina )
             tb_pon_txt( t, 0, i < m->c.n ? nom_ser( m, i + 1 ) : s->nombre );
             tb_pon_num( t, 1, s->nobs );
             if (s->tiene_stats) {
-                tb_pon_num( t, 2, s->media );
-                tb_pon_num( t, 3, s->sd );
+                int pct;
+
+                tb_pon_num( t, 2, en_ecuacion( m, i + 1, s->media, &pct ) );
+                tb_pon_num( t, 3, en_ecuacion( m, i + 1, s->sd, &pct ) );
                 tb_pon_num( t, 4, s->skew );
                 tb_pon_num( t, 5, s->kurt );
                 if (s->nobs > 0)
@@ -960,6 +995,7 @@ static gchar *dibuja( Mtram *m, int que, int entrada )
 {
     Diag           *D = &m->dia;
     struct Tseries  ts;
+    FPUnits         unid = { 1.0, 0 };
     gchar          *dir, *base, *eps = NULL;
     FDFig          *f = NULL;
     int             i, col = D->actual - 1;
@@ -986,19 +1022,29 @@ static gchar *dibuja( Mtram *m, int que, int entrada )
     /* Los residuos NO se transforman: lambda 1 y sin diferencias, como hace
      * fue con los suyos. Y no se pierde ninguna observacion al principio, asi
      * que el desplazamiento del eje es 0.                                */
+
+    /* Pero son los del MOTOR, refactor por los de la ecuacion: la linea de
+     * w y sigma se pasa a las unidades de la ecuacion, en % si va en
+     * logaritmos -- la misma sigma que pone pagina.c.                    */
+    if (D->actual >= 1 && D->actual <= m->c.n) {
+        const Serie *Y = m->c.s[D->actual - 1];
+
+        unid.refactor = Y->ts.refactor > 0 ? Y->ts.refactor : 1.0;
+        unid.pct      = fabs( Y->tm.boxlam ) < 1e-8;
+    }
     base = g_build_filename( dir, "res", NULL );
 
     switch (que) {
     case 0:   /* serie + acf/pacf: la bateria de fue, la misma figura */
         f = fp_PlotSer_CorrSer( &ts, 0, ts.nobs, 0, ts.begyear, 1.0, 0, 0,
-                                0, 0.0, base, ts.name );
+                                0, 0.0, base, ts.name, unid );
         eps = g_strdup_printf( "%s.eps", base );
         break;
     /* LA PAGINA DEL MODELO: la misma figura, con las ecuaciones estimadas
      * debajo, como la pagina de fue. Va junto al .out del modelo.        */
     case 4:
         f = fp_PlotSer_CorrSer( &ts, 0, ts.nobs, 0, ts.begyear, 1.0, 0, 0,
-                                0, 0.0, base, ts.name );
+                                0, 0.0, base, ts.name, unid );
         if (f) {
             gchar *suf = g_strdup_printf( "_%s.pdf", ts.name );
             gchar *pdf = mtram_artefacto( m, suf );

@@ -1442,3 +1442,108 @@ rejected** at this sample size.
 fit, rank 0 of `-lrtest`, and `fit_ll` for the bootstrap, which now seeds every
 rank as the observed data are).  The 22 other golden cases do not move.
 
+
+---
+
+## BUG-58 — `-alpha` accepts an `A` of deficient rank: the fit is `nan` and the program dies with SIGSEGV
+
+**Status: OPEN** (found 2026-10-16 by the Python port, reproduced on 0.13 at ae95446).
+
+**What it is.** `load_alpha_A` (`src/drvec.c` ~2671-2717) checks that `A`
+(M × sa) has full column rank through `choldcp(A'A)`. The modified Cholesky
+only faults on a **negative** pivot beyond `sqrt(eps)·maxoffl`. An exactly
+singular `A'A` gives a zero pivot, which it replaces and accepts. With
+`A = [1 1; 1 1; 0 0]` (rank 1, sa = 2), the program prints
+`Restriction H1(r): alpha = A*psi, with A of 3 x 2` and seeds `psi` through a
+singular LU (~4122-4152). It then writes a `.out` with `logelf : nan` and dies
+with SIGSEGV (exit 139).
+
+**How it was found.** drvec-python ports `-alpha` with an explicit rank check
+and compared its refusal with the oracle. The oracle did not refuse.
+
+**What it cost.** It costs no wrong number that looks right: the run crashes
+and the `.out` carries `nan`. What is lost is the diagnosis. The user gets a
+segmentation fault where the message should say that `psi` is not identified.
+A rank-deficient `A` that is not exactly singular, with a zero pivot
+perturbed by rounding, is not covered by this repro and has not been measured.
+
+**Repro.** `sh tests/repro/repro.sh 58` (fixtures `e1*.pre` and `alpha_sing.txt`):
+`exit 139`, `logelf : nan`.
+
+**Suggested fix.** Check the rank with a decomposition that reports it, such
+as an SVD or a pivoted QR, and refuse with "A does not have rank sa (A'A is
+singular), so psi is not identified" and exit 1. That is the port's message
+(drvec-python, docs/PORT.md §11).
+
+---
+
+## BUG-59 — "Input Data File" is truncated on the `.pre` route when the first file name is short
+
+**Status: OPEN** (found 2026-10-15 by the Python port, reproduced on 0.13 at ae95446).
+
+**What it is.** `inputf` is allocated for `argv[1]` plus room for `.inp`
+(`src/drvec.c` ~10372, `strcpy` at ~10383). On the `.pre` route it is then
+overwritten with `snprintf(inputf, strlen(argv[1]) + 8, "%s", "the .pre files")`
+(~10905). The bound is the first file name's length, not the text's. With a
+first file name of 6 characters or fewer, the `.out` says
+`Input Data File  : the .pre fil`.
+
+**How it was found.** Comparing drvec-python's `.out` with the oracle's on the
+article's 211 invocations: 169 differ only in this line.
+
+**What it cost.** Nothing numerical: one header line, cosmetic. There is no
+overflow, because `snprintf` respects the bound it is given. Its measured
+cost is on the port's acceptance: it is the only difference in 169 of the 211
+article runs, which therefore cannot be compared byte for byte.
+
+**Repro.** `sh tests/repro/repro.sh 59`: `drvec c.pre e1income.pre 1 0 0 -case 2
+-lrtest`, with `c.pre` a copy of `e1cons.pre`, writes `the .pre fil`.
+
+**Suggested fix.** Size the bound with `need`, the buffer's real size, or with
+`sizeof "the .pre files"`.
+
+---
+
+## BUG-60 — the r = 0 ladder's cache key loses the data when a drift is held: a bootstrap replication can start from the previous one's ladder
+
+**Status: OPEN** (found 2026-10-15 by the Python port, reproduced on 0.13 at ae95446).
+
+**What it is.** `fit_r0_ladder` (`src/drvec.c` ~5345) caches its optimum under
+`ladder_key()` (~5310-5323). The key is a double built as follows:
+
+- `p·1e6 + q·1e4 + case·1e3 + …`;
+- plus `1e12·2^(i-1)` for each drift held in case 3, as with `-nodrift i`, or
+  `-case pre` on a `.pre` without a mean;
+- plus `Σ rawmat[t][i]·1e-7·(t%97 + i)`.
+
+With a held drift the key is ~1e12, where a double's spacing is 1.2e-4. The
+data's terms (~1e-6 each) are mostly rounded away, so two different data sets
+get the same key. In `-lrtest -bootstrap` the replications differ only in
+their data. A replication whose key equals the previous one's therefore
+starts its rung-2 search from the **previous** replication's ladder: its
+rungs 0 and 1 are not fitted and its gate is not checked. Without a held drift
+the key is ~1e6 (spacing 2.3e-10) and keeps the data, so the goldens
+`rankboot` and `e1boot` are not affected.
+
+**How it was found.** drvec-python keys its cache on the data object. On
+`mmpre.muskrat.pre minkmu.pre 2 0 1 -case pre -lrtest -bootstrap 20` its
+`.boot` differs from the oracle's in one line only, replication 16.
+Replications 15 and 16 share the key 1000002003000.062.
+
+**What it cost.** Measured on that run, the C's LR\* for replication 16 is
+5.4210743829648322. Fitting its own ladder gives 5.4210743828848535, a
+difference of 8e-11, with the same optimum reached. Handing replication 15's
+ladder to replication 16 in the port reproduces the C's value bit for bit.
+The size is small here because the stale seed is close; nothing bounds it in
+general. The `.out` (p-value, percentiles) does not change on this run.
+
+**Repro.** `sh tests/repro/repro.sh 60` builds `tests/repro/probes/probe_ladder_key.c`.
+The probe carries a verbatim copy of `ladder_key`'s arithmetic, since the
+function is static. On mink-muskrat it changes one observation by 1e-3: with a
+held drift the key does not change, and without one it does. The probe exits
+1 while the defect is open. The measurement of LR\* above comes from
+drvec-python's `bugs/drvec-c-ladder-key/repro.py`, which needs the port.
+
+**Suggested fix.** Compare the data themselves in the cache: store a copy of
+`rawmat` or a hash of its bytes next to the key. Alternatively, invalidate the
+cache whenever `rawmat` changes, as each bootstrap replication does.

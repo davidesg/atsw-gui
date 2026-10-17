@@ -29,6 +29,7 @@ import sys
 FOREIGN = {
     "drtran-python/docs/BUGS.md": range(1, 14),      # BUG-1 .. BUG-13
     "drtran-python/docs/BUGS.md (2026-09-23)": range(21, 23),   # BUG-21, BUG-22
+    "drtran-python/docs/BUGS.md (2026-09-26 on)": range(51, 58),  # BUG-51 .. BUG-57
 }
 #  fue numbers with four digits (BUG-0005 ...), a separate sequence that cannot
 #  collide with this one.

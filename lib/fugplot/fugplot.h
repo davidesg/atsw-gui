@@ -19,9 +19,20 @@
  * Each function writes its EPS file and returns the figure (to be placed
  * in the PDF or freed with fd_fig_free), or NULL if it can not be made.  */
 
+/* The units of the statistics line under the series: w-bar, its standard
+ * error and sigma-hat_w. The engines work with refactor * BoxCox(y), so the
+ * data are divided by refactor (0: 1). pct says they are logs: 100 times a
+ * change in a log is a change in %, and the line says %. Otherwise the line
+ * is in the units of the series, with no %.                                */
+typedef struct {
+   double refactor;
+   int    pct;
+} FPUnits;
+
 /* -a: standardized series                            -> <x11out>.eps       */
 FDFig *fp_PlotSer( struct Tseries *ser, int tsnobs, int tmornsop, int tsby, double boxlam,
-                   int nrdiff, int nadiff, const char *x11out, const char *name );
+                   int nrdiff, int nadiff, const char *x11out, const char *name,
+                   FPUnits u );
 
 /* -b: acf and pacf                                   -> acf_<x11out>.eps   */
 FDFig *fp_CorrSer( struct Tseries *ser, int npar, int lags, double cbands, const char *x11out,
@@ -30,7 +41,7 @@ FDFig *fp_CorrSer( struct Tseries *ser, int npar, int lags, double cbands, const
 /* -c: standardized series + acf/pacf                 -> <x11out>.eps       */
 FDFig *fp_PlotSer_CorrSer( struct Tseries *ser, int npar, int tsnobs, int tmornsop,
                            int tsby, double boxlam, int nrdiff, int nadiff, int lags,
-                           double cbands, const char *x11out, const char *name );
+                           double cbands, const char *x11out, const char *name, FPUnits u );
 
 /* Like -c, but with an open circle around each marked observation (marks
  * holds indices 1..nobs). For the GUI: it says which incident is being
@@ -38,7 +49,7 @@ FDFig *fp_PlotSer_CorrSer( struct Tseries *ser, int npar, int tsnobs, int tmorns
 FDFig *fp_PlotSer_CorrSer_marks( struct Tseries *ser, int npar, int tsnobs, int tmornsop,
                                  int tsby, double boxlam, int nrdiff, int nadiff, int lags,
                                  double cbands, const char *x11out, const char *name,
-                                 const int *marks, int nmarks );
+                                 FPUnits u, const int *marks, int nmarks );
 
 /* -d: histogram and normal density                   -> hist_<x11out>.eps  */
 FDFig *fp_histogram( struct Tseries *ser, int nrdiff, int nadiff, double boxlam,

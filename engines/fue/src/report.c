@@ -505,7 +505,8 @@ static void draw_tail( Pen *p, const void *arg )
    space( p, 0.3 );
    put( p, F_ROMAN, sz, 0.0, "=" );
    space( p, 0.3 );
-   snprintf( text, sizeof( text ), "%2.2f %%", eq->sigma );
+   if ( eq->sigma_pct ) snprintf( text, sizeof( text ), "%2.2f %%", eq->sigma );
+   else                 snprintf( text, sizeof( text ), "%.4g", eq->sigma );
    put( p, F_NUM, sz, 0.0, text );
 }
 

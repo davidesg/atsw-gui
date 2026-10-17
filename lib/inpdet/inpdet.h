@@ -202,6 +202,11 @@ int id_fija_media( const char *origen, const char *destino, double valor, int fl
  * has them (f = 0, 1, ..., s/2). 0, or 1 with the reason.               */
 int id_ifadf( const char *origen, int ifadf[7], char *porque, size_t n );
 
+/* The rescaling factor (after "** ACF/PACF bands ... and reescaling factor",
+ * fue.c [3.7]): the engine works with refactor * BoxCox(y), and so are the
+ * residuals of its .out. 0 in the file is 1, as fue reads it. 0, or 1.  */
+int id_refactor_lee( const char *origen, double *refactor, char *porque, size_t n );
+
 /* ---------------------------------------------------------------------- */
 /* STOCHASTIC SEASONALITY (2026-10-15, for the MEG, lib/formales)          */
 /*                                                                         */

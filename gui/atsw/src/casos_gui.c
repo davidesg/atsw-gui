@@ -825,7 +825,7 @@ static void menu_corrida( Atsw *a, GdkEventButton *ev )
     gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
     }
     gtk_widget_show_all( menu );
-    gtk_menu_popup_at_pointer( GTK_MENU(menu), (GdkEvent *) ev );
+    atsw_menu_en( menu, a->c_corridas, ev );
     g_free( co );
 }
 
@@ -843,6 +843,31 @@ static gboolean on_c_click( GtkWidget *tv, GdkEventButton *ev, Atsw *a )
     gtk_tree_path_free( ruta );
     menu_corrida( a, ev );
     return TRUE;
+}
+
+static void on_c_borrar( GtkButton *b, Atsw *a );
+
+/* EL TECLADO, como en la rejilla de una serie: la tecla de menú saca el
+   menú del modelo marcado y Supr lo borra, preguntando antes.         */
+static gboolean on_c_menu_tecla( GtkWidget *tv, Atsw *a )
+{
+    gchar *co;
+
+    (void) tv;
+    if ( caso_marcado( a ) == NULL ) return FALSE;
+    if ( ( co = atsw_marcada( a->c_corridas, CO_ID ) ) == NULL ) return FALSE;
+    g_free( co );
+    menu_corrida( a, NULL );
+    return TRUE;
+}
+
+static gboolean on_c_tecla( GtkWidget *tv, GdkEventKey *ev, Atsw *a )
+{
+    (void) tv;
+    if ( ( ev->keyval == GDK_KEY_Delete || ev->keyval == GDK_KEY_KP_Delete ) &&
+         !( ev->state & ( GDK_CONTROL_MASK | GDK_MOD1_MASK | GDK_SHIFT_MASK ) ) )
+        { on_c_borrar( NULL, a ); return TRUE; }
+    return FALSE;
 }
 
 static gchar *corrida_marcada( Atsw *a )
@@ -1216,6 +1241,8 @@ GtkWidget *atsw_caso_vista( Atsw *a )
     g_signal_connect( a->c_corridas, "row-activated", G_CALLBACK(on_c_activado), a );
     /* EL BOTON DERECHO: «Ver modelo…», la pagina que drtran deja al estimar. */
     g_signal_connect( a->c_corridas, "button-press-event", G_CALLBACK(on_c_click), a );
+    g_signal_connect( a->c_corridas, "popup-menu", G_CALLBACK(on_c_menu_tecla), a );
+    g_signal_connect( a->c_corridas, "key-press-event", G_CALLBACK(on_c_tecla), a );
     gtk_box_pack_start( GTK_BOX(v), atsw_en_scroll( a->c_corridas ), TRUE, TRUE, 0 );
     return v;
 }

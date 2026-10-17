@@ -154,6 +154,41 @@ int main( int argc, char **argv )
     free( a ); free( b ); free( c );
     }
 
+    printf( "\nMarkdown, el del cuaderno\n" );
+    {
+    char *m = tb_md( t );
+
+    ok( m != NULL, "tb_md devuelve texto" );
+    if ( m )
+        {
+        ok( strstr( m, "**Parámetros estimados**" ) != NULL, "el titulo en negrita" );
+        ok( strstr( m, "| Parámetro | Estimado | d.t. | n | Reducción (%) |" ) != NULL,
+            "la cabecera, con la unidad" );
+        ok( strstr( m, "| :--- | ---: | ---: | ---: | ---: |" ) != NULL,
+            "texto a la izquierda, cifras a la derecha" );
+        ok( strstr( m, "| omega1[0] | 0.7499 | 0.2791 | 64 | -12.3 |" ) != NULL,
+            "los MISMOS numeros que en los otros tres" );
+        ok( strstr( m, "| omega1[1] | 0.3004 | - | 64 | - |" ) != NULL,
+            "lo vacio sale \"-\"" );
+        ok( strstr( m, "*Modelo: m6, 4 enlaces · Muestra: 1/1977 - 4/1992, 64 obs" ) != NULL,
+            "la procedencia, debajo" );
+        free( m );
+        }
+    }
+    {
+    Tabla *v = tb_new( "a|b" );
+    char  *m;
+
+    tb_col( v, "x", NULL, TB_TXT, 0 );
+    tb_fila( v );
+    tb_pon_txt( v, 0, "uno|dos\ntres" );
+    m = tb_md( v );
+    ok( m && strstr( m, "| uno\\|dos tres |" ) != NULL,
+        "un '|' se escapa y un salto no parte la fila" );
+    free( m );
+    tb_free( v );
+    }
+
     printf( "\nla extension elige el formato\n" );
     {
     char *c;
@@ -161,6 +196,15 @@ int main( int argc, char **argv )
     ok( tb_write( t, tex ) == 0, "tb_write con .tex" );
     c = lee( tex );
     ok( c && strstr( c, "\\begin{tabular}" ) != NULL, "y sale un tabular" );
+    free( c );
+    }
+    {
+    char md[512], *c;
+
+    snprintf( md, sizeof md, "%s/t.md", dir );
+    ok( tb_write( t, md ) == 0, "tb_write con .md" );
+    c = lee( md );
+    ok( c && strstr( c, "| :--- |" ) != NULL, "y sale una tabla de Markdown" );
     free( c );
     }
 

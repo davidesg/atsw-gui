@@ -60,6 +60,7 @@ typedef struct {
     char   estruct[64];
     Fila   f[GA_MAX];
     int    nf;
+    int    sin_cov;            /* convergió en 0 iteraciones: sin contraste */
 } Ga;
 
 
@@ -231,19 +232,18 @@ static void llena( Ga *g, GtkListStore *st )
         }
 }
 
-static void on_exportar( GtkButton *b, Ga *g )
+/* LA TABLA, una sola, para Exportar y para el cuaderno. */
+static Tabla *tabla_de( Ga *g )
 {
-    GtkWidget *d;
     Tabla     *t;
     char       titulo[256];
     int        i;
 
-    (void) b;
     g_snprintf( titulo, sizeof titulo, "Ganancia de las intervenciones de "
                 "%s / %s%s%s", g->serie, g->id,
                 g->muestra[0] ? ", muestra " : "", g->muestra );
     t = tb_new( titulo );
-    if ( t == NULL ) return;
+    if ( t == NULL ) return NULL;
 
     tb_col( t, "Intervención", NULL, TB_TXT, 0 );
     /* EN DOS COLUMNAS y no en dos lineas: un salto de linea dentro de una
@@ -291,6 +291,16 @@ static void on_exportar( GtkButton *b, Ga *g )
     tb_procedencia( t, "Contraste",
         "Wald sobre omega(1), con 1 g.l. Escrito el polinomio con sus "
         "signos, omega(1) es la SUMA de los coeficientes." );
+    return t;
+}
+
+static void on_exportar( GtkButton *b, Ga *g )
+{
+    GtkWidget *d;
+    Tabla     *t = tabla_de( g );
+
+    (void) b;
+    if ( t == NULL ) return;
 
     d = gtk_file_chooser_dialog_new( "Exportar la ganancia", g->h.padre,
             GTK_FILE_CHOOSER_ACTION_SAVE, "Cancelar", GTK_RESPONSE_CANCEL,
@@ -312,6 +322,24 @@ static void on_exportar( GtkButton *b, Ga *g )
         }
     gtk_widget_destroy( d );
     tb_free( t );
+}
+
+static void on_cuaderno( GtkButton *b, Ga *g )
+{
+    Cuaderno *c = an_cuaderno( &g->h, "Ganancia", g->serie, g->muestra, g->id );
+    Tabla    *t;
+
+    (void) b;
+    if ( c == NULL ) { an_cuaderno_cierra( &g->h, NULL ); return; }
+    if ( g->sin_cov )
+        cu_texto( c, "⚠ El motor convergió en **cero iteraciones**: lo que "
+                     "imprime como covarianza es la semilla del optimizador. "
+                     "Los contrastes de abajo son ficción." );
+    if ( g->nf == 0 )
+        cu_texto( c, "Este modelo no lleva ninguna intervención de suceso." );
+    else if ( ( t = tabla_de( g ) ) != NULL )
+        { cu_tabla( c, t ); tb_free( t ); }
+    an_cuaderno_cierra( &g->h, c );
 }
 
 static void on_cerrar( GtkWidget *w, Ga *g ) { (void) w; g_free( g ); }
@@ -427,6 +455,7 @@ void an_ganancia( const AnHost *h, const char *serie, const char *muestra,
     gtk_box_pack_start( GTK_BOX(raiz), pie, FALSE, FALSE, 0 );
 
     /* SIN COVARIANZA NO HAY CONTRASTE, y se dice arriba del todo. */
+    g->sin_cov = ( c.iterations == 0 );
     if ( c.iterations == 0 )
         {
         GtkWidget *av = gtk_label_new( NULL );
@@ -445,12 +474,14 @@ void an_ganancia( const AnHost *h, const char *serie, const char *muestra,
     gtk_box_pack_start( GTK_BOX(raiz), barra, FALSE, FALSE, 0 );
     b = gtk_button_new_with_label( "Exportar…" );
     gtk_widget_set_tooltip_text( b,
-        "El formato lo dice la extensión: .csv, .txt o .tex.\n\nLa tabla lleva "
+        "El formato lo dice la extensión: .csv, .txt, .tex o .md.\n\nLa tabla lleva "
         "dentro de qué modelo salió: una ganancia suelta en un papel no vale "
         "para nada dentro de un mes." );
     gtk_widget_set_sensitive( b, g->nf > 0 );
     g_signal_connect( b, "clicked", G_CALLBACK(on_exportar), g );
     gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
+    if ( ( b = an_boton_cuaderno( &g->h, G_CALLBACK(on_cuaderno), g ) ) )
+        gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
 
     g_signal_connect( win, "destroy", G_CALLBACK(on_cerrar), g );
     gtk_widget_show_all( win );

@@ -65,18 +65,19 @@ static void pinta( Dg *g, GtkWidget *lista )
 /* Exportar: la misma tabla, tres renderizados                               */
 /* ------------------------------------------------------------------------ */
 
-static void exporta( Dg *g )
+/* LA TABLA, una sola, para Exportar y para el cuaderno: dos copias de una
+   tabla acaban siendo dos tablas.                                      */
+static Tabla *tabla_de( Dg *g )
 {
-    GtkWidget *d;
-    Tabla     *t;
-    char       titulo[256];
-    int        i;
+    Tabla *t;
+    char   titulo[256];
+    int    i;
 
     g_snprintf( titulo, sizeof titulo, "Diagnosis de %s / %s%s%s",
                 g->serie, g->id,
                 g->muestra[0] ? ", muestra " : "", g->muestra );
     t = tb_new( titulo );
-    if ( t == NULL ) return;
+    if ( t == NULL ) return NULL;
 
     tb_col( t, "",            NULL, TB_TXT, 0 );
     tb_col( t, "Veredicto",   NULL, TB_TXT, 0 );
@@ -105,6 +106,15 @@ static void exporta( Dg *g )
                 g->o.nobs, g->o.npar );
     tb_procedencia( t, "Ajuste", b );
     }
+    return t;
+}
+
+static void exporta( Dg *g )
+{
+    GtkWidget *d;
+    Tabla     *t = tabla_de( g );
+
+    if ( t == NULL ) return;
 
     d = gtk_file_chooser_dialog_new( "Exportar la diagnosis",
             g->h.padre, GTK_FILE_CHOOSER_ACTION_SAVE,
@@ -164,6 +174,23 @@ static void on_factores( GtkButton *b, Dg *g )
 }
 
 static void on_exportar( GtkButton *b, Dg *g ) { (void) b; exporta( g ); }
+
+static void on_cuaderno( GtkButton *b, Dg *g )
+{
+    Cuaderno *c = an_cuaderno( &g->h, "Diagnosis", g->serie, g->muestra, g->id );
+    Tabla    *t = tabla_de( g );
+    gchar    *v;
+
+    (void) b;
+    if ( c == NULL ) { tb_free( t ); an_cuaderno_cierra( &g->h, NULL ); return; }
+    if ( g->estruct[0] ) cu_dato( c, "Estructura", g->estruct );
+    v = g_strdup_printf( "En conjunto: **%s**.", dx_estado_es( g->d.peor ) );
+    cu_texto( c, v );
+    g_free( v );
+    cu_tabla( c, t );
+    tb_free( t );
+    an_cuaderno_cierra( &g->h, c );
+}
 
 static void on_cerrar( GtkWidget *w, Dg *g ) { (void) w; g_free( g ); }
 
@@ -377,11 +404,14 @@ void an_diagnosis( const AnHost *h, const char *serie, const char *muestra,
 
     b = gtk_button_new_with_label( "Exportar…" );
     gtk_widget_set_tooltip_text( b,
-        "La misma tabla en TXT, CSV o TeX — lo dice la extensión que le "
+        "La misma tabla en TXT, CSV, TeX o Markdown — lo dice la extensión que le "
         "pongas. Con la procedencia dentro: una diagnosis suelta en un papel, "
         "sin decir de qué modelo es, no vale nada dentro de un mes." );
     g_signal_connect( b, "clicked", G_CALLBACK(on_exportar), g );
     gtk_box_pack_end( GTK_BOX(barra), b, FALSE, FALSE, 0 );
+
+    if ( ( b = an_boton_cuaderno( &g->h, G_CALLBACK(on_cuaderno), g ) ) )
+        gtk_box_pack_end( GTK_BOX(barra), b, FALSE, FALSE, 0 );
 
     g_signal_connect( win, "destroy", G_CALLBACK(on_cerrar), g );
     gtk_widget_show_all( win );

@@ -14,6 +14,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include <math.h>
 
 #include "outdiag.h"
@@ -150,6 +151,35 @@ int main( int argc, char **argv )
 
    ok( d.tiene_logl && fabs( d.logl + 1701.348826 ) < 1e-5,
        "la verosimilitud, -1701.348826" );
+
+   /* --- las transferencias, caracterizadas -------------------------------
+    * Una por enlace y en el orden de la red: la ganancia y el retardo medio,
+    * y la respuesta al impulso. Se cruza con la tabla de parametros: el
+    * primer nu distinto de cero, el de k = b, ES omega_j[0].            */
+   {
+   OdTransfs *tr = calloc( 1, sizeof *tr );
+   OdParams  *pa = calloc( 1, sizeof *pa );
+   int        j, cuadra = 0;
+
+   ok( od_transferencias_file( argv[1], tr ) == 0, "las transferencias se leen" );
+   ok( tr->n == 4 && tr->n_irf == 4, "cuatro enlaces, con su respuesta al impulso" );
+   od_params_file( argv[1], pa );
+   for ( j = 0; j < tr->n; j++ ) {
+      char   nm[32];
+      int    k;
+      const OdTransf *t = &tr->t[j];
+
+      snprintf( nm, sizeof nm, "omega%d[0]", j + 1 );
+      for ( k = 0; k < pa->n; k++ )
+         if ( !strcmp( pa->p[k].nombre, nm ) && t->b < t->nk &&
+              fabs( t->nu[t->b] - pa->p[k].valor ) < 1e-5 ) cuadra++;
+      printf( "     %-12s g=%9.5f (%7.5f)  m=%6.3f  b=%d  %d nu\n",
+              t->etiqueta, t->g, t->g_dt, t->m, t->b, t->nk );
+   }
+   ok( cuadra == tr->n, "el nu de k = b es el omega0 de la tabla, en los cuatro" );
+   ok( tr->t[0].hay_g && tr->t[0].g_dt > 0.0, "la ganancia lleva su error tipico" );
+   free( tr ); free( pa );
+   }
 
    printf( "\n%d fallos\n", fallos );
    return fallos ? 1 : 0;

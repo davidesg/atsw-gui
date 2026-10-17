@@ -575,6 +575,118 @@ static void pinta_par( Mtram *m )
 }
 
 /* ------------------------------------------------------------------------ */
+/* 7 · Las transferencias, caracterizadas                                    */
+/*                                                                           */
+/* «¿Cuánto pasa, y en cuánto tiempo?» Es la pregunta del caso, y el motor ya */
+/* la contesta: la ganancia g = ω(1)/δ(1), el retardo medio y la respuesta al */
+/* impulso, con sus errores típicos. Aquí se enseñan, de los enlaces que      */
+/* entran en la ecuación que se mira, en las unidades de la ecuación: g y los */
+/* ν por refactor(X)/refactor(Y), como los ω de la página.                    */
+/* ------------------------------------------------------------------------ */
+
+enum { G_ENL, G_G, G_GDT, G_M, G_MDT, G_B, G_IDX, G_N };
+enum { I_K, I_NU, I_NUDT, I_CUM, I_CUMDT, I_N };
+
+/* El enlace j (0..) del .out es el j de la red: los dos van en su orden. */
+static double esc_enlace( Mtram *m, int j )
+{
+    const NetLink *l = &m->red.lnk[j];
+
+    return refac( m, l->inp ) / refac( m, l->out );
+}
+
+static void pinta_irf( Mtram *m, int j )
+{
+    Diag         *D  = &m->dia;
+    GtkListStore *st = GTK_LIST_STORE( gtk_tree_view_get_model(
+                                           GTK_TREE_VIEW(D->l_irf) ) );
+    GtkTreeIter   it;
+    char          a[32], b[32], c[32], d[32];
+    int           k;
+
+    gtk_list_store_clear( st );
+    if (j < 0 || j >= D->tr.n || j >= m->red.n) {
+        gtk_label_set_text( GTK_LABEL(D->t_irf), "Respuesta al impulso" );
+        return;
+    }
+    {
+        gchar *t = g_strdup_printf( "Respuesta al impulso de %s ← %s: ν_k, la "
+            "respuesta a un impulso de una vez; la acumulada, a un cambio "
+            "permanente, que tiende a la ganancia",
+            nom_ser( m, m->red.lnk[j].out ), nom_ser( m, m->red.lnk[j].inp ) );
+        gtk_label_set_text( GTK_LABEL(D->t_irf), t );
+        g_free( t );
+    }
+    for (k = 0; k < D->tr.t[j].nk; k++) {
+        double e = esc_enlace( m, j );
+        const OdTransf *t = &D->tr.t[j];
+
+        snprintf( a, sizeof a, "%.6f", t->nu[k] * e );
+        snprintf( b, sizeof b, "%.6f", t->nu_dt[k] * e );
+        snprintf( c, sizeof c, "%.6f", t->cum[k] * e );
+        snprintf( d, sizeof d, "%.6f", t->cum_dt[k] * e );
+        gtk_list_store_append( st, &it );
+        gtk_list_store_set( st, &it, I_K, k, I_NU, a, I_NUDT, b, I_CUM, c,
+                            I_CUMDT, d, -1 );
+    }
+}
+
+static void on_tg_sel( GtkTreeSelection *sel, Mtram *m )
+{
+    GtkTreeModel *mod;
+    GtkTreeIter   it;
+    int           j = -1;
+
+    if (gtk_tree_selection_get_selected( sel, &mod, &it ))
+        gtk_tree_model_get( mod, &it, G_IDX, &j, -1 );
+    pinta_irf( m, j );
+}
+
+static void pinta_tr( Mtram *m )
+{
+    Diag         *D  = &m->dia;
+    GtkListStore *st = GTK_LIST_STORE( gtk_tree_view_get_model(
+                                           GTK_TREE_VIEW(D->l_tg) ) );
+    GtkTreeIter   it, primero;
+    gboolean      hay = FALSE;
+    int           j;
+
+    gtk_list_store_clear( st );
+    pinta_irf( m, -1 );
+    if (!D->hay_tr || D->tr.n != m->red.n) return;
+
+    for (j = 0; j < D->tr.n; j++) {
+        const OdTransf *t = &D->tr.t[j];
+        double          e = esc_enlace( m, j );
+        char            g[32], gd[32], mm[32], md[32];
+        gchar          *enl;
+
+        if (m->red.lnk[j].out != D->actual) continue;
+        if (t->hay_g) {
+            snprintf( g,  sizeof g,  "%.6f", t->g * e );
+            snprintf( gd, sizeof gd, "%.6f", t->g_dt * e );
+            snprintf( mm, sizeof mm, "%.3f", t->m );
+            snprintf( md, sizeof md, "%.3f", t->m_dt );
+        } else {
+            snprintf( g, sizeof g, "no definida" );
+            snprintf( gd, sizeof gd, "—" );
+            snprintf( mm, sizeof mm, "—" );
+            snprintf( md, sizeof md, "—" );
+        }
+        enl = g_strdup_printf( "%s ← %s", nom_ser( m, m->red.lnk[j].out ),
+                               nom_ser( m, m->red.lnk[j].inp ) );
+        gtk_list_store_append( st, &it );
+        gtk_list_store_set( st, &it, G_ENL, enl, G_G, g, G_GDT, gd, G_M, mm,
+                            G_MDT, md, G_B, t->b, G_IDX, j, -1 );
+        g_free( enl );
+        if (!hay) { primero = it; hay = TRUE; }
+    }
+    if (hay)
+        gtk_tree_selection_select_iter(
+            gtk_tree_view_get_selection( GTK_TREE_VIEW(D->l_tg) ), &primero );
+}
+
+/* ------------------------------------------------------------------------ */
 /* 6 · La salida entera                                                      */
 /* ------------------------------------------------------------------------ */
 
@@ -692,6 +804,7 @@ void diagnosis_refresca( Mtram *m )
     pinta_ajuste( m );
     pinta_res( m );
     pinta_par( m );
+    pinta_tr( m );
     pinta_out( m );
     pinta_veredicto( m );
 }
@@ -706,7 +819,7 @@ void diagnosis_desde( Mtram *m, const char *path )
     Diag  *D = &m->dia;
     gchar *res;
 
-    D->vale = D->hay_par = D->hay_res = FALSE;
+    D->vale = D->hay_par = D->hay_res = D->hay_tr = FALSE;
     g_free( D->path );
     D->path = NULL;
 
@@ -714,6 +827,7 @@ void diagnosis_desde( Mtram *m, const char *path )
         D->vale = TRUE;
         D->path = g_strdup( path );
         D->hay_par = od_params_file( path, &D->par ) == 0;
+        D->hay_tr  = od_transferencias_file( path, &D->tr ) == 0;
     }
 
     /* Los residuos, del fichero que escribe "drtran -e" -- el MISMO que la
@@ -1073,6 +1187,47 @@ static Tabla *tabla_actual( Mtram *m, int pagina )
         }
         break;
 
+    case 6:                                        /* transferencias */
+        if (!D->hay_tr || D->tr.n != m->red.n) return NULL;
+        t = tb_new( "Las transferencias: la respuesta al impulso, en las "
+                    "unidades de cada ecuación" );
+        tb_col( t, "Enlace",     NULL, TB_TXT, 0 );
+        tb_col( t, "k",          NULL, TB_ENT, 0 );
+        tb_col( t, "nu_k",       NULL, TB_NUM, 6 );
+        tb_col( t, "d.t.",       NULL, TB_NUM, 6 );
+        tb_col( t, "acumulada",  NULL, TB_NUM, 6 );
+        tb_col( t, "d.t.",       NULL, TB_NUM, 6 );
+        for (i = 0; i < D->tr.n; i++) {
+            const OdTransf *q = &D->tr.t[i];
+            double          e = esc_enlace( m, i );
+            gchar          *enl = g_strdup_printf( "%s <- %s",
+                                     nom_ser( m, m->red.lnk[i].out ),
+                                     nom_ser( m, m->red.lnk[i].inp ) );
+            int             k;
+
+            /* La ganancia y el retardo medio, en la cabecera: son del
+             * enlace, no de cada k.                                     */
+            if (q->hay_g) {
+                gchar *v = g_strdup_printf( "ganancia %.6f (%.6f), retardo "
+                    "medio %.3f (%.3f), b = %d", q->g * e, q->g_dt * e,
+                    q->m, q->m_dt, q->b );
+                tb_procedencia( t, enl, v );
+                g_free( v );
+            } else
+                tb_procedencia( t, enl, "ganancia no definida" );
+            for (k = 0; k < q->nk; k++) {
+                tb_fila( t );
+                tb_pon_txt( t, 0, enl );
+                tb_pon_num( t, 1, k );
+                tb_pon_num( t, 2, q->nu[k] * e );
+                tb_pon_num( t, 3, q->nu_dt[k] * e );
+                tb_pon_num( t, 4, q->cum[k] * e );
+                tb_pon_num( t, 5, q->cum_dt[k] * e );
+            }
+            g_free( enl );
+        }
+        break;
+
     default:
         return NULL;
     }
@@ -1394,6 +1549,10 @@ void diagnosis_menu( Mtram *m, GtkWidget *menu, GtkWidget *ref )
                          "dialog-information", ref, G_CALLBACK(on_sub), m );
         g_object_set_data( G_OBJECT(mi), "sub", GINT_TO_POINTER(k) );
     }
+    /* «¿cuánto pasa y en cuánto tiempo?»: la pestaña 7 */
+    mi = at_entrada( menu, "Transferencias: ganancia e impulso", NULL, NULL,
+                     ref, G_CALLBACK(on_sub), m );
+    g_object_set_data( G_OBJECT(mi), "sub", GINT_TO_POINTER(6) );
     gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
     if (m->dia.hay_res)
         llena_graficos( m, menu, ref );
@@ -1700,6 +1859,53 @@ GtkWidget *diagnosis_pagina_new( Mtram *m )
     D->t_out = texto_mono();
     gtk_notebook_append_page( GTK_NOTEBOOK(D->libreta), en_scroll( D->t_out ),
                               gtk_label_new( "6 · Salida" ) );
+
+    /* 7 transferencias */
+    {
+    GtkWidget *v7 = gtk_box_new( GTK_ORIENTATION_VERTICAL, 4 ), *sc, *l;
+
+    l = gtk_label_new( "Ganancia y retardo medio de los enlaces que entran en "
+                       "la ecuación (marca uno para ver su respuesta al impulso)" );
+    gtk_widget_set_halign( l, GTK_ALIGN_START );
+    gtk_label_set_line_wrap( GTK_LABEL(l), TRUE );
+    gtk_box_pack_start( GTK_BOX(v7), l, FALSE, FALSE, 0 );
+    st = gtk_list_store_new( G_N, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING,
+                             G_TYPE_STRING, G_TYPE_STRING, G_TYPE_INT, G_TYPE_INT );
+    D->l_tg = gtk_tree_view_new_with_model( GTK_TREE_MODEL(st) );
+    columna( D->l_tg, "Enlace",        G_ENL );
+    columna( D->l_tg, "Ganancia",      G_G );
+    columna( D->l_tg, "d.t.",          G_GDT );
+    columna( D->l_tg, "Retardo medio", G_M );
+    columna( D->l_tg, "d.t.",          G_MDT );
+    columna( D->l_tg, "b",             G_B );
+    gtk_widget_set_tooltip_text( D->l_tg,
+        "La ganancia g = ω(1)/δ(1): cuánto acaba moviéndose la salida si la "
+        "entrada cambia una unidad para siempre (CUÁNTO). El retardo medio: el "
+        "centro de gravedad de la respuesta, en períodos (CUÁNDO). Errores "
+        "típicos por el método delta; los calcula drtran." );
+    g_signal_connect( gtk_tree_view_get_selection( GTK_TREE_VIEW(D->l_tg) ),
+                      "changed", G_CALLBACK(on_tg_sel), m );
+    gtk_box_pack_start( GTK_BOX(v7), D->l_tg, FALSE, FALSE, 0 );
+
+    D->t_irf = gtk_label_new( "Respuesta al impulso" );
+    gtk_widget_set_halign( D->t_irf, GTK_ALIGN_START );
+    gtk_label_set_line_wrap( GTK_LABEL(D->t_irf), TRUE );
+    gtk_widget_set_margin_top( D->t_irf, 6 );
+    gtk_box_pack_start( GTK_BOX(v7), D->t_irf, FALSE, FALSE, 0 );
+    st = gtk_list_store_new( I_N, G_TYPE_INT, G_TYPE_STRING, G_TYPE_STRING,
+                             G_TYPE_STRING, G_TYPE_STRING );
+    D->l_irf = gtk_tree_view_new_with_model( GTK_TREE_MODEL(st) );
+    columna( D->l_irf, "k",          I_K );
+    columna( D->l_irf, "ν_k",        I_NU );
+    columna( D->l_irf, "d.t.",       I_NUDT );
+    columna( D->l_irf, "acumulada",  I_CUM );
+    columna( D->l_irf, "d.t.",       I_CUMDT );
+    sc = en_scroll( D->l_irf );
+    gtk_box_pack_start( GTK_BOX(v7), sc, TRUE, TRUE, 0 );
+    gtk_container_set_border_width( GTK_CONTAINER(v7), 6 );
+    gtk_notebook_append_page( GTK_NOTEBOOK(D->libreta), v7,
+                              gtk_label_new( "7 · Transferencias" ) );
+    }
 
     /* --- los dos veredictos --- */
     vb = gtk_box_new( GTK_ORIENTATION_VERTICAL, 2 );

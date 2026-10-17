@@ -1178,6 +1178,25 @@ int main(int argc, char **argv)
     check(filas(m->dia.l_ade) >= 1, "la de adecuacion tambien", NULL);
     check(filas(m->dia.l_res) >= 1, "la de residuos tambien", NULL);
     check(filas(m->dia.l_par) >= 3, "y la de parametros", NULL);
+    /* 7 · Transferencias: la ganancia del enlace, leida del .out, y su
+     * respuesta al impulso, que empieza en el omega0.                 */
+    check(m->dia.hay_tr && filas(m->dia.l_tg) == 1,
+          "la pestana Transferencias tiene el enlace de la salida", NULL);
+    check(filas(m->dia.l_irf) > 1, "y su respuesta al impulso", NULL);
+    {
+        gchar *g = celda(m->dia.l_tg, 0, 1),
+              *n0 = celda(m->dia.l_irf, m->dia.tr.t[0].b, 1);   /* k = b */
+        int    k;
+        double w0 = 0.0, esc = m->c.s[1]->ts.refactor / m->c.s[0]->ts.refactor;
+
+        for (k = 0; k < m->dia.par.n; k++)
+            if (!strcmp(m->dia.par.p[k].nombre, "omega1[0]")) w0 = m->dia.par.p[k].valor * esc;
+        check(g && fabs(g_ascii_strtod(g, NULL) - m->dia.tr.t[0].g * esc) < 1e-5,
+              "la ganancia es la del motor, en las unidades de la ecuacion", g);
+        check(n0 && fabs(g_ascii_strtod(n0, NULL) - w0) < 1e-5,
+              "el primer nu distinto de cero, el de k = b, es el omega0", n0);
+        g_free(g); g_free(n0);
+    }
     /* Con los nombres de «4 · Modelo» y no con los del motor: la ecuacion
      * que se mira primero, Sigma al final.                             */
     {

@@ -244,6 +244,13 @@ int id_maf_lee( const char *origen, IdMaf *m, char *porque, size_t n );
 int id_escribe_maf( const char *origen, const char *destino, const IdMaf *m,
                     char *porque, size_t n );
 
+/* The regular AR(2) operators with fixed frequency (fue.c [3.3.11-12]): the
+ * same shape, (1 - phi1 B - v B^2) at harmonic freq[i], with v the only
+ * parameter. Same struct. */
+int id_arf_lee( const char *origen, IdMaf *m, char *porque, size_t n );
+int id_escribe_arf( const char *origen, const char *destino, const IdMaf *m,
+                    char *porque, size_t n );
+
 /* ---------------------------------------------------------------------- */
 /* THE WAY BACK FROM drtran (2026-10-17, DISENO-casos §3)                  */
 /*                                                                         */

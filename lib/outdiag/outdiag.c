@@ -458,3 +458,122 @@ int od_params_file( const char *path, OdParams *o )
    free( b );
    return rc;
 }
+
+
+/* ------------------------------------------------------------------------ */
+/* Las transferencias, caracterizadas: ver outdiag.h.                        */
+/* ------------------------------------------------------------------------ */
+
+static void quita_fin( char *l )
+{
+   size_t n = strlen( l );
+
+   while ( n && ( l[n - 1] == '\n' || l[n - 1] == '\r' || l[n - 1] == ' ' ) ) l[--n] = 0;
+}
+
+int od_transferencias( const char *texto, OdTransfs *o )
+{
+   const char *p = texto;
+   char        l[512];
+   int         zona = 0;   /* 1 la caracterizacion, 2 la respuesta al impulso */
+   int         filas = 0;  /* la caracterizacion ya empezo a dar enlaces     */
+   OdTransf   *t = NULL;
+
+   memset( o, 0, sizeof *o );
+   if ( !texto ) return 1;
+
+   while ( ( p = linea( p, l, sizeof l ) ) != NULL ) {
+      quita_fin( l );
+
+      if ( strstr( l, "The transfer functions, characterized" ) )
+         { zona = 1; filas = 0; continue; }
+      if ( strstr( l, "IMPULSE RESPONSE  nu(B)" ) )
+         { zona = 2; t = NULL; continue; }
+      if ( !zona ) continue;
+
+      if ( zona == 1 ) {
+         double v, dt, tt;
+         size_t n = strlen( l );
+
+         if ( !strncmp( l, "------", 6 ) ) {
+            if ( filas ) zona = 0;           /* el pie de la tabla */
+            continue;
+         }
+         /* «IPC <- WTI:» o «input 1:», en la columna 0 */
+         if ( n > 1 && l[0] != ' ' && l[n - 1] == ':' ) {
+            if ( o->n >= OD_MAX_LINK ) continue;
+            t = &o->t[o->n++];
+            filas = 1;
+            snprintf( t->etiqueta, sizeof t->etiqueta, "%.*s", (int) ( n - 1 ), l );
+            continue;
+         }
+         if ( !t ) continue;
+         if ( sscanf( l, " gain %lf %lf %lf", &v, &dt, &tt ) == 3 )
+            { t->g = v; t->g_dt = dt; t->hay_g = 1; }
+         else if ( sscanf( l, " mean lag %lf %lf %lf", &v, &dt, &tt ) == 3 )
+            { t->m = v; t->m_dt = dt; }
+         else if ( sscanf( l, " pure delay b %d", &t->b ) == 1 )
+            ;
+         continue;
+      }
+
+      /* zona 2: un bloque por enlace, en el mismo orden */
+      if ( !strncmp( l, "=====", 5 ) && o->n_irf ) break;
+      if ( strstr( l, "(b=" ) && strstr( l, "s=" ) ) {
+         t = o->n_irf < OD_MAX_LINK ? &o->t[o->n_irf++] : NULL;
+         if ( t ) {
+            int bb, rr, ss;
+
+            t->nk = 0;
+            /* el retardo, de aqui: la caracterizacion no lo da si g no esta
+               definida (delta(1) u omega(1) casi cero) */
+            if ( sscanf( strstr( l, "(b=" ), "(b=%d, r=%d, s=%d)", &bb, &rr, &ss ) == 3 )
+               t->b = bb;
+            if ( !t->etiqueta[0] ) {
+               const char *q = l;
+               size_t      n;
+
+               while ( *q == ' ' ) q++;
+               n = (size_t) ( strstr( q, "(b=" ) - q );
+               while ( n && q[n - 1] == ' ' ) n--;
+               snprintf( t->etiqueta, sizeof t->etiqueta, "%.*s", (int) n, q );
+            }
+         }
+         continue;
+      }
+      if ( t && strchr( l, '|' ) ) {
+         int    k;
+         double a, b, c, d, e;
+
+         if ( sscanf( l, " %d %lf %lf %lf | %lf %lf", &k, &a, &b, &c, &d, &e ) == 6 &&
+              k == t->nk && t->nk < OD_MAX_IRF ) {
+            t->nu[k] = a; t->nu_dt[k] = b; t->cum[k] = d; t->cum_dt[k] = e;
+            t->nk++;
+         }
+      }
+   }
+   if ( o->n_irf > o->n ) o->n = o->n_irf;
+   return o->n ? 0 : 1;
+}
+
+int od_transferencias_file( const char *path, OdTransfs *o )
+{
+   FILE *f = fopen( path, "rb" );
+   char *b;
+   long  n;
+   int   rc;
+
+   memset( o, 0, sizeof *o );
+   if ( !f ) return -1;
+
+   fseek( f, 0, SEEK_END );  n = ftell( f );  fseek( f, 0, SEEK_SET );
+   b = malloc( n + 1 );
+   if ( !b ) { fclose( f ); return -1; }
+   n = (long) fread( b, 1, n, f );
+   b[n] = 0;
+   fclose( f );
+
+   rc = od_transferencias( b, o );
+   free( b );
+   return rc;
+}

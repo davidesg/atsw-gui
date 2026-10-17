@@ -106,10 +106,12 @@ diagonal, conversión de corridas viejas y «Ver modelo…» desde la madre.
   ser correcto, tanto si se presenta en % como en bruto» (el analista). La
   división por el refactor se perdió al pasar el gráfico a fugdraw (fue
   1.14); `lib/fugplot` recibe ahora `FPUnits` y pone % sólo en logaritmos.
-- **`lib/vuelta` no escribe AR(2) de frecuencia fija**: se niega con un
-  mensaje. No hay ninguno en los casos actuales.
+- **`lib/vuelta` y los AR(2) de frecuencia fija: resuelto** (17-oct). Se
+  escriben como los MA(2): `id_arf_lee` / `id_escribe_arf`, en el orden de
+  `lib/slots`. Va probado con `syn_ARF`.
 - **El `.pre` del caso IPC no es exactamente un óptimo**: fue tarda 10
-  iteraciones sobre él (el AR va redondeado a 4 decimales). Es el asunto de
+  iteraciones sobre él (el AR va redondeado a 4 decimales). Anotado como
+  **fue BUG-0001** (`engines/fue/BUGS.md`, con su repro), sin arreglar. Es el asunto de
   la puerta diagonal y de «si los `.pre` eran óptimos o especificaciones»
   (TODO.md).
 - **Posible prueba frágil en la madre**: una pasada de

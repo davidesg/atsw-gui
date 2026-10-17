@@ -82,6 +82,33 @@ a release nobody can cite correctly.
 
 ## 3. The record
 
+### 0.13 — 2026-10-16
+
+**Why a release at all, and why now.** `BUG-40` was decided: the deterministic
+component of a `.pre` is computed with fue's rule everywhere in the suite, and
+fue does not change. drvec's copy of the reader carried its own filter, the
+exact recursion of `ω(B)/δ(B)`; it now calls `lib/fuedet`, fue.c's code. The
+port needs the oracle that does this.
+
+**Why 0.13 and not 0.12.1.** Recorded figures move. None of the 34 goldens
+does — none has a δ with more than 40 periods behind it — but the `.pre` route,
+`-interv` and `-xpre` give other numbers whenever one does: on drvec-python's
+`mmb40.mink.pre` (a step with δ = 0.95), b40's logL moves +0.47 and b40rank's
+LR goes from 13.30 to 13.79, which turns "H0 not rejected" into "reject H0 at
+10 %". That is `y`.
+
+**Why not 1.0.** The conditions of §1 are where 0.12 left them.
+
+**What it contains.**
+
+| | |
+|---|---|
+| `BUG-40` | closed by agreeing with fue: `ν(B)` truncated at 40 lags when there is a δ, the variables summed, through `lib/fuedet` |
+| `pre_probe -det` | prints the component `build_det_component` subtracts; the suite checks it against fue's rule on `stepd2.pre` ([8ad]) |
+
+**Re-measured for this release.** The 34 golden hashes are unchanged; the suite
+passes, with [8ad] new.
+
 ### 0.12 — 2026-10-11
 
 **Why a release at all, and why now.** It is the oracle of the Python port.

@@ -966,8 +966,25 @@ or handles every one of these.
 
 ## BUG-40 — the deterministic component of a `.pre` uses the exact rational filter; fue truncates `nu(B)` at 40 lags
 
-**Status: WON'T FIX 2026-09-24 (the analyst's decision): a documented discrepancy, not
-changed.**  Neither side is wrong: fue approximates `ν(B) = ω(B)/δ(B)` by a
+**Status: FIXED 2026-10-16, by agreeing with fue (the analyst's decision).**
+fue's rule is adopted everywhere and fue does not change: `ν(B)` by `calcnu`,
+truncated at `Nomega` lags, or 40 when the variable has a δ, the variables
+summed and subtracted once. The code is fue.c's step [5], moved verbatim to
+`lib/fuedet` (fue's 109 runs are byte-identical after the move), and every
+program of the suite calls it: fue, fuf (which truncated at 20), `lib/fuepre`'s
+`build_det_component` (drtran's and drvarma's forecasts, the GUIs),
+`lib/prewhiten`'s `apply_univariate_model` (drtran's and drvarma's cast, which
+also subtracted variable by variable), drvec (this copy of the reader now calls
+`lib/fuedet` instead of carrying a filter), and fue's Python package
+(`cast_us_py`, `forecast._build_xi`, through a byte-identical copy). The
+transfer functions of the relations — drtran's links, drvec's `-xlink` — keep
+the exact recursion: they are not a `.pre`'s deterministic terms. drvec 0.13.
+None of drvec's 34 goldens moves; on drvec-python's `mmb40.mink.pre`, b40's
+logL moves +0.47 and b40rank's LR 13.30 → 13.79 (H0 rejected at 10 %).
+Checked by `tests/run_tests.sh` [8ad] and `sh tests/repro/repro.sh 40`.
+
+**History.** WON'T FIX 2026-09-24 (the analyst's decision then): a documented
+discrepancy, not changed.  Neither side is wrong: fue approximates `ν(B) = ω(B)/δ(B)` by a
 40-weight convolution, drvec and drtran apply the rational filter exactly.  They
 agree for the first 40 periods after an intervention; afterwards fue leaves out
 a fraction `δ⁴¹` of the long-run effect (0 at δ = 0.5, 1e-4 at 0.8, 0.013 at 0.9,
@@ -989,10 +1006,11 @@ agree to `t = 40`; at `t = 62` drvec subtracts 94.63 and fue 87.79.
 component other than the one the `.pre`'s ω and δ were estimated with, whenever
 the series is longer than 40 observations and δ is near 1.
 
-**Repro.** The probe in the review folder; to be added to `repro.sh` with a
-`.pre` carrying a step with δ.
+**Repro.** `sh tests/repro/repro.sh 40` (`tests/repro/fixtures/stepd2.pre`,
+through `bin/pre_probe -det`); `tests/run_tests.sh` [8ad] checks it against
+fue's rule, computed apart, on t = 1..62 and 8 periods ahead.
 **Suggested fix.** Agree with fue — truncate at 40 — or change fue; the two must
-compute the same regressor.
+compute the same regressor. Done the first way (2026-10-16).
 
 ---
 

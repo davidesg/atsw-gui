@@ -2947,6 +2947,33 @@ grep -a "D.mink <- A.mink(-1)" "$TMP/case.out" | grep -q "\*\*\*" \
   && ok "interior MA: its s.e. are still printed" || bad "interior MA s.e." "missing"
 echo
 
+# 8ad. BUG-40.  The deterministic component of a .pre is fue's: nu(B) =
+#      omega(B)/delta(B) truncated at 40 lags (fue.c, cast_us [5]), the code
+#      of lib/fuedet.  stepd2.pre has a step in 1855 with omega 5 and delta
+#      0.95 over 62 annual observations: 16 periods past the 40th lag.  The
+#      expected component is computed here, apart, with fue's rule -- nu_0 =
+#      omega, nu_k = delta nu_(k-1), summed up to lag 40 -- so there is no
+#      golden number.  The exact recursion this replaced gave 94.63 at t = 62
+#      where fue's rule gives 87.79.
+echo "[8ad] the deterministic component of a .pre is fue's (BUG-40)"
+f=tests/repro/fixtures/stepd2.pre
+if [ ! -x "$PROBE" ]; then
+    bad "BUG-40" "$PROBE not built -- run make first"
+else
+    "$PROBE" "$f" -det 8 > "$TMP/det40.txt" 2>&1
+    want=$(awk 'BEGIN{ s = 1855 - 1850 + 1; w = 5; d = 0.95; L = 40;
+                       nu[0] = w; for (k = 1; k <= L; k++) nu[k] = d * nu[k-1];
+                       for (t = 1; t <= 70; t++) { v = 0;
+                           for (k = 0; k <= L; k++) if (t - k >= s) v += nu[k];
+                           printf "%d %.10f\n", t, v } }')
+    if [ "$(cat "$TMP/det40.txt")" = "$want" ]; then
+        ok "stepd2.pre (delta 0.95): the component is fue's, t = 1..62 and 8 ahead"
+    else
+        bad "BUG-40" "$(echo "$want" | diff - "$TMP/det40.txt" | grep '^>' | tail -1)"
+    fi
+fi
+echo
+
 # ================================================== 9 MEMORY (opt-in) ==
 # Off by default so `make test` is deterministic on any machine; run it with
 #     VALGRIND=1 make test

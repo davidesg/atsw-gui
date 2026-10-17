@@ -7,6 +7,27 @@ publicación: `v*`.
 
 ## Sin publicar
 
+## 0.13 — 2026-10-16
+
+### BUG-40, cerrado: la componente determinista de un `.pre` es la de fue
+
+- drvec restaba la componente determinista de un `.pre` con la recursión
+  exacta de ω(B)/δ(B); fue la estima con ν(B) truncada en 40 retardos. Con un
+  δ próximo a uno y más de 40 periodos tras el suceso, el `.pre` dejaba de ser
+  el óptimo que fue había escrito. Ahora la copia del lector llama a
+  `lib/fuedet`, el código de fue.c que comparten fue, fuf, drtran, drvarma y
+  el paquete de Python de fue. La regla es la de fue en toda la suite, y fue
+  no cambia.
+- Ninguno de los 34 goldens se mueve: ninguno lleva un δ con más de 40
+  periodos detrás. En los ficheros de drvec-python sí: `mmb40.mink.pre` mueve
+  el logL de b40 en +0,47 y el LR de b40rank de 13,30 a 13,79 («reject H0 at
+  10 %»). Es lo que hace falta para el oráculo nuevo del porte.
+- La ruta `.pre`, `-interv` y `-xpre` cambian; las funciones de transferencia
+  de `-xlink` siguen con la recursión exacta, sin truncar.
+- `bin/pre_probe fichero.pre -det H` imprime la componente; la batería la
+  compara con la regla de fue en `stepd2.pre` ([8ad]), y
+  `tests/repro/repro.sh 40` la enseña.
+
 ## 0.12 — 2026-10-11
 
 ### BUG-41 y BUG-42, cerrados, y la diagnosis multivariante compartida

@@ -156,6 +156,16 @@ if want 39; then hdr 39 "the shared .pre reader accepts malformed files"
   echo "  (ifempty: SIGSEGV; long100: a lambda=1 file read as lambda=0; trunc: estimates with zeros)"
 fi
 
+if want 40; then hdr 40 "the .pre's deterministic component is not fue's (nu truncated at 40)"
+  P="$TOP/bin/pre_probe"
+  got=$("$P" "$F/stepd2.pre" -det 0 | awk '$1 == 62 {print $2}')
+  fue=$(awk 'BEGIN{ nu = 5; v = 0; for (k = 0; k <= 40; k++) { v += nu; nu *= 0.95 }
+                    printf "%.10f", v }')
+  echo "  stepd2.pre, step 1855, omega 5, delta 0.95: component at t = 62"
+  echo "  drvec: $got    fue's rule (40 lags): $fue"
+  echo "  (open: they differ, 94.63 against 87.79; fixed: they are the same)"
+fi
+
 if want 41; then hdr 41 "engine: the line search never returns on a NaN objective"
   gcc -O0 -I"$TOP/include" -o pn "$HERE/probes/probe_nan.c" "$TOP"/src/qnewtopt.c "$TOP"/src/nlatools.c -lgsl -lgslcblas -lm 2>/dev/null \
     && { timeout 10 ./pn >/dev/null 2>&1; echo "  exit $? (124 = still looping after 10 s)"; } \

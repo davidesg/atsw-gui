@@ -1154,6 +1154,26 @@ int main(int argc, char **argv)
     check(filas(m->dia.l_ade) >= 1, "la de adecuacion tambien", NULL);
     check(filas(m->dia.l_res) >= 1, "la de residuos tambien", NULL);
     check(filas(m->dia.l_par) >= 3, "y la de parametros", NULL);
+    /* Con los nombres de «4 · Modelo» y no con los del motor: la ecuacion
+     * que se mira primero, Sigma al final.                             */
+    {
+        gchar *c0 = celda(m->dia.l_par, 0, 0);
+        int    k, motor = 0, sigma = 0;
+
+        for (k = 0; k < filas(m->dia.l_par); k++) {
+            gchar *c = celda(m->dia.l_par, k, 0);
+
+            if (c && (strstr(c, "omega") || strstr(c, "phi_") || strstr(c, "log(var")))
+                motor++;
+            if (c && !strcmp(c, "Σ, de la red entera")) sigma++;
+            g_free(c);
+        }
+        check(c0 && g_str_has_prefix(c0, "ω1[0]"),
+              "los parametros, con el nombre del modelo: ω1[0] primero", c0);
+        check(motor == 0, "ninguno con el nombre del motor", NULL);
+        check(sigma == 1, "y Σ aparte, una vez", NULL);
+        g_free(c0);
+    }
     check(m->dia.hay_res, "los residuos de esta corrida se leen", NULL);
     s = buffer_de(m->dia.t_out);
     check(contiene(s, "Log-likelihood"), "la pestana Salida tiene el .out", NULL);
@@ -1235,8 +1255,9 @@ int main(int argc, char **argv)
     p.carpeta = trab; p.nombre = "parametros.csv";
     pulsa_dialogo(entrada_diag(m, "Exportar la diagnosis…"), &p);
     s = lee_fichero(csv);
-    check(contiene(s, "omega") || contiene(s, "phi"),
-          "«Exportar la diagnosis…» escribe la tabla de parametros", s);
+    check(contiene(s, "ω1[0]") && contiene(s, "φ_") && !contiene(s, "omega"),
+          "«Exportar la diagnosis…» escribe la tabla de parametros, con los "
+          "nombres del modelo", s);
     check(contiene(s, "modelo.out") || contiene(s, "SYN_Y"),
           "con la procedencia dentro", s);
     g_free(s); g_free(csv);

@@ -65,10 +65,10 @@ static void test_token_name(void) {
 
 static void test_engine_status(void) {
     struct { const char *arg; int status; int wrote; const char *in_message; } cases[] = {
-        { "ok",     0, 1, "finished"              },
+        { "ok",     0, 1, "ha terminado"          },
         { "nofile", 1, 0, "Error opening input file" },
         { "bad",    2, 0, "the file ends too soon"   },
-        { "noest",  3, 1, "initial values"        },
+        { "noest",  3, 1, "valores iniciales"     },
     };
     size_t i;
 
@@ -91,7 +91,7 @@ static void test_engine_signal(void) {
 
     check(r.status == ENGINE_SIGNAL, "a crash should be reported as a signal, not as %d",
           r.status);
-    check(r.message && strstr(r.message, "signal") != NULL,
+    check(r.message && strstr(r.message, "señal") != NULL,
           "the message of a crash should name the signal: \"%s\"",
           r.message ? r.message : "(null)");
     engine_result_clear(&r);
@@ -263,7 +263,7 @@ static void test_convergence(const char *dir) {
     check(c.kind == CONV_GRADTOL, "el criterio es el del gradiente, no %d", c.kind);
     check(convergence_is_good(&c), "y eso es convergencia de verdad");
     check(c.iterations == 20, "en 20 iteraciones, no %d", c.iterations);
-    check(c.brief && strcmp(c.brief, "converged (gradtol)") == 0,
+    check(c.brief && strcmp(c.brief, "convergió (gradtol)") == 0,
           "y se dice corto: \"%s\"", c.brief ? c.brief : "(null)");
     convergence_clear(&c);
 
@@ -286,7 +286,7 @@ static void test_convergence(const char *dir) {
     check(c.kind == CONV_MAXITS, "el limite de iteraciones, no %d", c.kind);
     check(!convergence_is_good(&c),
           "y eso NO es convergencia, aunque el motor diga CONVERGENCE OBTAINED");
-    check(c.brief && strstr(c.brief, "NOT converged") != NULL,
+    check(c.brief && strstr(c.brief, "NO convergió") != NULL,
           "y hay que decirlo: \"%s\"", c.brief ? c.brief : "(null)");
     convergence_clear(&c);
 

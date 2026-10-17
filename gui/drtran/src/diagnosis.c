@@ -386,41 +386,192 @@ static const char *de_donde( Mtram *m, const char *nombre )
     return "";
 }
 
+/* UN PARAMETRO DEL .out, LEIDO PARA EL ANALISTA. El motor los nombra a su
+ * manera --omega1[0], phi_1[B^1], omega_d1[3,0], log(var2/var1)-- y en sus
+ * unidades, refactor por BoxCox(y). Aqui: de que ecuacion es (0 si es de
+ * Sigma, de la red entera), su nombre en el idioma de «4 · Modelo» y lo
+ * que lo lleva a las unidades de la ecuacion, como pagina.c: los omega
+ * por refactor(X)/refactor(Y), los deterministas y la media divididos por
+ * refactor(Y). El log del cociente de varianzas se DESPLAZA (*suma).  */
+static double refac( Mtram *m, int i )
+{
+    if (i < 1 || i > m->c.n) return 1.0;
+    return m->c.s[i - 1]->ts.refactor > 0 ? m->c.s[i - 1]->ts.refactor : 1.0;
+}
+
+static int par_legible( Mtram *m, const char *n, char *nom, size_t sz,
+                        double *esc, double *suma )
+{
+    int i, j, k;
+
+    *esc = 1.0; *suma = 0.0;
+    if (sscanf( n, "omega_d%d[%d,%d]", &i, &j, &k ) == 3) {
+        *esc = 1.0 / refac( m, i );
+        if (k == 0) snprintf( nom, sz, "ω_D%d_%s", j, nom_ser( m, i ) );
+        else snprintf( nom, sz, "ω_D%d_%s[B^%d]", j, nom_ser( m, i ), k );
+        return i;
+    }
+    if (sscanf( n, "delta_d%d[%d,%d]", &i, &j, &k ) == 3) {
+        snprintf( nom, sz, "δ_D%d_%s[B^%d]", j, nom_ser( m, i ), k );
+        return i;
+    }
+    if (sscanf( n, "omega%d[%d]", &i, &k ) == 2 && i >= 1 && i <= m->red.n) {
+        const NetLink *l = &m->red.lnk[i - 1];
+
+        *esc = refac( m, l->inp ) / refac( m, l->out );
+        snprintf( nom, sz, "ω%d[%d]  ← %s", i, k, nom_ser( m, l->inp ) );
+        return l->out;
+    }
+    if (sscanf( n, "delta%d[%d]", &i, &k ) == 2 && i >= 1 && i <= m->red.n) {
+        const NetLink *l = &m->red.lnk[i - 1];
+
+        snprintf( nom, sz, "δ%d[%d]  ← %s", i, k, nom_ser( m, l->inp ) );
+        return l->out;
+    }
+    if (sscanf( n, "phi_%d[B^%d]", &i, &k ) == 2) {
+        if (k == 1) snprintf( nom, sz, "φ_%s", nom_ser( m, i ) );
+        else snprintf( nom, sz, "φ_%s[B^%d]", nom_ser( m, i ), k );
+        return i;
+    }
+    if (sscanf( n, "theta_%d[B^%d]", &i, &k ) == 2) {
+        if (k == 1) snprintf( nom, sz, "θ_%s", nom_ser( m, i ) );
+        else snprintf( nom, sz, "θ_%s[B^%d]", nom_ser( m, i ), k );
+        return i;
+    }
+    if (sscanf( n, "mu[%d]", &i ) == 1) {
+        *esc = 1.0 / refac( m, i );
+        snprintf( nom, sz, "μ_%s", nom_ser( m, i ) );
+        return i;
+    }
+    if (sscanf( n, "log(var%d/var%d)", &i, &j ) == 2) {
+        /* var en el motor = refactor² var en la ecuacion */
+        *suma = 2.0 * log( refac( m, j ) ) - 2.0 * log( refac( m, i ) );
+        snprintf( nom, sz, "log(σ²_%s / σ²_%s)", nom_ser( m, i ), nom_ser( m, j ) );
+        return 0;
+    }
+    if (sscanf( n, "q[%d,%d]", &i, &j ) == 2) {
+        snprintf( nom, sz, "q(%s, %s)", nom_ser( m, i ), nom_ser( m, j ) );
+        return 0;
+    }
+    snprintf( nom, sz, "%s", n );
+    return 0;
+}
+
+/* Su valor, su t y su p en esas unidades. Escalar no cambia ni t ni p;
+ * desplazar si: la t pasa a contrastar el cociente de las ecuaciones.   */
+typedef struct { double v, dt, t, p; } ParEc;
+
+static ParEc par_ecuacion( const OdPar *q, double esc, double suma )
+{
+    ParEc r = { q->valor * esc + suma, q->dt * esc, q->t, q->p };
+
+    if (suma != 0.0 && r.dt > 0.0) {
+        r.t = r.v / r.dt;
+        r.p = erfc( fabs( r.t ) / sqrt( 2.0 ) );
+    }
+    return r;
+}
+
+/* Lo que el motor dice de un slot atado --«(fixed)», «(= omega1[0] *
+ * theta_2[B^1])»--, con los nombres del modelo: «fijo», «= ω1[0] · θ_wti». */
+static const char *atado_legible( Mtram *m, const char *a )
+{
+    static char out[256];
+    size_t      o = 0;
+    const char *p;
+
+    if (!a[0]) return "atado";
+    if (!strcmp( a, "(fixed)" )) return "fijo";
+    p = a[0] == '(' ? a + 1 : a;
+    while (*p && *p != ')' && o + 1 < sizeof out) {
+        if (g_ascii_isalpha( *p )) {
+            char   tok[64], nom[96];
+            size_t k = 0;
+            double esc, suma;
+
+            while (*p && (g_ascii_isalnum( *p ) || strchr( "_[]^,", *p )) &&
+                   k + 1 < sizeof tok)
+                tok[k++] = *p++;
+            tok[k] = 0;
+            par_legible( m, tok, nom, sizeof nom, &esc, &suma );
+            if (strstr( nom, "  ←" )) *strstr( nom, "  ←" ) = 0;  /* sin la entrada */
+            o += g_strlcpy( out + o, nom, sizeof out - o );
+            if (o >= sizeof out) o = sizeof out - 1;
+        } else if (*p == '*') {
+            o += g_strlcpy( out + o, "·", sizeof out - o );
+            if (o >= sizeof out) o = sizeof out - 1;
+            p++;
+        } else
+            out[o++] = *p++;
+    }
+    out[o] = 0;
+    return out;
+}
+
+static const char *par_nota( Mtram *m, const OdPar *q, const ParEc *e )
+{
+    const char *de;
+
+    if (!q->libre) return atado_legible( m, q->atado );
+    de = de_donde( m, q->nombre );
+    return de[0] ? de : e->p < 0.05 ? "" : "no significativo";
+}
+
+/* LA ECUACION QUE SE MIRA, como el resto de la pagina (◀ ▶): lo que entra
+ * en ella --transferencias, ruido, deterministas, media-- y, aparte, Sigma,
+ * que es de la red entera. Exportar da todas las ecuaciones.          */
+static void fila_par( Mtram *m, GtkListStore *st, const OdPar *q,
+                      const char *nom, double esc, double suma )
+{
+    GtkTreeIter it;
+    ParEc       e = par_ecuacion( q, esc, suma );
+    char        v[32], dt[32], t[32], p[32];
+
+    snprintf( v, sizeof v, "%.6f", e.v );
+    if (q->libre) {
+        snprintf( dt, sizeof dt, "%.6f", e.dt );
+        snprintf( t,  sizeof t,  "%.3f", e.t );
+        snprintf( p,  sizeof p,  "%.4f", e.p );
+    } else {
+        snprintf( dt, sizeof dt, "—" );
+        snprintf( t,  sizeof t,  "—" );
+        snprintf( p,  sizeof p,  "—" );
+    }
+    gtk_list_store_append( st, &it );
+    gtk_list_store_set( st, &it, P_NOM, nom, P_VAL, v, P_DT, dt, P_T, t,
+                        P_P, p, P_DE, par_nota( m, q, &e ), -1 );
+}
+
 static void pinta_par( Mtram *m )
 {
     Diag         *D  = &m->dia;
     GtkListStore *st = GTK_LIST_STORE( gtk_tree_view_get_model(
                                            GTK_TREE_VIEW(D->l_par) ) );
     GtkTreeIter   it;
-    char          v[32], dt[32], t[32], p[32];
-    int           i;
+    char          nom[96];
+    double        esc, suma;
+    int           i, pasada, hay_sigma = 0;
 
     gtk_list_store_clear( st );
     if (!D->hay_par) return;
 
-    for (i = 0; i < D->par.n; i++) {
-        const OdPar *q = &D->par.p[i];
-        const char  *de;
+    for (pasada = 0; pasada < 2; pasada++)
+        for (i = 0; i < D->par.n; i++) {
+            const OdPar *q = &D->par.p[i];
+            int          ec = par_legible( m, q->nombre, nom, sizeof nom, &esc, &suma );
 
-        snprintf( v, sizeof v, "%.6f", q->valor );
-        if (q->libre) {
-            snprintf( dt, sizeof dt, "%.6f", q->dt );
-            snprintf( t,  sizeof t,  "%.3f", q->t );
-            snprintf( p,  sizeof p,  "%.4f", q->p );
-            de = de_donde( m, q->nombre );
-            if (!de[0]) de = q->p < 0.05 ? "" : "no significativo";
-        } else {
-            snprintf( dt, sizeof dt, "—" );
-            snprintf( t,  sizeof t,  "—" );
-            snprintf( p,  sizeof p,  "—" );
-            de = q->atado[0] ? q->atado : "atado";
+            if (pasada == 0 && ec == D->actual)
+                fila_par( m, st, q, nom, esc, suma );
+            else if (pasada == 1 && ec == 0) {
+                if (!hay_sigma++) {
+                    gtk_list_store_append( st, &it );
+                    gtk_list_store_set( st, &it, P_NOM, "Σ, de la red entera",
+                                        P_VAL, "", P_DT, "", P_T, "", P_P, "",
+                                        P_DE, "", -1 );
+                }
+                fila_par( m, st, q, nom, esc, suma );
+            }
         }
-
-        gtk_list_store_append( st, &it );
-        gtk_list_store_set( st, &it,
-            P_NOM, q->nombre, P_VAL, v, P_DT, dt, P_T, t, P_P, p,
-            P_DE, de, -1 );
-    }
 }
 
 /* ------------------------------------------------------------------------ */
@@ -514,7 +665,8 @@ static void pinta_veredicto( Mtram *m )
         gtk_button_set_label( GTK_BUTTON(D->b_volver), "Ir a Identificación" );
     } else
         mtram_verdicto( D->ver_ojo, MT_VERDE,
-            "Los %d enlaces pasan los dos contrastes.", D->d.ne );
+            D->d.ne == 1 ? "El enlace pasa los dos contrastes."
+                         : "Los %d enlaces pasan los dos contrastes.", D->d.ne );
 
     gtk_widget_set_sensitive( D->b_volver, D->ir_a >= 0 );
     gtk_widget_set_visible( D->b_volver, D->ir_a >= 0 );
@@ -686,9 +838,12 @@ static void fija_baseline( Mtram *m, gboolean callado )
     D->logl_base = D->d.logl;
     D->npar_base = D->par.n;
     D->hay_base  = TRUE;
-    snprintf( D->base_que, sizeof D->base_que, "%s, %d enlaces",
-              m->est.diagonal ? "diagonal -0" : "con transferencias",
-              m->red.n );
+    /* El diagonal (-0) no estima ningun enlace, aunque la red los tenga. */
+    if (m->est.diagonal)
+        snprintf( D->base_que, sizeof D->base_que, "el diagonal, sin transferencia" );
+    else
+        snprintf( D->base_que, sizeof D->base_que, "con %d enlace%s",
+                  m->red.n, m->red.n == 1 ? "" : "s" );
 
     /* Y SUS RESIDUOS, que es lo que da la d.t. y el R² del lado izquierdo.
      * El logL solo da el LR; las otras dos cifras de la escuela necesitan
@@ -888,7 +1043,8 @@ static Tabla *tabla_actual( Mtram *m, int pagina )
 
     case 4:                                        /* modelo estimado */
         if (!D->hay_par) return NULL;
-        t = tb_new( "Modelo estimado" );
+        t = tb_new( "Modelo estimado, en las unidades de cada ecuación" );
+        tb_col( t, "Ecuación",  NULL, TB_TXT, 0 );
         tb_col( t, "Parámetro", NULL, TB_TXT, 0 );
         tb_col( t, "Estimado",  NULL, TB_NUM, 6 );
         tb_col( t, "d.t.",      NULL, TB_NUM, 6 );
@@ -897,22 +1053,23 @@ static Tabla *tabla_actual( Mtram *m, int pagina )
         tb_col( t, "Nota",      NULL, TB_TXT, 0 );
         for (i = 0; i < D->par.n; i++) {
             const OdPar *q = &D->par.p[i];
-            const char  *de;
+            char         nom[96];
+            double       esc, suma;
+            int          ec = par_legible( m, q->nombre, nom, sizeof nom, &esc, &suma );
+            ParEc        e  = par_ecuacion( q, esc, suma );
 
             tb_fila( t );
-            tb_pon_txt( t, 0, q->nombre );
-            tb_pon_num( t, 1, q->valor );
+            tb_pon_txt( t, 0, ec ? nom_ser( m, ec ) : "Σ" );
+            tb_pon_txt( t, 1, nom );
+            tb_pon_num( t, 2, e.v );
             if (q->libre) {
-                tb_pon_num( t, 2, q->dt );
-                tb_pon_num( t, 3, q->t );
-                tb_pon_num( t, 4, q->p );
-                /* La misma nota que en pantalla: lo que se ve es lo que se
-                 * exporta, o son dos tablas distintas.                 */
-                de = de_donde( m, q->nombre );
-                if (!de[0]) de = q->p < 0.05 ? "" : "no significativo";
-                tb_pon_txt( t, 5, de );
-            } else
-                tb_pon_txt( t, 5, q->atado[0] ? q->atado : "atado" );
+                tb_pon_num( t, 3, e.dt );
+                tb_pon_num( t, 4, e.t );
+                tb_pon_num( t, 5, e.p );
+            }
+            /* La misma nota que en pantalla: lo que se ve es lo que se
+             * exporta, o son dos tablas distintas.                     */
+            tb_pon_txt( t, 6, par_nota( m, q, &e ) );
         }
         break;
 
@@ -1530,6 +1687,9 @@ GtkWidget *diagnosis_pagina_new( Mtram *m )
     columna( D->l_par, "p",         P_P );
     columna( D->l_par, "",          P_DE );
     gtk_widget_set_tooltip_text( D->l_par,
+        "Los parámetros de la ecuación que se mira (◀ ▶), con los nombres de "
+        "«4 · Modelo» y en las unidades de la ecuación, como su página; Σ, de "
+        "la red entera, al final. Exportar da todas las ecuaciones.\n\n"
         "Un parámetro que se mantuvo del .pre NO se estimó, y se dice: "
         "presentar como resultado algo que no se estimó sería la peor clase "
         "de mentira de una pantalla." );

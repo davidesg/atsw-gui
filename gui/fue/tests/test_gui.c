@@ -145,9 +145,9 @@ int main(int argc, char **argv) {
           "la barra de avance tiene que quedarse a la vista", bar_text);
     check(bar_text != NULL && strstr(bar_text, "it.") != NULL,
           "y decir cuantas iteraciones hubo", bar_text);
-    check(status != NULL && strstr(status, "finished") != NULL,
+    check(status != NULL && strstr(status, "ha terminado") != NULL,
           "la barra de estado tiene que decir que fue acabo", status);
-    check(status != NULL && strstr(status, "converged") != NULL,
+    check(status != NULL && strstr(status, "convergió") != NULL,
           "y si convergio", status);
     check(status != NULL && strlen(status) < 60,
           "y ser corta, para no estirar la ventana", status);

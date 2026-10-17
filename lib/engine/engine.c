@@ -57,30 +57,30 @@ static gchar *status_message(const char *program, int status, int signal_no,
     gboolean ladder = program && (strstr(program, "drtran") || strstr(program, "drvarma"));
 
     if (ladder && status == 4)
-        what = "the series do not share the same window (frequency, last date "
-               "or length); rebuild the .pre files in art over one window";
+        what = "las series no comparten la misma ventana (frecuencia, última "
+               "fecha o longitud): rehaz los .pre en art sobre una sola ventana";
     else if (ladder && status == 5 && strstr(program, "drvarma"))
-        what = "the diagonal gate failed: the joint model does not reproduce "
-               "the univariate ones";
+        what = "falló la puerta diagonal: el modelo conjunto no reproduce los "
+               "univariantes";
     else
     switch (status) {
-    case 0:  what = "finished";                                            break;
-    case 1:  what = "could not read the input file";                       break;
-    case 2:  what = "the input file is not valid, nothing was written";    break;
-    case 3:  what = "could not estimate the model; the results carry the "
-                    "initial values";                                      break;
-    case 4:  what = "stopped on a run-time error";                         break;
+    case 0:  what = "ha terminado";                                        break;
+    case 1:  what = "no pudo leer el fichero de entrada";                  break;
+    case 2:  what = "el fichero de entrada no es válido; no se escribió nada"; break;
+    case 3:  what = "no pudo estimar el modelo; los resultados llevan los "
+                    "valores iniciales";                                   break;
+    case 4:  what = "se paró por un error durante la ejecución";           break;
     case ENGINE_SIGNAL:
 #ifdef G_OS_WIN32
         /* En Windows no hay senales: una caida es una excepcion, y su codigo
          * (0xC0000005, acceso indebido) es lo que sirve para buscarla.   */
-        return g_strdup_printf("%s crashed (Windows exception 0x%08X, like a signal).",
+        return g_strdup_printf("%s se cayó (excepción de Windows 0x%08X, como una señal).",
                                program, (unsigned) signal_no);
 #else
-        return g_strdup_printf("%s died on signal %d.", program, signal_no);
+        return g_strdup_printf("%s murió por la señal %d.", program, signal_no);
 #endif
     default:
-        return g_strdup_printf("%s ended with status %d.", program, status);
+        return g_strdup_printf("%s acabó con el estado %d.", program, status);
     }
 
     line = first_line(err);
@@ -156,8 +156,8 @@ EngineResult engine_run(const char *workdir, const char *program, ...) {
 
     if (!g_spawn_sync(workdir, (gchar **)args->pdata, NULL, G_SPAWN_SEARCH_PATH,
                       NULL, NULL, &out, &err, &wait_status, &error)) {
-        r.message = g_strdup_printf("%s could not be run: %s", program,
-                                    error ? error->message : "unknown error");
+        r.message = g_strdup_printf("%s no se pudo lanzar: %s", program,
+                                    error ? error->message : "error desconocido");
         if (error) g_error_free(error);
         g_free(out);
         g_free(err);

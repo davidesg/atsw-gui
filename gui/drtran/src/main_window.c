@@ -197,7 +197,8 @@ static void refresca_compat(Mtram *m)
             anidados, anidados == 1 ? "" : "s");
     else
         mtram_verdicto(m->ver_oper, MT_VERDE,
-            "Operadores ∇: los %d pares, iguales", iguales);
+            iguales == 1 ? "Operadores ∇: iguales en las dos series"
+                         : "Operadores ∇: iguales en los %d pares", iguales);
 }
 
 /* TODO se refresca por aqui.

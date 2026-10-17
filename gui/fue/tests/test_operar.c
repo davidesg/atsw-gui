@@ -843,7 +843,7 @@ static void prueba_construir(FueContext *ctx) {
 
     /* Y se estima. */
     corre_fue(ctx);
-    check(contiene(estado(ctx), "fue finished"), "Run: fue acaba con el modelo construido", estado(ctx));
+    check(contiene(estado(ctx), "fue ha terminado"), "Run: fue acaba con el modelo construido", estado(ctx));
     check(g_file_test(out, G_FILE_TEST_EXISTS), "y deja D.out", out);
     check(vista_es_fichero(ctx->console_text_view, out), "la consola ensena el .out entero", NULL);
     check(gtk_notebook_get_current_page(GTK_NOTEBOOK(ctx->notebook)) == ctx->console_page,
@@ -896,7 +896,7 @@ static void prueba_fallos_motor(FueContext *ctx) {
     g_setenv("PATH", vacio, TRUE);
     corre_fue(ctx);
     g_setenv("PATH", path, TRUE);
-    check(contiene(estado(ctx), "could not be run"), "sin fue en el PATH: lo dice", estado(ctx));
+    check(contiene(estado(ctx), "no se pudo lanzar"), "sin fue en el PATH: lo dice", estado(ctx));
     check(gtk_widget_get_visible(ctx->progress), "y la barra de avance no se queda a medias", NULL);
 
     /* New: todo vacio. */
@@ -936,7 +936,7 @@ static void prueba_fallos_motor(FueContext *ctx) {
     gtk_entry_set_text(GTK_ENTRY(ctx->input_name_entry), "vacio");
     gtk_text_buffer_set_text(gtk_text_view_get_buffer(GTK_TEXT_VIEW(ctx->text_view)), "", -1);
     corre_fue(ctx);
-    check(!contiene(estado(ctx), "finished") && contiene(estado(ctx), "fue"),
+    check(!contiene(estado(ctx), "ha terminado") && contiene(estado(ctx), "fue"),
           "un modelo sin datos: fue no acaba bien y la barra lo dice", estado(ctx));
     {
     gchar *t = texto(ctx->text_view);
@@ -993,7 +993,7 @@ static void prueba_prevision(FueContext *ctx) {
     /* El ciclo entero, desde la barra: estimar y prever. */
     fue_abre_al_arrancar(ctx, inp);
     corre_fue(ctx);
-    check(contiene(estado(ctx), "fue finished"), "D1 se estima", estado(ctx));
+    check(contiene(estado(ctx), "fue ha terminado"), "D1 se estima", estado(ctx));
     barra(ctx, "Prever");
     check(g_strcmp0(estado(ctx), "Forecast finished successfully.") == 0, "Forecast hace el ciclo entero",
           estado(ctx));
@@ -1132,7 +1132,7 @@ static void prueba_analisis(FueContext *ctx) {
     g_free(s);
 
     corre_fue(ctx);
-    check(contiene(estado(ctx), "fue finished"), "se estima", estado(ctx));
+    check(contiene(estado(ctx), "fue ha terminado"), "se estima", estado(ctx));
     check(gtk_widget_get_sensitive(ctx->btn_diagnosis) && gtk_widget_get_sensitive(ctx->btn_anomalos)
           && gtk_widget_get_sensitive(ctx->btn_ganancia),
           "con el .out al dia, los tres se encienden", NULL);
@@ -1192,7 +1192,7 @@ static void prueba_analisis(FueContext *ctx) {
     }
     g_file_get_contents(out0, &c1, NULL, NULL);
     check(c0 && c1 && !strcmp(c0, c1), "el .out del padre sigue intacto", out0);
-    check(contiene(estado(ctx), "fue finished"), "y el hijo se estima", estado(ctx));
+    check(contiene(estado(ctx), "fue ha terminado"), "y el hijo se estima", estado(ctx));
     g_free(out0); g_free(c0); g_free(c1); g_free(ent);
     }
 
@@ -1320,7 +1320,7 @@ static void prueba_cambiar_de_modelo(FueContext *ctx) {
     check(NdetVar == 2 && It[0].type == 2 && It[1].type == 0 && It[1].period == 3,
           "quitar y añadir deja lo que dice el arbol", NULL);
     corre_fue(ctx);
-    check(contiene(estado(ctx), "fue finished"), "y el modelo se estima", estado(ctx));
+    check(contiene(estado(ctx), "fue ha terminado"), "y el modelo se estima", estado(ctx));
     /* Y volver a abrir otro: es donde se liberaba dos veces. */
     fue_abre_al_arrancar(ctx, d1);
     check(NdetVar == 11, "volver a abrir D1 funciona", NULL);

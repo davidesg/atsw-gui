@@ -282,6 +282,16 @@ programa:
   el GUI enseña en un mensaje de error puede llevar el `\r` (`lib/engine`,
   `first_line`).
 
+**fue y fuf, los motores** (2026-10-17; cada uno en su `BUGS.md` con su repro)
+
+- **fue BUG-0001**: el `.pre` va redondeado (AR, MA y δ a 4 decimales; ω a
+  6), así que no es el óptimo exacto. Estimar sobre él vuelve a iterar, y
+  drtran hereda el redondeo al mantener fijos los parámetros del `.pre`.
+  `engines/fue/BUGS.md`.
+- **fuf BUG-0001**: en el informe de previsión, con λ = 1 las variaciones
+  salen ×100, y la columna ERR no está en la escala de σ. El gestor de
+  previsiones va a leer esa columna. `engines/fuf/BUGS.md`.
+
 **drvarma / drvarma_gui**
 
 - El motor **sale con 0** cuando la estimación falla («ESTIMATION FAILED: AR

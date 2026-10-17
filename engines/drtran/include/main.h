@@ -243,15 +243,6 @@ real tdist( real t, int df );          /* Distribucion t-Student acumulada   */
 real normal_cdf( real z );             /* Distribucion normal estandar acumulada */
 
 /*****************************************************************************/
-/*  Funcion auxiliar para la respuesta al impulso de un filtro racional      */
-/*  (antes solo para un parametro, ahora tambien para vectores)              */
-/*****************************************************************************/
-
-void calcnu( double omega, int s, double delta, int r, double *nu, int lags );
-/* version para vectores (omega[], delta[]) */
-void calcnu_vec( double *omega, int s, double *delta, int r, double *nu, int lags );
-
-/*****************************************************************************/
 /*  Funciones propias de drtran (nuevas)                                     */
 /*****************************************************************************/
 

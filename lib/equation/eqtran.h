@@ -16,7 +16,7 @@
  *     w(B) = w0 - w1 B - ... - ws B^s        el primero SUMA, el resto RESTAN
  *     d(B) = 1  - d1 B - ... - dr B^r
  *
- * Esta verificado en los tres peldanos --fue::calcnu, drtran/nlatools.c:728 y
+ * Esta verificado en los tres peldanos --fue::calcnu (hoy lib/fuedet), la vieja calcnu de drtran/nlatools.c y
  * cast.py:87 del puerto-- y medido sobre el m6: la ganancia de EP <- EC sale
  * 0.360712 - (-0.529417) - 0.158782 = 0.731347, que es lo que imprime drtran.
  * Con el convenio ingenuo saldria -0.0099.

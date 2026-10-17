@@ -236,13 +236,6 @@ real tdist( real t, int df );          /* Distribuci?n t?Student acumulada   */
 real normal_cdf( real z );             /* Distribuci?n normal est?ndar acumulada */
 
 /*****************************************************************************/
-/*  Funciones auxiliares para el operador de convergencia (no usadas en      */
-/*  la versi?n actual, pero se mantienen por compatibilidad)                 */
-/*****************************************************************************/
-
-void calcnu( double omega, int s, double delta, int r, double *nu, int lags );
-
-/*****************************************************************************/
 /*  Funciones propias de drvarma.c (declaradas para completitud)             */
 /*****************************************************************************/
 

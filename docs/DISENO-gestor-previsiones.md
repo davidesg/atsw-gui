@@ -112,6 +112,11 @@ nueva, pero es otra acta y lo dice.
 
 ### 3.4 Actualizar y reestimar: dos gestos
 
+**El modelo se congela** (decisión del analista, 17-oct-2026): no se
+reestima con cada dato. Tampoco «reestimando la misma ventana», que da los
+mismos números pero no es lo mismo: los parámetros del ejercicio son los del
+modelo vigente, leídos, no recalculados.
+
 - **Actualizar**: el mismo modelo con más datos, los parámetros fijos y un
   origen nuevo. Es FORSIL. No crea modelo; crea un acta.
 - **Reestimar**: la ventana de estimación se alarga, o se rehace la
@@ -215,21 +220,19 @@ programa aparte. Las añadas son de las series y los modelos son de la madre.
   `.pre` del modelo, la añada como datos, las banderas a 0 y la σ² de la
   estimación. Comprobado con `CPI_USA_model_AR`: las mismas previsiones con
   todo fijo que con los parámetros libres.
-- **Multivariante**: drtran y drvarma **ya hacen el cálculo** con `-estwin`
-  y `-O -1`. Lo único que no es limpio es que **vuelven a estimar la misma
-  ventana** para obtener los parámetros fijos. Es determinista y barato,
-  pero significa que el acta depende de que el optimizador llegue al mismo
-  punto.
-
-  Un «fuf multivariante» —prever con los parámetros leídos de la corrida,
-  sin estimar nada— lo arreglaría. Hay dos formas:
-  - **una opción** de drtran y drvarma que lea los parámetros del `.out` o
-    de un `.cns` con todo fijo;
+- **Multivariante**: drtran y drvarma tienen el cálculo de FORSIL (`-estwin`
+  con `-O -1`), pero **vuelven a estimar la ventana** en cada corrida para
+  obtener los parámetros. Con el modelo congelado (§3.4) eso no vale: hace
+  falta **prever con los parámetros del modelo vigente, leídos, sin estimar
+  nada**. Es el «fuf multivariante». Hay dos formas:
+  - **una opción** de drtran y drvarma que lea los parámetros del modelo
+    (del `.out`, o de un `.cns` con todo fijo) y sólo prevea;
   - **un programa aparte**, como fuf lo es de fue.
 
-  **Propuesta**: empezar con lo que hay (`-estwin`, comprobando en cada acta
-  que la logL de la ventana coincide con la del modelo) y decidir lo del
-  programa después, con el gestor ya andando.
+  Las dos tocan los motores y piden el visto bueno. **Por comprobar
+  primero**: si un `.cns` con todos los parámetros fijos ya hace que drtran
+  sólo prevea, como pasa con fuf y las banderas a 0. Si es así, el gestor
+  sólo tiene que escribir ese `.cns`.
 
 ## 7. Orden propuesto
 
@@ -239,8 +242,8 @@ programa aparte. Las añadas son de las series y los modelos son de la madre.
 | 2 | `lib/previsiones` con ejercicios y actas, sólo univariantes (fuf). «Actualizar» deja un acta | sí |
 | 3 | La tabla previsión-realización, los estadísticos y el gráfico de previsiones sucesivas | sí |
 | 4 | Vigencias y reestimación: la política propone, el analista decide, el hijo hereda el ejercicio | sí |
-| 5 | Ejercicios de casos: drtran y drvarma con `-estwin -O -1` | sí |
-| 6 | Si hace falta, el «fuf multivariante» (§6) | — |
+| 5 | El «fuf multivariante»: prever con los parámetros congelados de una corrida (§6) | — |
+| 6 | Ejercicios de casos, con eso | sí |
 
 Cada paso, su PR y la CI en verde en las tres plataformas.
 
@@ -250,11 +253,16 @@ Cada paso, su PR y la CI en verde en las tres plataformas.
    (registro, adelante y atrás) o en modo evaluación (sin histórico) (§3.1).
 2. ~~Contra qué dato se mide el error~~ — **decidido**: los errores los
    calculan los motores; el gestor los lee (§3.5).
-3. **La política de reestimación** por defecto, y si «reestimar» es sólo
-   alargar la ventana con la misma especificación o abrir la identificación.
+3. **La política de reestimación.** El modelo se congela y no se reestima
+   con cada dato (§3.4, decidido). Queda por decidir si el gestor **propone**
+   reestimar (cada k orígenes, o cuando los errores a un paso se salen de la
+   banda) o si es siempre a mano, y si «reestimar» es sólo alargar la ventana
+   o abrir la identificación.
 4. **El primer alcance**: ¿sólo univariantes (pasos 1-4) y los casos
    después, o los dos desde el principio?
 5. **El sitio**: ¿una pestaña de la madre, como se propone, o un programa
    aparte?
-6. **El «fuf multivariante»**: ¿empezar con `-estwin` y decidir después, o
-   hacerlo ya?
+6. ~~El «fuf multivariante»~~ — **decidido en lo esencial**: hace falta,
+   porque el modelo se congela (§6). Queda por decidir **la forma**: una
+   opción de drtran y drvarma, o un programa aparte. Antes hay que comprobar
+   si basta con un `.cns` con todo fijo.

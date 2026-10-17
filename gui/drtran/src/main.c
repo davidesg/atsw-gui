@@ -29,10 +29,17 @@ static void activate(GtkApplication *app, gpointer data)
      * paginas --las series, la red, el modelo-- y dice en la barra lo que
      * paso, incluido un caso desfasado.                               */
     if (m->caso[0]) {
-        char why[1024];
+        char  why[1024];
+        guint antes = m->avisos;
 
         if (!mtram_caso_carga(m, why, sizeof why) || why[0])
             preview_show_status(m, "%s", why);
+        /* Y si nadie dijo nada --abrir un modelo estimado ya lo dice--, la
+         * barra no se queda con «Añade los .pre», que ya estan puestos. */
+        else if (m->avisos == antes && m->c.n > 0)
+            preview_show_status(m, "Caso %s: %d series; la salida es «%s».",
+                                m->caso, m->c.n,
+                                m->c.s[0]->ts.name ? m->c.s[0]->ts.name : "?");
     }
 }
 

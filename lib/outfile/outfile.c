@@ -11,11 +11,11 @@
 #include "outfile.h"
 
 static const struct { const char *mark; ConvKind kind; const char *brief; } kinds[] = {
-    { "GRADIENT STOPPING",             CONV_GRADTOL,  "converged (gradtol)"          },
-    { "PARAMETER STOPPING",            CONV_STEPTOL,  "converged (steptol)"          },
-    { "FAILED TO LOCATE A LOWER POINT",CONV_NO_LOWER, "stopped: no lower point"      },
-    { "ITERATION LIMIT",               CONV_MAXITS,   "NOT converged: iteration limit" },
-    { "MAX-LENGTH",                    CONV_MAXSTEPS, "stopped: five max-length steps" },
+    { "GRADIENT STOPPING",             CONV_GRADTOL,  "convergió (gradtol)"          },
+    { "PARAMETER STOPPING",            CONV_STEPTOL,  "convergió (steptol)"          },
+    { "FAILED TO LOCATE A LOWER POINT",CONV_NO_LOWER, "parado: no hay un punto más bajo"},
+    { "ITERATION LIMIT",               CONV_MAXITS,   "NO convergió: límite de iteraciones" },
+    { "MAX-LENGTH",                    CONV_MAXSTEPS, "parado: cinco pasos de longitud máxima" },
 };
 
 gboolean convergence_of(const char *out_path, Convergence *c) {
@@ -60,7 +60,7 @@ gboolean convergence_of(const char *out_path, Convergence *c) {
         if (g != NULL) c->gradient   = g_ascii_strtod(g + 7, NULL);
     }
     if (c->brief == NULL && c->iterations >= 0)
-        c->brief = g_strdup("finished");
+        c->brief = g_strdup("terminado");
     if (how != NULL && many != NULL) c->full = g_strdup_printf("%s\n%s", how, many);
     else if (many != NULL) c->full = g_strdup(many);
     else if (how != NULL)  c->full = g_strdup(how);

@@ -112,6 +112,16 @@ typedef struct {
     gchar     *nota;          /* lo que decir encima de la salida del motor:
                                  a donde va la corrida (el caso, la cache) */
     gboolean   cast_resta;    /* -S : el cast antiguo                       */
+
+    /* LA PREVISION DEL MISMO MODELO. drtran prevé en la pasada en que estima,
+     * así que prever es volver a correrlo; pero si la red y las restricciones
+     * son las del modelo que se mira, es EL MISMO modelo y no se da de alta
+     * otro: la corrida va a <modelo>_prev.* y no toca ni la diagnosis ni la
+     * pagina. pide_prever lo pide Prevision para la corrida siguiente;
+     * solo_prever dice que la que esta en marcha es de esas.            */
+    gboolean   pide_prever;
+    gboolean   solo_prever;
+    gchar     *prev_out;      /* el .out de esa corrida                     */
     gboolean   traza;         /* -v                                         */
 
     /* Lo que el estimador MANTIENE del .pre en vez de reestimarlo al juntar

@@ -935,7 +935,9 @@ static void on_c_razon_caso( GtkButton *b, Atsw *a )
    cortesia. Como con un modelo: o se va entera o no se va -- la siguiente
    corrida puede volver a llamarse igual y se encontraria un .out ajeno. */
 static const char *const ext_corrida[] =
-    { ".out", ".dag", ".cns", "_res.txt", "_eval.csv", NULL };
+    { ".out", ".dag", ".cns", "_res.txt", "_eval.csv",
+      /* y su prevision, calculada despues sobre el mismo modelo */
+      "_prev.out", "_prev.dag", "_prev.cns", "_prev_res.txt", "_prev_eval.csv", NULL };
 
 static gboolean confirma( Atsw *a, const char *pregunta, const char *detalle )
 {
@@ -978,7 +980,7 @@ static void on_c_borrar( GtkButton *b, Atsw *a )
     q   = g_strdup_printf( "¿Borro el modelo %s de %s?", co, a->caso );
     det = g_strdup_printf( "Se van su nodo del manifiesto Y sus ficheros (%s y "
                            "los que lleven su nombre: .dag, .cns, residuos, "
-                           "evaluación). No se puede deshacer.\n\nLos .pre de "
+                           "evaluación, previsión). No se puede deshacer.\n\nLos .pre de "
                            "las entradas son de las series y no se tocan.", out );
     if ( !confirma( a, q, det ) )
         { g_free( q ); g_free( det ); g_free( co ); return; }

@@ -63,6 +63,19 @@ static gchar *trabajo( void )
     return d;
 }
 
+/* El nombre de un fichero de la corrida: el del modelo o, si la corrida es
+ * solo la prevision del mismo modelo, el suyo aparte (_prev).          */
+static gchar *art( Mtram *m, const char *suf )
+{
+    gchar *s, *r;
+
+    if (!m->est.solo_prever) return mtram_artefacto( m, suf );
+    s = g_strconcat( "_prev", suf, NULL );
+    r = mtram_artefacto( m, s );
+    g_free( s );
+    return r;
+}
+
 /* Escribe la red y las restricciones que hay en las pantallas anteriores.
  * Devuelve TRUE si pudo; deja las rutas en *dag y *cns (nuevas, o NULL si esa
  * parte no hace falta).                                                    */
@@ -79,7 +92,7 @@ static gboolean artefactos( Mtram *m, gchar **dag, gchar **cns, char *why,
     nom[0] = NULL;
 
     if (m->red.n > 0) {
-        *dag = mtram_artefacto( m, ".dag" );
+        *dag = art( m, ".dag" );
         if (net_write( *dag, nom, m->red.lnk, m->red.n,
                        "escrito por mtram desde la pestaña Red" ) != 0) {
             snprintf( why, size, "no pude escribir %s", *dag );
@@ -95,7 +108,7 @@ static gboolean artefactos( Mtram *m, gchar **dag, gchar **cns, char *why,
             if (slots_line( &m->mod.st, i, b, sizeof b )) dice++;
 
         if (dice) {
-            *cns = mtram_artefacto( m, ".cns" );
+            *cns = art( m, ".cns" );
             if (cns_write( *cns, &m->mod.st,
                            "escrito por mtram desde la pestaña Modelo" ) < 0) {
                 snprintf( why, size, "no pude escribir %s", *cns );
@@ -125,7 +138,7 @@ static gchar **arma_argv( Mtram *m, const gchar *dag, const gchar *cns,
     for (i = 0; i < m->c.n; i++)
         g_ptr_array_add( a, g_strdup( m->c.s[i]->path ) );
 
-    *out = mtram_artefacto( m, ".out" );
+    *out = art( m, ".out" );
     g_ptr_array_add( a, g_strdup( "-o" ) );
     g_ptr_array_add( a, g_strdup( *out ) );
 
@@ -146,7 +159,7 @@ static gchar **arma_argv( Mtram *m, const gchar *dag, const gchar *cns,
      * la bateria de fue, y sacarlos de la columna derecha del grafico ASCII
      * del .out seria construir un grafico a partir de otro grafico.     */
     g_ptr_array_add( a, g_strdup( "-e" ) );
-    g_ptr_array_add( a, mtram_artefacto( m, "_res.txt" ) );
+    g_ptr_array_add( a, art( m, "_res.txt" ) );
 
     /* La prevision y la evaluacion las pide la pestaña Prevision; van en la
      * MISMA corrida porque el motor las hace en la misma pasada.       */
@@ -155,7 +168,7 @@ static gchar **arma_argv( Mtram *m, const gchar *dag, const gchar *cns,
         g_ptr_array_add( a, g_strdup_printf( "%d", m->prev.horizonte ) );
     }
     if (m->prev.evaluar && m->prev.ventana > 0) {
-        gchar *csv = mtram_artefacto( m, "_eval.csv" );
+        gchar *csv = art( m, "_eval.csv" );
 
         g_ptr_array_add( a, g_strdup( "-estwin" ) );
         g_ptr_array_add( a, g_strdup_printf( "%d", m->prev.ventana ) );
@@ -502,6 +515,21 @@ static void on_done( const EngineResult *r, gpointer data )
 
     cuenta_desenlace( m, r );
 
+    /* SOLO LA PREVISION DEL MODELO QUE SE MIRA: la diagnosis, la pagina y el
+     * manifiesto son los suyos y no se tocan.                         */
+    if (E->solo_prever) {
+        E->solo_prever = FALSE;
+        prevision_desde( m, E->prev_out );
+        mtram_barra_refresca( m );
+        if (r->status == 0)
+            preview_show_status( m, "La previsión del modelo %s: el mismo "
+                                    "modelo, sin dar de alta otro.",
+                                 m->corrida[0] ? m->corrida : "estimado" );
+        else
+            preview_show_status( m, "%s", r->message ? r->message : "" );
+        return;
+    }
+
     /* El informe, en su pestaña, y alli se salta: es el resultado. */
     carga_informe( m );
     if (verdict_ok( &E->v ))
@@ -518,6 +546,13 @@ static void on_done( const EngineResult *r, gpointer data )
      * deja en su PDF: la madre la enseña con «Ver modelo…» sin abrir nada. */
     if (verdict_ok( &E->v ))
         diagnosis_escribe_paginas( m, FALSE );
+
+    /* ESTIMAR ES IR A VER SI EL MODELO VALE: a la diagnosis, como al abrir
+     * uno ya estimado (H1). Desde Prevision no: alli se viene a prever y
+     * la tabla se llena donde se esta.                                 */
+    if (verdict_ok( &E->v ) && m->dia.vale && !E->diagonal &&
+        gtk_notebook_get_current_page( GTK_NOTEBOOK(m->libro) ) != PG_PREV)
+        gtk_notebook_set_current_page( GTK_NOTEBOOK(m->libro), PG_DIAG );
 
     /* La corrida ya existe en el disco: el manifiesto tiene que decirlo. Y la
      * siguiente colgara de esta -- ahi esta la cadena.               */
@@ -554,6 +589,50 @@ static void on_done( const EngineResult *r, gpointer data )
  * Devuelve TRUE si el motor arranco. Quien llame no tiene que estar en la
  * pagina de estimacion: la consola se llena igual y, al acabar, on_done
  * refresca todas.                                                        */
+/* ¿Es la especificacion la del modelo que se mira? La red y las
+ * restricciones que se escribirian ahora, contra las que se estimaron. Un
+ * fichero que no esta en ninguno de los dos lados es igual.           */
+static gboolean mismo_fichero( const gchar *a, const gchar *b )
+{
+    gchar   *x = NULL, *y = NULL;
+    gsize    nx = 0, ny = 0;
+    gboolean hx = a && g_file_get_contents( a, &x, &nx, NULL );
+    gboolean hy = b && g_file_get_contents( b, &y, &ny, NULL );
+    gboolean igual = hx == hy && (!hx || (nx == ny && !memcmp( x, y, nx )));
+
+    g_free( x ); g_free( y );
+    return igual;
+}
+
+static gboolean misma_especificacion( Mtram *m )
+{
+    gchar   *dag = NULL, *cns = NULL, *mdag, *mcns;
+    char     why[256];
+    gboolean igual;
+
+    /* Sin caso no hay modelos que dar de alta: la cache se pisa siempre. */
+    if (!m->hay_proy || !m->caso[0] || !m->corrida[0]) return FALSE;
+    if (!m->dia.hay_par || m->est.diagonal) return FALSE;
+    m->est.solo_prever = TRUE;
+    if (!artefactos( m, &dag, &cns, why, sizeof why )) {
+        m->est.solo_prever = FALSE;
+        return FALSE;
+    }
+    m->est.solo_prever = FALSE;
+    mdag  = m->red.n > 0 ? mtram_artefacto( m, ".dag" ) : NULL;
+    mcns  = cns ? mtram_artefacto( m, ".cns" ) : NULL;
+    igual = mismo_fichero( dag, mdag ) && mismo_fichero( cns, mcns );
+    /* y el modelo no tenia restricciones que ahora no hay */
+    if (igual && !cns) {
+        gchar *c = mtram_artefacto( m, ".cns" );
+
+        igual = !g_file_test( c, G_FILE_TEST_EXISTS );
+        g_free( c );
+    }
+    g_free( dag ); g_free( cns ); g_free( mdag ); g_free( mcns );
+    return igual;
+}
+
 gboolean estima_lanzar( Mtram *m )
 {
     Estima  *E = &m->est;
@@ -572,7 +651,12 @@ gboolean estima_lanzar( Mtram *m )
      * nombre y cuelga de la anterior: es la cadena de iteracion, y es lo que
      * hace que quepan dos modelos. Sin proyecto no hace nada y los nombres
      * siguen siendo los fijos de la cache.                            */
-    if (!mtram_corrida_nueva( m, why, sizeof why )) {
+    /* La prevision del MISMO modelo no es un modelo nuevo; si la red o las
+     * restricciones cambiaron, si lo es, y se estima como siempre.     */
+    E->solo_prever = E->pide_prever && misma_especificacion( m );
+    E->pide_prever = FALSE;
+    why[0] = 0;
+    if (!E->solo_prever && !mtram_corrida_nueva( m, why, sizeof why )) {
         preview_show_status( m, "%s", why );
         return FALSE;
     }
@@ -589,8 +673,13 @@ gboolean estima_lanzar( Mtram *m )
     }
 
     argv = arma_argv( m, dag, cns, &out );
-    g_free( E->out_path );
-    E->out_path = g_strdup( out );
+    if (E->solo_prever) {
+        g_free( E->prev_out );
+        E->prev_out = g_strdup( out );
+    } else {
+        g_free( E->out_path );
+        E->out_path = g_strdup( out );
+    }
 
     /* Lo que se va a ejecutar, con las rutas ENTERAS. Va en una ENTRADA y no
      * en una etiqueta: de una etiqueta partida en lineas no se copia una
@@ -684,6 +773,17 @@ void estima_desde( Mtram *m, const char *out )
     gtk_label_set_text( GTK_LABEL(E->titulo), "drtran — el modelo, tal como se estimó" );
     diagnosis_desde( m, out );
     prevision_desde( m, out );
+    /* y su ultima prevision, si se calculo despues (el mismo modelo) */
+    {
+        gchar *prev = mtram_artefacto( m, "_prev.out" );
+
+        if (g_file_test( prev, G_FILE_TEST_EXISTS )) {
+            g_free( E->prev_out );
+            E->prev_out = g_strdup( prev );
+            prevision_desde( m, prev );
+        }
+        g_free( prev );
+    }
     diagnosis_escribe_paginas( m, TRUE );
 
     /* ABRIR LO ESTIMADO ES VER SUS RESULTADOS, como fue_gui salta a la

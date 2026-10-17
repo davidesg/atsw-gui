@@ -1145,7 +1145,7 @@ static void on_fue_done(const EngineResult *r, gpointer data) {
         g_free(workspace);
         load_output_to_console(ctx);
         if (c.brief != NULL) {
-            gchar *brief = g_strdup_printf("fue finished: %s", c.brief);
+            gchar *brief = g_strdup_printf("fue ha terminado: %s", c.brief);
             gchar *full  = g_strdup_printf("%s\n\n%s", brief, c.full ? c.full : "");
 
             say(ctx, brief, full);
@@ -1251,7 +1251,7 @@ void on_run_fue(GtkWidget *widget, FueContext *ctx) {
     gtk_label_set_text(GTK_LABEL(ctx->status_label), "Running fue...");
     if (!engine_run_async(workspace, "fue", args, on_fue_iteration, on_fue_done, ctx)) {
         run_busy(ctx, FALSE);
-        gtk_label_set_text(GTK_LABEL(ctx->status_label), "fue could not be run.");
+        gtk_label_set_text(GTK_LABEL(ctx->status_label), "fue no se pudo lanzar.");
     }
     }
     g_free(workspace);

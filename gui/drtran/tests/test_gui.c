@@ -141,6 +141,30 @@ static GtkWidget *entrada_diag(Mtram *m, const char *txt)
     return hallada;
 }
 
+/* Lo mismo en Prever ▾. */
+static GtkWidget *menu_prev;
+
+static GtkWidget *entrada_prev(Mtram *m, const char *txt)
+{
+    GList     *l, *hs;
+    GtkWidget *hallada = NULL;
+
+    if (menu_prev) gtk_widget_destroy(menu_prev);
+    menu_prev = gtk_menu_new();
+    prevision_menu(m, menu_prev, NULL);
+    hs = gtk_container_get_children(GTK_CONTAINER(menu_prev));
+    for (l = hs; l && !hallada; l = l->next) {
+        const char *lb = gtk_menu_item_get_label(GTK_MENU_ITEM(l->data));
+        gchar      *t  = texto_de(l->data);
+
+        if (g_strcmp0(lb, txt) == 0 || (t && strstr(t, txt))) hallada = l->data;
+        g_free(t);
+    }
+    g_list_free(hs);
+    if (!hallada) check(0, "no encuentro la entrada de Prever ▾", txt);
+    return hallada;
+}
+
 static const char *etiqueta(GtkWidget *l)
 {
     const char *s = gtk_label_get_text(GTK_LABEL(l));
@@ -1154,6 +1178,26 @@ int main(int argc, char **argv)
     check(filas(m->dia.l_ade) >= 1, "la de adecuacion tambien", NULL);
     check(filas(m->dia.l_res) >= 1, "la de residuos tambien", NULL);
     check(filas(m->dia.l_par) >= 3, "y la de parametros", NULL);
+    /* Con los nombres de «4 · Modelo» y no con los del motor: la ecuacion
+     * que se mira primero, Sigma al final.                             */
+    {
+        gchar *c0 = celda(m->dia.l_par, 0, 0);
+        int    k, motor = 0, sigma = 0;
+
+        for (k = 0; k < filas(m->dia.l_par); k++) {
+            gchar *c = celda(m->dia.l_par, k, 0);
+
+            if (c && (strstr(c, "omega") || strstr(c, "phi_") || strstr(c, "log(var")))
+                motor++;
+            if (c && !strcmp(c, "Σ, de la red entera")) sigma++;
+            g_free(c);
+        }
+        check(c0 && g_str_has_prefix(c0, "ω1[0]"),
+              "los parametros, con el nombre del modelo: ω1[0] primero", c0);
+        check(motor == 0, "ninguno con el nombre del motor", NULL);
+        check(sigma == 1, "y Σ aparte, una vez", NULL);
+        g_free(c0);
+    }
     check(m->dia.hay_res, "los residuos de esta corrida se leen", NULL);
     s = buffer_de(m->dia.t_out);
     check(contiene(s, "Log-likelihood"), "la pestana Salida tiene el .out", NULL);
@@ -1172,10 +1216,8 @@ int main(int argc, char **argv)
     {
     GtkWidget *menu = gtk_menu_new();
     const char *que[] = { "Histograma", "Serie y ACF / PACF",
-                          "CCF de los residuos con SYN_X",
-                          "Serie y ACF / PACF, con el modelo", NULL };
-    const char *tit[] = { "hist_res.eps", "res.eps", "ccf_res.eps",
-                          "modelo_SYN_Y.pdf" };
+                          "CCF de los residuos con SYN_X", NULL };
+    const char *tit[] = { "hist_res.eps", "res.eps", "ccf_res.eps" };
     int         i;
 
     diagnosis_menu(m, menu, NULL);
@@ -1186,7 +1228,11 @@ int main(int argc, char **argv)
 
         for (j = 0; j < its->len; j++) {
             GtkWidget *mi = g_ptr_array_index(its, j);
-            if (g_strcmp0(gtk_menu_item_get_label(GTK_MENU_ITEM(mi)), que[i]) == 0) {
+            gchar     *t  = texto_de(mi);
+            gboolean   es = t && strstr(t, que[i]) != NULL;
+
+            g_free(t);
+            if (es && !ok) {
                 gtk_menu_item_activate(GTK_MENU_ITEM(mi));
                 ok = TRUE;
             }
@@ -1235,8 +1281,9 @@ int main(int argc, char **argv)
     p.carpeta = trab; p.nombre = "parametros.csv";
     pulsa_dialogo(entrada_diag(m, "Exportar la diagnosis…"), &p);
     s = lee_fichero(csv);
-    check(contiene(s, "omega") || contiene(s, "phi"),
-          "«Exportar la diagnosis…» escribe la tabla de parametros", s);
+    check(contiene(s, "ω1[0]") && contiene(s, "φ_") && !contiene(s, "omega"),
+          "«Exportar la diagnosis…» escribe la tabla de parametros, con los "
+          "nombres del modelo", s);
     check(contiene(s, "modelo.out") || contiene(s, "SYN_Y"),
           "con la procedencia dentro", s);
     g_free(s); g_free(csv);
@@ -1332,14 +1379,14 @@ int main(int argc, char **argv)
     check(g_file_test(s, G_FILE_TEST_EXISTS), "y el CSV de la evaluacion en la cache", s);
     g_free(s);
 
-    pulsa(boton(pg, "Guardar esta evaluación"));
+    pulsa(entrada_prev(m, "Guardar esta evaluación"));
     check(m->prev.tiene_ref, "«Guardar esta evaluación» la guarda", etiqueta(m->estado));
     pulsa(m->prev.b_calc);
     check(espera_motor(m, 120), "la segunda evaluacion acaba", NULL);
     s = celda(m->prev.lista, 0, 5);
     check(contiene(s, "igual"), "el mismo modelo, comparado con lo guardado, da igual", s);
     g_free(s);
-    pulsa(boton(pg, "Olvidarla"));
+    pulsa(entrada_prev(m, "Olvidarla"));
     check(!m->prev.tiene_ref, "«Olvidarla» la olvida", NULL);
 
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(m->prev.c_eval), FALSE);
@@ -1489,6 +1536,29 @@ int main(int argc, char **argv)
               s);
         printf("proyecto        : %s\n", out2 ? out2 : "(nada)");
         g_free(s);
+
+        /* LA PREVISION DEL MISMO MODELO no da de alta otro: va a
+         * C1_c01_prev.out y el caso sigue con sus dos corridas.        */
+        {
+            gchar *prev;
+
+            gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p2->prev.c_prever), TRUE);
+            pump(20);
+            pulsa(p2->prev.b_calc);
+            check(espera_motor(p2, 90), "la prevision del modelo acaba", NULL);
+            prev = mtram_artefacto(p2, "_prev.out");
+            check(p2->proy->nco == 2 && !strcmp(p2->corrida, "c01"),
+                  "prever el mismo modelo no da de alta otro", p2->corrida);
+            check(contiene(prev, "C1_c01_prev.out") && g_file_test(prev, G_FILE_TEST_EXISTS),
+                  "su prevision va aparte, con el nombre del modelo", prev);
+            check(p2->prev.vale, "y se lee", etiqueta(p2->prev.texto));
+            check(contiene(etiqueta(p2->estado), "el mismo modelo"),
+                  "y la barra lo dice", etiqueta(p2->estado));
+            g_free(prev);
+
+            gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p2->prev.c_prever), FALSE);
+            pump(20);
+        }
 
         check(pr_borra(p2->proy, "SYN_X", "", "m01", &e) != 0 &&
               e.cod == PR_EENCASO,

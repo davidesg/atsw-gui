@@ -36,6 +36,7 @@
  *                           de campos numericos (una fecha) recibe V1 | V2
  *   casilla ROTULO | 0/1    marca o desmarca la casilla cuyo rotulo empieza asi
  *   despliega ROTULO        abre el desplegable cuyo rotulo empieza asi
+ *   flecha ROTULO           abre el menu de la flecha de un boton partido
  *   fichero RUTA            en un selector de ficheros: elige RUTA
  *   foto NOMBRE             fotografia la ventana actual en FOTOS/NOMBRE.png
  *   fotomenu NOMBRE         la ventana actual con el menu abierto encima
@@ -1133,6 +1134,28 @@ static gboolean orden( const char *cmd, const char *arg )
         if ( (w = busca( v, es_casilla, p[0] )) == NULL ) ok = FALSE;
         else if ( !apunta_w( v, w ) ) ok = FALSE;
         else gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(w), atoi( p[1] ) );
+        }
+    else if ( strcmp( cmd, "flecha" ) == 0 )
+        {
+        /* La flecha de un boton partido de la barra: se abre su menu como
+           lo abre el clic, con "show-menu" antes (los menus que se rehacen
+           al abrirlos, como los de drtran_gui). Despues: fotomenu, menu. */
+        GtkWidget *menu;
+
+        if ( (w = busca( v, es_boton, arg )) == NULL || !GTK_IS_MENU_TOOL_BUTTON(w) ) ok = FALSE;
+        else if ( !apunta_w( v, w ) ) ok = FALSE;
+        else
+            {
+            g_signal_emit_by_name( w, "show-menu" );
+            menu = gtk_menu_tool_button_get_menu( GTK_MENU_TOOL_BUTTON(w) );
+            if ( menu == NULL ) ok = FALSE;
+            else
+                {
+                gtk_menu_popup_at_widget( GTK_MENU(menu), w, GDK_GRAVITY_SOUTH_WEST,
+                                          GDK_GRAVITY_NORTH_WEST, NULL );
+                menu_abierto = menu;
+                }
+            }
         }
     else if ( strcmp( cmd, "despliega" ) == 0 )
         {

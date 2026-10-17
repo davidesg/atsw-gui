@@ -91,6 +91,53 @@ los tiene corregidos en C.
 
 ---
 
+## CASO DE ESTUDIO: el gestor de previsiones
+
+Decisión del analista (17-oct-2026): **se estudia a fondo como caso propio, y
+no se empieza hasta cerrar drtran_gui con el sistema como está.** El plan está
+en `DISENO-gestor-previsiones.md`; lo que se aprendió de los programas viejos,
+en `ESTUDIO-taste-prevision.md`.
+
+**El problema.** No hay nada para gestionar modelos de cara a ejercicios de
+previsión consecutivos:
+- llega un dato más;
+- se prevé desde el nuevo origen con el modelo vigente;
+- la previsión se guarda tal como se hizo;
+- cuando llega lo previsto, se mide el error;
+- de vez en cuando se reestima y se sigue con el modelo nuevo.
+
+En fue se hace a mano (el `.pre`, la añada, las banderas a 0 y fuf), pero con
+varios modelos y meses se pierde el rastro de qué modelo, qué dato y qué
+previsión.
+
+**Decidido:**
+- **Las añadas de datos las decide el analista.** En modo **SPS** se guarda
+  el registro de previsiones y se puede ir adelante y atrás por los orígenes.
+  En modo **evaluación** de modelos no se guarda el histórico.
+- **Los errores los calculan los motores**: fuf en su columna ERR, drtran con
+  `-C`, drvarma en el `.recursive`. El gestor los lee y no hace otra cuenta.
+- **El modelo se congela**: no se reestima con cada dato, tampoco
+  «reestimando la misma ventana». Los parámetros se leen del modelo vigente.
+- **Univariante**: fuf ya prevé con todo fijo y la σ² de la estimación.
+  Comprobado: las mismas previsiones con las banderas a 0.
+
+**Abierto:**
+- **Multivariante**: hace falta un **fuf multivariante** que prevea con los
+  parámetros congelados de una corrida. drtran y drvarma con `-estwin`
+  vuelven a estimar la ventana.
+  - Comprobar primero si un `.cns` con todo fijo ya basta en drtran.
+  - Si no, decidir entre una opción de los motores y un programa aparte.
+- **La reestimación**: ¿el gestor la propone (cada k orígenes, o cuando los
+  errores a un paso se salen de la banda) o es siempre a mano? ¿Alargar la
+  ventana o volver a la identificación?
+- **El primer alcance** (¿univariantes primero?) y **el sitio** (¿pestaña de
+  la madre o programa aparte?).
+- **Las unidades de la columna ERR de fuf, por comprobar.** En
+  `CPI_USA_model_AR` vale miles (3370, −8988…) con σ² = 3148 (d.t. ≈ 56), y
+  las variaciones parecen multiplicadas dos veces por el refactor (−23,4 por
+  un −0,23 %). El gestor va a leer esa columna: hay que aclararlo antes, con
+  su `BUG-NNNN-repro/` si es un fallo.
+
 ## La interfaz en inglés y en otros idiomas
 
 **Decisión del analista, 2026-10-15.** De momento todo en español: la barra y
@@ -253,14 +300,8 @@ la división entera del Jarque-Bera.
 
 - El **acta** de previsión y la evaluación ex-post sobre una submuestra. Se
   revirtió con aquel intento fallido y sólo está en la conversación.
-- **Actualizar el origen de la previsión con el mismo modelo** (el analista,
-  2026-10-17). En drtran_gui, «Calcular la previsión» ya da la del MISMO
-  modelo sin dar de alta otro (`<modelo>_prev.*`). Lo que falta es seguir
-  prevéyendo con ese modelo a medida que llegan datos nuevos: mover el
-  origen, guardar cada previsión y acumularlas para compararlas con lo que
-  luego se observa. Pide un **fuf multivariante** (prever sin reestimar,
-  como fuf con un `.pre` de fue) y un **GUI que gestione las previsiones**
-  según van llegando los datos. Antes, estudiar cómo lo hacía el oráculo.
+- **Actualizar el origen de la previsión**: ahora es el caso de estudio de
+  arriba, «El gestor de previsiones».
 
 ---
 

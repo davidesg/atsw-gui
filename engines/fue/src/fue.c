@@ -1593,6 +1593,7 @@ fprintf( outputv, "Transformed-Differenced-Stochastic series: \n" );
 int timeout;
 int lags;
 STRING file_output;
+FPUnits units;
 file_output = NEW_STR( 4096 );
 /* EL FICHERO. Con "A%s" y una ruta salia "Acaso/X.eps": el EPS no se
    escribia, fugplot AVISABA y el informe salia SIN el grafico de residuos.
@@ -1619,11 +1620,15 @@ ruta_componer( x11out, "A", NULL, file_output, 4096 );
 /* The graph of the residuals, A<input>.eps, drawn by fugdraw (fugplot.c,    */
 /* the same graph as fug -c). The residuals are not transformed: lambda 1    */
 /* and no differences, so the title is just their name, as in fue 1.13.1.    */
+/* Their statistics are in the units of the equation, as sigma: divided by   */
+/* refactor, and in % only for logs (fue 1.13.1 divided too, in gnuplot).    */
+	units.refactor = Ts.refactor;
+	units.pct = ( Tm.boxlam == 0 && geom == 0 );
 	if ( Ts.freq > 1 ) 
-		graph_fig = fp_PlotSer_CorrSer ( &res, nparma, Ts.nobs, timeout, Ts.begyear, 1.0, 0, 0, lags, Tm.cbands, file_output, res.name );
+		graph_fig = fp_PlotSer_CorrSer ( &res, nparma, Ts.nobs, timeout, Ts.begyear, 1.0, 0, 0, lags, Tm.cbands, file_output, res.name, units );
 
 	else
-		graph_fig = fp_PlotSer_CorrSer ( &res, nparma, Ts.nobs, timeout, Ts.begyear - outyear, 1.0, 0, 0, lags, Tm.cbands, file_output, res.name );
+		graph_fig = fp_PlotSer_CorrSer ( &res, nparma, Ts.nobs, timeout, Ts.begyear - outyear, 1.0, 0, 0, lags, Tm.cbands, file_output, res.name, units );
 
 FREE_STR( file_output );
 /*
@@ -1669,7 +1674,10 @@ FREE_STR( file_output );
       }
 
    eq_build( &equation, inputv, dev, namef );
-   equation.sigma = 100 * sqrt( varma1.sigma2 ) / Ts.refactor;
+/* sigma in the units of the equation: the engine's are refactor times them,
+ * and only a log (without the geometric mean) reads in %.                 */
+   equation.sigma_pct = ( Tm.boxlam == 0 && geom == 0 );
+   equation.sigma = ( equation.sigma_pct ? 100 : 1 ) * sqrt( varma1.sigma2 ) / Ts.refactor;
    eq_write_latex( texputv, &equation, x11out );
 
 /* The report in PDF, drawn by fue itself (src/report.c): the graph, the

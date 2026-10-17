@@ -378,8 +378,12 @@ void eq_write_latex( FILE *f, const Equation *eq, const char *x11out )
    if ( eq->used[EQ_MAA] ) fprintf( f, "\\maa \n" );
    if ( eq->used[EQ_MAF] ) fprintf( f, "\\maf \n" );
    fprintf( f, "\\mathsf{%s_{t}} ; \\quad \n", eq->residuals );
-   fprintf( f, "\\hat{\\sigma}_{\\mathsf{%s}}=  \\mathsf{ %2.2f } \\%%  $ \n",
-            eq->residuals, eq->sigma );
+   if ( eq->sigma_pct )
+      fprintf( f, "\\hat{\\sigma}_{\\mathsf{%s}}=  \\mathsf{ %2.2f } \\%%  $ \n",
+               eq->residuals, eq->sigma );
+   else
+      fprintf( f, "\\hat{\\sigma}_{\\mathsf{%s}}=  \\mathsf{ %.4g }  $ \n",
+               eq->residuals, eq->sigma );
    fprintf( f, "\\input {%s_res}\n", x11out );
    fprintf( f, "\\end{footnotesize}\n" );
    fprintf( f, "\\end{flushleft}\n" );

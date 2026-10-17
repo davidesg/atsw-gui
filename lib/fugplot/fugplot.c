@@ -407,16 +407,27 @@ static void title( FDFig *f, double sz, double x, double xmax, double y, int ali
    fd_runs( f, x, y, align, r, n );
 }
 
-/* w-bar ( sigma-hat_w-bar ) = m% (se%)      sigma-hat_w = sd%   */
+/* w-bar ( sigma-hat_w-bar ) = m% (se%)      sigma-hat_w = sd%            */
+/* In the units of u: divided by refactor, and in % only for logs.          */
 static void statistics( FDFig *f, const Layout *L, double xc, double y,
-                        double mean, double sd, int nobs )
+                        double mean, double sd, int nobs, FPUnits u )
 {
    char   t1[64], t2[64];
    FDRun  r1[5], r2[3];
    double w1, w2, gap = 2.5 * L->stat;
+   double k = (u.pct ? 100.0 : 1.0) / (u.refactor > 0.0 ? u.refactor : 1.0);
+   double se = sd / sqrt( (double)nobs );
 
-   snprintf( t1, sizeof( t1 ), " ) = %.2f%% (%.2f%%)", 100 * mean, 100 * sd / sqrt( (double)nobs ) );
-   snprintf( t2, sizeof( t2 ), " = %.2f%%", 100 * sd );
+   if ( u.pct )
+      {
+      snprintf( t1, sizeof( t1 ), " ) = %.2f%% (%.2f%%)", k * mean, k * se );
+      snprintf( t2, sizeof( t2 ), " = %.2f%%", k * sd );
+      }
+   else
+      {
+      snprintf( t1, sizeof( t1 ), " ) = %.4g (%.4g)", k * mean, k * se );
+      snprintf( t2, sizeof( t2 ), " = %.4g", k * sd );
+      }
    r1[0] = (FDRun){ FD_TIMES,  L->statw,   0.0, "w",  FD_ACC_BAR };
    r1[1] = (FDRun){ FD_HELV,   L->stat,    0.0, " ( ", FD_ACC_NONE };
    r1[2] = (FDRun){ FD_SYMBOL, L->statsym, 0.0, FD_SYM_SIGMA, FD_ACC_HAT };
@@ -438,7 +449,7 @@ static void statistics( FDFig *f, const Layout *L, double xc, double y,
 static FDFig *plotser_corrser( struct Tseries *ser, int npar, int tsnobs, int tmornsop,
                                int tsby, double boxlam, int nrdiff, int nadiff, int lags,
                                double cbands, const char *x11out, const char *name,
-                               const int *marks, int nmarks )
+                               FPUnits u, const int *marks, int nmarks )
 {
    const Layout *L;
    FDFig  *f;
@@ -486,7 +497,7 @@ static FDFig *plotser_corrser( struct Tseries *ser, int npar, int tsnobs, int tm
    title( f, L->title, sx0 + 0.80 * (sx1 - sx0), cx0 - 6.0, H - 16.0, FD_LEFT,
           nrdiff, nadiff, freq, boxlam, name );
    statistics( f, L, (sx0 + sx1) / 2.0, (L == &layout_big) ? 16.0 : 14.0, ser->mean,
-               Stdev( ser->data, n ), n );
+               Stdev( ser->data, n ), n, u );
 
    corr_panel( f, L, cx0, cx1, 0.595 * H, 0.833 * H, acf, lags, freq, n, cmax, "acf" );
    snprintf( s, sizeof( s ), "Q(%d) = %.1f", lags - npar, ChiTest( acf, lags, n ) );
@@ -502,19 +513,19 @@ static FDFig *plotser_corrser( struct Tseries *ser, int npar, int tsnobs, int tm
 
 FDFig *fp_PlotSer_CorrSer( struct Tseries *ser, int npar, int tsnobs, int tmornsop,
                            int tsby, double boxlam, int nrdiff, int nadiff, int lags,
-                           double cbands, const char *x11out, const char *name )
+                           double cbands, const char *x11out, const char *name, FPUnits u )
 {
    return( plotser_corrser( ser, npar, tsnobs, tmornsop, tsby, boxlam, nrdiff, nadiff,
-                            lags, cbands, x11out, name, NULL, 0 ) );
+                            lags, cbands, x11out, name, u, NULL, 0 ) );
 }
 
 FDFig *fp_PlotSer_CorrSer_marks( struct Tseries *ser, int npar, int tsnobs, int tmornsop,
                                  int tsby, double boxlam, int nrdiff, int nadiff, int lags,
                                  double cbands, const char *x11out, const char *name,
-                                 const int *marks, int nmarks )
+                                 FPUnits u, const int *marks, int nmarks )
 {
    return( plotser_corrser( ser, npar, tsnobs, tmornsop, tsby, boxlam, nrdiff, nadiff,
-                            lags, cbands, x11out, name, marks, nmarks ) );
+                            lags, cbands, x11out, name, u, marks, nmarks ) );
 }
 
 /*****************************************************************************/
@@ -522,7 +533,7 @@ FDFig *fp_PlotSer_CorrSer_marks( struct Tseries *ser, int npar, int tsnobs, int 
 /*****************************************************************************/
 
 FDFig *fp_PlotSer( struct Tseries *ser, int tsnobs, int tmornsop, int tsby, double boxlam,
-                   int nrdiff, int nadiff, const char *x11out, const char *name )
+                   int nrdiff, int nadiff, const char *x11out, const char *name, FPUnits u )
 {
    const Layout *L;
    FDFig  *f;
@@ -546,7 +557,7 @@ FDFig *fp_PlotSer( struct Tseries *ser, int tsnobs, int tmornsop, int tsby, doub
    series_panel( f, L, sx0, sx1, 53.0, L->H - 34.0, a, n, freq, tsnobs, tmornsop, tsby,
                  AbsMax, NULL, 0 );
    title( f, L->title, sx1, 0.0, L->H - 16.0, FD_RIGHT, nrdiff, nadiff, freq, boxlam, name );
-   statistics( f, L, (sx0 + sx1) / 2.0, 12.0, ser->mean, Stdev( ser->data, n ), n );
+   statistics( f, L, (sx0 + sx1) / 2.0, 12.0, ser->mean, Stdev( ser->data, n ), n, u );
 
    save_eps( f, "", x11out );
    free_vector( a, 1, n );

@@ -436,6 +436,55 @@ int main( int argc, char **argv )
     ok( maf_ok == ifa, "un MA(2) de frecuencia fija se añade y el motor lo acepta" );
     }
 
+    /* EL REFACTOR. Lo que fue lee en [3.7] -- "%lf %lf" en la línea de las
+       bandas, 0 es 1 --, y es por lo que se dividen los residuos del .out
+       para dar sus cifras en las unidades de la ecuación (lib/fugplot).  */
+    {
+    int  vistos6 = 0, iguales6 = 0, cien = 0;
+    const char *tmp6 = temporal( "test_inpdet_refactor.inp" );
+    double rf;
+
+    printf( "\nEL REFACTOR, COMO LO LEE EL MOTOR\n" );
+    d = opendir( dir );
+    while ( d && ( e = readdir( d ) ) != NULL )
+        {
+        char   ruta[1024], l[1024];
+        int    n = (int) strlen( e->d_name ), lab = 0;
+        double cb = 0.0, motor = 0.0;
+        FILE  *f;
+
+        if ( n < 5 || strcmp( e->d_name + n - 4, ".inp" ) ) continue;
+        snprintf( ruta, sizeof ruta, "%s/%s", dir, e->d_name );
+        if ( inp_check_fue( ruta, msg, sizeof msg ) != 0 ) continue;
+        if ( !( f = fopen( ruta, "rb" ) ) ) continue;
+        while ( fgets( l, sizeof l, f ) )
+            {
+            if ( lab ) { sscanf( l, "%lf %lf", &cb, &motor ); break; }
+            if ( strstr( l, "reescaling factor" ) ) lab = 1;
+            }
+        fclose( f );
+        if ( !lab ) continue;
+        if ( motor == 0.0 ) motor = 1.0;
+        vistos6++;
+        if ( id_refactor_lee( ruta, &rf, porque, sizeof porque ) == 0 && rf == motor ) iguales6++;
+        else printf( "  FALLO %s: refactor %g, el motor lee %g\n", e->d_name, rf, motor );
+        if ( motor == 100.0 ) cien++;
+        }
+    if ( d ) closedir( d );
+    printf( "        %d ficheros, %d con refactor 100\n", vistos6, cien );
+    ok( vistos6 > 20 && iguales6 == vistos6, "se lee el refactor que lee el motor" );
+    ok( cien > 0, "y el corpus tiene modelos con refactor 100" );
+    {
+    FILE *f = fopen( tmp6, "wb" );
+
+    fputs( "** ACF/PACF bands (0 Automatic) and reescaling factor:\n 0 0\n", f );
+    fclose( f );
+    }
+    ok( id_refactor_lee( tmp6, &rf, porque, sizeof porque ) == 0 && rf == 1.0,
+        "un refactor 0 es 1, como en el motor" );
+    remove( tmp6 );
+    }
+
     printf( "\n%d fallos\n", fallos );
     return fallos ? 1 : 0;
 }

@@ -32,7 +32,7 @@ else
 endif
 
 # Compiler flags
-CFLAGS  = -O2 -g -Wall -Iinclude -I../../lib/optim -I../../lib/fugdraw
+CFLAGS  = -O2 -g -Wall -Iinclude -I../../lib/optim -I../../lib/fugdraw -I../../lib/fuedet
 LDFLAGS +=
 LIBS    = -lm
 
@@ -45,7 +45,8 @@ BIN_DIR   = bin
 # La biblioteca compartida. fugdraw.c es el mismo fichero en los cuatro
 # programas -- byte a byte -- y por eso vive en lib/ y no aqui.
 LIB_DIR  = ../../lib
-LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c $(LIB_DIR)/dates/dates.c $(LIB_DIR)/optim/lnsrch.c
+LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c $(LIB_DIR)/dates/dates.c $(LIB_DIR)/optim/lnsrch.c \
+           $(LIB_DIR)/fuedet/fuedet.c
 
 SRCS = $(wildcard $(SRC_DIR)/*.c)
 OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS)) \
@@ -85,6 +86,10 @@ $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 
 # Compile
+$(BUILD_DIR)/lib_fuedet/%.o: $(LIB_DIR)/fuedet/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(ALL_CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/lib_dates/%.o: $(LIB_DIR)/dates/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
 	$(CC) $(ALL_CFLAGS) -c $< -o $@
@@ -139,7 +144,8 @@ help:
 	@echo "  (Ensure the MXE toolchain is in PATH and PKG_CONFIG_PATH is set)"
 
 # Header dependencies (explicit)
-$(BUILD_DIR)/fuf.o:       include/fuf.h include/nlatools.h include/usfo.h
+$(BUILD_DIR)/fuf.o:       include/fuf.h include/nlatools.h include/usfo.h $(LIB_DIR)/fuedet/fuedet.h
+$(BUILD_DIR)/lib_fuedet/fuedet.o: $(LIB_DIR)/fuedet/fuedet.h
 $(BUILD_DIR)/diagnose.o:  include/fuf.h include/nlatools.h
 $(BUILD_DIR)/drvmlest.o:  include/fuf.h include/nlatools.h
 $(BUILD_DIR)/elfvarma.o:  include/fuf.h include/nlatools.h

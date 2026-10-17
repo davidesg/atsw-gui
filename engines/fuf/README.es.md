@@ -47,6 +47,12 @@ Desde la versión 1.09, FUF dibuja él mismo el gráfico de previsión y el
 informe en PDF (con el motor gráfico de FUG, `fugdraw`): no necesita Gnuplot
 ni LaTeX, y no tiene más dependencia que GSL.
 
+Desde la versión 1.10, la parte determinista del modelo se calcula con la
+regla de FUE y con su mismo código (`lib/fuedet`): los pesos de ω(B)/δ(B) se
+truncan en 40 retardos cuando la variable tiene δ, como los estima FUE. FUF
+1.09 y anteriores truncaban en 20, y con un δ próximo a uno la previsión no
+partía del óptimo de FUE.
+
 Códigos de salida: 0 resultados escritos; 1 error en la línea de órdenes o al
 abrir un fichero; 2 el `.inp` no es válido (no se escribe nada); 3 el modelo
 no se puede estimar desde sus valores iniciales; 4 error interno. Antes de

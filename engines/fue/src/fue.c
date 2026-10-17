@@ -28,6 +28,7 @@
 #include "equation.h"               /* the equation of the model, and its writers */
 #include "report.h"                 /* the report in PDF, drawn without LaTeX  */
 #include "rutas.h"                  /* prefixes go on the NAME, not on the path */
+#include "fuedet.h"                 /* the deterministic filter, step [5] of cast_us */
 
 double macheps;                      /* Machine epsilon: global variable.   */
 FILE *outputv;                     /* Output file: global variable.         */
@@ -2560,11 +2561,10 @@ void cast_us( double *x, struct Tvarma *armax,
 
 {
    int  i, j, k, itmp;
-   int  OrderAr, OrderMa, *NuLag;
-   double *vtmp1, *vtmp2, **Nu, tmp1, tmp2;
+   int  OrderAr, OrderMa;
+   double *vtmp1, *vtmp2, tmp1;
 
    void unscramble( struct Tusmodel *, int *, int *, double *, double *, int * );
-   void calcnu( double *, int, double *, int, double *, int );
 
 /*****************************************************************************/
 /* [1]: Put parameter vector x into seasonal model:                          */
@@ -2788,39 +2788,14 @@ void cast_us( double *x, struct Tvarma *armax,
 
    vtmp1 = vector( 1, Ts.nobs );
 
-   if ( Tm.NdetVar > 0 )
-      {
-      NuLag = ivector( 1, Tm.NdetVar );
-      Nu    = (double **)calloc((size_t)(Tm.NdetVar + 1), sizeof(double *));
-      for ( j = 1; j <= Tm.NdetVar; j++ )
-          {
-          if ( Tm.Ndelta[j] == 0 )
-             NuLag[j] = Tm.Nomega[j];
-          else
-             NuLag[j] = 40;
-          Nu[j] = vector( 0, NuLag[j] );
-          calcnu( Tm.Omega[j], Tm.Nomega[j], Tm.Delta[j], Tm.Ndelta[j],
-                  Nu[j], NuLag[j] );
-          }
-      for ( i = 1; i <= Ts.nobs; i++ )           /* Calculate noise:         */
-          {
-          tmp1 = 0.0;
-          for ( j = 1; j <= Tm.NdetVar; j++ )
-              {
-              tmp2 = 0.0;
-              for ( k = 0; k <= NuLag[j]; k++ ) if ( i-k >= 1 )
-                  tmp2 += Nu[j][k] * DataMat[j][i-k];
-              tmp1 += tmp2;
-              }
-          vtmp1[i] = DataMat[0][i] - tmp1;
-          }
-      for ( j = Tm.NdetVar; j >= 1; j-- )
-          free_vector( Nu[j], 0, NuLag[j] );
-      free( Nu );
-      free_ivector( NuLag, 1, Tm.NdetVar );
-      }
-   else
-      for ( i = 1; i <= Ts.nobs; i++ ) vtmp1[i] = DataMat[0][i];
+/* La regla de este paso -- nu_j(B) por calcnu, truncada en Nomega o en 40
+   retardos, las variables sumadas y restadas UNA vez -- vive en
+   lib/fuedet, porque es la de toda la suite: fuf, drtran, drvarma, drvec y
+   el paquete de Python la usan de alli. El codigo es el que estaba aqui, tal
+   cual, y las salidas de fue no cambian un byte (tests/run_tests.sh).      */
+   if ( fuedet_noise( Tm.NdetVar, Tm.Omega, Tm.Nomega, Tm.Delta, Tm.Ndelta,
+                      DataMat, DataMat[0], Ts.nobs, vtmp1 ) != 0 )
+      nrerror( "allocation failure in fuedet_noise()" );
 
    for ( j = Tm.ornsop + 1; j <= Ts.nobs; j++ )  /* Apply non-stat. factors: */
        {
@@ -3399,25 +3374,7 @@ void CalcNonsOp( int sp, int d, int ds, int *ifds, int ord, double *op )
 
 /*****************************************************************************/
 
-void calcnu( double *omega, int s, double *delta, int r, double *nu, int lags )
-
-{
-   int  i, j;
-   double sum1, sum2;
-
-   nu[0] = omega[0];
-   for ( j = 1; j <= lags; j++ )
-       {
-       sum1 = 0.0;
-       if ( r > 0 )
-          for ( i = 1; i <= j; i++ )
-              if ( i <= r ) sum1 = sum1 + delta[i] * nu[j-i];
-       sum2 = 0.0;
-       if ( s > 0 )
-          if ( j <= s ) sum2 = omega[j];
-       nu[j] = sum1 - sum2;
-       }
-}
+/* calcnu vive en lib/fuedet (fuedet_nu): ver el paso [5] de cast_us.     */
 
 /*****************************************************************************/
 

@@ -32,7 +32,7 @@ else
 endif
 
 # Compiler flags
-CFLAGS  = -O2 -g -Wall -Iinclude -I../../lib/optim -I../../lib/fugdraw -I../../lib/fugplot -I../../lib/equation -I../../lib/rutas
+CFLAGS  = -O2 -g -Wall -Iinclude -I../../lib/optim -I../../lib/fugdraw -I../../lib/fugplot -I../../lib/equation -I../../lib/rutas -I../../lib/fuedet
 LDFLAGS +=
 LIBS    = -lm
 
@@ -49,7 +49,8 @@ LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c $(LIB_DIR)/fugplot/fugplot.c \
            $(LIB_DIR)/dates/dates.c $(LIB_DIR)/optim/lnsrch.c \
            $(LIB_DIR)/rutas/rutas.c \
            $(LIB_DIR)/fugplot/plotsupport.c \
-           $(LIB_DIR)/equation/eqlatex.c
+           $(LIB_DIR)/equation/eqlatex.c \
+           $(LIB_DIR)/fuedet/fuedet.c
 
 SRCS = $(wildcard $(SRC_DIR)/*.c)
 OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS)) \
@@ -89,6 +90,10 @@ $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 
 # Compile
+$(BUILD_DIR)/lib_fuedet/%.o: $(LIB_DIR)/fuedet/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(ALL_CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/lib_equation/%.o: $(LIB_DIR)/equation/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
 	$(CC) $(ALL_CFLAGS) -c $< -o $@
@@ -155,7 +160,7 @@ help:
 	@echo "  (Ensure the MXE toolchain is in PATH and PKG_CONFIG_PATH is set)"
 
 # Header dependencies (explicit)
-$(BUILD_DIR)/fue.o:             include/fue.h include/nlatools.h $(LIB_DIR)/fugplot/fugplot.h $(LIB_DIR)/fugdraw/fugdraw.h include/plothost.h include/inpcheck.h $(LIB_DIR)/equation/equation.h include/report.h
+$(BUILD_DIR)/fue.o:             include/fue.h include/nlatools.h $(LIB_DIR)/fugplot/fugplot.h $(LIB_DIR)/fugdraw/fugdraw.h include/plothost.h include/inpcheck.h $(LIB_DIR)/equation/equation.h include/report.h $(LIB_DIR)/fuedet/fuedet.h
 $(BUILD_DIR)/inpcheck.o:        include/inpcheck.h
 $(BUILD_DIR)/equation.o:        $(LIB_DIR)/equation/equation.h include/fue.h include/nlatools.h
 $(BUILD_DIR)/eqlatex.o:         $(LIB_DIR)/equation/equation.h
@@ -165,6 +170,7 @@ $(BUILD_DIR)/fugdraw.o:         $(LIB_DIR)/fugdraw/fugdraw.h $(LIB_DIR)/fugdraw/
 $(BUILD_DIR)/lib_fugplot/fugplot.o: $(LIB_DIR)/fugplot/fugplot.h $(LIB_DIR)/fugdraw/fugdraw.h include/plothost.h include/fue.h include/nlatools.h
 $(BUILD_DIR)/lib_fugplot/plotsupport.o: include/plothost.h include/fue.h include/nlatools.h
 $(BUILD_DIR)/lib_rutas/rutas.o: $(LIB_DIR)/rutas/rutas.h
+$(BUILD_DIR)/lib_fuedet/fuedet.o: $(LIB_DIR)/fuedet/fuedet.h
 $(BUILD_DIR)/nlatools.o:        include/nlatools.h
 $(BUILD_DIR)/drvmlest.o:        include/fue.h include/nlatools.h
 $(BUILD_DIR)/elfvarma.o:        include/fue.h include/nlatools.h

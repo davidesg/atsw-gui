@@ -239,3 +239,19 @@ judge is `inp_check_fue`. Both are tested over the fue corpus.
   runs drtran on the m6 and checks that what is written reads back as the
   `.out` says, with the `.pre`'s flags, and that a `.pre` from another series
   is rejected without leaving a file.
+
+## `fuedet/` — the deterministic filter of a fue model, added 2026-10-16
+
+- **What it is.** ω(B)/δ(B) applied to the deterministic variables of a
+  `.pre`, with fue's rule: step [5] of `cast_us` in `engines/fue/src/fue.c`,
+  moved here verbatim. ν(B) by `calcnu`, truncated at Nomega lags, or 40 when
+  the variable has a δ; the variables summed and subtracted once.
+- **What changed.** There were nine implementations. fue's stays as it was
+  (its 109 runs are byte-identical); fuf truncated at 20, and drtran,
+  drvarma, drvec and the GUIs used the exact recursion, one of them
+  subtracting variable by variable. All of them now call this (drvec
+  BUG-40).
+- **Users.** fue, fuf, `fuepre` (`build_det_component`), `prewhiten`
+  (`apply_univariate_model`), drvec, and the Python package of fue, which
+  carries a byte-identical copy checked by its sha256. See
+  `fuedet/README.md`.

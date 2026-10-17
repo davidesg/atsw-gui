@@ -405,6 +405,15 @@ else
     echo "  (sin bin/drtran o sin los .pre del m6: no compruebo la vuelta)"
 fi
 
+# --- el filtro determinista de la suite (lib/fuedet) -------------------------
+# El paso [5] de fue.c, que usan fue, fuf, lib/fuepre, lib/prewhiten y drvec:
+# contra el codigo de fue.c, bit a bit, y la truncacion en 40 (BUG-40).
+echo
+$CC -O2 -Wall -Wextra -I"$L/fuedet" \
+    "$L/fuedet/test_fuedet.c" "$L/fuedet/fuedet.c" \
+    -o "$W/test_fuedet" -lm || exit 1
+"$W/test_fuedet" || exit 1
+
 # --- el resultado del identificador (engines/art) ---------------------------
 # El lector de DATA_art.cand contra las referencias del propio motor: lo que
 # la ventana de identificacion lee es lo que art escribe, por construccion.

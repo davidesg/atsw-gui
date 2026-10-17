@@ -14,6 +14,11 @@ séptimo lector, no; una séptima cuenta, tampoco.**
 | `expand_ar_factors` / `expand_ma_factors` | los factores del `.pre` multiplicados en un polinomio |
 | `apply_univariate_model` | Box-Cox, restar deterministas, diferenciar |
 
+Las deterministas se restan con `lib/fuedet`, la regla de fue (ν(B) truncada
+en 40 retardos si hay δ; las variables sumadas y restadas una vez). Hasta
+2026-10-16 era la recursión exacta, restada variable a variable (BUG-40 de
+drvec).
+
 Las cuatro eran **puras** — no tocaban un solo global del motor. `prewhiten_ccf`
 es lo nuevo aquí, y son los pasos 1–4 de `prewhiten_and_identify` con sus
 argumentos en vez de los globales (`lnk`, `w`, `phi`, `theta`, `n_stat`, `Ts`).

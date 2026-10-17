@@ -26,8 +26,10 @@
  *  referencia es la implementación en C y no la de Python (drtran y fue existen
  *  en las dos).
  *
- *  UNICA MODIFICACION respecto al original: comentado el #include "drtran.h"
- *  de abajo.  Comprobado que este fichero sólo usa struct Tusmodel, struct
+ *  MODIFICACIONES respecto al original: comentado el #include "drtran.h"
+ *  de abajo; y desde 2026-10-16 (BUG-40) build_det_component no lleva
+ *  filtro propio: llama a lib/fuedet, como el original de lib/fuepre.
+ *  Comprobado que este fichero sólo usa struct Tusmodel, struct
  *  Tseries y los allocators de nlatools, cuyos nombres coinciden en los dos
  *  proyectos; sus únicos símbolos externos son DateToObs, ObsToDate, Easter,
  *  vector, ivector, matrix y stderr, todos del motor de drvec.
@@ -42,13 +44,14 @@
 
 #include "main.h"
 /* #include "drtran.h" -- no se necesita: el lector solo usa Tusmodel,
-   Tseries y los allocators de nlatools.  Unica modificacion respecto al
-   original de drtran.  Ver PLAN_BETA.md F2 (procedencia).             */
+   Tseries y los allocators de nlatools.  Ver PLAN_BETA.md F2
+   (procedencia).                                                      */
 #include "fue_pre_reader.h"
 #include <string.h>
 #include <math.h>
 
 #include "fue_bridge.h"     /* free_fue_pre, for the error paths (BUG-39) */
+#include "fuedet.h"         /* the deterministic filter of fue (BUG-40)   */
 
 /*  BUG-39.  This used PRE_LINE, and main.h defines PRE_LINE as 80: the `#ifndef
  *  PRE_LINE / 512' that stood here never took effect.  A line longer than 80
@@ -363,53 +366,36 @@ static void read_fixfreq_section(FILE *f, char *line, int *Num, int **fre,
    filtro racional Omega(B)/Delta(B) y devuelve la contribucion total.
 
    Es lo que permite PREVER el nivel: la parte determinista del futuro se
-   conoce exactamente, no se prevé.                                         */
+   conoce exactamente, no se prevé.
+
+   BUG-40 (2026-10-16).  El filtro NO es de esta copia: es lib/fuedet, la
+   regla de fue (fue.c, cast_us [5]) que comparte toda la suite -- nu(B)
+   truncada en Nomega retardos, o en 40 si hay delta, y las variables
+   sumadas; quien llama resta la suma UNA vez.  Aqui estaba la recursion
+   exacta, y un .pre con un delta proximo a uno y mas de 40 periodos tras el
+   suceso dejaba de ser el optimo que fue habia escrito (mmb40.mink.pre:
+   +0,47 de logL y otro veredicto del rango).                              */
 void build_det_component(struct Tusmodel *Tm, struct Tseries *Ts,
                          int nobs_ext, real *det_out)
 {
     struct Tseries Text = *Ts;      /* misma fecha de inicio, mas observaciones */
-    real *v, *filt_num, *filt_out;
-    int i, j, t;
+    real **x;
+    int i, t;
 
     for (t = 1; t <= nobs_ext; t++) det_out[t] = 0.0;
     if (Tm->NdetVar <= 0) return;
 
     Text.nobs = nobs_ext;
 
-    v        = vector(1, nobs_ext);
-    filt_num = vector(1, nobs_ext);
-    filt_out = vector(1, nobs_ext);
+    x = matrix(1, Tm->NdetVar, 1, nobs_ext);
+    for (i = 1; i <= Tm->NdetVar; i++)
+        gen_detvar(Tm->detspec[i], &Text, x[i]);
 
-    for (i = 1; i <= Tm->NdetVar; i++) {
-        int nw = Tm->Nomega[i];
-        int nd = Tm->Ndelta[i];
+    if (fuedet_sum(Tm->NdetVar, Tm->Omega, Tm->Nomega, Tm->Delta, Tm->Ndelta,
+                   x, nobs_ext, det_out) != 0)
+        fprintf(stderr, "build_det_component: out of memory in fuedet_sum\n");
 
-        gen_detvar(Tm->detspec[i], &Text, v);
-
-        /* numerador Omega(B) = ω₀ - ω₁B - ... (Box-Jenkins, como fue calcnu):
-           el lider suma, los demas RESTAN. */
-        for (t = 1; t <= nobs_ext; t++) {
-            real sum = 0.0;
-            for (j = 0; j <= nw; j++)
-                if (t - j >= 1)
-                    sum += (j == 0 ? Tm->Omega[i][j] : -Tm->Omega[i][j]) * v[t - j];
-            filt_num[t] = sum;
-        }
-
-        /* denominador 1/Delta(B) (recursivo) */
-        for (t = 1; t <= nobs_ext; t++) {
-            real sum = filt_num[t];
-            for (j = 1; j <= nd; j++)
-                if (t - j >= 1) sum += Tm->Delta[i][j] * filt_out[t - j];
-            filt_out[t] = sum;
-        }
-
-        for (t = 1; t <= nobs_ext; t++) det_out[t] += filt_out[t];
-    }
-
-    free_vector(filt_out, 1, nobs_ext);
-    free_vector(filt_num, 1, nobs_ext);
-    free_vector(v, 1, nobs_ext);
+    free_matrix(x, 1, Tm->NdetVar, 1, nobs_ext);
 }
 
 /* ─── read_fue_pre ────────────────────────────────────────────────────── */

@@ -16,10 +16,10 @@ CC=${CC:-cc}
 CC="$CC $(pkg-config --cflags gsl 2>/dev/null) $(pkg-config --libs-only-L gsl 2>/dev/null)"
 GTK=$(pkg-config --cflags --libs gtk+-3.0 2>/dev/null) || { echo "hace falta GTK3"; exit 0; }
 
-$CC -O0 -g -w -I"$TOP/include" -I"$E/include" -I"$L/lik" -I"$L/fuepre" -I"$L/dates" \
+$CC -O0 -g -w -I"$TOP/include" -I"$E/include" -I"$L/lik" -I"$L/fuepre" -I"$L/fuedet" -I"$L/dates" \
     $(pkg-config --cflags gtk+-3.0) \
     "$TOP/tests/test_series.c" "$TOP/src/series.c" \
-    "$L/fuepre/fue_pre_reader.c" "$E/src/nlatools.c" "$L/dates/dates.c" \
+    "$L/fuepre/fue_pre_reader.c" "$L/fuedet/fuedet.c" "$E/src/nlatools.c" "$L/dates/dates.c" \
     -o "$W/test_series" $(pkg-config --libs gtk+-3.0) -lgsl -lgslcblas -lm || exit 1
 
 M6=${M6:-$TOP/../../engines/drtran/tests/data/m6}
@@ -33,8 +33,8 @@ fi
 # El oraculo es  drtran -p ES_CPI_airline.pre WTI_ar1.pre ; los numeros que se
 # exigen aqui estan copiados de su .out.
 echo
-$CC -O2 -w -I"$TOP/include" -I"$E/include" -I"$L/lik" -I"$L/fuepre" -I"$L/prewhiten" -I"$L/dates" -I"$L/diagmv" \
-    "$TOP/tests/test_prewhiten.c" "$L/fuepre/fue_pre_reader.c" \
+$CC -O2 -w -I"$TOP/include" -I"$E/include" -I"$L/lik" -I"$L/fuepre" -I"$L/fuedet" -I"$L/prewhiten" -I"$L/dates" -I"$L/diagmv" \
+    "$TOP/tests/test_prewhiten.c" "$L/fuepre/fue_pre_reader.c" "$L/fuedet/fuedet.c" \
     "$E/src/nlatools.c" "$E/src/diagnose.c" "$L/diagmv/diagmv.c" \
     "$L/prewhiten/prewhiten.c" "$L/dates/dates.c" \
     -o "$W/test_prewhiten" -lgsl -lgslcblas -lm || exit 1
@@ -84,9 +84,9 @@ fi
 # El oraculo es el recuento que imprime el motor:
 #   Structural parameters: 67   (free: 52, fixed/shared: 15)
 echo
-$CC -O2 -w -I"$L/slots" -I"$L/netfile" -I"$L/dates" -I"$E/include" -I"$L/lik" -I"$L/fuepre" \
+$CC -O2 -w -I"$L/slots" -I"$L/netfile" -I"$L/dates" -I"$E/include" -I"$L/lik" -I"$L/fuepre" -I"$L/fuedet" \
     "$L/slots/test_slots.c" "$L/slots/slots.c" "$L/netfile/netfile.c" \
-    "$L/fuepre/fue_pre_reader.c" "$E/src/nlatools.c" "$L/dates/dates.c" \
+    "$L/fuepre/fue_pre_reader.c" "$L/fuedet/fuedet.c" "$E/src/nlatools.c" "$L/dates/dates.c" \
     -o "$W/test_slots" -lgsl -lgslcblas -lm || exit 1
 
 M6D="$E/tests/data/m6"
@@ -218,9 +218,9 @@ $CC -O2 -Wall -Wextra -I"$L/nsop" \
 # denominador que es propiedad de los DATOS. Que ese denominador no se mueva
 # entre las dos corridas es lo unico que hace comparables los dos R².
 echo
-$CC -O2 -w -I"$TOP/include" -I"$E/include" -I"$L/lik" -I"$L/fuepre" -I"$L/outdiag" -I"$L/gof" -I"$L/dates" \
+$CC -O2 -w -I"$TOP/include" -I"$E/include" -I"$L/lik" -I"$L/fuepre" -I"$L/fuedet" -I"$L/outdiag" -I"$L/gof" -I"$L/dates" \
     "$TOP/tests/test_gof.c" "$L/gof/gof.c" "$L/outdiag/outdiag.c" \
-    "$L/fuepre/fue_pre_reader.c" "$E/src/nlatools.c" "$L/dates/dates.c" \
+    "$L/fuepre/fue_pre_reader.c" "$L/fuedet/fuedet.c" "$E/src/nlatools.c" "$L/dates/dates.c" \
     -o "$W/test_gof" -lgsl -lgslcblas -lm || exit 1
 
 DR="$E/bin/drtran"
@@ -404,6 +404,15 @@ if [ -x "$E/bin/drtran" ] && [ -f "$E/tests/data/m6/M6_EP.pre" ]; then
 else
     echo "  (sin bin/drtran o sin los .pre del m6: no compruebo la vuelta)"
 fi
+
+# --- el filtro determinista de la suite (lib/fuedet) -------------------------
+# El paso [5] de fue.c, que usan fue, fuf, lib/fuepre, lib/prewhiten y drvec:
+# contra el codigo de fue.c, bit a bit, y la truncacion en 40 (BUG-40).
+echo
+$CC -O2 -Wall -Wextra -I"$L/fuedet" \
+    "$L/fuedet/test_fuedet.c" "$L/fuedet/fuedet.c" \
+    -o "$W/test_fuedet" -lm || exit 1
+"$W/test_fuedet" || exit 1
 
 # --- el resultado del identificador (engines/art) ---------------------------
 # El lector de DATA_art.cand contra las referencias del propio motor: lo que

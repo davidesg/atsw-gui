@@ -30,6 +30,7 @@
 #include "main.h"
 #include "fue_pre_reader.h"
 #include "dates.h"
+#include "fuedet.h"
 #include <string.h>
 #include <math.h>
 
@@ -351,53 +352,34 @@ static void read_fixfreq_section(FILE *f, char *line, int *Num, int **fre,
    filtro racional Omega(B)/Delta(B) y devuelve la contribucion total.
 
    Es lo que permite PREVER el nivel: la parte determinista del futuro se
-   conoce exactamente, no se prevé.                                         */
+   conoce exactamente, no se prevé.
+
+   El filtro es el de fue, de lib/fuedet: nu(B) truncada en Nomega retardos,
+   o en 40 si hay delta, y las variables sumadas; quien llama resta la suma
+   UNA vez. Hasta 2026-10-16 era la recursion exacta, y un .pre con un delta
+   proximo a uno dejaba de ser el optimo que fue habia escrito (BUG-40 de
+   drvec).                                                                  */
 void build_det_component(struct Tusmodel *Tm, struct Tseries *Ts,
                          int nobs_ext, real *det_out)
 {
     struct Tseries Text = *Ts;      /* misma fecha de inicio, mas observaciones */
-    real *v, *filt_num, *filt_out;
-    int i, j, t;
+    real **x;
+    int i, t;
 
     for (t = 1; t <= nobs_ext; t++) det_out[t] = 0.0;
     if (Tm->NdetVar <= 0) return;
 
     Text.nobs = nobs_ext;
 
-    v        = vector(1, nobs_ext);
-    filt_num = vector(1, nobs_ext);
-    filt_out = vector(1, nobs_ext);
+    x = matrix(1, Tm->NdetVar, 1, nobs_ext);
+    for (i = 1; i <= Tm->NdetVar; i++)
+        gen_detvar(Tm->detspec[i], &Text, x[i]);
 
-    for (i = 1; i <= Tm->NdetVar; i++) {
-        int nw = Tm->Nomega[i];
-        int nd = Tm->Ndelta[i];
+    if (fuedet_sum(Tm->NdetVar, Tm->Omega, Tm->Nomega, Tm->Delta, Tm->Ndelta,
+                   x, nobs_ext, det_out) != 0)
+        fprintf(stderr, "build_det_component: sin memoria para fuedet_sum\n");
 
-        gen_detvar(Tm->detspec[i], &Text, v);
-
-        /* numerador Omega(B) = ω₀ - ω₁B - ... (Box-Jenkins, como fue calcnu):
-           el lider suma, los demas RESTAN. */
-        for (t = 1; t <= nobs_ext; t++) {
-            real sum = 0.0;
-            for (j = 0; j <= nw; j++)
-                if (t - j >= 1)
-                    sum += (j == 0 ? Tm->Omega[i][j] : -Tm->Omega[i][j]) * v[t - j];
-            filt_num[t] = sum;
-        }
-
-        /* denominador 1/Delta(B) (recursivo) */
-        for (t = 1; t <= nobs_ext; t++) {
-            real sum = filt_num[t];
-            for (j = 1; j <= nd; j++)
-                if (t - j >= 1) sum += Tm->Delta[i][j] * filt_out[t - j];
-            filt_out[t] = sum;
-        }
-
-        for (t = 1; t <= nobs_ext; t++) det_out[t] += filt_out[t];
-    }
-
-    free_vector(filt_out, 1, nobs_ext);
-    free_vector(filt_num, 1, nobs_ext);
-    free_vector(v, 1, nobs_ext);
+    free_matrix(x, 1, Tm->NdetVar, 1, nobs_ext);
 }
 
 /* ─── read_fue_pre ────────────────────────────────────────────────────── */

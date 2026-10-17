@@ -18,7 +18,7 @@ endif
 
 # lib/ of the atsw-gui monorepo (drvec entered it on 2026-09-27).
 LIB_DIR  = ../../lib
-CFLAGS   = -O2 -g3 -Wall -I./include -I$(LIB_DIR)/optim -I$(LIB_DIR)/diagmv $(GSL_CFLAGS)
+CFLAGS   = -O2 -g3 -Wall -I./include -I$(LIB_DIR)/optim -I$(LIB_DIR)/diagmv -I$(LIB_DIR)/fuedet $(GSL_CFLAGS)
 LDFLAGS  =
 LIBS     = $(GSL_LIBS) -lm
 
@@ -41,7 +41,8 @@ SUITE_SRC  = $(SRC_DIR)/fue_pre_reader.c \
 ALL_SRC = $(DRVEC_SRC) $(ENGINE_SRC) $(SUITE_SRC)
 OBJS    = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(ALL_SRC)) \
           $(BUILD_DIR)/lnsrch.o \
-          $(BUILD_DIR)/diagmv.o          # lib/optim, lib/diagmv: shared
+          $(BUILD_DIR)/diagmv.o \
+          $(BUILD_DIR)/fuedet.o          # lib/optim, lib/diagmv, lib/fuedet: shared
 
 EXEC = $(BIN_DIR)/drvec
 
@@ -59,7 +60,8 @@ CHIPROBE   = $(BIN_DIR)/chisq_probe
 #  deterministas.  Lo cazo la CI sobre un arbol limpio; en local el binario
 #  viejo seguia enlazado y la bateria pasaba por encima.
 PROBE_OBJS = $(BUILD_DIR)/fue_pre_reader.o $(BUILD_DIR)/fue_bridge.o \
-             $(BUILD_DIR)/diagnose.o $(BUILD_DIR)/nlatools.o
+             $(BUILD_DIR)/diagnose.o $(BUILD_DIR)/nlatools.o \
+             $(BUILD_DIR)/fuedet.o
 
 all: $(EXEC)
 
@@ -76,6 +78,12 @@ $(BUILD_DIR)/%.o: $(LIB_DIR)/optim/%.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/%.o: $(LIB_DIR)/diagmv/%.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+#  The deterministic filter of a .pre is fue's (BUG-40): lib/fuedet, the code
+#  of fue.c that fue, fuf, drtran and drvarma also link.  The vendored reader
+#  calls it instead of carrying a filter of its own.
+$(BUILD_DIR)/%.o: $(LIB_DIR)/fuedet/%.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # El lector de .pre es una COPIA de drtran y se mantiene con el minimo delta
@@ -148,7 +156,8 @@ $(BUILD_DIR)/nlatools.o:  $(INCLUDE_DIR)/main.h
 $(BUILD_DIR)/drvec.o:         $(INCLUDE_DIR)/fue_pre_reader.h \
                               $(INCLUDE_DIR)/fue_bridge.h
 $(BUILD_DIR)/fue_pre_reader.o: $(INCLUDE_DIR)/main.h \
-                               $(INCLUDE_DIR)/fue_pre_reader.h
+                               $(INCLUDE_DIR)/fue_pre_reader.h \
+                               $(LIB_DIR)/fuedet/fuedet.h
 $(BUILD_DIR)/fue_bridge.o:    $(INCLUDE_DIR)/main.h \
                               $(INCLUDE_DIR)/fue_bridge.h
 

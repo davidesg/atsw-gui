@@ -46,6 +46,12 @@ Since version 1.09 FUF draws the forecast graph and the PDF report itself
 (with the graphics engine of FUG, `fugdraw`): it needs neither Gnuplot nor
 LaTeX, and has no dependency other than GSL.
 
+Since version 1.10 the deterministic part of the model is computed with
+FUE's rule, from the same code (`lib/fuedet`): the weights of
+ω(B)/δ(B) are truncated at 40 lags when the variable has a δ, as FUE
+estimates them. FUF 1.09 and earlier truncated at 20 lags, so with a δ close
+to one the forecast did not start from FUE's optimum.
+
 Exit status: 0 results written; 1 command line or file error; 2 the `.inp`
 file is not valid (nothing written); 3 the model can not be estimated from
 its initial values; 4 internal error. Before writing anything, FUF checks the

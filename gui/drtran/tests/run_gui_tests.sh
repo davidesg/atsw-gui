@@ -38,7 +38,7 @@ fi
 INC="-I$TOP/include -I$E/include"
 for d in fuepre dates prewhiten netfile nsop slots intervencion verdict outdiag \
          gof tabla rutas proyecto outfcst engine ccfplot fugdraw fugplot \
-         equation preview utils inpcheck lik diagmv sitio barra vuelta inpdet; do
+         equation preview utils inpcheck lik diagmv sitio barra vuelta inpdet fuedet; do
     INC="$INC -I$L/$d"
 done
 

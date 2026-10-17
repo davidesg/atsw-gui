@@ -79,7 +79,8 @@ con transferencia contemporánea aparece ω₀ = 0.0149 (t = 8.0), logL = −739
               ─────────────────
                1. desempaquetar factores ARMA de x[] → expandir a φ, θ
                2. Box–Cox(datos crudos) · refactor
-               3. restar deterministas (Ω/Δ·D[t])
+               3. restar deterministas (Ω/Δ·D[t], con lib/fuedet: la
+                  regla de fue, ν truncada en 40 si hay δ)
                4. aplicar operador no estacionario (rnsop) → w_Y, w_X
                5. ν(B) = ω(B)/δ(B)·Bᵇ  → transfer[t] = Σ νⱼ·w_X[t−j]
                6. VARMA bivariante:

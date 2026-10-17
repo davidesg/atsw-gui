@@ -117,7 +117,7 @@
  *  argument that a reader needs before running the program, and the right
  *  place for the single definition the binary is built from.                 */
 #ifndef DRVEC_VERSION
-#define DRVEC_VERSION "0.12"
+#define DRVEC_VERSION "0.13"
 #endif
 
 real macheps;

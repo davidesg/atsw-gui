@@ -737,25 +737,8 @@ void Easter( int *day, int *month, int year )
 /****************************************************************************/
 /****************************************************************************/
 
-void calcnu( double omega, int s, double delta, int r, double *nu, int lags )
-
-{
-   int  i, j;
-   double sum1, sum2;
-
-   nu[0] = omega;
-   for ( j = 1; j <= lags; j++ )
-       {
-       sum1 = 0.0;
-       if ( r > 0 )
-          for ( i = 1; i <= j; i++ )
-              if ( i <= r ) sum1 = sum1 + delta * nu[j-i];
-       sum2 = 0.0;
-       if ( s > 0 )
-          if ( j <= s ) sum2 = omega;
-       nu[j] = sum1 - sum2;
-       }
-}
+/* calcnu (escalar) quitada 2026-10-16: nadie la llamaba. El filtro
+   determinista de la suite es lib/fuedet (BUG-40 de drvec).              */
 
 /****************************************************************************/
 /*****************************************************************************/

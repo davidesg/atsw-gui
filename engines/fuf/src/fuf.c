@@ -25,6 +25,7 @@
 #include "usfo.h"
 #include "inpcheck.h"               /* validation of the .inp, exit status */
 #include "report.h"                 /* the report in PDF, drawn without LaTeX  */
+#include "fuedet.h"                 /* the deterministic filter, step [5] of cast_us */
 
 double macheps;                      /* Machine epsilon: global variable.   */
 FILE *outputv;                       /* Output file: global variable.         */
@@ -124,7 +125,7 @@ int main( int argc, char *argv[] )
    setvbuf( stdout, NULL, _IONBF, 0 );
 
    printf( "\n" );
-   printf( "FUF 1.09: Copyright (C) 2026 Arthur B. Treadway and David E. Guerrero \n" );
+   printf( "FUF 1.10: Copyright (C) 2026 Arthur B. Treadway and David E. Guerrero \n" );
    printf( "Non-Final version. May contain errors. Please report\n" );
    printf( "\n" );
 
@@ -1624,11 +1625,10 @@ void cast_us( real *x, struct Tvarma *armax,
 
 {
    int  i, j, k, itmp;
-   int  OrderAr, OrderMa, *NuLag;
-   real *vtmp1, *vtmp2, **Nu, tmp1, tmp2, *xius;
+   int  OrderAr, OrderMa;
+   real *vtmp1, *vtmp2, *xius;
 
    void unscramble( struct Tusmodel *, int *, int *, real *, real *, int * );
-   void calcnu( real *, int, real *, int, real *, int );
 
 /*****************************************************************************/
 /* [1]: Put parameter vector x into seasonal model:                          */
@@ -1864,56 +1864,26 @@ for (i = 1; i <= Ts.nobs + Fs.L; i++) {
 
 // Handle deterministic variables if present
 if (Tm.NdetVar > 0) {
-    // Deterministic variables present - calculate their effects
-    NuLag = ivector( 1, Tm.NdetVar );
-    Nu    = (real **)calloc((size_t)(Tm.NdetVar + 1), sizeof(real *));
+    // The deterministic effect, xius[1..nobs+L], with fue's rule (step [5]
+    // of its cast_us): nu_j(B) truncated at Nomega lags, or at 40 when the
+    // variable has a delta, the variables summed and subtracted ONCE. It
+    // lives in lib/fuedet, shared by the whole suite. Until fuf 1.09 the
+    // truncation here was 20 lags, not fue's 40.
+    if (fuedet_sum(Tm.NdetVar, Tm.Omega, Tm.Nomega, Tm.Delta, Tm.Ndelta,
+                   DataMat, Ts.nobs + Fs.L, xius) != 0)
+        nrerror("allocation failure in fuedet_sum()");
 
-    // Initialize Nu arrays for each deterministic variable
-    for (j = 1; j <= Tm.NdetVar; j++) {
-        if (Tm.Ndelta[j] == 0) {
-            NuLag[j] = Tm.Nomega[j];
-        } else {
-            NuLag[j] = 20; // Default lag length for delta components
-        }
-        Nu[j] = vector( 0, NuLag[j] );
-        calcnu( Tm.Omega[j], Tm.Nomega[j], Tm.Delta[j], Tm.Ndelta[j],
-                Nu[j], NuLag[j] );
-    }
-
-    // Calculate deterministic effects for entire range
     for (i = 1; i <= Ts.nobs + Fs.L; i++) {
-        double deterministic_effect = 0.0;
-
-        // Sum effects from all deterministic variables
-        for (j = 1; j <= Tm.NdetVar; j++) {
-            double var_effect = 0.0;
-            for (k = 0; k <= NuLag[j]; k++) {
-                if (i - k >= 1) {
-                    var_effect += Nu[j][k] * DataMat[j][i - k];
-                }
-            }
-            deterministic_effect += var_effect;
-        }
-
-        xius[i] = deterministic_effect;
-
         // For historical period: data minus deterministic effect
         if (i <= Ts.nobs) {
-            vtmp1[i] = DataMat[0][i] - deterministic_effect;
+            vtmp1[i] = DataMat[0][i] - xius[i];
         }
         // For forecast period: we don't have actual data, so just store -deterministic_effect
         // This will be handled properly in the forecast function
         else {
-            vtmp1[i] = -deterministic_effect;
+            vtmp1[i] = -xius[i];
         }
     }
-
-    // Clean up Nu arrays
-    for (j = Tm.NdetVar; j >= 1; j--) {
-        free_vector(Nu[j], 0, NuLag[j]);
-    }
-    free(Nu);
-    free_ivector(NuLag, 1, Tm.NdetVar);
 }
 else {
     // No deterministic variables - simple case
@@ -2523,25 +2493,7 @@ void CalcNonsOp( int sp, int d, int ds, int *ifds, int ord, double *op )
 
 /*****************************************************************************/
 
-void calcnu( double *omega, int s, double *delta, int r, double *nu, int lags )
-
-{
-   int  i, j;
-   double sum1, sum2;
-
-   nu[0] = omega[0];
-   for ( j = 1; j <= lags; j++ )
-       {
-       sum1 = 0.0;
-       if ( r > 0 )
-          for ( i = 1; i <= j; i++ )
-              if ( i <= r ) sum1 = sum1 + delta[i] * nu[j-i];
-       sum2 = 0.0;
-       if ( s > 0 )
-          if ( j <= s ) sum2 = omega[j];
-       nu[j] = sum1 - sum2;
-       }
-}
+/* calcnu lives in lib/fuedet (fuedet_nu): see step [5] of cast_us.        */
 
 /*****************************************************************************/
 

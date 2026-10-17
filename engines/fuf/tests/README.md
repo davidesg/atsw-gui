@@ -78,6 +78,17 @@ Cada commit que cambia un código de salida de `runs.tsv` lo explica aquí.
   el PATH vacío escribe el PDF y que es de fugdraw. Ningún `.out` ni fichero
   LaTeX cambia: el `.tex` se sigue escribiendo siempre.
 
+- **La parte determinista con la regla de fue** (fuf 1.10, `lib/fuedet`):
+  los pesos ν(B) = ω(B)/δ(B) de una determinista con δ se truncan en 40
+  retardos, como en fue, y no en 20; el código es el de fue, compartido.
+  Ninguna de las 14 ejecuciones anteriores cambia: ninguna lleva δ. Entra
+  `forecast_RIPC.2`, que sí lo lleva (escalón en 2/2002 con δ = 0,8434, 78
+  observaciones): es el `forecast_RIPC.2.inp` que escribe `fue RIPC.2 -f 12`
+  con el corpus de fue. Con el 20, fuf partía de un punto que no era el
+  óptimo de fue --norma del gradiente 3,4490 en la iteración 0, media de los
+  residuos 0,0415--; con el 40, 0,0230 y −0,0005. La tabla de previsiones
+  se mueve hasta 0,52 (la variación anual) y 0,0023 en el nivel.
+
 ## Ver el informe
 
 El informe en PDF no se compara en la batería (lo que se compara es lo que lo

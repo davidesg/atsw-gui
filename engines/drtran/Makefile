@@ -10,7 +10,7 @@
 # Uses the drvarma exact-VARMA likelihood engine
 
 CC       = gcc
-CFLAGS   = -Wall -Wextra -O2 -fPIC -Iinclude -I../../lib/fuepre -I../../lib/optim -I../../lib/lik -I../../lib/dates -I../../lib/prewhiten -I../../lib/netfile -I../../lib/slots -I../../lib/rutas -I../../lib/diagmv
+CFLAGS   = -Wall -Wextra -O2 -fPIC -Iinclude -I../../lib/fuepre -I../../lib/optim -I../../lib/lik -I../../lib/dates -I../../lib/prewhiten -I../../lib/netfile -I../../lib/slots -I../../lib/rutas -I../../lib/diagmv -I../../lib/fuedet
 # GSL por pkg-config: en macOS (Homebrew) sus cabeceras no estan en las rutas
 # por defecto del compilador.
 GSL_CFLAGS := $(shell pkg-config --cflags gsl 2>/dev/null)
@@ -31,6 +31,7 @@ SRCS = $(SRCDIR)/drtran.c       \
        ../../lib/fuepre/fue_pre_reader.c \
        ../../lib/fuepre/fuepre_motor.c \
        ../../lib/fuepre/fuepre_forecast.c \
+       ../../lib/fuedet/fuedet.c \
        ../../lib/optim/lnsrch.c \
        ../../lib/diagmv/diagmv.c \
        ../../lib/lik/lik.c \

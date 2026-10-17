@@ -25,8 +25,15 @@
  *  (las cuatro ultimas: primera, segunda, penultima y ultima observacion).
  *  La bateria saca esos mismos valores del fichero con awk y los compara, asi
  *  que la comprobacion no envejece: no hay ningun numero de oro que mantener.
+ *
+ *  Con  pre_probe fichero.pre -det H  imprime en su lugar la componente
+ *  determinista que resta drvec, build_det_component, en t = 1..nobs+H:
+ *  una linea "t det" por periodo.  Es la prueba de BUG-40: la bateria la
+ *  compara con la regla de fue (nu truncada en 40 retardos), calculada aparte.
  */
 
+#include <string.h>
+#include <stdlib.h>
 #include "main.h"
 #include "fue_pre_reader.h"
 
@@ -70,6 +77,14 @@ int main(int argc, char **argv)
     }
     n = Ts.nobs;
     if (n < 2) { fprintf(stderr, "pre_probe: nobs = %d\n", n); return 1; }
+    if (argc >= 3 && strcmp(argv[2], "-det") == 0) {
+        int H = (argc >= 4) ? atoi(argv[3]) : 0, t;
+        real *det = vector(1, n + H);
+        build_det_component(&Tm, &Ts, n + H, det);
+        for (t = 1; t <= n + H; t++) printf("%d %.10f\n", t, det[t]);
+        free_vector(det, 1, n + H);
+        return 0;
+    }
 
     printf("%d %d %.10g %.10f %.10f %.10f %.10f\n",
            n, Ts.freq, Ts.refactor,

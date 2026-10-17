@@ -78,8 +78,12 @@ static double en_ecuacion( Mtram *m, int i, double dt, int *pct )
     return dt / r * (*pct ? 100.0 : 1.0);
 }
 
-static void dt_texto( char *t, size_t n, double v, int pct )
+/* La misma, escrita: con su % si va en logaritmos. */
+static void dt_ecuacion( Mtram *m, int i, double dt, char *t, size_t n )
 {
+    int    pct;
+    double v = en_ecuacion( m, i, dt, &pct );
+
     snprintf( t, n, pct ? "%.2f %%" : "%.4g", v );
 }
 
@@ -259,7 +263,6 @@ static void pinta_ajuste( Mtram *m )
         int     nw;
         char    cdtu[32], cdtt[32], cr2u[32], cr2t[32], cred[32];
         gboolean hay_u;
-        int      pct;
 
         w  = gof_estacionaria( &m->c.s[i]->ts, &m->c.s[i]->tm, &nw );
         sw = w ? gof_suma_cuad_cola( w, nw, D->res.n ) : 0.0;
@@ -274,10 +277,10 @@ static void pinta_ajuste( Mtram *m )
                 gof_r2_brajin( D->res_base.v[i], D->res_base.n, sw,
                                &r2u, &dtu ) == 0;
 
-        dt_texto( cdtt, sizeof cdtt, en_ecuacion( m, i + 1, dtt, &pct ), pct );
+        dt_ecuacion( m, i + 1, dtt, cdtt, sizeof cdtt );
         snprintf( cr2t, sizeof cr2t, r2t > -90.0 ? "%.4f" : "—", r2t );
         if (hay_u) {
-            dt_texto( cdtu, sizeof cdtu, en_ecuacion( m, i + 1, dtu, &pct ), pct );
+            dt_ecuacion( m, i + 1, dtu, cdtu, sizeof cdtu );
             snprintf( cr2u, sizeof cr2u, "%.4f", r2u );
             /* La reduccion de varianza residual: la cifra con la que la
              * escuela cierra cada caso, en las unidades del analista.   */
@@ -324,8 +327,9 @@ static void pinta_res( Mtram *m )
     for (i = 0; i < D->d.ns; i++) {
         const OdSerie *s = &D->d.s[i];
 
-        snprintf( med, sizeof med, "%.4f", s->media );
-        snprintf( dt,  sizeof dt,  "%.4f", s->sd );
+        /* En las unidades de la ecuacion, como la sigma de su pagina. */
+        dt_ecuacion( m, i + 1, s->media, med, sizeof med );
+        dt_ecuacion( m, i + 1, s->sd,    dt,  sizeof dt );
         snprintf( asi, sizeof asi, "%+.3f", s->skew );
         snprintf( cur, sizeof cur, "%+.3f", s->kurt );
 
@@ -766,6 +770,13 @@ static Tabla *tabla_actual( Mtram *m, int pagina )
 
     if (!D->vale) return NULL;
 
+    /* Las medias y las d.t. de los residuos, en las unidades de cada
+     * ecuacion: la columna dice % si TODAS van en logaritmos; si no, cada
+     * una va en las de su serie, sin unidad.                          */
+    pct_todas = m->c.n > 0;
+    for (i = 0; i < m->c.n; i++)
+        if (fabs( m->c.s[i]->tm.boxlam ) >= 1e-8) pct_todas = 0;
+
     switch (pagina) {
     case 0:                                        /* exogeneidad */
         t = tb_new( "Exogeneidad: ¿transferencia, o VARMA?" );
@@ -809,15 +820,6 @@ static Tabla *tabla_actual( Mtram *m, int pagina )
 
     case 2:                                        /* ajuste */
         if (!D->hay_res) return NULL;
-        /* Las d.t., en las unidades de cada ecuacion: % si TODAS van en
-         * logaritmos; si no, cada una en las de su serie, sin unidad.   */
-        {
-            int todas = m->c.n > 0;
-
-            for (i = 0; i < m->c.n; i++)
-                if (fabs( m->c.s[i]->tm.boxlam ) >= 1e-8) todas = 0;
-            pct_todas = todas;
-        }
         t = tb_new( "Ajuste: la desviación típica residual y el R² de Brajín (A.28)" );
         tb_col( t, "Ecuación",        NULL, TB_TXT, 0 );
         tb_col( t, "d.t. diagonal",   pct_todas ? "%" : NULL, TB_NUM, pct_todas ? 2 : 4 );
@@ -856,8 +858,8 @@ static Tabla *tabla_actual( Mtram *m, int pagina )
         t = tb_new( "Residuos: ¿son ruido blanco?" );
         tb_col( t, "Ecuación",   NULL, TB_TXT, 0 );
         tb_col( t, "n",          NULL, TB_ENT, 0 );
-        tb_col( t, "media",      NULL, TB_NUM, 4 );
-        tb_col( t, "d.t.",       NULL, TB_NUM, 4 );
+        tb_col( t, "media",      pct_todas ? "%" : NULL, TB_NUM, pct_todas ? 2 : 4 );
+        tb_col( t, "d.t.",       pct_todas ? "%" : NULL, TB_NUM, pct_todas ? 2 : 4 );
         tb_col( t, "asimetría",  NULL, TB_NUM, 3 );
         tb_col( t, "curtosis",   NULL, TB_NUM, 3 );
         tb_col( t, "Jarque-Bera", NULL, TB_NUM, 2 );
@@ -870,8 +872,10 @@ static Tabla *tabla_actual( Mtram *m, int pagina )
             tb_pon_txt( t, 0, i < m->c.n ? nom_ser( m, i + 1 ) : s->nombre );
             tb_pon_num( t, 1, s->nobs );
             if (s->tiene_stats) {
-                tb_pon_num( t, 2, s->media );
-                tb_pon_num( t, 3, s->sd );
+                int pct;
+
+                tb_pon_num( t, 2, en_ecuacion( m, i + 1, s->media, &pct ) );
+                tb_pon_num( t, 3, en_ecuacion( m, i + 1, s->sd, &pct ) );
                 tb_pon_num( t, 4, s->skew );
                 tb_pon_num( t, 5, s->kurt );
                 if (s->nobs > 0)

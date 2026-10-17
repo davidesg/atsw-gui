@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""LA VOZ DEL VIDEO: cada rotulo de los guiones, sintetizado con Piper.
+"""LA VOZ DEL VIDEO: cada rotulo de los guiones, sintetizado con Piper o Azure.
 
     python3 docs/manual/video/voz.py DIR_SALIDA guion.txt [guion.txt...]
 
@@ -12,9 +12,20 @@ Lo que se dice sale del rotulo, leido para el oido: las siglas deletreadas,
 «d = 1» como «de igual a uno», los decimales con coma. Si un rotulo necesita
 decir otra cosa, el guion lo pone detras de « || ».
 
-Necesita Piper (pip install piper-tts) y una voz en espanol:
+DOS MOTORES, y se elige por el entorno:
+
+  Piper (local; pip install piper-tts) y una voz en espanol:
     PIPER=/ruta/a/piper   (si no esta en el PATH)
-    VOZ_MODELO=/ruta/a/es_ES-sharvard-medium.onnx  (la del video)
+    VOZ_MODELO=/ruta/a/es_ES-sharvard-medium.onnx
+
+  Azure (las voces neuronales del servicio Speech; manda el texto a Azure):
+    VOZ_AZURE=es-ES-ElviraNeural        (o es-ES-AlvaroNeural, ...)
+    AZURE_SPEECH_REGION=westeurope       (la region del recurso)
+    AZURE_SPEECH_KEY=...                 (la clave; si no esta en el entorno
+                                          se lee de ~/.config/atsw/azure.env,
+                                          con lineas CLAVE=valor)
+  La clave NUNCA va en el repositorio. Con VOZ_AZURE no hace falta Piper.
+  VOZ_VELOCIDAD (Azure) ajusta el ritmo: "-5%", "+0%"...
 """
 
 import hashlib
@@ -22,7 +33,9 @@ import os
 import re
 import subprocess
 import sys
+import urllib.request
 import wave
+from xml.sax.saxutils import escape
 
 # Las siglas y los nombres, como se pronuncian. Por palabras enteras.
 SIGLAS = {
@@ -84,23 +97,67 @@ def rotulos(guiones):
                         yield arg
 
 
+def azure_conf():
+    """La region y la clave: del entorno o de ~/.config/atsw/azure.env."""
+    conf = {}
+    f = os.path.expanduser("~/.config/atsw/azure.env")
+    if os.path.exists(f):
+        with open(f, encoding="utf-8") as h:
+            for l in h:
+                if "=" in l and not l.lstrip().startswith("#"):
+                    k, v = l.split("=", 1)
+                    conf[k.strip()] = v.strip().strip('"').strip("'")
+    clave = os.environ.get("AZURE_SPEECH_KEY") or conf.get("AZURE_SPEECH_KEY")
+    region = os.environ.get("AZURE_SPEECH_REGION") or conf.get("AZURE_SPEECH_REGION")
+    if not clave or not region:
+        sys.exit("faltan AZURE_SPEECH_KEY y AZURE_SPEECH_REGION (en el entorno "
+                 "o en ~/.config/atsw/azure.env)")
+    return clave, region
+
+
+def azure(dice, wav, voz, clave, region):
+    """Una frase con el servicio Speech de Azure: SSML -> WAV PCM 24 kHz."""
+    vel = os.environ.get("VOZ_VELOCIDAD", "+0%")
+    ssml = ('<speak version="1.0" xml:lang="es-ES">'
+            '<voice name="%s"><prosody rate="%s">%s</prosody></voice></speak>'
+            % (voz, vel, escape(dice)))
+    req = urllib.request.Request(
+        "https://%s.tts.speech.microsoft.com/cognitiveservices/v1" % region,
+        data=ssml.encode("utf-8"), method="POST",
+        headers={"Ocp-Apim-Subscription-Key": clave,
+                 "Content-Type": "application/ssml+xml",
+                 "X-Microsoft-OutputFormat": "riff-24khz-16bit-mono-pcm",
+                 "User-Agent": "atsw-video"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        datos = r.read()
+    with open(wav + ".tmp", "wb") as h:
+        h.write(datos)
+    os.replace(wav + ".tmp", wav)
+
+
 def main():
     if len(sys.argv) < 3:
         sys.exit(__doc__)
     sal = sys.argv[1]
     os.makedirs(sal, exist_ok=True)
+    voz_azure = os.environ.get("VOZ_AZURE")
     piper = os.environ.get("PIPER", "piper")
     modelo = os.environ.get("VOZ_MODELO")
-    if not modelo:
-        sys.exit("falta VOZ_MODELO: la voz de Piper (.onnx)")
+    if voz_azure:
+        clave, region = azure_conf()
+    elif not modelo:
+        sys.exit("falta VOZ_AZURE (Azure) o VOZ_MODELO (la voz de Piper, .onnx)")
     hechos = 0
     for arg in dict.fromkeys(rotulos(sys.argv[2:])):
         sha = hashlib.sha1(arg.encode("utf-8")).hexdigest()
         wav = os.path.join(sal, sha + ".wav")
         if not os.path.exists(wav):
             dice = para_el_oido(arg)
-            subprocess.run([piper, "-m", modelo, "-f", wav], input=dice.encode("utf-8"),
-                           check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if voz_azure:
+                azure(dice, wav, voz_azure, clave, region)
+            else:
+                subprocess.run([piper, "-m", modelo, "-f", wav], input=dice.encode("utf-8"),
+                               check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             print("voz:", dice)
             hechos += 1
         with wave.open(wav) as w:

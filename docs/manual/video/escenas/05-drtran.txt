@@ -40,9 +40,11 @@ espera 3000
 pestana 2 · Adecuación
 rotulo Adecuación: la forma b r s es correcta.
 espera 2625
-rotulo ¿Merece la pena? Se compara con el modelo sin transferencia.
+rotulo ¿Merece la pena? Se compara con el modelo sin transferencia, desde el menú Diagnosis.
 pestana 3 · Ajuste
-boton Calcular baseline
+flecha Diagnosis
+espera 1500
+menu Calcular el baseline
 espera 8000
 pestana 5 · Estimación
 boton Estimar
@@ -53,10 +55,20 @@ espera 1125
 rotulo LR = 81.6 con dos parámetros: la transferencia se gana su sitio. La varianza del IPC baja un 33 %.
 espera 3600
 pestana 5 · Modelo estimado
-rotulo ω₀ = 0.019 y δ = 0.58: a largo plazo, un 10 % más de petróleo es un 0.45 % más de IPC.
-espera 3900
+rotulo ω₀ = 0.019 y δ = 0.58, con los nombres del modelo y en las unidades de la ecuación.
+espera 3600
+pestana 7 · Transferencias
+rotulo Ganancia 0.045: a largo plazo, un 10 % más de petróleo es un 0.45 % más de IPC. Retardo medio, 1.4 meses. || La ganancia es cero coma cero cuarenta y cinco: a largo plazo, un diez por ciento más de petróleo es un cero coma cuarenta y cinco por ciento más de i pe ce. El retardo medio, uno coma cuatro meses.
+espera 4200
+rotulo Ver modelo: la página de la ecuación, como la de fue.
+boton Ver modelo
+ventana .pdf
+tamano 1000 760
+espera 3750
+cierra
+ventana drtran —
 pestana 7 · Previsión
-casilla Prever (-f) | 1
+casilla Prever | 1
 rotulo Y prever. Prever la salida exige prever también las entradas.
 boton Calcular
 espera 8000

@@ -777,8 +777,9 @@ static void pinta_veredicto( Mtram *m )
         gtk_button_set_label( GTK_BUTTON(D->b_volver), "Ir a Identificación" );
     } else
         mtram_verdicto( D->ver_ojo, MT_VERDE,
-            D->d.ne == 1 ? "El enlace pasa los dos contrastes."
-                         : "Los %d enlaces pasan los dos contrastes.", D->d.ne );
+            D->d.ne == 0 ? "Sin enlaces: no hay transferencia que contrastar."
+            : D->d.ne == 1 ? "El enlace pasa los dos contrastes."
+                           : "Los %d enlaces pasan los dos contrastes.", D->d.ne );
 
     gtk_widget_set_sensitive( D->b_volver, D->ir_a >= 0 );
     gtk_widget_set_visible( D->b_volver, D->ir_a >= 0 );

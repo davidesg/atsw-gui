@@ -65,14 +65,19 @@ gchar *an_fichero( const char *que, const char *serie, const char *muestra,
 /* ------------------------------------------------------------------------ */
 
 /* La ruta, relativa al manifiesto si cae debajo: el cuaderno viaja con el
-   proyecto, y una ruta absoluta dejaría de valer al moverlo.            */
+   proyecto, y una ruta absoluta dejaría de valer al moverlo. La relativa,
+   con '/' también en Windows: es la que entiende Markdown.              */
 static void relativa( const Proyecto *p, const char *f, char *out, size_t n )
 {
    gchar *base = g_path_get_dirname( p->path );
    size_t l = strlen( base );
+   char  *q;
 
    if ( !strncmp( f, base, l ) && ( f[l] == '/' || f[l] == '\\' ) )
+      {
       g_snprintf( out, n, "%s", f + l + 1 );
+      for ( q = out; *q; q++ ) if ( *q == '\\' ) *q = '/';
+      }
    else
       g_snprintf( out, n, "%s", f );
    g_free( base );

@@ -305,6 +305,44 @@ la división entera del Jarque-Bera.
 
 ---
 
+## DESPUÉS DEL DISEÑO DE LA MADRE: el arranque, la presentación y el icono
+
+Pedido del analista (18-oct-2026). **No se empieza hasta que esté hecho el
+diseño de la madre** (`ESTUDIO-madre-organizacion.md`, sus fases 1-3).
+
+- **Al arrancar, comprobar que todo está instalado y funciona.**
+  - Qué se comprueba:
+    - los motores: fue, fuf, fug, drtran, drvarma, drvec y art;
+    - las GUI que lanza la madre;
+    - los esquemas de GSettings;
+    - el visor de EPS y PNG;
+    - lo demás que use.
+  - Si falta algo, la madre dice **qué** falta y **cómo arreglarlo**, por
+    plataforma. No basta con «no se pudo lanzar fue_gui» en la barra de
+    estado al primer clic.
+  - Se buscan donde ya los busca `atsw_programa` (`lib/sitio`: primero el
+    árbol de construcción, luego el PATH).
+  - El mismo informe, a mano, en Ayuda ▸ «Comprobar la instalación…».
+- **Una ventana de presentación** de ATSW mientras se carga (y la
+  comprobación de arriba corre), que muestra los créditos con esta
+  redacción:
+  > Diseño y construcción: Arthur B. Treadway y David E. Guerrero.
+  >
+  > Librerías y motores: José Alberto Mauricio, con Arthur B. Treadway y
+  > David E. Guerrero.
+
+  Ningún motor es sólo de uno: las cabeceras dicen «Copyright (C)
+  1995-2026 A.B. Treadway, J.A. Mauricio & D.E. Guerrero». Los mismos
+  créditos van en Ayuda ▸ «Acerca de».
+- **El icono**: el de la página del programa. Son el `<link rel="icon">` de
+  `web/index.html` y `packaging/linux/atsw.svg`: el cuadrado azul `#1f5fa8`
+  de esquinas redondeadas con la quebrada blanca. Al analista le gusta.
+  - Va en la ventana de cada GUI (`gtk_window_set_default_icon`).
+  - Va en la presentación.
+  - Va en los paquetes de Windows y macOS, que hoy no lo llevan.
+
+---
+
 ## Fallos conocidos y sin arreglar
 
 Los encontraron las pruebas conducidas y la CI de 2026-10-04; se dejaron

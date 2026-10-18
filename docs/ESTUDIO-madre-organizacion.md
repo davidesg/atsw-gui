@@ -10,7 +10,9 @@ Estudio del 18-oct-2026, a petición del analista:
 > una esquina de forma desordenada. Quizás deberíamos repensar cómo está
 > organizada la madre respecto a sus botones y menús.»*
 
-Es un estudio con propuesta y plan, **sin código**. Continúa
+Es un estudio con propuesta y plan, **sin código**. **El analista ya ha
+decidido cinco de las seis preguntas** (§8); lo que sigue está escrito con
+esas decisiones, y la sexta, la fila de arriba, espera a la maqueta. Continúa
 `ESTUDIO-taste-interfaz.md`, que ya concluyó que la madre es superior a TASTE
 en lo que importa, y lo que se toma de TASTE aquí es una sola idea: **el menú
 se organiza por la clase de modelo**. Las capturas son las del manual
@@ -42,10 +44,10 @@ de lo que parece.**
    casos…». **El camino bueno (el caso) está escondido detrás de él.**
 
 La propuesta en una línea: **una barra de menús `Proyecto · Datos · US · MT ·
-Ayuda`, construida con las mismas funciones que los menús contextuales; los
+VARMA · VECM · Ayuda`, construida con las mismas funciones que los menús contextuales; los
 botones se quedan pegados a lo que gobiernan y se llaman por el paso
-(«Estimar»), no por el programa; el botón de la esquina desaparece.** Cuatro
-PR pequeños (§6).
+(«Estimar»), no por el programa; el botón de la esquina desaparece.** Tres
+PR (§6), y VARMA y VECM llegan con sus propios hitos.
 
 ---
 
@@ -138,8 +140,8 @@ programa.
 |---|---|---|---|
 | **US** | univariante estocástico | fue estima, fuf prevé | completo: series, modelos, linaje |
 | **MT** | transferencia multivariante (*Multivariate Transfer*) | drtran | completo: casos |
-| **VARMA** | sistema simultáneo, con retroalimentación | drvarma | sin integrar (hito drvarma_gui) |
-| **VARMA-VECM** | VARMA con cointegración | drvec | sin GUI |
+| **VARMA** | sistema simultáneo, con retroalimentación | drvarma → drvarma_gui | sin integrar (hito drvarma_gui) |
+| **VECM** (VARMA-VECM) | VARMA con cointegración | drvec → drvec_gui | sin GUI: hito nuevo, drvec_gui |
 | — | identificación (no es una clase de modelo) | fug, art | herramienta de US |
 
 **UT no se ofrece.** Era la transferencia de una sola salida; MT, con drtran,
@@ -255,6 +257,9 @@ las decisiones al final:
 «NO HAY AYUDA DISPONIBLE»; aquí abre el manual, que ya se publica con cada versión.
 
 **Por qué estos cinco y no otros.**
+- **Un menú por clase, cada uno con su GUI**: US → fue_gui, MT →
+  drtran_gui, VARMA → drvarma_gui, VECM → drvec_gui. Es la escalera entera en
+  la barra: `Proyecto · Datos · US · MT · VARMA · VECM · Ayuda`.
 - **Por clase y no por objeto.** «Serie / Modelo / Caso» parecía la opción
   obvia, porque son las listas, pero en la madre **coinciden**: las series y
   sus modelos son US, y los casos y sus modelos son MT. Llamarlos por la clase
@@ -266,7 +271,46 @@ las decisiones al final:
 - **Sin «Ver» ni «Herramientas».** No hay nada que poner en «Ver»: las
   vistas se eligen marcando, no con modos. Un menú «Herramientas» acabaría
   siendo el cajón de lo que no se supo dónde poner.
-- **VARMA no tiene menú todavía** (§3.5).
+- **VARMA y VECM entran cuando entren sus GUI** (§3.5).
+
+### 3.1 bis Requisito: el título de cada menú dice su nombre completo
+
+**Petición del analista (18-oct-2026).** Al marcar un menú de la barra, al
+pasar el ratón o al llegar con el teclado, sale un globo con el **nombre
+completo** de la clase de modelo y con qué programas se trabaja. Para
+Proyecto, Datos y Ayuda, el globo dice lo que contiene. Tiene que funcionar
+**como funcionan hoy los globos de la madre**: primero una línea que dice
+qué es, luego, tras una línea en blanco, el porqué o lo que contiene, y al
+final la tecla. Es el formato de «Abrir…» (`main.c`: «Un proyecto.yaml. Si
+está roto se dice y NO se abre: nunca se pisa.\n\nCtrl+O») y de «→ fue»
+(«…\n\nCtrl+E, como Estimar en las hijas…»).
+
+| menú | primera línea del globo | lo que sigue | tecla |
+|---|---|---|---|
+| Proyecto | Proyecto — el manifiesto y lo que cuelga de él | abrir, crear, releer, propiedades, linaje y cuaderno; se guarda solo | Alt+P |
+| Datos | Datos — las series como datos, antes de cualquier modelo | importar, editar la serie, muestras, media–DT y serie con ACF/PACF | Alt+D |
+| US | US — Modelo univariante (Box-Jenkins), con fue y fuf | la serie marcada y sus modelos: identificar, estimar, diagnosticar, prever | Alt+U |
+| MT | MT — Transferencia multivariante, con drtran | el caso marcado: varias series, cada una con su modelo univariante, de entrada y de salida | Alt+M |
+| VARMA | VARMA — Modelo VARMA, con drvarma | **hito futuro** (drvarma_gui): sistemas con retroalimentación | Alt+V |
+| VECM | VECM — VARMA con corrección de error (VECM), con drvec | **hito futuro** (drvec_gui): sistemas cointegrados | Alt+C |
+| Ayuda | Ayuda — el manual, las teclas y «Acerca de» | F1 abre el manual | Alt+Y |
+
+**Nota técnica (GTK3).**
+- Un `GtkMenuItem` de la barra es un `GtkWidget` como cualquier otro, y
+  **admite globo** con `gtk_widget_set_tooltip_text`. Sale al pasar el ratón,
+  con el mismo formato que el resto de la madre.
+- **Con el teclado**, GTK3 no enseña el globo al llegar a una entrada con F10
+  o Alt+letra. Lo que sí hace es emitir la señal **`select`** del
+  `GtkMenuItem`, tanto al pasar el ratón como al llegar con las flechas o el
+  mnemónico, y **`deselect`** al salir. Con ellas, **la barra de estado sigue
+  al foco del teclado**: el mismo texto del globo se escribe abajo, y se
+  borra al salir.
+- Esa misma señal sirve para las entradas de dentro de los menús (§3.2). El
+  analista lee lo mismo llegue con el ratón o con el teclado; sólo cambia
+  dónde: el globo o la barra de estado.
+- Si se quisiera el recuadro también con el teclado, un `GtkPopover` anclado
+  a la entrada en `select` lo daría. No lo recomiendo en la primera versión:
+  duplica lo que ya dice la barra de estado y tapa el menú desplegado.
 
 ### 3.2 Un menú, dos sitios: los constructores se comparten
 
@@ -326,19 +370,18 @@ destructivo, separado** (`DISENO-interfaz.md` §2.5).
 vista del caso): Ctrl+E es «Estimar» de la que esté visible. Así el mismo
 gesto vale en US y en MT, y el programa que se abre es cosa de la clase.
 
-**El botón `drtran` de la esquina desaparece.** A MT se entra por un caso:
-«Nuevo caso…» o «Estimar» sobre uno que ya existe. Si se quiere conservar la
-exploración sin registro (probar dos series en drtran antes de declarar el
-caso), puede ir al fondo del menú MT como «Explorar en drtran, sin caso…»,
-con el aviso en la etiqueta de que no se guarda. **Mi recomendación es
-quitarlo**: un caso cuesta un diálogo, se puede borrar si no tiene modelos, y
-lo que no queda escrito es lo que este proyecto lleva un año arreglando.
-Pero es decisión del analista (§7).
+**El botón `drtran` de la esquina desaparece, y drtran sin caso también
+(decidido, §8).** La razón del analista: **drtran siempre necesita modelos
+para el input y el output**, es decir, los univariantes de cada serie con
+su `.pre`. Eso es exactamente lo que fija un caso. Un drtran sin caso no tiene
+de dónde sacarlos, salvo que el analista los busque a mano, y lo que estime no
+queda escrito. A MT se entra por «Nuevo caso…» o por «Estimar» sobre un caso
+que ya existe.
 
 ### 3.4 Teclado
 
 - **Mnemónicos con Alt**, estándar en Windows y en GTK: Alt+P Proyecto, Alt+D
-  Datos, Alt+U US, Alt+M MT, Alt+Y Ayuda. F10 abre la barra (lo hace GTK por
+  Datos, Alt+U US, Alt+M MT, Alt+V VARMA, Alt+C VECM, Alt+Y Ayuda. F10 abre la barra (lo hace GTK por
   defecto).
 - **Los atajos del #57 se quedan** y pasan a verse en el menú, que es donde se
   aprenden (`gtk_widget_add_accelerator` sobre la entrada). Se añaden sólo
@@ -348,18 +391,28 @@ Pero es decisión del analista (§7).
   `gtk_accelerator_parse( "<Primary>e", … )`, en macOS es Cmd, como espera
   quien usa un Mac.
 
-### 3.5 VARMA y VARMA-VECM: cuando lleguen, no antes
+### 3.5 VARMA y VECM: un menú y una GUI cada uno, cuando lleguen
 
-- **El sitio está reservado por el diseño, no por la pantalla.** Cuando el
-  hito drvarma_gui integre drvarma con los casos (`motor: drvarma`, que
-  `lib/proyecto` ya prevé), entra un menú **VARMA** entre MT y Ayuda. Tendrá
-  los mismos pasos y la entrada «Pasar a VARMA» que `DISENO-casos.md` §4
-  prevé para el caso con ciclo, que es donde MT se acaba.
-- **VARMA-VECM va dentro de VARMA**, no como menú propio: es la misma clase
-  con cointegración, y el GUI actual de drvarma ya lleva VECM y Johansen.
-  Mientras drvec no tenga GUI, no aparece.
-- **La lista de casos gana una columna «Clase»** (MT o VARMA) en ese momento.
-  Hoy sería una columna con el mismo valor en todas las filas.
+- **Decidido (§8): cada uno tiene su menú y su GUI.**
+  - El menú **VARMA** lanza drvarma_gui.
+  - El menú **VECM** lanza una GUI de drvec, drvec_gui, que **no existe** y
+    es un hito nuevo, posterior al de drvarma_gui.
+  - La barra final es `Proyecto · Datos · US · MT · VARMA · VECM · Ayuda`.
+- **Los dos trabajan sobre casos**, como MT (`motor: drvarma` / `drvec`, que
+  `lib/proyecto` ya prevé con su campo `motor`). Tendrán los mismos pasos:
+  nuevo caso, estimar, ver modelo, elegir, razón, derivar.
+- **Los pasos de un peldaño al siguiente.** «Pasar a VARMA» desde un caso MT
+  con ciclo, que es donde MT se acaba (`DISENO-casos.md` §4). «Pasar a VECM»
+  desde un caso VARMA cuyas series estén cointegradas.
+- **Lo que tiene hoy drvarma_gui no decide el reparto.** Aunque ya lleve VECM
+  y Johansen, en la madre VECM es su propia clase, con su propio motor
+  (drvec). Lo que haga drvarma_gui por dentro se ordena en el diseño de su
+  hito.
+- **La lista de casos gana una columna «Clase»** (MT, VARMA o VECM) cuando
+  haya más de una. Hoy sería una columna con el mismo valor en todas las
+  filas.
+- **La cabecera de casos** pasa de «Casos — MT» a «Casos» cuando convivan
+  varias clases, y la clase se lee en la columna.
 - **No se ponen entradas en gris** «para cuando llegue». Una entrada que nunca
   se enciende enseña que el menú miente.
 
@@ -421,7 +474,8 @@ Hay dos formas de hacer la barra:
 - **No meter los análisis del modelo en un submenú** «Análisis ▸». Son lo que
   más se usa después de estimar; un submenú los esconde para ahorrar diez
   líneas de altura que sobran.
-- **No ofrecer UT** (§2.2) ni entradas en gris para VARMA-VECM (§3.5).
+- **No ofrecer UT** (§2.2), ni entradas en gris para VARMA y VECM antes de
+  sus hitos (§3.5).
 - **No renombrar ahora «Identificar desde los datos…»** («Proponer
   candidatos…» sería más exacto, porque art propone y no estima). Es el
   nombre que usa el manual en §6, y cambiarlo no arregla nada que falle.
@@ -451,7 +505,7 @@ Hay dos formas de hacer la barra:
 
 ---
 
-## 6. El plan: cuatro PR pequeños
+## 6. El plan: tres PR y dos hitos
 
 Cada fase deja la madre usable y las pruebas en verde. **Las capturas del
 manual y el guion del vídeo no se tocan en ninguna**: se rehacen en el
@@ -460,10 +514,11 @@ próximo release.
 **Fase 1 — la barra, sin quitar nada.**
 - Se parten `menu_serie`, `menu_modelo` y `menu_corrida` en secciones; la
   barra `Proyecto · Datos · US · MT · Ayuda` se construye con ellas al
-  abrirse.
+  abrirse. VARMA y VECM no aparecen hasta sus hitos.
 - Entran en el contextual del modelo **Elegir** y **Razón…**, y en el de la
   serie, **Muestra nueva…**.
-- Globo → barra de estado al recorrer el menú.
+- Globo → barra de estado al recorrer el menú (`select`/`deselect`), y los
+  globos de los títulos con el nombre completo de cada clase (§3.1 bis).
 - Los atajos se ven en las entradas; `<Primary>`; F1 abre el manual (con
   `lib/sitio` para encontrarlo instalado).
 - **Pruebas:** una fase `barra` en `test_gui.c` que recorre los cinco menús,
@@ -485,41 +540,61 @@ próximo release.
   Ctrl+E con un caso marcado.
 
 **Fase 3 — quitar lo que sobra.**
-- Fuera la fila de arriba; el proyecto al título de la ventana.
-- Fuera el botón `drtran` de la esquina (o al fondo de MT, según §7).
+- La fila de arriba, según lo que se decida con la maqueta (§8, pregunta
+  3): quitarla, dejar «Cuaderno…» o dejarla entera.
+- Fuera el botón `drtran` de la esquina, y con él drtran sin caso (decidido).
 - Fuera «→ fug» y los dos «Borrar» de las filas.
 - **Pruebas:** las que usan `a->b_drtran` y los botones de arriba pasan a
   activar la entrada de menú.
 - **Es la fase que cambia lo que el analista ya conoce**: va sola, y
   después de que haya usado la barra con la fase 1 un tiempo.
 
-**Fase 4 — VARMA, con el hito drvarma_gui.**
-- Menú VARMA, columna «Clase» en los casos y «Pasar a VARMA» desde un caso
-  MT con ciclo.
-- Depende de que drvarma_gui acepte `--proyecto` y `--caso`.
-- No se empieza antes que ese hito, y VARMA-VECM espera a que drvec tenga
-  GUI.
+**Hito drvarma_gui — el menú VARMA.**
+- Menú VARMA, que lanza drvarma_gui con el caso.
+- Columna «Clase» en los casos.
+- «Pasar a VARMA» desde un caso MT con ciclo.
+- Depende de que drvarma_gui acepte `--proyecto` y `--caso`. Va dentro del
+  hito (`RELEVO.md` §6), no antes.
+
+**Hito drvec_gui — el menú VECM.** Posterior al de drvarma_gui.
+- Es un hito nuevo: **la GUI de drvec no existe**.
+- Su diseño parte, como el de drvarma_gui, de lo aprendido en el porte de
+  drvec y en sima.
+- En la madre: menú VECM, casos con `motor: drvec` y «Pasar a VECM» desde
+  un caso VARMA.
 
 Las fases 1 y 2 se pueden juntar si se prefiere un solo PR; la 3 conviene
 que vaya aparte.
 
 ---
 
-## 7. Preguntas abiertas (son del analista)
+## 7. Preguntas abiertas
 
-1. **¿Títulos de menú con la sigla o con la palabra?** `US · MT` (la escuela,
-   TASTE, lo que pediste) o `Univariante · Transferencia` (más claro para el
-   alumno). Mi recomendación es la sigla, con el globo explicándola y las
-   entradas en castellano llano.
-2. **¿drtran sin caso: fuera del todo, o al fondo del menú MT** como
-   «Explorar en drtran, sin caso…»? Recomiendo fuera.
-3. **¿Fuera toda la fila de arriba, o se queda algún botón?** El candidato a
-   quedarse es «Cuaderno…», que se abre a menudo.
-4. **¿«→ fug» sale de la fila de la rejilla?** Recomiendo que sí, ahora que
-   están los vistazos; queda en el menú US y en el contextual de la serie.
-5. **Cuando llegue VARMA: ¿un menú por clase (`US · MT · VARMA`) o un solo
-   menú «Sistemas»** que cambie según el motor del caso? Recomiendo uno por
-   clase, como TASTE y como la escalera; VARMA-VECM dentro de VARMA.
-6. **¿Datos como menú propio o dentro de Proyecto?** Recomiendo propio:
-   describir una serie es previo a elegir la clase de modelo, y en TASTE
-   también lo era.
+Sólo queda una, la 3: **¿qué se hace con la fila de arriba?** Hay tres
+opciones: quitarla entera, dejar sólo «Cuaderno…» o dejarla como está. El
+analista quiere verlo antes de decidir, así que la maqueta enseña las tres
+con un conmutador. Las otras cinco están decididas en §8.
+
+---
+
+## 8. Decisiones (18-oct-2026)
+
+1. **Menús con la sigla**: `US`, `MT`, `VARMA`, `VECM`. El globo del título
+   explica la sigla; las entradas van en castellano llano (§2.3).
+2. **drtran sin caso desaparece**, junto con el botón de la esquina. La razón
+   del analista: *el menú de drtran siempre necesita modelos para el input y
+   el output*, y eso es lo que da un caso (§3.3).
+3. **La fila de arriba: pendiente.** El analista quiere ver una maqueta con
+   todas las sugerencias y su funcionalidad antes de decidir (§7).
+4. **«→ fug» sale de la fila de la rejilla.** Queda en el menú US y en el
+   contextual de la serie (§3.3).
+5. **VARMA y VECM, cada uno con su menú y su GUI.**
+   - VARMA lanza drvarma_gui, que llega con el hito drvarma_gui.
+   - VECM lanza drvec_gui, un hito nuevo y posterior: la GUI no existe.
+   - Barra final: `Proyecto · Datos · US · MT · VARMA · VECM · Ayuda`.
+   - Queda corregido lo que este estudio decía antes, que VARMA-VECM iba
+     dentro de VARMA (§3.5, §6).
+6. **Datos, como menú propio** (§3.1).
+7. **Requisito nuevo: el título de cada menú dice su nombre completo**, al
+   pasar el ratón y al llegar con el teclado, con el formato de los globos de
+   hoy (§3.1 bis).

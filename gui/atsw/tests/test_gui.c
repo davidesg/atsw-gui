@@ -3798,6 +3798,32 @@ static void cuaderno( void )
     }
 }
 
+
+/* EL SEPARADOR DE LAS DOS LISTAS SE MUEVE. La pila de la derecha era
+   homogenea: la fila de botones del caso, oculta, imponia su ancho a los
+   modelos, y con los dos lados en su minimo el separador no tenia rango. */
+static void panel( void )
+{
+    GtkWidget *pan = gtk_widget_get_parent( A.pila );
+    gint       pmin = 0, pmax = 0, p;
+    char       vio[128];
+
+    check( GTK_IS_PANED(pan), "las dos listas van en un GtkPaned", "" );
+    if ( !GTK_IS_PANED(pan) ) return;
+
+    gtk_stack_set_visible_child_name( GTK_STACK(A.pila), "modelos" );
+    pump( 100 );
+    g_object_get( pan, "min-position", &pmin, "max-position", &pmax, NULL );
+    g_snprintf( vio, sizeof vio, "rango [%d, %d]", pmin, pmax );
+    check( pmax - pmin >= 200, "con los modelos, el separador tiene recorrido", vio );
+
+    gtk_paned_set_position( GTK_PANED(pan), pmin + 150 );
+    pump( 100 );
+    p = gtk_paned_get_position( GTK_PANED(pan) );
+    g_snprintf( vio, sizeof vio, "pedí %d, quedó %d", pmin + 150, p );
+    check( p == pmin + 150, "y se queda donde se lleva", vio );
+}
+
 int main( int argc, char **argv )
 {
     GtkApplication *app;
@@ -3864,6 +3890,7 @@ int main( int argc, char **argv )
             fase( "borrar" ); borrar();
             fase( "abrir" ); abrir( manifiesto );
             fase( "casos" ); casos();
+            fase( "panel" ); panel();
             fase( "legados" ); legados();
             }
         }

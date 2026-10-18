@@ -1804,6 +1804,11 @@ static void activate( GtkApplication *app, gpointer d )
     /* LA DERECHA ES UNA PILA: los modelos de la serie marcada o el caso
        marcado. Lo que se marca a la izquierda decide cual se ve.       */
     a->pila = gtk_stack_new();
+    /* MEDIDA POR LA VISIBLE, no por la mas ancha. Homogenea, la fila de
+       botones del caso (852 px) se imponia tambien a los modelos (530) y,
+       con los dos lados del separador en su minimo, el separador parecia
+       movible pero estaba congelado.                                   */
+    gtk_stack_set_hhomogeneous( GTK_STACK(a->pila), FALSE );
     gtk_stack_add_named( GTK_STACK(a->pila), der, "modelos" );
     gtk_stack_add_named( GTK_STACK(a->pila), atsw_caso_vista( a ), "caso" );
     gtk_paned_pack2( GTK_PANED(pan), a->pila, TRUE, FALSE );

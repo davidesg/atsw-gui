@@ -104,6 +104,15 @@ La identidad y la referencia van en el repositorio; el contenido, fuera. Es la
 misma regla que `docs/DISENO-proyecto.md` propone para el manifiesto de
 proyecto.
 
+## Créditos
+
+- **Diseño y construcción:** Arthur B. Treadway y David E. Guerrero.
+- **Librerías y motores:** José Alberto Mauricio, con Arthur B. Treadway y
+  David E. Guerrero.
+
+Copyright © 1995-2026 A.B. Treadway, J.A. Mauricio y D.E. Guerrero; cada
+fichero lleva en su cabecera de quién es.
+
 ## Licencia
 
 Los motores llevan GPL v2 o posterior. `docs/DISENO-repositorio.md` §8 deja

@@ -7,6 +7,13 @@
  * log-verosimilitudes exactas (logelf). Es lo que hace art con
  * copy.deepcopy(model) y .fit().
  *
+ * EL NOMBRE DEL MEG (lo fijo el analista, 18-oct-2026): en español «modelos
+ * MEG»; en inglés, cuando haya interfaz en inglés, «HSM». Los modelos de
+ * estacionalidad hibrida por frecuencias son de Abraham y Box (1978), pero
+ * los contrastes de aqui reunen a varios autores (HEGY, Gallego y Treadway,
+ * entre otros). Para no ser imprecisos, la interfaz no atribuye: las citas
+ * y las atribuciones van al manual del investigador.
+ *
  *   simplificacion estacional  H0: cos_k = sin_k = 0 en todos los armonicos
  *                              libres. LR = 2(L - L0) ~ chi2(gl).
  *   Shin-Fuller (1998)         H0: una raiz del AR en rho_m = 1 - 4/n (una
@@ -29,7 +36,7 @@
  *                              restringido y, si el LR sale negativo o el
  *                              testigo se va al eje negativo, el libre otra
  *                              vez desde el restringido (art BUG-0236).
- *   MEG (Abraham y Box, 1978)  ¿la estacionalidad es estocastica o
+ *   MEG                        ¿la estacionalidad es estocastica o
  *                              determinista? Frecuencia a frecuencia, sobre
  *                              un modelo con D = 0 y armonicos: el modelo
  *                              estocastico S quita el cos/sin de f (o el

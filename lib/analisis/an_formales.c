@@ -494,7 +494,7 @@ static void meg( GString *t, const Fm *g )
             }
     if ( !hay ) return;
     g_string_append( t, "<b>MEG — estacionalidad estocástica o determinista</b>, frecuencia a "
-        "frecuencia (Abraham y Box, 1978)\n    <small>En cada f, el modelo estocástico S quita el "
+        "frecuencia\n    <small>En cada f, el modelo estocástico S quita el "
         "armónico determinista, pone la raíz unitaria (ifadf[f] = 1) y un testigo de "
         "sobrediferenciación libre del mismo orden. H<sub>0</sub>: el testigo en la frontera, donde "
         "cancela la raíz. Testigo invertible → estocástica; en la frontera → determinista.</small>\n" );
@@ -537,7 +537,7 @@ static void meg( GString *t, const Fm *g )
         g_string_append_printf( t, "    <small>Críticos: en las interiores, los del par complejo "
             "(ley s = 2) para n = %d: %.2f (10 %%), %.2f (5 %%), %.2f (1 %%); en Nyquist, los de una "
             "raíz real (s = 1): 1.00, 1.94, 4.41. Salen de simulación (el Monte Carlo del estudio "
-            "SF_MEG, sin publicar); el contraste es el de Abraham y Box.</small>\n", n_int, c10, c5, c1 );
+            "SF_MEG, sin publicar).</small>\n", n_int, c10, c5, c1 );
         }
     if ( todas )
         {

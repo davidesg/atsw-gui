@@ -132,7 +132,7 @@ void an_factores_ar( const AnHost *h, const char *serie, const char *muestra,
  *   AN_FM_INTEGRACION  el orden de integracion regular: Shin-Fuller, el DCD
  *                      regular, la sobre y la subdiferenciacion.
  *   AN_FM_ESTACIONAL   la estacionalidad: la simplificacion estacional, el
- *                      DCD estacional, el MEG de Abraham y Box, el DCD_f y
+ *                      DCD estacional, el MEG, el DCD_f y
  *                      el testigo de Nyquist. Solo con s > 1.
  *
  * Cada uno reestima con fue, sin bloquear la ventana. Con la diagnosis sin
@@ -149,8 +149,8 @@ typedef enum { AN_FM_INTEGRACION, AN_FM_ESTACIONAL } AnFmFamilia;
     "modelo con un parámetro fijo y compara las verosimilitudes. Suponen un " \
     "modelo adecuado: si la diagnosis no está limpia, la ventana lo avisa."
 #define AN_FM_GLOBO_ESTACIONAL \
-    "¿La estacionalidad es determinista o estocástica? El MEG de Abraham y " \
-    "Box frecuencia a frecuencia, con su reformulación, la simplificación " \
+    "¿La estacionalidad es determinista o estocástica? El MEG, frecuencia " \
+    "a frecuencia, con su reformulación, la simplificación " \
     "estacional y el DCD estacional. Suponen un modelo adecuado: si la " \
     "diagnosis no está limpia, la ventana lo avisa."
 #define AN_FM_GLOBO_ANUAL \

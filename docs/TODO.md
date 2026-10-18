@@ -229,6 +229,7 @@ crítico y lo que dice, y un LR no finito saldrá como «no calculable».
 | | leer los `.out` que ya traigan MEG | el motor puede estar imprimiendo parte: mirar antes de portar |
 | | GSL para las distribuciones | ya es dependencia de `drtran_gui`; de ahí salen los autovalores de `nlatools` |
 | | `ar_factorization` primero | es leer el operador AR y sacarle las raíces — dice si hay un AR estacional escondido, y eso **sí** es de la escuela. Es el peldaño barato y el que menos compromete |
+| | **las citas del MEG, en el manual del investigador** | la interfaz dice «modelos MEG» (en inglés, «HSM») y no atribuye. Los modelos son de Abraham y Box (1978); los contrastes reúnen a varios autores (HEGY, Gallego y Treadway, entre otros). Hace falta un estudio con citas y atribuciones en el manual del investigador o del usuario, para quien quiera saber más (analista, 18-oct-2026) |
 | | decidir **dónde** se enseña | la diagnosis juzga lo que hay; un contraste de raíz unitaria es identificación, no diagnosis. La distinción que el analista hizo con la ganancia vale aquí igual |
 
 **No modificar los motores** salvo defecto, y con el visto bueno — como el de

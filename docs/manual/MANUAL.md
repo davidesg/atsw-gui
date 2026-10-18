@@ -447,7 +447,7 @@ La ventana de la **estacionalidad** lleva el resto:
 - El **DCD estacional** (¿sobra la diferencia estacional?) mira un MA anual en
   su frontera; m01 no lo tiene, y la ventana dice que no aplica.
 
-El **MEG** (Abraham y Box, 1978) pregunta, frecuencia a frecuencia, si la
+El contraste **MEG** pregunta, frecuencia a frecuencia, si la
 estacionalidad es **estocástica o determinista**. Se aplica a modelos como m01,
 con D = 0 y armónicos. En cada frecuencia f construye el modelo estocástico:
 quita el cos/sin de f (o el alter en f = 6), pone la raíz unitaria estacional de
@@ -457,7 +457,7 @@ determinista; si queda invertible, es estocástica. En m01 salen estocásticas
 f = 5 (LR = 2.36) y f = 3 (LR = 2.21), frente a un crítico de 2.07, y las demás
 deterministas. Es por poco: con media y armónicos en el modelo, el crítico real
 en muestra finita es mayor, y la ventana lo avisa. Los críticos salen de
-simulación; el contraste es el de Abraham y Box.
+simulación.
 
 **Reformular como estocástica…** deriva el modelo estocástico de la frecuencia
 elegida (de entrada, la más fuerte) como un hijo del modelo, para estimarlo y

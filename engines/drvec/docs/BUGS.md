@@ -1547,3 +1547,78 @@ drvec-python's `bugs/drvec-c-ladder-key/repro.py`, which needs the port.
 **Suggested fix.** Compare the data themselves in the cache: store a copy of
 `rawmat` or a hash of its bytes next to the key. Alternatively, invalidate the
 cache whenever `rawmat` changes, as each bootstrap replication does.
+
+---
+
+## BUG-61 — the two random generators assume a 64-bit `unsigned long`: on Windows the bootstrap never ends
+
+**Status: FIXED on 2026-10-18** (`src/drvec.c`, `boot_rng`/`boot_normal` and the
+`-multistart` jitter in `fit_search`), in 0.13 before its tag.
+Found the same day by the Windows build of the Python port, on 0.13 at ae95446.
+
+**What it was.** drvec has two generators of its own, both the 64-bit LCG
+`s ← s·6364136223846793005 + 1442695040888963407`, with the draw taken from
+bits 33..63 (`(s >> 33) & 0x7FFFFFFF`):
+
+- the bootstrap's, `static unsigned long boot_rng` with `boot_normal`
+  (`src/drvec.c` ~2203-2223), which feeds `-lrtest -bootstrap`, `-matest`,
+  `-artest` and `-irfboot`;
+- the `-multistart` jitter in `fit_search`, `unsigned long rng = 20260818UL`
+  (~5204-5212).
+
+Both held the state in `unsigned long`. That is 64 bits on LP64 (Linux,
+macOS) and 32 bits on LLP64 (Windows, MinGW-w64 and MSVC alike). On Windows
+the multiplier and increment are truncated when the product is stored, and
+`>> 33` shifts a 32-bit value by more than its width. That is undefined
+behaviour, and gcc folds it to 0, with a `-Wshift-count-overflow` warning that
+CI printed on every Windows build. Every `u1` is then 0, and `boot_normal`'s
+rejection loop, `do { … } while (u1 <= 1.0e-12)`, never ends. The jitter does
+not loop, but all its draws are `u = 0`, so every jittered start sits at
+`seed − amp·|seed|`.
+
+Both generators were written during drvec's development: the jitter in
+e6967a6 (2026-08-18, `-multistart`), the bootstrap's in 0c5eb53 (2026-08-19,
+`-bootstrap`). Neither is Mauricio's: the legacy code has no generator
+(`docs/LEGACY_NOTES.md`).
+
+**How it was found.** drvec-python bundles drvec C in its wheels (PLAN-vec
+B5). The Windows wheel's smoke test runs one bootstrap through the bundled
+`drvec.exe` (MSYS2 UCRT64, gcc -O2), and it did not end in 25 minutes
+(drvec-python, publish.yml run 39125179268, cancelled). A `drvec.exe`
+cross-built with `x86_64-w64-mingw32-gcc` and run under wine stays at
+`r = 0 -> 1 ...` until it is killed. The repro is drvec-python's
+`bugs/drvec-c-rng-long32/repro.py`.
+
+**What it cost.** On Linux and macOS, nothing: there `unsigned long` is
+`uint64_t`'s type, and the fixed binary's code section is byte for byte the
+old one's (`objcopy --only-section=.text`, same sha256). On Windows, every
+bootstrap hangs: `-lrtest -bootstrap`, `-irfboot`, and the bootstrap of
+`-matest` and `-artest`. `-multistart` ran, but with starts other than
+Linux's. atsw-gui's CI did not catch it, because drvec's battery does not
+block off Linux (`.github/check-all.sh`, `NO_BLOQUEAN`). On main, build.yml run
+39119659605, the Windows job's drvec battery was killed at its 900 s limit
+(rc=137), with `-irfboot` and `matest` failing. That was read as the slowness
+of Windows. drvec-python held back its Windows wheel and made
+`c_engine.find()` refuse drvec C on Windows until this was fixed.
+
+**Repro.** `sh tests/repro/repro.sh 61` builds
+`tests/repro/probes/probe_rng_width.c`. The generators are static, so the
+block extracts their text from `src/drvec.c` and compiles it with `long`
+redefined as `int`, which is how Windows sees it, on any host. The probe
+compares 4000 draws of each generator with an independent `uint64_t`
+reference. It exits 1 while the defect is open: on the 0.13 source it prints
+the three shift warnings, `32 bits of state`, and "boot_normal does not
+return". With the fix it prints `64 bits of state` and "same as 64-bit" for
+both, and exits 0.
+
+**The fix.** `uint64_t` from `<stdint.h>` for both states, with `ULL`
+constants. On LP64 this is the same type, so it is the same code: the 34
+goldens (`multistart`, `irfboot.out`/`.irfboot`, `rankboot.out`/`.boot`
+among them) are byte-identical, and so is the suite. atsw-gui's Windows CI job
+now runs a short bootstrap that blocks (mink-muskrat, `2 1 0 -case 2 -lrtest
+-bootstrap 19`, with a time limit).
+
+**The lesson.** A generator is a fixed-width object. Its type has to say how
+wide it is, and a shift by 33 is a statement about that width. Here it was a
+false one, which the compiler pointed out on every Windows build and the
+non-blocking battery did not stop.

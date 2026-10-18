@@ -226,19 +226,20 @@ las decisiones al final:
  Listado de identificación…        (fug; hoy «Identificación con fug» y «→ fug»)
  Identificar la estructura ARIMA…  (art; hoy «Identificar desde los datos…»)
  ─────────────────────────
- Modelo nuevo, desde los datos
- Estimar m01                 Ctrl+E   (fue; «Especificar el primer modelo» si sólo hay datos)
- Editar el .inp…
- Iterar: seguir desde su óptimo
- En otra muestra ▸
+ Modelo nuevo, desde los datos            ┐ planos o en «Especificar ▸» y
+ Estimar m01                 Ctrl+E      │ «Estimar ▸»: pregunta abierta (§7)
+ Editar el .inp…                          │ (fue; «Especificar el primer
+ Iterar: seguir desde su óptimo           │  modelo» si sólo hay datos)
+ En otra muestra ▸                        ┘
  ─────────────────────────
- Ver modelo…
- Diagnosis…
- Orden de integración…
- Estacionalidad (MEG)…
- Ganancia…
- Anómalos…
- Identificar los residuos…
+ Diagnosticar ▸                           (submenú: decidido, §3.1 ter)
+     Ver modelo…
+     Diagnosis…
+     Orden de integración…
+     Estacionalidad (MEG)…
+     Ganancia…
+     Anómalos…
+     Identificar los residuos…
  ─────────────────────────
  Prever…                              (fuf)
  ─────────────────────────
@@ -267,6 +268,53 @@ explícitamente: en Datos son descripción y en US son el primer paso del
 camino del analista, y un menú que obligara a saltar de Datos a US a mitad
 de la identificación estaría ordenado por el programa y no por el método.
 Las dos entradas llaman a la misma función.
+
+### 3.1 ter Submenús en US: «Diagnosticar ▸» sí; «Especificar ▸» y «Estimar ▸», por decidir
+
+**Decidido (§8): «Diagnosticar ▸» es un submenú.** Corrige lo que este
+estudio decía en §4, «no meter los análisis del modelo en un submenú». La
+razón es **la longitud**. Con la sección Identificar en el orden del
+analista, el menú US pasa de veinte entradas, y las siete de diagnóstico
+eran el bloque más largo y más homogéneo: todas piden un `.out` al día y
+todas se apagan juntas por la misma razón. Un submenú con nombre de paso del
+ciclo («Diagnosticar») no esconde nada. Dice qué hay dentro, y quien acaba de
+estimar va a él directamente. Lo que el estudio temía era un cajón genérico
+(«Análisis ▸»); éste es un paso del método.
+
+**Por decidir (§7): «Especificar ▸» y «Estimar ▸».** También podrían ser
+submenús:
+- «Especificar ▸»: Modelo nuevo desde los datos, Editar el .inp…, En otra
+  muestra ▸;
+- «Estimar ▸»: Estimar mNN, Iterar.
+
+El analista no lo tiene claro todavía. La maqueta tiene un conmutador
+«Especificar y Estimar: planos / en submenú» para compararlo. Lo que pesa en
+contra es que **Estimar es la acción más frecuente** y ya tiene Ctrl+E y un
+botón. Meterla en un submenú cuesta un paso más a quien usa el menú, y
+«En otra muestra ▸» quedaría como submenú dentro de otro submenú.
+
+**Cómo encajan en GTK3:**
+- **Teclado.** Un `GtkMenuItem` con `gtk_menu_item_set_submenu` lleva la
+  flecha ▸ y se abre con **→** (o Intro); **←** o Esc vuelven al menú de
+  arriba. Es el comportamiento estándar, sin código propio. La entrada
+  «Diagnosticar» no tiene atajo propio; sus hijas tampoco lo necesitan.
+- **Globos y barra de estado.**
+  - La entrada «Diagnosticar ▸» lleva su propio globo, con lo que contiene y
+    por qué está apagada si lo está: el mismo `porque` de `an_estado()` que
+    hoy apaga las siete.
+  - Cada hija lleva el suyo, como ahora.
+  - La señal `select` existe igual en las entradas de un submenú, así que la
+    barra de estado sigue al teclado también dentro (§3.1 bis).
+- **Apagado.** Si el modelo no tiene un `.out` al día, se apaga la entrada
+  del submenú entera y no las siete hijas una a una. Su globo dice por qué,
+  y el menú es más corto también en ese estado.
+- **Los contextuales siguen el mismo criterio**, porque se construyen con las
+  mismas secciones (§3.2). La sección «diagnosticar» devuelve una entrada
+  con submenú, y el menú del modelo (botón derecho) la recibe igual que la
+  barra. Si «Especificar ▸» y «Estimar ▸» se deciden como submenús, el
+  cambio se hace en un solo sitio y llega a los dos. La prueba de §5 (cada
+  entrada del contextual está en la barra con el mismo rótulo) recorre
+  también los submenús.
 
 **MT** — el caso marcado y sus modelos:
 
@@ -512,9 +560,10 @@ Hay dos formas de hacer la barra:
   muchas acciones.
 - **No quitar los contextuales ni el doble clic.** Son la vía rápida, y el
   #57 acaba de hacerlos accesibles con teclado.
-- **No meter los análisis del modelo en un submenú** «Análisis ▸». Son lo que
-  más se usa después de estimar; un submenú los esconde para ahorrar diez
-  líneas de altura que sobran.
+- **No meter los análisis en un cajón genérico** «Análisis ▸». Lo que sí se
+  hace (decidido) es un submenú con nombre de paso, «Diagnosticar ▸», por la
+  longitud del menú US (§3.1 ter). Corrige lo que aquí decía la primera
+  versión del estudio.
 - **No ofrecer UT** (§2.2), ni entradas en gris para VARMA y VECM antes de
   sus hitos (§3.5).
 - **No hacer una barra de iconos.** Los iconos de GTK para «estimar» o
@@ -528,9 +577,9 @@ Hay dos formas de hacer la barra:
   que lo evita es §3.2 (los mismos constructores). Una prueba lo vigila:
   cada entrada del contextual tiene que estar en la barra con el mismo
   rótulo y la misma sensibilidad.
-- **Que el menú US sea largo** (unas 20 entradas). Está dentro de lo normal
-  para un menú con separadores por paso, y la alternativa (submenús) es
-  peor, por lo dicho en §4.
+- **Que el menú US sea largo.** Pasaba de veinte entradas; con
+  «Diagnosticar ▸» baja a unas quince, y a unas doce si Especificar y
+  Estimar también van en submenú (§3.1 ter).
 - **Ctrl+E con dos sujetos.** Si la pila muestra el caso, Ctrl+E abre
   drtran. Es lo que se quiere, pero hay que decirlo en la barra de estado
   («Estimar c01 (MT) en drtran…») para que no sorprenda.
@@ -611,8 +660,10 @@ que vaya aparte.
 
 ## 7. Preguntas abiertas
 
-Ninguna: la última, la de la fila de arriba, se cerró después de ver la
-maqueta (§8, decisión 3). La maqueta es privada y todo en ella es simulado:
+Una: **¿«Especificar ▸» y «Estimar ▸» van planos o en submenú?**
+(§3.1 ter). El analista no lo tiene claro todavía; la maqueta tiene el
+conmutador para comparar. La de la fila de arriba se cerró después de ver
+la maqueta (§8, decisión 3). La maqueta es privada y todo en ella es simulado:
 <https://claude.ai/artifact/9rHr1juao4k6LRUF2yU1Hs>.
 
 ---
@@ -650,5 +701,7 @@ maqueta (§8, decisión 3). La maqueta es privada y todo en ella es simulado:
 10. **Para después del diseño de la madre**, anotado en `TODO.md`:
     - la comprobación de la instalación al arrancar;
     - la ventana de presentación con los créditos;
-    - el icono de la web;
-    - los créditos.
+    - el icono de la web.
+11. **«Diagnosticar ▸» es un submenú del menú US**, por la longitud del menú.
+    Corrige el «no hacer» de la primera versión. «Especificar ▸» y
+    «Estimar ▸» quedan como pregunta abierta (§3.1 ter, §7).

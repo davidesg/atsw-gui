@@ -305,7 +305,7 @@ la división entera del Jarque-Bera.
 
 ---
 
-## DESPUÉS DEL DISEÑO DE LA MADRE: el arranque, la presentación y los créditos
+## DESPUÉS DEL DISEÑO DE LA MADRE: el arranque, la presentación y el icono
 
 Pedido del analista (18-oct-2026). **No se empieza hasta que esté hecho el
 diseño de la madre** (`ESTUDIO-madre-organizacion.md`, sus fases 1-3).
@@ -323,24 +323,23 @@ diseño de la madre** (`ESTUDIO-madre-organizacion.md`, sus fases 1-3).
   - Se buscan donde ya los busca `atsw_programa` (`lib/sitio`: primero el
     árbol de construcción, luego el PATH).
   - El mismo informe, a mano, en Ayuda ▸ «Comprobar la instalación…».
-- **Una ventana de presentación** de ATSW, con los créditos, mientras se
-  carga (y la comprobación de arriba corre).
+- **Una ventana de presentación** de ATSW mientras se carga (y la
+  comprobación de arriba corre), que muestra los créditos con esta
+  redacción:
+  > Diseño y construcción: Arthur B. Treadway y David E. Guerrero.
+  >
+  > Librerías y motores: José Alberto Mauricio, con Arthur B. Treadway y
+  > David E. Guerrero.
+
+  Ningún motor es sólo de uno: las cabeceras dicen «Copyright (C)
+  1995-2026 A.B. Treadway, J.A. Mauricio & D.E. Guerrero». Los mismos
+  créditos van en Ayuda ▸ «Acerca de».
 - **El icono**: el de la página del programa. Son el `<link rel="icon">` de
   `web/index.html` y `packaging/linux/atsw.svg`: el cuadrado azul `#1f5fa8`
   de esquinas redondeadas con la quebrada blanca. Al analista le gusta.
   - Va en la ventana de cada GUI (`gtk_window_set_default_icon`).
   - Va en la presentación.
   - Va en los paquetes de Windows y macOS, que hoy no lo llevan.
-- **Los créditos**, con la redacción del analista:
-  > ATSW y sus GUIs: diseño y construcción de Arthur B. Treadway y David E.
-  > Guerrero. Motores y librerías: Alberto Mauricio.
-  - **Hoy no los publica ningún sitio**: ni `web/index.html`, ni el
-    `README.md`, ni el manual. Lo único que se acerca es
-    `engines/drvec/README.md`, con «J.A. Mauricio (1995–2006), A.B.
-    Treadway, and D.E. Guerrero», que es la autoría de drvec.
-  - Cuando entren en la presentación y en «Acerca de», se ponen **con esa
-    misma redacción** en la web, el README y el manual, para que digan lo
-    mismo en todas partes.
 
 ---
 

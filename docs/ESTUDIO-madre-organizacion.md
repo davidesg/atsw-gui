@@ -308,9 +308,14 @@ está roto se dice y NO se abre: nunca se pisa.\n\nCtrl+O») y de «→ fue»
 - Esa misma señal sirve para las entradas de dentro de los menús (§3.2). El
   analista lee lo mismo llegue con el ratón o con el teclado; sólo cambia
   dónde: el globo o la barra de estado.
-- Si se quisiera el recuadro también con el teclado, un `GtkPopover` anclado
-  a la entrada en `select` lo daría. No lo recomiendo en la primera versión:
-  duplica lo que ya dice la barra de estado y tapa el menú desplegado.
+- **El analista lo quiere también con el teclado** en los títulos. Como
+  GTK3 no lo hace solo, en `select` del título se enseña el mismo texto en un
+  recuadro propio, al lado del menú desplegado para no taparlo. Puede ser un
+  `GtkPopover` anclado al título o una ventana `GTK_WINDOW_POPUP` con el
+  estilo `tooltip`. Se quita en `deselect`.
+- **Dentro de los menús basta la barra de estado**: con el ratón, el globo
+  normal; con el teclado, la barra de estado. Un recuadro por cada entrada
+  recorrida con las flechas sería ruido.
 
 ### 3.2 Un menú, dos sitios: los constructores se comparten
 
@@ -571,9 +576,11 @@ que vaya aparte.
 ## 7. Preguntas abiertas
 
 Sólo queda una, la 3: **¿qué se hace con la fila de arriba?** Hay tres
-opciones: quitarla entera, dejar sólo «Cuaderno…» o dejarla como está. El
-analista quiere verlo antes de decidir, así que la maqueta enseña las tres
-con un conmutador. Las otras cinco están decididas en §8.
+opciones: quitarla entera, dejar sólo «Cuaderno…» o dejarla como está (sin
+el botón drtran, que ya está decidido). El analista quiere verlo antes de
+decidir, así que la maqueta enseña las tres con un conmutador:
+<https://claude.ai/artifact/9rHr1juao4k6LRUF2yU1Hs> (privada; todo es
+simulado). Las otras cinco están decididas en §8.
 
 ---
 

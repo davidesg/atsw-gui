@@ -331,3 +331,31 @@ void fue_analisis_refresca( FueContext *ctx )
         }
     }
 }
+
+
+/* ------------------------------------------------------------------------ */
+/* «Al cuaderno» en la ventana de graficos (lib/preview)                     */
+/* ------------------------------------------------------------------------ */
+
+gboolean preview_cuaderno_puede( PreviewApp *app )
+{
+    const Proyecto *p;
+
+    (void) app;
+    fue_proyecto_relee();
+    p = fue_proyecto();
+    return p && p->path[0];
+}
+
+/* Los graficos de fue son del modelo cargado: se lo pregunta al manifiesto. */
+void preview_cuaderno( PreviewApp *ctx, const gchar *path )
+{
+    AnHost h = fue_host( ctx );
+    char   serie[PR_ID], muestra[PR_ID], id[PR_ID];
+
+    if ( fue_modelo_actual( ctx, serie, sizeof serie, muestra, sizeof muestra,
+                            id, sizeof id ) == 0 )
+        an_cuaderno_grafico( &h, path, "Gráfico", serie, muestra, id, NULL );
+    else
+        an_cuaderno_grafico( &h, path, "Gráfico", NULL, NULL, NULL, NULL );
+}

@@ -3624,7 +3624,22 @@ static void cuaderno( void )
         const char *ti = gtk_window_get_title( l->data );
 
         if ( gtk_widget_get_visible( l->data ) && ti && strstr( ti, "anomalos" ) )
+            {
+            GPtrArray *bs = junta( l->data, GTK_TYPE_BUTTON, FALSE );
+            guint      i, n = 0;
+
+            for ( i = 0; i < bs->len; i++ )
+                {
+                const char *lb = gtk_button_get_label( g_ptr_array_index( bs, i ) );
+
+                n += lb && !strcmp( lb, "Al cuaderno" );
+                }
+            g_ptr_array_free( bs, TRUE );
+            /* La ventana del gráfico lleva el suyo en el pie, y la barra
+               no le añade otro con el mismo nombre. */
+            check( n == 1, "anómalos lleva un solo «Al cuaderno», el suyo", NULL );
             ba = boton_que_dice( l->data, "Al cuaderno" );
+            }
         }
     g_list_free( todas );
     check( ba != NULL, "la ventana de anómalos tiene «Al cuaderno»", NULL );
@@ -3658,6 +3673,85 @@ static void cuaderno( void )
         check( npng >= 1, "y el PNG está en cuaderno/img", img );
         g_free( img );
         }
+    }
+
+    /* LA VENTANA DE GRAFICOS COMUN: el vistazo, con su transformación, y
+       el resumen de un modelo, con la procedencia que da el manifiesto. */
+    {
+    static const struct { const char *menu, *titulo, *transf; } vz[] = {
+        { "Serie y ACF", " · Serie y ACF/PACF — ipc\n", "- **Transformación:** λ = " },
+        { "Media",       " · Media – desviación típica — ipc\n", "(la serie en nivel)" },
+    };
+    int k;
+
+    for ( k = 0; k < 2; k++ )
+        {
+        GtkMenu   *m = clic_derecho( A.l_series, 0 );
+        GtkWindow *g;
+        GtkWidget *bg;
+
+        if ( m && entrada_de( m, vz[k].menu ) )
+            gtk_menu_item_activate( GTK_MENU_ITEM(entrada_de( m, vz[k].menu )) );
+        cierra_menu( m );
+        pump( 300 );
+        g  = grafico( "vistazo.eps" );
+        bg = g ? boton_que_dice( GTK_WIDGET(g), "Al cuaderno" ) : NULL;
+        check( bg != NULL && gtk_widget_get_visible( bg ),
+               vz[k].menu[0] == 'S' ? "«Serie y ACF / PACF» tiene «Al cuaderno»"
+                                    : "«Media – desviación típica» tiene «Al cuaderno»",
+               todo_lo_dicho() );
+        if ( bg )
+            {
+            olvida();
+            gtk_button_clicked( GTK_BUTTON(bg) );
+            pump( 200 );
+            c = cuaderno_md();
+            check( strstr( c, vz[k].titulo ) != NULL && strstr( c, vz[k].transf ) != NULL &&
+                   strstr( c, "vistazo.eps\n" ) != NULL,
+                   "la entrada dice qué gráfico, de qué serie y con qué transformación", c );
+            check( dijo( "Al cuaderno: cuaderno/cuaderno.md" ) != NULL,
+                   "y lo dice en la barra", todo_lo_dicho() );
+            g_free( c );
+            }
+        }
+    }
+    {
+    GtkWindow *g;
+    GtkWidget *bg;
+    int        npng = 0;
+    gchar     *base = g_path_get_dirname( A.p->path );
+    gchar     *img = g_build_filename( base, "cuaderno", "img", NULL );
+    GDir      *dir;
+
+    marca( A.l_modelos, M_ID, "m01" );
+    on_grafico( NULL, &A );
+    pump( 300 );
+    g  = grafico( "m01" );
+    bg = g ? boton_que_dice( GTK_WIDGET(g), "Al cuaderno" ) : NULL;
+    check( bg != NULL, "«Ver modelo…» tiene «Al cuaderno»", todo_lo_dicho() );
+    if ( bg )
+        {
+        gtk_button_clicked( GTK_BUTTON(bg) );
+        pump( 200 );
+        c = cuaderno_md();
+        check( strstr( c, " · Gráfico — ipc / m01\n" ) != NULL &&
+               strstr( c, "- **Informe:** " ) != NULL &&
+               strstr( c, "![Gráfico de ipc / m01](img/" ) != NULL,
+               "el gráfico de un modelo sabe de qué modelo es (el manifiesto)", c );
+        check( strstr( c, "El gráfico no se pudo guardar" ) == NULL,
+               "y todos los PNG se escribieron", c );
+        g_free( c );
+        }
+    if ( ( dir = g_dir_open( img, 0, NULL ) ) != NULL )
+        {
+        const char *f;
+
+        while ( ( f = g_dir_read_name( dir ) ) != NULL )
+            if ( g_str_has_suffix( f, ".png" ) ) npng++;
+        g_dir_close( dir );
+        }
+    check( npng >= 4, "los PNG de los gráficos, en cuaderno/img", img );
+    g_free( img ); g_free( base );
     }
 
     /* «Cuaderno…»: se lee, y se añade una nota. */

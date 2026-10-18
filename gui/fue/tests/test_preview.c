@@ -26,6 +26,8 @@
  * have to exist.                                                         */
 void preview_open_external(PreviewApp *app, const gchar *path) { (void) app; (void) path; }
 void preview_show_status(PreviewApp *app, const gchar *format, ...) { (void) app; (void) format; }
+gboolean preview_cuaderno_puede(PreviewApp *app) { (void) app; return FALSE; }
+void preview_cuaderno(PreviewApp *app, const gchar *path) { (void) app; (void) path; }
 
 #define PW 200.0
 #define PH 100.0

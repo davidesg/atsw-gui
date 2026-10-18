@@ -11,8 +11,9 @@ Estudio del 18-oct-2026, a petición del analista:
 > organizada la madre respecto a sus botones y menús.»*
 
 Es un estudio con propuesta y plan, **sin código**. **El analista ya ha
-decidido cinco de las seis preguntas** (§8); lo que sigue está escrito con
-esas decisiones, y la sexta, la fila de arriba, espera a la maqueta. Continúa
+decidido todas las preguntas** (§8), la última después de ver la maqueta
+(<https://claude.ai/artifact/9rHr1juao4k6LRUF2yU1Hs>), y lo que sigue está
+escrito con esas decisiones. Continúa
 `ESTUDIO-taste-interfaz.md`, que ya concluyó que la madre es superior a TASTE
 en lo que importa, y lo que se toma de TASTE aquí es una sola idea: **el menú
 se organiza por la clase de modelo**. Las capturas son las del manual
@@ -202,15 +203,28 @@ propio.
  ─────────────────────────
  Media – desviación típica
  Serie y ACF / PACF…
+ Histograma                (nuevo en la madre; fug ya lo dibuja)
 ```
+
+**El histograma ya existe en fug, pero no en la madre.** El motor lo dibuja
+con su gráfica `-d` (`fp_histogram` en `lib/fugplot`: el histograma de la
+serie estandarizada con la densidad normal), y gtk_fmg lo ofrece con su botón
+«Histogram». Los vistazos de la madre llaman a fug con `-e` (media–DT) y `-c`
+(serie y ACF/PACF), así que el histograma es **un tercer modo del mismo
+vistazo, con `-d`**: no hay que dibujar nada nuevo, sólo pedírselo a fug. Va
+en Datos porque describe los datos, como TASTE, que también tenía su
+histograma en «Datos». (En `lib/analisis`, Anómalos dibuja otro histograma,
+pero ése es de los residuos y se queda allí.)
 
 **US** — la serie marcada y sus modelos, **en el orden del ciclo de Box y
 Jenkins** (identificar, especificar y estimar, diagnosticar, prever) y con
 las decisiones al final:
 
 ```
- Identificar desde los datos…      (art)
- Identificación completa en fug…
+ Media – desviación típica
+ Serie y ACF / PACF…
+ Listado de identificación…        (fug; hoy «Identificación con fug» y «→ fug»)
+ Identificar la estructura ARIMA…  (art; hoy «Identificar desde los datos…»)
  ─────────────────────────
  Modelo nuevo, desde los datos
  Estimar m01                 Ctrl+E   (fue; «Especificar el primer modelo» si sólo hay datos)
@@ -232,6 +246,27 @@ las decisiones al final:
  Razón…
  Borrar…                     Supr
 ```
+
+**La sección «Identificar» de US sigue el orden en que trabaja el analista**
+(decidido, §8):
+1. Media–DT, para decidir λ.
+2. Serie y ACF/PACF, para decidir d y D.
+3. **Listado de identificación…**, que es el nombre de la escuela para la
+   *primera identificación completa*. Hoy «Identificación con fug» y «→ fug»
+   lanzan `gtk_fmg`, la GUI de fug, con el `.inp` de datos de la muestra
+   (siempre el nodo de datos, aunque haya otro modelo marcado). Allí está
+   el juego de identificación del motor («Identification Plots Set»: serie,
+   histograma, media–DT, ACF y PACF para 0..r diferencias). El globo dice
+   «Primera identificación completa (fug)».
+4. **Identificar la estructura ARIMA…**, que es lo que hoy se llama
+   «Identificar desde los datos…»: art propone la estructura ARMA o ARIMA,
+   con sus contrastes y candidatos, y el nombre nuevo dice eso.
+
+Las dos primeras **repiten** entradas de Datos. El analista lo acepta
+explícitamente: en Datos son descripción y en US son el primer paso del
+camino del analista, y un menú que obligara a saltar de Datos a US a mitad
+de la identificación estaría ordenado por el programa y no por el método.
+Las dos entradas llaman a la misma función.
 
 **MT** — el caso marcado y sus modelos:
 
@@ -341,11 +376,14 @@ Consecuencias:
 
 ### 3.3 Los botones que quedan
 
-**La fila de arriba desaparece.** Todo lo que tenía va a Proyecto y Datos, que
-quedan justo encima. La etiqueta del proyecto pasa al título de la ventana
-(«ATSW — ipc-wti») y, con la ruta, al globo del título y a «Propiedades…».
-Gana una fila de alto y, sobre todo, deja de tener un botón suelto a la
-derecha.
+**La fila de arriba se queda entera, al principio** (decidido después de ver
+la maqueta, §8). Se quedan Abrir…, Nuevo…, Proyecto…, Linaje…, Cuaderno… y
+Datos…, con la etiqueta del proyecto. Lo único que sale es el botón
+`drtran` de la esquina. Sus botones son puertas duplicadas de Proyecto y
+Datos, y eso no cuesta nada: es lo que el analista, el manual y el vídeo ya
+conocen. Quitarla, o dejar sólo «Cuaderno…», queda como opción para más
+adelante, cuando la barra se haya usado un tiempo. La maqueta conserva el
+conmutador para compararlo.
 
 **La fila de la rejilla se queda**, porque está pegada a su sujeto (el modelo
 marcado), y se ordena por el ciclo:
@@ -358,7 +396,8 @@ marcado), y se ordena por el ciclo:
 - **«→ fue» pasa a ser «Estimar»** (Ctrl+E, el mismo verbo que en las hijas).
 - **«→ fug» sale de la fila.** Desde que existen los vistazos, que son el
   mismo dibujo de fug sin levantar la herramienta, lanzar fug completo es lo
-  raro y no lo frecuente. Queda en US y en el contextual de la serie.
+  raro y no lo frecuente. Queda como «Listado de identificación…» en US y en
+  el contextual de la serie.
 
 **La fila del caso se queda** y usa el mismo verbo:
 
@@ -452,13 +491,10 @@ Hay dos formas de hacer la barra:
 - **Un verbo por acción, con un solo nombre**: «Estimar» en US y en MT, con
   Ctrl+E en los dos.
 - **El camino sin registro deja de ser el más visible.**
-- **Una fila de botones menos.**
 
 **Se pierde, y hay que decirlo:**
-- **Lo que se aprendió con los botones de arriba.** El analista, el manual y
-  el vídeo enseñan «Datos…» y «Linaje…» como botones. Pasan a estar un clic
-  más lejos (Proyecto ▸ Linaje…). Para lo que se usa una vez por sesión es
-  aceptable; por eso «Cuaderno…» es la duda (§7).
+- **Nada de la fila de arriba**: se queda entera (§3.3). Lo que cambia para
+  quien ya la conoce es sólo el botón `drtran` de la esquina.
 - **La sigla es opaca para el alumno nuevo.** «US» no dice nada a quien no ha
   leído a Box y Jenkins. Se compensa con el globo del título del menú y el
   glosario del manual, pero es un coste real. La alternativa
@@ -481,9 +517,6 @@ Hay dos formas de hacer la barra:
   líneas de altura que sobran.
 - **No ofrecer UT** (§2.2), ni entradas en gris para VARMA y VECM antes de
   sus hitos (§3.5).
-- **No renombrar ahora «Identificar desde los datos…»** («Proponer
-  candidatos…» sería más exacto, porque art propone y no estima). Es el
-  nombre que usa el manual en §6, y cambiarlo no arregla nada que falle.
 - **No hacer una barra de iconos.** Los iconos de GTK para «estimar» o
   «diagnosis» no existen, y unos inventados se leen peor que una palabra.
 
@@ -541,16 +574,19 @@ próximo release.
 - Ctrl+E sigue a la pila (US o MT).
 - Unificar las variantes de «Modelo nuevo» y de «Estimar» en un nombre cada
   una (§1.2).
+- «Identificación con fug» pasa a «Listado de identificación…» e
+  «Identificar desde los datos…» pasa a «Identificar la estructura ARIMA…».
+  El manual (§5 y §6) lo recoge en el próximo release.
+- El vistazo «Histograma» (fug `-d`) en Datos, junto a los otros dos.
 - **Pruebas:** las que buscan esos rótulos se actualizan; una nueva comprueba
   Ctrl+E con un caso marcado.
 
 **Fase 3 — quitar lo que sobra.**
-- La fila de arriba, según lo que se decida con la maqueta (§8, pregunta
-  3): quitarla, dejar «Cuaderno…» o dejarla entera.
+- **La fila de arriba NO se quita**: se queda entera (§8).
 - Fuera el botón `drtran` de la esquina, y con él drtran sin caso (decidido).
 - Fuera «→ fug» y los dos «Borrar» de las filas.
-- **Pruebas:** las que usan `a->b_drtran` y los botones de arriba pasan a
-  activar la entrada de menú.
+- **Pruebas:** las que usan `a->b_drtran` pasan a activar la entrada de menú
+  MT; las de la fila de arriba no cambian.
 - **Es la fase que cambia lo que el analista ya conoce**: va sola, y
   después de que haya usado la barra con la fase 1 un tiempo.
 
@@ -575,12 +611,9 @@ que vaya aparte.
 
 ## 7. Preguntas abiertas
 
-Sólo queda una, la 3: **¿qué se hace con la fila de arriba?** Hay tres
-opciones: quitarla entera, dejar sólo «Cuaderno…» o dejarla como está (sin
-el botón drtran, que ya está decidido). El analista quiere verlo antes de
-decidir, así que la maqueta enseña las tres con un conmutador:
-<https://claude.ai/artifact/9rHr1juao4k6LRUF2yU1Hs> (privada; todo es
-simulado). Las otras cinco están decididas en §8.
+Ninguna: la última, la de la fila de arriba, se cerró después de ver la
+maqueta (§8, decisión 3). La maqueta es privada y todo en ella es simulado:
+<https://claude.ai/artifact/9rHr1juao4k6LRUF2yU1Hs>.
 
 ---
 
@@ -591,8 +624,9 @@ simulado). Las otras cinco están decididas en §8.
 2. **drtran sin caso desaparece**, junto con el botón de la esquina. La razón
    del analista: *el menú de drtran siempre necesita modelos para el input y
    el output*, y eso es lo que da un caso (§3.3).
-3. **La fila de arriba: pendiente.** El analista quiere ver una maqueta con
-   todas las sugerencias y su funcionalidad antes de decidir (§7).
+3. **La fila de arriba se queda entera, al principio**, decidido después de
+   ver la maqueta. Sólo sale el botón `drtran`. La fase «quitar lo que
+   sobra» ya no la toca (§3.3, §6).
 4. **«→ fug» sale de la fila de la rejilla.** Queda en el menú US y en el
    contextual de la serie (§3.3).
 5. **VARMA y VECM, cada uno con su menú y su GUI.**
@@ -605,3 +639,16 @@ simulado). Las otras cinco están decididas en §8.
 7. **Requisito nuevo: el título de cada menú dice su nombre completo**, al
    pasar el ratón y al llegar con el teclado, con el formato de los globos de
    hoy (§3.1 bis).
+8. **La sección «Identificar» de US, en el orden del analista**: Media–DT ·
+   Serie y ACF/PACF · Listado de identificación… (fug, la «primera
+   identificación completa») · Identificar la estructura ARIMA… (art, hoy
+   «Identificar desde los datos…»). La repetición con Datos se acepta
+   explícitamente: es el camino del analista (§3.1).
+9. **Los histogramas de los datos van en Datos.** El histograma existe en
+   fug (`-d`, el botón «Histogram» de gtk_fmg) pero no en la madre: entra
+   como tercer vistazo (§3.1).
+10. **Para después del diseño de la madre**, anotado en `TODO.md`:
+    - la comprobación de la instalación al arrancar;
+    - la ventana de presentación con los créditos;
+    - el icono de la web;
+    - los créditos.

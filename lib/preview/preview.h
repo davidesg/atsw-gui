@@ -27,4 +27,19 @@ gboolean preview_set_footer(const gchar *path, GtkWidget *footer);
  * SVG) is given by its extension. PNG, SVG and EPS keep the page shown. */
 gboolean preview_save_as(const gchar *path, const gchar *filename, GError **error);
 
+/* AL CUADERNO. Un anfitrion que define PREVIEW_CUADERNO en su previewhost.h
+ * da estas dos, y la ventana lleva el boton «Al cuaderno»:
+ *
+ *     gboolean preview_cuaderno_puede(PreviewApp *app);   hay proyecto
+ *     void     preview_cuaderno(PreviewApp *app, const gchar *path);
+ *
+ * La segunda escribe la entrada --con preview_save_as para el PNG, que
+ * guarda la pagina que se esta viendo--. Quien no lo define (fug, drtran)
+ * no tiene boton: no hay proyecto al que mandarlo.                     */
+
+/* La ventana de path ya lleva su propio «Al cuaderno» en el pie (Anómalos,
+ * que manda ademas los episodios y el umbral): el de la barra se quita, que
+ * dos botones con el mismo nombre y distinto efecto confunden.         */
+void preview_cuaderno_propio(const gchar *path);
+
 #endif

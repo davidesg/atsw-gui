@@ -29,4 +29,10 @@ void preview_show_status(PreviewApp *app, const gchar *format, ...)
  * misma funcion, que son cuatro lineas.                                 */
 const char *getExt(const char *fspec);
 
+/* La ventana de graficos lleva «Al cuaderno» (vistazo.c): la madre sabe de
+ * que serie, muestra y modelo es cada dibujo. */
+#define PREVIEW_CUADERNO
+gboolean preview_cuaderno_puede(PreviewApp *app);
+void     preview_cuaderno(PreviewApp *app, const gchar *path);
+
 #endif /* ATSW_PREVIEWHOST_H */

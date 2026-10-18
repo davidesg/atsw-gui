@@ -24,4 +24,10 @@ void preview_open_external(PreviewApp *app, const gchar *path);
 /* A line for the status bar of the application */
 void preview_show_status(PreviewApp *app, const gchar *format, ...) G_GNUC_PRINTF(2, 3);
 
+/* La ventana de graficos lleva «Al cuaderno» cuando fue trabaja dentro de un
+ * proyecto (src/analisis.c). */
+#define PREVIEW_CUADERNO
+gboolean preview_cuaderno_puede(PreviewApp *app);
+void     preview_cuaderno(PreviewApp *app, const gchar *path);
+
 #endif /* PREVIEWHOST_H */

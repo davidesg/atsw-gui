@@ -35,6 +35,7 @@
 #include "sitio.h"
 #include "analisis.h"
 #include "anfitrion.h"
+#include "rutas.h"
 
 void barra_pub( Atsw *a, const char *s );
 
@@ -46,7 +47,9 @@ typedef struct {
     GtkWidget *s_lam, *s_d, *s_D;
     gboolean   armando;             /* poniendo valores: no redibujar      */
     int        modo;                /* 0 serie+acf/pacf, 1 media-dt        */
-} Vistazo;
+    char       serie[PR_ID];        /* de quien es, para el cuaderno: la   */
+    char       muestra[PR_ID];      /* marcada puede cambiar con la ventana */
+} Vistazo;                          /* abierta                             */
 
 static Vistazo V;
 
@@ -358,6 +361,8 @@ void atsw_vistazo( Atsw *a, const char *inp, int modo, double lam )
     memset( &V, 0, sizeof V );
     V.a = a;
     V.modo = modo;
+    snprintf( V.serie, sizeof V.serie, "%s", a->serie );
+    snprintf( V.muestra, sizeof V.muestra, "%s", atsw_muestra_actual( a ) );
     snprintf( V.origen, sizeof V.origen, "%s", inp );
 
     dir = atsw_cache_dir();
@@ -389,4 +394,80 @@ void atsw_vistazo( Atsw *a, const char *inp, int modo, double lam )
         gtk_widget_destroy( pie );
     }
     (void) why;
+}
+
+
+/* ------------------------------------------------------------------------ */
+/* «Al cuaderno» en la ventana de graficos (lib/preview)                     */
+/* ------------------------------------------------------------------------ */
+
+gboolean preview_cuaderno_puede( PreviewApp *app )
+{
+    return app && app->hay && app->p && app->p->path[0];
+}
+
+/* DE QUIEN ES UN DIBUJO SE LE PREGUNTA AL MANIFIESTO, como en pr_de_ruta: el
+ * resumen de un modelo es <base>.pdf y su grafico A<base>.eps, asi que se
+ * prueba con el nombre y con el nombre sin la «A». 0 si es de un modelo.  */
+static int de_modelo( Atsw *a, const char *f, char *serie, char *muestra,
+                      char *id )
+{
+    char  sin[PR_RUTA], out[PR_RUTA];
+    gchar *dir, *nom;
+    int   rc = 1;
+
+    if ( ruta_sin_ext( f, sin, sizeof sin ) != 0 ) return 1;
+    snprintf( out, sizeof out, "%s.out", sin );
+    if ( pr_de_ruta( a->p, out, serie, PR_ID, muestra, PR_ID, id, PR_ID ) == 0 )
+        return 0;
+    dir = g_path_get_dirname( sin );
+    nom = g_path_get_basename( sin );
+    if ( nom[0] == 'A' && nom[1] )
+        {
+        gchar *o = g_strdup_printf( "%s%c%s.out", dir, G_DIR_SEPARATOR, nom + 1 );
+
+        rc = pr_de_ruta( a->p, o, serie, PR_ID, muestra, PR_ID, id, PR_ID );
+        g_free( o );
+        }
+    g_free( dir ); g_free( nom );
+    return rc;
+}
+
+void preview_cuaderno( PreviewApp *a, const gchar *path )
+{
+    AnHost h = atsw_host( a );
+    char   serie[PR_ID] = "", muestra[PR_ID] = "", id[PR_ID] = "";
+    char   caso[PR_ID], corrida[PR_ID];
+
+    if ( V.eps[0] && !strcmp( path, V.eps ) )
+        {
+        /* EL VISTAZO: lo que dice el dibujo depende de la transformacion
+           con la que se mira, y esa no esta en ningun fichero.        */
+        gchar *t = V.s_d
+            ? g_strdup_printf( "λ = %.2f, d = %d, D = %d",
+                  gtk_spin_button_get_value( GTK_SPIN_BUTTON(V.s_lam) ),
+                  gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(V.s_d) ),
+                  gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(V.s_D) ) )
+            : g_strdup_printf( "λ = %.2f (la serie en nivel)",
+                  gtk_spin_button_get_value( GTK_SPIN_BUTTON(V.s_lam) ) );
+        const char *datos[] = { "Transformación", t, NULL };
+
+        an_cuaderno_grafico( &h, path, V.modo ? "Media – desviación típica"
+                                              : "Serie y ACF/PACF",
+                             V.serie, V.muestra, NULL, datos );
+        g_free( t );
+        }
+    else if ( de_modelo( a, path, serie, muestra, id ) == 0 )
+        an_cuaderno_grafico( &h, path, "Gráfico", serie, muestra, id, NULL );
+    else if ( pr_caso_de_ruta( a->p, path, caso, sizeof caso,
+                               corrida, sizeof corrida ) == 0 )
+        {
+        const char *datos[] = { "Caso", caso, "Corrida", corrida, NULL };
+        gchar      *que = g_strdup_printf( "Gráfico — caso %s / %s", caso, corrida );
+
+        an_cuaderno_grafico( &h, path, que, NULL, NULL, NULL, datos );
+        g_free( que );
+        }
+    else
+        an_cuaderno_grafico( &h, path, "Gráfico", NULL, NULL, NULL, NULL );
 }

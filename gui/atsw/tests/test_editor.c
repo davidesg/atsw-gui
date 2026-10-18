@@ -28,12 +28,15 @@ void  atsw_refresca( Atsw *a )                  { (void) a; }
 char *atsw_programa( const char *p )            { (void) p; return 0; }
 int   atsw_guarda( Atsw *a, void *e )           { (void) a; (void) e; return 0; }
 
-/* Los dos ganchos que lib/preview pide al anfitrion. Aqui no hay anfitrion:
+/* Los ganchos que lib/preview pide al anfitrion. Aqui no hay anfitrion:
    el visor no entra en lo que se prueba.                               */
 void  preview_open_external( PreviewApp *a, const char *p )
                                                 { (void) a; (void) p; }
 void  preview_show_status( PreviewApp *a, const char *f, ... )
                                                 { (void) a; (void) f; }
+gboolean preview_cuaderno_puede( PreviewApp *a ) { (void) a; return FALSE; }
+void  preview_cuaderno( PreviewApp *a, const gchar *p )
+                                                { (void) a; (void) p; }
 
 static int fallos = 0;
 

@@ -51,6 +51,7 @@ typedef struct {
     GtkWidget  *zoom_label;
     GtkWidget  *vbox;          /* para colgarle un pie                    */
     GtkWidget  *footer;        /* los controles del que la abrio, o NULL  */
+    GtkWidget  *cuaderno;      /* «Al cuaderno», si el anfitrion lo tiene */
     gchar      *path;          /* file shown                              */
     gboolean    is_pdf;
     GArray     *pages;         /* of Page                                 */
@@ -810,6 +811,16 @@ gboolean preview_set_footer(const gchar *path, GtkWidget *footer)
 }
 
 /* Change the extension of the name typed when the file type is changed */
+void preview_cuaderno_propio(const gchar *path)
+{
+    Preview *pv = previews ? g_hash_table_lookup(previews, path) : NULL;
+
+    if (pv != NULL && pv->cuaderno != NULL) {
+        gtk_widget_destroy(pv->cuaderno);
+        pv->cuaderno = NULL;
+    }
+}
+
 static void on_filter_changed(GObject *chooser, GParamSpec *spec, gpointer data)
 {
     GtkFileFilter *filter = gtk_file_chooser_get_filter(GTK_FILE_CHOOSER(chooser));
@@ -1319,6 +1330,9 @@ static void on_viewer(GtkButton *b, Preview *pv)  { preview_open_external(pv->ap
 static void on_prev(GtkButton *b, Preview *pv)    { go_to(pv, (gint) pv->current - 1); }
 static void on_next(GtkButton *b, Preview *pv)    { go_to(pv, (gint) pv->current + 1); }
 static void on_close(GtkButton *b, Preview *pv)   { gtk_widget_destroy(pv->window); }
+#ifdef PREVIEW_CUADERNO
+static void on_cuaderno(GtkButton *b, Preview *pv) { preview_cuaderno(pv->app, pv->path); }
+#endif
 
 static gboolean on_key(GtkWidget *w, GdkEventKey *event, Preview *pv)
 {
@@ -1469,6 +1483,15 @@ static Preview *preview_new(PreviewApp *app, const gchar *path)
                           FALSE, G_CALLBACK(on_next), pv);
     bar_button(bar, "window-close", "_Close", "Close the window (Esc)",
                TRUE, G_CALLBACK(on_close), pv);
+#ifdef PREVIEW_CUADERNO
+    /* AL CUADERNO: el grafico tal como se ve, con su procedencia, en el
+     * cuaderno del proyecto (lib/cuaderno). Lo escribe el anfitrion, que es
+     * quien sabe de que serie y de que modelo es; sin proyecto no se ve.  */
+    pv->cuaderno = bar_button(bar, "document-edit", "Al cuaderno",
+                              "Este gráfico, tal como se ve, al cuaderno del proyecto: "
+                              "cuaderno/cuaderno.md, con su fecha y de dónde sale.",
+                              TRUE, G_CALLBACK(on_cuaderno), pv);
+#endif
 
     /* The page goes inside a scrolled window: when the zoom makes it
      * larger than the window there is something to scroll.               */
@@ -1539,6 +1562,11 @@ gboolean preview_show(PreviewApp *app, const gchar *path)
     g_free(base);
 
     update_pages(pv);
+#ifdef PREVIEW_CUADERNO
+    /* Se mira en cada recarga: el proyecto puede haberse abierto o cerrado. */
+    if (pv->cuaderno != NULL)
+        gtk_widget_set_visible(pv->cuaderno, preview_cuaderno_puede(app));
+#endif
     gtk_window_present(GTK_WINDOW(pv->window));
     return TRUE;
 }

@@ -800,5 +800,6 @@ void an_anomalos( const AnHost *h, const char *serie, const char *muestra,
         g_free( g );
         return;
         }
+    preview_cuaderno_propio( g->eps );   /* el del pie dice más que el de la barra */
     g_signal_connect( pie_caja, "destroy", G_CALLBACK(on_cerrar), g );
 }

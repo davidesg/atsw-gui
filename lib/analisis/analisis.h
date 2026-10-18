@@ -290,6 +290,15 @@ Cuaderno  *an_cuaderno( const AnHost *h, const char *que, const char *serie,
 void       an_cuaderno_cierra( const AnHost *h, Cuaderno *c );
 GtkWidget *an_boton_cuaderno( const AnHost *h, GCallback cb, gpointer datos );
 
+/* UN GRAFICO DE LA VENTANA COMUN (lib/preview), al cuaderno: la entrada de
+ * an_cuaderno con el título «que — serie / id», los pares clave-valor de
+ * datos (terminados en NULL; puede ser NULL), de qué fichero sale el dibujo
+ * y el PNG de la página que se está viendo. Es lo que hace el botón «Al
+ * cuaderno» de la ventana de gráficos en los anfitriones con proyecto. */
+void an_cuaderno_grafico( const AnHost *h, const char *eps, const char *que,
+                          const char *serie, const char *muestra,
+                          const char *id, const char *const *datos );
+
 /* EL MARCADO DE PANGO, EN MARKDOWN: lo que una ventana pinta en una
  * etiqueta, para el cuaderno sin escribirlo dos veces. <b> e <i> pasan a
  * ** y *; <sub> y <sup> se quedan, que Markdown los lee; <small>, <span> y

@@ -93,7 +93,8 @@ Cuaderno *an_cuaderno( const AnHost *h, const char *que, const char *serie,
    if ( h == NULL || h->p == NULL || !h->p->path[0] ) return NULL;
 
    t = ( id && *id ) ? g_strdup_printf( "%s — %s / %s", que, serie ? serie : "", id )
-                     : g_strdup_printf( "%s — %s", que, serie ? serie : "" );
+     : ( serie && *serie ) ? g_strdup_printf( "%s — %s", que, serie )
+     : g_strdup( que );
    c = cu_nueva( h->p->path, t );
    g_free( t );
    if ( c == NULL ) return NULL;
@@ -101,7 +102,8 @@ Cuaderno *an_cuaderno( const AnHost *h, const char *que, const char *serie,
    if ( h->p->id[0] ) cu_dato( c, "Proyecto", h->p->id );
    cu_dato( c, "Serie", serie );
    cu_dato( c, "Modelo", id );
-   cu_dato( c, "Muestra", ( muestra && *muestra ) ? muestra : "completa" );
+   if ( serie && *serie )
+      cu_dato( c, "Muestra", ( muestra && *muestra ) ? muestra : "completa" );
    if ( serie && *serie && id && *id &&
         pr_ruta( h->p, serie, muestra, id, ".out", out, sizeof out ) == 0 )
       {
@@ -142,6 +144,35 @@ GtkWidget *an_boton_cuaderno( const AnHost *h, GCallback cb, gpointer datos )
       "mirabas al decidirlo. Nunca se trunca, y se lee sin ATSW: es Markdown." );
    g_signal_connect( b, "clicked", cb, datos );
    return b;
+}
+
+void an_cuaderno_grafico( const AnHost *h, const char *eps, const char *que,
+                          const char *serie, const char *muestra,
+                          const char *id, const char *const *datos )
+{
+   Cuaderno *c = an_cuaderno( h, que, serie, muestra, id );
+   char      png[PR_RUTA], rel[PR_RUTA];
+   gchar    *base, *pie;
+   int       i;
+
+   if ( c == NULL ) { an_cuaderno_cierra( h, NULL ); return; }
+   for ( i = 0; datos && datos[i] && datos[i+1]; i += 2 )
+      cu_dato( c, datos[i], datos[i+1] );
+
+   /* El fichero del dibujo: relativo si es del proyecto; si vive fuera (la
+      cache del vistazo) basta su nombre, que una ruta de cache no dice nada. */
+   base = g_path_get_basename( eps );
+   relativa( h->p, eps, rel, sizeof rel );
+   cu_dato( c, "Gráfico", g_path_is_absolute( rel ) ? base : rel );
+
+   pie = ( id && *id ) ? g_strdup_printf( "%s de %s / %s", que, serie ? serie : "", id )
+       : ( serie && *serie ) ? g_strdup_printf( "%s de %s", que, serie )
+       : g_strdup( que );
+   if ( cu_imagen( c, base, pie, png, sizeof png ) == 0 )
+      preview_save_as( eps, png, NULL );       /* si falla, la entrada lo dice */
+   g_free( pie );
+   g_free( base );
+   an_cuaderno_cierra( h, c );
 }
 
 

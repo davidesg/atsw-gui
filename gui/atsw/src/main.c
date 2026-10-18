@@ -18,6 +18,7 @@
 #include "inpfile.h"
 #include "preview.h"
 #include "rutas.h"
+#include "sitio.h"
 
 void atsw_lanza( Atsw *a, const char *programa, const char *fichero );
 gboolean atsw_modelo_nuevo( Atsw *a, const char *serie, const char *muestra,
@@ -32,8 +33,109 @@ static Atsw A;
 
 void barra_pub( Atsw *a, const char *s )
 {
+    /* UN MENSAJE DE VERDAD GANA AL GLOBO que se estuviera enseñando: al
+       salir del menu ya no se repone lo de antes (on_entrada_fuera).   */
+    g_object_set_data( G_OBJECT(a->estado), "previo", NULL );
     gtk_label_set_text( GTK_LABEL(a->estado), s );
     gtk_widget_set_tooltip_text( a->estado, s );
+}
+
+/* ------------------------------------------------------------------------ */
+/* LA ENTRADA DE MENU                                                        */
+/*                                                                           */
+/* Una para todos los menus, la barra y los del boton derecho. Al recorrerla */
+/* --con el raton o con las flechas-- su globo pasa a la barra de estado, y  */
+/* al salir vuelve lo que hubiera. Es la linea 25 de TASTE con el contenido  */
+/* que alli faltaba: aquella repetia el rotulo (ESTUDIO-madre-organizacion   */
+/* §3.1 bis). Con el raton sale ademas el globo de siempre.                  */
+/* ------------------------------------------------------------------------ */
+
+/* El globo en una linea: la barra de estado no tiene mas. */
+static gchar *en_una_linea( const char *t )
+{
+    GString    *g = g_string_new( NULL );
+    const char *c;
+
+    for ( c = t ? t : ""; *c; c++ )
+        {
+        if ( *c != '\n' ) { g_string_append_c( g, *c ); continue; }
+        if ( g->len && g->str[g->len-1] != ' ' ) g_string_append_c( g, ' ' );
+        }
+    return g_string_free( g, FALSE );
+}
+
+static void enseña_en_barra( Atsw *a, GtkWidget *w )
+{
+    gchar *t, *u;
+
+    if ( a->estado == NULL ) return;
+    /* Lo de antes se guarda UNA vez: de una entrada a la de al lado se
+       sale y se entra, y no hay que guardar el globo de la primera.     */
+    if ( g_object_get_data( G_OBJECT(a->estado), "previo" ) == NULL )
+        g_object_set_data_full( G_OBJECT(a->estado), "previo",
+            g_strdup( gtk_label_get_text( GTK_LABEL(a->estado) ) ), g_free );
+    t = gtk_widget_get_tooltip_text( w );
+    u = en_una_linea( t );
+    gtk_label_set_text( GTK_LABEL(a->estado), u );
+    g_free( u ); g_free( t );
+}
+
+static void repone_barra( Atsw *a )
+{
+    const char *p;
+    gchar      *c;
+
+    if ( a->estado == NULL ) return;
+    p = g_object_get_data( G_OBJECT(a->estado), "previo" );
+    if ( p == NULL ) return;
+    c = g_strdup( p );
+    g_object_set_data( G_OBJECT(a->estado), "previo", NULL );
+    gtk_label_set_text( GTK_LABEL(a->estado), c );
+    g_free( c );
+}
+
+static void on_entrada_dentro( GtkMenuItem *mi, Atsw *a )
+     { enseña_en_barra( a, GTK_WIDGET(mi) ); }
+static void on_entrada_fuera( GtkMenuItem *mi, Atsw *a )
+     { (void) mi; repone_barra( a ); }
+
+GtkWidget *atsw_entrada( Atsw *a, GtkWidget *menu, const char *txt,
+                         const char *tip, GCallback cb, gpointer d )
+{
+    GtkWidget *mi = gtk_menu_item_new_with_label( txt );
+
+    if ( tip ) gtk_widget_set_tooltip_text( mi, tip );
+    if ( cb )
+        {
+        g_signal_connect( mi, "activate", cb, d );
+        g_object_set_data( G_OBJECT(mi), "accion", (gpointer) cb );
+        }
+    g_signal_connect( mi, "select",   G_CALLBACK(on_entrada_dentro), a );
+    g_signal_connect( mi, "deselect", G_CALLBACK(on_entrada_fuera), a );
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+    return mi;
+}
+
+void atsw_entrada_tecla( GtkWidget *mi, const char *acel )
+{
+    GtkWidget      *l = gtk_bin_get_child( GTK_BIN(mi) );
+    guint           k = 0;
+    GdkModifierType m = 0;
+
+    gtk_accelerator_parse( acel, &k, &m );
+    if ( k && GTK_IS_ACCEL_LABEL(l) )
+        gtk_accel_label_set_accel( GTK_ACCEL_LABEL(l), k, m );
+}
+
+void atsw_apaga( GtkWidget *mi, const char *porque )
+{
+    gtk_widget_set_sensitive( mi, FALSE );
+    gtk_widget_set_tooltip_text( mi, porque );
+}
+
+static void separa( GtkWidget *menu )
+{
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
 }
 
 /* ------------------------------------------------------------------------ */
@@ -59,6 +161,10 @@ static void on_iterar( GtkButton *b, Atsw *a );
 static GtkWidget *menu_muestras( Atsw *a, const char *padre,
                                  const char *desde );
 static gboolean que_mandar( Atsw *a, gboolean acepta_pre, char *out, size_t n );
+static void menu_serie( Atsw *a, GdkEventButton *ev );
+static void on_muestra_nueva( GtkButton *b, Atsw *a );
+static void on_elegir( GtkButton *b, Atsw *a );
+static void on_razon( GtkButton *b, Atsw *a );
 
 /* IDENTIFICAR ES SOBRE LOS DATOS, Y PUNTO.
  *
@@ -138,127 +244,6 @@ static void on_editar_serie( GtkMenuItem *m, Atsw *a )
 {
     (void) m;
     if ( a->hay && a->serie[0] ) atsw_serie_edita( a, a->serie );
-}
-
-/* EL MENU DE LA SERIE.
- *
- * Marcar una serie con el boton izquierdo despliega lo que se puede HACER con
- * ella. Antes marcar no hacia nada visible: la rejilla se llenaba y habia que
- * saber que los botones de la derecha existian y a que apuntaban. El gesto de
- * marcar tiene que OFRECER, no quedarse mudo.
- *
- * La seleccion se hace ANTES de desplegar, asi que el menu actua sobre la
- * serie que se acaba de marcar y la rejilla de al lado ya la enseña.
- *
- * Se cierra con Escape o pulsando fuera, y la serie se queda marcada.     */
-static void menu_serie( Atsw *a, GdkEventButton *ev )
-{
-    GtkWidget *menu = gtk_menu_new();
-    GtkWidget *mi;
-
-    mi = gtk_menu_item_new_with_label( "Identificación con fug" );
-    gtk_widget_set_tooltip_text( mi,
-        "Los gráficos de la serie, su ACF y su PACF. Va el nodo de datos de "
-        "esta muestra: se identifica ANTES de que haya modelo." );
-    g_signal_connect( mi, "activate", G_CALLBACK(on_fug), a );
-    gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
-
-    /* LO QUE VA A PASAR, DICHO EN LA ETIQUETA. Que el envio a fue derive un
-     * modelo cuando lo unico que hay son los datos es correcto, pero si el
-     * menu no lo dice el analista no sabe que puede empezar uno: «no es
-     * obvio como hacerlo» era exactamente esto.                        */
-    {
-    const char *porde = atsw_modelo_por_defecto( a->p, a->serie );
-    gboolean    solo_datos = ( !*porde || pr_es_datos( a->p, a->serie, atsw_muestra_actual( a ), porde ) );
-    gchar      *txt;
-
-    if ( solo_datos )
-        txt = g_strdup( "Especificar el primer modelo con fue" );
-    else
-        txt = g_strdup_printf( "Estimar %s en fue", porde );
-
-    mi = gtk_menu_item_new_with_label( txt );
-    g_free( txt );
-    gtk_widget_set_tooltip_text( mi, solo_datos
-        ? "Los datos no se estiman: nace un modelo colgado de ellos —el "
-          "primero de la serie— y es ése el que se abre en fue. El .inp de "
-          "los datos sigue intacto."
-        : "Se manda el .pre si lo hay —es un óptimo reejecutable— y si no "
-          "el .inp, que es la especificación." );
-    g_signal_connect( mi, "activate", G_CALLBACK(on_fue), a );
-    gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
-
-    /* Y empezar OTRO desde los datos, que no es lo mismo que iterar. */
-    if ( !solo_datos && pr_datos_de( a->p, a->serie, atsw_muestra_actual( a ) )[0] )
-        {
-        mi = gtk_menu_item_new_with_label( "Otro modelo, desde los datos" );
-        gtk_widget_set_tooltip_text( mi,
-            "Empieza de cero: cuelga de los datos, no del modelo de ahora. "
-            "Para seguir desde un óptimo está «Iterar»." );
-        g_signal_connect( mi, "activate", G_CALLBACK(on_nuevo_modelo), a );
-        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
-        }
-    }
-
-    gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
-
-    {
-    GtkWidget *sub = menu_muestras( a, NULL, "\x01" );   /* ninguna excluida */
-
-    if ( sub && a->nhojas > 1 )
-        {
-        mi = gtk_menu_item_new_with_label( "Modelo nuevo, en otra muestra…" );
-        gtk_widget_set_tooltip_text( mi,
-            "Empieza un modelo sobre una ventana declarada. Cuelga de los "
-            "datos, y su .inp se genera del datos.csv recortado." );
-        gtk_menu_item_set_submenu( GTK_MENU_ITEM(mi), sub );
-        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
-        }
-    else if ( sub )
-        gtk_widget_destroy( sub );
-    }
-
-    gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
-
-    mi = gtk_menu_item_new_with_label( "Editar la serie…" );
-    gtk_widget_set_tooltip_text( mi,
-        "Qué es, en qué unidades, de dónde se bajó y cuándo. Nada de esto "
-        "cabe en el .inp —el motor sólo lee un nombre— y es la mitad de lo "
-        "que hace falta para volver a este análisis dentro de seis meses." );
-    g_signal_connect( mi, "activate", G_CALLBACK(on_editar_serie), a );
-    gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
-
-    gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
-
-    /* LOS ATAJOS. Dibuja fug, aqui mismo, sin levantar la herramienta
-     * completa. Para mirar, no para decidir: no tocan el proyecto.    */
-    mi = gtk_menu_item_new_with_label( "Media – desviación típica" );
-    gtk_widget_set_tooltip_text( mi,
-        "¿La dispersión crece con el nivel? Empieza en la serie EN NIVEL "
-        "(λ = 1) y se mueve λ al pie del gráfico: si la nube se endereza con "
-        "logaritmos, la serie los pide." );
-    g_signal_connect( mi, "activate", G_CALLBACK(on_mdt), a );
-    gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
-
-    mi = gtk_menu_item_new_with_label( "Serie y ACF / PACF…" );
-    gtk_widget_set_tooltip_text( mi,
-        "Con λ, d y D AL PIE DEL GRÁFICO: se tocan y el dibujo se rehace ahí "
-        "mismo. Es la pregunta abierta —cuántas diferencias— y se contesta "
-        "probando." );
-    g_signal_connect( mi, "activate", G_CALLBACK(on_serie_acf), a );
-    gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
-
-    mi = gtk_menu_item_new_with_label( "Identificar desde los datos…" );
-    gtk_widget_set_tooltip_text( mi,
-        "art sobre la serie: los contrastes (la F estacional, ADF y KPSS) "
-        "dichos con lo que dicen, el correlograma y los candidatos. La "
-        "transformación se cambia en la propia ventana.\n\nPropone; no "
-        "estima. El modelo lo eliges tú." );
-    g_signal_connect( mi, "activate", G_CALLBACK(on_identifica_datos), a );
-    gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
-
-    gtk_widget_show_all( menu );
-    atsw_menu_en( menu, a->l_series, ev );
 }
 
 static gboolean on_serie_click( GtkWidget *tv, GdkEventButton *ev, Atsw *a )
@@ -1184,152 +1169,183 @@ static void on_muestra_nueva( GtkButton *b, Atsw *a )
     gtk_widget_destroy( d );
 }
 
-/* EL MENU DEL MODELO. Lo que se puede hacer con ESTE, no con la serie. */
-static void menu_modelo( Atsw *a, GdkEventButton *ev )
+/* ------------------------------------------------------------------------ */
+/* LAS SECCIONES                                                             */
+/*                                                                           */
+/* UN MENU, DOS SITIOS (ESTUDIO-madre-organizacion §3.2). El menu US de la   */
+/* barra no es una lista nueva: son las secciones con que se arman los menus */
+/* del boton derecho, puestas en el orden del ciclo y armadas cada vez que   */
+/* se abre. Dos copias de una regla son dos reglas, y la primera entrada que */
+/* dijera en la barra otra cosa que en el contextual seria la primera        */
+/* divergencia. Por eso los contextuales tambien se arman aqui.              */
+/* ------------------------------------------------------------------------ */
+
+#define SIN_PROYECTO "Abre un proyecto antes: Proyecto ▸ Abrir… o Nuevo…."
+#define SIN_SERIE    "Marca una serie en la lista de la izquierda."
+
+static gboolean hay_serie( Atsw *a ) { return a->hay && a->serie[0]; }
+
+/* LOS DOS VISTAZOS. Dibuja fug, aqui mismo, sin levantar la herramienta
+ * completa. Para mirar, no para decidir: no tocan el proyecto. Van en Datos
+ * --describen la serie-- y al principio de US, que es el primer paso del
+ * analista: la misma funcion en los dos sitios (§3.1).                  */
+static void sec_vistazos( Atsw *a, GtkWidget *menu )
 {
-    GtkWidget *menu = gtk_menu_new();
     GtkWidget *mi;
-    gchar     *id = atsw_marcada( a->l_modelos, M_ID );
-    gboolean   datos = id && pr_es_datos( a->p, a->serie, atsw_muestra_actual( a ), id );
+
+    mi = atsw_entrada( a, menu, "Media – desviación típica",
+        "¿La dispersión crece con el nivel? Empieza en la serie EN NIVEL "
+        "(λ = 1) y se mueve λ al pie del gráfico: si la nube se endereza con "
+        "logaritmos, la serie los pide.", G_CALLBACK(on_mdt), a );
+    if ( !hay_serie( a ) ) atsw_apaga( mi, SIN_SERIE );
+
+    mi = atsw_entrada( a, menu, "Serie y ACF / PACF…",
+        "Con λ, d y D AL PIE DEL GRÁFICO: se tocan y el dibujo se rehace ahí "
+        "mismo. Es la pregunta abierta —cuántas diferencias— y se contesta "
+        "probando.", G_CALLBACK(on_serie_acf), a );
+    if ( !hay_serie( a ) ) atsw_apaga( mi, SIN_SERIE );
+}
+
+/* IDENTIFICAR, en el orden en que trabaja el analista: λ, d y D, el juego
+   completo de fug y la propuesta de art (§3.1, decision 8).           */
+static void sec_identificar( Atsw *a, GtkWidget *menu )
+{
+    GtkWidget *mi;
+
+    sec_vistazos( a, menu );
+    mi = atsw_entrada( a, menu, "Identificación con fug",
+        "Los gráficos de la serie, su ACF y su PACF. Va el nodo de datos de "
+        "esta muestra: se identifica ANTES de que haya modelo.",
+        G_CALLBACK(on_fug), a );
+    if ( !hay_serie( a ) ) atsw_apaga( mi, SIN_SERIE );
+
+    mi = atsw_entrada( a, menu, "Identificar desde los datos…",
+        "art sobre la serie: los contrastes (la F estacional, ADF y KPSS) "
+        "dichos con lo que dicen, el correlograma y los candidatos. La "
+        "transformación se cambia en la propia ventana.\n\nPropone; no "
+        "estima. El modelo lo eliges tú.", G_CALLBACK(on_identifica_datos), a );
+    if ( !hay_serie( a ) ) atsw_apaga( mi, SIN_SERIE );
+}
+
+/* LOS ENVIOS DE LA SERIE: a fue el modelo por defecto, otro desde los
+ * datos, o uno en otra muestra.
+ *
+ * con_fue: en la barra, si hay un modelo marcado, sus envios los pone la
+ * seccion del modelo --«Abrir m01 en fue» es la misma accion que «Estimar
+ * m01 en fue»-- y aqui no se repiten. En el boton derecho sobre la serie
+ * van siempre.                                                         */
+static void sec_serie_envios( Atsw *a, GtkWidget *menu, gboolean con_fue )
+{
+    GtkWidget *mi;
+
+    if ( !hay_serie( a ) )
+        {
+        mi = atsw_entrada( a, menu, "Especificar el primer modelo con fue",
+                           NULL, G_CALLBACK(on_fue), a );
+        atsw_apaga( mi, a->hay ? SIN_SERIE : SIN_PROYECTO );
+        return;
+        }
+
+    /* LO QUE VA A PASAR, DICHO EN LA ETIQUETA. Que el envio a fue derive un
+     * modelo cuando lo unico que hay son los datos es correcto, pero si el
+     * menu no lo dice el analista no sabe que puede empezar uno: «no es
+     * obvio como hacerlo» era exactamente esto.                        */
+    if ( con_fue )
+    {
+    const char *porde = atsw_modelo_por_defecto( a->p, a->serie );
+    gboolean    solo_datos = ( !*porde || pr_es_datos( a->p, a->serie, atsw_muestra_actual( a ), porde ) );
+    gchar      *txt;
+
+    if ( solo_datos )
+        txt = g_strdup( "Especificar el primer modelo con fue" );
+    else
+        txt = g_strdup_printf( "Estimar %s en fue", porde );
+
+    mi = atsw_entrada( a, menu, txt, solo_datos
+        ? "Los datos no se estiman: nace un modelo colgado de ellos —el "
+          "primero de la serie— y es ése el que se abre en fue. El .inp de "
+          "los datos sigue intacto."
+        : "Se manda el .pre si lo hay —es un óptimo reejecutable— y si no "
+          "el .inp, que es la especificación.", G_CALLBACK(on_fue), a );
+    g_free( txt );
+    atsw_entrada_tecla( mi, "<Primary>e" );
+
+    /* Y empezar OTRO desde los datos, que no es lo mismo que iterar. */
+    if ( !solo_datos && pr_datos_de( a->p, a->serie, atsw_muestra_actual( a ) )[0] )
+        atsw_entrada( a, menu, "Otro modelo, desde los datos",
+            "Empieza de cero: cuelga de los datos, no del modelo de ahora. "
+            "Para seguir desde un óptimo está «Iterar».",
+            G_CALLBACK(on_nuevo_modelo), a );
+    }
+
+    {
+    GtkWidget *sub = menu_muestras( a, NULL, "\x01" );   /* ninguna excluida */
+
+    if ( sub && a->nhojas > 1 )
+        {
+        mi = atsw_entrada( a, menu, "Modelo nuevo, en otra muestra…",
+            "Empieza un modelo sobre una ventana declarada. Cuelga de los "
+            "datos, y su .inp se genera del datos.csv recortado.", NULL, NULL );
+        gtk_menu_item_set_submenu( GTK_MENU_ITEM(mi), sub );
+        }
+    else if ( sub )
+        gtk_widget_destroy( sub );
+    }
+}
+
+/* LA SERIE COMO DATO: lo que no cabe en el .inp, y las ventanas sobre ella. */
+static void sec_serie_datos( Atsw *a, GtkWidget *menu )
+{
+    GtkWidget *mi;
+
+    mi = atsw_entrada( a, menu, "Editar la serie…",
+        "Qué es, en qué unidades, de dónde se bajó y cuándo. Nada de esto "
+        "cabe en el .inp —el motor sólo lee un nombre— y es la mitad de lo "
+        "que hace falta para volver a este análisis dentro de seis meses.",
+        G_CALLBACK(on_editar_serie), a );
+    if ( !hay_serie( a ) ) atsw_apaga( mi, a->hay ? SIN_SERIE : SIN_PROYECTO );
+
+    /* LA MUESTRA NUEVA, que solo era el «+» de las pestañas. */
+    mi = atsw_entrada( a, menu, "Muestra nueva…",
+        "Declarar una submuestra: hasta dónde y por qué.\n\nLos modelos de "
+        "cada muestra viven en su hoja, porque dos modelos estimados sobre "
+        "ventanas distintas no se comparan.", G_CALLBACK(on_muestra_nueva), a );
+    if ( !a->hay ) atsw_apaga( mi, SIN_PROYECTO );
+}
+
+/* LOS ENVIOS DEL MODELO: especificar y estimar, en el orden del ciclo. */
+static void sec_modelo_envios( Atsw *a, GtkWidget *menu, const char *id,
+                               gboolean datos )
+{
+    GtkWidget *mi;
     gchar     *txt;
 
     txt = datos ? g_strdup( "Especificar un modelo con fue" )
-                : g_strdup_printf( "Abrir %s en fue", id ? id : "" );
-    mi = gtk_menu_item_new_with_label( txt );
-    g_free( txt );
-    gtk_widget_set_tooltip_text( mi, datos
+                : g_strdup_printf( "Abrir %s en fue", id );
+    mi = atsw_entrada( a, menu, txt, datos
         ? "Los datos no se estiman: nace un modelo colgado de ellos y es ése "
           "el que se abre."
         : "Se lleva el .pre si lo hay —es un óptimo reejecutable— y si no el "
-          ".inp. Es lo mismo que el doble clic." );
-    g_signal_connect( mi, "activate", G_CALLBACK(on_fue), a );
-    gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+          ".inp. Es lo mismo que el doble clic.", G_CALLBACK(on_fue), a );
+    g_free( txt );
+    atsw_entrada_tecla( mi, "<Primary>e" );
 
     if ( !datos )
         {
-        mi = gtk_menu_item_new_with_label( "Editar el .inp…" );
-        gtk_widget_set_tooltip_text( mi,
+        atsw_entrada( a, menu, "Editar el .inp…",
             "El fichero, a mano, con la salida del motor al lado y fue a un "
             "botón. La otra forma de iterar: el formulario de fue_gui sólo "
             "puede expresar lo que tiene widgets; el .inp, todo lo que el "
-            "motor lee." );
-        g_signal_connect( mi, "activate", G_CALLBACK(on_editar), a );
-        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
-
-        /* LOS DOS QUE PIDEN UN .out AL DIA. La regla es la de lib/analisis,
-           la misma que usa fue_gui: dos copias de una regla son dos
-           reglas. Y apagado no es mudo -- el globo dice por que.     */
-        {
-        char     porque[512];
-        AnEstado est = an_estado( a->p, a->serie, atsw_muestra_actual( a ), id,
-                                  porque, sizeof porque );
-        gboolean listo = ( est == AN_LISTO );
-
-        {
-        char     f[PR_RUTA];
-        gboolean hay = listo &&
-            atsw_resumen_de( a, a->serie, atsw_muestra_actual( a ), id, f, sizeof f ) == 0;
-
-        mi = gtk_menu_item_new_with_label( "Ver modelo…" );
-        gtk_widget_set_sensitive( mi, hay );
-        gtk_widget_set_tooltip_text( mi, hay
-            ? "Los residuos con su ACF y su PACF, el modelo estimado escrito "
-              "debajo con sus desviaciones típicas, y los residuos grandes: el "
-              "resumen que fue dejó al estimar, sin abrir fue_gui."
-            : listo ? "fue no dejó el gráfico de este modelo: vuelve a estimarlo."
-                    : porque );
-        g_signal_connect( mi, "activate", G_CALLBACK(on_grafico), a );
-        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
-        }
-
-        mi = gtk_menu_item_new_with_label( "Diagnosis…" );
-        gtk_widget_set_sensitive( mi, listo );
-        gtk_widget_set_tooltip_text( mi, listo
-            ? "Los cinco bloques: estimación, media, autocorrelación, "
-              "normalidad y parámetros, cada uno con su veredicto.\n\nDice lo "
-              "que los números dicen; qué hacer con ello es tuyo."
-            : porque );
-        g_signal_connect( mi, "activate", G_CALLBACK(on_diagnosis), a );
-        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
-
-        /* LOS CONTRASTES FORMALES, SIN PASAR POR LA DIAGNOSIS, y en dos:
-           el orden de integracion regular y la estacionalidad, que
-           preguntan cosas distintas. La diagnosis tiene los mismos dos
-           botones; estas son las puertas directas, las que pidio el
-           analista. La estacionalidad, solo con s > 1.                  */
-        mi = gtk_menu_item_new_with_label( "Orden de integración…" );
-        gtk_widget_set_sensitive( mi, listo );
-        gtk_widget_set_tooltip_text( mi, listo ? AN_FM_GLOBO_INTEGRACION : porque );
-        g_signal_connect( mi, "activate", G_CALLBACK(on_integracion), a );
-        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
-
-        {
-        int s = listo ? an_formales_s( a->p, a->serie, atsw_muestra_actual( a ), id ) : 0;
-
-        mi = gtk_menu_item_new_with_label( "Estacionalidad (MEG)…" );
-        gtk_widget_set_sensitive( mi, listo && s > 1 );
-        gtk_widget_set_tooltip_text( mi, !listo ? porque
-                                     : s > 1 ? AN_FM_GLOBO_ESTACIONAL : AN_FM_GLOBO_ANUAL );
-        g_signal_connect( mi, "activate", G_CALLBACK(on_estacionalidad), a );
-        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
-        }
-
-        mi = gtk_menu_item_new_with_label( "Ganancia…" );
-        gtk_widget_set_sensitive( mi, listo );
-        gtk_widget_set_tooltip_text( mi, listo
-            ? "¿El suceso dejó algo PARA SIEMPRE o revirtió?\n\nLa ganancia "
-              "de cada intervención con su contraste. No es diagnosis: es una "
-              "hipótesis sobre la naturaleza del incidente."
-            : porque );
-        g_signal_connect( mi, "activate", G_CALLBACK(on_ganancia), a );
-        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
-
-        mi = gtk_menu_item_new_with_label( "Anómalos…" );
-        gtk_widget_set_sensitive( mi, listo );
-        gtk_widget_set_tooltip_text( mi, listo
-            ? "Los episodios de residuos extremos, y los correlogramas CON y "
-              "SIN ellos.\n\nContesta lo que decide: ¿la estructura que veo "
-              "es del proceso o del anómalo? Y al revés —si no cambia nada, "
-              "intervenirlo no compra nada."
-            : porque );
-        g_signal_connect( mi, "activate", G_CALLBACK(on_anomalos), a );
-        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
-
-        mi = gtk_menu_item_new_with_label( "Identificar los residuos…" );
-        gtk_widget_set_sensitive( mi, listo );
-        gtk_widget_set_tooltip_text( mi, listo
-            ? "art propone qué ARMA ponerle a este modelo, leyendo el "
-              "correlograma de sus residuos (E3): el modelo base con sus "
-              "armónicos, intervenciones y media, sin la parte ARMA.\n\n"
-              "Propone; no estima. Derivar crea un hijo con el candidato que "
-              "elijas, sobre su .pre."
-            : porque );
-        g_signal_connect( mi, "activate", G_CALLBACK(on_identifica_res), a );
-        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
-        }
-
-        mi = gtk_menu_item_new_with_label( "Prever con fuf…" );
-        gtk_widget_set_tooltip_text( mi,
-            "Lo mismo que el botón «Forecast» de fue: corre «fue -f» para "
-            "escribir la entrada de previsión, corre fuf sobre ella y deja "
-            "las dos cosas en la pestaña de previsión.\n\nLos ficheros se "
-            "escriben AL LADO del modelo." );
-        g_signal_connect( mi, "activate", G_CALLBACK(on_prever), a );
-        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
-
-        mi = gtk_menu_item_new_with_label( "Iterar: seguir desde su óptimo" );
-        gtk_widget_set_tooltip_text( mi,
+            "motor lee.", G_CALLBACK(on_editar), a );
+        atsw_entrada( a, menu, "Iterar: seguir desde su óptimo",
             "Copia su .pre a un .inp nuevo. Un .pre que se toca vuelve a ser "
-            "un .inp: sus valores vuelven a ser semillas." );
-        g_signal_connect( mi, "activate", G_CALLBACK(on_iterar), a );
-        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+            "un .inp: sus valores vuelven a ser semillas.",
+            G_CALLBACK(on_iterar), a );
         }
 
-    mi = gtk_menu_item_new_with_label( "Modelo nuevo, desde los datos" );
-    gtk_widget_set_tooltip_text( mi,
-        "Empieza de cero: cuelga de los datos, no de éste." );
-    g_signal_connect( mi, "activate", G_CALLBACK(on_nuevo_modelo), a );
-    gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+    atsw_entrada( a, menu, "Modelo nuevo, desde los datos",
+        "Empieza de cero: cuelga de los datos, no de éste.",
+        G_CALLBACK(on_nuevo_modelo), a );
 
     /* LLEVARLO A OTRA VENTANA. Deriva y genera; lo de aqui no se toca. */
     if ( !datos )
@@ -1338,29 +1354,181 @@ static void menu_modelo( Atsw *a, GdkEventButton *ev )
 
         if ( sub )
             {
-            mi = gtk_menu_item_new_with_label( "En otra muestra…" );
-            gtk_widget_set_tooltip_text( mi,
+            mi = atsw_entrada( a, menu, "En otra muestra…",
                 "Deriva un modelo en otra ventana, colgado de éste. El .inp "
                 "se GENERA del datos.csv con la ventana nueva: no es una "
                 "copia con otro nobs.\n\nÉste no se toca: su .out describe "
-                "una estimación sobre estas observaciones." );
+                "una estimación sobre estas observaciones.", NULL, NULL );
             gtk_menu_item_set_submenu( GTK_MENU_ITEM(mi), sub );
-            gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
             }
         }
+}
 
-    if ( !datos )
-        {
-        gtk_menu_shell_append( GTK_MENU_SHELL(menu),
-                               gtk_separator_menu_item_new() );
-        mi = gtk_menu_item_new_with_label( "Borrar…" );
-        gtk_widget_set_tooltip_text( mi,
-            "El nodo y sus ficheros. Se pregunta antes. Un modelo del que "
-            "cuelgue otro no se borra: rompería el linaje." );
-        g_signal_connect( mi, "activate", G_CALLBACK(on_borrar), a );
-        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
-        }
+/* «DIAGNOSTICAR ▸», Y «VER MODELO…» DEBAJO.
+ *
+ * Un submenu por la longitud del menu (decision 11): las seis piden un .out
+ * al dia y se apagan juntas por la misma razon, asi que se apaga la entrada
+ * entera con un solo porque. «Ver modelo…» va FUERA y justo debajo
+ * (decision 12): es lo primero que se mira al volver de estimar, y no debe
+ * costar entrar en el submenu.
+ *
+ * La regla de «listo» es la de lib/analisis, la misma que usa fue_gui: dos
+ * copias de una regla son dos reglas. Y apagado no es mudo -- el globo dice
+ * por que.                                                            */
+static void sec_diagnosticar( Atsw *a, GtkWidget *menu, const char *id )
+{
+    GtkWidget *mi, *sub = gtk_menu_new();
+    char       porque[512];
+    AnEstado   est = an_estado( a->p, a->serie, atsw_muestra_actual( a ), id,
+                                porque, sizeof porque );
+    gboolean   listo = ( est == AN_LISTO );
 
+    mi = atsw_entrada( a, menu, "Diagnosticar", listo
+        ? "Lo que se le pregunta a un modelo estimado: la diagnosis, el "
+          "orden de integración, la estacionalidad, la ganancia, los "
+          "anómalos y la identificación de los residuos."
+        : porque, NULL, NULL );
+    gtk_menu_item_set_submenu( GTK_MENU_ITEM(mi), sub );
+    gtk_widget_set_sensitive( mi, listo );
+
+    mi = atsw_entrada( a, sub, "Diagnosis…", listo
+        ? "Los cinco bloques: estimación, media, autocorrelación, "
+          "normalidad y parámetros, cada uno con su veredicto.\n\nDice lo "
+          "que los números dicen; qué hacer con ello es tuyo."
+        : porque, G_CALLBACK(on_diagnosis), a );
+    gtk_widget_set_sensitive( mi, listo );
+
+    /* LOS CONTRASTES FORMALES, SIN PASAR POR LA DIAGNOSIS, y en dos: el
+       orden de integracion regular y la estacionalidad, que preguntan
+       cosas distintas. La estacionalidad, solo con s > 1.            */
+    mi = atsw_entrada( a, sub, "Orden de integración…",
+                       listo ? AN_FM_GLOBO_INTEGRACION : porque,
+                       G_CALLBACK(on_integracion), a );
+    gtk_widget_set_sensitive( mi, listo );
+
+    {
+    int s = listo ? an_formales_s( a->p, a->serie, atsw_muestra_actual( a ), id ) : 0;
+
+    mi = atsw_entrada( a, sub, "Estacionalidad (MEG)…", !listo ? porque
+                       : s > 1 ? AN_FM_GLOBO_ESTACIONAL : AN_FM_GLOBO_ANUAL,
+                       G_CALLBACK(on_estacionalidad), a );
+    gtk_widget_set_sensitive( mi, listo && s > 1 );
+    }
+
+    mi = atsw_entrada( a, sub, "Ganancia…", listo
+        ? "¿El suceso dejó algo PARA SIEMPRE o revirtió?\n\nLa ganancia "
+          "de cada intervención con su contraste. No es diagnosis: es una "
+          "hipótesis sobre la naturaleza del incidente."
+        : porque, G_CALLBACK(on_ganancia), a );
+    gtk_widget_set_sensitive( mi, listo );
+
+    mi = atsw_entrada( a, sub, "Anómalos…", listo
+        ? "Los episodios de residuos extremos, y los correlogramas CON y "
+          "SIN ellos.\n\nContesta lo que decide: ¿la estructura que veo "
+          "es del proceso o del anómalo? Y al revés —si no cambia nada, "
+          "intervenirlo no compra nada."
+        : porque, G_CALLBACK(on_anomalos), a );
+    gtk_widget_set_sensitive( mi, listo );
+
+    mi = atsw_entrada( a, sub, "Identificar los residuos…", listo
+        ? "art propone qué ARMA ponerle a este modelo, leyendo el "
+          "correlograma de sus residuos (E3): el modelo base con sus "
+          "armónicos, intervenciones y media, sin la parte ARMA.\n\n"
+          "Propone; no estima. Derivar crea un hijo con el candidato que "
+          "elijas, sobre su .pre."
+        : porque, G_CALLBACK(on_identifica_res), a );
+    gtk_widget_set_sensitive( mi, listo );
+
+    {
+    char     f[PR_RUTA];
+    gboolean hay = listo &&
+        atsw_resumen_de( a, a->serie, atsw_muestra_actual( a ), id, f, sizeof f ) == 0;
+
+    mi = atsw_entrada( a, menu, "Ver modelo…", hay
+        ? "Los residuos con su ACF y su PACF, el modelo estimado escrito "
+          "debajo con sus desviaciones típicas, y los residuos grandes: el "
+          "resumen que fue dejó al estimar, sin abrir fue_gui."
+        : listo ? "fue no dejó el gráfico de este modelo: vuelve a estimarlo."
+                : porque, G_CALLBACK(on_grafico), a );
+    gtk_widget_set_sensitive( mi, hay );
+    }
+}
+
+static void sec_prever( Atsw *a, GtkWidget *menu )
+{
+    atsw_entrada( a, menu, "Prever con fuf…",
+        "Lo mismo que el botón «Forecast» de fue: corre «fue -f» para "
+        "escribir la entrada de previsión, corre fuf sobre ella y deja "
+        "las dos cosas en la pestaña de previsión.\n\nLos ficheros se "
+        "escriben AL LADO del modelo.", G_CALLBACK(on_prever), a );
+}
+
+/* LAS DECISIONES, AL FINAL: elegir y el porque, y lo destructivo aparte.
+   Elegir y Razón no estaban en el boton derecho; solo en la fila.    */
+static void sec_decidir( Atsw *a, GtkWidget *menu )
+{
+    GtkWidget *mi;
+
+    atsw_entrada( a, menu, "Elegir",
+        "Declara que éste es EL modelo de la serie.", G_CALLBACK(on_elegir), a );
+    atsw_entrada( a, menu, "Razón…",
+        "El porqué de esta iteración. Se puede poner después —mirando el "
+        ".out, que es cuando de verdad se sabe— o no ponerse.",
+        G_CALLBACK(on_razon), a );
+    separa( menu );
+    mi = atsw_entrada( a, menu, "Borrar…",
+        "El nodo y sus ficheros. Se pregunta antes. Un modelo del que "
+        "cuelgue otro no se borra: rompería el linaje.", G_CALLBACK(on_borrar), a );
+    atsw_entrada_tecla( mi, "Delete" );
+}
+
+/* LO QUE SIGUE A ESTIMAR, en el orden del ciclo: diagnosticar, prever y
+   decidir. Los datos no se diagnostican.                              */
+static void secciones_estimado( Atsw *a, GtkWidget *menu, const char *id )
+{
+    if ( pr_es_datos( a->p, a->serie, atsw_muestra_actual( a ), id ) ) return;
+    separa( menu );
+    sec_diagnosticar( a, menu, id );
+    separa( menu );
+    sec_prever( a, menu );
+    separa( menu );
+    sec_decidir( a, menu );
+}
+
+/* LAS SECCIONES DEL MODELO: el boton derecho sobre la rejilla. */
+static void secciones_modelo( Atsw *a, GtkWidget *menu, const char *id )
+{
+    sec_modelo_envios( a, menu, id,
+                       pr_es_datos( a->p, a->serie, atsw_muestra_actual( a ), id ) );
+    secciones_estimado( a, menu, id );
+}
+
+/* EL MENU DE LA SERIE, con el boton derecho sobre la lista: lo que se puede
+ * HACER con ella, en el orden del ciclo y con las mismas secciones que la
+ * barra. La seleccion se hace ANTES de desplegar, asi que el menu actua
+ * sobre la serie que se acaba de marcar y la rejilla de al lado ya la
+ * enseña. Se cierra con Escape o pulsando fuera, y la serie se queda.  */
+static void menu_serie( Atsw *a, GdkEventButton *ev )
+{
+    GtkWidget *menu = gtk_menu_new();
+
+    sec_identificar( a, menu );
+    separa( menu );
+    sec_serie_envios( a, menu, TRUE );
+    separa( menu );
+    sec_serie_datos( a, menu );
+
+    gtk_widget_show_all( menu );
+    atsw_menu_en( menu, a->l_series, ev );
+}
+
+/* EL MENU DEL MODELO. Lo que se puede hacer con ESTE, no con la serie. */
+static void menu_modelo( Atsw *a, GdkEventButton *ev )
+{
+    GtkWidget *menu = gtk_menu_new();
+    gchar     *id = atsw_marcada( a->l_modelos, M_ID );
+
+    if ( id ) secciones_modelo( a, menu, id );
     g_free( id );
     gtk_widget_show_all( menu );
     atsw_menu_en( menu, a->l_modelos, ev );
@@ -1588,18 +1756,429 @@ static gboolean on_foco( GtkWidget *w, GdkEventFocus *ev, Atsw *a )
 
 static void on_cuaderno( GtkButton *b, Atsw *a ) { (void) b; atsw_cuaderno( a ); }
 
-static gboolean on_atajo_relee( GtkAccelGroup *g, GObject *o, guint k,
-                                GdkModifierType m, Atsw *a )
+/* ------------------------------------------------------------------------ */
+/* LA BARRA DE MENUS (ESTUDIO-madre-organizacion §3)                         */
+/*                                                                           */
+/* Proyecto · Datos · US · MT · Ayuda. Por CLASE de modelo y no por objeto:  */
+/* las series y sus modelos son US y los casos y los suyos son MT, y decirlo */
+/* asi enseña que hay una escalera y en que peldaño se esta. VARMA y VECM    */
+/* entran con sus GUI (§3.5): una entrada que nunca se enciende enseña que   */
+/* el menu miente.                                                           */
+/*                                                                           */
+/* Nada se quita en esta fase: la fila de arriba, el boton drtran, «→ fug» y */
+/* los «Borrar» de las filas siguen donde estaban (§6, fase 3).              */
+/* ------------------------------------------------------------------------ */
+
+static void relee( Atsw *a )
 {
     char why[512];
 
-    (void) g; (void) o; (void) k; (void) m;
-    if ( !a->hay ) { barra_pub( a, "No hay proyecto abierto." ); return TRUE; }
+    if ( !a->hay ) { barra_pub( a, "No hay proyecto abierto." ); return; }
     if ( atsw_relee( a, why, sizeof why ) )
         barra_pub( a, "El proyecto ha cambiado fuera de aquí: releído." );
     else
         barra_pub( a, why[0] ? why : "Releído: no había nada nuevo." );
     atsw_refresca( a );
+}
+
+static void on_relee_mi( GtkMenuItem *m, Atsw *a ) { (void) m; relee( a ); }
+static void on_sale_mi ( GtkMenuItem *m, Atsw *a ) { (void) m; gtk_widget_destroy( a->ventana ); }
+
+/* EL MANUAL, donde este. Instalado esta en sitios distintos en cada sistema
+ * (packaging/): en Linux en share/doc/atsw, en Windows al lado de bin/; en
+ * el arbol, el que construye docs/manual/construir.py, y si no su fuente.
+ * El de macOS va en el .dmg, fuera de la aplicacion, asi que alli --y si no
+ * hay ninguno-- el publicado, que es el de la ultima version.          */
+static gchar *manual_uri( void )
+{
+    static const char *const sitios[] = {
+        "../share/doc/atsw/Manual de ATSW.pdf",     /* Linux, instalado    */
+        "../Manual de ATSW.pdf",                    /* Windows, el bundle  */
+        "../../docs/manual/MANUAL.pdf",             /* el arbol, construido */
+        "../../docs/manual/MANUAL.html",
+        "../../docs/manual/MANUAL.md",
+        NULL };
+    gchar *dir = sitio_mi_dir(), *r = NULL;
+    int    i;
+
+    for ( i = 0; dir && sitios[i] && !r; i++ )
+        {
+        gchar *f = g_build_filename( dir, sitios[i], NULL );
+
+        if ( g_file_test( f, G_FILE_TEST_IS_REGULAR ) )
+            r = g_filename_to_uri( f, NULL, NULL );
+        g_free( f );
+        }
+    g_free( dir );
+    return r ? r : g_strdup( "https://davidesg.github.io/atsw-gui/manual/MANUAL.pdf" );
+}
+
+static void abre_manual( Atsw *a )
+{
+    gchar  *u = manual_uri();
+    GError *e = NULL;
+
+    if ( !gtk_show_uri_on_window( GTK_WINDOW(a->ventana), u, GDK_CURRENT_TIME, &e ) )
+        {
+        gchar *t = g_strdup_printf( "No pude abrir el manual (%s): %s", u,
+                                    e ? e->message : "?" );
+        barra_pub( a, t );
+        g_free( t );
+        }
+    else
+        barra_pub( a, "El manual, con el programa del sistema." );
+    g_clear_error( &e );
+    g_free( u );
+}
+
+static void on_manual_mi( GtkMenuItem *m, Atsw *a ) { (void) m; abre_manual( a ); }
+
+static gboolean on_atajo_manual( GtkAccelGroup *g, GObject *o, guint k,
+                                 GdkModifierType m, Atsw *a )
+{
+    (void) g; (void) o; (void) k; (void) m;
+    abre_manual( a );
+    return TRUE;
+}
+
+/* LAS TECLAS, en una ventana que no bloquea. La de Ctrl se escribe como la
+   escribe GTK en este sistema: en macOS es Cmd.                      */
+static void on_teclas_mi( GtkMenuItem *m, Atsw *a )
+{
+    static const struct { const char *acel, *que; } T[] = {
+        { "<Primary>o", "Abrir un proyecto" },
+        { "<Primary>n", "Proyecto nuevo" },
+        { "<Primary>r", "Releer lo que haya cambiado fuera" },
+        { "<Primary>e", "Mandar a fue el modelo marcado (como Estimar en las hijas)" },
+        { "<Primary>q", "Salir" },
+        { "F1",         "El manual" },
+        { "F10",        "La barra de menús; Alt y la letra subrayada, un menú" },
+        { "Menu",       "El menú de la fila marcada (también Mayús+F10)" },
+        { "Delete",     "Borrar el modelo marcado, preguntando antes" },
+        { "Return",     "Mandar a fue el modelo marcado (también doble clic)" } };
+    GString   *g = g_string_new( NULL );
+    GtkWidget *d;
+    guint      i;
+
+    (void) m;
+    for ( i = 0; i < G_N_ELEMENTS(T); i++ )
+        {
+        guint           k = 0;
+        GdkModifierType mo = 0;
+        gchar          *l;
+
+        gtk_accelerator_parse( T[i].acel, &k, &mo );
+        l = gtk_accelerator_get_label( k, mo );
+        g_string_append_printf( g, "%-12s  %s\n", l, T[i].que );
+        g_free( l );
+        }
+    d = gtk_message_dialog_new( GTK_WINDOW(a->ventana), GTK_DIALOG_DESTROY_WITH_PARENT,
+                                GTK_MESSAGE_INFO, GTK_BUTTONS_CLOSE, "Las teclas de la madre" );
+    gtk_message_dialog_format_secondary_text( GTK_MESSAGE_DIALOG(d), "%s", g->str );
+    g_signal_connect( d, "response", G_CALLBACK(gtk_widget_destroy), NULL );
+    gtk_widget_show( d );
+    g_string_free( g, TRUE );
+}
+
+#ifndef ATSW_VERSION
+#define ATSW_VERSION "en desarrollo"
+#endif
+
+/* ACERCA DE: sobrio. La presentacion con los creditos al arrancar es del
+   TODO, para despues del diseño de la madre.                          */
+static void on_acerca_mi( GtkMenuItem *m, Atsw *a )
+{
+    GtkWidget *d = gtk_about_dialog_new();
+
+    (void) m;
+    gtk_window_set_transient_for( GTK_WINDOW(d), GTK_WINDOW(a->ventana) );
+    gtk_window_set_destroy_with_parent( GTK_WINDOW(d), TRUE );
+    gtk_about_dialog_set_program_name( GTK_ABOUT_DIALOG(d), "ATSW" );
+    gtk_about_dialog_set_version( GTK_ABOUT_DIALOG(d), ATSW_VERSION );
+    gtk_about_dialog_set_comments( GTK_ABOUT_DIALOG(d),
+        "A Time Series Workshop: el taller de series temporales de la escuela "
+        "Box-Jenkins-Treadway.\n\n"
+        "Diseño y construcción: Arthur B. Treadway y David E. Guerrero.\n"
+        "Librerías y motores: José Alberto Mauricio, con Arthur B. Treadway y "
+        "David E. Guerrero." );
+    gtk_about_dialog_set_copyright( GTK_ABOUT_DIALOG(d),
+        "Copyright © 1995-2026 A.B. Treadway, J.A. Mauricio y D.E. Guerrero" );
+    gtk_about_dialog_set_license_type( GTK_ABOUT_DIALOG(d), GTK_LICENSE_GPL_2_0 );
+    gtk_about_dialog_set_website( GTK_ABOUT_DIALOG(d),
+                                  "https://davidesg.github.io/atsw-gui/" );
+    g_signal_connect( d, "response", G_CALLBACK(gtk_widget_destroy), NULL );
+    gtk_widget_show( d );
+}
+
+static void llena_proyecto( Atsw *a, GtkWidget *m )
+{
+    GtkWidget *mi;
+
+    mi = atsw_entrada( a, m, "Nuevo…", "Un proyecto nuevo, vacío.",
+                       G_CALLBACK(on_nuevo), a );
+    atsw_entrada_tecla( mi, "<Primary>n" );
+    mi = atsw_entrada( a, m, "Abrir…", "Un proyecto.yaml. Si está roto se dice "
+                       "y NO se abre: nunca se pisa.", G_CALLBACK(on_abrir), a );
+    atsw_entrada_tecla( mi, "<Primary>o" );
+    mi = atsw_entrada( a, m, "Releer", "Lo que haya cambiado fuera de aquí: "
+                       "lo mismo que pasa al volver a la ventana.",
+                       G_CALLBACK(on_relee_mi), a );
+    atsw_entrada_tecla( mi, "<Primary>r" );
+    if ( !a->hay ) atsw_apaga( mi, "No hay proyecto abierto." );
+    separa( m );
+    mi = atsw_entrada( a, m, "Propiedades…",
+        "Identificador, título y analista. Y lo que no se edita pero hay que "
+        "saber: cuándo se creó, dónde está el manifiesto y dónde la raíz de "
+        "los datos. (Es el botón «Proyecto…».)", G_CALLBACK(on_proyecto), a );
+    if ( !a->hay ) atsw_apaga( mi, SIN_PROYECTO );
+    mi = atsw_entrada( a, m, "Linaje…",
+        "La cadena entera y lo que cada nodo DEBE: sin estimar, sin razón, "
+        "cadena sin elegido.", G_CALLBACK(on_linaje), a );
+    if ( !a->hay ) atsw_apaga( mi, SIN_PROYECTO );
+    mi = atsw_entrada( a, m, "Cuaderno…",
+        "Lo que se miró, en orden, con su fecha y su procedencia, y las notas. "
+        "Es Markdown, al lado del manifiesto: se lee sin ATSW.",
+        G_CALLBACK(on_cuaderno), a );
+    if ( !a->hay ) atsw_apaga( mi, SIN_PROYECTO );
+    separa( m );
+    mi = atsw_entrada( a, m, "Salir", NULL, G_CALLBACK(on_sale_mi), a );
+    atsw_entrada_tecla( mi, "<Primary>q" );
+}
+
+static void llena_datos( Atsw *a, GtkWidget *m )
+{
+    GtkWidget *mi;
+
+    mi = atsw_entrada( a, m, "Importar series…",
+        "De un .xlsx, un .csv o un .txt a n SERIES del proyecto, cada una con "
+        "su primer .inp. (Es el botón «Datos…».)", G_CALLBACK(on_datos), a );
+    if ( !a->hay ) atsw_apaga( mi, SIN_PROYECTO );
+    sec_serie_datos( a, m );
+    separa( m );
+    sec_vistazos( a, m );
+}
+
+/* US: LA SERIE MARCADA Y SUS MODELOS, en el orden del ciclo de Box y
+ * Jenkins (identificar, especificar y estimar, diagnosticar, prever) y con
+ * las decisiones al final. Es la seccion de la serie seguida de la del
+ * modelo marcado en la rejilla, que son las de los dos menus del boton
+ * derecho.                                                            */
+static void llena_us( Atsw *a, GtkWidget *m )
+{
+    gchar *id = hay_serie( a ) ? atsw_marcada( a->l_modelos, M_ID ) : NULL;
+
+    sec_identificar( a, m );
+    separa( m );
+    if ( id )
+        {
+        /* Los envios del modelo y, detras, el de la serie que no repiten:
+           el modelo nuevo en otra muestra, que cuelga de los datos.   */
+        sec_modelo_envios( a, m, id,
+                           pr_es_datos( a->p, a->serie, atsw_muestra_actual( a ), id ) );
+        sec_serie_envios( a, m, FALSE );
+        secciones_estimado( a, m, id );
+        }
+    else
+        sec_serie_envios( a, m, TRUE );
+    g_free( id );
+}
+
+static void llena_ayuda( Atsw *a, GtkWidget *m )
+{
+    GtkWidget *mi;
+
+    mi = atsw_entrada( a, m, "Manual", "El manual del alumno: el caso IPC ← WTI "
+                       "paso a paso, con capturas.", G_CALLBACK(on_manual_mi), a );
+    atsw_entrada_tecla( mi, "F1" );
+    atsw_entrada( a, m, "Teclas", "Las teclas de la madre, en una lista.",
+                  G_CALLBACK(on_teclas_mi), a );
+    separa( m );
+    atsw_entrada( a, m, "Acerca de ATSW", "La versión, los créditos y la licencia.",
+                  G_CALLBACK(on_acerca_mi), a );
+}
+
+/* LOS TITULOS. El globo de cada uno dice su nombre completo (decision 7),
+   con el formato de los globos de la madre: que es, una linea en blanco,
+   lo que contiene, y la tecla.                                        */
+typedef void (*Llena)( Atsw *a, GtkWidget *m );
+
+static const struct { const char *rotulo, *globo; Llena llena; } TITULOS[] = {
+    { "_Proyecto",
+      "Proyecto — el manifiesto y lo que cuelga de él\n\nAbrir, crear y releer; "
+      "las propiedades, el linaje y el cuaderno. Se guarda solo.\n\nAlt+P",
+      llena_proyecto },
+    { "_Datos",
+      "Datos — las series como datos, antes de cualquier modelo\n\nImportar, "
+      "editar la serie, declarar una muestra; la media–desviación típica y la "
+      "serie con su ACF y su PACF.\n\nAlt+D",
+      llena_datos },
+    { "_US",
+      "US — Modelo univariante (Box-Jenkins), con fue y fuf\n\nLa serie marcada "
+      "y sus modelos: identificar, especificar y estimar, diagnosticar, prever; "
+      "y las decisiones al final.\n\nAlt+U",
+      llena_us },
+    { "_MT",
+      "MT — Transferencia multivariante, con drtran\n\nEl caso marcado: varias "
+      "series, cada una con su modelo univariante, de entrada y de salida.\n\n"
+      "Alt+M",
+      atsw_menu_mt },
+    { "A_yuda",
+      "Ayuda — el manual, las teclas y «Acerca de»\n\nF1 abre el manual.\n\n"
+      "Alt+Y",
+      llena_ayuda } };
+
+/* Rehace el menu del titulo i con el estado de ahora. */
+static void rehace_menu( Atsw *a, GtkWidget *titulo )
+{
+    GtkWidget *m = gtk_menu_item_get_submenu( GTK_MENU_ITEM(titulo) );
+    GList     *l, *h;
+    Llena      fn = (Llena) g_object_get_data( G_OBJECT(titulo), "llena" );
+
+    if ( m == NULL || fn == NULL ) return;
+    h = gtk_container_get_children( GTK_CONTAINER(m) );
+    for ( l = h; l; l = l->next ) gtk_widget_destroy( l->data );
+    g_list_free( h );
+    fn( a, m );
+    gtk_widget_show_all( m );
+}
+
+/* EL RECUADRO DEL TITULO, CON EL TECLADO. Con el raton sale el globo de
+ * siempre; con F10, Alt+letra o las flechas GTK3 no lo enseña, y el
+ * analista lo quiere igual (§3.1 bis). Va a la derecha del menu abierto,
+ * para no taparlo, y se quita al salir del titulo.                     */
+static gboolean coloca_recuadro( gpointer d )
+{
+    Atsw      *a = d;
+    GtkWidget *titulo = g_object_get_data( G_OBJECT(a->recuadro), "titulo" );
+    GtkWidget *m, *top;
+    GdkWindow *gw;
+    gint       x = 0, y = 0, w, wr = 0, hr = 0;
+
+    if ( titulo == NULL ) return G_SOURCE_REMOVE;
+    m   = gtk_menu_item_get_submenu( GTK_MENU_ITEM(titulo) );
+    top = m ? gtk_widget_get_toplevel( m ) : NULL;
+    gw  = top ? gtk_widget_get_window( top ) : NULL;
+    if ( gw && gtk_widget_get_mapped( top ) )
+        {
+        gdk_window_get_origin( gw, &x, &y );
+        w = gtk_widget_get_allocated_width( top );
+        x += w + 8;
+        }
+    else if ( ( gw = gtk_widget_get_window( titulo ) ) != NULL )
+        {
+        GtkAllocation al;
+
+        gdk_window_get_origin( gw, &x, &y );
+        gtk_widget_get_allocation( titulo, &al );
+        x += al.x + al.width + 8;
+        y += al.y + al.height;
+        }
+    gtk_window_get_size( GTK_WINDOW(a->recuadro), &wr, &hr );
+    {
+    GdkMonitor   *mo = gdk_display_get_monitor_at_point( gdk_display_get_default(), x, y );
+    GdkRectangle  r;
+
+    if ( mo )
+        {
+        gdk_monitor_get_workarea( mo, &r );
+        if ( x + wr > r.x + r.width ) x = r.x + r.width - wr;
+        }
+    }
+    gtk_window_move( GTK_WINDOW(a->recuadro), x, y );
+    return G_SOURCE_REMOVE;
+}
+
+static GtkWidget *recuadro_nuevo( void )
+{
+    GtkWidget      *w = gtk_window_new( GTK_WINDOW_POPUP );
+    GtkWidget      *l = gtk_label_new( NULL );
+    GtkCssProvider *css = gtk_css_provider_new();
+
+    /* Con el aspecto de un globo: el estilo «tooltip» del tema, y por si
+       el tema no lo da a una ventana cualquiera, el de Adwaita.        */
+    gtk_css_provider_load_from_data( css,
+        "window.atsw-recuadro { background-color: rgba(0,0,0,0.85); "
+        "border-radius: 5px; }"
+        "window.atsw-recuadro label { color: white; padding: 6px 10px; }", -1, NULL );
+    gtk_style_context_add_provider( gtk_widget_get_style_context( w ),
+        GTK_STYLE_PROVIDER(css), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION );
+    gtk_style_context_add_provider( gtk_widget_get_style_context( l ),
+        GTK_STYLE_PROVIDER(css), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION );
+    g_object_unref( css );
+    gtk_style_context_add_class( gtk_widget_get_style_context( w ), "atsw-recuadro" );
+    gtk_window_set_type_hint( GTK_WINDOW(w), GDK_WINDOW_TYPE_HINT_TOOLTIP );
+    /* UN ANCHO DE LECTURA: envuelta sin el, la ventana emergente se
+       quedaba en su minimo y salia una palabra por linea.             */
+    gtk_label_set_line_wrap( GTK_LABEL(l), TRUE );
+    gtk_label_set_width_chars( GTK_LABEL(l), 44 );
+    gtk_label_set_max_width_chars( GTK_LABEL(l), 48 );
+    gtk_label_set_xalign( GTK_LABEL(l), 0.0 );
+    gtk_container_add( GTK_CONTAINER(w), l );
+    gtk_widget_show( l );
+    return w;
+}
+
+static void on_titulo_dentro( GtkMenuItem *t, Atsw *a )
+{
+    GdkEvent *ev = gtk_get_current_event();
+    gboolean  teclado = ev == NULL || ev->type == GDK_KEY_PRESS ||
+                        ev->type == GDK_KEY_RELEASE;
+
+    if ( ev ) gdk_event_free( ev );
+    rehace_menu( a, GTK_WIDGET(t) );
+    enseña_en_barra( a, GTK_WIDGET(t) );
+    if ( !teclado ) return;
+
+    if ( a->recuadro == NULL ) a->recuadro = recuadro_nuevo();
+    {
+    gchar *g = gtk_widget_get_tooltip_text( GTK_WIDGET(t) );
+
+    gtk_label_set_text( GTK_LABEL(gtk_bin_get_child( GTK_BIN(a->recuadro) )), g );
+    g_free( g );
+    }
+    gtk_window_set_transient_for( GTK_WINDOW(a->recuadro), GTK_WINDOW(a->ventana) );
+    g_object_set_data( G_OBJECT(a->recuadro), "titulo", t );
+    gtk_widget_show( a->recuadro );
+    coloca_recuadro( a );
+    g_idle_add( coloca_recuadro, a );       /* cuando el menu ya tiene sitio */
+}
+
+static void on_titulo_fuera( GtkMenuItem *t, Atsw *a )
+{
+    (void) t;
+    if ( a->recuadro )
+        {
+        g_object_set_data( G_OBJECT(a->recuadro), "titulo", NULL );
+        gtk_widget_hide( a->recuadro );
+        }
+    repone_barra( a );
+}
+
+static GtkWidget *barra_de_menus( Atsw *a )
+{
+    GtkWidget *mb = gtk_menu_bar_new();
+    guint      i;
+
+    for ( i = 0; i < G_N_ELEMENTS(TITULOS); i++ )
+        {
+        GtkWidget *t = gtk_menu_item_new_with_mnemonic( TITULOS[i].rotulo );
+        GtkWidget *m = gtk_menu_new();
+
+        gtk_widget_set_tooltip_text( t, TITULOS[i].globo );
+        g_object_set_data( G_OBJECT(t), "llena", (gpointer) TITULOS[i].llena );
+        gtk_menu_item_set_submenu( GTK_MENU_ITEM(t), m );
+        g_signal_connect( t, "select",   G_CALLBACK(on_titulo_dentro), a );
+        g_signal_connect( t, "deselect", G_CALLBACK(on_titulo_fuera), a );
+        gtk_menu_shell_append( GTK_MENU_SHELL(mb), t );
+        }
+    return mb;
+}
+
+static gboolean on_atajo_relee( GtkAccelGroup *g, GObject *o, guint k,
+                                GdkModifierType m, Atsw *a )
+{
+    (void) g; (void) o; (void) k; (void) m;
+    relee( a );
     return TRUE;
 }
 
@@ -1617,6 +2196,8 @@ static void activate( GtkApplication *app, gpointer d )
     GtkWidget    *w, *raiz, *barra, *pan, *izq, *der, *vb, *bt;
     GtkListStore *st;
     GtkAccelGroup *atajos;
+    guint          k;
+    GdkModifierType prim;
 
     w = gtk_application_window_new( app );
     a->ventana = w;
@@ -1624,9 +2205,17 @@ static void activate( GtkApplication *app, gpointer d )
     gtk_window_set_default_size( GTK_WINDOW(w), 1000, 620 );
     g_signal_connect( w, "focus-in-event", G_CALLBACK(on_foco), a );
 
+    /* LA BARRA DE MENUS, pegada al borde, y lo de siempre debajo. */
+    {
+    GtkWidget *caja = gtk_box_new( GTK_ORIENTATION_VERTICAL, 0 );
+
+    gtk_container_add( GTK_CONTAINER(w), caja );
+    a->menubar = barra_de_menus( a );
+    gtk_box_pack_start( GTK_BOX(caja), a->menubar, FALSE, FALSE, 0 );
     raiz = gtk_box_new( GTK_ORIENTATION_VERTICAL, 6 );
     gtk_container_set_border_width( GTK_CONTAINER(raiz), 8 );
-    gtk_container_add( GTK_CONTAINER(w), raiz );
+    gtk_box_pack_start( GTK_BOX(caja), raiz, TRUE, TRUE, 0 );
+    }
 
     /* --- la barra --- */
     barra = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 6 );
@@ -1638,21 +2227,27 @@ static void activate( GtkApplication *app, gpointer d )
      * §3.3). Van en los globos, que es donde se buscan.               */
     atajos = gtk_accel_group_new();
     gtk_window_add_accel_group( GTK_WINDOW(w), atajos );
+    /* <Primary> Y NO Ctrl FIJO: en macOS es Cmd, como espera quien usa un
+       Mac (ESTUDIO-madre-organizacion §3.4). En Linux y Windows, Ctrl. */
+    gtk_accelerator_parse( "<Primary>o", &k, &prim );
 
     bt = boton( barra, "Abrir…", "Un proyecto.yaml. Si está roto se dice y NO se "
                             "abre: nunca se pisa.\n\nCtrl+O", G_CALLBACK(on_abrir), a );
     gtk_widget_add_accelerator( bt, "clicked", atajos, GDK_KEY_o,
-                                GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE );
+                                prim, GTK_ACCEL_VISIBLE );
     bt = boton( barra, "Nuevo…", "Un proyecto nuevo, vacío.\n\nCtrl+N",
                 G_CALLBACK(on_nuevo), a );
     gtk_widget_add_accelerator( bt, "clicked", atajos, GDK_KEY_n,
-                                GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE );
+                                prim, GTK_ACCEL_VISIBLE );
     /* Ctrl+R relee lo que haya cambiado fuera, que es lo que ya pasa al
        volver a la ventana; y Ctrl+Q sale, como en las hijas.          */
-    gtk_accel_group_connect( atajos, GDK_KEY_r, GDK_CONTROL_MASK, 0,
+    gtk_accel_group_connect( atajos, GDK_KEY_r, prim, 0,
                              g_cclosure_new( G_CALLBACK(on_atajo_relee), a, NULL ) );
-    gtk_accel_group_connect( atajos, GDK_KEY_q, GDK_CONTROL_MASK, 0,
+    gtk_accel_group_connect( atajos, GDK_KEY_q, prim, 0,
                              g_cclosure_new( G_CALLBACK(on_atajo_sale), a, NULL ) );
+    /* F1, el manual: en TASTE decia «NO HAY AYUDA DISPONIBLE». */
+    gtk_accel_group_connect( atajos, GDK_KEY_F1, 0, 0,
+                             g_cclosure_new( G_CALLBACK(on_atajo_manual), a, NULL ) );
     boton( barra, "Proyecto…",
         "Identificador, título y analista. Y lo que no se edita pero hay que "
         "saber: cuándo se creó, dónde está el manifiesto y dónde la raíz de "
@@ -1756,7 +2351,7 @@ static void activate( GtkApplication *app, gpointer d )
         "especificación.\n\nCtrl+E, como Estimar en las hijas. Intro o doble "
         "clic sobre un modelo hace lo mismo.", G_CALLBACK(on_fue), a );
     gtk_widget_add_accelerator( a->b_fue, "clicked", atajos, GDK_KEY_e,
-                                GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE );
+                                prim, GTK_ACCEL_VISIBLE );
 
     gtk_box_pack_start( GTK_BOX(der), b2, FALSE, FALSE, 0 );
     }
@@ -1844,6 +2439,14 @@ static void activate( GtkApplication *app, gpointer d )
     gtk_box_pack_start( GTK_BOX(raiz), a->estado, FALSE, FALSE, 0 );
 
     atsw_refresca( a );
+    /* Los menus nacen llenos: se rehacen al abrirse, pero un menu vacio
+       no deberia asomar nunca, ni la primera vez.                     */
+    {
+    GList *l, *h = gtk_container_get_children( GTK_CONTAINER(a->menubar) );
+
+    for ( l = h; l; l = l->next ) rehace_menu( a, l->data );
+    g_list_free( h );
+    }
     gtk_widget_show_all( w );
 }
 

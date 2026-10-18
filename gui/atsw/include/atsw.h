@@ -127,6 +127,12 @@ typedef struct {
    GtkWidget *estado;             /* la barra de abajo                      */
    GtkWidget *b_fue, *b_fug, *b_drtran, *b_nuevo, *b_iterar, *b_elegir, *b_razon;
 
+   /* LA BARRA DE MENUS (ESTUDIO-madre-organizacion §3.1): Proyecto, Datos,
+      US, MT y Ayuda. Cada menu se arma al abrirse con las mismas secciones
+      que los del boton derecho. recuadro es el globo del titulo cuando se
+      llega con el teclado, que GTK3 no enseña solo.                    */
+   GtkWidget *menubar, *recuadro;
+
    /* LOS CASOS. La derecha es una PILA: la rejilla de modelos de la serie
       marcada, o la vista del caso marcado. Las dos a la vez no caben, y
       marcar una cosa u otra en la izquierda es ya decir cual se mira.  */
@@ -400,6 +406,25 @@ gboolean   atsw_on_tecla( GtkWidget *tv, GdkEventKey *ev, Atsw *a );
    con el teclado se abre debajo de la fila marcada de tv, no donde haya
    quedado el puntero.                                                 */
 void       atsw_menu_en( GtkWidget *menu, GtkWidget *tv, GdkEventButton *ev );
+
+/* UNA ENTRADA DE MENU, la misma en la barra y en el boton derecho: rotulo,
+   globo y accion, y al recorrerla con el raton o con el teclado su globo
+   pasa a la barra de estado. cb puede ser NULL (la que lleva un submenu).
+   La accion queda apuntada en el dato «accion» del widget.             */
+GtkWidget *atsw_entrada( Atsw *a, GtkWidget *menu, const char *txt,
+                         const char *tip, GCallback cb, gpointer d );
+
+/* La tecla que se ENSEÑA a la derecha de la entrada («<Primary>e»). Solo se
+   enseña: la tecla de verdad la tiene el boton o el grupo de atajos de la
+   ventana, que existen aunque el menu este cerrado.                    */
+void       atsw_entrada_tecla( GtkWidget *mi, const char *acel );
+
+/* Apaga la entrada y pone en su globo POR QUE. */
+void       atsw_apaga( GtkWidget *mi, const char *porque );
+
+/* EL MENU MT de la barra: el caso marcado y sus modelos, con las mismas
+   secciones que el boton derecho sobre un modelo del caso.             */
+void       atsw_menu_mt( Atsw *a, GtkWidget *menu );
 
 /* «Cuaderno…»: el cuaderno del proyecto, para leerlo y anotarlo. */
 void       atsw_cuaderno( Atsw *a );

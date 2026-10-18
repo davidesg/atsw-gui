@@ -91,6 +91,14 @@ endif
 
 TARGET = atsw_gui
 
+# LA VERSION, para «Acerca de ATSW»: la de git si se compila desde un clon
+# (el tag y lo que lleve encima); si no la hay, el programa dice «en
+# desarrollo». Se puede pisar desde fuera: make ATSW_VERSION=0.1.5.
+ATSW_VERSION ?= $(shell git describe --tags --always 2>/dev/null)
+ifneq ($(strip $(ATSW_VERSION)),)
+  VERFLAGS = -DATSW_VERSION='"$(ATSW_VERSION)"'
+endif
+
 # En Windows, sin -mwindows cada GUI abre ademas una consola negra. gui/fug y
 # gui/fue ya lo llevaban; faltaba en estos dos, y se veia al empaquetar.
 ifeq ($(OS),Windows_NT)
@@ -116,7 +124,7 @@ $(TARGET): $(SRC) $(HDR) $(LIBHDR) $(INPCHECK) $(UTF8_RES)
 	@if [ -z "$(GTK_LIBS)" ]; then \
 	    echo "atsw_gui necesita los ficheros de desarrollo de GTK 3"; \
 	    echo "(Debian/Ubuntu: sudo apt install libgtk-3-dev)"; exit 1; fi
-	$(CC) $(CFLAGS) $(GTK_CFLAGS) $(GSL_CFLAGS) $(INC) $(LDFLAGS) -o $@ $(SRC) $(INPCHECK) $(UTF8_RES) \
+	$(CC) $(CFLAGS) $(VERFLAGS) $(GTK_CFLAGS) $(GSL_CFLAGS) $(INC) $(LDFLAGS) -o $@ $(SRC) $(INPCHECK) $(UTF8_RES) \
 	    $(GTK_LIBS) $(GSL_LIBS) -lz -lm
 
 install: $(TARGET)

@@ -105,9 +105,11 @@ LR goes from 13.30 to 13.79, which turns "H0 not rejected" into "reject H0 at
 |---|---|
 | `BUG-40` | closed by agreeing with fue: `ν(B)` truncated at 40 lags when there is a δ, the variables summed, through `lib/fuedet` |
 | `pre_probe -det` | prints the component `build_det_component` subtracts; the suite checks it against fue's rule on `stepd2.pre` ([8ad]) |
+| `BUG-61` | fixed in 0.13 before its tag: both random generators (the bootstrap's and `-multistart`'s) hold a `uint64_t`, not an `unsigned long`, which is 32 bits on Windows and made every bootstrap hang there |
 
 **Re-measured for this release.** The 34 golden hashes are unchanged; the suite
-passes, with [8ad] new.
+passes, with [8ad] new. After BUG-61 the same holds, and on Linux the
+binary's code section is byte-identical to the one built before the fix.
 
 ### 0.12 — 2026-10-11
 

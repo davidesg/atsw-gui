@@ -1,8 +1,8 @@
 #!/bin/sh
 # tests/repro/repro.sh -- minimal reproductions of the defects registered on
 # 2026-09-23 (docs/BUGS.md, BUG-23 .. BUG-45), from the review recorded in
-# docs/REVIEW_2026-09-23.md, and BUG-58 .. BUG-60 (2026-10-17, found by the
-# Python port).
+# docs/REVIEW_2026-09-23.md, BUG-58 .. BUG-60 (2026-10-17, found by the
+# Python port) and BUG-61 (2026-10-18, the Windows build of the port).
 #
 #   sh tests/repro/repro.sh            all of them
 #   sh tests/repro/repro.sh 23 31      only those
@@ -212,5 +212,19 @@ if want 60; then hdr 60 "ladder_key loses the data when a drift is held"
   gcc -O0 -o pk "$HERE/probes/probe_ladder_key.c" 2>/dev/null \
     && ./pk "$DS/mauricio/mink_muskrat.inp" \
     || echo "  (exit $?: 1 = the key ignores the change)"
+fi
+if want 61; then hdr 61 "the random generators assume a 64-bit long (Windows: the bootstrap hangs)"
+  S="$TOP/src/drvec.c"
+  sed -n '/^static .* boot_rng = /,/^}/p' "$S" > rng_boot.h
+  grep -m1 '^ *[a-z_0-9 ]* rng = [A-Z0-9_(]*20260818' "$S" > rng_jit_decl.h
+  grep -m1 '^ *rng = rng \*' "$S" > rng_jit_step.h
+  grep -m1 '^ *u = ((real) ((rng >> 33)' "$S" > rng_jit_draw.h
+  for h in rng_boot.h rng_jit_decl.h rng_jit_step.h rng_jit_draw.h; do
+    [ -s "$h" ] || { echo "  could not extract $h from src/drvec.c"; exit 2; }; done
+  echo "  as Windows (LLP64) compiles it:"
+  gcc -O0 -I. -o pr "$HERE/probes/probe_rng_width.c" -lm 2> pr.log \
+    || { cat pr.log; echo "  (the probe did not compile)"; exit 2; }
+  grep -a 'shift count' pr.log | sed 's/^/  gcc: /'
+  ./pr || echo "  (exit 1: the generators depend on the width of long)"
 fi
 echo

@@ -133,6 +133,22 @@ jobs:
           ls -la "$MSYSTEM_PREFIX/share/glib-2.0/schemas" | head
       - name: Compilar
         run: bash .github/build-all.sh
+      # BUG-61: con `unsigned long` (32 bits en Windows) el generador del
+      # bootstrap no terminaba nunca. La bateria de drvec no bloquea fuera de
+      # Linux, asi que aqui va un bootstrap corto que SI bloquea: tiene que
+      # terminar, y con su bloque en el .out.
+      - name: drvec, un bootstrap que termina (BUG-61)
+        timeout-minutes: 15
+        run: |
+          d=engines/drvec/tests/tmp/bug61
+          mkdir -p "$d"
+          cp engines/drvec/datasets/mauricio/mink_muskrat.inp "$d/mm.inp"
+          t0=$SECONDS; rc=0
+          timeout 600 engines/drvec/bin/drvec "$d/mm" 2 1 0 -case 2 -lrtest -bootstrap 19 > /dev/null || rc=$?
+          echo "drvec -lrtest -bootstrap 19: rc=$rc en $((SECONDS - t0)) s"
+          [ "$rc" -eq 0 ] || exit 1
+          grep -a -A12 'Parametric bootstrap under H0 (19 replications)' "$d/mm.out" || exit 1
+          test -s "$d/mm.boot"
       - name: Baterias
         if: always()
         timeout-minutes: 150

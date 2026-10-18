@@ -28,6 +28,22 @@ publicación: `v*`.
   compara con la regla de fue en `stepd2.pre` ([8ad]), y
   `tests/repro/repro.sh 40` la enseña.
 
+### BUG-61, cerrado en 0.13 antes de su etiqueta: los generadores, de 64 bits en todas partes
+
+- Los dos generadores de drvec, el del bootstrap (`boot_rng`, `boot_normal`)
+  y el de las sacudidas de `-multistart`, guardaban su estado en un
+  `unsigned long`. En Windows (LLP64) son 32 bits: la constante se truncaba,
+  `>> 33` pasaba del ancho del tipo y gcc lo dejaba en 0, y el bucle de
+  rechazo de `boot_normal` no terminaba nunca. Todo bootstrap (`-lrtest
+  -bootstrap`, `-irfboot`, `-matest`, `-artest`) se colgaba. Lo encontró la
+  rueda de Windows de drvec-python.
+- Ahora es `uint64_t` (`<stdint.h>`) con constantes `ULL`. En Linux y macOS
+  es el mismo tipo: la sección de código del binario es la misma byte a byte,
+  los 34 goldens y la batería no se mueven.
+- `tests/repro/repro.sh 61` compila los generadores como los ve Windows en
+  cualquier máquina (`probes/probe_rng_width.c`). La CI de Windows corre un
+  bootstrap corto que bloquea.
+
 ## 0.12 — 2026-10-11
 
 ### BUG-41 y BUG-42, cerrados, y la diagnosis multivariante compartida

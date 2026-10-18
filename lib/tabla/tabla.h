@@ -89,13 +89,22 @@ void tb_pon_vacio( Tabla *t, int col );        /* se escribe como "-"       */
  *         correo y sigue cuadrando.
  *
  * TEX     un tabular con su caption. La procedencia va como nota al pie.
+ *
+ * MD      una tabla de Markdown (la de GitHub), con el titulo en negrita y
+ *         la procedencia debajo, en cursiva. Es la del cuaderno del
+ *         proyecto: se lee como texto y se pinta como tabla.
  */
 int tb_write_csv( const Tabla *t, const char *path );
 int tb_write_txt( const Tabla *t, const char *path );
 int tb_write_tex( const Tabla *t, const char *path );
+int tb_write_md ( const Tabla *t, const char *path );
 
-/* Elige por la extension de path: .csv, .txt/.dat, .tex. Si no la reconoce,
- * CSV, que es el unico que se lee en todas partes.                        */
+/* La tabla en Markdown, en memoria: para meterla dentro de otro texto (el
+ * cuaderno). Se libera con free(). NULL si no hay memoria.               */
+char *tb_md( const Tabla *t );
+
+/* Elige por la extension de path: .csv, .txt/.dat, .tex, .md. Si no la
+ * reconoce, CSV, que es el unico que se lee en todas partes.              */
 int tb_write( const Tabla *t, const char *path );
 
 /* Cuantas filas y columnas lleva. Para poder decir "no hay nada que exportar"

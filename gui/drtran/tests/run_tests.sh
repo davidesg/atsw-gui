@@ -248,6 +248,13 @@ $CC -O2 -Wall -Wextra -I"$L/tabla" \
     "$L/tabla/test_tabla.c" "$L/tabla/tabla.c" -o "$W/test_tabla" || exit 1
 "$W/test_tabla" "$W" || exit 1
 
+# --- el cuaderno del proyecto: lo que se miro, en Markdown -----------------
+echo
+$CC -O2 -Wall -Wextra -I"$L/tabla" -I"$L/cuaderno" \
+    "$L/cuaderno/test_cuaderno.c" "$L/cuaderno/cuaderno.c" "$L/tabla/tabla.c" \
+    $(pkg-config --cflags --libs glib-2.0) -o "$W/test_cuaderno" || exit 1
+"$W/test_cuaderno" "$W" || exit 1
+
 # --- la puerta de los datos: una, no cuatro --------------------------------
 # El primer caso es el fichero de dos columnas con el que fue y fug daban DOS
 # SERIES DISTINTAS. Aqui se fija cual es la buena.

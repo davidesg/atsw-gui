@@ -389,6 +389,27 @@ const char *atsw_fecha_texto( const AtFecha *F, char *out, size_t n );
 void       atsw_on_activado( GtkTreeView *tv, GtkTreePath *ruta,
                              GtkTreeViewColumn *col, Atsw *a );
 gboolean   atsw_on_click( GtkWidget *tv, GdkEventButton *ev, Atsw *a );
+
+/* EL TECLADO DE LAS LISTAS: la tecla de menú (o Mayús+F10) saca el mismo
+   menú que el botón derecho, sobre la fila marcada, y Supr borra el modelo
+   marcado pasando por la misma pregunta.                               */
+gboolean   atsw_on_menu_tecla( GtkWidget *tv, Atsw *a );
+gboolean   atsw_on_tecla( GtkWidget *tv, GdkEventKey *ev, Atsw *a );
+
+/* UN MENU CONTEXTUAL, desde el ratón (ev) o desde el teclado (ev NULL):
+   con el teclado se abre debajo de la fila marcada de tv, no donde haya
+   quedado el puntero.                                                 */
+void       atsw_menu_en( GtkWidget *menu, GtkWidget *tv, GdkEventButton *ev );
+
+/* «Cuaderno…»: el cuaderno del proyecto, para leerlo y anotarlo. */
+void       atsw_cuaderno( Atsw *a );
+
+/* LOS FORMULARIOS QUE VALIDAN NO SE CIERRAN CON UN ERROR: el aviso en rojo
+   va dentro del dialogo y lo tecleado se queda (DISENO: «Nuevo caso»).
+   atsw_aviso_nuevo pone la etiqueta vacía al final de caja; atsw_aviso la
+   rellena (y lo repite en la barra).                                  */
+GtkWidget *atsw_aviso_nuevo( GtkWidget *caja );
+void       atsw_aviso( Atsw *a, GtkWidget *l, const char *why );
 void       a_id( const char *s, char *out, size_t n );
 gchar     *atsw_marcada( GtkWidget *tv, int columna );
 

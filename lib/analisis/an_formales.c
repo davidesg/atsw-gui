@@ -574,7 +574,9 @@ static void meg( GString *t, const Fm *g )
     g_string_append( t, "\n" );
 }
 
-static void pinta( Fm *g )
+/* EL TEXTO, en marcado de Pango: lo pinta la etiqueta y lo lleva el
+   cuaderno.                                                           */
+static GString *texto( Fm *g )
 {
     GString *t = g_string_new( "" );
     int      i, k;
@@ -617,8 +619,40 @@ static void pinta( Fm *g )
           "simplificación estacional, con la χ²." );
     g_free( d );
     }
+    return t;
+}
+
+static void pinta( Fm *g )
+{
+    GString *t = texto( g );
+
     gtk_label_set_markup( GTK_LABEL(g->l_texto), t->str );
     g_string_free( t, TRUE );
+}
+
+static void on_cuaderno( GtkButton *b, Fm *g )
+{
+    Cuaderno *c = an_cuaderno( &g->h, g->fam == AN_FM_INTEGRACION
+                                      ? "Orden de integración"
+                                      : "Estacionalidad (MEG)",
+                               g->serie, g->muestra, g->id );
+    GString  *t;
+    gchar    *md, *v;
+
+    (void) b;
+    if ( c == NULL ) { an_cuaderno_cierra( &g->h, NULL ); return; }
+    v = g_strdup_printf( "%d", g->pl.nobs );
+    cu_dato( c, "Observaciones", v );
+    g_free( v );
+    if ( g->cur < g->pl.n )
+        cu_texto( c, "*(Incompleto: quedaban contrastes por estimar al "
+                     "mandarlo aquí.)*" );
+    t  = texto( g );
+    md = an_markup_md( t->str );
+    cu_texto( c, md );
+    g_free( md );
+    g_string_free( t, TRUE );
+    an_cuaderno_cierra( &g->h, c );
 }
 
 static void siguiente( Fm *g );
@@ -933,6 +967,11 @@ void an_formales( const AnHost *h, const char *serie, const char *muestra, const
         gtk_box_pack_end( GTK_BOX(barra), g->b_ref, FALSE, FALSE, 0 );
         gtk_box_pack_end( GTK_BOX(barra), g->c_freq, FALSE, FALSE, 0 );
         }
+    }
+    {
+    GtkWidget *bc = an_boton_cuaderno( h, G_CALLBACK(on_cuaderno), g );
+
+    if ( bc ) gtk_box_pack_end( GTK_BOX(barra), bc, FALSE, FALSE, 0 );
     }
     gtk_box_pack_start( GTK_BOX(raiz), barra, FALSE, FALSE, 0 );
     }

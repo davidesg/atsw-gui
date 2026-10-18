@@ -3,6 +3,7 @@
  */
 
 #include <stdarg.h>
+#include <string.h>
 #include <sys/stat.h>
 
 #include "analisis.h"
@@ -56,6 +57,153 @@ gchar *an_fichero( const char *que, const char *serie, const char *muestra,
    g_free( base );
    g_free( dir );
    return ruta;
+}
+
+
+/* ------------------------------------------------------------------------ */
+/* El cuaderno                                                               */
+/* ------------------------------------------------------------------------ */
+
+/* La ruta, relativa al manifiesto si cae debajo: el cuaderno viaja con el
+   proyecto, y una ruta absoluta dejaría de valer al moverlo. La relativa,
+   con '/' también en Windows: es la que entiende Markdown.              */
+static void relativa( const Proyecto *p, const char *f, char *out, size_t n )
+{
+   gchar *base = g_path_get_dirname( p->path );
+   size_t l = strlen( base );
+   char  *q;
+
+   if ( !strncmp( f, base, l ) && ( f[l] == '/' || f[l] == '\\' ) )
+      {
+      g_snprintf( out, n, "%s", f + l + 1 );
+      for ( q = out; *q; q++ ) if ( *q == '\\' ) *q = '/';
+      }
+   else
+      g_snprintf( out, n, "%s", f );
+   g_free( base );
+}
+
+Cuaderno *an_cuaderno( const AnHost *h, const char *que, const char *serie,
+                       const char *muestra, const char *id )
+{
+   Cuaderno *c;
+   gchar    *t;
+   char      out[PR_RUTA], rel[PR_RUTA];
+
+   if ( h == NULL || h->p == NULL || !h->p->path[0] ) return NULL;
+
+   t = ( id && *id ) ? g_strdup_printf( "%s — %s / %s", que, serie ? serie : "", id )
+                     : g_strdup_printf( "%s — %s", que, serie ? serie : "" );
+   c = cu_nueva( h->p->path, t );
+   g_free( t );
+   if ( c == NULL ) return NULL;
+
+   if ( h->p->id[0] ) cu_dato( c, "Proyecto", h->p->id );
+   cu_dato( c, "Serie", serie );
+   cu_dato( c, "Modelo", id );
+   cu_dato( c, "Muestra", ( muestra && *muestra ) ? muestra : "completa" );
+   if ( serie && *serie && id && *id &&
+        pr_ruta( h->p, serie, muestra, id, ".out", out, sizeof out ) == 0 )
+      {
+      relativa( h->p, out, rel, sizeof rel );
+      cu_dato( c, "Informe", rel );
+      }
+   return c;
+}
+
+void an_cuaderno_cierra( const AnHost *h, Cuaderno *c )
+{
+   char why[PR_RUTA + 64], md[PR_RUTA];
+
+   if ( c == NULL )
+      { an_di( h, "Sin proyecto no hay cuaderno: vive al lado del manifiesto." );
+        return; }
+   if ( cu_cierra( c, why, sizeof why ) != 0 )
+      { an_di( h, "%s", why ); return; }
+   if ( h && h->p && cu_ruta( h->p->path, md, sizeof md ) == 0 )
+      {
+      char rel[PR_RUTA];
+
+      relativa( h->p, md, rel, sizeof rel );
+      an_di( h, "Al cuaderno: %s.", rel );
+      }
+}
+
+GtkWidget *an_boton_cuaderno( const AnHost *h, GCallback cb, gpointer datos )
+{
+   GtkWidget *b;
+
+   if ( h == NULL || h->p == NULL || !h->p->path[0] ) return NULL;
+   b = gtk_button_new_with_label( "Al cuaderno" );
+   gtk_widget_set_tooltip_text( b,
+      "Lo que enseña esta ventana, al cuaderno del proyecto "
+      "(cuaderno/cuaderno.md, al lado del manifiesto), con la fecha y de qué "
+      "modelo sale.\n\nEl guion guarda lo que decidiste; el cuaderno, lo que "
+      "mirabas al decidirlo. Nunca se trunca, y se lee sin ATSW: es Markdown." );
+   g_signal_connect( b, "clicked", cb, datos );
+   return b;
+}
+
+
+gchar *an_markup_md( const char *m )
+{
+   GString    *o = g_string_new( "" );
+   const char *p;
+   gboolean    inicio = TRUE;          /* al principio de una línea        */
+
+   for ( p = m ? m : ""; *p; )
+      {
+      if ( inicio && *p == ' ' ) { p++; continue; }
+      if ( *p == '<' )
+         {
+         const char *f = strchr( p, '>' );
+         gchar      *tag;
+
+         if ( f == NULL ) { g_string_append( o, p ); break; }
+         tag = g_strndup( p + 1, (gsize) ( f - p - 1 ) );
+         if ( !strcmp( tag, "b" ) || !strcmp( tag, "/b" ) )
+            g_string_append( o, "**" );
+         else if ( !strcmp( tag, "i" ) || !strcmp( tag, "/i" ) )
+            g_string_append( o, "*" );
+         else if ( !strcmp( tag, "sub" ) || !strcmp( tag, "/sub" ) ||
+                   !strcmp( tag, "sup" ) || !strcmp( tag, "/sup" ) )
+            g_string_append_printf( o, "<%s>", tag );
+         /* el resto (small, span, tt) se quita */
+         g_free( tag );
+         p = f + 1;
+         inicio = FALSE;
+         continue;
+         }
+      if ( *p == '&' )
+         {
+         static const struct { const char *e, *c; } ent[] = {
+            { "&amp;", "&" }, { "&gt;", ">" }, { "&quot;", "\"" },
+            { "&apos;", "'" }, { "&#39;", "'" } };
+         size_t k;
+         int    hecho = 0;
+
+         for ( k = 0; k < G_N_ELEMENTS( ent ) && !hecho; k++ )
+            if ( !strncmp( p, ent[k].e, strlen( ent[k].e ) ) )
+               { g_string_append( o, ent[k].c ); p += strlen( ent[k].e ); hecho = 1; }
+         /* &lt; se queda: un «<» suelto en Markdown puede abrir HTML. */
+         if ( !hecho ) { g_string_append_c( o, *p ); p++; }
+         inicio = FALSE;
+         continue;
+         }
+      if ( *p == '\n' )
+         {
+         /* Un salto suelto, de verdad (dos espacios); uno doble, párrafo. */
+         while ( o->len && o->str[o->len-1] == ' ' ) g_string_truncate( o, o->len - 1 );
+         if ( p[1] == '\n' || p[1] == '\0' ) g_string_append_c( o, '\n' );
+         else g_string_append( o, "  \n" );
+         p++;
+         inicio = TRUE;
+         continue;
+         }
+      g_string_append_c( o, *p++ );
+      inicio = FALSE;
+      }
+   return g_string_free( o, FALSE );
 }
 
 

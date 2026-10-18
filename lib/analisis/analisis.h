@@ -37,6 +37,7 @@
 #include <gtk/gtk.h>
 
 #include "proyecto.h"
+#include "cuaderno.h"
 #include "preview.h"      /* trae el previewhost.h del programa que compila */
 
 /* CON QUE SE ABRE UN MODELO DERIVADO.
@@ -271,5 +272,29 @@ gchar *an_cache_dir( void );
  * con un nombre fijo, dos modelos compartirían ventana. g_free.        */
 gchar *an_fichero( const char *que, const char *serie, const char *muestra,
                    const char *id );
+
+/* EL CUADERNO DEL PROYECTO (lib/cuaderno): la evidencia que se miró.
+ *
+ * an_cuaderno abre una entrada con la procedencia de siempre --proyecto,
+ * serie, modelo, muestra y el .out del que sale-- y el título «que — serie /
+ * id». NULL si el anfitrión no tiene un proyecto con manifiesto: el cuaderno
+ * vive a su lado y sin él no hay dónde escribir.
+ *
+ * an_cuaderno_cierra la escribe y le dice al anfitrión dónde, o por qué no.
+ *
+ * an_boton_cuaderno es el botón «Al cuaderno» de cada ventana, con su globo;
+ * NULL si no hay proyecto, y entonces no se ofrece (un botón que no puede
+ * hacer nada es peor que no tenerlo).                                   */
+Cuaderno  *an_cuaderno( const AnHost *h, const char *que, const char *serie,
+                        const char *muestra, const char *id );
+void       an_cuaderno_cierra( const AnHost *h, Cuaderno *c );
+GtkWidget *an_boton_cuaderno( const AnHost *h, GCallback cb, gpointer datos );
+
+/* EL MARCADO DE PANGO, EN MARKDOWN: lo que una ventana pinta en una
+ * etiqueta, para el cuaderno sin escribirlo dos veces. <b> e <i> pasan a
+ * ** y *; <sub> y <sup> se quedan, que Markdown los lee; <small>, <span> y
+ * <tt> se quitan. Las sangrías se quitan (en Markdown son un bloque de
+ * código) y un salto suelto se vuelve un salto de verdad. g_free.       */
+gchar *an_markup_md( const char *markup );
 
 #endif /* ATSW_ANALISIS_H */

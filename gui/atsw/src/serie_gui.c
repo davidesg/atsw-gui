@@ -13,6 +13,7 @@
  * contrario de para lo que existen.
  */
 
+#include <stdio.h>
 #include <string.h>
 
 #include "atsw.h"
@@ -35,6 +36,45 @@ GtkWidget *atsw_fila( GtkWidget *rejilla, int y, const char *et,
     return e;
 }
 
+/* EL AVISO DENTRO DEL DIALOGO. Lo aprendido de TASTE no es su «[C]
+ * CORREGIR» --en GTK los campos siguen ahí, editables-- sino lo que hay
+ * debajo: UN ERROR NO TIRA LO TECLEADO. Antes un nombre que no valía
+ * cerraba el diálogo y lo decía en la barra, y había que volver a
+ * escribirlo todo. Es el patrón de «Nuevo caso», para los demás.      */
+GtkWidget *atsw_aviso_nuevo( GtkWidget *caja )
+{
+    GtkWidget *l = gtk_label_new( "" );
+
+    gtk_label_set_line_wrap( GTK_LABEL(l), TRUE );
+    gtk_label_set_max_width_chars( GTK_LABEL(l), 70 );
+    gtk_label_set_xalign( GTK_LABEL(l), 0.0 );
+    gtk_widget_set_name( l, "aviso" );
+    gtk_box_pack_end( GTK_BOX(caja), l, FALSE, FALSE, 0 );
+    return l;
+}
+
+void atsw_aviso( Atsw *a, GtkWidget *l, const char *why )
+{
+    gchar *mk = g_markup_printf_escaped(
+        "<span foreground=\"#b3261e\">%s</span>", why );
+
+    gtk_label_set_markup( GTK_LABEL(l), mk );
+    g_free( mk );
+    barra_pub( a, why );
+}
+
+/* ¿Una fecha AAAA-MM-DD de verdad? Vacía también vale: no consta. */
+static gboolean fecha_vale( const char *t )
+{
+    int y, m, d;
+    char resto;
+
+    if ( !*t ) return TRUE;
+    if ( sscanf( t, "%4d-%2d-%2d%c", &y, &m, &d, &resto ) != 3 ) return FALSE;
+    if ( strlen( t ) != 10 ) return FALSE;
+    return g_date_valid_dmy( (GDateDay) d, (GDateMonth) m, (GDateYear) y );
+}
+
 static void pon( char *destino, size_t n, GtkWidget *e )
 {
     snprintf( destino, n, "%s", gtk_entry_get_text( GTK_ENTRY(e) ) );
@@ -45,7 +85,7 @@ void atsw_serie_edita( Atsw *a, const char *serie )
     PrSerie   *s;
     PrError    e;
     GtkWidget *d, *caja, *rej, *cab;
-    GtkWidget *desc, *fue, *url, *baj, *uni, *not;
+    GtkWidget *desc, *fue, *url, *baj, *uni, *not, *aviso;
     int        r;
 
     if ( !a->hay || serie == NULL || !*serie ) return;
@@ -99,8 +139,18 @@ void atsw_serie_edita( Atsw *a, const char *serie )
         "Lo que haya que saber al mirarla: cambios de base, rupturas, "
         "cómo se enlazó." );
 
+    aviso = atsw_aviso_nuevo( caja );
     gtk_widget_show_all( d );
-    r = gtk_dialog_run( GTK_DIALOG(d) );
+
+    for ( ;; )
+        {
+        r = gtk_dialog_run( GTK_DIALOG(d) );
+        if ( r != GTK_RESPONSE_OK ) break;
+        if ( fecha_vale( gtk_entry_get_text( GTK_ENTRY(baj) ) ) ) break;
+        atsw_aviso( a, aviso, "La bajada es una fecha AAAA-MM-DD, como "
+                    "«2026-10-17», o nada. Lo demás se queda como lo dejaste." );
+        gtk_widget_grab_focus( baj );
+        }
 
     if ( r == GTK_RESPONSE_OK )
         {
@@ -234,7 +284,8 @@ void atsw_proyecto_edita( Atsw *a )
 {
     PrError    e;
     GtkWidget *d, *caja, *rej;
-    GtkWidget *e_id, *e_tit, *e_ana;
+    GtkWidget *e_id, *e_tit, *e_ana, *aviso;
+    char       nuevo[PR_ID];
     int        r;
 
     if ( !a->hay ) { barra_pub( a, "Abre un proyecto antes." ); return; }
@@ -284,17 +335,36 @@ void atsw_proyecto_edita( Atsw *a )
     g_free( t );
     }
 
+    aviso = atsw_aviso_nuevo( caja );
     gtk_widget_show_all( d );
-    r = gtk_dialog_run( GTK_DIALOG(d) );
+
+    /* Un identificador que no vale ya no se ignora EN SILENCIO (antes se
+       quedaba el viejo sin decir nada): se dice, y el diálogo sigue.   */
+    for ( ;; )
+        {
+        r = gtk_dialog_run( GTK_DIALOG(d) );
+        if ( r != GTK_RESPONSE_OK ) break;
+        /* SE MIRA EL TEXTO, no lo que a_id saca de él: a_id llama «serie» a
+           lo vacío, y así un identificador borrado renombraba el proyecto
+           a «serie» sin decir nada.                                    */
+        {
+        gchar *t = g_strstrip( g_strdup( gtk_entry_get_text( GTK_ENTRY(e_id) ) ) );
+        gboolean vacio = !*t;
+
+        g_free( t );
+        a_id( gtk_entry_get_text( GTK_ENTRY(e_id) ), nuevo, sizeof nuevo );
+        if ( !vacio ) break;
+        }
+        atsw_aviso( a, aviso, "El identificador no puede quedar vacío: hace "
+                    "falta para nombrar el proyecto. Letras, cifras, «-» y «_»." );
+        gtk_widget_grab_focus( e_id );
+        }
 
     if ( r == GTK_RESPONSE_OK )
         {
-        char nuevo[PR_ID];
-
         /* El identificador se limpia como los demás: lo que no cabe o no
            vale no se guarda a medias.                                  */
-        a_id( gtk_entry_get_text( GTK_ENTRY(e_id) ), nuevo, sizeof nuevo );
-        if ( nuevo[0] ) snprintf( a->p->id, PR_ID, "%s", nuevo );
+        snprintf( a->p->id, PR_ID, "%s", nuevo );
 
         snprintf( a->p->titulo, PR_TEXTO, "%s",
                   gtk_entry_get_text( GTK_ENTRY(e_tit) ) );

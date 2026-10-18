@@ -525,6 +525,61 @@ static void on_marca( GtkToggleButton *b, An *g )
     dibuja( g );
 }
 
+/* AL CUADERNO: el gráfico TAL COMO SE VE --con o sin los marcados--, los
+   episodios y lo que dicen el Q, la normalidad y el pie.             */
+static void on_cuaderno( GtkButton *b, An *g )
+{
+    Cuaderno *c = an_cuaderno( &g->h, "Anómalos", g->serie, g->muestra, g->id );
+    GString  *ep;
+    char      png[PR_RUTA];
+    gchar    *pie_txt, *md;
+    int       i, nm = 0;
+    GtkWidget *l[3];
+
+    (void) b;
+    if ( c == NULL ) { an_cuaderno_cierra( &g->h, NULL ); return; }
+
+    md = g_strdup_printf( "%.1f", g->umbral );
+    cu_dato( c, "Umbral", md );
+    g_free( md );
+
+    ep = g_string_new( "" );
+    for ( i = 0; i < g->nep; i++ )
+        {
+        const AnEpisodio *e = &g->ep[i];
+
+        if ( e->n > 1 )
+            g_string_append_printf( ep, "- %s–%s, z máx. %+.1f%s\n",
+                g->o.res_fecha[e->desde], g->o.res_fecha[e->hasta], e->z_max,
+                g->marcado[i] ? " — **marcado**" : "" );
+        else
+            g_string_append_printf( ep, "- %s, z %+.1f%s\n",
+                g->o.res_fecha[e->desde], e->z_max,
+                g->marcado[i] ? " — **marcado**" : "" );
+        nm += g->marcado[i];
+        }
+    if ( g->nep == 0 ) g_string_append( ep, "Ningún residuo pasa del umbral.\n" );
+    cu_texto( c, ep->str );
+    g_string_free( ep, TRUE );
+
+    pie_txt = g_strdup_printf( "Residuos de %s%s", g->id,
+                               g->sin_anomalos && nm ? ", sin los episodios marcados"
+                                                     : "" );
+    if ( g->eps[0] && cu_imagen( c, g->id, pie_txt, png, sizeof png ) == 0 )
+        preview_save_as( g->eps, png, NULL );   /* si falla, la entrada lo dice */
+    g_free( pie_txt );
+
+    l[0] = g->l_q; l[1] = g->l_jb; l[2] = g->l_pie;
+    for ( i = 0; i < 3; i++ )
+        if ( l[i] && *gtk_label_get_label( GTK_LABEL(l[i]) ) )
+            {
+            md = an_markup_md( gtk_label_get_label( GTK_LABEL(l[i]) ) );
+            cu_texto( c, md );
+            g_free( md );
+            }
+    an_cuaderno_cierra( &g->h, c );
+}
+
 static void on_cerrar( GtkWidget *w, An *g ) { (void) w; g_free( g ); }
 
 
@@ -703,6 +758,9 @@ void an_anomalos( const AnHost *h, const char *serie, const char *muestra,
     gtk_widget_set_sensitive( g->b_sug, FALSE );
     g_signal_connect( g->b_sug, "clicked", G_CALLBACK(on_sugerir), g );
     gtk_box_pack_start( GTK_BOX(fila), g->b_sug, FALSE, FALSE, 0 );
+
+    if ( ( b = an_boton_cuaderno( h, G_CALLBACK(on_cuaderno), g ) ) )
+        gtk_box_pack_end( GTK_BOX(fila), b, FALSE, FALSE, 0 );
 
     g->l_q = gtk_label_new( NULL );
     gtk_label_set_xalign( GTK_LABEL(g->l_q), 0.0 );

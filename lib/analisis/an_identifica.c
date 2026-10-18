@@ -36,6 +36,7 @@
 
 #include "analisis.h"
 #include "artcand.h"
+#include "tabla.h"
 #include "raices.h"
 #include "engine.h"
 #include "inpcheck.h"
@@ -540,6 +541,83 @@ static void on_derivar( GtkButton *b, Id *g )
 
 /* ---- the window ------------------------------------------------------ */
 
+/* AL CUADERNO: la cabecera (qué serie, qué transformación), los
+   candidatos en el orden de art y el correlograma tal como se ve, con el
+   teórico del candidato elegido encima.                               */
+static void on_cuaderno( GtkButton *b, Id *g )
+{
+    Cuaderno *c = an_cuaderno( &g->h, "Identificación", g->serie, g->muestra, g->id );
+    Tabla    *t;
+    gchar    *md;
+    char      png[PR_RUTA];
+    int       i;
+
+    (void) b;
+    if ( c == NULL ) { an_cuaderno_cierra( &g->h, NULL ); return; }
+    if ( g->l_cab && *gtk_label_get_label( GTK_LABEL(g->l_cab) ) )
+        {
+        md = an_markup_md( gtk_label_get_label( GTK_LABEL(g->l_cab) ) );
+        cu_texto( c, md );
+        g_free( md );
+        }
+
+    if ( g->c && ( t = tb_new( "Los candidatos de art" ) ) != NULL )
+        {
+        tb_col( t, "#",         NULL, TB_ENT, 0 );
+        tb_col( t, "Órdenes",   NULL, TB_TXT, 0 );
+        tb_col( t, "Tipo",      NULL, TB_TXT, 0 );
+        tb_col( t, "Similitud", NULL, TB_NUM, 3 );
+        tb_col( t, "Peso",      NULL, TB_NUM, 3 );
+        tb_col( t, "AICc",      NULL, TB_NUM, 1 );
+        tb_col( t, "",          NULL, TB_TXT, 0 );
+        for ( i = 0; i < g->c->ncand; i++ )
+            {
+            const AcCand *k = &g->c->cand[i];
+            char orden[32], tipo[48];
+
+            g_snprintf( orden, sizeof orden, "(%d,%d)(%d,%d)", k->p, k->q, k->P, k->Q );
+            ac_kind( k, tipo, sizeof tipo );
+            tb_fila( t );
+            tb_pon_num( t, 0, i + 1 );
+            tb_pon_txt( t, 1, orden );
+            tb_pon_txt( t, 2, tipo );
+            if ( k->scored )
+                { tb_pon_num( t, 3, k->sim ); tb_pon_num( t, 4, k->weight );
+                  tb_pon_num( t, 5, k->aicc ); }
+            tb_pon_txt( t, 6, i == g->sel ? "elegido"
+                              : k->proposed ? "propuesto" : "" );
+            }
+        cu_tabla( c, t );
+        tb_free( t );
+        }
+
+    /* EL CORRELOGRAMA, pintado por la MISMA función que la ventana. */
+    if ( g->area && g->c )
+        {
+        int W = gtk_widget_get_allocated_width( g->area );
+        int H = gtk_widget_get_allocated_height( g->area );
+        gchar *pie = ( g->sel >= 0 && g->sel < g->c->ncand )
+            ? g_strdup_printf( "ACF y PACF, con el teórico de (%d,%d)(%d,%d)",
+                               g->c->cand[g->sel].p, g->c->cand[g->sel].q,
+                               g->c->cand[g->sel].P, g->c->cand[g->sel].Q )
+            : g_strdup( "ACF y PACF" );
+
+        if ( W > 1 && H > 1 &&
+             cu_imagen( c, g->id[0] ? g->id : "identificacion", pie, png, sizeof png ) == 0 )
+            {
+            cairo_surface_t *sf = cairo_image_surface_create( CAIRO_FORMAT_RGB24, W, H );
+            cairo_t         *cr = cairo_create( sf );
+
+            pinta( g->area, cr, g );
+            cairo_destroy( cr );
+            cairo_surface_write_to_png( sf, png );
+            cairo_surface_destroy( sf );
+            }
+        g_free( pie );
+        }
+    an_cuaderno_cierra( &g->h, c );
+}
+
 static void on_cerrar( GtkWidget *w, Id *g )
 {
     (void) w;
@@ -1016,6 +1094,8 @@ static void ventana( Id *g, const char *que )
             "y eso se hace desde la madre.</small>" );
         gtk_box_pack_end( GTK_BOX(barra), l, FALSE, FALSE, 0 );
         }
+    if ( ( b = an_boton_cuaderno( &g->h, G_CALLBACK(on_cuaderno), g ) ) )
+        gtk_box_pack_start( GTK_BOX(barra), b, FALSE, FALSE, 0 );
 
     g_signal_connect( g->win, "destroy", G_CALLBACK(on_cerrar), g );
     gtk_widget_show_all( g->win );

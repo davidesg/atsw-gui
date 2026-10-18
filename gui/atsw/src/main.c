@@ -258,7 +258,7 @@ static void menu_serie( Atsw *a, GdkEventButton *ev )
     gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
 
     gtk_widget_show_all( menu );
-    gtk_menu_popup_at_pointer( GTK_MENU(menu), (GdkEvent *) ev );
+    atsw_menu_en( menu, a->l_series, ev );
 }
 
 static gboolean on_serie_click( GtkWidget *tv, GdkEventButton *ev, Atsw *a )
@@ -283,6 +283,16 @@ static gboolean on_serie_click( GtkWidget *tv, GdkEventButton *ev, Atsw *a )
 
     menu_serie( a, ev );
     return TRUE;                            /* la seleccion ya esta hecha */
+}
+
+/* La tecla de menú sobre la lista de series: lo mismo que el botón derecho,
+   sobre la serie marcada.                                             */
+static gboolean on_serie_menu_tecla( GtkWidget *tv, Atsw *a )
+{
+    (void) tv;
+    if ( !a->hay || !a->serie[0] ) return FALSE;
+    menu_serie( a, NULL );
+    return TRUE;
 }
 
 static void on_serie( GtkTreeSelection *sel, gpointer d )
@@ -982,8 +992,10 @@ static void on_hoja( GtkNotebook *nb, GtkWidget *pag, guint n, Atsw *a )
  * PIDE, no se exige -- igual que la de una iteracion.                  */
 static void on_muestra_nueva( GtkButton *b, Atsw *a )
 {
-    GtkWidget *d, *caja, *rej, *e_id, *e_razon, *cd, *ch;
+    GtkWidget *d, *caja, *rej, *e_id, *e_razon, *cd, *ch, *aviso;
+    GtkWidget *e_desde = NULL, *e_hasta = NULL;
     AtFecha    f_desde, f_hasta;
+    char       id2[PR_ID], b1[32] = "", b2[32] = "";
     AtTramo    t;
     PrError    e;
     int        r;
@@ -1034,9 +1046,11 @@ static void on_muestra_nueva( GtkButton *b, Atsw *a )
      * mezcladas no se puede alimentar a drtran ni a drvarma.           */
     if ( t.mezcla )
         {
+        /* A MANO, y SE LEEN: antes estas dos entradas se creaban y lo que
+           se escribía en ellas no iba a ninguna parte.                  */
         cd = ch = NULL;
-        atsw_fila( rej, 1, "Desde ", "", NULL );
-        atsw_fila( rej, 2, "Hasta ", "", NULL );
+        e_desde = atsw_fila( rej, 1, "Desde ", "", "Período/año: «1/2015»." );
+        e_hasta = atsw_fila( rej, 2, "Hasta ", "", "Período/año: «12/2019»." );
         }
     else
         {
@@ -1086,48 +1100,86 @@ static void on_muestra_nueva( GtkButton *b, Atsw *a )
     g_free( txt );
     }
 
+    aviso = atsw_aviso_nuevo( caja );
     gtk_widget_show_all( d );
-    r = gtk_dialog_run( GTK_DIALOG(d) );
+
+    /* SI NO VALE, SE DICE Y EL DIALOGO SIGUE: el nombre, las fechas y la
+       razón que se escribieron no se pierden por un nombre repetido.   */
+    for ( ;; )
+        {
+        char why[512];
+
+        r = gtk_dialog_run( GTK_DIALOG(d) );
+        if ( r != GTK_RESPONSE_OK ) break;
+
+        a_id( gtk_entry_get_text( GTK_ENTRY(e_id) ), id2, sizeof id2 );
+        b1[0] = b2[0] = '\0';
+        if ( cd ) atsw_fecha_texto( &f_desde, b1, sizeof b1 );
+        if ( ch ) atsw_fecha_texto( &f_hasta, b2, sizeof b2 );
+        if ( e_desde ) g_snprintf( b1, sizeof b1, "%s", gtk_entry_get_text( GTK_ENTRY(e_desde) ) );
+        if ( e_hasta ) g_snprintf( b2, sizeof b2, "%s", gtk_entry_get_text( GTK_ENTRY(e_hasta) ) );
+
+        /* El texto, no lo limpio: a_id llama «serie» a lo vacío. */
+        {
+        gchar *tx = g_strstrip( g_strdup( gtk_entry_get_text( GTK_ENTRY(e_id) ) ) );
+
+        if ( !*tx ) id2[0] = '\0';
+        g_free( tx );
+        }
+        if ( !id2[0] )
+            {
+            atsw_aviso( a, aviso, "La muestra necesita un nombre: es lo que va "
+                        "en la pestaña." );
+            gtk_widget_grab_focus( e_id );
+            continue;
+            }
+        if ( cd && ch &&
+             ( f_desde.freq > 1
+               ? gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(f_desde.anio) ) * 100 +
+                 gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(f_desde.per) )
+               : gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(f_desde.anio) ) ) >
+             ( f_hasta.freq > 1
+               ? gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(f_hasta.anio) ) * 100 +
+                 gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(f_hasta.per) )
+               : gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(f_hasta.anio) ) ) )
+            {
+            atsw_aviso( a, aviso, "«Desde» va después de «Hasta»: así la ventana "
+                        "no tiene ninguna observación." );
+            continue;
+            }
+        if ( pr_muestra_add( a->p, id2, b1, b2,
+                             gtk_entry_get_text( GTK_ENTRY(e_razon) ), &e ) != 0 )
+            {
+            pr_error_es( &e, why, sizeof why );
+            atsw_aviso( a, aviso, why );
+            gtk_widget_grab_focus( e_id );
+            continue;
+            }
+        break;
+        }
 
     if ( r == GTK_RESPONSE_OK )
         {
-        const char *id = gtk_entry_get_text( GTK_ENTRY(e_id) );
-        char        id2[PR_ID], b1[32] = "", b2[32] = "";
+        gchar *t2;
 
-        a_id( id, id2, sizeof id2 );
-        if ( cd ) atsw_fecha_texto( &f_desde, b1, sizeof b1 );
-        if ( ch ) atsw_fecha_texto( &f_hasta, b2, sizeof b2 );
+        /* LA HOJA NACE USABLE: con el m00 de cada serie dentro se
+           puede mirar la ACF de la serie recortada --que es lo primero
+           que se hace al truncar-- y empezar un modelo.          */
+        {
+        char w[256];
 
-        if ( !id2[0] )
-            barra_pub( a, "La muestra necesita un nombre: es lo que va en la "
-                          "pestaña." );
-        else if ( pr_muestra_add( a->p, id2, b1, b2,
-                      gtk_entry_get_text( GTK_ENTRY(e_razon) ), &e ) != 0 )
-            { char why[512]; pr_error_es( &e, why, sizeof why );
-              barra_pub( a, why ); }
-        else
-            {
-            gchar *t2;
-
-            /* LA HOJA NACE USABLE: con el m00 de cada serie dentro se
-               puede mirar la ACF de la serie recortada --que es lo primero
-               que se hace al truncar-- y empezar un modelo.          */
-            {
-            char w[256];
-
-            atsw_puebla_muestra( a, id2, w, sizeof w );
-            }
-            atsw_guarda( a, &e );
-            atsw_hojas( a );
-            gtk_notebook_set_current_page( GTK_NOTEBOOK(a->libro),
-                                           a->nhojas - 1 );
-            atsw_refresca( a );
-            t2 = g_strdup_printf( "Muestra «%s» declarada%s%s. Los modelos "
-                                  "que estimes aquí viven en esta hoja.",
-                                  id2, b2[0] ? ", hasta " : "", b2 );
-            barra_pub( a, t2 );
-            g_free( t2 );
-            }
+        atsw_puebla_muestra( a, id2, w, sizeof w );
+        }
+        atsw_guarda( a, &e );
+        atsw_hojas( a );
+        gtk_notebook_set_current_page( GTK_NOTEBOOK(a->libro),
+                                       a->nhojas - 1 );
+        atsw_refresca( a );
+        t2 = g_strdup_printf( "Muestra «%s» declarada%s%s. Los modelos "
+                              "que estimes aquí viven en esta hoja.",
+                              id2, b2[0] ? ", hasta " : "", b2 );
+        barra_pub( a, t2 );
+        g_free( t2 );
         }
     gtk_widget_destroy( d );
 }
@@ -1311,7 +1363,7 @@ static void menu_modelo( Atsw *a, GdkEventButton *ev )
 
     g_free( id );
     gtk_widget_show_all( menu );
-    gtk_menu_popup_at_pointer( GTK_MENU(menu), (GdkEvent *) ev );
+    atsw_menu_en( menu, a->l_modelos, ev );
 }
 
 gboolean atsw_on_click( GtkWidget *tv, GdkEventButton *ev, Atsw *a )
@@ -1334,6 +1386,59 @@ gboolean atsw_on_click( GtkWidget *tv, GdkEventButton *ev, Atsw *a )
     a->l_modelos = tv;
     menu_modelo( a, ev );
     return TRUE;
+}
+
+gboolean atsw_on_menu_tecla( GtkWidget *tv, Atsw *a )
+{
+    gchar *id;
+
+    (void) tv;
+    if ( !a->hay || !a->serie[0] ) return FALSE;
+    if ( ( id = atsw_marcada( a->l_modelos, M_ID ) ) == NULL ) return FALSE;
+    g_free( id );
+    menu_modelo( a, NULL );
+    return TRUE;
+}
+
+gboolean atsw_on_tecla( GtkWidget *tv, GdkEventKey *ev, Atsw *a )
+{
+    (void) tv;
+    if ( ( ev->keyval == GDK_KEY_Delete || ev->keyval == GDK_KEY_KP_Delete ) &&
+         !( ev->state & ( GDK_CONTROL_MASK | GDK_MOD1_MASK | GDK_SHIFT_MASK ) ) )
+        {
+        gchar *id = atsw_marcada( a->l_modelos, M_ID );
+        gboolean datos = id && pr_es_datos( a->p, a->serie, atsw_muestra_actual( a ), id );
+
+        g_free( id );
+        /* EL NODO DE DATOS NO SE BORRA: el menú ni lo ofrece. */
+        if ( datos ) { barra_pub( a, "Los datos de la serie no se borran desde aquí." );
+                       return TRUE; }
+        on_borrar( NULL, a );
+        return TRUE;
+        }
+    return FALSE;
+}
+
+/* Ver atsw.h. */
+void atsw_menu_en( GtkWidget *menu, GtkWidget *tv, GdkEventButton *ev )
+{
+    GtkTreePath  *ruta = NULL;
+    GdkRectangle  r;
+
+    if ( ev != NULL || tv == NULL || !GTK_IS_TREE_VIEW(tv) )
+        { gtk_menu_popup_at_pointer( GTK_MENU(menu), (GdkEvent *) ev ); return; }
+
+    gtk_tree_view_get_cursor( GTK_TREE_VIEW(tv), &ruta, NULL );
+    if ( ruta == NULL )
+        { gtk_menu_popup_at_widget( GTK_MENU(menu), tv, GDK_GRAVITY_NORTH_WEST,
+                                    GDK_GRAVITY_NORTH_WEST, NULL ); return; }
+    gtk_tree_view_get_cell_area( GTK_TREE_VIEW(tv), ruta, NULL, &r );
+    gtk_tree_path_free( ruta );
+    /* La celda viene en coordenadas de la ventana de dibujo de la lista,
+       que es a la que se ancla el menú.                                */
+    gtk_menu_popup_at_rect( GTK_MENU(menu),
+                            gtk_tree_view_get_bin_window( GTK_TREE_VIEW(tv) ), &r,
+                            GDK_GRAVITY_SOUTH_WEST, GDK_GRAVITY_NORTH_WEST, NULL );
 }
 
 /* DOBLE CLIC EN UN MODELO: a fue, que es lo que se va a hacer con el.
@@ -1481,11 +1586,37 @@ static gboolean on_foco( GtkWidget *w, GdkEventFocus *ev, Atsw *a )
     return FALSE;
 }
 
+static void on_cuaderno( GtkButton *b, Atsw *a ) { (void) b; atsw_cuaderno( a ); }
+
+static gboolean on_atajo_relee( GtkAccelGroup *g, GObject *o, guint k,
+                                GdkModifierType m, Atsw *a )
+{
+    char why[512];
+
+    (void) g; (void) o; (void) k; (void) m;
+    if ( !a->hay ) { barra_pub( a, "No hay proyecto abierto." ); return TRUE; }
+    if ( atsw_relee( a, why, sizeof why ) )
+        barra_pub( a, "El proyecto ha cambiado fuera de aquí: releído." );
+    else
+        barra_pub( a, why[0] ? why : "Releído: no había nada nuevo." );
+    atsw_refresca( a );
+    return TRUE;
+}
+
+static gboolean on_atajo_sale( GtkAccelGroup *g, GObject *o, guint k,
+                               GdkModifierType m, Atsw *a )
+{
+    (void) g; (void) o; (void) k; (void) m;
+    gtk_widget_destroy( a->ventana );
+    return TRUE;
+}
+
 static void activate( GtkApplication *app, gpointer d )
 {
     Atsw         *a = d;
-    GtkWidget    *w, *raiz, *barra, *pan, *izq, *der, *vb;
+    GtkWidget    *w, *raiz, *barra, *pan, *izq, *der, *vb, *bt;
     GtkListStore *st;
+    GtkAccelGroup *atajos;
 
     w = gtk_application_window_new( app );
     a->ventana = w;
@@ -1501,9 +1632,27 @@ static void activate( GtkApplication *app, gpointer d )
     barra = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 6 );
     gtk_box_pack_start( GTK_BOX(raiz), barra, FALSE, FALSE, 0 );
 
-    boton( barra, "Abrir…", "Un proyecto.yaml. Si está roto se dice y NO se "
-                            "abre: nunca se pisa.", G_CALLBACK(on_abrir), a );
-    boton( barra, "Nuevo…", NULL, G_CALLBACK(on_nuevo), a );
+    /* LOS ATAJOS, los mismos que en las hijas. fue_gui y drtran_gui se
+     * manejan con Ctrl+O, Ctrl+E o Ctrl+Q, y la madre no tenía ni uno:
+     * quien venía de una hija perdía las manos (ESTUDIO-taste-interfaz
+     * §3.3). Van en los globos, que es donde se buscan.               */
+    atajos = gtk_accel_group_new();
+    gtk_window_add_accel_group( GTK_WINDOW(w), atajos );
+
+    bt = boton( barra, "Abrir…", "Un proyecto.yaml. Si está roto se dice y NO se "
+                            "abre: nunca se pisa.\n\nCtrl+O", G_CALLBACK(on_abrir), a );
+    gtk_widget_add_accelerator( bt, "clicked", atajos, GDK_KEY_o,
+                                GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE );
+    bt = boton( barra, "Nuevo…", "Un proyecto nuevo, vacío.\n\nCtrl+N",
+                G_CALLBACK(on_nuevo), a );
+    gtk_widget_add_accelerator( bt, "clicked", atajos, GDK_KEY_n,
+                                GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE );
+    /* Ctrl+R relee lo que haya cambiado fuera, que es lo que ya pasa al
+       volver a la ventana; y Ctrl+Q sale, como en las hijas.          */
+    gtk_accel_group_connect( atajos, GDK_KEY_r, GDK_CONTROL_MASK, 0,
+                             g_cclosure_new( G_CALLBACK(on_atajo_relee), a, NULL ) );
+    gtk_accel_group_connect( atajos, GDK_KEY_q, GDK_CONTROL_MASK, 0,
+                             g_cclosure_new( G_CALLBACK(on_atajo_sale), a, NULL ) );
     boton( barra, "Proyecto…",
         "Identificador, título y analista. Y lo que no se edita pero hay que "
         "saber: cuándo se creó, dónde está el manifiesto y dónde la raíz de "
@@ -1513,6 +1662,12 @@ static void activate( GtkApplication *app, gpointer d )
         "cadena sin elegido.\n\nLa rejilla contesta «¿cómo va este modelo?»; "
         "esto contesta «¿cómo va el recorrido?», que es una forma de árbol y "
         "no de tabla.", G_CALLBACK(on_linaje), a );
+    boton( barra, "Cuaderno…",
+        "Lo que se miró, en orden: cada ventana de análisis tiene un botón "
+        "«Al cuaderno» que la manda aquí con su fecha y su procedencia, y "
+        "aquí se añaden notas.\n\nEl linaje dice qué se decidió; el "
+        "cuaderno, qué se tenía delante al decidirlo. Es Markdown, al lado "
+        "del manifiesto: se lee sin ATSW.", G_CALLBACK(on_cuaderno), a );
     boton( barra, "Datos…",
         "De un .xlsx, un .csv o un .txt a n SERIES del proyecto, cada una con "
         "su primer .inp.\n\nEs el eslabón que faltaba: el camino datos → "
@@ -1554,6 +1709,8 @@ static void activate( GtkApplication *app, gpointer d )
     /* El boton derecho despliega lo que se puede hacer con la serie. */
     g_signal_connect( a->l_series, "button-press-event",
                       G_CALLBACK(on_serie_click), a );
+    g_signal_connect( a->l_series, "popup-menu",
+                      G_CALLBACK(on_serie_menu_tecla), a );
     gtk_box_pack_start( GTK_BOX(izq), atsw_en_scroll( a->l_series ), TRUE, TRUE, 0 );
     /* Y DEBAJO, LOS CASOS: lo que se cruza de varias series a la vez. */
     atsw_casos_panel( a, izq );
@@ -1596,7 +1753,10 @@ static void activate( GtkApplication *app, gpointer d )
     a->b_fue = boton( b2, "→ fue",
         "Manda esta serie a fue para ESTIMAR su modelo.\n\nSe manda el .pre "
         "si lo hay —es un óptimo reejecutable— y si no el .inp, que es la "
-        "especificación.", G_CALLBACK(on_fue), a );
+        "especificación.\n\nCtrl+E, como Estimar en las hijas. Intro o doble "
+        "clic sobre un modelo hace lo mismo.", G_CALLBACK(on_fue), a );
+    gtk_widget_add_accelerator( a->b_fue, "clicked", atajos, GDK_KEY_e,
+                                GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE );
 
     gtk_box_pack_start( GTK_BOX(der), b2, FALSE, FALSE, 0 );
     }

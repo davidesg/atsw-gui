@@ -906,6 +906,8 @@ static GtkWidget *hoja_nueva( Atsw *a )
         "manifiesto guarda linaje y razón, que son DECISIONES." );
     g_signal_connect( v, "row-activated", G_CALLBACK(atsw_on_activado), a );
     g_signal_connect( v, "button-press-event", G_CALLBACK(atsw_on_click), a );
+    g_signal_connect( v, "popup-menu", G_CALLBACK(atsw_on_menu_tecla), a );
+    g_signal_connect( v, "key-press-event", G_CALLBACK(atsw_on_tecla), a );
     return v;
 }
 

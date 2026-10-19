@@ -138,6 +138,36 @@ static void separa( GtkWidget *menu )
     gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
 }
 
+/* LA TECLA, ESCRITA POR GTK Y NO A MANO. Los globos decian «Ctrl+O» con la
+   cadena fija, y en macOS la tecla es Cmd desde que los atajos son
+   <Primary>: el globo mentia justo donde se busca la tecla.           */
+gchar *atsw_tecla( const char *acel )
+{
+    guint           k = 0;
+    GdkModifierType m = 0;
+
+    gtk_accelerator_parse( acel, &k, &m );
+    return k ? gtk_accelerator_get_label( k, m ) : g_strdup( acel );
+}
+
+gchar *atsw_globo_tecla( const char *globo, const char *acel )
+{
+    gchar *t = atsw_tecla( acel );
+    gchar *g = g_strdup_printf( "%s\n\n%s", globo, t );
+
+    g_free( t );
+    return g;
+}
+
+/* Ver atsw.h. */
+const char *atsw_clase_de( const char *motor )
+{
+    if ( motor == NULL || !*motor || !strcmp( motor, "drtran" ) ) return "MT";
+    if ( !strcmp( motor, "drvarma" ) ) return "VARMA";
+    if ( !strcmp( motor, "drvec" ) )   return "VECM";
+    return motor;
+}
+
 /* ------------------------------------------------------------------------ */
 
 
@@ -239,6 +269,7 @@ static void on_identifica_datos( GtkMenuItem *m, Atsw *a )
     inp_free( &inp );
 }
 static void on_serie_acf( GtkMenuItem *m, Atsw *a ) { (void)m; vistazo( a, 0, 1.0 ); }
+static void on_hist     ( GtkMenuItem *m, Atsw *a ) { (void)m; vistazo( a, 2, 1.0 ); }
 
 static void on_editar_serie( GtkMenuItem *m, Atsw *a )
 {
@@ -473,7 +504,7 @@ static gboolean que_mandar( Atsw *a, gboolean acepta_pre, char *out, size_t n )
 }
 
 static void manda( Atsw *a, const char *programa, const char *para,
-                   gboolean acepta_pre )
+                   gboolean acepta_pre, const char *que )
 {
     char f[PR_RUTA];
 
@@ -493,7 +524,7 @@ static void manda( Atsw *a, const char *programa, const char *para,
         atsw_lanza( a, programa, NULL );
         return;
         }
-    atsw_lanza( a, programa, f );
+    atsw_lanza_dice( a, programa, f, que );
 }
 
 /* A fue SE LE MANDA UN MODELO, NUNCA LOS DATOS.
@@ -537,8 +568,15 @@ static void on_fue( GtkButton *b, Atsw *a )
         g_free( marca );
         return;
         }
+    {
+    /* EL GESTO, CON SU CLASE Y SU PROGRAMA: «Estimar m01 (US) en fue». */
+    gchar *que = ( id && *id ) ? g_strdup_printf( "Estimar %s (US) en fue", id )
+                               : g_strdup( "Estimar (US) en fue" );
+
+    manda( a, "fue_gui", "estimarla", TRUE, que );
+    g_free( que );
+    }
     g_free( marca );
-    manda( a, "fue_gui", "estimarla", TRUE );
 }
 /* A fug NO se le manda un .pre: se identifica antes de que haya modelo. */
 static void on_fug( GtkButton *b, Atsw *a )
@@ -1189,7 +1227,7 @@ static gboolean hay_serie( Atsw *a ) { return a->hay && a->serie[0]; }
  * completa. Para mirar, no para decidir: no tocan el proyecto. Van en Datos
  * --describen la serie-- y al principio de US, que es el primer paso del
  * analista: la misma funcion en los dos sitios (§3.1).                  */
-static void sec_vistazos( Atsw *a, GtkWidget *menu )
+static void sec_vistazos( Atsw *a, GtkWidget *menu, gboolean con_hist )
 {
     GtkWidget *mi;
 
@@ -1204,22 +1242,42 @@ static void sec_vistazos( Atsw *a, GtkWidget *menu )
         "mismo. Es la pregunta abierta —cuántas diferencias— y se contesta "
         "probando.", G_CALLBACK(on_serie_acf), a );
     if ( !hay_serie( a ) ) atsw_apaga( mi, SIN_SERIE );
+
+    /* EL HISTOGRAMA, el tercer vistazo: el mismo fug, con -d. Describe los
+       datos, asi que va en Datos y no en la identificacion de US (§3.1). */
+    if ( con_hist )
+        {
+        mi = atsw_entrada( a, menu, "Histograma…",
+            "La serie con λ, d y D AL PIE, estandarizada, con la densidad "
+            "normal encima y su asimetría, curtosis y Jarque-Bera. Lo dibuja "
+            "fug, como en su herramienta.", G_CALLBACK(on_hist), a );
+        if ( !hay_serie( a ) ) atsw_apaga( mi, SIN_SERIE );
+        }
 }
 
 /* IDENTIFICAR, en el orden en que trabaja el analista: λ, d y D, el juego
-   completo de fug y la propuesta de art (§3.1, decision 8).           */
+   completo de fug y la propuesta de art (§3.1, decision 8).
+
+   «Listado de identificacion» es el nombre de la escuela para la primera
+   identificacion completa: el juego de fug, para cada numero de
+   diferencias. «Identificar la estructura ARIMA» dice lo que hace art: la
+   propone, con sus contrastes y sus candidatos.                       */
+#define GLOBO_LISTADO \
+    "Primera identificación completa (fug): la serie, el histograma, la " \
+    "media–desviación típica, la ACF y la PACF para cada número de " \
+    "diferencias.\n\nVa el nodo de datos de esta muestra: se identifica " \
+    "ANTES de que haya modelo."
+
 static void sec_identificar( Atsw *a, GtkWidget *menu )
 {
     GtkWidget *mi;
 
-    sec_vistazos( a, menu );
-    mi = atsw_entrada( a, menu, "Identificación con fug",
-        "Los gráficos de la serie, su ACF y su PACF. Va el nodo de datos de "
-        "esta muestra: se identifica ANTES de que haya modelo.",
-        G_CALLBACK(on_fug), a );
+    sec_vistazos( a, menu, FALSE );
+    mi = atsw_entrada( a, menu, "Listado de identificación…", GLOBO_LISTADO,
+                       G_CALLBACK(on_fug), a );
     if ( !hay_serie( a ) ) atsw_apaga( mi, SIN_SERIE );
 
-    mi = atsw_entrada( a, menu, "Identificar desde los datos…",
+    mi = atsw_entrada( a, menu, "Identificar la estructura ARIMA…",
         "art sobre la serie: los contrastes (la F estacional, ADF y KPSS) "
         "dichos con lo que dicen, el correlograma y los candidatos. La "
         "transformación se cambia en la propia ventana.\n\nPropone; no "
@@ -1227,20 +1285,51 @@ static void sec_identificar( Atsw *a, GtkWidget *menu )
     if ( !hay_serie( a ) ) atsw_apaga( mi, SIN_SERIE );
 }
 
-/* LOS ENVIOS DE LA SERIE: a fue el modelo por defecto, otro desde los
- * datos, o uno en otra muestra.
+/* ¿SOLO HAY DATOS? Entonces lo que toca no es estimar sino especificar el
+   primer modelo, y la etiqueta lo dice.                               */
+static gboolean solo_datos( Atsw *a )
+{
+    const char *porde = atsw_modelo_por_defecto( a->p, a->serie );
+
+    return !*porde || pr_es_datos( a->p, a->serie, atsw_muestra_actual( a ), porde );
+}
+
+/* LOS NOMBRES DE LOS ENVIOS, uno por accion (ESTUDIO §1.2):
+ *
+ *   Estimar mNN                     a fue, el .pre si lo hay. Ctrl+E.
+ *   Especificar el primer modelo    lo mismo cuando solo hay datos: nace un
+ *                                   modelo de ellos y es ese el que se abre.
+ *   Modelo nuevo, desde los datos   otro de cero, colgado de los datos.
+ *   Modelo nuevo, desde los datos   lo mismo sobre otra ventana: copia los
+ *     de otra muestra ▸             DATOS, recortados.
+ *   Llevar mNN a otra muestra ▸     copia ESTE MODELO a otra ventana.
+ *
+ * Los dos ultimos se confundian («Modelo nuevo, en otra muestra» y «En otra
+ * muestra»): el nombre dice ahora QUE se copia --los datos o el modelo-- y
+ * ADONDE.
  *
  * con_fue: en la barra, si hay un modelo marcado, sus envios los pone la
- * seccion del modelo --«Abrir m01 en fue» es la misma accion que «Estimar
- * m01 en fue»-- y aqui no se repiten. En el boton derecho sobre la serie
- * van siempre.                                                         */
+ * seccion del modelo y aqui no se repiten. En el boton derecho sobre la
+ * serie van siempre.                                                   */
+#define GLOBO_ESTIMAR \
+    "Estimar %s (US) en fue: se manda el .pre si lo hay —es un óptimo " \
+    "reejecutable— y si no el .inp, que es la especificación. Lo mismo " \
+    "que el doble clic."
+#define GLOBO_PRIMERO \
+    "Especificar el primer modelo (US) en fue: los datos no se estiman. " \
+    "Nace un modelo colgado de ellos y es ése el que se abre; el .inp de " \
+    "los datos sigue intacto."
+#define GLOBO_NUEVO \
+    "Empieza de cero (US, en fue): cuelga de los datos, no del modelo de " \
+    "ahora. Para seguir desde un óptimo está «Iterar»."
+
 static void sec_serie_envios( Atsw *a, GtkWidget *menu, gboolean con_fue )
 {
     GtkWidget *mi;
 
     if ( !hay_serie( a ) )
         {
-        mi = atsw_entrada( a, menu, "Especificar el primer modelo con fue",
+        mi = atsw_entrada( a, menu, "Especificar el primer modelo",
                            NULL, G_CALLBACK(on_fue), a );
         atsw_apaga( mi, a->hay ? SIN_SERIE : SIN_PROYECTO );
         return;
@@ -1253,29 +1342,27 @@ static void sec_serie_envios( Atsw *a, GtkWidget *menu, gboolean con_fue )
     if ( con_fue )
     {
     const char *porde = atsw_modelo_por_defecto( a->p, a->serie );
-    gboolean    solo_datos = ( !*porde || pr_es_datos( a->p, a->serie, atsw_muestra_actual( a ), porde ) );
-    gchar      *txt;
+    gboolean    sd = solo_datos( a );
+    gchar      *txt, *tip;
 
-    if ( solo_datos )
-        txt = g_strdup( "Especificar el primer modelo con fue" );
+    if ( sd )
+        {
+        txt = g_strdup( "Especificar el primer modelo" );
+        tip = g_strdup( GLOBO_PRIMERO );
+        }
     else
-        txt = g_strdup_printf( "Estimar %s en fue", porde );
-
-    mi = atsw_entrada( a, menu, txt, solo_datos
-        ? "Los datos no se estiman: nace un modelo colgado de ellos —el "
-          "primero de la serie— y es ése el que se abre en fue. El .inp de "
-          "los datos sigue intacto."
-        : "Se manda el .pre si lo hay —es un óptimo reejecutable— y si no "
-          "el .inp, que es la especificación.", G_CALLBACK(on_fue), a );
-    g_free( txt );
+        {
+        txt = g_strdup_printf( "Estimar %s", porde );
+        tip = g_strdup_printf( GLOBO_ESTIMAR, porde );
+        }
+    mi = atsw_entrada( a, menu, txt, tip, G_CALLBACK(on_fue), a );
+    g_free( txt ); g_free( tip );
     atsw_entrada_tecla( mi, "<Primary>e" );
 
     /* Y empezar OTRO desde los datos, que no es lo mismo que iterar. */
-    if ( !solo_datos && pr_datos_de( a->p, a->serie, atsw_muestra_actual( a ) )[0] )
-        atsw_entrada( a, menu, "Otro modelo, desde los datos",
-            "Empieza de cero: cuelga de los datos, no del modelo de ahora. "
-            "Para seguir desde un óptimo está «Iterar».",
-            G_CALLBACK(on_nuevo_modelo), a );
+    if ( !sd && pr_datos_de( a->p, a->serie, atsw_muestra_actual( a ) )[0] )
+        atsw_entrada( a, menu, "Modelo nuevo, desde los datos", GLOBO_NUEVO,
+                      G_CALLBACK(on_nuevo_modelo), a );
     }
 
     {
@@ -1283,9 +1370,10 @@ static void sec_serie_envios( Atsw *a, GtkWidget *menu, gboolean con_fue )
 
     if ( sub && a->nhojas > 1 )
         {
-        mi = atsw_entrada( a, menu, "Modelo nuevo, en otra muestra…",
-            "Empieza un modelo sobre una ventana declarada. Cuelga de los "
-            "datos, y su .inp se genera del datos.csv recortado.", NULL, NULL );
+        mi = atsw_entrada( a, menu, "Modelo nuevo, desde los datos de otra muestra",
+            "Empieza un modelo de cero sobre otra ventana declarada: copia "
+            "los DATOS, no un modelo. Cuelga de los datos, y su .inp se "
+            "genera del datos.csv recortado.", NULL, NULL );
         gtk_menu_item_set_submenu( GTK_MENU_ITEM(mi), sub );
         }
     else if ( sub )
@@ -1318,16 +1406,19 @@ static void sec_modelo_envios( Atsw *a, GtkWidget *menu, const char *id,
                                gboolean datos )
 {
     GtkWidget *mi;
-    gchar     *txt;
+    gchar     *txt, *tip;
 
-    txt = datos ? g_strdup( "Especificar un modelo con fue" )
-                : g_strdup_printf( "Abrir %s en fue", id );
-    mi = atsw_entrada( a, menu, txt, datos
-        ? "Los datos no se estiman: nace un modelo colgado de ellos y es ése "
-          "el que se abre."
-        : "Se lleva el .pre si lo hay —es un óptimo reejecutable— y si no el "
-          ".inp. Es lo mismo que el doble clic.", G_CALLBACK(on_fue), a );
-    g_free( txt );
+    /* SOBRE LOS DATOS, estimar ES empezar un modelo de ellos (on_fue
+       deriva), asi que va UNA entrada: la que dice lo que pasa. Antes iban
+       dos con dos nombres para lo mismo.                               */
+    if ( datos && solo_datos( a ) )
+        { txt = g_strdup( "Especificar el primer modelo" ); tip = g_strdup( GLOBO_PRIMERO ); }
+    else if ( datos )
+        { txt = g_strdup( "Modelo nuevo, desde los datos" ); tip = g_strdup( GLOBO_NUEVO ); }
+    else
+        { txt = g_strdup_printf( "Estimar %s", id ); tip = g_strdup_printf( GLOBO_ESTIMAR, id ); }
+    mi = atsw_entrada( a, menu, txt, tip, G_CALLBACK(on_fue), a );
+    g_free( txt ); g_free( tip );
     atsw_entrada_tecla( mi, "<Primary>e" );
 
     if ( !datos )
@@ -1343,9 +1434,9 @@ static void sec_modelo_envios( Atsw *a, GtkWidget *menu, const char *id,
             G_CALLBACK(on_iterar), a );
         }
 
-    atsw_entrada( a, menu, "Modelo nuevo, desde los datos",
-        "Empieza de cero: cuelga de los datos, no de éste.",
-        G_CALLBACK(on_nuevo_modelo), a );
+    if ( !datos )
+        atsw_entrada( a, menu, "Modelo nuevo, desde los datos", GLOBO_NUEVO,
+                      G_CALLBACK(on_nuevo_modelo), a );
 
     /* LLEVARLO A OTRA VENTANA. Deriva y genera; lo de aqui no se toca. */
     if ( !datos )
@@ -1354,11 +1445,13 @@ static void sec_modelo_envios( Atsw *a, GtkWidget *menu, const char *id,
 
         if ( sub )
             {
-            mi = atsw_entrada( a, menu, "En otra muestra…",
-                "Deriva un modelo en otra ventana, colgado de éste. El .inp "
-                "se GENERA del datos.csv con la ventana nueva: no es una "
-                "copia con otro nobs.\n\nÉste no se toca: su .out describe "
-                "una estimación sobre estas observaciones.", NULL, NULL );
+            txt = g_strdup_printf( "Llevar %s a otra muestra", id );
+            mi = atsw_entrada( a, menu, txt,
+                "Copia ESTE MODELO a otra ventana, colgado de él: el .inp se "
+                "GENERA del datos.csv con la ventana nueva, no es una copia "
+                "con otro nobs.\n\nÉste no se toca: su .out describe una "
+                "estimación sobre estas observaciones.", NULL, NULL );
+            g_free( txt );
             gtk_menu_item_set_submenu( GTK_MENU_ITEM(mi), sub );
             }
         }
@@ -1849,13 +1942,13 @@ static void on_teclas_mi( GtkMenuItem *m, Atsw *a )
         { "<Primary>o", "Abrir un proyecto" },
         { "<Primary>n", "Proyecto nuevo" },
         { "<Primary>r", "Releer lo que haya cambiado fuera" },
-        { "<Primary>e", "Mandar a fue el modelo marcado (como Estimar en las hijas)" },
+        { "<Primary>e", "Estimar lo que se ve a la derecha: el modelo (US) en fue o el caso (MT) en drtran" },
         { "<Primary>q", "Salir" },
         { "F1",         "El manual" },
         { "F10",        "La barra de menús; Alt y la letra subrayada, un menú" },
         { "Menu",       "El menú de la fila marcada (también Mayús+F10)" },
         { "Delete",     "Borrar el modelo marcado, preguntando antes" },
-        { "Return",     "Mandar a fue el modelo marcado (también doble clic)" } };
+        { "Return",     "Estimar el modelo marcado (también doble clic)" } };
     GString   *g = g_string_new( NULL );
     GtkWidget *d;
     guint      i;
@@ -1955,7 +2048,7 @@ static void llena_datos( Atsw *a, GtkWidget *m )
     if ( !a->hay ) atsw_apaga( mi, SIN_PROYECTO );
     sec_serie_datos( a, m );
     separa( m );
-    sec_vistazos( a, m );
+    sec_vistazos( a, m, TRUE );
 }
 
 /* US: LA SERIE MARCADA Y SUS MODELOS, en el orden del ciclo de Box y
@@ -2002,30 +2095,28 @@ static void llena_ayuda( Atsw *a, GtkWidget *m )
    lo que contiene, y la tecla.                                        */
 typedef void (*Llena)( Atsw *a, GtkWidget *m );
 
-static const struct { const char *rotulo, *globo; Llena llena; } TITULOS[] = {
+static const struct { const char *rotulo, *globo, *acel; Llena llena; } TITULOS[] = {
     { "_Proyecto",
       "Proyecto — el manifiesto y lo que cuelga de él\n\nAbrir, crear y releer; "
-      "las propiedades, el linaje y el cuaderno. Se guarda solo.\n\nAlt+P",
-      llena_proyecto },
+      "las propiedades, el linaje y el cuaderno. Se guarda solo.",
+      "<Alt>p", llena_proyecto },
     { "_Datos",
       "Datos — las series como datos, antes de cualquier modelo\n\nImportar, "
-      "editar la serie, declarar una muestra; la media–desviación típica y la "
-      "serie con su ACF y su PACF.\n\nAlt+D",
-      llena_datos },
+      "editar la serie, declarar una muestra; la media–desviación típica, la "
+      "serie con su ACF y su PACF, y el histograma.",
+      "<Alt>d", llena_datos },
     { "_US",
       "US — Modelo univariante (Box-Jenkins), con fue y fuf\n\nLa serie marcada "
       "y sus modelos: identificar, especificar y estimar, diagnosticar, prever; "
-      "y las decisiones al final.\n\nAlt+U",
-      llena_us },
+      "y las decisiones al final.",
+      "<Alt>u", llena_us },
     { "_MT",
       "MT — Transferencia multivariante, con drtran\n\nEl caso marcado: varias "
-      "series, cada una con su modelo univariante, de entrada y de salida.\n\n"
-      "Alt+M",
-      atsw_menu_mt },
+      "series, cada una con su modelo univariante, de entrada y de salida.",
+      "<Alt>m", atsw_menu_mt },
     { "A_yuda",
-      "Ayuda — el manual, las teclas y «Acerca de»\n\nF1 abre el manual.\n\n"
-      "Alt+Y",
-      llena_ayuda } };
+      "Ayuda — el manual, las teclas y «Acerca de»\n\nF1 abre el manual.",
+      "<Alt>y", llena_ayuda } };
 
 /* Rehace el menu del titulo i con el estado de ahora. */
 static void rehace_menu( Atsw *a, GtkWidget *titulo )
@@ -2164,7 +2255,10 @@ static GtkWidget *barra_de_menus( Atsw *a )
         GtkWidget *t = gtk_menu_item_new_with_mnemonic( TITULOS[i].rotulo );
         GtkWidget *m = gtk_menu_new();
 
-        gtk_widget_set_tooltip_text( t, TITULOS[i].globo );
+        gchar     *g = atsw_globo_tecla( TITULOS[i].globo, TITULOS[i].acel );
+
+        gtk_widget_set_tooltip_text( t, g );
+        g_free( g );
         g_object_set_data( G_OBJECT(t), "llena", (gpointer) TITULOS[i].llena );
         gtk_menu_item_set_submenu( GTK_MENU_ITEM(t), m );
         g_signal_connect( t, "select",   G_CALLBACK(on_titulo_dentro), a );
@@ -2187,6 +2281,21 @@ static gboolean on_atajo_sale( GtkAccelGroup *g, GObject *o, guint k,
 {
     (void) g; (void) o; (void) k; (void) m;
     gtk_widget_destroy( a->ventana );
+    return TRUE;
+}
+
+/* Ctrl+E ESTIMA LO QUE SE VE. La derecha es una pila --los modelos de la
+ * serie o el caso-- y el mismo gesto vale en las dos: el programa que se
+ * abre es cosa de la clase, fue para US y drtran para MT (§3.3). La barra
+ * de estado lo dice, para que no sorprenda (§5).                       */
+static gboolean on_atajo_estima( GtkAccelGroup *g, GObject *o, guint k,
+                                 GdkModifierType m, Atsw *a )
+{
+    const char *v = gtk_stack_get_visible_child_name( GTK_STACK(a->pila) );
+
+    (void) g; (void) o; (void) k; (void) m;
+    if ( v && !strcmp( v, "caso" ) ) atsw_caso_lanza( a, "drtran_gui" );
+    else                             on_fue( NULL, a );
     return TRUE;
 }
 
@@ -2231,20 +2340,28 @@ static void activate( GtkApplication *app, gpointer d )
        Mac (ESTUDIO-madre-organizacion §3.4). En Linux y Windows, Ctrl. */
     gtk_accelerator_parse( "<Primary>o", &k, &prim );
 
-    bt = boton( barra, "Abrir…", "Un proyecto.yaml. Si está roto se dice y NO se "
-                            "abre: nunca se pisa.\n\nCtrl+O", G_CALLBACK(on_abrir), a );
+    {
+    gchar *g = atsw_globo_tecla( "Un proyecto.yaml. Si está roto se dice y NO "
+                                 "se abre: nunca se pisa.", "<Primary>o" );
+
+    bt = boton( barra, "Abrir…", g, G_CALLBACK(on_abrir), a );
+    g_free( g );
     gtk_widget_add_accelerator( bt, "clicked", atajos, GDK_KEY_o,
                                 prim, GTK_ACCEL_VISIBLE );
-    bt = boton( barra, "Nuevo…", "Un proyecto nuevo, vacío.\n\nCtrl+N",
-                G_CALLBACK(on_nuevo), a );
+    g = atsw_globo_tecla( "Un proyecto nuevo, vacío.", "<Primary>n" );
+    bt = boton( barra, "Nuevo…", g, G_CALLBACK(on_nuevo), a );
+    g_free( g );
     gtk_widget_add_accelerator( bt, "clicked", atajos, GDK_KEY_n,
                                 prim, GTK_ACCEL_VISIBLE );
+    }
     /* Ctrl+R relee lo que haya cambiado fuera, que es lo que ya pasa al
        volver a la ventana; y Ctrl+Q sale, como en las hijas.          */
     gtk_accel_group_connect( atajos, GDK_KEY_r, prim, 0,
                              g_cclosure_new( G_CALLBACK(on_atajo_relee), a, NULL ) );
     gtk_accel_group_connect( atajos, GDK_KEY_q, prim, 0,
                              g_cclosure_new( G_CALLBACK(on_atajo_sale), a, NULL ) );
+    gtk_accel_group_connect( atajos, GDK_KEY_e, prim, 0,
+                             g_cclosure_new( G_CALLBACK(on_atajo_estima), a, NULL ) );
     /* F1, el manual: en TASTE decia «NO HAY AYUDA DISPONIBLE». */
     gtk_accel_group_connect( atajos, GDK_KEY_F1, 0, 0,
                              g_cclosure_new( G_CALLBACK(on_atajo_manual), a, NULL ) );
@@ -2289,6 +2406,20 @@ static void activate( GtkApplication *app, gpointer d )
     gtk_box_pack_start( GTK_BOX(raiz), pan, TRUE, TRUE, 0 );
 
     izq = gtk_box_new( GTK_ORIENTATION_VERTICAL, 4 );
+    /* LA SIGLA, DONDE VIVEN LOS OBJETOS: lo de arriba es US y lo de abajo
+       MT, y la madre enseña la escalera sin decir nada (§2.3).        */
+    {
+    GtkWidget *h = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 6 );
+    GtkWidget *l = gtk_label_new( NULL );
+
+    gtk_label_set_markup( GTK_LABEL(l), "<b>Series — US</b>" );
+    gtk_widget_set_tooltip_text( l,
+        "US — Modelo univariante (Box-Jenkins), con fue y fuf\n\nCada serie "
+        "con sus modelos, de los datos en adelante. El menú US habla de la "
+        "serie marcada aquí." );
+    gtk_box_pack_start( GTK_BOX(h), l, FALSE, FALSE, 4 );
+    gtk_box_pack_start( GTK_BOX(izq), h, FALSE, FALSE, 2 );
+    }
     st = gtk_list_store_new( S_N, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_INT,
                              G_TYPE_STRING, G_TYPE_STRING );
     a->l_series = gtk_tree_view_new_with_model( GTK_TREE_MODEL(st) );
@@ -2341,17 +2472,24 @@ static void activate( GtkApplication *app, gpointer d )
     /* LOS DOS ENVIOS. Van aqui, con la rejilla, porque actuan sobre el modelo
      * MARCADO -- el mismo sujeto que Iterar, Elegir y Razón.           */
     a->b_fug = boton( b2, "→ fug",
-        "Manda esta serie a fug para IDENTIFICARLA: sus gráficos, su ACF y "
-        "su PACF.\n\nVa SIEMPRE el nodo de datos de esta muestra, aunque "
-        "tengas otro modelo marcado: se identifica ANTES de que haya "
-        "modelo.", G_CALLBACK(on_fug), a );
-    a->b_fue = boton( b2, "→ fue",
-        "Manda esta serie a fue para ESTIMAR su modelo.\n\nSe manda el .pre "
-        "si lo hay —es un óptimo reejecutable— y si no el .inp, que es la "
-        "especificación.\n\nCtrl+E, como Estimar en las hijas. Intro o doble "
-        "clic sobre un modelo hace lo mismo.", G_CALLBACK(on_fue), a );
-    gtk_widget_add_accelerator( a->b_fue, "clicked", atajos, GDK_KEY_e,
-                                prim, GTK_ACCEL_VISIBLE );
+        "El listado de identificación: la primera identificación completa, "
+        "en fug. La serie, el histograma, la media–desviación típica, la ACF "
+        "y la PACF para cada número de diferencias.\n\nVa SIEMPRE el nodo "
+        "de datos de esta muestra, aunque tengas otro modelo marcado: se "
+        "identifica ANTES de que haya modelo.", G_CALLBACK(on_fug), a );
+    {
+    gchar *t = atsw_tecla( "<Primary>e" );
+    gchar *g = g_strdup_printf(
+        "Estimar el modelo marcado (US) en fue.\n\nSe manda el .pre si lo "
+        "hay —es un óptimo reejecutable— y si no el .inp, que es la "
+        "especificación. Si lo marcado son los datos, nace el primer "
+        "modelo.\n\n%s, como Estimar en las hijas: estima lo que se ve a la "
+        "derecha, el modelo o el caso. Intro o doble clic sobre un modelo "
+        "hace lo mismo.", t );
+
+    a->b_fue = boton( b2, "Estimar", g, G_CALLBACK(on_fue), a );
+    g_free( g ); g_free( t );
+    }
 
     gtk_box_pack_start( GTK_BOX(der), b2, FALSE, FALSE, 0 );
     }

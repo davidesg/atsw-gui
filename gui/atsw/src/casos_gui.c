@@ -447,10 +447,10 @@ static gboolean nc_acepta( Nc *x, char *why, size_t n )
             g_string_append_printf( lista, "%s%s/%s", i ? ", " : "",
                                     en[i].serie, en[i].modelo );
         if ( x->de[0] )
-            snprintf( why, n, "Caso %s, derivado de %s: %s. «Abrir en "
-                      "drtran» para estimarlo.", id, x->de, lista->str );
+            snprintf( why, n, "Caso %s, derivado de %s: %s. «Estimar» "
+                      "para estimarlo en drtran.", id, x->de, lista->str );
         else
-            snprintf( why, n, "Caso %s dado de alta: %s. «Abrir en drtran» "
+            snprintf( why, n, "Caso %s dado de alta: %s. «Estimar» en drtran "
                       "para estimarlo.", id, lista->str );
         g_string_free( lista, TRUE );
         barra_pub( a, why );
@@ -610,8 +610,8 @@ void atsw_caso_nuevo( Atsw *a, const char *deriva_de )
     "Qué series se cruzan, cada una con qué modelo estimado, y en qué " \
     "orden. La ventana común se comprueba antes de aceptar."
 #define GLOBO_C_DRTRAN \
-    "drtran_gui con este caso: sus series en su orden, comprobando los " \
-    "hashes. Si hay un modelo marcado, parte de él; si no, del " \
+    "Estimar el caso (MT) en drtran: sus series en su orden, comprobando " \
+    "los hashes. Si hay un modelo marcado, parte de él; si no, del " \
     "elegido. También con doble clic sobre el modelo."
 #define GLOBO_C_ELEGIR "Declara que el modelo marcado es EL del caso."
 #define GLOBO_C_RAZON \
@@ -668,7 +668,19 @@ void atsw_caso_lanza( Atsw *a, const char *programa )
        de nada: elegir por el analista una de partida seria decidir algo
        que no ha dicho.                                                */
     corrida = atsw_marcada( a->c_corridas, CO_ID );
-    atsw_lanza_caso( a, programa, a->caso, corrida );
+    {
+    /* EL GESTO, CON SU CLASE Y SU PROGRAMA, como en US. */
+    const PrCaso *c = caso_marcado( a );
+    const char   *cl = atsw_clase_de( c->motor );
+    gchar        *que = ( corrida && *corrida )
+        ? g_strdup_printf( "Estimar %s (%s) en %s", corrida, cl,
+                           c->motor[0] ? c->motor : "drtran" )
+        : g_strdup_printf( "Estimar el caso %s (%s) en %s", a->caso, cl,
+                           c->motor[0] ? c->motor : "drtran" );
+
+    atsw_lanza_caso( a, programa, a->caso, corrida, que );
+    g_free( que );
+    }
     g_free( corrida );
 }
 
@@ -818,12 +830,13 @@ static void sec_c_ver( Atsw *a, GtkWidget *menu, const PrCaso *c, const char *co
 static void sec_c_drtran( Atsw *a, GtkWidget *menu, const PrCaso *c, const char *co )
 {
     GtkWidget *mi;
-    gchar     *t = co ? g_strdup_printf( "Abrir %s en drtran", co )
-                      : g_strdup( "Abrir en drtran" );
+    gchar     *t = co ? g_strdup_printf( "Estimar %s", co ) : g_strdup( "Estimar" );
+    gchar     *g = co ? g_strdup_printf( "Estimar %s (MT) en drtran, desde ese modelo "
+                                         "del caso. Lo mismo que el doble clic.", co )
+                      : g_strdup( GLOBO_C_DRTRAN );
 
-    mi = atsw_entrada( a, menu, t, co ? "Lo mismo que el doble clic." : GLOBO_C_DRTRAN,
-                       G_CALLBACK(on_c_drtran_mi), a );
-    g_free( t );
+    mi = atsw_entrada( a, menu, t, g, G_CALLBACK(on_c_drtran_mi), a );
+    g_free( t ); g_free( g );
     atsw_entrada_tecla( mi, "<Primary>e" );
     if ( c == NULL ) atsw_apaga( mi, SIN_CASO );
 }
@@ -1232,11 +1245,12 @@ void atsw_casos_panel( Atsw *a, GtkWidget *izq )
 
     h = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 6 );
     l = gtk_label_new( NULL );
-    gtk_label_set_markup( GTK_LABEL(l), "<b>Casos</b>" );
+    gtk_label_set_markup( GTK_LABEL(l), "<b>Casos — MT</b>" );
     gtk_widget_set_tooltip_text( l,
-        "Lo que se cruza de varias series a la vez: cada una con el .pre con "
-        "que entra, en un orden que es parte del caso. drtran estima sus "
-        "modelos de transferencia." );
+        "MT — Transferencia multivariante, con drtran\n\nLo que se cruza de "
+        "varias series a la vez: cada una con el .pre con que entra, en un "
+        "orden que es parte del caso. El menú MT habla del caso marcado "
+        "aquí." );
     gtk_box_pack_start( GTK_BOX(h), l, FALSE, FALSE, 4 );
     a->b_nuevo_caso = gtk_button_new_with_label( "Nuevo caso…" );
     gtk_widget_set_tooltip_text( a->b_nuevo_caso, GLOBO_NUEVO_CASO );
@@ -1287,8 +1301,12 @@ GtkWidget *atsw_caso_vista( Atsw *a )
     v  = gtk_box_new( GTK_ORIENTATION_VERTICAL, 6 );
     b2 = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 6 );
 
-    a->b_c_drtran = boton_caso( b2, "Abrir en drtran", GLOBO_C_DRTRAN,
-                                G_CALLBACK(on_c_drtran), a );
+    {
+    gchar *g = atsw_globo_tecla( GLOBO_C_DRTRAN, "<Primary>e" );
+
+    a->b_c_drtran = boton_caso( b2, "Estimar", g, G_CALLBACK(on_c_drtran), a );
+    g_free( g );
+    }
     gtk_box_pack_start( GTK_BOX(b2), gtk_separator_new(
                             GTK_ORIENTATION_VERTICAL ), FALSE, FALSE, 4 );
     a->b_c_elegir = boton_caso( b2, "Elegir", GLOBO_C_ELEGIR,
@@ -1539,8 +1557,11 @@ static void pinta_vista( Atsw *a )
     GString *g = g_string_new( NULL );
     gchar   *t;
 
-    t = g_markup_printf_escaped( "<big><b>%s — %s</b></big>    %s · muestra %s",
+    /* LA CLASE, EL PROGRAMA Y LA MUESTRA: «MT · drtran · muestra completa».
+       El programa no se esconde: cuando algo falla, el mensaje es suyo. */
+    t = g_markup_printf_escaped( "<big><b>%s — %s</b></big>    %s · %s · muestra %s",
                                  c->id, c->titulo[0] ? c->titulo : "(sin título)",
+                                 atsw_clase_de( c->motor ),
                                  c->motor[0] ? c->motor : "drtran",
                                  c->muestra[0] ? c->muestra : "completa" );
     g_string_append( g, t ); g_free( t );

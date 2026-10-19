@@ -864,9 +864,7 @@ void atsw_refresca( Atsw *a )
     gtk_widget_set_sensitive( a->b_iterar, a->hay && a->serie[0] != '\0' );
     gtk_widget_set_sensitive( a->b_elegir, a->hay && a->serie[0] != '\0' );
     gtk_widget_set_sensitive( a->b_razon,  a->hay && a->serie[0] != '\0' );
-    gtk_widget_set_sensitive( a->b_drtran, a->hay );
     gtk_widget_set_sensitive( a->b_fue,    a->hay );
-    gtk_widget_set_sensitive( a->b_fug,    a->hay );
 }
 
 /* ------------------------------------------------------------------------ */

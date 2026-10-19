@@ -603,6 +603,30 @@ void atsw_caso_nuevo( Atsw *a, const char *deriva_de )
 /* LA SECCION CASOS Y LA VISTA DEL CASO                                      */
 /* ------------------------------------------------------------------------ */
 
+/* LOS GLOBOS DE LOS GESTOS DEL CASO, una vez: los dicen el boton de la
+   fila y la entrada del menu, y dos copias de un texto acaban siendo dos
+   textos.                                                             */
+#define GLOBO_NUEVO_CASO \
+    "Qué series se cruzan, cada una con qué modelo estimado, y en qué " \
+    "orden. La ventana común se comprueba antes de aceptar."
+#define GLOBO_C_DRTRAN \
+    "drtran_gui con este caso: sus series en su orden, comprobando los " \
+    "hashes. Si hay un modelo marcado, parte de él; si no, del " \
+    "elegido. También con doble clic sobre el modelo."
+#define GLOBO_C_ELEGIR "Declara que el modelo marcado es EL del caso."
+#define GLOBO_C_RAZON \
+    "El porqué del modelo marcado. Se puede poner después, mirando el " \
+    ".out, o no ponerse."
+#define GLOBO_C_BORRAR \
+    "El modelo marcado y sus ficheros. Se pregunta antes. Uno del que " \
+    "cuelgue otro no se borra."
+#define GLOBO_C_DERIVAR \
+    "Otro caso con las entradas cambiadas --por defecto el elegido y el " \
+    ".pre de hoy--, colgado de éste. Es la salida de los dos desfases: " \
+    "este no se reescribe nunca."
+#define GLOBO_C_RAZON_CASO "Qué se quiere ver cruzando estas series."
+#define GLOBO_C_BORRAR_CASO "Sólo si no tiene modelos: son estimaciones con su .out."
+
 static const PrCaso *caso_marcado( Atsw *a )
 {
     if ( !a->hay || !a->viendo_caso || !a->caso[0] ) return NULL;
@@ -698,6 +722,11 @@ static void on_c_drtran_mi( GtkMenuItem *mi, Atsw *a )
      { (void) mi; atsw_caso_lanza( a, "drtran_gui" ); }
 
 static gboolean confirma( Atsw *a, const char *pregunta, const char *detalle );
+static void on_c_elegir( GtkButton *b, Atsw *a );
+static void on_c_razon( GtkButton *b, Atsw *a );
+static void on_c_borrar( GtkButton *b, Atsw *a );
+static void on_c_razon_caso( GtkButton *b, Atsw *a );
+static void on_c_borrar_caso( GtkButton *b, Atsw *a );
 
 /* LA VUELTA AL UNIVARIANTE (DISENO-casos §3): cada entrada del caso gana
  * un modelo derivado, hijo del que entro, con su bloque reestimado junto a
@@ -741,91 +770,186 @@ static void on_c_vuelta( GtkMenuItem *mi, Atsw *a )
 
 static OdParams vuelta_par;        /* ~70 KB: fuera de la pila (Windows) */
 
-/* EL MENU DEL MODELO DEL CASO, con el boton derecho: lo que el de un modelo
- * univariante tiene para mirarlo sin abrir nada. «Ver modelo…» es la pagina
- * de la SALIDA --la serie que el caso explica--; si la red tiene mas
- * ecuaciones con pagina, cada una tiene la suya debajo.              */
-static void menu_corrida( Atsw *a, GdkEventButton *ev )
-{
-    const PrCaso *c = caso_marcado( a );
-    gchar        *co = c ? atsw_marcada( a->c_corridas, CO_ID ) : NULL;
-    GtkWidget    *menu, *mi;
-    int           k;
+/* LAS SECCIONES DEL CASO (ESTUDIO-madre-organizacion §3.2): las mismas en el
+ * boton derecho sobre un modelo del caso y en el menu MT de la barra. El
+ * contextual es lo que se puede hacer CON ESTE modelo; el menu MT, todo lo
+ * del caso marcado, con lo que no vale todavia apagado y diciendo por que.
+ *
+ * co es el modelo del caso marcado, o NULL si no hay ninguno.          */
 
-    if ( co == NULL ) return;
-    menu = gtk_menu_new();
+#define SIN_CASO     "Marca un caso en la lista CASOS."
+#define SIN_CORRIDA  "Marca un modelo del caso."
+
+/* «Ver modelo…» es la pagina de la SALIDA --la serie que el caso explica--;
+   si la red tiene mas ecuaciones con pagina, cada una tiene la suya.  */
+static void sec_c_ver( Atsw *a, GtkWidget *menu, const PrCaso *c, const char *co )
+{
+    GtkWidget *mi;
+    int        k;
+
+    if ( c == NULL || co == NULL )
+        {
+        mi = atsw_entrada( a, menu, "Ver modelo…", NULL, NULL, NULL );
+        atsw_apaga( mi, c ? SIN_CORRIDA : SIN_CASO );
+        return;
+        }
     for ( k = 0; k < c->nen; k++ )
         {
         char     f[PR_RUTA], nom[PR_ID + 64];
         gboolean hay = pagina_de( a, c, co, k, f, sizeof f, nom, sizeof nom ) == 0;
-        gchar   *txt;
+        gchar   *txt, *g;
 
         if ( k > 0 && !hay ) continue;
         txt = k == 0 ? g_strdup( "Ver modelo…" )
                      : g_strdup_printf( "Ver la ecuación de %s…", nom );
-        mi = gtk_menu_item_new_with_label( txt );
-        g_free( txt );
-        gtk_widget_set_sensitive( mi, hay );
-        if ( hay )
-            {
-            gchar *g = g_strdup_printf( "La página de %s: los residuos con su ACF y su "
+        g = hay ? g_strdup_printf( "La página de %s: los residuos con su ACF y su "
                 "PACF y, debajo, la transferencia, el ruido y los deterministas "
                 "estimados, con sus desviaciones típicas. La que drtran dejó al "
-                "estimar, sin abrir drtran.", nom );
-
-            gtk_widget_set_tooltip_text( mi, g );
-            g_free( g );
-            g_object_set_data_full( G_OBJECT(mi), "pdf", g_strdup( f ), g_free );
-            g_signal_connect( mi, "activate", G_CALLBACK(on_c_pagina), a );
-            }
-        else
-            gtk_widget_set_tooltip_text( mi, "Todavía no hay página: drtran la escribe "
-                "al estimar el modelo, y al abrirlo si ya estaba estimado." );
-        gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
+                "estimar, sin abrir drtran.", nom )
+                : g_strdup( "Todavía no hay página: drtran la escribe al estimar "
+                "el modelo, y al abrirlo si ya estaba estimado." );
+        mi = atsw_entrada( a, menu, txt, g, hay ? G_CALLBACK(on_c_pagina) : NULL, a );
+        g_free( txt ); g_free( g );
+        gtk_widget_set_sensitive( mi, hay );
+        if ( hay ) g_object_set_data_full( G_OBJECT(mi), "pdf", g_strdup( f ), g_free );
         }
-    gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
-    {
-    gchar *t = g_strdup_printf( "Abrir %s en drtran", co );
+}
 
-    mi = gtk_menu_item_new_with_label( t );
+static void sec_c_drtran( Atsw *a, GtkWidget *menu, const PrCaso *c, const char *co )
+{
+    GtkWidget *mi;
+    gchar     *t = co ? g_strdup_printf( "Abrir %s en drtran", co )
+                      : g_strdup( "Abrir en drtran" );
+
+    mi = atsw_entrada( a, menu, t, co ? "Lo mismo que el doble clic." : GLOBO_C_DRTRAN,
+                       G_CALLBACK(on_c_drtran_mi), a );
     g_free( t );
-    }
-    gtk_widget_set_tooltip_text( mi, "Lo mismo que el doble clic." );
-    g_signal_connect( mi, "activate", G_CALLBACK(on_c_drtran_mi), a );
-    gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
-    {
-    char     out[PR_RUTA];
-    gboolean hay = pr_corrida_ruta( a->p, c->id, co, ".out", out, sizeof out ) == 0 &&
-                   g_file_test( out, G_FILE_TEST_EXISTS );
-    gboolean ok  = hay && od_params_file( out, &vuelta_par ) == 0;
+    atsw_entrada_tecla( mi, "<Primary>e" );
+    if ( c == NULL ) atsw_apaga( mi, SIN_CASO );
+}
 
-    mi = gtk_menu_item_new_with_label( "Devolver los univariantes…" );
+/* LA VUELTA AL UNIVARIANTE, apagada si no hay que devolver, con su porque. */
+static void sec_c_vuelta( Atsw *a, GtkWidget *menu, const PrCaso *c, const char *co )
+{
+    GtkWidget *mi;
+    char       out[PR_RUTA];
+    gboolean   hay, ok;
+
+    if ( c == NULL || co == NULL )
+        {
+        mi = atsw_entrada( a, menu, "Devolver los univariantes…", NULL, NULL, NULL );
+        atsw_apaga( mi, c ? SIN_CORRIDA : SIN_CASO );
+        return;
+        }
+    hay = pr_corrida_ruta( a->p, c->id, co, ".out", out, sizeof out ) == 0 &&
+          g_file_test( out, G_FILE_TEST_EXISTS );
+    ok  = hay && od_params_file( out, &vuelta_par ) == 0;
+
     if ( !ok )
         {
-        gtk_widget_set_sensitive( mi, FALSE );
-        gtk_widget_set_tooltip_text( mi, hay ? "Su .out no trae la tabla de "
-                                               "parámetros: no hay qué devolver."
-                                             : "El modelo no está estimado: no tiene .out." );
+        mi = atsw_entrada( a, menu, "Devolver los univariantes…", NULL, NULL, NULL );
+        atsw_apaga( mi, hay ? "Su .out no trae la tabla de parámetros: no hay qué "
+                              "devolver." : "El modelo no está estimado: no tiene .out." );
         }
     else if ( !vu_con_transferencia( &vuelta_par ) )
         {
-        gtk_widget_set_sensitive( mi, FALSE );
-        gtk_widget_set_tooltip_text( mi, "Es el modelo diagonal: sin transferencia, "
-                                         "los bloques son los de fue y no hay nada "
-                                         "que devolver." );
+        mi = atsw_entrada( a, menu, "Devolver los univariantes…", NULL, NULL, NULL );
+        atsw_apaga( mi, "Es el modelo diagonal: sin transferencia, los bloques son "
+                        "los de fue y no hay nada que devolver." );
         }
     else
         {
-        gtk_widget_set_tooltip_text( mi, "Cada serie gana un modelo derivado, hijo "
-            "del que entró en el caso, con su bloque univariante reestimado junto a "
-            "la transferencia: un .inp para estimar en fue." );
+        mi = atsw_entrada( a, menu, "Devolver los univariantes…",
+            "Cada serie gana un modelo derivado, hijo del que entró en el caso, "
+            "con su bloque univariante reestimado junto a la transferencia: un "
+            ".inp para estimar en fue.", G_CALLBACK(on_c_vuelta), a );
         g_object_set_data_full( G_OBJECT(mi), "corrida", g_strdup( co ), g_free );
-        g_signal_connect( mi, "activate", G_CALLBACK(on_c_vuelta), a );
         }
-    gtk_menu_shell_append( GTK_MENU_SHELL(menu), mi );
-    }
+}
+
+/* LAS DECISIONES SOBRE EL MODELO DEL CASO, como en la rejilla de una serie:
+   en la fila y, ahora tambien, en el boton derecho.                   */
+static void sec_c_decidir( Atsw *a, GtkWidget *menu, const char *co )
+{
+    GtkWidget *mi;
+
+    mi = atsw_entrada( a, menu, "Elegir", GLOBO_C_ELEGIR, G_CALLBACK(on_c_elegir), a );
+    if ( co == NULL ) atsw_apaga( mi, SIN_CORRIDA );
+    mi = atsw_entrada( a, menu, "Razón…", GLOBO_C_RAZON, G_CALLBACK(on_c_razon), a );
+    if ( co == NULL ) atsw_apaga( mi, SIN_CORRIDA );
+    mi = atsw_entrada( a, menu, "Borrar modelo…", GLOBO_C_BORRAR,
+                       G_CALLBACK(on_c_borrar), a );
+    atsw_entrada_tecla( mi, "Delete" );
+    if ( co == NULL ) atsw_apaga( mi, SIN_CORRIDA );
+}
+
+/* EL CASO ENTERO: derivarlo, su porque y borrarlo. */
+static void sec_c_caso( Atsw *a, GtkWidget *menu, const PrCaso *c )
+{
+    GtkWidget *mi;
+
+    mi = atsw_entrada( a, menu, "Derivar caso…", GLOBO_C_DERIVAR,
+                       G_CALLBACK(on_derivar), a );
+    if ( c == NULL ) atsw_apaga( mi, SIN_CASO );
+    mi = atsw_entrada( a, menu, "Razón del caso…", GLOBO_C_RAZON_CASO,
+                       G_CALLBACK(on_c_razon_caso), a );
+    if ( c == NULL ) atsw_apaga( mi, SIN_CASO );
+    mi = atsw_entrada( a, menu, "Borrar caso…", GLOBO_C_BORRAR_CASO,
+                       G_CALLBACK(on_c_borrar_caso), a );
+    if ( c == NULL ) atsw_apaga( mi, SIN_CASO );
+}
+
+/* EL MENU DEL MODELO DEL CASO, con el boton derecho: lo que el de un modelo
+ * univariante tiene para mirarlo sin abrir nada, y las decisiones.   */
+static void menu_corrida( Atsw *a, GdkEventButton *ev )
+{
+    const PrCaso *c = caso_marcado( a );
+    gchar        *co = c ? atsw_marcada( a->c_corridas, CO_ID ) : NULL;
+    GtkWidget    *menu;
+
+    if ( co == NULL ) return;
+    menu = gtk_menu_new();
+    sec_c_ver( a, menu, c, co );
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
+    sec_c_drtran( a, menu, c, co );
+    sec_c_vuelta( a, menu, c, co );
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
+    sec_c_decidir( a, menu, co );
     gtk_widget_show_all( menu );
     atsw_menu_en( menu, a->c_corridas, ev );
+    g_free( co );
+}
+
+static void on_convertir( GtkButton *b, Atsw *a );
+
+/* Ver atsw.h. El orden es el de §3.1: el caso nuevo, estimar y mirar, las
+   decisiones sobre el modelo, las del caso, y la conversion de lo viejo
+   solo si lo hay.                                                     */
+void atsw_menu_mt( Atsw *a, GtkWidget *menu )
+{
+    const PrCaso *c = caso_marcado( a );
+    gchar        *co = c ? atsw_marcada( a->c_corridas, CO_ID ) : NULL;
+    GtkWidget    *mi;
+
+    mi = atsw_entrada( a, menu, "Nuevo caso…", GLOBO_NUEVO_CASO,
+                       G_CALLBACK(on_nuevo_caso), a );
+    if ( !a->hay ) atsw_apaga( mi, "Abre un proyecto antes: Proyecto ▸ Abrir… o Nuevo…." );
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
+    sec_c_drtran( a, menu, c, co );
+    sec_c_ver( a, menu, c, co );
+    sec_c_vuelta( a, menu, c, co );
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
+    sec_c_decidir( a, menu, co );
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
+    sec_c_caso( a, menu, c );
+    if ( a->hay && atsw_legados( a->p, NULL, 0 ) > 0 )
+        {
+        gchar *g = a->b_convertir ? gtk_widget_get_tooltip_text( a->b_convertir ) : NULL;
+
+        gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
+        atsw_entrada( a, menu, "Convertir en casos…", g, G_CALLBACK(on_convertir), a );
+        g_free( g );
+        }
     g_free( co );
 }
 
@@ -1115,9 +1239,7 @@ void atsw_casos_panel( Atsw *a, GtkWidget *izq )
         "modelos de transferencia." );
     gtk_box_pack_start( GTK_BOX(h), l, FALSE, FALSE, 4 );
     a->b_nuevo_caso = gtk_button_new_with_label( "Nuevo caso…" );
-    gtk_widget_set_tooltip_text( a->b_nuevo_caso,
-        "Qué series se cruzan, cada una con qué modelo estimado, y en qué "
-        "orden. La ventana común se comprueba antes de aceptar." );
+    gtk_widget_set_tooltip_text( a->b_nuevo_caso, GLOBO_NUEVO_CASO );
     g_signal_connect( a->b_nuevo_caso, "clicked", G_CALLBACK(on_nuevo_caso), a );
     gtk_box_pack_end( GTK_BOX(h), a->b_nuevo_caso, FALSE, FALSE, 0 );
     gtk_box_pack_start( GTK_BOX(izq), h, FALSE, FALSE, 2 );
@@ -1165,33 +1287,24 @@ GtkWidget *atsw_caso_vista( Atsw *a )
     v  = gtk_box_new( GTK_ORIENTATION_VERTICAL, 6 );
     b2 = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 6 );
 
-    a->b_c_drtran = boton_caso( b2, "Abrir en drtran",
-        "drtran_gui con este caso: sus series en su orden, comprobando los "
-        "hashes. Si hay un modelo marcado, parte de él; si no, del "
-        "elegido. También con doble clic sobre el modelo.", G_CALLBACK(on_c_drtran), a );
+    a->b_c_drtran = boton_caso( b2, "Abrir en drtran", GLOBO_C_DRTRAN,
+                                G_CALLBACK(on_c_drtran), a );
     gtk_box_pack_start( GTK_BOX(b2), gtk_separator_new(
                             GTK_ORIENTATION_VERTICAL ), FALSE, FALSE, 4 );
-    a->b_c_elegir = boton_caso( b2, "Elegir",
-        "Declara que el modelo marcado es EL del caso.",
-        G_CALLBACK(on_c_elegir), a );
-    a->b_c_razon = boton_caso( b2, "Razón…",
-        "El porqué del modelo marcado. Se puede poner después, mirando el "
-        ".out, o no ponerse.", G_CALLBACK(on_c_razon), a );
-    a->b_c_borrar = boton_caso( b2, "Borrar modelo…",
-        "El modelo marcado y sus ficheros. Se pregunta antes. Uno del que "
-        "cuelgue otro no se borra.", G_CALLBACK(on_c_borrar), a );
+    a->b_c_elegir = boton_caso( b2, "Elegir", GLOBO_C_ELEGIR,
+                                G_CALLBACK(on_c_elegir), a );
+    a->b_c_razon = boton_caso( b2, "Razón…", GLOBO_C_RAZON,
+                               G_CALLBACK(on_c_razon), a );
+    a->b_c_borrar = boton_caso( b2, "Borrar modelo…", GLOBO_C_BORRAR,
+                                G_CALLBACK(on_c_borrar), a );
     gtk_box_pack_start( GTK_BOX(b2), gtk_separator_new(
                             GTK_ORIENTATION_VERTICAL ), FALSE, FALSE, 4 );
-    a->b_c_derivar = boton_caso( b2, "Derivar caso…",
-        "Otro caso con las entradas cambiadas --por defecto el elegido y el "
-        ".pre de hoy--, colgado de éste. Es la salida de los dos desfases: "
-        "este no se reescribe nunca.", G_CALLBACK(on_derivar), a );
-    a->b_c_razon_caso = boton_caso( b2, "Razón del caso…",
-        "Qué se quiere ver cruzando estas series.",
-        G_CALLBACK(on_c_razon_caso), a );
-    a->b_c_borrar_caso = boton_caso( b2, "Borrar caso…",
-        "Sólo si no tiene modelos: son estimaciones con su .out.",
-        G_CALLBACK(on_c_borrar_caso), a );
+    a->b_c_derivar = boton_caso( b2, "Derivar caso…", GLOBO_C_DERIVAR,
+                                 G_CALLBACK(on_derivar), a );
+    a->b_c_razon_caso = boton_caso( b2, "Razón del caso…", GLOBO_C_RAZON_CASO,
+                                    G_CALLBACK(on_c_razon_caso), a );
+    a->b_c_borrar_caso = boton_caso( b2, "Borrar caso…", GLOBO_C_BORRAR_CASO,
+                                     G_CALLBACK(on_c_borrar_caso), a );
     gtk_box_pack_start( GTK_BOX(v), b2, FALSE, FALSE, 0 );
 
     a->c_cabeza = gtk_label_new( "" );

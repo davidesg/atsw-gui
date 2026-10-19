@@ -763,6 +763,10 @@ static GtkMenu *clic_derecho( GtkWidget *tv, int fila )
     return tomado ? menu_abierto() : NULL;
 }
 
+/* La entrada que empieza por <empieza>: primero en el menu y despues en
+   sus submenus. Los analisis del modelo viven ahora en «Diagnosticar ▸»
+   (ESTUDIO-madre-organizacion §3.1 ter), y una prueba que busca
+   «Diagnosis…» busca la entrada, no el sitio.                         */
 static GtkWidget *entrada_de( GtkMenu *m, const char *empieza )
 {
     GList     *l, *hijos = gtk_container_get_children( GTK_CONTAINER(m) );
@@ -775,6 +779,11 @@ static GtkWidget *entrada_de( GtkMenu *m, const char *empieza )
 
             if ( t && g_str_has_prefix( t, empieza ) ) r = l->data;
             }
+    for ( l = hijos; l && !r; l = l->next )
+        if ( GTK_IS_MENU_ITEM(l->data) &&
+             gtk_menu_item_get_submenu( GTK_MENU_ITEM(l->data) ) )
+            r = entrada_de( GTK_MENU(gtk_menu_item_get_submenu(
+                                GTK_MENU_ITEM(l->data) )), empieza );
     g_list_free( hijos );
     return r;
 }
@@ -3250,6 +3259,308 @@ static void casos( void )
 }
 
 /* ======================================================================== */
+/* LA BARRA DE MENUS (ESTUDIO-madre-organizacion §3, fase 1)                 */
+/*                                                                           */
+/* Lo que se vigila es lo que impide que se degrade (§5): cada entrada de un */
+/* menu del boton derecho esta en la barra con el mismo rotulo y la misma    */
+/* sensibilidad, submenus incluidos. Y que activar una entrada de la barra   */
+/* hace lo mismo que su boton.                                               */
+/* ======================================================================== */
+
+enum { B_PROYECTO = 1, B_DATOS = 2, B_US = 4, B_MT = 8, B_AYUDA = 16 };
+
+static void junta_entradas( GtkMenu *m, GPtrArray *out )
+{
+    GList *l, *h = gtk_container_get_children( GTK_CONTAINER(m) );
+
+    for ( l = h; l; l = l->next )
+        {
+        GtkWidget *sub;
+
+        if ( !GTK_IS_MENU_ITEM(l->data) || GTK_IS_SEPARATOR_MENU_ITEM(l->data) )
+            continue;
+        if ( gtk_menu_item_get_label( l->data ) ) g_ptr_array_add( out, l->data );
+        sub = gtk_menu_item_get_submenu( l->data );
+        if ( sub ) junta_entradas( GTK_MENU(sub), out );
+        }
+    g_list_free( h );
+}
+
+static GtkWidget *titulo_de( int i )
+{
+    GList     *h = gtk_container_get_children( GTK_CONTAINER(A.menubar) );
+    GtkWidget *t = g_list_nth_data( h, i );
+
+    g_list_free( h );
+    return t;
+}
+
+/* El menu del titulo i, rehecho con el estado de ahora: lo que se veria
+   al abrirlo.                                                         */
+static GtkMenu *abre_titulo( int i )
+{
+    GtkWidget *t = titulo_de( i );
+
+    if ( t == NULL ) return NULL;
+    rehace_menu( &A, t );
+    return GTK_MENU(gtk_menu_item_get_submenu( GTK_MENU_ITEM(t) ));
+}
+
+static GPtrArray *barra_de( int cuales )
+{
+    GPtrArray *b = g_ptr_array_new();
+    int        i;
+
+    for ( i = 0; i < 5; i++ )
+        if ( cuales & ( 1 << i ) )
+            {
+            GtkMenu *m = abre_titulo( i );
+
+            if ( m ) junta_entradas( m, b );
+            }
+    return b;
+}
+
+static GtkWidget *con_rotulo( GPtrArray *b, const char *r )
+{
+    guint i;
+
+    for ( i = 0; i < b->len; i++ )
+        if ( !g_strcmp0( gtk_menu_item_get_label( g_ptr_array_index( b, i ) ), r ) )
+            return g_ptr_array_index( b, i );
+    return NULL;
+}
+
+static gboolean con_accion( GPtrArray *b, gpointer acc )
+{
+    guint i;
+
+    for ( i = 0; i < b->len; i++ )
+        if ( g_object_get_data( G_OBJECT(g_ptr_array_index( b, i )), "accion" ) == acc )
+            return TRUE;
+    return FALSE;
+}
+
+/* exenta: la accion que en la barra pone otra seccion con otro rotulo --la
+   del modelo marcado-- y que basta con que este.                      */
+static void contextual_en_barra( GtkMenu *m, const char *que, int cuales,
+                                 gpointer exenta1, gpointer exenta2 )
+{
+    GPtrArray *c = g_ptr_array_new(), *b;
+    GString   *mal = g_string_new( NULL );
+    gchar     *q;
+    guint      i;
+
+    if ( m == NULL ) { check( FALSE, que, "no se abrio el menu" ); return; }
+    junta_entradas( m, c );
+    b = barra_de( cuales );
+    for ( i = 0; i < c->len; i++ )
+        {
+        GtkWidget  *e = g_ptr_array_index( c, i ), *x;
+        const char *r = gtk_menu_item_get_label( GTK_MENU_ITEM(e) );
+        gpointer    acc = g_object_get_data( G_OBJECT(e), "accion" );
+
+        x = con_rotulo( b, r );
+        if ( x == NULL && acc && ( acc == exenta1 || acc == exenta2 ) )
+            {
+            if ( !con_accion( b, acc ) )
+                g_string_append_printf( mal, "«%s» (ni su acción) ", r );
+            continue;
+            }
+        if ( x == NULL )
+            g_string_append_printf( mal, "«%s» falta ", r );
+        else if ( gtk_widget_get_sensitive( x ) != gtk_widget_get_sensitive( e ) )
+            g_string_append_printf( mal, "«%s» encendida distinto ", r );
+        }
+    q = g_strdup_printf( "cada entrada del menú %s está en la barra, igual "
+                         "(%u entradas)", que, c->len );
+    check( mal->len == 0 && c->len > 0, q, mal->str );
+    g_free( q );
+    g_string_free( mal, TRUE );
+    g_ptr_array_free( c, TRUE );
+    g_ptr_array_free( b, TRUE );
+}
+
+static int fila_de( GtkWidget *tv, int col, const char *v )
+{
+    GtkTreeModel *mo = gtk_tree_view_get_model( GTK_TREE_VIEW(tv) );
+    GtkTreeIter   it;
+    int           n = 0;
+
+    if ( gtk_tree_model_get_iter_first( mo, &it ) )
+        do {
+            gchar *s = NULL;
+
+            gtk_tree_model_get( mo, &it, col, &s, -1 );
+            if ( !g_strcmp0( s, v ) ) { g_free( s ); return n; }
+            g_free( s );
+            n++;
+        } while ( gtk_tree_model_iter_next( mo, &it ) );
+    return -1;
+}
+
+static void menus_barra( void )
+{
+    static const char *rot[] = { "_Proyecto", "_Datos", "_US", "_MT", "A_yuda" };
+    static const char *glo[] = { "Proyecto —", "Datos —",
+                                 "US — Modelo univariante (Box-Jenkins), con fue y fuf",
+                                 "MT — Transferencia multivariante, con drtran",
+                                 "Ayuda —" };
+    GtkMenu   *m;
+    GtkWidget *mi;
+    int        i;
+
+    /* --- los cinco títulos, con su nombre completo en el globo -------- */
+    check( A.menubar && GTK_IS_MENU_BAR(A.menubar), "la madre tiene barra de menús", NULL );
+    for ( i = 0; i < 5; i++ )
+        {
+        GtkWidget  *t = titulo_de( i );
+        const char *r = t ? gtk_menu_item_get_label( GTK_MENU_ITEM(t) ) : NULL;
+        gchar      *g = t ? gtk_widget_get_tooltip_text( t ) : NULL;
+        gchar      *q = g_strdup_printf( "el menú %d es %s y su globo dice «%s…»",
+                                         i + 1, rot[i], glo[i] );
+
+        check( r && !strcmp( r, rot[i] ) && g && g_str_has_prefix( g, glo[i] ), q,
+               g ? g : r );
+        g_free( q ); g_free( g );
+        }
+    check( titulo_de( 5 ) == NULL, "y sólo cinco: VARMA y VECM llegan con sus GUI", NULL );
+
+    /* --- US y los dos contextuales ------------------------------------ */
+    gtk_notebook_set_current_page( GTK_NOTEBOOK(A.libro), 0 );
+    pump( 50 );
+    marca( A.l_series, S_ID, "ipc" );
+    marca( A.l_modelos, M_ID, "m01" );
+    m = clic_derecho( A.l_modelos, fila_de( A.l_modelos, M_ID, "m01" ) );
+    {
+    GList *h = m ? gtk_container_get_children( GTK_CONTAINER(m) ) : NULL;
+    int    kd = -1, kv = -1, k = 0;
+    GList *l;
+
+    for ( l = h; l; l = l->next, k++ )
+        if ( GTK_IS_MENU_ITEM(l->data) && gtk_menu_item_get_label( l->data ) )
+            {
+            if ( !strcmp( gtk_menu_item_get_label( l->data ), "Diagnosticar" ) ) kd = k;
+            if ( !strcmp( gtk_menu_item_get_label( l->data ), "Ver modelo…" ) ) kv = k;
+            }
+    g_list_free( h );
+    check( kd >= 0 && kv == kd + 1 && m &&
+           gtk_menu_item_get_submenu( GTK_MENU_ITEM(entrada_de( m, "Diagnosticar" )) ),
+           "el menú de m01: «Diagnosticar ▸» es un submenú y «Ver modelo…» va "
+           "plano, justo debajo", m ? entradas( m ) : NULL );
+    }
+    check( m && entrada_de( m, "Elegir" ) && entrada_de( m, "Razón…" ),
+           "y gana «Elegir» y «Razón…», que sólo estaban en la fila",
+           m ? entradas( m ) : NULL );
+    contextual_en_barra( m, "del modelo", B_DATOS | B_US, NULL, NULL );
+    cierra_menu( m );
+
+    m = clic_derecho( A.l_series, fila_de( A.l_series, S_ID, "ipc" ) );
+    check( m && entrada_de( m, "Muestra nueva" ),
+           "el menú de la serie gana «Muestra nueva…», que sólo era el «+»",
+           m ? entradas( m ) : NULL );
+    /* «Estimar mNN en fue» y «Otro modelo, desde los datos» los pone en la
+       barra la sección del modelo marcado, con su rótulo: misma acción. */
+    contextual_en_barra( m, "de la serie", B_DATOS | B_US,
+                         (gpointer) G_CALLBACK(on_fue),
+                         (gpointer) G_CALLBACK(on_nuevo_modelo) );
+    cierra_menu( m );
+
+    /* --- MT y el contextual del modelo del caso ----------------------- */
+    marca( A.l_casos, CA_ID, "C1" );
+    pump( 50 );
+    marca_arbol( A.c_corridas, CO_ID, "c00" );
+    m = clic_derecho( A.c_corridas, 0 );
+    check( m && entrada_de( m, "Elegir" ) && entrada_de( m, "Razón…" ) &&
+           entrada_de( m, "Borrar modelo…" ),
+           "el menú del modelo del caso gana Elegir, Razón… y Borrar modelo…",
+           m ? entradas( m ) : NULL );
+    contextual_en_barra( m, "del modelo del caso", B_MT, NULL, NULL );
+    cierra_menu( m );
+    m = abre_titulo( 3 );
+    check( m && entrada_de( m, "Abrir c00 en drtran" ) && entrada_de( m, "Derivar caso" ) &&
+           gtk_widget_get_sensitive( entrada_de( m, "Derivar caso" ) ),
+           "MT habla del caso marcado y de su modelo", m ? entradas( m ) : NULL );
+
+    /* --- las entradas de la barra hacen lo que su botón --------------- */
+    olvida();
+    mi = entrada_de( abre_titulo( 0 ), "Releer" );
+    if ( mi ) gtk_menu_item_activate( GTK_MENU_ITEM(mi) );
+    pump( 50 );
+    check( dijo( "Releído" ) || dijo( "releído" ), "Proyecto ▸ Releer relee, como Ctrl+R",
+           todo_lo_dicho() );
+
+    marca( A.l_series, S_ID, "ipc" );
+    marca( A.l_modelos, M_ID, "m01" );
+    if ( ventana_titulada( "Diagnosis — ipc / m01" ) )
+        { gtk_widget_destroy( GTK_WIDGET(ventana_titulada( "Diagnosis — ipc / m01" )) );
+          pump( 50 ); }
+    m  = abre_titulo( 2 );
+    mi = m ? entrada_de( m, "Diagnosis" ) : NULL;
+    check( mi && gtk_widget_get_sensitive( mi ),
+           "US ▸ Diagnosticar ▸ Diagnosis… se enciende con m01 estimado",
+           m ? entradas( m ) : NULL );
+    if ( mi ) gtk_menu_item_activate( GTK_MENU_ITEM(mi) );
+    pump( 300 );
+    check( ventana_titulada( "Diagnosis — ipc / m01" ) != NULL,
+           "y abre la diagnosis de m01, como el menú del modelo", barra() );
+    if ( ventana_titulada( "Diagnosis — ipc / m01" ) )
+        gtk_widget_destroy( GTK_WIDGET(ventana_titulada( "Diagnosis — ipc / m01" )) );
+    pump( 50 );
+
+    responde( "Nuevo caso", contesta, GINT_TO_POINTER(GTK_RESPONSE_CANCEL) );
+    mi = entrada_de( abre_titulo( 3 ), "Nuevo caso" );
+    if ( mi ) gtk_menu_item_activate( GTK_MENU_ITEM(mi) );
+    todo_atendido( "MT ▸ Nuevo caso… tenía que abrir su diálogo, como el botón" );
+
+    /* --- las teclas se ven en las entradas ---------------------------- */
+    {
+    guint           k = 0, kp = 0;
+    GdkModifierType mo = 0, prim = 0;
+    GtkWidget      *l;
+
+    gtk_accelerator_parse( "<Primary>o", &kp, &prim );
+    mi = entrada_de( abre_titulo( 0 ), "Abrir" );
+    l  = mi ? gtk_bin_get_child( GTK_BIN(mi) ) : NULL;
+    if ( l && GTK_IS_ACCEL_LABEL(l) ) gtk_accel_label_get_accel( GTK_ACCEL_LABEL(l), &k, &mo );
+    check( k == GDK_KEY_o && mo == prim, "Proyecto ▸ Abrir… enseña su tecla", NULL );
+    }
+
+    /* --- con el teclado, el título enseña su nombre en un recuadro ---- */
+    {
+    GtkWidget  *t = titulo_de( 2 );
+    const char *x;
+
+    gtk_label_set_text( GTK_LABEL(A.estado), "lo de antes" );
+    g_signal_emit_by_name( t, "select" );
+    pump( 150 );
+    x = A.recuadro ? gtk_label_get_text( GTK_LABEL(gtk_bin_get_child( GTK_BIN(A.recuadro) )) )
+                   : NULL;
+    check( A.recuadro && gtk_widget_get_visible( A.recuadro ) && x &&
+           g_str_has_prefix( x, "US — Modelo univariante" ),
+           "al llegar a US con el teclado sale un recuadro con su nombre completo", x );
+    check( g_str_has_prefix( barra(), "US — Modelo univariante" ),
+           "y la barra de estado lo dice", barra() );
+    g_signal_emit_by_name( t, "deselect" );
+    pump( 100 );
+    check( A.recuadro && !gtk_widget_get_visible( A.recuadro ),
+           "al salir del título el recuadro se va", NULL );
+    check( !strcmp( barra(), "lo de antes" ), "y la barra vuelve a lo que decía", barra() );
+    gtk_menu_shell_deactivate( GTK_MENU_SHELL(A.menubar) );
+    pump( 50 );
+    }
+
+    /* --- F1 sabe dónde está el manual --------------------------------- */
+    {
+    gchar *u = manual_uri();
+
+    check( u && ( g_str_has_prefix( u, "file://" ) || g_str_has_prefix( u, "https://" ) ),
+           "F1 encuentra el manual: el instalado, el del árbol o el publicado", u );
+    g_free( u );
+    }
+}
+
+/* ======================================================================== */
 /* LAS CORRIDAS DE ANTES (docs/DISENO-casos.md §5)                           */
 /*                                                                           */
 /* Se fabrica lo que dejaba drtran_gui antes de los casos: modelos de la     */
@@ -3507,18 +3818,22 @@ static void teclado( void )
     static const guint  k[] = { GDK_KEY_o, GDK_KEY_n, GDK_KEY_e, GDK_KEY_r, GDK_KEY_q };
     static const char  *n[] = { "Ctrl+O", "Ctrl+N", "Ctrl+E", "Ctrl+R", "Ctrl+Q" };
     int            i;
+    guint          kp;
+    GdkModifierType prim = 0;
 
+    /* <Primary>: Ctrl en Linux y Windows, Cmd en macOS. */
+    gtk_accelerator_parse( "<Primary>o", &kp, &prim );
     for ( i = 0; i < 5; i++ )
         {
         guint  nq = 0;
         gchar *q  = g_strdup_printf( "la madre tiene %s, como las hijas", n[i] );
 
-        if ( g ) gtk_accel_group_query( g, k[i], GDK_CONTROL_MASK, &nq );
+        if ( g ) gtk_accel_group_query( g, k[i], prim, &nq );
         check( nq > 0, q, NULL );
         g_free( q );
         }
     olvida();
-    gtk_accel_groups_activate( G_OBJECT(A.ventana), GDK_KEY_r, GDK_CONTROL_MASK );
+    gtk_accel_groups_activate( G_OBJECT(A.ventana), GDK_KEY_r, prim );
     pump( 100 );
     check( dijo( "Releído" ) || dijo( "releído" ), "Ctrl+R relee y lo dice", todo_lo_dicho() );
 
@@ -3891,6 +4206,7 @@ int main( int argc, char **argv )
             fase( "abrir" ); abrir( manifiesto );
             fase( "casos" ); casos();
             fase( "panel" ); panel();
+            fase( "barra" ); menus_barra();
             fase( "legados" ); legados();
             }
         }

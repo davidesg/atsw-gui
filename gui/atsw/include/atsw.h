@@ -214,10 +214,16 @@ void       atsw_lanza( Atsw *a, const char *programa, const char *fichero );
 void       atsw_lanza_con( Atsw *a, const char *programa, const char *opcion,
                            const char *fichero );
 
+/* Lo mismo que atsw_lanza, y la barra dice antes el GESTO con su clase:
+   «Estimar m01 (US) en fue: <binario>, con ipc_m01.pre.»                */
+void       atsw_lanza_dice( Atsw *a, const char *programa, const char *fichero,
+                            const char *que );
+
 /* drtran_gui con un CASO: «--proyecto P --caso C [--corrida c]». corrida
-   puede ser NULL o "": entonces drtran parte de la elegida, o de nada. */
+   puede ser NULL o "": entonces drtran parte de la elegida, o de nada.
+   que, como en atsw_lanza_dice; NULL si no hay gesto que decir.        */
 void       atsw_lanza_caso( Atsw *a, const char *programa, const char *caso,
-                            const char *corrida );
+                            const char *corrida, const char *que );
 
 /* --- los casos (docs/DISENO-casos.md) ----------------------------------- */
 
@@ -277,9 +283,22 @@ void       atsw_pinta_casos( Atsw *a );
 /* «Nuevo caso…», o «Derivar caso…» si deriva_de no es NULL.            */
 void       atsw_caso_nuevo( Atsw *a, const char *deriva_de );
 
-/* «Abrir en drtran» con el programa dado: el caso marcado y, si hay una
+/* «Estimar» el caso con el programa dado: el caso marcado y, si hay una
    corrida marcada, esa.                                                */
 void       atsw_caso_lanza( Atsw *a, const char *programa );
+
+/* LA CLASE DE UN CASO POR SU MOTOR: drtran es MT, drvarma VARMA y drvec
+   VECM (ESTUDIO-madre-organizacion §2.2). Lo que no se conoce, tal cual. */
+const char *atsw_clase_de( const char *motor );
+
+/* LA TECLA COMO LA ESCRIBE ESTE SISTEMA: «Ctrl+E» en Linux y Windows, la
+   de Cmd en macOS. acel en el formato de gtk_accelerator_parse
+   («<Primary>e»). g_free.                                              */
+gchar     *atsw_tecla( const char *acel );
+
+/* Un globo con su tecla al final, tras una linea en blanco, que es el
+   formato de los globos de la madre. g_free.                           */
+gchar     *atsw_globo_tecla( const char *globo, const char *acel );
 
 /* Un texto en una linea, en un dialogo modal. TRUE si se acepto.       */
 gboolean   atsw_pide_texto( Atsw *a, const char *titulo, const char *aviso,

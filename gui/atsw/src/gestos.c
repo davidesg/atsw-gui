@@ -91,10 +91,12 @@ void atsw_lanza( Atsw *a, const char *programa, const char *fichero )
  *
  * extra es una lista terminada en NULL; con dice lo que la barra cuenta
  * despues del binario («con IPC_m01.inp», «con el caso C1»), y NULL es «con
- * este proyecto». Es el unico sitio que llama a g_spawn: los dos de abajo
- * solo componen la lista.                                              */
+ * este proyecto». que, si lo hay, va delante y dice el GESTO con su clase
+ * («Estimar m01 (US) en fue»): el verbo esta en el boton y el programa en
+ * segundo plano, pero siempre (ESTUDIO-madre-organizacion §2.3). Es el
+ * unico sitio que llama a g_spawn: los de abajo solo componen la lista. */
 static void lanza_v( Atsw *a, const char *programa, const char *const *extra,
-                     const char *con )
+                     const char *con, const char *que )
 {
     gchar  *argv[12];
     GError *e = NULL;
@@ -151,6 +153,13 @@ static void lanza_v( Atsw *a, const char *programa, const char *const *extra,
                  ? g_strdup_printf( "%s, con %s.", exe, con )
                  : g_strdup_printf( "%s, con este proyecto.", exe );
 
+        if ( que && *que )
+            {
+            gchar *t = g_strdup_printf( "%s: %s", que, s );
+
+            g_free( s );
+            s = t;
+            }
         barra_pub( a, s );
         g_free( s );
         }
@@ -177,7 +186,21 @@ void atsw_lanza_con( Atsw *a, const char *programa, const char *opcion,
              ( fichero && *fichero )
                  ? ( strrchr( fichero, '/' ) ? strrchr( fichero, '/' ) + 1
                                              : fichero )
-                 : NULL );
+                 : NULL, NULL );
+}
+
+/* Ver atsw.h. */
+void atsw_lanza_dice( Atsw *a, const char *programa, const char *fichero,
+                      const char *que )
+{
+    const char *extra[2] = { fichero, NULL };
+
+    if ( fichero == NULL || !*fichero ) extra[0] = NULL;
+    lanza_v( a, programa, extra,
+             ( fichero && *fichero )
+                 ? ( strrchr( fichero, '/' ) ? strrchr( fichero, '/' ) + 1
+                                             : fichero )
+                 : NULL, que );
 }
 
 /* drtran_gui CON UN CASO. Antes la madre solo sabia lanzarlo con el
@@ -185,7 +208,7 @@ void atsw_lanza_con( Atsw *a, const char *programa, const char *opcion,
  * orden bueno, que es parte de la identidad del caso--. Ahora el caso dice
  * que se cruza, y drtran lo carga y comprueba los hashes el mismo.     */
 void atsw_lanza_caso( Atsw *a, const char *programa, const char *caso,
-                      const char *corrida )
+                      const char *corrida, const char *que )
 {
     const char *extra[5];
     gchar      *con;
@@ -200,7 +223,7 @@ void atsw_lanza_caso( Atsw *a, const char *programa, const char *caso,
     con = ( corrida && *corrida )
         ? g_strdup_printf( "el caso %s, desde el modelo %s", caso, corrida )
         : g_strdup_printf( "el caso %s", caso );
-    lanza_v( a, programa, extra, con );
+    lanza_v( a, programa, extra, con, que );
     g_free( con );
 }
 

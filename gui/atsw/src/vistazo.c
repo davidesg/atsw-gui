@@ -9,7 +9,7 @@
  * Reimplementar aqui el dibujo habria sido abrir una segunda forma de hacer el
  * mismo grafico, que es exactamente como esta suite se llenó de divergencias.
  *
- * DOS GESTOS, Y SON DISTINTOS:
+ * TRES GESTOS, Y SON DISTINTOS:
  *
  *   media - desviacion tipica   una pregunta CERRADA: ¿la dispersion crece con
  *                               el nivel? Se contesta mirando dos dibujos, con
@@ -19,6 +19,10 @@
  *                               el analista prueba, y por eso lambda, d y D
  *                               van AL PIE DEL GRAFICO y el dibujo se rehace
  *                               sin cerrar nada.
+ *
+ *   histograma                  la forma de la distribucion de la serie
+ *                               transformada: con lambda, d y D al pie, como
+ *                               la anterior, porque es de esa serie.
  *
  * El .inp del vistazo es TEMPORAL y vive en la cache: no se toca el del
  * proyecto. Un vistazo no es una decision, y no deja rastro en el manifiesto.
@@ -46,7 +50,8 @@ typedef struct {
     char       eps[PR_RUTA];        /* el que se enseña                    */
     GtkWidget *s_lam, *s_d, *s_D;
     gboolean   armando;             /* poniendo valores: no redibujar      */
-    int        modo;                /* 0 serie+acf/pacf, 1 media-dt        */
+    int        modo;                /* 0 serie+acf/pacf, 1 media-dt,       */
+                                    /* 2 histograma                        */
     char       serie[PR_ID];        /* de quien es, para el cuaderno: la   */
     char       muestra[PR_ID];      /* marcada puede cambiar con la ventana */
 } Vistazo;                          /* abierta                             */
@@ -131,7 +136,7 @@ static gboolean dibuja( Vistazo *v, char *why, size_t n )
 
     argv[0] = exe;
     argv[1] = v->base;
-    argv[2] = (gchar *) ( v->modo ? "-e" : "-c" );
+    argv[2] = (gchar *) ( v->modo == 1 ? "-e" : v->modo == 2 ? "-d" : "-c" );
     argv[3] = NULL;
 
     ok = g_spawn_sync( dir, argv, NULL, 0, NULL, NULL, &sal, &err, &st, &e );
@@ -239,6 +244,8 @@ static void on_cambio( GtkWidget *w, Vistazo *v ) { (void) w; repinta( v ); }
 /* EL PIE, Y LO QUE LLEVA DEPENDE DEL GRAFICO.
  *
  *   serie + acf/pacf   lambda, d y D: la pregunta es cuantas diferencias.
+ *   histograma         lambda, d y D tambien: fug dibuja el de la serie
+ *                      transformada y diferenciada.
  *   media - desv. tip. SOLO lambda: ese grafico es de la serie EN NIVEL, asi
  *                      que d y D no le dicen nada. Poner unos mandos que no
  *                      hacen nada seria peor que no ponerlos.
@@ -264,7 +271,7 @@ static GtkWidget *pie_nuevo( Vistazo *v, double lam, int d, int D )
         "Box-Cox. 0 son logaritmos, 1 la serie sin transformar." );
     gtk_box_pack_start( GTK_BOX(caja), v->s_lam, FALSE, FALSE, 0 );
 
-    if ( v->modo == 0 )
+    if ( v->modo != 1 )
         {
         gtk_box_pack_start( GTK_BOX(caja), gtk_label_new( "  d" ), FALSE, FALSE, 0 );
         v->s_d = gtk_spin_button_new_with_range( 0, 3, 1 );
@@ -280,7 +287,7 @@ static GtkWidget *pie_nuevo( Vistazo *v, double lam, int d, int D )
         }
 
     {
-    GtkWidget *l = gtk_label_new( v->modo
+    GtkWidget *l = gtk_label_new( v->modo == 1
         ? "  La serie EN NIVEL: d y D no entran aquí. El dibujo lo hace fug."
         : "  El dibujo lo hace fug: es el mismo que verías en la herramienta "
           "completa." );
@@ -291,7 +298,7 @@ static GtkWidget *pie_nuevo( Vistazo *v, double lam, int d, int D )
 
     if ( v->modo == 0 )
         {
-        GtkWidget *b = gtk_button_new_with_label( "Identificar…" );
+        GtkWidget *b = gtk_button_new_with_label( "Identificar la estructura ARIMA…" );
 
         gtk_widget_set_tooltip_text( b,
             "art propone órdenes ARMA para la serie con esta λ, d y D, con su "
@@ -346,7 +353,8 @@ static void on_identificar( GtkButton *b, Vistazo *v )
 /* ------------------------------------------------------------------------ */
 
 /* modo 0: serie + acf/pacf, con controles. modo 1: media - desviacion tipica,
- * con la lambda que se pida y sin controles.                            */
+ * con la lambda que se pida y sin d ni D. modo 2: histograma, con los mismos
+ * controles que el 0.                                                   */
 void atsw_vistazo( Atsw *a, const char *inp, int modo, double lam )
 {
     gchar *dir;
@@ -377,7 +385,7 @@ void atsw_vistazo( Atsw *a, const char *inp, int modo, double lam )
     /* La transformacion de partida sale del .inp -- que es donde vive. */
     if ( inp_read( inp, &f, msg, sizeof msg ) == 0 )
         {
-        if ( modo == 0 ) lam = f.boxlam;
+        if ( modo != 1 ) lam = f.boxlam;
         d = f.nrdiff;
         D = f.nadiff;
         inp_free( &f );
@@ -452,8 +460,9 @@ void preview_cuaderno( PreviewApp *a, const gchar *path )
                   gtk_spin_button_get_value( GTK_SPIN_BUTTON(V.s_lam) ) );
         const char *datos[] = { "Transformación", t, NULL };
 
-        an_cuaderno_grafico( &h, path, V.modo ? "Media – desviación típica"
-                                              : "Serie y ACF/PACF",
+        an_cuaderno_grafico( &h, path, V.modo == 1 ? "Media – desviación típica"
+                                     : V.modo == 2 ? "Histograma"
+                                                   : "Serie y ACF/PACF",
                              V.serie, V.muestra, NULL, datos );
         g_free( t );
         }

@@ -1179,8 +1179,8 @@ static void serie( void )
         {
         gchar *e = entradas( m );
 
-        check( strstr( e, "Identificación con fug" ) &&
-               strstr( e, "Especificar el primer modelo con fue" ) &&
+        check( strstr( e, "Listado de identificación…" ) &&
+               strstr( e, "Especificar el primer modelo" ) &&
                strstr( e, "Editar la serie…" ) &&
                strstr( e, "Media – desviación típica" ) &&
                strstr( e, "Serie y ACF / PACF…" ),
@@ -1258,10 +1258,10 @@ static void vistazo_prueba( void )
        transformacion que se esta mirando, y su ventana con candidatos. */
     {
     GtkWindow *vg = grafico( "vistazo.eps" );
-    GtkWidget *bi = vg ? boton_que_dice( GTK_WIDGET(vg), "Identificar…" ) : NULL;
+    GtkWidget *bi = vg ? boton_que_dice( GTK_WIDGET(vg), "Identificar la estructura ARIMA…" ) : NULL;
     GtkWindow *wi;
 
-    check( bi != NULL, "el pie del vistazo ofrece «Identificar…»", NULL );
+    check( bi != NULL, "el pie del vistazo ofrece «Identificar la estructura ARIMA…»", NULL );
     if ( bi )
         {
         gtk_spin_button_set_value( GTK_SPIN_BUTTON(V.s_lam), 1.0 );
@@ -1270,7 +1270,7 @@ static void vistazo_prueba( void )
         gtk_button_clicked( GTK_BUTTON(bi) );
         pump( 1500 );
         wi = ventana_titulada( "Identificación — ipc / m00" );
-        check( wi != NULL, "«Identificar…» abre la identificación de los datos",
+        check( wi != NULL, "«Identificar la estructura ARIMA…» abre la identificación de los datos",
                todo_lo_dicho() );
         if ( wi )
             {
@@ -1380,10 +1380,10 @@ static void vistazo_prueba( void )
     /* E1: IDENTIFICAR DESDE LOS DATOS, con la transformacion en la ventana. */
     {
     GtkMenu   *m1 = clic_derecho( A.l_series, 0 );
-    GtkWidget *e1 = m1 ? entrada_de( m1, "Identificar desde los datos" ) : NULL;
+    GtkWidget *e1 = m1 ? entrada_de( m1, "Identificar la estructura ARIMA" ) : NULL;
     GtkWindow *w1;
 
-    check( e1 != NULL, "el menú de la serie ofrece «Identificar desde los datos…»",
+    check( e1 != NULL, "el menú de la serie ofrece «Identificar la estructura ARIMA…»",
            m1 ? entradas( m1 ) : NULL );
     olvida();
     if ( e1 ) gtk_menu_item_activate( GTK_MENU_ITEM(e1) );
@@ -1431,7 +1431,7 @@ static void vistazo_prueba( void )
        hay aviso y el derivado no los lleva.                           */
     {
     GtkMenu   *m2 = clic_derecho( A.l_series, 1 );
-    GtkWidget *e2 = m2 ? entrada_de( m2, "Identificar desde los datos" ) : NULL;
+    GtkWidget *e2 = m2 ? entrada_de( m2, "Identificar la estructura ARIMA" ) : NULL;
     GtkWindow *w2;
 
     olvida();
@@ -1587,7 +1587,7 @@ static void envios( void )
     }
     g_free( p );
 
-    /* → fue con m01 marcado (sin .pre): va su .inp. */
+    /* «Estimar» con m01 marcado (sin .pre): va su .inp. */
     p = atsw_programa( "fue_gui" );
     olvida();
     hijos_sin_pantalla( TRUE );
@@ -1596,8 +1596,10 @@ static void envios( void )
     {
     gchar *q = lanzado( p, "m01" );
 
-    check( p && dijo( q ), "«→ fue» lanza fue_gui con el modelo marcado",
+    check( p && dijo( q ), "«Estimar» lanza fue_gui con el modelo marcado",
            todo_lo_dicho() );
+    check( dijo( "Estimar m01 (US) en fue: " ) != NULL,
+           "y la barra dice el gesto, la clase y el programa", todo_lo_dicho() );
     g_free( q );
     }
     g_free( p );
@@ -1758,7 +1760,7 @@ static void editor( void )
         gchar     *e = entradas( m );
         GtkWidget *dx = entrada_de( m, "Diagnosis" );
 
-        check( strstr( e, "Abrir m01 en fue" ) && strstr( e, "Editar el .inp…" ) &&
+        check( strstr( e, "Estimar m01" ) && strstr( e, "Editar el .inp…" ) &&
                strstr( e, "Prever con fuf…" ) && strstr( e, "Iterar" ) &&
                strstr( e, "Borrar…" ),
                "el menu del modelo ofrece lo que se puede hacer con el", e );
@@ -2455,7 +2457,7 @@ static void muestra( void )
 
     marca( A.l_modelos, M_ID, "m01" );
     m = clic_derecho( A.l_modelos, 1 );
-    mi = m ? entrada_de( m, "En otra muestra" ) : NULL;
+    mi = m ? entrada_de( m, "Llevar m01 a otra muestra" ) : NULL;
     check( mi != NULL, "el menu de m01 ofrece llevarlo a otra muestra",
            m ? entradas( m ) : NULL );
     if ( mi )
@@ -2862,7 +2864,7 @@ static void casos( void )
            "el manifiesto guarda las entradas en orden y con su hash", s );
     g_free( s );
 
-    /* --- «Abrir en drtran» --------------------------------------------- */
+    /* --- «Estimar» el caso ---------------------------------------------- */
     atsw_caso_lanza( &A, "atsw_hijo_falso" );
     v = lo_que_recibio();
     check( v && g_strv_length( v ) >= 5 && !strcmp( v[0], "--proyecto" ) &&
@@ -2879,8 +2881,34 @@ static void casos( void )
     hijos_sin_pantalla( TRUE );
     gtk_button_clicked( GTK_BUTTON(A.b_c_drtran) );
     hijos_sin_pantalla( FALSE );
-    check( p && dijo( q ), "«Abrir en drtran» lanza el drtran_gui del arbol",
+    check( p && dijo( q ), "«Estimar» del caso lanza el drtran_gui del arbol",
            todo_lo_dicho() );
+    check( dijo( "Estimar el caso C1 (MT) en drtran: " ) != NULL,
+           "y la barra dice el gesto, la clase y el programa", todo_lo_dicho() );
+
+    /* Ctrl+E SIGUE A LA PILA: con el caso a la vista estima el caso, en
+       drtran, y no el modelo univariante de la serie que estaba marcada. */
+    {
+    const char     *vis = gtk_stack_get_visible_child_name( GTK_STACK(A.pila) );
+    guint           kp;
+    GdkModifierType prim = 0;
+
+    gtk_accelerator_parse( "<Primary>e", &kp, &prim );
+    check( vis && !strcmp( vis, "caso" ), "con un caso marcado, la derecha enseña el caso",
+           vis );
+    olvida();
+    hijos_sin_pantalla( TRUE );
+    gtk_accel_groups_activate( G_OBJECT(A.ventana), GDK_KEY_e, prim );
+    hijos_sin_pantalla( FALSE );
+    check( dijo( q ) && dijo( "Estimar el caso C1 (MT) en drtran" ) &&
+           !dijo( "(US) en fue" ),
+           "Ctrl+E con el caso a la vista lo estima en drtran", todo_lo_dicho() );
+    }
+
+    /* LA SIGLA Y EL PROGRAMA EN LA CABECERA DEL CASO (§2.3). */
+    check( strstr( gtk_label_get_text( GTK_LABEL(A.c_cabeza) ), "MT · drtran · muestra" ) != NULL,
+           "la cabecera del caso dice «MT · drtran · muestra …»",
+           gtk_label_get_text( GTK_LABEL(A.c_cabeza) ) );
     g_free( p ); g_free( q );
     }
 
@@ -3058,8 +3086,8 @@ static void casos( void )
         check( mi && gtk_widget_get_sensitive( mi ),
                "botón derecho sobre c00: «Ver modelo…», encendido con su página",
                m ? entradas( m ) : NULL );
-        check( m && entrada_de( m, "Abrir c00 en drtran" ),
-               "y «Abrir c00 en drtran»", m ? entradas( m ) : NULL );
+        check( m && entrada_de( m, "Estimar c00" ),
+               "y «Estimar c00»", m ? entradas( m ) : NULL );
         /* LA VUELTA AL UNIVARIANTE: esta, y con un .out sin tabla de
          * parametros (este es fingido) se apaga diciendo por que. El camino
          * entero, con un .out de verdad, lo prueba drtran_gui: es el mismo
@@ -3459,8 +3487,8 @@ static void menus_barra( void )
     check( m && entrada_de( m, "Muestra nueva" ),
            "el menú de la serie gana «Muestra nueva…», que sólo era el «+»",
            m ? entradas( m ) : NULL );
-    /* «Estimar mNN en fue» y «Otro modelo, desde los datos» los pone en la
-       barra la sección del modelo marcado, con su rótulo: misma acción. */
+    /* «Estimar mNN» y «Modelo nuevo, desde los datos» los pone en la barra
+       la sección del modelo marcado: misma acción.                     */
     contextual_en_barra( m, "de la serie", B_DATOS | B_US,
                          (gpointer) G_CALLBACK(on_fue),
                          (gpointer) G_CALLBACK(on_nuevo_modelo) );
@@ -3478,7 +3506,7 @@ static void menus_barra( void )
     contextual_en_barra( m, "del modelo del caso", B_MT, NULL, NULL );
     cierra_menu( m );
     m = abre_titulo( 3 );
-    check( m && entrada_de( m, "Abrir c00 en drtran" ) && entrada_de( m, "Derivar caso" ) &&
+    check( m && entrada_de( m, "Estimar c00" ) && entrada_de( m, "Derivar caso" ) &&
            gtk_widget_get_sensitive( entrada_de( m, "Derivar caso" ) ),
            "MT habla del caso marcado y de su modelo", m ? entradas( m ) : NULL );
 
@@ -4139,6 +4167,69 @@ static void panel( void )
     check( p == pmin + 150, "y se queda donde se lleva", vio );
 }
 
+/* EL HISTOGRAMA: el tercer vistazo, en Datos y no en US. Lo dibuja fug con
+   -d, con λ, d y D al pie, y mover d lo rehace.                       */
+static gboolean hay_hist( void )
+{
+    gchar      *dir = atsw_cache_dir();
+    GDir       *d = g_dir_open( dir, 0, NULL );
+    const char *n;
+    gboolean    si = FALSE;
+
+    while ( d && ( n = g_dir_read_name( d ) ) != NULL )
+        if ( g_str_has_prefix( n, "hist_" ) && g_str_has_suffix( n, ".eps" ) ) si = TRUE;
+    if ( d ) g_dir_close( d );
+    g_free( dir );
+    return si;
+}
+
+static void histograma_prueba( void )
+{
+    GtkMenu   *m;
+    GtkWidget *mi;
+    gchar     *antes, *despues;
+
+    marca( A.l_series, S_ID, "ipc" );
+    pump( 50 );
+    m  = abre_titulo( 1 );
+    mi = m ? entrada_de( m, "Histograma" ) : NULL;
+    check( mi && gtk_widget_get_sensitive( mi ), "Datos ofrece «Histograma…»",
+           m ? entradas( m ) : NULL );
+    cierra_menu( m );
+    m = abre_titulo( 2 );
+    check( m && !entrada_de( m, "Histograma" ),
+           "y US no: describe los datos, no identifica", m ? entradas( m ) : NULL );
+    cierra_menu( m );
+    if ( mi == NULL ) return;
+
+    olvida();
+    gtk_menu_item_activate( GTK_MENU_ITEM(mi) );
+    pump( 300 );
+    check( hay_hist(), "el histograma lo dibuja fug con -d (hist_*.eps)", todo_lo_dicho() );
+    check( V.s_d != NULL && V.s_D != NULL, "y lleva λ, d y D al pie", NULL );
+    check( grafico( "vistazo.eps" ) != NULL, "en la ventana de gráficos", todo_lo_dicho() );
+    dibuja_de_verdad( tinta_de( grafico( "vistazo.eps" ) ), "el histograma DIBUJA" );
+    if ( V.s_d == NULL ) return;
+    antes = lee( V.eps );
+    gtk_spin_button_set_value( GTK_SPIN_BUTTON(V.s_d),
+        gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(V.s_d) ) ? 0 : 1 );
+    pump( 300 );
+    despues = lee( V.eps );
+    check( strcmp( antes, despues ) != 0 && dijo( "fug:" ) == NULL,
+           "mover d rehace el histograma", todo_lo_dicho() );
+    g_free( antes ); g_free( despues );
+}
+
+/* LAS CABECERAS DE LAS DOS LISTAS LLEVAN SU CLASE (§2.3). */
+static void cabeceras( void )
+{
+    gchar *t = textos_de( A.ventana );
+
+    check( strstr( t, "Series — US" ) && strstr( t, "Casos — MT" ),
+           "las listas dicen su clase: «Series — US» y «Casos — MT»", t );
+    g_free( t );
+}
+
 int main( int argc, char **argv )
 {
     GtkApplication *app;
@@ -4206,6 +4297,8 @@ int main( int argc, char **argv )
             fase( "abrir" ); abrir( manifiesto );
             fase( "casos" ); casos();
             fase( "panel" ); panel();
+            fase( "histograma" ); histograma_prueba();
+            fase( "cabeceras" ); cabeceras();
             fase( "barra" ); menus_barra();
             fase( "legados" ); legados();
             }

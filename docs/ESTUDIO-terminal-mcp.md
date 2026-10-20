@@ -56,7 +56,10 @@ conversación SÍ»). Lo que ha cambiado desde entonces, y por eso se reabre:
    razón de cada decisión por escrito. No es `build_model` (§2.3).
 4. **La terminal es la del sistema** (decidido). La madre la abre en la
    carpeta del proyecto, ya preparado para el cliente de cada uno: Claude
-   Code, CodeWhale, Codex o Gemini CLI (§4, §5).
+   Code, CodeWhale, Codex o Gemini CLI (§4, §5). **Después, empotrada**,
+   como hace Kate: VTE en Linux, y en Windows y macOS un widget propio con
+   libvterm y ConPTY si un ensayo de una semana lo justifica, siempre con la
+   externa detrás (§5.1).
 5. **El asistente abre las ventanas de gráficos de la madre**, no dibujos
    suyos: `atsw_gui --ver …` abre una sola ventana, de sólo lectura, con el
    mismo gráfico que se ve en la madre (§7.4). Es imprescindible con los
@@ -265,11 +268,10 @@ razones de docencia, que ya no valen. Sobre el diseño:
   primera pasada rápida, un punto de partida o una referencia, y art lo
   admite cuando se pide expresamente.
 
-**Mi recomendación: fuera de la fase 1**, y si se quiere, más adelante como
-una herramienta explícita, **«ajuste automático»**, que estima con el `fue` de
-la madre y deja cada modelo en el linaje con `por: asistente` y la razón
-«ajuste automático, sin recorrido». Es una pregunta para el analista (§11,
-P1).
+**Decidido: fuera de la fase 1** (decisión 14). Más adelante, si se quiere,
+como una herramienta explícita, **«ajuste automático»**, que estima con el
+`fue` de la madre y deja cada modelo en el linaje con `por: asistente` y la
+razón «ajuste automático, sin recorrido».
 
 ### 2.4 Qué sale y qué se añade
 
@@ -296,8 +298,8 @@ decidimos para los `.pre`: un solo lector, el de fue; nunca un segundo.
 ### 2.6 Dónde vive y cómo se versiona
 
 **En el monorepo** (decidido): `mcp/atsw_mcp/` con su `pyproject.toml`, y
-`atsw-cli` en `gui/atsw-cli/` (o `tools/`), compilado con el resto y en
-`programas.sh`. El contrato (los nombres `mNN`, los casos, el manifiesto, las
+`atsw-cli` junto a la madre, en `gui/atsw-cli/` (decisión 16), compilado con
+el resto y en `programas.sh`. El contrato (los nombres `mNN`, los casos, el manifiesto, las
 subórdenes de `atsw-cli`) cambia con la madre en el mismo PR, y las pruebas
 que importan cruzan los dos lados (§8).
 
@@ -423,16 +425,96 @@ proyecto:
 No lanza el cliente: abre la terminal **con un aviso de una línea** sobre qué
 escribir según el cliente configurado.
 
-Por qué no empotrada, comprobado otra vez:
+### 5.1 Y empotrada: lo que hace Kate
 
-| opción | Windows | macOS | Linux | coste |
-|---|---|---|---|---|
-| **VTE** (`vte-2.91`) | **no** (depende de los pty de Unix) | no oficial (un port de MacPorts, 0.82, sin soporte del proyecto) | sí | bajo, sólo en Linux |
-| **terminal propia** con `libvterm` | ConPTY (Windows 10 1809+) | `forkpty` | `forkpty` | **semanas**, y mantenerla: libvterm (MIT, C, lo usa Neovim) da el parser y la pantalla; el dibujo, el teclado, el ancho Unicode y el redimensionado son nuestros |
-| **panel de conversación propio** | sí | sí | sí | medio-alto: es un cliente de LLM, con su autenticación y su bucle. `DISENO-madre.md` §10 ya lo descartaba |
+El analista propone, el 20-oct-2026: *«en la versión Linux podríamos
+integrar el terminal, y en las versiones en MS Windows y Mac he visto que
+Kate empotra una consola del sistema. Revisar esta opción.»* Revisado en las
+fuentes de KDE:
 
-La terminal empotrada queda, como mucho, para el final, y sólo si la externa
-se queda corta.
+- **Kate no tiene terminal propia.** Su complemento (`addons/konsole/
+  kateconsole.cpp`) carga en tiempo de ejecución **la KPart de Konsole**
+  (`kf6/parts/konsolepart`) y la maneja con `TerminalInterface`. Si no la
+  encuentra, pinta «Konsole not installed». No hay código distinto para
+  macOS: la misma KPart en los tres sistemas.
+- **En Windows, esa KPart es Konsole compilado para Windows.** El `Pty.cpp`
+  de Konsole elige en compilación: `KPtyProcess` en Unix y, con `Q_OS_WIN`,
+  `ConPtyProcess`, de `src/ptyqt/conptyprocess.cpp`, que crea una
+  **pseudoconsola de Windows (ConPTY)** con `CreatePseudoConsole`. Ese
+  fichero viene de la biblioteca ptyqt y lleva licencia **MIT**; el resto de
+  Konsole es GPL-2.0-or-later.
+- **Su historia.** El terminal de Kate en Windows llegó en la 23.04
+  (febrero de 2023), primero sobre qtermwidget (una bifurcación vieja de
+  Konsole) y ptyqt, y el propio equipo lo llamó *«una solución temporal»*:
+  lo que querían era portar Konsole a Windows y reutilizarlo, que es lo que
+  hay hoy. Avisaban también de que ningún desarrollador de Kate usa Windows y
+  de que mantener una terminal entera dentro del editor *«es mucho peso»*.
+- **En macOS**, la KPart usa los pty de Unix. Ha tenido problemas de teclado
+  propios: en 2022, ^C y ^D pedían ⌘ en el `.dmg` de Kate, y Konsole lleva un
+  mapa de teclas especial para macOS.
+- **Es una terminal de verdad**, no una consola de órdenes: el emulador
+  VT102/xterm de Konsole, con colores, pantalla alterna y redimensionado. Lo
+  que necesitan Claude Code, Codex o Gemini CLI, que son TUI a pantalla
+  completa. Y ConPTY es la misma pieza sobre la que corre Windows Terminal,
+  así que en Windows esas TUI funcionan sobre ella.
+
+**Lo que se puede llevar a GTK3, y lo que no.** La KPart es Qt y KDE
+Frameworks: meterla en la madre es meter Qt. **No se transfiere el
+componente; sí la receta**: un emulador como biblioteca, ConPTY en Windows,
+los pty de Unix en macOS y Linux, y el dibujo en un widget propio. Para
+GTK3 eso da estas opciones:
+
+| opción | Linux | macOS | Windows | TUI a pantalla completa | coste | mantenimiento |
+|---|---|---|---|---|---|---|
+| **(1) VTE** (`vte-2.91`, LGPL) | **sí**, es el de GNOME Terminal | Homebrew tiene `vte3` 0.84 **sólo para arm64**; en Quartz no lo usa nadie de quien sepamos | **no**: depende de los pty de Unix. Un port que sólo mostraba (`vte_terminal_feed`) se propuso y se cerró sin entrar (GNOME/vte #1236) | perfectas en Linux | **~1 semana** en Linux | bajo: lo mantiene GNOME |
+| **(2) widget propio: libvterm + ConPTY / forkpty**, dibujado en un `GtkDrawingArea` | sí | sí (`forkpty`) | sí (ConPTY, Windows 10 1809+) | buenas si el dibujo y el teclado están bien | **4-6 semanas** para que esté fino | **alto**: tres sistemas, teclado, IME, fuentes |
+| (3) VTE en Windows y macOS con su emulador y nuestro pty | — | posible | habría que portar VTE (C++20, meson, sus dependencias) y mantener la bifurcación | buenas | muy alto | muy alto |
+| (4) **reparentar la ventana de consola nativa** | — | **imposible**: macOS no deja empotrar la ventana de otro proceso | **no**: `SetParent` entre procesos es legal pero, en palabras de Raymond Chen, como hacer malabares con motosierras (ata las colas de entrada de los dos hilos); en Windows 11 la consola puede abrirse en Windows Terminal, que es una ventana con pestañas y no un `conhost`; y `GtkSocket`/`GtkPlug` son sólo de X11 | — | — | — |
+
+**El widget propio, en detalle**, porque es el único camino a Windows y
+macOS:
+
+- **libvterm** (Paul Evans, **MIT**, C) es un emulador VT220/xterm sin
+  dibujo: lleva el estado de la pantalla, la pantalla alterna, los colores
+  (256 y color verdadero) y avisa de lo que cambia. Lo usan Neovim (en su
+  propia copia) y emacs-libvterm, y la página de atribuciones de Qt Creator
+  lista libvterm 0.3.3 junto a la parte ConPty de ptyqt: **es la misma
+  receta**, en otro editor que funciona en los tres sistemas.
+- **Lo nuestro:**
+  - el pty: ConPTY en Windows (unos cientos de líneas sobre
+    `CreatePseudoConsole`, como el `conptyprocess.cpp` MIT), `forkpty` en
+    macOS y Linux;
+  - el dibujo de la rejilla con Pango y cairo (anchos dobles, negrita,
+    cursor, colores);
+  - el teclado (de `GdkEventKey` a `vterm_keyboard_*`), con las teclas
+    muertas del teclado español (ñ, tildes) y el IME;
+  - el ratón, la selección y el portapapeles, el pegado entre corchetes, el
+    historial hacia atrás y el redimensionado (`vterm_set_size` y
+    `ResizePseudoConsole`).
+- **Lo que cuesta de verdad es el teclado y el acabado**, no el emulador. Es
+  lo que a Kate le dio guerra en macOS, y lo que más se nota con una TUI.
+
+**Recomendación: una sola API y tres motores, con la externa siempre detrás.**
+
+```c
+GtkWidget *atsw_terminal_new( const char *dir, char **argv, GError **err );
+/* NULL si en esta plataforma no hay terminal empotrada: entonces se abre
+   la externa, que funciona siempre (§5). */
+```
+
+- **Ahora:** la terminal externa (decisión 1). Es la única que funciona en
+  todas partes y desde el primer día.
+- **Fase T1, Linux:** `atsw_terminal_new` con **VTE**, en un panel de la
+  madre (abajo, con F4, como en Kate). Barato y sólido, y donde no esté, la
+  externa.
+- **Fase T2, Windows y macOS, después de un ensayo:** una semana de
+  prototipo de libvterm + ConPTY en un `GtkDrawingArea`, en Windows, con
+  Claude Code y Codex dentro. **Se sigue sólo si pasa**: colores y pantalla
+  alterna, redimensionado sin basura, las tildes y la ñ con teclado español,
+  copiar y pegar, y que no se note lento. Si pasa, el mismo widget con
+  `forkpty` sirve en macOS (y en Linux, si se prefiere un solo motor).
+- **La externa no se va nunca**: es el respaldo si el widget falla, y la
+  opción de quien prefiera su terminal.
 
 ---
 
@@ -462,10 +544,9 @@ hitos, que es cuando el MTM los necesita.
   `~/Library/Application Support/ATSW/asistente`.
 - **Lo que instala es poco.** El núcleo de `atsw-gui-mcp` sólo necesita
   `mcp`. Lo que queda en Python (§2.2) trae numpy, scipy y, si se importa
-  art-python entero, pandas y matplotlib. Conviene que esas dependencias sean
-  **un extra**, `atsw-gui-mcp[python]`, que se instala por defecto pero cuya
-  falta sólo apaga las herramientas que lo necesitan. Es una pregunta (§11,
-  P2).
+  art-python entero, pandas y matplotlib. Esas dependencias son **un extra
+  opcional**, `atsw-gui-mcp[python]` (decisión 15): su falta sólo apaga las
+  herramientas que lo necesitan, y cada una lo dice.
 - **El plan B, pip**, en el manual, como en la P05.
 
 **Lo que hay que comprobar en el ensayo (fase 0):**
@@ -724,8 +805,21 @@ de sima tiene ya equivalente en C.
 
 **Hito drvec_gui → el VEC en `atsw-sis`.** Igual para el VECM.
 
+**Fase T1: la terminal empotrada en Linux** (§5.1). `atsw_terminal_new` con
+VTE, en un panel de la madre que se abre con F4; donde no haya VTE, la
+externa. Puede ir en cuanto esté la fase 2, sin esperar a los hitos.
+- **Pruebas**: en `test_gui` (Linux), el panel arranca un proceso en la
+  carpeta del proyecto y lo cierra; en Windows y macOS, `atsw_terminal_new`
+  devuelve NULL y se usa la externa.
+
+**Ensayo T2 (una semana) y, si pasa, fase T2: Windows y macOS.** Un
+prototipo de libvterm + ConPTY en un `GtkDrawingArea` con Claude Code y Codex
+dentro, juzgado con los criterios de §5.1. Si pasa, el widget propio detrás
+de la misma `atsw_terminal_new`, con ConPTY en Windows y `forkpty` en macOS
+(4-6 semanas). Si no pasa, se queda la externa y se anota por qué.
+
 **Al final:** el MCP de la madre, con el canal (§7.4 c) y el vocabulario de
-`--ver` ampliado. La terminal empotrada, sólo si la externa se queda corta.
+`--ver` ampliado.
 
 **Una necesidad posible, sin plan:** un gesto que empaquete el proyecto
 (manifiesto, modelos, cuaderno) para compartirlo o entregarlo. Se apunta por
@@ -771,6 +865,9 @@ fase 0 (ensayo de empaquetado y clientes), en paralelo desde ya ──┘
   versión.
 - **Dos encarnaciones.** El MTM respeta P4: escribe el proyecto de la madre
   con la herramienta de la madre y deja el `guion.json` a ATSW Python.
+- **El widget de terminal propio** (fase T2) es el riesgo de mantenimiento
+  más alto del estudio: teclado, IME y fuentes en tres sistemas. Por eso va
+  detrás de un ensayo con criterios, y la externa no se retira nunca.
 - **Dos órdenes parecidas.** `atsw-mcp` (de la suite) y `atsw-us`/`atsw-mt`
   (del MTM) pueden convivir. El manual dice cuál es cuál.
 
@@ -778,8 +875,8 @@ fase 0 (ensayo de empaquetado y clientes), en paralelo desde ya ──┘
 
 ## 11. Decisiones (19-oct-2026)
 
-1. **La terminal, externa**: la del sistema, abierta por la madre en la
-   carpeta del proyecto (§5). La empotrada, sólo al final y si hace falta.
+1. **La terminal, externa primero**: la del sistema, abierta por la madre
+   en la carpeta del proyecto (§5). La empotrada, después (P1).
 2. **El cliente: Claude Code o los alternativos.** El MTM se optimiza para
    Claude pero tiene que seguir funcionando con otros clientes (§4).
 3. **Sin acuerdo con la universidad.** Cada usuario, su cuenta; en la
@@ -788,8 +885,8 @@ fase 0 (ensayo de empaquetado y clientes), en paralelo desde ya ──┘
 5. **En el monorepo, `mcp/atsw_mcp/`.** La distribución, `atsw-gui-mcp`, y
    las órdenes, `atsw-us`, `atsw-mt` y `atsw-sis`, para no chocar con el
    `atsw-mcp` de la suite (§2.1).
-6. **El atajo auto-ARIMA**: revisada, ya sin razones de docencia (§2.3). Mi
-   recomendación es dejarlo fuera de la fase 1; ver P1.
+6. **El atajo auto-ARIMA**: revisada, ya sin razones de docencia (§2.3); ver
+   la 14.
 7. **Menú «Asistente» propio**, después de las clases (§7.1).
 8. **`por: asistente` en el linaje**, sólo cuando no es lo normal, por
    trazabilidad: quién dio cada paso (§7.2).
@@ -806,16 +903,24 @@ fase 0 (ensayo de empaquetado y clientes), en paralelo desde ya ──┘
 13. **Sin «Preparar la entrega…» en el plan**; queda como necesidad posible
     (§8).
 
+14. **El atajo auto-ARIMA, fuera de la fase 1**, con un «ajuste automático»
+    explícito posible más adelante (§2.3).
+15. **Lo que queda en Python, un extra opcional**: `atsw-gui-mcp[python]`
+    (§6.2).
+16. **`atsw-cli`**, con ese nombre, en el monorepo junto a la madre:
+    `gui/atsw-cli/` (§2.6).
+
 ### Preguntas que quedan
 
-- **P1. El atajo auto-ARIMA** (§2.3). ¿Fuera del MTM, o más adelante como
-  «ajuste automático» explícito, con el `fue` de la madre y marcado en el
-  linaje? Recomiendo fuera de la fase 1, y decidir con el uso.
-- **P2. Lo que queda en Python, como extra** (§6.2). ¿`atsw-gui-mcp[python]`
-  instalado por defecto, cuya falta sólo apaga sus herramientas, o todo
-  junto? Recomiendo el extra.
-- **P3. `atsw-cli`**: el nombre y el sitio (`gui/atsw-cli/` o `tools/`).
+- **P1. La terminal empotrada** (§5.1), la línea que abrió el analista el
+  20-oct-2026 a partir de Kate. Propuesta: una API, `atsw_terminal_new`, con
+  la externa siempre detrás; **fase T1** con VTE en Linux; un **ensayo de una
+  semana** de libvterm + ConPTY en Windows, con criterios de paso, antes de
+  decidir la **fase T2** para Windows y macOS. ¿De acuerdo con el orden y con
+  los criterios?
+- **P2. Dónde va el panel**: abajo en la ventana de la madre, con F4, como en
+  Kate, o en una ventana propia «Asistente» que se puede acoplar.
 
 ---
 
-**Estado: decidido salvo P1-P3.**
+**Estado: decidido salvo P1 y P2.**

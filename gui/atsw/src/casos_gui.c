@@ -881,7 +881,7 @@ static void sec_c_vuelta( Atsw *a, GtkWidget *menu, const PrCaso *c, const char 
 }
 
 /* LAS DECISIONES SOBRE EL MODELO DEL CASO, como en la rejilla de una serie:
-   en la fila y, ahora tambien, en el boton derecho.                   */
+   Elegir y Razón tambien en la fila; Borrar, solo aqui y con Supr.    */
 static void sec_c_decidir( Atsw *a, GtkWidget *menu, const char *co )
 {
     GtkWidget *mi;
@@ -1313,16 +1313,15 @@ GtkWidget *atsw_caso_vista( Atsw *a )
                                 G_CALLBACK(on_c_elegir), a );
     a->b_c_razon = boton_caso( b2, "Razón…", GLOBO_C_RAZON,
                                G_CALLBACK(on_c_razon), a );
-    a->b_c_borrar = boton_caso( b2, "Borrar modelo…", GLOBO_C_BORRAR,
-                                G_CALLBACK(on_c_borrar), a );
     gtk_box_pack_start( GTK_BOX(b2), gtk_separator_new(
                             GTK_ORIENTATION_VERTICAL ), FALSE, FALSE, 4 );
     a->b_c_derivar = boton_caso( b2, "Derivar caso…", GLOBO_C_DERIVAR,
                                  G_CALLBACK(on_derivar), a );
     a->b_c_razon_caso = boton_caso( b2, "Razón del caso…", GLOBO_C_RAZON_CASO,
                                     G_CALLBACK(on_c_razon_caso), a );
-    a->b_c_borrar_caso = boton_caso( b2, "Borrar caso…", GLOBO_C_BORRAR_CASO,
-                                     G_CALLBACK(on_c_borrar_caso), a );
+    /* LOS DOS «Borrar» NO VAN EN LA FILA (§6, fase 3): lo destructivo,
+       separado. Siguen en el menú MT, en el botón derecho y con Supr,
+       como los modelos de una serie.                                 */
     gtk_box_pack_start( GTK_BOX(v), b2, FALSE, FALSE, 0 );
 
     a->c_cabeza = gtk_label_new( "" );

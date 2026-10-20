@@ -609,7 +609,7 @@ Cada fase deja la madre usable y las pruebas en verde. **Las capturas del
 manual y el guion del vídeo no se tocan en ninguna**: se rehacen en el
 próximo release.
 
-**Fase 1 — la barra, sin quitar nada.**
+**Fase 1 — la barra, sin quitar nada.** Hecha (#66).
 - Se parten `menu_serie`, `menu_modelo` y `menu_corrida` en secciones; la
   barra `Proyecto · Datos · US · MT · Ayuda` se construye con ellas al
   abrirse. VARMA y VECM no aparecen hasta sus hitos.
@@ -625,7 +625,7 @@ próximo release.
   Nuevo caso…) con el mismo efecto que su botón.
 - **Riesgo:** bajo. No se quita nada, sólo se añade.
 
-**Fase 2 — los nombres por el paso y la clase.**
+**Fase 2 — los nombres por el paso y la clase.** Hecha (#67).
 - «→ fue» → «Estimar»; «Abrir en drtran» → «Estimar».
 - «Series — US» y «Casos — MT» en las cabeceras; «MT · drtran · …» en la
   cabecera del caso.
@@ -641,7 +641,7 @@ próximo release.
 - **Pruebas:** las que buscan esos rótulos se actualizan; una nueva comprueba
   Ctrl+E con un caso marcado.
 
-**Fase 3 — quitar lo que sobra.**
+**Fase 3 — quitar lo que sobra.** Hecha: el botón `drtran` y drtran sin caso, «→ fug» y los dos «Borrar» de la fila del caso ya no están. La fase `quitados` de la prueba de la madre comprueba que no vuelven y que lo que hacían sigue en US, MT y el botón derecho.
 - **La fila de arriba NO se quita**: se queda entera (§8).
 - Fuera el botón `drtran` de la esquina, y con él drtran sin caso (decidido).
 - Fuera «→ fug» y los dos «Borrar» de las filas.

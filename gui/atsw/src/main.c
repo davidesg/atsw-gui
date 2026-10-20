@@ -614,10 +614,10 @@ static void on_fug( GtkButton *b, Atsw *a )
     }
     atsw_lanza( a, "gtk_fmg", f );
 }
-/* drtran es de la RED: trabaja con n series, no con una. Se abre con el
- * proyecto y alli se eligen.                                          */
-static void on_drtran( GtkButton *b, Atsw *a )
-     { (void)b; atsw_lanza( a, "drtran_gui", NULL ); }
+/* NO HAY drtran SIN CASO (§6, fase 3): drtran siempre necesita los modelos
+ * de la salida y de las entradas, con su .pre, y eso es lo que fija un caso.
+ * Sin el, el analista los buscaria a mano y lo estimado no quedaria escrito.
+ * A MT se entra por «Nuevo caso…» o por «Estimar» sobre un caso.      */
 
 /* Un texto en una linea. Devuelve TRUE si se acepto. */
 static gboolean pide_texto( Atsw *a, const char *titulo, const char *aviso,
@@ -1858,8 +1858,9 @@ static void on_cuaderno( GtkButton *b, Atsw *a ) { (void) b; atsw_cuaderno( a );
 /* entran con sus GUI (§3.5): una entrada que nunca se enciende enseña que   */
 /* el menu miente.                                                           */
 /*                                                                           */
-/* Nada se quita en esta fase: la fila de arriba, el boton drtran, «→ fug» y */
-/* los «Borrar» de las filas siguen donde estaban (§6, fase 3).              */
+/* La fila de arriba se queda entera. El boton drtran, «→ fug» y los dos    */
+/* «Borrar» de la fila del caso ya no estan (§6, fase 3): lo raro y lo       */
+/* destructivo viven en la barra, el boton derecho y Supr.                   */
 /* ------------------------------------------------------------------------ */
 
 static void relee( Atsw *a )
@@ -2396,10 +2397,6 @@ static void activate( GtkApplication *app, gpointer d )
     gtk_label_set_ellipsize( GTK_LABEL(a->l_proy), PANGO_ELLIPSIZE_MIDDLE );
     gtk_box_pack_start( GTK_BOX(barra), a->l_proy, TRUE, TRUE, 8 );
 
-    a->b_drtran = boton( barra, "drtran",
-        "Las transferencias. Trabaja con VARIAS series a la vez, así que se "
-        "abre con el proyecto y allí se eligen.",
-        G_CALLBACK(on_drtran), a );
 
     /* --- las dos listas --- */
     pan = gtk_paned_new( GTK_ORIENTATION_HORIZONTAL );
@@ -2469,14 +2466,10 @@ static void activate( GtkApplication *app, gpointer d )
     gtk_box_pack_start( GTK_BOX(b2), gtk_separator_new(
                             GTK_ORIENTATION_VERTICAL ), FALSE, FALSE, 6 );
 
-    /* LOS DOS ENVIOS. Van aqui, con la rejilla, porque actuan sobre el modelo
-     * MARCADO -- el mismo sujeto que Iterar, Elegir y Razón.           */
-    a->b_fug = boton( b2, "→ fug",
-        "El listado de identificación: la primera identificación completa, "
-        "en fug. La serie, el histograma, la media–desviación típica, la ACF "
-        "y la PACF para cada número de diferencias.\n\nVa SIEMPRE el nodo "
-        "de datos de esta muestra, aunque tengas otro modelo marcado: se "
-        "identifica ANTES de que haya modelo.", G_CALLBACK(on_fug), a );
+    /* ESTIMAR va aqui, con la rejilla, porque actua sobre el modelo MARCADO
+     * --el mismo sujeto que Iterar, Elegir y Razón--. «→ fug» ya no: desde
+     * los vistazos, fug completo es lo raro, y vive en US como «Listado de
+     * identificación…» (§6, fase 3).                                   */
     {
     gchar *t = atsw_tecla( "<Primary>e" );
     gchar *g = g_strdup_printf(

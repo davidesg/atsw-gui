@@ -125,7 +125,7 @@ typedef struct {
    GtkWidget *ver_cuenta;         /* veredicto: cuantas cosas hay           */
    GtkWidget *ver_ojo;            /* veredicto: LO QUE HAY QUE MIRAR        */
    GtkWidget *estado;             /* la barra de abajo                      */
-   GtkWidget *b_fue, *b_fug, *b_drtran, *b_nuevo, *b_iterar, *b_elegir, *b_razon;
+   GtkWidget *b_fue, *b_nuevo, *b_iterar, *b_elegir, *b_razon;
 
    /* LA BARRA DE MENUS (ESTUDIO-madre-organizacion §3.1): Proyecto, Datos,
       US, MT y Ayuda. Cada menu se arma al abrirse con las mismas secciones
@@ -144,7 +144,7 @@ typedef struct {
    GtkWidget *caja_legado, *ver_legado, *b_convertir;
    GtkWidget *c_cabeza, *c_entradas, *c_corridas;
    GtkWidget *b_nuevo_caso, *b_c_drtran, *b_c_elegir, *b_c_razon,
-             *b_c_razon_caso, *b_c_derivar, *b_c_borrar, *b_c_borrar_caso;
+             *b_c_razon_caso, *b_c_derivar;
    char       caso[PR_ID];        /* el caso marcado                        */
    gboolean   viendo_caso;        /* la derecha enseña el caso, no la serie */
 

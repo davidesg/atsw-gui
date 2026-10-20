@@ -788,6 +788,48 @@ static GtkWidget *entrada_de( GtkMenu *m, const char *empieza )
     return r;
 }
 
+/* ACTIVAR UNA ENTRADA DE LA BARRA: el titulo i (0 Proyecto, 1 Datos, 2 US,
+   3 MT, 4 Ayuda), rehecho con lo marcado ahora, y la entrada que empieza
+   por <empieza>. Desde la fase 3 (ESTUDIO-madre-organizacion §6) lo raro y
+   lo destructivo --fug completo, borrar en un caso-- solo estan aqui y en
+   el boton derecho, y la prueba los alcanza como el analista.        */
+static gboolean en_barra( int i, const char *empieza )
+{
+    GList     *h = gtk_container_get_children( GTK_CONTAINER(A.menubar) );
+    GtkWidget *t = g_list_nth_data( h, i ), *e = NULL;
+
+    g_list_free( h );
+    if ( t )
+        {
+        rehace_menu( &A, t );
+        e = entrada_de( GTK_MENU(gtk_menu_item_get_submenu( GTK_MENU_ITEM(t) )),
+                        empieza );
+        }
+    check( e != NULL && gtk_widget_get_sensitive( e ),
+           "la entrada de la barra esta y se puede activar", empieza );
+    if ( e == NULL || !gtk_widget_get_sensitive( e ) ) return FALSE;
+    gtk_menu_item_activate( GTK_MENU_ITEM(e) );
+    return TRUE;
+}
+
+/* Un boton con ese rotulo en algun sitio de w, visible o no. */
+static gboolean hay_boton( GtkWidget *w, const char *rotulo )
+{
+    gboolean r = FALSE;
+
+    if ( GTK_IS_BUTTON(w) && !GTK_IS_MENU_ITEM(w) &&
+         !g_strcmp0( gtk_button_get_label( GTK_BUTTON(w) ), rotulo ) )
+        return TRUE;
+    if ( GTK_IS_CONTAINER(w) )
+        {
+        GList *l, *h = gtk_container_get_children( GTK_CONTAINER(w) );
+
+        for ( l = h; l && !r; l = l->next ) r = hay_boton( l->data, rotulo );
+        g_list_free( h );
+        }
+    return r;
+}
+
 static gchar *entradas( GtkMenu *m )
 {
     GList   *l, *hijos = gtk_container_get_children( GTK_CONTAINER(m) );
@@ -887,8 +929,7 @@ static void sin_proyecto( void )
     check( strstr( t, "No hay proyecto abierto" ) != NULL,
            "y el veredicto dice que hay que abrir uno", t );
     g_free( t );
-    check( !gtk_widget_get_sensitive( A.b_drtran ) &&
-           !gtk_widget_get_sensitive( A.b_fue ) &&
+    check( !gtk_widget_get_sensitive( A.b_fue ) &&
            !gtk_widget_get_sensitive( A.b_nuevo ),
            "sin proyecto, los envios estan apagados", NULL );
 
@@ -900,7 +941,7 @@ static void sin_proyecto( void )
            "«Linaje…» sin proyecto lo dice", barra() );
     on_fug( NULL, &A );
     check( strstr( barra(), "Abre un proyecto antes" ) != NULL,
-           "«→ fug» sin proyecto lo dice", barra() );
+           "«Listado de identificación…» sin proyecto lo dice", barra() );
     on_muestra_nueva( NULL, &A );
     check( strstr( barra(), "Abre un proyecto antes" ) != NULL,
            "«+» sin proyecto lo dice", barra() );
@@ -1022,8 +1063,6 @@ static void proyecto_nuevo( char *manifiesto, size_t n )
     check( strstr( gtk_label_get_text( GTK_LABEL(A.l_proy) ), "prueba" ) != NULL,
            "y la cabecera nombra el proyecto",
            gtk_label_get_text( GTK_LABEL(A.l_proy) ) );
-    check( gtk_widget_get_sensitive( A.b_drtran ),
-           "con proyecto, «drtran» se enciende", NULL );
 
     /* Sobre un proyecto que ya existe, se pregunta; cancelar no toca nada. */
     {
@@ -1569,15 +1608,17 @@ static void envios( void )
 {
     gchar *p;
 
-    /* → fug con m01 marcado: va m00 igual, y se dice. */
+    /* El listado de identificacion (US) con m01 marcado: va m00 igual, y
+       se dice. Ya no tiene boton en la fila (fase 3).                  */
     marca( A.l_modelos, M_ID, "m01" );
     p = atsw_programa( "gtk_fmg" );
     olvida();
     hijos_sin_pantalla( TRUE );
-    gtk_button_clicked( GTK_BUTTON(A.b_fug) );
+    en_barra( 2, "Listado de identificación" );
     hijos_sin_pantalla( FALSE );
     check( dijo( "va m00 y no m01" ) != NULL,
-           "«→ fug» con un modelo marcado avisa de que va el m00", todo_lo_dicho() );
+           "«Listado de identificación…» con un modelo marcado avisa de que "
+           "va el m00", todo_lo_dicho() );
     {
     gchar *q = lanzado( p, "m00" );
 
@@ -1604,20 +1645,8 @@ static void envios( void )
     }
     g_free( p );
 
-    /* drtran: con el proyecto, sin fichero. */
-    p = atsw_programa( "drtran_gui" );
-    olvida();
-    hijos_sin_pantalla( TRUE );
-    gtk_button_clicked( GTK_BUTTON(A.b_drtran) );
-    hijos_sin_pantalla( FALSE );
-    {
-    gchar *q = g_strdup_printf( "%s, con este proyecto.", p ? p : "drtran_gui" );
-
-    check( p && dijo( q ), "«drtran» lanza drtran_gui con el proyecto",
-           todo_lo_dicho() );
-    g_free( q );
-    }
-    g_free( p );
+    /* drtran SIN CASO ya no existe (fase 3): a MT se entra por un caso,
+       y eso lo prueba la fase de los casos.                            */
 }
 
 /* LO QUE LE LLEGA AL HIJO, con uno falso que lo escribe. */
@@ -3164,11 +3193,11 @@ static void casos( void )
 
     /* --- Borrar: lo que no se puede, dicho ----------------------------- */
     marca_arbol( A.c_corridas, CO_ID, "c00" );
-    gtk_button_clicked( GTK_BUTTON(A.b_c_borrar) );
+    en_barra( 3, "Borrar modelo" );
     todo_atendido( "(borrar c00)" );
     check( strstr( barra(), "De ese modelo cuelga «C1/c01»" ) != NULL,
            "una corrida con hijas no se borra, y se dice cual cuelga", barra() );
-    gtk_button_clicked( GTK_BUTTON(A.b_c_borrar_caso) );
+    en_barra( 3, "Borrar caso" );
     todo_atendido( "(borrar C1)" );
     check( strstr( barra(), "En ese caso está el modelo" ) != NULL,
            "un caso con corridas no se borra, y se dice por que", barra() );
@@ -3185,7 +3214,7 @@ static void casos( void )
     atsw_refresca( &A );
     marca_arbol( A.c_corridas, CO_ID, "c02" );
     responde( "¿Borro el modelo c02", contesta, GINT_TO_POINTER(GTK_RESPONSE_OK) );
-    gtk_button_clicked( GTK_BUTTON(A.b_c_borrar) );
+    en_barra( 3, "Borrar modelo" );
     todo_atendido( "«Borrar modelo…» tenia que preguntar" );
     check( strstr( barra(), "modelo c02 borrado, con sus ficheros" ) != NULL,
            "borrar una corrida lo dice", barra() );
@@ -3271,7 +3300,7 @@ static void casos( void )
 
     /* Un caso sin corridas si se borra. */
     responde( "¿Borro el caso C2", contesta, GINT_TO_POINTER(GTK_RESPONSE_OK) );
-    gtk_button_clicked( GTK_BUTTON(A.b_c_borrar_caso) );
+    en_barra( 3, "Borrar caso" );
     todo_atendido( "«Borrar caso…» tenia que preguntar" );
     check( pr_caso_idx( A.p, "C2" ) < 0 && strstr( barra(), "Caso C2 borrado" ),
            "un caso sin corridas se borra y lo dice", barra() );
@@ -4230,6 +4259,47 @@ static void cabeceras( void )
     g_free( t );
 }
 
+/* ======================================================================== */
+/* LO QUE SE QUITO (ESTUDIO-madre-organizacion §6, fase 3)                   */
+/*                                                                           */
+/* El boton drtran de la esquina, «→ fug» y los dos «Borrar» de la fila del  */
+/* caso ya no estan; lo que hacian sigue en la barra y en el boton derecho.  */
+/* Y la fila de arriba se queda entera.                                      */
+/* ======================================================================== */
+static void quitados( void )
+{
+    static const char *fuera[] = { "drtran", "→ fug", "Borrar modelo…",
+                                   "Borrar caso…", NULL };
+    static const char *siguen[] = { "Estimar", "Modelo nuevo", "Iterar",
+                                    "Elegir", "Razón…", "Derivar caso…",
+                                    "Razón del caso…", "Nuevo caso…", NULL };
+    int i;
+
+    for ( i = 0; fuera[i]; i++ )
+        check( !hay_boton( A.ventana, fuera[i] ),
+               "ese boton ya no esta en la madre", fuera[i] );
+    for ( i = 0; siguen[i]; i++ )
+        check( hay_boton( A.ventana, siguen[i] ),
+               "y ese boton sigue", siguen[i] );
+
+    {
+    GPtrArray *us = barra_de( B_US ), *mt = barra_de( B_MT );
+    guint      k;
+
+    check( con_rotulo( us, "Listado de identificación…" ) != NULL,
+           "fug completo sigue en US", NULL );
+    check( con_rotulo( mt, "Borrar modelo…" ) != NULL &&
+           con_rotulo( mt, "Borrar caso…" ) != NULL,
+           "los dos «Borrar» del caso siguen en MT", NULL );
+    for ( k = 0; k < mt->len; k++ )
+        check( g_strcmp0( gtk_menu_item_get_label( g_ptr_array_index( mt, k ) ),
+                          "drtran" ) != 0,
+               "MT no tiene un drtran sin caso", NULL );
+    g_ptr_array_free( us, TRUE );
+    g_ptr_array_free( mt, TRUE );
+    }
+}
+
 int main( int argc, char **argv )
 {
     GtkApplication *app;
@@ -4300,6 +4370,7 @@ int main( int argc, char **argv )
             fase( "histograma" ); histograma_prueba();
             fase( "cabeceras" ); cabeceras();
             fase( "barra" ); menus_barra();
+            fase( "quitados" ); quitados();
             fase( "legados" ); legados();
             }
         }

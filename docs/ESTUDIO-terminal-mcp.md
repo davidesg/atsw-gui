@@ -504,8 +504,8 @@ GtkWidget *atsw_terminal_new( const char *dir, char **argv, GError **err );
 
 - **Ahora:** la terminal externa (decisión 1). Es la única que funciona en
   todas partes y desde el primer día.
-- **Fase T1, Linux:** `atsw_terminal_new` con **VTE**, en un panel de la
-  madre (abajo, con F4, como en Kate). Barato y sólido, y donde no esté, la
+- **Fase T1, Linux:** `atsw_terminal_new` con **VTE**, dentro de la ventana
+  Asistente, acoplable a la madre (§7.6). Barato y sólido, y donde no esté, la
   externa.
 - **Fase T2, Windows y macOS, después de un ensayo:** una semana de
   prototipo de libvterm + ConPTY en un `GtkDrawingArea`, en Windows, con
@@ -573,7 +573,20 @@ no es opcional. Lo opcional no se pinta como error.
 
 **Menú propio** (decisión 7), después de las clases: `Proyecto · Datos · US
 · MT · Asistente · Ayuda`, y con VARMA y VECM, `… · VECM · Asistente ·
-Ayuda`. Se apaga entero, con su globo, si el asistente no está instalado.
+Ayuda`. No se apaga nunca entero: sin el asistente instalado, sus entradas
+de trabajo se grisan con su globo y quedan «Ventana del asistente» e
+«Instalar el asistente…», que es donde se arregla.
+
+| entrada | qué hace |
+|---|---|
+| **Ventana del asistente** (casilla, `<Primary><Shift>A`) | la enseña o la esconde (§7.6) |
+| **Acoplar a la madre** (casilla) | la pega al lado derecho de la madre, o la suelta |
+| — | |
+| **Abrir la terminal del sistema** | la externa, en la carpeta del proyecto (§5). Siempre está, haya o no terminal empotrada |
+| **Preparar el proyecto para el asistente…** | el andamiaje de abajo |
+| — | |
+| **Qué ha hecho el asistente…** | el linaje filtrado por `por: asistente` (§7.2) |
+| **Instalar el asistente…** / **Comprobar el asistente…** | con el `uv` del paquete (§6.2); una vez instalado, la entrada cambia a comprobar, que enseña versiones y clientes |
 
 «Preparar el proyecto para el asistente…» pregunta el cliente (o varios) y
 escribe en la carpeta del proyecto:
@@ -718,37 +731,136 @@ Donde el cliente lo permite, una segunda capa: el `.claude/settings.json` que
 la madre escribe con el `.mcp.json` permite las herramientas de los
 servidores y niega las de escribir y ejecutar.
 
-### 7.6 La maqueta
+### 7.6 La ventana Asistente, acoplable
+
+**Decidido: una ventana propia, «Asistente», que se acopla a la madre**
+(decisión 18), no un panel fijo abajo. Se puede tener suelta (en otro
+monitor, junto al cliente) o pegada a la madre.
+
+**Cómo se acopla. GTK3 no tiene acoplamiento propio**, así que se evaluó:
+
+| | qué es | veredicto |
+|---|---|---|
+| **libgdl (GDL)** | la biblioteca de acoplamiento de GNOME (Anjuta, gtranslator) | **no**: está en el archivo de GNOME (`gitlab.gnome.org/Archive/gdl`), la última versión es la 3.40.0, y arrastrar paneles es mucho más de lo que hace falta para una sola ventana |
+| **arrastrar para acoplar**, a mano | detectar que la ventana se suelta sobre el borde de la madre | **no**: la posición de las ventanas la decide el gestor de ventanas, y en Wayland una aplicación ni siquiera la conoce; en tres sistemas sería frágil |
+| **un conmutador «Acoplar / Desacoplar»** que mueve el contenido entre una `GtkWindow` y un lado de la madre | `g_object_ref` del contenido, `gtk_container_remove` de donde está, `gtk_container_add` en el otro sitio, `g_object_unref` | **sí** |
+
+**El conmutador, en detalle:**
+
+- **Un solo contenido, `AtswAsistente`**, un `GtkBox` con la terminal (o la
+  página de estado, abajo) y una barra fina arriba. Es lo que se mueve; la
+  ventana suelta y el hueco de la madre son sólo dos sitios donde se pone.
+- **La madre gana un `GtkPaned` horizontal por fuera**: a la izquierda lo
+  que hay hoy (listas y modelos, con su separador de siempre), **a la
+  derecha el Asistente** cuando está acoplado. Desacoplado, el lado derecho
+  desaparece y la madre recupera su ancho.
+- **A la derecha**, porque la izquierda ya es de las listas, abajo le
+  quitaría alto a la rejilla de modelos (y es lo que el analista descartó),
+  y una terminal necesita ~80 columnas, que caben al lado en una pantalla
+  ancha.
+- **El proceso sigue vivo al moverlo.** La sesión (el pty de VTE, o la
+  ConPTY del widget propio) es del objeto, no de su `GdkWindow`: al cambiar de
+  sitio el widget se desrealiza y se vuelve a realizar, y el proceso hijo ni
+  se entera. La referencia de `g_object_ref` impide que `gtk_container_remove`
+  lo destruya. Es lo primero que comprueba la prueba (§8). Después se le
+  devuelve el foco.
+- **Cerrar la ventana suelta la esconde**, no mata la sesión. La sesión
+  termina al cerrar el proyecto o con «Terminar la sesión» en la barra del
+  Asistente; si hay un proceso vivo al cerrar el proyecto, la madre pregunta.
+- **Los tres sistemas igual.** Es GTK puro: no hay ventanas de otros procesos
+  ni nada del sistema de ventanas (lo que descartó la opción 4 de §5.1).
+
+**Recuerda su estado por proyecto**: suelta o acoplada, visible o no, el
+tamaño y la posición de la ventana suelta y la posición del separador
+acoplado. **No va en `proyecto.yaml`**, que es el proyecto y se comparte;
+va en un `GKeyFile` del usuario, `ventanas.ini` en
+`g_get_user_config_dir()/atsw/`, con una sección por raíz de proyecto. Al
+abrir el proyecto, el Asistente vuelve como estaba. La madre no guarda hoy
+estado de ventanas en ningún sitio, así que este fichero es nuevo y servirá
+para lo demás que se quiera recordar.
+
+**Lo que enseña, según la plataforma**, con un `GtkStack` de dos páginas:
+
+- **«terminal»**, cuando `atsw_terminal_new` da un widget (Linux con VTE desde
+  T1; Windows y macOS si la fase T2 sale adelante). La terminal arranca en la
+  carpeta del proyecto con el intérprete del usuario (`$SHELL` en Linux y
+  macOS), y la barra de arriba dice el estado en una línea.
+- **«estado»**, cuando no hay terminal empotrada (Windows y macOS antes de
+  T2, o un Linux sin VTE). No es una ventana vacía:
+  - el botón grande **«Abrir la terminal del sistema»**, en la carpeta del
+    proyecto (§5);
+  - **la instalación del asistente**: `atsw-gui-mcp` y su versión, si está
+    el extra `[python]`, `atsw-cli`, y los clientes encontrados (claude,
+    codewhale, codex, gemini), cada uno con «falta: cómo instalarlo» cuando
+    no está;
+  - si el proyecto está preparado para el asistente, con el botón para
+    hacerlo;
+  - **lo último que ha hecho el asistente** en este proyecto, leído del
+    linaje (`por: asistente`), que se actualiza con el `GFileMonitor`
+    (§7.3).
+
+  La página «estado» también se ve con la terminal, plegada bajo la barra.
+
+### 7.7 La maqueta
+
+**Acoplada**, en Linux con VTE (fase T1):
 
 ```
-┌ ATSW — SF_MEG ─────────────────────────────────────────────────────────┐
-│ Proyecto  Datos  US  MT  Asistente  Ayuda                              │
-│                          ┌──────────────────────────────────────────┐  │
-│                          │ Abrir la terminal del proyecto      ⌃⇧A  │  │
-│                          │ Preparar el proyecto para el asistente…  │  │
-│                          │ ──────────────────────────────────────── │  │
-│                          │ Qué ha hecho el asistente…               │  │
-│                          │ Instalar el asistente…                   │  │
-│                          └──────────────────────────────────────────┘  │
-│ Series — US       │ IPC  muestra completa                              │
-│  IPC        ●     │  m00  datos                                        │
-│  WTI              │  m01  ARIMA(0,1,1)(0,1,1)12     σ 0,412            │
-│                   │  m02  + AI 2020-03              σ 0,398   elegido  │
-│ Casos — MT        │  m03  + MA(12) libre  ✦ asist.  σ 0,397            │
-│  C1  IPC ← WTI    │  m04  − MA(12)        ✦ asist.  σ 0,398            │
-├───────────────────┴────────────────────────────────────────────────────┤
-│ m04 de IPC, del asistente: «el MA(12) sobra: t = 0,4»                  │
-└────────────────────────────────────────────────────────────────────────┘
+┌ ATSW — SF_MEG ────────────────────────────────────────────────────────────────────────────┐
+│ Proyecto  Datos  US  MT  Asistente  Ayuda                                                 │
+│ Series — US    │ IPC  muestra completa                   ║ Asistente   ● claude    [⇱][×] │
+│  IPC      ●    │  m00  datos                             ║ ~/ATSW/SF_MEG                  │
+│  WTI           │  m01  ARIMA(0,1,1)(0,1,1)12   σ 0,412   ║ > ¿el MA(12) de m03 sobra?     │
+│                │  m02  + AI 2020-03            σ 0,398 ★ ║ ● atsw-us · sobreparametrizar  │
+│ Casos — MT     │  m03  + MA(12) libre ✦ asist. σ 0,397   ║   θ12 = 0,031  t = 0,41 → no   │
+│  C1 IPC ← WTI  │  m04  − MA(12)       ✦ asist. σ 0,398   ║ ● atsw-us · derivar m03 → m04  │
+│                │                                         ║ ● atsw-us · estimar (fue 0,2 s)│
+│                │                                         ║ ● atsw-us · ver residuos m04   │
+├────────────────┴─────────────────────────────────────────╨────────────────────────────────┤
+│ m04 de IPC, del asistente: «el MA(12) sobra: t = 0,4»                                     │
+└───────────────────────────────────────────────────────────────────────────────────────────┘
+  ║ el separador de fuera (GtkPaned)       [⇱] desacoplar       ★ elegido por el analista
+```
 
-┌ Terminal — ~/ATSW/SF_MEG ─────────────────┐  ┌ IPC/m04 · residuos ─────┐
-│ > ¿el MA(12) de m03 se gana su sitio?     │  │ ▁▃▂▅▁▂▇▁▃▂▁▄▂▁▃          │
-│ ● atsw-us · sobreparametrizar IPC/m03     │  │ ACF ▌▖ ▗ ▖  ▖           │
-│   θ12 = 0,031  t = 0,41 → no              │  │ PACF▌▗ ▖ ▗              │
-│ ● atsw-us · derivar IPC m03 → m04         │  │ Q(24) = 19,3            │
-│ ● atsw-us · estimar IPC/m04 (fue, 0,2 s)  │  │          [Al cuaderno]  │
-│ ● atsw-us · ver residuos IPC/m04          │  └─────────────────────────┘
-│   Q(24) = 19,3 (p 0,63): limpio.          │
-└───────────────────────────────────────────┘
+**Suelta**, con el menú Asistente abierto en la madre:
+
+```
+┌ ATSW — SF_MEG ─────────────────────────────────────────┐   ┌ Asistente — SF_MEG ──── [⇲][×] ┐
+│ Proyecto  Datos  US  MT  Asistente  Ayuda              │   │ ● claude · atsw-us, atsw-mt    │
+│                     ┌────────────────────────────────┐ │   │ > ...                          │
+│                     │ ☑ Ventana del asistente   ⌃⇧A  │ │   │                                │
+│                     │ ☐ Acoplar a la madre           │ │   │                                │
+│                     │ ────────────────────────────── │ │   │                                │
+│                     │ Abrir la terminal del sistema  │ │   │                                │
+│                     │ Preparar el proyecto…          │ │   │                                │
+│                     │ ────────────────────────────── │ │   │                                │
+│                     │ Qué ha hecho el asistente…     │ │   │                                │
+│                     │ Comprobar el asistente…        │ │   └────────────────────────────────┘
+│                     └────────────────────────────────┘ │            [⇲] acoplar
+└────────────────────────────────────────────────────────┘
+```
+
+**La página «estado»**, en Windows o macOS antes de T2 (acoplada o suelta,
+igual):
+
+```
+┌ Asistente — SF_MEG ──────────────────────────── [⇱][×] ┐
+│                                                        │
+│        [  Abrir la terminal del sistema  ]             │
+│        en C:\Users\…\ATSW\SF_MEG                       │
+│                                                        │
+│  La instalación                                        │
+│   ✓ atsw-gui-mcp 0.1.6   ✓ extra [python]   ✓ atsw-cli │
+│   ✓ claude   ✓ codewhale   — codex (cómo instalarlo)   │
+│   ✓ el proyecto está preparado (AGENTS.md, .mcp.json)  │
+│                                                        │
+│  Lo último del asistente                               │
+│   IPC/m04  − MA(12)        «el MA(12) sobra: t = 0,4»  │
+│   IPC/m03  + MA(12) libre  «el residuo pide el 12»     │
+│                                                        │
+│  La terminal empotrada llegará a Windows con la fase   │
+│  T2; mientras, se trabaja en la del sistema.           │
+└────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -788,15 +900,20 @@ Cada fase en su PR, con CI en las tres plataformas.
   En `test_gui`, `--ver` abre cada ventana sin escribir nada en el proyecto.
 
 **Fase 2: la madre y el asistente.**
-- El menú Asistente; «Preparar el proyecto para el asistente…» con el
-  andamiaje de §7.1; abrir la terminal de cada sistema (la prueba comprueba la
+- El menú Asistente (§7.1); «Preparar el proyecto para el asistente…» con
+  el andamiaje; abrir la terminal de cada sistema (la prueba comprueba la
   orden construida, no abre ventanas en CI); «Instalar el asistente…» con el
   `uv` del paquete.
+- **La ventana Asistente** en los tres sistemas, todavía con la página
+  «estado» sólo: el conmutador Acoplar/Desacoplar, el `GtkPaned` de fuera, y
+  `ventanas.ini` con el estado por proyecto (§7.6).
 - `GFileMonitor` y el campo `por: asistente`.
 - **Pruebas**: en `test_gui`, una fase `asistente` que escribe un modelo con
   `atsw-cli` por fuera y comprueba que la rejilla lo enseña sin foco y con la
   marca; el andamiaje generado (los ficheros, sin claves, el `AGENTS.md` por
-  debajo de 50 KB, y que no pisa uno existente).
+  debajo de 50 KB, y que no pisa uno existente); acoplar y desacoplar diez
+  veces sin perder el contenido, y que al reabrir el proyecto el Asistente
+  vuelve como estaba.
 
 **Hito drvarma_gui → `atsw-sis`, VARMA.** `drvarma` en el paquete, las
 subórdenes multivariantes de `atsw-cli` y las herramientas de sima para VARMA,
@@ -806,17 +923,21 @@ de sima tiene ya equivalente en C.
 **Hito drvec_gui → el VEC en `atsw-sis`.** Igual para el VECM.
 
 **Fase T1: la terminal empotrada en Linux** (§5.1). `atsw_terminal_new` con
-VTE, en un panel de la madre que se abre con F4; donde no haya VTE, la
-externa. Puede ir en cuanto esté la fase 2, sin esperar a los hitos.
-- **Pruebas**: en `test_gui` (Linux), el panel arranca un proceso en la
-  carpeta del proyecto y lo cierra; en Windows y macOS, `atsw_terminal_new`
-  devuelve NULL y se usa la externa.
+VTE, en la página «terminal» de la ventana Asistente; donde no haya VTE, la
+página «estado» y la externa. Puede ir en cuanto esté la fase 2, sin esperar
+a los hitos.
+- **Pruebas**: en `test_gui` (Linux), la terminal arranca un proceso en la
+  carpeta del proyecto; **el proceso sigue vivo (mismo PID, mismo pty) tras
+  acoplar y desacoplar**; y se cierra con el proyecto. En Windows y macOS,
+  `atsw_terminal_new` devuelve NULL y se ve la página «estado».
 
 **Ensayo T2 (una semana) y, si pasa, fase T2: Windows y macOS.** Un
 prototipo de libvterm + ConPTY en un `GtkDrawingArea` con Claude Code y Codex
 dentro, juzgado con los criterios de §5.1. Si pasa, el widget propio detrás
 de la misma `atsw_terminal_new`, con ConPTY en Windows y `forkpty` en macOS
-(4-6 semanas). Si no pasa, se queda la externa y se anota por qué.
+(4-6 semanas), con la misma prueba de acoplar y desacoplar sin perder la
+sesión. Si no pasa, se queda la página «estado» con la externa, y se anota
+por qué.
 
 **Al final:** el MCP de la madre, con el canal (§7.4 c) y el vocabulario de
 `--ver` ampliado.
@@ -876,7 +997,7 @@ fase 0 (ensayo de empaquetado y clientes), en paralelo desde ya ──┘
 ## 11. Decisiones (19-oct-2026)
 
 1. **La terminal, externa primero**: la del sistema, abierta por la madre
-   en la carpeta del proyecto (§5). La empotrada, después (P1).
+   en la carpeta del proyecto (§5). La empotrada, después (17).
 2. **El cliente: Claude Code o los alternativos.** El MTM se optimiza para
    Claude pero tiene que seguir funcionando con otros clientes (§4).
 3. **Sin acuerdo con la universidad.** Cada usuario, su cuenta; en la
@@ -910,17 +1031,27 @@ fase 0 (ensayo de empaquetado y clientes), en paralelo desde ya ──┘
 16. **`atsw-cli`**, con ese nombre, en el monorepo junto a la madre:
     `gui/atsw-cli/` (§2.6).
 
+17. **La terminal empotrada, en este orden** (§5.1): fase T1 con VTE en
+    Linux; un ensayo de una semana de libvterm + ConPTY en Windows con los
+    criterios de paso de §5.1; y, si pasa, la fase T2 en Windows y macOS.
+    Todo detrás de `atsw_terminal_new`, con la externa siempre de respaldo
+    (20-oct-2026).
+18. **Una ventana propia «Asistente», acoplable**, no un panel abajo con F4
+    (§7.6): un conmutador Acoplar/Desacoplar que mueve el contenido entre una
+    ventana suelta y el lado derecho de la madre, con el estado recordado por
+    proyecto.
+
 ### Preguntas que quedan
 
-- **P1. La terminal empotrada** (§5.1), la línea que abrió el analista el
-  20-oct-2026 a partir de Kate. Propuesta: una API, `atsw_terminal_new`, con
-  la externa siempre detrás; **fase T1** con VTE en Linux; un **ensayo de una
-  semana** de libvterm + ConPTY en Windows, con criterios de paso, antes de
-  decidir la **fase T2** para Windows y macOS. ¿De acuerdo con el orden y con
-  los criterios?
-- **P2. Dónde va el panel**: abajo en la ventana de la madre, con F4, como en
-  Kate, o en una ventana propia «Asistente» que se puede acoplar.
+Ninguna de fondo. Dos detalles que se pueden decidir al hacer la fase 2, y
+que propongo así salvo que se diga otra cosa:
+
+- **El atajo de la ventana**, `<Primary><Shift>A`, si no choca con otro de la
+  madre.
+- **El intérprete de la terminal empotrada en Windows** (fase T2):
+  PowerShell si está, y si no `cmd`. Con la regla de §3.1: sólo se abre el
+  intérprete, nunca se ejecuta un script.
 
 ---
 
-**Estado: decidido salvo P1 y P2.**
+**Estado: decidido.**

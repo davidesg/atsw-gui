@@ -101,6 +101,7 @@ jobs:
           echo "- el Python de uv: $mbpy MB en disco" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Humo, sin el extra
+        timeout-minutes: 10
         env:
           UV_OFFLINE: '1'
         run: |
@@ -112,6 +113,7 @@ jobs:
           fi
 
       - name: Humo, con el extra
+        timeout-minutes: 10
         env:
           UV_OFFLINE: '1'
         run: |
@@ -121,6 +123,26 @@ jobs:
           else
             "$py" tests/humo.py "$BIN_extra" --con-extra
           fi
+
+      - name: Importar el extra, fuera de MCP
+        # En la primera vuelta, el humo con el extra se colgo en Windows
+        # cuando estado importaba art. Ahora estado no importa nada; esto
+        # mide aparte cuanto tarda cada import y si escribe por la salida
+        # estandar, que dentro de un servidor MCP romperia el canal.
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 8
+        run: |
+          py="$BIN_extra/python"
+          for m in drtran sima art; do
+            t0=$(date +%s)
+            out=$(timeout 150 "$py" -c "import $m" 2>/dev/null); rc=$?
+            t1=$(date +%s)
+            n=$(printf '%s' "$out" | wc -c | tr -d ' ')
+            echo "import $m: rc=$rc, $((t1 - t0)) s, $n bytes por stdout"
+            [ "$n" -gt 0 ] && printf '%s\n' "$out" | head -5
+            echo "- import $m: rc=$rc, $((t1 - t0)) s, $n bytes por stdout" >> "$GITHUB_STEP_SUMMARY"
+          done
 
       - name: Lo que se descarga
         if: always()

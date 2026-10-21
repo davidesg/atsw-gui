@@ -100,7 +100,10 @@ def main() -> int:
             if not exe.is_file():
                 check(False, f"{nombre}: ejecutable instalado", str(exe))
                 continue
-            asyncio.run(una(exe, nombre, proyecto, binarios, extra))
+            try:
+                asyncio.run(asyncio.wait_for(una(exe, nombre, proyecto, binarios, extra), 120))
+            except TimeoutError:
+                check(False, f"{nombre}: responde en menos de 120 s", "se quedo colgado")
     print(f"\n{len(fallos)} fallos")
     return 1 if fallos else 0
 

@@ -15,6 +15,7 @@ que se vea que no son los de la madre.
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import platform
 import shutil
@@ -88,11 +89,14 @@ def busca_motor(nombre: str) -> tuple[str | None, str]:
 
 
 def extra_disponible(modulo: str) -> str:
-    """La version del paquete del extra, o por que no esta."""
-    try:
-        __import__(modulo)
-    except Exception as e:  # cualquier fallo al importar apaga lo mismo
-        return f"no ({type(e).__name__})"
+    """La version del paquete del extra, o «no».
+
+    Sin importarlo: un import de art trae matplotlib y compania, tarda, y lo
+    que escriba por la salida estandar romperia el canal MCP, que es esa
+    misma salida. Basta con saber que esta instalado.
+    """
+    if importlib.util.find_spec(modulo) is None:
+        return "no"
     dist = {"art": "art-tseries", "drtran": "drtran", "sima": "sima-tseries"}[modulo]
     try:
         return metadata.version(dist)

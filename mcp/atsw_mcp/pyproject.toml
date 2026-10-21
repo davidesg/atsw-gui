@@ -1,0 +1,55 @@
+# atsw-gui-mcp: los MCP a medida de la madre (docs/ESTUDIO-terminal-mcp.md).
+#
+# Fase 0: el esqueleto. Tres servidores que arrancan, dicen su version y
+# donde han encontrado el proyecto y los motores en C, y nada mas. El
+# analisis llega en la fase 1b.
+#
+# LAS VERSIONES, FIJADAS (§2.6 del estudio):
+#   mcp 1.x, no 2.x: el extra [python] importa art-tseries y sima-tseries,
+#   que piden mcp<2. Si el nucleo fuera a la 2, el nucleo y el extra no se
+#   podrian instalar juntos. Se sube cuando suban los tres de la suite.
+#   El extra fija lo que hoy esta en PyPI; fue 0.1.18, sima 0.2.0 y drvec
+#   esperan al release conjunto.
+#   Las transitivas van en uv.lock.
+
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "atsw-gui-mcp"
+version = "0.1.5"
+description = "Los MCP a medida de ATSW: el asistente sobre los motores en C de la madre"
+readme = "README.md"
+requires-python = ">=3.10"
+# Sin licencia declarada: docs/DISENO-repositorio.md §8 aun no la decide.
+authors = [
+    { name = "A.B. Treadway" },
+    { name = "J.A. Mauricio" },
+    { name = "D.E. Guerrero" },
+]
+dependencies = [
+    "mcp==1.30.0",
+]
+
+[project.optional-dependencies]
+# Lo que no tiene equivalente en C (§2.2): la lambda de Box-Cox, la escalera
+# de intervenciones, el veredicto encadenado y la identificacion echelon.
+# Su falta solo apaga esas herramientas (decision 15).
+python = [
+    "art-tseries==0.2.3",
+    "drtran==0.2.6",
+    "sima-tseries==0.1.1",
+]
+
+[project.scripts]
+atsw-us = "atsw_mcp.us:main"
+atsw-mt = "atsw_mcp.mt:main"
+atsw-sis = "atsw_mcp.sis:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/atsw_mcp"]
+
+[tool.uv]
+# uv.lock fija tambien las transitivas, para las tres plataformas.
+required-version = ">=0.12"

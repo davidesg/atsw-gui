@@ -65,7 +65,10 @@ conversación SÍ»). Lo que ha cambiado desde entonces, y por eso se reabre:
    mismo gráfico que se ve en la madre (§7.4). Es imprescindible con los
    modelos que no ven imágenes, y es el embrión del MCP de la madre.
 6. **Lo que hace el asistente queda en el linaje** como `por: asistente`:
-   se sabe siempre quién decidió cada paso (§7.2).
+   se sabe siempre quién decidió cada paso (§7.2). Cada corrida de un motor
+   apunta **lo que costó** en tiempo y en energía estimada (§7.7), y cada
+   modelo tiene una **ficha de confianza** que junta recorrido, adecuación,
+   reproducibilidad y coste (§7.8).
 7. **El MCP crece con la escalera** (decidido): US y MT después de la fase 3;
    VARMA con drvarma_gui; VECM con drvec_gui. Python se instala bajo demanda
    con uv, y el ensayo de empaquetado empieza ya, en paralelo (§9).
@@ -278,7 +281,7 @@ razón «ajuste automático, sin recorrido».
 | | herramientas | por qué |
 |---|---|---|
 | **salen** | `load_data`, `create_inp`, `preview_data` (los datos entran por Datos de la madre: `m00`); los `guion_*` y `export_guion` (el `guion.json` es de la otra encarnación, P4); `load_example` de sima, salvo decisión | chocan con el proyecto |
-| **nuevas** | `proyecto_resumen` (series, modelos, casos, elegidos); `modelo(serie, id)` que da la ruta; `derivar` (nuevo `mNN` desde un `.pre`, con padre); `razon` y `elegir`; `caso_nuevo` (MT, con las entradas y su hash); `cuaderno_apunte` (texto al cuaderno); `ver` (abre una ventana de gráficos de la madre, §7.4); `comprobar` (qué está instalado, con versiones) | el idioma de la madre |
+| **nuevas** | `proyecto_resumen` (series, modelos, casos, elegidos); `modelo(serie, id)` que da la ruta; `derivar` (nuevo `mNN` desde un `.pre`, con padre); `razon` y `elegir`; `caso_nuevo` (MT, con las entradas y su hash); `cuaderno_apunte` (texto al cuaderno); `ver` (abre una ventana de gráficos de la madre, §7.4); `ficha` (la ficha de confianza del modelo, §7.8); `comprobar` (qué está instalado, con versiones) | el idioma de la madre |
 
 **La razón, gratis.** `DISENO-madre.md` §8 bis no pide razón en la GUI
 porque un modal «¿por qué?» se contesta `asdf`. El asistente sí la da:
@@ -801,7 +804,149 @@ para lo demás que se quiera recordar.
 
   La página «estado» también se ve con la terminal, plegada bajo la barra.
 
-### 7.7 La maqueta
+### 7.7 El coste de cada estimación
+
+**Decidido** (decisión 19): cada corrida de un motor deja escrito lo que
+costó, para que el analista pueda compararlo y contarlo. Es barato, no toca
+los motores (se mide desde fuera, al lanzarlos) y da una cifra que un
+auto-ARIMA no da: cuánto cuesta en tiempo y en energía llegar a un modelo
+con su recorrido, con los motores en C o con lo que quede en Python.
+
+**Quién escribe: los tres, con el mismo código.** Una biblioteca nueva,
+`lib/coste`, que usan:
+
+- **la madre**, en `lib/engine`, que es por donde ya lanza todos los
+  motores;
+- **`atsw-cli`**, en las mismas funciones;
+- **el MTM**: lo que lanza en C pasa por `atsw-cli`, así que ya queda
+  apuntado; lo que corre en el extra Python lo apunta con `atsw-cli coste
+  apunta …`, para que también ahí haya un solo escritor (§2.5).
+
+**Dónde se guarda: `costes.csv`, en la raíz del proyecto, y no en el
+manifiesto.** Un modelo tiene muchas corridas (su estimación, sus
+reestimaciones, dos por frecuencia en el MEG, las de sobreparametrizar), y el
+YAML del manifiesto no sabe de listas (§2.5). Un registro de sólo añadir, una
+línea por corrida, se lee igual con una hoja de cálculo, con R o con Python,
+que es como se cuenta en un informe. Las escrituras de la madre y del MTM a la
+vez se ordenan con un cerrojo del fichero (`flock` en Unix, `LockFileEx` en
+Windows).
+
+| campo | ejemplo | qué es |
+|---|---|---|
+| `fecha` | `2026-10-21T10:14:03` | cuándo |
+| `quien` | `madre`, `atsw-cli`, `mtm` | qué programa la lanzó |
+| `por` | `analista`, `asistente` | quién lo pidió (§7.2) |
+| `objeto` | `IPC/m04`, `C1/c02` | el modelo o la corrida del manifiesto |
+| `paso` | `estimar`, `meg`, `sobreparametrizar`, `prever`, `reproducir` | para qué |
+| `motor` | `fue 1.14` | el programa y su versión |
+| `via` | `C`, `python` | el binario de la madre o el extra Python |
+| `cpu_s` | `0.21` | tiempo de CPU del proceso (usuario + sistema) |
+| `pared_s` | `0.34` | tiempo de reloj |
+| `energia_j` | `0.39` | la energía **estimada**, en julios |
+| `metodo` | `cpu×TDP/núcleos: 15 W, 8` | cómo se estimó la energía |
+| `sha_pre` | `3f2a9c…` | el `.pre` resultante, si lo hay |
+
+**Cómo se mide, en los tres sistemas:**
+
+- **El tiempo de CPU es la cifra principal**, porque es medible en todas
+  partes y comparable entre corridas de la misma máquina. En Windows,
+  `GetProcessTimes` sobre el proceso del motor, antes de cerrar su
+  manejador. En Unix, `wait4` cuando la madre recoge al hijo ella misma; en la
+  vía asíncrona, donde lo recoge GLib, la diferencia de
+  `getrusage(RUSAGE_CHILDREN)`, que es exacta mientras corra un motor a la
+  vez (los contrastes ya van de uno en uno). Para el extra Python,
+  `time.process_time()` alrededor de la llamada.
+- **El tiempo de reloj**, con `g_get_monotonic_time()`.
+- **La energía es una estimación, y se dice.** No hay una forma portátil de
+  medirla por proceso: en Linux, RAPL (`/sys/class/powercap`) mide el
+  paquete entero, con los demás procesos dentro, y en muchas distribuciones
+  sólo lo lee root; en macOS, `powermetrics` pide sudo; en Windows no hay
+  una API pública. Por eso, por defecto, **E ≈ tiempo de CPU × TDP nominal ÷
+  núcleos lógicos**, con un TDP por defecto (15 W, un portátil) que el
+  usuario puede cambiar en las preferencias. **El método va escrito en cada
+  línea**, y donde RAPL sea legible se puede apuntar además como «medida:
+  RAPL del paquete, con otros procesos». Una energía sin su método no se
+  enseña.
+
+**Dónde se ve en la madre:**
+
+- **En la ficha del modelo** («Ver modelo…»), una línea: «Coste: 0,21 s de
+  CPU (fue 1.14, C), ~0,4 J estimados; 2,9 s en total con sus contrastes».
+- **En la ventana del linaje**, una columna de coste por paso, y el total
+  del camino hasta el modelo.
+- **En la ficha de confianza** (§7.8).
+- **`atsw-cli coste resumen P [--por serie|motor|via|por]`** suma el
+  registro para un informe, en texto o CSV.
+
+### 7.8 La ficha de confianza
+
+**Decidido** (decisión 20): un resumen corto por modelo que reúne lo que
+hace falta para fiarse de él, o para no fiarse. Se parece a una *model card*,
+pero no se escribe a mano: **sale del linaje, del `.out` y del registro de
+costes que ya existen**. No se guarda: se calcula cada vez, así que nunca se
+queda vieja.
+
+**Lo que lleva:**
+
+1. **El recorrido.** La cadena desde `m00` hasta el modelo, cada paso con
+   quién lo decidió (analista o asistente, §7.2) y su razón. Y **la parte del
+   asistente**: «3 de 5 pasos decididos por el asistente (60 %)», y quién
+   eligió el modelo. Sin «sin razón» escondidos: un paso sin razón se ve como
+   tal.
+2. **La adecuación**, con cada comprobación pasada o no y su número, de
+   `lib/dictamen` sobre el `.out`: la Q en sus retardos con su p, la
+   normalidad, la media de los residuos, los anómalos de más de 3σ con su
+   fecha, la significación de los parámetros, las raíces (estacionariedad e
+   invertibilidad), las correlaciones entre estimadores, y, si se hicieron,
+   la sobreparametrización y la estabilidad. **Lo que no se hizo dice «no
+   consta»**, nunca «bien» (la regla de la huella vacía del guion).
+3. **La reproducibilidad.** Si el `.pre` se reproduce con el binario de la
+   madre: correr `fue` (o `drtran`) sobre él y comprobar que los parámetros
+   no se mueven. Cuesta una corrida, así que se hace al pedirlo
+   («Comprobar»), se apunta en `costes.csv` como paso `reproducir` con su
+   resultado y el hash del `.pre`, y la ficha enseña la última comprobación de
+   **ese** hash. Si el `.pre` vino del extra Python, o de otra versión del
+   motor, lo dice.
+4. **El coste**: el de la estimación y el total del recorrido, con su vía (C
+   o Python) y el método de la energía (§7.7).
+
+**El formato: Markdown, el mismo en todas partes.** Lo genera **una sola
+función en C**, `lib/ficha`, así que es idéntico venga de donde venga:
+
+- **en la madre**: Diagnosticar ▸ «Ficha de confianza…» en el menú del
+  modelo (junto a la diagnosis, que es lo que resume), y un botón en la
+  ventana del linaje. Se enseña con `an_markup_md`, como el resto de textos
+  de las ventanas de análisis, y lleva «Al cuaderno», que la añade a
+  `cuaderno.md` con su fecha;
+- **en `atsw-cli ficha P IPC/m04`**, en Markdown o en JSON (`--json`), para
+  quien la quiera en un informe o en un script;
+- **en el MTM**, la herramienta `ficha(serie, modelo)`, que devuelve el
+  Markdown: un modelo que no ve imágenes la lee entera.
+
+```
+## Ficha de confianza · IPC/m04
+
+**Recorrido** (5 pasos; 3 del asistente, 60 %; elegido por el analista)
+m00 datos → m01 analista «airline de partida» → m02 analista «AI 2020-03»
+→ m03 asistente «el residuo pide el 12» → m04 asistente «el MA(12) sobra: t = 0,4»
+
+**Adecuación**
+✓ Q(24) = 19,3 (p 0,63)   ✓ normalidad JB = 2,1 (p 0,35)   ✓ media ≈ 0
+✓ parámetros significativos   ✓ raíces fuera del círculo
+✗ anómalo de 3,4σ en 2022-03, sin tratar
+— estabilidad: no consta
+
+**Reproducibilidad**  ✓ se reproduce con fue 1.14 (C), comprobado el 21-oct-2026
+
+**Coste**  0,21 s de CPU, ~0,4 J (estimada: cpu×TDP/núcleos, 15 W, 8);
+2,9 s en total con sus contrastes; todo en C
+```
+
+**Y por proyecto**, la misma cuenta de la parte del asistente en «Qué ha
+hecho el asistente…» (§7.1): cuántos pasos del proyecto decidió el
+asistente y cuántos el analista. No limita nada: lo deja a la vista.
+
+### 7.9 La maqueta
 
 **Acoplada**, en Linux con VTE (fase T1):
 
@@ -883,9 +1028,19 @@ Cada fase en su PR, con CI en las tres plataformas.
   `dictamen`, `prewhiten`, con salida en texto y JSON. En `programas.sh`.
 - Cierra los «C, a comprobar» del inventario de US y MT (§2.2): lo que falte
   se apunta, no se improvisa.
+- **`lib/coste`** (§7.7): la medida en `lib/engine`, para la madre y para
+  `atsw-cli` a la vez, y `costes.csv`; `atsw-cli coste apunta` y `coste
+  resumen`.
+- **`lib/ficha`** (§7.8) y `atsw-cli ficha`, en Markdown y JSON, con la
+  comprobación de reproducibilidad.
 - **Pruebas**: cada suborden da los mismos números que la ventana de la
   madre que la usa (la misma función, dos anfitriones), en los tres
-  sistemas.
+  sistemas. **El coste**: cada corrida de un motor deja una línea con todos
+  sus campos; el tiempo de CPU es positivo y no pasa del de reloj por los
+  núcleos; ninguna energía sin método; dos escritores a la vez no rompen el
+  fichero. **La ficha**: la parte del asistente sale bien contada sobre un
+  linaje de prueba; lo no hecho dice «no consta»; un `.pre` retocado a mano da
+  «no se reproduce».
 
 **Fase 1b: `--ver` y el MTM de US y MT.**
 - `atsw_gui --ver`, con el vistazo movido a `lib/analisis` (§7.4).
@@ -898,6 +1053,9 @@ Cada fase en su PR, con CI en las tres plataformas.
   mueve en fue; rutas fuera de la raíz rechazadas; las instrucciones caben en
   20 KB; una sesión MCP a pelo, sin cliente de LLM, recorre las herramientas.
   En `test_gui`, `--ver` abre cada ventana sin escribir nada en el proyecto.
+  **La herramienta `ficha`** devuelve el mismo Markdown, byte a byte, que
+  `atsw-cli ficha`; lo que el MTM corre en el extra Python queda en
+  `costes.csv` con `via: python`.
 
 **Fase 2: la madre y el asistente.**
 - El menú Asistente (§7.1); «Preparar el proyecto para el asistente…» con
@@ -908,12 +1066,16 @@ Cada fase en su PR, con CI en las tres plataformas.
   «estado» sólo: el conmutador Acoplar/Desacoplar, el `GtkPaned` de fuera, y
   `ventanas.ini` con el estado por proyecto (§7.6).
 - `GFileMonitor` y el campo `por: asistente`.
+- **El coste y la ficha en la madre**: la línea de coste en «Ver modelo…», la
+  columna en la ventana del linaje, Diagnosticar ▸ «Ficha de confianza…» con
+  «Al cuaderno», y la parte del asistente en «Qué ha hecho el asistente…».
 - **Pruebas**: en `test_gui`, una fase `asistente` que escribe un modelo con
   `atsw-cli` por fuera y comprueba que la rejilla lo enseña sin foco y con la
   marca; el andamiaje generado (los ficheros, sin claves, el `AGENTS.md` por
   debajo de 50 KB, y que no pisa uno existente); acoplar y desacoplar diez
   veces sin perder el contenido, y que al reabrir el proyecto el Asistente
-  vuelve como estaba.
+  vuelve como estaba; la ficha de la madre es la misma que la de `atsw-cli`, y
+  «Al cuaderno» la añade una vez.
 
 **Hito drvarma_gui → `atsw-sis`, VARMA.** `drvarma` en el paquete, las
 subórdenes multivariantes de `atsw-cli` y las herramientas de sima para VARMA,
@@ -989,6 +1151,10 @@ fase 0 (ensayo de empaquetado y clientes), en paralelo desde ya ──┘
 - **El widget de terminal propio** (fase T2) es el riesgo de mantenimiento
   más alto del estudio: teclado, IME y fuentes en tres sistemas. Por eso va
   detrás de un ensayo con criterios, y la externa no se retira nunca.
+- **Una energía estimada leída como medida.** Por eso la cifra principal es
+  el tiempo de CPU, la energía lleva siempre su método, y comparar energías
+  de máquinas distintas sólo tiene sentido con el mismo método y el mismo
+  TDP.
 - **Dos órdenes parecidas.** `atsw-mcp` (de la suite) y `atsw-us`/`atsw-mt`
   (del MTM) pueden convivir. El manual dice cuál es cuál.
 
@@ -1040,6 +1206,17 @@ fase 0 (ensayo de empaquetado y clientes), en paralelo desde ya ──┘
     (§7.6): un conmutador Acoplar/Desacoplar que mueve el contenido entre una
     ventana suelta y el lado derecho de la madre, con el estado recordado por
     proyecto.
+
+19. **El coste de cada estimación en el registro del proyecto** (§7.7):
+    tiempo de CPU, tiempo de reloj, energía estimada con su método, y qué
+    motor y por qué vía (C o Python). Lo escriben igual la madre,
+    `atsw-cli` y el MTM, con `lib/coste`, en `costes.csv`; se ve en la ficha
+    del modelo, en el linaje y en la ficha de confianza.
+20. **Una ficha de confianza por modelo** (§7.8): el recorrido con quién
+    decidió cada paso y la parte del asistente, la adecuación, la
+    reproducibilidad con el binario de la madre y el coste. Se calcula del
+    linaje con `lib/ficha`, en Markdown, y es la misma en la madre, en
+    `atsw-cli ficha` y en la herramienta `ficha` del MTM, con «Al cuaderno».
 
 ### Preguntas que quedan
 

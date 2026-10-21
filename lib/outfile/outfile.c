@@ -178,6 +178,7 @@ gboolean fueout_read( const char *path, FueOut *o )
 {
    int matriz = 0;      /* 1 covarianzas, 2 correlaciones */
    int det_cur = 0;     /* de que determinista son los omegas de ahora */
+   int del_cur = 0;     /* y de cual los deltas                        */
     gchar  *txt = NULL, **lin;
     gsize   len = 0;
     int     i, n, cal_lag = 0, en_resid = 0;
@@ -209,26 +210,38 @@ gboolean fueout_read( const char *path, FueOut *o )
         else if ( sscanf( l, "logelf: %lf", &v ) == 1 )
             { o->logelf = v; o->tiene_logelf = TRUE; }
         else if ( sscanf( l, "Box-Cox lambda     : %lf", &v ) == 1 )
-            { o->lambda = v; det_cur = 0; }   /* aqui acaban los omegas */
+            { o->lambda = v; det_cur = del_cur = 0; }   /* aqui acaban */
         else if ( sscanf( l, "Seasonal period    : %d", &k ) == 1 ) o->s = k;
         else if ( sscanf( l, "Regular differences: %d", &k ) == 1 ) o->d = k;
         else if ( sscanf( l, "Annual differences : %d", &k ) == 1 ) o->D = k;
         else if ( sscanf( l, "Number of deterministic variables: %d", &k ) == 1 )
             o->ndet = k;
         else if ( g_str_has_prefix( l, "Mean parameter" ) )
-            { o->tiene_mu = TRUE; det_cur = 0; }
+            { o->tiene_mu = TRUE; det_cur = del_cur = 0; }
 
         /* QUE DETERMINISTA EMPIEZA AQUI. Las lineas que siguen, hasta la
            proxima cabecera, son SUS omegas.                            */
         else if ( sscanf( l, "Omegas for deterministic variable %d", &k ) == 1 )
             {
             det_cur = k;
+            del_cur = 0;
             if ( k >= 1 && k <= FO_MAX_PAR )
                 {
                 o->det_nom[k - 1] = 0;
                 o->det_i0[k - 1]  = 0;
                 if ( k > o->ndet_leidos ) o->ndet_leidos = k;
                 }
+            }
+
+        /* LOS DELTAS DE ESE DETERMINISTA. Hasta aqui las lineas eran sus
+           omegas; desde aqui, y hasta la proxima cabecera, son su
+           denominador. Antes se sumaban a los omegas.                   */
+        else if ( sscanf( l, "Deltas for deterministic variable %d", &k ) == 1 )
+            {
+            det_cur = 0;
+            del_cur = k;
+            if ( k >= 1 && k <= FO_MAX_PAR )
+                { o->det_ndel[k - 1] = 0; o->det_d0[k - 1] = 0; }
             }
 
         /* LA TABLA DE PARAMETROS: valor, error tipico y numero.
@@ -250,6 +263,12 @@ gboolean fueout_read( const char *path, FueOut *o )
                         o->det_i0[det_cur - 1] = k;
                     o->det_nom[det_cur - 1]++;
                     }
+                else if ( del_cur >= 1 && del_cur <= FO_MAX_PAR )
+                    {
+                    if ( o->det_ndel[del_cur - 1] == 0 )
+                        o->det_d0[del_cur - 1] = k;
+                    o->det_ndel[del_cur - 1]++;
+                    }
                 }
             }
 
@@ -260,6 +279,11 @@ gboolean fueout_read( const char *path, FueOut *o )
         else if ( g_str_has_prefix( l, "Coefficients for " ) )
             {
             const char *c = l + 17;
+
+            /* AQUI ACABAN LOS DETERMINISTAS. Sin esto el primer AR o MA se
+               contaba como un omega mas del ultimo: la ganancia del ultimo
+               escalon salia con el AR dentro (IPC m04, BUG-0001).        */
+            det_cur = del_cur = 0;
             int         cuantos = cuenta_coef( lin, i, n );
             gboolean    anual = ( strstr( c, "annual" ) != NULL );
             gboolean    ma    = ( strstr( c, "MA" ) != NULL );

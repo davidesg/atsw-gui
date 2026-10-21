@@ -197,6 +197,27 @@ int main( int argc, char **argv )
     ok( fo_fecha_parte( "obs", &per, &anno ) != 0, "y lo que no es fecha se rechaza" );
     }
 
+
+    printf( "\nLOS OMEGAS DE CADA DETERMINISTA ACABAN DONDE ACABAN (BUG-0001)\n" );
+    /* El AR que viene detras NO es un omega del ultimo escalon, y un delta
+       tampoco: es su denominador. Antes los dos se contaban como omegas. */
+    snprintf( path, sizeof path, "%s/RIPC.1/RIPC.1.out", golden );
+    ok( fueout_read( path, &o ), "lee RIPC.1.out" );
+    ok( o.det_nom[11] == 1 && o.det_i0[11] == 12,
+        "RIPC.1: el determinista 12 tiene un omega, el [12]" );
+    ok( o.det_ndel[11] == 1 && o.det_d0[11] == 13,
+        "RIPC.1: y un delta, el [13], que no cuenta como omega" );
+    {
+    /* golden es engines/fue/tests/golden: el repro esta en lib/outfile. */
+    snprintf( path, sizeof path,
+              "%s/../../../../lib/outfile/bugs/BUG-0001-repro/ipc_m04.out", golden );
+    ok( fueout_read( path, &o ), "lee ipc_m04.out (el del fallo)" );
+    ok( o.det_nom[11] == 4 && o.det_i0[11] == 12,
+        "IPC m04: step 3 2022 tiene 4 omegas, del [12] al [15]" );
+    ok( o.det_nom[12] == 2 && o.det_i0[12] == 16,
+        "IPC m04: step 1 2021 tiene 2, el [16] y el [17]; el AR [18] no entra" );
+    }
+
     printf( "\n%d fallos\n", fallos );
     return fallos ? 1 : 0;
 }

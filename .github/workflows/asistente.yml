@@ -21,6 +21,11 @@ on:
   pull_request:
     paths: [ 'mcp/**', '.github/workflows/asistente.yml' ]
   workflow_dispatch:
+    inputs:
+      frio:
+        description: 'Sin cache, para medir la descarga en frio'
+        type: boolean
+        default: false
 
 env:
   UV_VERSION: 0.12.24
@@ -72,9 +77,10 @@ jobs:
             echo "### ${{ matrix.runner }}"
             echo
             echo "- uv $UV_VERSION: archivo $(( $(tam "${{ matrix.uv }}") / 1048576 )) MB, binario $(( $(tam "$uv") / 1048576 )) MB"
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/cache@v4
+        if: ${{ !inputs.frio }}
         with:
           path: |
             .uv-cache
@@ -83,8 +89,8 @@ jobs:
 
       - name: Instalar el nucleo y el nucleo con el extra
         run: |
-          [ -d "$UV_CACHE_DIR/archive-v0" ] && echo "- cache de uv: reutilizada" >> "$GITHUB_STEP_SUMMARY" \
-                                            || echo "- cache de uv: vacia (descarga en frio)" >> "$GITHUB_STEP_SUMMARY"
+          [ -d "$UV_CACHE_DIR/archive-v0" ] && echo "- cache de uv: reutilizada" | tee -a "$GITHUB_STEP_SUMMARY" \
+                                            || echo "- cache de uv: vacia (descarga en frio)" | tee -a "$GITHUB_STEP_SUMMARY"
           for e in nucleo extra; do
             env_dir="$RUNNER_TEMP/$e"
             opc=""; [ $e = extra ] && opc="--extra python"
@@ -94,11 +100,11 @@ jobs:
             t1=$(date +%s)
             if [ -d "$env_dir/Scripts" ]; then b="$env_dir/Scripts"; else b="$env_dir/bin"; fi
             mb=$(du -sm "$env_dir" | cut -f1)
-            echo "- $e: instalado en $((t1 - t0)) s, $mb MB en disco" >> "$GITHUB_STEP_SUMMARY"
+            echo "- $e: instalado en $((t1 - t0)) s, $mb MB en disco" | tee -a "$GITHUB_STEP_SUMMARY"
             echo "BIN_$e=$b" >> "$GITHUB_ENV"
           done
           mbpy=$(du -sm "$UV_PYTHON_INSTALL_DIR" | cut -f1)
-          echo "- el Python de uv: $mbpy MB en disco" >> "$GITHUB_STEP_SUMMARY"
+          echo "- el Python de uv: $mbpy MB en disco" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Humo, sin el extra
         timeout-minutes: 10
@@ -147,7 +153,7 @@ jobs:
               t1=$(date +%s)
               n=$(printf '%s' "$out" | wc -c | tr -d ' ')
               linea="import $m, entrada $como: rc=$rc, $((t1 - t0)) s, $n bytes por stdout"
-              echo "$linea"; echo "- $linea" >> "$GITHUB_STEP_SUMMARY"
+              echo "- $linea" | tee -a "$GITHUB_STEP_SUMMARY"
               [ "$n" -gt 0 ] && printf '%s\n' "$out" | head -5
             done
           done
@@ -161,5 +167,5 @@ jobs:
             [ -f "$py" ] || continue
             site=$("$py" -c "import sysconfig; print(sysconfig.get_paths()['purelib'])")
             "$UV" run -q --no-project --python "$py" --with packaging==24.2 \
-              python tests/medida.py uv.lock "$site" "$e" >> "$GITHUB_STEP_SUMMARY"
+              python tests/medida.py uv.lock "$site" "$e" | tee -a "$GITHUB_STEP_SUMMARY"
           done

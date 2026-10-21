@@ -341,6 +341,10 @@ diseño de la madre** (`ESTUDIO-madre-organizacion.md`, sus fases 1-3).
   - Va en la ventana de cada GUI (`gtk_window_set_default_icon`).
   - Va en la presentación.
   - Va en los paquetes de Windows y macOS, que hoy no lo llevan.
+- **El asistente: una terminal con un MCP a medida (MTM) de los motores**,
+  pedido del 19-oct-2026. Estudio y decisiones abiertas en
+  `ESTUDIO-terminal-mcp.md`. En la comprobación de arranque entra como
+  opcional.
 
 ---
 

@@ -134,14 +134,22 @@ jobs:
         timeout-minutes: 8
         run: |
           py="$BIN_extra/python"
+          # Dos maneras: con la entrada estandar cerrada, y con una tuberia
+          # que sigue abierta, que es como la tiene un servidor MCP.
           for m in drtran sima art; do
-            t0=$(date +%s)
-            out=$(timeout 150 "$py" -c "import $m" 2>/dev/null); rc=$?
-            t1=$(date +%s)
-            n=$(printf '%s' "$out" | wc -c | tr -d ' ')
-            echo "import $m: rc=$rc, $((t1 - t0)) s, $n bytes por stdout"
-            [ "$n" -gt 0 ] && printf '%s\n' "$out" | head -5
-            echo "- import $m: rc=$rc, $((t1 - t0)) s, $n bytes por stdout" >> "$GITHUB_STEP_SUMMARY"
+            for como in cerrada tuberia; do
+              t0=$(date +%s); rc=0
+              if [ $como = cerrada ]; then
+                out=$(timeout 150 "$py" -c "import $m" 2>/dev/null </dev/null) || rc=$?
+              else
+                out=$(timeout 150 "$py" -c "import $m" 2>/dev/null < <(sleep 170)) || rc=$?
+              fi
+              t1=$(date +%s)
+              n=$(printf '%s' "$out" | wc -c | tr -d ' ')
+              linea="import $m, entrada $como: rc=$rc, $((t1 - t0)) s, $n bytes por stdout"
+              echo "$linea"; echo "- $linea" >> "$GITHUB_STEP_SUMMARY"
+              [ "$n" -gt 0 ] && printf '%s\n' "$out" | head -5
+            done
           done
 
       - name: Lo que se descarga
@@ -149,7 +157,8 @@ jobs:
         run: |
           for e in nucleo extra; do
             v="BIN_$e"; py="${!v}/python"
-            [ -x "$py" ] || [ -f "$py.exe" ] || continue
+            [ -f "$py.exe" ] && py="$py.exe"   # uv quiere la ruta entera en Windows
+            [ -f "$py" ] || continue
             site=$("$py" -c "import sysconfig; print(sysconfig.get_paths()['purelib'])")
             "$UV" run -q --no-project --python "$py" --with packaging==24.2 \
               python tests/medida.py uv.lock "$site" "$e" >> "$GITHUB_STEP_SUMMARY"

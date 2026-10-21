@@ -19,3 +19,23 @@ Instalar, con las versiones de `uv.lock`:
 
 Prueba de humo, sin cliente de LLM: `python tests/humo.py .venv/bin`.
 La prueba a mano con los clientes, en `docs/ENSAYO-clientes.md`.
+
+## Para la fase 1b: los procesos, con la entrada cerrada
+
+La CI de la fase 0 lo ha medido. **En Windows, un proceso lanzado desde
+dentro del servidor que hereda la entrada estándar se cuelga**: la entrada es
+la tubería del cliente MCP. Con `stdin=subprocess.DEVNULL` no pasa. En Linux
+y macOS no pasa de ninguna de las dos maneras.
+
+Importar `art` dentro del servidor se cuelga igual en Windows, aunque fuera
+del servidor tarda entre 1 y 19 s, también en un hilo y con una tubería
+abierta. Todo apunta a que ese import lanza un proceso.
+
+Así que en el MTM:
+
+- toda llamada a un motor en C va con `stdin=subprocess.DEVNULL`;
+- antes de importar el extra dentro del servidor hay que averiguar qué
+  proceso lanza `art` al importarse, o importarlo en un proceso aparte.
+
+Los pasos «diagnóstico» de `.github/workflows/asistente.yml`
+(`ATSW_MCP_DIAG=import|sub|sub-devnull`) lo repiten en cada vuelta.

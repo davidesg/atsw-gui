@@ -18,15 +18,22 @@ import subprocess
 import sys
 import time
 
+# «hilo»: el import en un hilo que no es el principal, con la entrada en
+# tuberia. Es como lo hace FastMCP, que corre las herramientas sincronas en
+# un hilo de trabajo.
+HILO = ("import threading; t = threading.Thread(target=__import__, args=({m!r},)); "
+        "t.start(); t.join()")
+
 for m in ("drtran", "sima", "art"):
-    for como in ("cerrada", "tuberia"):
+    for como in ("cerrada", "tuberia", "hilo"):
         # La tuberia: el proceso lee de un extremo y aqui se guarda el otro
         # abierto, sin escribir nada, como un cliente MCP callado.
         r = w = None
-        if como == "tuberia":
+        if como != "cerrada":
             r, w = os.pipe()
+        codigo = HILO.format(m=m) if como == "hilo" else f"import {m}"
         t0 = time.monotonic()
-        p = subprocess.Popen([sys.executable, "-c", f"import {m}"],
+        p = subprocess.Popen([sys.executable, "-c", codigo],
                              stdin=subprocess.DEVNULL if r is None else r,
                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         try:

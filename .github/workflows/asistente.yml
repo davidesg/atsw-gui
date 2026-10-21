@@ -132,31 +132,28 @@ jobs:
 
       - name: Importar el extra, fuera de MCP
         # En la primera vuelta, el humo con el extra se colgo en Windows
-        # cuando estado importaba art. Ahora estado no importa nada; esto
-        # mide aparte cuanto tarda cada import y si escribe por la salida
-        # estandar, que dentro de un servidor MCP romperia el canal.
+        # cuando estado importaba art dentro del servidor. Ahora estado no
+        # importa nada; esto mide aparte cuanto tarda cada import y si
+        # escribe por la salida estandar.
         if: always()
         continue-on-error: true
         timeout-minutes: 8
         run: |
-          py="$BIN_extra/python"
-          # Dos maneras: con la entrada estandar cerrada, y con una tuberia
-          # que sigue abierta, que es como la tiene un servidor MCP.
-          for m in drtran sima art; do
-            for como in cerrada tuberia; do
-              t0=$(date +%s); rc=0
-              if [ $como = cerrada ]; then
-                out=$(timeout 150 "$py" -c "import $m" 2>/dev/null </dev/null) || rc=$?
-              else
-                out=$(timeout 150 "$py" -c "import $m" 2>/dev/null < <(sleep 170)) || rc=$?
-              fi
-              t1=$(date +%s)
-              n=$(printf '%s' "$out" | wc -c | tr -d ' ')
-              linea="import $m, entrada $como: rc=$rc, $((t1 - t0)) s, $n bytes por stdout"
-              echo "- $linea" | tee -a "$GITHUB_STEP_SUMMARY"
-              [ "$n" -gt 0 ] && printf '%s\n' "$out" | head -5
-            done
-          done
+          "$BIN_extra/python" tests/importa.py | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Importar el extra dentro del servidor (diagnostico)
+        # Lo que hara la fase 1b: el humo con estado importando de verdad.
+        # No bloquea; dice si el cuelgue de Windows se reproduce.
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 8
+        env:
+          ATSW_MCP_IMPORTA: '1'
+        run: |
+          rc=0
+          "$BIN_extra/python" tests/humo.py "$BIN_extra" --con-extra || rc=$?
+          echo "- humo importando el extra dentro del servidor: rc=$rc" | tee -a "$GITHUB_STEP_SUMMARY"
+          exit $rc
 
       - name: Lo que se descarga
         if: always()

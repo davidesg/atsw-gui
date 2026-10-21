@@ -142,17 +142,45 @@ jobs:
           "$BIN_extra/python" tests/importa.py | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Importar el extra dentro del servidor (diagnostico)
-        # Lo que hara la fase 1b: el humo con estado importando de verdad.
-        # No bloquea; dice si el cuelgue de Windows se reproduce.
+        # Lo que hara la fase 1b: estado importa de verdad. No bloquea: dice si en
+        # Windows se cuelga, como se colgo el import en la primera vuelta.
         if: always()
         continue-on-error: true
         timeout-minutes: 8
         env:
-          ATSW_MCP_IMPORTA: '1'
+          ATSW_MCP_DIAG: import
         run: |
           rc=0
           "$BIN_extra/python" tests/humo.py "$BIN_extra" --con-extra || rc=$?
-          echo "- humo importando el extra dentro del servidor: rc=$rc" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "- humo con ATSW_MCP_DIAG=import: rc=$rc" | tee -a "$GITHUB_STEP_SUMMARY"
+          exit $rc
+
+      - name: Lanzar un proceso dentro del servidor (diagnostico)
+        # Como llamara la fase 1b a los motores en C, heredando la entrada estandar. No bloquea: dice si en
+        # Windows se cuelga, como se colgo el import en la primera vuelta.
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 8
+        env:
+          ATSW_MCP_DIAG: sub
+        run: |
+          rc=0
+          "$BIN_extra/python" tests/humo.py "$BIN_extra" --con-extra || rc=$?
+          echo "- humo con ATSW_MCP_DIAG=sub: rc=$rc" | tee -a "$GITHUB_STEP_SUMMARY"
+          exit $rc
+
+      - name: Lanzar un proceso con la entrada cerrada (diagnostico)
+        # Lo mismo con stdin=DEVNULL. No bloquea: dice si en
+        # Windows se cuelga, como se colgo el import en la primera vuelta.
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 8
+        env:
+          ATSW_MCP_DIAG: sub-devnull
+        run: |
+          rc=0
+          "$BIN_extra/python" tests/humo.py "$BIN_extra" --con-extra || rc=$?
+          echo "- humo con ATSW_MCP_DIAG=sub-devnull: rc=$rc" | tee -a "$GITHUB_STEP_SUMMARY"
           exit $rc
 
       - name: Lo que se descarga

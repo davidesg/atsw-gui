@@ -97,7 +97,7 @@ def extra_disponible(modulo: str) -> str:
     """
     if importlib.util.find_spec(modulo) is None:
         return "no"
-    if os.environ.get("ATSW_MCP_IMPORTA") == "1":
+    if os.environ.get("ATSW_MCP_DIAG") == "import":
         # Solo para el diagnostico de la CI: importarlo de verdad, dentro del
         # servidor, que es lo que hara la fase 1b.
         try:
@@ -128,6 +128,16 @@ def estado(servidor: str, clave: str) -> str:
     for m in MOTORES[clave] + COMUNES:
         ruta, origen = busca_motor(m)
         lineas.append(f"  {m}: {ruta or '-'} ({origen})")
+    diag = os.environ.get("ATSW_MCP_DIAG", "")
+    if diag.startswith("sub"):
+        # Solo para el diagnostico de la CI: lanzar un proceso desde dentro
+        # del servidor, que es como la fase 1b llamara a los motores en C.
+        # «sub» hereda la entrada estandar (la tuberia del cliente MCP);
+        # «sub-devnull» se la cierra.
+        import subprocess
+        kw = {"stdin": subprocess.DEVNULL} if diag == "sub-devnull" else {}
+        r = subprocess.run([sys.executable, "-c", "print(1)"], capture_output=True, timeout=60, **kw)
+        lineas.append(f"diag {diag}: rc={r.returncode}")
     lineas.append("extra [python]:")
     for mod in EXTRA[clave]:
         lineas.append(f"  {mod}: {extra_disponible(mod)}")

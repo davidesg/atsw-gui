@@ -97,6 +97,13 @@ def extra_disponible(modulo: str) -> str:
     """
     if importlib.util.find_spec(modulo) is None:
         return "no"
+    if os.environ.get("ATSW_MCP_IMPORTA") == "1":
+        # Solo para el diagnostico de la CI: importarlo de verdad, dentro del
+        # servidor, que es lo que hara la fase 1b.
+        try:
+            __import__(modulo)
+        except Exception as e:
+            return f"no ({type(e).__name__})"
     dist = {"art": "art-tseries", "drtran": "drtran", "sima": "sima-tseries"}[modulo]
     try:
         return metadata.version(dist)

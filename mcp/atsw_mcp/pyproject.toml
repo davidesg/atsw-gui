@@ -53,3 +53,10 @@ packages = ["src/atsw_mcp"]
 [tool.uv]
 # uv.lock fija tambien las transitivas, para las tres plataformas.
 required-version = ">=0.12"
+# cryptography (de pyjwt[crypto], que trae mcp) dejo de publicar la rueda
+# universal2 en la 49: en un Mac Intel se compilaba desde el fuente, tres
+# minutos en la CI y un compilador de Rust que el usuario no tiene. La 48.0.1
+# es la ultima con rueda para x86_64; solo ahi se queda atras.
+constraint-dependencies = [
+    "cryptography<49; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+]

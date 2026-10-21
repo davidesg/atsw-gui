@@ -33,7 +33,9 @@ typedef enum {
    EI_ALTER,        /* (-1)^t                                                */
    EI_OPEN,         /* ( or [, and the (1 of a factor of fixed frequency     */
    EI_CLOSE,        /* ) or ]                                                */
-   EI_OP            /* an operator between terms: '+', '-', '=', '/'         */
+   EI_OP,           /* an operator between terms: '+', '-', '=', '/'         */
+   EI_INPUT         /* the input of a transfer: text the name, a 0 the level,*/
+                    /* 1 its log, 2 Box-Cox with value lambda                */
 } EqItemKind;
 
 typedef struct {
@@ -52,12 +54,16 @@ typedef struct {
 
 /* The parts of the equation, each one a list of items. The equation is
  *
- *    deter                                       (if there are det. vars)
+ *    trans deter                    (if there are inputs or det. vars)
  *    arr ara arf [ nrdiff nadiff ifadf N_t mu ] = mar maa maf A_t ; sigma
- */
+ *
+ * EQ_TRANS is the transfer of a model with inputs (drtran): its terms go in
+ * the first line before the deterministic ones, written as fue writes a
+ * deterministic variable, with the input in the place of xi. fue does not
+ * use it: the univariate model leaves it empty.                            */
 typedef enum {
    EQ_DETER, EQ_ARR, EQ_ARA, EQ_ARF, EQ_MAR, EQ_MAA, EQ_MAF,
-   EQ_MU, EQ_NRDIFF, EQ_NADIFF, EQ_IFADF, EQ_NPARTS
+   EQ_MU, EQ_NRDIFF, EQ_NADIFF, EQ_IFADF, EQ_TRANS, EQ_NPARTS
 } EqPart;
 
 #define EQ_MAX_ITEMS 4096
@@ -70,6 +76,8 @@ typedef struct {
    char    name[96];               /* name of the series                     */
    char    residuals[96];          /* name of the residuals (A<input>)       */
    int     is_log;                 /* Box-Cox lambda = 0                     */
+   int     boxcox;                 /* another lambda (not 0 nor 1): lambda   */
+   double  lambda;
    int     freq, nobs;
    double  sigma;                  /* sqrt(sigma2) / refactor, x 100 if pct  */
    int     sigma_pct;              /* sigma in %: logs, no geometric mean    */

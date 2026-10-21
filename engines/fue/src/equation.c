@@ -88,31 +88,8 @@ static void add_b( Equation *eq, EqPart part, int power, int always )
    it->b = always;
 }
 
-/* The decimals of a coefficient: fue 1.13.1 chose them by its size, so that
- * a small coefficient does not print as 0.00.                              */
-int eq_decimals( const EqItem *it )
-{
-   double v = it->value;
-
-   switch ( it->style )
-      {
-      case CS_PHI:
-      case CS_PHIF:
-           return( 2 );
-      case CS_DELTA:
-           if ( v >= .10 ) return( 2 );
-           if ( v >= .01 ) return( 3 );
-           return( 4 );
-      case CS_OMEGA:
-      case CS_MU:
-      default:
-           if ( v >= .10 )   return( 2 );
-           if ( v >= .01 )   return( 3 );
-           if ( v >= .001 )  return( 4 );
-           if ( v >= .0001 ) return( 5 );
-           return( 6 );
-      }
-}
+/* eq_decimals(), the decimals of a coefficient, is in lib/equation/eqdraw.c:
+ * both writers of the equation and drtran_gui use it.                      */
 
 /*****************************************************************************/
 /* [11.2]: the deterministic part: ln X_t = sum omega(B)/delta(B) xi + N_t   */

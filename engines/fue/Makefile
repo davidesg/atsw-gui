@@ -50,6 +50,7 @@ LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c $(LIB_DIR)/fugplot/fugplot.c \
            $(LIB_DIR)/rutas/rutas.c \
            $(LIB_DIR)/fugplot/plotsupport.c \
            $(LIB_DIR)/equation/eqlatex.c \
+           $(LIB_DIR)/equation/eqdraw.c \
            $(LIB_DIR)/fuedet/fuedet.c
 
 SRCS = $(wildcard $(SRC_DIR)/*.c)
@@ -163,10 +164,11 @@ help:
 $(BUILD_DIR)/fue.o:             include/fue.h include/nlatools.h $(LIB_DIR)/fugplot/fugplot.h $(LIB_DIR)/fugdraw/fugdraw.h include/plothost.h include/inpcheck.h $(LIB_DIR)/equation/equation.h include/report.h $(LIB_DIR)/fuedet/fuedet.h
 $(BUILD_DIR)/inpcheck.o:        include/inpcheck.h
 $(BUILD_DIR)/equation.o:        $(LIB_DIR)/equation/equation.h include/fue.h include/nlatools.h
-$(BUILD_DIR)/eqlatex.o:         $(LIB_DIR)/equation/equation.h
-$(BUILD_DIR)/report.o:          include/report.h $(LIB_DIR)/equation/equation.h $(LIB_DIR)/fugdraw/fugdraw.h include/plothost.h
+$(BUILD_DIR)/lib_equation/eqlatex.o: $(LIB_DIR)/equation/equation.h
+$(BUILD_DIR)/lib_equation/eqdraw.o: $(LIB_DIR)/equation/equation.h $(LIB_DIR)/equation/eqdraw.h $(LIB_DIR)/fugdraw/fugdraw.h
+$(BUILD_DIR)/report.o:          include/report.h $(LIB_DIR)/equation/equation.h $(LIB_DIR)/equation/eqdraw.h $(LIB_DIR)/fugdraw/fugdraw.h include/plothost.h
 $(BUILD_DIR)/diagnose.o:        include/fue.h include/nlatools.h
-$(BUILD_DIR)/fugdraw.o:         $(LIB_DIR)/fugdraw/fugdraw.h $(LIB_DIR)/fugdraw/fd_metrics.h
+$(BUILD_DIR)/lib_fugdraw/fugdraw.o: $(LIB_DIR)/fugdraw/fugdraw.h $(LIB_DIR)/fugdraw/fd_metrics.h
 $(BUILD_DIR)/lib_fugplot/fugplot.o: $(LIB_DIR)/fugplot/fugplot.h $(LIB_DIR)/fugdraw/fugdraw.h include/plothost.h include/fue.h include/nlatools.h
 $(BUILD_DIR)/lib_fugplot/plotsupport.o: include/plothost.h include/fue.h include/nlatools.h
 $(BUILD_DIR)/lib_rutas/rutas.o: $(LIB_DIR)/rutas/rutas.h

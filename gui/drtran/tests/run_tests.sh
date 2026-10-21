@@ -46,6 +46,16 @@ else
     echo "no encuentro los .pre de la prueba en $C"
 fi
 
+# --- la pagina del modelo: una para fue y para drtran_gui ---------------------
+# lib/equation/eqdraw.c dibuja las dos. Con un termino de transferencia, el
+# ruido tiene que salir igual byte a byte y la transferencia ir delante de
+# los deterministas.
+echo
+$CC -O2 -Wall -Wextra -I"$L/equation" -I"$L/fugdraw" \
+    "$L/equation/test_eqdraw.c" "$L/equation/eqdraw.c" "$L/fugdraw/fugdraw.c" \
+    -o "$W/test_eqdraw" -lm || exit 1
+"$W/test_eqdraw" "$W" || exit 1
+
 # --- el .dag: la red -------------------------------------------------------
 # Que el GUI y el motor LEAN igual lo garantiza compartir lib/netfile. Que lo
 # que el GUI ESCRIBE lo lea el motor hay que preguntarselo al motor.

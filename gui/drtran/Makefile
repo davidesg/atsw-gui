@@ -47,6 +47,7 @@ SRC = src/main.c src/main_window.c src/barra_gui.c src/series.c src/identifica.c
       $(LIB)/fugplot/plotsupport.c \
       $(LIB)/fugdraw/fugdraw.c \
       $(LIB)/equation/eqtran.c \
+      $(LIB)/equation/eqdraw.c \
       $(LIB)/preview/preview.c \
       $(LIB)/utils/ext.c \
       $(LIB)/dates/dates.c \

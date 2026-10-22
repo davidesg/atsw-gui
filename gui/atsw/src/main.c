@@ -1457,9 +1457,10 @@ static void sec_modelo_envios( Atsw *a, GtkWidget *menu, const char *id,
         }
 }
 
-/* «DIAGNOSTICAR ▸», Y «VER MODELO…» DEBAJO.
+/* «DIAGNOSTICAR ▸», Y «VER MODELO…», «ANOMALOS…» E «IDENTIFICAR LOS
+ * RESIDUOS…» DEBAJO.
  *
- * Un submenu por la longitud del menu (decision 11): las seis piden un .out
+ * Un submenu por la longitud del menu (decision 11): las cuatro piden un .out
  * al dia y se apagan juntas por la misma razon, asi que se apaga la entrada
  * entera con un solo porque. «Ver modelo…» va FUERA y justo debajo
  * (decision 12): es lo primero que se mira al volver de estimar, y no debe
@@ -1478,8 +1479,7 @@ static void sec_diagnosticar( Atsw *a, GtkWidget *menu, const char *id )
 
     mi = atsw_entrada( a, menu, "Diagnosticar", listo
         ? "Lo que se le pregunta a un modelo estimado: la diagnosis, el "
-          "orden de integración, la estacionalidad, la ganancia, los "
-          "anómalos y la identificación de los residuos."
+          "orden de integración, la estacionalidad y la ganancia."
         : porque, NULL, NULL );
     gtk_menu_item_set_submenu( GTK_MENU_ITEM(mi), sub );
     gtk_widget_set_sensitive( mi, listo );
@@ -1515,23 +1515,6 @@ static void sec_diagnosticar( Atsw *a, GtkWidget *menu, const char *id )
         : porque, G_CALLBACK(on_ganancia), a );
     gtk_widget_set_sensitive( mi, listo );
 
-    mi = atsw_entrada( a, sub, "Anómalos…", listo
-        ? "Los episodios de residuos extremos, y los correlogramas CON y "
-          "SIN ellos.\n\nContesta lo que decide: ¿la estructura que veo "
-          "es del proceso o del anómalo? Y al revés —si no cambia nada, "
-          "intervenirlo no compra nada."
-        : porque, G_CALLBACK(on_anomalos), a );
-    gtk_widget_set_sensitive( mi, listo );
-
-    mi = atsw_entrada( a, sub, "Identificar los residuos…", listo
-        ? "art propone qué ARMA ponerle a este modelo, leyendo el "
-          "correlograma de sus residuos (E3): el modelo base con sus "
-          "armónicos, intervenciones y media, sin la parte ARMA.\n\n"
-          "Propone; no estima. Derivar crea un hijo con el candidato que "
-          "elijas, sobre su .pre."
-        : porque, G_CALLBACK(on_identifica_res), a );
-    gtk_widget_set_sensitive( mi, listo );
-
     {
     char     f[PR_RUTA];
     gboolean hay = listo &&
@@ -1545,6 +1528,26 @@ static void sec_diagnosticar( Atsw *a, GtkWidget *menu, const char *id )
                 : porque, G_CALLBACK(on_grafico), a );
     gtk_widget_set_sensitive( mi, hay );
     }
+
+    /* Y DETRAS DE «VER MODELO…», TAMBIEN FUERA: lo que se hace despues
+       de mirarle los residuos (lo pidio el analista, 2026-10-22).    */
+    mi = atsw_entrada( a, menu, "Anómalos…", listo
+        ? "Los episodios de residuos extremos, y los correlogramas CON y "
+          "SIN ellos.\n\nContesta lo que decide: ¿la estructura que veo "
+          "es del proceso o del anómalo? Y al revés —si no cambia nada, "
+          "intervenirlo no compra nada."
+        : porque, G_CALLBACK(on_anomalos), a );
+    gtk_widget_set_sensitive( mi, listo );
+
+    mi = atsw_entrada( a, menu, "Identificar los residuos…", listo
+        ? "art propone qué ARMA ponerle a este modelo, leyendo el "
+          "correlograma de sus residuos (E3): el modelo base con sus "
+          "armónicos, intervenciones y media, sin la parte ARMA.\n\n"
+          "Propone; no estima. Derivar crea un hijo con el candidato que "
+          "elijas, sobre su .pre."
+        : porque, G_CALLBACK(on_identifica_res), a );
+    gtk_widget_set_sensitive( mi, listo );
+
 }
 
 static void sec_prever( Atsw *a, GtkWidget *menu )

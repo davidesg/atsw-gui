@@ -3491,7 +3491,7 @@ static void menus_barra( void )
     m = clic_derecho( A.l_modelos, fila_de( A.l_modelos, M_ID, "m01" ) );
     {
     GList *h = m ? gtk_container_get_children( GTK_CONTAINER(m) ) : NULL;
-    int    kd = -1, kv = -1, k = 0;
+    int    kd = -1, kv = -1, ka = -1, ki = -1, k = 0;
     GList *l;
 
     for ( l = h; l; l = l->next, k++ )
@@ -3499,12 +3499,17 @@ static void menus_barra( void )
             {
             if ( !strcmp( gtk_menu_item_get_label( l->data ), "Diagnosticar" ) ) kd = k;
             if ( !strcmp( gtk_menu_item_get_label( l->data ), "Ver modelo…" ) ) kv = k;
+            if ( !strcmp( gtk_menu_item_get_label( l->data ), "Anómalos…" ) ) ka = k;
+            if ( !strcmp( gtk_menu_item_get_label( l->data ), "Identificar los residuos…" ) ) ki = k;
             }
     g_list_free( h );
     check( kd >= 0 && kv == kd + 1 && m &&
            gtk_menu_item_get_submenu( GTK_MENU_ITEM(entrada_de( m, "Diagnosticar" )) ),
            "el menú de m01: «Diagnosticar ▸» es un submenú y «Ver modelo…» va "
            "plano, justo debajo", m ? entradas( m ) : NULL );
+    check( kv >= 0 && ka == kv + 1 && ki == kv + 2,
+           "y detrás de «Ver modelo…», fuera del submenú, «Anómalos…» e «Identificar "
+           "los residuos…»", m ? entradas( m ) : NULL );
     }
     check( m && entrada_de( m, "Elegir" ) && entrada_de( m, "Razón…" ),
            "y gana «Elegir» y «Razón…», que sólo estaban en la fila",

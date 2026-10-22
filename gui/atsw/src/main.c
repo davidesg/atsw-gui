@@ -893,6 +893,17 @@ static void on_ganancia( GtkMenuItem *m, Atsw *a )
     g_free( id );
 }
 
+static void on_factores( GtkMenuItem *m, Atsw *a )
+{
+    gchar *id = atsw_marcada( a->l_modelos, M_ID );
+
+    (void) m;
+    if ( a->hay && a->serie[0] && id )
+        { AnHost h = atsw_host( a );
+          an_factores_ar( &h, a->serie, atsw_muestra_actual( a ), id ); }
+    g_free( id );
+}
+
 static void on_anomalos( GtkMenuItem *m, Atsw *a )
 {
     gchar *id = atsw_marcada( a->l_modelos, M_ID );
@@ -1460,7 +1471,7 @@ static void sec_modelo_envios( Atsw *a, GtkWidget *menu, const char *id,
 /* «DIAGNOSTICAR ▸», Y «VER MODELO…», «ANOMALOS…» E «IDENTIFICAR LOS
  * RESIDUOS…» DEBAJO.
  *
- * Un submenu por la longitud del menu (decision 11): las cuatro piden un .out
+ * Un submenu por la longitud del menu (decision 11): las cinco piden un .out
  * al dia y se apagan juntas por la misma razon, asi que se apaga la entrada
  * entera con un solo porque. «Ver modelo…» va FUERA y justo debajo
  * (decision 12): es lo primero que se mira al volver de estimar, y no debe
@@ -1479,7 +1490,8 @@ static void sec_diagnosticar( Atsw *a, GtkWidget *menu, const char *id )
 
     mi = atsw_entrada( a, menu, "Diagnosticar", listo
         ? "Lo que se le pregunta a un modelo estimado: la diagnosis, el "
-          "orden de integración, la estacionalidad y la ganancia."
+          "orden de integración, la estacionalidad, la ganancia y la "
+          "factorización del AR."
         : porque, NULL, NULL );
     gtk_menu_item_set_submenu( GTK_MENU_ITEM(mi), sub );
     gtk_widget_set_sensitive( mi, listo );
@@ -1513,6 +1525,18 @@ static void sec_diagnosticar( Atsw *a, GtkWidget *menu, const char *id )
           "de cada intervención con su contraste. No es diagnosis: es una "
           "hipótesis sobre la naturaleza del incidente."
         : porque, G_CALLBACK(on_ganancia), a );
+    gtk_widget_set_sensitive( mi, listo );
+
+    /* LA FACTORIZACION DEL AR, sin pasar por la diagnosis: antes solo se
+       llegaba desde su boton. No juzga ni contrasta: describe el operador
+       estimado, y desde ella se deriva el modelo factorizado.          */
+    mi = atsw_entrada( a, sub, "Factorización del AR…", listo
+        ? "Las raíces de cada factor AR, y sus factores reales y complejos: "
+          "de cada par, su amortiguamiento, su frecuencia y su periodo. Un "
+          "par en una frecuencia estacional y cerca de la unidad es un AR "
+          "estacional escondido.\n\nDesde ella se deriva el modelo "
+          "factorizado."
+        : porque, G_CALLBACK(on_factores), a );
     gtk_widget_set_sensitive( mi, listo );
 
     {
@@ -1879,7 +1903,7 @@ static void relee( Atsw *a )
 }
 
 static void on_relee_mi( GtkMenuItem *m, Atsw *a ) { (void) m; relee( a ); }
-static void on_sale_mi ( GtkMenuItem *m, Atsw *a ) { (void) m; gtk_widget_destroy( a->ventana ); }
+static void on_sale_mi ( GtkMenuItem *m, Atsw *a ) { (void) m; gtk_window_close( GTK_WINDOW(a->ventana) ); }
 
 /* EL MANUAL, donde este. Instalado esta en sitios distintos en cada sistema
  * (packaging/): en Linux en share/doc/atsw, en Windows al lado de bin/; en
@@ -2284,8 +2308,35 @@ static gboolean on_atajo_sale( GtkAccelGroup *g, GObject *o, guint k,
                                GdkModifierType m, Atsw *a )
 {
     (void) g; (void) o; (void) k; (void) m;
-    gtk_widget_destroy( a->ventana );
+    gtk_window_close( GTK_WINDOW(a->ventana) );
     return TRUE;
+}
+
+/* CERRAR LA MADRE CIERRA A SUS HIJOS. Los GUIs que lanzo vigilan su pid y
+ * se van con ella (lib/sitio): un fue_gui o un drtran_gui abiertos sin la
+ * madre seguirian escribiendo modelos en el proyecto sin nadie que los vea.
+ * Si hay alguno, se pregunta antes: lo que no se haya guardado en ellos se
+ * pierde. Salir, Ctrl+Q y la X de la ventana pasan todos por aqui.    */
+static gboolean on_cierra_madre( GtkWidget *w, GdkEvent *ev, Atsw *a )
+{
+    char       quienes[256];
+    int        n = atsw_hijos_vivos( a, quienes, sizeof quienes ), r;
+    GtkWidget *d;
+
+    (void) ev;
+    if ( n == 0 ) return FALSE;
+    d = gtk_message_dialog_new( GTK_WINDOW(w), GTK_DIALOG_MODAL, GTK_MESSAGE_QUESTION,
+                                GTK_BUTTONS_NONE, "%s abiert%s desde aquí: %s.",
+                                n == 1 ? "Hay una ventana" : "Hay varias ventanas",
+                                n == 1 ? "a" : "as", quienes );
+    gtk_message_dialog_format_secondary_text( GTK_MESSAGE_DIALOG(d),
+        "Se cierran con la madre. Lo que no hayas guardado en ellas se pierde." );
+    gtk_dialog_add_buttons( GTK_DIALOG(d), "_Cancelar", GTK_RESPONSE_CANCEL,
+                            "Cerrar _todo", GTK_RESPONSE_ACCEPT, NULL );
+    gtk_dialog_set_default_response( GTK_DIALOG(d), GTK_RESPONSE_CANCEL );
+    r = gtk_dialog_run( GTK_DIALOG(d) );
+    gtk_widget_destroy( d );
+    return r != GTK_RESPONSE_ACCEPT;
 }
 
 /* Ctrl+E ESTIMA LO QUE SE VE. La derecha es una pila --los modelos de la
@@ -2317,6 +2368,7 @@ static void activate( GtkApplication *app, gpointer d )
     gtk_window_set_title( GTK_WINDOW(w), "ATSW — el taller" );
     gtk_window_set_default_size( GTK_WINDOW(w), 1000, 620 );
     g_signal_connect( w, "focus-in-event", G_CALLBACK(on_foco), a );
+    g_signal_connect( w, "delete-event", G_CALLBACK(on_cierra_madre), a );
 
     /* LA BARRA DE MENUS, pegada al borde, y lo de siempre debajo. */
     {

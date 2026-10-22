@@ -42,6 +42,9 @@
 #include <stdlib.h>
 
 #include "sitio.h"
+#ifndef G_OS_WIN32
+#include <unistd.h>
+#endif
 #include "fugdraw.h"
 #include "inpdet.h"
 #include "inpcheck.h"
@@ -1650,6 +1653,12 @@ static void envios( void )
 }
 
 /* LO QUE LE LLEGA AL HIJO, con uno falso que lo escribe. */
+static gboolean fuera_cb( gpointer d )
+{
+    ( *(int *) d )++;
+    return G_SOURCE_REMOVE;
+}
+
 static void hijo_falso( void )
 {
     gchar **v;
@@ -1661,11 +1670,15 @@ static void hijo_falso( void )
            barra() );
     if ( v )
         {
-        check( g_strv_length( v ) >= 5 && !strcmp( v[0], "--proyecto" ) &&
-               !strcmp( v[1], A.p->path ) && !strcmp( v[2], "--prever" ) &&
-               !strcmp( v[3], inp ) && !strcmp( v[4], "FIN" ),
-               "al hijo le llega «--proyecto P --prever fichero»",
+        gchar *pid = g_strdup_printf( "%ld", sitio_mi_pid() );
+
+        check( g_strv_length( v ) >= 7 && !strcmp( v[0], "--proyecto" ) &&
+               !strcmp( v[1], A.p->path ) && !strcmp( v[2], "--madre" ) &&
+               !strcmp( v[3], pid ) && !strcmp( v[4], "--prever" ) &&
+               !strcmp( v[5], inp ) && !strcmp( v[6], "FIN" ),
+               "al hijo le llega «--proyecto P --madre PID --prever fichero»",
                g_strjoinv( " ", v ) );
+        g_free( pid );
         g_strfreev( v );
         }
 
@@ -1673,15 +1686,50 @@ static void hijo_falso( void )
     v = lo_que_recibio();
     if ( v )
         {
-        check( g_strv_length( v ) >= 3 && !strcmp( v[0], "--proyecto" ) &&
-               !strcmp( v[2], "FIN" ),
-               "sin fichero le llega solo «--proyecto P»", g_strjoinv( " ", v ) );
+        check( g_strv_length( v ) >= 5 && !strcmp( v[0], "--proyecto" ) &&
+               !strcmp( v[2], "--madre" ) && !strcmp( v[4], "FIN" ),
+               "sin fichero le llega solo «--proyecto P --madre PID»", g_strjoinv( " ", v ) );
         g_strfreev( v );
         }
     else
         check( 0, "el hijo sin fichero tambien arranca", barra() );
     check( strstr( barra(), "con este proyecto" ) != NULL,
            "y la barra dice que binario lanzo", barra() );
+
+    /* LOS HIJOS SE VAN CON LA MADRE. La madre los cuenta mientras viven y
+       los suelta al irse; y el hijo, con lib/sitio, se entera de que la
+       madre no esta y se cierra.                                       */
+    {
+    gint64   hasta = g_get_monotonic_time() + 10 * G_USEC_PER_SEC;
+    char     quienes[128];
+    int      fuera = 0;
+
+    while ( atsw_hijos_vivos( &A, NULL, 0 ) > 0 && g_get_monotonic_time() < hasta ) pump( 50 );
+    check( atsw_hijos_vivos( &A, quienes, sizeof quienes ) == 0,
+           "los hijos que se cierran salen de la cuenta de la madre", quienes );
+
+    /* un pid que no es el de la madre de este proceso: se va enseguida */
+    check( sitio_vigila_madre( "999999999", fuera_cb, &fuera ) == 1,
+           "el vigia acepta un pid", NULL );
+    hasta = g_get_monotonic_time() + 5 * G_USEC_PER_SEC;
+    while ( !fuera && g_get_monotonic_time() < hasta ) pump( 50 );
+    check( fuera == 1, "sin la madre, el vigia avisa (y una sola vez)", NULL );
+    check( sitio_vigila_madre( NULL, fuera_cb, &fuera ) == 0 &&
+           sitio_vigila_madre( "12x", fuera_cb, &fuera ) == 0,
+           "sin «--madre» o con un pid ilegible, no se vigila", NULL );
+#ifndef G_OS_WIN32
+    {
+    gchar *padre = g_strdup_printf( "%ld", (long) getppid() );
+
+    fuera = 0;
+    sitio_vigila_madre( padre, fuera_cb, &fuera );
+    hasta = g_get_monotonic_time() + 2500 * 1000;
+    while ( g_get_monotonic_time() < hasta ) pump( 50 );
+    check( fuera == 0, "con la madre viva, el vigia calla", NULL );
+    g_free( padre );
+    }
+#endif
+    }
 
     /* Un programa que no esta: se dice, no se lanza nada. */
     atsw_lanza( &A, "atsw_no_existe_ningun_programa", NULL );
@@ -2896,10 +2944,10 @@ static void casos( void )
     /* --- «Estimar» el caso ---------------------------------------------- */
     atsw_caso_lanza( &A, "atsw_hijo_falso" );
     v = lo_que_recibio();
-    check( v && g_strv_length( v ) >= 5 && !strcmp( v[0], "--proyecto" ) &&
-           !strcmp( v[1], A.p->path ) && !strcmp( v[2], "--caso" ) &&
-           !strcmp( v[3], "C1" ) && !strcmp( v[4], "FIN" ),
-           "sin corrida marcada, al hijo le llega «--proyecto P --caso C1»",
+    check( v && g_strv_length( v ) >= 7 && !strcmp( v[0], "--proyecto" ) &&
+           !strcmp( v[1], A.p->path ) && !strcmp( v[2], "--madre" ) &&
+           !strcmp( v[4], "--caso" ) && !strcmp( v[5], "C1" ) && !strcmp( v[6], "FIN" ),
+           "sin corrida marcada, al hijo le llega «--proyecto P --madre PID --caso C1»",
            v ? g_strjoinv( " ", v ) : barra() );
     g_strfreev( v );
     {
@@ -3054,10 +3102,10 @@ static void casos( void )
     check( marca_arbol( A.c_corridas, CO_ID, "c01" ), "se puede marcar c01", NULL );
     atsw_caso_lanza( &A, "atsw_hijo_falso" );
     v = lo_que_recibio();
-    check( v && g_strv_length( v ) >= 7 && !strcmp( v[2], "--caso" ) &&
-           !strcmp( v[3], "C1" ) && !strcmp( v[4], "--modelo" ) &&
-           !strcmp( v[5], "c01" ) && !strcmp( v[6], "FIN" ),
-           "con c01 marcado: «--proyecto P --caso C1 --modelo c01»",
+    check( v && g_strv_length( v ) >= 9 && !strcmp( v[4], "--caso" ) &&
+           !strcmp( v[5], "C1" ) && !strcmp( v[6], "--modelo" ) &&
+           !strcmp( v[7], "c01" ) && !strcmp( v[8], "FIN" ),
+           "con c01 marcado: «--proyecto P --madre PID --caso C1 --modelo c01»",
            v ? g_strjoinv( " ", v ) : barra() );
     g_strfreev( v );
 
@@ -3507,6 +3555,10 @@ static void menus_barra( void )
            gtk_menu_item_get_submenu( GTK_MENU_ITEM(entrada_de( m, "Diagnosticar" )) ),
            "el menú de m01: «Diagnosticar ▸» es un submenú y «Ver modelo…» va "
            "plano, justo debajo", m ? entradas( m ) : NULL );
+    check( m && entrada_de( GTK_MENU(gtk_menu_item_get_submenu(
+                   GTK_MENU_ITEM(entrada_de( m, "Diagnosticar" )) )), "Factorización del AR" ),
+           "y «Factorización del AR…» está en «Diagnosticar ▸», sin pasar por la diagnosis",
+           m ? entradas( m ) : NULL );
     check( kv >= 0 && ka == kv + 1 && ki == kv + 2,
            "y detrás de «Ver modelo…», fuera del submenú, «Anómalos…» e «Identificar "
            "los residuos…»", m ? entradas( m ) : NULL );

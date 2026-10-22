@@ -18,6 +18,7 @@
 //#include "config.h"
 #include "callbacks.h"
 #include "sitio.h"
+#include "iconos.h"
 #include "proyecto.h"
 #include "gui.h"
 #include "fug_run.h"
@@ -128,6 +129,7 @@ int main(int argc, char *argv[])
 #endif
 
     gtk_init(&argc, &argv);
+    at_logo_por_defecto();
     fug_run_init(argv[0]);
 
     /* Change decimal separator to point (POSIX): fug reads "%lf" */

@@ -29,4 +29,14 @@ GtkWidget *at_icono( const char *nombre, int px, GtkWidget *ref,
 GtkWidget *at_menu_item( const char *texto, const char *icono, GtkWidget *ref,
                           const char *respaldo );
 
+/* EL ICONO DE ATSW: el de la web (packaging/linux/atsw.svg), el cuadrado
+ * azul #1f5fa8 con la quebrada blanca. Se dibuja con cairo, sin cargador de
+ * SVG: es el icono del programa y tiene que salir siempre.
+ *
+ *   at_logo              el dibujo en un pixbuf de px x px (g_object_unref)
+ *   at_logo_por_defecto  el icono de todas las ventanas del proceso, en
+ *                        varios tamaños; cada GUI lo llama al arrancar.  */
+GdkPixbuf *at_logo( int px );
+void       at_logo_por_defecto( void );
+
 #endif

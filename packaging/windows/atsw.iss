@@ -32,6 +32,7 @@ Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayIcon={app}\bin\atsw_gui.exe
+SetupIconFile=..\..\lib\windows\atsw.ico
 
 [Languages]
 Name: "es"; MessagesFile: "compiler:Languages\Spanish.isl"

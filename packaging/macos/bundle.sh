@@ -130,6 +130,9 @@ if [ -n "${MACOS_MAXIMO:-}" ] &&
     exit 1
 fi
 
+# El icono de ATSW (packaging/icono/hacer.py): el de la web.
+cp "$R/packaging/macos/atsw.icns" "$C/Resources/atsw.icns"
+
 cat > "$C/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -140,6 +143,7 @@ cat > "$C/Info.plist" <<PLIST
   <key>CFBundleIdentifier</key>         <string>io.github.davidesg.atsw</string>
   <key>CFBundleExecutable</key>         <string>ATSW</string>
   <key>CFBundlePackageType</key>        <string>APPL</string>
+  <key>CFBundleIconFile</key>           <string>atsw.icns</string>
   <key>CFBundleVersion</key>            <string>$V</string>
   <key>CFBundleShortVersionString</key> <string>$V</string>
   <key>CFBundleDevelopmentRegion</key>  <string>es</string>

@@ -963,6 +963,44 @@ static void sin_proyecto( void )
  *
  * Los demas agentes pueden estar recompilando un hermano justo ahora: si
  * falta, se reintenta unos segundos antes de darlo por perdido.         */
+/* LA COMPROBACION DE LA INSTALACION (presentacion.c). En el arbol de
+   compilacion esta todo lo obligatorio: la prueba ya se niega a correr sin
+   los motores ni los hermanos. Y Ayuda la ofrece a mano.              */
+static void instalacion( void )
+{
+    AtComprob c[AT_MAX_COMPROB];
+    int       n = atsw_comprueba( c, AT_MAX_COMPROB ), i, fue = -1, gui = -1;
+    GString  *falta = g_string_new( "" );
+
+    for ( i = 0; i < n; i++ )
+        {
+        if ( !strcmp( c[i].que, "fue" ) ) fue = i;
+        if ( !strcmp( c[i].que, "drtran_gui" ) ) gui = i;
+        if ( !c[i].ok && !c[i].opcional ) g_string_append_printf( falta, "%s; ", c[i].que );
+        if ( !c[i].ok ) check( c[i].arreglo[0] != '\0', "lo que falta dice cómo se arregla",
+                               c[i].que );
+        }
+    check( n > 10 && fue >= 0 && gui >= 0, "se comprueban los motores y los GUIs", NULL );
+    check( atsw_comprueba_faltan( c, n ) == 0, "en el árbol de compilación no falta nada",
+           falta->str );
+    check( fue >= 0 && c[fue].ok && strstr( c[fue].ruta, "engines/fue/bin" ),
+           "fue se encuentra donde lo busca la madre, en el árbol", fue >= 0 ? c[fue].ruta : NULL );
+    g_string_free( falta, TRUE );
+    if ( en_barra( 4, "Comprobar la instalación" ) )
+        {
+        GList    *l, *t;
+        gboolean  visto = FALSE;
+
+        pump( 100 );
+        t = gtk_window_list_toplevels();
+        for ( l = t; l; l = l->next )
+            if ( !g_strcmp0( gtk_window_get_title( l->data ), "Comprobar la instalación" ) )
+                { visto = TRUE; gtk_widget_destroy( l->data ); }
+        g_list_free( t );
+        check( visto, "Ayuda ▸ «Comprobar la instalación…» abre el informe", NULL );
+        }
+}
+
 static void hermanos( void )
 {
     static const struct { const char *prog, *donde; } h[] = {
@@ -4400,6 +4438,7 @@ int main( int argc, char **argv )
 
     fase( "sin_proyecto" ); sin_proyecto();
     fase( "hermanos" ); hermanos();
+    fase( "instalacion" ); instalacion();
     fase( "proyecto_nuevo" ); proyecto_nuevo( manifiesto, sizeof manifiesto );
     if ( A.hay )
         {

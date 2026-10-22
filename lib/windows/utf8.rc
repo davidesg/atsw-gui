@@ -1,2 +1,5 @@
 // El manifiesto de utf8.manifest como recurso: 1 = el del proceso, 24 = RT_MANIFEST.
 1 24 "utf8.manifest"
+// EL ICONO DE ATSW (packaging/icono/hacer.py): el de la web, en cada .exe de
+// los GUIs. El explorador y la barra de tareas cogen el de menor id.
+1 ICON "atsw.ico"

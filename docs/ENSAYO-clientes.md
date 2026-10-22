@@ -12,6 +12,28 @@ un cliente de verdad, con su cuenta.
 Hay cuatro clientes. Basta con los que tenga quien hace la prueba, pero se
 anota cuáles se probaron y cuáles no.
 
+## Lo que ya está comprobado, y cuándo se hace el resto
+
+**Que los clientes arrancan un servidor MCP de `uv` en Windows y en macOS ya
+está comprobado**, en una práctica de clase de octubre de 2026 con `art-mcp`
+(art-tseries instalado con `uv tool install`). Funcionaron CodeWhale (con
+DeepSeek), Claude Code y Codex; Gemini CLI quedó sin confirmar. Es el mismo
+mecanismo que usan `atsw-us`, `atsw-mt` y `atsw-sis`, así que el punto 1 de
+§1 no hace falta repetirlo ahora.
+
+Lo que esa práctica **no** comprobó, porque allí no había proyecto y las rutas
+se daban a mano (`ART_FIG_DIR`), son los puntos 2 y 3 de §1: que el servidor
+encuentre el proyecto subiendo desde la carpeta del cliente, y que use los
+motores en C del paquete. **Se prueban en la fase 1b**, cuando los servidores
+tengan herramientas de verdad: con sólo `version` y `estado` el ensayo a mano
+no compensa todavía. Lo más delicado son CodeWhale y Codex, cuya
+configuración es global.
+
+Una nota para la fase 1b: en la CI de Windows, importar `art` dentro del
+servidor se colgaba (ver `mcp/atsw_mcp/README.md`), pero en esa práctica
+`art-mcp` funcionó en los Windows de los estudiantes. Apunta al entorno de la
+CI más que a un fallo real; hay que confirmarlo allí.
+
 ## 0. Preparar
 
 **uv.** En Windows: `winget install astral-sh.uv`. En macOS:

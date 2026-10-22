@@ -283,7 +283,15 @@ static void bloque_ganancia( const FueOut *o, const Convergence *conv,
            for ( b = 0; b < nl; b++ )
                V[a*16 + b] = fo_cov( o, idx[a], idx[b] );
        }
-       if ( iv_ganancia( om, libre, n, V, 16, NULL, 0, 0.0, &g ) != 0 ) continue;
+       {
+       double del[16];
+       int    nd = o->det_ndel[i], d0 = o->det_d0[i];
+
+       if ( nd < 0 || nd > 16 || d0 < 1 ) nd = 0;
+       for ( k = 0; k < nd; k++ ) del[k] = o->par[d0 - 1 + k];
+       if ( iv_ganancia( om, libre, n, V, 16, nd ? del : NULL, nd, 0.0, &g ) != 0 )
+          continue;
+       }
        if ( !g.hay_wald ) continue;
 
        {

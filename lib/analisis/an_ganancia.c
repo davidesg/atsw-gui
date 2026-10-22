@@ -113,10 +113,20 @@ static void arma( Ga *g )
             for ( b = 0; b < nl; b++ )
                 V[a*16 + b] = fo_cov( &g->o, idx[a], idx[b] );
 
+        /* EL DENOMINADOR, si lo hay: la ganancia es omega(1)/delta(1). */
+        {
+        double del[16];
+        int    nd = g->o.det_ndel[i], d0 = g->o.det_d0[i];
+
+        if ( nd < 0 || nd > 16 || d0 < 1 ) nd = 0;
+        for ( k = 0; k < nd; k++ ) del[k] = g->o.par[d0 - 1 + k];
+
         f->p = -1.0;
-        if ( iv_ganancia( f->om, f->libre, n, V, 16, NULL, 0, 0.0, &f->g ) == 0 &&
+        if ( iv_ganancia( f->om, f->libre, n, V, 16, nd ? del : NULL, nd, 0.0,
+                          &f->g ) == 0 &&
              f->g.hay_wald )
             f->p = chisq_cola( f->g.wald, 1 );
+        }
         g->nf++;
         }
 }

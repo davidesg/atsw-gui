@@ -141,6 +141,16 @@ typedef struct {
     int      det_i0[FO_MAX_PAR];       /* el indice 1-based del primero   */
     int      ndet_leidos;
 
+    /* Y SUS DELTAS, que fue escribe justo despues de los omegas de ese
+     * determinista con su propia cabecera:
+     *
+     *     Deltas for deterministic variable 12:
+     *           0.843401  (0.014953) [13]
+     *
+     * No son omegas: la ganancia es omega(1)/delta(1).                 */
+    int      det_ndel[FO_MAX_PAR];     /* cuantos deltas tiene el det i   */
+    int      det_d0[FO_MAX_PAR];       /* el indice 1-based del primero   */
+
     int      npares;
     int      par_a[FO_MAX_PAR], par_b[FO_MAX_PAR];
     double   par_r[FO_MAX_PAR];

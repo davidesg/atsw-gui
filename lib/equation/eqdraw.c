@@ -84,7 +84,8 @@
 #define MARGIN    70.866
 #define GRAPH_TOP 12.7      /* the graph, under the top margin               */
 #define TABLE_GAP 29.3      /* \bigskip, multicols: from the equation        */
-#define ROW       19.6      /* a row of the tabular                          */
+#define ROW       19.6      /* the first row of the tabular, under \hline    */
+#define ROW_NEXT  10.56     /* the next ones: \vspace{-.12in} after each row */
 #define TABCOLSEP  6.0
 #define COLSEP    10.0      /* \columnsep of multicols                       */
 
@@ -1116,7 +1117,7 @@ static void table( FDFig *f, const EqOutlier *out, int nout, int dates,
    y = base;
    for ( i = 0; i < nout; i++ )
        {
-       y -= ROW;
+       y -= ( i == 0 ) ? ROW : ROW_NEXT;
        snprintf( text, sizeof( text ), "%d", out[i].obs );
        fd_text( f, x[0] + w[0] / 2.0, y, F_ROMAN, SIZE, FD_CENTER, text );
        snprintf( text, sizeof( text ), "%.2f", out[i].z );

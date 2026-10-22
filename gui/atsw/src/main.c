@@ -2701,6 +2701,7 @@ int main( int argc, char **argv )
         }
 
     presentacion = !sin_pres;
+    atsw_escritorio_registra();
     argc = 1;
     app = gtk_application_new( "org.atsw.gui", G_APPLICATION_NON_UNIQUE );
     g_signal_connect( app, "startup", G_CALLBACK(numeros_con_punto), NULL );

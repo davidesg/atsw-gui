@@ -231,6 +231,10 @@ int  atsw_comprueba_faltan( const AtComprob *c, int n ); /* obligatorias   */
 /* La presentacion: creditos y comprobacion; abre madre al acabar (sola si
    no falta nada, con «Continuar» si falta).                            */
 void atsw_presentacion( Atsw *a, GtkWidget *madre );
+/* Linux: los .desktop del usuario que dan el icono de la barra, cuando se
+   lanza desde el arbol de fuentes (el paquete trae los suyos). Lo llama
+   main(), no las pruebas: escribe en ~/.local/share.                   */
+void atsw_escritorio_registra( void );
 /* Ayuda ▸ «Comprobar la instalación…»: el mismo informe en un dialogo.  */
 void atsw_informe_instalacion( Atsw *a );
 

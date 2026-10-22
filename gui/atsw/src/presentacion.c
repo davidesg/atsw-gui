@@ -25,6 +25,7 @@
 
 #include "atsw.h"
 #include "iconos.h"
+#include "sitio.h"
 
 #ifndef ATSW_VERSION
 #define ATSW_VERSION "en desarrollo"
@@ -126,6 +127,8 @@ static void cargador( AtComprob *c, const char *formato, const char *que, gboole
 #endif
 }
 
+static void escritorio( AtComprob *c );     /* mas abajo, con el registro */
+
 int atsw_comprueba( AtComprob *c, int max )
 {
     static const char *const motores[] = { "fue", "fuf", "fug", "drtran", "art" };
@@ -145,6 +148,7 @@ int atsw_comprueba( AtComprob *c, int max )
                              "Todavía no va en el paquete: VARMA llega en una versión posterior." );
     if ( n < max ) programa( &c[n++], "Sistemas", "drvec", TRUE,
                              "Todavía no va en el paquete: VECM llega en una versión posterior." );
+    if ( n < max ) escritorio( &c[n++] );
     /* EL ASISTENTE (ESTUDIO-terminal-mcp §6.3): opcional; se instala con uv. */
     if ( n < max ) programa( &c[n++], "Asistente", "uv", TRUE,
                              "El asistente es opcional y no está instalado: hace falta uv "
@@ -211,6 +215,137 @@ static gchar *informe_llano( const AtComprob *c, int n )
                                 c[i].ok ? c[i].ruta : c[i].opcional ? "(opcional, no está)"
                                                                     : "FALTA" );
     return g_string_free( t, FALSE );
+}
+
+/* ------------------------------------------------------------------------ */
+/* EL ICONO EN LA BARRA DE LINUX                                            */
+/*                                                                          */
+/* En GNOME (y en cualquier escritorio con Wayland) la barra no mira el     */
+/* icono de la ventana: busca el .desktop que se llama como el id de la     */
+/* aplicacion -- org.atsw.gui.desktop para la madre-- y pone su Icon. Sin   */
+/* el sale la rueda dentada. El paquete los instala (instalar.sh); lanzado  */
+/* desde el arbol de fuentes no hay ninguno, y la madre los escribe en el   */
+/* directorio del usuario, sin tocar nada del sistema.                      */
+/* ------------------------------------------------------------------------ */
+
+#if !defined(G_OS_WIN32) && !defined(__APPLE__)
+#define AT_ESCRITORIO 1
+#endif
+
+/* el dibujo de packaging/linux/atsw.svg, que es el de la web */
+static const char LOGO_SVG[] =
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\">\n"
+    "  <rect width=\"64\" height=\"64\" rx=\"14\" fill=\"#1f5fa8\"/>\n"
+    "  <polyline points=\"8,44 20,28 30,36 42,16 56,24\" fill=\"none\" stroke=\"#fff\"\n"
+    "            stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>\n"
+    "</svg>\n";
+
+/* Los cuatro GUIs: el id con el que se presentan (GtkApplication o, en
+   gtk_fmg, g_set_prgname) y su nombre en el menu.                      */
+static const struct { const char *id, *prog, *nombre; } GUIS[] = {
+    { "org.atsw.gui",   "atsw_gui",   "ATSW" },
+    { "org.fue.gui",    "fue_gui",    "ATSW: editor de modelos (fue)" },
+    { "org.drtran.gui", "drtran_gui", "ATSW: redes de transferencia (drtran)" },
+    { "org.fug.gui",    "gtk_fmg",    "ATSW: gráficos (fug)" },
+};
+
+/* ¿Hay ya un <id>.desktop que no sea nuestro del arbol? Entonces manda el
+   (el del paquete, o uno del usuario) y no se toca.                    */
+static gboolean desktop_ajeno( const char *id )
+{
+    const gchar *const *d = g_get_system_data_dirs();
+    gchar              *f, *c = NULL;
+    gboolean            r = FALSE;
+    int                 i;
+
+    for ( i = 0; d[i] && !r; i++ )
+        {
+        f = g_strdup_printf( "%s/applications/%s.desktop", d[i], id );
+        r = g_file_test( f, G_FILE_TEST_EXISTS );
+        g_free( f );
+        }
+    if ( r ) return TRUE;
+    f = g_strdup_printf( "%s/applications/%s.desktop", g_get_user_data_dir(), id );
+    if ( g_file_get_contents( f, &c, NULL, NULL ) )
+        r = strstr( c, "X-ATSW-Arbol=true" ) == NULL;
+    g_free( c );
+    g_free( f );
+    return r;
+}
+
+/* Escribe f con t solo si cambia: no se reescribe en cada arranque. */
+static void escribe_si_cambia( const char *f, const char *t )
+{
+    gchar *c = NULL;
+
+    if ( !g_file_get_contents( f, &c, NULL, NULL ) || strcmp( c, t ) )
+        g_file_set_contents( f, t, -1, NULL );
+    g_free( c );
+}
+
+void atsw_escritorio_registra( void )
+{
+#ifdef AT_ESCRITORIO
+    gchar *dir_ic = g_build_filename( g_get_user_data_dir(), "icons", "hicolor", "scalable",
+                                      "apps", NULL );
+    gchar *dir_ap = g_build_filename( g_get_user_data_dir(), "applications", NULL );
+    gchar *svg = g_build_filename( dir_ic, "atsw.svg", NULL );
+    gchar *yo = sitio_mi_dir();
+    guint  i;
+
+    g_mkdir_with_parents( dir_ic, 0755 );
+    g_mkdir_with_parents( dir_ap, 0755 );
+    escribe_si_cambia( svg, LOGO_SVG );
+    for ( i = 0; i < G_N_ELEMENTS(GUIS); i++ )
+        {
+        gchar *exe, *f, *t;
+
+        if ( desktop_ajeno( GUIS[i].id ) ) continue;
+        exe = i == 0 && yo ? g_build_filename( yo, "atsw_gui", NULL )
+                           : atsw_programa( GUIS[i].prog );
+        if ( !exe ) continue;
+        {
+        gchar *limpia = g_canonicalize_filename( exe, NULL );   /* sin «..» */
+
+        g_free( exe );
+        exe = limpia;
+        }
+        /* NoDisplay: es el del arbol de fuentes, para el icono de la barra;
+           el menu de aplicaciones lo pone el paquete.                  */
+        t = g_strdup_printf( "[Desktop Entry]\nType=Application\nName=%s\nExec=%s\n"
+                             "Icon=%s\nTerminal=false\nNoDisplay=true\n"
+                             "StartupWMClass=%s\nX-ATSW-Arbol=true\n",
+                             GUIS[i].nombre, exe, svg, GUIS[i].id );
+        f = g_strdup_printf( "%s/%s.desktop", dir_ap, GUIS[i].id );
+        escribe_si_cambia( f, t );
+        g_free( f ); g_free( t ); g_free( exe );
+        }
+    g_free( yo ); g_free( svg ); g_free( dir_ap ); g_free( dir_ic );
+#endif
+}
+
+/* Para la comprobacion: ¿la madre tiene su .desktop? (sin escribir nada) */
+static void escritorio( AtComprob *c )
+{
+    memset( c, 0, sizeof *c );
+    g_snprintf( c->grupo, sizeof c->grupo, "Escritorio" );
+    g_snprintf( c->que, sizeof c->que, "el icono en la barra" );
+    c->opcional = TRUE;
+#ifdef AT_ESCRITORIO
+    {
+    gchar *f = g_strdup_printf( "%s/applications/org.atsw.gui.desktop", g_get_user_data_dir() );
+
+    c->ok = desktop_ajeno( "org.atsw.gui" ) || g_file_test( f, G_FILE_TEST_EXISTS );
+    if ( c->ok ) g_snprintf( c->ruta, sizeof c->ruta, "org.atsw.gui.desktop" );
+    else g_snprintf( c->arreglo, sizeof c->arreglo, "Sin org.atsw.gui.desktop la barra pone "
+                     "una rueda dentada. La madre lo escribe al arrancar en %s.",
+                     g_get_user_data_dir() );
+    g_free( f );
+    }
+#else
+    c->ok = TRUE;
+    g_snprintf( c->ruta, sizeof c->ruta, "el del paquete" );
+#endif
 }
 
 /* ------------------------------------------------------------------------ */

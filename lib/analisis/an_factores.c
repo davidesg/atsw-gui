@@ -20,8 +20,11 @@
 #include <math.h>
 #include <string.h>
 
+#include <glib/gstdio.h>
+
 #include "raices.h"
 #include "outfile.h"
+#include "inpcheck.h"
 
 #include "analisis.h"
 
@@ -41,11 +44,17 @@ static void polinomio( GString *t, const RzAr *a )
         }
 }
 
+/* COMO EL ROOT DE LA UCM: primero las raíces, luego los factores agrupados
+ * --los reales juntos, los complejos juntos--, cada grupo en su tabla y con
+ * cuántos son. Antes salían intercalados en el orden de las raíces, con
+ * cada par en una línea de texto corrido, y no se podían comparar.
+ * Dentro de cada grupo, por módulo: el más cercano a la unidad primero. */
 static void un_factor( GString *t, const RzAr *a, int k, int s )
 {
-    int i, fijos = 0;
+    int i, fijos = 0, nr = 0, nc = 0, n;
 
     for ( i = 0; i < a->orden; i++ ) if ( a->idx[i] == 0 ) fijos++;
+    for ( i = 0; i < a->nf; i++ ) if ( a->f[i].complejo ) nc++; else nr++;
     g_string_append_printf( t, "<b>Factor AR %d</b>, orden %d%s:  ", k + 1, a->orden,
                             fijos ? ( fijos == 1 ? ", con un coeficiente fijo"
                                                  : ", con coeficientes fijos" ) : "" );
@@ -54,41 +63,159 @@ static void un_factor( GString *t, const RzAr *a, int k, int s )
     if ( a->nf == 0 )
         { g_string_append( t, "    Sin raíces: todos los coeficientes valen cero.\n\n" ); return; }
 
-    g_string_append( t, "<tt>    raíz       real       imag     módulo\n" );
+    g_string_append( t, "<tt>\n    RAÍZ       REAL       IMAG     MÓDULO\n" );
     for ( i = 0; i < a->orden && ( a->zre[i] != 0.0 || a->zim[i] != 0.0 ); i++ )
-        g_string_append_printf( t, "    %3d   %9.5f  %9.5f  %9.5f\n", i + 1,
+        g_string_append_printf( t, "    %4d  %9.5f  %9.5f  %9.5f\n", i + 1,
                                 a->zre[i], a->zim[i], hypot( a->zre[i], a->zim[i] ) );
-    g_string_append( t, "</tt>" );
 
-    for ( i = 0; i < a->nf; i++ )
+    if ( nr > 0 )
         {
-        const RzFactor *f = &a->f[i];
-
-        if ( !f->complejo )
+        g_string_append_printf( t, "\n</tt><b>Factores reales</b> (1 − a B): %d<tt>\n"
+                                "    FACTOR          a       RAÍZ\n", nr );
+        for ( i = 0, n = 0; i < a->nf; i++ )
             {
-            g_string_append_printf( t, "    (1 %s %.5f B): real, raíz %.4f%s\n",
-                                    f->a1 < 0 ? "+" : "−", fabs( f->a1 ), 1.0 / f->a1,
-                                    f->modulo < 1.0 + 0.05 ? " — <b>cerca de la unidad</b>" : "" );
-            continue;
+            const RzFactor *f = &a->f[i];
+
+            if ( f->complejo ) continue;
+            g_string_append_printf( t, "    %6d  %9.5f  %9.4f%s\n", ++n, f->a1, 1.0 / f->a1,
+                                    f->modulo < 1.0 + 0.05 ? "   <b>cerca de la unidad</b>" : "" );
             }
-        g_string_append_printf( t, "    (1 %s %.5f B + %.5f B<sup>2</sup>): complejo,  d = %.3f",
-                                f->a1 < 0 ? "+" : "−", fabs( f->a1 ), -f->a2, f->r );
-        if ( f->con_et ) g_string_append_printf( t, " ± %.3f", f->r_et );
-        g_string_append_printf( t, ",  frecuencia %.4f", f->omega / ( 2.0 * M_PI ) );
-        if ( s > 1 ) g_string_append_printf( t, " (armónico %.2f de s = %d)", f->armonico, s );
-        g_string_append_printf( t, ",  periodo %.2f", f->periodo );
-        if ( f->con_et && isfinite( f->periodo_et ) )
-            g_string_append_printf( t, " ± %.2f", f->periodo_et );
-        if ( isfinite( f->vida_media ) )
-            g_string_append_printf( t, ",  vida media %.1f", f->vida_media );
-        if ( f->estacional || f->casi_unitaria )
-            g_string_append_printf( t, "  — <b>%s%s%s</b>",
-                f->estacional ? "en una frecuencia estacional" : "",
-                f->estacional && f->casi_unitaria ? ", " : "",
-                f->casi_unitaria ? "casi unitario" : "" );
-        g_string_append( t, "\n" );
         }
-    g_string_append( t, "\n" );
+    if ( nc > 0 )
+        {
+        int hay_et = 0;
+
+        /* las columnas de los ± solo si alguno los tiene (un AR(2) entero) */
+        for ( i = 0; i < a->nf; i++ ) hay_et |= a->f[i].complejo && a->f[i].con_et;
+        g_string_append_printf( t, "\n</tt><b>Factores complejos</b> (1 − a<sub>1</sub> B − "
+                                "a<sub>2</sub> B<sup>2</sup>): %d<tt>\n", nc );
+        g_string_append_printf( t, "    %6s  %9s  %9s  %7s%s  %6s%s  %8s%s  %8s\n",
+                                "FACTOR", "a1", "a2", "d", hay_et ? "        " : "", "FREC",
+                                s > 1 ? "  ARMÓN." : "", "PERIODO", hay_et ? "        " : "",
+                                "VIDA M." );
+        for ( i = 0, n = 0; i < a->nf; i++ )
+            {
+            const RzFactor *f = &a->f[i];
+            char            vm[16] = "";
+
+            if ( !f->complejo ) continue;
+            if ( isfinite( f->vida_media ) ) g_snprintf( vm, sizeof vm, "%.1f", f->vida_media );
+            g_string_append_printf( t, "    %6d  %9.5f  %9.5f  %7.3f", ++n, f->a1, f->a2, f->r );
+            if ( hay_et )
+                {
+                if ( f->con_et ) g_string_append_printf( t, " ± %5.3f", f->r_et );
+                else g_string_append( t, "        " );
+                }
+            g_string_append_printf( t, "  %6.4f", f->omega / ( 2.0 * M_PI ) );
+            if ( s > 1 ) g_string_append_printf( t, "  %6.2f", f->armonico );
+            g_string_append_printf( t, "  %8.2f", f->periodo );
+            if ( hay_et )
+                {
+                if ( f->con_et && isfinite( f->periodo_et ) )
+                    g_string_append_printf( t, " ± %5.2f", f->periodo_et );
+                else g_string_append( t, "        " );
+                }
+            g_string_append_printf( t, "  %8s", vm );
+            if ( f->estacional || f->casi_unitaria )
+                g_string_append_printf( t, "   <b>%s%s%s</b>",
+                    f->estacional ? "estacional" : "",
+                    f->estacional && f->casi_unitaria ? ", " : "",
+                    f->casi_unitaria ? "casi unitario" : "" );
+            g_string_append( t, "\n" );
+            }
+        }
+    g_string_append( t, "</tt>\n" );
+}
+
+/* --- derivar el modelo factorizado -------------------------------------- */
+
+typedef struct {
+    AnHost     h;
+    char       serie[PR_ID], muestra[PR_ID], id[PR_ID];
+    int        s;
+    GtkWidget *win;
+} Fa;
+
+/* El fichero del padre: su .pre si lo hay (el óptimo), si no su .inp. */
+static int origen_de( const Fa *g, char *out, size_t n )
+{
+    char pre[PR_RUTA];
+
+    if ( pr_ruta( g->h.p, g->serie, g->muestra, g->id, ".pre", pre, sizeof pre ) == 0 &&
+         g_file_test( pre, G_FILE_TEST_EXISTS ) )
+        { g_snprintf( out, n, "%s", pre ); return 1; }
+    if ( pr_ruta( g->h.p, g->serie, g->muestra, g->id, ".inp", out, n ) != 0 ) return 0;
+    return g_file_test( out, G_FILE_TEST_EXISTS ) ? 2 : 0;
+}
+
+/* EL MODELO FACTORIZADO, como hijo del modelo (pr_deriva), juzgado por fue
+ * y abierto para estimarlo: lo que hacen el identificador y el MEG al
+ * derivar. Lo escribe lib/raices (rz_deriva_factorizado). */
+static void on_derivar( GtkButton *b, Fa *g )
+{
+    char          origen[PR_RUTA], destino[PR_RUTA], nuevo[PR_ID], msg[512], why[256];
+    PrError       e;
+    gchar        *dir, *razon, *aviso;
+    int           cual, partidos = 0, fijos = 0;
+    AnHerramienta con;
+
+    (void) b;
+    cual = origen_de( g, origen, sizeof origen );
+    if ( !cual ) { an_di( &g->h, "No encuentro el fichero de «%s».", g->id ); return; }
+    if ( pr_deriva( g->h.p, g->serie, g->muestra, g->id, nuevo, sizeof nuevo,
+                    destino, sizeof destino, &e ) != 0 )
+        { pr_error_es( &e, msg, sizeof msg ); an_di( &g->h, "%s", msg ); return; }
+    dir = g_path_get_dirname( destino );
+    g_mkdir_with_parents( dir, 0700 );
+    g_free( dir );
+    if ( rz_deriva_factorizado( origen, destino, g->s, &partidos, &fijos, why, sizeof why ) != 0 )
+        {
+        pr_borra( g->h.p, g->serie, g->muestra, nuevo, &e );
+        an_di( &g->h, "%s", why );
+        return;
+        }
+    /* EL JUEZ ES EL MOTOR: un .inp que fue no acepta se deshace */
+    if ( inp_check_fue( destino, msg, sizeof msg ) != 0 )
+        {
+        g_unlink( destino );
+        pr_borra( g->h.p, g->serie, g->muestra, nuevo, &e );
+        an_di( &g->h, "Lo que salió no lo acepta fue: %s", msg );
+        return;
+        }
+    razon = g_strdup_printf( "Modelo factorizado: %s del AR regular partido%s en sus factores "
+        "reales (1 − a B) y sus pares complejos (1 − a1 B − a2 B²), libres y sembrados con la "
+        "factorización de %s.%s", partidos == 1 ? "el factor" : "los factores",
+        partidos == 1 ? "" : "s", cual == 1 ? "su óptimo" : "su especificación",
+        fijos ? " Tenía coeficientes fijos: partido, esa restricción ya no está." : "" );
+    pr_razon( g->h.p, g->serie, g->muestra, nuevo, razon, &e );
+    g_free( razon );
+    con = ( g->h.puede && !( g->h.puede & AN_PUEDE_FUE ) ) ? AN_CON_EDITOR : AN_CON_FUE;
+    pr_pon_herramienta( g->h.p, con == AN_CON_EDITOR );
+    if ( g->h.guarda && g->h.guarda( g->h.dueno ) != 0 )
+        an_di( &g->h, "El .inp está en %s, pero no pude guardar el proyecto.", nuevo );
+    if ( g->h.refresca ) g->h.refresca( g->h.dueno );
+    {
+    AnHost host = g->h;
+    char   serie[PR_ID], muestra[PR_ID], padre[PR_ID];
+
+    g_snprintf( serie, sizeof serie, "%s", g->serie );
+    g_snprintf( muestra, sizeof muestra, "%s", g->muestra );
+    g_snprintf( padre, sizeof padre, "%s", g->id );
+    aviso = g_strdup_printf( "%s nace de %s con el AR factorizado. Estímalo: %scada par sale "
+                             "con su ± y se puede fijar o quitar uno a uno.", nuevo, padre,
+                             fijos ? "" : "la verosimilitud tiene que ser la misma, y " );
+    gtk_widget_destroy( g->win );
+    if ( host.cierra && cual ) host.cierra( host.dueno, serie, muestra, padre );
+    if ( host.abre ) host.abre( host.dueno, serie, muestra, nuevo, con );
+    an_di( &host, "%s", aviso );
+    g_free( aviso );
+    }
+}
+
+static void on_cerrar( GtkWidget *w, Fa *g )
+{
+    (void) w;
+    g_free( g );
 }
 
 void an_factores_ar( const AnHost *h, const char *serie, const char *muestra,
@@ -100,7 +227,7 @@ void an_factores_ar( const AnHost *h, const char *serie, const char *muestra,
     GtkWidget   *win, *raiz, *cab, *sw, *l;
     GString     *t;
     char         out[PR_RUTA], why[256];
-    int          k, sin_et, s;
+    int          k, sin_et, s, partible = 0;
 
     if ( !h || !h->p || !serie || !*serie || !id || !*id ) return;
     if ( pr_ruta( h->p, serie, muestra, id, ".out", out, sizeof out ) != 0 )
@@ -148,18 +275,22 @@ void an_factores_ar( const AnHost *h, const char *serie, const char *muestra,
                 "No lo impongas: estima el modelo factorizado para ver cada d con su ± y "
                 "contrasta la restricción por razón de verosimilitudes.\n\n",
                 f->nmod, f->mod_min, f->mod_max, 100.0 * f->mod_disp, f->nmod, f->nmod, f->nmod );
-        g_string_append( t, "<small>Un par complejo con el periodo en s/k (un armónico "
+        g_string_append( t, "<small>«Derivar el modelo factorizado» escribe un hijo con cada "
+            "factor partido así, libres y sembrados con estos números: estimado, cada par sale "
+            "con su ± y se puede fijar o quitar uno a uno. ");
+        g_string_append( t, "Un par complejo con el periodo en s/k (un armónico "
             "entero) y d cerca de 1 es un <b>AR estacional escondido</b> dentro de un AR(p) "
             "libre: candidato a un factor de frecuencia fija. Parecerlo no es serlo: se "
             "contrasta, y eso no lo hace esta ventana. Los ± salen por el método delta y solo para un AR(2) estimado entero; "
             "en un orden mayor los pares salen de las raíces y no tienen covarianza "
             "propia.</small>" );
         }
+    for ( k = 0; k < f->nar; k++ ) partible |= f->ar[k].nf > 1;
     g_free( f );
 
     win = gtk_window_new( GTK_WINDOW_TOPLEVEL );
     if ( h->padre ) gtk_window_set_transient_for( GTK_WINDOW(win), h->padre );
-    gtk_window_set_default_size( GTK_WINDOW(win), 820, 520 );
+    gtk_window_set_default_size( GTK_WINDOW(win), 980, 560 );
     {
     gchar *ti = g_strdup_printf( "Factorización del AR — %s / %s", serie, id );
 
@@ -196,6 +327,31 @@ void an_factores_ar( const AnHost *h, const char *serie, const char *muestra,
                                     GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC );
     gtk_container_add( GTK_CONTAINER(sw), l );
     gtk_box_pack_start( GTK_BOX(raiz), sw, TRUE, TRUE, 0 );
+
+    /* derivar: solo si el anfitrion sabe abrir el hijo y guardar */
+    if ( h->abre && h->guarda )
+        {
+        GtkWidget *barra = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 6 );
+        GtkWidget *b = gtk_button_new_with_label( "Derivar el modelo factorizado…" );
+        Fa        *g = g_new0( Fa, 1 );
+
+        g->h = *h;
+        g_snprintf( g->serie, sizeof g->serie, "%s", serie );
+        g_snprintf( g->muestra, sizeof g->muestra, "%s", muestra ? muestra : "" );
+        g_snprintf( g->id, sizeof g->id, "%s", id );
+        g->s   = s;
+        g->win = win;
+        gtk_widget_set_sensitive( b, partible );
+        gtk_widget_set_tooltip_text( b, partible
+            ? "Un hijo de este modelo con cada factor AR partido en sus factores reales "
+              "(1 − a B) y sus pares complejos (1 − a1 B − a2 B²), libres y sembrados con "
+              "la factorización, para estimarlo."
+            : "Cada factor AR ya es irreducible: el modelo ya está factorizado del todo." );
+        g_signal_connect( b, "clicked", G_CALLBACK(on_derivar), g );
+        g_signal_connect( win, "destroy", G_CALLBACK(on_cerrar), g );
+        gtk_box_pack_end( GTK_BOX(barra), b, FALSE, FALSE, 0 );
+        gtk_box_pack_start( GTK_BOX(raiz), barra, FALSE, FALSE, 0 );
+        }
 
     gtk_widget_show_all( win );
 }

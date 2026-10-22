@@ -71,6 +71,7 @@ LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c \
            $(LIB_DIR)/analisis/an_factores.c \
            $(LIB_DIR)/raices/raiz.c \
            $(LIB_DIR)/raices/factor.c \
+           $(LIB_DIR)/raices/parte.c \
            $(LIB_DIR)/analisis/an_formales.c \
            $(LIB_DIR)/formales/formales.c \
            $(LIB_DIR)/artcand/artcand.c \

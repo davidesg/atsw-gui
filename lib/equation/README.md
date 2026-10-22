@@ -10,6 +10,7 @@ ahora también del de drtran.
 | `equation.h` | `engines/fue/include/` | — el vocabulario |
 | `eqlatex.c` | `engines/fue/src/` | **cero** referencias a globales de fue |
 | `eqtran.h/.c` | nuevo | — |
+| `eqdraw.h/.c` | `engines/fue/src/report.c` | **cero**: la página entera |
 
 `equation.c` **no** se movió: tiene 45 referencias a los globales del motor.
 Es el *constructor* de la ecuación univariante y está donde tiene que estar.
@@ -53,3 +54,36 @@ coincidieran, la prueba no estaría distinguiendo nada y lo dice.
 
 El `- 0.0000B` no es un hueco: en el formato, un coeficiente escrito con
 bandera de FIJO **es especificación**, y se ve.
+
+## La página del modelo: una sola, la de fue en LaTeX
+
+`eqdraw.c` dibuja la página que enseña «Ver modelo…»: el gráfico de los
+residuos, la ecuación y la tabla de los residuos de más de tres desviaciones.
+La escriben **los dos**, con el mismo código:
+
+- fue (`engines/fue/src/report.c`), para el modelo univariante;
+- drtran_gui (`gui/drtran/src/pagina.c`), una por ecuación del caso.
+
+El modelo de transferencia se escribe **exactamente** como el univariante; lo
+único que se añade es la parte `EQ_TRANS`, en la primera línea y **delante de
+los deterministas**. Cada término se escribe como fue escribe una variable
+determinista con su ω(B)/δ(B), con la entrada (`EI_INPUT`, ln X_t) en el sitio
+de ξ.
+
+La composición es la de `fue -latex` (eqlatex.c compilado con pdflatex), medida
+sobre su PDF: A4 apaisado con márgenes de 2.5 cm, `\footnotesize` de un
+artículo de 12pt con `\linespread{1.6}`, los espacios de TeX entre átomos
+(fino, medio, grueso), `\est` tal como lo define eqlatex.c, los saltos de
+línea de TeX (después de un operador binario o de una relación) y la tabla de
+`_res.tex`. Las posiciones caen a menos de medio punto de las de pdflatex. Lo
+que no puede ser igual es **la letra**: fugdraw sólo usa las fuentes estándar
+de PDF, sin incrustar ninguna, así que Computer Modern se sustituye por
+Helvetica (`\mathsf`), Times (la redonda), Times Italic (la cursiva
+matemática) y Symbol inclinada (las griegas), cada una en el avance del
+glifo de Computer Modern al que sustituye.
+
+`test_eqdraw.c` exige que, con un término de transferencia, el ruido salga
+igual byte a byte y que la transferencia vaya delante de los deterministas:
+
+    cc -Ilib/equation -Ilib/fugdraw lib/equation/test_eqdraw.c \
+       lib/equation/eqdraw.c lib/fugdraw/fugdraw.c -lm

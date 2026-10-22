@@ -68,6 +68,9 @@ void   fd_text( FDFig *f, double x, double y, int font, double size, int align, 
 /* Text rotated 90 degrees counterclockwise (vertical axis labels); align
  * is along the text, (x, y) is the base line point. */
 void   fd_text_up( FDFig *f, double x, double y, int font, double size, int align, const char *s );
+/* Text slanted to the right by slant (tan of the angle), from (x, y). */
+void   fd_text_slant( FDFig *f, double x, double y, int font, double size,
+                      double slant, const char *s );
 double fd_runs_width( const FDRun *r, int n );
 void   fd_runs( FDFig *f, double x, double y, int align, const FDRun *r, int n );
 

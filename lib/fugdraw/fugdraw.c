@@ -187,6 +187,17 @@ void fd_text_up( FDFig *f, double x, double y, int font, double size, int align,
    put( f, "Q\n" );
 }
 
+/* Text slanted to the right, slant = tan of the angle (0.25: about 14 deg).
+ * The standard fonts have no italic Symbol; the Greek letters of the model
+ * are slanted as the math italic of LaTeX writes them.                    */
+void fd_text_slant( FDFig *f, double x, double y, int font, double size,
+                    double slant, const char *s )
+{
+   put( f, "q 1 0 %.4f 1 %.2f %.2f cm\n", slant, x, y );
+   show( f, 0.0, 0.0, font, size, s );
+   put( f, "Q\n" );
+}
+
 double fd_runs_width( const FDRun *r, int n )
 {
    double w = 0.0;

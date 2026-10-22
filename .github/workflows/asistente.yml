@@ -1,0 +1,196 @@
+# Fase 0 del asistente (docs/ESTUDIO-terminal-mcp.md §8): el ensayo del
+# empaquetado.
+#
+# Con el binario suelto de uv, el mismo que llevara el paquete (§6.2), y sin
+# PowerShell: instala un Python fijado y atsw-gui-mcp con su uv.lock, con y
+# sin el extra [python], y pasa la prueba de humo de tests/humo.py, que es
+# una sesion MCP a pelo con los tres servidores. La prueba no usa la red; en
+# Linux corre ademas sin interfaz de red (unshare -n), para que se note si
+# algo intentara descargar.
+#
+# Va aparte de build.yml y solo cuando se toca mcp/, para no alargar la CI
+# de los motores. Mide lo que pesa: el uv del paquete, la descarga y lo
+# instalado, con y sin el extra, en el resumen de cada job.
+
+name: asistente
+
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'mcp/**', '.github/workflows/asistente.yml' ]
+  pull_request:
+    paths: [ 'mcp/**', '.github/workflows/asistente.yml' ]
+  workflow_dispatch:
+    inputs:
+      frio:
+        description: 'Sin cache, para medir la descarga en frio'
+        type: boolean
+        default: false
+
+env:
+  UV_VERSION: 0.12.24
+  PYTHON: '3.12'
+
+jobs:
+  ensayo:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            uv: uv-x86_64-unknown-linux-gnu.tar.gz
+          - runner: windows-latest
+            uv: uv-x86_64-pc-windows-msvc.zip
+          - runner: macos-14
+            uv: uv-aarch64-apple-darwin.tar.gz
+          - runner: macos-15-intel
+            uv: uv-x86_64-apple-darwin.tar.gz
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: mcp/atsw_mcp
+    env:
+      UV_CACHE_DIR: ${{ github.workspace }}/.uv-cache
+      UV_PYTHON_INSTALL_DIR: ${{ github.workspace }}/.uv-python
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: El uv suelto, comprobado
+        run: |
+          base=https://github.com/astral-sh/uv/releases/download/$UV_VERSION
+          d="$RUNNER_TEMP/uv"; mkdir -p "$d"; cd "$d"
+          curl -sSLf -o "${{ matrix.uv }}" "$base/${{ matrix.uv }}"
+          curl -sSLf -o sum "$base/${{ matrix.uv }}.sha256"
+          esperado=$(cut -d' ' -f1 sum)
+          visto=$( (sha256sum "${{ matrix.uv }}" 2>/dev/null || shasum -a 256 "${{ matrix.uv }}") | cut -d' ' -f1)
+          echo "sha256 $visto"; [ "$esperado" = "$visto" ]
+          case "${{ matrix.uv }}" in
+            *.zip) unzip -q "${{ matrix.uv }}" ;;
+            *)     tar xzf "${{ matrix.uv }}" ;;
+          esac
+          uv=$(find "$d" -type f \( -name uv -o -name uv.exe \) | head -1)
+          echo "UV=$uv" >> "$GITHUB_ENV"
+          "$uv" --version
+          tam() { wc -c < "$1" | tr -d ' '; }
+          {
+            echo "### ${{ matrix.runner }}"
+            echo
+            echo "- uv $UV_VERSION: archivo $(( $(tam "${{ matrix.uv }}") / 1048576 )) MB, binario $(( $(tam "$uv") / 1048576 )) MB"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/cache@v4
+        if: ${{ !inputs.frio }}
+        with:
+          path: |
+            .uv-cache
+            .uv-python
+          key: asistente-${{ matrix.runner }}-uv${{ env.UV_VERSION }}-py${{ env.PYTHON }}-${{ hashFiles('mcp/atsw_mcp/uv.lock') }}
+
+      - name: Instalar el nucleo y el nucleo con el extra
+        run: |
+          [ -d "$UV_CACHE_DIR/archive-v0" ] && echo "- cache de uv: reutilizada" | tee -a "$GITHUB_STEP_SUMMARY" \
+                                            || echo "- cache de uv: vacia (descarga en frio)" | tee -a "$GITHUB_STEP_SUMMARY"
+          for e in nucleo extra; do
+            env_dir="$RUNNER_TEMP/$e"
+            opc=""; [ $e = extra ] && opc="--extra python"
+            t0=$(date +%s)
+            UV_PROJECT_ENVIRONMENT="$env_dir" "$UV" sync --frozen --no-dev --no-editable \
+              --managed-python --python "$PYTHON" $opc
+            t1=$(date +%s)
+            if [ -d "$env_dir/Scripts" ]; then b="$env_dir/Scripts"; else b="$env_dir/bin"; fi
+            mb=$(du -sm "$env_dir" | cut -f1)
+            echo "- $e: instalado en $((t1 - t0)) s, $mb MB en disco" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "BIN_$e=$b" >> "$GITHUB_ENV"
+          done
+          mbpy=$(du -sm "$UV_PYTHON_INSTALL_DIR" | cut -f1)
+          echo "- el Python de uv: $mbpy MB en disco" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Humo, sin el extra
+        timeout-minutes: 10
+        env:
+          UV_OFFLINE: '1'
+        run: |
+          py="$BIN_nucleo/python"
+          if [ "$RUNNER_OS" = Linux ]; then
+            sudo -E unshare -n "$py" tests/humo.py "$BIN_nucleo" --sin-extra
+          else
+            "$py" tests/humo.py "$BIN_nucleo" --sin-extra
+          fi
+
+      - name: Humo, con el extra
+        timeout-minutes: 10
+        env:
+          UV_OFFLINE: '1'
+        run: |
+          py="$BIN_extra/python"
+          if [ "$RUNNER_OS" = Linux ]; then
+            sudo -E unshare -n "$py" tests/humo.py "$BIN_extra" --con-extra
+          else
+            "$py" tests/humo.py "$BIN_extra" --con-extra
+          fi
+
+      - name: Importar el extra, fuera de MCP
+        # En la primera vuelta, el humo con el extra se colgo en Windows
+        # cuando estado importaba art dentro del servidor. Ahora estado no
+        # importa nada; esto mide aparte cuanto tarda cada import y si
+        # escribe por la salida estandar.
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 8
+        run: |
+          "$BIN_extra/python" tests/importa.py | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Importar el extra dentro del servidor (diagnostico)
+        # Lo que hara la fase 1b: estado importa de verdad. No bloquea: dice si en
+        # Windows se cuelga, como se colgo el import en la primera vuelta.
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 8
+        env:
+          ATSW_MCP_DIAG: import
+        run: |
+          rc=0
+          "$BIN_extra/python" tests/humo.py "$BIN_extra" --con-extra || rc=$?
+          echo "- humo con ATSW_MCP_DIAG=import: rc=$rc" | tee -a "$GITHUB_STEP_SUMMARY"
+          exit $rc
+
+      - name: Lanzar un proceso dentro del servidor (diagnostico)
+        # Como llamara la fase 1b a los motores en C, heredando la entrada estandar. No bloquea: dice si en
+        # Windows se cuelga, como se colgo el import en la primera vuelta.
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 8
+        env:
+          ATSW_MCP_DIAG: sub
+        run: |
+          rc=0
+          "$BIN_extra/python" tests/humo.py "$BIN_extra" --con-extra || rc=$?
+          echo "- humo con ATSW_MCP_DIAG=sub: rc=$rc" | tee -a "$GITHUB_STEP_SUMMARY"
+          exit $rc
+
+      - name: Lanzar un proceso con la entrada cerrada (diagnostico)
+        # Lo mismo con stdin=DEVNULL. No bloquea: dice si en
+        # Windows se cuelga, como se colgo el import en la primera vuelta.
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 8
+        env:
+          ATSW_MCP_DIAG: sub-devnull
+        run: |
+          rc=0
+          "$BIN_extra/python" tests/humo.py "$BIN_extra" --con-extra || rc=$?
+          echo "- humo con ATSW_MCP_DIAG=sub-devnull: rc=$rc" | tee -a "$GITHUB_STEP_SUMMARY"
+          exit $rc
+
+      - name: Lo que se descarga
+        if: always()
+        run: |
+          for e in nucleo extra; do
+            v="BIN_$e"; py="${!v}/python"
+            [ -f "$py.exe" ] && py="$py.exe"   # uv quiere la ruta entera en Windows
+            [ -f "$py" ] || continue
+            site=$("$py" -c "import sysconfig; print(sysconfig.get_paths()['purelib'])")
+            "$UV" run -q --no-project --python "$py" --with packaging==24.2 \
+              python tests/medida.py uv.lock "$site" "$e" | tee -a "$GITHUB_STEP_SUMMARY"
+          done

@@ -32,6 +32,7 @@ SRC = src/main.c src/ventana.c src/gestos.c src/datos_gui.c src/vistazo.c \
       $(LIB)/analisis/an_factores.c \
       $(LIB)/raices/raiz.c \
       $(LIB)/raices/factor.c \
+      $(LIB)/raices/parte.c \
       $(LIB)/analisis/an_formales.c \
       $(LIB)/formales/formales.c \
       ../../engines/art/src/unit_root_tests.c \

@@ -29,4 +29,23 @@ gchar *sitio_exe( const char *programa );
    el PATH. Devuelve una ruta nueva (g_free) o NULL. */
 gchar *sitio_busca( const char *programa, const char *const *sitios );
 
+/* --- LOS HIJOS SE VAN CON LA MADRE ---------------------------------------
+ *
+ * La madre lanza fue_gui, drtran_gui y gtk_fmg con «--madre PID». Si la madre
+ * se cierra y ellos siguen abiertos, siguen escribiendo en el proyecto --un
+ * modelo nuevo, un caso, el manifiesto-- sin nadie que lo vea ni lo ordene.
+ * Así que cada hijo vigila a su madre y se cierra cuando ella ya no está.
+ *
+ * Por qué así y no de otra forma: la madre no tiene con qué pedirle a otro
+ * proceso que se cierre ordenadamente en las tres plataformas (una señal en
+ * Windows no lo es), pero el hijo sí puede preguntar si su madre vive.
+ *
+ * sitio_mi_pid       el pid de este proceso, para el «--madre PID».
+ * sitio_vigila_madre  mira cada segundo si el proceso pid sigue vivo; si no,
+ *                     llama a al_irse(datos) una vez. pid NULL o vacío: no
+ *                     vigila (el programa lanzado a mano). Devuelve 1 si
+ *                     vigila.                                            */
+long sitio_mi_pid( void );
+int  sitio_vigila_madre( const char *pid, GSourceFunc al_irse, gpointer datos );
+
 #endif

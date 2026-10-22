@@ -384,17 +384,17 @@ static void bloque_parametros( const FueOut *o, const char *const *det,
        {
        char np[48];
 
-       snprintf( l->dice, DX_DICE, "%d parámetro%s no se gana%s su sitio, "
+       snprintf( l->dice, DX_DICE, "%d parámetro%s no parece%s significativo%s, "
                  "empezando por %s.", flojos, flojos == 1 ? "" : "s",
-                 flojos == 1 ? "" : "n",
+                 flojos == 1 ? "" : "n", flojos == 1 ? "" : "s",
                  dx_nombre_par( o, det, ndet, prim, np, sizeof np ) );
        }
        }
    else
        {
        l->estado = DX_CUADRA;
-       snprintf( l->dice, DX_DICE, "Todos se ganan su sitio y ninguno se pisa "
-                 "con otro." );
+       snprintf( l->dice, DX_DICE, "Todos parecen significativos y no hay dos "
+                 "muy correlacionados entre sí." );
        }
 }
 

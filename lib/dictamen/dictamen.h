@@ -78,7 +78,7 @@ typedef struct {
 /* Los umbrales, con nombre y en un sitio. */
 #define DX_ALFA      0.05    /* rechaza                                   */
 #define DX_ALFA_OJO  0.10    /* está en el filo                           */
-#define DX_T_FLOJO   2.0     /* |t| por debajo: el parámetro no se gana su sitio */
+#define DX_T_FLOJO   2.0     /* |t| por debajo: el parámetro no parece significativo */
 #define DX_R_ALTO    0.7     /* dos parámetros que se pisan               */
 
 /* El dictamen de un modelo. conv puede ser NULL: entonces la línea de la

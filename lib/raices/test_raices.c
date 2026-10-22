@@ -15,6 +15,7 @@
 #include <string.h>
 
 #include "raices.h"
+#include "inpdet.h"
 
 static int fallos;
 
@@ -178,6 +179,53 @@ int main( int argc, char **argv )
         "en4_ar18: el par más cercano a la unidad, d = 0.948 y periodo 2.40; sin ± (orden > 2)" );
     ok( cerca( f.mod_disp, 0.13544260412123446, 1e-6 ) && f.modulos_parecidos,
         "en4_ar18: dispersión de los módulos 13.5 %" );
+
+    printf( "\nEL MODELO FACTORIZADO (rz_deriva_factorizado)\n" );
+    {
+    char    dst[1100];
+    IdArma  ar, ori;
+    int     partidos = -1, fijos = -1, i, j, k, bien;
+
+    snprintf( dst, sizeof dst, "%s", argc > 3 ? argv[3] : "/tmp" );
+    strcat( dst, "/factorizado.inp" );
+    ok( rz_deriva_factorizado( ruta( argv[2], "en4_ar18/en4_ar18.pre" ), dst, 1, &partidos, &fijos,
+                               why, sizeof why ) == 0 && partidos == 1 && fijos == 0,
+        "en4_ar18: el AR(18) se parte" );
+    ok( id_arma_lee( dst, &ar, why, sizeof why ) == 0 && ar.nf[0] == 9, "en nueve factores" );
+    for ( bien = 1, i = 0; i < ar.nf[0]; i++ )
+        bien &= ar.ord[0][i] == 2 && ar.fl[0][i][0] == 1 && ar.fl[0][i][1] == 1;
+    ok( bien, "los nueve de orden 2 y libres" );
+    /* el producto de los nueve es el AR(18) de partida (semillas a 6 decimales) */
+    {
+    double pr[19] = { 1.0 }, q[19];
+    int    g = 0;
+
+    for ( i = 0; i < ar.nf[0]; i++ )
+        {
+        double f[3] = { 1.0, -ar.v[0][i][0], -ar.v[0][i][1] };
+
+        memset( q, 0, sizeof q );
+        for ( j = 0; j <= g; j++ ) for ( k = 0; k < 3; k++ ) q[j + k] += pr[j] * f[k];
+        g += 2;
+        memcpy( pr, q, sizeof pr );
+        }
+    id_arma_lee( ruta( argv[2], "en4_ar18/en4_ar18.pre" ), &ori, why, sizeof why );
+    for ( bien = g == 18, j = 0; j < 18; j++ ) bien &= fabs( -pr[j + 1] - ori.v[0][0][j] ) < 1e-5;
+    ok( bien, "su producto es el AR(18) de partida" );
+    }
+    ok( id_arma_lee( dst, &ar, why, sizeof why ) == 0 && ar.nf[1] == ori.nf[1]
+        && ar.nf[2] == ori.nf[2] && ar.nf[3] == ori.nf[3], "lo demás, como estaba" );
+
+    ok( rz_deriva_factorizado( ruta( argv[2], "RIPC.2/RIPC.2.pre" ), dst, 12, &partidos, NULL,
+                               why, sizeof why ) == 0 && id_arma_lee( dst, &ar, why, sizeof why ) == 0
+        && ar.nf[0] == 2 && ar.ord[0][0] == 1 && ar.ord[0][1] == 1
+        && cerca( 1.0 / ar.v[0][0][0], 1.375448102629401, 1e-3 ),
+        "RIPC.2: el AR(2) de raíces reales, en dos (1 - a B), la de 1.375 primero" );
+    ok( rz_deriva_factorizado( ruta( argv[2], "en4_fac9x2/en4_fac9x2.pre" ), dst, 1, NULL, NULL,
+                               why, sizeof why ) == 1 && strstr( why, "ya está factorizado" ),
+        "en4_fac9x2: ya irreducible, no se deriva y lo dice" );
+    remove( dst );
+    }
 
     if ( fallos ) { printf( "\n%d fallos\n", fallos ); return 1; }
     printf( "\ntodo bien\n" );

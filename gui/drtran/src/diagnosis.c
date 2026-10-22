@@ -250,7 +250,7 @@ static void pinta_ajuste( Mtram *m )
                 "χ²(%d) al 5%% ≈ %.1f%s", lr, k, k == 1 ? "" : "s", k,
                 (double) k + 1.645 * sqrt( 2.0 * k ),
                 k > 0 && lr > (double) k + 1.645 * sqrt( 2.0 * k )
-                    ? "   ·  la transferencia se gana su sitio" : "" );
+                    ? "   ·  la transferencia es significativa" : "" );
     }
     gtk_label_set_text( GTK_LABEL(D->l_lr), t->str );
     g_string_free( t, TRUE );

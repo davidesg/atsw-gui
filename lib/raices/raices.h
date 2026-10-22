@@ -116,4 +116,16 @@ int rz_factores_ar( const char *out, int s, int sin_et, RzFactores *f,
 int rz_factoriza( const double *c, int p, int s, const double cov2[2][2],
                   RzAr *a );
 
+/* EL MODELO FACTORIZADO (parte.c, con lib/inpdet): copia origen (un .pre o
+ * un .inp de fue) en destino con cada factor AR regular partido en sus
+ * factores reales (1 - a B) y sus pares complejos (1 - a1 B - a2 B^2),
+ * primero los reales, todos libres y sembrados con la factorizacion. Los
+ * que ya son irreducibles se copian tal cual. *partidos dice cuantos se
+ * partieron; *con_fijos, si alguno tenia un coeficiente fijo (partirlo
+ * suelta esa restriccion). Los dos pueden ser NULL. Devuelve 0, o 1 con el
+ * motivo (tambien si no hay nada que partir). Lo que salga lo juzga fue
+ * (inp_check_fue), como todo lo que se deriva.                          */
+int rz_deriva_factorizado( const char *origen, const char *destino, int s,
+                           int *partidos, int *con_fijos, char *why, size_t nwhy );
+
 #endif /* ATSW_RAICES_H */

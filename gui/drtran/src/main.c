@@ -17,6 +17,18 @@
 #include "gui.h"
 #include "previewhost.h"
 #include "engine.h"
+#include "sitio.h"
+
+/* LA MADRE QUE LO LANZO («--madre PID»): cuando se va, drtran_gui tambien
+ * (lib/sitio, sitio_vigila_madre). Sin la opcion no se vigila nada.     */
+static const char *g_madre = NULL;
+
+static gboolean se_fue_la_madre(gpointer data)
+{
+    (void)data;
+    g_application_quit(g_application_get_default());
+    return G_SOURCE_REMOVE;
+}
 
 
 static void activate(GtkApplication *app, gpointer data)
@@ -24,6 +36,7 @@ static void activate(GtkApplication *app, gpointer data)
     Mtram *m = data;
 
     gtk_widget_show_all(mtram_window_new(app, m));
+    sitio_vigila_madre(g_madre, se_fue_la_madre, NULL);
 
     /* EL CASO SE CARGA CON LA VENTANA YA HECHA: cargarlo es llenar sus
      * paginas --las series, la red, el modelo-- y dice en la barra lo que
@@ -62,7 +75,9 @@ static void uso(const char *me)
            "  --caso C      carga el caso C: sus series en su orden, y la red\n"
            "                y las restricciones de su modelo elegido.\n"
            "  --modelo c    parte del modelo c del caso, no del elegido\n"
-           "                (--corrida c, el nombre de antes, vale igual).\n",
+           "                (--corrida c, el nombre de antes, vale igual).\n"
+           "  --madre PID   la madre que lo lanza: si se cierra,\n"
+           "                drtran_gui se cierra tambien.\n",
            me);
 }
 
@@ -88,6 +103,7 @@ int main(int argc, char **argv)
         if (!strcmp(argv[i], "--proyecto") && i + 1 < argc) proy = argv[++i];
         else if (!strncmp(argv[i], "--proyecto=", 11)) proy = argv[i] + 11;
         else if (!strcmp(argv[i], "--caso") && i + 1 < argc) caso = argv[++i];
+        else if (!strcmp(argv[i], "--madre") && i + 1 < argc) g_madre = argv[++i];
         else if ((!strcmp(argv[i], "--modelo") || !strcmp(argv[i], "--corrida")) &&
                  i + 1 < argc) corrida = argv[++i];
         else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help"))

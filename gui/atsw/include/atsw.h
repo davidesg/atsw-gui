@@ -168,6 +168,11 @@ typedef struct {
     * refresco -> clear -> changed -> serie vacia. Es el mismo guardia que
     * main_window.c de drtran_gui llama «recolocando».                 */
    gboolean   recolocando;
+
+   /* LOS HIJOS ABIERTOS: los GUIs que esta madre lanzo y siguen vivos
+      (AtHijo, en gestos.c). Se van con ella --vigilan su pid, lib/sitio--
+      y al cerrarla se le pregunta al analista si los hay.             */
+   GPtrArray *hijos;
 } Atsw;
 
 GtkWidget *atsw_ventana_new( GtkApplication *app, Atsw *a );
@@ -208,6 +213,10 @@ void       atsw_proyecto_edita( Atsw *a );
 /* LANZAR UNO DE LOS GUIs con este proyecto abierto. La madre no los
    absorbe: les da el contexto que no tenian.                           */
 void       atsw_lanza( Atsw *a, const char *programa, const char *fichero );
+
+/* Cuantos GUIs lanzados siguen abiertos, y en quienes[] la lista para
+   decirlo («fue_gui (2), drtran_gui»). quienes puede ser NULL.         */
+int        atsw_hijos_vivos( const Atsw *a, char *quienes, size_t n );
 
 /* Lo mismo, con una opcion antes del fichero: fue_gui con «--prever»
    arranca el ciclo de prevision al abrir.                              */

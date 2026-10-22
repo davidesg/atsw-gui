@@ -87,6 +87,62 @@ void atsw_lanza( Atsw *a, const char *programa, const char *fichero )
     atsw_lanza_con( a, programa, NULL, fichero );
 }
 
+/* LOS HIJOS ABIERTOS. Cada GUI lanzado entra aqui y sale cuando se cierra:
+ * es lo que la madre consulta al cerrarse para avisar de que se los lleva. */
+typedef struct {
+    Atsw *a;
+    GPid  pid;
+    char  prog[32];
+} AtHijo;
+
+static void hijo_sale( GPid pid, gint estado, gpointer d )
+{
+    AtHijo *h = d;
+
+    (void) estado;
+    if ( h->a->hijos ) g_ptr_array_remove( h->a->hijos, h );
+    g_spawn_close_pid( pid );
+    g_free( h );
+}
+
+static void hijo_entra( Atsw *a, GPid pid, const char *programa )
+{
+    AtHijo *h = g_new0( AtHijo, 1 );
+
+    h->a = a;
+    h->pid = pid;
+    g_snprintf( h->prog, sizeof h->prog, "%s", programa );
+    if ( !a->hijos ) a->hijos = g_ptr_array_new();
+    g_ptr_array_add( a->hijos, h );
+    g_child_watch_add( pid, hijo_sale, h );
+}
+
+int atsw_hijos_vivos( const Atsw *a, char *quienes, size_t n )
+{
+    GString *t;
+    guint    i, j;
+    int      total = a->hijos ? (int) a->hijos->len : 0;
+
+    if ( !quienes || n == 0 ) return total;
+    t = g_string_new( "" );
+    for ( i = 0; a->hijos && i < a->hijos->len; i++ )
+        {
+        const AtHijo *h = g_ptr_array_index( a->hijos, i );
+        int           k = 0, visto = 0;
+
+        for ( j = 0; j < i; j++ )
+            visto |= !strcmp( ( (AtHijo *) g_ptr_array_index( a->hijos, j ) )->prog, h->prog );
+        if ( visto ) continue;
+        for ( j = i; j < a->hijos->len; j++ )
+            k += !strcmp( ( (AtHijo *) g_ptr_array_index( a->hijos, j ) )->prog, h->prog );
+        g_string_append_printf( t, "%s%s", t->len ? ", " : "", h->prog );
+        if ( k > 1 ) g_string_append_printf( t, " (%d)", k );
+        }
+    g_snprintf( quienes, n, "%s", t->str );
+    g_string_free( t, TRUE );
+    return total;
+}
+
 /* EL LANZAMIENTO, CON LO QUE VAYA DETRAS DE «--proyecto P».
  *
  * extra es una lista terminada en NULL; con dice lo que la barra cuenta
@@ -98,9 +154,11 @@ void atsw_lanza( Atsw *a, const char *programa, const char *fichero )
 static void lanza_v( Atsw *a, const char *programa, const char *const *extra,
                      const char *con, const char *que )
 {
-    gchar  *argv[12];
+    gchar  *argv[14];
     GError *e = NULL;
     gchar  *exe;
+    char    madre[24];
+    GPid    pid;
     int     n = 0, i;
 
     if ( !a->hay ) return;
@@ -120,6 +178,10 @@ static void lanza_v( Atsw *a, const char *programa, const char *const *extra,
     argv[n++] = exe;
     argv[n++] = (gchar *) "--proyecto";
     argv[n++] = a->p->path;
+    /* LA MADRE SE DICE: el hijo vigila este pid y se cierra con ella. */
+    g_snprintf( madre, sizeof madre, "%ld", sitio_mi_pid() );
+    argv[n++] = (gchar *) "--madre";
+    argv[n++] = madre;
     for ( i = 0; extra && extra[i] && n < (int) G_N_ELEMENTS(argv) - 1; i++ )
         argv[n++] = (gchar *) extra[i];
     argv[n] = NULL;
@@ -134,9 +196,13 @@ static void lanza_v( Atsw *a, const char *programa, const char *const *extra,
      * Heredando el de la madre van a donde va el suyo, que es el log con el
      * que se la lanza. El stdout si se tira: son los motores hablando, y eso
      * ya se enseña donde toca.                                         */
+    /* G_SPAWN_DO_NOT_REAP_CHILD: el hijo es hijo DIRECTO de la madre (sin
+       el doble fork de GLib), que es lo que vigila con getppid, y la madre
+       sabe cuando se va (hijo_sale).                                   */
     if ( !g_spawn_async( NULL, argv, NULL,
-                         G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL,
-                         NULL, NULL, NULL, &e ) )
+                         G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL |
+                         G_SPAWN_DO_NOT_REAP_CHILD,
+                         NULL, NULL, &pid, &e ) )
         {
         gchar *s = g_strdup_printf( "No pude lanzar %s: %s",
                                     exe, e ? e->message : "" );
@@ -147,6 +213,7 @@ static void lanza_v( Atsw *a, const char *programa, const char *const *extra,
         }
     else
         {
+        hijo_entra( a, pid, programa );
         /* SE DICE QUE BINARIO, con su ruta: asi una instalacion vieja que se
            cuele por el PATH se ve a la primera.                        */
         gchar *s = ( con && *con )

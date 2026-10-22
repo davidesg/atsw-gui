@@ -4,11 +4,15 @@
 
 #include "sitio.h"
 
+#include <stdlib.h>
+
 #ifdef G_OS_WIN32
 #include <windows.h>
-#elif defined(__APPLE__)
+#else
+#include <unistd.h>
+#endif
+#ifdef __APPLE__
 #include <mach-o/dyld.h>
-#include <stdlib.h>
 #endif
 
 gchar *sitio_mi_dir( void )
@@ -77,4 +81,73 @@ gchar *sitio_busca( const char *programa, const char *const *sitios )
     g_free( exe );
 
     return p;
+}
+
+/* --- los hijos se van con la madre: ver sitio.h ----------------------- */
+
+long sitio_mi_pid( void )
+{
+#ifdef G_OS_WIN32
+    return (long) GetCurrentProcessId();
+#else
+    return (long) getpid();
+#endif
+}
+
+typedef struct {
+    long        pid;
+#ifdef G_OS_WIN32
+    HANDLE      h;
+#endif
+    GSourceFunc al_irse;
+    gpointer    datos;
+} Vigia;
+
+/* EN UNIX, getppid Y NO kill(pid, 0): la madre lanza a sus hijos
+ * directamente (G_SPAWN_DO_NOT_REAP_CHILD), así que es su padre; cuando se
+ * va, el hijo pasa a otro padre. Con kill, un pid reutilizado por otro
+ * proceso pasaría por la madre. En Windows, el HANDLE abierto al arrancar:
+ * mientras esté abierto, el pid no se reutiliza.                       */
+static int viva( const Vigia *v )
+{
+#ifdef G_OS_WIN32
+    return v->h != NULL && WaitForSingleObject( v->h, 0 ) == WAIT_TIMEOUT;
+#else
+    return (long) getppid() == v->pid;
+#endif
+}
+
+static gboolean mira( gpointer d )
+{
+    Vigia *v = d;
+
+    if ( viva( v ) ) return G_SOURCE_CONTINUE;
+#ifdef G_OS_WIN32
+    if ( v->h ) CloseHandle( v->h );
+#endif
+    v->al_irse( v->datos );
+    g_free( v );
+    return G_SOURCE_REMOVE;
+}
+
+int sitio_vigila_madre( const char *pid, GSourceFunc al_irse, gpointer datos )
+{
+    Vigia *v;
+    char  *fin = NULL;
+    long   n;
+
+    if ( !pid || !*pid || !al_irse ) return 0;
+    n = strtol( pid, &fin, 10 );
+    if ( n <= 0 || ( fin && *fin ) ) return 0;
+    v = g_new0( Vigia, 1 );
+    v->pid = n;
+    v->al_irse = al_irse;
+    v->datos = datos;
+#ifdef G_OS_WIN32
+    v->h = OpenProcess( SYNCHRONIZE, FALSE, (DWORD) n );
+#endif
+    /* si ya no está al arrancar, se va en el primer segundo: la madre se
+       cerró mientras el hijo se abría                                  */
+    g_timeout_add_seconds( 1, mira, v );
+    return 1;
 }

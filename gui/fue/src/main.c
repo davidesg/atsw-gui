@@ -33,6 +33,17 @@ static void init_global_flags(FueContext *ctx) {
 }
 
 
+/* LA MADRE QUE LO LANZO («--madre PID»): cuando se va, fue_gui tambien
+ * (lib/sitio, sitio_vigila_madre). Sin la opcion no se vigila nada.     */
+static const char *g_madre = NULL;
+
+static gboolean se_fue_la_madre(gpointer data)
+{
+    (void)data;
+    g_application_quit(g_application_get_default());
+    return G_SOURCE_REMOVE;
+}
+
 /* Definidas mas abajo: activate() las usa. */
 const char *fue_abrir(void);
 int         fue_prever_al_arrancar(void);   /* faltaba: se usaba sin declarar */
@@ -80,6 +91,8 @@ static void activate(GtkApplication *app, gpointer user_data) {
 
     /* Cleanup on window close */
     g_signal_connect(ctx->main_window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
+
+    sitio_vigila_madre(g_madre, se_fue_la_madre, NULL);
 }
 
 /* --proyecto FICHERO: el espacio de trabajo sale de la RAIZ del proyecto.
@@ -111,14 +124,17 @@ static int lee_opciones(int argc, char *argv[])
         if (!strcmp(argv[i], "--proyecto") && i + 1 < argc) proy = argv[++i];
         else if (!strncmp(argv[i], "--proyecto=", 11)) proy = argv[i] + 11;
         else if (!strcmp(argv[i], "--prever")) fue_pon_prever(1);
+        else if (!strcmp(argv[i], "--madre") && i + 1 < argc) g_madre = argv[++i];
         else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
-            printf("uso: %s [--proyecto FICHERO] [--prever] [FICHERO.inp]\n\n"
+            printf("uso: %s [--proyecto FICHERO] [--prever] [--madre PID] [FICHERO.inp]\n\n"
                    "  --proyecto F  el espacio de trabajo sale de la raiz\n"
                    "                del proyecto F.\n"
                    "  --prever      al abrir, el ciclo de prevision: corre\n"
                    "                «fue -f», corre fuf y deja las dos cosas\n"
                    "                en la pestaña. Lo mismo que pulsar\n"
                    "                «Forecast», pero pedido desde fuera.\n"
+                   "  --madre PID   la madre que lo lanza: si se cierra,\n"
+                   "                fue_gui se cierra tambien.\n"
                    "  FICHERO.inp   se abre al arrancar. Es lo que la madre\n"
                    "                manda al decir «estimar esta serie».\n",
                    argv[0]);

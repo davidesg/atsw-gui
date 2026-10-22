@@ -17,6 +17,7 @@
 
 //#include "config.h"
 #include "callbacks.h"
+#include "sitio.h"
 #include "proyecto.h"
 #include "gui.h"
 #include "fug_run.h"
@@ -39,6 +40,14 @@ static void create_iden_dialog(AppWidgets *app);
  * Sin la opcion funciona como siempre.                                 */
 static char g_raiz[1024];
 static char g_abrir[1024];        /* el fichero que la madre manda */
+static const char *g_madre;       /* «--madre PID»: lib/sitio la vigila */
+
+static gboolean se_fue_la_madre(gpointer data)
+{
+    (void)data;
+    gtk_main_quit();
+    return G_SOURCE_REMOVE;
+}
 
 static int lee_opciones(int argc, char *argv[])
 {
@@ -50,10 +59,13 @@ static int lee_opciones(int argc, char *argv[])
     for (i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--proyecto") && i + 1 < argc) proy = argv[++i];
         else if (!strncmp(argv[i], "--proyecto=", 11)) proy = argv[i] + 11;
+        else if (!strcmp(argv[i], "--madre") && i + 1 < argc) g_madre = argv[++i];
         else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
-            printf("uso: %s [--proyecto FICHERO] [FICHERO]\n\n"
+            printf("uso: %s [--proyecto FICHERO] [--madre PID] [FICHERO]\n\n"
                    "  --proyecto F  el espacio de trabajo sale de la raiz\n"
                    "                del proyecto F.\n"
+                   "  --madre PID   la madre que lo lanza: si se cierra,\n"
+                   "                gtk_fmg se cierra tambien.\n"
                    "  FICHERO       se abre al arrancar. Es lo que la madre\n"
                    "                manda al decir «identificar esta serie».\n",
                    argv[0]);
@@ -173,6 +185,7 @@ int main(int argc, char *argv[])
             GTK_FILE_CHOOSER_BUTTON(app->data_filechooserbutton), app);
     }
 
+    sitio_vigila_madre(g_madre, se_fue_la_madre, NULL);
     gtk_main();
 
     g_slice_free(AppWidgets, app);

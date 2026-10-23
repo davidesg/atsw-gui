@@ -705,6 +705,61 @@ int main( int argc, char **argv )
     }
     }
 
+    /* QUIEN DIO EL PASO (ESTUDIO-terminal-mcp §7.2): por y por_elegido,
+       solo cuando no es el analista, y de ida y vuelta.               */
+    {
+    static Proyecto r, t;
+    PrError         e;
+    char            id0[PR_ID], id1[PR_ID], id2[PR_ID], a[PR_RUTA], b2[PR_RUTA];
+    FILE           *f;
+    char            l[256];
+    int             hay = 0, igual = 1, ca, cb;
+    FILE           *fa, *fb;
+
+    printf( "\nQUIEN DIO EL PASO\n" );
+    pr_nuevo( &r, "por", "linaje con asistente", "." );
+    snprintf( a, sizeof a, "%s/por.yaml", DIR );
+    snprintf( b2, sizeof b2, "%s/por2.yaml", DIR );
+    pr_serie_add( &r, "S", &e );
+    pr_deriva_rol( &r, "S", "", NULL, PR_DATOS, id0, sizeof id0, NULL, 0, &e );
+    pr_deriva( &r, "S", "", id0, id1, sizeof id1, NULL, 0, &e );
+    pr_deriva( &r, "S", "", id1, id2, sizeof id2, NULL, 0, &e );
+    ok( pr_pon_por( &r, "S", "", id2, "asistente", &e ) == 0,
+        "un paso se marca como del asistente" );
+    ok( pr_pon_por( &r, "S", "", id1, "analista", &e ) == 0 && !r.m[1].por[0],
+        "y el del analista se queda vacio, que es lo normal" );
+    ok( pr_pon_por_elegido( &r, "S", "", id2, "asistente", &e ) != 0,
+        "no se dice quien eligio un modelo que no es el elegido" );
+    pr_elige( &r, "S", "", id2, "el mejor", &e );
+    ok( pr_pon_por_elegido( &r, "S", "", id2, "asistente", &e ) == 0,
+        "pero si el elegido" );
+    pr_escribir( &r, a, &e );
+    f = fopen( a, "r" );
+    while ( f && fgets( l, sizeof l, f ) )
+        if ( !strncmp( l, "    por", 7 ) )
+            hay++;
+    if ( f ) fclose( f );
+    ok( hay == 2, "en el yaml, dos marcas: el paso y la eleccion; ninguna del analista" );
+    ok( pr_leer( a, &t, &e ) == 0, "se vuelve a leer" );
+    es( t.m[2].por, "asistente", "con el por del paso" );
+    es( t.m[2].por_elegido, "asistente", "y el de la eleccion" );
+    ok( !t.m[1].por[0], "y el del analista vacio" );
+    pr_escribir( &t, b2, &e );
+    fa = fopen( a, "rb" ); fb = fopen( b2, "rb" );
+    while ( fa && fb )
+        {
+        ca = fgetc( fa ); cb = fgetc( fb );
+        if ( ca != cb ) { igual = 0; break; }
+        if ( ca == EOF ) break;
+        }
+    if ( fa ) fclose( fa );
+    if ( fb ) fclose( fb );
+    ok( igual, "y se reescribe byte a byte igual" );
+    pr_elige( &t, "S", "", id1, NULL, &e );
+    ok( !t.m[2].por_elegido[0] && !t.m[1].por_elegido[0],
+        "elegir otro borra quien eligio el anterior" );
+    }
+
     printf( "\n%d fallos\n", fallos );
     free( p ); free( q );
     return fallos ? 1 : 0;

@@ -16,6 +16,7 @@
 #include "file_io.h"
 #include "engine.h"
 #include "sitio.h"
+#include "iconos.h"
 
 
 #ifdef _WIN32
@@ -61,6 +62,7 @@ static void activate(GtkApplication *app, gpointer user_data) {
     FueContext *ctx;
 
     if (abierta) { gtk_window_present(GTK_WINDOW(abierta)); return; }
+    at_logo_por_defecto();
 
     ctx = g_new0(FueContext, 1);
 

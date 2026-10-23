@@ -214,6 +214,30 @@ void       atsw_proyecto_edita( Atsw *a );
    absorbe: les da el contexto que no tenian.                           */
 void       atsw_lanza( Atsw *a, const char *programa, const char *fichero );
 
+/* LA COMPROBACION DE LA INSTALACION y la presentacion (presentacion.c).
+   Cada cosa que se comprueba: si esta, donde, y si no, como se arregla
+   en esta plataforma. Lo opcional que falta no es un error.             */
+#define AT_MAX_COMPROB 24
+typedef struct {
+   char     grupo[24];            /* "Motores", "Programas", "GTK"...      */
+   char     que[64];
+   gboolean ok, opcional;
+   char     ruta[512];            /* donde se encontro                     */
+   char     arreglo[512];         /* si falta, como se arregla             */
+} AtComprob;
+
+int  atsw_comprueba( AtComprob *c, int max );           /* cuantas llena  */
+int  atsw_comprueba_faltan( const AtComprob *c, int n ); /* obligatorias   */
+/* La presentacion: creditos y comprobacion; abre madre al acabar (sola si
+   no falta nada, con «Continuar» si falta).                            */
+void atsw_presentacion( Atsw *a, GtkWidget *madre );
+/* Linux: los .desktop del usuario que dan el icono de la barra, cuando se
+   lanza desde el arbol de fuentes (el paquete trae los suyos). Lo llama
+   main(), no las pruebas: escribe en ~/.local/share.                   */
+void atsw_escritorio_registra( void );
+/* Ayuda ▸ «Comprobar la instalación…»: el mismo informe en un dialogo.  */
+void atsw_informe_instalacion( Atsw *a );
+
 /* Cuantos GUIs lanzados siguen abiertos, y en quienes[] la lista para
    decirlo («fue_gui (2), drtran_gui»). quienes puede ser NULL.         */
 int        atsw_hijos_vivos( const Atsw *a, char *quienes, size_t n );

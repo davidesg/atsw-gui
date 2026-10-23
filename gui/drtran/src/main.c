@@ -18,6 +18,7 @@
 #include "previewhost.h"
 #include "engine.h"
 #include "sitio.h"
+#include "iconos.h"
 
 /* LA MADRE QUE LO LANZO («--madre PID»): cuando se va, drtran_gui tambien
  * (lib/sitio, sitio_vigila_madre). Sin la opcion no se vigila nada.     */
@@ -35,6 +36,7 @@ static void activate(GtkApplication *app, gpointer data)
 {
     Mtram *m = data;
 
+    at_logo_por_defecto();
     gtk_widget_show_all(mtram_window_new(app, m));
     sitio_vigila_madre(g_madre, se_fue_la_madre, NULL);
 

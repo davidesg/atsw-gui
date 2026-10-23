@@ -23,6 +23,7 @@ ENG = ../../engines/fug
 SRC = src/main.c src/callbacks.c src/data_load.c src/nlutils.c src/fug_run.c \
       $(LIB)/preview/preview.c $(LIB)/fugdraw/fugdraw.c $(LIB)/datos/datos.c \
       $(LIB)/proyecto/proyecto.c $(LIB)/xlsx/xlsx.c $(LIB)/sitio/sitio.c \
+      $(LIB)/barra/iconos.c \
       $(ENG)/src/inpfile.c
 
 HDR = include/callbacks.h include/data_load.h include/fug_run.h include/gui.h \
@@ -30,7 +31,7 @@ HDR = include/callbacks.h include/data_load.h include/fug_run.h include/gui.h \
       $(LIB)/preview/preview.h $(LIB)/fugdraw/fugdraw.h \
       $(LIB)/fugdraw/fd_metrics.h $(ENG)/src/inpfile.h
 
-INC = -Iinclude -I$(LIB)/sitio -I$(LIB)/preview -I$(LIB)/fugdraw -I$(LIB)/datos -I$(LIB)/xlsx -I$(LIB)/proyecto -I$(ENG)/src
+INC = -Iinclude -I$(LIB)/sitio -I$(LIB)/barra -I$(LIB)/preview -I$(LIB)/fugdraw -I$(LIB)/datos -I$(LIB)/xlsx -I$(LIB)/proyecto -I$(ENG)/src
 
 GTK_CFLAGS := $(shell pkg-config --cflags gtk+-3.0 2>/dev/null)
 GTK_LIBS   := $(shell pkg-config --libs   gtk+-3.0 2>/dev/null)

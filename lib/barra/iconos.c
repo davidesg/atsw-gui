@@ -11,6 +11,7 @@
  * veredictos, que son los unicos colores fijos.
  */
 
+#include <math.h>
 #include <string.h>
 #include "iconos.h"
 
@@ -187,4 +188,50 @@ GtkWidget *at_menu_item( const char *texto, const char *icono, GtkWidget *ref,
     gtk_box_pack_start( GTK_BOX(caja), et, TRUE, TRUE, 0 );
     gtk_container_add( GTK_CONTAINER(mi), caja );
     return mi;
+}
+
+/* --- el icono de ATSW: ver iconos.h ------------------------------------ */
+
+/* Las medidas de atsw.svg, en su viewBox de 64. Las mismas que dibuja
+ * packaging/icono/hacer.py para el .ico y el .icns.                    */
+GdkPixbuf *at_logo( int px )
+{
+    static const double q[5][2] = { { 8, 44 }, { 20, 28 }, { 30, 36 }, { 42, 16 }, { 56, 24 } };
+    const double     L = 64.0, r = 14.0;
+    cairo_surface_t *s = cairo_image_surface_create( CAIRO_FORMAT_ARGB32, px, px );
+    cairo_t         *c = cairo_create( s );
+    GdkPixbuf       *pb;
+    int              i;
+
+    cairo_scale( c, px / L, px / L );
+    cairo_new_sub_path( c );
+    cairo_arc( c, L - r, r, r, -G_PI / 2, 0 );
+    cairo_arc( c, L - r, L - r, r, 0, G_PI / 2 );
+    cairo_arc( c, r, L - r, r, G_PI / 2, G_PI );
+    cairo_arc( c, r, r, r, G_PI, 3 * G_PI / 2 );
+    cairo_close_path( c );
+    cairo_set_source_rgb( c, 0x1f / 255.0, 0x5f / 255.0, 0xa8 / 255.0 );
+    cairo_fill( c );
+    cairo_move_to( c, q[0][0], q[0][1] );
+    for ( i = 1; i < 5; i++ ) cairo_line_to( c, q[i][0], q[i][1] );
+    cairo_set_source_rgb( c, 1, 1, 1 );
+    cairo_set_line_width( c, 6.0 );
+    cairo_set_line_cap( c, CAIRO_LINE_CAP_ROUND );
+    cairo_set_line_join( c, CAIRO_LINE_JOIN_ROUND );
+    cairo_stroke( c );
+    cairo_destroy( c );
+    pb = gdk_pixbuf_get_from_surface( s, 0, 0, px, px );
+    cairo_surface_destroy( s );
+    return pb;
+}
+
+void at_logo_por_defecto( void )
+{
+    static const int tam[] = { 16, 24, 32, 48, 64, 128, 256 };
+    GList           *l = NULL;
+    guint            i;
+
+    for ( i = 0; i < G_N_ELEMENTS(tam); i++ ) l = g_list_append( l, at_logo( tam[i] ) );
+    gtk_window_set_default_icon_list( l );
+    g_list_free_full( l, g_object_unref );
 }

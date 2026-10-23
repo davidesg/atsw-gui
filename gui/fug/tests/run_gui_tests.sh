@@ -40,7 +40,7 @@ GTK_LIBS=$(pkg-config --libs gtk+-3.0 2>/dev/null)
 rm -rf "$WORK"
 mkdir -p "$WORK/obj" "$WORK/data" || exit 1
 
-INC="-I$TOP/include -I$LIB/sitio -I$LIB/preview -I$LIB/fugdraw -I$LIB/datos -I$LIB/xlsx -I$LIB/proyecto -I$ENG/src"
+INC="-I$TOP/include -I$LIB/sitio -I$LIB/barra -I$LIB/preview -I$LIB/fugdraw -I$LIB/datos -I$LIB/xlsx -I$LIB/proyecto -I$ENG/src"
 
 # LO QUE NO TIENE QUE PASAR EN UNA PRUEBA: que un dialogo espere una mano o
 # que se abra un visor. Estas funciones de GTK se llaman, DENTRO DEL GUI,
@@ -51,7 +51,7 @@ HOOKS="-include $TOP/tests/ganchos.h"
 # La lista del Makefile, con main.c por main_wrap.c.
 SRCS="$TOP/tests/main_wrap.c $TOP/src/callbacks.c $TOP/src/data_load.c $TOP/src/nlutils.c \
  $TOP/src/fug_run.c $LIB/preview/preview.c $LIB/fugdraw/fugdraw.c $LIB/datos/datos.c \
- $LIB/proyecto/proyecto.c $LIB/xlsx/xlsx.c $LIB/sitio/sitio.c $ENG/src/inpfile.c"
+ $LIB/proyecto/proyecto.c $LIB/xlsx/xlsx.c $LIB/sitio/sitio.c $LIB/barra/iconos.c $ENG/src/inpfile.c"
 
 OBJS=
 for f in $SRCS; do

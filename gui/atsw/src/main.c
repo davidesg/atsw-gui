@@ -19,6 +19,7 @@
 #include "preview.h"
 #include "rutas.h"
 #include "sitio.h"
+#include "iconos.h"
 
 void atsw_lanza( Atsw *a, const char *programa, const char *fichero );
 gboolean atsw_modelo_nuevo( Atsw *a, const char *serie, const char *muestra,
@@ -2005,16 +2006,20 @@ static void on_teclas_mi( GtkMenuItem *m, Atsw *a )
 #define ATSW_VERSION "en desarrollo"
 #endif
 
-/* ACERCA DE: sobrio. La presentacion con los creditos al arrancar es del
-   TODO, para despues del diseño de la madre.                          */
+static void on_comprobar_mi( GtkMenuItem *m, Atsw *a ) { (void) m; atsw_informe_instalacion( a ); }
+
+/* ACERCA DE: sobrio, con los mismos creditos que la presentacion. */
 static void on_acerca_mi( GtkMenuItem *m, Atsw *a )
 {
     GtkWidget *d = gtk_about_dialog_new();
+    GdkPixbuf *logo = at_logo( 128 );
 
     (void) m;
     gtk_window_set_transient_for( GTK_WINDOW(d), GTK_WINDOW(a->ventana) );
     gtk_window_set_destroy_with_parent( GTK_WINDOW(d), TRUE );
     gtk_about_dialog_set_program_name( GTK_ABOUT_DIALOG(d), "ATSW" );
+    gtk_about_dialog_set_logo( GTK_ABOUT_DIALOG(d), logo );
+    g_object_unref( logo );
     gtk_about_dialog_set_version( GTK_ABOUT_DIALOG(d), ATSW_VERSION );
     gtk_about_dialog_set_comments( GTK_ABOUT_DIALOG(d),
         "A Time Series Workshop: el taller de series temporales de la escuela "
@@ -2114,6 +2119,9 @@ static void llena_ayuda( Atsw *a, GtkWidget *m )
     atsw_entrada( a, m, "Teclas", "Las teclas de la madre, en una lista.",
                   G_CALLBACK(on_teclas_mi), a );
     separa( m );
+    atsw_entrada( a, m, "Comprobar la instalación…", "Lo mismo que se comprueba al "
+                  "arrancar: los motores, los programas y lo que usa GTK. De lo que "
+                  "falte, cómo se arregla.", G_CALLBACK(on_comprobar_mi), a );
     atsw_entrada( a, m, "Acerca de ATSW", "La versión, los créditos y la licencia.",
                   G_CALLBACK(on_acerca_mi), a );
 }
@@ -2354,6 +2362,10 @@ static gboolean on_atajo_estima( GtkAccelGroup *g, GObject *o, guint k,
     return TRUE;
 }
 
+/* La presentacion al arrancar: main() la enciende, salvo con
+   --sin-presentacion. Las pruebas no pasan por main().                */
+static gboolean presentacion = FALSE;
+
 static void activate( GtkApplication *app, gpointer d )
 {
     Atsw         *a = d;
@@ -2363,6 +2375,7 @@ static void activate( GtkApplication *app, gpointer d )
     guint          k;
     GdkModifierType prim;
 
+    at_logo_por_defecto();
     w = gtk_application_window_new( app );
     a->ventana = w;
     gtk_window_set_title( GTK_WINDOW(w), "ATSW — el taller" );
@@ -2633,7 +2646,11 @@ static void activate( GtkApplication *app, gpointer d )
     for ( l = h; l; l = l->next ) rehace_menu( a, l->data );
     g_list_free( h );
     }
-    gtk_widget_show_all( w );
+    /* LA PRESENTACION, con los creditos y la comprobacion de la
+       instalacion; ella abre la madre al acabar. Solo al arrancar por
+       main(): las pruebas levantan activate() directamente.           */
+    if ( presentacion ) atsw_presentacion( a, w );
+    else                gtk_widget_show_all( w );
 }
 
 /* LOS NUMEROS, CON PUNTO. GTK, al arrancar (en el "startup" de la
@@ -2651,18 +2668,24 @@ int main( int argc, char **argv )
 {
     GtkApplication *app;
     const char     *proy = NULL;
+    gboolean        sin_pres = FALSE;
     int             rc, i;
 
     for ( i = 1; i < argc; i++ )
         {
         if ( !strcmp( argv[i], "--proyecto" ) && i + 1 < argc ) proy = argv[++i];
         else if ( !strncmp( argv[i], "--proyecto=", 11 ) ) proy = argv[i] + 11;
+        else if ( !strcmp( argv[i], "--sin-presentacion" ) ) sin_pres = TRUE;
         else if ( !strcmp( argv[i], "-h" ) || !strcmp( argv[i], "--help" ) )
             {
-            printf( "uso: %s [--proyecto FICHERO]\n\n"
+            printf( "uso: %s [--proyecto FICHERO] [--sin-presentacion]\n\n"
                     "  ATSW GUI: el taller. Gestiona datos, modelos y\n"
                     "  proyectos, y lanza fue, fug y drtran con el proyecto\n"
-                    "  abierto.\n", argv[0] );
+                    "  abierto.\n\n"
+                    "  --sin-presentacion  sin la ventana de los creditos ni la\n"
+                    "                      comprobacion de la instalacion al\n"
+                    "                      arrancar (Ayuda la hace a mano).\n",
+                    argv[0] );
             return 0;
             }
         else { fprintf( stderr, "%s: no entiendo «%s»\n", argv[0], argv[i] );
@@ -2677,6 +2700,8 @@ int main( int argc, char **argv )
             { fprintf( stderr, "%s: %s\n", proy, why ); return 3; }
         }
 
+    presentacion = !sin_pres;
+    atsw_escritorio_registra();
     argc = 1;
     app = gtk_application_new( "org.atsw.gui", G_APPLICATION_NON_UNIQUE );
     g_signal_connect( app, "startup", G_CALLBACK(numeros_con_punto), NULL );

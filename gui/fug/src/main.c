@@ -18,6 +18,7 @@
 //#include "config.h"
 #include "callbacks.h"
 #include "sitio.h"
+#include "iconos.h"
 #include "proyecto.h"
 #include "gui.h"
 #include "fug_run.h"
@@ -127,7 +128,12 @@ int main(int argc, char *argv[])
     textdomain(GETTEXT_PACKAGE);
 #endif
 
+    /* EL ID CON QUE SE PRESENTA AL ESCRITORIO: sin GtkApplication, GTK usa
+       el prgname. La barra de GNOME busca org.fug.gui.desktop para el
+       icono (instalar.sh, o la madre desde el arbol de fuentes).       */
+    g_set_prgname("org.fug.gui");
     gtk_init(&argc, &argv);
+    at_logo_por_defecto();
     fug_run_init(argv[0]);
 
     /* Change decimal separator to point (POSIX): fug reads "%lf" */

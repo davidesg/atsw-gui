@@ -173,6 +173,114 @@ mira "coste resumen: un agrupamiento que no existe (estado 1)" \
      '! "$CLI" coste resumen "$Y" --por-que color 2>/dev/null'
 mira "coste: lo rechazado no se escribe" '[ $(wc -l < "$C") = 3 ]'
 
+# --por: quien dio el paso (ESTUDIO-terminal-mcp §7.2), y la ficha de
+# confianza (§7.8), sobre un linaje de prueba en otro proyecto: m01 del
+# analista, m02 del asistente, m03 del analista y sin razon, m04 del
+# asistente. «Estimar» es copiar el .pre del golden: la ficha no lo distingue.
+L="$WORK/lin"
+mkdir -p "$L/RIPC/work"
+cp "$G/RIPC.2/RIPC.2.pre" "$L/RIPC/work/RIPC_m00.inp"
+cat > "$L/proyecto.yaml" <<'YAML'
+schema_version: 2
+id: linaje
+titulo: "la ficha"
+raiz: .
+
+series:
+  RIPC:
+
+modelos:
+  RIPC/m00:
+    version: 0
+    padre: ""
+    razon: ""
+    rol: datos
+YAML
+YL="$L/proyecto.yaml"
+W="$L/RIPC/work"
+"$CLI" proyecto nuevo "$YL" RIPC --razon "airline de partida" >/dev/null
+cp "$G/RIPC.2/RIPC.2.pre" "$W/RIPC_m01.pre"
+"$CLI" proyecto itera "$YL" RIPC m01 --por asistente --razon "el residuo pide el 12" >/dev/null
+cp "$G/RIPC.2/RIPC.2.pre" "$W/RIPC_m02.pre"
+"$CLI" proyecto itera "$YL" RIPC m02 --por analista >/dev/null
+cp "$G/RIPC.2/RIPC.2.pre" "$W/RIPC_m03.pre"
+"$CLI" proyecto itera "$YL" RIPC m03 --por asistente --razon "el MA(12) sobra" >/dev/null
+cp "$G/RIPC.2/RIPC.2.pre" "$W/RIPC_m04.pre"
+cp "$G/RIPC.2/RIPC.2.out" "$W/RIPC_m04.out"
+"$CLI" proyecto elige "$YL" RIPC m04 "el mejor" >/dev/null
+
+mira "--por: dos pasos del asistente en el manifiesto, y el analista sin marca" \
+     '[ $(grep -c "^    por: asistente" "$YL") = 2 ] && ! grep -q "por.*analista" "$YL"'
+V=$("$CLI" --json proyecto ver "$YL")
+mira "--por: proyecto ver --json lo dice, paso a paso" \
+     '[ "$(echo "$V" | campo "[m[\"por\"] for m in d[\"modelos\"] if not m[\"datos\"]]")" = "['"'"'analista'"'"', '"'"'asistente'"'"', '"'"'analista'"'"', '"'"'asistente'"'"']" ]'
+mira "--por: y en texto, con su marca" \
+     '[ $("$CLI" proyecto ver "$YL" | grep -c "✦ asistente") = 2 ]'
+mira "--por: otro valor no se apunta (estado 1)" \
+     '! "$CLI" proyecto nuevo "$YL" RIPC --por nadie 2>/dev/null && ! grep -q "nadie" "$YL"'
+
+M=$("$CLI" ficha "$YL" RIPC m04)
+mira "ficha: la parte del asistente, bien contada" \
+     'echo "$M" | grep -q "^\*\*Recorrido\*\* (4 pasos; 2 del asistente, 50 %; elegido por el analista)"'
+mira "ficha: el recorrido, de los datos al modelo, con quién y por qué" \
+     'echo "$M" | grep -q "^m00 datos → m01 analista «airline de partida» → m02 asistente «el residuo pide el 12» → m03 analista (sin razón) → m04 asistente «el MA(12) sobra»$"'
+mira "ficha: la adecuación sale del dictamen" \
+     'echo "$M" | grep -q "^- ✓ Estimación: convergió"'
+mira "ficha: lo no hecho dice «no consta»" \
+     'echo "$M" | grep -q "^- — estabilidad: no consta" && echo "$M" | grep -q "^\*\*Coste\*\*  no consta$"'
+mira "ficha: sin comprobar, la reproducibilidad no consta" \
+     'echo "$M" | grep -q "^\*\*Reproducibilidad\*\*  no consta: pídela con atsw-cli ficha --comprobar$"'
+mira "ficha: un modelo sin .out no está estimado, y lo dice" \
+     '"$CLI" ficha "$YL" RIPC m03 | grep -q "no consta: el modelo no está estimado" && "$CLI" ficha "$YL" RIPC m03 | grep -q "no es el elegido"'
+J=$("$CLI" --json ficha "$YL" RIPC m04)
+printf '%s\n' "$M" > "$WORK/md"
+mira "ficha --json: el mismo Markdown que el texto, byte a byte" \
+     '[ "$(printf "%s\n" "$J" | "$PY" -c "import json,sys; d=json.load(sys.stdin); sys.stdout.write(str(d[\"markdown\"] == open(sys.argv[1], encoding=\"utf-8\").read()))" "$WORK/md")" = True ]'
+mira "ficha --json: 4 pasos, 2 del asistente, sin comprobación" \
+     '[ "$(printf "%s\n" "$J" | campo "(d[\"pasos\"], d[\"del_asistente\"], d[\"reproducibilidad\"][\"se_reproduce\"])")" = "(4, 2, None)" ]'
+"$CLI" proyecto elige "$YL" RIPC m04 "el mejor" --por asistente >/dev/null
+mira "elige --por asistente: elegido por el asistente" \
+     '"$CLI" ficha "$YL" RIPC m04 | grep -q "elegido por el asistente)" && grep -q "^    por_elegido: asistente" "$YL"'
+"$CLI" proyecto elige "$YL" RIPC m04 "el mejor" >/dev/null
+mira "elige sin --por: vuelve a ser del analista, sin marca" \
+     '! grep -q "por_elegido" "$YL"'
+
+if [ -x "$FUE" ]; then
+    SHA4=$("$PY" -c "import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest())" "$W/RIPC_m04.pre")
+    M=$("$CLI" ficha "$YL" RIPC m04 --comprobar)
+    mira "ficha --comprobar: un .pre intacto se reproduce" \
+         'echo "$M" | grep -q "^\*\*Reproducibilidad\*\*  ✓ se reproduce con fue [0-9.]* (C), comprobado el [0-9]*-[a-z]*-20[0-9][0-9]$"'
+    mira "ficha --comprobar: en costes.csv, reproducir:si con el sha del .pre" \
+         'tail -1 "$L/costes.csv" | grep -q ",atsw-cli,analista,RIPC/m04,reproducir:si,fue [0-9.]*,C,.*,$SHA4\$"'
+    mira "ficha --comprobar: con su CPU, que no es negativa, y su energía con método" \
+         '[ "$(tail -1 "$L/costes.csv" | "$PY" -c "import csv,sys; r=next(csv.reader(sys.stdin)); print(float(r[7]) >= 0 and float(r[9]) >= 0 and \"TDP\" in r[10])")" = True ]'
+    mira "ficha: y el coste del recorrido ya consta" \
+         'echo "$M" | grep -q "el recorrido, [0-9]*,[0-9][0-9] s de CPU en 1 corrida"'
+    # un .pre retocado a mano: un parametro de 0.955890 a 0.5
+    sed '50s/^0\.955890/0.500000/' "$G/RIPC.2/RIPC.2.pre" > "$W/RIPC_m03.pre"
+    mira "el retoque está hecho" '! cmp -s "$W/RIPC_m03.pre" "$G/RIPC.2/RIPC.2.pre"'
+    SHA3=$("$PY" -c "import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest())" "$W/RIPC_m03.pre")
+    J=$("$CLI" --json ficha "$YL" RIPC m03 --comprobar --por asistente)
+    mira "ficha --comprobar: un .pre retocado a mano no se reproduce" \
+         '[ "$(printf "%s\n" "$J" | campo "d[\"comprobado\"][\"se_reproduce\"]")" = False ] && printf "%s\n" "$J" | campo "d[\"markdown\"]" | grep -q "✗ no se reproduce con fue"'
+    mira "ficha --comprobar: y dice qué token se movió" \
+         'printf "%s\n" "$J" | campo "d[\"comprobado\"][\"diferencia\"]" | grep -q "^línea 50: 0.500000 → "'
+    mira "ficha --comprobar: reproducir:no, por el asistente, con el sha del retocado" \
+         'tail -1 "$L/costes.csv" | grep -q ",asistente,RIPC/m03,reproducir:no,.*,$SHA3\$"'
+    # OTRO .pre ES OTRO HASH: la comprobación de antes no vale para él
+    printf ' \n' >> "$W/RIPC_m04.pre"
+    mira "ficha: tocar el .pre deja la comprobación sin valor (no consta)" \
+         '"$CLI" ficha "$YL" RIPC m04 | grep -q "^\*\*Reproducibilidad\*\*  no consta"'
+fi
+"$CLI" coste apunta "$YL" --por asistente --quien mtm --objeto RIPC/m02 --paso estimar \
+       --motor "art 0.9" --via python --cpu 2 --pared 3 \
+       --sha-pre "$("$PY" -c "import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest())" "$W/RIPC_m02.pre")" >/dev/null
+M=$("$CLI" ficha "$YL" RIPC m02)
+mira "ficha: la estimación, con su motor y su vía" \
+     'echo "$M" | grep -q "^\*\*Coste\*\*  la estimación, 2,00 s de CPU (art 0.9, python), ~"'
+mira "ficha: el .pre que vino del extra Python lo dice" \
+     'echo "$M" | grep -q "el .pre salió del extra Python (art 0.9)"'
+
 # los errores
 J=$("$CLI" --json dictamen "$Y" RIPC m99 2>/dev/null); rc=$?
 mira "un modelo que no está: estado 1 y {ok: false} con el porqué" \

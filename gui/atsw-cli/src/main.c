@@ -36,6 +36,9 @@
 #include "raices.h"
 #include "inpcheck.h"
 #include "coste.h"
+#include "engine.h"
+#include "sitio.h"
+#include "ficha.h"
 
 #ifndef ATSW_VERSION
 #define ATSW_VERSION "en desarrollo"
@@ -46,6 +49,7 @@
 /* ------------------------------------------------------------------------ */
 
 static gboolean  json;
+static gboolean  comprobar;
 static const char *muestra = "";
 static const char *razon   = NULL;
 static const char *titulo  = NULL;
@@ -156,6 +160,15 @@ static int guarda( Proyecto *p, char *why, size_t n )
     return 0;
 }
 
+/* QUIEN DIO EL PASO (ESTUDIO-terminal-mcp §7.2): con --por asistente, el
+   modelo nuevo lo lleva escrito. El analista no se escribe.            */
+static void pon_por( Proyecto *p, const char *serie, const char *id )
+{
+    PrError e;
+
+    if ( c_por ) pr_pon_por( p, serie, muestra, id, c_por, &e );
+}
+
 /* La razon, si se dio, en el modelo recien hecho. */
 static void pon_razon( Proyecto *p, const char *serie, const char *id )
 {
@@ -216,6 +229,10 @@ static int proyecto_ver( const char *path )
             js_par( t, "id", m->id ); g_string_append( t, ", " );
             js_par( t, "padre", m->padre ); g_string_append( t, ", " );
             js_par( t, "razon", m->razon ); g_string_append( t, ", " );
+            js_par( t, "por", m->por[0] ? m->por : "analista" ); g_string_append( t, ", " );
+            js_par( t, "por_elegido", !m->elegido ? "" :
+                    m->por_elegido[0] ? m->por_elegido : "analista" );
+            g_string_append( t, ", " );
             g_string_append_printf( t, "\"datos\": %s, \"elegido\": %s}",
                                     m->rol == PR_DATOS ? "true" : "false",
                                     m->elegido ? "true" : "false" );
@@ -248,11 +265,15 @@ static int proyecto_ver( const char *path )
             {
             const PrModelo *m = &p->m[i];
 
-            g_string_append_printf( t, "  %s/%s%s%s%s%s%s\n", m->serie, m->id,
+            g_string_append_printf( t, "  %s/%s%s%s%s", m->serie, m->id,
                                     m->muestra[0] ? "  [" : "", m->muestra,
-                                    m->muestra[0] ? "]" : "",
-                                    m->elegido ? "  * elegido" : "",
-                                    m->rol == PR_DATOS ? "  (datos)" : "" );
+                                    m->muestra[0] ? "]" : "" );
+            /* LA MARCA DEL ASISTENTE, solo cuando la hay (§7.2) */
+            if ( m->por[0] ) g_string_append_printf( t, "  ✦ %s", m->por );
+            if ( m->elegido ) g_string_append( t, "  * elegido" );
+            if ( m->elegido && m->por_elegido[0] )
+                g_string_append_printf( t, " ✦ %s", m->por_elegido );
+            g_string_append_printf( t, "%s\n", m->rol == PR_DATOS ? "  (datos)" : "" );
             if ( m->padre[0] || m->razon[0] )
                 g_string_append_printf( t, "      de %s: %s\n", m->padre[0] ? m->padre : "—",
                                         m->razon[0] ? m->razon : "(sin razón)" );
@@ -287,6 +308,7 @@ static int proyecto_deriva( const char *path, const char *serie, const char *pad
                                   frase, sizeof frase );
     if ( rc != 0 ) { g_free( p ); return falla( "%s", frase ); }
     pon_razon( p, serie, id );
+    pon_por( p, serie, id );
     if ( guarda( p, why, sizeof why ) != 0 )
         { g_free( p ); return falla( "El .inp está, pero no pude guardar el proyecto: %s", why ); }
     dice_modelo( serie, id, ruta, frase );
@@ -306,6 +328,8 @@ static int proyecto_decide( const char *path, const char *serie, const char *id,
     if ( !p ) return falla( "%s", why );
     rc = elige ? pr_elige( p, serie, muestra, id, texto, &e )
                : pr_razon( p, serie, muestra, id, texto, &e );
+    /* QUIEN ELIGIO, despues de pr_elige, que lo borra al mover la marca. */
+    if ( rc == 0 && elige ) rc = pr_pon_por_elegido( p, serie, muestra, id, c_por, &e );
     if ( rc != 0 ) { pr_error_es( &e, why, sizeof why ); g_free( p ); return falla( "%s", why ); }
     if ( guarda( p, why, sizeof why ) != 0 ) { g_free( p ); return falla( "%s", why ); }
     if ( json )
@@ -389,32 +413,16 @@ static int ruta_de( const char *path, const char *serie, const char *id, const c
 
 static int dictamen( const char *path, const char *serie, const char *id )
 {
-    static char det[64][ID_LINEA];
-    const char *ptr[64];
-    char        out[PR_RUTA], pre[PR_RUTA], why[256];
+    char        out[PR_RUTA];
     Proyecto   *p = NULL;
-    FueOut     *o;
-    Convergence c;
     Dictamen    d;
     GString    *t;
-    int         nd = 0, i;
+    int         i;
 
     if ( ruta_de( path, serie, id, ".out", out, sizeof out, &p ) != 0 ) { g_free( p ); return 1; }
-    o = g_new0( FueOut, 1 );
-    if ( !fueout_read( out, o ) )
-        { g_free( o ); g_free( p ); return falla( "«%s» no está estimado: no hay .out.", id ); }
-    /* LOS NOMBRES DE LOS DETERMINISTAS, del .pre o del .inp: el .out dice
-       «deterministic variable 12» y nada mas (como an_deterministas). */
-    if ( ( pr_ruta( p, serie, muestra, id, ".pre", pre, sizeof pre ) == 0 &&
-           g_file_test( pre, G_FILE_TEST_EXISTS ) ) ||
-         pr_ruta( p, serie, muestra, id, ".inp", pre, sizeof pre ) == 0 )
-        nd = id_nombres( pre, det, 64, why, sizeof why );
-    if ( nd < 0 ) nd = 0;
-    for ( i = 0; i < nd; i++ ) ptr[i] = det[i];
-    memset( &c, 0, sizeof c );
-    if ( !convergence_of( out, &c ) ) memset( &c, 0, sizeof c );
-    dx_dictamen( o, &c, nd ? ptr : NULL, nd, &d );
-    convergence_clear( &c );
+    /* EL MISMO QUE LA FICHA (lib/ficha), que es el de la ventana */
+    if ( fi_dictamen( p, serie, muestra, id, &d ) != 0 )
+        { g_free( p ); return falla( "«%s» no está estimado: no hay .out.", id ); }
 
     t = g_string_new( "" );
     if ( json )
@@ -446,7 +454,6 @@ static int dictamen( const char *path, const char *serie, const char *id )
         }
     fputs( t->str, stdout );
     g_string_free( t, TRUE );
-    g_free( o );
     g_free( p );
     return 0;
 }
@@ -587,6 +594,7 @@ static int raices_factorizado( const char *path, const char *serie, const char *
         partidos == 1 ? "" : "s", desde_pre ? "su óptimo" : "su especificación",
         fijos ? " Tenía coeficientes fijos: partido, esa restricción ya no está." : "" );
     pr_razon( p, serie, muestra, nuevo, razon && *razon ? razon : frase, &e );
+    pon_por( p, serie, nuevo );
     if ( guarda( p, why, sizeof why ) != 0 )
         { g_free( frase ); g_free( p ); return falla( "%s", why ); }
     dice_modelo( serie, nuevo, destino, frase );
@@ -715,6 +723,119 @@ static int coste_resumen_orden( const char *path )
 }
 
 /* ------------------------------------------------------------------------ */
+/* ficha: la ficha de confianza (§7.8), la misma que la madre               */
+/* ------------------------------------------------------------------------ */
+
+static void js_corrida( GString *t, const char *k, const FiCorrida *c )
+{
+    js_cadena( t, k );
+    if ( !c->consta ) { g_string_append( t, ": null" ); return; }
+    g_string_append( t, ": {" );
+    js_par( t, "fecha", c->fecha ); g_string_append( t, ", " );
+    js_par( t, "motor", c->motor ); g_string_append( t, ", " );
+    js_par( t, "via", c->via ); g_string_append( t, ", " );
+    js_num( t, "cpu_s", c->cpu_s ); g_string_append( t, ", " );
+    js_num( t, "pared_s", c->pared_s ); g_string_append( t, ", " );
+    if ( c->energia_j >= 0.0 ) js_num( t, "energia_j", c->energia_j );
+    else g_string_append( t, "\"energia_j\": null" );
+    g_string_append( t, ", " );
+    js_par( t, "metodo", c->metodo ); g_string_append( t, "}" );
+}
+
+/* LOS MOTORES DE SU ARBOL, como la madre (gui/atsw/src/gestos.c): primero
+   al lado, en el arbol de compilacion o en el paquete; despues el PATH. */
+static gchar *hermano( const char *programa )
+{
+    static const char *const sitio[] = {     /* relativos a gui/atsw-cli/ */
+        "../../engines/fue/bin/%s",          /* el arbol de compilacion   */
+        "./%s", NULL                         /* el paquete: todo junto    */
+    };
+    return sitio_busca( programa, sitio );
+}
+
+/* ficha P SERIE MODELO [--comprobar]: con --comprobar, antes de la ficha se
+   corre fue sobre el .pre y se apunta en costes.csv lo que salio. */
+static int ficha( const char *path, const char *serie, const char *id )
+{
+    char      why[512], dif[512] = "";
+    Proyecto *p = abre( path, why, sizeof why );
+    Ficha    *f;
+    gchar    *md;
+    GString  *t;
+    int       i, rep = -1;
+
+    if ( !p ) return falla( "%s", why );
+    if ( comprobar )
+        {
+        engine_set_finder( hermano );
+        if ( fi_comprueba( p, serie, muestra, id, "atsw-cli",
+                           c_por ? c_por : "analista", &rep, dif, sizeof dif ) != 0 )
+            { g_free( p ); return falla( "%s", dif ); }
+        if ( !rep && !json ) fprintf( stderr, "atsw-cli: no se reproduce: %s\n", dif );
+        }
+    f = g_new0( Ficha, 1 );
+    if ( fi_ficha( p, serie, muestra, id, f, why, sizeof why ) != 0 )
+        { g_free( f ); g_free( p ); return falla( "%s", why ); }
+    md = fi_markdown( f );
+    if ( !json ) fputs( md, stdout );
+    else
+        {
+        t = g_string_new( "{\"ok\": true, " );
+        js_par( t, "serie", f->serie ); g_string_append( t, ", " );
+        js_par( t, "muestra", f->muestra ); g_string_append( t, ", " );
+        js_par( t, "modelo", f->id ); g_string_append( t, ", " );
+        js_par( t, "markdown", md );
+        g_string_append( t, ", \"recorrido\": [" );
+        for ( i = 0; i < f->npaso; i++ )
+            {
+            g_string_append( t, i ? ", {" : "{" );
+            js_par( t, "id", f->paso[i].id ); g_string_append( t, ", " );
+            js_par( t, "por", f->paso[i].datos ? "" : f->paso[i].por ); g_string_append( t, ", " );
+            js_par( t, "razon", f->paso[i].razon );
+            g_string_append_printf( t, ", \"datos\": %s}", f->paso[i].datos ? "true" : "false" );
+            }
+        g_string_append_printf( t, "], \"pasos\": %d, \"del_asistente\": %d, \"elegido\": %s, ",
+                                f->pasos, f->del_asistente, f->elegido ? "true" : "false" );
+        js_par( t, "por_elegido", f->por_elegido );
+        g_string_append_printf( t, ", \"estimado\": %s, \"adecuacion\": [",
+                                f->estimado ? "true" : "false" );
+        for ( i = 0; f->estimado && i < f->dx.n; i++ )
+            {
+            g_string_append( t, i ? ", {" : "{" );
+            js_par( t, "titulo", f->dx.l[i].titulo ); g_string_append( t, ", " );
+            js_par( t, "estado", dx_estado_es( f->dx.l[i].estado ) ); g_string_append( t, ", " );
+            js_par( t, "dato", f->dx.l[i].dato ); g_string_append( t, "}" );
+            }
+        g_string_append( t, "], \"reproducibilidad\": {" );
+        js_par( t, "sha_pre", f->sha_pre );
+        g_string_append_printf( t, ", \"se_reproduce\": %s, ",
+                                !f->rep.consta ? "null" : f->reproduce ? "true" : "false" );
+        js_corrida( t, "comprobacion", &f->rep ); g_string_append( t, ", " );
+        js_corrida( t, "origen", &f->origen ); g_string_append( t, "}, \"coste\": {" );
+        js_corrida( t, "estimacion", &f->estimacion );
+        g_string_append_printf( t, ", \"recorrido\": {\"corridas\": %d, ", f->corridas );
+        js_num( t, "cpu_s", f->cpu_s ); g_string_append( t, ", " );
+        js_num( t, "pared_s", f->pared_s ); g_string_append( t, ", " );
+        if ( f->con_energia ) js_num( t, "energia_j", f->energia_j );
+        else g_string_append( t, "\"energia_j\": null" );
+        g_string_append_printf( t, ", \"en_python\": %d}}", f->en_python );
+        if ( comprobar )
+            {
+            g_string_append_printf( t, ", \"comprobado\": {\"se_reproduce\": %s, ",
+                                    rep ? "true" : "false" );
+            js_par( t, "diferencia", dif ); g_string_append( t, "}" );
+            }
+        g_string_append( t, "}\n" );
+        fputs( t->str, stdout );
+        g_string_free( t, TRUE );
+        }
+    g_free( md );
+    g_free( f );
+    g_free( p );
+    return 0;
+}
+
+/* ------------------------------------------------------------------------ */
 /* La orden                                                                 */
 /* ------------------------------------------------------------------------ */
 
@@ -731,16 +852,19 @@ static void uso( FILE *f )
            "  dictamen P SERIE MODELO               la diagnosis del .out\n"
            "  raices factores P SERIE MODELO        la factorización del AR\n"
            "  raices factorizado P SERIE MODELO     deriva el modelo factorizado\n"
+           "  ficha P SERIE MODELO [--comprobar]    la ficha de confianza, en Markdown\n"
            "  coste apunta P --motor M --paso X --cpu S --pared S   una corrida de fuera\n"
            "  coste resumen P [--por-que G]         los totales de costes.csv\n\n"
            "  P es el proyecto.yaml.\n"
            "  --muestra M   la muestra (sin ella, la completa)\n"
            "  --razon R     la razón del modelo nuevo o del caso\n"
            "  --titulo T    el título del caso\n"
-           "  --json        la salida en JSON\n\n"
+           "  --json        la salida en JSON\n"
+           "  --por Q       quién da el paso: analista (si no se dice) o asistente;\n"
+           "                en nuevo, itera, elige y raices factorizado queda escrito\n"
+           "  --comprobar   ficha: corre fue sobre el .pre y lo apunta en costes.csv\n\n"
            "  coste apunta: --objeto SERIE/MODELO, --via C|python, --quien (atsw-cli),\n"
-           "    --por (analista; el MTM, asistente), --fecha, --sha-pre;\n"
-           "    --energia J con su --metodo, o sin los dos, que se estima.\n"
+           "    --fecha, --sha-pre, y --energia J con su --metodo (sin ellos, se estima)\n"
            "  coste resumen: --por-que serie|objeto|motor|via|por|paso|quien\n", f );
 }
 
@@ -754,6 +878,7 @@ int main( int argc, char **argv )
     for ( i = 1; i < argc; i++ )
         {
         if ( !strcmp( argv[i], "--json" ) ) json = TRUE;
+        else if ( !strcmp( argv[i], "--comprobar" ) ) comprobar = TRUE;
         else if ( !strcmp( argv[i], "--muestra" ) && i + 1 < argc ) muestra = argv[++i];
         else if ( !strcmp( argv[i], "--razon" ) && i + 1 < argc ) razon = argv[++i];
         else if ( !strcmp( argv[i], "--titulo" ) && i + 1 < argc ) titulo = argv[++i];
@@ -777,6 +902,10 @@ int main( int argc, char **argv )
         else if ( npos < (int) G_N_ELEMENTS(pos) ) pos[npos++] = argv[i];
         }
     if ( npos == 0 ) { uso( stderr ); return 2; }
+    /* QUIEN: solo los dos que hay (§7.2). Un valor que no se entiende no se
+       escribe en el manifiesto ni en el registro.                       */
+    if ( c_por && strcmp( c_por, "analista" ) && strcmp( c_por, "asistente" ) )
+        return falla( "--por %s: es analista o asistente.", c_por );
 
 #define ES(a, b) ( npos > (a) && !strcmp( pos[a], b ) )
     if ( ES( 0, "version" ) )
@@ -801,6 +930,7 @@ int main( int argc, char **argv )
         return raices_factores( pos[2], pos[3], pos[4] );
     if ( ES( 0, "raices" ) && ES( 1, "factorizado" ) && npos == 5 )
         return raices_factorizado( pos[2], pos[3], pos[4] );
+    if ( ES( 0, "ficha" ) && npos == 4 ) return ficha( pos[1], pos[2], pos[3] );
     if ( ES( 0, "coste" ) && ES( 1, "apunta" ) && npos == 3 ) return coste_apunta_orden( pos[2] );
     if ( ES( 0, "coste" ) && ES( 1, "resumen" ) && npos == 3 ) return coste_resumen_orden( pos[2] );
 #undef ES

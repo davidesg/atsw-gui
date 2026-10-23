@@ -233,9 +233,10 @@ mira "ficha: sin comprobar, la reproducibilidad no consta" \
 mira "ficha: un modelo sin .out no está estimado, y lo dice" \
      '"$CLI" ficha "$YL" RIPC m03 | grep -q "no consta: el modelo no está estimado" && "$CLI" ficha "$YL" RIPC m03 | grep -q "no es el elegido"'
 J=$("$CLI" --json ficha "$YL" RIPC m04)
+# en bytes y en UTF-8: el python de Windows lee stdin en cp1252
 printf '%s\n' "$M" > "$WORK/md"
 mira "ficha --json: el mismo Markdown que el texto, byte a byte" \
-     '[ "$(printf "%s\n" "$J" | "$PY" -c "import json,sys; d=json.load(sys.stdin); sys.stdout.write(str(d[\"markdown\"] == open(sys.argv[1], encoding=\"utf-8\").read()))" "$WORK/md")" = True ]'
+     '[ "$(printf "%s\n" "$J" | "$PY" -c "import json,sys; d=json.loads(sys.stdin.buffer.read().decode(\"utf-8\")); sys.stdout.write(str(d[\"markdown\"] == open(sys.argv[1], encoding=\"utf-8\").read()))" "$WORK/md")" = True ]'
 mira "ficha --json: 4 pasos, 2 del asistente, sin comprobación" \
      '[ "$(printf "%s\n" "$J" | campo "(d[\"pasos\"], d[\"del_asistente\"], d[\"reproducibilidad\"][\"se_reproduce\"])")" = "(4, 2, None)" ]'
 "$CLI" proyecto elige "$YL" RIPC m04 "el mejor" --por asistente >/dev/null

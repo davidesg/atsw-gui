@@ -739,8 +739,8 @@ static void uso( FILE *f )
            "  --titulo T    el título del caso\n"
            "  --json        la salida en JSON\n\n"
            "  coste apunta: --objeto SERIE/MODELO, --via C|python, --quien (atsw-cli),\n"
-           "    --por (analista; el MTM, asistente), --fecha, --sha-pre; --energia J con su --metodo, o\n"
-           "    sin los dos, que se estima (cpu×TDP/núcleos).\n"
+           "    --por (analista; el MTM, asistente), --fecha, --sha-pre;\n"
+           "    --energia J con su --metodo, o sin los dos, que se estima.\n"
            "  coste resumen: --por-que serie|objeto|motor|via|por|paso|quien\n", f );
 }
 

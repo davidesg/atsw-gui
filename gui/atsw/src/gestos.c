@@ -66,7 +66,7 @@ void preview_show_status( PreviewApp *app, const gchar *format, ... )
 gchar *atsw_programa( const char *programa )
 {
     static const char *const sitio[] = {   /* relativos a gui/atsw/  */
-        "../fue/bin/%s", "../fug/%s", "../drtran/%s", "./%s",
+        "../fue/bin/%s", "../fug/%s", "../drtran/%s", "../atsw-cli/%s", "./%s",
         /* Y LOS MOTORES, que el editor corre directamente. Van DESPUES de
            los GUIs porque ninguno se llama igual, y ANTES del PATH por la
            misma razon que ellos: una instalacion vieja en /usr/local se

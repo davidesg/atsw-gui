@@ -429,6 +429,13 @@ int pr_ruta( const Proyecto *p, const char *serie, const char *muestra,
    return ( esc < 0 || (size_t) esc >= n ) ? 1 : 0;
 }
 
+int pr_raiz( const Proyecto *p, char *out, size_t n )
+{
+   if ( p == NULL || out == NULL || n == 0 ) return 1;
+   out[0] = '\0';
+   return raiz_real( p, out, n ) != 0;
+}
+
 int pr_hijos( const Proyecto *p, const char *serie, const char *muestra,
               const char *id, char hijos[][PR_ID], int max )
 {

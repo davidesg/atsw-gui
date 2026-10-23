@@ -14,6 +14,11 @@
  *   4  the engine stopped on a run-time error
  *
  * Anything else (a signal, an unknown status) is reported as it comes.
+ *
+ * LO QUE CUESTA CADA CORRIDA: si el que lanza puso antes un contexto
+ * (coste_contexto, lib/coste), la corrida deja su linea en el costes.csv del
+ * proyecto, con el tiempo de CPU y de reloj. engine_run, engine_run_async y
+ * engine_start pasan por el mismo sitio; sin contexto no se escribe nada.
  */
 
 #ifndef ENGINE_H

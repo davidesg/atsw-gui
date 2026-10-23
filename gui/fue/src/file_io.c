@@ -19,6 +19,7 @@ void fue_analisis_refresca(FueContext *ctx);
 #include "outfile.h"        // lo que se lee del .out
 #include "main_window.h"    // update_model_label: estaba implicita
 #include "proyecto.h"
+#include "coste.h"          // lo que cuesta cada corrida, en costes.csv
 
 #ifdef _WIN32
 #include <windows.h>
@@ -1172,6 +1173,7 @@ static void on_fue_done(const EngineResult *r, gpointer data) {
  * y se estima el hijo. Devuelve FALSE si no hay que estimar.            */
 Proyecto   *fue_proyecto(void);
 int         fue_proyecto_relee(void);
+void        fue_coste_contexto(FueContext *ctx, const char *paso);
 int         fue_modelo_actual(FueContext *ctx, char *serie, size_t ns,
                               char *muestra, size_t nm, char *id, size_t nid);
 
@@ -1249,10 +1251,12 @@ void on_run_fue(GtkWidget *widget, FueContext *ctx) {
     }
     run_busy(ctx, TRUE);
     gtk_label_set_text(GTK_LABEL(ctx->status_label), "Running fue...");
+    fue_coste_contexto(ctx, "estimar");
     if (!engine_run_async(workspace, "fue", args, on_fue_iteration, on_fue_done, ctx)) {
         run_busy(ctx, FALSE);
         gtk_label_set_text(GTK_LABEL(ctx->status_label), "fue no se pudo lanzar.");
     }
+    coste_contexto_limpia();
     }
     g_free(workspace);
 }
@@ -1483,7 +1487,12 @@ void on_forecast_button_clicked(GtkToolButton *btn, FueContext *ctx) {
     // 1) Ejecutar fue -f para generar forecast_<base>.inp
     gtk_label_set_text(GTK_LABEL(ctx->status_label), "Generating forecast input file...");
     {
-    EngineResult r = engine_run(workspace, "fue", base_name, "-f", NULL);
+    EngineResult r;
+
+    /* Las dos corridas de la prevision --«fue -f» y fuf-- son «prever». */
+    fue_coste_contexto(ctx, "prever");
+    r = engine_run(workspace, "fue", base_name, "-f", NULL);
+    coste_contexto_limpia();
     if (!engine_wrote_results(&r)) {
         gtk_label_set_text(GTK_LABEL(ctx->status_label), r.message);
         show_engine_output(ctx, &r);
@@ -1511,7 +1520,11 @@ void on_forecast_button_clicked(GtkToolButton *btn, FueContext *ctx) {
     // 3) Ejecutar fuf sobre forecast_<base>
     gtk_label_set_text(GTK_LABEL(ctx->status_label), "Running FUF forecast...");
     {
-    EngineResult r = engine_run(workspace, "fuf", forecast_base, NULL);
+    EngineResult r;
+
+    fue_coste_contexto(ctx, "prever");
+    r = engine_run(workspace, "fuf", forecast_base, NULL);
+    coste_contexto_limpia();
     if (!engine_wrote_results(&r)) {
         gtk_label_set_text(GTK_LABEL(ctx->status_label), r.message);
         show_engine_output(ctx, &r);

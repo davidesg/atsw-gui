@@ -46,6 +46,7 @@
 #include "sitio.h"
 #include "previewhost.h"
 #include "preview.h"
+#include "coste.h"
 #include "engine.h"
 #include "verdict.h"
 #include "netfile.h"
@@ -708,8 +709,23 @@ gboolean estima_lanzar( Mtram *m )
     mtram_barra_refresca( m );
 
     d = trabajo();
+    /* LO QUE CUESTA, en el costes.csv del proyecto (lib/coste): solo con
+     * proyecto, y el objeto es «caso/corrida» si la corrida tiene nombre.
+     * Sin caso va a la cache y se apunta igual, sin objeto. quien es
+     * «madre», como en fue_gui: la puerta; el programa va en «motor».   */
+    if (m->hay_proy && m->proy) {
+        char   raiz[PR_RUTA];
+        gchar *obj = (m->caso[0] && m->corrida[0])
+                   ? g_strdup_printf( "%s/%s", m->caso, m->corrida ) : g_strdup( "" );
+
+        if (pr_raiz( m->proy, raiz, sizeof raiz ) == 0)
+            coste_contexto( raiz, "madre", "analista", obj,
+                            E->solo_prever ? "prever" : "estimar" );
+        g_free( obj );
+    }
     E->trabajo = engine_start( d, "drtran", (const char * const *) argv,
                                NULL, on_salida, on_done, m );
+    coste_contexto_limpia();
     if (!E->trabajo) {
         E->corriendo = FALSE;
         para_pulso( m );

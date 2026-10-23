@@ -38,7 +38,7 @@ else
 endif
 
 # Compiler and basic flags
-CFLAGS   = -O2 -g -Wall -Iinclude -I../../lib/fugdraw -I../../lib/preview -I../../lib/engine -I../../lib/outfile -I../../lib/utils -I../../lib/datos -I../../lib/xlsx -I../../lib/proyecto -I../../lib/inpcheck -I../../lib/fugplot -I../../lib/analisis -I../../lib/equation -I../../lib/anomalos -I../../lib/dictamen -I../../lib/intervencion -I../../lib/inpdet -I../../lib/tabla -I../../lib/cuaderno -I../../lib/rutas -I../../lib/artcand -I../../lib/sitio -I../../lib/raices -I../../lib/formales -I../../lib/barra -I$(ENG_DIR)/fue/include
+CFLAGS   = -O2 -g -Wall -Iinclude -I../../lib/fugdraw -I../../lib/preview -I../../lib/engine -I../../lib/coste -I../../lib/outfile -I../../lib/utils -I../../lib/datos -I../../lib/xlsx -I../../lib/proyecto -I../../lib/inpcheck -I../../lib/fugplot -I../../lib/analisis -I../../lib/equation -I../../lib/anomalos -I../../lib/dictamen -I../../lib/intervencion -I../../lib/inpdet -I../../lib/tabla -I../../lib/cuaderno -I../../lib/rutas -I../../lib/artcand -I../../lib/sitio -I../../lib/raices -I../../lib/formales -I../../lib/barra -I$(ENG_DIR)/fue/include
 LDFLAGS  +=
 LIBS     = -lz -lm
 
@@ -85,6 +85,7 @@ LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c \
            $(LIB_DIR)/cuaderno/cuaderno.c \
            $(LIB_DIR)/preview/preview.c \
            $(LIB_DIR)/engine/engine.c \
+           $(LIB_DIR)/coste/coste.c \
            $(LIB_DIR)/outfile/outfile.c \
            $(LIB_DIR)/datos/datos.c \
            $(LIB_DIR)/xlsx/xlsx.c \
@@ -204,6 +205,10 @@ $(BUILD_DIR)/lib_preview/%.o: $(LIB_DIR)/preview/%.c | $(BUILD_DIR)
 	$(CC) $(GUI_CFLAGS) $(DEPFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/lib_engine/%.o: $(LIB_DIR)/engine/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(GUI_CFLAGS) $(DEPFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/lib_coste/%.o: $(LIB_DIR)/coste/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
 	$(CC) $(GUI_CFLAGS) $(DEPFLAGS) -c $< -o $@
 

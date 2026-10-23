@@ -532,8 +532,9 @@ $CC -O2 -Wall -Wextra -I"$TOP/../atsw/include" -I"$L/proyecto" -I"$L/outdiag" \
     -I"$L/outfile" -I"$L/tabla" -I"$L/dates" $(pkg-config --cflags gtk+-3.0) \
     -I"$L/rutas" -I"$L/preview" -I"$L/fugdraw" -I"$L/utils" -I"$L/datos" \
     -I"$L/xlsx" -I"$L/engine" -I"$L/inpcheck" -I"$L/dictamen" -I"$L/intervencion" \
+    -I"$L/gesto" \
     "$TOP/../atsw/tests/test_atsw.c" "$TOP/../atsw/src/ventana.c" \
-    "$L/proyecto/proyecto.c" "$L/outdiag/outdiag.c" "$L/outfile/outfile.c" \
+    "$L/proyecto/proyecto.c" "$L/gesto/gesto.c" "$L/outdiag/outdiag.c" "$L/outfile/outfile.c" \
     "$L/dictamen/dictamen.c" "$L/intervencion/intervencion.c" "$L/dates/dates.c" \
     -o "$W/test_atsw" $(pkg-config --libs gtk+-3.0) -lm || exit 1
 "$W/test_atsw" || exit 1

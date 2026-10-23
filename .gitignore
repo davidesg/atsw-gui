@@ -57,6 +57,8 @@ gui/drtran/tests/work/
 # BINARIOS: no van al repositorio. Ya paso una vez con gui/drtran/mtram.
 gui/fug/gtk_fmg
 gui/atsw/atsw_gui
+gui/atsw-cli/atsw-cli
+gui/atsw-cli/atsw-cli.exe
 
 # LOS DIRECTORIOS DE TRABAJO DE LAS PRUEBAS. Habia 94 + 8 ficheros RASTREADOS
 # en dos carpetas que el propio banco empieza borrando con "rm -rf $WORK": no

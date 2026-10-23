@@ -97,7 +97,7 @@ corre() {        # corre NOMBRE ORDEN...
 }
 
 for d in engines/fue engines/fuf engines/fug engines/drtran engines/drvarma \
-         engines/art gui/fue gui/drtran; do
+         engines/art gui/fue gui/drtran gui/atsw-cli; do
     corre "$d" sh -c "cd $d && sh tests/run_tests.sh"
 done
 corre engines/drvec make -s -C engines/drvec test

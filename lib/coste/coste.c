@@ -39,11 +39,16 @@ static const char *const cabecera =
  * interfaz, pero atsw-cli o una bateria pueden hacerlo desde otro: el
  * contexto se copia entero bajo el cerrojo, y nadie ve uno a medias.    */
 typedef struct {
-    char *raiz, *quien, *por, *objeto, *paso;
+    char    *raiz, *quien, *por, *objeto, *paso;
+    gboolean retiene;           /* la linea no se escribe: se guarda        */
 } Contexto;
 
 static Contexto g_ctx;
 G_LOCK_DEFINE_STATIC( g_ctx );
+
+/* LA LINEA RETENIDA (coste_contexto_retiene). Una por proceso. */
+static CosteLinea *g_retenida;
+G_LOCK_DEFINE_STATIC( g_retenida );
 
 static void ctx_libera( Contexto *c )
 {
@@ -81,6 +86,24 @@ void coste_contexto_modelo( const char *raiz, const char *serie,
     else                       obj = g_strdup_printf( "%s/%s", serie, id );
     coste_contexto( raiz, "madre", "analista", obj, paso );
     g_free( obj );
+}
+
+void coste_contexto_retiene( void )
+{
+    G_LOCK( g_ctx );
+    if ( g_ctx.raiz ) g_ctx.retiene = TRUE;
+    G_UNLOCK( g_ctx );
+}
+
+CosteLinea *coste_retenida( void )
+{
+    CosteLinea *l;
+
+    G_LOCK( g_retenida );
+    l = g_retenida;
+    g_retenida = NULL;
+    G_UNLOCK( g_retenida );
+    return l;
 }
 
 void coste_contexto_limpia( void )
@@ -374,6 +397,7 @@ CosteCorrida *coste_empieza( const char *workdir, const char *programa,
     c->ctx.por    = g_strdup( g_ctx.por );
     c->ctx.objeto = g_strdup( g_ctx.objeto );
     c->ctx.paso   = g_strdup( g_ctx.paso );
+    c->ctx.retiene = g_ctx.retiene;
     G_UNLOCK( g_ctx );
 
     c->programa = nombre_programa( programa );
@@ -503,6 +527,33 @@ void coste_termina( CosteCorrida *c, gboolean escribio, const char *salida )
     l.pared_s   = c->pared_s;
     l.energia_j = -1.0;                       /* la estima coste_apunta */
     l.sha_pre   = sha;
+
+    /* RETENIDA: la escribira el que la pidio, cuando sepa que poner. */
+    if ( c->ctx.retiene )
+        {
+        CosteLinea *r = g_new0( CosteLinea, 1 );
+
+        r->fecha     = ahora();
+        r->quien     = g_strdup( l.quien );
+        r->por       = g_strdup( l.por );
+        r->objeto    = g_strdup( l.objeto );
+        r->paso      = g_strdup( l.paso );
+        r->motor     = g_strdup( l.motor );
+        r->via       = g_strdup( l.via );
+        r->cpu_s     = l.cpu_s;
+        r->pared_s   = l.pared_s;
+        r->energia_j = -1.0;
+        r->metodo    = g_strdup( "" );
+        r->sha_pre   = g_strdup( sha ? sha : "" );
+        G_LOCK( g_retenida );
+        coste_lineas_libera( g_retenida, g_retenida ? 1 : 0 );
+        g_retenida = r;
+        G_UNLOCK( g_retenida );
+        g_free( motor );
+        g_free( sha );
+        corrida_libera( c );
+        return;
+        }
 
     /* SE DICE, PERO NO PARA NADA: el motor ya ha corrido y sus resultados
        estan escritos. Un registro que no se puede escribir no es motivo

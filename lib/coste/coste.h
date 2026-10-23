@@ -22,7 +22,13 @@
  *   por        analista | asistente         quien lo pidio
  *   objeto     IPC/m04, C1/c02              el modelo o la corrida (o vacio)
  *   paso       estimar, meg, contraste,     para que
- *              prever, reproducir...
+ *              prever, reproducir:si,
+ *              reproducir:no...
+ *              reproducir LLEVA SU RESULTADO DETRAS DE LOS DOS PUNTOS
+ *              (lib/ficha): si el .pre se reproduce con el motor o no. Es
+ *              en el paso para no cambiar las columnas del registro; y
+ *              el sha_pre de esa linea es el del .pre COMPROBADO, no el del
+ *              que deja la corrida.
  *   motor      fue 1.14                     el programa y su version
  *   via        C | python                   el binario o el extra Python
  *   cpu_s      0.210                        CPU del proceso (usuario+sistema)
@@ -96,6 +102,24 @@ void coste_termina( CosteCorrida *c, gboolean escribio, const char *salida );
 
 /* No se pudo lanzar: no hubo corrida, no hay linea. */
 void coste_descarta( CosteCorrida *c );
+
+/* --- cuando la linea se decide despues de correr ------------------------- */
+
+/* LO QUE SE APUNTA DEPENDE DE LO QUE SALIO. La comprobacion de
+ * reproducibilidad (lib/ficha) corre el motor y SOLO DESPUES sabe que paso
+ * es --reproducir:si o reproducir:no-- y que sha_pre lleva: el del .pre
+ * comprobado, no el que deja la corrida. Medir a mano seria un segundo
+ * medidor; asi la medida es la de siempre y solo cambian dos campos.
+ *
+ * coste_contexto_retiene, llamada DESPUES de coste_contexto, hace que la
+ * corrida que se lance con ese contexto no escriba su linea y la deje
+ * guardada. coste_retenida la entrega (una linea propia, que se libera con
+ * coste_lineas_libera( l, 1 )) y vacia el hueco; NULL si no hay. El que la
+ * recoge cambia lo que tenga que cambiar y la escribe con coste_apunta.
+ * Hay UN hueco por proceso: una retenida que nadie recoge la pisa la
+ * siguiente.                                                            */
+void        coste_contexto_retiene( void );
+CosteLinea *coste_retenida( void );
 
 /* --- para los escritores de fuera (atsw-cli coste apunta) ---------------- */
 

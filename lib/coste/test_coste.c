@@ -298,6 +298,42 @@ int main( int argc, char **argv )
     if ( n == 2 ) comprueba_linea( &l[1], "IPC/pre-covid/m05", "meg", NULL, "asincrona" );
     coste_lineas_libera( l, n );
 
+    /* --- retenida: la linea se decide despues (lib/ficha, reproducir) --- */
+    {
+    CosteLinea *t;
+    gchar      *dr = nuevo_dir( raiz, "retenida" );
+
+    check( coste_retenida() == NULL, "retenida: sin pedirla, no hay ninguna" );
+    coste_contexto_modelo( dr, "IPC", "", "m04", "reproducir" );
+    coste_contexto_retiene();
+    r = engine_run( dr, g_prog, "--quema=0.2", "IPC_m04", NULL );
+    coste_contexto_limpia();
+    engine_result_clear( &r );
+    check( coste_lee( dr, &l, &n, &malas, why, sizeof why ) == 0 && n == 0,
+           "retenida: la corrida no escribe su linea" );
+    coste_lineas_libera( l, n );
+    t = coste_retenida();
+    check( t != NULL && t->cpu_s > 0.0 && t->pared_s >= t->cpu_s / 64 &&
+           !strcmp( t->paso, "reproducir" ) && !strcmp( t->objeto, "IPC/m04" ) &&
+           strlen( t->sha_pre ) == 64,
+           "retenida: se entrega medida, con su objeto, su paso y su sha" );
+    check( coste_retenida() == NULL, "retenida: y se entrega una vez" );
+    if ( t )
+        {
+        g_free( t->paso );
+        t->paso = g_strdup( "reproducir:si" );
+        check( coste_apunta( dr, t, why, sizeof why ) == 0,
+               "retenida: el que la pidio la apunta con su paso" );
+        coste_lineas_libera( t, 1 );
+        }
+    check( coste_lee( dr, &l, &n, &malas, why, sizeof why ) == 0 && n == 1 &&
+           !strcmp( l[0].paso, "reproducir:si" ) && l[0].energia_j >= 0.0 &&
+           l[0].metodo[0] != '\0',
+           "retenida: y queda como las demas, con su energia y su metodo" );
+    coste_lineas_libera( l, n );
+    g_free( dr );
+    }
+
     /* --- un motor que no se puede lanzar no cuesta nada ----------------- */
     coste_contexto_modelo( d, "IPC", "", "m06", "estimar" );
     r = engine_run( d, "no_hay_tal_motor_en_ninguna_parte", NULL );

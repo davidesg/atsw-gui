@@ -17,10 +17,11 @@ SRC = src/main.c \
       $(LIB)/intervencion/intervencion.c \
       $(LIB)/inpdet/inpdet.c \
       $(LIB)/raices/factor.c \
-      $(LIB)/raices/parte.c
+      $(LIB)/raices/parte.c \
+      $(LIB)/coste/coste.c
 
 INC = -I$(LIB)/proyecto -I$(LIB)/gesto -I$(LIB)/outfile -I$(LIB)/dictamen -I$(LIB)/intervencion \
-      -I$(LIB)/inpdet -I$(LIB)/raices -I$(LIB)/inpcheck
+      -I$(LIB)/inpdet -I$(LIB)/raices -I$(LIB)/inpcheck -I$(LIB)/coste
 
 GLIB_CFLAGS := $(shell pkg-config --cflags glib-2.0 2>/dev/null)
 GLIB_LIBS   := $(shell pkg-config --libs glib-2.0 2>/dev/null)

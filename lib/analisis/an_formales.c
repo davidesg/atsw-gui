@@ -36,6 +36,7 @@
 
 #include <glib/gstdio.h>
 
+#include "coste.h"
 #include "dictamen.h"
 #include "engine.h"
 #include "formales.h"
@@ -715,7 +716,17 @@ static void siguiente( Fm *g )
 
         gtk_label_set_text( GTK_LABEL(g->l_estado), e );
         g_free( e );
+        /* CADA REESTIMACION DEL CONTRASTE CUESTA, y es de este modelo: el
+           MEG son dos por frecuencia. El contexto, solo mientras se lanza. */
+        {
+        char raiz[PR_RUTA];
+
+        if ( g->h.p && pr_raiz( g->h.p, raiz, sizeof raiz ) == 0 )
+            coste_contexto_modelo( raiz, g->serie, g->muestra, g->id,
+                                   g->pl.t[g->cur].tipo == FM_MEG ? "meg" : "contraste" );
+        }
         g->corriendo = engine_run_async( g->dir, g->exe, argv, NULL, acabo, g );
+        coste_contexto_limpia();
         if ( !g->corriendo )
             {
             while ( fm_avanza( &g->pl, &g->pl.t[g->cur], g->l_libre, FALSE ) ) ;

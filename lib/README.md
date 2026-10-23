@@ -68,6 +68,26 @@ Traduce el estado de salida a un mensaje —0 escrito, 1 línea de órdenes, 2
 `.inp` inválido, 3 no estimable pero escrito con los valores iniciales, 4 error
 en ejecución— y distingue «hay ficheros» de «salió bien».
 
+Cada corrida se mide con `lib/coste` (abajo): sin contexto puesto, no se
+escribe nada.
+
+## `coste/` — lo que cuesta cada corrida
+
+Cada corrida de un motor deja una línea en `costes.csv`, en la raíz del
+proyecto (docs/ESTUDIO-terminal-mcp.md §7.7): cuándo, quién la lanzó, para
+qué, con qué motor y versión, el tiempo de CPU y el de reloj, la energía
+**estimada** con su método escrito al lado, y el sha256 del `.pre` resultante.
+Un registro de sólo añadir, con cerrojo (`flock` en Unix, `LockFileEx` en
+Windows) y una sola escritura por línea, para que la madre y el MTM puedan
+apuntar a la vez.
+
+La CPU sale de `GetProcessTimes` en Windows y de la diferencia de
+`getrusage(RUSAGE_CHILDREN)` en Unix, exacta mientras corra un motor a la vez.
+El que lanza dice antes de qué proyecto y para qué (`coste_contexto`), y
+`lib/engine` apunta la corrida; `coste_apunta` es para los de fuera (`atsw-cli
+coste apunta`) y `coste_resumen` suma el registro. La prueba es
+`test_coste.c`, en la batería de `gui/drtran`.
+
 ## `outfile/` — cómo acabó la estimación
 
 Lee el `.out` y dice si convergió **de verdad**. Importa porque el motor

@@ -441,6 +441,16 @@ $CC -O2 -Wall -Wextra -I"$L/fuedet" \
     -o "$W/test_fuedet" -lm || exit 1
 "$W/test_fuedet" || exit 1
 
+# --- lo que cuesta cada corrida (lib/coste, ESTUDIO-terminal-mcp §7.7) ------
+# Cada corrida de un motor deja una linea entera en costes.csv; sin contexto,
+# ninguna; y varios escritores a la vez (hilos y procesos) no la rompen. El
+# motor es la propia prueba, que con --quema gasta CPU como un motor.
+echo
+$CC -O2 -Wall -Wextra -I"$L/coste" -I"$L/engine" $(pkg-config --cflags glib-2.0) \
+    "$L/coste/test_coste.c" "$L/coste/coste.c" "$L/engine/engine.c" \
+    -o "$W/test_coste" $(pkg-config --libs glib-2.0) -lm || exit 1
+"$W/test_coste" "$W/coste" || exit 1
+
 # --- el resultado del identificador (engines/art) ---------------------------
 # El lector de DATA_art.cand contra las referencias del propio motor: lo que
 # la ventana de identificacion lee es lo que art escribe, por construccion.
@@ -512,11 +522,11 @@ $CC -O2 -Wall -Wextra -I"$TOP/../atsw/include" -I"$L/proyecto" -I"$L/inpcheck" \
     -Dinp_check=inp_check_fue -c "$TOP/../../engines/fue/src/inpcheck.c" \
     $(pkg-config --cflags glib-2.0) -o "$W/inpcheck_fue.o" || exit 1
 $CC -O2 -Wall -Wextra -I"$TOP/../atsw/include" -I"$L/proyecto" -I"$L/inpcheck" \
-    -I"$L/engine" -I"$L/outfile" -I"$L/outdiag" -I"$L/tabla" -I"$L/dates" \
+    -I"$L/engine" -I"$L/coste" -I"$L/outfile" -I"$L/outdiag" -I"$L/tabla" -I"$L/dates" \
     -I"$L/preview" -I"$L/rutas" -I"$L/fugdraw" -I"$L/utils" -I"$L/dictamen" \
     $(pkg-config --cflags gtk+-3.0) \
     "$TOP/../atsw/tests/test_editor.c" "$TOP/../atsw/src/editor.c" \
-    "$L/proyecto/proyecto.c" "$L/outfile/outfile.c" "$L/engine/engine.c" \
+    "$L/proyecto/proyecto.c" "$L/outfile/outfile.c" "$L/engine/engine.c" "$L/coste/coste.c" \
     "$L/outdiag/outdiag.c" "$L/dates/dates.c" "$L/rutas/rutas.c" \
     "$L/preview/preview.c" "$L/fugdraw/fugdraw.c" "$L/utils/ext.c" \
     "$W/inpcheck_fue.o" \

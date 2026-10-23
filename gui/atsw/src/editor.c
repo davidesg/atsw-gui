@@ -37,6 +37,7 @@
 
 #include <glib/gstdio.h>
 
+#include "coste.h"
 #include "engine.h"
 #include "preview.h"
 #include "rutas.h"
@@ -575,7 +576,17 @@ static void on_estimar( GtkButton *b, Editor *E )
 
     corriendo( E, TRUE );
     di( E, "Estimando %s…", base );
+    /* LO QUE CUESTA, EN costes.csv (lib/coste). lib/engine se queda con una
+       copia al lanzar, asi que el contexto se quita en seguida: si se
+       quedara puesto, se pegaria a la siguiente corrida de otro modelo.  */
+    {
+    char raiz[PR_RUTA];
+
+    if ( pr_raiz( E->a->p, raiz, sizeof raiz ) == 0 )
+        coste_contexto_modelo( raiz, E->serie, E->muestra, E->id, "estimar" );
+    }
     E->job = engine_start( dir, exe, argv, paso, sale, acabo, E );
+    coste_contexto_limpia();
     if ( E->job == NULL )
         { corriendo( E, FALSE ); di( E, "No pude lanzar %s.", exe ); }
 

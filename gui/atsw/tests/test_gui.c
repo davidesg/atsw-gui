@@ -49,6 +49,7 @@
 #include "inpdet.h"
 #include "inpcheck.h"
 #include "cuaderno.h"
+#include "coste.h"
 
 static int    fallos = 0;
 static char   T[PR_RUTA];          /* el directorio de la prueba          */
@@ -339,6 +340,30 @@ static gboolean existe( const char *serie, const char *muestra,
 
     g_free( f );
     return r;
+}
+
+/* LO QUE CUESTA (lib/coste): cuantas lineas de costes.csv, en la raiz del
+   proyecto, son de ese objeto y ese paso, con el motor fue y su metodo. En
+   *sha, el sha_pre de la ultima (g_free).                               */
+static int costes_de( const char *objeto, const char *paso, gchar **sha )
+{
+    char        raiz[PR_RUTA], why[256];
+    CosteLinea *l = NULL;
+    int         n = 0, i, k = 0;
+
+    if ( sha ) *sha = NULL;
+    if ( pr_raiz( A.p, raiz, sizeof raiz ) != 0 ||
+         coste_lee( raiz, &l, &n, NULL, why, sizeof why ) != 0 ) return 0;
+    for ( i = 0; i < n; i++ )
+        if ( !strcmp( l[i].objeto, objeto ) && !strcmp( l[i].paso, paso ) &&
+             g_str_has_prefix( l[i].motor, "fue" ) && !strcmp( l[i].quien, "madre" ) &&
+             l[i].cpu_s >= 0.0 && l[i].energia_j >= 0.0 && *l[i].metodo )
+            {
+            k++;
+            if ( sha ) { g_free( *sha ); *sha = g_strdup( l[i].sha_pre ); }
+            }
+    coste_lineas_libera( l, n );
+    return k;
 }
 
 /* Sin \r: en Windows la madre escribe los ficheros de texto con \r\n, y lo
@@ -1952,6 +1977,18 @@ static void editor( void )
     nota( "editor tras estimar: %s", estado_editor( E ) );
     check( existe( "ipc", "", "m01", ".out" ) && existe( "ipc", "", "m01", ".pre" ),
            "estimar deja el .out y el .pre de m01", estado_editor( E ) );
+    {
+    gchar *sha = NULL, *pre = ruta_de( "ipc", "", "m01", ".pre" ), *t = NULL, *esperado;
+    gsize  n = 0;
+
+    g_file_get_contents( pre, &t, &n, NULL );
+    esperado = t ? g_compute_checksum_for_data( G_CHECKSUM_SHA256, (guchar *) t, n )
+                 : g_strdup( "?" );
+    check( costes_de( "ipc/m01", "estimar", &sha ) == 1,
+           "y lo que costó, en costes.csv: una línea de ipc/m01, «estimar»", NULL );
+    check( sha && !strcmp( sha, esperado ), "con el sha256 de su .pre", sha );
+    g_free( sha ); g_free( pre ); g_free( t ); g_free( esperado );
+    }
     s = texto_de( E->salida );
     check( strlen( s ) > 500, "el informe sale en la pestaña Output", s );
     g_free( s );
@@ -2388,6 +2425,8 @@ static void menu_modelo_prueba( void )
             pump( 250 );
             }
         check( txt && strstr( txt, "Hecho." ), "sus contrastes acaban", txt );
+        check( costes_de( "ipc/m01", "contraste", NULL ) > 0,
+               "cada reestimación de un contraste deja su línea en costes.csv", NULL );
         check( txt && !strstr( txt, "No calculable" ) &&
                ( strstr( txt, "Rechaza H" ) || strstr( txt, "No rechaza H" ) ||
                  strstr( txt, "no admite ninguno" ) ),
@@ -2465,6 +2504,8 @@ static void menu_modelo_prueba( void )
                    "el MEG contrasta cada frecuencia y lo resume", txt );
             check( br != NULL && gtk_widget_get_sensitive( br ) == hay_est,
                    "y ofrece reformular si, y solo si, hay una estocástica", NULL );
+            check( costes_de( "ipc/m01", "meg", NULL ) >= 2,
+                   "y las estimaciones del MEG quedan en costes.csv como «meg»", NULL );
             }
         else
             check( txt && strstr( txt, "MEG: " ) && br == NULL,

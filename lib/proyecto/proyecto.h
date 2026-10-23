@@ -322,6 +322,11 @@ int pr_escribir( const Proyecto *p, const char *path, PrError *e );
 int pr_ruta( const Proyecto *p, const char *serie, const char *muestra,
              const char *id, const char *ext, char *out, size_t n );
 
+/* LA RAIZ DEL PROYECTO, resuelta como en pr_ruta: el directorio del que
+ * cuelga todo, y donde va lo que es del proyecto entero y no de una serie
+ * (costes.csv, lib/coste). 0 si pudo.                                   */
+int pr_raiz( const Proyecto *p, char *out, size_t n );
+
 /* CON QUE SE ABRE UN MODELO DERIVADO: 0 fue_gui, 1 el editor.
  *
  * Es una PREFERENCIA DE TRABAJO, y vive en el manifiesto porque la madre no

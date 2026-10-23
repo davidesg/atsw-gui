@@ -19,6 +19,7 @@
 
 #include "fue_context.h"
 #include "analisis.h"
+#include "coste.h"
 
 Proyecto   *fue_proyecto( void );
 int         fue_proyecto_relee( void );
@@ -65,6 +66,30 @@ int fue_modelo_actual( FueContext *ctx, char *serie, size_t ns,
     return r;
 }
 
+
+/* LO QUE CUESTA LO QUE SE VA A LANZAR, en el costes.csv del proyecto
+ * (lib/coste). Solo con --proyecto: un fue_gui suelto no sabe de proyecto
+ * y no escribe nada. El objeto es el modelo que la ventana tiene delante, o
+ * vacio si el fichero no es del manifiesto.
+ *
+ * quien es «madre», como en atsw_gui, y es a proposito: el campo dice POR
+ * QUE PUERTA entro la corrida --las ventanas de la suite, atsw-cli o el
+ * MTM--, y el programa ya va en «motor». fue_gui es una ventana de la
+ * madre, que lo lanza con --proyecto.
+ *
+ * Se llama justo antes de lanzar, y coste_contexto_limpia justo despues. */
+void fue_coste_contexto( FueContext *ctx, const char *paso )
+{
+    Proyecto *p = fue_proyecto();
+    char      serie[PR_ID], muestra[PR_ID], id[PR_ID], raiz[PR_RUTA];
+
+    coste_contexto_limpia();
+    if ( !p || pr_raiz( p, raiz, sizeof raiz ) != 0 ) return;
+    if ( fue_modelo_actual( ctx, serie, sizeof serie, muestra, sizeof muestra,
+                            id, sizeof id ) != 0 )
+        serie[0] = muestra[0] = id[0] = '\0';
+    coste_contexto_modelo( raiz, serie, muestra, id, paso );
+}
 
 /* ------------------------------------------------------------------------ */
 /* El anfitrión que fue_gui le da a lib/analisis                             */

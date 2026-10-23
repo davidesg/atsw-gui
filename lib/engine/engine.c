@@ -1,9 +1,12 @@
 /* engine.c -- running fue and fuf from the GUI. See include/engine.h. */
 
 #include "engine.h"
+#include "coste.h"
 
 #include <stdarg.h>
 #include <string.h>
+
+#include <glib/gstdio.h>
 
 #ifdef G_OS_WIN32
 #  include <windows.h>
@@ -128,50 +131,69 @@ static gchar *find_program(const char *program) {
 static gchar *status_message(const char *program, int status, int signal_no,
                              const char *err, const char *out);
 
+/* Se declara antes: engine_run corre por el mismo camino que engine_start */
+static EngineJob *lanza(const char *workdir, const char *program,
+                        const char *const *argv, GMainContext *ctx,
+                        gboolean sin_entrada, EngineProgress progress,
+                        EngineSalida salida, EngineDone done, gpointer data,
+                        GError **error);
+
+typedef struct { EngineResult r; gboolean fin; } Espera;
+
+static void espera_fin(const EngineResult *r, gpointer data) {
+    Espera *e = data;
+
+    e->r.status    = r->status;
+    e->r.signal_no = r->signal_no;
+    e->r.output    = g_strdup(r->output);
+    e->r.message   = g_strdup(r->message);
+    e->fin         = TRUE;
+}
+
 EngineResult engine_run(const char *workdir, const char *program, ...) {
     EngineResult r = { ENGINE_NORUN, 0, NULL, NULL };
     GPtrArray   *args;
     va_list      ap;
     const char  *a;
-    gchar       *path;
 
-    path = find_program(program);
     args = g_ptr_array_new_with_free_func(g_free);
-    g_ptr_array_add(args, path ? path : g_strdup(program));
     va_start(ap, program);
     while ((a = va_arg(ap, const char *)) != NULL)
         g_ptr_array_add(args, g_strdup(a));
     va_end(ap);
     g_ptr_array_add(args, NULL);
 
-    /* UN SOLO CAMINO EN LAS TRES PLATAFORMAS. Windows tenia uno propio,
-     * con CreateProcessW, que solo recogia el codigo de salida: el GUI
-     * decia "fue could not read the input file." sin la linea ni el motivo
-     * que el motor si escribe, y una caida pasaba por un estado cualquiera.
-     * El asincrono (engine_start) ya usaba g_spawn en Windows.          */
+    /* UN SOLO CAMINO EN LAS TRES PLATAFORMAS, Y AHORA TAMBIEN PARA LA ESPERA.
+     * Windows tenia uno propio, con CreateProcessW, que solo recogia el
+     * codigo de salida; despues fue g_spawn_sync. Pero g_spawn_sync recoge
+     * al hijo por dentro y no deja preguntarle cuanto costo: en Windows el
+     * tiempo de CPU sale de GetProcessTimes SOBRE SU MANEJADOR, y ese
+     * manejador g_spawn_sync no lo enseña (lib/coste). Asi que la espera es
+     * la corrida asincrona de siempre, en un contexto PROPIO que solo se
+     * itera aqui: la interfaz no se mueve mientras --como antes--, y lo que
+     * se mide es lo mismo en los dos caminos.
+     *
+     * Con la entrada CERRADA, como hacia g_spawn_sync: un motor que pidiera
+     * algo por teclado se quedaria esperando una respuesta que no llega. */
     {
-    gchar  *out = NULL, *err = NULL;
-    GError *error = NULL;
-    gint    wait_status = 0;
+    GMainContext *ctx = g_main_context_new();
+    GError       *error = NULL;
+    Espera        e;
 
-    if (!g_spawn_sync(workdir, (gchar **)args->pdata, NULL, G_SPAWN_SEARCH_PATH,
-                      NULL, NULL, &out, &err, &wait_status, &error)) {
+    memset(&e, 0, sizeof e);
+    if (lanza(workdir, program, (const char *const *) args->pdata, ctx, TRUE,
+              NULL, NULL, espera_fin, &e, &error) == NULL) {
         r.message = g_strdup_printf("%s no se pudo lanzar: %s", program,
                                     error ? error->message : "error desconocido");
         if (error) g_error_free(error);
-        g_free(out);
-        g_free(err);
+        g_main_context_unref(ctx);
         g_ptr_array_free(args, TRUE);
         return r;
     }
-    decode_status(wait_status, &r.status, &r.signal_no);
-    r.message = status_message(program, r.status, r.signal_no, err, out);
-    /* stderr first: that is where the engines put what went wrong */
-    r.output  = g_strconcat(err ? err : "", (err && *err && out && *out) ? "\n" : "",
-                            out ? out : "", NULL);
-    if (r.output && !*r.output) { g_free(r.output); r.output = NULL; }
-    g_free(out);
-    g_free(err);
+    while (!e.fin)
+        g_main_context_iteration(ctx, TRUE);
+    g_main_context_unref(ctx);
+    r = e.r;
     }
 
     g_ptr_array_free(args, TRUE);
@@ -205,6 +227,8 @@ typedef struct {
     guint           pending;    /* tuberias abiertas + el hijo              */
     GPid            pid;        /* para poder pararlo                       */
     gboolean        vivo;
+    GMainContext   *ctx;        /* donde se vigila; NULL, el de siempre     */
+    CosteCorrida   *coste;      /* lo que cuesta; NULL sin contexto         */
 } Run;
 
 /* El optimizador escribe "%4d F: %0.10f" por iteracion, todas seguidas y sin
@@ -257,6 +281,10 @@ static void run_finish(Run *run) {
                             (*run->err->str && *run->out->str) ? "\n" : "",
                             run->out->str, NULL);
     if (r.output && !*r.output) { g_free(r.output); r.output = NULL; }
+    /* EL COSTE ANTES QUE EL AVISO: quien recibe done() puede querer leer
+       costes.csv, y la linea de esta corrida tiene que estar ya.        */
+    coste_termina(run->coste, engine_wrote_results(&r), run->out->str);
+    run->coste = NULL;
     if (run->done != NULL)
         run->done(&r, run->data);
     engine_result_clear(&r);
@@ -308,6 +336,9 @@ static void on_child(GPid pid, gint wait_status, gpointer data) {
     Run *run = data;
 
     decode_status(wait_status, &run->status, &run->signal_no);
+    /* ANTES DE CERRARLO: en Windows el tiempo de CPU se le pregunta al
+       manejador del proceso, y despues de g_spawn_close_pid ya no hay. */
+    coste_hijo_acabo(run->coste, pid);
     g_spawn_close_pid(pid);
     run->vivo = FALSE;
     if (--run->pending == 0) run_finish(run);
@@ -319,14 +350,20 @@ static void watch_pipe(gint fd, Run *run, gboolean is_err) {
 #else
     GIOChannel *channel = g_io_channel_unix_new(fd);
 #endif
-    Pipe *pipe = g_new0(Pipe, 1);
+    Pipe    *pipe = g_new0(Pipe, 1);
+    GSource *src;
 
     pipe->run    = run;
     pipe->is_err = is_err;
     g_io_channel_set_encoding(channel, NULL, NULL);      /* bytes, sin UTF-8 */
     g_io_channel_set_flags(channel, G_IO_FLAG_NONBLOCK, NULL);
     g_io_channel_set_close_on_unref(channel, TRUE);
-    g_io_add_watch(channel, G_IO_IN | G_IO_HUP | G_IO_ERR, on_pipe, pipe);
+    /* En el contexto de la corrida: el de siempre para engine_start, uno
+       propio para la espera de engine_run.                              */
+    src = g_io_create_watch(channel, G_IO_IN | G_IO_HUP | G_IO_ERR);
+    g_source_set_callback(src, (GSourceFunc) (void (*)(void)) on_pipe, pipe, NULL);
+    g_source_attach(src, run->ctx);
+    g_source_unref(src);
 }
 
 /* Parar una corrida. Es lo que faltaba: el pid estaba aqui dentro y no salia,
@@ -363,27 +400,49 @@ EngineJob *engine_start(const char *workdir, const char *program,
                         const char *const *argv,
                         EngineProgress progress, EngineSalida salida,
                         EngineDone done, gpointer data) {
-    GPtrArray  *args = g_ptr_array_new_with_free_func(g_free);
-    gchar      *path = find_program(program);
-    GError     *error = NULL;
-    GPid        pid;
-    gint        out_fd = -1, err_fd = -1;
-    Run        *run;
-    int         i;
+    GError    *error = NULL;
+    EngineJob *job = lanza(workdir, program, argv, NULL, FALSE, progress,
+                           salida, done, data, &error);
+
+    if (error) g_error_free(error);
+    return job;
+}
+
+/* EL CAMINO DE LAS DOS: engine_start con el contexto de siempre y la entrada
+ * heredada (como ha sido siempre), engine_run con uno propio y la entrada
+ * cerrada. Aqui se pone en marcha la medida del coste.               */
+static EngineJob *lanza(const char *workdir, const char *program,
+                        const char *const *argv, GMainContext *ctx,
+                        gboolean sin_entrada, EngineProgress progress,
+                        EngineSalida salida, EngineDone done, gpointer data,
+                        GError **error) {
+    GPtrArray    *args = g_ptr_array_new_with_free_func(g_free);
+    gchar        *path = find_program(program);
+    GPid          pid;
+    gint          in_fd = -1, out_fd = -1, err_fd = -1;
+    Run          *run;
+    CosteCorrida *coste;
+    GSource      *src;
+    int           i;
 
     g_ptr_array_add(args, path ? path : g_strdup(program));
     for (i = 0; argv != NULL && argv[i] != NULL; i++)
         g_ptr_array_add(args, g_strdup(argv[i]));
     g_ptr_array_add(args, NULL);
 
+    coste = coste_empieza(workdir, program, argv);
     if (!g_spawn_async_with_pipes(workdir, (gchar **) args->pdata, NULL,
                                   G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD,
-                                  NULL, NULL, &pid, NULL, &out_fd, &err_fd, &error)) {
-        if (error) g_error_free(error);
+                                  NULL, NULL, &pid,
+                                  sin_entrada ? &in_fd : NULL,
+                                  &out_fd, &err_fd, error)) {
+        coste_descarta(coste);
         g_ptr_array_free(args, TRUE);
         return NULL;
     }
     g_ptr_array_free(args, TRUE);
+    /* La entrada, cerrada en el acto: el motor lee fin de fichero. */
+    if (in_fd >= 0) g_close(in_fd, NULL);
 
     run = g_new0(Run, 1);
     run->program  = g_strdup(program);
@@ -396,8 +455,13 @@ EngineJob *engine_start(const char *workdir, const char *program,
     run->pending  = 3;                       /* las dos tuberias y el hijo  */
     run->pid      = pid;
     run->vivo     = TRUE;
+    run->ctx      = ctx;
+    run->coste    = coste;
     watch_pipe(out_fd, run, FALSE);
     watch_pipe(err_fd, run, TRUE);
-    g_child_watch_add(pid, on_child, run);
+    src = g_child_watch_source_new(pid);
+    g_source_set_callback(src, (GSourceFunc) (void (*)(void)) on_child, run, NULL);
+    g_source_attach(src, ctx);
+    g_source_unref(src);
     return (EngineJob *) run;
 }

@@ -73,6 +73,11 @@ Tres consecuencias, y las tres son reglas del código, no convenios de lectura:
 El rol se escribe **sólo cuando no es el normal**: un manifiesto lleno de
 `rol: modelo` no dice nada y se lee peor.
 
+**Quién dio el paso**, por la misma regla (docs/ESTUDIO-terminal-mcp.md §7.2):
+`por: asistente` en un modelo que derivó un asistente, y `por_elegido:
+asistente` si fue él quien lo eligió. Lo del analista no lleva marca, porque es
+lo normal (`pr_pon_por`, `pr_pon_por_elegido`; `atsw-cli … --por asistente`).
+
 ## La cadena que esto registra
 
 ```

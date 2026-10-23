@@ -88,6 +88,23 @@ El que lanza dice antes de qué proyecto y para qué (`coste_contexto`), y
 coste apunta`) y `coste_resumen` suma el registro. La prueba es
 `test_coste.c`, en la batería de `gui/drtran`.
 
+Cuando lo que se apunta depende de lo que salió (la comprobación de
+reproducibilidad de `lib/ficha`), `coste_contexto_retiene` guarda la línea de
+la corrida en vez de escribirla, y `coste_retenida` la entrega para apuntarla
+con su paso (`reproducir:si`, `reproducir:no`): la medida es la de siempre.
+
+## `ficha/` — la ficha de confianza
+
+Lo que hace falta para fiarse de un modelo, o para no fiarse
+(docs/ESTUDIO-terminal-mcp.md §7.8): el recorrido desde los datos con quién dio
+cada paso y su razón, la adecuación de `lib/dictamen`, la última comprobación
+de reproducibilidad de **ese** `.pre` y el coste, de `costes.csv`. No se guarda:
+se calcula cada vez. Una sola función escribe el Markdown (`fi_markdown`), para
+que la madre, `atsw-cli ficha` y el MTM den los mismos bytes. `fi_comprueba`
+corre `fue` sobre el `.pre` (con `lib/engine`) y lo compara token a token, con
+la tolerancia del certificado de art (1e-3, medida). Sólo GLib. La prueba está
+en la batería de `gui/atsw-cli`.
+
 ## `outfile/` — cómo acabó la estimación
 
 Lee el `.out` y dice si convergió **de verdad**. Importa porque el motor

@@ -144,6 +144,35 @@ fi
 mira "raices factorizado: el ya factorizado no se vuelve a partir (estado 1)" \
      '! "$CLI" raices factorizado "$Y" en4 "$(echo "$J" | campo "d[\"modelo\"]")" 2>/dev/null'
 
+# coste: el MTM apunta lo que corre en Python, y el resumen lo suma. Hasta
+# aqui nada ha corrido un motor con contexto: el registro no existe.
+C="$P/costes.csv"
+mira "coste: sin corridas no hay costes.csv" '[ ! -f "$C" ]'
+mira "coste resumen: sin registro, cero grupos" \
+     '[ "$("$CLI" --json coste resumen "$Y" | campo "len(d[\"grupos\"])")" = 0 ]'
+"$CLI" coste apunta "$Y" --quien mtm --objeto RIPC/m01 --paso estimar \
+       --motor "art 0.9" --via python --cpu 1.5 --pared 2 >/dev/null
+"$CLI" coste apunta "$Y" --objeto en4/m01 --paso meg --motor "fue 1.14" \
+       --via C --cpu 0.5 --pared 0.75 --energia 3 --metodo "medido: RAPL" >/dev/null
+mira "coste apunta: la cabecera y dos líneas" \
+     '[ "$(head -1 "$C" | cut -d, -f1-3)" = "fecha,quien,por" ] && [ $(wc -l < "$C") = 3 ]'
+mira "coste apunta: sin energía, se estima y se dice cómo" \
+     'sed -n 2p "$C" | grep -q "cpu×TDP/núcleos"'
+mira "coste apunta: quien atsw-cli y por asistente, si no se dice" \
+     'sed -n 3p "$C" | grep -q ",atsw-cli,asistente,en4/m01,meg,"'
+J=$("$CLI" --json coste resumen "$Y" --por-que serie)
+mira "coste resumen por serie: RIPC y en4, con sus tiempos" \
+     '[ "$(echo "$J" | campo "[(g[\"clave\"], g[\"corridas\"], g[\"cpu_s\"]) for g in d[\"grupos\"]]")" = "[('"'"'RIPC'"'"', 1, 1.5), ('"'"'en4'"'"', 1, 0.5)]" ]'
+mira "coste resumen total: dos corridas, 2 s de CPU" \
+     '[ "$("$CLI" --json coste resumen "$Y" | campo "d[\"grupos\"][0][\"corridas\"] == 2 and d[\"grupos\"][0][\"cpu_s\"] == 2")" = True ]'
+mira "coste apunta: una energía sin su método no se apunta (estado 1)" \
+     '! "$CLI" coste apunta "$Y" --paso x --motor y --cpu 1 --pared 1 --energia 2 2>/dev/null'
+mira "coste apunta: un tiempo que no es un número (estado 1)" \
+     '! "$CLI" coste apunta "$Y" --paso x --motor y --cpu 1,5 --pared 1 2>/dev/null'
+mira "coste resumen: un agrupamiento que no existe (estado 1)" \
+     '! "$CLI" coste resumen "$Y" --por-que color 2>/dev/null'
+mira "coste: lo rechazado no se escribe" '[ $(wc -l < "$C") = 3 ]'
+
 # los errores
 J=$("$CLI" --json dictamen "$Y" RIPC m99 2>/dev/null); rc=$?
 mira "un modelo que no está: estado 1 y {ok: false} con el porqué" \

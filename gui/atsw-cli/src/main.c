@@ -35,6 +35,7 @@
 #include "inpdet.h"
 #include "raices.h"
 #include "inpcheck.h"
+#include "coste.h"
 
 #ifndef ATSW_VERSION
 #define ATSW_VERSION "en desarrollo"
@@ -48,6 +49,11 @@ static gboolean  json;
 static const char *muestra = "";
 static const char *razon   = NULL;
 static const char *titulo  = NULL;
+
+/* las de «coste apunta» y «coste resumen» */
+static const char *c_quien, *c_por, *c_objeto, *c_paso, *c_motor, *c_via,
+                  *c_cpu, *c_pared, *c_energia, *c_metodo, *c_sha, *c_fecha,
+                  *c_por_que;
 
 /* ------------------------------------------------------------------------ */
 /* JSON a mano: es poco y no merece una dependencia mas en tres sistemas    */
@@ -590,6 +596,125 @@ static int raices_factorizado( const char *path, const char *serie, const char *
 }
 
 /* ------------------------------------------------------------------------ */
+/* coste: apuntar una corrida de fuera y sumar el registro                  */
+/* ------------------------------------------------------------------------ */
+
+/* La raiz del proyecto, que es donde vive costes.csv. */
+static int raiz_de( const char *path, char *raiz, size_t n )
+{
+    char      why[512];
+    Proyecto *p = abre( path, why, sizeof why );
+    int       rc;
+
+    if ( !p ) return falla( "%s", why );
+    rc = pr_raiz( p, raiz, n );
+    g_free( p );
+    if ( rc != 0 ) return falla( "No pude saber la raíz del proyecto." );
+    return 0;
+}
+
+/* Un numero de la orden, con punto; nada detras. */
+static int numero_de( const char *opcion, const char *s, double *v )
+{
+    char *fin = NULL;
+
+    if ( s == NULL ) return falla( "Falta %s.", opcion );
+    *v = g_ascii_strtod( s, &fin );
+    if ( fin == s || *fin != '\0' || !isfinite( *v ) )
+        return falla( "%s %s: tiene que ser un número (con punto).", opcion, s );
+    return 0;
+}
+
+/* coste apunta P: una corrida que no paso por lib/engine (el MTM, que corre
+   en Python), al mismo registro y con el mismo escritor. */
+static int coste_apunta_orden( const char *path )
+{
+    char       raiz[PR_RUTA], why[512];
+    CosteLinea l;
+
+    if ( raiz_de( path, raiz, sizeof raiz ) != 0 ) return 1;
+    memset( &l, 0, sizeof l );
+    if ( !c_motor || !*c_motor ) return falla( "Falta --motor: con qué programa se corrió." );
+    if ( !c_paso || !*c_paso ) return falla( "Falta --paso: para qué se corrió." );
+    if ( numero_de( "--cpu", c_cpu, &l.cpu_s ) != 0 ||
+         numero_de( "--pared", c_pared, &l.pared_s ) != 0 ) return 1;
+    l.energia_j = -1.0;
+    if ( c_energia && numero_de( "--energia", c_energia, &l.energia_j ) != 0 ) return 1;
+    l.fecha   = (char *) c_fecha;
+    l.quien   = (char *) ( c_quien ? c_quien : "atsw-cli" );
+    l.por     = (char *) ( c_por ? c_por : "asistente" );
+    l.objeto  = (char *) c_objeto;
+    l.paso    = (char *) c_paso;
+    l.motor   = (char *) c_motor;
+    l.via     = (char *) c_via;
+    l.metodo  = (char *) c_metodo;
+    l.sha_pre = (char *) c_sha;
+    if ( coste_apunta( raiz, &l, why, sizeof why ) != 0 ) return falla( "%s", why );
+    if ( json )
+        {
+        GString *t = g_string_new( "{\"ok\": true, " );
+        gchar   *f = g_build_filename( raiz, COSTE_FICHERO, NULL );
+        gchar   *abs = g_canonicalize_filename( f, NULL );
+
+        js_par( t, "fichero", abs ); g_string_append( t, "}\n" );
+        fputs( t->str, stdout );
+        g_string_free( t, TRUE );
+        g_free( abs ); g_free( f );
+        }
+    else printf( "Apuntada en %s.\n", COSTE_FICHERO );
+    return 0;
+}
+
+/* coste resumen P [--por-que G]: los totales, por grupo. */
+static int coste_resumen_orden( const char *path )
+{
+    char        raiz[PR_RUTA], why[512];
+    CosteTotal *t = NULL;
+    GString    *s;
+    int         n = 0, i;
+
+    if ( raiz_de( path, raiz, sizeof raiz ) != 0 ) return 1;
+    if ( coste_resumen( raiz, c_por_que, &t, &n, why, sizeof why ) != 0 )
+        return falla( "%s", why );
+    s = g_string_new( "" );
+    if ( json )
+        {
+        g_string_append( s, "{\"ok\": true, " );
+        js_par( s, "por_que", c_por_que && *c_por_que ? c_por_que : "total" );
+        g_string_append( s, ", \"grupos\": [" );
+        for ( i = 0; i < n; i++ )
+            {
+            g_string_append( s, i ? ", {" : "{" );
+            js_par( s, "clave", t[i].clave );
+            g_string_append_printf( s, ", \"corridas\": %d, ", t[i].corridas );
+            js_num( s, "cpu_s", t[i].cpu_s ); g_string_append( s, ", " );
+            js_num( s, "pared_s", t[i].pared_s ); g_string_append( s, ", " );
+            js_num( s, "energia_j", t[i].energia_j ); g_string_append( s, "}" );
+            }
+        g_string_append( s, "]}\n" );
+        }
+    else if ( n == 0 )
+        g_string_append( s, "No hay corridas apuntadas.\n" );
+    else
+        {
+        g_string_append( s, "  " );
+        col( s, c_por_que && *c_por_que ? c_por_que : "", 20 );
+        g_string_append( s, "corridas      CPU (s)    reloj (s)   energía (J)\n" );
+        for ( i = 0; i < n; i++ )
+            {
+            g_string_append( s, "  " );
+            col( s, t[i].clave, 20 );
+            g_string_append_printf( s, "%8d %12.3f %12.3f %13.3f\n", t[i].corridas,
+                                    t[i].cpu_s, t[i].pared_s, t[i].energia_j );
+            }
+        }
+    fputs( s->str, stdout );
+    g_string_free( s, TRUE );
+    coste_totales_libera( t, n );
+    return 0;
+}
+
+/* ------------------------------------------------------------------------ */
 /* La orden                                                                 */
 /* ------------------------------------------------------------------------ */
 
@@ -605,12 +730,18 @@ static void uso( FILE *f )
            "  proyecto caso-nuevo P SERIE/MODELO SERIE/MODELO...   (la salida primero)\n"
            "  dictamen P SERIE MODELO               la diagnosis del .out\n"
            "  raices factores P SERIE MODELO        la factorización del AR\n"
-           "  raices factorizado P SERIE MODELO     deriva el modelo factorizado\n\n"
+           "  raices factorizado P SERIE MODELO     deriva el modelo factorizado\n"
+           "  coste apunta P --motor M --paso X --cpu S --pared S   una corrida de fuera\n"
+           "  coste resumen P [--por-que G]         los totales de costes.csv\n\n"
            "  P es el proyecto.yaml.\n"
            "  --muestra M   la muestra (sin ella, la completa)\n"
            "  --razon R     la razón del modelo nuevo o del caso\n"
            "  --titulo T    el título del caso\n"
-           "  --json        la salida en JSON\n", f );
+           "  --json        la salida en JSON\n\n"
+           "  coste apunta: --objeto SERIE/MODELO, --via C|python, --quien (atsw-cli),\n"
+           "    --por (asistente), --fecha, --sha-pre; --energia J con su --metodo, o\n"
+           "    sin los dos, que se estima (cpu×TDP/núcleos).\n"
+           "  coste resumen: --por-que serie|objeto|motor|via|por|paso|quien\n", f );
 }
 
 int main( int argc, char **argv )
@@ -626,6 +757,19 @@ int main( int argc, char **argv )
         else if ( !strcmp( argv[i], "--muestra" ) && i + 1 < argc ) muestra = argv[++i];
         else if ( !strcmp( argv[i], "--razon" ) && i + 1 < argc ) razon = argv[++i];
         else if ( !strcmp( argv[i], "--titulo" ) && i + 1 < argc ) titulo = argv[++i];
+        else if ( !strcmp( argv[i], "--quien" ) && i + 1 < argc ) c_quien = argv[++i];
+        else if ( !strcmp( argv[i], "--por" ) && i + 1 < argc ) c_por = argv[++i];
+        else if ( !strcmp( argv[i], "--objeto" ) && i + 1 < argc ) c_objeto = argv[++i];
+        else if ( !strcmp( argv[i], "--paso" ) && i + 1 < argc ) c_paso = argv[++i];
+        else if ( !strcmp( argv[i], "--motor" ) && i + 1 < argc ) c_motor = argv[++i];
+        else if ( !strcmp( argv[i], "--via" ) && i + 1 < argc ) c_via = argv[++i];
+        else if ( !strcmp( argv[i], "--cpu" ) && i + 1 < argc ) c_cpu = argv[++i];
+        else if ( !strcmp( argv[i], "--pared" ) && i + 1 < argc ) c_pared = argv[++i];
+        else if ( !strcmp( argv[i], "--energia" ) && i + 1 < argc ) c_energia = argv[++i];
+        else if ( !strcmp( argv[i], "--metodo" ) && i + 1 < argc ) c_metodo = argv[++i];
+        else if ( !strcmp( argv[i], "--sha-pre" ) && i + 1 < argc ) c_sha = argv[++i];
+        else if ( !strcmp( argv[i], "--fecha" ) && i + 1 < argc ) c_fecha = argv[++i];
+        else if ( !strcmp( argv[i], "--por-que" ) && i + 1 < argc ) c_por_que = argv[++i];
         else if ( !strcmp( argv[i], "-h" ) || !strcmp( argv[i], "--help" ) )
             { uso( stdout ); return 0; }
         else if ( argv[i][0] == '-' && argv[i][1] == '-' )
@@ -657,6 +801,8 @@ int main( int argc, char **argv )
         return raices_factores( pos[2], pos[3], pos[4] );
     if ( ES( 0, "raices" ) && ES( 1, "factorizado" ) && npos == 5 )
         return raices_factorizado( pos[2], pos[3], pos[4] );
+    if ( ES( 0, "coste" ) && ES( 1, "apunta" ) && npos == 3 ) return coste_apunta_orden( pos[2] );
+    if ( ES( 0, "coste" ) && ES( 1, "resumen" ) && npos == 3 ) return coste_resumen_orden( pos[2] );
 #undef ES
     fprintf( stderr, "atsw-cli: orden desconocida o mal escrita\n" );
     uso( stderr );

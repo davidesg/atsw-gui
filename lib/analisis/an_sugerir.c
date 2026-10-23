@@ -519,9 +519,9 @@ static void on_derivar( GtkButton *b, Sg *g )
     g_snprintf( serie, sizeof serie, "%s", g->serie );
     g_snprintf( muestra, sizeof muestra, "%s", g->muestra );
     g_snprintf( padre, sizeof padre, "%s", g->id );
-    aviso = g_strdup_printf( "%s nace de %s con %d intervención%s. Estímalo "
+    aviso = g_strdup_printf( "%s nace de %s con %d %s. Estímalo "
                              "para ver si compra algo.", nuevo, padre, n,
-                             n == 1 ? "" : "es" );
+                             n == 1 ? "intervención" : "intervenciones" );
 
     gtk_widget_destroy( g->win );
 

@@ -10,6 +10,7 @@
 #include "outfile.h"
 
 #include "atsw.h"
+#include "gesto.h"
 
 /* Un veredicto: una linea de altura fija con su punto de color. Es la regla
  * R3 del diseño, la misma que en las siete paginas de drtran_gui.        */
@@ -354,13 +355,7 @@ gboolean atsw_abre( Atsw *a, const char *path, char *why, size_t n )
 
 gchar *atsw_sha_de( const char *path )
 {
-    gchar *c = NULL, *h;
-    gsize  n = 0;
-
-    if ( !g_file_get_contents( path, &c, &n, NULL ) ) return NULL;
-    h = g_compute_checksum_for_data( G_CHECKSUM_SHA256, (const guchar *) c, n );
-    g_free( c );
-    return h;
+    return ge_sha( path );       /* el mismo que atsw-cli (lib/gesto) */
 }
 
 AtPre atsw_entrada_pre( const Proyecto *p, const PrCaso *c, int i )
@@ -819,8 +814,8 @@ static void pinta_veredictos( Atsw *a )
             a->p->ns - elegidos, a->p->ns - elegidos == 1 ? "" : "s" );
     else if ( n )
         verdicto( a->ver_ojo, AT_AMBAR,
-            "%d iteración%s sin razón (%s%s). El linaje está; el porqué, no.",
-            n, n == 1 ? "" : "es", sin[0], n > 1 ? ", …" : "" );
+            "%d %s sin razón (%s%s). El linaje está; el porqué, no.",
+            n, n == 1 ? "iteración" : "iteraciones", sin[0], n > 1 ? ", …" : "" );
     else if ( a->p->nm - datos > estimados )
         verdicto( a->ver_ojo, AT_AMBAR,
             "%d modelo%s declarado%s pero sin estimar.",

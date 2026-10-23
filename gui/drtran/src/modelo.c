@@ -690,8 +690,8 @@ static void refresca_cuenta( Mtram *m )
         mtram_verdicto( M->ver_cuenta, MT_VERDE,
             "%d de transferencia + %d covarianzas libres — esto es "
             "lo que se decide aquí · los otros %d vienen de los .pre "
-            "· %d restricción%s del empotrado, del .cns",
-            tr, cl, M->st.n - tr - ct, emp, emp == 1 ? "" : "es" );
+            "· %d %s del empotrado, del .cns",
+            tr, cl, M->st.n - tr - ct, emp, emp == 1 ? "restricción" : "restricciones" );
     else
         mtram_verdicto( M->ver_cuenta, MT_VERDE,
             "%d de transferencia + %d covarianzas libres — esto es lo "
@@ -708,9 +708,9 @@ static void refresca_cuenta( Mtram *m )
             mal > 1 ? " · y no es el único" : "" );
     else if (M->perdidas)
         mtram_verdicto( M->ver_ojo, MT_AMBAR,
-            "%d restricción%s se quedó%s por el camino: nombraba%s un "
+            "%d %s se quedó%s por el camino: nombraba%s un "
             "parámetro que este modelo ya no tiene",
-            M->perdidas, M->perdidas == 1 ? "" : "es",
+            M->perdidas, M->perdidas == 1 ? "restricción" : "restricciones",
             M->perdidas == 1 ? "" : "n", M->perdidas == 1 ? "" : "n" );
     else
         mtram_verdicto( M->ver_ojo, MT_VERDE,
@@ -1348,8 +1348,9 @@ gboolean modelo_lee( Mtram *m, const char *p )
     } else {
         g_free( m->mod.path );
         m->mod.path = g_strdup( p );
-        preview_show_status( m, "%d restricción%s de %s.",
-                             nc, nc == 1 ? "" : "es", g_path_get_basename( p ) );
+        preview_show_status( m, "%d %s de %s.",
+                             nc, nc == 1 ? "restricción" : "restricciones",
+                             g_path_get_basename( p ) );
         avisa_orden( m, p );
     }
     refresca_lista( m );

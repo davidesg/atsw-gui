@@ -401,7 +401,7 @@ void an_ganancia( const AnHost *h, const char *serie, const char *muestra,
     cab = gtk_label_new( NULL );
     {
     gchar *t = g_markup_printf_escaped(
-        "<b>%s / %s</b>%s%s   ·   %s   ·   %d intervención%s\n"
+        "<b>%s / %s</b>%s%s   ·   %s   ·   %d %s\n"
         "<small>¿El suceso dejó algo <b>para siempre</b> o revirtió? Lo dice "
         "la <b>ganancia</b>, ω(1). El polinomio va escrito con sus signos "
         "—convenio de Box-Jenkins, el primero suma y los retardos restan— y "
@@ -409,7 +409,7 @@ void an_ganancia( const AnHost *h, const char *serie, const char *muestra,
         "ojo.</small>",
         serie, id, ( muestra && *muestra ) ? "   muestra " : "",
         ( muestra && *muestra ) ? muestra : "", g->estruct, g->nf,
-        g->nf == 1 ? "" : "es" );
+        g->nf == 1 ? "intervención" : "intervenciones" );
 
     gtk_label_set_markup( GTK_LABEL(cab), t );
     g_free( t );

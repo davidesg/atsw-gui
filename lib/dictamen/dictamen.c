@@ -313,8 +313,9 @@ static void bloque_ganancia( const FueOut *o, const Convergence *conv,
        return;
        }
 
-   snprintf( l->dato, DX_DATO, "%d intervención%s con varios ω · %d con "
-             "ganancia nula", mirados, mirados == 1 ? "" : "es", transitorios );
+   snprintf( l->dato, DX_DATO, "%d %s con varios ω · %d con "
+             "ganancia nula", mirados, mirados == 1 ? "intervención" : "intervenciones",
+             transitorios );
 
    if ( transitorios > 0 )
        {

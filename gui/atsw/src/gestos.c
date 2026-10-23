@@ -9,6 +9,7 @@
 #include "atsw.h"
 #include "previewhost.h"
 #include "sitio.h"
+#include "gesto.h"
 
 void       barra_pub( Atsw *a, const char *s );
 GtkWidget *atsw_dialogo_texto( GtkWidget *padre, const char *titulo,
@@ -65,7 +66,7 @@ void preview_show_status( PreviewApp *app, const gchar *format, ... )
 gchar *atsw_programa( const char *programa )
 {
     static const char *const sitio[] = {   /* relativos a gui/atsw/  */
-        "../fue/bin/%s", "../fug/%s", "../drtran/%s", "./%s",
+        "../fue/bin/%s", "../fug/%s", "../drtran/%s", "../atsw-cli/%s", "./%s",
         /* Y LOS MOTORES, que el editor corre directamente. Van DESPUES de
            los GUIs porque ninguno se llama igual, y ANTES del PATH por la
            misma razon que ellos: una instalacion vieja en /usr/local se
@@ -318,71 +319,19 @@ gboolean atsw_itera( Atsw *a, const char *serie, const char *muestra,
                      const char *padre, char *why, size_t n )
 {
     PrError e;
-    char    id[PR_ID], origen[PR_RUTA], destino[PR_RUTA];
-    gchar  *contenido = NULL, *dir;
-    gsize   largo = 0;
 
     if ( why && n ) why[0] = '\0';
     if ( !a->hay ) return FALSE;
-
-    /* De donde se copia: el .pre del modelo del que se itera. Si no hay
-       padre, no hay de donde: la primera iteracion la trae fue.         */
-    if ( padre == NULL || *padre == '\0' )
-        {
-        if ( why ) snprintf( why, n, "Marca de qué modelo quieres iterar. La "
-                             "primera iteración la trae fue." );
+    /* EL GESTO ES DE lib/gesto: lo hace tambien atsw-cli, y dos copias de
+       un gesto acaban siendo dos gestos.                               */
+    if ( ge_itera( a->p, serie, muestra, padre, NULL, 0, NULL, 0, why, n ) != 0 )
         return FALSE;
-        }
-    /* De los DATOS no se itera: no tienen .pre porque no se estiman. Decir
-       «ese modelo no se ha estimado» seria cierto y no ayudaria nada.   */
-    if ( pr_es_datos( a->p, serie, muestra, padre ) )
-        {
-        if ( why ) snprintf( why, n, "Los datos no se iteran. Mándalos a fue "
-                             "y de ellos sale el primer modelo." );
-        return FALSE;
-        }
-    if ( pr_ruta( a->p, serie, muestra, padre, ".pre", origen,
-                  sizeof origen ) != 0 )
-        { if ( why ) snprintf( why, n, "No pude componer la ruta." );
-          return FALSE; }
-
-    if ( !g_file_get_contents( origen, &contenido, &largo, NULL ) )
-        {
-        /* SE DICE QUE FALTA, no se crea uno vacio. Un .pre que no esta es un
-           modelo que no se ha estimado, y eso es un hecho del proyecto.  */
-        if ( why ) snprintf( why, n, "No hay %s: ese modelo no se ha estimado "
-                             "todavía.", origen );
-        return FALSE;
-        }
-
-    /* La iteracion nueva, con su LINAJE, sin preguntar. */
-    /* ITERAR SE QUEDA EN SU VENTANA: seguir desde un optimo es seguir
-       sobre las mismas observaciones. Cambiar de ventana es otro gesto. */
-    if ( pr_deriva( a->p, serie, muestra, padre, id, sizeof id,
-                    destino, sizeof destino, &e ) != 0 )
-        { if ( why ) pr_error_es( &e, why, n ); g_free( contenido ); return FALSE; }
-
-    dir = g_path_get_dirname( destino );
-    g_mkdir_with_parents( dir, 0700 );
-    g_free( dir );
-
-    if ( !g_file_set_contents( destino, contenido, (gssize) largo, NULL ) )
-        {
-        if ( why ) snprintf( why, n, "No pude escribir %s", destino );
-        g_free( contenido );
-        return FALSE;
-        }
-    g_free( contenido );
-
     if ( atsw_guarda( a, &e ) != 0 )
         {
         if ( why ) snprintf( why, n, "El .inp está, pero no pude guardar el "
                              "proyecto." );
         return FALSE;
         }
-
-    if ( why ) snprintf( why, n, "%s: %s.pre → %s.inp. Ahora estímalo en fue.",
-                         serie, padre, id );
     return TRUE;
 }
 
@@ -406,71 +355,20 @@ gboolean atsw_modelo_nuevo( Atsw *a, const char *serie, const char *muestra,
                             char *id_out, size_t nid,
                             char *ruta_out, size_t nruta, char *why, size_t n )
 {
-    PrError     e;
-    const char *datos;
-    char        id[PR_ID], origen[PR_RUTA], destino[PR_RUTA];
-    gchar      *contenido = NULL, *dir;
-    gsize       largo = 0;
+    PrError e;
 
     if ( why && n ) why[0] = '\0';
     if ( id_out && nid ) id_out[0] = '\0';
     if ( ruta_out && nruta ) ruta_out[0] = '\0';
     if ( !a->hay ) return FALSE;
-
-    if ( serie == NULL || *serie == '\0' )
-        { if ( why ) snprintf( why, n, "Marca una serie." ); return FALSE; }
-
-    datos = pr_datos_de( a->p, serie, muestra );
-    if ( !*datos )
-        {
-        /* SE DICE QUE FALTAN LOS DATOS. Derivar de la nada daria un .inp
-           vacio que fue rechazaria con un error del motor, mas lejos del
-           sitio donde se puede arreglar.                                */
-        if ( why ) snprintf( why, n, "«%s» no tiene datos cargados en este "
-                             "proyecto: cárgalos con «Datos…».", serie );
+    if ( ge_modelo_nuevo( a->p, serie, muestra, id_out, nid, ruta_out, nruta, why, n ) != 0 )
         return FALSE;
-        }
-
-    /* EL .inp DE LOS DATOS DE ESTA VENTANA, no el de la completa. Con "" a
-       pelo aqui, un modelo nuevo en una submuestra nacia con la serie
-       ENTERA dentro: la ventana se declaraba y no se aplicaba.        */
-    if ( pr_ruta( a->p, serie, muestra, datos, ".inp", origen,
-                  sizeof origen ) != 0 ||
-         !g_file_get_contents( origen, &contenido, &largo, NULL ) )
-        {
-        if ( why ) snprintf( why, n, "No pude leer los datos de «%s».", serie );
-        return FALSE;
-        }
-
-    if ( pr_deriva( a->p, serie, muestra, datos, id, sizeof id,
-                    destino, sizeof destino, &e ) != 0 )
-        { if ( why ) pr_error_es( &e, why, n ); g_free( contenido ); return FALSE; }
-
-    dir = g_path_get_dirname( destino );
-    g_mkdir_with_parents( dir, 0700 );
-    g_free( dir );
-
-    /* El .inp nuevo arranca siendo COPIA de los datos: los mismos numeros,
-       sin modelo. Es lo que el analista va a especificar encima.        */
-    if ( !g_file_set_contents( destino, contenido, (gssize) largo, NULL ) )
-        {
-        if ( why ) snprintf( why, n, "No pude escribir %s", destino );
-        g_free( contenido );
-        return FALSE;
-        }
-    g_free( contenido );
-
     if ( atsw_guarda( a, &e ) != 0 )
         {
         if ( why ) snprintf( why, n, "El .inp está, pero no pude guardar el "
                              "proyecto." );
         return FALSE;
         }
-
-    if ( id_out && nid ) snprintf( id_out, nid, "%s", id );
-    if ( ruta_out && nruta ) snprintf( ruta_out, nruta, "%s", destino );
-    if ( why ) snprintf( why, n, "%s: %s nace de los datos (%s), que siguen "
-                         "intactos. Especifícalo en fue.", serie, id, datos );
     return TRUE;
 }
 

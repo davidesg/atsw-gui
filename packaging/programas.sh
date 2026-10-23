@@ -22,4 +22,5 @@ gui/atsw/atsw_gui
 gui/fue/bin/fue_gui
 gui/fug/gtk_fmg
 gui/drtran/drtran_gui
+gui/atsw-cli/atsw-cli
 "

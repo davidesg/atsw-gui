@@ -131,7 +131,9 @@ static void escritorio( AtComprob *c );     /* mas abajo, con el registro */
 
 int atsw_comprueba( AtComprob *c, int max )
 {
-    static const char *const motores[] = { "fue", "fuf", "fug", "drtran", "art" };
+    /* atsw-cli va con los motores: es la puerta del asistente a lib/ y no
+       es opcional (ESTUDIO-terminal-mcp §6.3).                         */
+    static const char *const motores[] = { "fue", "fuf", "fug", "drtran", "art", "atsw-cli" };
     static const char *const guis[]    = { "fue_gui", "gtk_fmg", "drtran_gui" };
     int n = 0;
     guint i;

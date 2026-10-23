@@ -27,7 +27,7 @@ env:
   # Lo que va en el paquete (packaging/programas.sh): sin drvarma ni drvec.
   DIRS: >-
     engines/fue engines/fuf engines/fug engines/drtran engines/art
-    gui/fue gui/fug gui/drtran gui/atsw
+    gui/fue gui/fug gui/drtran gui/atsw gui/atsw-cli
 
 jobs:
   # El manual del alumno en PDF (docs/manual/construir.py): va dentro de los

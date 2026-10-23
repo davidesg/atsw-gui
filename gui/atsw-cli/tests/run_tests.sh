@@ -158,8 +158,8 @@ mira "coste apunta: la cabecera y dos líneas" \
      '[ "$(head -1 "$C" | cut -d, -f1-3)" = "fecha,quien,por" ] && [ $(wc -l < "$C") = 3 ]'
 mira "coste apunta: sin energía, se estima y se dice cómo" \
      'sed -n 2p "$C" | grep -q "cpu×TDP/núcleos"'
-mira "coste apunta: quien atsw-cli y por asistente, si no se dice" \
-     'sed -n 3p "$C" | grep -q ",atsw-cli,asistente,en4/m01,meg,"'
+mira "coste apunta: quien atsw-cli y por analista, si no se dice" \
+     'sed -n 3p "$C" | grep -q ",atsw-cli,analista,en4/m01,meg,"'
 J=$("$CLI" --json coste resumen "$Y" --por-que serie)
 mira "coste resumen por serie: RIPC y en4, con sus tiempos" \
      '[ "$(echo "$J" | campo "[(g[\"clave\"], g[\"corridas\"], g[\"cpu_s\"]) for g in d[\"grupos\"]]")" = "[('"'"'RIPC'"'"', 1, 1.5), ('"'"'en4'"'"', 1, 0.5)]" ]'

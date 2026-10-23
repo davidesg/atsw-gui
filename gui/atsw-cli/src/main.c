@@ -642,7 +642,7 @@ static int coste_apunta_orden( const char *path )
     if ( c_energia && numero_de( "--energia", c_energia, &l.energia_j ) != 0 ) return 1;
     l.fecha   = (char *) c_fecha;
     l.quien   = (char *) ( c_quien ? c_quien : "atsw-cli" );
-    l.por     = (char *) ( c_por ? c_por : "asistente" );
+    l.por     = (char *) ( c_por ? c_por : "analista" );
     l.objeto  = (char *) c_objeto;
     l.paso    = (char *) c_paso;
     l.motor   = (char *) c_motor;
@@ -739,7 +739,7 @@ static void uso( FILE *f )
            "  --titulo T    el título del caso\n"
            "  --json        la salida en JSON\n\n"
            "  coste apunta: --objeto SERIE/MODELO, --via C|python, --quien (atsw-cli),\n"
-           "    --por (asistente), --fecha, --sha-pre; --energia J con su --metodo, o\n"
+           "    --por (analista; el MTM, asistente), --fecha, --sha-pre; --energia J con su --metodo, o\n"
            "    sin los dos, que se estima (cpu×TDP/núcleos).\n"
            "  coste resumen: --por-que serie|objeto|motor|via|por|paso|quien\n", f );
 }

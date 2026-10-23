@@ -348,13 +348,42 @@ int pr_elige( Proyecto *p, const char *serie, const char *muestra,
    for ( i = 0; i < p->nm; i++ )
        if ( strcmp( p->m[i].serie, serie ) == 0 &&
             strcmp( p->m[i].muestra, muestra ) == 0 )
-           { p->m[i].elegido = 0; p->m[i].razon_elegido[0] = '\0'; }
+           { p->m[i].elegido = 0; p->m[i].razon_elegido[0] = '\0';
+             p->m[i].por_elegido[0] = '\0'; }
 
    if ( k >= 0 )
        {
        p->m[k].elegido = 1;
        if ( razon ) snprintf( p->m[k].razon_elegido, PR_RAZON, "%s", razon );
        }
+   return 0;
+}
+
+/* LO NORMAL NO SE ESCRIBE: "analista" se guarda como "". */
+static void pon_por( char *dst, const char *por )
+{
+   if ( por == NULL || !strcmp( por, "analista" ) ) por = "";
+   snprintf( dst, PR_ID, "%s", por );
+}
+
+int pr_pon_por( Proyecto *p, const char *serie, const char *muestra,
+                const char *id, const char *por, PrError *e )
+{
+   int i = pr_modelo_idx( p, serie, muestra, id );
+
+   if ( i < 0 ) { falla( e, PR_ENOMODELO, 0, id ? id : "" ); return 1; }
+   pon_por( p->m[i].por, por );
+   return 0;
+}
+
+int pr_pon_por_elegido( Proyecto *p, const char *serie, const char *muestra,
+                        const char *id, const char *por, PrError *e )
+{
+   int i = pr_modelo_idx( p, serie, muestra, id );
+
+   if ( i < 0 || !p->m[i].elegido )
+       { falla( e, PR_ENOMODELO, 0, id ? id : "" ); return 1; }
+   pon_por( p->m[i].por_elegido, por );
    return 0;
 }
 
@@ -1226,7 +1255,10 @@ int pr_escribir( const Proyecto *p, const char *path, PrError *e )
            {
            fprintf( f, "    elegido: si\n" );
            escribe_campo( f, "razon_elegido", p->m[i].razon_elegido );
+           escribe_campo( f, "por_elegido", p->m[i].por_elegido );
            }
+       /* QUIEN, SOLO SI NO ES EL ANALISTA: como el rol (§7.2). */
+       escribe_campo( f, "por", p->m[i].por );
        if ( p->m[i].creado[0] )
            { fprintf( f, "    creado: " ); escribe_valor( f, p->m[i].creado );
              fputc( '\n', f ); }
@@ -1540,6 +1572,10 @@ int pr_leer( const char *path, Proyecto *p, PrError *e )
                else if ( strcmp( clave, "rol" ) == 0 )
                    p->m[cur].rol = !strcmp( valor, "datos" ) ? PR_DATOS
                                                              : PR_MODELO;
+               else if ( strcmp( clave, "por" ) == 0 )
+                   pon_por( p->m[cur].por, valor );
+               else if ( strcmp( clave, "por_elegido" ) == 0 )
+                   pon_por( p->m[cur].por_elegido, valor );
                else
                    { falla( e, PR_ECLAVE, nl, clave ); fclose( f ); return 1; }
                }

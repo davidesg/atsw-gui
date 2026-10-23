@@ -156,6 +156,14 @@ typedef struct {
     * sitios que puedan discrepar.                                      */
    int   elegido;
    char  razon_elegido[PR_RAZON];  /* por que ese y no otro              */
+
+   /* QUIEN DIO EL PASO (ESTUDIO-terminal-mcp §7.2). "" = el analista, que
+    * es lo normal y por eso no se escribe, como el rol. Lo que hace un
+    * asistente lleva "asistente": dentro de seis meses tiene que poder
+    * distinguirse una decision pensada de una tomada por el asistente.
+    * por_elegido es lo mismo para la eleccion, que es otro paso.       */
+   char  por[PR_ID];
+   char  por_elegido[PR_ID];
 } PrModelo;
 
 /* LA SERIE: una CLAVE corta y unos cuantos campos de texto.
@@ -407,6 +415,15 @@ int pr_muestra_borra( Proyecto *p, const char *id, PrError *e );
 int  pr_elige( Proyecto *p, const char *serie, const char *muestra,
                const char *id,
                const char *razon, PrError *e );
+
+/* QUIEN DIO EL PASO Y QUIEN LO ELIGIO. por NULL, "" o "analista" deja el
+   campo vacio: lo normal no se escribe. pr_pon_por_elegido solo vale en el
+   elegido de su ventana (si no, PR_ENOMODELO): pr_elige la borra al quitar
+   la marca, asi que se llama DESPUES de pr_elige.                       */
+int  pr_pon_por( Proyecto *p, const char *serie, const char *muestra,
+                 const char *id, const char *por, PrError *e );
+int  pr_pon_por_elegido( Proyecto *p, const char *serie, const char *muestra,
+                         const char *id, const char *por, PrError *e );
 
 /* --- la cadena ---------------------------------------------------------- */
 

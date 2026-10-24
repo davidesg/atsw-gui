@@ -2388,6 +2388,96 @@ static int cmp_real(const void *a, const void *b)
     return (x < y) ? -1 : ((x > y) ? 1 : 0);
 }
 
+/*  i1r_check -- is the model under H0 I(1) with rank r?  Cavaliere, Rahbek
+ *  and Taylor (2012, Algorithm 1, step ii) check it before simulating, since a
+ *  bootstrap sample that is not I(1, r) is not a draw under the null: theirs
+ *  checks that the levels VAR has p - r roots at 1 and the rest outside the
+ *  circle.  Here the sample is simulated on Ybar = [nabla Y2 ; W] and
+ *  integrated back (simulate_h0), so the same thing is two conditions on
+ *  Ybar's VARMA, Phi(B) Ybar = Theta(B) a:
+ *
+ *   1. Ybar is stationary: every root of |Phi(z)| outside the circle.  Then W
+ *      is stationary and the r relations hold.  The exact likelihood exists
+ *      only there, so a fit that converged meets it; it is checked anyway.
+ *   2. Y2 carries s = M - r stochastic trends: nabla Y2's long-run covariance,
+ *      the first s rows of K = Phi(1)^-1 Theta(1) times Sigma times their
+ *      transpose, is non-singular.  It is condition (d) of the Mauricio study,
+ *      rank(Lambda_perp' Theta(1)) = s, read where the sample is made.  With
+ *      q = 0 it follows from 1; with an MA root at z = 1 in the nabla Y2
+ *      block it fails, and the sample would carry fewer trends than H0 says.
+ *
+ *  2 is measured scale-free: the smallest singular value of D^-1/2 K_s L,
+ *  with L the Cholesky factor of Sigma and D the long-run variances, which is
+ *  1 for unrelated trends and 0 for a lost one.  Below GRANGER_ZERO the model
+ *  is taken to deny the rank, the threshold the rank condition already uses.
+ *  Returns 0 when both hold.                                                 */
+static real i1r_ar_min = 0.0, i1r_lr_sv = 0.0;
+
+static int i1r_check(struct Tvarma *v, int r)
+{
+    int M = v->m, s = M - r, i, j, k, sgn = 0, ifc = 0;
+    real d1, d2;
+    gsl_matrix *P1, *T1, *K, *G;
+    gsl_permutation *perm;
+    real **L;
+
+    i1r_ar_min = 1.0e12;
+    if (v->p > 0) report_operator_roots("", v->phi, M, v->p, &i1r_ar_min, 1);
+    i1r_lr_sv = 1.0;
+    if (i1r_ar_min <= 1.0 + 1.0e-6) return 1;
+    if (s <= 0) return 0;
+
+    /*  K = Phi(1)^-1 Theta(1), with elf's signs: Phi(1) = I - sum phi_j,
+     *  Theta(1) = I - sum theta_j.                                          */
+    P1 = gsl_matrix_alloc(M, M); T1 = gsl_matrix_alloc(M, M);
+    K  = gsl_matrix_alloc(M, M);
+    for (i = 0; i < M; i++)
+        for (j = 0; j < M; j++) {
+            real a = (i == j) ? 1.0 : 0.0, b = a;
+            for (k = 1; k <= v->p; k++) a -= v->phi[k][i+1][j+1];
+            for (k = 1; k <= v->q; k++) b -= v->theta[k][i+1][j+1];
+            gsl_matrix_set(P1, i, j, a);
+            gsl_matrix_set(T1, i, j, b);
+        }
+    perm = gsl_permutation_alloc(M);
+    gsl_linalg_LU_decomp(P1, perm, &sgn);
+    for (j = 0; j < M; j++) {
+        gsl_vector_view c = gsl_matrix_column(T1, j);
+        gsl_vector_view o = gsl_matrix_column(K, j);
+        gsl_linalg_LU_solve(P1, perm, &c.vector, &o.vector);
+    }
+
+    /*  G' = (D^-1/2 K_s L)', M x s for GSL's SVD (rows >= columns).        */
+    L = matrix(1, M, 1, M);
+    for (i = 1; i <= M; i++)
+        for (j = 1; j <= M; j++) L[i][j] = v->sigma2 * v->qq[i][j];
+    choldcp(L, M, &d1, &d2, &ifc);
+    G = gsl_matrix_alloc(M, s);
+    i1r_lr_sv = 0.0;
+    if (ifc == 0) {
+        gsl_matrix *V  = gsl_matrix_alloc(s, s);
+        gsl_vector *sv = gsl_vector_alloc(s), *wk = gsl_vector_alloc(s);
+        for (i = 1; i <= M; i++) for (j = i+1; j <= M; j++) L[i][j] = 0.0;
+        for (i = 0; i < s; i++) {
+            real dd = 0.0;
+            for (j = 0; j < M; j++) {
+                real acc = 0.0;
+                for (k = j; k < M; k++) acc += gsl_matrix_get(K, i, k) * L[k+1][j+1];
+                gsl_matrix_set(G, j, i, acc);
+                dd += acc * acc;
+            }
+            dd = (dd > 0.0) ? 1.0 / sqrt(dd) : 0.0;
+            for (j = 0; j < M; j++) gsl_matrix_set(G, j, i, gsl_matrix_get(G, j, i) * dd);
+        }
+        if (gsl_linalg_SV_decomp(G, V, sv, wk) == 0) i1r_lr_sv = gsl_vector_get(sv, s-1);
+        gsl_vector_free(wk); gsl_vector_free(sv); gsl_matrix_free(V);
+    }
+    free_matrix(L, 1, M, 1, M);
+    gsl_matrix_free(G); gsl_permutation_free(perm);
+    gsl_matrix_free(K); gsl_matrix_free(T1); gsl_matrix_free(P1);
+    return (i1r_lr_sv < GRANGER_ZERO);
+}
+
 /*  boot_dump -- <base>.boot, EVERY REPLICATION OF THE RANK BOOTSTRAP.
  *
  *  The .out gives three percentiles, a p-value and a count.  Homologating a
@@ -2438,6 +2528,18 @@ static int bootstrap_rank(int rr, real *x, int npar, int N, real *cv, real *pval
         vh.sigma2 = pi1 / (vh.n * vh.m);
         vh.logelf = -0.5*vh.m*vh.n*(LOG2PI - log((real)vh.m) - log((real)vh.n) + 1.0)
                     - 0.5*vh.n*(vh.m*log(pi1) + log(pi2));
+    }
+
+    /*  Cavaliere, Rahbek and Taylor's step (ii): no sample is drawn from a
+     *  model that is not I(1, rr).  -1 tells the caller why nothing came back. */
+    if (i1r_check(&vh, rr) != 0) {
+        vec_shootx(x, &vh, &ifr, 0, 1);
+        free_vector(stat, 1, N);
+        free_matrix(saved, 1, nobs_raw, 1, M);
+        free_matrix(sim, 1, nobs_raw, 1, M);
+        free_matrix(B2, 1, (s > 0 ? s : 1), 1, (rr > 0 ? rr : 1));
+        global_r = save_r;
+        return -1;
     }
 
     for (i = 1; i <= nobs_raw; i++)
@@ -9884,6 +9986,17 @@ static int run_lrtest(void)
                 printf("  r = %d -> %d ...", rr, rr+1); fflush(stdout);
                 reps = bootstrap_rank(rr, xkeep[rr], npkeep[rr], global_boot,
                                       cv, &pv, lr);
+                if (reps < 0) {
+                    fprintf(outputv, "  %-4d %4d %10.4f   the model under H0 is not "
+                                     "I(1, %d): not reported\n", rr, M - rr, lr, rr);
+                    fprintf(outputv, "             smallest AR root of Ybar %.6f "
+                                     "(> 1 is stationary); nabla Y2's long-run\n"
+                                     "             rank measure %.2e (0 = a trend "
+                                     "lost; Cavaliere, Rahbek and Taylor 2012)\n",
+                            i1r_ar_min, i1r_lr_sv);
+                    printf(" the model under H0 is not I(1, %d)\n", rr);
+                    continue;
+                }
                 if (reps < 10) {
                     fprintf(outputv, "  %-4d %4d %10.4f   only %d usable "
                                      "replications: not reported\n",

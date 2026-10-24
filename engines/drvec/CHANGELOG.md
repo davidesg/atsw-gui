@@ -7,6 +7,20 @@ publicación: `v*`.
 
 ## Sin publicar
 
+### El bootstrap del rango comprueba que el modelo bajo H₀ es I(1, r)
+
+- Antes de simular, `-bootstrap` comprueba lo que Cavaliere, Rahbek y Taylor
+  (2012, Algoritmo 1, paso ii) comprueban: que `Ȳ` es estacionario y que la
+  covarianza de largo plazo de `∇Y₂` tiene rango `M − r` (la condición (d) del
+  estudio de Mauricio). Si falla, la comparación no da valores críticos y el
+  `.out` dice qué condición falló. Cuando se cumple la salida no cambia: los 36
+  goldens no se mueven.
+- Con q = 0 se cumple por construcción; con MA y un rango nulo por debajo del
+  verdadero el ajuste se acerca a perder una tendencia sin perderla, y eso no
+  lo ve una comprobación binaria. Está medido en
+  `docs/ESTUDIO_CRT_2026-10-24.md`, que reproduce además el Monte Carlo de CRT
+  (`tools/mc_crt.py`).
+
 ### `-gzero i j`: entradas de Γ(k) fijadas a cero (sin realimentación a corto plazo)
 
 - `Γ_k[i][j] = 0` para todo k: la serie `j` no entra en el corto plazo de la

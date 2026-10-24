@@ -169,6 +169,7 @@ the first time.
 | `ANALISIS_PRELIMINAR.md` | the preliminary diagnosis |
 | `PLAN_BETA.md` | the development plan to beta, with its exit criteria |
 | `ESTUDIO_BVECM_vs_DRVEC.md`, `LEGACY_NOTES.md`, `ENCUADRE_ESTUDIO.md` | the study of the predecessor program, and notes on the legacy code |
+| [ESTUDIO_CRT_2026-10-24.md](ESTUDIO_CRT_2026-10-24.md) | the rank bootstrap against Cavaliere, Rahbek and Taylor (2012): the scheme, the I(1, r) check, and its size in their Monte Carlo design |
 
 ---
 

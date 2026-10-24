@@ -449,6 +449,12 @@ Cost is `N × 2` full estimations per comparison: about 4 s for a bivariate case
 at `B = 100`, and 40 s for `M = 3` at `B = 200`. Replications where either fit
 fails to converge are discarded and counted in the `reps` column.
 
+Before the first replication the model under H₀ is checked to be **I(1) with
+rank r**, as Cavaliere, Rahbek and Taylor (2012) check theirs: `Ȳ` stationary,
+and `∇Y₂`'s long-run covariance of rank `M − r`. A comparison that fails it gets
+no critical values, and the line says which condition failed. With `q = 0` it
+holds by construction; see [ESTUDIO_CRT_2026-10-24.md](ESTUDIO_CRT_2026-10-24.md).
+
 **Combined with `-alpha` / `-weakex`**, the sequence is still computed — testing
 the rank *within* the restricted model is a legitimate question — but the
 **critical values are suppressed**, because under `α = Aψ` the statistic has a

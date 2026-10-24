@@ -301,7 +301,7 @@ Where the program departs from the papers:
 | statistic | trace, H(r) against H(p) | λ-max, r against r+1 |
 | bootstrap errors | i.i.d. resampling of the restricted residuals, recentred | Gaussian draws with Σ̂ of the fit at rank r |
 | initial values | the observed ones | `Ȳ` from its mean with a burn-in of 50 + 10p; `Y₂` cumulated from its first observed level |
-| the I(1, r) check | explicit: p − r unit roots, the others outside the circle | by construction in part: the exact likelihood exists only for a stationary `Ȳ`, so the simulated `W` is stationary and `∇Y₂` too |
+| the I(1, r) check | explicit: p − r unit roots, the others outside the circle | explicit too (`i1r_check`): `Ȳ` stationary and `∇Y₂`'s long-run covariance of rank s; with q = 0 it holds by construction ([ESTUDIO_CRT_2026-10-24.md](ESTUDIO_CRT_2026-10-24.md) §3) |
 | failed replications | discarded when the root check fails | discarded when a refit does not converge (`fitfail`), counted in `reps` |
 
 Three consequences follow.
@@ -313,13 +313,18 @@ Three consequences follow.
   limit distribution does not depend on normality, but that is an argument, not
   a proof. The justification for `-bootstrap` here is the papers' design plus
   measurement.
-* **The construction leaves one condition unchecked.** A stationary `Ȳ` does
-  not by itself give `Y₂` its s stochastic trends: that needs
+* **The moving average can nearly undo what the check checks.** A stationary
+  `Ȳ` does not by itself give `Y₂` its s stochastic trends: that needs
   `rank(Λ⊥′Θ(1)) = s`, condition (d) of
   [ESTUDIO_MAURICIO_2026-09-23.md](ESTUDIO_MAURICIO_2026-09-23.md), the
-  VARMA counterpart of the full rank of `α⊥′Γβ⊥`. A moving-average root at 1 in
-  the `∇Y₂` block would simulate fewer trends than H₀ says. Nothing imposes or
-  checks it (BUG-46).
+  VARMA counterpart of the full rank of `α⊥′Γβ⊥`. `-bootstrap` now checks it
+  exactly before simulating, but with q ≥ 1 and a null rank below the true one
+  the fit absorbs the surplus stationary directions with MA roots next to the
+  unit circle, and the sample it simulates carries *nearly* fewer trends than
+  H₀ says — the problem Cavaliere, Rahbek and Taylor solve in the VAR, back
+  through the moving average. Measured in
+  [ESTUDIO_CRT_2026-10-24.md](ESTUDIO_CRT_2026-10-24.md) §3; its effect on
+  power is open.
 * **Discarding on non-convergence is not discarding on the root check.** If the
   refits that fail are not a random subset of the draws, the simulated
   distribution is censored. The count is printed so that it can be judged.

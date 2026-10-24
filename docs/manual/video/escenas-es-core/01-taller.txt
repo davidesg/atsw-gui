@@ -89,10 +89,10 @@ menu Diagnosis…
 ventana Diagnosis
 tamano 1000 800
 espera 800
-rotulo Residuos blancos: ninguna Q de Ljung-Box rechaza. Pero no son normales: Jarque-Bera vale 127. Suele ser cosa de unos pocos residuos.
+rotulo Residuos blancos: ninguna Q de Ljung-Box rechaza, y su media no se distingue de cero. Pero no son normales: Jarque-Bera vale 127.
 cierra
 ventana el taller
-rotulo «Anómalos…» enseña los residuos que se salen, y deja probar qué pasa sin ellos.
+rotulo Suele ser cosa de unos pocos residuos. «Anómalos…» enseña los que se salen, y deja probar qué pasa sin ellos.
 derecho m01
 espera 900
 menu Anómalos…
@@ -133,7 +133,7 @@ rotulo Y octubre de 2007: la subida mundial de los cereales y la leche, que en E
 rotulo El umbral es una ayuda, no la ley. Con una causa económica que se puede citar, se prueba la intervención, y la estimación decide.
 cierra
 ventana el taller
-rotulo «Iterar: seguir desde su óptimo» copia m02 en m03, para añadirle los dos escalones en fue_gui.
+rotulo «Iterar: seguir desde su óptimo» copia m02 en m03. En fue_gui, el escalón del IVA se convertirá en una función de transferencia.
 derecho m02
 espera 900
 menu Iterar: seguir desde su óptimo

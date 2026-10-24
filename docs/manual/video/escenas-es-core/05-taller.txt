@@ -13,7 +13,7 @@ menu Diagnosis…
 ventana Diagnosis
 tamano 1000 800
 espera 600
-rotulo Residuos blancos, y la normalidad falla, como en m03. Los tres escalones vuelven a salir significativos, y casi del mismo tamaño.
+rotulo Residuos blancos, y la normalidad falla, como en m03. La intervención del IVA vuelve a ser permanente, y casi del mismo tamaño.
 cierra
 ventana el taller
 rotulo Lo que distingue a las dos rutas no está en la diagnosis, sino en los residuos: «Anómalos…».
@@ -37,11 +37,11 @@ rotulo -
 rotulo Se declara el elegido, con su razón.
 boton Elegir
 ventana El modelo elegido
-entrada 1 | AR(3) x SMA(1) con D = 1 y tres escalones (IVA 9/2012 y 10/2012, alimentos 10/2007): residuos blancos; la estacionalidad evoluciona.
+entrada 1 | AR(3) x SMA(1) con D = 1; IVA 9/2012 con ω(B) = ω0 − ω1 B (ganancia +1.3 %) y escalón 10/2007: residuos blancos; la estacionalidad evoluciona.
 espera 1000
 boton Aceptar
 ventana el taller
 espera 600
-rotulo En resumen: un ARIMA de Box-Jenkins, y con él el efecto del IVA medido, un 1.3 por ciento sobre el nivel de los precios.
+rotulo En resumen: un ARIMA de Box-Jenkins con una función de transferencia para el IVA, y su ganancia: un 1.3 por ciento permanente sobre el nivel de los precios.
 rotulo -
 salir

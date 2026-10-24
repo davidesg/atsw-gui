@@ -74,19 +74,28 @@ normalidad se acepta (JB = 5.3, p = 0.07).
 **Dos puntos más.** En los residuos de m02 quedan dos cerca de 3σ, por debajo
 del umbral: **octubre de 2012** (+2.7σ) y **octubre de 2007** (+3.1σ). Los dos
 tienen una causa económica que se puede citar (§6), y por eso se prueban: el
-umbral es una ayuda, no la ley. m03 (de **Iterar**) los añade en fue_gui.
+umbral es una ayuda, no la ley.
+
+**El IVA, una función de transferencia.** Octubre de 2012 no es otro suceso:
+es la misma subida del IVA, que llegó en dos meses. Así que no se le pone un
+segundo escalón, sino que el escalón de septiembre pasa a llevar un
+numerador de orden 1, ω(B) = ω₀ − ω₁B (el convenio de fue: el primero suma y
+los retardos restan). En fue_gui es «Edit» sobre el escalón y orden 1 en el
+numerador. El de octubre de 2007 entra con un solo ω. Es **m03** (de
+**Iterar**).
 
 **m03**, el modelo de la ruta D = 1:
 
-(1 − 0.206 B − 0.086 B² − 0.143 B³) ∇∇₁₂ [ln Pₜ − 0.00793 S⁹ᐟ²⁰¹²ₜ − 0.00497 S¹⁰ᐟ²⁰¹²ₜ − 0.00389 S¹⁰ᐟ²⁰⁰⁷ₜ] = (1 − 0.583 B¹²) aₜ
+(1 − 0.206 B − 0.086 B² − 0.143 B³) ∇∇₁₂ [ln Pₜ − (0.00793 + 0.00497 B) S⁹ᐟ²⁰¹²ₜ − 0.00389 S¹⁰ᐟ²⁰⁰⁷ₜ] = (1 − 0.583 B¹²) aₜ
 
-| | ω | t | sobre el nivel |
-|---|---|---|---|
-| escalón 9/2012 (IVA) | 0.00793 | 7.4 | +0.79 % |
-| escalón 10/2012 (IVA, resto) | 0.00497 | 4.6 | +0.50 % |
-| escalón 10/2007 (alimentos) | 0.00389 | 3.7 | +0.39 % |
+| intervención | ω(B) | ganancia ω(1) | e.t. | t | sobre el nivel |
+|---|---|---|---|---|---|
+| IVA, escalón 9/2012 | 0.00793 + 0.00497 B (e.t. 0.0011 cada uno) | **0.01290** | 0.00164 | 7.8 (W = 61.6) | **+1.3 %** |
+| alimentos, escalón 10/2007 | 0.00389 | 0.00389 | 0.00106 | 3.7 | +0.39 % |
 
 - σ̂ₐ = 0.123 % (m02: 0.132 %; m01: 0.144 %). 7 parámetros.
+- Media de los residuos: −0.00014, t = −1.6: no se distingue de cero (m01:
+  t = −1.5).
 - Q de Ljung-Box: Q(8) = 6.5, Q(20) = 15.8, Q(32) = 21.4: residuos blancos.
 - Θ = 0.583 (e.t. 0.056): lejos de 1, la diferencia estacional no sobra.
 - El AR(3) tiene φ₂ = 0.086 con t = 1.2. Se deja: es el orden que pide la
@@ -94,15 +103,33 @@ umbral es una ayuda, no la ley. m03 (de **Iterar**) los añade en fue_gui.
 - **La normalidad empeora**: JB = 12.1 (p = 0.002). Con menos ruido destacan
   los **eneros de 2009 y 2010** (−3.4σ cada uno). Se explica en el §7.
 
-**Cómo se lee ω.** Con λ = 0, el escalón suma ω a ln Pₜ: el nivel queda
+**La ganancia es la cifra económica.** **Diagnosticar ▸ Ganancia…** da
+ω(1) = ω₀ − ω₁ = 0.0079 + 0.0050 = **0.0129**, con su error típico (0.0016) y
+el contraste de Wald de que sea cero (W = 61.6, p = 0.000; la t es 7.8). Es el
+efecto **permanente** del IVA sobre el nivel del subyacente: cuánto más caros
+quedaron los precios. ω₀ y ω₁ sólo dicen cómo se repartió en el tiempo: un
+0.79 % en el impacto, en septiembre, y un 0.50 % más con un mes de retraso. La
+fila «Ganancia» de la Diagnosis lo resume: la intervención deja una ganancia
+distinta de cero, el efecto es permanente y gobierna la previsión.
+
+**¿Traslado en dos meses o gradual?** La otra forma natural es
+ω₀/(1 − δB): un traslado que se va apagando, con ganancia ω₀/(1 − δ). Con los
+mismos parámetros (ω₀, δ) ajusta peor: la log-verosimilitud baja de 135.6 a
+131.3 (ω₀ = 0.0082, δ = 0.35, ganancia 0.0126). Con las dos cosas a la vez,
+(ω₀ − ω₁B)/(1 − δB), δ sale negativo y no significativo (δ = −0.30, t = −1.8;
+LR = 2.5). El traslado se hizo en dos meses y paró: ω₀ − ω₁B.
+
+**Cómo se lee ω.** Con λ = 0, la intervención suma ω a ln Pₜ: el nivel queda
 multiplicado por exp(ω), una subida de exp(ω) − 1, y para ω pequeño eso es
 ω × 100 por ciento. (Los modelos que deriva la madre llevan el factor de
 escala 1; con el factor 100 de fue, ω sale ya en porcentaje: 0.793.)
 
-**Dos escalones, no una función de transferencia de dos ω.** Un escalón con
-ω(B) = ω₀ − ω₁B describiría lo mismo, pero cada escalón con su único ω da
-el efecto de cada mes con su propio error típico, y el total es la suma:
-**+1.3 %** sobre el nivel del subyacente, permanente.
+**¿Y dos escalones separados?** Escalones en 9/2012 y en 10/2012, cada uno
+con un ω, dan exactamente la misma verosimilitud: es el mismo modelo escrito
+de otra forma. Pero la función de transferencia dice lo que pasó, un solo
+suceso con su dinámica, y da directamente la ganancia con su error típico.
+Con dos escalones habría que sumar a mano y calcular el error típico de la
+suma.
 
 ## 5. La ruta D = 0
 
@@ -113,18 +140,23 @@ estacional estacionaria. art le da casi todo el peso Akaike (0.999) a
 **AR(1)+MA(1) × SAR(1)**: **m04**.
 
 **La media.** Con d = 1 y D = 0 hace falta **μ**, la inflación mensual media
-(la deriva del índice). El modelo que deriva la identificación la trae fija en
-0; se libera en fue_gui («Include Mean Parameter»), donde también se añaden los
-tres escalones: un suceso económico es el mismo en las dos rutas.
+(la deriva del índice), y la madre la deriva ya libre: con d + D = 1 la deja
+libre cuando la serie diferenciada tiene una media significativa, y aquí la
+tiene (la inflación mensual media, t ≈ 2.6). En m03,
+con d = 1 y D = 1, va fija en cero: con dos diferencias, una media sería una
+tendencia en la inflación. En fue_gui se añaden las dos intervenciones, como en
+m03: un suceso económico es el mismo en las dos rutas.
 
 **m04:**
 
-(1 − 0.902 B)(1 − 0.356 B¹²)(∇[ln Pₜ − armónicos − escalones] − 0.00131) = (1 − 0.737 B) aₜ
+(1 − 0.902 B)(1 − 0.356 B¹²)(∇[ln Pₜ − armónicos − intervenciones] − 0.00131) = (1 − 0.737 B) aₜ
 
-- Escalones: 9/2012 ω = 0.00759 (t = 6.7), 10/2012 ω = 0.00487 (t = 4.3),
-  10/2007 ω = 0.00414 (t = 3.7). Casi los mismos que en m03.
+- IVA: ω(B) = 0.00759 + 0.00487 B; ganancia **0.01246** (e.t. 0.00167, t = 7.5),
+  un +1.25 %. Alimentos 10/2007: ω = 0.00414 (t = 3.7). Casi lo mismo que en
+  m03. También aquí el traslado gradual, ω₀/(1 − δB), ajusta peor (log-
+  verosimilitud 144.1 frente a 147.7).
 - μ = 0.00131 (t = 4.0): un 0.13 % al mes.
-- σ̂ₐ = 0.121 %. **18 parámetros** (11 armónicos, μ, 3 del ARMA, 3 escalones).
+- σ̂ₐ = 0.121 %. **18 parámetros** (11 armónicos, μ, 3 del ARMA, 3 ω).
 - Q(9) = 7.7, Q(21) = 24.1, Q(33) = 36.6: blancos. JB = 12.2 (p = 0.002).
 - El par de armónicos de f = 5 (periodo 12/5) no es significativo; se deja el
   juego completo, como lo pone art.
@@ -149,11 +181,11 @@ parte de la subida llegó al mes siguiente. Ese mes la tasa del subyacente
 subió otras cuatro décimas, hasta el 2.5 % ([INE, IPC octubre 2012][ine-1012]).
 En octubre también entraron precios regulados, como las tasas universitarias,
 que según el Banco de España «se trasladaron plenamente» ([Banco de España,
-Informe Anual 2012, cap. 5][bde]). El escalón de octubre recoge las dos cosas;
-el modelo no las separa.
+Informe Anual 2012, cap. 5][bde]). El término de octubre, ω₁, recoge las dos
+cosas; el modelo no las separa.
 
-**El tamaño.** Los dos escalones suman un 1.3 % sobre el nivel del
-subyacente. El Banco de España estimó que la traslación de la subida de la
+**El tamaño.** La ganancia de la función de transferencia es un 1.3 % sobre el
+nivel del subyacente. El Banco de España estimó que la traslación de la subida de la
 imposición indirecta fue de «en torno al 40 % del impacto potencial total»
 ([Banco de España, Informe Anual 2012, cap. 5][bde]). Una subida del 18 % al
 21 % encarece un 2.5 % lo que paga el tipo general (1.21/1.18); que el índice
@@ -168,7 +200,8 @@ en octubre de 2007 la tasa anual del subyacente subió cinco décimas, hasta el
 3.1 %, y el INE destacó «la leche, el pan, otros productos lácteos, la carne de
 ave y los quesos»; la leche pasó del 11.4 % al 24.8 % anual en un mes ([INE,
 IPC octubre 2007][ine-1007]). Son alimentos elaborados: están dentro del
-subyacente. El modelo lo mide como un escalón de +0.39 %.
+subyacente. El modelo lo mide como un escalón de +0.39 %, con un solo ω: no
+hay nada en los residuos que pida otra forma.
 
 ## 7. Cuándo no intervenir: los eneros
 
@@ -202,7 +235,7 @@ sistema de base 2001 ([INE][ine-rebajas]); la muestra empieza ahí.)
 | Q | blancos | blancos |
 | Jarque-Bera | 12.1 | 12.2 |
 | los eneros | los absorbe, salvo 2009-2010 | todos fuera, como anómalos |
-| el IVA | +1.3 % | +1.25 % |
+| ganancia del IVA | +1.3 % (t = 7.8) | +1.25 % (t = 7.5) |
 
 Las dos ajustan igual, y las dos miden lo mismo del IVA. **m03** lo consigue
 con 7 parámetros en lugar de 18, sigue la estacionalidad que evoluciona sin

@@ -141,6 +141,37 @@ Center for Applied Statistics and Economics, Humboldt-Universität zu Berlin.
 — Response-surface approximations giving arbitrary p-values, for statistics of
 the Saikkonen–Lütkepohl family rather than of the Johansen family.
 
+## The bootstrap: the rank and the restrictions
+
+The three papers that give the bootstrap of the cointegrated VAR its theory.
+None of them covers this program's class (moving-average terms, the exact
+likelihood, the λ-max form, Gaussian draws); what each one supports, and where
+`drvec` departs from it, is in [INFERENCE.md](INFERENCE.md) §7.
+
+**Swensen, A. R.** (2006). Bootstrap algorithms for testing and determining the
+cointegration rank in VAR models. *Econometrica*, 74(6), 1699–1714.
+— The first asymptotic theory for the rank bootstrap and for the bootstrap
+sequential procedure: α and β estimated at rank r, the short-run coefficients
+and the residuals from the unrestricted fit. Mentions the fully restricted
+alternative (Remark 2) without developing it.
+
+**Cavaliere, G., Rahbek, A. and Taylor, A. M. R.** (2012). Bootstrap
+determination of the co-integration rank in vector autoregressive models.
+*Econometrica*, 80(4), 1721–1740.
+— Every parameter estimated under the null rank, which makes the bootstrap data
+I(1) with rank r whatever the true rank, with no auxiliary conditions on the
+process; Swensen's mixed scheme can generate explosive or I(2) samples when the
+null rank is below the true one. This is the scheme `-bootstrap` implements, and
+the theoretical support for it.
+
+**Cavaliere, G., Nielsen, H. B. and Rahbek, A.** (2015). Bootstrap testing of
+hypotheses on co-integration relations in vector autoregressive models.
+*Econometrica*, 83(2), 813–831.
+— The LR test of a known β (H₀: β = τ): the χ² approximation is poor in finite
+samples, and a bootstrap that imposes the null is valid and consistent. It bears
+on the χ² tests this program reports for its restrictions (`-fixb2`,
+`-fixb2row`, `-alpha`/`-weakex`, `-gzero`), none of which is bootstrapped yet.
+
 ## Data sources
 
 **Chan, W.-Y. T. and Wallis, K. F.** (1978). Multiple time series modelling:
@@ -179,7 +210,8 @@ gradual adjustment dynamics: a unified framework from triangular representation
 to behavioral error correction models*. Unpublished manuscript, 2 May 2026.
 — The article accompanying the experimental predecessor of this program; the
 source of the parametric-bootstrap prescription for the rank test and of the
-convergence-operator extension that lies outside the present scope.
+convergence-operator extension that lies outside the present scope. The theory
+for that prescription, in the VAR, is Cavaliere, Rahbek and Taylor (2012).
 
 **Treadway, A. B.** (2001). *DRVUS: manual de usuario*. Unpublished user manual.
 — The origin and the authoritative description of the `.inp` file format.

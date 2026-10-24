@@ -11,7 +11,7 @@
 #define FILAS_PASO  64            /* cuantas filas se reservan de golpe */
 
 typedef struct {
-   char   s[TB_TEXTO_MAX];        /* si es texto                          */
+   char  *s;                      /* si es texto (malloc); NULL es ""     */
    double v;                      /* si es numero                         */
    int    vacio;
 } Celda;
@@ -49,7 +49,10 @@ Tabla *tb_new( const char *titulo )
 
 void tb_free( Tabla *t )
 {
+   size_t i;
+
    if ( t == NULL ) return;
+   for ( i = 0; i < (size_t) t->nfila * TB_MAX_COL; i++ ) free( t->c[i].s );
    free( t->c );
    free( t );
 }
@@ -100,7 +103,7 @@ int tb_fila( Tabla *t )
        {
        Celda *k = &t->c[(size_t) t->nfila * TB_MAX_COL + j];
 
-       k->s[0] = '\0';
+       k->s     = NULL;
        k->v     = 0.0;
        k->vacio = 1;
        }
@@ -113,12 +116,35 @@ static Celda *celda( Tabla *t, int col )
    return &t->c[(size_t) ( t->nfila - 1 ) * TB_MAX_COL + col];
 }
 
+/* EL TEXTO, ENTERO HASTA TB_TEXTO_MAX. Era un char[96] dentro de la celda
+   y lo que «Al cuaderno» copiaba de la Diagnosis salia cortado a media
+   palabra («(esperado», «es el co»), a veces a medio caracter. Ahora cada
+   celda guarda lo que mide, y si pasa del tope se corta en el ultimo
+   caracter UTF-8 entero.                                                 */
+static char *copia_texto( const char *v )
+{
+   size_t n = strlen( v );
+   char  *s;
+
+   if ( n > TB_TEXTO_MAX - 1 )
+       {
+       n = TB_TEXTO_MAX - 1;
+       while ( n > 0 && ( (unsigned char) v[n] & 0xC0 ) == 0x80 ) n--;
+       }
+   s = (char *) malloc( n + 1 );
+   if ( s == NULL ) return NULL;
+   memcpy( s, v, n );
+   s[n] = '\0';
+   return s;
+}
+
 void tb_pon_txt( Tabla *t, int col, const char *v )
 {
    Celda *k = celda( t, col );
 
    if ( k == NULL ) return;
-   snprintf( k->s, sizeof k->s, "%s", v ? v : "" );
+   free( k->s );
+   k->s     = copia_texto( v ? v : "" );
    k->vacio = 0;
 }
 
@@ -128,7 +154,8 @@ void tb_pon_num( Tabla *t, int col, double v )
 
    if ( k == NULL ) return;
    k->v     = v;
-   k->s[0]  = '\0';
+   free( k->s );
+   k->s     = NULL;
    k->vacio = 0;
 }
 
@@ -160,7 +187,7 @@ static void texto_celda( const Tabla *t, int fila, int col,
        case TB_ENT: snprintf( out, n, "%ld", (long) ( k->v < 0 ? k->v - 0.5
                                                                : k->v + 0.5 ) );
                     break;
-       default:     snprintf( out, n, "%s", k->s ); break;
+       default:     snprintf( out, n, "%s", k->s ? k->s : "" ); break;
        }
 }
 

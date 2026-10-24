@@ -1229,5 +1229,5 @@ void an_identifica_datos( const AnHost *h, const char *serie, const char *muestr
         { an_di( h, "%s", why ); g_free( datos ); on_cerrar( NULL, g ); return; }
     g_free( datos );
     calcula_raiz( g, g->x, g->n );
-    ventana( g, s->que && s->que[0] ? s->que : "Identificación desde los datos" );
+    ventana( g, s->que && s->que[0] ? s->que : "La estructura ARIMA" );
 }

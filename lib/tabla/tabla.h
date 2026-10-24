@@ -36,7 +36,7 @@
 
 #define TB_MAX_COL    24
 #define TB_MAX_PROC   12          /* entradas de procedencia                 */
-#define TB_TEXTO_MAX  96          /* lo que cabe en una celda de texto       */
+#define TB_TEXTO_MAX  1024        /* lo que cabe en una celda de texto       */
 
 typedef enum {
    TB_TXT,                        /* texto: se alinea a la izquierda         */

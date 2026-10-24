@@ -122,6 +122,14 @@ VERBOSE=${1:-}
 PASS=0; FAIL=0
 TOL=1e-6          # absolute tolerance on logelf
 RUN_TIMEOUT=${RUN_TIMEOUT:-30}   # seconds per estimation; a hang must FAIL, not hang
+#  The runs that are EXPENSIVE BY DESIGN -- the bootstraps (-bootstrap, -matest,
+#  -artest) and the M = 5 rank sequence -- get their own limit.  With the
+#  machine loaded (load 8 on 4 cores, 2026-10-24) the case-3 bootstrap took
+#  84 s and the M = 5 -lrtest 86 s, both finished and right; under 30 s they
+#  failed by timeout and were read as defects ("no critical values where the
+#  asymptotic table has none" for a run that had them).  A hang still fails,
+#  later.
+SLOW_TIMEOUT=${SLOW_TIMEOUT:-300}
 
 [ -x "$DRVEC" ] || { echo "ERROR: $DRVEC not built. Run make first."; exit 1; }
 mkdir -p "$TMP"
@@ -146,6 +154,8 @@ run() {
     STDERR=$(timeout "$RUN_TIMEOUT" "$DRVEC" "$TMP/case" "$@" 2>&1 >/dev/null)
     [ $? -eq 124 ] && TIMEDOUT="yes"
 }
+# slow_run: run, with SLOW_TIMEOUT (RUN_TIMEOUT is dynamically scoped).
+slow_run() { local RUN_TIMEOUT=$SLOW_TIMEOUT; run "$@"; }
 
 near() { awk -v a="$1" -v b="$2" -v t="$TOL" 'BEGIN{d=a-b; if(d<0)d=-d; exit !(d<=t)}'; }
 
@@ -337,6 +347,7 @@ struct_case() {
         bad "$label" "$(printf '%s' "$STDERR" | grep -iE 'ERROR (output|init_guess)' | head -1)"
     else ok "$label"; fi
 }
+slow_struct_case() { local RUN_TIMEOUT=$SLOW_TIMEOUT; struct_case "$@"; }
 for o in "-case 1" "-case 2" "-case 3" \
          "-case 2 -diagar" "-case 2 -diagma" "-case 2 -diagcov" \
          "-case 2 -diagar -diagma" "-case 3 -diagar -diagma -diagcov" \
@@ -371,7 +382,7 @@ struct_case "M=5 r=2 q=1 -marow"               "$DK" 2 1 2 -case 2 -marow
 struct_case "M=5 r=2 q=1 -matri"               "$DK" 2 1 2 -case 2 -matri
 struct_case "M=5 r=2 q=1 -warma"               "$DK" 2 1 2 -case 2 -warma
 struct_case "M=3 r=1 q=1 -warma"               "$UK" 2 1 1 -case 2 -warma
-struct_case "M=5 lrtest"                       "$DK" 2 0 0 -case 2 -lrtest
+slow_struct_case "M=5 lrtest"                  "$DK" 2 0 0 -case 2 -lrtest
 struct_case "legacy layout (-differenced)"     data/AL.inp 2 0 1 -case 2 -differenced
 for o in "-case 1" "-case 2" "-case 3"; do
     struct_case "legacy layout q=1 $o" "$MMOLD" 2 1 1 $o -differenced
@@ -1038,8 +1049,10 @@ echo
 #     the two fits the suite can reproduce on its own, the critical values are
 #     ordered, and the bootstrap ones are ABOVE the chi2 ones, which is the
 #     measured reason the option exists (HOMOLOGATION.md 4i).
-run "$MM" 2 1 1 -case 2 -mean -matest 30
-if ! grep -aq "inherited moving average against the free one" "$TMP/case.out"; then
+slow_run "$MM" 2 1 1 -case 2 -mean -matest 30
+if [ -n "$TIMEDOUT" ]; then
+    bad "matest" "did not finish in ${SLOW_TIMEOUT}s"
+elif ! grep -aq "inherited moving average against the free one" "$TMP/case.out"; then
     bad "matest" "no test block emitted"
 else
     lr=$(awk '/LR = 2\*/{print $(NF-3)}' "$TMP/case.out")
@@ -1206,10 +1219,12 @@ run data/pairs/milan.inp 2 1 1 -case 2 -mean -warma
 w0=$(logelf_of "$TMP/case")
 run data/pairs/milan.inp 2 1 1 -case 2 -mean -mawarma
 w1=$(logelf_of "$TMP/case")
-run data/pairs/milan.inp 2 1 1 -case 2 -mean -artest 20
+slow_run data/pairs/milan.inp 2 1 1 -case 2 -mean -artest 20
 a0=$(awk '/^  restricted     logL/{print $4}' "$TMP/case.out")
 a1=$(awk '/^  unrestricted   logL/{print $4}' "$TMP/case.out")
-if [ -z "$a0" ] || [ -z "$a1" ]; then
+if [ -n "$TIMEDOUT" ]; then
+    bad "artest" "did not finish in ${SLOW_TIMEOUT}s"
+elif [ -z "$a0" ] || [ -z "$a1" ]; then
     bad "artest" "no restricted/unrestricted logL reported"
 elif awk -v a="$a0" -v b="$w0" -v c="$a1" -v d="$w1" \
        'BEGIN{x=a-b; y=c-d; if(x<0)x=-x; if(y<0)y=-y; exit !(x<=1e-4 && y<=1e-4)}'
@@ -2663,8 +2678,10 @@ fi
 
 # 8p.4  -artest runs on the canonical case (BUG-35: its restricted -warma fit
 #       skipped the admissibility ladder and the test never ran).
-run "$MM" 2 1 1 -case 2 -artest 10
-if grep -aq "LR = 2\*\[L(H1) - L(H0)\]" "$TMP/case.out" && \
+slow_run "$MM" 2 1 1 -case 2 -artest 10
+if [ -n "$TIMEDOUT" ]; then
+    bad "-artest" "did not finish in ${SLOW_TIMEOUT}s"
+elif grep -aq "LR = 2\*\[L(H1) - L(H0)\]" "$TMP/case.out" && \
    ! grep -aq "one of the two fits failed" "$TMP/case.out"; then
     ok "-artest runs on mink-muskrat"
 else
@@ -3061,8 +3078,10 @@ fi
 #     the case-3 gap where the asymptotic tables have nothing.  Small B on
 #     purpose: this checks the machinery, not the calibration -- the calibration
 #     is a Monte Carlo study, not a unit test.
-run "$MM" 2 1 0 -case 2 -lrtest -bootstrap 40
-if ! grep -aq 'Parametric bootstrap under H0' "$TMP/case.out"; then
+slow_run "$MM" 2 1 0 -case 2 -lrtest -bootstrap 40
+if [ -n "$TIMEDOUT" ]; then
+    bad "bootstrap" "did not finish in ${SLOW_TIMEOUT}s"
+elif ! grep -aq 'Parametric bootstrap under H0' "$TMP/case.out"; then
     bad "bootstrap" "the bootstrap block is missing"
 else
     ok10=$(grep -aA3 'p-value  reps' "$TMP/case.out" | sed -n '3p' | awk '{print $4}')
@@ -3078,8 +3097,10 @@ else
     fi
 fi
 # case 3 has no tabulated values; the bootstrap must supply them
-run "$MM" 2 1 0 -case 3 -lrtest -bootstrap 40
-if grep -aq 'NOT TABULATED HERE' "$TMP/case.out" && \
+slow_run "$MM" 2 1 0 -case 3 -lrtest -bootstrap 40
+if [ -n "$TIMEDOUT" ]; then
+    bad "bootstrap on case 3" "did not finish in ${SLOW_TIMEOUT}s"
+elif grep -aq 'NOT TABULATED HERE' "$TMP/case.out" && \
    grep -aA3 'p-value  reps' "$TMP/case.out" | sed -n '3p' | grep -qE '[0-9]+\.[0-9]+'; then
     ok "the bootstrap fills the case-3 gap, where the tables have nothing"
 else

@@ -76,6 +76,39 @@ REGLAS = [
 ]
 
 
+# LOS NOMBRES QUE LA VOZ DICE MAL, por palabras enteras y despues de leer el
+# rotulo para el oido. Azure recibe la pronunciacion en IPA (<phoneme>); Piper,
+# una grafia que la imite. Sin esto, Azure dice «lambda» de modo que se oye
+# «la moda», y «Box y Jenkins» con la jota espanola. Box y Jenkins, Treadway,
+# Ljung: como en ingles, con los sonidos del espanol. Las frases ya
+# sintetizadas no se rehacen solas al cambiar esta tabla (la cache va por el
+# texto del rotulo): se borra su .wav. Se comprobo transcribiendo lo
+# sintetizado con el reconocedor de Azure: «ˈlambda» seguia sonando «lameda»;
+# con la silaba partida, «ˈlam.bða», se oye «lambda».
+PRONUNCIA = {
+    "lambda":   ("ˈlam.bða", "lambda"),
+    "Box":      ("ˈboks", "Bocs"),
+    "Jenkins":  ("ˈʝeŋkins", "Yénkins"),
+    "Treadway": ("ˈtɾe.ðwei", "Trédguei"),
+    "Ljung":    ("ˈʝuŋ", "Yung"),
+}
+
+
+def pronuncia(txt, ssml):
+    """El texto ya leido para el oido, con PRONUNCIA: SSML para Azure (y
+    entonces todo lo demas va escapado) o la grafia para Piper."""
+    trozos = re.split(r"(\b(?:%s)\b)" % "|".join(PRONUNCIA), txt)
+    sal = []
+    for i, t in enumerate(trozos):
+        if i % 2 == 0:
+            sal.append(escape(t) if ssml else t)
+        elif ssml:
+            sal.append('<phoneme alphabet="ipa" ph="%s">%s</phoneme>' % (PRONUNCIA[t][0], t))
+        else:
+            sal.append(PRONUNCIA[t][1])
+    return "".join(sal)
+
+
 def para_el_oido(txt):
     if " || " in txt:
         return txt.split(" || ", 1)[1]
@@ -120,7 +153,7 @@ def azure(dice, wav, voz, clave, region):
     vel = os.environ.get("VOZ_VELOCIDAD", "+0%")
     ssml = ('<speak version="1.0" xml:lang="es-ES">'
             '<voice name="%s"><prosody rate="%s">%s</prosody></voice></speak>'
-            % (voz, vel, escape(dice)))
+            % (voz, vel, pronuncia(dice, True)))
     req = urllib.request.Request(
         "https://%s.tts.speech.microsoft.com/cognitiveservices/v1" % region,
         data=ssml.encode("utf-8"), method="POST",
@@ -156,7 +189,7 @@ def main():
             if voz_azure:
                 azure(dice, wav, voz_azure, clave, region)
             else:
-                subprocess.run([piper, "-m", modelo, "-f", wav], input=dice.encode("utf-8"),
+                subprocess.run([piper, "-m", modelo, "-f", wav], input=pronuncia(dice, False).encode("utf-8"),
                                check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             print("voz:", dice)
             hechos += 1

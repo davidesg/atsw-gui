@@ -379,10 +379,18 @@ Se abre el editor con el `.inp` de m01:
 
 ![El editor de m01](img/editor-m01.png)
 
-Es el **modelo especificado**: logaritmos, d = 1, un AR(1) y los armónicos
-deterministas. Los valores son semillas. Pulsa **Guardar y estimar**: el motor
-**fue** lo estima por máxima verosimilitud exacta. En la pestaña **Output**
-está la salida:
+Es el **modelo especificado**: logaritmos, d = 1, un AR(1), los armónicos
+deterministas y la media μ. Los valores son semillas.
+
+> **¿Por qué lleva media?** Con una diferencia (d + D = 1), μ es la **deriva**:
+> el crecimiento medio de la serie. ATSW la deja libre sólo si la serie
+> transformada y diferenciada tiene una media significativa (\|t\| ≥ 2). El
+> IPC sube de media cada mes (t = 3.0), así que m01 lleva μ; el petróleo no
+> tiene deriva (t = 0.6), y su modelo no la lleva. Sin diferencias, μ es el
+> nivel y va siempre; con dos, no va nunca.
+
+Pulsa **Guardar y estimar**: el motor **fue** lo estima por máxima
+verosimilitud exacta. En la pestaña **Output** está la salida:
 
 ![La salida de la estimación](img/editor-m01-output.png)
 
@@ -439,10 +447,10 @@ Cada fila es una pregunta, con **los números** y **qué dicen**:
 | Fila | La pregunta | Aquí |
 |---|---|---|
 | **Estimación** | ¿Convergió? | Sí. |
-| **Media** | ¿Los residuos tienen media cero? | El modelo estima la media, así que es cero por construcción. |
+| **Media** | ¿Los residuos tienen media cero? | m01 estima la media (μ, la deriva del IPC), así que es cero por construcción y no hay contraste. En un modelo sin μ, como los de wti, la fila contrasta de verdad que la media de los residuos sea cero. |
 | **Autocorrelación** | ¿Los residuos son ruido blanco? | Sí: ninguna Q de Ljung-Box rechaza. |
-| **Normalidad** | ¿Son normales? | Sí (Jarque-Bera, p = 0.82). |
-| **Parámetros** | ¿Son significativos? | **4 no lo parecen** (\|t\| < 2), empezando por un armónico (cos 1). |
+| **Normalidad** | ¿Son normales? | Sí (Jarque-Bera, p = 0.68). |
+| **Parámetros** | ¿Son significativos? | De los 13, **3 no lo parecen** (\|t\| < 2), empezando por un armónico (sin 4). |
 | **Ganancia** | ¿El efecto de una intervención es permanente? | No aplica: m01 no tiene intervenciones. |
 
 **Factorización del AR…** (un botón de la diagnosis, y también en
@@ -456,9 +464,9 @@ del AR.
 
 ![La factorización del AR de m01](img/ipc-m01-factorizacion.png)
 
-En m01, un AR(1), sale una sola raíz real, 1.83: no hay nada escondido. Es una
-herramienta de identificación, no un contraste: si un par lo parece, se
-contrasta aparte. Para eso está **Derivar el modelo factorizado…**: escribe un
+En m01, un AR(1) con φ̂ = 0.40, sale una sola raíz real, 2.48: no hay nada
+escondido. Es una herramienta de identificación, no un contraste: si un par
+lo parece, se contrasta aparte. Para eso está **Derivar el modelo factorizado…**: escribe un
 hijo con cada factor AR partido así, libre y sembrado con estos números, para
 estimarlo y fijar o quitar un factor cada vez. En m01 está apagado, porque un
 AR(1) ya no se puede partir más.
@@ -476,7 +484,7 @@ la diagnosis, desde **Diagnosticar ▸** (en el botón derecho y en el menú
 ![El orden de integración de m01](img/ipc-m01-integracion.png)
 
 - **Shin-Fuller**: ¿le falta una diferencia al AR, es decir, tiene una raíz en
-  1 − 4/n? Φ = 26.9 frente a un crítico de 1.76: no; con d = 1 basta.
+  1 − 4/n? Φ = 37.5 frente a un crítico de 1.76: no; con d = 1 basta.
 - **Sobrediferenciación**: se impone una diferencia más (d = 2) con un testigo
   MA(1), y se pregunta si el testigo se apila en θ = 1, o sea, si la diferencia
   extra sobra. Aquí θ̂ = 0.971 y LR = 4.22 frente a 1.94: por sí solo apuntaría
@@ -502,7 +510,7 @@ La ventana de la **estacionalidad** lleva el resto:
 
 ![La estacionalidad de m01](img/ipc-m01-estacionalidad.png)
 
-- **Simplificación estacional**: ¿sobran los 11 armónicos a la vez? LR = 346
+- **Simplificación estacional**: ¿sobran los 11 armónicos a la vez? LR = 359
   con 11 grados de libertad, muy por encima del crítico (19.7): no sobran.
 - El **DCD estacional** (¿sobra la diferencia estacional?) mira un MA anual en
   su frontera; m01 no lo tiene, y la ventana dice que no aplica.
@@ -514,10 +522,11 @@ con D = 0 y armónicos. En cada frecuencia f construye el modelo estocástico:
 quita el cos/sin de f (o el alter en f = 6), pone la raíz unitaria estacional de
 esa frecuencia y un **testigo** MA libre. Luego mira si el testigo se apila en
 la frontera, donde cancela la raíz: si se apila, la estacionalidad en f es
-determinista; si queda invertible, es estocástica. En m01 salen estocásticas
-f = 5 (LR = 2.36) y f = 3 (LR = 2.21), frente a un crítico de 2.07, y las demás
-deterministas. Es por poco: con media y armónicos en el modelo, el crítico real
-en muestra finita es mayor, y la ventana lo avisa. Los críticos salen de
+determinista; si queda invertible, es estocástica. En m01 sale estocástica
+sólo f = 3 (LR = 2.31, frente a un crítico de 2.07), y las demás
+deterministas; la que más se acerca es f = 5 (LR = 1.77). Es por poco: con
+media y armónicos en el modelo, el crítico real en muestra finita es mayor, y
+la ventana lo avisa. Los críticos salen de
 simulación.
 
 **Reformular como estocástica…** deriva el modelo estocástico de la frecuencia
@@ -551,7 +560,7 @@ modelo está estimado.
 
 ### Los parámetros que no parecen significativos
 
-Cuatro armónicos tienen \|t\| < 2. La tentación es quitarlos. **No todavía**:
+Tres armónicos tienen \|t\| < 2. La tentación es quitarlos. **No todavía**:
 
 - Un armónico con t baja puede ser un indicio de que esa frecuencia estacional
   es **estocástica**, no determinista. El contraste que lo decide (el **MEG**)
@@ -596,6 +605,9 @@ Elige **AR(1)**, deriva m01, estímalo y abre su diagnosis:
 Todo cuadra **salvo la normalidad**: Jarque-Bera rechaza (p = 0.035). El propio
 programa sugiere la causa: con curtosis 0.4, *suele ser cosa de unos pocos
 atípicos, no de toda la muestra*.
+
+La fila **Media**, aquí sí, contrasta: m01 no lleva μ (el petróleo no tiene
+deriva), y la media de los residuos no se distingue de cero (t = 0.65).
 
 ### Los anómalos
 
@@ -645,10 +657,10 @@ Deja **en el editor** y pulsa **Derivar modelo con estas intervenciones**. Nace
 
 ![Diagnosis de wti m02](img/wti-m02-diagnosis.png)
 
-Ahora todo cuadra, también la normalidad, y los cuatro parámetros parecen
-significativos. La fila **Ganancia** ya tiene qué preguntar: los tres escalones
-dejan una ganancia distinta de cero, un efecto **permanente** en el nivel del
-petróleo. **Diagnosticar ▸ Ganancia…** da el contraste.
+Ahora todo cuadra, también la normalidad y la media de los residuos
+(t = 1.43), y los cuatro parámetros parecen significativos. La fila
+**Ganancia** ya tiene qué preguntar: los tres escalones dejan una ganancia
+distinta de cero, un efecto **permanente** en el nivel del petróleo. **Diagnosticar ▸ Ganancia…** da el contraste.
 
 ---
 
@@ -820,15 +832,19 @@ preblanqueado, en los retardos **negativos**.
 ![Exogeneidad](img/drtran-diagnosis.png)
 
 Si fallara, el sistema sería simultáneo y habría que ir a VARMA. Aquí
-p = 0.87: **wti es exógena**.
+p = 0.81: **wti es exógena**.
 
 **2 · Adecuación**: la misma Q en los retardos **k ≥ 0**. Si falla, la *forma*
 (b, r, s) está mal.
 
 ![Adecuación](img/drtran-adecuacion.png)
 
-p = 0.22: **la forma es adecuada**. Abajo, el contraste de Hosking dice que los
-residuos de las dos ecuaciones son ruido blanco conjuntamente.
+p = 0.18: **la forma es adecuada**. Abajo, el contraste de Hosking dice que los
+residuos de las dos ecuaciones son ruido blanco conjuntamente (p = 0.19). La
+misma línea avisa de que el Jarque-Bera multivariante rechaza la normalidad
+(p = 0.022): los residuos del IPC tienen algo de curtosis (1.1). No invalida
+la estimación, pero las bandas de la previsión, que suponen normalidad, hay que
+leerlas con esa reserva.
 
 **3 · Ajuste**: ¿merece la pena la transferencia? Converger y merecer la pena
 son afirmaciones distintas. Hay que compararla con el **modelo diagonal**, las
@@ -843,11 +859,11 @@ dos series sin relación entre ellas. Se calcula desde la flecha de
 
 ![Ajuste frente al diagonal](img/drtran-ajuste.png)
 
-- **LR = 81.59** con 2 parámetros de transferencia, frente a un valor crítico de
+- **LR = 86.89** con 2 parámetros de transferencia, frente a un valor crítico de
   5.3 al 5 %: **la transferencia es significativa**.
-- La varianza de los residuos del IPC baja un **32.7 %**: una parte importante
+- La varianza de los residuos del IPC baja un **34.3 %**: una parte importante
   de su variabilidad se explica con el petróleo.
-- En wti no cambia nada (−0.8 %), como debe ser: wti es la entrada, no
+- En wti apenas cambia (−1.9 %), como debe ser: wti es la entrada, no
   responde a nadie.
 
 **4 · Residuos**: la ACF de los residuos de cada ecuación, con la Q de
@@ -865,11 +881,12 @@ ecuación a otra (ipc, wti).
 
 | Parámetro | Qué es | Valor |
 |---|---|---|
-| `ω1[0] ← wti` | ω₀, el efecto del mismo mes | 0.019 (d.t. 0.002) |
-| `δ1[1] ← wti` | δ₁, cuánto se arrastra cada mes | 0.577 (d.t. 0.077) |
-| `φ_ipc` | el AR(1) del ruido del IPC | 0.469 |
+| `ω1[0] ← wti` | ω₀, el efecto del mismo mes | 0.018 (d.t. 0.002) |
+| `δ1[1] ← wti` | δ₁, cuánto se arrastra cada mes | 0.502 (d.t. 0.068) |
+| `φ_ipc` | el AR(1) del ruido del IPC | 0.287 |
 | `ω_D1_ipc`… | los armónicos del IPC | |
-| `φ_wti` | el AR(1) del petróleo (en la ecuación de wti) | 0.215 |
+| `μ_ipc` | la deriva del IPC: su crecimiento medio mensual que no viene del petróleo | 0.0013 (d.t. 0.0002) |
+| `φ_wti` | el AR(1) del petróleo (en la ecuación de wti) | 0.223 |
 | `ω_D1_wti`… | los tres escalones de 2008 del petróleo (ídem) | |
 
 **7 · Transferencias**: la **ganancia** y el **retardo medio** de cada enlace,
@@ -891,26 +908,27 @@ El modelo, en dos ecuaciones:
 
 ```
 ln IPC_t = ω₀ / (1 − δ₁ B) · ln WTI_t  +  D_t  +  N_t
-(1 − φ B) ∇ N_t = a_t
+(1 − φ B) (∇ N_t − μ) = a_t
 ```
 
 La primera es la **transferencia en niveles**, con los deterministas (D_t, los
 armónicos) y el **ruido** N_t. La segunda es el modelo del ruido: un AR(1) en
-diferencias.
+diferencias, alrededor de la deriva μ = 0.0013 (un 0.13 % al mes, cerca de un
+1.5 % al año, de inflación que no viene del petróleo).
 
 Como las dos series están en logaritmos, los coeficientes son **elasticidades**:
 
-- **Efecto del mismo mes**: ω₀ = 0.019. Si el petróleo sube un 10 %, el IPC
-  sube un 0.19 % ese mismo mes.
+- **Efecto del mismo mes**: ω₀ = 0.018. Si el petróleo sube un 10 %, el IPC
+  sube un 0.18 % ese mismo mes.
 - **Ganancia** (el efecto a largo plazo, cuando la subida del petróleo es
-  permanente): ω₀ / (1 − δ₁) = 0.019 / (1 − 0.577) ≈ **0.045** (d.t. 0.008,
+  permanente): ω₀ / (1 − δ₁) = 0.018 / (1 − 0.502) ≈ **0.037** (d.t. 0.005,
   en **7 · Transferencias**). Una subida permanente del 10 % en el petróleo
-  acaba subiendo el IPC un **0.45 %**.
-- **Retardo medio**: δ₁ / (1 − δ₁) ≈ **1.4 meses** (1.36, d.t. 0.43). La mayor
+  acaba subiendo el IPC un **0.37 %**.
+- **Retardo medio**: δ₁ / (1 − δ₁) ≈ **1 mes** (1.01, d.t. 0.28). La mayor
   parte del efecto llega en el primer trimestre.
 
 > Una advertencia de la escuela: si δ₁ se acercara a 1 (más de 0.95), la
-> ganancia y el retardo medio no serían fiables. Aquí δ₁ = 0.58, lejos de eso.
+> ganancia y el retardo medio no serían fiables. Aquí δ₁ = 0.50, lejos de eso.
 
 ---
 
@@ -923,7 +941,7 @@ Pestaña **7 · Previsión** (o el botón **Prever** de la barra). Marca
 
 Desde 12/2019, el nivel del IPC y su variación anual, cada uno con su
 desviación típica. El IPC de enero de 2020 fue 97.14; el modelo prevé
-97.03 ± 0.26.
+97.14 ± 0.25.
 
 Dos cosas que hay que tener claras:
 

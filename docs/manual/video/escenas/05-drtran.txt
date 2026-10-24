@@ -48,6 +48,10 @@ flecha Diagnosis
 espera 1500
 menu Calcular el baseline
 rotulo El baseline es el modelo diagonal: cada serie con su univariante, sin relación entre ellas.
+espera 4000
+rotulo Es el punto de comparación: si la transferencia no mejora su verosimilitud, el petróleo no explica nada del IPC.
+espera 4000
+rotulo drtran lo estima igual que el modelo completo, por máxima verosimilitud exacta, y al acabar lo fija solo.
 espera 8000
 pestana 5 · Estimación
 boton Estimar
@@ -56,13 +60,13 @@ espera 8000
 pestana 6 · Diagnosis
 pestana 3 · Ajuste
 espera 1125
-rotulo LR = 81.6 con dos parámetros: la transferencia es significativa. La varianza del IPC baja un 33 %.
+rotulo LR = 86.9 con dos parámetros: la transferencia es significativa. La varianza del IPC baja un 34 %.
 espera 3600
 pestana 5 · Modelo estimado
-rotulo ω₀ = 0.019 y δ = 0.58, con los nombres del modelo y en las unidades de la ecuación.
+rotulo ω₀ = 0.018 y δ = 0.50, con los nombres del modelo y en las unidades de la ecuación.
 espera 3600
 pestana 7 · Transferencias
-rotulo Ganancia 0.045: a largo plazo, un 10 % más de petróleo es un 0.45 % más de IPC. Retardo medio, 1.4 meses. || La ganancia es cero coma cero cuarenta y cinco: a largo plazo, un diez por ciento más de petróleo es un cero coma cuarenta y cinco por ciento más de i pe ce. El retardo medio, uno coma cuatro meses.
+rotulo Ganancia 0.037: a largo plazo, un 10 % más de petróleo es un 0.37 % más de IPC. Retardo medio, un mes. || La ganancia es cero coma cero treinta y siete: a largo plazo, un diez por ciento más de petróleo es un cero coma treinta y siete por ciento más de i pe ce. El retardo medio, un mes.
 espera 4200
 rotulo Ver modelo: la página de la ecuación, como la de fue.
 boton Ver modelo
@@ -79,7 +83,7 @@ rotulo Y prever. Prever la salida exige prever también las entradas.
 boton Calcular
 rotulo drtran prevé también el petróleo, con su modelo, y lo pasa por la transferencia.
 espera 8000
-rotulo Enero de 2020: el modelo prevé 97.03 ± 0.26. Fue 97.14.
+rotulo Enero de 2020: el modelo prevé 97.14 ± 0.25, y fue 97.14.
 espera 3750
 rotulo -
 portada Todo esto, paso a paso | docs/manual/MANUAL.md | 5000

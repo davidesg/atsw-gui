@@ -6,6 +6,16 @@
   transferencia con drtran, y la previsión. La filosofía es la de ART para los
   univariantes y la de mtram (drtran-python) para la transferencia.
 - **[datos/ipc_wti.csv](datos/ipc_wti.csv)**: los datos del caso.
+- **[CASO-ES-CORE.md](CASO-ES-CORE.md)**: un caso anterior, para empezar. El
+  IPC subyacente de España, univariante, por las dos rutas estacionales
+  (D = 1 y D = 0), con la subida del IVA de 2012 como intervención. Tiene su
+  vídeo (`video.sh es-core`).
+- **[datos/es_core.csv](datos/es_core.csv)** (y `.xlsx`): sus datos. Serie
+  IPC292511 del INE (subyacente: general sin alimentos no elaborados ni
+  productos energéticos), mensual, 2002-01 a 2026-09, descargada el
+  2026-10-24 de la API del INE (servicios.ine.es/wstempus). Fuente: Sitio web
+  del INE, www.ine.es; licencia CC BY 4.0
+  ([aviso legal](https://ine.es/dyngs/AYU/es/index.htm?cid=125)).
 - **img/**: las capturas. No están hechas a mano: las saca el programa.
 
 ## Rehacerlo
@@ -18,6 +28,7 @@ make                                      # el arbol construido
 bash docs/manual/capturas/capturas.sh     # las capturas, en img/ (unos 10 min)
 python3 docs/manual/construir.py          # MANUAL.html y MANUAL.pdf
 bash docs/manual/video/video.sh           # el video, video/ATSW-ipc-wti.mp4
+bash docs/manual/video/video.sh es-core   # el del IPC subyacente, video/ATSW-es-core.mp4
 ```
 
 La primera captura es la presentación, que lleva la versión con que se

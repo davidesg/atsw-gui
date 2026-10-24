@@ -46,6 +46,8 @@ SIGLAS = {
     "LR": "ele erre",
     "drtran": "de erre tran",
     "fug": "fug",
+    "fue_gui": "fue gui",
+    "AR": "a erre", "MA": "eme a",
     "MANUAL.md": "el manual",
 }
 
@@ -59,6 +61,8 @@ REGLAS = [
     (r"\bb r s\b", "be erre ese"),
     (r"λ", "lambda"),
     (r"ω₀", "omega cero"),
+    (r"ω", "omega"),
+    (r"Θ", "theta"),
     (r"δ", "delta"),
     (r"σ", "sigma"),
     (r"±", "más menos"),
@@ -68,6 +72,7 @@ REGLAS = [
     (r"\br = ", "erre igual a "),
     (r"\bs = ", "ese igual a "),
     (r"\bk = ", "ka igual a "),
+    (r"\bt = ", "te igual a "),
     (r"\br\b", "erre"),
     (r" = ", " igual a "),
     (r"(\d)\.(\d)", r"\1 coma \2"),

@@ -112,6 +112,7 @@ typedef struct {
     double   par[FO_MAX_PAR], par_et[FO_MAX_PAR];
     gboolean par_estimado[FO_MAX_PAR];
     gboolean tiene_mu;            /* el modelo estima la media            */
+    int      mu_i;                /* y su numero en la tabla (1..), o 0   */
 
     /* LOS PARES DE PARAMETROS CORRELACIONADOS. Salen de la matriz de
        correlaciones que el motor imprime -- dos decimales, que para

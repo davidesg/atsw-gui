@@ -21,7 +21,7 @@ foto ipc-serie-acf
 cierra
 ventana ATSW
 derecho ipc
-menu Identificar desde los datos…
+menu Identificar la estructura ARIMA…
 espera 6000
 ventanas
 ventana Identificación
@@ -56,11 +56,22 @@ fila m01
 foto taller-m01
 derecho m01
 fotomenu taller-menu-modelo
+submenu Diagnosticar
 menu Diagnosis…
 ventana Diagnosis
 tamano 1000 800
 espera 2500
 foto ipc-m01-diagnosis
+# Lo que se mira, al cuaderno del proyecto.
+boton Al cuaderno
+espera 800
+boton Factorización del AR…
+ventana Factorización del AR
+tamano 900 640
+espera 1500
+foto ipc-m01-factorizacion
+cierra
+ventana Diagnosis
 boton Orden de integración…
 ventana Orden de integración
 tamano 1000 720

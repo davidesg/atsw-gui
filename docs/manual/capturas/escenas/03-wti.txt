@@ -4,7 +4,7 @@ ventana ATSW
 pestana Pre-Covid
 fila wti
 derecho wti
-menu Identificar desde los datos…
+menu Identificar la estructura ARIMA…
 ventana Identificación
 tamano 760 900
 elige logaritmos (λ = 0)
@@ -23,6 +23,7 @@ ventana ATSW
 espera 1500
 fila m01
 derecho m01
+submenu Diagnosticar
 menu Diagnosis…
 ventana Diagnosis
 tamano 1000 800
@@ -36,6 +37,8 @@ ventana anomalos
 tamano 1000 820
 espera 2500
 foto wti-anomalos
+boton Al cuaderno
+espera 800
 casilla 10/2008 | 1
 boton Calibrar
 espera 3000
@@ -57,9 +60,12 @@ espera 1500
 fila m02
 foto taller-wti
 derecho m02
+submenu Diagnosticar
 menu Diagnosis…
 ventana Diagnosis
 tamano 1000 800
 espera 2500
 foto wti-m02-diagnosis
+boton Al cuaderno
+espera 800
 salir

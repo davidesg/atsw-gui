@@ -440,8 +440,8 @@ const char *dx_nombre_par( const FueOut *o, const char *const *det, int ndet,
            return buf;
            }
 
-   /* LA MEDIA es el ultimo cuando la hay, y el .out lo dice aparte. */
-   if ( o && o->tiene_mu && k == o->npar_leidos ) { snprintf( buf, n, "μ" ); return buf; }
+   /* LA MEDIA, cuando se estima: su numero lo da el .out (BUG-0002). */
+   if ( o && o->tiene_mu && k == o->mu_i ) { snprintf( buf, n, "μ" ); return buf; }
 
    snprintf( buf, n, "[%d]", k );
    return buf;

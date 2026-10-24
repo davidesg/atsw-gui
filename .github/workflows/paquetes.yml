@@ -53,6 +53,8 @@ jobs:
           path: |
             docs/manual/datos/ipc_wti.csv
             docs/manual/datos/ipc_wti.xlsx
+            docs/manual/datos/es_core.csv
+            docs/manual/datos/es_core.xlsx
 
   windows:
     needs: manual

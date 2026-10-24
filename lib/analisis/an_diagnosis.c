@@ -102,8 +102,8 @@ static Tabla *tabla_de( Dg *g )
     tb_procedencia( t, "Modelo",  g->id );
     tb_procedencia( t, "Muestra", g->muestra[0] ? g->muestra : "completa" );
     if ( g->estruct[0] ) tb_procedencia( t, "Estructura", g->estruct );
-    g_snprintf( b, sizeof b, "%d observaciones, %d parámetros",
-                g->o.nobs, g->o.npar );
+    g_snprintf( b, sizeof b, "%d observaciones, %d parámetro%s",
+                g->o.nobs, g->o.npar, g->o.npar == 1 ? "" : "s" );
     tb_procedencia( t, "Ajuste", b );
     }
     return t;

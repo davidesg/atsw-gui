@@ -262,7 +262,7 @@ static void on_identifica_datos( GtkMenuItem *m, Atsw *a )
     s.x = inp.data; s.n = inp.nobs; s.freq = inp.freq;
     s.per = inp.begtime; s.anio = inp.begyear;
     s.lam = inp.boxlam; s.d = inp.nrdiff; s.D = inp.nadiff;
-    que = g_strdup_printf( "Identificación de %s desde los datos", a->serie );
+    que = g_strdup_printf( "La estructura ARIMA de %s", a->serie );
     s.que = que;
     h = atsw_host( a );
     an_identifica_datos( &h, a->serie, mu, pr_datos_de( a->p, a->serie, mu ), &s );

@@ -18,6 +18,7 @@ espera 3750
 cierra
 ventana drtran —
 boton Añadir a la red
+rotulo La red recibe lo que propone la tabla: b = 0, r = 0, s = 1, dos pesos libres.
 pestana 3 · Red
 espera 1125
 fila 2 wti
@@ -33,6 +34,7 @@ espera 1125
 pestana 5 · Estimación
 rotulo Todo a la vez, por máxima verosimilitud exacta.
 boton Estimar
+rotulo Entran la transferencia, el modelo del ruido del IPC y el del petróleo. Lo primero es que converja.
 espera 8000
 pestana 6 · Diagnosis
 rotulo Primero la relación. Exogeneidad: el petróleo no depende del IPC.
@@ -40,39 +42,48 @@ espera 3000
 pestana 2 · Adecuación
 rotulo Adecuación: la forma b r s es correcta.
 espera 2625
-rotulo ¿Merece la pena? Se compara con el modelo sin transferencia, desde el menú Diagnosis.
+rotulo ¿Merece la pena? Se compara con el modelo sin transferencia, desde el menú de Diagnosis, en la barra.
 pestana 3 · Ajuste
 flecha Diagnosis
 espera 1500
 menu Calcular el baseline
+rotulo El baseline es el modelo diagonal: cada serie con su univariante, sin relación entre ellas.
+espera 4000
+rotulo Es el punto de comparación: si la transferencia no mejora su verosimilitud, el petróleo no explica nada del IPC.
+espera 4000
+rotulo drtran lo estima igual que el modelo completo, por máxima verosimilitud exacta, y al acabar lo fija solo.
 espera 8000
 pestana 5 · Estimación
 boton Estimar
+rotulo Se vuelve a estimar la transferencia, y se comparan las dos verosimilitudes.
 espera 8000
 pestana 6 · Diagnosis
 pestana 3 · Ajuste
 espera 1125
-rotulo LR = 81.6 con dos parámetros: la transferencia se gana su sitio. La varianza del IPC baja un 33 %.
+rotulo LR = 86.9 con dos parámetros: la transferencia es significativa. La varianza del IPC baja un 34 %.
 espera 3600
 pestana 5 · Modelo estimado
-rotulo ω₀ = 0.019 y δ = 0.58, con los nombres del modelo y en las unidades de la ecuación.
+rotulo ω₀ = 0.018 y δ = 0.50, con los nombres del modelo y en las unidades de la ecuación.
 espera 3600
 pestana 7 · Transferencias
-rotulo Ganancia 0.045: a largo plazo, un 10 % más de petróleo es un 0.45 % más de IPC. Retardo medio, 1.4 meses. || La ganancia es cero coma cero cuarenta y cinco: a largo plazo, un diez por ciento más de petróleo es un cero coma cuarenta y cinco por ciento más de i pe ce. El retardo medio, uno coma cuatro meses.
+rotulo Ganancia 0.037: a largo plazo, un 10 % más de petróleo es un 0.37 % más de IPC. Retardo medio, un mes. || La ganancia es cero coma cero treinta y siete: a largo plazo, un diez por ciento más de petróleo es un cero coma treinta y siete por ciento más de i pe ce. El retardo medio, un mes.
 espera 4200
 rotulo Ver modelo: la página de la ecuación, como la de fue.
 boton Ver modelo
 ventana .pdf
 tamano 1000 760
+rotulo Arriba, los residuos con su ACF y su PACF; debajo, el modelo estimado, con la desviación típica de cada coeficiente.
 espera 3750
 cierra
+rotulo -
 ventana drtran —
 pestana 7 · Previsión
 casilla Prever | 1
 rotulo Y prever. Prever la salida exige prever también las entradas.
 boton Calcular
+rotulo drtran prevé también el petróleo, con su modelo, y lo pasa por la transferencia.
 espera 8000
-rotulo Enero de 2020: el modelo prevé 97.03 ± 0.26. Fue 97.14.
+rotulo Enero de 2020: el modelo prevé 97.14 ± 0.25, y fue 97.14.
 espera 3750
 rotulo -
 portada Todo esto, paso a paso | docs/manual/MANUAL.md | 5000

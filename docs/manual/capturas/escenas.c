@@ -1232,7 +1232,7 @@ static gboolean tic( gpointer d )
         /* espera, y lo que espera a la voz, no son «no encuentro». */
         if ( strcmp( l, "espera" ) != 0
              && !( (strcmp( l, "rotulo" ) == 0 || strcmp( l, "salir" ) == 0 ||
-                    strcmp( l, "cierra" ) == 0) && video )
+                    strcmp( l, "cierra" ) == 0 || strcmp( l, "portada" ) == 0) && video )
              && g_get_monotonic_time() - desde > tiempo * 1000000LL )
             fallo( "no encuentro", lineas[il] );
         g_free( l );

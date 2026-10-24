@@ -7,6 +7,21 @@ publicación: `v*`.
 
 ## Sin publicar
 
+### `-gzero i j`: entradas de Γ(k) fijadas a cero (sin realimentación a corto plazo)
+
+- `Γ_k[i][j] = 0` para todo k: la serie `j` no entra en el corto plazo de la
+  ecuación `i`. Λ y F son los parámetros del propio VEC, así que un cero en F
+  es un cero en Γ, en cualquier ecuación, también en las del bloque Y1. La
+  máscara pasa por `f_free()`, el mismo predicado que ya usaba `-xsys`.
+- Con `-alpha`/`-weakex` es la restricción del modelo condicional
+  (exogeneidad débil y no realimentación). Se estima también el VEC libre y
+  se informa del LR, con df = (p−1)·entradas + (M−sa)·r.
+- En un sistema bivariante, `-gzero 1 2 -weakex 1` es exactamente `-xsys 1`
+  (lo comprueba la batería, §6d2). Dos casos nuevos en los goldens (`gzero`,
+  `gzeroa`); los 34 anteriores no se mueven.
+- Origen: el rodaje de sima 0.2.0 con Martín Manjón y Treadway (1997),
+  1985–2008: el modelo condicional R0T | (R30, R3) da LR 7.83, 8 df, p 0.45.
+
 ## 0.13 — 2026-10-16
 
 ### BUG-40, cerrado: la componente determinista de un `.pre` es la de fue

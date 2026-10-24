@@ -1622,3 +1622,44 @@ now runs a short bootstrap that blocks (mink-muskrat, `2 1 0 -case 2 -lrtest
 wide it is, and a shift by 33 is a statement about that width. Here it was a
 false one, which the compiler pointed out on every Windows build and the
 non-blocking battery did not stop.
+
+## BUG-63 — the rank bootstrap's `.boot` is buffered: no progress until the end
+
+**Status: FIXED on 2026-10-24** (`src/drvec.c`, `bootstrap_rank` and the
+`.boot` header in the `-lrtest` mode). Found in the shakedown of sima 0.2.0
+(Martín Manjón and Treadway 1997): a trivariate rank test with `-bootstrap
+499` takes 60–90 minutes, and sima's `job_status` showed almost nothing until
+the end.
+
+**What it was.** `bootstrap_rank` writes one line per replication to
+`<base>.boot` with `fprintf` (`boot_dump`, written for the replication-by-
+replication homologation of the port) and never flushes it. The C library buffers a file in blocks of 4 KB, and a line
+is about 25 bytes: some 160 replications sit in memory before any reaches the
+disk. The `.boot` is also the bootstrap's PROGRESS: drvec-python's
+`c_engine.Job.wait` tails it, line by line, and sima's jobs report
+"replication k of B" from it. A bivariate test with fewer than ~160
+replications showed nothing, not even the header, until it ended. A
+trivariate one, at ~5 s a replication, moved every ten-odd minutes.
+
+**How it was found.** In sima's shakedown: `job_status` on a trivariate rank
+test said almost nothing for an hour, while the Python engine's progress
+moves at every replication. drvec-python's reader was ruled out (it tails the
+file by byte offset and reports every complete line); the file itself was
+empty while drvec ran, which is the C library's buffer.
+
+**What it cost.** No number: the file's bytes at the end are the same. What
+it cost was the progress of every rank bootstrap run on drvec C through the
+port (sima's default engine), and with it the analyst's reading of whether a
+job of an hour was moving. A killed run also lost up to 160 replications
+that had been computed.
+
+**Repro.** `sh tests/repro/repro.sh 63` runs mink-muskrat `2 0 1 -case 2
+-lrtest -bootstrap 60` and watches `b63.boot` while drvec runs. Before the
+fix it prints `0 of 60` (the whole run, about 3.5 s, shows no line); after it,
+nearly all of them (`58 of 60`: the last land between two looks).
+
+**The fix.** `fflush(boot_dump)` after the header and after each
+replication's line. The `.boot` is byte for byte the same (the golden
+`rankboot.boot` does not move), and the cost is one system call per
+replication against seconds of fitting.
+

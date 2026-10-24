@@ -48,7 +48,9 @@ VOZ_MODELO=$PWD/es_ES-sharvard-medium.onnx PIPER=~/piper/bin/piper bash docs/man
 
 Cada rótulo se dice tal cual, leído para el oído (`video/voz.py`: «AR(1)» es
 «a erre uno», «d = 1» es «de igual a uno»). Si un rótulo tiene que decir otra
-cosa, el guion lo pone detrás: `rotulo TEXTO || LO QUE SE DICE`. Al grabar,
+cosa, el guion lo pone detrás: `rotulo TEXTO || LO QUE SE DICE`. Los nombres
+que la voz dice mal (lambda, Box y Jenkins, Ljung, Treadway) van en la tabla
+`PRONUNCIA` de `voz.py`: a Azure le llega su pronunciación en IPA. Al grabar,
 el rótulo siguiente espera a que acabe la frase: voz y subtítulo no se pisan.
 
 `capturas.sh` corre los guiones de `capturas/escenas/` y `video.sh` los de

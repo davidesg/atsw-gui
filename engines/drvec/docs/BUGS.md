@@ -1622,3 +1622,47 @@ now runs a short bootstrap that blocks (mink-muskrat, `2 1 0 -case 2 -lrtest
 wide it is, and a shift by 33 is a statement about that width. Here it was a
 false one, which the compiler pointed out on every Windows build and the
 non-blocking battery did not stop.
+
+## BUG-62 — the residual block does not say that its last r columns are the innovations of beta'Y, and they were read as the Y1 series'
+
+**Status: FIXED on 2026-10-24** (`src/drvec.c`, `residual_diagnostics`), in
+0.13. Found the day before in the shakedown of sima 0.2.0, on the replication
+of Martín Manjón and Treadway (1997).
+
+**What it was.** With r >= 1 drvec fits (nabla Y2, W), W = Y1 + B2'Y2, and its
+residuals are those of that vector: the first s columns are the innovations of
+nabla Y2, the last r those of the equilibrium errors. The block after the
+multivariate diagnostics ("residual sd:" and the cross-correlation matrices
+R(k)) printed the columns with no names. BUG-19 had already named them for the
+per-series diagnosis (`diagnose_ybar` swaps in ec1..ecr), but not here, and a
+reader took drvec's order (Y2, then Y1) as the order of the columns.
+
+**How it was found.** (GS2, GS30, GS10), monthly 1985–2008, r = 1 normalised on
+GS10: "residual sd" read 23.84, 18.95 and 4.41, and the third was taken as
+GS10's innovation, whose sd in Sigma is 21.8. 4.41 is sqrt(beta' Sigma beta)
+= sqrt(19.5): the innovation of ec1. The k = 0 correlations of that column
+(.28, .175) are not Sigma's (.88, .95), and on a shorter sample (2008–2015)
+they came out negative.
+
+**What it cost.** Nothing in the estimates, the standard errors or any test:
+only the reading of the diagnostic block.
+
+**Repro.** `sh tests/repro/repro.sh 62`: mink-muskrat, `2 1 1 -case 2`. Open,
+it prints the "residual sd" line alone and "(no names: the last column reads
+as mink's, and it is ec1's)"; fixed, it prints
+`the columns: D.muskrat ec1  (ec = the innovation of beta'Y, not of the Y1 series)`.
+The Python port's repro is drvec-python's `bugs/drvec-c-residual-labels/`.
+
+**The fix.** With r >= 1 one line before "residual sd", naming the columns as
+`D.<series>` for nabla Y2 and `ec<j>` for W, with what ec is. At r = 0 the
+block does not change. The 34 goldens were recaptured: 25 move, every fit
+report with r >= 1, by that line alone (each, with the line removed, hashes to
+its old value); the other 9 do not move (`r0` and `diag` at r = 0, the
+`lrtest`, `rungs`, `specs` and `eval` modes, which print no such block,
+`rankboot.out`, `rankboot.boot` and `irfboot.irfboot`).
+The Python port prints the same line (drvec-python `report.residual_diagnostics`)
+and its oracle files were regenerated with this binary.
+
+**The lesson.** BUG-19 fixed the name of W's residual where the diagnosis
+printed one; the block next to it printed none, and a column with no name is
+read by its position.

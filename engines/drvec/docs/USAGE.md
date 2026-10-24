@@ -109,6 +109,7 @@ in case 1, where nothing does. `drvec` warns.
 | `-fixb2row i v` | hold **row** `i` of `B₂` (variable `i` of the `∇Y₂` block, in the `.inp`'s order) at `v` in every relation, and estimate the other rows; repeatable. The free model is fitted with the same search and the LR against it is reported, χ² with (rows held)·`r` df; with `-alpha`/`-weakex` the restricted model carries both restrictions and the df add up. The LR is **invariant to the normalisation** — the Wald on a normalised coefficient is not (§`-fixb2row` below). Refused with `-fixb2`, `-warma` and the modes |
 | `-xpre FILE` `-xlink FILE` | exogenous **transfer inputs** on the VEC (MEJORA-2). `-xpre` (repeatable) gives an input series as a fue `.pre`; `-xlink` the links, `OUT <- IN b r s` per line (drtran's syntax, `r ≤ 2`). The VEC process is `Y_out − ω(B)/δ(B)·Bᵇ X_in`, on the **levels** (drtran's cast by subtraction; X frozen, minus its deterministics; presample backcast with its ARMA; I(0) or I(1)). The VEC without inputs is fitted first; `ω = 0` must reproduce it and the LR against it is reported (§`-xlink` below). `.pre` route, levels layout, case 2 or 3, a single fit |
 | `-xsys i` | series `i` (position in the input; it must be in the `∇Y₂` block) is an exogenous input **embedded in the system** — drtran's embedded cast, for an input that shares the outputs' operator (an I(1) input): `α_i = 0` and no other series in its row of `Γ(k)`; repeatable. The free VEC is fitted too and the LR of **strong exogeneity** is reported (df = `r`·inputs + (p−1)·entries held). Refused with `-alpha`/`-weakex`, `-xlink`, `-warma`, `q > 0` (not yet) and the modes (§`-xsys` below) |
+| `-gzero i j` | **`Γ_k[i][j] = 0` for every k**: series `j` (position in the input) is not in the short run of equation `i`; repeatable, `i ≠ j`, `p ≥ 2`. With `-weakex`/`-alpha` on top it is the **conditional model's** restriction (weak exogeneity and no feedback). The free VEC is fitted too and the LR reported (df = (p−1)·entries held, + (M−sa)·r with α = Aψ). Unlike `-xsys`, any equation, the `Y1` block's too. Refused with `-xsys`, `-fixb2row`, `-fixb2`, `-xlink`, `-diagar`, `-warma`, `q > 0` (not yet) and the modes (§`-gzero` below) |
 | `-alpha file` | impose `α = Aψ` with `A` read from `file`, and report the LR against the free model |
 | `-weakex i` | shorthand for the `A` that declares equation `i` weakly exogenous |
 
@@ -962,6 +963,35 @@ Example (the study that motivated it): `IT.pre GY.pre GAP.pre 4 0 1 -case 2
 Strong exogeneity of IT: LR 3.17, 7 df, p = 0.87. IT in `β`: −0.028 (s.e.
 0.056); G/Y −0.372, as without IT. The subtracting cast on the same data
 (`GAP <- IT 0 0 0`, `-xlink`) agrees: ω₀ = −0.0021 (0.0024), LR 0.73, p = 0.39.
+
+### `-gzero`: entries of `Γ(k)` held at zero (no feedback in the short run)
+
+`Λ` and the `F_k` are the VEC's own parameters — `vec_shootx` builds `Ȳ`'s VARMA
+from them with `C̄` and `C⁻¹` — so a zero in `F_k` **is** a zero in `Γ_k`, whatever
+the `r/s` partition. `-gzero i j` holds `Γ_k[i][j] = 0` for `k = 1..p−1`: series
+`j` does not enter the short run of equation `i`.
+
+Its use is the **conditional model**. With some series weakly exogenous
+(`α = Aψ`, `-alpha`/`-weakex`), the system reads as the others conditional on
+them — a transfer network, drtran's ground — only if the outputs do not enter
+the inputs' short run either (Johansen 1992; Harbo et al. 1998). `-gzero` for
+every (input, output) pair, with `-alpha` on the same fit, is that joint
+restriction, and its LR against the free VEC is the test.
+
+- `-xsys i` is the special case "every other series out of `i`'s row" for an
+  input in the `∇Y₂` block; `-gzero` names entries, and may hold a `Y1`
+  equation's (the series a relation is normalised on). In a bivariate system
+  `-gzero 1 2 -weakex 1` is exactly `-xsys 1` (checked by the suite).
+- The free VEC (no mask, `α` free) is fitted with the same search and the LR
+  reported, df = (p−1)·entries held, plus (M − sa)·r when `α = Aψ` is imposed.
+- The diagonal is never held (it is the series' own model, the ladder's rung);
+  `p ≥ 2` (at `p = 1` there is no `Γ`); `q = 0` only for now, as `-xsys`.
+
+Example (Martín Manjón and Treadway 1997, the target and two market rates,
+1985–2008): `R0T.pre R30.pre R3.pre 4 0 1 -case pre`, normalised on R3. R30 and
+R3 weakly exogenous (`-alpha` with `A = e₁`): LR 1.70, 2 df, p = 0.43. R0T out of
+their short run (`-gzero 2 1 -gzero 3 1`): LR 6.81, 6 df, p = 0.34. Both, the
+conditional model R0T | (R30, R3): LR 7.83, 8 df, p = 0.45.
 
 ### `-case pre`, `-nodrift`, `-trend`: the deterministics series by series
 

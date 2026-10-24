@@ -115,6 +115,20 @@ int main( void )
     ok( linea( &d, "Media" )->estado == DX_NO,
         "sin mu, el contraste vale -- y aquí la media NO es cero" );
 
+    printf( "\nμ ES EL PARAMETRO QUE DICE EL .out, NO EL ULTIMO (BUG-0002)\n" );
+    {
+    char buf[64];
+    base( &o );
+    o.tiene_mu = 0;
+    ok( strcmp( dx_nombre_par( &o, NULL, 0, 2, buf, sizeof buf ), "[2]" ) == 0,
+        "sin mu, el ultimo es [2], no μ" );
+    o.tiene_mu = 1; o.mu_i = 1;
+    ok( strcmp( dx_nombre_par( &o, NULL, 0, 1, buf, sizeof buf ), "μ" ) == 0,
+        "con mu en el [1], el [1] es μ" );
+    ok( strcmp( dx_nombre_par( &o, NULL, 0, 2, buf, sizeof buf ), "[2]" ) == 0,
+        "y el [2] sigue siendo [2]" );
+    }
+
     printf( "\nPARARSE SIN MEJORA NO ES FRACASAR\n" );
     base( &o );
     c.kind = CONV_NO_LOWER; c.brief = (gchar *) "stopped";

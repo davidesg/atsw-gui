@@ -35,4 +35,11 @@ espera 1500
 fila C1
 espera 800
 foto caso-vista
+# El cuaderno: lo que se llevo «Al cuaderno» en las escenas 02 y 03.
+boton Cuaderno…
+ventana Cuaderno
+tamano 900 680
+espera 1500
+foto cuaderno
+cierra
 salir

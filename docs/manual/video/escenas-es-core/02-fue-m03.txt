@@ -1,0 +1,31 @@
+#! fue_gui --proyecto @PROYECTO@/proyecto.yaml @PROYECTO@/subyacente/2002-2019/work/subyacente_m03.inp
+rotulo fue_gui, el estimador clásico, tiene una pestaña para cada parte del modelo.
+ventana FUE
+tamano 1100 760
+pestana Deterministic Component
+rotulo En la componente determinista está el escalón de septiembre. Lo convertimos en una función de transferencia: «Edit». || En la componente determinista está el escalón de septiembre. Lo convertimos en una función de transferencia, con el botón «edit».
+fila Step
+boton Edit
+ventana Deterministic Component
+espera 600
+rotulo Orden 1 en el numerador: ω(B) = ω₀ − ω₁B. ω₀ es lo que el IVA sube los precios en septiembre; − ω₁, lo que añade en octubre. || Orden uno en el numerador: omega de be, igual a omega cero menos omega uno por be. Omega cero es lo que el IVA sube los precios en septiembre; menos omega uno, lo que añade en octubre.
+numero 2 | 1
+espera 1500
+boton OK
+ventana FUE
+rotulo Un solo suceso, con el traslado repartido en dos meses. Lo que importa es la suma: la ganancia a largo plazo, ω(1) = ω₀ − ω₁. || Un solo suceso, con el traslado repartido en dos meses. Lo que importa es la suma: la ganancia a largo plazo, omega de uno, igual a omega cero menos omega uno.
+boton Add
+ventana Deterministic Component
+elige Step
+campo Season: | 10
+campo Year: | 2007
+espera 600
+boton OK
+ventana FUE
+rotulo Y un escalón en octubre de 2007, con un solo ω: el efecto de los alimentos entra de golpe y se queda.
+rotulo Probamos también un traslado gradual, ω₀ / (1 − δB), que se va apagando poco a poco. Con los mismos parámetros ajusta peor: el traslado se hizo en dos meses, y paró. || Probamos también un traslado gradual, omega cero entre uno menos delta be, que se va apagando poco a poco. Con los mismos parámetros ajusta peor: el traslado se hizo en dos meses, y paró.
+boton Estimar
+espera 1500
+rotulo Convergió. Lo leemos en el taller.
+rotulo -
+salir

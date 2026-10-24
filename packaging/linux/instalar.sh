@@ -50,5 +50,6 @@ entrada org.fug.gui    gtk_fmg    "ATSW: gráficos (fug)"          "Gráficos de
 install -m 644 "$R/packaging/LEEME.txt" "$D$P/share/doc/atsw/"
 [ -f "$R/docs/manual/MANUAL.pdf" ] && install -m 644 "$R/docs/manual/MANUAL.pdf" "$D$P/share/doc/atsw/Manual de ATSW.pdf"
 install -m 644 "$R"/docs/manual/datos/ipc_wti.csv "$R"/docs/manual/datos/ipc_wti.xlsx \
+    "$R"/docs/manual/datos/es_core.csv "$R"/docs/manual/datos/es_core.xlsx \
     "$D$P/share/doc/atsw/Datos del manual/"
 echo "instalado en $D$P"

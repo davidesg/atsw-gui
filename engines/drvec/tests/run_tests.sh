@@ -1664,6 +1664,45 @@ cli "-xsys with -lrtest is refused"        2 "$XMUS" "$XMNK" 3 0 0 -case 2 -xsys
 cli "-xsys with q > 0 is refused (not yet)" 2 "$XMUS" "$XMNK" 3 1 1 -case 2 -xsys 1
 echo
 
+echo "[6d2] -gzero: entries of Gamma(k) held at 0 (no feedback in the short run)"
+#  The conditional model's restriction, entry by entry.  What can be checked:
+#  -gzero 1 2 with -weakex 1 IS -xsys 1 in a bivariate system (alpha_1 = 0 and
+#  Gamma_k[1][2] = 0: the same model, the same optimum and the same LR); the
+#  free model of the LR is the plain fit; the walk consumes npar; the held
+#  entry is gone from the Gamma table and the free ones stay; the df with and
+#  without alpha; a Y1 equation can be held (unlike -xsys); and the refusals.
+xsrun gzx 3 0 1 -case 2 -gzero 1 2 -weakex 1
+la=$(logelf_of "$TMP/gzx"); lb=$(logelf_of "$TMP/xsc")
+if [ -n "$la" ] && [ -n "$lb" ] && near "$la" "$lb"; then
+    ok "-gzero 1 2 -weakex 1 is -xsys 1: the same optimum ($la)"
+else bad "-gzero + -weakex = -xsys" "gzero=$la xsys=$lb"; fi
+lf=$(grep -a 'logL VEC free' "$TMP/gzx.out" | awk '{print $NF}')
+if [ -n "$lf" ] && near "$lf" "$lp"; then
+    ok "-gzero: the free model of the LR is the plain fit ($lp)"
+else bad "-gzero free model" "free=$lf plain=$lp"; fi
+if printf '%s' "$XSTDERR" | grep -qiE 'ERROR (output|init_guess)'; then
+    bad "-gzero walk" "$(printf '%s' "$XSTDERR" | grep -iE 'ERROR (output|init_guess)' | head -1)"
+else ok "-gzero: the parameter walk consumes exactly npar"; fi
+if grep -aq 'degrees of freedom     : 3 ' "$TMP/gzx.out"; then
+    ok "-gzero with -weakex: df = (p-1)*(entries held) + (M - sa)*r = 3"
+else bad "-gzero df (alpha)" "$(grep -a 'degrees of freedom     :' "$TMP/gzx.out")"; fi
+xsrun gzy 3 0 1 -case 2 -gzero 2 1
+if grep -aq 'degrees of freedom     : 2 ' "$TMP/gzy.out"; then
+    ok "-gzero alone: df = (p-1)*(entries held) = 2"
+else bad "-gzero df" "$(grep -a 'degrees of freedom     :' "$TMP/gzy.out")"; fi
+if grep -aq 'D\.mink <- D\.muskrat(-' "$TMP/gzy.out"; then
+    bad "-gzero mask" "the held entry is still in the Gamma table"
+elif grep -aq 'D\.muskrat <- D\.mink(-1)' "$TMP/gzy.out"; then
+    ok "-gzero: the Y1 equation's entry is held; the other row keeps its regressor"
+else bad "-gzero mask" "no Gamma table"; fi
+cli "-gzero on the diagonal is refused"     2 "$XMUS" "$XMNK" 3 0 1 -case 2 -gzero 1 1
+cli "-gzero outside the system is refused"  2 "$XMUS" "$XMNK" 3 0 1 -case 2 -gzero 3 1
+cli "-gzero at p = 1 is refused"            2 "$XMUS" "$XMNK" 1 0 1 -case 2 -gzero 1 2
+cli "-gzero with -xsys is refused"          2 "$XMUS" "$XMNK" 3 0 1 -case 2 -gzero 2 1 -xsys 1
+cli "-gzero with -lrtest is refused"        2 "$XMUS" "$XMNK" 3 0 0 -case 2 -gzero 2 1 -lrtest
+cli "-gzero with q > 0 is refused (not yet)" 2 "$XMUS" "$XMNK" 3 1 1 -case 2 -gzero 2 1
+echo
+
 echo "[6e] -nodrift, -case pre and -trend (case 4): the deterministics per series (MEJORA-3)"
 #  -nodrift i holds E[nabla Y2_i] = 0 inside case 3, so holding every drift
 #  of the nabla Y2 block IS case 2, at any rank; -case pre reads the mask from

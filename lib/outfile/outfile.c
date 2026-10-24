@@ -181,7 +181,7 @@ gboolean fueout_read( const char *path, FueOut *o )
    int del_cur = 0;     /* y de cual los deltas                        */
     gchar  *txt = NULL, **lin;
     gsize   len = 0;
-    int     i, n, cal_lag = 0, en_resid = 0;
+    int     i, n, cal_lag = 0, en_resid = 0, mu_cab = -2;
     double  cal_r = 0.0;
     char    nm[16];
 
@@ -216,8 +216,11 @@ gboolean fueout_read( const char *path, FueOut *o )
         else if ( sscanf( l, "Annual differences : %d", &k ) == 1 ) o->D = k;
         else if ( sscanf( l, "Number of deterministic variables: %d", &k ) == 1 )
             o->ndet = k;
+        /* LA CABECERA DE LA MEDIA sale SIEMPRE, tambien con mu fija en 0
+           («0.000000», sin error tipico ni numero). Se estima solo si la
+           linea siguiente es de la tabla de parametros (BUG-0002).      */
         else if ( g_str_has_prefix( l, "Mean parameter" ) )
-            { o->tiene_mu = TRUE; det_cur = del_cur = 0; }
+            { mu_cab = i; det_cur = del_cur = 0; }
 
         /* QUE DETERMINISTA EMPIEZA AQUI. Las lineas que siguen, hasta la
            proxima cabecera, son SUS omegas.                            */
@@ -256,6 +259,7 @@ gboolean fueout_read( const char *path, FueOut *o )
                 o->par_et[k - 1]       = v2;
                 o->par_estimado[k - 1] = TRUE;
                 if ( k > o->npar_leidos ) o->npar_leidos = k;
+                if ( i == mu_cab + 1 ) { o->tiene_mu = TRUE; o->mu_i = k; }
 
                 if ( det_cur >= 1 && det_cur <= FO_MAX_PAR )
                     {

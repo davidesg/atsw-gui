@@ -222,6 +222,45 @@ int main( int argc, char **argv )
     tb_free( NULL );                          /* tampoco debe petar      */
     }
 
+    /* EL TEXTO LARGO, ENTERO. Lo de la Diagnosis que «Al cuaderno» copia
+       pasa de 96 bytes y salia cortado; lo que pasa del tope se corta en
+       un caracter entero, nunca en medio de una tilde.                 */
+    {
+    Tabla *v = tb_new( "largo" );
+    char   largo[300], enorme[TB_TEXTO_MAX + 40], *md;
+    size_t i;
+
+    snprintf( largo, sizeof largo, "JB = 1.23 (2 g.l.) p = 0.54 · asimetría "
+              "0.10, curtosis 0.20 · fuera de ±2: 3.7%% (esperado 4.6%%) y "
+              "la ganancia es el cociente de la suma de los omegas" );
+    tb_col( v, "a", NULL, TB_TXT, 0 );
+    tb_fila( v );
+    tb_pon_txt( v, 0, largo );
+    md = tb_md( v );
+    ok( md && strstr( md, "(esperado 4.6%) y la ganancia es el cociente" ) != NULL,
+        "una celda de más de 96 bytes sale entera" );
+    free( md );
+
+    /* "x" y luego eñes (2 bytes): el tope cae en medio de una */
+    enorme[0] = 'x';
+    for ( i = 1; i + 2 < sizeof enorme; i += 2 ) { enorme[i] = '\xc3'; enorme[i+1] = '\xb1'; }
+    enorme[i] = '\0';
+    tb_fila( v );
+    tb_pon_txt( v, 0, enorme );
+    tb_pon_txt( v, 0, enorme );               /* la segunda libera la primera */
+    md = tb_md( v );
+    {
+    const char *p = md ? strstr( md, "x\xc3\xb1" ) : NULL;
+    size_t      n = 0;
+
+    while ( p && ( p[n] == 'x' || (unsigned char) p[n] >= 0x80 ) ) n++;
+    ok( p && n < TB_TEXTO_MAX && n % 2 == 1,
+        "la que pasa del tope se corta en un carácter entero" );
+    }
+    free( md );
+    tb_free( v );
+    }
+
     tb_free( t );
     printf( "\n%d fallos\n", fallos );
     return fallos ? 1 : 0;

@@ -170,7 +170,7 @@ cp "$R/packaging/LEEME.txt" "$DMG/"
 [ -f "$R/docs/manual/MANUAL.pdf" ] && cp "$R/docs/manual/MANUAL.pdf" "$DMG/Manual de ATSW.pdf"
 # Y sus datos, para seguir el caso con el programa abierto.
 mkdir -p "$DMG/Datos del manual"
-cp "$R"/docs/manual/datos/ipc_wti.{csv,xlsx} "$DMG/Datos del manual/"
+cp "$R"/docs/manual/datos/{ipc_wti,es_core}.{csv,xlsx} "$DMG/Datos del manual/"
 # hdiutil falla a veces en los Mac de GitHub con «Resource busy», sin que
 # pase nada: se reintenta.
 for i in 1 2 3 4 5; do

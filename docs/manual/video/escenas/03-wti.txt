@@ -1,5 +1,5 @@
 #! atsw_gui --proyecto @PROYECTO@/proyecto.yaml
-ventana ATSW
+ventana el taller
 tamano 1100 700
 pestana Pre-Covid
 fila wti
@@ -7,33 +7,41 @@ rotulo El petróleo, por el mismo camino: logaritmos, d = 1, AR(1).
 espera 1875
 derecho wti
 espera 900
-menu Identificar desde los datos…
+menu Identificar la estructura ARIMA…
 ventana Identificación
 tamano 760 900
+rotulo La misma ventana de identificación: logaritmos, una diferencia regular, y se vuelve a identificar.
 elige logaritmos (λ = 0)
 numero 1 | 1
 boton Volver a identificar
 espera 3000
 fila AR(1)
+rotulo Se elige AR(1) y se deriva m01, como con el IPC.
 espera 1125
 elige abrir en el editor
 boton Derivar modelo con el candidato elegido
 ventana editor de ATSW
 espera 1125
 boton Guardar y estimar
+rotulo Un precio va en logaritmos: sus cambios se leen en porcentaje, y en la transferencia los coeficientes serán elasticidades.
 espera 7000
 cierra
 ventana ATSW
 espera 1125
 fila m01 | 2
+rotulo Y su diagnosis, también en «Diagnosticar ▸». || Y su diagnosis, también en el submenú Diagnosticar.
 derecho m01 | 2
 espera 900
+submenu Diagnosticar
+espera 600
 menu Diagnosis…
 ventana Diagnosis
 tamano 1000 800
 espera 1875
 rotulo Todo cuadra salvo la normalidad: suele ser cosa de unos pocos atípicos.
-espera 3375
+espera 1500
+rotulo Aquí la media sí se contrasta: el petróleo no tiene deriva, su modelo no la lleva, y los residuos salen centrados.
+espera 1875
 cierra
 ventana ATSW
 rotulo «Anómalos…» enseña los residuos que se salen.
@@ -55,23 +63,27 @@ boton Calibrar
 rotulo La forma la dice la firma del suceso en los residuos: tres escalones.
 boton Sugerir intervención…
 ventana Sugerir intervención
+rotulo El desplome dura varios meses en el nivel, y un escalón representa uno solo: por eso tres, desde octubre de 2008.
 espera 3750
 boton Derivar modelo con estas intervenciones
 ventana wti / m02.inp
 espera 1125
 boton Guardar y estimar
+rotulo fue estima m02: el mismo AR(1), más los tres escalones.
 espera 7000
 cierra
 ventana ATSW
 espera 1125
 fila m02
-rotulo m02: AR(1) con la intervención. Lo declaramos elegido.
+rotulo Con la intervención todo cuadra, también la normalidad: m02 es el elegido.
 boton Elegir
 ventana El modelo elegido
 entrada 1 | AR(1) con el episodio de 10/2008 (3 escalones).
 espera 1125
 boton Aceptar
 ventana ATSW
-espera 1875
+espera 600
+rotulo Los dos modelos univariantes están listos, cada uno con su razón escrita.
+espera 1200
 rotulo -
 salir

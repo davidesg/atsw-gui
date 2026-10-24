@@ -20,6 +20,11 @@ python3 docs/manual/construir.py          # MANUAL.html y MANUAL.pdf
 bash docs/manual/video/video.sh           # el video, video/ATSW-ipc-wti.mp4
 ```
 
+La primera captura es la presentación, que lleva la versión con que se
+compiló la madre (`git describe`). Para las capturas de una versión, se
+compila con la suya: `touch gui/atsw/src/presentacion.c gui/atsw/src/main.c && make -C gui/atsw
+ATSW_VERSION=v0.2.0`.
+
 Hace falta `broadwayd` (Debian/Ubuntu: `libgtk-3-bin`): las ventanas se
 dibujan fuera de la pantalla y no se ve nada mientras tanto. Para el PDF,
 el módulo `markdown` de Python y Chromium o Chrome; para el vídeo, `ffmpeg`

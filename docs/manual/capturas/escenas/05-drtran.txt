@@ -41,7 +41,11 @@ foto drtran-adecuacion
 pestana 3 · Ajuste
 espera 800
 # El baseline: el modelo diagonal (sin transferencia) con el que se compara.
-boton Calcular baseline
+# Esta en el menu de la flecha de Diagnosis, en la barra.
+flecha Diagnosis
+espera 800
+fotomenu drtran-diagnosis-menu
+menu Calcular el baseline
 espera 30000
 pestana 5 · Estimación
 boton Estimar
@@ -55,9 +59,11 @@ espera 800
 pestana 5 · Modelo estimado
 espera 800
 foto drtran-modelo
-boton Gráficos…
+pestana 7 · Transferencias
+espera 1500
+foto drtran-transferencias
+flecha Diagnosis
 espera 800
-fotomenu drtran-graficos-menu
 menu Serie y ACF / PACF
 ventana res.eps
 tamano 1000 760
@@ -65,8 +71,15 @@ espera 2500
 foto drtran-residuos-grafico
 cierra
 ventana drtran —
+boton Ver modelo
+ventana .pdf
+tamano 1000 760
+espera 3000
+foto drtran-ver-modelo
+cierra
+ventana drtran —
 pestana 7 · Previsión
-casilla Prever (-f) | 1
+casilla Prever | 1
 boton Calcular
 espera 30000
 foto drtran-prevision

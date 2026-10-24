@@ -63,7 +63,8 @@ se abren las herramientas de cada escalón.
 Debajo trabajan los **motores** de cálculo: `art` identifica, `fue` estima
 modelos univariantes por máxima verosimilitud exacta, `fuf` prevé, `fug`
 dibuja y `drtran` estima transferencias. No hace falta
-llamarlos a mano: las ventanas lo hacen por ti.
+llamarlos a mano: las ventanas lo hacen por ti. Las ventanas que abre el
+taller se cierran con él; si queda alguna abierta al salir, pregunta antes.
 
 ### La escalera
 
@@ -72,8 +73,8 @@ El método sube por escalones, y **cada escalón parte del anterior**:
 1. **Univariante**: cada serie, por separado, con su propio modelo ARIMA.
 2. **Transferencia**: una serie (la *salida*) responde a otras (las
    *entradas*). Se parte de los modelos univariantes del paso 1.
-3. **VARMA**: varias series que se afectan entre sí (drvarma; no viene en
-   esta primera versión).
+3. **VARMA**: varias series que se afectan entre sí (drvarma; todavía no
+   viene en el paquete).
 
 En este manual subes los dos primeros escalones.
 
@@ -127,17 +128,44 @@ fechas y una por serie.
 
 ## 3. Un proyecto nuevo y los datos
 
-Abre **ATSW**. La ventana principal está vacía:
+Abre **ATSW**. Primero sale la **presentación**, con la versión y los
+créditos:
+
+![La presentación](img/presentacion.png)
+
+Mientras se ve, ATSW comprueba que la instalación está completa: los motores,
+las ventanas y lo que necesitan para dibujar. Si no falta nada (*Todo está
+instalado*), se cierra sola y abre el taller. Si falta algo, se queda abierta
+y dice qué falta y cómo arreglarlo; **Copiar el informe** lo copia para
+mandarlo por correo. La misma comprobación está en **Ayuda ▸ Comprobar la
+instalación…**.
+
+La ventana principal está vacía:
 
 ![La ventana principal, sin proyecto](img/inicio.png)
+
+Arriba está la **barra de menús**, ordenada como el trabajo:
+
+| Menú | Qué tiene |
+|---|---|
+| **Proyecto** | Nuevo, abrir, releer, las propiedades, el linaje, el cuaderno y salir. |
+| **Datos** | Importar series, editar una serie, declarar una muestra y los gráficos de mirar los datos. |
+| **US** | Los modelos **univariantes**, en el orden del ciclo: identificar, estimar, diagnosticar, prever y elegir. |
+| **MT** | Los modelos de **transferencia**: los casos y sus modelos. |
+| **Ayuda** | Este manual (F1), las teclas, la comprobación de la instalación y los créditos. |
+
+Los botones de la fila de arriba hacen lo más frecuente, y el **botón
+derecho** sobre una fila saca el menú de lo que se puede hacer con ella: las
+mismas entradas que la barra. Al pasar por una entrada, la barra de estado de
+abajo dice qué hace o, si está apagada, por qué.
 
 **Un proyecto es una carpeta** con un fichero `proyecto.yaml` que lo recuerda
 todo: qué series hay, qué modelos has estimado, de cuál viene cada uno y **por
 qué** lo hiciste. No hay botón de guardar: cada cambio se escribe solo.
 
-1. Pulsa **Nuevo…**, crea una carpeta para el proyecto (por ejemplo
+1. Pulsa **Nuevo…** (o *Proyecto ▸ Nuevo…*, Ctrl+N), crea una carpeta para el proyecto (por ejemplo
    `ipc-wti`) y acepta el nombre `proyecto.yaml`. Pulsa **Crear**.
-2. Pulsa **Datos…** y elige `ipc_wti.csv`. ATSW lee el fichero y te enseña lo
+2. Pulsa **Datos…** (*Datos ▸ Importar series…*) y elige `ipc_wti.csv`. ATSW lee el fichero y te enseña lo
    que ha encontrado:
 
 ![Qué series cargar](img/datos-series.png)
@@ -151,7 +179,9 @@ anual desde el año 1, y eso no es lo que quieres.
 
 ![Las series cargadas](img/datos-cargados.png)
 
-A la izquierda están las series; a la derecha, los modelos de la serie marcada.
+A la izquierda están las series (**Series — US**) y, debajo, los casos; a la
+derecha, los modelos de la serie marcada. El separador entre los dos lados se
+puede mover.
 De momento cada una tiene solo **m00**, que son los datos tal como entraron:
 m00 no se edita nunca.
 
@@ -165,7 +195,7 @@ la relación normal entre petróleo e inflación. Estimaremos con los datos
 anteriores a la pandemia.
 
 Para eso se **declara una muestra**. Pulsa el **+** que hay junto a la pestaña
-«Completa», abajo a la derecha:
+«Completa», abajo a la derecha (o *Datos ▸ Muestra nueva…*):
 
 ![Nueva muestra](img/muestra-nueva.png)
 
@@ -187,7 +217,8 @@ A partir de aquí trabajamos siempre en la pestaña **Pre-Covid**.
 ## 5. Mirar la serie antes de decidir
 
 Marca **ipc** y pulsa el botón derecho del ratón. Este es el menú de una
-serie:
+serie, en el orden del ciclo: mirar e identificar, empezar un modelo, y lo que
+es de la serie como dato:
 
 ![El menú de una serie](img/taller-menu-serie.png)
 
@@ -211,7 +242,7 @@ modelo ajusta no es un criterio.
 
 ### La transformación: el gráfico media – desviación típica
 
-**Media – desviación típica** dibuja, para cada año, la media frente a la
+**Media – desviación típica** (también en el menú **Datos**) dibuja, para cada año, la media frente a la
 desviación típica:
 
 ![Media frente a desviación típica del IPC](img/ipc-media-dt.png)
@@ -230,11 +261,17 @@ pide logaritmos. Si es horizontal, niveles. Aquí la nube no es concluyente, y
 Una ACF que **decae muy despacio** es la marca de una serie que no es
 estacionaria: hay que diferenciarla.
 
+Al pie, λ, d y D vuelven a dibujarla transformada y diferenciada, y
+**Identificar la estructura ARIMA…** lleva al paso siguiente. Arriba, en las
+dos ventanas, **Al cuaderno** apunta el gráfico en el
+[cuaderno del proyecto](#el-cuaderno-del-proyecto). En el menú **Datos** está
+además el **Histograma…** de la serie transformada y diferenciada.
+
 ---
 
 ## 6. Identificar el modelo del IPC
 
-En el menú de la serie, elige **Identificar desde los datos…**. Se abre la
+En el menú de la serie, elige **Identificar la estructura ARIMA…**. Se abre la
 ventana de identificación, que llama a **art**:
 
 ![Identificación, en niveles](img/ipc-identificacion-niveles.png)
@@ -330,6 +367,10 @@ Marca **AR(1)**, elige **abrir en el editor** en el desplegable de abajo a la
 derecha y pulsa **Derivar modelo con el candidato elegido**. Nace el modelo
 **m01**, con la razón ya escrita (de qué candidato viene y por qué).
 
+> El menú de la serie tiene también **Listado de identificación…**: la
+> primera identificación completa de fug, en texto, como la daba el programa
+> clásico.
+
 ---
 
 ## 7. Estimar
@@ -361,8 +402,9 @@ Cierra el editor. En la ventana principal, m01 ya tiene sus números:
 | **Q (g.l.)**, **p** | El contraste de Ljung-Box sobre los residuos y su valor p. |
 | **Por qué** | La razón del modelo. |
 
-> Si prefieres trabajar en **fue_gui** (el estimador clásico), el botón derecho
-> sobre un modelo tiene **Abrir m01 en fue**. Hace lo mismo con más detalle:
+> Si prefieres trabajar en **fue_gui** (el estimador clásico), el botón
+> **Estimar** de la fila de modelos, o **Estimar m01** en el botón derecho
+> (Ctrl+E), abre el modelo marcado en fue. Hace lo mismo con más detalle:
 > una pestaña por cada parte del modelo. Su barra sigue el ciclo de trabajo:
 > **Nuevo**, **Abrir**, **Guardar**, **Estimar** y **Ver modelo**. Después vienen
 > tres botones con menú: **Diagnosis** (la diagnosis, los anómalos, la
@@ -380,7 +422,15 @@ Botón derecho sobre m01. Este es el menú de un modelo:
 
 ![El menú de un modelo](img/taller-menu-modelo.png)
 
-Elige **Diagnosis…**:
+Arriba, estimar y derivar otros modelos de este. Lo que se le pregunta a un
+modelo estimado va en el submenú **Diagnosticar ▸**: la diagnosis, el orden
+de integración, la estacionalidad, la ganancia y la factorización del AR.
+Justo debajo, a mano, lo que se mira al volver de estimar: **Ver modelo…**,
+**Anómalos…** e **Identificar los residuos…**. Después, prever, y al final
+las decisiones: elegir, la razón y borrar. Son las mismas entradas que el menú
+**US** de la barra.
+
+Elige **Diagnosticar ▸ Diagnosis…**:
 
 ![La diagnosis de m01](img/ipc-m01-diagnosis.png)
 
@@ -392,16 +442,26 @@ Cada fila es una pregunta, con **los números** y **qué dicen**:
 | **Media** | ¿Los residuos tienen media cero? | El modelo estima la media, así que es cero por construcción. |
 | **Autocorrelación** | ¿Los residuos son ruido blanco? | Sí: ninguna Q de Ljung-Box rechaza. |
 | **Normalidad** | ¿Son normales? | Sí (Jarque-Bera, p = 0.82). |
-| **Parámetros** | ¿Se ganan su sitio? | **4 no** (\|t\| < 2), empezando por un armónico. |
-| **Ganancia** | ¿El efecto de los deterministas es permanente? | Sí. |
+| **Parámetros** | ¿Son significativos? | **4 no lo parecen** (\|t\| < 2), empezando por un armónico (cos 1). |
+| **Ganancia** | ¿El efecto de una intervención es permanente? | No aplica: m01 no tiene intervenciones. |
 
-**Factorización del AR…** enseña las raíces de cada factor autorregresivo y,
-de cada par complejo, su amortiguamiento, su frecuencia y su periodo. Un par
-con el periodo en una frecuencia estacional (12, 6, 4… meses) y el
-amortiguamiento cerca de 1 sería un AR estacional escondido dentro del AR. En
-m01, un AR(1), sale una sola raíz real, 1.83: no hay nada escondido. Es una
+**Factorización del AR…** (un botón de la diagnosis, y también en
+**Diagnosticar ▸**) parte cada factor autorregresivo en sus factores: primero
+el polinomio y la tabla de sus raíces; después los factores reales (1 − a B) y
+los pares complejos (1 − a₁ B − a₂ B²), cada grupo en su tabla y el más
+cercano a la unidad primero. De cada par da su amortiguamiento, su frecuencia y
+su periodo. Un par con el periodo en una frecuencia estacional (12, 6, 4…
+meses) y el amortiguamiento cerca de 1 sería un AR estacional escondido dentro
+del AR.
+
+![La factorización del AR de m01](img/ipc-m01-factorizacion.png)
+
+En m01, un AR(1), sale una sola raíz real, 1.83: no hay nada escondido. Es una
 herramienta de identificación, no un contraste: si un par lo parece, se
-contrasta aparte.
+contrasta aparte. Para eso está **Derivar el modelo factorizado…**: escribe un
+hijo con cada factor AR partido así, libre y sembrado con estos números, para
+estimarlo y fijar o quitar un factor cada vez. En m01 está apagado, porque un
+AR(1) ya no se puede partir más.
 
 Los **contrastes formales** contrastan hipótesis sobre el modelo estimado, como
 el `formal_tests` de art. Cada contraste es una estimación más: fue reestima el
@@ -410,8 +470,8 @@ comparan las dos log-verosimilitudes. Se calculan uno detrás de otro sin
 bloquear la ventana. Son de dos tipos y van en dos ventanas: **Orden de
 integración…** (la diferencia regular) y **Estacionalidad (MEG)…**, que sólo se
 enciende si la serie es estacional (s > 1). Se abren desde los dos botones de
-la diagnosis, desde el menú del botón derecho de la lista de modelos y desde la
-barra de fue_gui (el menú del botón **Contrastes**).
+la diagnosis, desde **Diagnosticar ▸** (en el botón derecho y en el menú
+**US**) y desde la barra de fue_gui (el menú del botón **Contrastes**).
 
 ![El orden de integración de m01](img/ipc-m01-integracion.png)
 
@@ -447,8 +507,9 @@ La ventana de la **estacionalidad** lleva el resto:
 - El **DCD estacional** (¿sobra la diferencia estacional?) mira un MA anual en
   su frontera; m01 no lo tiene, y la ventana dice que no aplica.
 
-El contraste **MEG** pregunta, frecuencia a frecuencia, si la
-estacionalidad es **estocástica o determinista**. Se aplica a modelos como m01,
+El **MEG** (los **modelos MEG**, de estacionalidad híbrida por frecuencias)
+pregunta, frecuencia a frecuencia, si la estacionalidad es **estocástica o
+determinista**. Se aplica a modelos como m01,
 con D = 0 y armónicos. En cada frecuencia f construye el modelo estocástico:
 quita el cos/sin de f (o el alter en f = 6), pone la raíz unitaria estacional de
 esa frecuencia y un **testigo** MA libre. Luego mira si el testigo se apila en
@@ -474,19 +535,21 @@ Cada contraste dice su número, sus críticos y lo que dice. Y suponen un modelo
 **adecuado**: se pasan con la diagnosis limpia. Si no lo está, no se impide
 abrirlas, pero las dos ventanas lo avisan arriba.
 
-**Q de Ljung-Box**: se calcula en los retardos 12, 24, 36 y 3·12 + 2 (en
-general s, 2s, 3s y 3s + 3). El veredicto lo da el último, el más exigente. Si
+**Q de Ljung-Box**: se calcula en los retardos 12, 24, 36 y 39 (en general s,
+2s, 3s y 3s + 3); entre paréntesis van sus grados de libertad, el retardo menos
+los parámetros ARMA. El veredicto lo da el último, el más exigente. Si
 una Q rechaza, no dice *qué* retardo falla: eso lo dicen las barras de la ACF
 residual que se salen de la banda ±2/√n.
 
-**Ver modelo…** enseña el resumen del modelo estimado, sin abrir fue: los
-residuos con su ACF y PACF, el modelo escrito debajo con la desviación típica
-de cada coeficiente, y los residuos grandes. Sólo se enciende cuando el modelo
-está estimado.
+**Ver modelo…**, justo debajo de **Diagnosticar ▸**, enseña el resumen del
+modelo estimado, sin abrir fue: los residuos con su ACF y PACF, el modelo
+escrito debajo con la desviación típica de cada coeficiente (y σ̂, en las
+unidades de la ecuación), y los residuos grandes. Sólo se enciende cuando el
+modelo está estimado.
 
 ![Residuos y modelo de m01](img/ipc-m01-grafico.png)
 
-### Los parámetros que no se ganan su sitio
+### Los parámetros que no parecen significativos
 
 Cuatro armónicos tienen \|t\| < 2. La tentación es quitarlos. **No todavía**:
 
@@ -502,6 +565,21 @@ con residuos ruido blanco y normales. m01 lo es.
 > Fíjate en la línea de abajo de la ventana: *«Esto dice lo que los números
 > dicen. Qué hacer con ello —qué quitar, qué intervenir— es una decisión, y es
 > tuya.»*
+
+### El cuaderno del proyecto
+
+La diagnosis, los contrastes, la identificación, los anómalos, la ganancia y
+las ventanas de gráficos tienen un botón **Al cuaderno**. Apunta lo que estás
+mirando en el **cuaderno del proyecto**, un fichero Markdown
+(`cuaderno/cuaderno.md`, junto a `proyecto.yaml`), con la fecha y de dónde
+sale: la serie, el modelo, la muestra y el `.out`. Los gráficos van como
+imagen. **Cuaderno…**, en la fila de arriba o en el menú **Proyecto**, lo
+enseña en orden y deja añadir notas tuyas:
+
+![El cuaderno del proyecto](img/cuaderno.png)
+
+El cuaderno solo crece: nada de lo apuntado se borra. **Abrir fuera** lo abre
+con el programa que tengas para Markdown, que pinta las tablas y los gráficos.
 
 ---
 
@@ -567,8 +645,10 @@ Deja **en el editor** y pulsa **Derivar modelo con estas intervenciones**. Nace
 
 ![Diagnosis de wti m02](img/wti-m02-diagnosis.png)
 
-Ahora todo cuadra, también la normalidad, y los cuatro parámetros se ganan su
-sitio.
+Ahora todo cuadra, también la normalidad, y los cuatro parámetros parecen
+significativos. La fila **Ganancia** ya tiene qué preguntar: los tres escalones
+dejan una ganancia distinta de cero, un efecto **permanente** en el nivel del
+petróleo. **Diagnosticar ▸ Ganancia…** da el contraste.
 
 ---
 
@@ -597,7 +677,8 @@ series tienen ya su elegido declarado.
 Un **caso** es un conjunto **fijo y ordenado** de series, cada una con el
 `.pre` con el que entra. Es el punto de partida del escalón de transferencia.
 
-En el panel **Casos**, abajo a la izquierda, pulsa **Nuevo caso…**:
+En el panel **Casos — MT**, abajo a la izquierda, pulsa **Nuevo caso…** (o
+*MT ▸ Nuevo caso…*):
 
 ![Nuevo caso](img/caso-nuevo.png)
 
@@ -622,13 +703,18 @@ univariante de cada serie ya está resuelto, y la transferencia **no vuelve a
 identificarlo**: el modelo de la entrada queda como está, y el de la salida es
 la semilla del modelo del ruido.
 
-Pulsa **Abrir en drtran**.
+Pulsa **Estimar**, en la fila de botones del caso (o Ctrl+E): se abre drtran
+con el caso cargado. El menú **MT** y el botón derecho sobre el caso tienen lo
+demás: derivar el caso, su razón y borrarlo.
 
 ---
 
 ## 12. La función de transferencia en drtran
 
-drtran trabaja en siete pestañas, de izquierda a derecha.
+drtran trabaja en siete pestañas, de izquierda a derecha. Arriba tiene una
+barra como la de fue_gui: **Estimar** (Ctrl+E, desde cualquier pestaña),
+**Ver modelo**, **Diagnosis** y **Prever**. Un clic en el botón hace lo
+habitual; la flecha de al lado abre el resto.
 
 ### 1 · Series
 
@@ -746,41 +832,58 @@ residuos de las dos ecuaciones son ruido blanco conjuntamente.
 
 **3 · Ajuste**: ¿merece la pena la transferencia? Converger y merecer la pena
 son afirmaciones distintas. Hay que compararla con el **modelo diagonal**, las
-dos series sin relación entre ellas:
+dos series sin relación entre ellas. Se calcula desde la flecha de
+**Diagnosis**, en la barra:
 
-1. Pulsa **Calcular baseline**: drtran estima el modelo diagonal.
+![El menú de Diagnosis](img/drtran-diagnosis-menu.png)
+
+1. Elige **Calcular el baseline**: drtran estima el modelo diagonal.
 2. Vuelve a **5 · Estimación** y pulsa **Estimar**.
 3. Vuelve a **3 · Ajuste**:
 
 ![Ajuste frente al diagonal](img/drtran-ajuste.png)
 
 - **LR = 81.59** con 2 parámetros de transferencia, frente a un valor crítico de
-  5.3 al 5 %: **la transferencia se gana su sitio**.
+  5.3 al 5 %: **la transferencia es significativa**.
 - La varianza de los residuos del IPC baja un **32.7 %**: una parte importante
   de su variabilidad se explica con el petróleo.
 - En wti no cambia nada (−0.8 %), como debe ser: wti es la entrada, no
   responde a nadie.
 
 **4 · Residuos**: la ACF de los residuos de cada ecuación, con la Q de
-Ljung-Box. **Gráficos…** tiene la serie de residuos con su ACF y PACF, el
-histograma y la CCF de los residuos con cada entrada:
-
-![El menú Gráficos…](img/drtran-graficos-menu.png)
+Ljung-Box. El mismo menú de **Diagnosis** tiene los gráficos: la serie de
+residuos con su ACF y PACF, el histograma y la CCF de los residuos con cada
+entrada:
 
 ![Residuos del IPC en el modelo de transferencia](img/drtran-residuos-grafico.png)
 
-**5 · Modelo estimado**: la tabla de parámetros.
+**5 · Modelo estimado**: la tabla de parámetros, con los nombres del modelo y
+en las unidades de la ecuación. Las flechas ◀ ▶ de arriba pasan de una
+ecuación a otra (ipc, wti).
 
 ![El modelo estimado](img/drtran-modelo.png)
 
 | Parámetro | Qué es | Valor |
 |---|---|---|
-| `omega1[0]` | ω₀, el efecto del mismo mes | 0.019 (d.t. 0.002) |
-| `delta1[1]` | δ₁, cuánto se arrastra cada mes | 0.577 (d.t. 0.077) |
-| `phi_1[B^1]` | el AR(1) del ruido del IPC | 0.469 |
-| `phi_2[B^1]` | el AR(1) del petróleo | 0.215 |
-| `omega_d1[…]` | los armónicos del IPC | |
-| `omega_d2[…]` | los tres escalones de 2008 del petróleo | |
+| `ω1[0] ← wti` | ω₀, el efecto del mismo mes | 0.019 (d.t. 0.002) |
+| `δ1[1] ← wti` | δ₁, cuánto se arrastra cada mes | 0.577 (d.t. 0.077) |
+| `φ_ipc` | el AR(1) del ruido del IPC | 0.469 |
+| `ω_D1_ipc`… | los armónicos del IPC | |
+| `φ_wti` | el AR(1) del petróleo (en la ecuación de wti) | 0.215 |
+| `ω_D1_wti`… | los tres escalones de 2008 del petróleo (ídem) | |
+
+**7 · Transferencias**: la **ganancia** y el **retardo medio** de cada enlace,
+con su desviación típica, y la **respuesta al impulso**: cuánto responde el
+IPC k meses después de un impulso en el petróleo, y la respuesta acumulada a
+un cambio permanente, que tiende a la ganancia.
+
+![Ganancia, retardo medio y respuesta al impulso](img/drtran-transferencias.png)
+
+**Ver modelo**, en la barra, enseña la página de la ecuación, igual que la de
+un modelo univariante con la transferencia delante de los deterministas: los
+residuos con su ACF y PACF, el modelo estimado y los residuos grandes.
+
+![La página del modelo de transferencia](img/drtran-ver-modelo.png)
 
 ### Leer el resultado
 
@@ -800,10 +903,11 @@ Como las dos series están en logaritmos, los coeficientes son **elasticidades**
 - **Efecto del mismo mes**: ω₀ = 0.019. Si el petróleo sube un 10 %, el IPC
   sube un 0.19 % ese mismo mes.
 - **Ganancia** (el efecto a largo plazo, cuando la subida del petróleo es
-  permanente): ω₀ / (1 − δ₁) = 0.019 / (1 − 0.577) ≈ **0.045**. Una subida
-  permanente del 10 % en el petróleo acaba subiendo el IPC un **0.45 %**.
-- **Retardo medio**: δ₁ / (1 − δ₁) ≈ **1.4 meses**. La mayor parte del efecto
-  llega en el primer trimestre.
+  permanente): ω₀ / (1 − δ₁) = 0.019 / (1 − 0.577) ≈ **0.045** (d.t. 0.008,
+  en **7 · Transferencias**). Una subida permanente del 10 % en el petróleo
+  acaba subiendo el IPC un **0.45 %**.
+- **Retardo medio**: δ₁ / (1 − δ₁) ≈ **1.4 meses** (1.36, d.t. 0.43). La mayor
+  parte del efecto llega en el primer trimestre.
 
 > Una advertencia de la escuela: si δ₁ se acercara a 1 (más de 0.95), la
 > ganancia y el retardo medio no serían fiables. Aquí δ₁ = 0.58, lejos de eso.
@@ -812,8 +916,8 @@ Como las dos series están en logaritmos, los coeficientes son **elasticidades**
 
 ## 13. La previsión
 
-Pestaña **7 · Previsión**. Marca **Prever (-f)**, deja 8 periodos y pulsa
-**Calcular**:
+Pestaña **7 · Previsión** (o el botón **Prever** de la barra). Marca
+**Prever**, deja 8 periodos y pulsa **Calcular**:
 
 ![La previsión](img/drtran-prevision.png)
 
@@ -827,7 +931,7 @@ Dos cosas que hay que tener claras:
   IPC suma su propia innovación y la del petróleo, propagada por la
   transferencia.
 - **Las bandas son teóricas**: suponen que el modelo es el verdadero. Lo único
-  empírico es **Evaluar fuera de muestra (-C)**: estima una vez, fija los
+  empírico es **Evaluar fuera de muestra**: estima una vez, fija los
   parámetros y va moviendo el origen, comparando cada previsión con lo que de
   verdad pasó. Es lo que decide entre dos modelos.
 
@@ -855,15 +959,15 @@ mejor. Antes de darlo por bueno:
 5. En el taller, la tabla de **Modelos** del caso guarda cada estimación con su
    logL y su razón. **Elige** el modelo del caso y escribe por qué, como hiciste
    con las series. El botón derecho sobre un modelo del caso tiene **Ver
-   modelo…**: la página que drtran deja junto al `.out` al estimar, con los
+   modelo…**: la misma página que da **Ver modelo** en drtran, con los
    residuos y las ecuaciones estimadas, sin abrir drtran. Si la red tiene más
    ecuaciones, cada una tiene su página debajo. Y abrir en drtran un modelo ya
    estimado enseña su informe y su diagnosis sin volver a estimarlo.
 
 Y si la identificación de una red con más series encontrara un **ciclo**
 (dos series que se afectan mutuamente), ahí termina la transferencia: el
-siguiente escalón es **drvarma** (modelos VARMA), con los mismos `.pre`. No
-viene en esta primera versión.
+siguiente escalón es **drvarma** (modelos VARMA), con los mismos `.pre`.
+Todavía no viene en el paquete.
 
 ---
 
@@ -899,6 +1003,7 @@ viene en esta primera versión.
 | **Anómalo** | Una observación cuyo residuo es improbable. Se calibra, no se elimina. |
 | **Armónicos** | Ondas de seno y coseno que representan una estacionalidad determinista. |
 | **Caso** | Un conjunto fijo y ordenado de series, cada una con su `.pre`. La primera es la salida. |
+| **Cuaderno** | El diario del proyecto, en Markdown: lo que se lleva con «Al cuaderno» y tus notas. Solo crece. |
 | **CCF** | Función de correlación cruzada entre dos series. |
 | **Diagnosis** | La comprobación de que los residuos de un modelo son ruido blanco, normales y centrados. |
 | **Diagonal** | El modelo de varias series sin relación entre ellas. La vara de medir de la transferencia. |

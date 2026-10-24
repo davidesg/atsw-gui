@@ -1,5 +1,5 @@
 #! atsw_gui --proyecto @PROYECTO@/proyecto.yaml
-ventana ATSW
+ventana el taller
 tamano 1100 700
 pestana Pre-Covid
 rotulo Ahora las dos juntas. Un caso: series fijas, en orden, cada una con su modelo.
@@ -13,6 +13,7 @@ rotulo La primera serie es la salida: el IPC, lo que queremos explicar.
 espera 2625
 campo Título | Inflación y petróleo
 campo Por qué | ¿Cuánto pasa del precio del crudo al IPC, y con qué retardo?
+rotulo El título y el porqué quedan con el caso: es la pregunta que el modelo tiene que contestar.
 espera 1875
 boton Darlo de alta
 ventana ATSW
@@ -20,7 +21,7 @@ espera 1125
 fila C1
 rotulo Cada serie entra con su .pre: el modelo univariante ya está resuelto.
 espera 3375
-rotulo «Abrir en drtran» lo lleva al escalón siguiente.
+rotulo «Estimar», en la fila del caso, lo lleva a drtran: el escalón siguiente.
 espera 2250
 rotulo -
 salir

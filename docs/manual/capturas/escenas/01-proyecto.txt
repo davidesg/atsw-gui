@@ -1,6 +1,11 @@
 #! atsw_gui
 # Un proyecto nuevo, desde el fichero de datos (en un directorio aparte).
+# La presentacion: el icono, la version, los creditos y la comprobacion de la
+# instalacion. Si no falta nada se cierra sola y abre el taller.
 ventana ATSW
+espera 800
+foto presentacion
+ventana el taller
 espera 500
 foto inicio
 boton Nuevo…

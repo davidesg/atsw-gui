@@ -218,6 +218,18 @@ int main( int argc, char **argv )
         "IPC m04: step 1 2021 tiene 2, el [16] y el [17]; el AR [18] no entra" );
     }
 
+    printf( "\nLA CABECERA DE LA MEDIA NO DICE QUE SE ESTIME (BUG-0002)\n" );
+    /* fue imprime «Mean parameter (mu):» siempre; con mu fija le sigue
+       «0.000000», sin error tipico ni numero.                          */
+    snprintf( path, sizeof path,
+              "%s/../../../../lib/outfile/bugs/BUG-0002-repro/sin_mu.out", golden );
+    ok( fueout_read( path, &o ), "lee sin_mu.out" );
+    ok( !o.tiene_mu && o.mu_i == 0, "sin_mu: mu fija, no se estima" );
+    snprintf( path, sizeof path,
+              "%s/../../../../lib/outfile/bugs/BUG-0002-repro/con_mu.out", golden );
+    ok( fueout_read( path, &o ), "lee con_mu.out" );
+    ok( o.tiene_mu && o.mu_i == 19, "con_mu: mu estimada, el [19]" );
+
     printf( "\n%d fallos\n", fallos );
     return fallos ? 1 : 0;
 }

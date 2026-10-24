@@ -441,6 +441,43 @@ static int pon_armonicos( const char *inp, int s, int *puestos,
     return rc;
 }
 
+/* ¿EL HIJO ESTIMA LA MEDIA? Sin diferencias, si: es el nivel. Con una
+   (d + D = 1), es la deriva, y solo si la serie diferenciada la tiene:
+   t de su media, con el error tipico corregido por su r1, |t| >= 2. El IPC
+   en primeras diferencias la tiene (t = 3.0): fija en 0, sus residuos
+   salian con media 0.0007, t = 4 (BUG-0002). El WTI no (t = 0.6): el
+   petroleo no tiene deriva. Con d + D = 2, fija.                       */
+static gboolean media_libre( const Id *g )
+{
+    double *w, m = 0.0, v = 0.0, c = 0.0, t;
+    int     n = g->n, i, k, j;
+
+    if ( g->d + g->D == 0 ) return TRUE;
+    if ( g->d + g->D > 1 || g->x == NULL ) return FALSE;
+    w = g_new( double, n );
+    for ( i = 0; i < n; i++ ) w[i] = g->lam == 0.0 ? log( g->x[i] ) : g->x[i];
+    for ( k = 0; k < g->d + g->D; k++ )
+        {
+        int s = k < g->d ? 1 : g->freq;
+
+        for ( j = n - 1; j >= s; j-- ) w[j] -= w[j - s];
+        memmove( w, w + s, (size_t) ( n - s ) * sizeof *w );
+        n -= s;
+        }
+    if ( n < 10 ) { g_free( w ); return FALSE; }
+    for ( i = 0; i < n; i++ ) m += w[i];
+    m /= n;
+    for ( i = 0; i < n; i++ ) v += ( w[i] - m ) * ( w[i] - m );
+    for ( i = 1; i < n; i++ ) c += ( w[i] - m ) * ( w[i - 1] - m );
+    g_free( w );
+    if ( v <= 0.0 ) return FALSE;
+    c /= v;
+    if ( c > 0.9 ) c = 0.9;
+    if ( c < -0.9 ) c = -0.9;
+    t = m / sqrt( v / n / n * ( 1.0 + c ) / ( 1.0 - c ) );
+    return fabs( t ) >= 2.0;
+}
+
 static void on_derivar( GtkButton *b, Id *g )
 {
     char     origen[PR_RUTA], destino[PR_RUTA], porque[512], msg[512], nuevo[PR_ID];
@@ -479,6 +516,16 @@ static void on_derivar( GtkButton *b, Id *g )
            habia retirado para encontrarlo. Paso con IPC_ES.         */
         if ( rc == 0 && quita_armonicos( g ) )
             rc = pon_armonicos( destino, g->freq, &armonicos, porque, sizeof porque );
+        /* Y LA MEDIA, LIBRE cuando hace falta: ver media_libre. */
+        if ( rc == 0 && media_libre( g ) )
+            {
+            tmp = g_strdup_printf( "%s.mu", destino );
+            rc = id_fija_media( destino, tmp, 0.0, 1, porque, sizeof porque );
+            if ( rc == 0 && g_rename( tmp, destino ) != 0 )
+                { g_snprintf( porque, sizeof porque, "no pude escribir %s", destino ); rc = 1; }
+            g_unlink( tmp );
+            g_free( tmp );
+            }
         }
     else       /* E3/E4: what is missing is ADDED to what the model has */
         rc = id_anade_arma( origen, destino, k->p, k->phi, k->q, k->theta,
@@ -1136,6 +1183,9 @@ void an_identifica_serie( const AnHost *h, const char *serie, const char *muestr
     g = nuevo_id( h, serie, muestra, id );
     g->punto = 2;
     g->lam = s->lam; g->d = s->d; g->D = s->D; g->freq = s->freq;
+    g->n = s->n; g->per = s->per; g->anio = s->anio;
+    g->x = g_malloc( (gsize) s->n * sizeof *s->x );          /* media_libre */
+    memcpy( g->x, s->x, (size_t) s->n * sizeof *s->x );
 
     base = an_fichero( "identifica", serie, muestra, id );
     datos = g_strdup_printf( "%s.txt", base );
@@ -1229,5 +1279,5 @@ void an_identifica_datos( const AnHost *h, const char *serie, const char *muestr
         { an_di( h, "%s", why ); g_free( datos ); on_cerrar( NULL, g ); return; }
     g_free( datos );
     calcula_raiz( g, g->x, g->n );
-    ventana( g, s->que && s->que[0] ? s->que : "Identificación desde los datos" );
+    ventana( g, s->que && s->que[0] ? s->que : "La estructura ARIMA" );
 }

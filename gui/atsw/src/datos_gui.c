@@ -237,7 +237,8 @@ static void on_importar( GtkButton *b, Dialogo *D )
     else if ( n )
         {
         gchar *s = g_strdup_printf( "%d serie%s del proyecto: %s. "
-                                    "Ábrelas en fue para identificarlas.",
+                                    "Identifícalas desde el menú de la serie: "
+                                    "«Identificar la estructura ARIMA…».",
                                     n, n == 1 ? "" : "s", hechas->str );
 
         barra_pub( D->a, s );

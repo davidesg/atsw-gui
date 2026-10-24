@@ -479,6 +479,18 @@ static void on_derivar( GtkButton *b, Id *g )
            habia retirado para encontrarlo. Paso con IPC_ES.         */
         if ( rc == 0 && quita_armonicos( g ) )
             rc = pon_armonicos( destino, g->freq, &armonicos, porque, sizeof porque );
+        /* Y LA MEDIA, LIBRE cuando d + D <= 1: es el nivel, o la deriva de
+           la serie diferenciada una vez. Fija en 0, el IPC con d = 1 y
+           armonicos dejaba residuos de media 0.0007, t = 4 (BUG-0002). */
+        if ( rc == 0 && g->d + g->D <= 1 )
+            {
+            tmp = g_strdup_printf( "%s.mu", destino );
+            rc = id_fija_media( destino, tmp, 0.0, 1, porque, sizeof porque );
+            if ( rc == 0 && g_rename( tmp, destino ) != 0 )
+                { g_snprintf( porque, sizeof porque, "no pude escribir %s", destino ); rc = 1; }
+            g_unlink( tmp );
+            g_free( tmp );
+            }
         }
     else       /* E3/E4: what is missing is ADDED to what the model has */
         rc = id_anade_arma( origen, destino, k->p, k->phi, k->q, k->theta,

@@ -57,7 +57,7 @@ tamano 1000 760
 espera 1875
 rotulo «Guardar y estimar»: máxima verosimilitud exacta.
 boton Guardar y estimar
-rotulo fue estima el AR(1) y los once armónicos a la vez.
+rotulo fue estima a la vez el AR(1), los once armónicos y la media: la deriva del IPC, que sube de media cada mes.
 espera 8000
 pestana Output
 rotulo Lo primero que se lee es que convergió; después, cada parámetro con su error típico entre paréntesis.
@@ -78,8 +78,10 @@ ventana Diagnosis
 tamano 1000 800
 espera 2250
 rotulo Residuos blancos y normales: m01 es adecuado.
-espera 3000
-rotulo Cuatro armónicos no parecen significativos. No se quitan todavía: el modelo va a una transferencia.
+espera 1500
+rotulo La media no se contrasta: m01 estima la deriva, y los residuos quedan centrados por construcción.
+espera 1500
+rotulo Tres armónicos no parecen significativos. No se quitan todavía: el modelo va a una transferencia.
 espera 2625
 cierra
 ventana ATSW

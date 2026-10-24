@@ -39,7 +39,9 @@ ventana Diagnosis
 tamano 1000 800
 espera 1875
 rotulo Todo cuadra salvo la normalidad: suele ser cosa de unos pocos atípicos.
-espera 3375
+espera 1500
+rotulo Aquí la media sí se contrasta: el petróleo no tiene deriva, su modelo no la lleva, y los residuos salen centrados.
+espera 1875
 cierra
 ventana ATSW
 rotulo «Anómalos…» enseña los residuos que se salen.

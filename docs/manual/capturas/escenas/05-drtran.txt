@@ -46,7 +46,9 @@ flecha Diagnosis
 espera 800
 fotomenu drtran-diagnosis-menu
 menu Calcular el baseline
-espera 30000
+# El diagonal tarda mas o menos segun lleven media los univariantes: con
+# 30 s, el Estimar de abajo a veces seguia apagado (el motor corriendo).
+espera 60000
 pestana 5 · Estimación
 boton Estimar
 espera 30000

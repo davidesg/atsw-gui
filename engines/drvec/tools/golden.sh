@@ -112,6 +112,8 @@ PRE_CASES=(
   "fixb2row|$PRE1 $PRE2|2 1 1 -case 2 -fixb2row 1 0"
   "xlink|$PRE1 $PRE2|2 0 1 -case 2 -xpre $FX/xrev.pre -xlink $FX/xnet1.txt"
   "xsys|$PRE1 $PRE2|3 0 1 -case 2 -xsys 1"
+  "gzero|$PRE1 $PRE2|3 0 1 -case 2 -gzero 2 1"
+  "gzeroa|$PRE1 $PRE2|3 0 1 -case 2 -gzero 1 2 -weakex 1"
   "nodrift|$PRE1 $PRE2|2 0 1 -case 3 -nodrift 1"
   "casepre|$PRE1 $FX/minkmu.pre|2 0 1 -case pre"
   "trend|$PRE1 $FX/minkmu.pre|2 0 1 -case pre -trend"

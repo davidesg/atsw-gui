@@ -1,5 +1,5 @@
 #! atsw_gui --proyecto @PROYECTO@/proyecto.yaml
-ventana ATSW
+ventana el taller
 tamano 1100 700
 pestana Pre-Covid
 fila ipc
@@ -40,8 +40,8 @@ espera 2000
 rotulo Pero este modelo va a ir a una transferencia: la escuela empieza por la estacionalidad determinista, D = 0, con armónicos.
 numero 3 | 0
 espera 1500
-rotulo Con λ = 0, d = 1 y D = 0, art propone los órdenes.
-boton Identificar…
+rotulo «Identificar la estructura ARIMA…»: con λ = 0, d = 1 y D = 0, art propone los órdenes.
+boton Identificar la estructura ARIMA…
 ventana Identificación
 tamano 760 900
 espera 3000
@@ -57,23 +57,29 @@ tamano 1000 760
 espera 1875
 rotulo «Guardar y estimar»: máxima verosimilitud exacta.
 boton Guardar y estimar
+rotulo fue estima el AR(1) y los once armónicos a la vez.
 espera 8000
 pestana Output
+rotulo Lo primero que se lee es que convergió; después, cada parámetro con su error típico entre paréntesis.
 espera 1500
 cierra
 ventana ATSW
 espera 1125
 fila m01
-rotulo ¿Es adecuado? La diagnosis.
+rotulo En la tabla, m01 ya tiene sus números: la desviación típica de los residuos y la Q de Ljung-Box.
+espera 1000
+rotulo ¿Es adecuado? «Diagnosticar ▸ Diagnosis…». || ¿Es adecuado? En el submenú Diagnosticar, la diagnosis.
 derecho m01
 espera 1125
+submenu Diagnosticar
+espera 600
 menu Diagnosis…
 ventana Diagnosis
 tamano 1000 800
 espera 2250
 rotulo Residuos blancos y normales: m01 es adecuado.
 espera 3000
-rotulo Qué quitar o qué intervenir es una decisión, y es tuya.
+rotulo Cuatro armónicos no parecen significativos. No se quitan todavía: el modelo va a una transferencia.
 espera 2625
 cierra
 ventana ATSW
@@ -84,6 +90,8 @@ entrada 1 | AR(1) en logaritmos con d = 1: residuos blancos y normales.
 espera 1875
 boton Aceptar
 ventana ATSW
-espera 1875
+espera 600
+rotulo Elegir no borra nada: el proyecto guarda todos los modelos, de cuál nace cada uno y por qué.
+espera 1200
 rotulo -
 salir

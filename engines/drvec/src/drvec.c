@@ -2448,7 +2448,10 @@ static int bootstrap_rank(int rr, real *x, int npar, int N, real *cv, real *pval
         int ok0 = 0, ok1 = 0;
         real l0, l1;
         if (simulate_h0(&vh, B2, rr, sim) != 0) {
-            if (boot_dump) fprintf(boot_dump, "%d,%d,simfail,\n", rr, b);
+            if (boot_dump) {
+                fprintf(boot_dump, "%d,%d,simfail,\n", rr, b);
+                fflush(boot_dump);
+            }
             continue;
         }
         for (i = 1; i <= nobs_raw; i++)
@@ -2460,6 +2463,12 @@ static int bootstrap_rank(int rr, real *x, int npar, int N, real *cv, real *pval
                 fprintf(boot_dump, "%d,%d,ok,%.17g\n", rr, b, 2.0 * (l1 - l0));
             else
                 fprintf(boot_dump, "%d,%d,fitfail,\n", rr, b);
+            /*  BUG-63: each line is flushed as it is written.  The .boot is
+             *  also the PROGRESS of the bootstrap -- the Python port and sima
+             *  read it while the C runs -- and the library's 4 KB buffer held
+             *  some 160 replications, minutes of a trivariate test, before
+             *  anything reached the file.                                    */
+            fflush(boot_dump);
         }
         /* Every converged draw counts, negative ones included: the exact LR
            is not nested at Lambda = 0 and goes below zero under H0 in about
@@ -9862,6 +9871,7 @@ static int run_lrtest(void)
                     fprintf(boot_dump, "# drvec %s -bootstrap %d: the rank test, one "
                             "line per replication\nh0,rep,status,lr\n",
                             DRVEC_VERSION, global_boot);
+                if (boot_dump) fflush(boot_dump);
             }
             for (int rr = 0; rr <= M - 2; rr++) {
                 real cv[3] = {0.0, 0.0, 0.0}, pv = -1.0, lr;

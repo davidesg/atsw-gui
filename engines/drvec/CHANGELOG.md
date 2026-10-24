@@ -22,6 +22,16 @@ publicación: `v*`.
 - Origen: el rodaje de sima 0.2.0 con Martín Manjón y Treadway (1997),
   1985–2008: el modelo condicional R0T | (R30, R3) da LR 7.83, 8 df, p 0.45.
 
+### BUG-63, cerrado: el `.boot` del bootstrap del rango se escribe réplica a réplica
+
+- `bootstrap_rank` escribía cada réplica en `<base>.boot` sin vaciar el
+  búfer: el fichero no recibía nada hasta llenar 4 KB (unas 160 réplicas) o
+  hasta cerrarse. El `.boot` es también el progreso que leen drvec-python y
+  sima mientras el C corre, y un contraste trivariante de una hora no se
+  movía en `job_status` durante minutos. Ahora se vacía tras la cabecera y
+  tras cada réplica. El contenido final es el mismo byte a byte (el golden
+  `rankboot.boot` no se mueve). Repro: `sh tests/repro/repro.sh 63`.
+
 ## 0.13 — 2026-10-16
 
 ### BUG-40, cerrado: la componente determinista de un `.pre` es la de fue

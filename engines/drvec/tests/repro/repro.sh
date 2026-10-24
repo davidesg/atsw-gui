@@ -2,8 +2,8 @@
 # tests/repro/repro.sh -- minimal reproductions of the defects registered on
 # 2026-09-23 (docs/BUGS.md, BUG-23 .. BUG-45), from the review recorded in
 # docs/REVIEW_2026-09-23.md, BUG-58 .. BUG-60 (2026-10-17, found by the
-# Python port), BUG-61 (2026-10-18, the Windows build of the port) and BUG-62
-# (2026-10-24, the shakedown of sima 0.2.0).
+# Python port), BUG-61 (2026-10-18, the Windows build of the port), BUG-62
+# (2026-10-24, the shakedown of sima 0.2.0) and BUG-63 (the same shakedown).
 #
 #   sh tests/repro/repro.sh            all of them
 #   sh tests/repro/repro.sh 23 31      only those
@@ -214,6 +214,21 @@ if want 60; then hdr 60 "ladder_key loses the data when a drift is held"
     && ./pk "$DS/mauricio/mink_muskrat.inp" \
     || echo "  (exit $?: 1 = the key ignores the change)"
 fi
+if want 63; then hdr 63 "the rank bootstrap's .boot is buffered: no progress until the end"
+  "$B" "$F/../../fixtures/mmpre.muskrat.pre" "$F/../../fixtures/mmpre.mink.pre" \
+       2 0 1 -case 2 -lrtest -bootstrap 60 -name b63 >/dev/null 2>&1 &
+  pid=$!; seen=0
+  while kill -0 "$pid" 2>/dev/null; do
+    n=$(grep -c ',ok,\|,fitfail,\|,simfail,' b63.boot 2>/dev/null); n=${n:-0}
+    [ "$n" -gt "$seen" ] && seen=$n
+    sleep 0.05
+  done
+  wait "$pid"
+  echo "  replications in b63.boot while drvec ran: $seen of 60"
+  [ "$seen" -gt 0 ] || echo "  (none: the file reaches the disk only when it is closed)"
+fi
+echo
+
 if want 61; then hdr 61 "the random generators assume a 64-bit long (Windows: the bootstrap hangs)"
   S="$TOP/src/drvec.c"
   sed -n '/^static .* boot_rng = /,/^}/p' "$S" > rng_boot.h

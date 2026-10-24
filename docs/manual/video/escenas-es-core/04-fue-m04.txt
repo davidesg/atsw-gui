@@ -1,0 +1,37 @@
+#! fue_gui --proyecto @PROYECTO@/proyecto.yaml @PROYECTO@/subyacente/2002-2019/work/subyacente_m04.inp
+rotulo m04 en fue_gui. En su componente determinista están los once armónicos.
+ventana FUE
+tamano 1100 760
+pestana Deterministic Component
+rotulo Marcamos «Include Mean Parameter»: la media, la inflación mensual media, que con D = 0 hay que estimar. || Marcamos la casilla de la media: el parámetro mu, la inflación mensual media, que con de estacional igual a cero hay que estimar.
+casilla Include Mean | 1
+espera 600
+rotulo Y los tres escalones: septiembre y octubre de 2012, y octubre de 2007.
+boton Add
+ventana Deterministic Component
+elige Step
+campo Season: | 9
+campo Year: | 2012
+boton OK
+ventana FUE
+rotulo Un suceso económico es el mismo en las dos rutas: lo que cambia es cómo se trata la estacionalidad.
+boton Add
+ventana Deterministic Component
+elige Step
+campo Season: | 10
+campo Year: | 2012
+boton OK
+ventana FUE
+rotulo Es la ventaja de una intervención con causa: se lleva de un modelo a otro, porque lo que mide está fuera del modelo.
+boton Add
+ventana Deterministic Component
+elige Step
+campo Season: | 10
+campo Year: | 2007
+boton OK
+ventana FUE
+rotulo «Estimar». Son dieciocho parámetros: once armónicos, la media, tres del ARMA y tres escalones.
+boton Estimar
+espera 1500
+rotulo -
+salir

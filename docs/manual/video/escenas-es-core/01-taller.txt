@@ -1,0 +1,144 @@
+#! atsw_gui
+portada ATSW | La inflación subyacente: un modelo univariante con intervenciones | 1000
+rotulo El IPC subyacente es el IPC sin alimentos no elaborados ni productos energéticos: lo que queda al quitar los precios más volátiles.
+rotulo Vamos a construir su modelo ARIMA, y a medir con él lo que le hizo la subida del IVA de septiembre de 2012.
+portada Dos rutas | Estacionalidad estocástica (D = 1) y determinista (D = 0) | 1000
+rotulo La serie es mensual y muy estacional. La analizaremos dos veces, por las dos rutas canónicas: con estacionalidad estocástica, y con determinista.
+rotulo -
+ventana el taller
+tamano 1100 700
+rotulo Un proyecto es una carpeta: «Nuevo…» la crea. Y «Datos…» carga la serie: el índice subyacente del INE, mensual, desde 2002.
+boton Nuevo…
+ventana Proyecto nuevo
+fichero @PROYECTO@/proyecto.yaml
+espera 600
+boton Crear
+ventana el taller
+boton Datos…
+ventana Cargar datos
+fichero @DATOS@/es_core.csv
+espera 600
+boton Abrir
+ventana Qué series cargar
+rotulo Es un índice sin desestacionalizar: la estacionalidad está dentro, y el modelo tiene que explicarla.
+boton Cargar las marcadas
+espera 600
+boton Cerrar
+ventana el taller
+rotulo La muestra de estimación va de 2002 a 2019: doscientas dieciséis observaciones, sin la pandemia ni la crisis energética.
+boton +
+ventana Nueva muestra
+campo Nombre | 2002-2019
+campo Hasta | 12 | 2019
+campo Por qué | Antes de la pandemia y de la crisis energética.
+espera 600
+boton Declararla
+ventana el taller
+fila subyacente
+rotulo Antes de decidir nada, se mira la serie. Botón derecho: «Serie y ACF / PACF…».
+derecho subyacente
+espera 900
+menu Serie y ACF / PACF…
+ventana vistazo
+tamano 1000 760
+espera 600
+rotulo Un índice de precios va en logaritmos, λ = 0: una diferencia es entonces una tasa de variación, y un efecto se lee en porcentaje.
+numero 1 | 0
+rotulo La ACF decae muy despacio: la serie no es estacionaria. Con una diferencia regular, d = 1, lo que vemos es la inflación mensual.
+numero 2 | 1
+rotulo Y su ACF repite picos en 12, 24 y 36 que apenas se apagan: cada mes se parece al mismo mes de otros años. Es la estacionalidad.
+portada Dos maneras de tratar la estacionalidad | Determinista (D = 0) o estocástica (D = 1) | 1000
+rotulo Determinista: el patrón del año es fijo, como un calendario. Cada mes tiene siempre el mismo efecto, y se recoge con ondas de seno y coseno.
+rotulo Estocástica, la propuesta de Box-Jenkins: el patrón cambia poco a poco. La diferencia estacional compara cada mes con el del año anterior, y un MA estacional lo va actualizando.
+rotulo Lo que implica: con D = 1, si el patrón de enero cambia, el modelo lo sigue. Con D = 0 queda fijo, y su cambio aparece en los residuos.
+rotulo -
+rotulo Empezamos por la ruta de Box-Jenkins, D = 1. Los picos estacionales desaparecen, y queda uno negativo en 12: la firma de un MA estacional.
+numero 3 | 1
+espera 1500
+cierra
+ventana el taller
+rotulo Con λ = 0, d = 1 y D = 1, art propone los órdenes: «Identificar la estructura ARIMA…».
+derecho subyacente
+espera 900
+menu Identificar la estructura ARIMA…
+ventana Identificación
+tamano 760 900
+elige logaritmos (λ = 0)
+numero 1 | 1
+numero 2 | 1
+boton Volver a identificar
+espera 2000
+rotulo art propone un AR(1) con un MA estacional. Pero la PACF tiene fuera de las bandas los retardos 1 y 3: pide un AR de orden 3.
+fila AR(3) x SMA(1)
+rotulo AR(3) por SMA(1) comparte la similitud más alta. Es pariente del modelo de líneas aéreas de Box-Jenkins, con un AR(3) en lugar del MA regular. || A erre tres por eme a estacional uno comparte la similitud más alta. Es pariente del modelo de líneas aéreas de Box-Jenkins, con un a erre tres en lugar del eme a regular.
+elige abrir en el editor
+boton Derivar modelo con el candidato elegido
+ventana editor de ATSW
+tamano 1000 760
+rotulo Nace m01, con los coeficientes de art como semillas. «Guardar y estimar»: fue busca el óptimo por máxima verosimilitud exacta.
+boton Guardar y estimar
+espera 2500
+cierra
+ventana el taller
+fila m01
+rotulo ¿Es adecuado? Botón derecho, «Diagnosticar», «Diagnosis…».
+derecho m01
+espera 900
+submenu Diagnosticar
+menu Diagnosis…
+ventana Diagnosis
+tamano 1000 800
+espera 800
+rotulo Residuos blancos: ninguna Q de Ljung-Box rechaza. Pero no son normales: Jarque-Bera vale 127. Suele ser cosa de unos pocos residuos.
+cierra
+ventana el taller
+rotulo «Anómalos…» enseña los residuos que se salen, y deja probar qué pasa sin ellos.
+derecho m01
+espera 900
+menu Anómalos…
+ventana anomalos
+tamano 1000 820
+espera 600
+rotulo Uno se sale de todo: septiembre de 2012, más de cinco desviaciones típicas. Es el mes de la subida del IVA.
+rotulo El Real Decreto-ley 20 de 2012 subió el IVA general del 18 al 21 por ciento, y el reducido del 8 al 10, desde el 1 de septiembre.
+rotulo Los anómalos se calibran, no se borran: lo marcamos y pulsamos «Calibrar».
+casilla 9/2012 | 1
+boton Calibrar
+espera 1500
+rotulo Sin ese mes, Jarque-Bera cae de 127 a 4.8: el problema era sólo el IVA. Hay que intervenirlo. ¿Con qué forma? «Sugerir intervención…».
+boton Calibrar
+boton Sugerir intervención…
+ventana Sugerir intervención
+rotulo Un escalón. Un impuesto más alto sube el nivel de los precios para siempre: en el logaritmo del índice, un escalón permanente.
+rotulo En la inflación, que es su diferencia, es un impulso de un solo mes: la tasa sube ese mes y luego vuelve. Es lo que se ve en los residuos.
+boton Derivar modelo con estas intervenciones
+ventana m02.inp
+tamano 1000 760
+rotulo m02: el mismo AR(3) por SMA(1), con el escalón de septiembre y un solo parámetro, ω. Lo estimamos. || eme cero dos: el mismo a erre tres por eme a estacional uno, con el escalón de septiembre y un solo parámetro, omega. Lo estimamos.
+boton Guardar y estimar
+rotulo El escalón entra como una variable más, con su ω, y todos los parámetros se reestiman a la vez.
+cierra
+ventana el taller
+rotulo Una intervención bien puesta no sólo quita un residuo grande: deja que el resto del modelo se estime sin ese ruido. Los residuos de m02.
+fila m02
+derecho m02
+espera 900
+menu Anómalos…
+ventana anomalos
+tamano 1000 820
+espera 600
+rotulo Con el escalón ningún residuo pasa del umbral, y la normalidad ya se acepta. Pero hay dos puntos cerca de tres desviaciones típicas.
+rotulo Octubre de 2012, el mes siguiente: parte de la subida llegó con retraso, y subieron precios regulados como las tasas universitarias.
+rotulo Y octubre de 2007: la subida mundial de los cereales y la leche, que en España encareció ese otoño la leche, el pan y los lácteos.
+rotulo El umbral es una ayuda, no la ley. Con una causa económica que se puede citar, se prueba la intervención, y la estimación decide.
+cierra
+ventana el taller
+rotulo «Iterar: seguir desde su óptimo» copia m02 en m03, para añadirle los dos escalones en fue_gui.
+derecho m02
+espera 900
+menu Iterar: seguir desde su óptimo
+espera 1000
+fila m03
+espera 1000
+rotulo -
+salir

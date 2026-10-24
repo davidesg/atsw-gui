@@ -1,0 +1,29 @@
+#! fue_gui --proyecto @PROYECTO@/proyecto.yaml @PROYECTO@/subyacente/2002-2019/work/subyacente_m03.inp
+rotulo fue_gui, el estimador clásico, tiene una pestaña para cada parte del modelo.
+ventana FUE
+tamano 1100 760
+pestana Deterministic Component
+rotulo En la componente determinista está el escalón de septiembre. «Add» añade otro: octubre de 2012. || En la componente determinista está el escalón de septiembre. El botón «ad» añade otro: octubre de 2012.
+boton Add
+ventana Deterministic Component
+elige Step
+campo Season: | 10
+campo Year: | 2012
+espera 600
+boton OK
+ventana FUE
+rotulo Y otro en octubre de 2007. Cada escalón lleva un solo ω: el efecto entra de golpe y se queda.
+boton Add
+ventana Deterministic Component
+elige Step
+campo Season: | 10
+campo Year: | 2007
+espera 600
+boton OK
+ventana FUE
+rotulo ¿Por qué dos escalones y no uno con dos ω, una función de transferencia? Porque así cada mes tiene su efecto con su error típico, y el total es la suma.
+boton Estimar
+espera 1500
+rotulo Convergió. Los tres ω están en la consola; los leemos en la diagnosis.
+rotulo -
+salir

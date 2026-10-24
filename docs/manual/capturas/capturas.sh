@@ -22,15 +22,20 @@ set -euo pipefail
 R=$(cd "$(dirname "$0")/../../.." && pwd)
 M=$R/docs/manual
 # Un sitio fijo y corto, porque la ruta del proyecto sale en las capturas.
-T=/tmp/curso-atsw
+# CURSO y PROYECTO_NOMBRE los cambia el video de otro caso (video.sh es-core).
+T=${CURSO:-/tmp/curso-atsw}
+P=$T/${PROYECTO_NOMBRE:-ipc-wti}
 # Una sola vuelta a la vez: el directorio es fijo, y una vuelta que acaba lo
 # borra (el trap de abajo) aunque otra lo este usando.
 exec 9>"$T.lock"
 flock -n 9 || { echo "ya hay otra vuelta de capturas en marcha" >&2; exit 1; }
 # REUSA=1 parte de lo que dejo la vuelta anterior (con CONSERVA=1): para
 # escribir una escena sin repetir todas las de antes.
-[ -n "${REUSA:-}" ] || { rm -rf "$T"; mkdir -p "$T/ipc-wti"; }
-trap 'pkill -f "broadwayd :$PANTALLA" 2>/dev/null || true; [ -n "${CONSERVA:-}" ] || rm -rf "$T"' EXIT
+[ -n "${REUSA:-}" ] || { rm -rf "$T"; mkdir -p "$P"; }
+# El broadwayd de cada escena se para por su PID: solo el que se lanzo aqui.
+BROADWAY_PID=
+para_broadway() { [ -z "$BROADWAY_PID" ] || kill "$BROADWAY_PID" 2>/dev/null || true; BROADWAY_PID=; }
+trap 'para_broadway; [ -n "${CONSERVA:-}" ] || rm -rf "$T"' EXIT
 
 PANTALLA=${PANTALLA:-7}
 mkdir -p "$M/img" "$T/cache"
@@ -65,17 +70,18 @@ for e in "${escenas[@]}"; do
     linea=$(head -1 "$e")
     case "$linea" in '#! '*) ;; *) echo "$e: falta la linea #! programa" >&2; exit 1 ;; esac
     cmd=${linea#'#! '}
-    cmd=${cmd//@PROYECTO@/$T/ipc-wti}
+    cmd=${cmd//@PROYECTO@/$P}
     cmd=${cmd//@DATOS@/$M/datos}
-    sed -e "s|@PROYECTO@|$T/ipc-wti|g" -e "s|@DATOS@|$M/datos|g" "$e" > "$T/guion.txt"
+    sed -e "s|@PROYECTO@|$P|g" -e "s|@DATOS@|$M/datos|g" "$e" > "$T/guion.txt"
     echo "== $(basename "$e")"
     # Un broadwayd para cada escena: si un cliente sale con ventanas
     # abiertas, broadwayd a veces se cae (client_free: assertion failed).
     # Y en otra pantalla: la anterior tarda en soltar su socket.
-    pkill -f "broadwayd :$PANTALLA" 2>/dev/null || true
+    para_broadway
     PANTALLA=$((PANTALLA + 1))
     export BROADWAY_DISPLAY=":$PANTALLA"
     broadwayd ":$PANTALLA" >>"$T/broadwayd.log" 2>&1 &
+    BROADWAY_PID=$!
     sleep 1
     ( cd "$T" && GTK_MODULES=$T/libescenas.so ESCENA=$T/guion.txt \
           timeout "${LIMITE:-300}" "$T/ATSW/bin/"$cmd ) 2>&1 | grep -v "^$" | grep -v "pixman\|preferred_height_for_width\|Negative content\|BUG \*\*\*\|AccelLabel\|queue_draw_area\|Aborted" || true

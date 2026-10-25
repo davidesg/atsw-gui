@@ -1707,3 +1707,69 @@ replication's line. The `.boot` is byte for byte the same (the golden
 `rankboot.boot` does not move), and the cost is one system call per
 replication against seconds of fitting.
 
+
+## BUG-64 — a Lambda that points the wrong way is never made admissible: the rank above the true one fails to fit
+
+**Status: FIXED on 2026-10-25** (`src/drvec.c`, `make_admissible`). Found in
+the Monte Carlo of [ESTUDIO_CRT_2026-10-24.md](ESTUDIO_CRT_2026-10-24.md).
+
+**What it was.** Every start of `fit_search` goes through `make_admissible`,
+which shrinks F and Θ towards zero and, if that is not enough, halves Λ and
+quarters it, until the engine accepts the point. That ladder can only SCALE Λ.
+With `∇Y_t = −Λ W_{t−1} + …`, the error-correction block is admissible when
+`I − B′Λ` has its roots inside the unit circle. A seed whose `B′Λ` has a
+negative eigenvalue keeps W explosive at every multiple: shrinking takes the
+root towards one but never across it. That is what the seeds give at a rank
+above the true one: the spare relations are I(1), and the conditional
+regression and Johansen's canonical seed both give them a tiny adjustment of
+the wrong sign. Every rung failed with `elf`'s `ifault = 3` (strict
+non-stationarity), the rank was reported as `estimation failed`, and the rank
+test lost the comparison that needed it, although admissible points exist.
+
+The `-seedgate: no admissible starting point … Falling back to the cold start`
+message was not the defect: the fallback leaves `init_guess` as the seed, and
+the search table lists it as `seed` because `fit_search` adds a `cold` row only
+when the seed differs from it.
+
+**How it was found.** In the CRT Monte Carlo (q = 0, case 2, M = 4, true rank
+1 or 0), three replications of 350 had no `r = 2` row: rank 3 had failed. A
+debug build that printed every rung of `make_admissible` on replication 50 of
+panel a, T = 100 showed the 36 rungs (six shrinks of F and Θ by three scales
+of Λ, for each of the two seeds) all ending in `ifault = 3`, F and Θ at zero
+included.
+
+**What it cost.** The `r = 2` comparison in 3 of 350 replications (0.9 %) of
+the Monte Carlo. It does not enter the size or the power measured there, which
+are read at `r = 0` and `r = 1`. Inside a bootstrap a failed fit is a
+`fitfail`, discarded, so a comparison at a rank above the true one could also
+lose replications to it: the minimum of valid replications at `r = 2` was 96
+to 97 of 99. On real data it removes the step of the sequential test above the
+true rank whenever the seeds point the wrong way.
+
+And it cost optima where other starts survived. A start the ladder could not
+make admissible was dropped from the search without a word, and the search
+kept the best of the rest. On UKconsumption, `2 0 2 -case 2`, the dropped one
+was `johansen`: `seed` and `cold` stop at 570.2297 by step and by criterion 3,
+and with the fix `johansen` reaches **573.9602 by the gradient**, the value
+the JJ benchmark of 2026-09-23 had found only with `-multistart 30`
+(`benchmark/drvec_runs_2026-09-23/JJ/RESULTS.md`). The battery had the local
+optimum as its baseline, and `-lrtest` on the same data had LR(1) = 25.51 where
+it is 32.98 (r = 2 is rejected at 1 % either way).
+
+**Repro.** `sh tests/repro/repro.sh 64` runs `tests/repro/fixtures/crt64.inp`
+(that replication, `tools/mc_crt.py`'s seed 100050) with `2 0 0 -case 2
+-lrtest`. Before the fix the `r = 2` row says `(a model in the pair failed)`;
+after it, `2  2  2.6629`.
+
+**The fix.** A last resort in `make_admissible`, after the three scales of Λ:
+a Λ admissible by construction, `c·I` in the Y1 rows and zero in the Y2 rows
+(internal order), so that `B′Λ = c·I` whatever B2 is and W is `(1 − c) W_{t−1}`
+plus the shrunk short run. c = 0.05: on the two replications of panel a,
+c = 0.02 and 0.05 brought both starts to the same optimum by the gradient;
+c = 0.1 landed within 0.001 of it, c = 0.2 up to 2 log-likelihood points
+below, and c = 0.5 up to 155 below, stopping by criterion 3. Not
+under `-alpha` (Λ is A·ψ) or `-warma`. It acts only on a start every other
+rung failed to make admissible: the 36 hashes of `tools/golden.sh` do not
+move, and in `tests/run_tests.sh` two baselines do, both the UKconsumption
+fits above, now at the higher optimum (`golden 573.9601581380 … 2 0 2` and the
+`8p.2` LR(1) = 32.9750). `[8ae]` checks the repro's case.

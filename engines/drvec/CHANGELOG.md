@@ -7,6 +7,43 @@ publicación: `v*`.
 
 ## Sin publicar
 
+### BUG-64: el rango por encima del verdadero ya no se queda sin arranque
+
+- `make_admissible` sólo podía escalar Λ, y un Λ con el ajuste del signo
+  equivocado deja W explosivo a cualquier escala. Es lo que dan las semillas en
+  un rango por encima del verdadero: el ajuste se daba por fallido y el
+  contraste del rango perdía esa comparación. Ahora, si las tres escalas
+  fallan, prueba un Λ admisible por construcción (`c·I` en las filas de Y1,
+  c = 0.05). Actúa sobre todo arranque que antes se descartaba por no
+  admisible, también cuando otros sobrevivían: en UKconsumption `2 0 2 -case 2`
+  el arranque `johansen` vuelve a la búsqueda y llega a 573.9602 por gradiente,
+  el óptimo que antes sólo daba `-multistart 30`, frente al 570.2297 de antes;
+  el LR(1) de su `-lrtest` pasa de 25.51 a 32.98 (r = 2 se rechaza al 1 % en
+  los dos casos). Los 36 hashes de `golden.sh` no se mueven; en
+  `run_tests.sh` cambian esas dos referencias. Repro: `sh tests/repro/repro.sh
+  64`; comprobación `[8ae]`.
+
+### El bootstrap del rango comprueba que el modelo bajo H₀ es I(1, r)
+
+- Antes de simular, `-bootstrap` comprueba lo que Cavaliere, Rahbek y Taylor
+  (2012, Algoritmo 1, paso ii) comprueban: que `Ȳ` es estacionario y que la
+  covarianza de largo plazo de `∇Y₂` tiene rango `M − r` (la condición (d) del
+  estudio de Mauricio). Si falla, la comparación no da valores críticos y el
+  `.out` dice qué condición falló. Cuando se cumple la salida no cambia: los 36
+  goldens no se mueven.
+- Con q = 0 se cumple por construcción; con MA y un rango nulo por debajo del
+  verdadero el ajuste se acerca a perder una tendencia sin perderla, y eso no
+  lo ve una comprobación binaria. Está medido en
+  `docs/ESTUDIO_CRT_2026-10-24.md`, que reproduce además el Monte Carlo de CRT
+  (`tools/mc_crt.py`).
+- El bloque del bootstrap en el `.out` ya no dice que el contraste asintótico
+  rechaza «seis veces» el nivel nominal y el bootstrap «cuatro»: esa medición
+  (HOMOLOGATION §2.3, 2026-08-19) es anterior a BUG-24, 26, 27 y 50. Ahora da
+  la del diseño de CRT: 11 % con las tablas y 4 % con el bootstrap a T = 50, y
+  las tablas cerca del nominal a T = 100. Cambia `rankboot.out` (golden
+  recapturado); lo mismo en USAGE, INFERENCE §8, GETTING_STARTED y una nota al
+  principio de HOMOLOGATION §2.3, que se conserva como registro.
+
 ### `-gzero i j`: entradas de Γ(k) fijadas a cero (sin realimentación a corto plazo)
 
 - `Γ_k[i][j] = 0` para todo k: la serie `j` no entra en el corto plazo de la

@@ -116,8 +116,9 @@ Without a moving average there is no admissibility question, and the test is
 measuring what it says. With one, the free moving average degenerates in the
 direction that carries the common trend and absorbs the very thing the rank test
 measures — on the eight wheat pairs the evidence goes from unanimous at `q = 0`
-to two of eight at `q = 1`. Use the bootstrap: the asymptotic table over-rejects
-six-fold at these sample sizes.
+to two of eight at `q = 1`. Use the bootstrap: the table carries neither the
+moving average nor the sample size, and on short samples it is off (11 % against
+a nominal 5 % at T = 50, [ESTUDIO_CRT_2026-10-24.md](ESTUDIO_CRT_2026-10-24.md)).
 
 **2. At the selected rank, look at the specification ladder before choosing
 one.**

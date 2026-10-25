@@ -182,6 +182,16 @@ bin/drvec datasets/synthetic/rank0.inp 2 0 0 -case 2 -lrtest
 
 ### 2.3 The size of the rank test in finite samples — measured
 
+> **Superseded (2026-10-25).** This measurement (2026-08-19) predates BUG-24,
+> 26, 27 and 50, which changed the statistic, the table and the refits. Measured
+> again on Cavaliere, Rahbek and Taylor's (2012) design (q = 0, case 2, true
+> rank 1), the test of the true rank rejects 11 % at T = 50 with the tables and
+> 4 % with `-bootstrap 99`; at T = 100 the tables reject 4 %. The "six times"
+> and "four times" below no longer describe the program. The full study, with
+> the bootstrap at T = 100 still being extended, is
+> [ESTUDIO_CRT_2026-10-24.md](ESTUDIO_CRT_2026-10-24.md). The record below is
+> kept as it was.
+
 Over **60 replications** of a process with a true rank of 1, at n = 120, with the
 sequential test at the 5 % level, comparing the asymptotic tables against
 `-bootstrap 100`:

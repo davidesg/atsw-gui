@@ -429,10 +429,12 @@ the rank selected without it.**
 |---|---|
 | `-bootstrap N` | with `-lrtest`: N parametric-bootstrap replications under H₀ for each rank comparison; every replication (H₀ rank, number, `ok`/`simfail`/`fitfail`, LR* to 17 digits) in `<base>.boot` (CSV) |
 
-The asymptotic tables are known to be optimistic at these sample sizes — measured
-here, the sequential test over-rejects at about **six times** its nominal level
-at n = 120 — and the bootstrap cuts that to four, without fixing it ([HOMOLOGATION.md](HOMOLOGATION.md) §2.3), and Mélard, Roy and Saidi
-report the same for models with MA terms. `-bootstrap` replaces the tables with
+The asymptotic tables can be off in short samples. On Cavaliere, Rahbek and
+Taylor's (2012) design (q = 0, case 2), the test of the true rank rejects 11 % at
+T = 50 against a nominal 5 %, and the bootstrap brings it to 4 %; at T = 100 the
+tables are already close to nominal ([ESTUDIO_CRT_2026-10-24.md](ESTUDIO_CRT_2026-10-24.md)).
+Mélard, Roy and Saidi report finite-sample distortion for models with MA terms,
+which that design does not cover. `-bootstrap` replaces the tables with
 percentiles simulated **from the fitted model at rank r**, so they carry the
 sample size, the deterministic case and the MA component, which a table cannot.
 
@@ -448,6 +450,12 @@ needed for a p-value that resolves 1 %.
 Cost is `N × 2` full estimations per comparison: about 4 s for a bivariate case
 at `B = 100`, and 40 s for `M = 3` at `B = 200`. Replications where either fit
 fails to converge are discarded and counted in the `reps` column.
+
+Before the first replication the model under H₀ is checked to be **I(1) with
+rank r**, as Cavaliere, Rahbek and Taylor (2012) check theirs: `Ȳ` stationary,
+and `∇Y₂`'s long-run covariance of rank `M − r`. A comparison that fails it gets
+no critical values, and the line says which condition failed. With `q = 0` it
+holds by construction; see [ESTUDIO_CRT_2026-10-24.md](ESTUDIO_CRT_2026-10-24.md).
 
 **Combined with `-alpha` / `-weakex`**, the sequence is still computed — testing
 the rank *within* the restricted model is a legitimate question — but the

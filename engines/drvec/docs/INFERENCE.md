@@ -253,14 +253,106 @@ What this costs is stated plainly: where the estimate lies on the boundary, the
 standard errors reported for it are the BFGS ones, with the reservations above,
 and inference along the binding direction is not supported by them.
 
-## 7. What this does *not* establish
+## 7. The bootstrap: where the procedure comes from
+
+*Added 2026-10-24, from the three papers on the bootstrap of the cointegrated
+VAR.*
+
+`-bootstrap` was built from the prescription of the BVECM article (Guerrero and
+García-Hiernaux 2026, §6.3–6.5): simulate under H₀ with the parameters
+estimated at rank r, refit both ranks, read the percentiles. The theory for that
+scheme exists, for the VAR, and it was not cited until now.
+
+The article proves no result about that distribution. Its theorems are
+representation results — the WARMA–VEC equivalence (Theorem 1 and its
+corollaries) — and what they give the bootstrap is the structure of the
+simulated sample: a stationary system, inverted, is a VEC with `Π` of rank r.
+They do not give its distribution, nor the I(1, r) conditions, and Corollary 2,
+the moving-average case, covers only the class with `Θ` on the `w` block
+(`-mawarma`); for the free `Θ` of the default the representation is Mauricio's
+(2006). Its asymptotic claim, that moving-average terms leave the limit
+unchanged, rests on Yap and Reinsel (1995, Theorem 3), a trace test on the
+conditional likelihood (BUG-27).
+
+**Swensen (2006)** gave the first asymptotic theory for the rank bootstrap and
+for the bootstrap sequential procedure. His scheme mixes two fits: α and β at
+rank r, the short-run coefficients and the residuals from the unrestricted one.
+**Cavaliere, Rahbek and Taylor (2012)** showed what that costs: when the null
+rank is below the true one, the mixed scheme can generate explosive or I(2)
+samples, asymptotically and not only in small ones, unless auxiliary conditions
+hold on the process. They estimate **every** parameter under the null, prove
+that the estimates converge to pseudo-true values that satisfy the I(1, r)
+conditions whatever the true rank, and hence that the bootstrap test is
+correctly sized at the true rank and consistent below it. In their Monte Carlo
+(VAR(2), p = 4, r₀ = 1, restricted constant) the asymptotic test rejects about
+45 % at T = 50 and 13 % at T = 200 against a nominal 5 %, and their bootstrap
+stays close to 5 % from T = 50.
+
+**`drvec`'s scheme is theirs, not Swensen's**: `bootstrap_rank` recovers the
+whole model at rank r (Λ, F, Θ, B₂, Σ) and simulates from it. The sequential
+reading, the first comparison not rejected, is their Algorithm 2.
+
+Where the program departs from the papers:
+
+| | Cavaliere, Rahbek and Taylor (2012) | `drvec` |
+|---|---|---|
+| model | VAR, i.i.d. errors | VARMA on `Ȳ`; Θ is part of H₀ |
+| likelihood | Gaussian, reduced-rank regression | exact, unconditional |
+| statistic | trace, H(r) against H(p) | λ-max, r against r+1 |
+| bootstrap errors | i.i.d. resampling of the restricted residuals, recentred | Gaussian draws with Σ̂ of the fit at rank r |
+| initial values | the observed ones | `Ȳ` from its mean with a burn-in of 50 + 10p; `Y₂` cumulated from its first observed level |
+| the I(1, r) check | explicit: p − r unit roots, the others outside the circle | explicit too (`i1r_check`): `Ȳ` stationary and `∇Y₂`'s long-run covariance of rank s; with q = 0 it holds by construction ([ESTUDIO_CRT_2026-10-24.md](ESTUDIO_CRT_2026-10-24.md) §3) |
+| failed replications | discarded when the root check fails | discarded when a refit does not converge (`fitfail`), counted in `reps` |
+
+Three consequences follow.
+
+* **No theorem covers the program's case.** Moving-average terms, the exact
+  likelihood (whose LR is not nested at `Λ = 0` and goes negative in about 40 %
+  of the null draws, BUG-26) and the λ-max form are all outside the three
+  papers. Gaussian draws should not change the first-order result, since the
+  limit distribution does not depend on normality, but that is an argument, not
+  a proof. The justification for `-bootstrap` here is the papers' design plus
+  measurement.
+* **The moving average can nearly undo what the check checks.** A stationary
+  `Ȳ` does not by itself give `Y₂` its s stochastic trends: that needs
+  `rank(Λ⊥′Θ(1)) = s`, condition (d) of
+  [ESTUDIO_MAURICIO_2026-09-23.md](ESTUDIO_MAURICIO_2026-09-23.md), the
+  VARMA counterpart of the full rank of `α⊥′Γβ⊥`. `-bootstrap` now checks it
+  exactly before simulating, but with q ≥ 1 and a null rank below the true one
+  the fit absorbs the surplus stationary directions with MA roots next to the
+  unit circle, and the sample it simulates carries *nearly* fewer trends than
+  H₀ says — the problem Cavaliere, Rahbek and Taylor solve in the VAR, back
+  through the moving average. Measured in
+  [ESTUDIO_CRT_2026-10-24.md](ESTUDIO_CRT_2026-10-24.md) §3; its effect on
+  power is open.
+* **Discarding on non-convergence is not discarding on the root check.** If the
+  refits that fail are not a random subset of the draws, the simulated
+  distribution is censored. The count is printed so that it can be judged.
+
+**The restrictions.** Cavaliere, Nielsen and Rahbek (2015) treat the LR of a
+known β, and find what Section 1's asymptotics do not promise: the χ²
+approximation is poor in finite samples, the bootstrap from unrestricted
+estimates is unreliable exactly where the χ² fails worst, and a bootstrap that imposes the null is valid and
+consistent. The χ² tests of `-fixb2`, `-fixb2row`, `-alpha`/`-weakex` and
+`-gzero` are in that situation; the last three are not β = τ, so the paper is
+the closest result rather than a direct one. When the χ² over-rejects, its
+p-values are too small, so a restriction it does not reject would not be
+rejected by a better-sized test either; a χ² rejection near 5 % is the reading
+that needs care. `-matest` and `-artest` already simulate under the restricted
+model, which is the design the paper validates.
+
+## 8. What this does *not* establish
 
 * **It is asymptotic theory.** Every result above is a limit result, and this
-  program is used on 60–120 observations. The rank test's own finite-sample size
-  is measured at about six times its nominal level at `n = 120`, and the
-  parametric bootstrap cuts that to four without closing it
-  ([HOMOLOGATION.md](HOMOLOGATION.md) §2.3), and Mélard et al. report the same
-  for the MA case. Optimality in the limit is not accuracy in the sample.
+  program is used on 60–120 observations. On Cavaliere, Rahbek and Taylor's
+  design (§7; q = 0, case 2) the test of the true rank rejects 11 % at T = 50
+  with the tables and 4 % with the bootstrap; at T = 100 the tables reject 4 %
+  ([ESTUDIO_CRT_2026-10-24.md](ESTUDIO_CRT_2026-10-24.md)). The earlier
+  figure, six times the nominal level at `n = 120` and four with the bootstrap
+  ([HOMOLOGATION.md](HOMOLOGATION.md) §2.3), predates BUG-24, 26, 27 and 50
+  and no longer describes the program. Mélard et al. report finite-sample
+  distortion for the MA case, which that design does not cover. Optimality in
+  the limit is not accuracy in the sample.
 * **Optimality is conditional on the specification being right.** `drvec` is the
   licensed case *when the data have an ARMA error structure of the order fitted*.
   A misspecified VARMA has no stronger claim than a misspecified VECM, which is
@@ -270,10 +362,11 @@ and inference along the binding direction is not supported by them.
   transformation has nothing to remove and the parameterisation cannot express the
   answer; that is `drvarma`'s case, and reading a rank from `drvec` there is a
   mistake the program cannot catch for you.
-* **Nothing here is about the *rank* decision**, which follows non-standard
-  distributions in both frameworks and is the weaker part of both.
+* **Sections 1–6 are not about the *rank* decision**, which follows non-standard
+  distributions in both frameworks and is the weaker part of both; §7 says what
+  the bootstrap that replaces the tables rests on.
 
-## 8. The genealogy, one line each
+## 9. The genealogy, one line each
 
 The papers in the bibliography, and what each contributes to the chain:
 
@@ -290,7 +383,10 @@ The papers in the bibliography, and what each contributes to the chain:
 | **Mélard, Roy & Saidi (2004)** (`TR0444`) | the state-space route to the same exact likelihood; Hessian-at-the-optimum standard errors; finite-sample cost of MA terms |
 | **Hillmer & Tiao (1979)** | the exact likelihood of a stationary VARMA — the machinery the transformation delivers its system to |
 | **Chan & Wallis (1978)** | the mink–muskrat analysis and its `|Σ̂|`, used here to calibrate magnitude |
-| **Trenkler (2004)** | response surfaces for finite-sample critical values — the route out of §7's first bullet |
+| **Trenkler (2004)** | response surfaces for finite-sample critical values — the route out of §8's first bullet |
+| **Swensen (2006)** | the first theory for the rank bootstrap and the bootstrap sequential procedure, with a mixed restricted/unrestricted scheme |
+| **Cavaliere, Rahbek & Taylor (2012)** | every parameter under the null rank: bootstrap data I(1, r) whatever the true rank — the scheme `-bootstrap` implements |
+| **Cavaliere, Nielsen & Rahbek (2015)** | the bootstrap of the LR on β with the null imposed: valid and consistent where the χ² is not accurate |
 
 The line of descent is: **Phillips supplies the theory and names the requirement;
 Hillmer–Tiao and Mauricio (1997) supply the exact VARMA likelihood; Mauricio

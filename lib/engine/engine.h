@@ -94,6 +94,14 @@ EngineJob *engine_start(const char *workdir, const char *program,
  * con status ENGINE_SIGNAL: no hay un camino aparte para la cancelacion.  */
 void engine_stop(EngineJob *job);
 
+/* PARAR TODOS LOS QUE QUEDEN VIVOS, al irse el programa (BUG-0001 de
+ * drtran_gui). Manda SIGTERM (TerminateProcess en Windows) a cada corrida que
+ * no ha acabado, espera un momento a que salgan y remata con SIGKILL a la que
+ * no. No llama a done(): el que se va ya no tiene ventana a la que avisar.
+ * Se registra sola con atexit al lanzar la primera corrida; cada GUI la llama
+ * ademas en el "shutdown" de su aplicacion y antes de irse con la madre.  */
+void engine_stop_all(void);
+
 /* WHERE THE PROGRAM IS. By default, the PATH. A GUI run from the build tree
  * must run the engines of ITS tree, not an old install in /usr/local: there
  * was a fue of September there, from before the equation lost its italics,

@@ -27,6 +27,9 @@ static const char *g_madre = NULL;
 static gboolean se_fue_la_madre(gpointer data)
 {
     (void)data;
+    /* El motor, antes que la ventana: sin el, una estimacion en marcha
+     * seguia corriendo, huerfana (BUG-0001).                         */
+    engine_stop_all();
     g_application_quit(g_application_get_default());
     return G_SOURCE_REMOVE;
 }
@@ -152,6 +155,10 @@ int main(int argc, char **argv)
     app = gtk_application_new("org.drtran.gui", G_APPLICATION_NON_UNIQUE);
     g_signal_connect( app, "startup", G_CALLBACK(numeros_con_punto), NULL );
     g_signal_connect(app, "activate", G_CALLBACK(activate), &m);
+    /* LOS MOTORES QUE QUEDEN, PARADOS AL IRSE (BUG-0001 de drtran_gui):
+       el "shutdown" llega al cerrar la ventana y al irse con la madre,
+       y engine_stop_all para lo que lib/engine lanzo y sigue vivo. */
+    g_signal_connect_swapped(app, "shutdown", G_CALLBACK(engine_stop_all), NULL);
     rc = g_application_run(G_APPLICATION(app), argc, argv);
     g_object_unref(app);
     return rc;

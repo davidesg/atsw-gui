@@ -394,3 +394,111 @@ Its Hosking already uses k (`model.py`, `n_arma()`; the ladder counts the
 .pre's ARMA even under `-fixarma`, as this code now does) and s = freq + 2.
 It must follow for the per-series Ljung-Box npar and for the Lutkepohl JB,
 or its byte-identical `.out` test against this binary will show these lines.
+
+## BUG-0001 — los .inp de `-split` no se leen si su cabecera es larga, y `split.o` guarda la versión vieja
+
+**Encontrado:** 2026-10-25, en la batería de la escalera
+(`tests/escalera/pruebas.sh`, 10c): «la escalera y la via .inp no llegan al
+mismo VAR(1)» con un binario construido desde un árbol con cambios sin
+confirmar. Tras confirmarlos, un `make` incremental seguía fallando y
+`make clean && make` lo arregló.
+**Dónde:**
+- `src/split.c:87`: `"* Split from %s by drvarma %s\n\n"`, con la ruta del
+  `.inp` multivariante tal como se dio y `DRVARMA_VERSION_FULL`: una línea
+  de cabecera de longitud libre.
+- La causa de fondo está en el lector de fue: fue BUG-0002
+  (`../fue/src/fue.c:319-323`, `../fue/src/inpcheck.c:21`, `:204-205`), que
+  cuenta las cinco líneas libres con `fgets` de 90 bytes; una línea de 89
+  caracteres o más cuenta como dos.
+- `Makefile:141`: `$(BUILD_DIR)/drvarma.o $(BUILD_DIR)/escalera.o
+  $(GUI_OBJ): $(GIT_HASH_H)` no incluye `$(BUILD_DIR)/split.o`, que también
+  imprime `DRVARMA_VERSION_FULL` (por `include/version.h`).
+
+### Síntoma
+
+La escalera rechaza los ficheros que acaba de escribir `-split`:
+
+    ERROR: .../IPC_ES.inp is not a univariate model file of fue: line 6: the frequency must be 1, 4, 12 or 'number' (it is '**')
+
+y la batería no encuentra el bloque del VAR(1) en `lad.out`. fue rechaza
+esos `.inp` con el mismo mensaje.
+
+### Por qué
+
+`git describe --always --dirty --abbrev=10` (`Makefile:135`) da hoy la forma
+con etiqueta, `v0.2.0-4-g3f56422f48`, y no el hash de 10 caracteres que
+suponía `docs/DESIGN-v5-ladder.md` §6. La línea 4 de la batería
+(`* Split from data/models_group1/IPC3.inp by drvarma 5.0.0 (git
+v0.2.0-4-g3f56422f48)`) mide 84 caracteres; con `-dirty`, 90: pasa el
+umbral de 89 de fue BUG-0002. `-dirty` sólo la alarga; una ruta de origen
+larga hace lo mismo sin él.
+
+Lo del `make` incremental es el `Makefile:141`: al confirmar cambia el hash
+y se reescribe `build/git_hash.h`, se recompilan `drvarma.o` y `escalera.o`
+(`-version` y el `.out` ya dicen la versión nueva), pero `split.o` no, y
+`-split` sigue escribiendo la cadena vieja con `-dirty`.
+
+Las notas abiertas «drvarma split header longer than 80 chars» y la del
+«-dirty» son este fallo (el umbral es 89, no 80). La de «drvarma.c:176
+overflow» es otro: BUG-0002.
+
+### Cuándo pasa
+
+Siempre que `-split` reciba una ruta de origen larga, o que la versión sea
+lo bastante larga (árbol sucio, o más commits desde la etiqueta), de modo
+que la línea llegue a 89 caracteres.
+
+### Arreglo propuesto (no hecho)
+
+1. El de fondo, en fue (BUG-0002): leer las líneas libres hasta el salto.
+2. En `split.c:87`: no escribir texto de longitud libre en una línea que
+   fue lee con búfer fijo — sólo el nombre base del origen, y la versión en
+   una línea propia, o la línea recortada a menos de 89 caracteres.
+3. En `Makefile:141`: añadir `$(BUILD_DIR)/split.o` a los objetos que
+   dependen de `$(GIT_HASH_H)`.
+
+### Reproducción
+
+`bugs/BUG-0001-repro/repro.py`: hace `-split` desde una ruta corta (control)
+y desde una de 90 caracteres, y pasa la escalera VAR(1) sobre lo que sale;
+además pregunta a `make -pqn` si `build/split.o` depende de
+`build/git_hash.h`. Sale con 1 mientras alguna de las dos siga abierta, con
+0 cuando estén cerradas y con 2 si falla el control. No depende del estado
+de git: la cabecera larga la pone la ruta, no la versión.
+
+## BUG-0002 — la vía `.inp` desborda el montón con un nombre de 76 caracteres o más
+
+**Encontrado:** 2026-10-25, al revisar la nota abierta «drvarma.c:176
+overflow» junto con BUG-0001. No tienen la misma causa.
+**Dónde:** `src/drvarma.c:173-177` reserva 80 bytes para `inputf`,
+`outputf` y `base_name` (`NEW_STR(80)`) y copia en ellos `argv[1]` con
+`strcpy`; `src/drvarma.c:259-261` les añade `.out` y `.inp` con `strcat`.
+
+### Síntoma
+
+Con un nombre de ~100 caracteres el proceso aborta antes de escribir el
+`.out`: `malloc(): corrupted top size`, señal 6. Con uno de 76 a ~87 escribe
+fuera del bloque sin que se note (el relleno de malloc lo tapa).
+
+### Por qué
+
+80 bytes para una ruta que viene de la línea de órdenes, sin comprobar la
+longitud, y luego cuatro más con `strcat`. No tiene que ver con la cabecera
+de BUG-0001: aquí el fichero no llega a leerse mal, se corrompe el montón.
+
+### Cuándo pasa
+
+En la vía `.inp` (la multivariante, obsoleta desde la 5.0 pero viva) con
+una ruta de 76 caracteres o más: basta con una ruta absoluta algo profunda.
+
+### Arreglo propuesto (no hecho)
+
+Reservar según `strlen(argv[1]) + 5` (o usar búferes del tamaño de
+`PATH_MAX` con `snprintf` y comprobar el truncado).
+
+### Reproducción
+
+`bugs/BUG-0002-repro/repro.py`: la vía `.inp` (VAR(1) con `-mean`) sobre
+`IPC3` desde una carpeta de nombre corto (control) y desde una de 100
+caracteres. Sale con 1 mientras la segunda no escriba su `.out`, con 0
+cuando lo escriba y con 2 si falla el control.

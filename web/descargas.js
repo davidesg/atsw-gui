@@ -86,7 +86,7 @@
         var v = rel.assets.filter(function (x) { return x.name === nombre; })[0];
         if (v) {
           a.href = v.browser_download_url;
-          a.querySelector(".mas").textContent = "MP4, " + mb(v.size);
+          a.textContent = "Descargar el vídeo (MP4, " + mb(v.size) + ")";
         }
       });
 

@@ -130,6 +130,15 @@ h1 { font-size: clamp(1.8rem, 3.6vw, 2.6rem); margin: 0 0 1rem; }
 .tarjeta.enlace p { color: var(--suave); }
 .mas { color: var(--acento); font-weight: 600; font-size: .92rem; }
 .sub { text-decoration: underline; cursor: pointer; }
+.subseccion { margin-top: 2.5rem; }
+.videos { list-style: none; padding: 0; margin: 1rem 0 0; display: grid; gap: 1rem; counter-reset: video; }
+.videos > li { counter-increment: video; }
+.videos h4 { margin: 0 0 .5rem; font-size: 1.1rem; }
+.videos h4::before { content: counter(video) ". "; color: var(--acento); }
+.videos .dur { color: var(--suave); font-weight: 400; font-size: .9rem; margin-left: .4rem; }
+.videos p { color: var(--suave); margin: .4rem 0; }
+.videos .antes { font-size: .92rem; }
+.videos .antes b { color: var(--tinta); }
 .galeria { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; margin-top: 2rem; }
 .galeria figure { margin: 0; }
 .galeria figcaption { color: var(--suave); font-size: .9rem; margin-top: .5rem; }

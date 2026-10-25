@@ -20,6 +20,13 @@ publicación: `v*`.
   lo ve una comprobación binaria. Está medido en
   `docs/ESTUDIO_CRT_2026-10-24.md`, que reproduce además el Monte Carlo de CRT
   (`tools/mc_crt.py`).
+- El bloque del bootstrap en el `.out` ya no dice que el contraste asintótico
+  rechaza «seis veces» el nivel nominal y el bootstrap «cuatro»: esa medición
+  (HOMOLOGATION §2.3, 2026-08-19) es anterior a BUG-24, 26, 27 y 50. Ahora da
+  la del diseño de CRT: 11 % con las tablas y 4 % con el bootstrap a T = 50, y
+  las tablas cerca del nominal a T = 100. Cambia `rankboot.out` (golden
+  recapturado); lo mismo en USAGE, INFERENCE §8, GETTING_STARTED y una nota al
+  principio de HOMOLOGATION §2.3, que se conserva como registro.
 
 ### `-gzero i j`: entradas de Γ(k) fijadas a cero (sin realimentación a corto plazo)
 

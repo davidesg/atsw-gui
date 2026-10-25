@@ -429,10 +429,12 @@ the rank selected without it.**
 |---|---|
 | `-bootstrap N` | with `-lrtest`: N parametric-bootstrap replications under H₀ for each rank comparison; every replication (H₀ rank, number, `ok`/`simfail`/`fitfail`, LR* to 17 digits) in `<base>.boot` (CSV) |
 
-The asymptotic tables are known to be optimistic at these sample sizes — measured
-here, the sequential test over-rejects at about **six times** its nominal level
-at n = 120 — and the bootstrap cuts that to four, without fixing it ([HOMOLOGATION.md](HOMOLOGATION.md) §2.3), and Mélard, Roy and Saidi
-report the same for models with MA terms. `-bootstrap` replaces the tables with
+The asymptotic tables can be off in short samples. On Cavaliere, Rahbek and
+Taylor's (2012) design (q = 0, case 2), the test of the true rank rejects 11 % at
+T = 50 against a nominal 5 %, and the bootstrap brings it to 4 %; at T = 100 the
+tables are already close to nominal ([ESTUDIO_CRT_2026-10-24.md](ESTUDIO_CRT_2026-10-24.md)).
+Mélard, Roy and Saidi report finite-sample distortion for models with MA terms,
+which that design does not cover. `-bootstrap` replaces the tables with
 percentiles simulated **from the fitted model at rank r**, so they carry the
 sample size, the deterministic case and the MA component, which a table cannot.
 

@@ -344,15 +344,15 @@ model, which is the design the paper validates.
 ## 8. What this does *not* establish
 
 * **It is asymptotic theory.** Every result above is a limit result, and this
-  program is used on 60–120 observations. The rank test's own finite-sample size
-  was measured at about six times its nominal level at `n = 120`, and the
-  parametric bootstrap cut that to four without closing it
-  ([HOMOLOGATION.md](HOMOLOGATION.md) §2.3), and Mélard et al. report the same
-  for the MA case. That measurement (2026-08-19) predates BUG-24, 26, 27 and
-  50, which changed the statistic, the table and the refits, so it no longer
-  describes the bootstrap as it is; Cavaliere, Rahbek and Taylor's design (§7)
-  is the reference to measure it again against. Optimality in the limit is not
-  accuracy in the sample.
+  program is used on 60–120 observations. On Cavaliere, Rahbek and Taylor's
+  design (§7; q = 0, case 2) the test of the true rank rejects 11 % at T = 50
+  with the tables and 4 % with the bootstrap; at T = 100 the tables reject 4 %
+  ([ESTUDIO_CRT_2026-10-24.md](ESTUDIO_CRT_2026-10-24.md)). The earlier
+  figure, six times the nominal level at `n = 120` and four with the bootstrap
+  ([HOMOLOGATION.md](HOMOLOGATION.md) §2.3), predates BUG-24, 26, 27 and 50
+  and no longer describes the program. Mélard et al. report finite-sample
+  distortion for the MA case, which that design does not cover. Optimality in
+  the limit is not accuracy in the sample.
 * **Optimality is conditional on the specification being right.** `drvec` is the
   licensed case *when the data have an ARMA error structure of the order fitted*.
   A misspecified VARMA has no stronger claim than a misspecified VECM, which is

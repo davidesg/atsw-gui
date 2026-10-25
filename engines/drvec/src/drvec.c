@@ -9952,10 +9952,11 @@ static int run_lrtest(void)
         if (global_boot > 0) {
             fprintf(outputv,
                 "\n  === Parametric bootstrap under H0 (%d replications) ===\n"
-                "  The asymptotic values above are known to be optimistic at these\n"
-                "  sample sizes: measured, the sequential test over-rejects about\n"
-                "  SIX times its nominal level at n = 120, and these percentiles cut\n"
-                "  that to four without closing it.  They are empirical\n"
+                "  The asymptotic values above can be off in short samples:\n"
+                "  measured on Cavaliere, Rahbek and Taylor's (2012) design (q = 0,\n"
+                "  case 2), the test of the true rank rejects 11%% at T = 50 against\n"
+                "  a nominal 5%%, and these percentiles bring it to 4%%; at T = 100\n"
+                "  the tables are already close to nominal.  They are empirical\n"
                 "  percentiles of the statistic simulated FROM THE FITTED MODEL at\n"
                 "  rank r, so they carry the sample size, the deterministic case and\n"
                 "  the MA component that the tables cannot.\n", global_boot);

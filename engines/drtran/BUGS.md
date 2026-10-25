@@ -12,6 +12,8 @@ manual (`docs/manual/capturas/capturas.sh`, escena `05-drtran.txt`): ~5 h cada
 uno al 88 % de CPU. Lo normal en ese caso es **menos de un segundo**.
 **Dónde:** `src/nlatools.c:200-204` (`choldcp`), alcanzado desde
 `src/elfvarma.c:77` con una Q infinita que construye `src/tran_shootx.c:473`.
+**Arreglado:** 2026-10-25 (v0.2.1), con las dos guardas que se proponían; ver
+«Arreglo», al final.
 
 ### Síntoma
 
@@ -59,7 +61,7 @@ lleva μ libre (0.001545), el WTI μ fija en 0.
 La `-f` (previsión) y la evaluación recursiva (`-estwin`) estiman en la misma
 pasada, así que cuelgan con la misma especificación.
 
-### Arreglo propuesto (no hecho)
+### Arreglo propuesto (lo que se escribió el 24-oct)
 
 Dos guardas, las dos baratas, y conviene poner las dos:
 
@@ -85,3 +87,24 @@ poner la guarda en todos.
 `bugs/BUG-0058-repro/repro.py`: corre las dos especificaciones que cuelgan
 y sus controles (el IPC sin μ) con un límite de 60 s (`LIMITE`); sale con 1
 mientras alguna no acabe.
+
+### Arreglo (2026-10-25)
+
+Las dos guardas, sin tocar el `maxstep`: ninguna corrida que antes acabara
+cambia de trayectoria (las baterías y los goldens de los cinco motores salen
+idénticos byte a byte en Linux).
+
+- `choldcp` (`src/nlatools.c`): si un elemento de la diagonal de la entrada
+  no es finito (`inf` o `nan`), o no lo es `maxoffl`, `*ifault = 1` y vuelve;
+  `elf` devuelve el fallo y `objcfunc` rechaza el punto, como con una Q que
+  no es definida positiva. Los dos bucles del reescalado del determinante
+  paran si `*d1` no es finito (el de `*= 0.0625`) o es 0 (el de `*= 16`).
+- `tran_shootx.c`, paso 5: si algún `var[i] = exp(x)` no es finito,
+  `*ifaultx = 1`: el punto es inadmisible y ni llega a `elf`.
+
+El mismo `choldcp` lleva la misma guarda, con el mismo código, en
+`engines/drvarma`, `engines/drvec`, `engines/fue` y `engines/fuf`
+(`src/nlatools.c`).
+
+Con el arreglo, `repro.py` sale con 0: las cuatro corridas acaban en
+0.3 s (las dos que colgaban, con rc = 0).

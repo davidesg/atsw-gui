@@ -4,6 +4,7 @@
 #include "coste.h"
 
 #include <stdarg.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <glib/gstdio.h>
@@ -11,7 +12,12 @@
 #ifdef G_OS_WIN32
 #  include <windows.h>
 #else
+#  include <signal.h>
+#  include <unistd.h>
 #  include <sys/wait.h>
+#endif
+#ifdef __linux__
+#  include <sys/prctl.h>
 #endif
 
 /* The first line of text that says something, so that the status bar carries
@@ -332,8 +338,180 @@ static gboolean on_pipe(GIOChannel *channel, GIOCondition cond, gpointer data) {
     return FALSE;
 }
 
+/* ------------------------------------------------------------------------ */
+/* LOS QUE ESTAN VIVOS, para que no sobrevivan al programa (BUG-0001 de       */
+/* drtran_gui).                                                             */
+/*                                                                          */
+/* El pid de cada corrida estaba en su Run y nadie mas lo sabia: al cerrar la */
+/* ventana, al irse la madre o al morir el GUI por una senal, el motor seguia */
+/* corriendo, colgado de init. Se vieron dos drtran huerfanos de las capturas */
+/* del manual, cinco horas al 88 % de CPU cada uno.                          */
+/*                                                                          */
+/* Tres capas, de la que avisa a la que no:                                 */
+/*   - la lista de vivos y engine_stop_all, que los GUIs llaman al irse y que */
+/*     ademas queda con atexit para los exit() directos (todas las            */
+/*     plataformas, y la unica en macOS);                                   */
+/*   - en Linux, PR_SET_PDEATHSIG: el nucleo manda SIGTERM al motor cuando su */
+/*     padre muere, tambien por una senal que ningun manejador ve;          */
+/*   - en Windows, un job object con KILL_ON_JOB_CLOSE: al morir el GUI se   */
+/*     cierra su manejador y el sistema mata lo que haya dentro.            */
+/* ------------------------------------------------------------------------ */
+
+G_LOCK_DEFINE_STATIC(vivos);
+static GSList *vivos = NULL;            /* los Run cuyo hijo no se ha recogido */
+
+#ifdef G_OS_WIN32
+static HANDLE trabajo_job = NULL;       /* el job object; se crea con el primero */
+
+/* EL JOB OBJECT, una vez. Su manejador no se cierra nunca a mano: lo cierra
+ * el sistema cuando el GUI muere, de la forma que sea, y entonces mata lo que
+ * tenga dentro. Si no se puede crear (un GUI metido en un job que no lo deja)
+ * se sigue sin el: queda engine_stop_all.                                 */
+static HANDLE job_de_los_motores(void) {
+    static gsize hecho = 0;
+
+    if (g_once_init_enter(&hecho)) {
+        HANDLE job = CreateJobObjectW(NULL, NULL);
+
+        if (job) {
+            JOBOBJECT_EXTENDED_LIMIT_INFORMATION lim;
+
+            memset(&lim, 0, sizeof lim);
+            lim.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation,
+                                         &lim, sizeof lim)) {
+                CloseHandle(job);
+                job = NULL;
+            }
+        }
+        trabajo_job = job;
+        g_once_init_leave(&hecho, 1);
+    }
+    return trabajo_job;
+}
+#endif
+
+#ifdef __linux__
+/* EN EL HIJO, entre el fork y el exec: que el nucleo le mande SIGTERM si el
+ * padre muere. Sobrevive al exec. Si el padre ya se fue antes del prctl, el
+ * aviso no llegaria nunca: se mira getppid y se sale. Va atado al HILO que
+ * lanza, y por eso vale: los GUIs lanzan desde el hilo principal.         */
+static void hijo_muere_con_el_padre(gpointer data) {
+    pid_t padre = (pid_t) GPOINTER_TO_INT(data);
+
+    prctl(PR_SET_PDEATHSIG, SIGTERM);
+    if (getppid() != padre) _exit(1);
+}
+#endif
+
+/* ¿SIGUE VIVO EL HIJO? Sin recogerlo: lo recoge GLib, que es quien lo
+ * vigila, y si se recogiera aqui on_child no llegaria nunca. En POSIX,
+ * waitid con WNOWAIT lo mira y lo deja como estaba; en Windows, el
+ * manejador se puede esperar sin cerrarlo.                              */
+static gboolean sigue_vivo(GPid pid) {
+#ifdef G_OS_WIN32
+    return WaitForSingleObject((HANDLE) pid, 0) == WAIT_TIMEOUT;
+#else
+    siginfo_t info;
+
+    memset(&info, 0, sizeof info);
+    if (waitid(P_PID, (id_t) pid, &info, WEXITED | WNOHANG | WNOWAIT) != 0)
+        return FALSE;                   /* ECHILD: ya no es nuestro       */
+    return info.si_pid == 0;            /* nada que contar: sigue en ello */
+#endif
+}
+
+static void manda_parar(GPid pid, gboolean del_todo) {
+#ifdef G_OS_WIN32
+    (void) del_todo;
+    TerminateProcess((HANDLE) pid, 1);
+#else
+    kill((pid_t) pid, del_todo ? SIGKILL : SIGTERM);
+#endif
+}
+
+/* Los pids de los vivos, copiados: lo que se haga con ellos no toca la
+ * lista, que on_child puede cambiar.                                    */
+static GArray *pids_vivos(void) {
+    GArray *a = g_array_new(FALSE, FALSE, sizeof(GPid));
+    GSList *l;
+
+    G_LOCK(vivos);
+    for (l = vivos; l; l = l->next)
+        g_array_append_val(a, ((Run *) l->data)->pid);
+    G_UNLOCK(vivos);
+    return a;
+}
+
+/* Espera hasta ms milisegundos a que salgan; TRUE si salieron todos. */
+static gboolean espera_que_salgan(GArray *a, int ms) {
+    gint64 hasta = g_get_monotonic_time() + (gint64) ms * 1000;
+    guint  i;
+
+    for (;;) {
+        gboolean alguno = FALSE;
+
+        for (i = 0; i < a->len; i++)
+            if (sigue_vivo(g_array_index(a, GPid, i))) { alguno = TRUE; break; }
+        if (!alguno) return TRUE;
+        if (g_get_monotonic_time() >= hasta) return FALSE;
+        g_usleep(10000);
+    }
+}
+
+void engine_stop_all(void) {
+    GArray *a = pids_vivos();
+    guint   i;
+
+    if (a->len > 0) {
+        for (i = 0; i < a->len; i++)
+            manda_parar(g_array_index(a, GPid, i), FALSE);
+        /* Un motor parado por SIGTERM sale en el acto; uno que no sale en un
+         * segundo no va a salir, y se remata.                            */
+        if (!espera_que_salgan(a, 1000)) {
+            for (i = 0; i < a->len; i++)
+                if (sigue_vivo(g_array_index(a, GPid, i)))
+                    manda_parar(g_array_index(a, GPid, i), TRUE);
+            espera_que_salgan(a, 500);
+        }
+    }
+    g_array_free(a, TRUE);
+}
+
+static void vivo_alta(Run *run) {
+    static gsize con_atexit = 0;
+
+    /* atexit una sola vez, con la primera corrida: cubre a los programas que
+     * salen con exit() sin pasar por el "shutdown" de la aplicacion.    */
+    if (g_once_init_enter(&con_atexit)) {
+        atexit(engine_stop_all);
+        g_once_init_leave(&con_atexit, 1);
+    }
+#ifdef G_OS_WIN32
+    {
+    HANDLE job = job_de_los_motores();
+
+    /* Lo que el motor lance despues va al mismo job. Lo que lance en el
+     * instante entre el spawn y esto no: es la unica rendija, y
+     * engine_stop_all la cubre al salir por las buenas.                 */
+    if (job) AssignProcessToJobObject(job, (HANDLE) run->pid);
+    }
+#endif
+    G_LOCK(vivos);
+    vivos = g_slist_prepend(vivos, run);
+    G_UNLOCK(vivos);
+}
+
+static void vivo_baja(Run *run) {
+    G_LOCK(vivos);
+    vivos = g_slist_remove(vivos, run);
+    G_UNLOCK(vivos);
+}
+
 static void on_child(GPid pid, gint wait_status, gpointer data) {
     Run *run = data;
+
+    vivo_baja(run);
 
     decode_status(wait_status, &run->status, &run->signal_no);
     /* ANTES DE CERRARLO: en Windows el tiempo de CPU se le pregunta al
@@ -433,7 +611,13 @@ static EngineJob *lanza(const char *workdir, const char *program,
     coste = coste_empieza(workdir, program, argv);
     if (!g_spawn_async_with_pipes(workdir, (gchar **) args->pdata, NULL,
                                   G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD,
-                                  NULL, NULL, &pid,
+#ifdef __linux__
+                                  hijo_muere_con_el_padre,
+                                  GINT_TO_POINTER((gint) getpid()),
+#else
+                                  NULL, NULL,
+#endif
+                                  &pid,
                                   sin_entrada ? &in_fd : NULL,
                                   &out_fd, &err_fd, error)) {
         coste_descarta(coste);
@@ -457,6 +641,7 @@ static EngineJob *lanza(const char *workdir, const char *program,
     run->vivo     = TRUE;
     run->ctx      = ctx;
     run->coste    = coste;
+    vivo_alta(run);                          /* antes de que nada lo recoja */
     watch_pipe(out_fd, run, FALSE);
     watch_pipe(err_fd, run, TRUE);
     src = g_child_watch_source_new(pid);

@@ -23,23 +23,31 @@ pequeño (0.000535) queda con tres cifras significativas.
   `.pre` (`-N`, `-X`, `-D`, `-E`, `-M`), y la puerta diagonal no cierra
   exacta.
 
-### Arreglo propuesto (no hecho)
+### Qué se hace
 
-Escribir cada número con lo justo para leerse de vuelta exacto (`%.17g`, o el
-más corto que vuelve igual, como `coef_linea` en `lib/inpdet`). Cambia los
-goldens de los `.pre`.
+Nada en `fue.c`, `inpcheck.c` ni `fuf.c`. El arreglo va en el escritor:
+drvarma BUG-0001. Todo escritor nuevo de `.inp` o `.pre` debe mantener las
+cinco líneas libres en 88 caracteres o menos.
 
 ### Reproducción
 
 `bugs/BUG-0001-repro/repro.py`: sale con 1 mientras estimar sobre el `.pre`
 cueste más de una iteración.
 
-## BUG-0002 — una línea de la cabecera de 89 caracteres o más cuenta como dos
+## BUG-0002 — una línea de la cabecera de 89 caracteres o más cuenta como dos (no se arregla: es el formato)
 
 **Encontrado:** 2026-10-25, en la batería de la escalera de drvarma
 (`tests/escalera/pruebas.sh`, 10c): «la escalera y la via .inp no llegan al
 mismo VAR(1)» con un binario construido desde un árbol con cambios sin
-confirmar. Lo dispara drvarma (su BUG-0001), pero el defecto está aquí.
+confirmar. Lo dispara drvarma (su BUG-0001).
+**Decisión (2026-10-25, el analista): no se toca fue.** Lleva muchos años
+leyendo así sin que ningún fichero real lo pise; cambiar un lector que
+funciona por un fallo latente arriesga más que el fallo. El límite pasa a
+ser parte del formato: **cada línea libre de la cabecera tiene como mucho
+88 caracteres**, y lo cumplen los escritores. Los del paquete escriben la
+cabecera fija de siempre (`gui/fue/src/file_io.c`, «Input file for program
+FUE»); el único que metía texto libre es `drvarma -split`, que no va en el
+paquete.
 **Dónde:**
 - `src/fue.c:319-323` ([3.0], «the first six lines (may contain anything)»):
   cinco `fgets( dumstrg, MAXSTR, inputv )`, con `MAXSTR` 90
@@ -88,16 +96,15 @@ Las notas abiertas «drvarma split header longer than 80 chars» y la del
 «-dirty» son este mismo fallo; el umbral medido es 89, no 80. La de
 «drvarma.c:176 overflow» es otro (drvarma BUG-0002).
 
-### Arreglo propuesto (no hecho)
+### Qué se hace
 
-En `fue.c` [3.0], `inpcheck.c` (`label()` en las cinco líneas libres) y
-`fuf.c`: leer cada línea de la cabecera hasta el salto, sea cual sea su
-longitud (si `fgets` no trae `'\n'`, seguir leyendo hasta él). Los dos
-lectores tienen que cambiar a la vez: el validador existe para aceptar
-exactamente lo que fue lee bien. Por el lado del escritor, drvarma BUG-0001.
+Nada en `fue.c`, `inpcheck.c` ni `fuf.c`. El arreglo va en el escritor:
+drvarma BUG-0001. Todo escritor nuevo de `.inp` o `.pre` debe mantener las
+cinco líneas libres en 88 caracteres o menos.
 
 ### Reproducción
 
-`bugs/BUG-0002-repro/repro.py`: escribe el mismo `.inp` con la línea 3 de
-88 caracteres (control) y de 120; sale con 1 mientras el de 120 no se lea,
-con 0 cuando se lea, con 2 si falla el control. No depende del estado de git.
+`bugs/BUG-0002-repro/repro.py`: deja medido el límite. Escribe el mismo
+`.inp` con la línea 3 de 88 caracteres y de 120; sale con 0 mientras fue se
+porte como dice el formato (88 se lee, 120 no), con 1 si cambia, y con 2 si
+falla el de 88. No depende del estado de git.

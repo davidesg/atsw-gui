@@ -9,8 +9,9 @@ desplazado. El validador lo rechaza con un mensaje que no dice la causa:
 «line 6: the frequency must be 1, 4, 12 or 'number' (it is '**')».
 
 El mismo fichero con la línea 3 de 88 caracteres (control) se lee bien; con
-120 no. Sale con 1 mientras el fallo siga abierto, con 0 cuando esté
-arreglado, y con 2 si el control falla (el repro no prueba nada).
+120 no. No se arregla (decisión del analista, 2026-10-25): el límite es
+parte del formato. Este script lo deja medido: sale con 0 mientras fue se
+porte así (88 se lee, 120 no), con 1 si cambia, y con 2 si falla el de 88.
 No depende del estado de git: la línea larga se escribe aquí.
 """
 import pathlib, shutil, subprocess, sys, tempfile
@@ -42,7 +43,7 @@ with tempfile.TemporaryDirectory() as t:
     if rc88 != 0:
         print("el control (88) tampoco se lee: el repro no prueba nada")
         sys.exit(2)
-    if rc120 != 0:
-        print("ABIERTO: una línea larga de la cabecera desplaza la lectura")
+    if rc120 == 0:
+        print("CAMBIÓ: fue ya lee una línea de 120; el límite de 88 del formato ya no es el que era")
         sys.exit(1)
-    print("cerrado")
+    print("como dice el formato: 88 se lee, 120 no")

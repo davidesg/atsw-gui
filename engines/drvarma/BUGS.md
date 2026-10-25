@@ -450,7 +450,8 @@ que la línea llegue a 89 caracteres.
 
 ### Arreglo propuesto (no hecho)
 
-1. El de fondo, en fue (BUG-0002): leer las líneas libres hasta el salto.
+1. En fue no se toca nada (decisión del analista, 2026-10-25): el límite de
+   88 caracteres por línea libre es parte del formato (fue BUG-0002).
 2. En `split.c:87`: no escribir texto de longitud libre en una línea que
    fue lee con búfer fijo — sólo el nombre base del origen, y la versión en
    una línea propia, o la línea recortada a menos de 89 caracteres.

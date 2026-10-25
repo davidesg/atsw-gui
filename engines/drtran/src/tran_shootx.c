@@ -471,6 +471,11 @@ void shootx(real *xfree, struct Tvarma *armax, int *ifaultx, int firstx, int las
              estrategia del propio articulo (seccion 3).                       */
     var[1] = 1.0;
     for (i = 2; i <= n_ser; i++) var[i] = exp(x[idx++]);
+    /* Un paso enorme de la busqueda lineal puede llevar log(var_i/var_1) a
+       miles: exp() da inf y choldcp no acababa con esa Q (BUG-0058). El
+       punto es inadmisible.                                              */
+    for (i = 2; i <= n_ser; i++)
+        if (!isfinite(var[i])) { *ifaultx = 1; return; }
     for (i = 2; i <= n_ser; i++)
         for (j = 1; j < i; j++) cov[i][j] = x[idx++];
 

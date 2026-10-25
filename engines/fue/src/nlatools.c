@@ -136,20 +136,8 @@ void choldcp( double **mat, int n, double *d1, double *d2, int *ifault )
 /* [1]: check wether mat is numerically different from zero (redundancy):   */
 
    for ( maxoffl = 0.0, j = 1; j <= n; j++ )
-       {
-       if ( !isfinite( mat[j][j] ) )   /* inf o nan: la factorizacion no */
-          {                            /* tiene sentido (drtran BUG-0058) */
-          *ifault = 1;
-          return;
-          }
        if ( sqrt( fabs( mat[j][j] ) ) > maxoffl )
           maxoffl = sqrt( fabs( mat[j][j] ) );
-       }
-   if ( !isfinite( maxoffl ) )
-      {
-      *ifault = 1;
-      return;
-      }
    if ( maxoffl * maxoffl <= sqrteps )
       {
       for ( i = 1; i <= n; i++ ) for ( j = 1; j <= n; j++ ) mat[i][j] = 0.0;
@@ -203,14 +191,12 @@ void choldcp( double **mat, int n, double *d1, double *d2, int *ifault )
           }
 
        *d1 *= mat[j][j] * mat[j][j];
-       /* Con *d1 = inf o 0 el reescalado no termina nunca: inf * 0.0625 =
-          inf y 0 * 16 = 0 (drtran BUG-0058). Se deja *d1 como esta.      */
-       while ( isfinite( *d1 ) && fabs( *d1 ) >= 1.0 )
+       while ( fabs( *d1 ) >= 1.0 )
              {
              *d1 *= 0.0625;
              *d2 += 4.0;
              }
-       while ( *d1 != 0.0 && fabs( *d1 ) < 0.0625 )
+       while ( fabs( *d1 ) < 0.0625 )
              {
              *d1 *= 16.0;
              *d2 -=  4.0;

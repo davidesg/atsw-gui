@@ -102,9 +102,11 @@ idénticos byte a byte en Linux).
 - `tran_shootx.c`, paso 5: si algún `var[i] = exp(x)` no es finito,
   `*ifaultx = 1`: el punto es inadmisible y ni llega a `elf`.
 
-El mismo `choldcp` lleva la misma guarda, con el mismo código, en
-`engines/drvarma`, `engines/drvec`, `engines/fue` y `engines/fuf`
-(`src/nlatools.c`).
+El mismo `choldcp`, con el mismo bucle, está en `engines/drvarma`,
+`engines/drvec`, `engines/fue` y `engines/fuf` (`src/nlatools.c`), y **no
+se ha tocado** (decisión del analista, 2026-10-25): allí el cuelgue no se ha
+visto nunca en uso real, y no se cambia un motor probado por un fallo
+latente. Si un día aparece, la guarda es la de aquí.
 
 Con el arreglo, `repro.py` sale con 0: las cuatro corridas acaban en
 0.3 s (las dos que colgaban, con rc = 0).

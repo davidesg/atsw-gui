@@ -1,0 +1,2 @@
+# IPC <- WTI con una sola omega: b = 0, r = 0, s = 0
+ipc      <- wti        0 0 0

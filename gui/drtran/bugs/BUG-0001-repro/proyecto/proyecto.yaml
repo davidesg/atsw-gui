@@ -1,0 +1,74 @@
+# Proyecto de ATSW GUI. El nombre de cada fichero es CORTESIA:
+# la identidad esta aqui, y ningun programa parsea un nombre.
+schema_version: 2
+id: proyecto
+titulo: ""
+creado: "2026-10-24"
+analista: ""
+herramienta: editor
+raiz: .
+
+series:
+  ipc:
+  wti:
+
+# Ventanas declaradas sobre los datos. La COMPLETA es la
+# muestra total y no se declara: es lo que entro.
+muestras:
+  Pre-Covid:
+    desde: 1/2002
+    hasta: 12/2019
+    razon: "Antes de la pandemia: el modelo no tiene que explicar 2020."
+
+# La cadena de iteracion. padre vacio = raiz.
+# razon vacia = NO CONSTA, y no consta nunca significa cuadra.
+modelos:
+  ipc/m00:
+    version: 0
+    padre: ""
+    razon: ""
+    rol: datos
+  wti/m00:
+    version: 0
+    padre: ""
+    razon: ""
+    rol: datos
+  ipc/Pre-Covid/m00:
+    version: 0
+    padre: ""
+    razon: ""
+    rol: datos
+  wti/Pre-Covid/m00:
+    version: 0
+    padre: ""
+    razon: ""
+    rol: datos
+  ipc/Pre-Covid/m01:
+    version: 1
+    padre: m00
+    razon: "Identificado con art en los datos: (1,0)(0,0) AR(1), similitud 0.947, peso 0.171; elegido frente al propuesto. Con la transformación identificada. Derivado de m00. Con los armónicos deterministas que art retiró antes de identificar (D = 0)."
+    elegido: si
+    razon_elegido: "AR(1) en logaritmos con d = 1: residuos blancos y normales. Armónicos deterministas, que el modelo va a una transferencia."
+  wti/Pre-Covid/m01:
+    version: 1
+    padre: m00
+    razon: "Identificado con art en los datos: (1,0)(0,0) AR(1), similitud 0.961, peso 0.205; el propuesto. Con la transformación identificada. Derivado de m00."
+  wti/Pre-Covid/m02:
+    version: 2
+    padre: m01
+    razon: "episodio en 10/2008: 3 escalones en el nivel (3 ω sobre una «step»). El episodio dura 2 períodos EN EL NIVEL: una intervención escalar no puede representar más de uno. La forma general son 3 escalones.. Derivado de m01 (de su .pre, el óptimo)."
+    elegido: si
+    razon_elegido: "AR(1) con el episodio de 10/2008 (3 escalones): sin él, la ACF residual cambia."
+
+# Lo que se cruza: series EN ORDEN, cada una con el modelo
+# con que entra y el sha256 de su .pre. Ver DISENO-casos.md.
+casos:
+  C1:
+    motor: drtran
+    titulo: Inflación y petróleo
+    razon: ¿Cuánto pasa del precio del crudo al IPC, y con qué retardo?
+    muestra: Pre-Covid
+    creado: "2026-10-24"
+    entradas: ipc/m01@2337b6dfd4c500d2473f07b2c324c39080b2ee35c3da7a2d0c2b8eb57cf10fcd wti/m02@53de22799d4986376220f5a8a2fa5ac06c4b0684967dccb5de3a9cf9fb8d3734
+
+# Las estimaciones de cada caso, con su linaje.

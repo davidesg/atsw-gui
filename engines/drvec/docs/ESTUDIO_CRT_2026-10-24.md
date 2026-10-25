@@ -167,11 +167,112 @@ T = 200: 0.0 / 95.0 / 4.3 / 0.7.
 
 ## 6. Resultados
 
-*En curso.*
+Tres celdas, δ = 0, γ = 0.8, B = 99, con `bin/drvec` de esta rama (la
+comprobación I(1, r) incluida). Porcentaje de rechazos al 5 % ± error estándar;
+entre paréntesis, la cifra de CRT (§5). Cada réplica es reproducible: su
+semilla es `100000·seed + rep` (seed = 1), y `tools/mc_crt.py run --panel a
+--delta 0 --T 50 --reps 150 --B 99` rehace la celda en un CSV, que
+`tools/mc_crt.py summary` resume como abajo.
+
+**Tamaño** (H₀ = rango verdadero):
+
+| celda | réplicas | asintótico | bootstrap |
+|---|---|---|---|
+| a, T = 50, r = 1 | 150 | 11.3 ± 2.6 (45.5) | **4.0 ± 1.6** (5.2) |
+| a, T = 100, r = 1 | 100 | 4.0 ± 2.0 (22.6) | **9.0 ± 2.9** (5.4) |
+| b, T = 100, r = 0 | 100 | 9.0 ± 2.9 (44.3) | **7.0 ± 2.6** (6.6) |
+
+**Potencia** en el panel a (H₀: r = 0, falsa): asintótico 88.7 y 100, bootstrap
+68.7 y 100, a T = 50 y 100.
+
+**Procedimiento secuencial** (porcentaje de r̂ = 0 / 1 / 2 / 3):
+
+| celda | asintótico | bootstrap | bootstrap CRT |
+|---|---|---|---|
+| a, T = 50 | 11.3 / **78.0** / 9.3 / 1.3 | 31.3 / **65.3** / 3.3 / 0 | 44.1 / **50.6** / 4.4 / 0.9 |
+| a, T = 100 | 0 / **96.0** / 4.0 / 0 | 0 / **91.0** / 9.0 / 0 | 0.6 / **94.0** / 4.7 / 0.7 |
+| b, T = 100 | **91.0** / 9.0 / 0 / 0 | **93.0** / 7.0 / 0 / 0 | — |
+
+**La comprobación I(1, r)** no falló en ninguna de las 1047 comparaciones, como
+anticipaba §3 para q = 0.
+
+### Lectura
+
+1. **El bootstrap tiene el tamaño de CRT** en dos celdas de tres: 4.0 frente a
+   5.2 y 7.0 frente a 6.6, dentro del error. En la tercera (a, T = 100) da 9.0.
+   Con 100 réplicas, 9 o más rechazos tienen probabilidad 0.063 si el tamaño
+   es del 5 %: no es significativo, y la distribución de los p-valores por
+   encima de la cola está bien (proporción con p ≤ 0.10 / 0.20 / 0.50: 0.13 /
+   0.18 / 0.47). Pero hay un indicio de sesgo: el crítico bootstrap (mediana
+   19.5) queda por debajo del percentil 95 del LR en el propio Monte Carlo
+   (21.9), cuando a T = 50 coinciden (25.2 frente a 24.5). Un mecanismo
+   posible, no comprobado, es el sesgo de Γ̂ hacia menos persistencia, que haría
+   las muestras bootstrap menos persistentes que los datos. La celda se está
+   ampliando a 300 réplicas (error estándar 1.3 en torno al 5 %); esta fila se
+   actualiza cuando termine.
+2. **El asintótico de drvec se desvía mucho menos que el de CRT**: 11 frente a
+   46 a T = 50, 4 frente a 23 a T = 100, y 9 frente a 44 en el panel b. Las
+   dos diferencias declaradas en §4 apuntan en esa dirección: el λ-max compara
+   r con r + 1 y no con p, y la verosimilitud exacta da LR menores que la
+   condicional frente a las mismas tablas (BUG-26: infradimensionado a T
+   grande). En consecuencia, en este diseño el bootstrap de drvec **no corrige
+   un sesgo grande, porque no lo hay**; lo que hace es llevar el 11 % de T = 50
+   al nominal. Esto no se generaliza a modelos con MA: es lo que §3 dejó fuera
+   del diseño.
+3. **La selección del rango funciona**, y a T = 50 mejor que la de CRT (65 %
+   de aciertos frente a 51 %), porque deja r̂ = 0 menos veces: el λ-max tiene
+   más potencia contra r = 0 que la traza en este diseño. El precio es que el
+   bootstrap, que sube el crítico a T = 50 (35.5 frente a 28.1 en r = 0), cede
+   potencia frente al asintótico (68.7 frente a 88.7), y el secuencial
+   asintótico acierta más (78 %), con un tamaño del 11 % en r = 1. Es el
+   intercambio habitual, no un defecto.
+4. **La afirmación «seis veces / cuatro veces»** de HOMOLOGATION §2.3, que el
+   `.out` citaba, no describe el programa actual. El texto del `.out` se ha
+   cambiado por las cifras de esta tabla (`3110fa1`).
+
+### Lo que acompaña a las cifras
+
+* **Tres réplicas de 350 sin la comparación r = 2** (a, T = 100: réplicas 50 y
+  55; b: réplica 26). El ajuste de rango 3 no encuentra ningún arranque
+  admisible: con un rango verdadero de 1 o 0, ningún múltiplo de la Λ de la
+  regresión condicional deja el sistema transformado estacionario e invertible.
+  No afecta al tamaño ni a la potencia, que se leen en r = 0 y r = 1. Se
+  reproduce con la semilla `100050` del panel a, T = 100, y `-lrtest` sin
+  bootstrap.
+* **El aviso `[check: rank k stopped by criterion 3]`** (BUG-25: el ajuste paró
+  por paso y no por gradiente, a menudo un óptimo verdadero sobre una
+  superficie plana, CONVERGENCE.md) aparece en 102 de las 150 comparaciones
+  r = 1 de T = 50, 88 de 100 a T = 100 y 3 de 100 en el panel b. Separando
+  por él, el tamaño del bootstrap no cambia a T = 50 (3.9 % con aviso, 4.2 %
+  sin él); a T = 100 las 12 réplicas sin aviso son demasiado pocas para
+  comparar.
+* **Coste**: mediana de 490 s por réplica en el panel a y 765 s en el b, con
+  cuatro procesos y la máquina a carga 5–7.
 
 ## 7. Qué queda abierto
 
-*Se completa con los resultados.*
+1. **El 9 % de a, T = 100.** La ampliación a 300 réplicas lo confirma o lo
+   descarta. Si se confirma, es una propiedad del bootstrap en muestras finitas
+   que se documenta (como CRT documentan su 8.1 % a T = 50 en el panel b), y
+   se mira si arrancar desde los valores observados en lugar de desde la media
+   con burn-in lo reduce, que es la diferencia de §2 que más directamente toca
+   la persistencia de la muestra simulada.
+2. **El caso con MA.** Este diseño tiene q = 0, donde la comprobación I(1, r)
+   se cumple por construcción. El riesgo de §3, una raíz MA junto al círculo
+   unidad que casi quita una tendencia cuando H₀ está por debajo del rango
+   verdadero, sólo se mide con un DGP con q ≥ 1. Es el diseño siguiente, y
+   la pregunta es la potencia en r < r₀.
+3. **La traza.** drvec da λ-max. Para comparar la potencia con CRT directamente
+   haría falta la traza, que con la verosimilitud exacta son p − r ajustes más
+   por comparación. No es necesario para el tamaño.
+4. **El rango 3 sin arranque** de las tres réplicas de §6: la salida dice que
+   recurre al arranque en frío (`Falling back to the cold start`), pero la
+   tabla de búsqueda sólo lista `seed` y `johansen`. Hay que comprobar si el
+   arranque en frío se intenta de verdad; si no, es un defecto y va con su
+   repro.
+5. **El porte.** drvec-python transcribe el texto del bloque del bootstrap
+   (`report.py` y cuatro oráculos) y tiene que reproducir el camino de fallo de
+   `i1r_check`. Va en un PR aparte, al re-vendorizar `csrc/` desde esta rama.
 
 ## Referencias
 

@@ -79,11 +79,16 @@
         }
       });
 
-      var v = rel.assets.filter(function (x) { return /\.mp4$/.test(x.name); })[0];
-      if (v) {
-        document.getElementById("video").href = v.browser_download_url;
-        document.getElementById("video-nota").textContent = "MP4, " + mb(v.size);
-      }
+      // Cada tarjeta, SU video: ATSW-<data-video>.mp4. Antes se tomaba el
+      // primero que hubiera, y con dos la tarjeta enlazaba el que no era.
+      document.querySelectorAll("a[data-video]").forEach(function (a) {
+        var nombre = "ATSW-" + a.getAttribute("data-video") + ".mp4";
+        var v = rel.assets.filter(function (x) { return x.name === nombre; })[0];
+        if (v) {
+          a.href = v.browser_download_url;
+          a.textContent = "Descargar el vídeo (MP4, " + mb(v.size) + ")";
+        }
+      });
 
       // El boton grande de la portada baja directamente lo de tu sistema,
       // si no hay duda de cual es (en Mac la hay: chip y version).

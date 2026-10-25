@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ATSW — taller de series temporales</title>
-<meta name="description" content="ATSW: modelos ARIMA, intervención y funciones de transferencia con la metodología Box-Jenkins-Treadway. Descargas para Windows, macOS y Linux, manual y vídeo.">
+<meta name="description" content="ATSW: modelos ARIMA, intervención y funciones de transferencia con la metodología Box-Jenkins-Treadway. Descargas para Windows, macOS y Linux, manual y vídeos.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f5fa8'/%3E%3Cpolyline points='4,22 10,14 15,18 21,8 28,12' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="estilo.css">
 </head>
@@ -19,6 +19,7 @@
     <nav>
       <a href="#descargas">Descargas</a>
       <a href="#aprender">Aprender</a>
+      <a href="#videos">Vídeos</a>
       <a href="#instalar">Instalar</a>
       <a href="https://github.com/davidesg/atsw-gui">Código</a>
     </nav>
@@ -133,14 +134,15 @@
         y la previsión. Cada decisión, con su porqué.</p>
       <span class="mas">PDF · también <span class="sub" data-href="manual/MANUAL.html">en una página web</span></span>
     </a>
-    <a class="tarjeta enlace" id="video" href="https://github.com/davidesg/atsw-gui/releases">
-      <h3>El vídeo</h3>
-      <p>El mismo caso en seis minutos, con subtítulos: dónde se pulsa y qué
-        hay que mirar en cada ventana.</p>
-      <span class="mas" id="video-nota">MP4, en la página de la versión</span>
+    <a class="tarjeta enlace" href="#videos">
+      <h3>Los vídeos</h3>
+      <p>Cada uno enseña una cosa, con voz y subtítulos: dónde se pulsa y qué
+        hay que mirar en cada ventana. Se ven a demanda, en el orden que
+        haga falta.</p>
+      <span class="mas">Ver la lista</span>
     </a>
   </div>
-  <p>Los datos del caso, para seguirlo con el programa abierto:
+  <p>Los datos del manual, para seguirlo con el programa abierto:
     <a href="datos/ipc_wti.csv" download>ipc_wti.csv</a> o, para Excel,
     <a href="datos/ipc_wti.xlsx" download>ipc_wti.xlsx</a>.</p>
 
@@ -150,6 +152,37 @@
     <figure><img loading="lazy" src="img/drtran-ccf.png" alt="La correlación cruzada preblanqueada entre el IPC y el petróleo" width="1000" height="797"><figcaption>drtran: la correlación cruzada</figcaption></figure>
     <figure><img loading="lazy" src="img/drtran-prevision.png" alt="La previsión del IPC con su desviación típica" width="1100" height="797"><figcaption>La previsión, con su incertidumbre</figcaption></figure>
   </div>
+
+  <h3 class="subseccion" id="videos">Vídeos</h3>
+  <p>Cada vídeo, con lo que enseña, lo que conviene haber visto antes y sus
+    datos. Están en la página de la versión: se descargan y se ven con
+    cualquier reproductor.</p>
+  <ol class="videos">
+    <li class="tarjeta">
+      <h4>El univariante, con intervenciones <span class="dur">13 min</span></h4>
+      <p>El IPC subyacente de España. Su modelo ARIMA por las dos rutas de la
+        estacionalidad: estocástica, al estilo Box-Jenkins (D = 1), y
+        determinista, con armónicos (D = 0). La subida del IVA de 2012 como
+        función de transferencia, y su ganancia a largo plazo: +1,3 % en el
+        nivel de los precios.</p>
+      <p class="antes"><b>Antes:</b> nada; es el primero.
+        <b>Datos:</b> <a href="datos/es_core.csv" download>es_core.csv</a> ·
+        <a href="datos/es_core.xlsx" download>es_core.xlsx</a></p>
+      <a class="mas" data-video="es-core" href="https://github.com/davidesg/atsw-gui/releases">MP4, en la página de la versión</a>
+    </li>
+    <li class="tarjeta">
+      <h4>La función de transferencia <span class="dur">11 min</span></h4>
+      <p>El caso del manual: cuánto sube el IPC cuando sube el petróleo, y con
+        qué retardo. Los modelos del IPC y del petróleo, el caso con las dos
+        series, y la transferencia con drtran: la correlación cruzada, la
+        ganancia, el retardo medio y la previsión.</p>
+      <p class="antes"><b>Antes:</b> el univariante, con intervenciones.
+        <b>Datos:</b> <a href="datos/ipc_wti.csv" download>ipc_wti.csv</a> ·
+        <a href="datos/ipc_wti.xlsx" download>ipc_wti.xlsx</a></p>
+      <a class="mas" data-video="ipc-wti" href="https://github.com/davidesg/atsw-gui/releases">MP4, en la página de la versión</a>
+    </li>
+  </ol>
+
 </section>
 
 <section class="instalar" id="instalar">

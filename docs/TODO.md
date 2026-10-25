@@ -332,6 +332,20 @@ Pedido del analista (18-oct-2026), hecho después del diseño de la madre.
     el instalador; `packaging/macos/atsw.icns`, en ATSW.app. Los genera
     `packaging/icono/hacer.py`.
 
+## PENDIENTE: la presentación pública — el canal de YouTube
+
+Pedido del analista (25-oct-2026): ATSW tiene su propio canal, y los vídeos
+de cada análisis van allí, uno por análisis (univariante, transferencia…).
+La web y el MP4 de la release se quedan como alternativa.
+
+| | qué | notas |
+|---|---|---|
+| | **crear el canal** (lo hace el analista) | cuenta de marca «ATSW» desde un Gmail personal (las cuentas de la UCM pueden tener YouTube restringido); handle `@atsw` o, si está cogido, `@atsw-series`; verificar con el teléfono (youtube.com/verify), sin lo cual no hay miniaturas propias |
+| | imagen y banner del canal | imagen 800×800 con el icono de ATSW; banner 2560×1440 legible en el móvil; descripción con la web, GitHub y los créditos con la redacción de siempre |
+| | la ficha de cada vídeo | título y descripción sacados de las fichas de la web, capítulos con las marcas de tiempo de las escenas, subtítulos en español (.srt) desde el guion de la narración, miniatura 1280×720 |
+| | subirlos (el analista, en YouTube Studio) | a mano: la API exige un proyecto de Google Cloud auditado, o lo subido queda privado; primero «oculto» para revisar, luego público; una lista de reproducción en el orden univariante → transferencia |
+| | la web y las notas | cada ficha de `web/index.html#videos` incrusta su vídeo de YouTube, con la descarga del MP4 debajo; el enlace al canal en el pie y en las notas de la v0.2.0 |
+
 ## PENDIENTE: el asistente
 
 - **El asistente: una terminal con un MCP a medida (MTM) de los motores**,

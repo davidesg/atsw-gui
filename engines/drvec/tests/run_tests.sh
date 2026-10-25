@@ -531,7 +531,7 @@ golden   1.0712154882 "$MM" 2 1 1 -case 2 -mafree -diagar
 golden   0.5696296891 "$MM" 2 1 1 -case 2 -mafree -diagcov
 golden   5.4717136367 "$MM" 2 1 1 -case 2 -mafree -fixb2
 golden   3.0123641758 "$MM" 2 1 1 -case 2 -mafree -fixb2 0
-golden 570.2297062756 "$UK" 2 0 2 -case 2
+golden 573.9601581380 "$UK" 2 0 2 -case 2   # BUG-64: was 570.2297, a tc3 local optimum; -multistart 30 found this one (benchmark JJ)
 golden 858.3431076100 "$DK" 2 0 2 -case 2   # s=3, r=2: guards the B2 read order
 golden -318.8131393592 data/AL.inp 2 0 1 -case 2 -differenced
 echo
@@ -2632,17 +2632,19 @@ for d in PLL VILL; do
     fi
 done
 
-# 8p.2  The UKconsumption rank sequence: 70.13 then 25.51.  From one cold start
+# 8p.2  The UKconsumption rank sequence: 70.13 then 32.98.  From one cold start
 #       the r = 1 fit stopped 22 log-units short and the two LRs swapped rows
 #       (BUG-25) -- and the register marked the swapped pair as reproduced.
+#       LR(1) was 25.51 until BUG-64: the r = 2 fit lost its Johansen start
+#       and stopped 3.73 log-units below the optimum -multistart 30 finds.
 run "$UK" 2 0 1 -case 2 -lrtest
 lr0=$(sed -n '/M-r        LR/,/^$/p' "$TMP/case.out" | awk '$1=="0"{print $3; exit}')
 lr1=$(sed -n '/M-r        LR/,/^$/p' "$TMP/case.out" | awk '$1=="1"{print $3; exit}')
 if [ -n "$lr0" ] && [ -n "$lr1" ] && \
-   awk -v a="$lr0" -v b="$lr1" 'BEGIN{exit !((a-70.1280)^2 < 1e-6 && (b-25.5141)^2 < 1e-6)}'; then
+   awk -v a="$lr0" -v b="$lr1" 'BEGIN{exit !((a-70.1280)^2 < 1e-6 && (b-32.9750)^2 < 1e-6)}'; then
     ok "UKconsumption -lrtest: LR(0) = $lr0, LR(1) = $lr1, in that order"
 else
-    bad "UKconsumption -lrtest" "LR(0) = $lr0, LR(1) = $lr1 (expected 70.1280, 25.5141)"
+    bad "UKconsumption -lrtest" "LR(0) = $lr0, LR(1) = $lr1 (expected 70.1280, 32.9750)"
 fi
 
 # 8p.3  -fixb2 v does not depend on which column is demeaned: under case 2 the
@@ -3010,6 +3012,22 @@ else
     else
         bad "BUG-40" "$(echo "$want" | diff - "$TMP/det40.txt" | grep '^>' | tail -1)"
     fi
+fi
+echo
+
+echo "[8ae] a rank whose scaled Lambda is never admissible still gets a start (BUG-64)"
+#  True rank 1, M = 4: at r = 3 every multiple of the seeds' Lambda leaves W
+#  explosive.  Before the fix rank 3 was 'estimation failed' and the r = 2
+#  comparison was lost; make_admissible's last resort seeds it.
+run tests/repro/fixtures/crt64.inp 2 0 0 -case 2 -lrtest
+if [ -n "$TIMEDOUT" ]; then
+    bad "BUG-64" "did not finish in ${RUN_TIMEOUT}s"
+elif grep -aq '^  3     --   estimation failed' "$TMP/case.out"; then
+    bad "BUG-64" "rank 3 failed: no admissible start"
+elif grep -aqE '^  2       2 +[0-9]+\.[0-9]+' "$TMP/case.out"; then
+    ok "crt64: rank 3 is fitted and the r = 2 comparison has its LR"
+else
+    bad "BUG-64" "the r = 2 row of the rank test is missing or negative"
 fi
 echo
 

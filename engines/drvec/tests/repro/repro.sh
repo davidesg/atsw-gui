@@ -3,7 +3,8 @@
 # 2026-09-23 (docs/BUGS.md, BUG-23 .. BUG-45), from the review recorded in
 # docs/REVIEW_2026-09-23.md, BUG-58 .. BUG-60 (2026-10-17, found by the
 # Python port), BUG-61 (2026-10-18, the Windows build of the port), BUG-62
-# (2026-10-24, the shakedown of sima 0.2.0) and BUG-63 (the same shakedown).
+# (2026-10-24, the shakedown of sima 0.2.0), BUG-63 (the same shakedown) and
+# BUG-64 (2026-10-25, the Monte Carlo of docs/ESTUDIO_CRT_2026-10-24.md).
 #
 #   sh tests/repro/repro.sh            all of them
 #   sh tests/repro/repro.sh 23 31      only those
@@ -50,6 +51,7 @@ if want 25; then hdr 25 "-lrtest: one cold start per rank; UKconsumption LRs swa
   "$B" uk 2 0 1 -case 2 -lrtest >/dev/null 2>&1
   sed -n '/M-r        LR/,/^$/p' uk.out
   echo "  (2026-08-17, benchmark/README.md: r=0 70.1280, r=1 25.5141)"
+  echo "  (since BUG-64, 2026-10-25: r=1 32.9750, the r = 2 fit at its optimum)"
   "$B" uk 2 0 1 -case 2 -lrtest -multistart 20 >/dev/null 2>&1
   echo "  with -multistart 20 (ignored):"; sed -n '/M-r        LR/,/^$/p' uk.out
 fi
@@ -226,6 +228,14 @@ if want 63; then hdr 63 "the rank bootstrap's .boot is buffered: no progress unt
   wait "$pid"
   echo "  replications in b63.boot while drvec ran: $seen of 60"
   [ "$seen" -gt 0 ] || echo "  (none: the file reaches the disk only when it is closed)"
+fi
+
+if want 64; then hdr 64 "a Lambda that scaling cannot make admissible: the rank above the true one fails"
+  cp "$F/crt64.inp" c.inp; "$B" c 2 0 0 -case 2 -lrtest >/dev/null 2>&1
+  echo "  true rank 1 (CRT 2012 design); the rank test's last two rows:"
+  grep -a '^  [12]  ' c.out | tail -2
+  grep -a '^  3     --   estimation failed' c.out >/dev/null && \
+    echo "  (rank 3 failed: every start's admissibility ladder ends explosive)"
 fi
 echo
 

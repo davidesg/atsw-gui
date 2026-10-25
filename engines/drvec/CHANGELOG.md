@@ -7,6 +7,22 @@ publicación: `v*`.
 
 ## Sin publicar
 
+### BUG-64: el rango por encima del verdadero ya no se queda sin arranque
+
+- `make_admissible` sólo podía escalar Λ, y un Λ con el ajuste del signo
+  equivocado deja W explosivo a cualquier escala. Es lo que dan las semillas en
+  un rango por encima del verdadero: el ajuste se daba por fallido y el
+  contraste del rango perdía esa comparación. Ahora, si las tres escalas
+  fallan, prueba un Λ admisible por construcción (`c·I` en las filas de Y1,
+  c = 0.05). Actúa sobre todo arranque que antes se descartaba por no
+  admisible, también cuando otros sobrevivían: en UKconsumption `2 0 2 -case 2`
+  el arranque `johansen` vuelve a la búsqueda y llega a 573.9602 por gradiente,
+  el óptimo que antes sólo daba `-multistart 30`, frente al 570.2297 de antes;
+  el LR(1) de su `-lrtest` pasa de 25.51 a 32.98 (r = 2 se rechaza al 1 % en
+  los dos casos). Los 36 hashes de `golden.sh` no se mueven; en
+  `run_tests.sh` cambian esas dos referencias. Repro: `sh tests/repro/repro.sh
+  64`; comprobación `[8ae]`.
+
 ### El bootstrap del rango comprueba que el modelo bajo H₀ es I(1, r)
 
 - Antes de simular, `-bootstrap` comprueba lo que Cavaliere, Rahbek y Taylor

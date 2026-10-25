@@ -233,12 +233,14 @@ anticipaba §3 para q = 0.
 ### Lo que acompaña a las cifras
 
 * **Tres réplicas de 350 sin la comparación r = 2** (a, T = 100: réplicas 50 y
-  55; b: réplica 26). El ajuste de rango 3 no encuentra ningún arranque
-  admisible: con un rango verdadero de 1 o 0, ningún múltiplo de la Λ de la
-  regresión condicional deja el sistema transformado estacionario e invertible.
-  No afecta al tamaño ni a la potencia, que se leen en r = 0 y r = 1. Se
-  reproduce con la semilla `100050` del panel a, T = 100, y `-lrtest` sin
-  bootstrap.
+  55; b: réplica 26). El ajuste de rango 3 no encontraba ningún arranque
+  admisible: con un rango verdadero de 1 o 0, las semillas dan a las relaciones
+  sobrantes un ajuste del signo equivocado, y `make_admissible` sólo sabía
+  escalar Λ. Era un defecto, **BUG-64**, corregido en esta rama; las cifras de
+  esta sección son del binario anterior a la corrección, que no cambia nada en
+  r = 0 ni en r = 1, donde se leen el tamaño y la potencia. Con la corrección,
+  las réplicas 50 y 55 dan LR(2→3) = 2.66 y −0.40 (este último dentro de la
+  tolerancia de un ajuste de rango 2 que paró por criterio 3).
 * **El aviso `[check: rank k stopped by criterion 3]`** (BUG-25: el ajuste paró
   por paso y no por gradiente, a menudo un óptimo verdadero sobre una
   superficie plana, CONVERGENCE.md) aparece en 102 de las 150 comparaciones
@@ -265,11 +267,11 @@ anticipaba §3 para q = 0.
 3. **La traza.** drvec da λ-max. Para comparar la potencia con CRT directamente
    haría falta la traza, que con la verosimilitud exacta son p − r ajustes más
    por comparación. No es necesario para el tamaño.
-4. **El rango 3 sin arranque** de las tres réplicas de §6: la salida dice que
-   recurre al arranque en frío (`Falling back to the cold start`), pero la
-   tabla de búsqueda sólo lista `seed` y `johansen`. Hay que comprobar si el
-   arranque en frío se intenta de verdad; si no, es un defecto y va con su
-   repro.
+4. **El rango 3 sin arranque** de las tres réplicas de §6: *resuelto*. El
+   arranque en frío sí se intentaba (es la fila `seed` de la tabla de
+   búsqueda, que no lista `cold` aparte cuando coincide con la semilla); el
+   defecto estaba en `make_admissible`, que no podía arreglar un Λ del signo
+   equivocado. Registrado y corregido como BUG-64, con su repro.
 5. **El porte.** drvec-python transcribe el texto del bloque del bootstrap
    (`report.py` y cuatro oráculos) y tiene que reproducir el camino de fallo de
    `i1r_check`. Va en un PR aparte, al re-vendorizar `csrc/` desde esta rama.

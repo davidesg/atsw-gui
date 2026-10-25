@@ -5114,6 +5114,38 @@ static int make_admissible(real *x, int npar)
             if (ifev == 0) { res = pass * 6 + mi; break; }
         }
     }
+    /*  Scaling cannot fix a Lambda that points the wrong way: if I + B'Lambda
+     *  has a root outside the unit circle, every multiple of it keeps W
+     *  explosive, and the fit was reported as failed although admissible
+     *  points exist (BUG-64: the rank above the true one, whose spare
+     *  relations are I(1) and get a small adjustment of the wrong sign).
+     *  The last resort is a Lambda that is admissible by construction: the
+     *  Y1 rows c I, the Y2 rows zero (internal order), so B'Lambda = c I
+     *  whatever B2 is and, with nabla Y_t = -Lambda W_{t-1} + ... (PhBar[1]
+     *  carries -LamBar), W_t = (1 - c) W_{t-1} + ... once F and Theta are
+     *  shrunk.  Not under -alpha (Lambda is A psi) or -warma.  c is small
+     *  because the relations a scaled Lambda could not seed are nearly I(1):
+     *  on the two replications of BUG-64, c = 0.02 and 0.05 brought both
+     *  starts to the same optimum on the gradient, c = 0.2 up to 2
+     *  log-likelihood points below it, c = 0.5 up to 155, by criterion 3.  */
+    if (res < 0 && !global_warma && !global_alpha && global_r > 0) {
+        static const real cfb = 0.05;
+        int r = global_r;
+        for (mi = 0; mi < 6 && res < 0; mi++) {
+            real pi1, pi2, pi3;
+            int ifev = 0, ifc = 0;
+            for (i = 1; i <= npar; i++) x[i] = x0[i];
+            for (i = lo; i <= hi; i++) x[i] = shr[mi] * x0[i];
+            for (int ii = 1; ii <= M; ii++)
+                for (int jj = 1; jj <= r; jj++)
+                    x[nmean + (ii - 1) * r + jj] = (ii == jj) ? cfb : 0.0;
+            vec_shootx(x, &vt, &ifc, 0, 0);
+            if (ifc != 0) continue;
+            elf(vt.m, vt.n, vt.p, vt.q, vt.mu, vt.phi, vt.theta, vt.qq, vt.w,
+                1.0, vt.xitol, TRUE, vt.a, &pi1, &pi2, &pi3, &ifev);
+            if (ifev == 0) res = 18 + mi;
+        }
+    }
     if (res < 0) for (i = 1; i <= npar; i++) x[i] = x0[i];
     vec_shootx(x, &vt, &ift, 0, 1);
     free_vector(x0, 1, npar);

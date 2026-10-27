@@ -109,6 +109,18 @@ static gchar *lee_todo( gint fd )
     return g_string_free( s, FALSE );
 }
 
+/* Sin los \r: en Windows el hijo escribe en modo texto (\r\n), y las dos
+ * funciones --como g_spawn-- entregan los bytes tal cual.              */
+static gchar *sin_cr( gchar *t )
+{
+    gchar *a, *b;
+
+    if ( t == NULL ) return NULL;
+    for ( a = b = t; *a; a++ ) if ( *a != '\r' ) *b++ = *a;
+    *b = '\0';
+    return t;
+}
+
 typedef struct { GMainLoop *bucle; gint st; } Fin;
 
 static void fin( GPid pid, gint st, gpointer d )
@@ -154,6 +166,7 @@ int main( int argc, char **argv )
     check( ok, "sitio_lanza_y_espera lanza", e ? e->message : NULL );
     if ( ok )
         {
+        sin_cr( sal ); sin_cr( err );
         check( codigo( st ) == 3, "y devuelve el estado del hijo (3)", NULL );
         check( sal && strstr( sal, quiere ) != NULL,
                "los argumentos llegan tal cual (espacios, comillas, barras)", sal );
@@ -178,8 +191,8 @@ int main( int argc, char **argv )
     check( ok, "sitio_lanza_con_tuberias lanza", e ? e->message : NULL );
     if ( ok )
         {
-        sal = lee_todo( fo );
-        err = lee_todo( fe );
+        sal = sin_cr( lee_todo( fo ) );
+        err = sin_cr( lee_todo( fe ) );
         f.bucle = g_main_loop_new( NULL, FALSE );
         g_child_watch_add( pid, fin, &f );
         g_main_loop_run( f.bucle );

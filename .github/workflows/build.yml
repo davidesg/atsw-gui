@@ -133,6 +133,13 @@ jobs:
           ls -la "$MSYSTEM_PREFIX/share/glib-2.0/schemas" | head
       - name: Compilar
         run: bash .github/build-all.sh
+      # BUG-0001 de la madre: cada motor que lanzaba un GUI abria una ventana
+      # de consola. Un programa sin consola (-mwindows, como los GUIs) lanza
+      # un hijo de consola por cada camino y el hijo dice si tiene ventana.
+      # Mide tambien lo que tarda un dibujo del vistazo con fug.
+      - name: Sin consola al lanzar los motores (BUG-0001 de la madre)
+        timeout-minutes: 10
+        run: bash lib/sitio/prueba_consola.sh
       # BUG-61: con `unsigned long` (32 bits en Windows) el generador del
       # bootstrap no terminaba nunca. La bateria de drvec no bloquea fuera de
       # Linux, asi que aqui va un bootstrap corto que SI bloquea: tiene que

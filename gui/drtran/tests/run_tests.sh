@@ -446,10 +446,22 @@ $CC -O2 -Wall -Wextra -I"$L/fuedet" \
 # ninguna; y varios escritores a la vez (hilos y procesos) no la rompen. El
 # motor es la propia prueba, que con --quema gasta CPU como un motor.
 echo
-$CC -O2 -Wall -Wextra -I"$L/coste" -I"$L/engine" $(pkg-config --cflags glib-2.0) \
-    "$L/coste/test_coste.c" "$L/coste/coste.c" "$L/engine/engine.c" \
+$CC -O2 -Wall -Wextra -I"$L/coste" -I"$L/engine" -I"$L/sitio" $(pkg-config --cflags glib-2.0) \
+    "$L/coste/test_coste.c" "$L/coste/coste.c" "$L/engine/engine.c" "$L/sitio/sitio.c" \
     -o "$W/test_coste" $(pkg-config --libs glib-2.0) -lm || exit 1
 "$W/test_coste" "$W/coste" || exit 1
+
+# --- lanzar un motor (lib/sitio; gui/atsw/BUGS.md BUG-0001) -----------------
+# sitio_lanza_y_espera y sitio_lanza_con_tuberias: en las tres plataformas,
+# que lanzan, separan salida y error, devuelven el estado y pasan los
+# argumentos tal cual. En Windows, ademas, que el hijo de un proceso SIN
+# consola (como un GUI) no tiene ventana de consola; y dice, sin que cuente,
+# si con g_spawn_sync la tenia y lo que tarda cada camino.
+echo
+$CC -O2 -Wall -Wextra -I"$L/sitio" $(pkg-config --cflags glib-2.0) \
+    "$L/sitio/test_lanza.c" "$L/sitio/sitio.c" \
+    -o "$W/test_lanza" $(pkg-config --libs glib-2.0) || exit 1
+"$W/test_lanza" || exit 1
 
 # --- el resultado del identificador (engines/art) ---------------------------
 # El lector de DATA_art.cand contra las referencias del propio motor: lo que
@@ -522,11 +534,11 @@ $CC -O2 -Wall -Wextra -I"$TOP/../atsw/include" -I"$L/proyecto" -I"$L/inpcheck" \
     -Dinp_check=inp_check_fue -c "$TOP/../../engines/fue/src/inpcheck.c" \
     $(pkg-config --cflags glib-2.0) -o "$W/inpcheck_fue.o" || exit 1
 $CC -O2 -Wall -Wextra -I"$TOP/../atsw/include" -I"$L/proyecto" -I"$L/inpcheck" \
-    -I"$L/engine" -I"$L/coste" -I"$L/outfile" -I"$L/outdiag" -I"$L/tabla" -I"$L/dates" \
+    -I"$L/engine" -I"$L/coste" -I"$L/sitio" -I"$L/outfile" -I"$L/outdiag" -I"$L/tabla" -I"$L/dates" \
     -I"$L/preview" -I"$L/rutas" -I"$L/fugdraw" -I"$L/utils" -I"$L/dictamen" \
     $(pkg-config --cflags gtk+-3.0) \
     "$TOP/../atsw/tests/test_editor.c" "$TOP/../atsw/src/editor.c" \
-    "$L/proyecto/proyecto.c" "$L/outfile/outfile.c" "$L/engine/engine.c" "$L/coste/coste.c" \
+    "$L/proyecto/proyecto.c" "$L/outfile/outfile.c" "$L/engine/engine.c" "$L/coste/coste.c" "$L/sitio/sitio.c" \
     "$L/outdiag/outdiag.c" "$L/dates/dates.c" "$L/rutas/rutas.c" \
     "$L/preview/preview.c" "$L/fugdraw/fugdraw.c" "$L/utils/ext.c" \
     "$W/inpcheck_fue.o" \

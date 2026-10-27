@@ -2,6 +2,7 @@
 
 #include "engine.h"
 #include "coste.h"
+#include "sitio.h"
 
 #include <stdarg.h>
 #include <stdlib.h>
@@ -609,7 +610,10 @@ static EngineJob *lanza(const char *workdir, const char *program,
     g_ptr_array_add(args, NULL);
 
     coste = coste_empieza(workdir, program, argv);
-    if (!g_spawn_async_with_pipes(workdir, (gchar **) args->pdata, NULL,
+    /* sitio_lanza_con_tuberias es g_spawn_async_with_pipes en Linux y macOS;
+       en Windows, CreateProcessW sin ventana de consola (lib/sitio, y
+       gui/atsw/BUGS.md BUG-0001): con g_spawn, cada corrida abria una.  */
+    if (!sitio_lanza_con_tuberias(workdir, (gchar **) args->pdata, NULL,
                                   G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD,
 #ifdef __linux__
                                   hijo_muere_con_el_padre,

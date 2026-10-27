@@ -59,7 +59,7 @@ $CC -O0 -g -w -I"$TOP/include" $LIB_INC $GTK_CFLAGS -DPLOTSTATS_TIENE_NLA \
     -c "$LIB/analisis/plotstats.c" -o "$WORK/plotstats.o" || exit 1
 
 $CC -O0 -g -Wall -I"$TOP/include" $LIB_INC $GTK_CFLAGS \
-    "$TOP/tests/test_units.c" $LIB/engine/engine.c $LIB/coste/coste.c $LIB/utils/utils.c $LIB/outfile/outfile.c $INPCHECK_O \
+    "$TOP/tests/test_units.c" $LIB/engine/engine.c $LIB/coste/coste.c $LIB/sitio/sitio.c $LIB/utils/utils.c $LIB/outfile/outfile.c $INPCHECK_O \
     -o "$WORK/test_units" $GTK_LIBS -lm || exit 1
 
 # El motor falso, compilado como fue y como fuf (ver tests/fake/falso.c: en

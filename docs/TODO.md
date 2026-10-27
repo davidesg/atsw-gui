@@ -21,7 +21,7 @@ en Linux, macOS y Windows (`docs/PRUEBAS.md`). Falta:
 | hecho | **el paquete de macOS** | `ATSW.app` en `.dmg`, arm64 e Intel, macOS 14+: `packaging/macos/`. Firma ad hoc: Gatekeeper avisa |
 | | firmar los paquetes | Apple Developer ID + notarización; certificado de firma de código en Windows |
 | hecho | **el manual del alumno** | `docs/manual/`: el caso IPC ← WTI, con capturas y vídeo generados desde el programa |
-| | la consola en Windows | `lib/engine` lanza con `g_spawn`: comprobar que no asoma una consola al estimar |
+| hecho | la consola en Windows | asomaba una con cada motor que lanzaba un GUI (y el vistazo congelaba la madre): `lib/sitio` lanza con `CreateProcessW` y `CREATE_NO_WINDOW`, y la CI de Windows lo comprueba. `gui/atsw/BUGS.md` BUG-0001 |
 | hecho | el gestor de proyectos multivariantes | los **casos**: ver abajo |
 
 ### Los casos: la madre multivariante — HECHO (2026-10-04/05)

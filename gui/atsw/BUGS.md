@@ -104,3 +104,45 @@ lib/sitio, que lib/sitio usa `CREATE_NO_WINDOW` y que fue_gui no usa
 `lib/sitio/prueba_consola.sh`. Sale con 1 mientras alguna falle. Fuera de
 Windows prueba que el código va por el camino arreglado, no que la consola
 no asome: eso lo prueba la CI de Windows.
+
+## BUG-0002 — instalada con el .deb, la madre no encuentra a fug y el vistazo no se abre
+
+**Encontrado:** 2026-10-27, en la revisión de v0.2.2 con los casos de los
+vídeos (`.github/workflows/revision-casos.yml`), en Linux con el `.deb`.
+En Windows y macOS no pasa.
+**Arreglado:** no (abierto).
+
+### Síntoma
+
+Con el `.deb` instalado y ATSW abierto desde el menú o con `atsw`,
+«Serie y ACF / PACF…» y «Media – desviación típica» no abren su ventana. La
+escena 01 del vídeo del IPC subyacente se para en «ventana vistazo». Con
+`/usr/lib/atsw/bin` en el PATH, la ventana sí se abre.
+
+### Por qué
+
+El vistazo busca a fug con `sitio_busca()`, y su lista de sitios
+(`gui/atsw/src/vistazo.c`, `lanza_fug`) solo tiene el del árbol de
+compilación, `"../../engines/fug/%s"`. Le falta el del paquete, `"./%s"`
+(todos los programas en el mismo directorio, `packaging/programas.sh`), que
+sí tienen las demás listas (`gestos.c`, `an_identifica.c`, `an_formales.c`).
+Sin él cae al PATH:
+
+- en Linux el PATH no tiene `/usr/lib/atsw/bin`: fug no se encuentra, o se
+  encuentra otro más viejo (un `/usr/local/bin/fug` de una instalación
+  anterior se cuela sin avisar, como pasó con fue_gui);
+- en Windows no se ve: `g_find_program_in_path` mira antes el directorio del
+  propio `.exe`;
+- en macOS tampoco: el lanzador de la `.app` pone `Resources/bin` el primero
+  del PATH.
+
+El arreglo natural es añadir `"./%s"` a esa lista. Espera el visto bueno.
+
+### Reproducción
+
+`bugs/BUG-0002-repro/repro.py`: resuelve cada sitio de `lanza_fug()` como lo
+haría `sitio_busca()` en la disposición del paquete (la madre y fug en el
+mismo directorio, nada en el PATH) y sale con 1 mientras ninguno dé con fug.
+En la pantalla lo prueba la fila «Escena extra/vistazo-sin-path» de
+`revision-casos.yml`, que abre el vistazo sin el directorio del paquete en el
+PATH.

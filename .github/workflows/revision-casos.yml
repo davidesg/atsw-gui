@@ -1,0 +1,255 @@
+# LA REVISION DE UNA VERSION PUBLICADA CON LOS CASOS DE LOS VIDEOS, en las
+# tres plataformas, con el paquete instalado como lo instalaria un usuario:
+#
+#   el IPC subyacente (docs/manual/CASO-ES-CORE.md, video/escenas-es-core/)
+#   el IPC y el WTI   (docs/manual/MANUAL.md, video/escenas/)
+#
+# En cada plataforma (.github/revision/):
+#
+#   instalar   el paquete de la «release» (VERSION, abajo): el .deb con apt,
+#              el instalador de Windows en silencio y por usuario, la .app del
+#              .dmg de macOS (Apple Silicon e Intel).
+#   motores    motores.py: art, fue, atsw-cli, drtran con la secuencia de
+#              modelos de los videos, sobre los .inp que escriben sus escenas
+#              (casos/); los numeros clave y lo que tarda cada corrida (30 s
+#              es colgarse: se mata por su PID).
+#   escenas    escenas.py: los guiones de los videos con los GUIs instalados,
+#              en el escritorio del runner (Xvfb en Linux; sin broadway en
+#              ninguna), con el modulo de escenas por GTK_MODULES. Una foto
+#              por ventana, el escritorio, stderr y el tiempo de cada escena;
+#              en Windows, las ventanas de consola que asomen.
+#   informe    informe.py: una tabla con una fila por comprobacion y una
+#              columna por plataforma (OK, DIFF con los valores, FAIL), en el
+#              resumen del trabajo y como artefacto.
+#
+# Se lanza a mano (Actions -> revision-casos -> Run workflow), en los PR de la
+# rama revision-casos y con cada etiqueta v*.
+
+name: revision-casos
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'La version publicada que se revisa (sin la v)'
+        required: false
+        default: '0.2.2'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '.github/revision/**'
+      - '.github/workflows/revision-casos.yml'
+  push:
+    tags: [ 'v*' ]
+
+env:
+  # Con una etiqueta, esa version; a mano, la que se pida; si no, la 0.2.2.
+  VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name != '' && github.ref_name || inputs.version || '0.2.2' }}
+  GH_TOKEN: ${{ github.token }}
+  PYTHONIOENCODING: utf-8
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar el .deb
+        run: |
+          V=${VERSION#v}
+          mkdir -p rel R
+          bash .github/revision/descarga.sh "atsw_${V}_amd64.deb" rel
+          sudo apt-get update
+          # el paquete como lo instalaria un alumno: apt resuelve lo que pide
+          if sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ./rel/atsw_${V}_amd64.deb; then ok=true; else ok=false; fi
+          printf '{"ok": %s, "como": "apt-get install ./atsw_%s_amd64.deb (ubuntu-24.04)"}\n' "$ok" "$V" > R/instalar.json
+          ls -l /usr/lib/atsw/bin /usr/bin/atsw
+          # lo que hace falta para la revision, no para ATSW
+          sudo apt-get install -y --no-install-recommends gcc libgtk-3-dev pkg-config xvfb xauth imagemagick
+      - name: El modulo de escenas
+        run: cc -shared -fPIC -O2 -o "$RUNNER_TEMP/libescenas.so" docs/manual/capturas/escenas.c $(pkg-config --cflags --libs gtk+-3.0)
+      - name: Motores
+        timeout-minutes: 10
+        run: python3 .github/revision/motores.py --bin /usr/lib/atsw/bin --salida R
+      - name: Escenas
+        timeout-minutes: 25
+        # --path: la madre del .deb no encuentra a fug sin /usr/lib/atsw/bin en
+        # el PATH (BUG-0002 de la madre); las escenas de los casos lo llevan
+        # para poder seguir, y --extra prueba el vistazo sin el.
+        run: |
+          xvfb-run -a -s "-screen 0 1920x1080x24" \
+            python3 .github/revision/escenas.py --bin /usr/lib/atsw/bin --madre /usr/bin/atsw \
+              --path --extra --modulo "$RUNNER_TEMP/libescenas.so" --salida R/escenas
+          cp R/escenas/escenas.json R/
+      - name: Los numeros de los GUIs
+        if: always()
+        run: python3 .github/revision/motores.py --bin /usr/lib/atsw/bin --salida R --proyectos R/escenas/proyectos
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resultado-linux
+          path: R/
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 140
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar con el instalador
+        shell: pwsh
+        run: |
+          $V = $env:VERSION.TrimStart('v')
+          New-Item -ItemType Directory rel, R -Force | Out-Null
+          & "$env:ProgramFiles\Git\bin\bash.exe" .github/revision/descarga.sh "ATSW-$V-windows-x64-setup.exe" rel
+          if ($LASTEXITCODE) { exit 1 }
+          $p = Start-Process "rel\ATSW-$V-windows-x64-setup.exe" -PassThru -Wait `
+                 -ArgumentList '/VERYSILENT','/CURRENTUSER','/SUPPRESSMSGBOXES','/NORESTART','/LOG=R\instalar.log'
+          $bin = "$env:LOCALAPPDATA\Programs\ATSW\bin"
+          $ok = ($p.ExitCode -eq 0) -and (Test-Path "$bin\atsw_gui.exe")
+          Get-ChildItem $bin | Select-Object Name, Length | Format-Table | Out-String | Write-Host
+          @{ ok = $ok; como = "ATSW-$V-windows-x64-setup.exe /VERYSILENT /CURRENTUSER -> $bin (codigo $($p.ExitCode))" } |
+            ConvertTo-Json | Set-Content -Encoding utf8 R\instalar.json
+          "ATSW_BIN=$bin" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          if (-not $ok) { exit 1 }
+      - name: Pantalla de 1920x1080
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          try { Set-DisplayResolution -Width 1920 -Height 1080 -Force } catch { Write-Host "no se pudo: $_" }
+          Add-Type -AssemblyName System.Windows.Forms
+          [System.Windows.Forms.Screen]::PrimaryScreen.Bounds | Out-String | Write-Host
+      # El modulo se compila con el GTK de MSYS2, el mismo con que se hizo el
+      # paquete: dentro del GUI instalado sus DLL se resuelven por nombre a las
+      # que el GUI ya cargo de su directorio.
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: false
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-pkgconf mingw-w64-ucrt-x86_64-gtk3
+      - name: El modulo de escenas
+        shell: msys2 {0}
+        run: |
+          gcc -shared -O2 -o "$(cygpath -u "$RUNNER_TEMP")/escenas.dll" docs/manual/capturas/escenas.c \
+            $(pkg-config --cflags --libs gtk+-3.0)
+          objdump -p "$(cygpath -u "$RUNNER_TEMP")/escenas.dll" | grep "DLL Name"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Motores
+        shell: pwsh
+        timeout-minutes: 10
+        run: python .github/revision/motores.py --bin $env:ATSW_BIN --salida R
+      - name: Escenas
+        shell: pwsh
+        timeout-minutes: 35
+        # Sin MSYS2 en el PATH: lo que el paquete no lleve, falla aqui.
+        run: |
+          $env:PATH = "C:\Windows\System32;C:\Windows;C:\Windows\System32\WindowsPowerShell\v1.0;" + (Split-Path (Get-Command python).Source)
+          python .github/revision/escenas.py --bin $env:ATSW_BIN --extra `
+            --modulo "$env:RUNNER_TEMP\escenas.dll" --salida R\escenas
+          Copy-Item R\escenas\escenas.json R\
+      - name: Los numeros de los GUIs
+        if: always()
+        shell: pwsh
+        run: python .github/revision/motores.py --bin $env:ATSW_BIN --salida R --proyectos R\escenas\proyectos
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resultado-windows
+          path: R/
+
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            arq: arm64
+          - runner: macos-15-intel
+            arq: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 140
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar la .app del .dmg
+        run: |
+          V=${VERSION#v}
+          mkdir -p rel R
+          bash .github/revision/descarga.sh "ATSW-$V-macos-${{ matrix.arq }}.dmg" rel
+          ok=false
+          if hdiutil attach -nobrowse -readonly -mountpoint "$RUNNER_TEMP/dmg" "rel/ATSW-$V-macos-${{ matrix.arq }}.dmg"; then
+              mkdir -p "$HOME/Applications"
+              cp -R "$RUNNER_TEMP/dmg/ATSW.app" "$HOME/Applications/" && ok=true
+              hdiutil detach "$RUNNER_TEMP/dmg" || true
+          fi
+          APP="$HOME/Applications/ATSW.app"
+          printf '{"ok": %s, "como": "ATSW-%s-macos-%s.dmg -> ~/Applications/ATSW.app (%s)"}\n' \
+              "$ok" "$V" "${{ matrix.arq }}" "${{ matrix.runner }}" > R/instalar.json
+          ls "$APP/Contents/MacOS" "$APP/Contents/Resources/bin"
+          file "$APP/Contents/Resources/bin/atsw_gui"
+          # El entorno que pone el lanzador de la .app (packaging/macos/lanzador.c),
+          # para los GUIs que las escenas lanzan sin la madre.
+          RES="$APP/Contents/Resources"
+          sed "s|@PREFIJO@|$RES|g" "$RES/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache.in" > "$RUNNER_TEMP/loaders.cache"
+          {
+              echo "ATSW_APP=$APP"
+              echo "ATSW_BIN=$RES/bin"
+              echo "XDG_DATA_DIRS=$RES/share"
+              echo "GSETTINGS_SCHEMA_DIR=$RES/share/glib-2.0/schemas"
+              echo "GDK_PIXBUF_MODULE_FILE=$RUNNER_TEMP/loaders.cache"
+              echo "GTK_DATA_PREFIX=$RES"
+              echo "GTK_EXE_PREFIX=$RES"
+              echo "GTK_PATH=$RES/lib/gtk-3.0"
+          } >> "$GITHUB_ENV"
+          $ok
+      # Solo las cabeceras: el modulo no se enlaza con GTK (-undefined
+      # dynamic_lookup) y usa el que ya cargo la .app; dos GTK en un proceso
+      # no conviven.
+      - name: El modulo de escenas
+        run: |
+          brew install pkg-config gtk+3 >/dev/null
+          cc -dynamiclib -undefined dynamic_lookup -O2 -o "$RUNNER_TEMP/libescenas.so" \
+             docs/manual/capturas/escenas.c $(pkg-config --cflags gtk+-3.0)
+      - name: Motores
+        timeout-minutes: 10
+        run: python3 .github/revision/motores.py --bin "$ATSW_BIN" --salida R
+      - name: Escenas
+        timeout-minutes: 35
+        # La madre por el lanzador de la .app, como la abre el Finder; los
+        # demas GUIs con el entorno que el lanzador les deja (arriba), y con
+        # Resources/bin delante en el PATH, como hace el.
+        run: |
+          env PATH="$ATSW_BIN:/usr/bin:/bin:/usr/sbin:/sbin" python3 .github/revision/escenas.py \
+            --bin "$ATSW_BIN" --madre "$ATSW_APP/Contents/MacOS/ATSW" --extra \
+            --modulo "$RUNNER_TEMP/libescenas.so" --salida R/escenas
+          cp R/escenas/escenas.json R/
+      - name: Los numeros de los GUIs
+        if: always()
+        run: python3 .github/revision/motores.py --bin "$ATSW_BIN" --salida R --proyectos R/escenas/proyectos
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resultado-macos-${{ matrix.arq }}
+          path: R/
+
+  informe:
+    needs: [ linux, windows, macos ]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: resultado-*
+          path: resultados
+      - name: La tabla
+        run: python3 .github/revision/informe.py resultados --resumen "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: informe
+          path: |
+            resultados/informe.md
+            resultados/informe.json

@@ -26,6 +26,22 @@
  *
  * El .inp del vistazo es TEMPORAL y vive en la cache: no se toca el del
  * proyecto. Un vistazo no es una decision, y no deja rastro en el manifiesto.
+ *
+ * FUG CORRE SIN PARAR LA VENTANA (gui/atsw/BUGS.md BUG-0001). Se lanzaba con
+ * g_spawn_sync en el hilo de la interfaz, una vez por cada clic en un mando:
+ * en Linux no se notaba, pero en Windows cada corrida eran dos procesos (el
+ * ayudante de GLib y fug), una ventana de consola que asomaba y el antivirus
+ * mirando cada uno, y la ventana se quedaba congelada entre clic y clic.
+ * Ahora:
+ *
+ *   - un cambio en los mandos espera VZ_ESPERA_MS a que no llegue otro antes
+ *     de dibujar: tres clics seguidos en λ son UNA corrida, no tres;
+ *   - fug corre con engine_start (lib/engine), sin consola en Windows, y la
+ *     ventana sigue viva mientras: se ve el dibujo anterior hasta que llega
+ *     el nuevo;
+ *   - hay UNA corrida a la vez --todas escriben en el mismo directorio--. Si
+ *     se pide otra con una en marcha, esa se para y su resultado se tira; al
+ *     acabar se lanza la ultima pedida.
  */
 
 #include <string.h>
@@ -40,6 +56,7 @@
 #include "analisis.h"
 #include "anfitrion.h"
 #include "rutas.h"
+#include "engine.h"
 
 void barra_pub( Atsw *a, const char *s );
 
@@ -54,9 +71,24 @@ typedef struct {
                                     /* 2 histograma                        */
     char       serie[PR_ID];        /* de quien es, para el cuaderno: la   */
     char       muestra[PR_ID];      /* marcada puede cambiar con la ventana */
-} Vistazo;                          /* abierta                             */
+                                    /* abierta                             */
+    GtkWidget *pie;                 /* el pie, hasta que llegue el primer  */
+                                    /* dibujo y haya ventana donde ponerlo */
+    double     lam_h;               /* la transformacion del dibujo que SE */
+    int        d_h, D_h;            /* VE, que no es la de los mandos      */
+} Vistazo;                          /* mientras se espera al nuevo         */
 
 static Vistazo V;
+
+/* LA CORRIDA, FUERA DE V: atsw_vistazo pone V a cero y una corrida del
+ * vistazo anterior puede seguir en marcha.                              */
+#define VZ_ESPERA_MS 250
+static EngineJob *vz_job;           /* fug en marcha, o NULL               */
+static gboolean   vz_otra;          /* se pidio otra: esta no vale         */
+static guint      vz_reloj;         /* la espera tras tocar un mando       */
+static guint      vz_lanzadas;      /* cuantas van (lo mira la prueba)     */
+static double     vz_lam;           /* con que transformacion se lanzo la  */
+static int        vz_d, vz_D;       /* que esta en marcha                  */
 
 /* El directorio del vistazo, en la cache: es tierra de nadie a proposito. */
 gchar *atsw_cache_dir( void )
@@ -99,22 +131,22 @@ static int escribe_inp( const char *origen, const char *destino,
     return 0;
 }
 
-/* Llama al motor y devuelve TRUE si el EPS esta. */
-static gboolean dibuja( Vistazo *v, char *why, size_t n )
+static void vz_acabo( const EngineResult *r, gpointer data );
+static void limpia_eps( const char *dir );
+
+/* Lanza el motor con lo que digan ahora los mandos, y vuelve enseguida: el
+ * dibujo llega por vz_acabo(). FALSE, con why, si no se pudo lanzar.       */
+static gboolean lanza_fug( Vistazo *v, char *why, size_t n )
 {
     gchar  *dir = atsw_cache_dir();
     gchar  *exe = NULL;
-    gchar  *sal = NULL, *err = NULL;
-    GError *e = NULL;
-    gint    st;
-    gboolean ok;
     double  lam = gtk_spin_button_get_value( GTK_SPIN_BUTTON(v->s_lam) );
     /* En media - desviacion tipica no hay d ni D, y no es una omision: ese
      * grafico es de la serie EN NIVEL. Comprobado -- con d=1 D=1 en el .inp,
      * "fug -e" sigue escribiendo m_dt_d0...                            */
     int     d   = v->s_d ? gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(v->s_d) ) : 0;
     int     D   = v->s_D ? gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(v->s_D) ) : 0;
-    gchar  *argv[6];
+    const char *argv[3];
     char    inp[PR_RUTA + 8];
 
     snprintf( inp, sizeof inp, "%s.inp", v->base );
@@ -123,8 +155,6 @@ static gboolean dibuja( Vistazo *v, char *why, size_t n )
 
     /* El motor: el mismo que usa fug_gui. Se busca al lado antes que en el
      * PATH, por lo mismo que en gestos.c.                              */
-    exe = g_build_filename( dir, "..", NULL );
-    g_free( exe );
     {
     static const char *const sitio[] = { "../../engines/fug/%s", NULL };
 
@@ -134,21 +164,19 @@ static gboolean dibuja( Vistazo *v, char *why, size_t n )
         { snprintf( why, n, "No encuentro el motor fug." ); g_free( dir );
           return FALSE; }
 
-    argv[0] = exe;
-    argv[1] = v->base;
-    argv[2] = (gchar *) ( v->modo == 1 ? "-e" : v->modo == 2 ? "-d" : "-c" );
-    argv[3] = NULL;
+    /* Los EPS de la corrida anterior, fuera: el que quede sera el nuevo. */
+    limpia_eps( dir );
+    argv[0] = v->base;
+    argv[1] = v->modo == 1 ? "-e" : v->modo == 2 ? "-d" : "-c";
+    argv[2] = NULL;
+    vz_lam = lam; vz_d = d; vz_D = D;
+    vz_job = engine_start( dir, exe, argv, NULL, NULL, vz_acabo, v );
+    if ( vz_job ) vz_lanzadas++;
+    if ( vz_job == NULL )
+        snprintf( why, n, "fug: no se pudo lanzar el motor." );
 
-    ok = g_spawn_sync( dir, argv, NULL, 0, NULL, NULL, &sal, &err, &st, &e );
-    if ( ok && st != 0 ) ok = FALSE;
-
-    if ( !ok )
-        snprintf( why, n, "fug: %s", ( err && *err ) ? err
-                  : ( e ? e->message : "no pudo dibujar" ) );
-
-    if ( e ) g_error_free( e );
-    g_free( sal ); g_free( err ); g_free( exe ); g_free( dir );
-    return ok;
+    g_free( exe ); g_free( dir );
+    return vz_job != NULL;
 }
 
 /* EL NOMBRE DEL EPS NO SE COMPONE: SE BUSCA.
@@ -192,52 +220,101 @@ static void limpia_eps( const char *dir )
     g_dir_close( d );
 }
 
-static void repinta( Vistazo *v )
+/* El pie que no llego a ponerse, fuera: el primer dibujo no llego. */
+static void sin_pie( Vistazo *v )
 {
-    char why[512], eps[PR_RUTA];
+    if ( v->pie ) gtk_widget_destroy( v->pie );
+    v->pie = NULL;
+}
 
-    if ( v->armando ) return;
+/* PEDIR UN DIBUJO, YA. Con una corrida en marcha no se lanza otra: se para
+ * la que hay y, cuando avise de que acabó, se lanza esta.            */
+static void pide( Vistazo *v )
+{
+    char why[512];
 
-    {
-    gchar *dir = atsw_cache_dir();
-    gchar *sal;
+    if ( vz_reloj ) { g_source_remove( vz_reloj ); vz_reloj = 0; }
+    if ( vz_job )
+        { vz_otra = TRUE; engine_stop( vz_job ); return; }
+    if ( !lanza_fug( v, why, sizeof why ) )
+        { barra_pub( v->a, why ); sin_pie( v ); }
+}
 
-    limpia_eps( dir );
-    if ( !dibuja( v, why, sizeof why ) )
-        { barra_pub( v->a, why ); g_free( dir ); return; }
+/* El motor acabó: si su dibujo sigue valiendo, a la ventana. */
+static void vz_acabo( const EngineResult *r, gpointer data )
+{
+    Vistazo *v = data;
+    char     why[512];
+    gchar   *dir, *sal;
 
-    sal = busca_eps( dir );
-    g_free( dir );
-    if ( sal == NULL )
+    vz_job = NULL;
+    if ( vz_otra )                      /* lo pedido ya es otra cosa      */
+        { vz_otra = FALSE; pide( v ); return; }
+
+    if ( r->status != 0 )
         {
-        barra_pub( v->a, "El motor no dejó ningún gráfico. ¿Esa "
-                         "transformación tiene sentido para esta serie?" );
+        snprintf( why, sizeof why, "fug: %s",
+                  ( r->output && *r->output ) ? r->output : r->message );
+        barra_pub( v->a, why );
+        sin_pie( v );
         return;
         }
-    snprintf( eps, sizeof eps, "%s", sal );
-    g_free( sal );
-    }
+
+    dir = atsw_cache_dir();
+    sal = busca_eps( dir );
+    if ( sal == NULL )
+        {
+        g_free( dir );
+        barra_pub( v->a, "El motor no dejó ningún gráfico. ¿Esa "
+                         "transformación tiene sentido para esta serie?" );
+        sin_pie( v );
+        return;
+        }
 
     /* La MISMA ruta siempre que se pueda: preview reutiliza la ventana y la
      * recarga, asi que el pie no parpadea. Como el nombre lo pone la
      * transformacion, se copia al fijo.                                */
     {
-    gchar *d2 = atsw_cache_dir();
-    gchar *fijo = g_build_filename( d2, "vistazo.eps", NULL );
+    gchar *fijo = g_build_filename( dir, "vistazo.eps", NULL );
     gchar *c = NULL;
     gsize  ln = 0;
 
-    if ( g_file_get_contents( eps, &c, &ln, NULL ) )
+    if ( g_file_get_contents( sal, &c, &ln, NULL ) )
         { g_file_set_contents( fijo, c, (gssize) ln, NULL ); g_free( c ); }
     snprintf( v->eps, sizeof v->eps, "%s", fijo );
-    g_free( fijo ); g_free( d2 );
+    g_free( fijo );
     }
+    g_free( sal ); g_free( dir );
+    v->lam_h = vz_lam; v->d_h = vz_d; v->D_h = vz_D;
 
     preview_show( (PreviewApp *) v->a, v->eps );
+    /* El pie va con el PRIMER dibujo: antes no habia ventana. Va en LOS DOS
+     * graficos: el de media - desviacion tipica tambien deja tocar
+     * lambda, que es justo la pregunta que contesta.                   */
+    if ( v->pie )
+        {
+        if ( !preview_set_footer( v->eps, v->pie ) )
+            gtk_widget_destroy( v->pie );
+        v->pie = NULL;
+        }
     barra_pub( v->a, "" );
 }
 
-static void on_cambio( GtkWidget *w, Vistazo *v ) { (void) w; repinta( v ); }
+static gboolean al_reloj( gpointer d )
+{
+    vz_reloj = 0;
+    pide( d );
+    return G_SOURCE_REMOVE;
+}
+
+/* Un clic en un mando: se dibuja cuando dejen de llegar. */
+static void on_cambio( GtkWidget *w, Vistazo *v )
+{
+    (void) w;
+    if ( v->armando ) return;
+    if ( vz_reloj ) g_source_remove( vz_reloj );
+    vz_reloj = g_timeout_add( VZ_ESPERA_MS, al_reloj, v );
+}
 
 /* ------------------------------------------------------------------------ */
 
@@ -358,7 +435,6 @@ static void on_identificar( GtkButton *b, Vistazo *v )
 void atsw_vistazo( Atsw *a, const char *inp, int modo, double lam )
 {
     gchar *dir;
-    char   why[512];
     InpFile f;
     char    msg[256];
     int     d = 0, D = 0;
@@ -366,6 +442,10 @@ void atsw_vistazo( Atsw *a, const char *inp, int modo, double lam )
     if ( inp == NULL || !*inp )
         { barra_pub( a, "Marca una serie." ); return; }
 
+    /* Lo que quedara del vistazo anterior: la espera de un mando y un pie
+       que no llego a ponerse. Su corrida, si la hay, la para pide().  */
+    if ( vz_reloj ) { g_source_remove( vz_reloj ); vz_reloj = 0; }
+    sin_pie( &V );
     memset( &V, 0, sizeof V );
     V.a = a;
     V.modo = modo;
@@ -391,17 +471,10 @@ void atsw_vistazo( Atsw *a, const char *inp, int modo, double lam )
         inp_free( &f );
         }
 
-    /* El pie se arma antes de dibujar para que dibuja() lea sus valores. */
-    {
-    GtkWidget *pie = pie_nuevo( &V, lam, d, D );
-
-    repinta( &V );
-    /* El pie va en LOS DOS graficos: el de media - desviacion tipica tambien
-     * deja tocar lambda, que es justo la pregunta que contesta.        */
-    if ( !preview_set_footer( V.eps, pie ) )
-        gtk_widget_destroy( pie );
-    }
-    (void) why;
+    /* El pie se arma antes de dibujar para que lanza_fug() lea sus
+       valores; se pone en la ventana cuando llegue el dibujo (vz_acabo). */
+    V.pie = pie_nuevo( &V, lam, d, D );
+    pide( &V );
 }
 
 
@@ -451,13 +524,12 @@ void preview_cuaderno( PreviewApp *a, const gchar *path )
         {
         /* EL VISTAZO: lo que dice el dibujo depende de la transformacion
            con la que se mira, y esa no esta en ningun fichero.        */
+        /* La del dibujo que se ve, no la de los mandos: con el dibujo
+           nuevo en camino pueden no ser la misma.                     */
         gchar *t = V.s_d
             ? g_strdup_printf( "λ = %.2f, d = %d, D = %d",
-                  gtk_spin_button_get_value( GTK_SPIN_BUTTON(V.s_lam) ),
-                  gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(V.s_d) ),
-                  gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(V.s_D) ) )
-            : g_strdup_printf( "λ = %.2f (la serie en nivel)",
-                  gtk_spin_button_get_value( GTK_SPIN_BUTTON(V.s_lam) ) );
+                               V.lam_h, V.d_h, V.D_h )
+            : g_strdup_printf( "λ = %.2f (la serie en nivel)", V.lam_h );
         const char *datos[] = { "Transformación", t, NULL };
 
         an_cuaderno_grafico( &h, path, V.modo == 1 ? "Media – desviación típica"

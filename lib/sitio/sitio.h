@@ -48,4 +48,55 @@ gchar *sitio_busca( const char *programa, const char *const *sitios );
 long sitio_mi_pid( void );
 int  sitio_vigila_madre( const char *pid, GSourceFunc al_irse, gpointer datos );
 
+/* --- LOS MOTORES, SIN CONSOLA EN WINDOWS ---------------------------------
+ *
+ * Los motores (fue, fug, art...) son programas de consola, y los GUIs se
+ * enlazan con -mwindows: no tienen consola. En Windows, un programa de
+ * consola lanzado por uno que no la tiene recibe una NUEVA, con su ventana
+ * negra, y eso es lo que pasaba con g_spawn: GLib lanza a traves de su
+ * gspawn-win64-helper.exe (sin consola), y el motor, hijo de este, abria la
+ * suya. Cada redibujo del vistazo de la madre abria y cerraba una consola, y
+ * pagaba dos procesos en vez de uno. GLib no tiene una bandera para pedir
+ * CREATE_NO_WINDOW, ni en g_spawn ni en GSubprocess.
+ *
+ * Asi que en Windows se lanza con CreateProcessW y CREATE_NO_WINDOW --sin el
+ * proceso intermedio--, y en Linux y macOS es g_spawn, sin cambiar nada: las
+ * dos funciones de abajo tienen la firma de las de GLib y alli las llaman
+ * tal cual.
+ *
+ * CREATE_NO_WINDOW SOLO SI EL QUE LANZA NO TIENE CONSOLA, que es el criterio
+ * de GLib para elegir su ayudante: atsw-cli, o una bateria corrida desde una
+ * terminal, siguen compartiendo la suya con el motor (y el Ctrl-C le llega).
+ *
+ * En Windows, ademas:
+ *   - la entrada que no se pide como tuberia es NUL (no la del que lanza, que
+ *     en un GUI no existe); la salida y el error que no se piden, tambien;
+ *   - envp tiene que ser NULL (el hijo hereda el entorno) y child_setup no se
+ *     usa (tampoco lo usa GLib en Windows);
+ *   - el pid es el manejador del proceso, como en GLib: se vigila con
+ *     g_child_watch y se cierra con g_spawn_close_pid.                    */
+#ifdef G_OS_WIN32
+/* Abrir un fichero con el programa que Windows tenga para el (el PDF, con
+ * el visor). Era system("start ..."): system pasa por cmd.exe, un programa
+ * de consola, y desde un GUI eso asomaba una consola cada vez. Aqui es
+ * ShellExecuteW, sin interprete de ordenes. Devuelve TRUE si se abrio.  */
+gboolean sitio_abre( const char *ruta );
+#endif
+
+#define SITIO_SIN_CONSOLA 1     /* lo mira lib/sitio/test_consola.c */
+
+gboolean sitio_lanza_con_tuberias( const gchar *dir, gchar **argv, gchar **envp,
+                                   GSpawnFlags flags,
+                                   GSpawnChildSetupFunc child_setup,
+                                   gpointer user_data, GPid *child_pid,
+                                   gint *standard_input, gint *standard_output,
+                                   gint *standard_error, GError **error );
+
+gboolean sitio_lanza_y_espera( const gchar *dir, gchar **argv, gchar **envp,
+                               GSpawnFlags flags,
+                               GSpawnChildSetupFunc child_setup,
+                               gpointer user_data, gchar **standard_output,
+                               gchar **standard_error, gint *wait_status,
+                               GError **error );
+
 #endif

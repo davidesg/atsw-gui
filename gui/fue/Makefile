@@ -43,7 +43,12 @@ LDFLAGS  +=
 LIBS     = -lz -lm
 
 # Windows‑specific: hide console window
-ifeq ($(OS),windows)
+# OS vale «windows» al compilar cruzado, pero en MSYS2 viene del entorno de
+# Windows como «Windows_NT» --y entonces la deteccion de arriba no la toca--.
+# Con solo «windows», fue_gui salia con el subsistema de CONSOLA y abria una
+# al arrancar: la que se veia al «Derivar» desde la madre (gui/atsw/BUGS.md
+# BUG-0001; lo comprueba lib/sitio/prueba_consola.sh en la CI).
+ifneq ($(filter windows Windows_NT,$(OS)),)
     LDFLAGS += -mwindows -Wl,--subsystem,windows
 endif
 

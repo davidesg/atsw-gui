@@ -6,6 +6,7 @@
 #include <glib/gstdio.h>
 #include <string.h>
 #include <errno.h>
+#include "sitio.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -278,9 +279,9 @@ void set_current_inp_from_path(FueContext *ctx, const char *inp_path) {
 /* ------------------------------------------------------------------------- */
 static void open_pdf_file(const char *pdf_path) {
 #ifdef _WIN32
-    char cmd[1024];
-    snprintf(cmd, sizeof(cmd), "start \"\" \"%s\"", pdf_path);
-    (void)system(cmd);
+    /* Sin system("start ..."): pasaba por cmd.exe y asomaba una consola
+     * (gui/atsw/BUGS.md BUG-0001). */
+    (void)sitio_abre(pdf_path);
 #elif defined(__APPLE__)
     char *argv[] = { "open", (char *)pdf_path, NULL };
     g_spawn_async(NULL, argv, NULL,

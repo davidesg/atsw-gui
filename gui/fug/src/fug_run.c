@@ -224,8 +224,11 @@ gboolean run_fug(AppWidgets *app, const gchar *workspace, GPtrArray *args)
 
     show_status(app, "Running: %s", cmdline);
     set_busy(app, TRUE);
-    ok = g_spawn_sync(workspace, (gchar **) args->pdata, NULL, G_SPAWN_SEARCH_PATH,
-                      NULL, NULL, &out, &err, &status, &error);
+    /* g_spawn_sync en Linux y macOS; en Windows, sin la ventana de consola
+     * que g_spawn abria para fug en cada dibujo (lib/sitio).           */
+    ok = sitio_lanza_y_espera(workspace, (gchar **) args->pdata, NULL,
+                              G_SPAWN_SEARCH_PATH, NULL, NULL, &out, &err,
+                              &status, &error);
     set_busy(app, FALSE);
     g_ptr_array_remove_index(args, args->len - 1);
 

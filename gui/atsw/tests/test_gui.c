@@ -114,6 +114,19 @@ static void pump( int ms )
     } while ( g_get_monotonic_time() < hasta );
 }
 
+/* EL VISTAZO DIBUJA SIN PARAR LA VENTANA (vistazo.c, BUG-0001): fug corre
+ * aparte y un cambio en los mandos espera VZ_ESPERA_MS. Se deja correr el
+ * bucle hasta que no quede ni esa espera ni una corrida en marcha.        */
+static void espera_vistazo( void )
+{
+    gint64 hasta = g_get_monotonic_time() + 30 * G_USEC_PER_SEC;
+
+    pump( 20 );
+    while ( ( vz_reloj || vz_job ) && g_get_monotonic_time() < hasta )
+        pump( 20 );
+    pump( 50 );
+}
+
 /* ------------------------------------------------------------------------ */
 /* LA BARRA: lo que dice ahora y todo lo que ha dicho                         */
 /*                                                                           */
@@ -1325,7 +1338,7 @@ static void vistazo_prueba( void )
     olvida();
     gtk_menu_item_activate( GTK_MENU_ITEM(entrada_de( m, "Media" )) );
     cierra_menu( m );
-    pump( 200 );
+    espera_vistazo();
     check( g_file_test( V.eps, G_FILE_TEST_EXISTS ),
            "«Media – desviación típica» deja el EPS de fug", V.eps );
     check( V.s_d == NULL, "y su pie no lleva d ni D (es la serie en nivel)", NULL );
@@ -1338,7 +1351,7 @@ static void vistazo_prueba( void )
     if ( m == NULL ) return;
     gtk_menu_item_activate( GTK_MENU_ITEM(entrada_de( m, "Serie y ACF" )) );
     cierra_menu( m );
-    pump( 200 );
+    espera_vistazo();
     check( V.s_d != NULL && V.s_D != NULL,
            "«Serie y ACF / PACF…» lleva λ, d y D al pie", NULL );
     antes = lee( V.eps );
@@ -1347,7 +1360,7 @@ static void vistazo_prueba( void )
         {
         olvida();
         gtk_spin_button_set_value( GTK_SPIN_BUTTON(V.s_d), 1 );
-        pump( 300 );
+        espera_vistazo();
         despues = lee( V.eps );
         check( strcmp( antes, despues ) != 0,
                "mover d al pie rehace el grafico (otro EPS)", todo_lo_dicho() );
@@ -1358,6 +1371,24 @@ static void vistazo_prueba( void )
     g_free( antes );
     dibuja_de_verdad( tinta_de( grafico( "vistazo.eps" ) ),
                       "y el grafico rehecho tambien dibuja" );
+
+    /* EL CLIC NO PARA LA VENTANA (BUG-0001): tres cambios seguidos en λ no
+       lanzan fug en el acto --esperan VZ_ESPERA_MS-- y son UNA corrida. */
+    if ( V.s_lam )
+        {
+        guint n0 = vz_lanzadas;
+
+        olvida();
+        gtk_spin_button_set_value( GTK_SPIN_BUTTON(V.s_lam), 0.0 );
+        gtk_spin_button_set_value( GTK_SPIN_BUTTON(V.s_lam), 0.5 );
+        gtk_spin_button_set_value( GTK_SPIN_BUTTON(V.s_lam), 1.0 );
+        check( vz_job == NULL && vz_reloj != 0,
+               "un clic en λ no corre fug en el acto: espera al siguiente", NULL );
+        espera_vistazo();
+        check( vz_lanzadas == n0 + 1,
+               "y tres clics seguidos son UNA corrida de fug", todo_lo_dicho() );
+        check( dijo( "fug:" ) == NULL, "que dibuja sin quejarse", todo_lo_dicho() );
+        }
 
     /* IDENTIFICAR desde el mismo grafico (E2): art sobre la serie con la
        transformacion que se esta mirando, y su ventana con candidatos. */
@@ -1370,7 +1401,7 @@ static void vistazo_prueba( void )
     if ( bi )
         {
         gtk_spin_button_set_value( GTK_SPIN_BUTTON(V.s_lam), 1.0 );
-        pump( 300 );
+        espera_vistazo();
         olvida();
         gtk_button_clicked( GTK_BUTTON(bi) );
         pump( 1500 );
@@ -1471,14 +1502,14 @@ static void vistazo_prueba( void )
 
         /* art identifica en logaritmos o en niveles: otra lambda se dice */
         gtk_spin_button_set_value( GTK_SPIN_BUTTON(V.s_lam), 0.5 );
-        pump( 300 );
+        espera_vistazo();
         olvida();
         gtk_button_clicked( GTK_BUTTON(bi) );
         pump( 300 );
         check( dijo( "λ = 0.50" ) != NULL, "con λ = 0,5 se niega y dice por qué",
                todo_lo_dicho() );
         gtk_spin_button_set_value( GTK_SPIN_BUTTON(V.s_lam), 1.0 );
-        pump( 300 );
+        espera_vistazo();
         }
     }
 
@@ -1622,6 +1653,7 @@ static void vistazo_prueba( void )
     {
     gchar *no = g_build_filename( T, "no_existe.inp", NULL );
 
+    espera_vistazo();
     atsw_vistazo( &A, no, 0, 1.0 );
     check( strstr( barra(), "no_existe.inp" ) != NULL,
            "un vistazo sobre un .inp que no esta lo dice", barra() );
@@ -4201,7 +4233,7 @@ static void cuaderno( void )
         if ( m && entrada_de( m, vz[k].menu ) )
             gtk_menu_item_activate( GTK_MENU_ITEM(entrada_de( m, vz[k].menu )) );
         cierra_menu( m );
-        pump( 300 );
+        espera_vistazo();
         g  = grafico( "vistazo.eps" );
         bg = g ? boton_que_dice( GTK_WIDGET(g), "Al cuaderno" ) : NULL;
         check( bg != NULL && gtk_widget_get_visible( bg ),
@@ -4369,7 +4401,7 @@ static void histograma_prueba( void )
 
     olvida();
     gtk_menu_item_activate( GTK_MENU_ITEM(mi) );
-    pump( 300 );
+    espera_vistazo();
     check( hay_hist(), "el histograma lo dibuja fug con -d (hist_*.eps)", todo_lo_dicho() );
     check( V.s_d != NULL && V.s_D != NULL, "y lleva λ, d y D al pie", NULL );
     check( grafico( "vistazo.eps" ) != NULL, "en la ventana de gráficos", todo_lo_dicho() );
@@ -4378,7 +4410,7 @@ static void histograma_prueba( void )
     antes = lee( V.eps );
     gtk_spin_button_set_value( GTK_SPIN_BUTTON(V.s_d),
         gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(V.s_d) ) ? 0 : 1 );
-    pump( 300 );
+    espera_vistazo();
     despues = lee( V.eps );
     check( strcmp( antes, despues ) != 0 && dijo( "fug:" ) == NULL,
            "mover d rehace el histograma", todo_lo_dicho() );

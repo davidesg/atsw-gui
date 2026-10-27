@@ -1,5 +1,6 @@
 /* file_io.c */
 #include "file_io.h"
+#include "sitio.h"
 
 /* gui/fue/src/analisis.c */
 void fue_analisis_refresca(FueContext *ctx);
@@ -1423,9 +1424,9 @@ void fue_consola_si_estimado(FueContext *ctx, const char *path) {
 /* ========================================================================= */
 static void open_pdf_file(const char *pdf_path) {
 #ifdef _WIN32
-    char cmd[1024];
-    snprintf(cmd, sizeof(cmd), "start \"\" \"%s\"", pdf_path);
-    (void)system(cmd);
+    /* Sin system("start ..."): pasaba por cmd.exe y asomaba una consola
+     * (gui/atsw/BUGS.md BUG-0001). */
+    (void)sitio_abre(pdf_path);
 #elif defined(__APPLE__)
     char *argv[] = { "open", (char *)pdf_path, NULL };
     g_spawn_async(NULL, argv, NULL,

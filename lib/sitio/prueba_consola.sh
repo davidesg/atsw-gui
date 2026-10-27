@@ -17,9 +17,20 @@ esac
 R=$(cd "$(dirname "$0")/../.." && pwd)
 L="$R/lib"
 W=$(mktemp -d)
-trap 'rm -rf "$W"' EXIT
 CC=${CC:-gcc}
 mal=0
+
+# TODO LO QUE DICE, ADEMAS, EN UNA SOLA ANOTACION de GitHub (::notice::, con
+# los saltos como %0A): las anotaciones se leen por la API en cuanto acaba el
+# paso, sin esperar al trabajo entero (que en Windows son horas).
+exec > >(tee "$W/todo.txt") 2>&1
+anota() {
+    [ -n "$GITHUB_ACTIONS" ] || return 0
+    sync; sleep 1
+    printf '::notice title=prueba_consola::%s\n' \
+        "$(sed -e 's/%/%25/g' -e 's/::/: :/g' "$W/todo.txt" | awk '{ printf "%s%%0A", $0 }')" >&2
+}
+trap 'anota; rm -rf "$W"' EXIT
 
 $CC -O2 -o "$W/hijo_consola.exe" "$L/sitio/hijo_consola.c" || exit 1
 $CC -O2 -mwindows -I"$L/sitio" -I"$L/engine" -I"$L/coste" $(pkg-config --cflags glib-2.0) \

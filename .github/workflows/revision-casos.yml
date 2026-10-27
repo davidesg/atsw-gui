@@ -149,6 +149,7 @@ jobs:
           python .github/revision/escenas.py --bin $env:ATSW_BIN --extra `
             --modulo "$env:RUNNER_TEMP\escenas.dll" --salida R\escenas
           Copy-Item R\escenas\escenas.json R\
+          if (Test-Path R\escenas\control-consolas.json) { Copy-Item R\escenas\control-consolas.json R\ }
       - name: Los numeros de los GUIs
         if: always()
         shell: pwsh

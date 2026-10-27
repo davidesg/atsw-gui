@@ -48,8 +48,7 @@ CITADO = {
     "fue-es-m03": [("fue/es-core/subyacente_m03/sigma", 0.00123, 0.000005, "sigma 0.123 %"),
                    ("fue/es-core/subyacente_m03/sma1_1", 0.583, 0.0005, "Theta 0.583"),
                    ("fue/es-core/subyacente_m03/Q12", 6.5, 0.05, "Q(8) = 6.5"),
-                   ("fue/es-core/subyacente_m03/jb", 12.1, 0.05, "JB 12.1"),
-                   ("fue/es-core/subyacente_m03/logelf", None, None, "")],
+                   ("fue/es-core/subyacente_m03/jb", 12.1, 0.05, "JB 12.1")],
     "ganancia-m03": [("fue/es-core/subyacente_m03/ganancia_omega1", 0.0129, 0.00005, "omega(1) = 0.0129"),
                      ("fue/es-core/subyacente_m03/ganancia_omega1/et", 0.0016, 0.00005, "e.t. 0.0016"),
                      ("fue/es-core/subyacente_m03/ganancia_omega1/W", 61.6, 0.05, "W = 61.6")],
@@ -167,7 +166,8 @@ def fila_numeros(fid, prefijos, val, ref, linux, citado, mapa=None):
             difs.append("texto «%s»: %s" % (que, fmt(x)))
     if difs:
         return "DIFF", "; ".join(difs[:4]) + (" (y %d más)" % (len(difs) - 4) if len(difs) > 4 else "")
-    return "OK", "%d números" % n
+    m = len([x for x in citado.get(fid, []) if x[1] is not None])
+    return "OK", "%d números" % n + (" y %d citados" % m if m else "")
 
 
 def main():
@@ -190,7 +190,8 @@ def main():
     for p in plats:
         d = os.path.join(args.dir, "resultado-" + p)
         datos[p] = {"inst": carga(d, "instalar.json"), "num": carga(d, "numeros.json"),
-                    "gui": carga(d, "numeros-gui.json"), "esc": carga(d, "escenas.json")}
+                    "gui": carga(d, "numeros-gui.json"), "esc": carga(d, "escenas.json"),
+                    "ctl": carga(d, "control-consolas.json")}
 
     # A. la instalacion
     c = {}
@@ -263,8 +264,14 @@ def main():
             c[p] = ("—", "solo Windows")
             continue
         vistas = [(e["escena"], x) for e in (datos[p]["esc"] or []) for x in e.get("consolas", [])]
-        c[p] = ("OK", "ninguna ventana ConsoleWindowClass") if not vistas else \
-               ("FAIL", "; ".join("%s: %s" % (s, x["programa"]) for s, x in vistas[:5]))
+        ctl = datos[p]["ctl"]
+        if vistas:
+            c[p] = ("FAIL", "; ".join("%s: %s" % (s, x["programa"]) for s, x in vistas[:5]))
+        elif not ctl or not ctl.get("ok"):
+            c[p] = ("DIFF", "ninguna vista, pero el control positivo (cmd con consola nueva) "
+                            "tampoco se vio: el detector no prueba nada aquí")
+        else:
+            c[p] = ("OK", "ninguna; el control positivo sí se vio (%s)" % ctl["vistas"][0]["clase"])
     pon("C. GUIs (escenas)", "consolas", "Windows: ninguna consola asoma durante las escenas", c)
     # los avisos de stderr
     c = {}

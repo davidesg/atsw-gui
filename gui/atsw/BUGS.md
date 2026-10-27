@@ -116,8 +116,10 @@ En Windows y macOS no pasa.
 
 Con el `.deb` instalado y ATSW abierto desde el menú o con `atsw`,
 «Serie y ACF / PACF…» y «Media – desviación típica» no abren su ventana. La
-escena 01 del vídeo del IPC subyacente se para en «ventana vistazo». Con
-`/usr/lib/atsw/bin` en el PATH, la ventana sí se abre.
+escena 01 del vídeo del IPC subyacente se para en «ventana vistazo», y la
+barra de estado de la madre dice «No encuentro el motor fug.» (runner
+ubuntu-24.04, run 40597482182 de `revision-casos`). Con `/usr/lib/atsw/bin`
+en el PATH, la ventana sí se abre.
 
 ### Por qué
 

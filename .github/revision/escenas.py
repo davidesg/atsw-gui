@@ -163,6 +163,20 @@ class Consolas:
             self._hilo = threading.Thread(target=self._mira, daemon=True)
             self._hilo.start()
 
+    def control(self):
+        """El control positivo: una consola de verdad (cmd con
+        CREATE_NEW_CONSOLE) mientras se mira. Si no se ve, el detector no
+        vale en este Windows (p. ej. si la consola nueva abre como pestaña de
+        una ventana de Windows Terminal que ya estaba)."""
+        if not WIN:
+            return None
+        self.empieza()
+        p = subprocess.Popen(["cmd.exe", "/c", "ping -n 4 127.0.0.1 >nul"], creationflags=0x00000010)
+        p.wait(30)
+        time.sleep(0.5)
+        vistas = self.acaba()
+        return {"vistas": vistas, "ok": bool(vistas)}
+
     def acaba(self):
         if self._hilo:
             self._para.set()
@@ -318,6 +332,11 @@ def main():
         shutil.rmtree(base)
     os.makedirs(base)
     consolas = Consolas()
+    control = consolas.control()
+    if control is not None:
+        print("control de consolas: %s" % control, flush=True)
+        with open(os.path.join(args.salida, "control-consolas.json"), "w", encoding="utf-8") as f:
+            json.dump(control, f, ensure_ascii=False, indent=1)
     todos = []
     for caso in args.caso or ["es-core", "ipc-wti"]:
         os.makedirs(os.path.join(base, caso), exist_ok=True)

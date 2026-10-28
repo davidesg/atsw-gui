@@ -385,7 +385,7 @@ deterministas y la media μ. Los valores son semillas.
 > **¿Por qué lleva media?** Con una diferencia (d + D = 1), μ es la **deriva**:
 > el crecimiento medio de la serie. ATSW la deja libre sólo si la serie
 > transformada y diferenciada tiene una media significativa (\|t\| ≥ 2). El
-> IPC sube de media cada mes (t = 3.0), así que m01 lleva μ; el petróleo no
+> IPC sube de media cada mes (t = 3.1), así que m01 lleva μ; el petróleo no
 > tiene deriva (t = 0.6), y su modelo no la lleva. Sin diferencias, μ es el
 > nivel y va siempre; con dos, no va nunca.
 

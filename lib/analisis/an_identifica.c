@@ -444,7 +444,7 @@ static int pon_armonicos( const char *inp, int s, int *puestos,
 /* ¿EL HIJO ESTIMA LA MEDIA? Sin diferencias, si: es el nivel. Con una
    (d + D = 1), es la deriva, y solo si la serie diferenciada la tiene:
    t de su media, con el error tipico corregido por su r1, |t| >= 2. El IPC
-   en primeras diferencias la tiene (t = 3.0): fija en 0, sus residuos
+   en primeras diferencias la tiene (t = 3.1): fija en 0, sus residuos
    salian con media 0.0007, t = 4 (BUG-0002). El WTI no (t = 0.6): el
    petroleo no tiene deriva. Con d + D = 2, fija.                       */
 static gboolean media_libre( const Id *g )

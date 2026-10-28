@@ -110,7 +110,8 @@ no asome: eso lo prueba la CI de Windows.
 **Encontrado:** 2026-10-27, en la revisión de v0.2.2 con los casos de los
 vídeos (`.github/workflows/revision-casos.yml`), en Linux con el `.deb`.
 En Windows y macOS no pasa.
-**Arreglado:** no (abierto).
+**Arreglado:** 2026-10-28 (v0.2.3): la lista de `lanza_fug()` lleva ya el sitio del
+paquete, `"./%s"`, como las demás. `repro.py` sale con 0.
 
 ### Síntoma
 

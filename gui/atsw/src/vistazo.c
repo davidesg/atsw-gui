@@ -156,7 +156,7 @@ static gboolean lanza_fug( Vistazo *v, char *why, size_t n )
     /* El motor: el mismo que usa fug_gui. Se busca al lado antes que en el
      * PATH, por lo mismo que en gestos.c.                              */
     {
-    static const char *const sitio[] = { "../../engines/fug/%s", NULL };
+    static const char *const sitio[] = { "../../engines/fug/%s", "./%s", NULL };
 
     exe = sitio_busca( "fug", sitio );
     }

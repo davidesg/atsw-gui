@@ -33,7 +33,7 @@ on:
       version:
         description: 'La version publicada que se revisa (sin la v)'
         required: false
-        default: '0.2.2'
+        default: '0.2.3'
   pull_request:
     branches: [ main ]
     paths:
@@ -43,8 +43,8 @@ on:
     tags: [ 'v*' ]
 
 env:
-  # Con una etiqueta, esa version; a mano, la que se pida; si no, la 0.2.2.
-  VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name != '' && github.ref_name || inputs.version || '0.2.2' }}
+  # Con una etiqueta, esa version; a mano, la que se pida; si no, la 0.2.3.
+  VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name != '' && github.ref_name || inputs.version || '0.2.3' }}
   GH_TOKEN: ${{ github.token }}
   PYTHONIOENCODING: utf-8
 

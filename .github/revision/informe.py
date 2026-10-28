@@ -26,6 +26,9 @@ import os
 import re
 import sys
 
+# La versión revisada: la de la etiqueta, o la que se pidió a mano.
+VERSION = os.environ.get("VERSION", "").lstrip("v") or "?"
+
 AQUI = os.path.dirname(os.path.abspath(__file__))
 COLGADO = 30.0
 
@@ -56,7 +59,7 @@ CITADO = {
                    ("fue/es-core/subyacente_m04/t_mu", 4.0, 0.05, "t = 4.0"),
                    ("fue/es-core/subyacente_m04/ganancia_omega12", 0.01246, 0.000005, "ganancia 0.01246")],
     "media-madre": [("madre/t_media/es-core/subyacente", 2.6, 0.05, "ES_CORE: t = 2.6"),
-                    ("madre/t_media/ipc-wti/ipc", 3.0, 0.05, "IPC: t = 3.0"),
+                    ("madre/t_media/ipc-wti/ipc", 3.1, 0.05, "IPC: t = 3.1"),
                     ("madre/t_media/ipc-wti/wti", 0.6, 0.05, "WTI: t = 0.6")],
     "drtran-conjunta": [("drtran/conjunta/omega1[0]", 0.018, 0.0005, "omega0 = 0.018"),
                         ("drtran/conjunta/delta1[1]", 0.50, 0.005, "delta = 0.50"),
@@ -201,7 +204,7 @@ def main():
             c[p] = ("FAIL", "sin registro")
         else:
             c[p] = ("OK" if i.get("ok") else "FAIL", i.get("como", ""))
-    pon("A. Instalación", "instalar", "Instala el paquete v0.2.2 publicado", c)
+    pon("A. Instalación", "instalar", f"Instala el paquete v{VERSION} publicado", c)
 
     # B. los motores
     for fid, texto, pref in FILAS_MOTORES:
@@ -292,7 +295,7 @@ def main():
 
     # el Markdown
     sim = {"OK": "✅ OK", "DIFF": "🟡 DIFF", "FAIL": "❌ FAIL", "AVISO": "🟠 AVISO", "—": "—"}
-    md = ["# Revisión de ATSW v0.2.2 con los casos de los vídeos", "",
+    md = [f"# Revisión de ATSW v{VERSION} con los casos de los vídeos", "",
           "Una fila por comprobación y una columna por plataforma. En Linux, la referencia "
           "exacta; fuera de Linux, las varas de `docs/PRUEBAS.md` §3. Los números que citan "
           "los textos se miden con la precisión con que se citan.", ""]

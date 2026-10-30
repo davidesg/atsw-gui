@@ -346,6 +346,43 @@ La web y el MP4 de la release se quedan como alternativa.
 | | subirlos (el analista, en YouTube Studio) | a mano: la API exige un proyecto de Google Cloud auditado, o lo subido queda privado; primero «oculto» para revisar, luego público; una lista de reproducción en el orden univariante → transferencia |
 | | la web y las notas | cada ficha de `web/index.html#videos` incrusta su vídeo de YouTube, con la descarga del MP4 debajo; el enlace al canal en el pie y en las notas de la v0.2.0 |
 
+## PENDIENTE: el descriptivo de la suite — llegar a un consenso
+
+Planteado por el analista (30-oct-2026). «La suite Box-Jenkins-Treadway» era
+cierto mientras ATSW era univariante, intervención y transferencia. Con sima
+ya no lo es: quien lea «VARMA-VEC» no lo encuentra en Box y Jenkins. La
+escalera desde los modelos univariantes sí viene de Jenkins y Alavi y de la
+tradición oral de Treadway, pero ellos nunca vieron un VARMA-VEC. Y sima no
+siempre sube la escalera: también entra por el vector (Tiao y Box), y usa a
+Lütkepohl y a Poskitt. **Hay que aclararlo en las próximas versiones de
+ATSW, sin quitarle nada a la autoría de Treadway.**
+
+Criterios de la conversación:
+
+- La etiqueta Box-Jenkins-Treadway se queda donde es literal: **art y
+  drtran**, cuyo descriptivo actual es cierto, y la GUI y la web mientras solo
+  tengan univariante y transferencia.
+- Los nombres de autores no van en el descriptivo de la suite. Cada nombre
+  que se pone invita a preguntar por el que falta. Las citas van en la
+  documentación de cada método.
+
+Propuesta de partida (sin decidir):
+
+> **ATSW — A Time Series Workshop: from univariate analysis to multivariate
+> systems.** Univariate, intervention and transfer-function models in the
+> Box-Jenkins-Treadway methodology; VARMA and cointegrated VARMA-VEC systems by
+> exact maximum likelihood. Three MCP assistants, one for each rung: art, mtram
+> and sima.
+
+| | qué | notas |
+|---|---|---|
+| | **revisar todos los descriptivos de la suite** | inventario del 30-oct-2026, en las filas siguientes; un texto acordado, en inglés y en español |
+| | `atsw` en PyPI | `art-python/atsw-suite/pyproject.toml`: «the Box-Jenkins-Treadway suite (… multivariate VARMA and cointegrated VEC)». Es el caso más claro. Se cambia con una versión nueva de atsw |
+| | la cabecera de la suite | `art-python/atsw-suite/README.md` («ATSW — Box-Jenkins-Treadway time series suite» y la sección «Background — a modern Box-Jenkins-Treadway») y `art-python/llms.txt` |
+| | este repositorio | `README.md` («la suite Box-Jenkins-Treadway») |
+| | la web y la GUI, cuando lleguen los sistemas | `web/index.html` (meta y h1), `gui/atsw/src/main.c`, `gui/atsw/src/presentacion.c`, `packaging/linux/deb.sh`. Hoy son ciertos: ARIMA, intervención y transferencia |
+| | sima | sus descriptivos (README, PyPI, instrucciones del MCP), para que digan las dos rutas sin nombrar escuela |
+
 ## PENDIENTE: el asistente
 
 - **El asistente: una terminal con un MCP a medida (MTM) de los motores**,

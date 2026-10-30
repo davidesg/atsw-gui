@@ -37,11 +37,11 @@ macOS
 
          xattr -dr com.apple.quarantine /Applications/ATSW.app
 
-  Hay tres .dmg; en «Acerca de este Mac» pone qué Mac es y qué macOS:
-    «arm64»            Mac con Apple Silicon (M1, M2...), macOS 14 o posterior
+  Hay cuatro .dmg; en «Acerca de este Mac» pone qué Mac es y qué macOS:
+    «arm64»            Mac con Apple Silicon (M1, M2...), macOS 15 o posterior
+    «arm64-macos11»    Mac con Apple Silicon, macOS 11 (Big Sur) a 14 (Sonoma)
     «x86_64»           Mac con Intel, macOS 15 o posterior
-    «x86_64-macos11»   Mac con Intel, macOS 11 (Big Sur) a 14 (Sonoma);
-                       también Apple Silicon con macOS 11 a 13 (Rosetta 2)
+    «x86_64-macos11»   Mac con Intel, macOS 11 (Big Sur) a 14 (Sonoma)
   En macOS 11 el paso 2 es: clic derecho (o Ctrl+clic) sobre ATSW -> Abrir,
   y en el aviso, «Abrir».
 

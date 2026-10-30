@@ -4,7 +4,8 @@
 # docs/REVIEW_2026-09-23.md, BUG-58 .. BUG-60 (2026-10-17, found by the
 # Python port), BUG-61 (2026-10-18, the Windows build of the port), BUG-62
 # (2026-10-24, the shakedown of sima 0.2.0), BUG-63 (the same shakedown) and
-# BUG-64 (2026-10-25, the Monte Carlo of docs/ESTUDIO_CRT_2026-10-24.md).
+# BUG-64 (2026-10-25, the Monte Carlo of docs/ESTUDIO_CRT_2026-10-24.md),
+# BUG-66 and BUG-67 (2026-10-30, registered from drvec-python's TODO.md).
 #
 #   sh tests/repro/repro.sh            all of them
 #   sh tests/repro/repro.sh 23 31      only those
@@ -261,5 +262,22 @@ if want 62; then hdr 62 "the residual block does not say its last r columns are 
   grep -a -A1 '^  the columns:' r1.out || grep -a '^  residual sd:' r1.out
   grep -aq '^  the columns: D.muskrat ec1' r1.out \
     || echo "  (no names: the last column reads as mink's, and it is ec1's)"
+fi
+echo
+
+if want 66; then hdr 66 "-estwin dates the header and the diagnosis from the wrong observation"
+  cp "$TOP/tests/fixtures/mmpre.muskrat.pre" "$TOP/tests/fixtures/mmpre.mink.pre" .
+  "$B" mmpre.muskrat.pre mmpre.mink.pre 2 0 1 -case 2 -name full >/dev/null 2>&1
+  "$B" mmpre.muskrat.pre mmpre.mink.pre 2 0 1 -case 2 -f 4 -estwin 50 -name ew >/dev/null 2>&1
+  for f in full ew; do
+    printf '  %-5s %s | first residual: %s\n' "$f" "$(grep -a '^Sample' $f.out)" \
+      "$(grep -a -m1 -E '^ +1 +[0-9]{4} +[|]' $f.out | awk '{print $2}')"
+  done
+  echo "  (-estwin 50 fits 1851..1900: the first value the evaluation scores is 1901's)"
+fi
+
+if want 67; then hdr 67 "-fdhess: the s.e. move with an ulp of x and with the step"
+  python3 "$HERE/fdhess_noise.py" "$B"
+  [ $? -eq 1 ] && echo "  (exit 1: open)"
 fi
 echo

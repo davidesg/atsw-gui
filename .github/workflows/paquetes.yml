@@ -153,22 +153,35 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-14
+          # minimo: el macOS que el paquete promete en la web y en el LEEME.
+          # bundle.sh se para si algun binario pide mas, y comprueba_textos.py
+          # si los textos dicen otro. Con Homebrew, el paquete pide el macOS
+          # del runner (15); macOS 14 se retiro el 2-nov-2026.
+          - runner: macos-15
             arq: arm64
             nombre: arm64
+            minimo: '15.0'
           - runner: macos-15-intel
             arq: x86_64
             nombre: x86_64
-          # Para Intel con macOS 11 (Big Sur) o posterior: las bibliotecas de
-          # Homebrew piden el macOS del runner (13 o mas), las de conda-forge
-          # estan hechas para macOS viejos. Lo nuestro se compila para 11.0,
-          # y bundle.sh se para si algun binario pide mas.
+            minimo: '15.0'
+          # Para macOS 11 (Big Sur) o posterior: las bibliotecas de Homebrew
+          # piden el macOS del runner, las de conda-forge estan hechas para
+          # macOS viejos. Lo nuestro se compila para 11.0, y bundle.sh se para
+          # si algun binario pide mas. Uno para cada procesador.
+          - runner: macos-15
+            arq: arm64
+            nombre: arm64-macos11
+            minimo: '11.0'
+            conda: true
           - runner: macos-15-intel
             arq: x86_64
             nombre: x86_64-macos11
+            minimo: '11.0'
             conda: true
     runs-on: ${{ matrix.runner }}
-    # El de macOS 11 todavia es una prueba: si falla, la release sale sin el.
+    # Los de macOS 11 (conda-forge): si uno falla, la release sale sin el y
+    # la web lo marca como que falta en esta version.
     continue-on-error: ${{ matrix.conda == true }}
     defaults:
       run:
@@ -237,7 +250,11 @@ jobs:
           echo "v=$v" >> "$GITHUB_OUTPUT"
       - name: Compilar
         run: bash .github/build-all.sh
+      - name: El macOS minimo, el mismo en la web y en el LEEME
+        run: python3 packaging/macos/comprueba_textos.py "${{ matrix.nombre }}" "${{ matrix.minimo }}"
       - name: Empaquetar
+        env:
+          MACOS_MAXIMO: ${{ matrix.minimo }}
         run: bash packaging/macos/bundle.sh "${{ steps.v.outputs.v }}"
       - name: Probar el paquete
         run: |

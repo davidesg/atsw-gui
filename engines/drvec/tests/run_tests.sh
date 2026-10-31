@@ -1762,7 +1762,21 @@ cli "-nodrift in case 2 is refused"       2 "$XMUS" "$XMNK" 2 0 1 -case 2 -nodri
 cli "-nodrift outside the system is refused" 2 "$XMUS" "$XMNK" 2 0 1 -case 3 -nodrift 3
 cli "-case pre on the .inp route is refused" 2 "$CLI" 2 1 1 -case pre
 cli "-trend in case 2 is refused"         2 "$XMUS" "$XMNK" 2 0 1 -case 2 -trend
-cli "-trend with -lrtest is refused"      2 "$XMUS" "$XMNK" 2 0 0 -case 3 -trend -lrtest
+#  -trend with -lrtest: case 4 at every rank, calibrated by the bootstrap,
+#  whose samples carry W's slope (bootstrap_rank, simulate_h0).  trend4.inp
+#  has M = 3 and r = 1 by construction (tools/sim/sim_trend4.py), so the
+#  comparison 1 -> 2 simulates a model with a trend; rank 0 has none.
+rm -f "$TMP/tr4".*
+cp datasets/synthetic/trend4.inp "$TMP/tr4.inp"
+(cd "$TMP" && timeout "$SLOW_TIMEOUT" "$XDRV" tr4 1 0 0 -case 3 -trend -lrtest \
+    -bootstrap 19 >/dev/null 2>&1); trc=$?
+tb=$(grep -ac '^1,[0-9]*,ok,' "$TMP/tr4.boot" 2>/dev/null)
+if [ "$trc" -eq 0 ] && [ "${tb:-0}" -ge 10 ] \
+   && grep -aq 'NOTE: -trend is case 4' "$TMP/tr4.out" \
+   && grep -aEq '^  1       2 .* [01]\.[0-9]{4} +[0-9]+ ' "$TMP/tr4.out"; then
+    ok "-trend -lrtest -bootstrap: case 4 at every rank, $tb replications at H0 r = 1"
+else bad "-trend -lrtest" "exit=$trc boot(h0=1)=$tb"; fi
+cli "-trend with -lrtest in case 2 is refused" 2 "$XMUS" "$XMNK" 2 0 0 -case 2 -trend -lrtest
 cli "-trend with -f is refused"           2 "$XMUS" "$XMNK" 2 0 1 -case 3 -trend -f 4
 cli "-case 4 is refused (it is -trend)"   1 "$XMUS" "$XMNK" 2 0 1 -case 4
 echo

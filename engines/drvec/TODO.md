@@ -17,9 +17,10 @@ En orden:
 2. **`-xsys` con media móvil (q > 0)**: la máscara Θ_j[X][k] = 0 para k ≠ X a
    través de las clases MA. Antes del código, el estudio de identificación;
    `-marow`/`-mawarma` anulan la fila entera de X, diagonal incluida (MEJORA-2).
-3. **El rango con los deterministas nuevos**: con `-trend` (caso 4) y las
-   tablas del caso mixto de `-case pre` (hoy se imprimen las del caso 3; vale el
-   bootstrap), con un bootstrap que lleve la tendencia (MEJORA-3).
+3. **El rango con los deterministas nuevos**: con `-trend` (caso 4) **hecho en
+   0.14** (2026-10-31: `-bootstrap` lleva la tendencia, HOMOLOGATION §4x; falta
+   portarlo a drvec-python). Quedan las tablas del caso mixto de `-case pre`
+   (hoy se imprimen las del caso 3; vale el bootstrap) (MEJORA-3).
 4. **La previsión**: con exógenas (`-xlink` con `-f`/`-estwin`, necesita el
    futuro de X) y con `-trend` (prolongar la tendencia restringida).
 5. **`-irfboot` con exógenas y con `-trend`**: bandas con X fija (bootstrap
@@ -146,10 +147,10 @@ corto plazo).
 
 **Estado:** HECHA el 2026-10-07 (rama `feature/xlink`): `-case pre`, `-nodrift i`,
 `-trend`. Trivariante de Ecuador, PPA: caso 3 LR 6.21 (p 0.013) → `-case pre`
-5.09 (p 0.024) → `-case pre -trend` 0.15 (p 0.70), θ bajo PPA 0.45. Pendiente:
-el contraste de rango con `-trend` (tablas del caso 4 o bootstrap que lleve la
-tendencia), la previsión con tendencia, y `-lrtest` con `-case pre` (las tablas
-del caso mixto no existen: hoy se usan las del caso 3; bootstrap).
+5.09 (p 0.024) → `-case pre -trend` 0.15 (p 0.70), θ bajo PPA 0.45. El
+contraste de rango con `-trend`, hecho en 0.14 por bootstrap (HOMOLOGATION
+§4x). Pendiente: la previsión con tendencia, y `-lrtest` con `-case pre` (las
+tablas del caso mixto no existen: hoy se usan las del caso 3; bootstrap).
 
 **Qué falta.** Los casos 1–3 tratan el bloque ∇Y₂ en bloque: o ninguna serie
 tiene deriva (caso 2) o todas (caso 3). En el caso de motivación (trivariante

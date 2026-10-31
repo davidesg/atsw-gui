@@ -94,7 +94,7 @@ in case 1, where nothing does. `drvec` warns.
 | `-case 1\|2\|3` | the deterministic specification (Mauricio's Remark 6). Case 1: `E[∇Y₂] = E[W] = 0`. Case 2: `E[W] ≠ 0`. Case 3: both free. Default is 1 |
 | `-case pre` | case 3 with **each series' drift as its `.pre` says**: `E[∇Y₂ᵢ]` free iff the univariate model frees its mean (`Imu = 1`), held at 0 otherwise; `E[W]` free. The ladder's bottom rung is then exactly the univariate models (§`-case pre` below). `.pre` route only |
 | `-nodrift i` | hold `E[∇Y₂ᵢ] = 0` inside case 3 (series `i` by its position in the input); repeatable. Holding every drift of the `∇Y₂` block is case 2 |
-| `-trend` | **case 4**: a linear trend in `W`, restricted to the cointegrating space, on top of case 3 or `-case pre` (`r` slopes, `t` centred at mid-sample). A single fit: refused with `-lrtest` and the modes, `-f`, `-estwin`, `-writeinp`, `-writeres`, `-warma` |
+| `-trend` | **case 4**: a linear trend in `W`, restricted to the cointegrating space, on top of case 3 or `-case pre` (`r` slopes, `t` centred at mid-sample). A single fit, or the rank test calibrated by `-bootstrap` (no table for case 4); refused with the modes, `-f`, `-estwin`, `-writeinp`, `-writeres`, `-warma` |
 | `-irfboot N` | **bands for the level responses and the FEVD** by parametric bootstrap: `N` samples simulated from the fitted model (the rank bootstrap's generator) and **refitted as the data were** — same rank, same restrictions (`-weakex`/`-alpha`, `-fixb2row`, `-xsys`, the drift mask), same ladder start. Percentile bands (Efron), 90 % and 95 %, conditional on `r`; a summary in the `.out` and every response at every `k` in `<base>.irfboot` (CSV). Deterministic generator: reproducible. Levels layout; refused with `-xlink`, `-trend`, `-warma`, `-estwin` and the modes |
 | `-mean` | include a mean; implies case 2 unless a case was given |
 | `-diagar` `-diagma` `-diagcov` | restrict `Fᵢ`, `Θⱼ` or `Σ` to be diagonal |
@@ -1018,8 +1018,10 @@ model (G/Y's M1, without a mean, gives −222.91 there instead of its −223.42)
 - `-trend` adds case 4 (Johansen 1995, ch. 6): `E[W_t] = E[W] + d·(t − t_c)`.
   The equilibrium may drift (convergence, Balassa–Samuelson), and the Y1 block's
   drift becomes `d − β₂′E[∇Y₂]`. In the cast it is a deterministic term of W,
-  subtracted from the data. The rank test with a trend (case 4 tables or a
-  bootstrap carrying it) is pending.
+  subtracted from the data. With `-lrtest` every rank r >= 1 carries its r
+  slopes and rank 0 none. No table is printed: `-bootstrap N` calibrates the
+  statistic, and its samples carry the trend (HOMOLOGATION §4x: at T = 150
+  the test of the true rank rejects 3 % at a nominal 5 %).
 
 Measured on the case that motivated it (Ecuador; ln G/Y, ln CPI_USA, ln CPI_EC;
 p = 2, r = 1). The test of PPA (`-fixb2row 2 -1`, LR, 1 df):

@@ -2445,6 +2445,49 @@ With `r = 1` imposed, the adjustment coefficient of the series the relation is
 normalised on is `-0.0033` (t = −0.07).
 
 
+## 4x. The rank test with a restricted trend (case 4), calibrated by the bootstrap
+
+*2026-10-31, drvec 0.14 (`-trend -lrtest -bootstrap`).*
+
+**What was built.** Case 4 puts a trend in W, `E[W_t] = E[W] + d·(t − t_c)`,
+restricted to the cointegrating space; rank 0 has no W and no trend. There is
+no table for the exact LR in this case, as there is none for case 3, so the
+test is calibrated by the parametric bootstrap. Its generator, `simulate_h0`,
+draws `[∇Y₂ ; W]` around the cast's detrended mean. The trend has to be added
+back where the cast takes it out, with the same `t` and `t_c`; without that,
+the samples under H0 would have no trend and the refits would calibrate
+another statistic.
+
+**That the samples carry it.** A probe build printing the OLS slope of the
+simulated W on `datasets/synthetic/trend4.inp` (M = 3, r = 1, `-bootstrap
+20`): mean 0.0712 and sd 0.010 over the 20 samples of H0 r = 1, against the
+fitted d = 0.0721.
+
+**The size.** `tools/mc_trend4.py`, the DGP of `tools/sim/sim_trend4.py`:
+M = 3, true rank 1, `W = Y1 − Y2a − 0.5 Y2b` with slope d = 0.05, Y2 drifting
+(0.2, 0.1), Λ = (0.30, 0.10, 0), p = 1, Σ = I; T = 150, B = 99, 100
+replications, seeds 100001 to 100100. Two fits of the same data:
+
+| r = 1 → 2, the true rank | 10 % | 5 % | 1 % |
+|---|---|---|---|
+| `-case 3 -trend` (the model) | 4 % | 3 % | 2 % |
+| `-case 3` (the trend left out) | 18 % | 5 % | 0 % |
+
+The standard errors at 100 replications are 3.0, 2.2 and 1.0 points. The
+case-4 test is somewhat conservative (4 % at 10 %, two standard errors low),
+as the bootstrap already is in case 2
+([ESTUDIO_CRT_2026-10-24.md](ESTUDIO_CRT_2026-10-24.md): 4 % at a nominal 5 %
+at T = 50). Its p-values at
+the true rank have quantiles 0.14, 0.54 and 0.95 at 10, 50 and 90 %. Left
+out, a trend this small costs over-rejection at 10 % and little at 5 %. Power
+against r = 0 is 100 % in both. One replication of the case-4 test takes
+about 65 s, against 16 s without the trend, with two running at once.
+
+**What it does not cover.** One DGP, one sample size and one slope. Case 4
+with `-case pre` (a drift held) is the same path in the code and was not
+measured; `-irfboot` and the forecast still refuse `-trend`.
+
+
 ## 5. What is not in the register, and why
 
 * **The Census Housing example** of the AddOn (Hillmer & Tiao 1979): the data

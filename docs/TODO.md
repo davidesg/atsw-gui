@@ -439,7 +439,7 @@ programa:
 - **Las lagunas, prioridad de la versión siguiente** de drvec y de su porte:
   primero en el C, luego portadas. La lista ordenada, en
   `engines/drvec/TODO.md` («PRIORIDAD»): el rango con exógenas, `-xsys` con
-  MA, el rango con `-trend`/`-case pre`, la previsión y las bandas con
+  MA, el rango con `-case pre` (el de `-trend`, hecho en drvec 0.14), la previsión y las bandas con
   exógenas y tendencia, `-beta file`.
 
 - `copias.sh` señala una copia de `lib/fuepre/fue_pre_reader.c` en

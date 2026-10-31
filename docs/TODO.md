@@ -383,6 +383,33 @@ Propuesta de partida (sin decidir):
 | | la web y la GUI, cuando lleguen los sistemas | `web/index.html` (meta y h1), `gui/atsw/src/main.c`, `gui/atsw/src/presentacion.c`, `packaging/linux/deb.sh`. Hoy son ciertos: ARIMA, intervención y transferencia |
 | | sima | sus descriptivos (README, PyPI, instrucciones del MCP), para que digan las dos rutas sin nombrar escuela |
 
+## PENDIENTE: los wheels de macOS, para macOS 11 en los dos procesadores
+
+Propuesta (31-oct-2026), a incorporar o no en las próximas versiones: que los
+wheels de PyPI sigan el criterio de los `.dmg` de atsw-gui (#101), que llegan
+a macOS 11 en Apple Silicon e Intel. Hoy fue, drvarma y drvec publican sólo
+`macosx_14_0_arm64`, compilado en `macos-14`, y GitHub retira ese runner el
+2-nov-2026: la siguiente release de cualquiera de los tres falla en macOS
+hasta que sus workflows pasen a `macos-15`, con esta propuesta o sin ella.
+
+| | qué | notas |
+|---|---|---|
+| | Apple Silicon: `macosx_11_0_arm64` | en `macos-15` con `MACOSX_DEPLOYMENT_TARGET=11.0`; la GSL de Homebrew pide el macOS del runner, así que la GSL viene de conda-forge o se compila para 11.0, como en `paquetes.yml` |
+| | Intel: `macosx_11_0_x86_64` | en `macos-15-intel`; hasta ahora no se construía por política (no había runners), y con él el wheel puro deja de ser lo único que sirve a un Mac Intel |
+| | la comprobación | el workflow se para si algún `.so` o binario pide más de 11.0 (`vtool`/`otool -l`, `LC_BUILD_VERSION minos`), como `bundle.sh` |
+| | fue `wheels.yml` | cp310–cp314: 5 wheels por procesador |
+| | drvarma `publish.yml` | cp310–cp314: 5 wheels por procesador |
+| | drvec `publish.yml` | un wheel `py3` por plataforma (lleva el binario, no una extensión) |
+| | sólo tests | drvec `tests.yml`, art `preflight-atsw.yml`: `macos-14` → `macos-15`, sin más; sima ya lo hizo en su 0.2.1 |
+
+Cuántos ficheros por release, contando el sdist y el wheel puro:
+
+| | ahora | después |
+|---|---|---|
+| fue | 32 (30 binarios) | 37 (35 binarios) |
+| drvarma | 32 (30 binarios) | 37 (35 binarios) |
+| drvec | 6 (4 binarios) | 7 (5 binarios); 9 (7) si se añade musllinux, aplazado |
+
 ## PENDIENTE: el asistente
 
 - **El asistente: una terminal con un MCP a medida (MTM) de los motores**,

@@ -1773,3 +1773,82 @@ rung failed to make admissible: the 36 hashes of `tools/golden.sh` do not
 move, and in `tests/run_tests.sh` two baselines do, both the UKconsumption
 fits above, now at the higher optimum (`golden 573.9601581380 … 2 0 2` and the
 `8p.2` LR(1) = 32.9750). `[8ae]` checks the repro's case.
+
+---
+
+## BUG-66 — under `-estwin` the header and the diagnosis are dated from the wrong observation
+
+**Status: OPEN** (found 2026-10-15 by the Python port, reproduced on 0.13 at dda05d8).
+
+**What it is.** BUG-37 dates the first estimated observation as
+`nobs_raw - nobs + 1`, in the header (`src/drvec.c` ~11427, `ObsToDate`) and in
+the diagnosis, through `trans_d = nobs_raw - nobs` (~7982). That assumes that
+everything between the raw sample and the estimated one is trimmed at the
+START, which is true of the first difference. `-estwin E` trims at the END: it
+sets `nobs = E` (~747) and keeps the rest for the rolling evaluation. The
+offset then grows by what is left after the window, and every date moves
+forward by it.
+
+**How it was found.** By drvec-python's milestone 3 (the `-f`/`-estwin` port,
+`tests/test_forecast.py`), which reproduces the line and asserts it.
+
+**What it cost.** Nothing numerical: the fit, the forecasts and the rolling
+evaluation (numbered by origin, not dated) are right. What is wrong is every
+date the `.out` prints for the window. Mink-muskrat (annual, raw 62 from 1850),
+`2 0 1 -case 2 -f 4 -estwin 50`: the window is 1851..1900, and the first value
+the evaluation scores is 1901's. The header says `Sample : 50 observations
+from 1862`, and the residual plots run 1862..1911, eleven years late (62 − 1 −
+50). An analyst who reads a residual outlier off that plot looks for it in the
+wrong year.
+
+**Repro.** `sh tests/repro/repro.sh 66`: the header and the first residual
+date, with `-estwin 50` and without it.
+
+**Suggested fix.** Date from the start trim, `nobs_raw - nobs_full` with
+`nobs_full` the count before `-estwin`, in both places. The `.out` of the
+`-estwin` goldens changes in those lines only, and drvec-python's
+`report.py` with it (its `.out` is byte-identical).
+
+---
+
+## BUG-67 — `-fdhess`'s standard errors are not determined to the digits printed
+
+**Status: OPEN** (found 2026-10-15 by the Python port, measured on 0.13 at dda05d8).
+
+**What it is.** `exact_hessian_se` calls `fdhess` (`src/qnewtopt.c` 404,
+Dennis and Schnabel's A5.6.2, forward differences) with `eta = macheps`. Its
+step, `macheps^(1/3) · max(|x|, 1)` ≈ 6e-6, assumes an objective exact to an
+ulp. AS 311's is ~1e-14 relative (E1, |Σ| ~ 1e-11), and the second difference
+divides that noise by h² ~ 4e-11. The forward formula also carries an O(h)
+truncation error, so a larger `eta` trades the noise for a bias: it is not the
+fix.
+
+**How it was found.** By drvec-python's milestone 3, in setting the
+off-platform tolerance of the `-fdhess` s.e. (`TOL_FDSE_REL`, drvec-python
+`tests/conftest.py`, measured by `tests/test_fdhess.py::test_noise_floor`).
+
+**What it cost.** Measured with `tests/repro/fdhess_noise.py`, on the port,
+whose s.e. are the C's at the optimum to the printed digit (5e-7):
+
+| case (2 0 1 -case 2) | x moved by ~1 ulp | step × 3.6 (`eta` = 1e-14) |
+|---|---|---|
+| E1 | 4.2e-3 | 5.1e-2 (E[ec1] 0.051680 → 0.049059) |
+| mink-muskrat | 1.1e-3 | 1.9e-2 (D.muskrat <- ec1 0.325299 → 0.331589) |
+
+Relative changes of the most affected s.e. The `.out` prints six decimals,
+and the fourth significant digit is noise. A change of the step by a factor
+of a few moves the second or third digit, so the s.e. depend on a choice the
+`.out` does not report. E1 is a ridge rather than a maximum (drvec-python
+`TODO.md`), so its figures are the worst case. No crash, and the BFGS s.e.
+(the default) are not affected. It matters where an article quotes `-fdhess`
+s.e. to three digits.
+
+**Repro.** `sh tests/repro/repro.sh 67` (needs drvec-python importable; exit 1
+while open).
+
+**Suggested fix.** Not settled. A central-difference Hessian at the same step
+did not give a stable reference either: with larger steps it diverges, so the
+objective is far from quadratic at that scale. A step study (Richardson
+extrapolation over a few `eta`, or the analytic score of the concentrated
+likelihood) is what would settle it. Until then the `.out` could say how many
+digits of the s.e. are determined.

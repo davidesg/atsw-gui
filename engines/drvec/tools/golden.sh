@@ -119,6 +119,7 @@ PRE_CASES=(
   "trend|$PRE1 $FX/minkmu.pre|2 0 1 -case pre -trend"
   "irfboot|$PRE1 $PRE2|2 0 1 -case 2 -irfboot 40"
   "rankboot|$PRE1 $PRE2|2 0 1 -case 2 -lrtest -bootstrap 20"
+  "trendboot|datasets/synthetic/trend4|1 0 0 -case 3 -trend -lrtest -bootstrap 20"
 )
 for c in "${PRE_CASES[@]}"; do
     label=${c%%|*}; rest=${c#*|}; files=${rest%%|*}; args=${rest#*|}

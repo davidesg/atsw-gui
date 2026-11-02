@@ -82,6 +82,35 @@ a release nobody can cite correctly.
 
 ## 3. The record
 
+### 0.14 — sin publicar
+
+**Why a release at all.** The rank test with `-trend` (case 4), the third gap
+of the list in `TODO.md`, needed a bootstrap that carries the trend. And what
+came in after 0.13's record (`-gzero`, BUG-63, BUG-64, the I(1, r) check
+before the rank bootstrap) was built and shipped under the number 0.13: the
+binary in drvec-python 0.1.0's wheels says 0.13 and is not the 0.13 recorded
+below. A new number separates them.
+
+**Why 0.14 and not 0.13.1.** It adds capability (`-trend -lrtest`, `-gzero`)
+and recorded figures move (BUG-64: UKconsumption's LR(1) from 25.51 to
+32.98). That is `y`.
+
+**Why not 1.0.** The conditions of §1 are where 0.13 left them.
+
+**What it contains.**
+
+| | |
+|---|---|
+| `-trend -lrtest` | case 4 at every rank, calibrated by `-bootstrap`, whose samples carry W's slope (`simulate_h0`); no table is printed for it |
+| `-gzero i j` | entries of Γ(k) held at zero; with `-weakex`, the conditional model |
+| `BUG-63` | the rank bootstrap's `.boot` flushed replication by replication |
+| `BUG-64` | a last-resort Λ admissible by construction in `make_admissible` |
+| the I(1, r) check | `-bootstrap` does not simulate from a model under H0 that is not I(1, r) |
+
+**Re-measured for this release.** The 36 golden hashes of 0.13 are unchanged
+with `-trend -lrtest`; `trendboot.out` and `trendboot.boot` are new (38). The
+size of the case-4 test is in HOMOLOGATION §4x.
+
 ### 0.13 — 2026-10-16
 
 **Why a release at all, and why now.** `BUG-40` was decided: the deterministic

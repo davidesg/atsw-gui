@@ -118,7 +118,7 @@
  *  argument that a reader needs before running the program, and the right
  *  place for the single definition the binary is built from.                 */
 #ifndef DRVEC_VERSION
-#define DRVEC_VERSION "0.13"
+#define DRVEC_VERSION "0.14"
 #endif
 
 real macheps;
@@ -2271,8 +2271,13 @@ static real boot_normal(void)
 }
 
 /*  simulate_h0 — one sample of LEVELS under v's model, with B2 given.
- *  out is expected dimensioned (1..nobs_raw, 1..M).  Returns 0 if it worked.  */
-static int simulate_h0(struct Tvarma *v, real **B2, int r, real **out)
+ *  out is expected dimensioned (1..nobs_raw, 1..M).  Returns 0 if it worked.
+ *  dtr (1..r), or NULL: -trend's slopes.  v's W is the cast's, detrended
+ *  (W_t - d (t - tc)), so the trend is added back where the cast took it
+ *  out, with the same t and tc (vec_shootx): row t of v is row t+1 of the
+ *  levels, tc = (n + 1) / 2.                                                */
+static int simulate_h0(struct Tvarma *v, real **B2, int r, const real *dtr,
+                       real **out)
 {
     int M = nser, s = M - r, n = v->n, p = v->p, q = v->q;
     int burn = 50 + 10 * p, T = n + burn;
@@ -2317,7 +2322,7 @@ static int simulate_h0(struct Tvarma *v, real **B2, int r, real **out)
         int tb = t + burn;
         for (i = 1; i <= s; i++) out[t+1][i] = out[t][i] + wb[tb][i];
         for (j = 1; j <= r; j++) {
-            real w = wb[tb][s+j];
+            real w = wb[tb][s+j] + (dtr ? dtr[j] * (t - 0.5 * (n + 1)) : 0.0);
             for (i = 1; i <= s; i++) w -= B2[i][j] * out[t+1][i];
             out[t+1][s+j] = w;
         }
@@ -2497,6 +2502,7 @@ static int bootstrap_rank(int rr, real *x, int npar, int N, real *cv, real *pval
 {
     int M = nser, s = M - rr, i, j, b, nok = 0, ifr = 0;
     real **B2 = matrix(1, (s > 0 ? s : 1), 1, (rr > 0 ? rr : 1));
+    real *dtr = vector(1, (rr > 0 ? rr : 1));
     real **sim = matrix(1, nobs_raw, 1, M);
     real **saved = matrix(1, nobs_raw, 1, M);
     real *stat = vector(1, N);
@@ -2518,6 +2524,16 @@ static int bootstrap_rank(int rr, real *x, int npar, int N, real *cv, real *pval
     }
     /* The model under H0, recovered from the fit. */
     global_r = rr; build_y2_levels();
+    /*  -trend: W's r slopes, the last r of the mean block (par_blocks).  The
+     *  samples carry them, so the refits -- case 4 at every rank, as on the
+     *  data -- calibrate the statistic that was computed.  At rr = 0 there
+     *  is no W and no trend.                                              */
+    for (j = 1; j <= (rr > 0 ? rr : 1); j++) dtr[j] = 0.0;
+    if (global_trend && rr > 0) {
+        int nmean, nlam, nmid, ntail;
+        par_blocks(&nmean, &nlam, &nmid, &ntail);
+        for (j = 1; j <= rr; j++) dtr[j] = x[nmean - rr + j];
+    }
     vh.xitol = (met == 2) ? -1.0e-3 : 1.0e-3;
     vec_shootx(x, &vh, &ifr, 1, 0);
     {   /* fill sigma2/logelf by evaluating: vec_shootx does not set them */
@@ -2537,6 +2553,7 @@ static int bootstrap_rank(int rr, real *x, int npar, int N, real *cv, real *pval
         free_vector(stat, 1, N);
         free_matrix(saved, 1, nobs_raw, 1, M);
         free_matrix(sim, 1, nobs_raw, 1, M);
+        free_vector(dtr, 1, (rr > 0 ? rr : 1));
         free_matrix(B2, 1, (s > 0 ? s : 1), 1, (rr > 0 ? rr : 1));
         global_r = save_r;
         return -1;
@@ -2549,7 +2566,7 @@ static int bootstrap_rank(int rr, real *x, int npar, int N, real *cv, real *pval
     for (b = 1; b <= N; b++) {
         int ok0 = 0, ok1 = 0;
         real l0, l1;
-        if (simulate_h0(&vh, B2, rr, sim) != 0) {
+        if (simulate_h0(&vh, B2, rr, global_trend ? dtr : NULL, sim) != 0) {
             if (boot_dump) {
                 fprintf(boot_dump, "%d,%d,simfail,\n", rr, b);
                 fflush(boot_dump);
@@ -2607,6 +2624,7 @@ static int bootstrap_rank(int rr, real *x, int npar, int N, real *cv, real *pval
     free_vector(stat, 1, N);
     free_matrix(saved, 1, nobs_raw, 1, M);
     free_matrix(sim, 1, nobs_raw, 1, M);
+    free_vector(dtr, 1, (rr > 0 ? rr : 1));
     free_matrix(B2, 1, (s > 0 ? s : 1), 1, (rr > 0 ? rr : 1));
     global_r = save_r;
     return nok;
@@ -2684,7 +2702,7 @@ static int bootstrap_ma(real *x0, int npar0, int N, real *cv, real *pval,
         int ok0 = 0, ok1 = 0;
         real l0, l1;
         set_spec(k0);
-        if (simulate_h0(&vh, B2, r, sim) != 0) continue;
+        if (simulate_h0(&vh, B2, r, NULL, sim) != 0) continue;
         for (i = 1; i <= nobs_raw; i++)
             for (j = 1; j <= M; j++) rawmat[i][j] = sim[i][j];
         set_spec(k0); l0 = fit_ll(r, &ok0);
@@ -7769,7 +7787,7 @@ static void irf_bootstrap(real *x, int npar, int K, int N)
         struct Tvarma vr;
         int good = 0;
 
-        if (simulate_h0(&vh, B2, r, sim) == 0) {
+        if (simulate_h0(&vh, B2, r, NULL, sim) == 0) {
             for (i = 1; i <= nobs_raw; i++)
                 for (j = 1; j <= M; j++) rawmat[i][j] = sim[i][j];
             build_y2_levels();
@@ -9979,6 +9997,12 @@ static int run_lrtest(void)
                 "  legitimate question and a different one; its distribution is\n"
                 "  not the tabulated Johansen one.  For the usual rank test, drop\n"
                 "  the restriction.\n");
+        if (global_trend)
+            fprintf(outputv,
+                "  NOTE: -trend is case 4, a trend restricted to the cointegrating\n"
+                "  space (Johansen 1995, ch. 6): each rank r >= 1 carries r slopes\n"
+                "  and rank 0 none.  No table is given for it; -bootstrap N\n"
+                "  calibrates the statistic, with samples that carry the trend.\n");
 
         /* ---- critical values by parametric bootstrap, if asked for --------- */
         if (global_boot > 0) {
@@ -10247,7 +10271,7 @@ static void usage(FILE *o)
     fprintf(o, "              is then exactly the univariates\n");
     fprintf(o, "  -nodrift i : hold E[∇Y₂ᵢ] = 0 inside case 3 (repeatable)\n");
     fprintf(o, "  -trend  : case 4, a linear trend in W (restricted to beta) on top\n");
-    fprintf(o, "            of case 3 / -case pre; a single fit (no -lrtest, -f)\n\n");
+    fprintf(o, "            of case 3 / -case pre; with -lrtest, calibrated by -bootstrap (no -f)\n\n");
     fprintf(o, "Data layout (cols 1..s are the Y₂ block, cols s+1..M the Y₁ block):\n");
     fprintf(o, "  default        every series in LEVELS; ∇Y₂ is formed internally\n");
     fprintf(o, "                 (one observation is consumed)\n");
@@ -10940,19 +10964,20 @@ static int parse_cli(int argc, char *argv[])
             "       -specs, -rungs, -matest, -artest and -eval (not yet).\n");
         exit(2);
     }
-    /*  -trend (case 4) builds on case 3's drifts.  The rank test would need
-     *  case 4's tables (or a bootstrap that carries the trend); the forecast
-     *  and the rolling evaluation would have to extend it; -writeinp writes
-     *  Ybar without it; -warma walks its own mean block.                   */
-    if (global_trend && (global_case != 3 || global_warma || global_lrtest
+    /*  -trend (case 4) builds on case 3's drifts.  The rank test has no
+     *  tables for it (case 3's do not apply either) and is calibrated by
+     *  -bootstrap, whose samples carry the trend (bootstrap_rank); the
+     *  forecast and the rolling evaluation would have to extend it;
+     *  -writeinp writes Ybar without it; -warma walks its own mean block.  */
+    if (global_trend && (global_case != 3 || global_warma
                          || global_specs || global_rungs || global_matest
                          || global_artest || global_eval || global_fcast > 0
                          || global_estwin > 0 || global_writeinp
                          || global_writeres)) {
         fprintf(stderr,
             "ERROR: -trend (case 4) goes on case 3's drifts (-case 3 or -case pre)\n"
-            "       for a single fit: it cannot be combined with -warma, -f,\n"
-            "       -estwin, -writeinp, -writeres or the modes -lrtest, -specs,\n"
+            "       for a single fit or the rank test: it cannot be combined with\n"
+            "       -warma, -f, -estwin, -writeinp, -writeres or the modes -specs,\n"
             "       -rungs, -matest, -artest and -eval (not yet).\n");
         exit(2);
     }

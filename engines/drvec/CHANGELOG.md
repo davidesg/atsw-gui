@@ -5,7 +5,28 @@ Los informes completos están en [`docs/DEVELOPMENT_RECORD.md`](docs/DEVELOPMENT
 (las mediciones). Los defectos, en [`docs/BUGS.md`](docs/BUGS.md). Etiquetas de
 publicación: `v*`.
 
-## Sin publicar
+## 0.14 — sin publicar
+
+### El contraste de rango con `-trend` (caso 4), calibrado por bootstrap
+
+- `-trend -lrtest` ya no se rechaza en el caso 3 / `-case pre`. Cada rango
+  r ≥ 1 se ajusta con sus r pendientes de W, y el rango 0 sin ninguna. No hay
+  tablas: el `.out` imprime «(no values)», como en el caso 3, y una nota dice
+  que lo calibra `-bootstrap N`.
+- El generador del bootstrap lleva la tendencia: `simulate_h0` suma a cada W
+  su `d·(t − t_c)`, con la misma t y la misma t_c que el cast. Medido: en las
+  muestras simuladas de `trend4.inp` la pendiente de W es 0.0712 de media (sd
+  0.010, 20 muestras), frente a la ajustada de 0.0721.
+- Tamaño medido con `tools/mc_trend4.py` (M = 3, rango verdadero 1, d = 0.05,
+  T = 150, B = 99, 100 réplicas): el contraste del rango verdadero rechaza el
+  4 %, el 3 % y el 2 % a niveles del 10, el 5 y el 1 %, algo conservador como
+  en el caso 2. Con los mismos datos ajustados sin la tendencia (`-case 3`)
+  rechaza el 18 %, el 5 % y el 0 %. La potencia frente a r = 0 es del 100 %
+  en los dos. HOMOLOGATION §4x.
+- Datos nuevos `datasets/synthetic/trend4.inp` (`tools/sim/sim_trend4.py`),
+  el caso `trendboot` de los goldens (`.out` y `.boot`) y una comprobación en
+  `run_tests.sh` §6e. Los 36 hashes anteriores no se mueven.
+- `-irfboot`, `-f` y los modos siguen rechazando `-trend`.
 
 ### BUG-64: el rango por encima del verdadero ya no se queda sin arranque
 

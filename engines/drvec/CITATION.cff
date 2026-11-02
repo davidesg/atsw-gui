@@ -11,7 +11,7 @@ authors:
     given-names: "A. B."
   - family-names: "Guerrero"
     given-names: "D. E."
-version: "0.13"
+version: "0.14"
 date-released: "2026-10-16"
 license: GPL-2.0-or-later
 repository-code: "https://github.com/davidesg/drvec"

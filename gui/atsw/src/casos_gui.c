@@ -30,6 +30,7 @@
 #include "outfile.h"
 #include "preview.h"
 #include "vuelta.h"
+#include "netfile.h"
 
 void barra_pub( Atsw *a, const char *s );
 
@@ -208,7 +209,14 @@ typedef struct {
     int        n;
     char       muestra[PR_ID];
     char       de[PR_ID];           /* derivar: el caso de partida, o ""   */
+    char       motor[16];           /* "drtran" (MT) o "drvarma" (SIM)     */
 } Nc;
+
+/* Es un sistema de SIM (docs/DISENO-sim.md): drvarma, y mañana drvec. */
+static int es_sim( const char *motor )
+{
+    return motor && ( !strcmp( motor, "drvarma" ) || !strcmp( motor, "drvec" ) );
+}
 
 static void nc_coloca( Nc *x, NcFila *f )
 {
@@ -390,11 +398,12 @@ static gboolean nc_acepta( Nc *x, char *why, size_t n )
             }
 
     if ( ne < 2 )
-        { snprintf( why, n, "Un caso cruza al menos dos series: marca las que "
-                    "entran." ); return FALSE; }
+        { snprintf( why, n, "Un %s cruza al menos dos series: marca las que "
+                    "entran.", es_sim( x->motor ) ? "sistema" : "caso" ); return FALSE; }
 
     if ( atsw_ventana_comun( pv, ne, w, sizeof w ) != 0 )
-        { snprintf( why, n, "No es un caso: %s", w ); return FALSE; }
+        { snprintf( why, n, "No es un %s: %s", es_sim( x->motor ) ? "sistema" : "caso", w );
+          return FALSE; }
 
     /* LA IDENTIDAD, POR CONTENIDO: el sha256 de cada .pre ahora. */
     for ( i = 0; i < ne; i++ )
@@ -406,7 +415,15 @@ static gboolean nc_acepta( Nc *x, char *why, size_t n )
         }
 
     /* EL MISMO CASO DOS VECES NO: mismas series, mismo orden, mismos .pre. */
+    /* Con otro motor no es el mismo: un sistema SIM puede tener las mismas
+       entradas que un caso MT (es «Pasar a SIM»).                     */
     ya = pr_caso_de_entradas( a->p, en, ne, x->muestra );
+    if ( ya[0] && !x->de[0] )
+        {
+        const PrCaso *o = pr_caso_ver( a->p, ya );
+
+        if ( o && es_sim( o->motor ) != es_sim( x->motor ) ) ya = "";
+        }
     if ( ya[0] )
         { snprintf( why, n, "Ese caso ya existe: es %s, con las mismas series, "
                     "en el mismo orden y con los mismos .pre.", ya );
@@ -427,8 +444,8 @@ static gboolean nc_acepta( Nc *x, char *why, size_t n )
             snprintf( a->p->ca[k].titulo, PR_TEXTO, "%s", titulo );
         if ( *razon ) pr_caso_razon( a->p, id, razon, &e );
         }
-    else if ( pr_caso_add( a->p, en, ne, x->muestra, "drtran", titulo, razon,
-                           id, sizeof id, &e ) != 0 )
+    else if ( pr_caso_add( a->p, en, ne, x->muestra, x->motor[0] ? x->motor : "drtran",
+                           titulo, razon, id, sizeof id, &e ) != 0 )
         { pr_error_es( &e, why, n ); return FALSE; }
 
     if ( atsw_guarda( a, &e ) != 0 )
@@ -446,12 +463,19 @@ static gboolean nc_acepta( Nc *x, char *why, size_t n )
         for ( i = 0; i < ne; i++ )
             g_string_append_printf( lista, "%s%s/%s", i ? ", " : "",
                                     en[i].serie, en[i].modelo );
+        {
+        const PrCaso *nc = pr_caso_ver( a->p, id );
+        int           sim = nc && es_sim( nc->motor );
+
         if ( x->de[0] )
-            snprintf( why, n, "Caso %s, derivado de %s: %s. «Estimar» "
-                      "para estimarlo en drtran.", id, x->de, lista->str );
+            snprintf( why, n, "%s %s, derivado de %s: %s. «Estimar» "
+                      "para estimarlo en %s.", sim ? "Sistema" : "Caso", id, x->de,
+                      lista->str, sim ? "sim_gui" : "drtran" );
         else
-            snprintf( why, n, "Caso %s dado de alta: %s. «Estimar» en drtran "
-                      "para estimarlo.", id, lista->str );
+            snprintf( why, n, "%s %s dado de alta: %s. «Estimar» en %s "
+                      "para estimarlo.", sim ? "Sistema" : "Caso", id, lista->str,
+                      sim ? "sim_gui (la puerta primero)" : "drtran" );
+        }
         g_string_free( lista, TRUE );
         barra_pub( a, why );
         }
@@ -461,13 +485,21 @@ static gboolean nc_acepta( Nc *x, char *why, size_t n )
     return TRUE;
 }
 
-void atsw_caso_nuevo( Atsw *a, const char *deriva_de )
+static void caso_nuevo( Atsw *a, const char *deriva_de, const char *motor );
+
+void atsw_caso_nuevo( Atsw *a, const char *deriva_de ) { caso_nuevo( a, deriva_de, "drtran" ); }
+
+/* «Nuevo sistema…» del menú SIM: el mismo diálogo, con motor drvarma. El
+ * orden de las series es el de Cholesky de la respuesta al impulso.    */
+void atsw_caso_nuevo_sim( Atsw *a ) { caso_nuevo( a, NULL, "drvarma" ); }
+
+static void caso_nuevo( Atsw *a, const char *deriva_de, const char *motor )
 {
     Nc          *x;
     const PrCaso *c = NULL;
     GtkWidget   *caja, *l, *rej2;
     gchar       *tit;
-    int          i, r;
+    int          i, r, sim;
 
     if ( !a->hay ) { barra_pub( a, "Abre un proyecto antes." ); return; }
     if ( deriva_de && ( c = pr_caso_ver( a->p, deriva_de ) ) == NULL )
@@ -475,6 +507,9 @@ void atsw_caso_nuevo( Atsw *a, const char *deriva_de )
 
     x = g_new0( Nc, 1 );
     x->a = a;
+    /* Derivar conserva el motor del caso de partida (pr_caso_deriva). */
+    snprintf( x->motor, sizeof x->motor, "%s", c && c->motor[0] ? c->motor : motor );
+    sim = es_sim( x->motor );
     if ( c )
         {
         snprintf( x->de, sizeof x->de, "%s", c->id );
@@ -483,8 +518,8 @@ void atsw_caso_nuevo( Atsw *a, const char *deriva_de )
     else
         snprintf( x->muestra, sizeof x->muestra, "%s", atsw_muestra_actual( a ) );
 
-    tit = c ? g_strdup_printf( "Derivar caso de %s", c->id )
-            : g_strdup( "Nuevo caso" );
+    tit = c ? g_strdup_printf( "Derivar %s de %s", sim ? "sistema" : "caso", c->id )
+            : g_strdup( sim ? "Nuevo sistema" : "Nuevo caso" );
     x->d = gtk_dialog_new_with_buttons( tit, GTK_WINDOW(a->ventana),
                GTK_DIALOG_MODAL, "Cancelar", GTK_RESPONSE_CANCEL,
                c ? "Derivarlo" : "Darlo de alta", GTK_RESPONSE_OK, NULL );
@@ -499,6 +534,11 @@ void atsw_caso_nuevo( Atsw *a, const char *deriva_de )
         ? "<small>Las mismas series, con las entradas cambiadas: por defecto el\n"
           "modelo elegido HOY y su .pre de hoy. El caso de partida no se toca;\n"
           "el nuevo queda colgado de él.</small>"
+        : sim
+        ? "<small>Un sistema es un conjunto <b>fijo y ordenado</b> de series que se\n"
+          "explican entre sí, cada una con el .pre con que entra. <b>El orden es\n"
+          "parte del sistema</b>: es el de Cholesky de la respuesta al impulso.\n"
+          "Por defecto, el elegido de cada serie; se puede escoger otro estimado.</small>"
         : "<small>Un caso es un conjunto <b>fijo y ordenado</b> de series, cada una\n"
           "con el .pre con que entra. <b>El orden es parte del caso</b>: es el\n"
           "con que el .cns indexa las posiciones. Por defecto, el elegido de\n"
@@ -610,9 +650,10 @@ void atsw_caso_nuevo( Atsw *a, const char *deriva_de )
     "Qué series se cruzan, cada una con qué modelo estimado, y en qué " \
     "orden. La ventana común se comprueba antes de aceptar."
 #define GLOBO_C_DRTRAN \
-    "Estimar el caso (MT) en drtran: sus series en su orden, comprobando " \
-    "los hashes. Si hay un modelo marcado, parte de él; si no, del " \
-    "elegido. También con doble clic sobre el modelo."
+    "Estimar el caso en su programa --drtran_gui si es MT, sim_gui si es un " \
+    "sistema SIM--: sus series en su orden, comprobando los hashes. Si hay " \
+    "un modelo marcado, parte de él; si no, del elegido. También con doble " \
+    "clic sobre el modelo."
 #define GLOBO_C_ELEGIR "Declara que el modelo marcado es EL del caso."
 #define GLOBO_C_RAZON \
     "El porqué del modelo marcado. Se puede poner después, mirando el " \
@@ -657,6 +698,12 @@ static void on_derivar( GtkButton *b, Atsw *a )
     atsw_caso_nuevo( a, a->caso );
 }
 
+/* Ver atsw.h: el programa de un caso es el de su clase. */
+const char *atsw_programa_caso( const char *motor )
+{
+    return es_sim( motor ) ? "sim_gui" : "drtran_gui";
+}
+
 void atsw_caso_lanza( Atsw *a, const char *programa )
 {
     gchar *corrida;
@@ -675,21 +722,23 @@ void atsw_caso_lanza( Atsw *a, const char *programa )
     gchar        *que = ( corrida && *corrida )
         ? g_strdup_printf( "Estimar %s (%s) en %s", corrida, cl,
                            c->motor[0] ? c->motor : "drtran" )
-        : g_strdup_printf( "Estimar el caso %s (%s) en %s", a->caso, cl,
-                           c->motor[0] ? c->motor : "drtran" );
+        : g_strdup_printf( "Estimar el %s %s (%s) en %s", es_sim( c->motor ) ? "sistema" : "caso",
+                           a->caso, cl, c->motor[0] ? c->motor : "drtran" );
 
-    atsw_lanza_caso( a, programa, a->caso, corrida, que );
+    /* SIN PROGRAMA, EL DE SU CLASE: drtran_gui para MT, sim_gui para SIM. */
+    atsw_lanza_caso( a, programa ? programa : atsw_programa_caso( c->motor ),
+                     a->caso, corrida, que );
     g_free( que );
     }
     g_free( corrida );
 }
 
 static void on_c_drtran( GtkButton *b, Atsw *a )
-     { (void) b; atsw_caso_lanza( a, "drtran_gui" ); }
+     { (void) b; atsw_caso_lanza( a, NULL ); }
 
 static void on_c_activado( GtkTreeView *tv, GtkTreePath *ruta,
                            GtkTreeViewColumn *col, Atsw *a )
-     { (void) tv; (void) ruta; (void) col; atsw_caso_lanza( a, "drtran_gui" ); }
+     { (void) tv; (void) ruta; (void) col; atsw_caso_lanza( a, NULL ); }
 
 /* LA PAGINA DE UNA ECUACION del modelo co del caso: la que drtran_gui deja
  * junto al .out al estimar (o al abrir un modelo ya estimado), con el
@@ -731,7 +780,7 @@ static void on_c_pagina( GtkMenuItem *mi, Atsw *a )
 }
 
 static void on_c_drtran_mi( GtkMenuItem *mi, Atsw *a )
-     { (void) mi; atsw_caso_lanza( a, "drtran_gui" ); }
+     { (void) mi; atsw_caso_lanza( a, NULL ); }
 
 static gboolean confirma( Atsw *a, const char *pregunta, const char *detalle );
 static void on_c_elegir( GtkButton *b, Atsw *a );
@@ -791,6 +840,14 @@ static OdParams vuelta_par;        /* ~70 KB: fuera de la pila (Windows) */
 
 #define SIN_CASO     "Marca un caso en la lista CASOS."
 #define SIN_CORRIDA  "Marca un modelo del caso."
+#define SIN_CASO_MT  "Marca un caso MT en la lista CASOS: el marcado es un sistema SIM, " \
+                     "y su menú es SIM."
+#define SIN_SISTEMA  "Marca un sistema SIM en la lista CASOS (o «Nuevo sistema…»): el " \
+                     "marcado es un caso MT, y su menú es MT."
+
+/* El porque de una entrada apagada por falta de caso. Lo pone el menu que
+ * se esta haciendo (MT o SIM): el del boton derecho es SIN_CASO.       */
+static const char *sin_caso = SIN_CASO;
 
 /* «Ver modelo…» es la pagina de la SALIDA --la serie que el caso explica--;
    si la red tiene mas ecuaciones con pagina, cada una tiene la suya.  */
@@ -802,7 +859,7 @@ static void sec_c_ver( Atsw *a, GtkWidget *menu, const PrCaso *c, const char *co
     if ( c == NULL || co == NULL )
         {
         mi = atsw_entrada( a, menu, "Ver modelo…", NULL, NULL, NULL );
-        atsw_apaga( mi, c ? SIN_CORRIDA : SIN_CASO );
+        atsw_apaga( mi, c ? SIN_CORRIDA : sin_caso );
         return;
         }
     for ( k = 0; k < c->nen; k++ )
@@ -815,11 +872,13 @@ static void sec_c_ver( Atsw *a, GtkWidget *menu, const PrCaso *c, const char *co
         txt = k == 0 ? g_strdup( "Ver modelo…" )
                      : g_strdup_printf( "Ver la ecuación de %s…", nom );
         g = hay ? g_strdup_printf( "La página de %s: los residuos con su ACF y su "
-                "PACF y, debajo, la transferencia, el ruido y los deterministas "
-                "estimados, con sus desviaciones típicas. La que drtran dejó al "
-                "estimar, sin abrir drtran.", nom )
-                : g_strdup( "Todavía no hay página: drtran la escribe al estimar "
-                "el modelo, y al abrirlo si ya estaba estimado." );
+                "PACF y, debajo, su ecuación estimada con sus desviaciones típicas "
+                "(%s). La que %s dejó al estimar, sin abrirlo.", nom,
+                es_sim( c->motor ) ? "los términos cruzados, en la línea del ruido"
+                                   : "la transferencia, el ruido y los deterministas",
+                atsw_programa_caso( c->motor ) )
+                : g_strdup_printf( "Todavía no hay página: %s la escribe al estimar "
+                "el modelo (sim_gui, con «Ver modelo»).", atsw_programa_caso( c->motor ) );
         mi = atsw_entrada( a, menu, txt, g, hay ? G_CALLBACK(on_c_pagina) : NULL, a );
         g_free( txt ); g_free( g );
         gtk_widget_set_sensitive( mi, hay );
@@ -831,14 +890,15 @@ static void sec_c_drtran( Atsw *a, GtkWidget *menu, const PrCaso *c, const char 
 {
     GtkWidget *mi;
     gchar     *t = co ? g_strdup_printf( "Estimar %s", co ) : g_strdup( "Estimar" );
-    gchar     *g = co ? g_strdup_printf( "Estimar %s (MT) en drtran, desde ese modelo "
-                                         "del caso. Lo mismo que el doble clic.", co )
+    gchar     *g = co && c ? g_strdup_printf( "Estimar %s (%s) en %s, desde ese modelo "
+                                         "del caso. Lo mismo que el doble clic.", co,
+                                         atsw_clase_de( c->motor ), atsw_programa_caso( c->motor ) )
                       : g_strdup( GLOBO_C_DRTRAN );
 
     mi = atsw_entrada( a, menu, t, g, G_CALLBACK(on_c_drtran_mi), a );
     g_free( t ); g_free( g );
     atsw_entrada_tecla( mi, "<Primary>e" );
-    if ( c == NULL ) atsw_apaga( mi, SIN_CASO );
+    if ( c == NULL ) atsw_apaga( mi, sin_caso );
 }
 
 /* LA VUELTA AL UNIVARIANTE, apagada si no hay que devolver, con su porque. */
@@ -851,7 +911,7 @@ static void sec_c_vuelta( Atsw *a, GtkWidget *menu, const PrCaso *c, const char 
     if ( c == NULL || co == NULL )
         {
         mi = atsw_entrada( a, menu, "Devolver los univariantes…", NULL, NULL, NULL );
-        atsw_apaga( mi, c ? SIN_CORRIDA : SIN_CASO );
+        atsw_apaga( mi, c ? SIN_CORRIDA : sin_caso );
         return;
         }
     hay = pr_corrida_ruta( a->p, c->id, co, ".out", out, sizeof out ) == 0 &&
@@ -903,13 +963,13 @@ static void sec_c_caso( Atsw *a, GtkWidget *menu, const PrCaso *c )
 
     mi = atsw_entrada( a, menu, "Derivar caso…", GLOBO_C_DERIVAR,
                        G_CALLBACK(on_derivar), a );
-    if ( c == NULL ) atsw_apaga( mi, SIN_CASO );
+    if ( c == NULL ) atsw_apaga( mi, sin_caso );
     mi = atsw_entrada( a, menu, "Razón del caso…", GLOBO_C_RAZON_CASO,
                        G_CALLBACK(on_c_razon_caso), a );
-    if ( c == NULL ) atsw_apaga( mi, SIN_CASO );
+    if ( c == NULL ) atsw_apaga( mi, sin_caso );
     mi = atsw_entrada( a, menu, "Borrar caso…", GLOBO_C_BORRAR_CASO,
                        G_CALLBACK(on_c_borrar_caso), a );
-    if ( c == NULL ) atsw_apaga( mi, SIN_CASO );
+    if ( c == NULL ) atsw_apaga( mi, sin_caso );
 }
 
 /* EL MENU DEL MODELO DEL CASO, con el boton derecho: lo que el de un modelo
@@ -925,7 +985,7 @@ static void menu_corrida( Atsw *a, GdkEventButton *ev )
     sec_c_ver( a, menu, c, co );
     gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
     sec_c_drtran( a, menu, c, co );
-    sec_c_vuelta( a, menu, c, co );
+    if ( !es_sim( c->motor ) ) sec_c_vuelta( a, menu, c, co );   /* la vuelta es de drtran */
     gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
     sec_c_decidir( a, menu, co );
     gtk_widget_show_all( menu );
@@ -941,8 +1001,13 @@ static void on_convertir( GtkButton *b, Atsw *a );
 void atsw_menu_mt( Atsw *a, GtkWidget *menu )
 {
     const PrCaso *c = caso_marcado( a );
-    gchar        *co = c ? atsw_marcada( a->c_corridas, CO_ID ) : NULL;
+    gchar        *co;
     GtkWidget    *mi;
+
+    /* LOS SISTEMAS SON DEL MENU SIM: con uno marcado, las entradas del caso
+       se apagan aqui y dicen donde estan.                              */
+    if ( c && es_sim( c->motor ) ) { c = NULL; sin_caso = SIN_CASO_MT; }
+    co = c ? atsw_marcada( a->c_corridas, CO_ID ) : NULL;
 
     mi = atsw_entrada( a, menu, "Nuevo caso…", GLOBO_NUEVO_CASO,
                        G_CALLBACK(on_nuevo_caso), a );
@@ -963,6 +1028,152 @@ void atsw_menu_mt( Atsw *a, GtkWidget *menu )
         atsw_entrada( a, menu, "Convertir en casos…", g, G_CALLBACK(on_convertir), a );
         g_free( g );
         }
+    g_free( co );
+    sin_caso = SIN_CASO;
+}
+
+/* ------------------------------------------------------------------------ */
+/* EL MENU SIM (docs/DISENO-sim.md §5): los sistemas simultaneos            */
+/* ------------------------------------------------------------------------ */
+
+#define GLOBO_NUEVO_SISTEMA \
+    "Qué series se explican entre sí, cada una con qué modelo estimado, y en " \
+    "qué orden (el de Cholesky de la respuesta al impulso). Se estima en " \
+    "sim_gui, con la puerta primero."
+
+static void on_nuevo_sistema( GtkWidget *w, Atsw *a ) { (void) w; atsw_caso_nuevo_sim( a ); }
+
+/* EL CICLO DE UN CASO MT: el .dag del modelo marcado o, si no, del elegido.
+ * drtran no estima una red con ciclo (sale con 7): esa es la puerta a SIM.
+ * Devuelve 1 si hay ciclo y lo escribe en txt («A ↔ B»).               */
+static int ciclo_de( Atsw *a, const PrCaso *c, const char *co, char *txt, size_t n )
+{
+    char       dag[PR_RUTA];
+    char       nombres[PR_MAX_ENTRADA + 1][PR_ID + 64];
+    const char *nom[PR_MAX_ENTRADA + 1];
+    NetLink    lnk[NET_MAX_LINK];
+    int        k, nl, ciclo[PR_MAX_ENTRADA + 2], nc = 0;
+    const char *de = co && *co ? co : pr_corrida_elegida( a->p, c->id );
+
+    txt[0] = '\0';
+    if ( !de || !de[0] ) return 0;
+    if ( pr_corrida_ruta( a->p, c->id, de, ".dag", dag, sizeof dag ) != 0 ||
+         !g_file_test( dag, G_FILE_TEST_EXISTS ) ) return 0;
+    /* Los nombres, los del .pre (los que usa el .dag), en el orden del caso. */
+    nom[0] = "";
+    for ( k = 0; k < c->nen && k < PR_MAX_ENTRADA; k++ )
+        {
+        char pre[PR_RUTA], err[256];
+        InpFile in;
+
+        snprintf( nombres[k + 1], sizeof nombres[k + 1], "%s", c->en[k].serie );
+        memset( &in, 0, sizeof in );
+        if ( pr_ruta( a->p, c->en[k].serie, c->muestra, c->en[k].modelo, ".pre", pre,
+                      sizeof pre ) == 0 && inp_read( pre, &in, err, sizeof err ) == 0 )
+            {
+            if ( in.name[0] ) snprintf( nombres[k + 1], sizeof nombres[k + 1], "%s", in.name );
+            free( in.data );
+            }
+        nom[k + 1] = nombres[k + 1];
+        }
+    nl = net_read( dag, nom, c->nen, lnk, NET_MAX_LINK, NULL );
+    if ( nl <= 0 || net_topo( lnk, nl, c->nen, ciclo ) ) return 0;
+    if ( net_cycle( lnk, nl, c->nen, ciclo, &nc ) && nc > 1 )
+        {
+        size_t u = 0;
+        for ( k = 0; k < nc && u + 4 < n; k++ )
+            u += (size_t) snprintf( txt + u, n - u, "%s%s", k ? " → " : "",
+                                    ciclo[k] >= 1 && ciclo[k] <= c->nen ? nom[ciclo[k]] : "?" );
+        }
+    else
+        snprintf( txt, n, "un ciclo" );
+    return 1;
+}
+
+/* PASAR A SIM: un sistema hermano con las mismas entradas, en el mismo orden,
+ * y motor drvarma; la razon, precargada con el ciclo; el padre, el caso MT.
+ * Los .pre no se copian: son los de las series.                         */
+static void on_pasar_sim( GtkWidget *w, Atsw *a )
+{
+    const PrCaso *c = caso_marcado( a );
+    gchar        *co = c ? atsw_marcada( a->c_corridas, CO_ID ) : NULL;
+    char          cic[256], razon[PR_RAZON], id[PR_ID], why[512];
+    PrEntrada     en[PR_MAX_ENTRADA];
+    PrError       e;
+    int           k;
+
+    (void) w;
+    if ( c == NULL || es_sim( c->motor ) ) { barra_pub( a, "Marca un caso MT." ); g_free( co ); return; }
+    ciclo_de( a, c, co, cic, sizeof cic );
+    g_free( co );
+    memcpy( en, c->en, sizeof en[0] * (size_t) c->nen );
+    snprintf( razon, sizeof razon, "Pasado de %s (MT): la red tiene un ciclo%s%s.", c->id,
+              cic[0] ? ", " : "", cic );
+    if ( pr_caso_add( a->p, en, c->nen, c->muestra, "drvarma", c->titulo, razon, id,
+                      sizeof id, &e ) != 0 )
+        { pr_error_es( &e, why, sizeof why ); barra_pub( a, why ); return; }
+    k = pr_caso_idx( a->p, id );
+    if ( k >= 0 ) snprintf( a->p->ca[k].padre, PR_ID, "%s", c->id );
+    if ( atsw_guarda( a, &e ) != 0 )
+        { pr_error_es( &e, why, sizeof why ); barra_pub( a, why ); }
+    else
+        {
+        gchar *t = g_strdup_printf( "Sistema %s: las series de %s, en el mismo orden, como "
+                                    "VARMA. «Estimar» lo abre en sim_gui, con la puerta primero.",
+                                    id, c->id );
+        barra_pub( a, t );
+        g_free( t );
+        }
+    snprintf( a->caso, sizeof a->caso, "%s", id );
+    a->viendo_caso = TRUE;
+    atsw_refresca( a );
+}
+
+/* Ver atsw.h. Las mismas secciones que MT --lo comun en el mismo sitio--;
+   lo nuevo son «Nuevo sistema…» y «Pasar a SIM».                      */
+void atsw_menu_sim( Atsw *a, GtkWidget *menu )
+{
+    const PrCaso *m = caso_marcado( a ), *c = m && es_sim( m->motor ) ? m : NULL;
+    gchar        *co = c ? atsw_marcada( a->c_corridas, CO_ID ) : NULL;
+    GtkWidget    *mi;
+    char          cic[512];
+
+    mi = atsw_entrada( a, menu, "Nuevo sistema…", GLOBO_NUEVO_SISTEMA,
+                       G_CALLBACK(on_nuevo_sistema), a );
+    if ( !a->hay ) atsw_apaga( mi, "Abre un proyecto antes: Proyecto ▸ Abrir… o Nuevo…." );
+
+    /* PASAR A SIM, solo desde un caso MT cuya red tiene un ciclo. */
+    if ( m && !es_sim( m->motor ) )
+        {
+        gchar *mco = atsw_marcada( a->c_corridas, CO_ID );
+        int    hay = ciclo_de( a, m, mco, cic, sizeof cic );
+        gchar *g = hay ? g_strdup_printf( "La red del caso %s tiene un ciclo (%s): dos series "
+                         "que se alimentan, y eso no es una transferencia. Da de alta un "
+                         "sistema con las mismas series, en el mismo orden, para estimarlo "
+                         "como VARMA.", m->id, cic )
+                       : NULL;
+
+        mi = atsw_entrada( a, menu, "Pasar a SIM", g, hay ? G_CALLBACK(on_pasar_sim) : NULL, a );
+        if ( !hay ) atsw_apaga( mi, "Sólo cuando la red de un modelo del caso tiene un ciclo "
+                                    "(drtran no la estima). Para cruzar estas series como "
+                                    "sistema sin eso: «Nuevo sistema…»." );
+        g_free( g ); g_free( mco );
+        }
+    else
+        {
+        mi = atsw_entrada( a, menu, "Pasar a SIM", NULL, NULL, NULL );
+        atsw_apaga( mi, "Marca un caso MT cuya red tenga un ciclo." );
+        }
+
+    sin_caso = m && !c ? SIN_SISTEMA : SIN_CASO;
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
+    sec_c_drtran( a, menu, c, co );
+    sec_c_ver( a, menu, c, co );
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
+    sec_c_decidir( a, menu, co );
+    gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
+    sec_c_caso( a, menu, c );
+    sin_caso = SIN_CASO;
     g_free( co );
 }
 
@@ -1259,10 +1470,12 @@ void atsw_casos_panel( Atsw *a, GtkWidget *izq )
     gtk_box_pack_start( GTK_BOX(izq), h, FALSE, FALSE, 2 );
 
     st = gtk_list_store_new( CA_N, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING,
-                             G_TYPE_STRING, G_TYPE_STRING );
+                             G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING );
     a->l_casos = gtk_tree_view_new_with_model( GTK_TREE_MODEL(st) );
     g_object_unref( st );
     atsw_columna( a->l_casos, "Caso",    CA_ID );
+    /* LA CLASE: MT, VARMA y, con el VEC, VEC (docs/DISENO-sim.md §5.3). */
+    atsw_columna( a->l_casos, "Clase",   CA_CLASE );
     atsw_columna( a->l_casos, "Elegida", CA_ELEGIDA );
     atsw_columna( a->l_casos, "",        CA_MARCA );
     atsw_columna( a->l_casos, "Título",  CA_TITULO );
@@ -1558,8 +1771,9 @@ static void pinta_vista( Atsw *a )
 
     /* LA CLASE, EL PROGRAMA Y LA MUESTRA: «MT · drtran · muestra completa».
        El programa no se esconde: cuando algo falla, el mensaje es suyo. */
-    t = g_markup_printf_escaped( "<big><b>%s — %s</b></big>    %s · %s · muestra %s",
+    t = g_markup_printf_escaped( "<big><b>%s — %s</b></big>    %s%s · %s · muestra %s",
                                  c->id, c->titulo[0] ? c->titulo : "(sin título)",
+                                 es_sim( c->motor ) ? "SIM · " : "",
                                  atsw_clase_de( c->motor ),
                                  c->motor[0] ? c->motor : "drtran",
                                  c->muestra[0] ? c->muestra : "completa" );
@@ -1667,6 +1881,7 @@ void atsw_pinta_casos( Atsw *a )
         gtk_list_store_append( st, &it );
         gtk_list_store_set( st, &it,
             CA_ID,      c->id,
+            CA_CLASE,   atsw_clase_de( c->motor ),
             CA_TITULO,  c->titulo,
             CA_ELEGIDA, el,
             /* EL ⚠ ES SOLO EL DESFASE DE VERDAD. Otro elegido hoy no

@@ -166,7 +166,7 @@ const char *atsw_clase_de( const char *motor )
 {
     if ( motor == NULL || !*motor || !strcmp( motor, "drtran" ) ) return "MT";
     if ( !strcmp( motor, "drvarma" ) ) return "VARMA";
-    if ( !strcmp( motor, "drvec" ) )   return "VECM";
+    if ( !strcmp( motor, "drvec" ) )   return "VEC";
     return motor;
 }
 
@@ -2151,6 +2151,11 @@ static const struct { const char *rotulo, *globo, *acel; Llena llena; } TITULOS[
       "MT — Transferencia multivariante, con drtran\n\nEl caso marcado: varias "
       "series, cada una con su modelo univariante, de entrada y de salida.",
       "<Alt>m", atsw_menu_mt },
+    { "_SIM",
+      "SIM — Sistemas simultáneos, con drvarma (VARMA) y drvec (VEC)\n\nEl "
+      "sistema marcado: varias series que se explican entre sí, cada una con "
+      "su modelo univariante. Se estima en sim_gui, con la puerta primero.",
+      "<Alt>s", atsw_menu_sim },
     { "A_yuda",
       "Ayuda — el manual, las teclas y «Acerca de»\n\nF1 abre el manual.",
       "<Alt>y", llena_ayuda } };
@@ -2350,7 +2355,8 @@ static gboolean on_cierra_madre( GtkWidget *w, GdkEvent *ev, Atsw *a )
 
 /* Ctrl+E ESTIMA LO QUE SE VE. La derecha es una pila --los modelos de la
  * serie o el caso-- y el mismo gesto vale en las dos: el programa que se
- * abre es cosa de la clase, fue para US y drtran para MT (§3.3). La barra
+ * abre es cosa de la clase: fue para US, drtran para MT y sim_gui para SIM
+ * (§3.3; DISENO-sim.md §5.6). La barra
  * de estado lo dice, para que no sorprenda (§5).                       */
 static gboolean on_atajo_estima( GtkAccelGroup *g, GObject *o, guint k,
                                  GdkModifierType m, Atsw *a )
@@ -2358,7 +2364,7 @@ static gboolean on_atajo_estima( GtkAccelGroup *g, GObject *o, guint k,
     const char *v = gtk_stack_get_visible_child_name( GTK_STACK(a->pila) );
 
     (void) g; (void) o; (void) k; (void) m;
-    if ( v && !strcmp( v, "caso" ) ) atsw_caso_lanza( a, "drtran_gui" );
+    if ( v && !strcmp( v, "caso" ) ) atsw_caso_lanza( a, NULL );   /* el de su clase */
     else                             on_fue( NULL, a );
     return TRUE;
 }

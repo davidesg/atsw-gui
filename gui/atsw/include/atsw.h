@@ -72,7 +72,7 @@ enum { M_ID, M_PADRE, M_ESTRUCT, M_SD, M_Q, M_P, M_RAZON, M_ESTRELLA,
 
 /* LOS CASOS (docs/DISENO-casos.md §4): la lista de la izquierda, las
    entradas y el arbol de corridas de la derecha.                       */
-enum { CA_ID, CA_TITULO, CA_ELEGIDA, CA_MARCA, CA_GLOBO, CA_N };
+enum { CA_ID, CA_TITULO, CA_ELEGIDA, CA_MARCA, CA_GLOBO, CA_CLASE, CA_N };
 enum { EN_POS, EN_SERIE, EN_MODELO, EN_PRE, EN_HOY, EN_NOTA, EN_N };
 enum { CO_ID, CO_ESTRELLA, CO_RAZON, CO_LOGL, CO_PUERTA, CO_ESTADO, CO_GLOBO, CO_N };
 
@@ -319,6 +319,12 @@ void       atsw_caso_nuevo( Atsw *a, const char *deriva_de );
 /* «Estimar» el caso con el programa dado: el caso marcado y, si hay una
    corrida marcada, esa.                                                */
 void       atsw_caso_lanza( Atsw *a, const char *programa );
+/* «Nuevo sistema…» del menú SIM: el diálogo del caso con motor drvarma. */
+void       atsw_caso_nuevo_sim( Atsw *a );
+/* El programa de un caso, por su motor: sim_gui para un sistema SIM
+ * (drvarma, drvec), drtran_gui para MT. atsw_caso_lanza con programa
+ * NULL lanza este.                                                     */
+const char *atsw_programa_caso( const char *motor );
 
 /* LA CLASE DE UN CASO POR SU MOTOR: drtran es MT, drvarma VARMA y drvec
    VECM (ESTUDIO-madre-organizacion §2.2). Lo que no se conoce, tal cual. */
@@ -477,6 +483,9 @@ void       atsw_apaga( GtkWidget *mi, const char *porque );
 /* EL MENU MT de la barra: el caso marcado y sus modelos, con las mismas
    secciones que el boton derecho sobre un modelo del caso.             */
 void       atsw_menu_mt( Atsw *a, GtkWidget *menu );
+/* El menú SIM (docs/DISENO-sim.md §5.2): los sistemas simultáneos, con
+ * las mismas secciones que MT, «Nuevo sistema…» y «Pasar a SIM».       */
+void       atsw_menu_sim( Atsw *a, GtkWidget *menu );
 
 /* «Cuaderno…»: el cuaderno del proyecto, para leerlo y anotarlo. */
 void       atsw_cuaderno( Atsw *a );

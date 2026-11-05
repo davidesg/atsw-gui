@@ -50,6 +50,7 @@
 #include "inpcheck.h"
 #include "cuaderno.h"
 #include "coste.h"
+#include "netfile.h"
 
 static int    fallos = 0;
 static char   T[PR_RUTA];          /* el directorio de la prueba          */
@@ -830,7 +831,7 @@ static GtkWidget *entrada_de( GtkMenu *m, const char *empieza )
 }
 
 /* ACTIVAR UNA ENTRADA DE LA BARRA: el titulo i (0 Proyecto, 1 Datos, 2 US,
-   3 MT, 4 Ayuda), rehecho con lo marcado ahora, y la entrada que empieza
+   3 MT, 4 SIM, 5 Ayuda), rehecho con lo marcado ahora, y la entrada que empieza
    por <empieza>. Desde la fase 3 (ESTUDIO-madre-organizacion §6) lo raro y
    lo destructivo --fug completo, borrar en un caso-- solo estan aqui y en
    el boton derecho, y la prueba los alcanza como el analista.        */
@@ -1024,7 +1025,7 @@ static void instalacion( void )
     check( fue >= 0 && c[fue].ok && strstr( c[fue].ruta, "engines/fue/bin" ),
            "fue se encuentra donde lo busca la madre, en el árbol", fue >= 0 ? c[fue].ruta : NULL );
     g_string_free( falta, TRUE );
-    if ( en_barra( 4, "Comprobar la instalación" ) )
+    if ( en_barra( 5, "Comprobar la instalación" ) )
         {
         GList    *l, *t;
         gboolean  visto = FALSE;
@@ -3133,6 +3134,110 @@ static void casos( void )
     s = celda_arbol( A.c_corridas, CO_ID, "c01", CO_LOGL );
     check( s && !strcmp( s, "—" ), "sin .out, «—»", s );
     g_free( s );
+
+    /* --- SIM: los sistemas simultaneos (docs/DISENO-sim.md §5) ---------- */
+    {
+    GList        *hs = gtk_container_get_children( GTK_CONTAINER(A.menubar) );
+    GtkWidget    *t_mt = g_list_nth_data( hs, 3 ), *t_sim = g_list_nth_data( hs, 4 ), *e2;
+    const PrCaso *c1 = pr_caso_ver( A.p, "C1" );
+    char          sid[PR_ID] = "", dag[PR_RUTA] = "";
+    gchar        *ps = atsw_programa( "sim_gui" );
+
+    g_list_free( hs );
+    check( t_sim && !strcmp( gtk_menu_item_get_label( GTK_MENU_ITEM(t_sim) ), "_SIM" ),
+           "la barra de la madre tiene el menú SIM, después de MT", NULL );
+    check( !strcmp( atsw_programa_caso( "drvarma" ), "sim_gui" ) &&
+           !strcmp( atsw_programa_caso( "drtran" ), "drtran_gui" ),
+           "el programa de un caso es el de su clase", NULL );
+
+    /* «Pasar a SIM» solo con un ciclo: sin él, apagado y diciendo por qué. */
+    rehace_menu( &A, t_sim );
+    e2 = entrada_de( GTK_MENU(gtk_menu_item_get_submenu( GTK_MENU_ITEM(t_sim) )), "Pasar a SIM" );
+    check( e2 && !gtk_widget_get_sensitive( e2 ), "con C1 (MT) sin ciclo, «Pasar a SIM» apagado", NULL );
+
+    /* La red de c00 con un ciclo: la primera serie <- la segunda y al reves. */
+    if ( pr_corrida_ruta( A.p, "C1", "c00", ".dag", dag, sizeof dag ) == 0 )
+        {
+        char         nombres[3][PR_ID + 64];
+        const char  *nom[3] = { "", nombres[1], nombres[2] };
+        NetLink      lk[2] = { { 1, 2, 0, 0, 0 }, { 2, 1, 1, 0, 0 } };
+        int          k;
+
+        for ( k = 0; k < 2; k++ )
+            {
+            char    pre[PR_RUTA], err[256];
+            InpFile in;
+
+            memset( &in, 0, sizeof in );
+            snprintf( nombres[k + 1], sizeof nombres[k + 1], "%s", c1->en[k].serie );
+            if ( pr_ruta( A.p, c1->en[k].serie, c1->muestra, c1->en[k].modelo, ".pre",
+                          pre, sizeof pre ) == 0 && inp_read( pre, &in, err, sizeof err ) == 0 )
+                {
+                if ( in.name[0] ) snprintf( nombres[k + 1], sizeof nombres[k + 1], "%s", in.name );
+                free( in.data );
+                }
+            }
+        check( net_write( dag, nom, lk, 2, NULL ) == 0, "se escribe una red con ciclo para c00", dag );
+        }
+    marca_arbol( A.c_corridas, CO_ID, "c00" );
+    rehace_menu( &A, t_sim );
+    e2 = entrada_de( GTK_MENU(gtk_menu_item_get_submenu( GTK_MENU_ITEM(t_sim) )), "Pasar a SIM" );
+    check( e2 && gtk_widget_get_sensitive( e2 ) &&
+           strstr( gtk_widget_get_tooltip_text( e2 ), "ciclo" ),
+           "con un ciclo en la red de c00, «Pasar a SIM» se enciende y dice el ciclo",
+           e2 ? gtk_widget_get_tooltip_text( e2 ) : NULL );
+    if ( e2 && gtk_widget_get_sensitive( e2 ) ) gtk_menu_item_activate( GTK_MENU_ITEM(e2) );
+    snprintf( sid, sizeof sid, "%s", A.caso );
+    {
+    const PrCaso *cs = pr_caso_ver( A.p, sid );
+
+    check( cs && !strcmp( cs->motor, "drvarma" ) && !strcmp( cs->padre, "C1" ) &&
+           cs->nen == c1->nen && !strcmp( cs->en[0].serie, c1->en[0].serie ) &&
+           strstr( cs->razon, "ciclo" ),
+           "«Pasar a SIM»: un sistema hermano, drvarma, colgado de C1, las mismas entradas "
+           "en el mismo orden y la razón con el ciclo", cs ? cs->razon : barra() );
+    }
+    check( strstr( barra(), "como VARMA" ) != NULL, "y la barra lo dice", barra() );
+    s = filas( A.l_casos, CA_CLASE );
+    check( strstr( s, "MT" ) && strstr( s, "VARMA" ), "la columna Clase: MT y VARMA", s );
+    g_free( s );
+    check( strstr( gtk_label_get_text( GTK_LABEL(A.c_cabeza) ), "SIM · VARMA · drvarma" ) != NULL,
+           "la cabecera del sistema dice «SIM · VARMA · drvarma»",
+           gtk_label_get_text( GTK_LABEL(A.c_cabeza) ) );
+
+    /* Con el sistema marcado: SIM lo estima; MT se apaga y dice dónde. */
+    rehace_menu( &A, t_sim );
+    e2 = entrada_de( GTK_MENU(gtk_menu_item_get_submenu( GTK_MENU_ITEM(t_sim) )), "Estimar" );
+    check( e2 && gtk_widget_get_sensitive( e2 ), "con el sistema marcado, SIM ▸ Estimar se enciende", NULL );
+    rehace_menu( &A, t_mt );
+    e2 = entrada_de( GTK_MENU(gtk_menu_item_get_submenu( GTK_MENU_ITEM(t_mt) )), "Estimar" );
+    check( e2 && !gtk_widget_get_sensitive( e2 ) && strstr( gtk_widget_get_tooltip_text( e2 ), "SIM" ),
+           "y MT ▸ Estimar se apaga diciendo que su menú es SIM",
+           e2 ? gtk_widget_get_tooltip_text( e2 ) : NULL );
+    if ( ps )
+        {
+        gchar *q2 = g_strdup_printf( "%s, con el caso %s.", ps, sid );
+
+        olvida();
+        hijos_sin_pantalla( TRUE );
+        gtk_button_clicked( GTK_BUTTON(A.b_c_drtran) );
+        hijos_sin_pantalla( FALSE );
+        check( dijo( q2 ) != NULL, "«Estimar» del sistema lanza el sim_gui del árbol", todo_lo_dicho() );
+        check( dijo( "(VARMA) en drvarma" ) != NULL, "con su clase y su motor", todo_lo_dicho() );
+        g_free( q2 );
+        }
+    else
+        nota( "sim_gui no está construido: no se prueba que «Estimar» lo lance" );
+
+    /* Se deja como estaba: fuera el sistema y la red con ciclo. */
+    pr_caso_borra( A.p, sid, &e );
+    if ( dag[0] ) g_remove( dag );
+    snprintf( A.caso, sizeof A.caso, "C1" );
+    atsw_guarda( &A, &e );
+    atsw_refresca( &A );
+    check( pr_caso_idx( A.p, sid ) < 0, "el sistema de la prueba se borra", sid );
+    g_free( ps );
+    }
     s = celda_arbol( A.c_corridas, CO_ID, "c01", CO_RAZON );
     check( s && !strcmp( s, "(sin razón)" ), "y sin razon se ve como sin razon", s );
     g_free( s );
@@ -3617,18 +3722,19 @@ static int fila_de( GtkWidget *tv, int col, const char *v )
 
 static void menus_barra( void )
 {
-    static const char *rot[] = { "_Proyecto", "_Datos", "_US", "_MT", "A_yuda" };
+    static const char *rot[] = { "_Proyecto", "_Datos", "_US", "_MT", "_SIM", "A_yuda" };
     static const char *glo[] = { "Proyecto —", "Datos —",
                                  "US — Modelo univariante (Box-Jenkins), con fue y fuf",
                                  "MT — Transferencia multivariante, con drtran",
+                                 "SIM — Sistemas simultáneos, con drvarma (VARMA) y drvec (VEC)",
                                  "Ayuda —" };
     GtkMenu   *m;
     GtkWidget *mi;
     int        i;
 
-    /* --- los cinco títulos, con su nombre completo en el globo -------- */
+    /* --- los seis títulos, con su nombre completo en el globo --------- */
     check( A.menubar && GTK_IS_MENU_BAR(A.menubar), "la madre tiene barra de menús", NULL );
-    for ( i = 0; i < 5; i++ )
+    for ( i = 0; i < 6; i++ )
         {
         GtkWidget  *t = titulo_de( i );
         const char *r = t ? gtk_menu_item_get_label( GTK_MENU_ITEM(t) ) : NULL;
@@ -3640,7 +3746,7 @@ static void menus_barra( void )
                g ? g : r );
         g_free( q ); g_free( g );
         }
-    check( titulo_de( 5 ) == NULL, "y sólo cinco: VARMA y VECM llegan con sus GUI", NULL );
+    check( titulo_de( 6 ) == NULL, "y sólo seis: VARMA y VEC van los dos en SIM (DISENO-sim.md)", NULL );
 
     /* --- US y los dos contextuales ------------------------------------ */
     gtk_notebook_set_current_page( GTK_NOTEBOOK(A.libro), 0 );

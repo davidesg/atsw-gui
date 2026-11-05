@@ -650,19 +650,16 @@ próximo release.
 - **Es la fase que cambia lo que el analista ya conoce**: va sola, y
   después de que haya usado la barra con la fase 1 un tiempo.
 
-**Hito drvarma_gui — el menú VARMA.**
-- Menú VARMA, que lanza drvarma_gui con el caso.
-- Columna «Clase» en los casos.
-- «Pasar a VARMA» desde un caso MT con ciclo.
-- Depende de que drvarma_gui acepte `--proyecto` y `--caso`. Va dentro del
-  hito (`RELEVO.md` §6), no antes.
-
-**Hito drvec_gui — el menú VECM.** Posterior al de drvarma_gui.
-- Es un hito nuevo: **la GUI de drvec no existe**.
-- Su diseño parte, como el de drvarma_gui, de lo aprendido en el porte de
-  drvec y en sima.
-- En la madre: menú VECM, casos con `motor: drvec` y «Pasar a VECM» desde
-  un caso VARMA.
+**Hito SIM — los sistemas simultáneos (VARMA y VEC).** Sustituye a los
+hitos drvarma_gui y drvec_gui, que eran dos (decidido el 2026-11-05; el
+diseño, en `DISENO-sim.md`).
+- Un solo GUI hijo para drvarma y drvec, como sima: VARMA o VEC se decide
+  dentro del análisis, con el rango, no al entrar.
+- Un menú SIM en la madre, que lanza ese GUI con el sistema.
+- Columna «Clase» en los casos (MT, VARMA, VEC).
+- «Pasar a SIM» desde un caso MT con ciclo.
+- Depende de que el GUI acepte `--proyecto` y `--caso`. Va dentro del hito
+  (`RELEVO.md` §6), no antes.
 
 Las fases 1 y 2 se pueden juntar si se prefiere un solo PR; la 3 conviene
 que vaya aparte.

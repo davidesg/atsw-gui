@@ -292,3 +292,17 @@ judge is `inp_check_fue`. Both are tested over the fue corpus.
   (`apply_univariate_model`), drvec, and the Python package of fue, which
   carries a byte-identical copy checked by its sha256. See
   `fuedet/README.md`.
+
+
+## `outvarma/` — lo que escribe drvarma en la escalera, añadido el 2026-11-05
+
+- **Qué es.** El lector del `.out`, el `.forecast` y el `.recursive` de la
+  escalera de drvarma: la cabecera, la puerta, el optimizador (con la pared
+  MA), los parámetros, la LR contra los univariantes, Σ, las raíces, la IRF,
+  la FEVD, la previsión y la evaluación recursiva. La diagnosis la lee
+  `outdiag/`, que ya entiende este `.out`. Es la fase S1 de
+  `docs/DISENO-sim.md`.
+- **Para quién.** sim_gui, `atsw-cli` y el asistente: los tres leen con el
+  mismo código. Devuelve hechos, no frases.
+- **La prueba.** `outvarma/run_test.sh` pide a drvarma cinco salidas con los
+  `.pre` de Jenkins y Alavi y las lee; la corre la batería de drvarma.

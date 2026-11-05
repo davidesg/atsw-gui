@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include "sistema.h"
 #include "fue_pre_reader.h"
@@ -275,6 +276,15 @@ int sis_orden_modelo( const Sistema *s, const SisModelo *mo, const char *salida,
    if ( mo->fixarma ) argv[k++] = "-fixarma";
    if ( mo->metodo == 2 ) { argv[k++] = "-m"; argv[k++] = "2"; }
    if ( mo->hessian == 1 ) { argv[k++] = "-hessian"; argv[k++] = "bfgs"; }
+   {
+      /* -zero, con los coeficientes que el modelo tiene; en buf, tras los
+       * enlaces.                                                         */
+      size_t usado = 32 + (size_t) l + 1;
+      if ( usado < nbuf && sis_ceros_validos( s, mo, buf + usado, nbuf - usado ) > 0 ) {
+         argv[k++] = "-zero";
+         argv[k++] = buf + usado;
+      }
+   }
    if ( mo->lik == 1 ) { argv[k++] = "-lik"; argv[k++] = "shea"; }
    if ( mo->lik == 2 ) { argv[k++] = "-lik"; argv[k++] = "both"; }
    argv[k++] = "-o";
@@ -309,4 +319,86 @@ int sis_enlaces_de_texto( const Sistema *s, SisModelo *mo, const char *txt )
    }
    memcpy( mo->enlace, e, sizeof e );
    return 0;
+}
+
+/* ------------------------------------------------------------------------ */
+
+static int indice( const Sistema *s, const char *nom )
+{
+   int i;
+   for ( i = 0; i < s->n; i++ ) if ( !strcmp( s->s[i].nombre, nom ) ) return i;
+   return -1;
+}
+
+int sis_ceros_validos( const Sistema *s, const SisModelo *mo, char *out, size_t n )
+{
+   char buf[2048], *tok;
+   size_t usado = 0;
+   int cuantos = 0;
+
+   if ( !n ) return 0;
+   out[0] = 0;
+   copia( buf, sizeof buf, mo->zero );
+   for ( tok = strtok( buf, "," ); tok; tok = strtok( NULL, "," ) ) {
+      char kind[3] = "", a[SIS_NOMBRE] = "", b[SIS_NOMBRE] = "";
+      int k = 0, ia, ib, top, w;
+      while ( *tok == ' ' ) tok++;
+      if ( sscanf( tok, "%2[ARM]%d[%63[^<]<-%63[^]]]", kind, &k, a, b ) != 4 ) continue;
+      top = !strcmp( kind, "AR" ) ? mo->p : !strcmp( kind, "MA" ) ? mo->q : 0;
+      ia = indice( s, a ); ib = indice( s, b );
+      if ( k < 1 || k > top || ia < 0 || ib < 0 || ia == ib || !mo->enlace[ia][ib] ) continue;
+      w = snprintf( out + usado, n - usado, "%s%s%d[%s<-%s]", usado ? "," : "", kind, k, a, b );
+      if ( w < 0 || (size_t) w >= n - usado ) break;
+      usado += (size_t) w;
+      cuantos++;
+   }
+   return cuantos;
+}
+
+/* La gamma incompleta regularizada Q(a, x), por la serie o la fraccion
+ * continua (Numerical Recipes, gammq).                                   */
+static double lgam( double x ) { return lgamma( x ); }
+
+double sis_chi2_p( double x, int df )
+{
+   double a = df / 2.0, xx = x / 2.0, sum, del, ap, b, c, d, h, an;
+   int i;
+
+   if ( df <= 0 ) return 1.0;
+   if ( x <= 0 ) return 1.0;
+   if ( xx < a + 1.0 ) {                      /* la serie: P, y Q = 1 - P */
+      ap = a; sum = del = 1.0 / a;
+      for ( i = 0; i < 500; i++ ) {
+         ap += 1.0; del *= xx / ap; sum += del;
+         if ( fabs( del ) < fabs( sum ) * 1e-14 ) break;
+      }
+      return 1.0 - sum * exp( -xx + a * log( xx ) - lgam( a ) );
+   }
+   b = xx + 1.0 - a; c = 1.0 / 1e-300; d = 1.0 / b; h = d;   /* la fraccion */
+   for ( i = 1; i < 500; i++ ) {
+      an = -i * ( i - a ); b += 2.0;
+      d = an * d + b; if ( fabs( d ) < 1e-300 ) d = 1e-300;
+      c = b + an / c; if ( fabs( c ) < 1e-300 ) c = 1e-300;
+      d = 1.0 / d; del = d * c; h *= del;
+      if ( fabs( del - 1.0 ) < 1e-14 ) break;
+   }
+   return exp( -xx + a * log( xx ) - lgam( a ) ) * h;
+}
+
+void sis_modelo_sin_par( const SisModelo *mo, SisModelo *r, int a, int b )
+{
+   *r = *mo;
+   if ( a >= 0 && b >= 0 && a < SIS_MAX_SER && b < SIS_MAX_SER ) r->enlace[a][b] = 0;
+}
+
+int sis_modelo_triangular( const SisModelo *mo, SisModelo *r, const int *perm, int m )
+{
+   int pos[SIS_MAX_SER], i, a, b, quita = 0;
+
+   *r = *mo;
+   for ( i = 0; i < m; i++ ) pos[perm[i]] = i;
+   for ( a = 0; a < m; a++ )
+      for ( b = 0; b < m; b++ )
+         if ( a != b && r->enlace[a][b] && pos[b] > pos[a] ) { r->enlace[a][b] = 0; quita++; }
+   return quita;
 }

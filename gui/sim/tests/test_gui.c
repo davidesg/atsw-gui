@@ -96,9 +96,9 @@ static gboolean espera( Sim *m, int segundos )
 {
     gint64 hasta = g_get_monotonic_time() + (gint64) segundos * G_USEC_PER_SEC;
     pump( 20 );
-    while ((m->pp.corriendo || m->pe.corriendo || m->pv.corriendo) && g_get_monotonic_time() < hasta) pump( 20 );
+    while ((m->pp.corriendo || m->pe.corriendo || m->pv.corriendo || m->pd.corriendo) && g_get_monotonic_time() < hasta) pump( 20 );
     pump( 50 );
-    return !m->pp.corriendo && !m->pe.corriendo && !m->pv.corriendo;
+    return !m->pp.corriendo && !m->pe.corriendo && !m->pv.corriendo && !m->pd.corriendo;
 }
 
 static int filas_de( GtkWidget *tv ) { return filas( tv ); }
@@ -452,6 +452,25 @@ int main( int argc, char **argv )
            "el veredicto cuenta en cuántas gana el sistema", etiqueta( m->pv.ver_eval ) );
     printf( "evaluación      : %s\n", etiqueta( m->pv.ver_eval ) );
 
+    /* --- S7: simplificar y «¿es una red?» -------------------------------- */
+    check( estructura_simplificar( m, 1.0 ) && espera( m, 300 ), "Simplificar estima de nuevo", etiqueta( m->estado ) );
+    check( m->mod.zero[0] && m->pe.v && m->pe.v->npar < 18,
+           "con los coeficientes cruzados de |t| < 1 a cero: menos parámetros", m->mod.zero );
+    check( contiene( etiqueta( m->pe.orden ), "-zero" ), "la orden lleva -zero", etiqueta( m->pe.orden ) );
+    check( contiene( etiqueta( m->pd.ver_simpl ), "antes de simplificar" ) &&
+           contiene( etiqueta( m->pd.ver_simpl ), "LR =" ),
+           "la diagnosis contrasta la simplificación contra el modelo de antes", etiqueta( m->pd.ver_simpl ) );
+    printf( "simplificar     : %s\n", etiqueta( m->pd.ver_simpl ) );
+    check( estructura_red( m, 0.05 ) && espera( m, 600 ), "«¿Es una red?» corre", NULL );
+    check( contiene( etiqueta( m->pd.t_red ), "MINK no entra en MUSKRAT" ) &&
+           contiene( etiqueta( m->pd.t_red ), "orden" ),
+           "los pares y los órdenes triangulares, con su LR", etiqueta( m->pd.t_red ) );
+    check( contiene( etiqueta( m->pd.ver_red ), "SIMULTÁNEO" ),
+           "con retroalimentación en los dos sentidos, ningún orden se sostiene", etiqueta( m->pd.ver_red ) );
+    printf( "estructura      : %s\n", etiqueta( m->pd.ver_red ) );
+    pulsa( boton( m->ventana, "Quitar los ceros" ) );
+    check( !m->mod.zero[0], "«Quitar los ceros» deja libres todos los coeficientes", m->mod.zero );
+
     /* --- la pared MA: no se presenta como un óptimo ---------------------- */
     gtk_spin_button_set_value( GTK_SPIN_BUTTON(m->pm.s_p), 1 );
     gtk_spin_button_set_value( GTK_SPIN_BUTTON(m->pm.s_q), 1 );
@@ -566,6 +585,31 @@ int main( int argc, char **argv )
                g_file_test( s, G_FILE_TEST_EXISTS ),
                "con proyecto, la puerta va al directorio del sistema", s );
         g_free( s );
+
+        /* «PASAR A MT»: un modelo con un solo sentido (MUSKRAT <- MINK) ya es
+         * triangular; es una red, y el sistema da un caso MT hermano con la
+         * salida (MUSKRAT, la que recibe) primero.                       */
+        {
+            char why2[512];
+            int a, b;
+            for (a = 0; a < 2; a++) for (b = 0; b < 2; b++) p->mod.enlace[a][b] = 0;
+            p->mod.enlace[0][1] = 1;
+            p->mod.p = 1; p->mod.q = 0; p->mod.zero[0] = 0;
+            check( estima_lanzar( p ) && espera( p, 300 ) && p->pe.v, "el modelo de un solo sentido se estima", NULL );
+            check( estructura_red( p, 0.05 ) && espera( p, 300 ), "«¿Es una red?» corre", NULL );
+            check( contiene( etiqueta( p->pd.ver_red ), "ES UNA RED" ) &&
+                   contiene( etiqueta( p->pd.ver_red ), "ya es triangular" ),
+                   "un solo sentido: ya es una red", etiqueta( p->pd.ver_red ) );
+            check( gtk_widget_get_sensitive( p->pd.b_pasar_mt ), "con proyecto, «Pasar a MT» se enciende", NULL );
+            check( estructura_pasar_mt( p, why2, sizeof why2 ), "«Pasar a MT» da de alta el caso", why2 );
+            {
+                const PrCaso *mt = &p->proy->ca[p->proy->nca - 1];
+                check( !strcmp( mt->motor, "drtran" ) && !strcmp( mt->padre, "C1" ) &&
+                       !strcmp( mt->en[0].serie, "MUSKRAT" ) && !strcmp( mt->en[1].serie, "MINK" ),
+                       "un caso MT hermano, colgado del sistema, con la salida (MUSKRAT) primero",
+                       mt->en[0].serie );
+            }
+        }
 
         /* CERRAR CON EL MOTOR CORRIENDO: se para, y lo que llega despues no
          * escribe en una ventana que ya no existe.                      */

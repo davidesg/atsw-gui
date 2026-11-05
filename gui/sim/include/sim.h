@@ -60,7 +60,36 @@ typedef struct {
     gchar     *out;           /* el .out de la puerta                      */
     gchar     *firma;         /* las rutas del sistema cuando se paso      */
     VarmaOut  *v;             /* lo leido (lib/outvarma), en el monton     */
+    int        version;       /* sube con cada puerta leida                */
 } PagPuerta;
+
+/* La pagina 3: la identificacion (N2, sima identify_cross). */
+typedef struct {
+    GtkWidget *rejilla;       /* m x m miniaturas de la CCF de los residuos */
+    GtkWidget *enlaces;       /* la caja de las casillas propuestas        */
+    GtkWidget *ver_pide;      /* lo que falta (la puerta)                  */
+    GtkWidget *ver_lectura;   /* retroalimentacion, una direccion, nada    */
+    GtkWidget *ver_sigma;     /* la contemporanea: Sigma completa o no     */
+    GtkWidget *b_al_modelo;   /* «Al modelo»                               */
+    int        k_max;         /* los retardos que se leen como «cortos»    */
+    unsigned char marca[SIS_MAX_SER][SIS_MAX_SER];   /* lo propuesto      */
+    int        p_prop;        /* el retardo mas largo propuesto            */
+    gboolean   sigma_prop;    /* la contemporanea sale de la banda         */
+    gboolean   vale;          /* hay CCF que leer                          */
+    int        version;       /* la de la puerta que se leyo; -1 ninguna   */
+} PagIdent;
+
+/* La pagina 4: el modelo (N3). Lo que se mandara a drvarma en S4.      */
+typedef struct {
+    GtkWidget *s_p, *s_q;
+    GtkWidget *c_diag;        /* Sigma diagonal                            */
+    GtkWidget *enlaces;       /* la caja con una casilla por par ordenado  */
+    GtkWidget *c_redet, *c_fixarma, *c_m2, *cb_hessian, *cb_lik;
+    GtkWidget *orden;         /* la orden, copiable                        */
+    GtkWidget *ver_cuenta;    /* cuantos parametros cruzados               */
+    GtkWidget *ver_forma;     /* retroalimentacion o red                   */
+    gboolean   leyendo;       /* rellenando los controles: no leerlos      */
+} PagModelo;
 
 typedef struct {
     GtkWidget *ventana;
@@ -73,6 +102,9 @@ typedef struct {
     Sistema    sis;           /* las series, en orden                      */
     PagSeries  ps;
     PagPuerta  pp;
+    PagIdent   pi;
+    PagModelo  pm;
+    SisModelo  mod;           /* el modelo que se va a estimar             */
     gboolean   recolocando;   /* repintando la lista                       */
 
     /* EL PROYECTO, si se abrio con --proyecto; y el SISTEMA (un caso con
@@ -120,5 +152,17 @@ gboolean   puerta_pasar( Sim *m );
 /* Lo que la puerta dice de ESTE sistema: 1 pasa, 0 no se ha pasado (o el
  * sistema cambio despues), -1 falla.                                    */
 int        puerta_estado( Sim *m );
+
+/* identifica.c */
+GtkWidget *identifica_pagina_new( Sim *m );
+void       identifica_refresca( Sim *m );
+/* Pasa lo marcado al modelo (pagina 4): los enlaces, p y Sigma. */
+void       identifica_al_modelo( Sim *m );
+
+/* modelo.c */
+GtkWidget *modelo_pagina_new( Sim *m );
+void       modelo_refresca( Sim *m );
+/* La orden del modelo, legible (los ficheros por su nombre). g_free.   */
+gchar     *modelo_orden_texto( Sim *m );
 
 #endif /* SIM_GUI_H */

@@ -16,6 +16,7 @@ LIB = ../../lib
 ENG = ../../engines/drvarma
 
 SRC = src/main.c src/ventana.c src/series.c src/puerta.c src/proyecto.c \
+      src/identifica.c src/modelo.c \
       $(LIB)/sistema/sistema.c \
       $(LIB)/outvarma/outvarma.c \
       $(LIB)/outdiag/outdiag.c \
@@ -28,14 +29,19 @@ SRC = src/main.c src/ventana.c src/series.c src/puerta.c src/proyecto.c \
       $(LIB)/coste/coste.c \
       $(LIB)/sitio/sitio.c \
       $(LIB)/barra/iconos.c \
-      $(LIB)/barra/barra.c
+      $(LIB)/barra/barra.c \
+      $(LIB)/preview/preview.c \
+      $(LIB)/fugdraw/fugdraw.c \
+      $(LIB)/ccfplot/ccfplot.c \
+      $(LIB)/utils/ext.c
 
-HDR = include/sim.h
+HDR = include/sim.h include/previewhost.h
 
 INC = -Iinclude -I$(ENG)/include -I$(LIB)/sistema -I$(LIB)/outvarma -I$(LIB)/outdiag \
       -I$(LIB)/fuepre -I$(LIB)/fuedet -I$(LIB)/dates -I$(LIB)/lik -I$(LIB)/optim \
       -I$(LIB)/diagmv -I$(LIB)/prewhiten -I$(LIB)/inpcheck -I$(LIB)/proyecto \
-      -I$(LIB)/engine -I$(LIB)/coste -I$(LIB)/sitio -I$(LIB)/barra
+      -I$(LIB)/engine -I$(LIB)/coste -I$(LIB)/sitio -I$(LIB)/barra \
+      -I$(LIB)/preview -I$(LIB)/fugdraw -I$(LIB)/ccfplot -I$(LIB)/utils
 
 GTK_CFLAGS := $(shell pkg-config --cflags gtk+-3.0 2>/dev/null)
 GTK_LIBS   := $(shell pkg-config --libs   gtk+-3.0 2>/dev/null)

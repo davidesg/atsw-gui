@@ -49,6 +49,30 @@ int main( int argc, char **argv )
    k = sis_orden_puerta( &s, "puerta", av, 32 );
    ok( k == 7 && !strcmp( av[2], "0" ) && !strcmp( av[4], "-diagcov" ) && !strcmp( av[6], "puerta" ),
        "la orden de la puerta: A B 0 0 -diagcov -o puerta" );
+   {
+      SisModelo mo;
+      char buf[1024], lk[256];
+      int j;
+      sis_modelo_defecto( &mo, s.n );
+      ok( mo.p == 1 && mo.q == 0 && !mo.diagcov && sis_enlaces( &mo, 2 ) == 2,
+          "el modelo de partida: p = 1, Sigma completa, todos los enlaces" );
+      ok( sis_enlaces_texto( &s, &mo, lk, sizeof lk ) == 0 && !lk[0], "con todos, sin -links" );
+      ok( sis_retroalimenta( &mo, 2 ), "con todos, hay retroalimentacion" );
+      ok( sis_parametros_cruzados( &mo, 2 ) == 3, "2 enlaces x (1 + 0) + 1 de Sigma = 3" );
+      mo.enlace[1][0] = 0;
+      ok( sis_enlaces_texto( &s, &mo, lk, sizeof lk ) > 0 && !strcmp( lk, "MUSKRAT<-MINK" ),
+          "un enlace: -links MUSKRAT<-MINK" );
+      ok( !sis_retroalimenta( &mo, 2 ), "un solo sentido: sin retroalimentacion (es una red)" );
+      mo.p = 2; mo.q = 1; mo.diagcov = 1; mo.fixarma = 1; mo.lik = 2;
+      k = sis_orden_modelo( &s, &mo, "c01", buf, sizeof buf, av, 32 );
+      {
+         char o[2048] = "";
+         for ( j = 0; j < k; j++ ) { strcat( o, j ? " " : "" ); strcat( o, strrchr( av[j], '/' ) ? strrchr( av[j], '/' ) + 1 : av[j] ); }
+         printf( "    %s\n", o );
+         ok( !strcmp( o, "MUSKRAT_m03.pre MINK_m02.pre 2 1 -diagcov -links MUSKRAT<-MINK -fixarma -lik both -o c01" ),
+             "la orden del modelo" );
+      }
+   }
    sis_mueve( &s, 1, 0 );
    ok( !strcmp( s.s[0].nombre, "MINK" ) && !strcmp( s.s[1].nombre, "MUSKRAT" ), "mover cambia el orden" );
    s.s[1].fin_anio = 1910;

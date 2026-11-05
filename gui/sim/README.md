@@ -13,7 +13,8 @@ no transforma datos. Siete páginas, como drtran_gui:
 |---|---|
 | 1 · Series | hecha (S2): los ficheros en orden (el de Cholesky), la ventana común |
 | 2 · Puerta | hecha (S2): drvarma con p = q = 0 y Σ diagonal; pasa, falla, o el fichero no es un óptimo; la pregunta del rango |
-| 3 · Identificación, 4 · Modelo | S3 |
+| 3 · Identificación | hecha (S3): la rejilla m × m de la CCF de los residuos (las del `.out` de la puerta), la CCF entera al pulsar, los enlaces propuestos, «Al modelo» |
+| 4 · Modelo | hecha (S3): p, q, Σ, un enlace por par ordenado, opciones avanzadas; la orden de drvarma, antes de lanzar |
 | 5 · Estimación, 6 · Diagnosis | S4 |
 | 7 · Previsión | S5 |
 

@@ -75,6 +75,22 @@ static void puerta( const char *dir )
    ok( v.optim == OV_OPT_NADA && !v.fallo, "sin bloque del optimizador (p = q = 0), sin fallo" );
    ok( !v.tiene_lr, "sin LR (no hay contra que)" );
    ok( v.tiene_diag && v.diag.hosking.hay && v.diag.ns == 2, "la diagnosis, por lib/outdiag" );
+   {
+      const OvCcf *c = ov_ccf( &v, 0, 1 );
+      ok( v.nccf == 1 && c && c == ov_ccf( &v, 1, 0 ), "una CCF de residuos, la del par (en cualquier orden)" );
+      if ( c ) {
+         ok( c->i == 0 && c->j == 1 && !strcmp( c->a, "MUSKRAT" ) && !strcmp( c->b, "MINK" ),
+             "a[2] (MINK) - a[1] (MUSKRAT): A = MUSKRAT, B = MINK" );
+         ok( c->nlags == 9, "retardos -9..9" );
+         okf( c->banda, 2 / sqrt( 61 ), 1e-4, "la banda es 2/sqrt(61)" );
+         ok( fabs( c->r[c->nlags] ) > c->banda, "la contemporanea sale de la banda (Sigma completa)" );
+         ok( fabs( c->r[c->nlags + 1] ) > c->banda, "y k = 1: MINK entra en la ecuacion de MUSKRAT" );
+         ok( c->q_ge0 > 0 && c->q_le0 > 0 && c->df_ge0 == 10 && c->df_gt0 == 9, "los cuatro Q y sus grados" );
+         ok( ov_ccf_r( &v, 0, 1, 1, NULL ) == c->r[c->nlags + 1] && ov_ccf_r( &v, 1, 0, 1, NULL ) == c->r[c->nlags - 1],
+             "ov_ccf_r: MINK en MUSKRAT es k = +1; MUSKRAT en MINK, k = -1" );
+         ok( ov_ccf_r( &v, 0, 1, 0, NULL ) == ov_ccf_r( &v, 1, 0, 0, NULL ), "la contemporanea, la misma en los dos sentidos" );
+      }
+   }
 }
 
 static void ar2( const char *dir )

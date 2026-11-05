@@ -36,7 +36,7 @@
  *   la prevision  por serie, en su nivel, con la banda del 95 %
  *   la evaluacion recursiva, por serie y horizonte (con -estwin)
  *
- * Los tamanos: un VarmaOut ocupa unos 300 KB. Va en estatico o con malloc,
+ * Los tamanos: un VarmaOut ocupa unos 450 KB. Va en estatico o con malloc,
  * no en la pila.
  */
 
@@ -116,6 +116,30 @@ typedef struct {
    int     nh;
 } OvEvalSerie;
 
+/* LA CCF DE LOS RESIDUOS de un par (diagnose.c, «CROSS CORRELATION a[j]
+ * (B) - a[i] (A)», i < j). Es la evidencia de la identificacion (N2, sima
+ * identify_cross): los residuos del sistema diagonal son las innovaciones
+ * de cada serie --preblanqueadas por construccion--, asi que una
+ * correlacion fuera de la banda es dinamica entre las series.
+ *
+ *   r[k + nlags], k = -nlags..nlags
+ *   k > 0   B --> A: B entra en la ecuacion de A  (en -links, «A<-B»)
+ *   k < 0   A --> B: A entra en la ecuacion de B  («B<-A»)
+ *   k = 0   contemporanea: apunta a Sigma completa
+ *
+ * i y j son indices 0..m-1 en el orden del sistema.                      */
+#define OV_MAX_LAG     64
+#define OV_MAX_PARES  120
+typedef struct {
+   int    i, j;
+   char   a[OV_NOMBRE], b[OV_NOMBRE];   /* A = serie i, B = serie j       */
+   double banda;                        /* 2/sqrt(n)                       */
+   int    nlags;
+   double r[2 * OV_MAX_LAG + 1];
+   double q_ge0, q_gt0, q_le0, q_lt0;   /* Q de k>=0, k>0, k<=0, k<0      */
+   int    df_ge0, df_gt0;               /* sus grados (los de k<=0, k<0 son los mismos) */
+} OvCcf;
+
 typedef struct {
    /* la cabecera */
    int      p, q;
@@ -167,6 +191,10 @@ typedef struct {
    int      nh_fevd;
    double   fevd[OV_MAX_SER][OV_MAX_HOR][OV_MAX_SER];
 
+   /* las CCF de los residuos, un par cada una (i < j) */
+   OvCcf    ccf[OV_MAX_PARES];
+   int      nccf;
+
    /* la diagnosis, leida por lib/outdiag */
    Diagnosis diag;
    int       tiene_diag;
@@ -183,6 +211,15 @@ typedef struct {
  * 1 si no lo es.                                                          */
 int ov_parse( const char *texto, VarmaOut *v );
 int ov_parse_file( const char *path, VarmaOut *v );   /* -1: no se abre    */
+
+/* La CCF del par de series (en cualquier orden), o NULL. */
+const OvCcf *ov_ccf( const VarmaOut *v, int i, int j );
+
+/* La correlacion de «b entra en la ecuacion de a con retardo k» (k >= 0;
+ * k = 0 es la contemporanea, la misma en los dos sentidos), leida de la
+ * CCF de su par con el signo de k que toque. 0 si no la hay; *banda, si
+ * no es NULL, recibe la banda 2/sqrt(n) (0 si no hay CCF).              */
+double ov_ccf_r( const VarmaOut *v, int a, int b, int k, double *banda );
 
 /* El parametro que se llama asi, o NULL. */
 const OvParam *ov_param( const VarmaOut *v, const char *nombre );

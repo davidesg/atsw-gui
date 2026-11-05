@@ -121,6 +121,30 @@ typedef struct {
     int        version;
 } PagDiag;
 
+/* La pagina 7: la prevision y la evaluacion (N5, N6). drvarma preve en la
+ * pasada en que estima, asi que prever es volver a correr EL MISMO modelo
+ * con -forecast H: va a <modelo>_prev.* y no toca la estimacion. Evaluar
+ * son otras dos corridas con -estwin N --con -estwin, drvarma preve desde
+ * el final de la ventana, no de la muestra--: el sistema a <modelo>_eval.*
+ * y la vara de medir, el sistema diagonal (los univariantes) con la misma
+ * ventana, a <modelo>_diag.*                                            */
+typedef struct {
+    GtkWidget *s_hor, *c_eval, *s_win, *b_calc;
+    GtkWidget *ver_pide, *ver_eval;
+    GtkWidget *libreta;
+    GtkWidget *t_prev, *l_eval, *t_irf, *t_fevd;
+    GtkWidget *graficos;      /* un boton por serie: su grafico           */
+
+    EngineJob *trabajo;
+    gboolean   corriendo;
+    int        paso;          /* 1 prever, 2 evaluar el sistema, 3 el diagonal */
+    gchar     *base;          /* <modelo>_prev, sin extension             */
+    VarmaOut  *v;             /* la corrida de prevision                  */
+    VarmaOut  *ve;            /* la evaluacion del sistema (-estwin)      */
+    VarmaOut  *vd;            /* la del diagonal, con la misma ventana    */
+    int        version;       /* la estimacion de la que se previo        */
+} PagPrev;
+
 typedef struct {
     GtkWidget *ventana;
     GtkWidget *libro;         /* el cuaderno de las paginas                */
@@ -137,6 +161,7 @@ typedef struct {
     SisModelo  mod;           /* el modelo que se va a estimar             */
     PagEstima  pe;
     PagDiag    pd;
+    PagPrev    pv;
     gboolean   recolocando;   /* repintando la lista                       */
 
     /* EL PROYECTO, si se abrio con --proyecto; y el SISTEMA (un caso con
@@ -212,6 +237,15 @@ gboolean   estima_desde( Sim *m, const char *out );
 /* diagnosis.c */
 GtkWidget *diagnosis_pagina_new( Sim *m );
 void       diagnosis_refresca( Sim *m );
+
+/* prevision.c */
+GtkWidget *prevision_pagina_new( Sim *m );
+void       prevision_refresca( Sim *m );
+/* Prever (y evaluar, si esta marcado) el sistema estimado. TRUE si arranco. */
+gboolean   prevision_calcular( Sim *m );
+/* El grafico de la prevision de la serie i, escrito y en la ventana de
+ * graficos. TRUE si se pudo.                                             */
+gboolean   prevision_grafico( Sim *m, int i );
 
 /* pagina.c: «Ver modelo», la pagina de la serie i (0..n-1) del sistema
  * estimado, con el dibujante de fue (lib/equation). */

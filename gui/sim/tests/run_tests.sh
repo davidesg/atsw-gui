@@ -71,6 +71,6 @@ if grep -q '^no hay' "$W/gui.txt"; then
     grep '^FAIL' "$W/gui.txt"
     exit $rc
 fi
-grep -E '^(FAIL|puerta|modelo|estimación|diagnosis|sim_gui)' "$W/gui.txt"
+grep -E '^(FAIL|puerta|modelo|estimación|diagnosis|evaluación|sim_gui)' "$W/gui.txt"
 [ $rc -eq 0 ] || { echo "test_gui salio con $rc"; tail -20 "$W/gui_err.txt"; exit 1; }
 exit 0

@@ -96,9 +96,9 @@ static gboolean espera( Sim *m, int segundos )
 {
     gint64 hasta = g_get_monotonic_time() + (gint64) segundos * G_USEC_PER_SEC;
     pump( 20 );
-    while ((m->pp.corriendo || m->pe.corriendo) && g_get_monotonic_time() < hasta) pump( 20 );
+    while ((m->pp.corriendo || m->pe.corriendo || m->pv.corriendo) && g_get_monotonic_time() < hasta) pump( 20 );
     pump( 50 );
-    return !m->pp.corriendo && !m->pe.corriendo;
+    return !m->pp.corriendo && !m->pe.corriendo && !m->pv.corriendo;
 }
 
 static int filas_de( GtkWidget *tv ) { return filas( tv ); }
@@ -407,6 +407,50 @@ int main( int argc, char **argv )
         }
     }
     check( pagina_ver( m, 1 ), "Ver modelo de MINK abre su página", etiqueta( m->estado ) );
+
+    /* --- 7 · Previsión ---------------------------------------------------- */
+    check( gtk_widget_is_sensitive( GTK_WIDGET(m->tb_prev) ), "con un sistema estimado, Prever se enciende", NULL );
+    {
+        gchar *t = NULL;
+        GtkTextBuffer *b = gtk_text_view_get_buffer( GTK_TEXT_VIEW(m->pv.t_irf) );
+        GtkTextIter i0, i1;
+        gtk_text_buffer_get_bounds( b, &i0, &i1 );
+        t = gtk_text_buffer_get_text( b, &i0, &i1, FALSE );
+        check( contiene( t, "Choque en MUSKRAT" ) && contiene( t, "Choque en MINK" ),
+               "la respuesta al impulso, del .out de la estimación, sin correr nada", t );
+        g_free( t );
+        b = gtk_text_view_get_buffer( GTK_TEXT_VIEW(m->pv.t_fevd) );
+        gtk_text_buffer_get_bounds( b, &i0, &i1 );
+        t = gtk_text_buffer_get_text( b, &i0, &i1, FALSE );
+        check( contiene( t, "Descomposición" ) && contiene( t, "100.00" ), "y la descomposición", t );
+        g_free( t );
+    }
+    check( prevision_calcular( m ) && espera( m, 300 ), "prever corre", NULL );
+    check( m->pv.v && m->pv.v->nprev == 2 && m->pv.v->prev[0].nf == 10 && !m->pv.vd &&
+           !strcmp( m->pv.v->prev[0].origen, "1/1911" ),
+           "la previsión de las dos series, 10 periodos, sin evaluar", etiqueta( m->pv.ver_pide ) );
+    check( contiene( etiqueta( m->pv.ver_pide ), "TEÓRICAS" ), "la página dice que las bandas son teóricas",
+           etiqueta( m->pv.ver_pide ) );
+    s = g_build_filename( cache, SIM_CACHE, "modelo_prev.forecast", NULL );
+    check( g_file_test( s, G_FILE_TEST_EXISTS ), "en su propia corrida (_prev), sin tocar la estimación", s );
+    g_free( s );
+    check( m->pe.v && m->pe.v->npar == 18, "la estimación de «5» sigue siendo la misma", NULL );
+    check( prevision_grafico( m, 0 ), "el gráfico de MUSKRAT se dibuja", etiqueta( m->estado ) );
+    s = g_build_filename( cache, SIM_CACHE, "prev_MUSKRAT.eps", NULL );
+    check( g_file_test( s, G_FILE_TEST_EXISTS ), "y queda su EPS", s );
+    g_free( s );
+    gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(m->pv.c_eval), TRUE );
+    gtk_spin_button_set_value( GTK_SPIN_BUTTON(m->pv.s_hor), 4 );
+    gtk_spin_button_set_value( GTK_SPIN_BUTTON(m->pv.s_win), 48 );
+    check( prevision_calcular( m ) && espera( m, 600 ), "prever y evaluar corre (el sistema y los univariantes)", NULL );
+    check( m->pv.ve && m->pv.ve->nev == 2 && m->pv.vd && m->pv.vd->nev == 2,
+           "las dos evaluaciones: la del sistema y la de los univariantes", etiqueta( m->pv.ver_eval ) );
+    check( m->pv.v && !strcmp( m->pv.v->prev[0].origen, "1/1911" ),
+           "y la previsión sigue siendo desde el final de la muestra, no de la ventana", NULL );
+    check( filas_de( m->pv.l_eval ) == 8, "la tabla: 2 series x 4 horizontes", NULL );
+    check( contiene( etiqueta( m->pv.ver_eval ), "orígenes" ) && contiene( etiqueta( m->pv.ver_eval ), "de 8" ),
+           "el veredicto cuenta en cuántas gana el sistema", etiqueta( m->pv.ver_eval ) );
+    printf( "evaluación      : %s\n", etiqueta( m->pv.ver_eval ) );
 
     /* --- la pared MA: no se presenta como un óptimo ---------------------- */
     gtk_spin_button_set_value( GTK_SPIN_BUTTON(m->pm.s_p), 1 );

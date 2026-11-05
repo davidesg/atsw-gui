@@ -114,6 +114,11 @@ int  sis_enlaces( const SisModelo *mo, int m );
  * todos (no hace falta -links). Devuelve la longitud, -1 si no cabe.   */
 int  sis_enlaces_texto( const Sistema *s, const SisModelo *mo, char *out, size_t n );
 
+/* Al reves: «A<-B,C<-A» (o "" = todos) a la matriz de enlaces, por los
+ * nombres de las series. 0 si se pudo; 1 si un nombre no es del sistema
+ * (y la matriz queda como estaba).                                      */
+int  sis_enlaces_de_texto( const Sistema *s, SisModelo *mo, const char *txt );
+
 /* Hay retroalimentacion: algun par con enlace de ida y vuelta (A<-B y B<-A).
  * Es lo que trae a SIM y no a MT.                                       */
 int  sis_retroalimenta( const SisModelo *mo, int m );

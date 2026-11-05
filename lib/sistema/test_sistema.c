@@ -63,6 +63,14 @@ int main( int argc, char **argv )
       ok( sis_enlaces_texto( &s, &mo, lk, sizeof lk ) > 0 && !strcmp( lk, "MUSKRAT<-MINK" ),
           "un enlace: -links MUSKRAT<-MINK" );
       ok( !sis_retroalimenta( &mo, 2 ), "un solo sentido: sin retroalimentacion (es una red)" );
+      {
+         SisModelo m2;
+         sis_modelo_defecto( &m2, 2 );
+         ok( sis_enlaces_de_texto( &s, &m2, "MUSKRAT<-MINK" ) == 0 && m2.enlace[0][1] && !m2.enlace[1][0],
+             "de vuelta: MUSKRAT<-MINK a la matriz" );
+         ok( sis_enlaces_de_texto( &s, &m2, "" ) == 0 && m2.enlace[1][0], "vacio: todos" );
+         ok( sis_enlaces_de_texto( &s, &m2, "MUSKRAT<-NADIE" ) != 0, "un nombre que no esta: 1" );
+      }
       mo.p = 2; mo.q = 1; mo.diagcov = 1; mo.fixarma = 1; mo.lik = 2;
       k = sis_orden_modelo( &s, &mo, "c01", buf, sizeof buf, av, 32 );
       {

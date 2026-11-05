@@ -281,3 +281,32 @@ int sis_orden_modelo( const Sistema *s, const SisModelo *mo, const char *salida,
    argv[k++] = salida;
    return k;
 }
+
+int sis_enlaces_de_texto( const Sistema *s, SisModelo *mo, const char *txt )
+{
+   unsigned char e[SIS_MAX_SER][SIS_MAX_SER];
+   char buf[2048], *tok;
+   int a, b, m = s->n;
+
+   memset( e, 0, sizeof e );
+   if ( !txt || !*txt ) {
+      for ( a = 0; a < m; a++ ) for ( b = 0; b < m; b++ ) e[a][b] = a != b;
+      memcpy( mo->enlace, e, sizeof e );
+      return 0;
+   }
+   copia( buf, sizeof buf, txt );
+   for ( tok = strtok( buf, ", " ); tok; tok = strtok( NULL, ", " ) ) {
+      char *f = strstr( tok, "<-" );
+      int ia = -1, ib = -1, i;
+      if ( !f ) return 1;
+      *f = 0;
+      for ( i = 0; i < m; i++ ) {
+         if ( !strcmp( s->s[i].nombre, tok ) ) ia = i;
+         if ( !strcmp( s->s[i].nombre, f + 2 ) ) ib = i;
+      }
+      if ( ia < 0 || ib < 0 || ia == ib ) return 1;
+      e[ia][ib] = 1;
+   }
+   memcpy( mo->enlace, e, sizeof e );
+   return 0;
+}

@@ -91,6 +91,36 @@ typedef struct {
     gboolean   leyendo;       /* rellenando los controles: no leerlos      */
 } PagModelo;
 
+/* La pagina 5: la estimacion (N3). La unica, con la 2, que LANZA el motor. */
+typedef struct {
+    GtkWidget *b_estimar, *b_parar;
+    GtkWidget *orden;         /* la orden de esta corrida, copiable        */
+    GtkWidget *consola;       /* lo que dice drvarma, en vivo              */
+    GtkWidget *ver_fin;       /* como acabo                                */
+    GtkWidget *ver_donde;     /* a donde va la corrida                     */
+
+    EngineJob *trabajo;
+    gboolean   corriendo;
+    int        rc;
+    gchar     *out;           /* el .out de la corrida (con su extension)  */
+    char       corrida[PR_ID];   /* su id en el sistema, con proyecto      */
+    char       previa[PR_ID];    /* la anterior: el padre de la siguiente  */
+    VarmaOut  *v;             /* lo leido; NULL si no hay corrida          */
+    int        version;       /* sube con cada estimacion leida            */
+} PagEstima;
+
+/* La pagina 6: la diagnosis (N4). Lee, no calcula: lib/outvarma y
+ * lib/outdiag sobre el .out de la corrida.                              */
+typedef struct {
+    GtkWidget *ver_pide;
+    GtkWidget *libreta;
+    GtkWidget *ver_lr, *ver_hosking, *ver_jb, *ver_raices, *ver_optim;
+    GtkWidget *l_par, *l_res;
+    GtkWidget *t_sigma;
+    GtkWidget *t_out;
+    int        version;
+} PagDiag;
+
 typedef struct {
     GtkWidget *ventana;
     GtkWidget *libro;         /* el cuaderno de las paginas                */
@@ -105,6 +135,8 @@ typedef struct {
     PagIdent   pi;
     PagModelo  pm;
     SisModelo  mod;           /* el modelo que se va a estimar             */
+    PagEstima  pe;
+    PagDiag    pd;
     gboolean   recolocando;   /* repintando la lista                       */
 
     /* EL PROYECTO, si se abrio con --proyecto; y el SISTEMA (un caso con
@@ -134,6 +166,8 @@ void       sim_estado( Sim *m, const char *fmt, ... ) G_GNUC_PRINTF(2, 3);
 void       sim_veredicto( GtkWidget *w, const char *color, const char *fmt, ... )
            G_GNUC_PRINTF(3, 4);
 GtkWidget *sim_mono( const char *txt );
+/* Un criterio de parada de drvarma (qnewtopt.c), en castellano. */
+const char *sim_criterio( const char *c );
 /* drvarma, buscado al lado de sim_gui (el arbol, el paquete) antes que en
  * el PATH. SIM_DRVARMA en el entorno lo sustituye (la prueba). g_free.   */
 gchar     *sim_hermano( const char *programa );
@@ -164,5 +198,22 @@ GtkWidget *modelo_pagina_new( Sim *m );
 void       modelo_refresca( Sim *m );
 /* La orden del modelo, legible (los ficheros por su nombre). g_free.   */
 gchar     *modelo_orden_texto( Sim *m );
+
+/* estima.c */
+GtkWidget *estima_pagina_new( Sim *m );
+void       estima_refresca( Sim *m );
+/* Lanza drvarma con el modelo de la pagina 4. Pide la puerta superada.
+ * TRUE si arranco.                                                      */
+gboolean   estima_lanzar( Sim *m );
+/* Un sistema ya estimado, sin estimar: su .out en las paginas 5 y 6, y su
+ * modelo (p, q, Sigma, enlaces) en la 4. La usa la carga de un sistema.  */
+gboolean   estima_desde( Sim *m, const char *out );
+
+/* diagnosis.c */
+GtkWidget *diagnosis_pagina_new( Sim *m );
+void       diagnosis_refresca( Sim *m );
+
+/* puerta.c: una puerta ya pasada, leida de su .out (la carga de un sistema). */
+gboolean   puerta_desde( Sim *m, const char *out );
 
 #endif /* SIM_GUI_H */

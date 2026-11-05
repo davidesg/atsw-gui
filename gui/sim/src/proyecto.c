@@ -86,6 +86,24 @@ gboolean sim_caso_carga( Sim *m, char *why, size_t n )
         g_free( h );
     }
     m->desfasado = cambian->len > 0;
+
+    /* LO QUE YA ESTABA HECHO SE VE: la puerta del sistema, si se paso, y el
+     * modelo de --modelo o el elegido, con su .out. La siguiente corrida
+     * colgara de el.                                                    */
+    {
+        gchar *pu = sim_artefacto( m, "puerta.out" );
+        const char *de = m->modelo_ini[0] ? m->modelo_ini : pr_corrida_elegida( m->proy, m->caso );
+        char out[PR_RUTA];
+
+        if (g_file_test( pu, G_FILE_TEST_EXISTS )) puerta_desde( m, pu );
+        g_free( pu );
+        if (de && de[0] && pr_corrida_ruta( m->proy, m->caso, de, ".out", out, sizeof out ) == 0 &&
+            g_file_test( out, G_FILE_TEST_EXISTS )) {
+            snprintf( m->pe.corrida, sizeof m->pe.corrida, "%s", de );
+            snprintf( m->pe.previa, sizeof m->pe.previa, "%s", de );
+            estima_desde( m, out );
+        }
+    }
     if (m->desfasado && why)
         snprintf( why, n, "El sistema %s está DESFASADO: el .pre de %s cambió después "
                   "del alta. Lo que se estime no será lo que el sistema dice que se "

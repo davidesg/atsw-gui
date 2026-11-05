@@ -16,7 +16,7 @@ LIB = ../../lib
 ENG = ../../engines/drvarma
 
 SRC = src/main.c src/ventana.c src/series.c src/puerta.c src/proyecto.c \
-      src/identifica.c src/modelo.c \
+      src/identifica.c src/modelo.c src/estima.c src/diagnosis.c \
       $(LIB)/sistema/sistema.c \
       $(LIB)/outvarma/outvarma.c \
       $(LIB)/outdiag/outdiag.c \

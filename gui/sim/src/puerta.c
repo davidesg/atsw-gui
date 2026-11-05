@@ -160,6 +160,25 @@ gboolean puerta_pasar( Sim *m )
 
 static void on_pasar( GtkButton *b, Sim *m ) { (void) b; puerta_pasar( m ); }
 
+gboolean puerta_desde( Sim *m, const char *out )
+{
+    PagPuerta *P = &m->pp;
+    gchar *base;
+
+    if (!P->v) P->v = g_new0( VarmaOut, 1 );
+    if (ov_parse_file( out, P->v ) != 0 || !P->v->puerta.hay) return FALSE;
+    base = g_strdup( out );
+    if (g_str_has_suffix( base, ".out" )) base[strlen( base ) - 4] = 0;
+    g_free( P->out );
+    P->out = base;
+    g_free( P->firma );
+    P->firma = firma( m );
+    P->rc = P->v->puerta.pasa ? 0 : 5;
+    P->hecha = TRUE;
+    P->version++;
+    return TRUE;
+}
+
 static const char *por_que( const OvPuertaSerie *x )
 {
     if (x->no_optimo) return "se movió en su propia muestra: no es un óptimo";

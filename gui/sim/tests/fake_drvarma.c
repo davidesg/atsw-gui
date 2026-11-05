@@ -7,6 +7,7 @@
  */
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 int main( int argc, char **argv )
 {
@@ -19,6 +20,16 @@ int main( int argc, char **argv )
     if ( !o ) return 1;
     snprintf( r, sizeof r, "%s.out", o );
     if ( !( f = fopen( r, "w" ) ) ) return 1;
+    /* SIM_FALSO=estima: una estimacion que falla (sale con 3), como la
+     * escalera cuando est() devuelve un fallo.                          */
+    if ( getenv( "SIM_FALSO" ) && !strcmp( getenv( "SIM_FALSO" ), "estima" ) ) {
+        fprintf( f, "Program          : drvarma 5.0.0 (falso) (ladder mode: .pre input)\n"
+                    "Model            : VARMA with univariate diagonals; cross orders p=1 q=0\n\n"
+                    "  GATE: PASSED\n\n"
+                    "**** ESTIMATION FAILED: AR nonstationary (code 3)\n" );
+        fclose( f );
+        return 3;
+    }
     fprintf( f, "Program          : drvarma 5.0.0 (falso) (ladder mode: .pre input)\n"
                 "Model            : VARMA with univariate diagonals; cross orders p=0 q=0\n"
                 "Innovation cov.  : diagonal\n\n"

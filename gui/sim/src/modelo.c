@@ -17,12 +17,29 @@
 
 #include "sim.h"
 
+/* La salida que tendra la proxima estimacion: con un sistema, su proxima
+ * corrida (c00, c01... en el orden en que lib/proyecto las numera); sin
+ * el, el nombre fijo de la cache. g_free.                               */
+static gchar *salida( Sim *m )
+{
+    if (m->proy && m->caso[0]) {
+        int i, k = 0;
+        gchar *id, *r;
+        for (i = 0; i < m->proy->nco; i++) k += !strcmp( m->proy->co[i].caso, m->caso );
+        id = g_strdup_printf( "c%02d", k );
+        r = sim_artefacto( m, id );
+        g_free( id );
+        return r;
+    }
+    return sim_artefacto( m, "modelo" );
+}
+
 gchar *modelo_orden_texto( Sim *m )
 {
     const char *av[SIS_MAX_SER + 24];
     char buf[2048];
     GString *g = g_string_new( "drvarma" );
-    gchar *sal = sim_artefacto( m, "c01" );
+    gchar *sal = salida( m );
     int k, i;
 
     k = sis_orden_modelo( &m->sis, &m->mod, sal, buf, sizeof buf, av, G_N_ELEMENTS(av) );
@@ -133,6 +150,7 @@ static void textos( Sim *m )
     gchar *ord;
 
     if (!M->orden) return;
+    estima_refresca( m );       /* la orden de «5 · Estimación» es esta misma */
 
     if (n < 2) {
         gtk_label_set_text( GTK_LABEL(M->orden), "" );

@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <math.h>
 #include <glib/gstdio.h>
 #include <gtk/gtk.h>
 
@@ -95,10 +96,12 @@ static gboolean espera( Sim *m, int segundos )
 {
     gint64 hasta = g_get_monotonic_time() + (gint64) segundos * G_USEC_PER_SEC;
     pump( 20 );
-    while (m->pp.corriendo && g_get_monotonic_time() < hasta) pump( 20 );
+    while ((m->pp.corriendo || m->pe.corriendo) && g_get_monotonic_time() < hasta) pump( 20 );
     pump( 50 );
-    return !m->pp.corriendo;
+    return !m->pp.corriendo && !m->pe.corriendo;
 }
+
+static int filas_de( GtkWidget *tv ) { return filas( tv ); }
 
 static void copia( const char *de, const char *a )
 {
@@ -291,9 +294,9 @@ int main( int argc, char **argv )
     check( contiene( s, "ventana común" ), "MINK se movió por la ventana común", s ); g_free( s );
     s = g_build_filename( cache, SIM_CACHE, "puerta.out", NULL );
     check( g_file_test( s, G_FILE_TEST_EXISTS ), "sin proyecto, la puerta va a la cache", s ); g_free( s );
-    check( contiene( gtk_widget_get_tooltip_text( GTK_WIDGET(m->tb_estimar) ), "S4" ),
-           "con la puerta, el globo de Estimar dice cuándo llega",
-           gtk_widget_get_tooltip_text( GTK_WIDGET(m->tb_estimar) ) );
+    check( gtk_widget_is_sensitive( GTK_WIDGET(m->tb_estimar) ),
+           "con la puerta, Estimar se enciende", gtk_widget_get_tooltip_text( GTK_WIDGET(m->tb_estimar) ) );
+    check( !gtk_widget_is_sensitive( GTK_WIDGET(m->tb_diag) ), "sin estimar, Diagnosis apagado", NULL );
     printf( "puerta          : %s\n", etiqueta( m->pp.ver_puerta ) );
 
     /* --- 3 · Identificación: la CCF de los residuos, de la puerta ------- */
@@ -340,7 +343,7 @@ int main( int argc, char **argv )
            "Al modelo: un enlace, p = 1, Σ completa", etiqueta( m->estado ) );
 
     /* --- 4 · Modelo: la orden ------------------------------------------- */
-    check( contiene( etiqueta( m->pm.orden ), "MUSKRAT_m03.pre MINK_m02.pre 1 0 -links \"MUSKRAT<-MINK\" -o c01" ),
+    check( contiene( etiqueta( m->pm.orden ), "MUSKRAT_m03.pre MINK_m02.pre 1 0 -links \"MUSKRAT<-MINK\" -o modelo" ),
            "la orden lleva el enlace", etiqueta( m->pm.orden ) );
     check( contiene( etiqueta( m->pm.ver_forma ), "un solo sentido" ),
            "con un solo sentido, dice que es una red (MT)", etiqueta( m->pm.ver_forma ) );
@@ -360,6 +363,58 @@ int main( int argc, char **argv )
     check( !contiene( etiqueta( m->pm.orden ), "-links" ) && contiene( etiqueta( m->pm.ver_forma ), "retroalimentación" ),
            "Todos: sin -links, con retroalimentación", etiqueta( m->pm.orden ) );
     printf( "modelo          : %s\n", etiqueta( m->pm.orden ) );
+
+    /* --- 5 · Estimación: el AR(2) cruzado de Jenkins y Alavi ------------ */
+    gtk_spin_button_set_value( GTK_SPIN_BUTTON(m->pm.s_p), 2 );
+    gtk_spin_button_set_value( GTK_SPIN_BUTTON(m->pm.s_q), 0 );
+    gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(m->pm.c_diag), FALSE );
+    gtk_combo_box_set_active( GTK_COMBO_BOX(m->pm.cb_lik), 0 );
+    pump( 30 );
+    check( contiene( etiqueta( m->pe.orden ), "MUSKRAT_m03.pre MINK_m02.pre 2 0 -o modelo" ),
+           "la estimación lanza la orden del modelo", etiqueta( m->pe.orden ) );
+    pulsa( m->pe.b_estimar );
+    check( espera( m, 300 ), "drvarma estima y acaba", NULL );
+    check( contiene( etiqueta( m->pe.ver_fin ), "Convergió" ), "convergió", etiqueta( m->pe.ver_fin ) );
+    check( m->pe.v && m->pe.v->npar == 18 && m->pe.v->lr_df == 5 && fabs( m->pe.v->lr - 41.17 ) < 1.0,
+           "18 parámetros y LR ~ 41,17 con 5 gl (Jenkins y Alavi)", etiqueta( m->pe.ver_fin ) );
+    check( gtk_widget_is_sensitive( GTK_WIDGET(m->tb_diag) ), "con un sistema estimado, Diagnosis se enciende", NULL );
+    printf( "estimación      : %s\n", etiqueta( m->pe.ver_fin ) );
+
+    /* --- 6 · Diagnosis --------------------------------------------------- */
+    check( contiene( etiqueta( m->pd.ver_lr ), "aporta" ), "la LR: la dinámica cruzada aporta", etiqueta( m->pd.ver_lr ) );
+    check( filas_de( m->pd.l_par ) == 18, "la tabla de parámetros, 18 filas", NULL );
+    check( filas_de( m->pd.l_res ) == 2, "los residuos de las dos series", NULL );
+    check( contiene( etiqueta( m->pd.ver_hosking ), "Hosking" ) && contiene( etiqueta( m->pd.ver_jb ), "Jarque-Bera" ),
+           "Hosking y Jarque-Bera", etiqueta( m->pd.ver_hosking ) );
+    check( contiene( etiqueta( m->pd.ver_raices ), "Estacionario e invertible" ), "las raíces",
+           etiqueta( m->pd.ver_raices ) );
+    check( contiene( etiqueta( m->pd.t_sigma ), "Correlaciones" ), "Σ y sus correlaciones", NULL );
+    printf( "diagnosis       : %s\n", etiqueta( m->pd.ver_lr ) );
+
+    /* --- la pared MA: no se presenta como un óptimo ---------------------- */
+    gtk_spin_button_set_value( GTK_SPIN_BUTTON(m->pm.s_p), 1 );
+    gtk_spin_button_set_value( GTK_SPIN_BUTTON(m->pm.s_q), 1 );
+    gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(m->pm.c_diag), TRUE );
+    pulsa( boton( m->ventana, "Ninguno" ) );
+    m->mod.enlace[0][1] = 1;
+    modelo_refresca( m );
+    check( contiene( etiqueta( m->pm.orden ), "1 1 -diagcov -links \"MUSKRAT<-MINK\"" ), "el modelo de la pared",
+           etiqueta( m->pm.orden ) );
+    check( estima_lanzar( m ) && espera( m, 300 ), "estima", NULL );
+    check( contiene( etiqueta( m->pe.ver_fin ), "PARED MA" ) && contiene( etiqueta( m->pe.ver_fin ), "NO es un óptimo" ),
+           "parado en la pared MA: lo dice y no lo presenta como óptimo", etiqueta( m->pe.ver_fin ) );
+    check( contiene( etiqueta( m->pd.ver_optim ), "pared MA" ), "y la diagnosis lo recuerda", etiqueta( m->pd.ver_optim ) );
+
+    /* --- una estimación que falla (el motor falso sale con 3) ------------ */
+    g_setenv( "SIM_DRVARMA", fake, TRUE );
+    g_setenv( "SIM_FALSO", "estima", TRUE );
+    check( estima_lanzar( m ) && espera( m, 30 ), "el motor falso estima", NULL );
+    check( contiene( etiqueta( m->pe.ver_fin ), "FALLÓ" ), "una estimación fallida se dice en rojo",
+           etiqueta( m->pe.ver_fin ) );
+    check( !gtk_widget_is_sensitive( GTK_WIDGET(m->tb_diag) ) && contiene( etiqueta( m->pd.ver_pide ), "falló" ),
+           "y no hay diagnosis que enseñar", etiqueta( m->pd.ver_pide ) );
+    g_unsetenv( "SIM_FALSO" );
+    g_unsetenv( "SIM_DRVARMA" );
 
     /* Cambiar el orden invalida la puerta: es otro sistema. */
     marca( m->ps.lista, 0 );
@@ -422,6 +477,27 @@ int main( int argc, char **argv )
                "el título dice el sistema", gtk_window_get_title( GTK_WINDOW(p->ventana) ) );
         check( puerta_pasar( p ) && espera( p, 120 ) && puerta_estado( p ) == 1,
                "la puerta del sistema pasa", etiqueta( p->pp.ver_puerta ) );
+        /* Dos estimaciones: dos modelos del sistema, el segundo hijo del primero. */
+        p->mod.p = 1; p->mod.q = 0;
+        check( estima_lanzar( p ) && espera( p, 300 ) && p->pe.v && !strcmp( p->pe.corrida, "c00" ),
+               "la primera estimación es el modelo c00 del sistema", p->pe.corrida );
+        s = g_strdup( p->pe.out );
+        check( contiene( s, "_casos" ) && contiene( s, "C1_c00.out" ) && g_file_test( s, G_FILE_TEST_EXISTS ),
+               "con su .out en el directorio del sistema", s );
+        p->mod.p = 2;
+        check( estima_lanzar( p ) && espera( p, 300 ) && !strcmp( p->pe.corrida, "c01" ),
+               "la segunda es c01", p->pe.corrida );
+        check( g_file_test( s, G_FILE_TEST_EXISTS ), "y no pisa a c00", s );
+        g_free( s );
+        check( pr_corrida_ver( p->proy, "C1", "c01" ) &&
+               !g_strcmp0( pr_corrida_ver( p->proy, "C1", "c01" )->padre, "c00" ),
+               "c01 cuelga de c00 en el linaje", NULL );
+        {
+            Proyecto *disco = g_new0( Proyecto, 1 );
+            PrError e;
+            check( pr_leer( yaml, disco, &e ) == 0 && disco->nco == 2, "el manifiesto guardado tiene las dos", NULL );
+            g_free( disco );
+        }
         s = sim_artefacto( p, "puerta.out" );
         check( contiene( s, "_casos" ) && contiene( s, "C1_puerta.out" ) &&
                g_file_test( s, G_FILE_TEST_EXISTS ),
@@ -430,10 +506,26 @@ int main( int argc, char **argv )
 
         /* CERRAR CON EL MOTOR CORRIENDO: se para, y lo que llega despues no
          * escribe en una ventana que ya no existe.                      */
-        check( puerta_pasar( p ), "otra puerta arranca", NULL );
+        check( estima_lanzar( p ), "otra estimación arranca", NULL );
         gtk_widget_destroy( p->ventana );
         check( p->ventana == NULL, "al cerrar, la ventana deja de existir para el resto", NULL );
         check( espera( p, 60 ), "y el motor parado acaba sin romper nada", NULL );
+
+        /* Reabrir con --modelo c00: la puerta y el modelo, sin volver a correr. */
+        {
+            Sim *r = g_new0( Sim, 1 );
+            check( sim_proyecto_abre( r, yaml, why, sizeof why ), "se reabre", why );
+            snprintf( r->caso, sizeof r->caso, "C1" );
+            snprintf( r->modelo_ini, sizeof r->modelo_ini, "c00" );
+            sim_ventana_new( app, r );
+            check( sim_caso_carga( r, why, sizeof why ), "el sistema se carga", why );
+            check( puerta_estado( r ) == 1, "su puerta, leída del .out, sin volver a pasarla",
+                   etiqueta( r->pp.ver_puerta ) );
+            check( r->pe.v && !strcmp( r->pe.corrida, "c00" ) && r->mod.p == 1,
+                   "y el modelo c00, con su p en «4 · Modelo»", etiqueta( r->pe.ver_fin ) );
+            check( contiene( etiqueta( r->l_modelo ), "c00" ), "la barra dice el modelo", etiqueta( r->l_modelo ) );
+            gtk_widget_destroy( r->ventana );
+        }
 
         /* Un .pre que cambia despues del alta: el sistema esta desfasado. */
         {

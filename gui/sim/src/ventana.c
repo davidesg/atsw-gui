@@ -45,6 +45,17 @@ void sim_estado( Sim *m, const char *fmt, ... )
     g_free( t );
 }
 
+/* Los criterios de parada de qnewtopt.c, en castellano. */
+const char *sim_criterio( const char *c )
+{
+    if (strstr( c, "gradient" )) return "gradiente escalado bajo la tolerancia";
+    if (strstr( c, "distance" )) return "los dos últimos pasos casi coinciden";
+    if (strstr( c, "lower point" )) return "el último paso no encontró un punto más bajo";
+    if (strstr( c, "iteration limit" )) return "límite de iteraciones";
+    if (strstr( c, "maximum length" )) return "cinco pasos seguidos de longitud máxima";
+    return c;
+}
+
 GtkWidget *sim_mono( const char *txt )
 {
     GtkWidget *l = gtk_label_new( txt );
@@ -115,6 +126,12 @@ static GtkWidget *pagina_futura( const char *titulo, const char *que, const char
 /* ------------------------------------------------------------------------ */
 
 static void nada( GtkWidget *w, gpointer d ) { (void) w; (void) d; }
+static void on_estimar( GtkWidget *w, Sim *m ) { (void) w; estima_lanzar( m ); }
+static void on_diag( GtkWidget *w, Sim *m )
+{
+    (void) w;
+    gtk_notebook_set_current_page( GTK_NOTEBOOK(m->libro), PG_DIAG );
+}
 
 static gboolean sal( GtkAccelGroup *g, GObject *o, guint k, GdkModifierType mo, gpointer d )
 {
@@ -134,13 +151,13 @@ static void barra_new( Sim *m, GtkWidget *raiz )
     gtk_window_add_accel_group( GTK_WINDOW(m->ventana), atajos );
 
     m->tb_estimar = at_boton( barra, "Estimar", "estimar", "media-playback-start",
-                              "", G_CALLBACK(nada), m );
+                              "", G_CALLBACK(on_estimar), m );
     at_atajo( atajos, GDK_KEY_e, m->tb_estimar );
     m->tb_ver = at_partido( barra, "Ver modelo", "ver-modelo", "x-office-document",
                             gtk_menu_new(), G_CALLBACK(nada), m );
     gtk_toolbar_insert( GTK_TOOLBAR(barra), gtk_separator_tool_item_new(), -1 );
     m->tb_diag = at_partido( barra, "Diagnosis", "diagnosis", "dialog-information",
-                             gtk_menu_new(), G_CALLBACK(nada), m );
+                             gtk_menu_new(), G_CALLBACK(on_diag), m );
     at_atajo( atajos, GDK_KEY_d, m->tb_diag );
     m->tb_prev = at_partido( barra, "Prever", "prever", "go-jump",
                              gtk_menu_new(), G_CALLBACK(nada), m );
@@ -155,18 +172,28 @@ static void apaga( GtkToolItem *b, const char *globo )
     gtk_widget_set_tooltip_text( GTK_WIDGET(b), globo );
 }
 
+static void enciende( GtkToolItem *b, gboolean si, const char *globo_si, const char *globo_no )
+{
+    gtk_widget_set_sensitive( GTK_WIDGET(b), si );
+    gtk_widget_set_tooltip_text( GTK_WIDGET(b), si ? globo_si : globo_no );
+}
+
 static void barra_refresca( Sim *m )
 {
-    const char *falta;
+    gboolean corre = m->pe.corriendo || m->pp.corriendo;
+    gboolean hay = m->pe.v && !m->pe.v->fallo && !corre;
+    const char *falta, *sin = corre ? "El motor está corriendo." : "Todavía no hay sistema estimado: "
+                                       "Estimar (Ctrl+E) lo hace.";
 
     if (!m->tb_estimar) return;
-    falta = m->sis.n < 2 ? "Hacen falta al menos dos series: «1 · Series», Abrir…"
-          : puerta_estado( m ) <= 0 ? "Antes, la puerta: «2 · Puerta»."
-          : "Estimar el sistema llega con la fase S4 del diseño (DISENO-sim.md §7).";
-    apaga( m->tb_estimar, falta );
-    apaga( m->tb_ver, "Todavía no hay sistema estimado." );
-    apaga( m->tb_diag, "Todavía no hay sistema estimado." );
-    apaga( m->tb_prev, "Todavía no hay sistema estimado." );
+    falta = corre ? "El motor ya está corriendo."
+          : m->sis.n < 2 ? "Hacen falta al menos dos series: «1 · Series», Abrir…"
+          : "Antes, la puerta: «2 · Puerta».";
+    enciende( m->tb_estimar, !corre && m->sis.n >= 2 && puerta_estado( m ) == 1,
+              "Estimar el sistema con drvarma (Ctrl+E), con el modelo de «4 · Modelo»", falta );
+    enciende( m->tb_diag, hay, "«6 · Diagnosis» (Ctrl+D)", sin );
+    apaga( m->tb_ver, hay ? "Ver modelo llega con la fase S4b (DISENO-sim.md §7)." : sin );
+    apaga( m->tb_prev, hay ? "Prever llega con la fase S5 (DISENO-sim.md §7)." : sin );
 }
 
 static void estado_new( Sim *m, GtkWidget *raiz )
@@ -206,9 +233,12 @@ void sim_refresca( Sim *m )
     puerta_refresca( m );
     identifica_refresca( m );
     modelo_refresca( m );
+    estima_refresca( m );
+    diagnosis_refresca( m );
     barra_refresca( m );
 
-    if (m->caso[0]) t = g_strdup_printf( "Sistema: %s%s", m->caso, m->desfasado ? " (desfasado)" : "" );
+    if (m->caso[0]) t = g_strdup_printf( "Sistema: %s%s%s%s", m->caso, m->desfasado ? " (desfasado)" : "",
+                                         m->pe.corrida[0] ? " · Modelo: " : "", m->pe.corrida );
     else            t = g_strdup( "" );
     gtk_label_set_text( GTK_LABEL(m->l_modelo), t );
     g_free( t );
@@ -234,11 +264,15 @@ static void on_destroy( GtkWidget *w, Sim *m )
 {
     (void) w;
     if (m->pp.trabajo) engine_stop( m->pp.trabajo );
+    if (m->pe.trabajo) engine_stop( m->pe.trabajo );
     memset( &m->ps, 0, sizeof m->ps );
     m->pp.b_pasar = m->pp.orden = m->pp.lista = NULL;
     m->pp.ver_puerta = m->pp.ver_notas = m->pp.ver_rango = NULL;
     memset( &m->pi, 0, sizeof m->pi );
     memset( &m->pm, 0, sizeof m->pm );
+    m->pe.b_estimar = m->pe.b_parar = m->pe.orden = m->pe.consola = NULL;
+    m->pe.ver_fin = m->pe.ver_donde = NULL;
+    memset( &m->pd, 0, sizeof m->pd );
     m->ventana = m->libro = m->estado = m->l_modelo = m->avance = NULL;
     m->tb_estimar = m->tb_ver = m->tb_diag = m->tb_prev = NULL;
 }
@@ -266,18 +300,8 @@ GtkWidget *sim_ventana_new( GtkApplication *app, Sim *m )
     pestana( m, identifica_pagina_new( m ), "3 · Identificación",
              "La CCF de los residuos univariantes, par a par, y los enlaces" );
     pestana( m, modelo_pagina_new( m ), "4 · Modelo", "p, q, Σ y los enlaces: la orden de drvarma" );
-    pestana( m, pagina_futura( "5 · Estimación",
-             "drvarma estima el sistema; la página dice cómo acabó, y si se paró en "
-             "la pared MA no lo presenta como un óptimo.",
-             "el modelo («4 · Modelo»).",
-             "Llega con la fase S4 del diseño." ),
-             "5 · Estimación", "La estimación con drvarma" );
-    pestana( m, pagina_futura( "6 · Diagnosis",
-             "La LR contra los univariantes, los residuos de cada serie, Hosking y "
-             "el Jarque-Bera multivariante; simplificar, y «¿es una red?».",
-             "un sistema estimado («5 · Estimación»).",
-             "Llega con la fase S4 del diseño." ),
-             "6 · Diagnosis", "La diagnosis del sistema" );
+    pestana( m, estima_pagina_new( m ), "5 · Estimación", "La estimación con drvarma, y cómo acabó" );
+    pestana( m, diagnosis_pagina_new( m ), "6 · Diagnosis", "La diagnosis del sistema estimado" );
     pestana( m, pagina_futura( "7 · Previsión",
              "La previsión de cada serie en su nivel, la evaluación contra los "
              "univariantes, la respuesta al impulso y la descomposición de la "

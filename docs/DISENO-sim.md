@@ -477,7 +477,7 @@ Cada fase en su PR, con la CI en verde en Linux, macOS y Windows.
 | **S3** ✓ | Páginas 3 (Identificación: la rejilla de CCF y los enlaces) y 4 (Modelo: p, q, Σ, enlaces, opciones avanzadas) | sí | los enlaces elegidos llegan como `-links` exactos; la orden se ve antes de lanzar |
 | **S4** ✓ | Páginas 5 (Estimación) y 6 (Diagnosis), con la pared MA y la LR contra los univariantes | sí | estimación fallida → la página lo dice (sale 3); un ajuste en la pared no se presenta como óptimo |
 | **S4b** ✓ | «Ver modelo»: una página por serie con `lib/equation/eqdraw.c` (§3.4) | sí | una serie sin enlaces no lleva términos cruzados (la página de fue); con enlaces, van en la línea del ruido |
-| **S5** | Página 7 (Previsión): el gráfico, la evaluación contra los univariantes, IRF y FEVD | sí | el gráfico es el fichero que va al papel; la evaluación se guarda y la siguiente trae la diferencia |
+| **S5** ✓ | Página 7 (Previsión): el gráfico, la evaluación contra los univariantes, IRF y FEVD | sí | el gráfico es el fichero que va al papel; la evaluación se guarda y la siguiente trae la diferencia |
 | **S6** | La madre: menú SIM, columna Clase, Ctrl+E, «Pasar a SIM» y «Pasar a MT», el linaje | sí | `gui/atsw/tests/test_gui.c`: fase `sim`; la prueba `barra` cubre el menú SIM; un caso MT con ciclo ofrece «Pasar a SIM» y crea el hermano con las mismas entradas en orden |
 | **S6b** | «Nuevo sistema…» desde series sin modelo (ruta U, §5.5), con la marca «sin revisar» | sí | sobre las series crudas de `jenkins_alavi`, los modelos de partida y la puerta; un sistema que mezcla un modelo elegido y uno de partida |
 | **S7** | Simplificar y estructura (N4s, N4t) en `atsw-cli` | sí | sobre `jenkins_alavi`, los números coinciden con los de sima |

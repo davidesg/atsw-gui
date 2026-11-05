@@ -7,9 +7,8 @@
  * sube de fue a drtran y de drtran aqui, y lo comun esta en el mismo sitio.
  * Lo que todavia no se puede hacer se apaga, y el globo dice que falta.
  *
- * LAS PAGINAS QUE AUN NO EXISTEN dicen que haran y en que fase llegan, en
- * vez de quedar en blanco: la regla de mtram (cada pagina pide por su nombre
- * lo que le falta y dice quien lo fabrica, DISENO-sim.md §3.1).
+ * Cada pagina pide por su nombre lo que le falta y dice quien lo fabrica:
+ * la regla de mtram (DISENO-sim.md §3.1).
  */
 
 #include <stdarg.h>
@@ -85,47 +84,11 @@ gchar *sim_hermano( const char *programa )
     return sitio_busca( programa, sitio );
 }
 
-/* ------------------------------------------------------------------------ */
-/* Las paginas que llegan en otra fase                                       */
-/* ------------------------------------------------------------------------ */
-
-static GtkWidget *pagina_futura( const char *titulo, const char *que, const char *pide,
-                                 const char *fase )
-{
-    GtkWidget *caja = gtk_box_new( GTK_ORIENTATION_VERTICAL, 10 );
-    GtkWidget *t = gtk_label_new( NULL ), *l;
-    gchar *mk = g_markup_printf_escaped( "<b>%s</b>", titulo );
-
-    gtk_container_set_border_width( GTK_CONTAINER(caja), 18 );
-    gtk_label_set_markup( GTK_LABEL(t), mk );
-    g_free( mk );
-    gtk_widget_set_halign( t, GTK_ALIGN_START );
-    gtk_box_pack_start( GTK_BOX(caja), t, FALSE, FALSE, 0 );
-
-    l = gtk_label_new( que );
-    gtk_label_set_line_wrap( GTK_LABEL(l), TRUE );
-    gtk_label_set_xalign( GTK_LABEL(l), 0 );
-    gtk_box_pack_start( GTK_BOX(caja), l, FALSE, FALSE, 0 );
-
-    l = gtk_label_new( NULL );
-    sim_veredicto( l, SIM_AMBAR, "Pide: %s", pide );
-    gtk_label_set_xalign( GTK_LABEL(l), 0 );
-    gtk_label_set_line_wrap( GTK_LABEL(l), TRUE );
-    gtk_box_pack_start( GTK_BOX(caja), l, FALSE, FALSE, 0 );
-
-    l = gtk_label_new( fase );
-    gtk_label_set_xalign( GTK_LABEL(l), 0 );
-    gtk_label_set_line_wrap( GTK_LABEL(l), TRUE );
-    gtk_style_context_add_class( gtk_widget_get_style_context( l ), "dim-label" );
-    gtk_box_pack_start( GTK_BOX(caja), l, FALSE, FALSE, 0 );
-    return caja;
-}
 
 /* ------------------------------------------------------------------------ */
 /* La barra y la barra de estado                                             */
 /* ------------------------------------------------------------------------ */
 
-static void nada( GtkWidget *w, gpointer d ) { (void) w; (void) d; }
 static void on_estimar( GtkWidget *w, Sim *m ) { (void) w; estima_lanzar( m ); }
 static void on_ver( GtkWidget *w, Sim *m ) { (void) w; if (m->sis.n > 0) pagina_ver( m, 0 ); }
 
@@ -152,6 +115,8 @@ static void menu_ver( GtkMenuToolButton *b, Sim *m )
     }
     gtk_widget_show_all( menu );
 }
+
+static void on_prever( GtkWidget *w, Sim *m ) { (void) w; prevision_calcular( m ); }
 
 static void on_diag( GtkWidget *w, Sim *m )
 {
@@ -187,17 +152,12 @@ static void barra_new( Sim *m, GtkWidget *raiz )
                              gtk_menu_new(), G_CALLBACK(on_diag), m );
     at_atajo( atajos, GDK_KEY_d, m->tb_diag );
     m->tb_prev = at_partido( barra, "Prever", "prever", "go-jump",
-                             gtk_menu_new(), G_CALLBACK(nada), m );
+                             gtk_menu_new(), G_CALLBACK(on_prever), m );
 
     gtk_accel_group_connect( atajos, GDK_KEY_q, GDK_CONTROL_MASK, 0,
                              g_cclosure_new( G_CALLBACK(sal), m, NULL ) );
 }
 
-static void apaga( GtkToolItem *b, const char *globo )
-{
-    gtk_widget_set_sensitive( GTK_WIDGET(b), FALSE );
-    gtk_widget_set_tooltip_text( GTK_WIDGET(b), globo );
-}
 
 static void enciende( GtkToolItem *b, gboolean si, const char *globo_si, const char *globo_no )
 {
@@ -222,7 +182,7 @@ static void barra_refresca( Sim *m )
     enciende( m->tb_ver, hay, "La página del modelo de la primera serie: sus residuos con la ACF "
               "y la PACF y, debajo, su ecuación como la escribe fue, con los términos cruzados "
               "en la línea del ruido. La flecha: las demás series.", sin );
-    apaga( m->tb_prev, hay ? "Prever llega con la fase S5 (DISENO-sim.md §7)." : sin );
+    enciende( m->tb_prev, hay && !m->pv.corriendo, "Calcular la previsión, en «7 · Previsión»", sin );
 }
 
 static void estado_new( Sim *m, GtkWidget *raiz )
@@ -264,6 +224,7 @@ void sim_refresca( Sim *m )
     modelo_refresca( m );
     estima_refresca( m );
     diagnosis_refresca( m );
+    prevision_refresca( m );
     barra_refresca( m );
 
     if (m->caso[0]) t = g_strdup_printf( "Sistema: %s%s%s%s", m->caso, m->desfasado ? " (desfasado)" : "",
@@ -294,6 +255,7 @@ static void on_destroy( GtkWidget *w, Sim *m )
     (void) w;
     if (m->pp.trabajo) engine_stop( m->pp.trabajo );
     if (m->pe.trabajo) engine_stop( m->pe.trabajo );
+    if (m->pv.trabajo) engine_stop( m->pv.trabajo );
     memset( &m->ps, 0, sizeof m->ps );
     m->pp.b_pasar = m->pp.orden = m->pp.lista = NULL;
     m->pp.ver_puerta = m->pp.ver_notas = m->pp.ver_rango = NULL;
@@ -302,6 +264,9 @@ static void on_destroy( GtkWidget *w, Sim *m )
     m->pe.b_estimar = m->pe.b_parar = m->pe.orden = m->pe.consola = NULL;
     m->pe.ver_fin = m->pe.ver_donde = NULL;
     memset( &m->pd, 0, sizeof m->pd );
+    m->pv.s_hor = m->pv.c_eval = m->pv.s_win = m->pv.b_calc = NULL;
+    m->pv.ver_pide = m->pv.ver_eval = m->pv.libreta = NULL;
+    m->pv.t_prev = m->pv.l_eval = m->pv.t_irf = m->pv.t_fevd = m->pv.graficos = NULL;
     m->ventana = m->libro = m->estado = m->l_modelo = m->avance = NULL;
     m->tb_estimar = m->tb_ver = m->tb_diag = m->tb_prev = NULL;
 }
@@ -331,13 +296,8 @@ GtkWidget *sim_ventana_new( GtkApplication *app, Sim *m )
     pestana( m, modelo_pagina_new( m ), "4 · Modelo", "p, q, Σ y los enlaces: la orden de drvarma" );
     pestana( m, estima_pagina_new( m ), "5 · Estimación", "La estimación con drvarma, y cómo acabó" );
     pestana( m, diagnosis_pagina_new( m ), "6 · Diagnosis", "La diagnosis del sistema estimado" );
-    pestana( m, pagina_futura( "7 · Previsión",
-             "La previsión de cada serie en su nivel, la evaluación contra los "
-             "univariantes, la respuesta al impulso y la descomposición de la "
-             "varianza.",
-             "un sistema estimado («5 · Estimación»).",
-             "Llega con la fase S5 del diseño." ),
-             "7 · Previsión", "Previsión, evaluación, IRF y FEVD" );
+    pestana( m, prevision_pagina_new( m ), "7 · Previsión",
+             "La previsión, la evaluación contra los univariantes, la IRF y la FEVD" );
 
     estado_new( m, raiz );
     sim_refresca( m );

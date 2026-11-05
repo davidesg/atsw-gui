@@ -18,7 +18,7 @@ no transforma datos. Siete páginas, como drtran_gui:
 | 5 · Estimación | hecha (S4): lanza drvarma con el modelo de la 4; cómo acabó (convergió, pared MA, sin converger, falló); con un sistema, cada estimación es un modelo del caso con su padre |
 | 6 · Diagnosis | hecha (S4): la LR contra los univariantes, el optimizador, las raíces, Hosking, Jarque-Bera, los residuos de cada serie, los parámetros, Σ y el .out |
 | Ver modelo ▾ | hecho (S4b): la página de cada serie, la de fue (`lib/equation`), con los términos cruzados en la línea del ruido |
-| 7 · Previsión | S5 |
+| 7 · Previsión | hecha (S5): la previsión de cada serie en su nivel y su gráfico; la evaluación fuera de muestra contra los univariantes (la misma ventana); la respuesta al impulso y la descomposición, del .out de la estimación |
 
 Las páginas que faltan dicen qué harán y qué piden.
 

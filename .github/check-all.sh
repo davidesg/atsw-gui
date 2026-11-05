@@ -35,8 +35,9 @@ avisos=()
 # version de atsw-gui. Corren en las tres plataformas y lo que fallen se ve,
 # pero fuera de Linux --donde sus referencias no son reproducibles: modelos
 # con varios optimos locales, en los que otra libm acaba en otro-- sale como
-# aviso y no tumba la CI. En Linux bloquean como todas.
-NO_BLOQUEAN="engines/drvec engines/drvarma"
+# aviso y no tumba la CI. En Linux bloquean como todas. gui/sim (SIM,
+# docs/DISENO-sim.md) es el GUI de drvarma: va con su motor.
+NO_BLOQUEAN="engines/drvec engines/drvarma gui/sim"
 [ "$(uname -s)" = Linux ] && NO_BLOQUEAN=
 # Windows corre mas despacio: el limite por estimacion de drvec (30 s) cortaba
 # el bootstrap.
@@ -97,7 +98,7 @@ corre() {        # corre NOMBRE ORDEN...
 }
 
 for d in engines/fue engines/fuf engines/fug engines/drtran engines/drvarma \
-         engines/art gui/fue gui/drtran gui/atsw-cli; do
+         engines/art gui/fue gui/drtran gui/atsw-cli gui/sim; do
     corre "$d" sh -c "cd $d && sh tests/run_tests.sh"
 done
 corre engines/drvec make -s -C engines/drvec test

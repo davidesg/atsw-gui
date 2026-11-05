@@ -306,3 +306,16 @@ judge is `inp_check_fue`. Both are tested over the fue corpus.
   mismo código. Devuelve hechos, no frases.
 - **La prueba.** `outvarma/run_test.sh` pide a drvarma cinco salidas con los
   `.pre` de Jenkins y Alavi y las lee; la corre la batería de drvarma.
+
+
+## `sistema/` — un sistema de SIM sin ventana, añadido el 2026-11-05
+
+- **Qué es.** La lista ordenada de ficheros de fue de un sistema (VARMA o
+  VEC), leída con el lector de drvarma (`fuepre/` y su `nlatools`); la
+  ventana común en observaciones estacionarias, como la escribe drvarma; y la
+  orden de la puerta. Fase S2 de `docs/DISENO-sim.md`.
+- **Para quién.** sim_gui, y mañana `atsw-cli` y el asistente: lo que no
+  necesita GTK.
+- **La prueba.** `sistema/test_sistema.c` con los `.pre` de Jenkins y Alavi:
+  la ventana tiene que ser la del `.out` de drvarma (1/1851 – 1/1911, 61).
+  La corre la batería de `gui/sim`.

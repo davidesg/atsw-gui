@@ -52,6 +52,8 @@ gui/*/engine/
 
 # los binarios de los GUI: se construyen, no se guardan
 gui/drtran/drtran_gui
+gui/sim/sim_gui
+gui/sim/tests/work/
 gui/fue/gtk_fue
 gui/fug/gtk_fug
 gui/drtran/tests/work/

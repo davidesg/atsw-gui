@@ -428,6 +428,17 @@ const OvCcf *ov_ccf( const VarmaOut *v, int i, int j )
    return NULL;
 }
 
+double ov_ccf_r( const VarmaOut *v, int a, int b, int k, double *banda )
+{
+   const OvCcf *c = ov_ccf( v, a, b );
+
+   if ( banda ) *banda = c ? c->banda : 0;
+   if ( !c || k < 0 || k > c->nlags ) return 0;
+   /* En la CCF del par (i < j), k > 0 es «j --> i»: la serie j entra en la
+    * ecuacion de la serie i. Para a = i, b = j es +k; al reves, -k.      */
+   return c->r[c->nlags + ( a == c->i ? k : -k )];
+}
+
 /* ------------------------------------------------------------------------ */
 
 int ov_parse( const char *texto, VarmaOut *v )

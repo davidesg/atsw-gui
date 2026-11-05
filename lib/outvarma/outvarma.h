@@ -215,6 +215,12 @@ int ov_parse_file( const char *path, VarmaOut *v );   /* -1: no se abre    */
 /* La CCF del par de series (en cualquier orden), o NULL. */
 const OvCcf *ov_ccf( const VarmaOut *v, int i, int j );
 
+/* La correlacion de «b entra en la ecuacion de a con retardo k» (k >= 0;
+ * k = 0 es la contemporanea, la misma en los dos sentidos), leida de la
+ * CCF de su par con el signo de k que toque. 0 si no la hay; *banda, si
+ * no es NULL, recibe la banda 2/sqrt(n) (0 si no hay CCF).              */
+double ov_ccf_r( const VarmaOut *v, int a, int b, int k, double *banda );
+
 /* El parametro que se llama asi, o NULL. */
 const OvParam *ov_param( const VarmaOut *v, const char *nombre );
 

@@ -193,3 +193,91 @@ int sis_orden_puerta( const Sistema *s, const char *salida, const char **argv, i
    argv[k++] = salida;
    return k;
 }
+
+/* ------------------------------------------------------------------------ */
+
+void sis_modelo_defecto( SisModelo *mo, int m )
+{
+   int a, b;
+
+   memset( mo, 0, sizeof *mo );
+   mo->p = 1;
+   mo->metodo = 1;
+   for ( a = 0; a < m && a < SIS_MAX_SER; a++ )
+      for ( b = 0; b < m && b < SIS_MAX_SER; b++ )
+         mo->enlace[a][b] = a != b;
+}
+
+int sis_enlaces( const SisModelo *mo, int m )
+{
+   int a, b, k = 0;
+   for ( a = 0; a < m; a++ )
+      for ( b = 0; b < m; b++ )
+         k += a != b && mo->enlace[a][b];
+   return k;
+}
+
+int sis_enlaces_texto( const Sistema *s, const SisModelo *mo, char *out, size_t n )
+{
+   int a, b, m = s->n;
+   size_t usado = 0;
+
+   if ( !n ) return -1;
+   out[0] = 0;
+   if ( sis_enlaces( mo, m ) == m * ( m - 1 ) ) return 0;
+   for ( a = 0; a < m; a++ )
+      for ( b = 0; b < m; b++ ) {
+         int k;
+         if ( a == b || !mo->enlace[a][b] ) continue;
+         k = snprintf( out + usado, n - usado, "%s%s<-%s", usado ? "," : "",
+                       s->s[a].nombre, s->s[b].nombre );
+         if ( k < 0 || (size_t) k >= n - usado ) { out[0] = 0; return -1; }
+         usado += (size_t) k;
+      }
+   return (int) usado;
+}
+
+int sis_retroalimenta( const SisModelo *mo, int m )
+{
+   int a, b;
+   for ( a = 0; a < m; a++ )
+      for ( b = a + 1; b < m; b++ )
+         if ( mo->enlace[a][b] && mo->enlace[b][a] ) return 1;
+   return 0;
+}
+
+int sis_parametros_cruzados( const SisModelo *mo, int m )
+{
+   return sis_enlaces( mo, m ) * ( mo->p + mo->q ) + ( mo->diagcov ? 0 : m * ( m - 1 ) / 2 );
+}
+
+int sis_orden_modelo( const Sistema *s, const SisModelo *mo, const char *salida,
+                      char *buf, size_t nbuf, const char **argv, int max )
+{
+   int i, k = 0, l;
+   char *pp, *qq, *ln;
+
+   if ( nbuf < 64 || s->n + 18 > max ) return -1;
+   pp = buf;
+   qq = buf + 16;
+   ln = buf + 32;
+   snprintf( pp, 16, "%d", mo->p );
+   snprintf( qq, 16, "%d", mo->q );
+   l = sis_enlaces_texto( s, mo, ln, nbuf - 32 );
+   if ( l < 0 ) return -1;
+
+   for ( i = 0; i < s->n; i++ ) argv[k++] = s->s[i].ruta;
+   argv[k++] = pp;
+   argv[k++] = qq;
+   if ( mo->diagcov ) argv[k++] = "-diagcov";
+   if ( l > 0 ) { argv[k++] = "-links"; argv[k++] = ln; }
+   if ( mo->redet ) argv[k++] = "-redet";
+   if ( mo->fixarma ) argv[k++] = "-fixarma";
+   if ( mo->metodo == 2 ) { argv[k++] = "-m"; argv[k++] = "2"; }
+   if ( mo->hessian == 1 ) { argv[k++] = "-hessian"; argv[k++] = "bfgs"; }
+   if ( mo->lik == 1 ) { argv[k++] = "-lik"; argv[k++] = "shea"; }
+   if ( mo->lik == 2 ) { argv[k++] = "-lik"; argv[k++] = "both"; }
+   argv[k++] = "-o";
+   argv[k++] = salida;
+   return k;
+}

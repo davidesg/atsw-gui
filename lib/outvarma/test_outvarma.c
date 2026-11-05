@@ -86,6 +86,9 @@ static void puerta( const char *dir )
          ok( fabs( c->r[c->nlags] ) > c->banda, "la contemporanea sale de la banda (Sigma completa)" );
          ok( fabs( c->r[c->nlags + 1] ) > c->banda, "y k = 1: MINK entra en la ecuacion de MUSKRAT" );
          ok( c->q_ge0 > 0 && c->q_le0 > 0 && c->df_ge0 == 10 && c->df_gt0 == 9, "los cuatro Q y sus grados" );
+         ok( ov_ccf_r( &v, 0, 1, 1, NULL ) == c->r[c->nlags + 1] && ov_ccf_r( &v, 1, 0, 1, NULL ) == c->r[c->nlags - 1],
+             "ov_ccf_r: MINK en MUSKRAT es k = +1; MUSKRAT en MINK, k = -1" );
+         ok( ov_ccf_r( &v, 0, 1, 0, NULL ) == ov_ccf_r( &v, 1, 0, 0, NULL ), "la contemporanea, la misma en los dos sentidos" );
       }
    }
 }

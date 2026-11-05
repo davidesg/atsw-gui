@@ -86,4 +86,49 @@ int  sis_diferenciadas( const Sistema *s );
 int  sis_orden_puerta( const Sistema *s, const char *salida,
                        const char **argv, int max );
 
+/* ------------------------------------------------------------------------ */
+/* El modelo: lo que la pagina 4 manda a drvarma (N3, sima estimate)        */
+/* ------------------------------------------------------------------------ */
+
+/* enlace[a][b] != 0: la serie b entra en la ecuacion de la serie a, en AR y
+ * en MA, en todos los retardos hasta p y q (-links "A<-B"). Si estan todos
+ * los pares, la orden no lleva -links: es el valor por omision de drvarma. */
+typedef struct {
+   int           p, q;                        /* la dinamica cruzada       */
+   int           diagcov;                     /* Sigma diagonal            */
+   unsigned char enlace[SIS_MAX_SER][SIS_MAX_SER];
+   int           redet;                       /* reestimar deterministas   */
+   int           fixarma;                     /* el ARMA univariante fijo  */
+   int           metodo;                      /* -m: 1 (defecto) o 2       */
+   int           hessian;                     /* 0 fd (defecto), 1 bfgs    */
+   int           lik;                         /* 0 elf (defecto), 1 shea, 2 both */
+} SisModelo;
+
+/* Un modelo de partida: p = 1, q = 0, Sigma completa, todos los enlaces. */
+void sis_modelo_defecto( SisModelo *mo, int m );
+
+/* Cuantos enlaces hay marcados, y cuantos pares posibles (m(m-1)).       */
+int  sis_enlaces( const SisModelo *mo, int m );
+
+/* Los enlaces como los lee drvarma: «A<-B,C<-A». Cadena vacia si estan
+ * todos (no hace falta -links). Devuelve la longitud, -1 si no cabe.   */
+int  sis_enlaces_texto( const Sistema *s, const SisModelo *mo, char *out, size_t n );
+
+/* Hay retroalimentacion: algun par con enlace de ida y vuelta (A<-B y B<-A).
+ * Es lo que trae a SIM y no a MT.                                       */
+int  sis_retroalimenta( const SisModelo *mo, int m );
+
+/* Los parametros CRUZADOS que se van a estimar: (p + q) por enlace, y los
+ * de Sigma fuera de la diagonal si es completa.                         */
+int  sis_parametros_cruzados( const SisModelo *mo, int m );
+
+/* La orden del modelo:
+ *   A.pre B.pre ... p q [-diagcov] [-links L] [-redet] [-fixarma] [-m 2]
+ *   [-hessian bfgs] [-lik shea|both] -o SALIDA
+ * argv apunta a cadenas de s, de salida y de buf (que guarda p, q y los
+ * enlaces y tiene que vivir lo que argv); devuelve cuantos, -1 si no
+ * caben.                                                                */
+int  sis_orden_modelo( const Sistema *s, const SisModelo *mo, const char *salida,
+                       char *buf, size_t nbuf, const char **argv, int max );
+
 #endif /* ATSW_SISTEMA_H */

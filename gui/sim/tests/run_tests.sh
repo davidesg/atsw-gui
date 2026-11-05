@@ -20,7 +20,7 @@ GSL_LIBS=$(pkg-config --libs gsl 2>/dev/null)
 
 INC="-I$TOP/include -I$E/include"
 for d in sistema outvarma outdiag fuepre fuedet dates lik optim diagmv prewhiten \
-         inpcheck proyecto engine coste sitio barra; do
+         inpcheck proyecto engine coste sitio barra preview fugdraw ccfplot utils; do
     INC="$INC -I$L/$d"
 done
 
@@ -71,6 +71,6 @@ if grep -q '^no hay' "$W/gui.txt"; then
     grep '^FAIL' "$W/gui.txt"
     exit $rc
 fi
-grep -E '^(FAIL|puerta|sim_gui)' "$W/gui.txt"
+grep -E '^(FAIL|puerta|modelo|sim_gui)' "$W/gui.txt"
 [ $rc -eq 0 ] || { echo "test_gui salio con $rc"; tail -20 "$W/gui_err.txt"; exit 1; }
 exit 0

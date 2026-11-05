@@ -296,12 +296,79 @@ int main( int argc, char **argv )
            gtk_widget_get_tooltip_text( GTK_WIDGET(m->tb_estimar) ) );
     printf( "puerta          : %s\n", etiqueta( m->pp.ver_puerta ) );
 
+    /* --- 3 · Identificación: la CCF de los residuos, de la puerta ------- */
+    check( m->pi.vale, "con la puerta, la identificación tiene sus CCF", etiqueta( m->pi.ver_pide ) );
+    check( m->pi.marca[0][1] && m->pi.marca[1][0],
+           "propone MUSKRAT ← MINK y MINK ← MUSKRAT (k = 1, Jenkins y Alavi)", NULL );
+    check( m->pi.sigma_prop && contiene( etiqueta( m->pi.ver_sigma ), "Σ completa" ),
+           "la contemporánea sale de la banda: Σ completa", etiqueta( m->pi.ver_sigma ) );
+    check( contiene( etiqueta( m->pi.ver_lectura ), "Retroalimentación" ),
+           "y lo lee como retroalimentación", etiqueta( m->pi.ver_lectura ) );
+    {
+        /* Pulsar la miniatura MINK -> MUSKRAT: la CCF entera, en la ventana
+         * de gráficos, y el EPS que va al papel.                        */
+        GList *hs = gtk_container_get_children( GTK_CONTAINER(m->pi.rejilla) ), *l;
+        GtkWidget *celda = NULL;
+        gboolean r = FALSE;
+        for (l = hs; l && !celda; l = l->next) {
+            /* «a» y «b» van +1, para que 0 sea «no es una miniatura». */
+            if (GPOINTER_TO_INT(g_object_get_data( G_OBJECT(l->data), "a" )) == 1 &&
+                GPOINTER_TO_INT(g_object_get_data( G_OBJECT(l->data), "b" )) == 2) celda = l->data;
+        }
+        g_list_free( hs );
+        check( celda != NULL, "la miniatura MINK -> MUSKRAT está en la rejilla", NULL );
+        if (celda) {
+            GdkEvent *e = gdk_event_new( GDK_BUTTON_PRESS );
+            g_signal_emit_by_name( celda, "button-press-event", e, &r );
+            gdk_event_free( e );
+            pump( 100 );
+        }
+        s = g_build_filename( cache, SIM_CACHE, "ccf_MINK_MUSKRAT.eps", NULL );
+        check( r && g_file_test( s, G_FILE_TEST_EXISTS ), "pulsar escribe el EPS de la CCF entera", s );
+        g_free( s );
+    }
+    {
+        /* Desmarcar MINK ← MUSKRAT y llevarlo al modelo. */
+        GList *hs = gtk_container_get_children( GTK_CONTAINER(m->pi.enlaces) ), *l;
+        for (l = hs; l; l = l->next)
+            if (contiene( gtk_button_get_label( GTK_BUTTON(l->data) ), "MINK ← MUSKRAT" ))
+                gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(l->data), FALSE );
+        g_list_free( hs );
+    }
+    pulsa( boton( m->ventana, "Al modelo" ) );
+    check( m->mod.enlace[0][1] && !m->mod.enlace[1][0] && m->mod.p == 1 && !m->mod.diagcov,
+           "Al modelo: un enlace, p = 1, Σ completa", etiqueta( m->estado ) );
+
+    /* --- 4 · Modelo: la orden ------------------------------------------- */
+    check( contiene( etiqueta( m->pm.orden ), "MUSKRAT_m03.pre MINK_m02.pre 1 0 -links \"MUSKRAT<-MINK\" -o c01" ),
+           "la orden lleva el enlace", etiqueta( m->pm.orden ) );
+    check( contiene( etiqueta( m->pm.ver_forma ), "un solo sentido" ),
+           "con un solo sentido, dice que es una red (MT)", etiqueta( m->pm.ver_forma ) );
+    gtk_spin_button_set_value( GTK_SPIN_BUTTON(m->pm.s_p), 2 );
+    gtk_spin_button_set_value( GTK_SPIN_BUTTON(m->pm.s_q), 1 );
+    gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(m->pm.c_diag), TRUE );
+    pump( 30 );
+    check( contiene( etiqueta( m->pm.orden ), " 2 1 -diagcov -links" ), "p, q y Σ diagonal, en la orden",
+           etiqueta( m->pm.orden ) );
+    check( contiene( etiqueta( m->pm.ver_cuenta ), "1 enlace × (p + q = 3) = 3 coeficientes cruzados;" ),
+           "la cuenta de coeficientes cruzados", etiqueta( m->pm.ver_cuenta ) );
+    gtk_combo_box_set_active( GTK_COMBO_BOX(m->pm.cb_lik), 2 );
+    pump( 30 );
+    check( contiene( etiqueta( m->pm.orden ), "-lik both" ), "una opción avanzada, en la orden",
+           etiqueta( m->pm.orden ) );
+    pulsa( boton( m->ventana, "Todos" ) );
+    check( !contiene( etiqueta( m->pm.orden ), "-links" ) && contiene( etiqueta( m->pm.ver_forma ), "retroalimentación" ),
+           "Todos: sin -links, con retroalimentación", etiqueta( m->pm.orden ) );
+    printf( "modelo          : %s\n", etiqueta( m->pm.orden ) );
+
     /* Cambiar el orden invalida la puerta: es otro sistema. */
     marca( m->ps.lista, 0 );
     pulsa( boton( m->ventana, "Bajar" ) );
     check( !strcmp( m->sis.s[0].nombre, "MINK" ), "Bajar mueve MUSKRAT al segundo puesto", m->sis.s[0].nombre );
     check( puerta_estado( m ) == 0 && contiene( etiqueta( m->pp.ver_puerta ), "cambió" ),
            "con otro orden, la puerta hay que volver a pasarla", etiqueta( m->pp.ver_puerta ) );
+    check( !m->pi.vale && contiene( etiqueta( m->pi.ver_pide ), "puerta" ),
+           "y la identificación vuelve a pedir la puerta", etiqueta( m->pi.ver_pide ) );
 
     /* --- un .pre que no es un optimo ------------------------------------ */
     marca( m->ps.lista, 1 );

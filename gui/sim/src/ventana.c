@@ -204,6 +204,8 @@ void sim_refresca( Sim *m )
     if (!m->ventana) return;
     series_refresca( m );
     puerta_refresca( m );
+    identifica_refresca( m );
+    modelo_refresca( m );
     barra_refresca( m );
 
     if (m->caso[0]) t = g_strdup_printf( "Sistema: %s%s", m->caso, m->desfasado ? " (desfasado)" : "" );
@@ -235,6 +237,8 @@ static void on_destroy( GtkWidget *w, Sim *m )
     memset( &m->ps, 0, sizeof m->ps );
     m->pp.b_pasar = m->pp.orden = m->pp.lista = NULL;
     m->pp.ver_puerta = m->pp.ver_notas = m->pp.ver_rango = NULL;
+    memset( &m->pi, 0, sizeof m->pi );
+    memset( &m->pm, 0, sizeof m->pm );
     m->ventana = m->libro = m->estado = m->l_modelo = m->avance = NULL;
     m->tb_estimar = m->tb_ver = m->tb_diag = m->tb_prev = NULL;
 }
@@ -259,20 +263,9 @@ GtkWidget *sim_ventana_new( GtkApplication *app, Sim *m )
     pestana( m, puerta_pagina_new( m ), "2 · Puerta",
              "La puerta diagonal: el sistema sin dinámica cruzada tiene que "
              "reproducir los univariantes" );
-    pestana( m, pagina_futura( "3 · Identificación",
-             "La CCF de los residuos univariantes, par a par, en una rejilla: de "
-             "ahí salen los enlaces (qué serie entra en la ecuación de cuál). Con "
-             "un enlace de ida y vuelta hay retroalimentación, que es lo que trae "
-             "aquí y no a MT.",
-             "la puerta superada («2 · Puerta»).",
-             "Llega con la fase S3 del diseño (docs/DISENO-sim.md §7)." ),
-             "3 · Identificación", "La CCF de los residuos univariantes y los enlaces" );
-    pestana( m, pagina_futura( "4 · Modelo",
-             "Los órdenes p y q de la dinámica cruzada, Σ completa o diagonal, los "
-             "enlaces y las opciones avanzadas. La orden se ve antes de lanzar.",
-             "los enlaces («3 · Identificación»).",
-             "Llega con la fase S3 del diseño." ),
-             "4 · Modelo", "p, q, Σ y los enlaces" );
+    pestana( m, identifica_pagina_new( m ), "3 · Identificación",
+             "La CCF de los residuos univariantes, par a par, y los enlaces" );
+    pestana( m, modelo_pagina_new( m ), "4 · Modelo", "p, q, Σ y los enlaces: la orden de drvarma" );
     pestana( m, pagina_futura( "5 · Estimación",
              "drvarma estima el sistema; la página dice cómo acabó, y si se paró en "
              "la pared MA no lo presenta como un óptimo.",

@@ -90,6 +90,7 @@ static void on_done( const EngineResult *r, gpointer data )
     para_avance( m );
     P->rc = r->status;
     P->hecha = TRUE;
+    P->version++;
     if (!P->v) P->v = g_new0( VarmaOut, 1 );
     if (ov_parse_file( out, P->v ) != 0) {
         memset( P->v, 0, sizeof *P->v );

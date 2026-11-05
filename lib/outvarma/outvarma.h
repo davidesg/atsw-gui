@@ -248,4 +248,21 @@ typedef struct {
 int  ov_recursive_file( const char *path, OvRecursive *r );  /* 0 bien, 1 vacio, -1 no se abre */
 void ov_recursive_free( OvRecursive *r );
 
+/* LOS RESIDUOS, COMO NUMEROS: la columna derecha del grafico de cada serie
+ * en el .out («Standardized time series plot (original values on right-side
+ * column)»). drvarma no escribe un fichero de residuos; el .out los trae
+ * todos, con su fecha. Son los de la pagina del modelo (S4b): el grafico y
+ * la tabla de los residuos grandes. Va aparte de VarmaOut por su tamano
+ * (~300 KB): en el monton.                                              */
+#define OV_MAX_OBS 2048
+typedef struct {
+   int    m, n;                         /* series y observaciones          */
+   char   nombre[OV_MAX_SER][OV_NOMBRE];
+   double v[OV_MAX_SER][OV_MAX_OBS];    /* [serie][0..n-1]                 */
+   char   fecha[OV_MAX_OBS][16];        /* la de la primera serie          */
+} OvResiduos;
+
+/* 0 si leyo al menos una serie; 1 si no hay; -1 si no se abre. */
+int ov_residuos_file( const char *path, OvResiduos *r );
+
 #endif /* ATSW_OUTVARMA_H */

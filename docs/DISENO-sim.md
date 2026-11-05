@@ -277,8 +277,18 @@ SIM usa **ese mismo dibujante**, sin uno propio:
 - **Una página por serie**, como drtran: la ecuación de la serie i escrita
   como su univariante, con su transformación, su media, sus deterministas y
   sus factores AR y MA propios.
-- **Los términos cruzados van donde van los de transferencia**, delante de los
-  deterministas, con el nombre de la serie de la que vienen.
+- **Los términos cruzados van en la línea del ruido** (decidido por el
+  analista el 2026-11-05, en S4b). Es donde los pone el modelo que estima
+  drvarma, Φ(B)(w − μ) = Θ(B) a (`escalera.c:385-410`):
+
+      ln A_t = deterministas + N_t
+      φ(B)[∇N_t − μ] = (c₁B + c₂B²) w_B,t + θ(B) A_t + (−t₁B) A_B,t ;  σ
+
+  con w_B,t la serie estacionaria de B sin su media y A_B,t su innovación,
+  y una nota debajo que lo dice. Ponerlos en el hueco de la transferencia,
+  delante de los deterministas, como se proponía antes, no sería la ecuación
+  estimada salvo dividiendo por φ(B) y por las diferencias de cada serie.
+  Una serie sin enlaces da la página de fue tal cual.
 - «Ver modelo ▾» lista una entrada por serie, en el orden del sistema, que es
   el de Cholesky.
 - La madre ofrece lo mismo; el GUI, la madre y `atsw-cli` dan la misma
@@ -466,7 +476,7 @@ Cada fase en su PR, con la CI en verde en Linux, macOS y Windows.
 | **S2** ✓ | `gui/sim/`: el esqueleto con `--proyecto/--caso/--modelo`, la barra, la barra de estado, las páginas 1 (Series) y 2 (Puerta), en `lib/sistema` donde se compartan | sí | `gui/sim/tests/test_gui.c` en el estilo de drtran: cargar ficheros, la ventana común, la puerta que pasa y **la que falla** (un `.pre` retocado: sale 5 y la página lo dice), el motor que no está |
 | **S3** ✓ | Páginas 3 (Identificación: la rejilla de CCF y los enlaces) y 4 (Modelo: p, q, Σ, enlaces, opciones avanzadas) | sí | los enlaces elegidos llegan como `-links` exactos; la orden se ve antes de lanzar |
 | **S4** ✓ | Páginas 5 (Estimación) y 6 (Diagnosis), con la pared MA y la LR contra los univariantes | sí | estimación fallida → la página lo dice (sale 3); un ajuste en la pared no se presenta como óptimo |
-| **S4b** | «Ver modelo»: una página por serie con `lib/equation/eqdraw.c` (§3.4) | sí | la página de una serie sin enlaces es **idéntica** a la de su univariante en fue; con enlaces, los términos cruzados quedan delante de los deterministas |
+| **S4b** ✓ | «Ver modelo»: una página por serie con `lib/equation/eqdraw.c` (§3.4) | sí | una serie sin enlaces no lleva términos cruzados (la página de fue); con enlaces, van en la línea del ruido |
 | **S5** | Página 7 (Previsión): el gráfico, la evaluación contra los univariantes, IRF y FEVD | sí | el gráfico es el fichero que va al papel; la evaluación se guarda y la siguiente trae la diferencia |
 | **S6** | La madre: menú SIM, columna Clase, Ctrl+E, «Pasar a SIM» y «Pasar a MT», el linaje | sí | `gui/atsw/tests/test_gui.c`: fase `sim`; la prueba `barra` cubre el menú SIM; un caso MT con ciclo ofrece «Pasar a SIM» y crea el hermano con las mismas entradas en orden |
 | **S6b** | «Nuevo sistema…» desde series sin modelo (ruta U, §5.5), con la marca «sin revisar» | sí | sobre las series crudas de `jenkins_alavi`, los modelos de partida y la puerta; un sistema que mezcla un modelo elegido y uno de partida |
@@ -610,8 +620,9 @@ VEC llegará y qué hace sima mientras tanto.
 11. **Los proyectos de ejemplo** en Ayuda → Ejemplos, empezando por
     `jenkins_alavi` (§6). Recomendado: sí.
 12. **«Ver modelo»** en lo que no encaja en una ecuación univariante (§3.4):
-    Σ en una página propia del sistema (recomendado); el nombre de la
-    innovación ajena (a_B,t); el VEC y la echelon cuando lleguen.
+    los términos cruzados en la línea del ruido, con w_B,t y A_B,t
+    (decidido el 2026-11-05); Σ y sus correlaciones, por ahora en la
+    pestaña Σ de la diagnosis; el VEC y la echelon cuando lleguen.
 
 ---
 

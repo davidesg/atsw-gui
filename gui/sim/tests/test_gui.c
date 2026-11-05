@@ -391,6 +391,23 @@ int main( int argc, char **argv )
     check( contiene( etiqueta( m->pd.t_sigma ), "Correlaciones" ), "Σ y sus correlaciones", NULL );
     printf( "diagnosis       : %s\n", etiqueta( m->pd.ver_lr ) );
 
+    /* --- Ver modelo: la página de cada serie, con el dibujante de fue ---- */
+    check( gtk_widget_is_sensitive( GTK_WIDGET(m->tb_ver) ), "con un sistema estimado, Ver modelo se enciende", NULL );
+    check( pagina_cruzados( m, 0 ) > 0 && pagina_cruzados( m, 1 ) > 0,
+           "con todos los enlaces, las dos ecuaciones llevan términos cruzados", NULL );
+    {
+        int i;
+        for (i = 0; i < 2; i++) {
+            gchar *pdf = pagina_ruta( m, i );
+            char why[256];
+            check( pagina_serie( m, i, pdf, why, sizeof why ) == 0, "la página del modelo se escribe", why );
+            check( g_file_test( pdf, G_FILE_TEST_EXISTS ) && contiene( pdf, i ? "modelo_MINK.pdf" : "modelo_MUSKRAT.pdf" ),
+                   "con su nombre, junto al .out", pdf );
+            g_free( pdf );
+        }
+    }
+    check( pagina_ver( m, 1 ), "Ver modelo de MINK abre su página", etiqueta( m->estado ) );
+
     /* --- la pared MA: no se presenta como un óptimo ---------------------- */
     gtk_spin_button_set_value( GTK_SPIN_BUTTON(m->pm.s_p), 1 );
     gtk_spin_button_set_value( GTK_SPIN_BUTTON(m->pm.s_q), 1 );
@@ -404,6 +421,8 @@ int main( int argc, char **argv )
     check( contiene( etiqueta( m->pe.ver_fin ), "PARED MA" ) && contiene( etiqueta( m->pe.ver_fin ), "NO es un óptimo" ),
            "parado en la pared MA: lo dice y no lo presenta como óptimo", etiqueta( m->pe.ver_fin ) );
     check( contiene( etiqueta( m->pd.ver_optim ), "pared MA" ), "y la diagnosis lo recuerda", etiqueta( m->pd.ver_optim ) );
+    check( pagina_cruzados( m, 0 ) > 0 && pagina_cruzados( m, 1 ) == 0,
+           "con solo MUSKRAT ← MINK, la ecuación de MINK es la de fue, sin cruzados", NULL );
 
     /* --- una estimación que falla (el motor falso sale con 3) ------------ */
     g_setenv( "SIM_DRVARMA", fake, TRUE );

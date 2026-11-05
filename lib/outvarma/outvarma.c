@@ -646,3 +646,49 @@ void ov_recursive_free( OvRecursive *r )
    r->f = NULL;
    r->nf = 0;
 }
+
+int ov_residuos_file( const char *path, OvResiduos *r )
+{
+   char *t = lee_todo( path );
+   char l[1024];
+   const char *p, *q;
+   int serie = -1, en_grafico = 0, rayas = 0, k = 0;
+
+   memset( r, 0, sizeof *r );
+   if ( !t ) return -1;
+   p = t;
+   while ( ( q = linea( p, l, sizeof l ) ) ) {
+      const char *s = sb( l );
+      int a, obs;
+      char nom[OV_NOMBRE], f[16];
+      p = q;
+      if ( sscanf( s, "--- Residual series a[%d] (%63[^)])", &a, nom ) == 2 ) {
+         if ( r->m >= OV_MAX_SER ) break;
+         serie = r->m++;
+         copia( r->nombre[serie], sizeof r->nombre[serie], nom );
+         en_grafico = 0;
+         continue;
+      }
+      if ( serie < 0 ) continue;
+      if ( empieza( s, "Standardized time series plot" ) ) { en_grafico = 1; rayas = 0; k = 0; continue; }
+      if ( !en_grafico ) continue;
+      if ( empieza( s, "-----" ) ) {
+         if ( ++rayas == 2 ) {           /* la raya de debajo: se acabo */
+            en_grafico = 0;
+            if ( serie == 0 || k < r->n ) r->n = k;
+         }
+         continue;
+      }
+      if ( rayas == 1 && sscanf( s, "%d %15s", &obs, f ) == 2 ) {
+         const char *u = strrchr( s, '|' );
+         if ( !u || k >= OV_MAX_OBS ) continue;
+         u++;
+         while ( *u == '>' || *u == ' ' ) u++;
+         r->v[serie][k] = atof( u );
+         if ( serie == 0 ) copia( r->fecha[k], sizeof r->fecha[k], f );
+         k++;
+      }
+   }
+   free( t );
+   return r->m > 0 && r->n > 0 ? 0 : 1;
+}

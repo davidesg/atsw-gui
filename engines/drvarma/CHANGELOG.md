@@ -12,6 +12,16 @@ Versions up to 0.4 were maintained as directory snapshots (`drvarma_v.01` …
 drvarma joins the ladder fue → drtran → drvarma: it reads fue's `.pre` files.
 Design: `docs/DESIGN-v5-ladder.md`.
 
+### Added
+- **`-zero "AR1[A<-B],MA2[B<-A]"`** (2026-11-06, for sim_gui S7): single
+  cross coefficients held at zero, Tiao and Box's simplification by
+  coefficient (1981, §4), as the Python port's `zeros=` does. A zeroed
+  coefficient leaves the vector of parameters and the table, the LR against
+  the univariates loses its degree of freedom, and the header says
+  «Zero coefficients: …». Each one has to be in the model asked for (its lag
+  within p or q, its pair linked), or it is an error. Without `-zero` the
+  output does not change, byte for byte.
+
 ### Changed
 - **The deterministic terms of a `.pre` are filtered with fue's rule**
   (`lib/fuedet`, 2026-10-16; drvec BUG-40): ν(B) = ω(B)/δ(B) truncated at

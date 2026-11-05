@@ -264,6 +264,46 @@ rm -r "$T3"
     && bien "the diagonal gate closes with Shea's likelihood too" \
     || falla "the diagonal gate does not close with -lik shea"
 
+# 10d. -zero: un coeficiente cruzado suelto a cero (la simplificacion de Tiao y
+#      Box por coeficiente; sim_gui S7). Sale de la tabla, el modelo tiene un
+#      parametro menos, la LR contra los univariantes un grado menos, y la
+#      cabecera lo dice. Lo que no esta en el modelo es un error, no un
+#      silencio: un retardo fuera de p, o un par sin enlace.
+"$BIN" "$ES" "$FR" 1 0 -o "$TMP/zf" > /dev/null 2>&1
+"$BIN" "$ES" "$FR" 1 0 -zero "AR1[IPC_ES<-IPC_FR]" -o "$TMP/zz" > /dev/null 2>&1
+rc=$?
+nf=$(awk '/^Number of parameters:/ {print $4; exit}' "$TMP/zf.out")
+nz=$(awk '/^Number of parameters:/ {print $4; exit}' "$TMP/zz.out")
+df_f=$(awk '/LR = .* df = / {for (i = 1; i <= NF; i++) if ($i == "df") print $(i + 2); exit}' "$TMP/zf.out")
+df_z=$(awk '/LR = .* df = / {for (i = 1; i <= NF; i++) if ($i == "df") print $(i + 2); exit}' "$TMP/zz.out")
+[ $rc -eq 0 ] && [ -n "$nf" ] && [ "$nz" = "$((nf - 1))" ] \
+    && bien "-zero: un parametro menos ($nf -> $nz)" \
+    || falla "-zero: rc=$rc, parametros $nf -> $nz"
+[ -n "$df_f" ] && [ "$df_z" = "$((df_f - 1))" ] \
+    && bien "-zero: la LR contra los univariantes, un grado menos ($df_f -> $df_z)" \
+    || falla "-zero: gl de la LR $df_f -> $df_z"
+awk '$1 == "AR1[IPC_ES<-IPC_FR]"' "$TMP/zz.out" | grep -q . \
+    && falla "-zero: el coeficiente sigue en la tabla" \
+    || bien "-zero: el coeficiente sale de la tabla"
+awk '$1 == "AR1[IPC_FR<-IPC_ES]"' "$TMP/zz.out" | grep -q . \
+    && bien "-zero: el del otro sentido sigue libre" \
+    || falla "-zero: se fue tambien el del otro sentido"
+grep -q "^Zero coefficients: AR1\[IPC_ES<-IPC_FR\]$" "$TMP/zz.out" \
+    && bien "-zero: la cabecera lo dice" || falla "-zero: la cabecera no lo dice"
+grep -q "^Zero coefficients" "$TMP/zf.out" \
+    && falla "sin -zero la cabecera habla de ceros" || bien "sin -zero, la cabecera no cambia"
+"$BIN" "$ES" "$FR" 1 0 -zero "AR2[IPC_ES<-IPC_FR]" -o "$TMP/zb" > "$TMP/zb.log" 2>&1
+[ $? -ne 0 ] && grep -q "is not in the model" "$TMP/zb.log" \
+    && bien "-zero con un retardo fuera de p es un error" \
+    || falla "-zero acepta un retardo fuera de p"
+"$BIN" "$ES" "$FR" 1 0 -links "IPC_FR<-IPC_ES" -zero "AR1[IPC_ES<-IPC_FR]" -o "$TMP/zl" > "$TMP/zl.log" 2>&1
+[ $? -ne 0 ] && grep -q "not a linked pair" "$TMP/zl.log" \
+    && bien "-zero sobre un par sin enlace es un error" \
+    || falla "-zero acepta un par sin enlace"
+"$BIN" "$ES" "$FR" 1 0 -zero "XX1[IPC_ES<-IPC_FR]" -o "$TMP/zx" > "$TMP/zx.log" 2>&1
+[ $? -ne 0 ] && grep -q "is not of the form" "$TMP/zx.log" \
+    && bien "-zero mal escrito es un error" || falla "-zero mal escrito se acepta"
+
 # 11. la regresion de la salida de la 5.0
 REF=$AQUI/ref
 filtro() { grep -av '^Program          : \|^Output File      : \|^  \[[0-9]*\] \|^Full results written to \|^Forecasts written to \|^Recursive forecasts written to ' "$1"; }

@@ -503,3 +503,39 @@ Reservar según `strlen(argv[1]) + 5` (o usar búferes del tamaño de
 `IPC3` desde una carpeta de nombre corto (control) y desde una de 100
 caracteres. Sale con 1 mientras la segunda no escriba su `.out`, con 0
 cuando lo escriba y con 2 si falla el control.
+
+## BUG-0003 — la vía `.inp` sale con 0 cuando la estimación falla
+
+**Encontrado:** antes de 2026-10 (apuntado en `docs/TODO.md`); repro del
+2026-11-05, fase S0 de `docs/DISENO-sim.md`.
+**Dónde:** `src/drvarma.c:457-473` guarda el fallo de `est()` en
+`est_fault`, lo escribe en pantalla y en el `.out` y se salta los
+resultados (`:478`, `:705`); `main` acaba en `return 0` (`:725`) sin
+mirarlo.
+
+### Síntoma
+
+El `.out` dice `**** ESTIMATION FAILED: AR nonstationary (code 3)` y no trae
+resultados, pero el proceso sale con 0. El GUI viejo confía en el código y
+anuncia «DRVARMA finished successfully.»; un guion que llame al motor hace
+lo mismo.
+
+### Cuándo pasa
+
+En la vía `.inp` (la multivariante, obsoleta desde la 5.0 pero viva) cada
+vez que `est()` devuelve un fallo. Basta con el VARMA(1,1) por defecto
+sobre niveles: es lo que hace el GUI viejo si no se toca nada. La escalera
+no tiene el defecto: sale con 3 (`src/escalera.c:1335`, `:1397`).
+
+### Arreglo propuesto (no hecho)
+
+Que `main` devuelva un código distinto de 0 cuando `est_fault != 0`; el 3
+de la escalera, para que las dos vías digan lo mismo. Toca el motor: con OK.
+
+### Reproducción
+
+`bugs/BUG-0003-repro/repro.py`: IPC3 con log y sin diferenciar, VARMA(1,1)
+(la estimación falla); control, el mismo `.inp` con d = 1 y un VAR(1) con
+`-mean`, que estima bien. Sale con 1 mientras el caso fallido salga con 0,
+con 0 cuando salga con otro código y con 2 si el caso o el control no
+valen.

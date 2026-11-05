@@ -451,13 +451,18 @@ programa:
 
 - El motor **sale con 0** cuando la estimación falla («ESTIMATION FAILED: AR
   nonstationary»), y el GUI lo anuncia como éxito. Pasa con el VARMA(1,1)
-  por defecto sobre niveles.
+  por defecto sobre niveles. Es **BUG-0003**, con repro
+  (`engines/drvarma/bugs/BUG-0003-repro`); el arreglo, con OK.
 - El motor aborta en el manejador de errores de GSL con datos diminutos (3×2).
 - «Use differenced data» en Select VAR Order no hace nada: sólo cambia una
   etiqueta.
 - La conclusión de Johansen se escribe con `strcat` en un búfer fijo de
   2048 bytes: desborda con muchas series.
-- Las recargas pierden `base_name` y compañía; `transform_data` no se usa.
+- ~~Las recargas pierden `base_name`~~: **cerrado** desde las pruebas
+  conducidas (1915e6e, 2026-10-04): `load_data_file` solo sustituye los
+  datos si el fichero nuevo es bueno, y `prueba_carga` lo comprueba (un
+  fichero malo tras uno bueno y luego Run). `transform_data` sigue sin
+  llamarse: código muerto, que se va con el GUI viejo (DISENO-sim.md S9).
 
 **gtk_fmg**
 

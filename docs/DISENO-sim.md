@@ -73,9 +73,21 @@ usuario tendría que elegir antes de tener la evidencia.
 
 | entrada | quién fabrica los ficheros | versión |
 |---|---|---|
-| **Escalera** | los modelos US de la madre, en el orden que elige el analista, o «Pasar a SIM» desde un caso MT con ciclo (§5.4) | **primera** |
-| **Crudo, ruta U** (Jenkins y Alavi: los univariantes primero) | los univariantes **ligeros**, construidos con art desde la madre (§5.5); quedan en la lista US marcados «sin revisar», para pasarlos por fue cuando el analista quiera | **primera** |
+| **Escalera**, la de siempre | los modelos US que el analista construyó y **eligió** en la madre, uno por serie y en el orden que él decide, como un caso MT de drtran; o «Pasar a SIM» desde un caso MT con ciclo (§5.4) | **primera** |
+| **Crudo, ruta U** (Jenkins y Alavi: los univariantes primero) | para las series que todavía no tienen modelo: un **modelo de partida** de cada una, propuesto por el identificador de la madre y estimado con fue (§5.5); queda en la lista US marcado «sin revisar» | **primera** |
 | **Crudo, ruta V** (Tiao y Box: el vector primero) | un `.inp` por serie con solo su transformación (λ, d, D o armónicos, la media si d = D = 0) y un AR(p)/MA(q) libre en la diagonal (sima `write_specs`) | **segunda** (§8) |
+
+**La ruta U no sustituye a la escalera, la completa.** Lo normal es que el
+analista ya haya construido y elegido sus univariantes en US, y entonces el
+sistema se hace con ellos, igual que un caso MT. La ruta U solo rellena las
+series que aún no tienen modelo, y se pueden mezclar: en un mismo sistema,
+unas series con su modelo elegido y otras con un modelo de partida.
+
+**Los modelos de partida los hace la madre con los motores en C**: el
+identificador de US → «Identificar la estructura ARIMA…» (el motor `art` en
+C, `engines/art`) y fue para estimar. No es art-python ni el `build_univariate`
+de sima, que hace lo mismo en Python; donde los dos calculen distinto, manda
+la madre (la regla de la madre del MTM).
 
 El motor en C ya sirve para las tres: la ruta V cabe porque la escalera
 reestima la diagonal. La ruta V espera porque necesita dos cosas que hoy solo
@@ -205,8 +217,8 @@ En la barra, la regla de fue: apagado con globo que dice por qué
 | nodo | sima | qué es | en SIM | motor |
 |---|---|---|---|---|
 | N0r | `load_data` | series crudas, sin modelos | la madre: Datos → Importar series | — |
-| N0c | `characterize` | λ, d, estacionalidad, anómalos de cada serie | la madre, en «Nuevo sistema desde series sin modelo» (§5.5) | art |
-| N0u | `build_univariate` | ruta U: los univariantes ligeros | la madre, mismo diálogo (§5.5) | art y fue |
+| N0c | `characterize` | λ, d, estacionalidad, anómalos de cada serie | la madre, en «Nuevo sistema…», para las series sin modelo (§5.5) | identificador de la madre (`art` en C) |
+| N0u | `build_univariate` | ruta U: los modelos de partida | la madre, mismo diálogo (§5.5) | identificador de la madre (`art` en C) y fue |
 | N0v | `write_specs` | ruta V: el vector primero | **segunda versión** (§8) | — |
 | N0 | `load_pre` | los ficheros, sus modelos, la ventana común | página **1 · Series** | `lib/fuepre` (lector y alineación) |
 | N1 | `run_gate` | la puerta diagonal | página **2 · Puerta** | `drvarma A.pre B.pre … 0 0 -diagcov` |
@@ -396,21 +408,25 @@ corrida. Entonces:
 La vuelta, «Pasar a MT», es la misma operación con `motor: drtran`, cuando
 N4t encuentra un orden triangular.
 
-### 5.5 «Nuevo sistema…»: las dos entradas de la primera versión
+### 5.5 «Nuevo sistema…»: de cada serie, su modelo
 
-Un diálogo con dos pestañas:
+Un diálogo con una fila por serie, en el orden del sistema (que es el de
+Cholesky), y de cada una **qué modelo entra**:
 
-- **Desde modelos US** (la escalera): se eligen las series y, de cada una, su
-  modelo (el elegido por defecto), en orden.
-- **Desde series sin modelo** (ruta U): se eligen series importadas que aún
-  no tienen modelo. La madre las caracteriza con art (λ, d, estacionalidad) y
-  construye un univariante **ligero** de cada una con art y fue. Quedan en
-  la lista US como modelos normales, con la marca **«sin revisar»** y la razón
-  «construido para el sistema C2», y el sistema arranca sobre ellos.
+- **Su modelo elegido** (la escalera), que es lo que propone por defecto,
+  como hoy un caso MT de drtran. Se puede cambiar por otro de sus modelos.
+- **Un modelo de partida** (ruta U), solo si la serie aún no tiene modelo.
+  La madre la identifica con su identificador (λ, d, estacionalidad y la
+  estructura ARIMA, el motor `art` en C) y estima el modelo con fue. Queda en
+  la lista US como un modelo más, con la marca **«sin revisar»** y la razón
+  «modelo de partida para el sistema C2», y el sistema arranca sobre él.
 
-La marca «sin revisar» se quita sola cuando el analista deriva o elige ese
-modelo en fue. sima dice lo mismo («art's autonomous lane in miniature»):
-los univariantes de la ruta U se pueden y se deben revisar.
+Un sistema puede mezclar las dos cosas. Y si todas las series tienen modelo
+elegido, el diálogo es el de siempre y la ruta U no aparece.
+
+La marca «sin revisar» se quita cuando el analista revisa ese modelo en fue:
+lo deriva o lo elige. sima dice lo mismo de su ruta U: los univariantes de
+partida se pueden y se deben revisar.
 
 La ruta V tendrá una tercera pestaña en la segunda versión (§8).
 
@@ -453,7 +469,7 @@ Cada fase en su PR, con la CI en verde en Linux, macOS y Windows.
 | **S4b** | «Ver modelo»: una página por serie con `lib/equation/eqdraw.c` (§3.4) | sí | la página de una serie sin enlaces es **idéntica** a la de su univariante en fue; con enlaces, los términos cruzados quedan delante de los deterministas |
 | **S5** | Página 7 (Previsión): el gráfico, la evaluación contra los univariantes, IRF y FEVD | sí | el gráfico es el fichero que va al papel; la evaluación se guarda y la siguiente trae la diferencia |
 | **S6** | La madre: menú SIM, columna Clase, Ctrl+E, «Pasar a SIM» y «Pasar a MT», el linaje | sí | `gui/atsw/tests/test_gui.c`: fase `sim`; la prueba `barra` cubre el menú SIM; un caso MT con ciclo ofrece «Pasar a SIM» y crea el hermano con las mismas entradas en orden |
-| **S6b** | «Nuevo sistema…» desde series sin modelo (ruta U, §5.5), con la marca «sin revisar» | sí | sobre las series crudas de `jenkins_alavi`, los univariantes ligeros y la puerta |
+| **S6b** | «Nuevo sistema…» desde series sin modelo (ruta U, §5.5), con la marca «sin revisar» | sí | sobre las series crudas de `jenkins_alavi`, los modelos de partida y la puerta; un sistema que mezcla un modelo elegido y uno de partida |
 | **S7** | Simplificar y estructura (N4s, N4t) en `atsw-cli` | sí | sobre `jenkins_alavi`, los números coinciden con los de sima |
 | **S8** | `atsw-sis` para VARMA (`ESTUDIO-terminal-mcp.md`) | — | la herramienta y la página dan el mismo resultado, byte a byte donde el texto es el mismo |
 | **S9** | La documentación (§6): el capítulo «Sistemas», el proyecto de ejemplo `jenkins_alavi` en Ayuda → Ejemplos. Retirar `engines/drvarma/gui` del árbol de compilación y de la CI (no `seasonal_detection.c`, que es del motor) | sí | la CI sin el `drvarma_gui` viejo; el manual regenerado en el release |
@@ -568,15 +584,16 @@ VEC llegará y qué hace sima mientras tanto.
 - Un solo GUI y un solo menú, **SIM**, para VARMA y VEC (§0.2).
 - La **ruta V en la segunda versión** (§8).
 
-**Abiertas:**
+**Aceptadas con la recomendación (2026-11-05):**
 
 1. **El nombre del GUI hijo:** `gui/sim/`, binario `sim_gui`. Recomendado:
    sí (los otros se llaman por su motor, pero este tiene dos).
 2. **«sistema»** para un caso SIM, «caso» para MT. Recomendado: sí.
 3. **Siete páginas**, con la Puerta como la 2 y el resto en el orden de
    drtran; la R · Rango entra con S10. Recomendado: sí.
-4. **La ruta U en la primera versión** (§5.5), con los univariantes ligeros
-   en la lista US marcados «sin revisar». Recomendado: sí.
+4. **La ruta U en la primera versión** (§5.5), como complemento de la
+   escalera: modelos de partida, con el identificador de la madre, solo para
+   las series sin modelo, marcados «sin revisar». Recomendado: sí.
 5. **La orquestación de simplificar y estructura** (N4s, N4t) en
    `atsw-cli`, para el GUI, la madre y el MCP. Recomendado: sí.
 6. **Lo que solo existe en Python** (canónico, M(l), echelon): «esto lo hace

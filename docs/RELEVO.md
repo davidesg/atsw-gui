@@ -170,7 +170,11 @@ diagonal, conversión de corridas viejas y «Ver modelo…» desde la madre.
 - `gh pr edit` falla por los Projects clásicos; se usa
   `gh api -X PATCH repos/davidesg/atsw-gui/pulls/N`.
 
-## 6. Lo siguiente: el hito drvarma_gui (decisión del analista)
+## 6. Lo siguiente: el hito SIM (decisión del analista)
+
+- **El diseño está en `DISENO-sim.md`** (2026-11-05): un solo GUI y un solo
+  menú, SIM, para drvarma y drvec, como sima; la ruta V en la segunda
+  versión. Lo que sigue de esta sección es el encargo de partida.
 
 - **Se diseña con lo aprendido en sima-python** (sima-tseries, el drvarma en
   Python: `~/Dropbox/SRC`, servidor MCP `sima`) y sus ejemplos, empezando

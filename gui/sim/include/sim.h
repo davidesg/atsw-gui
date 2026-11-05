@@ -87,6 +87,7 @@ typedef struct {
     GtkWidget *c_redet, *c_fixarma, *c_m2, *cb_hessian, *cb_lik;
     GtkWidget *orden;         /* la orden, copiable                        */
     GtkWidget *ver_cuenta;    /* cuantos parametros cruzados               */
+    GtkWidget *ver_ceros, *b_sin_ceros;   /* -zero: lo que dejo Simplificar */
     GtkWidget *ver_forma;     /* retroalimentacion o red                   */
     gboolean   leyendo;       /* rellenando los controles: no leerlos      */
 } PagModelo;
@@ -119,6 +120,30 @@ typedef struct {
     GtkWidget *t_sigma;
     GtkWidget *t_out;
     int        version;
+
+    /* S7: simplificar (Tiao y Box por coeficiente, -zero) y «¿es una red?» */
+    GtkWidget *b_simpl, *b_red, *b_pasar_mt;
+    GtkWidget *ver_simpl, *ver_red, *t_red;
+    gboolean   hay_ant;       /* hay un modelo del que este es la simplificacion */
+    double     ll_ant;
+    int        k_ant;
+    char       co_ant[PR_ID];
+    int        ver_simpl_de;  /* la estimacion a la que se refiere ver_simpl */
+
+    EngineJob *trabajo;       /* la corrida de la estructura en marcha    */
+    gboolean   corriendo;
+    SisModelo *jobs;          /* los modelos restringidos                 */
+    char     (*etiq)[160];    /* lo que contrasta cada uno                */
+    int       *orden;         /* 1 si es un orden triangular, 0 un par    */
+    int      (*perm)[SIS_MAX_SER];
+    double    *ll;
+    int       *kk;
+    int        njobs, cur;
+    gchar     *base;          /* <modelo>_est                              */
+    int        orden_ok;      /* el orden triangular que se sostiene, o -1 */
+    int        tri;           /* el modelo YA es triangular: perm_tri      */
+    int        perm_tri[SIS_MAX_SER];
+    int        version_red;   /* la estimacion a la que se refiere         */
 } PagDiag;
 
 /* La pagina 7: la prevision y la evaluacion (N5, N6). drvarma preve en la
@@ -255,6 +280,18 @@ gboolean   pagina_ver( Sim *m, int i );
 /* Cuantos items cruzados lleva la ecuacion de la serie i (0: es la de fue
  * tal cual); -1 si no hay sistema estimado. Para la prueba.             */
 int        pagina_cruzados( Sim *m, int i );
+
+/* estructura.c: S7, simplificar y «¿es una red?» (sima simplify y structure). */
+/* Los coeficientes cruzados con |t| < t a cero (-zero) y una estimacion
+ * nueva, hija de la que se mira. TRUE si arranco.                       */
+gboolean   estructura_simplificar( Sim *m, double t );
+/* Cada par a cero y, con hasta 4 series, cada orden triangular, contra el
+ * modelo estimado, por LR. TRUE si arranco.                             */
+gboolean   estructura_red( Sim *m, double alfa );
+/* Con un orden triangular que se sostiene y un sistema del proyecto: un
+ * caso MT hermano, con las series en ese orden (la salida primero).    */
+gboolean   estructura_pasar_mt( Sim *m, char *why, size_t n );
+void       estructura_refresca( Sim *m );
 
 /* puerta.c: una puerta ya pasada, leida de su .out (la carga de un sistema). */
 gboolean   puerta_desde( Sim *m, const char *out );

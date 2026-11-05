@@ -92,6 +92,8 @@ static void todos( Sim *m, int valor )
     modelo_refresca( m );
 }
 
+static void on_sin_ceros( Sim *m ) { m->mod.zero[0] = 0; modelo_refresca( m ); }
+
 static void on_todos( GtkButton *b, Sim *m )   { (void) b; todos( m, 1 ); }
 static void on_ninguno( GtkButton *b, Sim *m ) { (void) b; todos( m, 0 ); }
 
@@ -146,7 +148,7 @@ void modelo_refresca( Sim *m )
 static void textos( Sim *m )
 {
     PagModelo *M = &m->pm;
-    int n = m->sis.n, ne, tot;
+    int n = m->sis.n, ne, tot, nz = 0;
     gchar *ord;
 
     if (!M->orden) return;
@@ -164,21 +166,33 @@ static void textos( Sim *m )
 
     ne = sis_enlaces( &m->mod, n );
     tot = sis_parametros_cruzados( &m->mod, n );
+    {
+        char z[2048];
+        nz = sis_ceros_validos( &m->sis, &m->mod, z, sizeof z );
+        gtk_widget_set_visible( M->b_sin_ceros, nz > 0 );
+        if (nz > 0) {
+            sim_veredicto( M->ver_ceros, SIM_AMBAR, "%d coeficiente%s cruzado%s a cero (-zero, de "
+                           "Simplificar): %s.", nz, nz == 1 ? "" : "s", nz == 1 ? "" : "s", z );
+        } else
+            gtk_label_set_text( GTK_LABEL(M->ver_ceros), "" );
+    }
     if (ne == 0 || m->mod.p + m->mod.q == 0)
         sim_veredicto( M->ver_cuenta, SIM_AMBAR,
                        "Sin dinámica cruzada (%s): es el sistema diagonal, el de la puerta%s.",
                        ne == 0 ? "ningún enlace" : "p = q = 0",
                        m->mod.diagcov ? "" : ", con Σ completa" );
     else {
-        int cruz = ne * ( m->mod.p + m->mod.q ), cov = tot - cruz;
+        int bruto = ne * ( m->mod.p + m->mod.q ), cov = tot - bruto, cruz = bruto - nz;
         gchar *mas = m->mod.diagcov ? g_strdup( "" )
                    : g_strdup_printf( ", más %d covarianza%s", cov, cov == 1 ? "" : "s" );
+        gchar *ceros = nz ? g_strdup_printf( " − %d a cero", nz ) : g_strdup( "" );
         sim_veredicto( M->ver_cuenta, SIM_VERDE,
-                       "%d enlace%s × (p + q = %d) = %d coeficientes cruzados%s; la diagonal es "
+                       "%d enlace%s × (p + q = %d)%s = %d coeficientes cruzados%s; la diagonal es "
                        "la de cada fichero, %s.",
-                       ne, ne == 1 ? "" : "s", m->mod.p + m->mod.q, cruz, mas,
+                       ne, ne == 1 ? "" : "s", m->mod.p + m->mod.q, ceros, cruz, mas,
                        m->mod.fixarma ? "fija en el .pre (-fixarma)" : "reestimada con el resto" );
         g_free( mas );
+        g_free( ceros );
     }
     if (ne == 0)
         gtk_label_set_text( GTK_LABEL(M->ver_forma), "" );
@@ -294,6 +308,15 @@ GtkWidget *modelo_pagina_new( Sim *m )
 
     M->ver_cuenta = veredicto_new();
     M->ver_forma = veredicto_new();
+    M->ver_ceros = veredicto_new();
+    M->b_sin_ceros = gtk_button_new_with_label( "Quitar los ceros" );
+    gtk_widget_set_tooltip_text( M->b_sin_ceros, "Que todos los coeficientes de los enlaces vuelvan "
+                                 "a estar libres" );
+    gtk_widget_set_halign( M->b_sin_ceros, GTK_ALIGN_START );
+    gtk_widget_set_no_show_all( M->b_sin_ceros, TRUE );
+    g_signal_connect_swapped( M->b_sin_ceros, "clicked", G_CALLBACK(on_sin_ceros), m );
+    gtk_box_pack_start( GTK_BOX(caja), M->ver_ceros, FALSE, FALSE, 0 );
+    gtk_box_pack_start( GTK_BOX(caja), M->b_sin_ceros, FALSE, FALSE, 0 );
     gtk_box_pack_start( GTK_BOX(caja), M->ver_cuenta, FALSE, FALSE, 0 );
     gtk_box_pack_start( GTK_BOX(caja), M->ver_forma, FALSE, FALSE, 0 );
     return caja;

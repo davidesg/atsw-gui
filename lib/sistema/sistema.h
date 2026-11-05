@@ -102,6 +102,7 @@ typedef struct {
    int           metodo;                      /* -m: 1 (defecto) o 2       */
    int           hessian;                     /* 0 fd (defecto), 1 bfgs    */
    int           lik;                         /* 0 elf (defecto), 1 shea, 2 both */
+   char          zero[2048];                  /* -zero: «AR1[A<-B],MA2[B<-A]», o "" */
 } SisModelo;
 
 /* Un modelo de partida: p = 1, q = 0, Sigma completa, todos los enlaces. */
@@ -135,5 +136,26 @@ int  sis_parametros_cruzados( const SisModelo *mo, int m );
  * caben.                                                                */
 int  sis_orden_modelo( const Sistema *s, const SisModelo *mo, const char *salida,
                        char *buf, size_t nbuf, const char **argv, int max );
+
+/* -zero solo lleva los coeficientes que el modelo tiene: su retardo dentro de
+ * p o q y su par enlazado (drvarma rechaza los demas). sis_orden_modelo lo
+ * filtra asi; esta es la misma cuenta, para quien quiera la lista. Devuelve
+ * cuantos quedan.                                                       */
+int  sis_ceros_validos( const Sistema *s, const SisModelo *mo, char *out, size_t n );
+
+/* ------------------------------------------------------------------------ */
+/* S7: simplificar y «¿es una red?» (sima simplify y structure)             */
+/* ------------------------------------------------------------------------ */
+
+/* La probabilidad de que una chi2 con df grados supere x. */
+double sis_chi2_p( double x, int df );
+
+/* El modelo restringido de un par: b deja de entrar en la ecuacion de a. */
+void sis_modelo_sin_par( const SisModelo *mo, SisModelo *r, int a, int b );
+
+/* El modelo triangular de un orden (perm[0..m-1], indices de serie): cada
+ * serie solo recibe de las que van antes que ella. Lo que el modelo no
+ * tenia enlazado sigue sin enlazar. Devuelve cuantos enlaces quita.     */
+int  sis_modelo_triangular( const SisModelo *mo, SisModelo *r, const int *perm, int m );
 
 #endif /* ATSW_SISTEMA_H */

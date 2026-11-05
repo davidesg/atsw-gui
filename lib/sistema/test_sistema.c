@@ -8,6 +8,7 @@
  */
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 #include "sistema.h"
 #include "fue_pre_reader.h"
 
@@ -80,6 +81,27 @@ int main( int argc, char **argv )
          ok( !strcmp( o, "MUSKRAT_m03.pre MINK_m02.pre 2 1 -diagcov -links MUSKRAT<-MINK -fixarma -lik both -o c01" ),
              "la orden del modelo" );
       }
+   }
+   {
+      SisModelo mo, r;
+      char buf[2048], z[512];
+      int perm[2] = { 1, 0 }, j;
+      ok( fabs( sis_chi2_p( 3.841459, 1 ) - 0.05 ) < 1e-5, "chi2: P(chi2_1 > 3.84) = 0.05" );
+      ok( fabs( sis_chi2_p( 11.0705, 5 ) - 0.05 ) < 1e-5, "chi2: P(chi2_5 > 11.07) = 0.05" );
+      ok( fabs( sis_chi2_p( 0.4761, 1 ) - 0.4902 ) < 1e-3, "chi2: P(chi2_1 > 0.476) = 0.49" );
+      sis_modelo_defecto( &mo, 2 );
+      mo.p = 2;
+      snprintf( mo.zero, sizeof mo.zero, "AR2[MINK<-MUSKRAT],AR3[MINK<-MUSKRAT],MA1[MINK<-MUSKRAT]" );
+      ok( sis_ceros_validos( &s, &mo, z, sizeof z ) == 1 && !strcmp( z, "AR2[MINK<-MUSKRAT]" ),
+          "-zero: solo los coeficientes que el modelo tiene (AR3 y MA1 fuera)" );
+      k = sis_orden_modelo( &s, &mo, "c", buf, sizeof buf, av, 32 );
+      for ( j = 0; j < k - 1; j++ ) if ( !strcmp( av[j], "-zero" ) ) break;
+      ok( j < k - 1 && !strcmp( av[j + 1], "AR2[MINK<-MUSKRAT]" ), "la orden lleva -zero" );
+      sis_modelo_sin_par( &mo, &r, 1, 0 );
+      ok( !r.enlace[1][0] && r.enlace[0][1] && sis_ceros_validos( &s, &r, z, sizeof z ) == 0,
+          "sin el par MINK <- MUSKRAT, su cero ya no va" );
+      ok( sis_modelo_triangular( &mo, &r, perm, 2 ) == 1 && r.enlace[0][1] && !r.enlace[1][0],
+          "triangular MINK, MUSKRAT: MUSKRAT recibe de MINK y no al revés" );
    }
    sis_mueve( &s, 1, 0 );
    ok( !strcmp( s.s[0].nombre, "MINK" ) && !strcmp( s.s[1].nombre, "MUSKRAT" ), "mover cambia el orden" );

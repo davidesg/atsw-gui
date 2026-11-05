@@ -176,6 +176,7 @@ void diagnosis_refresca( Sim *m )
     gchar *t = NULL;
 
     if (!D->libreta) return;
+    estructura_refresca( m );          /* S7: su estado cambia sin estimar */
     if (!v || m->pe.corriendo) {
         sim_veredicto( D->ver_pide, SIM_AMBAR, "Pide un sistema estimado («5 · Estimación»)." );
         gtk_widget_set_visible( D->libreta, FALSE );
@@ -200,6 +201,15 @@ void diagnosis_refresca( Sim *m )
         gtk_text_buffer_set_text( gtk_text_view_get_buffer( GTK_TEXT_VIEW(D->t_out) ), t, -1 );
         g_free( t );
     }
+}
+
+static void on_simpl( Sim *m ) { estructura_simplificar( m, 1.0 ); }
+static void on_red( Sim *m )   { estructura_red( m, 0.05 ); }
+static void on_pasar_mt( Sim *m )
+{
+    char why[512];
+    estructura_pasar_mt( m, why, sizeof why );
+    sim_estado( m, "%s", why );
 }
 
 GtkWidget *diagnosis_pagina_new( Sim *m )
@@ -262,6 +272,35 @@ GtkWidget *diagnosis_pagina_new( Sim *m )
     gtk_widget_set_margin_top( D->t_sigma, 8 );
     gtk_notebook_append_page( GTK_NOTEBOOK(D->libreta), D->t_sigma, gtk_label_new( "Σ" ) );
 
+    /* S7: simplificar y «¿es una red?» */
+    pg = gtk_box_new( GTK_ORIENTATION_VERTICAL, 8 );
+    gtk_container_set_border_width( GTK_CONTAINER(pg), 8 );
+    {
+        GtkWidget *fila = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 8 );
+        D->b_simpl = gtk_button_new_with_label( "Simplificar (|t| < 1)" );
+        gtk_widget_set_tooltip_text( D->b_simpl, "Tiao y Box: los coeficientes cruzados con |t| < 1 a "
+                                     "cero (drvarma -zero) y una estimación nueva, hija de ésta" );
+        D->b_red = gtk_button_new_with_label( "¿Es una red?" );
+        gtk_widget_set_tooltip_text( D->b_red, "Cada par a cero y cada orden triangular, contra este "
+                                     "modelo, por LR. Si un orden se sostiene, es una red de transferencia" );
+        D->b_pasar_mt = gtk_button_new_with_label( "Pasar a MT" );
+        g_signal_connect_swapped( D->b_simpl, "clicked", G_CALLBACK(on_simpl), m );
+        g_signal_connect_swapped( D->b_red, "clicked", G_CALLBACK(on_red), m );
+        g_signal_connect_swapped( D->b_pasar_mt, "clicked", G_CALLBACK(on_pasar_mt), m );
+        gtk_box_pack_start( GTK_BOX(fila), D->b_simpl, FALSE, FALSE, 0 );
+        gtk_box_pack_start( GTK_BOX(fila), D->b_red, FALSE, FALSE, 0 );
+        gtk_box_pack_start( GTK_BOX(fila), D->b_pasar_mt, FALSE, FALSE, 0 );
+        gtk_box_pack_start( GTK_BOX(pg), fila, FALSE, FALSE, 0 );
+    }
+    D->ver_simpl = veredicto_new();
+    D->ver_red = veredicto_new();
+    D->t_red = sim_mono( "" );
+    gtk_widget_set_valign( D->t_red, GTK_ALIGN_START );
+    gtk_box_pack_start( GTK_BOX(pg), D->ver_simpl, FALSE, FALSE, 0 );
+    gtk_box_pack_start( GTK_BOX(pg), D->ver_red, FALSE, FALSE, 0 );
+    gtk_box_pack_start( GTK_BOX(pg), D->t_red, FALSE, FALSE, 0 );
+    gtk_notebook_append_page( GTK_NOTEBOOK(D->libreta), pg, gtk_label_new( "Estructura" ) );
+
     D->t_out = gtk_text_view_new();
     gtk_text_view_set_editable( GTK_TEXT_VIEW(D->t_out), FALSE );
     gtk_text_view_set_monospace( GTK_TEXT_VIEW(D->t_out), TRUE );
@@ -271,5 +310,7 @@ GtkWidget *diagnosis_pagina_new( Sim *m )
         for (i = 0; i < gtk_notebook_get_n_pages( GTK_NOTEBOOK(D->libreta) ); i++)
             gtk_widget_show_all( gtk_notebook_get_nth_page( GTK_NOTEBOOK(D->libreta), i ) );
     }
+    gtk_widget_set_no_show_all( D->b_pasar_mt, TRUE );
+    gtk_widget_hide( D->b_pasar_mt );
     return caja;
 }

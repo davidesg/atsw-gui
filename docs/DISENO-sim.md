@@ -462,7 +462,7 @@ Cada fase en su PR, con la CI en verde en Linux, macOS y Windows.
 | fase | qué | se ve | pruebas |
 |---|---|---|---|
 | **S0** ✓ | B1 es drvarma BUG-0003, con repro, sin arreglar; B4 estaba cerrado | no | el repro sale con 1 mientras el fallo esté abierto |
-| **S1** | `lib/outvarma`: el lector del `.out` de la escalera; y el de `.forecast` / `.recursive` | no | contra `.out` **de verdad**, recién escritos por `drvarma` con los `.pre` de `jenkins_alavi` y de un caso de prueba: la puerta, la LR, los parámetros, Hosking |
+| **S1** ✓ | `lib/outvarma`: el lector del `.out` de la escalera; y el de `.forecast` / `.recursive` (el de drtran, `lib/outfcst`, no sirve: otras tablas); la diagnosis, con `lib/outdiag` | no | contra `.out` **de verdad**, recién escritos por `drvarma` con los `.pre` de `jenkins_alavi` y de un caso de prueba: la puerta, la LR, los parámetros, Hosking |
 | **S2** | `gui/sim/`: el esqueleto con `--proyecto/--caso/--modelo`, la barra, la barra de estado, las páginas 1 (Series) y 2 (Puerta), en `lib/sistema` donde se compartan | sí | `gui/sim/tests/test_gui.c` en el estilo de drtran: cargar ficheros, la ventana común, la puerta que pasa y **la que falla** (un `.pre` retocado: sale 5 y la página lo dice), el motor que no está |
 | **S3** | Páginas 3 (Identificación: la rejilla de CCF y los enlaces) y 4 (Modelo: p, q, Σ, enlaces, opciones avanzadas) | sí | los enlaces elegidos llegan como `-links` exactos; la orden se ve antes de lanzar |
 | **S4** | Páginas 5 (Estimación) y 6 (Diagnosis), con la pared MA y la LR contra los univariantes | sí | estimación fallida → la página lo dice (sale 3); un ajuste en la pared no se presenta como óptimo |

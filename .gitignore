@@ -19,6 +19,8 @@ build/
 *.pre
 # el airline de los contrastes formales: un .pre que es fixture, no salida
 !lib/formales/pruebas/*.pre
+# los de Jenkins y Alavi (ejemplo jenkins_alavi de sima): fixtures de lib/outvarma
+!lib/outvarma/datos/*.pre
 *.aux
 *.log
 *.dvi

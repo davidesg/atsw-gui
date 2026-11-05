@@ -3222,7 +3222,7 @@ static void casos( void )
         hijos_sin_pantalla( TRUE );
         gtk_button_clicked( GTK_BUTTON(A.b_c_drtran) );
         hijos_sin_pantalla( FALSE );
-        check( dijo( q2 ), "«Estimar» del sistema lanza el sim_gui del árbol", todo_lo_dicho() );
+        check( dijo( q2 ) != NULL, "«Estimar» del sistema lanza el sim_gui del árbol", todo_lo_dicho() );
         check( dijo( "(VARMA) en drvarma" ) != NULL, "con su clase y su motor", todo_lo_dicho() );
         g_free( q2 );
         }

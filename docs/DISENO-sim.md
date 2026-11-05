@@ -153,10 +153,10 @@ Una ventana con una fila de arriba y un cuaderno de pestañas (`create_ui`,
 
 | | fallo (`TODO.md`) | dónde | estado |
 |---|---|---|---|
-| B1 | el motor **sale con 0** cuando la estimación falla, y el GUI lo anuncia como éxito | `src/drvarma.c:457-473` guarda `est_fault` y escribe «ESTIMATION FAILED» en el `.out`, pero `main` acaba en `return 0` (`:725`) sin mirarlo. El GUI confía en el código (`run_drvarma`, ~`:1002-1032`) | **abierto, solo en la ruta del `.inp`**. La escalera sale con 3 (`escalera.c:1335`, `:1397`). SIM no usa ese camino; el defecto sigue y pide su `BUG-NNNN-repro` |
+| B1 | el motor **sale con 0** cuando la estimación falla, y el GUI lo anuncia como éxito | `src/drvarma.c:457-473` guarda `est_fault` y escribe «ESTIMATION FAILED» en el `.out`, pero `main` acaba en `return 0` (`:725`) sin mirarlo. El GUI confía en el código (`run_drvarma`, ~`:1002-1032`) | **abierto, solo en la ruta del `.inp`**: es drvarma **BUG-0003**, con repro (S0). La escalera sale con 3 (`escalera.c:1335`, `:1397`). SIM no usa ese camino |
 | B2 | «Use differenced data» en Select VAR Order no hace nada | `drvarma_gui.c:1359` lee la casilla; `:1365` llama a `preprocess_series` igual en los dos casos | **abierto**. Muere con la pantalla |
 | B3 | la conclusión de Johansen se escribe con `strcat` en un búfer fijo | `johansen_test.c:419` reserva 2048 bytes; `:430` y `:443` entran con `strcat` sin límite | **abierto**. Muere con el código |
-| B4 | las recargas pierden `base_name`; `transform_data` no se usa | `load_data_file` ya sustituye fichero, `base_name` y nombres solo si el fichero es bueno (`:207-211`, `:295-305`); `transform_data` (`:314`) sigue sin llamarse | **a confirmar con un repro** |
+| B4 | las recargas pierden `base_name`; `transform_data` no se usa | `load_data_file` ya sustituye fichero, `base_name` y nombres solo si el fichero es bueno (`:207-211`, `:295-305`); `transform_data` (`:314`) sigue sin llamarse | **cerrado** desde 1915e6e: lo comprueba `prueba_carga` del GUI viejo (un fichero malo tras uno bueno, y luego Run); `transform_data` es código muerto (S0) |
 
 Además, abiertos y con repro: drvarma BUG-0001 (la cabecera del `-split`) y
 BUG-0002 (`NEW_STR(80)` en `drvarma.c:173-177`), del PR #92. Son de la ruta
@@ -461,7 +461,7 @@ Cada fase en su PR, con la CI en verde en Linux, macOS y Windows.
 
 | fase | qué | se ve | pruebas |
 |---|---|---|---|
-| **S0** | Los repros de B1 (y B4 si se confirma) en `BUG-NNNN-repro/`, sin arreglar | no | el repro sale con 1 mientras el fallo esté abierto |
+| **S0** ✓ | B1 es drvarma BUG-0003, con repro, sin arreglar; B4 estaba cerrado | no | el repro sale con 1 mientras el fallo esté abierto |
 | **S1** | `lib/outvarma`: el lector del `.out` de la escalera; y el de `.forecast` / `.recursive` | no | contra `.out` **de verdad**, recién escritos por `drvarma` con los `.pre` de `jenkins_alavi` y de un caso de prueba: la puerta, la LR, los parámetros, Hosking |
 | **S2** | `gui/sim/`: el esqueleto con `--proyecto/--caso/--modelo`, la barra, la barra de estado, las páginas 1 (Series) y 2 (Puerta), en `lib/sistema` donde se compartan | sí | `gui/sim/tests/test_gui.c` en el estilo de drtran: cargar ficheros, la ventana común, la puerta que pasa y **la que falla** (un `.pre` retocado: sale 5 y la página lo dice), el motor que no está |
 | **S3** | Páginas 3 (Identificación: la rejilla de CCF y los enlaces) y 4 (Modelo: p, q, Σ, enlaces, opciones avanzadas) | sí | los enlaces elegidos llegan como `-links` exactos; la orden se ve antes de lanzar |

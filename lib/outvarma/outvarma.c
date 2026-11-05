@@ -370,6 +370,64 @@ static const char *lee_eval( const char *p, VarmaOut *v )
    return p;
 }
 
+/* «CROSS CORRELATION a[j] (B) - a[i] (A)», la banda, las filas «  k  r |…»
+ * y los dos Q.                                                           */
+static const char *lee_ccf( const char *l0, const char *p, VarmaOut *v )
+{
+   char l[1024];
+   const char *q;
+   OvCcf *c;
+   int j, i, filas = 0;
+   char b[OV_NOMBRE] = "", a[OV_NOMBRE] = "";
+
+   if ( v->nccf >= OV_MAX_PARES ) return p;
+   if ( sscanf( sb( l0 ), "CROSS CORRELATION a[%d] (%63[^)]) - a[%d] (%63[^)])", &j, b, &i, a ) != 4 &&
+        sscanf( sb( l0 ), "CROSS CORRELATION a[%d] - a[%d]", &j, &i ) != 2 ) return p;
+   c = &v->ccf[v->nccf];
+   memset( c, 0, sizeof *c );
+   c->i = i - 1; c->j = j - 1;
+   copia( c->a, sizeof c->a, a );
+   copia( c->b, sizeof c->b, b );
+
+   while ( ( q = linea( p, l, sizeof l ) ) ) {
+      const char *s = sb( l );
+      int k;
+      double r;
+      p = q;
+      if ( empieza( s, "CCF BANDS" ) ) { const char *e = strchr( s, '=' ); if ( e ) c->banda = atof( e + 1 ); continue; }
+      if ( strchr( s, '|' ) && sscanf( s, "%d %lf |", &k, &r ) == 2 ) {
+         if ( filas < 2 * OV_MAX_LAG + 1 ) c->r[filas++] = r;
+         continue;
+      }
+      if ( empieza( s, "Q(" ) ) {
+         double q1, q2;
+         int d1, d2;
+         if ( sscanf( s, "Q(%d) = %lf k >= 0 Q(%d) = %lf", &d1, &q1, &d2, &q2 ) == 4 ) {
+            c->q_ge0 = q1; c->q_gt0 = q2; c->df_ge0 = d1; c->df_gt0 = d2;
+            continue;
+         }
+         if ( sscanf( s, "Q(%d) = %lf k <= 0 Q(%d) = %lf", &d1, &q1, &d2, &q2 ) == 4 ) {
+            c->q_le0 = q1; c->q_lt0 = q2;
+            break;
+         }
+      }
+   }
+   if ( filas >= 3 && filas % 2 == 1 ) {
+      c->nlags = ( filas - 1 ) / 2;
+      v->nccf++;
+   }
+   return p;
+}
+
+const OvCcf *ov_ccf( const VarmaOut *v, int i, int j )
+{
+   int k;
+   for ( k = 0; k < v->nccf; k++ )
+      if ( ( v->ccf[k].i == i && v->ccf[k].j == j ) || ( v->ccf[k].i == j && v->ccf[k].j == i ) )
+         return &v->ccf[k];
+   return NULL;
+}
+
 /* ------------------------------------------------------------------------ */
 
 int ov_parse( const char *texto, VarmaOut *v )
@@ -449,6 +507,7 @@ int ov_parse( const char *texto, VarmaOut *v )
          }
          continue;
       }
+      if ( empieza( s, "CROSS CORRELATION a[" ) ) { p = lee_ccf( l, p, v ); continue; }
       if ( empieza( s, "RECURSIVE FORECAST EVALUATION" ) ) {
          const char *r = linea( p, l, sizeof l );        /* la raya de debajo */
          if ( r ) p = lee_eval( r, v );

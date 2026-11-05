@@ -127,6 +127,32 @@ static GtkWidget *pagina_futura( const char *titulo, const char *que, const char
 
 static void nada( GtkWidget *w, gpointer d ) { (void) w; (void) d; }
 static void on_estimar( GtkWidget *w, Sim *m ) { (void) w; estima_lanzar( m ); }
+static void on_ver( GtkWidget *w, Sim *m ) { (void) w; if (m->sis.n > 0) pagina_ver( m, 0 ); }
+
+static void on_ver_serie( GtkMenuItem *mi, Sim *m )
+{
+    pagina_ver( m, GPOINTER_TO_INT(g_object_get_data( G_OBJECT(mi), "serie" )) );
+}
+
+/* EL MENU DE «Ver modelo»: una entrada por serie, en el orden del sistema
+ * (el de Cholesky). Se hace al abrirlo: depende de las series.          */
+static void menu_ver( GtkMenuToolButton *b, Sim *m )
+{
+    GtkWidget *menu = gtk_menu_tool_button_get_menu( b );
+    GList *l = gtk_container_get_children( GTK_CONTAINER(menu) ), *q;
+    int i;
+
+    for (q = l; q; q = q->next) gtk_widget_destroy( q->data );
+    g_list_free( l );
+    for (i = 0; i < m->sis.n; i++) {
+        gchar *t = g_strdup_printf( "La ecuación de %s", m->sis.s[i].nombre );
+        GtkWidget *mi = at_entrada( menu, t, NULL, NULL, GTK_WIDGET(b), G_CALLBACK(on_ver_serie), m );
+        g_object_set_data( G_OBJECT(mi), "serie", GINT_TO_POINTER(i) );
+        g_free( t );
+    }
+    gtk_widget_show_all( menu );
+}
+
 static void on_diag( GtkWidget *w, Sim *m )
 {
     (void) w;
@@ -154,7 +180,8 @@ static void barra_new( Sim *m, GtkWidget *raiz )
                               "", G_CALLBACK(on_estimar), m );
     at_atajo( atajos, GDK_KEY_e, m->tb_estimar );
     m->tb_ver = at_partido( barra, "Ver modelo", "ver-modelo", "x-office-document",
-                            gtk_menu_new(), G_CALLBACK(nada), m );
+                            gtk_menu_new(), G_CALLBACK(on_ver), m );
+    g_signal_connect( m->tb_ver, "show-menu", G_CALLBACK(menu_ver), m );
     gtk_toolbar_insert( GTK_TOOLBAR(barra), gtk_separator_tool_item_new(), -1 );
     m->tb_diag = at_partido( barra, "Diagnosis", "diagnosis", "dialog-information",
                              gtk_menu_new(), G_CALLBACK(on_diag), m );
@@ -192,7 +219,9 @@ static void barra_refresca( Sim *m )
     enciende( m->tb_estimar, !corre && m->sis.n >= 2 && puerta_estado( m ) == 1,
               "Estimar el sistema con drvarma (Ctrl+E), con el modelo de «4 · Modelo»", falta );
     enciende( m->tb_diag, hay, "«6 · Diagnosis» (Ctrl+D)", sin );
-    apaga( m->tb_ver, hay ? "Ver modelo llega con la fase S4b (DISENO-sim.md §7)." : sin );
+    enciende( m->tb_ver, hay, "La página del modelo de la primera serie: sus residuos con la ACF "
+              "y la PACF y, debajo, su ecuación como la escribe fue, con los términos cruzados "
+              "en la línea del ruido. La flecha: las demás series.", sin );
     apaga( m->tb_prev, hay ? "Prever llega con la fase S5 (DISENO-sim.md §7)." : sin );
 }
 

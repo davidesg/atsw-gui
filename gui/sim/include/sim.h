@@ -213,6 +213,15 @@ gboolean   estima_desde( Sim *m, const char *out );
 GtkWidget *diagnosis_pagina_new( Sim *m );
 void       diagnosis_refresca( Sim *m );
 
+/* pagina.c: «Ver modelo», la pagina de la serie i (0..n-1) del sistema
+ * estimado, con el dibujante de fue (lib/equation). */
+gchar     *pagina_ruta( Sim *m, int i );
+int        pagina_serie( Sim *m, int i, const char *pdf, char *why, size_t n );
+gboolean   pagina_ver( Sim *m, int i );
+/* Cuantos items cruzados lleva la ecuacion de la serie i (0: es la de fue
+ * tal cual); -1 si no hay sistema estimado. Para la prueba.             */
+int        pagina_cruzados( Sim *m, int i );
+
 /* puerta.c: una puerta ya pasada, leida de su .out (la carga de un sistema). */
 gboolean   puerta_desde( Sim *m, const char *out );
 

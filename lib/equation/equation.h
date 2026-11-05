@@ -81,6 +81,26 @@ typedef struct {
    int     freq, nobs;
    double  sigma;                  /* sqrt(sigma2) / refactor, x 100 if pct  */
    int     sigma_pct;              /* sigma in %: logs, no geometric mean    */
+
+   /* THE CROSS TERMS OF A VARMA (sim_gui, drvarma): the equation of series
+    * A in Phi(B)(w - mu) = Theta(B) a, written as fue writes A's own model
+    * with the others' terms on the right of the noise line:
+    *
+    *   phi(B)[nabla N_t - mu] = cruz_ar + theta(B) A_t + cruz_ma ; sigma
+    *
+    * cruz_ar are the terms (c1 B + c2 B^2 ...) w_{B,t} of the AR cross
+    * dynamics, cruz_ma the terms (- t1 B ...) A_{B,t} of the MA one; an
+    * EI_INPUT with a == 3 is w_{B,t}, the stationary series of B, and one
+    * with a == 4 is A_{B,t}, its innovation. The first term of cruz_ar has
+    * no sign; the others, and every term of cruz_ma, begin with theirs.
+    * nota is a line under the equation (what w_{B,t} is). fue and drtran
+    * leave all of it empty (the memset of eq_build and eq_new), and their
+    * page does not change.                                              */
+   const EqItem *cruz_ar;
+   int           ncruz_ar;
+   const EqItem *cruz_ma;
+   int           ncruz_ma;
+   char          nota[256];
 } Equation;
 
 /* Build the equation of the model that has just been estimated. inputv is

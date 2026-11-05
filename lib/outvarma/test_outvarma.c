@@ -138,6 +138,17 @@ static void ar2( const char *dir )
    okf( v.fevd[0][0][0], 100, 1e-9, "FEVD: MUSKRAT en h = 1 es toda suya" );
    ok( v.tiene_diag && v.diag.ns == 2 && v.diag.hosking.hay && v.diag.jb.hay,
        "la diagnosis: dos series, Hosking y Jarque-Bera" );
+   {
+      static OvResiduos r;
+      double med = 0;
+      int k;
+      ok( ov_residuos_file( en( dir, "ar2.out" ), &r ) == 0, "los residuos, del grafico del .out" );
+      ok( r.m == 2 && r.n == 61 && !strcmp( r.nombre[1], "MINK" ), "dos series, 61 observaciones" );
+      for ( k = 0; k < r.n; k++ ) med += r.v[0][k];
+      okf( med / r.n, v.diag.s[0].media, 1e-4, "su media es la que dice el .out" );
+      ok( !strcmp( r.fecha[0], "1851" ) && !strcmp( r.fecha[60], "1911" ), "con sus fechas, 1851..1911" );
+      okf( r.v[0][57], -103.1112, 1e-3, "el residuo grande de 1908 (MUSKRAT)" );
+   }
    ok( v.nprev == 2 && !strcmp( v.prev[0].nombre, "MUSKRAT" ) && !strcmp( v.prev[1].nombre, "MINK" ),
        "la prevision de las dos series" );
    ok( v.prev[0].nf == 10 && v.prev[1].nf == 10, "diez filas cada una" );

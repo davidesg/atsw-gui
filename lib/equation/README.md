@@ -87,3 +87,16 @@ igual byte a byte y que la transferencia vaya delante de los deterministas:
 
     cc -Ilib/equation -Ilib/fugdraw lib/equation/test_eqdraw.c \
        lib/equation/eqdraw.c lib/fugdraw/fugdraw.c -lm
+
+## Los términos cruzados de un VARMA (sim_gui, 2026-11-05)
+
+La ecuación de la serie A de un VARMA de drvarma, Φ(B)(w − μ) = Θ(B) a, es la
+de su univariante con los términos de las otras series a la derecha de la
+línea del ruido:
+
+    φ(B)[∇N_t − μ] = (c₁B + c₂B²) w_B,t + θ(B) A_t + (−t₁B) A_B,t ;  σ
+
+`Equation` lleva para eso `cruz_ar`, `cruz_ma` y una `nota`, al final de la
+estructura: fue y drtran los dejan vacíos (el `memset` de `eq_build` y de
+`eq_new`) y su página no cambia. Un `EI_INPUT` con `a == 3` es w_B,t y con
+`a == 4` es A_B,t. Los arma `gui/sim/src/pagina.c`.

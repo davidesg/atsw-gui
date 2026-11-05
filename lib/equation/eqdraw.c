@@ -549,7 +549,19 @@ static void draw_items( Pen *p, const void *arg )
           case EI_HARMONIC: harmonic( p, it ); break;
           case EI_DUMMY:    dummy( p, it ); break;
           case EI_ALTER:    alternating( p ); break;
-          case EI_INPUT:    series( p, it->text, it->a == 1, it->a == 2, it->value ); break;
+          case EI_INPUT:
+               if ( it->a == 3 || it->a == 4 )     /* w_{B,t}, A_{B,t}: a VARMA */
+                  {
+                  char sub[112];
+
+                  snprintf( sub, sizeof( sub ), "%s,t", it->text );
+                  atom( p, A_ORD );
+                  sans( p, SANS, 0.0, it->a == 3 ? "w" : "A" );
+                  grow( p, 6.94, 0.0 );
+                  scripts( p, sub, NULL );
+                  }
+               else series( p, it->text, it->a == 1, it->a == 2, it->value );
+               break;
           case EI_OP:
                if ( it->sign == '/' )                   /* \, / ( 1 - ... )  */
                   {
@@ -983,11 +995,29 @@ static void draw_all( Pen *p, const Equation *eq )
    noise_left( p, &arg );
    atom( p, A_REL );
    op_glyph( p, '=' );
+   if ( eq->ncruz_ar > 0 )             /* a VARMA: the AR cross terms first */
+      {
+      Equation e2 = *eq;
+
+      e2.item[EQ_TRANS] = (EqItem *)eq->cruz_ar;
+      e2.n[EQ_TRANS] = eq->ncruz_ar;
+      terms( p, &e2, EQ_TRANS, 0 );
+      atom( p, A_BIN );
+      op_glyph( p, '+' );
+      }
    fit( p, ma_first, &arg );
    factors( p, eq, EQ_MAR );
    factors( p, eq, EQ_MAA );
    factors( p, eq, EQ_MAF );
    tail_a( p, &arg );
+   if ( eq->ncruz_ma > 0 )             /* and the MA ones after A_t        */
+      {
+      Equation e2 = *eq;
+
+      e2.item[EQ_TRANS] = (EqItem *)eq->cruz_ma;
+      e2.n[EQ_TRANS] = eq->ncruz_ma;
+      terms( p, &e2, EQ_TRANS, 0 );
+      }
    atom( p, A_PUNCT );
    glyph( p, F_ROMAN, SIZE, 0.0, ";", CM_SEMI );
    p->x += QUAD;               /* \quad; the thin space after ; comes with sigma */
@@ -999,6 +1029,13 @@ static void draw_all( Pen *p, const Equation *eq )
       if ( p->x + w > p->right ) newline( p );
       }
    tail_sigma( p, &arg );
+   if ( eq->nota[0] )                  /* a line under it: what w_{B,t} is */
+      {
+      newline( p );
+      atom( p, A_ORD );
+      sans( p, SANS, 0.0, eq->nota );
+      grow( p, 6.94, 2.0 );
+      }
 }
 
 double eq_draw( FDFig *f, const Equation *eq, double top, double left,

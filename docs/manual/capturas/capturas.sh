@@ -50,8 +50,12 @@ cc -shared -fPIC -O2 -Wall -o "$T/libescenas.so" "$M/capturas/escenas.c" \
 . "$R/packaging/programas.sh"
 mkdir -p "$T/ATSW/bin"
 for p in $PROGRAMAS; do cp "$R/$p" "$T/ATSW/bin/"; done
+rm -rf "$T/ATSW/Ejemplos"; cp -R "$R/docs/ejemplos" "$T/ATSW/Ejemplos"   # como en Windows y macOS
 export PATH="$T/ATSW/bin:$PATH"
 export GDK_BACKEND=broadway BROADWAY_DISPLAY=":$PANTALLA" GTK_THEME=Adwaita
+# Los ejemplos de Ayuda -> Ejemplos se copian AQUI, no en los documentos de
+# quien corre las capturas; los guiones los nombran con @EJEMPLOS@.
+export ATSW_EJEMPLOS=$T/ejemplos
 export XDG_CACHE_HOME=$T/cache XDG_CONFIG_HOME=$T/config XDG_DATA_HOME=$T/data NO_AT_BRIDGE=1 FOTOS=${FOTOS:-$M/img} LC_ALL=${IDIOMA:-C.UTF-8}
 
 # ESCENAS: de donde salen los guiones (el video tiene los suyos). VIDEO_DIR:
@@ -72,7 +76,9 @@ for e in "${escenas[@]}"; do
     cmd=${linea#'#! '}
     cmd=${cmd//@PROYECTO@/$P}
     cmd=${cmd//@DATOS@/$M/datos}
-    sed -e "s|@PROYECTO@|$P|g" -e "s|@DATOS@|$M/datos|g" "$e" > "$T/guion.txt"
+    cmd=${cmd//@EJEMPLOS@/$ATSW_EJEMPLOS}
+    sed -e "s|@PROYECTO@|$P|g" -e "s|@DATOS@|$M/datos|g" -e "s|@EJEMPLOS@|$ATSW_EJEMPLOS|g" \
+        "$e" > "$T/guion.txt"
     echo "== $(basename "$e")"
     # Un broadwayd para cada escena: si un cliente sale con ventanas
     # abiertas, broadwayd a veces se cae (client_free: assertion failed).

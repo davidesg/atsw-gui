@@ -5,7 +5,8 @@
 Este manual te lleva de la mano por un análisis completo con ATSW. Partes de un
 fichero con dos series mensuales y llegas a un modelo de función de
 transferencia estimado, diagnosticado y usado para prever. Por el camino verás
-**qué decide el programa, qué decides tú y con qué criterio**.
+**qué decide el programa, qué decides tú y con qué criterio**. El capítulo 14
+sube el último escalón, los sistemas, con un ejemplo que viene hecho.
 
 Todas las pantallas que aparecen aquí son del programa de verdad, haciendo
 exactamente lo que dice el texto. Si sigues los pasos con el mismo fichero de
@@ -28,9 +29,10 @@ datos, tienes que ver lo mismo.
 11. [El caso: las dos series juntas](#11-el-caso-las-dos-series-juntas)
 12. [La función de transferencia en drtran](#12-la-función-de-transferencia-en-drtran)
 13. [La previsión](#13-la-previsión)
-14. [Lo que queda por hacer](#14-lo-que-queda-por-hacer)
-15. [Las reglas de oro](#15-las-reglas-de-oro)
-16. [Glosario](#16-glosario)
+14. [Los sistemas: ratas almizcleras y visones](#14-los-sistemas-ratas-almizcleras-y-visones)
+15. [Lo que queda por hacer](#15-lo-que-queda-por-hacer)
+16. [Las reglas de oro](#16-las-reglas-de-oro)
+17. [Glosario](#17-glosario)
 
 ---
 
@@ -58,11 +60,12 @@ se abren las herramientas de cada escalón.
 | **ATSW — el taller** (`atsw_gui`) | La ventana principal: proyectos, series, muestras, modelos y casos. Todo empieza aquí. |
 | **fue_gui** | Editor y estimador de modelos univariantes (en inglés). |
 | **drtran_gui** | Funciones de transferencia y redes de transferencias. |
+| **sim_gui** | Sistemas simultáneos: modelos VARMA. |
 | **gtk_fmg** | Gráficos. |
 
 Debajo trabajan los **motores** de cálculo: `art` identifica, `fue` estima
 modelos univariantes por máxima verosimilitud exacta, `fuf` prevé, `fug`
-dibuja y `drtran` estima transferencias. No hace falta
+dibuja, `drtran` estima transferencias y `drvarma` sistemas. No hace falta
 llamarlos a mano: las ventanas lo hacen por ti. Las ventanas que abre el
 taller se cierran con él; si queda alguna abierta al salir, pregunta antes.
 
@@ -73,10 +76,11 @@ El método sube por escalones, y **cada escalón parte del anterior**:
 1. **Univariante**: cada serie, por separado, con su propio modelo ARIMA.
 2. **Transferencia**: una serie (la *salida*) responde a otras (las
    *entradas*). Se parte de los modelos univariantes del paso 1.
-3. **VARMA**: varias series que se afectan entre sí (drvarma; todavía no
-   viene en el paquete).
+3. **Sistemas (VARMA)**: varias series que se afectan entre sí. Se parte
+   también de los modelos univariantes.
 
-En este manual subes los dos primeros escalones.
+El caso del manual sube los dos primeros escalones. El tercero tiene su propio
+ejemplo, en el capítulo 14.
 
 ### Tres clases de fichero
 
@@ -958,7 +962,206 @@ nunca calcules «nivel ± 1.96 × d.t.» a mano.
 
 ---
 
-## 14. Lo que queda por hacer
+## 14. Los sistemas: ratas almizcleras y visones
+
+La transferencia supone que la salida no afecta a las entradas. Cuando dos
+series se afectan **en los dos sentidos**, eso ya no es una transferencia: es
+un **sistema**. ATSW lo estima como un modelo VARMA, con el motor `drvarma`,
+en la ventana **sim_gui**.
+
+El método es el mismo de siempre, un escalón más arriba: **cada serie conserva
+su modelo univariante**, y lo que se añade es la dinámica *entre* ellas.
+
+### El ejemplo
+
+Este capítulo no sigue el caso del IPC (el petróleo no responde al IPC español:
+ahí no hay sistema). Usa un ejemplo clásico que viene hecho: las pieles de
+**rata almizclera** y de **visón** que compró la Compañía de la Bahía de
+Hudson entre 1850 y 1911, el análisis de Jenkins y Alavi (1981). El visón come
+ratas almizcleras, así que cabe esperar que cada población afecte a la otra.
+
+En el taller, **Ayuda ▸ Ejemplos ▸ Ratas almizcleras y visones (SIM)**:
+
+![Ayuda ▸ Ejemplos](img/sim-ejemplos-menu.png)
+
+Se abre **una copia tuya** del proyecto, en la carpeta «Ejemplos de ATSW» de
+tus documentos. Si lo vuelves a pedir, se abre la misma copia, con lo que
+hayas hecho. Para empezar de cero, borra esa carpeta.
+
+![El proyecto de ejemplo](img/sim-ejemplo.png)
+
+Ya tiene hecho lo que en el caso del IPC te llevó los capítulos 5 a 10:
+
+- **MUSKRAT**: un ARIMA(6,1,1) en logaritmos;
+- **MINK**: un AR(4) en logaritmos, con media.
+
+Los dos están estimados y **elegidos**. El caso **C1** es el sistema: las dos
+series, **en ese orden**, cada una con su `.pre`. La columna **Clase** dice
+VARMA: es un caso de SIM, no de MT.
+
+> Con tus propias series, el sistema se da de alta con **SIM ▸ Nuevo sistema…**,
+> igual que un caso de transferencia. **Aquí el orden no elige una salida**:
+> todas las series se explican entre sí. Pero importa, porque es el orden en
+> que se reparte lo que pasa a la vez (la respuesta al impulso).
+
+Marca **C1** y pulsa **Estimar** (o Ctrl+E): se abre sim_gui con el sistema.
+Como drtran, trabaja en siete pestañas, con la barra arriba: **Estimar**,
+**Ver modelo**, **Diagnosis** y **Prever**.
+
+### 1 · Series
+
+![sim_gui: las series](img/sim-series.png)
+
+Las dos series, cada una con su modelo, y la **ventana común**: las
+observaciones que tienen las dos, ya diferenciadas. MUSKRAT lleva una
+diferencia y pierde su primer año, así que el sistema empieza en 1851.
+
+### 2 · Puerta
+
+Antes de añadir nada se comprueba que se parte de donde se cree. Pulsa
+**Pasar la puerta**:
+
+![La puerta](img/sim-puerta.png)
+
+sim_gui estima el sistema **diagonal** —sin dinámica cruzada y con Σ
+diagonal— en los óptimos de cada `.pre`. Su verosimilitud tiene que ser
+**exactamente** la suma de las de cada serie sola: aquí −579.345662 las dos,
+con una diferencia de 10⁻¹³. MINK «se movió» un poco porque la ventana común
+le quita su primer año; por eso se reestima ahí.
+
+**Si la puerta no pasa, no sigas**: el sistema no partiría de tus modelos
+univariantes, y nada de lo que venga después se podría comparar con ellos.
+
+### 3 · Identificación
+
+![La identificación](img/sim-identificacion.png)
+
+La rejilla tiene la **CCF de los residuos univariantes**. Esos residuos ya
+están preblanqueados —son las innovaciones de cada serie—, así que una barra
+fuera de la banda es dinámica entre las series, no de cada una. En la fila de
+una serie, la columna de la otra: «MINK → MUSKRAT» es el visón entrando en la
+ecuación de la rata almizclera.
+
+- **k = 1, en los dos sentidos.** Más visones un año, menos ratas
+  almizcleras el siguiente (la depredación). Más ratas, más visones el
+  siguiente (la comida). Es **retroalimentación**: lo que trae a un sistema.
+- **k = 0 (en gris) fuera de la banda.** Las dos se mueven a la vez en el
+  mismo año. Eso no es un enlace: pide una Σ **completa**.
+
+Pulsa una miniatura para ver la CCF entera. Deja marcados los dos enlaces
+propuestos y pulsa **Al modelo**.
+
+### 4 · Modelo
+
+![El modelo](img/sim-modelo.png)
+
+- **p** y **q**: los retardos de la dinámica cruzada, AR y MA.
+- **Σ diagonal**: desmarcada, porque la k = 0 lo pedía.
+- **Enlaces**: «A ← B», B entra en la ecuación de A.
+
+La propuesta es p = 1. Jenkins y Alavi leyeron dos candidatos en estos datos.
+De los residuos, una MA(1) cruzada. De la correlación parcial de las series,
+una **AR(2) cruzada**, que es la que se estima aquí: **p = 2, q = 0**. La línea
+de abajo dice cuántos parámetros cruzados se añaden: 2 enlaces × 2 retardos,
+más la covarianza.
+
+### 5 · Estimación
+
+Pulsa **Estimar**:
+
+![La estimación](img/sim-estimacion.png)
+
+El diagonal de cada serie se reestima junto con lo nuevo. El informe completo
+es el `.out` de drvarma, abajo. Si el optimizador se para en la **pared MA**
+(una raíz MA en el círculo unidad), lo dice arriba en ámbar: lo que sale no es
+un óptimo, y se prueba con menos q o sin ese enlace.
+
+### 6 · Diagnosis
+
+![La diagnosis](img/sim-diagnosis.png)
+
+**Ajuste** responde primero a la pregunta de siempre: **¿merece la pena?** La
+comparación es con el sistema diagonal, es decir, con los univariantes: logL
+−558.76 frente a −579.35, LR = 41.17 con 5 grados de libertad. La dinámica
+cruzada aporta. Después, que el optimizador convergió, y que el sistema es
+estacionario e invertible.
+
+![Los residuos](img/sim-diagnosis-residuos.png)
+
+**Residuos**: Hosking es el Ljung-Box de un sistema, con todas las
+autocorrelaciones y correlaciones cruzadas a la vez; aquí no rechaza. Los
+residuos no son normales: hay un año malo. **Ver modelo** lo enseña:
+
+![Ver modelo: MUSKRAT](img/sim-ver-modelo.png)
+
+Una página por serie, como en drtran. Arriba, sus residuos con su ACF y su
+PACF. Debajo, su ecuación: su propio modelo y, después del igual, lo que le
+llega de la otra serie, con su desviación típica debajo de cada coeficiente.
+**1908**: −4.2 desviaciones típicas en la rata almizclera. Jenkins y Alavi lo
+vieron (su 1906: fechan las series dos años antes) y no supieron qué lo causó.
+
+![Los parámetros](img/sim-diagnosis-parametros.png)
+
+**Parámetros**: los del diagonal y los cruzados. AR1[MUSKRAT<-MINK] = −0.54
+es la depredación: más visones, menos ratas al año siguiente. AR1[MINK<-MUSKRAT]
+= +0.46 es la comida. **Σ** tiene las covarianzas de las innovaciones, y
+**Salida**, el `.out` entero.
+
+**Estructura** tiene dos preguntas más:
+
+- **Simplificar (|t| < 1)** pone a cero los coeficientes cruzados con |t| < 1,
+  estima ese modelo como hijo del actual y los contrasta por LR. Aquí cae
+  AR2[MINK<-MUSKRAT] (t = −0.69). La LR no rechaza la restricción: el modelo
+  simple vale lo mismo, con un parámetro menos.
+- **¿Es una red?** pone a cero cada par de enlaces y prueba cada orden
+  triangular. Si alguno se sostuviera, no haría falta un sistema: bastaría una
+  red de transferencias, y **Pasar a MT** la llevaría a drtran. Aquí no: es
+  un sistema **simultáneo**.
+
+![Simplificar y ¿Es una red?](img/sim-red.png)
+
+Arriba, la simplificación: LR = 0.48 con 1 grado de libertad, p = 0.49.
+Debajo, cada restricción de «¿Es una red?» con su LR: todas se rechazan.
+
+### 7 · Previsión
+
+Pon **Horizonte** 3 y marca **Evaluar fuera de muestra, estimando con las
+primeras** 48 observaciones (hasta 1897, como la tabla VIII de Jenkins y
+Alavi). Pulsa **Calcular**:
+
+![La previsión](img/sim-prevision.png)
+
+La previsión de cada serie desde 1911, en nivel, con su banda. Como en drtran,
+**las bandas son teóricas**: suponen que el modelo es el verdadero. Lo
+empírico es la evaluación:
+
+![La evaluación](img/sim-evaluacion.png)
+
+Se estima con 48 años y se prevé desde cada origen siguiente, comparando con
+lo que pasó. Lo mismo con los univariantes. **El sistema pierde en todas las
+casillas**, y en el visón por un 30–40 %. El modelo que dentro de la muestra
+mejora claramente a las series solas no prevé mejor fuera de ella. Jenkins y
+Alavi no pudieron hacer esta prueba.
+
+La lección es la regla de la escalera: **los univariantes son la vara de
+medir**, también al prever. El sistema queda como la *descripción* de cómo se
+afectan las dos poblaciones —la depredación y la comida—, que era la
+pregunta.
+
+La **Respuesta al impulso** y la **Descomposición** de la varianza, en las
+otras dos pestañas, reparten lo que pasa a la vez en el orden del sistema:
+primero MUSKRAT. Por eso el orden importa. Por ahora salen en tabla:
+
+![La respuesta al impulso](img/sim-irf.png)
+
+Un choque de una desviación típica en la innovación de la rata almizclera
+sube los visones el año siguiente (0.70) y baja las ratas dos años después
+(−0.59): la presa alimenta al depredador, y el depredador se come a la
+presa.
+
+---
+
+## 15. Lo que queda por hacer
 
 Un modelo **adecuado** dice que los datos no lo contradicen, no que no haya uno
 mejor. Antes de darlo por bueno:
@@ -984,12 +1187,12 @@ mejor. Antes de darlo por bueno:
 
 Y si la identificación de una red con más series encontrara un **ciclo**
 (dos series que se afectan mutuamente), ahí termina la transferencia: el
-siguiente escalón es **drvarma** (modelos VARMA), con los mismos `.pre`.
-Todavía no viene en el paquete.
+siguiente escalón es un **sistema**, con los mismos `.pre` (capítulo 14). En
+el taller, con ese caso marcado, el menú **SIM** ofrece **Pasar a SIM**.
 
 ---
 
-## 15. Las reglas de oro
+## 16. Las reglas de oro
 
 1. **Mira antes de contrastar.** El gráfico y el correlograma deciden; los
    contrastes ayudan.
@@ -1010,10 +1213,14 @@ Todavía no viene en el paquete.
 12. **Primero la relación, después el ruido.** Calibra antes de re-especificar.
 13. **La CCF no enseña r**: las dos lecturas se estiman.
 14. **Converger no es merecer la pena**: compara con el diagonal.
+15. **En un sistema, la puerta va primero**: si el diagonal no reproduce los
+    univariantes, nada de lo que venga después se puede comparar con ellos.
+16. **Mejor dentro de la muestra no es prever mejor.** Los univariantes son la
+    vara de medir, también fuera de la muestra.
 
 ---
 
-## 16. Glosario
+## 17. Glosario
 
 | Término | Qué quiere decir |
 |---|---|
@@ -1024,7 +1231,7 @@ Todavía no viene en el paquete.
 | **Cuaderno** | El diario del proyecto, en Markdown: lo que se lleva con «Al cuaderno» y tus notas. Solo crece. |
 | **CCF** | Función de correlación cruzada entre dos series. |
 | **Diagnosis** | La comprobación de que los residuos de un modelo son ruido blanco, normales y centrados. |
-| **Diagonal** | El modelo de varias series sin relación entre ellas. La vara de medir de la transferencia. |
+| **Diagonal** | El modelo de varias series sin relación entre ellas. La vara de medir de la transferencia y del sistema. |
 | **Dominio** | Qué clase de serie es y qué espera la teoría de ella. Se declara antes de estimar. |
 | **Elegido** | El modelo que declaras como el bueno de una serie, con su razón. |
 | **Exógena** | Una entrada a la que la salida no afecta. Se contrasta en los retardos negativos de la CCF. |
@@ -1032,10 +1239,14 @@ Todavía no viene en el paquete.
 | **Intervención** | Un término determinista (impulso, escalón) que representa un suceso conocido. |
 | **Ljung-Box (Q)** | Contraste conjunto de que las autocorrelaciones de los residuos son cero. |
 | **Muestra** | Una ventana declarada sobre los datos. Cada una es una hoja con sus modelos. |
+| **Puerta** | En un sistema, la comprobación de que el modelo sin dinámica cruzada reproduce exactamente los univariantes. |
 | **Preblanqueo** | Filtrar la entrada con su modelo hasta dejarla en ruido blanco, y la salida con el mismo filtro. |
+| **Retroalimentación** | Dos series que se afectan en los dos sentidos. Es lo que lleva a un sistema y no a una transferencia. |
 | **Red** | Los enlaces salida ← entrada de un modelo de transferencia, con sus b r s. |
 | **Ruido (N_t)** | Lo que la transferencia no explica de la salida. Tiene su propio modelo ARIMA. |
+| **Σ** | La matriz de covarianzas de las innovaciones de un sistema. Completa, si las series se mueven a la vez en el mismo periodo. |
 | **Salida / entrada** | La serie que se explica y las que la explican. |
+| **Sistema** | Varias series en un orden fijo, cada una con su `.pre`, que se explican entre sí. Se estima como un VARMA. |
 | **Sobreintervenir** | Intervenir un anómalo que no cambia la identificación. |
 
 ---

@@ -25,6 +25,8 @@
  *                           (de la N-esima tabla que la tiene, si hay varias)
  *   doble TEXTO             doble clic (row-activated) en esa fila
  *   derecho TEXTO           clic derecho en esa fila: abre su menu
+ *   barra ROTULO            abre el menu de ese titulo de la barra de menus
+ *                           («Ayuda»); despues, menu y submenu
  *   menu ROTULO             activa el elemento del menu abierto
  *   submenu ROTULO          abre un submenu del menu abierto
  *   entrada N | TEXTO       escribe TEXTO en la N-esima entrada (desde 1)
@@ -182,6 +184,15 @@ static gboolean es_boton( GtkWidget *w, const char *arg )
     if ( !(GTK_IS_BUTTON(w) || GTK_IS_TOOL_BUTTON(w)) || !gtk_widget_is_drawable( w ) )
         return FALSE;
     t = rotulo( w );
+
+    return t && igual( t, arg );
+}
+
+/* Un titulo de la barra de menus: un elemento cuyo padre es la barra. */
+static gboolean es_titulo( GtkWidget *w, const char *arg )
+{
+    const char *t = GTK_IS_MENU_ITEM(w) && GTK_IS_MENU_BAR(gtk_widget_get_parent( w ))
+                    ? rotulo( w ) : NULL;
 
     return t && igual( t, arg );
 }
@@ -992,6 +1003,18 @@ static gboolean orden( const char *cmd, const char *arg )
         }
     if ( v == NULL ) return FALSE;
 
+    if ( strcmp( cmd, "barra" ) == 0 )
+        {
+        GtkAllocation a;
+
+        if ( (w = busca( v, es_titulo, arg )) == NULL ) return FALSE;
+        if ( !apunta_w( v, w ) ) return FALSE;
+        gtk_widget_get_allocation( w, &a );
+        gtk_widget_translate_coordinates( w, v, 0, a.height, &clic_x, &clic_y );
+        gtk_menu_shell_select_item( GTK_MENU_SHELL(gtk_widget_get_parent( w )), w );
+        menu_abierto = gtk_menu_item_get_submenu( GTK_MENU_ITEM(w) );
+        return TRUE;
+        }
     if ( strcmp( cmd, "boton" ) == 0 )
         {
         GtkAllocation a;

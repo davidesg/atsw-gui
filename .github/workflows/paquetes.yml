@@ -24,10 +24,11 @@ on:
     tags: [ 'v*' ]
 
 env:
-  # Lo que va en el paquete (packaging/programas.sh): sin drvarma ni drvec.
+  # Lo que va en el paquete (packaging/programas.sh): con drvarma y sim_gui
+  # (SIM, S9); sin drvec todavia (S10).
   DIRS: >-
-    engines/fue engines/fuf engines/fug engines/drtran engines/art
-    gui/fue gui/fug gui/drtran gui/atsw gui/atsw-cli
+    engines/fue engines/fuf engines/fug engines/drtran engines/drvarma engines/art
+    gui/fue gui/fug gui/drtran gui/sim gui/atsw gui/atsw-cli
 
 jobs:
   # El manual del alumno en PDF (docs/manual/construir.py): va dentro de los
@@ -110,7 +111,7 @@ jobs:
             else { Write-Host "$m arranca (sale con $($p.ExitCode))" }
           }
           Add-Type -AssemblyName System.Windows.Forms,System.Drawing
-          foreach ($g in 'atsw_gui','fue_gui','drtran_gui','gtk_fmg') {
+          foreach ($g in 'atsw_gui','fue_gui','drtran_gui','sim_gui','gtk_fmg') {
             $p = Start-Process "$bin\$g.exe" -PassThru -WorkingDirectory $env:USERPROFILE
             Start-Sleep 10
             if ($p.HasExited) { Write-Host "::error::$g se cierra al arrancar (codigo $($p.ExitCode))"; $mal += $g; continue }
@@ -285,7 +286,7 @@ jobs:
           R=$(cd "$RES" && pwd)
           PB=lib/gdk-pixbuf-2.0/2.10.0
           sed "s|@PREFIJO@|$R|g" "$R/$PB/loaders.cache.in" > "$RUNNER_TEMP/loaders.cache"
-          for g in fue_gui drtran_gui gtk_fmg; do
+          for g in fue_gui drtran_gui sim_gui gtk_fmg; do
               env PATH="$R/bin:/usr/bin:/bin" XDG_DATA_DIRS="$R/share" \
                   GSETTINGS_SCHEMA_DIR="$R/share/glib-2.0/schemas" \
                   GDK_PIXBUF_MODULE_FILE="$RUNNER_TEMP/loaders.cache" \
@@ -379,7 +380,7 @@ jobs:
                   echo "$m arranca"
               fi
           done
-          for g in atsw fue_gui drtran_gui gtk_fmg; do
+          for g in atsw fue_gui drtran_gui sim_gui gtk_fmg; do
               case $g in atsw) x=/usr/bin/atsw ;; *) x=/usr/lib/atsw/bin/$g ;; esac
               xvfb-run -a "$x" > "/tmp/$g.log" 2>&1 &
               pid=$!

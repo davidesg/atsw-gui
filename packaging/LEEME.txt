@@ -72,8 +72,9 @@ QUÉ HAY DENTRO
                 Desde ella se abren los demás.
   fue_gui       el editor y estimador de modelos univariantes
   drtran_gui    redes de funciones de transferencia
+  sim_gui       sistemas simultáneos: modelos VARMA
   gtk_fmg       gráficos
-  fue, fuf, fug, art, drtran   los motores de cálculo
+  fue, fuf, fug, art, drtran, drvarma   los motores de cálculo
 
 PARA APRENDER
 -------------

@@ -28,7 +28,10 @@ env:
 
 jobs:
   linux:
-    runs-on: ubuntu-latest
+    # FIJO EN 24.04: los goldens de Linux son BYTE A BYTE y se sacaron aqui.
+    # ubuntu-latest paso a 26.04 (otra libm, otro gcc) el 2026-11-11 y fallaron
+    # todos sin que cambiara una linea. Pasar a 26.04 es rehacer los goldens.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: Dependencias
@@ -59,7 +62,6 @@ jobs:
           path: |
             engines/*/tests/work/
             gui/*/tests/work/
-            engines/drvarma/tests/gui/work/
           if-no-files-found: ignore
 
   macos:
@@ -94,7 +96,6 @@ jobs:
           path: |
             engines/*/tests/work/
             gui/*/tests/work/
-            engines/drvarma/tests/gui/work/
           if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         if: always()
@@ -178,7 +179,6 @@ jobs:
           path: |
             engines/*/tests/work/
             gui/*/tests/work/
-            engines/drvarma/tests/gui/work/
           if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         if: always()

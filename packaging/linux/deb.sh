@@ -15,8 +15,8 @@ set -euo pipefail
 
 R=$(cd "$(dirname "$0")/../.." && pwd)
 V=${1:-0.0}
-DIRS="engines/fue engines/fuf engines/fug engines/drtran engines/art
-      gui/fue gui/fug gui/drtran gui/atsw gui/atsw-cli"
+DIRS="engines/fue engines/fuf engines/fug engines/drtran engines/drvarma engines/art
+      gui/fue gui/fug gui/drtran gui/sim gui/atsw gui/atsw-cli"
 A=$(gcc -print-multiarch)
 GSL="/usr/lib/$A/libgsl.a /usr/lib/$A/libgslcblas.a"
 for f in $GSL; do [ -f "$f" ] || { echo "falta $f (libgsl-dev)" >&2; exit 1; }; done
@@ -50,10 +50,10 @@ Installed-Size: $(du -sk "$P/usr" | cut -f1)
 Maintainer: ATSW <https://github.com/davidesg/atsw-gui/issues>
 Homepage: https://davidesg.github.io/atsw-gui/
 Description: taller de series temporales (Box-Jenkins-Treadway)
- Modelos ARIMA univariantes, anomalos e intervencion, y funciones de
- transferencia, con estimacion por maxima verosimilitud exacta. Trae la
- ventana principal (atsw), el editor fue, drtran, fug y sus motores, y el
- manual del alumno con sus datos.
+ Modelos ARIMA univariantes, anomalos e intervencion, funciones de
+ transferencia y sistemas simultaneos (VARMA), con estimacion por maxima
+ verosimilitud exacta. Trae la ventana principal (atsw), el editor fue,
+ drtran, sim_gui, fug y sus motores, y el manual del alumno con sus datos.
 CONTROL
 mkdir -p "$R/dist"
 dpkg-deb --build --root-owner-group "$P" "$R/dist/atsw_${V}_amd64.deb"

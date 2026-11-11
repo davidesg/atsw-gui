@@ -6,8 +6,8 @@
 #
 # Necesita: build-essential pkg-config libgtk-3-dev libgsl-dev zlib1g-dev
 PREFIX ?= /usr/local
-DIRS = engines/fue engines/fuf engines/fug engines/drtran engines/art \
-       gui/fue gui/fug gui/drtran gui/atsw gui/atsw-cli
+DIRS = engines/fue engines/fuf engines/fug engines/drtran engines/drvarma engines/art \
+       gui/fue gui/fug gui/drtran gui/sim gui/atsw gui/atsw-cli
 
 all:
 	@for d in $(DIRS); do \

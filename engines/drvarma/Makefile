@@ -69,20 +69,13 @@ LIB_OBJS = $(BUILD_DIR)/fue_pre_reader.o $(BUILD_DIR)/fuepre_motor.o \
            $(BUILD_DIR)/fuepre_forecast.o $(BUILD_DIR)/inpcheck_fue.o \
            $(BUILD_DIR)/diagmv.o $(BUILD_DIR)/fuedet.o
 
-# GUI source and objects
-GUI_SRC        = $(GUI_DIR)/drvarma_gui.c
-GUI_OBJ        = $(BUILD_DIR)/gui/drvarma_gui.o
+# THE OLD GUI IS GONE (2026-11-06, docs/DISENO-sim.md S9): drvarma's window
+# is sim_gui (gui/sim), on the ladder. gui/seasonal_detection.c stays where
+# it was because the engine compiles it (moving it would touch the engine).
 SEASONAL_SRC   = $(GUI_DIR)/seasonal_detection.c
-SEASONAL_OBJ   = $(BUILD_DIR)/gui/seasonal_detection.o
-JOHANSEN_SRC   = $(GUI_DIR)/johansen_test.c
-JOHANSEN_OBJ   = $(BUILD_DIR)/gui/johansen_test.o
-VECM_SRC       = $(GUI_DIR)/vecm.c
-VECM_OBJ       = $(BUILD_DIR)/gui/vecm.o
-GUI_OBJS       = $(GUI_OBJ) $(SEASONAL_OBJ) $(JOHANSEN_OBJ) $(VECM_OBJ)
 
 # Executable names
 DRV_EXEC  = $(BIN_DIR)/drvarma$(EXE_EXT)
-GUI_EXEC  = $(BIN_DIR)/drvarma_gui$(EXE_EXT)
 
 # pkg-config flags for GTK+3 and GSL
 GTK_CFLAGS  := $(shell $(PKG_CONFIG) --cflags gtk+-3.0 2>/dev/null)
@@ -113,16 +106,12 @@ ifeq ($(GLIB_LIBS),)
     GLIB_LIBS = -lglib-2.0
 endif
 
-# Combine GUI flags (include -DDRVARMA_GUI to exclude detect function)
-GUI_CFLAGS  = $(CFLAGS) $(GTK_CFLAGS) $(GSL_CFLAGS) -I$(GUI_DIR) -DDRVARMA_GUI
-GUI_LIBS    = $(GTK_LIBS) $(GSL_LIBS) -lm
-
 # CLI flags: the command-line engine now reuses gui/seasonal_detection.c
 # (harmonic seasonal adjustment), which depends on GSL + glib.
 CLI_CFLAGS  = $(CFLAGS) $(GSL_CFLAGS) $(GLIB_CFLAGS) -I$(GUI_DIR)
 CLI_LIBS    = $(GSL_LIBS) $(GLIB_LIBS) $(LIBS)
 
-# seasonal_detection.c compiled for the CLI (separate object from the GUI's)
+# seasonal_detection.c compiled into the engine
 SEASONAL_CLI_OBJ = $(BUILD_DIR)/seasonal_detection.o
 
 # The git commit the binary is built from, for the "Program" line of the .out,
@@ -136,17 +125,14 @@ $(GIT_HASH_H): FORCE | $(BUILD_DIR)
 	 printf '#define DRVARMA_GIT "%s"\n' "$$h" > $@.tmp; \
 	 cmp -s $@.tmp $@ && rm -f $@.tmp || mv $@.tmp $@
 FORCE:
-$(BUILD_DIR)/drvarma.o $(BUILD_DIR)/escalera.o $(GUI_OBJ): $(GIT_HASH_H)
+$(BUILD_DIR)/drvarma.o $(BUILD_DIR)/escalera.o: $(GIT_HASH_H)
 
-# Default target: build both
-all: $(DRV_EXEC) $(GUI_EXEC)
+# Default target: the engine (the window is sim_gui, gui/sim)
+all: $(DRV_EXEC)
 
 # Create directories if they don't exist
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
-
-$(BUILD_DIR)/gui:
-	mkdir -p $(BUILD_DIR)/gui
 
 $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
@@ -183,29 +169,12 @@ $(SEASONAL_CLI_OBJ): $(SEASONAL_SRC) | $(BUILD_DIR)
 $(DRV_EXEC): $(OBJS) $(LIB_OBJS) $(SEASONAL_CLI_OBJ) | $(BIN_DIR)
 	$(CC) $(LDFLAGS) -o $@ $^ $(CLI_LIBS)
 
-# GUI drvarma
-$(GUI_OBJ): $(GUI_SRC) | $(BUILD_DIR)/gui
-	$(CC) $(GUI_CFLAGS) -c $< -o $@
-
-$(SEASONAL_OBJ): $(SEASONAL_SRC) | $(BUILD_DIR)/gui
-	$(CC) $(GUI_CFLAGS) -c $< -o $@
-
-$(JOHANSEN_OBJ): $(JOHANSEN_SRC) | $(BUILD_DIR)/gui
-	$(CC) $(GUI_CFLAGS) -c $< -o $@
-
-$(VECM_OBJ): $(VECM_SRC) | $(BUILD_DIR)/gui
-	$(CC) $(GUI_CFLAGS) -c $< -o $@
-
-$(GUI_EXEC): $(GUI_OBJS) | $(BIN_DIR)
-	$(CC) $(LDFLAGS) -o $@ $^ $(GUI_LIBS)
-
-# Convenience targets
+# Convenience target
 drvarma: $(DRV_EXEC)
-gui: $(GUI_EXEC)
 
 # Clean
 clean:
-	rm -rf $(BUILD_DIR)/*.o $(BUILD_DIR)/gui/*.o $(DRV_EXEC) $(GUI_EXEC)
+	rm -rf $(BUILD_DIR)/*.o $(BUILD_DIR)/gui $(DRV_EXEC)
 
 distclean: clean
 	rm -rf $(BUILD_DIR) $(BIN_DIR)
@@ -217,23 +186,11 @@ install: $(DRV_EXEC)
 uninstall:
 	rm -f /usr/local/bin/drvarma$(EXE_EXT)
 
-# Pruebas conducidas del GUI (tests/gui): se levanta drvarma_gui de verdad y
-# se maneja desde el codigo. El guion compila la prueba con los MISMOS flags
-# que el GUI, que pide aqui (gui-flags) para no copiarlos y que se desfasen.
-check-gui: $(DRV_EXEC)
-	sh tests/gui/run_gui_tests.sh
-
-gui-flags:
-	@echo "CC=$(CC)"
-	@echo "CFLAGS=$(GUI_CFLAGS)"
-	@echo "LIBS=$(GUI_LIBS)"
-
 # Help
 help:
 	@echo "Available targets:"
-	@echo "  all       - build both drvarma and drvarma_gui (default)"
+	@echo "  all       - build drvarma (default; its window is sim_gui, gui/sim)"
 	@echo "  drvarma   - build only the command‑line program"
-	@echo "  gui       - build only the graphical interface"
 	@echo "  clean     - remove object files and executables"
 	@echo "  distclean - remove build/ and bin/ directories"
 	@echo "  install   - install drvarma to /usr/local/bin"
@@ -251,4 +208,4 @@ $(BUILD_DIR)/elfvarma.o: $(INCLUDE_DIR)/main.h
 $(BUILD_DIR)/drvmlest.o: $(INCLUDE_DIR)/main.h
 $(BUILD_DIR)/nlatools.o: $(INCLUDE_DIR)/main.h
 
-.PHONY: all drvarma gui check-gui gui-flags clean distclean install uninstall help FORCE
+.PHONY: all drvarma clean distclean install uninstall help FORCE

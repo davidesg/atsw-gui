@@ -49,7 +49,7 @@ captura() {
 
 fallan=()
 for g in gui/fue/bin/fue_gui gui/fug/gtk_fmg gui/drtran/drtran_gui \
-         gui/atsw/atsw_gui engines/drvarma/bin/drvarma_gui; do
+         gui/atsw/atsw_gui gui/sim/sim_gui; do
     nombre=$(basename "$g")
     echo "== $nombre"
     if [ ! -f "$g$EXE" ]; then

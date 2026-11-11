@@ -45,6 +45,7 @@ DESKTOP
 entrada org.atsw.gui   atsw_gui   "ATSW"                          "Taller de series temporales: proyectos, series, modelos y casos"
 entrada org.fue.gui    fue_gui    "ATSW: editor de modelos (fue)" "Modelos ARIMA univariantes"
 entrada org.drtran.gui drtran_gui "ATSW: redes de transferencia (drtran)" "Funciones de transferencia"
+entrada org.atsw.sim   sim_gui    "ATSW: sistemas simultáneos (SIM)" "Modelos VARMA, con drvarma"
 entrada org.fug.gui    gtk_fmg    "ATSW: gráficos (fug)"          "Gráficos de series"
 
 install -m 644 "$R/packaging/LEEME.txt" "$D$P/share/doc/atsw/"

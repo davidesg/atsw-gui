@@ -1,0 +1,19 @@
+#! atsw_gui
+# Los sistemas: Ayuda -> Ejemplos abre el proyecto de Jenkins y Alavi, con
+# los dos modelos univariantes hechos y el sistema C1 por estimar.
+ventana ATSW
+tamano 1100 700
+espera 800
+barra Ayuda
+espera 500
+fotomenu sim-ejemplos-menu
+submenu Ejemplos
+espera 500
+menu Ratas almizcleras y visones (SIM)
+espera 2000
+fila MUSKRAT
+espera 800
+fila C1
+espera 800
+foto sim-ejemplo
+salir

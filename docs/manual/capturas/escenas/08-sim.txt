@@ -1,0 +1,67 @@
+#! sim_gui --proyecto @EJEMPLOS@/jenkins_alavi/proyecto.yaml --caso C1
+# El sistema C1 en sim_gui, de la puerta a la prevision (lo deja la 07).
+ventana sim_gui
+tamano 1100 760
+espera 2000
+foto sim-series
+pestana 2 · Puerta
+boton Pasar la puerta
+espera 15000
+foto sim-puerta
+pestana 3 · Identificación
+espera 2000
+foto sim-identificacion
+boton Al modelo
+espera 1000
+# El candidato de la pccf (Jenkins y Alavi, metodo 1): una AR(2) cruzada.
+# p y q van en una rejilla, y GtkGrid da sus hijos AL REVES: p es el 2.º.
+numero 2 | 2
+espera 800
+foto sim-modelo
+pestana 5 · Estimación
+boton Estimar
+espera 30000
+foto sim-estimacion
+pestana 6 · Diagnosis
+espera 2000
+foto sim-diagnosis
+pestana Residuos
+espera 1500
+foto sim-diagnosis-residuos
+pestana Parámetros
+espera 800
+foto sim-diagnosis-parametros
+boton Ver modelo
+ventana .pdf
+tamano 1000 760
+espera 3000
+foto sim-ver-modelo
+cierra
+ventana sim_gui
+# La previsión a 3 años, y la evaluación estimando con los 48 primeros
+# (hasta 1897), como la tabla VIII de Jenkins y Alavi.
+pestana 7 · Previsión
+numero 1 | 3
+casilla Evaluar fuera de muestra | 1
+numero 2 | 48
+boton Calcular
+espera 60000
+foto sim-prevision
+pestana Evaluación
+espera 800
+foto sim-evaluacion
+pestana Respuesta al impulso
+espera 800
+foto sim-irf
+# Simplificar (los cruzados con |t| < 1 a cero, contra el modelo) y
+# «¿Es una red?» (cada par a cero y cada orden triangular, por LR).
+pestana 6 · Diagnosis
+pestana Estructura
+boton Simplificar (|t| < 1)
+espera 45000
+pestana Estructura
+espera 800
+boton ¿Es una red?
+espera 120000
+foto sim-red
+salir

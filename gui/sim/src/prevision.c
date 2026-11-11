@@ -313,8 +313,9 @@ static void evaluacion( Sim *m )
     }
     if (total)
         sim_veredicto( P->ver_eval, gana * 2 > total ? SIM_VERDE : SIM_AMBAR,
-                       "Fuera de muestra (%d orígenes), el sistema prevé mejor que los univariantes "
-                       "en %d de %d series y horizontes (RMSE sistema / univariantes < 1).",
+                       "Fuera de muestra (%d orígenes; n, los que tienen dato con que comparar), "
+                       "el sistema prevé mejor que los univariantes en %d de %d series y "
+                       "horizontes (RMSE sistema / univariantes < 1).",
                        P->ve->ev_origenes, gana, total );
     else
         sim_veredicto( P->ver_eval, SIM_AMBAR, "La evaluación del sistema, sin la de los univariantes "

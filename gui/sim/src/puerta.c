@@ -257,7 +257,7 @@ void puerta_refresca( Sim *m )
         sim_veredicto( P->ver_rango, SIM_AMBAR,
                        "%d de las series están diferenciadas. ¿Se mueven juntas a largo "
                        "plazo? Esa pregunta es la del rango de cointegración, y llega con "
-                       "el VEC (fase S10). Mientras tanto, la hace sima (prepare_vec y "
+                       "el VEC, en una versión posterior. Mientras tanto, la hace sima (prepare_vec y "
                        "rank_test).", dif );
     else
         gtk_label_set_text( GTK_LABEL(P->ver_rango), "" );

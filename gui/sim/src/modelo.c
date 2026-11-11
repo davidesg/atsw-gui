@@ -299,7 +299,7 @@ GtkWidget *modelo_pagina_new( Sim *m )
     gtk_box_pack_start( GTK_BOX(caja), exp, FALSE, FALSE, 0 );
 
     t = gtk_label_new( NULL );
-    gtk_label_set_markup( GTK_LABEL(t), "<b>La orden</b>   (estimar llega con la fase S4)" );
+    gtk_label_set_markup( GTK_LABEL(t), "<b>La orden</b>   (la que corre «Estimar»)" );
     gtk_widget_set_halign( t, GTK_ALIGN_START );
     gtk_box_pack_start( GTK_BOX(caja), t, FALSE, FALSE, 0 );
     M->orden = sim_mono( "" );

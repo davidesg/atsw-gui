@@ -1078,6 +1078,9 @@ static void ejemplos( void )
                    "el ejemplo se copia entero, con sus .pre", yaml );
             check( A.hay && !strcmp( A.p->id, "jenkins_alavi" ) && A.p->ns == 2,
                    "y se abre: dos series", NULL );
+            check( gtk_tree_model_iter_n_children(
+                       gtk_tree_view_get_model( GTK_TREE_VIEW(A.l_series) ), NULL ) == 2,
+                   "y la ventana las enseña (se refresca, como con «Abrir…»)", NULL );
             check( c >= 0 && !strcmp( A.p->ca[c].motor, "drvarma" ),
                    "con el sistema por estimar (C1, de drvarma)", NULL );
             check( dijo( "copiado en" ) != NULL, "la barra dice dónde está la copia",

@@ -2217,11 +2217,15 @@ static void on_ejemplo( GtkMenuItem *mi, Atsw *a )
     else if ( !atsw_abre( a, yaml, why, sizeof why ) )
         t = g_strdup_printf( "No pude abrir el ejemplo: %s", why );
     else
+        {
+        /* como «Abrir…»: abrir carga el proyecto; las listas, esto */
+        atsw_refresca( a );
         t = habia ? g_strdup_printf( "El ejemplo, en tu copia de antes (%s): lo que "
                                      "hiciste sigue ahí. Para empezar de cero, borra "
                                      "esa carpeta.", dst )
                   : g_strdup_printf( "El ejemplo, copiado en %s: tuyo para trabajar.",
                                      dst );
+        }
     barra_pub( a, t );
     g_free( t ); g_free( yaml ); g_free( dst ); g_free( de );
 }

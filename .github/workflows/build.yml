@@ -59,7 +59,6 @@ jobs:
           path: |
             engines/*/tests/work/
             gui/*/tests/work/
-            engines/drvarma/tests/gui/work/
           if-no-files-found: ignore
 
   macos:
@@ -94,7 +93,6 @@ jobs:
           path: |
             engines/*/tests/work/
             gui/*/tests/work/
-            engines/drvarma/tests/gui/work/
           if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         if: always()
@@ -178,7 +176,6 @@ jobs:
           path: |
             engines/*/tests/work/
             gui/*/tests/work/
-            engines/drvarma/tests/gui/work/
           if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         if: always()

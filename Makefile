@@ -59,8 +59,6 @@ check: all
 	@( cd gui/fug && sh tests/run_gui_tests.sh ) || exit 1
 	@printf '\n===== %s\n' "gui/atsw (ventana)"
 	@( cd gui/atsw && sh tests/run_gui_tests.sh ) || exit 1
-	@printf '\n===== %s\n' "drvarma_gui (ventana)"
-	@( cd engines/drvarma && sh tests/gui/run_gui_tests.sh ) || exit 1
 	@echo
 	@echo "todas las baterias pasan"
 

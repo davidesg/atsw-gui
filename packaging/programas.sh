@@ -10,17 +10,20 @@
 #
 # engines/fug/gtk_fmg NO: es el GUI viejo de GTK 2. El de verdad es gui/fug.
 #
-# drvarma y drvec NO van en la primera version (docs/TODO.md, decision del
-# analista del 2026-10-04): siguen en las pruebas, no en el paquete.
+# drvarma y su ventana, sim_gui, entran con SIM (docs/DISENO-sim.md, S9): la
+# madre ya da de alta sistemas y los estima con sim_gui. drvec todavia NO:
+# llega con el VEC (S10).
 PROGRAMAS="
 engines/fue/bin/fue
 engines/fuf/bin/fuf
 engines/fug/fug
 engines/drtran/bin/drtran
+engines/drvarma/bin/drvarma
 engines/art/bin/art
 gui/atsw/atsw_gui
 gui/fue/bin/fue_gui
 gui/fug/gtk_fmg
 gui/drtran/drtran_gui
+gui/sim/sim_gui
 gui/atsw-cli/atsw-cli
 "

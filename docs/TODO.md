@@ -276,6 +276,40 @@ la división entera del Jarque-Bera.
     Anómalos, y dice % sólo en logaritmos. Lo mismo la σ de la ecuación de
     fue con λ ≠ 0 y la tabla de Ajuste de drtran.
 
+## Pedidos del analista: la previsión y la respuesta al impulso en drtran y drvarma (2026-11-11)
+
+- **El gráfico de la previsión de drtran_gui, en el formato del de fue.** Hoy
+  los dos dibujan la previsión de forma distinta. Tienen que dar el mismo
+  gráfico: la serie, la previsión y sus bandas, con la misma apariencia.
+- **La tabla de la previsión de drtran, igual que la de fue, y con la
+  salida.** Las mismas columnas y el mismo formato. Tiene que estar también en
+  la salida (el `.out`), no solo en la ventana.
+- **drtran: comparar previsiones con `-estwin`, como se comparan en SF_MEG.**
+  Es decir, estimar en una ventana y prever desde su final, contra lo que se
+  observó después. drvarma ya lo hace con `-estwin` (sim_gui, Previsión →
+  Evaluación). A drtran le falta la opción.
+- **Los gráficos en alta definición de la IRF y de la respuesta escalón (SRF),
+  con sus bandas de confianza.** Hoy solo están en tabla. Van como los demás
+  gráficos de alta definición (`lib/fugdraw`, al PDF).
+- **Auditar «Al cuaderno» en drtran_gui, frente a fue_gui.** El analista no
+  tiene claro que la opción sea igual de consistente que en fue. Lo que hay
+  hoy: el botón «Al cuaderno» de la ventana de gráficos (`lib/preview`) solo
+  sale si el anfitrión define `PREVIEW_CUADERNO` en su `previewhost.h`. Lo
+  definen fue_gui (`gui/fue/src/analisis.c`: la entrada va al modelo cargado)
+  y la madre (`gui/atsw/src/vistazo.c`). drtran_gui y sim_gui no lo definen.
+  El comentario de `lib/preview/preview.h` lo justifica con que «no hay
+  proyecto», pero eso ya no es cierto: los dos abren con `--proyecto` y
+  `--caso`. La auditoría tiene que decir:
+  - qué gráficos de drtran pueden ir al cuaderno: la CCF, los residuos, la
+    previsión, la IRF, la página del modelo;
+  - a qué objeto se apunta la entrada: el caso y su modelo, como en fue la
+    serie y su modelo;
+  - si la entrada sale igual que las de fue (título, PNG, enlace al `.out`).
+  Después, lo mismo para sim_gui.
+- **Lo mismo en drvarma (sim_gui):** el gráfico de la previsión en el formato
+  de fue, la tabla igual y en la salida, y la IRF y la SRF dibujadas con sus
+  bandas, no solo en tabla.
+
 ## Lo demás, por documento
 
 ### `DISENO-anomalos.md`

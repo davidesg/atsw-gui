@@ -24,10 +24,11 @@ on:
     tags: [ 'v*' ]
 
 env:
-  # Lo que va en el paquete (packaging/programas.sh): sin drvarma ni drvec.
+  # Lo que va en el paquete (packaging/programas.sh): con drvarma y sim_gui
+  # (SIM, S9); sin drvec todavia (S10).
   DIRS: >-
-    engines/fue engines/fuf engines/fug engines/drtran engines/art
-    gui/fue gui/fug gui/drtran gui/atsw gui/atsw-cli
+    engines/fue engines/fuf engines/fug engines/drtran engines/drvarma engines/art
+    gui/fue gui/fug gui/drtran gui/sim gui/atsw gui/atsw-cli
 
 jobs:
   # El manual del alumno en PDF (docs/manual/construir.py): va dentro de los

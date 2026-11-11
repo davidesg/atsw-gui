@@ -1040,6 +1040,67 @@ static void instalacion( void )
         }
 }
 
+/* AYUDA -> EJEMPLOS: abre UNA COPIA del proyecto de ejemplo, y la segunda
+   vez la misma copia, sin pisarla (es el trabajo del alumno).          */
+static void ejemplos( void )
+{
+    gchar     *base = g_build_filename( T, "ejemplos", NULL );
+    gchar     *yaml = g_build_filename( base, "jenkins_alavi", "proyecto.yaml", NULL );
+    gchar     *pre  = g_build_filename( base, "jenkins_alavi", "MUSKRAT", "work",
+                                        "MUSKRAT_m01.pre", NULL );
+    GList     *h = gtk_container_get_children( GTK_CONTAINER(A.menubar) );
+    GtkWidget *t = g_list_nth_data( h, 5 ), *e = NULL, *r = NULL;
+    int        vez;
+
+    g_list_free( h );
+    g_setenv( "ATSW_EJEMPLOS", base, TRUE );
+    if ( t )
+        {
+        rehace_menu( &A, t );
+        e = entrada_de( GTK_MENU(gtk_menu_item_get_submenu( GTK_MENU_ITEM(t) )), "Ejemplos" );
+        }
+    if ( e && gtk_menu_item_get_submenu( GTK_MENU_ITEM(e) ) )
+        r = entrada_de( GTK_MENU(gtk_menu_item_get_submenu( GTK_MENU_ITEM(e) )),
+                        "Ratas almizcleras" );
+    check( r != NULL, "Ayuda ▸ Ejemplos ▸ «Ratas almizcleras y visones»", NULL );
+    if ( !r ) goto fin;
+    for ( vez = 0; vez < 2; vez++ )
+        {
+        olvida();
+        gtk_menu_item_activate( GTK_MENU_ITEM(r) );
+        pump( 100 );
+        if ( vez == 0 )
+            {
+            int c = A.hay ? pr_caso_idx( A.p, "C1" ) : -1;
+
+            check( g_file_test( yaml, G_FILE_TEST_IS_REGULAR ) &&
+                   g_file_test( pre, G_FILE_TEST_IS_REGULAR ),
+                   "el ejemplo se copia entero, con sus .pre", yaml );
+            check( A.hay && !strcmp( A.p->id, "jenkins_alavi" ) && A.p->ns == 2,
+                   "y se abre: dos series", NULL );
+            check( c >= 0 && !strcmp( A.p->ca[c].motor, "drvarma" ),
+                   "con el sistema por estimar (C1, de drvarma)", NULL );
+            check( dijo( "copiado en" ) != NULL, "la barra dice dónde está la copia",
+                   todo_lo_dicho() );
+            /* lo que haga el alumno se queda: la segunda vez no se pisa */
+            g_file_set_contents( pre, "tocado", -1, NULL );
+            }
+        else
+            {
+            gchar *c = NULL;
+
+            g_file_get_contents( pre, &c, NULL, NULL );
+            check( c && !strcmp( c, "tocado" ), "la segunda vez abre la copia de antes, "
+                   "sin pisarla", NULL );
+            check( dijo( "copia de antes" ) != NULL, "y lo dice", todo_lo_dicho() );
+            g_free( c );
+            }
+        }
+fin:
+    g_unsetenv( "ATSW_EJEMPLOS" );
+    g_free( base ); g_free( yaml ); g_free( pre );
+}
+
 static void hermanos( void )
 {
     static const struct { const char *prog, *donde; } h[] = {
@@ -4649,6 +4710,7 @@ int main( int argc, char **argv )
             fase( "legados" ); legados();
             }
         }
+    fase( "ejemplos" ); ejemplos();
 
     /* Lo que se escribio, fuera. Con ATSW_GUI_GUARDA se deja, para mirar
        el proyecto que dejo una prueba que fallo.                       */

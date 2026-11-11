@@ -54,5 +54,9 @@
 # capturas/ lo ignora el .gitignore de arriba (las de la CI); estas son fuentes
 !/manual/capturas/
 
+# --- los proyectos de ejemplo (Ayuda -> Ejemplos de la madre) ---------------
+# (sus .pre y .out los deja entrar el .gitignore de arriba)
+!/ejemplos/
+
 !/.gitignore
 !/README.md

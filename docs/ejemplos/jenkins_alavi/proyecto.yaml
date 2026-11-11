@@ -1,0 +1,49 @@
+# Proyecto de ATSW GUI. El nombre de cada fichero es CORTESIA:
+# la identidad esta aqui, y ningun programa parsea un nombre.
+schema_version: 2
+id: jenkins_alavi
+titulo: Ratas almizcleras y visones
+creado: "2026-11-11"
+analista: ""
+herramienta: fue
+raiz: .
+
+series:
+  MUSKRAT:
+  MINK:
+
+# La cadena de iteracion. padre vacio = raiz.
+# razon vacia = NO CONSTA, y no consta nunca significa cuadra.
+modelos:
+  MUSKRAT/m00:
+    version: 0
+    padre: ""
+    razon: ""
+    rol: datos
+  MINK/m00:
+    version: 0
+    padre: ""
+    razon: ""
+    rol: datos
+  MUSKRAT/m01:
+    version: 1
+    padre: m00
+    razon: "El modelo univariante de la rata almizclera, hecho en art por la vía guiada: ARIMA(6,1,1) en logaritmos. Es el MUSKRAT_m03 del ejemplo jenkins_alavi de sima."
+    elegido: si
+    razon_elegido: El de la vía guiada de art, el que el ejemplo de sima lleva al sistema.
+  MINK/m01:
+    version: 1
+    padre: m00
+    razon: "El modelo univariante del visón, hecho en art por la vía guiada: AR(4) en logaritmos, con media. Es el MINK_m02 del ejemplo jenkins_alavi de sima."
+    elegido: si
+    razon_elegido: El de la vía guiada de art, el que el ejemplo de sima lleva al sistema.
+
+# Lo que se cruza: series EN ORDEN, cada una con el modelo
+# con que entra y el sha256 de su .pre. Ver DISENO-casos.md.
+casos:
+  C1:
+    motor: drvarma
+    titulo: Ratas almizcleras y visones
+    razon: "¿Se mueven juntas las dos poblaciones? Jenkins y Alavi (1981): la rata almizclera y el visón, su depredador."
+    creado: "2026-11-11"
+    entradas: MUSKRAT/m01@fae461ab2ee6390201b3ac29feb8aa656a7cf50154a26a6a70a20b623e8abf27 MINK/m01@b30638ea17f37e71acc107dd84fa855662bd49525c7036b169a7badb4acc6c6c

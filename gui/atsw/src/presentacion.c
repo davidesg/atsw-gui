@@ -133,8 +133,8 @@ int atsw_comprueba( AtComprob *c, int max )
 {
     /* atsw-cli va con los motores: es la puerta del asistente a lib/ y no
        es opcional (ESTUDIO-terminal-mcp §6.3).                         */
-    static const char *const motores[] = { "fue", "fuf", "fug", "drtran", "art", "atsw-cli" };
-    static const char *const guis[]    = { "fue_gui", "gtk_fmg", "drtran_gui" };
+    static const char *const motores[] = { "fue", "fuf", "fug", "drtran", "drvarma", "art", "atsw-cli" };
+    static const char *const guis[]    = { "fue_gui", "gtk_fmg", "drtran_gui", "sim_gui" };
     int n = 0;
     guint i;
 
@@ -146,10 +146,8 @@ int atsw_comprueba( AtComprob *c, int max )
     if ( n < max ) cargador( &c[n++], "png", "las imágenes PNG", FALSE );
     if ( n < max ) cargador( &c[n++], "svg", "los iconos SVG de las barras", TRUE );
     /* LO QUE TODAVIA NO VA EN EL PAQUETE: se dice y no es un error. */
-    if ( n < max ) programa( &c[n++], "Sistemas", "drvarma", TRUE,
-                             "Todavía no va en el paquete: VARMA llega en una versión posterior." );
     if ( n < max ) programa( &c[n++], "Sistemas", "drvec", TRUE,
-                             "Todavía no va en el paquete: VECM llega en una versión posterior." );
+                             "Todavía no va en el paquete: el VEC llega en una versión posterior." );
     if ( n < max ) escritorio( &c[n++] );
     /* EL ASISTENTE (ESTUDIO-terminal-mcp §6.3): opcional; se instala con uv. */
     if ( n < max ) programa( &c[n++], "Asistente", "uv", TRUE,

@@ -45,6 +45,7 @@ DESKTOP
 entrada org.atsw.gui   atsw_gui   "ATSW"                          "Taller de series temporales: proyectos, series, modelos y casos"
 entrada org.fue.gui    fue_gui    "ATSW: editor de modelos (fue)" "Modelos ARIMA univariantes"
 entrada org.drtran.gui drtran_gui "ATSW: redes de transferencia (drtran)" "Funciones de transferencia"
+entrada org.atsw.sim   sim_gui    "ATSW: sistemas simultáneos (SIM)" "Modelos VARMA, con drvarma"
 entrada org.fug.gui    gtk_fmg    "ATSW: gráficos (fug)"          "Gráficos de series"
 
 install -m 644 "$R/packaging/LEEME.txt" "$D$P/share/doc/atsw/"
@@ -52,4 +53,8 @@ install -m 644 "$R/packaging/LEEME.txt" "$D$P/share/doc/atsw/"
 install -m 644 "$R"/docs/manual/datos/ipc_wti.csv "$R"/docs/manual/datos/ipc_wti.xlsx \
     "$R"/docs/manual/datos/es_core.csv "$R"/docs/manual/datos/es_core.xlsx \
     "$D$P/share/doc/atsw/Datos del manual/"
+# Los proyectos de ejemplo (Ayuda -> Ejemplos): la madre abre una copia.
+mkdir -p "$D$P/share/doc/atsw/Ejemplos"
+cp -R "$R"/docs/ejemplos/* "$D$P/share/doc/atsw/Ejemplos/"
+find "$D$P/share/doc/atsw/Ejemplos" -type d -exec chmod 755 {} + -o -type f -exec chmod 644 {} +
 echo "instalado en $D$P"

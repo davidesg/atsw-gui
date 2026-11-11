@@ -132,6 +132,9 @@ fi
 
 # El icono de ATSW (packaging/icono/hacer.py): el de la web.
 cp "$R/packaging/macos/atsw.icns" "$C/Resources/atsw.icns"
+# Los proyectos de ejemplo (Ayuda -> Ejemplos), al lado de bin/: la madre
+# abre una copia, asi que pueden ir dentro de la aplicacion firmada.
+cp -R "$R/docs/ejemplos" "$RES/Ejemplos"
 
 cat > "$C/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

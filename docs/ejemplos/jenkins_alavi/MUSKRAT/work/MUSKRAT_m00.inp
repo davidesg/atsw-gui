@@ -1,0 +1,94 @@
+************************************************
+* Input file for program FUE                   *
+* DOCTYPE ATSW-interface SYSTEM                *
+************************************************
+
+** Frequency of time series: either 1(A), 4(Q) or 12(M):
+ 1
+** Number of observations and starting date of time series:
+ 62  0 1850 MUSKRAT
+** Number of deterministic variables (including seasonal components):
+0
+** Number and orders of regular AR operators:
+0
+** Number and orders of annual AR operators:
+0
+** Number and orders of regular MA operators:
+0
+** Number and orders of anual MA operators:
+0
+** Number and frequencies of regular AR(2) operators with fixed frequency:
+0
+** Number and frequencies of regular MA(2) operators with fixed frequency:
+0
+** Mean parameter (mu):
+0.000000 0
+** Box-Cox lambda, regular differences and complete annual differences:
+ 1.000000 0 0
+** Individual factors of the annual difference (starting at freq 0.0):
+ 0
+** ACF/PACF bands (0 Automatic) and reescaling factor:
+ 0.000000 1.00
+** Time series (stochastic and non-standard deterministic variables):
+175472.000000
+194682.000000
+292530.000000
+493952.000000
+512291.000000
+345626.000000
+258806.000000
+302267.000000
+313502.000000
+254246.000000
+177291.000000
+206020.000000
+335385.000000
+357060.000000
+509769.000000
+418370.000000
+320824.000000
+412164.000000
+618081.000000
+404173.000000
+232251.000000
+443999.000000
+704789.000000
+767896.000000
+671982.000000
+523802.000000
+583319.000000
+437121.000000
+486030.000000
+499727.000000
+478078.000000
+829034.000000
+1029296.000000
+1069183.000000
+1083067.000000
+817003.000000
+347050.000000
+380132.000000
+344878.000000
+223614.000000
+322160.000000
+574742.000000
+806103.000000
+934646.000000
+648687.000000
+674811.000000
+813159.000000
+551716.000000
+568934.000000
+701487.000000
+767741.000000
+928199.000000
+1650214.000000
+1488287.000000
+924439.000000
+1056253.000000
+695070.000000
+407472.000000
+172418.000000
+302195.000000
+749142.000000
+963597.000000

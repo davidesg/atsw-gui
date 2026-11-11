@@ -126,6 +126,10 @@ SHA=$("$PY" -c "import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],'rb').
 mira "caso-nuevo: el sha del .pre en el manifiesto" 'grep -q "$SHA" "$Y"'
 mira "caso-nuevo: un modelo sin estimar no entra" \
      '! "$CLI" proyecto caso-nuevo "$Y" RIPC/m03 en4/m01 2>/dev/null'
+J=$("$CLI" --json proyecto caso-nuevo "$Y" RIPC/m01 en4/m01 --motor drvarma --titulo "sistema")
+mira "caso-nuevo --motor drvarma: un caso de SIM" '[ "$(echo "$J" | campo "d[\"motor\"]")" = drvarma ]'
+mira "caso-nuevo --motor: solo drtran o drvarma" \
+     '! "$CLI" proyecto caso-nuevo "$Y" RIPC/m01 en4/m01 --motor fue 2>/dev/null'
 
 # raices factorizado: los nueve AR(2), y fue los estima con la misma
 # verosimilitud que el AR(18)
@@ -281,6 +285,50 @@ mira "ficha: la estimación, con su motor y su vía" \
      'echo "$M" | grep -q "^\*\*Coste\*\*  la estimación, 2,00 s de CPU (art 0.9, python), ~"'
 mira "ficha: el .pre que vino del extra Python lo dice" \
      'echo "$M" | grep -q "el .pre salió del extra Python (art 0.9)"'
+
+# --- el proyecto de ejemplo de Ayuda -> Ejemplos (docs/ejemplos) ------------
+# Lo que la madre copia tiene que estar entero: el manifiesto se lee, el caso
+# es de SIM con el sha256 de cada .pre, cada .pre es un optimo (fue lo
+# reproduce) y los datos de m00 son los del datos.csv.
+EJ="$WORK/jenkins_alavi"
+cp -R "$R/docs/ejemplos/jenkins_alavi" "$EJ"
+V=$("$CLI" --json proyecto ver "$EJ/proyecto.yaml")
+mira "ejemplo: el caso C1 es de drvarma" \
+     '[ "$(echo "$V" | campo "[c[\"motor\"] for c in d[\"casos\"] if c[\"id\"]==\"C1\"][0]")" = drvarma ]'
+mira "ejemplo: los dos m01, elegidos" \
+     '[ "$(echo "$V" | campo "sorted(m[\"serie\"] for m in d[\"modelos\"] if m[\"elegido\"])")" = "['"'"'MINK'"'"', '"'"'MUSKRAT'"'"']" ]'
+mira "ejemplo: el sha256 de cada entrada es el de su .pre" '"$PY" - "$EJ" <<"PYEOF"
+import hashlib, re, sys, os
+d = sys.argv[1]
+y = open(os.path.join(d, "proyecto.yaml"), encoding="utf-8").read()
+ent = re.search(r"entradas: (.*)", y).group(1).split()
+for e in ent:
+    sm, sha = e.split("@"); s, m = sm.split("/")
+    f = os.path.join(d, s, "work", "%s_%s.pre" % (s, m))
+    if hashlib.sha256(open(f, "rb").read()).hexdigest() != sha: sys.exit(1)
+PYEOF'
+for s in MUSKRAT MINK; do
+    mkdir -p "$WORK/ej_$s"
+    cp "$EJ/$s/work/${s}_m01.pre" "$WORK/ej_$s/X.inp"
+    ( cd "$WORK/ej_$s" && "$FUE" X > /dev/null 2>&1 )
+    mira "ejemplo: fue reproduce el .pre de $s/m01" \
+         '[ -f "$WORK/ej_$s/X.pre" ] && "$PY" - "$WORK/ej_$s/X.pre" "$EJ/$s/work/${s}_m01.pre" <<"PYEOF"
+# numero a numero, con tolerancia: fuera de Linux el ultimo digito baila
+import re, sys
+num = lambda f: [float(x) for x in re.findall(r"-?\d+\.?\d*(?:[eE][-+]?\d+)?", open(f).read())]
+a, b = num(sys.argv[1]), num(sys.argv[2])
+sys.exit(0 if len(a) == len(b) and all(abs(x - y) <= 1e-6 * max(1.0, abs(y)) for x, y in zip(a, b)) else 1)
+PYEOF'
+    mira "ejemplo: m00 de $s son los datos de su datos.csv" '"$PY" - "$EJ" "$s" <<"PYEOF"
+import sys, os
+d, s = sys.argv[1], sys.argv[2]
+csv = [float(l.split(",")[1]) for l in open(os.path.join(d, s, "datos.csv"))
+       if l.strip() and not l.startswith("#") and l[0].isdigit()]
+inp = open(os.path.join(d, s, "work", s + "_m00.inp")).read().split("Time series")[1]
+inp = [float(x) for x in inp.split("\n", 1)[1].split()]
+sys.exit(0 if csv == inp and len(csv) == 62 else 1)
+PYEOF'
+done
 
 # los errores
 J=$("$CLI" --json dictamen "$Y" RIPC m99 2>/dev/null); rc=$?

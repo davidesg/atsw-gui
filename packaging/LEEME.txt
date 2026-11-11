@@ -72,8 +72,9 @@ QUÉ HAY DENTRO
                 Desde ella se abren los demás.
   fue_gui       el editor y estimador de modelos univariantes
   drtran_gui    redes de funciones de transferencia
+  sim_gui       sistemas simultáneos: modelos VARMA
   gtk_fmg       gráficos
-  fue, fuf, fug, art, drtran   los motores de cálculo
+  fue, fuf, fug, art, drtran, drvarma   los motores de cálculo
 
 PARA APRENDER
 -------------
@@ -85,6 +86,11 @@ PARA APRENDER
   En Windows, los dos están en el menú Inicio, en «ATSW»; en macOS, en el
   .dmg, junto a la aplicación.
   Hay también un vídeo del mismo caso: https://davidesg.github.io/atsw-gui/
+
+  Ayuda → Ejemplos, en ATSW, abre proyectos ya hechos. El primero es el de
+  los sistemas: las ratas almizcleras y los visones de Jenkins y Alavi, con
+  los dos modelos univariantes hechos y el sistema por estimar en sim_gui.
+  Se abre una copia tuya, en «Ejemplos de ATSW», dentro de tus documentos.
 
 
 Si algo falla, anota qué estabas haciendo y, si puedes, haz una captura de

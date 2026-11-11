@@ -377,17 +377,26 @@ static int proyecto_caso( const char *path, char **en, int nen )
             { g_free( p ); return falla( "%s/%s no está estimado: un caso entra con su .pre.",
                                          e[i].serie, e[i].modelo ); }
         }
-    if ( pr_caso_add( p, e, nen, muestra, NULL, titulo, razon, id, sizeof id, &pe ) != 0 )
+    /* EL MOTOR DEL CASO: drtran (MT, si no se dice) o drvarma (SIM), como la
+       madre con «Caso nuevo» y con el menú SIM.                          */
+    if ( c_motor && *c_motor && strcmp( c_motor, "drtran" ) && strcmp( c_motor, "drvarma" ) )
+        { g_free( p ); return falla( "--motor %s: un caso es de drtran (MT) o de drvarma (SIM).",
+                                     c_motor ); }
+    if ( pr_caso_add( p, e, nen, muestra, c_motor, titulo, razon, id, sizeof id, &pe ) != 0 )
         { pr_error_es( &pe, why, sizeof why ); g_free( p ); return falla( "%s", why ); }
     if ( guarda( p, why, sizeof why ) != 0 ) { g_free( p ); return falla( "%s", why ); }
     if ( json )
         {
         GString *t = g_string_new( "{\"ok\": true, " );
 
-        js_par( t, "caso", id ); g_string_append( t, "}\n" );
+        js_par( t, "caso", id ); g_string_append( t, ", " );
+        js_par( t, "motor", ( c_motor && *c_motor ) ? c_motor : "drtran" );
+        g_string_append( t, "}\n" );
         fputs( t->str, stdout );
         g_string_free( t, TRUE );
         }
+    else if ( c_motor && !strcmp( c_motor, "drvarma" ) )
+        printf( "Caso %s (SIM) dado de alta con %d series, en este orden.\n", id, nen );
     else printf( "Caso %s dado de alta con %d series; la salida es %s.\n", id, nen, e[0].serie );
     g_free( p );
     return 0;
@@ -859,6 +868,7 @@ static void uso( FILE *f )
            "  --muestra M   la muestra (sin ella, la completa)\n"
            "  --razon R     la razón del modelo nuevo o del caso\n"
            "  --titulo T    el título del caso\n"
+           "  --motor M     caso-nuevo: drtran (MT, si no se dice) o drvarma (SIM)\n"
            "  --json        la salida en JSON\n"
            "  --por Q       quién da el paso: analista (si no se dice) o asistente;\n"
            "                en nuevo, itera, elige y raices factorizado queda escrito\n"

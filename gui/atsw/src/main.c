@@ -1915,7 +1915,11 @@ static void on_sale_mi ( GtkMenuItem *m, Atsw *a ) { (void) m; gtk_window_close(
 static gchar *manual_uri( void )
 {
     static const char *const sitios[] = {
-        "../share/doc/atsw/Manual de ATSW.pdf",     /* Linux, instalado    */
+        /* Linux: los programas en PREFIJO/lib/atsw/bin, el manual en
+           PREFIJO/share/doc/atsw (packaging/linux/instalar.sh). Decia
+           "../share", que es lib/atsw/share: no lo encontraba nunca y
+           abria el publicado.                                         */
+        "../../../share/doc/atsw/Manual de ATSW.pdf",
         "../Manual de ATSW.pdf",                    /* Windows, el bundle  */
         "../../docs/manual/MANUAL.pdf",             /* el arbol, construido */
         "../../docs/manual/MANUAL.html",
@@ -2110,6 +2114,118 @@ static void llena_us( Atsw *a, GtkWidget *m )
     g_free( id );
 }
 
+/* ------------------------------------------------------------------------ */
+/* LOS EJEMPLOS: Ayuda -> Ejemplos (DISENO-sim.md §6)                        */
+/*                                                                          */
+/* Un ejemplo es un PROYECTO hecho, de los de sima: las series, sus modelos  */
+/* univariantes ya estimados y elegidos, y el caso por estimar. Lo instalado */
+/* no se toca --en Linux ni se puede--, asi que se abre UNA COPIA en         */
+/* «Ejemplos de ATSW», en los documentos del usuario. Si la copia ya esta,   */
+/* se abre esa: es el trabajo del alumno, y pisarlo seria perderlo.         */
+/* ------------------------------------------------------------------------ */
+
+static const struct { const char *dir, *rotulo, *globo; } EJEMPLOS[] = {
+    { "jenkins_alavi", "Ratas almizcleras y visones (SIM)",
+      "Jenkins y Alavi (1981): las pieles de rata almizclera y de visón de la "
+      "Compañía de la Bahía de Hudson, 1850–1911. Los dos modelos univariantes "
+      "están hechos y elegidos; el sistema, el caso C1, está por estimar en "
+      "sim_gui. Es el ejemplo del capítulo «Sistemas» del manual." } };
+
+/* Donde esta instalado el ejemplo (g_free), o NULL. */
+static gchar *ejemplo_fuente( const char *dir )
+{
+    static const char *const sitios[] = {
+        "../../../share/doc/atsw/Ejemplos",   /* Linux: PREFIJO/lib/atsw/bin  */
+        "../Ejemplos",                        /* Windows y macOS: al lado de bin */
+        "../../docs/ejemplos",                /* el arbol                      */
+        NULL };
+    gchar *yo = sitio_mi_dir(), *r = NULL;
+    int    i;
+
+    for ( i = 0; yo && sitios[i] && !r; i++ )
+        {
+        gchar *f = g_build_filename( yo, sitios[i], dir, "proyecto.yaml", NULL );
+
+        if ( g_file_test( f, G_FILE_TEST_IS_REGULAR ) )
+            r = g_build_filename( yo, sitios[i], dir, NULL );
+        g_free( f );
+        }
+    g_free( yo );
+    return r;
+}
+
+/* Donde va la copia (g_free). ATSW_EJEMPLOS la cambia (las pruebas). */
+static gchar *ejemplo_destino( const char *dir )
+{
+    const char *base = g_getenv( "ATSW_EJEMPLOS" );
+
+    if ( base && *base ) return g_build_filename( base, dir, NULL );
+    base = g_get_user_special_dir( G_USER_DIRECTORY_DOCUMENTS );
+    if ( !base || !*base ) base = g_get_home_dir();
+    return g_build_filename( base, "Ejemplos de ATSW", dir, NULL );
+}
+
+/* Copia el arbol de, en a (que no existe). FALSE con el motivo en why. */
+static gboolean copia_arbol( const char *de, const char *a, char *why, size_t n )
+{
+    GDir        *d;
+    const gchar *nom;
+    gboolean     ok = TRUE;
+
+    if ( g_mkdir_with_parents( a, 0755 ) != 0 )
+        { g_snprintf( why, n, "No pude crear %s.", a ); return FALSE; }
+    if ( ( d = g_dir_open( de, 0, NULL ) ) == NULL )
+        { g_snprintf( why, n, "No pude leer %s.", de ); return FALSE; }
+    while ( ok && ( nom = g_dir_read_name( d ) ) != NULL )
+        {
+        gchar *f = g_build_filename( de, nom, NULL ), *t = g_build_filename( a, nom, NULL );
+
+        if ( g_file_test( f, G_FILE_TEST_IS_DIR ) )
+            ok = copia_arbol( f, t, why, n );
+        else
+            {
+            gchar  *buf = NULL;
+            gsize   len = 0;
+            GError *e = NULL;
+
+            ok = g_file_get_contents( f, &buf, &len, &e ) &&
+                 g_file_set_contents( t, buf, (gssize) len, &e );
+            if ( !ok ) g_snprintf( why, n, "No pude copiar %s: %s", f, e ? e->message : "?" );
+            g_clear_error( &e );
+            g_free( buf );
+            }
+        g_free( f ); g_free( t );
+        }
+    g_dir_close( d );
+    return ok;
+}
+
+static void on_ejemplo( GtkMenuItem *mi, Atsw *a )
+{
+    int       k = GPOINTER_TO_INT( g_object_get_data( G_OBJECT(mi), "ejemplo" ) );
+    gchar    *de = ejemplo_fuente( EJEMPLOS[k].dir ), *dst = ejemplo_destino( EJEMPLOS[k].dir );
+    gchar    *yaml = g_build_filename( dst, "proyecto.yaml", NULL ), *t;
+    char      why[1024] = "";
+    gboolean  habia = g_file_test( yaml, G_FILE_TEST_IS_REGULAR );
+
+    if ( !habia && !de )
+        t = g_strdup_printf( "No encuentro el ejemplo «%s» instalado. ¿Está entera la "
+                             "instalación? (Ayuda → Comprobar la instalación)",
+                             EJEMPLOS[k].rotulo );
+    else if ( !habia && !copia_arbol( de, dst, why, sizeof why ) )
+        t = g_strdup( why );
+    else if ( !atsw_abre( a, yaml, why, sizeof why ) )
+        t = g_strdup_printf( "No pude abrir el ejemplo: %s", why );
+    else
+        t = habia ? g_strdup_printf( "El ejemplo, en tu copia de antes (%s): lo que "
+                                     "hiciste sigue ahí. Para empezar de cero, borra "
+                                     "esa carpeta.", dst )
+                  : g_strdup_printf( "El ejemplo, copiado en %s: tuyo para trabajar.",
+                                     dst );
+    barra_pub( a, t );
+    g_free( t ); g_free( yaml ); g_free( dst ); g_free( de );
+}
+
 static void llena_ayuda( Atsw *a, GtkWidget *m )
 {
     GtkWidget *mi;
@@ -2119,6 +2235,21 @@ static void llena_ayuda( Atsw *a, GtkWidget *m )
     atsw_entrada_tecla( mi, "F1" );
     atsw_entrada( a, m, "Teclas", "Las teclas de la madre, en una lista.",
                   G_CALLBACK(on_teclas_mi), a );
+    {
+    GtkWidget *sub = gtk_menu_new();
+    guint      k;
+
+    for ( k = 0; k < G_N_ELEMENTS(EJEMPLOS); k++ )
+        {
+        GtkWidget *e = atsw_entrada( a, sub, EJEMPLOS[k].rotulo, EJEMPLOS[k].globo,
+                                     G_CALLBACK(on_ejemplo), a );
+
+        g_object_set_data( G_OBJECT(e), "ejemplo", GINT_TO_POINTER( (int) k ) );
+        }
+    mi = atsw_entrada( a, m, "Ejemplos", "Proyectos hechos, para abrir y seguir: "
+                       "se abre una copia tuya, en «Ejemplos de ATSW».", NULL, NULL );
+    gtk_menu_item_set_submenu( GTK_MENU_ITEM(mi), sub );
+    }
     separa( m );
     atsw_entrada( a, m, "Comprobar la instalación…", "Lo mismo que se comprueba al "
                   "arrancar: los motores, los programas y lo que usa GTK. De lo que "
@@ -2157,7 +2288,7 @@ static const struct { const char *rotulo, *globo, *acel; Llena llena; } TITULOS[
       "su modelo univariante. Se estima en sim_gui, con la puerta primero.",
       "<Alt>s", atsw_menu_sim },
     { "A_yuda",
-      "Ayuda — el manual, las teclas y «Acerca de»\n\nF1 abre el manual.",
+      "Ayuda — el manual, las teclas, los ejemplos y «Acerca de»\n\nF1 abre el manual.",
       "<Alt>y", llena_ayuda } };
 
 /* Rehace el menu del titulo i con el estado de ahora. */

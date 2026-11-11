@@ -83,6 +83,8 @@ cp "$R/packaging/LEEME.txt" "$D/LEEME.txt"
 [ -f "$R/docs/manual/MANUAL.pdf" ] && cp "$R/docs/manual/MANUAL.pdf" "$D/Manual de ATSW.pdf"
 # Y sus datos, para seguir el caso con el programa abierto.
 mkdir -p "$D/Datos del manual"
+# Los proyectos de ejemplo (Ayuda -> Ejemplos), al lado de bin/.
+cp -R "$R/docs/ejemplos" "$D/Ejemplos"
 cp "$R"/docs/manual/datos/{ipc_wti,es_core}.{csv,xlsx} "$D/Datos del manual/"
 
 echo "paquete en $D: $(ls "$D/bin" | wc -l) ficheros en bin/, $(du -sh "$D" | cut -f1)"

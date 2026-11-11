@@ -21,6 +21,9 @@ build/
 !lib/formales/pruebas/*.pre
 # los de Jenkins y Alavi (ejemplo jenkins_alavi de sima): fixtures de lib/outvarma
 !lib/outvarma/datos/*.pre
+# los proyectos de ejemplo (Ayuda -> Ejemplos): sus modelos estimados son el ejemplo
+!docs/ejemplos/**/*.pre
+!docs/ejemplos/**/*.out
 *.aux
 *.log
 *.dvi

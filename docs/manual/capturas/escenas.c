@@ -208,7 +208,9 @@ static gboolean es_item( GtkWidget *w, const char *arg )
    la z detras, que cambia con cada estimacion. */
 static gboolean es_casilla( GtkWidget *w, const char *arg )
 {
-    return GTK_IS_CHECK_BUTTON(w) && rotulo( w )
+    /* solo las que se ven: una casilla escondida con el mismo principio
+       («LRM ← LRY» frente a «LRM») no es la que el guion quiere.       */
+    return GTK_IS_CHECK_BUTTON(w) && gtk_widget_is_drawable( w ) && rotulo( w )
            && strncmp( rotulo( w ), arg, strlen( arg ) ) == 0;
 }
 

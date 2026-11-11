@@ -45,7 +45,9 @@ hechos en el mismo orden.
 ## La prueba, contra ficheros de verdad
 
 `run_test.sh` pide a drvec del árbol tres salidas con los `.pre` de Johansen y
-Juselius (`datos/`, los del ejemplo `johansen_juselius` de sima): la prueba
+Juselius (`datos/`, los del ejemplo `johansen_juselius` de sima, **sin la línea
+«Built by sima's raw entry…»** que sima pone en la cabecera: fue y drvarma
+rechazan un `.pre` con esa línea de más; drvec la tolera): la prueba
 del rango **sin** bootstrap (2 s), el VEC con r = 1 normalizado sobre LRM (con
 `-fdhess`, como sima) y el mismo con IBO débilmente exógena.
 `test_outvec.c` las lee y comprueba las cifras del tutorial de sima:

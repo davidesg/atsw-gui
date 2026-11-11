@@ -14,7 +14,13 @@
  *   Σ           la covarianza de las innovaciones y sus correlaciones
  *   Salida      el .out entero
  *
- * Simplificar (los |t| < 1 a cero) y «¿es una red?» llegan con la fase S7.
+ * Simplificar (los |t| < 1 a cero) y «¿es una red?» estan en Estructura (S7).
+ *
+ * CON UN VEC (S10c) las mismas pestañas leen el .out de drvec (lib/outvec):
+ * Ajuste dice la relacion de equilibrio --beta, normalizada sobre el bloque
+ * Y1-- y como se ajusta cada serie a ella --alpha, con su t: negativo
+ * corrige el error--; Residuos es igual (lib/outdiag lee la diagnosis de
+ * drvec); Parametros, Σ y Salida, los del VEC. Estructura es del VARMA.
  */
 
 #include <math.h>
@@ -88,15 +94,16 @@ static void ajuste( Sim *m, const VarmaOut *v )
         gtk_label_set_text( GTK_LABEL(D->ver_raices), "" );
 }
 
-static void residuos( Sim *m, const VarmaOut *v )
+/* La de drvarma y la de drvec son la misma (lib/diagmv): d, y los nombres
+ * de las series en el orden del .out (NULL: los del sistema).          */
+static void residuos( Sim *m, const Diagnosis *d, gboolean tiene, const char (*nombres)[OVEC_NOMBRE] )
 {
     PagDiag *D = &m->pd;
     GtkListStore *st = GTK_LIST_STORE(gtk_tree_view_get_model( GTK_TREE_VIEW(D->l_res) ));
-    const Diagnosis *d = &v->diag;
     int i;
 
     gtk_list_store_clear( st );
-    if (!v->tiene_diag) {
+    if (!tiene) {
         sim_veredicto( D->ver_hosking, SIM_AMBAR, "El .out no trae la diagnosis de los residuos." );
         gtk_label_set_text( GTK_LABEL(D->ver_jb), "" );
         return;
@@ -119,7 +126,8 @@ static void residuos( Sim *m, const VarmaOut *v )
         gchar *c = g_strdup_printf( "%.3f", x->skew ), *e = g_strdup_printf( "%.3f", x->kurt );
         gchar *f = x->tiene_hist ? g_strdup_printf( "%.1f%% (%.1f%%)", x->fuera2, x->esp2 ) : g_strdup( "" );
         gchar *g = x->lb.hay ? g_strdup_printf( "Q(%d) = %.2f", x->lb.df, x->lb.q ) : g_strdup( "" );
-        const char *nom = i < m->sis.n ? m->sis.s[i].nombre : x->nombre;
+        const char *nom = nombres && i < m->sis.n ? nombres[i]
+                        : i < m->sis.n ? m->sis.s[i].nombre : x->nombre;
         gtk_list_store_append( st, &it );
         gtk_list_store_set( st, &it, R_SER, nom, R_MEDIA, a, R_SD, b, R_ASIM, c, R_CURT, e,
                             R_FUERA2, f, R_LB, g, -1 );
@@ -144,6 +152,108 @@ static void parametros( Sim *m, const VarmaOut *v )
         gtk_list_store_set( st, &it, P_NOM, x->nombre, P_EST, a, P_SE, b, P_T, c, P_P, e, -1 );
         g_free( a ); g_free( b ); g_free( c ); g_free( e );
     }
+}
+
+/* --- el VEC --------------------------------------------------------------- */
+
+/* «LRM = 1.12 LRY − 5.16 IBO + 4.26 IDE»: la relacion j, despejando su serie
+ * de Y1 (beta = [I_r ; beta_2]: la de Y1 lleva 1, las otras de Y1 cero). */
+static void relacion( const VecOut *v, int j, GString *g )
+{
+    int y = v->m - v->r + j, i, primero = 1;
+
+    g_string_append_printf( g, "%s =", v->serie[y] );
+    for (i = 0; i < v->m - v->r; i++) {
+        double c = -v->beta[i][j];
+        g_string_append_printf( g, primero ? " %s%.3g %s" : " %s %.3g %s",
+                                c < 0 ? "−" : ( primero ? "" : "+" ), c < 0 ? -c : c, v->serie[i] );
+        primero = 0;
+    }
+}
+
+static void ajuste_vec( Sim *m, const VecOut *v )
+{
+    PagDiag *D = &m->pd;
+    GString *g = g_string_new( NULL ), *a = g_string_new( NULL );
+    int i, j, corrige = 0;
+
+    for (j = 0; j < v->nr; j++) {
+        if (j) g_string_append( g, "; " );
+        relacion( v, j, g );
+        if (j < v->new_ && v->r == 1)
+            g_string_append_printf( g, ", más un error estacionario de media %.4g", v->ew[j] );
+    }
+    sim_veredicto( D->ver_lr, SIM_VERDE, "VEC con r = %d, normalizado sobre %s. La relación de "
+                   "equilibrio%s: %s.", v->r, m->pe.vec_norm, v->r == 1 ? "" : "es", g->str );
+
+    /* alpha: como se ajusta cada serie (signo de Johansen: negativo corrige) */
+    for (j = 0; j < v->nr; j++)
+        for (i = 0; i < v->m; i++) {
+            gchar *n = g_strdup_printf( "D.%s <- ec%d", v->serie[i], j + 1 );
+            const OvecPar *x = ovec_param( v, n );
+            double t = x ? x->t : 0.0;
+            const char *dice = !x ? "" : fabs( t ) < 2 ? "no reacciona (|t| < 2)"
+                             : v->alpha[i][j] < 0 ? "corrige el error" : "se aleja del equilibrio";
+            g_string_append_printf( a, "%s%s %+.3g (t %.2f): %s", a->len ? "; " : "", v->serie[i],
+                                    v->alpha[i][j], t, dice );
+            corrige += x && fabs( t ) >= 2 && v->alpha[i][j] < 0;
+            g_free( n );
+        }
+    sim_veredicto( D->ver_optim, corrige ? SIM_VERDE : SIM_AMBAR, "El ajuste al equilibrio (α): %s.%s",
+                   a->str, corrige ? "" : " Ninguna serie corrige el error de forma significativa: "
+                                          "la relación no tira del sistema." );
+    if (v->puerta == 0)
+        sim_veredicto( D->ver_raices, SIM_ROJO, "La puerta de drvec NO se verifica (diferencia %.3g).",
+                       v->puerta_dif );
+    else
+        sim_veredicto( D->ver_raices, v->ultimo_conv == 1 ? SIM_VERDE : SIM_AMBAR,
+                       "El optimizador %s en %d iteraciones (%s); %d de %d arranques, logL de %.6f "
+                       "a %.6f. La puerta de drvec, verificada. AIC %.4f, BIC %.4f.",
+                       v->ultimo_conv == 1 ? "convergió" : "se paró sin converger", v->ultimo_iter,
+                       sim_criterio( v->ultimo_criterio ), v->arranques_conv, v->arranques,
+                       v->busca_min, v->busca_max, v->aic, v->bic );
+    g_string_free( g, TRUE );
+    g_string_free( a, TRUE );
+}
+
+static void parametros_vec( Sim *m, const VecOut *v )
+{
+    GtkListStore *st = GTK_LIST_STORE(gtk_tree_view_get_model( GTK_TREE_VIEW(m->pd.l_par) ));
+    int i;
+
+    gtk_list_store_clear( st );
+    for (i = 0; i < v->npar_t; i++) {
+        const OvecPar *x = &v->par[i];
+        GtkTreeIter it;
+        gchar *a = g_strdup_printf( "%.6f", x->est ), *b = g_strdup_printf( "%.6f", x->se );
+        gchar *c = g_strdup_printf( "%.3f", x->t ), *e = g_strdup_printf( "%.4f", x->p );
+        gtk_list_store_append( st, &it );
+        gtk_list_store_set( st, &it, P_NOM, x->nombre, P_EST, a, P_SE, b, P_T, c, P_P, e, -1 );
+        g_free( a ); g_free( b ); g_free( c ); g_free( e );
+    }
+}
+
+static void sigma_vec( Sim *m, const VecOut *v )
+{
+    GString *g = g_string_new( "Σ (covarianza de las innovaciones, en el orden del .out):\n" );
+    int i, j;
+
+    for (i = 0; i < v->m; i++) {
+        g_string_append_printf( g, "  %-12s", v->serie[i] );
+        for (j = 0; j < v->m; j++) g_string_append_printf( g, " %12.5g", v->sigma[i][j] );
+        g_string_append_c( g, '\n' );
+    }
+    g_string_append( g, "\nCorrelaciones:\n" );
+    for (i = 0; i < v->m; i++) {
+        g_string_append_printf( g, "  %-12s", v->serie[i] );
+        for (j = 0; j < v->m; j++) {
+            double d = v->sigma[i][i] * v->sigma[j][j];
+            g_string_append_printf( g, " %8.4f", d > 0 ? v->sigma[i][j] / sqrt( d ) : 0.0 );
+        }
+        g_string_append_c( g, '\n' );
+    }
+    gtk_label_set_text( GTK_LABEL(m->pd.t_sigma), g->str );
+    g_string_free( g, TRUE );
 }
 
 static void sigma( Sim *m, const VarmaOut *v )
@@ -177,6 +287,39 @@ void diagnosis_refresca( Sim *m )
 
     if (!D->libreta) return;
     estructura_refresca( m );          /* S7: su estado cambia sin estimar */
+    if (m->pe.vec && !m->pe.corriendo) {
+        const VecOut *x = m->pe.vec;
+        if (D->version == m->pe.version) return;
+        D->version = m->pe.version;
+        if (!x->hay_vec) {
+            sim_veredicto( D->ver_pide, SIM_ROJO, "La estimación del VEC falló: no hay diagnosis "
+                           "(«5 · Estimación»)." );
+            gtk_widget_set_visible( D->libreta, FALSE );
+            return;
+        }
+        gtk_widget_set_visible( D->libreta, TRUE );
+        sim_veredicto( D->ver_pide, SIM_VERDE, "La diagnosis de %s, leída del .out de drvec.",
+                       m->pe.corrida[0] ? m->pe.corrida : "la última estimación" );
+        ajuste_vec( m, x );
+        {
+            /* drvec diagnostica W = (nabla Y2, beta'Y): las ultimas r filas son
+               los errores de equilibrio, ec1..ecr, no las series de Y1.  */
+            char nom[OVEC_MAX_SER][OVEC_NOMBRE];
+            int i;
+            for (i = 0; i < x->m && i < OVEC_MAX_SER; i++) {
+                if (i < x->m - x->r) snprintf( nom[i], OVEC_NOMBRE, "∇%s", x->serie[i] );
+                else                 snprintf( nom[i], OVEC_NOMBRE, "ec%d", i - ( x->m - x->r ) + 1 );
+            }
+            residuos( m, m->pe.vdiag, m->pe.vdiag != NULL, (const char (*)[OVEC_NOMBRE]) nom );
+        }
+        parametros_vec( m, x );
+        sigma_vec( m, x );
+        if (m->pe.out && g_file_get_contents( m->pe.out, &t, NULL, NULL )) {
+            gtk_text_buffer_set_text( gtk_text_view_get_buffer( GTK_TEXT_VIEW(D->t_out) ), t, -1 );
+            g_free( t );
+        }
+        return;
+    }
     if (!v || m->pe.corriendo) {
         sim_veredicto( D->ver_pide, SIM_AMBAR, "Pide un sistema estimado («5 · Estimación»)." );
         gtk_widget_set_visible( D->libreta, FALSE );
@@ -194,7 +337,7 @@ void diagnosis_refresca( Sim *m )
     sim_veredicto( D->ver_pide, SIM_VERDE, "La diagnosis de %s, leída del .out de drvarma.",
                    m->pe.corrida[0] ? m->pe.corrida : "la última estimación" );
     ajuste( m, v );
-    residuos( m, v );
+    residuos( m, &v->diag, v->tiene_diag, NULL );
     parametros( m, v );
     sigma( m, v );
     if (m->pe.out && g_file_get_contents( m->pe.out, &t, NULL, NULL )) {

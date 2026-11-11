@@ -130,7 +130,37 @@ typedef struct {
    int           hessian;                     /* 0 fd (defecto), 1 bfgs    */
    int           lik;                         /* 0 elf (defecto), 1 shea, 2 both */
    char          zero[2048];                  /* -zero: «AR1[A<-B],MA2[B<-A]», o "" */
+
+   /* LA CLASE (S10c): VARMA en diferencias con drvarma, o VEC con drvec. En
+    * el VEC p y q son los del VARMA sobre las series EN NIVELES (p >= 1), y
+    * lo de arriba de enlaces, Sigma y opciones no se usa.               */
+   int           clase;                       /* SIS_VARMA o SIS_VEC       */
+   int           r;                           /* el rango del VEC          */
+   char          caso[8];                     /* -case: 1, 2, 3 o pre      */
+   /* LA NORMALIZACION: las series del bloque Y1, sobre las que se normaliza
+    * beta (r de ellas). La logL EXACTA del VEC cambia con ella (decision del
+    * analista, 2026-11-11): dos VEC solo se comparan si la comparten.    */
+   unsigned char y1[SIS_MAX_SER];
 } SisModelo;
+
+#define SIS_VARMA 0
+#define SIS_VEC   1
+
+/* El VEC: cuantas series hay en Y1 (tienen que ser r), las de por omision
+ * (las r ultimas del sistema), y la normalizacion por nombre: «LRM» o
+ * «LRM, IDE». sis_normalizacion devuelve la longitud.                   */
+int  sis_vec_ny1( const SisModelo *mo, int m );
+void sis_vec_y1_defecto( SisModelo *mo, int m );
+int  sis_normalizacion( const Sistema *s, const SisModelo *mo, char *out, size_t n );
+
+/* La orden del VEC:
+ *   Y2... Y1... p q r -case C -fdhess -name NOMBRE
+ * primero las series de nabla Y2 y luego las de Y1, cada bloque en el orden
+ * del sistema (drvec normaliza beta sobre las ultimas r). NOMBRE es un nombre
+ * a secas: drvec escribe NOMBRE.out en el directorio en que corre. -1 si
+ * no caben o si Y1 no tiene r series.                                  */
+int  sis_orden_vec( const Sistema *s, const SisModelo *mo, const char *nombre,
+                    char *buf, size_t nbuf, const char **argv, int max );
 
 /* Un modelo de partida: p = 1, q = 0, Sigma completa, todos los enlaces. */
 void sis_modelo_defecto( SisModelo *mo, int m );

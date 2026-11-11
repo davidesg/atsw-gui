@@ -1,6 +1,6 @@
 # sim_gui — los sistemas simultáneos (SIM)
 
-El GUI de VARMA (drvarma) y, más adelante, de VEC (drvec). El diseño está en
+El GUI de VARMA (drvarma) y de VEC (drvec). El diseño está en
 `docs/DISENO-sim.md`: un solo GUI para los dos motores, como sima, porque
 VARMA o VEC se decide dentro del análisis y no al entrar.
 
@@ -16,9 +16,9 @@ aparece con series I(1):
 | 2 · Puerta | hecha (S2): drvarma con p = q = 0 y Σ diagonal; pasa, falla, o el fichero no es un óptimo; la pregunta del rango |
 | R · Rango | hecha (S10b): con dos o más series I(1) (d = 1, D = 0), la prueba del rango de cointegración con drvec (`-lrtest`, con bootstrap si hay réplicas, con su avance y «Detener»); las tablas por rango y por comparación, y el rango que propone la regla de sima. El caso mixto (alguna I(0)) lo dice y lo deja a sima |
 | 3 · Identificación | hecha (S3): la rejilla m × m de la CCF de los residuos (las del `.out` de la puerta), la CCF entera al pulsar, los enlaces propuestos, «Al modelo» |
-| 4 · Modelo | hecha (S3): p, q, Σ, un enlace por par ordenado, opciones avanzadas; la orden de drvarma, antes de lanzar |
+| 4 · Modelo | hecha (S3): p, q, Σ, un enlace por par ordenado, opciones avanzadas; la orden de drvarma, antes de lanzar. Con series I(1), la clase VEC (S10c): r, el caso y la normalización (las r series de Y1), con la orden de drvec |
 | 5 · Estimación | hecha (S4): lanza drvarma con el modelo de la 4; cómo acabó (convergió, pared MA, sin converger, falló); con un sistema, cada estimación es un modelo del caso con su padre |
-| 6 · Diagnosis | hecha (S4; Estructura en S7: Simplificar con `-zero`, «¿Es una red?» y «Pasar a MT»): la LR contra los univariantes, el optimizador, las raíces, Hosking, Jarque-Bera, los residuos de cada serie, los parámetros, Σ y el .out |
+| 6 · Diagnosis | hecha (S4; Estructura en S7: Simplificar con `-zero`, «¿Es una red?» y «Pasar a MT»): la LR contra los univariantes, el optimizador, las raíces, Hosking, Jarque-Bera, los residuos de cada serie, los parámetros, Σ y el .out. Con un VEC (S10c): la relación de equilibrio (β), el ajuste de cada serie (α, con su t), la búsqueda y la puerta de drvec, los residuos de W (∇Y₂ y ec), los parámetros, Σ y el .out |
 | Ver modelo ▾ | hecho (S4b): la página de cada serie, la de fue (`lib/equation`), con los términos cruzados en la línea del ruido |
 | 7 · Previsión | hecha (S5): la previsión de cada serie en su nivel y su gráfico; la evaluación fuera de muestra contra los univariantes (la misma ventana); la respuesta al impulso y la descomposición, del .out de la estimación |
 

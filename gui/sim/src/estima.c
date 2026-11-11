@@ -12,6 +12,11 @@
  *   la estimacion fallo       drvarma sale con 3 y lo dice en el .out
  *   la puerta fallo           sale con 5: nada encima se puede creer
  *
+ * CON LA CLASE VEC (S10c) lanza drvec (la orden la arma lib/sistema:
+ * sis_orden_vec) y lee su .out con lib/outvec; la diagnosis de residuos,
+ * con lib/outdiag, que lee la de drvec igual que la de drvarma. drvec no
+ * tiene -o: escribe <-name>.out en el directorio en que corre.
+ *
  * CON UN SISTEMA DEL PROYECTO, cada estimacion es una CORRIDA del caso
  * (c00, c01...), con su padre --la anterior-- en el linaje; su .out va al
  * directorio del sistema y no se pisa. Sin proyecto, a la cache con nombre
@@ -58,9 +63,54 @@ static void modelo_del_out( Sim *m, const VarmaOut *v )
     sis_enlaces_de_texto( &m->sis, &m->mod, v->enlaces );
 }
 
+/* ¿Es un .out de drvec? Su primera linea lo dice. */
+static gboolean es_de_drvec( const char *out )
+{
+    gchar *t = NULL;
+    gboolean r = FALSE;
+    if (g_file_get_contents( out, &t, NULL, NULL ))
+        r = g_str_has_prefix( t, "Program          : DRVEC" );
+    g_free( t );
+    return r;
+}
+
+/* El VEC del .out a la pagina 4: r, p, q, el caso y la normalizacion (las
+ * r ultimas series del .out, que es el bloque Y1).                     */
+static void modelo_del_vec( Sim *m, const VecOut *v )
+{
+    PagEstima *E = &m->pe;
+    int i, j;
+
+    m->mod.clase = SIS_VEC;
+    m->mod.r = v->r;
+    m->mod.p = v->p;
+    m->mod.q = v->q;
+    if (v->caso[0]) snprintf( m->mod.caso, sizeof m->mod.caso, "%s", v->caso );
+    memset( m->mod.y1, 0, sizeof m->mod.y1 );
+    for (j = v->m - v->r; j < v->m; j++)
+        for (i = 0; i < m->sis.n; i++)
+            if (!strcmp( m->sis.s[i].nombre, v->serie[j] )) m->mod.y1[i] = 1;
+    sis_normalizacion( &m->sis, &m->mod, E->vec_norm, sizeof E->vec_norm );
+}
+
 static void lee( Sim *m, const char *out )
 {
     PagEstima *E = &m->pe;
+
+    g_free( E->vec );   E->vec = NULL;
+    g_free( E->vdiag ); E->vdiag = NULL;
+    if (es_de_drvec( out )) {
+        g_free( E->v ); E->v = NULL;
+        E->vec = g_new0( VecOut, 1 );
+        if (ovec_parse_file( out, E->vec ) != 0 || E->vec->m == 0) {
+            g_free( E->vec ); E->vec = NULL;
+        } else {
+            E->vdiag = g_new0( Diagnosis, 1 );
+            if (od_parse_file( out, E->vdiag ) != 0) { g_free( E->vdiag ); E->vdiag = NULL; }
+        }
+        E->version++;
+        return;
+    }
     if (!E->v) E->v = g_new0( VarmaOut, 1 );
     if (ov_parse_file( out, E->v ) != 0) {
         g_free( E->v );
@@ -80,6 +130,7 @@ static void on_done( const EngineResult *r, gpointer data )
     if (!m->ventana) return;
     gtk_widget_hide( m->avance );
     lee( m, E->out );
+    if (E->vec) modelo_del_vec( m, E->vec );
     sim_refresca( m );
     {
         /* El veredicto, sin su punto de color. */
@@ -110,7 +161,8 @@ static gchar *corrida_nueva( Sim *m, char *why, size_t n )
         dir = g_path_get_dirname( ruta );
         g_mkdir_with_parents( dir, 0755 );
         g_free( dir );
-        /* drvarma pone el .out: -o lleva el nombre sin extension. */
+        /* drvarma pone el .out (-o lleva el nombre sin extension); drvec
+           igual con -name, en el directorio en que corre.            */
         base = g_strdup( ruta );
         if (g_str_has_suffix( base, ".out" )) base[strlen( base ) - 4] = 0;
         return base;
@@ -124,20 +176,28 @@ gboolean estima_lanzar( Sim *m )
     PagEstima *E = &m->pe;
     const char *av[SIS_MAX_SER + 24];
     char buf[2048], why[512];
-    gchar *base, *dir, *mot;
+    gchar *base, *dir, *mot, *nombre = NULL;
+    const char *motor;
+    gboolean vec;
     int k;
 
-    if (E->corriendo || m->pp.corriendo) return FALSE;
+    if (E->corriendo || m->pp.corriendo || m->pr.corriendo) return FALSE;
     if (m->sis.n < 2) { sim_estado( m, "Hacen falta al menos dos series («1 · Series»)." ); return FALSE; }
     if (puerta_estado( m ) != 1) {
         sim_estado( m, "Antes, la puerta superada («2 · Puerta»): si el sistema diagonal no "
                        "reproduce los univariantes, nada de lo que se estime encima se puede creer." );
         return FALSE;
     }
-    if (!( mot = sim_hermano( "drvarma" ) )) {
-        sim_veredicto( E->ver_fin, SIM_ROJO, "No pude lanzar drvarma: ni al lado de sim_gui ni en "
-                       "el PATH («make» en engines/drvarma)." );
-        sim_estado( m, "No pude lanzar drvarma." );
+    vec = m->mod.clase == SIS_VEC;
+    motor = vec ? "drvec" : "drvarma";
+    if (vec && sis_vec_ny1( &m->mod, m->sis.n ) != m->mod.r) {
+        sim_estado( m, "La normalización tiene que llevar r = %d series («4 · Modelo»).", m->mod.r );
+        return FALSE;
+    }
+    if (!( mot = sim_hermano( motor ) )) {
+        sim_veredicto( E->ver_fin, SIM_ROJO, "No pude lanzar %s: ni al lado de sim_gui ni en "
+                       "el PATH («make» en engines/%s).", motor, motor );
+        sim_estado( m, "No pude lanzar %s.", motor );
         return FALSE;
     }
     g_free( mot );
@@ -145,8 +205,12 @@ gboolean estima_lanzar( Sim *m )
         sim_estado( m, "No pude registrar la corrida: %s", why );
         return FALSE;
     }
-    k = sis_orden_modelo( &m->sis, &m->mod, base, buf, sizeof buf, av, G_N_ELEMENTS(av) - 1 );
-    if (k < 0) { g_free( base ); sim_estado( m, "La orden no cabe." ); return FALSE; }
+    if (vec) {
+        nombre = g_path_get_basename( base );
+        k = sis_orden_vec( &m->sis, &m->mod, nombre, buf, sizeof buf, av, G_N_ELEMENTS(av) - 1 );
+    } else
+        k = sis_orden_modelo( &m->sis, &m->mod, base, buf, sizeof buf, av, G_N_ELEMENTS(av) - 1 );
+    if (k < 0) { g_free( base ); g_free( nombre ); sim_estado( m, "La orden no cabe." ); return FALSE; }
     av[k] = NULL;
 
     g_free( E->out );
@@ -155,18 +219,19 @@ gboolean estima_lanzar( Sim *m )
     dir = g_path_get_dirname( base );
     if (E->consola)
         gtk_text_buffer_set_text( gtk_text_view_get_buffer( GTK_TEXT_VIEW(E->consola) ), "", -1 );
-    E->trabajo = engine_start( dir, "drvarma", av, NULL, on_salida, on_done, m );
+    E->trabajo = engine_start( dir, motor, av, NULL, on_salida, on_done, m );
     g_free( dir );
     g_free( base );
+    g_free( nombre );
     if (!E->trabajo) {
-        sim_veredicto( E->ver_fin, SIM_ROJO, "No pude lanzar drvarma." );
+        sim_veredicto( E->ver_fin, SIM_ROJO, "No pude lanzar %s.", motor );
         return FALSE;
     }
     /* La siguiente colgara de esta. */
     if (E->corrida[0]) snprintf( E->previa, sizeof E->previa, "%s", E->corrida );
     E->corriendo = TRUE;
     if (m->avance) { gtk_widget_show( m->avance ); g_timeout_add( 120, pulso, m ); }
-    sim_estado( m, "drvarma estima%s%s…", E->corrida[0] ? " la corrida " : "",
+    sim_estado( m, "%s estima%s%s…", motor, E->corrida[0] ? " la corrida " : "",
                 E->corrida[0] ? E->corrida : "" );
     sim_refresca( m );
     return TRUE;
@@ -181,8 +246,9 @@ gboolean estima_desde( Sim *m, const char *out )
     E->out = g_strdup( out );
     E->rc = 0;
     lee( m, out );
-    if (!E->v) return FALSE;
-    modelo_del_out( m, E->v );
+    if (E->vec) modelo_del_vec( m, E->vec );
+    else if (!E->v) return FALSE;
+    else modelo_del_out( m, E->v );
     if (E->consola && g_file_get_contents( out, &t, NULL, NULL )) {
         gtk_text_buffer_set_text( gtk_text_view_get_buffer( GTK_TEXT_VIEW(E->consola) ), t, -1 );
         g_free( t );
@@ -223,7 +289,26 @@ void estima_refresca( Sim *m )
                        "un nombre fijo: la siguiente pisa a esta." );
 
     if (E->corriendo)
-        sim_veredicto( E->ver_fin, SIM_AMBAR, "drvarma está estimando…" );
+        sim_veredicto( E->ver_fin, SIM_AMBAR, "%s está estimando…",
+                       m->mod.clase == SIS_VEC ? "drvec" : "drvarma" );
+    else if (E->vec) {
+        const VecOut *x = E->vec;
+        if (x->puerta == 0)
+            sim_veredicto( E->ver_fin, SIM_ROJO, "La puerta de drvec NO se verifica (diferencia "
+                           "%.3g): el VEC no parte de los modelos de fue.", x->puerta_dif );
+        else if (E->rc == 2 || !x->hay_vec)
+            sim_veredicto( E->ver_fin, SIM_ROJO, "La estimación del VEC FALLÓ (drvec salió con %d). "
+                           "No hay resultados; revisa el modelo («4 · Modelo»).", E->rc );
+        else if (x->ultimo_conv == 0)
+            sim_veredicto( E->ver_fin, SIM_AMBAR, "El VEC se paró sin converger tras %d iteraciones "
+                           "(%s): no es un óptimo seguro.", x->ultimo_iter,
+                           sim_criterio( x->ultimo_criterio ) );
+        else
+            sim_veredicto( E->ver_fin, SIM_VERDE, "VEC con r = %d, normalizado sobre %s: convergió "
+                           "(%d de %d arranques, logL de %.6f a %.6f). logL = %.6f, %d parámetros. "
+                           "La diagnosis, en «6».", x->r, E->vec_norm, x->arranques_conv,
+                           x->arranques, x->busca_min, x->busca_max, x->logL, x->npar );
+    }
     else if (puerta_estado( m ) != 1 && !v)
         sim_veredicto( E->ver_fin, SIM_AMBAR, "Pide la puerta superada («2 · Puerta»)." );
     else if (!v && !E->out)

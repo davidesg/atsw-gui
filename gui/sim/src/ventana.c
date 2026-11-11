@@ -168,22 +168,30 @@ static void enciende( GtkToolItem *b, gboolean si, const char *globo_si, const c
 
 static void barra_refresca( Sim *m )
 {
-    gboolean corre = m->pe.corriendo || m->pp.corriendo;
+    gboolean corre = m->pe.corriendo || m->pp.corriendo || m->pr.corriendo;
     gboolean hay = m->pe.v && !m->pe.v->fallo && !corre;
+    gboolean vec = m->pe.vec && m->pe.vec->hay_vec && !corre;
     const char *falta, *sin = corre ? "El motor está corriendo." : "Todavía no hay sistema estimado: "
                                        "Estimar (Ctrl+E) lo hace.";
+    /* CON UN VEC, la diagnosis si; la pagina del modelo y la prevision son
+     * todavia del VARMA (la del VEC la hace sima: forecast).            */
+    const char *sin_vec = "Con un VEC, todavía no: en sim_gui son del VARMA. La previsión del VEC "
+                          "la hace sima (forecast).";
 
     if (!m->tb_estimar) return;
     falta = corre ? "El motor ya está corriendo."
           : m->sis.n < 2 ? "Hacen falta al menos dos series: «1 · Series», Abrir…"
           : "Antes, la puerta: «2 · Puerta».";
     enciende( m->tb_estimar, !corre && m->sis.n >= 2 && puerta_estado( m ) == 1,
-              "Estimar el sistema con drvarma (Ctrl+E), con el modelo de «4 · Modelo»", falta );
-    enciende( m->tb_diag, hay, "«6 · Diagnosis» (Ctrl+D)", sin );
+              m->mod.clase == SIS_VEC ? "Estimar el VEC con drvec (Ctrl+E), con el modelo de «4 · Modelo»"
+                                      : "Estimar el sistema con drvarma (Ctrl+E), con el modelo de «4 · Modelo»",
+              falta );
+    enciende( m->tb_diag, hay || vec, "«6 · Diagnosis» (Ctrl+D)", sin );
     enciende( m->tb_ver, hay, "La página del modelo de la primera serie: sus residuos con la ACF "
               "y la PACF y, debajo, su ecuación como la escribe fue, con los términos cruzados "
-              "en la línea del ruido. La flecha: las demás series.", sin );
-    enciende( m->tb_prev, hay && !m->pv.corriendo, "Calcular la previsión, en «7 · Previsión»", sin );
+              "en la línea del ruido. La flecha: las demás series.", vec ? sin_vec : sin );
+    enciende( m->tb_prev, hay && !m->pv.corriendo, "Calcular la previsión, en «7 · Previsión»",
+              vec ? sin_vec : sin );
 }
 
 static void estado_new( Sim *m, GtkWidget *raiz )
@@ -235,8 +243,11 @@ void sim_refresca( Sim *m )
     gtk_label_set_text( GTK_LABEL(m->l_modelo), t );
     g_free( t );
 
-    t = m->caso[0] ? g_strdup_printf( "sim_gui — SIM · VARMA · %s", m->caso )
-                   : g_strdup( "sim_gui — SIM · VARMA" );
+    {
+        const char *cl = m->mod.clase == SIS_VEC ? "VEC" : "VARMA";
+        t = m->caso[0] ? g_strdup_printf( "sim_gui — SIM · %s · %s", cl, m->caso )
+                       : g_strdup_printf( "sim_gui — SIM · %s", cl );
+    }
     gtk_window_set_title( GTK_WINDOW(m->ventana), t );
     g_free( t );
 }
@@ -265,7 +276,7 @@ static void on_destroy( GtkWidget *w, Sim *m )
     m->pp.b_pasar = m->pp.orden = m->pp.lista = NULL;
     m->pp.ver_puerta = m->pp.ver_notas = m->pp.ver_rango = NULL;
     m->pr.pagina = m->pr.s_p = m->pr.s_q = m->pr.s_B = m->pr.c_caso = NULL;
-    m->pr.b_contrastar = m->pr.b_parar = m->pr.orden = m->pr.barra = NULL;
+    m->pr.b_contrastar = m->pr.b_parar = m->pr.b_al_modelo = m->pr.orden = m->pr.barra = NULL;
     m->pr.l_pruebas = m->pr.l_rangos = m->pr.ver_propuesta = m->pr.ver_puerta = NULL;
     m->pr.ver_notas = NULL;
     memset( &m->pi, 0, sizeof m->pi );

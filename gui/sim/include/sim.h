@@ -24,6 +24,7 @@
 
 #include "sistema.h"
 #include "outvarma.h"
+#include "outvec.h"
 #include "proyecto.h"
 #include "engine.h"
 
@@ -34,7 +35,9 @@
 #define SIM_AMBAR  "#9a6700"
 #define SIM_ROJO   "#b3261e"
 
-enum { PG_SERIES, PG_PUERTA, PG_IDENT, PG_MODELO, PG_ESTIMA, PG_DIAG, PG_PREV, PG_N };
+/* PG_RANGO esta siempre en el cuaderno, pero solo se ve cuando la pregunta
+ * existe (series I(1)): asi los indices de las demas no cambian.        */
+enum { PG_SERIES, PG_PUERTA, PG_RANGO, PG_IDENT, PG_MODELO, PG_ESTIMA, PG_DIAG, PG_PREV, PG_N };
 
 /* La pagina 1: las series, en el orden del sistema. */
 typedef struct {
@@ -62,6 +65,31 @@ typedef struct {
     VarmaOut  *v;             /* lo leido (lib/outvarma), en el monton     */
     int        version;       /* sube con cada puerta leida                */
 } PagPuerta;
+
+/* La pagina R · Rango: el rango de cointegracion, con drvec (S10b). */
+typedef struct {
+    GtkWidget *pagina;        /* la pagina entera: se esconde sin series I(1) */
+    GtkWidget *s_p, *s_q, *s_B, *c_caso;
+    GtkWidget *b_contrastar, *b_parar;
+    GtkWidget *orden;         /* la orden, copiable                        */
+    GtkWidget *barra;         /* el avance del bootstrap                   */
+    GtkWidget *l_pruebas;     /* r -> r+1: la LR y sus valores criticos    */
+    GtkWidget *l_rangos;      /* por r: npar, logL, AIC, BIC               */
+    GtkWidget *ver_propuesta; /* el rango que propone (la regla de sima)   */
+    GtkWidget *ver_puerta;    /* la puerta de drvec                        */
+    GtkWidget *ver_notas;     /* sin bootstrap, pocas replicas, no convergio */
+
+    SisRango   cfg;
+    EngineJob *trabajo;
+    gboolean   corriendo, parando;
+    guint      tic;           /* el temporizador del avance                */
+    gboolean   hecha;
+    int        rc;
+    gchar     *out;           /* <sistema>_rango, sin .out                 */
+    gchar     *firma;         /* las rutas y la configuracion de la prueba */
+    VecOut    *v;
+    int        version;
+} PagRango;
 
 /* La pagina 3: la identificacion (N2, sima identify_cross). */
 typedef struct {
@@ -181,6 +209,7 @@ typedef struct {
     Sistema    sis;           /* las series, en orden                      */
     PagSeries  ps;
     PagPuerta  pp;
+    PagRango   pr;
     PagIdent   pi;
     PagModelo  pm;
     SisModelo  mod;           /* el modelo que se va a estimar             */
@@ -218,8 +247,9 @@ void       sim_veredicto( GtkWidget *w, const char *color, const char *fmt, ... 
 GtkWidget *sim_mono( const char *txt );
 /* Un criterio de parada de drvarma (qnewtopt.c), en castellano. */
 const char *sim_criterio( const char *c );
-/* drvarma, buscado al lado de sim_gui (el arbol, el paquete) antes que en
- * el PATH. SIM_DRVARMA en el entorno lo sustituye (la prueba). g_free.   */
+/* drvarma o drvec, buscado al lado de sim_gui (el arbol, el paquete) antes
+ * que en el PATH. SIM_DRVARMA y SIM_DRVEC en el entorno lo sustituyen (la
+ * prueba). g_free.                                                      */
 gchar     *sim_hermano( const char *programa );
 
 /* series.c */
@@ -236,6 +266,18 @@ gboolean   puerta_pasar( Sim *m );
 /* Lo que la puerta dice de ESTE sistema: 1 pasa, 0 no se ha pasado (o el
  * sistema cambio despues), -1 falla.                                    */
 int        puerta_estado( Sim *m );
+
+/* rango.c: la pagina R · Rango (S10b). */
+GtkWidget *rango_pagina_new( Sim *m );
+void       rango_refresca( Sim *m );
+/* Si el sistema admite la prueba del rango (series I(1)); si no, por que. */
+gboolean   rango_aplica( Sim *m, char *why, size_t n );
+/* Lanza drvec -lrtest con lo de la pagina. TRUE si arranco.            */
+gboolean   rango_contrastar( Sim *m );
+/* 1 hay una prueba leida para ESTE sistema y configuracion; 0 no (o cambio). */
+int        rango_estado( Sim *m );
+/* Una prueba ya hecha, leida de su .out (la carga de un sistema).       */
+gboolean   rango_desde( Sim *m, const char *out );
 
 /* identifica.c */
 GtkWidget *identifica_pagina_new( Sim *m );

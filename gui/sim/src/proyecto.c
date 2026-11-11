@@ -97,6 +97,9 @@ gboolean sim_caso_carga( Sim *m, char *why, size_t n )
 
         if (g_file_test( pu, G_FILE_TEST_EXISTS )) puerta_desde( m, pu );
         g_free( pu );
+        pu = sim_artefacto( m, "rango.out" );
+        if (g_file_test( pu, G_FILE_TEST_EXISTS )) rango_desde( m, pu );
+        g_free( pu );
         if (de && de[0] && pr_corrida_ruta( m->proy, m->caso, de, ".out", out, sizeof out ) == 0 &&
             g_file_test( out, G_FILE_TEST_EXISTS )) {
             snprintf( m->pe.corrida, sizeof m->pe.corrida, "%s", de );

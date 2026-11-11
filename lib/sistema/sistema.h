@@ -87,6 +87,33 @@ int  sis_orden_puerta( const Sistema *s, const char *salida,
                        const char **argv, int max );
 
 /* ------------------------------------------------------------------------ */
+/* El rango de cointegracion (S10b, sima prepare_vec y rank_test)           */
+/* ------------------------------------------------------------------------ */
+
+/* La prueba del rango de drvec es para series I(1): cada una con d = 1 y sin
+ * diferencia estacional (D = 0), y al menos dos. 1 si el sistema la admite;
+ * 0 con el motivo en why (el caso mixto, con alguna d = 0, lo hace sima:
+ * prepare_vec mixed=True; no es el de por omision).                     */
+int  sis_rango_admite( const Sistema *s, char *why, size_t n );
+
+/* El caso determinista de drvec: "1", "2", "3" o "pre" (el de cada .pre). */
+typedef struct {
+   int  p, q;                 /* el VARMA sobre las series en niveles      */
+   char caso[8];
+   int  B;                    /* replicas del bootstrap; 0: sin bootstrap  */
+} SisRango;
+
+void sis_rango_defecto( SisRango *r );
+
+/* La orden de la prueba:
+ *   A.pre B.pre ... p q 0 -case C -lrtest [-bootstrap B] -name NOMBRE
+ * NOMBRE es un nombre a secas: drvec escribe NOMBRE.out y NOMBRE.boot en el
+ * directorio en que corre. argv apunta a s, a nombre y a buf (que guarda p,
+ * q y B y tiene que vivir lo que argv); devuelve cuantos, -1 si no caben. */
+int  sis_orden_rango( const Sistema *s, const SisRango *r, const char *nombre,
+                      char *buf, size_t nbuf, const char **argv, int max );
+
+/* ------------------------------------------------------------------------ */
 /* El modelo: lo que la pagina 4 manda a drvarma (N3, sima estimate)        */
 /* ------------------------------------------------------------------------ */
 

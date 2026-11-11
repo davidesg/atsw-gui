@@ -14,8 +14,8 @@
  * moverse es legitimo), o no es un optimo (es un .inp, una especificacion)--.
  *
  * Y la pregunta de la cointegracion (N1c): con dos o mas series
- * diferenciadas, ¿se mueven juntas a largo plazo? Es la del rango, y llega
- * con el VEC (fase S10).
+ * diferenciadas, ¿se mueven juntas a largo plazo? Es la del rango, en la
+ * pagina R · Rango (rango.c, S10b).
  */
 
 #include <string.h>
@@ -254,11 +254,18 @@ void puerta_refresca( Sim *m )
     /* N1c: la pregunta de la cointegracion, con dos o mas diferenciadas. */
     dif = sis_diferenciadas( &m->sis );
     if (m->sis.n >= 2 && dif >= 2)
-        sim_veredicto( P->ver_rango, SIM_AMBAR,
-                       "%d de las series están diferenciadas. ¿Se mueven juntas a largo "
-                       "plazo? Esa pregunta es la del rango de cointegración, y llega con "
-                       "el VEC, en una versión posterior. Mientras tanto, la hace sima (prepare_vec y "
-                       "rank_test).", dif );
+    {
+        char why[512];
+        if (rango_aplica( m, why, sizeof why ))
+            sim_veredicto( P->ver_rango, SIM_AMBAR,
+                           "%d de las series están diferenciadas. ¿Se mueven juntas a largo "
+                           "plazo? Esa pregunta es la del rango de cointegración: «R · Rango».",
+                           dif );
+        else
+            sim_veredicto( P->ver_rango, SIM_AMBAR,
+                           "%d de las series están diferenciadas, pero la prueba del rango no "
+                           "se puede hacer aquí: %s.", dif, why );
+    }
     else
         gtk_label_set_text( GTK_LABEL(P->ver_rango), "" );
 }

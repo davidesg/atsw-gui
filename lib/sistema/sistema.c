@@ -197,6 +197,66 @@ int sis_orden_puerta( const Sistema *s, const char *salida, const char **argv, i
 
 /* ------------------------------------------------------------------------ */
 
+int sis_rango_admite( const Sistema *s, char *why, size_t n )
+{
+   int i;
+
+   if ( why && n ) why[0] = 0;
+   if ( s->n < 2 )
+      { if ( why ) snprintf( why, n, "hacen falta al menos dos series" ); return 0; }
+   for ( i = 0; i < s->n; i++ )
+      {
+      const SisSerie *x = &s->s[i];
+      if ( x->D > 0 )
+         { if ( why ) snprintf( why, n, "%s lleva diferencia estacional (D = %d): la prueba "
+                                "del rango es para series I(1) sin raices estacionales",
+                                x->nombre, x->D );
+           return 0; }
+      if ( x->d >= 2 )
+         { if ( why ) snprintf( why, n, "%s lleva d = %d: la prueba del rango es para series "
+                                "I(1)", x->nombre, x->d );
+           return 0; }
+      if ( x->d == 0 )
+         { if ( why ) snprintf( why, n, "%s no esta diferenciada (d = 0): el caso mixto, con "
+                                "series I(0) dentro, lo hace sima (prepare_vec, mixed)", x->nombre );
+           return 0; }
+      }
+   return 1;
+}
+
+void sis_rango_defecto( SisRango *r )
+{
+   memset( r, 0, sizeof *r );
+   r->p = 2;
+   r->q = 0;
+   snprintf( r->caso, sizeof r->caso, "pre" );
+   r->B = 199;
+}
+
+int sis_orden_rango( const Sistema *s, const SisRango *r, const char *nombre,
+                     char *buf, size_t nbuf, const char **argv, int max )
+{
+   int i, k = 0, w;
+   char *p = buf, *q, *b;
+
+   if ( s->n + 12 > max ) return -1;
+   w = snprintf( buf, nbuf, "%d%c%d%c%d", r->p, 0, r->q, 0, r->B );
+   if ( w < 0 || (size_t) w >= nbuf ) return -1;
+   q = p + strlen( p ) + 1;
+   b = q + strlen( q ) + 1;
+   for ( i = 0; i < s->n; i++ ) argv[k++] = s->s[i].ruta;
+   argv[k++] = p;
+   argv[k++] = q;
+   argv[k++] = "0";
+   argv[k++] = "-case";
+   argv[k++] = r->caso;
+   argv[k++] = "-lrtest";
+   if ( r->B > 0 ) { argv[k++] = "-bootstrap"; argv[k++] = b; }
+   argv[k++] = "-name";
+   argv[k++] = nombre;
+   return k;
+}
+
 void sis_modelo_defecto( SisModelo *mo, int m )
 {
    int a, b;

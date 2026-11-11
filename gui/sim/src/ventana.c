@@ -256,6 +256,7 @@ static void on_destroy( GtkWidget *w, Sim *m )
     if (m->pp.trabajo) engine_stop( m->pp.trabajo );
     if (m->pe.trabajo) engine_stop( m->pe.trabajo );
     if (m->pv.trabajo) engine_stop( m->pv.trabajo );
+    if (m->pd.trabajo) engine_stop( m->pd.trabajo );
     memset( &m->ps, 0, sizeof m->ps );
     m->pp.b_pasar = m->pp.orden = m->pp.lista = NULL;
     m->pp.ver_puerta = m->pp.ver_notas = m->pp.ver_rango = NULL;
@@ -263,7 +264,10 @@ static void on_destroy( GtkWidget *w, Sim *m )
     memset( &m->pm, 0, sizeof m->pm );
     m->pe.b_estimar = m->pe.b_parar = m->pe.orden = m->pe.consola = NULL;
     m->pe.ver_fin = m->pe.ver_donde = NULL;
-    memset( &m->pd, 0, sizeof m->pd );
+    m->pd.ver_pide = m->pd.libreta = m->pd.ver_lr = m->pd.ver_hosking = m->pd.ver_jb = NULL;
+    m->pd.ver_raices = m->pd.ver_optim = m->pd.l_par = m->pd.l_res = m->pd.t_sigma = NULL;
+    m->pd.t_out = m->pd.b_simpl = m->pd.b_red = m->pd.b_pasar_mt = NULL;
+    m->pd.ver_simpl = m->pd.ver_red = m->pd.t_red = NULL;
     m->pv.s_hor = m->pv.c_eval = m->pv.s_win = m->pv.b_calc = NULL;
     m->pv.ver_pide = m->pv.ver_eval = m->pv.libreta = NULL;
     m->pv.t_prev = m->pv.l_eval = m->pv.t_irf = m->pv.t_fevd = m->pv.graficos = NULL;

@@ -1,6 +1,6 @@
 #!/bin/bash
-# LAS FUENTES PARA COMPILAR EN LINUX: solo lo que lleva la primera version
-# (sin drvarma ni drvec, sin el banco de conformidad ni el estudio), con un
+# LAS FUENTES PARA COMPILAR EN LINUX: solo lo que lleva el paquete (con
+# drvarma y drvec; sin el banco de conformidad ni el estudio), con un
 # Makefile que construye e instala (Makefile.fuente) y su INSTALAR.txt:
 #
 #   bash packaging/linux/fuente.sh [version]
@@ -16,7 +16,7 @@ trap 'rm -rf "$T"' EXIT
 
 cd "$R"
 git archive --prefix="$N/" HEAD \
-    lib engines/fue engines/fuf engines/fug engines/drtran engines/drvarma engines/art gui \
+    lib engines/fue engines/fuf engines/fug engines/drtran engines/drvarma engines/drvec engines/art gui \
     packaging docs/manual/MANUAL.md docs/manual/datos docs/manual/img docs/ejemplos |
     tar -x -C "$T"
 cp packaging/linux/Makefile.fuente "$T/$N/Makefile"

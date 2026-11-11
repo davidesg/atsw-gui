@@ -15,7 +15,7 @@ set -euo pipefail
 
 R=$(cd "$(dirname "$0")/../.." && pwd)
 V=${1:-0.0}
-DIRS="engines/fue engines/fuf engines/fug engines/drtran engines/drvarma engines/art
+DIRS="engines/fue engines/fuf engines/fug engines/drtran engines/drvarma engines/drvec engines/art
       gui/fue gui/fug gui/drtran gui/sim gui/atsw gui/atsw-cli"
 A=$(gcc -print-multiarch)
 GSL="/usr/lib/$A/libgsl.a /usr/lib/$A/libgslcblas.a"

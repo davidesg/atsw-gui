@@ -25,9 +25,9 @@ on:
 
 env:
   # Lo que va en el paquete (packaging/programas.sh): con drvarma y sim_gui
-  # (SIM, S9); sin drvec todavia (S10).
+  # (SIM, S9) y drvec (la prueba del rango de sim_gui, S10b).
   DIRS: >-
-    engines/fue engines/fuf engines/fug engines/drtran engines/drvarma engines/art
+    engines/fue engines/fuf engines/fug engines/drtran engines/drvarma engines/drvec engines/art
     gui/fue gui/fug gui/drtran gui/sim gui/atsw gui/atsw-cli
 
 jobs:

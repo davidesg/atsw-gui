@@ -1,0 +1,104 @@
+************************************************
+*        Input file for program DRVUS          *
+* Copyright (C) 1996 Jos? Alberto Mauricio     *
+************************************************
+* Built by sima's raw entry (route U), not reviewed in art
+
+** Frequency of time series: either 1(A), 4(Q) or 12(M):
+ 4
+** Number of observations and starting date of time series:
+ 55  1 1974 LRM
+** Number of deterministic variables (including seasonal components):
+3
+**
+cos 1
+sin 1
+alter
+**
+0 0 0 
+**
+0.803381  1
+**
+-0.064631  1
+**
+0.862986  1
+**
+0 0 0 
+**Number and orders of regular AR operators:
+1 1
+**
+0.5329 1
+** Number and orders of annual AR operators:
+0
+** Number and orders of regular MA operators:
+0
+** Number and orders of anual MA operators:
+0
+** Number and frequencies of regular AR(2) operators with fixed frequency:
+0
+** Number and frequencies of regular MA(2) operators with fixed frequency:
+0
+** Mean parameter (mu):
+0
+** Box-Cox lambda, regular differences and complete annual differences:
+1.00 1 0
+** Individual factors of the annual difference (from freq 0.0): 
+ 0 0 0
+** ACF/PACF bands (0 Automatic) and reescaling factor: 
+ 0.00 100.00
+** Time series (stochastic and non-standard deterministic variables): 
+11.6325502300 
+11.6041524800 
+11.5815206700 
+11.6018474100 
+11.5863049000 
+11.6044985700 
+11.6533070700 
+11.7642463900 
+11.7529337500 
+11.7654797900 
+11.7805829800 
+11.7701782200 
+11.7458921300 
+11.7686514100 
+11.7498245700 
+11.7486965400 
+11.7049158100 
+11.7034441600 
+11.7030011400 
+11.7036730100 
+11.6789030500 
+11.7077816000 
+11.6761550600 
+11.6859207400 
+11.6416063700 
+11.6351797600 
+11.6092609800 
+11.6576126500 
+11.6278184100 
+11.6288523200 
+11.6037776100 
+11.6290648500 
+11.6020233300 
+11.6037753200 
+11.5946223500 
+11.6038201700 
+11.6171256400 
+11.6880958900 
+11.7265149200 
+11.7812504300 
+11.7976201900 
+11.8419120400 
+11.8402953900 
+11.9235775300 
+11.9029622200 
+11.9267836600 
+11.9709981000 
+12.0259026100 
+12.0511507800 
+12.0754603800 
+12.0561893100 
+12.0716279500 
+12.0279522200 
+12.0397883400 
+12.0152941000 

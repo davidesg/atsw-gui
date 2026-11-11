@@ -21,6 +21,10 @@ build/
 !lib/formales/pruebas/*.pre
 # los de Jenkins y Alavi (ejemplo jenkins_alavi de sima): fixtures de lib/outvarma
 !lib/outvarma/datos/*.pre
+# los de Johansen y Juselius (ejemplo johansen_juselius de sima) y una prueba
+# del rango con 99 replicas: fixtures de lib/outvec
+!lib/outvec/datos/*.pre
+!lib/outvec/datos/*.out
 # los proyectos de ejemplo (Ayuda -> Ejemplos): sus modelos estimados son el ejemplo
 !docs/ejemplos/**/*.pre
 !docs/ejemplos/**/*.out

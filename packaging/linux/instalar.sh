@@ -53,4 +53,8 @@ install -m 644 "$R/packaging/LEEME.txt" "$D$P/share/doc/atsw/"
 install -m 644 "$R"/docs/manual/datos/ipc_wti.csv "$R"/docs/manual/datos/ipc_wti.xlsx \
     "$R"/docs/manual/datos/es_core.csv "$R"/docs/manual/datos/es_core.xlsx \
     "$D$P/share/doc/atsw/Datos del manual/"
+# Los proyectos de ejemplo (Ayuda -> Ejemplos): la madre abre una copia.
+mkdir -p "$D$P/share/doc/atsw/Ejemplos"
+cp -R "$R"/docs/ejemplos/* "$D$P/share/doc/atsw/Ejemplos/"
+find "$D$P/share/doc/atsw/Ejemplos" -type d -exec chmod 755 {} + -o -type f -exec chmod 644 {} +
 echo "instalado en $D$P"

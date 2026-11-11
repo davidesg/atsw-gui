@@ -17,7 +17,7 @@ trap 'rm -rf "$T"' EXIT
 cd "$R"
 git archive --prefix="$N/" HEAD \
     lib engines/fue engines/fuf engines/fug engines/drtran engines/drvarma engines/art gui \
-    packaging docs/manual/MANUAL.md docs/manual/datos docs/manual/img |
+    packaging docs/manual/MANUAL.md docs/manual/datos docs/manual/img docs/ejemplos |
     tar -x -C "$T"
 cp packaging/linux/Makefile.fuente "$T/$N/Makefile"
 cp packaging/linux/INSTALAR.txt packaging/LEEME.txt "$T/$N/"

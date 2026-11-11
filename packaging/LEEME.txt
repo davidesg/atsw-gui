@@ -87,6 +87,11 @@ PARA APRENDER
   .dmg, junto a la aplicación.
   Hay también un vídeo del mismo caso: https://davidesg.github.io/atsw-gui/
 
+  Ayuda → Ejemplos, en ATSW, abre proyectos ya hechos. El primero es el de
+  los sistemas: las ratas almizcleras y los visones de Jenkins y Alavi, con
+  los dos modelos univariantes hechos y el sistema por estimar en sim_gui.
+  Se abre una copia tuya, en «Ejemplos de ATSW», dentro de tus documentos.
+
 
 Si algo falla, anota qué estabas haciendo y, si puedes, haz una captura de
 pantalla.

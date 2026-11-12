@@ -3140,6 +3140,18 @@ else
 fi
 echo
 
+# ============================================================ lib/outvec =
+# The reader of drvec's .out for sim_gui (SIM, S10a): it runs this binary on
+# the Johansen-Juselius .pre files and reads the rank test, a VEC and a
+# restriction. If the output format changes, it fails here the same day.
+echo "== lib/outvec: the reader of the .out"
+if sh ../../lib/outvec/run_test.sh "$(pwd)/$DRVEC" > "$TMP/outvec.log" 2>&1; then
+    ok "lib/outvec reads the rank test, the VEC and the LR ($(grep -c '^  ok' "$TMP/outvec.log") checks)"
+else
+    bad "lib/outvec" "$(grep -E 'FALLA|fallos' "$TMP/outvec.log" | head -3 | tr '\n' ' ')"
+fi
+echo
+
 # ===================================================================== summary =
 echo "-----------------------------------------------"
 printf 'passed %d, failed %d\n' "$PASS" "$FAIL"

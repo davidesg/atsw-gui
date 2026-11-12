@@ -1,0 +1,90 @@
+************************************************
+*        Input file for program DRVUS          *
+* Copyright (C) 1996 Jos? Alberto Mauricio     *
+************************************************
+* Built by sima's raw entry (route U), not reviewed in art
+
+** Frequency of time series: either 1(A), 4(Q) or 12(M):
+ 4
+** Number of observations and starting date of time series:
+ 55  1 1974 IBO
+** Number of deterministic variables (including seasonal components):
+ 0
+**Number and orders of regular AR operators:
+1 1
+**
+0.3806 1
+** Number and orders of annual AR operators:
+0
+** Number and orders of regular MA operators:
+0
+** Number and orders of anual MA operators:
+0
+** Number and frequencies of regular AR(2) operators with fixed frequency:
+0
+** Number and frequencies of regular MA(2) operators with fixed frequency:
+0
+** Mean parameter (mu):
+0
+** Box-Cox lambda, regular differences and complete annual differences:
+1.00 1 0
+** Individual factors of the annual difference (from freq 0.0): 
+ 0 0 0
+** ACF/PACF bands (0 Automatic) and reescaling factor: 
+ 0.00 100.00
+** Time series (stochastic and non-standard deterministic variables): 
+0.1547356000 
+0.1779912000 
+0.1705647000 
+0.1522273000 
+0.1342276000 
+0.1334805000 
+0.1284132000 
+0.1288357000 
+0.1413445000 
+0.1531187000 
+0.1605787000 
+0.1618325000 
+0.1665814000 
+0.1630213000 
+0.1692466000 
+0.1728896000 
+0.1717371000 
+0.1757075000 
+0.1711933000 
+0.1820041000 
+0.1700434000 
+0.1689293000 
+0.1782750000 
+0.1804463000 
+0.1910667000 
+0.1967000000 
+0.1923000000 
+0.1829667000 
+0.1845333000 
+0.1928667000 
+0.2032333000 
+0.1923333000 
+0.2032667000 
+0.2107667000 
+0.2088667000 
+0.1970667000 
+0.1611000000 
+0.1383000000 
+0.1417000000 
+0.1338000000 
+0.1341000000 
+0.1417000000 
+0.1448000000 
+0.1412000000 
+0.1317000000 
+0.1196000000 
+0.1070000000 
+0.1037000000 
+0.0977000000 
+0.0984000000 
+0.1115000000 
+0.1142670000 
+0.1193333000 
+0.1173333000 
+0.1189667000 

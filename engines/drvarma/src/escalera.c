@@ -672,6 +672,8 @@ typedef struct {
     real *lvl, *lo, *hi;       /* 1..L: level and 95% band                 */
     real *sd, *sdp, *sda;      /* 1..L: sd of the transformed level, of its */
                                /* period and of its annual variation       */
+    real *err;                 /* 0..L: the exact residual of obs nb-L+j    */
+    int  *has_err;             /*       (0 where there is none)            */
 } Fc;
 
 static void fc_alloc(Fc *c, int nb, int L)
@@ -680,10 +682,13 @@ static void fc_alloc(Fc *c, int nb, int L)
     c->ystar = vector(1, nb + L);
     c->lvl = vector(1, L); c->lo = vector(1, L); c->hi = vector(1, L);
     c->sd = vector(1, L);  c->sdp = vector(1, L); c->sda = vector(1, L);
+    c->err = vector(0, L); c->has_err = ivector(0, L);
+    { int j; for (j = 0; j <= L; j++) { c->err[j] = 0.0; c->has_err[j] = 0; } }
 }
 
 static void fc_free(Fc *c, int L)
 {
+    free_ivector(c->has_err, 0, L); free_vector(c->err, 0, L);
     free_vector(c->sda, 1, L); free_vector(c->sdp, 1, L); free_vector(c->sd, 1, L);
     free_vector(c->hi, 1, L);  free_vector(c->lo, 1, L);  free_vector(c->lvl, 1, L);
     free_vector(c->ystar, 1, c->nb + L);
@@ -744,6 +749,15 @@ static int esc_forecast(real *x, real sigma2, int L, Fc *fc)
 
         fuepre_level_forecast(&Tm[i], &Ts[i], Ts[i].nobs, f1[a], L,
                               c->ystar, c->lvl, NULL);
+
+        /* THE ERR COLUMN of the forecast report (write_fuf_report): the exact
+           residual of each of the last L+1 observations. The stationary
+           series are aligned at their END (build_stationary drops from the
+           start), so obs nb-L+j is t = n_stat-L+j.                         */
+        for (j = 0; j <= L; j++) {
+            int tt = n_stat - L + j;
+            if (tt >= 1 && tt <= n_stat) { c->err[j] = vf.a[tt][a]; c->has_err[j] = 1; }
+        }
 
         /* psi of the transformed level of series i: 1/rnsop_i(B) psi_w(B) */
         fuepre_integrator(&Tm[i], L, uu);
@@ -828,6 +842,68 @@ static void write_forecast(FILE *out, FILE *ff, Fc *fc, int L)
     }
 }
 
+/* THE FORECAST REPORT OF fuf (forecast_table_acii, engines/fuf/src/usfo.c),
+   series by series, in the .out: the same table drtran writes (its headers,
+   labels, columns and four decimals, a space always between fields), so the
+   analyst reads the same table in fue, drtran and here. It goes AFTER the
+   block above, which stays: lib/outvarma and sim_gui read that one (its
+   Low95/High95). The last L+1 observations, with their period and annual
+   variation and their exact residual (ERR), then the L forecasts with their
+   standard deviations. In % if the model is in logarithms; if not, in the
+   units of the series (/refactor), as drtran.                             */
+static void write_fuf_report(FILE *out, Fc *fc, int L)
+{
+    int a, l, obs, per, sub, freq = data_freq;
+
+    for (a = 1; a <= act_m; a++) {
+        int   i  = act[a], nb = fc[a].nb;
+        real *y  = fc[a].ystar;
+        real  vs = (fabs(Tm[i].boxlam) < 1e-8 ? 100.0 : 1.0) / Ts[i].refactor;
+
+        ObsToDate(Ts[i].begyear, Ts[i].begtime, nb, freq, &per, &sub);
+        fprintf(out, "\nFORECAST REPORT: \n");
+        fprintf(out, "VARIABLE NAME: %s\n", Ts[i].name);
+        if (freq > 1) fprintf(out, "FORECAST ORIGIN : %2d/%4d\n", sub, per);
+        else          fprintf(out, "FORECAST ORIGIN : %4d\n", per);
+        fprintf(out, "LEAD TIME FOR FORECASTING: %d\n\n", L);
+        fprintf(out, " +----------------------------------------------------------------------------+\n");
+        fprintf(out, " |       |       LEVEL        |              VARIATION              |         |\n");
+        fprintf(out, " | DATE  +--------------------+-------------------------------------+   ERR   |\n");
+        fprintf(out, " |       |   VALUE   |  STD   | TRIMEST |  STD   |  ANUAL  |  STD   |         |\n");
+        fprintf(out, " |       |           |        |  /MONT  |        |         |        |         |\n");
+        fprintf(out, " +----------------------------------------------------------------------------+\n");
+
+        for (obs = nb - L; obs <= nb; obs++) {
+            if (obs < 1) continue;
+            ObsToDate(Ts[i].begyear, Ts[i].begtime, obs, freq, &per, &sub);
+            if (freq > 1) fprintf(out, "  %2d/%4d", sub, per);
+            else          fprintf(out, "     %4d", per);
+            fprintf(out, " %11.4f %8s", Ts[i].data[obs], "-");
+            if (obs - 1 >= 1) fprintf(out, " %9.4f %8s", vs * (y[obs] - y[obs - 1]), "-");
+            else              fprintf(out, " %9s %8s", "-", "-");
+            if (freq > 1 && obs - freq >= 1)
+                 fprintf(out, " %9.4f %8s", vs * (y[obs] - y[obs - freq]), "-");
+            else fprintf(out, " %9s %8s", "-", "-");
+            if (fc[a].has_err[obs - (nb - L)])
+                 fprintf(out, " %9.4f\n", vs * fc[a].err[obs - (nb - L)]);
+            else fprintf(out, " %9s\n", "-");
+        }
+        for (l = 1; l <= L; l++) {
+            real f2 = y[nb + l] - y[nb + l - 1];
+            real f3 = (nb + l - freq >= 1) ? y[nb + l] - y[nb + l - freq] : 0.0;
+            ObsToDate(Ts[i].begyear, Ts[i].begtime, nb + l, freq, &per, &sub);
+            if (freq > 1) fprintf(out, "  %2d/%4d", sub, per);
+            else          fprintf(out, "     %4d", per);
+            fprintf(out, " %11.4f %8.4f", fc[a].lvl[l], vs * fc[a].sd[l]);
+            fprintf(out, " %9.4f %8.4f", vs * f2, vs * fc[a].sdp[l]);
+            if (freq > 1) fprintf(out, " %9.4f %8.4f", vs * f3, vs * fc[a].sda[l]);
+            else          fprintf(out, " %9s %8s", "-", "-");
+            fprintf(out, " %9s\n", "-");
+        }
+        fprintf(out, " +----------------------------------------------------------------------------+\n");
+    }
+}
+
 /* The point forecast from the end of the estimation sample, and, with
    -estwin, the fixed-parameter forecasts from every later origin
    (NAME.recursive, in the format of the .inp path) and their errors.     */
@@ -848,6 +924,7 @@ static int esc_forecasts(real *x, real sigma2, int L, int estwin, const char *na
         fprintf(outputv, "=============================================================\n");
         write_forecast(outputv, ff, fc, L);
         if (ff) { fclose(ff); printf("Forecasts written to %s\n", fname); }
+        write_fuf_report(outputv, fc, L);
     }
     for (a = 1; a <= act_m; a++) fc_free(&fc[a], L);
     if (rc || estwin <= 0) return rc;

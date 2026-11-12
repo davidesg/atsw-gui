@@ -30,9 +30,12 @@ static const char *campo( const char *p, char *b, size_t size, int *hueco )
 {
    size_t n = 0;
 
-   while ( *p == ' ' || *p == '\t' ) p++;
+   /* El \r de un .out escrito en Windows es un separador mas: si no, el
+    * «-» del final de una fila prevista se leia «-\r», que no es hueco ni
+    * numero, y la fila entera se perdia (la CI de Windows, P2).       */
+   while ( *p == ' ' || *p == '\t' || *p == '\r' ) p++;
    if ( !*p ) return NULL;
-   while ( *p && *p != ' ' && *p != '\t' && n + 1 < size ) b[n++] = *p++;
+   while ( *p && *p != ' ' && *p != '\t' && *p != '\r' && n + 1 < size ) b[n++] = *p++;
    b[n] = 0;
    *hueco = ( n == 1 && b[0] == '-' );
    return p;

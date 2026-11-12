@@ -80,6 +80,7 @@ typedef struct {
    char   serie[OVEC_MAX_SER][OVEC_NOMBRE];   /* en el orden de la orden     */
    int    ny2;                  /* cuantas en el bloque nabla Y2             */
    int    nobs;                 /* las observaciones que usa                 */
+   int    nobs_raw;             /* las de los ficheros («(raw 55)»)          */
    int    es_rango;             /* 1: la prueba del rango; 0: un VEC de un r */
    int    r;                    /* el rango del VEC (-1 en la prueba)        */
    int    p, q;                 /* VARMA-VECM(p,q)                           */
@@ -138,6 +139,44 @@ const OvecPar *ovec_param( const VecOut *v, const char *nombre );
  * m - 1 y *al_menos = 1 (drvec no contrasta el rango completo). -1 si no se
  * puede leer (una comparacion que falta o sin valores criticos).        */
 int ovec_rango_propuesto( const VecOut *v, int *al_menos );
+
+/* --- la prevision y la evaluacion (S10c) -------------------------------- */
+
+#define OVEC_MAX_H 120
+
+/* El .forecast de -f H: por serie, el nivel con su banda del 95 % (teorica). */
+typedef struct {
+   char   nombre[OVEC_NOMBRE];
+   int    nf;
+   char   fecha[OVEC_MAX_H][16];
+   double nivel[OVEC_MAX_H], lo[OVEC_MAX_H], hi[OVEC_MAX_H], se[OVEC_MAX_H];
+} OvecPrev;
+
+/* Cuantas series lee (hasta max), 0 ninguna, -1 si no se abre. */
+int ovec_forecast_file( const char *path, OvecPrev *prev, int max );
+
+/* El .recursive de -f H -estwin E: «origin,h,series,actual,forecast,error»,
+ * el origen como fila de nabla Y (sima lo cuenta hacia atras desde el final:
+ * nobs_raw - (origen + 1)).                                            */
+typedef struct {
+   int    origen, h;
+   char   serie[OVEC_NOMBRE];
+   double real, prevision, error;
+} OvecRecFila;
+
+typedef struct {
+   int          estwin, horizonte;
+   OvecRecFila *f;            /* reservado por ovec_recursive_file           */
+   int          nf;
+} OvecRec;
+
+int  ovec_recursive_file( const char *path, OvecRec *r );   /* 0 bien, 1 vacio, -1 no se abre */
+void ovec_recursive_free( OvecRec *r );
+
+/* El texto de una seccion del .out por su titulo de banner («Impulse
+ * Response of the Levels»): desde despues del banner hasta el siguiente.
+ * g_free/free del llamador; NULL si no esta.                          */
+char *ovec_seccion_file( const char *path, const char *titulo );
 
 /* El progreso de un bootstrap en marcha: cuantas replicas hay ya en el
  * fichero .boot (las lineas de datos). -1 si no se puede leer.          */

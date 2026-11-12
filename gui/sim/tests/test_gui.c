@@ -744,9 +744,78 @@ int main( int argc, char **argv )
         check( !g_strcmp0( s, "ec1" ), "la última fila de residuos es el error de equilibrio (ec1)", s ); g_free( s );
         check( contiene( etiqueta( j->pd.ver_hosking ), "Hosking" ), "Hosking, de la salida de drvec",
                etiqueta( j->pd.ver_hosking ) );
-        check( gtk_widget_is_sensitive( GTK_WIDGET(j->tb_diag) ) && !gtk_widget_is_sensitive( GTK_WIDGET(j->tb_prev) ) &&
-               contiene( gtk_widget_get_tooltip_text( GTK_WIDGET(j->tb_prev) ), "sima" ),
-               "con un VEC: Diagnosis sí, Prever no (lo dice)", gtk_widget_get_tooltip_text( GTK_WIDGET(j->tb_prev) ) );
+        check( gtk_widget_is_sensitive( GTK_WIDGET(j->tb_diag) ) && gtk_widget_is_sensitive( GTK_WIDGET(j->tb_prev) ) &&
+               !gtk_widget_is_sensitive( GTK_WIDGET(j->tb_ver) ) &&
+               contiene( gtk_widget_get_tooltip_text( GTK_WIDGET(j->tb_ver) ), "α β′" ),
+               "con un VEC: Diagnosis y Prever sí; Ver modelo no (lo dice)",
+               gtk_widget_get_tooltip_text( GTK_WIDGET(j->tb_ver) ) );
+
+        /* --- S10c: la debil exogeneidad (Johansen y Juselius, sima) ------ */
+        check( restricciones_weakex( j ), "la débil exogeneidad arranca", etiqueta( j->estado ) );
+        {
+            gint64 hasta = g_get_monotonic_time() + 240 * G_USEC_PER_SEC;
+            while (j->pd.wx_corriendo && g_get_monotonic_time() < hasta) pump( 20 );
+            pump( 50 );
+        }
+        {
+            int i, iby = -1, ide = -1, lry = -1;
+            for (i = 0; i < j->pd.wx_n; i++) {
+                if (!strcmp( j->pd.wx_serie[i], "IBO" )) iby = i;
+                if (!strcmp( j->pd.wx_serie[i], "IDE" )) ide = i;
+                if (!strcmp( j->pd.wx_serie[i], "LRY" )) lry = i;
+            }
+            check( j->pd.wx_n == 4 && iby >= 0 && j->pd.wx_ok[iby] && j->pd.wx_lr[iby] < 0.01 &&
+                   j->pd.wx_p[iby] > 0.95, "IBO débilmente exógena: LR 0.0003, p 0.99 (sima)", NULL );
+            check( ide >= 0 && j->pd.wx_ok[ide] && fabs( j->pd.wx_lr[ide] - 2.07 ) < 0.05 &&
+                   fabs( j->pd.wx_p[ide] - 0.15 ) < 0.01, "IDE: LR 2.07, p 0.15 (sima)", NULL );
+            check( lry >= 0 && j->pd.wx_ok[lry] && fabs( j->pd.wx_lr[lry] - 4.31 ) < 0.05 &&
+                   j->pd.wx_p[lry] < 0.05, "LRY no: LR 4.31, p 0.04 (sima)", NULL );
+        }
+        check( contiene( etiqueta( j->pd.ver_wx ), "IBO, IDE" ), "la página dice cuáles son débilmente exógenas",
+               etiqueta( j->pd.ver_wx ) );
+        /* otra normalizacion en «4 · Modelo»: no se contrasta */
+        j->mod.y1[0] = 0; j->mod.y1[3] = 1;
+        check( !restricciones_weakex( j ) && contiene( etiqueta( j->estado ), "normalización" ),
+               "con otra normalización en «4 · Modelo», no contrasta y lo dice", etiqueta( j->estado ) );
+        j->mod.y1[0] = 1; j->mod.y1[3] = 0;
+
+        /* --- S10c: la prevision y la evaluacion del VEC ------------------ */
+        gtk_spin_button_set_value( GTK_SPIN_BUTTON(j->pv.s_hor), 4 );
+        gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(j->pv.c_eval), TRUE );
+        gtk_spin_button_set_value( GTK_SPIN_BUTTON(j->pv.s_win), 40 );
+        check( prevision_calcular( j ), "Calcular arranca con un VEC", etiqueta( j->estado ) );
+        {
+            gint64 hasta = g_get_monotonic_time() + 240 * G_USEC_PER_SEC;
+            while (j->pv.corriendo && g_get_monotonic_time() < hasta) pump( 20 );
+            pump( 50 );
+        }
+        check( j->pv.es_vec && j->pv.nfvec == 4 && j->pv.fvec[0].nf == 4,
+               "la previsión del VEC: cuatro series, cuatro periodos", etiqueta( j->estado ) );
+        check( contiene( etiqueta( j->pv.ver_pide ), "Previsión del VEC" ), "y la página lo dice",
+               etiqueta( j->pv.ver_pide ) );
+        check( filas( j->pv.l_eval ) == 16 && contiene( etiqueta( j->pv.ver_eval ), "mismos" ),
+               "la evaluación: 4 series × 4 horizontes, sobre los mismos orígenes que los univariantes",
+               etiqueta( j->pv.ver_eval ) );
+        {
+            GtkTreeModel *tm = gtk_tree_view_get_model( GTK_TREE_VIEW(j->pv.l_eval) );
+            GtkTreeIter it;
+            int n0 = -1;
+            if (gtk_tree_model_get_iter_first( tm, &it )) gtk_tree_model_get( tm, &it, 2, &n0, -1 );
+            gchar *vn = g_strdup_printf( "%d", n0 );
+            /* drvec guarda un origen solo si se pueden comprobar los H pasos:
+               con E = 40 de 55 y H = 4, del 39 al 50 (sima, evaluate_vec) */
+            check( n0 == 12, "12 orígenes (los que comprueban los 4 pasos; E = 40 de 55)", vn );
+            g_free( vn );
+        }
+        {
+            GtkTextBuffer *tb = gtk_text_view_get_buffer( GTK_TEXT_VIEW(j->pv.t_irf) );
+            GtkTextIter a0, a1;
+            gchar *tx;
+            gtk_text_buffer_get_bounds( tb, &a0, &a1 );
+            tx = gtk_text_buffer_get_text( tb, &a0, &a1, FALSE );
+            check( contiene( tx, "EN NIVELES" ) && strlen( tx ) > 300, "la IRF del VEC, en niveles", NULL );
+            g_free( tx );
+        }
 
         /* otra configuracion: la prueba ya no es de esta */
         gtk_spin_button_set_value( GTK_SPIN_BUTTON(j->pr.s_p), 3 );

@@ -20,7 +20,7 @@ aparece con series I(1):
 | 5 · Estimación | hecha (S4): lanza drvarma con el modelo de la 4; cómo acabó (convergió, pared MA, sin converger, falló); con un sistema, cada estimación es un modelo del caso con su padre |
 | 6 · Diagnosis | hecha (S4; Estructura en S7: Simplificar con `-zero`, «¿Es una red?» y «Pasar a MT»): la LR contra los univariantes, el optimizador, las raíces, Hosking, Jarque-Bera, los residuos de cada serie, los parámetros, Σ y el .out. Con un VEC (S10c): la relación de equilibrio (β), el ajuste de cada serie (α, con su t), la búsqueda y la puerta de drvec, los residuos de W (∇Y₂ y ec), los parámetros, Σ y el .out |
 | Ver modelo ▾ | hecho (S4b): la página de cada serie, la de fue (`lib/equation`), con los términos cruzados en la línea del ruido |
-| 7 · Previsión | hecha (S5): la previsión de cada serie en su nivel y su gráfico; la evaluación fuera de muestra contra los univariantes (la misma ventana); la respuesta al impulso y la descomposición, del .out de la estimación |
+| 7 · Previsión | hecha (S5): la previsión de cada serie en su nivel y su gráfico; la evaluación fuera de muestra contra los univariantes (la misma ventana); la respuesta al impulso y la descomposición, del .out de la estimación. Con un VEC (S10c): la previsión de drvec, la evaluación contra los univariantes sobre los mismos orígenes (la regla de sima) y la IRF y la FEVD en niveles |
 
 Las páginas que faltan dicen qué harán y qué piden.
 

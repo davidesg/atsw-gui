@@ -3269,6 +3269,35 @@ static void casos( void )
            "la cabecera del sistema dice «SIM · VARMA · drvarma»",
            gtk_label_get_text( GTK_LABEL(A.c_cabeza) ) );
 
+    /* UN SISTEMA QUE PASA A VEC NO CAMBIA DE FILA: CAMBIA LA CLASE (S10c).
+       Un modelo del sistema cuyo .out es de drvec lo hace VEC.          */
+    {
+    char    vid[PR_ID], vruta[PR_RUTA];
+    PrError pe;
+
+    if ( pr_corrida_nueva( A.p, sid, NULL, vid, sizeof vid, vruta, sizeof vruta, &pe ) == 0 )
+        {
+        gchar *d = g_path_get_dirname( vruta );
+        g_mkdir_with_parents( d, 0755 );
+        g_file_set_contents( vruta, "Program          : DRVEC 0.14\n", -1, NULL );
+        atsw_refresca( &A );
+        pump( 50 );
+        s = filas( A.l_casos, CA_CLASE );
+        check( strstr( s, "VEC" ) && strstr( s, "MT" ), "con un modelo de drvec, la Clase del sistema "
+               "es VEC (en la misma fila)", s );
+        g_free( s );
+        check( strstr( gtk_label_get_text( GTK_LABEL(A.c_cabeza) ), "SIM · VEC · drvec" ) != NULL,
+               "y la cabecera dice «SIM · VEC · drvec»", gtk_label_get_text( GTK_LABEL(A.c_cabeza) ) );
+        pr_corrida_borra( A.p, sid, vid, &pe );
+        g_remove( vruta );
+        g_free( d );
+        atsw_refresca( &A );
+        pump( 50 );
+        }
+    else
+        check( 0, "una corrida de prueba para el VEC", pe.texto );
+    }
+
     /* Con el sistema marcado: SIM lo estima; MT se apaga y dice dónde. */
     rehace_menu( &A, t_sim );
     e2 = entrada_de( GTK_MENU(gtk_menu_item_get_submenu( GTK_MENU_ITEM(t_sim) )), "Estimar" );

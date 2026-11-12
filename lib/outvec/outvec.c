@@ -121,7 +121,11 @@ static void cabecera( const char *l, VecOut *v )
       if ( par ) v->ny2 = atoi( par + 1 );
       }
    else if ( empieza( l, "Sample " ) )
+      {
+      const char *raw = strstr( l, "(raw " );
       v->nobs = atoi( valor( l ) );
+      v->nobs_raw = raw ? atoi( raw + 5 ) : v->nobs;
+      }
 }
 
 /* ------------------------------------------------------------------------ */
@@ -419,6 +423,143 @@ int ovec_rango_propuesto( const VecOut *v, int *al_menos )
       }
    if ( al_menos ) *al_menos = 1;
    return v->m - 1;
+}
+
+/* ------------------------------------------------------------------------ */
+/* La prevision, la evaluacion y las secciones                               */
+/* ------------------------------------------------------------------------ */
+
+static char *lee_todo( const char *path )
+{
+   FILE *f = fopen( path, "rb" );
+   char *b;
+   long  n;
+
+   if ( !f ) return NULL;
+   fseek( f, 0, SEEK_END );
+   n = ftell( f );
+   fseek( f, 0, SEEK_SET );
+   if ( n < 0 || !( b = malloc( (size_t) n + 1 ) ) ) { fclose( f ); return NULL; }
+   n = (long) fread( b, 1, (size_t) n, f );
+   b[n] = 0;
+   fclose( f );
+   return b;
+}
+
+int ovec_forecast_file( const char *path, OvecPrev *prev, int max )
+{
+   char       *t = lee_todo( path ), l[1024];
+   const char *p, *q;
+   int         n = -1;
+
+   if ( !t ) return -1;
+   for ( p = t; ( q = linea( p, l, sizeof l ) ) != NULL; p = q )
+      {
+      char nom[OVEC_NOMBRE], fe[16];
+      int  k;
+      double a, b, c, d;
+
+      if ( empieza( l, "Series " ) && strchr( l, '(' ) )
+         {
+         if ( n + 1 >= max ) break;
+         n++;
+         memset( &prev[n], 0, sizeof prev[n] );
+         if ( sscanf( strchr( l, '(' ) + 1, "%63[^)]", nom ) == 1 )
+            copia( prev[n].nombre, sizeof prev[n].nombre, nom );
+         continue;
+         }
+      if ( n < 0 || sscanf( l, "%15s %lf %lf %lf %lf", fe, &a, &b, &c, &d ) != 5 ) continue;
+      k = prev[n].nf;
+      if ( k >= OVEC_MAX_H ) continue;
+      copia( prev[n].fecha[k], sizeof prev[n].fecha[k], fe );
+      prev[n].nivel[k] = a; prev[n].lo[k] = b; prev[n].hi[k] = c; prev[n].se[k] = d;
+      prev[n].nf++;
+      }
+   free( t );
+   return n + 1;
+}
+
+int ovec_recursive_file( const char *path, OvecRec *r )
+{
+   char       *t = lee_todo( path ), l[1024];
+   const char *p, *q;
+   int         cap = 0;
+
+   memset( r, 0, sizeof *r );
+   if ( !t ) return -1;
+   for ( p = t; ( q = linea( p, l, sizeof l ) ) != NULL; p = q )
+      {
+      OvecRecFila x;
+      char ser[OVEC_NOMBRE];
+
+      if ( l[0] == '#' )
+         {
+         const char *e = strstr( l, "estwin=" ), *h = strstr( l, "horizon=" );
+         if ( e ) r->estwin = atoi( e + 7 );
+         if ( h ) r->horizonte = atoi( h + 8 );
+         continue;
+         }
+      memset( &x, 0, sizeof x );
+      if ( sscanf( l, "%d,%d,%63[^,],%lf,%lf,%lf", &x.origen, &x.h, ser, &x.real, &x.prevision,
+                   &x.error ) != 6 ) continue;
+      copia( x.serie, sizeof x.serie, ser );
+      if ( r->nf == cap )
+         {
+         int nc = cap ? 2 * cap : 256;
+         OvecRecFila *f = realloc( r->f, (size_t) nc * sizeof *f );
+         if ( !f ) break;
+         r->f = f; cap = nc;
+         }
+      r->f[r->nf++] = x;
+      }
+   free( t );
+   return r->nf ? 0 : 1;
+}
+
+void ovec_recursive_free( OvecRec *r )
+{
+   free( r->f );
+   r->f = NULL;
+   r->nf = 0;
+}
+
+char *ovec_seccion_file( const char *path, const char *titulo )
+{
+   char       *t = lee_todo( path ), *r = NULL, l[1024];
+   const char *p, *q, *ini = NULL;
+   int         dentro = 0;
+
+   if ( !t ) return NULL;
+   for ( p = t; ( q = linea( p, l, sizeof l ) ) != NULL; p = q )
+      {
+      int banner = empieza( l, "=============================================================" );
+      if ( !dentro && empieza( l, "  " ) && !strcmp( l + 2, titulo ) )
+         {
+         /* el titulo va entre dos banners: el cuerpo empieza tras el segundo */
+         const char *s = q, *z;
+         char m2[128];
+         if ( ( z = linea( s, m2, sizeof m2 ) ) && empieza( m2, "=====" ) ) s = z;
+         ini = s;
+         dentro = 1;
+         q = s;
+         continue;
+         }
+      if ( dentro && banner )
+         {
+         size_t n = (size_t)( p - ini );      /* hasta el banner siguiente */
+         r = malloc( n + 1 );
+         if ( r ) { memcpy( r, ini, n ); r[n] = 0; }
+         break;
+         }
+      }
+   if ( dentro && !r && ini )
+      {
+      size_t n = strlen( ini );
+      r = malloc( n + 1 );
+      if ( r ) memcpy( r, ini, n + 1 );
+      }
+   free( t );
+   return r;
 }
 
 int ovec_boot_hechas( const char *path_boot )

@@ -185,6 +185,18 @@ typedef struct {
     int        tri;           /* el modelo YA es triangular: perm_tri      */
     int        perm_tri[SIS_MAX_SER];
     int        version_red;   /* la estimacion a la que se refiere         */
+
+    /* S10c: las restricciones del VEC (restricciones.c). La debil
+     * exogeneidad de cada serie: drvec -weakex i, con la normalizacion del
+     * VEC estimado (cada corrida ajusta el libre y el restringido).      */
+    GtkWidget *b_weakex, *ver_wx, *t_wx;
+    EngineJob *wx_trabajo;
+    gboolean   wx_corriendo;
+    int        wx_n, wx_cur, wx_version;
+    char       wx_serie[SIS_MAX_SER][64];
+    double     wx_lr[SIS_MAX_SER], wx_p[SIS_MAX_SER];
+    int        wx_gl[SIS_MAX_SER], wx_ok[SIS_MAX_SER];
+    gchar     *wx_base;
 } PagDiag;
 
 /* La pagina 7: la prevision y la evaluacion (N5, N6). drvarma preve en la
@@ -209,6 +221,15 @@ typedef struct {
     VarmaOut  *ve;            /* la evaluacion del sistema (-estwin)      */
     VarmaOut  *vd;            /* la del diagonal, con la misma ventana    */
     int        version;       /* la estimacion de la que se previo        */
+    /* CON UN VEC (S10c): la prevision de drvec (-f), su evaluacion
+     * (-estwin, el .recursive) y la del diagonal de drvarma, alineadas por
+     * el origen contado desde el final (la regla de sima, evaluate_vec). */
+    gboolean   es_vec;
+    OvecPrev  *fvec;          /* OVEC_MAX_SER, en el monton                */
+    int        nfvec;
+    OvecRec    rvec;
+    int        vec_nobs_raw;
+    OvRecursive rdiag;
 } PagPrev;
 
 typedef struct {
@@ -352,6 +373,11 @@ gboolean   estructura_red( Sim *m, double alfa );
  * caso MT hermano, con las series en ese orden (la salida primero).    */
 gboolean   estructura_pasar_mt( Sim *m, char *why, size_t n );
 void       estructura_refresca( Sim *m );
+
+/* restricciones.c: S10c, las restricciones del VEC. La debil exogeneidad
+ * de cada serie, una corrida de drvec por serie. TRUE si arranco.       */
+gboolean   restricciones_weakex( Sim *m );
+void       restricciones_refresca( Sim *m );
 
 /* puerta.c: una puerta ya pasada, leida de su .out (la carga de un sistema). */
 gboolean   puerta_desde( Sim *m, const char *out );

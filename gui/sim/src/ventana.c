@@ -175,8 +175,8 @@ static void barra_refresca( Sim *m )
                                        "Estimar (Ctrl+E) lo hace.";
     /* CON UN VEC, la diagnosis si; la pagina del modelo y la prevision son
      * todavia del VARMA (la del VEC la hace sima: forecast).            */
-    const char *sin_vec = "Con un VEC, todavía no: en sim_gui son del VARMA. La previsión del VEC "
-                          "la hace sima (forecast).";
+    const char *sin_vec = "Con un VEC, la página del modelo todavía no: la ecuación con α β′ "
+                          "está en «6 · Diagnosis ▸ Ajuste» y en el .out.";
 
     if (!m->tb_estimar) return;
     falta = corre ? "El motor ya está corriendo."
@@ -190,8 +190,8 @@ static void barra_refresca( Sim *m )
     enciende( m->tb_ver, hay, "La página del modelo de la primera serie: sus residuos con la ACF "
               "y la PACF y, debajo, su ecuación como la escribe fue, con los términos cruzados "
               "en la línea del ruido. La flecha: las demás series.", vec ? sin_vec : sin );
-    enciende( m->tb_prev, hay && !m->pv.corriendo, "Calcular la previsión, en «7 · Previsión»",
-              vec ? sin_vec : sin );
+    enciende( m->tb_prev, ( hay || vec ) && !m->pv.corriendo, "Calcular la previsión, en «7 · Previsión»",
+              sin );
 }
 
 static void estado_new( Sim *m, GtkWidget *raiz )
@@ -268,6 +268,7 @@ static void on_destroy( GtkWidget *w, Sim *m )
     (void) w;
     if (m->pp.trabajo) engine_stop( m->pp.trabajo );
     if (m->pr.trabajo) engine_stop( m->pr.trabajo );
+    if (m->pd.wx_trabajo) engine_stop( m->pd.wx_trabajo );
     if (m->pr.tic) { g_source_remove( m->pr.tic ); m->pr.tic = 0; }
     if (m->pe.trabajo) engine_stop( m->pe.trabajo );
     if (m->pv.trabajo) engine_stop( m->pv.trabajo );
@@ -287,6 +288,7 @@ static void on_destroy( GtkWidget *w, Sim *m )
     m->pd.ver_raices = m->pd.ver_optim = m->pd.l_par = m->pd.l_res = m->pd.t_sigma = NULL;
     m->pd.t_out = m->pd.b_simpl = m->pd.b_red = m->pd.b_pasar_mt = NULL;
     m->pd.ver_simpl = m->pd.ver_red = m->pd.t_red = NULL;
+    m->pd.b_weakex = m->pd.ver_wx = m->pd.t_wx = NULL;
     m->pv.s_hor = m->pv.c_eval = m->pv.s_win = m->pv.b_calc = NULL;
     m->pv.ver_pide = m->pv.ver_eval = m->pv.libreta = NULL;
     m->pv.t_prev = m->pv.l_eval = m->pv.t_irf = m->pv.t_fevd = m->pv.graficos = NULL;

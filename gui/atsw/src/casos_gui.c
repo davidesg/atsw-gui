@@ -218,6 +218,33 @@ static int es_sim( const char *motor )
     return motor && ( !strcmp( motor, "drvarma" ) || !strcmp( motor, "drvec" ) );
 }
 
+/* UN SISTEMA QUE PASA A VEC NO CAMBIA DE FILA: CAMBIA LA CLASE (DISENO-sim.md
+ * §5.3). El caso sigue siendo de SIM; la clase la dice su modelo elegido --o,
+ * sin elegido, el ultimo--: si su .out es de drvec, VEC. Devuelve la clase y,
+ * en motor, el programa que la estima.                                  */
+static const char *clase_caso( const Atsw *a, const PrCaso *c, const char **motor )
+{
+    const char *id = NULL, *cl = atsw_clase_de( c->motor );
+    char        out[PR_RUTA];
+    int         i;
+
+    if ( motor ) *motor = c->motor[0] ? c->motor : "drtran";
+    if ( !es_sim( c->motor ) || !a->p ) return cl;
+    id = pr_corrida_elegida( a->p, c->id );
+    if ( !id || !id[0] )
+        for ( i = 0; i < a->p->nco; i++ )
+            if ( !strcmp( a->p->co[i].caso, c->id ) ) id = a->p->co[i].id;
+    if ( id && id[0] && pr_corrida_ruta( a->p, c->id, id, ".out", out, sizeof out ) == 0 )
+        {
+        FILE *f = fopen( out, "r" );
+        char  l[64] = "";
+        if ( f ) { if ( !fgets( l, sizeof l, f ) ) l[0] = 0; fclose( f ); }
+        if ( g_str_has_prefix( l, "Program          : DRVEC" ) )
+            { if ( motor ) *motor = "drvec"; return "VEC"; }
+        }
+    return cl;
+}
+
 static void nc_coloca( Nc *x, NcFila *f )
 {
     GtkWidget *w[4];
@@ -1771,12 +1798,14 @@ static void pinta_vista( Atsw *a )
 
     /* LA CLASE, EL PROGRAMA Y LA MUESTRA: «MT · drtran · muestra completa».
        El programa no se esconde: cuando algo falla, el mensaje es suyo. */
+    {
+    const char *mot, *cl = clase_caso( a, c, &mot );
     t = g_markup_printf_escaped( "<big><b>%s — %s</b></big>    %s%s · %s · muestra %s",
                                  c->id, c->titulo[0] ? c->titulo : "(sin título)",
                                  es_sim( c->motor ) ? "SIM · " : "",
-                                 atsw_clase_de( c->motor ),
-                                 c->motor[0] ? c->motor : "drtran",
+                                 cl, mot,
                                  c->muestra[0] ? c->muestra : "completa" );
+    }
     g_string_append( g, t ); g_free( t );
     t = g_markup_printf_escaped( "\n%s%s%screado %s",
                                  c->padre[0] ? "derivado de " : "", c->padre,
@@ -1881,7 +1910,7 @@ void atsw_pinta_casos( Atsw *a )
         gtk_list_store_append( st, &it );
         gtk_list_store_set( st, &it,
             CA_ID,      c->id,
-            CA_CLASE,   atsw_clase_de( c->motor ),
+            CA_CLASE,   clase_caso( a, c, NULL ),
             CA_TITULO,  c->titulo,
             CA_ELEGIDA, el,
             /* EL ⚠ ES SOLO EL DESFASE DE VERDAD. Otro elegido hoy no

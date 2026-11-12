@@ -149,6 +149,30 @@ static void ar2( const char *dir )
       ok( !strcmp( r.fecha[0], "1851" ) && !strcmp( r.fecha[60], "1911" ), "con sus fechas, 1851..1911" );
       okf( r.v[0][57], -103.1112, 1e-3, "el residuo grande de 1908 (MUSKRAT)" );
    }
+   {
+      /* Trimestrales: la primera estacion de cada año lleva '+' de borde,
+         no '|', y el '*' puede tapar el eje del cero (drvec, Johansen y
+         Juselius). Se leia el eje: un 0, o la fila saltada.            */
+      static OvResiduos r;
+      const char *trim =
+         "--- Residual series a[1] (IBO) ---\n"
+         "Standardized time series plot (original values on right-side column):\n"
+         "              -3      -2      -1       0      +1      +2      +3  \n"
+         "-------------+-+-------+-------+-------+-------+-------+-------+-+--------------\n"
+         "   1  2/1974>|         :       :       |       :       :   *     |> 1.9796243157\n"
+         "   2  3/1974 |         :      *:       |       :       :         | -1.0741136926\n"
+         "   3  4/1974 +         :       *       |       :       :         + -0.9858876860\n"
+         "   4  1/1975 +         :       :       *       :       :         + -0.0369605345\n"
+         "   5  2/1975 |         :       :       |       *       :         |  0.7765019084\n"
+         "-------------+-+-------+-------+-------+-------+-------+-------+-+--------------\n";
+      FILE *f = fopen( en( dir, "trim.out" ), "w" );
+      if ( f ) { fputs( trim, f ); fclose( f ); }
+      ok( ov_residuos_file( en( dir, "trim.out" ), &r ) == 0 && r.n == 5,
+          "trimestrales: las cinco filas, también las del borde '+'" );
+      okf( r.v[0][2], -0.9858876860, 1e-9, "la fila de borde '+': su valor, no el eje" );
+      okf( r.v[0][3], -0.0369605345, 1e-9, "y con el '*' sobre el eje" );
+      okf( r.v[0][0], 1.9796243157, 1e-9, "la marcada con '>'" );
+   }
    ok( v.nprev == 2 && !strcmp( v.prev[0].nombre, "MUSKRAT" ) && !strcmp( v.prev[1].nombre, "MINK" ),
        "la prevision de las dos series" );
    ok( v.prev[0].nf == 10 && v.prev[1].nf == 10, "diez filas cada una" );

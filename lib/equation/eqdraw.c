@@ -560,6 +560,13 @@ static void draw_items( Pen *p, const void *arg )
                   grow( p, 6.94, 0.0 );
                   scripts( p, sub, NULL );
                   }
+               else if ( it->a == 5 )               /* ec_{t-1}: a VEC          */
+                  {
+                  atom( p, A_ORD );
+                  sans( p, SANS, 0.0, "ec" );
+                  grow( p, 6.94, 0.0 );
+                  scripts( p, it->text, NULL );
+                  }
                else series( p, it->text, it->a == 1, it->a == 2, it->value );
                break;
           case EI_OP:
@@ -1029,12 +1036,25 @@ static void draw_all( Pen *p, const Equation *eq )
       if ( p->x + w > p->right ) newline( p );
       }
    tail_sigma( p, &arg );
-   if ( eq->nota[0] )                  /* a line under it: what w_{B,t} is */
+   if ( eq->nota[0] )                  /* lines under it: what w_{B,t} is */
       {
-      newline( p );
-      atom( p, A_ORD );
-      sans( p, SANS, 0.0, eq->nota );
-      grow( p, 6.94, 2.0 );
+      const char *q = eq->nota;
+
+      while ( *q )
+          {
+          const char *e = strchr( q, '\n' );
+          size_t      n = e ? (size_t)( e - q ) : strlen( q );
+          char        line[sizeof( eq->nota )];
+
+          memcpy( line, q, n );
+          line[n] = 0;
+          newline( p );
+          atom( p, A_ORD );
+          sans( p, SANS, 0.0, line );
+          grow( p, 6.94, 2.0 );
+          q += n;
+          if ( *q ) q++;
+          }
       }
 }
 

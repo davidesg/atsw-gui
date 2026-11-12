@@ -1,6 +1,7 @@
 #! sim_gui --proyecto @EJEMPLOS@/johansen_juselius/proyecto.yaml --caso C1
 # El sistema C1 de Johansen y Juselius en sim_gui: el rango y el VEC (lo
-# deja la 09).
+# deja la 09). Tarda unos 35 minutos: el bootstrap del rango, 15.
+# limite 3000
 ventana sim_gui
 tamano 1100 760
 espera 2000

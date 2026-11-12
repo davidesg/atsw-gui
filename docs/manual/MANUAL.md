@@ -945,9 +945,19 @@ Pestaña **7 · Previsión** (o el botón **Prever** de la barra). Marca
 
 ![La previsión](img/drtran-prevision.png)
 
-Desde 12/2019, el nivel del IPC y su variación anual, cada uno con su
-desviación típica. El IPC de enero de 2020 fue 97.14; el modelo prevé
-97.14 ± 0.25.
+La tabla es la del informe de drtran (el `.out`): la misma que da fue al
+prever una serie sola. Lleva las últimas observaciones y las previsiones desde
+12/2019, con el nivel, la variación del mes y la anual, cada una con su
+desviación típica, y en las observadas el error a un periodo (ERR). El IPC de
+enero de 2020 fue 97.14; el modelo prevé 97.14, con una desviación típica del
+0.25 % (en un modelo en logaritmos, las desviaciones van en %).
+
+El gráfico está en la flecha de **Prever**, «Ver el gráfico de la
+previsión», y es el mismo que el de fue. Arriba, la variación anual (la LRC
+anual, en %), con la banda de una desviación típica. Debajo, el error a un
+periodo de las observaciones, con la banda de dos sigma:
+
+![El gráfico de la previsión](img/drtran-prevision-grafico.png)
 
 Dos cosas que hay que tener claras:
 

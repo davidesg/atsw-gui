@@ -72,7 +72,7 @@ typedef struct {
    const double *y, *sd;
 } FPPanel;
 
-FDFig *fp_forecast( const FPPanel *p, int npanels, int n, int nprev,
+FDFig *fp_forecast_paneles( const FPPanel *p, int npanels, int n, int nprev,
                     const char *const *dates, const char *note, const char *x11out );
 
 /* Write figs[0..n-1] as a PDF document: A4 (landscape if landscape != 0),

@@ -1349,6 +1349,12 @@ int main(int argc, char **argv)
           "y se ensena con su origen", etiqueta(m->prev.texto));
     check(m->prev.f.ns > 0 && m->prev.f.s[0].nprev == 6,
           "con los 6 periodos pedidos", etiqueta(m->prev.texto));
+    /* LA TABLA ES LA DEL .out, tal cual: la de la salida, y solo esa. */
+    check(gtk_widget_get_visible(m->prev.tabla)
+          && contiene(etiqueta(m->prev.tabla), "FORECAST REPORT")
+          && contiene(etiqueta(m->prev.tabla), "SYN_Y")
+          && contiene(etiqueta(m->prev.tabla), "ERR"),
+          "la tabla de la previsión, la del .out", etiqueta(m->prev.tabla));
 
     /* H4: EL GRAFICO DE LA PREVISION, desde Prever ▾: la salida primero, y
      * dibuja de verdad (tinta en la ventana, no una pagina en blanco).  */
@@ -1372,6 +1378,14 @@ int main(int argc, char **argv)
         pulsa(mi);
         pump(50);
         check_tinta("prev_SYN_Y.eps", "el grafico de la previsión");
+        /* y es el de fuf: lleva el panel ERR debajo */
+        {
+        gchar *eps = cache_de("prev_SYN_Y.eps"), *txt = NULL;
+
+        check(g_file_get_contents(eps, &txt, NULL, NULL) && strstr(txt, "(ERR)"),
+              "el gráfico es el de fuf: con el panel ERR", eps);
+        g_free(txt); g_free(eps);
+        }
     }
     gtk_widget_destroy(mn);
     }

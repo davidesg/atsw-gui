@@ -96,4 +96,12 @@ int of_parse_file( const char *path, Forecast *f );
 /* La serie que se llama asi, o NULL. */
 const OfSerie *of_serie( const Forecast *f, const char *nombre );
 
+/* LA TABLA DE UNA SERIE, TAL CUAL ESTA EN EL .out: desde «FORECAST REPORT»
+ * hasta la ultima fila. Es lo que la ventana ensena, como fue_gui ensena el
+ * .out de fuf: re-componerla a partir de los numeros leidos seria una
+ * segunda tabla, y la tabla tiene que ser UNA, la del motor. Copia en buf
+ * (siempre terminado en 0) y devuelve 0, o 1 si la serie no tiene tabla. */
+int of_tabla( const char *texto, const char *nombre, char *buf, size_t size );
+int of_tabla_file( const char *path, const char *nombre, char *buf, size_t size );
+
 #endif /* ATSW_OUTFCST_H */

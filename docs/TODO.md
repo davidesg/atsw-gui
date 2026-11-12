@@ -310,6 +310,40 @@ la división entera del Jarque-Bera.
   de fue, la tabla igual y en la salida, y la IRF y la SRF dibujadas con sus
   bandas, no solo en tabla.
 
+### Lo que hay (12-nov-2026), y las decisiones
+
+Medido con fuf y drtran sobre IPC_ES ← WTI (`engines/drtran/examples/passthrough`):
+
+- **El gráfico.** fuf tiene su propio `fp_forecast`
+  (`engines/fuf/src/fufplot.c`). Arriba, la LRC anual (o el NIVEL si λ≠0):
+  las L últimas observaciones y las L previsiones, con bandas a trazos.
+  Debajo, **ERR**: los residuos en impulsos bajo su fecha, con ±2σ.
+  drtran_gui y sim_gui usan otro `fp_forecast` del mismo nombre, el de
+  `lib/fugplot`, con otro diseño (nivel y variación anual, sin ERR).
+  **Decidido:** el de fuf, **con sus bandas**: ±1 d.t. en logs y ±2 d.t. con
+  λ≠0. fuf no se toca.
+- **La tabla.** El `.out` de drtran ya trae la tabla «a la fuf», con las
+  mismas columnas, pero con 2 decimales y otra cabecera. La de drvarma es
+  otra («FORECASTS…»). La ventana de drtran_gui solo enseña el nivel y la
+  variación anual. **Decidido:** el formato exacto de `forecast_table_acii` de
+  fuf en drtran y drvarma; los lectores aceptan el viejo y el nuevo.
+- **`-estwin` en drtran.** El motor ya lo tiene, y drtran_gui ya lo pasa.
+  Lo que falta es lo de SF_MEG. **Decidido:** con la misma ventana se
+  evalúan la transferencia y su univariante (el diagonal, `-0`), y salen el
+  ratio del RMSE y Diebold-Mariano por horizonte, como `forecast_compare.py`
+  y como sim_gui con el diagonal.
+
+### Las fases, cada una en su PR
+
+| fase | qué |
+|---|---|
+| **P1** ✓ | El gráfico de fuf, a `lib/fufplot`. fuf lo llama de ahí, y su EPS no cambia ni un byte. drtran_gui dibuja con él. La ventana enseña la tabla del `.out` tal cual (`of_tabla`), así que con P2 sale ya en el formato de fuf |
+| **P2** | La tabla del `.out` de drtran en el formato exacto de fuf; `lib/outfcst` lee los dos; los goldens |
+| **P3** | drtran_gui: la evaluación frente al univariante con la misma ventana (ratio del RMSE, DM) |
+| **P4** | drtran_gui: la IRF y la SRF dibujadas con sus bandas (`lib/fugdraw`) |
+| **P5** | La auditoría de «Al cuaderno» en drtran_gui y en sim_gui |
+| **P6** | sim_gui: el gráfico de fuf, la tabla de drvarma en el formato de fuf, y la IRF y la SRF dibujadas |
+
 ## Lo demás, por documento
 
 ### `DISENO-anomalos.md`

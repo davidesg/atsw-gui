@@ -87,6 +87,29 @@ static void prevision( const char *path )
        "  la desviacion del nivel CRECE con el horizonte" );
    }
 
+   /* La tabla tal cual, para la ventana: de «FORECAST REPORT» a la linea
+    * que la cierra, y ni una fila de otra serie.                       */
+   {
+   static char t[65536];
+   int         filas = 0;
+   const char *l, *ult;
+   Forecast    g;
+
+   ok( of_tabla_file( path, "EP", t, sizeof t ) == 0,
+       "  la tabla de EP, tal cual esta en el .out" );
+   ok( !strncmp( t + strspn( t, " \n" ), "FORECAST REPORT", 15 ),
+       "  empieza en «FORECAST REPORT»" );
+   ok( strstr( t, "EP" ) != NULL && !strstr( t + 20, "FORECAST REPORT" ),
+       "  y es UNA: no se mete en la tabla de la serie siguiente" );
+   ult = strrchr( t, '\n' );
+   ok( ult && ult[1 + strspn( ult + 1, " " )] == '+',
+       "  acaba en la linea «+---» que la cierra" );
+   /* las filas que lleva son las que lee of_parse */
+   if ( of_parse( t, &g ) == 0 && g.ns == 1 ) filas = g.s[0].nf;
+   ok( filas == s->nf, "  con las mismas filas que lee of_parse" );
+   (void) l;
+   }
+
    /* La negativa razonada del motor es un resultado, no un hueco. */
    ok( f.decomp == 0,
        "la descomposicion de la varianza NO se da: Sigma no es diagonal" );
@@ -147,6 +170,41 @@ static void evaluacion( const char *path )
    }
 }
 
+/* --- la tabla en el formato de fuf ------------------------------------- */
+/* La de forecast_table_acii (engines/fuf/src/usfo.c): sin «+---» al final,
+ * acaba en una linea en blanco. of_tabla tiene que cortar ahi.          */
+static void tabla_fuf( void )
+{
+   static const char *out =
+      "algo antes\n"
+      "FORECAST REPORT: \n"
+      "VARIABLE NAME: IPC_ES\n"
+      "FORECAST ORIGIN : 12/2025\n"
+      "LEAD TIME FOR FORECASTING: 2\n"
+      "\n"
+      " +------+\n"
+      " | DATE +\n"
+      " +------+\n"
+      " 11/2025 119.5320     -   0.1934      -    2.9908     -   0.0262 \n"
+      " 12/2025 119.9420     -   0.3424      -    2.8825     -   0.2054 \n"
+      "  1/2026 119.0716 0.3636 -0.7283  0.3636   1.9836 0.3636 \n"
+      "  2/2026 119.2272 0.5923  0.1306  0.3782   1.7226 0.5923 \n"
+      "\n"
+      "lo que sigue\n";
+   char     t[4096];
+   Forecast g;
+
+   printf( "\nla tabla en el formato de fuf\n\n" );
+   ok( of_tabla( out, "IPC_ES", t, sizeof t ) == 0, "  se encuentra" );
+   ok( !strncmp( t, "FORECAST REPORT", 15 ), "  empieza en «FORECAST REPORT»" );
+   ok( !strstr( t, "lo que sigue" ) && strstr( t, "2/2026" ),
+       "  y acaba en la linea en blanco, con la ultima fila dentro" );
+   ok( of_tabla( out, "WTI", t, sizeof t ) == 1 && !t[0],
+       "  una serie que no esta: 1 y nada" );
+   ok( of_parse( out, &g ) == 0 && g.s[0].nf == 4 && g.s[0].nprev == 2,
+       "  of_parse la lee: 4 filas, 2 de prevision" );
+}
+
 int main( int argc, char **argv )
 {
    if ( argc < 2 ) {
@@ -154,6 +212,7 @@ int main( int argc, char **argv )
       return 2;
    }
 
+   tabla_fuf();
    prevision( argv[1] );
    if ( argc >= 3 ) evaluacion( argv[2] );
 

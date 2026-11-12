@@ -67,7 +67,7 @@ Cada commit que cambia un código de salida de `runs.tsv` lo explica aquí.
   `tests/corpus/bad_*.inp`).
 
 - **Gráfico nativo** (commit del gráfico): el gráfico de previsión
-  `prev<input>.<sub><año>.eps` lo dibuja fuf (`src/fufplot.c`, con el motor
+  `prev<input>.<sub><año>.eps` lo dibuja fuf (`lib/fufplot/fufplot.c`, con el motor
   gráfico de fug) y ya no llama a gnuplot. Los 13 EPS entran en las
   referencias, y se comprueba que con el PATH vacío el gráfico se escribe
   igual. Ningún `.out` ni fichero LaTeX cambia.

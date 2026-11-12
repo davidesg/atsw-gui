@@ -578,7 +578,7 @@ int i, Aper1, Asub1;
 
 }
 
-/* The graph of the forecasts, drawn by fuf itself (src/fufplot.c): the same
+/* The graph of the forecasts, drawn by fuf itself (lib/fufplot/fufplot.c): the same
  * two panels that gnuplot drew. The series is the annual change of the last
  * L observations and of the L forecasts: a rate, in per cent, when the model
  * is in logarithms (boxlam = 0), and a change in the units of the series
@@ -635,7 +635,7 @@ return( fig );                    /* the report puts it on its page */
 
 /* The same graph for a series transformed with a Box-Cox lambda other than
  * 0: the level is the transformation undone, and the band is of two standard
- * deviations (src/fufplot.c).                                              */
+ * deviations (lib/fufplot/fufplot.c).                                              */
 
 FDFig *forecast_graphic_BC ( double *data, double **res, double **f1, double ***v1, int ornsop, double sigma, int begyear, int begtime, int nobs, int L, int freq, double boxlam, char *x11out, double refactor )
 

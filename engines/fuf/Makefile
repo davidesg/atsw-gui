@@ -32,7 +32,7 @@ else
 endif
 
 # Compiler flags
-CFLAGS  = -O2 -g -Wall -Iinclude -I../../lib/optim -I../../lib/fugdraw -I../../lib/fuedet
+CFLAGS  = -O2 -g -Wall -Iinclude -I../../lib/optim -I../../lib/fugdraw -I../../lib/fuedet -I../../lib/fufplot
 LDFLAGS +=
 LIBS    = -lm
 
@@ -46,7 +46,7 @@ BIN_DIR   = bin
 # programas -- byte a byte -- y por eso vive en lib/ y no aqui.
 LIB_DIR  = ../../lib
 LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c $(LIB_DIR)/dates/dates.c $(LIB_DIR)/optim/lnsrch.c \
-           $(LIB_DIR)/fuedet/fuedet.c
+           $(LIB_DIR)/fuedet/fuedet.c $(LIB_DIR)/fufplot/fufplot.c
 
 SRCS = $(wildcard $(SRC_DIR)/*.c)
 OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS)) \
@@ -102,6 +102,10 @@ $(BUILD_DIR)/lib_fugdraw/%.o: $(LIB_DIR)/fugdraw/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
 	$(CC) $(ALL_CFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/lib_fufplot/%.o: $(LIB_DIR)/fufplot/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(ALL_CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
 	$(CC) $(ALL_CFLAGS) -c $< -o $@
 
@@ -152,7 +156,7 @@ $(BUILD_DIR)/elfvarma.o:  include/fuf.h include/nlatools.h
 $(BUILD_DIR)/nlatools.o:  include/nlatools.h
 $(BUILD_DIR)/qnewtopt.o:  include/fuf.h include/nlatools.h
 $(BUILD_DIR)/fugdraw.o:         $(LIB_DIR)/fugdraw/fugdraw.h $(LIB_DIR)/fugdraw/fd_metrics.h
-$(BUILD_DIR)/fufplot.o:         include/fufplot.h $(LIB_DIR)/fugdraw/fugdraw.h
+$(BUILD_DIR)/lib_fufplot/fufplot.o: $(LIB_DIR)/fufplot/fufplot.h $(LIB_DIR)/fugdraw/fugdraw.h
 $(BUILD_DIR)/inpcheck.o:        include/inpcheck.h
 $(BUILD_DIR)/usfo.o:      include/usfo.h include/nlatools.h include/fuf.h
 $(BUILD_DIR)/usmelard.o:  include/fuf.h include/nlatools.h

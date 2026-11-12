@@ -39,6 +39,22 @@ programa** — 28 líneas en fue, 15 en fug. Es lo que cada uno tiene que aporta
 `struct Tseries`, `vector()`, `Acf()`, `Pacf()`, `ChiTest()` y los
 estadísticos. La misma forma que `previewhost.h` tiene para `preview.c`.
 
+## `fufplot/` — el gráfico de la previsión de fuf
+
+El gráfico que fuf pone en su informe: arriba, la variación anual (la LRC
+anual en %, si el modelo va en logaritmos) o el nivel, con las L últimas
+observaciones, las L previsiones y sus bandas; debajo, **ERR**, el error a un
+periodo de las observaciones, en impulsos y con su banda de dos sigma.
+
+Era de fuf (`engines/fuf/src/fufplot.c`) y vino aquí para que drtran_gui y
+sim_gui dibujen la previsión **igual que fue**: el analista lee el mismo
+gráfico en las tres. Solo depende de `fugdraw`. fuf lo llama de aquí, y su
+EPS no cambió ni un byte con la mudanza.
+
+No se confunde con el `fp_forecast_paneles` de `fugplot/`, que fue el gráfico
+de la previsión de drtran_gui y sim_gui antes de este y lo sigue usando
+sim_gui hasta su fase (fase P6 de `docs/TODO.md`).
+
 ## `preview/` — la ventana de gráficos
 
 Muestra lo que `fugdraw` escribe, con **zoom** y con una **lupa** estilo `gv`

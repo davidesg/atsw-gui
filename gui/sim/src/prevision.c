@@ -312,7 +312,7 @@ gboolean prevision_grafico( Sim *m, int i )
                          "pasa fuera de muestra." );
     for (j = 0; j < 2; j++) { pn[j].title = t[j]; pn[j].y = y[j]; pn[j].sd = sd[j]; }
     base = sim_artefacto( m, x->nombre );
-    fig = fp_forecast( pn, 2, nf, x->nf, fe, nota, base );
+    fig = fp_forecast_paneles( pn, 2, nf, x->nf, fe, nota, base );
     if (fig) {
         gchar *dir = g_path_get_dirname( base ), *nom = g_strdup_printf( "prev_%s.eps", x->nombre );
         eps = g_build_filename( dir, nom, NULL );

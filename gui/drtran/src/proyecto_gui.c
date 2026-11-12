@@ -28,6 +28,8 @@
 #include "gui.h"
 #include "previewhost.h"
 #include "fue_pre_reader.h"
+#include "preview.h"
+#include "cuaderno.h"
 
 gboolean mtram_proyecto_abre( Mtram *m, const char *path_dado, char *why,
                               size_t n )
@@ -383,4 +385,65 @@ gchar *mtram_artefacto( Mtram *m, const char *sufijo )
                          sizeof ruta ) != 0)
         return g_build_filename( g_get_user_cache_dir(), GUI_CACHE, "x", NULL );
     return g_strdup( ruta );
+}
+
+
+/* ------------------------------------------------------------------------ */
+/* «Al cuaderno» en la ventana de graficos (lib/preview; fase P5)            */
+/* ------------------------------------------------------------------------ */
+
+gboolean preview_cuaderno_puede( PreviewApp *m )
+{
+    return m && m->hay_proy && m->proy && m->proy->path[0] && m->caso[0];
+}
+
+/* QUE ES el grafico, por su nombre: los que dibuja drtran_gui. La CCF de la
+ * identificacion es de antes de estimar, y no lleva corrida.          */
+static const char *que_es( const char *base, gboolean *del_modelo, gchar **libre )
+{
+    *del_modelo = TRUE;
+    *libre = NULL;
+    if (!strcmp( base, "ccf.eps" )) { *del_modelo = FALSE; return "CCF preblanqueada"; }
+    if (!strcmp( base, "ccf_res.eps" ))  return "CCF de los residuos";
+    if (!strcmp( base, "hist_res.eps" )) return "Histograma de los residuos";
+    if (!strcmp( base, "res.eps" ))      return "Residuos y su ACF/PACF";
+    if (g_str_has_prefix( base, "prev_" ) && g_str_has_suffix( base, ".eps" )) {
+        gchar *s = g_strndup( base + 5, strlen( base ) - 9 );
+
+        *libre = g_strdup_printf( "Previsión de %s", s );
+        g_free( s );
+        return *libre;
+    }
+    if (g_str_has_prefix( base, "irf_" )) return "Respuesta al impulso y al escalón";
+    if (g_str_has_suffix( base, ".pdf" )) return "El modelo";
+    return "Gráfico";
+}
+
+static int a_png( const char *eps, const char *png )
+{
+    return preview_save_as( eps, png, NULL ) ? 0 : 1;
+}
+
+void preview_cuaderno( PreviewApp *m, const gchar *path )
+{
+    gchar      *base = g_path_get_basename( path ), *libre;
+    gboolean    del_modelo;
+    const char *que  = que_es( base, &del_modelo, &libre );
+    char        why[1024], md[1024];
+    /* el informe: el .out de donde sale el dibujo. La prevision, el suyo
+     * (puede ser el _prev.out del mismo modelo); lo demas, el de la
+     * diagnosis, que es el del modelo que se mira.                    */
+    const char *out  = !del_modelo ? NULL
+                     : g_str_has_prefix( base, "prev_" ) && m->prev.out ? m->prev.out
+                     : m->dia.path;
+
+    if (cu_grafico_caso( m->proy ? m->proy->path : NULL,
+                         m->proy ? m->proy->id : NULL, que, m->caso,
+                         del_modelo && m->corrida[0] ? m->corrida : NULL,
+                         out, path, a_png, md, sizeof md, why, sizeof why ) == 0)
+        preview_show_status( m, "Al cuaderno: %s.", md );
+    else
+        preview_show_status( m, "%s", why );
+    g_free( libre );
+    g_free( base );
 }

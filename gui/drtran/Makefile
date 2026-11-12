@@ -38,6 +38,7 @@ SRC = src/main.c src/main_window.c src/barra_gui.c src/series.c src/identifica.c
       $(LIB)/outdiag/outdiag.c \
       $(LIB)/gof/gof.c \
       $(LIB)/tabla/tabla.c \
+      $(LIB)/cuaderno/cuaderno.c \
       $(LIB)/proyecto/proyecto.c \
       $(LIB)/rutas/rutas.c \
       $(LIB)/outfcst/outfcst.c \
@@ -63,7 +64,7 @@ SRC = src/main.c src/main_window.c src/barra_gui.c src/series.c src/identifica.c
 HDR = include/gui.h include/series.h include/previewhost.h include/plothost.h
 
 INC = -Iinclude -I$(ENG)/include -I$(LIB)/fuepre \
-      -I$(LIB)/dates -I$(LIB)/prewhiten -I$(LIB)/netfile -I$(LIB)/nsop -I$(LIB)/slots -I$(LIB)/intervencion -I$(LIB)/verdict -I$(LIB)/outdiag -I$(LIB)/gof -I$(LIB)/tabla -I$(LIB)/rutas -I$(LIB)/proyecto -I$(LIB)/outfcst -I$(LIB)/fcomp -I$(LIB)/engine -I$(LIB)/coste -I$(LIB)/ccfplot -I$(LIB)/fugdraw -I$(LIB)/fugplot -I$(LIB)/fufplot \
+      -I$(LIB)/dates -I$(LIB)/prewhiten -I$(LIB)/netfile -I$(LIB)/nsop -I$(LIB)/slots -I$(LIB)/intervencion -I$(LIB)/verdict -I$(LIB)/outdiag -I$(LIB)/gof -I$(LIB)/tabla -I$(LIB)/cuaderno -I$(LIB)/rutas -I$(LIB)/proyecto -I$(LIB)/outfcst -I$(LIB)/fcomp -I$(LIB)/engine -I$(LIB)/coste -I$(LIB)/ccfplot -I$(LIB)/fugdraw -I$(LIB)/fugplot -I$(LIB)/fufplot \
       -I$(LIB)/equation -I$(LIB)/preview -I$(LIB)/utils -I$(LIB)/inpcheck -I$(LIB)/lik -I$(LIB)/diagmv -I$(LIB)/sitio -I$(LIB)/barra -I$(LIB)/vuelta -I$(LIB)/inpdet -I$(LIB)/fuedet
 
 GTK_CFLAGS := $(shell pkg-config --cflags gtk+-3.0 2>/dev/null)

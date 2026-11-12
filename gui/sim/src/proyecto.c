@@ -11,6 +11,9 @@
 #include <glib/gstdio.h>
 
 #include "sim.h"
+#include "previewhost.h"
+#include "preview.h"
+#include "cuaderno.h"
 
 gboolean sim_proyecto_abre( Sim *m, const char *path_dado, char *why, size_t n )
 {
@@ -137,4 +140,52 @@ gchar *sim_artefacto( Sim *m, const char *nombre )
     g_mkdir_with_parents( dir, 0755 );
     g_free( dir );
     return r;
+}
+
+
+/* ------------------------------------------------------------------------ */
+/* «Al cuaderno» en la ventana de graficos (lib/preview; fase P5)            */
+/* ------------------------------------------------------------------------ */
+
+gboolean preview_cuaderno_puede( PreviewApp *m )
+{
+    return m && m->proy && m->proy->path[0] && m->caso[0];
+}
+
+static int a_png( const char *eps, const char *png )
+{
+    return preview_save_as( eps, png, NULL ) ? 0 : 1;
+}
+
+/* Que es el grafico, por su nombre, y de que .out sale. La CCF de la
+ * identificacion es de antes de estimar: sin corrida ni informe.       */
+void preview_cuaderno( PreviewApp *m, const gchar *path )
+{
+    gchar      *base = g_path_get_basename( path ), *que = NULL, *out = NULL;
+    gboolean    del_modelo = TRUE;
+    char        why[1024], md[1024];
+
+    if (g_str_has_prefix( base, "ccf_" )) {
+        que = g_strdup( "CCF de la identificación" );
+        del_modelo = FALSE;
+    } else if (g_str_has_prefix( base, "prev_" ) && g_str_has_suffix( base, ".eps" )) {
+        gchar *s = g_strndup( base + 5, strlen( base ) - 9 );
+
+        que = g_strdup_printf( "Previsión de %s", s );
+        g_free( s );
+        if (m->pv.base) out = g_strconcat( m->pv.base, ".out", NULL );
+    } else if (g_str_has_suffix( base, ".pdf" ))
+        que = g_strdup( "El modelo" );
+    else
+        que = g_strdup( "Gráfico" );
+    if (del_modelo && !out && m->pe.out) out = g_strdup( m->pe.out );
+
+    if (cu_grafico_caso( m->proy ? m->proy->path : NULL,
+                         m->proy ? m->proy->id : NULL, que, m->caso,
+                         del_modelo && m->pe.corrida[0] ? m->pe.corrida : NULL,
+                         out, path, a_png, md, sizeof md, why, sizeof why ) == 0)
+        sim_estado( m, "Al cuaderno: %s.", md );
+    else
+        sim_estado( m, "%s", why );
+    g_free( que ); g_free( out ); g_free( base );
 }

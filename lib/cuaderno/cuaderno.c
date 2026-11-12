@@ -270,3 +270,80 @@ int cu_nota( const char *manifiesto, const char *texto, char *why, size_t n )
    g_free( t );
    return cu_cierra( c, why, n );
 }
+
+void cu_relativa( const char *manifiesto, const char *f, char *out, size_t n )
+{
+   gchar *base;
+   size_t l;
+   char  *q;
+
+   if ( out == NULL || n == 0 ) return;
+   if ( f == NULL ) { out[0] = 0; return; }
+   if ( manifiesto == NULL || !*manifiesto ) { g_snprintf( out, n, "%s", f ); return; }
+   base = g_path_get_dirname( manifiesto );
+   l    = strlen( base );
+   if ( !strncmp( f, base, l ) && ( f[l] == '/' || f[l] == '\\' ) )
+      {
+      g_snprintf( out, n, "%s", f + l + 1 );
+      for ( q = out; *q; q++ ) if ( *q == '\\' ) *q = '/';
+      }
+   else
+      g_snprintf( out, n, "%s", f );
+   g_free( base );
+}
+
+int cu_grafico_caso( const char *manifiesto, const char *proyecto,
+                     const char *que, const char *caso, const char *corrida,
+                     const char *informe, const char *eps,
+                     int (*a_png)( const char *eps, const char *png ),
+                     char *md, size_t nmd, char *why, size_t n )
+{
+   Cuaderno *c;
+   gchar    *t, *pie, *base;
+   char      rel[4096], png[4096];
+   int       rc;
+
+   if ( md && nmd ) md[0] = 0;
+   if ( manifiesto == NULL || !*manifiesto )
+      { g_snprintf( why, n, "Sin proyecto no hay cuaderno: vive al lado del manifiesto." );
+        return 1; }
+   if ( eps == NULL || !*eps )
+      { g_snprintf( why, n, "No hay gráfico." ); return 1; }
+
+   que  = ( que && *que ) ? que : "Gráfico";
+   t    = ( caso && *caso && corrida && *corrida )
+        ? g_strdup_printf( "%s — caso %s / %s", que, caso, corrida )
+        : ( caso && *caso ) ? g_strdup_printf( "%s — caso %s", que, caso )
+        : g_strdup( que );
+   c = cu_nueva( manifiesto, t );
+   g_free( t );
+   if ( c == NULL ) { g_snprintf( why, n, "No pude abrir el cuaderno." ); return 1; }
+
+   if ( proyecto && *proyecto ) cu_dato( c, "Proyecto", proyecto );
+   if ( caso && *caso )         cu_dato( c, "Caso", caso );
+   if ( corrida && *corrida )   cu_dato( c, "Corrida", corrida );
+   if ( informe && *informe )
+      {
+      cu_relativa( manifiesto, informe, rel, sizeof rel );
+      cu_dato( c, "Informe", rel );
+      }
+   /* El dibujo: relativo si es del proyecto; si vive en la cache, su nombre,
+      que una ruta de cache no dice nada (como an_cuaderno_grafico).      */
+   base = g_path_get_basename( eps );
+   cu_relativa( manifiesto, eps, rel, sizeof rel );
+   cu_dato( c, "Gráfico", g_path_is_absolute( rel ) ? base : rel );
+
+   pie = ( caso && *caso && corrida && *corrida )
+       ? g_strdup_printf( "%s del caso %s / %s", que, caso, corrida )
+       : ( caso && *caso ) ? g_strdup_printf( "%s del caso %s", que, caso )
+       : g_strdup( que );
+   if ( cu_imagen( c, base, pie, png, sizeof png ) == 0 && a_png )
+      a_png( eps, png );                 /* si falla, la entrada lo dice */
+   g_free( pie );
+   g_free( base );
+
+   rc = cu_cierra( c, why, n );
+   if ( rc == 0 && md && nmd && cu_ruta( manifiesto, rel, sizeof rel ) == 0 )
+      cu_relativa( manifiesto, rel, md, nmd );
+   return rc;
+}

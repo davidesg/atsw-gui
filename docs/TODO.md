@@ -341,8 +341,35 @@ Medido con fuf y drtran sobre IPC_ES ← WTI (`engines/drtran/examples/passthrou
 | **P2** ✓ | La tabla del `.out` de drtran en el formato de fuf: sus cabeceras, rótulos, columnas y cuatro decimales, con un espacio garantizado entre campos (ver abajo). `lib/outfcst`, la batería de drtran y `.github/revision/numeros.py` leen la nueva |
 | **P3** ✓ | drtran_gui: al evaluar, el diagonal (`-0`) se evalúa solo con la misma ventana, en una corrida aparte, y la tabla da su RMSE, el cociente y Diebold-Mariano (`lib/fcomp`) |
 | **P4** ✓ | drtran_gui: la IRF y la SRF dibujadas con sus bandas (`fp_response` en `lib/fufplot`): «Ver el gráfico» en Diagnosis → Transferencias, y en Prever ▾ |
-| **P5** | La auditoría de «Al cuaderno» en drtran_gui y en sim_gui |
+| **P5** ✓ | La auditoría de «Al cuaderno» en drtran_gui y en sim_gui (abajo), y el botón en las dos |
 | **P6** | sim_gui: el gráfico de fuf, la tabla de drvarma en el formato de fuf, y la IRF y la SRF dibujadas |
+
+**La auditoría de «Al cuaderno» (P5, 12-nov-2026).**
+
+- **Lo que había.** El botón «Al cuaderno» de la ventana de gráficos
+  (`lib/preview`) sale solo si el anfitrión define `PREVIEW_CUADERNO`. Lo
+  definían fue_gui (la entrada va al modelo cargado) y la madre (al vistazo,
+  al modelo por su `.out` o al caso por su ruta). drtran_gui y sim_gui no lo
+  definían, y `preview.h` lo justificaba con «no hay proyecto», que ya no era
+  cierto: los dos abren con `--proyecto` y `--caso`.
+- **Qué gráficos pueden ir al cuaderno.** Todos los que abren su ventana:
+  - drtran_gui: la CCF preblanqueada, los residuos (serie y ACF/PACF,
+    histograma, CCF), la previsión, la respuesta al impulso y la página del
+    modelo;
+  - sim_gui: la CCF de la identificación, la previsión y la página del
+    modelo.
+- **A qué apunta la entrada.** Al caso y a su corrida, donde fue apunta a
+  la serie y a su modelo. La CCF de la identificación es de antes de
+  estimar, así que lleva el caso y no lleva corrida.
+- **¿Sale igual que en fue?** Sí. El título va con el caso donde fue pone la
+  serie («Previsión de IPC — caso C1 / c02»). La procedencia lleva Proyecto,
+  Caso, Corrida, Informe (el `.out` de donde sale el dibujo: el de la
+  previsión si es la previsión) y Gráfico, y luego el PNG de la página que
+  se ve, con su pie. La arma `cu_grafico_caso` (`lib/cuaderno`), la misma en
+  los dos.
+- **Pendiente, menor.** La rama de casos de la madre (`vistazo.c`) titula
+  «Gráfico — caso C1 / c02» y no pone Informe. Se puede pasar a
+  `cu_grafico_caso` para que las tres digan lo mismo.
 
 **Un defecto de fuf, sin tocar** (lo vio P2): `forecast_table_acii`
 (`engines/fuf/src/usfo.c`) escribe los campos pegados (`%9.4f%7.4f…`). Con

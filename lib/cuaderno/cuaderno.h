@@ -69,4 +69,27 @@ int cu_nota( const char *manifiesto, const char *texto, char *why, size_t n );
 /* Donde esta (o estara) el cuaderno de ese manifiesto. 0 si se pudo. */
 int cu_ruta( const char *manifiesto, char *out, size_t n );
 
+/* f relativa al directorio del manifiesto, con «/»; si no cuelga de el,
+ * tal cual.                                                               */
+void cu_relativa( const char *manifiesto, const char *f, char *out, size_t n );
+
+/* UN GRAFICO DE UN CASO (drtran_gui, sim_gui), con la misma procedencia que
+ * los de un modelo de fue (lib/analisis, an_cuaderno_grafico):
+ *
+ *     ## <que> — caso <caso> / <corrida>
+ *     - **Proyecto:** ...   - **Caso:** ...   - **Corrida:** ...
+ *     - **Informe:** <el .out, relativo>     - **Gráfico:** <el fichero>
+ *     ![<que> del caso <caso> / <corrida>](img/...png)
+ *
+ * corrida e informe pueden ser NULL (un grafico de antes de estimar, como
+ * la CCF). El PNG lo escribe a_png(eps, png): la ventana de graficos sabe
+ * hacerlo (preview_save_as) y este modulo no depende de GTK. 0 si fue bien;
+ * si no, why dice por que. En md, si no es NULL, la ruta del cuaderno
+ * relativa al manifiesto, para decirla.                                   */
+int cu_grafico_caso( const char *manifiesto, const char *proyecto,
+                     const char *que, const char *caso, const char *corrida,
+                     const char *informe, const char *eps,
+                     int (*a_png)( const char *eps, const char *png ),
+                     char *md, size_t nmd, char *why, size_t n );
+
 #endif /* ATSW_CUADERNO_H */

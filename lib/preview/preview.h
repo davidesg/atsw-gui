@@ -34,8 +34,9 @@ gboolean preview_save_as(const gchar *path, const gchar *filename, GError **erro
  *     void     preview_cuaderno(PreviewApp *app, const gchar *path);
  *
  * La segunda escribe la entrada --con preview_save_as para el PNG, que
- * guarda la pagina que se esta viendo--. Quien no lo define (fug, drtran)
- * no tiene boton: no hay proyecto al que mandarlo.                     */
+ * guarda la pagina que se esta viendo--. Lo definen fue_gui, la madre,
+ * drtran_gui y sim_gui (estos dos con --proyecto y --caso; la entrada la
+ * arma cu_grafico_caso de lib/cuaderno). fug no: no tiene proyecto.    */
 
 /* La ventana de path ya lleva su propio «Al cuaderno» en el pie (Anómalos,
  * que manda ademas los episodios y el umbral): el de la barra se quita, que

@@ -14,6 +14,8 @@
 
 real macheps = 2.220446049250313e-16;   /* ver sistema.h, ENLACE */
 
+#define G_N( a ) ( (int) ( sizeof (a) / sizeof (a)[0] ) )
+
 static int fallos = 0;
 static void ok( int c, const char *q ) { printf( "  %-58s %s\n", q, c ? "ok" : "FALLA" ); if ( !c ) fallos++; }
 
@@ -25,7 +27,7 @@ int main( int argc, char **argv )
    const char *av[32];
    int k;
 
-   if ( argc != 2 ) return 2;
+   if ( argc < 2 ) return 2;   /* argv[2], opcional: los .pre de Johansen y Juselius */
    snprintf( r, sizeof r, "%s/MUSKRAT_m03.pre", argv[1] );
    ok( sis_anade( &s, r, why, sizeof why ) == 0, "MUSKRAT_m03.pre se lee" );
    snprintf( r, sizeof r, "%s/MINK_m02.pre", argv[1] );
@@ -102,6 +104,42 @@ int main( int argc, char **argv )
           "sin el par MINK <- MUSKRAT, su cero ya no va" );
       ok( sis_modelo_triangular( &mo, &r, perm, 2 ) == 1 && r.enlace[0][1] && !r.enlace[1][0],
           "triangular MINK, MUSKRAT: MUSKRAT recibe de MINK y no al revés" );
+   }
+   /* --- el rango (S10b) ------------------------------------------------ */
+   {
+      SisRango rr;
+      const char *av[SIS_MAX_SER + 16];
+      char buf[64];
+      int k, j, tiene_b = 0, tiene_name = 0;
+
+      ok( !sis_rango_admite( &s, why, sizeof why ) && strstr( why, "MINK" ) && strstr( why, "d = 0" ),
+          "rango: con MINK (d = 0) no, y dice por qué (el caso mixto)" );
+      sis_rango_defecto( &rr );
+      ok( rr.p == 2 && rr.q == 0 && !strcmp( rr.caso, "pre" ) && rr.B == 199,
+          "rango: por omisión p = 2, q = 0, el caso de cada .pre, B = 199" );
+      rr.B = 99; snprintf( rr.caso, sizeof rr.caso, "2" );
+      k = sis_orden_rango( &s, &rr, "C1_rango", buf, sizeof buf, av, G_N( av ) );
+      for ( j = 0; j < k; j++ ) {
+         if ( !strcmp( av[j], "-bootstrap" ) && j + 1 < k && !strcmp( av[j + 1], "99" ) ) tiene_b = 1;
+         if ( !strcmp( av[j], "-name" ) && j + 1 < k && !strcmp( av[j + 1], "C1_rango" ) ) tiene_name = 1;
+      }
+      ok( k == s.n + 10 && !strcmp( av[s.n], "2" ) && !strcmp( av[s.n + 1], "0" ) &&
+          !strcmp( av[s.n + 2], "0" ) && !strcmp( av[s.n + 4], "2" ) && !strcmp( av[s.n + 5], "-lrtest" ) &&
+          tiene_b && tiene_name, "rango: la orden de drvec, con -bootstrap y -name" );
+      rr.B = 0;
+      k = sis_orden_rango( &s, &rr, "C1_rango", buf, sizeof buf, av, G_N( av ) );
+      ok( k == s.n + 8, "rango: B = 0, sin -bootstrap (los valores asintóticos)" );
+      if ( argc > 2 ) {
+         Sistema jj;
+         const char *nom[] = { "LRM", "LRY", "IBO", "IDE" };
+         memset( &jj, 0, sizeof jj );
+         for ( j = 0; j < 4; j++ ) {
+            snprintf( r, sizeof r, "%s/%s_u.pre", argv[2], nom[j] );
+            sis_anade( &jj, r, why, sizeof why );
+         }
+         ok( jj.n == 4 && sis_rango_admite( &jj, why, sizeof why ),
+             "rango: Johansen y Juselius (cuatro con d = 1) sí" );
+      }
    }
    sis_mueve( &s, 1, 0 );
    ok( !strcmp( s.s[0].nombre, "MINK" ) && !strcmp( s.s[1].nombre, "MUSKRAT" ), "mover cambia el orden" );

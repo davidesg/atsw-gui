@@ -96,9 +96,10 @@ static gboolean espera( Sim *m, int segundos )
 {
     gint64 hasta = g_get_monotonic_time() + (gint64) segundos * G_USEC_PER_SEC;
     pump( 20 );
-    while ((m->pp.corriendo || m->pe.corriendo || m->pv.corriendo || m->pd.corriendo) && g_get_monotonic_time() < hasta) pump( 20 );
+    while ((m->pp.corriendo || m->pr.corriendo || m->pe.corriendo || m->pv.corriendo || m->pd.corriendo) &&
+           g_get_monotonic_time() < hasta) pump( 20 );
     pump( 50 );
-    return !m->pp.corriendo && !m->pe.corriendo && !m->pv.corriendo && !m->pd.corriendo;
+    return !m->pp.corriendo && !m->pr.corriendo && !m->pe.corriendo && !m->pv.corriendo && !m->pd.corriendo;
 }
 
 static int filas_de( GtkWidget *tv ) { return filas( tv ); }
@@ -246,7 +247,10 @@ int main( int argc, char **argv )
     /* --- al abrir ------------------------------------------------------ */
     m = ventana_nueva( app );
     check( contiene( etiqueta( m->estado ), ".pre" ), "al abrir, la barra pide los .pre", etiqueta( m->estado ) );
-    check( gtk_notebook_get_n_pages( GTK_NOTEBOOK(m->libro) ) == 7, "siete paginas", NULL );
+    check( gtk_notebook_get_n_pages( GTK_NOTEBOOK(m->libro) ) == 8 &&
+           gtk_notebook_get_nth_page( GTK_NOTEBOOK(m->libro), PG_RANGO ) == m->pr.pagina,
+           "ocho paginas: las siete y R · Rango", NULL );
+    check( !gtk_widget_get_visible( m->pr.pagina ), "sin series, R · Rango no se ve", NULL );
     check( !gtk_widget_is_sensitive( GTK_WIDGET(m->tb_estimar) ) &&
            contiene( gtk_widget_get_tooltip_text( GTK_WIDGET(m->tb_estimar) ), "dos series" ),
            "sin series, Estimar apagado y el globo pide dos series",
@@ -278,6 +282,8 @@ int main( int argc, char **argv )
            gtk_widget_get_tooltip_text( GTK_WIDGET(m->tb_estimar) ) );
     check( !contiene( etiqueta( m->pp.ver_rango ), "rango" ),
            "con una sola serie diferenciada, no se pregunta por el rango", etiqueta( m->pp.ver_rango ) );
+    check( !gtk_widget_get_visible( m->pr.pagina ),
+           "con MINK (d = 0), R · Rango no se ve: el caso mixto es de sima", NULL );
 
     /* --- 2 · Puerta, con el drvarma de verdad --------------------------- */
     check( contiene( etiqueta( m->pp.ver_puerta ), "Todavía no" ), "antes, la puerta dice que no se ha pasado",
@@ -520,8 +526,9 @@ int main( int argc, char **argv )
     /* --- dos diferenciadas: la pregunta del rango ----------------------- */
     sis_quita( &m->sis, 0 );
     check( series_anade( m, mind ), "MINK con d = 1 entra", etiqueta( m->estado ) );
-    check( contiene( etiqueta( m->pp.ver_rango ), "rango" ),
-           "con dos diferenciadas, se pregunta por el rango", etiqueta( m->pp.ver_rango ) );
+    check( contiene( etiqueta( m->pp.ver_rango ), "R · Rango" ),
+           "con dos diferenciadas, la puerta manda a R · Rango", etiqueta( m->pp.ver_rango ) );
+    check( gtk_widget_get_visible( m->pr.pagina ), "y R · Rango se ve", NULL );
 
     /* --- una puerta que falla (el motor falso sale con 5) --------------- */
     g_setenv( "SIM_DRVARMA", fake, TRUE );
@@ -651,6 +658,56 @@ int main( int argc, char **argv )
             gtk_widget_destroy( q->ventana );
             g_free( pm );
         }
+    }
+
+    /* --- R · Rango: Johansen y Juselius, con el drvec del arbol ---------- */
+    {
+        Sim *j = ventana_nueva( app );
+        const char *nom[] = { "LRM", "LRY", "IBO", "IDE" };
+        gchar *jj = g_build_filename( datos, "..", "..", "outvec", "datos", NULL );
+        int i, al;
+
+        for (i = 0; i < 4; i++) {
+            gchar *de = g_strdup_printf( "%s/%s_u.pre", jj, nom[i] ), *a = g_build_filename( dd, nom[i], NULL );
+            gchar *a2 = g_strdup_printf( "%s_u.pre", a );
+            copia( de, a2 );
+            check( series_anade( j, a2 ), "una serie de Johansen y Juselius entra", etiqueta( j->estado ) );
+            g_free( de ); g_free( a ); g_free( a2 );
+        }
+        check( gtk_widget_get_visible( j->pr.pagina ), "cuatro I(1): R · Rango se ve", NULL );
+        check( contiene( etiqueta( j->pr.ver_propuesta ), "Contrastar el rango" ),
+               "antes de contrastar, la pagina dice que hacer", etiqueta( j->pr.ver_propuesta ) );
+        /* sin bootstrap (segundos) y el caso 2, el del tutorial de sima */
+        gtk_spin_button_set_value( GTK_SPIN_BUTTON(j->pr.s_B), 0 );
+        gtk_combo_box_set_active( GTK_COMBO_BOX(j->pr.c_caso), 2 );
+        check( contiene( etiqueta( j->pr.orden ), "-case 2 -lrtest -name" ) &&
+               !contiene( etiqueta( j->pr.orden ), "-bootstrap" ),
+               "la orden: caso 2, -lrtest, sin -bootstrap", etiqueta( j->pr.orden ) );
+        check( rango_contrastar( j ) && espera( j, 180 ), "drvec contrasta el rango", etiqueta( j->estado ) );
+        check( rango_estado( j ) == 1 && j->pr.v->nrango == 4, "la prueba se lee: cuatro rangos",
+               etiqueta( j->estado ) );
+        check( filas( j->pr.l_rangos ) == 4 && filas( j->pr.l_pruebas ) == 3,
+               "las tablas: 4 rangos y 3 contrastes", NULL );
+        s = celda( j->pr.l_pruebas, 0, 1 );
+        check( !g_strcmp0( s, "25.91" ), "la LR de r = 0 frente a 1 es la de sima (25.91)", s ); g_free( s );
+        check( ovec_rango_propuesto( j->pr.v, &al ) == 0 &&
+               contiene( etiqueta( j->pr.ver_propuesta ), "r = 0" ),
+               "propone r = 0 (los asintóticos)", etiqueta( j->pr.ver_propuesta ) );
+        check( contiene( etiqueta( j->pr.ver_notas ), "Sin bootstrap" ),
+               "y avisa de que sin bootstrap la prueba sale pequeña", etiqueta( j->pr.ver_notas ) );
+        check( contiene( etiqueta( j->pr.ver_puerta ), "suma" ), "la puerta de drvec, verificada",
+               etiqueta( j->pr.ver_puerta ) );
+        /* otra configuracion: la prueba ya no es de esta */
+        gtk_spin_button_set_value( GTK_SPIN_BUTTON(j->pr.s_p), 3 );
+        check( rango_estado( j ) == 0 && contiene( etiqueta( j->pr.ver_propuesta ), "cambiaron" ),
+               "con otro p, hay que volver a contrastar", etiqueta( j->pr.ver_propuesta ) );
+        /* el motor que no esta */
+        g_setenv( "SIM_DRVEC", "/no/existe/drvec", TRUE );
+        check( !rango_contrastar( j ) && contiene( etiqueta( j->pr.ver_propuesta ), "No pude lanzar drvec" ),
+               "sin drvec, la pagina lo dice", etiqueta( j->pr.ver_propuesta ) );
+        g_unsetenv( "SIM_DRVEC" );
+        gtk_widget_destroy( j->ventana );
+        g_free( jj );
     }
 
     printf( "sim_gui: %s\n", fails ? "hay fallos" : "todo bien" );

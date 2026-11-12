@@ -19,7 +19,7 @@ GSL_LIBS=$(pkg-config --libs gsl 2>/dev/null)
 [ -n "$GSL_LIBS" ] || GSL_LIBS="-lgsl -lgslcblas"
 
 INC="-I$TOP/include -I$E/include"
-for d in sistema outvarma outdiag fuepre fuedet dates lik optim diagmv prewhiten \
+for d in sistema outvarma outvec outdiag fuepre fuedet dates lik optim diagmv prewhiten \
          inpcheck proyecto engine coste sitio barra preview fugdraw ccfplot utils fugplot equation; do
     INC="$INC -I$L/$d"
 done
@@ -29,7 +29,7 @@ echo "lib/sistema"
 $CC -O0 -g -w $INC $GSL_CFLAGS "$L/sistema/test_sistema.c" "$L/sistema/sistema.c" \
     "$L/fuepre/fue_pre_reader.c" "$E/src/nlatools.c" "$L/dates/dates.c" "$L/fuedet/fuedet.c" \
     -o "$W/test_sistema" $GSL_LIBS -lm || exit 1
-"$W/test_sistema" "$L/outvarma/datos" 2> /dev/null > "$W/sistema.txt"
+"$W/test_sistema" "$L/outvarma/datos" "$L/outvec/datos" 2> /dev/null > "$W/sistema.txt"
 rc=$?
 grep -E "FALLA|fallos" "$W/sistema.txt"
 [ $rc -eq 0 ] || exit 1
@@ -37,6 +37,9 @@ grep -E "FALLA|fallos" "$W/sistema.txt"
 # 2. La ventana.
 pkg-config --exists gtk+-3.0 2>/dev/null || { echo "note: sin GTK3 no se prueba la ventana"; exit 0; }
 if [ -d "$E/bin" ]; then PATH="$E/bin:$PATH"; export PATH; fi
+# drvec, para R · Rango (S10b): sin el, esa parte de la prueba lo dice y falla.
+V="$TOP/../../engines/drvec"
+if [ -d "$V/bin" ]; then PATH="$V/bin:$PATH"; export PATH; fi
 if ! command -v drvarma > /dev/null 2>&1; then
     echo "note: drvarma no esta en el PATH ni en $E/bin: no se prueba la ventana"
     exit 0

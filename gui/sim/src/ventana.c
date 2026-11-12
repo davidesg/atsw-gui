@@ -75,11 +75,12 @@ gchar *sim_hermano( const char *programa )
         "../../engines/drvec/bin/%s",
         "./%s", NULL                         /* el paquete: todo junto         */
     };
-    const char *e = g_getenv( "SIM_DRVARMA" );
+    const char *e = !strcmp( programa, "drvarma" ) ? g_getenv( "SIM_DRVARMA" )
+                  : !strcmp( programa, "drvec" )   ? g_getenv( "SIM_DRVEC" ) : NULL;
 
     /* LA PRUEBA lo sustituye, y sin respaldo: con uno que no esta, no hay
      * motor (asi se prueba el aviso).                                  */
-    if (e && *e && !strcmp( programa, "drvarma" ))
+    if (e && *e)
         return g_file_test( e, G_FILE_TEST_IS_EXECUTABLE ) ? g_strdup( e ) : NULL;
     return sitio_busca( programa, sitio );
 }
@@ -220,6 +221,7 @@ void sim_refresca( Sim *m )
     if (!m->ventana) return;
     series_refresca( m );
     puerta_refresca( m );
+    rango_refresca( m );
     identifica_refresca( m );
     modelo_refresca( m );
     estima_refresca( m );
@@ -254,12 +256,18 @@ static void on_destroy( GtkWidget *w, Sim *m )
 {
     (void) w;
     if (m->pp.trabajo) engine_stop( m->pp.trabajo );
+    if (m->pr.trabajo) engine_stop( m->pr.trabajo );
+    if (m->pr.tic) { g_source_remove( m->pr.tic ); m->pr.tic = 0; }
     if (m->pe.trabajo) engine_stop( m->pe.trabajo );
     if (m->pv.trabajo) engine_stop( m->pv.trabajo );
     if (m->pd.trabajo) engine_stop( m->pd.trabajo );
     memset( &m->ps, 0, sizeof m->ps );
     m->pp.b_pasar = m->pp.orden = m->pp.lista = NULL;
     m->pp.ver_puerta = m->pp.ver_notas = m->pp.ver_rango = NULL;
+    m->pr.pagina = m->pr.s_p = m->pr.s_q = m->pr.s_B = m->pr.c_caso = NULL;
+    m->pr.b_contrastar = m->pr.b_parar = m->pr.orden = m->pr.barra = NULL;
+    m->pr.l_pruebas = m->pr.l_rangos = m->pr.ver_propuesta = m->pr.ver_puerta = NULL;
+    m->pr.ver_notas = NULL;
     memset( &m->pi, 0, sizeof m->pi );
     memset( &m->pm, 0, sizeof m->pm );
     m->pe.b_estimar = m->pe.b_parar = m->pe.orden = m->pe.consola = NULL;
@@ -295,6 +303,9 @@ GtkWidget *sim_ventana_new( GtkApplication *app, Sim *m )
     pestana( m, puerta_pagina_new( m ), "2 · Puerta",
              "La puerta diagonal: el sistema sin dinámica cruzada tiene que "
              "reproducir los univariantes" );
+    pestana( m, rango_pagina_new( m ), "R · Rango",
+             "El rango de cointegración, con drvec: ¿se mueven juntas a largo plazo? "
+             "Solo con series I(1)" );
     pestana( m, identifica_pagina_new( m ), "3 · Identificación",
              "La CCF de los residuos univariantes, par a par, y los enlaces" );
     pestana( m, modelo_pagina_new( m ), "4 · Modelo", "p, q, Σ y los enlaces: la orden de drvarma" );

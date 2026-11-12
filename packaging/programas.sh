@@ -19,6 +19,7 @@ engines/fuf/bin/fuf
 engines/fug/fug
 engines/drtran/bin/drtran
 engines/drvarma/bin/drvarma
+engines/drvec/bin/drvec
 engines/art/bin/art
 gui/atsw/atsw_gui
 gui/fue/bin/fue_gui

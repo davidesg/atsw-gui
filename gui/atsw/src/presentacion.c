@@ -12,8 +12,7 @@
  * y despues el PATH). Comprobar en otro sitio diria que esta lo que luego
  * no se encuentra.
  *
- * QUE NO PARA: lo opcional (drvarma y drvec, que aun no van en el paquete;
- * el asistente) se dice en gris y no es un error. Con algo obligatorio en
+ * QUE NO PARA: lo opcional (el asistente) se dice en gris y no es un error. Con algo obligatorio en
  * falta la presentacion se queda abierta con el informe; si no, se cierra
  * sola y abre la madre.
  *
@@ -133,7 +132,7 @@ int atsw_comprueba( AtComprob *c, int max )
 {
     /* atsw-cli va con los motores: es la puerta del asistente a lib/ y no
        es opcional (ESTUDIO-terminal-mcp §6.3).                         */
-    static const char *const motores[] = { "fue", "fuf", "fug", "drtran", "drvarma", "art", "atsw-cli" };
+    static const char *const motores[] = { "fue", "fuf", "fug", "drtran", "drvarma", "drvec", "art", "atsw-cli" };
     static const char *const guis[]    = { "fue_gui", "gtk_fmg", "drtran_gui", "sim_gui" };
     int n = 0;
     guint i;
@@ -145,9 +144,6 @@ int atsw_comprueba( AtComprob *c, int max )
     if ( n < max ) esquemas( &c[n++] );
     if ( n < max ) cargador( &c[n++], "png", "las imágenes PNG", FALSE );
     if ( n < max ) cargador( &c[n++], "svg", "los iconos SVG de las barras", TRUE );
-    /* LO QUE TODAVIA NO VA EN EL PAQUETE: se dice y no es un error. */
-    if ( n < max ) programa( &c[n++], "Sistemas", "drvec", TRUE,
-                             "Todavía no va en el paquete: el VEC llega en una versión posterior." );
     if ( n < max ) escritorio( &c[n++] );
     /* EL ASISTENTE (ESTUDIO-terminal-mcp §6.3): opcional; se instala con uv. */
     if ( n < max ) programa( &c[n++], "Asistente", "uv", TRUE,

@@ -697,6 +697,57 @@ int main( int argc, char **argv )
                "y avisa de que sin bootstrap la prueba sale pequeña", etiqueta( j->pr.ver_notas ) );
         check( contiene( etiqueta( j->pr.ver_puerta ), "suma" ), "la puerta de drvec, verificada",
                etiqueta( j->pr.ver_puerta ) );
+        /* --- S10c: Al modelo y el VEC --------------------------------- */
+        check( rango_al_modelo( j ) && j->mod.clase == SIS_VARMA && j->mod.p == 1,
+               "Al modelo con r = 0: el VARMA en diferencias, con p − 1 = 1", etiqueta( j->estado ) );
+        check( gtk_widget_is_sensitive( j->pm.rb_vec ), "con series I(1), la clase VEC se puede elegir", NULL );
+        gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(j->pm.rb_vec), TRUE );
+        pump( 50 );
+        gtk_spin_button_set_value( GTK_SPIN_BUTTON(j->pm.s_p), 2 );
+        gtk_spin_button_set_value( GTK_SPIN_BUTTON(j->pm.s_r), 1 );
+        gtk_combo_box_set_active( GTK_COMBO_BOX(j->pm.cb_caso), 2 );
+        pump( 50 );
+        check( j->mod.clase == SIS_VEC && gtk_widget_get_visible( j->pm.caja_vec ) &&
+               !gtk_widget_get_visible( j->pm.caja_varma ), "VEC: se ven r y la normalización, no los enlaces", NULL );
+        /* normalizar sobre LRM, como sima: de por omision es la ultima (IDE) */
+        {
+            GList *l = gtk_container_get_children( GTK_CONTAINER(j->pm.y1) ), *q;
+            for (q = l; q; q = q->next)
+                gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(q->data),
+                    !strcmp( gtk_button_get_label( GTK_BUTTON(q->data) ), "LRM" ) );
+            g_list_free( l );
+        }
+        pump( 50 );
+        check( contiene( etiqueta( j->pm.orden ), "drvec LRY_u.pre IBO_u.pre IDE_u.pre LRM_u.pre 2 0 1 "
+                         "-case 2 -fdhess -name" ), "la orden del VEC: LRM al final (Y1), r = 1, caso 2",
+               etiqueta( j->pm.orden ) );
+        check( contiene( etiqueta( j->pm.ver_vec ), "sobre LRM" ) && contiene( etiqueta( j->pm.ver_vec ), "comparten" ),
+               "la página dice la normalización y que fija la comparación", etiqueta( j->pm.ver_vec ) );
+        check( contiene( gtk_window_get_title( GTK_WINDOW(j->ventana) ), "SIM · VEC" ), "el título dice VEC",
+               gtk_window_get_title( GTK_WINDOW(j->ventana) ) );
+        check( puerta_pasar( j ) && espera( j, 120 ) && puerta_estado( j ) == 1,
+               "la puerta de drvarma pasa con Johansen y Juselius", etiqueta( j->pp.ver_puerta ) );
+        check( estima_lanzar( j ) && espera( j, 120 ), "drvec estima el VEC", etiqueta( j->estado ) );
+        check( j->pe.vec && j->pe.vec->hay_vec && j->pe.vec->r == 1 && !j->pe.v,
+               "el .out se lee como un VEC", etiqueta( j->pe.ver_fin ) );
+        check( contiene( etiqueta( j->pe.ver_fin ), "normalizado sobre LRM" ) &&
+               contiene( etiqueta( j->pe.ver_fin ), "convergió" ), "la estimación: convergió, sobre LRM",
+               etiqueta( j->pe.ver_fin ) );
+        check( gtk_widget_get_visible( j->pd.libreta ), "la diagnosis se ve", etiqueta( j->pd.ver_pide ) );
+        check( contiene( etiqueta( j->pd.ver_lr ), "LRM = 1.12 LRY − 5.16 IBO + 4.26 IDE" ),
+               "la relación de equilibrio es la de sima", etiqueta( j->pd.ver_lr ) );
+        check( contiene( etiqueta( j->pd.ver_optim ), "LRM -0.166 (t -2.27): corrige el error" ),
+               "α en LRM: −0.17, t −2.27, corrige el error", etiqueta( j->pd.ver_optim ) );
+        check( filas( j->pd.l_res ) == 4 && filas( j->pd.l_par ) == 33,
+               "los residuos de las cuatro y los 33 parámetros", NULL );
+        s = celda( j->pd.l_res, 3, 0 );
+        check( !g_strcmp0( s, "ec1" ), "la última fila de residuos es el error de equilibrio (ec1)", s ); g_free( s );
+        check( contiene( etiqueta( j->pd.ver_hosking ), "Hosking" ), "Hosking, de la salida de drvec",
+               etiqueta( j->pd.ver_hosking ) );
+        check( gtk_widget_is_sensitive( GTK_WIDGET(j->tb_diag) ) && !gtk_widget_is_sensitive( GTK_WIDGET(j->tb_prev) ) &&
+               contiene( gtk_widget_get_tooltip_text( GTK_WIDGET(j->tb_prev) ), "sima" ),
+               "con un VEC: Diagnosis sí, Prever no (lo dice)", gtk_widget_get_tooltip_text( GTK_WIDGET(j->tb_prev) ) );
+
         /* otra configuracion: la prueba ya no es de esta */
         gtk_spin_button_set_value( GTK_SPIN_BUTTON(j->pr.s_p), 3 );
         check( rango_estado( j ) == 0 && contiene( etiqueta( j->pr.ver_propuesta ), "cambiaron" ),

@@ -390,6 +390,11 @@ void prevision_refresca( Sim *m )
 
     if (P->corriendo)
         sim_veredicto( P->ver_pide, SIM_AMBAR, "drvarma está previendo…" );
+    else if (m->pe.vec && !m->pe.corriendo)
+        sim_veredicto( P->ver_pide, SIM_AMBAR, "Con un VEC, la previsión, la evaluación y la respuesta "
+                       "al impulso todavía no están en sim_gui: las hace sima (forecast, evaluate, "
+                       "impulse_response). La respuesta al impulso del VEC, en niveles, está en "
+                       "«6 · Diagnosis ▸ Salida»." );
     else if (!m->pe.v || m->pe.v->fallo)
         sim_veredicto( P->ver_pide, SIM_AMBAR, "Pide un sistema estimado («5 · Estimación»)." );
     else if (!P->v)

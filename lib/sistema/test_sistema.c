@@ -139,6 +139,24 @@ int main( int argc, char **argv )
          }
          ok( jj.n == 4 && sis_rango_admite( &jj, why, sizeof why ),
              "rango: Johansen y Juselius (cuatro con d = 1) sí" );
+         {
+            SisModelo mo;
+            char nb[256];
+            sis_modelo_defecto( &mo, 4 );
+            mo.clase = SIS_VEC; mo.p = 2; mo.r = 1; snprintf( mo.caso, sizeof mo.caso, "2" );
+            sis_vec_y1_defecto( &mo, 4 );
+            sis_normalizacion( &jj, &mo, nb, sizeof nb );
+            ok( sis_vec_ny1( &mo, 4 ) == 1 && !strcmp( nb, "IDE" ), "vec: por omisión, normaliza sobre la última" );
+            memset( mo.y1, 0, sizeof mo.y1 ); mo.y1[0] = 1;   /* sobre LRM, como sima */
+            k = sis_orden_vec( &jj, &mo, "C1_c00", buf, sizeof buf, av, G_N( av ) );
+            ok( k == 12 && strstr( av[0], "LRY_u.pre" ) && strstr( av[3], "LRM_u.pre" ) &&
+                !strcmp( av[4], "2" ) && !strcmp( av[5], "0" ) && !strcmp( av[6], "1" ) &&
+                !strcmp( av[8], "2" ) && !strcmp( av[9], "-fdhess" ) && !strcmp( av[11], "C1_c00" ),
+                "vec: la orden, LRM al final (Y1), -case 2 -fdhess -name" );
+            mo.y1[1] = 1;
+            ok( sis_orden_vec( &jj, &mo, "x", buf, sizeof buf, av, G_N( av ) ) == -1,
+                "vec: con r = 1 y dos en Y1, no hay orden" );
+         }
       }
    }
    sis_mueve( &s, 1, 0 );

@@ -223,6 +223,40 @@ gboolean rango_contrastar( Sim *m )
 
 static void on_contrastar( GtkButton *b, Sim *m ) { (void) b; rango_contrastar( m ); }
 
+gboolean rango_al_modelo( Sim *m )
+{
+    PagRango *R = &m->pr;
+    int al, r;
+
+    if (rango_estado( m ) != 1) return FALSE;
+    r = ovec_rango_propuesto( R->v, &al );
+    if (r < 0) return FALSE;
+    m->mod.p = R->cfg.p;
+    m->mod.q = R->cfg.q;
+    snprintf( m->mod.caso, sizeof m->mod.caso, "%s", R->cfg.caso );
+    if (r >= 1) {
+        m->mod.clase = SIS_VEC;
+        m->mod.r = r;
+        sis_vec_y1_defecto( &m->mod, m->sis.n );
+        sim_estado( m, "Al modelo: un VEC con r = %d, normalizado sobre la%s última%s serie%s "
+                    "(cámbialo en «4 · Modelo» antes de comparar).", r, r == 1 ? "" : "s",
+                    r == 1 ? "" : "s", r == 1 ? "" : "s" );
+    } else {
+        /* r = 0: no hay relaciones; el VARMA en diferencias de siempre, con
+           p - 1 retardos en las diferencias.                            */
+        m->mod.clase = SIS_VARMA;
+        m->mod.p = R->cfg.p > 1 ? R->cfg.p - 1 : 1;
+        sim_estado( m, "Al modelo: r = 0, el VARMA en diferencias. Un VEC con r de la teoría se "
+                    "elige en «4 · Modelo»." );
+    }
+    modelo_refresca( m );
+    if (m->libro) gtk_notebook_set_current_page( GTK_NOTEBOOK(m->libro), PG_MODELO );
+    sim_refresca( m );
+    return TRUE;
+}
+
+static void on_al_modelo( GtkButton *b, Sim *m ) { (void) b; rango_al_modelo( m ); }
+
 static void on_parar( GtkButton *b, Sim *m )
 {
     (void) b;
@@ -337,6 +371,7 @@ void rango_refresca( Sim *m )
     gtk_widget_set_sensitive( R->s_q, !R->corriendo );
     gtk_widget_set_sensitive( R->s_B, !R->corriendo );
     gtk_widget_set_sensitive( R->c_caso, !R->corriendo );
+    gtk_widget_set_sensitive( R->b_al_modelo, !R->corriendo && rango_estado( m ) == 1 );
 
     tablas( m );
     e = rango_estado( m );
@@ -518,6 +553,12 @@ GtkWidget *rango_pagina_new( Sim *m )
 
     R->ver_propuesta = veredicto_new();
     gtk_box_pack_start( GTK_BOX(caja), R->ver_propuesta, FALSE, FALSE, 0 );
+    R->b_al_modelo = gtk_button_new_with_label( "Rango al modelo" );
+    gtk_widget_set_tooltip_text( R->b_al_modelo, "El rango propuesto, p, q y el caso a «4 · Modelo»: "
+                                 "un VEC con r ≥ 1, o el VARMA en diferencias con r = 0" );
+    gtk_widget_set_halign( R->b_al_modelo, GTK_ALIGN_START );
+    g_signal_connect( R->b_al_modelo, "clicked", G_CALLBACK(on_al_modelo), m );
+    gtk_box_pack_start( GTK_BOX(caja), R->b_al_modelo, FALSE, FALSE, 0 );
 
     R->l_pruebas = gtk_tree_view_new_with_model( GTK_TREE_MODEL(b) );
     g_object_unref( b );

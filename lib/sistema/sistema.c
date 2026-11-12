@@ -257,6 +257,61 @@ int sis_orden_rango( const Sistema *s, const SisRango *r, const char *nombre,
    return k;
 }
 
+int sis_vec_ny1( const SisModelo *mo, int m )
+{
+   int i, k = 0;
+   for ( i = 0; i < m && i < SIS_MAX_SER; i++ ) k += mo->y1[i] != 0;
+   return k;
+}
+
+void sis_vec_y1_defecto( SisModelo *mo, int m )
+{
+   int i;
+   for ( i = 0; i < SIS_MAX_SER; i++ ) mo->y1[i] = i < m && i >= m - mo->r;
+}
+
+int sis_normalizacion( const Sistema *s, const SisModelo *mo, char *out, size_t n )
+{
+   int i;
+   size_t k = 0;
+
+   if ( !n ) return 0;
+   out[0] = 0;
+   for ( i = 0; i < s->n; i++ )
+      if ( mo->y1[i] )
+         {
+         int w = snprintf( out + k, n - k, "%s%s", k ? ", " : "", s->s[i].nombre );
+         if ( w < 0 || (size_t) w >= n - k ) break;
+         k += (size_t) w;
+         }
+   return (int) k;
+}
+
+int sis_orden_vec( const Sistema *s, const SisModelo *mo, const char *nombre,
+                   char *buf, size_t nbuf, const char **argv, int max )
+{
+   int i, k = 0, w;
+   char *p = buf, *q, *r;
+
+   if ( s->n + 10 > max || mo->r < 1 || mo->r >= s->n || sis_vec_ny1( mo, s->n ) != mo->r )
+      return -1;
+   w = snprintf( buf, nbuf, "%d%c%d%c%d", mo->p, 0, mo->q, 0, mo->r );
+   if ( w < 0 || (size_t) w >= nbuf ) return -1;
+   q = p + strlen( p ) + 1;
+   r = q + strlen( q ) + 1;
+   for ( i = 0; i < s->n; i++ ) if ( !mo->y1[i] ) argv[k++] = s->s[i].ruta;
+   for ( i = 0; i < s->n; i++ ) if ( mo->y1[i] )  argv[k++] = s->s[i].ruta;
+   argv[k++] = p;
+   argv[k++] = q;
+   argv[k++] = r;
+   argv[k++] = "-case";
+   argv[k++] = mo->caso;
+   argv[k++] = "-fdhess";
+   argv[k++] = "-name";
+   argv[k++] = nombre;
+   return k;
+}
+
 void sis_modelo_defecto( SisModelo *mo, int m )
 {
    int a, b;
@@ -264,6 +319,9 @@ void sis_modelo_defecto( SisModelo *mo, int m )
    memset( mo, 0, sizeof *mo );
    mo->p = 1;
    mo->metodo = 1;
+   mo->clase = SIS_VARMA;
+   mo->r = 1;
+   snprintf( mo->caso, sizeof mo->caso, "pre" );
    for ( a = 0; a < m && a < SIS_MAX_SER; a++ )
       for ( b = 0; b < m && b < SIS_MAX_SER; b++ )
          mo->enlace[a][b] = a != b;

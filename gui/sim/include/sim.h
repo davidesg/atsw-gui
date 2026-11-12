@@ -70,7 +70,7 @@ typedef struct {
 typedef struct {
     GtkWidget *pagina;        /* la pagina entera: se esconde sin series I(1) */
     GtkWidget *s_p, *s_q, *s_B, *c_caso;
-    GtkWidget *b_contrastar, *b_parar;
+    GtkWidget *b_contrastar, *b_parar, *b_al_modelo;
     GtkWidget *orden;         /* la orden, copiable                        */
     GtkWidget *barra;         /* el avance del bootstrap                   */
     GtkWidget *l_pruebas;     /* r -> r+1: la LR y sus valores criticos    */
@@ -117,6 +117,13 @@ typedef struct {
     GtkWidget *ver_cuenta;    /* cuantos parametros cruzados               */
     GtkWidget *ver_ceros, *b_sin_ceros;   /* -zero: lo que dejo Simplificar */
     GtkWidget *ver_forma;     /* retroalimentacion o red                   */
+    /* LA CLASE (S10c): VARMA en diferencias o VEC                         */
+    GtkWidget *rb_varma, *rb_vec;
+    GtkWidget *caja_varma;    /* los enlaces y las opciones de drvarma     */
+    GtkWidget *caja_vec;      /* r, el caso y la normalizacion             */
+    GtkWidget *s_r, *cb_caso, *y1;   /* y1: una casilla por serie          */
+    GtkWidget *ver_vec;       /* lo que dice la normalizacion, o que falta */
+    gchar     *series_y1;     /* las series cuando se fijo Y1: si cambian, Y1 vuelve a la de por omision */
     gboolean   leyendo;       /* rellenando los controles: no leerlos      */
 } PagModelo;
 
@@ -135,6 +142,12 @@ typedef struct {
     char       corrida[PR_ID];   /* su id en el sistema, con proyecto      */
     char       previa[PR_ID];    /* la anterior: el padre de la siguiente  */
     VarmaOut  *v;             /* lo leido; NULL si no hay corrida          */
+    /* UN VEC (S10c): lo leido con lib/outvec y su diagnosis de residuos
+     * (lib/outdiag lee la de drvec, que es la de lib/diagmv). Con un VEC,
+     * v es NULL; con un VARMA, vec es NULL.                             */
+    VecOut    *vec;
+    Diagnosis *vdiag;
+    char       vec_norm[256]; /* la normalizacion del VEC leido: «LRM»     */
     int        version;       /* sube con cada estimacion leida            */
 } PagEstima;
 
@@ -278,6 +291,10 @@ gboolean   rango_contrastar( Sim *m );
 int        rango_estado( Sim *m );
 /* Una prueba ya hecha, leida de su .out (la carga de un sistema).       */
 gboolean   rango_desde( Sim *m, const char *out );
+/* «Al modelo»: el rango propuesto, p, q y el caso a «4 · Modelo». Con r >= 1
+ * un VEC (normalizado sobre las r ultimas); con r = 0, el VARMA en
+ * diferencias. TRUE si habia una prueba que llevar.                    */
+gboolean   rango_al_modelo( Sim *m );
 
 /* identifica.c */
 GtkWidget *identifica_pagina_new( Sim *m );
@@ -288,7 +305,8 @@ void       identifica_al_modelo( Sim *m );
 /* modelo.c */
 GtkWidget *modelo_pagina_new( Sim *m );
 void       modelo_refresca( Sim *m );
-/* La orden del modelo, legible (los ficheros por su nombre). g_free.   */
+/* La orden del modelo, legible (los ficheros por su nombre). g_free. Con
+ * la clase VEC es la de drvec.                                          */
 gchar     *modelo_orden_texto( Sim *m );
 
 /* estima.c */

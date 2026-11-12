@@ -483,7 +483,7 @@ Cada fase en su PR, con la CI en verde en Linux, macOS y Windows.
 | **S7** ✓ | Simplificar (con `drvarma -zero`) y «¿Es una red?» (N4s, N4t), con «Pasar a MT»; lo que no necesita ventana, en `lib/sistema` (la orden en `atsw-cli`, con S8) | sí | sobre `jenkins_alavi`, los números coinciden con los de sima |
 | **S8** | `atsw-sis` para VARMA (`ESTUDIO-terminal-mcp.md`) | — | la herramienta y la página dan el mismo resultado, byte a byte donde el texto es el mismo |
 | **S9** ✓ | La documentación (§6): el capítulo «Sistemas», el proyecto de ejemplo `jenkins_alavi` en Ayuda → Ejemplos (`docs/ejemplos/`; la madre abre una copia en «Ejemplos de ATSW»). Retirar `engines/drvarma/gui` del árbol de compilación y de la CI (no `seasonal_detection.c`, que es del motor) | sí | la CI sin el `drvarma_gui` viejo; el manual regenerado en el release |
-| **S10** (a ✓: `lib/outvec`; b ✓: R · Rango) | **El VEC**: la página R · Rango, la clase VEC en las páginas 4-7, drvec detrás, la ecuación con α β′ | sí | sobre `johansen_juselius`, el rango y el VEC coinciden con sima |
+| **S10** (a ✓: `lib/outvec`; b ✓: R · Rango; c1 ✓: el VEC en las páginas 4-6) | **El VEC**: la página R · Rango, la clase VEC en las páginas 4-7, drvec detrás, la ecuación con α β′ | sí | sobre `johansen_juselius`, el rango y el VEC coinciden con sima |
 
 El GUI viejo **sigue compilando y probándose hasta S9**: nadie se queda sin
 VARMA mientras el nuevo no lo cubre.

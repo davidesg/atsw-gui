@@ -44,13 +44,22 @@ la diferencia relativa del RMSE al lado de la siguiente.
 La tabla lleva líneas `+---` **por dentro de su propia cabecera**:
 
 ```
-   +--------------------------------------------------------------+   <- ¿abre?
-   |         |      LEVEL       |           VARIATION      |       |
-   |  DATE   +-----------------+-------------------------+  ERR   |   <- y aquí
-   |         |   VALUE  |  STD |  PERIOD |  STD | ANNUAL  |  STD   |
-   +--------------------------------------------------------------+   <- ¿cierra?
-    3/1991   1290.78    -      14.95 ...                              <- los datos
+ +----------------------------------------------------------------------------+   <- ¿abre?
+ |       |       LEVEL        |              VARIATION              |         |
+ | DATE  +--------------------+-------------------------------------+   ERR   |   <- y aquí
+ |       |   VALUE   |  STD   | TRIMEST |  STD   |  ANUAL  |  STD   |         |
+ |       |           |        |  /MONT  |        |         |        |         |
+ +----------------------------------------------------------------------------+   <- ¿cierra?
+   3/1991   5260.9500        -   75.1500        -   74.6100        -   -2.3499   <- los datos
 ```
+
+Es la tabla de fuf (`forecast_table_acii`), con sus rótulos y sus cuatro
+decimales: drtran la escribe así desde la fase P2 de `docs/TODO.md`. Con un
+espacio garantizado entre campos, que fuf no da: allí van pegados y un nivel
+de 1000 se junta con la fecha. El lector acepta la cabecera de antes
+(«FORECAST ORIGIN: 3/1993    LEAD TIME: 8») y la de fuf, con el plazo en su
+línea («LEAD TIME FOR FORECASTING: 8»), y en las series anuales una fecha que
+es solo el año.
 
 Un interruptor «estoy dentro de la tabla» queda **invertido justo para los
 datos**, y además deja el resto del fichero fuera de juego. Una fila se reconoce

@@ -30,9 +30,12 @@ static const char *campo( const char *p, char *b, size_t size, int *hueco )
 {
    size_t n = 0;
 
-   while ( *p == ' ' || *p == '\t' ) p++;
+   /* El \r de un .out escrito en Windows es un separador mas: si no, el
+    * «-» del final de una fila prevista se leia «-\r», que no es hueco ni
+    * numero, y la fila entera se perdia (la CI de Windows, P2).       */
+   while ( *p == ' ' || *p == '\t' || *p == '\r' ) p++;
    if ( !*p ) return NULL;
-   while ( *p && *p != ' ' && *p != '\t' && n + 1 < size ) b[n++] = *p++;
+   while ( *p && *p != ' ' && *p != '\t' && *p != '\r' && n + 1 < size ) b[n++] = *p++;
    b[n] = 0;
    *hueco = ( n == 1 && b[0] == '-' );
    return p;
@@ -54,12 +57,18 @@ static int lee_fila( const char *l, OfFila *f )
 
    p = campo( p, b, sizeof b, &hueco );
    if ( !p || hueco ) return 0;
-   /* la fecha: digitos, una barra, digitos */
+   /* la fecha: digitos, una barra, digitos; o, en una serie anual, el anio
+    * solo, con sus cuatro cifras (y no otra cosa: «1» es la fila de un
+    * horizonte de la evaluacion, no un anio).                          */
    {
    char *barra = strchr( b, '/' );
 
-   if ( !barra || !isdigit( (unsigned char) b[0] ) ||
-        !isdigit( (unsigned char) barra[1] ) ) return 0;
+   if ( barra ) {
+      if ( !isdigit( (unsigned char) b[0] ) ||
+           !isdigit( (unsigned char) barra[1] ) ) return 0;
+   } else if ( strlen( b ) != 4 || strspn( b, "0123456789" ) != 4 ||
+               atoi( b ) < 1000 )
+      return 0;
    snprintf( f->fecha, sizeof f->fecha, "%.15s", b );
    }
 
@@ -120,6 +129,11 @@ int of_parse( const char *texto, Forecast *f )
             snprintf( ser->origen, sizeof ser->origen, "%.15s", nm );
          if ( strstr( l, "LEAD TIME" ) )
             sscanf( strstr( l, "LEAD TIME" ), "LEAD TIME: %d", &ser->lead );
+         continue;
+      }
+      /* el formato de fuf lo da en su linea: «LEAD TIME FOR FORECASTING: 8» */
+      if ( ser && strstr( l, "LEAD TIME" ) && strchr( l, ':' ) ) {
+         sscanf( strchr( l, ':' ) + 1, " %d", &ser->lead );
          continue;
       }
 

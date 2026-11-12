@@ -147,7 +147,9 @@ def drtran_out(ruta):
         r["q_ruido"] = {"p": float(m.group(1)), "gl": int(m.group(2)), "q": float(m.group(3))}
     # la prevision: el primer mes de cada informe, por variable
     prev = {}
-    for m in re.finditer(r"VARIABLE NAME\s*:\s*(\S+)\s+FORECAST ORIGIN:\s*(\S+)\s+LEAD TIME:\s*(\d+)(.*?)\+-{10,}\+\s*\n\s*\n", txt, re.S):
+    # La cabecera de fuf (desde 2026-11): «FORECAST ORIGIN : 12/2025» y el
+    # plazo en su linea, «LEAD TIME FOR FORECASTING: 8». Y la de antes.
+    for m in re.finditer(r"VARIABLE NAME\s*:\s*(\S+)\s+FORECAST ORIGIN\s*:\s*(\S+)\s+LEAD TIME(?: FOR FORECASTING)?:\s*(\d+)(.*?)\+-{10,}\+\s*\n\s*\n", txt, re.S):
         filas = [ln.split() for ln in m.group(4).splitlines()]
         filas = [f for f in filas if f and re.match(r"\d+/\d{4}$", f[0]) and len(f) >= 3 and f[2] != "-"]
         if filas:

@@ -203,6 +203,42 @@ static void tabla_fuf( void )
        "  una serie que no esta: 1 y nada" );
    ok( of_parse( out, &g ) == 0 && g.s[0].nf == 4 && g.s[0].nprev == 2,
        "  of_parse la lee: 4 filas, 2 de prevision" );
+   ok( g.s[0].lead == 2 && !strcmp( g.s[0].origen, "12/2025" ),
+       "  con el plazo de su linea propia y el origen" );
+
+   /* Un .out de Windows: \r\n. El «-» del final de una fila prevista no
+    * puede llevarse el \r y dejar de ser hueco.                      */
+   {
+   static const char *crlf =
+      "FORECAST REPORT: \r\n"
+      "VARIABLE NAME: IPC_ES\r\n"
+      "FORECAST ORIGIN : 12/2025\r\n"
+      "LEAD TIME FOR FORECASTING: 1\r\n"
+      "  12/2025    119.9420        -    0.3424        -    2.8825        -    0.2054\r\n"
+      "   1/2026    119.0716   0.3636   -0.7283   0.3636    1.9836   0.3636         -\r\n"
+      " +-----+\r\n";
+
+   ok( of_parse( crlf, &g ) == 0 && g.s[0].nf == 2 && g.s[0].nprev == 1
+       && g.s[0].f[1].sd_nivel > 0.36,
+       "  un .out de Windows (CRLF): la fila prevista no se pierde" );
+   }
+
+   /* Una serie anual: la fecha es el anio solo. */
+   {
+   static const char *anual =
+      "FORECAST REPORT: \n"
+      "VARIABLE NAME: PIB\n"
+      "FORECAST ORIGIN : 2024\n"
+      "LEAD TIME FOR FORECASTING: 1\n"
+      "     2023    100.0000        -    1.0000        -         -        -    0.1000\n"
+      "     2024    101.0000        -    1.0000        -         -        -    0.2000\n"
+      "     2025    102.0000   1.5000    1.0000   1.5000         -        -         -\n"
+      "\n";
+
+   ok( of_parse( anual, &g ) == 0 && g.s[0].nf == 3 && g.s[0].nprev == 1
+       && !strcmp( g.s[0].f[2].fecha, "2025" ),
+       "  una serie anual: la fecha es el anio solo" );
+   }
 }
 
 int main( int argc, char **argv )

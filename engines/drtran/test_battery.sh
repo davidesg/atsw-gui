@@ -1099,8 +1099,9 @@ $DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -0 -f 6 -o "$FR" >/dev/null 2
 # el reporte se emite con la cabecera y las columnas de fuf
 grep -q "FORECAST REPORT" "$FR" \
     && pass "emite el FORECAST REPORT" || fail "no emite el reporte de previsión"
-{ grep -q "LEVEL" "$FR" && grep -q "VARIATION" "$FR" && grep -q "PERIOD" "$FR" \
-  && grep -q "ANNUAL" "$FR" && grep -q "ERR" "$FR"; } \
+{ grep -q "LEVEL" "$FR" && grep -q "VARIATION" "$FR" && grep -q "TRIMEST" "$FR" \
+  && grep -q "ANUAL" "$FR" && grep -q "ERR" "$FR" \
+  && grep -q "LEAD TIME FOR FORECASTING: 6" "$FR"; } \
     && pass "la tabla lleva las columnas NIVEL/VARIACIÓN(período,anual)/ERR" \
     || fail "faltan columnas del reporte a la fuf"
 # FIRMA de forsil: en la 1a fila de PREVISIÓN, la DT de nivel = período = anual
@@ -1112,7 +1113,7 @@ python3 -c "import sys; sys.exit(0 if abs($S1-$S2)<1e-6 and abs($S1-$S3)<1e-6 el
     || fail "las DT a 1 paso no coinciden ($S1/$S2/$S3): la innovación es una sola"
 # HOMOLOGACIÓN con el valor documentado: WTI (AR(1) sobre dif. de log) tiene DT de
 # la variación de ~8.3% a 1 paso, 8.66% a 2, 8.69% a 3 (drtran-note, tabla WTI).
-WS1=$(awk '/VARIABLE NAME  : WTI/{f=1} f && /^ +[0-9]+\/[0-9]+/ && $5!="-"{print $5; exit}' "$FR")
+WS1=$(awk '/VARIABLE NAME: WTI/{f=1} f && /^ +[0-9]+\/[0-9]+/ && $5!="-"{print $5; exit}' "$FR")
 python3 -c "import sys; sys.exit(0 if abs($WS1-8.30)<0.05 else 1)" 2>/dev/null \
     && pass "WTI: DT de la variación a 1 paso = $WS1 (documentado 8.30)" \
     || fail "la DT de la variación de WTI no homologa con el valor documentado ($WS1)"
@@ -2329,7 +2330,7 @@ echo "   el airline de ES (MA x SMA) tiene su prevision de fue: 81.89 en"
 echo "   1/2020 y 83.82 en 12/2020, este donde este en la lista."
 echo
 fc_es() {   # nivel previsto de ES_CPI en la fecha $2, del .out $1
-    awk -v d="$2" '/VARIABLE NAME  : ES_CPI/{f=1} f && $1==d {print $2; exit}' "$1"
+    awk -v d="$2" '/VARIABLE NAME: ES_CPI/{f=1} f && $1==d {print $2; exit}' "$1"
 }
 $DRTRAN "$WORK/WTI_ar1.pre" "$WORK/ES_CPI_airline.pre" -0 -f 12 \
     -o "$TMPDIR/b55_2.out" > /dev/null 2>&1

@@ -2129,7 +2129,13 @@ static const struct { const char *dir, *rotulo, *globo; } EJEMPLOS[] = {
       "Jenkins y Alavi (1981): las pieles de rata almizclera y de visón de la "
       "Compañía de la Bahía de Hudson, 1850–1911. Los dos modelos univariantes "
       "están hechos y elegidos; el sistema, el caso C1, está por estimar en "
-      "sim_gui. Es el ejemplo del capítulo «Sistemas» del manual." } };
+      "sim_gui. Es el ejemplo del capítulo «Sistemas» del manual." },
+    { "johansen_juselius", "La demanda de dinero en Dinamarca (SIM · VEC)",
+      "Johansen y Juselius (1990): el dinero real, la renta real y dos tipos de "
+      "interés, trimestrales, 1974–1987. Los cuatro modelos univariantes están "
+      "hechos y elegidos; el sistema, el caso C1, está por estimar en sim_gui: "
+      "el rango de cointegración y el VEC. Es el ejemplo del capítulo «El VEC» "
+      "del manual." } };
 
 /* Donde esta instalado el ejemplo (g_free), o NULL. */
 static gchar *ejemplo_fuente( const char *dir )

@@ -290,14 +290,19 @@ mira "ficha: el .pre que vino del extra Python lo dice" \
 # Lo que la madre copia tiene que estar entero: el manifiesto se lee, el caso
 # es de SIM con el sha256 de cada .pre, cada .pre es un optimo (fue lo
 # reproduce) y los datos de m00 son los del datos.csv.
-EJ="$WORK/jenkins_alavi"
-cp -R "$R/docs/ejemplos/jenkins_alavi" "$EJ"
+for X in jenkins_alavi:MUSKRAT,MINK:62 johansen_juselius:LRM,LRY,IBO,IDE:55; do
+EJN=${X%%:*}; SER=$(echo "$X" | cut -d: -f2 | tr , ' '); NOBS=${X##*:}
+EJ="$WORK/$EJN"
+cp -R "$R/docs/ejemplos/$EJN" "$EJ"
 V=$("$CLI" --json proyecto ver "$EJ/proyecto.yaml")
-mira "ejemplo: el caso C1 es de drvarma" \
+mira "ejemplo $EJN: el caso C1 es de drvarma (SIM)" \
      '[ "$(echo "$V" | campo "[c[\"motor\"] for c in d[\"casos\"] if c[\"id\"]==\"C1\"][0]")" = drvarma ]'
-mira "ejemplo: los dos m01, elegidos" \
-     '[ "$(echo "$V" | campo "sorted(m[\"serie\"] for m in d[\"modelos\"] if m[\"elegido\"])")" = "['"'"'MINK'"'"', '"'"'MUSKRAT'"'"']" ]'
-mira "ejemplo: el sha256 de cada entrada es el de su .pre" '"$PY" - "$EJ" <<"PYEOF"
+mira "ejemplo $EJN: los m01 de $SER, elegidos" 'echo "$V" | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+sys.exit(0 if sorted(m[\"serie\"] for m in d[\"modelos\"] if m[\"elegido\"] and m[\"id\"] == \"m01\") == sorted(sys.argv[1:]) else 1)
+" $SER'
+mira "ejemplo $EJN: el sha256 de cada entrada es el de su .pre" '"$PY" - "$EJ" <<"PYEOF"
 import hashlib, re, sys, os
 d = sys.argv[1]
 y = open(os.path.join(d, "proyecto.yaml"), encoding="utf-8").read()
@@ -307,27 +312,31 @@ for e in ent:
     f = os.path.join(d, s, "work", "%s_%s.pre" % (s, m))
     if hashlib.sha256(open(f, "rb").read()).hexdigest() != sha: sys.exit(1)
 PYEOF'
-for s in MUSKRAT MINK; do
+for s in $SER; do
     mkdir -p "$WORK/ej_$s"
     cp "$EJ/$s/work/${s}_m01.pre" "$WORK/ej_$s/X.inp"
     ( cd "$WORK/ej_$s" && "$FUE" X > /dev/null 2>&1 )
-    mira "ejemplo: fue reproduce el .pre de $s/m01" \
+    mira "ejemplo $EJN: fue reproduce el .pre de $s/m01" \
          '[ -f "$WORK/ej_$s/X.pre" ] && "$PY" - "$WORK/ej_$s/X.pre" "$EJ/$s/work/${s}_m01.pre" <<"PYEOF"
-# numero a numero, con tolerancia: fuera de Linux el ultimo digito baila
+# numero a numero, con tolerancia: fuera de Linux el ultimo digito baila, y
+# en un optimo plano (LRM de johansen_juselius) reestimar mueve una unidad la
+# sexta decimal, que es la ultima que escribe el .pre
 import re, sys
 num = lambda f: [float(x) for x in re.findall(r"-?\d+\.?\d*(?:[eE][-+]?\d+)?", open(f).read())]
 a, b = num(sys.argv[1]), num(sys.argv[2])
-sys.exit(0 if len(a) == len(b) and all(abs(x - y) <= 1e-6 * max(1.0, abs(y)) for x, y in zip(a, b)) else 1)
+sys.exit(0 if len(a) == len(b) and all(abs(x - y) <= 2e-6 * max(1.0, abs(y)) for x, y in zip(a, b)) else 1)
 PYEOF'
-    mira "ejemplo: m00 de $s son los datos de su datos.csv" '"$PY" - "$EJ" "$s" <<"PYEOF"
+    mira "ejemplo $EJN: m00 de $s son los datos de su datos.csv" '"$PY" - "$EJ" "$s" "$NOBS" <<"PYEOF"
 import sys, os
-d, s = sys.argv[1], sys.argv[2]
+d, s, n = sys.argv[1], sys.argv[2], int(sys.argv[3])
 csv = [float(l.split(",")[1]) for l in open(os.path.join(d, s, "datos.csv"))
        if l.strip() and not l.startswith("#") and l[0].isdigit()]
 inp = open(os.path.join(d, s, "work", s + "_m00.inp")).read().split("Time series")[1]
 inp = [float(x) for x in inp.split("\n", 1)[1].split()]
-sys.exit(0 if csv == inp and len(csv) == 62 else 1)
+sys.exit(0 if len(csv) == len(inp) == n and all(abs(a - b) <= 1e-9 * max(1.0, abs(b)) for a, b in zip(csv, inp)) else 1)
 PYEOF'
+    rm -rf "$WORK/ej_$s"
+done
 done
 
 # los errores

@@ -1063,6 +1063,10 @@ static void ejemplos( void )
         r = entrada_de( GTK_MENU(gtk_menu_item_get_submenu( GTK_MENU_ITEM(e) )),
                         "Ratas almizcleras" );
     check( r != NULL, "Ayuda ▸ Ejemplos ▸ «Ratas almizcleras y visones»", NULL );
+    check( e && gtk_menu_item_get_submenu( GTK_MENU_ITEM(e) ) &&
+           entrada_de( GTK_MENU(gtk_menu_item_get_submenu( GTK_MENU_ITEM(e) )),
+                       "La demanda de dinero" ) != NULL,
+           "Ayuda ▸ Ejemplos ▸ «La demanda de dinero en Dinamarca» (el VEC)", NULL );
     if ( !r ) goto fin;
     for ( vez = 0; vez < 2; vez++ )
         {

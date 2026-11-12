@@ -1,0 +1,58 @@
+#! sim_gui --proyecto @EJEMPLOS@/johansen_juselius/proyecto.yaml --caso C1
+# El sistema C1 de Johansen y Juselius en sim_gui: el rango y el VEC (lo
+# deja la 09). Tarda unos 35 minutos: el bootstrap del rango, 15.
+# limite 3000
+ventana sim_gui
+tamano 1100 760
+espera 2000
+pestana 2 · Puerta
+boton Pasar la puerta
+espera 20000
+foto vec-puerta
+# El rango: p = 2, el caso 2 (la constante en la relacion, la de Johansen y
+# Juselius) y 199 replicas del bootstrap. Tarda minutos.
+pestana R · Rango
+combo 1 | 2 · la constante en la relación
+numero 3 | 199
+boton Contrastar el rango
+espera 1200000
+foto vec-rango
+# El VEC con r = 1 (la teoria), normalizado sobre LRM: la demanda de dinero.
+pestana 4 · Modelo
+casilla VEC (drvec) | 1
+espera 800
+# p y q van en una rejilla, que da sus hijos AL REVES: q es el 1.º y p el 2.º
+numero 1 | 0
+numero 2 | 2
+numero 3 | 1
+combo 1 | 2 · la constante en la relación
+casilla LRM | 1
+casilla IDE | 0
+espera 800
+foto vec-modelo
+pestana 5 · Estimación
+boton Estimar
+espera 60000
+foto vec-estimacion
+pestana 6 · Diagnosis
+espera 2000
+foto vec-diagnosis
+pestana Estructura
+boton Débil exogeneidad
+espera 240000
+foto vec-weakex
+# La prevision a un año, y la evaluacion estimando con las 40 primeras.
+pestana 7 · Previsión
+numero 1 | 4
+casilla Evaluar fuera de muestra | 1
+numero 2 | 40
+boton Calcular
+espera 240000
+foto vec-prevision
+pestana Evaluación
+espera 800
+foto vec-evaluacion
+pestana Respuesta al impulso
+espera 800
+foto vec-irf
+salir

@@ -1,0 +1,73 @@
+# Proyecto de ATSW GUI. El nombre de cada fichero es CORTESIA:
+# la identidad esta aqui, y ningun programa parsea un nombre.
+schema_version: 2
+id: johansen_juselius
+titulo: La demanda de dinero en Dinamarca
+creado: "2026-11-12"
+analista: ""
+herramienta: fue
+raiz: .
+
+series:
+  LRM:
+  LRY:
+  IBO:
+  IDE:
+
+# La cadena de iteracion. padre vacio = raiz.
+# razon vacia = NO CONSTA, y no consta nunca significa cuadra.
+modelos:
+  LRM/m00:
+    version: 0
+    padre: ""
+    razon: ""
+    rol: datos
+  LRY/m00:
+    version: 0
+    padre: ""
+    razon: ""
+    rol: datos
+  IBO/m00:
+    version: 0
+    padre: ""
+    razon: ""
+    rol: datos
+  IDE/m00:
+    version: 0
+    padre: ""
+    razon: ""
+    rol: datos
+  LRM/m01:
+    version: 1
+    padre: m00
+    razon: "El modelo univariante del dinero real (en logaritmos), hecho por la ruta U de sima con el motor de art, sin revisar en art: ARI(1,1) con estacionalidad trimestral determinista (cos, sin y alter). Es el LRM_u del ejemplo johansen_juselius de sima."
+    elegido: si
+    razon_elegido: El de la ruta U de sima, el que su ejemplo lleva al sistema.
+  LRY/m01:
+    version: 1
+    padre: m00
+    razon: "El modelo univariante de la renta real (en logaritmos), hecho por la ruta U de sima con el motor de art, sin revisar en art: un paseo aleatorio, ARIMA(0,1,0). Es el LRY_u del ejemplo johansen_juselius de sima."
+    elegido: si
+    razon_elegido: El de la ruta U de sima, el que su ejemplo lleva al sistema.
+  IBO/m01:
+    version: 1
+    padre: m00
+    razon: "El modelo univariante del tipo de los bonos, hecho por la ruta U de sima con el motor de art, sin revisar en art: ARI(1,1). Es el IBO_u del ejemplo johansen_juselius de sima."
+    elegido: si
+    razon_elegido: El de la ruta U de sima, el que su ejemplo lleva al sistema.
+  IDE/m01:
+    version: 1
+    padre: m00
+    razon: "El modelo univariante del tipo de los depósitos, hecho por la ruta U de sima con el motor de art, sin revisar en art: IMA(1,1). Es el IDE_u del ejemplo johansen_juselius de sima."
+    elegido: si
+    razon_elegido: El de la ruta U de sima, el que su ejemplo lleva al sistema.
+
+# Lo que se cruza: series EN ORDEN, cada una con el modelo
+# con que entra y el sha256 de su .pre. Ver DISENO-casos.md.
+casos:
+  C1:
+    motor: drvarma
+    titulo: La demanda de dinero en Dinamarca
+    razon: "¿Hay una relación de equilibrio entre el dinero, la renta y los tipos de interés? Johansen y Juselius (1990): la demanda de dinero en Dinamarca, 1974–1987."
+    creado: "2026-11-12"
+    entradas: LRM/m01@a09d01d469ccd49b7416fb469e20a0f71ada0908fce5802fa4738bb0745fb49e LRY/m01@1203ee33a9413546ff7c2c365daa38760889cc0852e45792180cd47c8f5d74bc IBO/m01@73a1f48473d07cb1350ce78667c85d8839adf1aa2abfbf4e49812259fcf77c93 IDE/m01@ea886342b0160a9b08244e9988f3cc2599e18665d1d474a6fed4ff6a2cdaeb18

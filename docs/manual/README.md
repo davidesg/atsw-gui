@@ -25,7 +25,7 @@ cambia una ventana se vuelven a generar:
 
 ```sh
 make                                      # el arbol construido
-bash docs/manual/capturas/capturas.sh     # las capturas, en img/ (unos 10 min)
+bash docs/manual/capturas/capturas.sh     # las capturas, en img/ (unos 45 min: 35 son del VEC)
 python3 docs/manual/construir.py          # MANUAL.html y MANUAL.pdf
 bash docs/manual/video/video.sh           # el video, video/ATSW-ipc-wti.mp4
 bash docs/manual/video/video.sh es-core   # el del IPC subyacente, video/ATSW-es-core.mp4

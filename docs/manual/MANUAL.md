@@ -5,8 +5,9 @@
 Este manual te lleva de la mano por un análisis completo con ATSW. Partes de un
 fichero con dos series mensuales y llegas a un modelo de función de
 transferencia estimado, diagnosticado y usado para prever. Por el camino verás
-**qué decide el programa, qué decides tú y con qué criterio**. El capítulo 14
-sube el último escalón, los sistemas, con un ejemplo que viene hecho.
+**qué decide el programa, qué decides tú y con qué criterio**. Los capítulos
+14 y 15 suben el último escalón, los sistemas, con dos ejemplos que vienen
+hechos: un VARMA y un VEC.
 
 Todas las pantallas que aparecen aquí son del programa de verdad, haciendo
 exactamente lo que dice el texto. Si sigues los pasos con el mismo fichero de
@@ -30,9 +31,10 @@ datos, tienes que ver lo mismo.
 12. [La función de transferencia en drtran](#12-la-función-de-transferencia-en-drtran)
 13. [La previsión](#13-la-previsión)
 14. [Los sistemas: ratas almizcleras y visones](#14-los-sistemas-ratas-almizcleras-y-visones)
-15. [Lo que queda por hacer](#15-lo-que-queda-por-hacer)
-16. [Las reglas de oro](#16-las-reglas-de-oro)
-17. [Glosario](#17-glosario)
+15. [El VEC: la demanda de dinero en Dinamarca](#15-el-vec-la-demanda-de-dinero-en-dinamarca)
+16. [Lo que queda por hacer](#16-lo-que-queda-por-hacer)
+17. [Las reglas de oro](#17-las-reglas-de-oro)
+18. [Glosario](#18-glosario)
 
 ---
 
@@ -76,11 +78,11 @@ El método sube por escalones, y **cada escalón parte del anterior**:
 1. **Univariante**: cada serie, por separado, con su propio modelo ARIMA.
 2. **Transferencia**: una serie (la *salida*) responde a otras (las
    *entradas*). Se parte de los modelos univariantes del paso 1.
-3. **Sistemas (VARMA)**: varias series que se afectan entre sí. Se parte
-   también de los modelos univariantes.
+3. **Sistemas (VARMA o VEC)**: varias series que se afectan entre sí. Se
+   parte también de los modelos univariantes.
 
-El caso del manual sube los dos primeros escalones. El tercero tiene su propio
-ejemplo, en el capítulo 14.
+El caso del manual sube los dos primeros escalones. El tercero tiene sus
+propios ejemplos, en los capítulos 14 (un VARMA) y 15 (un VEC).
 
 ### Tres clases de fichero
 
@@ -1161,7 +1163,177 @@ presa.
 
 ---
 
-## 15. Lo que queda por hacer
+## 15. El VEC: la demanda de dinero en Dinamarca
+
+En el capítulo 14 las dos series eran estacionarias una vez tomados
+logaritmos, y el sistema se estimó **en diferencias**, como el resto del
+manual. Pero hay series **I(1)** que se mueven juntas a largo plazo: cada una
+por su cuenta vaga sin volver a ningún sitio, y aun así la distancia entre
+ellas es estacionaria. Eso es la **cointegración**. Un VARMA en diferencias
+pierde esa relación; el modelo que la recoge es el **VEC** (modelo de
+corrección del error), y ATSW lo estima con el motor `drvec`, en la misma
+ventana sim_gui.
+
+### El ejemplo
+
+Es el caso publicado de Johansen y Juselius (1990): la **demanda de dinero en
+Dinamarca**, trimestral, de 1974.1 a 1987.3 (55 observaciones). Las series son
+el dinero real (**LRM**) y la renta real (**LRY**), en logaritmos, y el tipo de
+los bonos (**IBO**) y el de los depósitos (**IDE**). La teoría dice que la gente
+tiene más dinero cuanto más renta y menos cuanto más le rinde tenerlo en otra
+cosa: una relación de equilibrio entre las cuatro.
+
+En el taller, **Ayuda ▸ Ejemplos ▸ La demanda de dinero en Dinamarca (SIM ·
+VEC)**. Como el de las ratas almizcleras, se abre una copia tuya:
+
+![El proyecto de ejemplo](img/vec-ejemplo.png)
+
+Los cuatro modelos univariantes vienen hechos y elegidos, **con una diferencia
+cada uno**:
+
+- **LRM**: ARI(1,1), con estacionalidad trimestral determinista;
+- **LRY**: un paseo aleatorio, ARIMA(0,1,0);
+- **IBO**: ARI(1,1);
+- **IDE**: IMA(1,1).
+
+Son los de la ruta U del ejemplo de sima, hechos con el motor de art y **sin
+revisarlos en art**: sirven para el ejemplo, no son un análisis univariante
+terminado. El caso **C1** es el sistema de las cuatro, en ese orden. La
+columna **Clase** dice VARMA porque todavía no hay ningún modelo estimado: en
+cuanto se estime un VEC, dirá VEC. Marca **C1** y pulsa **Estimar**.
+
+### 2 · Puerta
+
+Lo primero, como siempre: **Pasar la puerta**. El sistema diagonal tiene que
+reproducir los cuatro univariantes.
+
+![La puerta](img/vec-puerta.png)
+
+### R · Rango
+
+Con dos o más series I(1) aparece una pestaña más, **R · Rango**: cuántas
+relaciones de cointegración hay. Es el **rango** r: con r = 0 no hay ninguna y
+el sistema es un VARMA en diferencias; con r = 1, una relación.
+
+Deja **p** en 2, elige el **Caso** «2 · la constante en la relación» (el de
+Johansen y Juselius: la constante va dentro del equilibrio, sin tendencia en
+las series) y pon **Réplicas** a 199. Pulsa **Contrastar el rango**:
+
+![El rango](img/vec-rango.png)
+
+drvec ajusta el sistema con r = 0, 1, 2, 3 y contrasta cada r frente a r + 1
+por razón de verosimilitudes. Las tablas asintóticas de Johansen valen para
+muestras grandes, y aquí hay 55 observaciones, así que la LR se calibra con un
+**bootstrap**: drvec simula 199 series con el modelo de cada r, las vuelve a
+estimar y mira dónde cae la LR de verdad. **Tarda**: unos quince minutos. La
+barra dice cuántas réplicas lleva, y **Detener** lo para.
+
+La primera comparación decide: r = 0 frente a r = 1, **LR = 25.91**, por
+debajo del 5 % del bootstrap (29.79), con p = 0.12. **No se rechaza r = 0**: con
+estos datos, la cointegración no se puede afirmar. La página lo propone, y
+**Rango al modelo** llevaría r = 0 a la página 4: un VARMA en diferencias.
+
+Johansen y Juselius encontraron una relación con la tabla asintótica, que con
+n = 55 es la menos de fiar. Aquí se sigue **con su teoría**, r = 1, sabiendo que
+la muestra no la confirma. Es una decisión del analista, y se escribe como tal.
+
+> Con menos de 199 réplicas el bootstrap es una exploración: la página lo
+> dice. Con 0 réplicas la prueba tarda segundos y usa los valores
+> asintóticos; sirve para hacerse una idea, no para decidir.
+
+### 4 · Modelo
+
+![El modelo VEC](img/vec-modelo.png)
+
+Con series I(1), la página tiene dos clases: **VARMA en diferencias
+(drvarma)** y **VEC (drvec)**. Elige **VEC** y fija:
+
+- **p = 2, q = 0**: el VARMA en niveles. En las diferencias queda p − 1 = 1
+  retardo.
+- **r = 1** y el **Caso** 2, los de la página R · Rango.
+- **Normalizar β sobre**: la serie sobre la que se lee la relación. Marca
+  **LRM**: la relación se lee como «la demanda de dinero, en función de lo
+  demás».
+
+**La normalización no es un detalle.** drvec pone esa serie la última (la
+orden de abajo lo enseña) y la verosimilitud exacta del VEC **cambia con
+ella**: con estos datos, −324.35 normalizando sobre LRM y −322.82 sobre IDE.
+Dos VEC solo se pueden comparar si comparten la normalización. sim_gui la fija
+antes de estimar y la conserva en todo lo que viene después.
+
+### 5 · Estimación
+
+Pulsa **Estimar**:
+
+![La estimación del VEC](img/vec-estimacion.png)
+
+drvec arranca desde varios puntos y se queda con el mejor. Aquí los tres
+convergieron al mismo óptimo: logL −324.35, con 33 parámetros.
+
+### 6 · Diagnosis
+
+![La diagnosis del VEC](img/vec-diagnosis.png)
+
+**Ajuste** dice lo que importa de un VEC, en palabras:
+
+- **La relación de equilibrio**: LRM = 1.12 LRY − 5.16 IBO + 4.26 IDE. La
+  elasticidad del dinero a la renta está cerca de 1. Los dos tipos van con
+  signos opuestos y tamaños parecidos: lo que cuenta es el **diferencial**
+  entre lo que rinde un bono (el coste de tener dinero) y lo que rinde un
+  depósito. Es la lectura de Johansen y Juselius.
+- **El ajuste al equilibrio (α)**: cuánto corrige cada serie, cada trimestre,
+  la distancia al equilibrio. Negativo en la serie normalizada es corregir.
+  LRM, −0.17 (t −2.27): el dinero **corrige el error**, un 17 % por trimestre.
+  Las demás no reaccionan con |t| > 2.
+
+**Residuos**, **Parámetros**, **Σ** y **Salida** son como en el VARMA. En los
+residuos hay una fila más, **ec1**: el error de equilibrio.
+
+Con un VEC no hay **Ver modelo** (la barra lo dice al pasar por encima): la
+página de cada serie con su ecuación α β′ llegará más adelante.
+
+**Estructura** cambia de preguntas. Simplificar y «¿Es una red?» son del
+VARMA. En el VEC, la pregunta es la **débil exogeneidad**: si una serie empuja
+el equilibrio sin ajustarse a él (su α es cero). Pulsa **Débil exogeneidad**:
+
+![La débil exogeneidad](img/vec-weakex.png)
+
+drvec estima el VEC con el α de cada serie a cero, una cada vez, y lo
+contrasta por LR con el libre. **IBO** (p = 0.99) e **IDE** (p = 0.15) son
+débilmente exógenas: los tipos de interés no se ajustan al equilibrio del
+dinero. **LRM** (p = 0.02) y **LRY** (p = 0.04) sí se ajustan, la renta por
+poco. Los contrastes usan la normalización del VEC estimado: si cambias la de
+la página 4, sim_gui no contrasta y te lo dice.
+
+### 7 · Previsión
+
+Pon **Horizonte** 4 y marca **Evaluar fuera de muestra, estimando con las
+primeras** 40 observaciones. Pulsa **Calcular**:
+
+![La previsión del VEC](img/vec-prevision.png)
+
+La previsión de cada serie un año hacia delante, desde 1987.4, **en su nivel**:
+drvec deshace la diferencia y la relación de equilibrio. Las bandas, como
+siempre, son teóricas. La evaluación:
+
+![La evaluación del VEC](img/vec-evaluacion.png)
+
+El VEC y los univariantes, **sobre los mismos orígenes** (los 12 desde los
+que se pueden comprobar los cuatro trimestres). El VEC prevé mejor el dinero y
+la renta, por poco, y **peor los tipos de interés**, en IBO a un trimestre casi
+el doble. Tiene sentido con lo anterior: los tipos son débilmente exógenos, la
+relación no les dice nada sobre su futuro, y el VEC les añade parámetros que
+estimar.
+
+![La respuesta al impulso del VEC](img/vec-irf.png)
+
+La **Respuesta al impulso**, en niveles: en un sistema cointegrado **no se
+apaga**. Converge al efecto permanente del choque. Va en las unidades en que
+estima drvec, que la cabecera explica.
+
+---
+
+## 16. Lo que queda por hacer
 
 Un modelo **adecuado** dice que los datos no lo contradicen, no que no haya uno
 mejor. Antes de darlo por bueno:
@@ -1192,7 +1364,7 @@ el taller, con ese caso marcado, el menú **SIM** ofrece **Pasar a SIM**.
 
 ---
 
-## 16. Las reglas de oro
+## 17. Las reglas de oro
 
 1. **Mira antes de contrastar.** El gráfico y el correlograma deciden; los
    contrastes ayudan.
@@ -1217,10 +1389,15 @@ el taller, con ese caso marcado, el menú **SIM** ofrece **Pasar a SIM**.
     univariantes, nada de lo que venga después se puede comparar con ellos.
 16. **Mejor dentro de la muestra no es prever mejor.** Los univariantes son la
     vara de medir, también fuera de la muestra.
+17. **Con muestras cortas, el rango con bootstrap.** La tabla asintótica es
+    para muestras grandes. Si la teoría pide otro rango, se dice que es una
+    decisión.
+18. **En el VEC, la normalización se fija antes de comparar**: la
+    verosimilitud cambia con ella.
 
 ---
 
-## 17. Glosario
+## 18. Glosario
 
 | Término | Qué quiere decir |
 |---|---|
@@ -1228,26 +1405,31 @@ el taller, con ese caso marcado, el menú **SIM** ofrece **Pasar a SIM**.
 | **Anómalo** | Una observación cuyo residuo es improbable. Se calibra, no se elimina. |
 | **Armónicos** | Ondas de seno y coseno que representan una estacionalidad determinista. |
 | **Caso** | Un conjunto fijo y ordenado de series, cada una con su `.pre`. La primera es la salida. |
+| **Cointegración** | Series I(1) que se mueven juntas a largo plazo: cada una vaga, pero una combinación de ellas es estacionaria. |
 | **Cuaderno** | El diario del proyecto, en Markdown: lo que se lleva con «Al cuaderno» y tus notas. Solo crece. |
 | **CCF** | Función de correlación cruzada entre dos series. |
 | **Diagnosis** | La comprobación de que los residuos de un modelo son ruido blanco, normales y centrados. |
+| **Débil exogeneidad** | En un VEC, una serie que empuja el equilibrio sin ajustarse a él: su α es cero. |
 | **Diagonal** | El modelo de varias series sin relación entre ellas. La vara de medir de la transferencia y del sistema. |
 | **Dominio** | Qué clase de serie es y qué espera la teoría de ella. Se declara antes de estimar. |
 | **Elegido** | El modelo que declaras como el bueno de una serie, con su razón. |
 | **Exógena** | Una entrada a la que la salida no afecta. Se contrasta en los retardos negativos de la CCF. |
 | **Ganancia** | El efecto a largo plazo de un cambio permanente en la entrada: ω(1)/δ(1). |
 | **Intervención** | Un término determinista (impulso, escalón) que representa un suceso conocido. |
+| **Normalización** | En un VEC, la serie sobre la que se lee la relación de equilibrio (su coeficiente en β es 1). La verosimilitud exacta depende de ella. |
 | **Ljung-Box (Q)** | Contraste conjunto de que las autocorrelaciones de los residuos son cero. |
 | **Muestra** | Una ventana declarada sobre los datos. Cada una es una hoja con sus modelos. |
 | **Puerta** | En un sistema, la comprobación de que el modelo sin dinámica cruzada reproduce exactamente los univariantes. |
 | **Preblanqueo** | Filtrar la entrada con su modelo hasta dejarla en ruido blanco, y la salida con el mismo filtro. |
 | **Retroalimentación** | Dos series que se afectan en los dos sentidos. Es lo que lleva a un sistema y no a una transferencia. |
+| **Rango (r)** | Cuántas relaciones de cointegración tiene un sistema. Con r = 0, el sistema es un VARMA en diferencias. |
 | **Red** | Los enlaces salida ← entrada de un modelo de transferencia, con sus b r s. |
 | **Ruido (N_t)** | Lo que la transferencia no explica de la salida. Tiene su propio modelo ARIMA. |
 | **Σ** | La matriz de covarianzas de las innovaciones de un sistema. Completa, si las series se mueven a la vez en el mismo periodo. |
 | **Salida / entrada** | La serie que se explica y las que la explican. |
-| **Sistema** | Varias series en un orden fijo, cada una con su `.pre`, que se explican entre sí. Se estima como un VARMA. |
+| **Sistema** | Varias series en un orden fijo, cada una con su `.pre`, que se explican entre sí. Se estima como un VARMA o, si cointegran, como un VEC. |
 | **Sobreintervenir** | Intervenir un anómalo que no cambia la identificación. |
+| **VEC** | Modelo de corrección del error: el sistema de series cointegradas, con sus relaciones de equilibrio (β) y cuánto corrige cada serie la distancia a ellas (α). |
 
 ---
 

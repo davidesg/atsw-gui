@@ -1,0 +1,18 @@
+#! atsw_gui
+# El VEC: Ayuda -> Ejemplos abre el proyecto de Johansen y Juselius, con los
+# cuatro modelos univariantes hechos y el sistema C1 por estimar.
+ventana ATSW
+tamano 1100 700
+espera 800
+barra Ayuda
+espera 500
+submenu Ejemplos
+espera 500
+menu La demanda de dinero en Dinamarca (SIM · VEC)
+espera 2000
+fila LRM
+espera 800
+fila C1
+espera 800
+foto vec-ejemplo
+salir

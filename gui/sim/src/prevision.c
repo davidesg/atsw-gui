@@ -343,7 +343,16 @@ static void texto_prev_vec( Sim *m )
 
     for (k = 0; k < P->nfvec; k++) {
         const OvecPrev *x = &P->fvec[k];
-        g_string_append_printf( g, "%s (banda del 95 %%, teórica; en logaritmos, la mediana):\n", x->nombre );
+        double lam = 1;
+        int i;
+
+        /* drvec deshace el Box-Cox de cada serie: con λ = 0 el nivel es la
+           mediana, no la media; con λ = 1 no hay nada que deshacer */
+        for (i = 0; i < m->sis.n; i++)
+            if (!strcmp( m->sis.s[i].nombre, x->nombre )) lam = m->sis.s[i].lambda;
+        g_string_append_printf( g, "%s (banda del 95 %%, teórica%s):\n", x->nombre,
+                                lam == 0 ? "; en logaritmos, el nivel es la mediana" :
+                                lam != 1 ? "; con Box-Cox, el nivel es la mediana" : "" );
         g_string_append_printf( g, "  %-10s %14s %14s %14s %10s\n", "fecha", "nivel", "inferior",
                                 "superior", "d.t." );
         for (j = 0; j < x->nf; j++)
@@ -514,8 +523,13 @@ static void irf_fevd( Sim *m )
     if (m->pe.vec && m->pe.vec->hay_vec && m->pe.out) {
         char *a = ovec_seccion_file( m->pe.out, "Impulse Response of the Levels" );
         char *b = ovec_seccion_file( m->pe.out, "Forecast Error Variance Decomposition, in Levels" );
-        gchar *ta = g_strdup_printf( "La respuesta al impulso del VEC, EN NIVELES (de drvec, tal "
-                                     "cual):\n%s", a ? a : "(el .out no la trae)\n" );
+        /* drvec responde en w = factor de escala * BoxCox(z), las unidades
+           en que estima, y su .out no lo dice: se dice aqui */
+        gchar *ta = g_strdup_printf( "La respuesta al impulso del VEC, EN NIVELES (de drvec, tal cual).\n"
+                                     "Va en las unidades en que estima drvec: cada serie, transformada con\n"
+                                     "su Box-Cox y multiplicada por el factor de escala de su .pre. Con un\n"
+                                     "factor 100, un 1 aquí es 0.01 en la serie.\n%s",
+                                     a ? a : "(el .out no la trae)\n" );
         gchar *tb = g_strdup_printf( "La descomposición de la varianza del VEC, EN NIVELES (de drvec, "
                                      "tal cual):\n%s", b ? b : "(el .out no la trae)\n" );
         gtk_text_buffer_set_text( gtk_text_view_get_buffer( GTK_TEXT_VIEW(m->pv.t_irf) ), ta, -1 );

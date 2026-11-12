@@ -74,6 +74,9 @@ for e in "${escenas[@]}"; do
     linea=$(head -1 "$e")
     case "$linea" in '#! '*) ;; *) echo "$e: falta la linea #! programa" >&2; exit 1 ;; esac
     cmd=${linea#'#! '}
+    # Una escena larga dice su limite («# limite S»; 10-vec: el bootstrap
+    # del rango tarda unos 15 min). LIMITE, si se da, manda sobre todas.
+    lim=$(sed -n 's/^# limite \([0-9]*\)$/\1/p' "$e" | head -1)
     cmd=${cmd//@PROYECTO@/$P}
     cmd=${cmd//@DATOS@/$M/datos}
     cmd=${cmd//@EJEMPLOS@/$ATSW_EJEMPLOS}
@@ -90,5 +93,5 @@ for e in "${escenas[@]}"; do
     BROADWAY_PID=$!
     sleep 1
     ( cd "$T" && GTK_MODULES=$T/libescenas.so ESCENA=$T/guion.txt \
-          timeout "${LIMITE:-300}" "$T/ATSW/bin/"$cmd ) 2>&1 | grep -v "^$" | grep -v "pixman\|preferred_height_for_width\|Negative content\|BUG \*\*\*\|AccelLabel\|queue_draw_area\|Aborted" || true
+          timeout "${LIMITE:-${lim:-300}}" "$T/ATSW/bin/"$cmd ) 2>&1 | grep -v "^$" | grep -v "pixman\|preferred_height_for_width\|Negative content\|BUG \*\*\*\|AccelLabel\|queue_draw_area\|Aborted" || true
 done

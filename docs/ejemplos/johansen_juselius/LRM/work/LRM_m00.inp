@@ -1,0 +1,87 @@
+************************************************
+* Input file for program FUE                   *
+* DOCTYPE ATSW-interface SYSTEM                *
+************************************************
+
+** Frequency of time series: either 1(A), 4(Q) or 12(M):
+ 4
+** Number of observations and starting date of time series:
+ 55  1 1974 LRM
+** Number of deterministic variables (including seasonal components):
+0
+** Number and orders of regular AR operators:
+0
+** Number and orders of annual AR operators:
+0
+** Number and orders of regular MA operators:
+0
+** Number and orders of anual MA operators:
+0
+** Number and frequencies of regular AR(2) operators with fixed frequency:
+0
+** Number and frequencies of regular MA(2) operators with fixed frequency:
+0
+** Mean parameter (mu):
+0.000000 0
+** Box-Cox lambda, regular differences and complete annual differences:
+ 1.000000 0 0
+** Individual factors of the annual difference (starting at freq 0.0):
+ 0 0 0
+** ACF/PACF bands (0 Automatic) and reescaling factor:
+ 0.000000 1.00
+** Time series (stochastic and non-standard deterministic variables):
+11.63255023
+11.60415248
+11.58152067
+11.60184741
+11.5863049
+11.60449857
+11.65330707
+11.76424639
+11.75293375
+11.76547979
+11.78058298
+11.77017822
+11.74589213
+11.76865141
+11.74982457
+11.74869654
+11.70491581
+11.70344416
+11.70300114
+11.70367301
+11.67890305
+11.7077816
+11.67615506
+11.68592074
+11.64160637
+11.63517976
+11.60926098
+11.65761265
+11.62781841
+11.62885232
+11.60377761
+11.62906485
+11.60202333
+11.60377532
+11.59462235
+11.60382017
+11.61712564
+11.68809589
+11.72651492
+11.78125043
+11.79762019
+11.84191204
+11.84029539
+11.92357753
+11.90296222
+11.92678366
+11.9709981
+12.02590261
+12.05115078
+12.07546038
+12.05618931
+12.07162795
+12.02795222
+12.03978834
+12.0152941

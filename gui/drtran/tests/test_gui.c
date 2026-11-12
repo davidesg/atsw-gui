@@ -452,9 +452,11 @@ static gboolean espera_motor(Mtram *m, int segundos)
     gint64 hasta = g_get_monotonic_time() + (gint64) segundos * G_USEC_PER_SEC;
 
     pump(20);
-    while (m->est.corriendo && g_get_monotonic_time() < hasta) pump(20);
+    /* y la del univariante de la Prevision, que se lanza sola detras */
+    while ((m->est.corriendo || m->prev.uni_corriendo)
+           && g_get_monotonic_time() < hasta) pump(20);
     pump(50);
-    return !m->est.corriendo;
+    return !m->est.corriendo && !m->prev.uni_corriendo;
 }
 
 /* LA TINTA DE UN GRAFICO. Se busca la ventana de graficos por su titulo (el
@@ -1408,6 +1410,18 @@ int main(int argc, char **argv)
     check(filas(m->prev.lista) == 6, "una fila de error por horizonte", NULL);
     s = celda(m->prev.lista, 0, 3);
     check(s[0] && g_ascii_strtod(s, NULL) > 0.0, "con su RMSE", s); g_free(s);
+    /* P3: FRENTE AL UNIVARIANTE, con la misma ventana, solo y sin pedirlo */
+    check(m->prev.hay_comp && m->prev.comp.nh == 6,
+          "y la comparacion con el univariante, horizonte a horizonte",
+          etiqueta(m->estado));
+    s = celda(m->prev.lista, 0, 5);
+    check(s[0] && g_ascii_strtod(s, NULL) > 0.0, "el RMSE del univariante", s); g_free(s);
+    s = celda(m->prev.lista, 0, 6);
+    check(s[0] && g_ascii_strtod(s, NULL) > 0.0, "el cociente", s); g_free(s);
+    s = celda(m->prev.lista, 0, 7);
+    check(contiene(s, "p = "), "Diebold-Mariano con su p", s); g_free(s);
+    check(m->prev.comp.origenes == m->prev.f.ev.origenes,
+          "los dos con los mismos origenes", NULL);
     s = cache_de("evaluacion.csv");
     check(g_file_test(s, G_FILE_TEST_EXISTS), "y el CSV de la evaluacion en la cache", s);
     g_free(s);
@@ -1416,7 +1430,7 @@ int main(int argc, char **argv)
     check(m->prev.tiene_ref, "«Guardar esta evaluación» la guarda", etiqueta(m->estado));
     pulsa(m->prev.b_calc);
     check(espera_motor(m, 120), "la segunda evaluacion acaba", NULL);
-    s = celda(m->prev.lista, 0, 5);
+    s = celda(m->prev.lista, 0, 8);
     check(contiene(s, "igual"), "el mismo modelo, comparado con lo guardado, da igual", s);
     g_free(s);
     pulsa(entrada_prev(m, "Olvidarla"));

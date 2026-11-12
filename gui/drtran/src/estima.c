@@ -175,6 +175,9 @@ static gchar **arma_argv( Mtram *m, const gchar *dag, const gchar *cns,
         g_ptr_array_add( a, g_strdup_printf( "%d", m->prev.ventana ) );
         g_ptr_array_add( a, g_strdup( "-C" ) );
         g_ptr_array_add( a, csv );
+        /* la Prevision lo compara luego con el del univariante */
+        g_free( m->prev.csv_modelo );
+        m->prev.csv_modelo = g_strdup( csv );
     }
 
     /* Lo que se MANTIENE del .pre en vez de reestimarlo al juntar. Es de
@@ -193,6 +196,39 @@ static gchar **arma_argv( Mtram *m, const gchar *dag, const gchar *cns,
     g_free( d );
     return (gchar **) g_ptr_array_free( a, FALSE );
 }
+
+/* LA EVALUACION DEL UNIVARIANTE, para la Prevision (fase P3): el diagonal
+ * (-0) con la MISMA ventana y el mismo horizonte, y lo que se mantiene del
+ * .pre igual que en el modelo, para que la unica diferencia entre los dos
+ * sea la transferencia. Nuevo, terminado en NULL; g_strfreev.            */
+gchar **estima_argv_univariante( Mtram *m, const gchar *out, const gchar *csv )
+{
+    GPtrArray *a = g_ptr_array_new();
+    int        i;
+
+    for (i = 0; i < m->c.n; i++)
+        g_ptr_array_add( a, g_strdup( m->c.s[i]->path ) );
+    g_ptr_array_add( a, g_strdup( "-o" ) );
+    g_ptr_array_add( a, g_strdup( out ) );
+    g_ptr_array_add( a, g_strdup( "-0" ) );
+    g_ptr_array_add( a, g_strdup( "-f" ) );
+    g_ptr_array_add( a, g_strdup_printf( "%d", m->prev.horizonte ) );
+    g_ptr_array_add( a, g_strdup( "-estwin" ) );
+    g_ptr_array_add( a, g_strdup_printf( "%d", m->prev.ventana ) );
+    g_ptr_array_add( a, g_strdup( "-C" ) );
+    g_ptr_array_add( a, g_strdup( csv ) );
+    if (m->est.fix_N) g_ptr_array_add( a, g_strdup( "-N" ) );
+    if (m->est.fix_X) g_ptr_array_add( a, g_strdup( "-X" ) );
+    if (m->est.fix_D) g_ptr_array_add( a, g_strdup( "-D" ) );
+    if (m->est.fix_E) g_ptr_array_add( a, g_strdup( "-E" ) );
+    if (m->est.fix_M) g_ptr_array_add( a, g_strdup( "-M" ) );
+    if (m->est.cast_resta) g_ptr_array_add( a, g_strdup( "-S" ) );
+    g_ptr_array_add( a, NULL );
+    return (gchar **) g_ptr_array_free( a, FALSE );
+}
+
+/* El directorio de trabajo de las corridas, para quien lance otra. */
+gchar *estima_trabajo( void ) { return trabajo(); }
 
 /* La orden en una linea, para que se pueda copiar y pegar en un terminal. */
 static gchar *orden_texto( Mtram *m )
@@ -643,6 +679,12 @@ gboolean estima_lanzar( Mtram *m )
     int      i;
 
     if (E->corriendo) return FALSE;
+    /* Una corrida a la vez, tambien con la del univariante de la Prevision. */
+    if (m->prev.uni_corriendo) {
+        preview_show_status( m, "Espera: está corriendo la evaluación del "
+                                "univariante (Previsión)." );
+        return FALSE;
+    }
     if (m->c.n < 2) {
         preview_show_status( m, "Carga al menos dos .pre." );
         return FALSE;

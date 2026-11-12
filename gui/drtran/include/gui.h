@@ -13,6 +13,7 @@
 #include "engine.h"
 #include "outdiag.h"
 #include "outfcst.h"
+#include "fcomp.h"
 #include "proyecto.h"
 #include "fugdraw.h"
 
@@ -236,6 +237,17 @@ typedef struct {
     OfEval     ref;           /* la evaluacion guardada, para comparar      */
     gboolean   tiene_ref;
     char       ref_que[80];
+
+    /* FRENTE AL UNIVARIANTE (fase P3, como en SF_MEG): con la MISMA ventana,
+     * el diagonal (-0) se evalua en una corrida aparte, que no da de alta
+     * nada ni toca la estimacion, y los dos CSV se comparan por horizonte:
+     * el cociente del RMSE y Diebold-Mariano (lib/fcomp).            */
+    gchar     *csv_modelo;    /* el -C de la corrida del modelo             */
+    gchar     *csv_uni;       /* el -C del diagonal                         */
+    struct EngineJob *uni_job;
+    gboolean   uni_corriendo;
+    FcComp     comp;
+    gboolean   hay_comp;
 } Prev;
 
 typedef struct {
@@ -383,6 +395,8 @@ void       estima_refresca(Mtram *m);
  * fabrica lo que la siguiente pide, y si una necesita una corrida, la pide.
  * Devuelve TRUE si arranco.                                            */
 gboolean   estima_lanzar(Mtram *m);
+gchar    **estima_argv_univariante(Mtram *m, const gchar *out, const gchar *csv);
+gchar     *estima_trabajo(void);
 
 /* drtran, o el programa que sea, buscado AL LADO de drtran_gui (el arbol de
  * compilacion, el paquete) antes que en el PATH. Rutas nuevas; g_free. */

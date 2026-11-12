@@ -969,6 +969,20 @@ Dos cosas que hay que tener claras:
   parámetros y va moviendo el origen, comparando cada previsión con lo que de
   verdad pasó. Es lo que decide entre dos modelos.
 
+Al evaluar, drtran_gui evalúa además **el univariante con la misma ventana**:
+el modelo diagonal, la salida sin la transferencia. Lo hace solo, en una
+corrida aparte que no cambia la estimación. La tabla pone tres columnas al
+lado de las del modelo:
+
+- **RMSE univariante**, el del modelo sin el petróleo;
+- **Cociente**, el RMSE del modelo dividido por el del univariante. Por
+  debajo de 1, la transferencia prevé mejor;
+- **Diebold-Mariano**, si la diferencia es real o puede ser suerte. DM > 0 va
+  a favor del modelo; ** es significativo al 5 % y * al 10 %.
+
+Una transferencia muy significativa dentro de la muestra puede prever peor
+fuera de ella. Este es el contraste que lo dice.
+
 Y como el modelo está en logaritmos, las bandas del nivel son **asimétricas**:
 nunca calcules «nivel ± 1.96 × d.t.» a mano.
 

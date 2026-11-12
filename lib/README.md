@@ -55,6 +55,16 @@ No se confunde con el `fp_forecast_paneles` de `fugplot/`, que fue el gráfico
 de la previsión de drtran_gui y sim_gui antes de este y lo sigue usando
 sim_gui hasta su fase (fase P6 de `docs/TODO.md`).
 
+## `fcomp/` — dos modelos, por su error fuera de muestra
+
+Lee dos CSV de `drtran -C` (la evaluación con los parámetros fijos de
+`-estwin`) y, por horizonte, da el RMSE de cada uno, su cociente y el
+contraste de Diebold-Mariano (HAC hasta h−1, corrección HLN, t de N−1). Es
+`forecast_compare.py` (`engines/drtran/examples/passthrough`) en C, con los
+mismos números: la prueba compara con él sobre los CSV de `fcomp/datos/`.
+drtran_gui lo usa para poner la transferencia frente a su univariante
+con la misma ventana (fase P3 de `docs/TODO.md`). Usa GSL para la t.
+
 ## `preview/` — la ventana de gráficos
 
 Muestra lo que `fugdraw` escribe, con **zoom** y con una **lupa** estilo `gv`

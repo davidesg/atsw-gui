@@ -36,7 +36,7 @@
 #include "previewhost.h"
 #include "preview.h"
 #include "outfcst.h"
-#include "fugplot.h"
+#include "fufplot.h"
 
 enum { P_H, P_N, P_MAE, P_RMSE, P_MAPE, P_COMP, P_N_COLS };
 
@@ -88,6 +88,7 @@ static void refresca_texto( Mtram *m )
     GString *t = g_string_new( NULL );
 
     if (!P->vale) {
+        gtk_widget_hide( P->tabla );
         gtk_label_set_text( GTK_LABEL(P->texto),
             "Pulsa «Calcular»: la previsión sale de la misma ejecución del\n"
             "motor que la estimación, y el botón la pide él solo." );
@@ -96,9 +97,12 @@ static void refresca_texto( Mtram *m )
     }
 
     /* --- la prevision, que es TEORICA ---------------------------------- */
+    /* LA TABLA ES LA DEL .out, TAL CUAL: la misma que lee el analista en el
+     * informe, como fue_gui ensena el .out de fuf. Rehacerla aqui con los
+     * numeros leidos seria una segunda tabla que podria no cuadrar.     */
     if (P->f.ns > 0) {
         const OfSerie *s = &P->f.s[0];
-        int            i;
+        static char    tb[65536];
 
         /* La salida del modelo es la primera serie cargada. */
         if (m->c.n > 0 && m->c.s[0]->ts.name) {
@@ -107,30 +111,39 @@ static void refresca_texto( Mtram *m )
             if (q) s = q;
         }
 
+        if (P->out && of_tabla_file( P->out, s->nombre, tb, sizeof tb ) == 0) {
+            /* fuf escribe Latin-1; drtran, ASCII: solo se convierte lo que
+             * no es UTF-8 ya.                                          */
+            gchar *u = g_utf8_validate( tb, -1, NULL ) ? g_strdup( tb )
+                     : g_convert_with_fallback( tb, -1, "UTF-8", "ISO-8859-1",
+                                                "?", NULL, NULL, NULL );
+            gchar *e = g_markup_escape_text( u ? u : tb, -1 );
+            gchar *mk = g_strdup_printf( "<tt>%s</tt>", e );
+
+            gtk_label_set_markup( GTK_LABEL(P->tabla), mk );
+            gtk_widget_show( P->tabla );
+            g_free( mk ); g_free( e ); g_free( u );
+        } else
+            gtk_widget_hide( P->tabla );
+
         g_string_append_printf( t,
-            "%s — origen %s, %d periodo%s.  Nivel y variación anual, con "
-            "su desviación típica:\n\n",
-            s->nombre, s->origen, s->lead, s->lead == 1 ? "" : "s" );
-
-        for (i = s->nf - s->nprev; i < s->nf; i++)
-            g_string_append_printf( t,
-                "   %-9s %12.2f  ± %8.2f      %+10.2f  ± %8.2f\n",
-                s->f[i].fecha, s->f[i].nivel, s->f[i].sd_nivel,
-                s->f[i].var_anu, s->f[i].sd_anu );
-
+            "%s — origen %s, %d periodo%s.  ", s->nombre, s->origen,
+            s->lead, s->lead == 1 ? "" : "s" );
         g_string_append( t,
-            "\nEsas desviaciones son TEÓRICAS: dicen lo que el modelo implica, "
-            "no lo que pasa\nfuera de muestra, donde la incertidumbre de los "
-            "parámetros y el cambio estructural\ntienen su parte. Un modelo "
-            "puede dar bandas estrechas y fallar." );
+            "Las desviaciones de la tabla son TEÓRICAS: dicen lo que el modelo "
+            "implica, no lo que pasa\nfuera de muestra, donde la incertidumbre "
+            "de los parámetros y el cambio estructural\ntienen su parte. Un "
+            "modelo puede dar bandas estrechas y fallar." );
 
         if (P->f.ns > 1)
             g_string_append_printf( t,
                 "\n\n(y otras %d series: prever una salida exige prever sus "
                 "entradas, así que el error\nde la salida suma su propia "
-                "innovación y las de todo lo que tiene aguas arriba)",
+                "innovación y las de todo lo que tiene aguas arriba. Sus "
+                "tablas\nestán en el .out y sus gráficos en «Prever ▾»)",
                 P->f.ns - 1 );
-    }
+    } else
+        gtk_widget_hide( P->tabla );
 
     /* --- la descomposicion, y su negativa razonada --------------------- */
     if (P->f.decomp == 0)
@@ -182,6 +195,8 @@ void prevision_desde( Mtram *m, const char *path )
     Prev *P = &m->prev;
 
     P->vale = FALSE;
+    g_free( P->out );
+    P->out = g_strdup( path );
     if (path && of_parse_file( path, &P->f ) == 0) P->vale = TRUE;
     prevision_refresca( m );
 }
@@ -265,70 +280,101 @@ void prevision_calcular( Mtram *m )
     on_calcular( NULL, m );
 }
 
-/* EL GRAFICO DE LA PREVISION (H4 de docs/DISENO-barra-drtran.md), con
- * fugdraw: lo que se ve es lo que va al papel (regla 7 de mtram). Dos
- * paneles, el nivel y la variacion anual, como los da la tabla, con las
- * bandas de +-2 d.t. -- y la nota de que son TEORICAS, en el propio dibujo:
- * un grafico se recorta y se pega sin la pantalla que lo explicaba.     */
-static gchar *latin1( const char *s )
-{
-    gchar *r = g_convert_with_fallback( s, -1, "ISO-8859-1", "UTF-8", "?",
-                                        NULL, NULL, NULL );
+/* EL GRAFICO DE LA PREVISION, EL DE fuf (lib/fufplot): el que el analista ya
+ * lee en fue_gui, con las mismas marcas y las mismas bandas. Arriba, la
+ * variacion anual --la LRC anual en %, si el modelo va en logaritmos-- de las
+ * L ultimas observaciones y de las L previsiones, con la banda de UNA
+ * desviacion tipica; con lambda < 0, el NIVEL, con la de dos, deshaciendo la
+ * transformacion como fuf (forecast_graphic_BC). Debajo, ERR: el error de
+ * prevision a un periodo de las observaciones, en impulsos bajo su fecha, con
+ * su banda de dos sigma.
+ *
+ * Todo sale de la tabla del .out, que lleva cada columna en las unidades de
+ * fuf. Y sigma tambien: el error a un periodo de la tabla es el de la forma
+ * REDUCIDA --el de prever Y sin conocer todavia la innovacion de X-- y su
+ * varianza es exactamente la del error de la prevision a un periodo, la
+ * desviacion de la primera fila prevista. En fuf, lo mismo: v1 en h = 1 es
+ * sigma2. Sin leer una segunda cosa que pudiera no cuadrar con la tabla.  */
 
-    return r ? r : g_strdup( s );
+/* «4/1993» o «1993»: el periodo y el anio. */
+static int fecha_de( const char *s, int *per, int *anio )
+{
+    if (sscanf( s, "%d/%d", per, anio ) == 2) return 1;
+    if (sscanf( s, "%d", anio ) == 1) { *per = 1; return 1; }
+    return 0;
 }
 
 gchar *prevision_grafico( Mtram *m, int k )
 {
     Prev          *P = &m->prev;
     const OfSerie *S;
-    FPPanel        pn[2];
-    double        *y[2], *sd[2];
-    const char   **fe;
-    gchar         *t[2], *nota, *dir, *base, *eps = NULL, *u;
+    const struct Tusmodel *tm = NULL;
+    double        *y, *b1, *b2, *err, lam = 1.0, sigma;
+    int            i, L, i0, freq = 1, per, anio, nivel;
+    gchar         *dir, *eps = NULL, *nom;
     FDFig         *fig;
-    int            i, freq;
 
-    if (!P->vale || k < 0 || k >= P->f.ns || P->f.s[k].nprev < 1) return NULL;
-    S    = &P->f.s[k];
-    freq = (m->c.n > 0) ? m->c.s[0]->ts.freq : 1;
+    if (!P->vale || k < 0 || k >= P->f.ns) return NULL;
+    S = &P->f.s[k];
+    L = S->nprev;
+    i0 = S->nf - 2 * L;                /* la primera de las L observadas  */
+    if (L < 2 || i0 < 0 || !fecha_de( S->f[i0].fecha, &per, &anio )) return NULL;
 
-    fe = g_new0( const char *, S->nf );
-    for (i = 0; i < 2; i++) {
-        y[i]  = g_new0( double, S->nf );
-        sd[i] = g_new0( double, S->nf );
-    }
-    for (i = 0; i < S->nf; i++) {
-        fe[i]    = S->f[i].fecha;
-        y[0][i]  = S->f[i].nivel;    sd[0][i] = S->f[i].sd_nivel;
-        y[1][i]  = S->f[i].var_anu;  sd[1][i] = S->f[i].sd_anu;
-    }
-    u = g_strdup_printf( "%s: el nivel, desde %s", S->nombre, S->origen );
-    t[0] = latin1( u ); g_free( u );
-    t[1] = latin1( freq > 1 ? "La variación anual" : "La variación" );
-    nota = latin1( "Bandas de ±2 d.t., TEÓRICAS: lo que el modelo implica, no lo "
-                   "que pasa fuera de muestra." );
-    for (i = 0; i < 2; i++) {
-        pn[i].title = t[i];
-        pn[i].y     = y[i];
-        pn[i].sd    = sd[i];
-    }
+    /* El modelo de ESA serie: su lambda y su frecuencia. */
+    for (i = 0; i < m->c.n; i++)
+        if (m->c.s[i]->ts.name && !strcmp( m->c.s[i]->ts.name, S->nombre )) {
+            tm   = &m->c.s[i]->tm;
+            freq = m->c.s[i]->ts.freq;
+        }
+    if (tm) lam = tm->boxlam;
+    nivel = lam < 0.0;                 /* fuf: forecast_graphic_BC       */
+    if (freq < 1) freq = 1;
 
-    dir = g_build_filename( g_get_user_cache_dir(), GUI_CACHE, NULL );
-    g_mkdir_with_parents( dir, 0700 );
-    base = g_build_filename( dir, S->nombre, NULL );
-    fig  = fp_forecast( pn, 2, S->nf, S->nprev, fe, nota, base );
+    y   = g_new0( double, 2 * L );
+    b1  = g_new0( double, 2 * L );
+    b2  = g_new0( double, 2 * L );
+    err = g_new0( double, L );
+    for (i = 0; i < 2 * L; i++) {
+        const OfFila *f = &S->f[i0 + i];
+        /* la variacion anual; con datos anuales, la del periodo, que es ella */
+        double        v  = (freq > 1) ? f->var_anu : f->var_per;
+        double        sd = (freq > 1) ? f->sd_anu  : f->sd_per;
+
+        if (nivel) {
+            /* La banda, como fuf: la transformada mas/menos dos desviaciones,
+             * deshecha. La tabla da el nivel y la desviacion EN LA ESCALA
+             * TRANSFORMADA (/refactor), y el refactor se va: z = (x^l - 1)/l. */
+            double z = (pow( f->nivel, lam ) - 1.0) / lam;
+
+            y[i] = f->nivel;
+            if (i >= L) {
+                b1[i] = pow( (z + 2.0 * f->sd_nivel) * lam + 1.0, 1.0 / lam );
+                b2[i] = pow( (z - 2.0 * f->sd_nivel) * lam + 1.0, 1.0 / lam );
+            }
+        } else {
+            y[i] = v;
+            if (i >= L) { b1[i] = v + sd; b2[i] = v - sd; }
+        }
+        if (i < L) err[i] = f->tiene_err ? f->err : 0.0;
+    }
+    sigma = S->f[i0 + L].sd_nivel;
+
+    fig = fp_forecast( y, b1, b2, err, L, sigma, freq, anio, per,
+                       nivel ? "LEVEL"
+                             : (tm && fabs( lam ) < 1e-8) ? "LRC anual (%)"
+                                                          : "Annual change" );
     if (fig) {
-        gchar *nom = g_strdup_printf( "prev_%s.eps", S->nombre );
-
+        dir = g_build_filename( g_get_user_cache_dir(), GUI_CACHE, NULL );
+        g_mkdir_with_parents( dir, 0700 );
+        nom = g_strdup_printf( "prev_%s.eps", S->nombre );
         eps = g_build_filename( dir, nom, NULL );
-        g_free( nom );
+        if (fd_write_eps( fig, eps ) != 0) { g_free( eps ); eps = NULL; }
         fd_fig_free( fig );
-        if (!g_file_test( eps, G_FILE_TEST_EXISTS )) { g_free( eps ); eps = NULL; }
+        g_free( nom );
+        g_free( dir );
     }
 
-    for (i = 0; i < 2; i++) { g_free( y[i] ); g_free( sd[i] ); g_free( t[i] ); }
-    g_free( fe ); g_free( nota ); g_free( base ); g_free( dir );
+    g_free( y ); g_free( b1 ); g_free( b2 ); g_free( err );
     return eps;
 }
 
@@ -452,6 +498,7 @@ GtkWidget *prevision_pagina_new( Mtram *m )
     GtkListStore *st;
 
     P->b_calc = NULL;
+    P->out  = NULL;
     P->vale = P->tiene_ref = FALSE;
     P->prever = P->evaluar = FALSE;
     P->horizonte = 8;
@@ -543,6 +590,12 @@ GtkWidget *prevision_pagina_new( Mtram *m )
     marco = gtk_frame_new( "La previsión" );
     vb = gtk_box_new( GTK_ORIENTATION_VERTICAL, 0 );
     gtk_container_set_border_width( GTK_CONTAINER(vb), 6 );
+    P->tabla = gtk_label_new( "" );
+    gtk_widget_set_halign( P->tabla, GTK_ALIGN_START );
+    gtk_label_set_selectable( GTK_LABEL(P->tabla), TRUE );
+    gtk_widget_set_no_show_all( P->tabla, TRUE );
+    gtk_box_pack_start( GTK_BOX(vb), P->tabla, FALSE, FALSE, 0 );
+
     P->texto = gtk_label_new( "" );
     gtk_widget_set_halign( P->texto, GTK_ALIGN_START );
     gtk_label_set_selectable( GTK_LABEL(P->texto), TRUE );
@@ -555,7 +608,7 @@ GtkWidget *prevision_pagina_new( Mtram *m )
     gtk_container_add( GTK_CONTAINER(sc), vb );
     gtk_container_add( GTK_CONTAINER(marco), sc );
     gtk_widget_set_size_request( marco, -1, 240 );
-    gtk_box_pack_start( GTK_BOX(caja), marco, FALSE, FALSE, 0 );
+    gtk_box_pack_start( GTK_BOX(caja), marco, TRUE, TRUE, 0 );
 
     prevision_refresca( m );
     return caja;

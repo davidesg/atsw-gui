@@ -758,7 +758,7 @@ static void forecast_panel( FDFig *f, const Layout *L, double x0, double x1, dou
    free( xs ); free( ys );
 }
 
-FDFig *fp_forecast( const FPPanel *p, int npanels, int n, int nprev,
+FDFig *fp_forecast_paneles( const FPPanel *p, int npanels, int n, int nprev,
                     const char *const *dates, const char *note, const char *x11out )
 {
    const Layout *L = &layout_small;

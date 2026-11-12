@@ -325,7 +325,7 @@ SIM usa **ese mismo dibujante**, sin uno propio:
 | `lib/ccfplot` | la CCF bidireccional, par a par |
 | `lib/diagmv` | Hosking y Jarque-Bera multivariantes: ya es de drvarma, drtran y drvec |
 | `lib/vuelta` | devolver a US el bloque diagonal estimado con la dinámica cruzada, como `.inp` (no `.pre`) |
-| `lib/fugplot` (`fp_forecast`), `lib/fugdraw` | el gráfico de la previsión en nivel y variación anual, con bandas teóricas |
+| `lib/fugplot` (`fp_forecast_paneles`; con P6 de `docs/TODO.md`, el de fuf, `lib/fufplot`), `lib/fugdraw` | el gráfico de la previsión en nivel y variación anual, con bandas teóricas |
 | `lib/preview` | el visor de páginas que van al papel |
 | `lib/equation` | la ecuación de cada serie con el dibujante único (§3.4) |
 | `lib/proyecto` | el sistema, sus corridas, la razón y el linaje |

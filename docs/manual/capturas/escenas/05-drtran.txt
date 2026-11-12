@@ -85,4 +85,13 @@ casilla Prever | 1
 boton Calcular
 espera 30000
 foto drtran-prevision
+# El grafico, el de fuf: en el menu de la flecha de Prever, la salida primero.
+flecha Prever
+espera 800
+menu Ver el gráfico de la previsión: ipc, la salida
+ventana prev_
+tamano 700 900
+espera 2500
+foto drtran-prevision-grafico
+cierra
 salir

@@ -76,3 +76,11 @@ Además de los números exactos:
 
 Y el banco comprueba que el CSV por origen tiene **31 × 6 filas más la
 cabecera**.
+
+## La tabla tal cual: `of_tabla`
+
+La ventana de drtran_gui no rehace la tabla con los números leídos: enseña
+**el bloque del `.out`**, de «FORECAST REPORT» a la línea que lo cierra, como
+fue_gui enseña el `.out` de fuf. Una tabla rehecha sería una segunda tabla, y
+podría no cuadrar con la del informe. `of_tabla` acepta los dos cierres: el
+«+---» de drtran y la línea en blanco de fuf.

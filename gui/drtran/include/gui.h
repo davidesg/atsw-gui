@@ -220,12 +220,14 @@ typedef struct {
  * comparar dos modelos, que es lo que TASTE no podia hacer.            */
 typedef struct {
     GtkWidget *lista;         /* el error por horizonte                     */
+    GtkWidget *tabla;         /* la tabla del .out, tal cual (la de fuf)    */
     GtkWidget *texto;         /* la prevision y lo que significa            */
     GtkWidget *b_calc;        /* Calcular: LANZA EL MOTOR desde aqui        */
     GtkWidget *c_prever, *c_eval, *s_hor, *s_win;
 
     Forecast   f;
     gboolean   vale;
+    gchar     *out;           /* el .out de donde se leyo: de ahi la tabla  */
 
     gboolean   prever, evaluar;
     int        horizonte;     /* -f L                                       */

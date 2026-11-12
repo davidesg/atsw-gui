@@ -185,25 +185,111 @@ int of_parse( const char *texto, Forecast *f )
    return ( f->ns || f->tiene_ev ) ? 0 : 1;
 }
 
-int of_parse_file( const char *path, Forecast *f )
+static char *lee_todo( const char *path )
 {
    FILE *fp = fopen( path, "rb" );
    char *b;
    long  n;
+
+   if ( !fp ) return NULL;
+   fseek( fp, 0, SEEK_END );  n = ftell( fp );  fseek( fp, 0, SEEK_SET );
+   b = malloc( n + 1 );
+   if ( !b ) { fclose( fp ); return NULL; }
+   n = (long) fread( b, 1, n, fp );
+   b[n] = 0;
+   fclose( fp );
+   return b;
+}
+
+int of_parse_file( const char *path, Forecast *f )
+{
+   char *b = lee_todo( path );
    int   rc;
 
    memset( f, 0, sizeof *f );
    f->decomp = -1;
-   if ( !fp ) return -1;
-
-   fseek( fp, 0, SEEK_END );  n = ftell( fp );  fseek( fp, 0, SEEK_SET );
-   b = malloc( n + 1 );
-   if ( !b ) { fclose( fp ); return -1; }
-   n = (long) fread( b, 1, n, fp );
-   b[n] = 0;
-   fclose( fp );
+   if ( !b ) return -1;
 
    rc = of_parse( b, f );
+   free( b );
+   return rc;
+}
+
+/* Una linea en blanco: solo espacios (y el \r de un .out de Windows). */
+static int en_blanco( const char *l )
+{
+   while ( *l == ' ' || *l == '\t' || *l == '\r' ) l++;
+   return !*l;
+}
+
+int of_tabla( const char *texto, const char *nombre, char *buf, size_t size )
+{
+   const char *p = texto, *ini = NULL, *fin = NULL, *q;
+   char        l[512];
+   int         filas = 0;
+
+   if ( size ) buf[0] = 0;
+   if ( !texto || !nombre || size < 2 ) return 1;
+
+   /* «FORECAST REPORT» y, unas lineas despues, «VARIABLE NAME: nombre». El
+    * principio del bloque es el primero; la serie la dice el segundo.   */
+   while ( p && *p ) {
+      q = linea( p, l, sizeof l );
+      if ( strstr( l, "FORECAST REPORT" ) ) ini = p;
+      else if ( ini && strstr( l, "VARIABLE NAME" ) ) {
+         char nm[OF_NOMBRE];
+         const char *dp = strchr( l, ':' );
+
+         if ( dp && sscanf( dp + 1, " %63s", nm ) == 1 && !strcmp( nm, nombre ) ) {
+            p = q;
+            break;
+         }
+         ini = NULL;
+      }
+      p = q;
+   }
+   if ( !ini || !p ) return 1;
+
+   /* El final: la linea que cierra despues de las filas. En el formato de
+    * drtran es un «+---»; en el de fuf, una linea en blanco.           */
+   while ( p && *p ) {
+      OfFila fila;
+
+      q = linea( p, l, sizeof l );
+      if ( lee_fila( l, &fila ) ) filas++;
+      else if ( filas > 0 ) {
+         const char *t = l;
+
+         while ( *t == ' ' ) t++;
+         fin = ( *t == '+' ) ? q : p;
+         if ( *t == '+' || en_blanco( l ) ) break;
+         fin = NULL;
+      }
+      p = q;
+   }
+   if ( !filas ) return 1;
+   if ( !fin ) fin = p ? p : texto + strlen( texto );
+
+   {
+   size_t n = (size_t)( fin - ini );
+
+   if ( n >= size ) n = size - 1;
+   memcpy( buf, ini, n );
+   /* sin el salto de linea del final: la ventana pone el suyo */
+   while ( n > 0 && ( buf[n - 1] == '\n' || buf[n - 1] == '\r' ) ) n--;
+   buf[n] = 0;
+   }
+   return 0;
+}
+
+int of_tabla_file( const char *path, const char *nombre, char *buf, size_t size )
+{
+   char *b = lee_todo( path );
+   int   rc;
+
+   if ( size ) buf[0] = 0;
+   if ( !b ) return 1;
+   rc = of_tabla( b, nombre, buf, size );
    free( b );
    return rc;
 }

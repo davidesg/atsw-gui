@@ -203,6 +203,25 @@ static void tabla_fuf( void )
        "  una serie que no esta: 1 y nada" );
    ok( of_parse( out, &g ) == 0 && g.s[0].nf == 4 && g.s[0].nprev == 2,
        "  of_parse la lee: 4 filas, 2 de prevision" );
+   ok( g.s[0].lead == 2 && !strcmp( g.s[0].origen, "12/2025" ),
+       "  con el plazo de su linea propia y el origen" );
+
+   /* Una serie anual: la fecha es el anio solo. */
+   {
+   static const char *anual =
+      "FORECAST REPORT: \n"
+      "VARIABLE NAME: PIB\n"
+      "FORECAST ORIGIN : 2024\n"
+      "LEAD TIME FOR FORECASTING: 1\n"
+      "     2023    100.0000        -    1.0000        -         -        -    0.1000\n"
+      "     2024    101.0000        -    1.0000        -         -        -    0.2000\n"
+      "     2025    102.0000   1.5000    1.0000   1.5000         -        -         -\n"
+      "\n";
+
+   ok( of_parse( anual, &g ) == 0 && g.s[0].nf == 3 && g.s[0].nprev == 1
+       && !strcmp( g.s[0].f[2].fecha, "2025" ),
+       "  una serie anual: la fecha es el anio solo" );
+   }
 }
 
 int main( int argc, char **argv )

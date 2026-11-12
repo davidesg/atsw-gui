@@ -1927,38 +1927,49 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
         ystar = vector(1, nb + L);
         for (t = 1; t <= nb + L; t++) ystar[t] = YS[i][t];
 
+        /* LA TABLA DE fuf (forecast_table_acii, engines/fuf/src/usfo.c): sus
+           cabeceras, sus rotulos, sus columnas y sus cuatro decimales, para
+           que el analista lea la misma tabla en fue y aqui. Con una
+           diferencia, y es a proposito: cada campo lleva al menos un espacio
+           delante. En fuf van pegados (%9.4f%7.4f...), y con un nivel de
+           1000 o una desviacion de 10 dos numeros se juntan en uno -- con WTI
+           (d.t. hasta 45) o el m6 (niveles de 5000) pasaba en cada fila.
+           Las unidades son las de esta tabla: la variacion en % si el modelo
+           va en logaritmos; si no, en las unidades de la serie.           */
         obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, nb, &per, &yr);
-        fprintf(out, "\n  FORECAST REPORT\n");
-        fprintf(out, "    VARIABLE NAME  : %s\n", Ts[i].name ? Ts[i].name : "");
-        if (freq > 1) fprintf(out, "    FORECAST ORIGIN: %2d/%-4d", per, yr);
-        else          fprintf(out, "    FORECAST ORIGIN: %-4d", yr);
-        fprintf(out, "    LEAD TIME: %d\n\n", L);
-        fprintf(out, "   +--------------------------------------------------------------------+\n");
-        fprintf(out, "   |         |      LEVEL       |           VARIATION            |       |\n");
-        fprintf(out, "   |  DATE   +-----------------+-------------------------------+  ERR  |\n");
-        fprintf(out, "   |         |   VALUE  |  STD |  PERIOD |  STD  | ANNUAL |  STD |       |\n");
-        fprintf(out, "   +--------------------------------------------------------------------+\n");
+        fprintf(out, "\nFORECAST REPORT: \n");
+        fprintf(out, "VARIABLE NAME: %s\n", Ts[i].name ? Ts[i].name : "");
+        if (freq > 1) fprintf(out, "FORECAST ORIGIN : %2d/%4d\n", per, yr);
+        else          fprintf(out, "FORECAST ORIGIN : %4d\n", yr);
+        fprintf(out, "LEAD TIME FOR FORECASTING: %d\n\n", L);
+        fprintf(out, " +----------------------------------------------------------------------------+\n");
+        fprintf(out, " |       |       LEVEL        |              VARIATION              |         |\n");
+        fprintf(out, " | DATE  +--------------------+-------------------------------------+   ERR   |\n");
+        fprintf(out, " |       |   VALUE   |  STD   | TRIMEST |  STD   |  ANUAL  |  STD   |         |\n");
+        fprintf(out, " |       |           |        |  /MONT  |        |         |        |         |\n");
+        fprintf(out, " +----------------------------------------------------------------------------+\n");
 
         /* Filas OBSERVADAS: las ultimas L+1 (origen incluido). */
         for (obs = nb - L; obs <= nb; obs++) {
             if (obs < 1) continue;
             obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, obs, &per, &yr);
-            if (freq > 1) fprintf(out, "   %2d/%-4d ", per, yr);
-            else          fprintf(out, "   %-6d ", yr);
-            fprintf(out, "%9.2f    -   ", Ts[i].data[obs]);
-            if (obs - 1 >= 1) fprintf(out, "%8.2f    -   ", vscale * (ystar[obs] - ystar[obs-1]));
-            else              fprintf(out, "    -        -   ");
-            if (obs - freq >= 1) fprintf(out, "%7.2f    -  ", vscale * (ystar[obs] - ystar[obs-freq]));
-            else                 fprintf(out, "   -        -  ");
+            if (freq > 1) fprintf(out, "  %2d/%4d", per, yr);
+            else          fprintf(out, "     %4d", yr);
+            fprintf(out, "%12.4f%9s", Ts[i].data[obs], "-");
+            if (obs - 1 >= 1) fprintf(out, "%10.4f%9s", vscale * (ystar[obs] - ystar[obs-1]), "-");
+            else              fprintf(out, "%10s%9s", "-", "-");
+            if (freq > 1 && obs - freq >= 1)
+                 fprintf(out, "%10.4f%9s", vscale * (ystar[obs] - ystar[obs-freq]), "-");
+            else fprintf(out, "%10s%9s", "-", "-");
             if (obs - ord >= 1 && obs - ord <= n_stat)
                 /* a esta indexada [tiempo][serie], como en todo el resto del
                    fichero.  Aqui estaba al reves -- a[i][obs-ord] --, asi que
                    la columna ERR leia de OTRA posicion del bloque contiguo de
                    residuos: valores que parecen residuos porque LO SON, pero de
                    la observacion equivocada.  Por eso nunca canto.             */
-                fprintf(out, "%7.2f\n", vscale * vf.a[obs - ord][i]);
+                fprintf(out, "%10.4f\n", vscale * vf.a[obs - ord][i]);
             else
-                fprintf(out, "    -  \n");
+                fprintf(out, "%10s\n", "-");
         }
         /* Filas de PREVISION. */
         for (l = 1; l <= L; l++) {
@@ -1968,15 +1979,15 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
             real f2  = ystar[nb + l] - ystar[nb + l - 1];
             real f3  = (nb + l - freq >= 1) ? ystar[nb + l] - ystar[nb + l - freq] : 0.0;
             obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, nb + l, &per, &yr);
-            if (freq > 1) fprintf(out, "   %2d/%-4d ", per, yr);
-            else          fprintf(out, "   %-6d ", yr);
-            fprintf(out, "%9.2f %6.2f ", LVL[i][l], vscale * sd1);
-            fprintf(out, "%8.2f %6.2f ", vscale * f2, vscale * sd2);
-            if (freq > 1) fprintf(out, "%7.2f %6.2f", vscale * f3, vscale * sd3);
-            else          fprintf(out, "    -       - ");
-            fprintf(out, "    -  \n");
+            if (freq > 1) fprintf(out, "  %2d/%4d", per, yr);
+            else          fprintf(out, "     %4d", yr);
+            fprintf(out, "%12.4f%9.4f", LVL[i][l], vscale * sd1);
+            fprintf(out, "%10.4f%9.4f", vscale * f2, vscale * sd2);
+            if (freq > 1) fprintf(out, "%10.4f%9.4f", vscale * f3, vscale * sd3);
+            else          fprintf(out, "%10s%9s", "-", "-");
+            fprintf(out, "%10s\n", "-");
         }
-        fprintf(out, "   +--------------------------------------------------------------------+\n");
+        fprintf(out, " +----------------------------------------------------------------------------+\n");
         free_vector(ystar, 1, nb + L);
     }
 

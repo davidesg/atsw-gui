@@ -23,7 +23,7 @@ cd "$(dirname "$0")/../.." || exit 2
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 C=tests/cases
 lvl() {   # the level forecast of ES_CPI for a date, from a .out
-    awk -v d="$2" '/VARIABLE NAME  : ES_CPI/{f=1} f && $1==d {print $2; exit}' "$1"
+    awk -v d="$2" '/VARIABLE NAME: ES_CPI/{f=1} f && $1==d {print $2; exit}' "$1"
 }
 ./bin/drtran $C/ES_CPI_airline.pre $C/WTI_ar1.pre -0 -f 12 -o $T/first.out  >/dev/null 2>&1
 ./bin/drtran $C/WTI_ar1.pre $C/ES_CPI_airline.pre -0 -f 12 -o $T/second.out >/dev/null 2>&1

@@ -338,11 +338,22 @@ Medido con fuf y drtran sobre IPC_ES ← WTI (`engines/drtran/examples/passthrou
 | fase | qué |
 |---|---|
 | **P1** ✓ | El gráfico de fuf, a `lib/fufplot`. fuf lo llama de ahí, y su EPS no cambia ni un byte. drtran_gui dibuja con él. La ventana enseña la tabla del `.out` tal cual (`of_tabla`), así que con P2 sale ya en el formato de fuf |
-| **P2** | La tabla del `.out` de drtran en el formato exacto de fuf; `lib/outfcst` lee los dos; los goldens |
+| **P2** ✓ | La tabla del `.out` de drtran en el formato de fuf: sus cabeceras, rótulos, columnas y cuatro decimales, con un espacio garantizado entre campos (ver abajo). `lib/outfcst`, la batería de drtran y `.github/revision/numeros.py` leen la nueva |
 | **P3** | drtran_gui: la evaluación frente al univariante con la misma ventana (ratio del RMSE, DM) |
 | **P4** | drtran_gui: la IRF y la SRF dibujadas con sus bandas (`lib/fugdraw`) |
 | **P5** | La auditoría de «Al cuaderno» en drtran_gui y en sim_gui |
 | **P6** | sim_gui: el gráfico de fuf, la tabla de drvarma en el formato de fuf, y la IRF y la SRF dibujadas |
+
+**Un defecto de fuf, sin tocar** (lo vio P2): `forecast_table_acii`
+(`engines/fuf/src/usfo.c`) escribe los campos pegados (`%9.4f%7.4f…`). Con
+un nivel de 1000 o más, el valor se junta con la fecha (` 12/20241234.5678`),
+y con una desviación de 10 o más, con el número de al lado. La tabla se lee
+mal a ojo y no se puede leer a máquina. fuf funciona y no se toca sin decidirlo:
+falta abrir su BUG con repro. drtran no lo copia: deja un espacio entre campos.
+Tampoco copia otras dos cosas de fuf: con λ ≠ 0 la variación va en las unidades
+de la serie (fuf la multiplica por 100), y con λ < 0 no escribe la segunda
+tabla de fuf (bandas y nivel transformado), porque la de drtran ya da el nivel
+deshecho.
 
 ## Lo demás, por documento
 

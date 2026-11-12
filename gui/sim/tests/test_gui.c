@@ -744,9 +744,49 @@ int main( int argc, char **argv )
         check( !g_strcmp0( s, "ec1" ), "la última fila de residuos es el error de equilibrio (ec1)", s ); g_free( s );
         check( contiene( etiqueta( j->pd.ver_hosking ), "Hosking" ), "Hosking, de la salida de drvec",
                etiqueta( j->pd.ver_hosking ) );
-        check( gtk_widget_is_sensitive( GTK_WIDGET(j->tb_diag) ) && !gtk_widget_is_sensitive( GTK_WIDGET(j->tb_prev) ) &&
-               contiene( gtk_widget_get_tooltip_text( GTK_WIDGET(j->tb_prev) ), "sima" ),
-               "con un VEC: Diagnosis sí, Prever no (lo dice)", gtk_widget_get_tooltip_text( GTK_WIDGET(j->tb_prev) ) );
+        check( gtk_widget_is_sensitive( GTK_WIDGET(j->tb_diag) ) && gtk_widget_is_sensitive( GTK_WIDGET(j->tb_prev) ) &&
+               !gtk_widget_is_sensitive( GTK_WIDGET(j->tb_ver) ) &&
+               contiene( gtk_widget_get_tooltip_text( GTK_WIDGET(j->tb_ver) ), "α β′" ),
+               "con un VEC: Diagnosis y Prever sí; Ver modelo no (lo dice)",
+               gtk_widget_get_tooltip_text( GTK_WIDGET(j->tb_ver) ) );
+
+        /* --- S10c: la prevision y la evaluacion del VEC ------------------ */
+        gtk_spin_button_set_value( GTK_SPIN_BUTTON(j->pv.s_hor), 4 );
+        gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(j->pv.c_eval), TRUE );
+        gtk_spin_button_set_value( GTK_SPIN_BUTTON(j->pv.s_win), 40 );
+        check( prevision_calcular( j ), "Calcular arranca con un VEC", etiqueta( j->estado ) );
+        {
+            gint64 hasta = g_get_monotonic_time() + 240 * G_USEC_PER_SEC;
+            while (j->pv.corriendo && g_get_monotonic_time() < hasta) pump( 20 );
+            pump( 50 );
+        }
+        check( j->pv.es_vec && j->pv.nfvec == 4 && j->pv.fvec[0].nf == 4,
+               "la previsión del VEC: cuatro series, cuatro periodos", etiqueta( j->estado ) );
+        check( contiene( etiqueta( j->pv.ver_pide ), "Previsión del VEC" ), "y la página lo dice",
+               etiqueta( j->pv.ver_pide ) );
+        check( filas( j->pv.l_eval ) == 16 && contiene( etiqueta( j->pv.ver_eval ), "mismos" ),
+               "la evaluación: 4 series × 4 horizontes, sobre los mismos orígenes que los univariantes",
+               etiqueta( j->pv.ver_eval ) );
+        {
+            GtkTreeModel *tm = gtk_tree_view_get_model( GTK_TREE_VIEW(j->pv.l_eval) );
+            GtkTreeIter it;
+            int n0 = -1;
+            if (gtk_tree_model_get_iter_first( tm, &it )) gtk_tree_model_get( tm, &it, 2, &n0, -1 );
+            gchar *vn = g_strdup_printf( "%d", n0 );
+            /* drvec guarda un origen solo si se pueden comprobar los H pasos:
+               con E = 40 de 55 y H = 4, del 39 al 50 (sima, evaluate_vec) */
+            check( n0 == 12, "12 orígenes (los que comprueban los 4 pasos; E = 40 de 55)", vn );
+            g_free( vn );
+        }
+        {
+            GtkTextBuffer *tb = gtk_text_view_get_buffer( GTK_TEXT_VIEW(j->pv.t_irf) );
+            GtkTextIter a0, a1;
+            gchar *tx;
+            gtk_text_buffer_get_bounds( tb, &a0, &a1 );
+            tx = gtk_text_buffer_get_text( tb, &a0, &a1, FALSE );
+            check( contiene( tx, "EN NIVELES" ) && strlen( tx ) > 300, "la IRF del VEC, en niveles", NULL );
+            g_free( tx );
+        }
 
         /* otra configuracion: la prueba ya no es de esta */
         gtk_spin_button_set_value( GTK_SPIN_BUTTON(j->pr.s_p), 3 );

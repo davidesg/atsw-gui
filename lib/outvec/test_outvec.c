@@ -108,6 +108,37 @@ int main( int argc, char **argv )
        "weakex: IBO debilmente exogena, LR 0.0003 con 1 gl, p 0.99 (sima)" );
    ok( v.nlr == 1 && cerca( v.lr[0].libre, -324.3522, 2e-3 ), "weakex: la logL libre es la del VEC" );
 
+   /* --- la prevision y la evaluacion (S10c) ------------------------------- */
+   {
+      static OvecPrev pv[OVEC_MAX_SER];
+      OvecRec rc;
+      char *irf, *fevd;
+      int n, i, k40 = 0;
+
+      snprintf( p, sizeof p, "%s/prev.forecast", dir );
+      n = ovec_forecast_file( p, pv, OVEC_MAX_SER );
+      ok( n == 4 && !strcmp( pv[0].nombre, "LRY" ) && !strcmp( pv[3].nombre, "LRM" ) && pv[0].nf == 8,
+          "prevision: cuatro series, en el orden de la orden, 8 periodos" );
+      ok( n == 4 && !strcmp( pv[0].fecha[0], "4/1987" ) && pv[0].lo[0] < pv[0].nivel[0] &&
+          pv[0].nivel[0] < pv[0].hi[0] && pv[0].se[0] > 0, "prevision: desde 4/1987, con su banda" );
+      snprintf( p, sizeof p, "%s/ev.recursive", dir );
+      ok( ovec_recursive_file( p, &rc ) == 0 && rc.estwin == 39 && rc.horizonte == 4,
+          "evaluacion: el .recursive, con estwin y horizonte" );
+      for ( i = 0; i < rc.nf; i++ ) k40 += rc.f[i].origen == 39 && rc.f[i].h == 1;
+      ok( rc.nf > 100 && k40 == 4 && fabs( rc.f[0].real - rc.f[0].prevision - rc.f[0].error ) < 1e-6,
+          "evaluacion: una fila por origen, horizonte y serie; error = real - prevision" );
+      ovec_recursive_free( &rc );
+      lee( dir, "prev.out", &v );
+      ok( v.nobs_raw == 55 && v.nobs == 54, "la muestra: 54 observaciones de 55 en los ficheros" );
+      snprintf( p, sizeof p, "%s/prev.out", dir );
+      irf  = ovec_seccion_file( p, "Impulse Response of the Levels" );
+      fevd = ovec_seccion_file( p, "Forecast Error Variance Decomposition, in Levels" );
+      ok( irf && strlen( irf ) > 200 && !strstr( irf, "Long-Run Gain" ), "la IRF en niveles, sin la seccion siguiente" );
+      ok( fevd && strlen( fevd ) > 200, "la descomposicion de la varianza, en niveles" );
+      ok( ovec_seccion_file( p, "No existe" ) == NULL, "una seccion que no esta: NULL" );
+      free( irf ); free( fevd );
+   }
+
    /* --- lo que no viene de drvec ------------------------------------------ */
    {
    const char *todas =

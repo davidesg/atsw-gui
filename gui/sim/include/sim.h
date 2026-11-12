@@ -209,6 +209,15 @@ typedef struct {
     VarmaOut  *ve;            /* la evaluacion del sistema (-estwin)      */
     VarmaOut  *vd;            /* la del diagonal, con la misma ventana    */
     int        version;       /* la estimacion de la que se previo        */
+    /* CON UN VEC (S10c): la prevision de drvec (-f), su evaluacion
+     * (-estwin, el .recursive) y la del diagonal de drvarma, alineadas por
+     * el origen contado desde el final (la regla de sima, evaluate_vec). */
+    gboolean   es_vec;
+    OvecPrev  *fvec;          /* OVEC_MAX_SER, en el monton                */
+    int        nfvec;
+    OvecRec    rvec;
+    int        vec_nobs_raw;
+    OvRecursive rdiag;
 } PagPrev;
 
 typedef struct {

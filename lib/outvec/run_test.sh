@@ -30,5 +30,7 @@ corre() {   # corre NOMBRE ARGS...
 corre rango LRM_u.pre LRY_u.pre IBO_u.pre IDE_u.pre 2 0 0 -case 2 -lrtest
 corre vec1  LRY_u.pre IBO_u.pre IDE_u.pre LRM_u.pre 2 0 1 -case 2 -fdhess
 corre wx    LRY_u.pre IBO_u.pre IDE_u.pre LRM_u.pre 2 0 1 -case 2 -weakex 2
+corre prev  LRY_u.pre IBO_u.pre IDE_u.pre LRM_u.pre 2 0 1 -case 2 -f 8
+corre ev    LRY_u.pre IBO_u.pre IDE_u.pre LRM_u.pre 2 0 1 -case 2 -f 4 -estwin 39
 
 "$W/test_outvec" "$W" "$AQUI/datos"

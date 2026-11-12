@@ -175,8 +175,8 @@ static void barra_refresca( Sim *m )
                                        "Estimar (Ctrl+E) lo hace.";
     /* CON UN VEC, la diagnosis si; la pagina del modelo y la prevision son
      * todavia del VARMA (la del VEC la hace sima: forecast).            */
-    const char *sin_vec = "Con un VEC, todavía no: en sim_gui son del VARMA. La previsión del VEC "
-                          "la hace sima (forecast).";
+    const char *sin_vec = "Con un VEC, la página del modelo todavía no: la ecuación con α β′ "
+                          "está en «6 · Diagnosis ▸ Ajuste» y en el .out.";
 
     if (!m->tb_estimar) return;
     falta = corre ? "El motor ya está corriendo."
@@ -190,8 +190,8 @@ static void barra_refresca( Sim *m )
     enciende( m->tb_ver, hay, "La página del modelo de la primera serie: sus residuos con la ACF "
               "y la PACF y, debajo, su ecuación como la escribe fue, con los términos cruzados "
               "en la línea del ruido. La flecha: las demás series.", vec ? sin_vec : sin );
-    enciende( m->tb_prev, hay && !m->pv.corriendo, "Calcular la previsión, en «7 · Previsión»",
-              vec ? sin_vec : sin );
+    enciende( m->tb_prev, ( hay || vec ) && !m->pv.corriendo, "Calcular la previsión, en «7 · Previsión»",
+              sin );
 }
 
 static void estado_new( Sim *m, GtkWidget *raiz )

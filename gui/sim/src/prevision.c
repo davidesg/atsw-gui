@@ -24,6 +24,15 @@
  *
  * La respuesta al impulso y la descomposicion ya estan en el .out de la
  * estimacion (lib/outvarma): se ensenan sin correr nada.
+ *
+ * CON UN VEC (S10c), lo mismo con drvec: -f H a <modelo>_prev, y con
+ * evaluacion -f H -estwin E-1 (E-1 filas de nabla Y: las mismas
+ * observaciones que las E primeras de los univariantes) a <modelo>_eval; los
+ * univariantes, el diagonal de drvarma con -estwin E. Los ORIGENES se
+ * cuentan hacia atras desde el final --drvec numera filas, drvarma da
+ * fechas-- y se comparan solo los comunes, con el valor real de drvec
+ * (sima, evaluate_vec). La IRF y la FEVD del VEC, en niveles, son las
+ * secciones del .out de la estimacion.
  */
 
 /* Antes que GTK: main.h de drvarma define TRUE y FALSE. */
@@ -63,21 +72,59 @@ static gboolean lanza( Sim *m, int paso );
 
 static const char *sufijo( int paso ) { return paso == 1 ? "" : paso == 2 ? "_eval" : "_diag"; }
 
+/* Lo que deja un paso del VEC: la prevision (1), la evaluacion (2) o el
+ * diagonal con su .recursive (3). TRUE si se leyo.                     */
+static gboolean lee_vec( Sim *m, const char *base )
+{
+    PagPrev *P = &m->pv;
+    gchar *f;
+    gboolean ok = FALSE;
+
+    if (P->paso == 1) {
+        if (!P->fvec) P->fvec = g_new0( OvecPrev, OVEC_MAX_SER );
+        f = g_strdup_printf( "%s.forecast", base );
+        P->nfvec = ovec_forecast_file( f, P->fvec, OVEC_MAX_SER );
+        ok = P->nfvec > 0;
+    } else if (P->paso == 2) {
+        VecOut *o = g_new0( VecOut, 1 );
+        gchar *out = g_strdup_printf( "%s.out", base );
+        ovec_recursive_free( &P->rvec );
+        f = g_strdup_printf( "%s.recursive", base );
+        ok = ovec_recursive_file( f, &P->rvec ) == 0;
+        if (ovec_parse_file( out, o ) == 0) P->vec_nobs_raw = o->nobs_raw;
+        g_free( o ); g_free( out );
+    } else {
+        g_free( P->vd ); P->vd = lee( base );
+        ov_recursive_free( &P->rdiag );
+        f = g_strdup_printf( "%s.recursive", base );
+        ok = ov_recursive_file( f, &P->rdiag ) == 0;
+    }
+    g_free( f );
+    return ok;
+}
+
 static void on_done( const EngineResult *r, gpointer data )
 {
     Sim *m = data;
     PagPrev *P = &m->pv;
     gchar *base = g_strdup_printf( "%s%s", P->base, sufijo( P->paso ) );
-    VarmaOut *v = lee( base );
+    VarmaOut *v = NULL;
+    gboolean leido;
 
-    g_free( base );
     P->trabajo = NULL;
-    if (P->paso == 1)      { g_free( P->v );  P->v = v; }
-    else if (P->paso == 2) { g_free( P->ve ); P->ve = v; }
-    else                   { g_free( P->vd ); P->vd = v; }
+    if (P->es_vec)
+        leido = lee_vec( m, base );
+    else {
+        v = lee( base );
+        leido = v != NULL;
+        if (P->paso == 1)      { g_free( P->v );  P->v = v; }
+        else if (P->paso == 2) { g_free( P->ve ); P->ve = v; }
+        else                   { g_free( P->vd ); P->vd = v; }
+    }
+    g_free( base );
 
     /* Con evaluacion, el sistema con -estwin y despues el diagonal. */
-    if (P->paso < 3 && r->status == 0 && v && m->ventana && P->c_eval &&
+    if (P->paso < 3 && r->status == 0 && leido && m->ventana && P->c_eval &&
         gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(P->c_eval) ) && lanza( m, P->paso + 1 ))
         return;
 
@@ -87,7 +134,8 @@ static void on_done( const EngineResult *r, gpointer data )
     P->version = m->pe.version;
     sim_refresca( m );
     if (r->status != 0)
-        sim_estado( m, "drvarma salió con %d al prever: %s", r->status, r->message );
+        sim_estado( m, "%s salió con %d al prever: %s", P->es_vec && P->paso < 3 ? "drvec" : "drvarma",
+                    r->status, r->message );
     else
         sim_estado( m, "Previsión lista%s.", P->vd ? ", y evaluada contra los univariantes" : "" );
 }
@@ -107,6 +155,27 @@ static gboolean lanza( Sim *m, int paso )
     snprintf( win, sizeof win, "%d", gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(P->s_win) ) );
     if (paso == 3) { mo.p = mo.q = 0; mo.diagcov = 1; }
     salida = g_strdup_printf( "%s%s", P->base, sufijo( paso ) );
+    if (P->es_vec && paso < 3) {
+        /* drvec: -f H [-estwin E-1] delante de «-name NOMBRE»; E-1 filas de
+           nabla Y son las E primeras observaciones de los univariantes. */
+        gchar *nom = g_path_get_basename( salida );
+        char w1[16];
+        snprintf( w1, sizeof w1, "%d", atoi( win ) - 1 );
+        k = sis_orden_vec( &m->sis, &m->mod, nom, buf, sizeof buf, av, G_N_ELEMENTS(av) - 6 );
+        if (k < 2) { g_free( nom ); g_free( salida ); return FALSE; }
+        k -= 2;
+        av[k++] = "-f";
+        av[k++] = hor;
+        if (paso > 1) { av[k++] = "-estwin"; av[k++] = w1; }
+        av[k++] = "-name";
+        av[k++] = nom;
+        av[k] = NULL;
+        dir = g_path_get_dirname( salida );
+        P->paso = paso;
+        P->trabajo = engine_start( dir, "drvec", av, NULL, NULL, on_done, m );
+        g_free( dir ); g_free( salida ); g_free( nom );
+        return P->trabajo != NULL;
+    }
     k = sis_orden_modelo( &m->sis, &mo, salida, buf, sizeof buf, av, G_N_ELEMENTS(av) - 6 );
     if (k < 2) { g_free( salida ); return FALSE; }
     /* -forecast H [-estwin N], delante de «-o SALIDA» (los dos ultimos). */
@@ -132,12 +201,14 @@ gboolean prevision_calcular( Sim *m )
     gchar *mot, *nom;
 
     if (P->corriendo || m->pe.corriendo || m->pp.corriendo) return FALSE;
-    if (!m->pe.v || m->pe.v->fallo) {
+    P->es_vec = m->pe.vec && m->pe.vec->hay_vec;
+    if (!P->es_vec && ( !m->pe.v || m->pe.v->fallo )) {
         sim_estado( m, "Antes, un sistema estimado («5 · Estimación»)." );
         return FALSE;
     }
-    if (!( mot = sim_hermano( "drvarma" ) )) {
-        sim_estado( m, "No pude lanzar drvarma: ni al lado de sim_gui ni en el PATH." );
+    if (!( mot = sim_hermano( P->es_vec ? "drvec" : "drvarma" ) )) {
+        sim_estado( m, "No pude lanzar %s: ni al lado de sim_gui ni en el PATH.",
+                    P->es_vec ? "drvec" : "drvarma" );
         return FALSE;
     }
     g_free( mot );
@@ -149,10 +220,14 @@ gboolean prevision_calcular( Sim *m )
     g_free( P->v ); P->v = NULL;
     g_free( P->ve ); P->ve = NULL;
     g_free( P->vd ); P->vd = NULL;
-    if (!lanza( m, 1 )) { sim_estado( m, "No pude lanzar drvarma." ); return FALSE; }
+    P->nfvec = 0;
+    ovec_recursive_free( &P->rvec );
+    ov_recursive_free( &P->rdiag );
+    if (!lanza( m, 1 )) { sim_estado( m, "No pude lanzar el motor." ); return FALSE; }
     P->corriendo = TRUE;
     if (m->avance) { gtk_widget_show( m->avance ); g_timeout_add( 120, pulso, m ); }
-    sim_estado( m, "drvarma prevé%s…", gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(P->c_eval) )
+    sim_estado( m, "%s prevé%s…", P->es_vec ? "drvec" : "drvarma",
+                gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(P->c_eval) )
                 ? " y evalúa (después, los univariantes con la misma ventana)" : "" );
     sim_refresca( m );
     return TRUE;
@@ -260,11 +335,33 @@ static void on_grafico( GtkButton *b, Sim *m )
 
 /* --- las tablas ------------------------------------------------------------ */
 
+static void texto_prev_vec( Sim *m )
+{
+    PagPrev *P = &m->pv;
+    GString *g = g_string_new( NULL );
+    int k, j;
+
+    for (k = 0; k < P->nfvec; k++) {
+        const OvecPrev *x = &P->fvec[k];
+        g_string_append_printf( g, "%s (banda del 95 %%, teórica; en logaritmos, la mediana):\n", x->nombre );
+        g_string_append_printf( g, "  %-10s %14s %14s %14s %10s\n", "fecha", "nivel", "inferior",
+                                "superior", "d.t." );
+        for (j = 0; j < x->nf; j++)
+            g_string_append_printf( g, "  %-10s %14.4f %14.4f %14.4f %10.5f\n", x->fecha[j],
+                                    x->nivel[j], x->lo[j], x->hi[j], x->se[j] );
+        g_string_append_c( g, '\n' );
+    }
+    gtk_text_buffer_set_text( gtk_text_view_get_buffer( GTK_TEXT_VIEW(P->t_prev) ), g->str, -1 );
+    g_string_free( g, TRUE );
+}
+
 static void texto_prev( Sim *m )
 {
     PagPrev *P = &m->pv;
     GString *g = g_string_new( NULL );
     int k, j;
+
+    if (P->es_vec) { g_string_free( g, TRUE ); texto_prev_vec( m ); return; }
 
     for (k = 0; P->v && k < P->v->nprev; k++) {
         const OvPrev *x = &P->v->prev[k];
@@ -280,10 +377,97 @@ static void texto_prev( Sim *m )
     g_string_free( g, TRUE );
 }
 
+/* La evaluacion del VEC: drvec y el diagonal de drvarma sobre los MISMOS
+ * origenes, contados hacia atras desde el final (sima, evaluate_vec): el de
+ * drvec es la fila de nabla Y, nobs_raw - (origen + 1); el de drvarma, una
+ * fecha. El real es el de drvec.                                        */
+static void evaluacion_vec( Sim *m )
+{
+    PagPrev *P = &m->pv;
+    GtkListStore *st = GTK_LIST_STORE(gtk_tree_view_get_model( GTK_TREE_VIEW(P->l_eval) ));
+    const SisSerie *s0 = &m->sis.s[0];
+    long fin = (long) s0->fin_anio * s0->freq + s0->fin_per - 1;
+    GHashTable *real = g_hash_table_new_full( g_str_hash, g_str_equal, g_free, g_free );
+    int i, j, k, H = P->rvec.horizonte, gana = 0, total = 0, origenes;
+    GHashTable *og = g_hash_table_new( g_direct_hash, g_direct_equal );
+
+    gtk_list_store_clear( st );
+    if (P->rvec.nf == 0 || P->rdiag.nf == 0) {
+        sim_veredicto( P->ver_eval, SIM_AMBAR, P->nfvec ? "Sin evaluación: marca «Evaluar fuera de "
+                       "muestra» y calcula." : "" );
+        g_hash_table_destroy( real ); g_hash_table_destroy( og );
+        return;
+    }
+    /* los reales de drvec, por serie, horizonte y origen hacia atras */
+    for (k = 0; k < P->rvec.nf; k++) {
+        const OvecRecFila *x = &P->rvec.f[k];
+        int atras = P->vec_nobs_raw - ( x->origen + 1 );
+        double *a = g_new( double, 1 );
+        *a = x->real;
+        g_hash_table_insert( real, g_strdup_printf( "%s|%d|%d", x->serie, x->h, atras ), a );
+        g_hash_table_add( og, GINT_TO_POINTER(atras + 1) );
+    }
+    origenes = (int) g_hash_table_size( og );
+    for (i = 0; i < m->sis.n; i++)
+        for (j = 1; j <= H; j++) {
+            double sv = 0, su = 0;
+            int n = 0;
+            GtkTreeIter it;
+            gchar *a, *b, *c, *h;
+            for (k = 0; k < P->rdiag.nf; k++) {
+                const OvRecFila *d = &P->rdiag.f[k];
+                int per, anio, l;
+                long o;
+                gchar *key;
+                const double *re;
+                if (d->h != j || strcmp( d->serie, m->sis.s[i].nombre )) continue;
+                if (sscanf( d->origen, "%d/%d", &per, &anio ) != 2) continue;
+                o = (long) anio * s0->freq + per - 1;
+                key = g_strdup_printf( "%s|%d|%ld", d->serie, j, fin - o );
+                re = g_hash_table_lookup( real, key );
+                g_free( key );
+                if (!re) continue;
+                /* el error de drvec en ese mismo origen */
+                for (l = 0; l < P->rvec.nf; l++) {
+                    const OvecRecFila *x = &P->rvec.f[l];
+                    if (x->h == j && !strcmp( x->serie, d->serie ) &&
+                        P->vec_nobs_raw - ( x->origen + 1 ) == fin - o) {
+                        sv += x->error * x->error;
+                        su += ( *re - d->nivel ) * ( *re - d->nivel );
+                        n++;
+                        break;
+                    }
+                }
+            }
+            if (n == 0) continue;
+            sv = sqrt( sv / n ); su = sqrt( su / n );
+            total++; gana += sv < su;
+            h = g_strdup_printf( "%d", n );
+            a = g_strdup_printf( "%.6g", sv ); b = g_strdup_printf( "%.6g", su );
+            c = su > 0 ? g_strdup_printf( "%.3f", sv / su ) : g_strdup( "" );
+            gtk_list_store_append( st, &it );
+            gtk_list_store_set( st, &it, E_SER, m->sis.s[i].nombre, E_H, j, E_N, n, E_SIS, a, E_UNI, b,
+                                E_RAZ, c, -1 );
+            g_free( h ); g_free( a ); g_free( b ); g_free( c );
+        }
+    if (total)
+        sim_veredicto( P->ver_eval, gana * 2 > total ? SIM_VERDE : SIM_AMBAR,
+                       "Fuera de muestra, el VEC y los univariantes sobre los mismos %d orígenes (los "
+                       "de drvec: los que comprueban los %d pasos): el VEC prevé mejor en %d de %d "
+                       "series y horizontes (RMSE VEC / univariantes < 1).", origenes, H, gana, total );
+    else
+        sim_veredicto( P->ver_eval, SIM_AMBAR, "La evaluación del VEC y la de los univariantes no "
+                       "comparten orígenes: revisa la ventana." );
+    g_hash_table_destroy( real );
+    g_hash_table_destroy( og );
+}
+
 /* La evaluacion: el RMSE del sistema y el de los univariantes, por serie y
  * horizonte, y cuantas veces gana el sistema.                            */
 static void evaluacion( Sim *m )
 {
+    if (m->pv.es_vec) { evaluacion_vec( m ); return; }
+    {
     PagPrev *P = &m->pv;
     GtkListStore *st = GTK_LIST_STORE(gtk_tree_view_get_model( GTK_TREE_VIEW(P->l_eval) ));
     int k, j, gana = 0, total = 0;
@@ -321,10 +505,25 @@ static void evaluacion( Sim *m )
         sim_veredicto( P->ver_eval, SIM_AMBAR, "La evaluación del sistema, sin la de los univariantes "
                        "con la que compararla." );
 }
+}
 
-/* La IRF y la FEVD, del .out de la estimacion: no se corre nada. */
+/* La IRF y la FEVD, del .out de la estimacion: no se corre nada. Las del
+ * VEC son las de drvec, EN NIVELES (sus secciones del .out).            */
 static void irf_fevd( Sim *m )
 {
+    if (m->pe.vec && m->pe.vec->hay_vec && m->pe.out) {
+        char *a = ovec_seccion_file( m->pe.out, "Impulse Response of the Levels" );
+        char *b = ovec_seccion_file( m->pe.out, "Forecast Error Variance Decomposition, in Levels" );
+        gchar *ta = g_strdup_printf( "La respuesta al impulso del VEC, EN NIVELES (de drvec, tal "
+                                     "cual):\n%s", a ? a : "(el .out no la trae)\n" );
+        gchar *tb = g_strdup_printf( "La descomposición de la varianza del VEC, EN NIVELES (de drvec, "
+                                     "tal cual):\n%s", b ? b : "(el .out no la trae)\n" );
+        gtk_text_buffer_set_text( gtk_text_view_get_buffer( GTK_TEXT_VIEW(m->pv.t_irf) ), ta, -1 );
+        gtk_text_buffer_set_text( gtk_text_view_get_buffer( GTK_TEXT_VIEW(m->pv.t_fevd) ), tb, -1 );
+        free( a ); free( b ); g_free( ta ); g_free( tb );
+        return;
+    }
+    {
     PagPrev *P = &m->pv;
     const VarmaOut *v = m->pe.v;
     GString *g = g_string_new( NULL ), *h = g_string_new( NULL );
@@ -365,6 +564,7 @@ static void irf_fevd( Sim *m )
     g_string_free( g, TRUE );
     g_string_free( h, TRUE );
 }
+}
 
 void prevision_refresca( Sim *m )
 {
@@ -373,28 +573,39 @@ void prevision_refresca( Sim *m )
     int i;
 
     if (!P->b_calc) return;
-    gtk_widget_set_sensitive( P->b_calc, !P->corriendo && m->pe.v && !m->pe.v->fallo && !m->pe.corriendo );
+    {
+        gboolean vec = m->pe.vec && m->pe.vec->hay_vec;
+        gtk_widget_set_sensitive( P->b_calc, !P->corriendo && !m->pe.corriendo &&
+                                  ( vec || ( m->pe.v && !m->pe.v->fallo ) ) );
+        if (!P->corriendo) P->es_vec = vec;
+    }
     gtk_widget_set_sensitive( P->s_win, gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(P->c_eval) ) );
 
     /* Una prevision de otra estimacion ya no es la de esta. */
-    if (P->v && P->version != m->pe.version && !P->corriendo) {
+    if (( P->v || P->nfvec ) && P->version != m->pe.version && !P->corriendo) {
         g_free( P->v ); P->v = NULL;
         g_free( P->ve ); P->ve = NULL;
         g_free( P->vd ); P->vd = NULL;
+        P->nfvec = 0;
+        ovec_recursive_free( &P->rvec );
+        ov_recursive_free( &P->rdiag );
     }
-    if (m->pe.v && m->pe.v->nobs > 0 && !P->corriendo) {
-        int nobs = m->pe.v->nobs, w = gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(P->s_win) );
+    if (( ( m->pe.v && m->pe.v->nobs > 0 ) || ( m->pe.vec && m->pe.vec->nobs_raw > 0 ) ) && !P->corriendo) {
+        int nobs = m->pe.vec ? m->pe.vec->nobs_raw : m->pe.v->nobs;
+        int w = gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(P->s_win) );
         gtk_spin_button_set_range( GTK_SPIN_BUTTON(P->s_win), 10, nobs > 11 ? nobs - 1 : 11 );
         if (w <= 10 || w >= nobs) gtk_spin_button_set_value( GTK_SPIN_BUTTON(P->s_win), (int)( 0.75 * nobs ) );
     }
 
     if (P->corriendo)
-        sim_veredicto( P->ver_pide, SIM_AMBAR, "drvarma está previendo…" );
-    else if (m->pe.vec && !m->pe.corriendo)
-        sim_veredicto( P->ver_pide, SIM_AMBAR, "Con un VEC, la previsión, la evaluación y la respuesta "
-                       "al impulso todavía no están en sim_gui: las hace sima (forecast, evaluate, "
-                       "impulse_response). La respuesta al impulso del VEC, en niveles, está en "
-                       "«6 · Diagnosis ▸ Salida»." );
+        sim_veredicto( P->ver_pide, SIM_AMBAR, "%s está previendo…", P->es_vec ? "drvec" : "drvarma" );
+    else if (P->es_vec && !P->nfvec)
+        sim_veredicto( P->ver_pide, SIM_AMBAR, "La respuesta al impulso y la descomposición del VEC, en "
+                       "niveles, ya están (abajo). La previsión: «Calcular»." );
+    else if (P->es_vec)
+        sim_veredicto( P->ver_pide, SIM_VERDE, "Previsión del VEC%s%s, %d periodos, en el nivel de cada "
+                       "serie. Las bandas son TEÓRICAS; lo empírico es la evaluación.",
+                       m->pe.corrida[0] ? " " : "", m->pe.corrida, P->fvec[0].nf );
     else if (!m->pe.v || m->pe.v->fallo)
         sim_veredicto( P->ver_pide, SIM_AMBAR, "Pide un sistema estimado («5 · Estimación»)." );
     else if (!P->v)

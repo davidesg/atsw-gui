@@ -30,6 +30,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
+#include <glib/gstdio.h>
 
 #include "gui.h"
 #include "barra.h"
@@ -37,8 +38,9 @@
 #include "preview.h"
 #include "outfcst.h"
 #include "fufplot.h"
+#include "engine.h"
 
-enum { P_H, P_N, P_MAE, P_RMSE, P_MAPE, P_COMP, P_N_COLS };
+enum { P_H, P_N, P_MAE, P_RMSE, P_MAPE, P_UNI, P_RATIO, P_DM, P_COMP, P_N_COLS };
 
 /* ------------------------------------------------------------------------ */
 
@@ -48,7 +50,7 @@ static void refresca_tabla( Mtram *m )
     GtkListStore *st = GTK_LIST_STORE( gtk_tree_view_get_model(
                                            GTK_TREE_VIEW(P->lista) ) );
     GtkTreeIter   it;
-    char          b[64], c[64];
+    char          b[64], c[64], uni[64], rat[64], dmt[64];
     int           i;
 
     gtk_list_store_clear( st );
@@ -69,6 +71,30 @@ static void refresca_tabla( Mtram *m )
                       fabs( d ) < 0.05 ? "igual" : d < 0 ? "MEJOR" : "peor" );
         }
 
+        /* FRENTE AL UNIVARIANTE, con la misma ventana: su RMSE, el cociente y
+         * Diebold-Mariano. Las estrellas, como forecast_compare.py.     */
+        {
+        const FcHoriz *u = NULL;
+        int            j;
+
+        uni[0] = rat[0] = dmt[0] = 0;
+        if (P->hay_comp)
+            for (j = 0; j < P->comp.nh; j++)
+                if (P->comp.h[j].h == h->h) u = &P->comp.h[j];
+        if (u) {
+            snprintf( uni, sizeof uni, "%.6f", u->rmse_a );
+            snprintf( rat, sizeof rat, "%.3f  %s", u->ratio,
+                      fabs( u->ratio - 1.0 ) < 0.0005 ? "igual"
+                      : u->ratio < 1.0 ? "MEJOR" : "peor" );
+            if (u->dm_ok)
+                snprintf( dmt, sizeof dmt, "%+.2f  p = %.4f%s", u->dm, u->p,
+                          u->p < 0.05 ? " **" : u->p < 0.10 ? " *" : "" );
+            else
+                snprintf( dmt, sizeof dmt, "—" );
+        } else if (P->uni_corriendo)
+            snprintf( uni, sizeof uni, "calculando…" );
+        }
+
         snprintf( b, sizeof b, "%d", h->h );
         gtk_list_store_append( st, &it );
         gtk_list_store_set( st, &it,
@@ -77,6 +103,9 @@ static void refresca_tabla( Mtram *m )
             P_MAE,  g_strdup_printf( "%.6f", h->mae ),
             P_RMSE, g_strdup_printf( "%.6f", h->rmse ),
             P_MAPE, g_strdup_printf( "%.4f", h->mape ),
+            P_UNI,  uni,
+            P_RATIO, rat,
+            P_DM,   dmt,
             P_COMP, c,
             -1 );
     }
@@ -169,6 +198,26 @@ static void refresca_texto( Mtram *m )
             "ventana de estimación y pulsa\n«Calcular»: las bandas de arriba no "
             "se pueden contrastar con nada mientras no la haya." );
 
+    if (P->f.tiene_ev) {
+        if (P->hay_comp)
+            g_string_append( t,
+                "\n\nFrente al univariante —el diagonal, con la MISMA ventana y "
+                "los mismos orígenes—: el cociente es\nRMSE del modelo / RMSE "
+                "del univariante, y menos de 1 dice que la transferencia prevé "
+                "mejor.\nDiebold-Mariano contrasta si la diferencia es real: "
+                "DM > 0 a favor del modelo (HLN, t de N−1;\n** al 5 %, * al "
+                "10 %). A horizonte largo se apoya en pocos datos "
+                "independientes: los errores\nde h pasos solapan h−1." );
+        else if (P->uni_corriendo)
+            g_string_append( t,
+                "\n\nEvaluando el univariante con la misma ventana, para "
+                "comparar…" );
+        else if (P->evaluar)
+            g_string_append( t,
+                "\n\nNo hay comparación con el univariante: su evaluación no "
+                "llegó a hacerse (mira la barra de estado)." );
+    }
+
     if (P->tiene_ref)
         g_string_append_printf( t,
             "\n\nComparando con la guardada (%s). La columna de la derecha es "
@@ -186,7 +235,57 @@ void prevision_refresca( Mtram *m )
     /* El boton se apaga mientras el motor corre: no hay dos corridas a la vez,
      * y un boton que se puede pulsar y no hace nada miente.             */
     if (m->prev.b_calc)
-        gtk_widget_set_sensitive( m->prev.b_calc, !m->est.corriendo );
+        gtk_widget_set_sensitive( m->prev.b_calc,
+                                  !m->est.corriendo && !m->prev.uni_corriendo );
+}
+
+/* --- frente al univariante (fase P3) -------------------------------------- */
+
+static void on_uni_done( const EngineResult *r, gpointer data )
+{
+    Mtram *m = data;
+    Prev  *P = &m->prev;
+
+    P->uni_corriendo = FALSE;
+    P->uni_job = NULL;
+    P->hay_comp = r->status == 0 && P->csv_uni && P->csv_modelo &&
+                  fc_compara_csv( P->csv_uni, P->csv_modelo, &P->comp ) == 0;
+    if (P->hay_comp)
+        preview_show_status( m, "Comparado con el univariante: %d orígenes "
+                                "comunes, %d horizontes.",
+                             P->comp.origenes, P->comp.nh );
+    else
+        preview_show_status( m, "La evaluación del univariante no salió: %s",
+                             r->message ? r->message : "" );
+    prevision_refresca( m );
+    estima_refresca( m );
+    mtram_barra_refresca( m );
+}
+
+/* EL UNIVARIANTE CON LA MISMA VENTANA: una corrida aparte, a sus propios
+ * ficheros (_uni_eval.*). No da de alta una corrida en el proyecto ni toca
+ * la estimacion ni la diagnosis: es una vara de medir, como el diagonal de
+ * sim_gui (gui/sim/src/prevision.c).                                     */
+static void lanza_univariante( Mtram *m )
+{
+    Prev   *P = &m->prev;
+    gchar  *out = mtram_artefacto( m, "_uni_eval.out" ), **argv, *d;
+
+    g_free( P->csv_uni );
+    P->csv_uni = mtram_artefacto( m, "_uni_eval.csv" );
+    g_remove( P->csv_uni );
+    argv = estima_argv_univariante( m, out, P->csv_uni );
+    d    = estima_trabajo();
+    P->uni_job = engine_start( d, "drtran", (const char * const *) argv,
+                               NULL, NULL, on_uni_done, m );
+    P->uni_corriendo = P->uni_job != NULL;
+    if (P->uni_corriendo)
+        preview_show_status( m, "Evaluando el univariante con la misma "
+                                "ventana (%d), para comparar…", P->ventana );
+    else
+        preview_show_status( m, "No pude lanzar drtran para el univariante." );
+    g_strfreev( argv );
+    g_free( out ); g_free( d );
 }
 
 /* La llama la estimacion al acabar, con SU .out. */
@@ -195,9 +294,17 @@ void prevision_desde( Mtram *m, const char *path )
     Prev *P = &m->prev;
 
     P->vale = FALSE;
+    P->hay_comp = FALSE;
     g_free( P->out );
     P->out = g_strdup( path );
     if (path && of_parse_file( path, &P->f ) == 0) P->vale = TRUE;
+
+    /* Con evaluacion, la del univariante con la misma ventana. Si el modelo
+     * ES el diagonal, no hay nada que comparar.                        */
+    if (P->vale && P->f.tiene_ev && P->evaluar && P->ventana > 0 &&
+        P->csv_modelo && !m->est.diagonal && !P->uni_corriendo &&
+        g_file_test( P->csv_modelo, G_FILE_TEST_EXISTS ))
+        lanza_univariante( m );
     prevision_refresca( m );
 }
 
@@ -243,7 +350,7 @@ static void on_calcular( GtkButton *b, Mtram *m )
 {
     Prev *P = &m->prev;
 
-    if (m->est.corriendo) {
+    if (m->est.corriendo || P->uni_corriendo) {
         preview_show_status( m, "El motor ya está corriendo." );
         return;
     }
@@ -499,6 +606,9 @@ GtkWidget *prevision_pagina_new( Mtram *m )
 
     P->b_calc = NULL;
     P->out  = NULL;
+    P->csv_modelo = P->csv_uni = NULL;
+    P->uni_job = NULL;
+    P->uni_corriendo = P->hay_comp = FALSE;
     P->vale = P->tiene_ref = FALSE;
     P->prever = P->evaluar = FALSE;
     P->horizonte = 8;
@@ -569,6 +679,7 @@ GtkWidget *prevision_pagina_new( Mtram *m )
     /* --- la tabla de la evaluacion --- */
     st = gtk_list_store_new( P_N_COLS, G_TYPE_STRING, G_TYPE_INT,
                              G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING,
+                             G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING,
                              G_TYPE_STRING );
     P->lista = gtk_tree_view_new_with_model( GTK_TREE_MODEL(st) );
     columna( P->lista, "Horizonte", P_H );
@@ -576,6 +687,9 @@ GtkWidget *prevision_pagina_new( Mtram *m )
     columna( P->lista, "MAE",       P_MAE );
     columna( P->lista, "RMSE",      P_RMSE );
     columna( P->lista, "MAPE %",    P_MAPE );
+    columna( P->lista, "RMSE univariante", P_UNI );
+    columna( P->lista, "Cociente",  P_RATIO );
+    columna( P->lista, "Diebold-Mariano", P_DM );
     columna( P->lista, "vs la guardada", P_COMP );
 
     sc = gtk_scrolled_window_new( NULL, NULL );

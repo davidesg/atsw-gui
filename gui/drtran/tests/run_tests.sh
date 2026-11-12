@@ -202,6 +202,13 @@ if [ -x "$E/bin/drtran" ] && [ -f "$M6D/M6_EP.pre" ]; then
 
     "$W/test_outfcst" "$W/fcst.out" "$W/eval.out" || exit 1
 
+    # Frente al univariante: el cociente y Diebold-Mariano (lib/fcomp),
+    # contra forecast_compare.py sobre los dos CSV de lib/fcomp/datos.
+    GSLF=$(pkg-config --cflags --libs gsl 2>/dev/null); [ -n "$GSLF" ] || GSLF="-lgsl -lgslcblas"
+    $CC -O2 -Wall -Wextra -I"$L/fcomp" "$L/fcomp/test_fcomp.c" "$L/fcomp/fcomp.c" \
+        -o "$W/test_fcomp" $GSLF -lm || exit 1
+    "$W/test_fcomp" "$L/fcomp/datos" || exit 1
+
     # El CSV por origen: la evaluacion tiene que dejarlo, y con una fila por
     # (origen, horizonte). 31 origenes x 6 horizontes + cabecera.
     if [ -f "$W/evaluacion.csv" ]; then

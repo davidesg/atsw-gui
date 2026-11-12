@@ -340,7 +340,7 @@ Medido con fuf y drtran sobre IPC_ES ← WTI (`engines/drtran/examples/passthrou
 | **P1** ✓ | El gráfico de fuf, a `lib/fufplot`. fuf lo llama de ahí, y su EPS no cambia ni un byte. drtran_gui dibuja con él. La ventana enseña la tabla del `.out` tal cual (`of_tabla`), así que con P2 sale ya en el formato de fuf |
 | **P2** ✓ | La tabla del `.out` de drtran en el formato de fuf: sus cabeceras, rótulos, columnas y cuatro decimales, con un espacio garantizado entre campos (ver abajo). `lib/outfcst`, la batería de drtran y `.github/revision/numeros.py` leen la nueva |
 | **P3** ✓ | drtran_gui: al evaluar, el diagonal (`-0`) se evalúa solo con la misma ventana, en una corrida aparte, y la tabla da su RMSE, el cociente y Diebold-Mariano (`lib/fcomp`) |
-| **P4** | drtran_gui: la IRF y la SRF dibujadas con sus bandas (`lib/fugdraw`) |
+| **P4** ✓ | drtran_gui: la IRF y la SRF dibujadas con sus bandas (`fp_response` en `lib/fufplot`): «Ver el gráfico» en Diagnosis → Transferencias, y en Prever ▾ |
 | **P5** | La auditoría de «Al cuaderno» en drtran_gui y en sim_gui |
 | **P6** | sim_gui: el gráfico de fuf, la tabla de drvarma en el formato de fuf, y la IRF y la SRF dibujadas |
 

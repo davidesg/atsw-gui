@@ -51,6 +51,10 @@ sim_gui dibujen la previsión **igual que fue**: el analista lee el mismo
 gráfico en las tres. Solo depende de `fugdraw`. fuf lo llama de aquí, y su
 EPS no cambió ni un byte con la mudanza.
 
+Lleva también `fp_response`, con el mismo estilo: la respuesta al impulso
+(ν_k, en impulsos con su barra de ±2 d.t.) y al escalón (la acumulada, con su
+banda y la ganancia hacia la que tiende). La usa drtran_gui (fase P4).
+
 No se confunde con el `fp_forecast_paneles` de `fugplot/`, que fue el gráfico
 de la previsión de drtran_gui y sim_gui antes de este y lo sigue usando
 sim_gui hasta su fase (fase P6 de `docs/TODO.md`).

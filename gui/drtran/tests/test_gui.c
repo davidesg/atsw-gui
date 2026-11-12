@@ -1392,6 +1392,37 @@ int main(int argc, char **argv)
     gtk_widget_destroy(mn);
     }
 
+    /* P4: LA RESPUESTA AL IMPULSO Y AL ESCALON, dibujada, desde Prever ▾ */
+    {
+    GtkWidget *mn = gtk_menu_new();
+    GList     *hs, *l;
+    GtkWidget *mi = NULL;
+
+    prevision_menu(m, mn, NULL);
+    hs = gtk_container_get_children(GTK_CONTAINER(mn));
+    for (l = hs; l && !mi; l = l->next) {
+        gchar *t = texto_de(l->data);
+        if (t && strstr(t, "La respuesta al impulso: SYN_Y ← SYN_X")) mi = l->data;
+        g_free(t);
+    }
+    g_list_free(hs);
+    check(mi != NULL, "Prever ▾: la respuesta al impulso del enlace", NULL);
+    if (mi) {
+        gchar *eps, *txt = NULL;
+
+        pulsa(mi);
+        pump(50);
+        check_tinta("irf_SYN_Y_SYN_X.eps", "el grafico de la respuesta al impulso");
+        eps = cache_de("irf_SYN_Y_SYN_X.eps");
+        check(g_file_get_contents(eps, &txt, NULL, NULL) && strstr(txt, "(Escal"),
+              "con el panel del escalón", eps);
+        g_free(txt); g_free(eps);
+    }
+    gtk_widget_destroy(mn);
+    check(gtk_widget_get_sensitive(m->dia.b_irf),
+          "y el botón «Ver el gráfico» de Transferencias, encendido", NULL);
+    }
+
     /* Evaluar sin ventana: se dice, no se lanza. */
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(m->prev.c_eval), TRUE);
     pump(20);

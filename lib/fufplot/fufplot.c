@@ -268,3 +268,145 @@ FDFig *fp_forecast( const double *y, const double *band, const double *band2,
 
    return( f );
 }
+
+/*****************************************************************************/
+/* The impulse and the step response of a transfer, in the style of the
+ * forecast graph above: the same canvas, fonts, axes and dashes.           */
+
+/* The horizontal axis of the lags: a tick at every k that fits, labelled. */
+static void k_axis( FDFig *f, double x0, double x1, double y0, int n )
+{
+   char   text[32];
+   double x, w = fd_text_width( FD_HELV, SZ_TICK, "00" ) * 1.6;
+   int    k, every = 1;
+
+   while ( n > 1 && every < n && ( x1 - x0 ) * every / ( n - 1 ) < w ) every++;
+   fd_gray( f, 0.0 );
+   fd_dash( f, 0.0, 0.0 );
+   fd_linewidth( f, LW_AXIS );
+   for ( k = 0; k < n; k += every )
+       {
+       x = mapv( (double)k, 0.0, (double)( n > 1 ? n - 1 : 1 ), x0, x1 );
+       fd_line( f, x, y0, x, y0 - TIC );
+       snprintf( text, sizeof( text ), "%d", k );
+       fd_text( f, x, y0 - SZ_TICK - 3.0, FD_HELV, SZ_TICK, FD_CENTER, text );
+       }
+}
+
+/* The range of a panel: the values and their bands, with whole ticks. */
+static void range( const double *v, const double *sd, int n, double nsd,
+                   double extra, int has_extra, double *v0, double *v1, double *step )
+{
+   int i;
+
+   *v0 = *v1 = 0.0;                     /* zero is always in the panel     */
+   for ( i = 0; i < n; i++ )
+       {
+       double lo = v[i] - nsd * sd[i], hi = v[i] + nsd * sd[i];
+
+       if ( lo < *v0 ) *v0 = lo;
+       if ( hi > *v1 ) *v1 = hi;
+       }
+   if ( has_extra ) { if ( extra < *v0 ) *v0 = extra; if ( extra > *v1 ) *v1 = extra; }
+   if ( !( *v1 > *v0 ) ) *v1 = *v0 + 1.0;
+   *step = nice_step( *v1 - *v0, 5 );
+   *v0 = floor( *v0 / *step ) * *step;
+   *v1 = ceil( *v1 / *step ) * *step;
+}
+
+FDFig *fp_response( const double *nu, const double *nu_sd,
+                    const double *cum, const double *cum_sd, int n,
+                    double gain, int has_gain,
+                    const char *title_irf, const char *title_srf )
+{
+   FDFig *f;
+   double x0, x1, y0, y1, v0, v1, step, x, yz, px[4096], py[4096];
+   int    i;
+
+   if ( n < 2 || n > 4096 ) return( NULL );
+   if ( ( f = fd_fig_new( W, H ) ) == NULL ) return( NULL );
+   x0 = MARGIN_L;
+   x1 = W - MARGIN_R;
+
+/* [1]: the impulse response, as impulses, with the band of 2 sd             */
+
+   y0 = H - 200.0;
+   y1 = H - 30.0;
+   range( nu, nu_sd, n, 2.0, 0.0, 0, &v0, &v1, &step );
+   fd_text( f, x0 - 20.0, y1 + 14.0, FD_HELV_BOLD, SZ_TITLE, FD_LEFT, title_irf );
+   yaxis( f, x0, x1, y0, y1, v0, v1, step );
+   k_axis( f, x0, x1, y0, n );
+
+   fd_gray( f, 0.0 );
+   fd_linewidth( f, LW_AXIS );
+   fd_dash( f, 0.0, 0.0 );
+   yz = mapv( 0.0, v0, v1, y0, y1 );
+   fd_line( f, x0, yz, x1, yz );
+
+   /* the band of each nu_k on its own: the lags are discrete, and a line
+    * joining them would draw a band between two lags where there is none */
+   fd_linewidth( f, LW_BAND );
+   for ( i = 0; i < n; i++ )
+       {
+       double lo, hi, cap = 3.0;
+
+       if ( !( nu_sd[i] > 0.0 ) ) continue;
+       x  = mapv( (double)i, 0.0, (double)(n - 1), x0, x1 );
+       lo = mapv( nu[i] - 2.0 * nu_sd[i], v0, v1, y0, y1 );
+       hi = mapv( nu[i] + 2.0 * nu_sd[i], v0, v1, y0, y1 );
+       fd_dash( f, 1.6, 2.2 );
+       fd_line( f, x + 2.5, lo, x + 2.5, hi );
+       fd_dash( f, 0.0, 0.0 );
+       fd_line( f, x + 2.5 - cap, lo, x + 2.5 + cap, lo );
+       fd_line( f, x + 2.5 - cap, hi, x + 2.5 + cap, hi );
+       }
+
+   fd_dash( f, 0.0, 0.0 );
+   fd_linewidth( f, LW_IMPULSE );
+   for ( i = 0; i < n; i++ )
+       {
+       x = mapv( (double)i, 0.0, (double)(n - 1), x0, x1 );
+       fd_line( f, x, yz, x, mapv( nu[i], v0, v1, y0, y1 ) );
+       }
+
+/* [2]: the step response (the cumulative), with its band and the gain       */
+
+   y0 = 40.0;
+   y1 = 195.0;
+   range( cum, cum_sd, n, 2.0, gain, has_gain, &v0, &v1, &step );
+   fd_text( f, x0 - 20.0, y1 + 14.0, FD_HELV_BOLD, SZ_TITLE, FD_LEFT, title_srf );
+   yaxis( f, x0, x1, y0, y1, v0, v1, step );
+   k_axis( f, x0, x1, y0, n );
+
+   fd_gray( f, 0.0 );
+   fd_linewidth( f, LW_AXIS );
+   fd_dash( f, 0.0, 0.0 );
+   yz = mapv( 0.0, v0, v1, y0, y1 );
+   fd_line( f, x0, yz, x1, yz );
+   if ( has_gain )                      /* where the step response goes     */
+      {
+      fd_linewidth( f, LW_BAND );
+      fd_dash( f, 3.0, 3.0 );
+      yz = mapv( gain, v0, v1, y0, y1 );
+      fd_line( f, x0, yz, x1, yz );
+      }
+
+   fd_linewidth( f, LW_BAND );
+   fd_dash( f, 1.6, 2.2 );
+   for ( i = 0; i < n; i++ )
+       {
+       px[i] = mapv( (double)i, 0.0, (double)(n - 1), x0, x1 );
+       py[i] = mapv( cum[i] + 2.0 * cum_sd[i], v0, v1, y0, y1 );
+       }
+   fd_polyline( f, px, py, n );
+   for ( i = 0; i < n; i++ ) py[i] = mapv( cum[i] - 2.0 * cum_sd[i], v0, v1, y0, y1 );
+   fd_polyline( f, px, py, n );
+
+   fd_dash( f, 0.0, 0.0 );
+   fd_linewidth( f, LW_LINE );
+   for ( i = 0; i < n; i++ ) py[i] = mapv( cum[i], v0, v1, y0, y1 );
+   fd_polyline( f, px, py, n );
+   for ( i = 0; i < n; i++ ) fd_disc( f, px[i], py[i], DOT_FOR );
+
+   return( f );
+}

@@ -177,7 +177,8 @@ typedef struct {
     /* LAS TRANSFERENCIAS, CARACTERIZADAS: la ganancia, el retardo medio y la
      * respuesta al impulso de cada enlace, que el motor ya escribe en el
      * .out y aqui se leen (lib/outdiag).                               */
-    GtkWidget *l_tg, *l_irf, *t_irf;
+    GtkWidget *l_tg, *l_irf, *t_irf, *b_irf;
+    int        irf_sel;       /* el enlace cuya respuesta se ve, o -1      */
     OdTransfs  tr;
     gboolean   hay_tr;
     gchar     *path;          /* el .out del que salio                      */
@@ -430,6 +431,10 @@ int        diagnosis_escribe_paginas(Mtram *m, gboolean solo_faltan);
  * ecuacion en el orden del recorrido; y la pagina de la ecuacion ecu (0: la
  * que se esta mirando en la pagina 6), que pasa a ser la actual.      */
 void       diagnosis_menu(Mtram *m, GtkWidget *menu, GtkWidget *ref);
+/* El grafico de la respuesta al impulso y al escalon del enlace j, con sus
+ * bandas (lib/fufplot): la ruta del EPS, nueva, o NULL.               */
+gchar     *diagnosis_grafico_irf(Mtram *m, int j);
+void       diagnosis_ver_irf(Mtram *m, int j);
 void       diagnosis_menu_modelos(Mtram *m, GtkWidget *menu, GtkWidget *ref);
 void       diagnosis_ver_modelo(Mtram *m, int ecu);
 

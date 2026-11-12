@@ -933,6 +933,12 @@ Como las dos series están en logaritmos, los coeficientes son **elasticidades**
 - **Retardo medio**: δ₁ / (1 − δ₁) ≈ **1 mes** (1.01, d.t. 0.28). La mayor
   parte del efecto llega en el primer trimestre.
 
+La respuesta al impulso y al escalón también se pueden ver en un gráfico, con
+el botón **Ver el gráfico** de **7 · Transferencias** o con la flecha de
+**Prever**. Arriba están los ν_k, la respuesta a una subida de una sola vez,
+cada uno con su barra de ±2 desviaciones típicas. Debajo está la respuesta a
+una subida permanente, con su banda, que se acerca a la ganancia.
+
 > Una advertencia de la escuela: si δ₁ se acercara a 1 (más de 0.95), la
 > ganancia y el retardo medio no serían fiables. Aquí δ₁ = 0.50, lejos de eso.
 

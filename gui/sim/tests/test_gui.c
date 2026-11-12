@@ -750,6 +750,35 @@ int main( int argc, char **argv )
                "con un VEC: Diagnosis y Prever sí; Ver modelo no (lo dice)",
                gtk_widget_get_tooltip_text( GTK_WIDGET(j->tb_ver) ) );
 
+        /* --- S10c: la debil exogeneidad (Johansen y Juselius, sima) ------ */
+        check( restricciones_weakex( j ), "la débil exogeneidad arranca", etiqueta( j->estado ) );
+        {
+            gint64 hasta = g_get_monotonic_time() + 240 * G_USEC_PER_SEC;
+            while (j->pd.wx_corriendo && g_get_monotonic_time() < hasta) pump( 20 );
+            pump( 50 );
+        }
+        {
+            int i, iby = -1, ide = -1, lry = -1;
+            for (i = 0; i < j->pd.wx_n; i++) {
+                if (!strcmp( j->pd.wx_serie[i], "IBO" )) iby = i;
+                if (!strcmp( j->pd.wx_serie[i], "IDE" )) ide = i;
+                if (!strcmp( j->pd.wx_serie[i], "LRY" )) lry = i;
+            }
+            check( j->pd.wx_n == 4 && iby >= 0 && j->pd.wx_ok[iby] && j->pd.wx_lr[iby] < 0.01 &&
+                   j->pd.wx_p[iby] > 0.95, "IBO débilmente exógena: LR 0.0003, p 0.99 (sima)", NULL );
+            check( ide >= 0 && j->pd.wx_ok[ide] && fabs( j->pd.wx_lr[ide] - 2.07 ) < 0.05 &&
+                   fabs( j->pd.wx_p[ide] - 0.15 ) < 0.01, "IDE: LR 2.07, p 0.15 (sima)", NULL );
+            check( lry >= 0 && j->pd.wx_ok[lry] && fabs( j->pd.wx_lr[lry] - 4.31 ) < 0.05 &&
+                   j->pd.wx_p[lry] < 0.05, "LRY no: LR 4.31, p 0.04 (sima)", NULL );
+        }
+        check( contiene( etiqueta( j->pd.ver_wx ), "IBO, IDE" ), "la página dice cuáles son débilmente exógenas",
+               etiqueta( j->pd.ver_wx ) );
+        /* otra normalizacion en «4 · Modelo»: no se contrasta */
+        j->mod.y1[0] = 0; j->mod.y1[3] = 1;
+        check( !restricciones_weakex( j ) && contiene( etiqueta( j->estado ), "normalización" ),
+               "con otra normalización en «4 · Modelo», no contrasta y lo dice", etiqueta( j->estado ) );
+        j->mod.y1[0] = 1; j->mod.y1[3] = 0;
+
         /* --- S10c: la prevision y la evaluacion del VEC ------------------ */
         gtk_spin_button_set_value( GTK_SPIN_BUTTON(j->pv.s_hor), 4 );
         gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(j->pv.c_eval), TRUE );

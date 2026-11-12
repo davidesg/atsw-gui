@@ -15,7 +15,7 @@ PREFIX  ?= /usr/local
 LIB = ../../lib
 ENG = ../../engines/drvarma
 
-SRC = src/main.c src/ventana.c src/series.c src/puerta.c src/rango.c src/proyecto.c \
+SRC = src/main.c src/ventana.c src/series.c src/puerta.c src/rango.c src/restricciones.c src/proyecto.c \
       src/identifica.c src/modelo.c src/estima.c src/diagnosis.c src/pagina.c src/plotshim.c src/prevision.c src/estructura.c \
       $(LIB)/sistema/sistema.c \
       $(LIB)/outvarma/outvarma.c $(LIB)/outvec/outvec.c \

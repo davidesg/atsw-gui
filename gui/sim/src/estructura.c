@@ -300,13 +300,23 @@ void estructura_refresca( Sim *m )
      * sobre los enlaces del VARMA.                                       */
     if (m->pe.vec && !m->pe.corriendo) {
         gtk_widget_hide( D->b_pasar_mt );
+        gtk_widget_hide( D->b_simpl );
+        gtk_widget_hide( D->b_red );
+        gtk_widget_show( D->b_weakex );
         sim_veredicto( D->ver_simpl, SIM_AMBAR, "Simplificar y «¿Es una red?» son del VARMA (sus "
-                       "enlaces). En el VEC, las preguntas de estructura son las restricciones "
-                       "sobre α y β; en sim_gui todavía no: las hace sima (test_restriction)." );
+                       "enlaces). En el VEC, las preguntas de estructura son restricciones sobre α "
+                       "y β, contrastadas con la normalización del VEC estimado. Las demás "
+                       "(β fija, Γ a cero) las hace sima (test_restriction)." );
         gtk_label_set_text( GTK_LABEL(D->ver_red), "" );
         gtk_label_set_text( GTK_LABEL(D->t_red), "" );
+        restricciones_refresca( m );
         return;
     }
+    gtk_widget_show( D->b_simpl );
+    gtk_widget_show( D->b_red );
+    gtk_widget_hide( D->b_weakex );
+    gtk_label_set_text( GTK_LABEL(D->ver_wx), "" );
+    gtk_label_set_text( GTK_LABEL(D->t_wx), "" );
 
     /* Simplificar: la LR contra el padre, cuando la estimacion es la hija. */
     if (D->hay_ant && v && !v->fallo && m->pe.version == D->ver_simpl_de && v->tiene_logl) {

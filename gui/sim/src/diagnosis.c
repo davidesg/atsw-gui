@@ -433,6 +433,13 @@ GtkWidget *diagnosis_pagina_new( Sim *m )
         gtk_box_pack_start( GTK_BOX(fila), D->b_simpl, FALSE, FALSE, 0 );
         gtk_box_pack_start( GTK_BOX(fila), D->b_red, FALSE, FALSE, 0 );
         gtk_box_pack_start( GTK_BOX(fila), D->b_pasar_mt, FALSE, FALSE, 0 );
+        /* S10c: la del VEC */
+        D->b_weakex = gtk_button_new_with_label( "Débil exogeneidad" );
+        gtk_widget_set_tooltip_text( D->b_weakex, "Para cada serie, α a cero en su ecuación (drvec "
+                                     "-weakex): ¿se ajusta al equilibrio, o solo lo empuja? LR "
+                                     "contra el VEC libre, con su misma normalización" );
+        g_signal_connect_swapped( D->b_weakex, "clicked", G_CALLBACK(restricciones_weakex), m );
+        gtk_box_pack_start( GTK_BOX(fila), D->b_weakex, FALSE, FALSE, 0 );
         gtk_box_pack_start( GTK_BOX(pg), fila, FALSE, FALSE, 0 );
     }
     D->ver_simpl = veredicto_new();
@@ -442,6 +449,11 @@ GtkWidget *diagnosis_pagina_new( Sim *m )
     gtk_box_pack_start( GTK_BOX(pg), D->ver_simpl, FALSE, FALSE, 0 );
     gtk_box_pack_start( GTK_BOX(pg), D->ver_red, FALSE, FALSE, 0 );
     gtk_box_pack_start( GTK_BOX(pg), D->t_red, FALSE, FALSE, 0 );
+    D->ver_wx = veredicto_new();
+    D->t_wx = sim_mono( "" );
+    gtk_widget_set_valign( D->t_wx, GTK_ALIGN_START );
+    gtk_box_pack_start( GTK_BOX(pg), D->ver_wx, FALSE, FALSE, 0 );
+    gtk_box_pack_start( GTK_BOX(pg), D->t_wx, FALSE, FALSE, 0 );
     gtk_notebook_append_page( GTK_NOTEBOOK(D->libreta), pg, gtk_label_new( "Estructura" ) );
 
     D->t_out = gtk_text_view_new();

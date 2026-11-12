@@ -417,32 +417,47 @@ Propuesta de partida (sin decidir):
 | | la web y la GUI, cuando lleguen los sistemas | `web/index.html` (meta y h1), `gui/atsw/src/main.c`, `gui/atsw/src/presentacion.c`, `packaging/linux/deb.sh`. Hoy son ciertos: ARIMA, intervención y transferencia |
 | | sima | sus descriptivos (README, PyPI, instrucciones del MCP), para que digan las dos rutas sin nombrar escuela |
 
-## PENDIENTE: los wheels de macOS, para macOS 11 en los dos procesadores
+## HECHO (12-nov-2026): los wheels de macOS, para macOS 11 en los dos procesadores
 
-Propuesta (31-oct-2026), a incorporar o no en las próximas versiones: que los
-wheels de PyPI sigan el criterio de los `.dmg` de atsw-gui (#101), que llegan
-a macOS 11 en Apple Silicon e Intel. Hoy fue, drvarma y drvec publican sólo
-`macosx_14_0_arm64`, compilado en `macos-14`, y GitHub retira ese runner el
-2-nov-2026: la siguiente release de cualquiera de los tres falla en macOS
-hasta que sus workflows pasen a `macos-15`, con esta propuesta o sin ella.
+Propuesta del 31-oct-2026, hecha para las próximas versiones de fue, drvarma
+y drvec: los wheels de PyPI siguen el criterio de los `.dmg` de atsw-gui
+(#101), que llegan a macOS 11 en Apple Silicon e Intel. Hasta fue 0.1.19,
+drvarma 0.3.1 y drvec 0.1.0 se publicaba sólo `macosx_14_0_arm64`, compilado
+en `macos-14`, que GitHub retiró el 2-nov-2026; un Mac Intel recibía el wheel
+puro, con los motores en Python y drvec sin su binario.
 
-| | qué | notas |
+| | qué | cómo quedó |
 |---|---|---|
-| | Apple Silicon: `macosx_11_0_arm64` | en `macos-15` con `MACOSX_DEPLOYMENT_TARGET=11.0`; la GSL de Homebrew pide el macOS del runner, así que la GSL viene de conda-forge o se compila para 11.0, como en `paquetes.yml` |
-| | Intel: `macosx_11_0_x86_64` | en `macos-15-intel`; hasta ahora no se construía por política (no había runners), y con él el wheel puro deja de ser lo único que sirve a un Mac Intel |
-| | la comprobación | el workflow se para si algún `.so` o binario pide más de 11.0 (`vtool`/`otool -l`, `LC_BUILD_VERSION minos`), como `bundle.sh` |
-| | fue `wheels.yml` | cp310–cp314: 5 wheels por procesador |
-| | drvarma `publish.yml` | cp310–cp314: 5 wheels por procesador |
-| | drvec `publish.yml` | un wheel `py3` por plataforma (lleva el binario, no una extensión) |
-| | sólo tests | drvec `tests.yml`, art `preflight-atsw.yml`: `macos-14` → `macos-15`, sin más; sima ya lo hizo en su 0.2.1 |
+| HECHO | Apple Silicon: `macosx_11_0_arm64` | en `macos-15` con `MACOSX_DEPLOYMENT_TARGET=11.0`; fue y drvarma compilan la GSL 2.8 (la del bottle de Homebrew que usaban) desde el código fuente, estática, para 11.0 (`tools/build_gsl.sh`, sha256 comprobado); drvec ya compilaba la 2.7.1 |
+| HECHO | Intel: `macosx_11_0_x86_64` | en `macos-15-intel`, igual |
+| HECHO | la comprobación | `tools/check_macos_minos.py` en los tres: el workflow se para si algún Mach-O pide más de 11.0 (`otool -l`, `LC_BUILD_VERSION minos`) o no es de la arquitectura del wheel |
+| HECHO | fue `wheels.yml` | fue-python #4 (550be7b) |
+| HECHO | drvarma `publish.yml` | drvarma-python #16 (415d081) |
+| HECHO | drvec `publish.yml` | drvec-python #9 (684fd22); sus pruebas de humo también en `macos-15-intel` |
+| HECHO | sólo tests | drvec `tests.yml` → `macos-15` (#9); art `preflight-atsw.yml` → `macos-15` (art-python #9) y, con `suites`, las siete suites contra lo instalado de PyPI en macOS arm64, Intel y Windows (art-python #10, e7af1a1) |
 
-Cuántos ficheros por release, contando el sdist y el wheel puro:
+Validado con los workflows manuales, sin publicar: fue 43101875691, drvarma
+43101880550, drvec 43101885358. Los diez wheels de macOS de fue y de drvarma
+y los dos de drvec declaran `minos 11.0` con su arquitectura, y el binario de
+drvec corre en Intel con el motor en C de drvarma.
 
-| | ahora | después |
+**Al publicar:** fue y drvarma antes que drvec. Las pruebas de humo de drvec
+en Intel exigen el motor en C de drvarma, así que su wheel x86_64 tiene que
+estar ya en PyPI.
+
+Ficheros por release, contando el sdist y el wheel puro:
+
+| | hasta ahora | desde la próxima |
 |---|---|---|
 | fue | 32 (30 binarios) | 37 (35 binarios) |
 | drvarma | 32 (30 binarios) | 37 (35 binarios) |
 | drvec | 6 (4 binarios) | 7 (5 binarios); 9 (7) si se añade musllinux, aplazado |
+
+Queda abierto, aparte: drvec-python #10, el bug `py-tests-exact-gsl-v3`.
+`ubuntu-latest` pasó a Ubuntu 26.04, cuya GSL amd64v3 mueve la 12.ª cifra, y
+las pruebas de humo de Linux del sdist y del wheel (con drvarma desde git)
+fallan las comparaciones byte a byte. Los wheels publicados no están
+afectados.
 
 ## PENDIENTE: el asistente
 

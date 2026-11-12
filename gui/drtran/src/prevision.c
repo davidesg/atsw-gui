@@ -511,6 +511,10 @@ static int salida_en( const Mtram *m, const Forecast *f )
 }
 
 static void on_calcular_mi( GtkMenuItem *mi, Mtram *m ) { prevision_calcular( m ); }
+static void on_irf_mi( GtkMenuItem *mi, Mtram *m )
+{
+    diagnosis_ver_irf( m, GPOINTER_TO_INT( g_object_get_data( G_OBJECT(mi), "enlace" ) ) );
+}
 static void on_guardar_mi ( GtkMenuItem *mi, Mtram *m ) { on_guardar_ref( NULL, m ); }
 static void on_olvidar_mi ( GtkMenuItem *mi, Mtram *m ) { on_olvidar_ref( NULL, m ); }
 static void on_pestana_mi ( GtkMenuItem *mi, Mtram *m )
@@ -547,6 +551,28 @@ void prevision_menu( Mtram *m, GtkWidget *menu, GtkWidget *ref )
         gtk_widget_set_sensitive( mi, FALSE );
         gtk_widget_set_tooltip_text( mi, "Todavía no hay previsión: «Calcular "
                                          "la previsión» la hace." );
+    }
+    /* LA RESPUESTA AL IMPULSO Y AL ESCALON de cada enlace, dibujada con sus
+     * bandas (fase P4): es la otra cara de prever con una transferencia,
+     * y hasta ahora solo estaba en tabla, en Diagnosis.              */
+    if (m->dia.hay_tr && m->dia.tr.n == m->red.n && m->red.n > 0) {
+        int j;
+
+        gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
+        for (j = 0; j < m->red.n; j++) {
+            int    o = m->red.lnk[j].out, x = m->red.lnk[j].inp;
+            gchar *r;
+
+            if (o < 1 || o > m->c.n || x < 1 || x > m->c.n) continue;
+            r = g_strdup_printf( "La respuesta al impulso: %s ← %s",
+                m->c.s[o - 1]->ts.name ? m->c.s[o - 1]->ts.name : "?",
+                m->c.s[x - 1]->ts.name ? m->c.s[x - 1]->ts.name : "?" );
+
+            mi = at_entrada( menu, r, NULL, NULL, ref,
+                             G_CALLBACK(on_irf_mi), m );
+            g_object_set_data( G_OBJECT(mi), "enlace", GINT_TO_POINTER(j) );
+            g_free( r );
+        }
     }
     gtk_menu_shell_append( GTK_MENU_SHELL(menu), gtk_separator_menu_item_new() );
     mi = at_entrada( menu, "Guardar esta evaluación", NULL, NULL, ref,

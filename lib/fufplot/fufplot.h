@@ -29,4 +29,19 @@ FDFig *fp_forecast( const double *y, const double *band, const double *band2,
                     const double *err, int L, double sigma, int freq,
                     int first_year, int first_season, const char *title );
 
+/* The impulse and the step response of a transfer, as the forecast graph:
+ *
+ *   above  nu[0..n-1], the response to a one-off unit impulse in the input,
+ *          as impulses, with the band of two standard deviations (nu_sd)
+ *   below  cum[0..n-1], the response to a permanent unit step (the sum of
+ *          the nu), with its band of two standard deviations and, if
+ *          has_gain, the gain it tends to, dashed
+ *
+ * The horizontal axis is the lag k. Titles in Latin-1. Returns the figure,
+ * or NULL.                                                                 */
+FDFig *fp_response( const double *nu, const double *nu_sd,
+                    const double *cum, const double *cum_sd, int n,
+                    double gain, int has_gain,
+                    const char *title_irf, const char *title_srf );
+
 #endif

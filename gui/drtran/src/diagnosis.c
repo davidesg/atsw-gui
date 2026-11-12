@@ -44,6 +44,7 @@
 #include "tabla.h"
 #include "netfile.h"
 #include "fugplot.h"
+#include "fufplot.h"
 #include "ccfplot.h"
 
 #define NDIAG_LAGS 24        /* los retardos de la CCF de residuos          */
@@ -605,6 +606,10 @@ static void pinta_irf( Mtram *m, int j )
     int           k;
 
     gtk_list_store_clear( st );
+    D->irf_sel = j;
+    if (D->b_irf)
+        gtk_widget_set_sensitive( D->b_irf, j >= 0 && j < D->tr.n &&
+                                            j < m->red.n && D->tr.t[j].nk >= 2 );
     if (j < 0 || j >= D->tr.n || j >= m->red.n) {
         gtk_label_set_text( GTK_LABEL(D->t_irf), "Respuesta al impulso" );
         return;
@@ -630,6 +635,76 @@ static void pinta_irf( Mtram *m, int j )
                             I_CUMDT, d, -1 );
     }
 }
+
+/* EL GRAFICO DE LA RESPUESTA (fase P4 de docs/TODO.md), con el estilo del de
+ * la prevision de fuf (lib/fufplot): arriba nu_k, la respuesta a un impulso
+ * de una vez, en impulsos; abajo la acumulada, la respuesta a un escalon,
+ * que tiende a la ganancia. Las dos con la banda de dos desviaciones, en las
+ * unidades de la ecuacion, como la tabla.                              */
+static gchar *a_latin1( const char *s )
+{
+    gchar *r = g_convert_with_fallback( s, -1, "ISO-8859-1", "UTF-8", "?",
+                                        NULL, NULL, NULL );
+
+    return r ? r : g_strdup( s );
+}
+
+gchar *diagnosis_grafico_irf( Mtram *m, int j )
+{
+    Diag           *D = &m->dia;
+    const OdTransf *t;
+    double         *nu, *nd, *cu, *cd, e;
+    gchar          *t1, *t2, *u, *dir, *nom, *eps = NULL;
+    FDFig          *fig;
+    int             k;
+
+    if (!D->hay_tr || j < 0 || j >= D->tr.n || j >= m->red.n) return NULL;
+    t = &D->tr.t[j];
+    if (t->nk < 2) return NULL;
+    e = esc_enlace( m, j );
+
+    nu = g_new( double, t->nk ); nd = g_new( double, t->nk );
+    cu = g_new( double, t->nk ); cd = g_new( double, t->nk );
+    for (k = 0; k < t->nk; k++) {
+        nu[k] = t->nu[k] * e;   nd[k] = t->nu_dt[k] * e;
+        cu[k] = t->cum[k] * e;  cd[k] = t->cum_dt[k] * e;
+    }
+    u  = g_strdup_printf( "Impulso: %s <- %s", nom_ser( m, m->red.lnk[j].out ),
+                          nom_ser( m, m->red.lnk[j].inp ) );
+    t1 = a_latin1( u ); g_free( u );
+    t2 = a_latin1( t->hay_g ? "Escalón y ganancia" : "Escalón" );
+
+    fig = fp_response( nu, nd, cu, cd, t->nk, t->g * e, t->hay_g, t1, t2 );
+    if (fig) {
+        dir = g_build_filename( g_get_user_cache_dir(), GUI_CACHE, NULL );
+        g_mkdir_with_parents( dir, 0700 );
+        nom = g_strdup_printf( "irf_%s_%s.eps", nom_ser( m, m->red.lnk[j].out ),
+                               nom_ser( m, m->red.lnk[j].inp ) );
+        eps = g_build_filename( dir, nom, NULL );
+        if (fd_write_eps( fig, eps ) != 0) { g_free( eps ); eps = NULL; }
+        fd_fig_free( fig );
+        g_free( nom ); g_free( dir );
+    }
+    g_free( nu ); g_free( nd ); g_free( cu ); g_free( cd );
+    g_free( t1 ); g_free( t2 );
+    return eps;
+}
+
+void diagnosis_ver_irf( Mtram *m, int j )
+{
+    gchar *eps = diagnosis_grafico_irf( m, j );
+
+    if (!eps) {
+        preview_show_status( m, "No hay respuesta al impulso que dibujar: "
+                                "estima el modelo con la red." );
+        return;
+    }
+    if (!preview_show( m, eps ))
+        preview_show_status( m, "No pude enseñar %s", eps );
+    g_free( eps );
+}
+
+static void on_ver_irf( GtkButton *b, Mtram *m ) { diagnosis_ver_irf( m, m->dia.irf_sel ); }
 
 static void on_tg_sel( GtkTreeSelection *sel, Mtram *m )
 {
@@ -1701,6 +1776,8 @@ GtkWidget *diagnosis_pagina_new( Mtram *m )
     D->path = NULL;
     D->actual = 0;
     D->ir_a = -1;
+    D->b_irf = NULL;
+    D->irf_sel = -1;
 
     caja = gtk_box_new( GTK_ORIENTATION_VERTICAL, 6 );
     gtk_container_set_border_width( GTK_CONTAINER(caja), 8 );
@@ -1888,11 +1965,25 @@ GtkWidget *diagnosis_pagina_new( Mtram *m )
                       "changed", G_CALLBACK(on_tg_sel), m );
     gtk_box_pack_start( GTK_BOX(v7), D->l_tg, FALSE, FALSE, 0 );
 
+    {
+    GtkWidget *h = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 6 );
+
     D->t_irf = gtk_label_new( "Respuesta al impulso" );
     gtk_widget_set_halign( D->t_irf, GTK_ALIGN_START );
     gtk_label_set_line_wrap( GTK_LABEL(D->t_irf), TRUE );
-    gtk_widget_set_margin_top( D->t_irf, 6 );
-    gtk_box_pack_start( GTK_BOX(v7), D->t_irf, FALSE, FALSE, 0 );
+    gtk_label_set_xalign( GTK_LABEL(D->t_irf), 0.0 );
+    gtk_box_pack_start( GTK_BOX(h), D->t_irf, TRUE, TRUE, 0 );
+    D->b_irf = gtk_button_new_with_label( "Ver el gráfico" );
+    gtk_widget_set_tooltip_text( D->b_irf,
+        "La respuesta al impulso (ν_k) y al escalón (la acumulada, que "
+        "tiende a la ganancia), con la banda de dos desviaciones típicas." );
+    gtk_widget_set_valign( D->b_irf, GTK_ALIGN_CENTER );
+    gtk_widget_set_sensitive( D->b_irf, FALSE );
+    g_signal_connect( D->b_irf, "clicked", G_CALLBACK(on_ver_irf), m );
+    gtk_box_pack_start( GTK_BOX(h), D->b_irf, FALSE, FALSE, 0 );
+    gtk_widget_set_margin_top( h, 6 );
+    gtk_box_pack_start( GTK_BOX(v7), h, FALSE, FALSE, 0 );
+    }
     st = gtk_list_store_new( I_N, G_TYPE_INT, G_TYPE_STRING, G_TYPE_STRING,
                              G_TYPE_STRING, G_TYPE_STRING );
     D->l_irf = gtk_tree_view_new_with_model( GTK_TREE_MODEL(st) );

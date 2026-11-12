@@ -107,6 +107,43 @@ int main( int argc, char **argv )
     ok( s && strstr( s, "\nm03 me convence más que m02.\n" ) != NULL, "la nota, sin espacios de sobra" );
     g_free( s );
 
+    printf( "\nun gráfico de un caso (drtran_gui, sim_gui)\n" );
+    {
+    gchar *d2  = g_path_get_dirname( man );
+    gchar *eps = g_build_filename( d2, "_casos", "C1", "work", "prev_IPC.eps", NULL );
+    gchar *out = g_build_filename( d2, "_casos", "C1", "work", "C1_c02.out", NULL );
+    char   rel[512];
+
+    cu_relativa( man, out, rel, sizeof rel );
+    ok( !strcmp( rel, "_casos/C1/work/C1_c02.out" ), "cu_relativa: relativa al manifiesto" );
+    cu_relativa( man, "/otro/sitio/x.eps", rel, sizeof rel );
+    ok( !strcmp( rel, "/otro/sitio/x.eps" ), "y lo de fuera, tal cual" );
+
+    ok( cu_grafico_caso( man, "P", "Previsión de IPC", "C1", "c02", out, eps,
+                         NULL, rel, sizeof rel, why, sizeof why ) == 0,
+        "se escribe" );
+    ok( !strcmp( rel, "cuaderno/cuaderno.md" ), "y dice dónde" );
+    s = lee( md );
+    ok( s && strstr( s, " · Previsión de IPC — caso C1 / c02\n" ) != NULL, "el título, con el caso y la corrida" );
+    ok( s && strstr( s, "**Caso:** C1" ) && strstr( s, "**Corrida:** c02" ),
+        "la procedencia: caso y corrida" );
+    ok( s && strstr( s, "**Informe:** _casos/C1/work/C1_c02.out" ) != NULL,
+        "el informe, relativo, como en fue" );
+    ok( s && strstr( s, "**Gráfico:** _casos/C1/work/prev_IPC.eps" ) != NULL, "el gráfico" );
+    g_free( s );
+    ok( cu_grafico_caso( man, NULL, "CCF", "C1", NULL, NULL, "/cache/ccf.eps",
+                         NULL, NULL, 0, why, sizeof why ) == 0,
+        "antes de estimar: sin corrida ni informe" );
+    s = lee( md );
+    ok( s && strstr( s, " · CCF — caso C1\n" ) && strstr( s, "**Gráfico:** ccf.eps" ),
+        "y un gráfico de la caché, por su nombre" );
+    g_free( s );
+    ok( cu_grafico_caso( NULL, NULL, "x", "C1", NULL, NULL, "a.eps", NULL, NULL, 0,
+                         why, sizeof why ) != 0 && strstr( why, "proyecto" ),
+        "sin proyecto, dice por qué" );
+    g_free( d2 ); g_free( eps ); g_free( out );
+    }
+
     printf( "\nsin proyecto\n" );
     ok( cu_nueva( NULL, "x" ) == NULL, "sin manifiesto no hay entrada" );
     ok( cu_cierra( NULL, why, sizeof why ) != 0 && why[0], "y cerrar NULL dice por qué" );

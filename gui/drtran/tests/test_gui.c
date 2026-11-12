@@ -29,6 +29,8 @@
 #include <gtk/gtk.h>
 
 #include "gui.h"
+#include "previewhost.h"
+#include "preview.h"
 
 /* main.c entra compilado con -Dmain=drtran_main: asi se prueban sus opciones
  * sin otro binario. Las que no arrancan la ventana vuelven enseguida.      */
@@ -1633,6 +1635,28 @@ int main(int argc, char **argv)
             check(contiene(etiqueta(p2->estado), "el mismo modelo"),
                   "y la barra lo dice", etiqueta(p2->estado));
             g_free(prev);
+
+            /* P5: AL CUADERNO, con proyecto y caso: la entrada lleva el
+             * caso, la corrida y su informe, como las de fue.          */
+            {
+                const OfSerie *y = of_serie(&p2->prev.f, "SYN_Y");
+                gchar *eps = y ? prevision_grafico(p2, (int) (y - p2->prev.f.s)) : NULL;
+                gchar *md, *t = NULL, *dir = g_path_get_dirname(p2->proy->path);
+
+                check(preview_cuaderno_puede(p2), "con proyecto y caso, hay «Al cuaderno»", NULL);
+                check(eps != NULL, "el gráfico de la previsión, para mandarlo", NULL);
+                /* desde su ventana, como el botón: el PNG es la página que se ve */
+                if (eps && preview_show(p2, eps)) { pump(50); preview_cuaderno(p2, eps); }
+                md = g_build_filename(dir, "cuaderno", "cuaderno.md", NULL);
+                check(g_file_get_contents(md, &t, NULL, NULL)
+                      && contiene(t, "Previsión de SYN_Y — caso C1 / c01")
+                      && contiene(t, "**Informe:** _casos/C1/")
+                      && contiene(t, "](img/") && !contiene(t, "no se pudo guardar"),
+                      "y la entrada: el caso, la corrida, el informe y la imagen", t);
+                check(contiene(etiqueta(p2->estado), "Al cuaderno"),
+                      "la barra dice dónde", etiqueta(p2->estado));
+                g_free(t); g_free(md); g_free(dir); g_free(eps);
+            }
 
             gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p2->prev.c_prever), FALSE);
             pump(20);

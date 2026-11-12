@@ -23,6 +23,8 @@
 #include <gtk/gtk.h>
 
 #include "sim.h"
+#include "previewhost.h"
+#include "preview.h"
 
 int sim_main( int argc, char **argv );
 
@@ -587,6 +589,26 @@ int main( int argc, char **argv )
             check( pr_leer( yaml, disco, &e ) == 0 && disco->nco == 2, "el manifiesto guardado tiene las dos", NULL );
             g_free( disco );
         }
+        /* P5: AL CUADERNO, con proyecto y caso: la página del modelo c01,
+         * desde su ventana, con el caso, la corrida y su informe.        */
+        {
+            gchar *pdf = pagina_ruta( p, 0 ), *dir = g_path_get_dirname( p->proy->path );
+            gchar *md = g_build_filename( dir, "cuaderno", "cuaderno.md", NULL ), *t = NULL;
+            char   w2[512];
+
+            check( preview_cuaderno_puede( p ), "con proyecto y caso, hay «Al cuaderno»", NULL );
+            check( pagina_serie( p, 0, pdf, w2, sizeof w2 ) == 0 && preview_show( p, pdf ),
+                   "la página del modelo, en su ventana", w2 );
+            pump( 50 );
+            preview_cuaderno( p, pdf );
+            check( g_file_get_contents( md, &t, NULL, NULL )
+                   && contiene( t, "El modelo — caso C1 / c01" )
+                   && contiene( t, "**Informe:** _casos/C1/" ) && contiene( t, "C1_c01.out" )
+                   && contiene( t, "](img/" ) && !contiene( t, "no se pudo guardar" ),
+                   "y la entrada: el caso, la corrida, el informe y la imagen", t );
+            g_free( t ); g_free( md ); g_free( dir ); g_free( pdf );
+        }
+
         s = sim_artefacto( p, "puerta.out" );
         check( contiene( s, "_casos" ) && contiene( s, "C1_puerta.out" ) &&
                g_file_test( s, G_FILE_TEST_EXISTS ),

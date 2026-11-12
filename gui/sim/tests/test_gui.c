@@ -23,6 +23,8 @@
 #include <gtk/gtk.h>
 
 #include "sim.h"
+#include "previewhost.h"
+#include "preview.h"
 
 int sim_main( int argc, char **argv );
 

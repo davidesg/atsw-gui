@@ -29,6 +29,8 @@
 #include <gtk/gtk.h>
 
 #include "gui.h"
+#include "previewhost.h"
+#include "preview.h"
 
 /* main.c entra compilado con -Dmain=drtran_main: asi se prueban sus opciones
  * sin otro binario. Las que no arrancan la ventana vuelven enseguida.      */

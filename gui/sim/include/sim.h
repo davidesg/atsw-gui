@@ -361,6 +361,12 @@ gboolean   pagina_ver( Sim *m, int i );
 /* Cuantos items cruzados lleva la ecuacion de la serie i (0: es la de fue
  * tal cual); -1 si no hay sistema estimado. Para la prueba.             */
 int        pagina_cruzados( Sim *m, int i );
+/* La nota de debajo de la ecuacion, en UTF-8 (con un VEC: que es ec_t).
+ * g_free; NULL si no hay sistema estimado. Para la prueba.              */
+gchar     *pagina_nota( Sim *m, int i );
+/* Los residuos de la serie i, en las unidades del motor (con un VEC, los
+ * de Y1 reconstruidos desde los de ec). Cuantos, o -1. Para la prueba.  */
+int        pagina_residuos( Sim *m, int i, double *v, int max );
 
 /* estructura.c: S7, simplificar y «¿es una red?» (sima simplify y structure). */
 /* Los coeficientes cruzados con |t| < t a cero (-zero) y una estimacion

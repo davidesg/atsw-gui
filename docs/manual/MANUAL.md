@@ -1289,8 +1289,30 @@ convergieron al mismo óptimo: logL −324.35, con 33 parámetros.
 **Residuos**, **Parámetros**, **Σ** y **Salida** son como en el VARMA. En los
 residuos hay una fila más, **ec1**: el error de equilibrio.
 
-Con un VEC no hay **Ver modelo** (la barra lo dice al pasar por encima): la
-página de cada serie con su ecuación α β′ llegará más adelante.
+**Ver modelo** enseña la página de cada serie, como en el VARMA (la flecha:
+las demás). La de LRM:
+
+![Ver modelo: LRM en el VEC](img/vec-ver-modelo.png)
+
+Arriba, sus residuos con su ACF y su PACF. Debajo, su ecuación, escrita como
+la escribe fue:
+
+- **La primera línea**: los deterministas de LRM, los de su `.pre`, y N_t.
+  drvec los resta **fijos**, con los valores que estimó fue; no los vuelve a
+  estimar. Una serie sin deterministas empieza en la segunda línea.
+- **La segunda**: el ruido. A la izquierda, su Γ propio como factor AR y la
+  diferencia ∇N_t. A la derecha, primero **α (ec_{t−1} − E)**: la corrección
+  del error, −0.17 por la distancia al equilibrio del trimestre anterior,
+  con E su media (la constante del caso 2). Después, los Γ cruzados, con las
+  diferencias de las otras series, y la innovación A_t con su σ.
+- **Debajo, ec_t**: la relación de equilibrio, normalizada sobre LRM, entre
+  las series sin sus deterministas.
+
+Todo va en las unidades de cada serie: sim_gui deshace el factor de escala
+del `.pre` (el 100 de estos), como fue. LRM es la serie de Y1, y drvec da los
+residuos de ec1, no los suyos. sim_gui reconstruye los de LRM
+(a_LRM = a_ec1 − β₂′ a_Y2) y salen con la σ del modelo: 0.0211 frente a
+0.0213.
 
 **Estructura** cambia de preguntas. Simplificar y «¿Es una red?» son del
 VARMA. En el VEC, la pregunta es la **débil exogeneidad**: si una serie empuja

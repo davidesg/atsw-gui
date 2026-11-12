@@ -173,10 +173,6 @@ static void barra_refresca( Sim *m )
     gboolean vec = m->pe.vec && m->pe.vec->hay_vec && !corre;
     const char *falta, *sin = corre ? "El motor está corriendo." : "Todavía no hay sistema estimado: "
                                        "Estimar (Ctrl+E) lo hace.";
-    /* CON UN VEC, la diagnosis si; la pagina del modelo y la prevision son
-     * todavia del VARMA (la del VEC la hace sima: forecast).            */
-    const char *sin_vec = "Con un VEC, la página del modelo todavía no: la ecuación con α β′ "
-                          "está en «6 · Diagnosis ▸ Ajuste» y en el .out.";
 
     if (!m->tb_estimar) return;
     falta = corre ? "El motor ya está corriendo."
@@ -187,9 +183,14 @@ static void barra_refresca( Sim *m )
                                       : "Estimar el sistema con drvarma (Ctrl+E), con el modelo de «4 · Modelo»",
               falta );
     enciende( m->tb_diag, hay || vec, "«6 · Diagnosis» (Ctrl+D)", sin );
-    enciende( m->tb_ver, hay, "La página del modelo de la primera serie: sus residuos con la ACF "
-              "y la PACF y, debajo, su ecuación como la escribe fue, con los términos cruzados "
-              "en la línea del ruido. La flecha: las demás series.", vec ? sin_vec : sin );
+    enciende( m->tb_ver, hay || vec, vec
+              ? "La página del modelo de la primera serie: sus residuos con la ACF y la PACF y, "
+                "debajo, su ecuación como la escribe fue, con la corrección del error α (ec − E) y "
+                "los términos cruzados en la línea del ruido; ec, la relación de equilibrio, en "
+                "una nota. La flecha: las demás series."
+              : "La página del modelo de la primera serie: sus residuos con la ACF "
+                "y la PACF y, debajo, su ecuación como la escribe fue, con los términos cruzados "
+                "en la línea del ruido. La flecha: las demás series.", sin );
     enciende( m->tb_prev, ( hay || vec ) && !m->pv.corriendo, "Calcular la previsión, en «7 · Previsión»",
               sin );
 }

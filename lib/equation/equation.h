@@ -93,14 +93,18 @@ typedef struct {
     * EI_INPUT with a == 3 is w_{B,t}, the stationary series of B, and one
     * with a == 4 is A_{B,t}, its innovation. The first term of cruz_ar has
     * no sign; the others, and every term of cruz_ma, begin with theirs.
-    * nota is a line under the equation (what w_{B,t} is). fue and drtran
+    * A VEC (drvec) puts its error-correction terms alpha (ec_{t-1} - E) at
+    * the head of cruz_ar: an EI_INPUT with a == 5 is ec, with its whole
+    * subscript in text ("t-1", "2,t-1").
+    * nota goes under the equation, one line per '\n' (what w_{B,t} is,
+    * what ec_t is). fue and drtran
     * leave all of it empty (the memset of eq_build and eq_new), and their
     * page does not change.                                              */
    const EqItem *cruz_ar;
    int           ncruz_ar;
    const EqItem *cruz_ma;
    int           ncruz_ma;
-   char          nota[256];
+   char          nota[1024];
 } Equation;
 
 /* Build the equation of the model that has just been estimated. inputv is

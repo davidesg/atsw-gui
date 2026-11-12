@@ -745,10 +745,45 @@ int main( int argc, char **argv )
         check( contiene( etiqueta( j->pd.ver_hosking ), "Hosking" ), "Hosking, de la salida de drvec",
                etiqueta( j->pd.ver_hosking ) );
         check( gtk_widget_is_sensitive( GTK_WIDGET(j->tb_diag) ) && gtk_widget_is_sensitive( GTK_WIDGET(j->tb_prev) ) &&
-               !gtk_widget_is_sensitive( GTK_WIDGET(j->tb_ver) ) &&
-               contiene( gtk_widget_get_tooltip_text( GTK_WIDGET(j->tb_ver) ), "α β′" ),
-               "con un VEC: Diagnosis y Prever sí; Ver modelo no (lo dice)",
+               gtk_widget_is_sensitive( GTK_WIDGET(j->tb_ver) ) &&
+               contiene( gtk_widget_get_tooltip_text( GTK_WIDGET(j->tb_ver) ), "α (ec − E)" ),
+               "con un VEC: Diagnosis, Prever y Ver modelo (con α (ec − E))",
                gtk_widget_get_tooltip_text( GTK_WIDGET(j->tb_ver) ) );
+
+        /* --- S10e: Ver modelo del VEC ------------------------------------- */
+        {
+            gchar *nota = pagina_nota( j, 0 );
+            double r[OV_MAX_OBS];
+            int i, n;
+            check( nota && contiene( nota, "ec(t) = N(LRM,t) - 1.1196 N(LRY,t) + 5.1557 N(IBO,t) - 4.2617 N(IDE,t)" ),
+                   "la nota dice ec, la relación de sima, normalizada sobre LRM", nota );
+            check( nota && contiene( nota, "sin sus deterministas (los de su .pre, fijos)" ),
+                   "LRM lleva sus deterministas del .pre, y la nota lo dice", nota );
+            g_free( nota );
+            check( pagina_cruzados( j, 0 ) > 0 && pagina_cruzados( j, 1 ) > 0,
+                   "las ecuaciones del VEC llevan α (ec − E) y los Γ cruzados", NULL );
+            /* LRM es la de Y1: el .out trae los residuos de ec1; los suyos se
+               reconstruyen, a = a_ec − β₂′ a_Y2, y su sd es la σ del modelo */
+            n = pagina_residuos( j, 0, r, OV_MAX_OBS );
+            {
+                double s = 0, s2 = 0, sd;
+                for (i = 0; i < n; i++) s += r[i];
+                for (i = 0; i < n; i++) s2 += ( r[i] - s / n ) * ( r[i] - s / n );
+                sd = n > 1 ? sqrt( s2 / n ) : 0;
+                gchar *v = g_strdup_printf( "n %d, sd %.4f, σ %.4f", n, sd, sqrt( j->pe.vec->sigma[3][3] ) );
+                check( n == 54 && fabs( sd - 2.11 ) < 0.02,
+                       "los residuos de LRM, reconstruidos desde los de ec1: sd 2.11 (σ 2.13)", v );
+                g_free( v );
+            }
+            for (i = 0; i < 4; i++) {
+                gchar *pdf = pagina_ruta( j, i );
+                char why[256];
+                check( pagina_serie( j, i, pdf, why, sizeof why ) == 0 && g_file_test( pdf, G_FILE_TEST_EXISTS ),
+                       "la página del VEC se escribe", why );
+                g_free( pdf );
+            }
+            check( pagina_ver( j, 0 ), "Ver modelo de LRM abre su página", etiqueta( j->estado ) );
+        }
 
         /* --- S10c: la debil exogeneidad (Johansen y Juselius, sima) ------ */
         check( restricciones_weakex( j ), "la débil exogeneidad arranca", etiqueta( j->estado ) );

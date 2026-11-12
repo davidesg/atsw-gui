@@ -680,10 +680,18 @@ int ov_residuos_file( const char *path, OvResiduos *r )
          continue;
       }
       if ( rayas == 1 && sscanf( s, "%d %15s", &obs, f ) == 2 ) {
-         const char *u = strrchr( s, '|' );
-         if ( !u || k >= OV_MAX_OBS ) continue;
-         u++;
-         while ( *u == '>' || *u == ' ' ) u++;
+         /* EL VALOR ES LA ULTIMA PALABRA de la linea. El borde derecho no
+            sirve de ancla: es '|' casi siempre, pero '+' en la primera
+            estacion de cada año (con datos trimestrales o mensuales), y
+            '|' es tambien el eje del cero. Buscar el ultimo '|' leia ahi
+            el eje: un 0, o la observacion saltada si el '*' lo tapaba. */
+         size_t n = strlen( s );
+         const char *u;
+         while ( n > 0 && ( s[n - 1] == ' ' || s[n - 1] == '\t' || s[n - 1] == '\r' ) ) n--;
+         u = s + n;
+         while ( u > s && u[-1] != ' ' && u[-1] != '\t' && u[-1] != '|' && u[-1] != '+' &&
+                 u[-1] != '>' && u[-1] != '<' ) u--;
+         if ( u == s + n || k >= OV_MAX_OBS ) continue;
          r->v[serie][k] = atof( u );
          if ( serie == 0 ) copia( r->fecha[k], sizeof r->fecha[k], f );
          k++;

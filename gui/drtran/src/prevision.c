@@ -38,6 +38,7 @@
 #include "preview.h"
 #include "outfcst.h"
 #include "fufplot.h"
+#include "ofgraf.h"
 #include "engine.h"
 
 enum { P_H, P_N, P_MAE, P_RMSE, P_MAPE, P_UNI, P_RATIO, P_DM, P_COMP, P_N_COLS };
@@ -403,29 +404,17 @@ void prevision_calcular( Mtram *m )
  * desviacion de la primera fila prevista. En fuf, lo mismo: v1 en h = 1 es
  * sigma2. Sin leer una segunda cosa que pudiera no cuadrar con la tabla.  */
 
-/* «4/1993» o «1993»: el periodo y el anio. */
-static int fecha_de( const char *s, int *per, int *anio )
-{
-    if (sscanf( s, "%d/%d", per, anio ) == 2) return 1;
-    if (sscanf( s, "%d", anio ) == 1) { *per = 1; return 1; }
-    return 0;
-}
-
 gchar *prevision_grafico( Mtram *m, int k )
 {
     Prev          *P = &m->prev;
     const OfSerie *S;
     const struct Tusmodel *tm = NULL;
-    double        *y, *b1, *b2, *err, lam = 1.0, sigma;
-    int            i, L, i0, freq = 1, per, anio, nivel;
     gchar         *dir, *eps = NULL, *nom;
     FDFig         *fig;
+    int            i, freq = 1;
 
     if (!P->vale || k < 0 || k >= P->f.ns) return NULL;
     S = &P->f.s[k];
-    L = S->nprev;
-    i0 = S->nf - 2 * L;                /* la primera de las L observadas  */
-    if (L < 2 || i0 < 0 || !fecha_de( S->f[i0].fecha, &per, &anio )) return NULL;
 
     /* El modelo de ESA serie: su lambda y su frecuencia. */
     for (i = 0; i < m->c.n; i++)
@@ -433,43 +422,9 @@ gchar *prevision_grafico( Mtram *m, int k )
             tm   = &m->c.s[i]->tm;
             freq = m->c.s[i]->ts.freq;
         }
-    if (tm) lam = tm->boxlam;
-    nivel = lam < 0.0;                 /* fuf: forecast_graphic_BC       */
-    if (freq < 1) freq = 1;
 
-    y   = g_new0( double, 2 * L );
-    b1  = g_new0( double, 2 * L );
-    b2  = g_new0( double, 2 * L );
-    err = g_new0( double, L );
-    for (i = 0; i < 2 * L; i++) {
-        const OfFila *f = &S->f[i0 + i];
-        /* la variacion anual; con datos anuales, la del periodo, que es ella */
-        double        v  = (freq > 1) ? f->var_anu : f->var_per;
-        double        sd = (freq > 1) ? f->sd_anu  : f->sd_per;
-
-        if (nivel) {
-            /* La banda, como fuf: la transformada mas/menos dos desviaciones,
-             * deshecha. La tabla da el nivel y la desviacion EN LA ESCALA
-             * TRANSFORMADA (/refactor), y el refactor se va: z = (x^l - 1)/l. */
-            double z = (pow( f->nivel, lam ) - 1.0) / lam;
-
-            y[i] = f->nivel;
-            if (i >= L) {
-                b1[i] = pow( (z + 2.0 * f->sd_nivel) * lam + 1.0, 1.0 / lam );
-                b2[i] = pow( (z - 2.0 * f->sd_nivel) * lam + 1.0, 1.0 / lam );
-            }
-        } else {
-            y[i] = v;
-            if (i >= L) { b1[i] = v + sd; b2[i] = v - sd; }
-        }
-        if (i < L) err[i] = f->tiene_err ? f->err : 0.0;
-    }
-    sigma = S->f[i0 + L].sd_nivel;
-
-    fig = fp_forecast( y, b1, b2, err, L, sigma, freq, anio, per,
-                       nivel ? "LEVEL"
-                             : (tm && fabs( lam ) < 1e-8) ? "LRC anual (%)"
-                                                          : "Annual change" );
+    /* La conversion de la tabla al dibujo es la de sim_gui: lib/outfcst. */
+    fig = of_grafico( S, tm ? tm->boxlam : 1.0, tm != NULL, freq );
     if (fig) {
         dir = g_build_filename( g_get_user_cache_dir(), GUI_CACHE, NULL );
         g_mkdir_with_parents( dir, 0700 );
@@ -480,8 +435,6 @@ gchar *prevision_grafico( Mtram *m, int k )
         g_free( nom );
         g_free( dir );
     }
-
-    g_free( y ); g_free( b1 ); g_free( b2 ); g_free( err );
     return eps;
 }
 

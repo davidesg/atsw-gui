@@ -53,6 +53,15 @@ foto sim-evaluacion
 pestana Respuesta al impulso
 espera 800
 foto sim-irf
+# Dibujada: el choque en MUSKRAT y la respuesta de MINK, que es lo que
+# trae el desplegable, y su acumulada. Sin bandas.
+boton Ver el gráfico
+ventana irf_
+tamano 700 900
+espera 2500
+foto sim-irf-grafico
+cierra
+ventana sim_gui
 # Simplificar (los cruzados con |t| < 1 a cero, contra el modelo) y
 # «¿Es una red?» (cada par a cero y cada orden triangular, por LR).
 pestana 6 · Diagnosis

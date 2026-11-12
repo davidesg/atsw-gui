@@ -342,7 +342,19 @@ Medido con fuf y drtran sobre IPC_ES ← WTI (`engines/drtran/examples/passthrou
 | **P3** ✓ | drtran_gui: al evaluar, el diagonal (`-0`) se evalúa solo con la misma ventana, en una corrida aparte, y la tabla da su RMSE, el cociente y Diebold-Mariano (`lib/fcomp`) |
 | **P4** ✓ | drtran_gui: la IRF y la SRF dibujadas con sus bandas (`fp_response` en `lib/fufplot`): «Ver el gráfico» en Diagnosis → Transferencias, y en Prever ▾ |
 | **P5** ✓ | La auditoría de «Al cuaderno» en drtran_gui y en sim_gui (abajo), y el botón en las dos |
-| **P6** | sim_gui: el gráfico de fuf, la tabla de drvarma en el formato de fuf, y la IRF y la SRF dibujadas |
+| **P6** ✓ (VARMA) | drvarma añade a su `.out` la tabla de fuf, sin quitar el bloque de antes (lo leen `outvarma` y sim_gui). sim_gui dibuja la previsión con el gráfico de fuf (`of_grafico`, `lib/outfcst`), enseña la tabla tal cual y dibuja la IRF con su acumulada, **sin bandas** |
+
+**Lo que queda de P6, y por qué.**
+
+- **El VEC (drvec).** Su previsión se calcula en niveles y solo trae la
+  d.t. del nivel. La tabla de fuf y el panel de arriba del gráfico (la
+  variación anual con su d.t.) piden además la d.t. de la variación del
+  periodo y de la anual. En drvec eso es cálculo nuevo en el motor, no
+  formato, y drvec C es el oráculo del porte a Python. sim_gui sigue
+  dibujando el VEC con `fp_forecast_paneles`.
+- **Las bandas de la IRF de drvarma.** drvarma no da los errores típicos de
+  la IRF ortogonalizada. sima las saca por bootstrap (`irf_bands`). En C
+  habría que llevar ese bootstrap, o el método delta, al motor.
 
 **La auditoría de «Al cuaderno» (P5, 12-nov-2026).**
 

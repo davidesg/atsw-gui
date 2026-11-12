@@ -55,9 +55,13 @@ Lleva también `fp_response`, con el mismo estilo: la respuesta al impulso
 (ν_k, en impulsos con su barra de ±2 d.t.) y al escalón (la acumulada, con su
 banda y la ganancia hacia la que tiende). La usa drtran_gui (fase P4).
 
+La conversión de la tabla del `.out` (la de fuf, que escriben drtran y la
+escalera de drvarma) a este gráfico está en `outfcst/ofgraf.c`
+(`of_grafico`): la usan drtran_gui y sim_gui, una sola vez.
+
 No se confunde con el `fp_forecast_paneles` de `fugplot/`, que fue el gráfico
-de la previsión de drtran_gui y sim_gui antes de este y lo sigue usando
-sim_gui hasta su fase (fase P6 de `docs/TODO.md`).
+de la previsión de drtran_gui y sim_gui antes de este. sim_gui lo sigue
+usando para el VEC, cuya previsión no trae la tabla de fuf.
 
 ## `fcomp/` — dos modelos, por su error fuera de muestra
 

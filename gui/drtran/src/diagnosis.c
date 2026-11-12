@@ -674,7 +674,7 @@ gchar *diagnosis_grafico_irf( Mtram *m, int j )
     t1 = a_latin1( u ); g_free( u );
     t2 = a_latin1( t->hay_g ? "Escalón y ganancia" : "Escalón" );
 
-    fig = fp_response( nu, nd, cu, cd, t->nk, t->g * e, t->hay_g, t1, t2 );
+    fig = fp_response( nu, nd, cu, cd, t->nk, t->g * e, t->hay_g, t1, t2, NULL );
     if (fig) {
         dir = g_build_filename( g_get_user_cache_dir(), GUI_CACHE, NULL );
         g_mkdir_with_parents( dir, 0700 );

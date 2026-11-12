@@ -45,6 +45,9 @@
 
 #include "fugdraw.h"
 #include "fugplot.h"
+#include "fufplot.h"
+#include "outfcst.h"
+#include "ofgraf.h"
 #include "preview.h"
 
 enum { E_SER, E_H, E_N, E_SIS, E_UNI, E_RAZ, E_N_ };
@@ -263,6 +266,35 @@ gboolean prevision_grafico( Sim *m, int i )
     gboolean ok = FALSE;
 
     if (!P->v || i < 0 || i >= m->sis.n) return FALSE;
+
+    /* EL DE fuf (fase P6 de docs/TODO.md): la escalera de drvarma escribe en
+     * su .out la tabla de fuf, y de ella sale el mismo grafico que en fue y
+     * en drtran_gui (lib/outfcst, of_grafico). Lo de abajo queda para un
+     * .out sin esa tabla (uno de antes).                                  */
+    if (P->base) {
+        gchar *out = g_strconcat( P->base, ".out", NULL );
+        static Forecast fo;
+        const OfSerie  *S;
+
+        if (of_parse_file( out, &fo ) == 0 &&
+            ( S = of_serie( &fo, m->sis.s[i].nombre ) ) != NULL) {
+            FDFig *fg = of_grafico( S, m->sis.s[i].lambda, 1, m->sis.s[i].freq );
+
+            if (fg) {
+                gchar *b = sim_artefacto( m, m->sis.s[i].nombre ), *dir = g_path_get_dirname( b );
+                gchar *nm = g_strdup_printf( "prev_%s.eps", m->sis.s[i].nombre );
+                gchar *ep = g_build_filename( dir, nm, NULL );
+
+                ok = fd_write_eps( fg, ep ) == 0 && preview_show( m, ep );
+                if (!ok) sim_estado( m, "No pude dibujar %s", ep );
+                fd_fig_free( fg );
+                g_free( ep ); g_free( nm ); g_free( dir ); g_free( b ); g_free( out );
+                return ok;
+            }
+        }
+        g_free( out );
+    }
+
     for (k = 0; k < P->v->nprev; k++)
         if (!strcmp( P->v->prev[k].nombre, m->sis.s[i].nombre )) x = &P->v->prev[k];
     if (!x || x->nf < 1) return FALSE;
@@ -333,6 +365,87 @@ static void on_grafico( GtkButton *b, Sim *m )
     prevision_grafico( m, GPOINTER_TO_INT(g_object_get_data( G_OBJECT(b), "serie" )) );
 }
 
+/* LA IRF DIBUJADA (fase P6), con el estilo del grafico de la prevision de
+ * fuf: arriba la respuesta de resp a un choque de una desviacion en la
+ * innovacion de choque (Cholesky, en el orden del sistema), en impulsos;
+ * abajo su acumulada. SIN BANDAS, y el dibujo lo dice: drvarma no da los
+ * errores tipicos de la IRF (sima los saca por bootstrap, irf_bands).  */
+gboolean prevision_grafico_irf( Sim *m, int choque, int resp )
+{
+    const VarmaOut *v = m->pe.v;
+    double *nu, *cu;
+    gchar  *t1, *t2, *u, *nota, *b, *dir, *nm, *ep;
+    FDFig  *fg;
+    int     k, n;
+    gboolean ok = FALSE;
+
+    if (!v || v->fallo || v->nh_irf < 2 || choque < 0 || resp < 0 ||
+        choque >= m->sis.n || resp >= m->sis.n) return FALSE;
+    n  = v->nh_irf;
+    nu = g_new( double, n );
+    cu = g_new( double, n );
+    for (k = 0; k < n; k++) {
+        nu[k] = v->irf[choque][k][resp];
+        cu[k] = nu[k] + ( k ? cu[k - 1] : 0.0 );
+    }
+    u = g_strdup_printf( "Impulso: %s <- %s", m->sis.s[resp].nombre, m->sis.s[choque].nombre );
+    t1 = latin1( u ); g_free( u );
+    t2 = latin1( "Acumulada" );
+    nota = latin1( "Choque de una d.t. (Cholesky, en el orden del sistema).\n"
+                   "Sin bandas: drvarma no da los errores típicos de la IRF." );
+    fg = fp_response( nu, NULL, cu, NULL, n, 0.0, 0, t1, t2, nota );
+    if (fg) {
+        b   = sim_artefacto( m, m->sis.s[resp].nombre );
+        dir = g_path_get_dirname( b );
+        nm  = g_strdup_printf( "irf_%s_%s.eps", m->sis.s[resp].nombre, m->sis.s[choque].nombre );
+        ep  = g_build_filename( dir, nm, NULL );
+        ok  = fd_write_eps( fg, ep ) == 0 && preview_show( m, ep );
+        if (!ok) sim_estado( m, "No pude dibujar %s", ep );
+        fd_fig_free( fg );
+        g_free( ep ); g_free( nm ); g_free( dir ); g_free( b );
+    }
+    g_free( nu ); g_free( cu ); g_free( t1 ); g_free( t2 ); g_free( nota );
+    return ok;
+}
+
+static void on_ver_irf( GtkButton *bt, Sim *m )
+{
+    PagPrev *P = &m->pv;
+
+    if (!prevision_grafico_irf( m, gtk_combo_box_get_active( GTK_COMBO_BOX(P->c_choque) ),
+                                gtk_combo_box_get_active( GTK_COMBO_BOX(P->c_resp) ) ))
+        sim_estado( m, "No hay respuesta al impulso que dibujar: estima el sistema." );
+}
+
+/* Las series en los dos desplegables, y el boton encendido si hay IRF. */
+static void irf_controles( Sim *m )
+{
+    PagPrev  *P = &m->pv;
+    gboolean  hay = m->pe.v && !m->pe.v->fallo && m->pe.v->nh_irf >= 2 &&
+                    !( m->pe.vec && m->pe.vec->hay_vec );
+    int       i, a0, b0;
+
+    if (!P->c_choque) return;
+    a0 = gtk_combo_box_get_active( GTK_COMBO_BOX(P->c_choque) );
+    b0 = gtk_combo_box_get_active( GTK_COMBO_BOX(P->c_resp) );
+    gtk_combo_box_text_remove_all( GTK_COMBO_BOX_TEXT(P->c_choque) );
+    gtk_combo_box_text_remove_all( GTK_COMBO_BOX_TEXT(P->c_resp) );
+    for (i = 0; i < m->sis.n; i++) {
+        gtk_combo_box_text_append_text( GTK_COMBO_BOX_TEXT(P->c_choque), m->sis.s[i].nombre );
+        gtk_combo_box_text_append_text( GTK_COMBO_BOX_TEXT(P->c_resp), m->sis.s[i].nombre );
+    }
+    if (m->sis.n > 0) {
+        gtk_combo_box_set_active( GTK_COMBO_BOX(P->c_choque), a0 >= 0 && a0 < m->sis.n ? a0 : 0 );
+        gtk_combo_box_set_active( GTK_COMBO_BOX(P->c_resp),
+                                  b0 >= 0 && b0 < m->sis.n ? b0 : ( m->sis.n > 1 ? 1 : 0 ) );
+    }
+    gtk_widget_set_sensitive( P->b_irf, hay );
+    gtk_widget_set_tooltip_text( P->b_irf, hay
+        ? "La respuesta y su acumulada, dibujadas. Sin bandas: drvarma no da sus errores típicos."
+        : m->pe.vec && m->pe.vec->hay_vec ? "La IRF del VEC, en niveles, está en la tabla de abajo."
+                                          : "Estima el sistema primero." );
+}
+
 /* --- las tablas ------------------------------------------------------------ */
 
 static void texto_prev_vec( Sim *m )
@@ -371,6 +484,30 @@ static void texto_prev( Sim *m )
     int k, j;
 
     if (P->es_vec) { g_string_free( g, TRUE ); texto_prev_vec( m ); return; }
+
+    /* LA TABLA DE fuf, la del .out de drvarma tal cual (fase P6): la misma
+     * que en fue y en drtran_gui. Debajo, la banda del 95 % del nivel, que
+     * esa tabla no lleva y el bloque de siempre del .out si.            */
+    if (P->v && P->base) {
+        gchar *out = g_strconcat( P->base, ".out", NULL );
+        static char tb[65536];
+
+        for (k = 0; k < m->sis.n; k++)
+            if (of_tabla_file( out, m->sis.s[k].nombre, tb, sizeof tb ) == 0) {
+                if (!g_utf8_validate( tb, -1, NULL )) {
+                    gchar *u = g_convert_with_fallback( tb, -1, "UTF-8", "ISO-8859-1", "?",
+                                                        NULL, NULL, NULL );
+                    g_string_append( g, u ? u : "" );
+                    g_free( u );
+                } else
+                    g_string_append( g, tb );
+                g_string_append( g, "\n\n" );
+            }
+        g_free( out );
+        if (g->len)
+            g_string_append( g, "Las desviaciones son TEÓRICAS: lo que el modelo implica, no lo que "
+                                "pasa fuera de muestra.\n\nLa banda del 95 % del nivel:\n\n" );
+    }
 
     for (k = 0; P->v && k < P->v->nprev; k++) {
         const OvPrev *x = &P->v->prev[k];
@@ -633,6 +770,7 @@ void prevision_refresca( Sim *m )
     texto_prev( m );
     evaluacion( m );
     irf_fevd( m );
+    irf_controles( m );
 
     l = gtk_container_get_children( GTK_CONTAINER(P->graficos) );
     for (q = l; q; q = q->next) gtk_widget_destroy( q->data );
@@ -739,8 +877,25 @@ GtkWidget *prevision_pagina_new( Sim *m )
     gtk_box_pack_start( GTK_BOX(pg), sw, TRUE, TRUE, 0 );
     gtk_notebook_append_page( GTK_NOTEBOOK(P->libreta), pg, gtk_label_new( "Evaluación" ) );
 
-    gtk_notebook_append_page( GTK_NOTEBOOK(P->libreta), texto_new( &P->t_irf ),
-                              gtk_label_new( "Respuesta al impulso" ) );
+    pg = gtk_box_new( GTK_ORIENTATION_VERTICAL, 6 );
+    gtk_container_set_border_width( GTK_CONTAINER(pg), 6 );
+    {
+    GtkWidget *f = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 6 );
+
+    gtk_box_pack_start( GTK_BOX(f), gtk_label_new( "Choque en" ), FALSE, FALSE, 0 );
+    P->c_choque = gtk_combo_box_text_new();
+    gtk_box_pack_start( GTK_BOX(f), P->c_choque, FALSE, FALSE, 0 );
+    gtk_box_pack_start( GTK_BOX(f), gtk_label_new( "respuesta de" ), FALSE, FALSE, 0 );
+    P->c_resp = gtk_combo_box_text_new();
+    gtk_box_pack_start( GTK_BOX(f), P->c_resp, FALSE, FALSE, 0 );
+    P->b_irf = gtk_button_new_with_label( "Ver el gráfico" );
+    g_signal_connect( P->b_irf, "clicked", G_CALLBACK(on_ver_irf), m );
+    gtk_widget_set_sensitive( P->b_irf, FALSE );
+    gtk_box_pack_start( GTK_BOX(f), P->b_irf, FALSE, FALSE, 0 );
+    gtk_box_pack_start( GTK_BOX(pg), f, FALSE, FALSE, 0 );
+    }
+    gtk_box_pack_start( GTK_BOX(pg), texto_new( &P->t_irf ), TRUE, TRUE, 0 );
+    gtk_notebook_append_page( GTK_NOTEBOOK(P->libreta), pg, gtk_label_new( "Respuesta al impulso" ) );
     gtk_notebook_append_page( GTK_NOTEBOOK(P->libreta), texto_new( &P->t_fevd ),
                               gtk_label_new( "Descomposición" ) );
     return caja;

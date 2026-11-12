@@ -211,6 +211,7 @@ typedef struct {
     GtkWidget *ver_pide, *ver_eval;
     GtkWidget *libreta;
     GtkWidget *t_prev, *l_eval, *t_irf, *t_fevd;
+    GtkWidget *c_choque, *c_resp, *b_irf;   /* la IRF dibujada (fase P6)   */
     GtkWidget *graficos;      /* un boton por serie: su grafico           */
 
     EngineJob *trabajo;
@@ -352,6 +353,10 @@ gboolean   prevision_calcular( Sim *m );
 /* El grafico de la prevision de la serie i, escrito y en la ventana de
  * graficos. TRUE si se pudo.                                             */
 gboolean   prevision_grafico( Sim *m, int i );
+/* La respuesta al impulso ortogonalizada de la serie resp a un choque en la
+ * serie choque, y su acumulada, dibujadas (lib/fufplot), sin bandas: drvarma
+ * no da sus errores tipicos. TRUE si se dibujo y se enseño.           */
+gboolean   prevision_grafico_irf( Sim *m, int choque, int resp );
 
 /* pagina.c: «Ver modelo», la pagina de la serie i (0..n-1) del sistema
  * estimado, con el dibujante de fue (lib/equation). */

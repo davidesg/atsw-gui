@@ -1193,9 +1193,10 @@ errores típicos de la respuesta al impulso:
 ![La respuesta al impulso](img/sim-irf.png)
 
 Un choque de una desviación típica en la innovación de la rata almizclera
-sube los visones el año siguiente (0.70) y baja las ratas dos años después
-(−0.59): la presa alimenta al depredador, y el depredador se come a la
-presa.
+(25.5: las series van en logaritmos por 100, así que es un 25 % largo) sube
+los visones el año siguiente en 17.9 y baja las ratas dos años después en
+15.1, en las mismas unidades: la presa alimenta al depredador, y el
+depredador se come a la presa.
 
 ![La respuesta de los visones a un choque en las ratas, dibujada](img/sim-irf-grafico.png)
 

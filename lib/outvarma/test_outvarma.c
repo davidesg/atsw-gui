@@ -126,7 +126,12 @@ static void ar2( const char *dir )
    ok( v.n_raices_ar == 10 && v.raiz_ar_max > 0 && v.raiz_ar_max < 1, "10 raices AR, todas dentro" );
    ok( v.n_raices_ma == 1 && v.raiz_ma_max < 1, "1 raiz MA, dentro" );
    ok( v.nh_irf == 21, "IRF: horizontes 0..20" );
-   okf( v.irf[0][0][0], 1, 1e-9, "IRF: el choque propio en h = 0 es 1" );
+   /* BUG-0004 de drvarma: el choque de una d.t. es el Cholesky de Sigma,
+      no el de Q. Antes la escalera daba 1 aqui (factorizaba Q).       */
+   okf( v.irf[0][0][0], sqrt( v.sigma[0][0] ), 1e-4,
+        "IRF: el choque propio en h = 0 es sqrt(Sigma11)" );
+   okf( v.irf[0][0][1], v.sigma[0][1] / sqrt( v.sigma[0][0] ), 1e-4,
+        "IRF: MINK responde a MUSKRAT en h = 0 con Sigma12 / sqrt(Sigma11)" );
    okf( v.irf[1][0][0], 0, 1e-9, "IRF: Cholesky, MINK no mueve a MUSKRAT en h = 0" );
    ok( v.nh_fevd == 20, "FEVD: horizontes 1..20" );
    for ( i = 0, n = 0; i < v.m; i++ )

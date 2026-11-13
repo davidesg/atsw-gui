@@ -1526,9 +1526,17 @@ int escalera_main(int argc, char *argv[])
         print_matrices(&F.vm);
         print_roots(&F.vm);
         {
-            int h = (F.vm.n < 40) ? 10 : 20;
+            /* BUG-0004: F.vm lleva sigma2 = 1 (shootx_esc; la escalera la
+               concentra y vive en F.sigma2), y la IRF factoriza
+               Sigma = sigma2 * Q. Con 1 factorizaba Q, y el choque de una
+               d.t. salia dividido por sigma. Se pone la de verdad solo
+               para el informe; la FEVD es un cociente y no cambia.     */
+            int  h = (F.vm.n < 40) ? 10 : 20;
+            real s2 = F.vm.sigma2;
+            F.vm.sigma2 = F.sigma2;
             impulse_response(&F.vm, h, outputv);
             variance_decomposition(&F.vm, h, outputv);
+            F.vm.sigma2 = s2;
         }
         multivariate_diagnostics(F.vm.a, F.vm.n, F.vm.m, data_freq, esc_ndyn(), outputv);
         {

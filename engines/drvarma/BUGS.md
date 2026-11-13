@@ -539,3 +539,40 @@ de la escalera, para que las dos vías digan lo mismo. Toca el motor: con OK.
 `-mean`, que estima bien. Sale con 1 mientras el caso fallido salga con 0,
 con 0 cuando salga con otro código y con 2 si el caso o el control no
 valen.
+
+## BUG-0004 — la IRF de la escalera se mide con Q, no con Σ
+
+**Encontrado:** 2026-11-13, al empezar las bandas de la IRF por el método
+delta (`docs/TODO.md`, fase P6 de la previsión).
+**Dónde:** `src/escalera.c`, en el informe del modelo pedido:
+`impulse_response(&F.vm, h, outputv)`. `F.vm` es el modelo que deja
+`shootx_esc`, que pone `armax->sigma2 = 1.0`: la escalera concentra σ², que
+vive en `F.sigma2`. `impulse_response` (`src/diagnose.c`) toma
+Σ = σ²·Q con ese σ² = 1, así que factoriza **Q**.
+
+### Síntoma
+
+El «choque de una desviación típica» mide √Q_jj y no √Σ_jj, y toda la IRF
+ortogonalizada (la acumulada y la ganancia también) sale **dividida por σ**.
+En Jenkins y Alavi, Σ₁₁ = 694.4: el choque de MUSKRAT tiene que medir 26.35
+y la tabla «Structural shock standard deviations» dice 1.0000. La FEVD no
+cambia, porque es un cociente. La vía `.inp` (`drvarma.c`) y el porte a
+Python usan la Σ completa.
+
+### Por qué importa
+
+sim_gui dibuja esa IRF como «choque de una d.t.» (fase P6), en unidades
+equivocadas; y las bandas por el método delta se calcularían sobre ella.
+
+### Arreglo propuesto (no hecho)
+
+Llamar a `impulse_response` con σ² = `F.sigma2` (poniéndolo en `F.vm` solo
+para esa llamada). Cambia las cifras de la IRF en el `.out` de la escalera:
+las referencias de `tests/escalera` y las fotos del manual que la enseñan.
+Toca el motor: con OK.
+
+### Reproducción
+
+`bugs/BUG-0004-repro/repro.py`: MUSKRAT y MINK, VARMA(1,1) con Σ llena. Sale
+con 1 mientras el choque de la primera serie no sea √Σ₁₁, con 0 cuando lo
+sea y con 2 si el caso no vale (sin `.out` o con Σ diagonal).

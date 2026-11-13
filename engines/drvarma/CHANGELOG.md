@@ -9,6 +9,15 @@ Versions up to 0.4 were maintained as directory snapshots (`drvarma_v.01` …
 
 ## [5.0.0] — unreleased
 
+### Fixed — the ladder's impulse responses were measured with Q, not Σ (BUG-0004)
+
+- The ladder concentrates σ² and called `impulse_response` with the model
+  `shootx_esc` leaves, where σ² = 1: the Cholesky factor was Q's, so a
+  one-s.d. shock was √Q_jj instead of √Σ_jj and the orthogonalised IRF, its
+  accumulation and the gain were all divided by σ. It now uses `F.sigma2`.
+  The FEVD (a ratio) does not change. The `.inp` route and the Python port
+  were right. `BUGS.md` BUG-0004, with its repro.
+
 drvarma joins the ladder fue → drtran → drvarma: it reads fue's `.pre` files.
 Design: `docs/DESIGN-v5-ladder.md`.
 

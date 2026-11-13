@@ -540,7 +540,7 @@ de la escalera, para que las dos vías digan lo mismo. Toca el motor: con OK.
 con 0 cuando salga con otro código y con 2 si el caso o el control no
 valen.
 
-## BUG-0004 — la IRF de la escalera se mide con Q, no con Σ
+## BUG-0004 — la IRF de la escalera se mide con Q, no con Σ (ARREGLADO)
 
 **Encontrado:** 2026-11-13, al empezar las bandas de la IRF por el método
 delta (`docs/TODO.md`, fase P6 de la previsión).
@@ -564,15 +564,18 @@ Python usan la Σ completa.
 sim_gui dibuja esa IRF como «choque de una d.t.» (fase P6), en unidades
 equivocadas; y las bandas por el método delta se calcularían sobre ella.
 
-### Arreglo propuesto (no hecho)
+### Arreglo (2026-11-13, PR propio)
 
-Llamar a `impulse_response` con σ² = `F.sigma2` (poniéndolo en `F.vm` solo
-para esa llamada). Cambia las cifras de la IRF en el `.out` de la escalera:
-las referencias de `tests/escalera` y las fotos del manual que la enseñan.
-Toca el motor: con OK.
+`impulse_response` se llama con σ² = `F.sigma2`, puesto en `F.vm` solo para
+esa llamada. Solo cambian, en las cuatro referencias de `tests/escalera`, la
+IRF, su acumulada y la ganancia; la FEVD y el resto, byte a byte iguales. La
+fila h = 0 es ahora el Cholesky de Σ (en `pt`: 8.2611, 0.1233 y 0.2056). La
+prueba de `lib/outvarma`, que daba por bueno el 1, pide √Σ₁₁ y Σ₁₂/√Σ₁₁. Las
+fotos del manual que enseñan la IRF, rehechas.
 
 ### Reproducción
 
 `bugs/BUG-0004-repro/repro.py`: MUSKRAT y MINK, VARMA(1,1) con Σ llena. Sale
 con 1 mientras el choque de la primera serie no sea √Σ₁₁, con 0 cuando lo
-sea y con 2 si el caso no vale (sin `.out` o con Σ diagonal).
+sea y con 2 si el caso no vale (sin `.out` o con Σ diagonal). Con el arreglo
+sale con 0: 26.3518 = √694.416.

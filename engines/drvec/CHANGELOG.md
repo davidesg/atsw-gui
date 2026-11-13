@@ -7,6 +7,21 @@ publicación: `v*`.
 
 ## 0.14 — sin publicar
 
+### La tabla de previsión de fuf en el `.out`
+
+- `-f H` escribe, después de su tabla, el FORECAST REPORT de fuf por serie,
+  como drvarma y drtran (fase P6 de atsw-gui): las `H+1` últimas
+  observaciones con su variación y su error a un paso (ERR), y las `H`
+  previsiones con la d.t. del nivel, de la variación del periodo y de la
+  anual. Las dos d.t. nuevas salen de las mismas `G_m` que la banda del nivel
+  (`G_m − G_{m−k}`); ERR es `G_0 a_t`. `docs/FORECAST.md` §5.
+- Ni la tabla de antes ni el `.forecast` cambian: el `.out` de `forecast` y de
+  `estwin` solo gana líneas (48 y 40), y se recapturan sus dos hashes.
+- `run_tests.sh` §8af: una tabla por serie y las identidades con la banda.
+  Las comprobaciones que leían el `.out` desde «Forecast» hasta el final
+  paran en «FORECAST REPORT».
+- El porte a Python no la tiene todavía.
+
 ### El contraste de rango con `-trend` (caso 4), calibrado por bootstrap
 
 - `-trend -lrtest` ya no se rechaza en el caso 3 / `-case pre`. Cada rango

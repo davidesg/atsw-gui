@@ -880,6 +880,22 @@ int main( int argc, char **argv )
                "la previsión del VEC: cuatro series, cuatro periodos", etiqueta( j->estado ) );
         check( contiene( etiqueta( j->pv.ver_pide ), "Previsión del VEC" ), "y la página lo dice",
                etiqueta( j->pv.ver_pide ) );
+        /* LA TABLA Y EL GRAFICO DE fuf, tambien con un VEC (fase P6): drvec
+           escribe la tabla en su .out, y de ella salen los dos.          */
+        {
+            GtkTextBuffer *tb = gtk_text_view_get_buffer( GTK_TEXT_VIEW(j->pv.t_prev) );
+            GtkTextIter a0, a1;
+            gchar *tx;
+
+            gtk_text_buffer_get_bounds( tb, &a0, &a1 );
+            tx = gtk_text_buffer_get_text( tb, &a0, &a1, FALSE );
+            check( contiene( tx, "VARIABLE NAME: LRM" ) && contiene( tx, "TRIMEST" ) &&
+                   contiene( tx, "La banda del 95 % del nivel" ),
+                   "la tabla de fuf del VEC, y debajo la banda del nivel", tx );
+            g_free( tx );
+        }
+        check( prevision_grafico( j, 3 ), "el gráfico de fuf de una serie del VEC se dibuja",
+               etiqueta( j->estado ) );
         check( filas( j->pv.l_eval ) == 16 && contiene( etiqueta( j->pv.ver_eval ), "mismos" ),
                "la evaluación: 4 series × 4 horizontes, sobre los mismos orígenes que los univariantes",
                etiqueta( j->pv.ver_eval ) );

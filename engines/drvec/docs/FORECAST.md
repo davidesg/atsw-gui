@@ -194,6 +194,26 @@ An aggregate RMSE cannot support a test of equal predictive ability; the series
 of losses can, which is why this file exists and why it is written **without
 being asked for**. `-C FILE` redirects it.
 
+### fuf's forecast report, in the `.out`
+
+After that table, `-f H` writes, series by series, the **FORECAST REPORT** of
+fuf (`forecast_table_acii`), with the headers and columns drvarma and drtran
+write: the last `H+1` observations with their period and annual variation and
+their one-step error (ERR), then the `H` forecasts with the standard deviations
+of the level, of the period variation and of the annual one. It is there so the
+analyst reads the same table from fue, drtran, drvarma and drvec (atsw-gui,
+`docs/TODO.md`, phase P6). The table above and the `.forecast` do not change.
+
+The variations are on the transformed level, `y* = refactor·BoxCox(z) = w + det`,
+times `100/refactor` under a log (a percentage) and `1/refactor` otherwise; the
+level column is `z`. The two new standard deviations come **from the same
+`G_m`** as the level band (§4): the error of `y*(n+h) − y*(n+h−k)` has weights
+`G_m − G_{m−k}`, with `G_{<0} = 0`, so the period one is `k = 1` and the annual
+one `k = freq`. ERR is `G_0 a_t`: the residual itself in the `∇Y₂` block, and
+`a_W − B₂' a_∇Y₂` in `Y₁`. The suite (§8af) checks the identities that tie them
+to the band: at `h = 1` the period s.d. is the level's, while `h ≤ freq` so is
+the annual one, and every forecast variation is a difference of two levels.
+
 ### What it is not
 
 The bands are **theoretical**: they come from the model's own innovation

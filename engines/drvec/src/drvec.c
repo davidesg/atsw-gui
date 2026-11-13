@@ -6666,6 +6666,126 @@ static void hypothesis_block(real *x, real **cov, int **ix_lam, int **ix_B2,
     free_ivector(idx, 1, (M * M * (nf + q) + M * r + s * r) + 1);
 }
 
+/*  write_fuf_report — P6 of docs/TODO.md (atsw-gui): fuf's FORECAST REPORT.
+ *
+ *  The table fue/fuf, drtran and drvarma write (forecast_table_acii, in
+ *  engines/fuf/src/usfo.c), series by series, so the analyst reads the same
+ *  table whatever produced the forecast.  Same headers, labels, columns and
+ *  four decimals as drvarma's escalera.c, with a space always between fields
+ *  (fuf's BUG-0002).  It goes AFTER the table above, which stays: the suite
+ *  and lib/outvec read that one and the .forecast.
+ *
+ *  THE SCALE.  The variations are taken on the TRANSFORMED level,
+ *  y* = refactor * BoxCox(z) = w + det, and multiplied by 100/refactor under
+ *  a log (a percentage) or 1/refactor otherwise (the units of the series):
+ *  drvarma's convention.  The LEVEL column is z, the series' own units.
+ *
+ *  THE STANDARD DEVIATIONS, AND NO SECOND ROUTE TO THEM.  The level error at
+ *  h is e(h) = sum_{m<h} G_m eps_{n+h-m}, with G_m from level_error_map().
+ *  A variation over k periods, y*(n+h) - y*(n+h-k), has error e(h) - e(h-k)
+ *  (zero when n+h-k is observed), whose weights are G_m - G_{m-k} with
+ *  G_{<0} = 0.  So the s.d. of the period variation (k = 1) and of the annual
+ *  one (k = freq) come from the SAME G_m as the band: the lesson of BUG-10.
+ *
+ *  ERR is the one-step level error of each observation, G_0 a_t: for the Y2
+ *  block the residual itself (nabla Y2 is in levels one step ahead), for Y1
+ *  the residual of W minus B2' that of nabla Y2.
+ *
+ *  With -differenced the levels of Y2 are unknown (cumulated from zero), and
+ *  a table of levels would be invented: it is not written.                  */
+static real fuf_var_k(real ***Gs, real **Sig, int M, int i, int h, int k)
+{
+    int m, a, b;
+    real var = 0.0;
+
+    for (m = 0; m < h; m++) {
+        real w[64];
+        for (a = 1; a <= M && a < 64; a++)
+            w[a] = Gs[m][i][a] - ((k > 0 && m - k >= 0) ? Gs[m - k][i][a] : 0.0);
+        for (a = 1; a <= M && a < 64; a++)
+            for (b = 1; b <= M && b < 64; b++) var += w[a] * Sig[a][b] * w[b];
+    }
+    return var > 0.0 ? sqrt(var) : 0.0;
+}
+
+static void write_fuf_report(struct Tvarma *v, real **B2, int H, int raw_origin,
+                             real **lev, real **SE, real ***Gs, real **Sig)
+{
+    int M = v->m, r = global_r, s = M - r, n = v->n, f = data_freq;
+    int i, k, t, h, per, sub;
+    int lag = global_levels ? 1 : 0;   /* raw obs t is datamat row t - lag  */
+
+    if (!global_levels) {
+        fprintf(outputv, "\n  (no FORECAST REPORT: with -differenced the levels of "
+                         "the Y2 block are unknown)\n");
+        return;
+    }
+    if (M >= 64) return;
+
+    for (i = 1; i <= M; i++) {
+        real lam = bt_on ? bt_lam[i] : 1.0, rf = bt_on ? bt_refac[i] : 1.0;
+        real vs  = (fabs(lam) < 1.0e-8 ? 100.0 : 1.0) / rf;
+#define YSTAR(tt, ww) ((ww) + ((bt_on && (tt) >= 1 && (tt) <= bt_T) ? bt_det[i][tt] : 0.0))
+
+        ObsToDate(data_start_year, data_start_sub, raw_origin, f, &per, &sub);
+        fprintf(outputv, "\nFORECAST REPORT: \n");
+        fprintf(outputv, "VARIABLE NAME: %s\n", series_names ? series_names[i] : "y");
+        if (f > 1) fprintf(outputv, "FORECAST ORIGIN : %2d/%4d\n", sub, per);
+        else       fprintf(outputv, "FORECAST ORIGIN : %4d\n", per);
+        fprintf(outputv, "LEAD TIME FOR FORECASTING: %d\n\n", H);
+        fprintf(outputv, " +----------------------------------------------------------------------------+\n");
+        fprintf(outputv, " |       |       LEVEL        |              VARIATION              |         |\n");
+        fprintf(outputv, " | DATE  +--------------------+-------------------------------------+   ERR   |\n");
+        fprintf(outputv, " |       |   VALUE   |  STD   | TRIMEST |  STD   |  ANUAL  |  STD   |         |\n");
+        fprintf(outputv, " |       |           |        |  /MONT  |        |         |        |         |\n");
+        fprintf(outputv, " +----------------------------------------------------------------------------+\n");
+
+        /* the last H+1 observations */
+        for (t = raw_origin - H; t <= raw_origin; t++) {
+            int tw = t - lag;                       /* its datamat row       */
+            if (t < 1) continue;
+            ObsToDate(data_start_year, data_start_sub, t, f, &per, &sub);
+            if (f > 1) fprintf(outputv, "  %2d/%4d", sub, per);
+            else       fprintf(outputv, "     %4d", per);
+            fprintf(outputv, " %11.4f %8s", bt_level(i, t, rawmat[t][i]), "-");
+            if (t - 1 >= 1)
+                fprintf(outputv, " %9.4f %8s", vs * (YSTAR(t, rawmat[t][i])
+                                   - YSTAR(t - 1, rawmat[t - 1][i])), "-");
+            else fprintf(outputv, " %9s %8s", "-", "-");
+            if (f > 1 && t - f >= 1)
+                fprintf(outputv, " %9.4f %8s", vs * (YSTAR(t, rawmat[t][i])
+                                   - YSTAR(t - f, rawmat[t - f][i])), "-");
+            else fprintf(outputv, " %9s %8s", "-", "-");
+            if (tw >= 1 && tw <= n) {
+                real e = v->a[tw][i];
+                if (i > s)
+                    for (k = 1; k <= s; k++) e -= B2[k][i - s] * v->a[tw][k];
+                fprintf(outputv, " %9.4f\n", vs * e);
+            } else fprintf(outputv, " %9s\n", "-");
+        }
+        /* the H forecasts: y*(n+h) - y*(n+h-k), observed when h <= k */
+        for (h = 1; h <= H; h++) {
+            int tr = raw_origin + h;
+            real yh = YSTAR(tr, lev[h][i]), y1, yf = 0.0;
+            y1 = (h > 1) ? YSTAR(tr - 1, lev[h - 1][i]) : YSTAR(raw_origin, rawmat[raw_origin][i]);
+            if (f > 1)
+                yf = (h > f) ? YSTAR(tr - f, lev[h - f][i])
+                   : (tr - f >= 1 ? YSTAR(tr - f, rawmat[tr - f][i]) : yh);
+            ObsToDate(data_start_year, data_start_sub, tr, f, &per, &sub);
+            if (f > 1) fprintf(outputv, "  %2d/%4d", sub, per);
+            else       fprintf(outputv, "     %4d", per);
+            fprintf(outputv, " %11.4f %8.4f", bt_level(i, tr, lev[h][i]), vs * SE[h][i]);
+            fprintf(outputv, " %9.4f %8.4f", vs * (yh - y1), vs * fuf_var_k(Gs, Sig, M, i, h, 1));
+            if (f > 1)
+                fprintf(outputv, " %9.4f %8.4f", vs * (yh - yf), vs * fuf_var_k(Gs, Sig, M, i, h, f));
+            else fprintf(outputv, " %9s %8s", "-", "-");
+            fprintf(outputv, " %9s\n", "-");
+        }
+        fprintf(outputv, " +----------------------------------------------------------------------------+\n");
+#undef YSTAR
+    }
+}
+
 /*  forecast_vec — H steps from the end of the sample, in levels.
  *  Returns 0 if it worked.  The columns are the .inp's: Y2 (1..s), Y1
  *  (s+1..M).                                                                 */
@@ -6673,7 +6793,7 @@ static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
 {
     int M = v->m, r = global_r, s = M - r, n = v->n, p = v->p, q = v->q;
     int h, i, j, k, l;
-    real ***Psi, **Csum, **G, **Sig, **Var, **Yb, **lev, **SE;
+    real ***Psi, ***Gs, **Csum, **G, **Sig, **Var, **Yb, **lev, **SE;
     real z;
     /*  The RAW index of the origin: with the series in levels, row t of
      *  datamat is row t+1 of the .inp (one observation is consumed by
@@ -6684,6 +6804,7 @@ static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
     if (!Y2_levels) return 1;
 
     Psi  = tensor(0, H, 1, M, 1, M);
+    Gs   = tensor(0, H, 1, M, 1, M);    /* G_m kept, for fuf's report        */
     Csum = matrix(1, M, 1, M);
     G    = matrix(1, M, 1, M);
     Sig  = matrix(1, M, 1, M);
@@ -6765,6 +6886,8 @@ static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
             for (j = 1; j <= M; j++) Csum[i][j] += Psi[m][i][j];
         level_error_map(Csum, Psi[m], B2, M, r, G);
         for (i = 1; i <= M; i++)
+            for (j = 1; j <= M; j++) Gs[m][i][j] = G[i][j];
+        for (i = 1; i <= M; i++)
             for (j = 1; j <= M; j++) {
                 real acc = 0.0;
                 for (k = 1; k <= M; k++)
@@ -6840,6 +6963,8 @@ static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
                      "nabla Y2 block,\n    because the two are tied by the "
                      "cointegrating relation\n");
 
+    write_fuf_report(v, B2, H, raw_origin, lev, SE, Gs, Sig);
+
     if (!quiet_mode)
         printf("Forecast: %d steps written to the .out\n", H);
 
@@ -6850,6 +6975,7 @@ static int forecast_vec(struct Tvarma *v, real **B2, int H, real conf)
     free_matrix(Sig, 1, M, 1, M);
     free_matrix(G, 1, M, 1, M);
     free_matrix(Csum, 1, M, 1, M);
+    free_tensor(Gs, 0, H, 1, M, 1, M);
     free_tensor(Psi, 0, H, 1, M, 1, M);
     return 0;
 }

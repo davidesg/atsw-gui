@@ -265,13 +265,14 @@ gboolean prevision_grafico( Sim *m, int i )
     FDFig *fig;
     gboolean ok = FALSE;
 
-    if (!P->v || i < 0 || i >= m->sis.n) return FALSE;
+    if (i < 0 || i >= m->sis.n) return FALSE;
 
-    /* EL DE fuf (fase P6 de docs/TODO.md): la escalera de drvarma escribe en
-     * su .out la tabla de fuf, y de ella sale el mismo grafico que en fue y
-     * en drtran_gui (lib/outfcst, of_grafico). Lo de abajo queda para un
-     * .out sin esa tabla (uno de antes).                                  */
-    if (P->base) {
+    /* EL DE fuf (fase P6 de docs/TODO.md): la escalera de drvarma y drvec
+     * escriben en su .out la tabla de fuf, y de ella sale el mismo grafico
+     * que en fue y en drtran_gui (lib/outfcst, of_grafico). Lo de abajo
+     * queda para un .out de drvarma sin esa tabla (uno de antes); un VEC
+     * sin ella no tiene grafico.                                         */
+    if (P->base && ( P->v || P->nfvec )) {
         gchar *out = g_strconcat( P->base, ".out", NULL );
         static Forecast fo;
         const OfSerie  *S;
@@ -295,6 +296,7 @@ gboolean prevision_grafico( Sim *m, int i )
         g_free( out );
     }
 
+    if (!P->v) return FALSE;
     for (k = 0; k < P->v->nprev; k++)
         if (!strcmp( P->v->prev[k].nombre, m->sis.s[i].nombre )) x = &P->v->prev[k];
     if (!x || x->nf < 1) return FALSE;
@@ -448,12 +450,46 @@ static void irf_controles( Sim *m )
 
 /* --- las tablas ------------------------------------------------------------ */
 
+/* LA TABLA DE fuf de cada serie, la del .out tal cual (fase P6): la misma
+ * que en fue y en drtran_gui. La escriben drvarma y drvec. FALSE si el .out
+ * no la trae (uno de antes).                                            */
+static gboolean tablas_fuf( Sim *m, GString *g )
+{
+    PagPrev *P = &m->pv;
+    gchar *out;
+    static char tb[65536];
+    gsize len0 = g->len;
+    int k;
+
+    if (!P->base) return FALSE;
+    out = g_strconcat( P->base, ".out", NULL );
+    for (k = 0; k < m->sis.n; k++)
+        if (of_tabla_file( out, m->sis.s[k].nombre, tb, sizeof tb ) == 0) {
+            if (!g_utf8_validate( tb, -1, NULL )) {
+                gchar *u = g_convert_with_fallback( tb, -1, "UTF-8", "ISO-8859-1", "?",
+                                                    NULL, NULL, NULL );
+                g_string_append( g, u ? u : "" );
+                g_free( u );
+            } else
+                g_string_append( g, tb );
+            g_string_append( g, "\n\n" );
+        }
+    g_free( out );
+    return g->len > len0;
+}
+
 static void texto_prev_vec( Sim *m )
 {
     PagPrev *P = &m->pv;
     GString *g = g_string_new( NULL );
     int k, j;
 
+    /* La tabla de fuf, que drvec escribe desde la fase P6: sus desviaciones
+     * de la variacion salen del mismo mapa que la banda del nivel. Debajo,
+     * la banda del 95 % del .forecast, que esa tabla no lleva.           */
+    if (tablas_fuf( m, g ))
+        g_string_append( g, "Las desviaciones son TEÓRICAS: lo que el modelo implica, no lo que "
+                            "pasa fuera de muestra.\n\nLa banda del 95 % del nivel:\n\n" );
     for (k = 0; k < P->nfvec; k++) {
         const OvecPrev *x = &P->fvec[k];
         double lam = 1;
@@ -488,26 +524,9 @@ static void texto_prev( Sim *m )
     /* LA TABLA DE fuf, la del .out de drvarma tal cual (fase P6): la misma
      * que en fue y en drtran_gui. Debajo, la banda del 95 % del nivel, que
      * esa tabla no lleva y el bloque de siempre del .out si.            */
-    if (P->v && P->base) {
-        gchar *out = g_strconcat( P->base, ".out", NULL );
-        static char tb[65536];
-
-        for (k = 0; k < m->sis.n; k++)
-            if (of_tabla_file( out, m->sis.s[k].nombre, tb, sizeof tb ) == 0) {
-                if (!g_utf8_validate( tb, -1, NULL )) {
-                    gchar *u = g_convert_with_fallback( tb, -1, "UTF-8", "ISO-8859-1", "?",
-                                                        NULL, NULL, NULL );
-                    g_string_append( g, u ? u : "" );
-                    g_free( u );
-                } else
-                    g_string_append( g, tb );
-                g_string_append( g, "\n\n" );
-            }
-        g_free( out );
-        if (g->len)
-            g_string_append( g, "Las desviaciones son TEÓRICAS: lo que el modelo implica, no lo que "
-                                "pasa fuera de muestra.\n\nLa banda del 95 % del nivel:\n\n" );
-    }
+    if (P->v && tablas_fuf( m, g ))
+        g_string_append( g, "Las desviaciones son TEÓRICAS: lo que el modelo implica, no lo que "
+                            "pasa fuera de muestra.\n\nLa banda del 95 % del nivel:\n\n" );
 
     for (k = 0; P->v && k < P->v->nprev; k++) {
         const OvPrev *x = &P->v->prev[k];
@@ -775,7 +794,9 @@ void prevision_refresca( Sim *m )
     l = gtk_container_get_children( GTK_CONTAINER(P->graficos) );
     for (q = l; q; q = q->next) gtk_widget_destroy( q->data );
     g_list_free( l );
-    for (i = 0; P->v && i < m->sis.n; i++) {
+    /* Con un VEC, el grafico sale de la tabla de fuf del .out de drvec
+       (fase P6): los botones, en cuanto hay prevision.                 */
+    for (i = 0; ( P->v || ( P->es_vec && P->nfvec ) ) && i < m->sis.n; i++) {
         gchar *t = g_strdup_printf( "Gráfico de %s", m->sis.s[i].nombre );
         GtkWidget *b = gtk_button_new_with_label( t );
         g_object_set_data( G_OBJECT(b), "serie", GINT_TO_POINTER(i) );

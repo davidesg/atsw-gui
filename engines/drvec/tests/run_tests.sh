@@ -2028,7 +2028,7 @@ done
 run "$MM" 2 1 1 -case 2 -f 8
 #  Acotado a la SECCION de prevision: desde 2026-08-24 el .out lleva la
 #  diagnosis por serie, cuyas filas de acf/pacf tambien empiezan por un numero.
-if sed -n '/^  Forecast$/,$p' "$TMP/case.out" \
+if sed -n '/^  Forecast$/,/^FORECAST REPORT/p' "$TMP/case.out" \
    | awk '/^ *[0-9]+ /{if(NF>=5){if(p1!="" && ($3<p1-1e-9 || $5<p2-1e-9)) bad=1; p1=$3; p2=$5}}
         END{exit bad?1:0}'; then
     ok "the bands are non-decreasing in the horizon"
@@ -2604,6 +2604,7 @@ else
         sh && /^ *[0-9]+ / && NF>=3 {k=$1; R[sh","k","1]=$2; R[sh","k","2]=$3;
                                      if (k>kmax) kmax=k; next}
         /^   h  / {mode="F"; next}
+        /^FORECAST REPORT/ {mode=""; next}
         mode=="F" && /^ *[0-9]+ / && NF>=5 {h=$1; SE[h","1]=$3; SE[h","2]=$5;
                                             if (h>hmax) hmax=h}
         END{
@@ -3060,6 +3061,35 @@ elif grep -aqE '^  2       2 +[0-9]+\.[0-9]+' "$TMP/case.out"; then
 else
     bad "BUG-64" "the r = 2 row of the rank test is missing or negative"
 fi
+echo
+
+# 8af. fuf's FORECAST REPORT (atsw-gui, docs/TODO.md P6).  The s.d. of the
+#      period and annual variations come from the same G_m as the level band
+#      (write_fuf_report), so they are tied to it by identities that need no
+#      golden value: at h = 1 the period variation's error IS the level's; while
+#      h <= freq the annual one's is too (the datum a year back is observed);
+#      and a forecast variation is the difference of two forecast levels.
+#      Danish data: quarterly, M = 5, r = 2, so the Y1 block is exercised.
+echo "[8af] fuf's forecast report: one per series, tied to the level band"
+run "$DK" 2 0 2 -case 2 -f 6
+nrep=$(grep -ac '^FORECAST REPORT' "$TMP/case.out")
+[ "$nrep" = 5 ] && ok "one FORECAST REPORT per series ($nrep)" \
+                || bad "fuf report" "$nrep reports, expected 5"
+msg=$(awk '
+    /^VARIABLE NAME:/ {ser=$3; h=0; prev=""; next}
+    /^ +[0-9]+\/[0-9]+ / {
+        if ($3 == "-") { prev=$2; next }          # observed row
+        h++
+        if (h == 1 && ($5 - $3 > 1e-4 || $3 - $5 > 1e-4))
+            { print ser ": h=1 period s.d. " $5 " != level s.d. " $3; exit }
+        if (h <= 4 && ($7 - $3 > 1e-4 || $3 - $7 > 1e-4))
+            { print ser ": h=" h " annual s.d. " $7 " != level s.d. " $3; exit }
+        d = $2 - prev - $4; if (d < 0) d = -d
+        if (d > 2e-4) { print ser ": h=" h " variation " $4 " != " $2 " - " prev; exit }
+        prev = $2
+    }' "$TMP/case.out")
+[ -z "$msg" ] && ok "h = 1 and h <= 4 s.d. are the level's, and the variations are differences" \
+              || bad "fuf report" "$msg"
 echo
 
 # ================================================== 9 MEMORY (opt-in) ==

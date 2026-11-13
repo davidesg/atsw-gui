@@ -465,15 +465,17 @@ int main( int argc, char **argv )
                "la página enseña la tabla de fuf de cada serie, y la banda del 95 %", t );
         g_free( t );
     }
-    /* P6: LA IRF DIBUJADA, sin bandas y diciéndolo */
+    /* P6: LA IRF DIBUJADA, con las bandas del metodo delta de la escalera */
     check( gtk_widget_get_sensitive( m->pv.b_irf ), "«Ver el gráfico» de la IRF, encendido", NULL );
     check( prevision_grafico_irf( m, 1, 0 ), "la respuesta de MUSKRAT a un choque en MINK se dibuja",
            etiqueta( m->estado ) );
     s = g_build_filename( cache, SIM_CACHE, "irf_MUSKRAT_MINK.eps", NULL );
     {
         gchar *t = NULL;
+        check( m->pe.v && m->pe.v->tiene_irf_se, "el .out de drvarma trae los errores típicos de la IRF",
+               NULL );
         check( g_file_get_contents( s, &t, NULL, NULL ) && contiene( t, "(Acumulada)" )
-               && contiene( t, "Sin bandas" ), "con su acumulada, y la nota de que no hay bandas", s );
+               && contiene( t, "todo delta" ), "con su acumulada, y la nota de las bandas (método delta)", s );
         g_free( t );
     }
     g_free( s );

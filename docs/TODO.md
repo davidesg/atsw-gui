@@ -350,9 +350,16 @@ Medido con fuf y drtran sobre IPC_ES ← WTI (`engines/drtran/examples/passthrou
 - **El VEC en el porte a Python.** drvec C ya escribe la tabla de fuf
   (13-nov-2026); el porte no. Como drvec C es su oráculo, la tabla tiene que
   llegar también allí, con las mismas `G_m`.
-- **Las bandas de la IRF de drvarma.** drvarma no da los errores típicos de
-  la IRF ortogonalizada. sima las saca por bootstrap (`irf_bands`). En C
-  habría que llevar ese bootstrap, o el método delta, al motor.
+- **Las bandas de la IRF de drvarma, por bootstrap.** Desde el 13-nov-2026
+  la escalera da los errores típicos de la IRF y de su acumulada por el
+  **método delta** (`irf_delta` en `escalera.c`), y sim_gui los dibuja con
+  ±2 d.t. Falta, como opción, el bootstrap paramétrico (`-irfboot N`), con
+  el diseño de drvec y de sima (`irf_bands`): simular el modelo, reestimar
+  cada réplica y los percentiles de Efron, que dan bandas asimétricas
+  (`fp_response` tendrá que aceptar límite inferior y superior). En sim_gui,
+  en segundo plano, como el bootstrap del rango. Y llevar las dos al porte a
+  Python. Antes de esto apareció y se arregló el BUG-0004 de drvarma: la IRF
+  de la escalera salía dividida por σ.
 
 **La auditoría de «Al cuaderno» (P5, 12-nov-2026).**
 

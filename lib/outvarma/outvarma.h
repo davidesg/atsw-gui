@@ -187,6 +187,11 @@ typedef struct {
    /* IRF ortogonalizada: irf[choque][h][serie], h = 0..nh_irf-1 */
    int      nh_irf;
    double   irf[OV_MAX_SER][OV_MAX_HOR][OV_MAX_SER];
+   /* sus errores tipicos por el metodo delta, y los de la acumulada, con
+      los mismos indices (la escalera de drvarma; 0 si el .out no los trae) */
+   int      tiene_irf_se;
+   double   irf_se[OV_MAX_SER][OV_MAX_HOR][OV_MAX_SER];
+   double   irfac_se[OV_MAX_SER][OV_MAX_HOR][OV_MAX_SER];
    /* FEVD: fevd[serie][h][choque] en %, h = 1..nh_fevd (indice h-1) */
    int      nh_fevd;
    double   fevd[OV_MAX_SER][OV_MAX_HOR][OV_MAX_SER];

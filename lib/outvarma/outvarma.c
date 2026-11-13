@@ -265,8 +265,14 @@ static const char *lee_tabla_h( const char *p, int m, double t[OV_MAX_HOR][OV_MA
    return p;
 }
 
-/* La IRF ortogonalizada: «Shock to A:» y su tabla, por cada choque. */
-static const char *lee_irf( const char *p, VarmaOut *v )
+/* La IRF ortogonalizada: «Shock to A:» y su tabla, por cada choque. Con
+   dst la deja ahi (los errores tipicos, que tienen la misma forma). */
+static const char *lee_irf_en( const char *p, VarmaOut *v,
+                               double dst[OV_MAX_SER][OV_MAX_HOR][OV_MAX_SER] );
+static const char *lee_irf( const char *p, VarmaOut *v ) { return lee_irf_en( p, v, v->irf ); }
+
+static const char *lee_irf_en( const char *p, VarmaOut *v,
+                               double dst[OV_MAX_SER][OV_MAX_HOR][OV_MAX_SER] )
 {
    char l[1024];
    const char *q;
@@ -280,8 +286,8 @@ static const char *lee_irf( const char *p, VarmaOut *v )
          int nh, h, j;
          p = lee_tabla_h( q, v->m, t, &nh, 0 );
          for ( h = 0; h < nh; h++ )
-            for ( j = 0; j < v->m; j++ ) v->irf[k][h][j] = t[h][j];
-         if ( nh > v->nh_irf ) v->nh_irf = nh;
+            for ( j = 0; j < v->m; j++ ) dst[k][h][j] = t[h][j];
+         if ( dst == v->irf && nh > v->nh_irf ) v->nh_irf = nh;
          k++;
          continue;
       }
@@ -505,6 +511,12 @@ int ov_parse( const char *texto, VarmaOut *v )
       if ( empieza( s, "Inverse roots of |phi(B)|=0:" ) )   { p = lee_raices( p, &v->raiz_ar_max, &v->n_raices_ar ); continue; }
       if ( empieza( s, "Inverse roots of |theta(B)|=0:" ) ) { p = lee_raices( p, &v->raiz_ma_max, &v->n_raices_ma ); continue; }
       if ( empieza( s, "ORTHOGONALIZED IMPULSE RESPONSE" ) ) { p = lee_irf( p, v ); continue; }
+      if ( empieza( s, "STD. ERRORS OF THE ORTHOGONALIZED IMPULSE RESPONSES" ) ) {
+         p = lee_irf_en( p, v, v->irf_se ); v->tiene_irf_se = 1; continue;
+      }
+      if ( empieza( s, "STD. ERRORS OF THE ACCUMULATED IMPULSE RESPONSES" ) ) {
+         p = lee_irf_en( p, v, v->irfac_se ); continue;
+      }
       if ( empieza( s, "FORECAST ERROR VARIANCE DECOMPOSITION" ) ) { p = lee_fevd( p, v ); continue; }
       if ( empieza( s, "Forecast of " ) && v->nprev < OV_MAX_SER ) {
          OvPrev *x = &v->prev[v->nprev];

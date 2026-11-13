@@ -133,6 +133,13 @@ static void ar2( const char *dir )
    okf( v.irf[0][0][1], v.sigma[0][1] / sqrt( v.sigma[0][0] ), 1e-4,
         "IRF: MINK responde a MUSKRAT en h = 0 con Sigma12 / sqrt(Sigma11)" );
    okf( v.irf[1][0][0], 0, 1e-9, "IRF: Cholesky, MINK no mueve a MUSKRAT en h = 0" );
+   /* los errores tipicos por el metodo delta, si el .out los trae (la
+      escalera de hoy): positivos donde la respuesta se mueve, y a h = 0 el
+      propio, sqrt(Sigma11 / 2n), que solo depende de Sigma            */
+   if ( v.tiene_irf_se ) {
+      ok( v.irf_se[0][1][1] > 0 && v.irfac_se[0][1][1] > 0, "IRF: con errores típicos (delta) y su acumulada" );
+      okf( v.irf_se[1][0][0], 0, 1e-9, "IRF: el cero de Cholesky no tiene error" );
+   }
    ok( v.nh_fevd == 20, "FEVD: horizontes 1..20" );
    for ( i = 0, n = 0; i < v.m; i++ )
       for ( h = 0; h < v.nh_fevd; h++ ) {

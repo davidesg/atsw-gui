@@ -304,6 +304,38 @@ grep -q "^Zero coefficients" "$TMP/zf.out" \
 [ $? -ne 0 ] && grep -q "is not of the form" "$TMP/zx.log" \
     && bien "-zero mal escrito es un error" || falla "-zero mal escrito se acepta"
 
+# 10c. LOS ERRORES TIPICOS DE LA IRF (metodo delta). En el sistema diagonal
+#      con Sigma diagonal, IPC_ES es un AR(1): su respuesta propia es
+#      O_h = phi^h L, con L = sqrt(Sigma11), y su error tipico tiene forma
+#      cerrada: Var = (h phi^(h-1) L)^2 Var(phi) + phi^(2h) Sigma11/(2n),
+#      porque Var(Sigma11) = 2 Sigma11^2/n y dL/dSigma11 = 1/(2L). La
+#      acumulada a h = 1, L(1+phi): Var = L^2 Var(phi) + (1+phi)^2 Sigma11/(2n).
+#      Prueba las dos partes: la dinamica (por shootx_esc) y Sigma.
+r=$(python3 - "$TMP/fc.out" <<'PY'
+import math, re, sys
+t = open(sys.argv[1], errors="replace").read()
+phi, sphi = map(float, re.search(r"phi_IPC_ES\[B\^1\]\s+(\S+)\s+(\S+)", t).groups())
+s11 = float(re.search(r"Innovation covariance Sigma.*\n\s*IPC_ES\s+(\S+)", t).group(1))
+n = int(re.search(r"\((\d+) stationary observations\)", t).group(1))
+def tabla(titulo):
+    b = t[t.index(titulo):]
+    b = b[b.index("Shock to IPC_ES:"):]
+    return [float(l.split()[1]) for l in b.split("\n")[2:5]]
+se, sea = tabla("STD. ERRORS OF THE ORTHOGONALIZED"), tabla("STD. ERRORS OF THE ACCUMULATED")
+L, vs = math.sqrt(s11), s11 / (2 * n)
+want = [math.sqrt((h * phi ** (h - 1) * L) ** 2 * sphi ** 2 + phi ** (2 * h) * vs) if h else math.sqrt(vs)
+        for h in range(3)]
+wa1 = math.sqrt(L ** 2 * sphi ** 2 + (1 + phi) ** 2 * vs)
+err = max(abs(a - b) for a, b in zip(se, want))
+err = max(err, abs(sea[1] - wa1))
+print("%.6f %s %s %.4f %.4f" % (err, " ".join("%.4f" % x for x in se), " ".join("%.4f" % x for x in want), sea[1], wa1))
+PY
+)
+set -- $r
+[ -n "$1" ] && python3 -c "import sys; sys.exit(0 if float('$1') <= 1.5e-4 else 1)" \
+    && bien "IRF, metodo delta: AR(1) con forma cerrada, h = 0..2 y la acumulada ($2 $3 $4)" \
+    || falla "IRF, metodo delta: no casa con la forma cerrada ($r)"
+
 # 11. la regresion de la salida de la 5.0
 REF=$AQUI/ref
 filtro() { grep -av '^Program          : \|^Output File      : \|^  \[[0-9]*\] \|^Full results written to \|^Forecasts written to \|^Recursive forecasts written to ' "$1"; }

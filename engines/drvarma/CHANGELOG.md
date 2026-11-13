@@ -9,6 +9,22 @@ Versions up to 0.4 were maintained as directory snapshots (`drvarma_v.01` …
 
 ## [5.0.0] — unreleased
 
+### Added — standard errors of the impulse responses, by the delta method
+
+- The ladder writes, after the orthogonalised IRF, two new sections: the
+  standard errors of the responses and of their accumulation. The gradient
+  is taken by central differences THROUGH `shootx_esc` (the same map from
+  the parameters to Phi and Theta that the estimation uses), with the
+  parameters' covariance of the table; and through the Cholesky factor of
+  Σ, with Cov(Σ_ab, Σ_cd) = (Σ_ac Σ_bd + Σ_ad Σ_bc)/n. The two blocks are
+  independent under normality. Without standard errors for the parameters
+  (boundary, Hessian not positive definite) the sections say so.
+- `tests/escalera/pruebas.sh` §10c checks them against the closed form of
+  an AR(1) (h = 0, 1, 2 and the accumulation). The four references only
+  gain lines.
+- `lib/outvarma` reads them (`irf_se`, `irfac_se`); sim_gui draws the IRF
+  with bands of ±2 s.e.
+
 ### Fixed — the ladder's impulse responses were measured with Q, not Σ (BUG-0004)
 
 - The ladder concentrates σ² and called `impulse_response` with the model

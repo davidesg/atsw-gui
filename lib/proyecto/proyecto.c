@@ -526,6 +526,19 @@ static int misma_cola( const char *a, const char *b )
    return *a == *b;
 }
 
+/* Los n primeros caracteres de dos colas, con el mismo criterio. */
+static int misma_cola_n( const char *a, const char *b, size_t n )
+{
+   for ( ; n > 0; n--, a++, b++ )
+       {
+       int sa = ( *a == '/' || *a == '\\' ), sb = ( *b == '/' || *b == '\\' );
+
+       if ( !*a || !*b ) return 0;
+       if ( sa != sb || ( !sa && *a != *b ) ) return 0;
+       }
+   return 1;
+}
+
 int pr_de_ruta( const Proyecto *p, const char *ruta,
                 char *serie, size_t ns, char *muestra, size_t nm,
                 char *id, size_t nid )
@@ -1121,12 +1134,16 @@ int pr_corrida_borra( Proyecto *p, const char *caso, const char *corrida,
 int pr_caso_de_ruta( const Proyecto *p, const char *ruta,
                      char *caso, size_t nc, char *corrida, size_t nco )
 {
-   /* Las colas de cuatro componentes: _casos/C1/work/C1_c01.out. */
-   static const char *EXT[] = { ".out", ".dag", ".cns", "_res.txt",
-                                "_eval.csv", NULL };
+   /* Las colas de cuatro componentes: _casos/C1/work/C1_c01.out. UN FICHERO
+      ES DE LA CORRIDA si su cola empieza por la de la corrida sin extension
+      (_casos/C1/work/C1_c01) y sigue con '.' o '_': el .out, el .dag, los
+      residuos, la evaluacion y tambien la pagina de cada ecuacion
+      (C1_c01_IPC.pdf), que lleva el nombre de su serie. Antes se probaba
+      una lista de extensiones y la pagina no estaba: el cuaderno de la
+      madre no sabia de que caso era. El '.' o '_' separa c01 de c010.    */
    char        cand[PR_RUTA];
    const char *q;
-   int         i, k;
+   int         i;
 
    if ( caso    && nc  ) caso[0] = '\0';
    if ( corrida && nco ) corrida[0] = '\0';
@@ -1134,18 +1151,21 @@ int pr_caso_de_ruta( const Proyecto *p, const char *ruta,
    if ( ( q = cola( ruta, 4 ) ) == NULL ) return 1;
 
    for ( i = 0; i < p->nco; i++ )
-       for ( k = 0; EXT[k]; k++ )
-           {
-           const char *c;
+       {
+       const char *c;
+       size_t      l;
 
-           if ( pr_corrida_ruta( p, p->co[i].caso, p->co[i].id, EXT[k], cand,
-                                 sizeof cand ) != 0 ) continue;
-           c = cola( cand, 4 );
-           if ( c == NULL || !misma_cola( c, q ) ) continue;
-           if ( caso    && nc  ) snprintf( caso, nc, "%s", p->co[i].caso );
-           if ( corrida && nco ) snprintf( corrida, nco, "%s", p->co[i].id );
-           return 0;
-           }
+       if ( pr_corrida_ruta( p, p->co[i].caso, p->co[i].id, "", cand,
+                             sizeof cand ) != 0 ) continue;
+       c = cola( cand, 4 );
+       if ( c == NULL ) continue;
+       l = strlen( c );
+       if ( strlen( q ) <= l || ( q[l] != '.' && q[l] != '_' ) ) continue;
+       if ( !misma_cola_n( c, q, l ) ) continue;
+       if ( caso    && nc  ) snprintf( caso, nc, "%s", p->co[i].caso );
+       if ( corrida && nco ) snprintf( corrida, nco, "%s", p->co[i].id );
+       return 0;
+       }
    return 1;
 }
 

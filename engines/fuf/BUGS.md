@@ -1,33 +1,50 @@
 # Fallos conocidos — fuf
 
-## BUG-0001 — el informe de previsión escala mal las variaciones y ERR
+## BUG-0001 — con λ = 1 la tabla de previsión sale ×100, salvo el nivel
 
 **Encontrado:** 2026-10-17, al planear el gestor de previsiones
 (`docs/DISENO-gestor-previsiones.md`), que va a leer la columna ERR.
+**Revisado:** 2026-11-13. La primera versión de este fallo decía dos cosas, y
+una era falsa (abajo).
 
 ### Síntoma
 
-1. **Con λ = 1 (niveles)** la variación sale multiplicada por 100, como si la
-   serie fuera en logaritmos. En `CPI_USA_model_AR` el índice pasa de 256.974
-   a 257.971 (+0.997) y la columna dice **99.7**; la anual, 625.9.
-2. **La columna ERR** de las observaciones no está en la escala de la σ de la
-   entrada. En `IPC_ES_m01_ar1` (logaritmos), σ = √0.0627 = 0.25 y ERR llega
-   a **100.4**; en `CPI_USA_model_AR`, a miles.
+`forecast_table_acii` (`src/usfo.c`) multiplica por 100 las variaciones, sus
+desviaciones típicas, la del nivel y ERR. En logaritmos eso las pasa a
+porcentaje, que es lo que se quiere. **En niveles (λ = 1) las deja cien veces
+más grandes** que en las unidades de la serie. Solo el nivel sale bien.
 
-Con logaritmos las variaciones sí salen bien (−0.98 % en 1/2020).
+En `CPI_USA_model_AR`, con el `.fuf.inp` que escribe fue (`fue x -f 24`):
 
-Es la misma familia que el σ_w del gráfico de residuos (PR #46): una cifra que
-supone logaritmos y no mira λ ni el refactor.
+- el índice pasa de 257.208 a 256.974 (−0.234) y la variación dice **−23.4**;
+- la d.t. de la primera previsión del nivel es σ = √3148/100 = 0.56 y la
+  tabla dice **56.1**;
+- ERR va en la misma escala ×100, coherente con esa d.t.
+
+### Lo que no era
+
+La primera versión decía también que, en logaritmos, ERR no estaba en la
+escala de σ (`IPC_ES_m01_ar1`: σ = 0.25 y ERR llegaba a 100.4). No es de fuf.
+Los `.fuf.inp` con los que se vio (los de `tests/corpus` y
+`conformidad/corpus`) llevan **factor de reescalado 1** con parámetros y
+varianza estimados con **100**, el de su `.inp` de fue. Con ese fichero la
+previsión del IPC cae de 104 a 38 en un mes. El fue de hoy escribe el factor
+bien (100), y con él ERR no pasa de 0.74 con σ = 0.25 %. Esos ficheros del
+corpus no se tocan: son la línea base byte a byte de la batería, no un
+modelo que haya que creerse.
 
 ### Por qué importa
 
 El gestor de previsiones lee los errores de los motores en vez de calcularlos
-(decisión del analista). Con ERR mal escalado leería números falsos.
+(decisión del analista). Con una serie en niveles leería las d.t. y ERR cien
+veces más grandes.
 
 ### Reproducción
 
-`bugs/BUG-0001-repro/repro.py`: sale con 1 mientras la variación en niveles no
-sea la diferencia de niveles o |ERR| supere diez veces la σ.
+`bugs/BUG-0001-repro/repro.py`, con los dos `.fuf.inp` escritos por fue desde
+`conformidad/corpus`. Sale con 1 mientras, en niveles, la variación no sea la
+diferencia de niveles o la d.t. de la primera previsión no sea σ. En
+logaritmos (`IPC_ES_m01_ar1`) comprueba que la tabla sale bien, como control.
 
 ## BUG-0002 — la tabla de previsión escribe los campos pegados
 
@@ -51,8 +68,9 @@ que es como la leen `lib/outfcst` y el gestor de previsiones. Con el nivel en
 miles (un PIB, un índice en base 1000) pasa en todas las filas.
 
 En el corpus de `tests/` ya se ve en 24 de las 49 filas de siete salidas de
-referencia, pero todas con λ = 1 o con el `.inp` de `IPC_ES_m01_ar1`, donde
-las desviaciones pasan de 10 por el BUG-0001. El repro no depende de él.
+referencia, pero en todas las desviaciones pasan de 10 por el ×100 de λ = 1
+(BUG-0001) o por un `.fuf.inp` con el factor de reescalado mal puesto. El
+repro no depende de ninguno de los dos.
 
 ### Lo que no se hace
 

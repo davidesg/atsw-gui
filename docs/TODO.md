@@ -558,6 +558,11 @@ programa:
 - `--proyecto` ignora la `raiz` del manifiesto (`gui/fue/src/main.c` ~144):
   `pr_ruta` con serie vacía devuelve vacío. Es el mismo fallo que se arregló
   en `gui/fug/src/main.c`.
+- **macOS (Mac M2, 13-nov-2026, lo vio el analista):** al cerrar la ventana de
+  fue_gui, macOS avisa de que la aplicación ha fallado o se ha colgado. Tras
+  cerrar el aviso el programa sigue funcionando. Por lo demás, en el M2 todo
+  funciona bien. Falta reproducirlo y ver qué pasa al salir (el informe de
+  macOS dice si es un fallo o un cuelgue, y en qué hilo).
 - En Windows los motores escriben su salida con `\r\n`; la primera línea que
   el GUI enseña en un mensaje de error puede llevar el `\r` (`lib/engine`,
   `first_line`).
@@ -568,9 +573,15 @@ programa:
   6), así que no es el óptimo exacto. Estimar sobre él vuelve a iterar, y
   drtran hereda el redondeo al mantener fijos los parámetros del `.pre`.
   `engines/fue/BUGS.md`.
-- **fuf BUG-0001**: en el informe de previsión, con λ = 1 las variaciones
-  salen ×100, y la columna ERR no está en la escala de σ. El gestor de
-  previsiones va a leer esa columna. `engines/fuf/BUGS.md`.
+- **fuf BUG-0001**: en el informe de previsión, con λ = 1 salen ×100 todas
+  las columnas menos el nivel: variaciones, d.t. y ERR. El gestor de
+  previsiones va a leer esas columnas. Revisado el 13-nov-2026: lo de que ERR
+  no estaba en la escala de σ en logaritmos no era de fuf, sino de unos
+  `.fuf.inp` con el factor de reescalado en 1 (fue lo escribe bien).
+  `engines/fuf/BUGS.md`.
+- **fuf BUG-0002**: la tabla de previsión escribe los campos pegados: un
+  nivel de 1000 o más se junta con la fecha, una d.t. de 10 o más con el
+  campo de al lado. `engines/fuf/BUGS.md`.
 
 **drvarma / drvarma_gui**
 

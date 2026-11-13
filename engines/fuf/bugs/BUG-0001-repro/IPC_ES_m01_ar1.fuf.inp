@@ -6,9 +6,9 @@
 ** Frequency of time series: either 1(A), 4(Q) or 12(M):
  12
 ** Number of observations and starting date of time series:
- 240  1 2002 IPC_ES
+ 216  1 2002 IPC_ES
 ** Forecast horizon and estimated innovation variance:
-24  0.06267213903
+24  0.0626721390
 ** Number of deterministic variables (including seasonal components):
 11
 **
@@ -70,7 +70,7 @@ alter
 ** Individual factors of the annual difference (from freq 0.0): 
  0 0 0 0 0 0 0
 ** ACF/PACF bands (0 Automatic) and reescaling factor: 
- 0.00 1.00
+ 0.00 100.00
 ** Time series (stochastic and non-standard deterministic variables): 
 69.5300000000 
 69.5900000000 
@@ -288,27 +288,3 @@ alter
 98.0010000000 
 98.1670000000 
 98.0960000000 
-97.1390000000 
-97.0240000000 
-96.6520000000 
-96.9440000000 
-96.9380000000 
-97.3850000000 
-96.5110000000 
-96.5550000000 
-96.7000000000 
-97.2080000000 
-97.3670000000 
-97.5740000000 
-97.5830000000 
-97.0080000000 
-97.9490000000 
-99.1050000000 
-99.5720000000 
-100.0460000000 
-99.2920000000 
-99.7430000000 
-100.5750000000 
-102.4250000000 
-102.7380000000 
-103.9650000000 

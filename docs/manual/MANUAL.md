@@ -1187,8 +1187,10 @@ La **Respuesta al impulso** y la **Descomposición** de la varianza, en las
 otras dos pestañas, reparten lo que pasa a la vez en el orden del sistema:
 primero MUSKRAT. Por eso el orden importa. La respuesta también se puede
 dibujar: elige el choque y la serie que responde, y pulsa **Ver el gráfico**.
-Sale con su acumulada debajo y **sin bandas**, porque drvarma no da los
-errores típicos de la respuesta al impulso:
+Sale con su acumulada debajo y con bandas de ±2 desviaciones típicas, que
+drvarma calcula por el **método delta**: linealiza la respuesta en los
+parámetros estimados y en Σ. Son simétricas y teóricas, y cerca de una raíz
+unitaria o a horizontes largos se quedan cortas:
 
 ![La respuesta al impulso](img/sim-irf.png)
 

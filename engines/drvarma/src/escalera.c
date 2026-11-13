@@ -537,6 +537,209 @@ static void fit_free(Fit *F)
     free_vector(F->x, 1, np);
 }
 
+/* ------------------------------------------------------------------------- */
+/*  LOS ERRORES TIPICOS DE LA IRF, POR EL METODO DELTA                        */
+/*                                                                           */
+/*  La IRF ortogonalizada es O_h = Psi_h L, con Psi_h los pesos MA(inf) del   */
+/*  VARMA y L el Cholesky de Sigma. Var(O_h[i][k]) = g' V g, con g su         */
+/*  gradiente y V la covarianza de lo estimado, en DOS bloques que con        */
+/*  normalidad son independientes (la informacion es diagonal por bloques):   */
+/*                                                                           */
+/*    - la dinamica: los parametros de x salvo los de Q (van al final, ver    */
+/*      esc_pack). Su covarianza es la de la tabla de parametros, F->cov      */
+/*      (2 f H^-1 / n). El gradiente, por diferencias centrales A TRAVES DE   */
+/*      shootx_esc: el mismo mapa x -> (Phi, Theta) que estima, sin derivar   */
+/*      a mano los factores de cada .pre. Sigma queda fija.                   */
+/*    - Sigma: Cov(S_ab, S_cd) = (S_ac S_bd + S_ad S_bc) / n. El gradiente,   */
+/*      por diferencias centrales del Cholesky. Con -diagcov solo varia la    */
+/*      diagonal.                                                            */
+/*                                                                           */
+/*  La acumulada es la suma: su gradiente, la suma de los gradientes.         */
+/*  Bandas SIMETRICAS de la linealizacion; se apuntan sus limites en el .out. */
+/*  Sin errores tipicos de los parametros (frontera, Hessiana no definida),   */
+/*  no hay bandas y se dice.                                                  */
+/* ------------------------------------------------------------------------- */
+static int irf_chol(real **S, real **L, int m)
+{
+    int a, b, ifault = 0;
+    real d1, d2;
+    for (a = 1; a <= m; a++) for (b = 1; b <= m; b++) L[a][b] = S[a][b];
+    choldcp(L, m, &d1, &d2, &ifault);
+    for (a = 1; a <= m; a++) for (b = a + 1; b <= m; b++) L[a][b] = 0.0;
+    return ifault;
+}
+
+/* O[h] = Psi_h L, h = 0..H, del modelo vm y el factor L */
+static void irf_orth(struct Tvarma *vm, real **L, int H, real ***psi, real ***O)
+{
+    int m = vm->m, h, a, b, k;
+    compute_psi_weights(m, vm->p, vm->q, vm->phi, vm->theta, H, psi);
+    for (h = 0; h <= H; h++)
+        for (a = 1; a <= m; a++)
+            for (b = 1; b <= m; b++) {
+                real acc = 0.0;
+                for (k = 1; k <= m; k++) acc += psi[h][a][k] * L[k][b];
+                O[h][a][b] = acc;
+            }
+}
+
+static void irf_tabla_se(FILE *out, const char *titulo, real ***se, int H, int m)
+{
+    int k, h, i;
+    fprintf(out, "\n=============================================================\n");
+    fprintf(out, "%s\n", titulo);
+    fprintf(out, "=============================================================\n");
+    fprintf(out, "Delta method: the parameters' covariance (the table above) and\n"
+                 "Sigma's, Cov(S_ab,S_cd) = (S_ac S_bd + S_ad S_bc)/n. Symmetric:\n"
+                 "a band is the response +/- 2 s.e.; it understates the uncertainty\n"
+                 "near a unit root and at long horizons.\n\n");
+    for (k = 1; k <= m; k++) {
+        fprintf(out, "Shock to %s:\n", Ts[act[k]].name);
+        fprintf(out, "Horizon");
+        for (i = 1; i <= m; i++) fprintf(out, "%9s", Ts[act[i]].name);
+        fprintf(out, "\n");
+        for (h = 0; h <= H; h++) {
+            fprintf(out, "%5d  ", h);
+            for (i = 1; i <= m; i++) fprintf(out, "%9.4f", se[h][i][k]);
+            fprintf(out, "\n");
+        }
+        fprintf(out, "\n");
+    }
+}
+
+static void irf_delta(Fit *F, int H, FILE *out)
+{
+    int m = F->vm.m, n = F->vm.n, np = F->npar, nq, nd, ns, j, a, b, c, d, h, i, k, g;
+    int ifault = 0, pares[ESC_MAX * (ESC_MAX + 1) / 2 + 1][2];
+    real **S, **L, **Lp, **Lm, ***psi, ***O, ***Op, ***Om, ***J, ***Ja, ***se, ***sea, *xp;
+    real **Vs;
+
+    nq = (m - 1) + (cx_diagcov ? 0 : m * (m - 1) / 2);     /* los de Q, al final */
+    nd = np - nq;
+    for (j = 1; j <= nd; j++)
+        if (isnan(F->dev[j])) {
+            fprintf(out, "\n(no standard errors for the impulse responses: the parameters "
+                         "have none -- %s)\n", est_se_label(F->se_how));
+            return;
+        }
+
+    /* los pares (a <= b) de Sigma que varian */
+    ns = 0;
+    for (a = 1; a <= m; a++)
+        for (b = a; b <= m; b++)
+            if (a == b || !cx_diagcov) { pares[++ns][0] = a; pares[ns][1] = b; }
+    g = nd + ns;                                         /* columnas de J   */
+
+    S   = matrix(1, m, 1, m);  L = matrix(1, m, 1, m);
+    Lp  = matrix(1, m, 1, m);  Lm = matrix(1, m, 1, m);
+    psi = tensor(0, H, 1, m, 1, m);
+    O   = tensor(0, H, 1, m, 1, m);
+    Op  = tensor(0, H, 1, m, 1, m);
+    Om  = tensor(0, H, 1, m, 1, m);
+    se  = tensor(0, H, 1, m, 1, m);
+    sea = tensor(0, H, 1, m, 1, m);
+    xp  = vector(1, np > 0 ? np : 1);
+    Vs  = matrix(1, ns, 1, ns);
+    /* J[h][(i-1)*m+k][col]: d O_h[i][k] / d theta_col */
+    J   = tensor(0, H, 1, m * m, 1, g);
+    Ja  = tensor(0, H, 1, m * m, 1, g);
+
+    for (a = 1; a <= m; a++)
+        for (b = 1; b <= m; b++) S[a][b] = F->sigma2 * F->vm.qq[a][b];
+    if (irf_chol(S, L, m)) {
+        fprintf(out, "\n(no standard errors for the impulse responses: Sigma is not "
+                     "positive definite)\n");
+        goto fin;
+    }
+
+    /* [1] la dinamica, por shootx_esc */
+    for (j = 1; j <= nd; j++) {
+        real e = 1.0e-5 * (fabs(F->x[j]) > 1.0 ? fabs(F->x[j]) : 1.0), den = 0.0;
+        int okp, okm;
+        for (i = 1; i <= np; i++) xp[i] = F->x[i];
+        xp[j] = F->x[j] + e;
+        shootx_esc(xp, &F->vm, &ifault, 0, 0);
+        okp = (ifault == 0);
+        if (okp) irf_orth(&F->vm, L, H, psi, Op);
+        xp[j] = F->x[j] - e;
+        shootx_esc(xp, &F->vm, &ifault, 0, 0);
+        okm = (ifault == 0);
+        if (okm) irf_orth(&F->vm, L, H, psi, Om);
+        shootx_esc(F->x, &F->vm, &ifault, 0, 0);
+        if (!okp || !okm) irf_orth(&F->vm, L, H, psi, O);
+        if (okp && okm) den = 2.0 * e; else if (okp || okm) den = e;
+        for (h = 0; h <= H; h++)
+            for (i = 1; i <= m; i++)
+                for (k = 1; k <= m; k++)
+                    J[h][(i - 1) * m + k][j] = den > 0.0
+                        ? ((okp ? Op[h][i][k] : O[h][i][k]) - (okm ? Om[h][i][k] : O[h][i][k])) / den
+                        : 0.0;
+    }
+
+    /* [2] Sigma, por su Cholesky; la dinamica, la estimada */
+    irf_orth(&F->vm, L, H, psi, O);
+    for (c = 1; c <= ns; c++) {
+        real e;
+        a = pares[c][0]; b = pares[c][1];
+        e = 1.0e-5 * sqrt(S[a][a] * S[b][b]);
+        S[a][b] += e; if (a != b) S[b][a] += e;
+        irf_chol(S, Lp, m);
+        S[a][b] -= 2.0 * e; if (a != b) S[b][a] -= 2.0 * e;
+        irf_chol(S, Lm, m);
+        S[a][b] += e; if (a != b) S[b][a] += e;
+        for (h = 0; h <= H; h++)
+            for (i = 1; i <= m; i++)
+                for (k = 1; k <= m; k++) {
+                    real dp = 0.0, dm = 0.0;
+                    int t;
+                    for (t = 1; t <= m; t++) { dp += psi[h][i][t] * Lp[t][k]; dm += psi[h][i][t] * Lm[t][k]; }
+                    J[h][(i - 1) * m + k][nd + c] = (dp - dm) / (2.0 * e);
+                }
+    }
+    for (c = 1; c <= ns; c++)
+        for (d = 1; d <= ns; d++) {
+            int a1 = pares[c][0], b1 = pares[c][1], c1 = pares[d][0], d1 = pares[d][1];
+            Vs[c][d] = (S[a1][c1] * S[b1][d1] + S[a1][d1] * S[b1][c1]) / n;
+        }
+
+    /* [3] la acumulada y las varianzas */
+    for (h = 0; h <= H; h++)
+        for (i = 1; i <= m * m; i++)
+            for (c = 1; c <= g; c++)
+                Ja[h][i][c] = J[h][i][c] + (h > 0 ? Ja[h - 1][i][c] : 0.0);
+    for (h = 0; h <= H; h++)
+        for (i = 1; i <= m; i++)
+            for (k = 1; k <= m; k++) {
+                int r = (i - 1) * m + k, w;
+                for (w = 0; w < 2; w++) {
+                    real ***JJ = w ? Ja : J, v = 0.0;
+                    for (c = 1; c <= nd; c++)
+                        for (d = 1; d <= nd; d++) v += JJ[h][r][c] * F->cov[c][d] * JJ[h][r][d];
+                    for (c = 1; c <= ns; c++)
+                        for (d = 1; d <= ns; d++) v += JJ[h][r][nd + c] * Vs[c][d] * JJ[h][r][nd + d];
+                    (w ? sea : se)[h][i][k] = v > 0.0 ? sqrt(v) : 0.0;
+                }
+            }
+
+    irf_tabla_se(out, "  STD. ERRORS OF THE ORTHOGONALIZED IMPULSE RESPONSES", se, H, m);
+    irf_tabla_se(out, "  STD. ERRORS OF THE ACCUMULATED IMPULSE RESPONSES", sea, H, m);
+
+fin:
+    shootx_esc(F->x, &F->vm, &ifault, 0, 0);
+    free_tensor(Ja, 0, H, 1, m * m, 1, g);
+    free_tensor(J, 0, H, 1, m * m, 1, g);
+    free_matrix(Vs, 1, ns, 1, ns);
+    free_vector(xp, 1, np > 0 ? np : 1);
+    free_tensor(sea, 0, H, 1, m, 1, m);
+    free_tensor(se, 0, H, 1, m, 1, m);
+    free_tensor(Om, 0, H, 1, m, 1, m);
+    free_tensor(Op, 0, H, 1, m, 1, m);
+    free_tensor(O, 0, H, 1, m, 1, m);
+    free_tensor(psi, 0, H, 1, m, 1, m);
+    free_matrix(Lm, 1, m, 1, m); free_matrix(Lp, 1, m, 1, m);
+    free_matrix(L, 1, m, 1, m);  free_matrix(S, 1, m, 1, m);
+}
+
 static const char *fault_msg(int f)
 {
     switch (f) {
@@ -1535,6 +1738,9 @@ int escalera_main(int argc, char *argv[])
             real s2 = F.vm.sigma2;
             F.vm.sigma2 = F.sigma2;
             impulse_response(&F.vm, h, outputv);
+            F.vm.sigma2 = s2;
+            irf_delta(&F, h, outputv);
+            F.vm.sigma2 = F.sigma2;
             variance_decomposition(&F.vm, h, outputv);
             F.vm.sigma2 = s2;
         }

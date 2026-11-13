@@ -370,12 +370,13 @@ static void on_grafico( GtkButton *b, Sim *m )
 /* LA IRF DIBUJADA (fase P6), con el estilo del grafico de la prevision de
  * fuf: arriba la respuesta de resp a un choque de una desviacion en la
  * innovacion de choque (Cholesky, en el orden del sistema), en impulsos;
- * abajo su acumulada. SIN BANDAS, y el dibujo lo dice: drvarma no da los
- * errores tipicos de la IRF (sima los saca por bootstrap, irf_bands).  */
+ * abajo su acumulada. Con las bandas de +-2 d.t. del metodo delta que la
+ * escalera de drvarma escribe en su .out; un .out de antes no las trae, y
+ * el dibujo lo dice.                                                    */
 gboolean prevision_grafico_irf( Sim *m, int choque, int resp )
 {
     const VarmaOut *v = m->pe.v;
-    double *nu, *cu;
+    double *nu, *cu, *nsd = NULL, *csd = NULL;
     gchar  *t1, *t2, *u, *nota, *b, *dir, *nm, *ep;
     FDFig  *fg;
     int     k, n;
@@ -390,12 +391,22 @@ gboolean prevision_grafico_irf( Sim *m, int choque, int resp )
         nu[k] = v->irf[choque][k][resp];
         cu[k] = nu[k] + ( k ? cu[k - 1] : 0.0 );
     }
+    if (v->tiene_irf_se) {
+        nsd = g_new( double, n );
+        csd = g_new( double, n );
+        for (k = 0; k < n; k++) {
+            nsd[k] = v->irf_se[choque][k][resp];
+            csd[k] = v->irfac_se[choque][k][resp];
+        }
+    }
     u = g_strdup_printf( "Impulso: %s <- %s", m->sis.s[resp].nombre, m->sis.s[choque].nombre );
     t1 = latin1( u ); g_free( u );
     t2 = latin1( "Acumulada" );
-    nota = latin1( "Choque de una d.t. (Cholesky, en el orden del sistema).\n"
-                   "Sin bandas: drvarma no da los errores típicos de la IRF." );
-    fg = fp_response( nu, NULL, cu, NULL, n, 0.0, 0, t1, t2, nota );
+    nota = latin1( nsd ? "Choque de una d.t. (Cholesky, en el orden del sistema).\n"
+                         "Bandas de ±2 d.t., método delta: simétricas y TEÓRICAS."
+                       : "Choque de una d.t. (Cholesky, en el orden del sistema).\n"
+                         "Sin bandas: este .out de drvarma no trae sus errores típicos." );
+    fg = fp_response( nu, nsd, cu, csd, n, 0.0, 0, t1, t2, nota );
     if (fg) {
         b   = sim_artefacto( m, m->sis.s[resp].nombre );
         dir = g_path_get_dirname( b );
@@ -406,7 +417,8 @@ gboolean prevision_grafico_irf( Sim *m, int choque, int resp )
         fd_fig_free( fg );
         g_free( ep ); g_free( nm ); g_free( dir ); g_free( b );
     }
-    g_free( nu ); g_free( cu ); g_free( t1 ); g_free( t2 ); g_free( nota );
+    g_free( nu ); g_free( cu ); g_free( nsd ); g_free( csd );
+    g_free( t1 ); g_free( t2 ); g_free( nota );
     return ok;
 }
 
@@ -443,7 +455,7 @@ static void irf_controles( Sim *m )
     }
     gtk_widget_set_sensitive( P->b_irf, hay );
     gtk_widget_set_tooltip_text( P->b_irf, hay
-        ? "La respuesta y su acumulada, dibujadas. Sin bandas: drvarma no da sus errores típicos."
+        ? "La respuesta y su acumulada, dibujadas, con bandas de ±2 d.t. (método delta)."
         : m->pe.vec && m->pe.vec->hay_vec ? "La IRF del VEC, en niveles, está en la tabla de abajo."
                                           : "Estima el sistema primero." );
 }

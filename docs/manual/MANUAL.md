@@ -1373,8 +1373,17 @@ primeras** 40 observaciones. Pulsa **Calcular**:
 ![La previsión del VEC](img/vec-prevision.png)
 
 La previsión de cada serie un año hacia delante, desde 1987.4, **en su nivel**:
-drvec deshace la diferencia y la relación de equilibrio. Las bandas, como
-siempre, son teóricas. La evaluación:
+drvec deshace la diferencia y la relación de equilibrio. Sale en la misma tabla
+que con un VARMA, la de fue y de drtran: las últimas observaciones con su error
+a un periodo (ERR) y las previsiones con las desviaciones del nivel, de la
+variación trimestral y de la anual. Debajo, la banda del 95 % del nivel. Los
+botones **Gráfico de…** dibujan el gráfico de fue; el del dinero:
+
+![El gráfico de la previsión del VEC](img/vec-prevision-grafico.png)
+
+Arriba, la variación anual de LRM con sus bandas; debajo, los errores a un
+periodo de las últimas observaciones. Las bandas, como siempre, son teóricas.
+La evaluación:
 
 ![La evaluación del VEC](img/vec-evaluacion.png)
 

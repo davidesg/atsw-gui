@@ -56,6 +56,14 @@ numero 2 | 40
 boton Calcular
 espera 240000
 foto vec-prevision
+# El grafico, el de fuf (fase P6): el del dinero, LRM.
+boton Gráfico de LRM
+ventana prev_
+tamano 700 900
+espera 2500
+foto vec-prevision-grafico
+cierra
+ventana sim_gui
 pestana Evaluación
 espera 800
 foto vec-evaluacion

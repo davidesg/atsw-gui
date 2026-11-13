@@ -20,7 +20,7 @@ GSL_LIBS=$(pkg-config --libs gsl 2>/dev/null)
 
 INC="-I$TOP/include -I$E/include"
 for d in sistema outvarma outvec outdiag fuepre fuedet dates lik optim diagmv prewhiten \
-         inpcheck proyecto engine coste sitio barra preview fugdraw ccfplot utils fugplot equation cuaderno tabla; do
+         inpcheck proyecto engine coste sitio barra preview fugdraw ccfplot utils fugplot equation cuaderno tabla fufplot outfcst; do
     INC="$INC -I$L/$d"
 done
 

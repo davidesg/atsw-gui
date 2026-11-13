@@ -446,6 +446,36 @@ int main( int argc, char **argv )
     check( prevision_grafico( m, 0 ), "el gráfico de MUSKRAT se dibuja", etiqueta( m->estado ) );
     s = g_build_filename( cache, SIM_CACHE, "prev_MUSKRAT.eps", NULL );
     check( g_file_test( s, G_FILE_TEST_EXISTS ), "y queda su EPS", s );
+    /* P6: ES EL DE fuf, sacado de la tabla de fuf del .out de drvarma */
+    {
+        gchar *t = NULL;
+        check( g_file_get_contents( s, &t, NULL, NULL ) && contiene( t, "(ERR)" ),
+               "y es el de fuf: con el panel ERR", s );
+        g_free( t );
+    }
+    g_free( s );
+    {
+        GtkTextBuffer *b = gtk_text_view_get_buffer( GTK_TEXT_VIEW(m->pv.t_prev) );
+        GtkTextIter i0, i1;
+        gchar *t;
+        gtk_text_buffer_get_bounds( b, &i0, &i1 );
+        t = gtk_text_buffer_get_text( b, &i0, &i1, FALSE );
+        check( contiene( t, "FORECAST REPORT" ) && contiene( t, "VARIABLE NAME: MINK" )
+               && contiene( t, "TRIMEST" ) && contiene( t, "La banda del 95 %" ),
+               "la página enseña la tabla de fuf de cada serie, y la banda del 95 %", t );
+        g_free( t );
+    }
+    /* P6: LA IRF DIBUJADA, sin bandas y diciéndolo */
+    check( gtk_widget_get_sensitive( m->pv.b_irf ), "«Ver el gráfico» de la IRF, encendido", NULL );
+    check( prevision_grafico_irf( m, 1, 0 ), "la respuesta de MUSKRAT a un choque en MINK se dibuja",
+           etiqueta( m->estado ) );
+    s = g_build_filename( cache, SIM_CACHE, "irf_MUSKRAT_MINK.eps", NULL );
+    {
+        gchar *t = NULL;
+        check( g_file_get_contents( s, &t, NULL, NULL ) && contiene( t, "(Acumulada)" )
+               && contiene( t, "Sin bandas" ), "con su acumulada, y la nota de que no hay bandas", s );
+        g_free( t );
+    }
     g_free( s );
     gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(m->pv.c_eval), TRUE );
     gtk_spin_button_set_value( GTK_SPIN_BUTTON(m->pv.s_hor), 4 );

@@ -302,7 +302,8 @@ static void range( const double *v, const double *sd, int n, double nsd,
    *v0 = *v1 = 0.0;                     /* zero is always in the panel     */
    for ( i = 0; i < n; i++ )
        {
-       double lo = v[i] - nsd * sd[i], hi = v[i] + nsd * sd[i];
+       double e  = sd ? nsd * sd[i] : 0.0;
+       double lo = v[i] - e, hi = v[i] + e;
 
        if ( lo < *v0 ) *v0 = lo;
        if ( hi > *v1 ) *v1 = hi;
@@ -317,7 +318,8 @@ static void range( const double *v, const double *sd, int n, double nsd,
 FDFig *fp_response( const double *nu, const double *nu_sd,
                     const double *cum, const double *cum_sd, int n,
                     double gain, int has_gain,
-                    const char *title_irf, const char *title_srf )
+                    const char *title_irf, const char *title_srf,
+                    const char *note )
 {
    FDFig *f;
    double x0, x1, y0, y1, v0, v1, step, x, yz, px[4096], py[4096];
@@ -346,7 +348,7 @@ FDFig *fp_response( const double *nu, const double *nu_sd,
    /* the band of each nu_k on its own: the lags are discrete, and a line
     * joining them would draw a band between two lags where there is none */
    fd_linewidth( f, LW_BAND );
-   for ( i = 0; i < n; i++ )
+   for ( i = 0; nu_sd && i < n; i++ )
        {
        double lo, hi, cap = 3.0;
 
@@ -391,22 +393,48 @@ FDFig *fp_response( const double *nu, const double *nu_sd,
       fd_line( f, x0, yz, x1, yz );
       }
 
-   fd_linewidth( f, LW_BAND );
-   fd_dash( f, 1.6, 2.2 );
-   for ( i = 0; i < n; i++ )
-       {
-       px[i] = mapv( (double)i, 0.0, (double)(n - 1), x0, x1 );
-       py[i] = mapv( cum[i] + 2.0 * cum_sd[i], v0, v1, y0, y1 );
-       }
-   fd_polyline( f, px, py, n );
-   for ( i = 0; i < n; i++ ) py[i] = mapv( cum[i] - 2.0 * cum_sd[i], v0, v1, y0, y1 );
-   fd_polyline( f, px, py, n );
+   for ( i = 0; i < n; i++ ) px[i] = mapv( (double)i, 0.0, (double)(n - 1), x0, x1 );
+   if ( cum_sd )
+      {
+      fd_linewidth( f, LW_BAND );
+      fd_dash( f, 1.6, 2.2 );
+      for ( i = 0; i < n; i++ ) py[i] = mapv( cum[i] + 2.0 * cum_sd[i], v0, v1, y0, y1 );
+      fd_polyline( f, px, py, n );
+      for ( i = 0; i < n; i++ ) py[i] = mapv( cum[i] - 2.0 * cum_sd[i], v0, v1, y0, y1 );
+      fd_polyline( f, px, py, n );
+      }
 
    fd_dash( f, 0.0, 0.0 );
    fd_linewidth( f, LW_LINE );
    for ( i = 0; i < n; i++ ) py[i] = mapv( cum[i], v0, v1, y0, y1 );
    fd_polyline( f, px, py, n );
    for ( i = 0; i < n; i++ ) fd_disc( f, px[i], py[i], DOT_FOR );
+
+   /* the note, under the panels: what a graph cut out of its window has to
+    * keep saying (here, why there are no bands)                           */
+   if ( note && *note )
+      {
+      /* one line per '\n', the last at the bottom                         */
+      char        line[256];
+      const char *p = note, *e;
+      int         nl = 1, k = 0;
+
+      for ( e = note; *e; e++ ) if ( *e == '\n' ) nl++;
+      while ( p && *p && k < nl )
+          {
+          size_t len;
+
+          e = strchr( p, '\n' );
+          len = e ? (size_t)( e - p ) : strlen( p );
+          if ( len >= sizeof( line ) ) len = sizeof( line ) - 1;
+          memcpy( line, p, len );
+          line[len] = '\0';
+          fd_text( f, x0 - 20.0, 4.0 + 10.0 * ( nl - 1 - k ), FD_HELV, SZ_TICK * 0.75,
+                   FD_LEFT, line );
+          p = e ? e + 1 : NULL;
+          k++;
+          }
+      }
 
    return( f );
 }

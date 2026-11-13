@@ -1163,9 +1163,12 @@ Alavi). Pulsa **Calcular**:
 
 ![La previsión](img/sim-prevision.png)
 
-La previsión de cada serie desde 1911, en nivel, con su banda. Como en drtran,
-**las bandas son teóricas**: suponen que el modelo es el verdadero. Lo
-empírico es la evaluación:
+La previsión de cada serie desde 1911 sale en la tabla de fue y de drtran,
+con las últimas observaciones, su error a un periodo (ERR) y las previsiones
+con sus desviaciones. Debajo está la banda del 95 % del nivel. Los botones
+**Gráfico de…** dibujan el gráfico de fue. Como en drtran, **las bandas son
+teóricas**: suponen que el modelo es el verdadero. Lo empírico es la
+evaluación:
 
 ![La evaluación](img/sim-evaluacion.png)
 
@@ -1182,7 +1185,10 @@ pregunta.
 
 La **Respuesta al impulso** y la **Descomposición** de la varianza, en las
 otras dos pestañas, reparten lo que pasa a la vez en el orden del sistema:
-primero MUSKRAT. Por eso el orden importa. Por ahora salen en tabla:
+primero MUSKRAT. Por eso el orden importa. La respuesta también se puede
+dibujar: elige el choque y la serie que responde, y pulsa **Ver el gráfico**.
+Sale con su acumulada debajo y **sin bandas**, porque drvarma no da los
+errores típicos de la respuesta al impulso:
 
 ![La respuesta al impulso](img/sim-irf.png)
 
@@ -1190,6 +1196,8 @@ Un choque de una desviación típica en la innovación de la rata almizclera
 sube los visones el año siguiente (0.70) y baja las ratas dos años después
 (−0.59): la presa alimenta al depredador, y el depredador se come a la
 presa.
+
+![La respuesta de los visones a un choque en las ratas, dibujada](img/sim-irf-grafico.png)
 
 ---
 

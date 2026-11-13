@@ -40,7 +40,10 @@ SRC = src/main.c src/ventana.c src/series.c src/puerta.c src/rango.c src/restric
       $(LIB)/fugplot/plotsupport.c \
       $(LIB)/equation/eqdraw.c \
       $(LIB)/cuaderno/cuaderno.c \
-      $(LIB)/tabla/tabla.c
+      $(LIB)/tabla/tabla.c \
+      $(LIB)/fufplot/fufplot.c \
+      $(LIB)/outfcst/outfcst.c \
+      $(LIB)/outfcst/ofgraf.c
 
 HDR = include/sim.h include/previewhost.h include/plothost.h
 
@@ -49,7 +52,7 @@ INC = -Iinclude -I$(ENG)/include -I$(LIB)/sistema -I$(LIB)/outvarma -I$(LIB)/out
       -I$(LIB)/diagmv -I$(LIB)/prewhiten -I$(LIB)/inpcheck -I$(LIB)/proyecto \
       -I$(LIB)/engine -I$(LIB)/coste -I$(LIB)/sitio -I$(LIB)/barra \
       -I$(LIB)/preview -I$(LIB)/fugdraw -I$(LIB)/ccfplot -I$(LIB)/utils \
-      -I$(LIB)/fugplot -I$(LIB)/equation -I$(LIB)/cuaderno -I$(LIB)/tabla
+      -I$(LIB)/fugplot -I$(LIB)/equation -I$(LIB)/cuaderno -I$(LIB)/tabla -I$(LIB)/fufplot -I$(LIB)/outfcst
 
 GTK_CFLAGS := $(shell pkg-config --cflags gtk+-3.0 2>/dev/null)
 GTK_LIBS   := $(shell pkg-config --libs   gtk+-3.0 2>/dev/null)

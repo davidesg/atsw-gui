@@ -1955,21 +1955,21 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
             obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, obs, &per, &yr);
             if (freq > 1) fprintf(out, "  %2d/%4d", per, yr);
             else          fprintf(out, "     %4d", yr);
-            fprintf(out, "%12.4f%9s", Ts[i].data[obs], "-");
-            if (obs - 1 >= 1) fprintf(out, "%10.4f%9s", vscale * (ystar[obs] - ystar[obs-1]), "-");
-            else              fprintf(out, "%10s%9s", "-", "-");
+            fprintf(out, " %11.4f %8s", Ts[i].data[obs], "-");
+            if (obs - 1 >= 1) fprintf(out, " %9.4f %8s", vscale * (ystar[obs] - ystar[obs-1]), "-");
+            else              fprintf(out, " %9s %8s", "-", "-");
             if (freq > 1 && obs - freq >= 1)
-                 fprintf(out, "%10.4f%9s", vscale * (ystar[obs] - ystar[obs-freq]), "-");
-            else fprintf(out, "%10s%9s", "-", "-");
+                 fprintf(out, " %9.4f %8s", vscale * (ystar[obs] - ystar[obs-freq]), "-");
+            else fprintf(out, " %9s %8s", "-", "-");
             if (obs - ord >= 1 && obs - ord <= n_stat)
                 /* a esta indexada [tiempo][serie], como en todo el resto del
                    fichero.  Aqui estaba al reves -- a[i][obs-ord] --, asi que
                    la columna ERR leia de OTRA posicion del bloque contiguo de
                    residuos: valores que parecen residuos porque LO SON, pero de
                    la observacion equivocada.  Por eso nunca canto.             */
-                fprintf(out, "%10.4f\n", vscale * vf.a[obs - ord][i]);
+                fprintf(out, " %9.4f\n", vscale * vf.a[obs - ord][i]);
             else
-                fprintf(out, "%10s\n", "-");
+                fprintf(out, " %9s\n", "-");
         }
         /* Filas de PREVISION. */
         for (l = 1; l <= L; l++) {
@@ -1981,11 +1981,11 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
             obs_to_date(Ts[i].begyear, Ts[i].begtime, freq, nb + l, &per, &yr);
             if (freq > 1) fprintf(out, "  %2d/%4d", per, yr);
             else          fprintf(out, "     %4d", yr);
-            fprintf(out, "%12.4f%9.4f", LVL[i][l], vscale * sd1);
-            fprintf(out, "%10.4f%9.4f", vscale * f2, vscale * sd2);
-            if (freq > 1) fprintf(out, "%10.4f%9.4f", vscale * f3, vscale * sd3);
-            else          fprintf(out, "%10s%9s", "-", "-");
-            fprintf(out, "%10s\n", "-");
+            fprintf(out, " %11.4f %8.4f", LVL[i][l], vscale * sd1);
+            fprintf(out, " %9.4f %8.4f", vscale * f2, vscale * sd2);
+            if (freq > 1) fprintf(out, " %9.4f %8.4f", vscale * f3, vscale * sd3);
+            else          fprintf(out, " %9s %8s", "-", "-");
+            fprintf(out, " %9s\n", "-");
         }
         fprintf(out, " +----------------------------------------------------------------------------+\n");
         free_vector(ystar, 1, nb + L);

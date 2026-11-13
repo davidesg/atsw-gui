@@ -37,11 +37,13 @@ FDFig *fp_forecast( const double *y, const double *band, const double *band2,
  *          the nu), with its band of two standard deviations and, if
  *          has_gain, the gain it tends to, dashed
  *
- * The horizontal axis is the lag k. Titles in Latin-1. Returns the figure,
- * or NULL.                                                                 */
+ * The horizontal axis is the lag k. nu_sd or cum_sd NULL: no band (the
+ * engine gave none), and note, under the panels, can say so. Titles and
+ * note in Latin-1. Returns the figure, or NULL.                            */
 FDFig *fp_response( const double *nu, const double *nu_sd,
                     const double *cum, const double *cum_sd, int n,
                     double gain, int has_gain,
-                    const char *title_irf, const char *title_srf );
+                    const char *title_irf, const char *title_srf,
+                    const char *note );
 
 #endif

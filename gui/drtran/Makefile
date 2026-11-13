@@ -42,6 +42,7 @@ SRC = src/main.c src/main_window.c src/barra_gui.c src/series.c src/identifica.c
       $(LIB)/proyecto/proyecto.c \
       $(LIB)/rutas/rutas.c \
       $(LIB)/outfcst/outfcst.c \
+      $(LIB)/outfcst/ofgraf.c \
       $(LIB)/fcomp/fcomp.c \
       $(LIB)/engine/engine.c \
       $(LIB)/coste/coste.c \

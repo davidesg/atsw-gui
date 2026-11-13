@@ -367,9 +367,13 @@ Medido con fuf y drtran sobre IPC_ES ← WTI (`engines/drtran/examples/passthrou
   previsión si es la previsión) y Gráfico, y luego el PNG de la página que
   se ve, con su pie. La arma `cu_grafico_caso` (`lib/cuaderno`), la misma en
   los dos.
-- **Pendiente, menor.** La rama de casos de la madre (`vistazo.c`) titula
-  «Gráfico — caso C1 / c02» y no pone Informe. Se puede pasar a
-  `cu_grafico_caso` para que las tres digan lo mismo.
+- **La madre, también (13-nov-2026).** Su rama de casos (`vistazo.c`)
+  titulaba «Gráfico — caso C1 / c02» y no ponía Informe; ahora la arma
+  `cu_grafico_caso` y las tres dicen lo mismo. Y no se ejecutaba nunca: lo
+  único que la madre abre de un caso es la página de una ecuación
+  (`C1_c01_IPC.pdf`), y `pr_caso_de_ruta` solo conocía `.out`, `.dag`… Ahora
+  es de la corrida todo fichero suyo que empiece por `<caso>_<corrida>` y siga
+  con `.` o `_`.
 
 **Un defecto de fuf, sin tocar** (lo vio P2): `forecast_table_acii`
 (`engines/fuf/src/usfo.c`) escribe los campos pegados (`%9.4f%7.4f…`). Con

@@ -595,6 +595,14 @@ int main( int argc, char **argv )
     ok( pr_caso_de_ruta( &c, win, uno, sizeof uno, otro, sizeof otro ) == 0 &&
         !strcmp( otro, "c01" ), "tambien con la ruta a la manera de Windows" );
     }
+    /* la pagina de una ecuacion lleva el nombre de su serie detras */
+    pr_corrida_ruta( &c, "C1", c1, "_IPC.pdf", ruta, sizeof ruta );
+    ok( pr_caso_de_ruta( &c, ruta, uno, sizeof uno, otro, sizeof otro ) == 0 &&
+        !strcmp( uno, "C1" ) && !strcmp( otro, "c01" ),
+        "la pagina de una ecuacion (C1_c01_IPC.pdf) tambien" );
+    pr_corrida_ruta( &c, "C1", c1, "0.out", ruta, sizeof ruta );
+    ok( pr_caso_de_ruta( &c, ruta, uno, sizeof uno, otro, sizeof otro ) == 1,
+        "C1_c010.out no es de la corrida c01" );
     pr_ruta( &c, "EP", "", a1, ".pre", ruta, sizeof ruta );
     ok( pr_caso_de_ruta( &c, ruta, uno, sizeof uno, otro, sizeof otro ) == 1,
         "el .pre de una serie no es de ningun caso" );

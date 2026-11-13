@@ -569,8 +569,10 @@ int pr_corrida_borra( Proyecto *p, const char *caso, const char *corrida,
                       PrError *e );
 
 /* DE UN FICHERO A SU (caso, corrida), como pr_de_ruta: una busqueda contra
- * el manifiesto, no un parseo del nombre. 0 si lo encontro; 1 si no es de
- * ningun caso, y eso no es un error.                                     */
+ * el manifiesto, no un parseo del nombre. Es de la corrida todo fichero
+ * de su carpeta que empiece por <caso>_<corrida> y siga con '.' o '_': el
+ * .out, el .dag, los residuos y la pagina de cada ecuacion. 0 si lo
+ * encontro; 1 si no es de ningun caso, y eso no es un error.            */
 int pr_caso_de_ruta( const Proyecto *p, const char *ruta,
                      char *caso, size_t nc, char *corrida, size_t nco );
 

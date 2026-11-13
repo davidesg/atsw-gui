@@ -3050,6 +3050,8 @@ static Proyecto *relee_manifiesto( void )
     return q;
 }
 
+static gchar *cuaderno_md( void );
+
 static void casos( void )
 {
     NuevoCaso x = { "", "", FALSE };
@@ -3502,6 +3504,30 @@ static void casos( void )
         check( ventana_titulada( tit ) != NULL, "«Ver modelo…» enseña la página del modelo "
                "del caso", q );
         g_free( q );
+        }
+        /* «AL CUADERNO» CON LA PAGINA: la entrada sabe de que caso y
+           corrida es, y la arma cu_grafico_caso, como en drtran_gui y
+           sim_gui. Antes la pagina no se reconocia como del caso y salia
+           un «Gráfico» sin procedencia.                               */
+        {
+        char  out[PR_RUTA];
+        gchar *cu;
+
+        olvida();
+        preview_cuaderno( (PreviewApp *) &A, pdf );
+        pump( 100 );
+        check( dijo( "Al cuaderno: cuaderno/cuaderno.md" ) != NULL,
+               "la página del caso, al cuaderno", todo_lo_dicho() );
+        cu = cuaderno_md();
+        check( strstr( cu, " · El modelo — caso C1 / c00\n" ) != NULL &&
+               strstr( cu, "- **Caso:** C1\n" ) != NULL &&
+               strstr( cu, "- **Corrida:** c00\n" ) != NULL,
+               "la entrada dice el caso y la corrida, como en drtran_gui", cu );
+        if ( pr_corrida_ruta( A.p, "C1", "c00", ".out", out, sizeof out ) == 0 &&
+             g_file_test( out, G_FILE_TEST_EXISTS ) )
+            check( strstr( cu, "- **Informe:** _casos/C1/work/C1_c00.out\n" ) != NULL,
+                   "y el .out de la corrida como Informe", cu );
+        g_free( cu );
         }
         if ( ventana_titulada( tit ) ) gtk_widget_destroy( GTK_WIDGET(ventana_titulada( tit )) );
         g_free( tit );

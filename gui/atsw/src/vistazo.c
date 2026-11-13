@@ -57,6 +57,7 @@
 #include "anfitrion.h"
 #include "rutas.h"
 #include "engine.h"
+#include "cuaderno.h"
 
 void barra_pub( Atsw *a, const char *s );
 
@@ -514,6 +515,11 @@ static int de_modelo( Atsw *a, const char *f, char *serie, char *muestra,
     return rc;
 }
 
+static int a_png( const char *eps, const char *png )
+{
+    return preview_save_as( eps, png, NULL ) ? 0 : 1;
+}
+
 void preview_cuaderno( PreviewApp *a, const gchar *path )
 {
     AnHost h = atsw_host( a );
@@ -543,11 +549,24 @@ void preview_cuaderno( PreviewApp *a, const gchar *path )
     else if ( pr_caso_de_ruta( a->p, path, caso, sizeof caso,
                                corrida, sizeof corrida ) == 0 )
         {
-        const char *datos[] = { "Caso", caso, "Corrida", corrida, NULL };
-        gchar      *que = g_strdup_printf( "Gráfico — caso %s / %s", caso, corrida );
+        /* UN DIBUJO DE UN CASO: la entrada la arma cu_grafico_caso, la
+           misma de drtran_gui y sim_gui, para que las tres digan lo mismo
+           (titulo «El modelo — caso C1 / c02», Informe, Grafico). Lo que
+           la madre abre de un caso es la pagina de una ecuacion.      */
+        char        out[PR_RUTA], why[1024], md[1024];
+        const char *inf = NULL;
 
-        an_cuaderno_grafico( &h, path, que, NULL, NULL, NULL, datos );
-        g_free( que );
+        if ( pr_corrida_ruta( a->p, caso, corrida, ".out", out, sizeof out ) == 0 &&
+             g_file_test( out, G_FILE_TEST_EXISTS ) )
+            inf = out;
+        if ( cu_grafico_caso( a->p->path, a->p->id[0] ? a->p->id : NULL,
+                              g_str_has_suffix( path, ".pdf" ) ? "El modelo"
+                                                               : "Gráfico",
+                              caso, corrida, inf, path, a_png,
+                              md, sizeof md, why, sizeof why ) == 0 )
+            an_di( &h, "Al cuaderno: %s.", md );
+        else
+            an_di( &h, "%s", why );
         }
     else
         an_cuaderno_grafico( &h, path, "Gráfico", NULL, NULL, NULL, NULL );

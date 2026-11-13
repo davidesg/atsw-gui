@@ -380,7 +380,7 @@ Medido con fuf y drtran sobre IPC_ES ← WTI (`engines/drtran/examples/passthrou
 un nivel de 1000 o más, el valor se junta con la fecha (` 12/20241234.5678`),
 y con una desviación de 10 o más, con el número de al lado. La tabla se lee
 mal a ojo y no se puede leer a máquina. fuf funciona y no se toca sin decidirlo:
-falta abrir su BUG con repro. drtran no lo copia: deja un espacio entre campos.
+es su BUG-0002 (`engines/fuf/BUGS.md`, con repro). drtran no lo copia: deja un espacio entre campos.
 Tampoco copia otras dos cosas de fuf: con λ ≠ 0 la variación va en las unidades
 de la serie (fuf la multiplica por 100), y con λ < 0 no escribe la segunda
 tabla de fuf (bandas y nivel transformado), porque la de drtran ya da el nivel

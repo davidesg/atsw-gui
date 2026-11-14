@@ -148,6 +148,35 @@ fi
 mira "raices factorizado: el ya factorizado no se vuelve a partir (estado 1)" \
      '! "$CLI" raices factorizado "$Y" en4 "$(echo "$J" | campo "d[\"modelo\"]")" 2>/dev/null'
 
+# especifica y estima: lo que el asistente hace con un modelo nuevo. Sobre una
+# copia (estima deja costes.csv). El editor es lib/inpdet, el de la madre, y
+# el juez del .inp, fue (inp_check_fue).
+PE="$WORK/proy_especifica"; cp -R "$P" "$PE"; YE="$PE/proyecto.yaml"; rm -f "$PE/costes.csv"
+N=$("$CLI" --json proyecto nuevo "$YE" RIPC --por asistente --razon "un AR(2)" | campo "d[\"modelo\"]")
+J=$("$CLI" --json especifica "$YE" RIPC "$N" --transformacion 1,0,0 --arma 2,0,0,0 --media libre)
+mira "especifica: el ARMA queda como se pidió, (2,0)(0,0)" \
+     '[ "$(echo "$J" | campo "d[\"arma\"]")" = "[2, 0, 0, 0]" ]'
+F=$(echo "$J" | campo "d[\"inp\"]")
+mira "especifica: fue acepta lo que salió" \
+     '[ -n "$F" ] && [ -f "$F" ] && ! ls "$(dirname "$F")" | grep -q "esp[12].tmp"'
+H=$(cksum < "$F")
+mira "especifica: un cambio que no vale deja el .inp como estaba (estado 1)" \
+     '! "$CLI" especifica "$YE" RIPC "$N" --intervencion "step" 2>/dev/null && [ "$H" = "$(cksum < "$F")" ]'
+mira "especifica sin cambios: estado 1" '! "$CLI" especifica "$YE" RIPC "$N" 2>/dev/null'
+mira "especifica de los datos: no se tocan (estado 1)" \
+     '"$CLI" especifica "$YE" RIPC m00 --arma 1,0,0,0 2>&1 | grep -q "son los datos"'
+if [ -x "$FUE" ]; then
+    J=$("$CLI" --json estima "$YE" RIPC "$N" --por asistente)
+    mira "estima: fue termina y trae la log-verosimilitud y el dictamen" \
+         '[ "$(echo "$J" | campo "d[\"estado\"] == 0 and d[\"logelf\"] is not None and d[\"dictamen\"] != \"\"")" = True ]'
+    mira "estima: su línea en costes.csv, por el asistente" \
+         'grep -q ",atsw-cli,asistente,RIPC/$N,estimar,fue" "$PE/costes.csv"'
+    mira "estima de lo ya estimado: no se reestima (estado 1)" \
+         '"$CLI" estima "$YE" RIPC "$N" 2>&1 | grep -q "ya está estimado"'
+    mira "especifica de lo ya estimado: no se reescribe (estado 1)" \
+         '! "$CLI" especifica "$YE" RIPC "$N" --arma 1,0,0,0 2>/dev/null'
+fi
+
 # anomalos: las mismas funciones que la ventana de la madre (an_residuos,
 # an_calibra). SIN OMITIR NADA, la ACF y la PACF de lib/anomalos son las que
 # fue imprime en el .out, retardo a retardo, y su Jarque-Bera tambien

@@ -94,6 +94,13 @@ EngineJob *engine_start(const char *workdir, const char *program,
  * con status ENGINE_SIGNAL: no hay un camino aparte para la cancelacion.  */
 void engine_stop(EngineJob *job);
 
+/* PARAR Y OLVIDAR: como engine_stop, pero done, progress y salida NO se
+ * llaman despues. Para cuando el dueño desaparece con el motor en marcha
+ * (una ventana que se cierra): sin esto, el final llegaba a done con los
+ * datos ya liberados (docs/AUDITORIA-procesos.md, B1). La corrida se
+ * recoge y se libera igual cuando el proceso sale.                      */
+void engine_abandona(EngineJob *job);
+
 /* PARAR TODOS LOS QUE QUEDEN VIVOS, al irse el programa (BUG-0001 de
  * drtran_gui). Manda SIGTERM (TerminateProcess en Windows) a cada corrida que
  * no ha acabado, espera un momento a que salgan y remata con SIGKILL a la que

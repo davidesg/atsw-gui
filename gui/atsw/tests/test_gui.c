@@ -2143,13 +2143,49 @@ static void editor( void )
     g_free( s );
     g_free( txt );
 
-    /* Cerrar con cambios: se pregunta; «Cerrar sin guardar» cierra. */
+    /* CERRAR CON FUE ESTIMANDO (docs/AUDITORIA-procesos.md, B1). Antes el
+       motor se paraba ANTES de preguntar, y su final llegaba al editor ya
+       liberado. «Seguir aquí» no para nada.                            */
+    gtk_button_clicked( GTK_BUTTON(E->b_estimar) );
+    check( E->job != NULL, "m02 se estima", estado_editor( E ) );
+    responde( "está estimando", contesta, GINT_TO_POINTER(GTK_RESPONSE_CANCEL) );
+    gtk_window_close( GTK_WINDOW(E->win) );
+    todo_atendido( "cerrar con fue estimando tenia que preguntar" );
+    pump( 100 );
+    /* fue puede acabar antes de que esto mire: lo que cuenta es que el
+       editor sigue y que la estimacion no se paro (acabo sola).        */
+    check( editor_de( "m02" ) == E &&
+           ( E->job != NULL || strstr( estado_editor( E ), "terminado" ) != NULL ),
+           "«Seguir aquí»: el editor sigue y la estimación no se para", estado_editor( E ) );
+
+    /* Cerrar con cambios: se pregunta; «Cerrar sin guardar» cierra. Y con
+       fue todavia estimando: la ventana se va con el motor en marcha y su
+       final no puede tocar el editor liberado.                         */
+    gtk_button_clicked( GTK_BUTTON(E->b_estimar) );   /* otra vez, en marcha  */
+    nota( "al cerrar el editor, fue %s", E->job ? "seguía estimando" : "ya había acabado" );
     pon_texto( E->texto, "cambio sin guardar\n" );
     responde( "cambios sin guardar", contesta, GINT_TO_POINTER(2) );
     gtk_window_close( GTK_WINDOW(E->win) );
     todo_atendido( "cerrar el editor con cambios tenia que preguntar" );
     pump( 100 );
     check( editor_de( "m02" ) == NULL, "y «Cerrar sin guardar» cierra el editor", NULL );
+    {
+    gint64 hasta = g_get_monotonic_time() + 5 * G_USEC_PER_SEC;
+    while ( g_get_monotonic_time() < hasta ) pump( 100 );
+    }
+    check( TRUE, "el final de fue, con el editor ya cerrado, no tumba la madre", NULL );
+    /* m02 se estimo aqui para probar el cierre: lo que viene despues lo
+       espera sin estimar. Sus resultados, fuera.                       */
+    {
+    static const char *ext[] = { ".out", ".pre", ".tex", ".pdf", NULL };
+    int k;
+    for ( k = 0; ext[k]; k++ )
+        {
+        gchar *r = ruta_de( "ipc", "", "m02", ext[k] );
+        g_unlink( r );
+        g_free( r );
+        }
+    }
 
     g_free( original );
     g_free( f );

@@ -241,6 +241,9 @@ void atsw_informe_instalacion( Atsw *a );
 /* Cuantos GUIs lanzados siguen abiertos, y en quienes[] la lista para
    decirlo («fue_gui (2), drtran_gui»). quienes puede ser NULL.         */
 int        atsw_hijos_vivos( const Atsw *a, char *quienes, size_t n );
+/* Los editores de .inp de la madre con cambios sin guardar o con fue
+ * estimando: cuantos, y cuales en buf (editor.c).                     */
+int        atsw_editores_pendientes( char *buf, size_t n );
 
 /* Lo mismo, con una opcion antes del fichero: fue_gui con «--prever»
    arranca el ciclo de prevision al abrir.                              */

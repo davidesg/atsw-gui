@@ -562,6 +562,17 @@ void engine_stop(EngineJob *job) {
 #endif
 }
 
+void engine_abandona(EngineJob *job) {
+    Run *run = (Run *) job;
+
+    if (run == NULL) return;
+    run->done     = NULL;
+    run->progress = NULL;
+    run->salida   = NULL;
+    run->data     = NULL;
+    engine_stop(job);
+}
+
 EngineJob *engine_start(const char *workdir, const char *program,
                         const char *const *argv,
                         EngineProgress progress, EngineSalida salida,

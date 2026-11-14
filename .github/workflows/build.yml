@@ -50,6 +50,10 @@ jobs:
       - name: GUIs
         if: always()
         run: xvfb-run -a -s "-screen 0 1600x1000x24" bash .github/gui-humo.sh
+      # La madre que se cae y la que se despide (lib/sitio, AUDITORIA-procesos B4)
+      - name: Hijos sin madre
+        if: always()
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" bash .github/madre-caida.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -84,6 +88,9 @@ jobs:
       - name: GUIs
         if: always()
         run: bash .github/gui-humo.sh
+      - name: Hijos sin madre
+        if: always()
+        run: bash .github/madre-caida.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:

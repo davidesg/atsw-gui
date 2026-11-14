@@ -2882,6 +2882,7 @@ int main( int argc, char **argv )
 
     presentacion = !sin_pres;
     atsw_escritorio_registra();
+    sitio_madre_limpia_despedidas();     /* una de otra madre con este pid */
     argc = 1;
     app = gtk_application_new( "org.atsw.gui", G_APPLICATION_NON_UNIQUE );
     g_signal_connect( app, "startup", G_CALLBACK(numeros_con_punto), NULL );
@@ -2889,6 +2890,12 @@ int main( int argc, char **argv )
     /* LOS MOTORES QUE QUEDEN, PARADOS AL IRSE (BUG-0001 de drtran_gui):
        el "shutdown" llega al cerrar la ventana, y engine_stop_all
        para lo que lib/engine lanzo y sigue vivo.                    */
+    /* LA DESPEDIDA, LO PRIMERO DEL "shutdown" (lib/sitio, AUDITORIA-procesos
+       B4): solo llega aqui un cierre de verdad --el analista ya dijo
+       «Cerrar todo»--, y los hijos que la vean se cierran con la madre. Si
+       la madre se cae no hay shutdown ni despedida, y los hijos se quedan
+       para que se guarde lo que tengan.                              */
+    g_signal_connect( app, "shutdown", G_CALLBACK(sitio_madre_se_despide), NULL );
     g_signal_connect_swapped( app, "shutdown", G_CALLBACK(engine_stop_all), NULL );
     rc = g_application_run( G_APPLICATION(app), argc, argv );
     g_object_unref( app );

@@ -48,6 +48,27 @@ gchar *sitio_busca( const char *programa, const char *const *sitios );
 long sitio_mi_pid( void );
 int  sitio_vigila_madre( const char *pid, GSourceFunc al_irse, gpointer datos );
 
+/* LA DESPEDIDA DE LA MADRE (AUDITORIA-procesos B4).
+ *
+ * Un hijo que ve irse a su madre no sabe por que: si el analista la cerro
+ * --y ya dijo «Cerrar todo»--, el hijo se cierra con ella; si se CAYO, cerrar
+ * el hijo es perder sin aviso lo que tenga sin guardar. Para distinguirlo, la
+ * madre deja una despedida al cerrarse bien: un fichero en el directorio
+ * temporal, atsw-madre-<pid>.adios.
+ *
+ * sitio_madre_se_despide       la madre, al cerrarse bien (en su shutdown).
+ * sitio_madre_limpia_despedidas la madre, al arrancar: la suya, si quedo de
+ *                               otro proceso con el mismo pid, y las de mas
+ *                               de un dia.
+ * sitio_madre_se_despidio      el hijo, en su al_irse: 1 si la madre pid se
+ *                               despidio (hace menos de diez minutos).
+ * sitio_madre_caida_texto      lo que el hijo dice si no se despidio.    */
+void        sitio_madre_se_despide( void );
+void        sitio_madre_limpia_despedidas( void );
+int         sitio_madre_se_despidio( const char *pid );
+const char *sitio_madre_caida_titulo( void );
+const char *sitio_madre_caida_texto( void );
+
 /* --- LOS MOTORES, SIN CONSOLA EN WINDOWS ---------------------------------
  *
  * Los motores (fue, fug, art...) son programas de consola, y los GUIs se

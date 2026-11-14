@@ -173,8 +173,29 @@ Cada fase en su PR, con su prueba, y la CI en verde en las tres plataformas.
   motor y el resultado es `ENGINE_PLAZO`, con un mensaje que lo dice.
   gtk_fmg deja `g_spawn_sync` y corre fug por ahí, como los demás.
 
-Quedan sin arreglar, por bajos o por sospechas sin comprobar: B4, B6, B7,
-C6 (la madre y una clave que no conoce) y A6 (el cuaderno).
+**Y lo bajo (14-nov-2026).** Se comprobó en el código cada uno:
+- **C6 resultó grave**: `pr_escribir`, si no podía leer el manifiesto de
+  disco (una clave de un ATSW más nuevo, un fichero estropeado), lo pisaba
+  en silencio. Es el BUG-0003 de gui/atsw, con su repro (PR #147): ahora se
+  niega con `PR_EILEGIBLE`.
+- **A6.** El cuaderno se escribe con el cerrojo del manifiesto
+  (`pr_cerrojo_coge` sobre `cuaderno.md.cerrojo`) y de una sola escritura:
+  una cabecera y cada entrada entera, con ocho hilos a la vez. El nombre de
+  cada imagen se reserva creando el fichero (`O_EXCL`), y la reserva que
+  nadie llena se quita. La huella del manifiesto en la madre es su sha256:
+  un cambio del mismo tamaño en el mismo segundo ya se ve.
+- **B4.** La madre deja una despedida al cerrarse bien
+  (`sitio_madre_se_despide`, en su shutdown). Un hijo que ve irse a la madre
+  **sin** despedida no se cierra: dice que se cayó y deja guardar. Lo prueba
+  `.github/madre-caida.sh` en Linux y macOS con fue_gui.
+- **B6.** En POSIX, `lib/engine` atrapa SIGTERM, SIGINT, SIGHUP y las
+  señales de una caída, manda SIGTERM a sus motores y deja morir al GUI como
+  habría muerto. SIGKILL no se puede atrapar: ahí, en macOS, el motor sigue.
+- **B7.** El ayudante de `gspawn` ya va en el paquete de Windows
+  (`packaging/windows/bundle.sh`). Y si `OpenProcess` falla por algo que no
+  es «ese proceso no existe», el hijo ya no se cierra: no vigila.
+
+No queda nada de la auditoría por arreglar.
 
 **La fase 1 va primero** porque A1–A4 son la raíz y se arreglan en un solo
 sitio. Las fases 3 a 5 son independientes de ella y pequeñas. Toca la

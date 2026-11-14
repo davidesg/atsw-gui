@@ -10,6 +10,18 @@
 #include <glib/gstdio.h>
 
 #include "cuaderno.h"
+#include "proyecto.h"            /* el cerrojo, el mismo del manifiesto */
+
+#include <errno.h>
+#include <fcntl.h>
+#ifdef _WIN32
+#  include <io.h>
+#else
+#  include <unistd.h>
+#endif
+#ifndef O_BINARY
+#  define O_BINARY 0
+#endif
 
 typedef enum { P_TEXTO, P_IMAGEN } Tipo;
 
@@ -28,6 +40,13 @@ struct Cuaderno {
    GString   *datos;
    GPtrArray *partes;
 };
+
+/* Una imagen reservada que nadie lleno: el fichero esta, pero vacio. */
+static int vacia( const char *ruta )
+{
+   GStatBuf st;
+   return g_stat( ruta, &st ) == 0 && st.st_size == 0;
+}
 
 static void parte_free( gpointer d )
 {
@@ -133,6 +152,8 @@ int cu_imagen( Cuaderno *c, const char *nombre, const char *pie,
    if ( c == NULL || ruta == NULL || n == 0 ) return 1;
    img = g_build_filename( c->dir, "img", NULL );
    nom = limpio( nombre );
+   if ( g_mkdir_with_parents( img, 0755 ) != 0 )
+      { g_free( img ); g_free( nom ); return 1; }
 
    /* Dos graficos en el mismo segundo no se pisan. */
    for ( k = 1; ; k++ )
@@ -140,21 +161,24 @@ int cu_imagen( Cuaderno *c, const char *nombre, const char *pie,
       gchar *f = k == 1 ? g_strdup_printf( "%s-%s.png", c->marca, nom )
                         : g_strdup_printf( "%s-%s-%d.png", c->marca, nom, k );
       gchar *r = g_build_filename( img, f, NULL );
-      guint  i;
-      int    usado = g_file_test( r, G_FILE_TEST_EXISTS );
+      int    fd;
 
-      for ( i = 0; !usado && i < c->partes->len; i++ )
+      /* EL NOMBRE SE RESERVA CREANDO EL FICHERO, vacio y con O_EXCL: mirar si
+         existe y escribirlo despues dejaba que dos programas, en el mismo
+         segundo, eligieran el mismo y uno pisara la imagen del otro
+         (AUDITORIA-procesos A6). Lo llena quien dibuja; si no llega a
+         llenarlo, cu_cierra y cu_descarta lo quitan.                   */
+      fd = g_open( r, O_CREAT | O_EXCL | O_WRONLY | O_BINARY, 0644 );
+      if ( fd >= 0 )
          {
-         Parte *q = g_ptr_array_index( c->partes, i );
-
-         usado = q->tipo == P_IMAGEN && !strcmp( q->ruta, r );
+         close( fd );
+         base = f; p = g_new0( Parte, 1 ); p->ruta = r;
+         break;
          }
-      if ( !usado ) { base = f; p = g_new0( Parte, 1 ); p->ruta = r; break; }
       g_free( f ); g_free( r );
+      if ( errno != EEXIST || k > 9999 )
+         { g_free( img ); g_free( nom ); return 1; }
       }
-
-   if ( g_mkdir_with_parents( img, 0755 ) != 0 )
-      { g_free( img ); g_free( nom ); g_free( base ); parte_free( p ); return 1; }
 
    p->tipo = P_IMAGEN;
    p->txt  = g_strdup( pie && *pie ? pie : "" );
@@ -168,7 +192,14 @@ int cu_imagen( Cuaderno *c, const char *nombre, const char *pie,
 
 void cu_descarta( Cuaderno *c )
 {
+   guint i;
+
    if ( c == NULL ) return;
+   for ( i = 0; i < c->partes->len; i++ )
+      {
+      const Parte *p = g_ptr_array_index( c->partes, i );
+      if ( p->tipo == P_IMAGEN && vacia( p->ruta ) ) g_unlink( p->ruta );
+      }
    g_free( c->dir ); g_free( c->titulo ); g_free( c->sello ); g_free( c->marca );
    g_string_free( c->datos, TRUE );
    g_ptr_array_free( c->partes, TRUE );
@@ -194,7 +225,7 @@ static GString *arma( const Cuaderno *c )
          if ( s->len && s->str[s->len-1] != '\n' ) g_string_append_c( s, '\n' );
          g_string_append_c( s, '\n' );
          }
-      else if ( g_file_test( p->ruta, G_FILE_TEST_IS_REGULAR ) )
+      else if ( g_file_test( p->ruta, G_FILE_TEST_IS_REGULAR ) && !vacia( p->ruta ) )
          {
          g_string_append_printf( s, "![%s](%s)\n", p->txt, p->rel );
          if ( *p->txt ) g_string_append_printf( s, "*%s*\n", p->txt );
@@ -233,20 +264,42 @@ int cu_cierra( Cuaderno *c, char *why, size_t n )
       return 1;
       }
 
-   md    = g_build_filename( c->dir, "cuaderno.md", NULL );
-   nuevo = !g_file_test( md, G_FILE_TEST_EXISTS );
-   s     = arma( c );
+   md = g_build_filename( c->dir, "cuaderno.md", NULL );
+   s  = arma( c );
 
-   /* "ab": añadir, y en binario para que Windows no meta \r. */
-   f = g_fopen( md, "ab" );
-   if ( f == NULL ) r = 1;
+   /* CON EL CERROJO, EL MISMO DEL MANIFIESTO (pr_cerrojo_coge, sobre
+      cuaderno.md.cerrojo), Y DE UNA SOLA ESCRITURA. Varios programas
+      añaden al cuaderno: en Windows el modo «a» del CRT busca el final y
+      luego escribe, y entre una cosa y otra puede escribir otro; en todos,
+      stdio parte una entrada larga en varias escrituras, y dos que nacian a
+      la vez ponian dos cabeceras (AUDITORIA-procesos A6).              */
+   {
+   PrError    e;
+   PrCerrojo *k = pr_cerrojo_coge( md, &e );
+
+   if ( k == NULL )
+      {
+      r = 1;
+      if ( why ) g_snprintf( why, n, "Otro programa está escribiendo en el cuaderno: "
+                             "no se añadió. Vuelve a intentarlo." );
+      }
    else
       {
-      if ( nuevo && fputs( CABECERA, f ) < 0 ) r = 1;
-      if ( !r && fwrite( s->str, 1, s->len, f ) != s->len ) r = 1;
-      if ( fclose( f ) != 0 ) r = 1;
+      nuevo = !g_file_test( md, G_FILE_TEST_EXISTS ) || vacia( md );
+      if ( nuevo ) g_string_prepend( s, CABECERA );
+      /* "ab": añadir, y en binario para que Windows no meta \r. */
+      f = g_fopen( md, "ab" );
+      if ( f == NULL ) r = 1;
+      else
+         {
+         setvbuf( f, NULL, _IONBF, 0 );           /* una escritura, entera */
+         if ( fwrite( s->str, 1, s->len, f ) != s->len ) r = 1;
+         if ( fclose( f ) != 0 ) r = 1;
+         }
+      pr_cerrojo_suelta( k );
+      if ( r && why ) g_snprintf( why, n, "No pude escribir en %s.", md );
       }
-   if ( r && why ) g_snprintf( why, n, "No pude escribir en %s.", md );
+   }
 
    g_string_free( s, TRUE );
    g_free( md );

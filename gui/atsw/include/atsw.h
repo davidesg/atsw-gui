@@ -151,10 +151,12 @@ typedef struct {
    Proyecto  *p;
    gboolean   hay;
 
-   /* LA HUELLA DEL MANIFIESTO: tamaño y fecha, como la de los .out. Si el
+   /* LA HUELLA DEL MANIFIESTO: el sha256 de lo que hay en disco. Si el
       fichero cambia por fuera --otra madre, un agente, un editor-- hay que
-      releerlo; si no, no se toca nada.                                 */
-   long       p_tam, p_mtime;
+      releerlo; si no, no se toca nada. Era tamaño y fecha, como la de los
+      .out, y un cambio del mismo tamaño en el mismo segundo no se veia
+      (AUDITORIA-procesos A6). Son unos KB: el hash no cuesta.          */
+   char       p_sha[72];
 
    AtRes      r[AT_MAX_RES];
    int        nr;

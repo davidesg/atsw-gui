@@ -18,6 +18,7 @@
 //#include "config.h"
 #include "callbacks.h"
 #include "sitio.h"
+#include "sitio_gtk.h"
 #include "iconos.h"
 #include "proyecto.h"
 #include "gui.h"
@@ -45,7 +46,12 @@ static const char *g_madre;       /* «--madre PID»: lib/sitio la vigila */
 
 static gboolean se_fue_la_madre(gpointer data)
 {
-    (void)data;
+    /* SIN DESPEDIDA, LA MADRE SE CAYO (lib/sitio, AUDITORIA-procesos B4):
+       no se cierra, para que se guarde lo que haya, y se dice.        */
+    if (!sitio_madre_se_despidio(g_madre)) {
+        sitio_avisa_madre_caida(GTK_WINDOW(data));
+        return G_SOURCE_REMOVE;
+    }
     gtk_main_quit();
     return G_SOURCE_REMOVE;
 }
@@ -184,7 +190,7 @@ int main(int argc, char *argv[])
             GTK_FILE_CHOOSER_BUTTON(app->data_filechooserbutton), app);
     }
 
-    sitio_vigila_madre(g_madre, se_fue_la_madre, NULL);
+    sitio_vigila_madre(g_madre, se_fue_la_madre, app->window);
     gtk_main();
 
     g_slice_free(AppWidgets, app);

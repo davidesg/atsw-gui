@@ -1,0 +1,71 @@
+# Proyecto de ATSW GUI. El nombre de cada fichero es CORTESIA:
+# la identidad esta aqui, y ningun programa parsea un nombre.
+schema_version: 2
+id: casos
+titulo: ""
+creado: "2026-11-14"
+analista: ""
+herramienta: fue
+raiz: .
+
+series:
+  EP:
+  EI:
+
+# La cadena de iteracion. padre vacio = raiz.
+# razon vacia = NO CONSTA, y no consta nunca significa cuadra.
+modelos:
+  EP/m00:
+    version: 0
+    padre: ""
+    razon: ""
+    rol: datos
+  EP/m01:
+    version: 1
+    padre: m00
+    razon: ""
+  EI/m00:
+    version: 0
+    padre: ""
+    razon: ""
+    rol: datos
+  EI/m01:
+    version: 1
+    padre: m00
+    razon: ""
+  EI/m02:
+    version: 2
+    padre: m01
+    razon: ""
+
+# Lo que se cruza: series EN ORDEN, cada una con el modelo
+# con que entra y el sha256 de su .pre. Ver DISENO-casos.md.
+casos:
+  C1:
+    motor: drtran
+    titulo: precios
+    razon: "el WTI adelanta: k=1"
+    creado: "2026-11-14"
+    entradas: EP/m01@aa11 EI/m01@bb22
+  C2:
+    motor: drtran
+    titulo: precios
+    razon: ""
+    padre: C1
+    creado: "2026-11-14"
+    entradas: EP/m01@aa11 EI/m02@bb22
+
+# Las estimaciones de cada caso, con su linaje.
+corridas:
+  C1/c00:
+    version: 0
+    padre: ""
+    razon: ""
+    creado: "2026-11-14"
+  C1/c01:
+    version: 1
+    padre: c00
+    razon: ""
+    elegido: si
+    razon_elegido: residuos limpios
+    creado: "2026-11-14"

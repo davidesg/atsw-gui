@@ -348,6 +348,47 @@ mira "una orden mal escrita: estado 2" '[ $rc = 2 ]'
 "$CLI" --nada version >/dev/null 2>&1; rc=$?
 mira "una opción desconocida: estado 2" '[ $rc = 2 ]'
 
+# EL MANIFIESTO ENTRE PROCESOS (docs/AUDITORIA-procesos.md, fase 1): 30
+# atsw-cli A LA VEZ, cada uno con la razon de un modelo distinto. Cada uno lee,
+# cambia y escribe; antes de la escritura transaccional, alguno escribia su
+# copia encima de la de otro y se perdian razones (medido: en 4 de 10 vueltas).
+# Ahora tienen que estar las 30, sin temporal que se quede (el .cerrojo se
+# queda: es el fichero sobre el que el sistema bloquea).
+C="$WORK/conc"; mkdir -p "$C"
+{
+  printf 'schema_version: 1\nid: conc\ntitulo: concurrencia\ncreado: "2026-11-14"\n'
+  printf 'analista: ""\nherramienta: fue\nraiz: .\n\nseries:\n  IPC:\n\nmodelos:\n'
+  printf '  IPC/m00:\n    version: 0\n    padre: ""\n    razon: ""\n    rol: datos\n'
+  for i in $(seq 1 30); do
+    printf '  IPC/m%02d:\n    version: %d\n    padre: m00\n    razon: ""\n' "$i" "$i"
+  done
+} > "$C/p.yaml"
+for i in $(seq 1 30); do
+  ( "$CLI" proyecto razon "$C/p.yaml" IPC "$(printf m%02d "$i")" "razon $i" \
+        > /dev/null 2> "$C/err.$i"; echo $? > "$C/rc.$i" ) &
+done
+wait
+n=$(grep -c 'razon: "*razon [0-9]' "$C/p.yaml")
+# LA REGLA ES QUE NADA SE PIERDA EN SILENCIO: un proceso puede no escribir (el
+# cerrojo no llega a tiempo, por ejemplo), pero entonces lo dice y sale con
+# error. Lo que no puede pasar es que diga que si y su razon no este.
+callados=""; avisan=""
+for i in $(seq 1 30); do
+  if [ "$(cat "$C/rc.$i")" = 0 ]; then
+    grep -q "razon: \"*razon $i\"*\$" "$C/p.yaml" || callados="$callados m$i"
+  else
+    avisan="$avisan m$i($(tr '\n' ' ' < "$C/err.$i"))"
+  fi
+done
+[ -n "$avisan" ] && echo "  los que avisaron:$avisan"
+mira "30 atsw-cli a la vez: ninguno dice que escribio y se pierde${callados:+ (se perdieron:$callados)}" \
+     '[ -z "$callados" ]'
+mira "30 atsw-cli a la vez sobre el mismo manifiesto: estan las 30 razones ($n de 30)" \
+     '[ "$n" = 30 ]'
+rm -f "$C"/rc.* "$C"/err.*
+mira "y no queda ningún temporal" \
+     '[ -z "$(ls "$C" | grep -E "\.tmp$")" ]'
+
 echo
 if [ $fallos -eq 0 ]; then echo "atsw-cli: todo bien"; exit 0; fi
 echo "atsw-cli: $fallos fallos"

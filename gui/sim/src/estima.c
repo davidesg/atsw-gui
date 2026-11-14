@@ -202,6 +202,8 @@ static gchar *corrida_nueva( Sim *m, char *why, size_t n )
             pr_error_es( &e, why, n );
             return NULL;
         }
+        if (pr_aviso()[0])
+            sim_estado( m, "El proyecto había cambiado a la vez: %s", pr_aviso() );
         snprintf( E->corrida, sizeof E->corrida, "%s", id );
         dir = g_path_get_dirname( ruta );
         g_mkdir_with_parents( dir, 0755 );

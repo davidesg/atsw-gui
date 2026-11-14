@@ -1,0 +1,10 @@
+schema_version: 1
+id: viejo
+series:
+  S:
+modelos:
+  S/m00:
+    version: 0
+    padre: ""
+    razon: ""
+    rol: datos

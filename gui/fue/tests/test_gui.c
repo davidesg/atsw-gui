@@ -88,6 +88,19 @@ static void test_guardar_deriva(FueContext *ctx, const char *dir, const char *mo
     char     id[PR_ID];
     const char *st;
 
+    /* EL MANIFIESTO ANTES QUE LOS FICHEROS: un ID nuevo salta los que ya
+       estan en disco (docs/DISENO-proyecto.md §5), y con IPC_m01.inp puesto
+       de antemano el hijo de m00 seria m02.                          */
+    g_mkdir_with_parents(proy, 0755);
+    pr_nuevo(p, "g", "guardar", ".");
+    snprintf(p->path, sizeof p->path, "%s", yaml);
+    pr_serie_add(p, "IPC", &e);
+    pr_deriva_rol(p, "IPC", "", NULL, PR_DATOS, id, sizeof id, NULL, 0, &e);
+    pr_deriva(p, "IPC", "", "m00", id, sizeof id, NULL, 0, &e);
+    check(!strcmp(id, "m01"), "el hijo de m00 es m01", id);
+    check(pr_escribir(p, yaml, &e) == 0, "el proyecto de la prueba se escribe", yaml);
+    fue_pon_proyecto(p);
+
     g_mkdir_with_parents(work, 0755);
     g_file_get_contents(src, &c, &n, NULL);
     g_file_set_contents(m01, c, (gssize) n, NULL);
@@ -98,13 +111,6 @@ static void test_guardar_deriva(FueContext *ctx, const char *dir, const char *mo
     g_free(c);
     g_file_set_contents(out, "un .out: m01 esta estimado\n", -1, NULL);
 
-    pr_nuevo(p, "g", "guardar", ".");
-    snprintf(p->path, sizeof p->path, "%s", yaml);
-    pr_serie_add(p, "IPC", &e);
-    pr_deriva_rol(p, "IPC", "", NULL, PR_DATOS, id, sizeof id, NULL, 0, &e);
-    pr_deriva(p, "IPC", "", "m00", id, sizeof id, NULL, 0, &e);
-    check(pr_escribir(p, yaml, &e) == 0, "el proyecto de la prueba se escribe", yaml);
-    fue_pon_proyecto(p);
 
     load_input_fue(m01);
     update_ui_from_model(ctx);

@@ -1,0 +1,33 @@
+# Proyecto de ATSW GUI. El nombre de cada fichero es CORTESIA:
+# la identidad esta aqui, y ningun programa parsea un nombre.
+schema_version: 1
+id: por
+titulo: linaje con asistente
+creado: "2026-11-14"
+analista: ""
+herramienta: fue
+raiz: .
+
+series:
+  S:
+
+# La cadena de iteracion. padre vacio = raiz.
+# razon vacia = NO CONSTA, y no consta nunca significa cuadra.
+modelos:
+  S/m00:
+    version: 0
+    padre: ""
+    razon: ""
+    rol: datos
+  S/m01:
+    version: 1
+    padre: m00
+    razon: ""
+  S/m02:
+    version: 2
+    padre: m01
+    razon: ""
+    elegido: si
+    razon_elegido: el mejor
+    por_elegido: asistente
+    por: asistente

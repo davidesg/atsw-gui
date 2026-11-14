@@ -1,0 +1,15 @@
+# Proyecto de ATSW GUI. El nombre de cada fichero es CORTESIA:
+# la identidad esta aqui, y ningun programa parsea un nombre.
+schema_version: 1
+id: x
+titulo: "{ni un mapa}"
+creado: "2026-11-14"
+analista: ""
+herramienta: fue
+raiz: .
+
+series:
+
+# La cadena de iteracion. padre vacio = raiz.
+# razon vacia = NO CONSTA, y no consta nunca significa cuadra.
+modelos:

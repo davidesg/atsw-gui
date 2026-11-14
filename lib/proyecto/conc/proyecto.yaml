@@ -1,0 +1,30 @@
+# Proyecto de ATSW GUI. El nombre de cada fichero es CORTESIA:
+# la identidad esta aqui, y ningun programa parsea un nombre.
+schema_version: 1
+id: C
+titulo: concurrencia
+creado: "2026-11-14"
+analista: ""
+herramienta: fue
+raiz: .
+
+series:
+  IPC:
+    descripcion: la de este
+  WTI:
+  PIB:
+  NUEVA:
+    descripcion: del otro
+
+# La cadena de iteracion. padre vacio = raiz.
+# razon vacia = NO CONSTA, y no consta nunca significa cuadra.
+modelos:
+  IPC/m00:
+    version: 0
+    padre: ""
+    razon: ""
+    rol: datos
+  IPC/m01:
+    version: 1
+    padre: m00
+    razon: ""

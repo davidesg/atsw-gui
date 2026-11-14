@@ -1,0 +1,15 @@
+schema_version: 2
+id: x
+series:
+  S:
+modelos:
+  S/m00:
+    rol: datos
+  S/m01:
+    padre: m00
+casos:
+  C1:
+    entradas: S/m01
+corridas:
+  C1/c01:
+    padre: c00

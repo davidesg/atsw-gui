@@ -23,12 +23,20 @@ SRC = src/main.c \
       $(LIB)/sitio/sitio.c \
       $(LIB)/ficha/ficha.c \
       $(LIB)/anomalos/anomalos.c \
-      $(LIB)/anomalos/residuos.c
+      $(LIB)/anomalos/residuos.c \
+      $(LIB)/prewhiten/prewhiten.c \
+      $(LIB)/fuepre/fue_pre_reader.c \
+      $(LIB)/fuedet/fuedet.c \
+      $(LIB)/diagmv/diagmv.c \
+      $(LIB)/dates/dates.c \
+      ../../engines/drtran/src/nlatools.c \
+      ../../engines/drtran/src/diagnose.c
 
 INC = -I$(LIB)/proyecto -I$(LIB)/gesto -I$(LIB)/outfile -I$(LIB)/dictamen -I$(LIB)/intervencion \
       -I$(LIB)/inpdet -I$(LIB)/raices -I$(LIB)/inpcheck -I$(LIB)/coste \
-      -I$(LIB)/engine -I$(LIB)/sitio -I$(LIB)/ficha -I$(LIB)/anomalos \
-      -I$(LIB)/fugplot
+      -I$(LIB)/engine -I$(LIB)/sitio -I$(LIB)/ficha -I$(LIB)/anomalos -I$(LIB)/fugplot \
+      -I$(LIB)/prewhiten -I$(LIB)/fuepre -I$(LIB)/fuedet -I$(LIB)/diagmv -I$(LIB)/dates -I$(LIB)/lik \
+      -I../../engines/drtran/include
 
 GLIB_CFLAGS := $(shell pkg-config --cflags glib-2.0 2>/dev/null)
 GLIB_LIBS   := $(shell pkg-config --libs glib-2.0 2>/dev/null)

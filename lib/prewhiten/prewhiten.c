@@ -387,3 +387,24 @@ fin:
     if ( wX )   free_vector( wX, 1, nX );
     return rc;
 }
+
+
+/* Ver prewhiten.h. Salio de la pantalla de identificacion de drtran_gui
+   (identifica.c, lee) para que atsw-cli lea la CCF igual.               */
+void prewhiten_lee( const double *ccf, int nlags, double banda,
+                    int *b, int *s, int *kmax, int *neg )
+{
+    int k, ultimo = -1;
+
+    *b = -1; *kmax = 0; *neg = 0;
+    for ( k = 0; k <= nlags; k++ )
+        if ( fabs( ccf[nlags + k] ) > banda ) {
+            if ( *b < 0 ) *b = k;
+            ultimo = k;
+        }
+    for ( k = 0; k <= nlags; k++ )
+        if ( fabs( ccf[nlags + k] ) > fabs( ccf[nlags + *kmax] ) ) *kmax = k;
+    for ( k = 1; k <= nlags; k++ )
+        if ( fabs( ccf[nlags - k] ) > banda ) (*neg)++;
+    *s = *b >= 0 ? ultimo - *b : -1;
+}

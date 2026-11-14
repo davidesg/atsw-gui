@@ -81,30 +81,11 @@ void preview_show_status(PreviewApp *app, const gchar *format, ...)
 /* Calcular: una CCF por entrada candidata                                   */
 /* ------------------------------------------------------------------------ */
 
-/* Lo que se lee del grafico, que es lo que va a las columnas. */
+/* Lo que se lee del grafico, que es lo que va a las columnas: lib/prewhiten
+ * (prewhiten_lee), lo mismo que atsw-cli prewhiten.                      */
 static void lee( IdentUno *u )
 {
-    int k;
-
-    u->b = u->ultimo = -1;
-    u->kmax = 0;
-    u->neg  = 0;
-
-    for (k = 0; k <= u->nlags; k++)
-        if (fabs( u->ccf[u->nlags + k] ) > u->banda) {
-            if (u->b < 0) u->b = k;
-            u->ultimo = k;
-        }
-    for (k = 0; k <= u->nlags; k++)
-        if (fabs( u->ccf[u->nlags + k] ) > fabs( u->ccf[u->nlags + u->kmax] ))
-            u->kmax = k;
-
-    /* El contraste de exogeneidad: si la salida antecede a la entrada, el
-     * modelo de transferencia no se sostiene y no hay (b,s) que lo arregle. */
-    for (k = 1; k <= u->nlags; k++)
-        if (fabs( u->ccf[u->nlags - k] ) > u->banda) u->neg++;
-
-    u->s = u->b >= 0 ? u->ultimo - u->b : -1;
+    prewhiten_lee( u->ccf, u->nlags, u->banda, &u->b, &u->s, &u->kmax, &u->neg );
 }
 
 static void calcula( Mtram *m )

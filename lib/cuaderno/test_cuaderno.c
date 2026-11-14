@@ -28,6 +28,28 @@ static gchar *lee( const char *f )
     return s;
 }
 
+/* VARIOS A LA VEZ: cada hilo, sus notas. El cerrojo es del sistema y va
+   por fichero abierto, asi que entre hilos se comporta como entre
+   procesos.                                                           */
+#define HILOS 8
+#define NOTAS 25
+typedef struct { const char *man; int k, mal; } Hilo;
+
+static gpointer escribe_notas( gpointer d )
+{
+    Hilo *h = d;
+    char  why[256], t[128];
+    int   i;
+
+    for ( i = 0; i < NOTAS; i++ )
+        {
+        g_snprintf( t, sizeof t, "nota %d-%d %s", h->k, i,
+                    "con texto de sobra para que la entrada no sea corta del todo" );
+        if ( cu_nota( h->man, t, why, sizeof why ) != 0 ) h->mal++;
+        }
+    return NULL;
+}
+
 static int veces( const char *s, const char *que )
 {
     int n = 0;
@@ -142,6 +164,45 @@ int main( int argc, char **argv )
                          why, sizeof why ) != 0 && strstr( why, "proyecto" ),
         "sin proyecto, dice por qué" );
     g_free( d2 ); g_free( eps ); g_free( out );
+    }
+
+    printf( "\ndos programas en el mismo segundo (AUDITORIA-procesos A6)\n" );
+    {
+    Cuaderno *a = cu_nueva( man, "A" ), *b = cu_nueva( man, "B" );
+    char      pa[1024], pb[1024];
+
+    /* Dos entradas distintas, como dos programas: ninguna sabe de la otra
+       y ninguna ha escrito todavia su imagen.                          */
+    cu_imagen( a, "Mismo nombre", "", pa, sizeof pa );
+    cu_imagen( b, "Mismo nombre", "", pb, sizeof pb );
+    ok( strcmp( pa, pb ) != 0, "dos entradas a la vez no eligen el mismo nombre de imagen" );
+    g_file_set_contents( pa, "png", 3, NULL );
+    cu_descarta( b );
+    ok( !g_file_test( pb, G_FILE_TEST_EXISTS ), "la reserva que nadie lleno se quita al descartar" );
+    ok( cu_cierra( a, why, sizeof why ) == 0 && g_file_test( pa, G_FILE_TEST_EXISTS ),
+        "y la que se lleno se queda" );
+    }
+
+    printf( "\n%d hilos escribiendo a la vez\n", HILOS );
+    {
+    GThread *th[HILOS];
+    Hilo     h[HILOS];
+    int      i, mal = 0;
+
+    g_unlink( md );
+    for ( i = 0; i < HILOS; i++ )
+        {
+        h[i].man = man; h[i].k = i; h[i].mal = 0;
+        th[i] = g_thread_new( "notas", escribe_notas, &h[i] );
+        }
+    for ( i = 0; i < HILOS; i++ ) { g_thread_join( th[i] ); mal += h[i].mal; }
+    s = lee( md );
+    ok( mal == 0, "ninguna escritura fallo" );
+    ok( veces( s, "# Cuaderno del proyecto" ) == 1, "una sola cabecera, aunque nacieran a la vez" );
+    ok( veces( s, "\n## " ) == HILOS * NOTAS, "todas las entradas" );
+    ok( veces( s, "para que la entrada no sea corta del todo\n\n---\n" ) == HILOS * NOTAS,
+        "y cada una entera, sin otra metida en medio" );
+    g_free( s );
     }
 
     printf( "\nsin proyecto\n" );

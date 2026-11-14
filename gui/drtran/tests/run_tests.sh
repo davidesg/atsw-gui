@@ -267,8 +267,8 @@ $CC -O2 -Wall -Wextra -I"$L/tabla" \
 
 # --- el cuaderno del proyecto: lo que se miro, en Markdown -----------------
 echo
-$CC -O2 -Wall -Wextra -I"$L/tabla" -I"$L/cuaderno" \
-    "$L/cuaderno/test_cuaderno.c" "$L/cuaderno/cuaderno.c" "$L/tabla/tabla.c" \
+$CC -O2 -Wall -Wextra -I"$L/tabla" -I"$L/cuaderno" -I"$L/proyecto" \
+    "$L/cuaderno/test_cuaderno.c" "$L/cuaderno/cuaderno.c" "$L/tabla/tabla.c" "$L/proyecto/proyecto.c" \
     $(pkg-config --cflags --libs glib-2.0) -o "$W/test_cuaderno" || exit 1
 "$W/test_cuaderno" "$W" || exit 1
 

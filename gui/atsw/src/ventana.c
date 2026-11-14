@@ -224,14 +224,19 @@ const char *atsw_modelo_por_defecto( const Proyecto *p, const char *serie )
 /* tirarse por delante del que tenemos en memoria, que funciona.             */
 /* ------------------------------------------------------------------------ */
 
+/* El sha256 del fichero en hu (vacio si no se lee). */
+static void huella_de( const char *path, char *hu, size_t n )
+{
+    gchar *h = ge_sha( path );
+
+    snprintf( hu, n, "%s", h ? h : "" );
+    g_free( h );
+}
+
 static void huella_manifiesto( Atsw *a )
 {
-    GStatBuf st;
-
-    if ( a->hay && g_stat( a->p->path, &st ) == 0 )
-        { a->p_tam = (long) st.st_size; a->p_mtime = (long) st.st_mtime; }
-    else
-        a->p_tam = a->p_mtime = 0;
+    if ( a->hay ) huella_de( a->p->path, a->p_sha, sizeof a->p_sha );
+    else          a->p_sha[0] = '\0';
 }
 
 /* GUARDAR ES ESCRIBIR Y APUNTAR LA HUELLA, LAS DOS COSAS.
@@ -273,16 +278,16 @@ int atsw_guarda( Atsw *a, PrError *e )
 
 gboolean atsw_relee( Atsw *a, char *why, size_t n )
 {
-    GStatBuf  st;
     Proyecto *nuevo;
     PrError   e;
-    char      path[PR_RUTA];
+    char      path[PR_RUTA], hu[72];
 
     if ( why && n ) why[0] = '\0';
     if ( !a->hay || a->p == NULL ) return FALSE;
-    if ( g_stat( a->p->path, &st ) != 0 ) return FALSE;
+    huella_de( a->p->path, hu, sizeof hu );
+    if ( !hu[0] ) return FALSE;             /* no se lee: ya se vera     */
 
-    if ( (long) st.st_size == a->p_tam && (long) st.st_mtime == a->p_mtime )
+    if ( !strcmp( hu, a->p_sha ) )
         return FALSE;                       /* no se ha movido */
 
     snprintf( path, sizeof path, "%s", a->p->path );
@@ -294,8 +299,7 @@ gboolean atsw_relee( Atsw *a, char *why, size_t n )
            fichero cambie otra vez: si alguien lo dejo a medias, el aviso
            saldria en cada golpe de foco.                               */
         if ( why ) pr_error_es( &e, why, n );
-        a->p_tam   = (long) st.st_size;
-        a->p_mtime = (long) st.st_mtime;
+        snprintf( a->p_sha, sizeof a->p_sha, "%s", hu );
         g_free( nuevo );
         return FALSE;
         }
@@ -326,8 +330,7 @@ gboolean atsw_relee( Atsw *a, char *why, size_t n )
     *a->p = *nuevo;
     g_free( nuevo );
     snprintf( a->p->path, sizeof a->p->path, "%s", path );
-    a->p_tam   = (long) st.st_size;
-    a->p_mtime = (long) st.st_mtime;
+    snprintf( a->p_sha, sizeof a->p_sha, "%s", hu );
 
     /* La cache de resultados se vacia: sus huellas siguen valiendo, pero un
        modelo que ya no esta no tiene por que seguir ocupando sitio.    */

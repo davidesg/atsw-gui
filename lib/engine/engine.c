@@ -394,10 +394,61 @@ static gboolean on_pipe(GIOChannel *channel, GIOCondition cond, gpointer data) {
 /*     padre muere, tambien por una senal que ningun manejador ve;          */
 /*   - en Windows, un job object con KILL_ON_JOB_CLOSE: al morir el GUI se   */
 /*     cierra su manejador y el sistema mata lo que haya dentro.            */
+/*   - y en POSIX (para macOS, que no tiene PDEATHSIG), un manejador de las  */
+/*     senales que se pueden atrapar --SIGTERM, SIGINT, SIGHUP y las de una  */
+/*     caida: SIGSEGV, SIGBUS, SIGABRT, SIGFPE, SIGILL-- que manda SIGTERM a */
+/*     los motores y deja morir al GUI como habria muerto. SIGKILL no se     */
+/*     puede atrapar: ahi, en macOS, el motor sigue (AUDITORIA-procesos B6). */
 /* ------------------------------------------------------------------------ */
 
 G_LOCK_DEFINE_STATIC(vivos);
 static GSList *vivos = NULL;            /* los Run cuyo hijo no se ha recogido */
+
+#ifndef G_OS_WIN32
+/* LOS PIDS, EN UNA TABLA FIJA que un manejador de senal puede leer: la lista
+ * de arriba es de GLib, con su cerrojo, y desde una senal no se toca. Solo
+ * se escribe desde el hilo de la interfaz (vivo_alta, vivo_baja).      */
+#define MAX_TABLA 64
+static volatile sig_atomic_t tabla[MAX_TABLA];
+
+static void tabla_pon(pid_t pid) {
+    int i;
+    for (i = 0; i < MAX_TABLA; i++) if (tabla[i] == 0) { tabla[i] = (sig_atomic_t) pid; return; }
+}
+
+static void tabla_quita(pid_t pid) {
+    int i;
+    for (i = 0; i < MAX_TABLA; i++) if (tabla[i] == (sig_atomic_t) pid) tabla[i] = 0;
+}
+
+static void al_morir(int sig) {
+    int i;
+
+    for (i = 0; i < MAX_TABLA; i++)            /* kill() se puede aqui      */
+        if (tabla[i] > 0) kill((pid_t) tabla[i], SIGTERM);
+    signal(sig, SIG_DFL);                      /* y se muere como se iba a  */
+    raise(sig);
+}
+
+/* Solo donde nadie puso ya un manejador: el del programa manda.        */
+static void manejadores(void) {
+    static const int senales[] = { SIGTERM, SIGINT, SIGHUP, SIGSEGV, SIGBUS,
+                                   SIGABRT, SIGFPE, SIGILL };
+    unsigned i;
+
+    for (i = 0; i < G_N_ELEMENTS(senales); i++) {
+        struct sigaction ya, nueva;
+
+        if (sigaction(senales[i], NULL, &ya) != 0 || ya.sa_handler != SIG_DFL ||
+            (ya.sa_flags & SA_SIGINFO))
+            continue;
+        memset(&nueva, 0, sizeof nueva);
+        nueva.sa_handler = al_morir;
+        sigemptyset(&nueva.sa_mask);
+        sigaction(senales[i], &nueva, NULL);
+    }
+}
+#endif
 
 #ifdef G_OS_WIN32
 static HANDLE trabajo_job = NULL;       /* el job object; se crea con el primero */
@@ -524,6 +575,9 @@ static void vivo_alta(Run *run) {
      * salen con exit() sin pasar por el "shutdown" de la aplicacion.    */
     if (g_once_init_enter(&con_atexit)) {
         atexit(engine_stop_all);
+#ifndef G_OS_WIN32
+        manejadores();
+#endif
         g_once_init_leave(&con_atexit, 1);
     }
 #ifdef G_OS_WIN32
@@ -538,12 +592,18 @@ static void vivo_alta(Run *run) {
 #endif
     G_LOCK(vivos);
     vivos = g_slist_prepend(vivos, run);
+#ifndef G_OS_WIN32
+    tabla_pon((pid_t) run->pid);
+#endif
     G_UNLOCK(vivos);
 }
 
 static void vivo_baja(Run *run) {
     G_LOCK(vivos);
     vivos = g_slist_remove(vivos, run);
+#ifndef G_OS_WIN32
+    tabla_quita((pid_t) run->pid);
+#endif
     G_UNLOCK(vivos);
 }
 

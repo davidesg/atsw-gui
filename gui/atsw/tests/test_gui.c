@@ -40,6 +40,11 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef _WIN32
+#  include <sys/utime.h>
+#else
+#  include <utime.h>
+#endif
 
 #include "sitio.h"
 #ifndef G_OS_WIN32
@@ -1906,6 +1911,23 @@ static void hijo_falso( void )
     check( sitio_vigila_madre( NULL, fuera_cb, &fuera ) == 0 &&
            sitio_vigila_madre( "12x", fuera_cb, &fuera ) == 0,
            "sin «--madre» o con un pid ilegible, no se vigila", NULL );
+
+    /* LA DESPEDIDA (lib/sitio, AUDITORIA-procesos B4): la deja la madre al
+       cerrarse bien, y el hijo la mira para saber si cerrarse con ella.  */
+    {
+    gchar *yo = g_strdup_printf( "%ld", sitio_mi_pid() );
+
+    sitio_madre_limpia_despedidas();
+    check( !sitio_madre_se_despidio( yo ), "sin despedida, la madre se cayo", NULL );
+    sitio_madre_se_despide();
+    check( sitio_madre_se_despidio( yo ), "con despedida, se cerro bien", NULL );
+    check( !sitio_madre_se_despidio( "999999999" ) && !sitio_madre_se_despidio( NULL ),
+           "la despedida es de esa madre, no de cualquiera", NULL );
+    sitio_madre_limpia_despedidas();
+    check( !sitio_madre_se_despidio( yo ),
+           "al arrancar, la madre quita la despedida que quedo con su pid", NULL );
+    g_free( yo );
+    }
 #ifndef G_OS_WIN32
     {
     gchar *padre = g_strdup_printf( "%ld", (long) getppid() );
@@ -2946,6 +2968,24 @@ static void abrir( const char *manifiesto )
                        "Cambiado desde fuera" ) != NULL,
                "y la cabecera enseña lo nuevo",
                gtk_label_get_text( GTK_LABEL(A.l_proy) ) );
+
+        /* EL MISMO TAMAÑO EN EL MISMO SEGUNDO (AUDITORIA-procesos A6): con
+           la huella de tamaño y fecha no se veia. Mismo largo de titulo, y
+           la fecha del fichero devuelta a la de antes.                  */
+        {
+        GStatBuf       st;
+        struct utimbuf ut;
+
+        g_stat( manifiesto, &st );
+        g_snprintf( q->titulo, sizeof q->titulo, "Cambiado desde FUERA de la ventana" );
+        pr_escribir( q, manifiesto, &e );
+        ut.actime = st.st_atime; ut.modtime = st.st_mtime;
+        g_utime( manifiesto, &ut );
+        on_foco( A.ventana, NULL, &A );
+        check( strstr( gtk_label_get_text( GTK_LABEL(A.l_proy) ), "FUERA" ) != NULL,
+               "un cambio del mismo tamaño y en el mismo segundo también se ve",
+               gtk_label_get_text( GTK_LABEL(A.l_proy) ) );
+        }
         }
     else
         check( 0, "(la prueba relee el manifiesto)", NULL );

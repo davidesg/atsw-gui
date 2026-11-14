@@ -16,6 +16,7 @@
 #include "file_io.h"
 #include "engine.h"
 #include "sitio.h"
+#include "sitio_gtk.h"
 #include "iconos.h"
 
 
@@ -41,6 +42,12 @@ static const char *g_madre = NULL;
 static gboolean se_fue_la_madre(gpointer data)
 {
     (void)data;
+    /* SIN DESPEDIDA, LA MADRE SE CAYO (lib/sitio, AUDITORIA-procesos B4):
+       no se cierra, para que se guarde lo que haya, y se dice.        */
+    if (!sitio_madre_se_despidio(g_madre)) {
+        sitio_avisa_madre_caida(sitio_ventana_activa());
+        return G_SOURCE_REMOVE;
+    }
     engine_stop_all();          /* los motores, antes (BUG-0001 de drtran_gui) */
     g_application_quit(g_application_get_default());
     return G_SOURCE_REMOVE;

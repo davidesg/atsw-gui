@@ -10,7 +10,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <glib.h>
+#include <glib/gstdio.h>
 #include "engine.h"
+#ifndef G_OS_WIN32
+#  include <signal.h>
+#  include <unistd.h>
+#endif
 
 static int fallos;
 
@@ -30,9 +35,31 @@ int main( int argc, char **argv )
 
     if ( argc >= 2 && g_str_has_prefix( argv[1], "--duerme=" ) )
         {
+#ifndef G_OS_WIN32
+        if ( argc >= 3 )                 /* el motor dice quien es */
+            {
+            gchar *n = g_strdup_printf( "%ld", (long) getpid() );
+            g_file_set_contents( argv[2], n, -1, NULL );
+            g_free( n );
+            }
+#endif
         g_usleep( (gulong) ( g_ascii_strtod( argv[1] + 9, NULL ) * G_USEC_PER_SEC ) );
         return 0;
         }
+#ifndef G_OS_WIN32
+    /* UN GUI QUE SE CAE: lanza un motor que duerme y muere con SIGABRT. */
+    if ( argc >= 4 && !strcmp( argv[1], "--cae" ) )
+        {
+        const char *const av[] = { "--duerme=30", argv[3], NULL };
+        EngineJob *j = engine_start( NULL, argv[2], av, NULL, NULL, NULL, NULL );
+        int        t;
+
+        for ( t = 0; t < 50 && !g_file_test( argv[3], G_FILE_TEST_EXISTS ); t++ )
+            g_usleep( 100000 );
+        (void) j;
+        abort();
+        }
+#endif
 
     prog = g_path_is_absolute( argv[0] ) ? g_strdup( argv[0] )
                                          : g_find_program_in_path( argv[0] );
@@ -77,6 +104,32 @@ int main( int argc, char **argv )
     r = engine_run( NULL, prog, "--duerme=1.2", NULL );
     check( r.status == 0, "con ATSW_PLAZO_MOTOR_S=0 no hay plazo", r.message );
     engine_result_clear( &r );
+
+#ifndef G_OS_WIN32
+    /* B6: el GUI muere por una senal y su motor no se queda huerfano. En
+       Linux lo cubre ademas PR_SET_PDEATHSIG; en macOS, solo el manejador. */
+    {
+    gchar *f = g_build_filename( g_get_tmp_dir(), "test_engine_motor.pid", NULL );
+    gchar *av[] = { prog, (gchar *) "--cae", prog, f, NULL };
+    gchar *s2 = NULL;
+    long   pm = 0;
+    int    vivo = 1, t;
+
+    g_unlink( f );
+    g_spawn_sync( NULL, av, NULL, G_SPAWN_STDERR_TO_DEV_NULL, NULL, NULL,
+                  NULL, NULL, NULL, NULL );
+    if ( g_file_get_contents( f, &s2, NULL, NULL ) ) pm = atol( s2 );
+    check( pm > 0, "el GUI de la prueba lanzo su motor", NULL );
+    for ( t = 0; pm > 0 && t < 30; t++ )
+        {
+        if ( kill( (pid_t) pm, 0 ) != 0 ) { vivo = 0; break; }
+        g_usleep( 100000 );
+        }
+    check( pm > 0 && !vivo, "el GUI muere por SIGABRT y su motor no se queda huerfano", NULL );
+    if ( pm > 0 && vivo ) kill( (pid_t) pm, SIGKILL );
+    g_unlink( f ); g_free( f ); g_free( s2 );
+    }
+#endif
 
     g_free( prog );
     printf( "lib/engine: %d fallos\n", fallos );

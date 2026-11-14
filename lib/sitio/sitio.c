@@ -4,6 +4,9 @@
 
 #include "sitio.h"
 
+#include <time.h>
+#include <glib/gstdio.h>
+
 #include <stdlib.h>
 
 #ifdef G_OS_WIN32
@@ -150,11 +153,94 @@ int sitio_vigila_madre( const char *pid, GSourceFunc al_irse, gpointer datos )
     v->datos = datos;
 #ifdef G_OS_WIN32
     v->h = OpenProcess( SYNCHRONIZE, FALSE, (DWORD) n );
+    /* QUE NO SE PUEDA ABRIR NO ES QUE SE HAYA IDO. Sin manejador, viva() da
+       que no, y el hijo se cerraba al segundo con la madre viva si Windows
+       negaba el acceso (AUDITORIA-procesos B7). Solo ERROR_INVALID_PARAMETER
+       dice que ese proceso no existe; con otro error no se puede vigilar, y
+       el hijo sigue como si no le hubieran dado --madre.              */
+    if ( v->h == NULL && GetLastError() != ERROR_INVALID_PARAMETER )
+        {
+        g_free( v );
+        return 0;
+        }
 #endif
     /* si ya no está al arrancar, se va en el primer segundo: la madre se
        cerró mientras el hijo se abría                                  */
     g_timeout_add_seconds( 1, mira, v );
     return 1;
+}
+
+/* --- la despedida de la madre: ver sitio.h ------------------------------ */
+
+static gchar *despedida_de( long pid )
+{
+    gchar *f = g_strdup_printf( "atsw-madre-%ld.adios", pid );
+    gchar *r = g_build_filename( g_get_tmp_dir(), f, NULL );
+
+    g_free( f );
+    return r;
+}
+
+void sitio_madre_se_despide( void )
+{
+    gchar *f = despedida_de( sitio_mi_pid() );
+
+    g_file_set_contents( f, "la madre se cerro bien\n", -1, NULL );
+    g_free( f );
+}
+
+void sitio_madre_limpia_despedidas( void )
+{
+    GDir        *d = g_dir_open( g_get_tmp_dir(), 0, NULL );
+    const gchar *n;
+    gchar       *mia = despedida_de( sitio_mi_pid() );
+    time_t       ahora = time( NULL );
+
+    g_unlink( mia );
+    g_free( mia );
+    if ( d == NULL ) return;
+    while ( ( n = g_dir_read_name( d ) ) != NULL )
+        {
+        GStatBuf st;
+        gchar   *f;
+
+        if ( !g_str_has_prefix( n, "atsw-madre-" ) || !g_str_has_suffix( n, ".adios" ) )
+            continue;
+        f = g_build_filename( g_get_tmp_dir(), n, NULL );
+        if ( g_stat( f, &st ) == 0 && ahora - st.st_mtime > 24 * 3600 ) g_unlink( f );
+        g_free( f );
+        }
+    g_dir_close( d );
+}
+
+int sitio_madre_se_despidio( const char *pid )
+{
+    GStatBuf st;
+    char    *fin = NULL;
+    long     n;
+    gchar   *f;
+    int      si;
+
+    if ( !pid || !*pid ) return 0;
+    n = strtol( pid, &fin, 10 );
+    if ( n <= 0 || ( fin && *fin ) ) return 0;
+    f  = despedida_de( n );
+    /* Diez minutos: una despedida vieja es de otra madre con el mismo pid. */
+    si = g_stat( f, &st ) == 0 && time( NULL ) - st.st_mtime < 600;
+    g_free( f );
+    return si;
+}
+
+const char *sitio_madre_caida_titulo( void )
+{
+    return "La madre (ATSW) se ha cerrado de golpe";
+}
+
+const char *sitio_madre_caida_texto( void )
+{
+    return "No se ha despedido: no la cerraste tú. Esta ventana sigue abierta "
+           "para que guardes lo que tengas; lo que guardes va al proyecto igual. "
+           "Ciérrala cuando termines.";
 }
 
 /* --- los motores, sin consola en Windows: ver sitio.h ----------------- */

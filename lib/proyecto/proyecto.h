@@ -102,7 +102,9 @@ typedef enum {
    PR_EHIJAS,        /* de la corrida cuelgan otras                       */
    PR_EENTRADA,      /* esa entrada no puede entrar en un caso            */
    PR_EVERSION,      /* el manifiesto es de una version que no se conoce  */
-   PR_EVACIO         /* el fichero no tiene nada                          */
+   PR_EVACIO,        /* el fichero no tiene nada                          */
+   PR_ECERROJO,      /* otro programa tiene el manifiesto cogido          */
+   PR_ECONFLICTO     /* lo mismo, dado de alta aqui y en otro programa    */
 } PrCodigo;
 
 typedef struct {
@@ -313,7 +315,28 @@ void pr_nuevo( Proyecto *p, const char *id, const char *titulo,
  * entero -- eso es lo que importa para que la otra encarnacion pueda mirarlo.
  */
 int pr_leer( const char *path, Proyecto *p, PrError *e );
-int pr_escribir( const Proyecto *p, const char *path, PrError *e );
+/* ESCRIBIR ES UNA TRANSACCION ENTRE PROCESOS (docs/AUDITORIA-procesos.md):
+ * con un cerrojo junto al manifiesto, se relee el disco y, si otro programa
+ * lo cambio desde que este lo leyo, se aplican sobre lo del disco SOLO los
+ * cambios de p respecto a lo que este proceso leyo, elemento a elemento.
+ * Se escribe a un temporal, se relee con la validacion de pr_leer y se
+ * renombra encima. p SE QUEDA CON EL RESULTADO. PR_ECONFLICTO si lo mismo
+ * se dio de alta aqui y en otro programa a la vez (no se escribe nada);
+ * PR_ECERROJO si otro lo tuvo cogido mas de 5 s. Lo que la fusion decidio
+ * (un cambio de los dos lados, un borrado contra un cambio) en pr_aviso(),
+ * "" si nada.                                                           */
+int pr_escribir( Proyecto *p, const char *path, PrError *e );
+const char *pr_aviso( void );
+
+/* Lo que habia en viejo y nuevo ya no trae (series, muestras, modelos,
+ * casos, corridas), una por linea en out. Devuelve cuantas. Para avisar al
+ * releer: una perdida posible.                                          */
+int pr_faltan( const Proyecto *viejo, const Proyecto *nuevo, char *out, size_t n );
+
+/* LA BASE de un manifiesto en este proceso: lo que leyo o escribio por
+ * ultima vez, contra lo que pr_escribir mide lo que cambio. La pone
+ * pr_leer; esto es para las pruebas, que hacen de dos procesos en uno.   */
+void pr_base_pon( const char *path, const Proyecto *base );
 
 /* --- nombres -> rutas --------------------------------------------------- */
 

@@ -348,6 +348,30 @@ mira "una orden mal escrita: estado 2" '[ $rc = 2 ]'
 "$CLI" --nada version >/dev/null 2>&1; rc=$?
 mira "una opción desconocida: estado 2" '[ $rc = 2 ]'
 
+# EL MANIFIESTO ENTRE PROCESOS (docs/AUDITORIA-procesos.md, fase 1): 30
+# atsw-cli A LA VEZ, cada uno con la razon de un modelo distinto. Cada uno lee,
+# cambia y escribe; antes de la escritura transaccional, alguno escribia su
+# copia encima de la de otro y se perdian razones (medido: en 4 de 10 vueltas).
+# Ahora tienen que estar las 30, sin cerrojo ni temporal que se quede.
+C="$WORK/conc"; mkdir -p "$C"
+{
+  printf 'schema_version: 1\nid: conc\ntitulo: concurrencia\ncreado: "2026-11-14"\n'
+  printf 'analista: ""\nherramienta: fue\nraiz: .\n\nseries:\n  IPC:\n\nmodelos:\n'
+  printf '  IPC/m00:\n    version: 0\n    padre: ""\n    razon: ""\n    rol: datos\n'
+  for i in $(seq 1 30); do
+    printf '  IPC/m%02d:\n    version: %d\n    padre: m00\n    razon: ""\n' "$i" "$i"
+  done
+} > "$C/p.yaml"
+for i in $(seq 1 30); do
+  "$CLI" proyecto razon "$C/p.yaml" IPC "$(printf m%02d "$i")" "razon $i" > /dev/null 2>&1 &
+done
+wait
+n=$(grep -c 'razon: "*razon [0-9]' "$C/p.yaml")
+mira "30 atsw-cli a la vez sobre el mismo manifiesto: no se pierde ninguna razón ($n de 30)" \
+     '[ "$n" = 30 ]'
+mira "y no queda cerrojo ni temporal" \
+     '[ -z "$(ls "$C" | grep -E "cerrojo|tmp")" ]'
+
 echo
 if [ $fallos -eq 0 ]; then echo "atsw-cli: todo bien"; exit 0; fi
 echo "atsw-cli: $fallos fallos"

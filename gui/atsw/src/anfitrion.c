@@ -77,5 +77,17 @@ AnHost atsw_host( Atsw *a )
     h.abre     = md_abre;
     h.cierra   = md_cierra;
     h.puede    = AN_PUEDE_FUE | AN_PUEDE_EDITOR;   /* las dos puertas */
+    /* --ver: SOLO LECTURA (ESTUDIO-terminal-mcp §7.4). Sin guarda ni abre
+       no se deriva ni se escribe el manifiesto; «Al cuaderno» si, que lo
+       que va al cuaderno lo decide quien mira.                        */
+    if ( a->solo_ver )
+        {
+        h.padre    = NULL;
+        h.guarda   = NULL;
+        h.refresca = NULL;
+        h.abre     = NULL;
+        h.cierra   = NULL;
+        h.puede    = 0;
+        }
     return h;
 }

@@ -263,6 +263,51 @@ mira "prewhiten de un modelo sin .pre: estado 1, y dice por qué" \
 mira "prewhiten con una entrada que no se puede leer: esa fila lo dice, las demás siguen" \
      '[ "$("$CLI" --json prewhiten "$YP" ES/m01 WTI/m09 WTI/m01 | campo "[e[\"vale\"] for e in d[\"entradas\"]]")" = "[False, True]" ]'
 
+# formales: los contrastes del modelo estimado, con las mismas funciones que
+# las dos ventanas de la madre (lib/formales). Los numeros son los de art que
+# fija lib/formales/test_formales.c para RIPC.2: la simplificacion estacional
+# 15.77767809, Shin-Fuller Phi = 1.69946526 (critico 1.75) y la
+# sobrediferenciacion LR = 0. Su MEG esta mal condicionado: solo se coteja
+# el veredicto, ninguna frecuencia estocastica. SOBRE UNA COPIA del
+# proyecto: sus reestimaciones dejan costes.csv, y las pruebas de coste de mas
+# abajo empiezan sin el.
+PF="$WORK/proy_formales"; cp -R "$P" "$PF"; YF="$PF/proyecto.yaml"; rm -f "$PF/costes.csv"
+if [ -x "$FUE" ]; then
+    J=$("$CLI" --json formales "$YF" RIPC m01)
+    # al fallar dice que vio: el estadistico, si es calculable y por que no
+    cerca() { "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+c = [x for x in d['contrastes'] if x['clave'] == '$1'][0]
+bien = c['estadistico'] is not None and abs(c['estadistico'] - ($2)) < $3
+if not bien:
+    sys.stderr.write('      se vio: estadistico %s, L %s, L0 %s, calculable %s, dudoso %s, motivo %r\\n'
+                     % (c['estadistico'], c['l_libre'], c['l_restringido'], c['calculable'],
+                        c['dudoso'], c['motivo']))
+sys.exit(0 if bien else 1)"; }
+    mira "formales: la simplificación estacional, LR 15.7777 (art)" \
+         'echo "$J" | cerca estacional 15.77767809 1e-5'
+    mira "formales: Shin-Fuller, Phi 1.6995 (art)" 'echo "$J" | cerca sf 1.69946526 1e-5'
+    mira "formales: la sobrediferenciación, LR 0 (art)" \
+         'echo "$J" | cerca sobre 0 1e-6'
+    mira "formales: el MEG, ninguna frecuencia estocástica (art)" \
+         '[ "$(echo "$J" | campo "(sum(1 for x in d[\"contrastes\"] if x[\"clave\"] == \"meg\"), sum(1 for x in d[\"contrastes\"] if x[\"clave\"] == \"meg\" and x[\"calculable\"] and x[\"rechaza\"]))")" = "(6, 0)" ]'
+    mira "formales: lo que no aplica, dicho (sin MA regular, no hay DCD)" \
+         'echo "$J" | campo "d[\"no_aplica\"]" | grep -q "DCD:"'
+    mira "formales: cada reestimación, en costes.csv por atsw-cli" \
+         '[ "$(grep -c ",atsw-cli,analista,RIPC/m01,contraste," "$PF/costes.csv")" -ge 2 ] &&
+          grep -q ",atsw-cli,analista,RIPC/m01,meg," "$PF/costes.csv"'
+    J=$("$CLI" --json formales "$YF" RIPC m01 --familia integracion)
+    mira "formales --familia integracion: solo los suyos" \
+         '[ "$(echo "$J" | campo "all(x[\"familia\"] == \"integracion\" for x in d[\"contrastes\"]) and len(d[\"contrastes\"]) == 2")" = True ]'
+    mira "formales --sub con d = 0: no hay diferencia que cuestionar, y lo dice" \
+         '"$CLI" formales "$YF" RIPC m01 --familia integracion --sub 2>&1 >/dev/null | grep -q "d = 0"'
+fi
+mira "formales --familia estacionalidad de una serie sin estacionalidad: estado 1" \
+     '! "$CLI" formales "$YF" en4 m01 --familia estacionalidad 2>/dev/null'
+mira "formales --familia mal escrita: estado 1, y dice por qué" \
+     '"$CLI" formales "$YF" RIPC m01 --familia otra 2>&1 | grep -q "integracion o estacionalidad"'
+
 # coste: el MTM apunta lo que corre en Python, y el resumen lo suma. Hasta
 # aqui nada ha corrido un motor con contexto: el registro no existe.
 C="$P/costes.csv"

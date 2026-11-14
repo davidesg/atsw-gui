@@ -689,6 +689,16 @@ afectados.
   pedido del 19-oct-2026. Estudio y decisiones abiertas en
   `ESTUDIO-terminal-mcp.md`. En la comprobación de arranque entra como
   opcional.
+- **Por dónde va (15-nov-2026), según la §8 del estudio.**
+  - Fase 0 (#71): hecha, al día tras el release conjunto. Queda la prueba a
+    mano con los clientes (Claude Code, Codex, Gemini CLI, CodeWhale), que es
+    del analista (`docs/ENSAYO-clientes.md`).
+  - Fase 1a, atsw-cli: completa. `proyecto` (ver, nuevo, itera, razón,
+    elige, caso-nuevo), `dictamen`, `raices`, `ficha`, `coste`, `formales`
+    (#150), `anomalos` (#151) y `prewhiten` (#152), cada una con las mismas
+    funciones que su ventana y cotejada con art o con el motor.
+  - Lo siguiente es la fase 1b: `atsw_gui --ver` y los MCP `atsw-us` y
+    `atsw-mt` sobre atsw-cli y los motores.
 
 ---
 

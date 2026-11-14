@@ -39,6 +39,7 @@
 #include "engine.h"
 #include "sitio.h"
 #include "ficha.h"
+#include "formales.h"
 /* el mundo de drtran, para el preblanqueo: lo mismo que enlaza drtran_gui */
 /* main.h define TRUE y FALSE a su manera: se le dejan y luego se vuelven a
    los de GLib, que es lo que usa todo lo demas de aqui.                 */
@@ -63,6 +64,8 @@
 
 static gboolean  json;
 static gboolean  comprobar;
+static gboolean  con_sub;                 /* formales --sub                 */
+static const char *familia = NULL;        /* formales --familia             */
 static int       retardos = 0;            /* prewhiten --retardos           */
 static const char *episodios = NULL;      /* anomalos --episodios           */
 static const char *muestra = "";
@@ -1192,6 +1195,254 @@ static int prewhiten( const char *path, char **cl, int ncl )
 }
 
 /* ------------------------------------------------------------------------ */
+/* formales: los contrastes formales del modelo estimado (lib/formales)     */
+/* ------------------------------------------------------------------------ */
+
+/* El directorio de trabajo de los restringidos: en la cache, como la madre
+   (an_fichero), con su propio prefijo para no pisar una ventana abierta. */
+static gchar *dir_formales( const char *serie, const char *id )
+{
+    gchar *base = g_strdup_printf( "formales_%s_%s_%s", serie,
+                                   *muestra ? muestra : "completa", id ), *s, *d;
+
+    for ( s = base; *s; s++ )
+        if ( !g_ascii_isalnum( *s ) && *s != '_' && *s != '-' ) *s = '_';
+    d = g_build_filename( g_get_user_cache_dir(), "atsw", base, NULL );
+    g_free( base );
+    return d;
+}
+
+/* Lo que dice, en una frase: lo mismo que la ventana, sin decidir nada. */
+static const char *lo_que_dice( const FmPrueba *x )
+{
+    if ( x->omitida || !x->calculable ) return "no calculable";
+    if ( x->tipo == FM_MEG ) return x->rechaza ? "estocástica" : "determinista";
+    return x->rechaza ? "rechaza H0 al 5 %" : "no rechaza H0 al 5 %";
+}
+
+/* La clave del contraste, en ASCII: para un programa, que no tiene por que
+   comparar cadenas con tildes (en Windows llegan cambiadas por la linea de
+   ordenes).                                                            */
+static const char *clave_fm( FmTipo tipo )
+{
+    switch ( tipo )
+        {
+        case FM_ESTACIONAL: return "estacional";
+        case FM_SF:         return "sf";
+        case FM_DCD:        return "dcd";
+        case FM_DCD_S:      return "dcd_s";
+        case FM_SOBRE:      return "sobre";
+        case FM_SUB:        return "sub";
+        case FM_MEG:        return "meg";
+        case FM_DCD_F:      return "dcd_f";
+        }
+    return "?";
+}
+
+static void js_prueba( GString *t, const FmPrueba *x )
+{
+    g_string_append( t, "{" );
+    js_par( t, "clave", clave_fm( x->tipo ) ); g_string_append( t, ", " );
+    js_par( t, "familia", fm_familia( x ) == FM_FAM_INTEGRACION ? "integracion"
+                                                                : "estacionalidad" );
+    g_string_append( t, ", " ); js_par( t, "contraste", fm_nombre( x->tipo ) );
+    g_string_append( t, ", " ); js_par( t, "hipotesis", x->hipotesis );
+    g_string_append_printf( t, ", \"factor\": %d, \"freq\": %d, \"gl\": %d", x->factor,
+                            x->freq, x->gl );
+    g_string_append( t, ", " ); js_num( t, "coef", x->coef );
+    g_string_append( t, ", " ); js_num( t, "nulo", x->nulo );
+    g_string_append_printf( t, ", \"calculable\": %s, \"omitida\": %s",
+                            x->calculable && !x->omitida ? "true" : "false",
+                            x->omitida ? "true" : "false" );
+    g_string_append( t, ", " ); js_par( t, "motivo", x->motivo );
+    g_string_append( t, ", " ); js_num( t, "l_libre", x->l_libre );
+    g_string_append( t, ", " ); js_num( t, "l_restringido", x->l_restr );
+    g_string_append( t, ", " ); js_num( t, "estadistico", x->est );
+    g_string_append( t, ", " ); js_num( t, "critico_10", x->c10 );
+    g_string_append( t, ", " ); js_num( t, "critico_5", x->c5 );
+    g_string_append( t, ", " ); js_num( t, "critico_1", x->c1 );
+    g_string_append( t, ", " ); js_num( t, "p", x->p );
+    g_string_append_printf( t, ", \"rechaza\": %s, \"al_otro_lado\": %s, \"dudoso\": %s",
+                            x->rechaza ? "true" : "false", x->al_otro_lado ? "true" : "false",
+                            x->dudoso ? "true" : "false" );
+    g_string_append( t, ", " ); js_par( t, "dice", lo_que_dice( x ) );
+    if ( x->tipo == FM_SOBRE || x->tipo == FM_SUB || x->tipo == FM_MEG )
+        {
+        g_string_append( t, ", " ); js_num( t, "l_testigo", x->l_testigo );
+        g_string_append( t, ", " ); js_par( t, "testigo", x->testigo );
+        }
+    if ( x->tipo == FM_SUB )
+        {
+        g_string_append( t, ", " ); js_num( t, "phi_restringido", x->phi_r );
+        g_string_append( t, ", " ); js_num( t, "rho_m", x->rho_m );
+        g_string_append_printf( t, ", \"acotado\": %s", x->acotado ? "true" : "false" );
+        }
+    g_string_append( t, "}" );
+}
+
+static void tx_prueba( GString *t, const FmPrueba *x )
+{
+    g_string_append_printf( t, "\n  %s", fm_nombre( x->tipo ) );
+    if ( x->freq > 0 ) g_string_append_printf( t, ", f = %d", x->freq );
+    g_string_append_printf( t, ": %s\n    H0: %s\n", lo_que_dice( x ), x->hipotesis );
+    if ( x->omitida || !x->calculable )
+        { g_string_append_printf( t, "    %s\n", x->motivo ); return; }
+    g_string_append_printf( t, "    L = %.4f, L0 = %.4f, ", x->l_libre, x->l_restr );
+    if ( x->tipo == FM_ESTACIONAL )
+        g_string_append_printf( t, "LR = %.4f con %d gl, p = %.4f\n", x->est, x->gl, x->p );
+    else
+        g_string_append_printf( t, "%s = %.4f; críticos 10 %% %.3f, 5 %% %.3f, 1 %% %.3f\n",
+                                x->tipo == FM_SF ? "Phi" : "LR", x->est, x->c10, x->c5, x->c1 );
+    if ( x->tipo != FM_ESTACIONAL && isfinite( x->coef ) )
+        g_string_append_printf( t, "    estimado %.6f, valor nulo %.6f\n", x->coef, x->nulo );
+    if ( x->testigo[0] ) g_string_append_printf( t, "    testigo: %s\n", x->testigo );
+    if ( x->al_otro_lado ) g_string_append( t, "    la raíz dominante ya está al otro lado de rho_m: Phi = 0\n" );
+    if ( x->dudoso )
+        g_string_append( t, "    alguna estimación acabó sin anular el gradiente, aun reiniciando: "
+                            "el estadístico hereda esa duda\n" );
+}
+
+/* formales P SERIE MODELO [--familia integracion|estacionalidad] [--sub]:
+   LAS MISMAS FUNCIONES que las dos ventanas de la madre (an_formales):
+   fm_plan escribe los restringidos, fue los estima de uno en uno --aqui
+   esperando, alli sin bloquear-- y fm_avanza los lee. Cada reestimacion
+   queda en costes.csv. AQUI NO SE DECIDE NI SE ENCADENA NADA.          */
+static int formales( const char *path, const char *serie, const char *id )
+{
+    char      out[PR_RUTA], pre[PR_RUTA], raiz[PR_RUTA], aviso[256] = "", why[256];
+    Proyecto *p = NULL;
+    FueOut   *o;
+    FmPlan   *pl;
+    Dictamen  d;
+    gchar    *dir, *obj;
+    GString  *t;
+    int       i, fam = -1;
+
+    if ( familia )
+        {
+        if ( !strcmp( familia, "integracion" ) ) fam = FM_FAM_INTEGRACION;
+        else if ( !strcmp( familia, "estacionalidad" ) ) fam = FM_FAM_ESTACIONAL;
+        else return falla( "--familia %s: es integracion o estacionalidad.", familia );
+        }
+    if ( ruta_de( path, serie, id, ".out", out, sizeof out, &p ) != 0 ) { g_free( p ); return 1; }
+    if ( pr_ruta( p, serie, muestra, id, ".pre", pre, sizeof pre ) != 0 ||
+         !g_file_test( pre, G_FILE_TEST_EXISTS ) )
+        { g_free( p ); return falla( "«%s» no tiene .pre: hay que estimarlo antes de contrastar nada.", id ); }
+    o = g_new0( FueOut, 1 );
+    if ( !fueout_read( out, o ) || !o->tiene_logelf )
+        { g_free( o ); g_free( p );
+          return falla( "El .out de «%s» no trae su log-verosimilitud (logelf).", id ); }
+    if ( fam == FM_FAM_ESTACIONAL && o->s <= 1 )
+        { int s = o->s; g_free( o ); g_free( p );
+          return falla( "«%s» no es estacional (s = %d): no hay estacionalidad que contrastar.", id, s ); }
+
+    /* LA DIAGNOSIS PRIMERO (art BUG-0025): no se impide, se dice. */
+    if ( fi_dictamen( p, serie, muestra, id, &d ) == 0 && d.peor == DX_NO )
+        g_snprintf( aviso, sizeof aviso, "La diagnosis no está limpia: estos contrastes suponen "
+                    "un modelo adecuado; léelos con esa reserva, o arregla antes el modelo." );
+
+    dir = dir_formales( serie, id );
+    g_mkdir_with_parents( dir, 0700 );
+    pl = g_new0( FmPlan, 1 );
+    if ( fm_plan( pre, out, dir, o->nobs, o->s > 0 ? o->s : 1, o->d, pl, why, sizeof why ) != 0 )
+        { g_free( pl ); g_free( dir ); g_free( o ); g_free( p ); return falla( "%s", why ); }
+    if ( fam >= 0 ) fm_quedate_con( pl, (FmFamilia) fam );
+    /* EL LADO d - 1 SE PIDE, NO SE OFRECE (art BUG-0167) */
+    if ( con_sub && fam != FM_FAM_ESTACIONAL && fm_plan_sub( pl, why, sizeof why ) != 0 )
+        fprintf( stderr, "atsw-cli: subdiferenciación: %s\n", why );
+
+    engine_set_finder( hermano );
+    raiz_de( path, raiz, sizeof raiz );
+    obj = *muestra ? g_strdup_printf( "%s/%s/%s", serie, muestra, id )
+                   : g_strdup_printf( "%s/%s", serie, id );
+    for ( i = 0; i < pl->n; i++ )
+        {
+        FmPrueba *x = &pl->t[i];
+
+        while ( !x->hecho )
+            {
+            EngineResult r;
+            gchar       *viejo = g_strdup( x->inp );
+            int          corrio;
+
+            /* el .out de una vuelta anterior, fuera: el que se lea sera este */
+            strcpy( viejo + strlen( viejo ) - 4, ".out" );
+            g_unlink( viejo );
+            g_free( viejo );
+            coste_contexto( raiz, "atsw-cli", c_por ? c_por : "analista", obj,
+                            x->tipo == FM_MEG ? "meg" : "contraste" );
+            r = engine_run( dir, "fue", x->base, NULL );
+            coste_contexto_limpia();
+            corrio = r.status == 0;
+            if ( r.status == ENGINE_NORUN )
+                {
+                while ( fm_avanza( pl, x, o->logelf, FALSE ) ) ;
+                g_snprintf( x->motivo, sizeof x->motivo, "no pude lanzar fue: %s", r.message );
+                engine_result_clear( &r );
+                break;
+                }
+            engine_result_clear( &r );
+            if ( !fm_avanza( pl, x, o->logelf, corrio ) ) break;
+            }
+        }
+    g_free( obj );
+
+    t = g_string_new( "" );
+    if ( json )
+        {
+        g_string_append( t, "{\"ok\": true, " );
+        js_par( t, "serie", serie ); g_string_append( t, ", " );
+        js_par( t, "muestra", muestra ); g_string_append( t, ", " );
+        js_par( t, "modelo", id ); g_string_append( t, ", " );
+        g_string_append_printf( t, "\"nobs\": %d, \"s\": %d, \"d\": %d, ", pl->nobs, pl->s, pl->d );
+        js_num( t, "l_libre", o->logelf ); g_string_append( t, ", " );
+        js_par( t, "aviso", aviso ); g_string_append( t, ", " );
+        js_par( t, "directorio", dir ); g_string_append( t, ", \"contrastes\": [" );
+        for ( i = 0; i < pl->n; i++ )
+            { if ( i ) g_string_append( t, ", " ); js_prueba( t, &pl->t[i] ); }
+        g_string_append( t, "], \"no_aplica\": [" );
+        {
+        int k, n = 0;
+
+        for ( k = 0; k < FM_NA; k++ )
+            if ( pl->no_aplica[k][0] )
+                { if ( n++ ) g_string_append( t, ", " ); js_cadena( t, pl->no_aplica[k] ); }
+        }
+        g_string_append( t, "]}\n" );
+        }
+    else
+        {
+        int f2;
+
+        g_string_append_printf( t, "Contrastes formales de %s/%s%s%s (%d observaciones, s = %d, d = %d)\n",
+                                serie, id, *muestra ? ", muestra " : "", muestra,
+                                pl->nobs, pl->s, pl->d );
+        if ( aviso[0] ) g_string_append_printf( t, "\n  ! %s\n", aviso );
+        for ( f2 = FM_FAM_INTEGRACION; f2 <= FM_FAM_ESTACIONAL; f2++ )
+            {
+            int hay = 0, k;
+
+            for ( i = 0; i < pl->n; i++ ) hay |= (int) fm_familia( &pl->t[i] ) == f2;
+            if ( fam >= 0 && fam != f2 ) continue;
+            g_string_append_printf( t, "\n%s\n", f2 == FM_FAM_INTEGRACION
+                                    ? "ORDEN DE INTEGRACIÓN" : "ESTACIONALIDAD" );
+            for ( i = 0; i < pl->n; i++ )
+                if ( (int) fm_familia( &pl->t[i] ) == f2 ) tx_prueba( t, &pl->t[i] );
+            if ( !hay ) g_string_append( t, "\n  (ninguno)\n" );
+            for ( k = 0; k < FM_NA; k++ )
+                if ( pl->no_aplica[k][0] &&
+                     ( ( k == 1 || k == 2 || k == 4 || k == 5 ) == ( f2 == FM_FAM_INTEGRACION ) ) )
+                    g_string_append_printf( t, "  (%s)\n", pl->no_aplica[k] );
+            }
+        g_string_append( t, "\nCada contraste dice lo suyo; qué hacer con ello lo decide el analista.\n" );
+        }
+    fputs( t->str, stdout );
+    g_string_free( t, TRUE );
+    g_free( pl ); g_free( dir ); g_free( o ); g_free( p );
+    return 0;
+}
+
+/* ------------------------------------------------------------------------ */
 /* La orden                                                                 */
 /* ------------------------------------------------------------------------ */
 
@@ -1209,6 +1460,7 @@ static void uso( FILE *f )
            "  raices factores P SERIE MODELO        la factorización del AR\n"
            "  raices factorizado P SERIE MODELO     deriva el modelo factorizado\n"
            "  ficha P SERIE MODELO [--comprobar]    la ficha de confianza, en Markdown\n"
+           "  formales P SERIE MODELO [--familia F] [--sub]   los contrastes formales\n"
            "  anomalos P SERIE MODELO [--episodios L]   los episodios y su calibración\n"
            "  prewhiten P SALIDA/MODELO ENTRADA/MODELO...   la CCF preblanqueada\n"
            "  coste apunta P --motor M --paso X --cpu S --pared S   una corrida de fuera\n"
@@ -1222,6 +1474,8 @@ static void uso( FILE *f )
            "  --por Q       quién da el paso: analista (si no se dice) o asistente;\n"
            "                en nuevo, itera, elige y raices factorizado queda escrito\n"
            "  --comprobar   ficha: corre fue sobre el .pre y lo apunta en costes.csv\n"
+           "  --familia F   formales: integracion o estacionalidad (sin ella, las dos)\n"
+           "  --sub         formales: también d - 1 (se pide, no se ofrece)\n"
            "  --episodios L anomalos: los que se omiten al calibrar, 1,3 o todos\n"
            "                (sin ella, todos)\n"
            "  --retardos N  prewhiten: a cada lado (sin ella, la regla del motor)\n\n"
@@ -1241,6 +1495,8 @@ int main( int argc, char **argv )
         {
         if ( !strcmp( argv[i], "--json" ) ) json = TRUE;
         else if ( !strcmp( argv[i], "--comprobar" ) ) comprobar = TRUE;
+        else if ( !strcmp( argv[i], "--sub" ) ) con_sub = TRUE;
+        else if ( !strcmp( argv[i], "--familia" ) && i + 1 < argc ) familia = argv[++i];
         else if ( !strcmp( argv[i], "--episodios" ) && i + 1 < argc ) episodios = argv[++i];
         else if ( !strcmp( argv[i], "--retardos" ) && i + 1 < argc ) retardos = atoi( argv[++i] );
         else if ( !strcmp( argv[i], "--muestra" ) && i + 1 < argc ) muestra = argv[++i];
@@ -1295,6 +1551,7 @@ int main( int argc, char **argv )
     if ( ES( 0, "raices" ) && ES( 1, "factorizado" ) && npos == 5 )
         return raices_factorizado( pos[2], pos[3], pos[4] );
     if ( ES( 0, "ficha" ) && npos == 4 ) return ficha( pos[1], pos[2], pos[3] );
+    if ( ES( 0, "formales" ) && npos == 4 ) return formales( pos[1], pos[2], pos[3] );
     if ( ES( 0, "anomalos" ) && npos == 4 ) return anomalos( pos[1], pos[2], pos[3] );
     if ( ES( 0, "prewhiten" ) && npos >= 3 ) return prewhiten( pos[1], pos + 2, npos - 2 );
     if ( ES( 0, "coste" ) && ES( 1, "apunta" ) && npos == 3 ) return coste_apunta_orden( pos[2] );

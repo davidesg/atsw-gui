@@ -90,10 +90,12 @@ static void activate(GtkApplication *app, gpointer user_data) {
             fue_consola_si_estimado(ctx, fue_abrir());
     }
 
-    /* Set up status label and text view (already done in create_main_window) */
-
-    /* Cleanup on window close */
-    g_signal_connect(ctx->main_window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
+    /* AL CERRAR LA VENTANA NO SE LLAMA A gtk_main_quit: fue_gui corre con
+       GtkApplication (g_application_run), no con gtk_main, y la aplicacion
+       termina sola cuando se va su ultima ventana, como drtran_gui, sim_gui
+       y la madre. Llamarlo sin gtk_main en marcha daba
+       «gtk_main_quit: assertion 'main_loops != NULL' failed» al cerrar, y
+       en macOS se veia un aviso de fallo al cerrar fue_gui (TODO.md). */
 
     sitio_vigila_madre(g_madre, se_fue_la_madre, NULL);
 }

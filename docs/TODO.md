@@ -582,8 +582,20 @@ programa:
 - **macOS (Mac M2, 13-nov-2026, lo vio el analista):** al cerrar la ventana de
   fue_gui, macOS avisa de que la aplicación ha fallado o se ha colgado. Tras
   cerrar el aviso el programa sigue funcionando. Por lo demás, en el M2 todo
-  funciona bien. Falta reproducirlo y ver qué pasa al salir (el informe de
-  macOS dice si es un fallo o un cuelgue, y en qué hilo).
+  funciona bien. Sin el informe de macOS (14-nov-2026):
+  - **Arreglado lo que se ve:** fue_gui era el único GUI que llamaba a
+    `gtk_main_quit()` al cerrar sin tener `gtk_main()` en marcha (corre con
+    `GtkApplication`); salía «gtk_main_quit: assertion 'main_loops != NULL'
+    failed». Ahora termina solo con su última ventana, como los demás. En
+    Linux, con AddressSanitizer, cerrar tras estimar, ver el modelo, la
+    diagnosis y prever no da ningún error de memoria.
+  - **La CI cierra los GUIs de verdad** (`.github/cierre.c`, en
+    `gui-humo.sh`): antes los mataba con kill. Ahora tienen que salir solos
+    y con 0 en Linux, macOS y Windows; si se caen o se cuelgan al cerrar,
+    falla. Los ejecutores de macOS son Macs de verdad.
+  - **Si vuelve a salir**, el informe está en la app Consola → «Informes de
+    fallos» (o en `~/Library/Logs/DiagnosticReports/fue_gui-*.ips`), y el
+    botón «Informar…» del aviso enseña el mismo texto.
 - En Windows los motores escriben su salida con `\r\n`; la primera línea que
   el GUI enseña en un mensaje de error puede llevar el `\r` (`lib/engine`,
   `first_line`).

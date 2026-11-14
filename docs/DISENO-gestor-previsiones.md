@@ -7,6 +7,9 @@ Plan para revisar (17-oct-2026). Sale de una petición del analista:
 > se hace a mano, pero necesitamos un gestor.»
 
 Lo que vino antes:
+- `DISENO-prevision.md` (septiembre de 2026): un primer intento —un
+  `fuf_gui` aparte de fue_gui— que se revirtió entero el 23-sep (`a041888`)
+  y del que no queda el fichero. Lo que sigue valiendo de él está en el §2bis.
 - `ESTUDIO-taste-prevision.md`: TASTE no acumulaba nada.
 - FORSIL ya está en drtran y drvarma: parámetros fijos, observaciones
   nuevas y errores por recursión.
@@ -44,6 +47,20 @@ marzo, con qué dato de febrero, si el dato se revisó después.
 | evaluación con el origen rodando | drtran `-C`; drvarma `.recursive` | MAE, RMSE y MAPE por horizonte, **dentro de una corrida** |
 | modelos con linaje, muestras, casos, hashes de `.pre` | `lib/proyecto` | quién es hijo de quién, en qué ventana, y si un caso quedó desfasado |
 | la previsión del mismo modelo sin dar de alta otro | drtran_gui (#49) | `<modelo>_prev.*`, pero **sólo la última**: se pisa |
+| **una sola tabla de previsión** | los `.out` de fuf, drtran, drvarma y drvec (fases P2 y P6, nov-2026) | la tabla de fuf (`forecast_table_acii`): las últimas observaciones con su variación y su **ERR**, y las previsiones con las d.t. del nivel y de las variaciones. La lee `lib/outfcst` (`of_parse_file`), venga del motor que venga |
+| comparar con el univariante, misma ventana | drtran_gui (P3) y sim_gui, VARMA y VEC | el cociente de los RMSE por horizonte; drtran_gui, además, **Diebold-Mariano** (`lib/fcomp`). sim_gui todavía no |
+
+**La columna ERR, antes de leerla** (aclarado el 13-nov-2026). Es el error
+a un paso de cada observación, la innovación. En la tabla de drtran, drvarma
+y drvec va en % con logaritmos y en las unidades de la serie si no. En la de
+**fuf** hay dos defectos apuntados, sin arreglar porque fuf funciona y no se
+toca sin decidirlo (`engines/fuf/BUGS.md`):
+- **BUG-0001**: con λ = 1, las variaciones, las d.t. y ERR salen ×100. Con
+  logaritmos todo está bien. El gestor tiene que leer la tabla de fuf
+  sabiéndolo, o pedir antes el arreglo.
+- **BUG-0002**: los campos van pegados cuando un número no cabe en su ancho
+  (un nivel de 1000 o más). `lib/outfcst` no puede partir esas filas por
+  espacios.
 
 **Lo que falta** es lo que une estas piezas en el tiempo:
 - **La llegada de datos nuevos.** No hay forma de decir «esta serie tiene un
@@ -53,6 +70,37 @@ marzo, con qué dato de febrero, si el dato se revisó después.
   el dato.
 - **La vigencia**: qué modelo se estaba usando en cada origen, y por qué se
   cambió.
+
+## 2bis. Lo que se aprendió del primer intento
+
+El `DISENO-prevision.md` de septiembre se revirtió con el código que lo
+acompañaba («No sirve. Regresión.»): `fuf_gui` como programa aparte, una
+tabla que resumía el informe de fuf y la previsión movida de sitio. La
+pestaña «Forecast» de fue_gui volvió entera, como estaba, y sigue siendo
+donde se prevé con fuf. Pero cuatro ideas del documento no dependían de ese
+código y valen para el gestor:
+
+1. **Una previsión no es un nodo del linaje.** El manifiesto registra
+   decisiones del analista; una previsión es una salida, determinada del
+   todo por (modelo, origen, horizonte). Darle un nodo metería en un
+   registro de decisiones algo que nadie decidió.
+2. **Pero el acta sí es un hecho.** Lo que se dijo, cuándo y antes de
+   saberlo no se puede regenerar: en cuanto se extiende la muestra y se
+   reestima, la previsión de enero no vuelve a salir. Son dos objetos:
+   | | qué es | dónde va |
+   |---|---|---|
+   | **la corrida** | una salida regenerable | junto a lo que la produjo, sin nodo |
+   | **el acta** | una afirmación hecha en una fecha | un registro del ejercicio (§3.3, §4) |
+3. **El origen se lee del `.out`, no del nombre del fichero.** fuf pone el
+   origen en el nombre de su EPS (`prev<base>.<sub><año>.eps`), y ese nombre
+   es la interfaz del motor y no se cambia. Pero nadie lo parsea: el
+   `.out` lo dice en claro (`FORECAST ORIGIN : 12/2021`), y eso es lo que
+   lee `lib/outfcst`. Si hay que parsear un nombre para saber algo, ese algo
+   no está registrado.
+4. **El informe del motor no se resume.** Lo que se enseña es la tabla del
+   `.out` tal cual (`of_tabla`), no una versión destilada: con dos versiones
+   de lo mismo, en cuanto no coinciden, no se sabe cuál manda. Es la regla
+   que siguen hoy drtran_gui y sim_gui (fases P1 y P6).
 
 ## 3. Los conceptos
 
@@ -154,7 +202,12 @@ lo que dice el motor. De ahí salen, **por horizonte y por modelo vigente**:
   la política del §3.4.
 
 Dos ejercicios sobre la misma serie y los mismos orígenes se pueden comparar
-fila a fila. Más adelante, con un contraste (Diebold-Mariano), no sólo a ojo.
+fila a fila, y con un contraste, no sólo a ojo: Diebold-Mariano por
+horizonte, que ya está en `lib/fcomp` (lo usa drtran_gui).
+
+**Las bandas que se miden son las teóricas** del motor: suponen que el
+modelo es el verdadero, y todos los GUI lo dicen. La cobertura de esta tabla
+es justo lo que las contrasta.
 
 ## 4. Dónde se guarda
 

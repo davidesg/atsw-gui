@@ -4,8 +4,9 @@ Estudio del 17-oct-2026, a petición del analista: *«cómo operaba el oráculo,
 guardando modelos, y cómo recalculaba las previsiones a partir de nuevas
 observaciones y nuevo origen de previsión; cómo se acumulaba esto»*. Es el
 paso previo a diseñar la previsión con origen móvil (`TODO.md`,
-`DISENO-prevision.md`): un fuf multivariante y un GUI que gestione las
-previsiones a medida que llegan los datos.
+`DISENO-gestor-previsiones.md`, que recoge lo que valía del
+`DISENO-prevision.md` revertido): un fuf multivariante y un GUI que gestione
+las previsiones a medida que llegan los datos.
 
 Completa `ESTUDIO-taste.md` (TASTE como diseño). Las referencias son a las
 fuentes originales en Borland Pascal (`atws/Taste/*.PAS`, contando líneas sin

@@ -1930,12 +1930,9 @@ const char *pr_error_en( const PrError *e, char *out, size_t n )
 #include <io.h>
 #include <process.h>
 #define pr_getpid _getpid
-#ifndef PROCESS_QUERY_LIMITED_INFORMATION
-#define PROCESS_QUERY_LIMITED_INFORMATION 0x1000
-#endif
 #else
 #include <unistd.h>
-#include <signal.h>
+#include <sys/file.h>
 #define pr_getpid getpid
 #endif
 
@@ -2012,76 +2009,116 @@ static void duerme_ms( int ms )
 #endif
 }
 
-/* ¿Sigue vivo ese proceso? Ante la duda, si. */
-static int vivo( long pid )
+/* --- 1. el cerrojo --------------------------------------------------------
+ * <manifiesto>.cerrojo, un fichero que se queda en su sitio, con el
+ * BLOQUEO DEL SISTEMA: flock en POSIX, LockFileEx en Windows. Es exclusivo
+ * de verdad, y el sistema lo suelta solo si el proceso muere: no hay
+ * cerrojos abandonados que adivinar.
+ *
+ * La primera version creaba el fichero con O_EXCL y lo borraba al soltarlo,
+ * con el PID dentro para tomar el de un proceso muerto. Con treinta
+ * atsw-cli a la vez (la bateria de atsw-cli), en macOS y Windows uno se
+ * perdia: B leia el PID de A, A soltaba y salia, C creaba el suyo, y B,
+ * viendo a A muerto, BORRABA EL DE C. Los dos escribian a la vez.
+ *
+ * Se espera hasta PR_CERROJO_MS (5 s; la variable de entorno del mismo
+ * nombre la cambia, para las pruebas).                                   */
+struct PrCerrojo
 {
-   if ( pid <= 0 ) return 0;
-#ifdef _WIN32
-   {
-   HANDLE h = OpenProcess( PROCESS_QUERY_LIMITED_INFORMATION, FALSE, (DWORD) pid );
-   DWORD  c = 0;
-   int    v;
-   if ( h == NULL ) return GetLastError() == ERROR_ACCESS_DENIED;
-   v = GetExitCodeProcess( h, &c ) && c == STILL_ACTIVE;
-   CloseHandle( h );
-   return v;
-   }
-#else
-   return kill( (pid_t) pid, 0 ) == 0 || errno == EPERM;
-#endif
+   int fd;
+};
+
+static int espera_ms( void )
+{
+   const char *env = getenv( "PR_CERROJO_MS" );
+   return env ? atoi( env ) : 5000;
 }
 
-/* --- 1. el cerrojo --------------------------------------------------------
- * <manifiesto>.cerrojo, con el PID de quien lo tiene. Se espera hasta
- * PR_CERROJO_MS (5 s; la variable de entorno del mismo nombre la cambia, para
- * las pruebas). Un cerrojo cuyo dueño ya no vive, o con mas de 30 s, se
- * toma: nadie lo tiene tanto, y un proceso muerto no lo va a soltar.     */
-static int cerrojo_toma( const char *path, PrError *e )
+PrCerrojo *pr_cerrojo_coge( const char *path, PrError *e )
 {
-   char        f[PR_RUTA + 16];
-   const char *env = getenv( "PR_CERROJO_MS" );
-   int         espera = env ? atoi( env ) : 5000, hecho = 0;
+   char       f[PR_RUTA + 16];
+   int        espera = espera_ms(), hecho = 0, fd;
+   PrCerrojo *c;
 
    snprintf( f, sizeof f, "%s.cerrojo", path );
+#ifdef _WIN32
+   fd = _open( f, _O_CREAT | _O_RDWR | _O_BINARY, _S_IREAD | _S_IWRITE );
+#else
+   fd = open( f, O_CREAT | O_RDWR, 0644 );
+#endif
+   if ( fd < 0 ) { falla( e, PR_EESCRIBIR, 0, f ); return NULL; }
    for ( ;; )
       {
-      int fd = open( f, O_CREAT | O_EXCL | O_WRONLY, 0644 );
-      if ( fd >= 0 )
+#ifdef _WIN32
+      OVERLAPPED ov;
+      HANDLE     h = (HANDLE) _get_osfhandle( fd );
+      memset( &ov, 0, sizeof ov );
+      if ( LockFileEx( h, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY,
+                       0, 1, 0, &ov ) ) break;
+#else
+      if ( flock( fd, LOCK_EX | LOCK_NB ) == 0 ) break;
+      if ( errno != EWOULDBLOCK && errno != EINTR )
+         { close( fd ); falla( e, PR_EESCRIBIR, 0, f ); return NULL; }
+#endif
+      if ( hecho >= espera )
          {
-         char b[32];
-         int  n = snprintf( b, sizeof b, "%ld\n", (long) pr_getpid() );
-         if ( write( fd, b, (unsigned) n ) != n ) { /* el PID es para avisar */ }
+#ifdef _WIN32
+         _close( fd );
+#else
          close( fd );
-         return 0;
+#endif
+         falla( e, PR_ECERROJO, 0, path );
+         return NULL;
          }
-      if ( errno != EEXIST ) { falla( e, PR_EESCRIBIR, 0, f ); return 1; }
-      {
-      FILE       *x = fopen( f, "r" );
-      long        pid = 0;
-      struct stat st;
-      int         viejo = stat( f, &st ) == 0 && time( NULL ) - st.st_mtime > 30;
-      if ( x ) { if ( fscanf( x, "%ld", &pid ) != 1 ) pid = 0; fclose( x ); }
-      if ( viejo || ( pid > 0 && !vivo( pid ) ) )
-         { remove( f ); continue; }           /* abandonado: se toma       */
-      }
-      if ( hecho >= espera ) { falla( e, PR_ECERROJO, 0, path ); return 1; }
       duerme_ms( 5 ); hecho += 5;
       }
+   c = malloc( sizeof *c );
+   if ( !c )
+      {
+#ifdef _WIN32
+      _close( fd );
+#else
+      close( fd );
+#endif
+      falla( e, PR_EESCRIBIR, 0, f );
+      return NULL;
+      }
+   c->fd = fd;
+   return c;
 }
 
-static void cerrojo_suelta( const char *path )
+void pr_cerrojo_suelta( PrCerrojo *c )
 {
-   char f[PR_RUTA + 16];
-   snprintf( f, sizeof f, "%s.cerrojo", path );
-   remove( f );
+   if ( !c ) return;
+#ifdef _WIN32
+   {
+   OVERLAPPED ov;
+   memset( &ov, 0, sizeof ov );
+   UnlockFileEx( (HANDLE) _get_osfhandle( c->fd ), 0, 1, 0, &ov );
+   _close( c->fd );
+   }
+#else
+   flock( c->fd, LOCK_UN );
+   close( c->fd );
+#endif
+   free( c );
 }
 
 /* Renombrar ENCIMA: en POSIX rename lo hace; en Windows rename falla si el
-   destino existe, y MoveFileEx con REPLACE_EXISTING es lo que lo hace.  */
+   destino existe, y MoveFileEx con REPLACE_EXISTING es lo que lo hace.
+   En Windows ademas falla mientras otro proceso tiene el manifiesto abierto
+   para leerlo (la madre releyendo, un atsw-cli arrancando): eso dura
+   milisegundos, y se reintenta hasta el plazo del cerrojo.           */
 static int renombra( const char *de, const char *a )
 {
 #ifdef _WIN32
-   return MoveFileExA( de, a, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH ) ? 0 : 1;
+   int espera = espera_ms(), hecho = 0;
+   for ( ;; )
+      {
+      if ( MoveFileExA( de, a, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH ) ) return 0;
+      if ( hecho >= espera ) return 1;
+      duerme_ms( 5 ); hecho += 5;
+      }
 #else
    return rename( de, a ) == 0 ? 0 : 1;
 #endif
@@ -2402,15 +2439,16 @@ const char *pr_aviso( void ) { return ultimo_aviso; }
 
 int pr_escribir( Proyecto *p, const char *path, PrError *e )
 {
-   Base     *b;
-   Proyecto *disco = NULL, *res = NULL, *prueba = NULL;
+   Base      *b;
+   PrCerrojo *cerrojo;
+   Proyecto  *disco = NULL, *res = NULL, *prueba = NULL;
    char      tmp[PR_RUTA + 32];
    PrError   e2;
    int       rc = 1, hay;
 
    ultimo_aviso[0] = '\0';
    if ( p == NULL || path == NULL ) return 1;
-   if ( cerrojo_toma( path, e ) ) return 1;
+   if ( ( cerrojo = pr_cerrojo_coge( path, e ) ) == NULL ) return 1;
 
    disco  = calloc( 1, sizeof *disco );
    res    = calloc( 1, sizeof *res );
@@ -2452,7 +2490,7 @@ int pr_escribir( Proyecto *p, const char *path, PrError *e )
    apunta_base( path, res );
    rc = 0;
 fin:
-   cerrojo_suelta( path );
+   pr_cerrojo_suelta( cerrojo );
    free( prueba ); free( res ); free( disco );
    return rc;
 }

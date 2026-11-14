@@ -326,6 +326,15 @@ int pr_leer( const char *path, Proyecto *p, PrError *e );
  * (un cambio de los dos lados, un borrado contra un cambio) en pr_aviso(),
  * "" si nada.                                                           */
 int pr_escribir( Proyecto *p, const char *path, PrError *e );
+
+/* EL CERROJO DEL MANIFIESTO, el que pr_escribir coge (un fichero al lado,
+ * <path>.cerrojo, con el bloqueo del sistema: flock o LockFileEx). NULL si
+ * otro lo tiene mas de PR_CERROJO_MS (PR_ECERROJO). El sistema lo suelta si
+ * el proceso muere. Para quien tenga que hacer varias cosas sin que otro
+ * escriba en medio, y para las pruebas.                                */
+typedef struct PrCerrojo PrCerrojo;
+PrCerrojo *pr_cerrojo_coge( const char *path, PrError *e );
+void       pr_cerrojo_suelta( PrCerrojo *c );
 const char *pr_aviso( void );
 
 /* Lo que habia en viejo y nuevo ya no trae (series, muestras, modelos,

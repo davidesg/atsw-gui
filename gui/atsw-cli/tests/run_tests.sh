@@ -352,7 +352,8 @@ mira "una opción desconocida: estado 2" '[ $rc = 2 ]'
 # atsw-cli A LA VEZ, cada uno con la razon de un modelo distinto. Cada uno lee,
 # cambia y escribe; antes de la escritura transaccional, alguno escribia su
 # copia encima de la de otro y se perdian razones (medido: en 4 de 10 vueltas).
-# Ahora tienen que estar las 30, sin cerrojo ni temporal que se quede.
+# Ahora tienen que estar las 30, sin temporal que se quede (el .cerrojo se
+# queda: es el fichero sobre el que el sistema bloquea).
 C="$WORK/conc"; mkdir -p "$C"
 {
   printf 'schema_version: 1\nid: conc\ntitulo: concurrencia\ncreado: "2026-11-14"\n'
@@ -369,8 +370,8 @@ wait
 n=$(grep -c 'razon: "*razon [0-9]' "$C/p.yaml")
 mira "30 atsw-cli a la vez sobre el mismo manifiesto: no se pierde ninguna razón ($n de 30)" \
      '[ "$n" = 30 ]'
-mira "y no queda cerrojo ni temporal" \
-     '[ -z "$(ls "$C" | grep -E "cerrojo|tmp")" ]'
+mira "y no queda ningún temporal" \
+     '[ -z "$(ls "$C" | grep -E "\.tmp$")" ]'
 
 echo
 if [ $fallos -eq 0 ]; then echo "atsw-cli: todo bien"; exit 0; fi

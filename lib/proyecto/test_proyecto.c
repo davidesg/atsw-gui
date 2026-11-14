@@ -204,21 +204,26 @@ static void concurrencia( void )
     pr_leer( path, a, &e );
     }
 
-    /* 8. EL CERROJO: vivo, se espera y se rinde; abandonado, se toma. */
-    snprintf( f, sizeof f, "%s.cerrojo", path );
+    /* 8. EL CERROJO, el bloqueo del sistema: con otro cogiendolo, se espera
+          y se rinde; suelto, se escribe. No se borra ni se adivina nada. */
 #ifdef _WIN32
     _putenv( "PR_CERROJO_MS=50" );
 #else
     setenv( "PR_CERROJO_MS", "50", 1 );
 #endif
-    x = fopen( f, "w" ); fprintf( x, "%ld\n", (long) getpid() ); fclose( x );
+    {
+    PrCerrojo *c = pr_cerrojo_coge( path, &e );
+    ok( c != NULL, "se coge el cerrojo del manifiesto" );
     ok( pr_escribir( a, path, &e ) != 0 && e.cod == PR_ECERROJO,
-        "con el cerrojo de un proceso vivo: PR_ECERROJO al cabo de la espera" );
-    x = fopen( f, "w" ); fprintf( x, "999999\n" ); fclose( x );
-    ok( pr_escribir( a, path, &e ) == 0, "con el de un proceso muerto, se toma y se escribe" );
-    { FILE *y = fopen( f, "r" ); ok( y == NULL, "y no queda cerrojo" ); if ( y ) fclose( y ); }
+        "con el cerrojo cogido por otro: PR_ECERROJO al cabo de la espera" );
+    pr_cerrojo_suelta( c );
+    ok( pr_escribir( a, path, &e ) == 0, "suelto, se escribe" );
+    c = pr_cerrojo_coge( path, &e );
+    ok( c != NULL, "y pr_escribir lo suelta al acabar" );
+    pr_cerrojo_suelta( c );
+    }
     snprintf( f, sizeof f, "%s.%ld.tmp", path, (long) getpid() );
-    { FILE *y = fopen( f, "r" ); ok( y == NULL, "ni el temporal" ); if ( y ) fclose( y ); }
+    { FILE *y = fopen( f, "r" ); ok( y == NULL, "no queda el temporal" ); if ( y ) fclose( y ); }
 
     /* 9. LO QUE FALTA AL RELEER. */
     *v1 = *a;

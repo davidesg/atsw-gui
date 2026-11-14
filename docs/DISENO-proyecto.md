@@ -351,7 +351,8 @@ que otro había escrito entretanto se perdía sin aviso
 La regla, en `lib/proyecto` y por tanto igual para todos:
 
 - **Escribir es una transacción** (`pr_escribir`):
-  1. se coge un cerrojo (`proyecto.yaml.cerrojo`, con el PID del dueño);
+  1. se coge un cerrojo: el bloqueo del sistema (`flock`, `LockFileEx`) sobre
+     `proyecto.yaml.cerrojo`, un fichero que se queda en su sitio;
   2. se relee el disco;
   3. si otro programa lo cambió desde que este lo leyó, se aplican sobre lo
      del disco **solo los cambios de este**, elemento a elemento y por su
@@ -360,7 +361,10 @@ La regla, en `lib/proyecto` y por tanto igual para todos:
      renombra encima.
 
   Releer y escribir un manifiesto de 3 KB cuesta 0,2 ms: el cerrojo no se
-  nota. Un cerrojo cuyo dueño ya no vive, o con más de 30 s, se toma.
+  nota. Si un proceso muere con él cogido, el sistema lo suelta. (La primera
+  versión creaba y borraba el fichero con el PID dentro, y tomaba el de un
+  proceso muerto; con muchos procesos a la vez uno podía borrar el cerrojo
+  recién creado por otro: lo vio la CI de macOS y Windows.)
 - **Lo que la fusión decide se dice.** Que gane lo de este programa cuando
   los dos cambiaron lo mismo, o que se quede algo que este borró y el otro
   cambió, queda en `pr_aviso()`, y la madre lo enseña. Una misma clave dada

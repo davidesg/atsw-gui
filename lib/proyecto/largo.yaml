@@ -1,0 +1,8 @@
+schema_version: 1
+id: X
+raiz: .
+series:
+  S:
+modelos:
+  S/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:
+    version: 0

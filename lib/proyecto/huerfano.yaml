@@ -1,0 +1,10 @@
+schema_version: 1
+id: X
+raiz: .
+series:
+  S:
+modelos:
+  S/a:
+    version: 0
+    padre: nadie
+    razon: ""

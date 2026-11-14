@@ -7,6 +7,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <time.h>
+#include <errno.h>
 
 #include "proyecto.h"
 
@@ -1398,6 +1399,31 @@ static int sangria( const char *s )
 }
 
 /* LA LECTURA, sin apuntar la base: pr_leer (mas abajo) la envuelve. */
+static void duerme_ms( int ms );
+static int  espera_ms( void );
+
+/* ABRIR PARA LEER. En Windows, mientras otro proceso sustituye el manifiesto
+   con MoveFileEx (pr_escribir), abrirlo falla unos milisegundos con acceso
+   denegado: el fichero esta, pero a medio cambiar de dueño. Se reintenta,
+   como renombra() al escribir. Que no exista (ENOENT) se dice enseguida, y
+   en POSIX rename es atomico y no hace falta: alli no se espera nunca.
+   Medido en la CI de Windows: uno de 30 atsw-cli a la vez no podia ni leer
+   y salia con «No pude abrir» (avisaba, no perdia nada, pero no hacia lo
+   suyo).                                                               */
+static FILE *abre_lectura( const char *path )
+{
+   FILE *f = fopen( path, "r" );
+#ifdef _WIN32
+   int espera = espera_ms(), hecho = 0;
+   while ( f == NULL && errno == EACCES && hecho < espera )
+      {
+      duerme_ms( 5 ); hecho += 5;
+      f = fopen( path, "r" );
+      }
+#endif
+   return f;
+}
+
 static int leer_crudo( const char *path, Proyecto *p, PrError *e )
 {
    FILE *f;
@@ -1412,7 +1438,7 @@ static int leer_crudo( const char *path, Proyecto *p, PrError *e )
    falla( e, PR_OK, 0, "" );
    snprintf( p->path, sizeof p->path, "%s", path ? path : "" );
 
-   f = fopen( path, "r" );
+   f = abre_lectura( path );
    if ( f == NULL ) { falla( e, PR_ENOFILE, 0, path ); return 1; }
 
    while ( fgets( linea, sizeof linea, f ) != NULL )

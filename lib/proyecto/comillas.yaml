@@ -1,0 +1,61 @@
+# Proyecto de ATSW GUI. El nombre de cada fichero es CORTESIA:
+# la identidad esta aqui, y ningun programa parsea un nombre.
+schema_version: 1
+id: SF_MEG
+titulo: Inflación del área euro
+creado: "2026-11-14"
+analista: ""
+herramienta: fue
+raiz: .
+
+series:
+  IPC_ES:
+    descripcion: Índice de precios de consumo armonizado, España
+    fuente: Eurostat, tabla prc_hicp_midx
+    bajada: "2026-09-20"
+    unidades: índice 2015 = 100
+  SUELTA:
+    bajada: "2026-09-20"
+    unidades: "12"
+    notas: "no"
+
+# Ventanas declaradas sobre los datos. La COMPLETA es la
+# muestra total y no se declara: es lo que entro.
+muestras:
+  pre-covid:
+    hasta: 12/2019
+    razon: 2020-2022 es otro proceso
+
+# La cadena de iteracion. padre vacio = raiz.
+# razon vacia = NO CONSTA, y no consta nunca significa cuadra.
+modelos:
+  IPC_ES/m00:
+    version: 0
+    padre: ""
+    razon: ""
+    rol: datos
+  IPC_ES/m01:
+    version: 1
+    padre: m00
+    razon: el residuo de 2020-03 pedía intervención
+  IPC_ES/m02:
+    version: 2
+    padre: m01
+    razon: ""
+    elegido: si
+    razon_elegido: el SAR no se gana su sitio
+  SUELTA/m01:
+    version: 1
+    padre: ""
+    razon: ""
+  IPC_ES/pre-covid/m00:
+    version: 0
+    padre: ""
+    razon: ""
+    rol: datos
+  IPC_ES/pre-covid/m01:
+    version: 1
+    padre: m00
+    razon: ""
+    elegido: si
+    razon_elegido: en esta ventana gana este

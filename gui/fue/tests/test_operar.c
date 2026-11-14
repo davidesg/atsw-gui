@@ -43,6 +43,7 @@ const char *fue_abrir(void);
 void        fue_pon_abrir(const char *s);
 const char *fue_raiz_proyecto(void);
 void        fue_pon_raiz_proyecto(const char *s);
+void        fue_pon_raiz_de(const Proyecto *p);
 void        fue_pon_proyecto(Proyecto *p);
 Proyecto   *fue_proyecto(void);
 int         fue_proyecto_relee(void);
@@ -573,6 +574,22 @@ static void prueba_arranque(FueContext *ctx) {
     g_free(s);
     gtk_widget_destroy(w2);
     g_free(c2);
+    }
+    /* «raiz: datos» en el manifiesto: la raiz es esa carpeta, no la del
+       manifiesto (AUDITORIA-procesos C4).                              */
+    {
+    Proyecto *p = g_new0(Proyecto, 1);
+    gchar    *esp = g_build_filename(dir, "datos", NULL);
+
+    pr_nuevo(p, "r", "raiz", "datos");
+    g_snprintf(p->path, sizeof p->path, "%s/proyecto.yaml", dir);
+    fue_pon_raiz_de(p);
+    check(g_strcmp0(fue_raiz_proyecto(), esp) == 0, "--proyecto con «raiz: datos»: la raiz es datos/", fue_raiz_proyecto());
+    pr_nuevo(p, "r", "raiz", ".");
+    g_snprintf(p->path, sizeof p->path, "%s/proyecto.yaml", dir);
+    fue_pon_raiz_de(p);
+    check(g_strcmp0(fue_raiz_proyecto(), dir) == 0, "--proyecto con «raiz: .»: la carpeta del manifiesto", fue_raiz_proyecto());
+    g_free(esp); g_free(p);
     }
     fue_pon_raiz_proyecto(NULL);
     check(fue_raiz_proyecto() == NULL, "y sin el, no hay raiz", fue_raiz_proyecto());

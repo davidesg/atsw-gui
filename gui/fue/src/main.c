@@ -112,7 +112,7 @@ static void activate(GtkApplication *app, gpointer user_data) {
  * ventana lo pregunta, y una prueba que levanta la ventana sin main() se
  * quedaba sin ello. Un dato que la interfaz consulta no puede vivir en el
  * unico fichero que las pruebas no pueden enlazar.                     */
-void fue_pon_raiz_proyecto(const char *s);
+void fue_pon_raiz_de(const Proyecto *p);
 void fue_pon_proyecto(Proyecto *p);
 void fue_pon_abrir(const char *s);
 void fue_pon_prever(int si);
@@ -162,19 +162,7 @@ static int lee_opciones(int argc, char *argv[])
         free(p);
         return 2;
     }
-    /* La raiz, resuelta: pr_ruta con id vacio da el directorio.       */
-    {
-    char raiz[1024] = "";
-
-    pr_ruta(p, "", "", NULL, NULL, raiz, sizeof raiz);
-    if (!raiz[0]) {
-        char *d = g_path_get_dirname(proy);
-
-        snprintf(raiz, sizeof raiz, "%s", d);
-        g_free(d);
-    }
-    fue_pon_raiz_proyecto(raiz);
-    }
+    fue_pon_raiz_de(p);
     /* EL MANIFIESTO SE GUARDA, no se tira: sin el, fue_gui sabe donde esta
        pero no de que modelo es lo que tiene abierto.                  */
     fue_pon_proyecto(p);

@@ -35,11 +35,24 @@ typedef struct {
 
 #define ENGINE_NORUN  (-1)   /* the program could not be started            */
 #define ENGINE_SIGNAL (-2)   /* it died on a signal                         */
+#define ENGINE_PLAZO  (-3)   /* engine_run: it did not finish in time, and it
+                                was stopped (ATSW_PLAZO_MOTOR_S, 300 s)    */
 
 /* Run <program> in workdir with the arguments that follow (a NULL-terminated
  * list) and wait for it. The program is looked up in the PATH, or with the
  * finder given to engine_set_finder.                                       */
 EngineResult engine_run(const char *workdir, const char *program, ...) G_GNUC_NULL_TERMINATED;
+
+/* The same, with the arguments in a NULL-terminated array (argv without the
+ * program).
+ *
+ * BOTH WAIT WITH A DEADLINE: the window that waits does not move, so a hung
+ * engine froze it for good (AUDITORIA-procesos B5). After
+ * ATSW_PLAZO_MOTOR_S seconds (300 by default; 0, no deadline) the engine is
+ * stopped and the result is ENGINE_PLAZO, with a message that says so.    */
+EngineResult engine_run_v(const char *workdir, const char *program,
+                          const char *const *argv);
+int          engine_plazo_s(void);
 
 /* TRUE when the run left its files behind: it finished (0), or it could not
  * estimate the model and wrote the results with the initial values (3).    */

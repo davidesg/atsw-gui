@@ -251,6 +251,10 @@ int main( int argc, char **argv )
     check( corre_main( 2, "--caso", "C1" ) == 2, "--caso sin --proyecto sale con 2", NULL );
     check( corre_main( 4, "--proyecto", yaml, "--modelo", "c01" ) == 2,
            "--modelo sin --caso sale con 2", NULL );
+    /* --corrida, sinonimo de --modelo como en drtran_gui: se entiende (3, el
+       caso no existe) y no es una opcion desconocida (2).               */
+    check( corre_main( 6, "--proyecto", yaml, "--caso", "C9", "--corrida", "c01" ) == 3,
+           "--corrida se entiende como --modelo", NULL );
     check( corre_main( 2, "--proyecto", "no_existe.yaml" ) == 3,
            "un proyecto que no existe sale con 3", NULL );
     check( corre_main( 4, "--proyecto", yaml, "--caso", "C9" ) == 3,

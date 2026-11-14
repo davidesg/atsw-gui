@@ -6,6 +6,7 @@
 /*****************************************************************************/
 
 #include "plothost.h"
+#include "lags.h"
 
 int annual_step( int years, double width )
 
@@ -36,21 +37,10 @@ int first_multiple( int year, int step )
 int default_lags( int nobs, int freq )
 
 /* Default number of lags of the acf and pacf (same rule for the .out file,
- * the plots and the GUI). At most nobs - 2 lags are used.                   */
+ * the plots and the GUI): fp_lags, in lags.h, so that the hosts that do not
+ * draw use the very same rule.                                              */
 {
-   int lags;
-
-   if ( nobs < 3 * (freq + 1) )
-      lags = nobs - freq / 2;
-   else if ( (freq == 1) && (nobs > 200) )
-      lags = 45;
-   else if ( freq == 1 )
-      lags = 9;
-   else
-      lags = 3 * (freq + 1);
-   if ( lags > nobs - 2 ) lags = nobs - 2;
-   if ( lags < 1 ) lags = 1;
-   return( lags );
+   return fp_lags( nobs, freq );
 }
 
 /*****************************************************************************/

@@ -148,6 +148,53 @@ fi
 mira "raices factorizado: el ya factorizado no se vuelve a partir (estado 1)" \
      '! "$CLI" raices factorizado "$Y" en4 "$(echo "$J" | campo "d[\"modelo\"]")" 2>/dev/null'
 
+# anomalos: las mismas funciones que la ventana de la madre (an_residuos,
+# an_calibra). SIN OMITIR NADA, la ACF y la PACF de lib/anomalos son las que
+# fue imprime en el .out, retardo a retardo, y su Jarque-Bera tambien
+# (lib/anomalos/anomalos.h): el cotejo es contra el motor. RIPC.2 tiene un
+# episodio, 1/2003, y sin el la ACF y la PACF del retardo 13 cambian de lado.
+O="$G/RIPC.2/RIPC.2.out"
+J=$("$CLI" --json anomalos "$Y" RIPC m01 --episodios 1)
+mira "anomalos: un episodio, en 1/2003" \
+     '[ "$(echo "$J" | campo "len(d[\"episodios\"]), d[\"episodios\"][0][\"desde\"]")" = "1 1/2003" ]'
+cola() { "$PY" - "$O" "$1" <<'PY'
+import json, re, sys
+t = open(sys.argv[1], errors="replace").read()
+def tabla(titulo):
+    b = t[t.rindex(titulo):].split("\n")[4:]
+    v = {}
+    for l in b:
+        m = re.match(r"\s*(\d+)\s+(-?\d+\.\d+)\s+[|+]", l)   # cada 12, con +
+        if not m: break
+        v[int(m.group(1))] = float(m.group(2))
+    return v
+acf, pacf = tabla("Autocorrelation function"), tabla("Partial autocorrelation function")
+jb = float(re.search(r"Jarque-Bera:\s+(\S+)", t).group(1))
+d = json.loads(sys.argv[2])
+peor = max(max(abs(x["acf_con"] - acf[x["lag"]]), abs(x["pacf_con"] - pacf[x["lag"]]))
+           for x in d["calibracion"] if x["lag"] in acf and x["lag"] in pacf)
+n = len([x for x in d["calibracion"] if x["lag"] in acf])
+print("%d %.5f %.6f %.6f" % (n, peor, d["jb"]["con"], jb))
+PY
+}
+R4=$(cola "$J")
+NL=$(echo "$R4" | cut -d' ' -f1); PEOR=$(echo "$R4" | cut -d' ' -f2)
+JBC=$(echo "$R4" | cut -d' ' -f3); JBO=$(echo "$R4" | cut -d' ' -f4)
+mira "anomalos: la ACF y la PACF de los $NL retardos son las del .out de fue (peor $PEOR)" \
+     '[ "$NL" -ge 30 ] && "$PY" -c "import sys; sys.exit(0 if $PEOR <= 0.0006 else 1)"'
+mira "anomalos: el Jarque-Bera es el del .out ($JBC y $JBO)" \
+     '"$PY" -c "import sys; sys.exit(0 if abs($JBC - $JBO) < 1e-3 * abs($JBO) else 1)"'
+mira "anomalos: sin el episodio, el retardo 13 cambia de lado en la ACF y en la PACF" \
+     '[ "$(echo "$J" | campo "[(x[\"acf\"], x[\"pacf\"]) for x in d[\"calibracion\"] if x[\"lag\"] == 13][0]")" = "('"'"'enmascarada'"'"', '"'"'enmascarada'"'"')" ]'
+mira "anomalos: tantos residuos como el .out, y uno omitido" \
+     '[ "$(echo "$J" | campo "d[\"residuos\"], d[\"omitidas\"]")" = "78 1" ]'
+mira "anomalos: sin --episodios se omiten todos (lo mismo aquí, que hay uno)" \
+     '[ "$("$CLI" --json anomalos "$Y" RIPC m01 | campo "d[\"omitidas\"]")" = 1 ]'
+mira "anomalos --episodios fuera de rango: estado 1, y dice cuáles hay" \
+     '"$CLI" anomalos "$Y" RIPC m01 --episodios 2 2>&1 | grep -q "de 1 a 1"'
+mira "anomalos de un modelo sin estimar: estado 1" \
+     '! "$CLI" anomalos "$Y" RIPC m00 2>/dev/null'
+
 # coste: el MTM apunta lo que corre en Python, y el resumen lo suma. Hasta
 # aqui nada ha corrido un motor con contexto: el registro no existe.
 C="$P/costes.csv"

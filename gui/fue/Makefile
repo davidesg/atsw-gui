@@ -83,6 +83,7 @@ LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c \
            $(LIB_DIR)/sitio/sitio.c \
            $(LIB_DIR)/barra/iconos.c $(LIB_DIR)/barra/barra.c \
            $(LIB_DIR)/anomalos/anomalos.c \
+           $(LIB_DIR)/anomalos/residuos.c \
            $(LIB_DIR)/dictamen/dictamen.c \
            $(LIB_DIR)/intervencion/intervencion.c \
            $(LIB_DIR)/inpdet/inpdet.c \

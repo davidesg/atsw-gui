@@ -47,10 +47,11 @@
 #include "fugplot.h"
 #include "fufplot.h"
 #include "outfcst.h"
+#include "fcomp.h"
 #include "ofgraf.h"
 #include "preview.h"
 
-enum { E_SER, E_H, E_N, E_SIS, E_UNI, E_RAZ, E_N_ };
+enum { E_SER, E_H, E_N, E_SIS, E_UNI, E_RAZ, E_DM, E_P, E_N_ };
 
 /* --- lanzar ---------------------------------------------------------------- */
 
@@ -123,6 +124,13 @@ static void on_done( const EngineResult *r, gpointer data )
         if (P->paso == 1)      { g_free( P->v );  P->v = v; }
         else if (P->paso == 2) { g_free( P->ve ); P->ve = v; }
         else                   { g_free( P->vd ); P->vd = v; }
+        if (P->paso >= 2) {   /* las previsiones de cada origen: Diebold-Mariano */
+            OvRecursive *rr = P->paso == 2 ? &P->rsis : &P->rdiag;
+            gchar *f = g_strdup_printf( "%s.recursive", base );
+            ov_recursive_free( rr );
+            ov_recursive_file( f, rr );
+            g_free( f );
+        }
     }
     g_free( base );
 
@@ -226,6 +234,7 @@ gboolean prevision_calcular( Sim *m )
     P->nfvec = 0;
     ovec_recursive_free( &P->rvec );
     ov_recursive_free( &P->rdiag );
+    ov_recursive_free( &P->rsis );
     if (!lanza( m, 1 )) { sim_estado( m, "No pude lanzar el motor." ); return FALSE; }
     P->corriendo = TRUE;
     if (m->avance) { gtk_widget_show( m->avance ); g_timeout_add( 120, pulso, m ); }
@@ -674,6 +683,62 @@ static void texto_prev( Sim *m )
     g_string_free( g, TRUE );
 }
 
+/* DIEBOLD-MARIANO (lib/fcomp, el de drtran_gui): A son los univariantes, B
+ * el sistema; DM > 0, el sistema preve mejor. Escribe las dos celdas y
+ * cuenta los significativos al 5 %.                                     */
+static void celdas_dm( const double *eu, const double *es, int n, int h,
+                       gchar **dm, gchar **pv, int *sig )
+{
+    double st, p;
+
+    if (n >= 2 && fc_dm_errores( eu, es, n, h, &st, &p )) {
+        *dm = g_strdup_printf( "%.2f", st );
+        *pv = g_strdup_printf( "%.3f", p );
+        if (p < 0.05) (*sig)++;
+    } else {
+        *dm = g_strdup( "" );
+        *pv = g_strdup( "" );
+    }
+}
+
+/* Los errores del sistema y de los univariantes, emparejados por origen, de
+ * una serie a un horizonte: los dos .recursive de drvarma traen solo la
+ * prevision, y el dato se lee del .pre de la serie. n de pares.        */
+typedef struct { int nobs, freq, ini_per, ini_anio; double *z; } SerieReal;
+
+static int origen_obs( const SerieReal *r, const char *org )
+{
+    int per = 1, anio;
+    if (sscanf( org, "%d/%d", &per, &anio ) != 2) {
+        if (sscanf( org, "%d", &anio ) != 1) return -1;
+        per = 1;
+    }
+    return ( anio - r->ini_anio ) * r->freq + per - r->ini_per + 1;   /* 1..nobs */
+}
+
+static int pares_varma( const PagPrev *P, const SerieReal *r, const char *serie, int h,
+                        double *es, double *eu, int max )
+{
+    int k, l, n = 0;
+    for (k = 0; k < P->rsis.nf && n < max; k++) {
+        const OvRecFila *a = &P->rsis.f[k];
+        int o;
+        if (a->h != h || strcmp( a->serie, serie )) continue;
+        o = origen_obs( r, a->origen );
+        if (o < 1 || o + h > r->nobs) continue;
+        for (l = 0; l < P->rdiag.nf; l++) {
+            const OvRecFila *b = &P->rdiag.f[l];
+            if (b->h == h && !strcmp( b->serie, serie ) && !strcmp( b->origen, a->origen )) {
+                es[n] = r->z[o + h] - a->nivel;
+                eu[n] = r->z[o + h] - b->nivel;
+                n++;
+                break;
+            }
+        }
+    }
+    return n;
+}
+
 /* La evaluacion del VEC: drvec y el diagonal de drvarma sobre los MISMOS
  * origenes, contados hacia atras desde el final (sima, evaluate_vec): el de
  * drvec es la fila de nabla Y, nobs_raw - (origen + 1); el de drvarma, una
@@ -685,7 +750,7 @@ static void evaluacion_vec( Sim *m )
     const SisSerie *s0 = &m->sis.s[0];
     long fin = (long) s0->fin_anio * s0->freq + s0->fin_per - 1;
     GHashTable *real = g_hash_table_new_full( g_str_hash, g_str_equal, g_free, g_free );
-    int i, j, k, H = P->rvec.horizonte, gana = 0, total = 0, origenes;
+    int i, j, k, H = P->rvec.horizonte, gana = 0, total = 0, origenes, sig = 0;
     GHashTable *og = g_hash_table_new( g_direct_hash, g_direct_equal );
 
     gtk_list_store_clear( st );
@@ -707,10 +772,10 @@ static void evaluacion_vec( Sim *m )
     origenes = (int) g_hash_table_size( og );
     for (i = 0; i < m->sis.n; i++)
         for (j = 1; j <= H; j++) {
-            double sv = 0, su = 0;
+            double sv = 0, su = 0, es[2048], eu[2048];
             int n = 0;
             GtkTreeIter it;
-            gchar *a, *b, *c, *h;
+            gchar *a, *b, *c, *h, *dm, *pv;
             for (k = 0; k < P->rdiag.nf; k++) {
                 const OvRecFila *d = &P->rdiag.f[k];
                 int per, anio, l;
@@ -731,6 +796,7 @@ static void evaluacion_vec( Sim *m )
                         P->vec_nobs_raw - ( x->origen + 1 ) == fin - o) {
                         sv += x->error * x->error;
                         su += ( *re - d->nivel ) * ( *re - d->nivel );
+                        if (n < 2048) { es[n] = x->error; eu[n] = *re - d->nivel; }
                         n++;
                         break;
                     }
@@ -742,16 +808,18 @@ static void evaluacion_vec( Sim *m )
             h = g_strdup_printf( "%d", n );
             a = g_strdup_printf( "%.6g", sv ); b = g_strdup_printf( "%.6g", su );
             c = su > 0 ? g_strdup_printf( "%.3f", sv / su ) : g_strdup( "" );
+            celdas_dm( eu, es, n < 2048 ? n : 2048, j, &dm, &pv, &sig );
             gtk_list_store_append( st, &it );
             gtk_list_store_set( st, &it, E_SER, m->sis.s[i].nombre, E_H, j, E_N, n, E_SIS, a, E_UNI, b,
-                                E_RAZ, c, -1 );
-            g_free( h ); g_free( a ); g_free( b ); g_free( c );
+                                E_RAZ, c, E_DM, dm, E_P, pv, -1 );
+            g_free( h ); g_free( a ); g_free( b ); g_free( c ); g_free( dm ); g_free( pv );
         }
     if (total)
         sim_veredicto( P->ver_eval, gana * 2 > total ? SIM_VERDE : SIM_AMBAR,
                        "Fuera de muestra, el VEC y los univariantes sobre los mismos %d orígenes (los "
                        "de drvec: los que comprueban los %d pasos): el VEC prevé mejor en %d de %d "
-                       "series y horizontes (RMSE VEC / univariantes < 1).", origenes, H, gana, total );
+                       "series y horizontes (RMSE VEC / univariantes < 1). Diebold-Mariano: %d "
+                       "diferencias significativas al 5 %%.", origenes, H, gana, total, sig );
     else
         sim_veredicto( P->ver_eval, SIM_AMBAR, "La evaluación del VEC y la de los univariantes no "
                        "comparten orígenes: revisa la ventana." );
@@ -767,7 +835,7 @@ static void evaluacion( Sim *m )
     {
     PagPrev *P = &m->pv;
     GtkListStore *st = GTK_LIST_STORE(gtk_tree_view_get_model( GTK_TREE_VIEW(P->l_eval) ));
-    int k, j, gana = 0, total = 0;
+    int k, j, gana = 0, total = 0, sig = 0;
 
     gtk_list_store_clear( st );
     if (!P->ve || P->ve->nev == 0) {
@@ -777,27 +845,57 @@ static void evaluacion( Sim *m )
     }
     for (k = 0; k < P->ve->nev; k++) {
         const OvEvalSerie *e = &P->ve->ev[k], *d = NULL;
+        SerieReal r = { 0, 1, 1, 1, NULL };
+        struct Tusmodel tm;
+        struct Tseries ts;
+        real **dmx = NULL;
+        int i, leido = 0;
         for (j = 0; P->vd && j < P->vd->nev; j++)
             if (!strcmp( P->vd->ev[j].nombre, e->nombre )) d = &P->vd->ev[j];
+        /* el dato, del .pre de la serie: los .recursive no lo traen */
+        memset( &tm, 0, sizeof tm ); memset( &ts, 0, sizeof ts );
+        for (i = 0; i < m->sis.n; i++)
+            if (!strcmp( m->sis.s[i].nombre, e->nombre ) &&
+                read_fue_pre( m->sis.s[i].ruta, &tm, &ts, &dmx ) == 0) {
+                r.nobs = ts.nobs; r.freq = ts.freq > 0 ? ts.freq : 1;
+                r.ini_per = ts.begtime; r.ini_anio = ts.begyear; r.z = ts.data;
+                leido = 1;
+                break;
+            }
         for (j = 0; j < e->nh; j++) {
             GtkTreeIter it;
             const OvHoriz *h = &e->h[j], *hd = d && j < d->nh ? &d->h[j] : NULL;
             gchar *a = g_strdup_printf( "%.6g", h->rmse );
             gchar *b = hd ? g_strdup_printf( "%.6g", hd->rmse ) : g_strdup( "" );
             gchar *c = hd && hd->rmse > 0 ? g_strdup_printf( "%.3f", h->rmse / hd->rmse ) : g_strdup( "" );
+            gchar *dm = NULL, *pv = NULL;
+            double es[2048], eu[2048];
+            int np = leido ? pares_varma( P, &r, e->nombre, h->h, es, eu, 2048 ) : 0;
+            /* SALVAGUARDA: los pares tienen que dar el RMSE que da drvarma
+               en su .out. Si no casan (un dato mal alineado), no hay DM. */
+            if (np > 0) {
+                double q = 0;
+                int t;
+                for (t = 0; t < np; t++) q += es[t] * es[t];
+                q = sqrt( q / np );
+                if (np != h->n || fabs( q - h->rmse ) > 1e-4 * ( h->rmse > 1 ? h->rmse : 1 )) np = 0;
+            }
+            celdas_dm( eu, es, np, h->h, &dm, &pv, &sig );
             if (hd) { total++; gana += h->rmse < hd->rmse; }
             gtk_list_store_append( st, &it );
             gtk_list_store_set( st, &it, E_SER, e->nombre, E_H, h->h, E_N, h->n, E_SIS, a, E_UNI, b,
-                                E_RAZ, c, -1 );
-            g_free( a ); g_free( b ); g_free( c );
+                                E_RAZ, c, E_DM, dm, E_P, pv, -1 );
+            g_free( a ); g_free( b ); g_free( c ); g_free( dm ); g_free( pv );
         }
+        if (leido) free_fue_pre( &tm, &ts, dmx );
     }
     if (total)
         sim_veredicto( P->ver_eval, gana * 2 > total ? SIM_VERDE : SIM_AMBAR,
                        "Fuera de muestra (%d orígenes; n, los que tienen dato con que comparar), "
                        "el sistema prevé mejor que los univariantes en %d de %d series y "
-                       "horizontes (RMSE sistema / univariantes < 1).",
-                       P->ve->ev_origenes, gana, total );
+                       "horizontes (RMSE sistema / univariantes < 1). Diebold-Mariano: %d "
+                       "diferencias significativas al 5 %%.",
+                       P->ve->ev_origenes, gana, total, sig );
     else
         sim_veredicto( P->ver_eval, SIM_AMBAR, "La evaluación del sistema, sin la de los univariantes "
                        "con la que compararla." );
@@ -891,6 +989,7 @@ void prevision_refresca( Sim *m )
         P->nfvec = 0;
         ovec_recursive_free( &P->rvec );
         ov_recursive_free( &P->rdiag );
+        ov_recursive_free( &P->rsis );
     }
     if (( ( m->pe.v && m->pe.v->nobs > 0 ) || ( m->pe.vec && m->pe.vec->nobs_raw > 0 ) ) && !P->corriendo) {
         int nobs = m->pe.vec ? m->pe.vec->nobs_raw : m->pe.v->nobs;
@@ -1016,7 +1115,7 @@ GtkWidget *prevision_pagina_new( Sim *m )
     P->ver_eval = veredicto_new();
     gtk_box_pack_start( GTK_BOX(pg), P->ver_eval, FALSE, FALSE, 0 );
     st = gtk_list_store_new( E_N_, G_TYPE_STRING, G_TYPE_INT, G_TYPE_INT, G_TYPE_STRING,
-                             G_TYPE_STRING, G_TYPE_STRING );
+                             G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING );
     P->l_eval = gtk_tree_view_new_with_model( GTK_TREE_MODEL(st) );
     g_object_unref( st );
     columna( P->l_eval, "Serie", E_SER, "" );
@@ -1025,6 +1124,9 @@ GtkWidget *prevision_pagina_new( Sim *m )
     columna( P->l_eval, "RMSE sistema", E_SIS, "El del modelo de «5 · Estimación»" );
     columna( P->l_eval, "RMSE univariantes", E_UNI, "El del sistema diagonal, con la misma ventana" );
     columna( P->l_eval, "Cociente", E_RAZ, "Menor que 1: el sistema prevé mejor" );
+    columna( P->l_eval, "DM", E_DM, "Diebold-Mariano (Harvey, Leybourne y Newbold): positivo, el "
+             "sistema prevé mejor" );
+    columna( P->l_eval, "p", E_P, "La del contraste, bilateral, con la t de n − 1 grados de libertad" );
     sw = gtk_scrolled_window_new( NULL, NULL );
     gtk_container_add( GTK_CONTAINER(sw), P->l_eval );
     gtk_box_pack_start( GTK_BOX(pg), sw, TRUE, TRUE, 0 );

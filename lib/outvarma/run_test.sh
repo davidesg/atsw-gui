@@ -38,5 +38,6 @@ corre ar2    $M $K 2 0 -forecast 10
 corre rec    $M $K 2 0 -forecast 4 -estwin 48
 corre pared  $M $K 1 1 -diagcov -links "MUSKRAT<-MINK"
 corre noopt  MUSKX.inp $K 0 0 -diagcov
+corre boot   $M $K 2 0 -irfboot 30
 
 "$W/test_outvarma" "$W"

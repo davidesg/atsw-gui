@@ -62,6 +62,16 @@ espera 2500
 foto sim-irf-grafico
 cierra
 ventana sim_gui
+# Las mismas bandas por bootstrap: 499 replicas (las de serie), reestimadas.
+boton Bandas por bootstrap
+espera 180000
+boton Ver el gráfico
+ventana irf_
+tamano 700 900
+espera 2500
+foto sim-irf-bootstrap
+cierra
+ventana sim_gui
 # Simplificar (los cruzados con |t| < 1 a cero, contra el modelo) y
 # «¿Es una red?» (cada par a cero y cada orden triangular, por LR).
 pestana 6 · Diagnosis

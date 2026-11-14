@@ -57,7 +57,7 @@ enum { E_SER, E_H, E_N, E_SIS, E_UNI, E_RAZ, E_N_ };
 static gboolean pulso( gpointer d )
 {
     Sim *m = d;
-    if (!m->pv.corriendo || !m->avance) return G_SOURCE_REMOVE;
+    if (( !m->pv.corriendo && !m->pv.bt_corriendo ) || !m->avance) return G_SOURCE_REMOVE;
     gtk_progress_bar_pulse( GTK_PROGRESS_BAR(m->avance) );
     return G_SOURCE_CONTINUE;
 }
@@ -391,6 +391,29 @@ gboolean prevision_grafico_irf( Sim *m, int choque, int resp )
         nu[k] = v->irf[choque][k][resp];
         cu[k] = nu[k] + ( k ? cu[k - 1] : 0.0 );
     }
+    /* las del bootstrap si son de esta estimacion; si no, las del delta */
+    if (m->pv.bt && m->pv.bt_version == m->pe.version && m->pv.bt->nh >= n &&
+        m->pv.bt->nh_acc >= n) {
+        const OvIrfBoot *bt = m->pv.bt;
+        double *nl = g_new( double, n ), *nh = g_new( double, n );
+        double *cl = g_new( double, n ), *ch = g_new( double, n );
+        gchar  *nb;
+
+        for (k = 0; k < n; k++) {
+            nl[k] = bt->lo[choque][k][resp];  nh[k] = bt->hi[choque][k][resp];
+            cl[k] = bt->alo[choque][k][resp]; ch[k] = bt->ahi[choque][k][resp];
+        }
+        u = g_strdup_printf( "Impulso: %s <- %s", m->sis.s[resp].nombre, m->sis.s[choque].nombre );
+        t1 = latin1( u ); g_free( u );
+        t2 = latin1( "Acumulada" );
+        nb = g_strdup_printf( "Choque de una d.t. (Cholesky, en el orden del sistema).\n"
+                              "Bandas del 95 %%: percentiles del bootstrap (%d réplicas reestimadas).",
+                              bt->n_rep );
+        nota = latin1( nb ); g_free( nb );
+        fg = fp_response_lohi( nu, nl, nh, cu, cl, ch, n, 0.0, 0, t1, t2, nota );
+        g_free( nl ); g_free( nh ); g_free( cl ); g_free( ch );
+        goto dibuja;
+    }
     if (v->tiene_irf_se) {
         nsd = g_new( double, n );
         csd = g_new( double, n );
@@ -407,6 +430,7 @@ gboolean prevision_grafico_irf( Sim *m, int choque, int resp )
                        : "Choque de una d.t. (Cholesky, en el orden del sistema).\n"
                          "Sin bandas: este .out de drvarma no trae sus errores típicos." );
     fg = fp_response( nu, nsd, cu, csd, n, 0.0, 0, t1, t2, nota );
+dibuja:
     if (fg) {
         b   = sim_artefacto( m, m->sis.s[resp].nombre );
         dir = g_path_get_dirname( b );
@@ -429,6 +453,86 @@ static void on_ver_irf( GtkButton *bt, Sim *m )
     if (!prevision_grafico_irf( m, gtk_combo_box_get_active( GTK_COMBO_BOX(P->c_choque) ),
                                 gtk_combo_box_get_active( GTK_COMBO_BOX(P->c_resp) ) ))
         sim_estado( m, "No hay respuesta al impulso que dibujar: estima el sistema." );
+}
+
+/* LAS BANDAS POR BOOTSTRAP: el modelo de la pagina 5 otra vez, con
+ * -irfboot N, a <modelo>_irfboot.*, en segundo plano (como el bootstrap
+ * del rango). Al acabar se lee el .irfboot, y el grafico las usa.      */
+static void on_boot_done( const EngineResult *r, gpointer data )
+{
+    Sim *m = data;
+    PagPrev *P = &m->pv;
+    gchar *f = g_strconcat( P->bt_base, ".irfboot", NULL );
+    const char *nom[SIS_MAX_SER];
+    int i, rc = -1;
+
+    P->bt_trabajo = NULL;
+    P->bt_corriendo = FALSE;
+    for (i = 0; i < m->sis.n && i < SIS_MAX_SER; i++) nom[i] = m->sis.s[i].nombre;
+    if (!P->bt) P->bt = g_new0( OvIrfBoot, 1 );
+    if (r->status == 0) rc = ov_irfboot_file( f, nom, m->sis.n, P->bt );
+    if (rc == 0) P->bt_version = m->pe.version;
+    else         P->bt_version = -1;
+    g_free( f );
+    if (!m->ventana || !P->b_boot) return;
+    if (m->avance && !P->corriendo) gtk_widget_hide( m->avance );
+    if (r->status != 0)
+        sim_estado( m, "drvarma salió con %d al calcular las bandas: %s", r->status, r->message );
+    else if (rc != 0)
+        sim_estado( m, "drvarma no dejó bandas por bootstrap (demasiadas réplicas fallidas)." );
+    else
+        sim_estado( m, "Bandas por bootstrap listas: %d réplicas.", P->bt->n_rep );
+    sim_refresca( m );
+}
+
+gboolean prevision_bootstrap( Sim *m, int N )
+{
+    PagPrev *P = &m->pv;
+    const char *av[SIS_MAX_SER + 32];
+    char buf[2048], nb[16];
+    gchar *mot, *nom, *dir;
+    int k;
+
+    if (P->bt_corriendo || m->pe.corriendo || N < 20) return FALSE;
+    if (!m->pe.v || m->pe.v->fallo || ( m->pe.vec && m->pe.vec->hay_vec )) {
+        sim_estado( m, "Las bandas por bootstrap son de un VARMA estimado («5 · Estimación»)." );
+        return FALSE;
+    }
+    if (!( mot = sim_hermano( "drvarma" ) )) {
+        sim_estado( m, "No pude lanzar drvarma: ni al lado de sim_gui ni en el PATH." );
+        return FALSE;
+    }
+    g_free( mot );
+    g_free( P->bt_base );
+    nom = g_strdup_printf( "%s_irfboot", m->pe.corrida[0] ? m->pe.corrida : "modelo" );
+    P->bt_base = sim_artefacto( m, nom );
+    g_free( nom );
+    k = sis_orden_modelo( &m->sis, &m->mod, P->bt_base, buf, sizeof buf, av, G_N_ELEMENTS(av) - 6 );
+    if (k < 2) return FALSE;
+    /* -irfboot N, delante de «-o SALIDA» (los dos ultimos) */
+    snprintf( nb, sizeof nb, "%d", N );
+    k -= 2;
+    av[k++] = "-irfboot";
+    av[k++] = nb;
+    av[k++] = "-o";
+    av[k++] = P->bt_base;
+    av[k] = NULL;
+    dir = g_path_get_dirname( P->bt_base );
+    P->bt_trabajo = engine_start( dir, "drvarma", av, NULL, NULL, on_boot_done, m );
+    g_free( dir );
+    if (!P->bt_trabajo) { sim_estado( m, "No pude lanzar drvarma." ); return FALSE; }
+    P->bt_corriendo = TRUE;
+    if (m->avance) { gtk_widget_show( m->avance ); g_timeout_add( 120, pulso, m ); }
+    sim_estado( m, "drvarma simula y reestima el modelo %d veces para las bandas…", N );
+    sim_refresca( m );
+    return TRUE;
+}
+
+static void on_boot( GtkButton *b, Sim *m )
+{
+    PagPrev *P = &m->pv;
+    (void) b;
+    prevision_bootstrap( m, gtk_spin_button_get_value_as_int( GTK_SPIN_BUTTON(P->s_boot) ) );
 }
 
 /* Las series en los dos desplegables, y el boton encendido si hay IRF. */
@@ -454,6 +558,22 @@ static void irf_controles( Sim *m )
                                   b0 >= 0 && b0 < m->sis.n ? b0 : ( m->sis.n > 1 ? 1 : 0 ) );
     }
     gtk_widget_set_sensitive( P->b_irf, hay );
+    if (P->b_boot) {
+        gboolean al_dia = P->bt && P->bt_version == m->pe.version && P->bt_version >= 0;
+        gtk_widget_set_sensitive( P->b_boot, hay && !P->bt_corriendo );
+        gtk_widget_set_sensitive( P->s_boot, hay && !P->bt_corriendo );
+        if (P->bt_corriendo)
+            sim_veredicto( P->ver_boot, SIM_AMBAR, "drvarma calcula las bandas por bootstrap…" );
+        else if (al_dia)
+            sim_veredicto( P->ver_boot, SIM_VERDE, "El gráfico lleva las bandas del bootstrap (%d "
+                           "réplicas reestimadas): percentiles del 95 %%, asimétricas si hace falta.",
+                           P->bt->n_rep );
+        else if (hay)
+            sim_veredicto( P->ver_boot, SIM_AMBAR, "El gráfico lleva las bandas del método delta "
+                           "(±2 d.t.). Las del bootstrap no linealizan: «Bandas por bootstrap»." );
+        else
+            sim_veredicto( P->ver_boot, SIM_AMBAR, "Las bandas son de un VARMA estimado." );
+    }
     gtk_widget_set_tooltip_text( P->b_irf, hay
         ? "La respuesta y su acumulada, dibujadas, con bandas de ±2 d.t. (método delta)."
         : m->pe.vec && m->pe.vec->hay_vec ? "La IRF del VEC, en niveles, está en la tabla de abajo."
@@ -926,6 +1046,24 @@ GtkWidget *prevision_pagina_new( Sim *m )
     gtk_widget_set_sensitive( P->b_irf, FALSE );
     gtk_box_pack_start( GTK_BOX(f), P->b_irf, FALSE, FALSE, 0 );
     gtk_box_pack_start( GTK_BOX(pg), f, FALSE, FALSE, 0 );
+    }
+    {
+    GtkWidget *f = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 6 );
+
+    gtk_box_pack_start( GTK_BOX(f), gtk_label_new( "Réplicas" ), FALSE, FALSE, 0 );
+    P->s_boot = gtk_spin_button_new_with_range( 20, 9999, 1 );
+    gtk_spin_button_set_value( GTK_SPIN_BUTTON(P->s_boot), 499 );
+    gtk_box_pack_start( GTK_BOX(f), P->s_boot, FALSE, FALSE, 0 );
+    P->b_boot = gtk_button_new_with_label( "Bandas por bootstrap" );
+    gtk_widget_set_tooltip_text( P->b_boot, "Simula el modelo estimado, reestima cada réplica y "
+                                 "da los percentiles: no linealiza, como el método delta. Corre en "
+                                 "segundo plano." );
+    g_signal_connect( P->b_boot, "clicked", G_CALLBACK(on_boot), m );
+    gtk_widget_set_sensitive( P->b_boot, FALSE );
+    gtk_box_pack_start( GTK_BOX(f), P->b_boot, FALSE, FALSE, 0 );
+    gtk_box_pack_start( GTK_BOX(pg), f, FALSE, FALSE, 0 );
+    P->ver_boot = veredicto_new();
+    gtk_box_pack_start( GTK_BOX(pg), P->ver_boot, FALSE, FALSE, 0 );
     }
     gtk_box_pack_start( GTK_BOX(pg), texto_new( &P->t_irf ), TRUE, TRUE, 0 );
     gtk_notebook_append_page( GTK_NOTEBOOK(P->libreta), pg, gtk_label_new( "Respuesta al impulso" ) );

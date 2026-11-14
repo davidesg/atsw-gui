@@ -478,6 +478,29 @@ int main( int argc, char **argv )
                && contiene( t, "todo delta" ), "con su acumulada, y la nota de las bandas (método delta)", s );
         g_free( t );
     }
+    /* Y POR BOOTSTRAP: drvarma -irfboot en segundo plano; al acabar, el
+       grafico usa sus percentiles y lo dice                             */
+    check( gtk_widget_get_sensitive( m->pv.b_boot ), "«Bandas por bootstrap», encendido", NULL );
+    check( contiene( etiqueta( m->pv.ver_boot ), "método delta" ), "y la página dice que hoy son las del delta",
+           etiqueta( m->pv.ver_boot ) );
+    check( prevision_bootstrap( m, 40 ), "el bootstrap arranca", etiqueta( m->estado ) );
+    {
+        gint64 hasta = g_get_monotonic_time() + 240 * G_USEC_PER_SEC;
+        while (m->pv.bt_corriendo && g_get_monotonic_time() < hasta) pump( 20 );
+        pump( 50 );
+    }
+    check( m->pv.bt && m->pv.bt_version == m->pe.version && m->pv.bt->n_rep == 40 &&
+           m->pv.bt->nh == m->pe.v->nh_irf, "las bandas del bootstrap se leen: 40 réplicas",
+           etiqueta( m->estado ) );
+    check( contiene( etiqueta( m->pv.ver_boot ), "bootstrap (40" ), "y la página lo dice",
+           etiqueta( m->pv.ver_boot ) );
+    check( prevision_grafico_irf( m, 1, 0 ), "la IRF se dibuja con ellas", etiqueta( m->estado ) );
+    {
+        gchar *t = NULL;
+        check( g_file_get_contents( s, &t, NULL, NULL ) && contiene( t, "bootstrap \\(40" ),   /* el EPS escapa el «(» */
+               "y la nota dice que son del bootstrap", s );
+        g_free( t );
+    }
     g_free( s );
     gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(m->pv.c_eval), TRUE );
     gtk_spin_button_set_value( GTK_SPIN_BUTTON(m->pv.s_hor), 4 );

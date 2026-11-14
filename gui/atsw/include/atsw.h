@@ -244,6 +244,14 @@ int        atsw_hijos_vivos( const Atsw *a, char *quienes, size_t n );
 /* Los editores de .inp de la madre con cambios sin guardar o con fue
  * estimando: cuantos, y cuales en buf (editor.c).                     */
 int        atsw_editores_pendientes( char *buf, size_t n );
+/* ¿Algun hijo vivo tiene abierto obj (un fichero, o «caso:C1»)? El programa
+ * que lo tiene, o NULL. Para no borrar lo que un hijo esta usando (A5). */
+const char *atsw_hijo_con( const Atsw *a, const char *obj );
+/* PARA LAS PRUEBAS, que lanzan el mismo hijo varias veces seguidas: olvida
+ * lo que tiene abierto cada uno (siguen vivos y contados). La madre se
+ * entera de que un hijo salio al recogerlo su bucle, y una prueba lanza
+ * el siguiente antes.                                                 */
+void        atsw_hijos_olvida( Atsw *a );
 
 /* Lo mismo, con una opcion antes del fichero: fue_gui con «--prever»
    arranca el ciclo de prevision al abrir.                              */

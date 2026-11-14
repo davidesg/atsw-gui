@@ -758,6 +758,29 @@ static void on_borrar( GtkMenuItem *m, Atsw *a )
     (void) m;
     if ( !a->hay || !a->serie[0] || !id ) { g_free( id ); return; }
 
+    /* NO SE BORRA LO QUE UN HIJO TIENE ABIERTO (docs/AUDITORIA-procesos.md,
+       A5): fue_gui seguiria estimando «fuera del proyecto» y dejaria .out y
+       .pre huerfanos con un nombre que el siguiente pr_deriva reutiliza. */
+    {
+    static const char *ext[] = { ".inp", ".pre", NULL };
+    int k;
+
+    for ( k = 0; ext[k]; k++ )
+        {
+        const char *quien;
+
+        if ( pr_ruta( a->p, a->serie, atsw_muestra_actual( a ), id, ext[k], f, sizeof f ) == 0 &&
+             ( quien = atsw_hijo_con( a, f ) ) != NULL )
+            {
+            g_snprintf( why, sizeof why, "%s está abierto en %s: ciérralo antes de borrarlo.",
+                        id, quien );
+            barra_pub( a, why );
+            g_free( id );
+            return;
+            }
+        }
+    }
+
     /* Se pregunta A LA LIBRERIA ANTES de preguntar al analista: si no se
        puede borrar, la pregunta sobraba y lo que hace falta es el porque. */
     {

@@ -96,7 +96,56 @@ typedef struct {
     Atsw *a;
     GPid  pid;
     char  prog[32];
+    /* LO QUE TIENE ABIERTO (docs/AUDITORIA-procesos.md, B3 y A5): el
+       fichero, canonico, o «caso:C1». "" si se abrio solo con el proyecto. */
+    char  obj[PR_RUTA + 8];
 } AtHijo;
+
+/* La forma comparable de lo que abre un hijo. */
+static void objeto_de( const char *const *extra, char *obj, size_t n )
+{
+    int i;
+
+    obj[0] = '\0';
+    for ( i = 0; extra && extra[i]; i++ )
+        {
+        if ( !strcmp( extra[i], "--caso" ) && extra[i + 1] )
+            { g_snprintf( obj, n, "caso:%s", extra[i + 1] ); return; }
+        if ( extra[i][0] != '-' )
+            {
+            gchar *c = g_canonicalize_filename( extra[i], NULL );
+            g_snprintf( obj, n, "%s", c );
+            g_free( c );
+            }
+        }
+}
+
+/* Ver atsw.h. */
+void atsw_hijos_olvida( Atsw *a )
+{
+    guint i;
+
+    for ( i = 0; a->hijos && i < a->hijos->len; i++ )
+        ( (AtHijo *) g_ptr_array_index( a->hijos, i ) )->obj[0] = '\0';
+}
+
+/* Ver atsw.h. */
+const char *atsw_hijo_con( const Atsw *a, const char *obj )
+{
+    guint  i;
+    gchar *c;
+    const char *r = NULL;
+
+    if ( !obj || !*obj || !a->hijos ) return NULL;
+    c = strncmp( obj, "caso:", 5 ) ? g_canonicalize_filename( obj, NULL ) : g_strdup( obj );
+    for ( i = 0; i < a->hijos->len && !r; i++ )
+        {
+        const AtHijo *h = g_ptr_array_index( a->hijos, i );
+        if ( h->obj[0] && !strcmp( h->obj, c ) ) r = h->prog;
+        }
+    g_free( c );
+    return r;
+}
 
 static void hijo_sale( GPid pid, gint estado, gpointer d )
 {
@@ -108,13 +157,14 @@ static void hijo_sale( GPid pid, gint estado, gpointer d )
     g_free( h );
 }
 
-static void hijo_entra( Atsw *a, GPid pid, const char *programa )
+static void hijo_entra( Atsw *a, GPid pid, const char *programa, const char *obj )
 {
     AtHijo *h = g_new0( AtHijo, 1 );
 
     h->a = a;
     h->pid = pid;
     g_snprintf( h->prog, sizeof h->prog, "%s", programa );
+    g_snprintf( h->obj, sizeof h->obj, "%s", obj ? obj : "" );
     if ( !a->hijos ) a->hijos = g_ptr_array_new();
     g_ptr_array_add( a->hijos, h );
     g_child_watch_add( pid, hijo_sale, h );
@@ -160,11 +210,31 @@ static void lanza_v( Atsw *a, const char *programa, const char *const *extra,
     gchar  *argv[14];
     GError *e = NULL;
     gchar  *exe;
-    char    madre[24];
+    char    madre[24], obj[PR_RUTA + 8];
     GPid    pid;
     int     n = 0, i;
 
     if ( !a->hay ) return;
+
+    /* DOS HIJOS SOBRE LO MISMO, NO (docs/AUDITORIA-procesos.md, B3): dos
+       drtran_gui sobre C1 daban de alta la misma corrida y se pisaban los
+       ficheros; dos fue_gui sobre m01 estimaban a la vez en el mismo .out.
+       Se dice que ya esta abierto, en vez de abrir otro.               */
+    objeto_de( extra, obj, sizeof obj );
+    for ( i = 0; obj[0] && a->hijos && i < (int) a->hijos->len; i++ )
+        {
+        const AtHijo *h = g_ptr_array_index( a->hijos, i );
+
+        if ( !strcmp( h->prog, programa ) && !strcmp( h->obj, obj ) )
+            {
+            gchar *s = g_strdup_printf( "%s ya tiene abierto %s, en otra ventana: "
+                                        "está ahí, no abro otro.", programa,
+                                        con && *con ? con : obj );
+            barra_pub( a, s );
+            g_free( s );
+            return;
+            }
+        }
 
     exe = atsw_programa( programa );
     if ( exe == NULL )
@@ -216,7 +286,7 @@ static void lanza_v( Atsw *a, const char *programa, const char *const *extra,
         }
     else
         {
-        hijo_entra( a, pid, programa );
+        hijo_entra( a, pid, programa, obj );
         /* SE DICE QUE BINARIO, con su ruta: asi una instalacion vieja que se
            cuele por el PATH se ve a la primera.                        */
         gchar *s = ( con && *con )

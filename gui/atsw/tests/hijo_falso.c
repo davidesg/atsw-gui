@@ -18,6 +18,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
 
 int main( int argc, char **argv )
 {
@@ -38,5 +43,19 @@ int main( int argc, char **argv )
     fclose( f );
 
     remove( log );                 /* en Windows, rename no pisa */
-    return rename( tmp, log ) == 0 ? 0 : 1;
+    if ( rename( tmp, log ) != 0 ) return 1;
+
+    /* ATSW_HIJO_ESPERA=S: sigue vivo S segundos, para que la madre lo
+       cuente mientras tanto (los dos hijos sobre lo mismo, AUDITORIA-
+       procesos B3).                                                  */
+    if ( getenv( "ATSW_HIJO_ESPERA" ) )
+        {
+        int s = atoi( getenv( "ATSW_HIJO_ESPERA" ) );
+#ifdef _WIN32
+        Sleep( (DWORD) s * 1000 );
+#else
+        sleep( (unsigned) s );
+#endif
+        }
+    return 0;
 }

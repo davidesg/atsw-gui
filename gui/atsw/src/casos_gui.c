@@ -1364,6 +1364,23 @@ static void on_c_borrar( GtkButton *b, Atsw *a )
     (void) b;
     if ( co == NULL ) return;
 
+    /* No con el caso abierto en un hijo (A5): drtran_gui o sim_gui la
+       volverian a escribir con su copia, o colgarian de ella otra.    */
+    {
+    gchar      *obj = g_strdup_printf( "caso:%s", a->caso );
+    const char *quien = atsw_hijo_con( a, obj );
+
+    g_free( obj );
+    if ( quien )
+        {
+        g_snprintf( why, sizeof why, "El caso %s está abierto en %s: ciérralo antes de "
+                    "borrar su modelo %s.", a->caso, quien, co );
+        barra_pub( a, why );
+        g_free( co );
+        return;
+        }
+    }
+
     /* Se pregunta A LA LIBRERIA antes que al analista, en una copia en el
        monton (~1,2 MB): si de ella cuelgan otras, la pregunta sobra.  */
     {
@@ -1430,6 +1447,21 @@ static void on_c_borrar_caso( GtkButton *b, Atsw *a )
     (void) b;
     if ( caso_marcado( a ) == NULL ) { barra_pub( a, "Marca un caso." ); return; }
     snprintf( id, sizeof id, "%s", a->caso );
+
+    /* No con el caso abierto en un hijo (A5). */
+    {
+    gchar      *obj = g_strdup_printf( "caso:%s", id );
+    const char *quien = atsw_hijo_con( a, obj );
+
+    g_free( obj );
+    if ( quien )
+        {
+        g_snprintf( why, sizeof why, "El caso %s está abierto en %s: ciérralo antes de "
+                    "borrarlo.", id, quien );
+        barra_pub( a, why );
+        return;
+        }
+    }
 
     {
     Proyecto *tmp = g_memdup2( a->p, sizeof *a->p );

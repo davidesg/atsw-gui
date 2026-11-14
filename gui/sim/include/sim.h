@@ -212,6 +212,15 @@ typedef struct {
     GtkWidget *libreta;
     GtkWidget *t_prev, *l_eval, *t_irf, *t_fevd;
     GtkWidget *c_choque, *c_resp, *b_irf;   /* la IRF dibujada (fase P6)   */
+    /* las bandas de la IRF por bootstrap (drvarma -irfboot N): otra corrida
+     * del mismo modelo, en segundo plano, a <modelo>_irfboot.*; valen para
+     * la estimacion bt_version. Sin ellas, las del metodo delta.         */
+    GtkWidget *s_boot, *b_boot, *ver_boot;
+    EngineJob *bt_trabajo;
+    gboolean   bt_corriendo;
+    int        bt_version;
+    gchar     *bt_base;
+    OvIrfBoot *bt;
     GtkWidget *graficos;      /* un boton por serie: su grafico           */
 
     EngineJob *trabajo;
@@ -357,6 +366,8 @@ gboolean   prevision_grafico( Sim *m, int i );
  * serie choque, y su acumulada, dibujadas (lib/fufplot), sin bandas: drvarma
  * no da sus errores tipicos. TRUE si se dibujo y se enseño.           */
 gboolean   prevision_grafico_irf( Sim *m, int choque, int resp );
+/* Las bandas de la IRF por bootstrap: drvarma -irfboot N, en segundo plano. */
+gboolean   prevision_bootstrap( Sim *m, int N );
 
 /* pagina.c: «Ver modelo», la pagina de la serie i (0..n-1) del sistema
  * estimado, con el dibujante de fue (lib/equation). */

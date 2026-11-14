@@ -46,4 +46,12 @@ FDFig *fp_response( const double *nu, const double *nu_sd,
                     const char *title_irf, const char *title_srf,
                     const char *note );
 
+/* The same, with each band given by its two edges, which need not be
+ * symmetric (the percentiles of a bootstrap). NULL edges: no band.        */
+FDFig *fp_response_lohi( const double *nu, const double *nu_lo, const double *nu_hi,
+                         const double *cum, const double *cum_lo, const double *cum_hi,
+                         int n, double gain, int has_gain,
+                         const char *title_irf, const char *title_srf,
+                         const char *note );
+
 #endif

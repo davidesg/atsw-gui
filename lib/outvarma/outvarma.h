@@ -270,4 +270,17 @@ typedef struct {
 /* 0 si leyo al menos una serie; 1 si no hay; -1 si no se abre. */
 int ov_residuos_file( const char *path, OvResiduos *r );
 
+/* LAS BANDAS DE LA IRF POR BOOTSTRAP: el <base>.irfboot de drvarma o de
+ * drvec -irfboot N («what,shock,response,k,point,p2.5,p5,p50,p95,p97.5»).
+ * Las de la IRF (what = irf) y las de su acumulada (acc; drvec no la da),
+ * del 95 %: [choque][h][respuesta], con los indices de nombres[0..m-1]. */
+typedef struct {
+   int    nh, nh_acc, n_rep;              /* horizontes 0..nh-1; replicas   */
+   double lo[OV_MAX_SER][OV_MAX_HOR][OV_MAX_SER], hi[OV_MAX_SER][OV_MAX_HOR][OV_MAX_SER];
+   double alo[OV_MAX_SER][OV_MAX_HOR][OV_MAX_SER], ahi[OV_MAX_SER][OV_MAX_HOR][OV_MAX_SER];
+} OvIrfBoot;
+
+/* 0 si leyo alguna fila de la IRF; 1 si no hay; -1 si no se abre. */
+int ov_irfboot_file( const char *path, const char *const *nombres, int m, OvIrfBoot *b );
+
 #endif /* ATSW_OUTVARMA_H */

@@ -293,8 +293,9 @@ static void k_axis( FDFig *f, double x0, double x1, double y0, int n )
        }
 }
 
-/* The range of a panel: the values and their bands, with whole ticks. */
-static void range( const double *v, const double *sd, int n, double nsd,
+/* The range of a panel: the values and their bands, with whole ticks. The
+ * band is given by its two edges (lo, hi), or not at all (NULL).         */
+static void range( const double *v, const double *lo, const double *hi, int n,
                    double extra, int has_extra, double *v0, double *v1, double *step )
 {
    int i;
@@ -302,11 +303,12 @@ static void range( const double *v, const double *sd, int n, double nsd,
    *v0 = *v1 = 0.0;                     /* zero is always in the panel     */
    for ( i = 0; i < n; i++ )
        {
-       double e  = sd ? nsd * sd[i] : 0.0;
-       double lo = v[i] - e, hi = v[i] + e;
+       double a = v[i], b = v[i];
 
-       if ( lo < *v0 ) *v0 = lo;
-       if ( hi > *v1 ) *v1 = hi;
+       if ( lo && lo[i] < a ) a = lo[i];
+       if ( hi && hi[i] > b ) b = hi[i];
+       if ( a < *v0 ) *v0 = a;
+       if ( b > *v1 ) *v1 = b;
        }
    if ( has_extra ) { if ( extra < *v0 ) *v0 = extra; if ( extra > *v1 ) *v1 = extra; }
    if ( !( *v1 > *v0 ) ) *v1 = *v0 + 1.0;
@@ -315,11 +317,11 @@ static void range( const double *v, const double *sd, int n, double nsd,
    *v1 = ceil( *v1 / *step ) * *step;
 }
 
-FDFig *fp_response( const double *nu, const double *nu_sd,
-                    const double *cum, const double *cum_sd, int n,
-                    double gain, int has_gain,
-                    const char *title_irf, const char *title_srf,
-                    const char *note )
+FDFig *fp_response_lohi( const double *nu, const double *nu_lo, const double *nu_hi,
+                         const double *cum, const double *cum_lo, const double *cum_hi,
+                         int n, double gain, int has_gain,
+                         const char *title_irf, const char *title_srf,
+                         const char *note )
 {
    FDFig *f;
    double x0, x1, y0, y1, v0, v1, step, x, yz, px[4096], py[4096];
@@ -334,7 +336,7 @@ FDFig *fp_response( const double *nu, const double *nu_sd,
 
    y0 = H - 200.0;
    y1 = H - 30.0;
-   range( nu, nu_sd, n, 2.0, 0.0, 0, &v0, &v1, &step );
+   range( nu, nu_lo, nu_hi, n, 0.0, 0, &v0, &v1, &step );
    fd_text( f, x0 - 20.0, y1 + 14.0, FD_HELV_BOLD, SZ_TITLE, FD_LEFT, title_irf );
    yaxis( f, x0, x1, y0, y1, v0, v1, step );
    k_axis( f, x0, x1, y0, n );
@@ -348,14 +350,14 @@ FDFig *fp_response( const double *nu, const double *nu_sd,
    /* the band of each nu_k on its own: the lags are discrete, and a line
     * joining them would draw a band between two lags where there is none */
    fd_linewidth( f, LW_BAND );
-   for ( i = 0; nu_sd && i < n; i++ )
+   for ( i = 0; nu_lo && nu_hi && i < n; i++ )
        {
        double lo, hi, cap = 3.0;
 
-       if ( !( nu_sd[i] > 0.0 ) ) continue;
+       if ( !( nu_hi[i] > nu_lo[i] ) ) continue;
        x  = mapv( (double)i, 0.0, (double)(n - 1), x0, x1 );
-       lo = mapv( nu[i] - 2.0 * nu_sd[i], v0, v1, y0, y1 );
-       hi = mapv( nu[i] + 2.0 * nu_sd[i], v0, v1, y0, y1 );
+       lo = mapv( nu_lo[i], v0, v1, y0, y1 );
+       hi = mapv( nu_hi[i], v0, v1, y0, y1 );
        fd_dash( f, 1.6, 2.2 );
        fd_line( f, x + 2.5, lo, x + 2.5, hi );
        fd_dash( f, 0.0, 0.0 );
@@ -375,7 +377,7 @@ FDFig *fp_response( const double *nu, const double *nu_sd,
 
    y0 = 40.0;
    y1 = 195.0;
-   range( cum, cum_sd, n, 2.0, gain, has_gain, &v0, &v1, &step );
+   range( cum, cum_lo, cum_hi, n, gain, has_gain, &v0, &v1, &step );
    fd_text( f, x0 - 20.0, y1 + 14.0, FD_HELV_BOLD, SZ_TITLE, FD_LEFT, title_srf );
    yaxis( f, x0, x1, y0, y1, v0, v1, step );
    k_axis( f, x0, x1, y0, n );
@@ -394,13 +396,13 @@ FDFig *fp_response( const double *nu, const double *nu_sd,
       }
 
    for ( i = 0; i < n; i++ ) px[i] = mapv( (double)i, 0.0, (double)(n - 1), x0, x1 );
-   if ( cum_sd )
+   if ( cum_lo && cum_hi )
       {
       fd_linewidth( f, LW_BAND );
       fd_dash( f, 1.6, 2.2 );
-      for ( i = 0; i < n; i++ ) py[i] = mapv( cum[i] + 2.0 * cum_sd[i], v0, v1, y0, y1 );
+      for ( i = 0; i < n; i++ ) py[i] = mapv( cum_hi[i], v0, v1, y0, y1 );
       fd_polyline( f, px, py, n );
-      for ( i = 0; i < n; i++ ) py[i] = mapv( cum[i] - 2.0 * cum_sd[i], v0, v1, y0, y1 );
+      for ( i = 0; i < n; i++ ) py[i] = mapv( cum_lo[i], v0, v1, y0, y1 );
       fd_polyline( f, px, py, n );
       }
 
@@ -436,5 +438,37 @@ FDFig *fp_response( const double *nu, const double *nu_sd,
           }
       }
 
+   return( f );
+}
+
+/* The symmetric bands of two standard deviations (drtran, the delta method
+ * of drvarma): the edges are v -+ 2 sd, computed as they always were, so
+ * the figure does not change by a byte.                                   */
+FDFig *fp_response( const double *nu, const double *nu_sd,
+                    const double *cum, const double *cum_sd, int n,
+                    double gain, int has_gain,
+                    const char *title_irf, const char *title_srf,
+                    const char *note )
+{
+   double *nl = NULL, *nh = NULL, *cl = NULL, *ch = NULL;
+   FDFig  *f;
+   int     i;
+
+   if ( n < 2 || n > 4096 ) return( NULL );
+   if ( nu_sd )
+      {
+      nl = malloc( n * sizeof *nl ); nh = malloc( n * sizeof *nh );
+      if ( !nl || !nh ) { free( nl ); free( nh ); return( NULL ); }
+      for ( i = 0; i < n; i++ ) { double e = 2.0 * nu_sd[i]; nl[i] = nu[i] - e; nh[i] = nu[i] + e; }
+      }
+   if ( cum_sd )
+      {
+      cl = malloc( n * sizeof *cl ); ch = malloc( n * sizeof *ch );
+      if ( !cl || !ch ) { free( nl ); free( nh ); free( cl ); free( ch ); return( NULL ); }
+      for ( i = 0; i < n; i++ ) { double e = 2.0 * cum_sd[i]; cl[i] = cum[i] - e; ch[i] = cum[i] + e; }
+      }
+   f = fp_response_lohi( nu, nl, nh, cum, cl, ch, n, gain, has_gain,
+                         title_irf, title_srf, note );
+   free( nl ); free( nh ); free( cl ); free( ch );
    return( f );
 }

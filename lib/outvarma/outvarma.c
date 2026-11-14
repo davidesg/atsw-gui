@@ -712,3 +712,51 @@ int ov_residuos_file( const char *path, OvResiduos *r )
    free( t );
    return r->m > 0 && r->n > 0 ? 0 : 1;
 }
+
+/* EL .irfboot (drvarma o drvec -irfboot N). Las columnas se parten por
+   comas; los nombres se buscan en nombres[], y una fila de otra serie se
+   salta.                                                                  */
+static int indice_de( const char *const *nombres, int m, const char *s )
+{
+   int i;
+   for ( i = 0; i < m; i++ ) if ( nombres[i] && !strcmp( nombres[i], s ) ) return i;
+   return -1;
+}
+
+int ov_irfboot_file( const char *path, const char *const *nombres, int m, OvIrfBoot *b )
+{
+   char *t = lee_todo( path );
+   char l[1024];
+   const char *p, *q;
+
+   memset( b, 0, sizeof *b );
+   if ( !t ) return -1;
+   for ( p = t; ( q = linea( p, l, sizeof l ) ); p = q ) {
+      char what[8], sh[OV_NOMBRE], re[OV_NOMBRE];
+      int  k, i, j;
+      double pt, p25, p5, p50, p95, p975;
+      const char *c;
+      if ( l[0] == '#' ) {
+         if ( ( c = strstr( l, "replications" ) ) ) {
+            const char *d = c;
+            while ( d > l && d[-1] == ' ' ) d--;
+            while ( d > l && d[-1] >= '0' && d[-1] <= '9' ) d--;
+            b->n_rep = atoi( d );
+         }
+         continue;
+      }
+      if ( sscanf( l, "%7[^,],%63[^,],%63[^,],%d,%lf,%lf,%lf,%lf,%lf,%lf",
+                   what, sh, re, &k, &pt, &p25, &p5, &p50, &p95, &p975 ) != 10 ) continue;
+      if ( k < 0 || k >= OV_MAX_HOR ) continue;
+      if ( ( i = indice_de( nombres, m, sh ) ) < 0 || ( j = indice_de( nombres, m, re ) ) < 0 ) continue;
+      if ( !strcmp( what, "irf" ) ) {
+         b->lo[i][k][j] = p25; b->hi[i][k][j] = p975;
+         if ( k + 1 > b->nh ) b->nh = k + 1;
+      } else if ( !strcmp( what, "acc" ) ) {
+         b->alo[i][k][j] = p25; b->ahi[i][k][j] = p975;
+         if ( k + 1 > b->nh_acc ) b->nh_acc = k + 1;
+      }
+   }
+   free( t );
+   return b->nh > 0 ? 0 : 1;
+}

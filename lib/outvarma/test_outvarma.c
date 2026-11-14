@@ -258,6 +258,34 @@ static void noopt( const char *dir )
    ok( v.puerta.pasa, "la puerta pasa igual: el cast es el mismo" );
 }
 
+/* -irfboot: el .irfboot, leido por los nombres de las series; la banda del
+   95 % abraza la respuesta estimada casi siempre (con 30 replicas se pide
+   en la mayoria de las celdas, no en todas).                            */
+static void boot( const char *dir )
+{
+   static OvIrfBoot b;
+   const char *nom[2] = { "MUSKRAT", "MINK" };
+   int i, j, h, dentro = 0, celdas = 0, orden = 1;
+
+   printf( "boot.irfboot\n" );
+   ok( ov_parse_file( en( dir, "boot.out" ), &v ) == 0, "es un .out de la escalera" );
+   ok( ov_irfboot_file( en( dir, "boot.irfboot" ), nom, 2, &b ) == 0, "el .irfboot se lee" );
+   ok( b.n_rep == 30, "30 replicas" );
+   ok( b.nh == v.nh_irf && b.nh_acc == v.nh_irf, "los horizontes de la IRF, y la acumulada" );
+   for ( i = 0; i < 2; i++ )
+      for ( h = 0; h < b.nh; h++ )
+         for ( j = 0; j < 2; j++ ) {
+            if ( b.lo[i][h][j] > b.hi[i][h][j] || b.alo[i][h][j] > b.ahi[i][h][j] ) orden = 0;
+            if ( b.hi[i][h][j] > b.lo[i][h][j] ) {
+               celdas++;
+               if ( v.irf[i][h][j] >= b.lo[i][h][j] && v.irf[i][h][j] <= b.hi[i][h][j] ) dentro++;
+            }
+         }
+   ok( orden, "cada banda, de menor a mayor" );
+   ok( celdas > 0 && dentro >= 0.8 * celdas, "la banda abraza la respuesta estimada" );
+   ok( b.lo[1][0][0] == 0 && b.hi[1][0][0] == 0, "el cero de Cholesky, sin banda" );
+}
+
 int main( int argc, char **argv )
 {
    if ( argc != 2 ) { fprintf( stderr, "uso: test_outvarma DIR\n" ); return 2; }
@@ -268,6 +296,7 @@ int main( int argc, char **argv )
    rec( argv[1] );
    pared( argv[1] );
    noopt( argv[1] );
+   boot( argv[1] );
    printf( "outvarma: %d fallos\n", fallos );
    return fallos ? 1 : 0;
 }

@@ -9,6 +9,20 @@ Versions up to 0.4 were maintained as directory snapshots (`drvarma_v.01` …
 
 ## [5.0.0] — unreleased
 
+### Added — `-irfboot N`: bands for the impulse responses by parametric bootstrap
+
+- The ladder simulates the fitted model N times (the stationary VARMA of
+  the w, Gaussian shocks with the fitted Σ, a burn-in thrown away), refits
+  each replication as the data were (from the optimum, with elf and without
+  the Hessian at the optimum) and reports Efron's percentiles (2.5, 5, 50,
+  95, 97.5) of the orthogonalised IRF and of its accumulation: to the .out,
+  and whole to `<base>.irfboot` in drvec's format. drvec's generator and
+  seed, so the bands are reproducible. Not with `-redet`.
+- `tests/escalera/pruebas.sh` §10d: the whole file, the same file in two
+  runs, and the 90 % band within 30 % of the delta method's at h = 0..2
+  (measured: 11 %). `lib/outvarma` reads it (`ov_irfboot_file`) and sim_gui
+  draws it ("Bandas por bootstrap", in the background).
+
 ### Added — standard errors of the impulse responses, by the delta method
 
 - The ladder writes, after the orthogonalised IRF, two new sections: the

@@ -1202,6 +1202,20 @@ depredador se come a la presa.
 
 ![La respuesta de los visones a un choque en las ratas, dibujada](img/sim-irf-grafico.png)
 
+Las bandas del método delta son una aproximación. Para no linealizar, pulsa
+**Bandas por bootstrap**: drvarma simula el modelo estimado tantas veces como
+digan las **Réplicas** (499 de serie), reestima cada simulación como se
+estimaron los datos y toma los percentiles. Corre en segundo plano, en un
+minuto o dos. Al acabar, el gráfico lleva esas bandas, del 95 %, que pueden
+ser asimétricas:
+
+![La misma respuesta, con las bandas del bootstrap](img/sim-irf-bootstrap.png)
+
+Aquí las dos casan bien a horizontes cortos, que es lo esperable en un
+modelo lejos de una raíz unitaria. Cuando no casan, la del bootstrap es la
+más fiable: no supone que la respuesta sea lineal en los parámetros. Las dos
+suponen, eso sí, que el modelo es el verdadero.
+
 ---
 
 ## 15. El VEC: la demanda de dinero en Dinamarca

@@ -280,6 +280,11 @@ gboolean sim_proyecto_abre( Sim *m, const char *path, char *why, size_t n );
  * sha256 de cada .pre. FALSE con el motivo; si un .pre cambio, carga igual
  * y lo dice en why (desfasado queda puesto).                            */
 gboolean sim_caso_carga( Sim *m, char *why, size_t n );
+/* Con el caso desfasado, antes de producir nada: el caso con estas entradas
+ * y los .pre de hoy (uno que ya las tenga, o derivado), y se sigue en el. */
+gboolean sim_caso_al_dia( Sim *m, char *why, size_t n );
+/* El sha256 de un fichero (g_free), o NULL. */
+gchar   *sim_sha( const char *path );
 /* La ruta de un artefacto: sin caso, en la cache con nombre fijo
  * («puerta» -> <cache>/sim_gui/puerta); con caso, en el del sistema:
  * <raiz>/_casos/<caso>/work/<caso>_puerta. Crea el directorio. g_free. */

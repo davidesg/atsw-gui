@@ -579,7 +579,8 @@ static void prueba_arranque(FueContext *ctx) {
        manifiesto (AUDITORIA-procesos C4).                              */
     {
     Proyecto *p = g_new0(Proyecto, 1);
-    gchar    *esp = g_build_filename(dir, "datos", NULL);
+    /* pr_raiz compone con «/», tambien en Windows: no g_build_filename */
+    gchar    *esp = g_strdup_printf("%s/datos", dir);
 
     pr_nuevo(p, "r", "raiz", "datos");
     g_snprintf(p->path, sizeof p->path, "%s/proyecto.yaml", dir);

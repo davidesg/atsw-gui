@@ -48,7 +48,15 @@ static gchar *firma( Sim *m )
     GString *g = g_string_new( NULL );
     int i;
 
-    for (i = 0; i < m->sis.n; i++) { g_string_append( g, m->sis.s[i].ruta ); g_string_append_c( g, '\n' ); }
+    for (i = 0; i < m->sis.n; i++) {
+        /* la ruta Y EL CONTENIDO: un .pre reestimado tiene la misma ruta */
+        gchar *h = sim_sha( m->sis.s[i].ruta );
+        g_string_append( g, m->sis.s[i].ruta );
+        g_string_append_c( g, '@' );
+        g_string_append( g, h ? h : "?" );
+        g_string_append_c( g, '\n' );
+        g_free( h );
+    }
     g_string_append_printf( g, "p=%d q=%d caso=%s B=%d", R->cfg.p, R->cfg.q, R->cfg.caso, R->cfg.B );
     return g_string_free( g, FALSE );
 }
@@ -173,6 +181,8 @@ gboolean rango_contrastar( Sim *m )
     int k;
 
     if (R->corriendo) return FALSE;
+    if (!sim_caso_al_dia( m, why, sizeof why )) { sim_estado( m, "%s", why ); return FALSE; }
+    if (why[0]) sim_estado( m, "%s", why );
     if (!rango_aplica( m, why, sizeof why )) { sim_estado( m, "Sin prueba del rango: %s.", why ); return FALSE; }
     mot = sim_hermano( "drvec" );
     if (!mot) {

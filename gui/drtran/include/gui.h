@@ -322,6 +322,8 @@ gboolean mtram_caso_carga(Mtram *m, char *why, size_t n);
  * cache de siempre-- y devuelve TRUE; en el segundo caso why dice por que.
  * FALSE con el motivo en why si no se pudo registrar.                   */
 gboolean mtram_corrida_nueva(Mtram *m, char *why, size_t n);
+/* La corrida sin resultados, fuera del manifiesto y del disco (C2). */
+void     mtram_corrida_retira( Mtram *m );
 
 /* Guarda el manifiesto. Sin proyecto, no hace nada.                     */
 gboolean mtram_proyecto_guarda(Mtram *m, char *why, size_t n);

@@ -1070,9 +1070,28 @@ void on_new_file(GtkToolButton *btn, FueContext *ctx) {
 /* ========================================================================= */
 /* Callbacks for toolbar buttons                                            */
 /* ========================================================================= */
+/* GUARDAR SOBRE UN MODELO ESTIMADO DERIVA, como Estimar y como el editor de
+ * la madre (docs/AUDITORIA-procesos.md, C3). Antes Ctrl+S escribia encima
+ * del .inp de un modelo con .out --incluso de uno que es entrada de un
+ * caso, o del nodo de datos--, y el .out y el .pre quedaban describiendo
+ * otro modelo sin que nada lo dijera. on_run_fue la llama dos veces: la
+ * segunda ya ve el hijo, que no esta estimado, y no deriva otro.      */
+static gboolean deriva_si_estimado(FueContext *ctx);
+
 void on_save_inp(GtkToolButton *btn, FueContext *ctx) {
+    gchar *deriva;
+
+    (void) btn;
     sync_all_from_ui(ctx);
+    if (!deriva_si_estimado(ctx)) return;
+    /* si derivo, eso es lo que hay que leer, no «INP file saved.» */
+    deriva = strstr(gtk_label_get_text(GTK_LABEL(ctx->status_label)), "ya estaba estimado")
+           ? g_strdup(gtk_label_get_text(GTK_LABEL(ctx->status_label))) : NULL;
     save_inp_file(ctx);
+    if (deriva) {
+        gtk_label_set_text(GTK_LABEL(ctx->status_label), deriva);
+        g_free(deriva);
+    }
 }
 
 /* ------------------------------------------------------------------------ */

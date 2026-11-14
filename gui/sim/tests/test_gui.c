@@ -671,6 +671,24 @@ int main( int argc, char **argv )
         check( pr_corrida_ver( p->proy, "C1", "c01" ) &&
                !g_strcmp0( pr_corrida_ver( p->proy, "C1", "c01" )->padre, "c00" ),
                "c01 cuelga de c00 en el linaje", NULL );
+        /* UNA CORRIDA SIN RESULTADOS NO QUEDA (docs/AUDITORIA-procesos.md,
+         * C2): el motor falso sale con error y no escribe nada.         */
+        g_setenv( "SIM_DRVARMA", fake, TRUE );
+        check( estima_lanzar( p ) && !strcmp( p->pe.corrida, "c02" ) && espera( p, 60 ),
+               "una estimación que falla (c02) corre", p->pe.corrida );
+        g_unsetenv( "SIM_DRVARMA" );
+        check( !pr_corrida_ver( p->proy, "C1", "c02" ) && !strcmp( p->pe.corrida, "c01" ) && p->pe.v,
+               "y no queda en el sistema: la ventana vuelve a c01", etiqueta( p->estado ) );
+        check( !strcmp( p->pe.previa, "c01" ), "la siguiente colgará de c01", p->pe.previa );
+        check( contiene( etiqueta( p->estado ), "no dejó resultados" ), "y la barra lo dice",
+               etiqueta( p->estado ) );
+        {
+            Proyecto *disco = g_new0( Proyecto, 1 );
+            PrError e2;
+            check( pr_leer( yaml, disco, &e2 ) == 0 && !pr_corrida_ver( disco, "C1", "c02" ),
+                   "ni en el manifiesto guardado", NULL );
+            g_free( disco );
+        }
         {
             Proyecto *disco = g_new0( Proyecto, 1 );
             PrError e;
@@ -765,6 +783,42 @@ int main( int argc, char **argv )
             sim_ventana_new( app, q );
             check( sim_caso_carga( q, why, sizeof why ) && contiene( why, "DESFASADO" ) && q->desfasado,
                    "un .pre que cambió después del alta: el sistema está desfasado", why );
+            /* docs/AUDITORIA-procesos.md, C1: lo de antes no se da por bueno */
+            check( puerta_estado( q ) == 0 && !q->pe.v && !q->pe.corrida[0],
+                   "desfasado: la puerta y los modelos de antes no cuentan", etiqueta( q->pp.ver_puerta ) );
+            {
+                int nco_c1 = 0, k;
+                for (k = 0; k < q->proy->nco; k++) nco_c1 += !strcmp( q->proy->co[k].caso, "C1" );
+                check( puerta_pasar( q ) && espera( q, 120 ) && puerta_estado( q ) == 1,
+                       "pasar la puerta deriva el sistema y pasa", etiqueta( q->estado ) );
+                check( strcmp( q->caso, "C1" ) != 0 && !q->desfasado,
+                       "y lo de ahora es otro sistema, al día", q->caso );
+                {
+                    const PrCaso *nc = pr_caso_ver( q->proy, q->caso );
+                    gchar *h = sim_sha( pm );
+                    check( nc && !strcmp( nc->padre, "C1" ) && nc->nen == 2 &&
+                           !strcmp( nc->en[0].sha, h ? h : "" ),
+                           "derivado de C1, con el hash del .pre de hoy", q->caso );
+                    g_free( h );
+                }
+                s = sim_artefacto( q, "puerta.out" );
+                check( g_file_test( s, G_FILE_TEST_EXISTS ) && !contiene( s, "C1_puerta" ),
+                       "la puerta nueva va a su directorio, no a C1", s );
+                g_free( s );
+                q->mod.p = 1; q->mod.q = 0;
+                {
+                    int a2, b2;
+                    for (a2 = 0; a2 < 2; a2++) for (b2 = 0; b2 < 2; b2++) q->mod.enlace[a2][b2] = a2 != b2;
+                    q->mod.zero[0] = 0;
+                }
+                check( estima_lanzar( q ) && espera( q, 300 ) && !strcmp( q->pe.corrida, "c00" ),
+                       "y la estimación es la c00 del sistema nuevo", q->pe.corrida );
+                {
+                    int ahora = 0;
+                    for (k = 0; k < q->proy->nco; k++) ahora += !strcmp( q->proy->co[k].caso, "C1" );
+                    check( ahora == nco_c1, "C1 no gana corridas: no se toca", NULL );
+                }
+            }
             gtk_widget_destroy( q->ventana );
             g_free( pm );
         }

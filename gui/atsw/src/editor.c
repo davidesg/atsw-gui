@@ -598,20 +598,45 @@ static void on_estimar( GtkButton *b, Editor *E )
 /* La ventana                                                                */
 /* ------------------------------------------------------------------------ */
 
+/* CERRAR CON FUE ESTIMANDO (docs/AUDITORIA-procesos.md, B1). Antes se
+ * paraba el motor ANTES de preguntar --y con «Seguir editando» la corrida
+ * ya estaba muerta-- y el final llegaba a acabo() con el editor liberado.
+ * Ahora se pregunta primero, y lo que para y suelta el motor es
+ * on_destruir, por donde pasa todo cierre: el aspa y el de derivar.    */
 static gboolean on_cerrar( GtkWidget *w, GdkEvent *ev, Editor *E )
 {
+    gboolean mod = gtk_text_buffer_get_modified(
+                       gtk_text_view_get_buffer( GTK_TEXT_VIEW(E->texto) ) );
+
     (void) w; (void) ev;
 
-    if ( E->job ) { engine_stop( E->job ); E->job = NULL; }
+    if ( E->job && !mod )
+        {
+        GtkWidget *d = gtk_message_dialog_new( GTK_WINDOW(E->win),
+                GTK_DIALOG_MODAL, GTK_MESSAGE_QUESTION, GTK_BUTTONS_NONE,
+                "fue está estimando %s.", E->id );
+        int r;
 
-    if ( gtk_text_buffer_get_modified(
-             gtk_text_view_get_buffer( GTK_TEXT_VIEW(E->texto) ) ) )
+        gtk_message_dialog_format_secondary_text( GTK_MESSAGE_DIALOG(d),
+            "Si cierras, la estimación se para." );
+        gtk_dialog_add_buttons( GTK_DIALOG(d), "Seguir aquí", GTK_RESPONSE_CANCEL,
+                                "Cerrar y pararla", 1, NULL );
+        gtk_dialog_set_default_response( GTK_DIALOG(d), GTK_RESPONSE_CANCEL );
+        r = gtk_dialog_run( GTK_DIALOG(d) );
+        gtk_widget_destroy( d );
+        return r != 1;
+        }
+
+    if ( mod )
         {
         GtkWidget *d = gtk_message_dialog_new( GTK_WINDOW(E->win),
                 GTK_DIALOG_MODAL, GTK_MESSAGE_QUESTION, GTK_BUTTONS_NONE,
                 "Hay cambios sin guardar en %s.inp.", E->id );
         int r;
 
+        if ( E->job )
+            gtk_message_dialog_format_secondary_text( GTK_MESSAGE_DIALOG(d),
+                "Y fue está estimando: si cierras, la estimación se para." );
         gtk_dialog_add_buttons( GTK_DIALOG(d), "Guardar", 1,
                                 "Cerrar sin guardar", 2,
                                 "Seguir editando", GTK_RESPONSE_CANCEL, NULL );
@@ -629,8 +654,37 @@ static gboolean on_cerrar( GtkWidget *w, GdkEvent *ev, Editor *E )
 static void on_destruir( GtkWidget *w, Editor *E )
 {
     (void) w;
+    /* EL MOTOR, PARADO Y SUELTO: su final ya no tiene a quien avisar. */
+    if ( E->job ) { engine_abandona( E->job ); E->job = NULL; }
     g_abiertos = g_slist_remove( g_abiertos, E );
     g_free( E );
+}
+
+/* LO QUE SE PERDERIA AL CERRAR LA MADRE: editores con cambios sin guardar
+ * o con fue estimando (B2). El editor no es de la GtkApplication, y al
+ * irse la madre el proceso sale sin pasar por su «¿Guardar?».           */
+int atsw_editores_pendientes( char *buf, size_t n )
+{
+    GSList *l;
+    int     k = 0;
+
+    if ( buf && n ) buf[0] = '\0';
+    for ( l = g_abiertos; l; l = l->next )
+        {
+        Editor  *E = l->data;
+        gboolean mod = gtk_text_buffer_get_modified(
+                           gtk_text_view_get_buffer( GTK_TEXT_VIEW(E->texto) ) );
+
+        if ( !mod && !E->job ) continue;
+        if ( buf && n )
+            {
+            size_t u = strlen( buf );
+            snprintf( buf + u, n - u, "%s%s%s%s", k ? ", " : "", E->id,
+                      mod ? " (sin guardar)" : "", E->job ? " (estimando)" : "" );
+            }
+        k++;
+        }
+    return k;
 }
 
 /* Cerrar lo que haya abierto de ese nodo. Se llama al DERIVAR.

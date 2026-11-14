@@ -158,7 +158,7 @@ Cada fase en su PR, con su prueba, y la CI en verde en las tres plataformas.
 | **4** | **Las corridas, solo con su `.out`**: darlas de alta cuando el motor ha escrito resultados (o marcarlas «fallida» sin hacerlas `previa`), en drtran y en sim | C2 | PR #143 |
 | **5** | **«Guardar» de fue_gui sobre un modelo estimado deriva**, como «Estimar» y como el editor de la madre | C3 | PR #144 |
 | **6** | **La madre, ante dos hijos sobre lo mismo y ante borrar lo que un hijo tiene abierto**: llevar la cuenta de qué tiene abierto cada hijo; no abrir dos veces lo mismo, sino traer al frente el que ya está; y avisar antes de borrar | B3, A5 | PR #145 |
-| **7** | **Lo menor**: rutas por `pr_raiz` y `pr_corrida_ruta`, un solo `sha_de`, `--corrida` en el documento, plazos en las esperas síncronas | C4, C5, B5 | PR de la fase 7 |
+| **7** | **Lo menor**: rutas por `pr_raiz` y `pr_corrida_ruta`, un solo `sha_de`, `--corrida` en el documento, plazos en las esperas síncronas | C4, C5, B5 | PR #146 |
 
 **Las siete, hechas (14-nov-2026).** La fase 7, en concreto:
 - **C4.** fue_gui respeta `raiz:` (`fue_pon_raiz_de`, con `pr_raiz`); fug

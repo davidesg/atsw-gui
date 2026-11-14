@@ -132,11 +132,11 @@ previsión.
   ventana o volver a la identificación?
 - **El primer alcance** (¿univariantes primero?) y **el sitio** (¿pestaña de
   la madre o programa aparte?).
-- **Las unidades de la columna ERR de fuf, por comprobar.** En
-  `CPI_USA_model_AR` vale miles (3370, −8988…) con σ² = 3148 (d.t. ≈ 56), y
-  las variaciones parecen multiplicadas dos veces por el refactor (−23,4 por
-  un −0,23 %). El gestor va a leer esa columna: hay que aclararlo antes, con
-  su `BUG-NNNN-repro/` si es un fallo.
+- ~~Las unidades de la columna ERR de fuf~~ — **aclarado** (13-nov-2026):
+  con logaritmos están bien; con λ = 1 salen ×100 todas las columnas menos
+  el nivel (fuf BUG-0001). Los miles de `CPI_USA_model_AR` venían además de
+  un `.fuf.inp` con el factor de reescalado mal puesto. Está en
+  `DISENO-gestor-previsiones.md` §2.
 
 ## La interfaz en inglés y en otros idiomas
 
@@ -422,12 +422,16 @@ deshecho.
 
 - **paso 6** — renombrar la clave de una serie. El menos urgente.
 
-### `DISENO-prevision.md`
+### `DISENO-prevision.md` — CERRADO (14-nov-2026)
 
-- El **acta** de previsión y la evaluación ex-post sobre una submuestra. Se
-  revirtió con aquel intento fallido y sólo está en la conversación.
-- **Actualizar el origen de la previsión**: ahora es el caso de estudio de
-  arriba, «El gestor de previsiones».
+El fichero se borró con la reversión del 23-sep y no se rehace: su sitio es
+`DISENO-gestor-previsiones.md`. El acta está en su §3.3; la evaluación
+ex-post, en su §3.5 y, contra el univariante con la misma ventana, en
+drtran_gui y sim_gui (P3, P6); lo que valía del documento viejo, en su §2bis.
+
+- **sim_gui: Diebold-Mariano en la evaluación.** Hoy da solo el cociente de
+  los RMSE contra los univariantes; drtran_gui da además Diebold-Mariano por
+  horizonte (`lib/fcomp`). Las mismas filas sirven: falta llamarlo.
 
 ---
 

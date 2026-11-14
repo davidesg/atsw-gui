@@ -1,5 +1,7 @@
 #! sim_gui --proyecto @EJEMPLOS@/jenkins_alavi/proyecto.yaml --caso C1
 # El sistema C1 en sim_gui, de la puerta a la prevision (lo deja la 07).
+# Con el bootstrap de la IRF y «¿Es una red?» pasa de los 300 s de serie.
+# limite 900
 ventana sim_gui
 tamano 1100 760
 espera 2000

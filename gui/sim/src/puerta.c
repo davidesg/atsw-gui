@@ -29,7 +29,15 @@ static gchar *firma( Sim *m )
 {
     GString *g = g_string_new( NULL );
     int i;
-    for (i = 0; i < m->sis.n; i++) { g_string_append( g, m->sis.s[i].ruta ); g_string_append_c( g, '\n' ); }
+    for (i = 0; i < m->sis.n; i++) {
+        /* la ruta Y EL CONTENIDO: un .pre reestimado tiene la misma ruta */
+        gchar *h = sim_sha( m->sis.s[i].ruta );
+        g_string_append( g, m->sis.s[i].ruta );
+        g_string_append_c( g, '@' );
+        g_string_append( g, h ? h : "?" );
+        g_string_append_c( g, '\n' );
+        g_free( h );
+    }
     return g_string_free( g, FALSE );
 }
 
@@ -116,6 +124,8 @@ gboolean puerta_pasar( Sim *m )
     int k;
 
     if (P->corriendo) return FALSE;
+    if (!sim_caso_al_dia( m, why, sizeof why )) { sim_estado( m, "%s", why ); return FALSE; }
+    if (why[0]) sim_estado( m, "%s", why );
     if (m->sis.n < 2) { sim_estado( m, "La puerta necesita al menos dos series («1 · Series»)." ); return FALSE; }
     if (sis_ventana( &m->sis, &v, why, sizeof why ) != 0) { sim_estado( m, "Sin ventana común: %s", why ); return FALSE; }
     /* EL MOTOR, ANTES: lib/engine, si no lo encuentra, prueba el nombre a

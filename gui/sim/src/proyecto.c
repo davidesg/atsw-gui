@@ -42,8 +42,10 @@ gboolean sim_proyecto_abre( Sim *m, const char *path_dado, char *why, size_t n )
     return TRUE;
 }
 
-/* El sha256 del fichero: la identidad de una entrada (como drtran_gui). */
-static gchar *sha_de( const char *path )
+/* El sha256 del fichero: la identidad de una entrada (como drtran_gui).
+ * Tambien la usan las firmas de la puerta y del rango (puerta.c, rango.c):
+ * un .pre reestimado tiene la misma ruta y otro contenido.             */
+gchar *sim_sha( const char *path )
 {
     gchar *c = NULL, *h;
     gsize  k = 0;
@@ -82,7 +84,7 @@ gboolean sim_caso_carga( Sim *m, char *why, size_t n )
             sim_refresca( m );
             return FALSE;
         }
-        h = sha_de( ruta );
+        h = sim_sha( ruta );
         if (c->en[i].sha[0] && (!h || strcmp( h, c->en[i].sha ) != 0))
             g_string_append_printf( cambian, "%s%s/%s", cambian->len ? ", " : "",
                                     c->en[i].serie, c->en[i].modelo );
@@ -92,8 +94,14 @@ gboolean sim_caso_carga( Sim *m, char *why, size_t n )
 
     /* LO QUE YA ESTABA HECHO SE VE: la puerta del sistema, si se paso, y el
      * modelo de --modelo o el elegido, con su .out. La siguiente corrida
-     * colgara de el.                                                    */
-    {
+     * colgara de el.
+     *
+     * SALVO CON EL CASO DESFASADO (docs/AUDITORIA-procesos.md, C1): la
+     * puerta, el rango y las corridas se hicieron con los .pre de antes, y
+     * las entradas que se acaban de cargar son las de hoy. Darlos por
+     * buenos era dar la puerta por superada con otros datos. Lo que se
+     * haga ahora va a un caso derivado (sim_caso_al_dia).              */
+    if (!m->desfasado) {
         gchar *pu = sim_artefacto( m, "puerta.out" );
         const char *de = m->modelo_ini[0] ? m->modelo_ini : pr_corrida_elegida( m->proy, m->caso );
         char out[PR_RUTA];
@@ -112,10 +120,75 @@ gboolean sim_caso_carga( Sim *m, char *why, size_t n )
     }
     if (m->desfasado && why)
         snprintf( why, n, "El sistema %s está DESFASADO: el .pre de %s cambió después "
-                  "del alta. Lo que se estime no será lo que el sistema dice que se "
-                  "cruzó.", m->caso, cambian->str );
+                  "del alta. Se cargan las entradas de hoy, sin la puerta ni los modelos "
+                  "de antes; lo que hagas ahora irá a un sistema derivado, con los .pre "
+                  "de hoy.", m->caso, cambian->str );
     g_string_free( cambian, TRUE );
     sim_refresca( m );
+    return TRUE;
+}
+
+/* EL CASO DESFASADO NO SE TOCA (docs/DISENO-casos.md §2.4, §3; AUDITORIA-
+ * procesos C1), como en drtran_gui: antes de producir nada --la puerta, el
+ * rango, una estimacion-- se busca el caso que ya tenga estas entradas con
+ * los .pre de hoy o se deriva uno, y se sigue en el. FALSE si no se pudo
+ * (why dice por que).                                                  */
+gboolean sim_caso_al_dia( Sim *m, char *why, size_t n )
+{
+    const PrCaso *c;
+    PrEntrada     en[PR_MAX_ENTRADA];
+    char          nuevo[PR_ID], viejo[PR_ID], mu[PR_ID], w[1024];
+    const char   *ya;
+    PrError       e;
+    int           i, nen;
+
+    if (why && n) why[0] = '\0';
+    if (!m->proy || !m->caso[0] || !m->desfasado) return TRUE;
+    if ((c = pr_caso_ver( m->proy, m->caso )) == NULL) {
+        if (why) snprintf( why, n, "«%s» ya no es un caso del proyecto.", m->caso );
+        return FALSE;
+    }
+    nen = c->nen;
+    snprintf( mu, sizeof mu, "%s", c->muestra );
+    for (i = 0; i < nen; i++) {
+        char   ruta[PR_RUTA];
+        gchar *h;
+
+        en[i] = c->en[i];
+        if (pr_ruta( m->proy, en[i].serie, mu, en[i].modelo, ".pre", ruta, sizeof ruta ) != 0 ||
+            ( h = sim_sha( ruta ) ) == NULL) {
+            if (why) snprintf( why, n, "No pude leer el .pre de %s/%s.", en[i].serie, en[i].modelo );
+            return FALSE;
+        }
+        snprintf( en[i].sha, PR_SHA, "%s", h );
+        g_free( h );
+    }
+    ya = pr_caso_de_entradas( m->proy, en, nen, mu );
+    if (ya[0])
+        snprintf( nuevo, sizeof nuevo, "%s", ya );
+    else if (pr_caso_deriva( m->proy, m->caso, en, nen, nuevo, sizeof nuevo, &e ) != 0 ||
+             pr_escribir( m->proy, m->proy->path, &e ) != 0) {
+        if (why) pr_error_es( &e, why, n );
+        return FALSE;
+    }
+    snprintf( viejo, sizeof viejo, "%s", m->caso );
+    snprintf( m->caso, sizeof m->caso, "%s", nuevo );
+    m->desfasado = FALSE;
+
+    /* LO DEL CASO VIEJO, FUERA: la puerta y el rango eran de otras entradas,
+       y la cadena de corridas empieza de nuevo en este caso.           */
+    m->pp.hecha = FALSE;
+    g_free( m->pp.firma ); m->pp.firma = NULL;
+    m->pr.hecha = FALSE;
+    g_free( m->pr.firma ); m->pr.firma = NULL;
+    m->pe.corrida[0] = m->pe.previa[0] = '\0';
+    m->modelo_ini[0] = '\0';
+    if (!sim_caso_carga( m, w, sizeof w )) {
+        if (why) snprintf( why, n, "%s", w );
+        return FALSE;
+    }
+    if (why) snprintf( why, n, "El sistema %s estaba desfasado: lo de ahora va a %s%s, con los "
+                       ".pre de hoy.", viejo, nuevo, ya[0] ? " (ya tenía esas entradas)" : "" );
     return TRUE;
 }
 

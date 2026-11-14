@@ -182,6 +182,7 @@ gboolean estima_lanzar( Sim *m )
     int k;
 
     if (E->corriendo || m->pp.corriendo || m->pr.corriendo) return FALSE;
+    if (!sim_caso_al_dia( m, why, sizeof why )) { sim_estado( m, "%s", why ); return FALSE; }
     if (m->sis.n < 2) { sim_estado( m, "Hacen falta al menos dos series («1 · Series»)." ); return FALSE; }
     if (puerta_estado( m ) != 1) {
         sim_estado( m, "Antes, la puerta superada («2 · Puerta»): si el sistema diagonal no "

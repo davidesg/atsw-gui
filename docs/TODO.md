@@ -345,19 +345,146 @@ Medido con fuf y drtran sobre IPC_ES ← WTI (`engines/drtran/examples/passthrou
 | **P6** ✓ (VARMA) | drvarma añade a su `.out` la tabla de fuf, sin quitar el bloque de antes (lo leen `outvarma` y sim_gui). sim_gui dibuja la previsión con el gráfico de fuf (`of_grafico`, `lib/outfcst`), enseña la tabla tal cual y dibuja la IRF con su acumulada, **sin bandas** |
 | **P6** ✓ (VEC) | drvec añade a su `.out` la tabla de fuf (`write_fuf_report`); las d.t. de la variación del periodo y de la anual salen de las mismas `G_m` que la banda del nivel. sim_gui dibuja el VEC con el gráfico de fuf (antes no tenía ninguno) y enseña la tabla, con la banda del 95 % del `.forecast` debajo |
 
-**Lo que queda de P6, y por qué.**
+**Lo que queda de P6: llevarla a los portes de Python** (apuntado el
+14-nov-2026, leídos drvarma-python `master` 237549e, drvec-python `main`
+a7f357f y sima-python `main` 483fe59). En C está hecho y es el oráculo; en
+los portes falta, y hoy **la suite dice cosas distintas según por dónde se
+entre**: sim_gui (C) da una banda y sima (el MCP, sobre los portes) otra, para
+el mismo modelo.
 
-- **El VEC en el porte a Python.** drvec C ya escribe la tabla de fuf
-  (13-nov-2026); el porte no. Como drvec C es su oráculo, la tabla tiene que
-  llegar también allí, con las mismas `G_m`.
-- **Las bandas de la IRF de drvarma en el porte a Python.** Desde el
-  13/14-nov-2026 la escalera en C da los errores típicos de la IRF y de su
-  acumulada por el **método delta** (`irf_delta`) y, con `-irfboot N`, sus
-  bandas por **bootstrap paramétrico** (`irf_bootstrap`: simular, reestimar,
-  percentiles de Efron, el generador de drvec). sim_gui dibuja las del delta
-  y, con «Bandas por bootstrap», las del bootstrap. Falta llevar las dos al
-  porte a Python. Antes de esto apareció y se arregló el BUG-0004 de
-  drvarma: la IRF de la escalera salía dividida por σ.
+*Lo que hace el C (el oráculo)*
+
+| qué | dónde | PR |
+|---|---|---|
+| La tabla de fuf (FORECAST REPORT) en el `.out` de drvarma, después del bloque de antes, que se queda | `engines/drvarma/src/escalera.c`; referencia `engines/drvarma/tests/escalera/ref/fc.out` | #130 |
+| La tabla de fuf en el `.out` de drvec | `write_fuf_report` y `fuf_var_k`, `engines/drvec/src/drvec.c`; prueba 8af de `engines/drvec/tests/run_tests.sh` | #132 |
+| BUG-0004: la IRF de la escalera con Σ y no con Q | `escalera.c`; `engines/drvarma/BUGS.md` | #133 |
+| Los errores típicos de la IRF y de su acumulada por el método delta | `irf_delta`, `irf_tabla_se` (`escalera.c`); prueba 10c de `engines/drvarma/tests/escalera/pruebas.sh` | #134 |
+| Las bandas por bootstrap paramétrico, `-irfboot N` | `irf_bootstrap`, `boot_simula`, `boot_normal` (`escalera.c`); prueba 10d | #135 |
+
+- **La tabla de fuf, en los dos.** El formato es el de `forecast_table_acii`
+  (`engines/fuf/src/usfo.c`), con un espacio garantizado entre campos (BUG-0002
+  de fuf):
+  - las cabeceras `FORECAST REPORT:`, `VARIABLE NAME:`, `FORECAST ORIGIN :` y
+    `LEAD TIME FOR FORECASTING:`;
+  - las columnas DATE, LEVEL VALUE/STD, VARIATION TRIMEST·MONT/STD,
+    ANUAL/STD y ERR, con cuatro decimales;
+  - las H+1 últimas observaciones, con «-» en las d.t., y las H previsiones.
+
+  Las variaciones van sobre el nivel transformado y* = refactor·BoxCox(z) =
+  w + det. Bajo log se multiplican por 100/refactor y, si no, por 1/refactor.
+  LEVEL va en las unidades de la serie.
+- **Las d.t. del VEC, sin segunda ruta (la lección del BUG-10).** El error del
+  nivel en h es e(h) = Σ_{m<h} G_m ε_{n+h−m}, con las G_m de
+  `level_error_map`. Una variación de k periodos tiene pesos G_m − G_{m−k}
+  (con G_{<0} = 0). Así, la d.t. de la variación del periodo (k = 1) y la de
+  la anual (k = freq) salen de **las mismas G_m** que la banda del nivel.
+- **El ERR del VEC.** Es el error de nivel a un paso de cada observación:
+  - en el bloque Y2, el residuo mismo;
+  - en Y1, el de W menos B2′ por el de ∇Y2.
+
+  Con `-differenced` no hay tabla, porque los niveles de Y2 no se conocen.
+- **El método delta.** O_h = Ψ_h L, con L el Cholesky de Σ. Var = g′Vg en dos
+  bloques independientes:
+  - **la dinámica**: los parámetros de x salvo los de Q, con la covarianza de
+    la tabla de parámetros. El gradiente, por diferencias centrales **a través
+    del mismo mapa x → (Φ, Θ) que estima** (`shootx_esc`), con paso
+    1e-5·max(1, |x_j|);
+  - **Σ**: Cov(S_ab, S_cd) = (S_ac S_bd + S_ad S_bc)/n, gradiente por
+    diferencias centrales del Cholesky, con paso 1e-5·√(S_aa S_bb). Con
+    `-diagcov` solo varía la diagonal.
+
+  La acumulada suma los gradientes. Sin errores típicos de los parámetros no
+  hay tabla, y se dice.
+- **El bootstrap.**
+  - N réplicas del VARMA estacionario de las w (con su media y la Σ
+    ajustada), con un tramo inicial de 50 + 10P que se tira.
+  - El generador es **el de drvec**: LCG de 64 bits (6364136223846793005,
+    1442695040888963407, semilla 987654321) con Box-Muller.
+  - Cada réplica se **reestima** como los datos (la misma escalera, enlaces y
+    ceros, desde el óptimo, con elf y sin Hessiana).
+  - Las bandas son los percentiles de Efron 2.5, 5, 50, 95 y 97.5, con
+    índice ceil(p·nok). Con menos de 20 réplicas buenas no hay bandas.
+  - Al `.out` van las bandas del 90 y del 95 %. Entero, a `<base>.irfboot`
+    (`what,shock,response,k,point,p2.5,p5,p50,p95,p97.5`), que lee
+    `ov_irfboot_file`.
+  - Con `-redet` es un error.
+
+*Lo que hay en los portes, y la diferencia*
+
+1. **drvarma-python, la tabla de fuf: no está.** Ni en el `.out` de la
+   escalera (`ladder.py`, `report.py`) ni en el de la vía `.inp`.
+   `report_forecast.py` es el informe HTML (SPS), no esta tabla.
+2. **drvarma-python, las bandas de la IRF: otro método.**
+   `irf.irf_fevd_bands` y `Ladder.irf_fevd_bands` sacan los parámetros de
+   N(θ̂, cov) y recalculan, **sin reestimar** (Lütkepohl §3.7). No es ni el
+   delta ni el bootstrap del C, y es lo que usa sima para el VARMA
+   (`impulse_response`, `mcp_server.py`). Su IRF ya es con Σ (el BUG-0004 era
+   solo del C).
+3. **drvec-python, la tabla de fuf: no está.** `forecast.py` tiene las G_m
+   (`forecast_arrays`, `report.level_error_map`) pero `forecast_vec` no
+   escribe la tabla.
+4. **drvec-python, el C vendorizado es viejo.** `csrc/` es de atsw-gui
+   800a540, anterior a #132 y también a **drvec 0.14** (5f61873: el rango con
+   `-trend`, caso 4, calibrado por bootstrap). `c_engine.C_VERSION` es «0.13»
+   y rechaza un C de otra versión: revendorizar obliga a llevar también 0.14.
+5. **sima** usa el bootstrap de drvec para el VEC (`irf_bands`, `mcp_vec.py`)
+   y las extracciones de parámetros para el VARMA. Tiene que acabar diciendo
+   lo mismo que sim_gui.
+
+*El plan, por repositorio y en este orden*
+
+- **drvarma-python** (una versión menor, 0.4.0, porque añade capacidad):
+  - *la tabla de fuf* en el `.out` de la escalera, al final del bloque de
+    previsión y como en `escalera.c`: un `report._fuf_table` con las mismas
+    cabeceras, columnas y decimales. Las d.t. del nivel salen de
+    `forecast_level_variances` y las de las variaciones de las mismas ψ, sin
+    segunda ruta. Prueba: el bloque, byte a byte, contra `ref/fc.out` del C
+    (filtrado como en `pruebas.sh`), o con la tolerancia de fuera de Linux.
+  - *`Ladder.irf_delta(H)`*, por omisión en el `.out`: las dos tablas «STD.
+    ERRORS OF THE …». El gradiente de la dinámica, por diferencias centrales
+    a través del mismo desempaquetado que estima (el equivalente de
+    `shootx_esc`), y Σ con su fórmula. Pruebas:
+    - la forma cerrada del AR(1) diagonal de la 10c (h = 0..2 y la acumulada
+      en h = 1, a 1.5e-4);
+    - los números del C en el caso `fc`.
+  - *`Ladder.irf_bootstrap(H, N, seed=987654321)`*: el generador de drvec
+    portado tal cual (`drvec-python/src/drvec/rng.py`, la clase `Rng`, ya lo
+    tiene; se reutiliza o se copia, sin un tercero), la reestimación de cada réplica y
+    `<base>.irfboot` con el formato del C. Pruebas:
+    - dos corridas dan el mismo fichero;
+    - la banda del 90 % casa con la del delta a menos de un 30 % en h = 0..2
+      (la 10d);
+    - el `.irfboot` del C para el mismo modelo, réplica a réplica donde la
+      trayectoria lo permita.
+  - *`irf_fevd_bands`*: se queda solo para lo que el C no tiene, las bandas
+    de la FEVD (decidido, abajo). Para la IRF ya no se usa.
+- **drvec-python** (0.2.0):
+  - revendorizar `csrc/` desde el `main` de atsw-gui con
+    `tools/vendor_drvec_c.py`, `C_VERSION` a «0.14» y las pruebas de oráculo
+    (`tests/test_bundled.py`) en verde;
+  - portar lo de 0.14: el rango con `-trend` en el caso 3 / `-case pre`, r
+    pendientes de W por rango y `simulate_h0` con d·(t − t_c);
+  - portar `write_fuf_report` y `fuf_var_k` a `forecast.py`/`report.py`, con
+    las G_m que ya están. Prueba: la 8af del C (una tabla por serie; en
+    h = 1 la d.t. del periodo es la del nivel; con h ≤ freq la anual también;
+    las variaciones son diferencias de niveles) y el `.out` del C byte a byte
+    en el caso danés (`-f 6`).
+- **sima-python**:
+  - el VARMA: `impulse_response(bands=True)` con el delta por omisión y
+    `irf_bands` con el bootstrap, como el VEC. La misma herramienta para los
+    dos tipos de ajuste, que hoy ya existe para el VEC;
+  - `forecast` enseña la tabla de fuf de los dos tipos;
+  - las versiones mínimas de drvarma y drvec en `pyproject.toml`.
+- **atsw** (la suite en PyPI): una versión que recoja las tres.
+
+*Decidido (14-nov-2026)*
+
+- **La IRF, como en C**: el método delta por omisión y el bootstrap como
+  opción, en drvarma-python y en sima, para el VARMA y para el VEC. Las
+  extracciones de parámetros de drvarma-python (Lütkepohl §3.7,
+  `irf_fevd_bands`) quedan **solo para las bandas de la FEVD**, que el C no
+  tiene. Para la IRF dejan de usarse, y se dice en su documentación.
 
 **La auditoría de «Al cuaderno» (P5, 12-nov-2026).**
 

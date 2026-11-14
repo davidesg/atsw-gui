@@ -340,6 +340,43 @@ artefacto escribe su entrada, y la que no puede dar la razón no registra.
 La prueba de que la regla funciona ya está medida: `rationale` es obligatoria y
 está en el 95% de los nodos; `analyst` es opcional y está en el 0%.
 
+### Varios procesos a la vez: escribir es una transacción
+
+Lo escriben **varios procesos a la vez**: la madre, fue_gui, drtran_gui,
+sim_gui y atsw-cli. Lo normal es tener la madre y un hijo abiertos. Hasta el
+14-nov-2026 cada uno escribía el fichero entero desde su copia en memoria, y lo
+que otro había escrito entretanto se perdía sin aviso
+(`docs/AUDITORIA-procesos.md`, A1–A4).
+
+La regla, en `lib/proyecto` y por tanto igual para todos:
+
+- **Escribir es una transacción** (`pr_escribir`):
+  1. se coge un cerrojo: el bloqueo del sistema (`flock`, `LockFileEx`) sobre
+     `proyecto.yaml.cerrojo`, un fichero que se queda en su sitio;
+  2. se relee el disco;
+  3. si otro programa lo cambió desde que este lo leyó, se aplican sobre lo
+     del disco **solo los cambios de este**, elemento a elemento y por su
+     clave;
+  4. se escribe a un temporal, se relee con la validación de `pr_leer` y se
+     renombra encima.
+
+  Releer y escribir un manifiesto de 3 KB cuesta 0,2 ms: el cerrojo no se
+  nota. Si un proceso muere con él cogido, el sistema lo suelta. (La primera
+  versión creaba y borraba el fichero con el PID dentro, y tomaba el de un
+  proceso muerto; con muchos procesos a la vez uno podía borrar el cerrojo
+  recién creado por otro: lo vio la CI de macOS y Windows.)
+- **Lo que la fusión decide se dice.** Que gane lo de este programa cuando
+  los dos cambiaron lo mismo, o que se quede algo que este borró y el otro
+  cambió, queda en `pr_aviso()`, y la madre lo enseña. Una misma clave dada
+  de alta en los dos lados con contenido distinto **no se escribe**
+  (`PR_ECONFLICTO`).
+- **Un identificador nuevo salta los que ya tienen ficheros en disco**,
+  aunque el manifiesto de este proceso todavía no los traiga.
+- **Una pérdida posible se avisa.** Si al releer falta algo que la madre
+  tenía, lo dice con un diálogo, no solo en la barra de estado.
+- **Nunca se escribe un manifiesto inválido.** Si la fusión deja un huérfano
+  (el otro borró el padre de lo que este derivó), no se instala.
+
 ---
 
 ## 6. Estado de la fase 5

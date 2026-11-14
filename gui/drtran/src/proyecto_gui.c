@@ -81,10 +81,15 @@ gboolean mtram_proyecto_guarda( Mtram *m, char *why, size_t n )
     if (why && n) why[0] = '\0';
     if (!m->hay_proy || !m->proy) return TRUE;
 
+    /* Una transaccion (docs/AUDITORIA-procesos.md): si la madre escribio
+       entretanto, se aplica sobre lo suyo solo lo de aqui. Lo que la
+       fusion tuvo que decidir, a la barra.                              */
     if (pr_escribir( m->proy, m->proy->path, &e ) != 0) {
         if (why) pr_error_es( &e, why, n );
         return FALSE;
     }
+    if (pr_aviso()[0])
+        preview_show_status( m, "El proyecto había cambiado a la vez: %s", pr_aviso() );
     return TRUE;
 }
 

@@ -1,0 +1,23 @@
+# TEMPORAL (se quita antes de fusionar #140)
+name: estres-cerrojo
+on: pull_request
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults: { run: { shell: msys2 {0} } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          install: make coreutils grep sed
+          pacboy: gcc:p pkgconf:p glib2:p gsl:p
+      - run: make -C gui/atsw-cli
+      - run: bash .github/estres-cerrojo.sh
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install glib gsl pkg-config coreutils
+      - run: make -C gui/atsw-cli
+      - run: bash .github/estres-cerrojo.sh

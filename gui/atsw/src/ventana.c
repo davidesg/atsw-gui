@@ -240,13 +240,34 @@ static void huella_manifiesto( Atsw *a )
  * siguiente golpe de foco lo relee creyendo que lo cambio otro -- y lo dice.
  * Un aviso falso de "esto ha cambiado fuera de aqui" es peor que no avisar:
  * enseña a no creerse los avisos.                                       */
+/* UN AVISO QUE NO SE PUEDE PASAR POR ALTO, pero que no bloquea: sale del
+   golpe de foco y de los gestos, y un gtk_dialog_run ahi anidaria bucles. */
+static void aviso_manifiesto( Atsw *a, const char *titulo, const char *texto )
+{
+    GtkWidget *d;
+
+    if ( !a->ventana || !texto || !*texto ) return;
+    d = gtk_message_dialog_new( GTK_WINDOW(a->ventana), GTK_DIALOG_DESTROY_WITH_PARENT,
+                                GTK_MESSAGE_WARNING, GTK_BUTTONS_CLOSE, "%s", titulo );
+    gtk_message_dialog_format_secondary_text( GTK_MESSAGE_DIALOG(d), "%s", texto );
+    g_signal_connect( d, "response", G_CALLBACK(gtk_widget_destroy), NULL );
+    gtk_widget_show( d );
+}
+
 int atsw_guarda( Atsw *a, PrError *e )
 {
     int rc;
 
     if ( !a->hay || a->p == NULL ) return 1;
+    /* pr_escribir es una transaccion (docs/AUDITORIA-procesos.md): si otro
+       programa escribio entretanto, se aplican sobre lo suyo solo los
+       cambios de aqui, y a->p se queda con el resultado. Lo que la fusion
+       tuvo que decidir se dice.                                        */
     rc = pr_escribir( a->p, a->p->path, e );
     huella_manifiesto( a );
+    if ( rc == 0 && pr_aviso()[0] )
+        aviso_manifiesto( a, "Otro programa había cambiado el proyecto a la vez",
+                          pr_aviso() );
     return rc;
 }
 
@@ -283,6 +304,25 @@ gboolean atsw_relee( Atsw *a, char *why, size_t n )
        Sugerir guardan a->p en su anfitrion, y cambiar el puntero las dejaba
        leyendo memoria liberada si el manifiesto cambiaba por fuera con
        ellas abiertas.                                                  */
+    /* UNA PERDIDA POSIBLE SE AVISA. Lo que esta madre tenia y el manifiesto
+       releido ya no trae: con las escrituras transaccionales no deberia
+       pasar (los hijos no borran), y si pasa hay que saberlo.          */
+    {
+    char *falta = g_malloc0( 4096 );
+    int   k = pr_faltan( a->p, nuevo, falta, 4096 );
+
+    if ( k > 0 )
+        {
+        gchar *t = g_strdup_printf( "Al releer el proyecto falta%s %d cosa%s que había aquí:\n\n%s\n\n"
+                                    "Si no las borraste tú, otro programa las ha perdido: "
+                                    "sus ficheros siguen en disco.",
+                                    k == 1 ? "" : "n", k, k == 1 ? "" : "s", falta );
+        aviso_manifiesto( a, "El proyecto ha perdido algo al cambiar fuera de aquí", t );
+        g_free( t );
+        }
+    g_free( falta );
+    }
+
     *a->p = *nuevo;
     g_free( nuevo );
     snprintf( a->p->path, sizeof a->p->path, "%s", path );

@@ -6,6 +6,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <direct.h>
+#include <io.h>
+#include <process.h>
+#else
+#include <unistd.h>
+#include <sys/stat.h>
+#endif
 
 #include "proyecto.h"
 
@@ -36,6 +44,196 @@ static const char *pon( const char *nombre, const char *txt )
     f = fopen( path, "w" );
     if ( f ) { fputs( txt, f ); fclose( f ); }
     return path;
+}
+
+/* EL MANIFIESTO ENTRE PROCESOS (docs/AUDITORIA-procesos.md, fase 1). La
+   prueba hace de dos procesos con pr_base_pon: lo que «el otro» leyo.   */
+static int en_disco_modelo( const char *path, const char *serie, const char *id )
+{
+    Proyecto *d = malloc( sizeof *d );
+    PrError   e;
+    int       r = pr_leer( path, d, &e ) == 0 && pr_modelo_idx( d, serie, "", id ) >= 0;
+    free( d );
+    return r;
+}
+
+static void concurrencia( void )
+{
+    Proyecto *a = calloc( 1, sizeof *a ), *b = calloc( 1, sizeof *b ),
+             *v1 = calloc( 1, sizeof *v1 ), *d = calloc( 1, sizeof *d );
+    PrError   e;
+    char      path[PR_RUTA + 32], dir[PR_RUTA], f[PR_RUTA + 32], id[PR_ID], av[1024];
+    FILE     *x;
+
+    printf( "\nEL MANIFIESTO ENTRE PROCESOS\n" );
+    snprintf( dir, sizeof dir, "%s/conc", DIR );
+#ifdef _WIN32
+    mkdir( dir );
+#else
+    mkdir( dir, 0755 );
+#endif
+    snprintf( path, sizeof path, "%s/proyecto.yaml", dir );
+    remove( path );
+    pr_nuevo( a, "C", "concurrencia", "." );
+    snprintf( a->path, sizeof a->path, "%s", path );
+    pr_serie_add( a, "IPC", &e );
+    pr_deriva_rol( a, "IPC", "", NULL, PR_DATOS, id, sizeof id, NULL, 0, &e );
+    pr_deriva( a, "IPC", "", "m00", id, sizeof id, NULL, 0, &e );           /* m01 */
+    ok( pr_escribir( a, path, &e ) == 0, "se escribe el primero" );
+    *v1 = *a;                                     /* lo que leyeron los dos */
+
+    /* 1. CADA UNO AÑADE LO SUYO: el otro, una serie; este, un modelo. */
+    *b = *v1;
+    pr_serie_add( b, "WTI", &e );
+    ok( pr_escribir( b, path, &e ) == 0, "el otro programa añade WTI y escribe" );
+    pr_base_pon( path, v1 );                      /* este leyo v1           */
+    pr_deriva( a, "IPC", "", "m01", id, sizeof id, NULL, 0, &e );           /* m02 */
+    ok( pr_escribir( a, path, &e ) == 0, "este añade m02 sobre su copia vieja y escribe" );
+    pr_leer( path, d, &e );
+    ok( pr_serie_idx( d, "WTI" ) >= 0 && pr_modelo_idx( d, "IPC", "", "m02" ) >= 0,
+        "en el disco están los dos: WTI no se pierde" );
+    ok( pr_serie_idx( a, "WTI" ) >= 0, "y la copia de este se queda con el resultado" );
+
+    /* 2. LO QUE BORRA ESTE SE BORRA, Y LO DEL OTRO SE QUEDA. */
+    *v1 = *a;
+    *b = *v1;
+    pr_serie_add( b, "PIB", &e );
+    pr_escribir( b, path, &e );
+    pr_base_pon( path, v1 );
+    ok( pr_borra( a, "IPC", "", "m02", &e ) == 0, "este borra m02" );
+    ok( pr_escribir( a, path, &e ) == 0 && !en_disco_modelo( path, "IPC", "m02" ),
+        "y en el disco no está" );
+    pr_leer( path, d, &e );
+    ok( pr_serie_idx( d, "PIB" ) >= 0, "pero la serie que añadió el otro, sí" );
+
+    /* 3. LOS DOS CAMBIAN LO MISMO: gana este, y se dice. */
+    *v1 = *a;
+    *b = *v1;
+    snprintf( b->s[pr_serie_idx( b, "IPC" )].descripcion, PR_TEXTO, "la del otro" );
+    pr_escribir( b, path, &e );
+    pr_base_pon( path, v1 );
+    snprintf( a->s[pr_serie_idx( a, "IPC" )].descripcion, PR_TEXTO, "la de este" );
+    ok( pr_escribir( a, path, &e ) == 0, "los dos cambian la descripción de IPC" );
+    pr_leer( path, d, &e );
+    es( d->s[pr_serie_idx( d, "IPC" )].descripcion, "la de este", "queda la de este" );
+    snprintf( av, sizeof av, "%s", pr_aviso() );
+    ok( strstr( av, "serie IPC" ) != NULL, "y pr_aviso lo dice" );
+
+    /* 4. LOS DOS DAN DE ALTA LO MISMO, DISTINTO: no se escribe. */
+    *v1 = *a;
+    *b = *v1;
+    pr_serie_add( b, "NUEVA", &e );
+    snprintf( b->s[b->ns - 1].descripcion, PR_TEXTO, "del otro" );
+    pr_escribir( b, path, &e );
+    pr_base_pon( path, v1 );
+    pr_serie_add( a, "NUEVA", &e );
+    snprintf( a->s[a->ns - 1].descripcion, PR_TEXTO, "de este" );
+    ok( pr_escribir( a, path, &e ) != 0 && e.cod == PR_ECONFLICTO,
+        "la misma serie dada de alta en los dos: PR_ECONFLICTO" );
+    pr_leer( path, d, &e );
+    es( d->s[pr_serie_idx( d, "NUEVA" )].descripcion, "del otro", "y el disco no se toca" );
+    *a = *d;
+
+    /* 5. EL ELEGIDO ES UNO: el otro elige m01; este, m00 no (son datos): */
+    pr_deriva( a, "IPC", "", "m01", id, sizeof id, NULL, 0, &e );           /* m03? */
+    pr_escribir( a, path, &e );
+    *v1 = *a;
+    *b = *v1;
+    pr_elige( b, "IPC", "", "m01", "la del otro", &e );
+    pr_escribir( b, path, &e );
+    pr_base_pon( path, v1 );
+    pr_elige( a, "IPC", "", id, "la de este", &e );
+    ok( pr_escribir( a, path, &e ) == 0, "cada uno elige un modelo distinto de IPC" );
+    pr_leer( path, d, &e );
+    ok( d->m[pr_modelo_idx( d, "IPC", "", id )].elegido &&
+        !d->m[pr_modelo_idx( d, "IPC", "", "m01" )].elegido,
+        "queda uno solo, el de este" );
+
+    /* 6. UNA FUSION QUE DEJARIA UN HUERFANO NO SE INSTALA: el otro borra el
+          padre del modelo que este deriva.                              */
+    *v1 = *a;
+    *b = *v1;
+    {
+    char hijo[PR_ID];
+    pr_deriva( a, "IPC", "", id, hijo, sizeof hijo, NULL, 0, &e );
+    pr_elige( b, "IPC", "", NULL, NULL, &e );
+    ok( pr_borra( b, "IPC", "", id, &e ) == 0 && pr_escribir( b, path, &e ) == 0,
+        "el otro borra el modelo elegido" );
+    pr_base_pon( path, v1 );
+    ok( pr_escribir( a, path, &e ) != 0 && e.cod == PR_EPADRE,
+        "este deriva de él: la fusión no se instala (PR_EPADRE)" );
+    ok( !en_disco_modelo( path, "IPC", hijo ), "y el disco sigue como lo dejó el otro" );
+    pr_leer( path, a, &e );
+    }
+
+    /* 7. UN ID NUEVO SALTA LOS FICHEROS QUE YA ESTAN EN DISCO. */
+    {
+    char sig[PR_ID], f2[PR_RUTA];
+    Proyecto *c = calloc( 1, sizeof *c );
+    *c = *a;
+    pr_deriva( c, "IPC", "", "m01", sig, sizeof sig, NULL, 0, &e );   /* el que tocaria */
+    pr_ruta( a, "IPC", "", sig, ".inp", f2, sizeof f2 );
+    {
+        char cmd[PR_RUTA + 16];
+        snprintf( cmd, sizeof cmd, "%s", f2 );
+        *strrchr( cmd, '/' ) = '\0';
+#ifdef _WIN32
+        mkdir( cmd );
+#else
+        mkdir( cmd, 0755 );
+#endif
+        { char *w = strrchr( cmd, '/' ); if ( w ) { *w = '\0';
+#ifdef _WIN32
+          mkdir( cmd );
+#else
+          mkdir( cmd, 0755 );
+#endif
+          *w = '/';
+#ifdef _WIN32
+          mkdir( cmd );
+#else
+          mkdir( cmd, 0755 );
+#endif
+        } }
+    }
+    x = fopen( f2, "w" ); if ( x ) { fputs( "de otro proceso\n", x ); fclose( x ); }
+    pr_deriva( a, "IPC", "", "m01", id, sizeof id, NULL, 0, &e );
+    ok( strcmp( id, sig ) != 0, "con su .inp ya en disco, el id siguiente no se reutiliza" );
+    remove( f2 );
+    free( c );
+    pr_leer( path, a, &e );
+    }
+
+    /* 8. EL CERROJO, el bloqueo del sistema: con otro cogiendolo, se espera
+          y se rinde; suelto, se escribe. No se borra ni se adivina nada. */
+#ifdef _WIN32
+    _putenv( "PR_CERROJO_MS=50" );
+#else
+    setenv( "PR_CERROJO_MS", "50", 1 );
+#endif
+    {
+    PrCerrojo *c = pr_cerrojo_coge( path, &e );
+    ok( c != NULL, "se coge el cerrojo del manifiesto" );
+    ok( pr_escribir( a, path, &e ) != 0 && e.cod == PR_ECERROJO,
+        "con el cerrojo cogido por otro: PR_ECERROJO al cabo de la espera" );
+    pr_cerrojo_suelta( c );
+    ok( pr_escribir( a, path, &e ) == 0, "suelto, se escribe" );
+    c = pr_cerrojo_coge( path, &e );
+    ok( c != NULL, "y pr_escribir lo suelta al acabar" );
+    pr_cerrojo_suelta( c );
+    }
+    snprintf( f, sizeof f, "%s.%ld.tmp", path, (long) getpid() );
+    { FILE *y = fopen( f, "r" ); ok( y == NULL, "no queda el temporal" ); if ( y ) fclose( y ); }
+
+    /* 9. LO QUE FALTA AL RELEER. */
+    *v1 = *a;
+    pr_borra( a, "IPC", "", "m01", &e );
+    {
+    char out[512];
+    int  k = pr_faltan( v1, a, out, sizeof out );
+    ok( k == 1 && strstr( out, "modelo IPC/m01" ) != NULL, "pr_faltan dice qué no está" );
+    }
+    free( a ); free( b ); free( v1 ); free( d );
 }
 
 int main( int argc, char **argv )
@@ -767,6 +965,7 @@ int main( int argc, char **argv )
     ok( !t.m[2].por_elegido[0] && !t.m[1].por_elegido[0],
         "elegir otro borra quien eligio el anterior" );
     }
+    concurrencia();
 
     printf( "\n%d fallos\n", fallos );
     free( p ); free( q );

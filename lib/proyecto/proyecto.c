@@ -10,6 +10,14 @@
 
 #include "proyecto.h"
 
+/* ¿Tiene ya ficheros en disco? Ver mas abajo, con el manifiesto entre
+   procesos: un id nuevo no puede pisar lo que otro proceso acaba de
+   escribir con ese nombre aunque el manifiesto de este no lo traiga. */
+static int ocupado_modelo( const Proyecto *p, const char *serie,
+                           const char *muestra, const char *id );
+static int ocupado_corrida( const Proyecto *p, const char *caso, const char *id );
+static int ocupado_caso( const Proyecto *p, const char *id );
+
 /* ------------------------------------------------------------------------ */
 /* Utiles                                                                    */
 /* ------------------------------------------------------------------------ */
@@ -683,7 +691,8 @@ int pr_deriva_rol( Proyecto *p, const char *serie, const char *muestra,
    if ( rol != PR_DATOS && v == 0 ) v = 1;
 
    snprintf( id, sizeof id, "m%02d", v );
-   while ( pr_modelo_idx( p, serie, muestra, id ) >= 0 )
+   while ( pr_modelo_idx( p, serie, muestra, id ) >= 0 ||
+           ( rol != PR_DATOS && ocupado_modelo( p, serie, muestra, id ) ) )
        snprintf( id, sizeof id, "m%02d", ++v );
 
    memset( &p->m[p->nm], 0, sizeof p->m[0] );
@@ -846,7 +855,7 @@ static void caso_id_libre( const Proyecto *p, char *id, size_t n )
    int k = 1;
 
    do snprintf( id, n, "C%d", k++ );
-   while ( pr_caso_idx( p, id ) >= 0 );
+   while ( pr_caso_idx( p, id ) >= 0 || ocupado_caso( p, id ) );
 }
 
 static int caso_pon( Proyecto *p, const PrEntrada *en, int nen,
@@ -1046,7 +1055,7 @@ int pr_corrida_nueva( Proyecto *p, const char *caso, const char *padre,
        if ( !strcmp( p->co[i].caso, caso ) && p->co[i].version >= v )
            v = p->co[i].version + 1;
    snprintf( id, sizeof id, "c%02d", v );
-   while ( pr_corrida_idx( p, caso, id ) >= 0 )
+   while ( pr_corrida_idx( p, caso, id ) >= 0 || ocupado_corrida( p, caso, id ) )
        snprintf( id, sizeof id, "c%02d", ++v );
 
    c = &p->co[p->nco];
@@ -1189,7 +1198,9 @@ static void escribe_campo( FILE *f, const char *clave, const char *valor )
    fputc( '\n', f );
 }
 
-int pr_escribir( const Proyecto *p, const char *path, PrError *e )
+/* EL VOLCADO, tal cual, de p a path: lo que era pr_escribir. pr_escribir
+   (mas abajo) lo usa para el temporal, con el cerrojo y la fusion.     */
+static int vuelca( const Proyecto *p, const char *path, PrError *e )
 {
    FILE *f;
    int   i;
@@ -1386,7 +1397,8 @@ static int sangria( const char *s )
    return n;
 }
 
-int pr_leer( const char *path, Proyecto *p, PrError *e )
+/* LA LECTURA, sin apuntar la base: pr_leer (mas abajo) la envuelve. */
+static int leer_crudo( const char *path, Proyecto *p, PrError *e )
 {
    FILE *f;
    char  linea[2048], copia[2048];
@@ -1806,6 +1818,12 @@ const char *pr_error_es( const PrError *e, char *out, size_t n )
        case PR_EVACIO:
            snprintf( out, n, "%s está vacío: no es un proyecto. No se abre, "
                      "para no guardar uno vacío encima.", e->texto ); break;
+       case PR_ECERROJO:
+           snprintf( out, n, "Otro programa tiene cogido %s desde hace más de "
+                     "5 s: no se ha guardado. Vuelve a intentarlo.", e->texto ); break;
+       case PR_ECONFLICTO:
+           snprintf( out, n, "No se ha guardado: %s. Vuelve a intentarlo, que ya "
+                     "se ve lo del otro programa.", e->texto ); break;
        }
    return out;
 }
@@ -1870,6 +1888,628 @@ const char *pr_error_en( const PrError *e, char *out, size_t n )
        case PR_EVACIO:
            snprintf( out, n, "%s is empty", e->texto );
            break;
+       case PR_ECERROJO:
+           snprintf( out, n, "%s is locked by another program", e->texto );
+           break;
+       case PR_ECONFLICTO:
+           snprintf( out, n, "not saved: %s", e->texto );
+           break;
        }
    return out;
+}
+
+/* ======================================================================== */
+/* EL MANIFIESTO ENTRE PROCESOS (docs/AUDITORIA-procesos.md, fase 1)         */
+/*                                                                           */
+/* Varios procesos escriben el mismo proyecto.yaml: la madre, fue_gui,       */
+/* drtran_gui, sim_gui, atsw-cli. Cada uno lo lee en su momento y lo         */
+/* escribia entero desde su copia: lo que otro habia escrito entretanto se   */
+/* perdia sin aviso. Ahora escribir es una TRANSACCION:                      */
+/*                                                                           */
+/*   1. el cerrojo (un fichero al lado, creado con O_EXCL);                  */
+/*   2. se relee el disco;                                                   */
+/*   3. si nadie lo cambio desde que ESTE proceso lo leyo (la base), se      */
+/*      escribe lo suyo tal cual. Si lo cambio otro, se aplican sobre lo     */
+/*      del disco SOLO los cambios de este proceso (su copia contra la      */
+/*      base), elemento a elemento y por su clave;                           */
+/*   4. se escribe a un temporal, se RELEE con la validacion de pr_leer y    */
+/*      se renombra encima: nunca hay un manifiesto a medias ni invalido;    */
+/*   5. el que llama se queda con el resultado, que es la base nueva.        */
+/*                                                                           */
+/* Medido: releer y escribir un manifiesto de 3 KB cuesta 0,2 ms. El         */
+/* cerrojo dura eso; los motores no lo tocan.                                */
+/* ======================================================================== */
+
+#include <errno.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <sys/stat.h>
+#include <dirent.h>
+#ifdef _WIN32
+#include <windows.h>
+#include <io.h>
+#include <process.h>
+#define pr_getpid _getpid
+#else
+#include <unistd.h>
+#include <sys/file.h>
+#define pr_getpid getpid
+#endif
+
+static int existe( const char *f )
+{
+   struct stat st;
+   return f && *f && stat( f, &st ) == 0;
+}
+
+static int ocupado_modelo( const Proyecto *p, const char *serie,
+                           const char *muestra, const char *id )
+{
+   static const char *ext[] = { ".inp", ".pre", ".out" };
+   char f[PR_RUTA];
+   int  i;
+   if ( !p->path[0] ) return 0;
+   for ( i = 0; i < 3; i++ )
+      if ( pr_ruta( p, serie, muestra, id, ext[i], f, sizeof f ) == 0 && existe( f ) )
+         return 1;
+   return 0;
+}
+
+static int ocupado_corrida( const Proyecto *p, const char *caso, const char *id )
+{
+   static const char *ext[] = { ".out", ".dag", ".cns", ".inp" };
+   char f[PR_RUTA];
+   int  i;
+   if ( !p->path[0] ) return 0;
+   for ( i = 0; i < 4; i++ )
+      if ( pr_corrida_ruta( p, caso, id, ext[i], f, sizeof f ) == 0 && existe( f ) )
+         return 1;
+   return 0;
+}
+
+/* ¿Hay algun fichero (no solo carpetas vacias) en dir o en su work/? La
+   madre, al borrar un caso, borra sus ficheros y deja las carpetas: ese id
+   se puede volver a dar.                                               */
+static int con_ficheros( const char *dir, int hondo )
+{
+   DIR           *d = opendir( dir );
+   struct dirent *x;
+   int            hay = 0;
+
+   if ( !d ) return 0;
+   while ( !hay && ( x = readdir( d ) ) != NULL )
+      {
+      char        f[PR_RUTA * 2];
+      struct stat st;
+      if ( !strcmp( x->d_name, "." ) || !strcmp( x->d_name, ".." ) ) continue;
+      snprintf( f, sizeof f, "%s/%s", dir, x->d_name );
+      if ( stat( f, &st ) != 0 ) continue;
+      if ( S_ISDIR( st.st_mode ) ) { if ( hondo > 0 && con_ficheros( f, hondo - 1 ) ) hay = 1; }
+      else hay = 1;
+      }
+   closedir( d );
+   return hay;
+}
+
+static int ocupado_caso( const Proyecto *p, const char *id )
+{
+   char f[PR_RUTA];
+   return p->path[0] && pr_corrida_ruta( p, id, NULL, NULL, f, sizeof f ) == 0 &&
+          con_ficheros( f, 1 );
+}
+
+static void duerme_ms( int ms )
+{
+#ifdef _WIN32
+   Sleep( (DWORD) ms );
+#else
+   struct timespec t;
+   t.tv_sec = ms / 1000; t.tv_nsec = (long) ( ms % 1000 ) * 1000000L;
+   nanosleep( &t, NULL );
+#endif
+}
+
+/* --- 1. el cerrojo --------------------------------------------------------
+ * <manifiesto>.cerrojo, un fichero que se queda en su sitio, con el
+ * BLOQUEO DEL SISTEMA: flock en POSIX, LockFileEx en Windows. Es exclusivo
+ * de verdad, y el sistema lo suelta solo si el proceso muere: no hay
+ * cerrojos abandonados que adivinar.
+ *
+ * La primera version creaba el fichero con O_EXCL y lo borraba al soltarlo,
+ * con el PID dentro para tomar el de un proceso muerto. Con treinta
+ * atsw-cli a la vez (la bateria de atsw-cli), en macOS y Windows uno se
+ * perdia: B leia el PID de A, A soltaba y salia, C creaba el suyo, y B,
+ * viendo a A muerto, BORRABA EL DE C. Los dos escribian a la vez.
+ *
+ * Se espera hasta PR_CERROJO_MS (5 s; la variable de entorno del mismo
+ * nombre la cambia, para las pruebas).                                   */
+struct PrCerrojo
+{
+   int fd;
+};
+
+static int espera_ms( void )
+{
+   const char *env = getenv( "PR_CERROJO_MS" );
+   return env ? atoi( env ) : 5000;
+}
+
+PrCerrojo *pr_cerrojo_coge( const char *path, PrError *e )
+{
+   char       f[PR_RUTA + 16];
+   int        espera = espera_ms(), hecho = 0, fd;
+   PrCerrojo *c;
+
+   snprintf( f, sizeof f, "%s.cerrojo", path );
+#ifdef _WIN32
+   fd = _open( f, _O_CREAT | _O_RDWR | _O_BINARY, _S_IREAD | _S_IWRITE );
+#else
+   fd = open( f, O_CREAT | O_RDWR, 0644 );
+#endif
+   if ( fd < 0 ) { falla( e, PR_EESCRIBIR, 0, f ); return NULL; }
+   for ( ;; )
+      {
+#ifdef _WIN32
+      OVERLAPPED ov;
+      HANDLE     h = (HANDLE) _get_osfhandle( fd );
+      memset( &ov, 0, sizeof ov );
+      if ( LockFileEx( h, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY,
+                       0, 1, 0, &ov ) ) break;
+#else
+      if ( flock( fd, LOCK_EX | LOCK_NB ) == 0 ) break;
+      if ( errno != EWOULDBLOCK && errno != EINTR )
+         { close( fd ); falla( e, PR_EESCRIBIR, 0, f ); return NULL; }
+#endif
+      if ( hecho >= espera )
+         {
+#ifdef _WIN32
+         _close( fd );
+#else
+         close( fd );
+#endif
+         falla( e, PR_ECERROJO, 0, path );
+         return NULL;
+         }
+      duerme_ms( 5 ); hecho += 5;
+      }
+   c = malloc( sizeof *c );
+   if ( !c )
+      {
+#ifdef _WIN32
+      _close( fd );
+#else
+      close( fd );
+#endif
+      falla( e, PR_EESCRIBIR, 0, f );
+      return NULL;
+      }
+   c->fd = fd;
+   return c;
+}
+
+void pr_cerrojo_suelta( PrCerrojo *c )
+{
+   if ( !c ) return;
+#ifdef _WIN32
+   {
+   OVERLAPPED ov;
+   memset( &ov, 0, sizeof ov );
+   UnlockFileEx( (HANDLE) _get_osfhandle( c->fd ), 0, 1, 0, &ov );
+   _close( c->fd );
+   }
+#else
+   flock( c->fd, LOCK_UN );
+   close( c->fd );
+#endif
+   free( c );
+}
+
+/* Renombrar ENCIMA: en POSIX rename lo hace; en Windows rename falla si el
+   destino existe, y MoveFileEx con REPLACE_EXISTING es lo que lo hace.
+   En Windows ademas falla mientras otro proceso tiene el manifiesto abierto
+   para leerlo (la madre releyendo, un atsw-cli arrancando): eso dura
+   milisegundos, y se reintenta hasta el plazo del cerrojo.           */
+static int renombra( const char *de, const char *a )
+{
+#ifdef _WIN32
+   int espera = espera_ms(), hecho = 0;
+   for ( ;; )
+      {
+      if ( MoveFileExA( de, a, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH ) ) return 0;
+      if ( hecho >= espera ) return 1;
+      duerme_ms( 5 ); hecho += 5;
+      }
+#else
+   return rename( de, a ) == 0 ? 0 : 1;
+#endif
+}
+
+/* --- 2. la base de cada manifiesto ----------------------------------------
+ * Lo que ESTE proceso leyo (o escribio) por ultima vez de cada fichero. Va
+ * por la ruta tal como se dio y por su ruta canonica.                    */
+typedef struct { char ruta[PR_RUTA]; Proyecto *p; } Base;
+static Base bases[8];
+static int  nbases;
+
+static void canonica( const char *path, char *out, size_t n )
+{
+#ifdef _WIN32
+   if ( _fullpath( out, path, n ) == NULL ) snprintf( out, n, "%s", path );
+#else
+   char r[PATH_MAX];
+   const char *src = realpath( path, r ) ? r : path;
+   size_t      l = strlen( src );
+   if ( n == 0 ) return;
+   if ( l >= n ) l = n - 1;
+   memcpy( out, src, l );
+   out[l] = '\0';
+#endif
+}
+
+static Base *base_de( const char *path, int crea )
+{
+   char c[PR_RUTA];
+   int  i;
+
+   canonica( path, c, sizeof c );
+   for ( i = 0; i < nbases; i++ )
+      if ( !strcmp( bases[i].ruta, c ) ) return &bases[i];
+   if ( !crea ) return NULL;
+   if ( nbases == (int) ( sizeof bases / sizeof bases[0] ) )
+      {                                       /* el mas viejo deja sitio   */
+      free( bases[0].p );
+      memmove( &bases[0], &bases[1], ( nbases - 1 ) * sizeof bases[0] );
+      nbases--;
+      }
+   snprintf( bases[nbases].ruta, PR_RUTA, "%s", c );
+   bases[nbases].p = NULL;
+   return &bases[nbases++];
+}
+
+static void apunta_base( const char *path, const Proyecto *p )
+{
+   Base *b = base_de( path, 1 );
+   if ( !b->p ) b->p = malloc( sizeof *b->p );
+   if ( b->p ) *b->p = *p;
+}
+
+void pr_base_pon( const char *path, const Proyecto *base ) { apunta_base( path, base ); }
+
+int pr_leer( const char *path, Proyecto *p, PrError *e )
+{
+   int rc = leer_crudo( path, p, e );
+   if ( rc == 0 ) apunta_base( path, p );
+   return rc;
+}
+
+/* --- 3. la fusion ---------------------------------------------------------
+ * Igualdad de contenido de cada elemento, campo a campo (las cadenas, por
+ * su texto: lo que hay detras del '\0' no cuenta).                       */
+#define S_(f) ( strcmp( a->f, b->f ) == 0 )
+#define I_(f) ( a->f == b->f )
+
+static int ig_serie( const void *x, const void *y )
+{
+   const PrSerie *a = x, *b = y;
+   return S_(id) && S_(descripcion) && S_(fuente) && S_(url) && S_(bajada) &&
+          S_(unidades) && S_(notas);
+}
+static int cl_serie( const void *x, const void *y )
+{ const PrSerie *a = x, *b = y; return S_(id); }
+
+static int ig_muestra( const void *x, const void *y )
+{
+   const PrMuestra *a = x, *b = y;
+   return S_(id) && S_(desde) && S_(hasta) && S_(razon);
+}
+static int cl_muestra( const void *x, const void *y )
+{ const PrMuestra *a = x, *b = y; return S_(id); }
+
+static int ig_modelo( const void *x, const void *y )
+{
+   const PrModelo *a = x, *b = y;
+   return S_(id) && S_(serie) && I_(version) && S_(padre) && S_(razon) &&
+          S_(creado) && I_(rol) && S_(muestra) && I_(elegido) &&
+          S_(razon_elegido) && S_(por) && S_(por_elegido);
+}
+static int cl_modelo( const void *x, const void *y )
+{ const PrModelo *a = x, *b = y; return S_(id) && S_(serie) && S_(muestra); }
+
+static int ig_caso( const void *x, const void *y )
+{
+   const PrCaso *a = x, *b = y;
+   int i;
+   if ( !( S_(id) && S_(titulo) && S_(razon) && S_(creado) && S_(motor) &&
+           S_(muestra) && S_(padre) && I_(nen) ) ) return 0;
+   for ( i = 0; i < a->nen; i++ )
+      if ( strcmp( a->en[i].serie, b->en[i].serie ) ||
+           strcmp( a->en[i].modelo, b->en[i].modelo ) ||
+           strcmp( a->en[i].sha, b->en[i].sha ) ) return 0;
+   return 1;
+}
+static int cl_caso( const void *x, const void *y )
+{ const PrCaso *a = x, *b = y; return S_(id); }
+
+static int ig_corrida( const void *x, const void *y )
+{
+   const PrCorrida *a = x, *b = y;
+   return S_(id) && S_(caso) && I_(version) && S_(padre) && S_(razon) &&
+          S_(creado) && I_(elegido) && S_(razon_elegido);
+}
+static int cl_corrida( const void *x, const void *y )
+{ const PrCorrida *a = x, *b = y; return S_(id) && S_(caso); }
+
+static int ig_cabecera( const Proyecto *a, const Proyecto *b )
+{
+   return I_(schema_version) && S_(id) && S_(titulo) && S_(creado) &&
+          S_(analista) && S_(raiz) && I_(herramienta);
+}
+
+typedef int (*Cmp)( const void *, const void * );
+
+static int busca( const char *v, int n, size_t tam, const void *x, Cmp clave )
+{
+   int i;
+   for ( i = 0; i < n; i++ ) if ( clave( v + i * tam, x ) ) return i;
+   return -1;
+}
+
+static void anota( char *av, size_t na, const char *fmt, const char *que, const char *id )
+{
+   size_t l = strlen( av );
+   if ( l + 2 >= na ) return;
+   if ( l ) { av[l++] = '\n'; av[l] = '\0'; }
+   snprintf( av + l, na - l, fmt, que, id );
+}
+
+/* Una tabla: res sale de lo del disco con los cambios de mia respecto a
+ * base. 0 bien; 1 conflicto (lo mismo dado de alta aqui y en otro programa
+ * con distinto contenido); 2 no cabe.                                    */
+static int fusiona_tabla( const void *base, int nb, const void *mia, int nm,
+                          const void *disco, int nd, void *res, int *nr, int max,
+                          size_t tam, Cmp clave, Cmp igual, const char *que,
+                          const char *(*nombre)( const void * ), char *av, size_t na )
+{
+   const char *B = base, *M = mia, *D = disco;
+   char       *R = res;
+   char       *fuera = calloc( (size_t) ( nd > 0 ? nd : 1 ), 1 );
+   int         i, n = 0;
+
+   if ( !fuera ) return 2;
+   for ( i = 0; i < nd; i++ )                  /* lo que hay en el disco    */
+      {
+      const char *d = D + i * tam;
+      int kb = busca( B, nb, tam, d, clave ), km = busca( M, nm, tam, d, clave );
+      memcpy( R + n * tam, d, tam );
+      if ( kb >= 0 && km >= 0 )
+         {
+         const char *b = B + kb * tam, *m = M + km * tam;
+         if ( !igual( m, b ) )                   /* lo cambie yo             */
+            {
+            if ( !igual( d, b ) && !igual( d, m ) )
+               anota( av, na, "%s %s: cambiado aquí y en otro programa; queda lo de aquí",
+                      que, nombre( m ) );
+            memcpy( R + n * tam, m, tam );
+            }
+         }
+      else if ( kb >= 0 && km < 0 )              /* lo borre yo              */
+         {
+         if ( igual( d, B + kb * tam ) ) { fuera[i] = 1; continue; }
+         anota( av, na, "%s %s: borrado aquí pero cambiado en otro programa; se queda",
+                que, nombre( d ) );
+         }
+      else if ( kb < 0 && km >= 0 )              /* alta aqui y en el disco  */
+         {
+         if ( !igual( d, M + km * tam ) )
+            {
+            anota( av, na, "%s %s: dado de alta aquí y en otro programa a la vez",
+                   que, nombre( d ) );
+            free( fuera );
+            return 1;
+            }
+         }
+      n++;
+      }
+   for ( i = 0; i < nm; i++ )                  /* lo mio que no esta        */
+      {
+      const char *m = M + i * tam;
+      int kb;
+      if ( busca( D, nd, tam, m, clave ) >= 0 ) continue;
+      kb = busca( B, nb, tam, m, clave );
+      if ( kb >= 0 )                             /* lo borro otro programa   */
+         {
+         if ( igual( m, B + kb * tam ) ) continue;
+         anota( av, na, "%s %s: borrado en otro programa y cambiado aquí; se recupera",
+                que, nombre( m ) );
+         }
+      if ( n >= max ) { free( fuera ); return 2; }
+      memcpy( R + n * tam, m, tam );
+      n++;
+      }
+   free( fuera );
+   *nr = n;
+   return 0;
+}
+
+static const char *nm_serie( const void *x )   { return ( (const PrSerie *) x )->id; }
+static const char *nm_muestra( const void *x ) { return ( (const PrMuestra *) x )->id; }
+static const char *nm_caso( const void *x )    { return ( (const PrCaso *) x )->id; }
+static const char *nm_modelo( const void *x )
+{
+   static char b[3 * PR_ID + 4];
+   const PrModelo *m = x;
+   snprintf( b, sizeof b, "%s%s%s/%s", m->serie, m->muestra[0] ? "/" : "", m->muestra, m->id );
+   return b;
+}
+static const char *nm_corrida( const void *x )
+{
+   static char b[2 * PR_ID + 2];
+   const PrCorrida *c = x;
+   snprintf( b, sizeof b, "%s/%s", c->caso, c->id );
+   return b;
+}
+
+/* EL ELEGIDO ES UNO POR GRUPO. Si la fusion deja dos --uno elegido aqui y
+   otro en otro programa--, gana el de aqui, como en lo demas.          */
+static void un_elegido( Proyecto *r, const Proyecto *mia, const Proyecto *base,
+                        char *av, size_t na )
+{
+   int i, j;
+   for ( i = 0; i < r->nm; i++ )
+      {
+      int ki, ji, mio_i;
+      if ( !r->m[i].elegido ) continue;
+      for ( j = i + 1; j < r->nm; j++ )
+         {
+         if ( !r->m[j].elegido || strcmp( r->m[i].serie, r->m[j].serie ) ||
+              strcmp( r->m[i].muestra, r->m[j].muestra ) ) continue;
+         ki = busca( (const char *) mia->m, mia->nm, sizeof mia->m[0], &r->m[i], cl_modelo );
+         ji = busca( (const char *) base->m, base->nm, sizeof base->m[0], &r->m[i], cl_modelo );
+         mio_i = ki >= 0 && mia->m[ki].elegido && !( ji >= 0 && base->m[ji].elegido );
+         if ( mio_i ) r->m[j].elegido = 0, r->m[j].razon_elegido[0] = '\0';
+         else         r->m[i].elegido = 0, r->m[i].razon_elegido[0] = '\0';
+         anota( av, na, "%s %s: elegido aquí y otro en otro programa; queda el de aquí",
+                "modelo", nm_modelo( mio_i ? &r->m[i] : &r->m[j] ) );
+         if ( !r->m[i].elegido ) break;
+         }
+      }
+   for ( i = 0; i < r->nco; i++ )
+      {
+      int ki, ji, mio_i;
+      if ( !r->co[i].elegido ) continue;
+      for ( j = i + 1; j < r->nco; j++ )
+         {
+         if ( !r->co[j].elegido || strcmp( r->co[i].caso, r->co[j].caso ) ) continue;
+         ki = busca( (const char *) mia->co, mia->nco, sizeof mia->co[0], &r->co[i], cl_corrida );
+         ji = busca( (const char *) base->co, base->nco, sizeof base->co[0], &r->co[i], cl_corrida );
+         mio_i = ki >= 0 && mia->co[ki].elegido && !( ji >= 0 && base->co[ji].elegido );
+         if ( mio_i ) r->co[j].elegido = 0, r->co[j].razon_elegido[0] = '\0';
+         else         r->co[i].elegido = 0, r->co[i].razon_elegido[0] = '\0';
+         anota( av, na, "%s %s: elegida aquí y otra en otro programa; queda la de aquí",
+                "corrida", nm_corrida( mio_i ? &r->co[i] : &r->co[j] ) );
+         if ( !r->co[i].elegido ) break;
+         }
+      }
+}
+
+static int iguales( const Proyecto *a, const Proyecto *b )
+{
+   int i;
+   if ( !ig_cabecera( a, b ) || a->ns != b->ns || a->nmu != b->nmu ||
+        a->nm != b->nm || a->nca != b->nca || a->nco != b->nco ) return 0;
+   for ( i = 0; i < a->ns; i++ )  if ( !ig_serie( &a->s[i], &b->s[i] ) ) return 0;
+   for ( i = 0; i < a->nmu; i++ ) if ( !ig_muestra( &a->mu[i], &b->mu[i] ) ) return 0;
+   for ( i = 0; i < a->nm; i++ )  if ( !ig_modelo( &a->m[i], &b->m[i] ) ) return 0;
+   for ( i = 0; i < a->nca; i++ ) if ( !ig_caso( &a->ca[i], &b->ca[i] ) ) return 0;
+   for ( i = 0; i < a->nco; i++ ) if ( !ig_corrida( &a->co[i], &b->co[i] ) ) return 0;
+   return 1;
+}
+
+/* r = disco + (mia - base). 0 bien; 1 conflicto; 2 no cabe. */
+static int fusiona( const Proyecto *base, const Proyecto *mia, const Proyecto *disco,
+                    Proyecto *r, char *av, size_t na )
+{
+   int rc;
+
+   *r = *disco;
+#define CAB_S(f) if ( strcmp( mia->f, base->f ) ) snprintf( r->f, sizeof r->f, "%s", mia->f )
+#define CAB_I(f) if ( mia->f != base->f ) r->f = mia->f
+   CAB_S(id); CAB_S(titulo); CAB_S(creado); CAB_S(analista); CAB_S(raiz);
+   CAB_I(herramienta);
+#undef CAB_S
+#undef CAB_I
+#define TABLA(v, n, MAX, cl, ig, que, nom) \
+   rc = fusiona_tabla( base->v, base->n, mia->v, mia->n, disco->v, disco->n, r->v, &r->n, \
+                       MAX, sizeof r->v[0], cl, ig, que, nom, av, na ); \
+   if ( rc ) return rc
+   TABLA( s,  ns,  PR_MAX_SERIE,   cl_serie,   ig_serie,   "serie",   nm_serie );
+   TABLA( mu, nmu, PR_MAX_MUESTRA, cl_muestra, ig_muestra, "muestra", nm_muestra );
+   TABLA( m,  nm,  PR_MAX_MODELO,  cl_modelo,  ig_modelo,  "modelo",  nm_modelo );
+   TABLA( ca, nca, PR_MAX_CASO,    cl_caso,    ig_caso,    "caso",    nm_caso );
+   TABLA( co, nco, PR_MAX_CORRIDA, cl_corrida, ig_corrida, "corrida", nm_corrida );
+#undef TABLA
+   un_elegido( r, mia, base, av, na );
+   return 0;
+}
+
+/* --- 4. escribir ---------------------------------------------------------- */
+static char ultimo_aviso[2048];
+
+const char *pr_aviso( void ) { return ultimo_aviso; }
+
+int pr_escribir( Proyecto *p, const char *path, PrError *e )
+{
+   Base      *b;
+   PrCerrojo *cerrojo;
+   Proyecto  *disco = NULL, *res = NULL, *prueba = NULL;
+   char      tmp[PR_RUTA + 32];
+   PrError   e2;
+   int       rc = 1, hay;
+
+   ultimo_aviso[0] = '\0';
+   if ( p == NULL || path == NULL ) return 1;
+   if ( ( cerrojo = pr_cerrojo_coge( path, e ) ) == NULL ) return 1;
+
+   disco  = calloc( 1, sizeof *disco );
+   res    = calloc( 1, sizeof *res );
+   prueba = calloc( 1, sizeof *prueba );
+   if ( !disco || !res || !prueba ) { falla( e, PR_EESCRIBIR, 0, path ); goto fin; }
+
+   *res = *p;
+   b    = base_de( path, 0 );
+   hay  = existe( path ) && leer_crudo( path, disco, &e2 ) == 0;
+   if ( hay && b && b->p && !iguales( disco, b->p ) )
+      {
+      /* LO CAMBIO OTRO PROGRAMA desde que este lo leyo. */
+      if ( iguales( p, b->p ) )
+         *res = *disco;                        /* aqui no cambio nada        */
+      else
+         {
+         int f = fusiona( b->p, p, disco, res, ultimo_aviso, sizeof ultimo_aviso );
+         if ( f )
+            {
+            falla( e, f == 1 ? PR_ECONFLICTO : PR_EMUCHAS, 0,
+                   f == 1 ? ultimo_aviso : path );
+            goto fin;
+            }
+         }
+      snprintf( res->path, sizeof res->path, "%s", p->path );
+      }
+
+   /* AL TEMPORAL, SE RELEE CON LA VALIDACION DE pr_leer Y SE RENOMBRA. */
+   snprintf( tmp, sizeof tmp, "%s.%ld.tmp", path, (long) pr_getpid() );
+   if ( vuelca( res, tmp, e ) ) { remove( tmp ); goto fin; }
+   if ( leer_crudo( tmp, prueba, e ) )
+      {
+      remove( tmp );                     /* la fusion dejo algo invalido */
+      goto fin;
+      }
+   if ( renombra( tmp, path ) ) { remove( tmp ); falla( e, PR_EESCRIBIR, 0, path ); goto fin; }
+
+   *p = *res;
+   apunta_base( path, res );
+   rc = 0;
+fin:
+   pr_cerrojo_suelta( cerrojo );
+   free( prueba ); free( res ); free( disco );
+   return rc;
+}
+
+/* LO QUE FALTA EN nuevo DE LO QUE HABIA EN viejo: lo que la madre tenia y
+   el manifiesto releido ya no trae. Una perdida posible, y se avisa.   */
+int pr_faltan( const Proyecto *viejo, const Proyecto *nuevo, char *out, size_t n )
+{
+   int i, k = 0;
+   if ( out && n ) out[0] = '\0';
+#define FALTA(v, nv, cl, que, nom) \
+   for ( i = 0; i < viejo->nv; i++ ) \
+      if ( busca( (const char *) nuevo->v, nuevo->nv, sizeof nuevo->v[0], &viejo->v[i], cl ) < 0 ) \
+         { k++; if ( out ) anota( out, n, "%s %s", que, nom( &viejo->v[i] ) ); }
+   FALTA( s,  ns,  cl_serie,   "serie",   nm_serie )
+   FALTA( mu, nmu, cl_muestra, "muestra", nm_muestra )
+   FALTA( m,  nm,  cl_modelo,  "modelo",  nm_modelo )
+   FALTA( ca, nca, cl_caso,    "caso",    nm_caso )
+   FALTA( co, nco, cl_corrida, "corrida", nm_corrida )
+#undef FALTA
+   return k;
 }

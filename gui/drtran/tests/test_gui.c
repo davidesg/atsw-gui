@@ -1611,6 +1611,24 @@ int main(int argc, char **argv)
               "con las dos corridas", s);
         check(g_strcmp0(pr_corrida_ver(p2->proy, "C1", "c01")->padre, "c00") == 0,
               "y la segunda cuelga de la primera (el linaje)", s);
+        /* UNA CORRIDA DETENIDA NO QUEDA (docs/AUDITORIA-procesos.md, C2):
+         * sin resultados, fuera del caso y del disco, y la siguiente
+         * cuelga de la anterior buena.                                  */
+        check(estima_lanzar(p2) && !strcmp(p2->corrida, "c02"), "otra corrida arranca (c02)",
+              p2->corrida);
+        gtk_button_clicked(GTK_BUTTON(p2->est.b_parar));
+        check(espera_motor(p2, 60), "«Detener» la para", NULL);
+        {
+            char f[PR_RUTA];
+            pr_corrida_ruta(p2->proy, "C1", "c02", ".dag", f, sizeof f);
+            check(p2->proy->nco == 2 && !pr_corrida_ver(p2->proy, "C1", "c02") &&
+                  !g_file_test(f, G_FILE_TEST_EXISTS),
+                  "la corrida detenida no queda: ni en el caso ni en el disco", f);
+        }
+        check(!strcmp(p2->previa, "c01"), "y la siguiente colgará de c01", p2->previa);
+        g_free(s);
+        s = lee_fichero(yaml);
+        check(!contiene(s, "C1/c02"), "el manifiesto tampoco la tiene", s);
         check(p2->proy->nm == nm0,
               "y ninguna corrida se registra ya como modelo de la serie de salida",
               s);

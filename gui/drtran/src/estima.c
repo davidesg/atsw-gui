@@ -593,13 +593,40 @@ static void on_done( const EngineResult *r, gpointer data )
 
     /* La corrida ya existe en el disco: el manifiesto tiene que decirlo. Y la
      * siguiente colgara de esta -- ahi esta la cadena.               */
+    /* ...SI LA HAY. Detenida, caida o sin .out, la corrida se retira y la
+     * siguiente cuelga de la anterior buena (docs/AUDITORIA-procesos.md,
+     * C2): antes se guardaba y se hacia «previa» fuera como fuera.     */
     if (m->hay_proy) {
-        char why2[256];
+        char     why2[256], quitada[PR_ID];
+        gboolean hay = !E->solo_prever && engine_wrote_results( r ) &&
+                       E->out_path && g_file_test( E->out_path, G_FILE_TEST_EXISTS );
 
-        snprintf( m->previa, sizeof m->previa, "%s", m->corrida );
+        quitada[0] = '\0';
+        if (hay || E->solo_prever)
+            snprintf( m->previa, sizeof m->previa, "%s", m->corrida );
+        else {
+            char out[PR_RUTA];
+
+            snprintf( quitada, sizeof quitada, "%s", m->corrida );
+            mtram_corrida_retira( m );
+            /* LA VENTANA VUELVE AL ULTIMO MODELO BUENO, el de previa: con
+               «Detener» se sigue donde se estaba, no sin modelo.        */
+            if (m->previa[0] && m->caso[0] &&
+                pr_corrida_ruta( m->proy, m->caso, m->previa, ".out", out, sizeof out ) == 0 &&
+                g_file_test( out, G_FILE_TEST_EXISTS )) {
+                snprintf( m->corrida, sizeof m->corrida, "%s", m->previa );
+                g_free( E->out_path );
+                E->out_path = g_strdup( out );
+                diagnosis_desde( m, E->out_path );
+                prevision_desde( m, E->out_path );
+            }
+        }
         if (!mtram_proyecto_guarda( m, why2, sizeof why2 ))
             preview_show_status( m, "El modelo está, pero no pude guardar el "
                                     "proyecto: %s", why2 );
+        else if (quitada[0])
+            preview_show_status( m, "La corrida %s no dejó resultados: no queda en "
+                                    "el caso.", quitada );
     }
 
     mtram_barra_refresca( m );
@@ -711,6 +738,7 @@ gboolean estima_lanzar( Mtram *m )
     E->nota = why[0] ? g_strdup_printf( "%s\n\n", why ) : NULL;
 
     if (!artefactos( m, &dag, &cns, why, sizeof why )) {
+        if (!E->solo_prever) mtram_corrida_retira( m );
         preview_show_status( m, "%s", why );
         return FALSE;
     }
@@ -778,6 +806,7 @@ gboolean estima_lanzar( Mtram *m )
         mtram_verdicto( E->ver_fin, MT_ROJO,
             "No pude lanzar drtran: ni al lado de drtran_gui ni en el PATH "
             "(«make» en engines/drtran)" );
+        if (!E->solo_prever) mtram_corrida_retira( m );
         mtram_barra_refresca( m );
     }
     g_free( d );

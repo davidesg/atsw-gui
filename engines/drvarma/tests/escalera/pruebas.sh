@@ -336,6 +336,45 @@ set -- $r
     && bien "IRF, metodo delta: AR(1) con forma cerrada, h = 0..2 y la acumulada ($2 $3 $4)" \
     || falla "IRF, metodo delta: no casa con la forma cerrada ($r)"
 
+# 10d. -irfboot: LAS BANDAS POR BOOTSTRAP. El .irfboot entero (irf y acc, m*m
+#      pares, h = 0..H), el mismo fichero en dos corridas (el generador es
+#      determinista, el de drvec), y, en un modelo sin raices cerca de la
+#      unidad, la banda del 90 % del bootstrap casa con la del metodo delta
+#      (2 * 1.645 d.t.) a menos de un 30 % en h = 0..2: dos calculos que no
+#      comparten nada salvo el modelo.
+"$BIN" "$WTI" "$ES" 1 0 -o "$TMP/bt1" -irfboot 100 > "$TMP/bt1.log" 2>&1
+"$BIN" "$WTI" "$ES" 1 0 -o "$TMP/bt2" -irfboot 100 > "$TMP/bt2.log" 2>&1
+r=$(python3 - "$TMP/bt1" <<'PY'
+import csv, sys
+b = sys.argv[1]
+t = open(b + ".out", errors="replace").read()
+rows = [r for r in csv.reader(l for l in open(b + ".irfboot") if not l.startswith("#"))][1:]
+H = max(int(r[3]) for r in rows)
+blk = t[t.index("STD. ERRORS OF THE ORTHOGONALIZED"):]
+blk = blk[blk.index("Shock to WTI:"):].split("\n")
+se = [[float(x) for x in l.split()[1:]] for l in blk[2:5]]
+peor = 0.0
+for r in rows:
+    if r[0] == "irf" and r[1] == "WTI" and int(r[3]) <= 2:
+        h, j = int(r[3]), (0 if r[2] == "WTI" else 1)
+        d = 2 * 1.645 * se[h][j]
+        peor = max(peor, abs((float(r[8]) - float(r[6])) / d - 1))
+print(len(rows), 2 * 4 * (H + 1), "%.3f" % peor)
+PY
+)
+set -- $r
+[ -n "$1" ] && [ "$1" = "$2" ] && bien "-irfboot: el .irfboot entero ($1 filas)" \
+    || falla "-irfboot: el .irfboot no tiene sus filas ($r)"
+cmp -s "$TMP/bt1.irfboot" "$TMP/bt2.irfboot" \
+    && bien "-irfboot: dos corridas, el mismo fichero (el generador de drvec)" \
+    || falla "-irfboot: dos corridas dan bandas distintas"
+[ -n "$3" ] && python3 -c "import sys; sys.exit(0 if float('$3') < 0.30 else 1)" \
+    && bien "-irfboot: la banda del 90 % casa con la del metodo delta (peor diferencia $3)" \
+    || falla "-irfboot: la banda no casa con la del metodo delta ($r)"
+"$BIN" "$WTI" "$ES" 1 0 -redet -irfboot 10 -o "$TMP/btr" > "$TMP/btr.log" 2>&1
+[ $? -ne 0 ] && grep -q "not -redet" "$TMP/btr.log" \
+    && bien "-irfboot con -redet es un error" || falla "-irfboot acepta -redet"
+
 # 11. la regresion de la salida de la 5.0
 REF=$AQUI/ref
 filtro() { grep -av '^Program          : \|^Output File      : \|^  \[[0-9]*\] \|^Full results written to \|^Forecasts written to \|^Recursive forecasts written to ' "$1"; }

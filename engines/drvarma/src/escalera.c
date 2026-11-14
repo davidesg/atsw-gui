@@ -40,6 +40,7 @@
 #include "inpcheck.h"
 #include "diagmv.h"           /* Hosking and Jarque-Bera, shared (lib/diagmv) */
 #include <string.h>
+#include <stdint.h>
 #include <math.h>
 
 #define ESC_MAX     10          /* series                                  */
@@ -740,6 +741,220 @@ fin:
     free_matrix(L, 1, m, 1, m);  free_matrix(S, 1, m, 1, m);
 }
 
+/* ------------------------------------------------------------------------- */
+/*  -irfboot N: LAS BANDAS DE LA IRF POR BOOTSTRAP PARAMETRICO                */
+/*                                                                           */
+/*  La otra cara del metodo delta (irf_delta): sin linealizar, y con bandas   */
+/*  que pueden ser asimetricas. El diseño es el de drvec (-irfboot, en        */
+/*  drvec.c) y el de sima (irf_bands), para que las tres digan lo mismo:      */
+/*                                                                           */
+/*    - el modelo ajustado se simula N veces: el VARMA estacionario de las    */
+/*      w, con su media y con innovaciones normales de la Sigma estimada,     */
+/*      y un tramo inicial que se tira (50 + 10 P). EL MISMO GENERADOR que    */
+/*      drvec (boot_normal, su semilla): las bandas se reproducen;            */
+/*    - cada replica se REESTIMA como los datos: la misma escalera, los       */
+/*      mismos enlaces y ceros, desde el optimo. Sin la Hessiana en el        */
+/*      optimo (aqui no hacen falta errores tipicos) y con elf;               */
+/*    - las bandas son los percentiles de Efron (2.5, 5, 50, 95, 97.5) de la  */
+/*      IRF ortogonalizada y de su acumulada, con la Sigma de cada replica.   */
+/*                                                                           */
+/*  Al .out, la tabla de 5 y 95 y de 2.5 y 97.5; entera, a <base>.irfboot,    */
+/*  con el formato del de drvec (what,shock,response,k,point,p2.5,...).       */
+/*  Con -redet no: las w se rehacen de los datos al estimar.                  */
+/* ------------------------------------------------------------------------- */
+static uint64_t boot_rng = 987654321ULL;
+
+static real boot_normal(void)
+{
+    /* Box-Muller sobre un LCG propio, el de drvec: determinista y sin libc. */
+    static int have = 0;
+    static real spare = 0.0;
+    real u1, u2, r, th;
+    if (have) { have = 0; return spare; }
+    do {
+        boot_rng = boot_rng * 6364136223846793005ULL + 1442695040888963407ULL;
+        u1 = ((real)((boot_rng >> 33) & 0x7FFFFFFF)) / 2147483648.0;
+    } while (u1 <= 1.0e-12);
+    boot_rng = boot_rng * 6364136223846793005ULL + 1442695040888963407ULL;
+    u2 = ((real)((boot_rng >> 33) & 0x7FFFFFFF)) / 2147483648.0;
+    r  = sqrt(-2.0 * log(u1));
+    th = 2.0 * M_PI * u2;
+    spare = r * sin(th); have = 1;
+    return r * cos(th);
+}
+
+static int cmp_real_boot(const void *a, const void *b)
+{
+    real x = *(const real *) a, y = *(const real *) b;
+    return (x > y) - (x < y);
+}
+
+/* Una muestra de las w del modelo v (con Sigma = s2 * qq): sim[t][a]. */
+static int boot_simula(struct Tvarma *v, real s2, real **sim)
+{
+    int m = v->m, n = v->n, P = v->p, Q = v->q, burn = 50 + 10 * P, T = n + burn;
+    int t, i, j, k;
+    real **wb = matrix(1, T, 1, m), **ab = matrix(1, T, 1, m);
+    real **S = matrix(1, m, 1, m), **L = matrix(1, m, 1, m), *z = vector(1, m);
+    int bad;
+
+    for (i = 1; i <= m; i++) for (j = 1; j <= m; j++) S[i][j] = s2 * v->qq[i][j];
+    bad = irf_chol(S, L, m);
+    if (!bad)
+        for (t = 1; t <= T; t++) {
+            for (i = 1; i <= m; i++) z[i] = boot_normal();
+            for (i = 1; i <= m; i++) {
+                real acc = 0.0;
+                for (k = 1; k <= i; k++) acc += L[i][k] * z[k];
+                ab[t][i] = acc;
+            }
+            for (i = 1; i <= m; i++) {
+                real acc = ab[t][i];
+                for (j = 1; j <= P; j++) if (t - j >= 1)
+                    for (k = 1; k <= m; k++) acc += v->phi[j][i][k] * (wb[t-j][k] - v->mu[k]);
+                for (j = 1; j <= Q; j++) if (t - j >= 1)
+                    for (k = 1; k <= m; k++) acc -= v->theta[j][i][k] * ab[t-j][k];
+                wb[t][i] = v->mu[i] + acc;
+            }
+        }
+    if (!bad)
+        for (t = 1; t <= n; t++)
+            for (i = 1; i <= m; i++) sim[t][i] = wb[t + burn][i];
+    free_vector(z, 1, m);
+    free_matrix(L, 1, m, 1, m); free_matrix(S, 1, m, 1, m);
+    free_matrix(ab, 1, T, 1, m); free_matrix(wb, 1, T, 1, m);
+    return bad;
+}
+
+static void irf_bootstrap(Fit *F, int H, int N, const char *base, FILE *out)
+{
+    int m = F->vm.m, n = F->vm.n, b, a, i, k, h, nok = 0, nfail = 0, w2, ifault = 0;
+    long cells = (long) (H + 1) * m * m;
+    real *irf = (real *) malloc(sizeof(real) * (size_t) cells * (size_t) N);
+    real *acu = (real *) malloc(sizeof(real) * (size_t) cells * (size_t) N);
+    real **sim = matrix(1, n, 1, m), **saved = matrix(1, m, 1, n), *col = vector(1, N);
+    real **S = matrix(1, m, 1, m), **L = matrix(1, m, 1, m);
+    real ***psi = tensor(0, H, 1, m, 1, m), ***O = tensor(0, H, 1, m, 1, m);
+    real ***O0 = tensor(0, H, 1, m, 1, m);
+    struct Tvarma vh;
+    FILE *save_out = outputv, *nul = tmpfile(), *fb;
+    int save_quiet = quiet_mode, save_fd = est_fdhess, save_lik = est_lik;
+    char fname[600];
+
+    if (!irf || !acu || !nul) {
+        fprintf(out, "\n(no bootstrap bands: out of memory)\n");
+        goto fin;
+    }
+    /* el modelo ajustado, con su Sigma, y su IRF (la del informe) */
+    vh = F->vm;
+    for (a = 1; a <= m; a++) for (i = 1; i <= m; i++) S[a][i] = F->sigma2 * F->vm.qq[a][i];
+    irf_chol(S, L, m);
+    irf_orth(&F->vm, L, H, psi, O0);
+    for (a = 1; a <= m; a++)
+        for (k = 1; k <= n; k++) saved[a][k] = w[act[a]][k];
+
+    printf("IRF bootstrap (-irfboot %d): ", N); fflush(stdout);
+    outputv = nul; quiet_mode = 1; est_fdhess = 0; est_lik = LIK_ELF;
+    for (b = 1; b <= N; b++) {
+        Fit Fb;
+        int good = 0;
+        if (boot_simula(&vh, F->sigma2, sim) == 0) {
+            for (a = 1; a <= m; a++)
+                for (k = 1; k <= n; k++) w[act[a]][k] = sim[k][a];
+            esc_unpack(F->x);                     /* desde el optimo        */
+            fit_run(&Fb, 1);
+            if (Fb.ifault == 0) {
+                for (a = 1; a <= m; a++)
+                    for (i = 1; i <= m; i++) S[a][i] = Fb.sigma2 * Fb.vm.qq[a][i];
+                if (irf_chol(S, L, m) == 0) {
+                    irf_orth(&Fb.vm, L, H, psi, O);
+                    good = 1;
+                }
+            }
+            fit_free(&Fb);
+        }
+        if (good) {
+            long base0 = (long) nok * cells;
+            for (i = 1; i <= m; i++)
+                for (k = 1; k <= m; k++) {
+                    real ac = 0.0;
+                    for (h = 0; h <= H; h++) {
+                        long c = base0 + ((long) h * m + (i - 1)) * m + (k - 1);
+                        ac += O[h][i][k];
+                        irf[c] = O[h][i][k];
+                        acu[c] = ac;
+                    }
+                }
+            nok++;
+        } else nfail++;
+        if (b % 50 == 0) { printf("%d ", b); fflush(stdout); }
+    }
+    outputv = save_out; quiet_mode = save_quiet; est_fdhess = save_fd; est_lik = save_lik;
+    for (a = 1; a <= m; a++)
+        for (k = 1; k <= n; k++) w[act[a]][k] = saved[a][k];
+    shootx_esc(F->x, &F->vm, &ifault, 0, 0);       /* el estado, al optimo   */
+    printf("\n  %d replications refitted, %d failed\n", nok, nfail);
+
+    fprintf(out, "\n=============================================================\n");
+    fprintf(out, "  BOOTSTRAP BANDS OF THE ORTHOGONALIZED IMPULSE RESPONSES\n");
+    fprintf(out, "=============================================================\n");
+    fprintf(out, "%d replications simulated from the fitted model (Gaussian shocks\n"
+                 "with the fitted Sigma) and REFITTED as the data were; %d failed and\n"
+                 "are left out. Percentile intervals (Efron). Same orthogonalisation\n"
+                 "as the responses above. The whole table is in %s.irfboot.\n",
+            nok, nfail, base);
+    if (nok < 20) {
+        fprintf(out, "\nToo few replications for bands (%d).\n", nok);
+        goto fin;
+    }
+    snprintf(fname, sizeof fname, "%s.irfboot", base);
+    fb = fopen(fname, "w");
+    if (fb) fprintf(fb, "# drvarma -irfboot %d: %d replications, percentile bands\n"
+                        "what,shock,response,k,point,p2.5,p5,p50,p95,p97.5\n", N, nok);
+    for (w2 = 0; w2 < 2; w2++) {
+        real *src = w2 ? acu : irf;
+        for (k = 1; k <= m; k++)
+            for (i = 1; i <= m; i++) {
+                real ac0 = 0.0;
+                fprintf(out, "\n%s of %s to a shock to %s:\n"
+                             "    h        point       5%%      95%%     2.5%%    97.5%%\n",
+                        w2 ? "Accumulated response" : "Response",
+                        Ts[act[i]].name, Ts[act[k]].name);
+                for (h = 0; h <= H; h++) {
+                    real q[5], pt;
+                    const real pp[5] = { 0.025, 0.05, 0.50, 0.95, 0.975 };
+                    int t, j;
+                    for (t = 0; t < nok; t++)
+                        col[t + 1] = src[(long) t * cells + ((long) h * m + (i - 1)) * m + (k - 1)];
+                    qsort(&col[1], (size_t) nok, sizeof(real), cmp_real_boot);
+                    for (j = 0; j < 5; j++) {
+                        int ix = (int) ceil(pp[j] * nok);
+                        if (ix < 1) ix = 1;
+                        if (ix > nok) ix = nok;
+                        q[j] = col[ix];
+                    }
+                    ac0 += O0[h][i][k];
+                    pt = w2 ? ac0 : O0[h][i][k];
+                    fprintf(out, "%5d %12.6f %8.4f %8.4f %8.4f %8.4f\n",
+                            h, pt, q[1], q[3], q[0], q[4]);
+                    if (fb) fprintf(fb, "%s,%s,%s,%d,%.8g,%.8g,%.8g,%.8g,%.8g,%.8g\n",
+                                    w2 ? "acc" : "irf", Ts[act[k]].name, Ts[act[i]].name,
+                                    h, pt, q[0], q[1], q[2], q[3], q[4]);
+                }
+            }
+    }
+    if (fb) { fclose(fb); printf("  bands written to the .out and to %s\n", fname); }
+
+fin:
+    if (nul) fclose(nul);
+    free_tensor(O0, 0, H, 1, m, 1, m); free_tensor(O, 0, H, 1, m, 1, m);
+    free_tensor(psi, 0, H, 1, m, 1, m);
+    free_matrix(L, 1, m, 1, m); free_matrix(S, 1, m, 1, m);
+    free_vector(col, 1, N);
+    free_matrix(saved, 1, m, 1, n); free_matrix(sim, 1, n, 1, m);
+    free(acu); free(irf);
+}
+
 static const char *fault_msg(int f)
 {
     switch (f) {
@@ -1242,6 +1457,7 @@ void escalera_usage(const char *prog)
 {
     printf("       %s A.pre B.pre [C.pre ...] p q [-diagcov] [-redet] [-fixarma]\n", prog);
     printf("                                  [-m method] [-o NAME] [-forecast H [-estwin N]]\n");
+    printf("                                  [-irfboot N]\n");
     printf("                                  [-hessian fd|bfgs] [-lik elf|shea|both]\n");
     printf("                                  [-links \"A<-B,C<-A\"] [-zero \"AR1[A<-B],...\"]\n");
     printf("  THE LADDER: each series comes with its univariate model from fue (.pre):\n");
@@ -1260,6 +1476,9 @@ void escalera_usage(const char *prog)
     printf("  -hessian : standard errors from fdhess at the optimum (fd, default) or\n"
            "             from the BFGS Hessian of the search (bfgs)\n");
     printf("  -o NAME  : results to NAME.out (default: the .pre names joined by '_')\n");
+    printf("  -irfboot N  : bands for the impulse responses by parametric bootstrap: N\n"
+           "                simulations of the fitted model, each refitted; Efron's\n"
+           "                percentiles to the .out and to NAME.irfboot (not with -redet)\n");
     printf("  -forecast H : forecast H periods -> NAME.forecast, each series in its level\n");
     printf("  -estwin N   : estimate on the first N observations of the first series,\n");
     printf("                then fixed-parameter forecasts from every origin to the end\n");
@@ -1283,6 +1502,7 @@ static void base_of(const char *path, char *out, size_t n)
 int escalera_main(int argc, char *argv[])
 {
     char  outname[512] = "", outfile[520], why[600];
+    int   irfboot_n = 0;
     const char *links_arg = NULL;
     const char *zero_arg = NULL;
     int   i, a, argi, met_esc = 1, p, q, rc = 0, fc_h = 0, estwin = 0;
@@ -1329,6 +1549,8 @@ int escalera_main(int argc, char *argv[])
         else if (strcmp(argv[argi], "-m") == 0 && argi + 1 < argc) met_esc = atoi(argv[++argi]);
         else if (strcmp(argv[argi], "-o") == 0 && argi + 1 < argc)
             snprintf(outname, sizeof outname, "%s", argv[++argi]);
+        else if (strcmp(argv[argi], "-irfboot") == 0 && argi + 1 < argc)
+            irfboot_n = atoi(argv[++argi]);
         else if (strcmp(argv[argi], "-forecast") == 0 && argi + 1 < argc)
             fc_h = atoi(argv[++argi]);
         else if (strcmp(argv[argi], "-estwin") == 0 && argi + 1 < argc)
@@ -1358,6 +1580,11 @@ int escalera_main(int argc, char *argv[])
         }
     }
     int want_diagcov = cx_diagcov;
+    if (irfboot_n < 0 || (irfboot_n > 0 && opt_redet)) {
+        printf("ERROR: -irfboot N needs N >= 1, and not -redet (the stationary\n"
+               "       series are rebuilt from the data at each estimation)\n");
+        return 1;
+    }
     if (fc_h < 0 || (estwin > 0 && fc_h <= 0)) {
         printf("ERROR: -estwin needs a horizon: give -forecast H\n");
         return 1;
@@ -1750,6 +1977,8 @@ int escalera_main(int argc, char *argv[])
             diagnose(&F.vm, np);
             free(np);
         }
+        if (irfboot_n > 0)
+            irf_bootstrap(&F, (F.vm.n < 40) ? 10 : 20, irfboot_n, outname, outputv);
     }
 
     /* [6] Forecasts. The estimated model is released first: the forecast

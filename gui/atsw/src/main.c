@@ -2474,18 +2474,39 @@ static gboolean on_atajo_sale( GtkAccelGroup *g, GObject *o, guint k,
  * pierde. Salir, Ctrl+Q y la X de la ventana pasan todos por aqui.    */
 static gboolean on_cierra_madre( GtkWidget *w, GdkEvent *ev, Atsw *a )
 {
-    char       quienes[256];
+    char       quienes[256], eds[512];
     int        n = atsw_hijos_vivos( a, quienes, sizeof quienes ), r;
+    int        ne = atsw_editores_pendientes( eds, sizeof eds );
     GtkWidget *d;
 
     (void) ev;
-    if ( n == 0 ) return FALSE;
-    d = gtk_message_dialog_new( GTK_WINDOW(w), GTK_DIALOG_MODAL, GTK_MESSAGE_QUESTION,
-                                GTK_BUTTONS_NONE, "%s abiert%s desde aquí: %s.",
-                                n == 1 ? "Hay una ventana" : "Hay varias ventanas",
-                                n == 1 ? "a" : "as", quienes );
-    gtk_message_dialog_format_secondary_text( GTK_MESSAGE_DIALOG(d),
-        "Se cierran con la madre. Lo que no hayas guardado en ellas se pierde." );
+    if ( n == 0 && ne == 0 ) return FALSE;
+    if ( n > 0 )
+        {
+        d = gtk_message_dialog_new( GTK_WINDOW(w), GTK_DIALOG_MODAL, GTK_MESSAGE_QUESTION,
+                                    GTK_BUTTONS_NONE, "%s abiert%s desde aquí: %s.",
+                                    n == 1 ? "Hay una ventana" : "Hay varias ventanas",
+                                    n == 1 ? "a" : "as", quienes );
+        if ( ne )
+            gtk_message_dialog_format_secondary_text( GTK_MESSAGE_DIALOG(d),
+                "Se cierran con la madre. Lo que no hayas guardado en ellas se pierde. "
+                "Y en los editores de aquí: %s.", eds );
+        else
+            gtk_message_dialog_format_secondary_text( GTK_MESSAGE_DIALOG(d),
+                "Se cierran con la madre. Lo que no hayas guardado en ellas se pierde." );
+        }
+    else
+        {
+        /* SOLO LOS EDITORES DE LA MADRE (docs/AUDITORIA-procesos.md, B2):
+           antes, sin hijos, se cerraba sin preguntar y se perdian.      */
+        d = gtk_message_dialog_new( GTK_WINDOW(w), GTK_DIALOG_MODAL, GTK_MESSAGE_QUESTION,
+                                    GTK_BUTTONS_NONE, "%s: %s.",
+                                    ne == 1 ? "Hay un editor con trabajo pendiente"
+                                            : "Hay editores con trabajo pendiente", eds );
+        gtk_message_dialog_format_secondary_text( GTK_MESSAGE_DIALOG(d),
+            "Si cierras la madre, lo que no hayas guardado se pierde y las "
+            "estimaciones se paran." );
+        }
     gtk_dialog_add_buttons( GTK_DIALOG(d), "_Cancelar", GTK_RESPONSE_CANCEL,
                             "Cerrar _todo", GTK_RESPONSE_ACCEPT, NULL );
     gtk_dialog_set_default_response( GTK_DIALOG(d), GTK_RESPONSE_CANCEL );

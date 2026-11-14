@@ -1930,6 +1930,9 @@ const char *pr_error_en( const PrError *e, char *out, size_t n )
 #include <io.h>
 #include <process.h>
 #define pr_getpid _getpid
+#ifndef PROCESS_QUERY_LIMITED_INFORMATION
+#define PROCESS_QUERY_LIMITED_INFORMATION 0x1000
+#endif
 #else
 #include <unistd.h>
 #include <signal.h>

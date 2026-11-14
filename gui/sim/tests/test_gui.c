@@ -671,6 +671,24 @@ int main( int argc, char **argv )
         check( pr_corrida_ver( p->proy, "C1", "c01" ) &&
                !g_strcmp0( pr_corrida_ver( p->proy, "C1", "c01" )->padre, "c00" ),
                "c01 cuelga de c00 en el linaje", NULL );
+        /* UNA CORRIDA SIN RESULTADOS NO QUEDA (docs/AUDITORIA-procesos.md,
+         * C2): el motor falso sale con error y no escribe nada.         */
+        g_setenv( "SIM_DRVARMA", fake, TRUE );
+        check( estima_lanzar( p ) && !strcmp( p->pe.corrida, "c02" ) && espera( p, 60 ),
+               "una estimación que falla (c02) corre", p->pe.corrida );
+        g_unsetenv( "SIM_DRVARMA" );
+        check( !pr_corrida_ver( p->proy, "C1", "c02" ) && !strcmp( p->pe.corrida, "c01" ) && p->pe.v,
+               "y no queda en el sistema: la ventana vuelve a c01", etiqueta( p->estado ) );
+        check( !strcmp( p->pe.previa, "c01" ), "la siguiente colgará de c01", p->pe.previa );
+        check( contiene( etiqueta( p->estado ), "no dejó resultados" ), "y la barra lo dice",
+               etiqueta( p->estado ) );
+        {
+            Proyecto *disco = g_new0( Proyecto, 1 );
+            PrError e2;
+            check( pr_leer( yaml, disco, &e2 ) == 0 && !pr_corrida_ver( disco, "C1", "c02" ),
+                   "ni en el manifiesto guardado", NULL );
+            g_free( disco );
+        }
         {
             Proyecto *disco = g_new0( Proyecto, 1 );
             PrError e;

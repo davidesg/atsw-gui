@@ -119,15 +119,56 @@ static void lee( Sim *m, const char *out )
     E->version++;
 }
 
+/* UNA CORRIDA SIN RESULTADOS SE RETIRA (docs/AUDITORIA-procesos.md, C2):
+ * se da de alta al lanzar --su id es el nombre de sus ficheros-- y, si el
+ * motor no llega a correr o acaba sin .out (detenido, caido), sale del
+ * manifiesto y del disco. La siguiente cuelga de la anterior buena.   */
+static void retira_corrida( Sim *m )
+{
+    PagEstima *E = &m->pe;
+    PrError e;
+
+    if (!m->proy || !m->caso[0] || !E->corrida[0]) return;
+    if (E->out) g_remove( E->out );
+    if (pr_corrida_borra( m->proy, m->caso, E->corrida, &e ) == 0)
+        pr_escribir( m->proy, m->proy->path, &e );
+    E->corrida[0] = '\0';
+}
+
 static void on_done( const EngineResult *r, gpointer data )
 {
     Sim *m = data;
     PagEstima *E = &m->pe;
+    char quitada[PR_ID] = "";
 
     E->corriendo = FALSE;
     E->trabajo = NULL;
     E->rc = r->status;
+    /* EL LINAJE, ANTES QUE LA VENTANA: tambien si se cerro con el motor en
+       marcha. Con resultados, la siguiente cuelga de esta; sin ellos, fuera. */
+    if (E->corrida[0]) {
+        if (engine_wrote_results( r ) && E->out && g_file_test( E->out, G_FILE_TEST_EXISTS ))
+            snprintf( E->previa, sizeof E->previa, "%s", E->corrida );
+        else {
+            snprintf( quitada, sizeof quitada, "%s", E->corrida );
+            retira_corrida( m );
+        }
+    }
     if (!m->ventana) return;
+    if (quitada[0] && E->previa[0] && m->proy && m->caso[0]) {
+        /* LA VENTANA VUELVE AL ULTIMO MODELO BUENO, el de previa. */
+        char out[PR_RUTA];
+        if (pr_corrida_ruta( m->proy, m->caso, E->previa, ".out", out, sizeof out ) == 0 &&
+            g_file_test( out, G_FILE_TEST_EXISTS )) {
+            gtk_widget_hide( m->avance );
+            snprintf( E->corrida, sizeof E->corrida, "%s", E->previa );
+            estima_desde( m, out );
+            sim_refresca( m );
+            sim_estado( m, "La corrida %s no dejó resultados: no queda en el sistema. "
+                        "Sigues en %s.", quitada, E->corrida );
+            return;
+        }
+    }
     gtk_widget_hide( m->avance );
     lee( m, E->out );
     if (E->vec) modelo_del_vec( m, E->vec );
@@ -136,7 +177,11 @@ static void on_done( const EngineResult *r, gpointer data )
         /* El veredicto, sin su punto de color. */
         const char *t = gtk_label_get_text( GTK_LABEL(E->ver_fin) ), *q = strstr( t, "●" );
         if (q) for (q += strlen( "●" ); *q == ' '; q++) ;
-        sim_estado( m, "%s", q ? q : t );
+        if (quitada[0])
+            sim_estado( m, "%s La corrida %s no dejó resultados: no queda en el sistema.",
+                        q ? q : t, quitada );
+        else
+            sim_estado( m, "%s", q ? q : t );
     }
 }
 
@@ -210,7 +255,12 @@ gboolean estima_lanzar( Sim *m )
         k = sis_orden_vec( &m->sis, &m->mod, nombre, buf, sizeof buf, av, G_N_ELEMENTS(av) - 1 );
     } else
         k = sis_orden_modelo( &m->sis, &m->mod, base, buf, sizeof buf, av, G_N_ELEMENTS(av) - 1 );
-    if (k < 0) { g_free( base ); g_free( nombre ); sim_estado( m, "La orden no cabe." ); return FALSE; }
+    if (k < 0) {
+        g_free( base ); g_free( nombre );
+        retira_corrida( m );
+        sim_estado( m, "La orden no cabe." );
+        return FALSE;
+    }
     av[k] = NULL;
 
     g_free( E->out );
@@ -224,11 +274,11 @@ gboolean estima_lanzar( Sim *m )
     g_free( base );
     g_free( nombre );
     if (!E->trabajo) {
+        retira_corrida( m );
         sim_veredicto( E->ver_fin, SIM_ROJO, "No pude lanzar %s.", motor );
         return FALSE;
     }
-    /* La siguiente colgara de esta. */
-    if (E->corrida[0]) snprintf( E->previa, sizeof E->previa, "%s", E->corrida );
+    /* La siguiente colgara de esta SI DEJA RESULTADOS: lo decide on_done. */
     E->corriendo = TRUE;
     if (m->avance) { gtk_widget_show( m->avance ); g_timeout_add( 120, pulso, m ); }
     sim_estado( m, "%s estima%s%s…", motor, E->corrida[0] ? " la corrida " : "",

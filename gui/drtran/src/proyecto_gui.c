@@ -24,6 +24,7 @@
  */
 
 #include <string.h>
+#include <glib/gstdio.h>
 
 #include "gui.h"
 #include "previewhost.h"
@@ -340,6 +341,27 @@ gboolean mtram_corrida_nueva( Mtram *m, char *why, size_t n )
     snprintf( m->corrida, sizeof m->corrida, "%s", id );
     crea_dir_corrida( m );
     return TRUE;
+}
+
+/* UNA CORRIDA SIN RESULTADOS SE RETIRA (docs/AUDITORIA-procesos.md, C2):
+ * la que no llego a lanzarse, la detenida o la que el motor dejo sin .out.
+ * Se da de alta al lanzar porque su id es el nombre de sus ficheros; si no
+ * deja resultados, fuera del manifiesto, con lo que se le preparo (.dag,
+ * .cns, el .out a medias), y la siguiente no cuelga de ella.          */
+void mtram_corrida_retira( Mtram *m )
+{
+    static const char *ext[] = { ".out", ".dag", ".cns", NULL };
+    PrError e;
+    int     k;
+
+    if (!m->hay_proy || !m->proy || !m->caso[0] || !m->corrida[0]) return;
+    for (k = 0; ext[k]; k++) {
+        char f[PR_RUTA];
+        if (pr_corrida_ruta( m->proy, m->caso, m->corrida, ext[k], f, sizeof f ) == 0)
+            g_remove( f );
+    }
+    pr_corrida_borra( m->proy, m->caso, m->corrida, &e );
+    m->corrida[0] = '\0';
 }
 
 gchar *mtram_artefacto( Mtram *m, const char *sufijo )

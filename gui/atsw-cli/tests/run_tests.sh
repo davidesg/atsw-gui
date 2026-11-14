@@ -364,12 +364,28 @@ C="$WORK/conc"; mkdir -p "$C"
   done
 } > "$C/p.yaml"
 for i in $(seq 1 30); do
-  "$CLI" proyecto razon "$C/p.yaml" IPC "$(printf m%02d "$i")" "razon $i" > /dev/null 2>&1 &
+  ( "$CLI" proyecto razon "$C/p.yaml" IPC "$(printf m%02d "$i")" "razon $i" \
+        > /dev/null 2> "$C/err.$i"; echo $? > "$C/rc.$i" ) &
 done
 wait
 n=$(grep -c 'razon: "*razon [0-9]' "$C/p.yaml")
-mira "30 atsw-cli a la vez sobre el mismo manifiesto: no se pierde ninguna razón ($n de 30)" \
+# LA REGLA ES QUE NADA SE PIERDA EN SILENCIO: un proceso puede no escribir (el
+# cerrojo no llega a tiempo, por ejemplo), pero entonces lo dice y sale con
+# error. Lo que no puede pasar es que diga que si y su razon no este.
+callados=""; avisan=""
+for i in $(seq 1 30); do
+  if [ "$(cat "$C/rc.$i")" = 0 ]; then
+    grep -q "razon: \"*razon $i\"*\$" "$C/p.yaml" || callados="$callados m$i"
+  else
+    avisan="$avisan m$i($(tr '\n' ' ' < "$C/err.$i"))"
+  fi
+done
+[ -n "$avisan" ] && echo "  los que avisaron:$avisan"
+mira "30 atsw-cli a la vez: ninguno dice que escribio y se pierde${callados:+ (se perdieron:$callados)}" \
+     '[ -z "$callados" ]'
+mira "30 atsw-cli a la vez sobre el mismo manifiesto: estan las 30 razones ($n de 30)" \
      '[ "$n" = 30 ]'
+rm -f "$C"/rc.* "$C"/err.*
 mira "y no queda ningún temporal" \
      '[ -z "$(ls "$C" | grep -E "\.tmp$")" ]'
 

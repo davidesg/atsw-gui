@@ -458,7 +458,7 @@ el mismo modelo.
     - el `.irfboot` del C para el mismo modelo, réplica a réplica donde la
       trayectoria lo permita.
   - *`irf_fevd_bands`*: se queda solo para lo que el C no tiene, las bandas
-    de la FEVD, si se decide así (ver abajo). Si no, se depreca con aviso.
+    de la FEVD (decidido, abajo). Para la IRF ya no se usa.
 - **drvec-python** (0.2.0):
   - revendorizar `csrc/` desde el `main` de atsw-gui con
     `tools/vendor_drvec_c.py`, `C_VERSION` a «0.14» y las pruebas de oráculo
@@ -478,14 +478,13 @@ el mismo modelo.
   - las versiones mínimas de drvarma y drvec en `pyproject.toml`.
 - **atsw** (la suite en PyPI): una versión que recoja las tres.
 
-*Por decidir*
+*Decidido (14-nov-2026)*
 
-- **¿Qué se hace con las extracciones de parámetros (Lütkepohl §3.7) de
-  drvarma-python?** La recomendación es que la IRF sea, como en C, delta por
-  omisión y bootstrap como opción, y que las extracciones queden solo para las
-  bandas de la FEVD, que el C no tiene. La otra salida es llevar al C
-  también las bandas de la FEVD (por el delta o el bootstrap) y retirar las
-  extracciones.
+- **La IRF, como en C**: el método delta por omisión y el bootstrap como
+  opción, en drvarma-python y en sima, para el VARMA y para el VEC. Las
+  extracciones de parámetros de drvarma-python (Lütkepohl §3.7,
+  `irf_fevd_bands`) quedan **solo para las bandas de la FEVD**, que el C no
+  tiene. Para la IRF dejan de usarse, y se dice en su documentación.
 
 **La auditoría de «Al cuaderno» (P5, 12-nov-2026).**
 

@@ -1850,6 +1850,10 @@ const char *pr_error_es( const PrError *e, char *out, size_t n )
        case PR_ECONFLICTO:
            snprintf( out, n, "No se ha guardado: %s. Vuelve a intentarlo, que ya "
                      "se ve lo del otro programa.", e->texto ); break;
+       case PR_EILEGIBLE:
+           snprintf( out, n, "No se ha guardado: el proyecto en disco no se puede "
+                     "leer (%s). Puede ser de un ATSW más nuevo o estar estropeado, "
+                     "y escribir encima perdería lo que tiene.", e->texto ); break;
        }
    return out;
 }
@@ -1919,6 +1923,11 @@ const char *pr_error_en( const PrError *e, char *out, size_t n )
            break;
        case PR_ECONFLICTO:
            snprintf( out, n, "not saved: %s", e->texto );
+           break;
+       case PR_EILEGIBLE:
+           snprintf( out, n, "not saved: the project on disk cannot be read (%s); "
+                     "it may come from a newer ATSW or be damaged, and writing over "
+                     "it would lose what it holds", e->texto );
            break;
        }
    return out;
@@ -2469,7 +2478,7 @@ int pr_escribir( Proyecto *p, const char *path, PrError *e )
    PrCerrojo *cerrojo;
    Proyecto  *disco = NULL, *res = NULL, *prueba = NULL;
    char      tmp[PR_RUTA + 32];
-   PrError   e2;
+   PrError   e2 = { PR_OK, 0, "" };
    int       rc = 1, hay;
 
    ultimo_aviso[0] = '\0';
@@ -2483,7 +2492,27 @@ int pr_escribir( Proyecto *p, const char *path, PrError *e )
 
    *res = *p;
    b    = base_de( path, 0 );
-   hay  = existe( path ) && leer_crudo( path, disco, &e2 ) == 0;
+   hay  = existe( path );
+   if ( hay && leer_crudo( path, disco, &e2 ) != 0 )
+      {
+      if ( e2.cod == PR_EVACIO ) hay = 0;      /* vacio: nada que perder */
+      }
+   if ( hay && e2.cod != PR_OK )
+      {
+      /* LO QUE ESTA EN DISCO NO SE ENTIENDE --una clave de un ATSW mas nuevo,
+         un schema_version mayor, un fichero estropeado-- Y NO SE PISA. Antes
+         se trataba como si no hubiera fichero: se escribia la copia de aqui
+         encima, lo que el otro escribio se perdia y se devolvia 0 (BUG-0003
+         de gui/atsw; AUDITORIA-procesos C6).                           */
+      char q[PR_TEXTO];
+
+      if ( e2.linea > 0 )
+         snprintf( q, sizeof q, "%s:%d: %s", path, e2.linea, e2.texto );
+      else
+         snprintf( q, sizeof q, "%s", e2.texto[0] ? e2.texto : path );
+      falla( e, PR_EILEGIBLE, e2.linea, q );
+      goto fin;
+      }
    if ( hay && b && b->p && !iguales( disco, b->p ) )
       {
       /* LO CAMBIO OTRO PROGRAMA desde que este lo leyo. */

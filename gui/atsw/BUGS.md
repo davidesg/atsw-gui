@@ -149,3 +149,46 @@ mismo directorio, nada en el PATH) y sale con 1 mientras ninguno dé con fug.
 En la pantalla lo prueba la fila «Escena extra/vistazo-sin-path» de
 `revision-casos.yml`, que abre el vistazo sin el directorio del paquete en el
 PATH.
+
+## BUG-0003 — pr_escribir pisa en silencio un manifiesto que no puede leer
+
+**Encontrado:** 2026-11-14, al repasar lo bajo de la auditoría de procesos
+(`docs/AUDITORIA-procesos.md`, C6). Es de `lib/proyecto`, y por tanto de todos
+los que escriben el manifiesto: la madre, sus ventanas, fue_gui, drtran_gui,
+sim_gui y atsw-cli.
+**Arreglado:** 2026-11-14: `pr_escribir` se niega con `PR_EILEGIBLE` y dice
+por qué. `repro.py` sale con 0.
+
+### Síntoma
+
+Un programa tiene el proyecto abierto. Otro, de un ATSW más nuevo, escribe en
+el manifiesto una clave que el primero no conoce. El primero guarda un cambio
+suyo: devuelve 0, sin aviso, y la clave nueva ha desaparecido del fichero. Lo
+mismo con un `schema_version` mayor o con un manifiesto estropeado a mano: lo
+que había se sustituye por la copia de este programa.
+
+### Por qué
+
+Desde la fase 1, `pr_escribir` es transaccional: coge el cerrojo, lee el
+manifiesto del disco y, si otro lo cambió, fusiona. Pero si esa lectura
+**fallaba**, se trataba igual que si el fichero no existiera
+(`hay = existe(path) && leer_crudo(...) == 0`). No había nada con qué
+fusionar, y la copia de aquí se escribía encima.
+
+Al abrir no pasaba: `pr_leer` rechaza la clave desconocida, así que ningún
+programa arranca con un manifiesto que no entiende. El hueco era el de quien
+ya lo tenía abierto cuando otro lo cambió.
+
+### Arreglo
+
+Si el manifiesto en disco existe y no se puede leer, `pr_escribir` no escribe,
+devuelve `PR_EILEGIBLE` y el mensaje dice dónde está lo que no entiende
+(`fichero:línea: clave`). Un fichero **vacío** (`PR_EVACIO`) sí se escribe:
+no hay nada que perder.
+
+### Reproducción
+
+`bugs/BUG-0003-repro/repro.py` compila `pisa.c` contra `lib/proyecto`: escribe
+un manifiesto, le añade una clave desconocida y guarda encima un cambio con la
+copia que tenía en memoria. Sale con 1 si `pr_escribir` devuelve 0 y la clave
+ha desaparecido. Lo prueba también la sección 10 de `lib/proyecto/test_proyecto.c`.

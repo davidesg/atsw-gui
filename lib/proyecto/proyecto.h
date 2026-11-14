@@ -104,7 +104,8 @@ typedef enum {
    PR_EVERSION,      /* el manifiesto es de una version que no se conoce  */
    PR_EVACIO,        /* el fichero no tiene nada                          */
    PR_ECERROJO,      /* otro programa tiene el manifiesto cogido          */
-   PR_ECONFLICTO     /* lo mismo, dado de alta aqui y en otro programa    */
+   PR_ECONFLICTO,    /* lo mismo, dado de alta aqui y en otro programa    */
+   PR_EILEGIBLE      /* el de disco no se lee: escribir encima lo perderia */
 } PrCodigo;
 
 typedef struct {

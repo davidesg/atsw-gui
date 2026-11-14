@@ -233,6 +233,31 @@ static void concurrencia( void )
     int  k = pr_faltan( v1, a, out, sizeof out );
     ok( k == 1 && strstr( out, "modelo IPC/m01" ) != NULL, "pr_faltan dice qué no está" );
     }
+
+    /* 10. LO QUE ESTA EN DISCO NO SE ENTIENDE, Y NO SE PISA (BUG-0003 de
+       gui/atsw): una clave de un ATSW mas nuevo. pr_escribir se niega con
+       PR_EILEGIBLE y el fichero se queda como estaba.                    */
+    *a = *v1;
+    ok( pr_escribir( a, path, &e ) == 0, "de partida, se escribe" );
+    x = fopen( path, "a" );
+    if ( x ) { fprintf( x, "clave_nueva: de un ATSW mas nuevo\n" ); fclose( x ); }
+    pr_serie_add( a, "DESEMPLEO", &e );
+    ok( pr_escribir( a, path, &e ) != 0 && e.cod == PR_EILEGIBLE,
+        "un manifiesto en disco que no se lee no se pisa: PR_EILEGIBLE" );
+    {
+    char m[512], buf[8192];
+    size_t nn = 0;
+    FILE *h = fopen( path, "rb" );
+
+    if ( h ) { nn = fread( buf, 1, sizeof buf - 1, h ); fclose( h ); }
+    buf[nn] = '\0';
+    ok( strstr( buf, "clave_nueva" ) != NULL && strstr( buf, "DESEMPLEO" ) == NULL,
+        "y el fichero sigue como estaba" );
+    pr_error_es( &e, m, sizeof m );
+    ok( strstr( m, "No se ha guardado" ) && strstr( m, "clave_nueva" ),
+        "el mensaje dice que no se guardo y por que" );
+    }
+    remove( path );
     free( a ); free( b ); free( v1 ); free( d );
 }
 

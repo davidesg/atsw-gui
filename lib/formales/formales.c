@@ -1280,3 +1280,46 @@ void fm_resultado( FmPrueba *t, double l_libre, int nobs, int s, int corrio )
             break;
         }
 }
+
+
+/* --- las dos familias (formales.h) ----------------------------------------- */
+
+FmFamilia fm_familia( const FmPrueba *t )
+{
+    int integ = t->tipo == FM_SF || t->tipo == FM_SOBRE || t->tipo == FM_SUB ||
+                ( t->tipo == FM_DCD && t->freq == 0 );
+
+    return integ ? FM_FAM_INTEGRACION : FM_FAM_ESTACIONAL;
+}
+
+/* Las lineas de no_aplica, por contraste (fm_plan): 0 la simplificacion
+ * estacional, 1 Shin-Fuller, 2 el DCD, 3 el estacional, 4 la
+ * sobrediferenciacion, 6 el MEG, 7 el DCD_f.                            */
+void fm_quedate_con( FmPlan *pl, FmFamilia fam )
+{
+    static const int integ[FM_NA] = { 0, 1, 1, 0, 1, 1, 0, 0 };
+    int i, n = 0;
+
+    for ( i = 0; i < pl->n; i++ )
+        if ( fm_familia( &pl->t[i] ) == fam )
+            { if ( n != i ) pl->t[n] = pl->t[i]; n++; }
+    pl->n = n;
+    for ( i = 0; i < FM_NA; i++ )
+        if ( integ[i] != ( fam == FM_FAM_INTEGRACION ) ) pl->no_aplica[i][0] = '\0';
+}
+
+const char *fm_nombre( FmTipo tipo )
+{
+    switch ( tipo )
+        {
+        case FM_ESTACIONAL: return "simplificación estacional";
+        case FM_SF:         return "Shin-Fuller";
+        case FM_DCD:        return "DCD";
+        case FM_DCD_S:      return "DCD estacional";
+        case FM_SOBRE:      return "sobrediferenciación";
+        case FM_SUB:        return "subdiferenciación";
+        case FM_MEG:        return "MEG";
+        case FM_DCD_F:      return "DCD_f";
+        }
+    return "?";
+}

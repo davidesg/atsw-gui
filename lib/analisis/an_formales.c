@@ -69,30 +69,12 @@ static gchar *programa_fue( void )
     return sitio_busca( "fue", sitio );
 }
 
-/* DE QUE VENTANA ES CADA CONTRASTE. El DCD regular con freq es el testigo
- * de Nyquist de un modelo reformulado tras el MEG: va con la estacionalidad. */
-static gboolean de_familia( const FmPrueba *x, AnFmFamilia fam )
-{
-    gboolean integ = x->tipo == FM_SF || x->tipo == FM_SOBRE || x->tipo == FM_SUB ||
-                     ( x->tipo == FM_DCD && x->freq == 0 );
-
-    return fam == AN_FM_INTEGRACION ? integ : !integ;
-}
-
-/* Las lineas de no_aplica, por contraste (lib/formales/formales.c): 0 la
- * simplificacion estacional, 1 Shin-Fuller, 2 el DCD, 3 el estacional,
- * 4 la sobrediferenciacion, 6 el MEG, 7 el DCD_f.                       */
+/* DE QUE VENTANA ES CADA CONTRASTE: lo decide lib/formales (fm_familia,
+ * fm_quedate_con), el mismo reparto que atsw-cli formales. Las dos
+ * enumeraciones van en el mismo orden.                                   */
 static void quedate_con( FmPlan *pl, AnFmFamilia fam )
 {
-    static const int integ[FM_NA] = { 0, 1, 1, 0, 1, 1, 0, 0 };
-    int i, n = 0;
-
-    for ( i = 0; i < pl->n; i++ )
-        if ( de_familia( &pl->t[i], fam ) )
-            { if ( n != i ) pl->t[n] = pl->t[i]; n++; }
-    pl->n = n;
-    for ( i = 0; i < FM_NA; i++ )
-        if ( integ[i] != ( fam == AN_FM_INTEGRACION ) ) pl->no_aplica[i][0] = '\0';
+    fm_quedate_con( pl, fam == AN_FM_INTEGRACION ? FM_FAM_INTEGRACION : FM_FAM_ESTACIONAL );
 }
 
 int an_formales_s( const Proyecto *p, const char *serie, const char *muestra,

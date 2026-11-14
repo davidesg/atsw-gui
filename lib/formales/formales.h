@@ -176,6 +176,20 @@ int fm_avanza( FmPlan *pl, FmPrueba *t, double l_libre, int corrio );
  * fm_avanza lo llama.                                                     */
 void fm_resultado( FmPrueba *t, double l_libre, int nobs, int s, int corrio );
 
+/* LAS DOS FAMILIAS: el orden de integracion regular (Shin-Fuller, el DCD
+ * regular, la sobre y la subdiferenciacion) y la estacionalidad (la
+ * simplificacion, el DCD estacional, el MEG y el DCD_f). El DCD regular CON
+ * freq es el testigo de Nyquist de un modelo reformulado tras el MEG: va con
+ * la estacionalidad. Las usan las dos ventanas de la madre y atsw-cli
+ * formales: aqui y no en cada anfitrion, para que digan lo mismo.       */
+typedef enum { FM_FAM_INTEGRACION, FM_FAM_ESTACIONAL } FmFamilia;
+
+FmFamilia   fm_familia( const FmPrueba *t );
+/* Se queda con los de fam, y con las lineas de no_aplica de esa familia. */
+void        fm_quedate_con( FmPlan *pl, FmFamilia fam );
+/* El nombre del contraste, corto: «Shin-Fuller», «MEG»... */
+const char *fm_nombre( FmTipo tipo );
+
 /* Los criticos, por si alguien los quiere enseñar sin contrastar */
 void fm_criticos_sf( int n, double *c10, double *c5, double *c1 );
 void fm_criticos_dcd_s( int s, double *c10, double *c5, double *c1 );

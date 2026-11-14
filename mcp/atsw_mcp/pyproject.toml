@@ -8,8 +8,9 @@
 #   mcp 1.x, no 2.x: el extra [python] importa art-tseries y sima-tseries,
 #   que piden mcp<2. Si el nucleo fuera a la 2, el nucleo y el extra no se
 #   podrian instalar juntos. Se sube cuando suban los tres de la suite.
-#   El extra fija lo que hoy esta en PyPI; fue 0.1.18, sima 0.2.0 y drvec
-#   esperan al release conjunto.
+#   El extra fija lo que esta en PyPI (14-nov-2026, despues del release
+#   conjunto): sima-tseries 0.2.2 trae drvarma 0.3.2, drvec 0.1.1 y fue
+#   0.1.20; art-tseries y drtran siguen en la 0.2.3 y la 0.2.6.
 #   Las transitivas van en uv.lock.
 
 [build-system]
@@ -18,7 +19,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "atsw-gui-mcp"
-version = "0.1.5"
+version = "0.1.6"
 description = "Los MCP a medida de ATSW: el asistente sobre los motores en C de la madre"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -39,7 +40,7 @@ dependencies = [
 python = [
     "art-tseries==0.2.3",
     "drtran==0.2.6",
-    "sima-tseries==0.1.1",
+    "sima-tseries==0.2.2",
 ]
 
 [project.scripts]

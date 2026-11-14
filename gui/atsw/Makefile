@@ -24,6 +24,7 @@ SRC = src/main.c src/ventana.c src/gestos.c src/datos_gui.c src/vistazo.c \
       $(LIB)/outfile/outfile.c \
       $(LIB)/dictamen/dictamen.c \
       $(LIB)/anomalos/anomalos.c \
+      $(LIB)/anomalos/residuos.c \
       $(LIB)/analisis/an_comun.c \
       $(LIB)/analisis/an_anomalos.c \
       $(LIB)/analisis/an_diagnosis.c \

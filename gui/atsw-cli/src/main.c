@@ -39,6 +39,7 @@
 #include "engine.h"
 #include "sitio.h"
 #include "ficha.h"
+#include "residuos.h"
 
 #ifndef ATSW_VERSION
 #define ATSW_VERSION "en desarrollo"
@@ -50,6 +51,7 @@
 
 static gboolean  json;
 static gboolean  comprobar;
+static const char *episodios = NULL;      /* anomalos --episodios           */
 static const char *muestra = "";
 static const char *razon   = NULL;
 static const char *titulo  = NULL;
@@ -845,6 +847,182 @@ static int ficha( const char *path, const char *serie, const char *id )
 }
 
 /* ------------------------------------------------------------------------ */
+/* anomalos: cuanto de lo que se ve en el correlograma es el anomalo        */
+/* ------------------------------------------------------------------------ */
+
+static const char *veredicto_corto( AnVeredicto v )
+{
+    return v == AN_ENMASCARADA ? "enmascarada" : v == AN_FABRICADA ? "fabricada" : "igual";
+}
+
+/* anomalos P SERIE MODELO [--episodios 1,3|todos]: LO MISMO QUE LA VENTANA
+   de la madre (an_anomalos), con las mismas funciones (lib/anomalos,
+   an_residuos): los episodios de los residuos del .out y la ACF y la PACF
+   con y sin los que se pidan, retardo a retardo, con su Ljung-Box y su
+   normalidad. Sin --episodios, sin todos: «¿y si no hubiera anomalos?». La
+   pregunta de verdad suele ser «¿y si no estuviera ESTE?», y es la que se
+   acaba interviniendo.                                                 */
+static int anomalos( const char *path, const char *serie, const char *id )
+{
+    char        out[PR_RUTA];
+    Proyecto   *p = NULL;
+    FueOut     *o;
+    AnResiduos *r;
+    AnCalibra   c;
+    AnNormal    con, sinellos;
+    int         marca[AN_MAX_EP], *omit, nomit, i, k;
+    double      qc = 0.0, qs = 0.0;
+    GString    *t;
+
+    if ( ruta_de( path, serie, id, ".out", out, sizeof out, &p ) != 0 ) { g_free( p ); return 1; }
+    o = g_new0( FueOut, 1 );
+    r = g_new0( AnResiduos, 1 );
+    if ( !fueout_read( out, o ) || an_residuos( o, r ) != 0 )
+        { g_free( r ); g_free( o ); g_free( p );
+          return falla( "«%s» no está estimado, o su .out no trae los residuos.", id ); }
+
+    /* que episodios: todos, o los numeros que se digan (1..nep) */
+    for ( i = 0; i < AN_MAX_EP; i++ ) marca[i] = episodios == NULL || !strcmp( episodios, "todos" );
+    if ( episodios && strcmp( episodios, "todos" ) )
+        {
+        gchar **v = g_strsplit( episodios, ",", -1 );
+
+        for ( i = 0; v[i]; i++ )
+            {
+            char *fin = NULL;
+            long  e = strtol( v[i], &fin, 10 );
+
+            if ( !*v[i] || ( fin && *fin ) || e < 1 || e > r->nep )
+                {
+                int nep = r->nep;
+                g_strfreev( v ); g_free( r ); g_free( o ); g_free( p );
+                return falla( "--episodios %s: son números de 1 a %d, separados por comas, "
+                              "o «todos».", episodios, nep );
+                }
+            marca[e - 1] = 1;
+            }
+        g_strfreev( v );
+        }
+    omit  = g_new0( int, FO_MAX_RES );
+    nomit = an_omite( r, marca, omit, FO_MAX_RES );
+    an_calibra( o->res, o->nres, nomit ? omit : NULL, nomit, r->lags, &c );
+    an_q( &c, c.nlags, &qc, &qs );
+    if ( an_normalidad( r->z, o->nres, nomit ? omit : NULL, nomit, &con, &sinellos ) != 0 )
+        { memset( &con, 0, sizeof con ); memset( &sinellos, 0, sizeof sinellos ); }
+
+    t = g_string_new( "" );
+    if ( json )
+        {
+        g_string_append( t, "{\"ok\": true, " );
+        js_par( t, "serie", serie ); g_string_append( t, ", " );
+        js_par( t, "muestra", muestra ); g_string_append( t, ", " );
+        js_par( t, "modelo", id ); g_string_append( t, ", " );
+        g_string_append_printf( t, "\"residuos\": %d, ", o->nres );
+        js_num( t, "umbral", r->umbral );
+        g_string_append_printf( t, ", \"freq\": %d, \"retardos\": %d, \"episodios\": [",
+                                r->freq, c.nlags );
+        for ( i = 0; i < r->nep; i++ )
+            {
+            const AnEpisodio *e = &r->ep[i];
+
+            g_string_append_printf( t, "%s{\"n\": %d, ", i ? ", " : "", i + 1 );
+            js_par( t, "desde", o->res_fecha[e->desde] ); g_string_append( t, ", " );
+            js_par( t, "hasta", o->res_fecha[e->hasta] ); g_string_append( t, ", " );
+            g_string_append_printf( t, "\"periodos\": %d, ", e->n );
+            js_num( t, "z_max", e->z_max ); g_string_append( t, ", " );
+            js_par( t, "fecha_z_max", o->res_fecha[e->i_max] ); g_string_append( t, ", " );
+            js_num( t, "p", e->p );
+            g_string_append_printf( t, ", \"omitido\": %s}", marca[i] ? "true" : "false" );
+            }
+        g_string_append_printf( t, "], \"omitidas\": %d, \"retardos_que_cambian\": %d, \"calibracion\": [",
+                                nomit, c.cambia );
+        for ( k = 0; k < c.nlags; k++ )
+            {
+            const AnLag *l = &c.l[k];
+
+            g_string_append_printf( t, "%s{\"lag\": %d, ", k ? ", " : "", l->lag );
+            js_num( t, "acf_con", l->acf_con ); g_string_append( t, ", " );
+            js_num( t, "acf_sin", l->acf_sin ); g_string_append( t, ", " );
+            js_num( t, "pacf_con", l->pacf_con ); g_string_append( t, ", " );
+            js_num( t, "pacf_sin", l->pacf_sin ); g_string_append( t, ", " );
+            js_par( t, "acf", veredicto_corto( l->acf ) ); g_string_append( t, ", " );
+            js_par( t, "pacf", veredicto_corto( l->pacf ) ); g_string_append( t, "}" );
+            }
+        g_string_append( t, "], " );
+        js_num( t, "banda_con", c.banda_con ); g_string_append( t, ", " );
+        js_num( t, "banda_sin", c.banda_sin ); g_string_append( t, ", \"q\": {" );
+        g_string_append_printf( t, "\"m\": %d, ", c.nlags );
+        js_num( t, "con", qc ); g_string_append( t, ", " );
+        js_num( t, "p_con", chisq_cola( qc, c.nlags ) ); g_string_append( t, ", " );
+        js_num( t, "sin", qs ); g_string_append( t, ", " );
+        js_num( t, "p_sin", chisq_cola( qs, c.nlags ) ); g_string_append( t, "}, \"jb\": {" );
+        js_num( t, "con", con.jb ); g_string_append( t, ", " );
+        js_num( t, "p_con", chisq_cola( con.jb, 2 ) ); g_string_append( t, ", " );
+        js_num( t, "sin", sinellos.jb ); g_string_append( t, ", " );
+        js_num( t, "p_sin", chisq_cola( sinellos.jb, 2 ) ); g_string_append( t, ", " );
+        js_num( t, "asimetria_con", con.skew ); g_string_append( t, ", " );
+        js_num( t, "curtosis_con", con.kurt ); g_string_append( t, ", " );
+        js_num( t, "curtosis_sin", sinellos.kurt );
+        g_string_append_printf( t, ", \"n_sin\": %d}}\n", sinellos.n );
+        }
+    else
+        {
+        g_string_append_printf( t, "Anómalos de %s/%s%s%s: %d episodio%s sobre %d residuos "
+                                "(un tramo cuenta si es tan improbable como un extremo aislado "
+                                "de |z| >= %.2f)\n", serie, id, *muestra ? ", muestra " : "",
+                                muestra, r->nep, r->nep == 1 ? "" : "s", o->nres, r->umbral );
+        for ( i = 0; i < r->nep; i++ )
+            {
+            const AnEpisodio *e = &r->ep[i];
+
+            if ( e->n > 1 )
+                g_string_append_printf( t, "  %d. %s-%s  (%d periodos, z máximo %+.2f en %s, p = %.2g)%s\n",
+                                        i + 1, o->res_fecha[e->desde], o->res_fecha[e->hasta], e->n,
+                                        e->z_max, o->res_fecha[e->i_max], e->p,
+                                        marca[i] ? "  [omitido]" : "" );
+            else
+                g_string_append_printf( t, "  %d. %s  (z %+.2f, p = %.2g)%s\n", i + 1,
+                                        o->res_fecha[e->desde], e->z_max, e->p,
+                                        marca[i] ? "  [omitido]" : "" );
+            }
+        if ( r->nep == 0 )
+            g_string_append( t, "  Ningún residuo pasa del umbral.\n" );
+        else
+            {
+            int hay = 0;
+
+            g_string_append_printf( t, "\nSin %s (%d observaciones de %d):\n",
+                                    nomit && episodios && strcmp( episodios, "todos" )
+                                    ? "los omitidos" : "los episodios", c.n_sin, c.n_con );
+            for ( k = 0; k < c.nlags; k++ )
+                {
+                const AnLag *l = &c.l[k];
+
+                if ( l->acf != AN_IGUAL )
+                    { hay++; g_string_append_printf( t, "  ACF %2d  %+.3f -> %+.3f  %s\n", l->lag,
+                                                     l->acf_con, l->acf_sin, an_veredicto_es( l->acf ) ); }
+                if ( l->pacf != AN_IGUAL )
+                    { hay++; g_string_append_printf( t, "  PACF %2d %+.3f -> %+.3f  %s\n", l->lag,
+                                                     l->pacf_con, l->pacf_sin, an_veredicto_es( l->pacf ) ); }
+                }
+            g_string_append( t, hay ? "  -> quitar esto cambiaría la identificación.\n"
+                                    : "  Ningún retardo cambia de lado de la banda: intervenir esto "
+                                      "no compra nada para la identificación.\n" );
+            }
+        g_string_append_printf( t, "\n  Q(%d)  con %.1f (p = %.3f)   sin %.1f (p = %.3f)   banda ±%.3f / ±%.3f\n",
+                                c.nlags, qc, chisq_cola( qc, c.nlags ), qs, chisq_cola( qs, c.nlags ),
+                                c.banda_con, c.banda_sin );
+        g_string_append_printf( t, "  JB    con %.1f (p = %.3f)   sin %.1f (p = %.3f)   curtosis %+.2f -> %+.2f\n",
+                                con.jb, chisq_cola( con.jb, 2 ), sinellos.jb,
+                                chisq_cola( sinellos.jb, 2 ), con.kurt, sinellos.kurt );
+        }
+    fputs( t->str, stdout );
+    g_string_free( t, TRUE );
+    g_free( omit ); g_free( r ); g_free( o ); g_free( p );
+    return 0;
+}
+
+/* ------------------------------------------------------------------------ */
 /* La orden                                                                 */
 /* ------------------------------------------------------------------------ */
 
@@ -862,6 +1040,7 @@ static void uso( FILE *f )
            "  raices factores P SERIE MODELO        la factorización del AR\n"
            "  raices factorizado P SERIE MODELO     deriva el modelo factorizado\n"
            "  ficha P SERIE MODELO [--comprobar]    la ficha de confianza, en Markdown\n"
+           "  anomalos P SERIE MODELO [--episodios L]   los episodios y su calibración\n"
            "  coste apunta P --motor M --paso X --cpu S --pared S   una corrida de fuera\n"
            "  coste resumen P [--por-que G]         los totales de costes.csv\n\n"
            "  P es el proyecto.yaml.\n"
@@ -872,7 +1051,9 @@ static void uso( FILE *f )
            "  --json        la salida en JSON\n"
            "  --por Q       quién da el paso: analista (si no se dice) o asistente;\n"
            "                en nuevo, itera, elige y raices factorizado queda escrito\n"
-           "  --comprobar   ficha: corre fue sobre el .pre y lo apunta en costes.csv\n\n"
+           "  --comprobar   ficha: corre fue sobre el .pre y lo apunta en costes.csv\n"
+           "  --episodios L anomalos: los que se omiten al calibrar, 1,3 o todos\n"
+           "                (sin ella, todos)\n\n"
            "  coste apunta: --objeto SERIE/MODELO, --via C|python, --quien (atsw-cli),\n"
            "    --fecha, --sha-pre, y --energia J con su --metodo (sin ellos, se estima)\n"
            "  coste resumen: --por-que serie|objeto|motor|via|por|paso|quien\n", f );
@@ -889,6 +1070,7 @@ int main( int argc, char **argv )
         {
         if ( !strcmp( argv[i], "--json" ) ) json = TRUE;
         else if ( !strcmp( argv[i], "--comprobar" ) ) comprobar = TRUE;
+        else if ( !strcmp( argv[i], "--episodios" ) && i + 1 < argc ) episodios = argv[++i];
         else if ( !strcmp( argv[i], "--muestra" ) && i + 1 < argc ) muestra = argv[++i];
         else if ( !strcmp( argv[i], "--razon" ) && i + 1 < argc ) razon = argv[++i];
         else if ( !strcmp( argv[i], "--titulo" ) && i + 1 < argc ) titulo = argv[++i];
@@ -941,6 +1123,7 @@ int main( int argc, char **argv )
     if ( ES( 0, "raices" ) && ES( 1, "factorizado" ) && npos == 5 )
         return raices_factorizado( pos[2], pos[3], pos[4] );
     if ( ES( 0, "ficha" ) && npos == 4 ) return ficha( pos[1], pos[2], pos[3] );
+    if ( ES( 0, "anomalos" ) && npos == 4 ) return anomalos( pos[1], pos[2], pos[3] );
     if ( ES( 0, "coste" ) && ES( 1, "apunta" ) && npos == 3 ) return coste_apunta_orden( pos[2] );
     if ( ES( 0, "coste" ) && ES( 1, "resumen" ) && npos == 3 ) return coste_resumen_orden( pos[2] );
 #undef ES

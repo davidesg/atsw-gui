@@ -41,6 +41,7 @@
 #include <math.h>
 
 #include "anomalos.h"
+#include "residuos.h"
 #include "dictamen.h"
 #include "outfile.h"
 
@@ -94,28 +95,6 @@ static void parte_fecha( const char *f, int *anno, int *per )
 {
     if ( fo_fecha_parte( f, per, anno ) != 0 ) { *per = 1; *anno = 0; }
 }
-
-/* LA FRECUENCIA, DE LAS FECHAS ANTES QUE DEL MODELO. El s del .out es el
-   período estacional del MODELO, y un mensual sin parte estacional puede
-   traerlo a 1; las fechas, en cambio, son las de la serie.              */
-static int frecuencia( const An *g )
-{
-    int i, maxp = 1, anno, per;
-
-    if ( g->o.nres < 1 ) return 1;
-    if ( strchr( g->o.res_fecha[0], '/' ) == NULL ) return 1;
-    for ( i = 0; i < g->o.nres; i++ )
-        {
-        parte_fecha( g->o.res_fecha[i], &anno, &per );
-        if ( per > maxp ) maxp = per;
-        }
-    (void) anno;
-    if ( g->o.s > 1 ) return g->o.s;
-    if ( maxp > 4 ) return 12;
-    if ( maxp > 1 ) return 4;
-    return 12;                     /* con barra y un solo período: mensual */
-}
-
 
 /* ------------------------------------------------------------------------ */
 /* La figura                                                                 */
@@ -347,16 +326,18 @@ static void pie( An *g )
 
 static void calibra( An *g, gboolean con_omisiones )
 {
-    int i, t;
+    AnResiduos r;
+    int        i, marca[AN_MAX_EP];
 
     g->nomit = 0;
     if ( con_omisiones )
-        for ( i = 0; i < g->nep; i++ )
-            {
-            if ( !g->marcado[i] ) continue;
-            for ( t = g->ep[i].desde; t <= g->ep[i].hasta; t++ )
-                if ( g->nomit < FO_MAX_RES ) g->omit[g->nomit++] = t;
-            }
+        {
+        /* los indices, como atsw-cli (an_omite): solo hacen falta los episodios */
+        r.nep = g->nep;
+        memcpy( r.ep, g->ep, sizeof r.ep );
+        for ( i = 0; i < g->nep; i++ ) marca[i] = g->marcado[i];
+        g->nomit = an_omite( &r, marca, g->omit, FO_MAX_RES );
+        }
     an_calibra( g->o.res, g->o.nres, g->nomit ? g->omit : NULL, g->nomit,
                 g->lags, &g->c );
 }
@@ -630,21 +611,19 @@ void an_anomalos( const AnHost *h, const char *serie, const char *muestra,
     g->unid.pct = g->o.lambda == 0.0;
     }
 
-    /* LOS EXTREMOS, EN EPISODIOS. Un suceso de tres períodos no son tres
-       atípicos sueltos con su forma decidida por adyacencia.          */
-    g->umbral = an_umbral( g->o.nres );
+    /* LOS EXTREMOS, EN EPISODIOS, LA FRECUENCIA Y LOS RETARDOS: lo calcula
+       lib/anomalos (an_residuos), lo mismo que atsw-cli anomalos.      */
     {
-    double sd = 0.0;
+    AnResiduos *r = g_new0( AnResiduos, 1 );
 
-    for ( i = 0; i < g->o.nres; i++ ) sd += g->o.res[i] * g->o.res[i];
-    sd = sqrt( sd / g->o.nres );
-    for ( i = 0; i < g->o.nres; i++ )
-        g->z[i] = ( sd > 0.0 ) ? g->o.res[i] / sd : 0.0;
-
-    /* SE PUNTUA EL TRAMO, NO LOS PUNTOS. Un 3 sigma con un 2 al lado es,
-       en un gaussiano, mucho más improbable que el 3 solo -- y una regla
-       punto a punto no sabe verlo. Ver lib/anomalos.             */
-    g->nep = an_episodios( g->z, g->o.nres, g->umbral, g->ep, AN_MAX_EP );
+    an_residuos( &g->o, r );
+    g->umbral = r->umbral;
+    memcpy( g->z, r->z, sizeof g->z );
+    memcpy( g->ep, r->ep, sizeof g->ep );
+    g->nep  = r->nep;
+    g->freq = r->freq;
+    g->lags = r->lags;
+    g_free( r );
     }
 
     /* EL EJE DE TIEMPO. tmornsop son los períodos que van de enero (o del
@@ -654,7 +633,6 @@ void an_anomalos( const AnHost *h, const char *serie, const char *muestra,
     {
     int anno, per;
 
-    g->freq = frecuencia( g );
     parte_fecha( g->o.res_fecha[0], &anno, &per );
     if ( per > g->freq ) per = 1;
     g->tsby     = anno;
@@ -662,9 +640,6 @@ void an_anomalos( const AnHost *h, const char *serie, const char *muestra,
     }
 
     g->nparma = g->o.p + g->o.q + g->o.P + g->o.Q;
-    g->lags   = default_lags( g->o.nres, g->freq );
-    if ( g->lags > AN_MAX_LAG ) g->lags = AN_MAX_LAG;
-    if ( g->lags > g->o.nres - 2 ) g->lags = g->o.nres - 2;
 
     /* SIN NADA MARCADO al abrir: el correlograma que se ve es el de siempre,
        y calibrar es un acto, no un estado de partida.                 */

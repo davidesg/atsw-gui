@@ -151,6 +151,8 @@ static const char *barra( void )
 static void olvida( void )
 {
     g_ptr_array_set_size( historial, 0 );
+    /* los hijos de los pasos de antes no impiden lanzar el de este */
+    if ( A.hay ) atsw_hijos_olvida( &A );
 }
 
 /* ¿Alguna de las cosas dichas desde olvida() contiene <que>? */
@@ -1872,6 +1874,29 @@ static void hijo_falso( void )
     check( atsw_hijos_vivos( &A, quienes, sizeof quienes ) == 0,
            "los hijos que se cierran salen de la cuenta de la madre", quienes );
 
+    /* DOS HIJOS SOBRE LO MISMO, NO (docs/AUDITORIA-procesos.md, B3 y A5):
+       la madre sabe que tiene abierto cada uno, no abre otro igual, y eso
+       es lo que miran los borrados.                                    */
+    g_setenv( "ATSW_HIJO_ESPERA", "3", TRUE );
+    atsw_lanza_caso( &A, "atsw_hijo_falso", "C9", NULL, NULL );
+    pump( 200 );
+    check( atsw_hijos_vivos( &A, NULL, 0 ) == 1 &&
+           !g_strcmp0( atsw_hijo_con( &A, "caso:C9" ), "atsw_hijo_falso" ),
+           "la madre sabe que caso tiene abierto el hijo", barra() );
+    atsw_lanza_caso( &A, "atsw_hijo_falso", "C9", NULL, NULL );
+    pump( 200 );
+    check( atsw_hijos_vivos( &A, NULL, 0 ) == 1 && strstr( barra(), "ya tiene abierto" ),
+           "el mismo caso otra vez: no abre otro, y lo dice", barra() );
+    atsw_lanza_caso( &A, "atsw_hijo_falso", "C8", NULL, NULL );
+    pump( 200 );
+    check( atsw_hijos_vivos( &A, NULL, 0 ) == 2, "otro caso sí abre otro", barra() );
+    check( atsw_hijo_con( &A, "caso:C7" ) == NULL, "y uno que nadie tiene abierto, no consta", NULL );
+    g_unsetenv( "ATSW_HIJO_ESPERA" );
+    hasta = g_get_monotonic_time() + 10 * G_USEC_PER_SEC;
+    while ( atsw_hijos_vivos( &A, NULL, 0 ) > 0 && g_get_monotonic_time() < hasta ) pump( 50 );
+    check( atsw_hijo_con( &A, "caso:C9" ) == NULL, "al irse el hijo, el caso queda libre", NULL );
+    g_unlink( HIJO_LOG );          /* lo que escribieron no lo lee nadie mas */
+
     /* un pid que no es el de la madre de este proceso: se va enseguida */
     check( sitio_vigila_madre( "999999999", fuera_cb, &fuera ) == 1,
            "el vigia acepta un pid", NULL );
@@ -3160,6 +3185,7 @@ static void casos( void )
     g_free( s );
 
     /* --- «Estimar» el caso ---------------------------------------------- */
+    atsw_hijos_olvida( &A );
     atsw_caso_lanza( &A, "atsw_hijo_falso" );
     v = lo_que_recibio();
     check( v && g_strv_length( v ) >= 7 && !strcmp( v[0], "--proyecto" ) &&
@@ -3451,6 +3477,7 @@ static void casos( void )
     }
 
     check( marca_arbol( A.c_corridas, CO_ID, "c01" ), "se puede marcar c01", NULL );
+    atsw_hijos_olvida( &A );
     atsw_caso_lanza( &A, "atsw_hijo_falso" );
     v = lo_que_recibio();
     check( v && g_strv_length( v ) >= 9 && !strcmp( v[4], "--caso" ) &&

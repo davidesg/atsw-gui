@@ -1,0 +1,86 @@
+# EL CIERRE DE LOS GUIs, EN macOS Y DEPRISA: compila los motores y los GUIs
+# (sin las baterias, que llevan horas) y abre y cierra cada GUI como el
+# usuario (gui-humo.sh con .github/cierre.c). Y fue_gui otra vez, con un
+# modelo abierto (Jenkins y Alavi).
+#
+# Lo pidio el analista: en un Mac M2, cerrar fue_gui sacaba un aviso de fallo
+# (TODO.md, 13-nov-2026). Los ejecutores de GitHub con Apple Silicon son
+# maquinas virtuales sobre M1; el registro dice cual toco.
+#
+# A mano desde Actions (workflow_dispatch, eligiendo el ejecutor), y en los PR
+# que tocan los GUIs o esta prueba.
+
+name: gui-cierre
+
+on:
+  workflow_dispatch:
+    inputs:
+      ejecutor:
+        description: "Ejecutor de macOS"
+        type: choice
+        options: [ macos-latest, macos-15-intel ]
+        default: macos-latest
+  pull_request:
+    paths:
+      - "gui/**"
+      - "lib/**"
+      - ".github/cierre.c"
+      - ".github/gui-humo.sh"
+      - ".github/workflows/gui-cierre.yml"
+
+env:
+  DIRS: >-
+    engines/fue engines/fuf engines/fug engines/drtran engines/drvarma
+    gui/fue gui/fug gui/drtran gui/atsw gui/sim
+
+jobs:
+  cierre:
+    runs-on: ${{ inputs.ejecutor || 'macos-latest' }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: La maquina
+        run: |
+          sysctl -n machdep.cpu.brand_string || true
+          sw_vers || true
+          uname -m
+      - name: Dependencias
+        run: brew install pkg-config gtk+3 gsl adwaita-icon-theme coreutils
+      - name: Compilar
+        run: bash .github/build-all.sh
+      - name: Abrir y cerrar los GUIs
+        run: bash .github/gui-humo.sh
+      - name: fue_gui con un modelo abierto, y cerrar
+        run: |
+          R=$(pwd)
+          P=$RUNNER_TEMP/ja
+          cp -R docs/ejemplos/jenkins_alavi "$P"
+          export PATH="$R/engines/fue/bin:$R/engines/fuf/bin:$R/engines/fug:$PATH"
+          ( cd gui/fue/bin && GTK_MODULES="$R/capturas/cierre.so" CIERRE=10 \
+              ./fue_gui --proyecto "$P/proyecto.yaml" "$P/MUSKRAT/work/MUSKRAT_m01.pre" ) \
+              > capturas/fue_gui_modelo.log 2>&1 &
+          pid=$!
+          t=0
+          while kill -0 "$pid" 2>/dev/null && [ "$t" -lt 60 ]; do sleep 1; t=$((t + 1)); done
+          cat capturas/fue_gui_modelo.log
+          if kill -0 "$pid" 2>/dev/null; then
+              echo "::error::fue_gui con un modelo no sale al cerrar (colgado)"; kill "$pid"; exit 1
+          fi
+          wait "$pid"; rc=$?
+          if [ "$rc" -ne 0 ]; then echo "::error::fue_gui con un modelo sale con $rc al cerrar"; exit 1; fi
+          echo "fue_gui con un modelo: se cierra solo y sale con 0"
+      - name: Informes de fallos de macOS
+        if: always()
+        run: |
+          ls -la ~/Library/Logs/DiagnosticReports/ 2>/dev/null | grep -i -E "fue_gui|gtk_fmg|drtran|atsw|sim_gui" || echo "ninguno"
+          for f in ~/Library/Logs/DiagnosticReports/*fue_gui* ~/Library/Logs/DiagnosticReports/*gtk_fmg* \
+                   ~/Library/Logs/DiagnosticReports/*drtran_gui* ~/Library/Logs/DiagnosticReports/*atsw_gui* \
+                   ~/Library/Logs/DiagnosticReports/*sim_gui*; do
+              [ -f "$f" ] && { echo "== $f"; head -120 "$f"; cp "$f" capturas/; }
+          done
+          true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gui-cierre-${{ inputs.ejecutor || 'macos-latest' }}
+          path: capturas/

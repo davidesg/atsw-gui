@@ -195,6 +195,74 @@ mira "anomalos --episodios fuera de rango: estado 1, y dice cuáles hay" \
 mira "anomalos de un modelo sin estimar: estado 1" \
      '! "$CLI" anomalos "$Y" RIPC m00 2>/dev/null'
 
+# prewhiten: la CCF preblanqueada, con las mismas funciones que la pantalla de
+# identificacion de drtran_gui (prewhiten_ccf, hosking_test, prewhiten_lee).
+# El oraculo es el del motor, el que fija gui/drtran/tests/test_prewhiten.c
+# sobre lo que imprime «drtran -p» con estos dos .pre: 203 observaciones, la
+# banda 0.14037, r(0) 0.3542, r(1) 0.2167, r(12) -0.3282, r(13) -0.1797,
+# nu(0) 0.0151 y ningun retardo negativo fuera de banda.
+PW="$WORK/proy_pw"; DC="$R/engines/drtran/tests/cases"
+mkdir -p "$PW/ES/work" "$PW/WTI/work"
+cp "$DC/ES_CPI_airline.pre" "$PW/ES/work/ES_m00.inp"; cp "$DC/ES_CPI_airline.pre" "$PW/ES/work/ES_m01.pre"
+cp "$DC/WTI_ar1.pre" "$PW/WTI/work/WTI_m00.inp";      cp "$DC/WTI_ar1.pre" "$PW/WTI/work/WTI_m01.pre"
+cat > "$PW/proyecto.yaml" <<'YAML'
+schema_version: 2
+id: pw
+titulo: "el preblanqueo"
+creado: "2026-11-14"
+analista: ""
+herramienta: fue
+raiz: .
+
+series:
+  ES:
+  WTI:
+
+modelos:
+  ES/m00:
+    version: 0
+    padre: ""
+    razon: ""
+    rol: datos
+  ES/m01:
+    version: 1
+    padre: m00
+    razon: "el airline"
+  WTI/m00:
+    version: 0
+    padre: ""
+    razon: ""
+    rol: datos
+  WTI/m01:
+    version: 1
+    padre: m00
+    razon: "el AR(1)"
+YAML
+YP="$PW/proyecto.yaml"
+J=$("$CLI" --json prewhiten "$YP" ES/m01 WTI/m01 --retardos 24)
+pw() { echo "$J" | "$PY" -c "
+import json, sys
+e = json.load(sys.stdin)['entradas'][0]
+r = {c['k']: c for c in e['ccf']}
+want = [('n', e['n'], 203, 0.5), ('banda', e['banda'], 0.14037, 5e-5),
+        ('r(0)', r[0]['r'], 0.3542, 5e-4), ('r(1)', r[1]['r'], 0.2167, 5e-4),
+        ('r(12)', r[12]['r'], -0.3282, 5e-4), ('r(13)', r[13]['r'], -0.1797, 5e-4),
+        ('nu(0)', r[0]['nu'], 0.0151, 5e-5), ('nu(12)', r[12]['nu'], -0.0140, 5e-5),
+        ('r(-6)', r[-6]['r'], -0.107, 5e-4), ('negativos', e['negativos_fuera'], 0, 0.5)]
+mal = [w[0] for w in want if abs(w[1] - w[2]) > w[3]]
+print(' '.join(mal) if mal else 'bien')"; }
+mira "prewhiten: los números del motor (drtran -p): n, banda, r(k), nu(k) y los negativos" \
+     '[ "$(pw)" = bien ]'
+mira "prewhiten: b = 0, el pico en k = 0, y la entrada puede tratarse como exógena" \
+     '[ "$(echo "$J" | campo "(d[\"entradas\"][0][\"b\"], d[\"entradas\"][0][\"kmax\"], d[\"entradas\"][0][\"negativos_fuera\"])")" = "(0, 0, 0)" ]'
+mira "prewhiten: el Hosking sobre los preblanqueados, con 4 x 24 grados de libertad" \
+     '[ "$(echo "$J" | campo "d[\"entradas\"][0][\"gl\"]")" = 96 ]'
+mira "prewhiten sin entrada: estado 1" '! "$CLI" prewhiten "$YP" ES/m01 2>/dev/null'
+mira "prewhiten de un modelo sin .pre: estado 1, y dice por qué" \
+     '"$CLI" prewhiten "$YP" ES/m00 WTI/m01 2>&1 | grep -q "no tiene .pre"'
+mira "prewhiten con una entrada que no se puede leer: esa fila lo dice, las demás siguen" \
+     '[ "$("$CLI" --json prewhiten "$YP" ES/m01 WTI/m09 WTI/m01 | campo "[e[\"vale\"] for e in d[\"entradas\"]]")" = "[False, True]" ]'
+
 # coste: el MTM apunta lo que corre en Python, y el resumen lo suma. Hasta
 # aqui nada ha corrido un motor con contexto: el registro no existe.
 C="$P/costes.csv"

@@ -39,6 +39,18 @@
 #include "engine.h"
 #include "sitio.h"
 #include "ficha.h"
+/* el mundo de drtran, para el preblanqueo: lo mismo que enlaza drtran_gui */
+/* main.h define TRUE y FALSE a su manera: se le dejan y luego se vuelven a
+   los de GLib, que es lo que usa todo lo demas de aqui.                 */
+#undef TRUE
+#undef FALSE
+#include "main.h"
+#undef TRUE
+#undef FALSE
+#define FALSE (0)
+#define TRUE  (!FALSE)
+#include "fue_pre_reader.h"
+#include "prewhiten.h"
 #include "residuos.h"
 
 #ifndef ATSW_VERSION
@@ -51,6 +63,7 @@
 
 static gboolean  json;
 static gboolean  comprobar;
+static int       retardos = 0;            /* prewhiten --retardos           */
 static const char *episodios = NULL;      /* anomalos --episodios           */
 static const char *muestra = "";
 static const char *razon   = NULL;
@@ -1023,6 +1036,162 @@ static int anomalos( const char *path, const char *serie, const char *id )
 }
 
 /* ------------------------------------------------------------------------ */
+/* prewhiten: la CCF preblanqueada que identifica (b, s), sin ventana       */
+/* ------------------------------------------------------------------------ */
+
+/* lib/prewhiten y diagnose.c son los del motor drtran, y piden estos dos
+   globales, como en drtran_gui (identifica.c) y su prueba.              */
+#define PW_MAX_LAGS 64          /* como IDENT_MAX_LAGS de drtran_gui */
+real  macheps = 2.220446049250313e-16;
+FILE *outputv = NULL;
+
+typedef struct {
+    struct Tusmodel tm;
+    struct Tseries  ts;
+    real          **dm;
+    int             leido;
+} PreLeido;
+
+/* SERIE/MODELO del proyecto -> su .pre, leido con el lector de la suite. */
+static int lee_pre( Proyecto *p, const char *clave, PreLeido *x, char *ruta, size_t nr,
+                    char *why, size_t n )
+{
+    char serie[PR_ID], id[PR_ID];
+    const char *barra = strchr( clave, '/' );
+
+    memset( x, 0, sizeof *x );
+    if ( !barra || barra == clave || !barra[1] || (size_t) ( barra - clave ) >= sizeof serie )
+        { g_snprintf( why, n, "«%s»: es SERIE/MODELO.", clave ); return 1; }
+    g_snprintf( serie, sizeof serie, "%.*s", (int) ( barra - clave ), clave );
+    g_snprintf( id, sizeof id, "%s", barra + 1 );
+    if ( pr_modelo_idx( p, serie, muestra, id ) < 0 )
+        { g_snprintf( why, n, "«%s» no es un modelo del proyecto en esa muestra.", clave ); return 1; }
+    if ( pr_ruta( p, serie, muestra, id, ".pre", ruta, nr ) != 0 ||
+         !g_file_test( ruta, G_FILE_TEST_EXISTS ) )
+        { g_snprintf( why, n, "«%s» no tiene .pre: hay que estimarlo antes.", clave ); return 1; }
+    if ( read_fue_pre( ruta, &x->tm, &x->ts, &x->dm ) != 0 )
+        { g_snprintf( why, n, "No pude leer %s.", ruta ); return 1; }
+    x->leido = 1;
+    return 0;
+}
+
+static void suelta_pre( PreLeido *x )
+{
+    if ( x->leido ) free_fue_pre( &x->tm, &x->ts, x->dm );
+    x->leido = 0;
+}
+
+/* prewhiten P SALIDA/MODELO ENTRADA/MODELO... [--retardos N]: LO MISMO QUE
+   LA PANTALLA DE IDENTIFICACION de drtran_gui, con las mismas funciones: la
+   entrada se preblanquea con su ARMA y la salida con el mismo filtro
+   (prewhiten_ccf), el portmanteau del motor sobre los preblanqueados
+   (hosking_test) y lo que se lee de la CCF (prewhiten_lee). Una entrada por
+   fila: identificar es comparar cuales merecen estar en la red.        */
+static int prewhiten( const char *path, char **cl, int ncl )
+{
+    char      why[512], ruta[PR_RUTA];
+    Proyecto *p = abre( path, why, sizeof why );
+    PreLeido *sal, *ent;
+    GString  *t;
+    int       j;
+
+    if ( !p ) return falla( "%s", why );
+    if ( ncl < 2 ) { g_free( p ); return falla( "prewhiten: la salida y al menos una entrada." ); }
+    sal = g_new0( PreLeido, 1 );
+    ent = g_new0( PreLeido, 1 );
+    if ( lee_pre( p, cl[0], sal, ruta, sizeof ruta, why, sizeof why ) != 0 )
+        { g_free( ent ); g_free( sal ); g_free( p ); return falla( "%s", why ); }
+
+    t = g_string_new( "" );
+    if ( json )
+        {
+        g_string_append( t, "{\"ok\": true, " );
+        js_par( t, "salida", cl[0] ); g_string_append( t, ", \"entradas\": [" );
+        }
+    else
+        g_string_append_printf( t, "Identificación de %s: la CCF preblanqueada de cada entrada\n", cl[0] );
+
+    for ( j = 1; j < ncl; j++ )
+        {
+        double  ccf[2 * PW_MAX_LAGS + 1], nu[2 * PW_MAX_LAGS + 1], banda = 0.0;
+        int     n = 0, nl, b = -1, s = -1, kmax = 0, neg = 0, k, vale = 0;
+        real  **res = NULL, Q = 0, pv = 0;
+        char    mot[512] = "";
+
+        if ( lee_pre( p, cl[j], ent, ruta, sizeof ruta, mot, sizeof mot ) == 0 )
+            {
+            nl = retardos > 0 ? retardos : prewhiten_nlags( sal->ts.nobs );
+            if ( nl > PW_MAX_LAGS ) nl = PW_MAX_LAGS;
+            if ( prewhiten_ccf( &ent->tm, &ent->ts, ent->dm, &sal->tm, &sal->ts, sal->dm,
+                                nl, ccf, nu, &n, &res, mot, sizeof mot ) == 0 )
+                {
+                hosking_test( res, n, 2, nl, &Q, &pv );
+                free_matrix( res, 1, n, 1, 2 );
+                banda = 2.0 / sqrt( (double) n );
+                prewhiten_lee( ccf, nl, banda, &b, &s, &kmax, &neg );
+                vale = 1;
+                }
+            suelta_pre( ent );
+            }
+        else nl = 0;
+
+        if ( json )
+            {
+            g_string_append_printf( t, "%s{", j > 1 ? ", " : "" );
+            js_par( t, "entrada", cl[j] );
+            g_string_append_printf( t, ", \"vale\": %s", vale ? "true" : "false" );
+            if ( !vale ) { g_string_append( t, ", " ); js_par( t, "motivo", mot ); g_string_append( t, "}" ); continue; }
+            if ( mot[0] ) { g_string_append( t, ", " ); js_par( t, "aviso", mot ); }
+            g_string_append_printf( t, ", \"n\": %d, \"retardos\": %d, ", n, nl );
+            js_num( t, "banda", banda );
+            g_string_append_printf( t, ", \"b\": %d, \"s\": %d, \"kmax\": %d, \"negativos_fuera\": %d, ",
+                                    b, s, kmax, neg );
+            js_num( t, "hosking", (double) Q );
+            g_string_append_printf( t, ", \"gl\": %d, ", 4 * nl );
+            js_num( t, "p", (double) pv );
+            g_string_append( t, ", \"ccf\": [" );
+            for ( k = -nl; k <= nl; k++ )
+                {
+                g_string_append_printf( t, "%s{\"k\": %d, ", k > -nl ? ", " : "", k );
+                js_num( t, "r", ccf[nl + k] ); g_string_append( t, ", " );
+                js_num( t, "nu", nu[nl + k] ); g_string_append( t, "}" );
+                }
+            g_string_append( t, "]}" );
+            }
+        else
+            {
+            g_string_append_printf( t, "\n  %s", cl[j] );
+            if ( !vale ) { g_string_append_printf( t, ": no se pudo preblanquear: %s\n", mot ); continue; }
+            if ( b < 0 )
+                g_string_append_printf( t, ": ningún retardo k >= 0 sale de la banda (±%.3f sobre %d obs)\n",
+                                        banda, n );
+            else
+                g_string_append_printf( t, ": b = %d, s = %d, pico en k = %d (banda ±%.3f sobre %d obs)\n",
+                                        b, s, kmax, banda, n );
+            if ( neg == 0 )
+                g_string_append( t, "    exogeneidad: ningún retardo negativo fuera de la banda\n" );
+            else
+                g_string_append_printf( t, "    exogeneidad: %d retardo%s negativo%s fuera: la salida "
+                                        "antecede a la entrada, y eso no lo arregla (b, s)\n",
+                                        neg, neg == 1 ? "" : "s", neg == 1 ? "" : "s" );
+            g_string_append_printf( t, "    Hosking sobre los preblanqueados: P(%d) = %.1f (p = %.4f)\n",
+                                    4 * nl, (double) Q, (double) pv );
+            g_string_append( t, "    k fuera de banda:" );
+            for ( k = -nl; k <= nl; k++ )
+                if ( fabs( ccf[nl + k] ) > banda ) g_string_append_printf( t, " %d (%+.3f)", k, ccf[nl + k] );
+            g_string_append( t, "\n" );
+            if ( mot[0] ) g_string_append_printf( t, "    aviso: %s\n", mot );
+            }
+        }
+    if ( json ) g_string_append( t, "]}\n" );
+    fputs( t->str, stdout );
+    g_string_free( t, TRUE );
+    suelta_pre( sal );
+    g_free( ent ); g_free( sal ); g_free( p );
+    return 0;
+}
+
+/* ------------------------------------------------------------------------ */
 /* La orden                                                                 */
 /* ------------------------------------------------------------------------ */
 
@@ -1041,6 +1210,7 @@ static void uso( FILE *f )
            "  raices factorizado P SERIE MODELO     deriva el modelo factorizado\n"
            "  ficha P SERIE MODELO [--comprobar]    la ficha de confianza, en Markdown\n"
            "  anomalos P SERIE MODELO [--episodios L]   los episodios y su calibración\n"
+           "  prewhiten P SALIDA/MODELO ENTRADA/MODELO...   la CCF preblanqueada\n"
            "  coste apunta P --motor M --paso X --cpu S --pared S   una corrida de fuera\n"
            "  coste resumen P [--por-que G]         los totales de costes.csv\n\n"
            "  P es el proyecto.yaml.\n"
@@ -1053,7 +1223,8 @@ static void uso( FILE *f )
            "                en nuevo, itera, elige y raices factorizado queda escrito\n"
            "  --comprobar   ficha: corre fue sobre el .pre y lo apunta en costes.csv\n"
            "  --episodios L anomalos: los que se omiten al calibrar, 1,3 o todos\n"
-           "                (sin ella, todos)\n\n"
+           "                (sin ella, todos)\n"
+           "  --retardos N  prewhiten: a cada lado (sin ella, la regla del motor)\n\n"
            "  coste apunta: --objeto SERIE/MODELO, --via C|python, --quien (atsw-cli),\n"
            "    --fecha, --sha-pre, y --energia J con su --metodo (sin ellos, se estima)\n"
            "  coste resumen: --por-que serie|objeto|motor|via|por|paso|quien\n", f );
@@ -1071,6 +1242,7 @@ int main( int argc, char **argv )
         if ( !strcmp( argv[i], "--json" ) ) json = TRUE;
         else if ( !strcmp( argv[i], "--comprobar" ) ) comprobar = TRUE;
         else if ( !strcmp( argv[i], "--episodios" ) && i + 1 < argc ) episodios = argv[++i];
+        else if ( !strcmp( argv[i], "--retardos" ) && i + 1 < argc ) retardos = atoi( argv[++i] );
         else if ( !strcmp( argv[i], "--muestra" ) && i + 1 < argc ) muestra = argv[++i];
         else if ( !strcmp( argv[i], "--razon" ) && i + 1 < argc ) razon = argv[++i];
         else if ( !strcmp( argv[i], "--titulo" ) && i + 1 < argc ) titulo = argv[++i];
@@ -1124,6 +1296,7 @@ int main( int argc, char **argv )
         return raices_factorizado( pos[2], pos[3], pos[4] );
     if ( ES( 0, "ficha" ) && npos == 4 ) return ficha( pos[1], pos[2], pos[3] );
     if ( ES( 0, "anomalos" ) && npos == 4 ) return anomalos( pos[1], pos[2], pos[3] );
+    if ( ES( 0, "prewhiten" ) && npos >= 3 ) return prewhiten( pos[1], pos + 2, npos - 2 );
     if ( ES( 0, "coste" ) && ES( 1, "apunta" ) && npos == 3 ) return coste_apunta_orden( pos[2] );
     if ( ES( 0, "coste" ) && ES( 1, "resumen" ) && npos == 3 ) return coste_resumen_orden( pos[2] );
 #undef ES

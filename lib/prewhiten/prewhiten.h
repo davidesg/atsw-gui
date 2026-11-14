@@ -84,6 +84,19 @@ int prewhiten_ccf( struct Tusmodel *tm_ent, struct Tseries *ts_ent,
                    int nlags, double *ccf, double *nu, int *n,
                    real ***res, char *why, size_t size );
 
+/* LO QUE SE LEE DE LA CCF, para decidir (b, s) y si la entrada puede serlo.
+ * Lo usan la pantalla de identificacion de drtran_gui y atsw-cli prewhiten:
+ *
+ *   b     el primer k >= 0 fuera de la banda (-1 si ninguno): el retardo puro
+ *   s     el ultimo fuera menos b (-1 si no hay b): el orden del numerador
+ *   kmax  el k >= 0 de mayor |r(k)|
+ *   neg   cuantos k < 0 salen de la banda: el contraste de EXOGENEIDAD. Si la
+ *         salida antecede a la entrada, no hay (b, s) que lo arregle.
+ *
+ * ccf como la da prewhiten_ccf (k = i - nlags); banda, 2/sqrt(n).        */
+void prewhiten_lee( const double *ccf, int nlags, double banda,
+                    int *b, int *s, int *kmax, int *neg );
+
 /* Los retardos que usa el motor: n/4, tope 24, suelo 10. */
 int prewhiten_nlags( int n );
 

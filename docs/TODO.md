@@ -593,6 +593,12 @@ programa:
     `gui-humo.sh`): antes los mataba con kill. Ahora tienen que salir solos
     y con 0 en Linux, macOS y Windows; si se caen o se cuelgan al cerrar,
     falla. Los ejecutores de macOS son Macs de verdad.
+  - **Lo que vio la CI de macOS** (`gui-cierre`, Apple M1 virtual, macOS
+    26.7): fue_gui se cierra bien. La que se colgaba era **la madre**: si se
+    cerraba su presentación sin pasar por «Continuar» o Esc (Cmd+W, Alt+F4),
+    la madre se quedaba escondida y el proceso vivo sin ventanas. Y sus
+    temporizadores usaban memoria ya liberada si se pulsaba Esc antes de los
+    2,5 s. Arreglado los dos en `presentacion.c`.
   - **Si vuelve a salir**, el informe está en la app Consola → «Informes de
     fallos» (o en `~/Library/Logs/DiagnosticReports/fue_gui-*.ips`), y el
     botón «Informar…» del aviso enseña el mismo texto.

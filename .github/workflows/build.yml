@@ -54,6 +54,13 @@ jobs:
       - name: Hijos sin madre
         if: always()
         run: xvfb-run -a -s "-screen 0 1600x1000x24" bash .github/madre-caida.sh
+      # atsw-us sobre los motores en C: una sesion MCP a pelo (mcp/atsw_mcp/tests/us.py)
+      - name: Asistente, atsw-us
+        if: always()
+        run: |
+          python3 -m venv /tmp/mcpenv
+          /tmp/mcpenv/bin/pip install -q "mcp==1.30.0"
+          PYTHONPATH="$PWD/mcp/atsw_mcp/src" /tmp/mcpenv/bin/python mcp/atsw_mcp/tests/us.py "$PWD"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

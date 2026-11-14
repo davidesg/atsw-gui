@@ -58,7 +58,8 @@ async def una(exe: Path, nombre: str, proyecto: Path, binarios: Path, extra: str
             check(bool(ini.instructions) and nombre in ini.instructions,
                   f"{nombre}: lleva instrucciones", repr(ini.instructions)[:80])
             ts = {t.name for t in (await s.list_tools()).tools}
-            check(ts == HERRAMIENTAS, f"{nombre}: tools/list", str(sorted(ts)))
+            # las de la fase 0 estan en los tres; atsw-us tiene ya las suyas (us.py)
+            check(HERRAMIENTAS <= ts, f"{nombre}: tools/list", str(sorted(ts)))
             v = texto(await s.call_tool("version", {}))
             check(v.startswith(nombre + " ") and f"clase {SERVIDORES[nombre]}" in v,
                   f"{nombre}: version", v.splitlines()[0] if v else "")

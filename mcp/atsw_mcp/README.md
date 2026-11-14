@@ -20,6 +20,28 @@ Instalar, con las versiones de `uv.lock`:
 Prueba de humo, sin cliente de LLM: `python tests/humo.py .venv/bin`.
 La prueba a mano con los clientes, en `docs/ENSAYO-clientes.md`.
 
+## Fase 1b: atsw-us
+
+`atsw-us` ya analiza, por el camino en C. Cada herramienta llama a una orden
+de `atsw-cli` (las mismas funciones que las ventanas de la madre) o abre una
+ventana de la madre con `atsw_gui --ver`. El MTM no escribe el manifiesto ni
+los `.inp`: lo hace `atsw-cli`, con `lib/proyecto` y `lib/inpdet`.
+
+| herramienta | qué hace | atsw-cli |
+|---|---|---|
+| `proyecto_resumen` | las series, sus modelos, el linaje y los elegidos | `proyecto ver` |
+| `derivar` | un modelo nuevo, de los datos o de un estimado, con su razón | `proyecto nuevo` / `itera` |
+| `especificar` | la transformación, el ARMA, las intervenciones y la media de un modelo sin estimar | `especifica` |
+| `estimar` | fue, con su coste, y el dictamen | `estima` |
+| `dictamen`, `formales`, `anomalos`, `raices`, `ficha` | la evidencia | las órdenes del mismo nombre |
+| `razon`, `elegir` | dejar escrito el porqué y el elegido | `proyecto razon` / `elige` |
+| `ver` | la ventana de la madre, y en texto lo que enseña | `atsw_gui --ver` |
+
+Las herramientas reciben series y modelos del proyecto, nunca rutas; lo que
+escribe va con `--por asistente`. La prueba, `tests/us.py`, es una sesión MCP
+a pelo sobre una copia del ejemplo de Jenkins y Alavi, y corre en la CI de
+Linux con los motores del árbol.
+
 ## Para la fase 1b: los procesos, con la entrada cerrada
 
 La CI de la fase 0 lo ha medido. **En Windows, un proceso lanzado desde

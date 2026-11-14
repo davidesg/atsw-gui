@@ -964,6 +964,9 @@ int main( int argc, char **argv )
                    "del cociente", q );
             g_free( q );
         }
+        check( !gtk_widget_get_visible( j->pv.b_boot ) || !gtk_widget_get_visible(
+                   gtk_widget_get_parent( j->pv.b_boot ) ),
+               "con un VEC no se ofrece el bootstrap de drvarma", NULL );
         {
             GtkTreeModel *tm = gtk_tree_view_get_model( GTK_TREE_VIEW(j->pv.l_eval) );
             GtkTreeIter it;

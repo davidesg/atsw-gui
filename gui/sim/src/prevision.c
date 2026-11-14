@@ -569,6 +569,10 @@ static void irf_controles( Sim *m )
     gtk_widget_set_sensitive( P->b_irf, hay );
     if (P->b_boot) {
         gboolean al_dia = P->bt && P->bt_version == m->pe.version && P->bt_version >= 0;
+        /* con un VEC no hay: sus bandas son las de drvec (-irfboot), aparte */
+        gboolean vec = m->pe.vec && m->pe.vec->hay_vec;
+        gtk_widget_set_visible( gtk_widget_get_parent( P->b_boot ), !vec );
+        gtk_widget_set_visible( P->ver_boot, !vec );
         gtk_widget_set_sensitive( P->b_boot, hay && !P->bt_corriendo );
         gtk_widget_set_sensitive( P->s_boot, hay && !P->bt_corriendo );
         if (P->bt_corriendo)
@@ -819,7 +823,8 @@ static void evaluacion_vec( Sim *m )
                        "Fuera de muestra, el VEC y los univariantes sobre los mismos %d orígenes (los "
                        "de drvec: los que comprueban los %d pasos): el VEC prevé mejor en %d de %d "
                        "series y horizontes (RMSE VEC / univariantes < 1). Diebold-Mariano: %d "
-                       "diferencias significativas al 5 %%.", origenes, H, gana, total, sig );
+                       "diferencia%s significativa%s al 5 %%.", origenes, H, gana, total, sig,
+                       sig == 1 ? "" : "s", sig == 1 ? "" : "s" );
     else
         sim_veredicto( P->ver_eval, SIM_AMBAR, "La evaluación del VEC y la de los univariantes no "
                        "comparten orígenes: revisa la ventana." );
@@ -894,8 +899,8 @@ static void evaluacion( Sim *m )
                        "Fuera de muestra (%d orígenes; n, los que tienen dato con que comparar), "
                        "el sistema prevé mejor que los univariantes en %d de %d series y "
                        "horizontes (RMSE sistema / univariantes < 1). Diebold-Mariano: %d "
-                       "diferencias significativas al 5 %%.",
-                       P->ve->ev_origenes, gana, total, sig );
+                       "diferencia%s significativa%s al 5 %%.",
+                       P->ve->ev_origenes, gana, total, sig, sig == 1 ? "" : "s", sig == 1 ? "" : "s" );
     else
         sim_veredicto( P->ver_eval, SIM_AMBAR, "La evaluación del sistema, sin la de los univariantes "
                        "con la que compararla." );
@@ -1164,7 +1169,11 @@ GtkWidget *prevision_pagina_new( Sim *m )
     gtk_widget_set_sensitive( P->b_boot, FALSE );
     gtk_box_pack_start( GTK_BOX(f), P->b_boot, FALSE, FALSE, 0 );
     gtk_box_pack_start( GTK_BOX(pg), f, FALSE, FALSE, 0 );
+    gtk_widget_show_all( f );
+    gtk_widget_set_no_show_all( f, TRUE );       /* la esconde un VEC */
     P->ver_boot = veredicto_new();
+    gtk_widget_set_no_show_all( P->ver_boot, TRUE );
+    gtk_widget_show( P->ver_boot );
     gtk_box_pack_start( GTK_BOX(pg), P->ver_boot, FALSE, FALSE, 0 );
     }
     gtk_box_pack_start( GTK_BOX(pg), texto_new( &P->t_irf ), TRUE, TRUE, 0 );

@@ -12,6 +12,7 @@
 
 #include "sim.h"
 #include "previewhost.h"
+#include "gesto.h"
 #include "preview.h"
 #include "cuaderno.h"
 
@@ -47,13 +48,7 @@ gboolean sim_proyecto_abre( Sim *m, const char *path_dado, char *why, size_t n )
  * un .pre reestimado tiene la misma ruta y otro contenido.             */
 gchar *sim_sha( const char *path )
 {
-    gchar *c = NULL, *h;
-    gsize  k = 0;
-
-    if (!g_file_get_contents( path, &c, &k, NULL )) return NULL;
-    h = g_compute_checksum_for_data( G_CHECKSUM_SHA256, (const guchar *) c, k );
-    g_free( c );
-    return h;
+    return ge_sha( path );       /* uno para toda la suite (lib/gesto) */
 }
 
 gboolean sim_caso_carga( Sim *m, char *why, size_t n )
@@ -194,18 +189,16 @@ gboolean sim_caso_al_dia( Sim *m, char *why, size_t n )
 
 gchar *sim_artefacto( Sim *m, const char *nombre )
 {
+    char   ruta[PR_RUTA];
     gchar *dir, *r;
 
-    if (m->proy && m->caso[0]) {
-        char raiz[PR_RUTA];
-
-        if (pr_raiz( m->proy, raiz, sizeof raiz ) != 0) snprintf( raiz, sizeof raiz, "." );
-        dir = g_build_filename( raiz, "_casos", m->caso, "work", NULL );
-        {
-            gchar *base = g_strdup_printf( "%s_%s", m->caso, nombre );
-            r = g_build_filename( dir, base, NULL );
-            g_free( base );
-        }
+    /* LA RUTA LA COMPONE lib/proyecto, como la de una corrida: la puerta y el
+       rango son artefactos del caso y van con su nombre, C1_puerta, en
+       _casos/C1/work. Antes se armaba aqui a mano (AUDITORIA-procesos C4). */
+    if (m->proy && m->caso[0] &&
+        pr_corrida_ruta( m->proy, m->caso, nombre, NULL, ruta, sizeof ruta ) == 0) {
+        r   = g_strdup( ruta );
+        dir = g_path_get_dirname( r );
     } else {
         dir = g_build_filename( g_get_user_cache_dir(), SIM_CACHE, NULL );
         r = g_build_filename( dir, nombre, NULL );

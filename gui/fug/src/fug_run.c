@@ -16,6 +16,7 @@
 #include <gtk/gtk.h>
 #include "fug_run.h"
 #include "sitio.h"
+#include "engine.h"
 #include "data_load.h"
 #include "preview.h"
 
@@ -213,9 +214,8 @@ static void set_busy(AppWidgets *app, gboolean busy)
  * the user; returns TRUE when fug finished successfully. */
 gboolean run_fug(AppWidgets *app, const gchar *workspace, GPtrArray *args)
 {
-    gchar *out = NULL, *err = NULL, *cmdline, *report;
-    GError *error = NULL;
-    gint status;
+    gchar *cmdline, *report;
+    EngineResult r;
     gboolean ok;
     gsize len;
 
@@ -224,39 +224,39 @@ gboolean run_fug(AppWidgets *app, const gchar *workspace, GPtrArray *args)
 
     show_status(app, "Running: %s", cmdline);
     set_busy(app, TRUE);
-    /* g_spawn_sync en Linux y macOS; en Windows, sin la ventana de consola
-     * que g_spawn abria para fug en cada dibujo (lib/sitio).           */
-    ok = sitio_lanza_y_espera(workspace, (gchar **) args->pdata, NULL,
-                              G_SPAWN_SEARCH_PATH, NULL, NULL, &out, &err,
-                              &status, &error);
+    /* POR lib/engine, COMO LOS DEMAS MOTORES: en Windows sin la ventana de
+     * consola que g_spawn abria para fug en cada dibujo (lib/sitio), y CON
+     * PLAZO: con g_spawn_sync un fug colgado dejaba la ventana congelada
+     * para siempre (AUDITORIA-procesos B5; ATSW_PLAZO_MOTOR_S).        */
+    r = engine_run_v(workspace, (const char *) args->pdata[0],
+                     (const char *const *) args->pdata + 1);
     set_busy(app, FALSE);
     g_ptr_array_remove_index(args, args->len - 1);
 
-    if (!ok) {
+    ok = (r.status == 0);
+    if (r.status == ENGINE_NORUN) {
         show_error(app, "Can not run the FUG engine \"%s\":\n%s\n\n"
                         "Hint: check that fug is installed and in the PATH "
                         "(or set the FUG environment variable).",
-                   fug_program(), error->message);
+                   fug_program(), r.message);
         show_status(app, "Error running fug");
-        g_error_free(error);
-    } else if (!g_spawn_check_exit_status(status, &error)) {
-        ok = FALSE;
+    } else if (!ok) {
+        const char *out = r.output ? r.output : "";
+
         /* keep only the end of the console output */
         len = strlen(out);
-        report = g_strconcat(err, (len > MAX_REPORT) ? "...\n" : "",
+        report = g_strconcat((len > MAX_REPORT) ? "...\n" : "",
                              out + ((len > MAX_REPORT) ? len - MAX_REPORT : 0), NULL);
         show_error(app, "fug failed (%s)\n\nCommand: %s\nFolder: %s\n\n%s",
-                   error->message, cmdline, workspace, g_strstrip(report));
+                   r.message, cmdline, workspace, g_strstrip(report));
         show_status(app, "fug failed: %s", cmdline);
         g_free(report);
-        g_error_free(error);
     } else {
         show_status(app, "Done: %s", cmdline);
     }
 
     g_free(cmdline);
-    g_free(out);
-    g_free(err);
+    engine_result_clear(&r);
     return ok;
 }
 

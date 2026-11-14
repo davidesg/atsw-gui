@@ -169,12 +169,15 @@ ocupa ~800 KB: va siempre en el montón (`PRUEBAS.md` §4).
 
 **`--caso C`**, con `--proyecto`:
 
-    drtran_gui --proyecto P --caso C1 [--corrida c01]
+    drtran_gui --proyecto P --caso C1 [--modelo c01]
+
+`--modelo` es lo que manda la madre (`atsw_lanza_caso`, `gestos.c`), y
+sim_gui entiende lo mismo. `--corrida` es sinónimo en los dos.
 
 - carga las entradas del caso en su orden, cada una del `.pre` de su modelo,
   y **comprueba sus hashes**: si alguno cambió, lo dice antes de estimar (el
   caso está desfasado) y ofrece derivar uno nuevo;
-- con `--corrida`, o si el caso tiene elegida, carga su `.dag` y su `.cns`;
+- con `--modelo`, o si el caso tiene elegida, carga su `.dag` y su `.cns`;
   si no, empieza sin red;
 - cada estimación es una corrida **del caso**, hija de la que se cargó.
 
@@ -224,7 +227,7 @@ univariantes, no ficheros de la corrida.
   `.pre`) en la muestra elegida. **Por defecto, el elegido**, pero se puede
   escoger otro —por lo de art de arriba—. Se ordenan, y la ventana común se
   comprueba antes de aceptar.
-- **«Abrir en drtran»** lanza `drtran_gui --proyecto P --caso C --corrida c`.
+- **«Abrir en drtran»** lanza `drtran_gui --proyecto P --caso C --modelo c`.
 - **El árbol de corridas** es el linaje, como el de los modelos
   (`linaje_gui.c`), con la razón al lado y «sin razón» a la vista.
 - **Por corrida, lo que la escalera pide ver** (`DISENO-escalera.md` §5.3):

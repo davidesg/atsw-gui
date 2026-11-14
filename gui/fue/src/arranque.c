@@ -14,6 +14,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "proyecto.h"
 
 static char g_raiz_proyecto[1024];
@@ -81,6 +82,30 @@ const char *fue_raiz_proyecto(void)
 void fue_pon_raiz_proyecto(const char *s)
 {
     snprintf(g_raiz_proyecto, sizeof g_raiz_proyecto, "%s", s ? s : "");
+}
+
+/* LA RAIZ DE UN MANIFIESTO, con pr_raiz: la de «raiz:», resuelta contra la
+ * carpeta del manifiesto. Antes se pedia con pr_ruta(p, "", ...), que con la
+ * serie vacia devuelve una ruta vacia: se caia siempre a la carpeta del
+ * manifiesto y un «raiz: datos» se ignoraba (AUDITORIA-procesos C4; fug tuvo
+ * el mismo fallo y lo arreglo copiando la cuenta). Si ni asi, la carpeta
+ * del manifiesto.                                                       */
+void fue_pon_raiz_de(const Proyecto *p)
+{
+    char raiz[PR_RUTA] = "";
+
+    if (p && pr_raiz(p, raiz, sizeof raiz) != 0) raiz[0] = '\0';
+    if (!raiz[0] && p && p->path[0]) {
+        char *b;
+
+        snprintf(raiz, sizeof raiz, "%s", p->path);
+        b = strrchr(raiz, '/');
+#ifdef _WIN32
+        { char *w = strrchr(raiz, '\\'); if (w && (!b || w > b)) b = w; }
+#endif
+        if (b) *b = '\0'; else snprintf(raiz, sizeof raiz, ".");
+    }
+    fue_pon_raiz_proyecto(raiz);
 }
 
 /* EL FICHERO QUE LA MADRE MANDA.

@@ -576,9 +576,6 @@ programa:
 - Al abrir la ventana, Diagnosis, Anómalos y Ganancia salen **encendidos**
   y sin tooltip: `fue_analisis_refresca()` sólo corre cuando cambia el
   nombre de entrada, nunca en `create_main_window` (`gui/fue/src/main_window.c`).
-- `--proyecto` ignora la `raiz` del manifiesto (`gui/fue/src/main.c` ~144):
-  `pr_ruta` con serie vacía devuelve vacío. Es el mismo fallo que se arregló
-  en `gui/fug/src/main.c`.
 - **macOS (Mac M2, 13-nov-2026, lo vio el analista):** al cerrar la ventana de
   fue_gui, macOS avisa de que la aplicación ha fallado o se ha colgado. Tras
   cerrar el aviso el programa sigue funcionando. Por lo demás, en el M2 todo

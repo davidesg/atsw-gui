@@ -18,8 +18,8 @@ sobre un frente:
 Cada hallazgo de gravedad alta o media se comprobó después **en el código**,
 leyendo el camino entero. La columna «visto» lo dice: **sí** es comprobado
 así; **lectura** es de las revisiones, coherente con el código pero sin
-seguirlo hasta el final. Nada se ha arreglado todavía: este documento es para
-decidir el orden.
+seguirlo hasta el final. El documento se escribió para decidir el orden; lo
+arreglado, por fases, está en el §4.
 
 ---
 
@@ -150,15 +150,31 @@ Comprobado por las revisiones, y conviene no tocarlo al arreglar lo de arriba.
 
 Cada fase en su PR, con su prueba, y la CI en verde en las tres plataformas.
 
-| fase | qué | arregla |
-|---|---|---|
-| **1** | **El manifiesto, transaccional, en `lib/proyecto`.** Una sola forma de cambiarlo, la misma para todos los procesos: **cerrojo** (un fichero junto al manifiesto, creado con `O_EXCL`), **releer**, aplicar el cambio, **escribir de forma atómica** (temporal + rename, que reemplaza también en Windows) y soltar el cerrojo. Los ids nuevos saltan también los que ya tienen ficheros en disco. Después, cada sitio que hoy escribe su copia pasa a esa forma: madre, ventanas de análisis, editor, fue, drtran, sim y atsw-cli | A1–A4, y lo de los ids de B3 y C6 |
-| **2** | **El editor de la madre.** Desenganchar el callback del motor al cerrarlo o al derivar (o mantener vivo el editor hasta que el motor avise). Preguntar por lo no guardado antes de parar la estimación, y también al cerrar la madre | B1, B2 |
-| **3** | **sim_gui con un caso desfasado, como drtran_gui**: derivar otro caso o reutilizar uno con esas entradas. La puerta y el rango, guardados por el hash de las entradas | C1 |
-| **4** | **Las corridas, solo con su `.out`**: darlas de alta cuando el motor ha escrito resultados (o marcarlas «fallida» sin hacerlas `previa`), en drtran y en sim | C2 |
-| **5** | **«Guardar» de fue_gui sobre un modelo estimado deriva**, como «Estimar» y como el editor de la madre | C3 |
-| **6** | **La madre, ante dos hijos sobre lo mismo y ante borrar lo que un hijo tiene abierto**: llevar la cuenta de qué tiene abierto cada hijo; no abrir dos veces lo mismo, sino traer al frente el que ya está; y avisar antes de borrar | B3, A5 |
-| **7** | **Lo menor**: rutas por `pr_raiz` y `pr_corrida_ruta`, un solo `sha_de`, `--corrida` en el documento, plazos en las esperas síncronas | C4, C5, B5 |
+| fase | qué | arregla | hecho |
+|---|---|---|---|
+| **1** | **El manifiesto, transaccional, en `lib/proyecto`.** Una sola forma de cambiarlo, la misma para todos los procesos: **cerrojo** (un fichero junto al manifiesto; se planteó con `O_EXCL` y quedó en `flock`/`LockFileEx`: DISENO-proyecto §5), **releer**, aplicar el cambio, **escribir de forma atómica** (temporal + rename, que reemplaza también en Windows) y soltar el cerrojo. Los ids nuevos saltan también los que ya tienen ficheros en disco. Después, cada sitio que hoy escribe su copia pasa a esa forma: madre, ventanas de análisis, editor, fue, drtran, sim y atsw-cli | A1–A4, y lo de los ids de B3 y C6 | PR #140 |
+| **2** | **El editor de la madre.** Desenganchar el callback del motor al cerrarlo o al derivar (o mantener vivo el editor hasta que el motor avise). Preguntar por lo no guardado antes de parar la estimación, y también al cerrar la madre | B1, B2 | PR #141 |
+| **3** | **sim_gui con un caso desfasado, como drtran_gui**: derivar otro caso o reutilizar uno con esas entradas. La puerta y el rango, guardados por el hash de las entradas | C1 | PR #142 |
+| **4** | **Las corridas, solo con su `.out`**: darlas de alta cuando el motor ha escrito resultados (o marcarlas «fallida» sin hacerlas `previa`), en drtran y en sim | C2 | PR #143 |
+| **5** | **«Guardar» de fue_gui sobre un modelo estimado deriva**, como «Estimar» y como el editor de la madre | C3 | PR #144 |
+| **6** | **La madre, ante dos hijos sobre lo mismo y ante borrar lo que un hijo tiene abierto**: llevar la cuenta de qué tiene abierto cada hijo; no abrir dos veces lo mismo, sino traer al frente el que ya está; y avisar antes de borrar | B3, A5 | PR #145 |
+| **7** | **Lo menor**: rutas por `pr_raiz` y `pr_corrida_ruta`, un solo `sha_de`, `--corrida` en el documento, plazos en las esperas síncronas | C4, C5, B5 | PR #146 |
+
+**Las siete, hechas (14-nov-2026).** La fase 7, en concreto:
+- **C4.** fue_gui respeta `raiz:` (`fue_pon_raiz_de`, con `pr_raiz`); fug
+  deja su copia de la cuenta y usa `pr_raiz`; `sim_artefacto` compone con
+  `pr_corrida_ruta`; un solo sha256 de fichero, `ge_sha` (lib/gesto), para
+  la madre, atsw-cli, drtran_gui y sim_gui; el nombre del gráfico de fue
+  (`A<modelo>.eps`) se compone solo en `atsw_grafico_de`.
+- **C5.** `--modelo` es el nombre (el que manda la madre); `--corrida`,
+  sinónimo en drtran_gui y en sim_gui. `DISENO-casos.md` lo dice así.
+- **B5.** `engine_run` (y el nuevo `engine_run_v`) esperan con plazo:
+  `ATSW_PLAZO_MOTOR_S`, 300 s por omisión, 0 sin plazo. Al plazo se para el
+  motor y el resultado es `ENGINE_PLAZO`, con un mensaje que lo dice.
+  gtk_fmg deja `g_spawn_sync` y corre fug por ahí, como los demás.
+
+Quedan sin arreglar, por bajos o por sospechas sin comprobar: B4, B6, B7,
+C6 (la madre y una clave que no conoce) y A6 (el cuaderno).
 
 **La fase 1 va primero** porque A1–A4 son la raíz y se arreglan en un solo
 sitio. Las fases 3 a 5 son independientes de ella y pequeñas. Toca la

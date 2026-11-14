@@ -84,7 +84,9 @@ int main( int argc, char **argv )
         if (!strcmp( argv[i], "--proyecto" ) && i + 1 < argc) proy = argv[++i];
         else if (!strncmp( argv[i], "--proyecto=", 11 )) proy = argv[i] + 11;
         else if (!strcmp( argv[i], "--caso" ) && i + 1 < argc) caso = argv[++i];
-        else if (!strcmp( argv[i], "--modelo" ) && i + 1 < argc) modelo = argv[++i];
+        /* --corrida, sinonimo, como en drtran_gui (DISENO-casos §3)   */
+        else if ((!strcmp( argv[i], "--modelo" ) || !strcmp( argv[i], "--corrida" )) &&
+                 i + 1 < argc) modelo = argv[++i];
         else if (!strcmp( argv[i], "--madre" ) && i + 1 < argc) g_madre = argv[++i];
         else if (!strcmp( argv[i], "-h" ) || !strcmp( argv[i], "--help" ))
             { uso( argv[0] ); g_ptr_array_free( fich, TRUE ); return 0; }

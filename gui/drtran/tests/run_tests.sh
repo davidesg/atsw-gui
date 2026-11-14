@@ -458,6 +458,15 @@ $CC -O2 -Wall -Wextra -I"$L/coste" -I"$L/engine" -I"$L/sitio" $(pkg-config --cfl
     -o "$W/test_coste" $(pkg-config --libs glib-2.0) -lm || exit 1
 "$W/test_coste" "$W/coste" || exit 1
 
+# --- el plazo de las esperas sincronas (lib/engine, AUDITORIA-procesos B5) --
+# Un motor colgado se para al plazo (ATSW_PLAZO_MOTOR_S) y se dice; la
+# ventana que espera no se queda congelada para siempre.
+echo
+$CC -O2 -Wall -Wextra -I"$L/engine" -I"$L/coste" -I"$L/sitio" $(pkg-config --cflags glib-2.0) \
+    "$L/engine/test_engine.c" "$L/engine/engine.c" "$L/coste/coste.c" "$L/sitio/sitio.c" \
+    -o "$W/test_engine" $(pkg-config --libs glib-2.0) -lm || exit 1
+"$W/test_engine" || exit 1
+
 # --- lanzar un motor (lib/sitio; gui/atsw/BUGS.md BUG-0001) -----------------
 # sitio_lanza_y_espera y sitio_lanza_con_tuberias: en las tres plataformas,
 # que lanzan, separan salida y error, devuelven el estado y pasan los

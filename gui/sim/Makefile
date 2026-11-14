@@ -27,6 +27,7 @@ SRC = src/main.c src/ventana.c src/series.c src/puerta.c src/rango.c src/restric
       $(ENG)/src/diagnose.c \
       $(LIB)/diagmv/diagmv.c \
       $(LIB)/proyecto/proyecto.c \
+      $(LIB)/gesto/gesto.c \
       $(LIB)/engine/engine.c \
       $(LIB)/coste/coste.c \
       $(LIB)/sitio/sitio.c \
@@ -50,7 +51,7 @@ HDR = include/sim.h include/previewhost.h include/plothost.h
 
 INC = -Iinclude -I$(ENG)/include -I$(LIB)/sistema -I$(LIB)/outvarma -I$(LIB)/outvec -I$(LIB)/outdiag \
       -I$(LIB)/fuepre -I$(LIB)/fuedet -I$(LIB)/dates -I$(LIB)/lik -I$(LIB)/optim \
-      -I$(LIB)/diagmv -I$(LIB)/prewhiten -I$(LIB)/inpcheck -I$(LIB)/proyecto \
+      -I$(LIB)/diagmv -I$(LIB)/prewhiten -I$(LIB)/inpcheck -I$(LIB)/proyecto -I$(LIB)/gesto \
       -I$(LIB)/engine -I$(LIB)/coste -I$(LIB)/sitio -I$(LIB)/barra \
       -I$(LIB)/preview -I$(LIB)/fugdraw -I$(LIB)/ccfplot -I$(LIB)/utils \
       -I$(LIB)/fugplot -I$(LIB)/equation -I$(LIB)/cuaderno -I$(LIB)/tabla -I$(LIB)/fufplot -I$(LIB)/outfcst -I$(LIB)/fcomp

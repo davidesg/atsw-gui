@@ -28,6 +28,7 @@
 
 #include "gui.h"
 #include "previewhost.h"
+#include "gesto.h"
 #include "fue_pre_reader.h"
 #include "preview.h"
 #include "cuaderno.h"
@@ -99,17 +100,10 @@ gboolean mtram_proyecto_guarda( Mtram *m, char *why, size_t n )
 
 /* EL SHA256 DE UN FICHERO, en hexadecimal (g_free), o NULL si no se lee. Es
  * la identidad de una entrada: lo que art guarda en su guion (base_pre_sha)
- * y mtram en su certificado (BUG-53).                                    */
-static gchar *sha_de( const char *path )
-{
-    gchar *c = NULL, *h;
-    gsize  n = 0;
-
-    if (!g_file_get_contents( path, &c, &n, NULL )) return NULL;
-    h = g_compute_checksum_for_data( G_CHECKSUM_SHA256, (const guchar *) c, n );
-    g_free( c );
-    return h;
-}
+ * y mtram en su certificado (BUG-53). Uno solo para toda la suite, el de
+ * lib/gesto (AUDITORIA-procesos C4): si la madre y esta ventana lo
+ * calcularan distinto, todo caso saldria desfasado.                    */
+#define sha_de ge_sha
 
 /* El directorio de la corrida tiene que existir antes de que el motor
  * intente escribir en el.                                               */

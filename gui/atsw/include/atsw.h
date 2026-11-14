@@ -272,8 +272,13 @@ void       atsw_lanza_caso( Atsw *a, const char *programa, const char *caso,
 /* --- los casos (docs/DISENO-casos.md) ----------------------------------- */
 
 /* EL SHA256 DE UN FICHERO, en hexadecimal (g_free), o NULL si no se lee. El
-   mismo calculo que drtran_gui: el fichero entero, tal cual.           */
+   mismo calculo en toda la suite (ge_sha, lib/gesto): el fichero entero,
+   tal cual.                                                             */
 gchar     *atsw_sha_de( const char *path );
+/* El grafico que fue deja al estimar (A<modelo>.eps), junto al .out. */
+int        atsw_grafico_de( Atsw *a, const char *serie, const char *muestra,
+                            const char *id, char *out, size_t n );
+
 
 /* COMO ESTA EL .pre DE UNA ENTRADA respecto del alta.                  */
 typedef enum {

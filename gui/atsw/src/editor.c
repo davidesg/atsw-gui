@@ -446,11 +446,26 @@ static void on_recargar( GtkButton *b, Editor *E )
 /* Estimar, sin congelar la ventana                                          */
 /* ------------------------------------------------------------------------ */
 
+/* EL GRAFICO QUE FUE DEJA AL ESTIMAR: residuos, ACF/PACF y el modelo
+ * escrito debajo. Se llama como el modelo con una «A» delante, junto al
+ * .out (Aipc_m01.eps): fue lo compone con ruta_componer(x11out, "A", ...)
+ * (engines/fue/src/fue.c). La madre lo compone SOLO AQUI, y aqui y no en main.c
+ * porque las pruebas enlazan editor.c sin main.c (antes cada uno tenia su
+ * copia: AUDITORIA-procesos C4).                       */
+int atsw_grafico_de( Atsw *a, const char *serie, const char *muestra,
+                            const char *id, char *out, size_t n )
+{
+    char base[PR_RUTA];
+
+    out[0] = '\0';
+    if ( pr_ruta( a->p, serie, muestra, id, ".eps", base, sizeof base ) != 0 )
+        return 1;
+    return ruta_componer( base, "A", NULL, out, n );
+}
+
 /* EL GRAFICO DE LOS RESIDUOS LO ESCRIBE EL MOTOR, y hay que saber su nombre
- * para encontrarlo: fue lo arma poniendo una "A" DELANTE DEL NOMBRE, no de
- * la ruta -- "Acaso/X.eps" no se podia escribir, y era un aviso, no un
- * error. Por eso el motor usa ruta_componer, y por eso aqui se compone
- * igual en vez de pegar cadenas.
+ * para encontrarlo: el modelo con una «A» delante del nombre (no de la
+ * ruta). Lo compone atsw_grafico_de, justo encima, el que usa la madre.
  *
  * Y es JUSTO lo que hace falta: fue lo dibuja con fp_PlotSer_CorrSer, "the
  * same graph as fug -c" -- la serie de residuos con su ACF y su PACF. No
@@ -458,12 +473,7 @@ static void on_recargar( GtkButton *b, Editor *E )
  * estimacion.                                                          */
 static int eps_de( Editor *E, char *out, size_t n )
 {
-    char base[PR_RUTA];
-
-    out[0] = '\0';
-    if ( pr_ruta( E->a->p, E->serie, E->muestra, E->id, ".eps", base, sizeof base ) != 0 )
-        return 1;
-    return ruta_componer( base, "A", NULL, out, n );
+    return atsw_grafico_de( E->a, E->serie, E->muestra, E->id, out, n );
 }
 
 static gboolean hay_eps( Editor *E )

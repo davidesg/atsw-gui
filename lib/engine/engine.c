@@ -138,6 +138,8 @@ static gchar *find_program(const char *program) {
 static gchar *status_message(const char *program, int status, int signal_no,
                              const char *err, const char *out);
 
+void engine_stop(EngineJob *job);
+
 /* Se declara antes: engine_run corre por el mismo camino que engine_start */
 static EngineJob *lanza(const char *workdir, const char *program,
                         const char *const *argv, GMainContext *ctx,
@@ -145,7 +147,7 @@ static EngineJob *lanza(const char *workdir, const char *program,
                         EngineSalida salida, EngineDone done, gpointer data,
                         GError **error);
 
-typedef struct { EngineResult r; gboolean fin; } Espera;
+typedef struct { EngineResult r; gboolean fin; gboolean plazo; EngineJob *job; } Espera;
 
 static void espera_fin(const EngineResult *r, gpointer data) {
     Espera *e = data;
@@ -157,18 +159,25 @@ static void espera_fin(const EngineResult *r, gpointer data) {
     e->fin         = TRUE;
 }
 
-EngineResult engine_run(const char *workdir, const char *program, ...) {
-    EngineResult r = { ENGINE_NORUN, 0, NULL, NULL };
-    GPtrArray   *args;
-    va_list      ap;
-    const char  *a;
+/* EL PLAZO DE UNA ESPERA SINCRONA. Una previsión, un dibujo o la ficha tardan
+ * segundos; cinco minutos solo los pasa un motor colgado, y la ventana que
+ * espera no se mueve mientras (AUDITORIA-procesos B5). 0 es sin plazo.   */
+int engine_plazo_s(void) {
+    const char *v = g_getenv("ATSW_PLAZO_MOTOR_S");
+    return (v && *v) ? atoi(v) : 300;
+}
 
-    args = g_ptr_array_new_with_free_func(g_free);
-    va_start(ap, program);
-    while ((a = va_arg(ap, const char *)) != NULL)
-        g_ptr_array_add(args, g_strdup(a));
-    va_end(ap);
-    g_ptr_array_add(args, NULL);
+static gboolean espera_plazo(gpointer data) {
+    Espera *e = data;
+
+    e->plazo = TRUE;
+    engine_stop(e->job);        /* su fin llega por espera_fin, como siempre */
+    return G_SOURCE_REMOVE;
+}
+
+EngineResult engine_run_v(const char *workdir, const char *program,
+                          const char *const *argv) {
+    EngineResult r = { ENGINE_NORUN, 0, NULL, NULL };
 
     /* UN SOLO CAMINO EN LAS TRES PLATAFORMAS, Y AHORA TAMBIEN PARA LA ESPERA.
      * Windows tenia uno propio, con CreateProcessW, que solo recogia el
@@ -182,27 +191,56 @@ EngineResult engine_run(const char *workdir, const char *program, ...) {
      *
      * Con la entrada CERRADA, como hacia g_spawn_sync: un motor que pidiera
      * algo por teclado se quedaria esperando una respuesta que no llega. */
-    {
     GMainContext *ctx = g_main_context_new();
     GError       *error = NULL;
     Espera        e;
+    int           plazo = engine_plazo_s();
 
     memset(&e, 0, sizeof e);
-    if (lanza(workdir, program, (const char *const *) args->pdata, ctx, TRUE,
-              NULL, NULL, espera_fin, &e, &error) == NULL) {
+    e.job = lanza(workdir, program, argv, ctx, TRUE, NULL, NULL, espera_fin, &e, &error);
+    if (e.job == NULL) {
         r.message = g_strdup_printf("%s no se pudo lanzar: %s", program,
                                     error ? error->message : "error desconocido");
         if (error) g_error_free(error);
         g_main_context_unref(ctx);
-        g_ptr_array_free(args, TRUE);
         return r;
+    }
+    if (plazo > 0) {
+        GSource *t = g_timeout_source_new_seconds((guint) plazo);
+
+        g_source_set_callback(t, espera_plazo, &e, NULL);
+        g_source_attach(t, ctx);
+        g_source_unref(t);
     }
     while (!e.fin)
         g_main_context_iteration(ctx, TRUE);
     g_main_context_unref(ctx);
     r = e.r;
-    }
+    if (e.plazo) {
+        gchar *base = g_path_get_basename(program);
 
+        r.status = ENGINE_PLAZO;
+        g_free(r.message);
+        r.message = g_strdup_printf("%s no terminó en %d s y se paró (el plazo es "
+                                    "ATSW_PLAZO_MOTOR_S).", base, plazo);
+        g_free(base);
+    }
+    return r;
+}
+
+EngineResult engine_run(const char *workdir, const char *program, ...) {
+    EngineResult r;
+    GPtrArray   *args;
+    va_list      ap;
+    const char  *a;
+
+    args = g_ptr_array_new_with_free_func(g_free);
+    va_start(ap, program);
+    while ((a = va_arg(ap, const char *)) != NULL)
+        g_ptr_array_add(args, g_strdup(a));
+    va_end(ap);
+    g_ptr_array_add(args, NULL);
+    r = engine_run_v(workdir, program, (const char *const *) args->pdata);
     g_ptr_array_free(args, TRUE);
     return r;
 }

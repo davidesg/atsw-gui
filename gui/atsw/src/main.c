@@ -679,19 +679,7 @@ static void on_nuevo_modelo( GtkButton *b, Atsw *a )
     barra_pub( a, why );
 }
 
-/* EL GRAFICO QUE FUE DEJA AL ESTIMAR: residuos, ACF/PACF y el modelo
- * escrito debajo. Se llama como el modelo con una «A» delante, junto al
- * .out (Aipc_m01.eps). El editor lo compone igual (editor.c, eps_de).  */
-static int atsw_grafico_de( Atsw *a, const char *serie, const char *muestra,
-                            const char *id, char *out, size_t n )
-{
-    char base[PR_RUTA];
-
-    out[0] = '\0';
-    if ( pr_ruta( a->p, serie, muestra, id, ".eps", base, sizeof base ) != 0 )
-        return 1;
-    return ruta_componer( base, "A", NULL, out, n );
-}
+/* atsw_grafico_de, el nombre del grafico de fue: en editor.c (atsw.h). */
 
 /* EL RESUMEN DEL MODELO ESTIMADO, para «Ver modelo…»: el
  * PDF que fue escribe al estimar (ipc_m01.pdf, report.c) con el gráfico de

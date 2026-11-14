@@ -354,6 +354,7 @@ typedef struct {
     AtComprob  c[AT_MAX_COMPROB];
     int        n;
     gboolean   listo, minimo, cerrada;
+    guint      t_comprueba, t_minimo;   /* los temporizadores, mientras viven */
 } Pr;
 
 static void abre_madre( Pr *g )
@@ -384,7 +385,24 @@ static gboolean on_tecla( GtkWidget *w, GdkEventKey *ev, Pr *g )
     return FALSE;
 }
 
-static void on_destruida( GtkWidget *w, Pr *g ) { (void) w; g_free( g ); }
+/* AL IRSE LA PRESENTACION, POR DONDE SEA (Esc, «Continuar», o cerrada sin
+ * pasar por ahi: Cmd+W en macOS, Alt+F4): sus temporizadores se retiran
+ * --si no, on_minimo y comprueba usaban g ya liberado, p. ej. con Esc
+ * antes de los 2,5 s-- y, si no habia abierto la madre, la abre. Antes,
+ * cerrada asi, la madre se quedaba escondida y el proceso vivo y sin
+ * ventanas; lo vio la CI de macOS (gui-cierre).                       */
+static void on_destruida( GtkWidget *w, Pr *g )
+{
+    (void) w;
+    if ( g->t_comprueba ) g_source_remove( g->t_comprueba );
+    if ( g->t_minimo )    g_source_remove( g->t_minimo );
+    if ( !g->cerrada )
+        {
+        g->cerrada = TRUE;
+        gtk_widget_show_all( g->madre );
+        }
+    g_free( g );
+}
 
 /* Las dos condiciones para irse solo: la comprobacion acabada sin faltas y
  * el tiempo minimo para leer los creditos. */
@@ -398,6 +416,7 @@ static gboolean on_minimo( gpointer d )
 {
     Pr *g = d;
 
+    g->t_minimo = 0;
     g->minimo = TRUE;
     quiza_se_va( g );
     return G_SOURCE_REMOVE;
@@ -409,6 +428,7 @@ static gboolean comprueba( gpointer d )
     int    faltan;
     gchar *m;
 
+    g->t_comprueba = 0;
     g->n = atsw_comprueba( g->c, AT_MAX_COMPROB );
     g->listo = TRUE;
     faltan = atsw_comprueba_faltan( g->c, g->n );
@@ -526,8 +546,8 @@ void atsw_presentacion( Atsw *a, GtkWidget *madre )
     gtk_widget_show_all( g->win );
     /* la comprobacion, cuando la ventana ya se ha pintado; y un minimo de
        dos segundos y medio para leer los creditos                      */
-    g_timeout_add( 150, comprueba, g );
-    g_timeout_add( 2500, on_minimo, g );
+    g->t_comprueba = g_timeout_add( 150, comprueba, g );
+    g->t_minimo    = g_timeout_add( 2500, on_minimo, g );
 }
 
 /* ------------------------------------------------------------------------ */

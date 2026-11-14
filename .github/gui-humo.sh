@@ -1,7 +1,11 @@
 #!/bin/bash
 # PRUEBA DE HUMO DE LOS GUIs: cada uno se lanza, tiene que seguir vivo al cabo
 # de ESPERA segundos (no se ha caido al arrancar) y se le hace una captura de
-# pantalla, que queda en capturas/ para mirarla. Luego se cierra.
+# pantalla, que queda en capturas/ para mirarla. Luego SE CIERRA COMO LO HARIA
+# EL USUARIO -- el modulo cierre.c cierra sus ventanas -- y tiene que salir
+# solo y con 0: ni caerse al cerrar ni quedarse colgado. Antes se le mataba
+# con kill y el cierre no se probaba en ninguna plataforma; en macOS, cerrar
+# fue_gui sacaba un aviso de fallo (TODO.md, 13-nov-2026).
 #
 # Lo que esto NO prueba es que los botones hagan lo que deben: para eso estan
 # las pruebas conducidas desde el codigo de cada GUI. Esto caza lo que ellas
@@ -47,6 +51,20 @@ captura() {
     esac
 }
 
+# EL MODULO QUE CIERRA (cierre.c), compilado para esta plataforma.
+case "$(uname -s)" in
+    MINGW*|MSYS*) MOD="$R/capturas/cierre.dll" ;;
+    *)            MOD="$R/capturas/cierre.so" ;;
+esac
+if ! cc -shared -fPIC -O2 -o "$MOD" "$R/.github/cierre.c" \
+        $(pkg-config --cflags --libs gtk+-3.0) > capturas/cierre.log 2>&1; then
+    echo "::error::no se pudo compilar el modulo de cierre"; sed 's/^/  | /' capturas/cierre.log
+    exit 1
+fi
+case "$(uname -s)" in MINGW*|MSYS*) MODG=$(cygpath -m "$MOD") ;; *) MODG=$MOD ;; esac
+CIERRE=$((ESPERA + 2))
+HASTA=${HASTA:-40}          # segundos para salir solo, desde que se lanza
+
 fallan=()
 for g in gui/fue/bin/fue_gui gui/fug/gtk_fmg gui/drtran/drtran_gui \
          gui/atsw/atsw_gui gui/sim/sim_gui; do
@@ -55,15 +73,37 @@ for g in gui/fue/bin/fue_gui gui/fug/gtk_fmg gui/drtran/drtran_gui \
     if [ ! -f "$g$EXE" ]; then
         echo "::error::$nombre: no esta construido"; fallan+=("$nombre"); continue
     fi
-    ( cd "$(dirname "$g")" && exec "./$nombre$EXE" ) > "capturas/$nombre.log" 2>&1 &
+    ( cd "$(dirname "$g")" && GTK_MODULES="$MODG" CIERRE=$CIERRE exec "./$nombre$EXE" ) \
+        > "capturas/$nombre.log" 2>&1 &
     pid=$!
     sleep "$ESPERA"
     if kill -0 "$pid" 2>/dev/null; then
         captura "capturas/$nombre.png" || echo "  (sin captura)"
         echo "  arranca y sigue vivo a los $ESPERA s"
-        kill "$pid" 2>/dev/null
-        case "$(uname -s)" in MINGW*|MSYS*) taskkill //F //IM "$nombre$EXE" > /dev/null 2>&1 ;; esac
-        wait "$pid" 2>/dev/null
+        # EL CIERRE: el modulo cierra sus ventanas a los $CIERRE s
+        t=$ESPERA
+        while kill -0 "$pid" 2>/dev/null && [ "$t" -lt "$HASTA" ]; do sleep 1; t=$((t + 1)); done
+        if kill -0 "$pid" 2>/dev/null; then
+            echo "::error::$nombre: no sale al cerrar sus ventanas (sigue vivo a los $HASTA s: colgado)"
+            sed 's/^/  | /' "capturas/$nombre.log" | tail -20
+            kill "$pid" 2>/dev/null
+            case "$(uname -s)" in MINGW*|MSYS*) taskkill //F //IM "$nombre$EXE" > /dev/null 2>&1 ;; esac
+            wait "$pid" 2>/dev/null
+            fallan+=("$nombre")
+        else
+            wait "$pid"; rc=$?
+            if [ "$rc" -eq 0 ]; then
+                echo "  se cierra solo y sale con 0"
+            else
+                echo "::error::$nombre: sale mal al cerrar (rc=$rc$( [ "$rc" -gt 128 ] && echo ", señal $((rc - 128))"))"
+                sed 's/^/  | /' "capturas/$nombre.log" | tail -30
+                fallan+=("$nombre")
+            fi
+            if grep -q "CRITICAL" "capturas/$nombre.log"; then
+                echo "::warning::$nombre: avisos CRITICAL de GLib/GTK (capturas/$nombre.log)"
+                grep "CRITICAL" "capturas/$nombre.log" | head -5 | sed 's/^/  | /'
+            fi
+        fi
     else
         wait "$pid"; rc=$?
         echo "::error::$nombre: se cerro al arrancar (rc=$rc)"
@@ -73,5 +113,5 @@ for g in gui/fue/bin/fue_gui gui/fug/gtk_fmg gui/drtran/drtran_gui \
 done
 
 echo
-if [ ${#fallan[@]} -eq 0 ]; then echo "los GUIs arrancan"
-else echo "no arrancan: ${fallan[*]}"; exit 1; fi
+if [ ${#fallan[@]} -eq 0 ]; then echo "los GUIs arrancan y se cierran bien"
+else echo "fallan al arrancar o al cerrar: ${fallan[*]}"; exit 1; fi

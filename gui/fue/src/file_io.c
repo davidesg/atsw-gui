@@ -1313,9 +1313,11 @@ void on_view_inp(GtkWidget *widget, FueContext *ctx) {
 }
 
 
+/* Salir: basta con destruir la ventana; GtkApplication termina sola con su
+   ultima ventana (ver main.c: no hay gtk_main al que pedirle que salga). */
 void on_quit(GtkWidget *widget, FueContext *ctx) {
+    (void) widget;
     gtk_widget_destroy(ctx->main_window);
-    gtk_main_quit();
 }
 
 /* En file_io.c, añadir al final (o en un lugar adecuado) */

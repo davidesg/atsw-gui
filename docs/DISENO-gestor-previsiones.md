@@ -48,7 +48,7 @@ marzo, con qué dato de febrero, si el dato se revisó después.
 | modelos con linaje, muestras, casos, hashes de `.pre` | `lib/proyecto` | quién es hijo de quién, en qué ventana, y si un caso quedó desfasado |
 | la previsión del mismo modelo sin dar de alta otro | drtran_gui (#49) | `<modelo>_prev.*`, pero **sólo la última**: se pisa |
 | **una sola tabla de previsión** | los `.out` de fuf, drtran, drvarma y drvec (fases P2 y P6, nov-2026) | la tabla de fuf (`forecast_table_acii`): las últimas observaciones con su variación y su **ERR**, y las previsiones con las d.t. del nivel y de las variaciones. La lee `lib/outfcst` (`of_parse_file`), venga del motor que venga |
-| comparar con el univariante, misma ventana | drtran_gui (P3) y sim_gui, VARMA y VEC | el cociente de los RMSE por horizonte; drtran_gui, además, **Diebold-Mariano** (`lib/fcomp`). sim_gui todavía no |
+| comparar con el univariante, misma ventana | drtran_gui (P3) y sim_gui, VARMA y VEC | el cociente de los RMSE y **Diebold-Mariano** por horizonte (`lib/fcomp`) |
 
 **La columna ERR, antes de leerla** (aclarado el 13-nov-2026). Es el error
 a un paso de cada observación, la innovación. En la tabla de drtran, drvarma
@@ -203,7 +203,7 @@ lo que dice el motor. De ahí salen, **por horizonte y por modelo vigente**:
 
 Dos ejercicios sobre la misma serie y los mismos orígenes se pueden comparar
 fila a fila, y con un contraste, no sólo a ojo: Diebold-Mariano por
-horizonte, que ya está en `lib/fcomp` (lo usa drtran_gui).
+horizonte, que ya está en `lib/fcomp` (lo usan drtran_gui y sim_gui).
 
 **Las bandas que se miden son las teóricas** del motor: suponen que el
 modelo es el verdadero, y todos los GUI lo dicen. La cobertura de esta tabla

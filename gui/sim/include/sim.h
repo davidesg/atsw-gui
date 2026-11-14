@@ -230,6 +230,9 @@ typedef struct {
     VarmaOut  *v;             /* la corrida de prevision                  */
     VarmaOut  *ve;            /* la evaluacion del sistema (-estwin)      */
     VarmaOut  *vd;            /* la del diagonal, con la misma ventana    */
+    /* las previsiones de cada origen, para Diebold-Mariano: las del sistema
+     * (-estwin, su .recursive) y las del diagonal (rdiag, mas abajo)     */
+    OvRecursive rsis;
     int        version;       /* la estimacion de la que se previo        */
     /* CON UN VEC (S10c): la prevision de drvec (-f), su evaluacion
      * (-estwin, el .recursive) y la del diagonal de drvarma, alineadas por

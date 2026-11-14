@@ -1178,6 +1178,13 @@ casillas**, y en el visón por un 30–40 %. El modelo que dentro de la muestra
 mejora claramente a las series solas no prevé mejor fuera de ella. Jenkins y
 Alavi no pudieron hacer esta prueba.
 
+Las dos últimas columnas dicen si esas diferencias pesan: el contraste de
+**Diebold-Mariano**, con la corrección de Harvey, Leybourne y Newbold para
+muestras cortas. Es positivo cuando el sistema prevé mejor. Aquí todos son
+negativos y ninguno es significativo (p entre 0.17 y 0.94): con 12 a 14
+orígenes, el sistema no prevé mejor, pero tampoco se puede decir que prevea
+peor.
+
 La lección es la regla de la escalera: **los univariantes son la vara de
 medir**, también al prever. El sistema queda como la *descripción* de cómo se
 afectan las dos poblaciones —la depredación y la comida—, que era la
@@ -1410,6 +1417,13 @@ la renta, por poco, y **peor los tipos de interés**, en IBO a un trimestre casi
 el doble. Tiene sentido con lo anterior: los tipos son débilmente exógenos, la
 relación no les dice nada sobre su futuro, y el VEC les añade parámetros que
 estimar.
+
+Diebold-Mariano lo matiza. Lo que el VEC gana en el dinero y la renta no es
+significativo. Lo que pierde en los tipos a un trimestre se queda al borde
+(p = 0.06 y 0.07). La única diferencia significativa es la de IDE a cuatro
+trimestres (p = 0.005), y con un cociente de solo 1.06: con 12 orígenes y
+cuatro pasos, la varianza del contraste se estima con muy pocos datos, así
+que conviene leerla con cuidado.
 
 ![La respuesta al impulso del VEC](img/vec-irf.png)
 

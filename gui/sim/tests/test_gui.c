@@ -104,6 +104,30 @@ static gboolean espera( Sim *m, int segundos )
     return !m->pp.corriendo && !m->pr.corriendo && !m->pe.corriendo && !m->pv.corriendo && !m->pd.corriendo;
 }
 
+/* Las filas de la evaluacion con Diebold-Mariano (columna 6), y en cuantas
+   su signo casa con el cociente (columna 5): DM > 0 si y solo si el
+   sistema tiene el RMSE menor, porque los dos salen de los mismos pares. */
+static int filas_con_dm( GtkWidget *tv, int *casan )
+{
+    GtkTreeModel *tm = gtk_tree_view_get_model( GTK_TREE_VIEW(tv) );
+    GtkTreeIter it;
+    int n = 0;
+    gboolean hay = gtk_tree_model_get_iter_first( tm, &it );
+
+    *casan = 0;
+    while (hay) {
+        gchar *ra = NULL, *dm = NULL;
+        gtk_tree_model_get( tm, &it, 5, &ra, 6, &dm, -1 );
+        if (dm && *dm) {
+            n++;
+            if (ra && *ra && ( ( atof( dm ) > 0 ) == ( atof( ra ) < 1 ) )) (*casan)++;
+        }
+        g_free( ra ); g_free( dm );
+        hay = gtk_tree_model_iter_next( tm, &it );
+    }
+    return n;
+}
+
 static int filas_de( GtkWidget *tv ) { return filas( tv ); }
 
 static void copia( const char *de, const char *a )
@@ -513,6 +537,15 @@ int main( int argc, char **argv )
     check( filas_de( m->pv.l_eval ) == 8, "la tabla: 2 series x 4 horizontes", NULL );
     check( contiene( etiqueta( m->pv.ver_eval ), "orígenes" ) && contiene( etiqueta( m->pv.ver_eval ), "de 8" ),
            "el veredicto cuenta en cuántas gana el sistema", etiqueta( m->pv.ver_eval ) );
+    {
+        int casan, n = filas_con_dm( m->pv.l_eval, &casan );
+        gchar *q = g_strdup_printf( "%d filas con DM, %d casan", n, casan );
+        check( n == 8 && casan == 8, "Diebold-Mariano en las 8 filas (los pares dan el RMSE de drvarma), "
+               "con el signo del cociente", q );
+        g_free( q );
+    }
+    check( contiene( etiqueta( m->pv.ver_eval ), "Diebold-Mariano" ), "y el veredicto lo cuenta",
+           etiqueta( m->pv.ver_eval ) );
     printf( "evaluación      : %s\n", etiqueta( m->pv.ver_eval ) );
 
     /* --- S7: simplificar y «¿es una red?» -------------------------------- */
@@ -924,6 +957,16 @@ int main( int argc, char **argv )
         check( filas( j->pv.l_eval ) == 16 && contiene( etiqueta( j->pv.ver_eval ), "mismos" ),
                "la evaluación: 4 series × 4 horizontes, sobre los mismos orígenes que los univariantes",
                etiqueta( j->pv.ver_eval ) );
+        {
+            int casan, n = filas_con_dm( j->pv.l_eval, &casan );
+            gchar *q = g_strdup_printf( "%d filas con DM, %d casan", n, casan );
+            check( n == 16 && casan == 16, "con un VEC, Diebold-Mariano en las 16 filas, con el signo "
+                   "del cociente", q );
+            g_free( q );
+        }
+        check( !gtk_widget_get_visible( j->pv.b_boot ) || !gtk_widget_get_visible(
+                   gtk_widget_get_parent( j->pv.b_boot ) ),
+               "con un VEC no se ofrece el bootstrap de drvarma", NULL );
         {
             GtkTreeModel *tm = gtk_tree_view_get_model( GTK_TREE_VIEW(j->pv.l_eval) );
             GtkTreeIter it;

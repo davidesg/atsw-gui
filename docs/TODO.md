@@ -429,9 +429,11 @@ El fichero se borró con la reversión del 23-sep y no se rehace: su sitio es
 ex-post, en su §3.5 y, contra el univariante con la misma ventana, en
 drtran_gui y sim_gui (P3, P6); lo que valía del documento viejo, en su §2bis.
 
-- **sim_gui: Diebold-Mariano en la evaluación.** Hoy da solo el cociente de
-  los RMSE contra los univariantes; drtran_gui da además Diebold-Mariano por
-  horizonte (`lib/fcomp`). Las mismas filas sirven: falta llamarlo.
+- ~~sim_gui: Diebold-Mariano en la evaluación~~ — **hecho** (14-nov-2026):
+  las columnas «DM» y «p», con el VARMA y con el VEC, con `fc_dm_errores` de
+  `lib/fcomp` (el mismo contraste que drtran_gui). Con un VARMA, el dato sale
+  del `.pre` de cada serie, porque los `.recursive` de drvarma no lo traen,
+  y si los pares no dan el RMSE del `.out` no se muestra el DM.
 
 ---
 

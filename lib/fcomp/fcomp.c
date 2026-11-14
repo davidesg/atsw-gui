@@ -141,3 +141,19 @@ fin:
    free( par ); free( la ); free( lb ); free( a ); free( b );
    return rc;
 }
+
+int fc_dm_errores( const double *ea, const double *eb, int n, int h,
+                   double *stat, double *p )
+{
+   double *la, *lb;
+   int     i, ok;
+
+   if ( n < 2 ) return 0;
+   la = malloc( n * sizeof *la );
+   lb = malloc( n * sizeof *lb );
+   if ( !la || !lb ) { free( la ); free( lb ); return 0; }
+   for ( i = 0; i < n; i++ ) { la[i] = ea[i] * ea[i]; lb[i] = eb[i] * eb[i]; }
+   ok = dm( la, lb, n, h, stat, p );
+   free( la ); free( lb );
+   return ok;
+}

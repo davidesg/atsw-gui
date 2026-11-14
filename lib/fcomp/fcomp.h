@@ -38,4 +38,12 @@ typedef struct {
 /* Devuelve 0 si pudo comparar; 1 si falta un fichero o no hay pares. */
 int fc_compara_csv( const char *csv_a, const char *csv_b, FcComp *c );
 
+/* EL MISMO CONTRASTE, sobre dos vectores de errores emparejados (ea[i] y
+ * eb[i] del mismo origen, en el orden de los origenes, que es el que
+ * importa a la varianza HAC), a horizonte h. Perdida cuadratica, como
+ * fc_compara_csv: DM > 0, B preve mejor que A. 1 si se pudo; 0 si n < 2 o
+ * la varianza era degenerada.                                          */
+int fc_dm_errores( const double *ea, const double *eb, int n, int h,
+                   double *stat, double *p );
+
 #endif /* ATSW_FCOMP_H */

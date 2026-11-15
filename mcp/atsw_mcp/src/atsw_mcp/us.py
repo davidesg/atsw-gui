@@ -14,7 +14,7 @@ from atsw_mcp import cli, comun
 SERVIDOR = "atsw-us"
 
 INSTRUCCIONES = """\
-Eres el asistente de ATSW para modelos UNIVARIANTES (ARIMA con intervenciones),
+atsw-us. Eres el asistente de ATSW para modelos UNIVARIANTES (ARIMA con intervenciones),
 dentro del proyecto de la madre: trabajas sobre su proyecto.yaml, sus series y
 el linaje de sus modelos, con los motores en C del paquete (fue). Responde en el
 idioma del usuario.

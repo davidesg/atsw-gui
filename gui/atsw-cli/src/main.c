@@ -72,6 +72,9 @@ static gboolean  json;
 /* caso-estima */
 static const char *k_enlace[NET_MAX_LINK];
 static int         k_nenlace = 0;
+#define K_MAX_RESTR 64
+static const char *k_restr[K_MAX_RESTR];   /* caso-estima --restriccion "NOMBRE = VALOR" */
+static int         k_nrestr = 0;
 static const char *k_desde = NULL;
 static gboolean    k_diagonal = FALSE;
 static int         k_prever = 0, k_evaluar = 0;   /* caso-estima --prever H --evaluar W */
@@ -2090,6 +2093,41 @@ static int copia_fichero( const char *de, const char *a )
    retira (AUDITORIA-procesos, fase 4): no queda en el linaje una
    estimacion que no existe. Un caso desfasado --un .pre cambio desde el
    alta-- no se estima: se crea otro con esos .pre.                     */
+/* LA TABLA DE PARAMETROS DEL .out DE drtran, TAL CUAL: la log-verosimilitud,
+   cada slot con su nombre --omega1[0], phi_2[B^1], mu[1], q[2,1]--, su
+   estimacion, su error tipico, su t y su p, y los FIJOS como tales. Es lo que
+   el asistente necesita para presentar la corrida y para saber como se llama
+   cada parametro al escribir una restriccion (--restriccion). Se copia, no se
+   rehace: es el bloque del motor.                                          */
+static int tabla_drtran( const char *out, GString *t )
+{
+    FILE *f = g_fopen( out, "r" );
+    char  l[512];
+    int   dentro = 0, n = 0, tras = 0;
+
+    if ( !f ) return 1;
+    while ( fgets( l, sizeof l, f ) )
+        {
+        l[strcspn( l, "\r\n" )] = '\0';
+        if ( !dentro && !strncmp( l, "Log-likelihood =", 16 ) ) { g_string_append_printf( t, "  %s\n", l ); continue; }
+        if ( !dentro && strstr( l, "Parameter" ) && strstr( l, "Std.Error" ) )
+            { dentro = 1; g_string_append_printf( t, "  %s\n", l ); continue; }
+        if ( dentro == 1 )
+            {
+            if ( !strncmp( l, "-----", 5 ) ) { if ( n ) { dentro = 2; } continue; }
+            g_string_append_printf( t, "  %s\n", l ); n++;
+            continue;
+            }
+        if ( dentro == 2 )
+            {
+            if ( !strncmp( l, "Standard errors:", 16 ) ) { g_string_append_printf( t, "  %s\n", l ); break; }
+            if ( ++tras > 3 ) break;
+            }
+        }
+    fclose( f );
+    return n ? 0 : 1;
+}
+
 static int caso_estima( const char *path, const char *caso )
 {
     char            why[512], raiz[PR_RUTA], out[PR_RUTA], dag[PR_RUTA], cns[PR_RUTA], res[PR_RUTA];
@@ -2209,6 +2247,27 @@ static int caso_estima( const char *path, const char *caso )
                  g_file_test( c0, G_FILE_TEST_EXISTS ) && copia_fichero( c0, cns ) == 0 ) hay_cns = 1;
             }
         }
+    /* LAS RESTRICCIONES DE ESTA CORRIDA, DETRAS DE LAS HEREDADAS: el .cns se
+       aplica linea a linea, asi que la ultima sobre un slot es la que manda.
+       Quien juzga si el slot existe y si la linea se entiende es el motor
+       (cns_read, lib/slots): un nombre que no tiene no deja corrida.     */
+    if ( k_nrestr > 0 )
+        {
+        FILE *fc = g_fopen( cns, hay_cns ? "a" : "w" );
+
+        if ( !fc ) { g_free( dir ); g_free( p ); return falla( "No pude escribir %s.", cns ); }
+        fprintf( fc, "%s# atsw-cli caso-estima %s/%s --restriccion\n", hay_cns ? "\n" : "", caso, id );
+        for ( k = 0; k < k_nrestr; k++ )
+            {
+            if ( !strchr( k_restr[k], '=' ) || strchr( k_restr[k], '\n' ) )
+                { fclose( fc ); g_remove( cns ); g_free( dir ); g_free( p );
+                  return falla( "--restriccion %s: es NOMBRE = VALOR («q[2,1] = free», «omega1[1] = 0», "
+                                "«delta1[1] = delta2[1]»).", k_restr[k] ); }
+            fprintf( fc, "%s\n", k_restr[k] );
+            }
+        fclose( fc );
+        hay_cns = 1;
+        }
 
     g_snprintf( sh, sizeof sh, "%d", k_prever );
     g_snprintf( sw, sizeof sw, "%d", k_evaluar );
@@ -2244,6 +2303,19 @@ static int caso_estima( const char *path, const char *caso )
         /* sin resultados no hay corrida: no se guarda el manifiesto, y los
            ficheros que se escribieron para ella, fuera                   */
         gchar *m = g_strdup( r.message );
+        const char *err = r.output ? strstr( r.output, "Error:" ) : NULL;
+
+        /* LO QUE DICE EL MOTOR, si lo dice («Error: unknown parameter
+           'omega9[1]' in the constraints file»): el estado solo no sirve */
+        if ( err )
+            {
+            gchar *l = g_strndup( err, strcspn( err, "\r\n" ) ), *m2;
+            size_t lm = strlen( m );
+
+            if ( lm && m[lm - 1] == '.' ) m[lm - 1] = '\0';
+            m2 = g_strdup_printf( "%s (%s).", m, l );
+            g_free( m ); g_free( l ); m = m2;
+            }
         g_remove( out ); g_remove( dag ); g_remove( cns ); g_remove( res ); g_remove( eval_csv );
         engine_result_clear( &r ); g_free( obj ); g_free( p );
         falla( "%s No queda la corrida.", m );
@@ -2354,6 +2426,14 @@ static int caso_estima( const char *path, const char *caso )
                 }
             g_string_append( t, "]}, " );
             }
+        {
+        GString *tb = g_string_new( "" );
+
+        tabla_drtran( out, tb );
+        g_string_append_printf( t, "\"restricciones\": %s, ", hay_cns ? "true" : "false" );
+        js_par( t, "tabla", tb->str ); g_string_append( t, ", " );
+        g_string_free( tb, TRUE );
+        }
         js_par( t, "out", out ); g_string_append( t, "}\n" );
         }
     else
@@ -2365,6 +2445,9 @@ static int caso_estima( const char *path, const char *caso )
         if ( hay )
             g_string_append_printf( t, "  diagnosis: %d contraste%s de adecuación sin pasar, %d de exogeneidad\n",
                                     noad, noad == 1 ? "" : "s", noex );
+        if ( hay_cns ) g_string_append( t, "  restricciones: las del .cns de la corrida\n" );
+        g_string_append( t, "\n" );
+        tabla_drtran( out, t );
         if ( hay_fc && fc->ns > 0 )
             {
             char tb[16384];
@@ -2569,7 +2652,7 @@ static void uso( FILE *f )
            "  proyecto caso-nuevo P SERIE/MODELO SERIE/MODELO...   (la salida primero)\n"
            "  proyecto ruta P SERIE MODELO|datos .inp|.pre|.out   la ruta del fichero (estado 1 si no existe)\n"
            "  caso-estima P CASO [--enlace E->S:b,r,s]... [--desde cNN] [--diagonal]\n"
-           "              [--prever H [--evaluar W]]   drtran sobre el caso\n"
+           "              [--prever H [--evaluar W]] [--restriccion \"NOMBRE = VALOR\"]...   drtran sobre el caso\n"
            "  dictamen P SERIE MODELO               la diagnosis del .out\n"
            "  ecuacion P SERIE MODELO               el modelo estimado: el bloque del .out, con sus t\n"
            "  raices factores P SERIE MODELO        la factorización del AR\n"
@@ -2617,6 +2700,8 @@ int main( int argc, char **argv )
         {
         if ( !strcmp( argv[i], "--json" ) ) json = TRUE;
         else if ( !strcmp( argv[i], "--comprobar" ) ) comprobar = TRUE;
+        else if ( !strcmp( argv[i], "--restriccion" ) && i + 1 < argc )
+            { if ( k_nrestr < K_MAX_RESTR ) k_restr[k_nrestr++] = argv[++i]; else i++; }
         else if ( !strcmp( argv[i], "--enlace" ) && i + 1 < argc )
             { if ( k_nenlace < NET_MAX_LINK ) k_enlace[k_nenlace++] = argv[++i]; else i++; }
         else if ( !strcmp( argv[i], "--desde" ) && i + 1 < argc ) k_desde = argv[++i];

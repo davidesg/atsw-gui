@@ -31,6 +31,9 @@
 #include <glib/gstdio.h>
 
 #include "sim.h"
+#include "trabajo.h"
+#include "sitio.h"
+#include <time.h>
 
 enum { R_R, R_NPAR, R_LOGL, R_AIC, R_BIC, R_N };
 enum { T_H0, T_LR, T_A5, T_B5, T_P, T_REPS, T_VER, T_N };
@@ -148,7 +151,12 @@ static void on_done( const EngineResult *r, gpointer data )
     Sim *m = data;
     PagRango *R = &m->pr;
     gchar *out = g_strdup_printf( "%s.out", R->out );
+    gchar *trab = g_strdup_printf( "%s.trabajo", R->out );
     gboolean parado = R->parando;
+
+    /* el trabajo ya no corre: la madre deja de enseñarlo (lib/trabajo) */
+    g_remove( trab );
+    g_free( trab );
 
     R->corriendo = FALSE;
     R->parando = FALSE;
@@ -194,6 +202,21 @@ gboolean rango_contrastar( Sim *m )
     g_free( mot );
     lee_controles( m );
 
+    /* UN BOOTSTRAP QUE YA CORRE sobre este caso --lo lanzo el asistente,
+       atsw-cli caso-rango --aparte--: no se pisa su fichero (lib/trabajo) */
+    {
+        gchar  *a = sim_artefacto( m, "rango" ), *tr = g_strdup_printf( "%s.trabajo", a );
+        Trabajo tj;
+        int     corre = trabajo_lee( tr, &tj ) == 0 && trabajo_estado( tr, &tj ) == TR_EN_MARCHA &&
+                        tj.pid != sitio_mi_pid();
+
+        g_free( a ); g_free( tr );
+        if (corre) {
+            sim_estado( m, "Ya hay un bootstrap del rango en marcha sobre este caso (%s, proceso %ld): "
+                           "espera a que termine; su avance sale en la barra de la madre.", tj.por, tj.pid );
+            return FALSE;
+        }
+    }
     g_free( R->out );
     R->out = sim_artefacto( m, "rango" );
     dir  = g_path_get_dirname( R->out );
@@ -218,6 +241,23 @@ gboolean rango_contrastar( Sim *m )
         return FALSE;
     }
     R->corriendo = TRUE;
+    /* EL BOOTSTRAP, A LA VISTA DE LA MADRE: su .trabajo, con sim_gui como el
+       proceso que lo lleva (si se cierra, drvec se para con el)        */
+    if (R->cfg.B > 0) {
+        Trabajo tj;
+        gchar  *tr = g_strdup_printf( "%s.trabajo", R->out ), *nb = g_path_get_basename( R->out );
+
+        memset( &tj, 0, sizeof tj );
+        g_strlcpy( tj.que, "bootstrap del rango", sizeof tj.que );
+        g_snprintf( tj.objeto, sizeof tj.objeto, "%s/rango", m->caso[0] ? m->caso : "sim" );
+        tj.pid = sitio_mi_pid(); tj.inicio = (long) time( NULL );
+        tj.total = R->cfg.B * ( m->sis.n - 1 );
+        g_strlcpy( tj.por, "analista", sizeof tj.por );
+        g_snprintf( tj.progreso, sizeof tj.progreso, "%s.boot", nb );
+        g_snprintf( tj.resultado, sizeof tj.resultado, "%s.out", nb );
+        trabajo_escribe( tr, &tj );
+        g_free( tr ); g_free( nb );
+    }
     gtk_progress_bar_set_fraction( GTK_PROGRESS_BAR(R->barra), 0.0 );
     gtk_progress_bar_set_text( GTK_PROGRESS_BAR(R->barra), "ajustando cada rango…" );
     gtk_widget_show( R->barra );

@@ -40,6 +40,7 @@ SRC = src/main.c \
       $(LIB)/sistema/sistema.c \
       $(LIB)/outvarma/outvarma.c \
       $(LIB)/outvec/outvec.c \
+      $(LIB)/trabajo/trabajo.c \
       ../../engines/drtran/src/nlatools.c \
       ../../engines/drtran/src/diagnose.c
 
@@ -47,7 +48,7 @@ INC = -I$(LIB)/proyecto -I$(LIB)/gesto -I$(LIB)/outfile -I$(LIB)/dictamen -I$(LI
       -I$(LIB)/inpdet -I$(LIB)/raices -I$(LIB)/formales -I$(LIB)/inpcheck -I$(LIB)/coste \
       -I$(LIB)/engine -I$(LIB)/sitio -I$(LIB)/ficha -I$(LIB)/outfcst -I$(LIB)/netfile -I$(LIB)/outdiag -I$(LIB)/fcomp -I$(LIB)/artcand -I../../engines/fug/src -I$(LIB)/anomalos -I$(LIB)/fugplot \
       -I$(LIB)/prewhiten -I$(LIB)/fuepre -I$(LIB)/fuedet -I$(LIB)/diagmv -I$(LIB)/dates -I$(LIB)/lik \
-      -I$(LIB)/sistema -I$(LIB)/outvarma -I$(LIB)/outvec \
+      -I$(LIB)/sistema -I$(LIB)/outvarma -I$(LIB)/outvec -I$(LIB)/trabajo \
       -I../../engines/drtran/include
 
 GLIB_CFLAGS := $(shell pkg-config --cflags glib-2.0 2>/dev/null)

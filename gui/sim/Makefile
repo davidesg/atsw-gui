@@ -18,7 +18,7 @@ ENG = ../../engines/drvarma
 SRC = src/main.c src/ventana.c src/series.c src/puerta.c src/rango.c src/restricciones.c src/proyecto.c \
       src/identifica.c src/modelo.c src/estima.c src/diagnosis.c src/pagina.c src/plotshim.c src/prevision.c src/estructura.c \
       $(LIB)/sistema/sistema.c \
-      $(LIB)/outvarma/outvarma.c $(LIB)/outvec/outvec.c \
+      $(LIB)/outvarma/outvarma.c $(LIB)/outvec/outvec.c $(LIB)/trabajo/trabajo.c \
       $(LIB)/outdiag/outdiag.c \
       $(LIB)/fuepre/fue_pre_reader.c \
       $(LIB)/fuedet/fuedet.c \
@@ -49,7 +49,7 @@ SRC = src/main.c src/ventana.c src/series.c src/puerta.c src/rango.c src/restric
 
 HDR = include/sim.h include/previewhost.h include/plothost.h
 
-INC = -Iinclude -I$(ENG)/include -I$(LIB)/sistema -I$(LIB)/outvarma -I$(LIB)/outvec -I$(LIB)/outdiag \
+INC = -Iinclude -I$(ENG)/include -I$(LIB)/sistema -I$(LIB)/outvarma -I$(LIB)/outvec -I$(LIB)/trabajo -I$(LIB)/outdiag \
       -I$(LIB)/fuepre -I$(LIB)/fuedet -I$(LIB)/dates -I$(LIB)/lik -I$(LIB)/optim \
       -I$(LIB)/diagmv -I$(LIB)/prewhiten -I$(LIB)/inpcheck -I$(LIB)/proyecto -I$(LIB)/gesto \
       -I$(LIB)/engine -I$(LIB)/coste -I$(LIB)/sitio -I$(LIB)/barra \

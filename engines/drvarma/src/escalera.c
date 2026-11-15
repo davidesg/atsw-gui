@@ -1625,6 +1625,7 @@ int escalera_main(int argc, char *argv[])
         printf("ERROR: %s\n", why);
         return 4;
     }
+    fuepre_warn_refactors(Ts, n_ser, stderr);
     for (i = 1; i <= n_ser; i++) nobs_full[i] = Ts[i].nobs;
 
     /* -links, resolved against the names of the .pre files */

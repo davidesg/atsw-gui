@@ -130,16 +130,18 @@ Sin parte todavía (propuesta; nada de esto está hecho):
   sale y los motores certifican por paso. Propuesta: que la transformación
   ponga el factor con la regla del punto 6.1 (100 con logaritmos), en
   `lib/inpdet`, para la madre y para `atsw-cli` a la vez.
-- **`gui/fue`** pasa el factor por un control de rango 1 a 1000 y lo escribe
-  con `%.2f`; por defecto, 1. Sin comprobar en ejecución: un fichero con
-  factor 0.01 o 10⁶ se recortaría al abrirlo y guardarlo.
+- **`gui/fue`** pasa el factor por un control de rango 1 a 1000; por defecto,
+  1. Sin comprobar en ejecución: un fichero con factor 0.01 o 10⁶ se
+  recortaría al abrirlo y guardarlo. (Su escritor ya no pierde el factor:
+  fue BUG-0003.)
 - **Restos de «×100 siempre»**: la figura gnuplot de la previsión de drtran
   (`fuf_graphic.c`), fuf con λ < 0 (tabla, LaTeX y gráfico), y la historia del
   gráfico de previsión de `gui/sim` (`prevision.c`).
 - **`atsw-cli`** imprime la σ del `.out` con la nota «en logaritmos: ×100 es un
   %», que solo es cierta con factor 1.
-- **Factores distintos**: drtran y la escalera de drvarma no avisan (drvec sí).
-  Los `.cns` de drtran (`omega = número`, `omega_a = omega_b`) y `-fixb2`,
+- **Factores distintos**: drtran y la escalera de drvarma ya avisan, como
+  drvec (`fuepre_warn_refactors`, por stderr: el `.out` no cambia). Queda que
+  los `.cns` de drtran (`omega = número`, `omega_a = omega_b`) y `-fixb2`,
   `-fixb2row`, `-alpha` de drvec van en unidades del motor.
 - **`PRE_MOVE = 1e-3`** en la puerta de la escalera es absoluto y cuenta μ: el
   veredicto «no es un óptimo» depende del factor.

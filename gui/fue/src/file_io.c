@@ -247,7 +247,14 @@ static void write_inp_file(FILE *f, FueContext *ctx) {
 
     /* ACF/PACF bands and rescaling factor */
     fprintf(f, "** ACF/PACF bands (0 Automatic) and reescaling factor:\n");
-    fprintf(f, " 0 %.2f\n", Ts.refactor);
+    {
+        /* fue BUG-0003: dos decimales si es exacto, la forma exacta si no */
+        char rfbuf[40];
+        snprintf(rfbuf, sizeof rfbuf, "%.2f", Ts.refactor);
+        if (strtod(rfbuf, NULL) != Ts.refactor)
+            snprintf(rfbuf, sizeof rfbuf, "%.10g", Ts.refactor);
+        fprintf(f, " 0 %s\n", rfbuf);
+    }
 
  /* Time series data */
 fprintf(f, "** Time series (stochastic and non-standard deterministic variables):\n");

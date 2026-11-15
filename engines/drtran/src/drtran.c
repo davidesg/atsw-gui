@@ -3853,6 +3853,7 @@ int main(int argc, char *argv[])
             fprintf(stderr, "Error: %s\n", why);
             return 4;
         }
+        fuepre_warn_refactors(Ts, n_ser, stderr);
     }
 
     /* --- Prevision recursiva: se ESTIMA solo con la ventana de entrenamiento.

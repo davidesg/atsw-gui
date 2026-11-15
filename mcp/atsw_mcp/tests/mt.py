@@ -89,7 +89,7 @@ async def corre(raiz: Path, w: Path) -> None:
             check(res.startswith("No se pudo") and "ENTRADA->SALIDA" in res,
                   "estimate con un enlace mal escrito: lo dice", res)
             res = await t("estimate", case="C1", reason="es de sim")
-            check(res.startswith("No se pudo") and "sim_gui" in res,
+            check(res.startswith("No se pudo") and "caso de SIM" in res and "atsw-sis" in res,
                   "estimate de un caso de SIM: no", res)
             res = await t("open_case", case="C9")
             check(res.startswith("No se pudo") and "no es un caso" in res,

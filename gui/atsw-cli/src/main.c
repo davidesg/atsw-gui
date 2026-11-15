@@ -2346,8 +2346,9 @@ static int caso_estima_sis( const char *path, const char *caso )
     if ( !p ) return falla( "%s", why );
     if ( !( c = caso_sis( p, caso, why, sizeof why ) ) ) { g_free( p ); return falla( "%s", why ); }
     if ( k_p < 0 || k_q < 0 )
-        { g_free( p ); return falla( "Un VARMA lleva --p N --q N: la dinámica cruzada (sima estimate; p = 1, q = 0 "
-                                     "para empezar)." ); }
+        { int r0 = falla( "%s es un caso de SIM (drvarma): se estima desde atsw-sis, y un VARMA lleva --p N --q N, "
+                          "la dinámica cruzada (p = 1, q = 0 para empezar).", caso );
+          g_free( p ); return r0; }
     if ( k_nrestr > 0 || k_prever > 0 || k_evaluar > 0 )
         { g_free( p ); return falla( "En un caso de SIM, --restriccion, --prever y --evaluar llegan con el siguiente "
                                      "paso; aquí, --p --q --diagcov --enlace --cero." ); }

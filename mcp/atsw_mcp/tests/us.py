@@ -45,6 +45,7 @@ async def corre(raiz: Path, w: Path) -> None:
     binarios = w / "bin"
     binarios.mkdir()
     for b in (raiz / "gui/atsw-cli/atsw-cli", raiz / "engines/fue/bin/fue",
+              raiz / "engines/art/bin/art",
               raiz / "gui/atsw/atsw_gui"):
         shutil.copy2(str(b) + exe, binarios / (b.name + exe))
     proy = w / "proy"
@@ -58,7 +59,7 @@ async def corre(raiz: Path, w: Path) -> None:
             check(len(ini.instructions or "") < 20_000, "las instrucciones caben en 20 KB",
                   str(len(ini.instructions or "")))
             ts = {t.name for t in (await s.list_tools()).tools}
-            quiero = {"proyecto_resumen", "derivar", "especificar", "estimar", "dictamen",
+            quiero = {"proyecto_resumen", "identificar", "derivar", "especificar", "estimar", "dictamen",
                       "formales", "anomalos", "raices", "ficha", "razon", "elegir", "ver"}
             check(quiero <= ts, "las herramientas del camino en C", str(sorted(ts)))
 
@@ -67,6 +68,9 @@ async def corre(raiz: Path, w: Path) -> None:
 
             res = await t("proyecto_resumen")
             check("MINK" in res and "MUSKRAT" in res, "proyecto_resumen: las dos series", res)
+
+            res = await t("identificar", serie="MINK", transformacion="0,1,0")
+            check("propuesto" in res and "candidatos" in res, "identificar: art propone", res)
 
             res = await t("derivar", serie="MINK", razon="")
             check(res.startswith("No se pudo") and "razón" in res, "derivar sin razón: no", res)

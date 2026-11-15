@@ -39,6 +39,8 @@
 #include "engine.h"
 #include "sitio.h"
 #include "ficha.h"
+#include "artrun.h"
+#include "inpfile.h"
 #include "formales.h"
 /* el mundo de drtran, para el preblanqueo: lo mismo que enlaza drtran_gui */
 /* main.h define TRUE y FALSE a su manera: se le dejan y luego se vuelven a
@@ -63,6 +65,7 @@
 /* ------------------------------------------------------------------------ */
 
 static gboolean  json;
+static const char *i_resid = NULL;        /* identifica --residuos          */
 static gboolean  comprobar;
 /* especifica: lo que se cambia del .inp (lib/inpdet) */
 static const char *e_arma = NULL, *e_anade = NULL, *e_transf = NULL, *e_media = NULL;
@@ -1660,6 +1663,174 @@ static int estima( const char *path, const char *serie, const char *id )
 }
 
 /* ------------------------------------------------------------------------ */
+/* identifica: lo que art propone, sin ventana                              */
+/* ------------------------------------------------------------------------ */
+
+static gchar *art_hermano( void )
+{
+    static const char *const sitio[] = { "../../engines/art/bin/%s", "./%s", NULL };
+    return sitio_busca( "art", sitio );
+}
+
+/* identifica P SERIE [--transformacion L,d,D] [--residuos MODELO]: LO MISMO
+   QUE LA VENTANA DE IDENTIFICACION de la madre, con las mismas funciones
+   (lib/artcand: ac_escribe_datos, ac_corre, ac_leer). Sobre los datos de la
+   serie --el nodo de datos de la muestra-- con la transformacion pedida (sin
+   ella, la del .inp de los datos, hecha una que art acepte: log o niveles,
+   d hasta 2, D hasta 1), o sobre los residuos de un modelo estimado (lo que
+   les falta). Propone; no deriva ni escribe nada en el proyecto.       */
+static int identifica( const char *path, const char *serie )
+{
+    char      why[512], ruta[PR_RUTA];
+    Proyecto *p = abre( path, why, sizeof why );
+    ArtCand  *c;
+    gchar    *exe, *dir, *datos, *base;
+    double    lam = 1.0;
+    int       d = 0, D = 0, freq = 1, per = 0, anio = 0, n = 0, sin = 0, i, k;
+    double   *x = NULL;
+    GString  *t;
+
+    if ( !p ) return falla( "%s", why );
+    if ( pr_serie_idx( p, serie ) < 0 ) { g_free( p ); return falla( "«%s» no es una serie del proyecto.", serie ); }
+    if ( i_resid )
+        {
+        FueOut *o = g_new0( FueOut, 1 );
+
+        if ( pr_modelo_idx( p, serie, muestra, i_resid ) < 0 ||
+             pr_ruta( p, serie, muestra, i_resid, ".out", ruta, sizeof ruta ) != 0 ||
+             !fueout_read( ruta, o ) || o->nres < 20 )
+            { g_free( o ); g_free( p );
+              return falla( "%s/%s no está estimado, o su .out no trae los residuos.", serie, i_resid ); }
+        freq = o->s;
+        for ( i = 0; i < o->nres; i++ )
+            {
+            int pp = 0, a = 0;
+            if ( fo_fecha_parte( o->res_fecha[i], &pp, &a ) == 0 && pp > freq && pp <= 52 ) freq = pp;
+            }
+        if ( freq < 1 ) freq = 1;
+        fo_fecha_parte( o->res_fecha[0], &per, &anio );
+        n = o->nres;
+        x = g_memdup2( o->res, (gsize) n * sizeof *x );
+        g_free( o );
+        }
+    else
+        {
+        const char *datos_id = pr_datos_de( p, serie, muestra );
+        InpFile     f;
+        int         positiva = 1;
+
+        if ( !*datos_id || pr_ruta( p, serie, muestra, datos_id, ".inp", ruta, sizeof ruta ) != 0 ||
+             inp_read( ruta, &f, why, sizeof why ) != 0 )
+            { g_free( p ); return falla( "%s no tiene datos en esa muestra.", serie ); }
+        n = f.nobs; freq = f.freq > 0 ? f.freq : 1; per = f.begtime; anio = f.begyear;
+        x = g_memdup2( f.data, (gsize) n * sizeof *x );
+        for ( i = 0; i < n; i++ ) if ( !( x[i] > 0.0 ) ) positiva = 0;
+        lam = ( f.boxlam == 0.0 && positiva ) ? 0.0 : 1.0;
+        d = f.nrdiff < 0 ? 0 : ( f.nrdiff > 2 ? 2 : f.nrdiff );
+        D = ( freq > 1 && f.nadiff > 0 ) ? 1 : 0;
+        inp_free( &f );
+        if ( e_transf )
+            {
+            if ( sscanf( e_transf, "%lf,%d,%d", &lam, &d, &D ) != 3 || ( lam != 0.0 && lam != 1.0 ) ||
+                 d < 0 || D < 0 )
+                { g_free( x ); g_free( p );
+                  return falla( "--transformacion %s: art identifica en logaritmos (λ = 0) o en niveles "
+                                "(λ = 1): es 0,d,D o 1,d,D.", e_transf ); }
+            if ( lam == 0.0 && !positiva )
+                { g_free( x ); g_free( p ); return falla( "La serie tiene valores no positivos: no hay logaritmo." ); }
+            }
+        }
+    if ( n < 10 ) { g_free( x ); g_free( p ); return falla( "Muy pocas observaciones (%d).", n ); }
+
+    dir = g_build_filename( g_get_user_cache_dir(), "atsw", NULL );
+    g_mkdir_with_parents( dir, 0700 );
+    base = g_strdup_printf( "identifica_%s_%s_%s", serie, *muestra ? muestra : "completa",
+                            i_resid ? i_resid : "datos" );
+    for ( i = 0; base[i]; i++ ) if ( !g_ascii_isalnum( base[i] ) && base[i] != '_' && base[i] != '-' ) base[i] = '_';
+    datos = g_strdup_printf( "%s%c%s.txt", dir, G_DIR_SEPARATOR, base );
+    g_free( base ); g_free( dir );
+    exe = art_hermano();
+    c = g_new0( ArtCand, 1 );
+    if ( ac_escribe_datos( datos, x, n, freq, per, anio ) != 0 )
+        { g_snprintf( why, sizeof why, "No pude escribir %s.", datos ); goto mal; }
+    if ( ac_corre( exe, datos, freq, lam, d, D, i_resid != NULL, c, &sin, why, sizeof why ) != 0 )
+        goto mal;
+
+    t = g_string_new( "" );
+    if ( json )
+        {
+        g_string_append( t, "{\"ok\": true, " );
+        js_par( t, "serie", serie ); g_string_append( t, ", " );
+        js_par( t, "sobre", i_resid ? "residuos" : "datos" ); g_string_append( t, ", " );
+        if ( i_resid ) { js_par( t, "modelo", i_resid ); g_string_append( t, ", " ); }
+        g_string_append_printf( t, "\"lambda\": %g, \"d\": %d, \"D\": %d, \"s\": %d, \"n\": %d, "
+                                "\"sin_armonicos\": %s, ", lam, d, D, c->s, c->n_used, sin ? "true" : "false" );
+        js_num( t, "banda", c->band );
+        if ( c->has_seasonal )
+            { g_string_append_printf( t, ", \"estacional\": {\"detectada\": %s, ", c->seasonal_detected ? "true" : "false" );
+              js_num( t, "F", c->seasonal_F ); g_string_append( t, ", " ); js_num( t, "p", c->seasonal_p );
+              g_string_append( t, "}" ); }
+        if ( c->has_unit_root )
+            { g_string_append( t, ", \"adf\": {" ); js_num( t, "estadistico", c->adf_stat );
+              g_string_append( t, ", " ); js_num( t, "p", c->adf_p ); g_string_append( t, "}, \"kpss\": {" );
+              js_num( t, "estadistico", c->kpss_stat ); g_string_append( t, ", " ); js_num( t, "p", c->kpss_p );
+              g_string_append( t, "}" ); }
+        g_string_append( t, ", \"candidatos\": [" );
+        for ( k = 0; k < c->ncand; k++ )
+            {
+            const AcCand *a = &c->cand[k];
+            char kind[64];
+
+            g_string_append_printf( t, "%s{\"arma\": [%d, %d, %d, %d], ", k ? ", " : "", a->p, a->q, a->P, a->Q );
+            js_par( t, "modelo", ac_kind( a, kind, sizeof kind ) ); g_string_append( t, ", " );
+            js_num( t, "similitud", a->sim ); g_string_append( t, ", " );
+            js_num( t, "peso", a->weight ); g_string_append( t, ", " );
+            if ( a->scored ) js_num( t, "aicc", a->aicc ); else g_string_append( t, "\"aicc\": null" );
+            g_string_append_printf( t, ", \"propuesto\": %s}", a->proposed ? "true" : "false" );
+            }
+        g_string_append( t, "], \"avisos\": [" );
+        for ( k = 0; k < c->nmsg; k++ ) { if ( k ) g_string_append( t, ", " ); js_cadena( t, c->msg[k] ); }
+        g_string_append( t, "]}\n" );
+        }
+    else
+        {
+        g_string_append_printf( t, "Identificación de %s%s%s, %s (λ = %g, d = %d, D = %d; s = %d, %d obs, banda ±%.3f)%s\n",
+                                serie, i_resid ? ": residuos de " : "", i_resid ? i_resid : "",
+                                i_resid ? "lo que les falta" : "los datos", lam, d, D, c->s, c->n_used, c->band,
+                                sin ? "\n  sin armónicos: la F no detecta estacionalidad" : "" );
+        if ( c->has_seasonal )
+            g_string_append_printf( t, "  estacionalidad: F = %.3f (p = %.4f), %s\n", c->seasonal_F, c->seasonal_p,
+                                    c->seasonal_detected ? "detectada" : "no detectada" );
+        if ( c->has_unit_root )
+            g_string_append_printf( t, "  raíz unitaria: ADF %.3f (p = %.4f), KPSS %.3f (p = %.4f)\n",
+                                    c->adf_stat, c->adf_p, c->kpss_stat, c->kpss_p );
+        g_string_append( t, "  candidatos, en el orden de art (el primero es su propuesta):\n" );
+        for ( k = 0; k < c->ncand; k++ )
+            {
+            const AcCand *a = &c->cand[k];
+            char kind[64];
+
+            char aicc[32];
+
+            if ( a->scored ) g_snprintf( aicc, sizeof aicc, "AICc %.2f", a->aicc );
+            else             g_snprintf( aicc, sizeof aicc, "sin puntuar" );
+            g_string_append_printf( t, "    %d. (%d,%d)(%d,%d)  %-22s similitud %.3f  peso %.3f  %s%s\n",
+                                    k + 1, a->p, a->q, a->P, a->Q, ac_kind( a, kind, sizeof kind ), a->sim,
+                                    a->weight, aicc, a->proposed ? "  <- propuesto" : "" );
+            }
+        for ( k = 0; k < c->nmsg; k++ ) g_string_append_printf( t, "  aviso: %s\n", c->msg[k] );
+        g_string_append( t, "Propone; no deriva nada. El modelo se hace con «proyecto nuevo» y «especifica».\n" );
+        }
+    fputs( t->str, stdout );
+    g_string_free( t, TRUE );
+    g_free( c ); g_free( exe ); g_free( datos ); g_free( x ); g_free( p );
+    return 0;
+mal:
+    g_free( c ); g_free( exe ); g_free( datos ); g_free( x ); g_free( p );
+    return falla( "%s", why );
+}
+
+/* ------------------------------------------------------------------------ */
 /* La orden                                                                 */
 /* ------------------------------------------------------------------------ */
 
@@ -1677,6 +1848,7 @@ static void uso( FILE *f )
            "  raices factores P SERIE MODELO        la factorización del AR\n"
            "  raices factorizado P SERIE MODELO     deriva el modelo factorizado\n"
            "  ficha P SERIE MODELO [--comprobar]    la ficha de confianza, en Markdown\n"
+           "  identifica P SERIE [--transformacion L,d,D] [--residuos MODELO]   lo que art propone\n"
            "  especifica P SERIE MODELO [cambios]   la especificación de un modelo sin estimar\n"
            "  estima P SERIE MODELO                fue sobre el modelo, y su dictamen\n"
            "  formales P SERIE MODELO [--familia F] [--sub]   los contrastes formales\n"
@@ -1716,6 +1888,7 @@ int main( int argc, char **argv )
         {
         if ( !strcmp( argv[i], "--json" ) ) json = TRUE;
         else if ( !strcmp( argv[i], "--comprobar" ) ) comprobar = TRUE;
+        else if ( !strcmp( argv[i], "--residuos" ) && i + 1 < argc ) i_resid = argv[++i];
         else if ( !strcmp( argv[i], "--arma" ) && i + 1 < argc ) e_arma = argv[++i];
         else if ( !strcmp( argv[i], "--anade-arma" ) && i + 1 < argc ) e_anade = argv[++i];
         else if ( !strcmp( argv[i], "--transformacion" ) && i + 1 < argc ) e_transf = argv[++i];
@@ -1778,6 +1951,7 @@ int main( int argc, char **argv )
     if ( ES( 0, "raices" ) && ES( 1, "factorizado" ) && npos == 5 )
         return raices_factorizado( pos[2], pos[3], pos[4] );
     if ( ES( 0, "ficha" ) && npos == 4 ) return ficha( pos[1], pos[2], pos[3] );
+    if ( ES( 0, "identifica" ) && npos == 3 ) return identifica( pos[1], pos[2] );
     if ( ES( 0, "especifica" ) && npos == 4 ) return especifica( pos[1], pos[2], pos[3] );
     if ( ES( 0, "estima" ) && npos == 4 ) return estima( pos[1], pos[2], pos[3] );
     if ( ES( 0, "formales" ) && npos == 4 ) return formales( pos[1], pos[2], pos[3] );

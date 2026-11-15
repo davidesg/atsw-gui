@@ -36,6 +36,7 @@
 
 #include "analisis.h"
 #include "artcand.h"
+#include "artrun.h"
 #include "tabla.h"
 #include "raices.h"
 #include "engine.h"
@@ -83,98 +84,22 @@ static gchar *programa_art( void )
     return sitio_busca( "art", sitio );
 }
 
-/* The series, as a lib/datos file the engine reads: "# freq", "# start". */
-static int escribe_datos( const char *ruta, const double *x, int n,
-                          int freq, int per, int anio )
-{
-    FILE *f = g_fopen( ruta, "w" );
-    int   i;
+/* LA SERIE PARA art, Y art CORRIENDO: lib/artcand/artrun.c (ac_escribe_datos,
+ * ac_corre), lo mismo que atsw-cli identifica. La regla de los armonicos
+ * --con D = 0 y la F sin patron estacional, otra vez con --harmonics off--
+ * esta alli.                                                            */
+#define escribe_datos ac_escribe_datos
 
-    if ( !f ) return 1;
-    fprintf( f, "# freq %d\n", freq > 0 ? freq : 1 );
-    if ( anio > 0 ) fprintf( f, "# start %d/%d\n", per > 0 ? per : 1, anio );
-    for ( i = 0; i < n; i++ ) fprintf( f, "%.10g\n", x[i] );
-    fclose( f );
-    return 0;
-}
-
-/* Runs art on `datos` once; on success fills g->c and returns TRUE.
-   `off` asks art not to remove the harmonics (--harmonics off).        */
-static gboolean corre_art_una( Id *g, const char *datos, gboolean residuos,
-                               gboolean off, char *why, size_t n )
-{
-    gchar       *exe = programa_art();
-    gchar       *dir = g_path_get_dirname( datos );
-    char         s[16], d[16], D[16], cand[PR_RUTA];
-    EngineResult r;
-    int          line = 0, rc;
-
-    if ( !exe )
-        { g_snprintf( why, n, "No encuentro el motor art (engines/art/bin/art)." );
-          g_free( dir ); return FALSE; }
-
-    g_snprintf( s, sizeof s, "%d", g->freq > 0 ? g->freq : 1 );
-    g_snprintf( d, sizeof d, "%d", g->d );
-    g_snprintf( D, sizeof D, "%d", g->D );
-    if ( residuos )
-        r = engine_run( dir, exe, datos, "-s", s, "--harmonics", "off",
-                        "--no-tests", NULL );
-    else if ( g->lam == 0.0 )
-        r = off ? engine_run( dir, exe, datos, "-s", s, "-l", "-d", d, "-D", D,
-                              "--harmonics", "off", NULL )
-                : engine_run( dir, exe, datos, "-s", s, "-l", "-d", d, "-D", D, NULL );
-    else
-        r = off ? engine_run( dir, exe, datos, "-s", s, "-d", d, "-D", D,
-                              "--harmonics", "off", NULL )
-                : engine_run( dir, exe, datos, "-s", s, "-d", d, "-D", D, NULL );
-    g_free( exe );
-    g_free( dir );
-
-    if ( r.status != 0 )
-        {
-        g_snprintf( why, n, "art no identificó: %s", r.message ? r.message : "?" );
-        engine_result_clear( &r );
-        return FALSE;
-        }
-    engine_result_clear( &r );
-
-    {
-    gchar *base = g_strndup( datos, strlen( datos ) -
-                             ( g_str_has_suffix( datos, ".txt" ) ? 4 : 0 ) );
-    g_snprintf( cand, sizeof cand, "%s_art.cand", base );
-    g_free( base );
-    }
-    rc = ac_leer( cand, g->c, &line );
-    if ( rc != AC_OK )
-        {
-        g_snprintf( why, n, rc == AC_ENOFILE ? "art no dejó %s." :
-                            rc == AC_ETRUNC ? "%s está cortado." :
-                            "%s no se entiende (línea %d).", cand, line );
-        return FALSE;
-        }
-    if ( g->c->ncand == 0 )
-        { g_snprintf( why, n, "art no propuso ningún candidato." ); return FALSE; }
-    return TRUE;
-}
-
-/* SIN ESTACIONALIDAD, SIN ARMONICOS. Con D = 0 y s > 1, art retira los
- * armonicos SIEMPRE (model_detection.c, harmonics auto), aunque su propio
- * contraste F diga que no hay patron estacional. Entonces el ARMA sale de
- * una serie que no es la que hay, y el hijo heredaba once armonicos que
- * nadie pidio. Paso con WTI. Si el F no detecta estacionalidad, se vuelve
- * a identificar con --harmonics off: lo identificado es la serie tal cual,
- * el hijo no lleva armonicos y no hay aviso. El motor no se toca.      */
 static gboolean corre_art( Id *g, const char *datos, gboolean residuos,
                            char *why, size_t n )
 {
-    g->sin_armonicos = FALSE;
-    if ( !corre_art_una( g, datos, residuos, FALSE, why, n ) ) return FALSE;
-    if ( residuos || g->D != 0 || g->freq <= 1 ||
-         !g->c->has_seasonal || g->c->seasonal_detected )
-        return TRUE;
-    if ( !corre_art_una( g, datos, residuos, TRUE, why, n ) ) return FALSE;
-    g->sin_armonicos = TRUE;
-    return TRUE;
+    gchar *exe = programa_art();
+    int    sin = 0, rc;
+
+    rc = ac_corre( exe, datos, g->freq, g->lam, g->d, g->D, residuos, g->c, &sin, why, n );
+    g_free( exe );
+    g->sin_armonicos = sin ? TRUE : FALSE;
+    return rc == 0;
 }
 
 /* ---- saying things --------------------------------------------------- */
@@ -830,7 +755,6 @@ static void tabla_raiz( Id *g )
 }
 
 static gboolean corre_art( Id *g, const char *datos, gboolean residuos, char *why, size_t n );
-static int escribe_datos( const char *ruta, const double *x, int n, int freq, int per, int anio );
 
 /* E1: art again, with the transformation in the controls. */
 /* EL AVISO: con D = 0 art ha quitado la estacionalidad con armonicos

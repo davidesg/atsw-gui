@@ -80,6 +80,7 @@ LIB_SRCS = $(LIB_DIR)/fugdraw/fugdraw.c \
            $(LIB_DIR)/analisis/an_formales.c \
            $(LIB_DIR)/formales/formales.c \
            $(LIB_DIR)/artcand/artcand.c \
+           $(LIB_DIR)/artcand/artrun.c \
            $(LIB_DIR)/sitio/sitio.c \
            $(LIB_DIR)/barra/iconos.c $(LIB_DIR)/barra/barra.c \
            $(LIB_DIR)/anomalos/anomalos.c \

@@ -32,7 +32,7 @@ los `.inp`: lo hace `atsw-cli`, con `lib/proyecto` y `lib/inpdet`.
 | `guion_map` | las series, sus modelos, el linaje y los elegidos | `proyecto ver` |
 | `identification_analysis` | lo que propone el identificador art, sobre los datos o los residuos | `identifica` |
 | `new_version` | un modelo nuevo, de los datos o de un estimado, con su razón | `proyecto nuevo` / `itera` |
-| `write_inp` | la transformación, el ARMA, las intervenciones y la media de un modelo sin estimar | `especifica` |
+| `write_inp` | la transformación, el ARMA, las intervenciones, los armónicos, Semana Santa y la media de un modelo sin estimar | `especifica` |
 | `estimate_and_diagnose` | fue, con su coste, y el dictamen | `estima` |
 | `model_equation_display` | el modelo estimado: el bloque del .out con sus t, σ y la log-verosimilitud | `ecuacion` |
 | `diagnose` | la diagnosis en veredictos | `dictamen` |

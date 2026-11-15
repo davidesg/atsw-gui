@@ -113,6 +113,14 @@ gboolean sitio_lanza_con_tuberias( const gchar *dir, gchar **argv, gchar **envp,
                                    gint *standard_input, gint *standard_output,
                                    gint *standard_error, GError **error );
 
+/* Un proceso SUELTO: sigue vivo cuando quien lo lanza termina (en Windows,
+ * DETACHED_PROCESS; en Unix, la doble bifurcacion de GLib). Sin entrada ni
+ * salidas. *pid, el numero del proceso para sitio_vive.                  */
+gboolean sitio_lanza_suelto( const gchar *dir, gchar **argv, long *pid, GError **error );
+
+/* Si el proceso pid sigue vivo. */
+gboolean sitio_vive( long pid );
+
 gboolean sitio_lanza_y_espera( const gchar *dir, gchar **argv, gchar **envp,
                                GSpawnFlags flags,
                                GSpawnChildSetupFunc child_setup,

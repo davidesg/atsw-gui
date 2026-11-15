@@ -96,9 +96,13 @@ orden que arma sim_gui— y lib/outvarma. Primer paso del hito: la parte VARMA.
 | `load_pre` | el caso de SIM, con las series en el orden del sistema (el de Cholesky) | `atsw-cli proyecto caso-nuevo --motor drvarma` |
 | `run_gate` | N1, la puerta del diagonal, y las CCF de sus residuos par a par (N2) | `atsw-cli caso-puerta` |
 | `estimate` | N3/N4, un VARMA como corrida: `p`, `q`, `diagcov`, `links`, `zeros`, `from_run`; la LR, Hosking, JB y la tabla de drvarma | `atsw-cli caso-estima` |
+| `rank_test` | C1, el rango (drvec -lrtest): sin `B`, la asintótica (orientación); con `B`, el bootstrap aparte | `atsw-cli caso-rango [--bootstrap B --aparte]` |
+| `job_status`, `job_result` | el trabajo aparte, «CASO/rango»: cómo va, y su resultado final | `atsw-cli caso-rango --estado` |
+| `estimate_vec` | C2, el VEC de rango r, con su normalización; se niega sin bootstrap salvo `theory` | `atsw-cli caso-estima --r` |
+| `test_restriction` | C3, la exogeneidad débil de cada serie, por LR | `atsw-cli caso-exogeneidad` |
 | `open_case` | el caso en sim_gui | `sim_gui --caso` |
 
-Los nombres son los de sima. El VEC, la simplificación, la estructura, la
+Los nombres son los de sima. La simplificación, la estructura, la
 evaluación y la previsión llegan en los pasos siguientes. Prueba:
 `tests/sis.py`, en la CI de Linux.
 

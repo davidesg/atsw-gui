@@ -162,6 +162,15 @@ int  sis_normalizacion( const Sistema *s, const SisModelo *mo, char *out, size_t
 int  sis_orden_vec( const Sistema *s, const SisModelo *mo, const char *nombre,
                     char *buf, size_t nbuf, const char **argv, int max );
 
+/* EL VEC DE UN .out DE drvec, como modelo: r, p, q, el caso y la
+ * normalizacion, que son las r ULTIMAS series del .out (el bloque Y1).
+ * serie[0..m-1] son los nombres en el orden del .out (VecOut.serie), que
+ * no es el del sistema: drvec pone primero el bloque nabla Y2. Sin GTK, para
+ * sim_gui y atsw-cli (caso-exogeneidad). Devuelve cuantas series de Y1
+ * encontro en el sistema (r si todo cuadra).                            */
+int  sis_vec_desde( const Sistema *s, SisModelo *mo, int r, int p, int q, const char *caso,
+                    const char serie[][64], int m );
+
 /* Un modelo de partida: p = 1, q = 0, Sigma completa, todos los enlaces. */
 void sis_modelo_defecto( SisModelo *mo, int m );
 

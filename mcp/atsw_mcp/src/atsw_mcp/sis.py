@@ -1,6 +1,7 @@
 """atsw-sis: el servidor de la clase SIM, sistemas simultaneos (docs/ESTUDIO-terminal-mcp.md §2.1).
 
-Primer paso del hito: la parte VARMA (drvarma). Los casos de SIM del
+La parte VARMA (drvarma) y la del VEC (drvec): el rango, con su bootstrap
+aparte (caso-rango --aparte), el VEC y la exogeneidad debil. Los casos de SIM del
 proyecto, la puerta del sistema diagonal con las CCF de sus residuos (atsw-cli
 caso-puerta), y el VARMA como corrida del caso (atsw-cli caso-estima, lo que
 hace la pagina 4 de sim_gui), con lib/sistema y lib/outvarma. Las
@@ -46,9 +47,31 @@ N1 run_gate(case): la puerta. El sistema diagonal (p = q = 0, Σ diagonal)
    PARA: nada de lo que se estime encima se puede creer. Si una serie «se
    movió» sin recorte de ventana, su fichero era una especificación, no un
    óptimo: dilo, y ofrece volver a atsw-us.
-   CON DOS O MÁS SERIES CON d = 1, antes del VARMA en diferencias va la
-   pregunta de la cointegración (el rango, el VEC): aún no está en atsw-sis.
-   Dilo, y ofrece hacerla en sim_gui (open_case) antes de seguir.
+N1c CON DOS O MÁS SERIES CON d = 1, antes del VARMA en diferencias va la
+   pregunta de la cointegración. Se ofrece SIEMPRE; decide el analista (en
+   autónomo, tú, con la razón escrita y el PROPÓSITO: prever o largo plazo).
+   C1 rank_test(case, p, q): la prueba del rango de drvec (r -> r+1). Sin B,
+      la asintótica: ORIENTACIÓN, nunca veredicto (en el caso «pre» o 3, el
+      habitual, ni siquiera hay valores críticos). EL BOOTSTRAP SE OFRECE
+      SIEMPRE (B = 199 a 499; 999 si importa el 1 %), y es lo RECOMENDADO
+      cuando hay que decidir el rango: caso sin valores tabulados, n/(M p)
+      pequeño, una LR cerca del crítico, o el carril autónomo. Tarda minutos:
+      va APARTE; rank_test devuelve el id del trabajo y job_status /
+      job_result lo siguen. NADA PARCIAL ES UN RESULTADO: no decidas el rango
+      antes de job_result. El analista también puede lanzarlo en sim_gui:
+      deja el resultado en el mismo fichero, y rank_test lo lee.
+      r = 0: las diferencias están bien, el VARMA (N2). 0 < r < M: el VEC.
+      Todas rechazadas: «al menos M-1», una pregunta de raíz unitaria.
+   C2 estimate_vec(case, r, p, q, normalise_on): el VEC adoptado. Se niega
+      sin un bootstrap terminado que proponga ese r, salvo que el analista lo
+      adopte por TEORÍA (theory, que queda escrito). normalise_on nombra las
+      r series sobre las que se normaliza beta: otra normalización es OTRO
+      ajuste, no un reordenamiento, y la logL del VEC cambia con ella (dos
+      VEC solo se comparan si la comparten).
+   C3 test_restriction(case, run): la exogeneidad débil de cada serie, alfa_i
+      = 0 por LR (nunca el Wald del .out, que depende de la normalización). Una
+      serie débilmente exógena no corrige hacia el equilibrio: candidata a
+      ENTRADA de un modelo condicional, que es atsw-mt. Ofrécelo; no vayas.
 N2 La identificación: run_gate devuelve también las CCF de los residuos del
    diagonal —las innovaciones de cada serie, preblanqueadas por
    construcción—, par a par, con los retardos fuera de banda: k > 0, «A<-B»
@@ -72,8 +95,7 @@ en un bloque de código; nunca la rehagas. Los cruzados se llaman AR1[A<-B],
 MA1[A<-B]; Q[A,B] es la covarianza de las innovaciones.
 
 ══ LO QUE AQUÍ NO HAY (todavía) ══
-El VEC y el rango de cointegración, la simplificación de Tiao y Box, la
-pregunta de si el sistema es una red, la evaluación fuera de muestra (el
+La simplificación de Tiao y Box, la pregunta de si el sistema es una red, la evaluación fuera de muestra (el
 patrón de medida), la previsión y la respuesta al impulso con sus bandas.
 Llegan en los pasos siguientes. Mientras, open_case abre el caso en sim_gui,
 donde el analista los tiene. No improvises sus resultados.
@@ -85,7 +107,9 @@ donde el analista los tiene. No improvises sus resultados.
 2. La puerta no es opcional.
 3. Las herramientas no deciden: enseñan evidencia y un menú.
 4. No podes un enlace ni quites una serie para mejorar un número.
-5. Solo dentro del proyecto y con estas herramientas; lo que escribes queda
+5. SIN BOOTSTRAP TERMINADO NO HAY RANGO, ni beta, ni equilibrio, salvo un r
+   adoptado por teoría y escrito como tal.
+6. Solo dentro del proyecto y con estas herramientas; lo que escribes queda
    con «por: asistente».
 """
 
@@ -171,6 +195,116 @@ def crea():
             a += ["--razon", reason, "--por", "asistente"]
             return cli.atsw_cli(*a)
         return _hazlo(f)
+
+    def _rango_json(case: str) -> dict:
+        import json
+        try:
+            return json.loads(cli.atsw_cli("caso-rango", case, "--estado", "--json"))
+        except (cli.NoSePuede, ValueError):
+            return {}
+
+    @app.tool()
+    def rank_test(case: str, p: int = 1, q: int = 0, case_det: str = "", B: int = 0,
+                  redo: bool = False) -> str:
+        """C1, el rango de cointegración (drvec -lrtest, r -> r+1) de un caso de SIM con
+        todas sus series I(1). Sin B, la asintótica: orientación, nunca veredicto. Con B
+        (199 a 499; el bootstrap es lo que DECIDE el rango, y se ofrece siempre), lanza
+        el bootstrap APARTE y devuelve el id del trabajo, «CASO/rango»: síguelo con
+        job_status y recoge el resultado con job_result. Un bootstrap ya terminado con la
+        misma configuración (hecho aquí o en sim_gui) no se repite sin redo.
+        case_det: 1, 2, 3 o pre (el de cada .pre, por defecto)."""
+        def f():
+            c = cli.comprueba_id("el caso", case)
+            a = ["caso-rango", c, "--p", str(int(p)), "--q", str(int(q))]
+            if case_det:
+                a += ["--caso-det", cli.comprueba_id("el caso determinista", case_det)]
+            if B:
+                a += ["--bootstrap", str(int(B)), "--aparte"]
+            if redo:
+                a += ["--rehacer"]
+            a += ["--por", "asistente"]
+            dice = cli.atsw_cli(*a)
+            if B and "lanzado" in dice:
+                dice += f"\n\nid del trabajo: {c}/rango"
+            return dice
+        return _hazlo(f)
+
+    def _caso_del_trabajo(job_id: str) -> str:
+        if not job_id.endswith("/rango"):
+            raise cli.NoSePuede(f"«{job_id}» no es un trabajo: es CASO/rango («C1/rango»)")
+        return cli.comprueba_id("el caso", job_id.rsplit("/", 1)[0])
+
+    @app.tool()
+    def job_status(job_id: str) -> str:
+        """El estado de un trabajo aparte («C1/rango», el bootstrap del rango): en marcha,
+        con cuántas réplicas van y cuánto falta, o terminado (el resultado, con
+        job_result). Nunca un número provisional."""
+        def f():
+            c = _caso_del_trabajo(job_id)
+            d = _rango_json(c)
+            if d.get("terminado"):
+                return f"{job_id}: terminado. El resultado, con job_result."
+            return cli.atsw_cli("caso-rango", c, "--estado")
+        return _hazlo(f)
+
+    @app.tool()
+    def job_result(job_id: str) -> str:
+        """El resultado FINAL de un trabajo terminado: la tabla del rango con el
+        bootstrap y el rango propuesto. Si no ha terminado, lo dice y no da nada
+        parcial: una decisión espera a esto."""
+        def f():
+            c = _caso_del_trabajo(job_id)
+            d = _rango_json(c)
+            if not d.get("terminado"):
+                return f"{job_id} no ha terminado: no hay resultado. job_status dice cómo va."
+            return cli.atsw_cli("caso-rango", c, "--estado")
+        return _hazlo(f)
+
+    @app.tool()
+    def estimate_vec(case: str, r: int, reason: str, p: int = 2, q: int = 0,
+                     normalise_on: str = "", case_det: str = "", theory: str = "",
+                     from_run: str = "") -> str:
+        """C2, el VEC de rango r como corrida del caso (drvec, con el hessiano en el
+        óptimo), tras la puerta. Se NIEGA sin un bootstrap terminado (rank_test) que
+        proponga ese r, salvo que el analista lo adopte por TEORÍA: theory dice por
+        qué, y queda escrito en la razón. p, q: el VARMA sobre las series EN NIVELES (p
+        >= 1). normalise_on: las r series sobre las que se normaliza beta («LRM» o «LRM,
+        IDE»); sin ella, las r últimas del caso. Devuelve el optimizador, la logL, AIC,
+        BIC, Hosking, JB y la tabla de drvec entera (alfa, beta, Gamma, Q)."""
+        def f():
+            c = cli.comprueba_id("el caso", case)
+            if not reason.strip():
+                raise cli.NoSePuede("la razón no puede ir vacía")
+            d = _rango_json(c)
+            rp = d.get("propuesto") if d.get("terminado") and d.get("bootstrap") else None
+            razon = reason
+            if rp != int(r):
+                if not theory.strip():
+                    hay = (f"el bootstrap propone r = {rp}" if rp is not None
+                           else "no hay un bootstrap del rango terminado")
+                    raise cli.NoSePuede(f"{hay}: un VEC con r = {r} necesita el bootstrap (rank_test con B) "
+                                        "o que el analista lo adopte por teoría (theory)")
+                razon = f"{reason} [r = {r} adoptado por TEORÍA: {theory}; bootstrap: " + \
+                        (f"r = {rp}]" if rp is not None else "no hecho]")
+            a = ["caso-estima", c, "--r", str(int(r)), "--p", str(int(p)), "--q", str(int(q))]
+            if normalise_on:
+                a += ["--normaliza", normalise_on]
+            if case_det:
+                a += ["--caso-det", cli.comprueba_id("el caso determinista", case_det)]
+            if from_run:
+                a += ["--desde", cli.comprueba_id("la corrida", from_run)]
+            a += ["--razon", razon, "--por", "asistente"]
+            return cli.atsw_cli(*a)
+        return _hazlo(f)
+
+    @app.tool()
+    def test_restriction(case: str, run: str) -> str:
+        """C3, la exogeneidad débil: para cada serie, alfa_i = 0 contra el VEC libre de
+        la corrida run, con su normalización, por LR (drvec -weakex). p > 0,05: la serie
+        no corrige hacia el equilibrio, candidata a entrada de un modelo condicional
+        (atsw-mt)."""
+        return _hazlo(lambda: cli.atsw_cli("caso-exogeneidad", cli.comprueba_id("el caso", case),
+                                           cli.comprueba_id("la corrida", run), "--por", "asistente"))
 
     @app.tool()
     def open_case(case: str, run: str = "") -> str:

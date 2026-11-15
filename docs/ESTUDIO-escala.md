@@ -134,9 +134,10 @@ Sin parte todavía (propuesta; nada de esto está hecho):
   1. Sin comprobar en ejecución: un fichero con factor 0.01 o 10⁶ se
   recortaría al abrirlo y guardarlo. (Su escritor ya no pierde el factor:
   fue BUG-0003.)
-- **Restos de «×100 siempre»**: la figura gnuplot de la previsión de drtran
-  (`fuf_graphic.c`), fuf con λ < 0 (tabla, LaTeX y gráfico), y la historia del
-  gráfico de previsión de `gui/sim` (`prevision.c`).
+- **Restos de «×100 siempre»**: queda fuf con λ < 0 (tabla, LaTeX y
+  gráfico), que es una tabla propia. La figura gnuplot de la previsión de
+  drtran y la historia del gráfico de previsión de `gui/sim` ya siguen la
+  regla de sus tablas.
 - **`atsw-cli`** imprime la σ del `.out` con la nota «en logaritmos: ×100 es un
   %», que solo es cierta con factor 1.
 - **Factores distintos**: drtran y la escalera de drvarma ya avisan, como

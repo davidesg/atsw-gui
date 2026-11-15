@@ -1573,8 +1573,12 @@ static void forecast_latex_doc(int m, int L, real ***LP, real **sigma,
             for (t = 1; t <= n_stat; t++) { real z = vscale * aresid[i][t]; s2 += z * z; cc++; }
             if (cc > 0) s2 /= cc;
             snprintf(x11, sizeof x11, "%s_s%d", forecast_base, i);
+            /* La figura pinta 100*x/refactor. Para que diga lo que la tabla
+               (vscale: un tanto por ciento solo en logaritmos) se le pasa
+               100/vscale, que con logaritmos es el factor de siempre. */
             forecast_graphic(ystar, res1, f3w, v3w, ord, s2,
-                             Ts[i].begyear, Ts[i].begtime, nb, L, freq, x11, refc);
+                             Ts[i].begyear, Ts[i].begtime, nb, L, freq, x11,
+                             100.0 / vscale);
             free_tensor(v3w, 1, L, 1, 1, 1, 1);
             free_matrix(f3w, 1, 1, 1, L);
             ObsToDate(Ts[i].begyear, Ts[i].begtime, nb + 1, freq, &aper, &asub);

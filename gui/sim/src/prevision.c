@@ -329,8 +329,11 @@ gboolean prevision_grafico( Sim *m, int i )
         double yt = ts.data[o], ys = ts.data[o - f];
         fechas[j] = f == 1 ? g_strdup_printf( "%ld", a ) : g_strdup_printf( "%ld/%ld", a % f + 1, a / f );
         y[0][j] = yt;
+        /* Como la tabla de la escalera (drvarma BUG-0005): un tanto por
+           ciento solo en logaritmos; si no, el cambio de la transformada. */
         y[1][j] = es_log ? ( yt > 0 && ys > 0 ? 100.0 * log( yt / ys ) : 0.0 )
-                         : 100.0 * ( yt - ys ) * rf;
+                : fabs( tm.boxlam - 1.0 ) < 1e-12 ? ( yt - ys ) * rf
+                : ( pow( yt, tm.boxlam ) - pow( ys, tm.boxlam ) ) / tm.boxlam * rf;
     }
     for (j = 0; j < x->nf; j++) {
         s = nh + j;

@@ -79,17 +79,8 @@ static gboolean es_de_drvec( const char *out )
 static void modelo_del_vec( Sim *m, const VecOut *v )
 {
     PagEstima *E = &m->pe;
-    int i, j;
 
-    m->mod.clase = SIS_VEC;
-    m->mod.r = v->r;
-    m->mod.p = v->p;
-    m->mod.q = v->q;
-    if (v->caso[0]) snprintf( m->mod.caso, sizeof m->mod.caso, "%s", v->caso );
-    memset( m->mod.y1, 0, sizeof m->mod.y1 );
-    for (j = v->m - v->r; j < v->m; j++)
-        for (i = 0; i < m->sis.n; i++)
-            if (!strcmp( m->sis.s[i].nombre, v->serie[j] )) m->mod.y1[i] = 1;
+    sis_vec_desde( &m->sis, &m->mod, v->r, v->p, v->q, v->caso, v->serie, v->m );
     sis_normalizacion( &m->sis, &m->mod, E->vec_norm, sizeof E->vec_norm );
 }
 

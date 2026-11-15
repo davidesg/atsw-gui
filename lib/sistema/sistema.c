@@ -520,3 +520,20 @@ int sis_modelo_triangular( const SisModelo *mo, SisModelo *r, const int *perm, i
          if ( a != b && r->enlace[a][b] && pos[b] > pos[a] ) { r->enlace[a][b] = 0; quita++; }
    return quita;
 }
+
+int sis_vec_desde( const Sistema *s, SisModelo *mo, int r, int p, int q, const char *caso,
+                   const char serie[][64], int m )
+{
+    int i, j, n = 0;
+
+    mo->clase = SIS_VEC;
+    mo->r = r;
+    mo->p = p;
+    mo->q = q;
+    if (caso && caso[0]) snprintf( mo->caso, sizeof mo->caso, "%s", caso );
+    memset( mo->y1, 0, sizeof mo->y1 );
+    for (j = m - r; j < m; j++)
+        for (i = 0; i < s->n; i++)
+            if (j >= 0 && !strcmp( s->s[i].nombre, serie[j] )) { mo->y1[i] = 1; n++; }
+    return n;
+}

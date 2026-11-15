@@ -841,9 +841,20 @@ afectados.
     ellos, el PATH daba el drvarma de Python. En atsw-sis, `guion_map`,
     `load_pre`, `run_gate`, `estimate` y `open_case`, con los nombres de sima,
     y las instrucciones de sima recortadas a la parte VARMA.
-  - **Lo que falta de atsw-sis, por PR:** (2) el rango y el VEC, con la
-    exogeneidad débil (`rank_test`, `estimate_vec`, `test_restriction`);
-    (3) la simplificación y si es una red (`simplify`, `structure`); (4) la
+  - **atsw-sis, segundo paso: el rango y el VEC (15-nov-2026).** `atsw-cli
+    caso-rango` (drvec -lrtest, artefacto del caso, el mismo fichero que
+    sim_gui), `caso-estima --r` (el VEC, con `--normaliza` y `--caso-det`) y
+    `caso-exogeneidad` (alfa_i = 0 por LR, serie a serie). EL BOOTSTRAP SE
+    OFRECE SIEMPRE, y es lo recomendado para decidir el rango (decisión del
+    analista): tarda minutos, así que va APARTE —`--bootstrap B --aparte`
+    lanza drvec suelto (lib/sitio, `sitio_lanza_suelto`) y `--estado` lo sigue
+    por su `.boot`—; nada parcial es un resultado, y uno ya terminado no se
+    pisa. En atsw-sis, `rank_test`, `job_status`, `job_result`,
+    `estimate_vec` (se niega sin bootstrap salvo `theory`) y
+    `test_restriction`. `modelo_del_vec` de sim_gui pasa a lib/sistema
+    (`sis_vec_desde`). El bootstrap EN PARALELO, que quitaría la espera, es
+    una propuesta para drvec sin decidir: engines/drvec/TODO.md, MEJORA-4.
+  - **Lo que falta de atsw-sis, por PR:** (3) la simplificación y si es una red (`simplify`, `structure`); (4) la
     previsión, la evaluación y las bandas (`forecast`, `evaluate`,
     `impulse_response`, `variance_decomposition`, `irf_bands`). La lógica que
     hoy vive en los ficheros GTK de sim_gui (la clasificación del ajuste, las

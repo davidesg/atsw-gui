@@ -18,6 +18,8 @@
 #include <string.h>
 #else
 #include <unistd.h>
+#include <signal.h>
+#include <errno.h>
 #endif
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
@@ -327,9 +329,22 @@ static void cierra( HANDLE *h )
  * hereda SOLO sus tres manejadores (PROC_THREAD_ATTRIBUTE_HANDLE_LIST): si
  * heredara cualquier otro heredable --la tuberia de otra corrida lanzada a
  * la vez-- esa no veria su fin de fichero hasta que este acabase.        */
+static gboolean lanza_win_como( const gchar *dir, gchar **argv, GSpawnFlags flags,
+                                int suelto, HANDLE *proc, HANDLE *in_w, HANDLE *out_r,
+                                HANDLE *err_r, GError **error );
+
 static gboolean lanza_win( const gchar *dir, gchar **argv, GSpawnFlags flags,
                            HANDLE *proc, HANDLE *in_w, HANDLE *out_r,
                            HANDLE *err_r, GError **error )
+{
+    return lanza_win_como( dir, argv, flags, 0, proc, in_w, out_r, err_r, error );
+}
+
+/* suelto: DETACHED_PROCESS, sin la consola del que lanza, para que siga
+   vivo cuando esta se cierre (sitio_lanza_suelto).                     */
+static gboolean lanza_win_como( const gchar *dir, gchar **argv, GSpawnFlags flags,
+                                int suelto, HANDLE *proc, HANDLE *in_w, HANDLE *out_r,
+                                HANDLE *err_r, GError **error )
 {
     SECURITY_ATTRIBUTES  sa = { sizeof sa, NULL, TRUE };
     HANDLE               hijo[3] = { NULL, NULL, NULL };
@@ -406,7 +421,8 @@ static gboolean lanza_win( const gchar *dir, gchar **argv, GSpawnFlags flags,
 
     /* LA RAZON DE TODO ESTO: sin consola propia si el que lanza no la tiene. */
     como = EXTENDED_STARTUPINFO_PRESENT
-         | ( GetConsoleWindow() == NULL ? CREATE_NO_WINDOW : 0 );
+         | ( suelto ? DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+                    : GetConsoleWindow() == NULL ? CREATE_NO_WINDOW : 0 );
     memset( &pi, 0, sizeof pi );
     if ( !CreateProcessW( (wchar_t *) wapp, (wchar_t *) wcl, NULL, NULL, TRUE,
                           como, NULL, (wchar_t *) wdir, &si.StartupInfo, &pi ) )
@@ -534,3 +550,53 @@ gboolean sitio_lanza_y_espera( const gchar *dir, gchar **argv, gchar **envp,
 }
 
 #endif
+
+/* ------------------------------------------------------------------------ */
+/* UN PROCESO SUELTO, que sigue vivo cuando quien lo lanza ha terminado: el  */
+/* bootstrap del rango, que tarda mas que una llamada (atsw-cli caso-rango   */
+/* --aparte). La entrada y las salidas van a NUL / /dev/null: el que lanza   */
+/* no espera a nadie, y el programa escribe sus ficheros.                    */
+/* ------------------------------------------------------------------------ */
+
+gboolean sitio_lanza_suelto( const gchar *dir, gchar **argv, long *pid, GError **error )
+{
+#ifdef G_OS_WIN32
+    HANDLE proc = NULL;
+
+    if ( !lanza_win_como( dir, argv, 0, 1, &proc, NULL, NULL, NULL, error ) ) return FALSE;
+    if ( pid ) *pid = (long) GetProcessId( proc );
+    CloseHandle( proc );
+    return TRUE;
+#else
+    /* sin G_SPAWN_DO_NOT_REAP_CHILD, GLib hace la doble bifurcacion: el nieto
+       queda colgado de init y nadie tiene que recogerlo                  */
+    GPid p = 0;
+
+    if ( !g_spawn_async( dir, argv, NULL,
+                         G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL,
+                         NULL, NULL, &p, error ) )
+        return FALSE;
+    if ( pid ) *pid = (long) p;
+    return TRUE;
+#endif
+}
+
+/* Si el proceso pid sigue vivo. Un pid que se reutilizo daria un falso
+   «vivo»: quien pregunta mira ademas sus ficheros.                     */
+gboolean sitio_vive( long pid )
+{
+    if ( pid <= 0 ) return FALSE;
+#ifdef G_OS_WIN32
+    {
+    HANDLE   h = OpenProcess( SYNCHRONIZE, FALSE, (DWORD) pid );
+    gboolean v;
+
+    if ( !h ) return FALSE;
+    v = WaitForSingleObject( h, 0 ) == WAIT_TIMEOUT;
+    CloseHandle( h );
+    return v;
+    }
+#else
+    return kill( (pid_t) pid, 0 ) == 0 || errno == EPERM;
+#endif
+}

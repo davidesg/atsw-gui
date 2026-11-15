@@ -61,6 +61,7 @@
 #include "residuos.h"
 #include "sistema.h"
 #include "outvarma.h"
+#include "outvec.h"
 
 #ifndef ATSW_VERSION
 #define ATSW_VERSION "en desarrollo"
@@ -81,6 +82,11 @@ static int         k_p = -1, k_q = -1;  /* caso-estima de SIM: la dinamica cruza
 static int         k_diagcov = 0;       /* caso-estima de SIM: Sigma diagonal      */
 static const char *k_cero[K_MAX_RESTR]; /* caso-estima de SIM: --cero "AR1[A<-B]"  */
 static int         k_ncero = 0;
+static int         k_r = 0;             /* caso-estima de SIM: el rango del VEC    */
+static const char *k_norma = NULL;      /* --normaliza "A,B": el bloque Y1         */
+static const char *k_casodet = NULL;    /* --caso-det 1|2|3|pre                    */
+static int         k_boot = 0;          /* caso-rango --bootstrap B                */
+static gboolean    k_aparte, k_rehacer, k_estado;
 static const char *k_desde = NULL;
 static gboolean    k_diagonal = FALSE;
 static int         k_prever = 0, k_evaluar = 0;   /* caso-estima --prever H --evaluar W */
@@ -2113,7 +2119,7 @@ static int tabla_motor( const char *out, GString *t )
 {
     FILE *f = g_fopen( out, "r" );
     char  l[512];
-    int   dentro = 0, n = 0, tras = 0;
+    int   dentro = 0, n = 0, tras = 0, rayas = 0;
 
     if ( !f ) return 1;
     while ( fgets( l, sizeof l, f ) )
@@ -2126,8 +2132,10 @@ static int tabla_motor( const char *out, GString *t )
         if ( strstr( l, "Standard errors:" ) ) { g_string_append_printf( t, "  %s\n", l ); break; }
         if ( dentro == 1 )
             {
-            if ( !strncmp( l, "-----", 5 ) ) { if ( n ) dentro = 2; continue; }
-            if ( !l[0] ) { if ( n ) break; continue; }
+            /* drtran y drvec la abren y la cierran con rayas, con lineas en
+               blanco entre secciones; drvarma, sin rayas, acaba en blanco */
+            if ( !strncmp( l, "-----", 5 ) ) { if ( n ) dentro = 2; else rayas = 1; continue; }
+            if ( !l[0] ) { if ( n && !rayas ) break; if ( rayas && n ) g_string_append_c( t, '\n' ); continue; }
             g_string_append_printf( t, "  %s\n", l ); n++;
             continue;
             }
@@ -2321,6 +2329,506 @@ static int caso_puerta( const char *path, const char *caso )
     return k;
 }
 
+/* ------------------------------------------------------------------------ */
+/* SIM: el rango de cointegracion, el VEC y la exogeneidad debil (drvec)    */
+/* ------------------------------------------------------------------------ */
+
+/* Las TABLAS de un .out de drvec, tal cual: cada bloque que empieza con una
+   cabecera «  r    npar» o «  r    M-r» hasta la primera linea en blanco (el
+   ajuste de cada rango, las LR asintoticas y, si lo hay, el bootstrap), con
+   la linea que lo titula. Sin la prosa de las advertencias.             */
+static void tablas_rango( const char *out, GString *t )
+{
+    FILE *f = g_fopen( out, "r" );
+    char  l[512], prev[512] = "";
+    int   dentro = 0;
+
+    if ( !f ) return;
+    while ( fgets( l, sizeof l, f ) )
+        {
+        l[strcspn( l, "\r\n" )] = '\0';
+        if ( !dentro && ( g_str_has_prefix( l, "  r    npar" ) || g_str_has_prefix( l, "  r    M-r" ) ) )
+            {
+            dentro = 1;
+            if ( strstr( prev, "bootstrap" ) || strstr( prev, "critical" ) )
+                g_string_append_printf( t, "%s\n", prev );
+            }
+        if ( dentro )
+            {
+            if ( !l[0] ) { dentro = 0; g_string_append_c( t, '\n' ); }
+            else g_string_append_printf( t, "%s\n", l );
+            }
+        if ( l[0] ) g_snprintf( prev, sizeof prev, "%s", l );
+        }
+    fclose( f );
+}
+
+/* Lo que se le dice al analista de una prueba ya leida: el rango propuesto
+   con el bootstrap, o por que sin el no hay veredicto. */
+static void veredicto_rango( const VecOut *v, GString *t )
+{
+    int al = 0, r = v->nboot > 0 ? ovec_rango_propuesto( v, &al ) : -1, sin_cv = 0, i;
+
+    for ( i = 0; i < v->nasint; i++ ) if ( !v->asint[i].hay_cv ) sin_cv = 1;
+    if ( v->nboot > 0 && r >= 0 )
+        g_string_append_printf( t, "Rango propuesto con el bootstrap (%d réplicas, al 5 %%): r %s %d.%s\n", v->B,
+                                al ? ">=" : "=", r,
+                                r == 0 ? " Sin cointegración: el VARMA en diferencias (caso-estima --p --q)."
+                                : al ? " Todas se rechazan: el último paso es una pregunta de raíz unitaria."
+                                : " El VEC con ese rango: caso-estima --r." );
+    else if ( v->nboot > 0 )
+        g_string_append_printf( t, "El bootstrap de %d réplicas no basta para dar valores críticos: NO HAY RANGO. "
+                                "Repítelo con B = 199 o más (--bootstrap B --aparte --rehacer).\n", v->B );
+    else
+        g_string_append_printf( t, "SIN BOOTSTRAP NO HAY RANGO: la tabla asintótica es orientación, no veredicto%s. "
+                                "El bootstrap (--bootstrap B --aparte, B = 199 o más) es lo RECOMENDADO para decidir "
+                                "el rango; o en sim_gui, que deja su resultado en el mismo fichero.\n",
+                                sin_cv ? " (y en este caso determinista no hay valores críticos tabulados)" : "" );
+}
+
+static void rango_json( const VecOut *v, GString *t )
+{
+    int al = 0, r = v->nboot > 0 ? ovec_rango_propuesto( v, &al ) : -1, i;
+
+    g_string_append_printf( t, "\"m\": %d, \"p\": %d, \"q\": %d, ", v->m, v->p, v->q );
+    js_par( t, "caso_det", v->caso ); g_string_append( t, ", \"rangos\": [" );
+    for ( i = 0; i < v->nrango; i++ )
+        {
+        g_string_append_printf( t, "%s{\"r\": %d, \"npar\": %d, ", i ? ", " : "", v->rango[i].r, v->rango[i].npar );
+        js_num( t, "logl", v->rango[i].logL ); g_string_append( t, ", " );
+        js_num( t, "aic", v->rango[i].aic ); g_string_append( t, ", " );
+        js_num( t, "bic", v->rango[i].bic ); g_string_append( t, "}" );
+        }
+    g_string_append( t, "], \"lr\": [" );
+    for ( i = 0; i < v->nasint; i++ )
+        {
+        g_string_append_printf( t, "%s{\"r\": %d, ", i ? ", " : "", v->asint[i].r );
+        js_num( t, "lr", v->asint[i].lr ); g_string_append( t, "}" );
+        }
+    g_string_append_printf( t, "], \"bootstrap\": %d, \"propuesto\": ", v->nboot > 0 ? v->B : 0 );
+    if ( r >= 0 ) g_string_append_printf( t, "%d, \"al_menos\": %s", r, al ? "true" : "false" );
+    else g_string_append( t, "null" );
+}
+
+/* El fichero del trabajo aparte: <C>_rango.trabajo, «clave valor» por linea */
+static void trabajo_escribe( const char *ruta, long pid, int B, int m, long inicio, const char *por )
+{
+    gchar *t = g_strdup_printf( "pid %ld\nB %d\nm %d\ninicio %ld\npor %s\n", pid, B, m, inicio, por );
+    g_file_set_contents( ruta, t, -1, NULL );
+    g_free( t );
+}
+
+static int trabajo_lee( const char *ruta, long *pid, int *B, int *m, long *inicio, char *por, size_t npor )
+{
+    gchar *t = NULL;
+    char   q[32] = "analista";
+    int    ok;
+
+    if ( !g_file_get_contents( ruta, &t, NULL, NULL ) ) return 1;
+    ok = sscanf( t, "pid %ld\nB %d\nm %d\ninicio %ld\npor %31s", pid, B, m, inicio, q ) >= 4;
+    g_snprintf( por, npor, "%s", q );
+    g_free( t );
+    return ok ? 0 : 1;
+}
+
+/* caso-rango P CASO: N1c/C1 de sima (rank_test). drvec -lrtest sobre las
+   series del caso (todas con d = 1 y D = 0), artefacto del caso <C>_rango,
+   el MISMO fichero que escribe sim_gui. Sin bootstrap, la asintotica, que
+   es orientacion. Con --bootstrap B, aparte (--aparte: tarda mas que una
+   llamada): drvec suelto, y --estado lo sigue por su .boot. Un bootstrap ya
+   terminado con la misma configuracion no se pisa sin --rehacer.        */
+static int caso_rango( const char *path, const char *caso )
+{
+    char          why[1024], base[PR_RUTA], out[PR_RUTA], boot[PR_RUTA], trab[PR_RUTA], raiz[PR_RUTA];
+    char          buf[256];
+    Proyecto     *p = abre( path, why, sizeof why );
+    const PrCaso *c;
+    Sistema      *sis;
+    SisVentana    ve;
+    SisRango      rg;
+    VecOut       *v = NULL;
+    GString      *t;
+    const char   *av[SIS_MAX_SER + 16];
+    gchar        *dir, *nombre, *obj;
+    long          pid = 0, inicio = 0;
+    int           k, B = 0, m = 0, hecho = 0;
+    char          por[32] = "analista";
+
+    if ( !p ) return falla( "%s", why );
+    if ( !( c = caso_sis( p, caso, why, sizeof why ) ) ) { g_free( p ); return falla( "%s", why ); }
+    sis = g_new0( Sistema, 1 );
+    if ( sis_del_caso( p, c, sis, why, sizeof why ) != 0 || sis_ventana( sis, &ve, why, sizeof why ) != 0 ||
+         !sis_rango_admite( sis, why, sizeof why ) )
+        { g_free( sis ); g_free( p ); return falla( "%s", why ); }
+    pr_corrida_ruta( p, caso, "rango", NULL, base, sizeof base );
+    g_snprintf( out, sizeof out, "%s.out", base );
+    g_snprintf( boot, sizeof boot, "%s.boot", base );
+    g_snprintf( trab, sizeof trab, "%s.trabajo", base );
+    raiz_de( path, raiz, sizeof raiz );
+    dir = g_path_get_dirname( base );
+    nombre = g_path_get_basename( base );
+    g_mkdir_with_parents( dir, 0700 );
+    v = g_new0( VecOut, 1 );
+
+    /* --- EL TRABAJO APARTE: ¿en marcha, terminado o caido? --------------- */
+    if ( trabajo_lee( trab, &pid, &B, &m, &inicio, por, sizeof por ) == 0 )
+        {
+        int  hechas = ovec_boot_hechas( boot ), total = B * ( m > 1 ? m - 1 : 1 );
+        long ya = (long) time( NULL ) - inicio;
+
+        if ( sitio_vive( pid ) )
+            {
+            if ( !k_estado && !k_rehacer )
+                { g_free( v ); g_free( dir ); g_free( nombre ); g_free( sis ); g_free( p );
+                  return falla( "Hay un bootstrap del rango en marcha (proceso %ld): caso-rango --estado lo sigue.", pid ); }
+            if ( k_estado )
+                {
+                t = g_string_new( "" );
+                if ( json )
+                    g_string_append_printf( t, "{\"ok\": true, \"terminado\": false, \"hechas\": %d, \"total\": %d, "
+                                            "\"segundos\": %ld}\n", hechas < 0 ? 0 : hechas, total, ya );
+                else
+                    g_string_append_printf( t, "%s: el bootstrap del rango sigue en marcha: %d de %d réplicas en %ld s%s. "
+                                            "Nada parcial es un resultado.\n", caso, hechas < 0 ? 0 : hechas, total, ya,
+                                            hechas > 0 ? "" : " (las primeras tardan en llegar)" );
+                if ( hechas > 0 && !json )
+                    g_string_append_printf( t, "  quedan unos %ld s.\n", (long) ( (double) ya / hechas * ( total - hechas ) ) );
+                fputs( t->str, stdout ); g_string_free( t, TRUE );
+                g_free( v ); g_free( dir ); g_free( nombre ); g_free( sis ); g_free( p );
+                return 0;
+                }
+            }
+        else
+            {
+            /* termino: su coste, una vez (drvec es de un hilo: cpu = pared) */
+            if ( ovec_parse_file( out, v ) == 0 && v->nboot > 0 )
+                {
+                CosteLinea l;
+                gchar *ob = g_strdup_printf( "%s/rango", caso ), *mot = g_strdup_printf( "%s -bootstrap %d",
+                                             v->programa[0] ? v->programa : "drvec", B );
+
+                memset( &l, 0, sizeof l );
+                l.quien = "atsw-cli"; l.por = por; l.objeto = ob;
+                l.paso = "rango"; l.motor = mot; l.via = "C";
+                l.pared_s = l.cpu_s = (double) ya; l.energia_j = -1.0;
+                coste_apunta( raiz, &l, why, sizeof why );
+                g_free( ob ); g_free( mot );
+                hecho = 1;
+                }
+            g_remove( trab );
+            if ( !hecho )
+                { g_free( v ); g_free( dir ); g_free( nombre ); g_free( sis ); g_free( p );
+                  return falla( "El bootstrap del rango terminó sin resultados (¿se paró o falló drvec?). Vuelve a "
+                                "lanzarlo." ); }
+            }
+        }
+    else if ( k_estado )
+        {
+        if ( !( ovec_parse_file( out, v ) == 0 && v->nrango > 0 ) )
+            { g_free( v ); g_free( dir ); g_free( nombre ); g_free( sis ); g_free( p );
+              return falla( "%s no tiene prueba del rango, ni en marcha ni hecha.", caso ); }
+        hecho = 1;
+        }
+
+    /* --- UNA PRUEBA YA HECHA: con bootstrap y la misma configuracion, no se pisa */
+    sis_rango_defecto( &rg );
+    if ( k_p >= 0 ) rg.p = k_p;
+    if ( k_q >= 0 ) rg.q = k_q;
+    if ( k_casodet ) g_snprintf( rg.caso, sizeof rg.caso, "%s", k_casodet );
+    rg.B = k_boot > 0 ? k_boot : 0;
+    if ( !hecho && !k_rehacer && ovec_parse_file( out, v ) == 0 && v->nboot > 0 && v->p == rg.p && v->q == rg.q &&
+         ( !k_casodet || !strcmp( v->caso, rg.caso ) ) && ( rg.B == 0 || rg.B == v->B ) )
+        hecho = 2;
+
+    if ( !hecho )
+        {
+        if ( rg.B > 0 && !k_aparte )
+            { g_free( v ); g_free( dir ); g_free( nombre ); g_free( sis ); g_free( p );
+              return falla( "El bootstrap tarda más que una llamada (minutos con B = 199): va aparte, --aparte, y se "
+                            "sigue con caso-rango --estado." ); }
+        g_remove( out ); g_remove( boot );
+        k = sis_orden_rango( sis, &rg, nombre, buf, sizeof buf, av, G_N_ELEMENTS( av ) - 1 );
+        if ( k < 0 ) { g_free( v ); g_free( dir ); g_free( nombre ); g_free( sis ); g_free( p ); return falla( "La orden no cabe." ); }
+        av[k] = NULL;
+        engine_set_finder( hermano );
+        if ( rg.B > 0 )
+            {
+            gchar  *exe = hermano( "drvec" ), **argv = g_new0( gchar *, k + 2 );
+            GError *err = NULL;
+            int     j;
+
+            if ( !exe ) { g_free( argv ); g_free( v ); g_free( dir ); g_free( nombre ); g_free( sis ); g_free( p );
+                          return falla( "No encuentro drvec." ); }
+            argv[0] = exe;
+            for ( j = 0; j < k; j++ ) argv[j + 1] = (gchar *) av[j];
+            if ( !sitio_lanza_suelto( dir, argv, &pid, &err ) )
+                { int r0 = falla( "No pude lanzar drvec: %s", err ? err->message : "?" );
+                  g_clear_error( &err ); g_free( exe ); g_free( argv );
+                  g_free( v ); g_free( dir ); g_free( nombre ); g_free( sis ); g_free( p ); return r0; }
+            trabajo_escribe( trab, pid, rg.B, sis->n, (long) time( NULL ), c_por ? c_por : "analista" );
+            g_free( exe ); g_free( argv );
+            t = g_string_new( "" );
+            if ( json ) g_string_append_printf( t, "{\"ok\": true, \"lanzado\": true, \"pid\": %ld, \"B\": %d, "
+                                                "\"total\": %d}\n", pid, rg.B, rg.B * ( sis->n - 1 ) );
+            else g_string_append_printf( t, "%s: bootstrap del rango lanzado aparte (proceso %ld): %d réplicas por cada "
+                                         "uno de los %d contrastes, %d ajustes. Síguelo con caso-rango --estado; nada "
+                                         "parcial es un resultado.\n", caso, pid, rg.B, sis->n - 1, rg.B * ( sis->n - 1 ) );
+            fputs( t->str, stdout ); g_string_free( t, TRUE );
+            g_free( v ); g_free( dir ); g_free( nombre ); g_free( sis ); g_free( p );
+            return 0;
+            }
+        obj = g_strdup_printf( "%s/rango", caso );
+        coste_contexto( raiz, "atsw-cli", c_por ? c_por : "analista", obj, "rango" );
+        {
+        EngineResult r = engine_run_v( dir, "drvec", av );
+        coste_contexto_limpia();
+        g_free( obj );
+        memset( v, 0, sizeof *v );
+        if ( ovec_parse_file( out, v ) != 0 || v->nrango == 0 )
+            { gchar *msg = g_strdup( r.message ); engine_result_clear( &r );
+              g_free( v ); g_free( dir ); g_free( nombre ); g_free( sis ); g_free( p );
+              falla( "%s No hay prueba del rango.", msg ); g_free( msg ); return 1; }
+        engine_result_clear( &r );
+        }
+        }
+
+    /* --- LA PRUEBA, LEIDA ----------------------------------------------- */
+    t = g_string_new( "" );
+    if ( json )
+        {
+        GString *tb = g_string_new( "" );
+        tablas_rango( out, tb );
+        g_string_append( t, "{\"ok\": true, \"terminado\": true, " );
+        js_par( t, "caso", caso ); g_string_append_printf( t, ", \"ya_estaba\": %s, ", hecho == 2 ? "true" : "false" );
+        rango_json( v, t ); g_string_append( t, ", " );
+        js_par( t, "tablas", tb->str ); g_string_append( t, "}\n" );
+        g_string_free( tb, TRUE );
+        }
+    else
+        {
+        g_string_append_printf( t, "%s: el rango de cointegración (drvec -lrtest), VARMA-VECM(%d,%d), caso %s, %d series%s\n\n",
+                                caso, v->p, v->q, v->caso, v->m,
+                                hecho == 2 ? " — ya estaba hecho con bootstrap: no se repite (--rehacer para repetirlo)" : "" );
+        tablas_rango( out, t );
+        veredicto_rango( v, t );
+        }
+    fputs( t->str, stdout ); g_string_free( t, TRUE );
+    g_free( v ); g_free( dir ); g_free( nombre ); g_free( sis ); g_free( p );
+    return 0;
+}
+
+/* caso-exogeneidad P CASO cNN: C3 de sima (test_restriction, weak exogeneity).
+   Para cada serie, alpha_i = 0 contra el VEC libre de la corrida cNN, con SU
+   normalizacion (sim_gui, restricciones.c): drvec -weakex i. Artefactos
+   <C>_<cNN>_wx<i>; no son corridas. p > 0,05: la serie no corrige hacia el
+   equilibrio (debilmente exogena): candidata a entrada en un modelo
+   condicional, que es mtram.                                             */
+static int caso_exogeneidad( const char *path, const char *caso, const char *corrida )
+{
+    char          why[1024], out[PR_RUTA], raiz[PR_RUTA], buf[512], idx[16];
+    Proyecto     *p = abre( path, why, sizeof why );
+    const PrCaso *c;
+    Sistema      *sis;
+    SisModelo    *mo;
+    VecOut       *v, *w;
+    GString      *t;
+    gchar        *dir, *obj;
+    int           i, k, ok = 0;
+
+    if ( !p ) return falla( "%s", why );
+    if ( !( c = caso_sis( p, caso, why, sizeof why ) ) ) { g_free( p ); return falla( "%s", why ); }
+    if ( pr_corrida_idx( p, caso, corrida ) < 0 ) { g_free( p ); return falla( "«%s» no es un modelo de %s.", corrida, caso ); }
+    sis = g_new0( Sistema, 1 );
+    if ( sis_del_caso( p, c, sis, why, sizeof why ) != 0 ) { g_free( sis ); g_free( p ); return falla( "%s", why ); }
+    pr_corrida_ruta( p, caso, corrida, ".out", out, sizeof out );
+    v = g_new0( VecOut, 1 );
+    if ( ovec_parse_file( out, v ) != 0 || !v->hay_vec )
+        { g_free( v ); g_free( sis ); g_free( p ); return falla( "%s/%s no es un VEC estimado: la exogeneidad débil se "
+                                                                 "contrasta en un VEC (caso-estima --r).", caso, corrida ); }
+    mo = g_new0( SisModelo, 1 );
+    sis_modelo_defecto( mo, sis->n );
+    if ( sis_vec_desde( sis, mo, v->r, v->p, v->q, v->caso, v->serie, v->m ) != v->r )
+        { g_free( mo ); g_free( v ); g_free( sis ); g_free( p ); return falla( "La normalización del VEC no cuadra con las series del caso." ); }
+    dir = g_path_get_dirname( out );
+    raiz_de( path, raiz, sizeof raiz );
+    engine_set_finder( hermano );
+    t = g_string_new( "" );
+    if ( json ) { g_string_append( t, "{\"ok\": true, " ); js_par( t, "caso", caso ); g_string_append( t, ", " );
+                  js_par( t, "corrida", corrida ); g_string_append( t, ", \"series\": [" ); }
+    else g_string_append_printf( t, "%s/%s: la exogeneidad débil, alpha_i = 0 contra el VEC libre (r = %d), por LR\n"
+                                 "  serie                LR    g.l.        p\n", caso, corrida, v->r );
+    w = g_new0( VecOut, 1 );
+    for ( i = 0; i < v->m; i++ )
+        {
+        const char *av[SIS_MAX_SER + 24];
+        gchar *nom = g_strdup_printf( "%s_%s_wx%d", caso, corrida, i + 1 ), *wo = g_strdup_printf( "%s/%s.out", dir, nom );
+        EngineResult r;
+
+        k = sis_orden_vec( sis, mo, nom, buf, sizeof buf, av, G_N_ELEMENTS( av ) - 4 );
+        if ( k < 2 ) { g_free( nom ); g_free( wo ); continue; }
+        g_snprintf( idx, sizeof idx, "%d", i + 1 );
+        k -= 2;
+        av[k++] = "-weakex"; av[k++] = idx; av[k++] = "-name"; av[k++] = nom; av[k] = NULL;
+        g_remove( wo );
+        obj = g_strdup_printf( "%s/%s", caso, corrida );
+        coste_contexto( raiz, "atsw-cli", c_por ? c_por : "analista", obj, "exogeneidad" );
+        r = engine_run_v( dir, "drvec", av );
+        coste_contexto_limpia();
+        g_free( obj );
+        memset( w, 0, sizeof *w );
+        if ( ovec_parse_file( wo, w ) == 0 && w->nlr > 0 )
+            {
+            const OvecLR *x = &w->lr[0];
+            ok++;
+            if ( json )
+                {
+                g_string_append( t, i ? ", {" : "{" ); js_par( t, "serie", v->serie[i] ); g_string_append( t, ", " );
+                js_num( t, "lr", x->lr ); g_string_append_printf( t, ", \"gl\": %d, ", x->gl );
+                js_num( t, "p", x->p ); g_string_append_printf( t, ", \"exogena\": %s}", x->p > 0.05 ? "true" : "false" );
+                }
+            else
+                g_string_append_printf( t, "  %-16s %8.4f %6d %10.4f   %s\n", v->serie[i], x->lr, x->gl, x->p,
+                                        x->p > 0.05 ? "no se rechaza: débilmente exógena (no corrige)"
+                                                    : "se rechaza: corrige hacia el equilibrio" );
+            }
+        else if ( !json )
+            g_string_append_printf( t, "  %-16s sin resultado (%s)\n", v->serie[i], r.message );
+        engine_result_clear( &r );
+        g_free( nom ); g_free( wo );
+        }
+    if ( json ) g_string_append( t, "]}\n" );
+    else g_string_append( t, "Una serie débilmente exógena puede ser ENTRADA de un modelo condicional: eso es mtram "
+                             "(atsw-mt), no se va solo. LR, no Wald: el Wald del .out depende de la normalización.\n" );
+    fputs( t->str, stdout );
+    g_string_free( t, TRUE ); g_free( w ); g_free( dir ); g_free( mo ); g_free( v ); g_free( sis ); g_free( p );
+    return ok ? 0 : 1;
+}
+
+/* El VEC de un caso de SIM (sima estimate_vec, C2): drvec con r, p, q (el
+   VARMA sobre las series EN NIVELES, p >= 1), el caso determinista y la
+   normalizacion --las series del bloque Y1, r de ellas; sin --normaliza, las
+   r ultimas del caso--. La logL exacta del VEC depende de la normalizacion:
+   dos VEC solo se comparan si la comparten. Una corrida del caso, que se
+   guarda solo si drvec deja resultados. Toma p, el caso y el sistema.   */
+static int caso_estima_vec( const char *path, Proyecto *p, const PrCaso *c, Sistema *sis, SisModelo *mo )
+{
+    char          why[1024], out[PR_RUTA], raiz[PR_RUTA], id[PR_ID], buf[1024], norma[256];
+    const char   *av[SIS_MAX_SER + 32];
+    const char   *caso = c->id;
+    gchar        *dir, *nombre, *obj;
+    EngineResult  r;
+    PrError       e;
+    VecOut       *v;
+    Diagnosis    *d;
+    GString      *t, *tb;
+    int           k, i, ok;
+
+    if ( k_nenlace || k_ncero || k_diagcov )
+        return falla( "Un VEC no lleva --enlace, --cero ni --diagcov: r, p, q, --normaliza y --caso-det." );
+    if ( k_r < 1 || k_r >= sis->n ) return falla( "--r %d: el rango de un VEC va de 1 a %d.", k_r, sis->n - 1 );
+    if ( mo->p < 1 ) return falla( "En un VEC, p es el del VARMA sobre las series en niveles: p >= 1." );
+    if ( !sis_rango_admite( sis, why, sizeof why ) ) return falla( "%s", why );
+    mo->clase = SIS_VEC;
+    mo->r = k_r;
+    if ( k_casodet ) g_snprintf( mo->caso, sizeof mo->caso, "%s", k_casodet );
+    else if ( !mo->caso[0] ) g_snprintf( mo->caso, sizeof mo->caso, "pre" );
+    if ( k_norma )
+        {
+        gchar **nn = g_strsplit( k_norma, ",", -1 );
+        memset( mo->y1, 0, sizeof mo->y1 );
+        for ( k = 0; nn[k]; k++ )
+            {
+            int hay = 0;
+            g_strstrip( nn[k] );
+            for ( i = 0; i < sis->n; i++ ) if ( !strcmp( sis->s[i].nombre, nn[k] ) ) { mo->y1[i] = 1; hay = 1; }
+            if ( !hay ) { int r0 = falla( "--normaliza: «%s» no es una serie del caso.", nn[k] ); g_strfreev( nn ); return r0; }
+            }
+        g_strfreev( nn );
+        }
+    else sis_vec_y1_defecto( mo, sis->n );
+    if ( sis_vec_ny1( mo, sis->n ) != mo->r )
+        return falla( "La normalización lleva r = %d series (--normaliza «A,B»).", mo->r );
+    sis_normalizacion( sis, mo, norma, sizeof norma );
+    if ( k_desde && pr_corrida_idx( p, caso, k_desde ) < 0 ) return falla( "«%s» no es un modelo de %s.", k_desde, caso );
+    if ( pr_corrida_nueva( p, caso, k_desde ? k_desde : "", id, sizeof id, out, sizeof out, &e ) != 0 )
+        { pr_error_es( &e, why, sizeof why ); return falla( "%s", why ); }
+    if ( razon && *razon ) pr_corrida_razon( p, caso, id, razon, &e );
+    dir = g_path_get_dirname( out );
+    nombre = g_path_get_basename( out );
+    if ( g_str_has_suffix( nombre, ".out" ) ) nombre[strlen( nombre ) - 4] = '\0';
+    k = sis_orden_vec( sis, mo, nombre, buf, sizeof buf, av, G_N_ELEMENTS( av ) - 1 );
+    if ( k < 0 ) { g_free( dir ); g_free( nombre ); return falla( "La orden no cabe." ); }
+    av[k] = NULL;
+    g_mkdir_with_parents( dir, 0700 );
+    g_remove( out );
+    engine_set_finder( hermano );
+    raiz_de( path, raiz, sizeof raiz );
+    obj = g_strdup_printf( "%s/%s", caso, id );
+    coste_contexto( raiz, "atsw-cli", c_por ? c_por : "analista", obj, "estimar" );
+    r = engine_run_v( dir, "drvec", av );
+    coste_contexto_limpia();
+    g_free( dir ); g_free( nombre ); g_free( obj );
+
+    v = g_new0( VecOut, 1 );
+    ok = engine_wrote_results( &r ) && ovec_parse_file( out, v ) == 0 && v->hay_vec;
+    if ( !ok )
+        {
+        gchar *m = g_strdup( r.message );
+        const char *err = r.output ? strstr( r.output, "Error" ) : NULL;
+        if ( err ) { gchar *l = g_strndup( err, strcspn( err, "\r\n" ) ), *m2 = g_strdup_printf( "%s (%s)", m, l );
+                     g_free( m ); g_free( l ); m = m2; }
+        g_remove( out ); engine_result_clear( &r ); g_free( v );
+        falla( "%s No queda la corrida.", m ); g_free( m );
+        return 1;
+        }
+    if ( guarda( p, why, sizeof why ) != 0 ) { engine_result_clear( &r ); g_free( v ); return falla( "%s", why ); }
+    d = g_new0( Diagnosis, 1 );
+    od_parse_file( out, d );
+    tb = g_string_new( "" );
+    tabla_motor( out, tb );
+    t = g_string_new( "" );
+    {
+    const char *opt = v->ultimo_conv == 1 ? "convergió" : v->ultimo_conv == 0 ? "PARADO sin converger" : "no consta";
+    if ( json )
+        {
+        g_string_append( t, "{\"ok\": true, " );
+        js_par( t, "caso", caso ); g_string_append( t, ", " );
+        js_par( t, "corrida", id ); g_string_append( t, ", " );
+        js_par( t, "padre", k_desde ? k_desde : "" ); g_string_append( t, ", " );
+        js_par( t, "clase", "VEC" ); g_string_append_printf( t, ", \"r\": %d, \"p\": %d, \"q\": %d, ", v->r, v->p, v->q );
+        js_par( t, "caso_det", v->caso ); g_string_append( t, ", " );
+        js_par( t, "normalizacion", norma ); g_string_append( t, ", " );
+        js_par( t, "optimizador", opt ); g_string_append( t, ", " );
+        js_num( t, "logl", v->logL ); g_string_append( t, ", " );
+        js_num( t, "aic", v->aic ); g_string_append( t, ", " );
+        js_num( t, "bic", v->bic ); g_string_append( t, ", " );
+        if ( d->hosking.hay ) { js_num( t, "hosking_p", d->hosking.p ); g_string_append( t, ", " ); }
+        if ( d->jb.hay ) { js_num( t, "jb_p", d->jb.p ); g_string_append( t, ", " ); }
+        js_par( t, "tabla", tb->str ); g_string_append( t, ", " );
+        js_par( t, "out", out ); g_string_append( t, "}\n" );
+        }
+    else
+        {
+        g_string_append_printf( t, "%s/%s: VEC r = %d, VARMA-VECM(%d,%d) en niveles, caso %s, normalizado sobre %s\n",
+                                caso, id, v->r, v->p, v->q, v->caso, norma );
+        g_string_append_printf( t, "  optimizador: %s%s%s", opt, v->ultimo_criterio[0] ? " · " : "", v->ultimo_criterio );
+        if ( v->arranques ) g_string_append_printf( t, " (%d arranques, %d convergieron)", v->arranques, v->arranques_conv );
+        g_string_append_printf( t, "\n  log-verosimilitud exacta: %.6f   AIC %.4f   BIC %.4f\n", v->logL, v->aic, v->bic );
+        g_string_append( t, "  (la logL de un VEC depende de su normalización: dos VEC solo se comparan si la comparten)\n" );
+        if ( d->hosking.hay )
+            g_string_append_printf( t, "  Hosking (retardo %d): Q = %.2f, %d g.l., p = %.4f\n", d->hosking_lag,
+                                    d->hosking.q, d->hosking.df, d->hosking.p );
+        if ( d->jb.hay )
+            g_string_append_printf( t, "  Jarque-Bera multivariante: %.2f, %d g.l., p = %.4f\n", d->jb.q, d->jb.df, d->jb.p );
+        g_string_append_printf( t, "\n%s  %s\n", tb->str, out );
+        }
+    }
+    fputs( t->str, stdout );
+    g_string_free( t, TRUE ); g_string_free( tb, TRUE );
+    g_free( d ); g_free( v ); engine_result_clear( &r );
+    return 0;
+}
+
 /* caso-estima de un caso de SIM: N3 de sima (estimate), un VARMA como corrida
    del caso. --p N --q N (la dinamica cruzada), --diagcov, --enlace "A<-B"
    (sin ninguno, todos los pares), --cero "AR1[A<-B]" (se repite). Antes, la
@@ -2365,6 +2873,12 @@ static int caso_estima_sis( const char *path, const char *caso )
     mo = g_new0( SisModelo, 1 );
     sis_modelo_defecto( mo, sis->n );
     mo->p = k_p; mo->q = k_q; mo->diagcov = k_diagcov;
+    if ( k_r > 0 )
+        {
+        int rc = caso_estima_vec( path, p, c, sis, mo );
+        g_free( mo ); g_free( o ); g_free( sis ); g_free( p );
+        return rc;
+        }
     enl = g_string_new( "" );
     for ( k = 0; k < k_nenlace; k++ )
         {
@@ -3010,6 +3524,11 @@ static void uso( FILE *f )
            "  caso-puerta P CASO                    SIM: la puerta del sistema diagonal y las CCF\n"
            "  caso-estima P CASO --p N --q N [--diagcov] [--enlace A<-B]... [--cero \"AR1[A<-B]\"]... [--desde cNN]\n"
            "                                        SIM: un VARMA con drvarma, tras la puerta\n"
+           "  caso-estima P CASO --r R --p N --q N [--normaliza \"A,B\"] [--caso-det C] [--desde cNN]\n"
+           "                                        SIM: un VEC con drvec, tras la puerta\n"
+           "  caso-rango P CASO [--p N --q N --caso-det C] [--bootstrap B --aparte] [--rehacer] | --estado\n"
+           "                                        SIM: el rango de cointegración (drvec -lrtest)\n"
+           "  caso-exogeneidad P CASO cNN           SIM: la exogeneidad débil de cada serie en el VEC cNN\n"
            "  dictamen P SERIE MODELO               la diagnosis del .out\n"
            "  ecuacion P SERIE MODELO               el modelo estimado: el bloque del .out, con sus t\n"
            "  raices factores P SERIE MODELO        la factorización del AR\n"
@@ -3060,6 +3579,13 @@ int main( int argc, char **argv )
         else if ( !strcmp( argv[i], "--p" ) && i + 1 < argc ) k_p = atoi( argv[++i] );
         else if ( !strcmp( argv[i], "--q" ) && i + 1 < argc ) k_q = atoi( argv[++i] );
         else if ( !strcmp( argv[i], "--diagcov" ) ) k_diagcov = 1;
+        else if ( !strcmp( argv[i], "--r" ) && i + 1 < argc ) k_r = atoi( argv[++i] );
+        else if ( !strcmp( argv[i], "--normaliza" ) && i + 1 < argc ) k_norma = argv[++i];
+        else if ( !strcmp( argv[i], "--caso-det" ) && i + 1 < argc ) k_casodet = argv[++i];
+        else if ( !strcmp( argv[i], "--bootstrap" ) && i + 1 < argc ) k_boot = atoi( argv[++i] );
+        else if ( !strcmp( argv[i], "--aparte" ) ) k_aparte = TRUE;
+        else if ( !strcmp( argv[i], "--rehacer" ) ) k_rehacer = TRUE;
+        else if ( !strcmp( argv[i], "--estado" ) ) k_estado = TRUE;
         else if ( !strcmp( argv[i], "--cero" ) && i + 1 < argc )
             { if ( k_ncero < K_MAX_RESTR ) k_cero[k_ncero++] = argv[++i]; else i++; }
         else if ( !strcmp( argv[i], "--restriccion" ) && i + 1 < argc )
@@ -3141,6 +3667,8 @@ int main( int argc, char **argv )
     if ( ES( 0, "prever" ) && npos == 4 ) return prever( pos[1], pos[2], pos[3] );
     if ( ES( 0, "caso-estima" ) && npos == 3 ) return caso_estima( pos[1], pos[2] );
     if ( ES( 0, "caso-puerta" ) && npos == 3 ) return caso_puerta( pos[1], pos[2] );
+    if ( ES( 0, "caso-rango" ) && npos == 3 ) return caso_rango( pos[1], pos[2] );
+    if ( ES( 0, "caso-exogeneidad" ) && npos == 4 ) return caso_exogeneidad( pos[1], pos[2], pos[3] );
     if ( ES( 0, "identifica" ) && npos == 3 ) return identifica( pos[1], pos[2] );
     if ( ES( 0, "especifica" ) && npos == 4 ) return especifica( pos[1], pos[2], pos[3] );
     if ( ES( 0, "estima" ) && npos == 4 ) return estima( pos[1], pos[2], pos[3] );

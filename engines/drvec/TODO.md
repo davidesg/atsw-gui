@@ -180,3 +180,32 @@ trivariante es el caso mixto.
 **A estudiar:** cómo entran media y tendencia en `Ȳ = (∇Y₂, W)` (Mauricio 2006,
 Remark 6: E[W], E[∇Y₂]); identificación con r ≥ 2; distribución del contraste de
 rango en el caso mixto y en el caso 4; relación con MEJORA-2 (exógenas).
+
+## MEJORA-4 — El bootstrap del rango, en paralelo (propuesta, 15-nov-2026; sin decidir)
+
+**Por qué.** `-bootstrap B` corre en un solo núcleo: con B = 199-499 sobre las
+cuatro series de Johansen y Juselius tarda de 10 a 25 minutos (medido: 19
+réplicas, p = 2, 62 s). Las réplicas son independientes. Con K núcleos, el
+tiempo se divide casi por K. Hoy se resuelve SIN tocar el motor: el asistente
+lo lanza aparte (`atsw-cli caso-rango --bootstrap B --aparte`, y `--estado`).
+Esto es lo que quitaría la espera de verdad.
+
+**Qué hace falta en drvec, y por qué no es trivial.**
+1. **Una semilla por réplica.** Hoy hay UN generador con semilla fija
+   (`boot_rng = 987654321`, drvec.c) que recorre todas las réplicas seguidas, y
+   el rechazo de Box-Muller consume un número variable de extracciones: no se
+   puede saltar a la réplica k. La semilla de la réplica k tiene que salir de
+   (k, la semilla base), para que B réplicas den LO MISMO en 1 proceso que en K.
+2. **`-bootpart k/K`**: este proceso hace las réplicas k, k+K, k+2K…, y escribe
+   su `.boot`.
+3. **Juntar**: el `.boot` ya es una línea por réplica (`h0,rep,status,lr`), así
+   que los K ficheros se juntan y los percentiles se calculan sobre todos.
+   Dónde: un `-bootmerge` en drvec (los críticos los sigue calculando el motor)
+   o en lib/outvec. Mejor en el motor: el veredicto no debe cambiar de dueño.
+
+**Lo que cuesta.** Cambia la secuencia: los números de los `.boot` y `.irfboot`
+de hoy cambian (igual de válidos, otra muestra de Monte Carlo), y hay que
+regenerar los goldens. Es tocar un motor probado: necesita decisión del
+analista, su BUG o registro, y la prueba de que K = 1 y K = 4 dan el mismo
+`.boot` réplica a réplica. El porte (drvec-python) tendría que seguirlo para
+seguir siendo golden.

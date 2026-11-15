@@ -39,7 +39,7 @@ async def corre(raiz: Path, w: Path) -> None:
     binarios = w / "bin"
     binarios.mkdir()
     for b in (raiz / "gui/atsw-cli/atsw-cli", raiz / "gui/sim/sim_gui",
-              raiz / "engines/drvarma/bin/drvarma"):
+              raiz / "engines/drvarma/bin/drvarma", raiz / "engines/drvec/bin/drvec"):
         shutil.copy2(str(b) + exe, binarios / (b.name + exe))
     proy = w / "proy"
     shutil.copytree(raiz / "docs/ejemplos/jenkins_alavi", proy)
@@ -84,6 +84,48 @@ async def corre(raiz: Path, w: Path) -> None:
     y = (proy / "proyecto.yaml").read_text(encoding="utf-8")
     check("C1/c00" in y and "otro orden de Cholesky" in y,
           "el manifiesto tiene las corridas y el caso nuevo", y[-400:])
+
+    # EL VEC, sobre johansen_juselius (cuatro series I(1)): el rango, su
+    # bootstrap aparte, el VEC y la exogeneidad debil
+    pj = w / "jj"
+    shutil.copytree(raiz / "docs/ejemplos/johansen_juselius", pj)
+    env = dict(os.environ, ATSW_BIN=str(binarios), ATSW_PROYECTO=str(pj))
+    params = StdioServerParameters(command=sys.executable, args=["-m", "atsw_mcp.sis"],
+                                   env=env, cwd=str(w))
+    async with stdio_client(params) as (r, wr):
+        async with ClientSession(r, wr) as s:
+            await s.initialize()
+
+            async def t(nombre, **a):
+                return texto(await s.call_tool(nombre, a))
+
+            res = await t("rank_test", case="C1", p=1, q=0)
+            check("SIN BOOTSTRAP NO HAY RANGO" in res and "RECOMENDADO" in res,
+                  "rank_test sin B: orientación, y el bootstrap recomendado", res)
+            res = await t("run_gate", case="C1")
+            res = await t("estimate_vec", case="C1", r=1, reason="r = 1")
+            check(res.startswith("No se pudo") and "teoría" in res,
+                  "estimate_vec sin bootstrap ni teoría: no", res)
+            res = await t("rank_test", case="C1", p=1, q=0, B=19)
+            check("lanzado" in res and "C1/rango" in res, "rank_test con B: lanzado aparte, con su id", res)
+            res = await t("job_result", job_id="C1/rango")
+            check("no ha terminado" in res or "Rango propuesto" in res,
+                  "job_result antes de acabar: nada parcial", res)
+            for _ in range(120):
+                if "terminado" in (res := await t("job_status", job_id="C1/rango")):
+                    break
+                await asyncio.sleep(2)
+            check("terminado" in res, "job_status: termina", res)
+            res = await t("job_result", job_id="C1/rango")
+            check("Rango propuesto con el bootstrap (19 réplicas" in res, "job_result: el rango propuesto", res)
+            res = await t("estimate_vec", case="C1", r=1, p=2, reason="el VEC de Johansen y Juselius",
+                          normalise_on="LRM", theory="la demanda de dinero: una relación de equilibrio")
+            check("C1/c00" in res and "-324.352224" in res and "IDE in ec1" in res,
+                  "estimate_vec por teoría: c00, la logL de drvec C y la tabla", res)
+            res = await t("test_restriction", case="C1", run="c00")
+            check("IBO" in res and "débilmente exógena" in res, "test_restriction: la exogeneidad débil", res)
+    y = (pj / "proyecto.yaml").read_text(encoding="utf-8")
+    check("adoptado por TEORÍA" in y, "el manifiesto dice que r se adoptó por teoría", y[-600:])
 
 
 def main() -> int:

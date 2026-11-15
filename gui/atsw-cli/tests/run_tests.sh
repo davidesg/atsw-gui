@@ -512,6 +512,53 @@ if [ -x "$DRV" ]; then
     mira "caso-estima de SIM: el motor es el de C (drvarma 5), no el de Python" \
          'grep -q "^Program *: drvarma 5" "$PS/_casos/C1/work/C1_c00.out"'
 fi
+mira "caso-rango con una serie I(0): drvec no la admite (estado 1)" \
+     '! "$CLI" caso-rango "$YS" C1 >/dev/null 2>&1'
+
+# el rango, el VEC y la exogeneidad debil (drvec), sobre una copia de
+# johansen_juselius (LRM LRY IBO IDE, todas I(1)). Los numeros son los de
+# drvec C: el VEC r = 1 normalizado sobre LRM da -324.352224, y la
+# exogeneidad debil la de Johansen y Juselius: IBO e IDE no corrigen.
+DVC="$R/engines/drvec/bin/drvec$EXE"
+PJ="$WORK/proy_vec"; cp -R "$R/docs/ejemplos/johansen_juselius" "$PJ"; YJ="$PJ/proyecto.yaml"; rm -f "$PJ/costes.csv"
+if [ -x "$DVC" ] && [ -x "$DRV" ]; then
+    J=$("$CLI" --json caso-rango "$YJ" C1 --p 1 --q 0)
+    mira "caso-rango sin bootstrap: el ajuste de cada rango, y sin rango propuesto" \
+         '[ "$(printf "%s\n" "$J" | campo "(len(d[\"rangos\"]), d[\"propuesto\"], d[\"bootstrap\"])")" = "(4, None, 0)" ]'
+    mira "caso-rango sin bootstrap: dice que es orientación y recomienda el bootstrap" \
+         '"$CLI" caso-rango "$YJ" C1 --p 1 --q 0 | grep -q "SIN BOOTSTRAP NO HAY RANGO.*RECOMENDADO"'
+    mira "caso-rango --bootstrap sin --aparte: va aparte (estado 1)" \
+         '"$CLI" caso-rango "$YJ" C1 --p 1 --bootstrap 19 2>&1 | grep -q -- "--aparte"'
+    J=$("$CLI" --json caso-rango "$YJ" C1 --p 1 --bootstrap 19 --aparte --por asistente)
+    mira "caso-rango --aparte: lanzado, 19 réplicas por cada uno de los 3 contrastes" \
+         '[ "$(printf "%s\n" "$J" | campo "(d[\"lanzado\"], d[\"total\"])")" = "(True, 57)" ]'
+    mira "caso-rango con uno en marcha: no lanza otro (estado 1)" \
+         '"$CLI" caso-rango "$YJ" C1 --p 1 --bootstrap 19 --aparte 2>&1 | grep -q "en marcha"'
+    n=0
+    until "$CLI" --json caso-rango "$YJ" C1 --estado | grep -q '"terminado": true' || [ $n -ge 120 ]; do sleep 2; n=$((n+2)); done
+    J=$("$CLI" --json caso-rango "$YJ" C1 --estado)
+    mira "caso-rango --estado: terminado, con el bootstrap y su rango propuesto" \
+         '[ "$(printf "%s\n" "$J" | campo "(d[\"bootstrap\"], d[\"propuesto\"])")" = "(19, 0)" ]'
+    mira "caso-rango: su coste en costes.csv, por el asistente, y sin el fichero del trabajo" \
+         'grep -q ",atsw-cli,asistente,C1/rango,rango,DRVEC.*-bootstrap 19" "$PJ/costes.csv" &&
+          [ ! -f "$PJ/_casos/C1/work/C1_rango.trabajo" ]'
+    mira "caso-rango otra vez: el bootstrap ya hecho no se pisa" \
+         '[ "$("$CLI" --json caso-rango "$YJ" C1 --p 1 --q 0 | campo "(d[\"ya_estaba\"], d[\"bootstrap\"])")" = "(True, 19)" ]'
+    "$CLI" caso-puerta "$YJ" C1 > /dev/null
+    J=$("$CLI" --json caso-estima "$YJ" C1 --r 1 --p 2 --q 0 --normaliza LRM --razon "el VEC r = 1")
+    mira "caso-estima --r: c00, el VEC normalizado sobre LRM, logL -324.352224" \
+         '[ "$(printf "%s\n" "$J" | campo "(d[\"corrida\"], d[\"clase\"], d[\"normalizacion\"], round(d[\"logl\"], 6))")" = "('"'"'c00'"'"', '"'"'VEC'"'"', '"'"'LRM'"'"', -324.352224)" ]'
+    mira "caso-estima --r: la tabla de drvec entera, con alpha, beta y Gamma" \
+         'printf "%s\n" "$J" | campo "d[\"tabla\"]" | grep -q "IDE in ec1" &&
+          printf "%s\n" "$J" | campo "d[\"tabla\"]" | grep -q "D.LRM <- D.LRM(-1)"'
+    mira "caso-estima --r con --enlace: un VEC no lleva enlaces (estado 1)" \
+         '"$CLI" caso-estima "$YJ" C1 --r 1 --p 2 --q 0 --enlace "LRM<-IBO" 2>&1 | grep -q "no lleva --enlace"'
+    mira "caso-estima --r con una normalización que no es del caso (estado 1)" \
+         '"$CLI" caso-estima "$YJ" C1 --r 1 --p 2 --q 0 --normaliza OTRA 2>&1 | grep -q "no es una serie del caso"'
+    J=$("$CLI" --json caso-exogeneidad "$YJ" C1 c00)
+    mira "caso-exogeneidad: IBO e IDE no corrigen; LRY y LRM sí (Johansen y Juselius)" \
+         '[ "$(printf "%s\n" "$J" | campo "sorted(x[\"serie\"] for x in d[\"series\"] if x[\"exogena\"])")" = "['"'"'IBO'"'"', '"'"'IDE'"'"']" ]'
+fi
 
 # formales: los contrastes del modelo estimado, con las mismas funciones que
 # las dos ventanas de la madre (lib/formales). Los numeros son los de art que

@@ -149,6 +149,61 @@ campos de fue_gui («Data Input», «Stochastic Component»…), que vienen del
 motor. Cuando se haga, gettext (GLib ya lo trae) y un catálogo por idioma;
 los textos de hoy están escritos en el código, sin marcar.
 
+## PENDIENTE: las órdenes de C y de Python, en inglés y las mismas
+
+**Pedido del analista, 15-nov-2026. Necesita un plan antes de tocar nada.**
+El objetivo: que las dos suites, la de C (atsw-cli, los GUIs, los motores) y
+la de Python (art, drtran, sima, fue-python y los MCP), sean **espejos**,
+cada una *golden* de la otra, y que se puedan **usar indistintamente con las
+mismas órdenes**. Hasta ahora ha funcionado así; con el tamaño que tienen ya
+empiezan a divergir. El porte está en inglés, así que la de C pasa al inglés
+(o a mnemónicos), no al revés.
+
+No se hace ahora: es un cambio grande que toca la madre, los cinco GUIs, la
+forma en que la madre los lanza, atsw-cli, sus pruebas, el MCP de atsw-us y
+atsw-mt, el manual y los guiones de los vídeos. Lo que el plan tiene que
+decidir:
+
+1. **Las órdenes y opciones de atsw-cli.** Propuesta de partida:
+
+   | ahora | propuesta |
+   |---|---|
+   | `proyecto ver / nuevo / itera / razon / elige / caso-nuevo` | `project show / new / iterate / reason / choose / new-case` |
+   | `especifica`, `estima`, `prever` | `specify`, `estimate`, `forecast` |
+   | `identifica`, `dictamen`, `ficha` | `identify`, `verdict`, `card` |
+   | `raices factores / factorizado` | `roots factors / factorize` |
+   | `formales`, `anomalos`, `prewhiten` | `formal`, `outliers`, `prewhiten` |
+   | `caso-estima` | `case-estimate` |
+   | `coste apunta / resumen` | `cost log / summary` |
+   | `--muestra --razon --titulo --motor --por` | `--sample --reason --title --engine --by` |
+   | `--comprobar --familia integracion\|estacionalidad --sub` | `--check --family integration\|seasonality --sub` |
+   | `--episodios --retardos --residuos` | `--episodes --lags --residuals` |
+   | `--transformacion --anade-arma --intervencion --media libre` | `--transform --add-arma --intervention --mean free` |
+   | `--enlace --desde --diagonal --prever --evaluar` | `--link --from --diagonal --forecast --evaluate` |
+   | `--objeto --paso --via --quien --cpu --pared --energia --metodo --fecha --por-que` | `--object --step --via --who --cpu --wall --energy --method --date --group-by` |
+
+2. **Las opciones de los GUIs**, también las anteriores a atsw-cli:
+   `--proyecto --caso --modelo --madre --prever --sin-presentacion` en
+   atsw_gui, fue_gui, drtran_gui, sim_gui y gtk_fmg, y el modo
+   `atsw_gui --ver serie|media-dt|histograma|residuos|diagnosis` (→ `--view
+   series|mean-sd|histogram|residuals|diagnosis`). La madre y los GUIs se
+   cambian a la vez, o se acepta la forma vieja como alias un tiempo.
+3. **El emparejamiento con Python:** cada orden de C con su herramienta del
+   porte (p. ej. `estimate` ↔ `estimate`, `forecast` ↔ `forecast`,
+   `case-estimate` ↔ el `estimate` de drtran/sima), de modo que el golden de
+   una sea la salida de la otra con la misma orden.
+4. **Abiertas, sin preferencia del analista todavía:** si las claves del JSON
+   que devuelve atsw-cli (`serie`, `modelo`, `prevision`,
+   `frente_al_diagonal`…) pasan al inglés, y si los nombres de las
+   herramientas MCP de atsw-us y atsw-mt (`derivar`, `especificar`,
+   `estimar`, `prever`, `estimar_caso`…) pasan al inglés como los de art,
+   drtran y sima.
+
+Lo que **no** cambia: los valores que van al manifiesto y a `costes.csv`
+(`por: asistente`/`analista`, el paso) son datos del proyecto, no palabras de
+orden; y los mensajes al usuario siguen en español (la interfaz en otros
+idiomas es la sección de arriba).
+
 ## EL SIGUIENTE PASO: los contrastes formales y el MEG
 
 **Decisión del analista, 2026-09-26.** Traer al GUI `formal_tests` y el MEG:

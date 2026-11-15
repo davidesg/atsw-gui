@@ -744,7 +744,9 @@ afectados.
     `forecast` y `evaluate` de drtran) y `open_case`. Argumentos `series`,
     `model`, `sample`, `reason`, `why`… Se corrige ya porque el asistente es
     lo que se está construyendo: cada herramienta nueva nace con el nombre de
-    su pareja. Las palabras de atsw-cli que hay debajo no cambian todavía (ver
+    su pareja. Por qué: un asistente que ya conoce el protocolo de art lo
+    usa aquí sin vocabulario nuevo (menos instrucciones, menos cómputo), y
+    lo que se hace en un proyecto se lleva a otro. Las palabras de atsw-cli que hay debajo no cambian todavía (ver
     «Las órdenes de C y de Python, en inglés y las mismas»).
 
 ---

@@ -117,6 +117,16 @@ def abre_caso(caso: str, corrida: str = "") -> str:
     return _aparte(cmd, f"el caso {caso} en drtran_gui")
 
 
+def abre_sim(caso: str, corrida: str = "") -> str:
+    """sim_gui --caso: el caso de SIM, para trabajarlo en su ventana. Un caso que no
+    esta lo dice sim_gui antes de abrir."""
+    cmd = [_binario("sim_gui"), "--proyecto", str(proyecto()),
+           "--caso", comprueba_id("el caso", caso)]
+    if corrida:
+        cmd += ["--modelo", comprueba_id("el modelo del caso", corrida)]
+    return _aparte(cmd, f"el caso {caso} en sim_gui")
+
+
 def ruta(serie: str, modelo: str, ext: str, muestra: str = "") -> str:
     """El fichero de un modelo, como lo compone lib/proyecto (atsw-cli proyecto
     ruta). Solo para el extra Python, que llama a art con rutas; el asistente

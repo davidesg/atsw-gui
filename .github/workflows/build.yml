@@ -62,6 +62,7 @@ jobs:
           /tmp/mcpenv/bin/pip install -q "mcp==1.30.0"
           PYTHONPATH="$PWD/mcp/atsw_mcp/src" /tmp/mcpenv/bin/python mcp/atsw_mcp/tests/us.py "$PWD"
           PYTHONPATH="$PWD/mcp/atsw_mcp/src" /tmp/mcpenv/bin/python mcp/atsw_mcp/tests/mt.py "$PWD"
+          PYTHONPATH="$PWD/mcp/atsw_mcp/src" /tmp/mcpenv/bin/python mcp/atsw_mcp/tests/sis.py "$PWD"
           # y con el extra [python]: boxcox_analysis e intervention_ladder de art,
           # en su proceso aparte, con su linea de coste via python
           /tmp/mcpenv/bin/pip install -q "art-tseries==0.2.3"

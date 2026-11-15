@@ -59,6 +59,8 @@
 #include "fue_pre_reader.h"
 #include "prewhiten.h"
 #include "residuos.h"
+#include "sistema.h"
+#include "outvarma.h"
 
 #ifndef ATSW_VERSION
 #define ATSW_VERSION "en desarrollo"
@@ -75,6 +77,10 @@ static int         k_nenlace = 0;
 #define K_MAX_RESTR 64
 static const char *k_restr[K_MAX_RESTR];   /* caso-estima --restriccion "NOMBRE = VALOR" */
 static int         k_nrestr = 0;
+static int         k_p = -1, k_q = -1;  /* caso-estima de SIM: la dinamica cruzada */
+static int         k_diagcov = 0;       /* caso-estima de SIM: Sigma diagonal      */
+static const char *k_cero[K_MAX_RESTR]; /* caso-estima de SIM: --cero "AR1[A<-B]"  */
+static int         k_ncero = 0;
 static const char *k_desde = NULL;
 static gboolean    k_diagonal = FALSE;
 static int         k_prever = 0, k_evaluar = 0;   /* caso-estima --prever H --evaluar W */
@@ -956,6 +962,9 @@ static gchar *hermano( const char *programa )
         "../../engines/drtran/bin/%s",
         "../../engines/art/bin/%s",
         "../../engines/fuf/bin/%s",
+        "../../engines/drvarma/bin/%s",      /* SIM: drvarma y drvec. Sin  */
+        "../../engines/drvec/bin/%s",        /* ellos, el PATH da los de   */
+                                             /* Python, que se llaman igual */
         "./%s", NULL                         /* el paquete: todo junto    */
     };
     return sitio_busca( programa, sitio );
@@ -2093,13 +2102,14 @@ static int copia_fichero( const char *de, const char *a )
    retira (AUDITORIA-procesos, fase 4): no queda en el linaje una
    estimacion que no existe. Un caso desfasado --un .pre cambio desde el
    alta-- no se estima: se crea otro con esos .pre.                     */
-/* LA TABLA DE PARAMETROS DEL .out DE drtran, TAL CUAL: la log-verosimilitud,
-   cada slot con su nombre --omega1[0], phi_2[B^1], mu[1], q[2,1]--, su
-   estimacion, su error tipico, su t y su p, y los FIJOS como tales. Es lo que
-   el asistente necesita para presentar la corrida y para saber como se llama
-   cada parametro al escribir una restriccion (--restriccion). Se copia, no se
-   rehace: es el bloque del motor.                                          */
-static int tabla_drtran( const char *out, GString *t )
+/* LA TABLA DE PARAMETROS DEL .out DEL MOTOR (drtran o drvarma), TAL CUAL:
+   la log-verosimilitud de drtran, cada slot con su nombre --omega1[0],
+   phi_2[B^1], AR1[MINK<-MUSKRAT], Q[MINK,MUSKRAT]--, su estimacion, su error
+   tipico, su t y su p, y los FIJOS como tales; y la linea del hessiano. Es lo
+   que el asistente presenta y de donde salen los nombres de las
+   restricciones (--restriccion) y de los ceros (--cero). Se copia, no se
+   rehace. drtran la cierra con rayas; drvarma, con «Standard errors».   */
+static int tabla_motor( const char *out, GString *t )
 {
     FILE *f = g_fopen( out, "r" );
     char  l[512];
@@ -2112,20 +2122,362 @@ static int tabla_drtran( const char *out, GString *t )
         if ( !dentro && !strncmp( l, "Log-likelihood =", 16 ) ) { g_string_append_printf( t, "  %s\n", l ); continue; }
         if ( !dentro && strstr( l, "Parameter" ) && strstr( l, "Std.Error" ) )
             { dentro = 1; g_string_append_printf( t, "  %s\n", l ); continue; }
+        if ( !dentro ) continue;
+        if ( strstr( l, "Standard errors:" ) ) { g_string_append_printf( t, "  %s\n", l ); break; }
         if ( dentro == 1 )
             {
-            if ( !strncmp( l, "-----", 5 ) ) { if ( n ) { dentro = 2; } continue; }
+            if ( !strncmp( l, "-----", 5 ) ) { if ( n ) dentro = 2; continue; }
+            if ( !l[0] ) { if ( n ) break; continue; }
             g_string_append_printf( t, "  %s\n", l ); n++;
             continue;
             }
-        if ( dentro == 2 )
-            {
-            if ( !strncmp( l, "Standard errors:", 16 ) ) { g_string_append_printf( t, "  %s\n", l ); break; }
-            if ( ++tras > 3 ) break;
-            }
+        if ( ++tras > 3 ) break;          /* dentro == 2: tras las rayas */
         }
     fclose( f );
     return n ? 0 : 1;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Los casos de SIM (motor drvarma): la puerta y la estimacion VARMA, sin    */
+/* ventana, con lib/sistema --la misma orden que arma sim_gui-- y            */
+/* lib/outvarma (docs/DISENO-sim.md; sima run_gate y estimate)              */
+/* ------------------------------------------------------------------------ */
+
+/* El sistema del caso: sus .pre en el orden del manifiesto (el de Cholesky),
+   comprobados contra el sha del alta. Un caso desfasado no se estima por
+   debajo, como en caso-estima.                                          */
+static int sis_del_caso( Proyecto *p, const PrCaso *c, Sistema *sis, char *why, size_t n )
+{
+    int i;
+
+    memset( sis, 0, sizeof *sis );
+    for ( i = 0; i < c->nen; i++ )
+        {
+        char   pre[PR_RUTA];
+        gchar *h;
+
+        if ( pr_ruta( p, c->en[i].serie, c->muestra, c->en[i].modelo, ".pre", pre, sizeof pre ) != 0 ||
+             !g_file_test( pre, G_FILE_TEST_EXISTS ) )
+            { g_snprintf( why, n, "%s/%s ya no tiene .pre.", c->en[i].serie, c->en[i].modelo ); return 1; }
+        h = ge_sha( pre );
+        if ( c->en[i].sha[0] && ( !h || strcmp( h, c->en[i].sha ) ) )
+            { g_free( h );
+              g_snprintf( why, n, "%s está desfasado: cambió el .pre de %s/%s desde el alta. Crea un caso nuevo "
+                          "con esos modelos.", c->id, c->en[i].serie, c->en[i].modelo ); return 1; }
+        g_free( h );
+        if ( sis_anade( sis, pre, why, n ) != 0 ) return 1;
+        }
+    if ( sis->n < 2 ) { g_snprintf( why, n, "Un sistema cruza dos series o más." ); return 1; }
+    return 0;
+}
+
+static const PrCaso *caso_sis( Proyecto *p, const char *caso, char *why, size_t n )
+{
+    const PrCaso *c = pr_caso_ver( p, caso );
+
+    if ( !c ) { g_snprintf( why, n, "«%s» no es un caso del proyecto.", caso ); return NULL; }
+    if ( strcmp( c->motor, "drvarma" ) )
+        { g_snprintf( why, n, "%s es de %s (MT): se estima con caso-estima, sin la puerta de SIM.", caso, c->motor );
+          return NULL; }
+    return c;
+}
+
+/* caso-puerta P CASO: N1 de sima (run_gate). El sistema diagonal --p = q = 0,
+   Sigma diagonal-- tiene que reproducir la suma de las univariantes: si no,
+   nada de lo que se estime encima se puede creer (drvarma sale con 5). No es
+   una corrida: es un artefacto del caso, <C>_puerta.out, como en sim_gui.
+   Devuelve el bloque de la puerta tal cual y, de las CCF de los residuos del
+   diagonal --las innovaciones de cada serie--, los retardos fuera de banda
+   de cada par: la evidencia para los enlaces (N2, identify_cross).        */
+static int caso_puerta( const char *path, const char *caso )
+{
+    char          why[1024], base[PR_RUTA], out[PR_RUTA], raiz[PR_RUTA], l[512];
+    Proyecto     *p = abre( path, why, sizeof why );
+    const PrCaso *c;
+    Sistema      *sis;
+    SisVentana    v;
+    VarmaOut     *o;
+    EngineResult  r;
+    const char   *av[SIS_MAX_SER + 8];
+    GString      *t, *bloque = g_string_new( "" );
+    gchar        *dir, *obj;
+    FILE         *f;
+    int           k, i, j, dentro = 0, hay;
+
+    if ( !p ) { g_string_free( bloque, TRUE ); return falla( "%s", why ); }
+    if ( !( c = caso_sis( p, caso, why, sizeof why ) ) )
+        { g_free( p ); g_string_free( bloque, TRUE ); return falla( "%s", why ); }
+    sis = g_new0( Sistema, 1 );
+    if ( sis_del_caso( p, c, sis, why, sizeof why ) != 0 || sis_ventana( sis, &v, why, sizeof why ) != 0 )
+        { g_free( sis ); g_free( p ); g_string_free( bloque, TRUE ); return falla( "%s", why ); }
+    pr_corrida_ruta( p, caso, "puerta", NULL, base, sizeof base );
+    g_snprintf( out, sizeof out, "%s.out", base );
+    dir = g_path_get_dirname( base );
+    g_mkdir_with_parents( dir, 0700 );
+    g_remove( out );
+    k = sis_orden_puerta( sis, base, av, G_N_ELEMENTS( av ) - 1 );
+    av[k] = NULL;
+    engine_set_finder( hermano );
+    raiz_de( path, raiz, sizeof raiz );
+    obj = g_strdup_printf( "%s/puerta", caso );
+    coste_contexto( raiz, "atsw-cli", c_por ? c_por : "analista", obj, "puerta" );
+    r = engine_run_v( dir, "drvarma", av );
+    coste_contexto_limpia();
+    g_free( dir ); g_free( obj );
+
+    o = g_new0( VarmaOut, 1 );
+    hay = g_file_test( out, G_FILE_TEST_EXISTS ) && ov_parse_file( out, o ) == 0 && o->puerta.hay;
+    if ( !hay )
+        {
+        gchar *m = g_strdup( r.message );
+        engine_result_clear( &r ); g_free( o ); g_free( sis ); g_free( p ); g_string_free( bloque, TRUE );
+        falla( "%s No hay puerta.", m ); g_free( m );
+        return 1;
+        }
+    /* el bloque de la puerta, tal cual: desde «THE DIAGONAL GATE» hasta la
+       primera linea en blanco despues del veredicto                       */
+    if ( ( f = g_fopen( out, "r" ) ) )
+        {
+        while ( fgets( l, sizeof l, f ) )
+            {
+            l[strcspn( l, "\r\n" )] = '\0';
+            if ( !dentro && strstr( l, "THE DIAGONAL GATE" ) ) dentro = 1;
+            if ( !dentro ) continue;
+            if ( dentro == 2 && !l[0] ) break;
+            if ( strstr( l, "GATE:" ) ) dentro = 2;
+            if ( l[0] && strncmp( l, "=====", 5 ) ) g_string_append_printf( bloque, "%s\n", l );
+            }
+        fclose( f );
+        }
+
+    t = g_string_new( "" );
+    if ( json )
+        {
+        g_string_append( t, "{\"ok\": true, " );
+        js_par( t, "caso", caso ); g_string_append( t, ", " );
+        g_string_append_printf( t, "\"pasa\": %s, \"nobs\": %d, ", o->puerta.pasa ? "true" : "false", o->nobs );
+        js_num( t, "suma", o->puerta.suma ); g_string_append( t, ", " );
+        js_num( t, "conjunta", o->puerta.conjunta ); g_string_append( t, ", \"series\": [" );
+        for ( i = 0; i < o->puerta.ns; i++ )
+            {
+            const OvPuertaSerie *x = &o->puerta.s[i];
+            g_string_append( t, i ? ", {" : "{" );
+            js_par( t, "serie", x->nombre ); g_string_append( t, ", " );
+            js_num( t, "logl", x->logl ); g_string_append( t, ", " );
+            js_num( t, "mov", x->mov );
+            g_string_append_printf( t, ", \"recortada\": %s, \"no_optimo\": %s}",
+                                    x->recortada ? "true" : "false", x->no_optimo ? "true" : "false" );
+            }
+        g_string_append( t, "], \"ccf\": [" );
+        }
+    else
+        {
+        g_string_append_printf( t, "%s: la puerta del sistema diagonal (p = q = 0, Σ diagonal), %d observaciones "
+                                "estacionarias comunes\n\n%s\n", caso, o->nobs, bloque->str );
+        g_string_append( t, o->puerta.pasa
+            ? "La puerta pasa: el sistema diagonal reproduce las univariantes. Se puede estimar encima.\n"
+            : "La puerta NO pasa: nada de lo que se estime encima se puede creer. Revisa los univariantes.\n" );
+        if ( o->nccf > 0 )
+            g_string_append( t, "\nLas CCF de los residuos del diagonal (las innovaciones de cada serie), retardos "
+                                "fuera de banda:\n  k > 0: B entra en la ecuación de A («A<-B»); k < 0: «B<-A»; "
+                                "k = 0: contemporánea (Σ completa)\n" );
+        }
+    for ( i = 0; i < o->nccf; i++ )
+        {
+        const OvCcf *x = &o->ccf[i];
+        GString *pos = g_string_new( "" ), *neg = g_string_new( "" );
+        int cero = fabs( x->r[x->nlags] ) > x->banda;
+
+        for ( j = 1; j <= x->nlags; j++ )
+            {
+            if ( fabs( x->r[x->nlags + j] ) > x->banda ) g_string_append_printf( pos, "%s%d", pos->len ? "," : "", j );
+            if ( fabs( x->r[x->nlags - j] ) > x->banda ) g_string_append_printf( neg, "%s%d", neg->len ? "," : "", -j );
+            }
+        if ( json )
+            {
+            g_string_append( t, i ? ", {" : "{" );
+            js_par( t, "a", x->a ); g_string_append( t, ", " );
+            js_par( t, "b", x->b ); g_string_append( t, ", " );
+            js_num( t, "banda", x->banda ); g_string_append( t, ", " );
+            js_par( t, "k_pos", pos->str ); g_string_append( t, ", " );
+            js_par( t, "k_neg", neg->str );
+            g_string_append_printf( t, ", \"k0\": %s, ", cero ? "true" : "false" );
+            js_num( t, "q_gt0", x->q_gt0 ); g_string_append( t, ", " );
+            js_num( t, "q_lt0", x->q_lt0 ); g_string_append_printf( t, ", \"df\": %d}", x->df_gt0 );
+            }
+        else
+            g_string_append_printf( t, "  %s, %s (banda %.3f): k > 0 [%s] (%s<-%s); k < 0 [%s] (%s<-%s); k = 0 %s;"
+                                    " Q(k>0) = %.2f, Q(k<0) = %.2f con %d g.l.\n",
+                                    x->a, x->b, x->banda, pos->len ? pos->str : "ninguno", x->a, x->b,
+                                    neg->len ? neg->str : "ninguno", x->b, x->a, cero ? "fuera" : "dentro",
+                                    x->q_gt0, x->q_lt0, x->df_gt0 );
+        g_string_free( pos, TRUE ); g_string_free( neg, TRUE );
+        }
+    if ( json ) { g_string_append( t, "], " ); js_par( t, "bloque", bloque->str ); g_string_append( t, "}\n" ); }
+    fputs( t->str, stdout );
+    k = o->puerta.pasa ? 0 : 1;
+    g_string_free( t, TRUE ); g_string_free( bloque, TRUE );
+    engine_result_clear( &r ); g_free( o ); g_free( sis ); g_free( p );
+    return k;
+}
+
+/* caso-estima de un caso de SIM: N3 de sima (estimate), un VARMA como corrida
+   del caso. --p N --q N (la dinamica cruzada), --diagcov, --enlace "A<-B"
+   (sin ninguno, todos los pares), --cero "AR1[A<-B]" (se repite). Antes, la
+   puerta superada. La corrida se guarda solo si drvarma deja resultados,
+   como en caso-estima.                                                     */
+static int caso_estima_sis( const char *path, const char *caso )
+{
+    char          why[1024], out[PR_RUTA], base[PR_RUTA], pu[PR_RUTA], raiz[PR_RUTA], id[PR_ID];
+    char          buf[4096];
+    Proyecto     *p = abre( path, why, sizeof why );
+    const PrCaso *c;
+    Sistema      *sis;
+    SisVentana    v;
+    SisModelo    *mo;
+    VarmaOut     *o;
+    EngineResult  r;
+    PrError       e;
+    const char   *av[SIS_MAX_SER + 32];
+    GString      *t, *enl;
+    gchar        *dir, *obj;
+    int           k, ok;
+
+    if ( !p ) return falla( "%s", why );
+    if ( !( c = caso_sis( p, caso, why, sizeof why ) ) ) { g_free( p ); return falla( "%s", why ); }
+    if ( k_p < 0 || k_q < 0 )
+        { int r0 = falla( "%s es un caso de SIM (drvarma): se estima desde atsw-sis, y un VARMA lleva --p N --q N, "
+                          "la dinámica cruzada (p = 1, q = 0 para empezar).", caso );
+          g_free( p ); return r0; }
+    if ( k_nrestr > 0 || k_prever > 0 || k_evaluar > 0 )
+        { g_free( p ); return falla( "En un caso de SIM, --restriccion, --prever y --evaluar llegan con el siguiente "
+                                     "paso; aquí, --p --q --diagcov --enlace --cero." ); }
+    sis = g_new0( Sistema, 1 );
+    if ( sis_del_caso( p, c, sis, why, sizeof why ) != 0 || sis_ventana( sis, &v, why, sizeof why ) != 0 )
+        { g_free( sis ); g_free( p ); return falla( "%s", why ); }
+    /* LA PUERTA, ANTES (sim_gui, estima_lanzar) */
+    o = g_new0( VarmaOut, 1 );
+    pr_corrida_ruta( p, caso, "puerta", ".out", pu, sizeof pu );
+    if ( !g_file_test( pu, G_FILE_TEST_EXISTS ) || ov_parse_file( pu, o ) != 0 || !o->puerta.hay || !o->puerta.pasa )
+        { g_free( o ); g_free( sis ); g_free( p );
+          return falla( "Antes, la puerta superada (caso-puerta): si el sistema diagonal no reproduce las "
+                        "univariantes, nada de lo que se estime encima se puede creer." ); }
+    mo = g_new0( SisModelo, 1 );
+    sis_modelo_defecto( mo, sis->n );
+    mo->p = k_p; mo->q = k_q; mo->diagcov = k_diagcov;
+    enl = g_string_new( "" );
+    for ( k = 0; k < k_nenlace; k++ )
+        {
+        if ( !strstr( k_enlace[k], "<-" ) || strchr( k_enlace[k], ',' ) )
+            { g_string_free( enl, TRUE ); g_free( mo ); g_free( o ); g_free( sis ); g_free( p );
+              return falla( "--enlace %s: en un caso de SIM es «A<-B» (B entra en la ecuación de A), uno por "
+                            "--enlace.", k_enlace[k] ); }
+        g_string_append_printf( enl, "%s%s", enl->len ? "," : "", k_enlace[k] );
+        }
+    if ( enl->len && sis_enlaces_de_texto( sis, mo, enl->str ) != 0 )
+        { int r0 = falla( "--enlace %s: las series tienen que ser del caso.", enl->str );
+          g_string_free( enl, TRUE ); g_free( mo ); g_free( o ); g_free( sis ); g_free( p ); return r0; }
+    g_string_free( enl, TRUE );
+    for ( k = 0; k < k_ncero; k++ )
+        {
+        if ( strlen( mo->zero ) + strlen( k_cero[k] ) + 2 >= sizeof mo->zero ) break;
+        if ( mo->zero[0] ) g_strlcat( mo->zero, ",", sizeof mo->zero );
+        g_strlcat( mo->zero, k_cero[k], sizeof mo->zero );
+        }
+    if ( k_desde && pr_corrida_idx( p, caso, k_desde ) < 0 )
+        { g_free( mo ); g_free( o ); g_free( sis ); g_free( p ); return falla( "«%s» no es un modelo de %s.", k_desde, caso ); }
+    if ( pr_corrida_nueva( p, caso, k_desde ? k_desde : "", id, sizeof id, out, sizeof out, &e ) != 0 )
+        { pr_error_es( &e, why, sizeof why ); g_free( mo ); g_free( o ); g_free( sis ); g_free( p ); return falla( "%s", why ); }
+    if ( razon && *razon ) pr_corrida_razon( p, caso, id, razon, &e );
+    g_snprintf( base, sizeof base, "%s", out );
+    if ( g_str_has_suffix( base, ".out" ) ) base[strlen( base ) - 4] = '\0';
+    k = sis_orden_modelo( sis, mo, base, buf, sizeof buf, av, G_N_ELEMENTS( av ) - 1 );
+    if ( k < 0 ) { g_free( mo ); g_free( o ); g_free( sis ); g_free( p ); return falla( "La orden no cabe." ); }
+    av[k] = NULL;
+    dir = g_path_get_dirname( out );
+    g_mkdir_with_parents( dir, 0700 );
+    g_remove( out );
+    engine_set_finder( hermano );
+    raiz_de( path, raiz, sizeof raiz );
+    obj = g_strdup_printf( "%s/%s", caso, id );
+    coste_contexto( raiz, "atsw-cli", c_por ? c_por : "analista", obj, "estimar" );
+    r = engine_run_v( dir, "drvarma", av );
+    coste_contexto_limpia();
+    g_free( dir ); g_free( obj );
+
+    memset( o, 0, sizeof *o );
+    ok = engine_wrote_results( &r ) && g_file_test( out, G_FILE_TEST_EXISTS ) && ov_parse_file( out, o ) == 0;
+    if ( !ok || o->fallo )
+        {
+        gchar *m = g_strdup( o->fallo && o->fallo_msg[0] ? o->fallo_msg : r.message );
+        const char *err = r.output ? strstr( r.output, "Error" ) : NULL;
+
+        if ( err && !o->fallo )
+            { gchar *l = g_strndup( err, strcspn( err, "\r\n" ) ), *m2 = g_strdup_printf( "%s (%s)", m, l );
+              g_free( m ); g_free( l ); m = m2; }
+        g_remove( out );
+        engine_result_clear( &r ); g_free( mo ); g_free( o ); g_free( sis ); g_free( p );
+        falla( "%s No queda la corrida.", m ); g_free( m );
+        return 1;
+        }
+    if ( guarda( p, why, sizeof why ) != 0 )
+        { engine_result_clear( &r ); g_free( mo ); g_free( o ); g_free( sis ); g_free( p ); return falla( "%s", why ); }
+
+    {
+    const char *opt = o->optim == OV_OPT_CONVERGIO ? "convergió" : o->optim == OV_OPT_PARED_MA
+                      ? "parado en la pared de invertibilidad MA" : o->optim == OV_OPT_PARADO ? "parado sin converger"
+                      : "sin optimizador (el diagonal)";
+    GString *tb = g_string_new( "" );
+
+    tabla_motor( out, tb );
+    t = g_string_new( "" );
+    if ( json )
+        {
+        g_string_append( t, "{\"ok\": true, " );
+        js_par( t, "caso", caso ); g_string_append( t, ", " );
+        js_par( t, "corrida", id ); g_string_append( t, ", " );
+        js_par( t, "padre", k_desde ? k_desde : "" ); g_string_append( t, ", " );
+        js_par( t, "clase", "VARMA" ); g_string_append( t, ", " );
+        g_string_append_printf( t, "\"p\": %d, \"q\": %d, \"diagcov\": %s, ", mo->p, mo->q, mo->diagcov ? "true" : "false" );
+        js_par( t, "enlaces", o->enlaces ); g_string_append( t, ", " );
+        js_par( t, "optimizador", opt ); g_string_append( t, ", " );
+        if ( o->tiene_logl ) { js_num( t, "logl", o->logl ); g_string_append( t, ", " ); }
+        if ( o->tiene_lr )
+            { js_num( t, "lr", o->lr ); g_string_append_printf( t, ", \"lr_df\": %d, ", o->lr_df );
+              js_num( t, "lr_p", o->lr_p ); g_string_append( t, ", " ); }
+        if ( o->tiene_diag && o->diag.hosking.hay )
+            { js_num( t, "hosking_p", o->diag.hosking.p ); g_string_append( t, ", " ); }
+        if ( o->tiene_diag && o->diag.jb.hay )
+            { js_num( t, "jb_p", o->diag.jb.p ); g_string_append( t, ", " ); }
+        js_num( t, "raiz_ar_max", o->raiz_ar_max ); g_string_append( t, ", " );
+        js_num( t, "raiz_ma_max", o->raiz_ma_max ); g_string_append( t, ", " );
+        js_par( t, "tabla", tb->str ); g_string_append( t, ", " );
+        js_par( t, "out", out ); g_string_append( t, "}\n" );
+        }
+    else
+        {
+        g_string_append_printf( t, "%s/%s: VARMA p = %d, q = %d, Σ %s, enlaces %s\n", caso, id, mo->p, mo->q,
+                                mo->diagcov ? "diagonal" : "completa", o->enlaces[0] ? o->enlaces : "todos" );
+        g_string_append_printf( t, "  optimizador: %s%s%s\n", opt, o->criterio[0] ? " · " : "", o->criterio );
+        if ( o->tiene_logl ) g_string_append_printf( t, "  log-verosimilitud exacta: %.6f\n", o->logl );
+        if ( o->tiene_lr )
+            g_string_append_printf( t, "  frente a las univariantes (el diagonal): LR = %.4f, %d g.l., p = %.4f\n",
+                                    o->lr, o->lr_df, o->lr_p );
+        if ( o->tiene_diag && o->diag.hosking.hay )
+            g_string_append_printf( t, "  Hosking (retardo %d): Q = %.2f, %d g.l., p = %.4f\n", o->diag.hosking_lag,
+                                    o->diag.hosking.q, o->diag.hosking.df, o->diag.hosking.p );
+        if ( o->tiene_diag && o->diag.jb.hay )
+            g_string_append_printf( t, "  Jarque-Bera multivariante: %.2f, %d g.l., p = %.4f\n",
+                                    o->diag.jb.q, o->diag.jb.df, o->diag.jb.p );
+        if ( o->n_raices_ar || o->n_raices_ma )
+            g_string_append_printf( t, "  la raíz inversa mayor: AR %.4f, MA %.4f\n", o->raiz_ar_max, o->raiz_ma_max );
+        g_string_append_printf( t, "\n%s  %s\n", tb->str, out );
+        }
+    fputs( t->str, stdout );
+    g_string_free( t, TRUE ); g_string_free( tb, TRUE );
+    }
+    engine_result_clear( &r ); g_free( mo ); g_free( o ); g_free( sis ); g_free( p );
+    return 0;
 }
 
 static int caso_estima( const char *path, const char *caso )
@@ -2154,8 +2506,10 @@ static int caso_estima( const char *path, const char *caso )
           return falla( "--evaluar W necesita el horizonte: --prever H." ); }
     if ( !( c = pr_caso_ver( p, caso ) ) )
         { g_free( p ); g_string_free( desfase, TRUE ); return falla( "«%s» no es un caso del proyecto.", caso ); }
+    if ( !strcmp( c->motor, "drvarma" ) )
+        { g_free( p ); g_string_free( desfase, TRUE ); return caso_estima_sis( path, caso ); }
     if ( strcmp( c->motor, "drtran" ) != 0 )
-        { int r0 = falla( "%s es de %s: se estima en sim_gui, no con drtran.", caso, c->motor );
+        { int r0 = falla( "%s es de %s: no lo estima atsw-cli.", caso, c->motor );
           g_free( p ); g_string_free( desfase, TRUE ); return r0; }
 
     /* las entradas: sus .pre, su hash y el nombre que lleva cada uno */
@@ -2429,7 +2783,7 @@ static int caso_estima( const char *path, const char *caso )
         {
         GString *tb = g_string_new( "" );
 
-        tabla_drtran( out, tb );
+        tabla_motor( out, tb );
         g_string_append_printf( t, "\"restricciones\": %s, ", hay_cns ? "true" : "false" );
         js_par( t, "tabla", tb->str ); g_string_append( t, ", " );
         g_string_free( tb, TRUE );
@@ -2447,7 +2801,7 @@ static int caso_estima( const char *path, const char *caso )
                                     noad, noad == 1 ? "" : "s", noex );
         if ( hay_cns ) g_string_append( t, "  restricciones: las del .cns de la corrida\n" );
         g_string_append( t, "\n" );
-        tabla_drtran( out, t );
+        tabla_motor( out, t );
         if ( hay_fc && fc->ns > 0 )
             {
             char tb[16384];
@@ -2653,6 +3007,9 @@ static void uso( FILE *f )
            "  proyecto ruta P SERIE MODELO|datos .inp|.pre|.out   la ruta del fichero (estado 1 si no existe)\n"
            "  caso-estima P CASO [--enlace E->S:b,r,s]... [--desde cNN] [--diagonal]\n"
            "              [--prever H [--evaluar W]] [--restriccion \"NOMBRE = VALOR\"]...   drtran sobre el caso\n"
+           "  caso-puerta P CASO                    SIM: la puerta del sistema diagonal y las CCF\n"
+           "  caso-estima P CASO --p N --q N [--diagcov] [--enlace A<-B]... [--cero \"AR1[A<-B]\"]... [--desde cNN]\n"
+           "                                        SIM: un VARMA con drvarma, tras la puerta\n"
            "  dictamen P SERIE MODELO               la diagnosis del .out\n"
            "  ecuacion P SERIE MODELO               el modelo estimado: el bloque del .out, con sus t\n"
            "  raices factores P SERIE MODELO        la factorización del AR\n"
@@ -2700,6 +3057,11 @@ int main( int argc, char **argv )
         {
         if ( !strcmp( argv[i], "--json" ) ) json = TRUE;
         else if ( !strcmp( argv[i], "--comprobar" ) ) comprobar = TRUE;
+        else if ( !strcmp( argv[i], "--p" ) && i + 1 < argc ) k_p = atoi( argv[++i] );
+        else if ( !strcmp( argv[i], "--q" ) && i + 1 < argc ) k_q = atoi( argv[++i] );
+        else if ( !strcmp( argv[i], "--diagcov" ) ) k_diagcov = 1;
+        else if ( !strcmp( argv[i], "--cero" ) && i + 1 < argc )
+            { if ( k_ncero < K_MAX_RESTR ) k_cero[k_ncero++] = argv[++i]; else i++; }
         else if ( !strcmp( argv[i], "--restriccion" ) && i + 1 < argc )
             { if ( k_nrestr < K_MAX_RESTR ) k_restr[k_nrestr++] = argv[++i]; else i++; }
         else if ( !strcmp( argv[i], "--enlace" ) && i + 1 < argc )
@@ -2778,6 +3140,7 @@ int main( int argc, char **argv )
     if ( ES( 0, "ficha" ) && npos == 4 ) return ficha( pos[1], pos[2], pos[3] );
     if ( ES( 0, "prever" ) && npos == 4 ) return prever( pos[1], pos[2], pos[3] );
     if ( ES( 0, "caso-estima" ) && npos == 3 ) return caso_estima( pos[1], pos[2] );
+    if ( ES( 0, "caso-puerta" ) && npos == 3 ) return caso_puerta( pos[1], pos[2] );
     if ( ES( 0, "identifica" ) && npos == 3 ) return identifica( pos[1], pos[2] );
     if ( ES( 0, "especifica" ) && npos == 4 ) return especifica( pos[1], pos[2], pos[3] );
     if ( ES( 0, "estima" ) && npos == 4 ) return estima( pos[1], pos[2], pos[3] );
